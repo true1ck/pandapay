@@ -1,0 +1,34 @@
+{
+  "id": "local:10",
+  "templateHash": "3f90d54c80b18d881324201236f5557f3062d6ff9963b8a746df5b3169e91466",
+  "weight": 1,
+  "source": "synthetic",
+  "messages": [
+    {
+      "sender": "HDFCBK",
+      "body": "Your credit card XX4321 payment due on 20-Oct-2026. Total amount due INR 3000.",
+      "observedAt": "2026-11-20T09:00:00.000Z"
+    }
+  ],
+  "expect": {
+    "facts": [
+      {
+        "factType": "bill_due",
+        "attrs": {
+          "dueDate": "2026-10-20"
+        },
+        "amounts": [
+          {
+            "role": "due_total",
+            "minor": 300000
+          }
+        ],
+        "instrument": {
+          "kind": "credit_card",
+          "maskDigits": "4321"
+        }
+      }
+    ]
+  },
+  "origin": "local_sms_cases.json"
+}

@@ -1,0 +1,41 @@
+{
+  "id": "corpus:card_statement",
+  "templateHash": "b1a74e05e553a99eaabbdb33355efbb69e80201a4459b0a8ed65d77b450286e5",
+  "weight": 1,
+  "source": "synthetic",
+  "messages": [
+    {
+      "sender": "AXISBK",
+      "body": "Your Axis Bank Credit Card XX4321 e-statement generated on 12-10-26. Total Amount Due INR 3,000.00, Minimum Amount Due INR 600.00, pay by 05-Nov-26.",
+      "observedAt": "2026-11-20T09:00:00.000Z"
+    }
+  ],
+  "expect": {
+    "facts": [
+      {
+        "factType": "bill_due",
+        "attrs": {
+          "dueDate": "2026-11-05",
+          "statementDate": "2026-10-12"
+        },
+        "amounts": [
+          {
+            "role": "due_total",
+            "minor": 300000
+          },
+          {
+            "role": "due_minimum",
+            "minor": 60000
+          }
+        ],
+        "instrument": {
+          "kind": "credit_card",
+          "issuerSlug": "axis",
+          "maskDigits": "4321"
+        }
+      }
+    ]
+  },
+  "note": "Statement total, minimum due and due date stay separate roles.",
+  "origin": "sms_family_corpus.json"
+}

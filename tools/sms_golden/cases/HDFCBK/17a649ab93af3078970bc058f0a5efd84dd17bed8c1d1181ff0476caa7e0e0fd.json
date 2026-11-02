@@ -1,0 +1,29 @@
+{
+  "id": "local:18",
+  "templateHash": "17a649ab93af3078970bc058f0a5efd84dd17bed8c1d1181ff0476caa7e0e0fd",
+  "weight": 1,
+  "source": "synthetic",
+  "messages": [
+    {
+      "sender": "HDFCBK",
+      "body": "INR 500 will be credited to account XX1234.",
+      "observedAt": "2026-11-20T09:00:00.000Z"
+    }
+  ],
+  "expect": {
+    "facts": [
+      {
+        "factType": "attempt",
+        "attrs": {
+          "status": "pending",
+          "direction": "credit"
+        },
+        "instrument": {
+          "kind": "bank_account",
+          "maskDigits": "1234"
+        }
+      }
+    ]
+  },
+  "origin": "local_sms_cases.json"
+}

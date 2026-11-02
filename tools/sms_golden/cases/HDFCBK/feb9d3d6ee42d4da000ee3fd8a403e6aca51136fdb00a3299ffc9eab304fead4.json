@@ -1,0 +1,35 @@
+{
+  "id": "local:08",
+  "templateHash": "feb9d3d6ee42d4da000ee3fd8a403e6aca51136fdb00a3299ffc9eab304fead4",
+  "weight": 1,
+  "source": "synthetic",
+  "messages": [
+    {
+      "sender": "HDFCBK",
+      "body": "INR 500 purchase declined on credit card XX4321.",
+      "observedAt": "2026-11-20T09:00:00.000Z"
+    }
+  ],
+  "expect": {
+    "facts": [
+      {
+        "factType": "attempt",
+        "attrs": {
+          "status": "declined",
+          "direction": "debit"
+        },
+        "amounts": [
+          {
+            "role": "posted",
+            "minor": 50000
+          }
+        ],
+        "instrument": {
+          "kind": "credit_card",
+          "maskDigits": "4321"
+        }
+      }
+    ]
+  },
+  "origin": "local_sms_cases.json"
+}

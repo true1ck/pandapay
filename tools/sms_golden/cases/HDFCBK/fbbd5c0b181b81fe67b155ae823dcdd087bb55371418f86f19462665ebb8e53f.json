@@ -1,0 +1,41 @@
+{
+  "id": "probe:paytm_wallet_load_bank",
+  "templateHash": "fbbd5c0b181b81fe67b155ae823dcdd087bb55371418f86f19462665ebb8e53f",
+  "weight": 1,
+  "source": "synthetic",
+  "messages": [
+    {
+      "sender": "VM-HDFCBK-S",
+      "body": "Rs.500.00 debited from A/c XX1234 on 01-11-26 to VPA add-money@paytm (UPI Ref No 432155555555).",
+      "observedAt": "2026-12-01T09:00:00.000Z"
+    }
+  ],
+  "expect": {
+    "facts": [
+      {
+        "factType": "movement",
+        "attrs": {
+          "direction": "debit",
+          "purpose": "wallet_topup",
+          "rail": "upi"
+        },
+        "amounts": [
+          {
+            "role": "posted",
+            "minor": 50000
+          }
+        ],
+        "instrument": {
+          "kind": "bank_account",
+          "issuerSlug": "hdfc",
+          "maskDigits": "1234"
+        },
+        "counterparty": {
+          "kind": "own"
+        }
+      }
+    ]
+  },
+  "note": "A wallet top-up is a transfer; the wallet purchase is the spend.",
+  "origin": "probe_cases.json"
+}

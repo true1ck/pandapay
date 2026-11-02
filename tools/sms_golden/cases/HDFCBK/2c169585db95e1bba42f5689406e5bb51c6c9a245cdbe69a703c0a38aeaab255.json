@@ -1,0 +1,35 @@
+{
+  "id": "probe:limit_enhanced",
+  "templateHash": "2c169585db95e1bba42f5689406e5bb51c6c9a245cdbe69a703c0a38aeaab255",
+  "weight": 1,
+  "source": "synthetic",
+  "messages": [
+    {
+      "sender": "VM-HDFCBK-S",
+      "body": "Congratulations! The credit limit on your HDFC Bank Credit Card XX5678 has been enhanced to Rs.3,00,000 effective 01-11-26.",
+      "observedAt": "2026-12-01T09:00:00.000Z"
+    }
+  ],
+  "expect": {
+    "facts": [
+      {
+        "factType": "limit_change",
+        "attrs": {
+          "reason": "increase"
+        },
+        "amounts": [
+          {
+            "role": "credit_limit",
+            "minor": 30000000
+          }
+        ],
+        "instrument": {
+          "kind": "credit_card",
+          "issuerSlug": "hdfc",
+          "maskDigits": "5678"
+        }
+      }
+    ]
+  },
+  "origin": "probe_cases.json"
+}

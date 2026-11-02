@@ -1,0 +1,64 @@
+{
+  "id": "wallet_topup_then_wallet_spend",
+  "description": "Paytm (full visibility): the bank top-up is a transfer joined to the wallet credit; only the wallet purchase is spending.",
+  "knownInstruments": [
+    {
+      "kind": "bank_account",
+      "issuerSlug": "hdfc",
+      "maskDigits": "1234"
+    }
+  ],
+  "messages": [
+    {
+      "sender": "VM-HDFCBK-S",
+      "body": "Rs.500.00 debited from A/c XX1234 on 01-11-26 to VPA add-money@paytm (UPI Ref No 432155555555).",
+      "observedAt": "2026-11-01T09:00:00Z"
+    },
+    {
+      "sender": "JM-iPaytm",
+      "body": "Rs 500 added to your Paytm Wallet. Updated balance: Rs 500. Txn ID 12345678900",
+      "observedAt": "2026-11-01T09:01:00Z"
+    },
+    {
+      "sender": "JM-iPaytm",
+      "body": "Rs 120 paid from Paytm Wallet to Chai Point. Updated balance: Rs 380. Txn ID 12345678901",
+      "observedAt": "2026-11-02T08:30:00Z"
+    }
+  ],
+  "expect": {
+    "events": [
+      {
+        "type": "wallet_topup",
+        "legRoles": [
+          "debit_leg",
+          "credit_leg"
+        ]
+      },
+      {
+        "type": "purchase",
+        "legRoles": [
+          "debit_leg"
+        ]
+      }
+    ],
+    "instruments": [
+      {
+        "kind": "bank_account",
+        "issuerSlug": "hdfc",
+        "maskDigits": "1234"
+      },
+      {
+        "kind": "wallet",
+        "issuerSlug": "paytm"
+      }
+    ],
+    "totals": {
+      "from": "2026-11-01T00:00:00Z",
+      "to": "2026-12-01T00:00:00Z",
+      "spendMinor": 12000,
+      "incomeMinor": 0,
+      "investmentMinor": 0,
+      "transactionCount": 1
+    }
+  }
+}

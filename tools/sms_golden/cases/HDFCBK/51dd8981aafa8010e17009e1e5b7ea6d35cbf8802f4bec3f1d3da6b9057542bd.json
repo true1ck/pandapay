@@ -1,0 +1,50 @@
+{
+  "id": "probe:ipo_allotment_debit",
+  "templateHash": "51dd8981aafa8010e17009e1e5b7ea6d35cbf8802f4bec3f1d3da6b9057542bd",
+  "weight": 1,
+  "source": "synthetic",
+  "messages": [
+    {
+      "sender": "VM-HDFCBK-S",
+      "body": "Rs.14,250.00 debited from A/c XX1234 on 30-11-26 towards IPO allotment of TATA TECHNOLOGIES LTD. Avl Bal Rs.52,310.40 -HDFC Bank",
+      "observedAt": "2026-12-01T09:00:00.000Z"
+    }
+  ],
+  "expect": {
+    "facts": [
+      {
+        "factType": "movement",
+        "attrs": {
+          "direction": "debit",
+          "purpose": "investment"
+        },
+        "amounts": [
+          {
+            "role": "posted",
+            "minor": 1425000
+          }
+        ],
+        "instrument": {
+          "kind": "bank_account",
+          "issuerSlug": "hdfc",
+          "maskDigits": "1234"
+        }
+      },
+      {
+        "factType": "balance_snapshot",
+        "amounts": [
+          {
+            "role": "available_balance",
+            "minor": 5231040
+          }
+        ],
+        "instrument": {
+          "kind": "bank_account",
+          "issuerSlug": "hdfc",
+          "maskDigits": "1234"
+        }
+      }
+    ]
+  },
+  "origin": "probe_cases.json"
+}

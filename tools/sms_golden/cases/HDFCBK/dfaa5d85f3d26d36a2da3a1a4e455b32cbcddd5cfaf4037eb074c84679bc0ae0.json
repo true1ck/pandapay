@@ -1,0 +1,36 @@
+{
+  "id": "probe:refund_on_card",
+  "templateHash": "dfaa5d85f3d26d36a2da3a1a4e455b32cbcddd5cfaf4037eb074c84679bc0ae0",
+  "weight": 1,
+  "source": "synthetic",
+  "messages": [
+    {
+      "sender": "VM-HDFCBK-S",
+      "body": "Refund of Rs.499.00 from SWIGGY credited to your HDFC Bank Credit Card XX5678 on 03-11-26.",
+      "observedAt": "2026-12-01T09:00:00.000Z"
+    }
+  ],
+  "expect": {
+    "facts": [
+      {
+        "factType": "movement",
+        "attrs": {
+          "direction": "credit",
+          "purpose": "refund"
+        },
+        "amounts": [
+          {
+            "role": "posted",
+            "minor": 49900
+          }
+        ],
+        "instrument": {
+          "kind": "credit_card",
+          "issuerSlug": "hdfc",
+          "maskDigits": "5678"
+        }
+      }
+    ]
+  },
+  "origin": "probe_cases.json"
+}

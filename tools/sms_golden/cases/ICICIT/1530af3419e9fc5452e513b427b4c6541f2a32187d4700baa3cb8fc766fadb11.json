@@ -1,0 +1,36 @@
+{
+  "id": "probe:ipo_mandate_executed",
+  "templateHash": "1530af3419e9fc5452e513b427b4c6541f2a32187d4700baa3cb8fc766fadb11",
+  "weight": 1,
+  "source": "synthetic",
+  "messages": [
+    {
+      "sender": "AX-ICICIT-S",
+      "body": "Your A/c XX1234 is debited for Rs 14,250.00 on 30-Nov-26 against UPI mandate for IPO TATA TECH. -ICICI Bank",
+      "observedAt": "2026-12-01T09:00:00.000Z"
+    }
+  ],
+  "expect": {
+    "facts": [
+      {
+        "factType": "movement",
+        "attrs": {
+          "direction": "debit",
+          "purpose": "investment"
+        },
+        "amounts": [
+          {
+            "role": "posted",
+            "minor": 1425000
+          }
+        ],
+        "instrument": {
+          "kind": "bank_account",
+          "issuerSlug": "icici",
+          "maskDigits": "1234"
+        }
+      }
+    ]
+  },
+  "origin": "probe_cases.json"
+}

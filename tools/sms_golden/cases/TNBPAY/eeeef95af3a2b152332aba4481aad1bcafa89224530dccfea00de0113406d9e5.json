@@ -1,0 +1,32 @@
+{
+  "id": "corpus:bill_with_offer",
+  "templateHash": "eeeef95af3a2b152332aba4481aad1bcafa89224530dccfea00de0113406d9e5",
+  "weight": 1,
+  "source": "synthetic",
+  "messages": [
+    {
+      "sender": "TNBPAY",
+      "body": "Your TNEB electricity bill of Rs.1,500 is due on 18-10-26. Pay on TNEB app and get Rs.100 cashback offer!",
+      "observedAt": "2026-11-20T09:00:00.000Z"
+    }
+  ],
+  "expect": {
+    "facts": [
+      {
+        "factType": "bill_due",
+        "attrs": {
+          "dueDate": "2026-10-18",
+          "billerName": "TNEB"
+        },
+        "amounts": [
+          {
+            "role": "due_total",
+            "minor": 150000
+          }
+        ]
+      }
+    ]
+  },
+  "note": "A real bill wins over appended marketing.",
+  "origin": "sms_family_corpus.json"
+}

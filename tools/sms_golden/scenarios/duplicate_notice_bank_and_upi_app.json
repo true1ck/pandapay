@@ -1,0 +1,49 @@
+{
+  "id": "duplicate_notice_bank_and_upi_app",
+  "description": "The same payment reported by a bank and a UPI app counts once.",
+  "knownInstruments": [
+    {
+      "kind": "bank_account",
+      "issuerSlug": "hdfc",
+      "maskDigits": "1234"
+    }
+  ],
+  "messages": [
+    {
+      "sender": "VM-HDFCBK-S",
+      "body": "Rs.250.00 debited from A/c XX1234 on 05-11-26 to VPA chaipoint@okaxis (UPI Ref No 432100000001). Avl bal Rs 40,000.00",
+      "observedAt": "2026-11-05T13:00:00Z"
+    },
+    {
+      "sender": "VM-GPAY-S",
+      "body": "You paid Rs.250.00 to Chai Point using Google Pay. UPI Ref 432100000001.",
+      "observedAt": "2026-11-05T13:01:00Z"
+    }
+  ],
+  "expect": {
+    "events": [
+      {
+        "type": "purchase",
+        "legRoles": [
+          "debit_leg",
+          "duplicate_notice"
+        ]
+      }
+    ],
+    "instruments": [
+      {
+        "kind": "bank_account",
+        "issuerSlug": "hdfc",
+        "maskDigits": "1234"
+      }
+    ],
+    "totals": {
+      "from": "2026-11-01T00:00:00Z",
+      "to": "2026-12-01T00:00:00Z",
+      "spendMinor": 25000,
+      "incomeMinor": 0,
+      "investmentMinor": 0,
+      "transactionCount": 1
+    }
+  }
+}

@@ -1,0 +1,61 @@
+{
+  "id": "refund_after_purchase",
+  "description": "A refund joins its purchase and reduces that category.",
+  "knownInstruments": [
+    {
+      "kind": "credit_card",
+      "issuerSlug": "hdfc",
+      "maskDigits": "5678"
+    }
+  ],
+  "messages": [
+    {
+      "sender": "VM-HDFCBK-S",
+      "body": "Rs.499.00 spent on HDFC Bank Card x5678 at SWIGGY on 2026-11-01:12:30:11. Avl Lmt: Rs.45,000.00.",
+      "observedAt": "2026-11-01T12:31:00Z"
+    },
+    {
+      "sender": "VM-HDFCBK-S",
+      "body": "Refund of Rs.499.00 from SWIGGY credited to your HDFC Bank Credit Card XX5678 on 03-11-26.",
+      "observedAt": "2026-11-03T10:00:00Z"
+    }
+  ],
+  "expect": {
+    "events": [
+      {
+        "type": "purchase",
+        "legRoles": [
+          "debit_leg"
+        ]
+      },
+      {
+        "type": "refund",
+        "legRoles": [
+          "original",
+          "reversal"
+        ]
+      }
+    ],
+    "instruments": [
+      {
+        "kind": "credit_card",
+        "issuerSlug": "hdfc",
+        "maskDigits": "5678"
+      }
+    ],
+    "totals": {
+      "from": "2026-11-01T00:00:00Z",
+      "to": "2026-12-01T00:00:00Z",
+      "spendMinor": 0,
+      "incomeMinor": 0,
+      "investmentMinor": 0,
+      "transactionCount": 2
+    },
+    "categories": [
+      {
+        "eventIndex": 0,
+        "category": "food_dining"
+      }
+    ]
+  }
+}

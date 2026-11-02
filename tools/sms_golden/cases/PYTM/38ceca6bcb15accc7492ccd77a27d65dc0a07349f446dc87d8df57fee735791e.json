@@ -1,0 +1,17 @@
+{
+  "id": "corpus:cashback_offer_only",
+  "templateHash": "38ceca6bcb15accc7492ccd77a27d65dc0a07349f446dc87d8df57fee735791e",
+  "weight": 1,
+  "source": "synthetic",
+  "messages": [
+    {
+      "sender": "DM-PYTM-P",
+      "body": "Get Rs.100 cashback when you spend Rs.15,000 on Paytm app recharge offers. Apply now!",
+      "observedAt": "2026-11-20T09:00:00.000Z"
+    }
+  ],
+  "expect": {
+    "ignore": true
+  },
+  "origin": "sms_family_corpus.json"
+}

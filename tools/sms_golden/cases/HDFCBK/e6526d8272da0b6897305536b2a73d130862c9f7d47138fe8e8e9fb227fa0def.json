@@ -1,0 +1,51 @@
+{
+  "id": "probe:groww_sip_upi",
+  "templateHash": "e6526d8272da0b6897305536b2a73d130862c9f7d47138fe8e8e9fb227fa0def",
+  "weight": 1,
+  "source": "synthetic",
+  "messages": [
+    {
+      "sender": "VM-HDFCBK-S",
+      "body": "Rs.5,000.00 debited from A/c XX1234 on 05-11-26 to VPA groww.mf@validhdfc (UPI Ref No 432112345678). Avl bal Rs 47,310.40",
+      "observedAt": "2026-12-01T09:00:00.000Z"
+    }
+  ],
+  "expect": {
+    "facts": [
+      {
+        "factType": "movement",
+        "attrs": {
+          "direction": "debit",
+          "purpose": "investment",
+          "rail": "upi"
+        },
+        "amounts": [
+          {
+            "role": "posted",
+            "minor": 500000
+          }
+        ],
+        "instrument": {
+          "kind": "bank_account",
+          "issuerSlug": "hdfc",
+          "maskDigits": "1234"
+        }
+      },
+      {
+        "factType": "balance_snapshot",
+        "amounts": [
+          {
+            "role": "available_balance",
+            "minor": 4731040
+          }
+        ],
+        "instrument": {
+          "kind": "bank_account",
+          "issuerSlug": "hdfc",
+          "maskDigits": "1234"
+        }
+      }
+    ]
+  },
+  "origin": "probe_cases.json"
+}

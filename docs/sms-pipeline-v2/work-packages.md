@@ -6,7 +6,7 @@ Each work package is self-contained: an agent needs only the Agent playbook, the
 
 | WP | Title | Milestone | Depends on | Owns (main paths) | Model | Status |
 | --- | --- | --- | --- | --- | --- | --- |
-| 00 | Golden set and eval harness | M0 | none | `tools/sms_golden/`, `tools/sms_rules_cli/` (skeleton, `cluster`, `redact`, `golden`), `app/test/sms_golden_baseline/`, `api/test/sms_golden_baseline/` | Sonnet | Not started |
+| 00 | Golden set and eval harness | M0 | none | `tools/sms_golden/`, `tools/sms_rules_cli/` (skeleton, `cluster`, `redact`, `golden`), `app/test/sms_golden_baseline/`, `api/test/sms_golden_baseline/` | Sonnet | In review |
 | 01 | Contracts package | M0 | none | `contracts/sms/v2/`, `pandapay_domain/.../sms_v2/contract/`, `api/src/sms_v2/contracts.js`, `app/lib/features/sms_v2/flag.dart`, `app/lib/features/sms_v2/storage/schema.dart`, `app/pubspec.yaml` (assets) | Opus | Not started |
 | 02 | Rule engine | M1 | 01 | `pandapay_domain/.../sms_v2/engine/`, CLI `build`, `lint`, `sign-dev`, `fetch-baseline` | Sonnet | Not started |
 | 03 | Baseline rule bundle (03a–03d) | M1 | 00, 02 | `rules/sms/v2/` (one sub-package per family folder), `app/assets/sms_rules/` | Sonnet × 4 | Not started |

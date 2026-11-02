@@ -1,0 +1,16 @@
+name: sms_rules_cli
+description: PandaPay SMS pipeline v2 rules command-line tool (redact, cluster, golden).
+version: 0.1.0
+publish_to: none
+
+environment:
+  sdk: ^3.12.2
+
+dependencies:
+  args: ^2.5.0
+  pandapay_domain:
+    path: ../../packages/pandapay_domain
+
+dev_dependencies:
+  lints: ^6.0.0
+  test: ^1.25.6

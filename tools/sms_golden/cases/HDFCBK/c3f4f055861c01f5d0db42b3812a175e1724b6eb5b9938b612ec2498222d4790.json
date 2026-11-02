@@ -1,0 +1,37 @@
+{
+  "id": "corpus:ambiguous_suffix_two_banks",
+  "templateHash": "c3f4f055861c01f5d0db42b3812a175e1724b6eb5b9938b612ec2498222d4790",
+  "weight": 1,
+  "source": "synthetic",
+  "messages": [
+    {
+      "sender": "HDFCBK",
+      "body": "Rs.3,000 debited from HDFC Bank A/c XX9080 on 16-10-26 for balance transfer to another bank.",
+      "observedAt": "2026-11-20T09:00:00.000Z"
+    }
+  ],
+  "expect": {
+    "facts": [
+      {
+        "factType": "movement",
+        "attrs": {
+          "direction": "debit",
+          "purpose": "transfer"
+        },
+        "amounts": [
+          {
+            "role": "posted",
+            "minor": 300000
+          }
+        ],
+        "instrument": {
+          "kind": "bank_account",
+          "issuerSlug": "hdfc",
+          "maskDigits": "9080"
+        }
+      }
+    ]
+  },
+  "note": "Same last four at two banks must stay separate instruments.",
+  "origin": "sms_family_corpus.json"
+}

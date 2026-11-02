@@ -1,0 +1,50 @@
+{
+  "id": "probe:spend_avl_limit_icici",
+  "templateHash": "085b329a4b430a0045790f9fef962e0388e01dfc209971089cc9f9bf5c390662",
+  "weight": 1,
+  "source": "synthetic",
+  "messages": [
+    {
+      "sender": "AX-ICICIT-S",
+      "body": "INR 1,299.00 spent using ICICI Bank Card XX9012 on 01-Nov-26 on AMAZON PAY IN. Avl Limit: INR 1,48,701.00. If not you, call 1800 2662/SMS BLOCK 9012 to 9215676766.",
+      "observedAt": "2026-12-01T09:00:00.000Z"
+    }
+  ],
+  "expect": {
+    "facts": [
+      {
+        "factType": "movement",
+        "attrs": {
+          "direction": "debit",
+          "purpose": "purchase"
+        },
+        "amounts": [
+          {
+            "role": "posted",
+            "minor": 129900
+          }
+        ],
+        "instrument": {
+          "kind": "credit_card",
+          "issuerSlug": "icici",
+          "maskDigits": "9012"
+        }
+      },
+      {
+        "factType": "balance_snapshot",
+        "amounts": [
+          {
+            "role": "available_credit",
+            "minor": 14870100
+          }
+        ],
+        "instrument": {
+          "kind": "credit_card",
+          "issuerSlug": "icici",
+          "maskDigits": "9012"
+        }
+      }
+    ]
+  },
+  "origin": "probe_cases.json"
+}

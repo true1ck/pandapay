@@ -1,0 +1,37 @@
+{
+  "id": "corpus:refund_with_offer",
+  "templateHash": "0bfaaf460289463951fbebd68def6d6f06b3a85b5e51e6c1c76692f3614a02e7",
+  "weight": 1,
+  "source": "synthetic",
+  "messages": [
+    {
+      "sender": "HDFCBK",
+      "body": "Your refund of Rs.499 was credited to credit card XX4321. Get 5% cashback on next purchase!",
+      "observedAt": "2026-11-20T09:00:00.000Z"
+    }
+  ],
+  "expect": {
+    "facts": [
+      {
+        "factType": "movement",
+        "attrs": {
+          "direction": "credit",
+          "purpose": "refund"
+        },
+        "amounts": [
+          {
+            "role": "posted",
+            "minor": 49900
+          }
+        ],
+        "instrument": {
+          "kind": "credit_card",
+          "issuerSlug": "hdfc",
+          "maskDigits": "4321"
+        }
+      }
+    ]
+  },
+  "note": "A refund is neither earned income nor a promotion.",
+  "origin": "sms_family_corpus.json"
+}

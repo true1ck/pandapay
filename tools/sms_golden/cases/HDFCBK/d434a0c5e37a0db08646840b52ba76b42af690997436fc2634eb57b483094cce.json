@@ -1,0 +1,32 @@
+{
+  "id": "local:13",
+  "templateHash": "d434a0c5e37a0db08646840b52ba76b42af690997436fc2634eb57b483094cce",
+  "weight": 1,
+  "source": "synthetic",
+  "messages": [
+    {
+      "sender": "HDFCBK",
+      "body": "Payment received INR 2500 from RAVI via UPI.",
+      "observedAt": "2026-11-20T09:00:00.000Z"
+    }
+  ],
+  "expect": {
+    "facts": [
+      {
+        "factType": "movement",
+        "attrs": {
+          "direction": "credit",
+          "purpose": "p2p",
+          "rail": "upi"
+        },
+        "amounts": [
+          {
+            "role": "posted",
+            "minor": 250000
+          }
+        ]
+      }
+    ]
+  },
+  "origin": "local_sms_cases.json"
+}

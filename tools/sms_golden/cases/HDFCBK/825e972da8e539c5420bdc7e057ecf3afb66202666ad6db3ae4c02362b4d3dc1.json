@@ -1,0 +1,36 @@
+{
+  "id": "corpus:autopay_mandate",
+  "templateHash": "825e972da8e539c5420bdc7e057ecf3afb66202666ad6db3ae4c02362b4d3dc1",
+  "weight": 1,
+  "source": "synthetic",
+  "messages": [
+    {
+      "sender": "HDFCBK",
+      "body": "AutoPay e-mandate successfully registered for NETFLIX with maximum limit of INR 2,000.00 on HDFC Bank A/c XX1797",
+      "observedAt": "2026-11-20T09:00:00.000Z"
+    }
+  ],
+  "expect": {
+    "facts": [
+      {
+        "factType": "mandate",
+        "attrs": {
+          "phase": "created",
+          "merchantName": "NETFLIX"
+        },
+        "amounts": [
+          {
+            "role": "ceiling",
+            "minor": 200000
+          }
+        ],
+        "instrument": {
+          "kind": "bank_account",
+          "issuerSlug": "hdfc",
+          "maskDigits": "1797"
+        }
+      }
+    ]
+  },
+  "origin": "sms_family_corpus.json"
+}

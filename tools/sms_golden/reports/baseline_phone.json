@@ -1,0 +1,2589 @@
+{
+  "schema": "pandapay.sms.golden-report/1",
+  "engine": "phone: LocalSmsParser.parse (capture gate + parser)",
+  "stages": {
+    "interpreter": "available",
+    "instruments": "not_available",
+    "linker": "not_available",
+    "projector": "not_available",
+    "categories": "not_available"
+  },
+  "counts": {
+    "cases": 82,
+    "casesPassed": 29,
+    "scenarios": 15,
+    "scenariosPassed": null,
+    "scenariosEvaluated": false,
+    "messages": 82,
+    "weight": 82.0
+  },
+  "metrics": {
+    "captureRecall": {
+      "status": "ok",
+      "value": 0.918918918918919,
+      "numerator": 68.0,
+      "denominator": 74.0
+    },
+    "ignorePrecision": {
+      "status": "ok",
+      "value": 0.5714285714285714,
+      "numerator": 8.0,
+      "denominator": 14.0
+    },
+    "eventKind": {
+      "status": "ok",
+      "value": 0.33783783783783783,
+      "numerator": 25.0,
+      "denominator": 74.0
+    },
+    "amountRole": {
+      "status": "ok",
+      "value": 0.7575757575757576,
+      "numerator": 50.0,
+      "denominator": 66.0
+    },
+    "instrument": {
+      "status": "ok",
+      "value": 0.6742424242424242,
+      "numerator": 44.5,
+      "denominator": 66.0
+    },
+    "doubleCounts": {
+      "status": "not_available",
+      "value": null,
+      "numerator": 0.0,
+      "denominator": 0.0
+    },
+    "pairsLinked": {
+      "status": "not_available",
+      "value": null,
+      "numerator": 0.0,
+      "denominator": 0.0
+    },
+    "category": {
+      "status": "not_available",
+      "value": null,
+      "numerator": 0.0,
+      "denominator": 0.0
+    },
+    "askRate": {
+      "status": "ok",
+      "value": 0.08108108108108109,
+      "numerator": 6.0,
+      "denominator": 74.0
+    },
+    "scenarioTotals": {
+      "status": "not_available",
+      "value": null,
+      "numerator": 0.0,
+      "denominator": 0.0
+    },
+    "eventKindByAmount": {
+      "status": "ok",
+      "value": 0.2141837764837979,
+      "numerator": 96426.5,
+      "denominator": 450204.5
+    },
+    "amountRoleByAmount": {
+      "status": "ok",
+      "value": 0.8938704522056088,
+      "numerator": 402424.5,
+      "denominator": 450204.5
+    },
+    "instrumentByAmount": {
+      "status": "ok",
+      "value": 0.7291227054635853,
+      "numerator": 324974.0,
+      "denominator": 445705.5
+    },
+    "scenarioEvents": {
+      "status": "not_available",
+      "value": null,
+      "numerator": 0.0,
+      "denominator": 0.0
+    },
+    "scenarioInstruments": {
+      "status": "not_available",
+      "value": null,
+      "numerator": 0.0,
+      "denominator": 0.0
+    }
+  },
+  "byFamily": {
+    "balance": {
+      "cases": 2,
+      "weight": 2.0,
+      "metrics": {
+        "captureRecall": {
+          "status": "ok",
+          "value": 1.0,
+          "numerator": 2.0,
+          "denominator": 2.0
+        },
+        "ignorePrecision": {
+          "status": "no_data",
+          "value": null,
+          "numerator": 0.0,
+          "denominator": 0.0
+        },
+        "eventKind": {
+          "status": "ok",
+          "value": 1.0,
+          "numerator": 2.0,
+          "denominator": 2.0
+        },
+        "amountRole": {
+          "status": "ok",
+          "value": 1.0,
+          "numerator": 2.0,
+          "denominator": 2.0
+        },
+        "instrument": {
+          "status": "ok",
+          "value": 1.0,
+          "numerator": 2.0,
+          "denominator": 2.0
+        },
+        "askRate": {
+          "status": "ok",
+          "value": 0.0,
+          "numerator": 0.0,
+          "denominator": 2.0
+        },
+        "eventKindByAmount": {
+          "status": "no_data",
+          "value": null,
+          "numerator": 0.0,
+          "denominator": 0.0
+        },
+        "amountRoleByAmount": {
+          "status": "no_data",
+          "value": null,
+          "numerator": 0.0,
+          "denominator": 0.0
+        },
+        "instrumentByAmount": {
+          "status": "no_data",
+          "value": null,
+          "numerator": 0.0,
+          "denominator": 0.0
+        }
+      }
+    },
+    "bill_statement": {
+      "cases": 3,
+      "weight": 3.0,
+      "metrics": {
+        "captureRecall": {
+          "status": "ok",
+          "value": 0.6666666666666666,
+          "numerator": 2.0,
+          "denominator": 3.0
+        },
+        "ignorePrecision": {
+          "status": "ok",
+          "value": 0.0,
+          "numerator": 0.0,
+          "denominator": 1.0
+        },
+        "eventKind": {
+          "status": "ok",
+          "value": 0.6666666666666666,
+          "numerator": 2.0,
+          "denominator": 3.0
+        },
+        "amountRole": {
+          "status": "ok",
+          "value": 0.6666666666666666,
+          "numerator": 2.0,
+          "denominator": 3.0
+        },
+        "instrument": {
+          "status": "ok",
+          "value": 0.6666666666666666,
+          "numerator": 2.0,
+          "denominator": 3.0
+        },
+        "askRate": {
+          "status": "ok",
+          "value": 0.0,
+          "numerator": 0.0,
+          "denominator": 3.0
+        },
+        "eventKindByAmount": {
+          "status": "no_data",
+          "value": null,
+          "numerator": 0.0,
+          "denominator": 0.0
+        },
+        "amountRoleByAmount": {
+          "status": "no_data",
+          "value": null,
+          "numerator": 0.0,
+          "denominator": 0.0
+        },
+        "instrumentByAmount": {
+          "status": "no_data",
+          "value": null,
+          "numerator": 0.0,
+          "denominator": 0.0
+        }
+      }
+    },
+    "card_payment": {
+      "cases": 6,
+      "weight": 6.0,
+      "metrics": {
+        "captureRecall": {
+          "status": "ok",
+          "value": 1.0,
+          "numerator": 6.0,
+          "denominator": 6.0
+        },
+        "ignorePrecision": {
+          "status": "no_data",
+          "value": null,
+          "numerator": 0.0,
+          "denominator": 0.0
+        },
+        "eventKind": {
+          "status": "ok",
+          "value": 0.0,
+          "numerator": 0.0,
+          "denominator": 6.0
+        },
+        "amountRole": {
+          "status": "ok",
+          "value": 1.0,
+          "numerator": 6.0,
+          "denominator": 6.0
+        },
+        "instrument": {
+          "status": "ok",
+          "value": 0.4,
+          "numerator": 2.0,
+          "denominator": 5.0
+        },
+        "askRate": {
+          "status": "ok",
+          "value": 0.0,
+          "numerator": 0.0,
+          "denominator": 6.0
+        },
+        "eventKindByAmount": {
+          "status": "ok",
+          "value": 0.0,
+          "numerator": 0.0,
+          "denominator": 96700.0
+        },
+        "amountRoleByAmount": {
+          "status": "ok",
+          "value": 1.0,
+          "numerator": 96700.0,
+          "denominator": 96700.0
+        },
+        "instrumentByAmount": {
+          "status": "ok",
+          "value": 0.3507853403141361,
+          "numerator": 33500.0,
+          "denominator": 95500.0
+        }
+      }
+    },
+    "card_spend": {
+      "cases": 6,
+      "weight": 6.0,
+      "metrics": {
+        "captureRecall": {
+          "status": "ok",
+          "value": 1.0,
+          "numerator": 5.0,
+          "denominator": 5.0
+        },
+        "ignorePrecision": {
+          "status": "ok",
+          "value": 1.0,
+          "numerator": 1.0,
+          "denominator": 1.0
+        },
+        "eventKind": {
+          "status": "ok",
+          "value": 0.8,
+          "numerator": 4.0,
+          "denominator": 5.0
+        },
+        "amountRole": {
+          "status": "ok",
+          "value": 0.8,
+          "numerator": 4.0,
+          "denominator": 5.0
+        },
+        "instrument": {
+          "status": "ok",
+          "value": 0.9,
+          "numerator": 4.5,
+          "denominator": 5.0
+        },
+        "askRate": {
+          "status": "ok",
+          "value": 0.0,
+          "numerator": 0.0,
+          "denominator": 5.0
+        },
+        "eventKindByAmount": {
+          "status": "ok",
+          "value": 0.6825548141086749,
+          "numerator": 2148.0,
+          "denominator": 3147.0
+        },
+        "amountRoleByAmount": {
+          "status": "ok",
+          "value": 0.6825548141086749,
+          "numerator": 2148.0,
+          "denominator": 3147.0
+        },
+        "instrumentByAmount": {
+          "status": "ok",
+          "value": 0.9207181442643788,
+          "numerator": 2897.5,
+          "denominator": 3147.0
+        }
+      }
+    },
+    "credit": {
+      "cases": 6,
+      "weight": 6.0,
+      "metrics": {
+        "captureRecall": {
+          "status": "ok",
+          "value": 1.0,
+          "numerator": 6.0,
+          "denominator": 6.0
+        },
+        "ignorePrecision": {
+          "status": "no_data",
+          "value": null,
+          "numerator": 0.0,
+          "denominator": 0.0
+        },
+        "eventKind": {
+          "status": "ok",
+          "value": 0.16666666666666666,
+          "numerator": 1.0,
+          "denominator": 6.0
+        },
+        "amountRole": {
+          "status": "ok",
+          "value": 1.0,
+          "numerator": 4.0,
+          "denominator": 4.0
+        },
+        "instrument": {
+          "status": "ok",
+          "value": 0.4,
+          "numerator": 2.0,
+          "denominator": 5.0
+        },
+        "askRate": {
+          "status": "ok",
+          "value": 0.3333333333333333,
+          "numerator": 2.0,
+          "denominator": 6.0
+        },
+        "eventKindByAmount": {
+          "status": "ok",
+          "value": 0.13636363636363635,
+          "numerator": 3000.0,
+          "denominator": 22000.0
+        },
+        "amountRoleByAmount": {
+          "status": "ok",
+          "value": 1.0,
+          "numerator": 22000.0,
+          "denominator": 22000.0
+        },
+        "instrumentByAmount": {
+          "status": "ok",
+          "value": 0.38461538461538464,
+          "numerator": 7500.0,
+          "denominator": 19500.0
+        }
+      }
+    },
+    "debit": {
+      "cases": 11,
+      "weight": 11.0,
+      "metrics": {
+        "captureRecall": {
+          "status": "ok",
+          "value": 1.0,
+          "numerator": 11.0,
+          "denominator": 11.0
+        },
+        "ignorePrecision": {
+          "status": "no_data",
+          "value": null,
+          "numerator": 0.0,
+          "denominator": 0.0
+        },
+        "eventKind": {
+          "status": "ok",
+          "value": 0.5454545454545454,
+          "numerator": 6.0,
+          "denominator": 11.0
+        },
+        "amountRole": {
+          "status": "ok",
+          "value": 1.0,
+          "numerator": 11.0,
+          "denominator": 11.0
+        },
+        "instrument": {
+          "status": "ok",
+          "value": 0.9090909090909091,
+          "numerator": 10.0,
+          "denominator": 11.0
+        },
+        "askRate": {
+          "status": "ok",
+          "value": 0.0,
+          "numerator": 0.0,
+          "denominator": 11.0
+        },
+        "eventKindByAmount": {
+          "status": "ok",
+          "value": 0.16746748365857603,
+          "numerator": 8800.5,
+          "denominator": 52550.5
+        },
+        "amountRoleByAmount": {
+          "status": "ok",
+          "value": 1.0,
+          "numerator": 52550.5,
+          "denominator": 52550.5
+        },
+        "instrumentByAmount": {
+          "status": "ok",
+          "value": 0.9714560280111512,
+          "numerator": 51050.5,
+          "denominator": 52550.5
+        }
+      }
+    },
+    "failed_declined": {
+      "cases": 3,
+      "weight": 3.0,
+      "metrics": {
+        "captureRecall": {
+          "status": "ok",
+          "value": 1.0,
+          "numerator": 3.0,
+          "denominator": 3.0
+        },
+        "ignorePrecision": {
+          "status": "no_data",
+          "value": null,
+          "numerator": 0.0,
+          "denominator": 0.0
+        },
+        "eventKind": {
+          "status": "ok",
+          "value": 0.0,
+          "numerator": 0.0,
+          "denominator": 3.0
+        },
+        "amountRole": {
+          "status": "ok",
+          "value": 0.0,
+          "numerator": 0.0,
+          "denominator": 2.0
+        },
+        "instrument": {
+          "status": "ok",
+          "value": 1.0,
+          "numerator": 3.0,
+          "denominator": 3.0
+        },
+        "askRate": {
+          "status": "ok",
+          "value": 0.0,
+          "numerator": 0.0,
+          "denominator": 3.0
+        },
+        "eventKindByAmount": {
+          "status": "ok",
+          "value": 0.0,
+          "numerator": 0.0,
+          "denominator": 1000.0
+        },
+        "amountRoleByAmount": {
+          "status": "ok",
+          "value": 0.0,
+          "numerator": 0.0,
+          "denominator": 1000.0
+        },
+        "instrumentByAmount": {
+          "status": "ok",
+          "value": 1.0,
+          "numerator": 1000.0,
+          "denominator": 1000.0
+        }
+      }
+    },
+    "investment": {
+      "cases": 3,
+      "weight": 3.0,
+      "metrics": {
+        "captureRecall": {
+          "status": "ok",
+          "value": 1.0,
+          "numerator": 3.0,
+          "denominator": 3.0
+        },
+        "ignorePrecision": {
+          "status": "no_data",
+          "value": null,
+          "numerator": 0.0,
+          "denominator": 0.0
+        },
+        "eventKind": {
+          "status": "ok",
+          "value": 0.6666666666666666,
+          "numerator": 2.0,
+          "denominator": 3.0
+        },
+        "amountRole": {
+          "status": "ok",
+          "value": 1.0,
+          "numerator": 2.0,
+          "denominator": 2.0
+        },
+        "instrument": {
+          "status": "ok",
+          "value": 1.0,
+          "numerator": 2.0,
+          "denominator": 2.0
+        },
+        "askRate": {
+          "status": "ok",
+          "value": 0.3333333333333333,
+          "numerator": 1.0,
+          "denominator": 3.0
+        },
+        "eventKindByAmount": {
+          "status": "ok",
+          "value": 1.0,
+          "numerator": 10000.0,
+          "denominator": 10000.0
+        },
+        "amountRoleByAmount": {
+          "status": "ok",
+          "value": 1.0,
+          "numerator": 10000.0,
+          "denominator": 10000.0
+        },
+        "instrumentByAmount": {
+          "status": "ok",
+          "value": 1.0,
+          "numerator": 10000.0,
+          "denominator": 10000.0
+        }
+      }
+    },
+    "ipo_asba_hold": {
+      "cases": 5,
+      "weight": 5.0,
+      "metrics": {
+        "captureRecall": {
+          "status": "ok",
+          "value": 0.6,
+          "numerator": 3.0,
+          "denominator": 5.0
+        },
+        "ignorePrecision": {
+          "status": "ok",
+          "value": 0.0,
+          "numerator": 0.0,
+          "denominator": 2.0
+        },
+        "eventKind": {
+          "status": "ok",
+          "value": 0.4,
+          "numerator": 2.0,
+          "denominator": 5.0
+        },
+        "amountRole": {
+          "status": "ok",
+          "value": 0.4,
+          "numerator": 2.0,
+          "denominator": 5.0
+        },
+        "instrument": {
+          "status": "ok",
+          "value": 0.4,
+          "numerator": 2.0,
+          "denominator": 5.0
+        },
+        "askRate": {
+          "status": "ok",
+          "value": 0.0,
+          "numerator": 0.0,
+          "denominator": 5.0
+        },
+        "eventKindByAmount": {
+          "status": "ok",
+          "value": 0.4,
+          "numerator": 28500.0,
+          "denominator": 71250.0
+        },
+        "amountRoleByAmount": {
+          "status": "ok",
+          "value": 0.4,
+          "numerator": 28500.0,
+          "denominator": 71250.0
+        },
+        "instrumentByAmount": {
+          "status": "ok",
+          "value": 0.4,
+          "numerator": 28500.0,
+          "denominator": 71250.0
+        }
+      }
+    },
+    "limit": {
+      "cases": 2,
+      "weight": 2.0,
+      "metrics": {
+        "captureRecall": {
+          "status": "ok",
+          "value": 0.0,
+          "numerator": 0.0,
+          "denominator": 1.0
+        },
+        "ignorePrecision": {
+          "status": "ok",
+          "value": 0.5,
+          "numerator": 1.0,
+          "denominator": 2.0
+        },
+        "eventKind": {
+          "status": "ok",
+          "value": 0.0,
+          "numerator": 0.0,
+          "denominator": 1.0
+        },
+        "amountRole": {
+          "status": "ok",
+          "value": 0.0,
+          "numerator": 0.0,
+          "denominator": 1.0
+        },
+        "instrument": {
+          "status": "ok",
+          "value": 0.0,
+          "numerator": 0.0,
+          "denominator": 1.0
+        },
+        "askRate": {
+          "status": "ok",
+          "value": 0.0,
+          "numerator": 0.0,
+          "denominator": 1.0
+        },
+        "eventKindByAmount": {
+          "status": "no_data",
+          "value": null,
+          "numerator": 0.0,
+          "denominator": 0.0
+        },
+        "amountRoleByAmount": {
+          "status": "no_data",
+          "value": null,
+          "numerator": 0.0,
+          "denominator": 0.0
+        },
+        "instrumentByAmount": {
+          "status": "no_data",
+          "value": null,
+          "numerator": 0.0,
+          "denominator": 0.0
+        }
+      }
+    },
+    "mandate_autopay": {
+      "cases": 8,
+      "weight": 8.0,
+      "metrics": {
+        "captureRecall": {
+          "status": "ok",
+          "value": 1.0,
+          "numerator": 8.0,
+          "denominator": 8.0
+        },
+        "ignorePrecision": {
+          "status": "no_data",
+          "value": null,
+          "numerator": 0.0,
+          "denominator": 0.0
+        },
+        "eventKind": {
+          "status": "ok",
+          "value": 0.4375,
+          "numerator": 3.5,
+          "denominator": 8.0
+        },
+        "amountRole": {
+          "status": "ok",
+          "value": 0.5833333333333334,
+          "numerator": 3.5,
+          "denominator": 6.0
+        },
+        "instrument": {
+          "status": "ok",
+          "value": 0.5,
+          "numerator": 2.5,
+          "denominator": 5.0
+        },
+        "askRate": {
+          "status": "ok",
+          "value": 0.0,
+          "numerator": 0.0,
+          "denominator": 8.0
+        },
+        "eventKindByAmount": {
+          "status": "ok",
+          "value": 0.3197202166064982,
+          "numerator": 708.5,
+          "denominator": 2216.0
+        },
+        "amountRoleByAmount": {
+          "status": "ok",
+          "value": 0.3197202166064982,
+          "numerator": 708.5,
+          "denominator": 2216.0
+        },
+        "instrumentByAmount": {
+          "status": "ok",
+          "value": 0.5,
+          "numerator": 708.5,
+          "denominator": 1417.0
+        }
+      }
+    },
+    "other": {
+      "cases": 2,
+      "weight": 2.0,
+      "metrics": {
+        "captureRecall": {
+          "status": "ok",
+          "value": 0.0,
+          "numerator": 0.0,
+          "denominator": 1.0
+        },
+        "ignorePrecision": {
+          "status": "ok",
+          "value": 0.5,
+          "numerator": 1.0,
+          "denominator": 2.0
+        },
+        "eventKind": {
+          "status": "ok",
+          "value": 0.0,
+          "numerator": 0.0,
+          "denominator": 1.0
+        },
+        "amountRole": {
+          "status": "ok",
+          "value": 0.0,
+          "numerator": 0.0,
+          "denominator": 1.0
+        },
+        "instrument": {
+          "status": "ok",
+          "value": 0.0,
+          "numerator": 0.0,
+          "denominator": 1.0
+        },
+        "askRate": {
+          "status": "ok",
+          "value": 0.0,
+          "numerator": 0.0,
+          "denominator": 1.0
+        },
+        "eventKindByAmount": {
+          "status": "no_data",
+          "value": null,
+          "numerator": 0.0,
+          "denominator": 0.0
+        },
+        "amountRoleByAmount": {
+          "status": "no_data",
+          "value": null,
+          "numerator": 0.0,
+          "denominator": 0.0
+        },
+        "instrumentByAmount": {
+          "status": "no_data",
+          "value": null,
+          "numerator": 0.0,
+          "denominator": 0.0
+        }
+      }
+    },
+    "otp_security": {
+      "cases": 2,
+      "weight": 2.0,
+      "metrics": {
+        "captureRecall": {
+          "status": "no_data",
+          "value": null,
+          "numerator": 0.0,
+          "denominator": 0.0
+        },
+        "ignorePrecision": {
+          "status": "ok",
+          "value": 1.0,
+          "numerator": 2.0,
+          "denominator": 2.0
+        },
+        "eventKind": {
+          "status": "no_data",
+          "value": null,
+          "numerator": 0.0,
+          "denominator": 0.0
+        },
+        "amountRole": {
+          "status": "no_data",
+          "value": null,
+          "numerator": 0.0,
+          "denominator": 0.0
+        },
+        "instrument": {
+          "status": "no_data",
+          "value": null,
+          "numerator": 0.0,
+          "denominator": 0.0
+        },
+        "askRate": {
+          "status": "no_data",
+          "value": null,
+          "numerator": 0.0,
+          "denominator": 0.0
+        },
+        "eventKindByAmount": {
+          "status": "no_data",
+          "value": null,
+          "numerator": 0.0,
+          "denominator": 0.0
+        },
+        "amountRoleByAmount": {
+          "status": "no_data",
+          "value": null,
+          "numerator": 0.0,
+          "denominator": 0.0
+        },
+        "instrumentByAmount": {
+          "status": "no_data",
+          "value": null,
+          "numerator": 0.0,
+          "denominator": 0.0
+        }
+      }
+    },
+    "refund_reversal": {
+      "cases": 7,
+      "weight": 7.0,
+      "metrics": {
+        "captureRecall": {
+          "status": "ok",
+          "value": 0.8571428571428571,
+          "numerator": 6.0,
+          "denominator": 7.0
+        },
+        "ignorePrecision": {
+          "status": "ok",
+          "value": 0.0,
+          "numerator": 0.0,
+          "denominator": 1.0
+        },
+        "eventKind": {
+          "status": "ok",
+          "value": 0.0,
+          "numerator": 0.0,
+          "denominator": 7.0
+        },
+        "amountRole": {
+          "status": "ok",
+          "value": 1.0,
+          "numerator": 5.0,
+          "denominator": 5.0
+        },
+        "instrument": {
+          "status": "ok",
+          "value": 0.8333333333333334,
+          "numerator": 5.0,
+          "denominator": 6.0
+        },
+        "askRate": {
+          "status": "ok",
+          "value": 0.0,
+          "numerator": 0.0,
+          "denominator": 7.0
+        },
+        "eventKindByAmount": {
+          "status": "ok",
+          "value": 0.0,
+          "numerator": 0.0,
+          "denominator": 2199.0
+        },
+        "amountRoleByAmount": {
+          "status": "ok",
+          "value": 1.0,
+          "numerator": 2199.0,
+          "denominator": 2199.0
+        },
+        "instrumentByAmount": {
+          "status": "ok",
+          "value": 1.0,
+          "numerator": 2199.0,
+          "denominator": 2199.0
+        }
+      }
+    },
+    "reward_points": {
+      "cases": 8,
+      "weight": 8.0,
+      "metrics": {
+        "captureRecall": {
+          "status": "ok",
+          "value": 1.0,
+          "numerator": 5.0,
+          "denominator": 5.0
+        },
+        "ignorePrecision": {
+          "status": "ok",
+          "value": 1.0,
+          "numerator": 3.0,
+          "denominator": 3.0
+        },
+        "eventKind": {
+          "status": "ok",
+          "value": 0.1,
+          "numerator": 0.5,
+          "denominator": 5.0
+        },
+        "amountRole": {
+          "status": "ok",
+          "value": 0.6,
+          "numerator": 3.0,
+          "denominator": 5.0
+        },
+        "instrument": {
+          "status": "ok",
+          "value": 0.5,
+          "numerator": 2.0,
+          "denominator": 4.0
+        },
+        "askRate": {
+          "status": "ok",
+          "value": 0.2,
+          "numerator": 1.0,
+          "denominator": 5.0
+        },
+        "eventKindByAmount": {
+          "status": "ok",
+          "value": 0.0,
+          "numerator": 0.0,
+          "denominator": 674.0
+        },
+        "amountRoleByAmount": {
+          "status": "ok",
+          "value": 0.9629080118694362,
+          "numerator": 649.0,
+          "denominator": 674.0
+        },
+        "instrumentByAmount": {
+          "status": "ok",
+          "value": 0.9629080118694362,
+          "numerator": 649.0,
+          "denominator": 674.0
+        }
+      }
+    },
+    "salary_income": {
+      "cases": 3,
+      "weight": 3.0,
+      "metrics": {
+        "captureRecall": {
+          "status": "ok",
+          "value": 1.0,
+          "numerator": 3.0,
+          "denominator": 3.0
+        },
+        "ignorePrecision": {
+          "status": "no_data",
+          "value": null,
+          "numerator": 0.0,
+          "denominator": 0.0
+        },
+        "eventKind": {
+          "status": "ok",
+          "value": 0.16666666666666666,
+          "numerator": 0.5,
+          "denominator": 3.0
+        },
+        "amountRole": {
+          "status": "ok",
+          "value": 1.0,
+          "numerator": 3.0,
+          "denominator": 3.0
+        },
+        "instrument": {
+          "status": "ok",
+          "value": 1.0,
+          "numerator": 3.0,
+          "denominator": 3.0
+        },
+        "askRate": {
+          "status": "ok",
+          "value": 0.0,
+          "numerator": 0.0,
+          "denominator": 3.0
+        },
+        "eventKindByAmount": {
+          "status": "ok",
+          "value": 0.22972972972972974,
+          "numerator": 42500.0,
+          "denominator": 185000.0
+        },
+        "amountRoleByAmount": {
+          "status": "ok",
+          "value": 1.0,
+          "numerator": 185000.0,
+          "denominator": 185000.0
+        },
+        "instrumentByAmount": {
+          "status": "ok",
+          "value": 1.0,
+          "numerator": 185000.0,
+          "denominator": 185000.0
+        }
+      }
+    },
+    "wallet": {
+      "cases": 5,
+      "weight": 5.0,
+      "metrics": {
+        "captureRecall": {
+          "status": "ok",
+          "value": 1.0,
+          "numerator": 5.0,
+          "denominator": 5.0
+        },
+        "ignorePrecision": {
+          "status": "no_data",
+          "value": null,
+          "numerator": 0.0,
+          "denominator": 0.0
+        },
+        "eventKind": {
+          "status": "ok",
+          "value": 0.3,
+          "numerator": 1.5,
+          "denominator": 5.0
+        },
+        "amountRole": {
+          "status": "ok",
+          "value": 0.5,
+          "numerator": 2.5,
+          "denominator": 5.0
+        },
+        "instrument": {
+          "status": "ok",
+          "value": 0.5,
+          "numerator": 2.5,
+          "denominator": 5.0
+        },
+        "askRate": {
+          "status": "ok",
+          "value": 0.4,
+          "numerator": 2.0,
+          "denominator": 5.0
+        },
+        "eventKindByAmount": {
+          "status": "ok",
+          "value": 0.22188581314878894,
+          "numerator": 769.5,
+          "denominator": 3468.0
+        },
+        "amountRoleByAmount": {
+          "status": "ok",
+          "value": 0.5679065743944637,
+          "numerator": 1969.5,
+          "denominator": 3468.0
+        },
+        "instrumentByAmount": {
+          "status": "ok",
+          "value": 0.5679065743944637,
+          "numerator": 1969.5,
+          "denominator": 3468.0
+        }
+      }
+    }
+  },
+  "byBrand": {
+    "AMAZON": {
+      "cases": 2,
+      "weight": 2.0,
+      "metrics": {
+        "captureRecall": {
+          "status": "ok",
+          "value": 1.0,
+          "numerator": 2.0,
+          "denominator": 2.0
+        },
+        "ignorePrecision": {
+          "status": "no_data",
+          "value": null,
+          "numerator": 0.0,
+          "denominator": 0.0
+        },
+        "eventKind": {
+          "status": "ok",
+          "value": 0.0,
+          "numerator": 0.0,
+          "denominator": 2.0
+        },
+        "amountRole": {
+          "status": "ok",
+          "value": 0.0,
+          "numerator": 0.0,
+          "denominator": 2.0
+        },
+        "instrument": {
+          "status": "ok",
+          "value": 0.0,
+          "numerator": 0.0,
+          "denominator": 2.0
+        },
+        "askRate": {
+          "status": "ok",
+          "value": 1.0,
+          "numerator": 2.0,
+          "denominator": 2.0
+        },
+        "eventKindByAmount": {
+          "status": "ok",
+          "value": 0.0,
+          "numerator": 0.0,
+          "denominator": 524.0
+        },
+        "amountRoleByAmount": {
+          "status": "ok",
+          "value": 0.0,
+          "numerator": 0.0,
+          "denominator": 524.0
+        },
+        "instrumentByAmount": {
+          "status": "ok",
+          "value": 0.0,
+          "numerator": 0.0,
+          "denominator": 524.0
+        }
+      }
+    },
+    "AMEXIN": {
+      "cases": 1,
+      "weight": 1.0,
+      "metrics": {
+        "captureRecall": {
+          "status": "ok",
+          "value": 1.0,
+          "numerator": 1.0,
+          "denominator": 1.0
+        },
+        "ignorePrecision": {
+          "status": "no_data",
+          "value": null,
+          "numerator": 0.0,
+          "denominator": 0.0
+        },
+        "eventKind": {
+          "status": "ok",
+          "value": 0.0,
+          "numerator": 0.0,
+          "denominator": 1.0
+        },
+        "amountRole": {
+          "status": "ok",
+          "value": 1.0,
+          "numerator": 1.0,
+          "denominator": 1.0
+        },
+        "instrument": {
+          "status": "ok",
+          "value": 0.0,
+          "numerator": 0.0,
+          "denominator": 1.0
+        },
+        "askRate": {
+          "status": "ok",
+          "value": 0.0,
+          "numerator": 0.0,
+          "denominator": 1.0
+        },
+        "eventKindByAmount": {
+          "status": "ok",
+          "value": 0.0,
+          "numerator": 0.0,
+          "denominator": 12000.0
+        },
+        "amountRoleByAmount": {
+          "status": "ok",
+          "value": 1.0,
+          "numerator": 12000.0,
+          "denominator": 12000.0
+        },
+        "instrumentByAmount": {
+          "status": "ok",
+          "value": 0.0,
+          "numerator": 0.0,
+          "denominator": 12000.0
+        }
+      }
+    },
+    "AXISBK": {
+      "cases": 4,
+      "weight": 4.0,
+      "metrics": {
+        "captureRecall": {
+          "status": "ok",
+          "value": 1.0,
+          "numerator": 4.0,
+          "denominator": 4.0
+        },
+        "ignorePrecision": {
+          "status": "no_data",
+          "value": null,
+          "numerator": 0.0,
+          "denominator": 0.0
+        },
+        "eventKind": {
+          "status": "ok",
+          "value": 0.5,
+          "numerator": 2.0,
+          "denominator": 4.0
+        },
+        "amountRole": {
+          "status": "ok",
+          "value": 1.0,
+          "numerator": 4.0,
+          "denominator": 4.0
+        },
+        "instrument": {
+          "status": "ok",
+          "value": 0.5,
+          "numerator": 2.0,
+          "denominator": 4.0
+        },
+        "askRate": {
+          "status": "ok",
+          "value": 0.0,
+          "numerator": 0.0,
+          "denominator": 4.0
+        },
+        "eventKindByAmount": {
+          "status": "ok",
+          "value": 0.06818181818181818,
+          "numerator": 1500.0,
+          "denominator": 22000.0
+        },
+        "amountRoleByAmount": {
+          "status": "ok",
+          "value": 1.0,
+          "numerator": 22000.0,
+          "denominator": 22000.0
+        },
+        "instrumentByAmount": {
+          "status": "ok",
+          "value": 0.38636363636363635,
+          "numerator": 8500.0,
+          "denominator": 22000.0
+        }
+      }
+    },
+    "CANBNK": {
+      "cases": 1,
+      "weight": 1.0,
+      "metrics": {
+        "captureRecall": {
+          "status": "ok",
+          "value": 1.0,
+          "numerator": 1.0,
+          "denominator": 1.0
+        },
+        "ignorePrecision": {
+          "status": "no_data",
+          "value": null,
+          "numerator": 0.0,
+          "denominator": 0.0
+        },
+        "eventKind": {
+          "status": "ok",
+          "value": 1.0,
+          "numerator": 1.0,
+          "denominator": 1.0
+        },
+        "amountRole": {
+          "status": "ok",
+          "value": 1.0,
+          "numerator": 1.0,
+          "denominator": 1.0
+        },
+        "instrument": {
+          "status": "ok",
+          "value": 1.0,
+          "numerator": 1.0,
+          "denominator": 1.0
+        },
+        "askRate": {
+          "status": "ok",
+          "value": 0.0,
+          "numerator": 0.0,
+          "denominator": 1.0
+        },
+        "eventKindByAmount": {
+          "status": "ok",
+          "value": 1.0,
+          "numerator": 3000.0,
+          "denominator": 3000.0
+        },
+        "amountRoleByAmount": {
+          "status": "ok",
+          "value": 1.0,
+          "numerator": 3000.0,
+          "denominator": 3000.0
+        },
+        "instrumentByAmount": {
+          "status": "ok",
+          "value": 1.0,
+          "numerator": 3000.0,
+          "denominator": 3000.0
+        }
+      }
+    },
+    "HDFCBK": {
+      "cases": 56,
+      "weight": 56.0,
+      "metrics": {
+        "captureRecall": {
+          "status": "ok",
+          "value": 0.88,
+          "numerator": 44.0,
+          "denominator": 50.0
+        },
+        "ignorePrecision": {
+          "status": "ok",
+          "value": 0.5,
+          "numerator": 6.0,
+          "denominator": 12.0
+        },
+        "eventKind": {
+          "status": "ok",
+          "value": 0.29,
+          "numerator": 14.5,
+          "denominator": 50.0
+        },
+        "amountRole": {
+          "status": "ok",
+          "value": 0.7906976744186046,
+          "numerator": 34.0,
+          "denominator": 43.0
+        },
+        "instrument": {
+          "status": "ok",
+          "value": 0.7386363636363636,
+          "numerator": 32.5,
+          "denominator": 44.0
+        },
+        "askRate": {
+          "status": "ok",
+          "value": 0.04,
+          "numerator": 2.0,
+          "denominator": 50.0
+        },
+        "eventKindByAmount": {
+          "status": "ok",
+          "value": 0.21255597301189352,
+          "numerator": 75498.5,
+          "denominator": 355193.5
+        },
+        "amountRoleByAmount": {
+          "status": "ok",
+          "value": 0.911465159131572,
+          "numerator": 323746.5,
+          "denominator": 355193.5
+        },
+        "instrumentByAmount": {
+          "status": "ok",
+          "value": 0.8448835097214242,
+          "numerator": 296296.0,
+          "denominator": 350694.5
+        }
+      }
+    },
+    "ICICIB": {
+      "cases": 1,
+      "weight": 1.0,
+      "metrics": {
+        "captureRecall": {
+          "status": "ok",
+          "value": 1.0,
+          "numerator": 1.0,
+          "denominator": 1.0
+        },
+        "ignorePrecision": {
+          "status": "no_data",
+          "value": null,
+          "numerator": 0.0,
+          "denominator": 0.0
+        },
+        "eventKind": {
+          "status": "ok",
+          "value": 0.0,
+          "numerator": 0.0,
+          "denominator": 1.0
+        },
+        "amountRole": {
+          "status": "ok",
+          "value": 0.0,
+          "numerator": 0.0,
+          "denominator": 1.0
+        },
+        "instrument": {
+          "status": "ok",
+          "value": 1.0,
+          "numerator": 1.0,
+          "denominator": 1.0
+        },
+        "askRate": {
+          "status": "ok",
+          "value": 0.0,
+          "numerator": 0.0,
+          "denominator": 1.0
+        },
+        "eventKindByAmount": {
+          "status": "ok",
+          "value": 0.0,
+          "numerator": 0.0,
+          "denominator": 500.0
+        },
+        "amountRoleByAmount": {
+          "status": "ok",
+          "value": 0.0,
+          "numerator": 0.0,
+          "denominator": 500.0
+        },
+        "instrumentByAmount": {
+          "status": "ok",
+          "value": 1.0,
+          "numerator": 500.0,
+          "denominator": 500.0
+        }
+      }
+    },
+    "ICICIT": {
+      "cases": 7,
+      "weight": 7.0,
+      "metrics": {
+        "captureRecall": {
+          "status": "ok",
+          "value": 1.0,
+          "numerator": 7.0,
+          "denominator": 7.0
+        },
+        "ignorePrecision": {
+          "status": "no_data",
+          "value": null,
+          "numerator": 0.0,
+          "denominator": 0.0
+        },
+        "eventKind": {
+          "status": "ok",
+          "value": 0.5,
+          "numerator": 3.5,
+          "denominator": 7.0
+        },
+        "amountRole": {
+          "status": "ok",
+          "value": 0.5714285714285714,
+          "numerator": 4.0,
+          "denominator": 7.0
+        },
+        "instrument": {
+          "status": "ok",
+          "value": 0.42857142857142855,
+          "numerator": 3.0,
+          "denominator": 7.0
+        },
+        "askRate": {
+          "status": "ok",
+          "value": 0.0,
+          "numerator": 0.0,
+          "denominator": 7.0
+        },
+        "eventKindByAmount": {
+          "status": "ok",
+          "value": 0.2756851798143852,
+          "numerator": 15209.0,
+          "denominator": 55168.0
+        },
+        "amountRoleByAmount": {
+          "status": "ok",
+          "value": 0.7288464327146171,
+          "numerator": 40209.0,
+          "denominator": 55168.0
+        },
+        "instrumentByAmount": {
+          "status": "ok",
+          "value": 0.2756851798143852,
+          "numerator": 15209.0,
+          "denominator": 55168.0
+        }
+      }
+    },
+    "IPAYTM": {
+      "cases": 1,
+      "weight": 1.0,
+      "metrics": {
+        "captureRecall": {
+          "status": "ok",
+          "value": 1.0,
+          "numerator": 1.0,
+          "denominator": 1.0
+        },
+        "ignorePrecision": {
+          "status": "no_data",
+          "value": null,
+          "numerator": 0.0,
+          "denominator": 0.0
+        },
+        "eventKind": {
+          "status": "ok",
+          "value": 1.0,
+          "numerator": 1.0,
+          "denominator": 1.0
+        },
+        "amountRole": {
+          "status": "ok",
+          "value": 1.0,
+          "numerator": 1.0,
+          "denominator": 1.0
+        },
+        "instrument": {
+          "status": "ok",
+          "value": 1.0,
+          "numerator": 1.0,
+          "denominator": 1.0
+        },
+        "askRate": {
+          "status": "ok",
+          "value": 0.0,
+          "numerator": 0.0,
+          "denominator": 1.0
+        },
+        "eventKindByAmount": {
+          "status": "ok",
+          "value": 1.0,
+          "numerator": 120.0,
+          "denominator": 120.0
+        },
+        "amountRoleByAmount": {
+          "status": "ok",
+          "value": 1.0,
+          "numerator": 120.0,
+          "denominator": 120.0
+        },
+        "instrumentByAmount": {
+          "status": "ok",
+          "value": 1.0,
+          "numerator": 120.0,
+          "denominator": 120.0
+        }
+      }
+    },
+    "KOTAKB": {
+      "cases": 1,
+      "weight": 1.0,
+      "metrics": {
+        "captureRecall": {
+          "status": "ok",
+          "value": 1.0,
+          "numerator": 1.0,
+          "denominator": 1.0
+        },
+        "ignorePrecision": {
+          "status": "no_data",
+          "value": null,
+          "numerator": 0.0,
+          "denominator": 0.0
+        },
+        "eventKind": {
+          "status": "ok",
+          "value": 1.0,
+          "numerator": 1.0,
+          "denominator": 1.0
+        },
+        "amountRole": {
+          "status": "ok",
+          "value": 1.0,
+          "numerator": 1.0,
+          "denominator": 1.0
+        },
+        "instrument": {
+          "status": "ok",
+          "value": 1.0,
+          "numerator": 1.0,
+          "denominator": 1.0
+        },
+        "askRate": {
+          "status": "ok",
+          "value": 0.0,
+          "numerator": 0.0,
+          "denominator": 1.0
+        },
+        "eventKindByAmount": {
+          "status": "ok",
+          "value": 1.0,
+          "numerator": 300.0,
+          "denominator": 300.0
+        },
+        "amountRoleByAmount": {
+          "status": "ok",
+          "value": 1.0,
+          "numerator": 300.0,
+          "denominator": 300.0
+        },
+        "instrumentByAmount": {
+          "status": "ok",
+          "value": 1.0,
+          "numerator": 300.0,
+          "denominator": 300.0
+        }
+      }
+    },
+    "KOTAKN": {
+      "cases": 1,
+      "weight": 1.0,
+      "metrics": {
+        "captureRecall": {
+          "status": "ok",
+          "value": 1.0,
+          "numerator": 1.0,
+          "denominator": 1.0
+        },
+        "ignorePrecision": {
+          "status": "no_data",
+          "value": null,
+          "numerator": 0.0,
+          "denominator": 0.0
+        },
+        "eventKind": {
+          "status": "ok",
+          "value": 0.0,
+          "numerator": 0.0,
+          "denominator": 1.0
+        },
+        "amountRole": {
+          "status": "no_data",
+          "value": null,
+          "numerator": 0.0,
+          "denominator": 0.0
+        },
+        "instrument": {
+          "status": "no_data",
+          "value": null,
+          "numerator": 0.0,
+          "denominator": 0.0
+        },
+        "askRate": {
+          "status": "ok",
+          "value": 1.0,
+          "numerator": 1.0,
+          "denominator": 1.0
+        },
+        "eventKindByAmount": {
+          "status": "no_data",
+          "value": null,
+          "numerator": 0.0,
+          "denominator": 0.0
+        },
+        "amountRoleByAmount": {
+          "status": "no_data",
+          "value": null,
+          "numerator": 0.0,
+          "denominator": 0.0
+        },
+        "instrumentByAmount": {
+          "status": "no_data",
+          "value": null,
+          "numerator": 0.0,
+          "denominator": 0.0
+        }
+      }
+    },
+    "PYTM": {
+      "cases": 1,
+      "weight": 1.0,
+      "metrics": {
+        "captureRecall": {
+          "status": "no_data",
+          "value": null,
+          "numerator": 0.0,
+          "denominator": 0.0
+        },
+        "ignorePrecision": {
+          "status": "ok",
+          "value": 1.0,
+          "numerator": 1.0,
+          "denominator": 1.0
+        },
+        "eventKind": {
+          "status": "no_data",
+          "value": null,
+          "numerator": 0.0,
+          "denominator": 0.0
+        },
+        "amountRole": {
+          "status": "no_data",
+          "value": null,
+          "numerator": 0.0,
+          "denominator": 0.0
+        },
+        "instrument": {
+          "status": "no_data",
+          "value": null,
+          "numerator": 0.0,
+          "denominator": 0.0
+        },
+        "askRate": {
+          "status": "no_data",
+          "value": null,
+          "numerator": 0.0,
+          "denominator": 0.0
+        },
+        "eventKindByAmount": {
+          "status": "no_data",
+          "value": null,
+          "numerator": 0.0,
+          "denominator": 0.0
+        },
+        "amountRoleByAmount": {
+          "status": "no_data",
+          "value": null,
+          "numerator": 0.0,
+          "denominator": 0.0
+        },
+        "instrumentByAmount": {
+          "status": "no_data",
+          "value": null,
+          "numerator": 0.0,
+          "denominator": 0.0
+        }
+      }
+    },
+    "SBIBNK": {
+      "cases": 1,
+      "weight": 1.0,
+      "metrics": {
+        "captureRecall": {
+          "status": "ok",
+          "value": 1.0,
+          "numerator": 1.0,
+          "denominator": 1.0
+        },
+        "ignorePrecision": {
+          "status": "no_data",
+          "value": null,
+          "numerator": 0.0,
+          "denominator": 0.0
+        },
+        "eventKind": {
+          "status": "ok",
+          "value": 0.0,
+          "numerator": 0.0,
+          "denominator": 1.0
+        },
+        "amountRole": {
+          "status": "ok",
+          "value": 1.0,
+          "numerator": 1.0,
+          "denominator": 1.0
+        },
+        "instrument": {
+          "status": "ok",
+          "value": 1.0,
+          "numerator": 1.0,
+          "denominator": 1.0
+        },
+        "askRate": {
+          "status": "ok",
+          "value": 0.0,
+          "numerator": 0.0,
+          "denominator": 1.0
+        },
+        "eventKindByAmount": {
+          "status": "ok",
+          "value": 0.0,
+          "numerator": 0.0,
+          "denominator": 250.0
+        },
+        "amountRoleByAmount": {
+          "status": "ok",
+          "value": 1.0,
+          "numerator": 250.0,
+          "denominator": 250.0
+        },
+        "instrumentByAmount": {
+          "status": "ok",
+          "value": 1.0,
+          "numerator": 250.0,
+          "denominator": 250.0
+        }
+      }
+    },
+    "SBICRD": {
+      "cases": 1,
+      "weight": 1.0,
+      "metrics": {
+        "captureRecall": {
+          "status": "ok",
+          "value": 1.0,
+          "numerator": 1.0,
+          "denominator": 1.0
+        },
+        "ignorePrecision": {
+          "status": "no_data",
+          "value": null,
+          "numerator": 0.0,
+          "denominator": 0.0
+        },
+        "eventKind": {
+          "status": "ok",
+          "value": 1.0,
+          "numerator": 1.0,
+          "denominator": 1.0
+        },
+        "amountRole": {
+          "status": "ok",
+          "value": 1.0,
+          "numerator": 1.0,
+          "denominator": 1.0
+        },
+        "instrument": {
+          "status": "ok",
+          "value": 1.0,
+          "numerator": 1.0,
+          "denominator": 1.0
+        },
+        "askRate": {
+          "status": "ok",
+          "value": 0.0,
+          "numerator": 0.0,
+          "denominator": 1.0
+        },
+        "eventKindByAmount": {
+          "status": "ok",
+          "value": 1.0,
+          "numerator": 799.0,
+          "denominator": 799.0
+        },
+        "amountRoleByAmount": {
+          "status": "ok",
+          "value": 1.0,
+          "numerator": 799.0,
+          "denominator": 799.0
+        },
+        "instrumentByAmount": {
+          "status": "ok",
+          "value": 1.0,
+          "numerator": 799.0,
+          "denominator": 799.0
+        }
+      }
+    },
+    "SBIINB": {
+      "cases": 1,
+      "weight": 1.0,
+      "metrics": {
+        "captureRecall": {
+          "status": "ok",
+          "value": 1.0,
+          "numerator": 1.0,
+          "denominator": 1.0
+        },
+        "ignorePrecision": {
+          "status": "no_data",
+          "value": null,
+          "numerator": 0.0,
+          "denominator": 0.0
+        },
+        "eventKind": {
+          "status": "ok",
+          "value": 1.0,
+          "numerator": 1.0,
+          "denominator": 1.0
+        },
+        "amountRole": {
+          "status": "ok",
+          "value": 1.0,
+          "numerator": 1.0,
+          "denominator": 1.0
+        },
+        "instrument": {
+          "status": "ok",
+          "value": 1.0,
+          "numerator": 1.0,
+          "denominator": 1.0
+        },
+        "askRate": {
+          "status": "ok",
+          "value": 0.0,
+          "numerator": 0.0,
+          "denominator": 1.0
+        },
+        "eventKindByAmount": {
+          "status": "no_data",
+          "value": null,
+          "numerator": 0.0,
+          "denominator": 0.0
+        },
+        "amountRoleByAmount": {
+          "status": "no_data",
+          "value": null,
+          "numerator": 0.0,
+          "denominator": 0.0
+        },
+        "instrumentByAmount": {
+          "status": "no_data",
+          "value": null,
+          "numerator": 0.0,
+          "denominator": 0.0
+        }
+      }
+    },
+    "TNBPAY": {
+      "cases": 1,
+      "weight": 1.0,
+      "metrics": {
+        "captureRecall": {
+          "status": "ok",
+          "value": 1.0,
+          "numerator": 1.0,
+          "denominator": 1.0
+        },
+        "ignorePrecision": {
+          "status": "no_data",
+          "value": null,
+          "numerator": 0.0,
+          "denominator": 0.0
+        },
+        "eventKind": {
+          "status": "ok",
+          "value": 0.0,
+          "numerator": 0.0,
+          "denominator": 1.0
+        },
+        "amountRole": {
+          "status": "ok",
+          "value": 1.0,
+          "numerator": 1.0,
+          "denominator": 1.0
+        },
+        "instrument": {
+          "status": "no_data",
+          "value": null,
+          "numerator": 0.0,
+          "denominator": 0.0
+        },
+        "askRate": {
+          "status": "ok",
+          "value": 0.0,
+          "numerator": 0.0,
+          "denominator": 1.0
+        },
+        "eventKindByAmount": {
+          "status": "no_data",
+          "value": null,
+          "numerator": 0.0,
+          "denominator": 0.0
+        },
+        "amountRoleByAmount": {
+          "status": "no_data",
+          "value": null,
+          "numerator": 0.0,
+          "denominator": 0.0
+        },
+        "instrumentByAmount": {
+          "status": "no_data",
+          "value": null,
+          "numerator": 0.0,
+          "denominator": 0.0
+        }
+      }
+    },
+    "VICARE": {
+      "cases": 1,
+      "weight": 1.0,
+      "metrics": {
+        "captureRecall": {
+          "status": "no_data",
+          "value": null,
+          "numerator": 0.0,
+          "denominator": 0.0
+        },
+        "ignorePrecision": {
+          "status": "ok",
+          "value": 1.0,
+          "numerator": 1.0,
+          "denominator": 1.0
+        },
+        "eventKind": {
+          "status": "no_data",
+          "value": null,
+          "numerator": 0.0,
+          "denominator": 0.0
+        },
+        "amountRole": {
+          "status": "no_data",
+          "value": null,
+          "numerator": 0.0,
+          "denominator": 0.0
+        },
+        "instrument": {
+          "status": "no_data",
+          "value": null,
+          "numerator": 0.0,
+          "denominator": 0.0
+        },
+        "askRate": {
+          "status": "no_data",
+          "value": null,
+          "numerator": 0.0,
+          "denominator": 0.0
+        },
+        "eventKindByAmount": {
+          "status": "no_data",
+          "value": null,
+          "numerator": 0.0,
+          "denominator": 0.0
+        },
+        "amountRoleByAmount": {
+          "status": "no_data",
+          "value": null,
+          "numerator": 0.0,
+          "denominator": 0.0
+        },
+        "instrumentByAmount": {
+          "status": "no_data",
+          "value": null,
+          "numerator": 0.0,
+          "denominator": 0.0
+        }
+      }
+    },
+    "ZOMATO": {
+      "cases": 1,
+      "weight": 1.0,
+      "metrics": {
+        "captureRecall": {
+          "status": "ok",
+          "value": 1.0,
+          "numerator": 1.0,
+          "denominator": 1.0
+        },
+        "ignorePrecision": {
+          "status": "no_data",
+          "value": null,
+          "numerator": 0.0,
+          "denominator": 0.0
+        },
+        "eventKind": {
+          "status": "ok",
+          "value": 0.0,
+          "numerator": 0.0,
+          "denominator": 1.0
+        },
+        "amountRole": {
+          "status": "ok",
+          "value": 0.0,
+          "numerator": 0.0,
+          "denominator": 1.0
+        },
+        "instrument": {
+          "status": "ok",
+          "value": 0.0,
+          "numerator": 0.0,
+          "denominator": 1.0
+        },
+        "askRate": {
+          "status": "ok",
+          "value": 1.0,
+          "numerator": 1.0,
+          "denominator": 1.0
+        },
+        "eventKindByAmount": {
+          "status": "ok",
+          "value": 0.0,
+          "numerator": 0.0,
+          "denominator": 350.0
+        },
+        "amountRoleByAmount": {
+          "status": "ok",
+          "value": 0.0,
+          "numerator": 0.0,
+          "denominator": 350.0
+        },
+        "instrumentByAmount": {
+          "status": "ok",
+          "value": 0.0,
+          "numerator": 0.0,
+          "denominator": 350.0
+        }
+      }
+    }
+  },
+  "failures": [
+    {
+      "kind": "case",
+      "id": "probe:amazon_pay_balance_spend",
+      "reasons": [
+        "message became a review item",
+        "kind: no movement fact produced",
+        "amount: no movement fact produced",
+        "instrument: no movement fact produced",
+        "kind: no balance_snapshot fact produced",
+        "amount: no balance_snapshot fact produced",
+        "instrument: no balance_snapshot fact produced"
+      ]
+    },
+    {
+      "kind": "case",
+      "id": "probe:amazon_pay_cashback",
+      "reasons": [
+        "message became a review item",
+        "kind: no movement fact produced",
+        "amount: no movement fact produced",
+        "instrument: no movement fact produced"
+      ]
+    },
+    {
+      "kind": "case",
+      "id": "probe:cc_payment_amex",
+      "reasons": [
+        "kind: attrs.direction: expected credit, got null",
+        "instrument: instrument.maskDigits: expected 10005, got 2026"
+      ]
+    },
+    {
+      "kind": "case",
+      "id": "probe:cc_payment_axis",
+      "reasons": [
+        "kind: attrs.direction: expected credit, got null"
+      ]
+    },
+    {
+      "kind": "case",
+      "id": "probe:axis_multiline",
+      "reasons": [
+        "instrument: instrument.maskDigits: expected 123456, got null"
+      ]
+    },
+    {
+      "kind": "case",
+      "id": "corpus:card_bill_payment",
+      "reasons": [
+        "kind: attrs.direction: expected debit, got null",
+        "instrument: instrument: expected an object, got null"
+      ]
+    },
+    {
+      "kind": "case",
+      "id": "corpus:autopay_failed",
+      "reasons": [
+        "kind: attrs.direction: expected debit, got null"
+      ]
+    },
+    {
+      "kind": "case",
+      "id": "probe:cc_bill_bank_side",
+      "reasons": [
+        "kind: attrs.direction: expected debit, got null",
+        "instrument: instrument.kind: expected bank_account, got credit_card"
+      ]
+    },
+    {
+      "kind": "case",
+      "id": "local:21",
+      "reasons": [
+        "kind: attrs.direction: expected credit, got null"
+      ]
+    },
+    {
+      "kind": "case",
+      "id": "probe:upcoming_autopay",
+      "reasons": [
+        "kind: no attempt fact produced",
+        "amount: no attempt fact produced",
+        "instrument: no attempt fact produced"
+      ]
+    },
+    {
+      "kind": "case",
+      "id": "corpus:refund_with_offer",
+      "reasons": [
+        "kind: attrs.direction: expected credit, got null"
+      ]
+    },
+    {
+      "kind": "case",
+      "id": "probe:ipo_asba_block",
+      "reasons": [
+        "financial message was ignored",
+        "kind: no hold fact produced",
+        "amount: no hold fact produced",
+        "instrument: no hold fact produced"
+      ]
+    },
+    {
+      "kind": "case",
+      "id": "local:04",
+      "reasons": [
+        "kind: attrs.purpose: expected salary, got null"
+      ]
+    },
+    {
+      "kind": "case",
+      "id": "corpus:salary_income",
+      "reasons": [
+        "kind: attrs.purpose: expected salary, got null"
+      ]
+    },
+    {
+      "kind": "case",
+      "id": "local:18",
+      "reasons": [
+        "message became a review item",
+        "kind: no attempt fact produced",
+        "instrument: no attempt fact produced"
+      ]
+    },
+    {
+      "kind": "case",
+      "id": "probe:spend_avl_lmt_hdfc",
+      "reasons": [
+        "kind: no balance_snapshot fact produced",
+        "amount: no balance_snapshot fact produced",
+        "instrument: no balance_snapshot fact produced"
+      ]
+    },
+    {
+      "kind": "case",
+      "id": "corpus:atm_withdrawal",
+      "reasons": [
+        "kind: attrs.direction: expected debit, got null"
+      ]
+    },
+    {
+      "kind": "case",
+      "id": "probe:salary_neft",
+      "reasons": [
+        "kind: attrs.purpose: expected salary, got null"
+      ]
+    },
+    {
+      "kind": "case",
+      "id": "probe:limit_enhanced",
+      "reasons": [
+        "financial message was ignored",
+        "kind: no limit_change fact produced",
+        "amount: no limit_change fact produced",
+        "instrument: no limit_change fact produced"
+      ]
+    },
+    {
+      "kind": "case",
+      "id": "probe:self_transfer_imps",
+      "reasons": [
+        "kind: attrs.direction: expected debit, got null"
+      ]
+    },
+    {
+      "kind": "case",
+      "id": "local:19",
+      "reasons": [
+        "message became a review item",
+        "kind: no attempt fact produced",
+        "instrument: no attempt fact produced"
+      ]
+    },
+    {
+      "kind": "case",
+      "id": "probe:reward_points_redeemed",
+      "reasons": [
+        "financial message was ignored",
+        "kind: no reward fact produced",
+        "amount: no reward fact produced",
+        "instrument: no reward fact produced"
+      ]
+    },
+    {
+      "kind": "case",
+      "id": "local:09",
+      "reasons": [
+        "kind: attrs.direction: expected credit, got null"
+      ]
+    },
+    {
+      "kind": "case",
+      "id": "local:00",
+      "reasons": [
+        "kind: no balance_snapshot fact produced",
+        "amount: no balance_snapshot fact produced"
+      ]
+    },
+    {
+      "kind": "case",
+      "id": "local:20",
+      "reasons": [
+        "financial message was ignored",
+        "kind: no attempt fact produced",
+        "instrument: no attempt fact produced"
+      ]
+    },
+    {
+      "kind": "case",
+      "id": "corpus:autopay_scheduled",
+      "reasons": [
+        "kind: no attempt fact produced",
+        "amount: no attempt fact produced"
+      ]
+    },
+    {
+      "kind": "case",
+      "id": "corpus:outstanding_reminder",
+      "reasons": [
+        "financial message was ignored",
+        "kind: no bill_due fact produced",
+        "amount: no bill_due fact produced",
+        "instrument: no bill_due fact produced"
+      ]
+    },
+    {
+      "kind": "case",
+      "id": "local:16",
+      "reasons": [
+        "kind: attrs.direction: expected credit, got null"
+      ]
+    },
+    {
+      "kind": "case",
+      "id": "probe:cashback_on_card",
+      "reasons": [
+        "kind: attrs.direction: expected credit, got null"
+      ]
+    },
+    {
+      "kind": "case",
+      "id": "local:14",
+      "reasons": [
+        "kind: attrs.direction: expected credit, got null"
+      ]
+    },
+    {
+      "kind": "case",
+      "id": "local:17",
+      "reasons": [
+        "kind: attrs.direction: expected credit, got null"
+      ]
+    },
+    {
+      "kind": "case",
+      "id": "local:22",
+      "reasons": [
+        "kind: attrs.status: expected pending, got failed"
+      ]
+    },
+    {
+      "kind": "case",
+      "id": "corpus:ambiguous_suffix_two_banks",
+      "reasons": [
+        "kind: attrs.purpose: expected transfer, got purchase"
+      ]
+    },
+    {
+      "kind": "case",
+      "id": "local:05",
+      "reasons": [
+        "kind: attrs.direction: expected debit, got null"
+      ]
+    },
+    {
+      "kind": "case",
+      "id": "corpus:reversed_credit",
+      "reasons": [
+        "kind: attrs.direction: expected credit, got null"
+      ]
+    },
+    {
+      "kind": "case",
+      "id": "local:13",
+      "reasons": [
+        "kind: attrs.direction: expected credit, got null"
+      ]
+    },
+    {
+      "kind": "case",
+      "id": "probe:ipo_unblock",
+      "reasons": [
+        "financial message was ignored",
+        "kind: no hold fact produced",
+        "amount: no hold fact produced",
+        "instrument: no hold fact produced"
+      ]
+    },
+    {
+      "kind": "case",
+      "id": "probe:refund_on_card",
+      "reasons": [
+        "kind: attrs.direction: expected credit, got null"
+      ]
+    },
+    {
+      "kind": "case",
+      "id": "probe:cc_bill_card_side",
+      "reasons": [
+        "kind: attrs.direction: expected credit, got null"
+      ]
+    },
+    {
+      "kind": "case",
+      "id": "corpus:mandate_cancelled",
+      "reasons": [
+        "kind: no mandate fact produced",
+        "instrument: no mandate fact produced"
+      ]
+    },
+    {
+      "kind": "case",
+      "id": "probe:paytm_wallet_load_bank",
+      "reasons": [
+        "kind: attrs.purpose: expected wallet_topup, got purchase"
+      ]
+    },
+    {
+      "kind": "case",
+      "id": "local:15",
+      "reasons": [
+        "kind: attrs.direction: expected credit, got null"
+      ]
+    },
+    {
+      "kind": "case",
+      "id": "local:08",
+      "reasons": [
+        "kind: attrs.status: expected declined, got failed",
+        "amount: amounts: expected a list, got null"
+      ]
+    },
+    {
+      "kind": "case",
+      "id": "corpus:declined_attempt",
+      "reasons": [
+        "kind: attrs.status: expected declined, got failed",
+        "amount: amounts: expected a list, got null"
+      ]
+    },
+    {
+      "kind": "case",
+      "id": "probe:spend_avl_limit_icici",
+      "reasons": [
+        "kind: no balance_snapshot fact produced",
+        "amount: no balance_snapshot fact produced",
+        "instrument: no balance_snapshot fact produced"
+      ]
+    },
+    {
+      "kind": "case",
+      "id": "probe:reward_points_earned",
+      "reasons": [
+        "kind: no reward fact produced",
+        "amount: no reward fact produced",
+        "instrument: no reward fact produced",
+        "amount: amounts: no element matches {role: points_balance, minor: 1250, unit: POINTS}"
+      ]
+    },
+    {
+      "kind": "case",
+      "id": "probe:ipo_upi_mandate_block",
+      "reasons": [
+        "kind: no hold fact produced",
+        "amount: no hold fact produced",
+        "instrument: no hold fact produced",
+        "kind: attrs.mandatePurpose: expected ipo, got null"
+      ]
+    },
+    {
+      "kind": "case",
+      "id": "probe:spotify_card_si",
+      "reasons": [
+        "kind: no balance_snapshot fact produced",
+        "amount: no balance_snapshot fact produced",
+        "instrument: no balance_snapshot fact produced"
+      ]
+    },
+    {
+      "kind": "case",
+      "id": "probe:cc_bill_via_cred",
+      "reasons": [
+        "kind: attrs.direction: expected debit, got credit",
+        "instrument: instrument.maskDigits: expected 1234, got null"
+      ]
+    },
+    {
+      "kind": "case",
+      "id": "corpus:kotak_settlement",
+      "reasons": [
+        "message became a review item",
+        "kind: no attempt fact produced"
+      ]
+    },
+    {
+      "kind": "case",
+      "id": "probe:sbi_upi_p2p",
+      "reasons": [
+        "kind: attrs.purpose: expected p2p, got purchase"
+      ]
+    },
+    {
+      "kind": "case",
+      "id": "corpus:bill_with_offer",
+      "reasons": [
+        "kind: attrs.billerName: expected TNEB, got null"
+      ]
+    },
+    {
+      "kind": "case",
+      "id": "probe:zomato_money_spend",
+      "reasons": [
+        "message became a review item",
+        "kind: no movement fact produced",
+        "amount: no movement fact produced",
+        "instrument: no movement fact produced",
+        "kind: no balance_snapshot fact produced",
+        "amount: no balance_snapshot fact produced",
+        "instrument: no balance_snapshot fact produced"
+      ]
+    }
+  ]
+}

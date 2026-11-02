@@ -1,0 +1,29 @@
+{
+  "id": "local:19",
+  "templateHash": "3c81703dba87fb2dbb2942862b78ab4a1111fa232494af9103bef3a7fdc19ab8",
+  "weight": 1,
+  "source": "synthetic",
+  "messages": [
+    {
+      "sender": "HDFCBK",
+      "body": "INR 500 not credited to account XX1234.",
+      "observedAt": "2026-11-20T09:00:00.000Z"
+    }
+  ],
+  "expect": {
+    "facts": [
+      {
+        "factType": "attempt",
+        "attrs": {
+          "status": "failed",
+          "direction": "credit"
+        },
+        "instrument": {
+          "kind": "bank_account",
+          "maskDigits": "1234"
+        }
+      }
+    ]
+  },
+  "origin": "local_sms_cases.json"
+}

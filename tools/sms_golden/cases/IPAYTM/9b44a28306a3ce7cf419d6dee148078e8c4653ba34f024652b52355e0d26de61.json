@@ -1,0 +1,48 @@
+{
+  "id": "probe:paytm_wallet_spend",
+  "templateHash": "9b44a28306a3ce7cf419d6dee148078e8c4653ba34f024652b52355e0d26de61",
+  "weight": 1,
+  "source": "synthetic",
+  "messages": [
+    {
+      "sender": "JM-iPaytm",
+      "body": "Rs 120 paid from Paytm Wallet to Chai Point. Updated balance: Rs 380. Txn ID 12345678901",
+      "observedAt": "2026-12-01T09:00:00.000Z"
+    }
+  ],
+  "expect": {
+    "facts": [
+      {
+        "factType": "movement",
+        "attrs": {
+          "direction": "debit",
+          "purpose": "purchase"
+        },
+        "amounts": [
+          {
+            "role": "posted",
+            "minor": 12000
+          }
+        ],
+        "instrument": {
+          "kind": "wallet",
+          "issuerSlug": "paytm"
+        }
+      },
+      {
+        "factType": "balance_snapshot",
+        "amounts": [
+          {
+            "role": "available_balance",
+            "minor": 38000
+          }
+        ],
+        "instrument": {
+          "kind": "wallet",
+          "issuerSlug": "paytm"
+        }
+      }
+    ]
+  },
+  "origin": "probe_cases.json"
+}

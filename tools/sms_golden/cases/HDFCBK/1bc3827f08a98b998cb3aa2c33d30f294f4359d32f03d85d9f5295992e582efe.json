@@ -1,0 +1,50 @@
+{
+  "id": "probe:spend_avl_lmt_hdfc",
+  "templateHash": "1bc3827f08a98b998cb3aa2c33d30f294f4359d32f03d85d9f5295992e582efe",
+  "weight": 1,
+  "source": "synthetic",
+  "messages": [
+    {
+      "sender": "VM-HDFCBK-S",
+      "body": "Rs.499.00 spent on HDFC Bank Card x5678 at SWIGGY on 2026-11-01:12:30:11. Avl Lmt: Rs.45,000.00. Not you? Call 18002586161",
+      "observedAt": "2026-12-01T09:00:00.000Z"
+    }
+  ],
+  "expect": {
+    "facts": [
+      {
+        "factType": "movement",
+        "attrs": {
+          "direction": "debit",
+          "purpose": "purchase"
+        },
+        "amounts": [
+          {
+            "role": "posted",
+            "minor": 49900
+          }
+        ],
+        "instrument": {
+          "kind": "credit_card",
+          "issuerSlug": "hdfc",
+          "maskDigits": "5678"
+        }
+      },
+      {
+        "factType": "balance_snapshot",
+        "amounts": [
+          {
+            "role": "available_credit",
+            "minor": 4500000
+          }
+        ],
+        "instrument": {
+          "kind": "credit_card",
+          "issuerSlug": "hdfc",
+          "maskDigits": "5678"
+        }
+      }
+    ]
+  },
+  "origin": "probe_cases.json"
+}

@@ -1,0 +1,30 @@
+{
+  "id": "corpus:mandate_cancelled",
+  "templateHash": "efceea58343d71962a23cc38bb3d9af456ee24973ed5b0a761e48552ed20005d",
+  "weight": 1,
+  "source": "synthetic",
+  "messages": [
+    {
+      "sender": "HDFCBK",
+      "body": "Your NETFLIX AutoPay mandate has been cancelled successfully on HDFC A/c XX1797.",
+      "observedAt": "2026-11-20T09:00:00.000Z"
+    }
+  ],
+  "expect": {
+    "facts": [
+      {
+        "factType": "mandate",
+        "attrs": {
+          "phase": "revoked",
+          "merchantName": "NETFLIX"
+        },
+        "instrument": {
+          "kind": "bank_account",
+          "issuerSlug": "hdfc",
+          "maskDigits": "1797"
+        }
+      }
+    ]
+  },
+  "origin": "sms_family_corpus.json"
+}

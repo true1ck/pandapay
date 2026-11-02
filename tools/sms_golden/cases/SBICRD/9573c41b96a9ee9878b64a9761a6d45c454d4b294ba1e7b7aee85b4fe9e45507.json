@@ -1,0 +1,36 @@
+{
+  "id": "probe:sbi_card_spend",
+  "templateHash": "9573c41b96a9ee9878b64a9761a6d45c454d4b294ba1e7b7aee85b4fe9e45507",
+  "weight": 1,
+  "source": "synthetic",
+  "messages": [
+    {
+      "sender": "AD-SBICRD-S",
+      "body": "Rs.799.00 spent on your SBI Credit Card ending 3456 at ZOMATO on 01/11/26. Trxn. not done by you? Report at https://sbicard.com/Dispute",
+      "observedAt": "2026-12-01T09:00:00.000Z"
+    }
+  ],
+  "expect": {
+    "facts": [
+      {
+        "factType": "movement",
+        "attrs": {
+          "direction": "debit",
+          "purpose": "purchase"
+        },
+        "amounts": [
+          {
+            "role": "posted",
+            "minor": 79900
+          }
+        ],
+        "instrument": {
+          "kind": "credit_card",
+          "issuerSlug": "sbi",
+          "maskDigits": "3456"
+        }
+      }
+    ]
+  },
+  "origin": "probe_cases.json"
+}

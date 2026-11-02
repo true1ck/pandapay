@@ -1,0 +1,35 @@
+{
+  "id": "corpus:ambiguous_suffix_two_banks_second",
+  "templateHash": "044a6934c68f6ee2380ceae972a96ff3dccc6c314e8e5bb16ea6fe74c6c2b22f",
+  "weight": 1,
+  "source": "synthetic",
+  "messages": [
+    {
+      "sender": "CANBNK",
+      "body": "Your Canara Bank account XX9080 was credited Rs.3,000 on 16-10-26 from HDFC Bank. Ref 908877665544.",
+      "observedAt": "2026-11-20T09:00:00.000Z"
+    }
+  ],
+  "expect": {
+    "facts": [
+      {
+        "factType": "movement",
+        "attrs": {
+          "direction": "credit"
+        },
+        "amounts": [
+          {
+            "role": "posted",
+            "minor": 300000
+          }
+        ],
+        "instrument": {
+          "kind": "bank_account",
+          "issuerSlug": "canara",
+          "maskDigits": "9080"
+        }
+      }
+    ]
+  },
+  "origin": "sms_family_corpus.json"
+}

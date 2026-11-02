@@ -1,0 +1,36 @@
+{
+  "id": "local:01",
+  "templateHash": "8fc6bc4a21681e30f1ac5f9eed127d79d1f51ebcd95fea472db500f24acb84d9",
+  "weight": 1,
+  "source": "synthetic",
+  "messages": [
+    {
+      "sender": "ICICIT",
+      "body": "INR 250 spent on ICICI Bank Card XX7788 at SWIGGY on 05-Aug-26.",
+      "observedAt": "2026-11-20T09:00:00.000Z"
+    }
+  ],
+  "expect": {
+    "facts": [
+      {
+        "factType": "movement",
+        "attrs": {
+          "direction": "debit",
+          "purpose": "purchase"
+        },
+        "amounts": [
+          {
+            "role": "posted",
+            "minor": 25000
+          }
+        ],
+        "instrument": {
+          "kind": "credit_card",
+          "issuerSlug": "icici",
+          "maskDigits": "7788"
+        }
+      }
+    ]
+  },
+  "origin": "local_sms_cases.json"
+}

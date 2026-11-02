@@ -1,0 +1,26 @@
+{
+  "id": "corpus:kotak_settlement",
+  "templateHash": "8ff39f606d33e782d4ed3b1bcd8fb3e1d26d27afb59d1e8eccffc654db3f4ca6",
+  "weight": 1,
+  "source": "synthetic",
+  "messages": [
+    {
+      "sender": "KOTAKN",
+      "body": "Kotak Neo: Running A/c settlement payout of INR 15,500.00 initiated for your demat account. You should receive funds in A/c XX1234 by EOD.",
+      "observedAt": "2026-11-20T09:00:00.000Z"
+    }
+  ],
+  "expect": {
+    "facts": [
+      {
+        "factType": "attempt",
+        "attrs": {
+          "status": "pending",
+          "direction": "credit"
+        }
+      }
+    ]
+  },
+  "note": "Broker payout initiated, not yet received; never consumer spend or income.",
+  "origin": "sms_family_corpus.json"
+}

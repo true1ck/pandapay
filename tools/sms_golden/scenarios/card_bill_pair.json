@@ -1,0 +1,47 @@
+{
+  "id": "card_bill_pair",
+  "description": "Bank debit and the card's payment received are one event; neither is spending.",
+  "messages": [
+    {
+      "sender": "VM-HDFCBK-S",
+      "body": "Rs.25,000.00 debited from A/c XX1234 on 10-11-26 towards BillPay - HDFC Bank Credit Card XX5678. Ref 9876543. -HDFC Bank",
+      "observedAt": "2026-11-10T09:00:00Z"
+    },
+    {
+      "sender": "VM-HDFCBK-S",
+      "body": "Payment of Rs.25,000.00 received towards your HDFC Bank Credit Card XX5678 on 10-11-26. Thank you. -HDFC Bank",
+      "observedAt": "2026-11-10T09:02:00Z"
+    }
+  ],
+  "expect": {
+    "events": [
+      {
+        "type": "card_bill_payment",
+        "legRoles": [
+          "debit_leg",
+          "credit_leg"
+        ]
+      }
+    ],
+    "instruments": [
+      {
+        "kind": "bank_account",
+        "issuerSlug": "hdfc",
+        "maskDigits": "1234"
+      },
+      {
+        "kind": "credit_card",
+        "issuerSlug": "hdfc",
+        "maskDigits": "5678"
+      }
+    ],
+    "totals": {
+      "from": "2026-11-01T00:00:00Z",
+      "to": "2026-12-01T00:00:00Z",
+      "spendMinor": 0,
+      "incomeMinor": 0,
+      "investmentMinor": 0,
+      "transactionCount": 0
+    }
+  }
+}

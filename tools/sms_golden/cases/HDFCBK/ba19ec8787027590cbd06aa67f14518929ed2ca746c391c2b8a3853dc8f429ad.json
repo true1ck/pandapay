@@ -1,0 +1,36 @@
+{
+  "id": "probe:cashback_on_card",
+  "templateHash": "ba19ec8787027590cbd06aa67f14518929ed2ca746c391c2b8a3853dc8f429ad",
+  "weight": 1,
+  "source": "synthetic",
+  "messages": [
+    {
+      "sender": "VM-HDFCBK-S",
+      "body": "Cashback of Rs.150.00 credited to your HDFC Bank Credit Card XX5678 on 01-11-26.",
+      "observedAt": "2026-12-01T09:00:00.000Z"
+    }
+  ],
+  "expect": {
+    "facts": [
+      {
+        "factType": "movement",
+        "attrs": {
+          "direction": "credit",
+          "purpose": "cashback"
+        },
+        "amounts": [
+          {
+            "role": "posted",
+            "minor": 15000
+          }
+        ],
+        "instrument": {
+          "kind": "credit_card",
+          "issuerSlug": "hdfc",
+          "maskDigits": "5678"
+        }
+      }
+    ]
+  },
+  "origin": "probe_cases.json"
+}

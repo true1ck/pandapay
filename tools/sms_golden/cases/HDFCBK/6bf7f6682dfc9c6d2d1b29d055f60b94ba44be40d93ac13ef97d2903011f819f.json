@@ -1,0 +1,37 @@
+{
+  "id": "probe:reward_points_redeemed",
+  "templateHash": "6bf7f6682dfc9c6d2d1b29d055f60b94ba44be40d93ac13ef97d2903011f819f",
+  "weight": 1,
+  "source": "synthetic",
+  "messages": [
+    {
+      "sender": "VM-HDFCBK-S",
+      "body": "2,000 Reward Points redeemed against your HDFC Bank Credit Card XX5678 for Rs 500 statement credit.",
+      "observedAt": "2026-12-01T09:00:00.000Z"
+    }
+  ],
+  "expect": {
+    "facts": [
+      {
+        "factType": "reward",
+        "amounts": [
+          {
+            "role": "points_redeemed",
+            "minor": 2000,
+            "unit": "POINTS"
+          },
+          {
+            "role": "cash_value",
+            "minor": 50000
+          }
+        ],
+        "instrument": {
+          "kind": "credit_card",
+          "issuerSlug": "hdfc",
+          "maskDigits": "5678"
+        }
+      }
+    ]
+  },
+  "origin": "probe_cases.json"
+}

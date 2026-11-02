@@ -1,0 +1,34 @@
+{
+  "id": "local:16",
+  "templateHash": "b396f8f6674bad3d8daf633843a59ed3aee56588cc5506b2c9a83cc9fe89829d",
+  "weight": 1,
+  "source": "synthetic",
+  "messages": [
+    {
+      "sender": "HDFCBK",
+      "body": "INR 1200 deposited into your wallet.",
+      "observedAt": "2026-11-20T09:00:00.000Z"
+    }
+  ],
+  "expect": {
+    "facts": [
+      {
+        "factType": "movement",
+        "attrs": {
+          "direction": "credit",
+          "purpose": "wallet_topup"
+        },
+        "amounts": [
+          {
+            "role": "posted",
+            "minor": 120000
+          }
+        ],
+        "instrument": {
+          "kind": "wallet"
+        }
+      }
+    ]
+  },
+  "origin": "local_sms_cases.json"
+}
