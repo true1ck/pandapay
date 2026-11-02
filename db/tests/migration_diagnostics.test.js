@@ -18,3 +18,14 @@ test('product migration diagnostics retain reviewed filenames and fixed failure 
   assert.equal(safeMigrationDiagnostic(new Error('Applied migration checksum mismatch: private-value')).category, 'ledger_checksum');
   assert.ok(!Object.hasOwn(safeMigrationDiagnostic({ migrationFile: 'private@example.invalid', code: 'private-token' }), 'migration'));
 });
+test('product migration diagnostics classify safe infrastructure causes without retaining stderr', () => {
+  const secret = 'postgres://private-user:private-password@example.invalid/private-db';
+  const diagnostic = safeMigrationDiagnostic(Object.assign(new Error('Command failed: pg_dump'), {
+    stderr: Buffer.from(`pg_dump: error: aborting because of server version mismatch\n${secret}`),
+  }));
+  assert.deepEqual(diagnostic, { code: 'migration_failed', category: 'pg_dump_version_mismatch' });
+  assert.equal(JSON.stringify(diagnostic).includes(secret), false);
+  assert.equal(safeMigrationDiagnostic(Object.assign(new Error('Command failed: pg_dump'), {
+    stderr: 'pg_dump: error: permission denied for schema private',
+  })).category, 'schema_dump_permission_denied');
+});

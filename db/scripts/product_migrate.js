@@ -324,7 +324,20 @@ function safeMigrationDiagnostic(error) {
     [/role setup failed/i, 'role_setup_failed'],
     [/another.*migration|advisory lock/i, 'migration_lock_unavailable'],
   ];
-  diagnostic.category = categories.find(([pattern]) => pattern.test(message))?.[1] || 'operation_failed';
+  const stderr = Buffer.isBuffer(error?.stderr) ? error.stderr.toString('utf8') : (typeof error?.stderr === 'string' ? error.stderr : '');
+  const causeMessage = typeof error?.cause?.message === 'string' ? error.cause.message : '';
+  const safeFailureText = `${message}\n${stderr}\n${causeMessage}`;
+  const infrastructureCategories = [
+    [/server version mismatch|server is newer than the client|pg_dump version/i, 'pg_dump_version_mismatch'],
+    [/snapshot.*(?:invalid|does not exist)|invalid snapshot identifier/i, 'schema_snapshot_failed'],
+    [/permission denied|must be owner|insufficient privilege/i, 'schema_dump_permission_denied'],
+    [/ECONNREFUSED|connection refused|timeout expired|could not connect/i, 'database_connection_failed'],
+    [/certificate|SSL|TLS/i, 'database_tls_failed'],
+    [/pg_dump/i, 'schema_dump_failed'],
+  ];
+  diagnostic.category = categories.find(([pattern]) => pattern.test(message))?.[1]
+    || infrastructureCategories.find(([pattern]) => pattern.test(safeFailureText))?.[1]
+    || 'operation_failed';
   return diagnostic;
 }
 if (require.main === module) main().catch(error => {
