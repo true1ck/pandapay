@@ -1,0 +1,39 @@
+import 'dart:convert';
+import 'dart:io';
+import 'package:flutter_test/flutter_test.dart';
+import 'package:pandapay/data/local_sms_parser.dart';
+
+void main() {
+  test('real sms probe', () {
+    final src = Platform.environment['SMS_IN']!;
+    final outPath = Platform.environment['SMS_OUT']!;
+    final buf = StringBuffer();
+    var n = 0;
+    for (final line in File(src).readAsLinesSync()) {
+      if (line.trim().isEmpty) continue;
+      final m = jsonDecode(line) as Map<String, dynamic>;
+      Map<String, Object?> row;
+      try {
+        final obs = LocalSmsParser.parse(
+          namespace: 'user:probe',
+          sender: m['sender'] as String,
+          body: m['body'] as String,
+          receivedAt: DateTime.parse(m['observedAt'] as String).toUtc(),
+        );
+        final t = obs?.transaction;
+        row = {
+          'id': m['id'], 'event': obs?.eventType.name, 'disp': obs?.disposition.name,
+          'amount': t == null ? null : t.amount.paise / 100, 'kind': t?.entryKind.name,
+          'instrument': t?.instrument.name, 'card': obs?.cardLast4 ?? t?.cardLast4,
+          'acct': obs?.accountLast4 ?? t?.accountLast4,
+        };
+      } catch (e) {
+        row = {'id': m['id'], 'event': 'THROW', 'disp': null};
+      }
+      buf.writeln(jsonEncode(row));
+      n++;
+    }
+    File(outPath).writeAsStringSync(buf.toString());
+    print('device parsed $n');
+  }, timeout: const Timeout(Duration(minutes: 30)));
+}
