@@ -1,0 +1,104 @@
+name: Inspect production migration baseline
+
+on:
+  workflow_dispatch:
+    inputs:
+      target_sha:
+        description: Exact branch commit whose migration image should capture the read-only baseline
+        required: true
+        type: string
+      source_ref:
+        description: Branch containing the reviewed target commit
+        required: true
+        default: codex/ios-shortcuts-prototype
+        type: string
+
+permissions:
+  contents: read
+
+jobs:
+  capture:
+    name: Capture read-only baseline metadata
+    runs-on: ubuntu-latest
+    environment: production
+    timeout-minutes: 10
+    steps:
+      - name: Set up SSH
+        env:
+          SSH_KEY: ${{ secrets.PROD_SSH_KEY }}
+          KNOWN_HOSTS: ${{ secrets.PROD_SSH_KNOWN_HOSTS }}
+        run: |
+          set -euo pipefail
+          umask 077
+          mkdir -p ~/.ssh
+          printf '%s\n' "$SSH_KEY" > ~/.ssh/id_deploy
+          chmod 600 ~/.ssh/id_deploy
+          printf '%s\n' "$KNOWN_HOSTS" > ~/.ssh/known_hosts
+          chmod 644 ~/.ssh/known_hosts
+
+      - name: Capture baseline without adopting it
+        env:
+          HOST: ${{ secrets.PROD_HOST }}
+          DEPLOY_USER: ${{ secrets.PROD_USER }}
+          TARGET_SHA: ${{ inputs.target_sha }}
+          SOURCE_REF: ${{ inputs.source_ref }}
+        run: |
+          set -euo pipefail
+          [[ "$TARGET_SHA" =~ ^[0-9a-fA-F]{40}$ ]]
+          [[ "$SOURCE_REF" =~ ^[A-Za-z0-9._/-]+$ ]]
+          ssh -i ~/.ssh/id_deploy -o BatchMode=yes -o StrictHostKeyChecking=yes \
+            -o ServerAliveInterval=30 -o ServerAliveCountMax=10 \
+            -o ConnectTimeout=15 "$DEPLOY_USER@$HOST" \
+            "bash -s -- '$TARGET_SHA' '$SOURCE_REF'" <<'REMOTE'
+          set -euo pipefail
+          TARGET_SHA="$1"
+          SOURCE_REF="$2"
+          APP_DIR=/home/ubuntu/apps/pandapay
+          BASELINE_DIR="$APP_DIR/deploy/migration-baselines"
+          test -f "$APP_DIR/.env"
+          test -d "$APP_DIR/.git"
+          git -C "$APP_DIR" fetch -q origin "$SOURCE_REF"
+          source_tip="$(git -C "$APP_DIR" rev-parse "refs/remotes/origin/$SOURCE_REF")"
+          test "$source_tip" = "$TARGET_SHA"
+          server_head="$(git -C "$APP_DIR" rev-parse HEAD)"
+          printf 'server_head=%s\nsource_tip=%s\n' "$server_head" "$source_tip"
+          git -C "$APP_DIR" merge-base --is-ancestor "$server_head" "$TARGET_SHA"
+
+          mkdir -m 700 -p "$BASELINE_DIR"
+          test ! -L "$BASELINE_DIR"
+          baseline="$BASELINE_DIR/product.json"
+          if test -e "$baseline"; then
+            printf '%s\n' 'baseline_file=existing_not_overwritten'
+          else
+            stage="$(mktemp -d)"
+            ca="$(mktemp)"
+            trap 'rm -rf "$stage" "$ca"' EXIT
+            git -C "$APP_DIR" archive "$TARGET_SHA" | tar -x -C "$stage"
+            curl --fail --silent --show-error --location --max-time 20 \
+              https://supabase-downloads.s3-ap-southeast-1.amazonaws.com/prod/ssl/prod-ca-2021.crt > "$ca"
+            expected='807025AD50D4ED219D2C9C7D299C004F824EB00CF7F65AFEF607D07B72E6CAFA'
+            actual="$(openssl x509 -in "$ca" -outform DER 2>/dev/null | sha256sum | awk '{print toupper($1)}')"
+            test "$actual" = "$expected"
+            export DB_SSL=true DB_SSL_CA="$(cat "$ca")" MIGRATION_BASELINES_DIR="$BASELINE_DIR"
+            docker compose --profile sms-ai --profile sms-learning \
+              -f "$stage/docker-compose.prod.yml" --env-file "$APP_DIR/.env" \
+              run --rm --no-deps -v "$BASELINE_DIR:/reviewed" \
+              --entrypoint node db-migrate /db/scripts/product_migrate.js \
+              --write-baseline /reviewed/product.json
+          fi
+
+          python3 - "$baseline" <<'PY'
+          import hashlib, json, pathlib, sys
+          path = pathlib.Path(sys.argv[1])
+          value = json.loads(path.read_text())
+          if value.get('format') != 'pandapay-reviewed-product-baseline-v2':
+              raise SystemExit('unexpected baseline format')
+          ledger = value.get('ledger')
+          if not isinstance(ledger, list) or not ledger:
+              raise SystemExit('baseline ledger is empty or malformed')
+          print('baseline_format=' + value['format'])
+          print('baseline_ledger_entries=' + str(len(ledger)))
+          print('baseline_sha256=' + hashlib.sha256(path.read_bytes()).hexdigest())
+          print('adoption=not_configured')
+          PY
+          REMOTE
