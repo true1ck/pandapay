@@ -82,6 +82,7 @@ class LocalPortableSnapshotSource implements PortableLocalSnapshotSource {
       'transaction_outbox_entries': namespaced('transaction_outbox_entries'),
       'duplicate_resolution_outbox': namespaced('duplicate_resolution_outbox'),
       'transaction_tag_outbox': namespaced('transaction_tag_outbox'),
+      'foreign_payments_outbox': namespaced('foreign_payments_outbox'),
       'sms_facts_outbox': namespaced('sms_facts_outbox'),
       'sms_fact_override_outbox': namespaced('sms_fact_override_outbox'),
       'sms_rule_exposure_outbox': namespaced('sms_rule_exposure_outbox'),

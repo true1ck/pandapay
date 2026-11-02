@@ -25,7 +25,7 @@ final iosSmsIntakeControllerProvider =
             expectedNamespace: namespace,
             records: rows,
           );
-          if (batch.messages.length != rows.length ||
+          if (batch.messages.length + batch.sensitive != rows.length ||
               ref.read(cacheNamespaceProvider) != namespace) {
             throw StateError('Shortcut input needs attention');
           }

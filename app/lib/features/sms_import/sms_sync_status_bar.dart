@@ -24,6 +24,7 @@ _StatusView _statusView(IosSmsIntakeController controller) {
     visible: state.visible,
     label:
         controller.automaticallyAdvancing &&
+            !state.acquisitionFinished &&
             state.activeJob?['kind'] == 'history'
         ? '${state.label}\nPandaPay and Shortcuts take turns until it’s done.'
         : state.label,

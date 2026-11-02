@@ -226,7 +226,9 @@ void main() {
         // Both legs keep their own account suffix binding.
         expect(first?.accountLast4, '9080');
         expect(second?.transaction?.accountLast4, '9080');
-        expect(second?.transaction?.entryKind, TxnEntryKind.transfer);
+        // Naming another bank does not prove both accounts belong to this
+        // user. Keep the current bank-credit classification independent.
+        expect(second?.transaction?.entryKind, TxnEntryKind.income);
         // No cross-bank automatic pairing exists on the device today.
         expect(second?.transaction?.merchantName, isNot('Sujay Kumar'));
       },

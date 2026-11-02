@@ -90,6 +90,7 @@ Future<void> _pump(
   await tester.pumpWidget(
     ProviderScope(
       overrides: [
+        foreignPaymentsProvider.overrideWith((ref) async => const []),
         accessTokenProvider.overrideWith((ref) => 'test-token'),
         sessionInitProvider.overrideWith((ref) async {}),
         userCardsRepositoryProvider.overrideWithValue(repo),

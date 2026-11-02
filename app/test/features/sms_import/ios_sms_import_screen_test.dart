@@ -31,12 +31,13 @@ Future<void> _pumpImport(
   WidgetTester tester,
   MemoryBridge service, {
   bool fromHub = false,
+  IosSmsCapture? capture,
 }) async {
   final controller = IosSmsIntakeController(
     service: service,
     namespace: () => 'user:a',
     requestUpload: () {},
-    capture: (_, _, _) async => [],
+    capture: capture ?? (_, _, _) async => [],
   );
   await tester.pumpWidget(
     ProviderScope(
@@ -82,6 +83,103 @@ Future<void> _scrollTo(
 }
 
 void main() {
+  testWidgets(
+    'Resume stays disabled during delivery and saved-message processing',
+    (tester) async {
+      SharedPreferences.setMockInitialValues({
+        iosSmsSharingAcknowledgementKey: true,
+      });
+      final service = MemoryBridge();
+      service.snapshot['jobs'] = [
+        {'id': 'h', 'kind': 'history', 'state': 'active'},
+      ];
+      final window = <String, Object?>{
+        'id': 'w',
+        'job_id': 'h',
+        'state': 'running',
+        'start': '2026-03-01T00:00:00Z',
+        'end': '2026-04-01T00:00:00Z',
+        'enumerated': 424,
+        'processed': 86,
+      };
+      service.snapshot['windows'] = [window];
+      await _pumpImport(tester, service);
+      await _scrollTo(tester, find.text('Resume import'));
+      expect(
+        tester
+            .widget<FilledButton>(
+              find.widgetWithText(FilledButton, 'Resume import'),
+            )
+            .onPressed,
+        isNull,
+      );
+      expect(service.calls, isNot(contains('runShortcut')));
+      window['state'] = 'finished';
+      final context = tester.element(find.byType(IosSmsImportScreen));
+      await ProviderScope.containerOf(
+        context,
+        listen: false,
+      ).read(iosSmsIntakeControllerProvider).refresh();
+      await tester.pumpAndSettle();
+      expect(find.text('Processing saved messages'), findsOneWidget);
+      expect(
+        tester
+            .widget<FilledButton>(
+              find.widgetWithText(FilledButton, 'Resume import'),
+            )
+            .onPressed,
+        isNull,
+      );
+      expect(
+        find.textContaining('424 messages read · 86 processed'),
+        findsOneWidget,
+      );
+    },
+  );
+
+  testWidgets('Retry processing never opens or resets the Shortcut', (
+    tester,
+  ) async {
+    final delay = IosSmsIntakeController.drainRetryDelay;
+    IosSmsIntakeController.drainRetryDelay = Duration.zero;
+    addTearDown(() => IosSmsIntakeController.drainRetryDelay = delay);
+    SharedPreferences.setMockInitialValues({
+      iosSmsSharingAcknowledgementKey: true,
+    });
+    final service = MemoryBridge()..rows.add({'id': 'saved'});
+    service.snapshot['jobs'] = [
+      {'id': 'h', 'kind': 'history', 'state': 'active'},
+    ];
+    service.snapshot['windows'] = [
+      {
+        'id': 'w',
+        'job_id': 'h',
+        'state': 'finished',
+        'attempt': 'original',
+        'start': '2026-03-01T00:00:00Z',
+        'end': '2026-04-01T00:00:00Z',
+      },
+    ];
+    var failing = true;
+    await _pumpImport(
+      tester,
+      service,
+      capture: (_, _, rows) async {
+        if (failing) throw StateError('Synthetic storage failure');
+        return [
+          {'id': 'saved'},
+        ];
+      },
+    );
+    await _scrollTo(tester, find.text('Retry processing'));
+    expect(find.text('Processing needs attention'), findsOneWidget);
+    failing = false;
+    await tester.tap(find.text('Retry processing'));
+    await tester.pumpAndSettle();
+    expect(service.rows, isEmpty);
+    expect(service.calls, isNot(contains('runShortcut')));
+    expect(service.calls, isNot(contains('control')));
+  });
   setUp(() => SharedPreferences.setMockInitialValues({}));
 
   testWidgets('import details distinguish received and missing sender input', (
@@ -266,13 +364,19 @@ void main() {
         ];
         await _pumpImport(tester, service);
         expect(find.text('Split busy dates'), findsNothing);
-        expect(find.text('79 messages read · 4 to review'), findsOneWidget);
+        expect(
+          find.text('79 messages read · 30 processed · 4 to review'),
+          findsOneWidget,
+        );
         await _scrollTo(tester, find.text('3 months'));
         await tester.tap(find.text('3 months'));
         await tester.pumpAndSettle();
         expect(find.text('Custom dates'), findsOneWidget);
         expect(service.createdJobs, isEmpty);
-        await _scrollTo(tester, find.byKey(const ValueKey('ios-sms-start-import')));
+        await _scrollTo(
+          tester,
+          find.byKey(const ValueKey('ios-sms-start-import')),
+        );
         await tester.tap(find.byKey(const ValueKey('ios-sms-start-import')));
         await tester.pumpAndSettle();
         expect(service.createdJobs.single['replacingJobID'], 'catchup');
@@ -315,15 +419,14 @@ void main() {
       // the first day of a month instead of asserting a calendar accident.
       final now = DateTime.now();
       final start = iosSmsMonthsAgo(now, 24);
-      final missing = buildHistoryMonths(
-        now: now,
-        coverage: const [],
-      ).where(
-        (month) =>
-            month.canImport &&
-            month.end.isAfter(start) &&
-            month.start.isBefore(now),
-      ).length;
+      final missing = buildHistoryMonths(now: now, coverage: const [])
+          .where(
+            (month) =>
+                month.canImport &&
+                month.end.isAfter(start) &&
+                month.start.isBefore(now),
+          )
+          .length;
       expect(find.text('Import $missing missing months'), findsOneWidget);
       expect(service.calls, isNot(contains('control')));
       expect(service.calls, isNot(contains('runShortcut')));
@@ -690,8 +793,12 @@ void main() {
     expect(tester.takeException(), isNull);
   });
 
-  testWidgets('the month strip shows coverage and imports a tapped month', (tester) async {
-    SharedPreferences.setMockInitialValues({iosSmsSharingAcknowledgementKey: true});
+  testWidgets('the month strip shows coverage and imports a tapped month', (
+    tester,
+  ) async {
+    SharedPreferences.setMockInitialValues({
+      iosSmsSharingAcknowledgementKey: true,
+    });
     final service = MemoryBridge();
     final now = DateTime.now();
     final lastMonth = DateTime(now.year, now.month - 1);
@@ -707,11 +814,15 @@ void main() {
       },
     ];
     await _pumpImport(tester, service);
-    final summary = find.text('23 of 24 months imported · tap a month to import it');
+    final summary = find.text(
+      '23 of 24 months imported · tap a month to import it',
+    );
     await _scrollTo(tester, summary);
     expect(summary, findsOneWidget);
     expect(find.text('Import 1 missing month'), findsOneWidget);
-    final cell = find.bySemanticsLabel(RegExp('^${DateFormat('MMMM yyyy').format(lastMonth)}: Not imported'));
+    final cell = find.bySemanticsLabel(
+      RegExp('^${DateFormat('MMMM yyyy').format(lastMonth)}: Not imported'),
+    );
     await tester.ensureVisible(cell);
     await tester.tap(cell);
     await tester.pumpAndSettle();

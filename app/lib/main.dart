@@ -21,6 +21,10 @@ import 'data/spend_reports_repository.dart';
 import 'data/product_access_api.dart';
 import 'features/settings/appearance_providers.dart';
 import 'features/recovery/automatic_account_recovery.dart';
+import 'features/sms_import/ios_sms_background.dart' as ios_background;
+
+@pragma('vm:entry-point')
+Future<void> iosSmsBackgroundMain() => ios_background.iosSmsBackgroundMain();
 
 void main() {
   markStartup('Dart main');

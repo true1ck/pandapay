@@ -39,7 +39,7 @@ enum SmsImportLiveActivityHost {
       let state = currentState()
       Task {
         for activity in Activity<SmsImportActivityAttributes>.activities {
-          if let state, state.status == "importing" || state.status == "paused" {
+          if let state, ["importing", "processing", "paused"].contains(state.status) {
             await activity.update(ActivityContent(state: state, staleDate: Date().addingTimeInterval(staleAfter)))
           } else {
             let final = state ?? .init(status: "complete", done: 0, total: 0, range: "")
@@ -60,7 +60,9 @@ enum SmsImportLiveActivityHost {
     return .init(status: status,
                  done: progress["done"] as? Int ?? 0,
                  total: progress["total"] as? Int ?? 0,
-                 range: rangeLabel(start: progress["start"] as? String, end: progress["end"] as? String))
+                 range: rangeLabel(start: progress["start"] as? String, end: progress["end"] as? String),
+                 received: progress["received"] as? Int,
+                 processed: progress["processed"] as? Int)
   }
   #endif
 

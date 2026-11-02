@@ -1,0 +1,98 @@
+[
+  {
+    "id": "malformed-usd",
+    "body": "USD .00 spent using ICICI Bank Card XX1234 on 02-Dec-25 on SYNTHETIC AI. Avl Limit: INR 2,86,388.46.",
+    "paymentInr": null,
+    "review": true
+  },
+  {
+    "id": "usd",
+    "body": "USD 20.00 spent using ICICI Bank Card XX1234 on SYNTHETIC AI. Avl Limit: INR 2,86,388.46.",
+    "paymentInr": null,
+    "review": true
+  },
+  {
+    "id": "eur",
+    "body": "EUR 9.99 spent using Bank Card XX1234 at SYNTHETIC. Available credit limit INR 199000.",
+    "paymentInr": null,
+    "review": true
+  },
+  {
+    "id": "gbp",
+    "body": "GBP 15.00 charged to Card XX1234. Remaining limit Rs.150000.",
+    "paymentInr": null,
+    "review": true
+  },
+  {
+    "id": "aed",
+    "body": "AED 100.00 paid using Card XX1234. Avl Bal INR 12000.",
+    "paymentInr": null,
+    "review": true
+  },
+  {
+    "id": "sgd",
+    "body": "SGD 30.00 debited from account XX1234. Closing balance INR 9000.",
+    "paymentInr": null,
+    "review": true
+  },
+  {
+    "id": "currency-symbol",
+    "body": "\u20ac9.99 spent using Card XX1234. Credit limit INR 100000.",
+    "paymentInr": null,
+    "review": true
+  },
+  {
+    "id": "usd-no-inr",
+    "body": "USD 20.00 spent using Bank Card XX1234 at SYNTHETIC.",
+    "paymentInr": null,
+    "review": true
+  },
+  {
+    "id": "usd-explicit-inr",
+    "body": "USD 20.00 spent using Card XX1234 at SYNTHETIC. Billed INR 1710.50. Avl Limit INR 100000.",
+    "paymentInr": 1710.5,
+    "review": false
+  },
+  {
+    "id": "limit-before-charge",
+    "body": "Avl Limit INR 100000. INR 500 spent using Card XX1234 at SYNTHETIC.",
+    "paymentInr": 500,
+    "review": false
+  },
+  {
+    "id": "limit-only-domestic",
+    "body": "Amount spent using Card XX1234. Avl Limit INR 100000.",
+    "paymentInr": null,
+    "review": true
+  },
+  {
+    "id": "domestic-valid",
+    "body": "INR 500 spent using Card XX1234 at SYNTHETIC. Avl Limit INR 100000.",
+    "paymentInr": 500,
+    "review": false
+  },
+  {
+    "id": "same-number-two-roles",
+    "body": "INR 500 spent using Card XX1234 at SYNTHETIC. Available balance INR 500.",
+    "paymentInr": 500,
+    "review": false
+  },
+  {
+    "id": "balance-after-number",
+    "body": "USD 20 spent using Card XX1234. INR 100000 is your available limit.",
+    "paymentInr": null,
+    "review": true
+  },
+  {
+    "id": "two-inr-roles",
+    "body": "USD 20 spent using Card XX1234. Avl Limit INR 100000. Equivalent INR 1710.50.",
+    "paymentInr": 1710.5,
+    "review": false
+  },
+  {
+    "id": "currencyless-domestic",
+    "body": "Account XX1234 debited by 50.00 via UPI to SYNTHETIC.",
+    "paymentInr": null,
+    "review": false
+  }
+]

@@ -13,6 +13,8 @@ import '../../features/sms_import/sms_text_hint.dart';
 import '../local_sms_parser.dart';
 import '../needs_review_repository.dart';
 import '../user_cards_repository.dart';
+import '../foreign_payment.dart';
+import '../foreign_payments_repository.dart';
 import '../../features/sms_import/sms_background_queue.dart';
 import 'auto_resolved_history_repository.dart';
 import 'financial_store.dart';
@@ -77,7 +79,10 @@ class SmsImportStore {
         store.database,
       ).loadSharedCategoryRulesSync();
       final intake = SmsIntakeRepository(store.database);
-      final selfTransferRules = SelfTransferRules(store.database, namespace: namespace).load();
+      final selfTransferRules = SelfTransferRules(
+        store.database,
+        namespace: namespace,
+      ).load();
       db.execute('SAVEPOINT sms_batch');
       try {
         for (final message in messages) {
@@ -228,6 +233,15 @@ class SmsImportStore {
         message,
         parserVersion: LocalSmsParser.version,
       );
+      final extractedForeignPayment = ForeignPaymentExtractor.fromSms(
+        namespace: namespace, sourceKey: key, sender: message.sender,
+        body: message.body, receivedAt: message.receivedAt,
+      );
+      final foreignPayment=extractedForeignPayment==null ? null : ForeignPaymentExtractor.bindCard(extractedForeignPayment,message.sender,message.body,cards);
+      if (foreignPayment != null &&
+          captureLocalForeignPayment(store.database, namespace, foreignPayment)) {
+        store.notifyExternalChanges(namespace, const ['foreign_payments']);
+      }
       // Always evaluate the built-in/current rule set independently. A
       // candidate in shadow mode may be wrong, so its observation must never
       // become the baseline merely because it matched first.
@@ -298,7 +312,8 @@ class SmsImportStore {
           sourceKey: key,
           stage: result.candidate.stage,
           matched: result.matched,
-          applied: appliedCandidate != null &&
+          applied:
+              appliedCandidate != null &&
               result.candidate.candidateId ==
                   appliedCandidate.candidate.candidateId,
           outcome: outcome,
@@ -372,6 +387,27 @@ class SmsImportStore {
         });
         if (observation.transaction != null) {
           store.saveProvisional(namespace, observation.transaction!);
+        }
+        if (observation.reasonCodes.any(
+          (reason) => const {
+            'foreign_currency_needs_billed_inr',
+            'transaction_amount_not_evidenced',
+          }.contains(reason),
+        )) {
+          addNeedsReviewSync(
+            store.database,
+            namespace,
+            NeedsReviewItem(
+              id: key,
+              sender: message.sender,
+              body: message.body,
+              reason: observation.reasonCodes.first,
+              receivedAt: message.receivedAt,
+            ),
+          );
+          // An INR-only hosted parser must not recreate a limit as spending.
+          // Preserve original evidence locally for an explicit billed amount.
+          intake.acknowledge(namespace, key);
         }
         final isMandate =
             observation.reasonCodes.contains('mandate_notice') &&
@@ -758,7 +794,8 @@ class SmsImportStore {
     final payload = smsFactPayload(fact);
     final sourceKey = _cleanSourceKey(item);
     final rawFactIndex = fact['factIndex'];
-    final factIndex = rawFactIndex is int && rawFactIndex >= 0 && rawFactIndex <= 31
+    final factIndex =
+        rawFactIndex is int && rawFactIndex >= 0 && rawFactIndex <= 31
         ? rawFactIndex
         : null;
     AutoResolvedHistoryEntry? history;
@@ -782,7 +819,12 @@ class SmsImportStore {
             break;
           case 'bill_obligation':
             history = _fileBill(
-              namespace, item, payload, sourceKey, score, factIndex,
+              namespace,
+              item,
+              payload,
+              sourceKey,
+              score,
+              factIndex,
             );
             break;
           case 'mandate_lifecycle':

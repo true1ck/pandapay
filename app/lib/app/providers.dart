@@ -32,6 +32,8 @@ import '../data/device_identity.dart';
 import '../data/device_metadata.dart';
 import '../data/devices_api.dart';
 import '../data/emergency_contacts_repository.dart';
+import '../data/foreign_payment.dart';
+import '../data/foreign_payments_repository.dart';
 import '../data/import_repository.dart';
 import '../data/local/app_database.dart';
 import '../data/local/recovery_deferred_sms.dart';
@@ -91,6 +93,7 @@ import '../features/sms_import/sms_listener_service.dart';
 import '../features/sms_import/sms_inbox_scanner.dart';
 import '../features/sms_import/sms_capture_worker.dart';
 import '../features/sms_import/sms_background_queue.dart';
+import '../data/sms_amount_repair.dart';
 import '../features/sms_import/ios_shortcut_sms.dart';
 import '../features/sms_import/sms_text_hint.dart';
 import '../features/settings/settings_sync.dart';
@@ -1197,6 +1200,40 @@ final needsReviewRepositoryProvider = Provider<NeedsReviewRepository>((ref) {
     },
   );
 });
+
+final foreignPaymentsRepositoryProvider = Provider<ForeignPaymentsRepository>((ref) {
+  final namespace = ref.watch(cacheNamespaceProvider);
+  final cacheFuture = ref.watch(responseCacheProvider.future);
+  var disposed = false;
+  ref.onDispose(() => disposed = true);
+  return ForeignPaymentsRepository(
+    database: cacheFuture.then((cache) => cache.financialStore.database),
+    namespace: namespace, apiBaseUrl: _apiBaseUrl,
+    client: ref.read(authenticatedHttpClientProvider),
+    accessToken: () => disposed ? null : ref.read(accessTokenProvider),
+    accountIsCurrent: () => !disposed && ref.read(cacheNamespaceProvider) == namespace,
+    onChanged: () {
+      if (disposed) return;
+      unawaited(cacheFuture.then((cache) {
+        if (!disposed) cache.financialStore.notifyExternalChanges(namespace,
+            const ['foreign_payments', 'needs_review']);
+      }));
+    },
+    onLedgerChanged: () {
+      if (!disposed) invalidateTransactionViews(ref);
+    },
+  );
+});
+
+final foreignPaymentsProvider = FutureProvider<List<ForeignPayment>>((ref) async {
+  final markReady = _financialChanges(ref, 'foreign_payments');
+  final items = await ref.watch(foreignPaymentsRepositoryProvider).fetchAll();
+  markReady();
+  return items;
+});
+
+final foreignPaymentsSummaryProvider = Provider<ForeignPaymentsSummary>((ref) =>
+  ForeignPaymentsSummary.fromPayments(ref.watch(foreignPaymentsProvider).valueOrNull ?? const []));
 
 final needsReviewItemsProvider = FutureProvider<List<NeedsReviewItem>>((
   ref,
@@ -5029,18 +5066,22 @@ RecurringSeries _normalizeLegacyServiceMandate(RecurringSeries item) {
   final service = _namedServiceAutoPayName(item.displayName);
   if (service == null) return item;
   final lifecycle = item.lifecycleStatus.trim().toLowerCase();
+  // Older mandate rows guessed a plan price and monthly schedule from an
+  // authorization alone. Neither one setup occurrence nor a known service
+  // proves billing terms. Keep reviewed terms and actual charge history.
+  final setupOnly = !item.isUserEdited &&
+      item.occurrenceCount <= 1 &&
+      item.detectionSource == 'mandate';
 
   return RecurringSeries(
     id: item.id,
     displayName: service,
-    // A legacy mandate is authorization evidence, not a completed charge.
-    // Do not let its ceiling/cached amount become a subscription price.
-    typicalAmount: Money.zero(),
-    amountKnown: false,
+    typicalAmount: setupOnly ? Money.zero() : item.typicalAmount,
+    amountKnown: !setupOnly && item.amountKnown,
     autopayLimit: item.autopayLimit,
-    cadenceDays: 0,
-    occurrenceCount: 0,
-    annualCost: Money.zero(),
+    cadenceDays: setupOnly ? 0 : item.cadenceDays,
+    occurrenceCount: setupOnly ? 0 : item.occurrenceCount,
+    annualCost: setupOnly ? Money.zero() : item.annualCost,
     categoryName: item.categoryName,
     subcategoryName: item.subcategoryName,
     cardName: item.cardName,
@@ -5054,9 +5095,12 @@ RecurringSeries _normalizeLegacyServiceMandate(RecurringSeries item) {
     sourceKey: item.sourceKey,
     startDate: item.startDate,
     endDate: item.endDate,
-    lastSeenOn: null,
-    nextExpectedOn: null,
-    cadenceConfirmed: true,
+    lastSeenOn: item.lastSeenOn ?? item.startDate,
+    nextExpectedOn: setupOnly ? null : item.nextExpectedOn,
+    // Zero days alone does not prove on-demand billing. Preserve an explicit
+    // as-presented confirmation, but discard confirmation of a guessed cycle.
+    cadenceConfirmed: item.cadenceConfirmed &&
+        (!setupOnly || item.cadenceDays == 0),
     setupConfirmed: true,
     engineStatus: lifecycle.isEmpty || lifecycle == 'active'
         ? 'candidate'
@@ -5729,7 +5773,7 @@ Future<RecurringReport> _mergeLocalSetupSeries(
       paymentMethod: item.paymentMethod ?? localMatch?.paymentMethod,
       sourceKey: item.sourceKey ?? localMatch?.sourceKey,
       mandateReference: item.mandateReference ?? localMatch?.mandateReference,
-      cadenceConfirmed: item.cadenceConfirmed || (localMatch?.cadenceConfirmed ?? false) || item.cadenceDays == 0,
+      cadenceConfirmed: item.cadenceConfirmed || (localMatch?.cadenceConfirmed ?? false),
       setupConfirmed: item.setupConfirmed || (localMatch?.setupConfirmed ?? false),
       autopayStatus: (item.autopayStatus.isNotEmpty && item.autopayStatus != 'unknown')
           ? item.autopayStatus
@@ -5941,7 +5985,7 @@ Future<List<TransactionEntry>> loadTransactionsWithOfflineCache(
 
   // A known empty result has coverage too. Reading any surface never waits
   // for a network refresh when its saved content is available.
-  if (local != null && legacy == null) {
+  if (local != null && (local.complete || local.rows.isNotEmpty) && legacy == null) {
     if (!_isKnownOffline() &&
         (!preferCached ||
             DateTime.now().difference(local.fetchedAt) >=
@@ -5989,91 +6033,57 @@ Future<List<TransactionEntry>?> _readLegacyTransactionSnapshots(
   required bool useReportSnapshots,
 }) async {
   if (cache == null) return null;
-  final namespace = ref.read(cacheNamespaceProvider);
-  final suffixes = <String>{cacheKey, 'transactions:all'};
+
+  final prefixes = <String>[
+    _scopedCacheKey(ref, cacheKey),
+    _scopedCacheKey(ref, '$_transactionsCacheKey:'),
+  ];
   if (useReportSnapshots) {
-    suffixes.add('insights_transactions:thisMonth:cached-range');
-    suffixes.add('insights_transactions:thisYear:cached-range');
-    final from = filter.from;
-    final to = filter.to ?? DateTime.now();
-    if (from != null) {
-      var month = DateTime(from.year, from.month);
-      final lastMonth = DateTime(to.year, to.month);
-      while (!month.isAfter(lastMonth)) {
-        suffixes.add(
-          'spend_detail:month:${month.year}-${month.month.toString().padLeft(2, '0')}',
-        );
-        month = DateTime(month.year, month.month + 1);
-      }
-    }
+    prefixes
+      ..add(_scopedCacheKey(ref, 'spend_detail:'))
+      ..add(_scopedCacheKey(ref, 'insights_transactions:'));
   }
 
-  final rowsById = <String, TransactionEntry>{};
-  var foundSnapshot = false;
-  for (final suffix in suffixes) {
-    final snapshot = await _readCacheOrNull(
-      ref,
-      cache,
-      '$namespace:$suffix',
-    );
-    if (snapshot == null) continue;
+  final snapshots = <CachedResponse>[];
+  for (final prefix in prefixes.toSet()) {
+    snapshots.addAll(await cache.readPrefix(prefix));
+  }
+  snapshots.sort((a, b) => b.fetchedAt.compareTo(a.fetchedAt));
+  if (snapshots.isEmpty) return null;
+
+  final byId = <String, TransactionEntry>{};
+  var decodedAny = false;
+  for (final snapshot in snapshots) {
     try {
       final body = jsonDecode(snapshot.rawJson) as Map<String, dynamic>;
-      final rawRows = body['transactions'];
-      if (rawRows is! List) continue;
-      foundSnapshot = true;
-      for (final raw in rawRows.whereType<Map<String, dynamic>>()) {
-        final row = TransactionEntry.fromJson(raw);
-        if (_matchesTransactionQuery(row, filter)) {
-          rowsById.putIfAbsent(row.id, () => row);
+      final rows = body['transactions'];
+      if (rows is! List) continue;
+      var snapshotCoversFilter = rows.isEmpty;
+      for (final raw in rows) {
+        try {
+          if (raw is! Map) continue;
+          final row = TransactionEntry.fromJson(
+            Map<String, dynamic>.from(raw),
+          );
+          if (!filter.matches(row)) continue;
+          snapshotCoversFilter = true;
+          byId.putIfAbsent(row.id, () => row);
+        } catch (_) {
+          // One malformed row must not discard valid rows in the same snapshot.
         }
       }
+      decodedAny = decodedAny || snapshotCoversFilter;
     } catch (_) {
-      // A corrupt compatibility snapshot is ignored; another snapshot or the
-      // authoritative fetch may still provide a usable result.
+      // A malformed legacy snapshot must not hide another valid range.
     }
   }
-  return foundSnapshot ? rowsById.values.toList(growable: false) : null;
+  return decodedAny ? byId.values.toList() : null;
 }
 
-bool _matchesTransactionQuery(TransactionEntry row, TransactionQuery filter) {
-  if (filter.from != null && row.occurredAt.isBefore(filter.from!)) {
-    return false;
-  }
-  if (filter.to != null) {
-    final endExclusive = DateTime(
-      filter.to!.year,
-      filter.to!.month,
-      filter.to!.day + 1,
-    );
-    if (!row.occurredAt.isBefore(endExclusive)) return false;
-  }
-  if (filter.cardId != null && row.userCardId != filter.cardId) return false;
-  if (filter.categoryId != null &&
-      row.categoryId != filter.categoryId &&
-      row.parentCategoryId != filter.categoryId) {
-    return false;
-  }
-  if (filter.userCategoryId != null &&
-      row.userCategoryId != filter.userCategoryId &&
-      row.parentUserCategoryId != filter.userCategoryId) {
-    return false;
-  }
-  if (filter.source != null && row.source != filter.source) return false;
-  final query = filter.query?.trim().toLowerCase();
-  if (query != null && query.isNotEmpty) {
-    final haystack = [
-      row.merchantName,
-      row.merchantVpa,
-      row.categoryName,
-      row.subcategoryName,
-      row.note,
-      row.sourceKey,
-    ].whereType<String>().join(' ').toLowerCase();
-    if (!haystack.contains(query)) return false;
-  }
-  return true;
-}
+/// Shared stale-safe transaction loader for Activity, Insights, and the
+/// period detail rows in Spending. The server remains authoritative, but a
+/// successful response is persisted before it is rendered so a cold offline
+/// launch still has a truthful last-known view.
 
 /// Returns one transaction from the last successful Activity snapshot without
 /// making a network request. Detail screens use this before their live fetch,
@@ -6989,6 +6999,42 @@ final smsBackgroundFlushProvider = Provider<void>((ref) {
         smsCaptureNamespaceKey,
         ref.read(cacheNamespaceProvider),
       );
+      var amountRepaired = false;
+      final repairRepo = ref.read(userCardsRepositoryProvider);
+      if (repairRepo != null && ref.read(isOnlineProvider).valueOrNull != false) {
+          final repairNamespace = ref.read(cacheNamespaceProvider);
+          final repairStages = <String>[];
+          try {
+            final cache = await ref.read(responseCacheProvider.future);
+            amountRepaired = await repairSyncedSmsAmounts(
+              store: cache.financialStore, namespace: repairNamespace,
+              accountIsCurrent: () => !disposed && ref.read(cacheNamespaceProvider) == repairNamespace,
+              fetch: repairRepo.fetchTransaction,
+              ignoreWrongTransaction: (id) => repairRepo.ignoreTransaction(id, reason: 'wrong_transaction'),
+              observe: (stage) {
+                repairStages.add(stage);
+                unawaited(prefs.setString(
+                  'pandapay_app.sms_amount_repair_diagnostic_v1_$repairNamespace',
+                  '${DateTime.now().toIso8601String()} ${repairStages.join(',')}'));
+              },
+            ) > 0;
+          } catch (_) {
+            // Source evidence stays local; a later authenticated pass retries.
+          }
+        }
+      // Original-currency evidence is durable on both platforms and remains
+      // separate from the INR transaction/reward ledger. Replays backfill old
+      // review-only imports and flush user corrections before legacy uploads.
+      try {
+        final foreignRepo = ref.read(foreignPaymentsRepositoryProvider);
+        await foreignRepo.backfillCapturedMessages();
+        if (ref.read(isOnlineProvider).valueOrNull != false) {
+          await foreignRepo.sync();
+          await foreignRepo.repairServerAmountRoles();
+        }
+      } catch (_) {
+        // Account-scoped outbox and captured originals retry on resume.
+      }
       // The shared rule bundle is downloaded, not local, so the device has to
       // be online to learn a new rule. It refreshes here — on the lifecycle
       // pass — rather than inside the SMS sync: a sync pass must make
@@ -7020,21 +7066,21 @@ final smsBackgroundFlushProvider = Provider<void>((ref) {
         // settled, leaving the app listening but never importing the existing
         // inbox until a later resume.
         await ref.read(smsAutoImportProvider).start();
-        var changed = false;
+        var changed = amountRepaired;
         try {
-          changed = await reconcileInbox();
+          changed = await reconcileInbox() || changed;
         } catch (e, st) {
           debugPrint('reconcileInbox error: $e\n$st');
           // A provider/permission/network failure must not abort the remaining
           // queue retry and must not surface as an unhandled lifecycle error.
         }
-        // Network reconciliation drains durable local rows; it never rereads
-        // inbox history and can fail without undoing completed local capture.
-        changed = await flush() > 0 || changed;
         // Repair rows imported by older builds, including categories and
         // cross-source duplicate candidates that need a user's decision.
         // Run once per migration revision/account, not every five minutes.
         final repo = ref.read(userCardsRepositoryProvider);
+        // Correct source-backed limit expenses before a large legacy upload
+        // pass, so pending network work cannot postpone account repair.
+        changed = await flush() > 0 || changed;
         final prefs = await SharedPreferences.getInstance();
         final repairKey =
             'pandapay_app.sms_history_repaired_at_v2_${ref.read(cacheNamespaceProvider)}';

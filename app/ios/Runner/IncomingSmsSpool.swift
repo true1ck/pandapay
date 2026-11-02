@@ -391,6 +391,17 @@ final class IncomingSmsSpool {
       _ = try owner(db, generation: generation)
       guard outcomes.count <= 50 else { throw IncomingSmsError.invalid }
       for row in outcomes {
+        if let id = row["id"] as? String, row["outcome"] as? String == "excluded_security",
+           let version = row["parserVersion"] as? Int {
+          // Validate against the original saved input: an arbitrary caller
+          // cannot discard a financial message using a security receipt.
+          if let capture = try query(db, "SELECT body FROM captures WHERE id=? AND generation=? AND state='pending'", [id, generation]).first {
+            guard let body = capture["body"] as? String, SmsSecurityPolicy.sensitive(body) else { throw IncomingSmsError.invalid }
+            try execute(db, "UPDATE receipts SET outcome='excluded_security',binding=NULL WHERE capture_id=?", [id])
+            try execute(db, "UPDATE captures SET state='committed',body=NULL,sender=NULL,occurrence=NULL,outcome='ignored',source_key=NULL,parser_version=? WHERE id=? AND generation=?", [version, id, generation])
+          }
+          continue
+        }
         guard let id = row["id"] as? String, let outcome = row["outcome"] as? String,
               ["captured", "ignored", "review", "existing"].contains(outcome),
               let key = row["sourceKey"] as? String, key.count == 64,
@@ -553,7 +564,7 @@ final class IncomingSmsSpool {
   }
 
   /// Progress of the latest history import, for the Lock Screen activity:
-  /// state is importing, paused, stopped, complete or none.
+  /// Delivery and local processing share the same completion contract.
   func importProgress() throws -> [String: Any] {
     try transaction { db in
       guard let account = try? owner(db), let generation = account["generation"] as? String,
@@ -565,17 +576,21 @@ final class IncomingSmsSpool {
       for row in windows {
         let month = row["month"] as! String
         if !months.contains(month) { months.append(month) }
-        if !["complete", "finished"].contains(row["state"] as? String ?? "") { open.insert(month) }
+        if row["state"] as? String != "complete" { open.insert(month) }
       }
-      let current = windows.first { !["complete", "finished"].contains($0["state"] as? String ?? "") }
+      let current = windows.first { $0["state"] as? String != "complete" }
+      let receiving = windows.contains { ["queued", "waiting", "running", "partial"].contains($0["state"] as? String ?? "") }
       let state: String
       switch job["state"] as? String {
       case "complete": state = "complete"
       case "paused": state = "paused"
       case "stopped": state = "stopped"
-      default: state = current == nil ? "complete" : (current?["state"] as? String == "partial" ? "paused" : "importing")
+      default: state = current == nil ? "complete" : (current?["state"] as? String == "partial" ? "paused" : (receiving ? "importing" : "processing"))
       }
       var result: [String: Any] = ["state": state, "done": months.count - open.count, "total": months.count]
+      let counts = try query(db, "SELECT COUNT(*) AS received,SUM(CASE WHEN c.state='committed' THEN 1 ELSE 0 END) AS processed FROM receipts r JOIN windows w ON w.attempt=r.attempt LEFT JOIN captures c ON c.id=r.capture_id WHERE w.job_id=?", [job["id"]]).first
+      result["received"] = counts?["received"] as? Int ?? 0
+      result["processed"] = counts?["processed"] as? Int ?? 0
       if let current { result["start"] = current["start"]; result["end"] = current["end"] }
       return result
     }
@@ -630,7 +645,7 @@ final class IncomingSmsSpool {
       if partial { try execute(db, "UPDATE windows SET state='partial' WHERE id=?", [row["id"]]) }
       else if !pending { try execute(db, "UPDATE windows SET state='complete' WHERE id=?", [row["id"]]) }
     }
-    for job in try query(db, "SELECT * FROM jobs WHERE state='active'") {
+    for job in try query(db, "SELECT * FROM jobs WHERE state IN ('active','paused')") {
       let rows = try query(db, "SELECT state,end FROM windows WHERE job_id=? ORDER BY ordinal", [job["id"]])
       // Only catch-up jobs establish ongoing coverage; older history is separate.
       if job["kind"] as? String == "catchup" {
@@ -662,7 +677,7 @@ final class IncomingSmsSpool {
       case "stop": try execute(db, "UPDATE jobs SET state='stopped' WHERE id=?", [job["id"]])
       case "retry":
         // New token fences all delayed callbacks; old captured rows still drain.
-        try execute(db, "UPDATE windows SET state='queued',attempt=NULL,found=NULL,limit_off=NULL,warning=0 WHERE job_id=? AND state<>'complete'", [job["id"]])
+        try execute(db, "UPDATE windows SET state='queued',attempt=NULL,found=NULL,limit_off=NULL,warning=0 WHERE job_id=? AND state IN ('waiting','running','partial')", [job["id"]])
         try execute(db, "UPDATE jobs SET state='active' WHERE id=?", [job["id"]])
       case "split":
         guard let row = try query(db, "SELECT * FROM windows WHERE job_id=? AND state='partial' ORDER BY ordinal LIMIT 1", [job["id"]]).first,

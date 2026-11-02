@@ -252,7 +252,25 @@ ParsedStatementLine? _parseRow(
   final currencyIndex =
       options.columns[ImportColumn.currency] ??
       _headerIndex(headers, ['currency']);
-  if (currencyIndex != null &&
+  final billedInrIndex = _headerIndex(headers, [
+    'billed inr',
+    'amount inr',
+    'inr amount',
+    'settled inr',
+    'billed amount inr',
+  ]);
+  final printedCurrency =
+      currencyIndex == null || currencyIndex < 0 || currencyIndex >= row.length
+      ? null
+      : row[currencyIndex].trim().toUpperCase();
+  final foreignCurrency =
+      printedCurrency != null &&
+          printedCurrency.isNotEmpty &&
+          !const ['INR', 'RS', 'RUPEES', '₹'].contains(printedCurrency)
+      ? printedCurrency
+      : null;
+  if (billedInrIndex == null &&
+      currencyIndex != null &&
       currencyIndex >= 0 &&
       currencyIndex < row.length &&
       row[currencyIndex].trim().isNotEmpty &&
@@ -301,6 +319,7 @@ ParsedStatementLine? _parseRow(
   // contains the word value. A plain "Value" column is still handled by the
   // numeric fallback below.
   final amountIndex =
+      billedInrIndex ??
       options.columns[ImportColumn.amount] ??
       _headerIndex(headers, [
         'amount',
@@ -314,7 +333,9 @@ ParsedStatementLine? _parseRow(
   var isCredit = false;
   var dedicatedDirection = false;
   String? amountRaw;
-  if (debitIndex != null &&
+  if (billedInrIndex != null && billedInrIndex < row.length) {
+    amountRaw = row[billedInrIndex];
+  } else if (debitIndex != null &&
       debitIndex >= 0 &&
       debitIndex < row.length &&
       (number(row[debitIndex]) ?? 0) != 0) {
@@ -452,6 +473,7 @@ ParsedStatementLine? _parseRow(
     return null;
   }
   final referenceIndex = _headerIndex(headers, [
+    'reference',
     'utr',
     'rrn',
     'bank reference',
@@ -487,7 +509,13 @@ ParsedStatementLine? _parseRow(
   ]);
   final tagNames = normalizeImportedTagNames([
     for (var i = 0; i < headers.length && i < row.length; i++)
-      if (const ['tag', 'tags', 'label', 'labels', 'tag names'].contains(headers[i]))
+      if (const [
+        'tag',
+        'tags',
+        'label',
+        'labels',
+        'tag names',
+      ].contains(headers[i]))
         ...parseImportedTagNames(row[i]),
   ]);
   final transfer =
@@ -568,6 +596,29 @@ ParsedStatementLine? _parseRow(
         ? row[subcategoryHintIndex].trim()
         : null,
     tagNames: tagNames,
+    originalCurrency:
+        foreignCurrency ??
+        _cellFor(headers, row, [
+          'original currency',
+          'foreign currency',
+          'transaction currency',
+        ])?.toUpperCase(),
+    originalAmount:
+        _cellFor(headers, row, [
+          'original amount',
+          'foreign amount',
+          'transaction amount foreign',
+        ])?.replaceAll(',', '') ??
+        (foreignCurrency != null && billedInrIndex != null
+            ? _cellFor(headers, row, [
+                'amount',
+                'transaction amount',
+              ])?.replaceAll(',', '')
+            : null),
+    foreignSourceKey: _cellFor(headers, row, [
+      'foreign source key',
+      'foreign_source_key',
+    ]),
     instrument: _parseInstrument(
       _cellFor(headers, row, [
         'instrument',

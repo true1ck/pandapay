@@ -4,6 +4,31 @@ import 'package:pandapay/data/user_cards_repository.dart' show TxnInstrument;
 
 void main() {
   test(
+    'dual-currency statements use explicitly billed INR and preserve original foreign amount',
+    () {
+      final result = parseFlexibleCsvStatement('''
+Date,Description,Amount,Currency,Billed INR,Account,Reference
+2026-03-05,Synthetic Subscription,20,USD,1742,Card 1234,ABC123456
+''');
+      final row = result.transactions.single;
+      expect(row.amount.rupees, 1742);
+      expect(row.originalAmount, '20');
+      expect(row.originalCurrency, 'USD');
+      expect(row.bankReference, 'ABC123456');
+    },
+  );
+  test(
+    'foreign amount without billed INR is never relabelled as rupees in statement import',
+    () {
+      final result = parseFlexibleCsvStatement('''
+Date,Description,Amount,Currency
+2026-03-05,Synthetic Subscription,20,USD
+''');
+      expect(result.transactions, isEmpty);
+      expect(result.rejectedRows, isNotEmpty);
+    },
+  );
+  test(
     'tags are distinct from subcategories and survive delimiter-containing JSON names',
     () {
       final result = parseFlexibleCsvStatement('''

@@ -9,6 +9,8 @@ const HASH = /^[a-f0-9]{64}$/i;
 const UUID = /^[a-f0-9]{8}-[a-f0-9]{4}-[a-f0-9]{4}-[a-f0-9]{4}-[a-f0-9]{12}$/i;
 const { importTagNames } = require('./transaction_tags');
 const { safeErrorCode } = require('./safeErrorCode');
+const foreignExchange = require('./foreign_exchange');
+const { reconcileStatementForeignPayment } = require('./foreign_payments');
 
 function createStatementImportAdmission({ maxConcurrent = 2 } = {}) {
   if (!Number.isSafeInteger(maxConcurrent) || maxConcurrent < 1 || maxConcurrent > 4) {
@@ -102,6 +104,13 @@ function validateStatementImport(body, { receiptsEnabled = false } = {}) {
   for (const [index, row] of body.transactions.entries()) {
     const prefix = `transactions[${index}]`;
     if (!row || typeof row !== 'object' || Array.isArray(row)) return `${prefix} must be an object`;
+    if ((row.originalCurrency == null) !== (row.originalAmount == null)
+        || (row.originalCurrency != null && (row.originalCurrency === 'INR'
+          || !foreignExchange.CURRENCIES.has(row.originalCurrency)
+          || !foreignExchange.originalAmount(row.originalAmount, row.originalCurrency)))) {
+      return `${prefix}.originalCurrency and originalAmount must be a valid foreign amount`;
+    }
+    if (row.foreignSourceKey != null && !HASH.test(row.foreignSourceKey)) return `${prefix}.foreignSourceKey is invalid`;
     if (receiptsEnabled) {
       for (const name of ['merchantVpa', 'vpa']) {
         if (row[name] != null && (typeof row[name] !== 'string' || row[name].length > 256)) return `${prefix}.${name} is invalid`;
@@ -163,6 +172,8 @@ function statementImportRequestHash(body) {
     importRowKey: row.importRowKey || `${body.importKey}:${index}`,
     sourceAccount: maskAccount(row.sourceAccount || null),
     bankReference: row.bankReference || null,
+    ...(row.originalCurrency != null ? { originalCurrency: row.originalCurrency, originalAmount: foreignExchange.originalAmount(row.originalAmount, row.originalCurrency) } : {}),
+    ...(row.foreignSourceKey != null ? { foreignSourceKey: row.foreignSourceKey } : {}),
     categoryHint: row.categoryHint ?? null,
     subcategoryHint: row.subcategoryHint ?? null,
     tagNames: row.tagNames ?? [],
@@ -395,6 +406,19 @@ function createStatementImportHandler({ withUserClient, importResolvers, clientM
         });
         if (outcome.status !== 200 && outcome.status !== 201) {
           throw new Error(`statement transaction ${index} failed: ${outcome.error || outcome.status}`);
+        }
+        if (outcome.transaction?.status === 'active' &&
+            (transaction.originalCurrency || transaction.foreignSourceKey || transaction.bankReference)) {
+          await reconcileStatementForeignPayment(client, req.userId, {
+            transactionId: outcome.transaction.id, sourceKey,
+            foreignSourceKey: transaction.foreignSourceKey,
+            originalCurrency: transaction.originalCurrency,
+            originalAmount: transaction.originalAmount,
+            billedInr: transaction.amountInr, occurredAt: transaction.occurredAt,
+            merchantName, userCardId: outcome.transaction.user_card_id || userCardId,
+            accountLast4: /(?:^|\s)(\d{4})$/.exec(transaction.sourceAccount || '')?.[1],
+            bankReference: transaction.bankReference, entryKind: inferStatementEntryKind(transaction),
+          });
         }
         if (transaction.tagNames?.length) await importTagNames(client, req.userId, outcome.transaction.id, transaction.tagNames);
         if (['exact_retry', 'high_confidence'].includes(outcome.duplicateKind)) {

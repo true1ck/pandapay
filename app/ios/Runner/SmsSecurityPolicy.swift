@@ -12,6 +12,7 @@ enum SmsSecurityPolicy {
   private static let nonCredentialStatementInstruction = #"(?i)\benter\s+your\s+pan\s+as\s+the\s+password[.!](?=\s|$)"#
   private static let security = #"(?i)\b(?:otp|pin|cvv|passcode|password|secret\s*code|one[-\s]*time\s*(?:password|code)|verification\s*(?:code|number)|security\s*code|access\s*code|login\s*code|authentication\s*code|auth\s*code|authori[sz]ation\s*code|reset\s*(?:code|link))(?![a-z])|\b(?:do\s*not|don't|never)\s*share\b|\b[0-9]{4,8}\b[\s\S]{0,40}\bvalid\s+(?:for|till|until)\s+[0-9]+\s*(?:minutes?|mins?|seconds?|secs?)\b|\b(?:code|credential)\b[\s\S]{0,40}\b(?:expires?|expiry|expiration|valid|regenerat\w*)\b|\b(?:regenerat\w*|generat\w*)\b[\s\S]{0,30}\b(?:code|credential)\b"#
   static func sensitive(_ body: String) -> Bool {
+    if body.range(of: #"(?i)\bregistration\s+alert\s*:\s*device\s+name\b"#, options: .regularExpression) != nil { return true }
     var evidence = body
     let pattern = try! NSRegularExpression(pattern: advisory)
     for match in pattern.matches(in: body, range: NSRange(body.startIndex..., in: body)) {

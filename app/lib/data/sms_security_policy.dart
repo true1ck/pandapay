@@ -2,6 +2,10 @@
 /// Only an established, terminal advisory on a financial alert is discounted
 /// for classification. Original text is never changed for storage or parsing.
 class SmsSecurityPolicy {
+  static final _registration = RegExp(
+    r'\bregistration\s+alert\s*:\s*device\s+name\b',
+    caseSensitive: false,
+  );
   static final _advisory = RegExp(
     r"\b(?:never\s*share|do\s*not\s*share|don't\s*share)\s*(?:your\s+)?otp\s*[/,]\s*pin\s*[/,]\s*cvv\b",
     caseSensitive: false,
@@ -39,6 +43,7 @@ class SmsSecurityPolicy {
   );
 
   static bool sensitive(String body) {
+    if (_registration.hasMatch(body)) return true;
     var evidence = body;
     for (final match in _advisory.allMatches(body)) {
       final prefix = body.substring(0, match.start);

@@ -221,7 +221,9 @@ ParsedStatement? _parsePandaPayExport(String input) {
     final raw = records[index];
     if (raw is! Map) {
       rejected.add(
-        ImportRejectedRow(sourceRowId, [raw.toString()], 'Transaction row must be an object.'),
+        ImportRejectedRow(sourceRowId, [
+          raw.toString(),
+        ], 'Transaction row must be an object.'),
       );
       continue;
     }
@@ -238,30 +240,66 @@ ParsedStatement? _parsePandaPayExport(String input) {
     final instrument = _pandaPayInstrument(raw['instrument']);
     final rail = raw['rail']?.toString().trim().toLowerCase();
     if (occurredAt == null) {
-      rejected.add(ImportRejectedRow(sourceRowId, cells, 'Transaction date is invalid.'));
+      rejected.add(
+        ImportRejectedRow(sourceRowId, cells, 'Transaction date is invalid.'),
+      );
       continue;
     }
     if (amount == null || !amount.isFinite || amount <= 0) {
-      rejected.add(ImportRejectedRow(sourceRowId, cells, 'Transaction amount is invalid.'));
+      rejected.add(
+        ImportRejectedRow(sourceRowId, cells, 'Transaction amount is invalid.'),
+      );
       continue;
     }
-    if (!const {'spend', 'income', 'investment', 'transfer'}.contains(entryKind)) {
-      rejected.add(ImportRejectedRow(sourceRowId, cells, 'Transaction type is not supported.'));
+    if (!const {
+      'spend',
+      'income',
+      'investment',
+      'transfer',
+    }.contains(entryKind)) {
+      rejected.add(
+        ImportRejectedRow(
+          sourceRowId,
+          cells,
+          'Transaction type is not supported.',
+        ),
+      );
       continue;
     }
     if (!const {'active', 'ignored', 'deleted'}.contains(status)) {
-      rejected.add(ImportRejectedRow(sourceRowId, cells, 'Transaction status is not supported.'));
+      rejected.add(
+        ImportRejectedRow(
+          sourceRowId,
+          cells,
+          'Transaction status is not supported.',
+        ),
+      );
       continue;
     }
     if (raw['instrument'] != null && instrument == null) {
-      rejected.add(ImportRejectedRow(sourceRowId, cells, 'Payment instrument is not supported.'));
+      rejected.add(
+        ImportRejectedRow(
+          sourceRowId,
+          cells,
+          'Payment instrument is not supported.',
+        ),
+      );
       continue;
     }
     if (rail != null &&
         rail.isNotEmpty &&
-        !const {'upi_qr', 'swipe', 'online', 'contactless', 'atm', 'emi', 'unknown'}
-            .contains(rail)) {
-      rejected.add(ImportRejectedRow(sourceRowId, cells, 'Payment rail is not supported.'));
+        !const {
+          'upi_qr',
+          'swipe',
+          'online',
+          'contactless',
+          'atm',
+          'emi',
+          'unknown',
+        }.contains(rail)) {
+      rejected.add(
+        ImportRejectedRow(sourceRowId, cells, 'Payment rail is not supported.'),
+      );
       continue;
     }
 
@@ -279,10 +317,14 @@ ParsedStatement? _parsePandaPayExport(String input) {
         isTransfer: entryKind == 'transfer',
         isInvestment: entryKind == 'investment',
         sourceAccount: _nonEmptyString(raw['source_account']),
+        originalCurrency: _nonEmptyString(raw['original_currency']),
+        originalAmount: _nonEmptyString(raw['original_amount']?.toString()),
+        foreignSourceKey: _nonEmptyString(raw['foreign_source_key']),
         categoryHint: _nonEmptyString(raw['category_name']),
         subcategoryHint: _nonEmptyString(raw['subcategory_name']),
         tagNames: _pandaPayTagNames(raw['tags']),
-        categoryId: (userCategoryId == null || userCategoryId.isEmpty) &&
+        categoryId:
+            (userCategoryId == null || userCategoryId.isEmpty) &&
                 categoryId != null &&
                 _uuidPattern.hasMatch(categoryId)
             ? categoryId
@@ -501,6 +543,9 @@ class TransactionImportSession {
           isInvestment: row.isInvestment,
           sourceAccount: row.sourceAccount,
           bankReference: row.bankReference,
+          originalCurrency: row.originalCurrency,
+          originalAmount: row.originalAmount,
+          foreignSourceKey: row.foreignSourceKey,
           categoryHint: row.categoryHint,
           subcategoryHint: row.subcategoryHint,
           tagNames: row.tagNames,
@@ -739,6 +784,9 @@ class TransactionImportSession {
         isInvestment: row.isInvestment,
         sourceAccount: row.sourceAccount,
         bankReference: row.bankReference,
+        originalCurrency: row.originalCurrency,
+        originalAmount: row.originalAmount,
+        foreignSourceKey: row.foreignSourceKey,
         categoryHint: row.categoryHint,
         subcategoryHint: row.subcategoryHint,
         tagNames: row.tagNames,
@@ -772,6 +820,9 @@ class TransactionImportSession {
         : TxnEntryKind.spend,
     instrument: rows[index].instrument ?? instruments[accountFor(rows[index])],
     bankReference: rows[index].bankReference,
+    originalCurrency: rows[index].originalCurrency,
+    originalAmount: rows[index].originalAmount,
+    foreignSourceKey: rows[index].foreignSourceKey,
     categoryHint: rows[index].categoryHint,
     subcategoryHint: rows[index].subcategoryHint,
     tagNames: normalizeImportedTagNames([

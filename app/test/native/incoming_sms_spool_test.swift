@@ -433,9 +433,15 @@ do {
   require(try store.finish(request: first, found: 1, limitOff: true, warning: false) == "finished", "searched, waiting for PandaPay")
   let second = try store.issueNextRange()!
   require(second != first, "the loop moves on while PandaPay has not processed the first range")
-  require(try store.importProgress()["done"] as? Int == 1, "a searched range counts as done for progress")
+  require(try store.importProgress()["done"] as? Int == 0, "delivery alone cannot count as processed progress")
   require(try store.finish(request: second, found: 0, limitOff: true, warning: false) == "complete", "empty range completes")
   require(try store.issueNextRange() == nil, "nothing left to search")
+  require(try store.importProgress()["state"] as? String == "processing", "notification waits for saved input processing")
+  let saved = try store.pending(generation: g)
+  try store.control(generation: g, command: "retry")
+  require(try store.issueNextRange() == nil, "retry cannot reissue an already searched range")
+  try store.acknowledge(generation: g, outcomes: saved.map { ["id": $0["id"]!, "sourceKey": String(repeating: "b", count: 64), "parserVersion": 26, "outcome": "captured"] })
+  require(try store.importProgress()["state"] as? String == "complete" && store.importProgress()["done"] as? Int == 2, "processing completion agrees with job completion")
   print("PASS: a looping Shortcut moves through ranges while PandaPay is closed")
 }
 
@@ -467,4 +473,40 @@ do {
   _ = try store.capture(body: "INR 6 spent at SHOP.", sender: "ICICIT-S", receivedAt: d1.addingTimeInterval(60), provenance: "original", request: second, useMessageReceipt: true)
   require(try !store.observeHandoff(request: launched, stage: .resumeStalled, expectedReceived: 1), "a message in a later range counts as progress")
   print("PASS: a looping run is monitored across the whole import")
+}
+
+do {
+  let directory = root.appendingPathComponent("legacy-security")
+  let store = IncomingSmsSpool(directory: directory, now: { time })
+  let g = try store.configure(namespace: "user:legacy-security", enabled: true)["generation"] as! String
+  let registration = "Registration Alert: Device Name: SYNTHETIC PHONE."
+  require(try store.capture(body: registration, sender: sender, receivedAt: receive, provenance: "original") == "excluded_security", "new registration alerts never enter the queue")
+  _ = try store.capture(body: body, sender: sender, receivedAt: receive, provenance: "original")
+  let id = try store.pending(generation: g).first!["id"] as! String
+  fails { try store.acknowledge(generation: g, outcomes: [["id": id, "outcome": "excluded_security", "parserVersion": 26]]) }
+  require(try store.pending(generation: g).count == 1, "a caller cannot label a financial input as security")
+  // Reproduce an input admitted by an older policy without changing the new
+  // capture policy: only this synthetic copy of the SQLite file is edited.
+  var connection: OpaquePointer?
+  require(sqlite3_open(directory.appendingPathComponent("handoff.sqlite").path, &connection) == SQLITE_OK, "open legacy fixture")
+  require(sqlite3_exec(connection, "UPDATE captures SET body='Registration Alert: Device Name: SYNTHETIC PHONE.' WHERE state='pending'", nil, nil, nil) == SQLITE_OK, "seed older-policy input")
+  sqlite3_close(connection)
+  try store.acknowledge(generation: g, outcomes: [["id": id, "outcome": "excluded_security", "parserVersion": 26]])
+  require(try store.pending(generation: g).isEmpty, "legacy security input cannot block later batches")
+  require(try Data(contentsOf: directory.appendingPathComponent("handoff.sqlite")).range(of: Data(registration.utf8)) == nil, "legacy security body is erased on acknowledgement")
+  print("PASS: legacy security exclusions are validated and release durable input")
+}
+
+do {
+  let store = IncomingSmsSpool(directory: root.appendingPathComponent("paused-processing"), now: { time })
+  let g = try store.configure(namespace: "user:paused-processing", enabled: true)["generation"] as! String
+  try store.createJob(generation: g, id: UUID().uuidString, kind: "history", zone: "UTC", windows: [["start": iso(start), "end": iso(time)]])
+  let request = try store.issue(generation: g)!
+  _ = try store.capture(body: body, sender: sender, receivedAt: receive, provenance: "original", request: request, itemID: "1")
+  _ = try store.finish(request: request, found: 1, limitOff: true, warning: false)
+  try store.control(generation: g, command: "pause")
+  let rows = try store.pending(generation: g)
+  try store.acknowledge(generation: g, outcomes: rows.map { ["id": $0["id"]!, "sourceKey": String(repeating: "c", count: 64), "parserVersion": 26, "outcome": "captured"] })
+  require(try store.importProgress()["state"] as? String == "complete", "pausing after delivery cannot leave a fully processed job stuck")
+  print("PASS: paused delivery completes after its final local acknowledgement")
 }

@@ -11,6 +11,55 @@ import 'package:shared_preferences/shared_preferences.dart';
 
 void main() {
   test(
+    'an old security input releases its batch without a body hash or decision',
+    () {
+      final db = openInMemoryForTesting();
+      final store = FinancialStore(db);
+      addTearDown(() {
+        store.dispose();
+        db.close();
+      });
+      const ns = 'user:synthetic', generation = 'g1';
+      final rows = <Map<Object?, Object?>>[
+        {
+          'id': 'security',
+          'namespace': ns,
+          'generation': generation,
+          'sender': 'VM-TESTBK',
+          'body': 'Registration Alert: Device Name: SYNTHETIC PHONE.',
+          'receivedAt': '2026-03-07T06:00:00Z',
+        },
+        {
+          'id': 'other',
+          'namespace': ns,
+          'generation': generation,
+          'sender': 'VM-TESTBK',
+          'body': 'Welcome to synthetic service.',
+          'receivedAt': '2026-03-07T06:01:00Z',
+        },
+      ];
+      final batch = IosShortcutSmsBatch.fromRows(
+        rows,
+        allowSenderInference: false,
+      );
+      expect(batch.sensitive, 1);
+      SmsImportStore(store).captureBatch(ns, batch.messages);
+      final outcomes = IosSmsAcquisitionReceipts(
+        store,
+      ).record(ns, generation, rows);
+      expect(outcomes.map((r) => r['outcome']), [
+        'excluded_security',
+        'ignored',
+      ]);
+      expect(outcomes.first.containsKey('sourceKey'), isFalse);
+      expect(db.db.select('SELECT * FROM sms_source_decisions'), hasLength(1));
+      expect(
+        db.db.select('SELECT * FROM ios_sms_acquisition_receipts'),
+        hasLength(1),
+      );
+    },
+  );
+  test(
     'only committed shared decisions establish receipts; personal policy is shared',
     () async {
       final db = openInMemoryForTesting();

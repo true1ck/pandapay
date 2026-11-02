@@ -235,6 +235,7 @@ enum IncomingSmsBridge {
   static func register(messenger: FlutterBinaryMessenger) {
     let channel = FlutterMethodChannel(name: "pandapay/ios_sms_intake", binaryMessenger: messenger)
     self.channel = channel
+    SmsImportBackgroundHost.attach(channel)
     channel.setMethodCallHandler { call, result in
       let args = call.arguments as? [String: Any] ?? [:]
       if call.method == "isForeground" { result(UIApplication.shared.applicationState == .active); return }
@@ -277,9 +278,10 @@ enum IncomingSmsBridge {
             try IncomingSmsSpool.shared.observeHandoff(request: request, stage: .launchRequested)
             DispatchQueue.main.async {
               pendingLaunch = launch; returned = nil
+              if args["userInitiated"] as? Bool == true { SmsImportBackgroundHost.beginUserImport() }
               foregroundReturn = SmsShortcutForegroundReturn(request: request)
               // Shown on the Lock Screen and Dynamic Island while it imports.
-              SmsImportLiveActivityHost.start()
+              if !SmsImportBackgroundHost.hasContinuedRuntime { SmsImportLiveActivityHost.start() }
               UIApplication.shared.open(launch.url, options: [:]) { opened in
                 if !opened { pendingLaunch = nil; foregroundReturn = nil }
                 result(opened)
@@ -312,6 +314,7 @@ enum IncomingSmsBridge {
             guard let generation = args["generation"] as? String, let outcomes = args["outcomes"] as? [[String: Any]] else { throw IncomingSmsError.invalid }
             try spool.acknowledge(generation: generation, outcomes: outcomes)
             SmsImportLiveActivityHost.refresh()
+            SmsImportBackgroundHost.workArrived()
           case "createJob":
             guard let generation = args["generation"] as? String, let id = args["id"] as? String,
                   let kind = args["kind"] as? String, let zone = args["zone"] as? String,
@@ -329,6 +332,7 @@ enum IncomingSmsBridge {
             guard let generation = args["generation"] as? String, let command = args["command"] as? String else { throw IncomingSmsError.invalid }
             try spool.control(generation: generation, command: command)
             SmsImportLiveActivityHost.refresh()
+            SmsImportBackgroundHost.workArrived()
             DispatchQueue.main.async { pendingLaunch = nil; foregroundReturn = nil; returned = nil }
           default: DispatchQueue.main.async { result(FlutterMethodNotImplemented) }; return
           }
@@ -343,10 +347,14 @@ enum IncomingSmsBridge {
 
   static func notifyReady() {
     DispatchQueue.main.async { channel?.invokeMethod("ready", arguments: nil) }
+    SmsImportBackgroundHost.workArrived()
   }
 
   @MainActor
   static func claimForegroundReturn(request: String) -> Bool {
+    // With continued runtime, Dart can process while Shortcuts stays in
+    // front. Keep the foreground handoff only for the older/fallback path.
+    if SmsImportBackgroundHost.hasContinuedRuntime { return false }
     guard let launch = pendingLaunch, returned == nil else { return false }
     // A looping run captures later ranges of the same import: they may bring
     // PandaPay back too, once per launch or runner resume.

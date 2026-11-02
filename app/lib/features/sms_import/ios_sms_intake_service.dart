@@ -15,11 +15,19 @@ class IosSmsIntakeService {
   Future<Object?> call(String method, [Map<String, Object?>? arguments]) =>
       channel.invokeMethod<Object?>(method, arguments);
 
-  void listen(Future<void> Function()? onReady) {
+  void listen(
+    Future<void> Function()? onReady, {
+    Future<Map<String, Object?>> Function()? onBackground,
+    void Function()? onExpiration,
+  }) {
     channel.setMethodCallHandler(
       onReady == null
           ? null
           : (call) async {
+              if (call.method == 'processBackground') {
+                return onBackground?.call();
+              }
+              if (call.method == 'expireBackground') onExpiration?.call();
               if (call.method == 'ready') await onReady();
             },
     );

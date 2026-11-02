@@ -168,5 +168,10 @@
     "id": "statement-instruction-with-assignment",
     "body": "Your SIP Purchase in Folio 00000000/00 under FICTIONAL Test Fund for Rs. 73.19 has been processed on 16-Oct-2026. Enter your PAN as the password: FAKE-TEMP-SECRET",
     "sensitive": true
+  },
+  {
+    "id": "device-registration-alert",
+    "body": "Registration Alert: Device Name: SYNTHETIC PHONE. New device registered.",
+    "sensitive": true
   }
 ]

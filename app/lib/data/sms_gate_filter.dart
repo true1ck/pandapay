@@ -21,11 +21,11 @@ class SmsGateVerdict {
   bool get passed => action == SmsGateAction.pass;
 
   const SmsGateVerdict.pass({required this.normalizedSender})
-      : action = SmsGateAction.pass,
-        dropReason = null;
+    : action = SmsGateAction.pass,
+      dropReason = null;
 
   const SmsGateVerdict.drop(this.dropReason, {this.normalizedSender = ''})
-      : action = SmsGateAction.drop;
+    : action = SmsGateAction.drop;
 }
 
 /// 5-Gate ultra-fast triage filter that executes before regex parsing.
@@ -40,12 +40,6 @@ class SmsGateFilter {
   // and 6-digit numeric promotional sender headers
   static final _p2pOrTelemarketingRe = RegExp(
     r'^(?:\+?91[\-\s]?|0)?(?:140\d{7}|[6-9]\d{9})$|^(?:[A-Za-z]{2}-)?\d{6}(?:-[A-Za-z])?$',
-  );
-
-  // Device registration remains an independent security veto.
-  static final _registrationSecurityRe = RegExp(
-    r'\bregistration\s+alert\s*:\s*device\s+name\b',
-    caseSensitive: false,
   );
 
   // Gate 4: Demat, CDSL/NSDL depository share movements & broker noise
@@ -105,13 +99,13 @@ class SmsGateFilter {
     final trimmedSender = sender.trim();
 
     // Gate 2: Security & OTP veto (never persists or processes security secrets)
-    if (SmsSecurityPolicy.sensitive(body) ||
-        _registrationSecurityRe.hasMatch(body)) {
+    if (SmsSecurityPolicy.sensitive(body)) {
       return const SmsGateVerdict.drop(SmsGateDropReason.otpOrSecurity);
     }
 
     // Gate 3: Sender header validation (reject P2P 10-digit numbers & 140 telemarketing)
-    if (trimmedSender.isNotEmpty && _p2pOrTelemarketingRe.hasMatch(trimmedSender)) {
+    if (trimmedSender.isNotEmpty &&
+        _p2pOrTelemarketingRe.hasMatch(trimmedSender)) {
       return const SmsGateVerdict.drop(SmsGateDropReason.telemarketingOrP2p);
     }
 
@@ -127,7 +121,9 @@ class SmsGateFilter {
 
     // Gate 4: Demat depository & securities non-cash movement
     if (_dematDepositoryRe.hasMatch(body)) {
-      return const SmsGateVerdict.drop(SmsGateDropReason.dematOrSecuritiesAlert);
+      return const SmsGateVerdict.drop(
+        SmsGateDropReason.dematOrSecuritiesAlert,
+      );
     }
 
     if (_earlyNoiseRe.hasMatch(body) &&

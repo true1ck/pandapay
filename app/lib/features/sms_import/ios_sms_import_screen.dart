@@ -651,9 +651,13 @@ class _IosSmsImportScreenState extends ConsumerState<IosSmsImportScreen> {
         : state.completed;
     final title = state.paused
         ? 'Import paused'
+        : controller.canRetryProcessing
+        ? 'Processing needs attention'
         : state.partial || state.error != null
         ? 'Import needs a check'
-        : automatic
+        : state.acquisitionFinished && state.savingMessages
+        ? 'Processing saved messages'
+        : automatic || state.waiting
         ? 'Importing your history'
         : 'Ready to resume';
     return Container(
@@ -670,7 +674,7 @@ class _IosSmsImportScreenState extends ConsumerState<IosSmsImportScreen> {
           Text(
             state.importedThrough == null
                 ? 'Nothing imported yet'
-                : 'Imported through ${_day(state.importedThrough!, year: true)}',
+                : 'Imported through ${_day(state.importedThrough!.subtract(const Duration(milliseconds: 1)), year: true)}',
             style: BambooFonts.ui(14, color: BambooInk.onSlate),
           ),
           if (state.currentWindow case final window?) ...[
@@ -683,9 +687,8 @@ class _IosSmsImportScreenState extends ConsumerState<IosSmsImportScreen> {
           if (automatic) ...[
             const SizedBox(height: AppSpace.sm),
             Text(
-              'PandaPay opens Shortcuts for each date range and comes back '
-              'by itself. If you leave or lock your phone, it carries on when '
-              'you return to PandaPay.',
+              'Messages are saved as Shortcuts runs. PandaPay processes them '
+              'automatically and keeps its progress if iOS pauses the work.',
               style: BambooFonts.ui(12, color: BambooInk.onSlateSubtle),
             ),
           ],
@@ -701,6 +704,7 @@ class _IosSmsImportScreenState extends ConsumerState<IosSmsImportScreen> {
           const SizedBox(height: AppSpace.sm),
           Text(
             '${_messages(_sum(state.currentWindows, 'enumerated'))} read'
+            ' · ${_sum(state.currentWindows, 'processed')} processed'
             '${_sum(state.currentWindows, 'needs_review') > 0 ? ' · ${_sum(state.currentWindows, 'needs_review')} to review' : ''}',
             style: BambooFonts.ui(13, color: BambooInk.onSlateSubtle),
           ),
@@ -720,13 +724,24 @@ class _IosSmsImportScreenState extends ConsumerState<IosSmsImportScreen> {
                 minimumSize: const Size.fromHeight(46),
                 textStyle: BambooFonts.ui(14, weight: FontWeight.w700),
               ),
-              // Not tied to batch processing, which comes and goes every
-              // few seconds during an import and made the button blink. A
-              // tap simply waits for the current batch to finish.
-              onPressed: _busy || !_sharingConfirmed
+              // Local processing and external acquisition have separate
+              // actions. An active or already searched range is never reissued.
+              onPressed:
+                  _busy ||
+                      !_sharingConfirmed ||
+                      (!controller.canRetryProcessing &&
+                          !controller.canResumeImport)
                   ? null
-                  : () => _run(_launch),
-              child: const Text('Resume import'),
+                  : () => _run(
+                      controller.canRetryProcessing
+                          ? controller.refresh
+                          : _launch,
+                    ),
+              child: Text(
+                controller.canRetryProcessing
+                    ? 'Retry processing'
+                    : 'Resume import',
+              ),
             ),
           Wrap(
             spacing: AppSpace.sm,

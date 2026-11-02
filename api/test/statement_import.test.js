@@ -49,6 +49,18 @@ test('validates all file sources, accounting timezone offsets and legacy clients
   assert.equal(validateStatementImport({ userCardId: cardId, statementFrom: '2026-10-02', statementTo: '2026-10-02', txnCount: 2 }), null);
 });
 
+test('foreign statement evidence is validated and included in replay identity without changing old hashes', () => {
+  const original=body();const originalHash=statementImportRequestHash(original);
+  const changed=body();Object.assign(changed.transactions[0],{originalCurrency:'USD',originalAmount:'20.00'});
+  assert.equal(validateStatementImport(changed),null);
+  assert.notEqual(statementImportRequestHash(changed),originalHash);
+  changed.transactions[0].originalAmount='20';
+  const normalized=statementImportRequestHash(changed);changed.transactions[0].originalAmount='20.000';
+  assert.equal(statementImportRequestHash(changed),normalized);
+  changed.transactions[0].originalAmount='20.123';assert.match(validateStatementImport(changed),/foreign amount/);
+  assert.equal(statementImportRequestHash(original),originalHash);
+});
+
 test('accepts each supported transaction type and rejects unknown types', () => {
   for (const entryKind of ['spend', 'income', 'investment', 'transfer']) {
     assert.equal(validateStatementImport(body({ transactions: [{ ...body().transactions[0], entryKind }] })), null);
@@ -93,6 +105,8 @@ function harness({ cardType = 'credit', owned = true, automatic = false, failOnI
   const client = { query: async (sql, params) => {
     databaseCalls++;
     queries.push({ sql, params });
+    if (sql.includes('pg_advisory_xact_lock')) return { rows: [] };
+    if (sql.includes('FROM foreign_payments')) return { rows: [] };
     if (sql.includes('SELECT cp.card_type')) return { rows: owned ? [{ card_type: cardType }] : [] };
     if (sql.includes('FROM user_categories')) return { rows: [{ id: userCategoryId, parent_category_id: categoryId }] };
     if (sql.includes('FROM spend_categories')) return { rows: [{ id: categoryId }] };

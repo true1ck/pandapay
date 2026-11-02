@@ -61,6 +61,17 @@ jobs:
   api:
     name: API and auth (Node)
     runs-on: ubuntu-latest
+    services:
+      foreign-payments-postgres:
+        image: postgres:17-alpine
+        env:
+          POSTGRES_PASSWORD: foreign_fixture_only
+          POSTGRES_DB: pandapay_fx_test
+        ports:
+          - 5548:5432
+        options: >-
+          --health-cmd "pg_isready -U postgres -d pandapay_fx_test"
+          --health-interval 5s --health-timeout 5s --health-retries 10
     steps:
       - uses: actions/checkout@v4
       - uses: actions/setup-node@v4
@@ -75,6 +86,7 @@ jobs:
       - name: Test api
         working-directory: api
         env:
+          PANDAPAY_FX_FIXTURE_URL: postgresql://postgres:foreign_fixture_only@127.0.0.1:5548/pandapay_fx_test
           # src/auth.js throws at require-time without this, by design — it
           # refuses to start with an unset signing secret rather than silently
           # accepting unsigned tokens. A CI-only value satisfies the check.

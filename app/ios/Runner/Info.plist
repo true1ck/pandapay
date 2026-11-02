@@ -93,9 +93,15 @@
 	     the user has granted "Always" via the toggle above — background
 	     modes are declarative permission for what the app MAY do, still
 	     gated by the actual location-permission grant at runtime. -->
+	<key>BGTaskSchedulerPermittedIdentifiers</key>
+	<array>
+		<string>app.pandapay.pandapay.sms-processing</string>
+		<string>app.pandapay.pandapay.sms-import</string>
+	</array>
 	<key>UIBackgroundModes</key>
 	<array>
 		<string>location</string>
+		<string>processing</string>
 	</array>
 	<key>UILaunchStoryboardName</key>
 	<string>LaunchScreen</string>

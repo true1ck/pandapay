@@ -1,7 +1,7 @@
 {
   "formatVersion": 1,
   "label": "portable-backup-table-coverage-v1",
-  "updated": "2026-10-29",
+  "updated": "2026-11-02",
   "comment": "Schema-aware inventory of PostgreSQL CREATE TABLE objects in db/supabase/migrations. Public-schema keys remain unqualified for contract compatibility; non-public schemas are qualified. This registry covers server migration tables only, not SQLite tables or individual fields, and is not a full database disaster-recovery manifest. Portable export and restore services have separate device, integration and recovery acceptance gates; excluded user-linked rows remain explicit coverage gaps.",
   "tables": {
     "admin_control.provisioning_receipts": {
@@ -411,27 +411,27 @@
     },
     "sms_learning_feedback_events": {
       "disposition": "excluded_with_intent",
-      "reason": "Account-linked SMS correction history is not exported in portable backup v1; the learning ledger is removed on account erasure."
+      "reason": "Account-linked opt-in correction evidence and its source hashes are not exported in portable v1. Shared-learning consent and moderation require their own lifecycle; complete paired PostgreSQL recovery preserves these rows."
     },
     "sms_ai_learning_proposals": {
       "disposition": "excluded_with_intent",
-      "reason": "Account-linked AI learning proposals are not exported in portable backup v1; shared review state must not be restored as personal data."
+      "reason": "Account-linked opt-in AI learning proposals are not exported in portable v1. Their consent, moderation and cross-user eligibility cannot be replayed by a personal archive; complete paired PostgreSQL backups preserve this explicit coverage gap."
     },
     "sms_category_rule_approvals": {
       "disposition": "platform_ops",
-      "reason": "Shared admin approval state for SMS category rules belongs to platform recovery, not account-scoped portable restore."
+      "reason": "Admin-reviewed shared category approvals govern all accounts and cannot be restored from a single account archive; complete PostgreSQL recovery preserves the review records."
     },
     "sms_category_rule_v2_approvals": {
       "disposition": "platform_ops",
-      "reason": "Shared admin approval state for contextual SMS category rules belongs to platform recovery, not account-scoped portable restore."
+      "reason": "Shared context-specific category approvals and admin attribution are platform review state, preserved by complete PostgreSQL recovery rather than per-account restore."
     },
     "sms_parser_candidate_approvals": {
       "disposition": "platform_ops",
-      "reason": "Shared admin approval state for parser candidates belongs to platform recovery, not account-scoped portable restore."
+      "reason": "Admin parser-candidate approval gates are global operational state and remain outside account-scoped portable restore; complete PostgreSQL recovery preserves them."
     },
     "sms_learning_settings": {
       "disposition": "platform_ops",
-      "reason": "Global SMS learning thresholds are platform configuration and must not be replaced by an account archive."
+      "reason": "Global SMS learning rollout controls are operational state; account-scoped portable restore must not replace them. Complete PostgreSQL recovery preserves them."
     },
     "sms_learning_candidate_decisions": {
       "disposition": "platform_ops",
@@ -625,29 +625,21 @@
       "disposition": "platform_ops",
       "reason": "Bounded worker heartbeat and aggregate delivery counters migrate in full PostgreSQL recovery. They contain no customer identifiers/payload and are not account portable-export data. Recovered heartbeats are stale until a real worker reports again."
     },
-    "sms_learning_settings": {
-      "disposition": "platform_ops",
-      "reason": "Global SMS learning rollout controls are operational state; account-scoped portable restore must not replace them. Complete PostgreSQL recovery preserves them."
+    "foreign_exchange_rates": {
+      "disposition": "global_catalog",
+      "reason": "Public daily reference-rate cache contains no account data; foreign payment rows retain their frozen rate snapshot."
     },
-    "sms_category_rule_approvals": {
-      "disposition": "platform_ops",
-      "reason": "Admin-reviewed shared category approvals govern all accounts and cannot be restored from a single account archive; complete PostgreSQL recovery preserves the review records."
+    "foreign_payments": {
+      "disposition": "exported_v1",
+      "section": "foreign_payments"
     },
-    "sms_category_rule_v2_approvals": {
-      "disposition": "platform_ops",
-      "reason": "Shared context-specific category approvals and admin attribution are platform review state, preserved by complete PostgreSQL recovery rather than per-account restore."
+    "foreign_payment_sources": {
+      "disposition": "exported_v1",
+      "section": "foreign_payment_sources"
     },
-    "sms_parser_candidate_approvals": {
-      "disposition": "platform_ops",
-      "reason": "Admin parser-candidate approval gates are global operational state and remain outside account-scoped portable restore; complete PostgreSQL recovery preserves them."
-    },
-    "sms_ai_learning_proposals": {
+    "foreign_payment_events": {
       "disposition": "excluded_with_intent",
-      "reason": "Account-linked opt-in AI learning proposals are not exported in portable v1. Their consent, moderation and cross-user eligibility cannot be replayed by a personal archive; complete paired PostgreSQL backups preserve this explicit coverage gap."
-    },
-    "sms_learning_feedback_events": {
-      "disposition": "excluded_with_intent",
-      "reason": "Account-linked opt-in correction evidence and its source hashes are not exported in portable v1. Shared-learning consent and moderation require their own lifecycle; complete paired PostgreSQL recovery preserves these rows."
+      "reason": "Account-linked correction audit is preserved in paired PostgreSQL backups; portable archives export current foreign payment state and source aliases, not replayable historical event snapshots."
     }
   }
 }

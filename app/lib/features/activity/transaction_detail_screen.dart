@@ -24,6 +24,7 @@ import '../../main.dart' show MoneyText;
 import '../account/account_screen.dart' show AccountTile;
 import '../cards/card_summary.dart';
 import 'report_transaction_screen.dart';
+import 'foreign_payments_screen.dart';
 import '../sync/split_sync.dart';
 import '../insights/spend_trends_screen.dart';
 import 'sms_learning_capture.dart';
@@ -62,7 +63,10 @@ class TransactionDetailScreen extends ConsumerWidget {
     final txn = ref.watch(transactionDetailProvider(transactionId));
     // Activity and Spending already hold the complete row that was tapped.
     // Use it immediately while a live refresh is pending or unavailable.
-    final entry = _withLocalSmsEvidence(txn.valueOrNull ?? initialEntry, initialEntry);
+    final entry = _withLocalSmsEvidence(
+      txn.valueOrNull ?? initialEntry,
+      initialEntry,
+    );
     return Scaffold(
       backgroundColor: BambooInk.paper,
       appBar: AppBar(
@@ -108,16 +112,27 @@ class TransactionDetailScreen extends ConsumerWidget {
                             entry.amount.format(),
                             style: BambooFonts.heading(28),
                           ),
-                          if (entry.cardDisplayName != null || entry.cardLast4 != null) ...[
+                          if (entry.cardDisplayName != null ||
+                              entry.cardLast4 != null) ...[
                             const SizedBox(height: AppSpace.md),
                             Text(
-                              entry.cardDisplayName ?? 'Card ending ${entry.cardLast4}',
-                              style: BambooFonts.ui(14, color: BambooInk.ink700),
+                              entry.cardDisplayName ??
+                                  'Card ending ${entry.cardLast4}',
+                              style: BambooFonts.ui(
+                                14,
+                                color: BambooInk.ink700,
+                              ),
                             ),
                           ],
                           if (entry.paymentMethod == 'upi') ...[
                             const SizedBox(height: AppSpace.sm),
-                            Text('UPI', style: BambooFonts.ui(14, color: BambooInk.ink700)),
+                            Text(
+                              'UPI',
+                              style: BambooFonts.ui(
+                                14,
+                                color: BambooInk.ink700,
+                              ),
+                            ),
                           ],
                           const SizedBox(height: AppSpace.md),
                           const Text(
@@ -151,37 +166,39 @@ TransactionEntry? _withLocalSmsEvidence(
   TransactionEntry? entry,
   TransactionEntry? local,
 ) {
-  if (entry == null || entry.paymentMethod != null ||
-      local?.paymentMethod != 'upi' || entry.sourceKey == null ||
+  if (entry == null ||
+      entry.paymentMethod != null ||
+      local?.paymentMethod != 'upi' ||
+      entry.sourceKey == null ||
       entry.sourceKey != local?.sourceKey) {
     return entry;
   }
-  return TransactionEntry.fromJson({...entry.toJson(), 'payment_method': 'upi'});
+  return TransactionEntry.fromJson({
+    ...entry.toJson(),
+    'payment_method': 'upi',
+  });
 }
 
 /// Shared so screens that change a transaction's lifecycle outside this one
 /// (Deleted transactions' restore) can drop the cached detail instead of
 /// showing the pre-restore status until the app restarts.
 final transactionDetailProvider =
-    FutureProvider.family<TransactionEntry?, String>((
-  ref,
-  id,
-) async {
-  final repo = ref.watch(userCardsRepositoryProvider);
-  final loaded = ref.read(transactionsProvider).valueOrNull;
-  final fromLoaded = loaded == null
-      ? null
-      : loaded.where((entry) => entry.id == id).firstOrNull;
-  final cached = await cachedTransactionById(ref, id);
-  final fallback = fromLoaded ?? cached;
-  if (repo == null || id.startsWith('local-')) return fallback;
-  try {
-    return _withLocalSmsEvidence(await repo.fetchTransaction(id), fallback);
-  } catch (error) {
-    if (isAuthenticationFailure(error) || fallback != null) return fallback;
-    rethrow;
-  }
-});
+    FutureProvider.family<TransactionEntry?, String>((ref, id) async {
+      final repo = ref.watch(userCardsRepositoryProvider);
+      final loaded = ref.read(transactionsProvider).valueOrNull;
+      final fromLoaded = loaded == null
+          ? null
+          : loaded.where((entry) => entry.id == id).firstOrNull;
+      final cached = await cachedTransactionById(ref, id);
+      final fallback = fromLoaded ?? cached;
+      if (repo == null || id.startsWith('local-')) return fallback;
+      try {
+        return _withLocalSmsEvidence(await repo.fetchTransaction(id), fallback);
+      } catch (error) {
+        if (isAuthenticationFailure(error) || fallback != null) return fallback;
+        rethrow;
+      }
+    });
 
 final _capturedSmsProvider = FutureProvider.family<SmsIntakeEntry?, String>((
   ref,
@@ -228,6 +245,7 @@ class _DetailBodyState extends ConsumerState<_DetailBody> {
       _note = widget.entry.note;
     }
   }
+
   List<TransactionSplit> _splits = const [];
   String? _splitLoadError;
   bool _loadingSplits = true;
@@ -534,7 +552,10 @@ class _DetailBodyState extends ConsumerState<_DetailBody> {
     final previousNote = _note;
     final cleanOldNote = _note
         ?.replaceFirst(
-          RegExp(r'^\[(?:deleted|ignored(?::\s*[^ \]]+)?)\]\s*', caseSensitive: false),
+          RegExp(
+            r'^\[(?:deleted|ignored(?::\s*[^ \]]+)?)\]\s*',
+            caseSensitive: false,
+          ),
           '',
         )
         .trim();
@@ -564,7 +585,11 @@ class _DetailBodyState extends ConsumerState<_DetailBody> {
       if (deleting) {
         cache.financialStore.markInactive(namespace, widget.entry.id);
       } else {
-        cache.financialStore.markInactive(namespace, widget.entry.id, reason: reason);
+        cache.financialStore.markInactive(
+          namespace,
+          widget.entry.id,
+          reason: reason,
+        );
       }
 
       ref.invalidate(transactionDetailProvider(widget.entry.id));
@@ -632,7 +657,10 @@ class _DetailBodyState extends ConsumerState<_DetailBody> {
     final previousNote = _note;
     final restoredNote = _note
         ?.replaceFirst(
-          RegExp(r'^\[(?:deleted|ignored(?::\s*[^ \]]+)?)\]\s*', caseSensitive: false),
+          RegExp(
+            r'^\[(?:deleted|ignored(?::\s*[^ \]]+)?)\]\s*',
+            caseSensitive: false,
+          ),
           '',
         )
         .trim();
@@ -680,9 +708,9 @@ class _DetailBodyState extends ConsumerState<_DetailBody> {
           _entry = previousEntry;
           _note = previousNote;
         });
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(content: Text(userFacingErrorMessage(e))),
-        );
+        ScaffoldMessenger.of(
+          context,
+        ).showSnackBar(SnackBar(content: Text(userFacingErrorMessage(e))));
       }
     } finally {
       if (mounted) setState(() => _restoring = false);
@@ -744,7 +772,12 @@ class _DetailBodyState extends ConsumerState<_DetailBody> {
                 style: BambooFonts.heading(16, color: BambooInk.ink900),
               ),
             ),
-            for (final r in const ['refund', 'reversal', 'wrong_transaction', 'transfer'])
+            for (final r in const [
+              'refund',
+              'reversal',
+              'wrong_transaction',
+              'transfer',
+            ])
               ListTile(
                 leading: r == 'transfer'
                     ? const Icon(Icons.delete_outline, color: AppColors.error)
@@ -764,10 +797,7 @@ class _DetailBodyState extends ConsumerState<_DetailBody> {
                     ? Text(
                         'This is not a transaction I recognise. It is excluded '
                         'from spend and reviewed with your consent.',
-                        style: BambooFonts.ui(
-                          12,
-                          color: BambooInk.ink500,
-                        ),
+                        style: BambooFonts.ui(12, color: BambooInk.ink500),
                       )
                     : null,
                 onTap: () => Navigator.of(context).pop(r),
@@ -1000,9 +1030,7 @@ class _DetailBodyState extends ConsumerState<_DetailBody> {
               const SizedBox(width: AppSpace.md),
               Expanded(
                 child: FilledButton(
-                  style: FilledButton.styleFrom(
-                    minimumSize: const Size(0, 52),
-                  ),
+                  style: FilledButton.styleFrom(minimumSize: const Size(0, 52)),
                   onPressed: () => Navigator.of(context).pop(true),
                   child: const Text('Remove'),
                 ),
@@ -1068,7 +1096,10 @@ class _DetailBodyState extends ConsumerState<_DetailBody> {
                             child: Text(
                               entry.note?.contains('[ignored: refund]') == true
                                   ? 'This transaction is marked as a refund — excluded from spend, caps, and rankings.'
-                                  : entry.note?.contains('[ignored: reversal]') == true
+                                  : entry.note?.contains(
+                                          '[ignored: reversal]',
+                                        ) ==
+                                        true
                                   ? 'This transaction is marked as a reversal — excluded from spend, caps, and rankings.'
                                   : 'This transaction is ${entry.status} — excluded from caps and rankings.',
                               style: BambooFonts.ui(
@@ -1099,7 +1130,9 @@ class _DetailBodyState extends ConsumerState<_DetailBody> {
                       ],
                     ),
                   ),
-                  const SizedBox(height: AppSpace.xl),
+                  const SizedBox(height: AppSpace.md),
+                  ForeignTransactionInfo(transactionId: entry.id),
+                  const SizedBox(height: AppSpace.md),
                   _DetailRow(label: 'Card', value: _cardOrPaymentLabel(entry)),
                   _DetailRow(
                     label: 'Category',
@@ -1269,9 +1302,9 @@ class _DetailBodyState extends ConsumerState<_DetailBody> {
                         : entry.note?.contains('[ignored: reversal]') == true
                         ? 'Reversed'
                         : (entry.status.isEmpty
-                            ? 'Unknown'
-                            : entry.status[0].toUpperCase() +
-                                entry.status.substring(1)),
+                              ? 'Unknown'
+                              : entry.status[0].toUpperCase() +
+                                    entry.status.substring(1)),
                   ),
                   if (_note != null && _note!.isNotEmpty)
                     _DetailRow(label: 'Note', value: _note!),

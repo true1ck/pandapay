@@ -214,6 +214,7 @@ void main() {
           merchantSearchRepositoryProvider.overrideWithValue(repo),
           catalogueProvider.overrideWith((ref) async => [_card('dining-card', rate: 0.05)]),
           userCardsProvider.overrideWith((ref) async => const []),
+          foreignPaymentsProvider.overrideWith((ref) async => const []),
           transactionsProvider.overrideWith((ref) async => [txn]),
         ],
         child: const MaterialApp(home: MerchantSearchScreen()),

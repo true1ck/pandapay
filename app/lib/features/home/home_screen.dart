@@ -27,6 +27,7 @@ import '../insights/payments_due_screen.dart'
 import '../../data/card_bill_ledger.dart' show CardBill;
 import '../insights/spend_trends_screen.dart' show SpendingDonut;
 import '../import/import_hub_screen.dart';
+import '../activity/foreign_payments_screen.dart';
 import '../overrides/manual_overrides_screen.dart';
 import '../quickadd/quick_add_screen.dart';
 import '../scan/scan_result_screen.dart';
@@ -183,6 +184,7 @@ class _HomeScreenState extends ConsumerState<HomeScreen> {
                         ),
                       ),
                       const _HomeSpendHeadline(),
+                      if (_showDeferredSections) const _HomeForeignSummary(),
                       const _HomeQuickActions(),
                       const _HomeSectionDivider(),
                       Padding(
@@ -526,6 +528,40 @@ class _HomeWidgetSyncState extends ConsumerState<_HomeWidgetSync> {
       });
     }
     return const SizedBox.shrink();
+  }
+}
+
+class _HomeForeignSummary extends ConsumerWidget {
+  const _HomeForeignSummary();
+
+  @override
+  Widget build(BuildContext context, WidgetRef ref) {
+    final now = ref.watch(clockProvider).now();
+    final from = DateTime(now.year, now.month);
+    final payments = foreignPaymentsForPeriod(
+      ref.watch(foreignPaymentsProvider).valueOrNull ?? const [],
+      from: from,
+      to: now,
+    );
+    if (!payments.any((payment) => payment.isPending))
+      return const SizedBox.shrink();
+    return Padding(
+      padding: const EdgeInsets.fromLTRB(
+        HomeScreen._gutter,
+        AppSpace.sm,
+        HomeScreen._gutter,
+        0,
+      ),
+      child: ForeignPaymentSummaryCard(
+        payments: payments,
+        compact: true,
+        onTap: () => Navigator.of(context).push(
+          MaterialPageRoute<void>(
+            builder: (_) => ForeignPaymentsScreen(from: from, to: now),
+          ),
+        ),
+      ),
+    );
   }
 }
 
@@ -3283,8 +3319,10 @@ class _HomeDuesAndReminders extends ConsumerWidget {
                       const SizedBox(width: AppSpace.sm),
                   itemBuilder: (context, index) => _HomeDueCard(
                     row: rows[index],
-                    product: catalogue.firstWhereOrNull(
-                          (product) => product.id == rows[index].card.cardProductId,
+                    product:
+                        catalogue.firstWhereOrNull(
+                          (product) =>
+                              product.id == rows[index].card.cardProductId,
                         ) ??
                         catalogue.firstWhereOrNull(
                           (product) =>
@@ -3305,10 +3343,12 @@ class _HomeDuesAndReminders extends ConsumerWidget {
                 child: Row(
                   children: [
                     Text(
-                      rows.any((row) =>
-                              row.bill != null &&
-                              row.bill!.isCurrentAsOf(now) &&
-                              row.bill!.amountDue != null)
+                      rows.any(
+                            (row) =>
+                                row.bill != null &&
+                                row.bill!.isCurrentAsOf(now) &&
+                                row.bill!.amountDue != null,
+                          )
                           ? 'Outstanding on these cards'
                           : 'Tracked spend on these cards',
                       style: BambooFonts.ui(12, color: BambooInk.ink500),
@@ -3353,7 +3393,8 @@ class _HomeDueCard extends StatelessWidget {
     final showsBill = bill != null && bill.isCurrentAsOf(now);
     final isPaid = bill?.isPaid == true;
     final isOverdue = row.daysUntilDue < 0;
-    final urgent = !isPaid &&
+    final urgent =
+        !isPaid &&
         ((row.daysUntilDue >= 0 && row.daysUntilDue <= 5) || isOverdue);
     return SizedBox(
       width: 236,
@@ -3396,8 +3437,8 @@ class _HomeDueCard extends StatelessWidget {
                   row.daysUntilDue == 0
                       ? 'Due today'
                       : isOverdue
-                          ? 'Past due (${DateFormat('dd MMM').format(row.dueOn)})'
-                          : DateFormat('dd MMM').format(row.dueOn),
+                      ? 'Past due (${DateFormat('dd MMM').format(row.dueOn)})'
+                      : DateFormat('dd MMM').format(row.dueOn),
                   style: BambooFonts.ui(
                     12,
                     weight: FontWeight.w700,

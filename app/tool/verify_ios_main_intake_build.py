@@ -9,6 +9,8 @@ from pathlib import Path
 bundle = Path(sys.argv[1])
 info = plistlib.loads((bundle / 'Info.plist').read_bytes())
 assert info['CFBundleIdentifier'] == 'app.pandapay.pandapay', 'Wrong app bundle'
+assert 'processing' in info.get('UIBackgroundModes', []), 'SMS background processing mode missing'
+assert {'app.pandapay.pandapay.sms-processing', 'app.pandapay.pandapay.sms-import'} <= set(info.get('BGTaskSchedulerPermittedIdentifiers', [])), 'SMS background task identifiers missing'
 binary = (bundle / 'Frameworks/App.framework/App').read_bytes()
 def has_compiled_text(text):
     # Dart stores strings containing arrows/other non-Latin characters as
@@ -27,6 +29,8 @@ for marker in [b'SMS on iPhone', b'Your spending, up to date.', b'Live bank aler
                b'Handoff: Returning to PandaPay during import']:
     assert has_compiled_text(marker.decode()), f'Production SMS setup UI missing from compiled app: {marker.decode()}'
 assert not has_compiled_text('Flutter Demo Home Page'), 'Flutter demo was compiled'
+for marker in ['iosSmsBackgroundMain', 'Retry processing', 'Processing saved messages', 'Processing needs attention']:
+    assert has_compiled_text(marker), f'Import recovery missing from compiled app: {marker}'
 assert not has_compiled_text('PandaPay History Probe'), 'Probe entry point was compiled'
 for marker in [b'Face ID', b'Touch ID']:
     assert has_compiled_text(marker.decode()), 'Device-aware biometric labels missing from compiled app'

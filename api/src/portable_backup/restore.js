@@ -67,6 +67,7 @@ function validateManifest({ manifest, backupId, profileId, snapshotRevision }) {
   if (!revision) throw new PortableRestoreError('snapshot_revision_required');
   for (const section of PORTABLE_SECTIONS) {
     const declaration = sectionDeclaration(manifest, section.name);
+    if (!declaration && section.optionalForLegacy) continue;
     if (!declaration || !Number.isSafeInteger(declaredCount(declaration))
       || declaredCount(declaration) < 0
       || !Number.isSafeInteger(declaredBytes(declaration))
@@ -85,6 +86,10 @@ function validateManifest({ manifest, backupId, profileId, snapshotRevision }) {
 }
 
 function stableId(sectionName, record, ordinal) {
+  if (sectionName === 'foreign_payment_sources') {
+    if (typeof record.source_key !== 'string' || !/^[0-9a-f]{64}$/.test(record.source_key)) throw new PortableRestoreError('record_id_required', 422);
+    return record.source_key;
+  }
   if (sectionName === 'transaction_tag_links') {
     if (!record.transaction_id || !record.tag_id) throw new PortableRestoreError('record_id_required', 422);
     return `${record.transaction_id}:${record.tag_id}`;
@@ -331,7 +336,8 @@ function existingRecordQuery(sectionName, stableIdValue, profileId) {
     };
   }
   const alias = section.alias;
-  const filter = sectionName === 'profile' ? `${alias}.id = $1` : `${alias}.id = $2 AND ${alias}.profile_id = $1`;
+  const identity = sectionName === 'foreign_payment_sources' ? 'source_key' : 'id';
+  const filter = sectionName === 'profile' ? `${alias}.id = $1` : `${alias}.${identity} = $2 AND ${alias}.profile_id = $1`;
   return {
     text: `SELECT to_jsonb(${alias}) - ARRAY[${EXCLUDED_FIELDS.map((field) => `'${field}'`).join(', ')}]::text[] AS record
              FROM public.${section.table} ${alias}
@@ -351,7 +357,8 @@ async function buildRestorePlan(client, profileId, session) {
     [session.id, profileId],
   );
   const byName = new Map(sectionRows.rows.map((row) => [row.section_name, row]));
-  const missingSections = PORTABLE_SECTIONS.map(({ name }) => name).filter((name) => !byName.has(name));
+  const missingSections = PORTABLE_SECTIONS.filter((section) => !section.optionalForLegacy || sectionDeclaration(session.manifest, section.name))
+    .map(({ name }) => name).filter((name) => !byName.has(name));
   const noops = [];
   const missing = [];
   const conflicts = [];

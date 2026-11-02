@@ -1,5 +1,6 @@
 import '../../features/sms_import/ios_shortcut_sms.dart';
 import '../../features/sms_import/sms_background_queue.dart';
+import '../../features/sms_import/sms_text_hint.dart';
 import '../local_sms_parser.dart';
 import 'financial_store.dart';
 import 'sms_intake_repository.dart';
@@ -34,6 +35,18 @@ class IosSmsAcquisitionReceipts {
           body: row['body'] as String,
           receivedAt: DateTime.parse(row['receivedAt'] as String),
         );
+        // Older native policies admitted some security alerts. A terminal
+        // exclusion must release that queue item without storing a body digest
+        // or inventing a financial decision. Native acknowledgement erases it.
+        if (classifySmsTriage(message.sender, message.body).kind ==
+            SmsTriageKind.sensitive) {
+          results.add({
+            'id': row['id'] as String,
+            'parserVersion': LocalSmsParser.version,
+            'outcome': 'excluded_security',
+          });
+          continue;
+        }
         final key = smsSourceKey(namespace, message.sender, message.body);
         final decision = intake.decision(namespace, key);
         final existing = store.hasReceipt(namespace, key);

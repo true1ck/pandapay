@@ -4895,6 +4895,13 @@ smsLearningFeedbackRoute.registerSmsLearningFeedbackRoute(app, {
   withUserClient,
 });
 registerBillsProjectionRoutes(app, { requireAuth, withUserClient });
+// Original-currency evidence stays outside the INR ledger until confirmation.
+require('./foreign_payments_route').registerForeignPaymentRoutes(app, {
+  requireAuth, withUserClient, insertTransactionAndUpdateState,
+});
+require('./sms_amount_audit').registerSmsAmountAuditRoutes(app, {
+  requireAuth, withUserClient, loadUserCardForState, reverseTransactionState,
+});
 // The versioned rule bundle the device downloads and applies locally, so a
 // parser improvement reaches a phone without an app release.
 smsRuleBundleRoute.registerSmsRuleBundleRoutes(app, {
@@ -7958,7 +7965,8 @@ app.get('/recurring', requireAuth, async (req, res) => {
         .filter(Boolean);
       // Historical transaction patterns are surfaced as review candidates.
       // They must not share the confirmed-service projection or annual total.
-      const validRows = stored.rows.filter(isDisplayableSubscriptionRecord).concat(legacyMandateRows);
+      const validRows = require('./recurring_evidence').filterCurrentRecurringRows(stored.rows,detected)
+        .filter(isDisplayableSubscriptionRecord).concat(legacyMandateRows);
       const now = new Date();
       const series = validRows.map((r) => {
         if (r.__legacyMandateSetup) {

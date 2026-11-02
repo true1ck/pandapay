@@ -47,6 +47,7 @@ Future<void> _pumpApp(WidgetTester tester) async {
         utilizationTransactionsProvider.overrideWith(
           (ref) async => const [],
         ),
+        foreignPaymentsProvider.overrideWith((ref) async => const []),
         homeSummaryProvider.overrideWith((ref) async => null),
         bankAccountSummariesProvider.overrideWith((ref) async => const []),
         cardOverridesProvider.overrideWith((ref) async => const []),

@@ -19,6 +19,9 @@ class StatementTransactionInput {
   final String? importRowKey;
   final String? sourceAccount;
   final String? bankReference;
+  final String? originalCurrency;
+  final String? originalAmount;
+  final String? foreignSourceKey;
   final String? categoryHint;
   final String? subcategoryHint;
   final List<String> tagNames;
@@ -38,6 +41,9 @@ class StatementTransactionInput {
     this.importRowKey,
     this.sourceAccount,
     this.bankReference,
+    this.originalCurrency,
+    this.originalAmount,
+    this.foreignSourceKey,
     this.categoryHint,
     this.subcategoryHint,
     this.tagNames = const [],
@@ -58,6 +64,9 @@ class StatementTransactionInput {
     if (importRowKey != null) 'importRowKey': importRowKey,
     if (sourceAccount != null) 'sourceAccount': sourceAccount,
     if (bankReference != null) 'bankReference': bankReference,
+    if (originalCurrency != null) 'originalCurrency': originalCurrency,
+    if (originalAmount != null) 'originalAmount': originalAmount,
+    if (foreignSourceKey != null) 'foreignSourceKey': foreignSourceKey,
     if (categoryHint != null) 'categoryHint': categoryHint,
     if (subcategoryHint != null) 'subcategoryHint': subcategoryHint,
     if (tagNames.isNotEmpty) 'tagNames': tagNames,

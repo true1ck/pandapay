@@ -3,6 +3,7 @@ import 'dart:convert';
 import 'package:pandapay_domain/pandapay_domain.dart';
 
 import 'statement_reconciler.dart';
+import 'foreign_money.dart';
 import 'user_cards_repository.dart' show TxnInstrument;
 
 enum ImportDateOrder { dayFirst, monthFirst }
@@ -30,7 +31,8 @@ List<String> parseImportedTagNames(String value) {
       if (decoded is List) {
         return normalizeImportedTagNames([
           for (final item in decoded)
-            if (item is String) item
+            if (item is String)
+              item
             else if (item is Map && item['name'] is String)
               item['name'] as String,
         ]);
@@ -86,6 +88,9 @@ class ParsedStatementLine {
   final bool isCredit;
   final String? sourceAccount;
   final String? bankReference;
+  final String? originalCurrency;
+  final String? originalAmount;
+  final String? foreignSourceKey;
   final String? categoryHint;
   final String? subcategoryHint;
   final List<String> tagNames;
@@ -112,6 +117,9 @@ class ParsedStatementLine {
     this.isCredit = false,
     this.sourceAccount,
     this.bankReference,
+    this.originalCurrency,
+    this.originalAmount,
+    this.foreignSourceKey,
     this.categoryHint,
     this.subcategoryHint,
     this.tagNames = const [],
@@ -148,6 +156,9 @@ class ParsedStatementLine {
     isInvestment: isInvestment ?? this.isInvestment,
     sourceAccount: sourceAccount,
     bankReference: bankReference,
+    originalCurrency: originalCurrency,
+    originalAmount: originalAmount,
+    foreignSourceKey: foreignSourceKey,
     categoryHint: categoryHint ?? this.categoryHint,
     subcategoryHint: subcategoryHint ?? this.subcategoryHint,
     tagNames: tagNames ?? this.tagNames,
@@ -180,6 +191,16 @@ class ParsedStatement {
 
 /// The same guard is applied to every reviewed file/OCR row before submission.
 String? validateImportedTransaction(ParsedStatementLine row) {
+  if ((row.originalCurrency == null) != (row.originalAmount == null) ||
+      (row.originalCurrency != null &&
+          canonicalForeignAmount(row.originalAmount, row.originalCurrency) ==
+              null)) {
+    return 'Provide both a valid original foreign currency and its amount.';
+  }
+  if (row.foreignSourceKey != null &&
+      !RegExp(r'^[a-f0-9]{64}$').hasMatch(row.foreignSourceKey!)) {
+    return 'The original payment reference is invalid.';
+  }
   if (row.amount.paise <= 0 || row.amount.paise > 999999999999) {
     return 'Amount must be positive and below ₹10 billion.';
   }
@@ -207,7 +228,8 @@ String? validateImportedTransaction(ParsedStatementLine row) {
   if (!const {'active', 'ignored', 'deleted'}.contains(row.status)) {
     return 'Transaction status is not supported.';
   }
-  if (row.tagNames.length > 30 || row.tagNames.any((name) => name.trim().isEmpty || name.length > 60)) {
+  if (row.tagNames.length > 30 ||
+      row.tagNames.any((name) => name.trim().isEmpty || name.length > 60)) {
     return 'Use up to 30 tags, each with 1–60 characters.';
   }
   if (row.reviewReasons.isNotEmpty) return row.reviewReasons.join(' ');

@@ -26,7 +26,11 @@ class MemoryBridge extends IosSmsIntakeService {
   @override
   bool get supported => true;
   @override
-  void listen(Future<void> Function()? callback) {}
+  void listen(
+    Future<void> Function()? callback, {
+    Future<Map<String, Object?>> Function()? onBackground,
+    void Function()? onExpiration,
+  }) {}
   @override
   Future<Object?> call(String method, [Map<String, Object?>? arguments]) async {
     calls.add(method);
@@ -113,6 +117,57 @@ class MemoryBridge extends IosSmsIntakeService {
 }
 
 void main() {
+  test('Resume cannot reissue a running or already searched range', () async {
+    final service = MemoryBridge();
+    final controller = IosSmsIntakeController(
+      service: service,
+      namespace: () => 'user:a',
+      capture: (_, _, _) async => [],
+      requestUpload: () {},
+    );
+    addTearDown(controller.dispose);
+    await controller.refresh();
+    await controller.startHistory(DateTime(2026, 3), DateTime(2026, 4));
+    await controller.continueImport('PANDAPAY SMS HISTORY');
+    expect(controller.canResumeImport, isFalse);
+    await controller.continueImport('PANDAPAY SMS HISTORY');
+    expect(service.calls.where((c) => c == 'runShortcut'), hasLength(1));
+    final w = (service.snapshot['windows'] as List).first as Map;
+    w['state'] = 'finished';
+    await controller.refresh();
+    expect(controller.canResumeImport, isFalse);
+    await controller.continueImport('PANDAPAY SMS HISTORY');
+    expect(service.calls.where((c) => c == 'runShortcut'), hasLength(1));
+  });
+
+  test(
+    'retry processing drains locally without resetting Shortcut attempts',
+    () async {
+      final service = MemoryBridge()..rows.add({'id': 'pending'});
+      var fail = true;
+      final controller = IosSmsIntakeController(
+        service: service,
+        namespace: () => 'user:a',
+        requestUpload: () {},
+        capture: (_, _, rows) async {
+          if (fail) throw StateError('Synthetic processing failure');
+          return [
+            {'id': 'pending'},
+          ];
+        },
+      );
+      addTearDown(controller.dispose);
+      await controller.refresh();
+      expect(controller.canRetryProcessing, isTrue);
+      expect(controller.state.label, 'Processing needs attention');
+      fail = false;
+      await controller.refresh();
+      expect(controller.canRetryProcessing, isFalse);
+      expect(service.rows, isEmpty);
+      expect(service.calls, isNot(contains('runShortcut')));
+      expect(service.calls, isNot(contains('control')));
+    },
+  );
   setUpAll(() => IosSmsIntakeController.drainRetryDelay = Duration.zero);
 
   test('a batch that fails once is retried without showing an error', () async {
@@ -844,11 +899,14 @@ void main() {
       at(launching: true).label,
       at().label,
       at(state: 'running').label,
-      at(processing: true, state: 'finished').label,
     };
     expect(labels, hasLength(1));
     expect(labels.single, startsWith('Importing history · '));
     expect(labels.single, endsWith('2025'), reason: 'the year is always named');
+    expect(
+      at(processing: true, state: 'finished').label,
+      'Processing saved messages',
+    );
   });
 
   _loopMonitorTests();
@@ -1127,7 +1185,7 @@ void _loopMonitorTests() {
         everyElement(isNotNull),
         reason: 'no flicker to a clean state',
       );
-      expect(controller.state.label, 'Import needs a check');
+      expect(controller.state.label, 'Processing needs attention');
       // Once the messages save, the error goes by itself.
       service.rows.clear();
       await controller.refresh();

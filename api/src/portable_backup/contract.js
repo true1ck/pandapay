@@ -46,6 +46,8 @@ const PORTABLE_SECTIONS = Object.freeze([
   { name: 'sms_sources', table: 'sms_sources', alias: 't', filter: 't.profile_id = $1', orderBy: 't.id', cursor: 't.id' },
   { name: 'sms_source_facts', table: 'sms_source_facts', alias: 't', filter: 't.profile_id = $1', orderBy: 't.id', cursor: 't.id' },
   { name: 'fact_overrides', table: 'fact_overrides', alias: 't', filter: 't.profile_id = $1', orderBy: 't.id', cursor: 't.id' },
+  { name: 'foreign_payments', table: 'foreign_payments', alias: 't', filter: 't.profile_id = $1', orderBy: 't.id', cursor: 't.id', optionalForLegacy: true },
+  { name: 'foreign_payment_sources', table: 'foreign_payment_sources', alias: 't', filter: 't.profile_id = $1', orderBy: 't.source_key', cursor: 't.source_key', optionalForLegacy: true },
 ]);
 
 // Device identity, credentials and operational queues are intentionally not

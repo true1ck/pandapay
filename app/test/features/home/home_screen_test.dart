@@ -264,6 +264,7 @@ void main() {
     await tester.pumpWidget(
       ProviderScope(
         overrides: [
+          foreignPaymentsProvider.overrideWith((ref) async => const []),
           homeSummaryProvider.overrideWith(
             (ref) async => HomeSummary(
               rewardsThisMonth: Money.fromRupees(547.20),

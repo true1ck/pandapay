@@ -19,6 +19,7 @@ const KNOWN_FIELDS = [
   'direction', 'mcc', 'availableBalance', 'balance',
 ];
 const MAX_MESSAGE_LENGTH = 20000;
+const { paymentAmounts, hasInrAmount, permitsPaymentAmount, paymentReviewReason } = require('./sms_amount_evidence');
 const { isInvestmentFundingMessage, isBrokerSettlementMessage, isInvestmentFolioAllotment } = require('./recurring');
 const { cleanMerchantName, isWeakMerchantName, appearsInMessage } = require('./merchant_identity');
 
@@ -499,7 +500,7 @@ function parseBuiltInAccountCredit(sms) {
     return { ok: false, reason: 'not_a_completed_credit' };
   }
 
-  const amountMatch = body.match(/(?:₹|rs\.?|inr)\s*[:.]?\s*([\d,]+(?:\.\d{1,2})?)/i);
+  const amountMatch = paymentAmounts(body)[0];
   if (!amountMatch) return { ok: false, reason: 'no_account_credit_match' };
 
   const incomingMarker = /\b(?:credited|received|deposited|refunded|reversed)\b/i.test(body)
@@ -698,7 +699,7 @@ function parseBuiltInBeneficiaryDebit(sms) {
   );
   if (!beneficiaryMatch) return { ok: false, reason: 'no_beneficiary_debit_match' };
 
-  const amountMatch = body.match(/(?:₹|rs\.?|inr)\s*[:.]?\s*([\d,]+(?:\.\d{1,2})?)/i);
+  const amountMatch = paymentAmounts(body)[0];
   if (!amountMatch) return { ok: false, reason: 'no_beneficiary_debit_match' };
   const dateMatch = body.match(/\b(\d{4}[-/.]\d{1,2}[-/.]\d{1,2}|\d{1,2}[-/.](?:\d{1,2}|[A-Za-z]{3,})[-/.]\d{2,4})\b/);
   const referenceMatch = body.match(/\b(?:ref(?:erence)?|txn(?:\s*id)?)\s*(?:no\.?|id)?\s*[:#-]?\s*([A-Za-z0-9-]{6,})/i);
@@ -759,7 +760,7 @@ function parseBuiltInAccountDebit(sms) {
     return { ok: false, reason: 'ambiguous_account_debit' };
   }
   const accountLast4 = extractAccountLast4(body);
-  const amountMatch = body.match(/(?:₹|rs\.?|inr)\s*[:.]?\s*([\d,]+(?:\.\d{1,2})?)/i);
+  const amountMatch = paymentAmounts(body)[0];
   if (!amountMatch) return { ok: false, reason: 'no_account_debit_match' };
 
   const dateMatch = body.match(/\b(\d{4}[-/.]\d{1,2}[-/.]\d{1,2}|\d{1,2}[-/.](?:\d{1,2}|[A-Za-z]{3,})[-/.]\d{2,4})\b/);
@@ -802,7 +803,7 @@ function parseBuiltInWalletSpend(sms) {
   if (!isWalletDebit) return { ok: false, reason: 'no_wallet_spend_match' };
   if (!isSuccessfulSpend(body)) return { ok: false, reason: 'not_a_successful_spend' };
 
-  const amountMatch = body.match(/(?:₹|rs\.?|inr)\s*[:.]?\s*([\d,]+(?:\.\d{1,2})?)/i);
+  const amountMatch = paymentAmounts(body)[0];
   if (!amountMatch) return { ok: false, reason: 'no_wallet_spend_amount' };
 
   const amazonPay = body.match(/\b(Amazon\s+Pay)\s+wallet\b/i)?.[1];
@@ -943,7 +944,7 @@ function parseBuiltInCardBillPayment(sms) {
     return { ok: false, reason: 'card_bill_reminder' };
   }
   const lower = body.toLowerCase();
-  const amountMatch = body.match(/(?:₹|rs\.?|inr)\s*[:.]?\s*([\d,]+(?:\.\d{1,2})?)/i);
+  const amountMatch = paymentAmounts(body)[0];
   if (!amountMatch) return { ok: false, reason: 'no_card_bill_payment_match' };
 
   const towardCard = /\b(?:payment|amount)\b[\s\S]{0,90}\b(?:received|credited)\b[\s\S]{0,90}\btowards?\b[\s\S]{0,50}\bcredit\s+card\b/i.test(body)
@@ -1000,7 +1001,7 @@ function parseBuiltInCardCredit(sms) {
       && !/\b(?:reversed|refunded|credited)\b/i.test(body)) {
     return { ok: false, reason: 'not_a_completed_card_credit' };
   }
-  const amountMatch = body.match(/(?:₹|rs\.?|inr)\s*[:.]?\s*([\d,]+(?:\.\d{1,2})?)/i);
+  const amountMatch = paymentAmounts(body)[0];
   if (!amountMatch) return { ok: false, reason: 'no_card_credit_match' };
   const adjustmentMarker = /\b(?:credited|received|refunded|refund|cashback|reward|statement\s+credit|balance\s+adjustment)\b/i.test(body)
     || (/\b(?:reversed|reversal)\b/i.test(body) && /\b(?:posted|applied|credited)\b/i.test(body));
@@ -1037,7 +1038,7 @@ function parseBuiltInNonSpendDebit(sms) {
     && !feeCharge
     && isInvestmentFundingMessage(body);
   if (!cashWithdrawal && !loanRepayment && !feeCharge && !investment) return { ok: false, reason: 'no_non_spend_debit' };
-  const amountMatch = body.match(/(?:₹|rs\.?|inr)\s*[:.]?\s*([\d,]+(?:\.\d{1,2})?)/i);
+  const amountMatch = paymentAmounts(body)[0];
   if (!amountMatch) return { ok: false, reason: 'no_non_spend_amount' };
   const last4Match = body.match(/\b(?:card)\b[\s\S]{0,45}?(?:ending(?:\s+with)?|x{1,4}|\*{1,4}|last\s*4|no\.?)\D{0,5}(\d{4})\b/i);
   const accountLast4 = extractAccountLast4(body);
@@ -1076,7 +1077,7 @@ function parseInvestmentFolioAllotment(sms) {
   if (!isInvestmentFolioAllotment(body)) {
     return { ok: false, reason: 'not_folio_allotment' };
   }
-  const amountMatch = body.match(/(?:₹|rs\.?|inr)\s*[:.]?\s*([\d,]+(?:\.\d{1,2})?)/i);
+  const amountMatch = paymentAmounts(body)[0];
   const amountInr = amountMatch ? Number(amountMatch[1].replace(/,/g, '')) : null;
   const schemeMatch = body.match(/\b(?:scheme|fund(?:\s+name)?)\s*[:\-]\s*([A-Za-z0-9_][-A-Za-z0-9 .&'/()]{2,60})/i);
   const inFundMatch = body.match(/\bin\s+([A-Za-z0-9][-A-Za-z0-9 .&'/()]{2,60}?)(?=(?:\s+(?:processed|successful|completed|allotted|for\b|at\s+nav|with\s+nav|nav|on\s+\d|folio)|[.,;]|$))/i);
@@ -1122,7 +1123,7 @@ function parseBuiltInInvestmentMovement(sms) {
   if (/\b(?:declined|failed|failure|cancelled|canceled|pending|processing|reversed|refund(?:ed)?)\b/i.test(body)) {
     return { ok: false, reason: 'unsuccessful_investment_movement' };
   }
-  const amountMatch = body.match(/(?:₹|rs\.?|inr)\s*[:.]?\s*([\d,]+(?:\.\d{1,2})?)/i);
+  const amountMatch = paymentAmounts(body)[0];
   if (!amountMatch) return { ok: false, reason: 'no_investment_amount' };
   const amountInr = Number(amountMatch[1].replace(/,/g, ''));
   if (!Number.isFinite(amountInr) || amountInr <= 0) {
@@ -1155,7 +1156,7 @@ function parseBuiltInUpiDebit(sms) {
   if (!isSuccessfulSpend(body)) return { ok: false, reason: 'no_builtin_upi_match' };
   const instrument = inferInstrument(body);
   if (instrument !== 'upi_bank') return { ok: false, reason: 'no_builtin_upi_match' };
-  const amountMatch = body.match(/(?:₹|rs\.?|inr)\s*[:.]?\s*([\d,]+(?:\.\d{1,2})?)/i);
+  const amountMatch = paymentAmounts(body)[0];
   if (!amountMatch) return { ok: false, reason: 'no_builtin_upi_match' };
   const amountInr = Number(amountMatch[1].replace(/,/g, ''));
   if (!Number.isFinite(amountInr) || amountInr <= 0) return { ok: false, reason: 'no_builtin_upi_match' };
@@ -1228,7 +1229,7 @@ function parseBuiltInCardSpend(sms) {
   if (!last4Match) return { ok: false, reason: 'no_builtin_card_match' };
   const instrument = inferInstrument(body) || 'other';
   if (!['credit_card', 'debit_card', 'other'].includes(instrument)) return { ok: false, reason: 'no_builtin_card_match' };
-  const amountMatch = body.match(/(?:₹|rs\.?|inr)\s*[:.]?\s*([\d,]+(?:\.\d{1,2})?)/i);
+  const amountMatch = paymentAmounts(body)[0];
   if (!amountMatch) return { ok: false, reason: 'no_builtin_card_match' };
   const amountInr = Number(amountMatch[1].replace(/,/g, ''));
   if (!Number.isFinite(amountInr) || amountInr <= 0) return { ok: false, reason: 'no_builtin_card_match' };
@@ -1281,6 +1282,8 @@ function senderMatches(senderPattern, sender) {
  *          | {ok: false, reason: string}}
  */
 function parseSms(pattern, sms) {
+  const amountReview = paymentReviewReason(sms?.body);
+  if (amountReview) return { ok: false, reason: amountReview };
   if (!pattern || typeof pattern.regex !== 'string' || !pattern.regex) {
     return { ok: false, reason: 'invalid_pattern' };
   }
@@ -1367,6 +1370,9 @@ function parseSms(pattern, sms) {
     // even map "amount" is not usable, regardless of what else it captured.
     return { ok: false, reason: 'no_amount_field_mapped' };
   }
+  if (hasInrAmount(sms.body) && !permitsPaymentAmount(sms.body, fields.amountInr)) {
+    return { ok: false, reason: 'transaction_amount_not_evidenced' };
+  }
 
   const direction = String(fields.direction || '').toLowerCase();
   if (direction && /credit|refund|reversal|failed|declin/.test(direction)) {
@@ -1411,6 +1417,8 @@ function parseSms(pattern, sms) {
  * @param {{body: string, sender?: string}} sms
  */
 function parseConservativeBankSpend(sms) {
+  const amountReview = paymentReviewReason(sms?.body);
+  if (amountReview) return { ok: false, reason: amountReview };
   if (!sms || typeof sms.body !== 'string' || !sms.body.trim()) {
     return { ok: false, reason: 'empty_body' };
   }
@@ -1438,7 +1446,7 @@ function parseConservativeBankSpend(sms) {
     return { ok: false, reason: 'no_card_marker' };
   }
 
-  const currencyAmount = body.match(/(?:₹|\bINR\b|\bRS\.?)(?:\s*:?\s*)([0-9][0-9,]*(?:\.\d{1,2})?)/i);
+  const currencyAmount = paymentAmounts(body)[0];
   if (!currencyAmount) return { ok: false, reason: 'no_amount_found' };
   const amountInr = Number(currencyAmount[1].replace(/,/g, ''));
   if (!Number.isFinite(amountInr) || amountInr <= 0) {
@@ -1494,6 +1502,18 @@ function enrichMissingCardMerchant(result, sms) {
 }
 
 function parseSmsAgainstPatterns(patterns, sms) {
+  const amountReview = paymentReviewReason(sms?.body);
+  if (amountReview) {
+    // Keep the specialist disposition for a bill/mandate or known service
+    // notice. The monetary guard still prevents every purchase projection.
+    if (isNonTransactionNoise(sms?.sender, sms?.body)) {
+      return { ok: false, reason: 'non_transaction_message' };
+    }
+    if (isCardBillNotice(sms?.body)) {
+      return { ok: false, reason: 'card_bill_notice' };
+    }
+    return { ok: false, reason: amountReview };
+  }
   if (isSecurityOrOtpMessage(sms?.body)) {
     return { ok: false, reason: 'security_message' };
   }

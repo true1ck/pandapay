@@ -21,11 +21,13 @@ class IosSmsIntakeState {
   final bool processing;
   final bool launching;
   final String? error;
+  final bool processingFailed;
   const IosSmsIntakeState({
     this.snapshot = const {},
     this.processing = false,
     this.launching = false,
     this.error,
+    this.processingFailed = false,
   });
   bool get enabled => snapshot['enabled'] == true;
   int get pending => snapshot['pending'] as int? ?? 0;
@@ -84,6 +86,13 @@ class IosSmsIntakeState {
   ];
 
   bool get partial => currentWindows.any((w) => w['state'] == 'partial');
+  bool get acquisitionFinished =>
+      currentWindows.isNotEmpty &&
+      currentWindows.every(
+        (w) => const ['complete', 'finished'].contains(w['state']),
+      );
+  bool get savingMessages =>
+      pending > 0 || currentWindows.any((w) => w['state'] == 'finished');
 
   /// The active job's windows in date order. A window that hit the 500
   /// message cap is followed by its continuation.
@@ -112,10 +121,15 @@ class IosSmsIntakeState {
     final start = DateTime.tryParse(activeJob?['start'] as String? ?? '');
     final end = DateTime.tryParse(activeJob?['end'] as String? ?? '');
     if (start == null || end == null || !end.isAfter(start)) return null;
-    final through = importedThrough ?? start;
-    return (through.difference(start).inSeconds /
-            end.difference(start).inSeconds)
-        .clamp(0.0, 1.0);
+    final savedSeconds = currentWindows
+        .where((w) => w['state'] == 'complete')
+        .fold<int>(0, (total, w) {
+          final from = DateTime.tryParse(w['start'] as String? ?? '');
+          final to = DateTime.tryParse(w['end'] as String? ?? '');
+          return total +
+              (from == null || to == null ? 0 : to.difference(from).inSeconds);
+        });
+    return (savedSeconds / end.difference(start).inSeconds).clamp(0.0, 1.0);
   }
 
   /// Why the current range stopped, in words the user can act on.
@@ -187,12 +201,16 @@ class IosSmsIntakeState {
 
   String get label {
     if (error != null) {
+      if (processingFailed) return 'Processing needs attention';
       // Same words as the import card, so the two never disagree.
       return activeJob?['kind'] == 'history'
           ? 'Import needs a check'
           : 'Message update needs attention';
     }
     if (paused) return 'Message update paused';
+    if (acquisitionFinished && savingMessages) {
+      return 'Processing saved messages';
+    }
     if (partial) {
       return missingSenders > 0
           ? 'Messages need sender details'
@@ -252,8 +270,34 @@ class IosSmsIntakeController extends ChangeNotifier {
   String? _automaticJob;
   String? _automaticShortcut;
   String? _issuedAttempt;
+  bool _userInitiatedLaunch = false;
   String? _returnedAttempt;
   bool get automaticallyAdvancing => _automaticJob != null;
+  bool get canRetryProcessing => _drainError != null;
+  bool get canResumeImport =>
+      state.activeJob != null &&
+      !state.processing &&
+      !state.launching &&
+      !state.savingMessages &&
+      !state.acquisitionFinished &&
+      !canRetryProcessing &&
+      (state.paused || state.partial || !state.waiting || _haltError != null);
+  bool _stopDrainRequested = false;
+
+  /// Expiration stops between committed batches; it never abandons a writer.
+  void stopBackgroundProcessing() {
+    if (_refreshing != null) _stopDrainRequested = true;
+  }
+
+  Future<Map<String, Object?>> processInBackground() async {
+    if (!namespace().startsWith('user:')) {
+      return {'success': false, 'unavailable': true};
+    }
+    _stopDrainRequested = false;
+    await refresh();
+    return {'success': _drainError == null, 'pending': state.pending};
+  }
+
   int _revision = 0;
   Timer? _handoffTimer;
   String? _resumedAttempt;
@@ -485,7 +529,13 @@ class IosSmsIntakeController extends ChangeNotifier {
     IosImportSessionStore? sessionStore,
   }) : now = now ?? DateTime.now,
        sessionStore = sessionStore ?? const IosImportSessionStore() {
-    if (service.supported) service.listen(refresh);
+    if (service.supported) {
+      service.listen(
+        refresh,
+        onBackground: processInBackground,
+        onExpiration: stopBackgroundProcessing,
+      );
+    }
     // Load once, in the background; the import loop never waits on storage.
     if (service.supported) {
       unawaited(
@@ -523,13 +573,16 @@ class IosSmsIntakeController extends ChangeNotifier {
   void _publish(IosSmsIntakeState value) {
     if (_disposed) return;
     final error = value.error ?? _drainError ?? _haltError;
-    _state = identical(error, value.error)
+    _state =
+        identical(error, value.error) &&
+            value.processingFailed == (_drainError != null)
         ? value
         : IosSmsIntakeState(
             snapshot: value.snapshot,
             processing: value.processing,
             launching: value.launching,
             error: error,
+            processingFailed: _drainError != null,
           );
     notifyListeners();
   }
@@ -638,6 +691,7 @@ class IosSmsIntakeController extends ChangeNotifier {
               if (!state.enabled) return;
               final generation = state.generation!;
               var drained = false;
+              var nextProgress = now().add(const Duration(seconds: 1));
               do {
                 _refreshAgain = false;
                 while (true) {
@@ -648,7 +702,7 @@ class IosSmsIntakeController extends ChangeNotifier {
                   final rows = (pending! as List)
                       .map((row) => Map<Object?, Object?>.from(row as Map))
                       .toList();
-                  if (rows.isEmpty) break;
+                  if (rows.isEmpty || _stopDrainRequested) break;
                   // Publish "processing" once; repeating it per batch rebuilds
                   // every listening screen for no visible change.
                   if (!state.processing) {
@@ -697,10 +751,24 @@ class IosSmsIntakeController extends ChangeNotifier {
                     }
                   }
                   drained = true;
+                  _drainError = null;
+                  // Keep the app's counts moving during a large backlog,
+                  // without rebuilding every listening page for every SMS.
+                  if (!now().isBefore(nextProgress)) {
+                    final snapshot = await service.call('snapshot');
+                    _check(expected, revision);
+                    _publish(
+                      IosSmsIntakeState(
+                        snapshot: Map<String, Object?>.from(snapshot! as Map),
+                        processing: true,
+                      ),
+                    );
+                    nextProgress = now().add(const Duration(seconds: 1));
+                  }
                   // Let frames render between batches.
                   await Future<void>.delayed(const Duration(milliseconds: 16));
                 }
-              } while (_refreshAgain);
+              } while (_refreshAgain && !_stopDrainRequested);
               // One upload pass for the whole drain, not one per batch.
               if (drained) requestUpload();
               _drainError = null;
@@ -726,7 +794,10 @@ class IosSmsIntakeController extends ChangeNotifier {
                   .firstOrNull;
               // A looping Shortcut that runs past the last range ends with an
               // error once the import is already complete: nothing was lost.
-              if (window?['state'] == 'complete' || state.activeJob == null) {
+              if (state.paused) {
+                _endAutomaticSession();
+              } else if (window?['state'] == 'complete' ||
+                  state.activeJob == null) {
                 _returnedAttempt = errorAttempt;
               } else {
                 _endAutomaticSession();
@@ -747,12 +818,13 @@ class IosSmsIntakeController extends ChangeNotifier {
                 namespace() == expected &&
                 revision == _revision) {
               _drainError =
-                  'Saved messages remain pending. Retry when storage and your account are available.';
+                  'Saved messages could not be processed. Retry processing; no new import is needed.';
               _publish(IosSmsIntakeState(snapshot: state.snapshot));
             }
           }
         }).whenComplete(() {
           _refreshing = null;
+          _stopDrainRequested = false;
           if (_refreshAgain && !_disposed) {
             _refreshAgain = false;
             unawaited(refresh());
@@ -841,6 +913,8 @@ class IosSmsIntakeController extends ChangeNotifier {
     final expected = namespace(), revision = _revision;
     _check(expected, revision);
     if (!state.enabled || state.activeJob == null) return;
+    // A retry of local processing must never replace an acquisition attempt.
+    if (!canResumeImport) return;
     _clearErrors();
     // A user-started session is bounded to this job and account. It does not
     // survive process death or admit unrelated app-open/daily jobs.
@@ -853,6 +927,7 @@ class IosSmsIntakeController extends ChangeNotifier {
       await _load();
     }
     _automaticJob = state.activeJob?['id'] as String?;
+    _userInitiatedLaunch = !automatic;
     _automaticShortcut = shortcutName.trim();
     _lastShortcut = _automaticShortcut;
     _issuedAttempt = null;
@@ -1086,7 +1161,9 @@ class IosSmsIntakeController extends ChangeNotifier {
     final launched = await service.call('runShortcut', {
       'name': _automaticShortcut,
       'request': request,
+      'userInitiated': _userInitiatedLaunch,
     });
+    _userInitiatedLaunch = false;
     _check(expected, revision);
     await _load();
     if (launched == true) {

@@ -7,6 +7,9 @@ import UIKit
     _ application: UIApplication,
     didFinishLaunchingWithOptions launchOptions: [UIApplication.LaunchOptionsKey: Any]?
   ) -> Bool {
+#if !PANDAPAY_DEVICE_IMPORT_PROBE
+    SmsImportBackgroundHost.register()
+#endif
     return super.application(application, didFinishLaunchingWithOptions: launchOptions)
   }
 

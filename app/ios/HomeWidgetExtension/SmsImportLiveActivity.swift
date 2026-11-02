@@ -44,6 +44,7 @@ struct SmsImportLiveActivity: Widget {
     case "complete": return "SMS import complete"
     case "stopped": return "SMS import stopped"
     case "paused": return "Import paused · open PandaPay to continue"
+    case "processing": return "Processing saved messages"
     default:
       if stale { return "Waiting · open PandaPay to continue" }
       return state.range.isEmpty ? "Importing your SMS" : "Importing \(state.range)"
@@ -64,6 +65,10 @@ struct SmsImportLiveActivity: Widget {
         }
         Text(SmsImportLiveActivity.title(state, stale: stale))
           .font(.subheadline).foregroundColor(.white.opacity(0.85)).lineLimit(1)
+        if let received = state.received, let processed = state.processed {
+          Text("\(received) read · \(processed) processed")
+            .font(.caption).foregroundColor(.white.opacity(0.75))
+        }
         ProgressView(value: Double(state.done), total: Double(max(state.total, 1)))
           .tint(SmsImportLiveActivity.lime)
       }

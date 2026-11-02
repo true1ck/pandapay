@@ -18,6 +18,7 @@ import '../features/account/account_screen.dart';
 import '../features/activity/activity_screen.dart';
 import '../features/activity/duplicate_review_screen.dart';
 import '../features/activity/edit_transaction_screen.dart';
+import '../features/activity/foreign_payments_screen.dart';
 import '../features/activity/needs_review_screen.dart';
 import '../features/activity/transaction_detail_screen.dart';
 import '../features/auth/login_screen.dart';
@@ -118,6 +119,8 @@ abstract final class AppRoute {
   /// deep-linkable per ui-spec §1 ("transaction detail" explicitly named).
   static const transactionDetail = '/activity/:id';
   static const needsReview = '/activity/needs-review';
+  static const foreignPayments = '/activity/foreign';
+  static const foreignPaymentDetail = '/activity/foreign/:id';
   static const duplicateReview = '/activity/duplicates';
   static const missedOpportunities = '/insights/missed-opportunities';
 
@@ -687,6 +690,18 @@ final goRouterProvider = Provider<GoRouter>((ref) {
       GoRoute(
         path: AppRoute.duplicateReview,
         builder: (context, state) => const DuplicateReviewScreen(),
+      ),
+      GoRoute(
+        path: AppRoute.foreignPayments,
+        builder: (context, state) => ForeignPaymentsScreen(
+          from: DateTime.tryParse(state.uri.queryParameters['from'] ?? ''),
+          to: DateTime.tryParse(state.uri.queryParameters['to'] ?? ''),
+        ),
+      ),
+      GoRoute(
+        path: AppRoute.foreignPaymentDetail,
+        builder: (context, state) =>
+            ForeignPaymentDetailScreen(paymentId: state.pathParameters['id']!),
       ),
       GoRoute(
         path: AppRoute.transactionDetail,

@@ -174,6 +174,7 @@ void main() {
           overrides: [
             userCardsProvider.overrideWith((ref) async => const []),
             categoriesProvider.overrideWith((ref) async => const []),
+            foreignPaymentsProvider.overrideWith((ref) async => const []),
             transactionsProvider.overrideWith(
               (ref) async => [
                 entry('1', 'Frequent', 4),
@@ -232,6 +233,7 @@ void main() {
           overrides: [
             userCardsProvider.overrideWith((ref) async => const []),
             categoriesProvider.overrideWith((ref) async => const []),
+            foreignPaymentsProvider.overrideWith((ref) async => const []),
             transactionsProvider.overrideWith((ref) async => const []),
             merchantSearchRepositoryProvider.overrideWithValue(repo),
           ],
@@ -292,6 +294,7 @@ void main() {
                 ),
               ],
             ),
+            foreignPaymentsProvider.overrideWith((ref) async => const []),
             transactionsProvider.overrideWith((ref) async => const []),
           ],
           child: MaterialApp(
@@ -349,6 +352,7 @@ void main() {
               ),
             ],
           ),
+          foreignPaymentsProvider.overrideWith((ref) async => const []),
           transactionsProvider.overrideWith((ref) async => const []),
           merchantSearchRepositoryProvider.overrideWithValue(
             _EmptyMerchantSearchRepository(),
@@ -578,6 +582,7 @@ void main() {
               ],
             ),
             categoriesProvider.overrideWith((ref) async => const []),
+            foreignPaymentsProvider.overrideWith((ref) async => const []),
             transactionsProvider.overrideWith((ref) async => const []),
             merchantSearchRepositoryProvider.overrideWithValue(
               _EmptyMerchantSearchRepository(),

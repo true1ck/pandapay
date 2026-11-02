@@ -7,6 +7,9 @@ import 'app_database.dart';
 import '../local_sms_parser.dart';
 import '../merchant_identity.dart';
 import '../commitments_repository.dart';
+import '../sms_amount_evidence.dart';
+import '../needs_review_repository.dart';
+import 'sms_intake_repository.dart';
 
 /// DLT SMS sender IDs split one bank's alerts across channel variants
 /// ("AD-" advertising, "AX-" activity, "VM-"/"PD-" operator packs, "-S"/"-T"
@@ -330,6 +333,7 @@ class FinancialStore {
     if (_transactionRepairFingerprints[ns] == before) return;
     _repairProvisionalMerchantNames(ns);
     _deleteProvisionalDeclineTransactions(ns);
+    _repairProvisionalAmountRoles(ns);
     _transactionRepairFingerprints[ns] = _repairFingerprint(ns);
   }
 
@@ -337,6 +341,183 @@ class FinancialStore {
     "SELECT 1 FROM financial_entities WHERE namespace=? AND entity='transactions' AND pending=1 LIMIT 1",
     [ns],
   ).isNotEmpty;
+
+  /// Synced projections require the ordinary server status/reversal route.
+  /// Return evidence only; this read never modifies a confirmed transaction.
+  List<Map<String, Object?>> invalidSmsAmountCandidates(String ns) {
+    if (database.db
+        .select(
+          "SELECT 1 FROM sqlite_master WHERE type='table' AND name='sms_captured_messages'",
+        )
+        .isEmpty) {
+      return const [];
+    }
+    final result = <Map<String, Object?>>[];
+    final hasAutoResolution = database.db.select(
+      "SELECT 1 FROM sqlite_master WHERE type='table' AND name='local_auto_resolved_history'",
+    ).isNotEmpty;
+    for (final row in database.db.select(
+      'SELECT e.id,e.payload,e.source_key,m.sender,m.body,m.received_at, '
+      '(SELECT COUNT(*) FROM financial_source_receipts r WHERE r.namespace=e.namespace AND r.source_key=e.source_key AND r.transaction_id=e.id) AS has_source_receipt '
+      'FROM financial_entities e '
+      'JOIN sms_captured_messages m ON m.namespace=e.namespace AND m.id=e.source_key '
+      "WHERE e.namespace=? AND e.entity='transactions' AND e.pending=0 "
+      'AND NOT EXISTS (SELECT 1 FROM sync_pending_changes p WHERE p.namespace=e.namespace AND p.entity=\'transactions\' AND p.entity_id=e.id)',
+      [ns],
+    )) {
+      final data = jsonDecode(row['payload'] as String) as Map<String, dynamic>;
+      if (hasAutoResolution && database.db.select(
+        'SELECT 1 FROM local_auto_resolved_history WHERE namespace=? AND source_key=? AND is_user_modified=1 LIMIT 1',
+        [ns,row['source_key']],
+      ).isNotEmpty) continue;
+      final body = row['body'] as String, amount = data['amount_inr'];
+      if (!const ['sms','sms_bulk'].contains(data['source']) ||
+          data['status'] != 'active' ||
+          (data['note'] as String?)?.isNotEmpty == true ||
+          data['user_category_id'] != null ||
+          (data['tags'] is List && (data['tags'] as List).isNotEmpty) ||
+          amount is! num ||
+          !SmsAmountEvidence.isNonPaymentAmount(body, amount) ||
+          SmsAmountEvidence.permits(body, amount) ||
+          SmsAmountEvidence.reviewReason(body) == null) {
+        continue;
+      }
+      result.add(Map<String, Object?>.from(row));
+    }
+    return result;
+  }
+
+  /// Only untouched local SMS projections may be repaired automatically.
+  /// Confirmed transactions and queued user edits keep their existing values.
+  void _repairProvisionalAmountRoles(String ns) {
+    final db = database.db;
+    if (db
+        .select(
+          "SELECT 1 FROM sqlite_master WHERE type='table' AND name='sms_captured_messages'",
+        )
+        .isEmpty) {
+      return;
+    }
+    final rows = db.select(
+      'SELECT e.id,e.payload,e.source_key,m.sender,m.body,m.received_at '
+      'FROM financial_entities e JOIN sms_captured_messages m '
+      'ON m.namespace=e.namespace AND m.id=e.source_key '
+      "WHERE e.namespace=? AND e.entity='transactions' AND e.pending=1 AND e.id LIKE 'local-sms:%'",
+      [ns],
+    );
+    final hasAutoResolution = db
+        .select(
+          "SELECT 1 FROM sqlite_master WHERE type='table' AND name='local_auto_resolved_history'",
+        )
+        .isNotEmpty;
+    for (final row in rows) {
+      final body = row['body'] as String;
+      if (!SmsAmountEvidence.hasInr(body)) continue;
+      final payload =
+          jsonDecode(row['payload'] as String) as Map<String, dynamic>;
+      final amount = payload['amount_inr'];
+      if (amount is! num ||
+          SmsAmountEvidence.permits(body, amount) ||
+          !SmsAmountEvidence.isNonPaymentAmount(body, amount)) {
+        continue;
+      }
+      // Older parsers also misclassified pure limit-change notices. They
+      // need the same recoverable correction even without movement wording.
+      if (SmsAmountEvidence.reviewReason(body) == null &&
+          SmsAmountEvidence.paymentAmounts(body).isEmpty) {
+        continue;
+      }
+      final id = row['id'] as String, key = row['source_key'] as String;
+      if (id != '$_provisionalSmsIdPrefix$key' ||
+          !_isUnclaimedProvisionalSmsTransaction(
+            database,
+            ns,
+            id,
+            key,
+            payload,
+            hasAutoResolution: hasAutoResolution,
+          )) {
+        continue;
+      }
+      final intake = SmsIntakeRepository(database);
+      db.execute('SAVEPOINT sms_amount_repair');
+      try {
+        if (_deleteProvisionalTransaction(ns, id, key)) {
+          final receivedAt = DateTime.fromMillisecondsSinceEpoch(
+            row['received_at'] as int,
+          );
+          addNeedsReviewSync(
+            database,
+            ns,
+            NeedsReviewItem(
+              id: key,
+              sender: row['sender'] as String,
+              body: body,
+              reason:
+                  SmsAmountEvidence.reviewReason(body) ??
+                  'transaction_amount_not_evidenced',
+              receivedAt: receivedAt,
+            ),
+          );
+          intake.recordDecision(
+            ns,
+            sourceKey: key,
+            decision: 'financial_review',
+            state: 'final',
+            reasonCode: 'transaction_amount_not_evidenced',
+            receivedAt: receivedAt.millisecondsSinceEpoch,
+            parserVersion: LocalSmsParser.version.toString(),
+            policyVersion: 'amount-role-v1',
+          );
+          intake.acknowledge(ns, key);
+          // A typed movement queued by an older parser must not recreate the
+          // provisional expense. Preserve independent balance/identity facts.
+          if (db
+              .select(
+                "SELECT 1 FROM sqlite_master WHERE type='table' AND name='sms_facts_outbox'",
+              )
+              .isNotEmpty) {
+            final envelopes = db.select(
+              'SELECT facts FROM sms_facts_outbox WHERE namespace=? AND id=?',
+              [ns, key],
+            );
+            for (final envelope in envelopes) {
+              final data =
+                  jsonDecode(envelope['facts'] as String)
+                      as Map<String, dynamic>;
+              final facts = (data['facts'] as List).where((fact) {
+                if (fact is! Map || fact['factType'] != 'posted_movement') {
+                  return true;
+                }
+                final value = (fact['payload'] as Map?)?['amountInr'];
+                return value is num && SmsAmountEvidence.permits(body, value);
+              }).toList();
+              if (facts.isEmpty) {
+                db.execute(
+                  'DELETE FROM sms_facts_outbox WHERE namespace=? AND id=?',
+                  [ns, key],
+                );
+              } else {
+                db.execute(
+                  'UPDATE sms_facts_outbox SET facts=? WHERE namespace=? AND id=?',
+                  [
+                    jsonEncode({...data, 'facts': facts}),
+                    ns,
+                    key,
+                  ],
+                );
+              }
+            }
+          }
+        }
+        db.execute('RELEASE SAVEPOINT sms_amount_repair');
+      } catch (_) {
+        db.execute('ROLLBACK TO SAVEPOINT sms_amount_repair');
+        db.execute('RELEASE SAVEPOINT sms_amount_repair');
+        rethrow;
+      }
+    }
+  }
 
   final void Function(String namespace)? onChanged;
   final void Function(FinancialChange change)? onEntityChanged;
@@ -517,8 +698,12 @@ class FinancialStore {
   // server row whose narrower rail contract cannot represent generic UPI.
   // Match the account and exact SMS source identity, never merchant/amount.
   void _enrichSmsPaymentMethod(String ns, List<Map<String, dynamic>> rows) {
-    final keys = rows.where((row) => row['payment_method'] == null)
-        .map((row) => row['source_key']).whereType<String>().toSet().toList();
+    final keys = rows
+        .where((row) => row['payment_method'] == null)
+        .map((row) => row['source_key'])
+        .whereType<String>()
+        .toSet()
+        .toList();
     if (keys.isEmpty) {
       return;
     }
@@ -570,13 +755,11 @@ class FinancialStore {
           [ns, row['id']],
         );
         if (stored.isEmpty || stored.single['pending'] != 0) continue;
-        if (database.db
-            .select(
-              'SELECT 1 FROM local_auto_resolved_history '
-              'WHERE namespace=? AND source_key=? AND is_user_modified=1 LIMIT 1',
-              [ns, sourceKey],
-            )
-            .isNotEmpty) {
+        if (database.db.select(
+          'SELECT 1 FROM local_auto_resolved_history '
+          'WHERE namespace=? AND source_key=? AND is_user_modified=1 LIMIT 1',
+          [ns, sourceKey],
+        ).isNotEmpty) {
           continue;
         }
         final captures = database.db.select(
@@ -722,8 +905,7 @@ class FinancialStore {
       for (final row in rows) {
         final id = row['id'] as String;
         final sourceKey = row['source_key'] as String?;
-        if (sourceKey == null ||
-            id != '$_provisionalSmsIdPrefix$sourceKey') {
+        if (sourceKey == null || id != '$_provisionalSmsIdPrefix$sourceKey') {
           continue;
         }
         final marker = _provisionalMerchantRepairMarker(sourceKey);
@@ -769,9 +951,7 @@ class FinancialStore {
             _markLocalRepair(ns, marker);
             continue;
           }
-          final cleaned = MerchantIdentity.cleanName(
-            transaction.merchantName,
-          );
+          final cleaned = MerchantIdentity.cleanName(transaction.merchantName);
           if (cleaned == null || MerchantIdentity.isWeakName(cleaned)) {
             _markLocalRepair(ns, marker);
             continue;
@@ -831,8 +1011,7 @@ class FinancialStore {
       for (final row in rows) {
         final id = row['id'] as String;
         final sourceKey = row['source_key'] as String?;
-        if (sourceKey == null ||
-            id != '$_provisionalSmsIdPrefix$sourceKey') {
+        if (sourceKey == null || id != '$_provisionalSmsIdPrefix$sourceKey') {
           continue;
         }
         final marker = _declinedTransactionRepairMarker(sourceKey);
@@ -887,11 +1066,7 @@ class FinancialStore {
     }
   }
 
-  bool _deleteProvisionalTransaction(
-    String ns,
-    String id,
-    String sourceKey,
-  ) {
+  bool _deleteProvisionalTransaction(String ns, String id, String sourceKey) {
     database.db.execute(
       "DELETE FROM financial_entities WHERE namespace=? "
       "AND entity='transactions' AND id=? AND pending=1 AND source_key=? "
@@ -915,10 +1090,10 @@ class FinancialStore {
       'UPDATE sms_captured_messages SET processed=1 WHERE namespace=? AND id=?',
       [ns, sourceKey],
     );
-    database.db.execute(
-      'DELETE FROM sms_intake WHERE namespace=? AND id=?',
-      [ns, sourceKey],
-    );
+    database.db.execute('DELETE FROM sms_intake WHERE namespace=? AND id=?', [
+      ns,
+      sourceKey,
+    ]);
     if (database.db
         .select(
           "SELECT 1 FROM sqlite_master WHERE type='table' "
@@ -953,8 +1128,7 @@ class FinancialStore {
       final row = rows.single;
       final id = row['id'] as String;
       final sourceKey = row['source_key'] as String?;
-      if (sourceKey == null ||
-          id != '$_provisionalSmsIdPrefix$sourceKey') {
+      if (sourceKey == null || id != '$_provisionalSmsIdPrefix$sourceKey') {
         return false;
       }
       final decoded = jsonDecode(row['payload'] as String);
@@ -1095,10 +1269,10 @@ class FinancialStore {
       'declined_txn_repair_v1:${LocalSmsParser.version}:$sourceKey';
 
   void _markLocalRepair(String ns, String marker) {
-    database.db.execute(
-      'INSERT OR REPLACE INTO local_repairs VALUES (?, ?)',
-      [ns, marker],
-    );
+    database.db.execute('INSERT OR REPLACE INTO local_repairs VALUES (?, ?)', [
+      ns,
+      marker,
+    ]);
   }
 
   void _ensureLocalRepairsTable() => database.db.execute('''
@@ -1364,8 +1538,7 @@ class FinancialStore {
 
   Map<String, Map<String, dynamic>> cardBillAssignments(String ns) => {
     for (final row in entities(ns, 'bill_card_assignments'))
-      if (row['observation_id'] is String)
-        row['observation_id'] as String: row,
+      if (row['observation_id'] is String) row['observation_id'] as String: row,
   };
 
   /// User corrections live separately from captured SMS so re-importing a
@@ -2121,7 +2294,8 @@ class FinancialStore {
         final parsedTransaction = parsed?.transaction;
         if (parsedTransaction == null ||
             parsedTransaction.sourceKey != row['source_key'] ||
-            MerchantIdentity.cleanName(parsedTransaction.merchantName) == null ||
+            MerchantIdentity.cleanName(parsedTransaction.merchantName) ==
+                null ||
             parsedTransaction.amount.paise !=
                 Money.fromRupees(payload['amount_inr'] as num).paise) {
           continue;

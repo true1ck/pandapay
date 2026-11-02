@@ -325,6 +325,7 @@ Future<ProviderContainer> _pumpFlow(
   final fakeApi = api ?? _FakeProductAccess();
   final container = ProviderContainer(
     overrides: [
+      foreignPaymentsProvider.overrideWith((ref) async => const []),
       productAccessApiProvider.overrideWithValue(fakeApi),
       consentsApiProvider.overrideWithValue(consentsApi),
       ownedCardsWithProductProvider.overrideWithValue(

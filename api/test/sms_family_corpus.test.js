@@ -44,16 +44,16 @@ test('send_debit_with_balance: posted spend with balance snapshot', () => {
   });
 });
 
-test('balance_only without a pattern: server has nothing to learn from today', () => {
+test('balance_only is explicitly excluded from purchase amounts', () => {
   const r = parse('balance_only');
   assert.equal(r.ok, false);
-  assert.equal(r.reason, 'no_transaction_match');
+  assert.equal(r.reason, 'transaction_amount_not_evidenced');
 });
 
 test('card_statement: no transaction match; statement day extractor works', () => {
   const r = parse('card_statement');
   assert.equal(r.ok, false);
-  assert.equal(r.reason, 'not_a_transaction_alert');
+  assert.equal(r.reason, 'transaction_amount_not_evidenced');
   const day = extractStatementDate(byId.get('card_statement').body, new Date('2026-10-16'));
   assert.deepEqual(
     {

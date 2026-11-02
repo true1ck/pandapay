@@ -75,6 +75,7 @@ void main() {
           utilizationTransactionsProvider.overrideWith(
             (ref) async => const [],
           ),
+          foreignPaymentsProvider.overrideWith((ref) async => const []),
           homeSummaryProvider.overrideWith((ref) async => null),
           bankAccountSummariesProvider.overrideWith((ref) async => const []),
           homeEngagementCheckInProvider.overrideWith((ref, day) async {}),

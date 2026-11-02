@@ -46,6 +46,7 @@ Future<void> _pumpApp(
         myCardsProvider.overrideWith((ref) async => const []),
         transactionsProvider.overrideWith((ref) async => const []),
         utilizationTransactionsProvider.overrideWith((ref) async => const []),
+        foreignPaymentsProvider.overrideWith((ref) async => const []),
         homeSummaryProvider.overrideWith((ref) async => null),
         bankAccountSummariesProvider.overrideWith((ref) async => const []),
         cardOverridesProvider.overrideWith((ref) async => const []),

@@ -5,6 +5,7 @@ const MONEY_FIELDS = [
   'amountInr', 'amountDueInr', 'minimumDueInr', 'outstandingInr',
   'limitInr', 'proposedAmountInr', 'availableBalanceInr',
 ];
+const { hasInrAmount, permitsPaymentAmount, paymentReviewReason } = require('./sms_amount_evidence');
 const { extractDueDate } = require('./due_date_parser');
 const {
   cleanMerchantName,
@@ -242,6 +243,8 @@ function normalizeModelFacts(facts, message) {
 /** Amount must occur in the same explicit completed payment clause. This
  * prevents a nearby available-balance figure from being filed as the payment. */
 function amountInCompletedTransaction(body, amount) {
+  if (paymentReviewReason(body)) return false;
+  if (hasInrAmount(body) && !permitsPaymentAmount(body, amount)) return false;
   if (typeof amount !== 'number' || !Number.isFinite(amount) || amount <= 0) return false;
   const text = String(body || '');
   const pattern = /\b(?:payment|transaction|transfer|purchase)\b[\s\S]{0,120}\bcompleted(?:\s+successfully)?\b/gi;
@@ -313,6 +316,8 @@ function movementTimestampSupported(body, timestamp, payload) {
 /** The posted amount must be attached to the movement clause, not a nearby
  * balance-after figure from the same bank SMS. */
 function amountInPostedTransaction(body, amount) {
+  if (paymentReviewReason(body)) return false;
+  if (hasInrAmount(body) && !permitsPaymentAmount(body, amount)) return false;
   if (typeof amount !== 'number' || !Number.isFinite(amount) || amount <= 0) return false;
   const core = coreTransactionClause(body);
   // Do not split on every period: `Rs.` and decimal paise both contain dots.

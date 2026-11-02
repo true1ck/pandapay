@@ -14,11 +14,13 @@ import '../../app/transaction_tag_picker.dart';
 import '../../data/api_exception.dart';
 import '../../data/catalogue_repository.dart' show SpendCategory;
 import '../../data/merchant_identity.dart';
+import '../../data/foreign_payment.dart';
 import '../../data/spending_selection.dart';
 import '../../data/user_cards_repository.dart';
 import '../../main.dart' show MoneyText;
 import '../auth/login_screen.dart';
 import 'activity_projection.dart';
+import 'foreign_payments_screen.dart';
 import 'deleted_transactions_screen.dart';
 import 'sms_learning_capture.dart';
 
@@ -119,8 +121,9 @@ class _ActivityScreenState extends ConsumerState<ActivityScreen> {
       final lastDate = DateTime(now.year + 1, 12, 31);
       DateTimeRange? initialRange;
       if (filter.from != null && filter.to != null) {
-        final start =
-            filter.from!.isBefore(firstDate) ? firstDate : filter.from!;
+        final start = filter.from!.isBefore(firstDate)
+            ? firstDate
+            : filter.from!;
         final end = filter.to!.isAfter(lastDate)
             ? lastDate
             : (filter.to!.isBefore(start) ? start : filter.to!);
@@ -134,25 +137,29 @@ class _ActivityScreenState extends ConsumerState<ActivityScreen> {
         initialDateRange: initialRange,
       );
       if (range != null && mounted) {
-        ref.read(_activityFilterProvider.notifier).update(
-          (current) => current.copyWith(
-            from: () => range.start,
-            to: () => range.end,
-            datePreset: _ActivityDatePreset.custom,
-          ),
-        );
+        ref
+            .read(_activityFilterProvider.notifier)
+            .update(
+              (current) => current.copyWith(
+                from: () => range.start,
+                to: () => range.end,
+                datePreset: _ActivityDatePreset.custom,
+              ),
+            );
       }
       return;
     }
 
     final range = picked.range(DateTime.now());
-    ref.read(_activityFilterProvider.notifier).update(
-      (current) => current.copyWith(
-        from: () => range?.start,
-        to: () => range?.end,
-        datePreset: picked,
-      ),
-    );
+    ref
+        .read(_activityFilterProvider.notifier)
+        .update(
+          (current) => current.copyWith(
+            from: () => range?.start,
+            to: () => range?.end,
+            datePreset: picked,
+          ),
+        );
   }
 
   Future<void> _openFilterSheet(
@@ -196,6 +203,7 @@ class _ActivityScreenState extends ConsumerState<ActivityScreen> {
 
   final Set<String> _selectedIds = {};
   bool _selecting = false;
+  bool _foreignOnly = false;
   bool _isBulkOperating = false;
   late bool _initialFilterReady = !_hasInitialFilter;
 
@@ -374,9 +382,9 @@ class _ActivityScreenState extends ConsumerState<ActivityScreen> {
       }
     } catch (error) {
       if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(content: Text(userFacingErrorMessage(error))),
-        );
+        ScaffoldMessenger.of(
+          context,
+        ).showSnackBar(SnackBar(content: Text(userFacingErrorMessage(error))));
       }
     } finally {
       if (mounted) setState(() => _isBulkOperating = false);
@@ -513,9 +521,9 @@ class _ActivityScreenState extends ConsumerState<ActivityScreen> {
       }
     } catch (error) {
       if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(content: Text(userFacingErrorMessage(error))),
-        );
+        ScaffoldMessenger.of(
+          context,
+        ).showSnackBar(SnackBar(content: Text(userFacingErrorMessage(error))));
       }
     } finally {
       if (mounted) setState(() => _isBulkOperating = false);
@@ -579,9 +587,9 @@ class _ActivityScreenState extends ConsumerState<ActivityScreen> {
       }
     } catch (error) {
       if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(content: Text(userFacingErrorMessage(error))),
-        );
+        ScaffoldMessenger.of(
+          context,
+        ).showSnackBar(SnackBar(content: Text(userFacingErrorMessage(error))));
       }
     } finally {
       if (mounted) setState(() => _isBulkOperating = false);
@@ -641,6 +649,41 @@ class _ActivityScreenState extends ConsumerState<ActivityScreen> {
     final filter = ref.watch(_activityFilterProvider);
     final transactions = ref.watch(activityTransactionsProvider);
     final tagRepository = ref.watch(transactionTagsProvider);
+    final foreign =
+        foreignPaymentsForPeriod(
+              ref.watch(foreignPaymentsProvider).valueOrNull ?? const [],
+              from: filter.from,
+              to: filter.to,
+              query: filter.query,
+              categoryId: filter.categoryId,
+            )
+            .where(
+              (payment) =>
+                  !payment.isIgnored &&
+                  (filter.cardId == null ||
+                      payment.userCardId == filter.cardId) &&
+                  filter.tagIds.isEmpty &&
+                  switch (filter.type) {
+                    _ActivityTypeFilter.all => true,
+                    _ActivityTypeFilter.spending ||
+                    _ActivityTypeFilter.moneyOut =>
+                      payment.direction != 'refund',
+                    _ActivityTypeFilter.moneyIn =>
+                      payment.direction == 'refund',
+                    _ => false,
+                  },
+            )
+            .toList();
+    final foreignByTransaction = {
+      for (final payment in foreign)
+        if (payment.transactionId != null) payment.transactionId!: payment,
+    };
+    final pendingForeign = foreign
+        .where((payment) => payment.isPending)
+        .toList();
+    final previewForeign = _foreignOnly
+        ? pendingForeign
+        : pendingForeign.take(3).toList();
 
     return AppBackground(
       child: Column(
@@ -687,6 +730,21 @@ class _ActivityScreenState extends ConsumerState<ActivityScreen> {
                     transactions.valueOrNull ?? const [],
                   ),
                 ),
+                const SizedBox(height: AppSpace.xs),
+                Align(
+                  alignment: Alignment.centerLeft,
+                  child: FilterChip(
+                    key: const Key('activity-foreign-filter'),
+                    avatar: const Icon(Icons.currency_exchange, size: 16),
+                    label: const Text('Foreign currency'),
+                    selected: _foreignOnly,
+                    onSelected: (selected) => setState(() {
+                      _foreignOnly = selected;
+                      _selecting = false;
+                      _selectedIds.clear();
+                    }),
+                  ),
+                ),
                 if (filter.hasClearableFilters) ...[
                   const SizedBox(height: AppSpace.xs),
                   _ActiveFilterBadgesRow(filter: filter),
@@ -710,8 +768,16 @@ class _ActivityScreenState extends ConsumerState<ActivityScreen> {
                 message: userFacingErrorMessage(err),
                 onRetry: () => ref.invalidate(activityTransactionsProvider),
               ),
-              data: (entries) {
-                if (entries.isEmpty) {
+              data: (allEntries) {
+                final entries = _foreignOnly
+                    ? allEntries
+                          .where(
+                            (entry) =>
+                                foreignByTransaction.containsKey(entry.id),
+                          )
+                          .toList()
+                    : allEntries;
+                if (entries.isEmpty && previewForeign.isEmpty) {
                   return RefreshIndicator(
                     onRefresh: () async {
                       ref.invalidate(activityTransactionsProvider);
@@ -729,7 +795,9 @@ class _ActivityScreenState extends ConsumerState<ActivityScreen> {
                           ),
                           child: EmptyState(
                             icon: Icons.receipt_long_outlined,
-                            title: filter.hasClearableFilters
+                            title: _foreignOnly
+                                ? 'No foreign payments in this period'
+                                : filter.hasClearableFilters
                                 ? 'No activity matches these filters'
                                 : 'No activity this month',
                             message: filter.isActive
@@ -768,8 +836,48 @@ class _ActivityScreenState extends ConsumerState<ActivityScreen> {
                             AppSpace.lg,
                             0,
                           ),
-                          itemCount: projection.rows.length + selectionOffset,
+                          itemCount:
+                              projection.rows.length +
+                              selectionOffset +
+                              (pendingForeign.isEmpty
+                                  ? 0
+                                  : previewForeign.length + 1),
                           itemBuilder: (context, index) {
+                            final foreignOffset = pendingForeign.isEmpty
+                                ? 0
+                                : previewForeign.length + 1;
+                            if (foreignOffset > 0 && index == 0) {
+                              return Padding(
+                                padding: const EdgeInsets.only(
+                                  bottom: AppSpace.sm,
+                                ),
+                                child: ForeignPaymentSummaryCard(
+                                  payments: pendingForeign,
+                                  onTap: () => Navigator.of(context).push(
+                                    MaterialPageRoute<void>(
+                                      builder: (_) => ForeignPaymentsScreen(
+                                        from: filter.from,
+                                        to: filter.to,
+                                      ),
+                                    ),
+                                  ),
+                                ),
+                              );
+                            }
+                            if (index < foreignOffset) {
+                              final payment = previewForeign[index - 1];
+                              return Padding(
+                                padding: const EdgeInsets.only(
+                                  bottom: AppSpace.sm,
+                                ),
+                                child: ForeignPaymentTile(
+                                  payment: payment,
+                                  onTap: () =>
+                                      openForeignPayment(context, payment),
+                                ),
+                              );
+                            }
+                            index -= foreignOffset;
                             final row = _selecting && index == 0
                                 ? const ActivityListRow.selection()
                                 : projection.rows[index - selectionOffset];
@@ -845,6 +953,8 @@ class _ActivityScreenState extends ConsumerState<ActivityScreen> {
                                   ),
                                   child: _TransactionTile(
                                     entry,
+                                    foreignPayment:
+                                        foreignByTransaction[entry.id],
                                     selecting: _selecting,
                                     selected: _selectedIds.contains(entry.id),
                                     tagNames:
@@ -859,7 +969,9 @@ class _ActivityScreenState extends ConsumerState<ActivityScreen> {
                                       if (_selecting) {
                                         if (!_isBulkOperating) {
                                           setState(() {
-                                            if (!_selectedIds.remove(entry.id)) {
+                                            if (!_selectedIds.remove(
+                                              entry.id,
+                                            )) {
                                               _selectedIds.add(entry.id);
                                             }
                                           });
@@ -874,9 +986,9 @@ class _ActivityScreenState extends ConsumerState<ActivityScreen> {
                                     onLongPress: _selecting || _isBulkOperating
                                         ? null
                                         : () => setState(() {
-                                              _selecting = true;
-                                              _selectedIds.add(entry.id);
-                                            }),
+                                            _selecting = true;
+                                            _selectedIds.add(entry.id);
+                                          }),
                                   ),
                                 );
                               case ActivityRowKind.spacer:
@@ -932,7 +1044,6 @@ class _ActivityScreenState extends ConsumerState<ActivityScreen> {
       alwaysUse24HourFormat: MediaQuery.alwaysUse24HourFormatOf(context),
     );
   }
-
 }
 
 /// D1's filter state — card + category + date preset/range. A plain immutable
@@ -1322,10 +1433,7 @@ class _SpendPeriodAndFilterBar extends StatelessWidget {
               mainAxisSize: MainAxisSize.min,
               children: [
                 Flexible(
-                  child: Text(
-                    periodLabel,
-                    overflow: TextOverflow.ellipsis,
-                  ),
+                  child: Text(periodLabel, overflow: TextOverflow.ellipsis),
                 ),
                 const SizedBox(width: 4),
                 const Icon(Icons.keyboard_arrow_down_rounded, size: 18),
@@ -1348,12 +1456,9 @@ class _SpendPeriodAndFilterBar extends StatelessWidget {
           icon: const Icon(Icons.tune_rounded, size: 18),
           label: Text(filtersActive ? 'Filters ·' : 'Filters'),
           style: OutlinedButton.styleFrom(
-            foregroundColor:
-                filtersActive ? BambooInk.jade : BambooInk.ink900,
+            foregroundColor: filtersActive ? BambooInk.jade : BambooInk.ink900,
             side: BorderSide(
-              color: filtersActive
-                  ? BambooInk.jade
-                  : BambooInk.hairlineOnPaper,
+              color: filtersActive ? BambooInk.jade : BambooInk.hairlineOnPaper,
             ),
             padding: const EdgeInsets.symmetric(horizontal: 14),
             minimumSize: const Size(0, 44),
@@ -1376,9 +1481,9 @@ class _ActiveFilterBadgesRow extends ConsumerWidget {
     final cards = ref.watch(userCardsProvider).valueOrNull ?? const [];
     final card = filter.cardId != null
         ? cards.cast<UserCard?>().firstWhere(
-              (c) => c?.id == filter.cardId,
-              orElse: () => null,
-            )
+            (c) => c?.id == filter.cardId,
+            orElse: () => null,
+          )
         : null;
     final cardTitle = card?.nickname?.isNotEmpty == true
         ? card!.nickname!
@@ -1402,14 +1507,19 @@ class _ActiveFilterBadgesRow extends ConsumerWidget {
           if (filter.type != _ActivityTypeFilter.all)
             _badge(
               label: filter.type.label,
-              onRemove: () => ref.read(_activityFilterProvider.notifier).update(
-                    (current) => current.copyWith(type: _ActivityTypeFilter.all),
+              onRemove: () => ref
+                  .read(_activityFilterProvider.notifier)
+                  .update(
+                    (current) =>
+                        current.copyWith(type: _ActivityTypeFilter.all),
                   ),
             ),
           if (filter.categoryId != null || filter.categoryLabel != null)
             _badge(
               label: filter.categoryLabel ?? 'Category',
-              onRemove: () => ref.read(_activityFilterProvider.notifier).update(
+              onRemove: () => ref
+                  .read(_activityFilterProvider.notifier)
+                  .update(
                     (current) => current.copyWith(
                       categoryId: () => null,
                       categoryLabel: () => null,
@@ -1419,14 +1529,18 @@ class _ActiveFilterBadgesRow extends ConsumerWidget {
           if (filter.cardId != null)
             _badge(
               label: cardTitle,
-              onRemove: () => ref.read(_activityFilterProvider.notifier).update(
-                    (current) => current.copyWith(cardId: () => null),
-                  ),
+              onRemove: () => ref
+                  .read(_activityFilterProvider.notifier)
+                  .update((current) => current.copyWith(cardId: () => null)),
             ),
           if (filter.tagIds.isNotEmpty || filter.untagged)
             _badge(
-              label: filter.untagged ? 'Untagged' : '${filter.tagIds.length} tags',
-              onRemove: () => ref.read(_activityFilterProvider.notifier).update(
+              label: filter.untagged
+                  ? 'Untagged'
+                  : '${filter.tagIds.length} tags',
+              onRemove: () => ref
+                  .read(_activityFilterProvider.notifier)
+                  .update(
                     (current) =>
                         current.copyWith(tagIds: const {}, untagged: false),
                   ),
@@ -1505,8 +1619,7 @@ class _ActivityFilterSheetState extends State<_ActivityFilterSheet> {
           entry.parentCategoryId != _categoryId) {
         return false;
       }
-      if (_categoryLabel != null &&
-          entry.categoryName != _categoryLabel) {
+      if (_categoryLabel != null && entry.categoryName != _categoryLabel) {
         return false;
       }
       final entryTagIds = entry.tags.map((t) => t.id).toSet();
@@ -1527,11 +1640,10 @@ class _ActivityFilterSheetState extends State<_ActivityFilterSheet> {
 
   Money get _matchingTotal {
     return _matchingEntries
-        .where((e) => e.status == 'active' && e.entryKind != TxnEntryKind.income)
-        .fold<Money>(
-          const Money.zero(),
-          (sum, e) => sum + e.amount,
-        );
+        .where(
+          (e) => e.status == 'active' && e.entryKind != TxnEntryKind.income,
+        )
+        .fold<Money>(const Money.zero(), (sum, e) => sum + e.amount);
   }
 
   void _reset() {
@@ -1565,9 +1677,9 @@ class _ActivityFilterSheetState extends State<_ActivityFilterSheet> {
   String? get _selectedCardName {
     if (_cardId == null) return null;
     final c = widget.cards.cast<UserCard?>().firstWhere(
-          (c) => c?.id == _cardId,
-          orElse: () => null,
-        );
+      (c) => c?.id == _cardId,
+      orElse: () => null,
+    );
     if (c == null) return null;
     return c.nickname?.isNotEmpty == true ? c.nickname! : c.cardName;
   }
@@ -1575,9 +1687,9 @@ class _ActivityFilterSheetState extends State<_ActivityFilterSheet> {
   String? get _selectedCategoryName {
     if (_categoryId != null) {
       final c = widget.categories.cast<SpendCategory?>().firstWhere(
-            (cat) => cat?.id == _categoryId,
-            orElse: () => null,
-          );
+        (cat) => cat?.id == _categoryId,
+        orElse: () => null,
+      );
       if (c != null) return c.name;
     }
     return _categoryLabel;
@@ -1585,8 +1697,9 @@ class _ActivityFilterSheetState extends State<_ActivityFilterSheet> {
 
   @override
   Widget build(BuildContext context) {
-    final topLevelCategories =
-        widget.categories.where((c) => !c.isSubcategory).toList();
+    final topLevelCategories = widget.categories
+        .where((c) => !c.isSubcategory)
+        .toList();
 
     return SafeArea(
       top: false,
@@ -1646,55 +1759,63 @@ class _ActivityFilterSheetState extends State<_ActivityFilterSheet> {
                       label: _currentDateLabel,
                       trailing: const Icon(Icons.keyboard_arrow_down_rounded),
                       onTap: () async {
-                        final picked = await showModalBottomSheet<
-                            _ActivityDatePreset>(
-                          context: context,
-                          showDragHandle: true,
-                          builder: (sheetContext) => SafeArea(
-                            child: SingleChildScrollView(
-                              padding: const EdgeInsets.symmetric(
-                                  vertical: AppSpace.sm),
-                              child: Column(
-                                crossAxisAlignment: CrossAxisAlignment.start,
-                                children: [
-                                  Padding(
-                                    padding: const EdgeInsets.fromLTRB(
-                                      AppSpace.lg,
-                                      AppSpace.sm,
-                                      AppSpace.lg,
-                                      AppSpace.xs,
-                                    ),
-                                    child: Text(
-                                      'Activity period',
-                                      style: BambooFonts.heading(17,
-                                          color: BambooInk.ink900),
-                                    ),
+                        final picked =
+                            await showModalBottomSheet<_ActivityDatePreset>(
+                              context: context,
+                              showDragHandle: true,
+                              builder: (sheetContext) => SafeArea(
+                                child: SingleChildScrollView(
+                                  padding: const EdgeInsets.symmetric(
+                                    vertical: AppSpace.sm,
                                   ),
-                                  for (final preset
-                                      in _ActivityDatePreset.values)
-                                    ListTile(
-                                      leading: Icon(
-                                        _datePresetIcon(preset),
-                                        color: preset == _datePreset
-                                            ? BambooInk.jade
-                                            : BambooInk.ink500,
+                                  child: Column(
+                                    crossAxisAlignment:
+                                        CrossAxisAlignment.start,
+                                    children: [
+                                      Padding(
+                                        padding: const EdgeInsets.fromLTRB(
+                                          AppSpace.lg,
+                                          AppSpace.sm,
+                                          AppSpace.lg,
+                                          AppSpace.xs,
+                                        ),
+                                        child: Text(
+                                          'Activity period',
+                                          style: BambooFonts.heading(
+                                            17,
+                                            color: BambooInk.ink900,
+                                          ),
+                                        ),
                                       ),
-                                      title: Text(
-                                        preset.label,
-                                        style: BambooFonts.ui(14,
-                                            weight: FontWeight.w600,
-                                            color: BambooInk.ink900),
-                                      ),
-                                      selected: preset == _datePreset,
-                                      selectedTileColor: BambooInk.paperMuted,
-                                      onTap: () => Navigator.of(sheetContext)
-                                          .pop(preset),
-                                    ),
-                                ],
+                                      for (final preset
+                                          in _ActivityDatePreset.values)
+                                        ListTile(
+                                          leading: Icon(
+                                            _datePresetIcon(preset),
+                                            color: preset == _datePreset
+                                                ? BambooInk.jade
+                                                : BambooInk.ink500,
+                                          ),
+                                          title: Text(
+                                            preset.label,
+                                            style: BambooFonts.ui(
+                                              14,
+                                              weight: FontWeight.w600,
+                                              color: BambooInk.ink900,
+                                            ),
+                                          ),
+                                          selected: preset == _datePreset,
+                                          selectedTileColor:
+                                              BambooInk.paperMuted,
+                                          onTap: () => Navigator.of(
+                                            sheetContext,
+                                          ).pop(preset),
+                                        ),
+                                    ],
+                                  ),
+                                ),
                               ),
-                            ),
-                          ),
-                        );
+                            );
                         if (picked == null || !mounted) return;
                         if (picked == _ActivityDatePreset.custom) {
                           final now = DateTime.now();
@@ -1752,7 +1873,10 @@ class _ActivityFilterSheetState extends State<_ActivityFilterSheet> {
                       child: _selectedCategoryName == null
                           ? Text(
                               'All categories',
-                              style: BambooFonts.ui(14, color: BambooInk.ink500),
+                              style: BambooFonts.ui(
+                                14,
+                                color: BambooInk.ink500,
+                              ),
                             )
                           : _valueChip(
                               _selectedCategoryName!,
@@ -1765,32 +1889,40 @@ class _ActivityFilterSheetState extends State<_ActivityFilterSheet> {
                           ? const Icon(Icons.keyboard_arrow_down_rounded)
                           : null,
                       onTap: () async {
-                        final picked = await showModalBottomSheet<
-                            ({bool all, String? id, String? name})>(
-                          context: context,
-                          showDragHandle: true,
-                          builder: (sheetContext) => SafeArea(
-                            child: ListView(
-                              shrinkWrap: true,
-                              children: [
-                                ListTile(
-                                  title: const Text('All categories'),
-                                  selected: _categoryId == null &&
-                                      _categoryLabel == null,
-                                  onTap: () => Navigator.of(sheetContext)
-                                      .pop((all: true, id: null, name: null)),
+                        final picked =
+                            await showModalBottomSheet<
+                              ({bool all, String? id, String? name})
+                            >(
+                              context: context,
+                              showDragHandle: true,
+                              builder: (sheetContext) => SafeArea(
+                                child: ListView(
+                                  shrinkWrap: true,
+                                  children: [
+                                    ListTile(
+                                      title: const Text('All categories'),
+                                      selected:
+                                          _categoryId == null &&
+                                          _categoryLabel == null,
+                                      onTap: () => Navigator.of(
+                                        sheetContext,
+                                      ).pop((all: true, id: null, name: null)),
+                                    ),
+                                    for (final c in topLevelCategories)
+                                      ListTile(
+                                        title: Text(c.name),
+                                        selected: c.id == _categoryId,
+                                        onTap: () =>
+                                            Navigator.of(sheetContext).pop((
+                                              all: false,
+                                              id: c.id,
+                                              name: c.name,
+                                            )),
+                                      ),
+                                  ],
                                 ),
-                                for (final c in topLevelCategories)
-                                  ListTile(
-                                    title: Text(c.name),
-                                    selected: c.id == _categoryId,
-                                    onTap: () => Navigator.of(sheetContext)
-                                        .pop((all: false, id: c.id, name: c.name)),
-                                  ),
-                              ],
-                            ),
-                          ),
-                        );
+                              ),
+                            );
                         if (picked == null || !mounted) return;
                         setState(() {
                           _categoryId = picked.all ? null : picked.id;
@@ -1807,7 +1939,10 @@ class _ActivityFilterSheetState extends State<_ActivityFilterSheet> {
                       child: _selectedCardName == null
                           ? Text(
                               'All cards & accounts',
-                              style: BambooFonts.ui(14, color: BambooInk.ink500),
+                              style: BambooFonts.ui(
+                                14,
+                                color: BambooInk.ink500,
+                              ),
                             )
                           : _valueChip(
                               _selectedCardName!,
@@ -1817,35 +1952,39 @@ class _ActivityFilterSheetState extends State<_ActivityFilterSheet> {
                           ? const Icon(Icons.keyboard_arrow_down_rounded)
                           : null,
                       onTap: () async {
-                        final picked = await showModalBottomSheet<
-                            ({bool all, String? id})>(
-                          context: context,
-                          showDragHandle: true,
-                          builder: (sheetContext) => SafeArea(
-                            child: ListView(
-                              shrinkWrap: true,
-                              children: [
-                                ListTile(
-                                  title: const Text('All cards & accounts'),
-                                  selected: _cardId == null,
-                                  onTap: () => Navigator.of(sheetContext)
-                                      .pop((all: true, id: null)),
-                                ),
-                                for (final c in widget.cards)
-                                  ListTile(
-                                    title: Text(
-                                      c.nickname?.isNotEmpty == true
-                                          ? c.nickname!
-                                          : c.cardName,
+                        final picked =
+                            await showModalBottomSheet<
+                              ({bool all, String? id})
+                            >(
+                              context: context,
+                              showDragHandle: true,
+                              builder: (sheetContext) => SafeArea(
+                                child: ListView(
+                                  shrinkWrap: true,
+                                  children: [
+                                    ListTile(
+                                      title: const Text('All cards & accounts'),
+                                      selected: _cardId == null,
+                                      onTap: () => Navigator.of(
+                                        sheetContext,
+                                      ).pop((all: true, id: null)),
                                     ),
-                                    selected: c.id == _cardId,
-                                    onTap: () => Navigator.of(sheetContext)
-                                        .pop((all: false, id: c.id)),
-                                  ),
-                              ],
-                            ),
-                          ),
-                        );
+                                    for (final c in widget.cards)
+                                      ListTile(
+                                        title: Text(
+                                          c.nickname?.isNotEmpty == true
+                                              ? c.nickname!
+                                              : c.cardName,
+                                        ),
+                                        selected: c.id == _cardId,
+                                        onTap: () => Navigator.of(
+                                          sheetContext,
+                                        ).pop((all: false, id: c.id)),
+                                      ),
+                                  ],
+                                ),
+                              ),
+                            );
                         if (picked == null || !mounted) return;
                         setState(() => _cardId = picked.all ? null : picked.id);
                       },
@@ -1898,8 +2037,9 @@ class _ActivityFilterSheetState extends State<_ActivityFilterSheet> {
               ),
               decoration: const BoxDecoration(
                 color: BambooInk.paper,
-                border:
-                    Border(top: BorderSide(color: BambooInk.hairlineOnPaper)),
+                border: Border(
+                  top: BorderSide(color: BambooInk.hairlineOnPaper),
+                ),
               ),
               child: Column(
                 mainAxisSize: MainAxisSize.min,
@@ -1931,8 +2071,7 @@ class _ActivityFilterSheetState extends State<_ActivityFilterSheet> {
                         backgroundColor: BambooInk.lime,
                         foregroundColor: BambooInk.slate,
                         minimumSize: const Size.fromHeight(52),
-                        textStyle:
-                            BambooFonts.ui(16, weight: FontWeight.w700),
+                        textStyle: BambooFonts.ui(16, weight: FontWeight.w700),
                         shape: RoundedRectangleBorder(
                           borderRadius: BorderRadius.circular(16),
                         ),
@@ -1995,112 +2134,111 @@ Widget _selectionField({
   Widget? child,
   Widget? trailing,
   VoidCallback? onTap,
-}) =>
-    InkWell(
-      onTap: onTap,
+}) => InkWell(
+  onTap: onTap,
+  borderRadius: BorderRadius.circular(16),
+  child: Container(
+    constraints: const BoxConstraints(minHeight: 52),
+    padding: const EdgeInsets.symmetric(horizontal: 15, vertical: 7),
+    decoration: BoxDecoration(
+      color: BambooInk.paper,
       borderRadius: BorderRadius.circular(16),
-      child: Container(
-        constraints: const BoxConstraints(minHeight: 52),
-        padding: const EdgeInsets.symmetric(horizontal: 15, vertical: 7),
-        decoration: BoxDecoration(
-          color: BambooInk.paper,
-          borderRadius: BorderRadius.circular(16),
-          border: Border.all(color: BambooInk.hairlineOnPaper),
+      border: Border.all(color: BambooInk.hairlineOnPaper),
+    ),
+    child: Row(
+      children: [
+        if (icon != null) ...[
+          Icon(icon, size: 22, color: BambooInk.ink900),
+          const SizedBox(width: 14),
+        ],
+        Expanded(
+          child:
+              child ??
+              Text(
+                label ?? '',
+                style: BambooFonts.ui(14, color: BambooInk.ink500),
+                overflow: TextOverflow.ellipsis,
+              ),
         ),
-        child: Row(
-          children: [
-            if (icon != null) ...[
-              Icon(icon, size: 22, color: BambooInk.ink900),
-              const SizedBox(width: 14),
-            ],
-            Expanded(
-              child: child ??
-                  Text(
-                    label ?? '',
-                    style: BambooFonts.ui(14, color: BambooInk.ink500),
-                    overflow: TextOverflow.ellipsis,
-                  ),
-            ),
-            if (trailing != null) trailing,
-          ],
-        ),
-      ),
-    );
+        if (trailing != null) trailing,
+      ],
+    ),
+  ),
+);
 
 Widget _typePill({
   required String label,
   required bool selected,
   required VoidCallback onTap,
   IconData? icon,
-}) =>
-    InkWell(
-      onTap: onTap,
+}) => InkWell(
+  onTap: onTap,
+  borderRadius: BorderRadius.circular(18),
+  child: Container(
+    padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 7),
+    decoration: BoxDecoration(
+      color: selected ? BambooInk.slate : BambooInk.paper,
       borderRadius: BorderRadius.circular(18),
-      child: Container(
-        padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 7),
-        decoration: BoxDecoration(
-          color: selected ? BambooInk.slate : BambooInk.paper,
-          borderRadius: BorderRadius.circular(18),
-          border: Border.all(
-            color: selected ? BambooInk.slate : BambooInk.hairlineOnPaper,
+      border: Border.all(
+        color: selected ? BambooInk.slate : BambooInk.hairlineOnPaper,
+      ),
+    ),
+    child: Row(
+      mainAxisSize: MainAxisSize.min,
+      children: [
+        if (icon != null) ...[
+          Icon(
+            icon,
+            size: 15,
+            color: selected ? BambooInk.onSlate : BambooInk.ink700,
+          ),
+          const SizedBox(width: 5),
+        ],
+        Text(
+          label,
+          style: BambooFonts.ui(
+            13,
+            weight: selected ? FontWeight.w600 : FontWeight.w500,
+            color: selected ? BambooInk.onSlate : BambooInk.ink700,
           ),
         ),
-        child: Row(
-          mainAxisSize: MainAxisSize.min,
-          children: [
-            if (icon != null) ...[
-              Icon(
-                icon,
-                size: 15,
-                color: selected ? BambooInk.onSlate : BambooInk.ink700,
-              ),
-              const SizedBox(width: 5),
-            ],
-            Text(
-              label,
-              style: BambooFonts.ui(
-                13,
-                weight: selected ? FontWeight.w600 : FontWeight.w500,
-                color: selected ? BambooInk.onSlate : BambooInk.ink700,
-              ),
-            ),
-          ],
-        ),
-      ),
-    );
+      ],
+    ),
+  ),
+);
 
 Widget _valueChip(String label, {VoidCallback? onRemove}) => Container(
-      padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
-      decoration: BoxDecoration(
-        color: BambooInk.paperMuted,
-        borderRadius: BorderRadius.circular(12),
-        border: Border.all(color: BambooInk.hairlineOnPaper),
+  padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
+  decoration: BoxDecoration(
+    color: BambooInk.paperMuted,
+    borderRadius: BorderRadius.circular(12),
+    border: Border.all(color: BambooInk.hairlineOnPaper),
+  ),
+  child: Row(
+    mainAxisSize: MainAxisSize.min,
+    children: [
+      Text(
+        label,
+        style: BambooFonts.ui(
+          13,
+          weight: FontWeight.w600,
+          color: BambooInk.ink900,
+        ),
       ),
-      child: Row(
-        mainAxisSize: MainAxisSize.min,
-        children: [
-          Text(
-            label,
-            style: BambooFonts.ui(
-              13,
-              weight: FontWeight.w600,
-              color: BambooInk.ink900,
-            ),
+      if (onRemove != null) ...[
+        const SizedBox(width: 4),
+        GestureDetector(
+          onTap: onRemove,
+          child: const Icon(
+            Icons.close_rounded,
+            size: 16,
+            color: BambooInk.ink500,
           ),
-          if (onRemove != null) ...[
-            const SizedBox(width: 4),
-            GestureDetector(
-              onTap: onRemove,
-              child: const Icon(
-                Icons.close_rounded,
-                size: 16,
-                color: BambooInk.ink500,
-              ),
-            ),
-          ],
-        ],
-      ),
-    );
+        ),
+      ],
+    ],
+  ),
+);
 
 String _dateFilterLabel(ActivityFilter filter) {
   if (filter.datePreset != _ActivityDatePreset.allTime) {
@@ -2360,6 +2498,7 @@ class _MovementChip extends StatelessWidget {
 
 class _TransactionTile extends StatelessWidget {
   final TransactionEntry entry;
+  final ForeignPayment? foreignPayment;
   final VoidCallback onTap;
   final VoidCallback? onLongPress;
   final List<String> tagNames;
@@ -2367,6 +2506,7 @@ class _TransactionTile extends StatelessWidget {
   final bool selected;
   const _TransactionTile(
     this.entry, {
+    this.foreignPayment,
     required this.onTap,
     this.onLongPress,
     this.tagNames = const [],
@@ -2425,6 +2565,8 @@ class _TransactionTile extends StatelessWidget {
     final showTransferChip = transferPayee != null && !isRefund && !isReversal;
     final nameDisplay = showTransferChip ? transferPayee : merchantDisplay;
     final subtitleParts = <String>[
+      if (foreignPayment != null)
+        '${foreignPayment!.originalLabel} · Foreign currency',
       isSmsImported ? '$timeLabel · SMS' : timeLabel,
       if (entry.entryKind != TxnEntryKind.spend || isInvestmentCategory)
         entryLabel,
@@ -2505,7 +2647,7 @@ class _TransactionTile extends StatelessWidget {
                           : isIncome
                           ? Icons.arrow_downward_rounded
                           : (entry.entryKind == TxnEntryKind.investment ||
-                                  isInvestmentCategory)
+                                isInvestmentCategory)
                           ? Icons.trending_up_rounded
                           : isMoneyOut
                           ? Icons.arrow_upward_rounded
@@ -2526,8 +2668,7 @@ class _TransactionTile extends StatelessWidget {
                           width: 20,
                           height: 20,
                           decoration: BoxDecoration(
-                            color:
-                                selected ? BambooInk.lime : BambooInk.paper,
+                            color: selected ? BambooInk.lime : BambooInk.paper,
                             shape: BoxShape.circle,
                             border: Border.all(
                               color: selected
@@ -2567,7 +2708,9 @@ class _TransactionTile extends StatelessWidget {
                             maxLines: 2,
                             style: BambooFonts.heading(
                               14.5,
-                              color: isIgnored ? BambooInk.ink700 : BambooInk.ink900,
+                              color: isIgnored
+                                  ? BambooInk.ink700
+                                  : BambooInk.ink900,
                             ),
                             overflow: TextOverflow.ellipsis,
                           ),
@@ -2593,7 +2736,9 @@ class _TransactionTile extends StatelessWidget {
                           // Refund/Reversal money moves.
                           const SizedBox(width: AppSpace.xs),
                           _MovementChip(
-                            label: entry.entryKind == TxnEntryKind.transfer ? 'Transfer' : 'Payment',
+                            label: entry.entryKind == TxnEntryKind.transfer
+                                ? 'Transfer'
+                                : 'Payment',
                             tint: BambooInk.ink900,
                             fillAlpha: 0.07,
                             borderAlpha: 0.14,
@@ -2635,13 +2780,16 @@ class _TransactionTile extends StatelessWidget {
                     // The subtitle already carries "Pending confirmation", so the
                     // hourglass only pushed the figure off the row's right edge.
                     showConfidenceIcon: false,
-                    style: BambooFonts.money(
-                      15,
-                      color: isIgnored ? BambooInk.ink500 : directionColor,
-                    ).copyWith(
-                      decoration: isIgnored ? TextDecoration.lineThrough : null,
-                      decorationColor: BambooInk.ink500,
-                    ),
+                    style:
+                        BambooFonts.money(
+                          15,
+                          color: isIgnored ? BambooInk.ink500 : directionColor,
+                        ).copyWith(
+                          decoration: isIgnored
+                              ? TextDecoration.lineThrough
+                              : null,
+                          decorationColor: BambooInk.ink500,
+                        ),
                   ),
                   if (isRefund) ...[
                     const SizedBox(height: 2),
@@ -2696,7 +2844,11 @@ class _SelectionCountChip extends StatelessWidget {
           child: Row(
             mainAxisSize: MainAxisSize.min,
             children: [
-              const Icon(Icons.close_rounded, size: 16, color: BambooInk.onSlate),
+              const Icon(
+                Icons.close_rounded,
+                size: 16,
+                color: BambooInk.onSlate,
+              ),
               const SizedBox(width: 6),
               Text(
                 '$count selected',
@@ -2809,14 +2961,18 @@ class _BulkActionBar extends StatelessWidget {
                     Icon(
                       Icons.delete_outline_rounded,
                       size: 21,
-                      color: BambooInk.clay.withValues(alpha: enabled ? 1 : 0.4),
+                      color: BambooInk.clay.withValues(
+                        alpha: enabled ? 1 : 0.4,
+                      ),
                     ),
                     Text(
                       'Delete',
                       style: BambooFonts.ui(
                         10.5,
                         weight: FontWeight.w600,
-                        color: BambooInk.clay.withValues(alpha: enabled ? 1 : 0.4),
+                        color: BambooInk.clay.withValues(
+                          alpha: enabled ? 1 : 0.4,
+                        ),
                       ),
                     ),
                   ],
@@ -2865,7 +3021,10 @@ class _BulkEditSheet extends StatelessWidget {
           mainAxisSize: MainAxisSize.min,
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
-            Text('Edit $n', style: BambooFonts.heading(18, color: BambooInk.ink900)),
+            Text(
+              'Edit $n',
+              style: BambooFonts.heading(18, color: BambooInk.ink900),
+            ),
             const SizedBox(height: 2),
             Text(
               'Applies to every selected transaction',
@@ -2955,7 +3114,9 @@ class _BulkEditTile extends StatelessWidget {
                     title,
                     style: BambooFonts.heading(
                       14,
-                      color: BambooInk.ink900.withValues(alpha: enabled ? 1 : 0.4),
+                      color: BambooInk.ink900.withValues(
+                        alpha: enabled ? 1 : 0.4,
+                      ),
                     ),
                   ),
                   const SizedBox(height: 1),
@@ -2965,7 +3126,9 @@ class _BulkEditTile extends StatelessWidget {
                     overflow: TextOverflow.ellipsis,
                     style: BambooFonts.ui(
                       11.5,
-                      color: BambooInk.ink500.withValues(alpha: enabled ? 1 : 0.4),
+                      color: BambooInk.ink500.withValues(
+                        alpha: enabled ? 1 : 0.4,
+                      ),
                     ),
                   ),
                 ],

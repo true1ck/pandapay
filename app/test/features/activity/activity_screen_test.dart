@@ -140,6 +140,7 @@ Future<void> _pump(
   await tester.pumpWidget(
     ProviderScope(
       overrides: [
+        foreignPaymentsProvider.overrideWith((ref) async => const []),
         accessTokenProvider.overrideWith((ref) => 'test-token'),
         sessionInitProvider.overrideWith((ref) async {}),
         userCardsRepositoryProvider.overrideWithValue(repo),
@@ -169,6 +170,7 @@ void main() {
         overrides: [
           accessTokenProvider.overrideWith((ref) => 'test-token'),
           sessionInitProvider.overrideWith((ref) async {}),
+          foreignPaymentsProvider.overrideWith((ref) async => const []),
           activityTransactionsProvider.overrideWith((ref) {
             loads++;
             return loads == 1 ? Future.value([row]) : pendingReload.future;
@@ -832,6 +834,7 @@ void main() {
       await tester.pumpWidget(
         ProviderScope(
           overrides: [
+            foreignPaymentsProvider.overrideWith((ref) async => const []),
             accessTokenProvider.overrideWith((ref) => 'test-token'),
             sessionInitProvider.overrideWith((ref) async {}),
             userCardsRepositoryProvider.overrideWithValue(repo),

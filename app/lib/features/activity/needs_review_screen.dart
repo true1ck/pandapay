@@ -20,9 +20,11 @@ import '../../data/local/sms_learning_feedback.dart';
 import '../../data/local_sms_parser.dart';
 import '../../data/needs_review_repository.dart';
 import '../../data/sms_fact_contract.dart';
+import '../../data/sms_amount_evidence.dart';
 import '../../data/user_cards_repository.dart'
     show TxnEntryKind, TxnInstrument, UserCard;
 import 'needs_review_clustering.dart';
+import 'foreign_payments_screen.dart';
 import 'sms_learning_capture.dart' as sms_learning_capture;
 
 String _feedbackSourceKey(String reviewId) {
@@ -102,8 +104,10 @@ String _reviewTypeLabel(NeedsReviewItem item) {
     return switch (type) {
       'balance_snapshot' => 'Bank balance alert',
       'bill_obligation' =>
-        RegExp(r'\b(?:credit\s+)?card\b', caseSensitive: false)
-                .hasMatch(item.body)
+        RegExp(
+              r'\b(?:credit\s+)?card\b',
+              caseSensitive: false,
+            ).hasMatch(item.body)
             ? 'Card bill alert'
             : 'Bill reminder',
       'mandate_lifecycle' => 'AutoPay mandate alert',
@@ -132,6 +136,12 @@ String _reviewTypeLabel(NeedsReviewItem item) {
 }
 
 String _reviewReasonLabel(String? reason, String body) {
+  if (reason == 'foreign_currency_needs_billed_inr') {
+    return 'Foreign payment. View the original currency and an INR estimate, or confirm the amount billed by your bank. Credit limits are excluded.';
+  }
+  if (reason == 'transaction_amount_not_evidenced') {
+    return 'The payment amount is unclear. Balances and credit limits are excluded from spending.';
+  }
   if (reason == 'sender_unavailable') {
     return 'Sender wasn’t provided. Check this message before adding it.';
   }
@@ -164,6 +174,8 @@ String _reviewReasonLabel(String? reason, String body) {
 }
 
 String _reviewActionLabel(NeedsReviewItem item) {
+  if (item.reason == 'foreign_currency_needs_billed_inr')
+    return 'View foreign payment';
   if (item.kind == NeedsReviewKind.payLaterDrawdown ||
       NeedsReviewRepository.isPayLaterDrawdown(
         item.body,
@@ -296,7 +308,8 @@ Future<void> _persistSmsFactCorrection(
     // (granted AND current smsSharedLearningPolicyVersion) before SMS-derived
     // evidence leaves the device. The redacted evidence stays in the local
     // outbox either way, so a later consented flush can still upload it.
-    final consented = await sms_learning_capture.smsLearningConsentActiveAtCapture(ref);
+    final consented = await sms_learning_capture
+        .smsLearningConsentActiveAtCapture(ref);
     final accepted = await repository.overrideSmsFact(
       sourceKey: sourceKey,
       factIndex: factIndex,
@@ -347,8 +360,8 @@ Future<void> _recordReviewedTransactionFeedback(
   final actionableFacts = (item.aiSuggestions ?? const [])
       .where((suggestion) => actionableTypes.contains(suggestion['factType']))
       .toList(growable: false);
-  final factIndexIsPresent = aiFact?['factIndex'] is int &&
-      (aiFact!['factIndex'] as int) >= 0;
+  final factIndexIsPresent =
+      aiFact?['factIndex'] is int && (aiFact!['factIndex'] as int) >= 0;
   if (!factIndexIsPresent && actionableFacts.length > 1) return;
   final sourceKey = _feedbackSourceKey(item.id);
   if (!RegExp(r'^[0-9a-f]{64}$').hasMatch(sourceKey)) return;
@@ -357,7 +370,12 @@ Future<void> _recordReviewedTransactionFeedback(
       ? Map<String, dynamic>.from(rawPayload)
       : <String, dynamic>{};
   const safeOriginalFields = [
-    'amountInr', 'merchant', 'category', 'occurredAt', 'instrument', 'entryKind',
+    'amountInr',
+    'merchant',
+    'category',
+    'occurredAt',
+    'instrument',
+    'entryKind',
   ];
   final originalFields = <String, dynamic>{
     for (final key in safeOriginalFields)
@@ -379,14 +397,17 @@ Future<void> _recordReviewedTransactionFeedback(
   };
   final normalizedCategory = category?.trim().toLowerCase();
   final priorCategory = payload['category'];
-  final changedToValidCategory = normalizedCategory != null &&
+  final changedToValidCategory =
+      normalizedCategory != null &&
       smsSpendCategories.contains(normalizedCategory) &&
       priorCategory != normalizedCategory;
   bool sameDate(dynamic raw) {
     final suggested = raw is String ? DateTime.tryParse(raw) : null;
     return suggested != null && suggested.toUtc() == occurredAt.toUtc();
   }
-  final matches = payload['amountInr'] is num &&
+
+  final matches =
+      payload['amountInr'] is num &&
       (payload['amountInr'] as num).toDouble() == amountInr &&
       payload['merchant'] is String &&
       (payload['merchant'] as String).trim().toLowerCase() ==
@@ -556,12 +577,12 @@ Future<void> _recordReviewedBillFeedback(
     correctionKind: matches
         ? null
         : (payload['category'] != result.category.name
-            ? 'misclassified_kind'
-            : !sameAmount
-                ? 'wrong_amount'
-                : !sameDate
-                    ? 'wrong_date'
-                    : 'wrong_bill_fields'),
+              ? 'misclassified_kind'
+              : !sameAmount
+              ? 'wrong_amount'
+              : !sameDate
+              ? 'wrong_date'
+              : 'wrong_bill_fields'),
     decisionOrigin: suggestion != null ? 'ai' : 'parser',
     messageAt: item.receivedAt,
     reason: matches ? null : 'user_saved_reviewed_bill',
@@ -3118,6 +3139,18 @@ class _NeedsReviewTileState extends ConsumerState<_NeedsReviewTile> {
       );
       if (correctionKind == null || !mounted) return;
       setState(() => _busy = true);
+      if (widget.item.reason == 'foreign_currency_needs_billed_inr') {
+        final foreignRepo = ref.read(foreignPaymentsRepositoryProvider);
+        await foreignRepo.fetchAll(refresh: false);
+        final payment = await foreignRepo.find(
+          _feedbackSourceKey(widget.item.id),
+        );
+        if (payment != null && !payment.isConfirmed) {
+          await foreignRepo.ignore(payment.id);
+          ref.invalidate(foreignPaymentsProvider);
+        }
+        if (!mounted) return;
+      }
       final suggestedFact = (widget.item.aiSuggestions ?? const [])
           .where(
             (fact) => const {
@@ -3655,6 +3688,28 @@ class _NeedsReviewTileState extends ConsumerState<_NeedsReviewTile> {
   }
 
   Future<void> _handlePrimaryAction() async {
+    if (widget.item.reason == 'foreign_currency_needs_billed_inr') {
+      setState(() => _busy = true);
+      try {
+        final repo = ref.read(foreignPaymentsRepositoryProvider);
+        await repo.fetchAll(refresh: false);
+        final payment = await repo.find(_feedbackSourceKey(widget.item.id));
+        if (!mounted) return;
+        if (payment != null) {
+          await openForeignPayment(context, payment);
+          return;
+        }
+      } catch (error) {
+        if (mounted)
+          ScaffoldMessenger.of(context).showSnackBar(
+            SnackBar(content: Text(userFacingErrorMessage(error))),
+          );
+        return;
+      } finally {
+        if (mounted) setState(() => _busy = false);
+      }
+      // Unsupported foreign events retain ordinary manual review below.
+    }
     if (widget.item.kind == NeedsReviewKind.securityOrServiceAlert ||
         _isSecurityOrServiceAlert(widget.item.body)) {
       await _dismissNotATransaction();
@@ -4218,7 +4273,12 @@ class _FillFieldsSheetState extends ConsumerState<_FillFieldsSheet> {
     final payload = movement?['payload'];
     if (payload is Map) {
       final amount = payload['amountInr'];
-      if (amount is num && amount.isFinite && amount > 0) {
+      if (amount is num &&
+          amount.isFinite &&
+          amount > 0 &&
+          SmsAmountEvidence.reviewReason(widget.item.body) == null &&
+          (!SmsAmountEvidence.hasInr(widget.item.body) ||
+              SmsAmountEvidence.permits(widget.item.body, amount))) {
         _amountController.text = amount.toStringAsFixed(2);
       }
       final merchant = payload['merchant'];

@@ -45,6 +45,7 @@ Future<void> _pumpApp(WidgetTester tester, {required bool tutorialSeen}) async {
         utilizationTransactionsProvider.overrideWith(
           (ref) async => const [],
         ),
+        foreignPaymentsProvider.overrideWith((ref) async => const []),
         homeSummaryProvider.overrideWith((ref) async => null),
         bankAccountSummariesProvider.overrideWith((ref) async => const []),
         cardOverridesProvider.overrideWith((ref) async => const []),
@@ -52,6 +53,7 @@ Future<void> _pumpApp(WidgetTester tester, {required bool tutorialSeen}) async {
         homeDataRefreshProvider.overrideWith((ref) async {}),
         sessionInitProvider.overrideWith((ref) async {}),
         sessionKeepAliveProvider.overrideWith((ref) {}),
+        smsBackgroundFlushProvider.overrideWith((ref) {}),
         accessTokenProvider.overrideWith((ref) => 'test-token'),
       ],
       child: Consumer(

@@ -1,6 +1,7 @@
 import 'dart:math' as math;
 
 import 'sms_fact_contract.dart';
+import 'sms_amount_evidence.dart';
 
 /// Device mirror of api/src/ai_fact_scoring.js — multi-signal composite
 /// confidence for AI-extracted SMS facts.
@@ -279,10 +280,7 @@ const Set<String> _smsWeakMerchantExact = {
   'your payment',
 };
 
-final RegExp _smsUrlRe = RegExp(
-  r'https?:\/\/|www\.',
-  caseSensitive: false,
-);
+final RegExp _smsUrlRe = RegExp(r'https?:\/\/|www\.', caseSensitive: false);
 final RegExp _smsBoilerplateRe = RegExp(
   r'\b(?:for\s+other\s+services|other\s+services|if\s+not\s+u|if\s+not\s+you|not\s+you|view\s+(?:the\s+)?(?:payment\s+)?(?:receipt|bill|invoice)|download\s+(?:the\s+)?(?:payment\s+)?(?:receipt|bill|invoice)|(?:has|have|had|was|were|is|are)\s+(?:been\s+)?(?:successfully\s+)?(?:recorded|completed|processed|confirmed)|call|sms\s+block|to\s+block|block\s+card|report\s+spam)\b',
   caseSensitive: false,
@@ -298,8 +296,10 @@ final RegExp _smsMerchantFragmentRe = RegExp(
   caseSensitive: false,
 );
 
-String _smsNormalizeWhitespace(String value) =>
-    value.replaceAll(RegExp(r'\u00a0'), ' ').replaceAll(RegExp(r'\s+'), ' ').trim();
+String _smsNormalizeWhitespace(String value) => value
+    .replaceAll(RegExp(r'\u00a0'), ' ')
+    .replaceAll(RegExp(r'\s+'), ' ')
+    .trim();
 
 String _smsStripWrapping(String value) => value
     .replaceFirst(RegExp(r'''^[\s"'“”‘’()[\]{}]+''', unicode: true), '')
@@ -359,8 +359,14 @@ String? _smsBaseWeaknessReason(String text) {
   }
 
   final words = text.split(RegExp(r'\s+')).where((word) => word.isNotEmpty);
-  if (words.length == 1 && compact.length >= 8 && digitCount > 0 && letterCount > 0) {
-    final vowels = RegExp(r'[aeiou]', caseSensitive: false).allMatches(compact).length;
+  if (words.length == 1 &&
+      compact.length >= 8 &&
+      digitCount > 0 &&
+      letterCount > 0) {
+    final vowels = RegExp(
+      r'[aeiou]',
+      caseSensitive: false,
+    ).allMatches(compact).length;
     final digitRatio = digitCount / compact.length;
     if (vowels <= 1 || digitRatio >= 0.4) return 'hash_id';
   }
@@ -404,11 +410,11 @@ String? smsCleanMerchantName(String? value) {
 }
 
 /// True when the value cannot safely be displayed/stored as a merchant.
-bool smsIsWeakMerchantName(String? value) => smsCleanMerchantName(value) == null;
+bool smsIsWeakMerchantName(String? value) =>
+    smsCleanMerchantName(value) == null;
 
-String _smsNormalizeForMatch(String value) => value
-    .toLowerCase()
-    .replaceAll(RegExp(r'[^\p{L}\p{N}]', unicode: true), '');
+String _smsNormalizeForMatch(String value) =>
+    value.toLowerCase().replaceAll(RegExp(r'[^\p{L}\p{N}]', unicode: true), '');
 
 bool _smsAppearsInMessage(String value, String body) {
   final normalized = _smsNormalizeForMatch(value);
@@ -432,7 +438,10 @@ bool _smsAppearsInMessage(String value, String body) {
 /// either; it always goes through these semantics.
 final Map<String, RegExp> _smsAliasCues = {
   'amazon pay later': RegExp(r'\b(?:pay\s+later|axio)\b', caseSensitive: false),
-  'bank or service fee': RegExp(r'\b(?:fees?|charges?)\b', caseSensitive: false),
+  'bank or service fee': RegExp(
+    r'\b(?:fees?|charges?)\b',
+    caseSensitive: false,
+  ),
   'bank transfer': RegExp(
     r'\b(?:credited|received|deposited)\b[^.!?\n]{0,100}\bfrom\b[^.!?\n]{0,60}\b(?:bank|a\/?c\.?|account)\b|\bfrom\b[^.!?\n]{0,100}\b(?:bank|a\/?c\.?|account)\b[^.!?\n]{0,60}\b(?:credited|received|deposited)\b',
     caseSensitive: false,
@@ -650,6 +659,11 @@ double _evidenceScore(
 
 bool _amountInCompletedPayment(String body, Object? amount) {
   if (amount is! num || !amount.isFinite || amount <= 0) return false;
+  if (SmsAmountEvidence.reviewReason(body) != null ||
+      (SmsAmountEvidence.hasInr(body) &&
+          !SmsAmountEvidence.permits(body, amount))) {
+    return false;
+  }
   final pattern = RegExp(
     r'\b(?:payment|transaction|transfer|purchase)\b[\s\S]{0,120}\b(?:completed(?:\s+successfully)?|recorded)\b',
     caseSensitive: false,
@@ -662,6 +676,11 @@ bool _amountInCompletedPayment(String body, Object? amount) {
 
 bool _amountInPostedTransaction(String body, Object? amount) {
   if (amount is! num || !amount.isFinite || amount <= 0) return false;
+  if (SmsAmountEvidence.reviewReason(body) != null ||
+      (SmsAmountEvidence.hasInr(body) &&
+          !SmsAmountEvidence.permits(body, amount))) {
+    return false;
+  }
   final movementOrCompletion = RegExp(
     r'\b(debited|deducted|spent|paid|credited|received|refunded|withdrawn|transferred|transfer|processed|payout|settled|disbursed|invested|deposited|sent)\b|\b(?:payment|transaction|transfer|purchase)\b[\s\S]{0,100}\b(?:completed(?:\s+successfully)?|recorded)\b',
     caseSensitive: false,
@@ -824,13 +843,14 @@ double _disambiguationScore(
   // appear in the body and still not identify the payee.
   final evidencedParty =
       [
-        payload['merchant'],
-        payload['transferParty'],
-        payload['billerName'],
-        payload['serviceName'],
-      ].whereType<String>().where((party) => party.trim().isNotEmpty).any(
-        (party) => _smsMerchantGrounded(party, body),
-      );
+            payload['merchant'],
+            payload['transferParty'],
+            payload['billerName'],
+            payload['serviceName'],
+          ]
+          .whereType<String>()
+          .where((party) => party.trim().isNotEmpty)
+          .any((party) => _smsMerchantGrounded(party, body));
   if (factType == 'posted_movement' && hasMovementParty && evidencedParty) {
     return 1.0;
   }
@@ -951,10 +971,15 @@ SmsFactConfidence _scoreFact(
   final merchantEvidenced =
       !needsLedgerGate ||
       (party is String && _smsMerchantGrounded(party, body));
-  final completionEvidence =
-      !needsLedgerGate || smsHasCompletionEvidence(body);
+  final completionEvidence = !needsLedgerGate || smsHasCompletionEvidence(body);
   final autoResolveEligible =
-      merchantEvidenced && completionEvidence && !receiptOnly;
+      merchantEvidenced &&
+      completionEvidence &&
+      !receiptOnly &&
+      (!needsLedgerGate ||
+          (factType == 'bill_payment'
+              ? _amountInCompletedPayment(body, payload['amountInr'])
+              : _amountInPostedTransaction(body, payload['amountInr'])));
   return SmsFactConfidence(
     fact: fact,
     composite: composite,
