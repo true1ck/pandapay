@@ -310,7 +310,7 @@ class _SupportTicketCardState extends ConsumerState<_SupportTicketCard> {
     final t = widget.ticket;
     final isPending = t['state'] == 'pending';
     final isStale = t['is_stale'] == true;
-    final kind = (t['kind'] ?? 'general') as String;
+    final kind = (t['kind'] ?? 'general').toString();
     final reporter = t['user_email'] ?? t['user_name'];
     final diagnostics = t['diagnostics'];
 

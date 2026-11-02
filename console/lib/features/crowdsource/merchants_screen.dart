@@ -165,7 +165,7 @@ class _MerchantTile extends ConsumerWidget {
   Widget build(BuildContext context, WidgetRef ref) {
     final m = merchant;
     return ListTile(
-      title: Text(m['display_name'] as String? ?? m['vpa'] as String),
+      title: Text(m['display_name'] as String? ?? m['vpa'] as String? ?? 'Unnamed merchant'),
       subtitle: Text(
         '${m['vpa']} · ${m['category_name'] ?? 'uncategorized'} · '
         'confidence ${m['confidence']} (${m['confidence_score']}) · '
@@ -263,10 +263,10 @@ class _MerchantDetailDialogState extends ConsumerState<_MerchantDetailDialog> {
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
                   Text(
-                    m['display_name'] as String? ?? m['vpa'] as String,
+                    m['display_name'] as String? ?? m['vpa'] as String? ?? 'Unnamed merchant',
                     style: Theme.of(context).textTheme.titleMedium,
                   ),
-                  Text(m['vpa'] as String),
+                  Text((m['vpa'] ?? '').toString()),
                   const SizedBox(height: 8),
                   // AD-6.2.1: confidence breakdown — the raw inputs (see
                   // GET /admin/merchants/:id's doc comment for why this is

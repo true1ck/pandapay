@@ -109,7 +109,7 @@ class _CardEditorTileState extends ConsumerState<_CardEditorTile> {
   @override
   Widget build(BuildContext context) {
     final card = widget.card;
-    final status = card['status'] as String;
+    final status = (card['status'] ?? 'unknown').toString();
     final nextOptions = _cardStatusTransitions[status] ?? const <String>[];
     final verifiedAt = card['verified_at'] as String?;
     return Card(

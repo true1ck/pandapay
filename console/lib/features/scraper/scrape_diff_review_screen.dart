@@ -41,7 +41,8 @@ class ScrapeDiffReviewScreen extends ConsumerWidget {
         // (page_snapshots aren't 1:1 with a run once retries happen).
         final bySource = <String, Map<String, dynamic>>{};
         for (final run in runList) {
-          bySource.putIfAbsent(run['source_id'] as String, () => run);
+          final sourceKey = (run['source_id'] ?? run['id'] ?? 'unknown').toString();
+          bySource.putIfAbsent(sourceKey, () => run);
         }
         return ListView(
           padding: const EdgeInsets.all(12),
