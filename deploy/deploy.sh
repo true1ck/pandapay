@@ -49,6 +49,7 @@ SERVICES_FENCED=0
 SOURCE_REPLACEMENT_STARTED=0
 DEPLOY_BACKUP_STAGE=''
 DEPLOY_TARGET_STAGE=''
+DB_CA_TEMP=''
 OLD_WRITER_CONTAINER_IDS=()
 BACKUP_COMPOSE_FILES=()
 
@@ -112,6 +113,7 @@ on_exit() {
   fi
   if [ -n "$DEPLOY_BACKUP_STAGE" ]; then rm -rf -- "$DEPLOY_BACKUP_STAGE"; fi
   if [ -n "$DEPLOY_TARGET_STAGE" ]; then rm -rf -- "$DEPLOY_TARGET_STAGE"; fi
+  if [ -n "$DB_CA_TEMP" ]; then rm -f -- "$DB_CA_TEMP"; fi
   exit "$status"
 }
 trap on_exit EXIT
@@ -156,6 +158,69 @@ upsert_env_value() {
   mv "$tmp" .env
 }
 
+# The production database is Supabase's session pooler. Its certificate chain
+# is intentionally not trusted by the base image's public CA store, so strict
+# hostname verification needs Supabase's reviewed public root CA. Bootstrap it
+# only for the known Supabase pooler hostname, verify the pinned public
+# fingerprint, and export it for Compose without persisting or printing the
+# certificate. Other providers must supply their own reviewed DB_SSL_CA.
+configure_database_tls() {
+  local db_ssl db_ca admin_url expected actual
+  db_ssl=true
+  if grep -q '^DB_SSL=' .env; then
+    check_single_env_key DB_SSL
+    db_ssl="$(sed -n 's/^DB_SSL=//p' .env | sed 's/^"//; s/"$//')"
+  fi
+  [ "$db_ssl" = true ] || {
+    echo 'FATAL: production deployment requires DB_SSL=true for verified database TLS' >&2
+    exit 1
+  }
+
+  db_ca=""
+  if grep -q '^DB_SSL_CA=' .env; then
+    [ "$(awk 'index($0, "DB_SSL_CA=") == 1 { count++ } END { print count + 0 }' .env)" -eq 1 ] || {
+      echo 'FATAL: .env must contain at most one DB_SSL_CA entry' >&2
+      exit 1
+    }
+    db_ca="$(sed -n 's/^DB_SSL_CA=//p' .env | sed 's/^"//; s/"$//')"
+  fi
+  if [ -n "$db_ca" ]; then
+    export DB_SSL=true DB_SSL_CA="$db_ca"
+    return 0
+  fi
+
+  admin_url="$(sed -n 's/^ADMIN_DATABASE_URL=//p' .env | sed 's/^"//; s/"$//')"
+  case "$admin_url" in
+    *pooler.supabase.com:*)
+      command -v curl >/dev/null 2>&1 || {
+        echo 'FATAL: curl is required to obtain the reviewed Supabase database CA' >&2
+        exit 1
+      }
+      command -v sha256sum >/dev/null 2>&1 || {
+        echo 'FATAL: sha256sum is required to verify the reviewed Supabase database CA' >&2
+        exit 1
+      }
+      DB_CA_TEMP="$(mktemp)"
+      curl --fail --silent --show-error --location --max-time 20 \
+        https://supabase.com/prod-ca-2021.crt > "$DB_CA_TEMP"
+      expected='807025AD50D4ED219D2C9C7D299C004F824EB00CF7F65AFEF607D07B72E6CAFA'
+      actual="$(sha256sum "$DB_CA_TEMP" | awk '{print toupper($1)}')"
+      [ "$actual" = "$expected" ] || {
+        echo 'FATAL: downloaded Supabase database CA fingerprint is not the reviewed value' >&2
+        exit 1
+      }
+      export DB_SSL=true DB_SSL_CA="$(cat "$DB_CA_TEMP")"
+      echo '    verified reviewed Supabase database CA for strict TLS'
+      ;;
+    *)
+      # Leave the system trust path available for providers using a public CA;
+      # a private/provider CA must be supplied explicitly and will fail closed
+      # in the migration/runtime TLS resolver if it is missing.
+      export DB_SSL=true
+      ;;
+  esac
+}
+
 if ! grep -Eq '^PHONE_LOOKUP_HMAC_KEY=.{32,}$' .env; then
   echo "FATAL: .env must contain a stable PHONE_LOOKUP_HMAC_KEY of at least 32 characters"
   exit 1
@@ -181,6 +246,8 @@ for key in \
   BACKUP_AGE_RECIPIENTS_FILE; do
   check_single_env_key "$key"
 done
+
+configure_database_tls
 
 # Only the host file may opt into local storage; inherited shell values must
 # not silently relax the offhost default. Reject ambiguity before downtime.
