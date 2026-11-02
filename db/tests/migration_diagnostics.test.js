@@ -29,3 +29,17 @@ test('product migration diagnostics classify safe infrastructure causes without 
     stderr: 'pg_dump: error: permission denied for schema private',
   })).category, 'schema_dump_permission_denied');
 });
+test('baseline failures expose only a safe phase and category', () => {
+  const dumpError = Object.assign(new Error('Command failed: pg_dump --dbname secret'), {
+    baselinePhase: 'schema_dump', stderr: Buffer.from('password=secret')
+  });
+  assert.deepEqual(safeMigrationDiagnostic(dumpError), {
+    code: 'migration_failed', phase: 'schema_dump', category: 'schema_dump_failed'
+  });
+  const catalogError = Object.assign(new Error('ACL inventory is unavailable'), {
+    baselinePhase: 'catalog_fingerprint'
+  });
+  assert.deepEqual(safeMigrationDiagnostic(catalogError), {
+    code: 'migration_failed', phase: 'catalog_fingerprint', category: 'schema_fingerprint_failed'
+  });
+});

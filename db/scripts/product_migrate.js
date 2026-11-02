@@ -200,7 +200,12 @@ async function legacyBaseline(client, files, names, snapshot) {
   if (typeof client.schemaFingerprint !== 'function') throw new Error('Schema fingerprint provider is required for baseline verification');
   let schemaSha256;
   if (snapshot) {
-    schemaSha256 = await client.schemaFingerprint(snapshot);
+    try {
+      schemaSha256 = await client.schemaFingerprint(snapshot);
+    } catch (error) {
+      if (error && typeof error === 'object') error.baselinePhase ||= 'schema_fingerprint';
+      throw error;
+    }
   } else {
     // The apply path also validates legacy checksums. Hold a read-only snapshot
     // across pg_dump and catalog inspection before writing any adopted digest.
@@ -212,7 +217,12 @@ async function legacyBaseline(client, files, names, snapshot) {
       if (typeof exported !== 'string' || !/^[0-9A-F]+-[0-9A-F]+-\d+$/i.test(exported)) {
         throw new Error('Read-only baseline snapshot is unavailable');
       }
-      schemaSha256 = await client.schemaFingerprint(exported);
+      try {
+        schemaSha256 = await client.schemaFingerprint(exported);
+      } catch (error) {
+        if (error && typeof error === 'object') error.baselinePhase ||= 'schema_fingerprint';
+        throw error;
+      }
       await client.query('COMMIT');
     } catch (error) {
       await client.query('ROLLBACK').catch(() => {});
@@ -275,8 +285,19 @@ async function main() {
     client.schemaFingerprint = snapshot => {
       const args = ['--dbname', adminConnection, '--schema-only', '--no-acl', '--quote-all-identifiers', '--exclude-table=public.schema_migrations'];
       if (snapshot) args.push('--snapshot', snapshot);
-      const schema = execFileSync('pg_dump', args, { env, encoding: 'utf8', stdio: ['ignore', 'pipe', 'pipe'], timeout: 120000, maxBuffer: 16 * 1024 * 1024 });
-      return schemaFingerprint({ client, snapshot, dump: schema });
+      let schema;
+      try {
+        schema = execFileSync('pg_dump', args, { env, encoding: 'utf8', stdio: ['ignore', 'pipe', 'pipe'], timeout: 120000, maxBuffer: 16 * 1024 * 1024 });
+      } catch (error) {
+        if (error && typeof error === 'object') error.baselinePhase ||= 'schema_dump';
+        throw error;
+      }
+      try {
+        return schemaFingerprint({ client, snapshot, dump: schema });
+      } catch (error) {
+        if (error && typeof error === 'object') error.baselinePhase ||= 'catalog_fingerprint';
+        throw error;
+      }
     };
     if (process.argv[2] === '--write-baseline') {
       if (!process.argv[3]) throw new Error('--write-baseline requires a new output path');
@@ -313,6 +334,9 @@ async function main() {
 function safeMigrationDiagnostic(error) {
   const rawCode = error?.code || error?.cause?.code;
   const diagnostic = { code: typeof rawCode === 'string' && /^[0-9A-Z]{5}$/.test(rawCode) ? rawCode : 'migration_failed' };
+  if (['schema_dump', 'catalog_fingerprint', 'schema_fingerprint'].includes(error?.baselinePhase)) {
+    diagnostic.phase = error.baselinePhase;
+  }
   if (/^(?:seed:)?\d+_[A-Za-z0-9_-]{1,120}\.sql$/.test(error?.migrationFile || '')) {
     diagnostic.migration = error.migrationFile;
   }
@@ -334,9 +358,12 @@ function safeMigrationDiagnostic(error) {
     [/ECONNREFUSED|connection refused|timeout expired|could not connect/i, 'database_connection_failed'],
     [/certificate|SSL|TLS/i, 'database_tls_failed'],
     [/pg_dump/i, 'schema_dump_failed'],
+    [/ACL inventory|schema deparser|CHECK constraint|schema dump|catalog fingerprint|unbalanced|unclosed|malformed/i, 'schema_fingerprint_failed'],
   ];
   diagnostic.category = categories.find(([pattern]) => pattern.test(message))?.[1]
     || infrastructureCategories.find(([pattern]) => pattern.test(safeFailureText))?.[1]
+    || (diagnostic.phase === 'schema_dump' ? 'schema_dump_failed' : null)
+    || (diagnostic.phase ? 'schema_fingerprint_failed' : null)
     || 'operation_failed';
   return diagnostic;
 }
