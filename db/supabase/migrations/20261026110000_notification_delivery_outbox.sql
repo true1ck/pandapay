@@ -44,6 +44,21 @@ drop policy if exists notification_outbox_read_profile on public.profiles;
 create policy notification_outbox_read_profile on public.profiles for select to notification_outbox_owner using(true);
 drop policy if exists notification_outbox_read_preferences on public.notification_preferences;
 create policy notification_outbox_read_preferences on public.notification_preferences for select to notification_outbox_owner using(true);
+-- Managed PostgreSQL administrators may hold ADMIN without SET on roles.
+-- Add only a temporary SET grant attributed to this migration account, and
+-- restore its exact prior options after creating the capability-owned objects.
+do $$
+declare v_prior jsonb;
+begin
+  select jsonb_build_object('inherit',m.inherit_option,'set',m.set_option)
+    into v_prior from pg_auth_members m
+    where m.roleid='notification_outbox_owner'::regrole and m.member=current_user::regrole
+      and m.grantor=current_user::regrole;
+  perform set_config('pandapay.notification_outbox_owner_prior_migration_grant',coalesce(v_prior::text,'null'),false);
+  execute format('grant notification_outbox_owner to %I with inherit false granted by %I',current_user,current_user);
+  execute format('grant notification_outbox_owner to %I with set true granted by %I',current_user,current_user);
+end $$;
+
 set role notification_outbox_owner;
 create or replace function notification_delivery.bump_version()
 returns trigger language plpgsql set search_path=''
@@ -256,3 +271,15 @@ grant execute on function notification_delivery.allowed(uuid,uuid) to notificati
 comment on table notification_delivery.revisions is 'Bounded immutable customer-visible content revision snapshots for queued push intent.';
 comment on table notification_delivery.outbox is 'Private push queue referencing an immutable revision snapshot; provider response loss may repeat delivery without provider idempotency.';
 reset role;
+
+-- Do not retain a new owner capability on the migration account.
+do $$
+declare v_prior jsonb := current_setting('pandapay.notification_outbox_owner_prior_migration_grant')::jsonb;
+begin
+  if v_prior='null'::jsonb then
+    execute format('revoke notification_outbox_owner from %I granted by %I',current_user,current_user);
+  else
+    execute format('grant notification_outbox_owner to %I with inherit %s granted by %I',current_user,v_prior->>'inherit',current_user);
+    execute format('grant notification_outbox_owner to %I with set %s granted by %I',current_user,v_prior->>'set',current_user);
+  end if;
+end $$;

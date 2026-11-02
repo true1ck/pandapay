@@ -14,6 +14,21 @@ do $$ begin
 end $$;
 grant usage on schema notification_delivery to notification_monitor;
 
+-- Managed PostgreSQL administrators may hold ADMIN without SET on roles.
+-- Add only a temporary SET grant attributed to this migration account, and
+-- restore its exact prior options after creating the capability-owned objects.
+do $$
+declare v_prior jsonb;
+begin
+  select jsonb_build_object('inherit',m.inherit_option,'set',m.set_option)
+    into v_prior from pg_auth_members m
+    where m.roleid='notification_outbox_owner'::regrole and m.member=current_user::regrole
+      and m.grantor=current_user::regrole;
+  perform set_config('pandapay.notification_outbox_owner_prior_migration_grant',coalesce(v_prior::text,'null'),false);
+  execute format('grant notification_outbox_owner to %I with inherit false granted by %I',current_user,current_user);
+  execute format('grant notification_outbox_owner to %I with set true granted by %I',current_user,current_user);
+end $$;
+
 set role notification_outbox_owner;
 
 create table if not exists notification_delivery.worker_status(
@@ -150,3 +165,14 @@ comment on function notification_delivery.health() is
   'Monitor-only count/age summary; no customer identifiers, payloads, tokens, or event keys. enabled is intentionally null.';
 
 reset role;
+-- Do not retain a new owner capability on the migration account.
+do $$
+declare v_prior jsonb := current_setting('pandapay.notification_outbox_owner_prior_migration_grant')::jsonb;
+begin
+  if v_prior='null'::jsonb then
+    execute format('revoke notification_outbox_owner from %I granted by %I',current_user,current_user);
+  else
+    execute format('grant notification_outbox_owner to %I with inherit %s granted by %I',current_user,v_prior->>'inherit',current_user);
+    execute format('grant notification_outbox_owner to %I with set %s granted by %I',current_user,v_prior->>'set',current_user);
+  end if;
+end $$;

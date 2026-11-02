@@ -18,9 +18,35 @@ do $$ begin
     create role pandapay_feedback_admission nologin nosuperuser nocreatedb nocreaterole noinherit noreplication nobypassrls;
   end if;
 end $$;
-alter role pandapay_feedback_admission nologin nosuperuser nocreatedb nocreaterole noinherit noreplication nobypassrls;
+-- A managed CREATEROLE administrator cannot restate NOSUPERUSER or
+-- NOBYPASSRLS even when those attributes are already false. Preserve a safe
+-- existing capability and fail if it has broader privileges.
+do $$ begin
+  if exists(select 1 from pg_roles where rolname='pandapay_feedback_admission' and
+    (rolcanlogin or rolsuper or rolcreatedb or rolcreaterole or rolinherit or rolreplication or rolbypassrls)) then
+    raise exception 'unsafe feedback admission capability';
+  end if;
+  if exists(select 1 from pg_auth_members where member='pandapay_feedback_admission'::regrole) then
+    raise exception 'feedback admission capability must not inherit roles';
+  end if;
+end $$;
 grant usage on schema feedback_admission to pandapay_feedback_admission;
 grant usage,create on schema feedback_admission to feedback_admission_owner;
+-- Managed PostgreSQL administrators may hold ADMIN without SET on roles.
+-- Add only a temporary SET grant attributed to this migration account, and
+-- restore its exact prior options after creating the capability-owned objects.
+do $$
+declare v_prior jsonb;
+begin
+  select jsonb_build_object('inherit',m.inherit_option,'set',m.set_option)
+    into v_prior from pg_auth_members m
+    where m.roleid='feedback_admission_owner'::regrole and m.member=current_user::regrole
+      and m.grantor=current_user::regrole;
+  perform set_config('pandapay.feedback_admission_owner_prior_migration_grant',coalesce(v_prior::text,'null'),false);
+  execute format('grant feedback_admission_owner to %I with inherit false granted by %I',current_user,current_user);
+  execute format('grant feedback_admission_owner to %I with set true granted by %I',current_user,current_user);
+end $$;
+
 set role feedback_admission_owner;
 
 create table if not exists feedback_admission.buckets (
@@ -124,4 +150,15 @@ grant execute on function feedback_admission.consume(text,text,boolean) to panda
 comment on function feedback_admission.consume(text,text,boolean) is
   'Atomic fixed-window feedback admission. Accepts only keyed opaque identity digests; fixed route allowlist, 5/profile and 30/IP hourly caps, 250k row ceiling.';
 reset role;
+-- Do not retain a new owner capability on the migration account.
+do $$
+declare v_prior jsonb := current_setting('pandapay.feedback_admission_owner_prior_migration_grant')::jsonb;
+begin
+  if v_prior='null'::jsonb then
+    execute format('revoke feedback_admission_owner from %I granted by %I',current_user,current_user);
+  else
+    execute format('grant feedback_admission_owner to %I with inherit %s granted by %I',current_user,v_prior->>'inherit',current_user);
+    execute format('grant feedback_admission_owner to %I with set %s granted by %I',current_user,v_prior->>'set',current_user);
+  end if;
+end $$;
 commit;

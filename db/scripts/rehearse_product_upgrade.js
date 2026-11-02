@@ -18,6 +18,8 @@ const ROLE_NAMES = [...REQUIRED_RUNTIME_ROLES, 'sms_learning_worker'];
 const COMMAND_TIMEOUT_MS = 5 * 60 * 1000;
 const STATEMENT_TIMEOUT_MS = 120000;
 const BATCH_SIZE = 1000;
+const PILOT_PAUSE_MIGRATION = '20261025232400_pause_gemini_sms_queue_until_pilot.sql';
+const PILOT_PAUSE_SHA256 = 'b049cd5e6f19d778f9e43d3b8912ad32313281be8ab1a06330f8bf99b4c2117f';
 const REHEARSAL_STAGES = new Set(['preflight', 'apply', 'replay']);
 const SAFE_FAILURE_CATEGORIES = new Set([
   'invalid_target', 'restore_attestation_required', 'reviewed_baseline_required',
@@ -278,6 +280,41 @@ function assertOriginalTablesPreserved(before, after) {
   }
 }
 
+// A reviewed forward migration intentionally updates one operational flag.
+// Every other flag and every other original field must remain identical. This
+// opt-in is bound to the exact SQL, not a generic table/column exclusion.
+function assertReviewedPilotPause(beforeFlags, afterFlags, beforeLedger, afterLedger, dbDir) {
+  const filename = path.join(dbDir, 'supabase/migrations', PILOT_PAUSE_MIGRATION);
+  const digest = crypto.createHash('sha256').update(fs.readFileSync(filename)).digest('hex');
+  const applied = afterLedger.find(row => row.filename === PILOT_PAUSE_MIGRATION);
+  if (digest !== PILOT_PAUSE_SHA256 ||
+      beforeLedger.some(row => row.filename === PILOT_PAUSE_MIGRATION) ||
+      applied?.checksum !== PILOT_PAUSE_SHA256 ||
+      !Array.isArray(beforeFlags) || !Array.isArray(afterFlags) ||
+      beforeFlags.length !== afterFlags.length) throw rehearsalError('table_data_changed');
+  const previous = new Map(beforeFlags.map(row => [row.key, row]));
+  const current = new Map(afterFlags.map(row => [row.key, row]));
+  if (previous.size !== beforeFlags.length || current.size !== afterFlags.length ||
+      !previous.has('sms_ai_queue_enabled')) throw rehearsalError('table_data_changed');
+  for (const [key, row] of previous) {
+    const updated = current.get(key);
+    if (!updated) throw rehearsalError('table_data_changed');
+    if (key !== 'sms_ai_queue_enabled') {
+      if (JSON.stringify(row) !== JSON.stringify(updated)) throw rehearsalError('table_data_changed');
+      continue;
+    }
+    const allowed = new Set(['is_enabled', 'rollout_percent', 'description', 'updated_at']);
+    if (updated.is_enabled !== false || updated.rollout_percent !== 0 ||
+        updated.description !== 'Gemini SMS pilot paused pending explicit provider and privacy acceptance' ||
+        !Number.isFinite(new Date(updated.updated_at).getTime()) ||
+        Object.keys(row).length !== Object.keys(updated).length ||
+        Object.keys(row).some(column => !Object.hasOwn(updated, column) ||
+          (!allowed.has(column) && JSON.stringify(row[column]) !== JSON.stringify(updated[column])))) {
+      throw rehearsalError('table_data_changed');
+    }
+  }
+}
+
 function assertRuntimeRolesPreserved(beforeRoles, afterRoles) {
   const before = new Map(beforeRoles.map(row => [row.rolname, row]));
   const after = new Map(afterRoles.map(row => [row.rolname, row]));
@@ -389,6 +426,9 @@ async function runProductUpgrade(options = {}) {
   try {
     await client.connect?.();
     const before = await captureProductState(client, { fingerprintTable: options.fingerprintTable });
+    const reviewPilotPause = env.RESTORE_REVIEW_SMS_PILOT_PAUSE === 'REVIEW_EXACT_PAUSE_MIGRATION';
+    const beforeFlags = reviewPilotPause
+      ? (await client.query('SELECT * FROM public.feature_flags ORDER BY key')).rows : null;
     const invoke = options.runMigration || (async (command, migrationEnv, phase) => {
       const args = command === '--check' ? [migrationFile, '--check'] : [migrationFile];
       await runBounded(process.execPath, args, { env: migrationEnv, timeoutMs: options.commandTimeoutMs, phase });
@@ -399,7 +439,17 @@ async function runProductUpgrade(options = {}) {
 
     const originalColumns = new Map([...before.tables].map(([key, table]) => [key, table.columns]));
     const after = await captureProductState(client, { fingerprintTable: options.fingerprintTable, originalColumns });
-    assertOriginalTablesPreserved(before, after);
+    let preservationState = after;
+    if (reviewPilotPause) {
+      const afterFlags = (await client.query('SELECT * FROM public.feature_flags ORDER BY key')).rows;
+      assertReviewedPilotPause(beforeFlags, afterFlags, before.ledger, after.ledger, dbDir);
+      const key = tableKey('public', 'feature_flags');
+      if (!before.fingerprints.has(key) || !after.fingerprints.has(key)) throw rehearsalError('table_data_changed');
+      preservationState = { ...after, fingerprints: new Map(after.fingerprints) };
+      preservationState.fingerprints.set(key, before.fingerprints.get(key));
+      options.log?.('CONFIGURATION_REVIEW=passed migration=sms_pilot_pause flags_changed=1');
+    }
+    assertOriginalTablesPreserved(before, preservationState);
     assertRuntimeRolesPreserved(before.roles, after.roles);
     const ledgerEntriesVerified = assertProductLedger(after.ledger, migrationInventory, dbDir);
     const summary = {
@@ -442,6 +492,7 @@ module.exports = {
   hashTableRowsWithCursor,
   captureProductState,
   assertOriginalTablesPreserved,
+  assertReviewedPilotPause,
   assertRuntimeRolesPreserved,
   assertProductLedger,
   runBounded,

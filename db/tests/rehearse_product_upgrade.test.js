@@ -14,11 +14,43 @@ const {
   safeProductMigrationCategory,
   runBounded,
   assertOriginalTablesPreserved,
+  assertReviewedPilotPause,
   assertRuntimeRolesPreserved,
   assertProductLedger,
   captureProductState,
   runProductUpgrade,
 } = require('../scripts/rehearse_product_upgrade');
+
+test('reviewed pilot pause accepts only its exact configuration transition', () => {
+  const dbDir = path.resolve(__dirname, '..');
+  const name = '20261025232400_pause_gemini_sms_queue_until_pilot.sql';
+  const checksum = 'b049cd5e6f19d778f9e43d3b8912ad32313281be8ab1a06330f8bf99b4c2117f';
+  const original = [
+    { key: 'sms_ai_queue_enabled', is_enabled: true, rollout_percent: 100,
+      description: 'previous pilot', min_app_version: null, updated_by: null,
+      updated_at: '2026-10-25T00:00:00Z' },
+    { key: 'unrelated', is_enabled: false, rollout_percent: 0 },
+  ];
+  const expected = structuredClone(original);
+  Object.assign(expected[0], { is_enabled: false, rollout_percent: 0,
+    description: 'Gemini SMS pilot paused pending explicit provider and privacy acceptance',
+    updated_at: '2026-11-02T00:00:00Z' });
+  const ledger = [{ filename: name, checksum }];
+  assert.doesNotThrow(() => assertReviewedPilotPause(original, expected, [], ledger, dbDir));
+  for (const mutate of [
+    rows => { rows[0].is_enabled = true; },
+    rows => { rows[0].rollout_percent = 1; },
+    rows => { rows[0].updated_by = 'different-user'; },
+    rows => { rows[1].is_enabled = true; },
+    rows => { rows.push({ key: 'additional' }); },
+    rows => { rows[0].description = 'different policy'; },
+  ]) {
+    const changed = structuredClone(expected); mutate(changed);
+    assert.throws(() => assertReviewedPilotPause(original, changed, [], ledger, dbDir), /table_data_changed/);
+  }
+  assert.throws(() => assertReviewedPilotPause(original, expected, ledger, ledger, dbDir), /table_data_changed/);
+  assert.throws(() => assertReviewedPilotPause(original, expected, [], [{ filename: name, checksum: '0'.repeat(64) }], dbDir), /table_data_changed/);
+});
 
 function fixture(t) {
   const root = fs.mkdtempSync(path.join(os.tmpdir(), 'product-upgrade-rehearsal-test-'));

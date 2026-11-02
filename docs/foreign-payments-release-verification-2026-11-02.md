@@ -144,3 +144,33 @@ any adoption. Earlier local recovery evidence covered 97 historical migrations,
 not the whole current 123-entry baseline. A fresh encrypted paired local export
 was saved as set `d9e43b4819abcb22b546a504ff98138e`; its restore outcome must be
 recorded separately and is not inferred from export completion.
+
+Read-only run [41457270613](https://github.com/true1ck/pandapay/actions/runs/41457270613)
+completed successfully using the corrected transport. The existing protected
+baseline hash matched, with `applied=123 legacy=123 pending=21`, and the current
+database comparison passed without adopting checksums. A separately captured
+local read-only fingerprint matched the same exact baseline bytes.
+
+The fresh paired export was actually restored on an independent RAM-backed
+Supabase PostgreSQL 17 clone. Exact source grantors were supplied after checking
+their membership projections against the encrypted archive; upgrade SQL ran as
+the restored source administrator rather than an arbitrary clone superuser.
+The rehearsal exposed missing temporary SET grants in three pending notification
+and feedback migrations, plus an unnecessary privileged ALTER ROLE statement.
+The fixes preserve and restore grantor-specific membership options and reject
+unsafe pre-existing capability roles. They do not modify any already-applied
+migration in the 123-entry baseline.
+
+Upgrade and replay passed with **189 original product tables**, **144 verified
+checksummed migration entries**, and both required runtime roles preserved.
+The only intentional original-table value change is the existing forward
+Gemini pilot-pause migration. Its opt-in review is bound to the exact SQL hash,
+one flag and four specified fields; all other original values remain checked.
+Regression tests reject unrelated flag changes and incorrect pause values.
+The contact upgrade/replay preserved **14 account IDs** and seven auth tables,
+archiving the two phone claims covered by the existing exact approved proposal.
+All application recovery/key checks passed, and the disposable cluster was
+removed. Private diagnostics were removed from release source. Protected review
+evidence is retained with the local recovery archive. This rehearsal itself
+performed no production mutations. Migration/rehearsal unit checks: **28 passed**;
+backup-flow checks: **46 passed**.
