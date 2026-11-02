@@ -177,20 +177,16 @@ jobs:
               --write-baseline /reviewed/product.json
           fi
 
-          python3 - "$baseline" <<'PY'
-          import hashlib, json, pathlib, sys
-          path = pathlib.Path(sys.argv[1])
-          value = json.loads(path.read_text())
-          if value.get('format') != 'pandapay-reviewed-product-baseline-v2':
-              raise SystemExit('unexpected baseline format')
-          ledger = value.get('ledger')
-          if not isinstance(ledger, list) or not ledger:
-              raise SystemExit('baseline ledger is empty or malformed')
-          print('baseline_format=' + value['format'])
-          print('baseline_ledger_entries=' + str(len(ledger)))
-          print('baseline_sha256=' + hashlib.sha256(path.read_bytes()).hexdigest())
-          print('adoption=not_configured')
-          PY
+          test -s "$baseline"
+          baseline_format="$(grep -o '"format":"[^"]*"' "$baseline" | head -1 | cut -d'"' -f4)"
+          test "$baseline_format" = 'pandapay-reviewed-product-baseline-v2'
+          baseline_ledger_entries="$(grep -o '\["[^"]*","[0-9a-f]\{64\}"\]' "$baseline" | wc -l | tr -d ' ')"
+          test "$baseline_ledger_entries" -gt 0
+          printf 'baseline_format=%s\n' "$baseline_format"
+          printf 'baseline_ledger_entries=%s\n' "$baseline_ledger_entries"
+          printf 'baseline_bytes=%s\n' "$(wc -c < "$baseline" | tr -d ' ')"
+          printf 'baseline_sha256=%s\n' "$(sha256sum "$baseline" | awk '{print $1}')"
+          printf '%s\n' 'adoption=not_configured'
           REMOTE
 
   verify:
