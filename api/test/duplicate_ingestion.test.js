@@ -1,7 +1,6 @@
 const test = require('node:test');
 const assert = require('node:assert/strict');
 const fs = require('node:fs');
-const selfTransfers = require('../src/self_transfer');
 const { parseSmsAgainstPatterns, isBankAccountMessage } = require('../src/sms_parser');
 const {bestDuplicate, MAX_CROSS_SOURCE_CANDIDATE_MS, AMOUNT_TOLERANCE_INR} = require('../src/transaction_dedup');
 const source = fs.readFileSync(require.resolve('../src/index.js'), 'utf8');
@@ -140,10 +139,10 @@ test('replay never renames a merchant the parser already named', async () => {
 
 test('SMS and email imports keep unresolved generic cards cardless despite a selected credit card', async () => {
   const importMessage = new Function(
-    'selfTransfers', 'extractVpa', 'extractMcc', 'isBankAccountMessage', 'importResolvers', 'insertTransactionAndUpdateState',
+    'extractVpa', 'extractMcc', 'isBankAccountMessage', 'importResolvers', 'insertTransactionAndUpdateState', 'selfTransfers',
     `${extract('importParsedMessage', 'reconcileArchivedCardReferences')} return importParsedMessage;`,
   )(
-    selfTransfers, () => null, () => null, isBankAccountMessage,
+    () => null, () => null, isBankAccountMessage,
     {
       userCardMatchesInstrument: async (_client, _user, _card, instrument) => {
         assert.equal(instrument, 'credit_card', 'untyped cards must not enter card matching');
@@ -155,7 +154,7 @@ test('SMS and email imports keep unresolved generic cards cardless despite a sel
         return null;
       },
     },
-    async (_client, _user, args) => ({ status: 201, transaction: args }),
+    async (_client, _user, args) => ({ status: 201, transaction: args }), require('../src/self_transfer'),
   );
   const body = 'INR 250 spent on ICICI Bank Card XX7788 at SWIGGY on 05-Aug-26.';
   const unknown = parseSmsAgainstPatterns([], { sender: 'ICICIB', body });
@@ -185,10 +184,10 @@ test('SMS and email imports keep unresolved generic cards cardless despite a sel
 test('card imports use saved suffix identity, never a stale selection or contradictory card type', async () => {
   const resolvers = require('../src/import_resolvers');
   const importMessage = new Function(
-    'selfTransfers', 'extractVpa', 'extractMcc', 'isBankAccountMessage', 'importResolvers', 'insertTransactionAndUpdateState',
+    'extractVpa', 'extractMcc', 'isBankAccountMessage', 'importResolvers', 'insertTransactionAndUpdateState', 'selfTransfers',
     `${extract('importParsedMessage', 'reconcileArchivedCardReferences')} return importParsedMessage;`,
-  )(selfTransfers, () => null, () => null, isBankAccountMessage, resolvers,
-    async (_client, _user, args) => ({ status: 201, transaction: args }));
+  )(() => null, () => null, isBankAccountMessage, resolvers,
+    async (_client, _user, args) => ({ status: 201, transaction: args }), require('../src/self_transfer'));
   const credit = { id: 'credit', last4: '7788', card_type: 'credit', issuer: 'issuer-a' };
   const debit = { id: 'debit', last4: '7788', card_type: 'debit', issuer: 'issuer-a' };
   const stale = { ...credit, id: 'stale', last4: '9999', issuer: 'issuer-b' };
@@ -245,12 +244,12 @@ test('card imports use saved suffix identity, never a stale selection or contrad
 
 test('untyped account evidence or missing card context never uses a saved card or caller selection', async () => {
   const importMessage = new Function(
-    'selfTransfers', 'extractVpa', 'extractMcc', 'isBankAccountMessage', 'importResolvers', 'insertTransactionAndUpdateState',
+    'extractVpa', 'extractMcc', 'isBankAccountMessage', 'importResolvers', 'insertTransactionAndUpdateState', 'selfTransfers',
     `${extract('importParsedMessage', 'reconcileArchivedCardReferences')} return importParsedMessage;`,
-  )(selfTransfers, () => null, () => null, isBankAccountMessage, {
+  )(() => null, () => null, isBankAccountMessage, {
     resolveUserCardForImport: async () => assert.fail('no physical-card identity'),
     userCardMatchesInstrument: async () => assert.fail('must not trust the selected card'),
-  }, async (_client, _user, args) => ({ transaction: args }));
+  }, async (_client, _user, args) => ({ transaction: args }), require('../src/self_transfer'));
   for (const [rawText, fields] of [
     ['INR 250 debited from account 7788 for card services.', { last4: '7788', accountLast4: '7788' }],
     ['INR 250 spent at SWIGGY.', { last4: '7788' }],
