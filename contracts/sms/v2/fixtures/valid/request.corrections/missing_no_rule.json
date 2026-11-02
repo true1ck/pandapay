@@ -1,0 +1,14 @@
+{
+  "sourceKey": "sms:synthetic:0777",
+  "factIds": [],
+  "correctionKind": "missing",
+  "corrected": {},
+  "trace": {
+    "appVersion": "1.0.0+1",
+    "engineVersion": "2.0.0",
+    "bundleVersion": 1,
+    "ruleId": null,
+    "ruleVersion": null,
+    "stage": "extraction"
+  }
+}

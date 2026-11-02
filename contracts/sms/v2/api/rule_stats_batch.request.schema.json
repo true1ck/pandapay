@@ -1,0 +1,65 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://pandapay.app/contracts/sms/v2/api/rule_stats_batch.request.schema.json",
+  "title": "POST /sms/v2/rule-stats:batch request",
+  "type": "object",
+  "required": [
+    "day",
+    "appVersion",
+    "bundleVersion",
+    "stats"
+  ],
+  "additionalProperties": false,
+  "properties": {
+    "day": {
+      "$ref": "../common.schema.json#/$defs/date"
+    },
+    "appVersion": {
+      "type": "string",
+      "minLength": 1
+    },
+    "bundleVersion": {
+      "type": "integer",
+      "minimum": 0
+    },
+    "stats": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "required": [
+          "ruleId",
+          "ruleVersion",
+          "hits",
+          "toReview",
+          "corrected"
+        ],
+        "additionalProperties": false,
+        "properties": {
+          "ruleId": {
+            "type": "string",
+            "minLength": 1
+          },
+          "ruleVersion": {
+            "type": "integer",
+            "minimum": 1
+          },
+          "hits": {
+            "type": "integer",
+            "minimum": 0,
+            "x-code": "request.rule_stats_batch.counter_invalid"
+          },
+          "toReview": {
+            "type": "integer",
+            "minimum": 0,
+            "x-code": "request.rule_stats_batch.counter_invalid"
+          },
+          "corrected": {
+            "type": "integer",
+            "minimum": 0,
+            "x-code": "request.rule_stats_batch.counter_invalid"
+          }
+        }
+      }
+    }
+  }
+}

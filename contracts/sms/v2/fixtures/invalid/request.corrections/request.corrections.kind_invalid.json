@@ -1,0 +1,20 @@
+{
+  "sourceKey": "sms:synthetic:0001",
+  "factIds": [
+    "b0461c8d7702e3af18830fc4a8009c7243f03fb4424e2ac905fcf291a5ebb659"
+  ],
+  "eventId": "b0461c8d7702e3af18830fc4a8009c7243f03fb4424e2ac905fcf291a5ebb659",
+  "correctionKind": "vibes",
+  "corrected": {
+    "category": "groceries"
+  },
+  "trace": {
+    "appVersion": "1.0.0+1",
+    "engineVersion": "2.0.0",
+    "bundleVersion": 1,
+    "ruleId": "HDFC-CARD-SPEND-03",
+    "ruleVersion": 4,
+    "stage": "category"
+  },
+  "redactedTemplate": "Rs.<AMT> spent at <MERCHANT>"
+}

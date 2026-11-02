@@ -1,0 +1,38 @@
+{
+  "contractVersion": "2.0",
+  "factId": "6b2107c7c16fec96e460fc330c00546d911421e38ea60c529acd34eaadd45b03",
+  "sourceKey": "sms:synthetic:0026",
+  "factType": "instrument_hint",
+  "observedAt": "2026-11-01T07:00:20Z",
+  "occurredAt": "2026-11-01T07:00:11Z",
+  "instrument": {
+    "kind": "credit_card",
+    "issuerSlug": "hdfc",
+    "maskDigits": "9012",
+    "maskLength": 16,
+    "productName": null,
+    "raw": "XX9012"
+  },
+  "counterparty": null,
+  "amounts": [],
+  "references": {},
+  "attrs": {
+    "hint": "bogus"
+  },
+  "provenance": {
+    "engine": "rules",
+    "ruleId": "SYN-RULE-INSTRUMENT_HINT",
+    "ruleVersion": 1,
+    "bundleVersion": 1,
+    "engineVersion": "2.0.0",
+    "appVersion": "1.0.0+1"
+  },
+  "evidence": [
+    {
+      "field": "amt",
+      "start": 0,
+      "end": 10
+    }
+  ],
+  "confidence": 0.99
+}

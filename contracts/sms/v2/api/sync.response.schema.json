@@ -1,0 +1,128 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://pandapay.app/contracts/sms/v2/api/sync.response.schema.json",
+  "title": "GET /sms/v2/sync response",
+  "type": "object",
+  "required": [
+    "cursor",
+    "instruments",
+    "events",
+    "ledger",
+    "aiResults",
+    "corrections",
+    "latestBundleVersion"
+  ],
+  "additionalProperties": false,
+  "properties": {
+    "cursor": {
+      "type": "string",
+      "minLength": 1
+    },
+    "instruments": {
+      "type": "array",
+      "items": {
+        "$ref": "../instrument.schema.json"
+      }
+    },
+    "events": {
+      "type": "array",
+      "items": {
+        "$ref": "../event.schema.json"
+      }
+    },
+    "ledger": {
+      "type": "array",
+      "items": {
+        "$ref": "../ledger_entry.schema.json"
+      }
+    },
+    "aiResults": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "required": [
+          "templateHash",
+          "status"
+        ],
+        "additionalProperties": false,
+        "properties": {
+          "templateHash": {
+            "$ref": "../common.schema.json#/$defs/sha256"
+          },
+          "status": {
+            "type": "string",
+            "enum": [
+              "pending",
+              "ready",
+              "rejected"
+            ],
+            "x-code": "response.sync.ai_status_invalid"
+          },
+          "ruleId": {
+            "type": "string",
+            "minLength": 1
+          },
+          "ruleVersion": {
+            "type": "integer",
+            "minimum": 1
+          }
+        }
+      }
+    },
+    "corrections": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "required": [
+          "caseId",
+          "sourceKey",
+          "status",
+          "decision",
+          "reason"
+        ],
+        "additionalProperties": false,
+        "properties": {
+          "caseId": {
+            "type": "string",
+            "minLength": 1
+          },
+          "sourceKey": {
+            "type": "string",
+            "minLength": 1
+          },
+          "status": {
+            "type": "string",
+            "enum": [
+              "open",
+              "decided"
+            ],
+            "x-code": "response.sync.correction_status_invalid"
+          },
+          "decision": {
+            "type": [
+              "string",
+              "null"
+            ],
+            "enum": [
+              "data_fix",
+              "code_fix",
+              "not_a_bug",
+              null
+            ],
+            "x-code": "response.sync.correction_decision_invalid"
+          },
+          "reason": {
+            "type": [
+              "string",
+              "null"
+            ]
+          }
+        }
+      }
+    },
+    "latestBundleVersion": {
+      "type": "integer",
+      "minimum": 0
+    }
+  }
+}

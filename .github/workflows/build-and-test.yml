@@ -125,6 +125,15 @@ jobs:
           dart pub get
           dart test
 
+      # SMS pipeline v2 contracts (WP-01): the Dart and Node validators must
+      # agree on every fixture in contracts/sms/v2. The Dart suite already ran
+      # above as part of `dart test`; it is repeated by name so a contracts
+      # failure is easy to find, followed by the Node suite.
+      - name: Contracts
+        run: |
+          (cd packages/pandapay_domain && dart test test/sms_v2/contract_fixtures_test.dart)
+          (cd api && npm ci && node --test test/sms_v2/contracts.test.js)
+
       - name: App dependencies
         working-directory: app
         run: flutter pub get

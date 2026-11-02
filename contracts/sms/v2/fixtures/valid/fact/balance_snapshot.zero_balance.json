@@ -1,0 +1,44 @@
+{
+  "contractVersion": "2.0",
+  "factId": "7ddcdd283516bb3e4e016718b41a3dd6584a8406babc8493cb683972a153b154",
+  "sourceKey": "sms:synthetic:0012",
+  "factType": "balance_snapshot",
+  "observedAt": "2026-11-01T07:00:20Z",
+  "occurredAt": "2026-11-01T07:00:11Z",
+  "instrument": {
+    "kind": "bank_account",
+    "issuerSlug": "sbi",
+    "maskDigits": "1234",
+    "maskLength": null,
+    "productName": null,
+    "raw": "XX1234"
+  },
+  "counterparty": null,
+  "amounts": [
+    {
+      "role": "available_balance",
+      "minor": 0,
+      "unit": "INR"
+    }
+  ],
+  "references": {},
+  "attrs": {
+    "asOf": "2026-11-01T07:00:11Z"
+  },
+  "provenance": {
+    "engine": "rules",
+    "ruleId": "SYN-RULE-BALANCE_SNAPSHOT",
+    "ruleVersion": 1,
+    "bundleVersion": 1,
+    "engineVersion": "2.0.0",
+    "appVersion": "1.0.0+1"
+  },
+  "evidence": [
+    {
+      "field": "amt",
+      "start": 0,
+      "end": 10
+    }
+  ],
+  "confidence": 0.99
+}

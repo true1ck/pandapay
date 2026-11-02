@@ -1,0 +1,43 @@
+{
+  "contractVersion": "2.0",
+  "factId": "a58b2e516cccd81fb603fea35bd59379187af2ec73ffe36f11e928bc265e4596",
+  "sourceKey": "sms:synthetic:0019",
+  "factType": "bill_due",
+  "observedAt": "2026-11-01T07:00:20Z",
+  "occurredAt": "2026-11-01T07:00:11Z",
+  "instrument": null,
+  "counterparty": {
+    "name": "SYNTH FIBER",
+    "vpa": null,
+    "kind": "merchant",
+    "accountMask": null
+  },
+  "amounts": [
+    {
+      "role": "due_total",
+      "minor": 119900,
+      "unit": "INR"
+    }
+  ],
+  "references": {},
+  "attrs": {
+    "dueDate": "2026-11-10",
+    "billerName": "SYNTH FIBER"
+  },
+  "provenance": {
+    "engine": "rules",
+    "ruleId": "SYN-RULE-BILL_DUE",
+    "ruleVersion": 1,
+    "bundleVersion": 1,
+    "engineVersion": "2.0.0",
+    "appVersion": "1.0.0+1"
+  },
+  "evidence": [
+    {
+      "field": "amt",
+      "start": 0,
+      "end": 10
+    }
+  ],
+  "confidence": 0.99
+}

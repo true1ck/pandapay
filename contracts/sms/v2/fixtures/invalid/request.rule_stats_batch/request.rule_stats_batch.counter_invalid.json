@@ -1,0 +1,14 @@
+{
+  "day": "2026-11-01",
+  "appVersion": "1.0.0+1",
+  "bundleVersion": 1,
+  "stats": [
+    {
+      "ruleId": "HDFC-CARD-SPEND-03",
+      "ruleVersion": 4,
+      "hits": -1,
+      "toReview": 2,
+      "corrected": 1
+    }
+  ]
+}

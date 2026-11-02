@@ -1,0 +1,15 @@
+{
+  "eventId": "c998c4934b89271bee6211ae55c5879aaf22422d7a035362b027ae71fe6f4b39",
+  "type": "card_bill_payment",
+  "status": "awaiting_leg",
+  "legs": [
+    {
+      "factId": "c998c4934b89271bee6211ae55c5879aaf22422d7a035362b027ae71fe6f4b39",
+      "role": "debit_leg"
+    }
+  ],
+  "linkRuleId": "LINK-CARD-BILL",
+  "confidence": 0.6,
+  "occurredAt": "2026-11-01T07:00:11Z",
+  "amountMinor": 450000
+}

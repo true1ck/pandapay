@@ -1,0 +1,16 @@
+{
+  "schema": "pandapay.sms.rules/2",
+  "bundleVersion": 0,
+  "createdAt": "2026-11-01T00:00:00Z",
+  "expiresAt": "2099-01-01T00:00:00Z",
+  "minEngineVersion": "2.0.0",
+  "taxonomyVersion": 1,
+  "senders": [],
+  "ignoreRules": [],
+  "rules": [],
+  "counterpartyPurposes": [],
+  "linkRules": [],
+  "categoryRules": [],
+  "merchantAliases": [],
+  "signature": null
+}

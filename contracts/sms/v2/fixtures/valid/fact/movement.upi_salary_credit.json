@@ -1,0 +1,53 @@
+{
+  "contractVersion": "2.0",
+  "factId": "cad25954b6aebab22b20de9fc1dd7c15f8cbe04868142f722eab251929a2268a",
+  "sourceKey": "sms:synthetic:0002",
+  "factType": "movement",
+  "observedAt": "2026-11-01T07:00:20Z",
+  "occurredAt": "2026-11-01T07:00:11Z",
+  "instrument": {
+    "kind": "bank_account",
+    "issuerSlug": "sbi",
+    "maskDigits": "1234",
+    "maskLength": null,
+    "productName": null,
+    "raw": "XX1234"
+  },
+  "counterparty": {
+    "name": "ACME PAYROLL",
+    "vpa": null,
+    "kind": "merchant",
+    "accountMask": null
+  },
+  "amounts": [
+    {
+      "role": "posted",
+      "minor": 8500000,
+      "unit": "INR"
+    }
+  ],
+  "references": {
+    "neftUtr": "SYNUTR0001"
+  },
+  "attrs": {
+    "direction": "credit",
+    "purpose": "salary",
+    "rail": "neft"
+  },
+  "provenance": {
+    "engine": "rules",
+    "ruleId": "SYN-RULE-MOVEMENT",
+    "ruleVersion": 1,
+    "bundleVersion": 1,
+    "engineVersion": "2.0.0",
+    "appVersion": "1.0.0+1"
+  },
+  "evidence": [
+    {
+      "field": "amt",
+      "start": 0,
+      "end": 10
+    }
+  ],
+  "confidence": 0.99
+}

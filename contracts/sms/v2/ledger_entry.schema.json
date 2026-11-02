@@ -1,0 +1,197 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://pandapay.app/contracts/sms/v2/ledger_entry.schema.json",
+  "title": "Ledger entry",
+  "type": "object",
+  "required": [
+    "entryId",
+    "eventId",
+    "from",
+    "to",
+    "amountMinor",
+    "unit",
+    "occurredAt",
+    "category",
+    "categorySource",
+    "countsAsTransaction",
+    "isSpend",
+    "isIncome",
+    "isInvestment"
+  ],
+  "properties": {
+    "entryId": {
+      "type": "string",
+      "pattern": "^[0-9a-f]{64}$",
+      "x-code": "ledger.id_invalid"
+    },
+    "eventId": {
+      "type": "string",
+      "pattern": "^[0-9a-f]{64}$",
+      "x-code": "ledger.id_invalid"
+    },
+    "from": {
+      "oneOf": [
+        {
+          "type": "object",
+          "required": [
+            "instrumentId"
+          ],
+          "properties": {
+            "instrumentId": {
+              "type": "string",
+              "pattern": "^[0-9a-f]{8}-[0-9a-f]{4}-4[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$"
+            }
+          },
+          "additionalProperties": false
+        },
+        {
+          "type": "object",
+          "required": [
+            "external"
+          ],
+          "properties": {
+            "external": {
+              "type": "string",
+              "minLength": 1
+            }
+          },
+          "additionalProperties": false
+        },
+        {
+          "type": "object",
+          "required": [
+            "ownUnresolved"
+          ],
+          "properties": {
+            "ownUnresolved": {
+              "type": "string",
+              "enum": [
+                "bank_account",
+                "credit_card",
+                "debit_card",
+                "prepaid_card",
+                "wallet",
+                "broker",
+                "loan",
+                "pay_later"
+              ]
+            }
+          },
+          "additionalProperties": false
+        }
+      ],
+      "x-codes": {
+        "oneOf": "ledger.endpoint_invalid"
+      }
+    },
+    "to": {
+      "oneOf": [
+        {
+          "type": "object",
+          "required": [
+            "instrumentId"
+          ],
+          "properties": {
+            "instrumentId": {
+              "type": "string",
+              "pattern": "^[0-9a-f]{8}-[0-9a-f]{4}-4[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$"
+            }
+          },
+          "additionalProperties": false
+        },
+        {
+          "type": "object",
+          "required": [
+            "external"
+          ],
+          "properties": {
+            "external": {
+              "type": "string",
+              "minLength": 1
+            }
+          },
+          "additionalProperties": false
+        },
+        {
+          "type": "object",
+          "required": [
+            "ownUnresolved"
+          ],
+          "properties": {
+            "ownUnresolved": {
+              "type": "string",
+              "enum": [
+                "bank_account",
+                "credit_card",
+                "debit_card",
+                "prepaid_card",
+                "wallet",
+                "broker",
+                "loan",
+                "pay_later"
+              ]
+            }
+          },
+          "additionalProperties": false
+        }
+      ],
+      "x-codes": {
+        "oneOf": "ledger.endpoint_invalid"
+      }
+    },
+    "amountMinor": {
+      "type": "integer",
+      "minimum": 1,
+      "x-code": "ledger.amount_invalid"
+    },
+    "unit": {
+      "type": "string",
+      "enum": [
+        "INR",
+        "POINTS"
+      ],
+      "x-code": "ledger.unit_invalid"
+    },
+    "occurredAt": {
+      "$ref": "common.schema.json#/$defs/utcTime"
+    },
+    "category": {
+      "type": [
+        "string",
+        "null"
+      ],
+      "pattern": "^[a-z][a-z0-9_]*$",
+      "x-code": "ledger.category_invalid"
+    },
+    "categorySource": {
+      "type": [
+        "string",
+        "null"
+      ],
+      "enum": [
+        "user",
+        "shared",
+        "catalogue",
+        "mcc",
+        "history_confirmed",
+        "ai",
+        "default",
+        null
+      ],
+      "x-code": "ledger.category_source_invalid"
+    },
+    "countsAsTransaction": {
+      "type": "boolean"
+    },
+    "isSpend": {
+      "type": "boolean"
+    },
+    "isIncome": {
+      "type": "boolean"
+    },
+    "isInvestment": {
+      "type": "boolean"
+    }
+  },
+  "additionalProperties": false
+}

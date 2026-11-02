@@ -1,0 +1,364 @@
+{
+  "schema": "pandapay.sms.rules/2",
+  "bundleVersion": 1,
+  "createdAt": "2026-11-20T00:00:00Z",
+  "expiresAt": "2026-11-27T00:00:00Z",
+  "minEngineVersion": "2.0.0",
+  "taxonomyVersion": 1,
+  "senders": [
+    {
+      "brand": "HDFCBK",
+      "issuerSlug": "hdfc",
+      "issuerKind": "bank",
+      "aliases": [
+        "HDFCCC"
+      ]
+    },
+    {
+      "brand": "PAYTM",
+      "issuerSlug": "paytm",
+      "issuerKind": "wallet",
+      "aliases": [],
+      "walletSpendVisibility": "sms"
+    },
+    {
+      "brand": "AMAZONPAY",
+      "issuerSlug": "amazonpay",
+      "issuerKind": "wallet",
+      "aliases": [],
+      "walletSpendVisibility": "partial"
+    },
+    {
+      "brand": "JUSPAY",
+      "issuerSlug": null,
+      "issuerKind": "gateway",
+      "aliases": []
+    }
+  ],
+  "ignoreRules": [
+    {
+      "id": "IGN-LIMIT-OFFER",
+      "senders": [
+        "*"
+      ],
+      "pattern": "eligible for an? (?:credit )?limit (?:increase|enhancement)",
+      "flags": "i",
+      "reason": "promotion"
+    }
+  ],
+  "rules": [
+    {
+      "id": "HDFC-CARD-SPEND-03",
+      "version": 4,
+      "family": "card_spend",
+      "senders": [
+        "HDFCBK"
+      ],
+      "priority": 500,
+      "match": {
+        "pattern": "^(?:rs\\.?|inr)\\s*(?<amt>[\\d,]+(?:\\.\\d{1,2})?)\\s+spent on hdfc bank card x(?<mask>\\d{4}) at (?<merchant>.+?) on (?<date>\\d{4}-\\d{2}-\\d{2}:\\d{2}:\\d{2}:\\d{2})\\.\\s*avl lmt:\\s*(?:rs\\.?|inr)\\s*(?<avl>[\\d,]+(?:\\.\\d{1,2})?)",
+        "flags": "i",
+        "requireAll": [
+          "spent"
+        ],
+        "rejectAny": [
+          "declined",
+          "failed",
+          "will be debited"
+        ]
+      },
+      "emit": [
+        {
+          "factType": "movement",
+          "attrs": {
+            "direction": "debit",
+            "purpose": "purchase",
+            "rail": "card"
+          },
+          "amounts": [
+            {
+              "role": "posted",
+              "from": "amt",
+              "unit": "INR"
+            }
+          ],
+          "occurredAt": {
+            "from": "date",
+            "formats": [
+              "yyyy-MM-dd:HH:mm:ss"
+            ]
+          },
+          "instrument": {
+            "kind": "credit_card",
+            "issuerSlug": "hdfc",
+            "maskFrom": "mask"
+          },
+          "counterparty": {
+            "nameFrom": "merchant",
+            "kind": "merchant",
+            "transforms": [
+              "sanitizeNarration"
+            ]
+          }
+        },
+        {
+          "factType": "balance_snapshot",
+          "amounts": [
+            {
+              "role": "available_credit",
+              "from": "avl",
+              "unit": "INR"
+            }
+          ],
+          "instrument": {
+            "sameAs": 0
+          },
+          "attrs": {
+            "asOf": {
+              "sameAs": 0,
+              "field": "occurredAt"
+            }
+          }
+        }
+      ],
+      "confidence": 0.99,
+      "examples": [
+        {
+          "sender": "VM-HDFCBK-S",
+          "body": "Rs.499.00 spent on HDFC Bank Card x5678 at SWIGGY on 2026-11-01:12:30:11. Avl Lmt: Rs.45,000.00",
+          "expectFactTypes": [
+            "movement",
+            "balance_snapshot"
+          ]
+        },
+        {
+          "sender": "VM-HDFCBK-S",
+          "body": "Txn of Rs.499.00 declined on HDFC Bank Card x5678 at SWIGGY",
+          "expectFactTypes": []
+        }
+      ],
+      "status": "active",
+      "createdBy": "baseline",
+      "updatedAt": "2026-11-20T00:00:00Z"
+    },
+    {
+      "id": "AI-PROV-0001",
+      "version": 1,
+      "family": "card_spend",
+      "senders": [
+        "HDFCBK"
+      ],
+      "priority": 100,
+      "match": {
+        "pattern": "^(?:rs\\.?|inr)\\s*(?<amt>[\\d,]+(?:\\.\\d{1,2})?)\\s+spent on hdfc bank card x(?<mask>\\d{4}) at (?<merchant>.+?) on (?<date>\\d{4}-\\d{2}-\\d{2}:\\d{2}:\\d{2}:\\d{2})\\.\\s*avl lmt:\\s*(?:rs\\.?|inr)\\s*(?<avl>[\\d,]+(?:\\.\\d{1,2})?)",
+        "flags": "i",
+        "requireAll": [
+          "spent"
+        ],
+        "rejectAny": [
+          "declined",
+          "failed",
+          "will be debited"
+        ],
+        "templateHash": "e87b8b915fc1917db35a25da9bc88d4d09bebf25018772da17a34d6e63838fc8"
+      },
+      "emit": [
+        {
+          "factType": "movement",
+          "attrs": {
+            "direction": "debit",
+            "purpose": "purchase",
+            "rail": "card"
+          },
+          "amounts": [
+            {
+              "role": "posted",
+              "from": "amt",
+              "unit": "INR"
+            }
+          ],
+          "occurredAt": {
+            "from": "date",
+            "formats": [
+              "yyyy-MM-dd:HH:mm:ss"
+            ]
+          },
+          "instrument": {
+            "kind": "credit_card",
+            "issuerSlug": "hdfc",
+            "maskFrom": "mask"
+          },
+          "counterparty": {
+            "nameFrom": "merchant",
+            "kind": "merchant",
+            "transforms": [
+              "sanitizeNarration"
+            ]
+          }
+        },
+        {
+          "factType": "balance_snapshot",
+          "amounts": [
+            {
+              "role": "available_credit",
+              "from": "avl",
+              "unit": "INR"
+            }
+          ],
+          "instrument": {
+            "sameAs": 0
+          },
+          "attrs": {
+            "asOf": {
+              "sameAs": 0,
+              "field": "occurredAt"
+            }
+          }
+        }
+      ],
+      "confidence": 0.99,
+      "examples": [
+        {
+          "sender": "VM-HDFCBK-S",
+          "body": "Rs.499.00 spent on HDFC Bank Card x5678 at SWIGGY on 2026-11-01:12:30:11. Avl Lmt: Rs.45,000.00",
+          "expectFactTypes": [
+            "movement",
+            "balance_snapshot"
+          ]
+        },
+        {
+          "sender": "VM-HDFCBK-S",
+          "body": "Txn of Rs.499.00 declined on HDFC Bank Card x5678 at SWIGGY",
+          "expectFactTypes": []
+        }
+      ],
+      "status": "provisional",
+      "createdBy": "ai:synthetic-model",
+      "updatedAt": "2026-11-20T00:00:00Z"
+    }
+  ],
+  "counterpartyPurposes": [
+    {
+      "id": "CPP-PAYTM-TOPUP",
+      "vpaPattern": "^add-money@paytm$",
+      "namePattern": null,
+      "purpose": "wallet_topup",
+      "targetInstrument": {
+        "kind": "wallet",
+        "issuerSlug": "paytm"
+      }
+    },
+    {
+      "id": "CPP-CRED",
+      "vpaPattern": "^cred\\.club@",
+      "namePattern": "^CRED(?: CLUB)?$",
+      "purpose": "card_payment",
+      "targetInstrument": {
+        "kind": "credit_card"
+      }
+    },
+    {
+      "id": "CPP-CHEQ",
+      "vpaPattern": "^cheq[\\w.-]*@",
+      "namePattern": "^CHEQ(?: DIGITAL)?",
+      "purpose": "card_payment",
+      "targetInstrument": {
+        "kind": "credit_card"
+      }
+    }
+  ],
+  "linkRules": [
+    {
+      "id": "LINK-CARD-BILL",
+      "eventType": "card_bill_payment",
+      "legs": [
+        {
+          "role": "debit_leg",
+          "match": {
+            "factType": "movement",
+            "direction": "debit",
+            "purpose": [
+              "card_payment"
+            ],
+            "instrumentKind": [
+              "bank_account"
+            ]
+          }
+        },
+        {
+          "role": "credit_leg",
+          "match": {
+            "factType": "movement",
+            "direction": "credit",
+            "purpose": [
+              "card_payment"
+            ],
+            "instrumentKind": [
+              "credit_card"
+            ]
+          }
+        }
+      ],
+      "join": {
+        "amountRole": "posted",
+        "amountTolerancePct": 0,
+        "windowHours": 72,
+        "reference": "prefer"
+      },
+      "singleLeg": "complete",
+      "priority": 100
+    },
+    {
+      "id": "LINK-RECEIPT",
+      "eventType": "purchase",
+      "legs": [
+        {
+          "role": "debit_leg",
+          "match": {
+            "factType": "movement",
+            "direction": "debit",
+            "evidenceOnly": false
+          }
+        },
+        {
+          "role": "duplicate_notice",
+          "match": {
+            "factType": "movement",
+            "evidenceOnly": true
+          }
+        }
+      ],
+      "join": {
+        "amountRole": "posted",
+        "windowHours": 72
+      },
+      "singleLeg": "complete",
+      "priority": 90
+    }
+  ],
+  "categoryRules": [
+    {
+      "merchantKey": "SWIGGY INSTAMART",
+      "match": "token",
+      "senders": [
+        "*"
+      ],
+      "context": [],
+      "category": "Food & Drink",
+      "priority": 900,
+      "source": "catalogue"
+    }
+  ],
+  "merchantAliases": [
+    {
+      "alias": "AMAZON PAY IN",
+      "merchantKey": "AMAZON",
+      "kind": "marketplace"
+    }
+  ],
+  "signature": {
+    "alg": "Ed25519",
+    "keyId": "sms-rules-2026-11",
+    "value": "c3ludGhldGljLXNpZ25hdHVyZS1ub3QtcmVhbA=="
+  }
+}

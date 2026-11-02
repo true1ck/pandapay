@@ -1,0 +1,30 @@
+{
+  "instrumentId": "3f9d5a52-1c0e-4b4e-9d57-6a7a1b0f2c11",
+  "kind": "credit_card",
+  "issuerSlug": "hdfc",
+  "maskDigits": "5678",
+  "maskLength": 16,
+  "displayName": "HDFC credit card ••5678",
+  "status": "detected",
+  "userCardId": "8a1b2c3d-4e5f-4a6b-8c7d-9e0f1a2b3c4d",
+  "parentInstrumentId": null,
+  "aliases": {
+    "senders": [
+      "HDFCBK"
+    ],
+    "vpas": [],
+    "productNames": [
+      "Synthetic Platinum"
+    ]
+  },
+  "creditLimitMinor": -1,
+  "creditLimitSource": "sms",
+  "creditLimitAt": "2026-11-01T07:00:11Z",
+  "availableMinor": 4500000,
+  "availableAt": "2026-11-01T07:00:11Z",
+  "pointsBalance": 1250,
+  "pointsAt": "2026-11-01T07:00:11Z",
+  "firstSeenAt": "2026-10-01T05:00:00Z",
+  "lastSeenAt": "2026-11-01T07:00:20Z",
+  "evidenceCount": 12
+}

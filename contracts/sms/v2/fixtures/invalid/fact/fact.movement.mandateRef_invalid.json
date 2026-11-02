@@ -1,0 +1,52 @@
+{
+  "contractVersion": "2.0",
+  "factId": "b0461c8d7702e3af18830fc4a8009c7243f03fb4424e2ac905fcf291a5ebb659",
+  "sourceKey": "sms:synthetic:0001",
+  "factType": "movement",
+  "observedAt": "2026-11-01T07:00:20Z",
+  "occurredAt": "2026-11-01T07:00:11Z",
+  "instrument": {
+    "kind": "credit_card",
+    "issuerSlug": "hdfc",
+    "maskDigits": "5678",
+    "maskLength": 16,
+    "productName": null,
+    "raw": "x5678"
+  },
+  "counterparty": {
+    "name": "SWIGGY",
+    "vpa": null,
+    "kind": "merchant",
+    "accountMask": null
+  },
+  "amounts": [
+    {
+      "role": "posted",
+      "minor": 49900,
+      "unit": "INR"
+    }
+  ],
+  "references": {},
+  "attrs": {
+    "direction": "debit",
+    "purpose": "purchase",
+    "rail": "card",
+    "mandateRef": 5
+  },
+  "provenance": {
+    "engine": "rules",
+    "ruleId": "SYN-RULE-MOVEMENT",
+    "ruleVersion": 1,
+    "bundleVersion": 1,
+    "engineVersion": "2.0.0",
+    "appVersion": "1.0.0+1"
+  },
+  "evidence": [
+    {
+      "field": "amt",
+      "start": 0,
+      "end": 10
+    }
+  ],
+  "confidence": 0.99
+}

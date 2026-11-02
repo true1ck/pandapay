@@ -1,0 +1,10 @@
+{
+  "items": [
+    {
+      "templateHash": "e87b8b915fc1917db35a25da9bc88d4d09bebf25018772da17a34d6e63838fc8",
+      "senderBrand": "HDFCBK",
+      "redactedBody": "Rs.<AMT> spent on HDFC Bank Card x<MASK> at <MERCHANT>",
+      "observedAt": "2026-11-01T07:00:20Z"
+    }
+  ]
+}

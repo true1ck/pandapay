@@ -1,0 +1,56 @@
+{
+  "contractVersion": "2.0",
+  "factId": "bd69f3870dcae70e0f020110144a152b7adccc0213e758b1b1879c81975ca65f",
+  "sourceKey": "sms:synthetic:0005",
+  "factType": "attempt",
+  "observedAt": "2026-11-01T07:00:20Z",
+  "occurredAt": "2026-11-01T07:00:11Z",
+  "instrument": {
+    "kind": "credit_card",
+    "issuerSlug": "hdfc",
+    "maskDigits": "5678",
+    "maskLength": 16,
+    "productName": null,
+    "raw": "x5678"
+  },
+  "counterparty": {
+    "name": "SYNTH TUBE",
+    "vpa": null,
+    "kind": "merchant",
+    "accountMask": null
+  },
+  "amounts": [
+    {
+      "role": "posted",
+      "minor": 12900,
+      "unit": "INR"
+    },
+    {
+      "role": "outstanding",
+      "minor": 5,
+      "unit": "INR"
+    }
+  ],
+  "references": {},
+  "attrs": {
+    "status": "failed",
+    "direction": "debit",
+    "purpose": "emi"
+  },
+  "provenance": {
+    "engine": "rules",
+    "ruleId": "SYN-RULE-ATTEMPT",
+    "ruleVersion": 1,
+    "bundleVersion": 1,
+    "engineVersion": "2.0.0",
+    "appVersion": "1.0.0+1"
+  },
+  "evidence": [
+    {
+      "field": "amt",
+      "start": 0,
+      "end": 10
+    }
+  ],
+  "confidence": 0.99
+}

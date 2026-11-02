@@ -1,0 +1,43 @@
+{
+  "contractVersion": "2.0",
+  "factId": "8b9e50919989be3638c416149fdfc687bf26da2cbc7ac1a907fa359dc6d5de3e",
+  "sourceKey": "sms:synthetic:0028",
+  "factType": "instrument_hint",
+  "observedAt": "2026-11-01T07:00:20Z",
+  "occurredAt": "2026-11-01T07:00:11Z",
+  "instrument": {
+    "kind": "bank_account",
+    "issuerSlug": "sbi",
+    "maskDigits": "1234",
+    "maskLength": null,
+    "productName": null,
+    "raw": "XX1234"
+  },
+  "counterparty": {
+    "name": null,
+    "vpa": "synthetic@upi",
+    "kind": "own",
+    "accountMask": null
+  },
+  "amounts": [],
+  "references": {},
+  "attrs": {
+    "hint": "linked_upi"
+  },
+  "provenance": {
+    "engine": "rules",
+    "ruleId": "SYN-RULE-INSTRUMENT_HINT",
+    "ruleVersion": 1,
+    "bundleVersion": 1,
+    "engineVersion": "2.0.0",
+    "appVersion": "1.0.0+1"
+  },
+  "evidence": [
+    {
+      "field": "amt",
+      "start": 0,
+      "end": 10
+    }
+  ],
+  "confidence": 0.99
+}

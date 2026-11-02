@@ -1,0 +1,19 @@
+{
+  "eventId": "b0461c8d7702e3af18830fc4a8009c7243f03fb4424e2ac905fcf291a5ebb659",
+  "type": "card_bill_payment",
+  "status": "complete",
+  "legs": [
+    {
+      "factId": "b0461c8d7702e3af18830fc4a8009c7243f03fb4424e2ac905fcf291a5ebb659",
+      "role": "debit_leg"
+    },
+    {
+      "factId": "abc",
+      "role": "credit_leg"
+    }
+  ],
+  "linkRuleId": "LINK-CARD-BILL",
+  "confidence": 0.97,
+  "occurredAt": "2026-11-01T07:00:11Z",
+  "amountMinor": 1234500
+}

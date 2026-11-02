@@ -1,0 +1,45 @@
+{
+  "contractVersion": "2.0",
+  "factId": "4d2814a4b531e3eb8476b408025bf89a8e8c4f6b435cc7c3d9f616c727080b32",
+  "sourceKey": "sms:synthetic:0011",
+  "factType": "balance_snapshot",
+  "observedAt": "2026-11-01T07:00:20Z",
+  "occurredAt": "2026-11-01T07:00:11Z",
+  "instrument": {
+    "kind": "credit_card",
+    "issuerSlug": "hdfc",
+    "maskDigits": "5678",
+    "maskLength": 16,
+    "productName": null,
+    "raw": "x5678"
+  },
+  "counterparty": null,
+  "amounts": [
+    {
+      "role": "available_credit",
+      "minor": 4500000,
+      "unit": "INR"
+    }
+  ],
+  "references": {},
+  "attrs": {
+    "asOf": "2026-11-01T07:00:11Z",
+    "bogusAttr": 1
+  },
+  "provenance": {
+    "engine": "rules",
+    "ruleId": "SYN-RULE-BALANCE_SNAPSHOT",
+    "ruleVersion": 1,
+    "bundleVersion": 1,
+    "engineVersion": "2.0.0",
+    "appVersion": "1.0.0+1"
+  },
+  "evidence": [
+    {
+      "field": "amt",
+      "start": 0,
+      "end": 10
+    }
+  ],
+  "confidence": 0.99
+}

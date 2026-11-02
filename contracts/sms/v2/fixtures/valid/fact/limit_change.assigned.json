@@ -1,0 +1,44 @@
+{
+  "contractVersion": "2.0",
+  "factId": "c54a6048c0d655f4468fbeefea7a9a0bdfbf1b83d3d4c8aa665544ba2c8937eb",
+  "sourceKey": "sms:synthetic:0015",
+  "factType": "limit_change",
+  "observedAt": "2026-11-01T07:00:20Z",
+  "occurredAt": "2026-11-01T07:00:11Z",
+  "instrument": {
+    "kind": "credit_card",
+    "issuerSlug": "hdfc",
+    "maskDigits": "5678",
+    "maskLength": 16,
+    "productName": null,
+    "raw": "x5678"
+  },
+  "counterparty": null,
+  "amounts": [
+    {
+      "role": "credit_limit",
+      "minor": 10000000,
+      "unit": "INR"
+    }
+  ],
+  "references": {},
+  "attrs": {
+    "reason": "assigned"
+  },
+  "provenance": {
+    "engine": "rules",
+    "ruleId": "SYN-RULE-LIMIT_CHANGE",
+    "ruleVersion": 1,
+    "bundleVersion": 1,
+    "engineVersion": "2.0.0",
+    "appVersion": "1.0.0+1"
+  },
+  "evidence": [
+    {
+      "field": "amt",
+      "start": 0,
+      "end": 10
+    }
+  ],
+  "confidence": 0.99
+}

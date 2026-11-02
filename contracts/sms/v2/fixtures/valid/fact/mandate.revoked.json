@@ -1,0 +1,39 @@
+{
+  "contractVersion": "2.0",
+  "factId": "03c5a154273703024ca6ec33a8ab8313d0a49d17752976ea6962cfb3a0ef8f7b",
+  "sourceKey": "sms:synthetic:0021",
+  "factType": "mandate",
+  "observedAt": "2026-11-01T07:00:20Z",
+  "occurredAt": "2026-11-01T07:00:11Z",
+  "instrument": {
+    "kind": "bank_account",
+    "issuerSlug": "sbi",
+    "maskDigits": "1234",
+    "maskLength": null,
+    "productName": null,
+    "raw": "XX1234"
+  },
+  "counterparty": null,
+  "amounts": [],
+  "references": {},
+  "attrs": {
+    "phase": "revoked",
+    "merchantName": "SYNTH STREAM"
+  },
+  "provenance": {
+    "engine": "rules",
+    "ruleId": "SYN-RULE-MANDATE",
+    "ruleVersion": 1,
+    "bundleVersion": 1,
+    "engineVersion": "2.0.0",
+    "appVersion": "1.0.0+1"
+  },
+  "evidence": [
+    {
+      "field": "amt",
+      "start": 0,
+      "end": 10
+    }
+  ],
+  "confidence": 0.99
+}

@@ -1,0 +1,131 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://pandapay.app/contracts/sms/v2/api/facts_batch.request.schema.json",
+  "title": "POST /sms/v2/facts:batch request",
+  "type": "object",
+  "required": [
+    "contractVersion",
+    "appVersion",
+    "deviceId",
+    "items",
+    "instruments",
+    "events",
+    "ledger"
+  ],
+  "additionalProperties": false,
+  "properties": {
+    "contractVersion": {
+      "const": "2.0",
+      "x-code": "request.facts_batch.contract_version_invalid"
+    },
+    "appVersion": {
+      "type": "string",
+      "minLength": 1
+    },
+    "deviceId": {
+      "type": "string",
+      "minLength": 1
+    },
+    "items": {
+      "type": "array",
+      "maxItems": 500,
+      "x-codes": {
+        "maxItems": "request.facts_batch.items_too_many"
+      },
+      "items": {
+        "type": "object",
+        "required": [
+          "sourceKey",
+          "senderBrand",
+          "observedAt",
+          "bodyHash",
+          "facts"
+        ],
+        "additionalProperties": false,
+        "properties": {
+          "sourceKey": {
+            "type": "string",
+            "minLength": 1
+          },
+          "senderBrand": {
+            "type": "string",
+            "pattern": "^[A-Z0-9]+$",
+            "x-code": "request.facts_batch.sender_brand_invalid"
+          },
+          "observedAt": {
+            "$ref": "../common.schema.json#/$defs/utcTime"
+          },
+          "bodyHash": {
+            "$ref": "../common.schema.json#/$defs/sha256"
+          },
+          "facts": {
+            "type": "array",
+            "items": {
+              "type": "object",
+              "allOf": [
+                {
+                  "$ref": "../fact.schema.json"
+                },
+                {
+                  "type": "object",
+                  "properties": {
+                    "factType": {
+                      "type": "string",
+                      "enum": [
+                        "movement",
+                        "attempt",
+                        "hold",
+                        "balance_snapshot",
+                        "limit_change",
+                        "bill_due",
+                        "mandate",
+                        "reward",
+                        "instrument_hint"
+                      ],
+                      "x-code": "request.facts_batch.info_fact_forbidden"
+                    },
+                    "evidence": {
+                      "type": "array",
+                      "maxItems": 0,
+                      "x-code": "request.facts_batch.evidence_forbidden"
+                    },
+                    "instrument": {
+                      "type": [
+                        "object",
+                        "null"
+                      ],
+                      "properties": {
+                        "raw": {
+                          "type": "null",
+                          "x-code": "request.facts_batch.raw_forbidden"
+                        }
+                      }
+                    }
+                  }
+                }
+              ]
+            }
+          }
+        }
+      }
+    },
+    "instruments": {
+      "type": "array",
+      "items": {
+        "$ref": "../instrument.schema.json"
+      }
+    },
+    "events": {
+      "type": "array",
+      "items": {
+        "$ref": "../event.schema.json"
+      }
+    },
+    "ledger": {
+      "type": "array",
+      "items": {
+        "$ref": "../ledger_entry.schema.json"
+      }
+    }
+  }
+}

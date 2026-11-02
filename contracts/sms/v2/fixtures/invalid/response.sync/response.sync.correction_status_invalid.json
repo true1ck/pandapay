@@ -1,0 +1,95 @@
+{
+  "cursor": "opaque-cursor-1",
+  "instruments": [
+    {
+      "instrumentId": "3f9d5a52-1c0e-4b4e-9d57-6a7a1b0f2c11",
+      "kind": "credit_card",
+      "issuerSlug": "hdfc",
+      "maskDigits": "5678",
+      "maskLength": 16,
+      "displayName": "HDFC credit card ••5678",
+      "status": "detected",
+      "userCardId": "8a1b2c3d-4e5f-4a6b-8c7d-9e0f1a2b3c4d",
+      "parentInstrumentId": null,
+      "aliases": {
+        "senders": [
+          "HDFCBK"
+        ],
+        "vpas": [],
+        "productNames": [
+          "Synthetic Platinum"
+        ]
+      },
+      "creditLimitMinor": 30000000,
+      "creditLimitSource": "sms",
+      "creditLimitAt": "2026-11-01T07:00:11Z",
+      "availableMinor": 4500000,
+      "availableAt": "2026-11-01T07:00:11Z",
+      "pointsBalance": 1250,
+      "pointsAt": "2026-11-01T07:00:11Z",
+      "firstSeenAt": "2026-10-01T05:00:00Z",
+      "lastSeenAt": "2026-11-01T07:00:20Z",
+      "evidenceCount": 12
+    }
+  ],
+  "events": [
+    {
+      "eventId": "b0461c8d7702e3af18830fc4a8009c7243f03fb4424e2ac905fcf291a5ebb659",
+      "type": "card_bill_payment",
+      "status": "complete",
+      "legs": [
+        {
+          "factId": "b0461c8d7702e3af18830fc4a8009c7243f03fb4424e2ac905fcf291a5ebb659",
+          "role": "debit_leg"
+        },
+        {
+          "factId": "cad25954b6aebab22b20de9fc1dd7c15f8cbe04868142f722eab251929a2268a",
+          "role": "credit_leg"
+        }
+      ],
+      "linkRuleId": "LINK-CARD-BILL",
+      "confidence": 0.97,
+      "occurredAt": "2026-11-01T07:00:11Z",
+      "amountMinor": 1234500
+    }
+  ],
+  "ledger": [
+    {
+      "entryId": "c8a1e2bfe5d584128c87400709b6f599afae5b122b08f5c4f1c48293aadcbb4c",
+      "eventId": "b0461c8d7702e3af18830fc4a8009c7243f03fb4424e2ac905fcf291a5ebb659",
+      "from": {
+        "instrumentId": "3f9d5a52-1c0e-4b4e-9d57-6a7a1b0f2c11"
+      },
+      "to": {
+        "external": "SWIGGY"
+      },
+      "amountMinor": 49900,
+      "unit": "INR",
+      "occurredAt": "2026-11-01T07:00:11Z",
+      "category": "food",
+      "categorySource": "catalogue",
+      "countsAsTransaction": true,
+      "isSpend": true,
+      "isIncome": false,
+      "isInvestment": false
+    }
+  ],
+  "aiResults": [
+    {
+      "templateHash": "e87b8b915fc1917db35a25da9bc88d4d09bebf25018772da17a34d6e63838fc8",
+      "status": "ready",
+      "ruleId": "AI-PROV-0001",
+      "ruleVersion": 1
+    }
+  ],
+  "corrections": [
+    {
+      "caseId": "case-0001",
+      "sourceKey": "sms:synthetic:0001",
+      "status": "maybe",
+      "decision": "data_fix",
+      "reason": "new merchant alias"
+    }
+  ],
+  "latestBundleVersion": 7
+}

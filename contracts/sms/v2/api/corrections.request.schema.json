@@ -1,0 +1,104 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://pandapay.app/contracts/sms/v2/api/corrections.request.schema.json",
+  "title": "POST /sms/v2/corrections request",
+  "type": "object",
+  "required": [
+    "sourceKey",
+    "factIds",
+    "correctionKind",
+    "corrected",
+    "trace"
+  ],
+  "additionalProperties": false,
+  "properties": {
+    "sourceKey": {
+      "type": "string",
+      "minLength": 1
+    },
+    "factIds": {
+      "type": "array",
+      "items": {
+        "$ref": "../common.schema.json#/$defs/sha256"
+      }
+    },
+    "eventId": {
+      "$ref": "../common.schema.json#/$defs/sha256"
+    },
+    "correctionKind": {
+      "type": "string",
+      "enum": [
+        "not_financial",
+        "wrong_kind",
+        "wrong_amount",
+        "wrong_instrument",
+        "wrong_link",
+        "wrong_category",
+        "wrong_date",
+        "wrong_merchant",
+        "duplicate",
+        "missing",
+        "preference_only"
+      ],
+      "x-code": "request.corrections.kind_invalid"
+    },
+    "corrected": {
+      "type": "object"
+    },
+    "trace": {
+      "type": "object",
+      "required": [
+        "appVersion",
+        "engineVersion",
+        "bundleVersion",
+        "ruleId",
+        "ruleVersion",
+        "stage"
+      ],
+      "additionalProperties": false,
+      "properties": {
+        "appVersion": {
+          "type": "string",
+          "minLength": 1
+        },
+        "engineVersion": {
+          "type": "string",
+          "minLength": 1
+        },
+        "bundleVersion": {
+          "type": "integer",
+          "minimum": 0
+        },
+        "ruleId": {
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "ruleVersion": {
+          "type": [
+            "integer",
+            "null"
+          ],
+          "minimum": 0
+        },
+        "stage": {
+          "type": "string",
+          "enum": [
+            "gate",
+            "extraction",
+            "instrument",
+            "linking",
+            "category",
+            "sync"
+          ],
+          "x-code": "request.corrections.stage_invalid"
+        }
+      }
+    },
+    "redactedTemplate": {
+      "type": "string",
+      "minLength": 1
+    }
+  }
+}

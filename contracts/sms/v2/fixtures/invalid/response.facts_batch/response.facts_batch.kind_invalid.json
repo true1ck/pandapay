@@ -1,0 +1,26 @@
+{
+  "results": [
+    {
+      "id": "b0461c8d7702e3af18830fc4a8009c7243f03fb4424e2ac905fcf291a5ebb659",
+      "kind": "blob",
+      "status": "accepted"
+    },
+    {
+      "id": "3f9d5a52-1c0e-4b4e-9d57-6a7a1b0f2c11",
+      "kind": "instrument",
+      "status": "duplicate"
+    },
+    {
+      "id": "b0461c8d7702e3af18830fc4a8009c7243f03fb4424e2ac905fcf291a5ebb659",
+      "kind": "event",
+      "status": "rejected",
+      "errors": [
+        {
+          "code": "event.anchor_mismatch",
+          "path": "/eventId"
+        }
+      ]
+    }
+  ],
+  "serverTime": "2026-11-01T07:00:20Z"
+}

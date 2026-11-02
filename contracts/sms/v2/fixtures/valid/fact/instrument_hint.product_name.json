@@ -1,0 +1,38 @@
+{
+  "contractVersion": "2.0",
+  "factId": "01534550539903073f91f70e03b04c73274cd87677d189a9153a8a65557e20f6",
+  "sourceKey": "sms:synthetic:0027",
+  "factType": "instrument_hint",
+  "observedAt": "2026-11-01T07:00:20Z",
+  "occurredAt": "2026-11-01T07:00:11Z",
+  "instrument": {
+    "kind": "credit_card",
+    "issuerSlug": "hdfc",
+    "maskDigits": null,
+    "maskLength": null,
+    "productName": "Synthetic Platinum",
+    "raw": null
+  },
+  "counterparty": null,
+  "amounts": [],
+  "references": {},
+  "attrs": {
+    "hint": "product_name"
+  },
+  "provenance": {
+    "engine": "rules",
+    "ruleId": "SYN-RULE-INSTRUMENT_HINT",
+    "ruleVersion": 1,
+    "bundleVersion": 1,
+    "engineVersion": "2.0.0",
+    "appVersion": "1.0.0+1"
+  },
+  "evidence": [
+    {
+      "field": "amt",
+      "start": 0,
+      "end": 10
+    }
+  ],
+  "confidence": 0.99
+}

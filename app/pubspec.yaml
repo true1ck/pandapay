@@ -257,6 +257,7 @@ flutter:
     - assets/logo/pandapay_mark.png
     - assets/illustrations/
     - assets/data/bundled_catalogue.json
+    - assets/sms_rules/
 
   # An image asset can refer to one or more resolution-specific "variants", see
   # https://flutter.dev/to/resolution-aware-images

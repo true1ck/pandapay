@@ -1,0 +1,9 @@
+{
+  "version": 4,
+  "cohort": "pct50",
+  "goldenReport": {
+    "total": 10,
+    "passed": 10,
+    "bundleSha256": "1e6ed65d77d6364eeaed5a745ba5c4985ae2b700dd85d7cf7f027bdf294a33fc"
+  }
+}

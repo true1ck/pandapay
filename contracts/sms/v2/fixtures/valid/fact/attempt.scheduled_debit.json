@@ -1,0 +1,52 @@
+{
+  "contractVersion": "2.0",
+  "factId": "c1063b2dc19643038805fbd8bb1352b32ee7e7021cd91b3effbf119f646a5cb1",
+  "sourceKey": "sms:synthetic:0006",
+  "factType": "attempt",
+  "observedAt": "2026-11-01T07:00:20Z",
+  "occurredAt": null,
+  "instrument": {
+    "kind": "bank_account",
+    "issuerSlug": "sbi",
+    "maskDigits": "1234",
+    "maskLength": null,
+    "productName": null,
+    "raw": "XX1234"
+  },
+  "counterparty": {
+    "name": "SYNTH STREAM",
+    "vpa": null,
+    "kind": "merchant",
+    "accountMask": null
+  },
+  "amounts": [
+    {
+      "role": "scheduled",
+      "minor": 64900,
+      "unit": "INR"
+    }
+  ],
+  "references": {},
+  "attrs": {
+    "status": "scheduled",
+    "direction": "debit",
+    "purpose": "bill_payment",
+    "dueAt": "2026-11-05T00:00:00Z"
+  },
+  "provenance": {
+    "engine": "rules",
+    "ruleId": "SYN-RULE-ATTEMPT",
+    "ruleVersion": 1,
+    "bundleVersion": 1,
+    "engineVersion": "2.0.0",
+    "appVersion": "1.0.0+1"
+  },
+  "evidence": [
+    {
+      "field": "amt",
+      "start": 0,
+      "end": 10
+    }
+  ],
+  "confidence": 0.99
+}

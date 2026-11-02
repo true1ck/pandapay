@@ -1,0 +1,179 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://pandapay.app/contracts/sms/v2/instrument.schema.json",
+  "title": "Instrument",
+  "type": "object",
+  "required": [
+    "instrumentId",
+    "kind",
+    "issuerSlug",
+    "maskDigits",
+    "maskLength",
+    "displayName",
+    "status",
+    "userCardId",
+    "parentInstrumentId",
+    "aliases",
+    "creditLimitMinor",
+    "creditLimitSource",
+    "creditLimitAt",
+    "availableMinor",
+    "availableAt",
+    "pointsBalance",
+    "pointsAt",
+    "firstSeenAt",
+    "lastSeenAt",
+    "evidenceCount"
+  ],
+  "properties": {
+    "instrumentId": {
+      "$ref": "common.schema.json#/$defs/uuid"
+    },
+    "kind": {
+      "type": "string",
+      "enum": [
+        "bank_account",
+        "credit_card",
+        "debit_card",
+        "prepaid_card",
+        "wallet",
+        "broker",
+        "loan",
+        "pay_later"
+      ],
+      "x-code": "instrument.kind_invalid"
+    },
+    "issuerSlug": {
+      "type": "string",
+      "pattern": "^[a-z0-9_]+$",
+      "x-code": "instrument.issuer_invalid"
+    },
+    "maskDigits": {
+      "type": [
+        "string",
+        "null"
+      ],
+      "pattern": "^\\d{2,6}$",
+      "x-code": "instrument.mask_digits_invalid"
+    },
+    "maskLength": {
+      "type": [
+        "integer",
+        "null"
+      ],
+      "minimum": 2,
+      "maximum": 32,
+      "x-code": "instrument.mask_length_invalid"
+    },
+    "displayName": {
+      "type": "string",
+      "minLength": 1
+    },
+    "status": {
+      "type": "string",
+      "enum": [
+        "detected",
+        "confirmed",
+        "rejected",
+        "archived"
+      ],
+      "x-code": "instrument.status_invalid"
+    },
+    "userCardId": {
+      "$ref": "common.schema.json#/$defs/uuidOrNull"
+    },
+    "parentInstrumentId": {
+      "$ref": "common.schema.json#/$defs/uuidOrNull"
+    },
+    "aliases": {
+      "type": "object",
+      "required": [
+        "senders",
+        "vpas",
+        "productNames"
+      ],
+      "additionalProperties": false,
+      "properties": {
+        "senders": {
+          "type": "array",
+          "items": {
+            "type": "string",
+            "minLength": 1
+          }
+        },
+        "vpas": {
+          "type": "array",
+          "items": {
+            "type": "string",
+            "minLength": 1
+          }
+        },
+        "productNames": {
+          "type": "array",
+          "items": {
+            "type": "string",
+            "minLength": 1
+          }
+        }
+      },
+      "x-code": "instrument.aliases_invalid"
+    },
+    "creditLimitMinor": {
+      "type": [
+        "integer",
+        "null"
+      ],
+      "minimum": 0,
+      "x-code": "instrument.amount_invalid"
+    },
+    "creditLimitSource": {
+      "type": [
+        "string",
+        "null"
+      ],
+      "enum": [
+        "sms",
+        "user",
+        null
+      ],
+      "x-code": "instrument.credit_limit_source_invalid"
+    },
+    "creditLimitAt": {
+      "$ref": "common.schema.json#/$defs/utcTimeOrNull"
+    },
+    "availableMinor": {
+      "type": [
+        "integer",
+        "null"
+      ],
+      "minimum": 0,
+      "x-code": "instrument.amount_invalid"
+    },
+    "availableAt": {
+      "$ref": "common.schema.json#/$defs/utcTimeOrNull"
+    },
+    "pointsBalance": {
+      "type": [
+        "integer",
+        "null"
+      ],
+      "minimum": 0,
+      "x-code": "instrument.amount_invalid"
+    },
+    "pointsAt": {
+      "$ref": "common.schema.json#/$defs/utcTimeOrNull"
+    },
+    "firstSeenAt": {
+      "$ref": "common.schema.json#/$defs/utcTime"
+    },
+    "lastSeenAt": {
+      "$ref": "common.schema.json#/$defs/utcTime"
+    },
+    "evidenceCount": {
+      "type": "integer",
+      "minimum": 0,
+      "x-code": "instrument.evidence_count_invalid"
+    }
+  },
+  "additionalProperties": false
+}

@@ -1,0 +1,31 @@
+{
+  "instrumentId": "b1e2d3c4-a5f6-4789-a0b1-c2d3e4f5a6b7",
+  "kind": "bank_account",
+  "issuerSlug": "sbi",
+  "maskDigits": "1234",
+  "maskLength": null,
+  "displayName": "SBI account ••1234",
+  "status": "confirmed",
+  "userCardId": null,
+  "parentInstrumentId": null,
+  "aliases": {
+    "senders": [
+      "SBIUPI",
+      "SBIBNK"
+    ],
+    "vpas": [
+      "synthetic@sbi"
+    ],
+    "productNames": []
+  },
+  "creditLimitMinor": null,
+  "creditLimitSource": null,
+  "creditLimitAt": null,
+  "availableMinor": 0,
+  "availableAt": "2026-11-01T07:00:11Z",
+  "pointsBalance": null,
+  "pointsAt": null,
+  "firstSeenAt": "2026-10-01T05:00:00Z",
+  "lastSeenAt": "2026-11-01T07:00:20Z",
+  "evidenceCount": 12
+}

@@ -1,0 +1,19 @@
+{
+  "eventId": "b0461c8d7702e3af18830fc4a8009c7243f03fb4424e2ac905fcf291a5ebb659",
+  "type": "card_bill_payment",
+  "status": "maybe",
+  "legs": [
+    {
+      "factId": "b0461c8d7702e3af18830fc4a8009c7243f03fb4424e2ac905fcf291a5ebb659",
+      "role": "debit_leg"
+    },
+    {
+      "factId": "cad25954b6aebab22b20de9fc1dd7c15f8cbe04868142f722eab251929a2268a",
+      "role": "credit_leg"
+    }
+  ],
+  "linkRuleId": "LINK-CARD-BILL",
+  "confidence": 0.97,
+  "occurredAt": "2026-11-01T07:00:11Z",
+  "amountMinor": 1234500
+}

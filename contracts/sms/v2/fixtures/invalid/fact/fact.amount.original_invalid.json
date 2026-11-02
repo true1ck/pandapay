@@ -1,0 +1,55 @@
+{
+  "contractVersion": "2.0",
+  "factId": "796136de7df1a310c45848dfddcd57ee4b64d43af3ebf578e30c4444859115ae",
+  "sourceKey": "sms:synthetic:0004",
+  "factType": "movement",
+  "observedAt": "2026-11-01T07:00:20Z",
+  "occurredAt": "2026-11-01T07:00:11Z",
+  "instrument": {
+    "kind": "credit_card",
+    "issuerSlug": "hdfc",
+    "maskDigits": "5678",
+    "maskLength": 16,
+    "productName": null,
+    "raw": "x5678"
+  },
+  "counterparty": {
+    "name": "SYNTH AI INC",
+    "vpa": null,
+    "kind": "merchant",
+    "accountMask": null
+  },
+  "amounts": [
+    {
+      "role": "posted",
+      "minor": 175000,
+      "unit": "INR",
+      "original": {
+        "minor": 0,
+        "currency": "usd"
+      }
+    }
+  ],
+  "references": {},
+  "attrs": {
+    "direction": "debit",
+    "purpose": "purchase",
+    "rail": "card"
+  },
+  "provenance": {
+    "engine": "rules",
+    "ruleId": "SYN-RULE-MOVEMENT",
+    "ruleVersion": 1,
+    "bundleVersion": 1,
+    "engineVersion": "2.0.0",
+    "appVersion": "1.0.0+1"
+  },
+  "evidence": [
+    {
+      "field": "amt",
+      "start": 0,
+      "end": 10
+    }
+  ],
+  "confidence": 0.99
+}

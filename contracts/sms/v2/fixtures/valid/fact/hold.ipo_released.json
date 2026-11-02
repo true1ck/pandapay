@@ -1,0 +1,47 @@
+{
+  "contractVersion": "2.0",
+  "factId": "349f293df51d26cca7230b7dc70221c6e27efd552e019f1aea08acb7af29fa82",
+  "sourceKey": "sms:synthetic:0009",
+  "factType": "hold",
+  "observedAt": "2026-11-01T07:00:20Z",
+  "occurredAt": "2026-11-01T07:00:11Z",
+  "instrument": {
+    "kind": "bank_account",
+    "issuerSlug": "sbi",
+    "maskDigits": "1234",
+    "maskLength": null,
+    "productName": null,
+    "raw": "XX1234"
+  },
+  "counterparty": null,
+  "amounts": [
+    {
+      "role": "released",
+      "minor": 1425000,
+      "unit": "INR"
+    }
+  ],
+  "references": {
+    "asbaRef": "SYNASBA001"
+  },
+  "attrs": {
+    "phase": "released",
+    "purpose": "ipo_asba"
+  },
+  "provenance": {
+    "engine": "rules",
+    "ruleId": "SYN-RULE-HOLD",
+    "ruleVersion": 1,
+    "bundleVersion": 1,
+    "engineVersion": "2.0.0",
+    "appVersion": "1.0.0+1"
+  },
+  "evidence": [
+    {
+      "field": "amt",
+      "start": 0,
+      "end": 10
+    }
+  ],
+  "confidence": 0.99
+}

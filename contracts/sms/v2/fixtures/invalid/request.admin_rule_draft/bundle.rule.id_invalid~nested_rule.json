@@ -1,0 +1,94 @@
+{
+  "id": "bad id",
+  "version": 4,
+  "family": "card_spend",
+  "senders": [
+    "HDFCBK"
+  ],
+  "priority": 500,
+  "match": {
+    "pattern": "^(?:rs\\.?|inr)\\s*(?<amt>[\\d,]+(?:\\.\\d{1,2})?)\\s+spent on hdfc bank card x(?<mask>\\d{4}) at (?<merchant>.+?) on (?<date>\\d{4}-\\d{2}-\\d{2}:\\d{2}:\\d{2}:\\d{2})\\.\\s*avl lmt:\\s*(?:rs\\.?|inr)\\s*(?<avl>[\\d,]+(?:\\.\\d{1,2})?)",
+    "flags": "i",
+    "requireAll": [
+      "spent"
+    ],
+    "rejectAny": [
+      "declined",
+      "failed",
+      "will be debited"
+    ]
+  },
+  "emit": [
+    {
+      "factType": "movement",
+      "attrs": {
+        "direction": "debit",
+        "purpose": "purchase",
+        "rail": "card"
+      },
+      "amounts": [
+        {
+          "role": "posted",
+          "from": "amt",
+          "unit": "INR"
+        }
+      ],
+      "occurredAt": {
+        "from": "date",
+        "formats": [
+          "yyyy-MM-dd:HH:mm:ss"
+        ]
+      },
+      "instrument": {
+        "kind": "credit_card",
+        "issuerSlug": "hdfc",
+        "maskFrom": "mask"
+      },
+      "counterparty": {
+        "nameFrom": "merchant",
+        "kind": "merchant",
+        "transforms": [
+          "sanitizeNarration"
+        ]
+      }
+    },
+    {
+      "factType": "balance_snapshot",
+      "amounts": [
+        {
+          "role": "available_credit",
+          "from": "avl",
+          "unit": "INR"
+        }
+      ],
+      "instrument": {
+        "sameAs": 0
+      },
+      "attrs": {
+        "asOf": {
+          "sameAs": 0,
+          "field": "occurredAt"
+        }
+      }
+    }
+  ],
+  "confidence": 0.99,
+  "examples": [
+    {
+      "sender": "VM-HDFCBK-S",
+      "body": "Rs.499.00 spent on HDFC Bank Card x5678 at SWIGGY on 2026-11-01:12:30:11. Avl Lmt: Rs.45,000.00",
+      "expectFactTypes": [
+        "movement",
+        "balance_snapshot"
+      ]
+    },
+    {
+      "sender": "VM-HDFCBK-S",
+      "body": "Txn of Rs.499.00 declined on HDFC Bank Card x5678 at SWIGGY",
+      "expectFactTypes": []
+    }
+  ],
+  "status": "active",
+  "createdBy": "baseline",
+  "updatedAt": "2026-11-20T00:00:00Z"
+}

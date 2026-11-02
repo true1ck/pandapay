@@ -1,0 +1,3588 @@
+{
+  "contractVersion": "2.0",
+  "appVersion": "1.0.0+1",
+  "deviceId": "synthetic-device-0001",
+  "items": [
+    {
+      "sourceKey": "sms:synthetic:0",
+      "senderBrand": "HDFCBK",
+      "observedAt": "2026-11-01T07:00:20Z",
+      "bodyHash": "c02c0b965e023abee808f2b548d8d5193a8b5229be6f3121a6f16e2d41a449b3",
+      "facts": []
+    },
+    {
+      "sourceKey": "sms:synthetic:1",
+      "senderBrand": "HDFCBK",
+      "observedAt": "2026-11-01T07:00:20Z",
+      "bodyHash": "7dc96f776c8423e57a2785489a3f9c43fb6e756876d6ad9a9cac4aa4e72ec193",
+      "facts": []
+    },
+    {
+      "sourceKey": "sms:synthetic:2",
+      "senderBrand": "HDFCBK",
+      "observedAt": "2026-11-01T07:00:20Z",
+      "bodyHash": "4814d92093ac8a0f4a2163ab87dee509ba306a58f5888be0edcb2fcd0712028b",
+      "facts": []
+    },
+    {
+      "sourceKey": "sms:synthetic:3",
+      "senderBrand": "HDFCBK",
+      "observedAt": "2026-11-01T07:00:20Z",
+      "bodyHash": "76a8277347f52530e1cf979175a178980b3a180d176165c985d85f7e142f1eed",
+      "facts": []
+    },
+    {
+      "sourceKey": "sms:synthetic:4",
+      "senderBrand": "HDFCBK",
+      "observedAt": "2026-11-01T07:00:20Z",
+      "bodyHash": "486bacc5c2d8a71a73d51bf8e522deaa264ec2628dca2955da1e9b8e00f21943",
+      "facts": []
+    },
+    {
+      "sourceKey": "sms:synthetic:5",
+      "senderBrand": "HDFCBK",
+      "observedAt": "2026-11-01T07:00:20Z",
+      "bodyHash": "3c5661974942379614b943d0593e4a5e3f85900ab3fb4ce064725c15ccb93a01",
+      "facts": []
+    },
+    {
+      "sourceKey": "sms:synthetic:6",
+      "senderBrand": "HDFCBK",
+      "observedAt": "2026-11-01T07:00:20Z",
+      "bodyHash": "2f5da6e9921baa794759ee9f4b362555bcb3c1646eb51f671253b5d7d710b75e",
+      "facts": []
+    },
+    {
+      "sourceKey": "sms:synthetic:7",
+      "senderBrand": "HDFCBK",
+      "observedAt": "2026-11-01T07:00:20Z",
+      "bodyHash": "e1b0acf86b9621b8c13ca17bb2f2a23d662bfa940453d8e897a77e39d9e8bd59",
+      "facts": []
+    },
+    {
+      "sourceKey": "sms:synthetic:8",
+      "senderBrand": "HDFCBK",
+      "observedAt": "2026-11-01T07:00:20Z",
+      "bodyHash": "92ee93de02ea87db530298f4d66c63984f20a6899019e3dab1a18d2399289140",
+      "facts": []
+    },
+    {
+      "sourceKey": "sms:synthetic:9",
+      "senderBrand": "HDFCBK",
+      "observedAt": "2026-11-01T07:00:20Z",
+      "bodyHash": "cb440fe2f7ec20d54f4726630cebadb8673965ccb57a64bbeda757842fd26375",
+      "facts": []
+    },
+    {
+      "sourceKey": "sms:synthetic:10",
+      "senderBrand": "HDFCBK",
+      "observedAt": "2026-11-01T07:00:20Z",
+      "bodyHash": "087f4c7109d76636536c712c5121252018fa2dd0fddeba804f1df78494d8ea01",
+      "facts": []
+    },
+    {
+      "sourceKey": "sms:synthetic:11",
+      "senderBrand": "HDFCBK",
+      "observedAt": "2026-11-01T07:00:20Z",
+      "bodyHash": "8101d16893f3425fbb4ff727e5502764784208aadf2df3acfab20162f7c74fc7",
+      "facts": []
+    },
+    {
+      "sourceKey": "sms:synthetic:12",
+      "senderBrand": "HDFCBK",
+      "observedAt": "2026-11-01T07:00:20Z",
+      "bodyHash": "8651b2bcef1776e9ebffd170feb1430004ad2b52e37c7b53489a31f431e1a7af",
+      "facts": []
+    },
+    {
+      "sourceKey": "sms:synthetic:13",
+      "senderBrand": "HDFCBK",
+      "observedAt": "2026-11-01T07:00:20Z",
+      "bodyHash": "76bdb563530c997e6fdf55cc894b3c8d454b14f052427b5e26487816f20643fb",
+      "facts": []
+    },
+    {
+      "sourceKey": "sms:synthetic:14",
+      "senderBrand": "HDFCBK",
+      "observedAt": "2026-11-01T07:00:20Z",
+      "bodyHash": "1cc8ff5e6aa02f9fae19675155bbd0541480d2677abdadd1f248fc66daf9e9d2",
+      "facts": []
+    },
+    {
+      "sourceKey": "sms:synthetic:15",
+      "senderBrand": "HDFCBK",
+      "observedAt": "2026-11-01T07:00:20Z",
+      "bodyHash": "40d674998c07527b12a31e2963b0603a34bb46ba1dbfdd51220a010f3b364d94",
+      "facts": []
+    },
+    {
+      "sourceKey": "sms:synthetic:16",
+      "senderBrand": "HDFCBK",
+      "observedAt": "2026-11-01T07:00:20Z",
+      "bodyHash": "3b7e9da2df5de9523282424656a51ce393523866f9179f93a92744353ad76cba",
+      "facts": []
+    },
+    {
+      "sourceKey": "sms:synthetic:17",
+      "senderBrand": "HDFCBK",
+      "observedAt": "2026-11-01T07:00:20Z",
+      "bodyHash": "17bb42fe2af6771b4815132dad5d9b4b46d0fdf121aabb4daaaa7acd0c3447be",
+      "facts": []
+    },
+    {
+      "sourceKey": "sms:synthetic:18",
+      "senderBrand": "HDFCBK",
+      "observedAt": "2026-11-01T07:00:20Z",
+      "bodyHash": "fce6d0a75bf5a500c97c3ae089306ebd2d71c2e7f64a58f7f74ca9ee697118f0",
+      "facts": []
+    },
+    {
+      "sourceKey": "sms:synthetic:19",
+      "senderBrand": "HDFCBK",
+      "observedAt": "2026-11-01T07:00:20Z",
+      "bodyHash": "9bfea10e1d03fc0af5aa162bdf0edb99cc31260bb849fad7cc61440a8341c971",
+      "facts": []
+    },
+    {
+      "sourceKey": "sms:synthetic:20",
+      "senderBrand": "HDFCBK",
+      "observedAt": "2026-11-01T07:00:20Z",
+      "bodyHash": "dc60c4ca476066179e139318a894ccaa7bd3073189e4f8059505804f00870e4d",
+      "facts": []
+    },
+    {
+      "sourceKey": "sms:synthetic:21",
+      "senderBrand": "HDFCBK",
+      "observedAt": "2026-11-01T07:00:20Z",
+      "bodyHash": "056df3f4fa8f8aaf96fa6c3862e0af2fbc0e0c6dad3f27687a9d42ae35773f51",
+      "facts": []
+    },
+    {
+      "sourceKey": "sms:synthetic:22",
+      "senderBrand": "HDFCBK",
+      "observedAt": "2026-11-01T07:00:20Z",
+      "bodyHash": "c4ffa7146bc75b1b1b3352d536340198f1f1e10ab4b2323b0523a1ccffb7e21c",
+      "facts": []
+    },
+    {
+      "sourceKey": "sms:synthetic:23",
+      "senderBrand": "HDFCBK",
+      "observedAt": "2026-11-01T07:00:20Z",
+      "bodyHash": "a212f07276961212b0ecf8c407bff6ea97c344f30087457c0e1b3569bb9711b5",
+      "facts": []
+    },
+    {
+      "sourceKey": "sms:synthetic:24",
+      "senderBrand": "HDFCBK",
+      "observedAt": "2026-11-01T07:00:20Z",
+      "bodyHash": "61bc0c8f43a828a9a063324941a35a04f5f786beb45eaede70fdace393d8e235",
+      "facts": []
+    },
+    {
+      "sourceKey": "sms:synthetic:25",
+      "senderBrand": "HDFCBK",
+      "observedAt": "2026-11-01T07:00:20Z",
+      "bodyHash": "fd2d4cab3d29a091ff558cfa94f1fa69380af57cdc31cc3c792b1b3d921c51b1",
+      "facts": []
+    },
+    {
+      "sourceKey": "sms:synthetic:26",
+      "senderBrand": "HDFCBK",
+      "observedAt": "2026-11-01T07:00:20Z",
+      "bodyHash": "9f1e0272a9e69c5abdc408f803917f273053d190a4dc6182b4f3fd9f5447ec40",
+      "facts": []
+    },
+    {
+      "sourceKey": "sms:synthetic:27",
+      "senderBrand": "HDFCBK",
+      "observedAt": "2026-11-01T07:00:20Z",
+      "bodyHash": "8e77e64d74e8601f7e95f8a4f28913f2bc4b1f4803502fdd0e4aaf2b49d23d6c",
+      "facts": []
+    },
+    {
+      "sourceKey": "sms:synthetic:28",
+      "senderBrand": "HDFCBK",
+      "observedAt": "2026-11-01T07:00:20Z",
+      "bodyHash": "fb272f126e8dfb89e4005c4999dac311d47856ed95c4edfb0853168333e21a95",
+      "facts": []
+    },
+    {
+      "sourceKey": "sms:synthetic:29",
+      "senderBrand": "HDFCBK",
+      "observedAt": "2026-11-01T07:00:20Z",
+      "bodyHash": "2b04fa6f77e5b1b2b57e077764574c83742262339a391dad19bdf9f6524dcb38",
+      "facts": []
+    },
+    {
+      "sourceKey": "sms:synthetic:30",
+      "senderBrand": "HDFCBK",
+      "observedAt": "2026-11-01T07:00:20Z",
+      "bodyHash": "08e526346896c3129f4603591e67b53d9ded670ccee6e9659803673cd4a6805a",
+      "facts": []
+    },
+    {
+      "sourceKey": "sms:synthetic:31",
+      "senderBrand": "HDFCBK",
+      "observedAt": "2026-11-01T07:00:20Z",
+      "bodyHash": "6ed23e1b9a8128024e723b74e094d77d01903fd1edd3f4ca717838c7cdca2c50",
+      "facts": []
+    },
+    {
+      "sourceKey": "sms:synthetic:32",
+      "senderBrand": "HDFCBK",
+      "observedAt": "2026-11-01T07:00:20Z",
+      "bodyHash": "405ea565bcf4773f753be1e051f021e470163de3652827e5f11ee746618c2739",
+      "facts": []
+    },
+    {
+      "sourceKey": "sms:synthetic:33",
+      "senderBrand": "HDFCBK",
+      "observedAt": "2026-11-01T07:00:20Z",
+      "bodyHash": "0d40d51d9f929814454c2f7c0c0789b660fd7d1519709142d15c3835ffd7137f",
+      "facts": []
+    },
+    {
+      "sourceKey": "sms:synthetic:34",
+      "senderBrand": "HDFCBK",
+      "observedAt": "2026-11-01T07:00:20Z",
+      "bodyHash": "12ca2c442b28cfd03f6039b637cc5c61eafdc7836f6ebf3a09b703c2bd94bcec",
+      "facts": []
+    },
+    {
+      "sourceKey": "sms:synthetic:35",
+      "senderBrand": "HDFCBK",
+      "observedAt": "2026-11-01T07:00:20Z",
+      "bodyHash": "03205445d4a8b32d382a8d78071d7bdff695a2985d53e274706ef09e55f7767e",
+      "facts": []
+    },
+    {
+      "sourceKey": "sms:synthetic:36",
+      "senderBrand": "HDFCBK",
+      "observedAt": "2026-11-01T07:00:20Z",
+      "bodyHash": "eddaaf3d1786054efb510c386644a8eb3c258b2fcd990b67895d6ac876bbf34f",
+      "facts": []
+    },
+    {
+      "sourceKey": "sms:synthetic:37",
+      "senderBrand": "HDFCBK",
+      "observedAt": "2026-11-01T07:00:20Z",
+      "bodyHash": "4473f236d91bf1ac20a6823ac6082fc1d8b5cbc0f168304fce3bee6fe9941f5c",
+      "facts": []
+    },
+    {
+      "sourceKey": "sms:synthetic:38",
+      "senderBrand": "HDFCBK",
+      "observedAt": "2026-11-01T07:00:20Z",
+      "bodyHash": "20f16b6776bb62a865545132843339870c05aeab6c0b835b5461319ee82690d0",
+      "facts": []
+    },
+    {
+      "sourceKey": "sms:synthetic:39",
+      "senderBrand": "HDFCBK",
+      "observedAt": "2026-11-01T07:00:20Z",
+      "bodyHash": "63aa588eac13fbad04ddfd98e62b69e6c86c7f1f925836f180615dd1d8b520e9",
+      "facts": []
+    },
+    {
+      "sourceKey": "sms:synthetic:40",
+      "senderBrand": "HDFCBK",
+      "observedAt": "2026-11-01T07:00:20Z",
+      "bodyHash": "7fe31ac7dd514a97833924cf013f2391538a3ae7ad7a37a58c69063f9cd6ed29",
+      "facts": []
+    },
+    {
+      "sourceKey": "sms:synthetic:41",
+      "senderBrand": "HDFCBK",
+      "observedAt": "2026-11-01T07:00:20Z",
+      "bodyHash": "46fe13c69e51f111c291311fc67e4e800afc17d19d6ea3cd695251d63d90aaa8",
+      "facts": []
+    },
+    {
+      "sourceKey": "sms:synthetic:42",
+      "senderBrand": "HDFCBK",
+      "observedAt": "2026-11-01T07:00:20Z",
+      "bodyHash": "9fa6eb003f14425eb9c8e6baacfbcaab26257357b829c7bfa74ffcc4f31c1780",
+      "facts": []
+    },
+    {
+      "sourceKey": "sms:synthetic:43",
+      "senderBrand": "HDFCBK",
+      "observedAt": "2026-11-01T07:00:20Z",
+      "bodyHash": "9363eaa993870cd359391f65a251e449990cda3b7b562a01f5e66c2dd362f7bf",
+      "facts": []
+    },
+    {
+      "sourceKey": "sms:synthetic:44",
+      "senderBrand": "HDFCBK",
+      "observedAt": "2026-11-01T07:00:20Z",
+      "bodyHash": "fd54e31b382f79f9f69ae114cd0e1772cfd5a1055b96468d17d932e78911e540",
+      "facts": []
+    },
+    {
+      "sourceKey": "sms:synthetic:45",
+      "senderBrand": "HDFCBK",
+      "observedAt": "2026-11-01T07:00:20Z",
+      "bodyHash": "ee6bb87b200acb28272c54403018c437dab1edd47aceb5f76504ccc1a53415d1",
+      "facts": []
+    },
+    {
+      "sourceKey": "sms:synthetic:46",
+      "senderBrand": "HDFCBK",
+      "observedAt": "2026-11-01T07:00:20Z",
+      "bodyHash": "e2d789ae124dd1fdf8cd8a33247592b83ffe60ce00aea242ef7e2ca848fe826c",
+      "facts": []
+    },
+    {
+      "sourceKey": "sms:synthetic:47",
+      "senderBrand": "HDFCBK",
+      "observedAt": "2026-11-01T07:00:20Z",
+      "bodyHash": "93de47ddfbde388567e8e8935436f8dfcbf3c7c63fba341eda86661a23c1042c",
+      "facts": []
+    },
+    {
+      "sourceKey": "sms:synthetic:48",
+      "senderBrand": "HDFCBK",
+      "observedAt": "2026-11-01T07:00:20Z",
+      "bodyHash": "f741acadc384f8bc5908cca58f520fa82b3bc6480b156e77882a4fdf59fb2b1a",
+      "facts": []
+    },
+    {
+      "sourceKey": "sms:synthetic:49",
+      "senderBrand": "HDFCBK",
+      "observedAt": "2026-11-01T07:00:20Z",
+      "bodyHash": "d43a91ec903b7ecc2201d679b7935172c9523835abffbc4fbc016eb85906622b",
+      "facts": []
+    },
+    {
+      "sourceKey": "sms:synthetic:50",
+      "senderBrand": "HDFCBK",
+      "observedAt": "2026-11-01T07:00:20Z",
+      "bodyHash": "2e71443d3f88223f548c3bdfa78683b236f775c6219094cad62ac3df9b095101",
+      "facts": []
+    },
+    {
+      "sourceKey": "sms:synthetic:51",
+      "senderBrand": "HDFCBK",
+      "observedAt": "2026-11-01T07:00:20Z",
+      "bodyHash": "30ebb311f9164c879550bd8c8b5754bbd07c6cb3518d5058489a64f20f80fe81",
+      "facts": []
+    },
+    {
+      "sourceKey": "sms:synthetic:52",
+      "senderBrand": "HDFCBK",
+      "observedAt": "2026-11-01T07:00:20Z",
+      "bodyHash": "6457133d7bf315a26495a72102797a0cdc0d3285be12788d649a76a2f550e087",
+      "facts": []
+    },
+    {
+      "sourceKey": "sms:synthetic:53",
+      "senderBrand": "HDFCBK",
+      "observedAt": "2026-11-01T07:00:20Z",
+      "bodyHash": "57fabcc263068c1dbf1eb375e9832c96c3c05d3158f2a4811e4206b581d77682",
+      "facts": []
+    },
+    {
+      "sourceKey": "sms:synthetic:54",
+      "senderBrand": "HDFCBK",
+      "observedAt": "2026-11-01T07:00:20Z",
+      "bodyHash": "edb1b0ff0da20a9050c941ec293408d6915419008331ece5a352f14fd8fb1cb0",
+      "facts": []
+    },
+    {
+      "sourceKey": "sms:synthetic:55",
+      "senderBrand": "HDFCBK",
+      "observedAt": "2026-11-01T07:00:20Z",
+      "bodyHash": "80a8581fe03480949e96c17a683fd6cd1778d90b4bcd30667244e1a68ee03a2a",
+      "facts": []
+    },
+    {
+      "sourceKey": "sms:synthetic:56",
+      "senderBrand": "HDFCBK",
+      "observedAt": "2026-11-01T07:00:20Z",
+      "bodyHash": "4975d480f674287ea95dbf6cc6502869478a172f4ca1297ba4528a9529d18df1",
+      "facts": []
+    },
+    {
+      "sourceKey": "sms:synthetic:57",
+      "senderBrand": "HDFCBK",
+      "observedAt": "2026-11-01T07:00:20Z",
+      "bodyHash": "ef98dc32e01d9d9b6cebccefb45f6b5c07a6fa9c1d39cc50c85fb773c5edf2a2",
+      "facts": []
+    },
+    {
+      "sourceKey": "sms:synthetic:58",
+      "senderBrand": "HDFCBK",
+      "observedAt": "2026-11-01T07:00:20Z",
+      "bodyHash": "717aa046d6dabf799a4202660375eff5d63eeb85b950106df691c6e48ff4cdd0",
+      "facts": []
+    },
+    {
+      "sourceKey": "sms:synthetic:59",
+      "senderBrand": "HDFCBK",
+      "observedAt": "2026-11-01T07:00:20Z",
+      "bodyHash": "b60123eb42606d7d27a0a77cd6a5344d8a439e2bf461fc6baeb63e61f00f781d",
+      "facts": []
+    },
+    {
+      "sourceKey": "sms:synthetic:60",
+      "senderBrand": "HDFCBK",
+      "observedAt": "2026-11-01T07:00:20Z",
+      "bodyHash": "a22828e19104c26a16f539a31d643394736ac77020b764088150a97b15573f90",
+      "facts": []
+    },
+    {
+      "sourceKey": "sms:synthetic:61",
+      "senderBrand": "HDFCBK",
+      "observedAt": "2026-11-01T07:00:20Z",
+      "bodyHash": "5b9abb305b91998ad0ec0e939e52d7535bc20dbfaf4868427158a2920ebc9bb5",
+      "facts": []
+    },
+    {
+      "sourceKey": "sms:synthetic:62",
+      "senderBrand": "HDFCBK",
+      "observedAt": "2026-11-01T07:00:20Z",
+      "bodyHash": "b21226b622374b38df0ff75a67f03fdd6fd9c4d4f2537bdb74a2c8745ce0602e",
+      "facts": []
+    },
+    {
+      "sourceKey": "sms:synthetic:63",
+      "senderBrand": "HDFCBK",
+      "observedAt": "2026-11-01T07:00:20Z",
+      "bodyHash": "eb7b1d4510dabf6ae6312597a79614088c9689cbe933d008b34b9b381cb598ce",
+      "facts": []
+    },
+    {
+      "sourceKey": "sms:synthetic:64",
+      "senderBrand": "HDFCBK",
+      "observedAt": "2026-11-01T07:00:20Z",
+      "bodyHash": "861a13e890e5f322310b1424cad9bec3c4e8372e834ec9f7b7d36369aa32f9d1",
+      "facts": []
+    },
+    {
+      "sourceKey": "sms:synthetic:65",
+      "senderBrand": "HDFCBK",
+      "observedAt": "2026-11-01T07:00:20Z",
+      "bodyHash": "d39b666110b51507d08e07c7d2b4cf7435834315715de73098686534abf9d0c3",
+      "facts": []
+    },
+    {
+      "sourceKey": "sms:synthetic:66",
+      "senderBrand": "HDFCBK",
+      "observedAt": "2026-11-01T07:00:20Z",
+      "bodyHash": "a7e8e357b87dbeca46d469edc5d1b80e17b44c3a7d963b736d90de00614aa93b",
+      "facts": []
+    },
+    {
+      "sourceKey": "sms:synthetic:67",
+      "senderBrand": "HDFCBK",
+      "observedAt": "2026-11-01T07:00:20Z",
+      "bodyHash": "626e242ba35acc32c2e0c994463dbc5b4371dceaa38c4d5d8a197dda1b915c2b",
+      "facts": []
+    },
+    {
+      "sourceKey": "sms:synthetic:68",
+      "senderBrand": "HDFCBK",
+      "observedAt": "2026-11-01T07:00:20Z",
+      "bodyHash": "4387cd3c5b3eb56a724cc80391c8e49c898785f4af673a7021352ebfda1941aa",
+      "facts": []
+    },
+    {
+      "sourceKey": "sms:synthetic:69",
+      "senderBrand": "HDFCBK",
+      "observedAt": "2026-11-01T07:00:20Z",
+      "bodyHash": "70c9895359980811a66aff851d0ccf3fb2eef098bd14e696f5cbb1b712e1fa93",
+      "facts": []
+    },
+    {
+      "sourceKey": "sms:synthetic:70",
+      "senderBrand": "HDFCBK",
+      "observedAt": "2026-11-01T07:00:20Z",
+      "bodyHash": "ad1a7ad26229f4bf77dd48db71c3113ef8d68d8d9c39babc895bbaebfb6d73a2",
+      "facts": []
+    },
+    {
+      "sourceKey": "sms:synthetic:71",
+      "senderBrand": "HDFCBK",
+      "observedAt": "2026-11-01T07:00:20Z",
+      "bodyHash": "903a79c5c0b577439233720a5ebbf3c248d5d34d9f8a1eda3cc26653f998ee64",
+      "facts": []
+    },
+    {
+      "sourceKey": "sms:synthetic:72",
+      "senderBrand": "HDFCBK",
+      "observedAt": "2026-11-01T07:00:20Z",
+      "bodyHash": "92b34e66b788aa5135fc71c8b185a8ee67a06c2413775bc208ac6ee7dfa4ed3e",
+      "facts": []
+    },
+    {
+      "sourceKey": "sms:synthetic:73",
+      "senderBrand": "HDFCBK",
+      "observedAt": "2026-11-01T07:00:20Z",
+      "bodyHash": "3afb06ab0509f9b73aa05ac94c891078ddecff084448aa0eadaeb6a89980adf0",
+      "facts": []
+    },
+    {
+      "sourceKey": "sms:synthetic:74",
+      "senderBrand": "HDFCBK",
+      "observedAt": "2026-11-01T07:00:20Z",
+      "bodyHash": "36daf89bef884e6b0a4c2ccfa7138f3698f11ae772f049f7ada671cd88175676",
+      "facts": []
+    },
+    {
+      "sourceKey": "sms:synthetic:75",
+      "senderBrand": "HDFCBK",
+      "observedAt": "2026-11-01T07:00:20Z",
+      "bodyHash": "c18f198607f4044d5f6d44096cb7fbb06d42c1e34e20ce474b9a30b9895bfd28",
+      "facts": []
+    },
+    {
+      "sourceKey": "sms:synthetic:76",
+      "senderBrand": "HDFCBK",
+      "observedAt": "2026-11-01T07:00:20Z",
+      "bodyHash": "af9e9e60b675f6db3c05e9021a5d487ebbf661c9ab26f83e47fda7b1cc672378",
+      "facts": []
+    },
+    {
+      "sourceKey": "sms:synthetic:77",
+      "senderBrand": "HDFCBK",
+      "observedAt": "2026-11-01T07:00:20Z",
+      "bodyHash": "bc34efce167fc30d3a44ea91e7778b0221c79561dfea91555789e71238bf0155",
+      "facts": []
+    },
+    {
+      "sourceKey": "sms:synthetic:78",
+      "senderBrand": "HDFCBK",
+      "observedAt": "2026-11-01T07:00:20Z",
+      "bodyHash": "da86f41191bdd5c0572fa3e531150ac1009e703cfaf3427370571ce8aff85415",
+      "facts": []
+    },
+    {
+      "sourceKey": "sms:synthetic:79",
+      "senderBrand": "HDFCBK",
+      "observedAt": "2026-11-01T07:00:20Z",
+      "bodyHash": "231d9293a519742203cd0a9f8b35b82cd3dcd8bb03b329c83a60efb9c9a0eb01",
+      "facts": []
+    },
+    {
+      "sourceKey": "sms:synthetic:80",
+      "senderBrand": "HDFCBK",
+      "observedAt": "2026-11-01T07:00:20Z",
+      "bodyHash": "e673da29c51c16c3f22cacdda8f9f1c5e143f8f627d34e02bca08b09da50189b",
+      "facts": []
+    },
+    {
+      "sourceKey": "sms:synthetic:81",
+      "senderBrand": "HDFCBK",
+      "observedAt": "2026-11-01T07:00:20Z",
+      "bodyHash": "a7d15325ec87a5275230b366e7df3ff12a7a310f9ce36ed657ad159538bd109e",
+      "facts": []
+    },
+    {
+      "sourceKey": "sms:synthetic:82",
+      "senderBrand": "HDFCBK",
+      "observedAt": "2026-11-01T07:00:20Z",
+      "bodyHash": "d902658dcd4cff678deae06523e529dd8917a793be981dee738f6982d403b616",
+      "facts": []
+    },
+    {
+      "sourceKey": "sms:synthetic:83",
+      "senderBrand": "HDFCBK",
+      "observedAt": "2026-11-01T07:00:20Z",
+      "bodyHash": "949819a38fe573c08d05c562872e495b672967c47c7921ce13d0ce713ed6c898",
+      "facts": []
+    },
+    {
+      "sourceKey": "sms:synthetic:84",
+      "senderBrand": "HDFCBK",
+      "observedAt": "2026-11-01T07:00:20Z",
+      "bodyHash": "eef57eff2a9bca04f5281437cede5fc567df9c1f99acda038e10bbb93a95bd8f",
+      "facts": []
+    },
+    {
+      "sourceKey": "sms:synthetic:85",
+      "senderBrand": "HDFCBK",
+      "observedAt": "2026-11-01T07:00:20Z",
+      "bodyHash": "95b2a1ed189fdb9ed704af2a7e1c6c5903f297401ea1b43380ce085632f95e05",
+      "facts": []
+    },
+    {
+      "sourceKey": "sms:synthetic:86",
+      "senderBrand": "HDFCBK",
+      "observedAt": "2026-11-01T07:00:20Z",
+      "bodyHash": "7f7b9f4b94e8e6d8ff2227d50d04222f37d190d07e36da08145fd813faf598ca",
+      "facts": []
+    },
+    {
+      "sourceKey": "sms:synthetic:87",
+      "senderBrand": "HDFCBK",
+      "observedAt": "2026-11-01T07:00:20Z",
+      "bodyHash": "9794c2ca1544ab22dbdb74095de8c584635c4ef388a48238934c985154f482cf",
+      "facts": []
+    },
+    {
+      "sourceKey": "sms:synthetic:88",
+      "senderBrand": "HDFCBK",
+      "observedAt": "2026-11-01T07:00:20Z",
+      "bodyHash": "523979721b0ace749d88e8d61a3cf0bd80362bea906f9beb155bfc62351c8ab6",
+      "facts": []
+    },
+    {
+      "sourceKey": "sms:synthetic:89",
+      "senderBrand": "HDFCBK",
+      "observedAt": "2026-11-01T07:00:20Z",
+      "bodyHash": "1c0a06a8bb29389ab45a8c06dd131d5eaba2f190b5af0cc404273793833cbdb6",
+      "facts": []
+    },
+    {
+      "sourceKey": "sms:synthetic:90",
+      "senderBrand": "HDFCBK",
+      "observedAt": "2026-11-01T07:00:20Z",
+      "bodyHash": "708fa63fd98dcf46705a6dedfc006b7aef332c208fe6c9436eed22975a80d23e",
+      "facts": []
+    },
+    {
+      "sourceKey": "sms:synthetic:91",
+      "senderBrand": "HDFCBK",
+      "observedAt": "2026-11-01T07:00:20Z",
+      "bodyHash": "8ad66d3a6dbf66d280dbbdc0961236ece0c151e9b540551020f49ba6b1266e86",
+      "facts": []
+    },
+    {
+      "sourceKey": "sms:synthetic:92",
+      "senderBrand": "HDFCBK",
+      "observedAt": "2026-11-01T07:00:20Z",
+      "bodyHash": "1a5751cea04e249752e75c7ede8ef1187c32aa12fd98f781f1c1165e21735483",
+      "facts": []
+    },
+    {
+      "sourceKey": "sms:synthetic:93",
+      "senderBrand": "HDFCBK",
+      "observedAt": "2026-11-01T07:00:20Z",
+      "bodyHash": "e8a6557cd393604ad75c96e23931bc4a983800067c6e53309c8bc74be56749b7",
+      "facts": []
+    },
+    {
+      "sourceKey": "sms:synthetic:94",
+      "senderBrand": "HDFCBK",
+      "observedAt": "2026-11-01T07:00:20Z",
+      "bodyHash": "56d84fd9102983fbe0a5a5f5c2cc832c23c71ed96543ce54985ca1b069eedd16",
+      "facts": []
+    },
+    {
+      "sourceKey": "sms:synthetic:95",
+      "senderBrand": "HDFCBK",
+      "observedAt": "2026-11-01T07:00:20Z",
+      "bodyHash": "ea09656744b736dda735118876107ea5ca6dc8ba6bda2796a6544b7211c07fda",
+      "facts": []
+    },
+    {
+      "sourceKey": "sms:synthetic:96",
+      "senderBrand": "HDFCBK",
+      "observedAt": "2026-11-01T07:00:20Z",
+      "bodyHash": "cf18fe11c85d57e5fd72ea52e57c3ba90134b4eab5d90d7ddf55e156cc400eb4",
+      "facts": []
+    },
+    {
+      "sourceKey": "sms:synthetic:97",
+      "senderBrand": "HDFCBK",
+      "observedAt": "2026-11-01T07:00:20Z",
+      "bodyHash": "4966b0134ca8b1aaab2a6b0d18d6a9803e31146c855cc5422708aa25f2b741b5",
+      "facts": []
+    },
+    {
+      "sourceKey": "sms:synthetic:98",
+      "senderBrand": "HDFCBK",
+      "observedAt": "2026-11-01T07:00:20Z",
+      "bodyHash": "5d232c26b95d7cb971a9b72d884d0a48a91d8f341175073072aa8ed6a988f3fb",
+      "facts": []
+    },
+    {
+      "sourceKey": "sms:synthetic:99",
+      "senderBrand": "HDFCBK",
+      "observedAt": "2026-11-01T07:00:20Z",
+      "bodyHash": "3fb7eaa98f43ec52c95bae9989e0cf44dc91aba5ff87cc0c4d24516f7e8c5e70",
+      "facts": []
+    },
+    {
+      "sourceKey": "sms:synthetic:100",
+      "senderBrand": "HDFCBK",
+      "observedAt": "2026-11-01T07:00:20Z",
+      "bodyHash": "2711a313df7a8ebd2a7316f3bfb38158e0d93ff250e54d441695052ecb6da27f",
+      "facts": []
+    },
+    {
+      "sourceKey": "sms:synthetic:101",
+      "senderBrand": "HDFCBK",
+      "observedAt": "2026-11-01T07:00:20Z",
+      "bodyHash": "3894b455e17ad07d34b3682fdbeb09a9c2136b3be1ea904672e7de949858b6ca",
+      "facts": []
+    },
+    {
+      "sourceKey": "sms:synthetic:102",
+      "senderBrand": "HDFCBK",
+      "observedAt": "2026-11-01T07:00:20Z",
+      "bodyHash": "3d6e1011cd20f1acafe63d15c9b1570a1e9a445313c4eecad30e33e43a6b3711",
+      "facts": []
+    },
+    {
+      "sourceKey": "sms:synthetic:103",
+      "senderBrand": "HDFCBK",
+      "observedAt": "2026-11-01T07:00:20Z",
+      "bodyHash": "384850f53015ccd428d0facc7a2f633fa95f4d0be6b22a0113a0b4a7d1575887",
+      "facts": []
+    },
+    {
+      "sourceKey": "sms:synthetic:104",
+      "senderBrand": "HDFCBK",
+      "observedAt": "2026-11-01T07:00:20Z",
+      "bodyHash": "6326e05815db8747018aae66e3c300e0740d7f210cde6b9c70fb9de0233a346a",
+      "facts": []
+    },
+    {
+      "sourceKey": "sms:synthetic:105",
+      "senderBrand": "HDFCBK",
+      "observedAt": "2026-11-01T07:00:20Z",
+      "bodyHash": "b321cd299995f20b68d027e7387ee74605ed04cfc596bee0c8c8efc3190b76e4",
+      "facts": []
+    },
+    {
+      "sourceKey": "sms:synthetic:106",
+      "senderBrand": "HDFCBK",
+      "observedAt": "2026-11-01T07:00:20Z",
+      "bodyHash": "d6c4e37816ad4f4fab3e243948b75728a6923f9abb406175a64bc915dc1b558f",
+      "facts": []
+    },
+    {
+      "sourceKey": "sms:synthetic:107",
+      "senderBrand": "HDFCBK",
+      "observedAt": "2026-11-01T07:00:20Z",
+      "bodyHash": "d8d39399f1cf842764331e89029a64d2ac1939dd47120160c4299ab45a1dafe2",
+      "facts": []
+    },
+    {
+      "sourceKey": "sms:synthetic:108",
+      "senderBrand": "HDFCBK",
+      "observedAt": "2026-11-01T07:00:20Z",
+      "bodyHash": "f4543917fd66d6a4803049cd787713d99d70c93623db9432d69984ebf098a0a9",
+      "facts": []
+    },
+    {
+      "sourceKey": "sms:synthetic:109",
+      "senderBrand": "HDFCBK",
+      "observedAt": "2026-11-01T07:00:20Z",
+      "bodyHash": "9a05644d798b31f7acfa5e7594cd6c76436d9f8e714aa9580a8ca8969a89666a",
+      "facts": []
+    },
+    {
+      "sourceKey": "sms:synthetic:110",
+      "senderBrand": "HDFCBK",
+      "observedAt": "2026-11-01T07:00:20Z",
+      "bodyHash": "5d895202021305b3236470b1e92db3deb3318afd9a022537e20e945f80dd9f0b",
+      "facts": []
+    },
+    {
+      "sourceKey": "sms:synthetic:111",
+      "senderBrand": "HDFCBK",
+      "observedAt": "2026-11-01T07:00:20Z",
+      "bodyHash": "9b5e57a2510a67d60f0fbd8f859e2804246e83cb7d74beeb38e63ab77206e4f0",
+      "facts": []
+    },
+    {
+      "sourceKey": "sms:synthetic:112",
+      "senderBrand": "HDFCBK",
+      "observedAt": "2026-11-01T07:00:20Z",
+      "bodyHash": "7118e5b0a8b6f876d9d5fcea15c8da20339de168f55552d60380cb602831dbf7",
+      "facts": []
+    },
+    {
+      "sourceKey": "sms:synthetic:113",
+      "senderBrand": "HDFCBK",
+      "observedAt": "2026-11-01T07:00:20Z",
+      "bodyHash": "acf9f07e31d2e73dc9b6e411f14b9d195729425ed1ae0cf69e1ebaeae44b8e56",
+      "facts": []
+    },
+    {
+      "sourceKey": "sms:synthetic:114",
+      "senderBrand": "HDFCBK",
+      "observedAt": "2026-11-01T07:00:20Z",
+      "bodyHash": "49119dc58b74508d7f07b9c4ee0fa963757f02f2b76d0ecf6049d2d8c617932d",
+      "facts": []
+    },
+    {
+      "sourceKey": "sms:synthetic:115",
+      "senderBrand": "HDFCBK",
+      "observedAt": "2026-11-01T07:00:20Z",
+      "bodyHash": "6c016166072c65d73ac262052593d25ba6162dada1d845576decb9a8cc5ffdb1",
+      "facts": []
+    },
+    {
+      "sourceKey": "sms:synthetic:116",
+      "senderBrand": "HDFCBK",
+      "observedAt": "2026-11-01T07:00:20Z",
+      "bodyHash": "3090c867c584b0fb0db9ad4d324bce6307be993803800f0d8fc0b880a4987bf9",
+      "facts": []
+    },
+    {
+      "sourceKey": "sms:synthetic:117",
+      "senderBrand": "HDFCBK",
+      "observedAt": "2026-11-01T07:00:20Z",
+      "bodyHash": "317757223c52ebd3da7c297ba5924d00937d18b8fb56202631c86f0945d9485f",
+      "facts": []
+    },
+    {
+      "sourceKey": "sms:synthetic:118",
+      "senderBrand": "HDFCBK",
+      "observedAt": "2026-11-01T07:00:20Z",
+      "bodyHash": "f4b56e79f9bce1fc5638e8bcdec31521075cae50d7b88f8ba7b526d5967d035c",
+      "facts": []
+    },
+    {
+      "sourceKey": "sms:synthetic:119",
+      "senderBrand": "HDFCBK",
+      "observedAt": "2026-11-01T07:00:20Z",
+      "bodyHash": "edbddf10cb160e0d8df39a0ec60c2b11d3dcd89d0e1b324b08690c77102e9116",
+      "facts": []
+    },
+    {
+      "sourceKey": "sms:synthetic:120",
+      "senderBrand": "HDFCBK",
+      "observedAt": "2026-11-01T07:00:20Z",
+      "bodyHash": "d3079c50f130aac1c003badca36878ebc2cf3e2d8508f966a7d73e8c314d3b6a",
+      "facts": []
+    },
+    {
+      "sourceKey": "sms:synthetic:121",
+      "senderBrand": "HDFCBK",
+      "observedAt": "2026-11-01T07:00:20Z",
+      "bodyHash": "9e6918fb76be00399e3e6dbd84e6fe8a08dc39166d769103b05f8f3a6fd4c98b",
+      "facts": []
+    },
+    {
+      "sourceKey": "sms:synthetic:122",
+      "senderBrand": "HDFCBK",
+      "observedAt": "2026-11-01T07:00:20Z",
+      "bodyHash": "47d825c590e68814d5da11f9c23cbeae61e936b004e2427a767b07723ceea791",
+      "facts": []
+    },
+    {
+      "sourceKey": "sms:synthetic:123",
+      "senderBrand": "HDFCBK",
+      "observedAt": "2026-11-01T07:00:20Z",
+      "bodyHash": "60bcad77c43c4ab9840d8aa44b6c18e692e6c8e5e4f40351561c41274f1197c8",
+      "facts": []
+    },
+    {
+      "sourceKey": "sms:synthetic:124",
+      "senderBrand": "HDFCBK",
+      "observedAt": "2026-11-01T07:00:20Z",
+      "bodyHash": "542d304e6c7bd7e4c08a97959a6da1c04013381c891be01e73c8340cc5374fb1",
+      "facts": []
+    },
+    {
+      "sourceKey": "sms:synthetic:125",
+      "senderBrand": "HDFCBK",
+      "observedAt": "2026-11-01T07:00:20Z",
+      "bodyHash": "c2234f20a0329d5bcf8e2e8a89dac3a822252bd6dd7443d61c9f21c421008775",
+      "facts": []
+    },
+    {
+      "sourceKey": "sms:synthetic:126",
+      "senderBrand": "HDFCBK",
+      "observedAt": "2026-11-01T07:00:20Z",
+      "bodyHash": "ff6082e6ffaf958997a4e92000a27a695d00d1acb33477255b8b868de0b3ef68",
+      "facts": []
+    },
+    {
+      "sourceKey": "sms:synthetic:127",
+      "senderBrand": "HDFCBK",
+      "observedAt": "2026-11-01T07:00:20Z",
+      "bodyHash": "0a6c9ede8a880b505936686e60c106bced696376238954645348e962e3c5070e",
+      "facts": []
+    },
+    {
+      "sourceKey": "sms:synthetic:128",
+      "senderBrand": "HDFCBK",
+      "observedAt": "2026-11-01T07:00:20Z",
+      "bodyHash": "3cb718fe4c547693d2aaa72b952439061ab1715877750e6f12ec5af7376389f3",
+      "facts": []
+    },
+    {
+      "sourceKey": "sms:synthetic:129",
+      "senderBrand": "HDFCBK",
+      "observedAt": "2026-11-01T07:00:20Z",
+      "bodyHash": "8b43ad5bac9c75a534aac275aa070c0334422875dba17ed7efd403a841be9b70",
+      "facts": []
+    },
+    {
+      "sourceKey": "sms:synthetic:130",
+      "senderBrand": "HDFCBK",
+      "observedAt": "2026-11-01T07:00:20Z",
+      "bodyHash": "40adc24bca39d87fa92f4fa9de6bddbeb5377509223dd042211e6b18b80b6cfd",
+      "facts": []
+    },
+    {
+      "sourceKey": "sms:synthetic:131",
+      "senderBrand": "HDFCBK",
+      "observedAt": "2026-11-01T07:00:20Z",
+      "bodyHash": "3808d287dba19ab14e7ec73a1181d48ead34ace30aa9c6c2d4a69d00db5f441c",
+      "facts": []
+    },
+    {
+      "sourceKey": "sms:synthetic:132",
+      "senderBrand": "HDFCBK",
+      "observedAt": "2026-11-01T07:00:20Z",
+      "bodyHash": "6576b33eba5883fdbe022c25880f5a42e1a708d4dbec6872f4939eafb3d7cdcf",
+      "facts": []
+    },
+    {
+      "sourceKey": "sms:synthetic:133",
+      "senderBrand": "HDFCBK",
+      "observedAt": "2026-11-01T07:00:20Z",
+      "bodyHash": "1bcef68f6f8209c41b22eb44956b7c959bd62432d1ccc12cf5eb64729bd17193",
+      "facts": []
+    },
+    {
+      "sourceKey": "sms:synthetic:134",
+      "senderBrand": "HDFCBK",
+      "observedAt": "2026-11-01T07:00:20Z",
+      "bodyHash": "746f1cdab0c7d785d56672f27c149fa7de37f87b9e50744142525977aec81772",
+      "facts": []
+    },
+    {
+      "sourceKey": "sms:synthetic:135",
+      "senderBrand": "HDFCBK",
+      "observedAt": "2026-11-01T07:00:20Z",
+      "bodyHash": "223e1ec8a47636d43f20758686c582cf1ced52e561fb9c5271341ad76eb59a88",
+      "facts": []
+    },
+    {
+      "sourceKey": "sms:synthetic:136",
+      "senderBrand": "HDFCBK",
+      "observedAt": "2026-11-01T07:00:20Z",
+      "bodyHash": "f9de49d9ab259fc2aa61834e10a631813e5e6f1cbe47327a7951ad2f14cd3210",
+      "facts": []
+    },
+    {
+      "sourceKey": "sms:synthetic:137",
+      "senderBrand": "HDFCBK",
+      "observedAt": "2026-11-01T07:00:20Z",
+      "bodyHash": "21ec1d61cdddb40d939caa5a320db4d1090b9a8251689d2000bcac06f1d35422",
+      "facts": []
+    },
+    {
+      "sourceKey": "sms:synthetic:138",
+      "senderBrand": "HDFCBK",
+      "observedAt": "2026-11-01T07:00:20Z",
+      "bodyHash": "b28166d4cb4b5d3a287fcd84247fd453f25534ae70c8783c0b5e27e27b632935",
+      "facts": []
+    },
+    {
+      "sourceKey": "sms:synthetic:139",
+      "senderBrand": "HDFCBK",
+      "observedAt": "2026-11-01T07:00:20Z",
+      "bodyHash": "a306a99e80934c5e07693287f19e828123a5f7f2eadcf36af5471bfb102f141f",
+      "facts": []
+    },
+    {
+      "sourceKey": "sms:synthetic:140",
+      "senderBrand": "HDFCBK",
+      "observedAt": "2026-11-01T07:00:20Z",
+      "bodyHash": "2122c2f7143074f08837ebcb1c0ee906ff2c0c7afe5a3b872b2cf9f2fedcd3cf",
+      "facts": []
+    },
+    {
+      "sourceKey": "sms:synthetic:141",
+      "senderBrand": "HDFCBK",
+      "observedAt": "2026-11-01T07:00:20Z",
+      "bodyHash": "5240754389d3b2781cd016dd0b3f02850b89ef7251f29a754d5f5d12ac0da741",
+      "facts": []
+    },
+    {
+      "sourceKey": "sms:synthetic:142",
+      "senderBrand": "HDFCBK",
+      "observedAt": "2026-11-01T07:00:20Z",
+      "bodyHash": "953f963f26c99940566353e08c668d8528c0926ce6e063a9978c05c050b4e228",
+      "facts": []
+    },
+    {
+      "sourceKey": "sms:synthetic:143",
+      "senderBrand": "HDFCBK",
+      "observedAt": "2026-11-01T07:00:20Z",
+      "bodyHash": "abed930e06c7d75e92c46919d9f86d8d468695e2547f4b4152272cf7430ce67a",
+      "facts": []
+    },
+    {
+      "sourceKey": "sms:synthetic:144",
+      "senderBrand": "HDFCBK",
+      "observedAt": "2026-11-01T07:00:20Z",
+      "bodyHash": "8d24242b3ee90bcbcf10d46ab3bbdd0d24c58ab55d850d427189133dad017c9b",
+      "facts": []
+    },
+    {
+      "sourceKey": "sms:synthetic:145",
+      "senderBrand": "HDFCBK",
+      "observedAt": "2026-11-01T07:00:20Z",
+      "bodyHash": "ec92f21e962cf79d2e2d781f36056e0d58574236ef4c218d1b8723ca71e7608f",
+      "facts": []
+    },
+    {
+      "sourceKey": "sms:synthetic:146",
+      "senderBrand": "HDFCBK",
+      "observedAt": "2026-11-01T07:00:20Z",
+      "bodyHash": "12d478ca550cfa850d9e951837493a0027d604daff4a00bbb21a4a524e7395ff",
+      "facts": []
+    },
+    {
+      "sourceKey": "sms:synthetic:147",
+      "senderBrand": "HDFCBK",
+      "observedAt": "2026-11-01T07:00:20Z",
+      "bodyHash": "dcfc2994886f5389114e2bbc2abef4afee507bb479c72cd2b9823b9fecba4557",
+      "facts": []
+    },
+    {
+      "sourceKey": "sms:synthetic:148",
+      "senderBrand": "HDFCBK",
+      "observedAt": "2026-11-01T07:00:20Z",
+      "bodyHash": "dd8a4396e31312289506d69e59e51996bc77a378afffeb5eeed82cee45029ab9",
+      "facts": []
+    },
+    {
+      "sourceKey": "sms:synthetic:149",
+      "senderBrand": "HDFCBK",
+      "observedAt": "2026-11-01T07:00:20Z",
+      "bodyHash": "62a26260ed8e63d2f40b39b6f61fe9670cba45e2da1ffb1dd48d831483cff0b4",
+      "facts": []
+    },
+    {
+      "sourceKey": "sms:synthetic:150",
+      "senderBrand": "HDFCBK",
+      "observedAt": "2026-11-01T07:00:20Z",
+      "bodyHash": "1bf5e9f9250a960d55dcb356dfb25502b40ded8d75d31f477bf4fdec440f6b38",
+      "facts": []
+    },
+    {
+      "sourceKey": "sms:synthetic:151",
+      "senderBrand": "HDFCBK",
+      "observedAt": "2026-11-01T07:00:20Z",
+      "bodyHash": "f31e204dd9641a96ddcf337b4d7c4592deeb95eb0bc9a7f3487496627a4e96cd",
+      "facts": []
+    },
+    {
+      "sourceKey": "sms:synthetic:152",
+      "senderBrand": "HDFCBK",
+      "observedAt": "2026-11-01T07:00:20Z",
+      "bodyHash": "87a4431152f75e2c1d758f82bff1662dcccea097d7a49833d5e7ea2de02a0f14",
+      "facts": []
+    },
+    {
+      "sourceKey": "sms:synthetic:153",
+      "senderBrand": "HDFCBK",
+      "observedAt": "2026-11-01T07:00:20Z",
+      "bodyHash": "c061d5b14dfacbb99ef2db46557bb29432b71ee3cc2d9f4dafb865a875c7d5f6",
+      "facts": []
+    },
+    {
+      "sourceKey": "sms:synthetic:154",
+      "senderBrand": "HDFCBK",
+      "observedAt": "2026-11-01T07:00:20Z",
+      "bodyHash": "d680198d53b12ee418470c501c5e222e586f4432fb13e1c5243bd95eedc79210",
+      "facts": []
+    },
+    {
+      "sourceKey": "sms:synthetic:155",
+      "senderBrand": "HDFCBK",
+      "observedAt": "2026-11-01T07:00:20Z",
+      "bodyHash": "f6e8c0562be6319adf02b5a04a8095b984e5b3703be9ad956e1cfd683f78311f",
+      "facts": []
+    },
+    {
+      "sourceKey": "sms:synthetic:156",
+      "senderBrand": "HDFCBK",
+      "observedAt": "2026-11-01T07:00:20Z",
+      "bodyHash": "1162fa03f8b7cb6dad63327da685c2a9e871a70ffafad876d7264d1e1e37c7b1",
+      "facts": []
+    },
+    {
+      "sourceKey": "sms:synthetic:157",
+      "senderBrand": "HDFCBK",
+      "observedAt": "2026-11-01T07:00:20Z",
+      "bodyHash": "44c4035d40067660f13556b722353f5bfd6c9fe4ecc57e5e1bff3e6f76865ad8",
+      "facts": []
+    },
+    {
+      "sourceKey": "sms:synthetic:158",
+      "senderBrand": "HDFCBK",
+      "observedAt": "2026-11-01T07:00:20Z",
+      "bodyHash": "d76e46245b0657243ebf2f045f73415491dbc112bba372d1380b62941b121a71",
+      "facts": []
+    },
+    {
+      "sourceKey": "sms:synthetic:159",
+      "senderBrand": "HDFCBK",
+      "observedAt": "2026-11-01T07:00:20Z",
+      "bodyHash": "a80adae3a28775f10f5fdc123cd1ad887de9831b7ef1e30839d3d5d1f524c457",
+      "facts": []
+    },
+    {
+      "sourceKey": "sms:synthetic:160",
+      "senderBrand": "HDFCBK",
+      "observedAt": "2026-11-01T07:00:20Z",
+      "bodyHash": "d47945adeb77cabab60ab3d4f5dae0af32ed8cb2eb0399fbf5847dbd04d1996f",
+      "facts": []
+    },
+    {
+      "sourceKey": "sms:synthetic:161",
+      "senderBrand": "HDFCBK",
+      "observedAt": "2026-11-01T07:00:20Z",
+      "bodyHash": "7f0be9cff57ed650443388a697736a9f24af791610d38e9dc3a38051f19c02a3",
+      "facts": []
+    },
+    {
+      "sourceKey": "sms:synthetic:162",
+      "senderBrand": "HDFCBK",
+      "observedAt": "2026-11-01T07:00:20Z",
+      "bodyHash": "e876cfee89445df69fe5118dc465bdfda3f054e196afa59793b7054c47a35833",
+      "facts": []
+    },
+    {
+      "sourceKey": "sms:synthetic:163",
+      "senderBrand": "HDFCBK",
+      "observedAt": "2026-11-01T07:00:20Z",
+      "bodyHash": "1f7218f7bdc447ad514a81983e983561205b707739cbb7328e6cbac4fe9a29e5",
+      "facts": []
+    },
+    {
+      "sourceKey": "sms:synthetic:164",
+      "senderBrand": "HDFCBK",
+      "observedAt": "2026-11-01T07:00:20Z",
+      "bodyHash": "4b8fbd4b5e9981bd8cae5047ab598a460d337d734af79d029e27a7cd2001aac6",
+      "facts": []
+    },
+    {
+      "sourceKey": "sms:synthetic:165",
+      "senderBrand": "HDFCBK",
+      "observedAt": "2026-11-01T07:00:20Z",
+      "bodyHash": "26e0afabaa4a23285953b1a0e0d770b7c06ccbd1714f92895d0209479844d7e0",
+      "facts": []
+    },
+    {
+      "sourceKey": "sms:synthetic:166",
+      "senderBrand": "HDFCBK",
+      "observedAt": "2026-11-01T07:00:20Z",
+      "bodyHash": "a47405f1c4372398147202f291f8f21eae58b9537a11708861c7ee5281d772f3",
+      "facts": []
+    },
+    {
+      "sourceKey": "sms:synthetic:167",
+      "senderBrand": "HDFCBK",
+      "observedAt": "2026-11-01T07:00:20Z",
+      "bodyHash": "86712250b0765a523bb7cf83b14fb124e1935bd072bb31abfa5333d5c9f041fa",
+      "facts": []
+    },
+    {
+      "sourceKey": "sms:synthetic:168",
+      "senderBrand": "HDFCBK",
+      "observedAt": "2026-11-01T07:00:20Z",
+      "bodyHash": "2a4f1441c49916e760db779db6f90b12f62e0d160d622a6334d38eb5ec6747b1",
+      "facts": []
+    },
+    {
+      "sourceKey": "sms:synthetic:169",
+      "senderBrand": "HDFCBK",
+      "observedAt": "2026-11-01T07:00:20Z",
+      "bodyHash": "46f068a520cde6f3a918bc4c428a1059dce967008098a0a820b429f80832501e",
+      "facts": []
+    },
+    {
+      "sourceKey": "sms:synthetic:170",
+      "senderBrand": "HDFCBK",
+      "observedAt": "2026-11-01T07:00:20Z",
+      "bodyHash": "cdb76fa26517f2de2570004bf544f2436d0137897e4b8a6f983aea9ce2f2d3a1",
+      "facts": []
+    },
+    {
+      "sourceKey": "sms:synthetic:171",
+      "senderBrand": "HDFCBK",
+      "observedAt": "2026-11-01T07:00:20Z",
+      "bodyHash": "2c0a173f7ac79203cf211c9b323154135d716b69644a85cc328029daf3ff3289",
+      "facts": []
+    },
+    {
+      "sourceKey": "sms:synthetic:172",
+      "senderBrand": "HDFCBK",
+      "observedAt": "2026-11-01T07:00:20Z",
+      "bodyHash": "d8d21190547f49d8ca3d536a104525532ddcab764d3b97779ec6a6df87eddc25",
+      "facts": []
+    },
+    {
+      "sourceKey": "sms:synthetic:173",
+      "senderBrand": "HDFCBK",
+      "observedAt": "2026-11-01T07:00:20Z",
+      "bodyHash": "d3a9bd156020e9a68d357148f59e1113b63f621a62908ed4ee5d2b87b5602f00",
+      "facts": []
+    },
+    {
+      "sourceKey": "sms:synthetic:174",
+      "senderBrand": "HDFCBK",
+      "observedAt": "2026-11-01T07:00:20Z",
+      "bodyHash": "9d7da1a0e9a85a70a5ef75f493782c8462e3030d70a72e3514f8f8c57fddff43",
+      "facts": []
+    },
+    {
+      "sourceKey": "sms:synthetic:175",
+      "senderBrand": "HDFCBK",
+      "observedAt": "2026-11-01T07:00:20Z",
+      "bodyHash": "7b9cc512787adbbc1bba5211b754ef8a625a5d94cccdf696bc2c4536762f5ce9",
+      "facts": []
+    },
+    {
+      "sourceKey": "sms:synthetic:176",
+      "senderBrand": "HDFCBK",
+      "observedAt": "2026-11-01T07:00:20Z",
+      "bodyHash": "83ddbb45c3b88d806019d0df31283633e4c3b0861a4258af0532fd5296ae082c",
+      "facts": []
+    },
+    {
+      "sourceKey": "sms:synthetic:177",
+      "senderBrand": "HDFCBK",
+      "observedAt": "2026-11-01T07:00:20Z",
+      "bodyHash": "dd88dc3781a84a73e591d678d1c44b3a6c115a03422737eb5d5938187a107c83",
+      "facts": []
+    },
+    {
+      "sourceKey": "sms:synthetic:178",
+      "senderBrand": "HDFCBK",
+      "observedAt": "2026-11-01T07:00:20Z",
+      "bodyHash": "365fb097e78e680e7faf9731bb1b4ea5a4c3eb4f444a1aad928e381989a0c142",
+      "facts": []
+    },
+    {
+      "sourceKey": "sms:synthetic:179",
+      "senderBrand": "HDFCBK",
+      "observedAt": "2026-11-01T07:00:20Z",
+      "bodyHash": "ef33efb6d8a6e71b38a5ce101df3cb0819e5b8cbd62f86dd6f812170d974981d",
+      "facts": []
+    },
+    {
+      "sourceKey": "sms:synthetic:180",
+      "senderBrand": "HDFCBK",
+      "observedAt": "2026-11-01T07:00:20Z",
+      "bodyHash": "8ca30f763eef2babf5aceb0420fa7f6044b614b96d6d1eb7af1f17632196c6c8",
+      "facts": []
+    },
+    {
+      "sourceKey": "sms:synthetic:181",
+      "senderBrand": "HDFCBK",
+      "observedAt": "2026-11-01T07:00:20Z",
+      "bodyHash": "3f26775901dec2eb3a2a1934c1a5164f9c1fb7e790225e50b8131ac012431cce",
+      "facts": []
+    },
+    {
+      "sourceKey": "sms:synthetic:182",
+      "senderBrand": "HDFCBK",
+      "observedAt": "2026-11-01T07:00:20Z",
+      "bodyHash": "adb3e73d5c1f9df32a1937d5f3943a070a6c35d8315cdd55c1beb7b53772be87",
+      "facts": []
+    },
+    {
+      "sourceKey": "sms:synthetic:183",
+      "senderBrand": "HDFCBK",
+      "observedAt": "2026-11-01T07:00:20Z",
+      "bodyHash": "08a04428ff76ced428404b3a41e39cb2666489024648f828b50d615285be506c",
+      "facts": []
+    },
+    {
+      "sourceKey": "sms:synthetic:184",
+      "senderBrand": "HDFCBK",
+      "observedAt": "2026-11-01T07:00:20Z",
+      "bodyHash": "2d2c15de43666421c6ff18a452fff095c956bddc3944241dad3ec9d390b1deb4",
+      "facts": []
+    },
+    {
+      "sourceKey": "sms:synthetic:185",
+      "senderBrand": "HDFCBK",
+      "observedAt": "2026-11-01T07:00:20Z",
+      "bodyHash": "f7246dbd76e10a461fb2ad08843a9624d2acc26e762376c833bd11fad48bf8e6",
+      "facts": []
+    },
+    {
+      "sourceKey": "sms:synthetic:186",
+      "senderBrand": "HDFCBK",
+      "observedAt": "2026-11-01T07:00:20Z",
+      "bodyHash": "4e8baacf6def091a355a360f79695d3e6b06c7ce745ab51f53fc0b63116b51b7",
+      "facts": []
+    },
+    {
+      "sourceKey": "sms:synthetic:187",
+      "senderBrand": "HDFCBK",
+      "observedAt": "2026-11-01T07:00:20Z",
+      "bodyHash": "34d10593ef703889ac4764218640242c41332c1e286402f88bd5a097c3bca408",
+      "facts": []
+    },
+    {
+      "sourceKey": "sms:synthetic:188",
+      "senderBrand": "HDFCBK",
+      "observedAt": "2026-11-01T07:00:20Z",
+      "bodyHash": "af88480a1452864c18ab6103d7940ee73880efe31d0315c23528de1cd1253867",
+      "facts": []
+    },
+    {
+      "sourceKey": "sms:synthetic:189",
+      "senderBrand": "HDFCBK",
+      "observedAt": "2026-11-01T07:00:20Z",
+      "bodyHash": "4ce494e058e82e063b70a845192a03a7535cf915f6ef0e5216e35691fd559c36",
+      "facts": []
+    },
+    {
+      "sourceKey": "sms:synthetic:190",
+      "senderBrand": "HDFCBK",
+      "observedAt": "2026-11-01T07:00:20Z",
+      "bodyHash": "d74bf635f6ce52748bad5d05caffb98c26697c0c22d4fd6ec563c6a024530ba2",
+      "facts": []
+    },
+    {
+      "sourceKey": "sms:synthetic:191",
+      "senderBrand": "HDFCBK",
+      "observedAt": "2026-11-01T07:00:20Z",
+      "bodyHash": "56a604d86adf80bfa1ae7741c9f249cd9989dc49f7276381cb54970fbaf30d44",
+      "facts": []
+    },
+    {
+      "sourceKey": "sms:synthetic:192",
+      "senderBrand": "HDFCBK",
+      "observedAt": "2026-11-01T07:00:20Z",
+      "bodyHash": "86c6b7a64798c7212c30bd6c7b4fcc331f640015b97bdd0cc64cb8fda5e1014f",
+      "facts": []
+    },
+    {
+      "sourceKey": "sms:synthetic:193",
+      "senderBrand": "HDFCBK",
+      "observedAt": "2026-11-01T07:00:20Z",
+      "bodyHash": "f90302992c13c041d78d2f96c9476804e39d17c7383a0d0993c739b8e504dbd2",
+      "facts": []
+    },
+    {
+      "sourceKey": "sms:synthetic:194",
+      "senderBrand": "HDFCBK",
+      "observedAt": "2026-11-01T07:00:20Z",
+      "bodyHash": "19267161821b114b1c39bc97e8305e487d1fd29fffbb62e7ee1c5fd73d0745cf",
+      "facts": []
+    },
+    {
+      "sourceKey": "sms:synthetic:195",
+      "senderBrand": "HDFCBK",
+      "observedAt": "2026-11-01T07:00:20Z",
+      "bodyHash": "24115d233225f949a7db75d27e16ebc1c622cd80104aa6b5d582ee8c1609481d",
+      "facts": []
+    },
+    {
+      "sourceKey": "sms:synthetic:196",
+      "senderBrand": "HDFCBK",
+      "observedAt": "2026-11-01T07:00:20Z",
+      "bodyHash": "3e49096b77c95dad6c86298638cc4bd99987be804d8e1f8c654a57169b72066e",
+      "facts": []
+    },
+    {
+      "sourceKey": "sms:synthetic:197",
+      "senderBrand": "HDFCBK",
+      "observedAt": "2026-11-01T07:00:20Z",
+      "bodyHash": "9adb75474886188145855814c52a14c2671026ae0961d519213e0b34495ba6ed",
+      "facts": []
+    },
+    {
+      "sourceKey": "sms:synthetic:198",
+      "senderBrand": "HDFCBK",
+      "observedAt": "2026-11-01T07:00:20Z",
+      "bodyHash": "22a4f1a861d85323603a0e64859b8f9b086bf7d3df56542f6ec6ad52bcf26678",
+      "facts": []
+    },
+    {
+      "sourceKey": "sms:synthetic:199",
+      "senderBrand": "HDFCBK",
+      "observedAt": "2026-11-01T07:00:20Z",
+      "bodyHash": "3923d7f2249745ef67269cebb0ae5f86c26ab96665a529c8aec8e0dc79d88f46",
+      "facts": []
+    },
+    {
+      "sourceKey": "sms:synthetic:200",
+      "senderBrand": "HDFCBK",
+      "observedAt": "2026-11-01T07:00:20Z",
+      "bodyHash": "be0a29f7760d9b94111209ca95984c2942d336df8003904bf1200dbaab318fee",
+      "facts": []
+    },
+    {
+      "sourceKey": "sms:synthetic:201",
+      "senderBrand": "HDFCBK",
+      "observedAt": "2026-11-01T07:00:20Z",
+      "bodyHash": "262a862c26d08814e5c44ac89972bf408452187e9863b499fb98582260f32836",
+      "facts": []
+    },
+    {
+      "sourceKey": "sms:synthetic:202",
+      "senderBrand": "HDFCBK",
+      "observedAt": "2026-11-01T07:00:20Z",
+      "bodyHash": "cdf08179e449117b000fab972c3951a9948eae186ab609d55ce0e2be89c73b26",
+      "facts": []
+    },
+    {
+      "sourceKey": "sms:synthetic:203",
+      "senderBrand": "HDFCBK",
+      "observedAt": "2026-11-01T07:00:20Z",
+      "bodyHash": "4a7bbaf0dccc22679e343e443f53cb1d795c0dd3b1ea6204ce9c6d10271ee8e7",
+      "facts": []
+    },
+    {
+      "sourceKey": "sms:synthetic:204",
+      "senderBrand": "HDFCBK",
+      "observedAt": "2026-11-01T07:00:20Z",
+      "bodyHash": "a1007317a3421bdc6d41f10451113085ee60702824e6ca5f34ddf41b92b75043",
+      "facts": []
+    },
+    {
+      "sourceKey": "sms:synthetic:205",
+      "senderBrand": "HDFCBK",
+      "observedAt": "2026-11-01T07:00:20Z",
+      "bodyHash": "66760a47d611925ca2181907016d30667bf2e80e5a102ed47b286e52d67bced0",
+      "facts": []
+    },
+    {
+      "sourceKey": "sms:synthetic:206",
+      "senderBrand": "HDFCBK",
+      "observedAt": "2026-11-01T07:00:20Z",
+      "bodyHash": "5f357dd8c247fd2dade4f35e1e02232cff3db0c5ce589ccef1f5d7326dbf5763",
+      "facts": []
+    },
+    {
+      "sourceKey": "sms:synthetic:207",
+      "senderBrand": "HDFCBK",
+      "observedAt": "2026-11-01T07:00:20Z",
+      "bodyHash": "81e6848d6fa46a53f0d5ce4f9348e54cf5b122f35d44aa44cd0461e12e0cec92",
+      "facts": []
+    },
+    {
+      "sourceKey": "sms:synthetic:208",
+      "senderBrand": "HDFCBK",
+      "observedAt": "2026-11-01T07:00:20Z",
+      "bodyHash": "03620259e5b1834515300435174b5ebf08fdf4172a06993be2ecf1bea7d0a8d5",
+      "facts": []
+    },
+    {
+      "sourceKey": "sms:synthetic:209",
+      "senderBrand": "HDFCBK",
+      "observedAt": "2026-11-01T07:00:20Z",
+      "bodyHash": "35e751cb27171e124838ea8d379c9cfa462bf3c4de252eaf4d5b4312cf6cad4e",
+      "facts": []
+    },
+    {
+      "sourceKey": "sms:synthetic:210",
+      "senderBrand": "HDFCBK",
+      "observedAt": "2026-11-01T07:00:20Z",
+      "bodyHash": "a9fac9546cce05ee0c45ec64c4a0f679a21909d1f1f9d108fdbb859833d59ee4",
+      "facts": []
+    },
+    {
+      "sourceKey": "sms:synthetic:211",
+      "senderBrand": "HDFCBK",
+      "observedAt": "2026-11-01T07:00:20Z",
+      "bodyHash": "d1a2c6a9f13066d3ffe69aa1a0569ed3eff6244aafa1113e30c5afdc8a1f1fe5",
+      "facts": []
+    },
+    {
+      "sourceKey": "sms:synthetic:212",
+      "senderBrand": "HDFCBK",
+      "observedAt": "2026-11-01T07:00:20Z",
+      "bodyHash": "a6baa4100f2f922cc9b52aa8371cc29ec1f3d10031dfb1a7f2ab15c9a3716c03",
+      "facts": []
+    },
+    {
+      "sourceKey": "sms:synthetic:213",
+      "senderBrand": "HDFCBK",
+      "observedAt": "2026-11-01T07:00:20Z",
+      "bodyHash": "6b1cd51e98ca5bde0965ec2291fef28ce36c69619a6309a52411e6ed4e60b5fa",
+      "facts": []
+    },
+    {
+      "sourceKey": "sms:synthetic:214",
+      "senderBrand": "HDFCBK",
+      "observedAt": "2026-11-01T07:00:20Z",
+      "bodyHash": "2d3ae587daf82c54640d0739f821ffdf3745e9e1d39d0c5b593cd407d493ded6",
+      "facts": []
+    },
+    {
+      "sourceKey": "sms:synthetic:215",
+      "senderBrand": "HDFCBK",
+      "observedAt": "2026-11-01T07:00:20Z",
+      "bodyHash": "dbd2b5d5deaec1a6a33333a49e3882d321c55f2243ba49573cdad71d560c9c7c",
+      "facts": []
+    },
+    {
+      "sourceKey": "sms:synthetic:216",
+      "senderBrand": "HDFCBK",
+      "observedAt": "2026-11-01T07:00:20Z",
+      "bodyHash": "bea34d9c5b13e101040eac24dd01c87cf99e0570f6900b488bb7a6166cd53bd3",
+      "facts": []
+    },
+    {
+      "sourceKey": "sms:synthetic:217",
+      "senderBrand": "HDFCBK",
+      "observedAt": "2026-11-01T07:00:20Z",
+      "bodyHash": "a6571156360c0bc43c0bb2365773eb2f3d80044a00452ec0126aebd1a89385a8",
+      "facts": []
+    },
+    {
+      "sourceKey": "sms:synthetic:218",
+      "senderBrand": "HDFCBK",
+      "observedAt": "2026-11-01T07:00:20Z",
+      "bodyHash": "9aeab1fea1b8c2d41e293b39f2e03828026e9dd525567d1b934a49c3187fe146",
+      "facts": []
+    },
+    {
+      "sourceKey": "sms:synthetic:219",
+      "senderBrand": "HDFCBK",
+      "observedAt": "2026-11-01T07:00:20Z",
+      "bodyHash": "e4973845feee1c80d8b87742382f8e9404a409e9653baf10ff0b4afbc3c6e802",
+      "facts": []
+    },
+    {
+      "sourceKey": "sms:synthetic:220",
+      "senderBrand": "HDFCBK",
+      "observedAt": "2026-11-01T07:00:20Z",
+      "bodyHash": "5c88c1ce52e176e800a36fae59e1bdcd7979f8518a94714a5b74aee76ce8b0fd",
+      "facts": []
+    },
+    {
+      "sourceKey": "sms:synthetic:221",
+      "senderBrand": "HDFCBK",
+      "observedAt": "2026-11-01T07:00:20Z",
+      "bodyHash": "308fdf096f72ac6ffa4551acad0862b359e6d7bc67d5d91ada578102a987d310",
+      "facts": []
+    },
+    {
+      "sourceKey": "sms:synthetic:222",
+      "senderBrand": "HDFCBK",
+      "observedAt": "2026-11-01T07:00:20Z",
+      "bodyHash": "37ec1599b81fda20db29da394fdd3d88cfbfbf68511406cbdc055424c4dbfd93",
+      "facts": []
+    },
+    {
+      "sourceKey": "sms:synthetic:223",
+      "senderBrand": "HDFCBK",
+      "observedAt": "2026-11-01T07:00:20Z",
+      "bodyHash": "9e4079d67d69b3084419299eea3638ded1e1728811c7861425362cbbb2493fc2",
+      "facts": []
+    },
+    {
+      "sourceKey": "sms:synthetic:224",
+      "senderBrand": "HDFCBK",
+      "observedAt": "2026-11-01T07:00:20Z",
+      "bodyHash": "cedf365c372c12879246a15eb37d4e88101aeb144ad585b15bc420ed7e03745f",
+      "facts": []
+    },
+    {
+      "sourceKey": "sms:synthetic:225",
+      "senderBrand": "HDFCBK",
+      "observedAt": "2026-11-01T07:00:20Z",
+      "bodyHash": "16238eae679e522973ad179cf6cc15ae695d55ed200f88d2e850607f8ca052c5",
+      "facts": []
+    },
+    {
+      "sourceKey": "sms:synthetic:226",
+      "senderBrand": "HDFCBK",
+      "observedAt": "2026-11-01T07:00:20Z",
+      "bodyHash": "84e7493ab5a868e8357bfe42333d1b339cabfeab67a173a46863b6b696d127b2",
+      "facts": []
+    },
+    {
+      "sourceKey": "sms:synthetic:227",
+      "senderBrand": "HDFCBK",
+      "observedAt": "2026-11-01T07:00:20Z",
+      "bodyHash": "128f9e5936fb4a74e25e782478b916f32d74fc0068986ef18d3fd64ce199f198",
+      "facts": []
+    },
+    {
+      "sourceKey": "sms:synthetic:228",
+      "senderBrand": "HDFCBK",
+      "observedAt": "2026-11-01T07:00:20Z",
+      "bodyHash": "7937bb91d8f5094ba8b2fe4b93f44c30f16adf0a4b5f65cc748840f31c0e9541",
+      "facts": []
+    },
+    {
+      "sourceKey": "sms:synthetic:229",
+      "senderBrand": "HDFCBK",
+      "observedAt": "2026-11-01T07:00:20Z",
+      "bodyHash": "2d05cb25f4b9eb2cad4640a1e685c813f8ffbcd5625a7ffad3c6982cdb9cde24",
+      "facts": []
+    },
+    {
+      "sourceKey": "sms:synthetic:230",
+      "senderBrand": "HDFCBK",
+      "observedAt": "2026-11-01T07:00:20Z",
+      "bodyHash": "33b0e72854eeb1bec072a3a3a73bfa21b82085a2085754a348ce8987e95e8ae2",
+      "facts": []
+    },
+    {
+      "sourceKey": "sms:synthetic:231",
+      "senderBrand": "HDFCBK",
+      "observedAt": "2026-11-01T07:00:20Z",
+      "bodyHash": "e0bbc8b761e5c15b430ab7d268ff8f0b4b1514c53bf09d6366bc5a9f410d5b9c",
+      "facts": []
+    },
+    {
+      "sourceKey": "sms:synthetic:232",
+      "senderBrand": "HDFCBK",
+      "observedAt": "2026-11-01T07:00:20Z",
+      "bodyHash": "554646407f8f0d25c74977debff0b0e145e952d0984a13fa6abb8ce4697595ec",
+      "facts": []
+    },
+    {
+      "sourceKey": "sms:synthetic:233",
+      "senderBrand": "HDFCBK",
+      "observedAt": "2026-11-01T07:00:20Z",
+      "bodyHash": "e199377192c571f12616cb5fb2abd00f6c85cccdeb209a1d4bb7f777c34a909f",
+      "facts": []
+    },
+    {
+      "sourceKey": "sms:synthetic:234",
+      "senderBrand": "HDFCBK",
+      "observedAt": "2026-11-01T07:00:20Z",
+      "bodyHash": "693726a1fb838f3991c7eb790d92146bfb26ed000079701574b82d94e03ee9bd",
+      "facts": []
+    },
+    {
+      "sourceKey": "sms:synthetic:235",
+      "senderBrand": "HDFCBK",
+      "observedAt": "2026-11-01T07:00:20Z",
+      "bodyHash": "66862802ad96a6252302ff895aa0784c5eb9efd884417f6698424edc95d55693",
+      "facts": []
+    },
+    {
+      "sourceKey": "sms:synthetic:236",
+      "senderBrand": "HDFCBK",
+      "observedAt": "2026-11-01T07:00:20Z",
+      "bodyHash": "059d052c1927857e501cbd2dde7061a03afc7a50310049a8c8dc8ebe3b325eec",
+      "facts": []
+    },
+    {
+      "sourceKey": "sms:synthetic:237",
+      "senderBrand": "HDFCBK",
+      "observedAt": "2026-11-01T07:00:20Z",
+      "bodyHash": "288d66b1009959450d84107bf41eab5d560121c2b29d440ca0db5502876f0e39",
+      "facts": []
+    },
+    {
+      "sourceKey": "sms:synthetic:238",
+      "senderBrand": "HDFCBK",
+      "observedAt": "2026-11-01T07:00:20Z",
+      "bodyHash": "dc16e1c0f714c73c0d8577070f1591489874e3de398502ca087cf3d5fc80444f",
+      "facts": []
+    },
+    {
+      "sourceKey": "sms:synthetic:239",
+      "senderBrand": "HDFCBK",
+      "observedAt": "2026-11-01T07:00:20Z",
+      "bodyHash": "b6ef3037662b7621c28eeadeb9ea6a43b8363805d7c29a9541d8242a22ead59f",
+      "facts": []
+    },
+    {
+      "sourceKey": "sms:synthetic:240",
+      "senderBrand": "HDFCBK",
+      "observedAt": "2026-11-01T07:00:20Z",
+      "bodyHash": "ef2ee1bbad5db2f07bed8f08272b94ebd00831bc5b970abb54ee0ffff5380283",
+      "facts": []
+    },
+    {
+      "sourceKey": "sms:synthetic:241",
+      "senderBrand": "HDFCBK",
+      "observedAt": "2026-11-01T07:00:20Z",
+      "bodyHash": "81ccc4d8a3b71a2e20d718e0843703594b3f9c23c79442385b32fb21ee4d136f",
+      "facts": []
+    },
+    {
+      "sourceKey": "sms:synthetic:242",
+      "senderBrand": "HDFCBK",
+      "observedAt": "2026-11-01T07:00:20Z",
+      "bodyHash": "d283be5f2c85faee85464b7919953650f92849bc35100cb6a5e8818f347caf21",
+      "facts": []
+    },
+    {
+      "sourceKey": "sms:synthetic:243",
+      "senderBrand": "HDFCBK",
+      "observedAt": "2026-11-01T07:00:20Z",
+      "bodyHash": "9a80fee04d127e8b508a6d0be6cf78a2179c3b8a53e587a8f87e333ae4b8576e",
+      "facts": []
+    },
+    {
+      "sourceKey": "sms:synthetic:244",
+      "senderBrand": "HDFCBK",
+      "observedAt": "2026-11-01T07:00:20Z",
+      "bodyHash": "e24706dd9b1f1ffb34272d49728adcee792f712aca54600e1da5fe38fcc0c254",
+      "facts": []
+    },
+    {
+      "sourceKey": "sms:synthetic:245",
+      "senderBrand": "HDFCBK",
+      "observedAt": "2026-11-01T07:00:20Z",
+      "bodyHash": "dd180227d9ed4705ae2e7682a7c5641025af5b295a1b59106b903626a5bff855",
+      "facts": []
+    },
+    {
+      "sourceKey": "sms:synthetic:246",
+      "senderBrand": "HDFCBK",
+      "observedAt": "2026-11-01T07:00:20Z",
+      "bodyHash": "ba25f991fe8d16d47d688d14ee2565c06d42015fc3227ebecbc2b125e33d1378",
+      "facts": []
+    },
+    {
+      "sourceKey": "sms:synthetic:247",
+      "senderBrand": "HDFCBK",
+      "observedAt": "2026-11-01T07:00:20Z",
+      "bodyHash": "07764e086a11e7e11671209c1b2794220b2e322e54e16d9c1ee226da17778644",
+      "facts": []
+    },
+    {
+      "sourceKey": "sms:synthetic:248",
+      "senderBrand": "HDFCBK",
+      "observedAt": "2026-11-01T07:00:20Z",
+      "bodyHash": "c37f592259be8f1d4d28fcb0756b95752fc8dc0cecf39aa2dd51f6ca6bc029ec",
+      "facts": []
+    },
+    {
+      "sourceKey": "sms:synthetic:249",
+      "senderBrand": "HDFCBK",
+      "observedAt": "2026-11-01T07:00:20Z",
+      "bodyHash": "298ede39cd64c9e660bae68a755972d212950bcee08f9b1c3efa2269092c2d42",
+      "facts": []
+    },
+    {
+      "sourceKey": "sms:synthetic:250",
+      "senderBrand": "HDFCBK",
+      "observedAt": "2026-11-01T07:00:20Z",
+      "bodyHash": "9a1580e621b71bdcf37b5ecb2c876cab3d1efaf6bd5826cf3bd4c72102f04746",
+      "facts": []
+    },
+    {
+      "sourceKey": "sms:synthetic:251",
+      "senderBrand": "HDFCBK",
+      "observedAt": "2026-11-01T07:00:20Z",
+      "bodyHash": "c0c11a61e8c12518441a16bc7c6e0e2aff001c89f6f7ee85f28bd620d40679ae",
+      "facts": []
+    },
+    {
+      "sourceKey": "sms:synthetic:252",
+      "senderBrand": "HDFCBK",
+      "observedAt": "2026-11-01T07:00:20Z",
+      "bodyHash": "cf9ebca585edf51adeedb947ba3e76a46389453e024bb00d5ad36387ca22cf38",
+      "facts": []
+    },
+    {
+      "sourceKey": "sms:synthetic:253",
+      "senderBrand": "HDFCBK",
+      "observedAt": "2026-11-01T07:00:20Z",
+      "bodyHash": "23362b1938defadcb7f52ae35b383c8edcce13c3b5782890cf58852c391034e5",
+      "facts": []
+    },
+    {
+      "sourceKey": "sms:synthetic:254",
+      "senderBrand": "HDFCBK",
+      "observedAt": "2026-11-01T07:00:20Z",
+      "bodyHash": "9011ba169d8ed8304e6c87584dc876c1b168c3ad38c20acc085db5a129a7c9a0",
+      "facts": []
+    },
+    {
+      "sourceKey": "sms:synthetic:255",
+      "senderBrand": "HDFCBK",
+      "observedAt": "2026-11-01T07:00:20Z",
+      "bodyHash": "c91b350460bfc5856a08f58f80b9bde3ad5db749f96ba461063ae9a458893b91",
+      "facts": []
+    },
+    {
+      "sourceKey": "sms:synthetic:256",
+      "senderBrand": "HDFCBK",
+      "observedAt": "2026-11-01T07:00:20Z",
+      "bodyHash": "7c5ee1cecf5f8eacd1284feb5f0bf2bdea533a51e2f0c9aabe9236d335989f3b",
+      "facts": []
+    },
+    {
+      "sourceKey": "sms:synthetic:257",
+      "senderBrand": "HDFCBK",
+      "observedAt": "2026-11-01T07:00:20Z",
+      "bodyHash": "a904443c33fbd2be9381f9e482fbe590ca0994df660ce553dbf17f82b5adac52",
+      "facts": []
+    },
+    {
+      "sourceKey": "sms:synthetic:258",
+      "senderBrand": "HDFCBK",
+      "observedAt": "2026-11-01T07:00:20Z",
+      "bodyHash": "c727228fdadf610a02ab52e6302dc94caeaf4f01430ac9b993c146b826382436",
+      "facts": []
+    },
+    {
+      "sourceKey": "sms:synthetic:259",
+      "senderBrand": "HDFCBK",
+      "observedAt": "2026-11-01T07:00:20Z",
+      "bodyHash": "fe4bb2eceb48f842a66f185654251235aabf34abdb90905ece2fed9d458c2cc0",
+      "facts": []
+    },
+    {
+      "sourceKey": "sms:synthetic:260",
+      "senderBrand": "HDFCBK",
+      "observedAt": "2026-11-01T07:00:20Z",
+      "bodyHash": "49ac58c971806b6273976a837e3d3dcfd2b62407a9b05c1238d66bd1c4d1792d",
+      "facts": []
+    },
+    {
+      "sourceKey": "sms:synthetic:261",
+      "senderBrand": "HDFCBK",
+      "observedAt": "2026-11-01T07:00:20Z",
+      "bodyHash": "2e9e035beb15a314b2e60d44cdd659fc4fce924193bdc6279275d2d4def030af",
+      "facts": []
+    },
+    {
+      "sourceKey": "sms:synthetic:262",
+      "senderBrand": "HDFCBK",
+      "observedAt": "2026-11-01T07:00:20Z",
+      "bodyHash": "d7dd0cff75c3aff232d793a8a42a9e7603a950959cfad714e5e9a9f0ed6c0c0b",
+      "facts": []
+    },
+    {
+      "sourceKey": "sms:synthetic:263",
+      "senderBrand": "HDFCBK",
+      "observedAt": "2026-11-01T07:00:20Z",
+      "bodyHash": "0ff45b8c833ecec9f3b1f9fadec193b9d7a561f49d5d6d7de4c16d0ffde61aa0",
+      "facts": []
+    },
+    {
+      "sourceKey": "sms:synthetic:264",
+      "senderBrand": "HDFCBK",
+      "observedAt": "2026-11-01T07:00:20Z",
+      "bodyHash": "8d4f86139289c98d7d19155f3c9628642c27b9f982c5db90751d081e70e29cf3",
+      "facts": []
+    },
+    {
+      "sourceKey": "sms:synthetic:265",
+      "senderBrand": "HDFCBK",
+      "observedAt": "2026-11-01T07:00:20Z",
+      "bodyHash": "640d53090397fba4cea1b642ccb7e3be4b8688761e5dffae52698dff31789c9e",
+      "facts": []
+    },
+    {
+      "sourceKey": "sms:synthetic:266",
+      "senderBrand": "HDFCBK",
+      "observedAt": "2026-11-01T07:00:20Z",
+      "bodyHash": "6df67c7e7b16bde86fa526ff61d80820135fa45ad9226540314039bfcb55e5c9",
+      "facts": []
+    },
+    {
+      "sourceKey": "sms:synthetic:267",
+      "senderBrand": "HDFCBK",
+      "observedAt": "2026-11-01T07:00:20Z",
+      "bodyHash": "0ee279f2adea113db412e7bcff7cbbf4ddbb31ae78bcc98d1adb8081987f4bef",
+      "facts": []
+    },
+    {
+      "sourceKey": "sms:synthetic:268",
+      "senderBrand": "HDFCBK",
+      "observedAt": "2026-11-01T07:00:20Z",
+      "bodyHash": "206cfd4207da93ea2b87ffe6ff93b0ccf3ca1282e05144727a2b5c5bc53e8dfb",
+      "facts": []
+    },
+    {
+      "sourceKey": "sms:synthetic:269",
+      "senderBrand": "HDFCBK",
+      "observedAt": "2026-11-01T07:00:20Z",
+      "bodyHash": "2d6e2cce378766d85d8d7e7ea1f323e6e16d543ef728513d0704054e0c65dc72",
+      "facts": []
+    },
+    {
+      "sourceKey": "sms:synthetic:270",
+      "senderBrand": "HDFCBK",
+      "observedAt": "2026-11-01T07:00:20Z",
+      "bodyHash": "c08719a823d49f71d915b25ea186849808e0c63578b2f806602fd85e8947c024",
+      "facts": []
+    },
+    {
+      "sourceKey": "sms:synthetic:271",
+      "senderBrand": "HDFCBK",
+      "observedAt": "2026-11-01T07:00:20Z",
+      "bodyHash": "5a1c5e7a92e50e184c8315c8b6f05f139dc9f66142a2bbad07efdf887880dbb0",
+      "facts": []
+    },
+    {
+      "sourceKey": "sms:synthetic:272",
+      "senderBrand": "HDFCBK",
+      "observedAt": "2026-11-01T07:00:20Z",
+      "bodyHash": "e25bc95e5e99952458c6f4be6781014cfac75ee082c2b0b5724a00badf054fad",
+      "facts": []
+    },
+    {
+      "sourceKey": "sms:synthetic:273",
+      "senderBrand": "HDFCBK",
+      "observedAt": "2026-11-01T07:00:20Z",
+      "bodyHash": "db10a5f1b43a1649d34997dbb98b9a7af58c9c95872c8b5774967516bfda9cdf",
+      "facts": []
+    },
+    {
+      "sourceKey": "sms:synthetic:274",
+      "senderBrand": "HDFCBK",
+      "observedAt": "2026-11-01T07:00:20Z",
+      "bodyHash": "03af6b0747f5b0d0af411537bd304db76723132d635ad71ea75c995f8d2e7fc6",
+      "facts": []
+    },
+    {
+      "sourceKey": "sms:synthetic:275",
+      "senderBrand": "HDFCBK",
+      "observedAt": "2026-11-01T07:00:20Z",
+      "bodyHash": "23ecdf49388a2b45cadf9a4a9583e8516f5ac0764438b60d34c50bef3b428fa4",
+      "facts": []
+    },
+    {
+      "sourceKey": "sms:synthetic:276",
+      "senderBrand": "HDFCBK",
+      "observedAt": "2026-11-01T07:00:20Z",
+      "bodyHash": "da63baeeb8befeae79e95e3fca817472de703586aaa5cb2a355de21cf681a601",
+      "facts": []
+    },
+    {
+      "sourceKey": "sms:synthetic:277",
+      "senderBrand": "HDFCBK",
+      "observedAt": "2026-11-01T07:00:20Z",
+      "bodyHash": "3eb81c1c4626705029d9ace5a76d88a819e621bada97542b77e6cc0eec0c089b",
+      "facts": []
+    },
+    {
+      "sourceKey": "sms:synthetic:278",
+      "senderBrand": "HDFCBK",
+      "observedAt": "2026-11-01T07:00:20Z",
+      "bodyHash": "dab9fd158c4ae3805fe1af3ecc3bf62783d9f2f6b882464dff690b62fd57a4f8",
+      "facts": []
+    },
+    {
+      "sourceKey": "sms:synthetic:279",
+      "senderBrand": "HDFCBK",
+      "observedAt": "2026-11-01T07:00:20Z",
+      "bodyHash": "a15fd234270bd32cc9164cb64b3d64d1a6e730f74ce96f3b771b0d2cbb565afb",
+      "facts": []
+    },
+    {
+      "sourceKey": "sms:synthetic:280",
+      "senderBrand": "HDFCBK",
+      "observedAt": "2026-11-01T07:00:20Z",
+      "bodyHash": "1f21a3a0a4d79c25972d4488bf2f0727aa7af388eed1f8dd8b88b5858bf71b79",
+      "facts": []
+    },
+    {
+      "sourceKey": "sms:synthetic:281",
+      "senderBrand": "HDFCBK",
+      "observedAt": "2026-11-01T07:00:20Z",
+      "bodyHash": "f10b47e287be18bd0c943019e38cf0eda98ba28444eabfdcde786b8846545508",
+      "facts": []
+    },
+    {
+      "sourceKey": "sms:synthetic:282",
+      "senderBrand": "HDFCBK",
+      "observedAt": "2026-11-01T07:00:20Z",
+      "bodyHash": "709367b97e0a3d51fa57e55fbc2f50aab7ec34481bfc6ba4e088d0e281a3b84c",
+      "facts": []
+    },
+    {
+      "sourceKey": "sms:synthetic:283",
+      "senderBrand": "HDFCBK",
+      "observedAt": "2026-11-01T07:00:20Z",
+      "bodyHash": "0d02730c14ff023c12705c46dce7a5966a8a170d638f4f8d73a94b5d44977498",
+      "facts": []
+    },
+    {
+      "sourceKey": "sms:synthetic:284",
+      "senderBrand": "HDFCBK",
+      "observedAt": "2026-11-01T07:00:20Z",
+      "bodyHash": "5e0086cc9c13ca399e3c6371cf09d9574e7acb46f230363f205445fec8064371",
+      "facts": []
+    },
+    {
+      "sourceKey": "sms:synthetic:285",
+      "senderBrand": "HDFCBK",
+      "observedAt": "2026-11-01T07:00:20Z",
+      "bodyHash": "20d5c3cbe78d8c56b84e195a7af8701c567dfcbcfd492d5b5abfee68d6b77ebc",
+      "facts": []
+    },
+    {
+      "sourceKey": "sms:synthetic:286",
+      "senderBrand": "HDFCBK",
+      "observedAt": "2026-11-01T07:00:20Z",
+      "bodyHash": "4a4fbe696062ec486eb7eae65f5294b8ee64fe7f66631b9af313620b625269cc",
+      "facts": []
+    },
+    {
+      "sourceKey": "sms:synthetic:287",
+      "senderBrand": "HDFCBK",
+      "observedAt": "2026-11-01T07:00:20Z",
+      "bodyHash": "ca1cc5466687b338574104e9a1c0921a395525a1151f381dbf3ff1ca13f1ddd0",
+      "facts": []
+    },
+    {
+      "sourceKey": "sms:synthetic:288",
+      "senderBrand": "HDFCBK",
+      "observedAt": "2026-11-01T07:00:20Z",
+      "bodyHash": "0d0d40765e762a9ffed6d07109f2572f8dafc2c723279ca84ec7e25e50d499d4",
+      "facts": []
+    },
+    {
+      "sourceKey": "sms:synthetic:289",
+      "senderBrand": "HDFCBK",
+      "observedAt": "2026-11-01T07:00:20Z",
+      "bodyHash": "1898c5bbc63409e6a22a80ea4004391601be65e39cf51c443a9c87e6635bde38",
+      "facts": []
+    },
+    {
+      "sourceKey": "sms:synthetic:290",
+      "senderBrand": "HDFCBK",
+      "observedAt": "2026-11-01T07:00:20Z",
+      "bodyHash": "63bf60f50487209a4a98fc9e09d9c03bb7ed2f4875b9c8dd22d20861d76c6579",
+      "facts": []
+    },
+    {
+      "sourceKey": "sms:synthetic:291",
+      "senderBrand": "HDFCBK",
+      "observedAt": "2026-11-01T07:00:20Z",
+      "bodyHash": "646e8627b4dae64b256333d4d4e902ee8ea3b627644c5a8bc8657701199eae34",
+      "facts": []
+    },
+    {
+      "sourceKey": "sms:synthetic:292",
+      "senderBrand": "HDFCBK",
+      "observedAt": "2026-11-01T07:00:20Z",
+      "bodyHash": "edf4d03b0f2d70e863cea3444767cf696d7f7e801bcb26abd274d7e8040ea0fb",
+      "facts": []
+    },
+    {
+      "sourceKey": "sms:synthetic:293",
+      "senderBrand": "HDFCBK",
+      "observedAt": "2026-11-01T07:00:20Z",
+      "bodyHash": "a74a260a2ae4946ade01bbbfa973c099421b2fefa1c823cca7e9dd06cbd530cf",
+      "facts": []
+    },
+    {
+      "sourceKey": "sms:synthetic:294",
+      "senderBrand": "HDFCBK",
+      "observedAt": "2026-11-01T07:00:20Z",
+      "bodyHash": "e05dacc292a0a51cfd0828ba89eae2b6c8ba354253285bdd6f3d841dac547f91",
+      "facts": []
+    },
+    {
+      "sourceKey": "sms:synthetic:295",
+      "senderBrand": "HDFCBK",
+      "observedAt": "2026-11-01T07:00:20Z",
+      "bodyHash": "20bbf323ec6704b8d1cd9b765647d5a1d2ceed9211c00574d04a71033042670e",
+      "facts": []
+    },
+    {
+      "sourceKey": "sms:synthetic:296",
+      "senderBrand": "HDFCBK",
+      "observedAt": "2026-11-01T07:00:20Z",
+      "bodyHash": "7e6169329154f014cc92dc189d7aa5f3523cdcbb84de4838c14ed3a1ac6d4a15",
+      "facts": []
+    },
+    {
+      "sourceKey": "sms:synthetic:297",
+      "senderBrand": "HDFCBK",
+      "observedAt": "2026-11-01T07:00:20Z",
+      "bodyHash": "459e413cb84d0a29fffec6673ae02df9a16031dc3dbb0dbccae99c24b37c4407",
+      "facts": []
+    },
+    {
+      "sourceKey": "sms:synthetic:298",
+      "senderBrand": "HDFCBK",
+      "observedAt": "2026-11-01T07:00:20Z",
+      "bodyHash": "be899e53d5d0cd79b7cd9c8de24b16f4869644a2e6030fa234b1ca1636d07ee7",
+      "facts": []
+    },
+    {
+      "sourceKey": "sms:synthetic:299",
+      "senderBrand": "HDFCBK",
+      "observedAt": "2026-11-01T07:00:20Z",
+      "bodyHash": "77a38e51c645fb4fcfc411754fdaa7b6f407a1253059edf16547e7e2bc8d756a",
+      "facts": []
+    },
+    {
+      "sourceKey": "sms:synthetic:300",
+      "senderBrand": "HDFCBK",
+      "observedAt": "2026-11-01T07:00:20Z",
+      "bodyHash": "515f3f510efacd0b0a709746b30f5674b298a6fbed90b150d930a11755031b58",
+      "facts": []
+    },
+    {
+      "sourceKey": "sms:synthetic:301",
+      "senderBrand": "HDFCBK",
+      "observedAt": "2026-11-01T07:00:20Z",
+      "bodyHash": "f396593298e3d79d97425408463812d431f0019493a8311a894088b1aa95ea90",
+      "facts": []
+    },
+    {
+      "sourceKey": "sms:synthetic:302",
+      "senderBrand": "HDFCBK",
+      "observedAt": "2026-11-01T07:00:20Z",
+      "bodyHash": "810950d16ecf8a7d18f66b193fc01a0ecc3806a2e847271ca5f4490a7338c291",
+      "facts": []
+    },
+    {
+      "sourceKey": "sms:synthetic:303",
+      "senderBrand": "HDFCBK",
+      "observedAt": "2026-11-01T07:00:20Z",
+      "bodyHash": "d5013394eeb36cc5f6729b510233eaa740ff4242853fff347e95b950ff4c7865",
+      "facts": []
+    },
+    {
+      "sourceKey": "sms:synthetic:304",
+      "senderBrand": "HDFCBK",
+      "observedAt": "2026-11-01T07:00:20Z",
+      "bodyHash": "34ca7928381ece45e196780c76bbd347b98f2ae8973f6deb1c23e245b7b9a327",
+      "facts": []
+    },
+    {
+      "sourceKey": "sms:synthetic:305",
+      "senderBrand": "HDFCBK",
+      "observedAt": "2026-11-01T07:00:20Z",
+      "bodyHash": "071e776341845dec7cb702ece4fc1520917f0d20d84220ff7827e8af04fe4621",
+      "facts": []
+    },
+    {
+      "sourceKey": "sms:synthetic:306",
+      "senderBrand": "HDFCBK",
+      "observedAt": "2026-11-01T07:00:20Z",
+      "bodyHash": "b4deedb0ac10e6453970b4fccbfd9adf685274c3e0e354885c657aeb77631d9f",
+      "facts": []
+    },
+    {
+      "sourceKey": "sms:synthetic:307",
+      "senderBrand": "HDFCBK",
+      "observedAt": "2026-11-01T07:00:20Z",
+      "bodyHash": "310855d5a6314ed3b4c2392a3a518fe6a2b41d6a13aff6dbbb7d34c1dacc0b4b",
+      "facts": []
+    },
+    {
+      "sourceKey": "sms:synthetic:308",
+      "senderBrand": "HDFCBK",
+      "observedAt": "2026-11-01T07:00:20Z",
+      "bodyHash": "35a59c6a77643548dba829cee930716541d3cdd28550a25931a7f8b619039b0d",
+      "facts": []
+    },
+    {
+      "sourceKey": "sms:synthetic:309",
+      "senderBrand": "HDFCBK",
+      "observedAt": "2026-11-01T07:00:20Z",
+      "bodyHash": "46fa0bf1c0202d377ee448073e3f80c15e6aa88a2b6d5eb8197fa237f0a8261d",
+      "facts": []
+    },
+    {
+      "sourceKey": "sms:synthetic:310",
+      "senderBrand": "HDFCBK",
+      "observedAt": "2026-11-01T07:00:20Z",
+      "bodyHash": "70a689267da8e045642fbf75d44cb68a234f79eb12efa1bbbf78fbc71583a28f",
+      "facts": []
+    },
+    {
+      "sourceKey": "sms:synthetic:311",
+      "senderBrand": "HDFCBK",
+      "observedAt": "2026-11-01T07:00:20Z",
+      "bodyHash": "03e237474f3ec52569225d5326d09d2f5ca3457f01e4c22b3f1600f575dc635d",
+      "facts": []
+    },
+    {
+      "sourceKey": "sms:synthetic:312",
+      "senderBrand": "HDFCBK",
+      "observedAt": "2026-11-01T07:00:20Z",
+      "bodyHash": "faf0723ca2dfa8244a82345056a502005b18897b99a4ec661fe14d58eb8dc511",
+      "facts": []
+    },
+    {
+      "sourceKey": "sms:synthetic:313",
+      "senderBrand": "HDFCBK",
+      "observedAt": "2026-11-01T07:00:20Z",
+      "bodyHash": "09c7afb99842eac089729ae0dae988069ca4b13b3d2d4fe630804ddc4806499b",
+      "facts": []
+    },
+    {
+      "sourceKey": "sms:synthetic:314",
+      "senderBrand": "HDFCBK",
+      "observedAt": "2026-11-01T07:00:20Z",
+      "bodyHash": "b6a8a4ef532364f362326169a03596bcebebced67fe000308465cd2957796d0b",
+      "facts": []
+    },
+    {
+      "sourceKey": "sms:synthetic:315",
+      "senderBrand": "HDFCBK",
+      "observedAt": "2026-11-01T07:00:20Z",
+      "bodyHash": "d3b58049eda3b1a5ffa98c3d72c1a070bf5f1a1393d058237761958848b77618",
+      "facts": []
+    },
+    {
+      "sourceKey": "sms:synthetic:316",
+      "senderBrand": "HDFCBK",
+      "observedAt": "2026-11-01T07:00:20Z",
+      "bodyHash": "7dd89623b0b4835d4879d6d1ecf0ea937842173fdea3e9b2137d073d441cd191",
+      "facts": []
+    },
+    {
+      "sourceKey": "sms:synthetic:317",
+      "senderBrand": "HDFCBK",
+      "observedAt": "2026-11-01T07:00:20Z",
+      "bodyHash": "5ac84d66236210f3256551ae3e0d0dd0d9ba0d371f6b221879f60186ef3c307f",
+      "facts": []
+    },
+    {
+      "sourceKey": "sms:synthetic:318",
+      "senderBrand": "HDFCBK",
+      "observedAt": "2026-11-01T07:00:20Z",
+      "bodyHash": "dab4126195658d46848cfb0fe7cd6a6bdccb8d02e1495fbf4db5356a07ce110c",
+      "facts": []
+    },
+    {
+      "sourceKey": "sms:synthetic:319",
+      "senderBrand": "HDFCBK",
+      "observedAt": "2026-11-01T07:00:20Z",
+      "bodyHash": "a28db9bbca64656d6b5c83e173df71c39898df38e5c84030ee208372b3a15226",
+      "facts": []
+    },
+    {
+      "sourceKey": "sms:synthetic:320",
+      "senderBrand": "HDFCBK",
+      "observedAt": "2026-11-01T07:00:20Z",
+      "bodyHash": "3c4b725dca4eb9986298309cb0e037793df038494e4bc37c450a4cf807479072",
+      "facts": []
+    },
+    {
+      "sourceKey": "sms:synthetic:321",
+      "senderBrand": "HDFCBK",
+      "observedAt": "2026-11-01T07:00:20Z",
+      "bodyHash": "09785bedc12d39f20e7edac171a8b5f2ce9762a8f1163f812b9319aca42755d1",
+      "facts": []
+    },
+    {
+      "sourceKey": "sms:synthetic:322",
+      "senderBrand": "HDFCBK",
+      "observedAt": "2026-11-01T07:00:20Z",
+      "bodyHash": "e58c547f0725e0169cdcf937ac2ecca10c41162d3e5efb5e7282de183ed6a1fb",
+      "facts": []
+    },
+    {
+      "sourceKey": "sms:synthetic:323",
+      "senderBrand": "HDFCBK",
+      "observedAt": "2026-11-01T07:00:20Z",
+      "bodyHash": "1331a3559ffb37f8fb12bc618ffb15402ed70162aeb36a8cb3c09980697d2600",
+      "facts": []
+    },
+    {
+      "sourceKey": "sms:synthetic:324",
+      "senderBrand": "HDFCBK",
+      "observedAt": "2026-11-01T07:00:20Z",
+      "bodyHash": "48cc1a7d2b9195ab6d2c21bd5a772c5ad3b0a7bb23d136efb29db8c87fd6d953",
+      "facts": []
+    },
+    {
+      "sourceKey": "sms:synthetic:325",
+      "senderBrand": "HDFCBK",
+      "observedAt": "2026-11-01T07:00:20Z",
+      "bodyHash": "d134b3d5e22b51b59a3826d9ac50d7556bfc42cf18947cab0c34bb1605c94c89",
+      "facts": []
+    },
+    {
+      "sourceKey": "sms:synthetic:326",
+      "senderBrand": "HDFCBK",
+      "observedAt": "2026-11-01T07:00:20Z",
+      "bodyHash": "5a66b4147215c2419ae1d3857d4f6fe77de8752cf0499ed9396c2b473c46b501",
+      "facts": []
+    },
+    {
+      "sourceKey": "sms:synthetic:327",
+      "senderBrand": "HDFCBK",
+      "observedAt": "2026-11-01T07:00:20Z",
+      "bodyHash": "1d5e4f213ee0f3036a75c0f4521f08fa7ca06257a703c4c6a59035208e60853d",
+      "facts": []
+    },
+    {
+      "sourceKey": "sms:synthetic:328",
+      "senderBrand": "HDFCBK",
+      "observedAt": "2026-11-01T07:00:20Z",
+      "bodyHash": "af17d9c08cb95a09e126c4c726e1646d2b81dae3cb9aa020d34003b3088c6a8c",
+      "facts": []
+    },
+    {
+      "sourceKey": "sms:synthetic:329",
+      "senderBrand": "HDFCBK",
+      "observedAt": "2026-11-01T07:00:20Z",
+      "bodyHash": "7f291b2fa136e6689232186129605251d93a3e212e8401750dbb2382f4945ea5",
+      "facts": []
+    },
+    {
+      "sourceKey": "sms:synthetic:330",
+      "senderBrand": "HDFCBK",
+      "observedAt": "2026-11-01T07:00:20Z",
+      "bodyHash": "97b86794ed4c1aaf67427364a1c99f3bf766796def361fbe2e92973dd07a78a6",
+      "facts": []
+    },
+    {
+      "sourceKey": "sms:synthetic:331",
+      "senderBrand": "HDFCBK",
+      "observedAt": "2026-11-01T07:00:20Z",
+      "bodyHash": "96447010c1cd82c2970ee338517fad599593668bd04b88be422264ef40fdebbc",
+      "facts": []
+    },
+    {
+      "sourceKey": "sms:synthetic:332",
+      "senderBrand": "HDFCBK",
+      "observedAt": "2026-11-01T07:00:20Z",
+      "bodyHash": "cfed7b7d569a4f8bea2d0d8a884aaebbe14715711d1bc31fbe4dd6b3b5ca9e3e",
+      "facts": []
+    },
+    {
+      "sourceKey": "sms:synthetic:333",
+      "senderBrand": "HDFCBK",
+      "observedAt": "2026-11-01T07:00:20Z",
+      "bodyHash": "1073b093e5d695e7098cba9c268bd5d3a2eda661856e0ac6c78c3b614d7dc6e4",
+      "facts": []
+    },
+    {
+      "sourceKey": "sms:synthetic:334",
+      "senderBrand": "HDFCBK",
+      "observedAt": "2026-11-01T07:00:20Z",
+      "bodyHash": "ce1e466f8d277768a6b6d68e7b794d71fabb40e463e9396509041e661245e81d",
+      "facts": []
+    },
+    {
+      "sourceKey": "sms:synthetic:335",
+      "senderBrand": "HDFCBK",
+      "observedAt": "2026-11-01T07:00:20Z",
+      "bodyHash": "8100a721aa0c1ff130528114659f55114a5526faf4059e07fe4bbe2c8a40bdaf",
+      "facts": []
+    },
+    {
+      "sourceKey": "sms:synthetic:336",
+      "senderBrand": "HDFCBK",
+      "observedAt": "2026-11-01T07:00:20Z",
+      "bodyHash": "9afd0597590a364330915641bba6f5f98fe3921897959df90094b3240ff0b404",
+      "facts": []
+    },
+    {
+      "sourceKey": "sms:synthetic:337",
+      "senderBrand": "HDFCBK",
+      "observedAt": "2026-11-01T07:00:20Z",
+      "bodyHash": "f3ae3d1cdc3aebf2ed2c4603debd9665cddd27a53fa54f6dfdc0c955a544e677",
+      "facts": []
+    },
+    {
+      "sourceKey": "sms:synthetic:338",
+      "senderBrand": "HDFCBK",
+      "observedAt": "2026-11-01T07:00:20Z",
+      "bodyHash": "ba129c4f7bb8559c934d7e815d456187e4341fd3f144c8ef8548aaea9e7b1609",
+      "facts": []
+    },
+    {
+      "sourceKey": "sms:synthetic:339",
+      "senderBrand": "HDFCBK",
+      "observedAt": "2026-11-01T07:00:20Z",
+      "bodyHash": "3d49bd2eadbc0e4cc605d7efa7563996cfb12c3261a170a759044f5da245c537",
+      "facts": []
+    },
+    {
+      "sourceKey": "sms:synthetic:340",
+      "senderBrand": "HDFCBK",
+      "observedAt": "2026-11-01T07:00:20Z",
+      "bodyHash": "c78f3d7b085860a1364c3be303da0f526012d70b2ab54a6ac5ae4150e0a61dba",
+      "facts": []
+    },
+    {
+      "sourceKey": "sms:synthetic:341",
+      "senderBrand": "HDFCBK",
+      "observedAt": "2026-11-01T07:00:20Z",
+      "bodyHash": "95a85de7906b5723f4ee311e533b2e7f5cedaef0086be52b282bebc03f7d0976",
+      "facts": []
+    },
+    {
+      "sourceKey": "sms:synthetic:342",
+      "senderBrand": "HDFCBK",
+      "observedAt": "2026-11-01T07:00:20Z",
+      "bodyHash": "d48498594de3cb4b21e20027ba4b8ca5a264948cf70ac770ebe2a2d0ac668635",
+      "facts": []
+    },
+    {
+      "sourceKey": "sms:synthetic:343",
+      "senderBrand": "HDFCBK",
+      "observedAt": "2026-11-01T07:00:20Z",
+      "bodyHash": "14ebaffa4fc9a709562a816888c0fc11dd9768424f7924f78d644e4429addcad",
+      "facts": []
+    },
+    {
+      "sourceKey": "sms:synthetic:344",
+      "senderBrand": "HDFCBK",
+      "observedAt": "2026-11-01T07:00:20Z",
+      "bodyHash": "e17cd1f5656c6aee9c5564393f3ec48660d3f99009d1041ea5242bd4afe9ffd3",
+      "facts": []
+    },
+    {
+      "sourceKey": "sms:synthetic:345",
+      "senderBrand": "HDFCBK",
+      "observedAt": "2026-11-01T07:00:20Z",
+      "bodyHash": "79e36cbed1a3ce5ebb489a7ed32ca8c44575afba4831591778866ac4778d3263",
+      "facts": []
+    },
+    {
+      "sourceKey": "sms:synthetic:346",
+      "senderBrand": "HDFCBK",
+      "observedAt": "2026-11-01T07:00:20Z",
+      "bodyHash": "5f6f3b34dda9860127a735a197876f4aba94c20a59369f180c570fdf4c62cda6",
+      "facts": []
+    },
+    {
+      "sourceKey": "sms:synthetic:347",
+      "senderBrand": "HDFCBK",
+      "observedAt": "2026-11-01T07:00:20Z",
+      "bodyHash": "cbfd061fb70d96f671e523cc665ebbd0a35e62caf148ed8e77acf00f3dda9bc6",
+      "facts": []
+    },
+    {
+      "sourceKey": "sms:synthetic:348",
+      "senderBrand": "HDFCBK",
+      "observedAt": "2026-11-01T07:00:20Z",
+      "bodyHash": "0ed805247ecc8039591f0386a59ee6aba983030fe5ca96d6fa20bd378b6f1ab3",
+      "facts": []
+    },
+    {
+      "sourceKey": "sms:synthetic:349",
+      "senderBrand": "HDFCBK",
+      "observedAt": "2026-11-01T07:00:20Z",
+      "bodyHash": "391c85f0bde425ac7e79c7fc105836f16c628456fa56976cfa0139e7b9084a99",
+      "facts": []
+    },
+    {
+      "sourceKey": "sms:synthetic:350",
+      "senderBrand": "HDFCBK",
+      "observedAt": "2026-11-01T07:00:20Z",
+      "bodyHash": "75b7ce89ebd0a7f12cd7c7aa4011934a90338dd6f32d6347946b9e5ff9823f5b",
+      "facts": []
+    },
+    {
+      "sourceKey": "sms:synthetic:351",
+      "senderBrand": "HDFCBK",
+      "observedAt": "2026-11-01T07:00:20Z",
+      "bodyHash": "3f045011b1386ba6837d2e329e93545946e243822c412d8475fb5a617fdb1bf1",
+      "facts": []
+    },
+    {
+      "sourceKey": "sms:synthetic:352",
+      "senderBrand": "HDFCBK",
+      "observedAt": "2026-11-01T07:00:20Z",
+      "bodyHash": "6bc5003be842a92f53d7197a311650c330194da8a1ccacd11e70fd2f09519e39",
+      "facts": []
+    },
+    {
+      "sourceKey": "sms:synthetic:353",
+      "senderBrand": "HDFCBK",
+      "observedAt": "2026-11-01T07:00:20Z",
+      "bodyHash": "9d0943672540890110cc43877d5c4462180e28ebc434093d5380161daff7ec38",
+      "facts": []
+    },
+    {
+      "sourceKey": "sms:synthetic:354",
+      "senderBrand": "HDFCBK",
+      "observedAt": "2026-11-01T07:00:20Z",
+      "bodyHash": "474660fe39288b16e00d21d9c2db16a1b087daf70bd6a24ab22819c3e7a5849e",
+      "facts": []
+    },
+    {
+      "sourceKey": "sms:synthetic:355",
+      "senderBrand": "HDFCBK",
+      "observedAt": "2026-11-01T07:00:20Z",
+      "bodyHash": "5dd1c8792191def1b36ed78bad668e789b0dad701125e85f9e9abaeff790232e",
+      "facts": []
+    },
+    {
+      "sourceKey": "sms:synthetic:356",
+      "senderBrand": "HDFCBK",
+      "observedAt": "2026-11-01T07:00:20Z",
+      "bodyHash": "4760ee3ddbd2b8484fcae0c2ab8b977f2f946aa3e2810b72a5e49eae91d7a3ef",
+      "facts": []
+    },
+    {
+      "sourceKey": "sms:synthetic:357",
+      "senderBrand": "HDFCBK",
+      "observedAt": "2026-11-01T07:00:20Z",
+      "bodyHash": "060a98558a59d0e83768f9fd291f51bf068fd64aa3903621cb03245c208c0548",
+      "facts": []
+    },
+    {
+      "sourceKey": "sms:synthetic:358",
+      "senderBrand": "HDFCBK",
+      "observedAt": "2026-11-01T07:00:20Z",
+      "bodyHash": "328eefc105f6bc401ba2e5639afffde8427e4959b3b7b8dc9fa76cb98467fb29",
+      "facts": []
+    },
+    {
+      "sourceKey": "sms:synthetic:359",
+      "senderBrand": "HDFCBK",
+      "observedAt": "2026-11-01T07:00:20Z",
+      "bodyHash": "ec84a8ba62e7fb9e07bb5b6587fa2ad4c6cc97f08dfd186863f27d8a9af99165",
+      "facts": []
+    },
+    {
+      "sourceKey": "sms:synthetic:360",
+      "senderBrand": "HDFCBK",
+      "observedAt": "2026-11-01T07:00:20Z",
+      "bodyHash": "f96c8a374abeb8ada8c39857f722b6d562527807e7489b94df59fcb7cf957400",
+      "facts": []
+    },
+    {
+      "sourceKey": "sms:synthetic:361",
+      "senderBrand": "HDFCBK",
+      "observedAt": "2026-11-01T07:00:20Z",
+      "bodyHash": "e584d3c7408554100ddcec8f9a76b11be0e1921e06820d9e30ca48123628943c",
+      "facts": []
+    },
+    {
+      "sourceKey": "sms:synthetic:362",
+      "senderBrand": "HDFCBK",
+      "observedAt": "2026-11-01T07:00:20Z",
+      "bodyHash": "fc06e0cc0378133070d42a19dd93c769b1f8ca1e8dbc5112cd50b7ea1971476c",
+      "facts": []
+    },
+    {
+      "sourceKey": "sms:synthetic:363",
+      "senderBrand": "HDFCBK",
+      "observedAt": "2026-11-01T07:00:20Z",
+      "bodyHash": "d26c3bba8d9af27e381a605f6ea2b0ab8d77dfc18b5a2104c855293944b938cf",
+      "facts": []
+    },
+    {
+      "sourceKey": "sms:synthetic:364",
+      "senderBrand": "HDFCBK",
+      "observedAt": "2026-11-01T07:00:20Z",
+      "bodyHash": "a7f5f6ad40837bc050e88252a890c9cba4765744641ca16a03bc19ccbe08c71e",
+      "facts": []
+    },
+    {
+      "sourceKey": "sms:synthetic:365",
+      "senderBrand": "HDFCBK",
+      "observedAt": "2026-11-01T07:00:20Z",
+      "bodyHash": "d0e8576f49399ec092c4f85bdf9f18f496c4395ceeb146e24e284d93eac5c056",
+      "facts": []
+    },
+    {
+      "sourceKey": "sms:synthetic:366",
+      "senderBrand": "HDFCBK",
+      "observedAt": "2026-11-01T07:00:20Z",
+      "bodyHash": "ae1eef3c7f54f28ef4dbd6b6fef971af7468c7fac4e124ce665d08feb44d6da7",
+      "facts": []
+    },
+    {
+      "sourceKey": "sms:synthetic:367",
+      "senderBrand": "HDFCBK",
+      "observedAt": "2026-11-01T07:00:20Z",
+      "bodyHash": "ccaef6d7d5ecb787571484c8027b27204e426d4da6403934cc649c48a68d58ad",
+      "facts": []
+    },
+    {
+      "sourceKey": "sms:synthetic:368",
+      "senderBrand": "HDFCBK",
+      "observedAt": "2026-11-01T07:00:20Z",
+      "bodyHash": "6e1ad9d81dcf08906b64f3db31cb13f43e243d960ed8031c2e2f0598e80f4988",
+      "facts": []
+    },
+    {
+      "sourceKey": "sms:synthetic:369",
+      "senderBrand": "HDFCBK",
+      "observedAt": "2026-11-01T07:00:20Z",
+      "bodyHash": "e7be0387c9e87bc298182c0c3c144dbe88706e8e6dc65f1fdb789811201131b8",
+      "facts": []
+    },
+    {
+      "sourceKey": "sms:synthetic:370",
+      "senderBrand": "HDFCBK",
+      "observedAt": "2026-11-01T07:00:20Z",
+      "bodyHash": "d296750c07f4fc6c07330dd4f207b4f048036d1e792de4a3e8587698089cb2bb",
+      "facts": []
+    },
+    {
+      "sourceKey": "sms:synthetic:371",
+      "senderBrand": "HDFCBK",
+      "observedAt": "2026-11-01T07:00:20Z",
+      "bodyHash": "1628b0242bd0d3519be85f1104acde42e0db07724e01d38279289e8f0601be0b",
+      "facts": []
+    },
+    {
+      "sourceKey": "sms:synthetic:372",
+      "senderBrand": "HDFCBK",
+      "observedAt": "2026-11-01T07:00:20Z",
+      "bodyHash": "d8dadec6af87589dadb35e7a7542b57050b8cf2bf8b60a9cbdd74c277e6d9449",
+      "facts": []
+    },
+    {
+      "sourceKey": "sms:synthetic:373",
+      "senderBrand": "HDFCBK",
+      "observedAt": "2026-11-01T07:00:20Z",
+      "bodyHash": "466abd6dbd9888e1c70a7c0cde846a67239ec5a8be8defc5496629dc521283b4",
+      "facts": []
+    },
+    {
+      "sourceKey": "sms:synthetic:374",
+      "senderBrand": "HDFCBK",
+      "observedAt": "2026-11-01T07:00:20Z",
+      "bodyHash": "a77f728fe6a67aed09f7473546052d7f8617b64582c40c91d043c145d9baca9e",
+      "facts": []
+    },
+    {
+      "sourceKey": "sms:synthetic:375",
+      "senderBrand": "HDFCBK",
+      "observedAt": "2026-11-01T07:00:20Z",
+      "bodyHash": "2a2f30e8a2982084434895934443d47b14deab7e3b75c267e8ccce1d99b578df",
+      "facts": []
+    },
+    {
+      "sourceKey": "sms:synthetic:376",
+      "senderBrand": "HDFCBK",
+      "observedAt": "2026-11-01T07:00:20Z",
+      "bodyHash": "78d5262939f914f21434d583275f3ad2c3b995d55b6913a76c8845370d3d744f",
+      "facts": []
+    },
+    {
+      "sourceKey": "sms:synthetic:377",
+      "senderBrand": "HDFCBK",
+      "observedAt": "2026-11-01T07:00:20Z",
+      "bodyHash": "97b0a0efb92070a7f7421709dc63fadb78cc32c1b1053cd778171964c522c6fb",
+      "facts": []
+    },
+    {
+      "sourceKey": "sms:synthetic:378",
+      "senderBrand": "HDFCBK",
+      "observedAt": "2026-11-01T07:00:20Z",
+      "bodyHash": "5934542a6e26c0073dc43b6efcc31eaef3025f9f98d9d1228e3630279fbc1cb3",
+      "facts": []
+    },
+    {
+      "sourceKey": "sms:synthetic:379",
+      "senderBrand": "HDFCBK",
+      "observedAt": "2026-11-01T07:00:20Z",
+      "bodyHash": "538d6f9c9dc4d87799b100ebcb02eb752a1abb11de691c3fd584a1c65d40cd74",
+      "facts": []
+    },
+    {
+      "sourceKey": "sms:synthetic:380",
+      "senderBrand": "HDFCBK",
+      "observedAt": "2026-11-01T07:00:20Z",
+      "bodyHash": "8e04128e7c1a078f61b7a5d3fcf9181942762b998c67392a1404d5eb82bbf6cc",
+      "facts": []
+    },
+    {
+      "sourceKey": "sms:synthetic:381",
+      "senderBrand": "HDFCBK",
+      "observedAt": "2026-11-01T07:00:20Z",
+      "bodyHash": "f071de29435538528d782655fc695491c443ec4b65cc7cbf8f7428b6e4d7f517",
+      "facts": []
+    },
+    {
+      "sourceKey": "sms:synthetic:382",
+      "senderBrand": "HDFCBK",
+      "observedAt": "2026-11-01T07:00:20Z",
+      "bodyHash": "927a2704c9a1b272bdbc838b3d98324948beac9ce8b519625b3b9f4473250b51",
+      "facts": []
+    },
+    {
+      "sourceKey": "sms:synthetic:383",
+      "senderBrand": "HDFCBK",
+      "observedAt": "2026-11-01T07:00:20Z",
+      "bodyHash": "73c6d7acd6855383e2dd574c8d3c15a3c509c9f2be95ffbf5c77ffb384e93b60",
+      "facts": []
+    },
+    {
+      "sourceKey": "sms:synthetic:384",
+      "senderBrand": "HDFCBK",
+      "observedAt": "2026-11-01T07:00:20Z",
+      "bodyHash": "6a7a8838e025ec393ebb283e11e1ee4a11400719208b5bdbd79a80b2bc9d5a66",
+      "facts": []
+    },
+    {
+      "sourceKey": "sms:synthetic:385",
+      "senderBrand": "HDFCBK",
+      "observedAt": "2026-11-01T07:00:20Z",
+      "bodyHash": "be03c27fd1d6deacedb25c853b0a22e43fc7543e83a72be91e79b2875eb4768a",
+      "facts": []
+    },
+    {
+      "sourceKey": "sms:synthetic:386",
+      "senderBrand": "HDFCBK",
+      "observedAt": "2026-11-01T07:00:20Z",
+      "bodyHash": "9aa97dd1587e00d31858192489cc9ec5645a2f0a0f53fbe90aa4aee05c71fd21",
+      "facts": []
+    },
+    {
+      "sourceKey": "sms:synthetic:387",
+      "senderBrand": "HDFCBK",
+      "observedAt": "2026-11-01T07:00:20Z",
+      "bodyHash": "44c9c3ec78ca5b3dea456a9b64869c1240a98422323cfcca6bad90b36c2e8be9",
+      "facts": []
+    },
+    {
+      "sourceKey": "sms:synthetic:388",
+      "senderBrand": "HDFCBK",
+      "observedAt": "2026-11-01T07:00:20Z",
+      "bodyHash": "536a151a518ac28724ca3168b5d9a46a04d52272fa9c2315b5a63a6f8cdcd2ff",
+      "facts": []
+    },
+    {
+      "sourceKey": "sms:synthetic:389",
+      "senderBrand": "HDFCBK",
+      "observedAt": "2026-11-01T07:00:20Z",
+      "bodyHash": "332ed23d637b2098f47e5b043d3cd6baf54c9300038bf2b0ad53257ef1e8ed0b",
+      "facts": []
+    },
+    {
+      "sourceKey": "sms:synthetic:390",
+      "senderBrand": "HDFCBK",
+      "observedAt": "2026-11-01T07:00:20Z",
+      "bodyHash": "d2e86da433009479739214e6bf14960c45bb7795ebb0ec1ba31c5e817ce7196b",
+      "facts": []
+    },
+    {
+      "sourceKey": "sms:synthetic:391",
+      "senderBrand": "HDFCBK",
+      "observedAt": "2026-11-01T07:00:20Z",
+      "bodyHash": "a05dcb3a335137aa9b482d7a8fdfc81876e1aa9570f037f87768826d0ef1d871",
+      "facts": []
+    },
+    {
+      "sourceKey": "sms:synthetic:392",
+      "senderBrand": "HDFCBK",
+      "observedAt": "2026-11-01T07:00:20Z",
+      "bodyHash": "4fed3dac027a7c5fbf47f212f582cc801bf2abe07c7af9b06aed9f66308e4150",
+      "facts": []
+    },
+    {
+      "sourceKey": "sms:synthetic:393",
+      "senderBrand": "HDFCBK",
+      "observedAt": "2026-11-01T07:00:20Z",
+      "bodyHash": "1bcd81ff9b9ab1ffd37adc65f68198cbc0b7dbc9a88296dc76b486b2ad0de187",
+      "facts": []
+    },
+    {
+      "sourceKey": "sms:synthetic:394",
+      "senderBrand": "HDFCBK",
+      "observedAt": "2026-11-01T07:00:20Z",
+      "bodyHash": "e67186847746e9c28586e273888604398ae864ed4d79b05496e4de9a96ce7ade",
+      "facts": []
+    },
+    {
+      "sourceKey": "sms:synthetic:395",
+      "senderBrand": "HDFCBK",
+      "observedAt": "2026-11-01T07:00:20Z",
+      "bodyHash": "b03e85b61d100d710c5bbc558d923d19eaa2fa2b01e68e7454e7b7b10cdb3725",
+      "facts": []
+    },
+    {
+      "sourceKey": "sms:synthetic:396",
+      "senderBrand": "HDFCBK",
+      "observedAt": "2026-11-01T07:00:20Z",
+      "bodyHash": "3dab48e6c9ebac2dc0f0c4324bb12fd57f3b24d44ce1e4eb8cbcfff8eae9beaf",
+      "facts": []
+    },
+    {
+      "sourceKey": "sms:synthetic:397",
+      "senderBrand": "HDFCBK",
+      "observedAt": "2026-11-01T07:00:20Z",
+      "bodyHash": "6e9c04501bae835cab9a1bdbf10f1e47f3f10e0d387a3eced67c11a1238bf60a",
+      "facts": []
+    },
+    {
+      "sourceKey": "sms:synthetic:398",
+      "senderBrand": "HDFCBK",
+      "observedAt": "2026-11-01T07:00:20Z",
+      "bodyHash": "82c010ae57aa30890e535f76c8d807d5089bb245fbd7c00895f9e140b409c3a4",
+      "facts": []
+    },
+    {
+      "sourceKey": "sms:synthetic:399",
+      "senderBrand": "HDFCBK",
+      "observedAt": "2026-11-01T07:00:20Z",
+      "bodyHash": "8053d92710fa75dec832911e5d2b4e3ed2d84052f0831f3341482dbf14886e51",
+      "facts": []
+    },
+    {
+      "sourceKey": "sms:synthetic:400",
+      "senderBrand": "HDFCBK",
+      "observedAt": "2026-11-01T07:00:20Z",
+      "bodyHash": "89400623fcc5b1bc907a18d94ed6e4e2c23e85187e2da6fc7938d693c125ccfc",
+      "facts": []
+    },
+    {
+      "sourceKey": "sms:synthetic:401",
+      "senderBrand": "HDFCBK",
+      "observedAt": "2026-11-01T07:00:20Z",
+      "bodyHash": "fb28a3c2a8a3814063a7ddc199bd2ace393f84397f05739901cc2416830cc7d8",
+      "facts": []
+    },
+    {
+      "sourceKey": "sms:synthetic:402",
+      "senderBrand": "HDFCBK",
+      "observedAt": "2026-11-01T07:00:20Z",
+      "bodyHash": "8c212f37fce4ed1fd7a3c40da44196515f35321616f89231ccc2055c40ebdba0",
+      "facts": []
+    },
+    {
+      "sourceKey": "sms:synthetic:403",
+      "senderBrand": "HDFCBK",
+      "observedAt": "2026-11-01T07:00:20Z",
+      "bodyHash": "ef8c342cda032742fd74dd44ae01228e83b010f8c873882081d6ef196957bd90",
+      "facts": []
+    },
+    {
+      "sourceKey": "sms:synthetic:404",
+      "senderBrand": "HDFCBK",
+      "observedAt": "2026-11-01T07:00:20Z",
+      "bodyHash": "4674bfaf23324fd8e318a060a04bfd05aa5a4950918b0779aeb5484d90e26990",
+      "facts": []
+    },
+    {
+      "sourceKey": "sms:synthetic:405",
+      "senderBrand": "HDFCBK",
+      "observedAt": "2026-11-01T07:00:20Z",
+      "bodyHash": "e5797bc9826219fdec73b5d1b6fe06e6a5e64499689c6f29a3e45af3c9f5f67d",
+      "facts": []
+    },
+    {
+      "sourceKey": "sms:synthetic:406",
+      "senderBrand": "HDFCBK",
+      "observedAt": "2026-11-01T07:00:20Z",
+      "bodyHash": "c68293090fc3aec2faf4a57488a0d0c66e119a591d0a6ca1715d96357b96d9b2",
+      "facts": []
+    },
+    {
+      "sourceKey": "sms:synthetic:407",
+      "senderBrand": "HDFCBK",
+      "observedAt": "2026-11-01T07:00:20Z",
+      "bodyHash": "015f9e13daba7653bc3bc58261598566af6f1b888d1d6626038b874263a8ef65",
+      "facts": []
+    },
+    {
+      "sourceKey": "sms:synthetic:408",
+      "senderBrand": "HDFCBK",
+      "observedAt": "2026-11-01T07:00:20Z",
+      "bodyHash": "2c26f6e2dd3d370eba741166953707317a47d4dfb4eac16652a1074ec54d0dad",
+      "facts": []
+    },
+    {
+      "sourceKey": "sms:synthetic:409",
+      "senderBrand": "HDFCBK",
+      "observedAt": "2026-11-01T07:00:20Z",
+      "bodyHash": "b99ee0d800a036143595ee8555dbc5434982a66f30ca5ad1b513520e028ddaa5",
+      "facts": []
+    },
+    {
+      "sourceKey": "sms:synthetic:410",
+      "senderBrand": "HDFCBK",
+      "observedAt": "2026-11-01T07:00:20Z",
+      "bodyHash": "0aac2fccc88ad632316fb4b5138b344cf1ce4ebf39f8b8b9b78fddee03e4231d",
+      "facts": []
+    },
+    {
+      "sourceKey": "sms:synthetic:411",
+      "senderBrand": "HDFCBK",
+      "observedAt": "2026-11-01T07:00:20Z",
+      "bodyHash": "50a6f31a7dc4e037b126c88da7f971ea5a54fbd6edae748a1512d623e8cdd3e1",
+      "facts": []
+    },
+    {
+      "sourceKey": "sms:synthetic:412",
+      "senderBrand": "HDFCBK",
+      "observedAt": "2026-11-01T07:00:20Z",
+      "bodyHash": "efdc6875fbdaa6e8c6c3e92bc4208376d3c8c03c45e34d5d076b93461e241770",
+      "facts": []
+    },
+    {
+      "sourceKey": "sms:synthetic:413",
+      "senderBrand": "HDFCBK",
+      "observedAt": "2026-11-01T07:00:20Z",
+      "bodyHash": "91828a860aefd2e32f25413eb45ea86921abb69d61737187b1c8aeb021db0849",
+      "facts": []
+    },
+    {
+      "sourceKey": "sms:synthetic:414",
+      "senderBrand": "HDFCBK",
+      "observedAt": "2026-11-01T07:00:20Z",
+      "bodyHash": "efcd178d9c0d4eeb56c0cb38045768eee2bf38a666169af4da115bfe08f098c6",
+      "facts": []
+    },
+    {
+      "sourceKey": "sms:synthetic:415",
+      "senderBrand": "HDFCBK",
+      "observedAt": "2026-11-01T07:00:20Z",
+      "bodyHash": "1ea7a324ca8b31756130aff5e9e238e5f0716d33205d8dde165ea3d627f787ce",
+      "facts": []
+    },
+    {
+      "sourceKey": "sms:synthetic:416",
+      "senderBrand": "HDFCBK",
+      "observedAt": "2026-11-01T07:00:20Z",
+      "bodyHash": "649166877facb04b541154a5c0ecc81c1a8f69161ab671d979d897d41d1a4bba",
+      "facts": []
+    },
+    {
+      "sourceKey": "sms:synthetic:417",
+      "senderBrand": "HDFCBK",
+      "observedAt": "2026-11-01T07:00:20Z",
+      "bodyHash": "9b6bc8dd7b8cef48f5186dfa899306563234ea38de8161e70753ddce902f20ec",
+      "facts": []
+    },
+    {
+      "sourceKey": "sms:synthetic:418",
+      "senderBrand": "HDFCBK",
+      "observedAt": "2026-11-01T07:00:20Z",
+      "bodyHash": "215f39e47dbd36313f79fb0588b038175c441a9024b2b767dcbb13f120710453",
+      "facts": []
+    },
+    {
+      "sourceKey": "sms:synthetic:419",
+      "senderBrand": "HDFCBK",
+      "observedAt": "2026-11-01T07:00:20Z",
+      "bodyHash": "736972dbd81fd28f5e0d8c014c5d57b6502d3babd55e27576b00060fed819618",
+      "facts": []
+    },
+    {
+      "sourceKey": "sms:synthetic:420",
+      "senderBrand": "HDFCBK",
+      "observedAt": "2026-11-01T07:00:20Z",
+      "bodyHash": "dce5f5d6474edaba0cd56875a8aa3d05e6ba0c8f13fcd9c7716518cc00af31bc",
+      "facts": []
+    },
+    {
+      "sourceKey": "sms:synthetic:421",
+      "senderBrand": "HDFCBK",
+      "observedAt": "2026-11-01T07:00:20Z",
+      "bodyHash": "7f7cb9cdf1c61181e9dc8bd396bb773a72681fa09a2e183e6b5e00b55ae39980",
+      "facts": []
+    },
+    {
+      "sourceKey": "sms:synthetic:422",
+      "senderBrand": "HDFCBK",
+      "observedAt": "2026-11-01T07:00:20Z",
+      "bodyHash": "66d938818cd8134ef525d3a65c38aba5a7d1f8688fc6ea4b4be47921adff2c28",
+      "facts": []
+    },
+    {
+      "sourceKey": "sms:synthetic:423",
+      "senderBrand": "HDFCBK",
+      "observedAt": "2026-11-01T07:00:20Z",
+      "bodyHash": "1b1ebb93987cb39844d1e35ce7d39674d6efa64034ef1e0544dd0c2c9f005b6a",
+      "facts": []
+    },
+    {
+      "sourceKey": "sms:synthetic:424",
+      "senderBrand": "HDFCBK",
+      "observedAt": "2026-11-01T07:00:20Z",
+      "bodyHash": "89c16c4b8e658fa1caf26c2fd214720601574579d7cdd28bfee35806d7002c85",
+      "facts": []
+    },
+    {
+      "sourceKey": "sms:synthetic:425",
+      "senderBrand": "HDFCBK",
+      "observedAt": "2026-11-01T07:00:20Z",
+      "bodyHash": "7874990af37f0d57d245c6f4c8d11215146c9eb94c116184665d7e443e8df535",
+      "facts": []
+    },
+    {
+      "sourceKey": "sms:synthetic:426",
+      "senderBrand": "HDFCBK",
+      "observedAt": "2026-11-01T07:00:20Z",
+      "bodyHash": "677eb367de8250ba763604233475be9a1c165d588d2d725b8256ea4782affa11",
+      "facts": []
+    },
+    {
+      "sourceKey": "sms:synthetic:427",
+      "senderBrand": "HDFCBK",
+      "observedAt": "2026-11-01T07:00:20Z",
+      "bodyHash": "675a01458053ac5da74b2250848f7cfb93b6ca70ffa00480ee85bfbf2d184ec1",
+      "facts": []
+    },
+    {
+      "sourceKey": "sms:synthetic:428",
+      "senderBrand": "HDFCBK",
+      "observedAt": "2026-11-01T07:00:20Z",
+      "bodyHash": "1e121c86afbaf55c7e1a6ee73b29b150dd32864a3c8f2efa671c881d1dea8597",
+      "facts": []
+    },
+    {
+      "sourceKey": "sms:synthetic:429",
+      "senderBrand": "HDFCBK",
+      "observedAt": "2026-11-01T07:00:20Z",
+      "bodyHash": "8e19ecf34ca0eb1fd10e42583f5090318f40c5db8e716aa30fb1411252cd0bb0",
+      "facts": []
+    },
+    {
+      "sourceKey": "sms:synthetic:430",
+      "senderBrand": "HDFCBK",
+      "observedAt": "2026-11-01T07:00:20Z",
+      "bodyHash": "20726d537731581bb22cc4b6ca82564ade76a09658e52a33269af681994c484d",
+      "facts": []
+    },
+    {
+      "sourceKey": "sms:synthetic:431",
+      "senderBrand": "HDFCBK",
+      "observedAt": "2026-11-01T07:00:20Z",
+      "bodyHash": "d2886b0921631b453832a29ca080f24c6d1f5bee715814c4f8492351eb3eb0b7",
+      "facts": []
+    },
+    {
+      "sourceKey": "sms:synthetic:432",
+      "senderBrand": "HDFCBK",
+      "observedAt": "2026-11-01T07:00:20Z",
+      "bodyHash": "0e3b5f685baee5556917af6808c523ed56835db333c400cc5db0938a90a09e0c",
+      "facts": []
+    },
+    {
+      "sourceKey": "sms:synthetic:433",
+      "senderBrand": "HDFCBK",
+      "observedAt": "2026-11-01T07:00:20Z",
+      "bodyHash": "4deef2db2a9108f4264b3252e100bb018a068fc7b3d0d5ff260e24de8017d8a0",
+      "facts": []
+    },
+    {
+      "sourceKey": "sms:synthetic:434",
+      "senderBrand": "HDFCBK",
+      "observedAt": "2026-11-01T07:00:20Z",
+      "bodyHash": "b7356fef946ad4c571fbb2612dbceb48b0b10f3a74139d336bdc1f714c84c0ac",
+      "facts": []
+    },
+    {
+      "sourceKey": "sms:synthetic:435",
+      "senderBrand": "HDFCBK",
+      "observedAt": "2026-11-01T07:00:20Z",
+      "bodyHash": "cb79f28a70d0886331b293503b344aaae9a2c87544a1ba0566f9be1631e7cfae",
+      "facts": []
+    },
+    {
+      "sourceKey": "sms:synthetic:436",
+      "senderBrand": "HDFCBK",
+      "observedAt": "2026-11-01T07:00:20Z",
+      "bodyHash": "05cdb90b70dd2b0c02631a3662c5e3624ed2b01f48788ba4e3fe11449766d54f",
+      "facts": []
+    },
+    {
+      "sourceKey": "sms:synthetic:437",
+      "senderBrand": "HDFCBK",
+      "observedAt": "2026-11-01T07:00:20Z",
+      "bodyHash": "ebb270fcd8388e9b38c8d91fdbd388e44c3fc12eb99c8531356d5f778c4e3984",
+      "facts": []
+    },
+    {
+      "sourceKey": "sms:synthetic:438",
+      "senderBrand": "HDFCBK",
+      "observedAt": "2026-11-01T07:00:20Z",
+      "bodyHash": "cd9569896646d669ee1e0e41dbd6b376446785e85c9707b6540da88f49befc1b",
+      "facts": []
+    },
+    {
+      "sourceKey": "sms:synthetic:439",
+      "senderBrand": "HDFCBK",
+      "observedAt": "2026-11-01T07:00:20Z",
+      "bodyHash": "acf7d99e30dec2d0d3a874777e0e07a5948498c7e8115b105b45d47c8bfc7482",
+      "facts": []
+    },
+    {
+      "sourceKey": "sms:synthetic:440",
+      "senderBrand": "HDFCBK",
+      "observedAt": "2026-11-01T07:00:20Z",
+      "bodyHash": "a6304f4c1ca276a583a2f38e9ade9aff4c614a78fa07e2d1749b2da3f0255e50",
+      "facts": []
+    },
+    {
+      "sourceKey": "sms:synthetic:441",
+      "senderBrand": "HDFCBK",
+      "observedAt": "2026-11-01T07:00:20Z",
+      "bodyHash": "789f84d14db73f44547bbdfe637372e31b64de2165ca8552347c7097b21f2a44",
+      "facts": []
+    },
+    {
+      "sourceKey": "sms:synthetic:442",
+      "senderBrand": "HDFCBK",
+      "observedAt": "2026-11-01T07:00:20Z",
+      "bodyHash": "48ad9887c4d93741da105a9a5d70572d13fadff01b91b3fd4b5ba685be905256",
+      "facts": []
+    },
+    {
+      "sourceKey": "sms:synthetic:443",
+      "senderBrand": "HDFCBK",
+      "observedAt": "2026-11-01T07:00:20Z",
+      "bodyHash": "a82032e725d3f77c1664f81b07638f5e6a624f3c964454c9ec1adc626d46f972",
+      "facts": []
+    },
+    {
+      "sourceKey": "sms:synthetic:444",
+      "senderBrand": "HDFCBK",
+      "observedAt": "2026-11-01T07:00:20Z",
+      "bodyHash": "5b6a036b7f096dbdaa0c0ef5b29b373163fb38712009808d0de058c9f05700a1",
+      "facts": []
+    },
+    {
+      "sourceKey": "sms:synthetic:445",
+      "senderBrand": "HDFCBK",
+      "observedAt": "2026-11-01T07:00:20Z",
+      "bodyHash": "4ada2d14908369a7bdb7bdaef34688d8201671e81e170d847bac0b002f381992",
+      "facts": []
+    },
+    {
+      "sourceKey": "sms:synthetic:446",
+      "senderBrand": "HDFCBK",
+      "observedAt": "2026-11-01T07:00:20Z",
+      "bodyHash": "a76c8a7849569704499a3720c7c6b95a3720c3efdd3b61f6219d15aa7e53a259",
+      "facts": []
+    },
+    {
+      "sourceKey": "sms:synthetic:447",
+      "senderBrand": "HDFCBK",
+      "observedAt": "2026-11-01T07:00:20Z",
+      "bodyHash": "51563f6310034163bbfb72d5bf8b3a9180a4175bf4f9ee200460987b983b71ac",
+      "facts": []
+    },
+    {
+      "sourceKey": "sms:synthetic:448",
+      "senderBrand": "HDFCBK",
+      "observedAt": "2026-11-01T07:00:20Z",
+      "bodyHash": "e009f69e348e8268a8772d11907251d188e2cfd92cc56ea69daeb192b5ff874d",
+      "facts": []
+    },
+    {
+      "sourceKey": "sms:synthetic:449",
+      "senderBrand": "HDFCBK",
+      "observedAt": "2026-11-01T07:00:20Z",
+      "bodyHash": "6e54261f8bffd7a4d4b15001972ce96fc2d1f0b5ab779e66abeb75e6860acfe5",
+      "facts": []
+    },
+    {
+      "sourceKey": "sms:synthetic:450",
+      "senderBrand": "HDFCBK",
+      "observedAt": "2026-11-01T07:00:20Z",
+      "bodyHash": "1beca2d5d725dada91b27baa9b23209381dd47c31067e0af40c504e7cfb18c40",
+      "facts": []
+    },
+    {
+      "sourceKey": "sms:synthetic:451",
+      "senderBrand": "HDFCBK",
+      "observedAt": "2026-11-01T07:00:20Z",
+      "bodyHash": "14b3a05f49d899c550e5f52fc0da63409002f857456007184d499ac81d8b6402",
+      "facts": []
+    },
+    {
+      "sourceKey": "sms:synthetic:452",
+      "senderBrand": "HDFCBK",
+      "observedAt": "2026-11-01T07:00:20Z",
+      "bodyHash": "020b8b47ec36f13f65616023dc9f20c0ae091cdb8ab8b0031fb065bf2c372d15",
+      "facts": []
+    },
+    {
+      "sourceKey": "sms:synthetic:453",
+      "senderBrand": "HDFCBK",
+      "observedAt": "2026-11-01T07:00:20Z",
+      "bodyHash": "5f352aac6077b9e08d0d4e805022671237cc473fa9fc6761375383e83f95229f",
+      "facts": []
+    },
+    {
+      "sourceKey": "sms:synthetic:454",
+      "senderBrand": "HDFCBK",
+      "observedAt": "2026-11-01T07:00:20Z",
+      "bodyHash": "53424c68d2f4501baccf1165b6d5a24f3f76b2e2773da50682595d4c29743f34",
+      "facts": []
+    },
+    {
+      "sourceKey": "sms:synthetic:455",
+      "senderBrand": "HDFCBK",
+      "observedAt": "2026-11-01T07:00:20Z",
+      "bodyHash": "8a5fd9d2632add8587f1fc992147a4f87556254534d448cdedb0dc9bc3fc2b2a",
+      "facts": []
+    },
+    {
+      "sourceKey": "sms:synthetic:456",
+      "senderBrand": "HDFCBK",
+      "observedAt": "2026-11-01T07:00:20Z",
+      "bodyHash": "9fa08238f6f14e9fa46c557fb954f43f6065562c61cb886af3debc4f8f117eb7",
+      "facts": []
+    },
+    {
+      "sourceKey": "sms:synthetic:457",
+      "senderBrand": "HDFCBK",
+      "observedAt": "2026-11-01T07:00:20Z",
+      "bodyHash": "e6cdc3490c68730d6d723787ac2a0e3f68b42ea164a911f4c94f6a44f91342a0",
+      "facts": []
+    },
+    {
+      "sourceKey": "sms:synthetic:458",
+      "senderBrand": "HDFCBK",
+      "observedAt": "2026-11-01T07:00:20Z",
+      "bodyHash": "f9b001c8652f3238d54516a33d40cfd2fc3d6b4b086d7dc1066882248151b4d7",
+      "facts": []
+    },
+    {
+      "sourceKey": "sms:synthetic:459",
+      "senderBrand": "HDFCBK",
+      "observedAt": "2026-11-01T07:00:20Z",
+      "bodyHash": "84c265be8316bb548a1a180f4a03cc6bb5e84a4ec52aa26ceb21d06a1579b752",
+      "facts": []
+    },
+    {
+      "sourceKey": "sms:synthetic:460",
+      "senderBrand": "HDFCBK",
+      "observedAt": "2026-11-01T07:00:20Z",
+      "bodyHash": "5a551cd4b4f6297da106b0364a15a05b0b6e218503d2d65865afad34079e59db",
+      "facts": []
+    },
+    {
+      "sourceKey": "sms:synthetic:461",
+      "senderBrand": "HDFCBK",
+      "observedAt": "2026-11-01T07:00:20Z",
+      "bodyHash": "ea258366db1907b61218152e6fc7bbf5c4374d8acf093ee0333b8ef78cf27aeb",
+      "facts": []
+    },
+    {
+      "sourceKey": "sms:synthetic:462",
+      "senderBrand": "HDFCBK",
+      "observedAt": "2026-11-01T07:00:20Z",
+      "bodyHash": "0ce8cffe87c35d2291fc3ab12d394f5b3e0e92972e0a4fab738f3e213b0a0568",
+      "facts": []
+    },
+    {
+      "sourceKey": "sms:synthetic:463",
+      "senderBrand": "HDFCBK",
+      "observedAt": "2026-11-01T07:00:20Z",
+      "bodyHash": "f597b9092968f1cb7bf944be5d41efc2bcff3d2a70061d7e906b930092a45abd",
+      "facts": []
+    },
+    {
+      "sourceKey": "sms:synthetic:464",
+      "senderBrand": "HDFCBK",
+      "observedAt": "2026-11-01T07:00:20Z",
+      "bodyHash": "393b6cd3be1bbddc448859d8e44259cf15204e0b708368991fa1ec0b8f0b296c",
+      "facts": []
+    },
+    {
+      "sourceKey": "sms:synthetic:465",
+      "senderBrand": "HDFCBK",
+      "observedAt": "2026-11-01T07:00:20Z",
+      "bodyHash": "ed7d0fb4e7409cf949c8e6ed6a697838647a7dc7595861ed312ff3d5452c37bd",
+      "facts": []
+    },
+    {
+      "sourceKey": "sms:synthetic:466",
+      "senderBrand": "HDFCBK",
+      "observedAt": "2026-11-01T07:00:20Z",
+      "bodyHash": "45bdd15f0358477ac7dbaf12b9cd64ef4dce28019d311f6e24fdb0812f70bc86",
+      "facts": []
+    },
+    {
+      "sourceKey": "sms:synthetic:467",
+      "senderBrand": "HDFCBK",
+      "observedAt": "2026-11-01T07:00:20Z",
+      "bodyHash": "73a6b1ce698458952fdaa8bf1aaf98d7c9fa4bd0e96b3e0f296613c043cf346a",
+      "facts": []
+    },
+    {
+      "sourceKey": "sms:synthetic:468",
+      "senderBrand": "HDFCBK",
+      "observedAt": "2026-11-01T07:00:20Z",
+      "bodyHash": "75397c72e229364126302198051ae2a7215a7273939ca902715c2d690a930a41",
+      "facts": []
+    },
+    {
+      "sourceKey": "sms:synthetic:469",
+      "senderBrand": "HDFCBK",
+      "observedAt": "2026-11-01T07:00:20Z",
+      "bodyHash": "c4d674047ab1c0b8b35a842d1fd05d057abe4ba9bf70477c028ebf4bbd565de5",
+      "facts": []
+    },
+    {
+      "sourceKey": "sms:synthetic:470",
+      "senderBrand": "HDFCBK",
+      "observedAt": "2026-11-01T07:00:20Z",
+      "bodyHash": "3bc36f29c05a744eb08d8b012dca524392b96fa10455a18e232c879deefc2787",
+      "facts": []
+    },
+    {
+      "sourceKey": "sms:synthetic:471",
+      "senderBrand": "HDFCBK",
+      "observedAt": "2026-11-01T07:00:20Z",
+      "bodyHash": "557eda200c3a2f3f9d026f054e35c60635feff8f3615a792ab9fd8ff00dfb860",
+      "facts": []
+    },
+    {
+      "sourceKey": "sms:synthetic:472",
+      "senderBrand": "HDFCBK",
+      "observedAt": "2026-11-01T07:00:20Z",
+      "bodyHash": "6c9eb4bdec16c99c999aa6495844e7155cfa85069e64e0ec65f1952f14005443",
+      "facts": []
+    },
+    {
+      "sourceKey": "sms:synthetic:473",
+      "senderBrand": "HDFCBK",
+      "observedAt": "2026-11-01T07:00:20Z",
+      "bodyHash": "081d72ecac632460b2608cebce2e3075ab47cc39b79e08394449183527bef6bf",
+      "facts": []
+    },
+    {
+      "sourceKey": "sms:synthetic:474",
+      "senderBrand": "HDFCBK",
+      "observedAt": "2026-11-01T07:00:20Z",
+      "bodyHash": "13fd98b3ffd431e4adb630f861e82d868d514a27c9e916a51299890ff47cc316",
+      "facts": []
+    },
+    {
+      "sourceKey": "sms:synthetic:475",
+      "senderBrand": "HDFCBK",
+      "observedAt": "2026-11-01T07:00:20Z",
+      "bodyHash": "1f467bfb779456ba23f8f3dd1e3f760704256ab64fd6f3f587cd550d399a84d6",
+      "facts": []
+    },
+    {
+      "sourceKey": "sms:synthetic:476",
+      "senderBrand": "HDFCBK",
+      "observedAt": "2026-11-01T07:00:20Z",
+      "bodyHash": "666fb7c2b7ad6d64bb5fc206c6ff6d0ff5356e24bfc6c4b8d3faf18aea82691f",
+      "facts": []
+    },
+    {
+      "sourceKey": "sms:synthetic:477",
+      "senderBrand": "HDFCBK",
+      "observedAt": "2026-11-01T07:00:20Z",
+      "bodyHash": "def715c622afd8bcee8a2ccc7a30be640bf7e03d73e5bcceeed53110bfcf0530",
+      "facts": []
+    },
+    {
+      "sourceKey": "sms:synthetic:478",
+      "senderBrand": "HDFCBK",
+      "observedAt": "2026-11-01T07:00:20Z",
+      "bodyHash": "e7a187560942451431889774d58edd5b4859542b149cea43775f18c77c60924f",
+      "facts": []
+    },
+    {
+      "sourceKey": "sms:synthetic:479",
+      "senderBrand": "HDFCBK",
+      "observedAt": "2026-11-01T07:00:20Z",
+      "bodyHash": "193c8cf7a7b40d0cf9358176738789989b02510ff37c6afc66f4b37963e69fc2",
+      "facts": []
+    },
+    {
+      "sourceKey": "sms:synthetic:480",
+      "senderBrand": "HDFCBK",
+      "observedAt": "2026-11-01T07:00:20Z",
+      "bodyHash": "7b9e7b2f8874d73904ebf232dc2dc6151a599d37911b31e265044716e9b79468",
+      "facts": []
+    },
+    {
+      "sourceKey": "sms:synthetic:481",
+      "senderBrand": "HDFCBK",
+      "observedAt": "2026-11-01T07:00:20Z",
+      "bodyHash": "cd0ed79a1eb6944279a14ea807f1d548f96156aea52c0a01b433651a99ad7241",
+      "facts": []
+    },
+    {
+      "sourceKey": "sms:synthetic:482",
+      "senderBrand": "HDFCBK",
+      "observedAt": "2026-11-01T07:00:20Z",
+      "bodyHash": "55db84313028c4835606db0fdda0dee14774105f35c4bd8bc4c3c63b393b3ef3",
+      "facts": []
+    },
+    {
+      "sourceKey": "sms:synthetic:483",
+      "senderBrand": "HDFCBK",
+      "observedAt": "2026-11-01T07:00:20Z",
+      "bodyHash": "ec8a3c9cd90c3d2540f8e793d04b9910fe22112a7fc7ce4b152251952447f1b5",
+      "facts": []
+    },
+    {
+      "sourceKey": "sms:synthetic:484",
+      "senderBrand": "HDFCBK",
+      "observedAt": "2026-11-01T07:00:20Z",
+      "bodyHash": "c532f14784ddb30a265a7919dc54d9ccd28e1e1a308d51e7d02c5b4363a471ea",
+      "facts": []
+    },
+    {
+      "sourceKey": "sms:synthetic:485",
+      "senderBrand": "HDFCBK",
+      "observedAt": "2026-11-01T07:00:20Z",
+      "bodyHash": "c8d1824a2e0b2229680e5d68c9097a9a0d4eb259f64d3e35b2f343bf9e6d3f68",
+      "facts": []
+    },
+    {
+      "sourceKey": "sms:synthetic:486",
+      "senderBrand": "HDFCBK",
+      "observedAt": "2026-11-01T07:00:20Z",
+      "bodyHash": "de912628fbdf53ac53a9f36fe00c42bd18c605b453b53d4e6e30109bb66660d1",
+      "facts": []
+    },
+    {
+      "sourceKey": "sms:synthetic:487",
+      "senderBrand": "HDFCBK",
+      "observedAt": "2026-11-01T07:00:20Z",
+      "bodyHash": "4d431c47fa44d9803612c4d1f151b4bc85a04f2ecf5a38e3bc89686b991817d0",
+      "facts": []
+    },
+    {
+      "sourceKey": "sms:synthetic:488",
+      "senderBrand": "HDFCBK",
+      "observedAt": "2026-11-01T07:00:20Z",
+      "bodyHash": "4d992305217f1ff2a71e268ecef144ef05d1644f86e64477461285cc671fec20",
+      "facts": []
+    },
+    {
+      "sourceKey": "sms:synthetic:489",
+      "senderBrand": "HDFCBK",
+      "observedAt": "2026-11-01T07:00:20Z",
+      "bodyHash": "0101b233f3c0fbd5540acc7ea70226bc6a9de9eb3bebcd076df6c28eed10695e",
+      "facts": []
+    },
+    {
+      "sourceKey": "sms:synthetic:490",
+      "senderBrand": "HDFCBK",
+      "observedAt": "2026-11-01T07:00:20Z",
+      "bodyHash": "ebb59a77568eb0f82f137249f4336af13e8a4cfb53b40cf54e7a2dbb8da99a9c",
+      "facts": []
+    },
+    {
+      "sourceKey": "sms:synthetic:491",
+      "senderBrand": "HDFCBK",
+      "observedAt": "2026-11-01T07:00:20Z",
+      "bodyHash": "92048ae13ad44fa13e485bc7a8291625d8d0dadebe3527ad232d15d9af6e1cde",
+      "facts": []
+    },
+    {
+      "sourceKey": "sms:synthetic:492",
+      "senderBrand": "HDFCBK",
+      "observedAt": "2026-11-01T07:00:20Z",
+      "bodyHash": "278fff2e25b0c57ef6a30cdfee0fa582bb9229d4d08d5b28af09be03f698fea7",
+      "facts": []
+    },
+    {
+      "sourceKey": "sms:synthetic:493",
+      "senderBrand": "HDFCBK",
+      "observedAt": "2026-11-01T07:00:20Z",
+      "bodyHash": "4baa6a1e2e733c6861ed3fc9905c69551f57c94f7263388af5b615bc43ac9813",
+      "facts": []
+    },
+    {
+      "sourceKey": "sms:synthetic:494",
+      "senderBrand": "HDFCBK",
+      "observedAt": "2026-11-01T07:00:20Z",
+      "bodyHash": "bb035c73b2aa525eef583edca3fb652a25ac9459c30dfc11c1813fc26b8f2c56",
+      "facts": []
+    },
+    {
+      "sourceKey": "sms:synthetic:495",
+      "senderBrand": "HDFCBK",
+      "observedAt": "2026-11-01T07:00:20Z",
+      "bodyHash": "73bafcf77f92753d04707fc78591b21f12d70fde7f6ab94bfec37d3efa7972a8",
+      "facts": []
+    },
+    {
+      "sourceKey": "sms:synthetic:496",
+      "senderBrand": "HDFCBK",
+      "observedAt": "2026-11-01T07:00:20Z",
+      "bodyHash": "73088a27f603247f10f43dff3250efd241286fc49baa8ee129c0093bbab2a08f",
+      "facts": []
+    },
+    {
+      "sourceKey": "sms:synthetic:497",
+      "senderBrand": "HDFCBK",
+      "observedAt": "2026-11-01T07:00:20Z",
+      "bodyHash": "e0ab99c9fd637ee79bb2b1585b33ea4edc547f3f1ab29307c8e6eb6910139a38",
+      "facts": []
+    },
+    {
+      "sourceKey": "sms:synthetic:498",
+      "senderBrand": "HDFCBK",
+      "observedAt": "2026-11-01T07:00:20Z",
+      "bodyHash": "b3a43d9fa5ee29019ade859238d2d2609963c159dfed7c449fd7b781cb6ea340",
+      "facts": []
+    },
+    {
+      "sourceKey": "sms:synthetic:499",
+      "senderBrand": "HDFCBK",
+      "observedAt": "2026-11-01T07:00:20Z",
+      "bodyHash": "21751c96e2e606226de235d9b12737fc73dec6fd246d879ef97b2eca0a3d0aeb",
+      "facts": []
+    },
+    {
+      "sourceKey": "sms:synthetic:500",
+      "senderBrand": "HDFCBK",
+      "observedAt": "2026-11-01T07:00:20Z",
+      "bodyHash": "133faee254a349dd6156083ce787b2760554af1ec0459c910cd64def17ca9947",
+      "facts": []
+    }
+  ],
+  "instruments": [
+    {
+      "instrumentId": "3f9d5a52-1c0e-4b4e-9d57-6a7a1b0f2c11",
+      "kind": "credit_card",
+      "issuerSlug": "hdfc",
+      "maskDigits": "5678",
+      "maskLength": 16,
+      "displayName": "HDFC credit card ••5678",
+      "status": "detected",
+      "userCardId": "8a1b2c3d-4e5f-4a6b-8c7d-9e0f1a2b3c4d",
+      "parentInstrumentId": null,
+      "aliases": {
+        "senders": [
+          "HDFCBK"
+        ],
+        "vpas": [],
+        "productNames": [
+          "Synthetic Platinum"
+        ]
+      },
+      "creditLimitMinor": 30000000,
+      "creditLimitSource": "sms",
+      "creditLimitAt": "2026-11-01T07:00:11Z",
+      "availableMinor": 4500000,
+      "availableAt": "2026-11-01T07:00:11Z",
+      "pointsBalance": 1250,
+      "pointsAt": "2026-11-01T07:00:11Z",
+      "firstSeenAt": "2026-10-01T05:00:00Z",
+      "lastSeenAt": "2026-11-01T07:00:20Z",
+      "evidenceCount": 12
+    }
+  ],
+  "events": [
+    {
+      "eventId": "b0461c8d7702e3af18830fc4a8009c7243f03fb4424e2ac905fcf291a5ebb659",
+      "type": "card_bill_payment",
+      "status": "complete",
+      "legs": [
+        {
+          "factId": "b0461c8d7702e3af18830fc4a8009c7243f03fb4424e2ac905fcf291a5ebb659",
+          "role": "debit_leg"
+        },
+        {
+          "factId": "cad25954b6aebab22b20de9fc1dd7c15f8cbe04868142f722eab251929a2268a",
+          "role": "credit_leg"
+        }
+      ],
+      "linkRuleId": "LINK-CARD-BILL",
+      "confidence": 0.97,
+      "occurredAt": "2026-11-01T07:00:11Z",
+      "amountMinor": 1234500
+    }
+  ],
+  "ledger": [
+    {
+      "entryId": "c8a1e2bfe5d584128c87400709b6f599afae5b122b08f5c4f1c48293aadcbb4c",
+      "eventId": "b0461c8d7702e3af18830fc4a8009c7243f03fb4424e2ac905fcf291a5ebb659",
+      "from": {
+        "instrumentId": "3f9d5a52-1c0e-4b4e-9d57-6a7a1b0f2c11"
+      },
+      "to": {
+        "external": "SWIGGY"
+      },
+      "amountMinor": 49900,
+      "unit": "INR",
+      "occurredAt": "2026-11-01T07:00:11Z",
+      "category": "food",
+      "categorySource": "catalogue",
+      "countsAsTransaction": true,
+      "isSpend": true,
+      "isIncome": false,
+      "isInvestment": false
+    }
+  ]
+}

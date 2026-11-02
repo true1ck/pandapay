@@ -1,0 +1,60 @@
+{
+  "contractVersion": "2.0",
+  "factId": "79420067cd1fc8e517ec007447383cb501f49c416ba456dc017957d445096db9",
+  "sourceKey": "sms:synthetic:0020",
+  "factType": "mandate",
+  "observedAt": "2026-11-01T07:00:20Z",
+  "occurredAt": "2026-11-01T07:00:11Z",
+  "instrument": {
+    "kind": "bank_account",
+    "issuerSlug": "sbi",
+    "maskDigits": "1234",
+    "maskLength": null,
+    "productName": null,
+    "raw": "XX1234"
+  },
+  "counterparty": {
+    "name": "SYNTH TUBE",
+    "vpa": null,
+    "kind": "merchant",
+    "accountMask": null
+  },
+  "amounts": [
+    {
+      "role": "ceiling",
+      "minor": 100000,
+      "unit": "INR"
+    },
+    {
+      "role": "outstanding",
+      "minor": 5,
+      "unit": "INR"
+    }
+  ],
+  "references": {
+    "umrn": "SYNUMRN0002"
+  },
+  "attrs": {
+    "phase": "created",
+    "frequency": "monthly",
+    "merchantName": "SYNTH TUBE",
+    "oneTime": false,
+    "mandatePurpose": "subscription"
+  },
+  "provenance": {
+    "engine": "rules",
+    "ruleId": "SYN-RULE-MANDATE",
+    "ruleVersion": 1,
+    "bundleVersion": 1,
+    "engineVersion": "2.0.0",
+    "appVersion": "1.0.0+1"
+  },
+  "evidence": [
+    {
+      "field": "amt",
+      "start": 0,
+      "end": 10
+    }
+  ],
+  "confidence": 0.99
+}

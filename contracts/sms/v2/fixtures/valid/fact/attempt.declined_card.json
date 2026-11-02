@@ -1,0 +1,51 @@
+{
+  "contractVersion": "2.0",
+  "factId": "77e71e1fe0a83e73c4c4d8365974f21edce31fad76a6e0ba31173478d590a643",
+  "sourceKey": "sms:synthetic:0007",
+  "factType": "attempt",
+  "observedAt": "2026-11-01T07:00:20Z",
+  "occurredAt": "2026-11-01T07:00:11Z",
+  "instrument": {
+    "kind": "credit_card",
+    "issuerSlug": "hdfc",
+    "maskDigits": "5678",
+    "maskLength": 16,
+    "productName": null,
+    "raw": "x5678"
+  },
+  "counterparty": {
+    "name": "SWIGGY",
+    "vpa": null,
+    "kind": "merchant",
+    "accountMask": null
+  },
+  "amounts": [
+    {
+      "role": "posted",
+      "minor": 49900,
+      "unit": "INR"
+    }
+  ],
+  "references": {},
+  "attrs": {
+    "status": "declined",
+    "direction": "debit",
+    "purpose": "purchase"
+  },
+  "provenance": {
+    "engine": "rules",
+    "ruleId": "SYN-RULE-ATTEMPT",
+    "ruleVersion": 1,
+    "bundleVersion": 1,
+    "engineVersion": "2.0.0",
+    "appVersion": "1.0.0+1"
+  },
+  "evidence": [
+    {
+      "field": "amt",
+      "start": 0,
+      "end": 10
+    }
+  ],
+  "confidence": 0.99
+}

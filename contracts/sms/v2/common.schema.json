@@ -1,0 +1,288 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://pandapay.app/contracts/sms/v2/common.schema.json",
+  "title": "Shared definitions",
+  "$defs": {
+    "utcTime": {
+      "type": "string",
+      "pattern": "^\\d{4}-\\d{2}-\\d{2}T\\d{2}:\\d{2}:\\d{2}(\\.\\d{1,9})?Z$",
+      "format": "date-time",
+      "x-code": "common.timestamp_invalid"
+    },
+    "utcTimeOrNull": {
+      "type": [
+        "string",
+        "null"
+      ],
+      "pattern": "^\\d{4}-\\d{2}-\\d{2}T\\d{2}:\\d{2}:\\d{2}(\\.\\d{1,9})?Z$",
+      "format": "date-time",
+      "x-code": "common.timestamp_invalid"
+    },
+    "uuidOrNull": {
+      "type": [
+        "string",
+        "null"
+      ],
+      "pattern": "^[0-9a-f]{8}-[0-9a-f]{4}-4[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$",
+      "x-code": "common.uuid_invalid"
+    },
+    "date": {
+      "type": "string",
+      "pattern": "^\\d{4}-\\d{2}-\\d{2}$",
+      "format": "date",
+      "x-code": "common.date_invalid"
+    },
+    "uuid": {
+      "type": "string",
+      "pattern": "^[0-9a-f]{8}-[0-9a-f]{4}-4[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$",
+      "x-code": "common.uuid_invalid"
+    },
+    "sha256": {
+      "type": "string",
+      "pattern": "^[0-9a-f]{64}$",
+      "x-code": "common.sha256_invalid"
+    },
+    "amount": {
+      "type": "object",
+      "required": [
+        "role",
+        "minor",
+        "unit"
+      ],
+      "properties": {
+        "role": {
+          "type": "string",
+          "x-code": "fact.amount.role_not_allowed"
+        },
+        "minor": {
+          "type": "integer",
+          "minimum": 0,
+          "x-codes": {
+            "type": "fact.amount.minor_not_integer",
+            "minimum": "fact.amount.minor_not_positive"
+          }
+        },
+        "unit": {
+          "type": "string",
+          "pattern": "^(POINTS|[A-Z]{3})$",
+          "x-code": "fact.amount.unit_invalid"
+        },
+        "original": {
+          "type": "object",
+          "required": [
+            "minor",
+            "currency"
+          ],
+          "additionalProperties": false,
+          "properties": {
+            "minor": {
+              "type": "integer",
+              "minimum": 1,
+              "x-code": "fact.amount.original_invalid"
+            },
+            "currency": {
+              "type": "string",
+              "pattern": "^[A-Z]{3}$",
+              "x-code": "fact.amount.original_invalid"
+            }
+          },
+          "x-code": "fact.amount.original_invalid"
+        }
+      },
+      "additionalProperties": false
+    },
+    "instrumentMention": {
+      "type": [
+        "object",
+        "null"
+      ],
+      "required": [
+        "kind",
+        "issuerSlug",
+        "maskDigits",
+        "maskLength",
+        "productName",
+        "raw"
+      ],
+      "properties": {
+        "kind": {
+          "type": [
+            "string",
+            "null"
+          ],
+          "enum": [
+            "bank_account",
+            "credit_card",
+            "debit_card",
+            "prepaid_card",
+            "wallet",
+            "broker",
+            "loan",
+            "pay_later",
+            null
+          ],
+          "x-code": "fact.instrument.kind_invalid"
+        },
+        "issuerSlug": {
+          "type": [
+            "string",
+            "null"
+          ],
+          "pattern": "^[a-z0-9_]+$",
+          "x-code": "fact.instrument.issuer_invalid"
+        },
+        "maskDigits": {
+          "type": [
+            "string",
+            "null"
+          ],
+          "pattern": "^\\d{2,6}$",
+          "x-code": "fact.instrument.mask_digits_invalid"
+        },
+        "maskLength": {
+          "type": [
+            "integer",
+            "null"
+          ],
+          "minimum": 2,
+          "maximum": 32,
+          "x-code": "fact.instrument.mask_length_invalid"
+        },
+        "productName": {
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "raw": {
+          "type": [
+            "string",
+            "null"
+          ]
+        }
+      },
+      "additionalProperties": false
+    },
+    "counterparty": {
+      "type": [
+        "object",
+        "null"
+      ],
+      "required": [
+        "name",
+        "vpa",
+        "kind",
+        "accountMask"
+      ],
+      "properties": {
+        "name": {
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "vpa": {
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "kind": {
+          "type": [
+            "string",
+            "null"
+          ],
+          "enum": [
+            "merchant",
+            "person",
+            "own",
+            "bank",
+            "unknown",
+            null
+          ],
+          "x-code": "fact.counterparty.kind_invalid"
+        },
+        "accountMask": {
+          "type": [
+            "string",
+            "null"
+          ],
+          "pattern": "^\\d{2,6}$",
+          "x-code": "fact.counterparty.account_mask_invalid"
+        }
+      },
+      "additionalProperties": false
+    },
+    "provenance": {
+      "type": "object",
+      "required": [
+        "engine",
+        "ruleId",
+        "ruleVersion",
+        "bundleVersion",
+        "engineVersion",
+        "appVersion"
+      ],
+      "properties": {
+        "engine": {
+          "type": "string",
+          "enum": [
+            "rules",
+            "ai",
+            "user"
+          ],
+          "x-code": "fact.provenance.engine_invalid"
+        },
+        "ruleId": {
+          "type": "string",
+          "minLength": 1
+        },
+        "ruleVersion": {
+          "type": "integer",
+          "minimum": 0
+        },
+        "bundleVersion": {
+          "type": "integer",
+          "minimum": 0
+        },
+        "engineVersion": {
+          "type": "string",
+          "minLength": 1
+        },
+        "appVersion": {
+          "type": "string",
+          "minLength": 1
+        },
+        "model": {
+          "type": "string",
+          "minLength": 1
+        }
+      },
+      "additionalProperties": false
+    },
+    "span": {
+      "type": "object",
+      "required": [
+        "field",
+        "start",
+        "end"
+      ],
+      "properties": {
+        "field": {
+          "type": "string",
+          "minLength": 1
+        },
+        "start": {
+          "type": "integer",
+          "minimum": 0
+        },
+        "end": {
+          "type": "integer",
+          "minimum": 0
+        }
+      },
+      "additionalProperties": false,
+      "x-code": "fact.evidence.span_invalid"
+    }
+  }
+}
