@@ -196,15 +196,15 @@ configure_database_tls() {
         echo 'FATAL: curl is required to obtain the reviewed Supabase database CA' >&2
         exit 1
       }
-      command -v sha256sum >/dev/null 2>&1 || {
-        echo 'FATAL: sha256sum is required to verify the reviewed Supabase database CA' >&2
+      command -v openssl >/dev/null 2>&1 || {
+        echo 'FATAL: openssl is required to verify the reviewed Supabase database CA' >&2
         exit 1
       }
       DB_CA_TEMP="$(mktemp)"
       curl --fail --silent --show-error --location --max-time 20 \
-        https://supabase.com/prod-ca-2021.crt > "$DB_CA_TEMP"
+        https://supabase-downloads.s3-ap-southeast-1.amazonaws.com/prod/ssl/prod-ca-2021.crt > "$DB_CA_TEMP"
       expected='807025AD50D4ED219D2C9C7D299C004F824EB00CF7F65AFEF607D07B72E6CAFA'
-      actual="$(sha256sum "$DB_CA_TEMP" | awk '{print toupper($1)}')"
+      actual="$(openssl x509 -in "$DB_CA_TEMP" -outform DER 2>/dev/null | sha256sum | awk '{print toupper($1)}')"
       [ "$actual" = "$expected" ] || {
         echo 'FATAL: downloaded Supabase database CA fingerprint is not the reviewed value' >&2
         exit 1
