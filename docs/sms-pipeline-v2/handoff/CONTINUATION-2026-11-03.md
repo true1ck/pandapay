@@ -119,3 +119,15 @@ Continue the existing work-package workflow: isolated worktree, owned paths and 
 Keep all new app paths behind `SMS_PIPELINE_V2` and server routes behind the disabled-by-default flag until the planned rollout. Leave Gmail/email/IMAP and both card-discovery engines untouched. Do not edit applied migrations or generated files by hand; do not upgrade dependencies outside authorised touch points. Use synthetic or reviewed redacted fixtures only.
 
 No push, deployment, production flag change, release or legacy deletion is part of this documentation checkpoint. The plan ships one user-facing release after its gates; an internal merge is not a release.
+
+## Local integration and accuracy checkpoint
+
+The owner designated `codex/sms-v2-wp14` as the integration line. Both it and `sms-v2/main` point to `b59d5bd`. The previous tip `01bd0a8` is preserved at `sms-v2/main-claude-backup`. An ancestry check confirmed that `ddd5e13`, `58d00ed` and `01bd0a8` are absent from the integration line.
+
+The accuracy worktree is on `codex/sms-v2-real-accuracy`. From `tools/sms_rules_cli`, this command validated 1,505 examples across 724 rules, 27 ignore rules and 147 senders.
+
+```sh
+dart run bin/sms_rules.dart build --rules ../../rules/sms/v2 --created-at 2026-11-04T00:00:00Z --out /tmp/pandapay-real-sms.a1N9hk/baseline.json
+```
+
+The repository extractor attempted a read-only connection to the local Messages archive. SQLite could not open it and a direct file open confirmed macOS denied access with `Operation not permitted`. No corpus was extracted. Family accuracy, double counts and review rate remain unmeasured. The subsequent signing, import, correction, device and cutover checkpoints wait on this ordered accuracy step.
