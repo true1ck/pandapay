@@ -84,7 +84,7 @@ test('PgStore: import, publish, serve, pause, stats and jobs on a real database'
     // Exercise the same private HTTP registrar and database helper used at runtime.
     const { createAdminApiApp } = require('../../src/admin/app');
     const { registerPrivateRulesAdminRoutes } = require('../../src/sms_v2/rules_admin_route');
-    const policies = require('../../src/admin/route_manifest').routeManifest.filter(p => p.path.startsWith('/admin/sms/v2/'));
+    const policies = require('../../src/admin/route_manifest').routeManifest.filter(p => (p.path.startsWith('/admin/sms/v2/rules') || p.path === '/admin/sms/v2/bundles'));
     await pool.query("INSERT INTO feature_flags(key,is_enabled,rollout_percent) VALUES('sms_pipeline_v2_enabled',true,100) ON CONFLICT(key) DO UPDATE SET is_enabled=true, rollout_percent=100");
     const app = createAdminApiApp({
       routeManifest: policies,

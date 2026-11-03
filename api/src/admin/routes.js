@@ -13,6 +13,7 @@ function registerAdminRoutes(api) {
   const { legacyApp, legacyDependencies } = api;
   registerPrivateRulesAdminRoutes(api);
   require('../sms_v2/corrections_route').registerPrivateCorrections(api);
+  require('../sms_v2/ai_templates').registerPrivateTemplateRoutes(api);
   registerInlineAdminRoutes(legacyApp, legacyDependencies);
   registerAdminReferralOperationsRoutes(legacyApp, legacyDependencies);
 const REWARD_UNITS = [
