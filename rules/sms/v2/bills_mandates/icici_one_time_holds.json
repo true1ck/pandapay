@@ -1,0 +1,98 @@
+[
+  {
+    "id": "ICICI-UPI-ONE-TIME-PLACED",
+    "version": 1,
+    "family": "mandate_hold",
+    "senders": [
+      "ICICIT",
+      "ICICIB"
+    ],
+    "priority": 795,
+    "match": {
+      "pattern": "^dear customer,\\s+your account has been blocked by an amount of\\s+(?:rs\\.?|inr|₹)\\s*(?<amt>\\d[\\d,]*(?:\\.\\d{1,2})?),\\s*against the upi one[- ]time mandate\\s*-\\s*icici bank\\.?\\s*$",
+      "flags": "i"
+    },
+    "emit": [
+      {
+        "factType": "hold",
+        "attrs": {
+          "phase": "placed",
+          "purpose": "other"
+        },
+        "amounts": [
+          {
+            "role": "held",
+            "unit": "INR",
+            "from": "amt"
+          }
+        ]
+      }
+    ],
+    "confidence": 0.95,
+    "examples": [
+      {
+        "sender": "AX-ICICIT-S",
+        "body": "Dear Customer, your account has been blocked by an amount of Rs.14250, against the UPI one-time mandate-ICICI Bank.",
+        "expectFactTypes": [
+          "hold"
+        ]
+      },
+      {
+        "sender": "AX-ICICIT-S",
+        "body": "Dear Customer, your account has been debited by an amount of Rs.14250, against the UPI one-time mandate-ICICI Bank.",
+        "expectFactTypes": []
+      }
+    ],
+    "status": "active",
+    "createdBy": "baseline",
+    "updatedAt": "2026-11-04T00:00:00Z"
+  },
+  {
+    "id": "ICICI-UPI-ONE-TIME-RELEASED",
+    "version": 1,
+    "family": "mandate_hold",
+    "senders": [
+      "ICICIT",
+      "ICICIB"
+    ],
+    "priority": 795,
+    "match": {
+      "pattern": "^dear customer,\\s+your account has been unblocked by an amount of\\s+(?:rs\\.?|inr|₹)\\s*(?<amt>\\d[\\d,]*(?:\\.\\d{1,2})?),\\s*against the upi one[- ]time mandate\\s*-\\s*icici bank\\.?\\s*$",
+      "flags": "i"
+    },
+    "emit": [
+      {
+        "factType": "hold",
+        "attrs": {
+          "phase": "released",
+          "purpose": "other"
+        },
+        "amounts": [
+          {
+            "role": "released",
+            "unit": "INR",
+            "from": "amt"
+          }
+        ]
+      }
+    ],
+    "confidence": 0.95,
+    "examples": [
+      {
+        "sender": "AX-ICICIT-S",
+        "body": "Dear Customer, your account has been unblocked by an amount of Rs.14250, against the UPI one-time mandate-ICICI Bank.",
+        "expectFactTypes": [
+          "hold"
+        ]
+      },
+      {
+        "sender": "AX-ICICIT-S",
+        "body": "Dear Customer, your account has been debited by an amount of Rs.14250, against the UPI one-time mandate-ICICI Bank.",
+        "expectFactTypes": []
+      }
+    ],
+    "status": "active",
+    "createdBy": "baseline",
+    "updatedAt": "2026-11-04T00:00:00Z"
+  }
+]
