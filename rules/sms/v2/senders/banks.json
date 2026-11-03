@@ -1,0 +1,542 @@
+[
+  {
+    "brand": "AMEXBK",
+    "issuerSlug": "amex",
+    "issuerKind": "bank",
+    "aliases": []
+  },
+  {
+    "brand": "AMEXIN",
+    "issuerSlug": "amex",
+    "issuerKind": "bank",
+    "aliases": []
+  },
+  {
+    "brand": "AUBANK",
+    "issuerSlug": "au",
+    "issuerKind": "bank",
+    "aliases": []
+  },
+  {
+    "brand": "AUSFBL",
+    "issuerSlug": "au",
+    "issuerKind": "bank",
+    "aliases": []
+  },
+  {
+    "brand": "AXISBK",
+    "issuerSlug": "axis",
+    "issuerKind": "bank",
+    "aliases": []
+  },
+  {
+    "brand": "AXISBN",
+    "issuerSlug": "axis",
+    "issuerKind": "bank",
+    "aliases": []
+  },
+  {
+    "brand": "AXISCC",
+    "issuerSlug": "axis",
+    "issuerKind": "bank",
+    "aliases": []
+  },
+  {
+    "brand": "AXISMB",
+    "issuerSlug": "axis",
+    "issuerKind": "bank",
+    "aliases": []
+  },
+  {
+    "brand": "BANDHN",
+    "issuerSlug": "bandhan",
+    "issuerKind": "bank",
+    "aliases": []
+  },
+  {
+    "brand": "BDNSMS",
+    "issuerSlug": "bandhan",
+    "issuerKind": "bank",
+    "aliases": []
+  },
+  {
+    "brand": "BOBCRD",
+    "issuerSlug": "bob",
+    "issuerKind": "bank",
+    "aliases": []
+  },
+  {
+    "brand": "BOBSMS",
+    "issuerSlug": "bob",
+    "issuerKind": "bank",
+    "aliases": []
+  },
+  {
+    "brand": "BOBTXN",
+    "issuerSlug": "bob",
+    "issuerKind": "bank",
+    "aliases": []
+  },
+  {
+    "brand": "BOIIND",
+    "issuerSlug": "boi",
+    "issuerKind": "bank",
+    "aliases": []
+  },
+  {
+    "brand": "BOISMS",
+    "issuerSlug": "boi",
+    "issuerKind": "bank",
+    "aliases": []
+  },
+  {
+    "brand": "BOMSMS",
+    "issuerSlug": "bom",
+    "issuerKind": "bank",
+    "aliases": []
+  },
+  {
+    "brand": "CANARA",
+    "issuerSlug": "canara",
+    "issuerKind": "bank",
+    "aliases": []
+  },
+  {
+    "brand": "CANBNK",
+    "issuerSlug": "canara",
+    "issuerKind": "bank",
+    "aliases": []
+  },
+  {
+    "brand": "CBOISM",
+    "issuerSlug": "cbi",
+    "issuerKind": "bank",
+    "aliases": []
+  },
+  {
+    "brand": "CBSSBI",
+    "issuerSlug": "sbi",
+    "issuerKind": "bank",
+    "aliases": []
+  },
+  {
+    "brand": "CENTBK",
+    "issuerSlug": "cbi",
+    "issuerKind": "bank",
+    "aliases": []
+  },
+  {
+    "brand": "CITIBK",
+    "issuerSlug": "citi",
+    "issuerKind": "bank",
+    "aliases": []
+  },
+  {
+    "brand": "CITIBN",
+    "issuerSlug": "citi",
+    "issuerKind": "bank",
+    "aliases": []
+  },
+  {
+    "brand": "CSBBNK",
+    "issuerSlug": "csb",
+    "issuerKind": "bank",
+    "aliases": []
+  },
+  {
+    "brand": "CSBSMS",
+    "issuerSlug": "csb",
+    "issuerKind": "bank",
+    "aliases": []
+  },
+  {
+    "brand": "DBSBIN",
+    "issuerSlug": "dbs",
+    "issuerKind": "bank",
+    "aliases": []
+  },
+  {
+    "brand": "DBSBNK",
+    "issuerSlug": "dbs",
+    "issuerKind": "bank",
+    "aliases": []
+  },
+  {
+    "brand": "DCBBNK",
+    "issuerSlug": "dcb",
+    "issuerKind": "bank",
+    "aliases": []
+  },
+  {
+    "brand": "DCBSMS",
+    "issuerSlug": "dcb",
+    "issuerKind": "bank",
+    "aliases": []
+  },
+  {
+    "brand": "DOPBNK",
+    "issuerSlug": "indiapost",
+    "issuerKind": "bank",
+    "aliases": []
+  },
+  {
+    "brand": "FEDBNK",
+    "issuerSlug": "federal",
+    "issuerKind": "bank",
+    "aliases": []
+  },
+  {
+    "brand": "FEDSMS",
+    "issuerSlug": "federal",
+    "issuerKind": "bank",
+    "aliases": []
+  },
+  {
+    "brand": "HDFCBK",
+    "issuerSlug": "hdfc",
+    "issuerKind": "bank",
+    "aliases": []
+  },
+  {
+    "brand": "HDFCBN",
+    "issuerSlug": "hdfc",
+    "issuerKind": "bank",
+    "aliases": []
+  },
+  {
+    "brand": "HDFCCB",
+    "issuerSlug": "hdfc",
+    "issuerKind": "bank",
+    "aliases": []
+  },
+  {
+    "brand": "HDFCCC",
+    "issuerSlug": "hdfc",
+    "issuerKind": "bank",
+    "aliases": []
+  },
+  {
+    "brand": "HSBCBK",
+    "issuerSlug": "hsbc",
+    "issuerKind": "bank",
+    "aliases": []
+  },
+  {
+    "brand": "HSBCIN",
+    "issuerSlug": "hsbc",
+    "issuerKind": "bank",
+    "aliases": []
+  },
+  {
+    "brand": "ICICIB",
+    "issuerSlug": "icici",
+    "issuerKind": "bank",
+    "aliases": []
+  },
+  {
+    "brand": "ICICIC",
+    "issuerSlug": "icici",
+    "issuerKind": "bank",
+    "aliases": []
+  },
+  {
+    "brand": "ICICIO",
+    "issuerSlug": "icici",
+    "issuerKind": "bank",
+    "aliases": []
+  },
+  {
+    "brand": "ICICIS",
+    "issuerSlug": "icici",
+    "issuerKind": "bank",
+    "aliases": []
+  },
+  {
+    "brand": "ICICIT",
+    "issuerSlug": "icici",
+    "issuerKind": "bank",
+    "aliases": []
+  },
+  {
+    "brand": "IDBIBK",
+    "issuerSlug": "idbi",
+    "issuerKind": "bank",
+    "aliases": []
+  },
+  {
+    "brand": "IDBISM",
+    "issuerSlug": "idbi",
+    "issuerKind": "bank",
+    "aliases": []
+  },
+  {
+    "brand": "IDFCBK",
+    "issuerSlug": "idfc",
+    "issuerKind": "bank",
+    "aliases": []
+  },
+  {
+    "brand": "IDFCFB",
+    "issuerSlug": "idfc",
+    "issuerKind": "bank",
+    "aliases": []
+  },
+  {
+    "brand": "INDBNK",
+    "issuerSlug": "indusind",
+    "issuerKind": "bank",
+    "aliases": []
+  },
+  {
+    "brand": "INDUSB",
+    "issuerSlug": "indusind",
+    "issuerKind": "bank",
+    "aliases": []
+  },
+  {
+    "brand": "INDUSI",
+    "issuerSlug": "indusind",
+    "issuerKind": "bank",
+    "aliases": []
+  },
+  {
+    "brand": "IOBCHN",
+    "issuerSlug": "iob",
+    "issuerKind": "bank",
+    "aliases": []
+  },
+  {
+    "brand": "IOBSMS",
+    "issuerSlug": "iob",
+    "issuerKind": "bank",
+    "aliases": []
+  },
+  {
+    "brand": "IPPBMS",
+    "issuerSlug": "indiapost",
+    "issuerKind": "bank",
+    "aliases": []
+  },
+  {
+    "brand": "JKBANK",
+    "issuerSlug": "jkb",
+    "issuerKind": "bank",
+    "aliases": []
+  },
+  {
+    "brand": "JKBSMS",
+    "issuerSlug": "jkb",
+    "issuerKind": "bank",
+    "aliases": []
+  },
+  {
+    "brand": "KARBNK",
+    "issuerSlug": "karnataka",
+    "issuerKind": "bank",
+    "aliases": []
+  },
+  {
+    "brand": "KBLSMS",
+    "issuerSlug": "karnataka",
+    "issuerKind": "bank",
+    "aliases": []
+  },
+  {
+    "brand": "KMBANK",
+    "issuerSlug": "kotak",
+    "issuerKind": "bank",
+    "aliases": []
+  },
+  {
+    "brand": "KOTAKB",
+    "issuerSlug": "kotak",
+    "issuerKind": "bank",
+    "aliases": []
+  },
+  {
+    "brand": "KOTAKC",
+    "issuerSlug": "kotak",
+    "issuerKind": "bank",
+    "aliases": []
+  },
+  {
+    "brand": "KVBANK",
+    "issuerSlug": "kvb",
+    "issuerKind": "bank",
+    "aliases": []
+  },
+  {
+    "brand": "KVBSMS",
+    "issuerSlug": "kvb",
+    "issuerKind": "bank",
+    "aliases": []
+  },
+  {
+    "brand": "MAHABK",
+    "issuerSlug": "bom",
+    "issuerKind": "bank",
+    "aliases": []
+  },
+  {
+    "brand": "PNBBNK",
+    "issuerSlug": "pnb",
+    "issuerKind": "bank",
+    "aliases": []
+  },
+  {
+    "brand": "PNBSMS",
+    "issuerSlug": "pnb",
+    "issuerKind": "bank",
+    "aliases": []
+  },
+  {
+    "brand": "RBLBNK",
+    "issuerSlug": "rbl",
+    "issuerKind": "bank",
+    "aliases": []
+  },
+  {
+    "brand": "RBLCRD",
+    "issuerSlug": "rbl",
+    "issuerKind": "bank",
+    "aliases": []
+  },
+  {
+    "brand": "SBIBNK",
+    "issuerSlug": "sbi",
+    "issuerKind": "bank",
+    "aliases": []
+  },
+  {
+    "brand": "SBICARD",
+    "issuerSlug": "sbi",
+    "issuerKind": "bank",
+    "aliases": []
+  },
+  {
+    "brand": "SBICRD",
+    "issuerSlug": "sbi",
+    "issuerKind": "bank",
+    "aliases": []
+  },
+  {
+    "brand": "SBIINB",
+    "issuerSlug": "sbi",
+    "issuerKind": "bank",
+    "aliases": []
+  },
+  {
+    "brand": "SBIPSG",
+    "issuerSlug": "sbi",
+    "issuerKind": "bank",
+    "aliases": []
+  },
+  {
+    "brand": "SBIUPI",
+    "issuerSlug": "sbi",
+    "issuerKind": "bank",
+    "aliases": []
+  },
+  {
+    "brand": "SBMSMS",
+    "issuerSlug": "sbi",
+    "issuerKind": "bank",
+    "aliases": []
+  },
+  {
+    "brand": "SBYONO",
+    "issuerSlug": "sbi",
+    "issuerKind": "bank",
+    "aliases": []
+  },
+  {
+    "brand": "SCBANK",
+    "issuerSlug": "sc",
+    "issuerKind": "bank",
+    "aliases": []
+  },
+  {
+    "brand": "SCBIND",
+    "issuerSlug": "sc",
+    "issuerKind": "bank",
+    "aliases": []
+  },
+  {
+    "brand": "SIBSMS",
+    "issuerSlug": "sib",
+    "issuerKind": "bank",
+    "aliases": []
+  },
+  {
+    "brand": "SLICEB",
+    "issuerSlug": "slice",
+    "issuerKind": "bank",
+    "aliases": []
+  },
+  {
+    "brand": "SLICEI",
+    "issuerSlug": "slice",
+    "issuerKind": "bank",
+    "aliases": []
+  },
+  {
+    "brand": "SOUTHB",
+    "issuerSlug": "sib",
+    "issuerKind": "bank",
+    "aliases": []
+  },
+  {
+    "brand": "TMBANK",
+    "issuerSlug": "tmb",
+    "issuerKind": "bank",
+    "aliases": []
+  },
+  {
+    "brand": "TMBSMS",
+    "issuerSlug": "tmb",
+    "issuerKind": "bank",
+    "aliases": []
+  },
+  {
+    "brand": "UBOI",
+    "issuerSlug": "union",
+    "issuerKind": "bank",
+    "aliases": []
+  },
+  {
+    "brand": "UCOBNK",
+    "issuerSlug": "uco",
+    "issuerKind": "bank",
+    "aliases": []
+  },
+  {
+    "brand": "UCOSMS",
+    "issuerSlug": "uco",
+    "issuerKind": "bank",
+    "aliases": []
+  },
+  {
+    "brand": "UNIONB",
+    "issuerSlug": "union",
+    "issuerKind": "bank",
+    "aliases": []
+  },
+  {
+    "brand": "YESBK",
+    "issuerSlug": "yes",
+    "issuerKind": "bank",
+    "aliases": []
+  },
+  {
+    "brand": "YESBNK",
+    "issuerSlug": "yes",
+    "issuerKind": "bank",
+    "aliases": []
+  },
+  {
+    "brand": "YESCRD",
+    "issuerSlug": "yes",
+    "issuerKind": "bank",
+    "aliases": []
+  }
+]
