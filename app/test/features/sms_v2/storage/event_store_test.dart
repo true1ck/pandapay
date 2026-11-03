@@ -72,6 +72,14 @@ void main() {
     expect(store.get(_id(1))!.legs, hasLength(3));
   });
 
+  test('an explicit user correction can remove a wrong link', () {
+    store.upsert(_event(1, more: [(2, LegRole.creditLeg)]));
+    store.upsert(_event(1, status: EventStatus.userConfirmed), fromUser: true);
+    expect(store.get(_id(1))!.legs.map((leg) => leg.factId), [_id(1)]);
+    store.upsert(_event(1, more: [(2, LegRole.creditLeg)]));
+    expect(store.get(_id(1))!.legs.map((leg) => leg.factId), [_id(1)]);
+  });
+
   test('a user_confirmed event changes only through the user', () {
     store.upsert(_event(1, status: EventStatus.userConfirmed), fromUser: true);
     final kept = store.upsert(_event(1, more: [(2, LegRole.creditLeg)]));

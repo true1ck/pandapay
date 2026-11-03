@@ -83,7 +83,8 @@ function registerSmsV2(app, deps) {
 
   require('./ai_templates').registerTemplates(app, shared);
 
-  // WP-12 adds its correction routes here.
+  require('./corrections_route').registerCorrections(app, shared);
+
   return { hooks };
 }
 
