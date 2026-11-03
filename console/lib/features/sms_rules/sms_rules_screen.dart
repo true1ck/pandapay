@@ -5,6 +5,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import '../../data/sms_v2_admin_api.dart';
 import 'providers.dart';
 import 'rule_editor.dart';
+import 'category_editor.dart';
 import 'golden_runner.dart';
 import 'package:pandapay_domain/sms_v2_template.dart';
 import 'download_stub.dart' if (dart.library.js_interop) 'download_web.dart';
@@ -33,7 +34,7 @@ class SmsRulesScreen extends ConsumerWidget {
     }
 
     return DefaultTabController(
-      length: 4,
+      length: 5,
       child: Scaffold(
         appBar: AppBar(
           title: const Text('SMS pipeline rules'),
@@ -42,6 +43,7 @@ class SmsRulesScreen extends ConsumerWidget {
             tabs: [
               Tab(text: 'Rules'),
               Tab(text: 'Templates'),
+              Tab(text: 'Categories'),
               Tab(text: 'Corrections'),
               Tab(text: 'Metrics'),
             ],
@@ -108,9 +110,67 @@ class SmsRulesScreen extends ConsumerWidget {
                 },
               ),
             ),
+            _RemotePanel(
+              load: () async => [await api.categories()],
+              builder: (rows) => ListView(
+                children: [
+                  const ListTile(
+                    title: Text('Reviewed category drafts'),
+                    subtitle: Text(
+                      'Publishing a category changes shared bundle parts in every cohort.',
+                    ),
+                  ),
+                  for (final draft in rows.first['drafts'] as List? ?? const [])
+                    ListTile(
+                      title: Text(
+                        '${draft['body']['merchantKey']} → ${draft['body']['category']}',
+                      ),
+                      subtitle: Text(
+                        'Revision ${draft['revision']} · ${draft['status']}',
+                      ),
+                      trailing: const Icon(Icons.edit_outlined),
+                      onTap: () => Navigator.of(context).push(
+                        MaterialPageRoute<void>(
+                          builder: (_) => SmsCategoryEditor(
+                            api: api,
+                            id: draft['id'] as String,
+                            initialRule: (draft['body'] as Map)
+                                .cast<String, dynamic>(),
+                            revision: draft['status'] == 'draft'
+                                ? draft['revision'] as int
+                                : null,
+                            runner: runner,
+                          ),
+                        ),
+                      ),
+                    ),
+                  const Divider(),
+                  const ListTile(title: Text('Published category rules')),
+                  for (final rule in rows.first['rules'] as List? ?? const [])
+                    ListTile(
+                      title: Text(
+                        '${rule['merchantKey']} → ${rule['category']}',
+                      ),
+                      subtitle: Text(
+                        '${rule['match']} · ${rule['source']} · ${(rule['senders'] as List).join(', ')}',
+                      ),
+                    ),
+                ],
+              ),
+            ),
             _CorrectionsTab(
               api: api,
               onOpen: open,
+              onCategory: (id, rule) => Navigator.of(context).push(
+                MaterialPageRoute<void>(
+                  builder: (_) => SmsCategoryEditor(
+                    api: api,
+                    id: id,
+                    initialRule: rule,
+                    runner: runner,
+                  ),
+                ),
+              ),
               onDownload: onDownload ?? downloadJson,
             ),
             _RemotePanel(
@@ -359,10 +419,12 @@ class _CorrectionsTab extends StatefulWidget {
     required this.api,
     required this.onOpen,
     required this.onDownload,
+    required this.onCategory,
   });
   final SmsV2AdminApi api;
   final void Function(String, {Map<String, dynamic>? draft}) onOpen;
   final void Function(String, String) onDownload;
+  final void Function(String, Map<String, dynamic>) onCategory;
   @override
   State<_CorrectionsTab> createState() => _CorrectionsTabState();
 }
@@ -392,6 +454,20 @@ class _CorrectionsTabState extends State<_CorrectionsTab> {
       if (!mounted) return;
       setState(() => _revision++);
       if (decision == 'data_fix') {
+        final category = result['categoryDraft'];
+        if (category is Map) {
+          final keys = category['counterpartyKeys'] as List? ?? const [];
+          widget.onCategory(id, {
+            'merchantKey': keys.firstOrNull ?? '',
+            'match': 'exact',
+            'senders': [if (row['sender_brand'] is String) row['sender_brand']],
+            'context': <String>[],
+            'category': category['category'],
+            'priority': category['priority'] ?? 100,
+            'source': 'shared',
+          });
+          return;
+        }
         final draft = result['ruleDraft'];
         final ruleId = row['trace']?['ruleId'] as String?;
         if (draft is Map && ruleId != null) {

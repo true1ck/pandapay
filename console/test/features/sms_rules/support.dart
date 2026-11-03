@@ -108,6 +108,9 @@ class FakeAdmin extends AdminApi {
     if (path == '/admin/sms/v2/templates') return {'templates': <Object?>[]};
     if (path == '/admin/sms/v2/metrics') return {'ai': <Object?>[]};
     if (path == '/admin/sms/v2/bundles') return {'bundles': <Object?>[]};
+    if (path == '/admin/sms/v2/category-rules') {
+      return {'drafts': <Object?>[], 'rules': <Object?>[]};
+    }
     if (path == '/admin/sms/v2/corrections?groupBy=template') {
       return {
         'groups': [
