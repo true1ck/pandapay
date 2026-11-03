@@ -1,0 +1,16 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://pandapay.app/contracts/sms/v2/api/corrections.response.schema.json",
+  "title": "POST /sms/v2/corrections response",
+  "type": "object",
+  "required": [
+    "caseId"
+  ],
+  "additionalProperties": false,
+  "properties": {
+    "caseId": {
+      "type": "string",
+      "minLength": 1
+    }
+  }
+}

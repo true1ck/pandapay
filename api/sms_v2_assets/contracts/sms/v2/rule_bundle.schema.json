@@ -1,0 +1,1122 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://pandapay.app/contracts/sms/v2/rule_bundle.schema.json",
+  "title": "Rule bundle v2",
+  "type": "object",
+  "required": [
+    "schema",
+    "bundleVersion",
+    "createdAt",
+    "expiresAt",
+    "minEngineVersion",
+    "taxonomyVersion",
+    "senders",
+    "ignoreRules",
+    "rules",
+    "counterpartyPurposes",
+    "linkRules",
+    "categoryRules",
+    "merchantAliases",
+    "signature"
+  ],
+  "additionalProperties": false,
+  "properties": {
+    "schema": {
+      "const": "pandapay.sms.rules/2",
+      "x-code": "bundle.schema_invalid"
+    },
+    "bundleVersion": {
+      "type": "integer",
+      "minimum": 0,
+      "x-code": "bundle.version_invalid"
+    },
+    "createdAt": {
+      "$ref": "common.schema.json#/$defs/utcTime"
+    },
+    "expiresAt": {
+      "$ref": "common.schema.json#/$defs/utcTime"
+    },
+    "minEngineVersion": {
+      "type": "string",
+      "pattern": "^\\d+\\.\\d+\\.\\d+$",
+      "x-code": "bundle.engine_version_invalid"
+    },
+    "taxonomyVersion": {
+      "type": "integer",
+      "minimum": 1,
+      "x-code": "bundle.taxonomy_invalid"
+    },
+    "senders": {
+      "type": "array",
+      "items": {
+        "$ref": "#/$defs/sender"
+      }
+    },
+    "ignoreRules": {
+      "type": "array",
+      "items": {
+        "$ref": "#/$defs/ignoreRule"
+      }
+    },
+    "rules": {
+      "type": "array",
+      "items": {
+        "$ref": "#/$defs/rule"
+      }
+    },
+    "counterpartyPurposes": {
+      "type": "array",
+      "items": {
+        "$ref": "#/$defs/counterpartyPurpose"
+      }
+    },
+    "linkRules": {
+      "type": "array",
+      "items": {
+        "$ref": "#/$defs/linkRule"
+      }
+    },
+    "categoryRules": {
+      "type": "array",
+      "items": {
+        "$ref": "#/$defs/categoryRule"
+      }
+    },
+    "merchantAliases": {
+      "type": "array",
+      "items": {
+        "$ref": "#/$defs/merchantAlias"
+      }
+    },
+    "signature": {
+      "type": [
+        "object",
+        "null"
+      ],
+      "required": [
+        "alg",
+        "keyId",
+        "value"
+      ],
+      "additionalProperties": false,
+      "properties": {
+        "alg": {
+          "const": "Ed25519",
+          "x-code": "bundle.signature_invalid"
+        },
+        "keyId": {
+          "type": "string",
+          "minLength": 1
+        },
+        "value": {
+          "type": "string",
+          "pattern": "^[A-Za-z0-9+/]+={0,2}$",
+          "x-code": "bundle.signature_invalid"
+        }
+      },
+      "x-code": "bundle.signature_invalid"
+    }
+  },
+  "if": {
+    "type": "object",
+    "required": [
+      "bundleVersion"
+    ],
+    "properties": {
+      "bundleVersion": {
+        "type": "integer",
+        "minimum": 1
+      }
+    }
+  },
+  "then": {
+    "type": "object",
+    "properties": {
+      "signature": {
+        "type": "object",
+        "x-codes": {
+          "type": "bundle.signature_required"
+        }
+      }
+    }
+  },
+  "$defs": {
+    "emitAmount": {
+      "type": "object",
+      "required": [
+        "role",
+        "from",
+        "unit"
+      ],
+      "additionalProperties": false,
+      "properties": {
+        "role": {
+          "type": "string",
+          "enum": [
+            "posted",
+            "held",
+            "released",
+            "scheduled",
+            "due_total",
+            "due_minimum",
+            "outstanding",
+            "available_balance",
+            "available_credit",
+            "credit_limit",
+            "ceiling",
+            "points_earned",
+            "points_redeemed",
+            "points_balance",
+            "cash_value"
+          ],
+          "x-code": "bundle.emit.role_invalid"
+        },
+        "from": {
+          "type": "string",
+          "pattern": "^[A-Za-z][A-Za-z0-9_]*$"
+        },
+        "unit": {
+          "type": "string",
+          "pattern": "^(POINTS|[A-Z]{3})$"
+        },
+        "transforms": {
+          "type": "array",
+          "items": {
+            "type": "string",
+            "enum": [
+              "parseAmountIndian",
+              "parseDate",
+              "digitsOnly",
+              "sanitizeNarration",
+              "upperTrim",
+              "vpaFromText",
+              "stripTrailingRefs"
+            ],
+            "x-code": "bundle.emit.transform_unknown"
+          }
+        }
+      }
+    },
+    "emit": {
+      "type": "object",
+      "required": [
+        "factType"
+      ],
+      "additionalProperties": false,
+      "properties": {
+        "factType": {
+          "type": "string",
+          "enum": [
+            "movement",
+            "attempt",
+            "hold",
+            "balance_snapshot",
+            "limit_change",
+            "bill_due",
+            "mandate",
+            "reward",
+            "instrument_hint",
+            "info"
+          ],
+          "x-code": "bundle.emit.fact_type_invalid"
+        },
+        "attrs": {
+          "type": "object"
+        },
+        "amounts": {
+          "type": "array",
+          "items": {
+            "$ref": "#/$defs/emitAmount"
+          }
+        },
+        "occurredAt": {
+          "type": "object",
+          "required": [
+            "from"
+          ],
+          "additionalProperties": false,
+          "properties": {
+            "from": {
+              "type": "string",
+              "minLength": 1
+            },
+            "formats": {
+              "type": "array",
+              "items": {
+                "type": "string",
+                "minLength": 1
+              }
+            }
+          }
+        },
+        "instrument": {
+          "type": "object",
+          "additionalProperties": false,
+          "properties": {
+            "kind": {
+              "type": "string",
+              "enum": [
+                "bank_account",
+                "credit_card",
+                "debit_card",
+                "prepaid_card",
+                "wallet",
+                "broker",
+                "loan",
+                "pay_later"
+              ],
+              "x-code": "bundle.emit.instrument_kind_invalid"
+            },
+            "issuerSlug": {
+              "type": "string",
+              "pattern": "^[a-z0-9_]+$"
+            },
+            "issuerSlugFrom": {
+              "type": "string",
+              "minLength": 1
+            },
+            "maskFrom": {
+              "type": "string",
+              "minLength": 1
+            },
+            "maskLengthFrom": {
+              "type": "string",
+              "minLength": 1
+            },
+            "productNameFrom": {
+              "type": "string",
+              "minLength": 1
+            },
+            "sameAs": {
+              "type": "integer",
+              "minimum": 0
+            }
+          }
+        },
+        "counterparty": {
+          "type": "object",
+          "additionalProperties": false,
+          "properties": {
+            "nameFrom": {
+              "type": "string",
+              "minLength": 1
+            },
+            "vpaFrom": {
+              "type": "string",
+              "minLength": 1
+            },
+            "accountMaskFrom": {
+              "type": "string",
+              "minLength": 1
+            },
+            "kind": {
+              "type": "string",
+              "enum": [
+                "merchant",
+                "person",
+                "own",
+                "bank",
+                "unknown"
+              ],
+              "x-code": "bundle.emit.counterparty_kind_invalid"
+            },
+            "transforms": {
+              "type": "array",
+              "items": {
+                "type": "string",
+                "enum": [
+                  "parseAmountIndian",
+                  "parseDate",
+                  "digitsOnly",
+                  "sanitizeNarration",
+                  "upperTrim",
+                  "vpaFromText",
+                  "stripTrailingRefs"
+                ],
+                "x-code": "bundle.emit.transform_unknown"
+              }
+            },
+            "sameAs": {
+              "type": "integer",
+              "minimum": 0
+            }
+          }
+        },
+        "references": {
+          "type": "object",
+          "additionalProperties": {
+            "type": "string",
+            "minLength": 1
+          }
+        }
+      }
+    },
+    "rule": {
+      "type": "object",
+      "required": [
+        "id",
+        "version",
+        "family",
+        "senders",
+        "priority",
+        "match",
+        "emit",
+        "confidence",
+        "examples",
+        "status",
+        "createdBy",
+        "updatedAt"
+      ],
+      "additionalProperties": false,
+      "properties": {
+        "id": {
+          "type": "string",
+          "pattern": "^[A-Za-z0-9][A-Za-z0-9_.:-]*$",
+          "x-code": "bundle.rule.id_invalid"
+        },
+        "version": {
+          "type": "integer",
+          "minimum": 1,
+          "x-code": "bundle.rule.version_invalid"
+        },
+        "family": {
+          "type": "string",
+          "pattern": "^[a-z][a-z0-9_]*$",
+          "x-code": "bundle.rule.family_invalid"
+        },
+        "senders": {
+          "type": "array",
+          "minItems": 1,
+          "items": {
+            "type": "string",
+            "minLength": 1
+          },
+          "x-codes": {
+            "minItems": "bundle.rule.senders_empty"
+          }
+        },
+        "priority": {
+          "type": "integer",
+          "x-code": "bundle.rule.priority_invalid"
+        },
+        "match": {
+          "type": "object",
+          "required": [
+            "pattern",
+            "flags"
+          ],
+          "additionalProperties": false,
+          "properties": {
+            "pattern": {
+              "type": "string",
+              "minLength": 1,
+              "maxLength": 2000,
+              "x-codes": {
+                "minLength": "bundle.rule.pattern_empty",
+                "maxLength": "bundle.rule.pattern_too_long"
+              }
+            },
+            "flags": {
+              "type": "string",
+              "pattern": "^[ims]*$",
+              "x-code": "bundle.flags_invalid"
+            },
+            "requireAll": {
+              "type": "array",
+              "items": {
+                "type": "string",
+                "minLength": 1
+              }
+            },
+            "rejectAny": {
+              "type": "array",
+              "items": {
+                "type": "string",
+                "minLength": 1
+              }
+            },
+            "templateHash": {
+              "type": "string",
+              "pattern": "^[0-9a-f]{64}$",
+              "x-code": "bundle.rule.template_hash_invalid"
+            }
+          }
+        },
+        "emit": {
+          "type": "array",
+          "minItems": 1,
+          "items": {
+            "$ref": "#/$defs/emit"
+          },
+          "x-codes": {
+            "minItems": "bundle.rule.emit_empty"
+          }
+        },
+        "confidence": {
+          "type": "number",
+          "minimum": 0,
+          "maximum": 1,
+          "x-code": "bundle.rule.confidence_invalid"
+        },
+        "examples": {
+          "type": "array",
+          "items": {
+            "type": "object",
+            "required": [
+              "sender",
+              "body",
+              "expectFactTypes"
+            ],
+            "additionalProperties": false,
+            "properties": {
+              "sender": {
+                "type": "string",
+                "minLength": 1
+              },
+              "body": {
+                "type": "string",
+                "minLength": 1
+              },
+              "expectFactTypes": {
+                "type": "array",
+                "items": {
+                  "type": "string",
+                  "enum": [
+                    "movement",
+                    "attempt",
+                    "hold",
+                    "balance_snapshot",
+                    "limit_change",
+                    "bill_due",
+                    "mandate",
+                    "reward",
+                    "instrument_hint",
+                    "info"
+                  ],
+                  "x-code": "bundle.rule.example_fact_type_invalid"
+                }
+              }
+            }
+          },
+          "allOf": [
+            {
+              "contains": {
+                "type": "object",
+                "properties": {
+                  "expectFactTypes": {
+                    "type": "array",
+                    "minItems": 1
+                  }
+                },
+                "required": [
+                  "expectFactTypes"
+                ]
+              },
+              "x-codes": {
+                "contains": "bundle.rule.examples_incomplete"
+              }
+            },
+            {
+              "contains": {
+                "type": "object",
+                "properties": {
+                  "expectFactTypes": {
+                    "type": "array",
+                    "maxItems": 0
+                  }
+                },
+                "required": [
+                  "expectFactTypes"
+                ]
+              },
+              "x-codes": {
+                "contains": "bundle.rule.examples_incomplete"
+              }
+            }
+          ]
+        },
+        "status": {
+          "type": "string",
+          "enum": [
+            "draft",
+            "active",
+            "provisional",
+            "paused",
+            "retired"
+          ],
+          "x-code": "bundle.rule.status_invalid"
+        },
+        "createdBy": {
+          "type": "string",
+          "minLength": 1
+        },
+        "updatedAt": {
+          "$ref": "common.schema.json#/$defs/utcTime"
+        }
+      },
+      "if": {
+        "type": "object",
+        "required": [
+          "status"
+        ],
+        "properties": {
+          "status": {
+            "const": "provisional"
+          }
+        }
+      },
+      "then": {
+        "type": "object",
+        "properties": {
+          "createdBy": {
+            "type": "string",
+            "pattern": "^ai:.+",
+            "x-code": "bundle.rule.provisional_created_by"
+          }
+        }
+      }
+    },
+    "linkRule": {
+      "type": "object",
+      "required": [
+        "id",
+        "eventType",
+        "legs",
+        "join",
+        "singleLeg",
+        "priority"
+      ],
+      "additionalProperties": false,
+      "properties": {
+        "id": {
+          "type": "string",
+          "pattern": "^[A-Za-z0-9][A-Za-z0-9_.:-]*$",
+          "x-code": "bundle.link.id_invalid"
+        },
+        "eventType": {
+          "type": "string",
+          "enum": [
+            "purchase",
+            "refund",
+            "cashback",
+            "income",
+            "p2p_out",
+            "p2p_in",
+            "own_transfer",
+            "card_bill_payment",
+            "wallet_topup",
+            "investment",
+            "ipo_application",
+            "investment_withdrawal",
+            "dividend",
+            "atm_withdrawal",
+            "fee",
+            "emi",
+            "bill_payment",
+            "subscription_charge",
+            "unknown"
+          ],
+          "x-code": "bundle.link.event_type_invalid"
+        },
+        "legs": {
+          "type": "array",
+          "minItems": 1,
+          "items": {
+            "type": "object",
+            "required": [
+              "role",
+              "match"
+            ],
+            "additionalProperties": false,
+            "properties": {
+              "role": {
+                "type": "string",
+                "enum": [
+                  "debit_leg",
+                  "credit_leg",
+                  "hold_placed",
+                  "hold_released",
+                  "hold_converted",
+                  "original",
+                  "reversal",
+                  "charge",
+                  "duplicate_notice"
+                ],
+                "x-code": "bundle.link.leg_role_invalid"
+              },
+              "match": {
+                "type": "object",
+                "additionalProperties": false,
+                "properties": {
+                  "factType": {
+                    "type": "string",
+                    "enum": [
+                      "movement",
+                      "attempt",
+                      "hold",
+                      "balance_snapshot",
+                      "limit_change",
+                      "bill_due",
+                      "mandate",
+                      "reward",
+                      "instrument_hint",
+                      "info"
+                    ],
+                    "x-code": "bundle.link.match_invalid"
+                  },
+                  "direction": {
+                    "type": "string",
+                    "enum": [
+                      "debit",
+                      "credit"
+                    ],
+                    "x-code": "bundle.link.match_invalid"
+                  },
+                  "purpose": {
+                    "type": "array",
+                    "items": {
+                      "type": "string",
+                      "enum": [
+                        "purchase",
+                        "p2p",
+                        "atm",
+                        "salary",
+                        "interest",
+                        "refund",
+                        "cashback",
+                        "reversal",
+                        "fee",
+                        "emi",
+                        "card_payment",
+                        "wallet_topup",
+                        "investment",
+                        "bill_payment",
+                        "tax",
+                        "transfer",
+                        "dividend",
+                        "unknown",
+                        "ipo_asba",
+                        "upi_mandate_block",
+                        "preauth",
+                        "lien",
+                        "other"
+                      ],
+                      "x-code": "bundle.link.match_invalid"
+                    }
+                  },
+                  "instrumentKind": {
+                    "type": "array",
+                    "items": {
+                      "type": "string",
+                      "enum": [
+                        "bank_account",
+                        "credit_card",
+                        "debit_card",
+                        "prepaid_card",
+                        "wallet",
+                        "broker",
+                        "loan",
+                        "pay_later"
+                      ],
+                      "x-code": "bundle.link.match_invalid"
+                    }
+                  },
+                  "phase": {
+                    "type": "array",
+                    "items": {
+                      "type": "string",
+                      "enum": [
+                        "placed",
+                        "released",
+                        "converted"
+                      ],
+                      "x-code": "bundle.link.match_invalid"
+                    }
+                  },
+                  "evidenceOnly": {
+                    "type": "boolean"
+                  }
+                }
+              }
+            }
+          },
+          "x-codes": {
+            "minItems": "bundle.link.legs_empty"
+          }
+        },
+        "join": {
+          "type": "object",
+          "required": [
+            "windowHours"
+          ],
+          "additionalProperties": false,
+          "properties": {
+            "amountRole": {
+              "type": "string",
+              "enum": [
+                "posted",
+                "held",
+                "released",
+                "scheduled",
+                "due_total",
+                "due_minimum",
+                "outstanding",
+                "available_balance",
+                "available_credit",
+                "credit_limit",
+                "ceiling",
+                "points_earned",
+                "points_redeemed",
+                "points_balance",
+                "cash_value"
+              ],
+              "x-code": "bundle.link.join_invalid"
+            },
+            "amountTolerancePct": {
+              "type": "number",
+              "minimum": 0,
+              "maximum": 100,
+              "x-code": "bundle.link.join_invalid"
+            },
+            "windowHours": {
+              "type": "number",
+              "exclusiveMinimum": 0,
+              "x-code": "bundle.link.join_invalid"
+            },
+            "reference": {
+              "type": "string",
+              "enum": [
+                "ignore",
+                "prefer",
+                "require"
+              ],
+              "x-code": "bundle.link.join_invalid"
+            }
+          },
+          "x-code": "bundle.link.join_invalid"
+        },
+        "singleLeg": {
+          "type": "string",
+          "enum": [
+            "complete",
+            "awaiting_leg",
+            "review"
+          ],
+          "x-code": "bundle.link.single_leg_invalid"
+        },
+        "priority": {
+          "type": "integer"
+        }
+      }
+    },
+    "sender": {
+      "type": "object",
+      "required": [
+        "brand",
+        "issuerSlug",
+        "issuerKind",
+        "aliases"
+      ],
+      "additionalProperties": false,
+      "properties": {
+        "brand": {
+          "type": "string",
+          "pattern": "^[A-Z0-9]+$",
+          "x-code": "bundle.sender.brand_invalid"
+        },
+        "issuerSlug": {
+          "type": [
+            "string",
+            "null"
+          ],
+          "pattern": "^[a-z0-9_]+$",
+          "x-code": "bundle.sender.issuer_invalid"
+        },
+        "issuerKind": {
+          "type": "string",
+          "enum": [
+            "bank",
+            "card_network",
+            "wallet",
+            "broker",
+            "gateway",
+            "biller",
+            "other"
+          ],
+          "x-code": "bundle.sender.issuer_kind_invalid"
+        },
+        "aliases": {
+          "type": "array",
+          "items": {
+            "type": "string",
+            "pattern": "^[A-Z0-9]+$",
+            "x-code": "bundle.sender.brand_invalid"
+          }
+        },
+        "walletSpendVisibility": {
+          "type": "string",
+          "enum": [
+            "sms",
+            "partial"
+          ],
+          "x-code": "bundle.sender.wallet_visibility_invalid"
+        }
+      }
+    },
+    "ignoreRule": {
+      "type": "object",
+      "required": [
+        "id",
+        "senders",
+        "pattern",
+        "flags",
+        "reason"
+      ],
+      "additionalProperties": false,
+      "properties": {
+        "id": {
+          "type": "string",
+          "pattern": "^[A-Za-z0-9][A-Za-z0-9_.:-]*$",
+          "x-code": "bundle.ignore.id_invalid"
+        },
+        "senders": {
+          "type": "array",
+          "minItems": 1,
+          "items": {
+            "type": "string",
+            "minLength": 1
+          }
+        },
+        "pattern": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 2000,
+          "x-code": "bundle.ignore.pattern_invalid"
+        },
+        "flags": {
+          "type": "string",
+          "pattern": "^[ims]*$",
+          "x-code": "bundle.flags_invalid"
+        },
+        "reason": {
+          "type": "string",
+          "enum": [
+            "otp",
+            "security",
+            "promotion",
+            "service",
+            "delivery",
+            "other"
+          ],
+          "x-code": "bundle.ignore.reason_invalid"
+        }
+      }
+    },
+    "counterpartyPurpose": {
+      "type": "object",
+      "required": [
+        "id",
+        "vpaPattern",
+        "namePattern",
+        "purpose",
+        "targetInstrument"
+      ],
+      "additionalProperties": false,
+      "properties": {
+        "id": {
+          "type": "string",
+          "pattern": "^[A-Za-z0-9][A-Za-z0-9_.:-]*$",
+          "x-code": "bundle.cpp.id_invalid"
+        },
+        "vpaPattern": {
+          "type": [
+            "string",
+            "null"
+          ],
+          "maxLength": 2000
+        },
+        "namePattern": {
+          "type": [
+            "string",
+            "null"
+          ],
+          "maxLength": 2000
+        },
+        "purpose": {
+          "type": "string",
+          "enum": [
+            "purchase",
+            "p2p",
+            "atm",
+            "salary",
+            "interest",
+            "refund",
+            "cashback",
+            "reversal",
+            "fee",
+            "emi",
+            "card_payment",
+            "wallet_topup",
+            "investment",
+            "bill_payment",
+            "tax",
+            "transfer",
+            "dividend",
+            "unknown"
+          ],
+          "x-code": "bundle.cpp.purpose_invalid"
+        },
+        "targetInstrument": {
+          "type": [
+            "object",
+            "null"
+          ],
+          "required": [
+            "kind"
+          ],
+          "additionalProperties": false,
+          "properties": {
+            "kind": {
+              "type": "string",
+              "enum": [
+                "bank_account",
+                "credit_card",
+                "debit_card",
+                "prepaid_card",
+                "wallet",
+                "broker",
+                "loan",
+                "pay_later"
+              ],
+              "x-code": "bundle.cpp.target_invalid"
+            },
+            "issuerSlug": {
+              "type": "string",
+              "pattern": "^[a-z0-9_]+$"
+            }
+          },
+          "x-code": "bundle.cpp.target_invalid"
+        }
+      },
+      "anyOf": [
+        {
+          "type": "object",
+          "required": [
+            "vpaPattern"
+          ],
+          "properties": {
+            "vpaPattern": {
+              "type": "string"
+            }
+          }
+        },
+        {
+          "type": "object",
+          "required": [
+            "namePattern"
+          ],
+          "properties": {
+            "namePattern": {
+              "type": "string"
+            }
+          }
+        }
+      ],
+      "x-codes": {
+        "anyOf": "bundle.cpp.pattern_required"
+      }
+    },
+    "categoryRule": {
+      "type": "object",
+      "required": [
+        "merchantKey",
+        "match",
+        "senders",
+        "context",
+        "category",
+        "priority",
+        "source"
+      ],
+      "additionalProperties": false,
+      "properties": {
+        "merchantKey": {
+          "type": "string",
+          "minLength": 1,
+          "x-code": "bundle.category.merchant_key_invalid"
+        },
+        "match": {
+          "type": "string",
+          "enum": [
+            "token",
+            "exact",
+            "prefix",
+            "contains"
+          ],
+          "x-code": "bundle.category.match_invalid"
+        },
+        "senders": {
+          "type": "array",
+          "minItems": 1,
+          "items": {
+            "type": "string",
+            "minLength": 1
+          }
+        },
+        "context": {
+          "type": "array",
+          "items": {
+            "type": "string",
+            "minLength": 1
+          }
+        },
+        "category": {
+          "type": "string",
+          "pattern": "^[a-z][a-z0-9_]*$",
+          "x-code": "bundle.category.slug_invalid"
+        },
+        "priority": {
+          "type": "integer"
+        },
+        "source": {
+          "type": "string",
+          "enum": [
+            "user",
+            "shared",
+            "catalogue",
+            "mcc",
+            "history_confirmed",
+            "ai",
+            "default"
+          ],
+          "x-code": "bundle.category.source_invalid"
+        }
+      }
+    },
+    "merchantAlias": {
+      "type": "object",
+      "required": [
+        "alias",
+        "merchantKey",
+        "kind"
+      ],
+      "additionalProperties": false,
+      "properties": {
+        "alias": {
+          "type": "string",
+          "minLength": 1,
+          "x-code": "bundle.alias.invalid"
+        },
+        "merchantKey": {
+          "type": "string",
+          "minLength": 1,
+          "x-code": "bundle.alias.invalid"
+        },
+        "kind": {
+          "type": "string",
+          "minLength": 1,
+          "x-code": "bundle.alias.invalid"
+        }
+      }
+    }
+  }
+}

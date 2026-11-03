@@ -1,0 +1,46 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://pandapay.app/contracts/sms/v2/api/unknown_templates.request.schema.json",
+  "title": "POST /sms/v2/unknown-templates request",
+  "type": "object",
+  "required": [
+    "items"
+  ],
+  "additionalProperties": false,
+  "properties": {
+    "items": {
+      "type": "array",
+      "maxItems": 50,
+      "x-codes": {
+        "maxItems": "request.unknown_templates.items_too_many"
+      },
+      "items": {
+        "type": "object",
+        "required": [
+          "templateHash",
+          "senderBrand",
+          "redactedBody",
+          "observedAt"
+        ],
+        "additionalProperties": false,
+        "properties": {
+          "templateHash": {
+            "$ref": "../common.schema.json#/$defs/sha256"
+          },
+          "senderBrand": {
+            "type": "string",
+            "pattern": "^[A-Z0-9]+$",
+            "x-code": "request.unknown_templates.sender_brand_invalid"
+          },
+          "redactedBody": {
+            "type": "string",
+            "minLength": 1
+          },
+          "observedAt": {
+            "$ref": "../common.schema.json#/$defs/utcTime"
+          }
+        }
+      }
+    }
+  }
+}

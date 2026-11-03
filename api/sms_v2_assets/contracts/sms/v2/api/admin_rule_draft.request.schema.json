@@ -1,0 +1,6 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://pandapay.app/contracts/sms/v2/api/admin_rule_draft.request.schema.json",
+  "title": "PUT /admin/sms/v2/rules/:id/draft request (body = Rule)",
+  "$ref": "../rule_bundle.schema.json#/$defs/rule"
+}
