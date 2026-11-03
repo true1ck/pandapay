@@ -243,15 +243,6 @@
     "reason": "promotion"
   },
   {
-    "id": "IGN-PHONEPE-UNAPPROVED-COLLECT",
-    "senders": [
-      "PHONPE"
-    ],
-    "pattern": "^[^\\r\\n]{1,160} has requested money from you on PhonePe\\.\\s+(?:rs\\.?|inr|₹)\\s*[\\d,]+(?:\\.\\d{1,2})?\\s+will be debited from your account on approving the request\\s*-\\s*https?://\\S+\\s*$",
-    "flags": "i",
-    "reason": "service"
-  },
-  {
     "id": "IGN-ICICI-TRANSACTION-PASSWORD",
     "senders": [
       "ICICIO"
