@@ -20,6 +20,20 @@ void main() {
     expect(message.receivedAt, DateTime.utc(2026, 9, 30, 14, 40, 51, 277));
   });
 
+  for (final tag in ['smsft', 'smsft_fi', 'smsft_rm', 'smsft_or', 'smsfp']) {
+    test(
+      'retains raw iOS sender tagged $tag without counting it as personal',
+      () {
+        final sender = 'ICICIB-S($tag)';
+        final batch = IosShortcutSmsBatch.fromRows([
+          row()..['sender'] = sender,
+        ]);
+        expect(batch.personal, 0);
+        expect(batch.messages.single.sender, sender);
+      },
+    );
+  }
+
   test('missing dates are withheld and missing sender can be inferred', () {
     final noSender = row()..['sender'] = '';
     final noDate = row()..remove('receivedAt');

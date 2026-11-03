@@ -210,6 +210,7 @@ class SmsTriageResult {
 }
 
 SmsTriageResult classifySmsTriage(String sender, String smsBody) {
+  sender = IosShortcutSmsBatch.senderForTriage(sender);
   final verdict = SmsGateFilter.evaluate(sender, smsBody);
   // iPhone delivers a saved contact's name instead of its number. It is the
   // same personal sender Android sees as a mobile number; Android never

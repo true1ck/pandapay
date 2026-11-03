@@ -40,12 +40,22 @@ class IosShortcutSmsBatch {
     return trimmed;
   }
 
+  static final _filterTag = RegExp(
+    r'\s*\((?:smsft(?:_fi|_rm|_or)?|smsfp)\)\s*$',
+    caseSensitive: false,
+  );
+
+  /// Strip the iOS annotation for classification only. Keep the raw
+  /// sender on QueuedSms for source identity and the rule engine.
+  static String senderForTriage(String sender) =>
+      sender.replaceFirst(_filterTag, '');
+
   /// True for a contact name ("Sujay", "Mom Work"). Bank and company headers
   /// look like "SBICRD-S", "JioBal-S", "VM-HDFCBK" or "HDFCBK"; numbers and
   /// emails are addresses, not names. iOS cannot save an alphanumeric bank
   /// header as a contact, so a name always stands for a phone or email.
   static bool looksLikeContactName(String sender) {
-    final s = sender.trim();
+    final s = senderForTriage(sender).trim();
     if (s.isEmpty || !RegExp(r'[A-Za-z]').hasMatch(s) || s.contains('@')) {
       return false;
     }

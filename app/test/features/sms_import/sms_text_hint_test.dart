@@ -2,6 +2,26 @@ import 'package:flutter_test/flutter_test.dart';
 import 'package:pandapay/features/sms_import/sms_text_hint.dart';
 
 void main() {
+  test('iOS filter tags preserve bank, contact, phone and OTP triage', () {
+    const body = 'INR 250 spent on ICICI Bank Card XX7788 at SWIGGY.';
+    for (final tag in ['smsft', 'smsft_fi', 'smsft_rm', 'smsft_or', 'smsfp']) {
+      expect(
+        classifySmsTriage('ICICIB-S($tag)', body).kind,
+        SmsTriageKind.financialCandidate,
+      );
+      for (final sender in ['Mom Work', '+919876543210']) {
+        expect(
+          classifySmsTriage('$sender($tag)', body).kind,
+          classifySmsTriage(sender, body).kind,
+        );
+      }
+      expect(
+        classifySmsTriage('ICICIB-S($tag)', 'OTP 123456. Do not share.').kind,
+        SmsTriageKind.sensitive,
+      );
+    }
+  });
+
   group('extractLast4Hint', () {
     test('extracts a single "ending NNNN" style last-4', () {
       expect(
