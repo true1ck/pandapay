@@ -478,5 +478,545 @@
     "status": "active",
     "createdBy": "baseline",
     "updatedAt": "2026-11-20T00:00:00Z"
+  },
+  {
+    "id": "BIL-CC-CRED-REMINDER-RBL",
+    "version": 1,
+    "family": "card_due",
+    "senders": [
+      "CREDCL"
+    ],
+    "priority": 705,
+    "match": {
+      "pattern": "^update from cred:\\s*payment for your\\s+RBL(?:\\s+bank)?\\s+credit card\\s+[x*]{2,}[- ]?(?<mask>\\d{2,4})\\s+is due on\\s+(?<due>[a-z]{3}\\s+\\d{1,2},\\s+\\d{4})\\.\\s*bill amount:\\s*(?:rs\\.?|inr|₹)\\s*(?<tot>\\d[\\d,]*(?:\\.\\d{1,2})?)(?![\\d,])(?:\\s|\\.|$)",
+      "flags": "i",
+      "rejectAny": [
+        "was paid",
+        "paid on"
+      ]
+    },
+    "emit": [
+      {
+        "factType": "bill_due",
+        "attrs": {
+          "dueDate": {
+            "from": "due",
+            "formats": [
+              "MMM dd, yyyy"
+            ]
+          }
+        },
+        "amounts": [
+          {
+            "role": "due_total",
+            "from": "tot",
+            "unit": "INR"
+          }
+        ],
+        "instrument": {
+          "kind": "credit_card",
+          "maskFrom": "mask",
+          "issuerSlug": "rbl"
+        }
+      }
+    ],
+    "confidence": 0.95,
+    "examples": [
+      {
+        "sender": "VM-CREDIN-S",
+        "body": "Update from CRED: Payment for your RBL Bank credit card XXXX-9876 is due on Nov 20, 2026. Bill amount: Rs.1200 Tap on the link to pay: https://example.invalid/pay",
+        "expectFactTypes": [
+          "bill_due"
+        ]
+      },
+      {
+        "sender": "VM-CREDIN-S",
+        "body": "Update from CRED: Payment for your RBL Bank credit card XXXX-9876 was paid on Nov 20, 2026. Bill amount: Rs.1200 Tap on the link to pay: https://example.invalid/pay",
+        "expectFactTypes": []
+      }
+    ],
+    "status": "active",
+    "createdBy": "baseline",
+    "updatedAt": "2026-11-20T00:00:00Z"
+  },
+  {
+    "id": "BIL-CC-CRED-REMINDER-BOB",
+    "version": 1,
+    "family": "card_due",
+    "senders": [
+      "CREDCL"
+    ],
+    "priority": 705,
+    "match": {
+      "pattern": "^update from cred:\\s*payment for your\\s+Bank\\s+of\\s+Baroda(?:\\s+bank)?\\s+credit card\\s+[x*]{2,}[- ]?(?<mask>\\d{2,4})\\s+is due on\\s+(?<due>[a-z]{3}\\s+\\d{1,2},\\s+\\d{4})\\.\\s*bill amount:\\s*(?:rs\\.?|inr|₹)\\s*(?<tot>\\d[\\d,]*(?:\\.\\d{1,2})?)(?![\\d,])(?:\\s|\\.|$)",
+      "flags": "i",
+      "rejectAny": [
+        "was paid",
+        "paid on"
+      ]
+    },
+    "emit": [
+      {
+        "factType": "bill_due",
+        "attrs": {
+          "dueDate": {
+            "from": "due",
+            "formats": [
+              "MMM dd, yyyy"
+            ]
+          }
+        },
+        "amounts": [
+          {
+            "role": "due_total",
+            "from": "tot",
+            "unit": "INR"
+          }
+        ],
+        "instrument": {
+          "kind": "credit_card",
+          "maskFrom": "mask",
+          "issuerSlug": "bob"
+        }
+      }
+    ],
+    "confidence": 0.95,
+    "examples": [
+      {
+        "sender": "VM-CREDIN-S",
+        "body": "Update from CRED: Payment for your Bank of Baroda credit card XXXX-9876 is due on Nov 20, 2026. Bill amount: Rs.1200 Tap on the link to pay: https://example.invalid/pay",
+        "expectFactTypes": [
+          "bill_due"
+        ]
+      },
+      {
+        "sender": "VM-CREDIN-S",
+        "body": "Update from CRED: Payment for your Bank of Baroda credit card XXXX-9876 was paid on Nov 20, 2026. Bill amount: Rs.1200 Tap on the link to pay: https://example.invalid/pay",
+        "expectFactTypes": []
+      }
+    ],
+    "status": "active",
+    "createdBy": "baseline",
+    "updatedAt": "2026-11-20T00:00:00Z"
+  },
+  {
+    "id": "BIL-CC-CRED-REMINDER-INDUSIND",
+    "version": 1,
+    "family": "card_due",
+    "senders": [
+      "CREDCL"
+    ],
+    "priority": 705,
+    "match": {
+      "pattern": "^update from cred:\\s*payment for your\\s+IndusInd(?:\\s+bank)?\\s+credit card\\s+[x*]{2,}[- ]?(?<mask>\\d{2,4})\\s+is due on\\s+(?<due>[a-z]{3}\\s+\\d{1,2},\\s+\\d{4})\\.\\s*bill amount:\\s*(?:rs\\.?|inr|₹)\\s*(?<tot>\\d[\\d,]*(?:\\.\\d{1,2})?)(?![\\d,])(?:\\s|\\.|$)",
+      "flags": "i",
+      "rejectAny": [
+        "was paid",
+        "paid on"
+      ]
+    },
+    "emit": [
+      {
+        "factType": "bill_due",
+        "attrs": {
+          "dueDate": {
+            "from": "due",
+            "formats": [
+              "MMM dd, yyyy"
+            ]
+          }
+        },
+        "amounts": [
+          {
+            "role": "due_total",
+            "from": "tot",
+            "unit": "INR"
+          }
+        ],
+        "instrument": {
+          "kind": "credit_card",
+          "maskFrom": "mask",
+          "issuerSlug": "indusind"
+        }
+      }
+    ],
+    "confidence": 0.95,
+    "examples": [
+      {
+        "sender": "VM-CREDIN-S",
+        "body": "Update from CRED: Payment for your IndusInd Bank credit card XXXX-9876 is due on Nov 20, 2026. Bill amount: Rs.1200 Tap on the link to pay: https://example.invalid/pay",
+        "expectFactTypes": [
+          "bill_due"
+        ]
+      },
+      {
+        "sender": "VM-CREDIN-S",
+        "body": "Update from CRED: Payment for your IndusInd Bank credit card XXXX-9876 was paid on Nov 20, 2026. Bill amount: Rs.1200 Tap on the link to pay: https://example.invalid/pay",
+        "expectFactTypes": []
+      }
+    ],
+    "status": "active",
+    "createdBy": "baseline",
+    "updatedAt": "2026-11-20T00:00:00Z"
+  },
+  {
+    "id": "BIL-CC-CRED-REMINDER-AU",
+    "version": 1,
+    "family": "card_due",
+    "senders": [
+      "CREDCL"
+    ],
+    "priority": 705,
+    "match": {
+      "pattern": "^update from cred:\\s*payment for your\\s+AU\\s+Small\\s+Finance(?:\\s+bank)?\\s+credit card\\s+[x*]{2,}[- ]?(?<mask>\\d{2,4})\\s+is due on\\s+(?<due>[a-z]{3}\\s+\\d{1,2},\\s+\\d{4})\\.\\s*bill amount:\\s*(?:rs\\.?|inr|₹)\\s*(?<tot>\\d[\\d,]*(?:\\.\\d{1,2})?)(?![\\d,])(?:\\s|\\.|$)",
+      "flags": "i",
+      "rejectAny": [
+        "was paid",
+        "paid on"
+      ]
+    },
+    "emit": [
+      {
+        "factType": "bill_due",
+        "attrs": {
+          "dueDate": {
+            "from": "due",
+            "formats": [
+              "MMM dd, yyyy"
+            ]
+          }
+        },
+        "amounts": [
+          {
+            "role": "due_total",
+            "from": "tot",
+            "unit": "INR"
+          }
+        ],
+        "instrument": {
+          "kind": "credit_card",
+          "maskFrom": "mask",
+          "issuerSlug": "au"
+        }
+      }
+    ],
+    "confidence": 0.95,
+    "examples": [
+      {
+        "sender": "VM-CREDIN-S",
+        "body": "Update from CRED: Payment for your AU Small Finance Bank credit card XXXX-9876 is due on Nov 20, 2026. Bill amount: Rs.1200 Tap on the link to pay: https://example.invalid/pay",
+        "expectFactTypes": [
+          "bill_due"
+        ]
+      },
+      {
+        "sender": "VM-CREDIN-S",
+        "body": "Update from CRED: Payment for your AU Small Finance Bank credit card XXXX-9876 was paid on Nov 20, 2026. Bill amount: Rs.1200 Tap on the link to pay: https://example.invalid/pay",
+        "expectFactTypes": []
+      }
+    ],
+    "status": "active",
+    "createdBy": "baseline",
+    "updatedAt": "2026-11-20T00:00:00Z"
+  },
+  {
+    "id": "BIL-CC-CRED-REMINDER-HSBC",
+    "version": 1,
+    "family": "card_due",
+    "senders": [
+      "CREDCL"
+    ],
+    "priority": 705,
+    "match": {
+      "pattern": "^update from cred:\\s*payment for your\\s+HSBC(?:\\s+bank)?\\s+credit card\\s+[x*]{2,}[- ]?(?<mask>\\d{2,4})\\s+is due on\\s+(?<due>[a-z]{3}\\s+\\d{1,2},\\s+\\d{4})\\.\\s*bill amount:\\s*(?:rs\\.?|inr|₹)\\s*(?<tot>\\d[\\d,]*(?:\\.\\d{1,2})?)(?![\\d,])(?:\\s|\\.|$)",
+      "flags": "i",
+      "rejectAny": [
+        "was paid",
+        "paid on"
+      ]
+    },
+    "emit": [
+      {
+        "factType": "bill_due",
+        "attrs": {
+          "dueDate": {
+            "from": "due",
+            "formats": [
+              "MMM dd, yyyy"
+            ]
+          }
+        },
+        "amounts": [
+          {
+            "role": "due_total",
+            "from": "tot",
+            "unit": "INR"
+          }
+        ],
+        "instrument": {
+          "kind": "credit_card",
+          "maskFrom": "mask",
+          "issuerSlug": "hsbc"
+        }
+      }
+    ],
+    "confidence": 0.95,
+    "examples": [
+      {
+        "sender": "VM-CREDIN-S",
+        "body": "Update from CRED: Payment for your HSBC credit card XXXX-9876 is due on Nov 20, 2026. Bill amount: Rs.1200 Tap on the link to pay: https://example.invalid/pay",
+        "expectFactTypes": [
+          "bill_due"
+        ]
+      },
+      {
+        "sender": "VM-CREDIN-S",
+        "body": "Update from CRED: Payment for your HSBC credit card XXXX-9876 was paid on Nov 20, 2026. Bill amount: Rs.1200 Tap on the link to pay: https://example.invalid/pay",
+        "expectFactTypes": []
+      }
+    ],
+    "status": "active",
+    "createdBy": "baseline",
+    "updatedAt": "2026-11-20T00:00:00Z"
+  },
+  {
+    "id": "BIL-CC-CRED-REMINDER-SC",
+    "version": 1,
+    "family": "card_due",
+    "senders": [
+      "CREDCL"
+    ],
+    "priority": 705,
+    "match": {
+      "pattern": "^update from cred:\\s*payment for your\\s+Standard\\s+Chartered(?:\\s+bank)?\\s+credit card\\s+[x*]{2,}[- ]?(?<mask>\\d{2,4})\\s+is due on\\s+(?<due>[a-z]{3}\\s+\\d{1,2},\\s+\\d{4})\\.\\s*bill amount:\\s*(?:rs\\.?|inr|₹)\\s*(?<tot>\\d[\\d,]*(?:\\.\\d{1,2})?)(?![\\d,])(?:\\s|\\.|$)",
+      "flags": "i",
+      "rejectAny": [
+        "was paid",
+        "paid on"
+      ]
+    },
+    "emit": [
+      {
+        "factType": "bill_due",
+        "attrs": {
+          "dueDate": {
+            "from": "due",
+            "formats": [
+              "MMM dd, yyyy"
+            ]
+          }
+        },
+        "amounts": [
+          {
+            "role": "due_total",
+            "from": "tot",
+            "unit": "INR"
+          }
+        ],
+        "instrument": {
+          "kind": "credit_card",
+          "maskFrom": "mask",
+          "issuerSlug": "sc"
+        }
+      }
+    ],
+    "confidence": 0.95,
+    "examples": [
+      {
+        "sender": "VM-CREDIN-S",
+        "body": "Update from CRED: Payment for your Standard Chartered credit card XXXX-9876 is due on Nov 20, 2026. Bill amount: Rs.1200 Tap on the link to pay: https://example.invalid/pay",
+        "expectFactTypes": [
+          "bill_due"
+        ]
+      },
+      {
+        "sender": "VM-CREDIN-S",
+        "body": "Update from CRED: Payment for your Standard Chartered credit card XXXX-9876 was paid on Nov 20, 2026. Bill amount: Rs.1200 Tap on the link to pay: https://example.invalid/pay",
+        "expectFactTypes": []
+      }
+    ],
+    "status": "active",
+    "createdBy": "baseline",
+    "updatedAt": "2026-11-20T00:00:00Z"
+  },
+  {
+    "id": "BIL-CC-CRED-REMINDER-PNB",
+    "version": 1,
+    "family": "card_due",
+    "senders": [
+      "CREDCL"
+    ],
+    "priority": 705,
+    "match": {
+      "pattern": "^update from cred:\\s*payment for your\\s+Punjab\\s+National(?:\\s+bank)?\\s+credit card\\s+[x*]{2,}[- ]?(?<mask>\\d{2,4})\\s+is due on\\s+(?<due>[a-z]{3}\\s+\\d{1,2},\\s+\\d{4})\\.\\s*bill amount:\\s*(?:rs\\.?|inr|₹)\\s*(?<tot>\\d[\\d,]*(?:\\.\\d{1,2})?)(?![\\d,])(?:\\s|\\.|$)",
+      "flags": "i",
+      "rejectAny": [
+        "was paid",
+        "paid on"
+      ]
+    },
+    "emit": [
+      {
+        "factType": "bill_due",
+        "attrs": {
+          "dueDate": {
+            "from": "due",
+            "formats": [
+              "MMM dd, yyyy"
+            ]
+          }
+        },
+        "amounts": [
+          {
+            "role": "due_total",
+            "from": "tot",
+            "unit": "INR"
+          }
+        ],
+        "instrument": {
+          "kind": "credit_card",
+          "maskFrom": "mask",
+          "issuerSlug": "pnb"
+        }
+      }
+    ],
+    "confidence": 0.95,
+    "examples": [
+      {
+        "sender": "VM-CREDIN-S",
+        "body": "Update from CRED: Payment for your Punjab National Bank credit card XXXX-9876 is due on Nov 20, 2026. Bill amount: Rs.1200 Tap on the link to pay: https://example.invalid/pay",
+        "expectFactTypes": [
+          "bill_due"
+        ]
+      },
+      {
+        "sender": "VM-CREDIN-S",
+        "body": "Update from CRED: Payment for your Punjab National Bank credit card XXXX-9876 was paid on Nov 20, 2026. Bill amount: Rs.1200 Tap on the link to pay: https://example.invalid/pay",
+        "expectFactTypes": []
+      }
+    ],
+    "status": "active",
+    "createdBy": "baseline",
+    "updatedAt": "2026-11-20T00:00:00Z"
+  },
+  {
+    "id": "BIL-CC-CRED-REMINDER-CANARA",
+    "version": 1,
+    "family": "card_due",
+    "senders": [
+      "CREDCL"
+    ],
+    "priority": 705,
+    "match": {
+      "pattern": "^update from cred:\\s*payment for your\\s+Canara(?:\\s+bank)?\\s+credit card\\s+[x*]{2,}[- ]?(?<mask>\\d{2,4})\\s+is due on\\s+(?<due>[a-z]{3}\\s+\\d{1,2},\\s+\\d{4})\\.\\s*bill amount:\\s*(?:rs\\.?|inr|₹)\\s*(?<tot>\\d[\\d,]*(?:\\.\\d{1,2})?)(?![\\d,])(?:\\s|\\.|$)",
+      "flags": "i",
+      "rejectAny": [
+        "was paid",
+        "paid on"
+      ]
+    },
+    "emit": [
+      {
+        "factType": "bill_due",
+        "attrs": {
+          "dueDate": {
+            "from": "due",
+            "formats": [
+              "MMM dd, yyyy"
+            ]
+          }
+        },
+        "amounts": [
+          {
+            "role": "due_total",
+            "from": "tot",
+            "unit": "INR"
+          }
+        ],
+        "instrument": {
+          "kind": "credit_card",
+          "maskFrom": "mask",
+          "issuerSlug": "canara"
+        }
+      }
+    ],
+    "confidence": 0.95,
+    "examples": [
+      {
+        "sender": "VM-CREDIN-S",
+        "body": "Update from CRED: Payment for your Canara Bank credit card XXXX-9876 is due on Nov 20, 2026. Bill amount: Rs.1200 Tap on the link to pay: https://example.invalid/pay",
+        "expectFactTypes": [
+          "bill_due"
+        ]
+      },
+      {
+        "sender": "VM-CREDIN-S",
+        "body": "Update from CRED: Payment for your Canara Bank credit card XXXX-9876 was paid on Nov 20, 2026. Bill amount: Rs.1200 Tap on the link to pay: https://example.invalid/pay",
+        "expectFactTypes": []
+      }
+    ],
+    "status": "active",
+    "createdBy": "baseline",
+    "updatedAt": "2026-11-20T00:00:00Z"
+  },
+  {
+    "id": "BIL-CC-CRED-REMINDER-AMEX",
+    "version": 1,
+    "family": "card_due",
+    "senders": [
+      "CREDCL"
+    ],
+    "priority": 705,
+    "match": {
+      "pattern": "^update from cred:\\s*payment for your\\s+American\\s+Express(?:\\s+bank)?\\s+credit card\\s+[x*]{2,}[- ]?(?<mask>\\d{2,4})\\s+is due on\\s+(?<due>[a-z]{3}\\s+\\d{1,2},\\s+\\d{4})\\.\\s*bill amount:\\s*(?:rs\\.?|inr|₹)\\s*(?<tot>\\d[\\d,]*(?:\\.\\d{1,2})?)(?![\\d,])(?:\\s|\\.|$)",
+      "flags": "i",
+      "rejectAny": [
+        "was paid",
+        "paid on"
+      ]
+    },
+    "emit": [
+      {
+        "factType": "bill_due",
+        "attrs": {
+          "dueDate": {
+            "from": "due",
+            "formats": [
+              "MMM dd, yyyy"
+            ]
+          }
+        },
+        "amounts": [
+          {
+            "role": "due_total",
+            "from": "tot",
+            "unit": "INR"
+          }
+        ],
+        "instrument": {
+          "kind": "credit_card",
+          "maskFrom": "mask",
+          "issuerSlug": "amex"
+        }
+      }
+    ],
+    "confidence": 0.95,
+    "examples": [
+      {
+        "sender": "VM-CREDIN-S",
+        "body": "Update from CRED: Payment for your American Express credit card XXXX-9876 is due on Nov 20, 2026. Bill amount: Rs.1200 Tap on the link to pay: https://example.invalid/pay",
+        "expectFactTypes": [
+          "bill_due"
+        ]
+      },
+      {
+        "sender": "VM-CREDIN-S",
+        "body": "Update from CRED: Payment for your American Express credit card XXXX-9876 was paid on Nov 20, 2026. Bill amount: Rs.1200 Tap on the link to pay: https://example.invalid/pay",
+        "expectFactTypes": []
+      }
+    ],
+    "status": "active",
+    "createdBy": "baseline",
+    "updatedAt": "2026-11-20T00:00:00Z"
   }
 ]
