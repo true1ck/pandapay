@@ -244,6 +244,11 @@ test('event legs grow and the status rules hold, including immutable user_confir
   assert.equal(statusOf((await ingest(p, h.batch({ events: [e2('ambiguous')] }))).results, 'event', f2.factId), 'accepted');
   assert.equal(errorsOf((await ingest(p, h.batch({ events: [e2('awaiting_leg')] }))).results, 'event', f2.factId)[0].code, 'event_status_transition_invalid');
   assert.equal(statusOf((await ingest(p, h.batch({ events: [e2('complete')] }))).results, 'event', f2.factId), 'accepted');
+  // A new explicit correction can remove and re-role a previously linked fact.
+  const correctedLegs = [{ factId: id, role: 'original' }];
+  assert.equal(statusOf((await ingest(p, h.batch({ events: [mk('user_confirmed', correctedLegs)] }))).results, 'event', id), 'accepted');
+  assert.deepEqual((await read()).legs, correctedLegs);
+
 });
 
 test('an event id owned by another profile is rejected', { skip }, async () => {

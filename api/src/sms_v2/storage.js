@@ -112,6 +112,9 @@ function mergeEvent(ex, inc) {
   if (!STATUS_NEXT[ex.status].has(inc.status)) {
     return { ok: false, code: ex.status === 'user_confirmed' ? 'event_status_locked' : 'event_status_transition_invalid' };
   }
+  if (inc.status === 'user_confirmed') {
+    return { ok: true, merged: inc, changed: !sameDoc(inc, ex) };
+  }
   const roleById = new Map(ex.legs.map((l) => [l.factId, l.role]));
   const legs = ex.legs.map((l) => ({ factId: l.factId, role: l.role }));
   for (const l of inc.legs) {

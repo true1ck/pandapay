@@ -39,6 +39,9 @@ class LedgerSnapshot {
     final ownerByFact = <String, Event>{};
     for (final event in list) {
       if (spendEventTypes.contains(event.type)) {
+        // A corrected money leg can change while the original anchor stays
+        // first for stable event identity and linked-refund references.
+        ownerByFact[event.eventId] = event;
         for (final leg in event.legs) {
           if (moneyLegRoles.contains(leg.role)) ownerByFact[leg.factId] = event;
         }
