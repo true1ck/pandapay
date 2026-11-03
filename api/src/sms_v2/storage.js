@@ -35,6 +35,11 @@ const EVENT_DOC = `jsonb_build_object(
   'eventId', event_id, 'type', type, 'status', status, 'legs', legs, 'linkRuleId', link_rule_id,
   'confidence', confidence, 'occurredAt', ${ts('occurred_at')}, 'amountMinor', amount_minor)`;
 
+const FACT_DOC = `(payload - 'senderBrand' - 'bodyHash') || jsonb_build_object(
+  'contractVersion', contract_version, 'factId', fact_id, 'sourceKey', source_key,
+  'factType', fact_type, 'observedAt', ${ts('observed_at')}, 'occurredAt', ${ts('occurred_at')},
+  'provenance', provenance, 'evidence', '[]'::jsonb)`;
+
 const LEDGER_DOC = `jsonb_build_object(
   'entryId', entry_id, 'eventId', event_id, 'from', ${endpointSql('from')}, 'to', ${endpointSql('to')},
   'amountMinor', amount_minor, 'unit', unit, 'occurredAt', ${ts('occurred_at')}, 'category', category_slug,
@@ -753,7 +758,7 @@ function decodeCursor(raw) {
     for (const k of Object.keys(c)) {
       const v = c[k];
       if (k === 'a' || k === 'c') { if (typeof v !== 'string' || v.length > 512) return null; continue; } // hook cursors
-      if (!['i', 'e', 'l'].includes(k)) return null;
+      if (!['i', 'e', 'l', 'f'].includes(k)) return null;
       if (!Array.isArray(v) || v.length !== 2 || typeof v[0] !== 'string' || typeof v[1] !== 'string') return null;
       if (!/^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}\.\d{6}Z$/.test(v[0])) return null;
     }
@@ -763,22 +768,22 @@ function decodeCursor(raw) {
   }
 }
 
-async function readEntity(client, profileId, { table, idCol, doc, cur }) {
+async function readEntity(client, profileId, { table, idCol, doc, cur, timeCol = 'updated_at' }) {
   const args = [profileId, SYNC_LIMIT + 1];
   let where = 'profile_id = $1';
   if (cur) {
     args.push(cur[0], cur[1]);
-    where += ` AND (updated_at, ${idCol}) > ($3::timestamptz, $4::${idCol === 'instrument_id' ? 'uuid' : 'text'})`;
+    where += ` AND (${timeCol}, ${idCol}) > ($3::timestamptz, $4::${idCol === 'instrument_id' ? 'uuid' : 'text'})`;
   }
   const r = await client.query(
-    `SELECT ${doc} AS doc, ${idCol}::text AS id, ${cursorTs('updated_at')} AS cur
-       FROM ${table} WHERE ${where} ORDER BY updated_at, ${idCol} LIMIT $2`,
+    `SELECT ${doc} AS doc, ${idCol}::text AS id, ${cursorTs(timeCol)} AS cur
+       FROM ${table} WHERE ${where} ORDER BY ${timeCol}, ${idCol} LIMIT $2`,
     args,
   );
   const more = r.rows.length > SYNC_LIMIT;
   const rows = more ? r.rows.slice(0, SYNC_LIMIT) : r.rows;
   const last = rows.length ? [rows[rows.length - 1].cur, rows[rows.length - 1].id] : cur || null;
-  return { docs: rows.map((x) => x.doc), more, last };
+  return { docs: rows.map((x) => x.doc), updatedAt: Object.fromEntries(rows.map((x) => [x.id, x.cur])), more, last };
 }
 
 /** Changes after `cursor` (already decoded). Returns {instruments, events, ledger, cursor, hasMore}. */
@@ -786,14 +791,18 @@ async function readChanges(client, profileId, cursor, hookCursors = {}) {
   const inst = await readEntity(client, profileId, { table: 'sms_v2_instruments', idCol: 'instrument_id', doc: INSTRUMENT_DOC, cur: cursor.i });
   const ev = await readEntity(client, profileId, { table: 'sms_v2_events', idCol: 'event_id', doc: EVENT_DOC, cur: cursor.e });
   const led = await readEntity(client, profileId, { table: 'sms_v2_ledger_entries', idCol: 'entry_id', doc: LEDGER_DOC, cur: cursor.l });
+  const facts = await readEntity(client, profileId, { table: 'sms_v2_facts', idCol: 'fact_id', doc: FACT_DOC, cur: cursor.f, timeCol: 'created_at' });
   const next = {};
+  if (facts.last) next.f = facts.last;
   if (inst.last) next.i = inst.last;
   if (ev.last) next.e = ev.last;
   if (led.last) next.l = led.last;
   if (hookCursors.a) next.a = hookCursors.a;
   if (hookCursors.c) next.c = hookCursors.c;
   return {
-    instruments: inst.docs, events: ev.docs, ledger: led.docs, cursor: encodeCursor(next), hasMore: inst.more || ev.more || led.more,
+    instruments: inst.docs, events: ev.docs, ledger: led.docs, facts: facts.docs,
+    updatedAt: { instruments: inst.updatedAt, events: ev.updatedAt, ledger: led.updatedAt },
+    cursor: encodeCursor(next), hasMore: inst.more || ev.more || led.more || facts.more,
   };
 }
 

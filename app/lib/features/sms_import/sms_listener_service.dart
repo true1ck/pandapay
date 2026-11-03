@@ -1,3 +1,4 @@
+import '../sms_v2/flag.dart';
 import 'dart:ui';
 
 import 'package:path/path.dart' as path;
@@ -74,6 +75,7 @@ Future<void> smsBackgroundHandler(SmsMessage message) async {
           final bundle = ruleStore.loadActiveBundleSync();
           SmsImportStore(
             store,
+            deferToSmsV2: kSmsPipelineV2,
             downloadedRules: bundle,
             candidateRules: ruleStore.loadCandidateBundlesSync(namespace: namespace),
           ).capture(namespace, queued);

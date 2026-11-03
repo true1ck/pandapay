@@ -41,6 +41,13 @@ ValidationResult validateBundleJson(Object? json) => _run(
       (d) => _bundleSemantics(d as Map<String, Object?>, ''),
     );
 
+/// Public API validation for the additive sync context and private upload.
+ValidationResult validateSyncResponseJson(Object? json) =>
+    _run('sync.response.schema.json', json, 'response.sync.malformed', null);
+
+ValidationResult validateFactsBatchRequestJson(Object? json) =>
+    _run('facts_batch.request.schema.json', json, 'request.facts_batch.malformed', null);
+
 ValidationResult _run(
   String schema,
   Object? json,

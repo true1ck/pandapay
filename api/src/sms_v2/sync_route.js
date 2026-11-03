@@ -49,6 +49,8 @@ function createSyncHandler({ withUserClient, hooks }) {
         instruments: changes.instruments,
         events: changes.events,
         ledger: changes.ledger,
+        facts: changes.facts,
+        updatedAt: changes.updatedAt,
         aiResults: ai.items,
         corrections: corrections.items,
         latestBundleVersion,

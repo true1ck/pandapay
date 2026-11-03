@@ -25,8 +25,11 @@ class FactsUpload {
     required this.appVersion,
     required this.headers,
     DateTime Function()? clock,
+    this.accountIsCurrent = _alwaysCurrent,
   }) : clock = clock ?? DateTime.now;
 
+  static bool _alwaysCurrent() => true;
+  final bool Function() accountIsCurrent;
   final OutboxStore queue;
   final http.Client client;
   final Uri baseUri;
@@ -145,7 +148,7 @@ class FactsUpload {
 
   Future<int> _drain({required bool backfill}) async {
     var acknowledged = 0;
-    while (true) {
+    while (accountIsCurrent()) {
       final batch = nextBatch();
       if (batch == null) return acknowledged;
       try {
@@ -167,6 +170,7 @@ class FactsUpload {
               body: batch.gzipBytes,
             )
             .timeout(const Duration(seconds: 30));
+        if (!accountIsCurrent()) return acknowledged;
         if (response.statusCode != 200) {
           throw const FormatException('Upload failed');
         }
@@ -211,5 +215,6 @@ class FactsUpload {
         return acknowledged;
       }
     }
+    return acknowledged;
   }
 }

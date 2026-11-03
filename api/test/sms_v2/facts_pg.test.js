@@ -507,10 +507,16 @@ test('sync returns contract-shaped documents and never another profile\'s rows',
   assert.deepEqual(mine.instruments, [s.inst]);
   assert.deepEqual(mine.events, [s.e]);
   assert.deepEqual(mine.ledger, [s.l]);
-  const body = { cursor: mine.cursor, instruments: mine.instruments, events: mine.events, ledger: mine.ledger, aiResults: [], corrections: [], latestBundleVersion: 0 };
+  assert.equal(mine.facts[0].factId, s.f.factId);
+  assert.deepEqual(mine.facts[0].evidence, []);
+  assert.equal(mine.facts[0].instrument.raw, null);
+  assert.equal('senderBrand' in mine.facts[0], false);
+  assert.equal('bodyHash' in mine.facts[0], false);
+  assert.match(mine.updatedAt.events[s.e.eventId], /^\d{4}-.*Z$/);
+  const body = { cursor: mine.cursor, instruments: mine.instruments, events: mine.events, ledger: mine.ledger, facts: mine.facts, updatedAt: mine.updatedAt, aiResults: [], corrections: [], latestBundleVersion: 0 };
   assert.deepEqual(contracts.validateResponse('sync', body), { ok: true, errors: [] });
   const theirs = await withUserClient(b, (client) => storage.readChanges(client, b, {}));
-  assert.deepEqual([theirs.instruments.length, theirs.events.length, theirs.ledger.length], [0, 0, 0]);
+  assert.deepEqual([theirs.instruments.length, theirs.events.length, theirs.ledger.length, theirs.facts.length], [0, 0, 0, 0]);
 });
 
 // ---------- HTTP end to end ----------

@@ -1,3 +1,5 @@
+import '../features/sms_v2/flag.dart';
+import '../features/sms_v2/providers/runtime_provider.dart';
 import '../features/sms_v2/ledger/providers.dart';
 import '../features/sms_v2/ledger/adapters.dart' as sms_v2_adapters;
 import 'package:pandapay_domain/sms_v2_ledger.dart' as sms_v2_ledger;
@@ -1795,6 +1797,31 @@ final userCardsRepositoryProvider = Provider<UserCardsRepository?>((ref) {
   final namespace = ref.read(cacheNamespaceProvider);
   late final UserCardsRepository repository;
   repository = UserCardsRepository(
+    onSmsV2Import: ref.watch(smsPipelineV2EnabledProvider) ? (messages, backfill) async {
+      final runtime = await ref.read(smsV2RuntimeProvider.future);
+      if (runtime == null) throw StateError('SMS v2 session unavailable');
+      final cache = await ref.read(responseCacheProvider.future);
+      final intake = SmsIntakeRepository(cache.financialStore.database);
+      final seen = <String>{};
+      final newSources = <String>{};
+      var duplicates = 0;
+      for (final message in messages) {
+        final key = smsSourceKey(namespace, message.sender, message.body);
+        if (!seen.add(key) || intake.decision(namespace, key)?.policyVersion == 'v2') {
+          duplicates++;
+        } else {
+          newSources.add(key);
+        }
+      }
+      await runtime.capture([
+        for (final message in messages) QueuedSms(sender: message.sender,
+          body: message.body, receivedAt: message.occurredAt),
+      ], backfill: backfill);
+      final imported = newSources.where((key) => intake.decision(namespace, key)?.decision == 'matched').length;
+      final review = newSources.where((key) => intake.decision(namespace, key)?.decision == 'unknown').length;
+      return SmsBatchImportResult(imported: imported, duplicate: duplicates,
+        unparsed: 0, invalid: 0, errored: 0, needsReview: review);
+    } : null,
     apiBaseUrl: _apiBaseUrl,
     accessToken: token,
     client: ref.read(authenticatedHttpClientProvider),
@@ -1830,6 +1857,13 @@ final userCardsRepositoryProvider = Provider<UserCardsRepository?>((ref) {
           ?.remapTransaction('local-outbox:$mutationId', transactionId);
     },
     onSmsCaptured: (message) async {
+      if (ref.read(smsPipelineV2EnabledProvider)) {
+        final runtime = await ref.read(smsV2RuntimeProvider.future);
+        if (runtime == null) throw StateError('SMS v2 session unavailable');
+        await runtime.capture([QueuedSms(sender: message.sender, body: message.body,
+          receivedAt: message.occurredAt)]);
+        return;
+      }
       if (ref.read(cacheNamespaceProvider) != namespace) {
         throw StateError(
           'Account changed. Retry this import from the current account.',
@@ -1861,6 +1895,15 @@ final userCardsRepositoryProvider = Provider<UserCardsRepository?>((ref) {
       ref.invalidate(commitmentsProvider);
     },
     onSmsBatchCaptured: (messages) async {
+      if (ref.read(smsPipelineV2EnabledProvider)) {
+        final runtime = await ref.read(smsV2RuntimeProvider.future);
+        if (runtime == null) throw StateError('SMS v2 session unavailable');
+        await runtime.capture([
+          for (final message in messages) QueuedSms(sender: message.sender,
+            body: message.body, receivedAt: message.occurredAt),
+        ]);
+        return;
+      }
       final cache = await ref.read(responseCacheProvider.future);
       cache.financialStore.migrateLegacy(namespace);
       for (var start = 0; start < messages.length; start += 100) {
@@ -6828,6 +6871,10 @@ final notificationTriggerLifecycleProvider = Provider<void>((ref) {
 final smsFlushTriggerProvider = StateProvider<int>((ref) => 0);
 
 final smsBackgroundFlushProvider = Provider<void>((ref) {
+  if (ref.watch(smsPipelineV2EnabledProvider)) {
+    ref.watch(smsV2LifecycleProvider);
+    return;
+  }
   var workInProgress = false;
   var rerunRequested = false;
   var runnerActive = false;
@@ -7718,6 +7765,12 @@ class SmsAutoImportController {
       throw StateError('Account changed during SMS capture');
     }
     final store = cache.financialStore;
+    if (_ref.read(smsPipelineV2EnabledProvider)) {
+      final runtime = await _ref.read(smsV2RuntimeProvider.future);
+      if (runtime == null) throw StateError('SMS v2 session unavailable');
+      await runtime.capture(messages);
+      return;
+    }
     final path = store.database.filePath;
     void captureDirect() {
       if (_disposed || _ref.read(cacheNamespaceProvider) != namespace) {
@@ -7872,6 +7925,11 @@ class SmsAutoImportController {
     String namespace,
     int scanned,
   ) async {
+    if (_ref.read(smsPipelineV2EnabledProvider)) {
+      final runtime = await _ref.read(smsV2RuntimeProvider.future);
+      if (runtime != null) await runtime.sync();
+      return SmsInboxSyncSummary(scanned: scanned, imported: 0, duplicates: 0, ignored: 0);
+    }
     var imported = 0,
         duplicates = 0,
         ignored = 0,

@@ -58,6 +58,7 @@ class SmsImportStore {
   final FinancialStore store;
   final SmsV2Pipeline? v2Pipeline;
   final bool deferToSmsV2;
+  final bool v2Backfill;
   // Drain profile name into the parser for own-name self-transfer matching.
   final String? ownUserName;
   final SmsRuleBundle? downloadedRules;
@@ -67,6 +68,7 @@ class SmsImportStore {
     this.ownUserName,
     this.v2Pipeline,
     this.deferToSmsV2 = false,
+    this.v2Backfill = false,
     this.downloadedRules,
     this.candidateRules = const [],
   });
@@ -154,6 +156,7 @@ class SmsImportStore {
               reasonCode: triage.reasonCode, receivedAt: message.receivedAt.millisecondsSinceEpoch,
               policyVersion: 'v2',
             );
+            intake.acknowledge(namespace, sourceKey);
             continue;
           }
           if (feedback.matchesFalseTransactionRuleSync(sender: message.sender, body: message.body)) {
@@ -194,7 +197,7 @@ class SmsImportStore {
           for (var start = 0; start < candidates.length; start += 500) {
             final end = (start + 500).clamp(0, candidates.length);
             final chunk = candidates.sublist(start, end);
-            pipeline.processBatch(chunk);
+            pipeline.processBatch(chunk, backfill: v2Backfill);
             for (final message in chunk) {
               intake.acknowledge(namespace, message.sourceKey);
             }

@@ -1392,6 +1392,7 @@ class UserCardsRepository {
   /// retry. Local tag links can now move from local-outbox:<mutation> to id.
   final void Function(String clientMutationId, String transactionId)?
   onTransactionSaved;
+  final Future<SmsBatchImportResult> Function(List<SmsBatchMessage>, bool)? onSmsV2Import;
   final Future<void> Function(SmsBatchMessage)? onSmsCaptured;
   final Future<void> Function(List<SmsBatchMessage>)? onSmsBatchCaptured;
   final Future<void> Function(
@@ -1407,6 +1408,7 @@ class UserCardsRepository {
     http.Client? client,
     this.onTransactionSaved,
     this.onSmsCaptured,
+    this.onSmsV2Import,
     this.onSmsBatchCaptured,
     this.onSmsUploaded,
     this.dismissalOutbox,
@@ -1796,6 +1798,15 @@ class UserCardsRepository {
       body: body,
       occurredAt: occurredAt ?? DateTime.now(),
     );
+    final v2Import = onSmsV2Import;
+    if (v2Import != null) {
+      final result = await v2Import([message], backfill);
+      return SmsImportResult(
+        parsed: result.imported != 0 || result.duplicate != 0,
+        duplicate: result.duplicate != 0,
+        needsReview: result.needsReview != 0,
+      );
+    }
     await onSmsCaptured?.call(message);
     final response = await _client
         .post(
@@ -2311,6 +2322,8 @@ class UserCardsRepository {
     bool captureLocally = true,
     bool notifyNewTransactions = false,
   }) async {
+    final v2Import = onSmsV2Import;
+    if (v2Import != null) return v2Import(messages, backfill);
     if (captureLocally) await captureSmsMessages(messages);
     final response = await _client
         .post(
