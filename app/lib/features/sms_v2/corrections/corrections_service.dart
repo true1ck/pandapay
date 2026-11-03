@@ -11,6 +11,7 @@ import '../category/category_snapshot.dart';
 import '../category/user_category_rules.dart';
 import '../ledger/projection_writer.dart';
 import '../pipeline/trace.dart';
+import '../personal/personal_format_service.dart';
 import '../storage/event_store.dart';
 import '../storage/fact_store.dart';
 import '../storage/instrument_store.dart';
@@ -66,6 +67,18 @@ class CorrectionsService {
   late final _events = EventStore(_db, namespace: namespace);
   late final _ledger = LedgerStore(_db, namespace: namespace);
   late final _outbox = OutboxStore(_db, namespace: namespace);
+
+  List<String> teachFormat({
+    required PersonalFormatChoice choice,
+    required Iterable<String> sourceKeys,
+    required String appVersion,
+  }) => PersonalFormatService(
+    financial: financial,
+    namespace: namespace,
+    bundle: bundle,
+    appVersion: appVersion,
+    categoryIdBySlug: categoryIdBySlug,
+  ).apply(choice: choice, sourceKeys: sourceKeys);
 
   void apply(SmsCorrection correction) {
     if (correction.id.isEmpty) {
