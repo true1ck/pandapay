@@ -9,7 +9,7 @@ import 'package:sqlite3/sqlite3.dart';
 /// `payload` is the event's contract JSON.
 ///
 /// The store enforces the linker's promises even if a caller slips:
-/// - legs only grow: an upsert keeps every stored leg the new event lacks;
+/// - automatic links only grow; explicit user corrections replace wrong legs;
 /// - a `user_confirmed` event changes only through `fromUser: true` (the
 ///   person's own edit, or the same edit synced back from the server).
 class EventStore {
@@ -24,7 +24,7 @@ class EventStore {
   ///
   /// Marks the row dirty so sync picks it up (pass `dirty: false` for rows
   /// that came from the server). A stored `user_confirmed` event is returned
-  /// unchanged unless [fromUser] is true.
+  /// unchanged unless [fromUser] is true. Explicit user edits replace legs.
   Event upsert(Event event, {bool dirty = true, bool fromUser = false}) {
     final stored = get(event.eventId);
     var next = event;
@@ -37,7 +37,7 @@ class EventStore {
         for (final l in stored.legs)
           if (!have.contains(l.factId)) l,
       ];
-      if (kept.isNotEmpty) {
+      if (!fromUser && kept.isNotEmpty) {
         next = event.copyWith(legs: [...event.legs, ...kept]);
       }
     }
