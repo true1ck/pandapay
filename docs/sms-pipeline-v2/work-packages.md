@@ -8,14 +8,14 @@ Each work package is self-contained: an agent needs only the Agent playbook, the
 | --- | --- | --- | --- | --- | --- | --- |
 | 00 | Golden set and eval harness | M0 | none | `tools/sms_golden/`, `tools/sms_rules_cli/` (skeleton, `cluster`, `redact`, `golden`), `app/test/sms_golden_baseline/`, `api/test/sms_golden_baseline/` | Sonnet | Done (4944a5e) |
 | 01 | Contracts package | M0 | none | `contracts/sms/v2/`, `pandapay_domain/.../sms_v2/contract/`, `api/src/sms_v2/contracts.js`, `app/lib/features/sms_v2/flag.dart`, `app/lib/features/sms_v2/storage/schema.dart`, `app/pubspec.yaml` (assets) | Opus | Done (a61e338). Contracts frozen 2026-11-03 |
-| 02 | Rule engine | M1 | 01 | `pandapay_domain/.../sms_v2/engine/`, CLI `build`, `lint`, `sign-dev`, `fetch-baseline` | Sonnet | Not started |
+| 02 | Rule engine | M1 | 01 | `pandapay_domain/.../sms_v2/engine/`, CLI `build`, `lint`, `sign-dev`, `fetch-baseline` | Sonnet | Done (19fa053) |
 | 03 | Baseline rule bundle (03a–03d) | M1 | 00, 02 | `rules/sms/v2/` (one sub-package per family folder), `app/assets/sms_rules/` | Sonnet × 4 | Not started |
 | 04 | Instrument registry and detection | M1 | 01 | `pandapay_domain/.../sms_v2/instruments/`, `app/lib/features/sms_v2/storage/instrument_store.dart`, `app/lib/features/sms_v2/instruments/` | Sonnet | Not started |
 | 05 | Event linker | M1 | 01, 04 | `pandapay_domain/.../sms_v2/linker/`, `app/lib/features/sms_v2/storage/event_store.dart` | Opus | Not started |
 | 06 | Ledger and projections | M1 | 05, 07 | `pandapay_domain/.../sms_v2/ledger/`, `app/lib/features/sms_v2/ledger/`, `storage/ledger_store.dart`, totals call sites (hotspot owner) | Sonnet | Not started |
 | 07 | Category resolver and taxonomy | M1 | 01 | `pandapay_domain/.../sms_v2/category/`, `app/lib/features/sms_v2/category/` | Sonnet | Not started |
 | 08 | Server facts ingestion v2 | M1 | 01 | `api/src/sms_v2/{index,facts_route,sync_route,storage,guard}.js`, `scripts/check_sms_v2.js`, migrations for instruments, facts, events, ledger and `transactions` columns | Sonnet | Not started |
-| 09 | Rule service v2 | M1 | 01, 02 (bundle shape) | `api/src/sms_v2/{rules_route,rules_admin_route,bundle_builder,signer,rule_stats}.js`, `api/scripts/import_sms_v2_rules.js`, rule migrations | Sonnet | Not started |
+| 09 | Rule service v2 | M1 | 01, 02 (bundle shape) | `api/src/sms_v2/{rules_route,rules_admin_route,bundle_builder,signer,rule_stats}.js`, `api/scripts/import_sms_v2_rules.js`, rule migrations | Sonnet | Done (cb05c0b) |
 | 10 | AI per template | M2 | 09 | `api/src/sms_v2/{ai_templates,template_worker}.js`, template migration`s` | Sonnet | Not started |
 | 11 | Admin Rules page and corrections UI | M2 | 09, 12 | `console/lib/features/sms_rules/`, `console/lib/data/sms_v2_admin_api.dart`, console routes | Sonnet | Not started |
 | 12 | Correction trace and `sms-fix-case` skill | M2 | 00, 08 | `api/src/sms_v2/corrections_route.js`, corrections migration, `app/lib/features/sms_v2/pipeline/trace.dart`, `app/lib/features/sms_v2/sync/corrections_sync.dart`, `.claude/skills/sms-fix-case/` | Sonnet | Not started |
