@@ -98,6 +98,10 @@ add('POST', '/admin/sms/v2/rules/:id/publish', 'learning.publish', true);
 add('POST', '/admin/sms/v2/rules/:id/pause', 'learning.publish', true);
 add('POST', '/admin/sms/v2/rules/:id/rollback', 'learning.publish', true);
 
+add('GET', '/admin/sms/v2/templates', 'learning.read');
+add('GET', '/admin/sms/v2/metrics', 'learning.read');
+add('POST', '/admin/sms/v2/templates/:hash/draft', 'learning.publish', true);
+
 const routeManifest = Object.freeze(definitions.map(([method, path, permission, freshMfa]) =>
   Object.freeze({ method, path, permission, freshMfa })
 ));

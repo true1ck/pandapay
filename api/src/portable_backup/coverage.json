@@ -688,6 +688,22 @@
     "foreign_payment_events": {
       "disposition": "excluded_with_intent",
       "reason": "Account-linked correction audit is preserved in paired PostgreSQL backups; portable archives export current foreign payment state and source aliases, not replayable historical event snapshots."
+    },
+    "sms_v2_unknown_templates": {
+      "disposition": "platform_ops",
+      "reason": "Redacted template drafting and shared rule state is managed by the platform and preserved by full database recovery."
+    },
+    "sms_v2_template_submitters": {
+      "disposition": "excluded_with_intent",
+      "reason": "Account-linked opt-in template submissions are excluded from portable export. Consent revocation purges submitter access, and complete database recovery preserves outstanding submissions."
+    },
+    "sms_v2_template_attempts": {
+      "disposition": "platform_ops",
+      "reason": "Provider capacity and AI cost accounting are platform operation state preserved by full database recovery."
+    },
+    "sms_v2_ai_capacity": {
+      "disposition": "platform_ops",
+      "reason": "Provider capacity and AI cost accounting are platform operation state preserved by full database recovery."
     }
   }
 }

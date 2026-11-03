@@ -598,5 +598,23 @@
     "path": "/admin/sms/v2/rules/:id/rollback",
     "permission": "learning.publish",
     "freshMfa": true
+  },
+  {
+    "method": "GET",
+    "path": "/admin/sms/v2/templates",
+    "permission": "learning.read",
+    "freshMfa": false
+  },
+  {
+    "method": "GET",
+    "path": "/admin/sms/v2/metrics",
+    "permission": "learning.read",
+    "freshMfa": false
+  },
+  {
+    "method": "POST",
+    "path": "/admin/sms/v2/templates/:hash/draft",
+    "permission": "learning.publish",
+    "freshMfa": true
   }
 ]
