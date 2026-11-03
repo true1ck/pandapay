@@ -238,6 +238,10 @@ async function listRules(s, query, now) {
       cohort: widestLive(rowCohorts),
       autoPaused: cohorts.some((c) => c.ruleId === id && c.pauseReason === AUTO_PAUSE_REASON),
       metrics7d: { hits: sum('hits'), toReview: sum('toReview'), corrected: sum('corrected') },
+      positiveExample: latest.body.examples?.find(example => example.expectFactTypes?.length)?.body || null,
+      factTypes: [...new Set((latest.body.emit || []).map(emit => emit.factType))],
+      source: latest.body.createdBy,changedBy:latest.createdBy,updatedAt:latest.body.updatedAt,
+      exampleCount:latest.body.examples?.length || 0,
     });
   }
   return out;
@@ -248,6 +252,7 @@ async function ruleDetail(s, ruleId, now) {
   if (!versions.length) throw new HttpError(404, 'rule_not_found');
   const cohorts = (await s.allCohorts()).filter((c) => c.ruleId === ruleId);
   const stats = await s.statsSince(utcDay(new Date(now.getTime() - 7 * 86400000)));
+  const daily = await s.statsByDay(utcDay(new Date(now.getTime() - 30 * 86400000)));
   return {
     ruleId,
     versions: versions.map((v) => {
@@ -257,6 +262,9 @@ async function ruleDetail(s, ruleId, now) {
         cohorts: cohorts.filter((c) => c.version === v.version).map((c) => ({ cohort: c.cohort, startedAt: c.startedAt, pausedAt: c.pausedAt, pauseReason: c.pauseReason })),
         metrics7d: m ? { hits: m.hits, toReview: m.toReview, corrected: m.corrected, devices: m.devices } : { hits: 0, toReview: 0, corrected: 0, devices: 0 },
         goldenCoverage: { exampleCount: Array.isArray(v.body.examples) ? v.body.examples.length : 0 },
+        metrics30d: daily.filter(row => row.ruleId===ruleId && row.version===v.version)
+          .reduce((sum,row) => ({hits:sum.hits+row.hits,toReview:sum.toReview+row.toReview,corrected:sum.corrected+row.corrected}),{hits:0,toReview:0,corrected:0}),
+        dailyMetrics: daily.filter(row => row.ruleId===ruleId && row.version===v.version),
       };
     }),
   };

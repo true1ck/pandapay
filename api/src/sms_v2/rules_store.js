@@ -97,6 +97,16 @@ class PgTx {
     await this.c.query('SELECT pandapay.sms_v2_record_rule_stats($1::date, $2, $3::jsonb)', [day, appVersion, JSON.stringify(rows)]);
   }
   async rollupRuleStats() { return (await this.c.query('SELECT pandapay.sms_v2_rollup_rule_stats() AS n')).rows[0].n; }
+  async statsByDay(day) {
+    const result = await this.c.query(
+      `SELECT day,rule_id,rule_version,SUM(hits)::bigint AS hits,
+        SUM(to_review)::bigint AS to_review,SUM(corrected)::bigint AS corrected
+       FROM sms_v2_rule_stats_daily WHERE day >= $1::date
+       GROUP BY day,rule_id,rule_version ORDER BY day,rule_id,rule_version`, [day]);
+    return result.rows.map(row => ({day:row.day instanceof Date ? utcDay(row.day) : String(row.day),
+      ruleId:row.rule_id,version:row.rule_version,hits:Number(row.hits),
+      toReview:Number(row.to_review),corrected:Number(row.corrected)}));
+  }
   async statsSince(day) {
     const r = await this.c.query(
       `SELECT rule_id, rule_version, SUM(hits)::bigint AS hits, SUM(to_review)::bigint AS to_review,
@@ -194,6 +204,16 @@ class MemoryStore {
         const keep = utcDay(new Date(Date.parse(`${self.today()}T00:00:00Z`) - 2 * 86400000));
         st().profileStats = st().profileStats.filter((p) => p.day >= keep);
         return groups.size;
+      },
+      async statsByDay(day) {
+        const rows = new Map();
+        for (const item of st().daily.filter(row => row.day >= day)) {
+          const key = [item.day,item.ruleId,item.version].join('|');
+          const row = rows.get(key) || {day:item.day,ruleId:item.ruleId,version:item.version,hits:0,toReview:0,corrected:0};
+          row.hits += item.hits;row.toReview += item.toReview;row.corrected += item.corrected;
+          rows.set(key,row);
+        }
+        return [...rows.values()].sort((a,b) => a.day.localeCompare(b.day));
       },
       async statsSince(day) {
         const out = new Map();
