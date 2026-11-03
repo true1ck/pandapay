@@ -6,6 +6,7 @@
 library;
 
 export 'src/sms_v2/contract/enums.dart';
+export 'src/sms_v2/engine/engine.dart';
 export 'src/sms_v2/contract/errors.dart';
 export 'src/sms_v2/contract/event.dart';
 export 'src/sms_v2/contract/fact.dart';

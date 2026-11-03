@@ -1,0 +1,68 @@
+[
+  {
+    "id": "HDFC-CARD-SPEND-BROAD",
+    "version": 1,
+    "family": "card_spend",
+    "senders": [
+      "HDFCBK"
+    ],
+    "priority": 900,
+    "match": {
+      "pattern": "^Rs\\.(?<amt>[\\d,]+\\.\\d{2}) spent on HDFC Bank Card x(?<mask>\\d{4}) at (?<merchant>.+)$",
+      "flags": "i",
+      "requireAll": [
+        "spent"
+      ],
+      "rejectAny": [
+        "declined"
+      ]
+    },
+    "emit": [
+      {
+        "factType": "movement",
+        "attrs": {
+          "direction": "debit",
+          "purpose": "purchase",
+          "rail": "card"
+        },
+        "amounts": [
+          {
+            "role": "posted",
+            "from": "amt",
+            "unit": "INR"
+          }
+        ],
+        "instrument": {
+          "kind": "credit_card",
+          "issuerSlug": "hdfc",
+          "maskFrom": "mask"
+        },
+        "counterparty": {
+          "nameFrom": "merchant",
+          "kind": "merchant",
+          "transforms": [
+            "sanitizeNarration"
+          ]
+        }
+      }
+    ],
+    "confidence": 0.95,
+    "examples": [
+      {
+        "sender": "VM-HDFCBK-S",
+        "body": "Rs.10.00 spent on HDFC Bank Card x1111 at SHOP",
+        "expectFactTypes": [
+          "movement"
+        ]
+      },
+      {
+        "sender": "VM-HDFCBK-S",
+        "body": "Txn of Rs.10.00 declined on HDFC Bank Card x1111 at SHOP",
+        "expectFactTypes": []
+      }
+    ],
+    "status": "active",
+    "createdBy": "baseline",
+    "updatedAt": "2026-11-20T00:00:00Z"
+  }
+]

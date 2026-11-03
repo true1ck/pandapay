@@ -1,0 +1,11 @@
+[
+  {
+    "id": "IGN-LIMIT-OFFER",
+    "senders": [
+      "*"
+    ],
+    "pattern": "eligible for an? (?:credit )?limit (?:increase|enhancement)",
+    "flags": "i",
+    "reason": "promotion"
+  }
+]

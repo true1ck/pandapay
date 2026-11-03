@@ -1,9 +1,13 @@
 import 'dart:io';
 
 import 'package:args/command_runner.dart';
+import 'package:sms_rules_cli/commands/build_command.dart';
 import 'package:sms_rules_cli/commands/cluster_command.dart';
+import 'package:sms_rules_cli/commands/fetch_baseline_command.dart';
 import 'package:sms_rules_cli/commands/golden_command.dart';
+import 'package:sms_rules_cli/commands/lint_command.dart';
 import 'package:sms_rules_cli/commands/redact_command.dart';
+import 'package:sms_rules_cli/commands/sign_dev_command.dart';
 
 /// The command registry: `name -> Command`. Later work packages add one line
 /// each (`build`, `lint`, `sign-dev`, `fetch-baseline`, ...).
@@ -11,6 +15,10 @@ final Map<String, Command<int> Function()> commandRegistry = {
   'redact': RedactCommand.new,
   'cluster': ClusterCommand.new,
   'golden': GoldenCommand.new,
+  'build': BuildCommand.new,
+  'lint': LintCommand.new,
+  'sign-dev': SignDevCommand.new,
+  'fetch-baseline': FetchBaselineCommand.new,
 };
 
 Future<void> main(List<String> args) async {

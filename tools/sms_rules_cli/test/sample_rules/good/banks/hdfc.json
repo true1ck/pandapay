@@ -1,0 +1,74 @@
+[
+  {
+    "id": "HDFC-CARD-SPEND-01",
+    "version": 1,
+    "family": "card_spend",
+    "senders": [
+      "HDFCBK"
+    ],
+    "priority": 500,
+    "match": {
+      "pattern": "^Rs\\.(?<amt>[\\d,]+\\.\\d{2}) spent on HDFC Bank Card x(?<mask>\\d{4}) at (?<merchant>.+?) on (?<date>\\d{2}-\\d{2}-\\d{2})",
+      "flags": "i",
+      "requireAll": [
+        "spent"
+      ],
+      "rejectAny": [
+        "declined"
+      ]
+    },
+    "emit": [
+      {
+        "factType": "movement",
+        "attrs": {
+          "direction": "debit",
+          "purpose": "purchase",
+          "rail": "card"
+        },
+        "amounts": [
+          {
+            "role": "posted",
+            "from": "amt",
+            "unit": "INR"
+          }
+        ],
+        "instrument": {
+          "kind": "credit_card",
+          "issuerSlug": "hdfc",
+          "maskFrom": "mask"
+        },
+        "counterparty": {
+          "nameFrom": "merchant",
+          "kind": "merchant",
+          "transforms": [
+            "sanitizeNarration"
+          ]
+        },
+        "occurredAt": {
+          "from": "date",
+          "formats": [
+            "dd-MM-yy"
+          ]
+        }
+      }
+    ],
+    "confidence": 0.95,
+    "examples": [
+      {
+        "sender": "VM-HDFCBK-S",
+        "body": "Rs.499.00 spent on HDFC Bank Card x5678 at SWIGGY on 01-11-26",
+        "expectFactTypes": [
+          "movement"
+        ]
+      },
+      {
+        "sender": "VM-HDFCBK-S",
+        "body": "Txn of Rs.499.00 declined on HDFC Bank Card x5678 at SWIGGY on 01-11-26",
+        "expectFactTypes": []
+      }
+    ],
+    "status": "active",
+    "createdBy": "baseline",
+    "updatedAt": "2026-11-20T00:00:00Z"
+  }
+]

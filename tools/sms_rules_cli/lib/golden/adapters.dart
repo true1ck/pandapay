@@ -1,6 +1,9 @@
 import 'dart:convert';
 import 'dart:io';
 
+import 'package:pandapay_domain/sms_v2.dart' show smsEngineVersion;
+
+import 'engine_stage.dart';
 import 'models.dart';
 
 // =============================================================================
@@ -138,12 +141,18 @@ class GoldenAdapters {
   };
 }
 
-/// The adapters for a bundle.
-///
-/// TODO(orchestrator, after WP-01 merges): build the engine from [bundlePath]
-/// and return all five stages. Until then every stage is `not_available`.
-GoldenAdapters loadDefaultAdapters({String? bundlePath}) =>
-    const GoldenAdapters(label: 'unwired (WP-01 not merged)');
+/// The adapters for a bundle. The interpreter stage is the real rule engine
+/// (WP-02) running [bundlePath]; the other stages stay `not_available` until
+/// their packages land and the orchestrator wires them here.
+GoldenAdapters loadDefaultAdapters({String? bundlePath}) {
+  if (bundlePath == null) {
+    return const GoldenAdapters(label: 'unwired (no --bundle given)');
+  }
+  return GoldenAdapters(
+    interpreter: EngineInterpreterStage.fromFile(bundlePath),
+    label: 'rule engine $smsEngineVersion + $bundlePath',
+  );
+}
 
 /// Replays interpretations that were computed elsewhere, such as the output of
 /// today's phone or server parser. The file is
