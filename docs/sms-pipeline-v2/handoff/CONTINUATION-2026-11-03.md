@@ -163,3 +163,35 @@ From the CLI directory, rerun the baseline build with output `"$p/phonepe-servic
 The synthetic colon-delimited NEFT credit returned unknown before the fix and matched after it. Existing ICICI Info credit rules for NEFT, IMPS and RTGS accept the colon form while retaining their existing direction, salary classification and balance handling.
 
 From the CLI directory, run the baseline build with output `"$p/icici-v0.json"`. It passed 1,508 examples. Run the probe with that bundle against `"$p/icici-synthetic.jsonl"` and then `"$p/sms.jsonl"`. The corpus now has 1,359 matches, 1,532 ignores and 2,305 unknowns. The 15 additional matches are extraction outcomes. The labeled accuracy and full-pipeline gates remain open.
+
+### CRED reminders and ICICI transaction passwords
+
+Commit 99021f6 adds issuer-specific CRED reminders for eight issuers. A synthetic masked-card reminder returned unknown before the fix. Local template analysis exposed the actual month-first date shape. The rule uses the engine's supported `MMM dd, yyyy` tokens. All eight positive and negative example pairs pass. The private corpus gained 173 matches.
+
+The following rule commit adds a sender-scoped ICICI transaction-password ignore. Its synthetic notice changed from unknown to ignored. Another 44 private notices moved to ignored.
+
+From `tools/sms_rules_cli`, rerun the baseline build above with output `"$p/otp-v0.json"`, then run the same probe and redaction/cluster sequence against that bundle. The final build passed 1,524 examples. `dart run tool/check_pipeline.dart` passed 115 cases and 15 scenarios. `node test/regex_parity.mjs` passed 45,720 comparisons. The probe counted 1,532 matched, 1,576 ignored and 2,088 unknown.
+
+The private evaluation directory contains a seeded sample of 327 messages across 12 heuristic family strata, with sender and population counts. Expected readings are still blank. The corpus unknown share is 40.2%. The labeled financial unknown rate, family accuracy and real-corpus pipeline accounting gates remain open.
+
+### Coverage beyond the owner corpus
+
+The known masked CRED reminder layout now covers nine additional issuers. A synthetic RBL message was unknown before the change and matched after it. The positive and negative examples are synthetic. The private corpus totals were unchanged, so this is additional tested coverage outside the observed sample.
+
+From the CLI directory, build the baseline with output `"$p/issuer-v0.json"`. The build passed 1,542 examples across 742 rules. `dart run tool/check_pipeline.dart` passed 115 cases and 15 scenarios. `node test/regex_parity.mjs` passed 46,260 comparisons with zero mismatches.
+
+On the integration checkout, `flutter test --no-pub test/features/sms_v2/sync/template_upload_test.dart --reporter expanded` passed two tests. They cover consent, withdrawal and private draft delivery. Unknown formats can enter the shared queue as redacted templates when the user consents and the service is enabled. Shared publication requires an authorized admin with fresh MFA and a passing candidate golden report. Production provisioning and real-user verification are still pending.
+
+### ICICI one-time mandate holds
+
+The synthetic hold was unknown on the previous bundle. The new rules read blocked and unblocked notices as hold facts. The notice does not identify an IPO or an account suffix, so the rules leave those fields unspecified. Debit wording is a negative example.
+
+From the CLI directory, build with output `"$p/hold-v0.json"`, then run the private probe, redaction and clustering with the new bundle. Build passed 1,546 examples. `dart run tool/check_pipeline.dart` passed 115 cases and 15 scenarios. `node test/regex_parity.mjs` passed 46,380 comparisons with zero mismatches. The corpus now has 1,580 matched, 1,576 ignored and 2,040 unknown. The remaining unknowns form 869 clusters.
+
+On the integration checkout, `flutter test --no-pub --dart-define=SMS_PIPELINE_V2=true test/features/sms_v2/pipeline/runtime_scenarios_test.dart --reporter expanded` passed 15 synthetic scenarios including card bills, CHEQ, IPO holds and salary. Full private corpus accounting and labeled accuracy are still outstanding.
+
+### Noise and integration recheck
+
+A synthetic Jio fraud education notice returned unknown before the sender-scoped ignore and ignored afterward. On the same 5,196 messages, 14 unknowns moved to ignored. Counts are 1,580 matched, 1,590 ignored and 2,026 unknown. From the CLI directory, the baseline build with output `"$p/noise-v0.json"` passed 1,546 examples. `dart run tool/check_pipeline.dart` passed 115 cases and 15 scenarios. `node test/regex_parity.mjs` passed 47,926 comparisons with zero mismatches. Regex parity is already wired in build-and-test.yml.
+
+On the integration checkout, `bash scripts/test_private_admin.sh` passed 35 top-level Node tests and three Python tests. Its full-schema test invokes the real PostgreSQL rule, ingestion, template, category, correction and migration suites. This checks the migrated rule fixture and category publication locally. A production-equivalent deployment rehearsal and a real admin session remain separate checks.
