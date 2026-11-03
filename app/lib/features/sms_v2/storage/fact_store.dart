@@ -7,6 +7,9 @@ import 'package:sqlite3/sqlite3.dart';
 class FactStore {
   FactStore(this._db, {required this.namespace});
 
+  static final _caches = Expando<Map<String, Fact>>();
+  Map<String, Fact> get _cache => _caches[_db] ??= <String, Fact>{};
+  String _key(String id) => '$namespace|$id';
   final Database _db;
   final String namespace;
 
@@ -32,7 +35,9 @@ ON CONFLICT(namespace, fact_id) DO NOTHING
         jsonEncode(fact.toJson()),
       ],
     );
-    return _db.updatedRows != 0;
+    final inserted = _db.updatedRows != 0;
+    if (inserted) _cache[_key(fact.factId)] = fact;
+    return inserted;
   }
 
   List<Fact> forSource(String sourceKey) =>
@@ -72,11 +77,11 @@ WHERE namespace = ? AND fact_id = ? AND uploaded_at IS NULL
 
   List<Fact> _read(String condition, List<Object?> args, {int? limit}) => [
     for (final row in _db.select(
-      'SELECT payload FROM v2_facts WHERE namespace = ? AND $condition '
+      'SELECT fact_id,payload FROM v2_facts WHERE namespace = ? AND $condition '
       'ORDER BY observed_at, fact_id${limit == null ? '' : ' LIMIT ?'}',
       [namespace, ...args, ?limit],
     ))
-      Fact.fromJson(
+      _cache[_key(row['fact_id'] as String)] ??= Fact.fromJson(
         (jsonDecode(row['payload'] as String) as Map).cast<String, Object?>(),
       ),
   ];

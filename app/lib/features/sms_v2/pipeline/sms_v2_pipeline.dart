@@ -15,6 +15,8 @@ import '../storage/ledger_store.dart';
 import '../storage/outbox_store.dart';
 import '../storage/schema.dart';
 import '../storage/stats_store.dart';
+import '../storage/sync_state_store.dart';
+import 'trace.dart';
 
 /// The local part of WP-14. The caller supplies a verified bundle and a
 /// financial candidate that has already passed the existing safety gate.
@@ -118,8 +120,9 @@ class SmsV2Pipeline {
             }
           }
         }
+        var traces = <String, DecisionTrace>{};
         if (incoming.isNotEmpty) {
-          _project(
+          traces = _project(
             unique.values.toList(),
             incoming,
             review,
@@ -128,6 +131,27 @@ class SmsV2Pipeline {
         }
         for (final (message, outcome) in interpreted) {
           final result = outcome.result;
+          final trace =
+              traces[message.sourceKey] ??
+              DecisionTrace(
+                appVersion: appVersion,
+                engineVersion: engine.engineVersion,
+                bundleVersion: bundle.bundleVersion,
+                outcome: result.outcome.name,
+                ruleId: result.ruleId,
+                ruleVersion: result.ruleVersion,
+                facts: result.facts,
+              );
+          SyncStateStore(
+            _db,
+            namespace: namespace,
+          ).put('trace:${message.sourceKey}', jsonEncode(trace.toJson()));
+          if (result.outcome != InterpretOutcome.unknown) {
+            _db.execute(
+              "UPDATE v2_review_items SET status='resolved' WHERE namespace=? AND kind='template' AND json_extract(payload,'\$.sourceKey')=?",
+              [namespace, message.sourceKey],
+            );
+          }
           if (result.outcome == InterpretOutcome.matched) {
             _queue(message, result.facts, backfill: backfill);
           }
@@ -152,8 +176,9 @@ class SmsV2Pipeline {
                   ?.sourceKey ??
               unique.keys.first;
           _db.execute(
-            'INSERT OR IGNORE INTO v2_review_items '
-            '(namespace, review_id, kind, payload, status) VALUES (?, ?, ?, ?, ?)',
+            'INSERT INTO v2_review_items '
+            '(namespace, review_id, kind, payload, status) VALUES (?, ?, ?, ?, ?) '
+            'ON CONFLICT(namespace,review_id) DO UPDATE SET kind=excluded.kind,payload=excluded.payload,status=excluded.status',
             [
               namespace,
               '$source:$index',
@@ -210,7 +235,7 @@ class SmsV2Pipeline {
         },
       );
 
-  void _project(
+  Map<String, DecisionTrace> _project(
     List<SmsMessage> messages,
     List<Fact> incoming,
     List<ReviewItem> review, {
@@ -220,12 +245,13 @@ class SmsV2Pipeline {
       ..sort((a, b) => a.observedAt.compareTo(b.observedAt));
     final from = ordered.first.observedAt.subtract(const Duration(days: 120));
     final recent = _facts.since(from);
-    final knownEvents = _events.findByFactIds(recent.map((f) => f.factId));
+    final knownEvents = _events.contextSince(from);
     final instrumentsById = {
       for (final instrument in _instruments.list())
         instrument.instrumentId: instrument,
     };
     final instrumentIds = _facts.instrumentIdsSince(from);
+    final steps = <String, String>{};
     for (final fact in incoming) {
       final mention = fact.instrument;
       if (mention != null) {
@@ -257,6 +283,13 @@ class SmsV2Pipeline {
               backfill: backfill,
             );
             instrumentIds[fact.factId] = base.instrumentId;
+            steps[fact.factId] = resolution.created
+                ? 'created'
+                : mention.maskDigits == null
+                ? 'issuer_kind'
+                : mention.kind == null
+                ? 'issuer_mask'
+                : 'exact_key';
           case InstrumentReviewNeeded(:final reason):
             review.add(
               ReviewItem(
@@ -293,7 +326,20 @@ class SmsV2Pipeline {
       for (final event in [...result.created, ...result.updated])
         _events.upsert(event),
     ];
-    if (affected.isEmpty) return;
+    if (affected.isEmpty) {
+      return {
+        for (final message in messages)
+          message.sourceKey: DecisionTrace(
+            appVersion: appVersion,
+            engineVersion: engine.engineVersion,
+            bundleVersion: bundle.bundleVersion,
+            outcome: 'matched',
+            facts: incoming
+                .where((fact) => fact.sourceKey == message.sourceKey)
+                .toList(),
+          ),
+      };
+    }
     for (final event in affected) {
       _outbox.enqueue(
         'event',
@@ -315,9 +361,18 @@ class SmsV2Pipeline {
         if (fact != null) factsById[leg.factId] = fact;
       }
     }
+    final originalIds = {
+      for (final event in affected)
+        for (final leg in event.legs)
+          if (leg.role == LegRole.original) leg.factId,
+    };
     final projection = LedgerSnapshot.project(
       events: {
-        for (final event in [...knownEvents, ...affected]) event.eventId: event,
+        if (originalIds.isNotEmpty)
+          for (final event in knownEvents)
+            if (event.legs.any((leg) => originalIds.contains(leg.factId)))
+              event.eventId: event,
+        for (final event in affected) event.eventId: event,
       }.values,
       factsById: factsById,
       instrumentsById: instrumentsById,
@@ -359,5 +414,45 @@ class SmsV2Pipeline {
         backfill: backfill,
       );
     }
+    final eventByFact = {
+      for (final event in affected)
+        for (final leg in event.legs) leg.factId: event,
+    };
+    final bySource = <String, List<Fact>>{};
+    for (final fact in incoming) {
+      bySource.putIfAbsent(fact.sourceKey, () => []).add(fact);
+    }
+    return {
+      for (final message in messages)
+        for (final ownFacts in [bySource[message.sourceKey] ?? <Fact>[]])
+          for (final event in [
+            ownFacts
+                .map((fact) => eventByFact[fact.factId])
+                .whereType<Event>()
+                .firstOrNull,
+          ])
+            message.sourceKey: DecisionTrace(
+              appVersion: appVersion,
+              engineVersion: engine.engineVersion,
+              bundleVersion: bundle.bundleVersion,
+              outcome: 'matched',
+              ruleId: ownFacts.firstOrNull?.provenance.ruleId,
+              ruleVersion: ownFacts.firstOrNull?.provenance.ruleVersion,
+              facts: ownFacts,
+              instruments: [
+                for (final fact in ownFacts)
+                  if (instrumentIds[fact.factId] case final id?)
+                    (
+                      factId: fact.factId,
+                      instrumentId: id,
+                      step: steps[fact.factId] ?? 'stored',
+                    ),
+              ],
+              event: event,
+              category: event == null
+                  ? null
+                  : projection.categoryByEvent[event.eventId],
+            ),
+    };
   }
 }

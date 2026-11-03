@@ -13,6 +13,7 @@ import '../storage/ledger_store.dart';
 import '../storage/outbox_store.dart';
 import '../storage/schema.dart';
 import '../storage/sync_state_store.dart';
+import 'corrections_sync.dart';
 
 /// Pull changes and the next cursor commit in the same local transaction.
 class SyncPull {
@@ -202,6 +203,16 @@ class SyncPull {
         for (final result in body['corrections'] as List) {
           _state.put('correction:${result['caseId']}', jsonEncode(result));
         }
+        CorrectionsSync(
+          queue: OutboxStore(_db, namespace: namespace),
+          client: client,
+          baseUri: baseUri,
+          headers: headers,
+          accountIsCurrent: accountIsCurrent,
+        ).applyStatuses([
+          for (final status in body['corrections'] as List)
+            (status as Map).cast<String, Object?>(),
+        ]);
         _state.put('rules:latest', '${body['latestBundleVersion']}');
         _rebuildDisplay();
         _state.put('pull:cursor', body['cursor'] as String);

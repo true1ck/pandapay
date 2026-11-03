@@ -1,3 +1,4 @@
+import 'dart:convert';
 import 'package:pandapay_domain/pandapay_domain.dart' show Money, TxnRail;
 import 'package:pandapay_domain/sms_v2.dart' as v2;
 import 'package:pandapay_domain/sms_v2_category.dart';
@@ -109,7 +110,36 @@ class ProjectionWriter {
   }) {
     final existing = <String, TransactionEntry>{};
     final legacyBySource = <String, List<TransactionEntry>>{};
-    for (final raw in financial.entities(ledger.namespace, 'transactions')) {
+    final db = ledger.db;
+    db.execute(
+      "CREATE INDEX IF NOT EXISTS idx_financial_sms_v2_event ON financial_entities(namespace,json_extract(payload,'\$.event_id')) WHERE entity='transactions'",
+    );
+    final eventIds = snapshot.events
+        .map((event) => event.eventId)
+        .toSet()
+        .toList();
+    final sources = {
+      for (final event in snapshot.events)
+        if (factsById[event.eventId] case final fact?) fact.sourceKey,
+    }.toList();
+    final stored = <String, Map<String, dynamic>>{};
+    for (final (ids, expression) in [
+      (eventIds, "json_extract(payload,'\$.event_id')"),
+      (sources, 'source_key'),
+    ]) {
+      for (var offset = 0; offset < ids.length; offset += 400) {
+        final chunk = ids.skip(offset).take(400).toList();
+        final placeholders = List.filled(chunk.length, '?').join(',');
+        for (final row in db.select(
+          "SELECT id,payload FROM financial_entities WHERE namespace=? AND entity='transactions' AND $expression IN ($placeholders)",
+          [ledger.namespace, ...chunk],
+        )) {
+          stored[row['id'] as String] =
+              jsonDecode(row['payload'] as String) as Map<String, dynamic>;
+        }
+      }
+    }
+    for (final raw in stored.values) {
       final eventId = raw['event_id'];
       if (eventId is String) {
         existing[eventId] = TransactionEntry.fromJson(raw);
@@ -126,7 +156,6 @@ class ProjectionWriter {
     for (final e in snapshot.entries) {
       rowsByEvent.putIfAbsent(e.eventId, () => []).add(e);
     }
-    final db = ledger.db;
     financial.batch(() {
       db.execute('SAVEPOINT v2_projection');
       try {

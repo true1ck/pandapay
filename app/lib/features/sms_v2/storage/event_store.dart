@@ -120,6 +120,18 @@ WHERE e.namespace = ? AND json_extract(j.value, '\$.factId') IN ($marks)
     return list;
   }
 
+  /// Link context for recent facts in one indexed join, including events
+  /// whose printed date is older than their message receipt time.
+  List<Event> contextSince(DateTime observedAt) => [
+    for (final row in _db.select(
+      "SELECT DISTINCT e.payload FROM v2_events e, json_each(e.payload, '\$.legs') leg "
+      "JOIN v2_facts f ON f.namespace=e.namespace AND f.fact_id=json_extract(leg.value,'\$.factId') "
+      'WHERE e.namespace=? AND f.observed_at>=?',
+      [namespace, observedAt.toUtc().toIso8601String()],
+    ))
+      _decode(row['payload'] as String),
+  ];
+
   /// Open (`awaiting_leg`) events whose `occurredAt` is inside
   /// `[from, to]` (either may be null), oldest first.
   List<Event> listOpen({DateTime? from, DateTime? to}) => _list(

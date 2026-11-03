@@ -1329,17 +1329,26 @@ class FinancialStore {
     TransactionQuery? completeQuery,
     DateTime? at,
   }) {
-    final byEvent = <String, String>{};
-    for (final raw in entities(ns, 'transactions')) {
-      final eventId = raw['event_id'];
-      if (eventId is String) byEvent[eventId] = raw['id'] as String;
+    final remoteEvents = rows.where((row) => row.eventId != null && row.id != 'v2:${row.eventId}').map((row) => row.eventId!).toSet().toList();
+    if (remoteEvents.isNotEmpty) {
+      final byEvent = <String, String>{};
+      for (var offset = 0; offset < remoteEvents.length; offset += 400) {
+        final chunk = remoteEvents.skip(offset).take(400).toList();
+        final marks = List.filled(chunk.length, '?').join(',');
+        for (final row in database.db.select(
+          "SELECT id,json_extract(payload,'\$.event_id') AS event_id FROM financial_entities WHERE namespace=? AND entity='transactions' AND json_extract(payload,'\$.event_id') IN ($marks)",
+          [ns, ...chunk],
+        )) {
+          byEvent[row['event_id'] as String] = row['id'] as String;
+        }
+      }
+      rows = [
+        for (final row in rows)
+          if (byEvent[row.eventId] != null && byEvent[row.eventId] != row.id)
+            TransactionEntry.fromJson({...row.toJson(), 'id': byEvent[row.eventId]})
+          else row,
+      ];
     }
-    rows = [
-      for (final row in rows)
-        if (row.eventId != null && byEvent[row.eventId] != null && byEvent[row.eventId] != row.id)
-          TransactionEntry.fromJson({...row.toJson(), 'id': byEvent[row.eventId]})
-        else row,
-    ];
     var changed = false;
     final timestamp = (at ?? DateTime.now()).millisecondsSinceEpoch;
     _transaction(() {
