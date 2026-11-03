@@ -2,14 +2,23 @@
 -- Synthetic ids only; every row is rolled back.
 \set ON_ERROR_STOP on
 begin;
+do $$ begin
+  if not exists(select 1 from pg_roles where rolname='admin_api_runtime') then
+    create role admin_api_runtime login noinherit nosuperuser nocreatedb nocreaterole noreplication nobypassrls;
+  end if;
+end $$;
+grant pandapay_admin_api to admin_api_runtime;
 select gen_random_uuid()::text as admin_id, gen_random_uuid()::text as p1, gen_random_uuid()::text as p2,
        gen_random_uuid()::text as tester \gset
 insert into profiles(id) values (:'admin_id'::uuid), (:'p1'::uuid), (:'p2'::uuid), (:'tester'::uuid);
-insert into admin_users(id, is_active) values (:'admin_id'::uuid, true);
+insert into admin_users(id, email, role, is_active) values (:'admin_id'::uuid, 'sms-v2-fixture@example.invalid', 'owner', true);
 
--- Admin writes rule data and a bundle; the tester is registered.
-set local role app_user;
+-- Rehearse the authenticated private login, rather than a public-role stub.
+set local session authorization admin_api_runtime;
+set local role pandapay_admin_api;
 select set_config('app.user_id', :'admin_id', true);
+select set_config('pandapay.admin_actor', :'admin_id', true);
+select set_config('pandapay.admin_permission', 'learning.publish', true);
 insert into sms_v2_rules(rule_id, version, status, family, senders, body, created_by)
   values ('R-1', 1, 'active', 'card_spend', '{HDFCBK}', '{"id":"R-1"}', 'baseline');
 insert into sms_v2_rule_cohorts(rule_id, version, cohort) values ('R-1', 1, 'all');
@@ -32,8 +41,28 @@ do $$ begin
   exception when foreign_key_violation then null; end;
 end $$;
 
--- A normal profile cannot read or write any rule table.
+-- Possession of a read permission does not authorize publication or rollup.
+select set_config('pandapay.admin_permission', 'learning.read', true);
+do $$ begin
+  begin
+    insert into sms_v2_rules(rule_id,version,status,family,body,created_by)
+      values ('READ-ONLY',1,'draft','card_spend','{}','fixture');
+    raise exception 'read transaction published a rule';
+  exception when insufficient_privilege then null; end;
+  begin
+    perform pandapay.sms_v2_rollup_rule_stats();
+    raise exception 'read transaction ran rollup';
+  exception when insufficient_privilege then null; end;
+end $$;
+select set_config('pandapay.admin_permission', 'learning.publish', true);
+
+-- Forged GUCs on a public connection never confer admin authority.
+reset role;
+reset session authorization;
+set local role app_user;
 select set_config('app.user_id', :'p1', true);
+select set_config('pandapay.admin_actor', :'admin_id', true);
+select set_config('pandapay.admin_permission', 'learning.publish', true);
 do $$ declare n int; begin
   foreach n in array array[1] loop
     if (select count(*) from sms_v2_rules) <> 0 then raise exception 'rules visible to non-admin'; end if;
@@ -96,7 +125,8 @@ select set_config('app.user_id', :'admin_id', true);
 reset role;
 insert into sms_v2_rule_stats_profile_daily(day, profile_id, rule_id, rule_version, app_version, hits)
   values (current_date - 4, :'p1'::uuid, 'R-1', 1, '1.0.0', 3);
-set local role app_user;
+set local session authorization admin_api_runtime;
+set local role pandapay_admin_api;
 select set_config('app.user_id', :'admin_id', true);
 select pandapay.sms_v2_rollup_rule_stats();
 select pandapay.sms_v2_rollup_rule_stats();   -- idempotent
@@ -111,4 +141,5 @@ do $$ declare r record; begin
   if (select count(*) from sms_v2_rule_stats_profile_daily) <> 2 then raise exception 'recent profile rows lost'; end if;
 end $$;
 
+select 'sms_v2_rules ok' as result;
 rollback;

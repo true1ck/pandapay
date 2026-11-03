@@ -89,6 +89,15 @@ add('POST', '/admin/sms-rules/publish', 'learning.publish', true);
 add('POST', '/admin/sms-rules/:bundleVersion/rollback', 'learning.publish', true);
 add('POST', '/admin/sms-learning/cycle', 'learning.cycle', true);
 
+add('GET', '/admin/sms/v2/rules', 'learning.read');
+add('GET', '/admin/sms/v2/rules/:id', 'learning.read');
+add('GET', '/admin/sms/v2/rules/:id/candidate', 'learning.read');
+add('GET', '/admin/sms/v2/bundles', 'learning.read');
+add('PUT', '/admin/sms/v2/rules/:id/draft', 'learning.publish', true);
+add('POST', '/admin/sms/v2/rules/:id/publish', 'learning.publish', true);
+add('POST', '/admin/sms/v2/rules/:id/pause', 'learning.publish', true);
+add('POST', '/admin/sms/v2/rules/:id/rollback', 'learning.publish', true);
+
 const routeManifest = Object.freeze(definitions.map(([method, path, permission, freshMfa]) =>
   Object.freeze({ method, path, permission, freshMfa })
 ));

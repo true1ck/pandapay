@@ -7,9 +7,11 @@ const aiQueueRoute = require('../ai_queue_route');
 const smsLearning = require('../sms_learning');
 const smsLearningFeedbackRoute = require('../sms_learning_feedback_route');
 const smsRuleBundle = require('../sms_rule_bundle');
+const { registerPrivateRulesAdminRoutes } = require('../sms_v2/rules_admin_route');
 
 function registerAdminRoutes(api) {
   const { legacyApp, legacyDependencies } = api;
+  registerPrivateRulesAdminRoutes(api);
   registerInlineAdminRoutes(legacyApp, legacyDependencies);
   registerAdminReferralOperationsRoutes(legacyApp, legacyDependencies);
 const REWARD_UNITS = [

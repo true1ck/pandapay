@@ -7,7 +7,7 @@
  *
  *   node api/scripts/run_sms_v2_rule_jobs.js --admin-id <admin_users.id>
  *
- * Cron (UTC), on any host with DATABASE_URL and the signing key:
+ * Cron (UTC), on a private maintenance host with ADMIN_API_DATABASE_URL and the signing key:
  *   7 * * * *  cd /app/api && node scripts/run_sms_v2_rule_jobs.js --admin-id $SMS_V2_JOB_ADMIN_ID
  */
 function arg(name) {
@@ -20,13 +20,14 @@ async function main() {
   if (!adminId) { console.error('usage: run_sms_v2_rule_jobs.js --admin-id <uuid>'); process.exit(2); }
   const { signerFromEnv } = require('../src/sms_v2/signer');
   const signer = signerFromEnv();
-  const { withUserClient, pool } = require('../src/db');
-  const { createPgStore } = require('../src/sms_v2/rules_store');
+  if (!signer) { console.error('SMS_RULES_SIGNING_KEY and SMS_RULES_KEY_ID are required'); process.exit(2); }
+  const { openRuleAdminStore } = require('../src/sms_v2/admin_store');
   const { runRuleJobs } = require('../src/sms_v2/rule_stats');
-  const store = createPgStore({ withUserClient });
-  const out = await runRuleJobs({ store, signer, adminId });
-  console.log(JSON.stringify(out));
-  await pool.end();
+  const { store, pool } = await openRuleAdminStore();
+  try {
+    const out = await runRuleJobs({ store, signer, adminId });
+    console.log(JSON.stringify(out));
+  } finally { await pool.end(); }
 }
 
 main().catch((err) => { console.error('rule jobs failed:', err && (err.code || err.message)); process.exit(1); });

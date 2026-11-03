@@ -8,7 +8,7 @@
  * Every rule becomes version 1 on cohort `all`, the non-rule parts (senders,
  * link rules, ...) are stored, and signed bundles are minted. Needs
  * SMS_RULES_SIGNING_KEY and SMS_RULES_KEY_ID. Re-running with the same input
- * changes nothing. Point DATABASE_URL at a local database to test.
+ * changes nothing. Set ADMIN_API_DATABASE_URL to the dedicated private runtime credential.
  */
 const fs = require('node:fs');
 
@@ -27,14 +27,14 @@ async function main() {
   const { signerFromEnv } = require('../src/sms_v2/signer');
   const signer = signerFromEnv();
   if (!signer) { console.error('SMS_RULES_SIGNING_KEY and SMS_RULES_KEY_ID are required'); process.exit(2); }
-  const { withUserClient, pool } = require('../src/db');
-  const { createPgStore } = require('../src/sms_v2/rules_store');
+  const { openRuleAdminStore } = require('../src/sms_v2/admin_store');
   const { importBundle } = require('../src/sms_v2/rules_admin_route');
   const bundle = JSON.parse(fs.readFileSync(input, 'utf8'));
-  const store = createPgStore({ withUserClient });
-  const result = await store.tx(adminId, (s) => importBundle(s, bundle, { signer, adminId }));
-  console.log(JSON.stringify({ rulesInserted: result.rulesInserted, bundlesMinted: result.minted.map((m) => ({ bundleVersion: m.bundleVersion, cohort: m.cohort })) }));
-  await pool.end();
+  const { store, pool } = await openRuleAdminStore();
+  try {
+    const result = await store.tx(adminId, (s) => importBundle(s, bundle, { signer, adminId }));
+    console.log(JSON.stringify({ rulesInserted: result.rulesInserted, bundlesMinted: result.minted.map((m) => ({ bundleVersion: m.bundleVersion, cohort: m.cohort })) }));
+  } finally { await pool.end(); }
 }
 
 main().catch((err) => { console.error('import failed:', err && (err.code || err.message)); process.exit(1); });

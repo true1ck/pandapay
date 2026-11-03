@@ -6,7 +6,6 @@
 //   registerRules(app, deps)
 //     deps.requireSmsV2   404 unless the sms_pipeline_v2_enabled flag is on (WP-08)
 //     deps.requireMember  authenticates the caller and sets req.userId (falls back to deps.requireAuth)
-//     deps.requireAdmin   existing admin authority check
 //     deps.withUserClient RLS session helper from db.js (or deps.store for a custom store)
 //     deps.hooks.security optional {verifyAttestation(req), checkEntitlement(req)}; default allow
 //     deps.signer         optional; defaults to signerFromEnv() (throws in production without a key)
@@ -17,7 +16,6 @@ const { signerFromEnv } = require('./signer');
 const { cohortFor, bundleForServing } = require('./bundle_builder');
 const { createPgStore } = require('./rules_store');
 const { createStatsHandler } = require('./rule_stats');
-const { registerRulesAdminRoutes } = require('./rules_admin_route');
 
 const denied = (v) => v === false || (v && typeof v === 'object' && v.ok === false);
 
@@ -71,7 +69,6 @@ function registerRules(app, deps) {
 
   app.get('/sms/v2/rules', deps.requireSmsV2, requireMember, createRulesHandler({ store, getSigner, security, now }));
   app.post('/sms/v2/rule-stats\\:batch', deps.requireSmsV2, requireMember, createStatsHandler({ store }));
-  registerRulesAdminRoutes(app, { ...deps, store, getSigner, now });
 
   return {
     latestBundleVersion: async (profileId) => store.tx(profileId, async (s) => {

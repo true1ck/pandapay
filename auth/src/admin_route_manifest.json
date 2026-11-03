@@ -550,5 +550,53 @@
     "path": "/admin/sms-learning/cycle",
     "permission": "learning.cycle",
     "freshMfa": true
+  },
+  {
+    "method": "GET",
+    "path": "/admin/sms/v2/rules",
+    "permission": "learning.read",
+    "freshMfa": false
+  },
+  {
+    "method": "GET",
+    "path": "/admin/sms/v2/rules/:id",
+    "permission": "learning.read",
+    "freshMfa": false
+  },
+  {
+    "method": "GET",
+    "path": "/admin/sms/v2/rules/:id/candidate",
+    "permission": "learning.read",
+    "freshMfa": false
+  },
+  {
+    "method": "GET",
+    "path": "/admin/sms/v2/bundles",
+    "permission": "learning.read",
+    "freshMfa": false
+  },
+  {
+    "method": "PUT",
+    "path": "/admin/sms/v2/rules/:id/draft",
+    "permission": "learning.publish",
+    "freshMfa": true
+  },
+  {
+    "method": "POST",
+    "path": "/admin/sms/v2/rules/:id/publish",
+    "permission": "learning.publish",
+    "freshMfa": true
+  },
+  {
+    "method": "POST",
+    "path": "/admin/sms/v2/rules/:id/pause",
+    "permission": "learning.publish",
+    "freshMfa": true
+  },
+  {
+    "method": "POST",
+    "path": "/admin/sms/v2/rules/:id/rollback",
+    "permission": "learning.publish",
+    "freshMfa": true
   }
 ]

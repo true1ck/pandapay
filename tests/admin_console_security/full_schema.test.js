@@ -53,6 +53,19 @@ test('private admin migrations coexist with the complete clean application schem
     '-h', socket, '-p', '55487', '-U', 'postgres', '-d', productName,
     '-X', '-q', '-v', 'ON_ERROR_STOP=1', '-f', path.resolve(__dirname, '../../db/tests/20261021143000_referral_operator_controls_test.sql'),
   ], { stdio: 'pipe' });
+  // The SMS v2 service must use these same fully migrated private roles.
+  for (const name of ['20261110120000_sms_v2_rules_test.sql', '20261111120000_sms_v2_core_test.sql']) {
+    execFileSync('psql', ['-h', socket, '-p', '55487', '-U', 'postgres', '-d', productName,
+      '-X', '-q', '-v', 'ON_ERROR_STOP=1', '-f', path.resolve(__dirname, '../../db/tests', name)], { stdio: 'pipe' });
+  }
+  execFileSync(process.execPath, ['--test', 'api/test/sms_v2/rules_pg.test.js', 'api/test/sms_v2/facts_pg.test.js'], {
+    cwd: path.resolve(__dirname, '../..'), stdio: 'pipe',
+    env: {
+      ...process.env,
+      SMS_V2_TEST_DATABASE_URL: `postgresql://postgres@localhost/${productName}?host=${encodeURIComponent(socket)}&port=55487`,
+      SMS_V2_TEST_ADMIN_DATABASE_URL: `postgresql://admin_api_runtime@localhost/${productName}?host=${encodeURIComponent(socket)}&port=55487`,
+    },
+  });
   const actor = crypto.randomUUID();
   let currentActor = actor;
   await product.query("INSERT INTO admin_users(id,email,role) VALUES($1,'schema-owner@example.test','owner')", [actor]);

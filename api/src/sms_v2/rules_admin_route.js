@@ -7,6 +7,9 @@
 const fs = require('node:fs');
 const path = require('node:path');
 const express = require('express');
+const { createPgStore } = require('./rules_store');
+const { createRequireSmsV2 } = require('./guard');
+const { signerFromEnv } = require('./signer');
 const { validateRequest, validateBundle } = require('./contracts');
 const {
   COHORT_RANK, ruleManifest, partsOf, buildManifest, candidateBundle, contentSha256, mintBundles, PARTS_KEY,
@@ -261,15 +264,14 @@ async function ruleDetail(s, ruleId, now) {
 
 // ---------- routes ----------
 
-function registerRulesAdminRoutes(app, deps) {
-  const { requireSmsV2, requireAdmin, store, getSigner, getGates = loadGates, now = () => new Date() } = deps;
-  const router = express.Router();
-  router.use(requireSmsV2, requireAdmin);
+function registerRuleHandlers(router, deps) {
+  const { storeFor, getSigner, getGates = loadGates, now = () => new Date() } = deps;
 
   const wrap = (fn) => async (req, res) => {
     try {
       await fn(req, res);
     } catch (err) {
+      if (err && err.code === 'ADMIN_PERMISSION_DENIED') return res.status(403).json({ error: 'admin_permission_required' });
       if (err instanceof HttpError) return res.status(err.status).json({ error: err.code, ...(err.detail ? { detail: err.detail } : {}) });
       if (err && err.code === 'signing_unavailable') return res.status(503).json({ error: 'signing_unavailable' });
       if (err && err.code === 'bundle_invalid') return res.status(422).json({ error: 'bundle_invalid', detail: JSON.stringify(err.details) });
@@ -284,22 +286,22 @@ function registerRulesAdminRoutes(app, deps) {
   const ctx = (req) => ({ signer: getSigner(), adminId: req.userId, now: now() });
 
   router.get('/rules', wrap(async (req, res) => {
-    const rules = await store.tx(req.userId, (s) => listRules(s, req.query, now()));
+    const rules = await storeFor(req).tx(req.userId, (s) => listRules(s, req.query, now()));
     res.json({ rules });
   }));
   router.get('/rules/:id', wrap(async (req, res) => {
-    res.json(await store.tx(req.userId, (s) => ruleDetail(s, req.params.id, now())));
+    res.json(await storeFor(req).tx(req.userId, (s) => ruleDetail(s, req.params.id, now())));
   }));
   router.put('/rules/:id/draft', wrap(async (req, res) => {
     validate('admin_rule_draft', req.body);
     if (req.body.id !== req.params.id) throw new HttpError(400, 'rule_id_mismatch');
-    res.json(await store.tx(req.userId, (s) => saveDraft(s, req.params.id, req.body, ctx(req))));
+    res.json(await storeFor(req).tx(req.userId, (s) => saveDraft(s, req.params.id, req.body, ctx(req))));
   }));
   router.get('/rules/:id/candidate', wrap(async (req, res) => {
     const version = Number(req.query.version);
     const cohort = String(req.query.cohort || '');
     if (!Number.isInteger(version) || !(cohort in COHORT_RANK)) throw new HttpError(400, 'candidate_query_invalid');
-    const out = await store.tx(req.userId, async (s) => {
+    const out = await storeFor(req).tx(req.userId, async (s) => {
       const row = await s.getRule(req.params.id, version);
       if (!row) throw new HttpError(404, 'rule_version_not_found');
       const parts = await s.getParts();
@@ -313,27 +315,54 @@ function registerRulesAdminRoutes(app, deps) {
   }));
   router.post('/rules/:id/publish', wrap(async (req, res) => {
     validate('admin_rule_publish', req.body);
-    res.json(await store.tx(req.userId, (s) => publishVersion(s, req.params.id, req.body, { ...ctx(req), gates: getGates() })));
+    res.json(await storeFor(req).tx(req.userId, (s) => publishVersion(s, req.params.id, req.body, { ...ctx(req), gates: getGates() })));
   }));
   router.post('/rules/:id/pause', wrap(async (req, res) => {
     validate('admin_rule_pause', req.body);
     const version = req.query.version === undefined ? undefined : Number(req.query.version);
     if (version !== undefined && !Number.isInteger(version)) throw new HttpError(400, 'version_invalid');
-    res.json(await store.tx(req.userId, (s) => pauseVersion(s, req.params.id, { reason: req.body.reason, version }, ctx(req))));
+    res.json(await storeFor(req).tx(req.userId, (s) => pauseVersion(s, req.params.id, { reason: req.body.reason, version }, ctx(req))));
   }));
   router.post('/rules/:id/rollback', wrap(async (req, res) => {
     validate('admin_rule_rollback', req.body);
-    res.json(await store.tx(req.userId, (s) => rollbackRule(s, req.params.id, req.body, ctx(req))));
+    res.json(await storeFor(req).tx(req.userId, (s) => rollbackRule(s, req.params.id, req.body, ctx(req))));
   }));
   router.get('/bundles', wrap(async (req, res) => {
-    const rows = await store.tx(req.userId, (s) => s.listBundles(100));
+    const rows = await storeFor(req).tx(req.userId, (s) => s.listBundles(100));
     res.json({ bundles: rows.map((b) => ({ bundleVersion: b.bundleVersion, cohort: b.cohort, status: b.status, manifest: b.manifest, sha256: b.sha256, keyId: b.keyId, publishedBy: b.publishedBy, createdAt: b.createdAt })) });
   }));
 
+}
+
+// Explicit standalone adapter for focused service tests. Production registers
+// these handlers exclusively through the private admin registrar below.
+function registerRulesAdminRoutes(app, deps) {
+  const router = express.Router();
+  router.use(deps.requireSmsV2, deps.requireAdmin);
+  registerRuleHandlers(router, { ...deps, storeFor: () => deps.store });
   app.use('/admin/sms/v2', router);
 }
 
+function registerPrivateRulesAdminRoutes(api, deps = {}) {
+  let signer = deps.signer;
+  if (signer === undefined) {
+    try { signer = signerFromEnv(); } catch { signer = null; }
+  }
+  const requestStores = new WeakMap();
+  const router = {};
+  for (const method of ['get', 'put', 'post']) {
+    router[method] = (path, handler) => api.route(method, `/admin/sms/v2${path}`, async (req, res, ctx) => {
+      req.userId = req.admin.userId;
+      const withPrivateClient = (_actorId, operation) => ctx.withAdminClient(operation);
+      requestStores.set(req, deps.store || createPgStore({ withUserClient: withPrivateClient }));
+      const requireSmsV2 = createRequireSmsV2({ withUserClient: withPrivateClient, cacheMs: 0 });
+      return requireSmsV2(req, res, () => handler(req, res));
+    });
+  }
+  registerRuleHandlers(router, { ...deps, getSigner: () => signer, storeFor: req => requestStores.get(req) });
+}
+
 module.exports = {
-  registerRulesAdminRoutes, lintPattern, checkGoldenReport, loadGates, importBundle, saveDraft, publishVersion,
+  registerRulesAdminRoutes, registerPrivateRulesAdminRoutes, lintPattern, checkGoldenReport, loadGates, importBundle, saveDraft, publishVersion,
   pauseVersion, rollbackRule, listRules, ruleDetail, HttpError, PARTS_KEY, ruleManifest,
 };

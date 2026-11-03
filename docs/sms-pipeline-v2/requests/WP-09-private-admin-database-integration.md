@@ -22,3 +22,8 @@ The later failure is expected under the current security boundary. `202610301000
 - Run both rule-service and ingestion database tests and the SQL tests against every migration, then update the WP-09 handoff.
 
 This is an orchestrator integration request for WP-09/WP-13. It does not approve changes to applied migrations, frozen wire contracts, or the legacy public admin security policy.
+
+
+## Resolution
+
+Implemented locally on `codex/sms-v2-wp09-admin`. Admin HTTP handlers, imports and jobs use authenticated private transactions. A new additive migration supplies private grants and restrictive permission policies for v2 rule tables and protects the rollup. The rule and ingestion Postgres tests and both SQL tests pass on the complete product schema. The existing private security CI rehearsal now includes these tests. See the WP-09 handoff for exact verification.
