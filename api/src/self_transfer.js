@@ -112,7 +112,7 @@ async function applySelfTransferRuleHistorically(
        FROM transactions t
        JOIN transaction_observations o
          ON o.transaction_id=t.id AND o.profile_id=t.profile_id
-      WHERE t.profile_id=$1
+      WHERE t.profile_id=$1 AND t.status='active'
         AND t.entry_kind='spend'
         AND t.instrument='upi_bank'
         AND o.source IN ('sms','sms_bulk')

@@ -60,7 +60,7 @@ app.get('/transactions/:id/splits', requireAuth, async (req, res) => {
   }
   try {
     const result = await withUserClient(req.userId, async (client) => {
-      const owns = await client.query(`SELECT id FROM transactions WHERE id = $1 AND profile_id = $2`, [
+      const owns = await client.query(`SELECT id FROM transactions WHERE id = $1 AND profile_id = $2 AND status = 'active'`, [
         req.params.id,
         req.userId,
       ]);
@@ -118,7 +118,7 @@ app.put('/transactions/:id/splits', requireAuth, async (req, res) => {
   try {
     const result = await withUserClient(req.userId, async (client) => {
       const parent = await client.query(
-        `SELECT id, amount_inr FROM transactions WHERE id = $1 AND profile_id = $2 FOR UPDATE`,
+        `SELECT id, amount_inr FROM transactions WHERE id = $1 AND profile_id = $2 AND status = 'active' FOR UPDATE`,
         [req.params.id, req.userId]
       );
       if (parent.rows.length === 0) return { status: 404, error: 'transaction not found' };
