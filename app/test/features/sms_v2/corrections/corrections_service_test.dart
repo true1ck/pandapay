@@ -9,10 +9,13 @@ import 'package:pandapay/features/sms_v2/corrections/corrections_service.dart';
 import 'package:pandapay/features/sms_v2/pipeline/trace.dart';
 import 'package:pandapay/features/sms_v2/storage/event_store.dart';
 import 'package:pandapay/features/sms_v2/storage/fact_store.dart';
+import 'package:pandapay/features/sms_v2/storage/instrument_store.dart';
 import 'package:pandapay/features/sms_v2/storage/ledger_store.dart';
 import 'package:pandapay/features/sms_v2/storage/outbox_store.dart';
 import 'package:pandapay/features/sms_v2/storage/schema.dart';
 import 'package:pandapay_domain/sms_v2.dart';
+import 'package:pandapay/features/sms_v2/ledger/projection_writer.dart';
+import 'package:pandapay_domain/sms_v2_ledger.dart';
 import 'package:sqlite3/sqlite3.dart';
 
 void main() {
@@ -61,6 +64,16 @@ void main() {
               )
               as Map)
           .cast<String, Object?>(),
+    );
+    ProjectionWriter(financial, LedgerStore(db.db, namespace: 'user:a')).write(
+      LedgerSnapshot.project(
+        events: [event],
+        factsById: {fact.factId: fact},
+        instrumentsById: {},
+        bundle: bundle,
+      ),
+      factsById: {fact.factId: fact},
+      instrumentsById: {},
     );
     service = CorrectionsService(
       financial: financial,
@@ -180,6 +193,10 @@ void main() {
   test(
     'not-financial correction removes money and creates a template ignore rule',
     () {
+      expect(
+        LedgerStore(db.db, namespace: 'user:a').forEvent(event.eventId),
+        hasLength(1),
+      );
       final change = correction(CorrectionKind.notFinancial, {});
       service.apply(change);
       expect(
@@ -195,6 +212,163 @@ void main() {
           body: change.message!.body,
         ),
         isTrue,
+      );
+    },
+  );
+
+  test('changing a purchase category reprojects its linked refund too', () {
+    final json = fact.toJson();
+    final refundFact = Fact.fromJson({
+      ...json,
+      'factId': 'f' * 64,
+      'sourceKey': 'sms:refund',
+      'attrs': <String, Object?>{
+        ...(json['attrs'] as Map).cast<String, Object?>(),
+        'direction': 'credit',
+        'purpose': 'refund',
+      },
+    });
+    FactStore(db.db, namespace: 'user:a').insert(refundFact);
+    final refund = Event(
+      eventId: refundFact.factId,
+      type: EventType.refund,
+      status: EventStatus.complete,
+      legs: [
+        EventLeg(factId: refundFact.factId, role: LegRole.reversal),
+        EventLeg(factId: fact.factId, role: LegRole.original),
+      ],
+      confidence: .99,
+      occurredAt: fact.effectiveAt,
+      amountMinor: fact.amounts.first.minor,
+    );
+    EventStore(db.db, namespace: 'user:a').upsert(refund);
+    service.apply(
+      correction(CorrectionKind.wrongCategory, {
+        'merchantKey': 'SWIGGY',
+        'category': 'groceries',
+      }),
+    );
+    expect(
+      LedgerStore(
+        db.db,
+        namespace: 'user:a',
+      ).categoryDecisions()[refund.eventId]?.slug,
+      'groceries',
+    );
+  });
+
+  test('date and merchant user facts change the projected transaction', () {
+    service.apply(
+      correction(CorrectionKind.wrongDate, {
+        'occurredAt': '2026-10-31T18:30:00Z',
+      }),
+    );
+    final saved = financial
+        .entities('user:a', 'transactions')
+        .map(TransactionEntry.fromJson)
+        .single;
+    expect(saved.occurredAt, DateTime.utc(2026, 10, 31, 18, 30));
+    final changed = EventStore(db.db, namespace: 'user:a').get(event.eventId)!;
+    final money = changed.legs.last.factId;
+    service.apply(
+      SmsCorrection(
+        id: 'merchant-correction',
+        sourceKey: FactStore(db.db, namespace: 'user:a').get(money)!.sourceKey,
+        kind: CorrectionKind.wrongMerchant,
+        corrected: {'merchantName': 'SYNTHETIC STORE'},
+        trace: trace,
+        factIds: [money],
+        eventId: event.eventId,
+      ),
+    );
+    expect(
+      financial
+          .entities('user:a', 'transactions')
+          .map(TransactionEntry.fromJson)
+          .single
+          .merchantName,
+      'SYNTHETIC STORE',
+    );
+  });
+
+  test(
+    'wrong-kind, explicit link and duplicate corrections keep stable identity',
+    () {
+      service.apply(
+        correction(CorrectionKind.wrongKind, {'eventType': 'income'}),
+      );
+      expect(
+        financial
+            .entities('user:a', 'transactions')
+            .map(TransactionEntry.fromJson)
+            .single
+            .entryKind,
+        TxnEntryKind.income,
+      );
+      service.apply(
+        SmsCorrection(
+          id: 'unlink',
+          sourceKey: fact.sourceKey,
+          kind: CorrectionKind.wrongLink,
+          corrected: {
+            'legs': [
+              EventLeg(factId: fact.factId, role: LegRole.creditLeg).toJson(),
+            ],
+          },
+          trace: trace,
+          factIds: [fact.factId],
+          eventId: event.eventId,
+        ),
+      );
+      expect(
+        EventStore(db.db, namespace: 'user:a').get(event.eventId)!.legs,
+        hasLength(1),
+      );
+      service.apply(correction(CorrectionKind.duplicate, {}));
+      expect(
+        LedgerStore(db.db, namespace: 'user:a').forEvent(event.eventId),
+        isEmpty,
+      );
+      expect(
+        financial
+            .entities('user:a', 'transactions')
+            .map(TransactionEntry.fromJson)
+            .single
+            .status,
+        'ignored',
+      );
+    },
+  );
+
+  test(
+    'instrument reassignment is account scoped and updates the ledger endpoint',
+    () {
+      final instrument = Instrument(
+        instrumentId: '00000000-0000-4000-8000-000000000001',
+        kind: InstrumentKind.bankAccount,
+        issuerSlug: 'synthetic',
+        maskDigits: '1234',
+        displayName: 'Synthetic account',
+        status: InstrumentStatus.confirmed,
+        firstSeenAt: fact.observedAt,
+        lastSeenAt: fact.observedAt,
+        evidenceCount: 1,
+      );
+      InstrumentStore(db.db, namespace: 'user:b').upsert(instrument);
+      final change = correction(CorrectionKind.wrongInstrument, {
+        'instrumentId': instrument.instrumentId,
+      });
+      expect(() => service.apply(change), throwsArgumentError);
+      InstrumentStore(db.db, namespace: 'user:a').upsert(instrument);
+      service.apply(change);
+      expect(
+        (LedgerStore(
+                  db.db,
+                  namespace: 'user:a',
+                ).forEvent(event.eventId).single.from
+                as InstrumentEndpoint)
+            .instrumentId,
+        instrument.instrumentId,
       );
     },
   );

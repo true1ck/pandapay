@@ -48,6 +48,55 @@ void main() {
     for (final f in fs) f.factId: f,
   };
 
+  test(
+    'linked refund follows the stable anchor after its money fact is corrected',
+    () {
+      final corrected = h.debit(
+        'purchase',
+        sourceKey: 'sms:corrected-purchase',
+        20000,
+        at: at.toIso8601String(),
+        inst: h.hdfcCard,
+        counterparty: h.party(name: 'SWIGGY', kind: 'merchant'),
+      );
+      final purchase = event(
+        EventType.purchase,
+        [debit, corrected],
+        roles: [LegRole.original, LegRole.debitLeg],
+        status: EventStatus.userConfirmed,
+      );
+      final refund = event(
+        EventType.refund,
+        [credit, debit],
+        roles: [LegRole.reversal, LegRole.original],
+      );
+      final bundle = RuleBundle(
+        bundleVersion: 0,
+        createdAt: at,
+        expiresAt: at.add(const Duration(days: 1)),
+        minEngineVersion: '2.0.0',
+        taxonomyVersion: 1,
+      );
+      final snapshot = LedgerSnapshot.project(
+        events: [purchase, refund],
+        factsById: facts([debit, corrected, credit]),
+        instrumentsById: h.allInstruments,
+        bundle: bundle,
+        lockedCategories: {purchase.eventId: dining},
+      );
+      expect(snapshot.categoryByEvent[refund.eventId]?.slug, 'dining');
+      expect(
+        snapshot
+            .totals(
+              at.subtract(const Duration(days: 1)),
+              at.add(const Duration(days: 1)),
+            )
+            .byCategory,
+        {'dining': 10000},
+      );
+    },
+  );
+
   test('each event type follows the contract totals classification', () {
     const spend = {
       EventType.purchase,
