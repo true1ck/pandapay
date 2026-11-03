@@ -1,0 +1,143 @@
+[
+  {
+    "id": "WAL-BILLPAY-BILL-01",
+    "version": 1,
+    "family": "bill_pay_receipt",
+    "senders": [
+      "TATNEU",
+      "PAYZPP"
+    ],
+    "priority": 600,
+    "match": {
+      "pattern": "\\bbill payment (?:of )?(?:rs\\.?|inr|₹)\\s*(?<amt>[\\d,]+(?:\\.\\d{1,2})?) (?:for|to|towards) (?<biller>[^.\\n]+?) (?:is |was |has been )?(?:successful|successfully)",
+      "flags": "is",
+      "rejectAny": [
+        "failed",
+        "unsuccessful",
+        "pending"
+      ]
+    },
+    "emit": [
+      {
+        "factType": "movement",
+        "attrs": {
+          "direction": "debit",
+          "purpose": "bill_payment",
+          "rail": "unknown",
+          "evidenceOnly": true
+        },
+        "amounts": [
+          {
+            "role": "posted",
+            "from": "amt",
+            "unit": "INR"
+          }
+        ],
+        "counterparty": {
+          "nameFrom": "biller",
+          "kind": "merchant",
+          "transforms": [
+            "sanitizeNarration"
+          ]
+        }
+      }
+    ],
+    "confidence": 0.93,
+    "examples": [
+      {
+        "sender": "VM-TATNEU-S",
+        "body": "Your bill payment of Rs. 927.00 for Goa Electricity is successful. Ref 112233445566. - Tata Neu",
+        "expectFactTypes": [
+          "movement"
+        ]
+      },
+      {
+        "sender": "AD-PAYZPP",
+        "body": "PayZapp: Bill payment of Rs 649.00 for JioFiber was successful.",
+        "expectFactTypes": [
+          "movement"
+        ]
+      },
+      {
+        "sender": "VM-TATNEU-S",
+        "body": "Your Goa Electricity bill of Rs. 927.00 is ready. Pay by 2026-11-09 to avoid late charges - Tata Neu",
+        "expectFactTypes": []
+      }
+    ],
+    "status": "active",
+    "createdBy": "baseline",
+    "updatedAt": "2026-11-03T00:00:00Z"
+  },
+  {
+    "id": "WAL-BILLPAY-CARD-01",
+    "version": 1,
+    "family": "bill_pay_receipt",
+    "senders": [
+      "TATNEU",
+      "PAYZPP"
+    ],
+    "priority": 700,
+    "match": {
+      "pattern": "\\bbill payment (?:of )?(?:rs\\.?|inr|₹)\\s*(?<amt>[\\d,]+(?:\\.\\d{1,2})?) (?:for|to|towards) (?<biller>[^.\\n]+?) (?:is |was |has been )?(?:successful|successfully)",
+      "flags": "is",
+      "requireAll": [
+        "credit card"
+      ],
+      "rejectAny": [
+        "failed",
+        "unsuccessful",
+        "pending"
+      ]
+    },
+    "emit": [
+      {
+        "factType": "movement",
+        "attrs": {
+          "direction": "debit",
+          "purpose": "card_payment",
+          "rail": "unknown",
+          "evidenceOnly": true
+        },
+        "amounts": [
+          {
+            "role": "posted",
+            "from": "amt",
+            "unit": "INR"
+          }
+        ],
+        "counterparty": {
+          "nameFrom": "biller",
+          "kind": "merchant",
+          "transforms": [
+            "sanitizeNarration"
+          ]
+        }
+      }
+    ],
+    "confidence": 0.95,
+    "examples": [
+      {
+        "sender": "VM-TATNEU-S",
+        "body": "Your bill payment of Rs. 8,331.00 for HDFC Credit Card is successful. Ref 998877665544. - Tata Neu",
+        "expectFactTypes": [
+          "movement"
+        ]
+      },
+      {
+        "sender": "AD-PAYZPP",
+        "body": "PayZapp: Bill payment of Rs 4,200.00 for ICICI Bank Credit Card was successful.",
+        "expectFactTypes": [
+          "movement"
+        ]
+      },
+      {
+        "sender": "VM-TATNEU-S",
+        "body": "Your bill payment of Rs. 8,331.00 for HDFC Credit Card has failed. Please retry. - Tata Neu",
+        "expectFactTypes": []
+      }
+    ],
+    "status": "active",
+    "createdBy": "baseline",
+    "updatedAt": "2026-11-03T00:00:00Z"
+  }
+]

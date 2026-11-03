@@ -1,0 +1,126 @@
+[
+  {
+    "id": "CPP-PAYTM-TOPUP",
+    "vpaPattern": "^add-?money@",
+    "namePattern": "^(?:PAYTM(?: PAYMENTS)? WALLET|ADD MONEY TO PAYTM)",
+    "purpose": "wallet_topup",
+    "targetInstrument": {
+      "kind": "wallet",
+      "issuerSlug": "paytm"
+    }
+  },
+  {
+    "id": "CPP-PHONEPE-TOPUP",
+    "vpaPattern": "^phonepe-?wallet@",
+    "namePattern": "^(?:PHONEPE WALLET|ADD MONEY TO PHONEPE)",
+    "purpose": "wallet_topup",
+    "targetInstrument": {
+      "kind": "wallet",
+      "issuerSlug": "phonepe"
+    }
+  },
+  {
+    "id": "CPP-MOBIKWIK-TOPUP",
+    "vpaPattern": "^mobikwik-?(?:wallet|addmoney)@",
+    "namePattern": "^(?:MOBIKWIK WALLET|ADD MONEY TO MOBIKWIK)",
+    "purpose": "wallet_topup",
+    "targetInstrument": {
+      "kind": "wallet",
+      "issuerSlug": "mobikwik"
+    }
+  },
+  {
+    "id": "CPP-FREECHARGE-TOPUP",
+    "vpaPattern": "^freecharge-?(?:wallet|addmoney)@",
+    "namePattern": "^(?:FREECHARGE WALLET|ADD MONEY TO FREECHARGE)",
+    "purpose": "wallet_topup",
+    "targetInstrument": {
+      "kind": "wallet",
+      "issuerSlug": "freecharge"
+    }
+  },
+  {
+    "id": "CPP-ZOMATO-MONEY-TOPUP",
+    "vpaPattern": "^zomato-?money@",
+    "namePattern": "^ZOMATO MONEY",
+    "purpose": "wallet_topup",
+    "targetInstrument": {
+      "kind": "wallet",
+      "issuerSlug": "zomato_money"
+    }
+  },
+  {
+    "id": "CPP-PLUXEE-TOPUP",
+    "vpaPattern": null,
+    "namePattern": "^(?:PLUXEE|SODEXO) (?:WALLET|CARD|MEAL)",
+    "purpose": "wallet_topup",
+    "targetInstrument": {
+      "kind": "wallet",
+      "issuerSlug": "pluxee"
+    }
+  },
+  {
+    "id": "CPP-AMAZONPAY-TOPUP",
+    "vpaPattern": "^amazonpay@",
+    "namePattern": "^AMAZON PAY (?:WALL|IN E)",
+    "purpose": "wallet_topup",
+    "targetInstrument": {
+      "kind": "wallet",
+      "issuerSlug": "amazonpay"
+    }
+  },
+  {
+    "id": "CPP-CRED",
+    "vpaPattern": "^cred\\.?club@",
+    "namePattern": "^CRED(?: CLUB)?$",
+    "purpose": "card_payment",
+    "targetInstrument": {
+      "kind": "credit_card"
+    }
+  },
+  {
+    "id": "CPP-CHEQ",
+    "vpaPattern": "^cheq[\\w.-]*@",
+    "namePattern": "^CHEQ(?: DIGITAL)?",
+    "purpose": "card_payment",
+    "targetInstrument": {
+      "kind": "credit_card"
+    }
+  },
+  {
+    "id": "CPP-BBPS-BILLDESK-CARD",
+    "vpaPattern": "^(?:bbps|billdesk)[\\w.-]*(?:creditcard|ccbill|cc)[\\w.-]*@",
+    "namePattern": "^(?:BBPS|BILL ?DESK)\\b[^\\n]{0,30}?\\b(?:CREDIT ?CARD|CC)\\b",
+    "purpose": "card_payment",
+    "targetInstrument": {
+      "kind": "credit_card"
+    }
+  },
+  {
+    "id": "CPP-BANK-CREDIT-CARD",
+    "vpaPattern": null,
+    "namePattern": "^(?:[A-Z&.-]{2,20} ){1,3}(?:BANK )?(?:CREDIT ?CARD|CC)(?: (?:BILL(?: ?PAY(?:MENT)?)?|PAYMENT|REPAYMENT|PAY))?$",
+    "purpose": "card_payment",
+    "targetInstrument": {
+      "kind": "credit_card"
+    }
+  },
+  {
+    "id": "CPP-CARD-ISSUER-PAYEE",
+    "vpaPattern": null,
+    "namePattern": "^(?:SBI CARDS?(?: (?:AND|&) PAYMENT SERVICES(?: LTD| LIMITED)?)?|AMERICAN EXPRESS(?: BANKING CORP)?|AMEX)$",
+    "purpose": "card_payment",
+    "targetInstrument": {
+      "kind": "credit_card"
+    }
+  },
+  {
+    "id": "CPP-BILLPAY-APP-CARD",
+    "vpaPattern": "^(?:tataneu|tneu|payzapp)[\\w.-]*bill[\\w.-]*@",
+    "namePattern": "^(?:TATA ?NEU|TNEU|PAYZAPP)\\b[^\\n]{0,20}?\\bBILL ?(?:PAY(?:MENT)?)?",
+    "purpose": "card_payment",
+    "targetInstrument": {
+      "kind": "credit_card"
+    }
+  }
+]

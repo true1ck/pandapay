@@ -1,0 +1,859 @@
+[
+  {
+    "id": "WAL-FREECHARGE-CASHBACK-01",
+    "version": 1,
+    "family": "wallet_cashback",
+    "senders": [
+      "FRCHRG"
+    ],
+    "priority": 700,
+    "match": {
+      "pattern": "^(?:rs\\.?|inr|₹)\\s*(?<amt>[\\d,]+(?:\\.\\d{1,2})?)\\b[^.]{0,30}?\\bcashback\\b[^.]{0,60}?\\b(?:credited|added|received)\\b[^.]{0,40}?\\bfreecharge(?: wallet| balance)?",
+      "flags": "is",
+      "requireAll": [
+        "cashback"
+      ],
+      "rejectAny": [
+        "will be",
+        "when you",
+        "if you",
+        "eligible",
+        "up to",
+        "upto",
+        "win ",
+        "failed"
+      ]
+    },
+    "emit": [
+      {
+        "factType": "movement",
+        "attrs": {
+          "direction": "credit",
+          "purpose": "cashback",
+          "rail": "wallet"
+        },
+        "amounts": [
+          {
+            "role": "posted",
+            "from": "amt",
+            "unit": "INR"
+          }
+        ],
+        "instrument": {
+          "kind": "wallet",
+          "issuerSlug": "freecharge"
+        }
+      }
+    ],
+    "confidence": 0.96,
+    "examples": [
+      {
+        "sender": "VM-FRCHRG-S",
+        "body": "Rs 25 cashback credited to your Freecharge wallet for your order.",
+        "expectFactTypes": [
+          "movement"
+        ]
+      },
+      {
+        "sender": "VM-FRCHRG-S",
+        "body": "Rs 25 cashback will be credited to your Freecharge wallet within 48 hours.",
+        "expectFactTypes": []
+      }
+    ],
+    "status": "active",
+    "createdBy": "baseline",
+    "updatedAt": "2026-11-03T00:00:00Z"
+  },
+  {
+    "id": "WAL-FREECHARGE-DEBIT-01",
+    "version": 1,
+    "family": "wallet_spend",
+    "senders": [
+      "FRCHRG"
+    ],
+    "priority": 600,
+    "match": {
+      "pattern": "^(?:rs\\.?|inr|₹)\\s*(?<amt>[\\d,]+(?:\\.\\d{1,2})?) (?:has been |was |is )?(?:debited|deducted|spent|charged)(?: from| using| via| on| at)? (?:your )?freecharge(?: wallet| balance)?(?: (?:to|at) (?<merchant>[^.,\\n]+?)(?:\\.|,|\\s+(?:for|on|using|via|txn|ref|order|bal|balance)\\b|\\s*$))?(?=(?:.*?\\b(?:txn|transaction|ref)\\s*(?:id|no|number)?\\.?:?\\s*#?(?<ref_txnId>(?=[a-z]*\\d)[a-z0-9]{6,}))?).*?\\b(?:(?:updated|available|current|remaining|closing|wallet) )?bal(?:ance)?\\b\\.?\\s*(?:is|:|-|=)?\\s*(?:rs\\.?|inr|₹)\\s*(?<bal>[\\d,]+(?:\\.\\d{1,2})?)",
+      "flags": "is",
+      "rejectAny": [
+        "failed",
+        "unsuccessful",
+        "declined",
+        "could not",
+        "unable to",
+        "will be",
+        "reversed"
+      ]
+    },
+    "emit": [
+      {
+        "factType": "movement",
+        "attrs": {
+          "direction": "debit",
+          "purpose": "purchase",
+          "rail": "wallet"
+        },
+        "amounts": [
+          {
+            "role": "posted",
+            "from": "amt",
+            "unit": "INR"
+          }
+        ],
+        "instrument": {
+          "kind": "wallet",
+          "issuerSlug": "freecharge"
+        },
+        "counterparty": {
+          "nameFrom": "merchant",
+          "kind": "merchant",
+          "transforms": [
+            "sanitizeNarration"
+          ]
+        }
+      },
+      {
+        "factType": "balance_snapshot",
+        "amounts": [
+          {
+            "role": "available_balance",
+            "from": "bal",
+            "unit": "INR"
+          }
+        ],
+        "instrument": {
+          "sameAs": 0
+        },
+        "attrs": {
+          "asOf": {
+            "sameAs": 0,
+            "field": "occurredAt"
+          }
+        }
+      }
+    ],
+    "confidence": 0.97,
+    "examples": [
+      {
+        "sender": "VM-FRCHRG-S",
+        "body": "Rs 120 has been debited from your Freecharge wallet to Metro Mart. Updated balance: Rs 380. Txn ID 12345678901",
+        "expectFactTypes": [
+          "movement",
+          "balance_snapshot"
+        ]
+      },
+      {
+        "sender": "VM-FRCHRG-S",
+        "body": "Rs 120 could not be debited from your Freecharge wallet. Payment failed, please retry.",
+        "expectFactTypes": []
+      }
+    ],
+    "status": "active",
+    "createdBy": "baseline",
+    "updatedAt": "2026-11-03T00:00:00Z"
+  },
+  {
+    "id": "WAL-FREECHARGE-DEBIT-02",
+    "version": 1,
+    "family": "wallet_spend",
+    "senders": [
+      "FRCHRG"
+    ],
+    "priority": 450,
+    "match": {
+      "pattern": "^(?:rs\\.?|inr|₹)\\s*(?<amt>[\\d,]+(?:\\.\\d{1,2})?) (?:has been |was |is )?(?:debited|deducted|spent|charged)(?: from| using| via| on| at)? (?:your )?freecharge(?: wallet| balance)?(?: (?:to|at) (?<merchant>[^.,\\n]+?)(?:\\.|,|\\s+(?:for|on|using|via|txn|ref|order|bal|balance)\\b|\\s*$))?(?=(?:.*?\\b(?:txn|transaction|ref)\\s*(?:id|no|number)?\\.?:?\\s*#?(?<ref_txnId>(?=[a-z]*\\d)[a-z0-9]{6,}))?)",
+      "flags": "is",
+      "rejectAny": [
+        "failed",
+        "unsuccessful",
+        "declined",
+        "could not",
+        "unable to",
+        "will be",
+        "reversed"
+      ]
+    },
+    "emit": [
+      {
+        "factType": "movement",
+        "attrs": {
+          "direction": "debit",
+          "purpose": "purchase",
+          "rail": "wallet"
+        },
+        "amounts": [
+          {
+            "role": "posted",
+            "from": "amt",
+            "unit": "INR"
+          }
+        ],
+        "instrument": {
+          "kind": "wallet",
+          "issuerSlug": "freecharge"
+        },
+        "counterparty": {
+          "nameFrom": "merchant",
+          "kind": "merchant",
+          "transforms": [
+            "sanitizeNarration"
+          ]
+        }
+      }
+    ],
+    "confidence": 0.93,
+    "examples": [
+      {
+        "sender": "AX-FRCHRG",
+        "body": "Rs.50.0 debited from your Freecharge wallet",
+        "expectFactTypes": [
+          "movement"
+        ]
+      },
+      {
+        "sender": "VM-FRCHRG-S",
+        "body": "Rs 120 could not be debited from your Freecharge wallet. Payment failed, please retry.",
+        "expectFactTypes": []
+      }
+    ],
+    "status": "active",
+    "createdBy": "baseline",
+    "updatedAt": "2026-11-03T00:00:00Z"
+  },
+  {
+    "id": "WAL-FREECHARGE-FAILED-01",
+    "version": 1,
+    "family": "wallet_failed",
+    "senders": [
+      "FRCHRG"
+    ],
+    "priority": 750,
+    "match": {
+      "pattern": "^(?:your )?(?:payment|transaction|txn|order)\\b[^\\n]*?(?:rs\\.?|inr|₹)\\s*(?<amt>[\\d,]+(?:\\.\\d{1,2})?)[^\\n]*?\\bfreecharge(?: wallet| balance)?[^\\n]*?\\b(?:failed|was unsuccessful|declined|could not be (?:completed|processed))",
+      "flags": "is",
+      "rejectAny": [
+        "successful",
+        "successfully"
+      ]
+    },
+    "emit": [
+      {
+        "factType": "attempt",
+        "attrs": {
+          "status": "failed",
+          "direction": "debit",
+          "purpose": "purchase"
+        },
+        "amounts": [
+          {
+            "role": "posted",
+            "from": "amt",
+            "unit": "INR"
+          }
+        ],
+        "instrument": {
+          "kind": "wallet",
+          "issuerSlug": "freecharge"
+        }
+      }
+    ],
+    "confidence": 0.9,
+    "examples": [
+      {
+        "sender": "VM-FRCHRG-S",
+        "body": "Your payment of Rs 120 from Freecharge wallet failed. Money will not be deducted.",
+        "expectFactTypes": [
+          "attempt"
+        ]
+      },
+      {
+        "sender": "VM-FRCHRG-S",
+        "body": "Your payment of Rs 120 from Freecharge wallet was successful.",
+        "expectFactTypes": []
+      }
+    ],
+    "status": "active",
+    "createdBy": "baseline",
+    "updatedAt": "2026-11-03T00:00:00Z"
+  },
+  {
+    "id": "WAL-FREECHARGE-FAILED-02",
+    "version": 1,
+    "family": "wallet_failed",
+    "senders": [
+      "FRCHRG"
+    ],
+    "priority": 745,
+    "match": {
+      "pattern": "^(?:your )?(?:add money|top-?up|wallet load|load)\\b[^\\n]*?(?:rs\\.?|inr|₹)\\s*(?<amt>[\\d,]+(?:\\.\\d{1,2})?)[^\\n]*?\\bfreecharge(?: wallet| balance)?[^\\n]*?\\b(?:failed|was unsuccessful|declined|could not be (?:completed|processed))",
+      "flags": "is",
+      "rejectAny": [
+        "successful",
+        "successfully"
+      ]
+    },
+    "emit": [
+      {
+        "factType": "attempt",
+        "attrs": {
+          "status": "failed",
+          "direction": "credit",
+          "purpose": "wallet_topup"
+        },
+        "amounts": [
+          {
+            "role": "posted",
+            "from": "amt",
+            "unit": "INR"
+          }
+        ],
+        "instrument": {
+          "kind": "wallet",
+          "issuerSlug": "freecharge"
+        }
+      }
+    ],
+    "confidence": 0.88,
+    "examples": [
+      {
+        "sender": "VM-FRCHRG-S",
+        "body": "Your add money request of Rs 500 to Freecharge wallet failed. Amount debited, if any, will be refunded.",
+        "expectFactTypes": [
+          "attempt"
+        ]
+      },
+      {
+        "sender": "VM-FRCHRG-S",
+        "body": "Your add money request of Rs 500 to Freecharge wallet was successful.",
+        "expectFactTypes": []
+      }
+    ],
+    "status": "active",
+    "createdBy": "baseline",
+    "updatedAt": "2026-11-03T00:00:00Z"
+  },
+  {
+    "id": "WAL-FREECHARGE-LOAD-01",
+    "version": 1,
+    "family": "wallet_load",
+    "senders": [
+      "FRCHRG"
+    ],
+    "priority": 580,
+    "match": {
+      "pattern": "^(?:rs\\.?|inr|₹)\\s*(?<amt>[\\d,]+(?:\\.\\d{1,2})?) (?:has been |was |is )?(?:successfully )?(?:added|loaded|credited|received)(?: in| into| to| in to) (?:your )?freecharge(?: wallet| balance)?(?=(?:.*?\\bupi ref(?:erence)?(?: no)?\\.?:?\\s*(?<ref_upiRef>\\d{6,}))?)(?=(?:.*?\\b(?:txn|transaction)\\s*(?:id|no|number)?\\.?:?\\s*#?(?<ref_txnId>(?=[a-z]*\\d)[a-z0-9]{6,}))?).*?\\b(?:(?:updated|available|current|remaining|closing|wallet) )?bal(?:ance)?\\b\\.?\\s*(?:is|:|-|=)?\\s*(?:rs\\.?|inr|₹)\\s*(?<bal>[\\d,]+(?:\\.\\d{1,2})?)",
+      "flags": "is",
+      "rejectAny": [
+        "cashback",
+        "refund",
+        "reward",
+        "reversal",
+        "reversed",
+        "bonus",
+        "gift",
+        "promo",
+        "compensation",
+        "will be",
+        "failed"
+      ]
+    },
+    "emit": [
+      {
+        "factType": "movement",
+        "attrs": {
+          "direction": "credit",
+          "purpose": "wallet_topup",
+          "rail": "wallet"
+        },
+        "amounts": [
+          {
+            "role": "posted",
+            "from": "amt",
+            "unit": "INR"
+          }
+        ],
+        "instrument": {
+          "kind": "wallet",
+          "issuerSlug": "freecharge"
+        }
+      },
+      {
+        "factType": "balance_snapshot",
+        "amounts": [
+          {
+            "role": "available_balance",
+            "from": "bal",
+            "unit": "INR"
+          }
+        ],
+        "instrument": {
+          "sameAs": 0
+        },
+        "attrs": {
+          "asOf": {
+            "sameAs": 0,
+            "field": "occurredAt"
+          }
+        }
+      }
+    ],
+    "confidence": 0.96,
+    "examples": [
+      {
+        "sender": "VM-FRCHRG-S",
+        "body": "Rs 500 has been added to your Freecharge wallet. Updated balance: Rs 500.",
+        "expectFactTypes": [
+          "movement",
+          "balance_snapshot"
+        ]
+      },
+      {
+        "sender": "VM-FRCHRG-S",
+        "body": "Add money to your Freecharge wallet and get Rs 100 cashback on your first load. Offer valid till 30 Nov.",
+        "expectFactTypes": []
+      }
+    ],
+    "status": "active",
+    "createdBy": "baseline",
+    "updatedAt": "2026-11-03T00:00:00Z"
+  },
+  {
+    "id": "WAL-FREECHARGE-LOAD-02",
+    "version": 1,
+    "family": "wallet_load",
+    "senders": [
+      "FRCHRG"
+    ],
+    "priority": 440,
+    "match": {
+      "pattern": "^(?:rs\\.?|inr|₹)\\s*(?<amt>[\\d,]+(?:\\.\\d{1,2})?) (?:has been |was |is )?(?:successfully )?(?:added|loaded|credited|received)(?: in| into| to| in to) (?:your )?freecharge(?: wallet| balance)?(?=(?:.*?\\bupi ref(?:erence)?(?: no)?\\.?:?\\s*(?<ref_upiRef>\\d{6,}))?)(?=(?:.*?\\b(?:txn|transaction)\\s*(?:id|no|number)?\\.?:?\\s*#?(?<ref_txnId>(?=[a-z]*\\d)[a-z0-9]{6,}))?)",
+      "flags": "is",
+      "rejectAny": [
+        "cashback",
+        "refund",
+        "reward",
+        "reversal",
+        "reversed",
+        "bonus",
+        "gift",
+        "promo",
+        "compensation",
+        "will be",
+        "failed"
+      ]
+    },
+    "emit": [
+      {
+        "factType": "movement",
+        "attrs": {
+          "direction": "credit",
+          "purpose": "wallet_topup",
+          "rail": "wallet"
+        },
+        "amounts": [
+          {
+            "role": "posted",
+            "from": "amt",
+            "unit": "INR"
+          }
+        ],
+        "instrument": {
+          "kind": "wallet",
+          "issuerSlug": "freecharge"
+        }
+      }
+    ],
+    "confidence": 0.93,
+    "examples": [
+      {
+        "sender": "AX-FRCHRG",
+        "body": "Rs.5000 added to Freecharge wallet from your bank account. UPI Ref 123456789012.",
+        "expectFactTypes": [
+          "movement"
+        ]
+      },
+      {
+        "sender": "VM-FRCHRG-S",
+        "body": "Add money to your Freecharge wallet and get Rs 100 cashback on your first load. Offer valid till 30 Nov.",
+        "expectFactTypes": []
+      }
+    ],
+    "status": "active",
+    "createdBy": "baseline",
+    "updatedAt": "2026-11-03T00:00:00Z"
+  },
+  {
+    "id": "WAL-FREECHARGE-PAID-01",
+    "version": 1,
+    "family": "wallet_spend",
+    "senders": [
+      "FRCHRG"
+    ],
+    "priority": 620,
+    "match": {
+      "pattern": "^(?:rs\\.?|inr|₹)\\s*(?<amt>[\\d,]+(?:\\.\\d{1,2})?) (?:has been |was |is )?paid (?:from|using|via|with) (?:your )?freecharge(?: wallet| balance)?(?: (?:to|at) (?<merchant>[^.,\\n]+?)(?:\\.|,|\\s+(?:for|on|using|via|txn|ref|order|bal|balance)\\b|\\s*$))?(?=(?:.*?\\b(?:txn|transaction|ref)\\s*(?:id|no|number)?\\.?:?\\s*#?(?<ref_txnId>(?=[a-z]*\\d)[a-z0-9]{6,}))?).*?\\b(?:(?:updated|available|current|remaining|closing|wallet) )?bal(?:ance)?\\b\\.?\\s*(?:is|:|-|=)?\\s*(?:rs\\.?|inr|₹)\\s*(?<bal>[\\d,]+(?:\\.\\d{1,2})?)",
+      "flags": "is",
+      "rejectAny": [
+        "failed",
+        "unsuccessful",
+        "declined",
+        "could not",
+        "unable to",
+        "will be",
+        "reversed"
+      ]
+    },
+    "emit": [
+      {
+        "factType": "movement",
+        "attrs": {
+          "direction": "debit",
+          "purpose": "purchase",
+          "rail": "wallet"
+        },
+        "amounts": [
+          {
+            "role": "posted",
+            "from": "amt",
+            "unit": "INR"
+          }
+        ],
+        "instrument": {
+          "kind": "wallet",
+          "issuerSlug": "freecharge"
+        },
+        "counterparty": {
+          "nameFrom": "merchant",
+          "kind": "merchant",
+          "transforms": [
+            "sanitizeNarration"
+          ]
+        }
+      },
+      {
+        "factType": "balance_snapshot",
+        "amounts": [
+          {
+            "role": "available_balance",
+            "from": "bal",
+            "unit": "INR"
+          }
+        ],
+        "instrument": {
+          "sameAs": 0
+        },
+        "attrs": {
+          "asOf": {
+            "sameAs": 0,
+            "field": "occurredAt"
+          }
+        }
+      }
+    ],
+    "confidence": 0.97,
+    "examples": [
+      {
+        "sender": "VM-FRCHRG-S",
+        "body": "Rs 120 paid from Freecharge wallet to Metro Mart. Updated balance: Rs 380. Txn ID 12345678901",
+        "expectFactTypes": [
+          "movement",
+          "balance_snapshot"
+        ]
+      },
+      {
+        "sender": "VM-FRCHRG-S",
+        "body": "Rs 120 payment from Freecharge wallet was declined. Please try again.",
+        "expectFactTypes": []
+      }
+    ],
+    "status": "active",
+    "createdBy": "baseline",
+    "updatedAt": "2026-11-03T00:00:00Z"
+  },
+  {
+    "id": "WAL-FREECHARGE-PAID-02",
+    "version": 1,
+    "family": "wallet_spend",
+    "senders": [
+      "FRCHRG"
+    ],
+    "priority": 460,
+    "match": {
+      "pattern": "^(?:rs\\.?|inr|₹)\\s*(?<amt>[\\d,]+(?:\\.\\d{1,2})?) (?:has been |was |is )?paid (?:from|using|via|with) (?:your )?freecharge(?: wallet| balance)?(?: (?:to|at) (?<merchant>[^.,\\n]+?)(?:\\.|,|\\s+(?:for|on|using|via|txn|ref|order|bal|balance)\\b|\\s*$))?(?=(?:.*?\\b(?:txn|transaction|ref)\\s*(?:id|no|number)?\\.?:?\\s*#?(?<ref_txnId>(?=[a-z]*\\d)[a-z0-9]{6,}))?)",
+      "flags": "is",
+      "rejectAny": [
+        "failed",
+        "unsuccessful",
+        "declined",
+        "could not",
+        "unable to",
+        "will be",
+        "reversed"
+      ]
+    },
+    "emit": [
+      {
+        "factType": "movement",
+        "attrs": {
+          "direction": "debit",
+          "purpose": "purchase",
+          "rail": "wallet"
+        },
+        "amounts": [
+          {
+            "role": "posted",
+            "from": "amt",
+            "unit": "INR"
+          }
+        ],
+        "instrument": {
+          "kind": "wallet",
+          "issuerSlug": "freecharge"
+        },
+        "counterparty": {
+          "nameFrom": "merchant",
+          "kind": "merchant",
+          "transforms": [
+            "sanitizeNarration"
+          ]
+        }
+      }
+    ],
+    "confidence": 0.93,
+    "examples": [
+      {
+        "sender": "AX-FRCHRG",
+        "body": "Rs 499.00 paid using Freecharge wallet for your order",
+        "expectFactTypes": [
+          "movement"
+        ]
+      },
+      {
+        "sender": "VM-FRCHRG-S",
+        "body": "Rs 120 payment from Freecharge wallet was declined. Please try again.",
+        "expectFactTypes": []
+      }
+    ],
+    "status": "active",
+    "createdBy": "baseline",
+    "updatedAt": "2026-11-03T00:00:00Z"
+  },
+  {
+    "id": "WAL-FREECHARGE-PAID-03",
+    "version": 1,
+    "family": "wallet_spend",
+    "senders": [
+      "FRCHRG"
+    ],
+    "priority": 610,
+    "match": {
+      "pattern": "^(?:you have )?paid (?:rs\\.?|inr|₹)\\s*(?<amt>[\\d,]+(?:\\.\\d{1,2})?) to (?<merchant>[^.,\\n]+?) (?:using|via|from|with) (?:your )?freecharge(?: wallet| balance)?(?=(?:.*?\\b(?:txn|transaction|ref)\\s*(?:id|no|number)?\\.?:?\\s*#?(?<ref_txnId>(?=[a-z]*\\d)[a-z0-9]{6,}))?).*?\\b(?:(?:updated|available|current|remaining|closing|wallet) )?bal(?:ance)?\\b\\.?\\s*(?:is|:|-|=)?\\s*(?:rs\\.?|inr|₹)\\s*(?<bal>[\\d,]+(?:\\.\\d{1,2})?)",
+      "flags": "is",
+      "rejectAny": [
+        "failed",
+        "unsuccessful",
+        "declined",
+        "could not",
+        "unable to",
+        "will be",
+        "reversed"
+      ]
+    },
+    "emit": [
+      {
+        "factType": "movement",
+        "attrs": {
+          "direction": "debit",
+          "purpose": "purchase",
+          "rail": "wallet"
+        },
+        "amounts": [
+          {
+            "role": "posted",
+            "from": "amt",
+            "unit": "INR"
+          }
+        ],
+        "instrument": {
+          "kind": "wallet",
+          "issuerSlug": "freecharge"
+        },
+        "counterparty": {
+          "nameFrom": "merchant",
+          "kind": "merchant",
+          "transforms": [
+            "sanitizeNarration"
+          ]
+        }
+      },
+      {
+        "factType": "balance_snapshot",
+        "amounts": [
+          {
+            "role": "available_balance",
+            "from": "bal",
+            "unit": "INR"
+          }
+        ],
+        "instrument": {
+          "sameAs": 0
+        },
+        "attrs": {
+          "asOf": {
+            "sameAs": 0,
+            "field": "occurredAt"
+          }
+        }
+      }
+    ],
+    "confidence": 0.97,
+    "examples": [
+      {
+        "sender": "VM-FRCHRG-S",
+        "body": "Paid Rs 120 to Metro Mart using Freecharge wallet. Balance: Rs 380. Txn ID 12345678901",
+        "expectFactTypes": [
+          "movement",
+          "balance_snapshot"
+        ]
+      },
+      {
+        "sender": "VM-FRCHRG-S",
+        "body": "Paid Rs 120 to Metro Mart using Freecharge wallet failed",
+        "expectFactTypes": []
+      }
+    ],
+    "status": "active",
+    "createdBy": "baseline",
+    "updatedAt": "2026-11-03T00:00:00Z"
+  },
+  {
+    "id": "WAL-FREECHARGE-PAID-04",
+    "version": 1,
+    "family": "wallet_spend",
+    "senders": [
+      "FRCHRG"
+    ],
+    "priority": 455,
+    "match": {
+      "pattern": "^(?:you have )?paid (?:rs\\.?|inr|₹)\\s*(?<amt>[\\d,]+(?:\\.\\d{1,2})?) to (?<merchant>[^.,\\n]+?) (?:using|via|from|with) (?:your )?freecharge(?: wallet| balance)?(?=(?:.*?\\b(?:txn|transaction|ref)\\s*(?:id|no|number)?\\.?:?\\s*#?(?<ref_txnId>(?=[a-z]*\\d)[a-z0-9]{6,}))?)",
+      "flags": "is",
+      "rejectAny": [
+        "failed",
+        "unsuccessful",
+        "declined",
+        "could not",
+        "unable to",
+        "will be",
+        "reversed"
+      ]
+    },
+    "emit": [
+      {
+        "factType": "movement",
+        "attrs": {
+          "direction": "debit",
+          "purpose": "purchase",
+          "rail": "wallet"
+        },
+        "amounts": [
+          {
+            "role": "posted",
+            "from": "amt",
+            "unit": "INR"
+          }
+        ],
+        "instrument": {
+          "kind": "wallet",
+          "issuerSlug": "freecharge"
+        },
+        "counterparty": {
+          "nameFrom": "merchant",
+          "kind": "merchant",
+          "transforms": [
+            "sanitizeNarration"
+          ]
+        }
+      }
+    ],
+    "confidence": 0.93,
+    "examples": [
+      {
+        "sender": "AX-FRCHRG",
+        "body": "Paid Rs 85.50 to Metro Mart from Freecharge wallet",
+        "expectFactTypes": [
+          "movement"
+        ]
+      },
+      {
+        "sender": "VM-FRCHRG-S",
+        "body": "Paid Rs 120 to Metro Mart using Freecharge wallet failed",
+        "expectFactTypes": []
+      }
+    ],
+    "status": "active",
+    "createdBy": "baseline",
+    "updatedAt": "2026-11-03T00:00:00Z"
+  },
+  {
+    "id": "WAL-FREECHARGE-REFUND-01",
+    "version": 1,
+    "family": "wallet_refund",
+    "senders": [
+      "FRCHRG"
+    ],
+    "priority": 690,
+    "match": {
+      "pattern": "^(?:refund of )?(?:rs\\.?|inr|₹)\\s*(?<amt>[\\d,]+(?:\\.\\d{1,2})?)\\b[^.]{0,60}?\\b(?:refunded|credited|added|returned|received)\\b[^.]{0,40}?\\bfreecharge(?: wallet| balance)?",
+      "flags": "is",
+      "requireAll": [
+        "refund"
+      ],
+      "rejectAny": [
+        "will be",
+        "initiated",
+        "failed",
+        "request",
+        "eligible"
+      ]
+    },
+    "emit": [
+      {
+        "factType": "movement",
+        "attrs": {
+          "direction": "credit",
+          "purpose": "refund",
+          "rail": "wallet"
+        },
+        "amounts": [
+          {
+            "role": "posted",
+            "from": "amt",
+            "unit": "INR"
+          }
+        ],
+        "instrument": {
+          "kind": "wallet",
+          "issuerSlug": "freecharge"
+        }
+      }
+    ],
+    "confidence": 0.95,
+    "examples": [
+      {
+        "sender": "VM-FRCHRG-S",
+        "body": "Refund of Rs 120 has been credited to your Freecharge wallet for order cancelled.",
+        "expectFactTypes": [
+          "movement"
+        ]
+      },
+      {
+        "sender": "VM-FRCHRG-S",
+        "body": "Refund of Rs 120 will be credited to your Freecharge wallet in 3-5 working days.",
+        "expectFactTypes": []
+      }
+    ],
+    "status": "active",
+    "createdBy": "baseline",
+    "updatedAt": "2026-11-03T00:00:00Z"
+  }
+]

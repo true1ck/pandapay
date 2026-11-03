@@ -1,0 +1,859 @@
+[
+  {
+    "id": "WAL-ZOMATO-CASHBACK-01",
+    "version": 1,
+    "family": "wallet_cashback",
+    "senders": [
+      "ZOMATO"
+    ],
+    "priority": 700,
+    "match": {
+      "pattern": "^(?:rs\\.?|inr|₹)\\s*(?<amt>[\\d,]+(?:\\.\\d{1,2})?)\\b[^.]{0,30}?\\bcashback\\b[^.]{0,60}?\\b(?:credited|added|received)\\b[^.]{0,40}?\\bzomato money(?: balance| wallet| credits?)?",
+      "flags": "is",
+      "requireAll": [
+        "cashback"
+      ],
+      "rejectAny": [
+        "will be",
+        "when you",
+        "if you",
+        "eligible",
+        "up to",
+        "upto",
+        "win ",
+        "failed"
+      ]
+    },
+    "emit": [
+      {
+        "factType": "movement",
+        "attrs": {
+          "direction": "credit",
+          "purpose": "cashback",
+          "rail": "wallet"
+        },
+        "amounts": [
+          {
+            "role": "posted",
+            "from": "amt",
+            "unit": "INR"
+          }
+        ],
+        "instrument": {
+          "kind": "wallet",
+          "issuerSlug": "zomato_money"
+        }
+      }
+    ],
+    "confidence": 0.96,
+    "examples": [
+      {
+        "sender": "VM-ZOMATO-S",
+        "body": "Rs 25 cashback credited to your Zomato Money balance for your order.",
+        "expectFactTypes": [
+          "movement"
+        ]
+      },
+      {
+        "sender": "VM-ZOMATO-S",
+        "body": "Rs 25 cashback will be credited to your Zomato Money balance within 48 hours.",
+        "expectFactTypes": []
+      }
+    ],
+    "status": "active",
+    "createdBy": "baseline",
+    "updatedAt": "2026-11-03T00:00:00Z"
+  },
+  {
+    "id": "WAL-ZOMATO-DEBIT-01",
+    "version": 1,
+    "family": "wallet_spend",
+    "senders": [
+      "ZOMATO"
+    ],
+    "priority": 600,
+    "match": {
+      "pattern": "^(?:rs\\.?|inr|₹)\\s*(?<amt>[\\d,]+(?:\\.\\d{1,2})?) (?:has been |was |is )?(?:debited|deducted|spent|charged)(?: from| using| via| on| at)? (?:your )?zomato money(?: balance| wallet| credits?)?(?: (?:to|at) (?<merchant>[^.,\\n]+?)(?:\\.|,|\\s+(?:for|on|using|via|txn|ref|order|bal|balance)\\b|\\s*$))?(?=(?:.*?\\border\\s*(?:id|no|number)?\\.?:?\\s*#?(?<ref_orderId>(?=[a-z]*\\d)[a-z0-9]{5,}))?).*?\\b(?:(?:updated|available|current|remaining|closing|wallet) )?bal(?:ance)?\\b\\.?\\s*(?:is|:|-|=)?\\s*(?:rs\\.?|inr|₹)\\s*(?<bal>[\\d,]+(?:\\.\\d{1,2})?)",
+      "flags": "is",
+      "rejectAny": [
+        "failed",
+        "unsuccessful",
+        "declined",
+        "could not",
+        "unable to",
+        "will be",
+        "reversed"
+      ]
+    },
+    "emit": [
+      {
+        "factType": "movement",
+        "attrs": {
+          "direction": "debit",
+          "purpose": "purchase",
+          "rail": "wallet"
+        },
+        "amounts": [
+          {
+            "role": "posted",
+            "from": "amt",
+            "unit": "INR"
+          }
+        ],
+        "instrument": {
+          "kind": "wallet",
+          "issuerSlug": "zomato_money"
+        },
+        "counterparty": {
+          "nameFrom": "merchant",
+          "kind": "merchant",
+          "transforms": [
+            "sanitizeNarration"
+          ]
+        }
+      },
+      {
+        "factType": "balance_snapshot",
+        "amounts": [
+          {
+            "role": "available_balance",
+            "from": "bal",
+            "unit": "INR"
+          }
+        ],
+        "instrument": {
+          "sameAs": 0
+        },
+        "attrs": {
+          "asOf": {
+            "sameAs": 0,
+            "field": "occurredAt"
+          }
+        }
+      }
+    ],
+    "confidence": 0.97,
+    "examples": [
+      {
+        "sender": "VM-ZOMATO-S",
+        "body": "Rs 120 has been debited from your Zomato Money balance to Burger Hub. Updated balance: Rs 380. Order #123456",
+        "expectFactTypes": [
+          "movement",
+          "balance_snapshot"
+        ]
+      },
+      {
+        "sender": "VM-ZOMATO-S",
+        "body": "Rs 120 could not be debited from your Zomato Money balance. Payment failed, please retry.",
+        "expectFactTypes": []
+      }
+    ],
+    "status": "active",
+    "createdBy": "baseline",
+    "updatedAt": "2026-11-03T00:00:00Z"
+  },
+  {
+    "id": "WAL-ZOMATO-DEBIT-02",
+    "version": 1,
+    "family": "wallet_spend",
+    "senders": [
+      "ZOMATO"
+    ],
+    "priority": 450,
+    "match": {
+      "pattern": "^(?:rs\\.?|inr|₹)\\s*(?<amt>[\\d,]+(?:\\.\\d{1,2})?) (?:has been |was |is )?(?:debited|deducted|spent|charged)(?: from| using| via| on| at)? (?:your )?zomato money(?: balance| wallet| credits?)?(?: (?:to|at) (?<merchant>[^.,\\n]+?)(?:\\.|,|\\s+(?:for|on|using|via|txn|ref|order|bal|balance)\\b|\\s*$))?(?=(?:.*?\\border\\s*(?:id|no|number)?\\.?:?\\s*#?(?<ref_orderId>(?=[a-z]*\\d)[a-z0-9]{5,}))?)",
+      "flags": "is",
+      "rejectAny": [
+        "failed",
+        "unsuccessful",
+        "declined",
+        "could not",
+        "unable to",
+        "will be",
+        "reversed"
+      ]
+    },
+    "emit": [
+      {
+        "factType": "movement",
+        "attrs": {
+          "direction": "debit",
+          "purpose": "purchase",
+          "rail": "wallet"
+        },
+        "amounts": [
+          {
+            "role": "posted",
+            "from": "amt",
+            "unit": "INR"
+          }
+        ],
+        "instrument": {
+          "kind": "wallet",
+          "issuerSlug": "zomato_money"
+        },
+        "counterparty": {
+          "nameFrom": "merchant",
+          "kind": "merchant",
+          "transforms": [
+            "sanitizeNarration"
+          ]
+        }
+      }
+    ],
+    "confidence": 0.93,
+    "examples": [
+      {
+        "sender": "AX-ZOMATO",
+        "body": "Rs.50.0 debited from your Zomato Money balance",
+        "expectFactTypes": [
+          "movement"
+        ]
+      },
+      {
+        "sender": "VM-ZOMATO-S",
+        "body": "Rs 120 could not be debited from your Zomato Money balance. Payment failed, please retry.",
+        "expectFactTypes": []
+      }
+    ],
+    "status": "active",
+    "createdBy": "baseline",
+    "updatedAt": "2026-11-03T00:00:00Z"
+  },
+  {
+    "id": "WAL-ZOMATO-FAILED-01",
+    "version": 1,
+    "family": "wallet_failed",
+    "senders": [
+      "ZOMATO"
+    ],
+    "priority": 750,
+    "match": {
+      "pattern": "^(?:your )?(?:payment|transaction|txn|order)\\b[^\\n]*?(?:rs\\.?|inr|₹)\\s*(?<amt>[\\d,]+(?:\\.\\d{1,2})?)[^\\n]*?\\bzomato money(?: balance| wallet| credits?)?[^\\n]*?\\b(?:failed|was unsuccessful|declined|could not be (?:completed|processed))",
+      "flags": "is",
+      "rejectAny": [
+        "successful",
+        "successfully"
+      ]
+    },
+    "emit": [
+      {
+        "factType": "attempt",
+        "attrs": {
+          "status": "failed",
+          "direction": "debit",
+          "purpose": "purchase"
+        },
+        "amounts": [
+          {
+            "role": "posted",
+            "from": "amt",
+            "unit": "INR"
+          }
+        ],
+        "instrument": {
+          "kind": "wallet",
+          "issuerSlug": "zomato_money"
+        }
+      }
+    ],
+    "confidence": 0.9,
+    "examples": [
+      {
+        "sender": "VM-ZOMATO-S",
+        "body": "Your payment of Rs 120 from Zomato Money balance failed. Money will not be deducted.",
+        "expectFactTypes": [
+          "attempt"
+        ]
+      },
+      {
+        "sender": "VM-ZOMATO-S",
+        "body": "Your payment of Rs 120 from Zomato Money balance was successful.",
+        "expectFactTypes": []
+      }
+    ],
+    "status": "active",
+    "createdBy": "baseline",
+    "updatedAt": "2026-11-03T00:00:00Z"
+  },
+  {
+    "id": "WAL-ZOMATO-FAILED-02",
+    "version": 1,
+    "family": "wallet_failed",
+    "senders": [
+      "ZOMATO"
+    ],
+    "priority": 745,
+    "match": {
+      "pattern": "^(?:your )?(?:add money|top-?up|wallet load|load)\\b[^\\n]*?(?:rs\\.?|inr|₹)\\s*(?<amt>[\\d,]+(?:\\.\\d{1,2})?)[^\\n]*?\\bzomato money(?: balance| wallet| credits?)?[^\\n]*?\\b(?:failed|was unsuccessful|declined|could not be (?:completed|processed))",
+      "flags": "is",
+      "rejectAny": [
+        "successful",
+        "successfully"
+      ]
+    },
+    "emit": [
+      {
+        "factType": "attempt",
+        "attrs": {
+          "status": "failed",
+          "direction": "credit",
+          "purpose": "wallet_topup"
+        },
+        "amounts": [
+          {
+            "role": "posted",
+            "from": "amt",
+            "unit": "INR"
+          }
+        ],
+        "instrument": {
+          "kind": "wallet",
+          "issuerSlug": "zomato_money"
+        }
+      }
+    ],
+    "confidence": 0.88,
+    "examples": [
+      {
+        "sender": "VM-ZOMATO-S",
+        "body": "Your add money request of Rs 500 to Zomato Money balance failed. Amount debited, if any, will be refunded.",
+        "expectFactTypes": [
+          "attempt"
+        ]
+      },
+      {
+        "sender": "VM-ZOMATO-S",
+        "body": "Your add money request of Rs 500 to Zomato Money balance was successful.",
+        "expectFactTypes": []
+      }
+    ],
+    "status": "active",
+    "createdBy": "baseline",
+    "updatedAt": "2026-11-03T00:00:00Z"
+  },
+  {
+    "id": "WAL-ZOMATO-LOAD-01",
+    "version": 1,
+    "family": "wallet_load",
+    "senders": [
+      "ZOMATO"
+    ],
+    "priority": 580,
+    "match": {
+      "pattern": "^(?:rs\\.?|inr|₹)\\s*(?<amt>[\\d,]+(?:\\.\\d{1,2})?) (?:has been |was |is )?(?:successfully )?(?:added|loaded|credited|received)(?: in| into| to| in to) (?:your )?zomato money(?: balance| wallet| credits?)?(?=(?:.*?\\bupi ref(?:erence)?(?: no)?\\.?:?\\s*(?<ref_upiRef>\\d{6,}))?).*?\\b(?:(?:updated|available|current|remaining|closing|wallet) )?bal(?:ance)?\\b\\.?\\s*(?:is|:|-|=)?\\s*(?:rs\\.?|inr|₹)\\s*(?<bal>[\\d,]+(?:\\.\\d{1,2})?)",
+      "flags": "is",
+      "rejectAny": [
+        "cashback",
+        "refund",
+        "reward",
+        "reversal",
+        "reversed",
+        "bonus",
+        "gift",
+        "promo",
+        "compensation",
+        "will be",
+        "failed"
+      ]
+    },
+    "emit": [
+      {
+        "factType": "movement",
+        "attrs": {
+          "direction": "credit",
+          "purpose": "wallet_topup",
+          "rail": "wallet"
+        },
+        "amounts": [
+          {
+            "role": "posted",
+            "from": "amt",
+            "unit": "INR"
+          }
+        ],
+        "instrument": {
+          "kind": "wallet",
+          "issuerSlug": "zomato_money"
+        }
+      },
+      {
+        "factType": "balance_snapshot",
+        "amounts": [
+          {
+            "role": "available_balance",
+            "from": "bal",
+            "unit": "INR"
+          }
+        ],
+        "instrument": {
+          "sameAs": 0
+        },
+        "attrs": {
+          "asOf": {
+            "sameAs": 0,
+            "field": "occurredAt"
+          }
+        }
+      }
+    ],
+    "confidence": 0.96,
+    "examples": [
+      {
+        "sender": "VM-ZOMATO-S",
+        "body": "Rs 500 has been added to your Zomato Money balance. Updated balance: Rs 500. Valid till 31 Dec 2026.",
+        "expectFactTypes": [
+          "movement",
+          "balance_snapshot"
+        ]
+      },
+      {
+        "sender": "VM-ZOMATO-S",
+        "body": "Add money to your Zomato Money balance and get Rs 100 cashback on your first load. Offer valid till 30 Nov.",
+        "expectFactTypes": []
+      }
+    ],
+    "status": "active",
+    "createdBy": "baseline",
+    "updatedAt": "2026-11-03T00:00:00Z"
+  },
+  {
+    "id": "WAL-ZOMATO-LOAD-02",
+    "version": 1,
+    "family": "wallet_load",
+    "senders": [
+      "ZOMATO"
+    ],
+    "priority": 440,
+    "match": {
+      "pattern": "^(?:rs\\.?|inr|₹)\\s*(?<amt>[\\d,]+(?:\\.\\d{1,2})?) (?:has been |was |is )?(?:successfully )?(?:added|loaded|credited|received)(?: in| into| to| in to) (?:your )?zomato money(?: balance| wallet| credits?)?(?=(?:.*?\\bupi ref(?:erence)?(?: no)?\\.?:?\\s*(?<ref_upiRef>\\d{6,}))?)",
+      "flags": "is",
+      "rejectAny": [
+        "cashback",
+        "refund",
+        "reward",
+        "reversal",
+        "reversed",
+        "bonus",
+        "gift",
+        "promo",
+        "compensation",
+        "will be",
+        "failed"
+      ]
+    },
+    "emit": [
+      {
+        "factType": "movement",
+        "attrs": {
+          "direction": "credit",
+          "purpose": "wallet_topup",
+          "rail": "wallet"
+        },
+        "amounts": [
+          {
+            "role": "posted",
+            "from": "amt",
+            "unit": "INR"
+          }
+        ],
+        "instrument": {
+          "kind": "wallet",
+          "issuerSlug": "zomato_money"
+        }
+      }
+    ],
+    "confidence": 0.93,
+    "examples": [
+      {
+        "sender": "AX-ZOMATO",
+        "body": "Rs.5000 added to Zomato Money balance from your bank account. UPI Ref 123456789012.",
+        "expectFactTypes": [
+          "movement"
+        ]
+      },
+      {
+        "sender": "VM-ZOMATO-S",
+        "body": "Add money to your Zomato Money balance and get Rs 100 cashback on your first load. Offer valid till 30 Nov.",
+        "expectFactTypes": []
+      }
+    ],
+    "status": "active",
+    "createdBy": "baseline",
+    "updatedAt": "2026-11-03T00:00:00Z"
+  },
+  {
+    "id": "WAL-ZOMATO-PAID-01",
+    "version": 1,
+    "family": "wallet_spend",
+    "senders": [
+      "ZOMATO"
+    ],
+    "priority": 620,
+    "match": {
+      "pattern": "^(?:rs\\.?|inr|₹)\\s*(?<amt>[\\d,]+(?:\\.\\d{1,2})?) (?:has been |was |is )?paid (?:from|using|via|with) (?:your )?zomato money(?: balance| wallet| credits?)?(?: (?:to|at) (?<merchant>[^.,\\n]+?)(?:\\.|,|\\s+(?:for|on|using|via|txn|ref|order|bal|balance)\\b|\\s*$))?(?=(?:.*?\\border\\s*(?:id|no|number)?\\.?:?\\s*#?(?<ref_orderId>(?=[a-z]*\\d)[a-z0-9]{5,}))?).*?\\b(?:(?:updated|available|current|remaining|closing|wallet) )?bal(?:ance)?\\b\\.?\\s*(?:is|:|-|=)?\\s*(?:rs\\.?|inr|₹)\\s*(?<bal>[\\d,]+(?:\\.\\d{1,2})?)",
+      "flags": "is",
+      "rejectAny": [
+        "failed",
+        "unsuccessful",
+        "declined",
+        "could not",
+        "unable to",
+        "will be",
+        "reversed"
+      ]
+    },
+    "emit": [
+      {
+        "factType": "movement",
+        "attrs": {
+          "direction": "debit",
+          "purpose": "purchase",
+          "rail": "wallet"
+        },
+        "amounts": [
+          {
+            "role": "posted",
+            "from": "amt",
+            "unit": "INR"
+          }
+        ],
+        "instrument": {
+          "kind": "wallet",
+          "issuerSlug": "zomato_money"
+        },
+        "counterparty": {
+          "nameFrom": "merchant",
+          "kind": "merchant",
+          "transforms": [
+            "sanitizeNarration"
+          ]
+        }
+      },
+      {
+        "factType": "balance_snapshot",
+        "amounts": [
+          {
+            "role": "available_balance",
+            "from": "bal",
+            "unit": "INR"
+          }
+        ],
+        "instrument": {
+          "sameAs": 0
+        },
+        "attrs": {
+          "asOf": {
+            "sameAs": 0,
+            "field": "occurredAt"
+          }
+        }
+      }
+    ],
+    "confidence": 0.97,
+    "examples": [
+      {
+        "sender": "VM-ZOMATO-S",
+        "body": "Rs 120 paid from Zomato Money balance to Burger Hub. Updated balance: Rs 380. Order #123456",
+        "expectFactTypes": [
+          "movement",
+          "balance_snapshot"
+        ]
+      },
+      {
+        "sender": "VM-ZOMATO-S",
+        "body": "Rs 120 payment from Zomato Money balance was declined. Please try again.",
+        "expectFactTypes": []
+      }
+    ],
+    "status": "active",
+    "createdBy": "baseline",
+    "updatedAt": "2026-11-03T00:00:00Z"
+  },
+  {
+    "id": "WAL-ZOMATO-PAID-02",
+    "version": 1,
+    "family": "wallet_spend",
+    "senders": [
+      "ZOMATO"
+    ],
+    "priority": 460,
+    "match": {
+      "pattern": "^(?:rs\\.?|inr|₹)\\s*(?<amt>[\\d,]+(?:\\.\\d{1,2})?) (?:has been |was |is )?paid (?:from|using|via|with) (?:your )?zomato money(?: balance| wallet| credits?)?(?: (?:to|at) (?<merchant>[^.,\\n]+?)(?:\\.|,|\\s+(?:for|on|using|via|txn|ref|order|bal|balance)\\b|\\s*$))?(?=(?:.*?\\border\\s*(?:id|no|number)?\\.?:?\\s*#?(?<ref_orderId>(?=[a-z]*\\d)[a-z0-9]{5,}))?)",
+      "flags": "is",
+      "rejectAny": [
+        "failed",
+        "unsuccessful",
+        "declined",
+        "could not",
+        "unable to",
+        "will be",
+        "reversed"
+      ]
+    },
+    "emit": [
+      {
+        "factType": "movement",
+        "attrs": {
+          "direction": "debit",
+          "purpose": "purchase",
+          "rail": "wallet"
+        },
+        "amounts": [
+          {
+            "role": "posted",
+            "from": "amt",
+            "unit": "INR"
+          }
+        ],
+        "instrument": {
+          "kind": "wallet",
+          "issuerSlug": "zomato_money"
+        },
+        "counterparty": {
+          "nameFrom": "merchant",
+          "kind": "merchant",
+          "transforms": [
+            "sanitizeNarration"
+          ]
+        }
+      }
+    ],
+    "confidence": 0.93,
+    "examples": [
+      {
+        "sender": "AX-ZOMATO",
+        "body": "Rs 499.00 paid using Zomato Money balance for your order",
+        "expectFactTypes": [
+          "movement"
+        ]
+      },
+      {
+        "sender": "VM-ZOMATO-S",
+        "body": "Rs 120 payment from Zomato Money balance was declined. Please try again.",
+        "expectFactTypes": []
+      }
+    ],
+    "status": "active",
+    "createdBy": "baseline",
+    "updatedAt": "2026-11-03T00:00:00Z"
+  },
+  {
+    "id": "WAL-ZOMATO-PAID-03",
+    "version": 1,
+    "family": "wallet_spend",
+    "senders": [
+      "ZOMATO"
+    ],
+    "priority": 610,
+    "match": {
+      "pattern": "^(?:you have )?paid (?:rs\\.?|inr|₹)\\s*(?<amt>[\\d,]+(?:\\.\\d{1,2})?) to (?<merchant>[^.,\\n]+?) (?:using|via|from|with) (?:your )?zomato money(?: balance| wallet| credits?)?(?=(?:.*?\\border\\s*(?:id|no|number)?\\.?:?\\s*#?(?<ref_orderId>(?=[a-z]*\\d)[a-z0-9]{5,}))?).*?\\b(?:(?:updated|available|current|remaining|closing|wallet) )?bal(?:ance)?\\b\\.?\\s*(?:is|:|-|=)?\\s*(?:rs\\.?|inr|₹)\\s*(?<bal>[\\d,]+(?:\\.\\d{1,2})?)",
+      "flags": "is",
+      "rejectAny": [
+        "failed",
+        "unsuccessful",
+        "declined",
+        "could not",
+        "unable to",
+        "will be",
+        "reversed"
+      ]
+    },
+    "emit": [
+      {
+        "factType": "movement",
+        "attrs": {
+          "direction": "debit",
+          "purpose": "purchase",
+          "rail": "wallet"
+        },
+        "amounts": [
+          {
+            "role": "posted",
+            "from": "amt",
+            "unit": "INR"
+          }
+        ],
+        "instrument": {
+          "kind": "wallet",
+          "issuerSlug": "zomato_money"
+        },
+        "counterparty": {
+          "nameFrom": "merchant",
+          "kind": "merchant",
+          "transforms": [
+            "sanitizeNarration"
+          ]
+        }
+      },
+      {
+        "factType": "balance_snapshot",
+        "amounts": [
+          {
+            "role": "available_balance",
+            "from": "bal",
+            "unit": "INR"
+          }
+        ],
+        "instrument": {
+          "sameAs": 0
+        },
+        "attrs": {
+          "asOf": {
+            "sameAs": 0,
+            "field": "occurredAt"
+          }
+        }
+      }
+    ],
+    "confidence": 0.97,
+    "examples": [
+      {
+        "sender": "VM-ZOMATO-S",
+        "body": "Paid Rs 120 to Burger Hub using Zomato Money balance. Balance: Rs 380. Order #123456",
+        "expectFactTypes": [
+          "movement",
+          "balance_snapshot"
+        ]
+      },
+      {
+        "sender": "VM-ZOMATO-S",
+        "body": "Paid Rs 120 to Burger Hub using Zomato Money balance failed",
+        "expectFactTypes": []
+      }
+    ],
+    "status": "active",
+    "createdBy": "baseline",
+    "updatedAt": "2026-11-03T00:00:00Z"
+  },
+  {
+    "id": "WAL-ZOMATO-PAID-04",
+    "version": 1,
+    "family": "wallet_spend",
+    "senders": [
+      "ZOMATO"
+    ],
+    "priority": 455,
+    "match": {
+      "pattern": "^(?:you have )?paid (?:rs\\.?|inr|₹)\\s*(?<amt>[\\d,]+(?:\\.\\d{1,2})?) to (?<merchant>[^.,\\n]+?) (?:using|via|from|with) (?:your )?zomato money(?: balance| wallet| credits?)?(?=(?:.*?\\border\\s*(?:id|no|number)?\\.?:?\\s*#?(?<ref_orderId>(?=[a-z]*\\d)[a-z0-9]{5,}))?)",
+      "flags": "is",
+      "rejectAny": [
+        "failed",
+        "unsuccessful",
+        "declined",
+        "could not",
+        "unable to",
+        "will be",
+        "reversed"
+      ]
+    },
+    "emit": [
+      {
+        "factType": "movement",
+        "attrs": {
+          "direction": "debit",
+          "purpose": "purchase",
+          "rail": "wallet"
+        },
+        "amounts": [
+          {
+            "role": "posted",
+            "from": "amt",
+            "unit": "INR"
+          }
+        ],
+        "instrument": {
+          "kind": "wallet",
+          "issuerSlug": "zomato_money"
+        },
+        "counterparty": {
+          "nameFrom": "merchant",
+          "kind": "merchant",
+          "transforms": [
+            "sanitizeNarration"
+          ]
+        }
+      }
+    ],
+    "confidence": 0.93,
+    "examples": [
+      {
+        "sender": "AX-ZOMATO",
+        "body": "Paid Rs 85.50 to Burger Hub from Zomato Money balance",
+        "expectFactTypes": [
+          "movement"
+        ]
+      },
+      {
+        "sender": "VM-ZOMATO-S",
+        "body": "Paid Rs 120 to Burger Hub using Zomato Money balance failed",
+        "expectFactTypes": []
+      }
+    ],
+    "status": "active",
+    "createdBy": "baseline",
+    "updatedAt": "2026-11-03T00:00:00Z"
+  },
+  {
+    "id": "WAL-ZOMATO-REFUND-01",
+    "version": 1,
+    "family": "wallet_refund",
+    "senders": [
+      "ZOMATO"
+    ],
+    "priority": 690,
+    "match": {
+      "pattern": "^(?:refund of )?(?:rs\\.?|inr|₹)\\s*(?<amt>[\\d,]+(?:\\.\\d{1,2})?)\\b[^.]{0,60}?\\b(?:refunded|credited|added|returned|received)\\b[^.]{0,40}?\\bzomato money(?: balance| wallet| credits?)?",
+      "flags": "is",
+      "requireAll": [
+        "refund"
+      ],
+      "rejectAny": [
+        "will be",
+        "initiated",
+        "failed",
+        "request",
+        "eligible"
+      ]
+    },
+    "emit": [
+      {
+        "factType": "movement",
+        "attrs": {
+          "direction": "credit",
+          "purpose": "refund",
+          "rail": "wallet"
+        },
+        "amounts": [
+          {
+            "role": "posted",
+            "from": "amt",
+            "unit": "INR"
+          }
+        ],
+        "instrument": {
+          "kind": "wallet",
+          "issuerSlug": "zomato_money"
+        }
+      }
+    ],
+    "confidence": 0.95,
+    "examples": [
+      {
+        "sender": "VM-ZOMATO-S",
+        "body": "Refund of Rs 120 has been credited to your Zomato Money balance for order cancelled.",
+        "expectFactTypes": [
+          "movement"
+        ]
+      },
+      {
+        "sender": "VM-ZOMATO-S",
+        "body": "Refund of Rs 120 will be credited to your Zomato Money balance in 3-5 working days.",
+        "expectFactTypes": []
+      }
+    ],
+    "status": "active",
+    "createdBy": "baseline",
+    "updatedAt": "2026-11-03T00:00:00Z"
+  }
+]
