@@ -124,10 +124,14 @@ WHERE e.namespace = ? AND json_extract(j.value, '\$.factId') IN ($marks)
   /// whose printed date is older than their message receipt time.
   List<Event> contextSince(DateTime observedAt) => [
     for (final row in _db.select(
-      "SELECT DISTINCT e.payload FROM v2_events e, json_each(e.payload, '\$.legs') leg "
-      "JOIN v2_facts f ON f.namespace=e.namespace AND f.fact_id=json_extract(leg.value,'\$.factId') "
-      'WHERE e.namespace=? AND f.observed_at>=?',
-      [namespace, observedAt.toUtc().toIso8601String()],
+      // json_each must run before the fact lookup. Letting SQLite start
+      // from the date index multiplies every recent fact by every event.
+      "SELECT e.payload FROM v2_events e WHERE e.namespace=? AND EXISTS ("
+      "SELECT 1 FROM json_each(e.payload, '\$.legs') leg "
+      "CROSS JOIN v2_facts f ON f.namespace=e.namespace "
+      "AND f.fact_id=json_extract(leg.value,'\$.factId') "
+      "WHERE f.observed_at>=?)",
+      [namespace, _factTimestamp(observedAt)],
     ))
       _decode(row['payload'] as String),
   ];
@@ -194,6 +198,14 @@ WHERE e.namespace = ? AND json_extract(j.value, '\$.factId') IN ($marks)
         [value, namespace, id],
       );
     }
+  }
+
+  static String _factTimestamp(DateTime value) {
+    final utc = value.toUtc();
+    final iso = utc.toIso8601String();
+    return utc.microsecond == 0
+        ? '${iso.substring(0, iso.length - 1)}000Z'
+        : iso;
   }
 
   Event _decode(String payload) =>

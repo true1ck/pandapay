@@ -1,4 +1,8 @@
+import 'dart:convert';
+import 'dart:io';
+
 import 'package:flutter_test/flutter_test.dart';
+import 'package:pandapay/features/sms_v2/storage/fact_store.dart';
 import 'package:pandapay/features/sms_v2/storage/event_store.dart';
 import 'package:pandapay/features/sms_v2/storage/schema.dart';
 import 'package:pandapay_domain/sms_v2.dart';
@@ -91,6 +95,48 @@ void main() {
     );
     expect(store.get(_id(1))!.type, EventType.refund);
   });
+
+  test(
+    'context follows recent fact receipt time, deduplicates legs and isolates accounts',
+    () {
+      final json =
+          (jsonDecode(
+                    File(
+                      '../contracts/sms/v2/fixtures/valid/fact/movement.card_spend.json',
+                    ).readAsStringSync(),
+                  )
+                  as Map)
+              .cast<String, Object?>();
+      final boundary = DateTime.utc(2026, 11, 1);
+      final recent = Fact.fromJson({
+        ...json,
+        'factId': _id(1),
+        'observedAt': boundary.toIso8601String(),
+        'occurredAt': null,
+      });
+      final older = Fact.fromJson({
+        ...json,
+        'factId': _id(2),
+        'observedAt': '2026-10-01T00:00:00Z',
+        'occurredAt': null,
+      });
+      final facts = FactStore(db, namespace: 'user:a');
+      facts.insert(recent);
+      facts.insert(older);
+      store.upsert(
+        _event(1, more: [(2, LegRole.creditLeg)], at: DateTime.utc(2025)),
+      );
+      store.upsert(_event(2, at: DateTime.utc(2025)));
+      EventStore(db, namespace: 'user:b').upsert(_event(1));
+      expect(store.contextSince(boundary).map((event) => event.eventId), [
+        _id(1),
+      ]);
+      expect(
+        store.contextSince(boundary.add(const Duration(microseconds: 1))),
+        isEmpty,
+      );
+    },
+  );
 
   test('open events within a window, and events since a time', () {
     store.upsert(
