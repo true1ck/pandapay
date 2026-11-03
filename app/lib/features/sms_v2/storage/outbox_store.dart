@@ -13,8 +13,9 @@ class OutboxRecord {
   final String kind;
   final String payload;
   final int attempts;
+  bool get backfill => (jsonDecode(payload) as Map)['_backfill'] == true;
   Map<String, Object?> get json =>
-      (jsonDecode(payload) as Map).cast<String, Object?>();
+      (jsonDecode(payload) as Map).cast<String, Object?>()..remove('_backfill');
 }
 
 /// A durable account queue. Acknowledgement compares the sent payload so an
@@ -24,14 +25,24 @@ class OutboxStore {
   final Database db;
   final String namespace;
 
-  void enqueue(String kind, String id, Map<String, Object?> payload) {
+  void enqueue(
+    String kind,
+    String id,
+    Map<String, Object?> payload, {
+    bool backfill = false,
+  }) {
     db.execute(
       '''
 INSERT INTO v2_outbox(namespace, id, kind, payload) VALUES (?, ?, ?, ?)
 ON CONFLICT(namespace, id) DO UPDATE SET payload=excluded.payload,
   attempts=0, next_attempt_at=0 WHERE v2_outbox.payload != excluded.payload
 ''',
-      [namespace, '$kind:$id', kind, jsonEncode(payload)],
+      [
+        namespace,
+        '$kind:$id',
+        kind,
+        jsonEncode({...payload, if (backfill) '_backfill': true}),
+      ],
     );
   }
 

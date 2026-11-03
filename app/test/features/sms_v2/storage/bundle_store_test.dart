@@ -35,6 +35,7 @@ void main() {
       final trusted = {
         body(1),
         body(2),
+        body(2, expires: '2026-12-02T00:00:00Z'),
         body(3, engine: '99.0.0'),
         body(3, expires: '2026-11-01T00:00:00Z'),
       };
@@ -53,6 +54,10 @@ void main() {
       expect((await store.load(shippedJson: baseline)).bundleVersion, 0);
       expect(await store.install(body(1)), isTrue);
       expect(await store.install(body(2)), isTrue);
+      expect(
+        await store.install(body(2, expires: '2026-12-02T00:00:00Z')),
+        isTrue,
+      );
       expect(await store.install(body(1)), isFalse);
       expect(await store.install(body(3, engine: '99.0.0')), isFalse);
       expect(

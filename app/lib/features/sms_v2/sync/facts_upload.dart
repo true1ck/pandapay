@@ -7,10 +7,11 @@ import 'package:http/http.dart' as http;
 import '../storage/outbox_store.dart';
 
 class UploadBatch {
-  const UploadBatch(this.records, this.body, this.gzipBytes);
+  const UploadBatch(this.records, this.body, this.gzipBytes, this.backfill);
   final List<OutboxRecord> records;
   final Map<String, Object?> body;
   final List<int> gzipBytes;
+  final bool backfill;
 }
 
 /// Bounded upload and acknowledgement. Source groups precede dependent
@@ -36,19 +37,31 @@ class FactsUpload {
   Future<int>? _running;
 
   UploadBatch? nextBatch() {
-    final pending = queue.due(clock(), limit: 2500)
-      ..sort((a, b) => _order(a.kind).compareTo(_order(b.kind)));
-    final candidates = pending
-        .where(
-          (record) => const {
-            'source',
-            'instrument',
-            'event',
-            'ledger',
-          }.contains(record.kind),
-        )
-        .take(500)
-        .toList();
+    final pending = queue.due(clock(), limit: 2500);
+    final position = {
+      for (final (index, row) in pending.indexed) row.id: index,
+    };
+    pending.sort((a, b) {
+      final rank = _order(a.kind).compareTo(_order(b.kind));
+      return rank == 0 ? position[a.id]!.compareTo(position[b.id]!) : rank;
+    });
+    final history = pending.firstOrNull?.backfill ?? false;
+    final counts = <String, int>{};
+    final candidates = <OutboxRecord>[];
+    for (final record in pending) {
+      if (record.backfill != history) continue;
+      if (!const {
+        'source',
+        'instrument',
+        'event',
+        'ledger',
+      }.contains(record.kind))
+        continue;
+      final count = counts[record.kind] ?? 0;
+      if (count >= 500) continue;
+      candidates.add(record);
+      counts[record.kind] = count + 1;
+    }
     var length = candidates.length;
     while (length > 0) {
       final records = candidates.take(length).toList();
@@ -57,7 +70,7 @@ class FactsUpload {
       if (encoded.length <= 8 * 1024 * 1024) {
         final compressed = gzip.encode(encoded);
         if (compressed.length <= 1024 * 1024) {
-          return UploadBatch(records, body, compressed);
+          return UploadBatch(records, body, compressed, history);
         }
       }
       length ~/= 2;
@@ -141,7 +154,9 @@ class FactsUpload {
               baseUri
                   .resolve('/sms/v2/facts:batch')
                   .replace(
-                    queryParameters: backfill ? {'backfill': 'true'} : null,
+                    queryParameters: backfill || batch.backfill
+                        ? {'backfill': 'true'}
+                        : null,
                   ),
               headers: {
                 ...await headers(),

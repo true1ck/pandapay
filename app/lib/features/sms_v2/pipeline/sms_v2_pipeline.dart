@@ -52,11 +52,12 @@ class SmsV2Pipeline {
   late final _writer = ProjectionWriter(financial, _ledger);
 
   /// Returns false for a replay of a source already processed by v2.
-  bool process(SmsMessage message) => processBatch([message]) != 0;
+  bool process(SmsMessage message, {bool backfill = false}) =>
+      processBatch([message], backfill: backfill) != 0;
 
   /// A history chunk shares one link pass and one local transaction.
   /// Callers yield to the UI between chunks of at most 500 messages.
-  int processBatch(List<SmsMessage> messages) {
+  int processBatch(List<SmsMessage> messages, {bool backfill = false}) {
     if (messages.length > 500) {
       throw ArgumentError('Maximum chunk is 500 messages');
     }
@@ -96,12 +97,17 @@ class SmsV2Pipeline {
           }
         }
         if (incoming.isNotEmpty) {
-          _project(unique.values.toList(), incoming, review);
+          _project(
+            unique.values.toList(),
+            incoming,
+            review,
+            backfill: backfill,
+          );
         }
         for (final (message, outcome) in interpreted) {
           final result = outcome.result;
           if (result.outcome == InterpretOutcome.matched) {
-            _queue(message, result.facts);
+            _queue(message, result.facts, backfill: backfill);
           }
           _intake.recordDecision(
             namespace,
@@ -145,7 +151,7 @@ class SmsV2Pipeline {
     return unique.length;
   }
 
-  void _queue(SmsMessage message, List<Fact> facts) {
+  void _queue(SmsMessage message, List<Fact> facts, {required bool backfill}) {
     final upload = [
       for (final fact in facts)
         if (fact.factType != FactType.info)
@@ -166,7 +172,7 @@ class SmsV2Pipeline {
         'observedAt': message.observedAt.toUtc().toIso8601String(),
         'bodyHash': sha256.convert(utf8.encode(message.body)).toString(),
         'facts': upload,
-      });
+      }, backfill: backfill);
     }
   }
 
@@ -184,8 +190,9 @@ class SmsV2Pipeline {
   void _project(
     List<SmsMessage> messages,
     List<Fact> incoming,
-    List<ReviewItem> review,
-  ) {
+    List<ReviewItem> review, {
+    required bool backfill,
+  }) {
     final ordered = [...messages]
       ..sort((a, b) => a.observedAt.compareTo(b.observedAt));
     final from = ordered.first.observedAt.subtract(const Duration(days: 120));
@@ -224,6 +231,7 @@ class SmsV2Pipeline {
               'instrument',
               base.instrumentId,
               update.instrument.toJson(),
+              backfill: backfill,
             );
             instrumentIds[fact.factId] = base.instrumentId;
           case InstrumentReviewNeeded(:final reason):
@@ -264,7 +272,12 @@ class SmsV2Pipeline {
     ];
     if (affected.isEmpty) return;
     for (final event in affected) {
-      _outbox.enqueue('event', event.eventId, event.toJson());
+      _outbox.enqueue(
+        'event',
+        event.eventId,
+        event.toJson(),
+        backfill: backfill,
+      );
       if (event.confidence < .7) {
         review.add(ReviewItem(kind: ReviewKind.event, payload: event.toJson()));
       }
@@ -316,7 +329,12 @@ class SmsV2Pipeline {
       instrumentIdByFactId: instrumentIds,
     );
     for (final entry in changed.entries) {
-      _outbox.enqueue('ledger', entry.entryId, entry.toJson());
+      _outbox.enqueue(
+        'ledger',
+        entry.entryId,
+        entry.toJson(),
+        backfill: backfill,
+      );
     }
   }
 }

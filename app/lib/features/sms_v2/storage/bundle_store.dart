@@ -24,8 +24,20 @@ class BundleStore {
       return false;
     }
     final installed = await _latest();
-    if (installed != null && installed.bundleVersion >= bundle.bundleVersion)
-      return false;
+    if (installed != null) {
+      if (installed.bundleVersion > bundle.bundleVersion) return false;
+      if (installed.bundleVersion == bundle.bundleVersion) {
+        Map<String, Object?> content(RuleBundle value) => value.toJson()
+          ..remove('signature')
+          ..remove('expiresAt')
+          ..remove('createdAt');
+        if (canonicalJson(content(installed)) !=
+                canonicalJson(content(bundle)) ||
+            !bundle.expiresAt.isAfter(installed.expiresAt)) {
+          return false;
+        }
+      }
+    }
     // Compile before committing so an incompatible engine keeps the last copy.
     try {
       RuleEngine().compiled(bundle);
@@ -35,7 +47,9 @@ class BundleStore {
     db.execute(
       '''
 INSERT INTO v2_rule_bundle(bundle_version,json,sha256,signature,expires_at,fetched_at)
-VALUES(?,?,?,?,?,?) ON CONFLICT(bundle_version) DO NOTHING
+VALUES(?,?,?,?,?,?) ON CONFLICT(bundle_version) DO UPDATE SET
+  json=excluded.json, sha256=excluded.sha256, signature=excluded.signature,
+  expires_at=excluded.expires_at, fetched_at=excluded.fetched_at
 ''',
       [
         bundle.bundleVersion,
