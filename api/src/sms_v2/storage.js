@@ -71,6 +71,8 @@ function pickLatest(exVal, exAt, incVal, incAt) {
 /** Merges an uploaded instrument into the stored one (same instrumentId). */
 function mergeInstrument(ex, inc) {
   const m = { ...inc };
+  // Detection is automatic; confirmed/rejected are explicit user decisions.
+  if (inc.status === 'detected' && ex.status !== 'detected') m.status = ex.status;
   const exUser = ex.creditLimitSource === 'user';
   const incUser = inc.creditLimitSource === 'user';
   let limit;
@@ -552,14 +554,23 @@ async function projectTransactions(client, profileId, eventIds, { backfill, deps
   }
   const instruments = new Map();
   if (instrumentIds.size) {
-    const r = await client.query('SELECT instrument_id AS id, kind, user_card_id FROM sms_v2_instruments WHERE profile_id = $1 AND instrument_id = ANY($2::uuid[])', [profileId, [...instrumentIds]]);
-    r.rows.forEach((x) => instruments.set(x.id, { kind: x.kind, userCardId: x.user_card_id }));
+    const r = await client.query('SELECT instrument_id AS id, kind, user_card_id, status FROM sms_v2_instruments WHERE profile_id = $1 AND instrument_id = ANY($2::uuid[])', [profileId, [...instrumentIds]]);
+    r.rows.forEach((x) => instruments.set(x.id, { kind: x.kind, userCardId: x.user_card_id, status: x.status }));
   }
   const anchorRows = await client.query(
     `SELECT fact_id AS id, source_key, payload->'attrs'->>'rail' AS rail FROM sms_v2_facts WHERE profile_id = $1 AND fact_id = ANY($2::text[])`,
     [profileId, eventIds],
   );
   const anchors = new Map(anchorRows.rows.map((x) => [x.id, { sourceKey: x.source_key, rail: x.rail }]));
+
+  const rejectedEvents = eventIds.filter((id) => (ledgerOf.get(id) || []).some((e) =>
+    [e.fromInstrumentId, e.toInstrumentId].some((instId) => instId && instruments.get(instId)?.status === 'rejected')));
+  if (rejectedEvents.length) {
+    // The sync contract has no ledger tombstones. Re-emit the unchanged event
+    // alongside the rejected instrument so clients clear/reproject its ledger.
+    await client.query('DELETE FROM sms_v2_ledger_entries WHERE profile_id = $1 AND event_id = ANY($2::text[])', [profileId, rejectedEvents]);
+    await client.query('UPDATE sms_v2_events SET updated_at = clock_timestamp() WHERE profile_id = $1 AND event_id = ANY($2::text[])', [profileId, rejectedEvents]);
+  }
 
   const specs = new Map();
   for (const id of eventIds) {
@@ -742,8 +753,19 @@ async function ingestBatch(client, profileId, body, { backfill = false, deps, ho
   const storedEvents = await upsertEvents(client, profileId, body.events, results);
   if (storedEvents.length && hooks && hooks.afterEventsStored) await hooks.afterEventsStored(client, profileId, storedEvents);
   const acceptedLedger = await upsertLedger(client, profileId, body.ledger, results);
-  const affected = [...new Set([...storedEvents.map((e) => e.eventId), ...acceptedLedger.map((l) => l.eventId)])];
-  const stats = await projectTransactions(client, profileId, affected, { backfill, deps });
+  const affected = new Set([...storedEvents.map((e) => e.eventId), ...acceptedLedger.map((l) => l.eventId)]);
+  const uploadedInstruments = results.filter((r) => r.kind === 'instrument' && r.status !== 'rejected').map((r) => r.id);
+  if (uploadedInstruments.length) {
+    const rejected = await client.query(
+      `SELECT DISTINCT l.event_id FROM sms_v2_ledger_entries l
+         JOIN sms_v2_instruments i ON i.profile_id = l.profile_id
+          AND (i.instrument_id = l.from_instrument_id OR i.instrument_id = l.to_instrument_id)
+        WHERE l.profile_id = $1 AND i.status = 'rejected' AND i.instrument_id = ANY($2::uuid[])`,
+      [profileId, uploadedInstruments],
+    );
+    rejected.rows.forEach((r) => affected.add(r.event_id));
+  }
+  const stats = await projectTransactions(client, profileId, [...affected], { backfill, deps });
   return { results, stats };
 }
 

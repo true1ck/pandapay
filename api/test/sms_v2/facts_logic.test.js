@@ -65,6 +65,14 @@ test('a zero-amount event is not a row', () => {
   assert.equal(projectEvent({ event: ev('purchase', null, { amountMinor: 0 }), ledger: [led()], instruments, anchor }), null);
 });
 
+test('empty ledgers and rejected endpoints never project a financial row', () => {
+  assert.equal(projectEvent({ event: ev('purchase'), ledger: [], instruments, anchor }), null);
+  assert.equal(projectEvent({ event: ev('purchase'), ledger: [led({ unit: 'POINTS' })], instruments, anchor }), null);
+  const rejected = new Map([...instruments, [ACCT, { kind: 'bank_account', status: 'rejected' }]]);
+  assert.equal(projectEvent({ event: ev('own_transfer'), ledger: [led({ toInstrumentId: ACCT, toExternal: null })], instruments: rejected, anchor }), null);
+  assert.equal(projectEvent({ event: ev('purchase'), ledger: [led({ fromInstrumentId: ACCT })], instruments: rejected, anchor }), null);
+});
+
 test('purchase: merchant, category slug, card and instrument come from the ledger and instrument', () => {
   const row = projectEvent({ event: ev('purchase'), ledger: [led()], instruments, anchor });
   assert.equal(row.merchantName, 'SYNTHETIC SHOP');
@@ -102,14 +110,14 @@ test('only a credit-card spend moves card state', () => {
 });
 
 test('rails: ATM and EMI come from the event, UPI from the fact, the rest is unknown', () => {
-  assert.equal(projectEvent({ event: ev('atm_withdrawal'), ledger: [], instruments, anchor }).rail, 'atm');
-  assert.equal(projectEvent({ event: ev('emi'), ledger: [], instruments, anchor }).rail, 'emi');
-  assert.equal(projectEvent({ event: ev('purchase'), ledger: [], instruments, anchor: { sourceKey: 'k', rail: 'upi' } }).rail, 'upi_qr');
-  assert.equal(projectEvent({ event: ev('purchase'), ledger: [], instruments, anchor: { sourceKey: 'k', rail: 'imps' } }).rail, 'unknown');
+  assert.equal(projectEvent({ event: ev('atm_withdrawal'), ledger: [led()], instruments, anchor }).rail, 'atm');
+  assert.equal(projectEvent({ event: ev('emi'), ledger: [led()], instruments, anchor }).rail, 'emi');
+  assert.equal(projectEvent({ event: ev('purchase'), ledger: [led()], instruments, anchor: { sourceKey: 'k', rail: 'upi' } }).rail, 'upi_qr');
+  assert.equal(projectEvent({ event: ev('purchase'), ledger: [led()], instruments, anchor: { sourceKey: 'k', rail: 'imps' } }).rail, 'unknown');
 });
 
 test('POINTS ledger entries never provide a merchant or a card', () => {
-  const row = projectEvent({ event: ev('purchase'), ledger: [led({ unit: 'POINTS', toExternal: 'POINTS HOLDER' })], instruments, anchor });
+  const row = projectEvent({ event: ev('purchase'), ledger: [led({ unit: 'POINTS', toExternal: 'POINTS HOLDER' }), led({ fromInstrumentId: null, toExternal: null })], instruments, anchor });
   assert.equal(row.merchantName, null);
   assert.equal(row.userCardId, null);
 });
@@ -219,6 +227,14 @@ test('instrument merge keeps a user-entered limit, the latest balance and the wi
   assert.equal(m.displayName, 'Renamed');
   const userNow = storage.mergeInstrument({ ...ex, creditLimitSource: 'sms' }, { ...inc, creditLimitSource: 'user', creditLimitMinor: 700000 });
   assert.equal(userNow.creditLimitMinor, 700000);
+});
+
+test('automatic detection cannot undo an explicit instrument decision', () => {
+  const detected = h.instrument({ status: 'detected' });
+  for (const status of ['confirmed', 'rejected']) {
+    assert.equal(storage.mergeInstrument({ ...detected, status }, detected).status, status);
+  }
+  assert.equal(storage.mergeInstrument({ ...detected, status: 'rejected' }, { ...detected, status: 'confirmed' }).status, 'confirmed');
 });
 
 // ---------- cursors ----------

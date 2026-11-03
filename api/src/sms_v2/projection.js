@@ -78,7 +78,7 @@ const byTimeThenId = (a, b) => {
  * @param {object} args.event     {eventId, type, status, legs, occurredAt, amountMinor}
  * @param {object[]} args.ledger  rows: {entryId, occurredAt, unit, fromInstrumentId, fromExternal,
  *                                toInstrumentId, toExternal, category}
- * @param {Map<string,{kind:string,userCardId:?string}>} args.instruments by instrument id
+ * @param {Map<string,{kind:string,userCardId:?string,status?:string}>} args.instruments by instrument id
  * @param {?{sourceKey:string, rail:?string}} args.anchor the event's anchor fact
  * @returns {?object} the row to upsert, or null when the event is not a row
  */
@@ -86,6 +86,11 @@ function projectEvent({ event, ledger, instruments, anchor }) {
   const entryKind = entryKindFor(event);
   if (!entryKind) return null;
   if (!(event.amountMinor > 0)) return null;
+  // A financial row must be backed by ledger truth. In particular an event-only
+  // stale replay must not recreate a row after its rejected instrument was purged.
+  if (!(ledger || []).some((e) => e.unit === 'INR')) return null;
+  if ((ledger || []).some((e) => [e.fromInstrumentId, e.toInstrumentId]
+    .some((id) => id && instruments.get(id)?.status === 'rejected'))) return null;
   const inflow = INFLOW_TYPES.has(event.type);
   const entries = (ledger || []).filter((e) => e.unit === 'INR').sort(byTimeThenId);
 
