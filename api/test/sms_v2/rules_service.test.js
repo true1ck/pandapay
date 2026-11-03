@@ -14,7 +14,7 @@ const { canonicalize, canonicalBundleBytes, sha256Hex, createSigner, signBundle,
 const builder = require('../../src/sms_v2/bundle_builder');
 const { MemoryStore, utcDay } = require('../../src/sms_v2/rules_store');
 const { registerRules } = require('../../src/sms_v2/rules_route');
-const { lintPattern, importBundle, checkGoldenReport } = require('../../src/sms_v2/rules_admin_route');
+const { registerRulesAdminRoutes, lintPattern, importBundle, checkGoldenReport } = require('../../src/sms_v2/rules_admin_route');
 const stats = require('../../src/sms_v2/rule_stats');
 const { validateBundle } = require('../../src/sms_v2/contracts');
 
@@ -61,6 +61,7 @@ async function harness({ flag = true, tick } = {}) {
     store, signer, requireSmsV2, requireMember, requireAdmin, now: () => clock,
     hooks: { security: { checkEntitlement: async () => state.entitled } },
   });
+  registerRulesAdminRoutes(app, { store, getSigner: () => signer, requireSmsV2, requireAdmin, now: () => clock });
   const server = await new Promise((resolve) => { const s = app.listen(0, '127.0.0.1', () => resolve(s)); });
   const base = `http://127.0.0.1:${server.address().port}`;
   const call = async (method, url, { user = ADMIN, admin = true, body, headers = {} } = {}) => {
