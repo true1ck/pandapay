@@ -601,6 +601,30 @@
   },
   {
     "method": "GET",
+    "path": "/admin/sms/v2/corrections",
+    "permission": "learning.read",
+    "freshMfa": false
+  },
+  {
+    "method": "GET",
+    "path": "/admin/sms/v2/corrections/:caseId/export",
+    "permission": "learning.read",
+    "freshMfa": false
+  },
+  {
+    "method": "PUT",
+    "path": "/admin/sms/v2/corrections/:caseId/example",
+    "permission": "learning.publish",
+    "freshMfa": true
+  },
+  {
+    "method": "POST",
+    "path": "/admin/sms/v2/corrections/:caseId/decision",
+    "permission": "learning.publish",
+    "freshMfa": true
+  },
+  {
+    "method": "GET",
     "path": "/admin/sms/v2/templates",
     "permission": "learning.read",
     "freshMfa": false
