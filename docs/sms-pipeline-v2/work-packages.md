@@ -22,7 +22,7 @@ Each work package is self-contained: an agent needs only the Agent playbook, the
 | 13 | Security | M2 | 08, 09 | `api/src/sms_v2/security.js`, `app/lib/features/sms_v2/sync/{bundle_verifier,rule_keys,attestation}.dart`, `app/pubspec.yaml` (attestation plugin), platform setup files | Sonnet | Not started |
 | 14 | Phone pipeline wiring and batched sync | M2 | 02, 04, 05, 06, 07, 08 | `app/lib/features/sms_v2/pipeline/`, `sync/` (except WP-12 and WP-13 files), `storage/{fact_store,outbox_store,bundle_store,stats_store}.dart`, `providers/`, `app/lib/app/providers.dart` | Opus | In progress (iOS sender triage and local fact storage) |
 | 15 | Review and confirmation screens | M2 | 14 | `app/lib/features/sms_v2/ui/`, `app/lib/app/router.dart` | Sonnet | Not started |
-| 16 | Data migration and replay | M3 | 14, 08 | `app/lib/features/sms_v2/migration/`, `api/src/sms_v2/legacy_supersede.js`, supersede migration | Opus | Not started |
+| 16 | Data migration and replay | M3 | 14, 08 | `app/lib/features/sms_v2/migration/`, `api/src/sms_v2/legacy_supersede.js`, supersede migration | Opus | In progress (server half in review; phone replay and owner dry-run open) |
 | 17 | Cutover, cleanup and release | M3 | all | Flag removal, deletions listed in WP-17, minimum-version enforcement, release checklist | Opus + orchestrator | Not started |
 
 Parallel lanes in M1: `02 → 03`, `04 → 05 → 06` (06 also waits for 07), `07`, `08` and `09`. In M2, 10, 12 and 13 run in parallel, then 11; WP-14 starts once its M1 inputs are Done, then WP-15. In M3, WP-16 runs, then WP-17.

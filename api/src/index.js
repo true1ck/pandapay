@@ -1923,7 +1923,7 @@ app.get('/merchants/search', async (req, res) => {
                   2 AS source_priority,
                   COUNT(*)::int AS confirmation_count
              FROM transactions t
-            WHERE t.merchant_name IS NOT NULL
+            WHERE t.status = 'active' AND t.merchant_name IS NOT NULL
               AND t.merchant_name ILIKE $1
             GROUP BY t.merchant_name, t.category_id
          ),
@@ -3062,7 +3062,7 @@ async function pairTransferObservation(client, userId, transactionId) {
        FROM transactions t
        JOIN transaction_observations o
          ON o.transaction_id = t.id AND o.profile_id = t.profile_id
-      WHERE t.id = $1 AND t.profile_id = $2
+      WHERE t.id = $1 AND t.profile_id = $2 AND t.status = 'active'
         AND o.source IN ('sms', 'sms_bulk')
       ORDER BY o.observed_at DESC
       LIMIT 1`,
@@ -5553,6 +5553,7 @@ app.get('/account-summaries', requireAuth, async (req, res) => {
              LEFT JOIN issuers oi
                ON oi.id::text = o.metadata->>'patternIssuerId'
              WHERE o.profile_id = $1
+               AND t.status = 'active'
                AND o.source IN ('sms', 'sms_bulk')
                AND o.metadata->>'accountLast4' ~ '^[0-9]{4}$'
                AND t.instrument IN ('upi_bank', 'debit_card')
@@ -5993,7 +5994,7 @@ app.get('/transactions/:id', requireAuth, async (req, res) => {
            LEFT JOIN user_categories ucat ON ucat.id = t.user_category_id AND ucat.profile_id = t.profile_id
            LEFT JOIN spend_categories parent_sc ON parent_sc.id = ucat.parent_category_id
            LEFT JOIN user_categories parent_uc ON parent_uc.id = ucat.parent_user_category_id AND parent_uc.profile_id = t.profile_id
-          WHERE t.id = $1 AND t.profile_id = $2`,
+          WHERE t.id = $1 AND t.profile_id = $2 AND t.status <> 'superseded'`,
         [req.params.id, req.userId]
       )
     );
@@ -6024,6 +6025,8 @@ app.get('/duplicate-candidates', requireAuth, async (req, res) => {
         `SELECT id, txn_a_id, txn_b_id, match_score, match_reason, suppressed_txn_id, detected_at
            FROM duplicate_candidates
           WHERE profile_id = $1 AND state = 'pending'
+            AND EXISTS(SELECT 1 FROM transactions a WHERE a.id=txn_a_id AND a.status <> 'superseded')
+            AND EXISTS(SELECT 1 FROM transactions b WHERE b.id=txn_b_id AND b.status <> 'superseded')
           ORDER BY detected_at DESC`,
         [req.userId]
       );
@@ -6661,7 +6664,7 @@ app.get('/transactions/:id/category-related-preview', requireAuth, async (req, r
            LEFT JOIN spend_categories sc ON sc.id = t.category_id
            LEFT JOIN user_categories ucat
              ON ucat.id = t.user_category_id AND ucat.profile_id = t.profile_id
-          WHERE t.profile_id = $1 AND t.id <> $2
+          WHERE t.profile_id = $1 AND t.id <> $2 AND t.status = 'active'
             AND (($3::text IS NOT NULL AND lower(btrim(t.merchant_vpa::text)) = $3)
               OR ($3::text IS NULL AND lower(regexp_replace(btrim(t.merchant_name), '\\s+', ' ', 'g')) = $4))
           ORDER BY t.occurred_at DESC, t.id DESC
@@ -6671,7 +6674,7 @@ app.get('/transactions/:id/category-related-preview', requireAuth, async (req, r
       const count = await client.query(
         `SELECT count(*)::int AS total
            FROM transactions t
-          WHERE t.profile_id = $1 AND t.id <> $2
+          WHERE t.profile_id = $1 AND t.id <> $2 AND t.status = 'active'
             AND (($3::text IS NOT NULL AND lower(btrim(t.merchant_vpa::text)) = $3)
               OR ($3::text IS NULL AND lower(regexp_replace(btrim(t.merchant_name), '\\s+', ' ', 'g')) = $4))`,
         keyParams,
@@ -7533,7 +7536,7 @@ app.get('/assistant/spending-summary', requireAuth, async (req, res) => {
         `SELECT MAX(o.observed_at) AS latest_sms_observed_at
            FROM transaction_observations o
            JOIN transactions t ON t.id = o.transaction_id
-          WHERE t.profile_id = $1
+          WHERE t.profile_id = $1 AND t.status = 'active'
             AND o.source IN ('sms', 'sms_bulk')`,
         [req.userId]
       );

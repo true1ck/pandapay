@@ -580,6 +580,12 @@ async function projectTransactions(client, profileId, eventIds, { backfill, deps
     if (spec && spec.amountMinor < 1e12) specs.set(id, spec);
   }
 
+  const legacySources = await client.query(
+    'SELECT DISTINCT superseded_by_event_id AS id FROM transactions WHERE profile_id=$1 AND superseded_by_event_id=ANY($2::text[])',
+    [profileId, eventIds],
+  );
+  const historyEvents = new Set(legacySources.rows.map(r => r.id));
+
   const slugs = [...new Set([...specs.values()].map((s) => s.categorySlug).filter(Boolean))];
   const categoryId = new Map();
   if (slugs.length) {
@@ -616,14 +622,14 @@ async function projectTransactions(client, profileId, eventIds, { backfill, deps
     const keys = [...new Set(fresh.map((s) => s.sourceKey).filter(Boolean))];
     const held = new Map();
     if (keys.length) {
-      const r = await client.query('SELECT id, source_key, event_id FROM transactions WHERE profile_id = $1 AND source_key = ANY($2::text[])', [profileId, keys]);
+      const r = await client.query('SELECT id, source_key, event_id, status FROM transactions WHERE profile_id = $1 AND source_key = ANY($2::text[])', [profileId, keys]);
       r.rows.forEach((x) => held.set(x.source_key, x));
     }
     const used = new Set();
     const adoptions = [];
     for (const s of fresh) {
       const h = s.sourceKey ? held.get(s.sourceKey) : null;
-      if (h && !h.event_id && !used.has(s.sourceKey)) {
+      if (h && !h.event_id && h.status !== 'superseded' && !used.has(s.sourceKey)) {
         adoptions.push({ id: h.id, event_id: s.eventId });
         adopted.add(s.eventId);
         used.add(s.sourceKey);
@@ -651,18 +657,18 @@ async function projectTransactions(client, profileId, eventIds, { backfill, deps
       `INSERT INTO transactions (profile_id, user_card_id, amount_inr, occurred_at, merchant_name, category_id, rail, source,
          status, reward_state, source_key, instrument, entry_kind, state_applied, is_backfill, event_id, pipeline_version)
        SELECT $1, r.user_card_id, r.amount_minor::numeric / 100, r.occurred_at, r.merchant_name, r.category_id, r.rail::txn_rail,
-              'sms', 'active', 'estimated', r.source_key, r.instrument::txn_instrument, r.entry_kind::txn_entry_kind, false, $3,
+              'sms', 'active', 'estimated', r.source_key, r.instrument::txn_instrument, r.entry_kind::txn_entry_kind, false, r.is_backfill,
               r.event_id, 2
          FROM jsonb_to_recordset($2::jsonb) AS r(event_id text, amount_minor bigint, occurred_at timestamptz, merchant_name text,
-           category_id uuid, user_card_id uuid, rail text, instrument text, entry_kind text, source_key text)
+           category_id uuid, user_card_id uuid, rail text, instrument text, entry_kind text, source_key text, is_backfill boolean)
        ON CONFLICT (profile_id, event_id) WHERE event_id IS NOT NULL DO NOTHING
        RETURNING id, event_id, amount_inr, occurred_at, merchant_name, category_id, user_card_id, rail::text AS rail,
-                 entry_kind::text AS entry_kind, instrument::text AS instrument`,
+                 entry_kind::text AS entry_kind, instrument::text AS instrument, is_backfill`,
       [profileId, J(toInsert.map((s) => ({
         event_id: s.eventId, amount_minor: s.amountMinor, occurred_at: s.occurredAt, merchant_name: s.merchantName,
         category_id: s.categoryId, user_card_id: s.userCardId, rail: s.rail, instrument: s.instrument, entry_kind: s.entryKind,
-        source_key: s.sourceKey,
-      }))), backfill === true],
+        source_key: s.sourceKey, is_backfill: backfill === true || historyEvents.has(s.eventId),
+      })))],
     );
     newRows.push(...r.rows);
     stats.inserted += r.rowCount;
@@ -710,7 +716,7 @@ async function projectTransactions(client, profileId, eventIds, { backfill, deps
   // first stored. Never for backfill rows, never twice for the same row.
   const candidates = [];
   if (backfill !== true) {
-    for (const r of newRows) if (rowMovesCard(r)) candidates.push({ id: r.id, row: r });
+    for (const r of newRows) if (!r.is_backfill && rowMovesCard(r)) candidates.push({ id: r.id, row: r });
   }
   const changedIds = new Set(changed.map((c) => c.row.id));
   for (const { row, spec } of changed) {

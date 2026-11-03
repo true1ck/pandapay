@@ -85,6 +85,8 @@ function registerSmsV2(app, deps) {
 
   require('./ai_templates').registerTemplates(app, shared);
 
+  require('./legacy_supersede').installLegacySupersede(hooks);
+
   return { hooks };
 }
 
