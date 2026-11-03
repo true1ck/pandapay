@@ -116,56 +116,44 @@ Merchant name was not scored, so real accuracy on these cases is lower. Test fil
 | Subscriptions | 4/4 | 3/4 | Kind is right, but merchants are lost or raw: "Bank debit", "UPI Mandate NETFLIX", "SPOTIFY SI". Nothing links the debit to its mandate. |
 | Credit limits | 5/5 | 4/5 | "Limit enhanced to ₹3,00,000" is not recognised, and a limit offer lands in Needs Review. "Avl Lmt" on every card spend is ignored. |
 
-## Your real messages: 12 months
+## What real messages showed
 
-Today's pipeline was run on 12 months of the owner's real messages. They confirm every synthetic finding and add new failure families the probes missed. About 34% of what today's server counts as spending is not spending: card bills paid through CHEQ make up 20%, and card statements 14%. The run did not change the plan's design, but it added rules, two contract fields and one link rule.
+Today's pipeline was also run on a year of real bank and service messages from one phone. That data stays private and is never committed. It confirmed every synthetic finding and added failure families the probes missed. Counts, names and amounts are left out on purpose.
 
-Scope:
-
-- 5,210 messages from 274 bank and service senders, November 2025 to November 2026, about 14 a day.
-- Read locally from the Mac Messages archive; personal chats were filtered out in the query and never read.
-- Nothing left the Mac. This section holds only counts and generic descriptions.
-- Both of today's parsers ran on every message.
-
-| Finding | Messages | What happens today | Fix (work package) |
-| --- | --- | --- | --- |
-| Card statements and bill reminders booked as spending | 47 (35 statements, 12 due reminders) | The server books statement totals as spends. Statements alone are 14% of the 12-month spending total. | `bill_due` rules (03c) |
-| Card bill payments counted twice | 58 card "payment received" rows; 26 have the matching bank debit within 3 days | Both rows exist and both count | `LINK-CARD-BILL` (05) |
-| Failed standing instructions booked as spending | 11 | The phone books "could not be processed" as a spend | `attempt` rules (03c) |
-| Upcoming standing-instruction debits booked | 5 | The server books "to be debited … is due" as a transfer | `attempt` with status `scheduled` (03c) |
-| IPO and UPI one-time mandate holds | 85 block and unblock, 110 mandate approvals, plus SBI "funds blocked" and "hold removed" | Not booked (good), but not understood either: review noise, and no hold is shown | `hold` rules (03c), `LINK-IPO` (05) |
-| Debits made under a mandate or standing instruction | 18 | Missed: no spend recorded | `movement` with `mandateRef` (03c) |
-| Zomato Money | 142 (70 payments, 72 credits) | Not recognised at all | Wallet rules (03b) |
-| Amazon Pay | 64 wallet loads from a credit card; 13 balance payments sent by Juspay and Pine Labs | Loads booked as spending; balance payments not recognised | Wallet rules (03b) plus the decision below |
-| Biller and app receipts (broadband, rent, a store account) | 18 or more | The phone books them as spends, duplicating the real debit | `evidenceOnly` receipts and `LINK-RECEIPT` (05) |
-| One SBI account under 4 sender IDs (SBIUPI, SBIBNK, SBYONO, SBIPSG) | 299 or more | Split into separate accounts, or dropped by the "UPI" filter | Issuer-level instrument key (04), sender registry (03a) |
-| Card identity | 130 card spends with no card digits; one card read as "2025" | Spends not linked to a card | Mask rules and the date-overlap guard (02, 03a) |
-| iOS sender tag such as `YESBNK-S(smsft_fi)` | 97% of messages carry one | No code handles it. If the Shortcut passes it through, every sender match fails. | `normalizeSenderBrand` (02); verify the Shortcut's format (14) |
-| Finance messages neither parser understands | 556 of 1,591 tagged Finance by iOS | Each becomes a review item or an AI job | Rules, plus ignore rules for broker payable notices (133), collect requests (109) and loan-consent offers (39) |
-| Refunds | 60 | 19 booked as plain transfers, 41 missed | Refund rules (03a, 03b) |
-| Dividends and broker payouts | 7 | Not recognised | Purpose `dividend`, broker payout rules (03a, 03c) |
-| Phone and server disagree | 98, plus 11 with different kinds | Answers change after sync | Removed by design: one parser |
-| Card bills paid through CHEQ (and apps like it: CRED, BBPS billers, Tata Neu, PayZapp) | 29 bank debits to "CHEQ DIGITAL PRI"; only 4 have a matching card "payment received" message | Both parsers book them as spending: about 20% of the 12-month spending total | Card-bill payees in counterpartyPurposes (03b); the payment counts as a card payment on its own, even without the card's message (05, 06) |
+| Failure family | What happens today | Fix (work package) |
+| --- | --- | --- |
+| Card statements and bill reminders | Booked as spending | `bill_due` rules (03c) |
+| Card bill payments | Counted twice: a bank debit plus the card's own "payment received" | `LINK-CARD-BILL` (05) |
+| Card bills paid through bill-pay apps (CHEQ, CRED, BBPS billers, Tata Neu, PayZapp) | Booked as spending, often with no card-side receipt | Counterparty-purpose rules (03b), linker (05) |
+| Failed and upcoming standing-instruction debits | Booked as spending or transfers | `attempt` rules (03c) |
+| IPO and UPI one-time mandate holds | Filed as bills or AutoPay mandates; no hold is shown | `hold` rules (03c), `LINK-IPO` (05) |
+| Debits made under a mandate | Missed | `movement` with `mandateRef` (03c) |
+| Wallets (Zomato Money, Pluxee, Amazon Pay and others) | Not recognised, or loads booked as spending | Wallet rules (03b) plus the decision below |
+| Biller and app receipts | Booked as spends, duplicating the real debit | `evidenceOnly` receipts and `LINK-RECEIPT` (05) |
+| One bank account under several sender IDs | Split into separate accounts | Issuer-level instrument key (04), sender registry (03a) |
+| Cards with no printed digits | Spends not linked to a card | Mask rules and the date-overlap guard (02, 03a) |
+| iOS sender tag such as `YESBNK-S(smsft_fi)` | No code handles it | `normalizeSenderBrand` (02); verify the Shortcut's format (14) |
+| Finance messages neither parser understands | Each becomes a review item or an AI job | Rules, plus ignore rules for broker payable notices, collect requests and loan-consent offers |
+| Refunds | Booked as plain transfers, or missed | Refund rules (03a, 03b) |
+| Dividends and broker payouts | Not recognised | Purpose `dividend`, broker payout rules (03a, 03c) |
+| Phone and server disagree | Answers change after sync | Removed by design: one parser |
 
 Other measured facts:
 
-- **OTPs:** all 451 were ignored correctly.
-- **iOS filter tags:** Transactions 1,652, Finance 1,591, Promotions 806, Reminders 750, Orders 274. The Promotions tag is a free signal for the safety gate.
-- **Scale:** about 14 messages a day per user means about 14 million a day at 1 million users. AI per message is not viable; AI per template is.
+- **OTPs** were all ignored correctly.
+- **iOS filter tags** include Transactions, Finance, Promotions, Reminders and Orders. The Promotions tag is a free signal for the safety gate.
+- **Scale:** roughly ten to fifteen messages a day per user means more than ten million a day at one million users. AI per message is not viable; AI per template is.
+
+**Capture risk (P0, check first).** On iPhone, the archive stores senders as `ICICIT-S(smsft_fi)`. The app's capture check (`looksLikeContactName`) treats a sender with that tag as a personal contact. If the Shortcut passes the tagged sender, almost nothing from banks gets in, salary included. The fix is to strip the tag before the safety gate (WP-14) and test it with every tag.
 
 Changes this made to the plan, already applied in the tabs:
 
-- **Contracts:**
-  - `SmsMessage.iosFilter`
-  - movement purpose `dividend`
-  - movement attribute `evidenceOnly`
-  - the `LINK-RECEIPT` link rule
-  - sender entries `walletSpendVisibility` and gateway senders
+- **Contracts:** `SmsMessage.iosFilter`, movement purpose `dividend`, movement attribute `evidenceOnly`, the `LINK-RECEIPT` link rule, and sender entries `walletSpendVisibility` and gateway senders.
 - **WP-02:** strips the iOS tag before matching senders.
-- **WP-03:** works through a real-template checklist, in the order of the table above.
+- **WP-03:** works through a real-template checklist, in order of weight.
 - **WP-05:** joins receipts to the debit they confirm.
 - **WP-14:** checks what sender string the Shortcut actually delivers.
-- **WP-00:** imports this set, redacted, as the first real golden set.
+- **WP-00:** imports a redacted set as the first real golden set.
 
 **Decided on 3 November 2026: Amazon Pay top-ups count as spending.**
 
@@ -176,49 +164,12 @@ Changes this made to the plan, already applied in the tabs:
 
 ### Subscriptions, IPOs, investments and money in
 
-The messages are there, but today's app files them under the wrong kind. That is why subscriptions, IPOs and income look wrong. There is also one capture risk on iPhone that could hide almost everything.
+The messages are there, but today's app files them under the wrong kind. That is why subscriptions, IPOs and income look wrong.
 
-**Capture risk (P0, check first).** On iPhone, the archive stores senders as `ICICIT-S(smsft_fi)`. The app's capture check (`looksLikeContactName`) treats a sender with that tag as a personal contact.
-
-- With the tag, 1,173 of 1,197 money messages are dropped before classification.
-- Without the tag, none are.
-
-If the Shortcut passes the tagged sender, almost nothing from banks gets in, salary included. The fix is to strip the tag before the safety gate (WP-14) and test it with every tag.
-
-| Service | What your messages show | What happens today | Fix |
-| --- | --- | --- | --- |
-| Netflix | Mandate set up May 2026; 2 charges (May, June); cancelled June 2026 | The "debit is scheduled" notice is booked as an extra spend | Shown as a past, cancelled subscription; a notice is an `attempt` (scheduled) |
-| YouTube Premium | Monthly on an ICICI credit-card standing instruction, November 2025 to October 2026: 16 charges, 11 failed attempts (January to February 2026), mandate cancelled and set up again 7 times | The server books 7 charges as transfers (not spending); the phone books the 11 failures as spends | Active subscription; failures are shown as failed payments, never as spending |
-| Apple Media Services | 8 charges, December 2025 to August 2026; 14 mandates set up, 17 cancelled, 12 approval requests | Charges have no category; mandates are ignored | Subscription with its mandate history |
-| ChatGPT | Charges in November 2025 and October 2026; mandate set up and cancelled | Booked as entertainment | Subscription |
-| Claude | 5 foreign-currency charges in November 2025; 3 receipts in July 2026 | Foreign charges go to review; receipts are booked as spends | Foreign charges recorded with the billed INR; receipts are evidence only |
-| Google One / Play | 9 charges, July to October 2026 | 7 not recognised | Rules (03a) |
-| JioFiber / JioHome | A monthly bill for 13 months: due notices and payment receipts | Bills not tracked; 12 receipts booked as spends | A bill with due dates; receipts are evidence only |
-| Alegra broadband | 103 "payment due" reminders over 13 months | Not tracked | A bill |
-| Airtel and Jio recharge offers | About 200 promotions naming Apple Music, Hotstar or Google One | Correctly ignored | Keep |
-
-Today's subscription detector found only 4 series in 12 months, with no names. The new subscriptions list comes from mandates plus charge events. It shows active, cancelled and failed-payment states, keeps past subscriptions, and never includes one-time mandates or IPOs.
-
-**IPOs:**
-
-- 48 ICICI "account blocked / unblocked … against the UPI one-time mandate" messages: the phone files them as **bills**.
-- About 60 ICICI "mandate raised by \<company> for your approval / approved / revoked" messages (Meesho, Shiprocket, Molbio, Dhoot Transmission and others): the phone files them as **AutoPay mandates**, the same type that feeds subscriptions.
-- SBI "hold … removed", NSE IPO application receipts and BSE "no allotment" messages: not understood at all.
-- **Fix:** an IPO application becomes one event: applied, amount blocked, then either allotted (a debit, counted as investment) or released. It never appears in spending, bills or subscriptions. A new **Your IPO applications** screen lists each one with its company, amount, platform, bank account and status.
-
-**Investments:**
-
-- **Money to brokers:** UPI debits to Upstox are booked as spending by the server and as investment by the phone (the server wins). Debits to Nu Investors Technologies are spending in both.
-- **Money back:** NEFT credits from Kotak Securities and Upstox are booked as income or investment, never as a withdrawal. Settlement notices from Upstox, Kotak and Univest are not understood.
-- **Broker balances:** NSE and BSE send regular "fund balance" reports for 7 brokers (Upstox, Groww, Zerodha, Kotak Securities, Univest, ICICI Securities, Nu Investors). They are ignored today, but they are free balance data.
-- **Fix:** Investments becomes its own area, never a spend category. Per platform it shows money put in, money taken out, net invested, the latest fund balance and dividends.
-
-**Money in:**
-
-- **Salary is found:** a NEFT credit via Citibank from your employer, 14 messages in 11 of 12 months (none in June). Both parsers mark it as income. If you don't see it in the app, the cause is upstream: capture (the risk above) or the screen, not classification.
-- **Dividends:** 15 NACH credits from 13 companies (ITC, NALCO, Infosys, Coal India and others) are missed by both parsers.
-- **Overall:** of 160 incoming-money messages, only 18 count as income; 98 are booked as plain transfers and 35 as nothing.
-- **Fix:** a Money in view showing:
+- **Subscriptions:** today's detector finds few series and shows no names. The new list comes from mandates plus charge events. It shows active, cancelled and failed-payment states, keeps past subscriptions, and never includes one-time mandates.
+- **IPOs:** block, unblock and mandate messages are filed as bills or AutoPay. The fix: an IPO application becomes one event (applied, amount blocked, then allotted as a debit counted as investment, or released). It never appears in spending, bills or subscriptions. A **Your IPO applications** screen lists each one.
+- **Investments:** money to brokers is booked inconsistently, money back is never seen as a withdrawal, and NSE and BSE fund-balance reports are ignored although they are free balance data. The fix: Investments becomes its own area, never a spend category. Per platform it shows money put in, money taken out, net invested, the latest fund balance and dividends.
+- **Money in:** salary credits are classified as income by both parsers, so if salary is missing in the app the cause is upstream (the capture risk above) or the screen. Dividend credits are missed, and many incoming credits are booked as plain transfers. The fix: a Money in view showing:
   - salary, auto-detected after 2 months from the same payer, or confirmed once by the user
   - dividends, refunds and cashback
   - money from people

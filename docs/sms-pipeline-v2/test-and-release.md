@@ -38,7 +38,7 @@ The case and scenario formats are defined in WP-00. Each case is weighted by its
 | Ask rate | Unknown plus review items, over financial messages | ≤ 5% | ≤ 2% |
 | Scenario totals | Spend, income, investment, count and by-category exactly right | 100% | 100% |
 
-The gates live in `tools/sms_golden/gates.json` as `m1` and `release` profiles. No metric may fall below the last committed report. When new cases are added, the orchestrator recommits the baseline in the same pull request. The release gates must pass on both the synthetic cases and the redacted real templates from the owner's export: 5,210 messages from 274 senders, November 2025 to November 2026.
+The gates live in `tools/sms_golden/gates.json` as `m1` and `release` profiles. No metric may fall below the last committed report. When new cases are added, the orchestrator recommits the baseline in the same pull request. The release gates must pass on both the synthetic cases and the redacted real templates from a year of real messages (kept private).
 
 ## Migration and compatibility tests
 

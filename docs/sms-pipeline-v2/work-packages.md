@@ -86,7 +86,7 @@ Parallel lanes in M1: `02 → 03`, `04 → 05 → 06` (06 also waits for 07), `0
 
 **Out of scope:** labeling the owner's real messages (done with the owner once Full Disk Access is granted), and the engine itself.
 
-**The owner's real export already exists:** 5,210 messages from 274 senders over 12 months, read from the Mac Messages archive.
+**A real export exists locally and stays private:** a year of institutional messages, read from the Mac Messages archive.
 
 - The scripts used are in `docs/sms-pipeline-v2/seed/real_sms_tools/` (extract, analyse, and run both of today's parsers). Turn them into the `redact` and `cluster` commands.
 - Real extracts go only into `tools/sms_golden/private/` and are never committed.
@@ -315,11 +315,11 @@ Once the owner's real templates are labeled (after Full Disk Access), the same f
 
 ### Real templates to cover first
 
-These come from the owner's 12 months (Overview → "Your real messages"). Each is listed by sender and kind only. The redacted examples arrive with WP-00's real golden set.
+These come from the owner's 12 months (Overview → "What real messages showed"). Each is listed by sender and kind only. The redacted examples arrive with WP-00's real golden set.
 
 - **03a Banks:**
   - SBIUPI "A/C … debited by \<amount without Rs> … trf to", and the same account under SBIBNK, SBYONO, SBIPSG and CBSSBI
-  - SBI credits "credit by \<payer> - \<company>", which are dividends (`purpose: dividend`; 15 NACH dividend credits from 13 companies in the owner's data); broker money: UPI debits to UPSTOX SECURITIE and NU INVESTORS TEC (investment) and NEFT credits from Kotak Securities and Upstox (investment withdrawal); employer NEFT credits (income, labelled salary by WP-06)
+  - SBI credits "credit by \<payer> - \<company>", which are dividends (`purpose: dividend`; NACH dividend credits); broker money: UPI debits to UPSTOX SECURITIE and NU INVESTORS TEC (investment) and NEFT credits from Kotak Securities and Upstox (investment withdrawal); employer NEFT credits (income, labelled salary by WP-06)
   - India Post (DOPBNK) account debits and credits
   - ICICI account "debited … Info BIL\*" (bill payments)
   - Kotak "transferred to your account"
@@ -330,7 +330,7 @@ These come from the owner's 12 months (Overview → "Your real messages"). Each 
   - Zomato Money: payment from balance, and "added to" credits with an expiry date
   - Amazon Pay: card loads that print "AMAZON PAY WALL" or "AMAZON PAY IN E" (wallet top-up), and balance payments sent by Juspay and Pine Labs. Amazon Pay is walletSpendVisibility partial: emit the card load as a movement with purpose wallet\_topup to issuer amazonpay, and each balance payment as an evidenceOnly movement plus a balance\_snapshot
   - Pluxee: spends, deductions such as convenience fees (`purpose: fee`), and loads
-  - store-account payments such as TinyMart, as `evidenceOnly` receipts; card-bill app payments, such as SBI UPI debits to CHEQ DIGITAL PRI (29 in the owner's data, about 20% of today's spending total), and app receipts such as Tata Neu "bill payment … is successful" (evidenceOnly)
+  - store-account payments such as TinyMart, as `evidenceOnly` receipts; card-bill app payments, such as SBI UPI debits to CHEQ DIGITAL PRI, and app receipts such as Tata Neu "bill payment … is successful" (evidenceOnly)
 - **03c Investments, mandates and bills:**
   - ICICI "account has been blocked / unblocked by an amount … against the UPI one-time mandate" (hold placed, released)
   - ICICI "approved the mandate of … raised by" and "… is revoked"
@@ -340,7 +340,7 @@ These come from the owner's 12 months (Overview → "Your real messages"). Each 
   - card statements from ICICI, YES and SBI, and the CRED reminders for the same cards, as one `bill_due` each, never two
   - broadband and phone bills due (Jio, Alegra)
   - biller receipts (JioFiber, rent) as `evidenceOnly`
-  - broker settlement payouts and notices (Kotak, Upstox, Univest); NSE and BSE "fund balance" reports as balance\_snapshot for a broker instrument (7 brokers in the owner's data); IPO issuer mandates ("mandate of … raised by \<company>") as mandate with oneTime and mandatePurpose ipo
+  - broker settlement payouts and notices (Kotak, Upstox, Univest); NSE and BSE "fund balance" reports as balance\_snapshot for a broker instrument; IPO issuer mandates ("mandate of … raised by \<company>") as mandate with oneTime and mandatePurpose ipo
 - **03d Ignore and info rules:**
   - broker "payable to you for all trades" notices (NSE and BSE fund-balance reports are balance snapshots now, see 03c)
   - UPI collect requests (PhonePe, SBI)
@@ -483,7 +483,7 @@ These come from the owner's 12 months (Overview → "Your real messages"). Each 
 - `LINK-RECEIPT` joins it to the bank, card or wallet debit with the same amount within 3 days, as role `duplicate_notice`.
 - On a partial-visibility wallet (Amazon Pay) it is wallet activity only: no event and no review item. Elsewhere, if no debit arrives in the window, it becomes a review item: "We saw a receipt from \<biller> for \<amount> but no payment. Add it?"
 
-The owner's real data had at least 18 such receipts booked as extra spends today.
+Real data showed such receipts booked as extra spends.
 
 **Tests:**
 
@@ -1098,7 +1098,7 @@ Over the limit returns `429` with `Retry-After`.
 
 **Touch points:** `app/lib/data/local/sms_import_store.dart` gets one guarded branch. When the flag is on, a captured financial candidate goes to `SmsV2Pipeline.process` instead of `LocalSmsParser` and the legacy upload. The safety gate, source key and capture bookkeeping before that point stay exactly as they are.
 
-**Sender format on iPhone:** in the Messages archive, sender IDs look like `YESBNK-S(smsft_fi)`. They have no operator prefix and end with an iOS filter tag. First check what string the Shortcut actually delivers to `ios_sms_intake_controller.dart` and the native spool. Then pass the raw sender into `SmsMessage`, let `normalizeSenderBrand` split off the tag, and store it as `iosFilter`. Also strip the tag before the safety gate and triage (touch point: one normalisation call at the start of classifySmsTriage in sms\_text\_hint.dart and of IosShortcutSmsBatch.looksLikeContactName). Today a tagged sender counts as a personal contact, so 1,173 of 1,197 money messages are dropped. Add a test with each tag seen: `smsft`, `smsft_fi`, `smsft_rm`, `smsft_or`, `smsfp`.
+**Sender format on iPhone:** in the Messages archive, sender IDs look like `YESBNK-S(smsft_fi)`. They have no operator prefix and end with an iOS filter tag. First check what string the Shortcut actually delivers to `ios_sms_intake_controller.dart` and the native spool. Then pass the raw sender into `SmsMessage`, let `normalizeSenderBrand` split off the tag, and store it as `iosFilter`. Also strip the tag before the safety gate and triage (touch point: one normalisation call at the start of classifySmsTriage in sms\_text\_hint.dart and of IosShortcutSmsBatch.looksLikeContactName). Today a tagged sender counts as a personal contact, so almost every money message is dropped. Add a test with each tag seen: `smsft`, `smsft_fi`, `smsft_rm`, `smsft_or`, `smsfp`.
 
 **Build:**
 

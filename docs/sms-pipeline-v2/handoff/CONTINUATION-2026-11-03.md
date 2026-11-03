@@ -127,74 +127,18 @@ The owner designated `codex/sms-v2-wp14` as the integration line. Both it and `s
 The accuracy worktree is on `codex/sms-v2-real-accuracy`. From `tools/sms_rules_cli`, this command validated 1,505 examples across 724 rules, 27 ignore rules and 147 senders.
 
 ```sh
-dart run bin/sms_rules.dart build --rules ../../rules/sms/v2 --created-at 2026-11-04T00:00:00Z --out /tmp/pandapay-real-sms.a1N9hk/baseline.json
+dart run bin/sms_rules.dart build --rules ../../rules/sms/v2 --created-at 2026-11-04T00:00:00Z --out <private-dir>/baseline.json
 ```
 
 The repository extractor attempted a read-only connection to the local Messages archive. SQLite could not open it and a direct file open confirmed macOS denied access with `Operation not permitted`. No corpus was extracted. Family accuracy, double counts and review rate remain unmeasured. The subsequent signing, import, correction, device and cutover checkpoints wait on this ordered accuracy step.
 
-### First real-corpus baseline
+### Real-corpus accuracy work (private)
 
-After Full Disk Access was granted, the same read-only extractor retained 5,196 messages across 298 sender headers. The private evaluation directory is `/tmp/pandapay-real-sms.a1N9hk`. From `tools/sms_rules_cli`, the commands were:
+A read-only local extract of a year of the owner's institutional messages stays on the owner's Mac and is never committed. Rule work is driven by redacting and clustering messages that no rule matched, then writing general rules. Each rule ships with a positive and a negative synthetic example, and the build, the golden gate and regex parity must pass before it is committed.
 
-```sh
-p=/tmp/pandapay-real-sms.a1N9hk
-dart run bin/sms_rules.dart build --rules ../../rules/sms/v2 --bundle-version 0 --created-at 2026-11-04T00:00:00Z --out "$p/baseline-v0.json"
-dart --packages=.dart_tool/package_config.json "$p/probe.dart" "$p/baseline-v0.json" "$p/sms.jsonl" "$p/misses.jsonl"
-dart run bin/sms_rules.dart redact --in "$p/misses.jsonl" --out "$p/redacted-misses.jsonl"
-dart run bin/sms_rules.dart cluster --in "$p/redacted-misses.jsonl" --out "$p/miss-templates.json"
-```
+Fixes made so far: successful Zomato Money payments with the separate balance, PhonePe collect requests that are not debits, colon-delimited ICICI Info credits, CRED due reminders (extended to 17 issuers), ICICI transaction-password notices, ICICI one-time mandate holds and releases, and a Jio fraud-education notice. The unmatched share of the private corpus fell on every pass, but the labeled accuracy, full-pipeline double-count and review-rate gates are still open. Exact corpus counts and commands are kept in the private working notes, not here.
 
-The engine matched 1,273, ignored 1,460 and returned unknown for 2,463 (47.4%). The unknowns clustered into 886 templates, with 640 covering 90% of unknown messages. These are engine outcomes. Accuracy requires reviewed expected readings. The phone review rate and double counts require running the full pipeline and checking event linkage. The family gate remains open.
-
-### Wallet accuracy pass 1
-
-The synthetic Zomato Money success notice first returned unknown under the baseline probe. The new sender-scoped rule emits the posted debit and the separate remaining balance. Its negative example covers unsuccessful payment.
-
-From `tools/sms_rules_cli`, repeat the first baseline build command with output `"$p/candidate-v0.json"`. It passes 1,507 examples for 725 rules. Run the same probe against that candidate, first using `"$p/zomato-synthetic.jsonl"` and then `"$p/sms.jsonl"`. The synthetic case now matches. On the same 5,196 messages, matches rose from 1,273 to 1,344 and unknowns fell from 2,463 to 2,392. The 1,460 ignores were unchanged. These are extraction outcomes. Family accuracy, review routing and double counts remain open.
-
-### Wallet accuracy pass 2
-
-A synthetic PhonePe collect request failed the expected ignored outcome before the change and passed afterward. The sender-scoped service rule requires wording that makes the debit conditional on approval. It emits no movement.
-
-From the CLI directory, rerun the baseline build with output `"$p/phonepe-service-v0.json"` and run `dart --packages=.dart_tool/package_config.json "$p/probe.dart" "$p/phonepe-service-v0.json" "$p/sms.jsonl" "$p/phonepe-service-misses.jsonl"`. Build validation passed 1,507 examples with 725 rules and 28 ignore rules. On the same corpus, 72 unknowns became ignores. Totals are 1,344 matched, 1,532 ignored and 2,320 unknown (44.65%). Accuracy and end-to-end accounting gates remain open.
-
-### ICICI Info credit formats
-
-The synthetic colon-delimited NEFT credit returned unknown before the fix and matched after it. Existing ICICI Info credit rules for NEFT, IMPS and RTGS accept the colon form while retaining their existing direction, salary classification and balance handling.
-
-From the CLI directory, run the baseline build with output `"$p/icici-v0.json"`. It passed 1,508 examples. Run the probe with that bundle against `"$p/icici-synthetic.jsonl"` and then `"$p/sms.jsonl"`. The corpus now has 1,359 matches, 1,532 ignores and 2,305 unknowns. The 15 additional matches are extraction outcomes. The labeled accuracy and full-pipeline gates remain open.
-
-### CRED reminders and ICICI transaction passwords
-
-Commit 99021f6 adds issuer-specific CRED reminders for eight issuers. A synthetic masked-card reminder returned unknown before the fix. Local template analysis exposed the actual month-first date shape. The rule uses the engine's supported `MMM dd, yyyy` tokens. All eight positive and negative example pairs pass. The private corpus gained 173 matches.
-
-The following rule commit adds a sender-scoped ICICI transaction-password ignore. Its synthetic notice changed from unknown to ignored. Another 44 private notices moved to ignored.
-
-From `tools/sms_rules_cli`, rerun the baseline build above with output `"$p/otp-v0.json"`, then run the same probe and redaction/cluster sequence against that bundle. The final build passed 1,524 examples. `dart run tool/check_pipeline.dart` passed 115 cases and 15 scenarios. `node test/regex_parity.mjs` passed 45,720 comparisons. The probe counted 1,532 matched, 1,576 ignored and 2,088 unknown.
-
-The private evaluation directory contains a seeded sample of 327 messages across 12 heuristic family strata, with sender and population counts. Expected readings are still blank. The corpus unknown share is 40.2%. The labeled financial unknown rate, family accuracy and real-corpus pipeline accounting gates remain open.
-
-### Coverage beyond the owner corpus
-
-The known masked CRED reminder layout now covers nine additional issuers. A synthetic RBL message was unknown before the change and matched after it. The positive and negative examples are synthetic. The private corpus totals were unchanged, so this is additional tested coverage outside the observed sample.
-
-From the CLI directory, build the baseline with output `"$p/issuer-v0.json"`. The build passed 1,542 examples across 742 rules. `dart run tool/check_pipeline.dart` passed 115 cases and 15 scenarios. `node test/regex_parity.mjs` passed 46,260 comparisons with zero mismatches.
-
-On the integration checkout, `flutter test --no-pub test/features/sms_v2/sync/template_upload_test.dart --reporter expanded` passed two tests. They cover consent, withdrawal and private draft delivery. Unknown formats can enter the shared queue as redacted templates when the user consents and the service is enabled. Shared publication requires an authorized admin with fresh MFA and a passing candidate golden report. Production provisioning and real-user verification are still pending.
-
-### ICICI one-time mandate holds
-
-The synthetic hold was unknown on the previous bundle. The new rules read blocked and unblocked notices as hold facts. The notice does not identify an IPO or an account suffix, so the rules leave those fields unspecified. Debit wording is a negative example.
-
-From the CLI directory, build with output `"$p/hold-v0.json"`, then run the private probe, redaction and clustering with the new bundle. Build passed 1,546 examples. `dart run tool/check_pipeline.dart` passed 115 cases and 15 scenarios. `node test/regex_parity.mjs` passed 46,380 comparisons with zero mismatches. The corpus now has 1,580 matched, 1,576 ignored and 2,040 unknown. The remaining unknowns form 869 clusters.
-
-On the integration checkout, `flutter test --no-pub --dart-define=SMS_PIPELINE_V2=true test/features/sms_v2/pipeline/runtime_scenarios_test.dart --reporter expanded` passed 15 synthetic scenarios including card bills, CHEQ, IPO holds and salary. Full private corpus accounting and labeled accuracy are still outstanding.
-
-### Noise and integration recheck
-
-A synthetic Jio fraud education notice returned unknown before the sender-scoped ignore and ignored afterward. On the same 5,196 messages, 14 unknowns moved to ignored. Counts are 1,580 matched, 1,590 ignored and 2,026 unknown. From the CLI directory, the baseline build with output `"$p/noise-v0.json"` passed 1,546 examples. `dart run tool/check_pipeline.dart` passed 115 cases and 15 scenarios. `node test/regex_parity.mjs` passed 47,926 comparisons with zero mismatches. Regex parity is already wired in build-and-test.yml.
-
-On the integration checkout, `bash scripts/test_private_admin.sh` passed 35 top-level Node tests and three Python tests. Its full-schema test invokes the real PostgreSQL rule, ingestion, template, category, correction and migration suites. This checks the migrated rule fixture and category publication locally. A production-equivalent deployment rehearsal and a real admin session remain separate checks.
+A stratified private sample for labeling and the labeled-accuracy scorer are the next inputs; neither is committed.
 
 ### Plan and placeholder audit
 
@@ -221,9 +165,9 @@ flutter test --no-pub --dart-define=SMS_PIPELINE_V2=true test/features/sms_v2/mi
 
 The tested accuracy branch was fast-forwarded into the local integration line. The interrupted-replay regression was applied as f5c31e3. Both local integration refs included these changes.
 
-The same 5,196 private inputs ran through the real phone runtime with an in-memory database, offline HTTP, original filter tags and a synthetic account. The replay stored 1,300 matched, 1,585 ignored and 709 unknown source decisions. It produced 1,028 counted transactions and 792 open review rows (744 template, 36 event and 12 instrument). Review rows may overlap across kinds and input rows may be filtered or deduplicated, so dividing either count by 5,196 does not establish the reviewed financial-message rate. This exercise measured behavior without determining correctness or a double-count rate.
+The private corpus ran through the real phone runtime with an in-memory database, offline HTTP, original filter tags and a synthetic account. The replay stored matched, ignored and unknown source decisions, produced counted transactions and open review rows. Review rows may overlap across kinds and input rows may be filtered or deduplicated, so these counts do not establish the reviewed financial-message rate. This exercise measured behavior without determining correctness or a double-count rate.
 
-The WP-16 dry run also ran on an in-memory copy populated through legacy offline capture. It retained 2,119 messages, left 870 unchecked, and reported five duplicates merged. Monthly transaction counts summed to 1,077 before and 1,113 after. The test asserted that original rows were byte-for-byte unchanged as JSON. The before/after amounts and complete reports are private local artifacts. This is an offline reconstruction without the owner's actual account state, card bindings or prior edits.
+The WP-16 dry run also ran on an in-memory copy populated through legacy offline capture. It reported duplicates merged and monthly transaction counts before and after. The test asserted that original rows were byte-for-byte unchanged as JSON. The before/after amounts and complete reports are private local artifacts. This is an offline reconstruction without the owner's actual account state, card bindings or prior edits.
 
 The development bundle rehearsal built 744 rules, 30 ignore rules and 147 senders, and passed 1,546 examples. On a socket-only fully migrated Postgres cluster, `node api/scripts/import_sms_v2_rules.js --input <local-bundle> --admin-id <synthetic-owner>` inserted 744 rules and minted four signed cohorts. The second identical import inserted zero rules and minted zero bundles. The local-only connection used `NODE_ENV=test DB_SSL=false`. A temporary Flutter test passed signature verification, tamper rejection and all 15 phone scenarios using the signed bundle exported from Postgres. The ephemeral private key existed only in the import process environment. The temporary test harnesses were removed.
 

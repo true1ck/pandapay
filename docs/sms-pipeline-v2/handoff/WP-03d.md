@@ -35,7 +35,7 @@ Deliberate differences from the old parser: "Refund initiated" and "refund pendi
 | `isProvidentFundNotice` | `IGN-SERVICE-PF-NOTICE` |
 | billerOnboarding, `controlNotice` SEBI/demat noise | `IGN-SERVICE-BILLER-ONBOARDING`, `IGN-SERVICE-DEMAT-NOTICE` |
 | `wallet balance is Rs 0`, `add money to wallet` | `IGN-SERVICE-WALLET-NAG` |
-| (new, from owner's data) broker payable, collect requests, YES BANK consent, recharge promos | `IGN-BROKER-PAYABLE-TRADES`, `IGN-UPI-COLLECT-REQUEST`, `IGN-LOAN-OFFER-CONSENT`, `IGN-RECHARGE-PROMO` |
+| (new, from real messages) broker payable, collect requests, YES BANK consent, recharge promos | `IGN-BROKER-PAYABLE-TRADES`, `IGN-UPI-COLLECT-REQUEST`, `IGN-LOAN-OFFER-CONSENT`, `IGN-RECHARGE-PROMO` |
 | `extractCreditLimit` (`api/src/card_limit_parser.js`), limit-with-amount balance branch | `LIM-INCREASE-01/02`, `LIM-DECREASE-01`, `LIM-*-VERB-01`, `LIM-UPDATED-01`, `LIM-ASSIGNED-01`, `LIM-STATED-01` |
 | `rewardCredit`, "Reward or cashback" merchant label, `rewardState` | `REW-EARNED-*`, `REW-REDEEMED-*`, `CBK-*` |
 | `api/src/merchant_category.js` `BUILTIN_CATEGORY_RULES`, `flashtext_merchant_extractor.dart` catalogue | `category_rules.json` |
