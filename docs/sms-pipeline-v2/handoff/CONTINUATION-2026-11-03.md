@@ -216,3 +216,15 @@ From the integration checkout's app directory:
 ```sh
 flutter test --no-pub --dart-define=SMS_PIPELINE_V2=true test/features/sms_v2/migration/legacy_replay_test.dart test/features/sms_v2/ui/review_actions_test.dart test/features/sms_v2/ledger/adapters_test.dart --reporter expanded
 ```
+
+### Integrated candidate and local release rehearsal
+
+The tested accuracy branch was fast-forwarded into the local integration line. The interrupted-replay regression was applied as f5c31e3. Both local integration refs included these changes.
+
+The same 5,196 private inputs ran through the real phone runtime with an in-memory database, offline HTTP, original filter tags and a synthetic account. The replay stored 1,300 matched, 1,585 ignored and 709 unknown source decisions. It produced 1,028 counted transactions and 792 open review rows (744 template, 36 event and 12 instrument). Review rows may overlap across kinds and input rows may be filtered or deduplicated, so dividing either count by 5,196 does not establish the reviewed financial-message rate. This exercise measured behavior without determining correctness or a double-count rate.
+
+The WP-16 dry run also ran on an in-memory copy populated through legacy offline capture. It retained 2,119 messages, left 870 unchecked, and reported five duplicates merged. Monthly transaction counts summed to 1,077 before and 1,113 after. The test asserted that original rows were byte-for-byte unchanged as JSON. The before/after amounts and complete reports are private local artifacts. This is an offline reconstruction without the owner's actual account state, card bindings or prior edits.
+
+The development bundle rehearsal built 744 rules, 30 ignore rules and 147 senders, and passed 1,546 examples. On a socket-only fully migrated Postgres cluster, `node api/scripts/import_sms_v2_rules.js --input <local-bundle> --admin-id <synthetic-owner>` inserted 744 rules and minted four signed cohorts. The second identical import inserted zero rules and minted zero bundles. The local-only connection used `NODE_ENV=test DB_SSL=false`. A temporary Flutter test passed signature verification, tamper rejection and all 15 phone scenarios using the signed bundle exported from Postgres. The ephemeral private key existed only in the import process environment. The temporary test harnesses were removed.
+
+The candidate is still below the evidence required for rollout. Review expected readings in the private sample, investigate remaining unknowns and verify full-corpus linkage before using it for tester accounting. The production key and App Check owner steps are in ../runbooks/signing-keys.md. The actual device dry run, final native checks and seven-day tester gate remain.
