@@ -86,8 +86,13 @@ payload=excluded.payload,dirty=excluded.dirty WHERE v2_ledger.payload != exclude
             (to == null || e.occurredAt.isBefore(to)),
       )
       .toList();
-  List<LedgerEntry> forEvent(String eventId) =>
-      list().where((e) => e.eventId == eventId).toList();
+  List<LedgerEntry> forEvent(String eventId) => [
+    for (final row in db.select(
+      'SELECT payload FROM v2_ledger WHERE namespace=? AND event_id=? ORDER BY entry_id',
+      [namespace, eventId],
+    ))
+      _decode(row['payload'] as String),
+  ];
   List<LedgerEntry> dirty() =>
       _rows(dirty: true).map((r) => _decode(r['payload'] as String)).toList();
   void markClean(Iterable<String> ids) => _mark(ids, 0);

@@ -1,3 +1,4 @@
+import '../features/sms_v2/providers/data_providers.dart' as sms_v2_data;
 import '../features/sms_v2/instruments/bank_summary_adapter.dart';
 import '../features/sms_v2/flag.dart';
 import '../features/sms_v2/providers/runtime_provider.dart';
@@ -1335,6 +1336,9 @@ final activeSmsRuleBundleProvider = FutureProvider<SmsRuleBundle?>((ref) async {
 /// Insights Hub's tile both read this rather than the full list, so
 /// neither has to unwrap an AsyncValue just to show a number.
 final needsReviewCountProvider = FutureProvider<int>((ref) async {
+  if (ref.watch(smsPipelineV2EnabledProvider)) {
+    return (await ref.watch(sms_v2_data.reviewItemsProvider.future)).length;
+  }
   final markReady = _financialChanges(ref, 'needs_review');
   final count = await ref.watch(needsReviewRepositoryProvider).count();
   markReady();

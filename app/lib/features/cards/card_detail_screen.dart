@@ -1,3 +1,4 @@
+import '../sms_v2/ui/ledger_screens.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
@@ -324,6 +325,7 @@ class CardDetailScreen extends ConsumerWidget {
                         result: cardUtilization,
                       ),
                       const SizedBox(height: AppSpace.md),
+                      LinkedInstrumentUsage(userCardId: userCard.id),
                       _CardSpendingMixSection(userCard: userCard),
                       const SizedBox(height: AppSpace.lg),
                       for (final section in ordered) ...[

@@ -31,6 +31,7 @@ class SmsCorrection {
     this.message,
     this.extractedMaskCorrect = true,
     this.sharedLearningConsent = false,
+    this.reportCase = true,
   });
 
   final String id, sourceKey;
@@ -41,6 +42,9 @@ class SmsCorrection {
   final String? eventId;
   final SmsMessage? message;
   final bool extractedMaskCorrect, sharedLearningConsent;
+
+  /// A confirmation locks the reading without reporting a false defect.
+  final bool reportCase;
 }
 
 /// Applies the local effect and queues its review case in the same savepoint.
@@ -160,7 +164,12 @@ class CorrectionsService {
               legs.any((leg) => _facts.get(leg.factId) == null)) {
             throw ArgumentError('All linked facts must be in this account');
           }
-          event = event!.copyWith(legs: legs);
+          event = event!.copyWith(
+            legs: legs,
+            type: corrected['eventType'] is String
+                ? EventType.fromWire(corrected['eventType'] as String)
+                : null,
+          );
         } else if (correction.kind != CorrectionKind.missing) {
           if (event == null || originalFacts.length != 1) {
             throw ArgumentError('One source fact and event are required');
@@ -266,6 +275,25 @@ class CorrectionsService {
             for (final related in _events.findByFactIds(correction.factIds))
               if (related.eventId != event!.eventId) related.eventId: related,
           };
+          for (final id
+              in correction.corrected['_retireEventIds'] as List? ?? const []) {
+            if (correction.kind != CorrectionKind.wrongLink ||
+                id is! String ||
+                id == event!.eventId)
+              throw ArgumentError('Invalid merged event');
+            final other = _events.get(id);
+            final linked = event!.legs.map((leg) => leg.factId).toSet();
+            if (other == null ||
+                other.legs.any((leg) => !linked.contains(leg.factId)))
+              throw ArgumentError('Every merged message must remain linked');
+            affected[id] = _events.upsert(
+              other.copyWith(
+                type: EventType.unknown,
+                status: EventStatus.userConfirmed,
+              ),
+              fromUser: true,
+            );
+          }
           final previousEntries = [
             for (final related in affected.values)
               ..._ledger.forEvent(related.eventId),
@@ -337,10 +365,11 @@ class CorrectionsService {
               'trace': correction.trace.toJson(),
               'corrected': correction.corrected,
             }),
-            'pending',
+            correction.reportCase ? 'pending' : 'resolved',
           ],
         );
-        if (stage != null) _queueCase(correction, stage);
+        if (stage != null && correction.reportCase)
+          _queueCase(correction, stage);
         _db.execute('RELEASE sms_v2_correction');
         financial.notifyExternalChanges(namespace, const [
           'transactions',

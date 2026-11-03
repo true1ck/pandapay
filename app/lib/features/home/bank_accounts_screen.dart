@@ -1,3 +1,4 @@
+import '../sms_v2/ui/ledger_screens.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
@@ -262,70 +263,82 @@ class _BankAccountsScreenState extends ConsumerState<BankAccountsScreen> {
                 )
               else
                 for (final account in accounts)
-                  Card(
-                    margin: const EdgeInsets.only(bottom: 12),
-                    child: ListTile(
-                      contentPadding: const EdgeInsets.symmetric(
-                        horizontal: 16,
-                        vertical: 8,
-                      ),
-                      leading: CircleAvatar(
-                        backgroundColor: BambooInk.slate,
-                        foregroundColor: BambooInk.lime,
-                        child: Text(
-                          (account.issuerShortName ?? account.issuerName ?? 'B')
-                              .trim()
-                              .characters
-                              .first
-                              .toUpperCase(),
-                        ),
-                      ),
-                      title: Text(
-                        account.issuerShortName ??
-                            account.issuerName ??
-                            'Bank account',
-                      ),
-                      subtitle: Text(
-                        'Account ending ${account.accountLast4}\n${account.isBalanceManuallySet
-                            ? 'Manually updated ${DateFormat('dd MMM, h:mm a').format(account.manualBalanceUpdatedAt!.toLocal())}'
-                            : account.latestBalanceSmsAt == null
-                            ? 'No balance reported by SMS'
-                            : 'SMS snapshot ${DateFormat('dd MMM, h:mm a').format(account.latestBalanceSmsAt!.toLocal())}'}',
-                      ),
-                      isThreeLine: true,
-                      trailing: SizedBox(
-                        width: 152,
-                        child: Row(
-                          mainAxisAlignment: MainAxisAlignment.end,
-                          children: [
-                            Flexible(
-                              child: Text(
-                                account.availableBalance == null
-                                    ? 'Not set'
-                                    : _unlocked
-                                    ? account.availableBalance!.format(
-                                        hidePaise: true,
-                                      )
-                                    : '₹••••',
-                                maxLines: 1,
-                                overflow: TextOverflow.ellipsis,
-                                style: BambooFonts.ui(
-                                  13,
-                                  weight: FontWeight.w700,
+                  Column(
+                    children: [
+                      Card(
+                        margin: const EdgeInsets.only(bottom: 12),
+                        child: ListTile(
+                          contentPadding: const EdgeInsets.symmetric(
+                            horizontal: 16,
+                            vertical: 8,
+                          ),
+                          leading: CircleAvatar(
+                            backgroundColor: BambooInk.slate,
+                            foregroundColor: BambooInk.lime,
+                            child: Text(
+                              (account.issuerShortName ??
+                                      account.issuerName ??
+                                      'B')
+                                  .trim()
+                                  .characters
+                                  .first
+                                  .toUpperCase(),
+                            ),
+                          ),
+                          title: Text(
+                            account.issuerShortName ??
+                                account.issuerName ??
+                                'Bank account',
+                          ),
+                          subtitle: Text(
+                            'Account ending ${account.accountLast4}\n${account.isBalanceManuallySet
+                                ? 'Manually updated ${DateFormat('dd MMM, h:mm a').format(account.manualBalanceUpdatedAt!.toLocal())}'
+                                : account.latestBalanceSmsAt == null
+                                ? 'No balance reported by SMS'
+                                : 'SMS snapshot ${DateFormat('dd MMM, h:mm a').format(account.latestBalanceSmsAt!.toLocal())}'}',
+                          ),
+                          isThreeLine: true,
+                          trailing: SizedBox(
+                            width: 152,
+                            child: Row(
+                              mainAxisAlignment: MainAxisAlignment.end,
+                              children: [
+                                Flexible(
+                                  child: Text(
+                                    account.availableBalance == null
+                                        ? 'Not set'
+                                        : _unlocked
+                                        ? account.availableBalance!.format(
+                                            hidePaise: true,
+                                          )
+                                        : '₹••••',
+                                    maxLines: 1,
+                                    overflow: TextOverflow.ellipsis,
+                                    style: BambooFonts.ui(
+                                      13,
+                                      weight: FontWeight.w700,
+                                    ),
+                                  ),
                                 ),
-                              ),
+                                IconButton(
+                                  tooltip: 'Edit balance',
+                                  onPressed: _authenticating
+                                      ? null
+                                      : () => _editBalance(account),
+                                  icon: const Icon(Icons.edit_outlined),
+                                ),
+                              ],
                             ),
-                            IconButton(
-                              tooltip: 'Edit balance',
-                              onPressed: _authenticating
-                                  ? null
-                                  : () => _editBalance(account),
-                              icon: const Icon(Icons.edit_outlined),
-                            ),
-                          ],
+                          ),
                         ),
                       ),
-                    ),
+                      if (_unlocked)
+                        LinkedInstrumentUsage(
+                          accountMask: account.accountLast4,
+                          issuerName:
+                              account.issuerName ?? account.issuerShortName,
+                        ),
+                    ],
                   ),
             ],
           );

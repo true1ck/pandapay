@@ -1,3 +1,4 @@
+import '../sms_v2/ui/home_prompt.dart';
 import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
@@ -185,6 +186,7 @@ class _HomeScreenState extends ConsumerState<HomeScreen> {
                       ),
                       const _HomeSpendHeadline(),
                       if (_showDeferredSections) const _HomeForeignSummary(),
+                      const SmsV2HomePrompt(),
                       const _HomeQuickActions(),
                       const _HomeSectionDivider(),
                       Padding(

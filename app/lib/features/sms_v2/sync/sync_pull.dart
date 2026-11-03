@@ -132,13 +132,20 @@ class SyncPull {
               conflict.instrumentId != incoming.instrumentId) {
             _adopt(conflict, incoming.instrumentId);
           }
-          if (!_dirty(
-                'v2_instruments',
-                'instrument_id',
-                incoming.instrumentId,
-              ) &&
+          if ((incoming.status == InstrumentStatus.rejected ||
+                  !_dirty(
+                    'v2_instruments',
+                    'instrument_id',
+                    incoming.instrumentId,
+                  )) &&
               newer('instruments', incoming.instrumentId)) {
             _instruments.upsert(incoming, dirty: false);
+            if (incoming.status == InstrumentStatus.rejected) {
+              _db.execute('DELETE FROM v2_outbox WHERE namespace=? AND id=?', [
+                namespace,
+                'instrument:${incoming.instrumentId}',
+              ]);
+            }
             record('instruments', incoming.instrumentId);
           }
         }
@@ -310,20 +317,56 @@ class SyncPull {
       if (complete || transactionKindForEvent(event) == null) ready.add(event);
     }
     final readyIds = ready.map((event) => event.eventId).toSet();
-    final entries = _ledger
-        .list()
-        .where((entry) => readyIds.contains(entry.eventId))
-        .toList();
-    final dirtyBefore = _ledger.dirty().map((entry) => entry.entryId).toSet();
     final instruments = {
       for (final instrument in _instruments.list())
         instrument.instrumentId: instrument,
     };
+    final instrumentIds = _facts.instrumentIdsSince(DateTime.utc(1900));
+    final invalidEvents = {
+      for (final event in ready)
+        if (event.type == EventType.unknown ||
+            event.legs.any((leg) {
+              final fact = facts[leg.factId];
+              return fact != null &&
+                  instrumentForFact(
+                        fact,
+                        instruments,
+                        instrumentIdByFactId: instrumentIds,
+                      )?.status ==
+                      InstrumentStatus.rejected;
+            }))
+          event.eventId,
+      for (final entry in _ledger.list())
+        if ([entry.from, entry.to].whereType<InstrumentEndpoint>().any(
+          (endpoint) =>
+              instruments[endpoint.instrumentId]?.status ==
+              InstrumentStatus.rejected,
+        ))
+          entry.eventId,
+    };
+    for (final id in invalidEvents) {
+      for (final entry in _ledger.forEvent(id)) {
+        _db.execute('DELETE FROM v2_outbox WHERE namespace=? AND id=?', [
+          namespace,
+          'ledger:${entry.entryId}',
+        ]);
+      }
+    }
+    final entries = _ledger
+        .list()
+        .where(
+          (entry) =>
+              readyIds.contains(entry.eventId) &&
+              !invalidEvents.contains(entry.eventId),
+        )
+        .toList();
+    final dirtyBefore = _ledger.dirty().map((entry) => entry.entryId).toSet();
     final locked = _ledger.categoryDecisions();
     final projectedCategories = LedgerSnapshot.project(
       events: ready,
       factsById: facts,
       instrumentsById: instruments,
+      instrumentIdByFactId: instrumentIds,
       bundle: bundle,
       lockedCategories: {
         ...locked,
@@ -344,6 +387,7 @@ class SyncPull {
       ),
       factsById: facts,
       instrumentsById: instruments,
+      instrumentIdByFactId: instrumentIds,
       categoryIdBySlug: categoryIdBySlug,
     );
     // These are server projections, so writing the display does not queue a push.

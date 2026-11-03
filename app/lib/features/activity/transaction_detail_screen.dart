@@ -1,3 +1,5 @@
+import '../sms_v2/flag.dart';
+import '../sms_v2/ui/why_sheet.dart';
 import 'package:flutter/material.dart';
 import 'dart:async';
 import 'dart:convert';
@@ -1424,6 +1426,19 @@ class _DetailBodyState extends ConsumerState<_DetailBody> {
                     _SplitSummary(splits: _splits, total: widget.entry.amount),
                   ],
                   const SizedBox(height: AppSpace.sm),
+                  if (ref.watch(smsPipelineV2EnabledProvider) &&
+                      entry.pipelineVersion == 2 &&
+                      entry.sourceKey != null)
+                    AccountTile(
+                      icon: Icons.help_outline,
+                      label: 'Why this?',
+                      onTap: () => showSmsWhy(
+                        context,
+                        ref,
+                        sourceKey: entry.sourceKey!,
+                        eventId: entry.eventId,
+                      ),
+                    ),
                   // Design 18's third row, landing on design 26 with this payment
                   // already attached — not the catalogue-correction screen (C7) and
                   // not the general feedback inbox (H9).

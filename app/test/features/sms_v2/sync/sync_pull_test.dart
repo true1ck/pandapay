@@ -148,6 +148,39 @@ void main() {
   });
 
   test(
+    'an instrument-only rejection clears old money without ledger tombstones',
+    () async {
+      final client = MockClient((_) async => response());
+      await puller(client: client).pull();
+      final incoming = (body['instruments'] as List).single as Map;
+      incoming['status'] = 'rejected';
+      body['events'] = [];
+      body['ledger'] = [];
+      body['facts'] = [];
+      body['cursor'] = 'page-rejected';
+      (body['updatedAt'] as Map)['instruments'] = {
+        incoming['instrumentId']: '2026-11-01T08:00:00Z',
+      };
+      await puller(client: client).pull();
+      expect(LedgerStore(database.db, namespace: 'target').list(), isEmpty);
+      expect(
+        financial
+            .entities('target', 'transactions')
+            .every((r) => r['status'] != 'active'),
+        isTrue,
+      );
+      // An older page replay carries ledger rows, but cannot resurrect the row.
+      body['ledger'] = OutboxStore(database.db, namespace: 'source')
+          .due(DateTime.utc(2026, 12))
+          .where((r) => r.kind == 'ledger')
+          .map((r) => r.json)
+          .toList();
+      await puller(client: client).pull();
+      expect(LedgerStore(database.db, namespace: 'target').list(), isEmpty);
+    },
+  );
+
+  test(
     'pending local edits survive ordinary pulls while server user confirmation wins',
     () async {
       final client = MockClient((_) async => response());
