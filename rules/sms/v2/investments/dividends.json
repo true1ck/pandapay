@@ -1,0 +1,117 @@
+[
+  {
+    "id": "INV-DIVIDEND-CREDIT-01",
+    "version": 1,
+    "family": "dividend",
+    "senders": [
+      "*"
+    ],
+    "priority": 380,
+    "match": {
+      "pattern": "(?:dividend|idcw)[\\s\\S]{0,80}?(?:rs\\.?|inr|₹)\\s*(?<amt>[\\d,]+(?:\\.\\d{1,2})?)[\\s\\S]{0,120}?credit(?:ed)?(?:[\\s\\S]{0,60}?(?:a/c|acct?\\.?|account)\\s*(?:no\\.?\\s*)?(?:ending\\s*(?:with\\s*|in\\s*)?)?(?:[x*•.]+\\s*)?(?<mask>\\d{2,16})\\b)?",
+      "flags": "i",
+      "rejectAny": [
+        "will be credited",
+        "record date",
+        "per share",
+        "declared",
+        "debited"
+      ]
+    },
+    "emit": [
+      {
+        "factType": "movement",
+        "attrs": {
+          "direction": "credit",
+          "purpose": "dividend",
+          "rail": "unknown"
+        },
+        "amounts": [
+          {
+            "role": "posted",
+            "from": "amt",
+            "unit": "INR"
+          }
+        ],
+        "instrument": {
+          "kind": "bank_account",
+          "maskFrom": "mask"
+        }
+      }
+    ],
+    "confidence": 0.9,
+    "examples": [
+      {
+        "sender": "VM-HDFCBK-S",
+        "body": "Dividend of Rs 1,200.00 has been credited to your A/c XX1234 on 12-11-26 from INFOSYS LTD.",
+        "expectFactTypes": [
+          "movement"
+        ]
+      },
+      {
+        "sender": "VM-HDFCBK-S",
+        "body": "Dividend of Rs 5 per share declared by INFOSYS LTD. Record date 20-Nov-26.",
+        "expectFactTypes": []
+      }
+    ],
+    "status": "active",
+    "createdBy": "baseline",
+    "updatedAt": "2026-11-20T00:00:00Z"
+  },
+  {
+    "id": "INV-DIVIDEND-CREDIT-02",
+    "version": 1,
+    "family": "dividend",
+    "senders": [
+      "*"
+    ],
+    "priority": 380,
+    "match": {
+      "pattern": "credit(?:ed)?\\s+(?:by|of|with)\\s+(?:rs\\.?|inr|₹)\\s*(?<amt>[\\d,]+(?:\\.\\d{1,2})?)[\\s\\S]{0,160}?(?:dividend|idcw)",
+      "flags": "i",
+      "rejectAny": [
+        "will be credited",
+        "record date",
+        "declared"
+      ]
+    },
+    "emit": [
+      {
+        "factType": "movement",
+        "attrs": {
+          "direction": "credit",
+          "purpose": "dividend",
+          "rail": "nach"
+        },
+        "amounts": [
+          {
+            "role": "posted",
+            "from": "amt",
+            "unit": "INR"
+          }
+        ],
+        "instrument": {
+          "kind": "bank_account"
+        }
+      }
+    ],
+    "confidence": 0.9,
+    "examples": [
+      {
+        "sender": "AD-SBIBNK-S",
+        "body": "Your A/c XX1234 credited by Rs.1200.00 on 12Nov26 NACH-DIVIDEND INFOSYS LTD. -SBI",
+        "expectFactTypes": [
+          "movement"
+        ]
+      },
+      {
+        "sender": "AD-SBIBNK-S",
+        "body": "Your A/c XX1234 credited by Rs.1200.00 on 12Nov26 by NEFT from ACME TECHNOLOGIES LTD. -SBI",
+        "expectFactTypes": []
+      }
+    ],
+    "status": "active",
+    "createdBy": "baseline",
+    "updatedAt": "2026-11-20T00:00:00Z"
+  }
+]

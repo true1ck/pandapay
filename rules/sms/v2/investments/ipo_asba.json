@@ -1,0 +1,1480 @@
+[
+  {
+    "id": "INV-IPO-ALLOT-01",
+    "version": 1,
+    "family": "ipo_allotment",
+    "senders": [
+      "*"
+    ],
+    "priority": 820,
+    "match": {
+      "pattern": "(?:rs\\.?|inr|₹)\\s*(?<amt>[\\d,]+(?:\\.\\d{1,2})?)\\s+(?:has been\\s+)?debited\\s+(?:from|in)\\s+(?:your\\s+)?(?:bank\\s+)?(?:a/c|acct?\\.?|account)\\s*(?:no\\.?\\s*)?(?:ending\\s*(?:with\\s*|in\\s*)?)?(?:[x*•.]+\\s*)?(?<mask>\\d{2,16})\\b(?:\\s+on\\s+(?<date>\\d{2}[-/ ](?:\\d{2}|(?:jan|feb|mar|apr|may|jun|jul|aug|sep|oct|nov|dec))[-/ ]\\d{2,4}|\\d{2}(?:jan|feb|mar|apr|may|jun|jul|aug|sep|oct|nov|dec)\\d{2,4}))?\\s+(?:towards|for)\\s+(?:the\\s+)?(?:ipo|asba)\\s+(?:allotment|allocation|application)(?:\\s+(?:of|for)\\s+(?<issue>[a-z0-9&' ()-]+?)(?=\\s*(?:[.,;]|avl|-\\s*[a-z]|$)))?",
+      "flags": "i",
+      "rejectAny": [
+        "not allotted",
+        "no allotment",
+        "refund"
+      ]
+    },
+    "emit": [
+      {
+        "factType": "movement",
+        "attrs": {
+          "direction": "debit",
+          "purpose": "investment",
+          "rail": "unknown"
+        },
+        "amounts": [
+          {
+            "role": "posted",
+            "from": "amt",
+            "unit": "INR"
+          }
+        ],
+        "occurredAt": {
+          "from": "date"
+        },
+        "instrument": {
+          "kind": "bank_account",
+          "maskFrom": "mask"
+        },
+        "counterparty": {
+          "kind": "merchant",
+          "nameFrom": "issue",
+          "transforms": [
+            "sanitizeNarration"
+          ]
+        }
+      }
+    ],
+    "confidence": 0.98,
+    "examples": [
+      {
+        "sender": "VM-HDFCBK-S",
+        "body": "Rs.14,250.00 debited from A/c XX1234 on 30-11-26 towards IPO allotment of TATA TECHNOLOGIES LTD. -HDFC Bank",
+        "expectFactTypes": [
+          "movement"
+        ]
+      },
+      {
+        "sender": "VM-HDFCBK-S",
+        "body": "Rs.14,250.00 blocked in your A/c XX1234 towards ASBA for TATA TECHNOLOGIES LTD has been released on 30-11-26. -HDFC Bank",
+        "expectFactTypes": []
+      }
+    ],
+    "status": "active",
+    "createdBy": "baseline",
+    "updatedAt": "2026-11-20T00:00:00Z"
+  },
+  {
+    "id": "INV-IPO-ALLOT-01-B",
+    "version": 1,
+    "family": "ipo_allotment",
+    "senders": [
+      "*"
+    ],
+    "priority": 821,
+    "match": {
+      "pattern": "(?:rs\\.?|inr|₹)\\s*(?<amt>[\\d,]+(?:\\.\\d{1,2})?)\\s+(?:has been\\s+)?debited\\s+(?:from|in)\\s+(?:your\\s+)?(?:bank\\s+)?(?:a/c|acct?\\.?|account)\\s*(?:no\\.?\\s*)?(?:ending\\s*(?:with\\s*|in\\s*)?)?(?:[x*•.]+\\s*)?(?<mask>\\d{2,16})\\b(?:\\s+on\\s+(?<date>\\d{2}[-/ ](?:\\d{2}|(?:jan|feb|mar|apr|may|jun|jul|aug|sep|oct|nov|dec))[-/ ]\\d{2,4}|\\d{2}(?:jan|feb|mar|apr|may|jun|jul|aug|sep|oct|nov|dec)\\d{2,4}))?\\s+(?:towards|for)\\s+(?:the\\s+)?(?:ipo|asba)\\s+(?:allotment|allocation|application)(?:\\s+(?:of|for)\\s+(?<issue>[a-z0-9&' ()-]+?)(?=\\s*(?:[.,;]|avl|-\\s*[a-z]|$)))?[\\s\\S]*?avl\\.?\\s*bal(?:ance)?\\.?\\s*[:\\-]?\\s*(?:rs\\.?|inr|₹)\\s*(?<bal>[\\d,]+(?:\\.\\d{1,2})?)",
+      "flags": "i",
+      "rejectAny": [
+        "not allotted",
+        "no allotment",
+        "refund"
+      ]
+    },
+    "emit": [
+      {
+        "factType": "movement",
+        "attrs": {
+          "direction": "debit",
+          "purpose": "investment",
+          "rail": "unknown"
+        },
+        "amounts": [
+          {
+            "role": "posted",
+            "from": "amt",
+            "unit": "INR"
+          }
+        ],
+        "occurredAt": {
+          "from": "date"
+        },
+        "instrument": {
+          "kind": "bank_account",
+          "maskFrom": "mask"
+        },
+        "counterparty": {
+          "kind": "merchant",
+          "nameFrom": "issue",
+          "transforms": [
+            "sanitizeNarration"
+          ]
+        }
+      },
+      {
+        "factType": "balance_snapshot",
+        "amounts": [
+          {
+            "role": "available_balance",
+            "from": "bal",
+            "unit": "INR"
+          }
+        ],
+        "instrument": {
+          "sameAs": 0
+        },
+        "attrs": {
+          "asOf": {
+            "sameAs": 0,
+            "field": "occurredAt"
+          }
+        }
+      }
+    ],
+    "confidence": 0.98,
+    "examples": [
+      {
+        "sender": "VM-HDFCBK-S",
+        "body": "Rs.14,250.00 debited from A/c XX1234 on 30-11-26 towards IPO allotment of TATA TECHNOLOGIES LTD. Avl Bal Rs.52,310.40 -HDFC Bank",
+        "expectFactTypes": [
+          "movement",
+          "balance_snapshot"
+        ]
+      },
+      {
+        "sender": "VM-HDFCBK-S",
+        "body": "Rs.14,250.00 blocked in your A/c XX1234 towards ASBA for TATA TECHNOLOGIES LTD has been released on 30-11-26. -HDFC Bank",
+        "expectFactTypes": []
+      }
+    ],
+    "status": "active",
+    "createdBy": "baseline",
+    "updatedAt": "2026-11-20T00:00:00Z"
+  },
+  {
+    "id": "INV-IPO-ALLOT-02",
+    "version": 1,
+    "family": "ipo_allotment",
+    "senders": [
+      "*"
+    ],
+    "priority": 800,
+    "match": {
+      "pattern": "(?:debited|deducted)[\\s\\S]{0,60}?(?:rs\\.?|inr|₹)\\s*(?<amt>[\\d,]+(?:\\.\\d{1,2})?)[\\s\\S]{0,120}?(?:ipo|asba)\\s+(?:allotment|allocation)(?:\\s+(?:of|for)\\s+(?<issue>[a-z0-9&' ()-]+?)(?=\\s*(?:[.,;]|avl|-\\s*[a-z]|$)))?",
+      "flags": "i",
+      "requireAll": [
+        "allot"
+      ],
+      "rejectAny": [
+        "no allot",
+        "not allot",
+        "refund",
+        "released",
+        "unblock",
+        "will be debited"
+      ]
+    },
+    "emit": [
+      {
+        "factType": "movement",
+        "attrs": {
+          "direction": "debit",
+          "purpose": "investment",
+          "rail": "unknown"
+        },
+        "amounts": [
+          {
+            "role": "posted",
+            "from": "amt",
+            "unit": "INR"
+          }
+        ],
+        "instrument": {
+          "kind": "bank_account"
+        },
+        "counterparty": {
+          "kind": "merchant",
+          "nameFrom": "issue",
+          "transforms": [
+            "sanitizeNarration"
+          ]
+        }
+      }
+    ],
+    "confidence": 0.9,
+    "examples": [
+      {
+        "sender": "VM-HDFCBK-S",
+        "body": "Your account is debited Rs. 14,250.00 as ASBA converted to IPO allotment of SWIGGY LIMITED.",
+        "expectFactTypes": [
+          "movement"
+        ]
+      },
+      {
+        "sender": "VM-HDFCBK-S",
+        "body": "No allotment of IPO shares. Rs. 14,250.00 will be debited only if shares are allotted.",
+        "expectFactTypes": []
+      }
+    ],
+    "status": "active",
+    "createdBy": "baseline",
+    "updatedAt": "2026-11-20T00:00:00Z"
+  },
+  {
+    "id": "INV-IPO-ALLOT-03",
+    "version": 1,
+    "family": "ipo_allotment",
+    "senders": [
+      "*"
+    ],
+    "priority": 830,
+    "match": {
+      "pattern": "(?:a/c|acct?\\.?|account)\\s*(?:no\\.?\\s*)?(?:ending\\s*(?:with\\s*|in\\s*)?)?(?:[x*•.]+\\s*)?(?<mask>\\d{2,16})\\b\\s+is\\s+debited\\s+(?:for|with|by)\\s+(?:rs\\.?|inr|₹)\\s*(?<amt>[\\d,]+(?:\\.\\d{1,2})?)(?:\\s+on\\s+(?<date>\\d{2}[-/ ](?:\\d{2}|(?:jan|feb|mar|apr|may|jun|jul|aug|sep|oct|nov|dec))[-/ ]\\d{2,4}|\\d{2}(?:jan|feb|mar|apr|may|jun|jul|aug|sep|oct|nov|dec)\\d{2,4}))?\\s+against\\s+(?:the\\s+)?upi\\s+(?:one[- ]time\\s+)?mandate\\s+for\\s+(?:the\\s+)?ipo\\s+(?:of\\s+)?(?<issue>[a-z0-9&' ()-]+?)(?=\\s*(?:[.,;]|avl|-\\s*[a-z]|$))",
+      "flags": "i",
+      "rejectAny": [
+        "will be",
+        "failed",
+        "unblock",
+        "released"
+      ]
+    },
+    "emit": [
+      {
+        "factType": "movement",
+        "attrs": {
+          "direction": "debit",
+          "purpose": "investment",
+          "rail": "upi"
+        },
+        "amounts": [
+          {
+            "role": "posted",
+            "from": "amt",
+            "unit": "INR"
+          }
+        ],
+        "occurredAt": {
+          "from": "date"
+        },
+        "instrument": {
+          "kind": "bank_account",
+          "maskFrom": "mask"
+        },
+        "counterparty": {
+          "kind": "merchant",
+          "nameFrom": "issue",
+          "transforms": [
+            "sanitizeNarration"
+          ]
+        }
+      }
+    ],
+    "confidence": 0.98,
+    "examples": [
+      {
+        "sender": "AX-ICICIT-S",
+        "body": "Your A/c XX1234 is debited for Rs 14,250.00 on 30-Nov-26 against UPI mandate for IPO TATA TECH. -ICICI Bank",
+        "expectFactTypes": [
+          "movement"
+        ]
+      },
+      {
+        "sender": "AX-ICICIT-S",
+        "body": "Your A/c XX1234 will be debited for Rs 14,250.00 on 30-Nov-26 against UPI mandate for IPO TATA TECH. -ICICI Bank",
+        "expectFactTypes": []
+      }
+    ],
+    "status": "active",
+    "createdBy": "baseline",
+    "updatedAt": "2026-11-20T00:00:00Z"
+  },
+  {
+    "id": "INV-IPO-ALLOT-03-B",
+    "version": 1,
+    "family": "ipo_allotment",
+    "senders": [
+      "*"
+    ],
+    "priority": 831,
+    "match": {
+      "pattern": "(?:a/c|acct?\\.?|account)\\s*(?:no\\.?\\s*)?(?:ending\\s*(?:with\\s*|in\\s*)?)?(?:[x*•.]+\\s*)?(?<mask>\\d{2,16})\\b\\s+is\\s+debited\\s+(?:for|with|by)\\s+(?:rs\\.?|inr|₹)\\s*(?<amt>[\\d,]+(?:\\.\\d{1,2})?)(?:\\s+on\\s+(?<date>\\d{2}[-/ ](?:\\d{2}|(?:jan|feb|mar|apr|may|jun|jul|aug|sep|oct|nov|dec))[-/ ]\\d{2,4}|\\d{2}(?:jan|feb|mar|apr|may|jun|jul|aug|sep|oct|nov|dec)\\d{2,4}))?\\s+against\\s+(?:the\\s+)?upi\\s+(?:one[- ]time\\s+)?mandate\\s+for\\s+(?:the\\s+)?ipo\\s+(?:of\\s+)?(?<issue>[a-z0-9&' ()-]+?)(?=\\s*(?:[.,;]|avl|-\\s*[a-z]|$))[\\s\\S]*?avl\\.?\\s*bal(?:ance)?\\.?\\s*[:\\-]?\\s*(?:rs\\.?|inr|₹)\\s*(?<bal>[\\d,]+(?:\\.\\d{1,2})?)",
+      "flags": "i",
+      "rejectAny": [
+        "will be",
+        "failed",
+        "unblock",
+        "released"
+      ]
+    },
+    "emit": [
+      {
+        "factType": "movement",
+        "attrs": {
+          "direction": "debit",
+          "purpose": "investment",
+          "rail": "upi"
+        },
+        "amounts": [
+          {
+            "role": "posted",
+            "from": "amt",
+            "unit": "INR"
+          }
+        ],
+        "occurredAt": {
+          "from": "date"
+        },
+        "instrument": {
+          "kind": "bank_account",
+          "maskFrom": "mask"
+        },
+        "counterparty": {
+          "kind": "merchant",
+          "nameFrom": "issue",
+          "transforms": [
+            "sanitizeNarration"
+          ]
+        }
+      },
+      {
+        "factType": "balance_snapshot",
+        "amounts": [
+          {
+            "role": "available_balance",
+            "from": "bal",
+            "unit": "INR"
+          }
+        ],
+        "instrument": {
+          "sameAs": 0
+        },
+        "attrs": {
+          "asOf": {
+            "sameAs": 0,
+            "field": "occurredAt"
+          }
+        }
+      }
+    ],
+    "confidence": 0.98,
+    "examples": [
+      {
+        "sender": "AX-ICICIT-S",
+        "body": "Your A/c XX1234 is debited for Rs 14,250.00 on 30-Nov-26 against UPI mandate for IPO TATA TECH. Avl Bal Rs 52,310.40 -ICICI Bank",
+        "expectFactTypes": [
+          "movement",
+          "balance_snapshot"
+        ]
+      },
+      {
+        "sender": "AX-ICICIT-S",
+        "body": "Your A/c XX1234 will be debited for Rs 14,250.00 on 30-Nov-26 against UPI mandate for IPO TATA TECH. -ICICI Bank",
+        "expectFactTypes": []
+      }
+    ],
+    "status": "active",
+    "createdBy": "baseline",
+    "updatedAt": "2026-11-20T00:00:00Z"
+  },
+  {
+    "id": "INV-IPO-ALLOT-04",
+    "version": 1,
+    "family": "ipo_allotment",
+    "senders": [
+      "*"
+    ],
+    "priority": 830,
+    "match": {
+      "pattern": "(?:a/c|acct?\\.?|account)\\s*(?:no\\.?\\s*)?(?:ending\\s*(?:with\\s*|in\\s*)?)?(?:[x*•.]+\\s*)?(?<mask>\\d{2,16})\\b\\s+(?:has been|is)\\s+debited\\s+(?:for|with|by)\\s+(?:rs\\.?|inr|₹)\\s*(?<amt>[\\d,]+(?:\\.\\d{1,2})?)(?:\\s+on\\s+(?<date>\\d{2}[-/ ](?:\\d{2}|(?:jan|feb|mar|apr|may|jun|jul|aug|sep|oct|nov|dec))[-/ ]\\d{2,4}|\\d{2}(?:jan|feb|mar|apr|may|jun|jul|aug|sep|oct|nov|dec)\\d{2,4}))?\\s+against\\s+(?:the\\s+)?upi\\s+one[- ]time\\s+mandate\\s+raised\\s+by\\s+(?<issue>[a-z0-9&' ()-]+?)(?=\\s*(?:[.,;]|avl|-\\s*[a-z]|$))",
+      "flags": "i",
+      "rejectAny": [
+        "will be",
+        "failed",
+        "unblock",
+        "released",
+        "blocked"
+      ]
+    },
+    "emit": [
+      {
+        "factType": "movement",
+        "attrs": {
+          "direction": "debit",
+          "purpose": "investment",
+          "rail": "upi"
+        },
+        "amounts": [
+          {
+            "role": "posted",
+            "from": "amt",
+            "unit": "INR"
+          }
+        ],
+        "occurredAt": {
+          "from": "date"
+        },
+        "instrument": {
+          "kind": "bank_account",
+          "maskFrom": "mask"
+        },
+        "counterparty": {
+          "kind": "merchant",
+          "nameFrom": "issue",
+          "transforms": [
+            "sanitizeNarration"
+          ]
+        }
+      }
+    ],
+    "confidence": 0.95,
+    "examples": [
+      {
+        "sender": "AX-ICICIT-S",
+        "body": "ICICI Bank Acct XX1234 has been debited for Rs 14,250.00 on 30-Nov-26 against the UPI one-time mandate raised by TATA TECHNOLOGIES LIMITED. -ICICI Bank",
+        "expectFactTypes": [
+          "movement"
+        ]
+      },
+      {
+        "sender": "AX-ICICIT-S",
+        "body": "ICICI Bank Acct XX1234 has been blocked by an amount of Rs 14,250.00 against the UPI one-time mandate raised by TATA TECHNOLOGIES LIMITED. -ICICI Bank",
+        "expectFactTypes": []
+      }
+    ],
+    "status": "active",
+    "createdBy": "baseline",
+    "updatedAt": "2026-11-20T00:00:00Z"
+  },
+  {
+    "id": "INV-IPO-ASBA-BLOCK-01",
+    "version": 1,
+    "family": "ipo_hold",
+    "senders": [
+      "*"
+    ],
+    "priority": 820,
+    "match": {
+      "pattern": "(?:rs\\.?|inr|₹)\\s*(?<amt>[\\d,]+(?:\\.\\d{1,2})?)\\s+(?:has been |is |was )?(?:blocked|marked as lien|lien marked)\\s+(?:in|on|against)\\s+your\\s+(?:bank\\s+)?(?:a/c|acct?\\.?|account)\\s*(?:no\\.?\\s*)?(?:ending\\s*(?:with\\s*|in\\s*)?)?(?:[x*•.]+\\s*)?(?<mask>\\d{2,16})\\b\\s+(?:towards|for)\\s+(?:the\\s+)?asba\\s+(?:application\\s+)?(?:for\\s+)?(?<issue>[a-z0-9&.' ()-]+?)(?:\\s+ipo)?\\s+on\\s+(?<date>\\d{2}[-/ ](?:\\d{2}|(?:jan|feb|mar|apr|may|jun|jul|aug|sep|oct|nov|dec))[-/ ]\\d{2,4}|\\d{2}(?:jan|feb|mar|apr|may|jun|jul|aug|sep|oct|nov|dec)\\d{2,4})",
+      "flags": "i",
+      "requireAll": [
+        "asba"
+      ],
+      "rejectAny": [
+        "released",
+        "unblocked",
+        "failed",
+        "rejected",
+        "debited"
+      ]
+    },
+    "emit": [
+      {
+        "factType": "hold",
+        "attrs": {
+          "phase": "placed",
+          "purpose": "ipo_asba",
+          "issueName": {
+            "from": "issue",
+            "transforms": [
+              "upperTrim"
+            ]
+          }
+        },
+        "amounts": [
+          {
+            "role": "held",
+            "from": "amt",
+            "unit": "INR"
+          }
+        ],
+        "instrument": {
+          "kind": "bank_account",
+          "maskFrom": "mask"
+        },
+        "occurredAt": {
+          "from": "date"
+        }
+      }
+    ],
+    "confidence": 0.98,
+    "examples": [
+      {
+        "sender": "VM-HDFCBK-S",
+        "body": "Rs.14,250.00 has been blocked in your A/c XX1234 towards ASBA application for TATA TECHNOLOGIES LTD IPO on 22-11-26. -HDFC Bank",
+        "expectFactTypes": [
+          "hold"
+        ]
+      },
+      {
+        "sender": "VM-HDFCBK-S",
+        "body": "Rs.14,250.00 blocked in your A/c XX1234 towards ASBA for TATA TECHNOLOGIES LTD has been released on 22-11-26. -HDFC Bank",
+        "expectFactTypes": []
+      }
+    ],
+    "status": "active",
+    "createdBy": "baseline",
+    "updatedAt": "2026-11-20T00:00:00Z"
+  },
+  {
+    "id": "INV-IPO-ASBA-BLOCK-02",
+    "version": 1,
+    "family": "ipo_hold",
+    "senders": [
+      "*"
+    ],
+    "priority": 820,
+    "match": {
+      "pattern": "asba\\s+application\\s+(?:no\\.?\\s*)?(?<ref_asbaRef>[a-z0-9]+)\\s+for\\s+(?<issue>[a-z0-9&.' ()-]+?)\\s+of\\s+(?:rs\\.?|inr|₹)\\s*(?<amt>[\\d,]+(?:\\.\\d{1,2})?)\\s+has been\\s+(?:accepted|received|placed|registered)(?:\\s+successfully)?(?:\\s+on\\s+(?<date>\\d{2}[-/ ](?:\\d{2}|(?:jan|feb|mar|apr|may|jun|jul|aug|sep|oct|nov|dec))[-/ ]\\d{2,4}|\\d{2}(?:jan|feb|mar|apr|may|jun|jul|aug|sep|oct|nov|dec)\\d{2,4}))?",
+      "flags": "i",
+      "requireAll": [
+        "asba"
+      ],
+      "rejectAny": [
+        "rejected",
+        "failed",
+        "cancel",
+        "withdrawn"
+      ]
+    },
+    "emit": [
+      {
+        "factType": "hold",
+        "attrs": {
+          "phase": "placed",
+          "purpose": "ipo_asba",
+          "issueName": {
+            "from": "issue",
+            "transforms": [
+              "upperTrim"
+            ]
+          }
+        },
+        "amounts": [
+          {
+            "role": "held",
+            "from": "amt",
+            "unit": "INR"
+          }
+        ],
+        "instrument": {
+          "kind": "bank_account"
+        },
+        "occurredAt": {
+          "from": "date"
+        }
+      }
+    ],
+    "confidence": 0.97,
+    "examples": [
+      {
+        "sender": "VM-KOTAKB-S",
+        "body": "Dear Customer, your request for ASBA application no. 1789027578CB90FY for RENTOMOJO LIMITED of Rs. 2,09,272.00 has been accepted successfully on 10/09/2026. - Kotak Bank",
+        "expectFactTypes": [
+          "hold"
+        ]
+      },
+      {
+        "sender": "VM-KOTAKB-S",
+        "body": "Dear Customer, your request for ASBA application no. 1789027578CB90FY for RENTOMOJO LIMITED of Rs. 2,09,272.00 has been rejected on 10/09/2026. - Kotak Bank",
+        "expectFactTypes": []
+      }
+    ],
+    "status": "active",
+    "createdBy": "baseline",
+    "updatedAt": "2026-11-20T00:00:00Z"
+  },
+  {
+    "id": "INV-IPO-ASBA-BLOCK-03",
+    "version": 1,
+    "family": "ipo_hold",
+    "senders": [
+      "*"
+    ],
+    "priority": 820,
+    "match": {
+      "pattern": "lien\\s+of\\s+(?:rs\\.?|inr|₹)\\s*(?<amt>[\\d,]+(?:\\.\\d{1,2})?)\\s+(?:has been\\s+)?marked\\s+on\\s+your\\s+(?:bank\\s+)?(?:account|a/c)\\s+(?:no\\.?\\s*)?(?:[x*•.]*(?<mask>\\d{2,16})\\s+)?for\\s+asba\\s+application\\s+(?:no\\.?\\s*)?(?<ref_asbaRef>[a-z0-9]+)\\s+for\\s+(?<issue>[a-z0-9&' ()-]+?)\\s*(?:[.,;]|$)",
+      "flags": "i",
+      "requireAll": [
+        "asba",
+        "lien"
+      ],
+      "rejectAny": [
+        "removed",
+        "released",
+        "unmarked"
+      ]
+    },
+    "emit": [
+      {
+        "factType": "hold",
+        "attrs": {
+          "phase": "placed",
+          "purpose": "ipo_asba",
+          "issueName": {
+            "from": "issue",
+            "transforms": [
+              "upperTrim"
+            ]
+          }
+        },
+        "amounts": [
+          {
+            "role": "held",
+            "from": "amt",
+            "unit": "INR"
+          }
+        ],
+        "instrument": {
+          "kind": "bank_account",
+          "maskFrom": "mask"
+        }
+      }
+    ],
+    "confidence": 0.96,
+    "examples": [
+      {
+        "sender": "VM-HDFCBK-S",
+        "body": "Dear Customer, lien of Rs. 14850.00 marked on your account for ASBA application no. 987654 for SWIGGY LIMITED.",
+        "expectFactTypes": [
+          "hold"
+        ]
+      },
+      {
+        "sender": "VM-HDFCBK-S",
+        "body": "Dear Customer, lien of Rs. 14850.00 on your account for ASBA application no. 987654 for SWIGGY LIMITED has been removed.",
+        "expectFactTypes": []
+      }
+    ],
+    "status": "active",
+    "createdBy": "baseline",
+    "updatedAt": "2026-11-20T00:00:00Z"
+  },
+  {
+    "id": "INV-IPO-ASBA-BLOCK-90",
+    "version": 1,
+    "family": "ipo_hold",
+    "senders": [
+      "*"
+    ],
+    "priority": 150,
+    "match": {
+      "pattern": "(?:rs\\.?|inr|₹)\\s*(?<amt>[\\d,]+(?:\\.\\d{1,2})?)[\\s\\S]{0,120}?(?:blocked|lien|block)\\b[\\s\\S]{0,160}?asba(?:[\\s\\S]{0,80}?(?:a/c|acct?\\.?|account)\\s*(?:no\\.?\\s*)?(?:ending\\s*(?:with\\s*|in\\s*)?)?(?:[x*•.]+\\s*)?(?<mask>\\d{2,16})\\b)?",
+      "flags": "i",
+      "requireAll": [
+        "asba"
+      ],
+      "rejectAny": [
+        "released",
+        "unblocked",
+        "removed",
+        "debited",
+        "reversed",
+        "credited back",
+        "unmarked",
+        "lifted"
+      ]
+    },
+    "emit": [
+      {
+        "factType": "hold",
+        "attrs": {
+          "phase": "placed",
+          "purpose": "ipo_asba"
+        },
+        "amounts": [
+          {
+            "role": "held",
+            "from": "amt",
+            "unit": "INR"
+          }
+        ],
+        "instrument": {
+          "kind": "bank_account",
+          "maskFrom": "mask"
+        }
+      }
+    ],
+    "confidence": 0.8,
+    "examples": [
+      {
+        "sender": "VM-HDFCBK-S",
+        "body": "Rs 9,000.00 blocked in your account towards ASBA bid. Funds will stay blocked until allotment.",
+        "expectFactTypes": [
+          "hold"
+        ]
+      },
+      {
+        "sender": "VM-HDFCBK-S",
+        "body": "Rs 9,000.00 earlier blocked towards your ASBA bid has been released to your account.",
+        "expectFactTypes": []
+      }
+    ],
+    "status": "active",
+    "createdBy": "baseline",
+    "updatedAt": "2026-11-20T00:00:00Z"
+  },
+  {
+    "id": "INV-IPO-ASBA-RELEASE-01",
+    "version": 1,
+    "family": "ipo_hold",
+    "senders": [
+      "*"
+    ],
+    "priority": 820,
+    "match": {
+      "pattern": "(?:rs\\.?|inr|₹)\\s*(?<amt>[\\d,]+(?:\\.\\d{1,2})?)\\s+(?:that was\\s+)?(?:blocked|marked as lien|lien marked)\\s+(?:in|on|against)\\s+your\\s+(?:bank\\s+)?(?:a/c|acct?\\.?|account)\\s*(?:no\\.?\\s*)?(?:ending\\s*(?:with\\s*|in\\s*)?)?(?:[x*•.]+\\s*)?(?<mask>\\d{2,16})\\b\\s+(?:towards|for)\\s+(?:the\\s+)?asba\\s+(?:application\\s+)?(?:for\\s+)?(?<issue>[a-z0-9&.' ()-]+?)(?:\\s+ipo)?\\s+(?:has been|is|was)\\s+(?:released|unblocked|unfrozen|credited back|reversed)(?:\\s+on\\s+(?<date>\\d{2}[-/ ](?:\\d{2}|(?:jan|feb|mar|apr|may|jun|jul|aug|sep|oct|nov|dec))[-/ ]\\d{2,4}|\\d{2}(?:jan|feb|mar|apr|may|jun|jul|aug|sep|oct|nov|dec)\\d{2,4}))?",
+      "flags": "i",
+      "requireAll": [
+        "asba"
+      ]
+    },
+    "emit": [
+      {
+        "factType": "hold",
+        "attrs": {
+          "phase": "released",
+          "purpose": "ipo_asba",
+          "issueName": {
+            "from": "issue",
+            "transforms": [
+              "upperTrim"
+            ]
+          }
+        },
+        "amounts": [
+          {
+            "role": "released",
+            "from": "amt",
+            "unit": "INR"
+          }
+        ],
+        "instrument": {
+          "kind": "bank_account",
+          "maskFrom": "mask"
+        },
+        "occurredAt": {
+          "from": "date"
+        }
+      }
+    ],
+    "confidence": 0.98,
+    "examples": [
+      {
+        "sender": "VM-HDFCBK-S",
+        "body": "Rs.14,250.00 blocked in your A/c XX1234 towards ASBA for TATA TECHNOLOGIES LTD has been released on 30-11-26. -HDFC Bank",
+        "expectFactTypes": [
+          "hold"
+        ]
+      },
+      {
+        "sender": "VM-HDFCBK-S",
+        "body": "Rs.14,250.00 has been blocked in your A/c XX1234 towards ASBA application for TATA TECHNOLOGIES LTD IPO on 22-11-26. -HDFC Bank",
+        "expectFactTypes": []
+      }
+    ],
+    "status": "active",
+    "createdBy": "baseline",
+    "updatedAt": "2026-11-20T00:00:00Z"
+  },
+  {
+    "id": "INV-IPO-ASBA-RELEASE-02",
+    "version": 1,
+    "family": "ipo_hold",
+    "senders": [
+      "*"
+    ],
+    "priority": 820,
+    "match": {
+      "pattern": "lien\\s+of\\s+(?:rs\\.?|inr|₹)\\s*(?<amt>[\\d,]+(?:\\.\\d{1,2})?)[\\s\\S]{0,60}?asba\\s+application\\s+(?:no\\.?\\s*)?(?<ref_asbaRef>[a-z0-9]+)[\\s\\S]{0,60}?(?:has been|is|was)\\s+(?:removed|released|unmarked|revoked|lifted)",
+      "flags": "i",
+      "requireAll": [
+        "asba",
+        "lien"
+      ]
+    },
+    "emit": [
+      {
+        "factType": "hold",
+        "attrs": {
+          "phase": "released",
+          "purpose": "ipo_asba"
+        },
+        "amounts": [
+          {
+            "role": "released",
+            "from": "amt",
+            "unit": "INR"
+          }
+        ],
+        "instrument": {
+          "kind": "bank_account"
+        }
+      }
+    ],
+    "confidence": 0.95,
+    "examples": [
+      {
+        "sender": "VM-HDFCBK-S",
+        "body": "Dear Customer, lien of Rs. 14850.00 on your account for ASBA application no. 987654 for SWIGGY LIMITED has been removed on 12-12-26.",
+        "expectFactTypes": [
+          "hold"
+        ]
+      },
+      {
+        "sender": "VM-HDFCBK-S",
+        "body": "Dear Customer, lien of Rs. 14850.00 marked on your account for ASBA application no. 987654 for SWIGGY LIMITED.",
+        "expectFactTypes": []
+      }
+    ],
+    "status": "active",
+    "createdBy": "baseline",
+    "updatedAt": "2026-11-20T00:00:00Z"
+  },
+  {
+    "id": "INV-IPO-ASBA-RELEASE-90",
+    "version": 1,
+    "family": "ipo_hold",
+    "senders": [
+      "*"
+    ],
+    "priority": 150,
+    "match": {
+      "pattern": "(?:rs\\.?|inr|₹)\\s*(?<amt>[\\d,]+(?:\\.\\d{1,2})?)[\\s\\S]{0,160}?(?:unblocked|released|lien\\s+(?:removed|released|revoked)|unmarked|credited back|reversed)(?:[\\s\\S]{0,80}?(?:a/c|acct?\\.?|account)\\s*(?:no\\.?\\s*)?(?:ending\\s*(?:with\\s*|in\\s*)?)?(?:[x*•.]+\\s*)?(?<mask>\\d{2,16})\\b)?",
+      "flags": "i",
+      "requireAll": [
+        "asba"
+      ],
+      "rejectAny": [
+        "debited"
+      ]
+    },
+    "emit": [
+      {
+        "factType": "hold",
+        "attrs": {
+          "phase": "released",
+          "purpose": "ipo_asba"
+        },
+        "amounts": [
+          {
+            "role": "released",
+            "from": "amt",
+            "unit": "INR"
+          }
+        ],
+        "instrument": {
+          "kind": "bank_account",
+          "maskFrom": "mask"
+        }
+      }
+    ],
+    "confidence": 0.8,
+    "examples": [
+      {
+        "sender": "VM-HDFCBK-S",
+        "body": "Rs 9,000.00 earlier blocked towards your ASBA bid has been released to your account.",
+        "expectFactTypes": [
+          "hold"
+        ]
+      },
+      {
+        "sender": "VM-HDFCBK-S",
+        "body": "Rs 9,000.00 blocked in your account towards ASBA bid. Funds will stay blocked until allotment.",
+        "expectFactTypes": []
+      }
+    ],
+    "status": "active",
+    "createdBy": "baseline",
+    "updatedAt": "2026-11-20T00:00:00Z"
+  },
+  {
+    "id": "INV-IPO-MANDATE-APPROVED-01",
+    "version": 1,
+    "family": "ipo_mandate",
+    "senders": [
+      "*"
+    ],
+    "priority": 810,
+    "match": {
+      "pattern": "approved\\s+(?:the\\s+)?(?:upi\\s+)?(?:one[- ]time\\s+)?mandate\\s+of\\s+(?:rs\\.?|inr|₹)\\s*(?<amt>[\\d,]+(?:\\.\\d{1,2})?)\\s+raised\\s+by\\s+(?<m>[a-z0-9&.' ()-]*?(?:ltd|limited|ipo|inc)\\.?)(?=\\s|[.,;]|$)",
+      "flags": "i",
+      "requireAll": [
+        "approved"
+      ],
+      "rejectAny": [
+        "autopay",
+        "recurring",
+        "monthly",
+        "subscription"
+      ]
+    },
+    "emit": [
+      {
+        "factType": "mandate",
+        "attrs": {
+          "phase": "created",
+          "merchantName": {
+            "from": "m",
+            "transforms": [
+              "upperTrim"
+            ]
+          },
+          "mandatePurpose": "ipo",
+          "oneTime": true
+        },
+        "amounts": [
+          {
+            "role": "ceiling",
+            "from": "amt",
+            "unit": "INR"
+          }
+        ]
+      }
+    ],
+    "confidence": 0.93,
+    "examples": [
+      {
+        "sender": "AX-ICICIT-S",
+        "body": "You have approved the mandate of Rs 14,250.00 raised by TATA TECHNOLOGIES LIMITED on UPI. Amount will be blocked until allotment. -ICICI Bank",
+        "expectFactTypes": [
+          "mandate"
+        ]
+      },
+      {
+        "sender": "AX-ICICIT-S",
+        "body": "You have approved the mandate of Rs 649.00 raised by NETFLIX on UPI. Monthly autopay.",
+        "expectFactTypes": []
+      }
+    ],
+    "status": "active",
+    "createdBy": "baseline",
+    "updatedAt": "2026-11-20T00:00:00Z"
+  },
+  {
+    "id": "INV-IPO-MANDATE-REVOKED-01",
+    "version": 1,
+    "family": "ipo_mandate",
+    "senders": [
+      "*"
+    ],
+    "priority": 810,
+    "match": {
+      "pattern": "mandate\\s+of\\s+(?:rs\\.?|inr|₹)\\s*(?<amt>[\\d,]+(?:\\.\\d{1,2})?)\\s+raised\\s+by\\s+(?<m>[a-z0-9&.' ()-]*?(?:ltd|limited|ipo|inc)\\.?)\\s+(?:has been|is|was)\\s+revoked",
+      "flags": "i"
+    },
+    "emit": [
+      {
+        "factType": "mandate",
+        "attrs": {
+          "phase": "revoked",
+          "merchantName": {
+            "from": "m",
+            "transforms": [
+              "upperTrim"
+            ]
+          },
+          "mandatePurpose": "ipo",
+          "oneTime": true
+        },
+        "amounts": [
+          {
+            "role": "ceiling",
+            "from": "amt",
+            "unit": "INR"
+          }
+        ]
+      }
+    ],
+    "confidence": 0.93,
+    "examples": [
+      {
+        "sender": "AX-ICICIT-S",
+        "body": "The mandate of Rs 14,250.00 raised by TATA TECHNOLOGIES LIMITED is revoked. -ICICI Bank",
+        "expectFactTypes": [
+          "mandate"
+        ]
+      },
+      {
+        "sender": "AX-ICICIT-S",
+        "body": "The mandate of Rs 649.00 raised by NETFLIX is revoked. -ICICI Bank",
+        "expectFactTypes": []
+      }
+    ],
+    "status": "active",
+    "createdBy": "baseline",
+    "updatedAt": "2026-11-20T00:00:00Z"
+  },
+  {
+    "id": "INV-IPO-NOALLOT-01",
+    "version": 1,
+    "family": "ipo_notice",
+    "senders": [
+      "*"
+    ],
+    "priority": 420,
+    "match": {
+      "pattern": "no\\s+allot(?:ment|ted)\\b",
+      "flags": "i",
+      "requireAll": [
+        "no allot"
+      ],
+      "rejectAny": [
+        "debited"
+      ]
+    },
+    "emit": [
+      {
+        "factType": "info",
+        "attrs": {
+          "category": "service"
+        }
+      }
+    ],
+    "confidence": 0.9,
+    "examples": [
+      {
+        "sender": "VM-BSEIND-S",
+        "body": "BSE: Dear Investor, No allotment for your IPO application no. 1234567. Blocked funds will be released by your bank within 3 working days.",
+        "expectFactTypes": [
+          "info"
+        ]
+      },
+      {
+        "sender": "VM-BSEIND-S",
+        "body": "BSE: Dear Investor, shares have been allotted for your IPO application no. 1234567.",
+        "expectFactTypes": []
+      }
+    ],
+    "status": "active",
+    "createdBy": "baseline",
+    "updatedAt": "2026-11-20T00:00:00Z"
+  },
+  {
+    "id": "INV-IPO-NSE-RECEIPT-01",
+    "version": 1,
+    "family": "ipo_notice",
+    "senders": [
+      "*"
+    ],
+    "priority": 400,
+    "match": {
+      "pattern": "ipo\\s+(?:application|bid)\\s+(?:for\\s+)?(?<issue>[a-z0-9&.' ()-]+?)\\s+(?:is|has been)\\s+(?:received|submitted|placed)[\\s\\S]*?upi\\s*id[:\\s]*(?<vpa>[a-z0-9._-]+@[a-z0-9]+)",
+      "flags": "i",
+      "rejectAny": [
+        "rejected",
+        "failed"
+      ]
+    },
+    "emit": [
+      {
+        "factType": "instrument_hint",
+        "attrs": {
+          "hint": "linked_upi"
+        },
+        "counterparty": {
+          "kind": "own",
+          "vpaFrom": "vpa"
+        }
+      }
+    ],
+    "confidence": 0.85,
+    "examples": [
+      {
+        "sender": "VM-NSEIND-S",
+        "body": "NSE: Your IPO application for TATA TECH has been received. Application no. 1234567. Bid amount Rs 14,250. UPI ID: ravi@okaxis. Accept the mandate in your UPI app.",
+        "expectFactTypes": [
+          "instrument_hint"
+        ]
+      },
+      {
+        "sender": "VM-NSEIND-S",
+        "body": "NSE: Your IPO application for TATA TECH has been rejected. Application no. 1234567.",
+        "expectFactTypes": []
+      }
+    ],
+    "status": "active",
+    "createdBy": "baseline",
+    "updatedAt": "2026-11-20T00:00:00Z"
+  },
+  {
+    "id": "INV-IPO-NSE-RECEIPT-02",
+    "version": 1,
+    "family": "ipo_notice",
+    "senders": [
+      "*"
+    ],
+    "priority": 300,
+    "match": {
+      "pattern": "ipo\\s+(?:application|bid)\\s+(?:for\\s+)?[a-z0-9&.' ()-]+?\\s+(?:is|has been)\\s+(?:received|submitted|placed)",
+      "flags": "i",
+      "rejectAny": [
+        "rejected",
+        "failed",
+        "debited"
+      ]
+    },
+    "emit": [
+      {
+        "factType": "info",
+        "attrs": {
+          "category": "service"
+        }
+      }
+    ],
+    "confidence": 0.9,
+    "examples": [
+      {
+        "sender": "VM-NSEIND-S",
+        "body": "NSE: Your IPO application for TATA TECH has been received. Application no. 1234567. Bid amount Rs 14,250.",
+        "expectFactTypes": [
+          "info"
+        ]
+      },
+      {
+        "sender": "VM-NSEIND-S",
+        "body": "NSE: Your IPO application for TATA TECH has been rejected. Application no. 1234567.",
+        "expectFactTypes": []
+      }
+    ],
+    "status": "active",
+    "createdBy": "baseline",
+    "updatedAt": "2026-11-20T00:00:00Z"
+  },
+  {
+    "id": "INV-IPO-UPIMANDATE-BLOCK-01",
+    "version": 1,
+    "family": "ipo_hold",
+    "senders": [
+      "*"
+    ],
+    "priority": 830,
+    "match": {
+      "pattern": "upi[- ]mandate\\s+for\\s+(?:rs\\.?|inr|₹)\\s*(?<amt>[\\d,]+(?:\\.\\d{1,2})?)\\s+for\\s+ipo\\s+of\\s+(?<issue>[a-z0-9&.' ()-]+?)\\s+has been\\s+(?:successfully\\s+)?created\\s+and\\s+(?:the\\s+)?amount\\s+is\\s+blocked\\s+in\\s+(?:a/c|acct?\\.?|account)\\s*(?:no\\.?\\s*)?(?:ending\\s*(?:with\\s*|in\\s*)?)?(?:[x*•.]+\\s*)?(?<mask>\\d{2,16})\\b(?:[.\\s]+umrn[:\\s]*(?<ref_umrn>[a-z0-9@_-]+))?",
+      "flags": "i",
+      "rejectAny": [
+        "could not",
+        "failed",
+        "unblock",
+        "released"
+      ]
+    },
+    "emit": [
+      {
+        "factType": "hold",
+        "attrs": {
+          "phase": "placed",
+          "purpose": "upi_mandate_block",
+          "issueName": {
+            "from": "issue",
+            "transforms": [
+              "upperTrim"
+            ]
+          }
+        },
+        "amounts": [
+          {
+            "role": "held",
+            "from": "amt",
+            "unit": "INR"
+          }
+        ],
+        "instrument": {
+          "kind": "bank_account",
+          "maskFrom": "mask"
+        }
+      },
+      {
+        "factType": "mandate",
+        "attrs": {
+          "phase": "created",
+          "merchantName": {
+            "from": "issue",
+            "transforms": [
+              "upperTrim"
+            ]
+          },
+          "mandatePurpose": "ipo",
+          "oneTime": true
+        },
+        "amounts": [
+          {
+            "role": "ceiling",
+            "from": "amt",
+            "unit": "INR"
+          }
+        ],
+        "instrument": {
+          "sameAs": 0
+        }
+      }
+    ],
+    "confidence": 0.98,
+    "examples": [
+      {
+        "sender": "AX-ICICIT-S",
+        "body": "Dear Customer, UPI Mandate for Rs 14,250.00 for IPO of TATA TECH has been successfully created and amount is blocked in A/c XX1234. UMRN 1234567890. -ICICI Bank",
+        "expectFactTypes": [
+          "hold",
+          "mandate"
+        ]
+      },
+      {
+        "sender": "AX-ICICIT-S",
+        "body": "Dear Customer, UPI Mandate for Rs 14,250.00 for IPO of TATA TECH could not be created. No amount is blocked in A/c XX1234.",
+        "expectFactTypes": []
+      }
+    ],
+    "status": "active",
+    "createdBy": "baseline",
+    "updatedAt": "2026-11-20T00:00:00Z"
+  },
+  {
+    "id": "INV-IPO-UPIMANDATE-BLOCK-02",
+    "version": 1,
+    "family": "ipo_hold",
+    "senders": [
+      "*"
+    ],
+    "priority": 830,
+    "match": {
+      "pattern": "upi[- ]mandate\\s+(?:of|for)\\s+(?:rs\\.?|inr|₹)\\s*(?<amt>[\\d,]+(?:\\.\\d{1,2})?)\\s+(?:has been\\s+)?created\\s+(?:towards|for|in favou?r of)\\s+(?<issue>[a-z0-9&.' ()-]+?)(?:\\s+ipo)?\\.?\\s+funds\\s+(?:are\\s+)?blocked(?:\\s+in\\s+(?:your\\s+)?(?:a/c|acct?\\.?|account)\\s*(?:no\\.?\\s*)?(?:ending\\s*(?:with\\s*|in\\s*)?)?(?:[x*•.]+\\s*)?(?<mask>\\d{2,16})\\b)?(?:[\\s\\S]*?umn[:\\s]*(?<ref_umrn>[a-z0-9@_-]+))?",
+      "flags": "i",
+      "requireAll": [
+        "blocked"
+      ],
+      "rejectAny": [
+        "unblock",
+        "removed",
+        "released"
+      ]
+    },
+    "emit": [
+      {
+        "factType": "hold",
+        "attrs": {
+          "phase": "placed",
+          "purpose": "upi_mandate_block",
+          "issueName": {
+            "from": "issue",
+            "transforms": [
+              "upperTrim"
+            ]
+          }
+        },
+        "amounts": [
+          {
+            "role": "held",
+            "from": "amt",
+            "unit": "INR"
+          }
+        ],
+        "instrument": {
+          "kind": "bank_account",
+          "maskFrom": "mask"
+        }
+      },
+      {
+        "factType": "mandate",
+        "attrs": {
+          "phase": "created",
+          "merchantName": {
+            "from": "issue",
+            "transforms": [
+              "upperTrim"
+            ]
+          },
+          "mandatePurpose": "ipo",
+          "oneTime": true
+        },
+        "amounts": [
+          {
+            "role": "ceiling",
+            "from": "amt",
+            "unit": "INR"
+          }
+        ],
+        "instrument": {
+          "sameAs": 0
+        }
+      }
+    ],
+    "confidence": 0.96,
+    "examples": [
+      {
+        "sender": "AD-SBIBNK-S",
+        "body": "UPI-Mandate of Rs.14250.00 created towards TATA TECHNOLOGIES LTD IPO. Funds blocked in A/c X1234. UMN abc123@sbi. -SBI",
+        "expectFactTypes": [
+          "hold",
+          "mandate"
+        ]
+      },
+      {
+        "sender": "AD-SBIBNK-S",
+        "body": "UPI-Mandate of Rs.14250.00 created towards NETFLIX for subscription. No funds are held.",
+        "expectFactTypes": []
+      }
+    ],
+    "status": "active",
+    "createdBy": "baseline",
+    "updatedAt": "2026-11-20T00:00:00Z"
+  },
+  {
+    "id": "INV-IPO-UPIMANDATE-BLOCK-03",
+    "version": 1,
+    "family": "ipo_hold",
+    "senders": [
+      "*"
+    ],
+    "priority": 830,
+    "match": {
+      "pattern": "(?:a/c|acct?\\.?|account)\\s*(?:no\\.?\\s*)?(?:ending\\s*(?:with\\s*|in\\s*)?)?(?:[x*•.]+\\s*)?(?<mask>\\d{2,16})\\b\\s+(?:has been|is)\\s+blocked\\s+by\\s+(?:an\\s+)?amount\\s+of\\s+(?:rs\\.?|inr|₹)\\s*(?<amt>[\\d,]+(?:\\.\\d{1,2})?)\\s+against\\s+(?:the\\s+)?upi\\s+one[- ]time\\s+mandate(?:[\\s\\S]*?umn[:\\s]*(?<ref_umrn>[a-z0-9@_-]+))?",
+      "flags": "i"
+    },
+    "emit": [
+      {
+        "factType": "hold",
+        "attrs": {
+          "phase": "placed",
+          "purpose": "upi_mandate_block"
+        },
+        "amounts": [
+          {
+            "role": "held",
+            "from": "amt",
+            "unit": "INR"
+          }
+        ],
+        "instrument": {
+          "kind": "bank_account",
+          "maskFrom": "mask"
+        }
+      }
+    ],
+    "confidence": 0.97,
+    "examples": [
+      {
+        "sender": "AX-ICICIT-S",
+        "body": "ICICI Bank Acct XX1234 has been blocked by an amount of Rs 14,250.00 against the UPI one-time mandate. UMN: ipo1234@icici. Do not share OTP.",
+        "expectFactTypes": [
+          "hold"
+        ]
+      },
+      {
+        "sender": "AX-ICICIT-S",
+        "body": "ICICI Bank Acct XX1234 has been unblocked by an amount of Rs 14,250.00 against the UPI one-time mandate. UMN: ipo1234@icici.",
+        "expectFactTypes": []
+      }
+    ],
+    "status": "active",
+    "createdBy": "baseline",
+    "updatedAt": "2026-11-20T00:00:00Z"
+  },
+  {
+    "id": "INV-IPO-UPIMANDATE-RELEASE-01",
+    "version": 1,
+    "family": "ipo_hold",
+    "senders": [
+      "*"
+    ],
+    "priority": 830,
+    "match": {
+      "pattern": "(?:a/c|acct?\\.?|account)\\s*(?:no\\.?\\s*)?(?:ending\\s*(?:with\\s*|in\\s*)?)?(?:[x*•.]+\\s*)?(?<mask>\\d{2,16})\\b\\s+(?:has been|is)\\s+unblocked\\s+by\\s+(?:an\\s+)?amount\\s+of\\s+(?:rs\\.?|inr|₹)\\s*(?<amt>[\\d,]+(?:\\.\\d{1,2})?)\\s+against\\s+(?:the\\s+)?upi\\s+one[- ]time\\s+mandate(?:[\\s\\S]*?umn[:\\s]*(?<ref_umrn>[a-z0-9@_-]+))?",
+      "flags": "i"
+    },
+    "emit": [
+      {
+        "factType": "hold",
+        "attrs": {
+          "phase": "released",
+          "purpose": "upi_mandate_block"
+        },
+        "amounts": [
+          {
+            "role": "released",
+            "from": "amt",
+            "unit": "INR"
+          }
+        ],
+        "instrument": {
+          "kind": "bank_account",
+          "maskFrom": "mask"
+        }
+      }
+    ],
+    "confidence": 0.97,
+    "examples": [
+      {
+        "sender": "AX-ICICIT-S",
+        "body": "Your account XX1234 has been unblocked by an amount of Rs 14,250.00 against the UPI one-time mandate. UMN: ipo1234@icici.",
+        "expectFactTypes": [
+          "hold"
+        ]
+      },
+      {
+        "sender": "AX-ICICIT-S",
+        "body": "Your account XX1234 has been blocked by an amount of Rs 14,250.00 against the UPI one-time mandate. UMN: ipo1234@icici.",
+        "expectFactTypes": []
+      }
+    ],
+    "status": "active",
+    "createdBy": "baseline",
+    "updatedAt": "2026-11-20T00:00:00Z"
+  },
+  {
+    "id": "INV-IPO-UPIMANDATE-RELEASE-02",
+    "version": 1,
+    "family": "ipo_hold",
+    "senders": [
+      "*"
+    ],
+    "priority": 830,
+    "match": {
+      "pattern": "hold\\s+(?:of|for)\\s+(?:rs\\.?|inr|₹)\\s*(?<amt>[\\d,]+(?:\\.\\d{1,2})?)\\s+(?:on|in)\\s+(?:your\\s+)?(?:a/c|acct?\\.?|account)\\s*(?:no\\.?\\s*)?(?:ending\\s*(?:with\\s*|in\\s*)?)?(?:[x*•.]+\\s*)?(?<mask>\\d{2,16})\\b(?:\\s+for\\s+[a-z -]*?mandate)?[\\s\\S]*?(?:has been|is|was)\\s+(?:removed|released|lifted)",
+      "flags": "i",
+      "rejectAny": [
+        "placed",
+        "created"
+      ]
+    },
+    "emit": [
+      {
+        "factType": "hold",
+        "attrs": {
+          "phase": "released",
+          "purpose": "upi_mandate_block"
+        },
+        "amounts": [
+          {
+            "role": "released",
+            "from": "amt",
+            "unit": "INR"
+          }
+        ],
+        "instrument": {
+          "kind": "bank_account",
+          "maskFrom": "mask"
+        }
+      }
+    ],
+    "confidence": 0.95,
+    "examples": [
+      {
+        "sender": "AD-SBIBNK-S",
+        "body": "Hold for Rs.14250.00 on your A/c X1234 for UPI-Mandate has been removed. -SBI",
+        "expectFactTypes": [
+          "hold"
+        ]
+      },
+      {
+        "sender": "AD-SBIBNK-S",
+        "body": "Hold for Rs.14250.00 on your A/c X1234 for UPI-Mandate has been placed. -SBI",
+        "expectFactTypes": []
+      }
+    ],
+    "status": "active",
+    "createdBy": "baseline",
+    "updatedAt": "2026-11-20T00:00:00Z"
+  }
+]

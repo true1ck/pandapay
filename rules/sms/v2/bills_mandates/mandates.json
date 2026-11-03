@@ -1,0 +1,3281 @@
+[
+  {
+    "id": "MND-CREATED-AUTOPAY-01",
+    "version": 1,
+    "family": "mandate_created",
+    "senders": [
+      "*"
+    ],
+    "priority": 700,
+    "match": {
+      "pattern": "(?:upi\\s+)?autopay\\s+(?:e-?)?mandate\\s+(?:for|to|towards)\\s+(?<m>[a-z0-9&.' _*-]+?)\\s+with\\s+(?:a\\s+)?max(?:imum)?\\s+(?:amount|limit)\\s+(?:of\\s+)?(?:rs\\.?|inr|₹)\\s*(?<cap>[\\d,]+(?:\\.\\d{1,2})?)\\s+has been\\s+(?:successfully\\s+)?(?:registered|created|set up|activated)(?:\\s+on\\s+(?<date>\\d{2}[-/ ](?:\\d{2}|(?:jan|feb|mar|apr|may|jun|jul|aug|sep|oct|nov|dec))[-/ ]\\d{2,4}|\\d{2}(?:jan|feb|mar|apr|may|jun|jul|aug|sep|oct|nov|dec)\\d{2,4}))?",
+      "flags": "i",
+      "rejectAny": [
+        "could not",
+        "failed",
+        "cancel",
+        "revoke"
+      ]
+    },
+    "emit": [
+      {
+        "factType": "mandate",
+        "attrs": {
+          "phase": "created",
+          "merchantName": {
+            "from": "m",
+            "transforms": [
+              "sanitizeNarration"
+            ]
+          }
+        },
+        "amounts": [
+          {
+            "role": "ceiling",
+            "from": "cap",
+            "unit": "INR"
+          }
+        ]
+      }
+    ],
+    "confidence": 0.97,
+    "examples": [
+      {
+        "sender": "VM-HDFCBK-S",
+        "body": "Your AutoPay mandate for NETFLIX with maximum amount INR 1499 has been registered on 01-11-2026.",
+        "expectFactTypes": [
+          "mandate"
+        ]
+      },
+      {
+        "sender": "VM-HDFCBK-S",
+        "body": "Your AutoPay mandate for NETFLIX with maximum amount INR 1499 could not be registered on 01-11-2026.",
+        "expectFactTypes": []
+      }
+    ],
+    "status": "active",
+    "createdBy": "baseline",
+    "updatedAt": "2026-11-20T00:00:00Z"
+  },
+  {
+    "id": "MND-CREATED-AUTOPAY-01-A",
+    "version": 1,
+    "family": "mandate_created",
+    "senders": [
+      "*"
+    ],
+    "priority": 701,
+    "match": {
+      "pattern": "(?:upi\\s+)?autopay\\s+(?:e-?)?mandate\\s+(?:for|to|towards)\\s+(?<m>[a-z0-9&.' _*-]+?)\\s+with\\s+(?:a\\s+)?max(?:imum)?\\s+(?:amount|limit)\\s+(?:of\\s+)?(?:rs\\.?|inr|₹)\\s*(?<cap>[\\d,]+(?:\\.\\d{1,2})?)\\s+has been\\s+(?:successfully\\s+)?(?:registered|created|set up|activated)(?:\\s+on\\s+(?<date>\\d{2}[-/ ](?:\\d{2}|(?:jan|feb|mar|apr|may|jun|jul|aug|sep|oct|nov|dec))[-/ ]\\d{2,4}|\\d{2}(?:jan|feb|mar|apr|may|jun|jul|aug|sep|oct|nov|dec)\\d{2,4}))?(?:[\\s\\S]*?(?:a/c|acct?\\.?|account)\\s*(?:no\\.?\\s*)?(?:ending\\s*(?:with\\s*|in\\s*)?)?(?:[x*•.]+\\s*)?(?<mask>\\d{2,16})\\b)",
+      "flags": "i",
+      "rejectAny": [
+        "could not",
+        "failed",
+        "cancel",
+        "revoke"
+      ]
+    },
+    "emit": [
+      {
+        "factType": "mandate",
+        "attrs": {
+          "phase": "created",
+          "merchantName": {
+            "from": "m",
+            "transforms": [
+              "sanitizeNarration"
+            ]
+          }
+        },
+        "amounts": [
+          {
+            "role": "ceiling",
+            "from": "cap",
+            "unit": "INR"
+          }
+        ],
+        "instrument": {
+          "kind": "bank_account",
+          "maskFrom": "mask"
+        }
+      }
+    ],
+    "confidence": 0.97,
+    "examples": [
+      {
+        "sender": "VM-HDFCBK-S",
+        "body": "Your AutoPay mandate for NETFLIX with maximum amount INR 1499 has been registered on 01-11-2026 on A/c XX1234.",
+        "expectFactTypes": [
+          "mandate"
+        ]
+      },
+      {
+        "sender": "VM-HDFCBK-S",
+        "body": "Your AutoPay mandate for NETFLIX with maximum amount INR 1499 could not be registered on 01-11-2026.",
+        "expectFactTypes": []
+      }
+    ],
+    "status": "active",
+    "createdBy": "baseline",
+    "updatedAt": "2026-11-20T00:00:00Z"
+  },
+  {
+    "id": "MND-CREATED-AUTOPAY-01-INV",
+    "version": 1,
+    "family": "mandate_created",
+    "senders": [
+      "*"
+    ],
+    "priority": 705,
+    "match": {
+      "pattern": "(?:upi\\s+)?autopay\\s+(?:e-?)?mandate\\s+(?:for|to|towards)\\s+(?<m>(?:zerodha|groww|upstox|rksv|kotak\\s*sec\\w*|kotak\\s+neo|indmoney|ind\\s*money|angel\\s*(?:one|broking)|dhan\\b|univest|paytm\\s+money|hdfc\\s*sec\\w*|icici\\s*sec\\w*|icici\\s+direct|5\\s*paisa|motilal\\s+oswal|sharekhan|nu\\s*investors|iccl|indian\\s+clearing|nse\\s+clearing|bse\\s*star|coin\\s+by\\s+zerodha|smallcase|et\\s+money|kuvera|mutual\\s+fund|\\bmf\\b|cams\\b|kfin\\w*)[a-z0-9&.' _*-]*?)\\s+with\\s+(?:a\\s+)?max(?:imum)?\\s+(?:amount|limit)\\s+(?:of\\s+)?(?:rs\\.?|inr|₹)\\s*(?<cap>[\\d,]+(?:\\.\\d{1,2})?)\\s+has been\\s+(?:successfully\\s+)?(?:registered|created|set up|activated)(?:\\s+on\\s+(?<date>\\d{2}[-/ ](?:\\d{2}|(?:jan|feb|mar|apr|may|jun|jul|aug|sep|oct|nov|dec))[-/ ]\\d{2,4}|\\d{2}(?:jan|feb|mar|apr|may|jun|jul|aug|sep|oct|nov|dec)\\d{2,4}))?",
+      "flags": "i",
+      "rejectAny": [
+        "could not",
+        "failed",
+        "cancel",
+        "revoke"
+      ]
+    },
+    "emit": [
+      {
+        "factType": "mandate",
+        "attrs": {
+          "phase": "created",
+          "merchantName": {
+            "from": "m",
+            "transforms": [
+              "sanitizeNarration"
+            ]
+          },
+          "mandatePurpose": "sip"
+        },
+        "amounts": [
+          {
+            "role": "ceiling",
+            "from": "cap",
+            "unit": "INR"
+          }
+        ]
+      }
+    ],
+    "confidence": 0.97,
+    "examples": [
+      {
+        "sender": "VM-HDFCBK-S",
+        "body": "Your AutoPay mandate for ICCL GROWW AUTOPAY with maximum amount INR 10,000 has been registered on 01-11-2026.",
+        "expectFactTypes": [
+          "mandate"
+        ]
+      },
+      {
+        "sender": "VM-HDFCBK-S",
+        "body": "Your AutoPay mandate for NETFLIX with maximum amount INR 1499 could not be registered on 01-11-2026.",
+        "expectFactTypes": []
+      }
+    ],
+    "status": "active",
+    "createdBy": "baseline",
+    "updatedAt": "2026-11-20T00:00:00Z"
+  },
+  {
+    "id": "MND-CREATED-AUTOPAY-01-INV-A",
+    "version": 1,
+    "family": "mandate_created",
+    "senders": [
+      "*"
+    ],
+    "priority": 706,
+    "match": {
+      "pattern": "(?:upi\\s+)?autopay\\s+(?:e-?)?mandate\\s+(?:for|to|towards)\\s+(?<m>(?:zerodha|groww|upstox|rksv|kotak\\s*sec\\w*|kotak\\s+neo|indmoney|ind\\s*money|angel\\s*(?:one|broking)|dhan\\b|univest|paytm\\s+money|hdfc\\s*sec\\w*|icici\\s*sec\\w*|icici\\s+direct|5\\s*paisa|motilal\\s+oswal|sharekhan|nu\\s*investors|iccl|indian\\s+clearing|nse\\s+clearing|bse\\s*star|coin\\s+by\\s+zerodha|smallcase|et\\s+money|kuvera|mutual\\s+fund|\\bmf\\b|cams\\b|kfin\\w*)[a-z0-9&.' _*-]*?)\\s+with\\s+(?:a\\s+)?max(?:imum)?\\s+(?:amount|limit)\\s+(?:of\\s+)?(?:rs\\.?|inr|₹)\\s*(?<cap>[\\d,]+(?:\\.\\d{1,2})?)\\s+has been\\s+(?:successfully\\s+)?(?:registered|created|set up|activated)(?:\\s+on\\s+(?<date>\\d{2}[-/ ](?:\\d{2}|(?:jan|feb|mar|apr|may|jun|jul|aug|sep|oct|nov|dec))[-/ ]\\d{2,4}|\\d{2}(?:jan|feb|mar|apr|may|jun|jul|aug|sep|oct|nov|dec)\\d{2,4}))?(?:[\\s\\S]*?(?:a/c|acct?\\.?|account)\\s*(?:no\\.?\\s*)?(?:ending\\s*(?:with\\s*|in\\s*)?)?(?:[x*•.]+\\s*)?(?<mask>\\d{2,16})\\b)",
+      "flags": "i",
+      "rejectAny": [
+        "could not",
+        "failed",
+        "cancel",
+        "revoke"
+      ]
+    },
+    "emit": [
+      {
+        "factType": "mandate",
+        "attrs": {
+          "phase": "created",
+          "merchantName": {
+            "from": "m",
+            "transforms": [
+              "sanitizeNarration"
+            ]
+          },
+          "mandatePurpose": "sip"
+        },
+        "amounts": [
+          {
+            "role": "ceiling",
+            "from": "cap",
+            "unit": "INR"
+          }
+        ],
+        "instrument": {
+          "kind": "bank_account",
+          "maskFrom": "mask"
+        }
+      }
+    ],
+    "confidence": 0.97,
+    "examples": [
+      {
+        "sender": "VM-HDFCBK-S",
+        "body": "Your AutoPay mandate for ICCL GROWW AUTOPAY with maximum amount INR 10,000 has been registered on 01-11-2026 on A/c XX1234.",
+        "expectFactTypes": [
+          "mandate"
+        ]
+      },
+      {
+        "sender": "VM-HDFCBK-S",
+        "body": "Your AutoPay mandate for NETFLIX with maximum amount INR 1499 could not be registered on 01-11-2026.",
+        "expectFactTypes": []
+      }
+    ],
+    "status": "active",
+    "createdBy": "baseline",
+    "updatedAt": "2026-11-20T00:00:00Z"
+  },
+  {
+    "id": "MND-CREATED-AUTOPAY-02",
+    "version": 1,
+    "family": "mandate_created",
+    "senders": [
+      "*"
+    ],
+    "priority": 700,
+    "match": {
+      "pattern": "autopay\\s+(?:e-?)?mandate\\s+(?:successfully\\s+)?(?:registered|created|set up|activated)\\s+(?:for|to|towards)\\s+(?<m>[a-z0-9&.' _*-]+?)\\s+with\\s+max(?:imum)?\\s+(?:amount|limit)\\s+(?:of\\s+)?(?:rs\\.?|inr|₹)\\s*(?<cap>[\\d,]+(?:\\.\\d{1,2})?)",
+      "flags": "i",
+      "rejectAny": [
+        "failed",
+        "could not",
+        "cancel",
+        "revoke"
+      ]
+    },
+    "emit": [
+      {
+        "factType": "mandate",
+        "attrs": {
+          "phase": "created",
+          "merchantName": {
+            "from": "m",
+            "transforms": [
+              "sanitizeNarration"
+            ]
+          }
+        },
+        "amounts": [
+          {
+            "role": "ceiling",
+            "from": "cap",
+            "unit": "INR"
+          }
+        ]
+      }
+    ],
+    "confidence": 0.97,
+    "examples": [
+      {
+        "sender": "VM-HDFCBK-S",
+        "body": "AutoPay e-mandate successfully registered for NETFLIX with maximum limit of INR 2,000.00.",
+        "expectFactTypes": [
+          "mandate"
+        ]
+      },
+      {
+        "sender": "VM-HDFCBK-S",
+        "body": "AutoPay e-mandate registration for NETFLIX with maximum limit of INR 2,000.00 failed",
+        "expectFactTypes": []
+      }
+    ],
+    "status": "active",
+    "createdBy": "baseline",
+    "updatedAt": "2026-11-20T00:00:00Z"
+  },
+  {
+    "id": "MND-CREATED-AUTOPAY-02-A",
+    "version": 1,
+    "family": "mandate_created",
+    "senders": [
+      "*"
+    ],
+    "priority": 701,
+    "match": {
+      "pattern": "autopay\\s+(?:e-?)?mandate\\s+(?:successfully\\s+)?(?:registered|created|set up|activated)\\s+(?:for|to|towards)\\s+(?<m>[a-z0-9&.' _*-]+?)\\s+with\\s+max(?:imum)?\\s+(?:amount|limit)\\s+(?:of\\s+)?(?:rs\\.?|inr|₹)\\s*(?<cap>[\\d,]+(?:\\.\\d{1,2})?)(?:[\\s\\S]*?(?:a/c|acct?\\.?|account)\\s*(?:no\\.?\\s*)?(?:ending\\s*(?:with\\s*|in\\s*)?)?(?:[x*•.]+\\s*)?(?<mask>\\d{2,16})\\b)",
+      "flags": "i",
+      "rejectAny": [
+        "failed",
+        "could not",
+        "cancel",
+        "revoke"
+      ]
+    },
+    "emit": [
+      {
+        "factType": "mandate",
+        "attrs": {
+          "phase": "created",
+          "merchantName": {
+            "from": "m",
+            "transforms": [
+              "sanitizeNarration"
+            ]
+          }
+        },
+        "amounts": [
+          {
+            "role": "ceiling",
+            "from": "cap",
+            "unit": "INR"
+          }
+        ],
+        "instrument": {
+          "kind": "bank_account",
+          "maskFrom": "mask"
+        }
+      }
+    ],
+    "confidence": 0.97,
+    "examples": [
+      {
+        "sender": "VM-HDFCBK-S",
+        "body": "AutoPay e-mandate successfully registered for NETFLIX with maximum limit of INR 2,000.00 on HDFC Bank A/c XX1797",
+        "expectFactTypes": [
+          "mandate"
+        ]
+      },
+      {
+        "sender": "VM-HDFCBK-S",
+        "body": "AutoPay e-mandate registration for NETFLIX with maximum limit of INR 2,000.00 failed",
+        "expectFactTypes": []
+      }
+    ],
+    "status": "active",
+    "createdBy": "baseline",
+    "updatedAt": "2026-11-20T00:00:00Z"
+  },
+  {
+    "id": "MND-CREATED-AUTOPAY-02-INV",
+    "version": 1,
+    "family": "mandate_created",
+    "senders": [
+      "*"
+    ],
+    "priority": 705,
+    "match": {
+      "pattern": "autopay\\s+(?:e-?)?mandate\\s+(?:successfully\\s+)?(?:registered|created|set up|activated)\\s+(?:for|to|towards)\\s+(?<m>(?:zerodha|groww|upstox|rksv|kotak\\s*sec\\w*|kotak\\s+neo|indmoney|ind\\s*money|angel\\s*(?:one|broking)|dhan\\b|univest|paytm\\s+money|hdfc\\s*sec\\w*|icici\\s*sec\\w*|icici\\s+direct|5\\s*paisa|motilal\\s+oswal|sharekhan|nu\\s*investors|iccl|indian\\s+clearing|nse\\s+clearing|bse\\s*star|coin\\s+by\\s+zerodha|smallcase|et\\s+money|kuvera|mutual\\s+fund|\\bmf\\b|cams\\b|kfin\\w*)[a-z0-9&.' _*-]*?)\\s+with\\s+max(?:imum)?\\s+(?:amount|limit)\\s+(?:of\\s+)?(?:rs\\.?|inr|₹)\\s*(?<cap>[\\d,]+(?:\\.\\d{1,2})?)",
+      "flags": "i",
+      "rejectAny": [
+        "failed",
+        "could not",
+        "cancel",
+        "revoke"
+      ]
+    },
+    "emit": [
+      {
+        "factType": "mandate",
+        "attrs": {
+          "phase": "created",
+          "merchantName": {
+            "from": "m",
+            "transforms": [
+              "sanitizeNarration"
+            ]
+          },
+          "mandatePurpose": "sip"
+        },
+        "amounts": [
+          {
+            "role": "ceiling",
+            "from": "cap",
+            "unit": "INR"
+          }
+        ]
+      }
+    ],
+    "confidence": 0.97,
+    "examples": [
+      {
+        "sender": "VM-HDFCBK-S",
+        "body": "AutoPay e-mandate successfully registered for ZERODHA with maximum limit of INR 50,000.00.",
+        "expectFactTypes": [
+          "mandate"
+        ]
+      },
+      {
+        "sender": "VM-HDFCBK-S",
+        "body": "AutoPay e-mandate registration for NETFLIX with maximum limit of INR 2,000.00 failed",
+        "expectFactTypes": []
+      }
+    ],
+    "status": "active",
+    "createdBy": "baseline",
+    "updatedAt": "2026-11-20T00:00:00Z"
+  },
+  {
+    "id": "MND-CREATED-AUTOPAY-02-INV-A",
+    "version": 1,
+    "family": "mandate_created",
+    "senders": [
+      "*"
+    ],
+    "priority": 706,
+    "match": {
+      "pattern": "autopay\\s+(?:e-?)?mandate\\s+(?:successfully\\s+)?(?:registered|created|set up|activated)\\s+(?:for|to|towards)\\s+(?<m>(?:zerodha|groww|upstox|rksv|kotak\\s*sec\\w*|kotak\\s+neo|indmoney|ind\\s*money|angel\\s*(?:one|broking)|dhan\\b|univest|paytm\\s+money|hdfc\\s*sec\\w*|icici\\s*sec\\w*|icici\\s+direct|5\\s*paisa|motilal\\s+oswal|sharekhan|nu\\s*investors|iccl|indian\\s+clearing|nse\\s+clearing|bse\\s*star|coin\\s+by\\s+zerodha|smallcase|et\\s+money|kuvera|mutual\\s+fund|\\bmf\\b|cams\\b|kfin\\w*)[a-z0-9&.' _*-]*?)\\s+with\\s+max(?:imum)?\\s+(?:amount|limit)\\s+(?:of\\s+)?(?:rs\\.?|inr|₹)\\s*(?<cap>[\\d,]+(?:\\.\\d{1,2})?)(?:[\\s\\S]*?(?:a/c|acct?\\.?|account)\\s*(?:no\\.?\\s*)?(?:ending\\s*(?:with\\s*|in\\s*)?)?(?:[x*•.]+\\s*)?(?<mask>\\d{2,16})\\b)",
+      "flags": "i",
+      "rejectAny": [
+        "failed",
+        "could not",
+        "cancel",
+        "revoke"
+      ]
+    },
+    "emit": [
+      {
+        "factType": "mandate",
+        "attrs": {
+          "phase": "created",
+          "merchantName": {
+            "from": "m",
+            "transforms": [
+              "sanitizeNarration"
+            ]
+          },
+          "mandatePurpose": "sip"
+        },
+        "amounts": [
+          {
+            "role": "ceiling",
+            "from": "cap",
+            "unit": "INR"
+          }
+        ],
+        "instrument": {
+          "kind": "bank_account",
+          "maskFrom": "mask"
+        }
+      }
+    ],
+    "confidence": 0.97,
+    "examples": [
+      {
+        "sender": "VM-HDFCBK-S",
+        "body": "AutoPay e-mandate successfully registered for ZERODHA with maximum limit of INR 50,000.00 on HDFC Bank A/c XX1797",
+        "expectFactTypes": [
+          "mandate"
+        ]
+      },
+      {
+        "sender": "VM-HDFCBK-S",
+        "body": "AutoPay e-mandate registration for NETFLIX with maximum limit of INR 2,000.00 failed",
+        "expectFactTypes": []
+      }
+    ],
+    "status": "active",
+    "createdBy": "baseline",
+    "updatedAt": "2026-11-20T00:00:00Z"
+  },
+  {
+    "id": "MND-CREATED-ENACH-01",
+    "version": 1,
+    "family": "mandate_created",
+    "senders": [
+      "*"
+    ],
+    "priority": 680,
+    "match": {
+      "pattern": "(?:e-?nach|e-?mandate|nach|ecs)\\s+(?:mandate\\s+)?(?:registration\\s+)?(?:for|towards)\\s+(?<m>[a-z0-9&.' _*-]+?)\\s+(?:has been|is|was)\\s+(?:successfully\\s+)?(?:registered|created|approved|activated)(?:[\\s\\S]*?umrn[:\\s]*(?<ref_umrn>[a-z0-9]+))?(?:[\\s\\S]*?max(?:imum)?\\s+(?:amount|limit)?\\s*(?:of\\s+)?(?:rs\\.?|inr|₹)\\s*(?<cap>[\\d,]+(?:\\.\\d{1,2})?))?",
+      "flags": "i",
+      "rejectAny": [
+        "reject",
+        "fail",
+        "cancel",
+        "revoke"
+      ]
+    },
+    "emit": [
+      {
+        "factType": "mandate",
+        "attrs": {
+          "phase": "created",
+          "merchantName": {
+            "from": "m",
+            "transforms": [
+              "sanitizeNarration"
+            ]
+          }
+        },
+        "amounts": [
+          {
+            "role": "ceiling",
+            "from": "cap",
+            "unit": "INR"
+          }
+        ]
+      }
+    ],
+    "confidence": 0.9,
+    "examples": [
+      {
+        "sender": "VM-HDFCBK-S",
+        "body": "Your e-NACH mandate for BAJAJ FINANCE LTD has been successfully registered. UMRN HDFC0000123456. Max amount of Rs 25,000.00 monthly.",
+        "expectFactTypes": [
+          "mandate"
+        ]
+      },
+      {
+        "sender": "VM-HDFCBK-S",
+        "body": "Your e-NACH mandate for BAJAJ FINANCE LTD has been rejected. Please retry.",
+        "expectFactTypes": []
+      }
+    ],
+    "status": "active",
+    "createdBy": "baseline",
+    "updatedAt": "2026-11-20T00:00:00Z"
+  },
+  {
+    "id": "MND-CREATED-SI-01",
+    "version": 1,
+    "family": "mandate_created",
+    "senders": [
+      "*"
+    ],
+    "priority": 690,
+    "match": {
+      "pattern": "standing\\s+instruction(?:\\s*\\(si\\))?\\s+of\\s+(?:rs\\.?|inr|₹)\\s*(?<cap>[\\d,]+(?:\\.\\d{1,2})?)\\s+towards\\s+(?<m>[a-z0-9&.' _*-]+?)\\s+on\\s+(?:[a-z]+\\s+)?(?:[a-z]+\\s+)?(?:[a-z]+\\s+)?(?:card|cc)\\s*(?:no\\.?\\s*)?(?:ending\\s*(?:with\\s*|in\\s*)?)?(?:[x*•.]+\\s*)?(?<mask>\\d{2,16})\\b\\s+has been\\s+(?:successfully\\s+)?(?:registered|created|set up|activated)(?:[\\s\\S]*?si\\s+ref(?:\\s+no\\.?)?[:\\s]*(?<ref_txnId>[a-z0-9]+))?",
+      "flags": "i",
+      "rejectAny": [
+        "cancel",
+        "delet",
+        "fail"
+      ]
+    },
+    "emit": [
+      {
+        "factType": "mandate",
+        "attrs": {
+          "phase": "created",
+          "merchantName": {
+            "from": "m",
+            "transforms": [
+              "sanitizeNarration"
+            ]
+          }
+        },
+        "amounts": [
+          {
+            "role": "ceiling",
+            "from": "cap",
+            "unit": "INR"
+          }
+        ],
+        "instrument": {
+          "maskFrom": "mask"
+        }
+      }
+    ],
+    "confidence": 0.96,
+    "examples": [
+      {
+        "sender": "VM-HDFCBK-S",
+        "body": "Dear Customer, Standing Instruction (SI) of Rs 199.00 towards NETFLIX on HDFC Bank Card ending 1234 has been registered successfully. SI Ref No: 12345678.",
+        "expectFactTypes": [
+          "mandate"
+        ]
+      },
+      {
+        "sender": "VM-HDFCBK-S",
+        "body": "Dear Customer, Standing Instruction (SI) of Rs 199.00 towards NETFLIX on HDFC Bank Card ending 1234 has been cancelled successfully. SI Ref No: 12345678.",
+        "expectFactTypes": []
+      }
+    ],
+    "status": "active",
+    "createdBy": "baseline",
+    "updatedAt": "2026-11-20T00:00:00Z"
+  },
+  {
+    "id": "MND-CREATED-SI-02",
+    "version": 1,
+    "family": "mandate_created",
+    "senders": [
+      "*"
+    ],
+    "priority": 690,
+    "match": {
+      "pattern": "standing\\s+instruction\\s+(?:created|registered|set up)\\s+(?:towards|for)\\s+(?<m>[a-z0-9&.' _*-]+?)\\.\\s*max(?:imum)?\\s+limit[:\\s]*(?:rs\\.?|inr|₹)\\s*(?<cap>[\\d,]+(?:\\.\\d{1,2})?)\\s+on\\s+(?:card|cc)\\s*(?:no\\.?\\s*)?(?:ending\\s*(?:with\\s*|in\\s*)?)?(?:[x*•.]+\\s*)?(?<mask>\\d{2,16})\\b",
+      "flags": "i",
+      "rejectAny": [
+        "fail"
+      ]
+    },
+    "emit": [
+      {
+        "factType": "mandate",
+        "attrs": {
+          "phase": "created",
+          "merchantName": {
+            "from": "m",
+            "transforms": [
+              "sanitizeNarration"
+            ]
+          }
+        },
+        "amounts": [
+          {
+            "role": "ceiling",
+            "from": "cap",
+            "unit": "INR"
+          }
+        ],
+        "instrument": {
+          "maskFrom": "mask"
+        }
+      }
+    ],
+    "confidence": 0.95,
+    "examples": [
+      {
+        "sender": "VM-HDFCBK-S",
+        "body": "Standing Instruction created towards AGIONE TEC. Max limit: INR 500.00 on card ending 1234.",
+        "expectFactTypes": [
+          "mandate"
+        ]
+      },
+      {
+        "sender": "VM-HDFCBK-S",
+        "body": "Standing Instruction creation towards AGIONE TEC failed. Max limit: INR 500.00 on card ending 1234.",
+        "expectFactTypes": []
+      }
+    ],
+    "status": "active",
+    "createdBy": "baseline",
+    "updatedAt": "2026-11-20T00:00:00Z"
+  },
+  {
+    "id": "MND-CREATED-UPI-01",
+    "version": 1,
+    "family": "mandate_created",
+    "senders": [
+      "*"
+    ],
+    "priority": 690,
+    "match": {
+      "pattern": "(?:upi\\s+)?(?:auto[- ]?pay\\s+)?mandate\\s+(?:has been\\s+)?(?:successfully\\s+)?(?:created|registered|set up|approved)(?:\\s+successfully)?\\s+(?:for|towards|in favou?r of|with)\\s+(?<m>[a-z0-9&.' _*-]+?)\\s+(?:for|of)\\s+(?:an?\\s+)?(?:max(?:imum)?\\s+)?(?:amount\\s+(?:of\\s+)?)?(?:rs\\.?|inr|₹)\\s*(?<cap>[\\d,]+(?:\\.\\d{1,2})?)(?:\\s+(?<freq>monthly|weekly|quarterly|yearly|daily))?",
+      "flags": "i",
+      "rejectAny": [
+        "declined",
+        "failed",
+        "could not",
+        "blocked"
+      ]
+    },
+    "emit": [
+      {
+        "factType": "mandate",
+        "attrs": {
+          "phase": "created",
+          "merchantName": {
+            "from": "m",
+            "transforms": [
+              "sanitizeNarration"
+            ]
+          },
+          "frequency": {
+            "from": "freq"
+          }
+        },
+        "amounts": [
+          {
+            "role": "ceiling",
+            "from": "cap",
+            "unit": "INR"
+          }
+        ]
+      }
+    ],
+    "confidence": 0.9,
+    "examples": [
+      {
+        "sender": "AX-AXISBK-S",
+        "body": "UPI Mandate created successfully for NETFLIX for Rs 649.00 monthly. To pause or revoke, use your UPI app. -Axis Bank",
+        "expectFactTypes": [
+          "mandate"
+        ]
+      },
+      {
+        "sender": "AX-AXISBK-S",
+        "body": "UPI Mandate creation for NETFLIX for Rs 649.00 monthly was declined. -Axis Bank",
+        "expectFactTypes": []
+      }
+    ],
+    "status": "active",
+    "createdBy": "baseline",
+    "updatedAt": "2026-11-20T00:00:00Z"
+  },
+  {
+    "id": "MND-CREATED-UPI-01-A",
+    "version": 1,
+    "family": "mandate_created",
+    "senders": [
+      "*"
+    ],
+    "priority": 691,
+    "match": {
+      "pattern": "(?:upi\\s+)?(?:auto[- ]?pay\\s+)?mandate\\s+(?:has been\\s+)?(?:successfully\\s+)?(?:created|registered|set up|approved)(?:\\s+successfully)?\\s+(?:for|towards|in favou?r of|with)\\s+(?<m>[a-z0-9&.' _*-]+?)\\s+(?:for|of)\\s+(?:an?\\s+)?(?:max(?:imum)?\\s+)?(?:amount\\s+(?:of\\s+)?)?(?:rs\\.?|inr|₹)\\s*(?<cap>[\\d,]+(?:\\.\\d{1,2})?)(?:\\s+(?<freq>monthly|weekly|quarterly|yearly|daily))?(?:[\\s\\S]*?(?:a/c|acct?\\.?|account)\\s*(?:no\\.?\\s*)?(?:ending\\s*(?:with\\s*|in\\s*)?)?(?:[x*•.]+\\s*)?(?<mask>\\d{2,16})\\b)",
+      "flags": "i",
+      "rejectAny": [
+        "declined",
+        "failed",
+        "could not",
+        "blocked"
+      ]
+    },
+    "emit": [
+      {
+        "factType": "mandate",
+        "attrs": {
+          "phase": "created",
+          "merchantName": {
+            "from": "m",
+            "transforms": [
+              "sanitizeNarration"
+            ]
+          },
+          "frequency": {
+            "from": "freq"
+          }
+        },
+        "amounts": [
+          {
+            "role": "ceiling",
+            "from": "cap",
+            "unit": "INR"
+          }
+        ],
+        "instrument": {
+          "kind": "bank_account",
+          "maskFrom": "mask"
+        }
+      }
+    ],
+    "confidence": 0.9,
+    "examples": [
+      {
+        "sender": "AX-AXISBK-S",
+        "body": "UPI Mandate created successfully for NETFLIX for Rs 649.00 monthly on A/c XX1234. UMN abc@axis. To pause or revoke, use your UPI app. -Axis Bank",
+        "expectFactTypes": [
+          "mandate"
+        ]
+      },
+      {
+        "sender": "AX-AXISBK-S",
+        "body": "UPI Mandate creation for NETFLIX for Rs 649.00 monthly was declined. -Axis Bank",
+        "expectFactTypes": []
+      }
+    ],
+    "status": "active",
+    "createdBy": "baseline",
+    "updatedAt": "2026-11-20T00:00:00Z"
+  },
+  {
+    "id": "MND-EXEC-NACH-01",
+    "version": 1,
+    "family": "mandate_exec",
+    "senders": [
+      "*"
+    ],
+    "priority": 700,
+    "match": {
+      "pattern": "(?:e-?)?(?:nach|ecs)\\s+(?:debit|transaction|mandate debit)\\s+(?:of\\s+)?(?:rs\\.?|inr|₹)\\s*(?<amt>[\\d,]+(?:\\.\\d{1,2})?)\\s+(?:for|towards)\\s+(?<m>[a-z0-9&.' _*-]+?)(?=\\s+(?:umrn|loan|emi|processed|successful|debited|executed|deducted|on|ref|for|is|has|was)\\b|\\s*[.,;]|\\s*$)(?:[\\s\\S]*?umrn[:\\s]*(?<ref_umrn>[a-z0-9@_-]+))?[\\s\\S]*?(?:processed|successful|debited|executed|deducted)(?:\\s+on\\s+(?<date>\\d{2}[-/ ](?:\\d{2}|(?:jan|feb|mar|apr|may|jun|jul|aug|sep|oct|nov|dec))[-/ ]\\d{2,4}|\\d{2}(?:jan|feb|mar|apr|may|jun|jul|aug|sep|oct|nov|dec)\\d{2,4}))?",
+      "flags": "i",
+      "rejectAny": [
+        "failed",
+        "returned",
+        "bounced",
+        "will be"
+      ]
+    },
+    "emit": [
+      {
+        "factType": "movement",
+        "attrs": {
+          "direction": "debit",
+          "purpose": "unknown",
+          "rail": "nach",
+          "mandateRef": {
+            "from": "ref_umrn"
+          }
+        },
+        "amounts": [
+          {
+            "role": "posted",
+            "from": "amt",
+            "unit": "INR"
+          }
+        ],
+        "occurredAt": {
+          "from": "date"
+        },
+        "instrument": {
+          "kind": "bank_account"
+        },
+        "counterparty": {
+          "kind": "merchant",
+          "nameFrom": "m",
+          "transforms": [
+            "sanitizeNarration"
+          ]
+        }
+      }
+    ],
+    "confidence": 0.9,
+    "examples": [
+      {
+        "sender": "VM-HDFCBK-S",
+        "body": "NACH debit of Rs 2,500.00 towards ACME INSURANCE UMRN HDFC000123456 processed on 05-11-26.",
+        "expectFactTypes": [
+          "movement"
+        ]
+      },
+      {
+        "sender": "VM-HDFCBK-S",
+        "body": "NACH debit of Rs 2,500.00 towards ACME INSURANCE UMRN HDFC000123456 failed on 05-11-26.",
+        "expectFactTypes": []
+      }
+    ],
+    "status": "active",
+    "createdBy": "baseline",
+    "updatedAt": "2026-11-20T00:00:00Z"
+  },
+  {
+    "id": "MND-EXEC-NACH-01-INV",
+    "version": 1,
+    "family": "mandate_exec",
+    "senders": [
+      "*"
+    ],
+    "priority": 705,
+    "match": {
+      "pattern": "(?:e-?)?(?:nach|ecs)\\s+(?:debit|transaction|mandate debit)\\s+(?:of\\s+)?(?:rs\\.?|inr|₹)\\s*(?<amt>[\\d,]+(?:\\.\\d{1,2})?)\\s+(?:for|towards)\\s+(?<m>(?:zerodha|groww|upstox|rksv|kotak\\s*sec\\w*|kotak\\s+neo|indmoney|ind\\s*money|angel\\s*(?:one|broking)|dhan\\b|univest|paytm\\s+money|hdfc\\s*sec\\w*|icici\\s*sec\\w*|icici\\s+direct|5\\s*paisa|motilal\\s+oswal|sharekhan|nu\\s*investors|iccl|indian\\s+clearing|nse\\s+clearing|bse\\s*star|coin\\s+by\\s+zerodha|smallcase|et\\s+money|kuvera|mutual\\s+fund|\\bmf\\b|cams\\b|kfin\\w*)[a-z0-9&.' _*-]*?)(?=\\s+(?:umrn|loan|emi|processed|successful|debited|executed|deducted|on|ref|for|is|has|was)\\b|\\s*[.,;]|\\s*$)(?:[\\s\\S]*?umrn[:\\s]*(?<ref_umrn>[a-z0-9@_-]+))?[\\s\\S]*?(?:processed|successful|debited|executed|deducted)(?:\\s+on\\s+(?<date>\\d{2}[-/ ](?:\\d{2}|(?:jan|feb|mar|apr|may|jun|jul|aug|sep|oct|nov|dec))[-/ ]\\d{2,4}|\\d{2}(?:jan|feb|mar|apr|may|jun|jul|aug|sep|oct|nov|dec)\\d{2,4}))?",
+      "flags": "i",
+      "rejectAny": [
+        "failed",
+        "returned",
+        "bounced",
+        "will be"
+      ]
+    },
+    "emit": [
+      {
+        "factType": "movement",
+        "attrs": {
+          "direction": "debit",
+          "purpose": "investment",
+          "rail": "nach",
+          "mandateRef": {
+            "from": "ref_umrn"
+          }
+        },
+        "amounts": [
+          {
+            "role": "posted",
+            "from": "amt",
+            "unit": "INR"
+          }
+        ],
+        "occurredAt": {
+          "from": "date"
+        },
+        "instrument": {
+          "kind": "bank_account"
+        },
+        "counterparty": {
+          "kind": "merchant",
+          "nameFrom": "m",
+          "transforms": [
+            "sanitizeNarration"
+          ]
+        }
+      }
+    ],
+    "confidence": 0.9,
+    "examples": [
+      {
+        "sender": "VM-HDFCBK-S",
+        "body": "NACH debit of Rs 10,000.00 towards ICCL GROWW AUTOPAY UMRN HDFC000123457 processed on 05-11-26.",
+        "expectFactTypes": [
+          "movement"
+        ]
+      },
+      {
+        "sender": "VM-HDFCBK-S",
+        "body": "NACH debit of Rs 2,500.00 towards ACME INSURANCE UMRN HDFC000123456 failed on 05-11-26.",
+        "expectFactTypes": []
+      }
+    ],
+    "status": "active",
+    "createdBy": "baseline",
+    "updatedAt": "2026-11-20T00:00:00Z"
+  },
+  {
+    "id": "MND-EXEC-NACH-EMI-01",
+    "version": 1,
+    "family": "mandate_exec",
+    "senders": [
+      "*"
+    ],
+    "priority": 710,
+    "match": {
+      "pattern": "(?=[\\s\\S]*?\\b(?:loan|emi)\\b)(?:e-?)?(?:nach|ecs)\\s+(?:debit|transaction|mandate debit)\\s+(?:of\\s+)?(?:rs\\.?|inr|₹)\\s*(?<amt>[\\d,]+(?:\\.\\d{1,2})?)\\s+(?:for|towards)\\s+(?<m>[a-z0-9&.' _*-]+?)(?=\\s+(?:umrn|loan|emi|processed|successful|debited|executed|deducted|on|ref|for|is|has|was)\\b|\\s*[.,;]|\\s*$)(?:[\\s\\S]*?umrn[:\\s]*(?<ref_umrn>[a-z0-9@_-]+))?[\\s\\S]*?(?:processed|successful|debited|executed|deducted)(?:\\s+on\\s+(?<date>\\d{2}[-/ ](?:\\d{2}|(?:jan|feb|mar|apr|may|jun|jul|aug|sep|oct|nov|dec))[-/ ]\\d{2,4}|\\d{2}(?:jan|feb|mar|apr|may|jun|jul|aug|sep|oct|nov|dec)\\d{2,4}))?",
+      "flags": "i",
+      "rejectAny": [
+        "failed",
+        "returned",
+        "bounced",
+        "will be"
+      ]
+    },
+    "emit": [
+      {
+        "factType": "movement",
+        "attrs": {
+          "direction": "debit",
+          "purpose": "emi",
+          "rail": "nach",
+          "mandateRef": {
+            "from": "ref_umrn"
+          }
+        },
+        "amounts": [
+          {
+            "role": "posted",
+            "from": "amt",
+            "unit": "INR"
+          }
+        ],
+        "occurredAt": {
+          "from": "date"
+        },
+        "instrument": {
+          "kind": "bank_account"
+        },
+        "counterparty": {
+          "kind": "merchant",
+          "nameFrom": "m",
+          "transforms": [
+            "sanitizeNarration"
+          ]
+        }
+      }
+    ],
+    "confidence": 0.93,
+    "examples": [
+      {
+        "sender": "VM-HDFCBK-S",
+        "body": "NACH debit of Rs 12,345.00 towards BAJAJ FINANCE LTD loan EMI UMRN HDFC000123458 processed on 05-11-26.",
+        "expectFactTypes": [
+          "movement"
+        ]
+      },
+      {
+        "sender": "VM-HDFCBK-S",
+        "body": "NACH debit of Rs 12,345.00 towards BAJAJ FINANCE LTD loan EMI UMRN HDFC000123458 failed on 05-11-26.",
+        "expectFactTypes": []
+      }
+    ],
+    "status": "active",
+    "createdBy": "baseline",
+    "updatedAt": "2026-11-20T00:00:00Z"
+  },
+  {
+    "id": "MND-EXEC-SI-01",
+    "version": 1,
+    "family": "mandate_exec",
+    "senders": [
+      "*"
+    ],
+    "priority": 700,
+    "match": {
+      "pattern": "standing\\s+instruction(?:\\s*\\(si\\))?\\s+of\\s+(?:rs\\.?|inr|₹)\\s*(?<amt>[\\d,]+(?:\\.\\d{1,2})?)\\s+(?:for|towards)\\s+(?<m>[a-z0-9&.' _*-]+?)\\s+(?:on|from)\\s+(?:[a-z]+\\s+)?(?:[a-z]+\\s+)?(?:[a-z]+\\s+)?(?:card|cc)\\s*(?:no\\.?\\s*)?(?:ending\\s*(?:with\\s*|in\\s*)?)?(?:[x*•.]+\\s*)?(?<mask>\\d{2,16})\\b\\s+has been\\s+(?:successfully\\s+)?(?:processed|debited|charged|executed)(?:[\\s\\S]*?ref(?:\\s+no\\.?)?[:\\s]*(?<ref_txnId>[a-z0-9]+))?",
+      "flags": "i",
+      "rejectAny": [
+        "could not",
+        "not been",
+        "failed"
+      ]
+    },
+    "emit": [
+      {
+        "factType": "movement",
+        "attrs": {
+          "direction": "debit",
+          "purpose": "purchase",
+          "rail": "card",
+          "mandateRef": {
+            "from": "ref_txnId"
+          }
+        },
+        "amounts": [
+          {
+            "role": "posted",
+            "from": "amt",
+            "unit": "INR"
+          }
+        ],
+        "instrument": {
+          "maskFrom": "mask"
+        },
+        "counterparty": {
+          "kind": "merchant",
+          "nameFrom": "m",
+          "transforms": [
+            "sanitizeNarration"
+          ]
+        }
+      }
+    ],
+    "confidence": 0.95,
+    "examples": [
+      {
+        "sender": "AX-ICICIT-S",
+        "body": "Dear Customer, your standing instruction (SI) of Rs 119.00 for SPOTIFY SI on ICICI Bank Card XX9012 has been processed successfully. SI Ref No: 12345678.",
+        "expectFactTypes": [
+          "movement"
+        ]
+      },
+      {
+        "sender": "AX-ICICIT-S",
+        "body": "Dear Customer, your standing instruction (SI) of Rs 119.00 for SPOTIFY SI on ICICI Bank Card XX9012 could not be processed due to insufficient limit.",
+        "expectFactTypes": []
+      }
+    ],
+    "status": "active",
+    "createdBy": "baseline",
+    "updatedAt": "2026-11-20T00:00:00Z"
+  },
+  {
+    "id": "MND-EXEC-UPI-01",
+    "version": 1,
+    "family": "mandate_exec",
+    "senders": [
+      "*"
+    ],
+    "priority": 720,
+    "match": {
+      "pattern": "(?:rs\\.?|inr|₹)\\s*(?<amt>[\\d,]+(?:\\.\\d{1,2})?)\\s+debited\\s+from\\s+(?:a/c|acct?\\.?|account)\\s*(?:no\\.?\\s*)?(?:ending\\s*(?:with\\s*|in\\s*)?)?(?:[x*•.]+\\s*)?(?<mask>\\d{2,16})\\b\\s+for\\s+upi\\s+mandate\\s+(?<m>[a-z0-9&.' _*-]+?)\\s+on\\s+(?<date>\\d{2}[-/ ](?:\\d{2}|(?:jan|feb|mar|apr|may|jun|jul|aug|sep|oct|nov|dec))[-/ ]\\d{2,4}|\\d{2}(?:jan|feb|mar|apr|may|jun|jul|aug|sep|oct|nov|dec)\\d{2,4})(?:\\s+umrn\\s*[:\\-]?\\s*(?<ref_umrn>[a-z0-9@_-]+))?",
+      "flags": "i",
+      "rejectAny": [
+        "will be",
+        "failed"
+      ]
+    },
+    "emit": [
+      {
+        "factType": "movement",
+        "attrs": {
+          "direction": "debit",
+          "purpose": "purchase",
+          "rail": "upi",
+          "mandateRef": {
+            "from": "ref_umrn"
+          }
+        },
+        "amounts": [
+          {
+            "role": "posted",
+            "from": "amt",
+            "unit": "INR"
+          }
+        ],
+        "occurredAt": {
+          "from": "date"
+        },
+        "instrument": {
+          "kind": "bank_account",
+          "maskFrom": "mask"
+        },
+        "counterparty": {
+          "kind": "merchant",
+          "nameFrom": "m",
+          "transforms": [
+            "sanitizeNarration"
+          ]
+        }
+      }
+    ],
+    "confidence": 0.97,
+    "examples": [
+      {
+        "sender": "VM-HDFCBK-S",
+        "body": "Rs.649.00 debited from A/c XX1234 for UPI Mandate NETFLIX on 01-11-26 UMRN 9876.",
+        "expectFactTypes": [
+          "movement"
+        ]
+      },
+      {
+        "sender": "VM-HDFCBK-S",
+        "body": "Rs.649.00 will be debited from A/c XX1234 for UPI Mandate NETFLIX on 05-11-26 UMRN 9876.",
+        "expectFactTypes": []
+      }
+    ],
+    "status": "active",
+    "createdBy": "baseline",
+    "updatedAt": "2026-11-20T00:00:00Z"
+  },
+  {
+    "id": "MND-EXEC-UPI-01-B",
+    "version": 1,
+    "family": "mandate_exec",
+    "senders": [
+      "*"
+    ],
+    "priority": 721,
+    "match": {
+      "pattern": "(?:rs\\.?|inr|₹)\\s*(?<amt>[\\d,]+(?:\\.\\d{1,2})?)\\s+debited\\s+from\\s+(?:a/c|acct?\\.?|account)\\s*(?:no\\.?\\s*)?(?:ending\\s*(?:with\\s*|in\\s*)?)?(?:[x*•.]+\\s*)?(?<mask>\\d{2,16})\\b\\s+for\\s+upi\\s+mandate\\s+(?<m>[a-z0-9&.' _*-]+?)\\s+on\\s+(?<date>\\d{2}[-/ ](?:\\d{2}|(?:jan|feb|mar|apr|may|jun|jul|aug|sep|oct|nov|dec))[-/ ]\\d{2,4}|\\d{2}(?:jan|feb|mar|apr|may|jun|jul|aug|sep|oct|nov|dec)\\d{2,4})(?:\\s+umrn\\s*[:\\-]?\\s*(?<ref_umrn>[a-z0-9@_-]+))?[\\s\\S]*?avl\\.?\\s*bal(?:ance)?\\.?\\s*[:\\-]?\\s*(?:rs\\.?|inr|₹)\\s*(?<bal>[\\d,]+(?:\\.\\d{1,2})?)",
+      "flags": "i",
+      "rejectAny": [
+        "will be",
+        "failed"
+      ]
+    },
+    "emit": [
+      {
+        "factType": "movement",
+        "attrs": {
+          "direction": "debit",
+          "purpose": "purchase",
+          "rail": "upi",
+          "mandateRef": {
+            "from": "ref_umrn"
+          }
+        },
+        "amounts": [
+          {
+            "role": "posted",
+            "from": "amt",
+            "unit": "INR"
+          }
+        ],
+        "occurredAt": {
+          "from": "date"
+        },
+        "instrument": {
+          "kind": "bank_account",
+          "maskFrom": "mask"
+        },
+        "counterparty": {
+          "kind": "merchant",
+          "nameFrom": "m",
+          "transforms": [
+            "sanitizeNarration"
+          ]
+        }
+      },
+      {
+        "factType": "balance_snapshot",
+        "amounts": [
+          {
+            "role": "available_balance",
+            "from": "bal",
+            "unit": "INR"
+          }
+        ],
+        "instrument": {
+          "sameAs": 0
+        },
+        "attrs": {
+          "asOf": {
+            "sameAs": 0,
+            "field": "occurredAt"
+          }
+        }
+      }
+    ],
+    "confidence": 0.97,
+    "examples": [
+      {
+        "sender": "VM-HDFCBK-S",
+        "body": "Rs.649.00 debited from A/c XX1234 for UPI Mandate NETFLIX on 01-11-26 UMRN 9876. Avl Bal Rs 51,661.40",
+        "expectFactTypes": [
+          "movement",
+          "balance_snapshot"
+        ]
+      },
+      {
+        "sender": "VM-HDFCBK-S",
+        "body": "Rs.649.00 will be debited from A/c XX1234 for UPI Mandate NETFLIX on 05-11-26 UMRN 9876.",
+        "expectFactTypes": []
+      }
+    ],
+    "status": "active",
+    "createdBy": "baseline",
+    "updatedAt": "2026-11-20T00:00:00Z"
+  },
+  {
+    "id": "MND-EXEC-UPI-01-INV",
+    "version": 1,
+    "family": "mandate_exec",
+    "senders": [
+      "*"
+    ],
+    "priority": 725,
+    "match": {
+      "pattern": "(?:rs\\.?|inr|₹)\\s*(?<amt>[\\d,]+(?:\\.\\d{1,2})?)\\s+debited\\s+from\\s+(?:a/c|acct?\\.?|account)\\s*(?:no\\.?\\s*)?(?:ending\\s*(?:with\\s*|in\\s*)?)?(?:[x*•.]+\\s*)?(?<mask>\\d{2,16})\\b\\s+for\\s+upi\\s+mandate\\s+(?<m>(?:zerodha|groww|upstox|rksv|kotak\\s*sec\\w*|kotak\\s+neo|indmoney|ind\\s*money|angel\\s*(?:one|broking)|dhan\\b|univest|paytm\\s+money|hdfc\\s*sec\\w*|icici\\s*sec\\w*|icici\\s+direct|5\\s*paisa|motilal\\s+oswal|sharekhan|nu\\s*investors|iccl|indian\\s+clearing|nse\\s+clearing|bse\\s*star|coin\\s+by\\s+zerodha|smallcase|et\\s+money|kuvera|mutual\\s+fund|\\bmf\\b|cams\\b|kfin\\w*)[a-z0-9&.' _*-]*?)\\s+on\\s+(?<date>\\d{2}[-/ ](?:\\d{2}|(?:jan|feb|mar|apr|may|jun|jul|aug|sep|oct|nov|dec))[-/ ]\\d{2,4}|\\d{2}(?:jan|feb|mar|apr|may|jun|jul|aug|sep|oct|nov|dec)\\d{2,4})(?:\\s+umrn\\s*[:\\-]?\\s*(?<ref_umrn>[a-z0-9@_-]+))?",
+      "flags": "i",
+      "rejectAny": [
+        "will be",
+        "failed"
+      ]
+    },
+    "emit": [
+      {
+        "factType": "movement",
+        "attrs": {
+          "direction": "debit",
+          "purpose": "investment",
+          "rail": "upi",
+          "mandateRef": {
+            "from": "ref_umrn"
+          }
+        },
+        "amounts": [
+          {
+            "role": "posted",
+            "from": "amt",
+            "unit": "INR"
+          }
+        ],
+        "occurredAt": {
+          "from": "date"
+        },
+        "instrument": {
+          "kind": "bank_account",
+          "maskFrom": "mask"
+        },
+        "counterparty": {
+          "kind": "merchant",
+          "nameFrom": "m",
+          "transforms": [
+            "sanitizeNarration"
+          ]
+        }
+      }
+    ],
+    "confidence": 0.97,
+    "examples": [
+      {
+        "sender": "VM-HDFCBK-S",
+        "body": "Rs.5,000.00 debited from A/c XX1234 for UPI Mandate ICCL GROWW AUTOPAY on 01-11-26 UMRN 9877.",
+        "expectFactTypes": [
+          "movement"
+        ]
+      },
+      {
+        "sender": "VM-HDFCBK-S",
+        "body": "Rs.649.00 will be debited from A/c XX1234 for UPI Mandate NETFLIX on 05-11-26 UMRN 9876.",
+        "expectFactTypes": []
+      }
+    ],
+    "status": "active",
+    "createdBy": "baseline",
+    "updatedAt": "2026-11-20T00:00:00Z"
+  },
+  {
+    "id": "MND-EXEC-UPI-01-INV-B",
+    "version": 1,
+    "family": "mandate_exec",
+    "senders": [
+      "*"
+    ],
+    "priority": 726,
+    "match": {
+      "pattern": "(?:rs\\.?|inr|₹)\\s*(?<amt>[\\d,]+(?:\\.\\d{1,2})?)\\s+debited\\s+from\\s+(?:a/c|acct?\\.?|account)\\s*(?:no\\.?\\s*)?(?:ending\\s*(?:with\\s*|in\\s*)?)?(?:[x*•.]+\\s*)?(?<mask>\\d{2,16})\\b\\s+for\\s+upi\\s+mandate\\s+(?<m>(?:zerodha|groww|upstox|rksv|kotak\\s*sec\\w*|kotak\\s+neo|indmoney|ind\\s*money|angel\\s*(?:one|broking)|dhan\\b|univest|paytm\\s+money|hdfc\\s*sec\\w*|icici\\s*sec\\w*|icici\\s+direct|5\\s*paisa|motilal\\s+oswal|sharekhan|nu\\s*investors|iccl|indian\\s+clearing|nse\\s+clearing|bse\\s*star|coin\\s+by\\s+zerodha|smallcase|et\\s+money|kuvera|mutual\\s+fund|\\bmf\\b|cams\\b|kfin\\w*)[a-z0-9&.' _*-]*?)\\s+on\\s+(?<date>\\d{2}[-/ ](?:\\d{2}|(?:jan|feb|mar|apr|may|jun|jul|aug|sep|oct|nov|dec))[-/ ]\\d{2,4}|\\d{2}(?:jan|feb|mar|apr|may|jun|jul|aug|sep|oct|nov|dec)\\d{2,4})(?:\\s+umrn\\s*[:\\-]?\\s*(?<ref_umrn>[a-z0-9@_-]+))?[\\s\\S]*?avl\\.?\\s*bal(?:ance)?\\.?\\s*[:\\-]?\\s*(?:rs\\.?|inr|₹)\\s*(?<bal>[\\d,]+(?:\\.\\d{1,2})?)",
+      "flags": "i",
+      "rejectAny": [
+        "will be",
+        "failed"
+      ]
+    },
+    "emit": [
+      {
+        "factType": "movement",
+        "attrs": {
+          "direction": "debit",
+          "purpose": "investment",
+          "rail": "upi",
+          "mandateRef": {
+            "from": "ref_umrn"
+          }
+        },
+        "amounts": [
+          {
+            "role": "posted",
+            "from": "amt",
+            "unit": "INR"
+          }
+        ],
+        "occurredAt": {
+          "from": "date"
+        },
+        "instrument": {
+          "kind": "bank_account",
+          "maskFrom": "mask"
+        },
+        "counterparty": {
+          "kind": "merchant",
+          "nameFrom": "m",
+          "transforms": [
+            "sanitizeNarration"
+          ]
+        }
+      },
+      {
+        "factType": "balance_snapshot",
+        "amounts": [
+          {
+            "role": "available_balance",
+            "from": "bal",
+            "unit": "INR"
+          }
+        ],
+        "instrument": {
+          "sameAs": 0
+        },
+        "attrs": {
+          "asOf": {
+            "sameAs": 0,
+            "field": "occurredAt"
+          }
+        }
+      }
+    ],
+    "confidence": 0.97,
+    "examples": [
+      {
+        "sender": "VM-HDFCBK-S",
+        "body": "Rs.5,000.00 debited from A/c XX1234 for UPI Mandate ICCL GROWW AUTOPAY on 01-11-26 UMRN 9877. Avl Bal Rs 41,661.40",
+        "expectFactTypes": [
+          "movement",
+          "balance_snapshot"
+        ]
+      },
+      {
+        "sender": "VM-HDFCBK-S",
+        "body": "Rs.649.00 will be debited from A/c XX1234 for UPI Mandate NETFLIX on 05-11-26 UMRN 9876.",
+        "expectFactTypes": []
+      }
+    ],
+    "status": "active",
+    "createdBy": "baseline",
+    "updatedAt": "2026-11-20T00:00:00Z"
+  },
+  {
+    "id": "MND-EXEC-UPI-02",
+    "version": 1,
+    "family": "mandate_exec",
+    "senders": [
+      "*"
+    ],
+    "priority": 720,
+    "match": {
+      "pattern": "(?:rs\\.?|inr|₹)\\s*(?<amt>[\\d,]+(?:\\.\\d{1,2})?)\\s+(?:has been\\s+)?debited\\s+from\\s+your\\s+(?:a/c|acct?\\.?|account)\\s*(?:no\\.?\\s*)?(?:ending\\s*(?:with\\s*|in\\s*)?)?(?:[x*•.]+\\s*)?(?<mask>\\d{2,16})\\b(?:\\s+on\\s+(?<date>\\d{2}[-/ ](?:\\d{2}|(?:jan|feb|mar|apr|may|jun|jul|aug|sep|oct|nov|dec))[-/ ]\\d{2,4}|\\d{2}(?:jan|feb|mar|apr|may|jun|jul|aug|sep|oct|nov|dec)\\d{2,4}))?\\s+towards\\s+(?<m>[a-z0-9&.' _*-]+?)\\s+for\\s+upi\\s+mandate(?:[\\s\\S]*?umrn[:\\s]*(?<ref_umrn>[a-z0-9@_-]+))?",
+      "flags": "i",
+      "rejectAny": [
+        "will be",
+        "failed"
+      ]
+    },
+    "emit": [
+      {
+        "factType": "movement",
+        "attrs": {
+          "direction": "debit",
+          "purpose": "purchase",
+          "rail": "upi",
+          "mandateRef": {
+            "from": "ref_umrn"
+          }
+        },
+        "amounts": [
+          {
+            "role": "posted",
+            "from": "amt",
+            "unit": "INR"
+          }
+        ],
+        "occurredAt": {
+          "from": "date"
+        },
+        "instrument": {
+          "kind": "bank_account",
+          "maskFrom": "mask"
+        },
+        "counterparty": {
+          "kind": "merchant",
+          "nameFrom": "m",
+          "transforms": [
+            "sanitizeNarration"
+          ]
+        }
+      }
+    ],
+    "confidence": 0.96,
+    "examples": [
+      {
+        "sender": "AX-AXISBK-S",
+        "body": "INR 649.00 debited from your A/c XX1234 on 03-09-26 towards NETFLIX INDIA for UPI Mandate. UMRN abc123@axis. - Axis Bank",
+        "expectFactTypes": [
+          "movement"
+        ]
+      },
+      {
+        "sender": "AX-AXISBK-S",
+        "body": "INR 3000.00 will be debited from your A/c XX1234 on 03-09-26 towards ICCL GROWW AUTOPAY for UPI Mandate. - Axis Bank",
+        "expectFactTypes": []
+      }
+    ],
+    "status": "active",
+    "createdBy": "baseline",
+    "updatedAt": "2026-11-20T00:00:00Z"
+  },
+  {
+    "id": "MND-EXEC-UPI-02-INV",
+    "version": 1,
+    "family": "mandate_exec",
+    "senders": [
+      "*"
+    ],
+    "priority": 725,
+    "match": {
+      "pattern": "(?:rs\\.?|inr|₹)\\s*(?<amt>[\\d,]+(?:\\.\\d{1,2})?)\\s+(?:has been\\s+)?debited\\s+from\\s+your\\s+(?:a/c|acct?\\.?|account)\\s*(?:no\\.?\\s*)?(?:ending\\s*(?:with\\s*|in\\s*)?)?(?:[x*•.]+\\s*)?(?<mask>\\d{2,16})\\b(?:\\s+on\\s+(?<date>\\d{2}[-/ ](?:\\d{2}|(?:jan|feb|mar|apr|may|jun|jul|aug|sep|oct|nov|dec))[-/ ]\\d{2,4}|\\d{2}(?:jan|feb|mar|apr|may|jun|jul|aug|sep|oct|nov|dec)\\d{2,4}))?\\s+towards\\s+(?<m>(?:zerodha|groww|upstox|rksv|kotak\\s*sec\\w*|kotak\\s+neo|indmoney|ind\\s*money|angel\\s*(?:one|broking)|dhan\\b|univest|paytm\\s+money|hdfc\\s*sec\\w*|icici\\s*sec\\w*|icici\\s+direct|5\\s*paisa|motilal\\s+oswal|sharekhan|nu\\s*investors|iccl|indian\\s+clearing|nse\\s+clearing|bse\\s*star|coin\\s+by\\s+zerodha|smallcase|et\\s+money|kuvera|mutual\\s+fund|\\bmf\\b|cams\\b|kfin\\w*)[a-z0-9&.' _*-]*?)\\s+for\\s+upi\\s+mandate(?:[\\s\\S]*?umrn[:\\s]*(?<ref_umrn>[a-z0-9@_-]+))?",
+      "flags": "i",
+      "rejectAny": [
+        "will be",
+        "failed"
+      ]
+    },
+    "emit": [
+      {
+        "factType": "movement",
+        "attrs": {
+          "direction": "debit",
+          "purpose": "investment",
+          "rail": "upi",
+          "mandateRef": {
+            "from": "ref_umrn"
+          }
+        },
+        "amounts": [
+          {
+            "role": "posted",
+            "from": "amt",
+            "unit": "INR"
+          }
+        ],
+        "occurredAt": {
+          "from": "date"
+        },
+        "instrument": {
+          "kind": "bank_account",
+          "maskFrom": "mask"
+        },
+        "counterparty": {
+          "kind": "merchant",
+          "nameFrom": "m",
+          "transforms": [
+            "sanitizeNarration"
+          ]
+        }
+      }
+    ],
+    "confidence": 0.96,
+    "examples": [
+      {
+        "sender": "AX-AXISBK-S",
+        "body": "INR 3000.00 debited from your A/c XX1234 on 03-09-26 towards ICCL GROWW AUTOPAY for UPI Mandate. UMRN abc124@axis. - Axis Bank",
+        "expectFactTypes": [
+          "movement"
+        ]
+      },
+      {
+        "sender": "AX-AXISBK-S",
+        "body": "INR 3000.00 will be debited from your A/c XX1234 on 03-09-26 towards ICCL GROWW AUTOPAY for UPI Mandate. - Axis Bank",
+        "expectFactTypes": []
+      }
+    ],
+    "status": "active",
+    "createdBy": "baseline",
+    "updatedAt": "2026-11-20T00:00:00Z"
+  },
+  {
+    "id": "MND-EXEC-UPI-90",
+    "version": 1,
+    "family": "mandate_exec",
+    "senders": [
+      "*"
+    ],
+    "priority": 300,
+    "match": {
+      "pattern": "(?:rs\\.?|inr|₹)\\s*(?<amt>[\\d,]+(?:\\.\\d{1,2})?)[\\s\\S]{0,60}?(?:debited|deducted|paid)[\\s\\S]{0,160}?(?:upi\\s+(?:auto[- ]?pay|mandate)|auto[- ]?pay\\s+mandate|umrn)(?:[\\s\\S]{0,60}?umrn[:\\s]*(?<ref_umrn>[a-z0-9@_-]+))?",
+      "flags": "i",
+      "rejectAny": [
+        "will be",
+        "failed",
+        "declined",
+        "blocked",
+        "created",
+        "revoked",
+        "cancel",
+        "approved"
+      ]
+    },
+    "emit": [
+      {
+        "factType": "movement",
+        "attrs": {
+          "direction": "debit",
+          "purpose": "unknown",
+          "rail": "upi",
+          "mandateRef": {
+            "from": "ref_umrn"
+          }
+        },
+        "amounts": [
+          {
+            "role": "posted",
+            "from": "amt",
+            "unit": "INR"
+          }
+        ]
+      }
+    ],
+    "confidence": 0.7,
+    "examples": [
+      {
+        "sender": "VM-HDFCBK-S",
+        "body": "Rs 649.00 debited from your account under UPI mandate for a recurring payment. UMRN xyz789.",
+        "expectFactTypes": [
+          "movement"
+        ]
+      },
+      {
+        "sender": "VM-HDFCBK-S",
+        "body": "Rs 649.00 will be debited from your account under UPI mandate for a recurring payment.",
+        "expectFactTypes": []
+      }
+    ],
+    "status": "active",
+    "createdBy": "baseline",
+    "updatedAt": "2026-11-20T00:00:00Z"
+  },
+  {
+    "id": "MND-EXPIRED-01",
+    "version": 1,
+    "family": "mandate_expired",
+    "senders": [
+      "*"
+    ],
+    "priority": 680,
+    "match": {
+      "pattern": "(?:upi\\s+)?(?:auto[- ]?pay\\s+)?(?:e-?)?mandate\\s+(?:for|to|towards)\\s+(?<m>[a-z0-9&.' _*-]+?)\\s+(?:has been|is|was)\\s+(?:successfully\\s+)?(?:expired|lapsed)",
+      "flags": "i"
+    },
+    "emit": [
+      {
+        "factType": "mandate",
+        "attrs": {
+          "phase": "expired",
+          "merchantName": {
+            "from": "m",
+            "transforms": [
+              "sanitizeNarration"
+            ]
+          }
+        }
+      }
+    ],
+    "confidence": 0.93,
+    "examples": [
+      {
+        "sender": "VM-HDFCBK-S",
+        "body": "Your UPI AutoPay mandate for NETFLIX has been expired.",
+        "expectFactTypes": [
+          "mandate"
+        ]
+      },
+      {
+        "sender": "VM-HDFCBK-S",
+        "body": "Your UPI AutoPay mandate for NETFLIX has been created on A/c XX1234.",
+        "expectFactTypes": []
+      }
+    ],
+    "status": "active",
+    "createdBy": "baseline",
+    "updatedAt": "2026-11-20T00:00:00Z"
+  },
+  {
+    "id": "MND-EXPIRED-01-A",
+    "version": 1,
+    "family": "mandate_expired",
+    "senders": [
+      "*"
+    ],
+    "priority": 681,
+    "match": {
+      "pattern": "(?:upi\\s+)?(?:auto[- ]?pay\\s+)?(?:e-?)?mandate\\s+(?:for|to|towards)\\s+(?<m>[a-z0-9&.' _*-]+?)\\s+(?:has been|is|was)\\s+(?:successfully\\s+)?(?:expired|lapsed)(?:[\\s\\S]*?(?:a/c|acct?\\.?|account)\\s*(?:no\\.?\\s*)?(?:ending\\s*(?:with\\s*|in\\s*)?)?(?:[x*•.]+\\s*)?(?<mask>\\d{2,16})\\b)",
+      "flags": "i"
+    },
+    "emit": [
+      {
+        "factType": "mandate",
+        "attrs": {
+          "phase": "expired",
+          "merchantName": {
+            "from": "m",
+            "transforms": [
+              "sanitizeNarration"
+            ]
+          }
+        },
+        "instrument": {
+          "kind": "bank_account",
+          "maskFrom": "mask"
+        }
+      }
+    ],
+    "confidence": 0.93,
+    "examples": [
+      {
+        "sender": "VM-HDFCBK-S",
+        "body": "Your UPI AutoPay mandate for NETFLIX has been expired on A/c XX1234.",
+        "expectFactTypes": [
+          "mandate"
+        ]
+      },
+      {
+        "sender": "VM-HDFCBK-S",
+        "body": "Your UPI AutoPay mandate for NETFLIX has been created on A/c XX1234.",
+        "expectFactTypes": []
+      }
+    ],
+    "status": "active",
+    "createdBy": "baseline",
+    "updatedAt": "2026-11-20T00:00:00Z"
+  },
+  {
+    "id": "MND-EXPIRED-02",
+    "version": 1,
+    "family": "mandate_expired",
+    "senders": [
+      "*"
+    ],
+    "priority": 680,
+    "match": {
+      "pattern": "your\\s+(?<m>[a-z0-9&.' _*-]+?)\\s+(?:upi\\s+)?(?:auto[- ]?pay\\s+)?(?:e-?)?mandate\\s+(?:has been|is|was)\\s+(?:successfully\\s+)?(?:expired|lapsed)",
+      "flags": "i"
+    },
+    "emit": [
+      {
+        "factType": "mandate",
+        "attrs": {
+          "phase": "expired",
+          "merchantName": {
+            "from": "m",
+            "transforms": [
+              "sanitizeNarration"
+            ]
+          }
+        }
+      }
+    ],
+    "confidence": 0.93,
+    "examples": [
+      {
+        "sender": "VM-HDFCBK-S",
+        "body": "Your NETFLIX UPI AutoPay mandate has been expired.",
+        "expectFactTypes": [
+          "mandate"
+        ]
+      },
+      {
+        "sender": "VM-HDFCBK-S",
+        "body": "Your NETFLIX UPI AutoPay mandate has been created.",
+        "expectFactTypes": []
+      }
+    ],
+    "status": "active",
+    "createdBy": "baseline",
+    "updatedAt": "2026-11-20T00:00:00Z"
+  },
+  {
+    "id": "MND-EXPIRED-02-A",
+    "version": 1,
+    "family": "mandate_expired",
+    "senders": [
+      "*"
+    ],
+    "priority": 681,
+    "match": {
+      "pattern": "your\\s+(?<m>[a-z0-9&.' _*-]+?)\\s+(?:upi\\s+)?(?:auto[- ]?pay\\s+)?(?:e-?)?mandate\\s+(?:has been|is|was)\\s+(?:successfully\\s+)?(?:expired|lapsed)(?:[\\s\\S]*?(?:a/c|acct?\\.?|account)\\s*(?:no\\.?\\s*)?(?:ending\\s*(?:with\\s*|in\\s*)?)?(?:[x*•.]+\\s*)?(?<mask>\\d{2,16})\\b)",
+      "flags": "i"
+    },
+    "emit": [
+      {
+        "factType": "mandate",
+        "attrs": {
+          "phase": "expired",
+          "merchantName": {
+            "from": "m",
+            "transforms": [
+              "sanitizeNarration"
+            ]
+          }
+        },
+        "instrument": {
+          "kind": "bank_account",
+          "maskFrom": "mask"
+        }
+      }
+    ],
+    "confidence": 0.93,
+    "examples": [
+      {
+        "sender": "VM-HDFCBK-S",
+        "body": "Your NETFLIX UPI AutoPay mandate has been expired on HDFC A/c XX1234.",
+        "expectFactTypes": [
+          "mandate"
+        ]
+      },
+      {
+        "sender": "VM-HDFCBK-S",
+        "body": "Your NETFLIX UPI AutoPay mandate has been created.",
+        "expectFactTypes": []
+      }
+    ],
+    "status": "active",
+    "createdBy": "baseline",
+    "updatedAt": "2026-11-20T00:00:00Z"
+  },
+  {
+    "id": "MND-FAILED-01",
+    "version": 1,
+    "family": "mandate_failed",
+    "senders": [
+      "*"
+    ],
+    "priority": 700,
+    "match": {
+      "pattern": "(?:auto[- ]?pay|auto[- ]?debit|mandate|standing\\s+instruction|nach|ecs|si\\b)[\\s\\S]{0,100}?(?:rs\\.?|inr|₹)\\s*(?<amt>[\\d,]+(?:\\.\\d{1,2})?)(?:[\\s\\S]{0,60}?(?:towards|for)\\s+(?<m>[a-z0-9&.' _*-]+?)(?=\\s+(?:has|have|is|was|could|failed|due|on|from|dated)\\b|[.,;]))?[\\s\\S]{0,100}?(?:failed|could not be processed|was unsuccessful|not processed|declined|rejected|bounced|dishonou?red|returned unpaid)",
+      "flags": "i",
+      "rejectAny": [
+        "has been processed successfully",
+        "was successful",
+        "is successful",
+        "cancel",
+        "registration",
+        "creation",
+        "registered",
+        "created",
+        "set up",
+        "setup"
+      ]
+    },
+    "emit": [
+      {
+        "factType": "attempt",
+        "attrs": {
+          "status": "failed",
+          "direction": "debit",
+          "purpose": "unknown"
+        },
+        "amounts": [
+          {
+            "role": "posted",
+            "from": "amt",
+            "unit": "INR"
+          }
+        ],
+        "counterparty": {
+          "nameFrom": "m",
+          "transforms": [
+            "sanitizeNarration"
+          ]
+        }
+      }
+    ],
+    "confidence": 0.93,
+    "examples": [
+      {
+        "sender": "AX-ICICIT-S",
+        "body": "Dear Customer, your standing instruction of Rs 119.00 for SPOTIFY on card XX9012 could not be processed due to insufficient limit.",
+        "expectFactTypes": [
+          "attempt"
+        ]
+      },
+      {
+        "sender": "VM-HDFCBK-S",
+        "body": "AutoPay payment of Rs 649.00 towards NETFLIX failed due to insufficient balance. No money was debited.",
+        "expectFactTypes": [
+          "attempt"
+        ]
+      },
+      {
+        "sender": "AX-ICICIT-S",
+        "body": "Dear Customer, your standing instruction of Rs 119.00 for SPOTIFY on card XX9012 has been processed successfully.",
+        "expectFactTypes": []
+      }
+    ],
+    "status": "active",
+    "createdBy": "baseline",
+    "updatedAt": "2026-11-20T00:00:00Z"
+  },
+  {
+    "id": "MND-MODIFIED-01",
+    "version": 1,
+    "family": "mandate_modified",
+    "senders": [
+      "*"
+    ],
+    "priority": 680,
+    "match": {
+      "pattern": "(?:upi\\s+)?(?:auto[- ]?pay\\s+)?(?:e-?)?mandate\\s+(?:for|to|towards)\\s+(?<m>[a-z0-9&.' _*-]+?)\\s+(?:has been|is|was)\\s+(?:successfully\\s+)?(?:modified|updated|changed|revised)",
+      "flags": "i"
+    },
+    "emit": [
+      {
+        "factType": "mandate",
+        "attrs": {
+          "phase": "modified",
+          "merchantName": {
+            "from": "m",
+            "transforms": [
+              "sanitizeNarration"
+            ]
+          }
+        }
+      }
+    ],
+    "confidence": 0.93,
+    "examples": [
+      {
+        "sender": "VM-HDFCBK-S",
+        "body": "Your UPI AutoPay mandate for NETFLIX has been modified.",
+        "expectFactTypes": [
+          "mandate"
+        ]
+      },
+      {
+        "sender": "VM-HDFCBK-S",
+        "body": "Your UPI AutoPay mandate for NETFLIX has been created on A/c XX1234.",
+        "expectFactTypes": []
+      }
+    ],
+    "status": "active",
+    "createdBy": "baseline",
+    "updatedAt": "2026-11-20T00:00:00Z"
+  },
+  {
+    "id": "MND-MODIFIED-01-A",
+    "version": 1,
+    "family": "mandate_modified",
+    "senders": [
+      "*"
+    ],
+    "priority": 681,
+    "match": {
+      "pattern": "(?:upi\\s+)?(?:auto[- ]?pay\\s+)?(?:e-?)?mandate\\s+(?:for|to|towards)\\s+(?<m>[a-z0-9&.' _*-]+?)\\s+(?:has been|is|was)\\s+(?:successfully\\s+)?(?:modified|updated|changed|revised)(?:[\\s\\S]*?(?:a/c|acct?\\.?|account)\\s*(?:no\\.?\\s*)?(?:ending\\s*(?:with\\s*|in\\s*)?)?(?:[x*•.]+\\s*)?(?<mask>\\d{2,16})\\b)",
+      "flags": "i"
+    },
+    "emit": [
+      {
+        "factType": "mandate",
+        "attrs": {
+          "phase": "modified",
+          "merchantName": {
+            "from": "m",
+            "transforms": [
+              "sanitizeNarration"
+            ]
+          }
+        },
+        "instrument": {
+          "kind": "bank_account",
+          "maskFrom": "mask"
+        }
+      }
+    ],
+    "confidence": 0.93,
+    "examples": [
+      {
+        "sender": "VM-HDFCBK-S",
+        "body": "Your UPI AutoPay mandate for NETFLIX has been modified on A/c XX1234.",
+        "expectFactTypes": [
+          "mandate"
+        ]
+      },
+      {
+        "sender": "VM-HDFCBK-S",
+        "body": "Your UPI AutoPay mandate for NETFLIX has been created on A/c XX1234.",
+        "expectFactTypes": []
+      }
+    ],
+    "status": "active",
+    "createdBy": "baseline",
+    "updatedAt": "2026-11-20T00:00:00Z"
+  },
+  {
+    "id": "MND-MODIFIED-02",
+    "version": 1,
+    "family": "mandate_modified",
+    "senders": [
+      "*"
+    ],
+    "priority": 680,
+    "match": {
+      "pattern": "your\\s+(?<m>[a-z0-9&.' _*-]+?)\\s+(?:upi\\s+)?(?:auto[- ]?pay\\s+)?(?:e-?)?mandate\\s+(?:has been|is|was)\\s+(?:successfully\\s+)?(?:modified|updated|changed|revised)",
+      "flags": "i"
+    },
+    "emit": [
+      {
+        "factType": "mandate",
+        "attrs": {
+          "phase": "modified",
+          "merchantName": {
+            "from": "m",
+            "transforms": [
+              "sanitizeNarration"
+            ]
+          }
+        }
+      }
+    ],
+    "confidence": 0.93,
+    "examples": [
+      {
+        "sender": "VM-HDFCBK-S",
+        "body": "Your NETFLIX UPI AutoPay mandate has been modified.",
+        "expectFactTypes": [
+          "mandate"
+        ]
+      },
+      {
+        "sender": "VM-HDFCBK-S",
+        "body": "Your NETFLIX UPI AutoPay mandate has been created.",
+        "expectFactTypes": []
+      }
+    ],
+    "status": "active",
+    "createdBy": "baseline",
+    "updatedAt": "2026-11-20T00:00:00Z"
+  },
+  {
+    "id": "MND-MODIFIED-02-A",
+    "version": 1,
+    "family": "mandate_modified",
+    "senders": [
+      "*"
+    ],
+    "priority": 681,
+    "match": {
+      "pattern": "your\\s+(?<m>[a-z0-9&.' _*-]+?)\\s+(?:upi\\s+)?(?:auto[- ]?pay\\s+)?(?:e-?)?mandate\\s+(?:has been|is|was)\\s+(?:successfully\\s+)?(?:modified|updated|changed|revised)(?:[\\s\\S]*?(?:a/c|acct?\\.?|account)\\s*(?:no\\.?\\s*)?(?:ending\\s*(?:with\\s*|in\\s*)?)?(?:[x*•.]+\\s*)?(?<mask>\\d{2,16})\\b)",
+      "flags": "i"
+    },
+    "emit": [
+      {
+        "factType": "mandate",
+        "attrs": {
+          "phase": "modified",
+          "merchantName": {
+            "from": "m",
+            "transforms": [
+              "sanitizeNarration"
+            ]
+          }
+        },
+        "instrument": {
+          "kind": "bank_account",
+          "maskFrom": "mask"
+        }
+      }
+    ],
+    "confidence": 0.93,
+    "examples": [
+      {
+        "sender": "VM-HDFCBK-S",
+        "body": "Your NETFLIX UPI AutoPay mandate has been modified on HDFC A/c XX1234.",
+        "expectFactTypes": [
+          "mandate"
+        ]
+      },
+      {
+        "sender": "VM-HDFCBK-S",
+        "body": "Your NETFLIX UPI AutoPay mandate has been created.",
+        "expectFactTypes": []
+      }
+    ],
+    "status": "active",
+    "createdBy": "baseline",
+    "updatedAt": "2026-11-20T00:00:00Z"
+  },
+  {
+    "id": "MND-PAUSED-01",
+    "version": 1,
+    "family": "mandate_paused",
+    "senders": [
+      "*"
+    ],
+    "priority": 680,
+    "match": {
+      "pattern": "(?:upi\\s+)?(?:auto[- ]?pay\\s+)?(?:e-?)?mandate\\s+(?:for|to|towards)\\s+(?<m>[a-z0-9&.' _*-]+?)\\s+(?:has been|is|was)\\s+(?:successfully\\s+)?(?:paused|put on hold|suspended)",
+      "flags": "i"
+    },
+    "emit": [
+      {
+        "factType": "mandate",
+        "attrs": {
+          "phase": "paused",
+          "merchantName": {
+            "from": "m",
+            "transforms": [
+              "sanitizeNarration"
+            ]
+          }
+        }
+      }
+    ],
+    "confidence": 0.93,
+    "examples": [
+      {
+        "sender": "VM-HDFCBK-S",
+        "body": "Your UPI AutoPay mandate for NETFLIX has been paused.",
+        "expectFactTypes": [
+          "mandate"
+        ]
+      },
+      {
+        "sender": "VM-HDFCBK-S",
+        "body": "Your UPI AutoPay mandate for NETFLIX has been resumed on A/c XX1234.",
+        "expectFactTypes": []
+      }
+    ],
+    "status": "active",
+    "createdBy": "baseline",
+    "updatedAt": "2026-11-20T00:00:00Z"
+  },
+  {
+    "id": "MND-PAUSED-01-A",
+    "version": 1,
+    "family": "mandate_paused",
+    "senders": [
+      "*"
+    ],
+    "priority": 681,
+    "match": {
+      "pattern": "(?:upi\\s+)?(?:auto[- ]?pay\\s+)?(?:e-?)?mandate\\s+(?:for|to|towards)\\s+(?<m>[a-z0-9&.' _*-]+?)\\s+(?:has been|is|was)\\s+(?:successfully\\s+)?(?:paused|put on hold|suspended)(?:[\\s\\S]*?(?:a/c|acct?\\.?|account)\\s*(?:no\\.?\\s*)?(?:ending\\s*(?:with\\s*|in\\s*)?)?(?:[x*•.]+\\s*)?(?<mask>\\d{2,16})\\b)",
+      "flags": "i"
+    },
+    "emit": [
+      {
+        "factType": "mandate",
+        "attrs": {
+          "phase": "paused",
+          "merchantName": {
+            "from": "m",
+            "transforms": [
+              "sanitizeNarration"
+            ]
+          }
+        },
+        "instrument": {
+          "kind": "bank_account",
+          "maskFrom": "mask"
+        }
+      }
+    ],
+    "confidence": 0.93,
+    "examples": [
+      {
+        "sender": "VM-HDFCBK-S",
+        "body": "Your UPI AutoPay mandate for NETFLIX has been paused on A/c XX1234.",
+        "expectFactTypes": [
+          "mandate"
+        ]
+      },
+      {
+        "sender": "VM-HDFCBK-S",
+        "body": "Your UPI AutoPay mandate for NETFLIX has been resumed on A/c XX1234.",
+        "expectFactTypes": []
+      }
+    ],
+    "status": "active",
+    "createdBy": "baseline",
+    "updatedAt": "2026-11-20T00:00:00Z"
+  },
+  {
+    "id": "MND-PAUSED-02",
+    "version": 1,
+    "family": "mandate_paused",
+    "senders": [
+      "*"
+    ],
+    "priority": 680,
+    "match": {
+      "pattern": "your\\s+(?<m>[a-z0-9&.' _*-]+?)\\s+(?:upi\\s+)?(?:auto[- ]?pay\\s+)?(?:e-?)?mandate\\s+(?:has been|is|was)\\s+(?:successfully\\s+)?(?:paused|put on hold|suspended)",
+      "flags": "i"
+    },
+    "emit": [
+      {
+        "factType": "mandate",
+        "attrs": {
+          "phase": "paused",
+          "merchantName": {
+            "from": "m",
+            "transforms": [
+              "sanitizeNarration"
+            ]
+          }
+        }
+      }
+    ],
+    "confidence": 0.93,
+    "examples": [
+      {
+        "sender": "VM-HDFCBK-S",
+        "body": "Your NETFLIX UPI AutoPay mandate has been paused.",
+        "expectFactTypes": [
+          "mandate"
+        ]
+      },
+      {
+        "sender": "VM-HDFCBK-S",
+        "body": "Your NETFLIX UPI AutoPay mandate has been resumed.",
+        "expectFactTypes": []
+      }
+    ],
+    "status": "active",
+    "createdBy": "baseline",
+    "updatedAt": "2026-11-20T00:00:00Z"
+  },
+  {
+    "id": "MND-PAUSED-02-A",
+    "version": 1,
+    "family": "mandate_paused",
+    "senders": [
+      "*"
+    ],
+    "priority": 681,
+    "match": {
+      "pattern": "your\\s+(?<m>[a-z0-9&.' _*-]+?)\\s+(?:upi\\s+)?(?:auto[- ]?pay\\s+)?(?:e-?)?mandate\\s+(?:has been|is|was)\\s+(?:successfully\\s+)?(?:paused|put on hold|suspended)(?:[\\s\\S]*?(?:a/c|acct?\\.?|account)\\s*(?:no\\.?\\s*)?(?:ending\\s*(?:with\\s*|in\\s*)?)?(?:[x*•.]+\\s*)?(?<mask>\\d{2,16})\\b)",
+      "flags": "i"
+    },
+    "emit": [
+      {
+        "factType": "mandate",
+        "attrs": {
+          "phase": "paused",
+          "merchantName": {
+            "from": "m",
+            "transforms": [
+              "sanitizeNarration"
+            ]
+          }
+        },
+        "instrument": {
+          "kind": "bank_account",
+          "maskFrom": "mask"
+        }
+      }
+    ],
+    "confidence": 0.93,
+    "examples": [
+      {
+        "sender": "VM-HDFCBK-S",
+        "body": "Your NETFLIX UPI AutoPay mandate has been paused on HDFC A/c XX1234.",
+        "expectFactTypes": [
+          "mandate"
+        ]
+      },
+      {
+        "sender": "VM-HDFCBK-S",
+        "body": "Your NETFLIX UPI AutoPay mandate has been resumed.",
+        "expectFactTypes": []
+      }
+    ],
+    "status": "active",
+    "createdBy": "baseline",
+    "updatedAt": "2026-11-20T00:00:00Z"
+  },
+  {
+    "id": "MND-RESUMED-01",
+    "version": 1,
+    "family": "mandate_resumed",
+    "senders": [
+      "*"
+    ],
+    "priority": 680,
+    "match": {
+      "pattern": "(?:upi\\s+)?(?:auto[- ]?pay\\s+)?(?:e-?)?mandate\\s+(?:for|to|towards)\\s+(?<m>[a-z0-9&.' _*-]+?)\\s+(?:has been|is|was)\\s+(?:successfully\\s+)?(?:resumed|reactivated|re-activated|unpaused)",
+      "flags": "i"
+    },
+    "emit": [
+      {
+        "factType": "mandate",
+        "attrs": {
+          "phase": "resumed",
+          "merchantName": {
+            "from": "m",
+            "transforms": [
+              "sanitizeNarration"
+            ]
+          }
+        }
+      }
+    ],
+    "confidence": 0.93,
+    "examples": [
+      {
+        "sender": "VM-HDFCBK-S",
+        "body": "Your UPI AutoPay mandate for NETFLIX has been resumed.",
+        "expectFactTypes": [
+          "mandate"
+        ]
+      },
+      {
+        "sender": "VM-HDFCBK-S",
+        "body": "Your UPI AutoPay mandate for NETFLIX has been paused on A/c XX1234.",
+        "expectFactTypes": []
+      }
+    ],
+    "status": "active",
+    "createdBy": "baseline",
+    "updatedAt": "2026-11-20T00:00:00Z"
+  },
+  {
+    "id": "MND-RESUMED-01-A",
+    "version": 1,
+    "family": "mandate_resumed",
+    "senders": [
+      "*"
+    ],
+    "priority": 681,
+    "match": {
+      "pattern": "(?:upi\\s+)?(?:auto[- ]?pay\\s+)?(?:e-?)?mandate\\s+(?:for|to|towards)\\s+(?<m>[a-z0-9&.' _*-]+?)\\s+(?:has been|is|was)\\s+(?:successfully\\s+)?(?:resumed|reactivated|re-activated|unpaused)(?:[\\s\\S]*?(?:a/c|acct?\\.?|account)\\s*(?:no\\.?\\s*)?(?:ending\\s*(?:with\\s*|in\\s*)?)?(?:[x*•.]+\\s*)?(?<mask>\\d{2,16})\\b)",
+      "flags": "i"
+    },
+    "emit": [
+      {
+        "factType": "mandate",
+        "attrs": {
+          "phase": "resumed",
+          "merchantName": {
+            "from": "m",
+            "transforms": [
+              "sanitizeNarration"
+            ]
+          }
+        },
+        "instrument": {
+          "kind": "bank_account",
+          "maskFrom": "mask"
+        }
+      }
+    ],
+    "confidence": 0.93,
+    "examples": [
+      {
+        "sender": "VM-HDFCBK-S",
+        "body": "Your UPI AutoPay mandate for NETFLIX has been resumed on A/c XX1234.",
+        "expectFactTypes": [
+          "mandate"
+        ]
+      },
+      {
+        "sender": "VM-HDFCBK-S",
+        "body": "Your UPI AutoPay mandate for NETFLIX has been paused on A/c XX1234.",
+        "expectFactTypes": []
+      }
+    ],
+    "status": "active",
+    "createdBy": "baseline",
+    "updatedAt": "2026-11-20T00:00:00Z"
+  },
+  {
+    "id": "MND-RESUMED-02",
+    "version": 1,
+    "family": "mandate_resumed",
+    "senders": [
+      "*"
+    ],
+    "priority": 680,
+    "match": {
+      "pattern": "your\\s+(?<m>[a-z0-9&.' _*-]+?)\\s+(?:upi\\s+)?(?:auto[- ]?pay\\s+)?(?:e-?)?mandate\\s+(?:has been|is|was)\\s+(?:successfully\\s+)?(?:resumed|reactivated|re-activated|unpaused)",
+      "flags": "i"
+    },
+    "emit": [
+      {
+        "factType": "mandate",
+        "attrs": {
+          "phase": "resumed",
+          "merchantName": {
+            "from": "m",
+            "transforms": [
+              "sanitizeNarration"
+            ]
+          }
+        }
+      }
+    ],
+    "confidence": 0.93,
+    "examples": [
+      {
+        "sender": "VM-HDFCBK-S",
+        "body": "Your NETFLIX UPI AutoPay mandate has been resumed.",
+        "expectFactTypes": [
+          "mandate"
+        ]
+      },
+      {
+        "sender": "VM-HDFCBK-S",
+        "body": "Your NETFLIX UPI AutoPay mandate has been paused.",
+        "expectFactTypes": []
+      }
+    ],
+    "status": "active",
+    "createdBy": "baseline",
+    "updatedAt": "2026-11-20T00:00:00Z"
+  },
+  {
+    "id": "MND-RESUMED-02-A",
+    "version": 1,
+    "family": "mandate_resumed",
+    "senders": [
+      "*"
+    ],
+    "priority": 681,
+    "match": {
+      "pattern": "your\\s+(?<m>[a-z0-9&.' _*-]+?)\\s+(?:upi\\s+)?(?:auto[- ]?pay\\s+)?(?:e-?)?mandate\\s+(?:has been|is|was)\\s+(?:successfully\\s+)?(?:resumed|reactivated|re-activated|unpaused)(?:[\\s\\S]*?(?:a/c|acct?\\.?|account)\\s*(?:no\\.?\\s*)?(?:ending\\s*(?:with\\s*|in\\s*)?)?(?:[x*•.]+\\s*)?(?<mask>\\d{2,16})\\b)",
+      "flags": "i"
+    },
+    "emit": [
+      {
+        "factType": "mandate",
+        "attrs": {
+          "phase": "resumed",
+          "merchantName": {
+            "from": "m",
+            "transforms": [
+              "sanitizeNarration"
+            ]
+          }
+        },
+        "instrument": {
+          "kind": "bank_account",
+          "maskFrom": "mask"
+        }
+      }
+    ],
+    "confidence": 0.93,
+    "examples": [
+      {
+        "sender": "VM-HDFCBK-S",
+        "body": "Your NETFLIX UPI AutoPay mandate has been resumed on HDFC A/c XX1234.",
+        "expectFactTypes": [
+          "mandate"
+        ]
+      },
+      {
+        "sender": "VM-HDFCBK-S",
+        "body": "Your NETFLIX UPI AutoPay mandate has been paused.",
+        "expectFactTypes": []
+      }
+    ],
+    "status": "active",
+    "createdBy": "baseline",
+    "updatedAt": "2026-11-20T00:00:00Z"
+  },
+  {
+    "id": "MND-REVOKED-01",
+    "version": 1,
+    "family": "mandate_revoked",
+    "senders": [
+      "*"
+    ],
+    "priority": 680,
+    "match": {
+      "pattern": "your\\s+(?<m>[a-z0-9&.' _*-]+?)\\s+(?:upi\\s+)?(?:auto[- ]?pay\\s+)?(?:e-?)?mandate\\s+(?:has been|is|was)\\s+(?:cancelled|canceled|revoked|deleted|closed|terminated|deactivated)(?:\\s+successfully)?",
+      "flags": "i"
+    },
+    "emit": [
+      {
+        "factType": "mandate",
+        "attrs": {
+          "phase": "revoked",
+          "merchantName": {
+            "from": "m",
+            "transforms": [
+              "sanitizeNarration"
+            ]
+          }
+        }
+      }
+    ],
+    "confidence": 0.96,
+    "examples": [
+      {
+        "sender": "VM-HDFCBK-S",
+        "body": "Your NETFLIX AutoPay mandate has been cancelled successfully.",
+        "expectFactTypes": [
+          "mandate"
+        ]
+      },
+      {
+        "sender": "VM-HDFCBK-S",
+        "body": "Your NETFLIX AutoPay mandate has been registered successfully on HDFC A/c XX1797.",
+        "expectFactTypes": []
+      }
+    ],
+    "status": "active",
+    "createdBy": "baseline",
+    "updatedAt": "2026-11-20T00:00:00Z"
+  },
+  {
+    "id": "MND-REVOKED-01-A",
+    "version": 1,
+    "family": "mandate_revoked",
+    "senders": [
+      "*"
+    ],
+    "priority": 681,
+    "match": {
+      "pattern": "your\\s+(?<m>[a-z0-9&.' _*-]+?)\\s+(?:upi\\s+)?(?:auto[- ]?pay\\s+)?(?:e-?)?mandate\\s+(?:has been|is|was)\\s+(?:cancelled|canceled|revoked|deleted|closed|terminated|deactivated)(?:\\s+successfully)?(?:[\\s\\S]*?(?:a/c|acct?\\.?|account)\\s*(?:no\\.?\\s*)?(?:ending\\s*(?:with\\s*|in\\s*)?)?(?:[x*•.]+\\s*)?(?<mask>\\d{2,16})\\b)",
+      "flags": "i"
+    },
+    "emit": [
+      {
+        "factType": "mandate",
+        "attrs": {
+          "phase": "revoked",
+          "merchantName": {
+            "from": "m",
+            "transforms": [
+              "sanitizeNarration"
+            ]
+          }
+        },
+        "instrument": {
+          "kind": "bank_account",
+          "maskFrom": "mask"
+        }
+      }
+    ],
+    "confidence": 0.96,
+    "examples": [
+      {
+        "sender": "VM-HDFCBK-S",
+        "body": "Your NETFLIX AutoPay mandate has been cancelled successfully on HDFC A/c XX1797.",
+        "expectFactTypes": [
+          "mandate"
+        ]
+      },
+      {
+        "sender": "VM-HDFCBK-S",
+        "body": "Your NETFLIX AutoPay mandate has been registered successfully on HDFC A/c XX1797.",
+        "expectFactTypes": []
+      }
+    ],
+    "status": "active",
+    "createdBy": "baseline",
+    "updatedAt": "2026-11-20T00:00:00Z"
+  },
+  {
+    "id": "MND-REVOKED-02",
+    "version": 1,
+    "family": "mandate_revoked",
+    "senders": [
+      "*"
+    ],
+    "priority": 680,
+    "match": {
+      "pattern": "(?:upi\\s+)?(?:auto[- ]?pay\\s+)?(?:e-?)?mandate\\s+(?:for|to|towards)\\s+(?<m>[a-z0-9&.' _*-]+?)\\s+(?:has been|is|was)\\s+(?:successfully\\s+)?(?:cancelled|canceled|revoked|deleted|closed|terminated|deactivated)",
+      "flags": "i"
+    },
+    "emit": [
+      {
+        "factType": "mandate",
+        "attrs": {
+          "phase": "revoked",
+          "merchantName": {
+            "from": "m",
+            "transforms": [
+              "sanitizeNarration"
+            ]
+          }
+        }
+      }
+    ],
+    "confidence": 0.95,
+    "examples": [
+      {
+        "sender": "VM-HDFCBK-S",
+        "body": "AutoPay mandate for NETFLIX has been revoked successfully.",
+        "expectFactTypes": [
+          "mandate"
+        ]
+      },
+      {
+        "sender": "VM-HDFCBK-S",
+        "body": "AutoPay mandate for NETFLIX has been created successfully on A/c XX1797.",
+        "expectFactTypes": []
+      }
+    ],
+    "status": "active",
+    "createdBy": "baseline",
+    "updatedAt": "2026-11-20T00:00:00Z"
+  },
+  {
+    "id": "MND-REVOKED-02-A",
+    "version": 1,
+    "family": "mandate_revoked",
+    "senders": [
+      "*"
+    ],
+    "priority": 681,
+    "match": {
+      "pattern": "(?:upi\\s+)?(?:auto[- ]?pay\\s+)?(?:e-?)?mandate\\s+(?:for|to|towards)\\s+(?<m>[a-z0-9&.' _*-]+?)\\s+(?:has been|is|was)\\s+(?:successfully\\s+)?(?:cancelled|canceled|revoked|deleted|closed|terminated|deactivated)(?:[\\s\\S]*?(?:a/c|acct?\\.?|account)\\s*(?:no\\.?\\s*)?(?:ending\\s*(?:with\\s*|in\\s*)?)?(?:[x*•.]+\\s*)?(?<mask>\\d{2,16})\\b)",
+      "flags": "i"
+    },
+    "emit": [
+      {
+        "factType": "mandate",
+        "attrs": {
+          "phase": "revoked",
+          "merchantName": {
+            "from": "m",
+            "transforms": [
+              "sanitizeNarration"
+            ]
+          }
+        },
+        "instrument": {
+          "kind": "bank_account",
+          "maskFrom": "mask"
+        }
+      }
+    ],
+    "confidence": 0.95,
+    "examples": [
+      {
+        "sender": "VM-HDFCBK-S",
+        "body": "AutoPay mandate for NETFLIX has been revoked successfully on A/c XX1797.",
+        "expectFactTypes": [
+          "mandate"
+        ]
+      },
+      {
+        "sender": "VM-HDFCBK-S",
+        "body": "AutoPay mandate for NETFLIX has been created successfully on A/c XX1797.",
+        "expectFactTypes": []
+      }
+    ],
+    "status": "active",
+    "createdBy": "baseline",
+    "updatedAt": "2026-11-20T00:00:00Z"
+  },
+  {
+    "id": "MND-REVOKED-03",
+    "version": 1,
+    "family": "mandate_revoked",
+    "senders": [
+      "*"
+    ],
+    "priority": 670,
+    "match": {
+      "pattern": "mandate\\s+of\\s+(?:rs\\.?|inr|₹)\\s*(?<cap>[\\d,]+(?:\\.\\d{1,2})?)\\s+raised\\s+by\\s+(?<m>[a-z0-9&.' _*-]+?)\\s+(?:has been|is|was)\\s+(?:revoked|cancelled|canceled|deleted)",
+      "flags": "i"
+    },
+    "emit": [
+      {
+        "factType": "mandate",
+        "attrs": {
+          "phase": "revoked",
+          "merchantName": {
+            "from": "m",
+            "transforms": [
+              "sanitizeNarration"
+            ]
+          }
+        },
+        "amounts": [
+          {
+            "role": "ceiling",
+            "from": "cap",
+            "unit": "INR"
+          }
+        ]
+      }
+    ],
+    "confidence": 0.9,
+    "examples": [
+      {
+        "sender": "AX-ICICIT-S",
+        "body": "The mandate of Rs 649.00 raised by NETFLIX is revoked. -ICICI Bank",
+        "expectFactTypes": [
+          "mandate"
+        ]
+      },
+      {
+        "sender": "AX-ICICIT-S",
+        "body": "You have approved the mandate of Rs 649.00 raised by NETFLIX. -ICICI Bank",
+        "expectFactTypes": []
+      }
+    ],
+    "status": "active",
+    "createdBy": "baseline",
+    "updatedAt": "2026-11-20T00:00:00Z"
+  },
+  {
+    "id": "MND-REVOKED-04",
+    "version": 1,
+    "family": "mandate_revoked",
+    "senders": [
+      "*"
+    ],
+    "priority": 670,
+    "match": {
+      "pattern": "standing\\s+instruction(?:\\s*\\(si\\))?\\s+(?:of\\s+(?:rs\\.?|inr|₹)\\s*(?<cap>[\\d,]+(?:\\.\\d{1,2})?)\\s+)?(?:towards|for)\\s+(?<m>[a-z0-9&.' _*-]+?)\\s+(?:on\\s+(?:[a-z]+\\s+)?(?:[a-z]+\\s+)?(?:[a-z]+\\s+)?(?:card|cc)\\s*(?:no\\.?\\s*)?(?:ending\\s*(?:with\\s*|in\\s*)?)?(?:[x*•.]+\\s*)?(?<mask>\\d{2,16})\\b\\s+)?(?:has been|is|was)\\s+(?:successfully\\s+)?(?:cancelled|canceled|revoked|deleted|closed|terminated|deactivated)",
+      "flags": "i"
+    },
+    "emit": [
+      {
+        "factType": "mandate",
+        "attrs": {
+          "phase": "revoked",
+          "merchantName": {
+            "from": "m",
+            "transforms": [
+              "sanitizeNarration"
+            ]
+          }
+        },
+        "instrument": {
+          "maskFrom": "mask"
+        }
+      }
+    ],
+    "confidence": 0.93,
+    "examples": [
+      {
+        "sender": "VM-HDFCBK-S",
+        "body": "Standing Instruction towards NETFLIX on HDFC Bank Card ending 1234 has been cancelled successfully.",
+        "expectFactTypes": [
+          "mandate"
+        ]
+      },
+      {
+        "sender": "VM-HDFCBK-S",
+        "body": "Standing Instruction towards NETFLIX on HDFC Bank Card ending 1234 has been registered successfully.",
+        "expectFactTypes": []
+      }
+    ],
+    "status": "active",
+    "createdBy": "baseline",
+    "updatedAt": "2026-11-20T00:00:00Z"
+  },
+  {
+    "id": "MND-REVOKED-05",
+    "version": 1,
+    "family": "mandate_revoked",
+    "senders": [
+      "*"
+    ],
+    "priority": 685,
+    "match": {
+      "pattern": "(?:e-?nach|nach|e-?mandate|ecs)\\s+(?:mandate\\s+)?(?:for|towards)\\s+(?<m>[a-z0-9&.' _*-]+?)\\s+(?:has been|is|was)\\s+(?:successfully\\s+)?(?:cancelled|canceled|revoked|deleted|closed|terminated|deactivated)",
+      "flags": "i"
+    },
+    "emit": [
+      {
+        "factType": "mandate",
+        "attrs": {
+          "phase": "revoked",
+          "merchantName": {
+            "from": "m",
+            "transforms": [
+              "sanitizeNarration"
+            ]
+          }
+        }
+      }
+    ],
+    "confidence": 0.9,
+    "examples": [
+      {
+        "sender": "VM-HDFCBK-S",
+        "body": "Your e-NACH mandate for BAJAJ FINANCE LTD has been cancelled successfully.",
+        "expectFactTypes": [
+          "mandate"
+        ]
+      },
+      {
+        "sender": "VM-HDFCBK-S",
+        "body": "Your e-NACH mandate for BAJAJ FINANCE LTD has been registered successfully.",
+        "expectFactTypes": []
+      }
+    ],
+    "status": "active",
+    "createdBy": "baseline",
+    "updatedAt": "2026-11-20T00:00:00Z"
+  },
+  {
+    "id": "MND-UPCOMING-01",
+    "version": 1,
+    "family": "mandate_upcoming",
+    "senders": [
+      "*"
+    ],
+    "priority": 700,
+    "match": {
+      "pattern": "(?:a/c|acct?\\.?|account)\\s*(?:no\\.?\\s*)?(?:ending\\s*(?:with\\s*|in\\s*)?)?(?:[x*•.]+\\s*)?(?<mask>\\d{2,16})\\b\\s+will be\\s+debited\\s+(?:for|with|by)\\s+(?:rs\\.?|inr|₹)\\s*(?<amt>[\\d,]+(?:\\.\\d{1,2})?)\\s+on\\s+(?<due>\\d{2}[-/ ](?:\\d{2}|(?:jan|feb|mar|apr|may|jun|jul|aug|sep|oct|nov|dec))[-/ ]\\d{2,4}|\\d{2}(?:jan|feb|mar|apr|may|jun|jul|aug|sep|oct|nov|dec)\\d{2,4})\\s+towards\\s+(?<m>[a-z0-9&.' _*-]+?)(?:\\s+(?:upi\\s+)?(?:autopay|mandate))?(?=\\s*(?:[.,;]|ensure|please|$))",
+      "flags": "i"
+    },
+    "emit": [
+      {
+        "factType": "attempt",
+        "attrs": {
+          "status": "scheduled",
+          "direction": "debit",
+          "purpose": "unknown",
+          "dueAt": {
+            "from": "due"
+          }
+        },
+        "amounts": [
+          {
+            "role": "scheduled",
+            "from": "amt",
+            "unit": "INR"
+          }
+        ],
+        "instrument": {
+          "kind": "bank_account",
+          "maskFrom": "mask"
+        },
+        "counterparty": {
+          "kind": "merchant",
+          "nameFrom": "m",
+          "transforms": [
+            "sanitizeNarration"
+          ]
+        }
+      }
+    ],
+    "confidence": 0.97,
+    "examples": [
+      {
+        "sender": "VM-HDFCBK-S",
+        "body": "Your A/c XX1234 will be debited for Rs.649.00 on 05-11-26 towards NETFLIX UPI AutoPay. Ensure sufficient balance.",
+        "expectFactTypes": [
+          "attempt"
+        ]
+      },
+      {
+        "sender": "VM-HDFCBK-S",
+        "body": "Your A/c XX1234 was debited for Rs.649.00 on 05-11-26 towards NETFLIX UPI AutoPay.",
+        "expectFactTypes": []
+      }
+    ],
+    "status": "active",
+    "createdBy": "baseline",
+    "updatedAt": "2026-11-20T00:00:00Z"
+  },
+  {
+    "id": "MND-UPCOMING-01-INV",
+    "version": 1,
+    "family": "mandate_upcoming",
+    "senders": [
+      "*"
+    ],
+    "priority": 705,
+    "match": {
+      "pattern": "(?:a/c|acct?\\.?|account)\\s*(?:no\\.?\\s*)?(?:ending\\s*(?:with\\s*|in\\s*)?)?(?:[x*•.]+\\s*)?(?<mask>\\d{2,16})\\b\\s+will be\\s+debited\\s+(?:for|with|by)\\s+(?:rs\\.?|inr|₹)\\s*(?<amt>[\\d,]+(?:\\.\\d{1,2})?)\\s+on\\s+(?<due>\\d{2}[-/ ](?:\\d{2}|(?:jan|feb|mar|apr|may|jun|jul|aug|sep|oct|nov|dec))[-/ ]\\d{2,4}|\\d{2}(?:jan|feb|mar|apr|may|jun|jul|aug|sep|oct|nov|dec)\\d{2,4})\\s+towards\\s+(?<m>(?:zerodha|groww|upstox|rksv|kotak\\s*sec\\w*|kotak\\s+neo|indmoney|ind\\s*money|angel\\s*(?:one|broking)|dhan\\b|univest|paytm\\s+money|hdfc\\s*sec\\w*|icici\\s*sec\\w*|icici\\s+direct|5\\s*paisa|motilal\\s+oswal|sharekhan|nu\\s*investors|iccl|indian\\s+clearing|nse\\s+clearing|bse\\s*star|coin\\s+by\\s+zerodha|smallcase|et\\s+money|kuvera|mutual\\s+fund|\\bmf\\b|cams\\b|kfin\\w*)[a-z0-9&.' _*-]*?)(?:\\s+(?:upi\\s+)?(?:autopay|mandate))?(?=\\s*(?:[.,;]|ensure|please|$))",
+      "flags": "i"
+    },
+    "emit": [
+      {
+        "factType": "attempt",
+        "attrs": {
+          "status": "scheduled",
+          "direction": "debit",
+          "purpose": "investment",
+          "dueAt": {
+            "from": "due"
+          }
+        },
+        "amounts": [
+          {
+            "role": "scheduled",
+            "from": "amt",
+            "unit": "INR"
+          }
+        ],
+        "instrument": {
+          "kind": "bank_account",
+          "maskFrom": "mask"
+        },
+        "counterparty": {
+          "kind": "merchant",
+          "nameFrom": "m",
+          "transforms": [
+            "sanitizeNarration"
+          ]
+        }
+      }
+    ],
+    "confidence": 0.97,
+    "examples": [
+      {
+        "sender": "VM-HDFCBK-S",
+        "body": "Your A/c XX1234 will be debited for Rs.5,000.00 on 05-11-26 towards GROWW UPI AutoPay. Ensure sufficient balance.",
+        "expectFactTypes": [
+          "attempt"
+        ]
+      },
+      {
+        "sender": "VM-HDFCBK-S",
+        "body": "Your A/c XX1234 was debited for Rs.649.00 on 05-11-26 towards NETFLIX UPI AutoPay.",
+        "expectFactTypes": []
+      }
+    ],
+    "status": "active",
+    "createdBy": "baseline",
+    "updatedAt": "2026-11-20T00:00:00Z"
+  },
+  {
+    "id": "MND-UPCOMING-02",
+    "version": 1,
+    "family": "mandate_upcoming",
+    "senders": [
+      "*"
+    ],
+    "priority": 700,
+    "match": {
+      "pattern": "upcoming\\s+mandate\\s+set\\s+for\\s+(?<due>\\d{2}[-/ ](?:\\d{2}|(?:jan|feb|mar|apr|may|jun|jul|aug|sep|oct|nov|dec))[-/ ]\\d{2,4}|\\d{2}(?:jan|feb|mar|apr|may|jun|jul|aug|sep|oct|nov|dec)\\d{2,4})\\s*,?\\s*(?:rs\\.?|inr|₹)\\s*(?<amt>[\\d,]+(?:\\.\\d{1,2})?)\\s+will be\\s+debited\\s+from\\s+your\\s+(?:a/c|account)\\s+towards\\s+(?<m>[a-z0-9&.' _*-]+?)\\s+for\\s+upi\\s+mandate(?:\\s*,\\s*[•*x.\\s]*(?<mask>\\d{2,16}))?",
+      "flags": "i"
+    },
+    "emit": [
+      {
+        "factType": "attempt",
+        "attrs": {
+          "status": "scheduled",
+          "direction": "debit",
+          "purpose": "unknown",
+          "dueAt": {
+            "from": "due"
+          }
+        },
+        "amounts": [
+          {
+            "role": "scheduled",
+            "from": "amt",
+            "unit": "INR"
+          }
+        ],
+        "instrument": {
+          "kind": "bank_account",
+          "maskFrom": "mask"
+        },
+        "counterparty": {
+          "kind": "merchant",
+          "nameFrom": "m",
+          "transforms": [
+            "sanitizeNarration"
+          ]
+        }
+      }
+    ],
+    "confidence": 0.97,
+    "examples": [
+      {
+        "sender": "AX-AXISBK-S",
+        "body": "For the upcoming mandate set for 03-09-26, INR 3000.00 will be debited from your A/c towards NETFLIX INDIA for UPI Mandate, •••• 5173. To stop execution, pause mandate - Axis Bank",
+        "expectFactTypes": [
+          "attempt"
+        ]
+      },
+      {
+        "sender": "AX-AXISBK-S",
+        "body": "INR 3000.00 was debited from your A/c towards ICCL GROWW AUTOPAY for UPI Mandate, •••• 5173. - Axis Bank",
+        "expectFactTypes": []
+      }
+    ],
+    "status": "active",
+    "createdBy": "baseline",
+    "updatedAt": "2026-11-20T00:00:00Z"
+  },
+  {
+    "id": "MND-UPCOMING-02-INV",
+    "version": 1,
+    "family": "mandate_upcoming",
+    "senders": [
+      "*"
+    ],
+    "priority": 705,
+    "match": {
+      "pattern": "upcoming\\s+mandate\\s+set\\s+for\\s+(?<due>\\d{2}[-/ ](?:\\d{2}|(?:jan|feb|mar|apr|may|jun|jul|aug|sep|oct|nov|dec))[-/ ]\\d{2,4}|\\d{2}(?:jan|feb|mar|apr|may|jun|jul|aug|sep|oct|nov|dec)\\d{2,4})\\s*,?\\s*(?:rs\\.?|inr|₹)\\s*(?<amt>[\\d,]+(?:\\.\\d{1,2})?)\\s+will be\\s+debited\\s+from\\s+your\\s+(?:a/c|account)\\s+towards\\s+(?<m>(?:zerodha|groww|upstox|rksv|kotak\\s*sec\\w*|kotak\\s+neo|indmoney|ind\\s*money|angel\\s*(?:one|broking)|dhan\\b|univest|paytm\\s+money|hdfc\\s*sec\\w*|icici\\s*sec\\w*|icici\\s+direct|5\\s*paisa|motilal\\s+oswal|sharekhan|nu\\s*investors|iccl|indian\\s+clearing|nse\\s+clearing|bse\\s*star|coin\\s+by\\s+zerodha|smallcase|et\\s+money|kuvera|mutual\\s+fund|\\bmf\\b|cams\\b|kfin\\w*)[a-z0-9&.' _*-]*?)\\s+for\\s+upi\\s+mandate(?:\\s*,\\s*[•*x.\\s]*(?<mask>\\d{2,16}))?",
+      "flags": "i"
+    },
+    "emit": [
+      {
+        "factType": "attempt",
+        "attrs": {
+          "status": "scheduled",
+          "direction": "debit",
+          "purpose": "investment",
+          "dueAt": {
+            "from": "due"
+          }
+        },
+        "amounts": [
+          {
+            "role": "scheduled",
+            "from": "amt",
+            "unit": "INR"
+          }
+        ],
+        "instrument": {
+          "kind": "bank_account",
+          "maskFrom": "mask"
+        },
+        "counterparty": {
+          "kind": "merchant",
+          "nameFrom": "m",
+          "transforms": [
+            "sanitizeNarration"
+          ]
+        }
+      }
+    ],
+    "confidence": 0.97,
+    "examples": [
+      {
+        "sender": "AX-AXISBK-S",
+        "body": "For the upcoming mandate set for 03-09-26, INR 3000.00 will be debited from your A/c towards ICCL GROWW AUTOPAY for UPI Mandate, •••• 5173. To stop execution, pause mandate - Axis Bank",
+        "expectFactTypes": [
+          "attempt"
+        ]
+      },
+      {
+        "sender": "AX-AXISBK-S",
+        "body": "INR 3000.00 was debited from your A/c towards ICCL GROWW AUTOPAY for UPI Mandate, •••• 5173. - Axis Bank",
+        "expectFactTypes": []
+      }
+    ],
+    "status": "active",
+    "createdBy": "baseline",
+    "updatedAt": "2026-11-20T00:00:00Z"
+  },
+  {
+    "id": "MND-UPCOMING-03",
+    "version": 1,
+    "family": "mandate_upcoming",
+    "senders": [
+      "*"
+    ],
+    "priority": 690,
+    "match": {
+      "pattern": "your\\s+(?<m>[a-z0-9&.' _*-]+?)\\s+auto[- ]?pay\\s+of\\s+(?:rs\\.?|inr|₹)\\s*(?<amt>[\\d,]+(?:\\.\\d{1,2})?)\\s+is\\s+scheduled\\s+for\\s+(?<due>\\d{2}[-/ ](?:\\d{2}|(?:jan|feb|mar|apr|may|jun|jul|aug|sep|oct|nov|dec))[-/ ]\\d{2,4}|\\d{2}(?:jan|feb|mar|apr|may|jun|jul|aug|sep|oct|nov|dec)\\d{2,4})",
+      "flags": "i"
+    },
+    "emit": [
+      {
+        "factType": "attempt",
+        "attrs": {
+          "status": "scheduled",
+          "direction": "debit",
+          "purpose": "unknown",
+          "dueAt": {
+            "from": "due"
+          }
+        },
+        "amounts": [
+          {
+            "role": "scheduled",
+            "from": "amt",
+            "unit": "INR"
+          }
+        ],
+        "counterparty": {
+          "kind": "merchant",
+          "nameFrom": "m",
+          "transforms": [
+            "sanitizeNarration"
+          ]
+        }
+      }
+    ],
+    "confidence": 0.95,
+    "examples": [
+      {
+        "sender": "VM-HDFCBK-S",
+        "body": "Your Netflix AutoPay of INR 799 is scheduled for 17-10-26. The next payment due on 18-10-26.",
+        "expectFactTypes": [
+          "attempt"
+        ]
+      },
+      {
+        "sender": "VM-HDFCBK-S",
+        "body": "Your Netflix AutoPay of INR 799 was processed on 17-10-26.",
+        "expectFactTypes": []
+      }
+    ],
+    "status": "active",
+    "createdBy": "baseline",
+    "updatedAt": "2026-11-20T00:00:00Z"
+  },
+  {
+    "id": "MND-UPCOMING-03-INV",
+    "version": 1,
+    "family": "mandate_upcoming",
+    "senders": [
+      "*"
+    ],
+    "priority": 695,
+    "match": {
+      "pattern": "your\\s+(?<m>(?:zerodha|groww|upstox|rksv|kotak\\s*sec\\w*|kotak\\s+neo|indmoney|ind\\s*money|angel\\s*(?:one|broking)|dhan\\b|univest|paytm\\s+money|hdfc\\s*sec\\w*|icici\\s*sec\\w*|icici\\s+direct|5\\s*paisa|motilal\\s+oswal|sharekhan|nu\\s*investors|iccl|indian\\s+clearing|nse\\s+clearing|bse\\s*star|coin\\s+by\\s+zerodha|smallcase|et\\s+money|kuvera|mutual\\s+fund|\\bmf\\b|cams\\b|kfin\\w*)[a-z0-9&.' _*-]*?)\\s+auto[- ]?pay\\s+of\\s+(?:rs\\.?|inr|₹)\\s*(?<amt>[\\d,]+(?:\\.\\d{1,2})?)\\s+is\\s+scheduled\\s+for\\s+(?<due>\\d{2}[-/ ](?:\\d{2}|(?:jan|feb|mar|apr|may|jun|jul|aug|sep|oct|nov|dec))[-/ ]\\d{2,4}|\\d{2}(?:jan|feb|mar|apr|may|jun|jul|aug|sep|oct|nov|dec)\\d{2,4})",
+      "flags": "i"
+    },
+    "emit": [
+      {
+        "factType": "attempt",
+        "attrs": {
+          "status": "scheduled",
+          "direction": "debit",
+          "purpose": "investment",
+          "dueAt": {
+            "from": "due"
+          }
+        },
+        "amounts": [
+          {
+            "role": "scheduled",
+            "from": "amt",
+            "unit": "INR"
+          }
+        ],
+        "counterparty": {
+          "kind": "merchant",
+          "nameFrom": "m",
+          "transforms": [
+            "sanitizeNarration"
+          ]
+        }
+      }
+    ],
+    "confidence": 0.95,
+    "examples": [
+      {
+        "sender": "VM-HDFCBK-S",
+        "body": "Your Groww AutoPay of INR 5,000 is scheduled for 17-10-26. The next payment due on 18-11-26.",
+        "expectFactTypes": [
+          "attempt"
+        ]
+      },
+      {
+        "sender": "VM-HDFCBK-S",
+        "body": "Your Netflix AutoPay of INR 799 was processed on 17-10-26.",
+        "expectFactTypes": []
+      }
+    ],
+    "status": "active",
+    "createdBy": "baseline",
+    "updatedAt": "2026-11-20T00:00:00Z"
+  },
+  {
+    "id": "MND-UPCOMING-04",
+    "version": 1,
+    "family": "mandate_upcoming",
+    "senders": [
+      "*"
+    ],
+    "priority": 690,
+    "match": {
+      "pattern": "standing\\s+instruction(?:\\s*\\(si\\))?\\s+of\\s+(?:rs\\.?|inr|₹)\\s*(?<amt>[\\d,]+(?:\\.\\d{1,2})?)\\s+(?:for|towards)\\s+(?<m>[a-z0-9&.' _*-]+?)\\s+(?:on|from)\\s+(?:[a-z]+\\s+)?(?:[a-z]+\\s+)?(?:[a-z]+\\s+)?(?:card|cc)\\s*(?:no\\.?\\s*)?(?:ending\\s*(?:with\\s*|in\\s*)?)?(?:[x*•.]+\\s*)?(?<mask>\\d{2,16})\\b\\s+(?:will be|is due to be|is scheduled to be)\\s+(?:processed|debited|charged|executed)\\s+on\\s+(?<due>\\d{2}[-/ ](?:\\d{2}|(?:jan|feb|mar|apr|may|jun|jul|aug|sep|oct|nov|dec))[-/ ]\\d{2,4}|\\d{2}(?:jan|feb|mar|apr|may|jun|jul|aug|sep|oct|nov|dec)\\d{2,4})",
+      "flags": "i"
+    },
+    "emit": [
+      {
+        "factType": "attempt",
+        "attrs": {
+          "status": "scheduled",
+          "direction": "debit",
+          "purpose": "unknown",
+          "dueAt": {
+            "from": "due"
+          }
+        },
+        "amounts": [
+          {
+            "role": "scheduled",
+            "from": "amt",
+            "unit": "INR"
+          }
+        ],
+        "instrument": {
+          "maskFrom": "mask"
+        },
+        "counterparty": {
+          "kind": "merchant",
+          "nameFrom": "m",
+          "transforms": [
+            "sanitizeNarration"
+          ]
+        }
+      }
+    ],
+    "confidence": 0.95,
+    "examples": [
+      {
+        "sender": "AX-ICICIT-S",
+        "body": "Dear Customer, your standing instruction (SI) of Rs 119.00 for SPOTIFY SI on ICICI Bank Card XX9012 will be processed on 05-Nov-26. Please ensure sufficient limit.",
+        "expectFactTypes": [
+          "attempt"
+        ]
+      },
+      {
+        "sender": "AX-ICICIT-S",
+        "body": "Dear Customer, your standing instruction (SI) of Rs 119.00 for SPOTIFY SI on ICICI Bank Card XX9012 has been processed on 05-Nov-26.",
+        "expectFactTypes": []
+      }
+    ],
+    "status": "active",
+    "createdBy": "baseline",
+    "updatedAt": "2026-11-20T00:00:00Z"
+  },
+  {
+    "id": "MND-UPCOMING-05",
+    "version": 1,
+    "family": "mandate_upcoming",
+    "senders": [
+      "*"
+    ],
+    "priority": 690,
+    "match": {
+      "pattern": "pre[- ]?debit\\s+(?:notification|intimation|alert)[:\\s-]*(?:rs\\.?|inr|₹)\\s*(?<amt>[\\d,]+(?:\\.\\d{1,2})?)\\s+will be\\s+(?:debited|charged|deducted)\\s+(?:from|on)[\\s\\S]{0,60}?(?:card|cc)\\s*(?:no\\.?\\s*)?(?:ending\\s*(?:with\\s*|in\\s*)?)?(?:[x*•.]+\\s*)?(?<mask>\\d{2,16})\\b[\\s\\S]{0,40}?towards\\s+(?<m>[a-z0-9&.' _*-]+?)\\s+on\\s+(?<due>\\d{2}[-/ ](?:\\d{2}|(?:jan|feb|mar|apr|may|jun|jul|aug|sep|oct|nov|dec))[-/ ]\\d{2,4}|\\d{2}(?:jan|feb|mar|apr|may|jun|jul|aug|sep|oct|nov|dec)\\d{2,4})",
+      "flags": "i"
+    },
+    "emit": [
+      {
+        "factType": "attempt",
+        "attrs": {
+          "status": "scheduled",
+          "direction": "debit",
+          "purpose": "unknown",
+          "dueAt": {
+            "from": "due"
+          }
+        },
+        "amounts": [
+          {
+            "role": "scheduled",
+            "from": "amt",
+            "unit": "INR"
+          }
+        ],
+        "instrument": {
+          "maskFrom": "mask"
+        },
+        "counterparty": {
+          "kind": "merchant",
+          "nameFrom": "m",
+          "transforms": [
+            "sanitizeNarration"
+          ]
+        }
+      }
+    ],
+    "confidence": 0.93,
+    "examples": [
+      {
+        "sender": "VM-HDFCBK-S",
+        "body": "Pre-debit notification: Rs 649.00 will be debited from your card ending 1234 towards NETFLIX on 05-Nov-26. To cancel, visit your bank app.",
+        "expectFactTypes": [
+          "attempt"
+        ]
+      },
+      {
+        "sender": "VM-HDFCBK-S",
+        "body": "Debit notification: Rs 649.00 was debited from your card ending 1234 towards NETFLIX on 05-Nov-26.",
+        "expectFactTypes": []
+      }
+    ],
+    "status": "active",
+    "createdBy": "baseline",
+    "updatedAt": "2026-11-20T00:00:00Z"
+  },
+  {
+    "id": "MND-UPCOMING-90",
+    "version": 1,
+    "family": "mandate_upcoming",
+    "senders": [
+      "*"
+    ],
+    "priority": 200,
+    "match": {
+      "pattern": "(?:autopay|auto[- ]?debit|mandate|standing instruction|nach)[\\s\\S]{0,120}?(?:rs\\.?|inr|₹)\\s*(?<amt>[\\d,]+(?:\\.\\d{1,2})?)[\\s\\S]{0,80}?(?:will be|is to be|scheduled to be)\\s+(?:debited|charged|deducted|processed)(?:[\\s\\S]{0,40}?on\\s+(?<due>\\d{2}[-/ ](?:\\d{2}|(?:jan|feb|mar|apr|may|jun|jul|aug|sep|oct|nov|dec))[-/ ]\\d{2,4}|\\d{2}(?:jan|feb|mar|apr|may|jun|jul|aug|sep|oct|nov|dec)\\d{2,4}))?",
+      "flags": "i",
+      "requireAll": [
+        "will be"
+      ],
+      "rejectAny": [
+        "failed",
+        "declined"
+      ]
+    },
+    "emit": [
+      {
+        "factType": "attempt",
+        "attrs": {
+          "status": "scheduled",
+          "direction": "debit",
+          "purpose": "unknown",
+          "dueAt": {
+            "from": "due"
+          }
+        },
+        "amounts": [
+          {
+            "role": "scheduled",
+            "from": "amt",
+            "unit": "INR"
+          }
+        ]
+      }
+    ],
+    "confidence": 0.7,
+    "examples": [
+      {
+        "sender": "VM-HDFCBK-S",
+        "body": "Your Netflix AutoPay mandate: Rs 649.00 will be debited from your account soon.",
+        "expectFactTypes": [
+          "attempt"
+        ]
+      },
+      {
+        "sender": "VM-HDFCBK-S",
+        "body": "Your Netflix AutoPay mandate: Rs 649.00 has been debited from your account.",
+        "expectFactTypes": []
+      }
+    ],
+    "status": "active",
+    "createdBy": "baseline",
+    "updatedAt": "2026-11-20T00:00:00Z"
+  }
+]
