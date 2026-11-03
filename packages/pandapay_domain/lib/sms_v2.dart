@@ -19,3 +19,4 @@ export 'src/sms_v2/contract/rule_bundle.dart';
 export 'src/sms_v2/contract/schema_data.g.dart' show smsV2SchemaSources;
 export 'src/sms_v2/contract/types.dart';
 export 'src/sms_v2/contract/validate.dart';
+export 'src/sms_v2/instruments/instruments.dart';
