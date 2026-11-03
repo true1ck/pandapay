@@ -1,0 +1,172 @@
+[
+  {
+    "brand": "ACTFBR",
+    "issuerSlug": "act_fibernet",
+    "issuerKind": "biller",
+    "aliases": [
+      "ACTCRP"
+    ]
+  },
+  {
+    "brand": "AIRTEL",
+    "issuerSlug": "airtel",
+    "issuerKind": "biller",
+    "aliases": [
+      "AIRTLP",
+      "AIRTLF",
+      "ARTLPY"
+    ]
+  },
+  {
+    "brand": "ALEGRA",
+    "issuerSlug": "alegra",
+    "issuerKind": "biller",
+    "aliases": [
+      "ALEGRN"
+    ]
+  },
+  {
+    "brand": "AXIOPL",
+    "issuerSlug": "axio",
+    "issuerKind": "other",
+    "aliases": [
+      "AXIOFS",
+      "AXIOAP",
+      "AXIOCR"
+    ]
+  },
+  {
+    "brand": "BESCOM",
+    "issuerSlug": "bescom",
+    "issuerKind": "biller",
+    "aliases": [
+      "BESCOMP"
+    ]
+  },
+  {
+    "brand": "BSNLTL",
+    "issuerSlug": "bsnl",
+    "issuerKind": "biller",
+    "aliases": [
+      "BSNL",
+      "BSNLCP"
+    ]
+  },
+  {
+    "brand": "CREDCL",
+    "issuerSlug": null,
+    "issuerKind": "other",
+    "aliases": [
+      "CREDIN",
+      "CREDCM",
+      "CREDAP"
+    ]
+  },
+  {
+    "brand": "HDFCER",
+    "issuerSlug": "hdfc_ergo",
+    "issuerKind": "biller",
+    "aliases": [
+      "HDFCERG"
+    ]
+  },
+  {
+    "brand": "ICICIL",
+    "issuerSlug": "icici_lombard",
+    "issuerKind": "biller",
+    "aliases": [
+      "ICICLM"
+    ]
+  },
+  {
+    "brand": "JIOPAY",
+    "issuerSlug": "jio",
+    "issuerKind": "biller",
+    "aliases": [
+      "JIOCNT",
+      "JIOFBR",
+      "JIOINF",
+      "JIOCRE"
+    ]
+  },
+  {
+    "brand": "LAZYPY",
+    "issuerSlug": "lazypay",
+    "issuerKind": "other",
+    "aliases": [
+      "LAZYPAY",
+      "LZYPAY"
+    ]
+  },
+  {
+    "brand": "LICIND",
+    "issuerSlug": "lic",
+    "issuerKind": "biller",
+    "aliases": [
+      "LICOFI",
+      "LICSMS"
+    ]
+  },
+  {
+    "brand": "MGLCNG",
+    "issuerSlug": "mgl",
+    "issuerKind": "biller",
+    "aliases": [
+      "MGLIMT"
+    ]
+  },
+  {
+    "brand": "MSEDCL",
+    "issuerSlug": "msedcl",
+    "issuerKind": "biller",
+    "aliases": [
+      "MSEDCLP",
+      "MAHAVT"
+    ]
+  },
+  {
+    "brand": "SIMPLP",
+    "issuerSlug": "simpl",
+    "issuerKind": "other",
+    "aliases": [
+      "SIMPLAP",
+      "GETSMP"
+    ]
+  },
+  {
+    "brand": "STARHL",
+    "issuerSlug": "star_health",
+    "issuerKind": "biller",
+    "aliases": [
+      "STARHI",
+      "STARHEALTH"
+    ]
+  },
+  {
+    "brand": "TATAPW",
+    "issuerSlug": "tata_power",
+    "issuerKind": "biller",
+    "aliases": [
+      "TATAPWR"
+    ]
+  },
+  {
+    "brand": "TNBPAY",
+    "issuerSlug": "tneb",
+    "issuerKind": "biller",
+    "aliases": [
+      "TNEBLT",
+      "TANGEDCO"
+    ]
+  },
+  {
+    "brand": "VICARE",
+    "issuerSlug": "vi",
+    "issuerKind": "biller",
+    "aliases": [
+      "VIPOST",
+      "VIBILL",
+      "VIAPPS"
+    ]
+  }
+]

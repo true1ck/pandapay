@@ -1,0 +1,1654 @@
+[
+  {
+    "id": "INV-BROKER-FUNDS-ADDED-01",
+    "version": 1,
+    "family": "broker_account",
+    "senders": [
+      "ZERODH",
+      "GROWW",
+      "UPSTOX",
+      "KOTAKN",
+      "INDMNY",
+      "ANGELO",
+      "DHANHQ",
+      "UNIVST",
+      "PAYTMM",
+      "HDFCSC",
+      "ICICID",
+      "FIVEPS",
+      "MOSLTD",
+      "SHRKHN"
+    ],
+    "priority": 600,
+    "match": {
+      "pattern": "(?:rs\\.?|inr|₹)\\s*(?<amt>[\\d,]+(?:\\.\\d{1,2})?)\\s+(?:has been\\s+|have been\\s+|was\\s+|is\\s+)?(?:added|credited|deposited)\\s+(?:to|in|into)\\s+your\\b",
+      "flags": "i",
+      "rejectAny": [
+        "failed",
+        "declined",
+        "unsuccessful",
+        "pending",
+        "withdraw",
+        "payout"
+      ]
+    },
+    "emit": [
+      {
+        "factType": "movement",
+        "attrs": {
+          "direction": "credit",
+          "purpose": "investment",
+          "rail": "unknown",
+          "evidenceOnly": true
+        },
+        "amounts": [
+          {
+            "role": "posted",
+            "from": "amt",
+            "unit": "INR"
+          }
+        ],
+        "instrument": {
+          "kind": "broker"
+        }
+      }
+    ],
+    "confidence": 0.9,
+    "examples": [
+      {
+        "sender": "VM-ZERODH-S",
+        "body": "Funds of Rs 5,000.00 have been added to your Zerodha trading account via UPI.",
+        "expectFactTypes": [
+          "movement"
+        ]
+      },
+      {
+        "sender": "VM-ZERODH-S",
+        "body": "Fund addition of Rs 5,000.00 to your Zerodha trading account has failed. Please retry.",
+        "expectFactTypes": []
+      }
+    ],
+    "status": "active",
+    "createdBy": "baseline",
+    "updatedAt": "2026-11-20T00:00:00Z"
+  },
+  {
+    "id": "INV-BROKER-PAYOUT-DONE-01",
+    "version": 1,
+    "family": "broker_account",
+    "senders": [
+      "ZERODH",
+      "GROWW",
+      "UPSTOX",
+      "KOTAKN",
+      "INDMNY",
+      "ANGELO",
+      "DHANHQ",
+      "UNIVST",
+      "PAYTMM",
+      "HDFCSC",
+      "ICICID",
+      "FIVEPS",
+      "MOSLTD",
+      "SHRKHN"
+    ],
+    "priority": 600,
+    "match": {
+      "pattern": "(?:settlement\\s+payout|payout|withdrawal)\\s+(?:request\\s+)?of\\s+(?:rs\\.?|inr|₹)\\s*(?<amt>[\\d,]+(?:\\.\\d{1,2})?)\\s+(?:has been\\s+|is\\s+|was\\s+)?(?:credited|completed|settled|successful)(?:[\\s\\S]*?(?:a/c|acct?\\.?|account)\\s*(?:no\\.?\\s*)?(?:ending\\s*(?:with\\s*|in\\s*)?)?(?:[x*•.]+\\s*)?(?<mask>\\d{2,16})\\b)?",
+      "flags": "i",
+      "rejectAny": [
+        "failed",
+        "rejected",
+        "reversed"
+      ]
+    },
+    "emit": [
+      {
+        "factType": "movement",
+        "attrs": {
+          "direction": "credit",
+          "purpose": "investment",
+          "rail": "unknown",
+          "evidenceOnly": true
+        },
+        "amounts": [
+          {
+            "role": "posted",
+            "from": "amt",
+            "unit": "INR"
+          }
+        ],
+        "instrument": {
+          "kind": "broker"
+        },
+        "counterparty": {
+          "kind": "bank",
+          "accountMaskFrom": "mask"
+        }
+      }
+    ],
+    "confidence": 0.9,
+    "examples": [
+      {
+        "sender": "VM-UPSTOX-S",
+        "body": "Upstox: Your withdrawal of Rs 8,000.00 has been credited to your bank A/c XX1234.",
+        "expectFactTypes": [
+          "movement"
+        ]
+      },
+      {
+        "sender": "VM-UPSTOX-S",
+        "body": "Upstox: Your withdrawal of Rs 8,000.00 has failed and will be reversed to your trading account.",
+        "expectFactTypes": []
+      }
+    ],
+    "status": "active",
+    "createdBy": "baseline",
+    "updatedAt": "2026-11-20T00:00:00Z"
+  },
+  {
+    "id": "INV-BROKER-PAYOUT-INIT-01",
+    "version": 1,
+    "family": "broker_account",
+    "senders": [
+      "ZERODH",
+      "GROWW",
+      "UPSTOX",
+      "KOTAKN",
+      "INDMNY",
+      "ANGELO",
+      "DHANHQ",
+      "UNIVST",
+      "PAYTMM",
+      "HDFCSC",
+      "ICICID",
+      "FIVEPS",
+      "MOSLTD",
+      "SHRKHN"
+    ],
+    "priority": 600,
+    "match": {
+      "pattern": "(?:settlement\\s+payout|payout|withdrawal)\\s+(?:request\\s+)?of\\s+(?:rs\\.?|inr|₹)\\s*(?<amt>[\\d,]+(?:\\.\\d{1,2})?)\\s+(?:has been\\s+|is\\s+|was\\s+)?(?:initiated|requested|raised|processed)(?:[\\s\\S]*?(?:a/c|acct?\\.?|account)\\s*(?:no\\.?\\s*)?(?:ending\\s*(?:with\\s*|in\\s*)?)?(?:[x*•.]+\\s*)?(?<mask>\\d{2,16})\\b)?",
+      "flags": "i",
+      "rejectAny": [
+        "rejected",
+        "failed",
+        "declined",
+        "cancelled"
+      ]
+    },
+    "emit": [
+      {
+        "factType": "attempt",
+        "attrs": {
+          "status": "pending",
+          "direction": "credit",
+          "purpose": "investment"
+        },
+        "amounts": [
+          {
+            "role": "posted",
+            "from": "amt",
+            "unit": "INR"
+          }
+        ],
+        "instrument": {
+          "kind": "broker"
+        },
+        "counterparty": {
+          "kind": "bank",
+          "accountMaskFrom": "mask"
+        }
+      }
+    ],
+    "confidence": 0.93,
+    "examples": [
+      {
+        "sender": "VM-KOTAKN-S",
+        "body": "Kotak Neo: Running A/c settlement payout of INR 15,500.00 initiated for your demat account. You should receive funds in A/c XX1234 by EOD.",
+        "expectFactTypes": [
+          "attempt"
+        ]
+      },
+      {
+        "sender": "VM-UPSTOX-S",
+        "body": "Upstox: Your withdrawal request of Rs 8,000.00 has been initiated. Funds will reach your bank A/c XX1234 in 1 working day.",
+        "expectFactTypes": [
+          "attempt"
+        ]
+      },
+      {
+        "sender": "VM-UPSTOX-S",
+        "body": "Upstox: Your withdrawal request of Rs 8,000.00 was rejected due to insufficient funds.",
+        "expectFactTypes": []
+      }
+    ],
+    "status": "active",
+    "createdBy": "baseline",
+    "updatedAt": "2026-11-20T00:00:00Z"
+  },
+  {
+    "id": "INV-BROKER-PAYOUT-NOTICE-01",
+    "version": 1,
+    "family": "broker_account",
+    "senders": [
+      "ZERODH",
+      "GROWW",
+      "UPSTOX",
+      "KOTAKN",
+      "INDMNY",
+      "ANGELO",
+      "DHANHQ",
+      "UNIVST",
+      "PAYTMM",
+      "HDFCSC",
+      "ICICID",
+      "FIVEPS",
+      "MOSLTD",
+      "SHRKHN"
+    ],
+    "priority": 590,
+    "match": {
+      "pattern": "(?:funds?|payout|settlement|withdrawal)(?:\\s+amount)?\\s+(?:of\\s+)?(?:rs\\.?|inr|₹)\\s*(?<amt>[\\d,]+(?:\\.\\d{1,2})?)\\s+will be\\s+(?:credited|transferred|settled|paid)(?:[\\s\\S]*?(?:a/c|acct?\\.?|account)\\s*(?:no\\.?\\s*)?(?:ending\\s*(?:with\\s*|in\\s*)?)?(?:[x*•.]+\\s*)?(?<mask>\\d{2,16})\\b)?",
+      "flags": "i",
+      "rejectAny": [
+        "failed",
+        "rejected"
+      ]
+    },
+    "emit": [
+      {
+        "factType": "attempt",
+        "attrs": {
+          "status": "pending",
+          "direction": "credit",
+          "purpose": "investment"
+        },
+        "amounts": [
+          {
+            "role": "posted",
+            "from": "amt",
+            "unit": "INR"
+          }
+        ],
+        "instrument": {
+          "kind": "broker"
+        },
+        "counterparty": {
+          "kind": "bank",
+          "accountMaskFrom": "mask"
+        }
+      }
+    ],
+    "confidence": 0.85,
+    "examples": [
+      {
+        "sender": "VM-UNIVST-S",
+        "body": "Univest: Your payout of Rs 4,200.00 will be credited to your bank A/c XX1234 by 6 PM today.",
+        "expectFactTypes": [
+          "attempt"
+        ]
+      },
+      {
+        "sender": "VM-UPSTOX-S",
+        "body": "Upstox: Funds of Rs 9,000.00 will be transferred to your bank account within 24 hours.",
+        "expectFactTypes": [
+          "attempt"
+        ]
+      },
+      {
+        "sender": "VM-UPSTOX-S",
+        "body": "Upstox: Funds of Rs 9,000.00 were transferred to your bank account.",
+        "expectFactTypes": []
+      }
+    ],
+    "status": "active",
+    "createdBy": "baseline",
+    "updatedAt": "2026-11-20T00:00:00Z"
+  },
+  {
+    "id": "INV-BROKER-TOPUP-CREDITED-01",
+    "version": 1,
+    "family": "broker_topup",
+    "senders": [
+      "*"
+    ],
+    "priority": 840,
+    "match": {
+      "pattern": "(?:a/c|acct?\\.?|account)\\s*(?:no\\.?\\s*)?(?:ending\\s*(?:with\\s*|in\\s*)?)?(?:[x*•.]+\\s*)?(?<mask>\\d{2,16})\\b\\s+debited\\s+for\\s+(?:rs\\.?|inr|₹)\\s*(?<amt>[\\d,]+(?:\\.\\d{1,2})?)\\s+on\\s+(?<date>\\d{2}[-/ ](?:\\d{2}|(?:jan|feb|mar|apr|may|jun|jul|aug|sep|oct|nov|dec))[-/ ]\\d{2,4}|\\d{2}(?:jan|feb|mar|apr|may|jun|jul|aug|sep|oct|nov|dec)\\d{2,4})\\s*[;,]\\s*(?<broker>(?:zerodha|groww|upstox|rksv|kotak\\s*sec\\w*|kotak\\s+neo|indmoney|ind\\s*money|angel\\s*(?:one|broking)|dhan\\b|univest|paytm\\s+money|hdfc\\s*sec\\w*|icici\\s*sec\\w*|icici\\s+direct|5\\s*paisa|motilal\\s+oswal|sharekhan|nu\\s*investors|iccl|indian\\s+clearing|nse\\s+clearing|bse\\s*star|coin\\s+by\\s+zerodha|smallcase|et\\s+money|kuvera|mutual\\s+fund|\\bmf\\b|cams\\b|kfin\\w*)[a-z0-9 .&]*?)\\s+credited",
+      "flags": "i"
+    },
+    "emit": [
+      {
+        "factType": "movement",
+        "attrs": {
+          "direction": "debit",
+          "purpose": "investment",
+          "rail": "upi"
+        },
+        "amounts": [
+          {
+            "role": "posted",
+            "from": "amt",
+            "unit": "INR"
+          }
+        ],
+        "occurredAt": {
+          "from": "date"
+        },
+        "instrument": {
+          "kind": "bank_account",
+          "maskFrom": "mask"
+        },
+        "counterparty": {
+          "kind": "merchant",
+          "nameFrom": "broker",
+          "transforms": [
+            "sanitizeNarration"
+          ]
+        }
+      }
+    ],
+    "confidence": 0.97,
+    "examples": [
+      {
+        "sender": "AX-ICICIT-S",
+        "body": "ICICI Bank Acct XX1234 debited for Rs 5000.00 on 10-Nov-26; UPSTOX SECURITIES credited. UPI:432198765432. Call 18002662 for dispute.",
+        "expectFactTypes": [
+          "movement"
+        ]
+      },
+      {
+        "sender": "AX-ICICIT-S",
+        "body": "ICICI Bank Acct XX1234 debited for Rs 25000.00 on 10-Nov-26; CRED Club credited. UPI:432198765432. Call 18002662 for dispute.",
+        "expectFactTypes": []
+      }
+    ],
+    "status": "active",
+    "createdBy": "baseline",
+    "updatedAt": "2026-11-20T00:00:00Z"
+  },
+  {
+    "id": "INV-BROKER-TOPUP-GENERIC-01",
+    "version": 1,
+    "family": "broker_topup",
+    "senders": [
+      "*"
+    ],
+    "priority": 330,
+    "match": {
+      "pattern": "(?:rs\\.?|inr|₹)\\s*(?<amt>[\\d,]+(?:\\.\\d{1,2})?)[\\s\\S]{0,60}?(?:debited|deducted|paid|sent|transferred)[\\s\\S]{0,120}?(?:to|towards|trf to|for|at|in favou?r of|payee)\\s+(?<broker>(?:zerodha|groww|upstox|rksv|kotak\\s*sec\\w*|kotak\\s+neo|indmoney|ind\\s*money|angel\\s*(?:one|broking)|dhan\\b|univest|paytm\\s+money|hdfc\\s*sec\\w*|icici\\s*sec\\w*|icici\\s+direct|5\\s*paisa|motilal\\s+oswal|sharekhan|nu\\s*investors|iccl|indian\\s+clearing|nse\\s+clearing|bse\\s*star|coin\\s+by\\s+zerodha|smallcase|et\\s+money|kuvera|mutual\\s+fund|\\bmf\\b|cams\\b|kfin\\w*)[a-z0-9 .&]*?)(?=\\s*(?:[.,;()]|[\\r\\n]|\\s(?:ref|refno|on|upi|via|umrn|avl|utr|if|call|sms)\\b|-\\s*[a-z]|$))",
+      "flags": "i",
+      "rejectAny": [
+        "failed",
+        "declined",
+        "will be debited",
+        "scheduled",
+        "credited to your",
+        "received from"
+      ]
+    },
+    "emit": [
+      {
+        "factType": "movement",
+        "attrs": {
+          "direction": "debit",
+          "purpose": "investment",
+          "rail": "unknown"
+        },
+        "amounts": [
+          {
+            "role": "posted",
+            "from": "amt",
+            "unit": "INR"
+          }
+        ],
+        "counterparty": {
+          "kind": "merchant",
+          "nameFrom": "broker",
+          "transforms": [
+            "sanitizeNarration"
+          ]
+        }
+      }
+    ],
+    "confidence": 0.8,
+    "examples": [
+      {
+        "sender": "VM-KOTAKB-S",
+        "body": "Rs 15,000.00 transferred from your account via IMPS to ZERODHA BROKING on 12-11-26. Ref 432198765000.",
+        "expectFactTypes": [
+          "movement"
+        ]
+      },
+      {
+        "sender": "VM-KOTAKB-S",
+        "body": "Rs 15,000.00 transferred from your account via IMPS to RAVI KUMAR on 12-11-26. Ref 432198765000.",
+        "expectFactTypes": []
+      }
+    ],
+    "status": "active",
+    "createdBy": "baseline",
+    "updatedAt": "2026-11-20T00:00:00Z"
+  },
+  {
+    "id": "INV-BROKER-TOPUP-SBIUPI-01",
+    "version": 1,
+    "family": "broker_topup",
+    "senders": [
+      "*"
+    ],
+    "priority": 851,
+    "match": {
+      "pattern": "(?:(?:a/c|acct?\\.?|account)\\s*(?:no\\.?\\s*)?(?:ending\\s*(?:with\\s*|in\\s*)?)?(?:[x*•.]+\\s*)?(?<mask>\\d{2,16})\\b\\s+)?debited\\s+by\\s+(?<amt>[\\d,]+(?:\\.\\d{1,2})?)\\s+on\\s+date\\s+(?<date>\\d{2}[-/ ](?:\\d{2}|(?:jan|feb|mar|apr|may|jun|jul|aug|sep|oct|nov|dec))[-/ ]\\d{2,4}|\\d{2}(?:jan|feb|mar|apr|may|jun|jul|aug|sep|oct|nov|dec)\\d{2,4})\\s+trf\\s+to\\s+(?<broker>(?:zerodha|groww|upstox|rksv|kotak\\s*sec\\w*|kotak\\s+neo|indmoney|ind\\s*money|angel\\s*(?:one|broking)|dhan\\b|univest|paytm\\s+money|hdfc\\s*sec\\w*|icici\\s*sec\\w*|icici\\s+direct|5\\s*paisa|motilal\\s+oswal|sharekhan|nu\\s*investors|iccl|indian\\s+clearing|nse\\s+clearing|bse\\s*star|coin\\s+by\\s+zerodha|smallcase|et\\s+money|kuvera|mutual\\s+fund|\\bmf\\b|cams\\b|kfin\\w*)[a-z0-9 .&]*?)\\s+refno\\s+(?<ref_upiRef>\\d+)",
+      "flags": "i"
+    },
+    "emit": [
+      {
+        "factType": "movement",
+        "attrs": {
+          "direction": "debit",
+          "purpose": "investment",
+          "rail": "upi"
+        },
+        "amounts": [
+          {
+            "role": "posted",
+            "from": "amt",
+            "unit": "INR"
+          }
+        ],
+        "occurredAt": {
+          "from": "date"
+        },
+        "instrument": {
+          "kind": "bank_account",
+          "maskFrom": "mask"
+        },
+        "counterparty": {
+          "kind": "merchant",
+          "nameFrom": "broker",
+          "transforms": [
+            "sanitizeNarration"
+          ]
+        }
+      }
+    ],
+    "confidence": 0.98,
+    "examples": [
+      {
+        "sender": "AD-SBIBNK-S",
+        "body": "Dear UPI user A/C X1234 debited by 5000.0 on date 01Nov26 trf to UPSTOX SECURITIE Refno 432112345678. If not u? call 1800111109. -SBI",
+        "expectFactTypes": [
+          "movement"
+        ]
+      },
+      {
+        "sender": "AD-SBIBNK-S",
+        "body": "Dear UPI user A/C X1234 debited by 10,000.00 on date 02Nov26 trf to NU INVESTORS TEC Refno 432112345679. -SBI",
+        "expectFactTypes": [
+          "movement"
+        ]
+      },
+      {
+        "sender": "AD-SBIBNK-S",
+        "body": "Dear UPI user A/C X1234 debited by 250.0 on date 01Nov26 trf to RAMESH KUMAR Refno 432112345678. If not u? call 1800111109. -SBI",
+        "expectFactTypes": []
+      }
+    ],
+    "status": "active",
+    "createdBy": "baseline",
+    "updatedAt": "2026-11-20T00:00:00Z"
+  },
+  {
+    "id": "INV-BROKER-TOPUP-TOWARDS-01",
+    "version": 1,
+    "family": "broker_topup",
+    "senders": [
+      "*"
+    ],
+    "priority": 840,
+    "match": {
+      "pattern": "(?:a/c|acct?\\.?|account)\\s*(?:no\\.?\\s*)?(?:ending\\s*(?:with\\s*|in\\s*)?)?(?:[x*•.]+\\s*)?(?<mask>\\d{2,16})\\b\\s+(?:is\\s+)?debited\\s+(?:by|for|with)\\s+(?:rs\\.?|inr|₹)\\s*(?<amt>[\\d,]+(?:\\.\\d{1,2})?)\\s+(?:towards|for|to)\\s+(?<broker>(?:zerodha|groww|upstox|rksv|kotak\\s*sec\\w*|kotak\\s+neo|indmoney|ind\\s*money|angel\\s*(?:one|broking)|dhan\\b|univest|paytm\\s+money|hdfc\\s*sec\\w*|icici\\s*sec\\w*|icici\\s+direct|5\\s*paisa|motilal\\s+oswal|sharekhan|nu\\s*investors|iccl|indian\\s+clearing|nse\\s+clearing|bse\\s*star|coin\\s+by\\s+zerodha|smallcase|et\\s+money|kuvera|mutual\\s+fund|\\bmf\\b|cams\\b|kfin\\w*)[a-z0-9 .&]*?)(?=\\s*(?:[.,;()]|[\\r\\n]|\\s(?:ref|refno|on|upi|via|umrn|avl|utr|if|call|sms)\\b|-\\s*[a-z]|$))",
+      "flags": "i",
+      "rejectAny": [
+        "failed",
+        "declined",
+        "will be debited",
+        "scheduled"
+      ]
+    },
+    "emit": [
+      {
+        "factType": "movement",
+        "attrs": {
+          "direction": "debit",
+          "purpose": "investment",
+          "rail": "unknown"
+        },
+        "amounts": [
+          {
+            "role": "posted",
+            "from": "amt",
+            "unit": "INR"
+          }
+        ],
+        "instrument": {
+          "kind": "bank_account",
+          "maskFrom": "mask"
+        },
+        "counterparty": {
+          "kind": "merchant",
+          "nameFrom": "broker",
+          "transforms": [
+            "sanitizeNarration"
+          ]
+        }
+      }
+    ],
+    "confidence": 0.96,
+    "examples": [
+      {
+        "sender": "VM-HDFCBK-S",
+        "body": "Your A/c *1797 is debited by Rs.5000 towards Groww. Ref 123456789012.",
+        "expectFactTypes": [
+          "movement"
+        ]
+      },
+      {
+        "sender": "VM-HDFCBK-S",
+        "body": "Your A/c *1797 is debited by Rs.5000 towards Swiggy Instamart. Ref 123456789012.",
+        "expectFactTypes": []
+      }
+    ],
+    "status": "active",
+    "createdBy": "baseline",
+    "updatedAt": "2026-11-20T00:00:00Z"
+  },
+  {
+    "id": "INV-BROKER-TOPUP-UPINARR-01",
+    "version": 1,
+    "family": "broker_topup",
+    "senders": [
+      "*"
+    ],
+    "priority": 840,
+    "match": {
+      "pattern": "(?:rs\\.?|inr|₹)\\s*(?<amt>[\\d,]+(?:\\.\\d{1,2})?)\\s+debited[\\s\\S]{0,20}?(?:a/c|acct?\\.?|account)\\s*(?:no\\.?\\s*)?(?:ending\\s*(?:with\\s*|in\\s*)?)?(?:[x*•.]+\\s*)?(?<mask>\\d{2,16})\\b[\\s\\S]{0,40}?upi/p2[mp]/(?<ref_upiRef>\\d+)/(?<broker>(?:zerodha|groww|upstox|rksv|kotak\\s*sec\\w*|kotak\\s+neo|indmoney|ind\\s*money|angel\\s*(?:one|broking)|dhan\\b|univest|paytm\\s+money|hdfc\\s*sec\\w*|icici\\s*sec\\w*|icici\\s+direct|5\\s*paisa|motilal\\s+oswal|sharekhan|nu\\s*investors|iccl|indian\\s+clearing|nse\\s+clearing|bse\\s*star|coin\\s+by\\s+zerodha|smallcase|et\\s+money|kuvera|mutual\\s+fund|\\bmf\\b|cams\\b|kfin\\w*)[a-z0-9 .&]*?)(?=\\s*(?:[.,;()]|[\\r\\n]|\\s(?:ref|refno|on|upi|via|umrn|avl|utr|if|call|sms)\\b|-\\s*[a-z]|$))",
+      "flags": "i"
+    },
+    "emit": [
+      {
+        "factType": "movement",
+        "attrs": {
+          "direction": "debit",
+          "purpose": "investment",
+          "rail": "upi"
+        },
+        "amounts": [
+          {
+            "role": "posted",
+            "from": "amt",
+            "unit": "INR"
+          }
+        ],
+        "instrument": {
+          "kind": "bank_account",
+          "maskFrom": "mask"
+        },
+        "counterparty": {
+          "kind": "merchant",
+          "nameFrom": "broker",
+          "transforms": [
+            "sanitizeNarration"
+          ]
+        }
+      }
+    ],
+    "confidence": 0.97,
+    "examples": [
+      {
+        "sender": "AX-AXISBK-S",
+        "body": "INR 5000.00 debited\nA/c no. XX123456\n01-11-26, 12:30:11\nUPI/P2M/432112345678/GROWW\nNot you? SMS BLOCKUPI Cust ID to 919951860002\nAxis Bank",
+        "expectFactTypes": [
+          "movement"
+        ]
+      },
+      {
+        "sender": "AX-AXISBK-S",
+        "body": "INR 1500.00 debited\nA/c no. XX123456\n01-11-26, 12:30:11\nUPI/P2M/432112345678/BIGBASKET\nNot you? SMS BLOCKUPI Cust ID to 919951860002\nAxis Bank",
+        "expectFactTypes": []
+      }
+    ],
+    "status": "active",
+    "createdBy": "baseline",
+    "updatedAt": "2026-11-20T00:00:00Z"
+  },
+  {
+    "id": "INV-BROKER-TOPUP-VPA-01",
+    "version": 1,
+    "family": "broker_topup",
+    "senders": [
+      "*"
+    ],
+    "priority": 850,
+    "match": {
+      "pattern": "(?:rs\\.?|inr|₹)\\s*(?<amt>[\\d,]+(?:\\.\\d{1,2})?)\\s+debited\\s+from\\s+(?:a/c|acct?\\.?|account)\\s*(?:no\\.?\\s*)?(?:ending\\s*(?:with\\s*|in\\s*)?)?(?:[x*•.]+\\s*)?(?<mask>\\d{2,16})\\b\\s+on\\s+(?<date>\\d{2}[-/ ](?:\\d{2}|(?:jan|feb|mar|apr|may|jun|jul|aug|sep|oct|nov|dec))[-/ ]\\d{2,4}|\\d{2}(?:jan|feb|mar|apr|may|jun|jul|aug|sep|oct|nov|dec)\\d{2,4})\\s+to\\s+vpa\\s+(?<vpa>[a-z0-9._-]*(?:groww|zerodha|upstox|rksv|kotaksec|kotakneo|indmoney|angelone|angelbroking|dhan|univest|paytmmoney|hdfcsec|icicisec|icicidirect|5paisa|motilal|sharekhan|iccl|nseclearing|bsestar|mfcentral|cams|kfin|nuinvestors)[a-z0-9._-]*@[a-z0-9]+)(?:\\s*\\(upi\\s+ref(?:\\s+no\\.?)?\\s*(?<ref_upiRef>\\d+)\\))?",
+      "flags": "i",
+      "rejectAny": [
+        "failed",
+        "declined"
+      ]
+    },
+    "emit": [
+      {
+        "factType": "movement",
+        "attrs": {
+          "direction": "debit",
+          "purpose": "investment",
+          "rail": "upi"
+        },
+        "amounts": [
+          {
+            "role": "posted",
+            "from": "amt",
+            "unit": "INR"
+          }
+        ],
+        "occurredAt": {
+          "from": "date"
+        },
+        "instrument": {
+          "kind": "bank_account",
+          "maskFrom": "mask"
+        },
+        "counterparty": {
+          "kind": "merchant",
+          "vpaFrom": "vpa"
+        }
+      }
+    ],
+    "confidence": 0.97,
+    "examples": [
+      {
+        "sender": "VM-HDFCBK-S",
+        "body": "Rs.5,000.00 debited from A/c XX1234 on 05-11-26 to VPA zerodha.broking@icici (UPI Ref No 432112345678).",
+        "expectFactTypes": [
+          "movement"
+        ]
+      },
+      {
+        "sender": "VM-HDFCBK-S",
+        "body": "Rs.5,000.00 debited from A/c XX1234 on 05-11-26 to VPA add-money@paytm (UPI Ref No 432155555555).",
+        "expectFactTypes": []
+      }
+    ],
+    "status": "active",
+    "createdBy": "baseline",
+    "updatedAt": "2026-11-20T00:00:00Z"
+  },
+  {
+    "id": "INV-BROKER-TOPUP-VPA-01-B",
+    "version": 1,
+    "family": "broker_topup",
+    "senders": [
+      "*"
+    ],
+    "priority": 851,
+    "match": {
+      "pattern": "(?:rs\\.?|inr|₹)\\s*(?<amt>[\\d,]+(?:\\.\\d{1,2})?)\\s+debited\\s+from\\s+(?:a/c|acct?\\.?|account)\\s*(?:no\\.?\\s*)?(?:ending\\s*(?:with\\s*|in\\s*)?)?(?:[x*•.]+\\s*)?(?<mask>\\d{2,16})\\b\\s+on\\s+(?<date>\\d{2}[-/ ](?:\\d{2}|(?:jan|feb|mar|apr|may|jun|jul|aug|sep|oct|nov|dec))[-/ ]\\d{2,4}|\\d{2}(?:jan|feb|mar|apr|may|jun|jul|aug|sep|oct|nov|dec)\\d{2,4})\\s+to\\s+vpa\\s+(?<vpa>[a-z0-9._-]*(?:groww|zerodha|upstox|rksv|kotaksec|kotakneo|indmoney|angelone|angelbroking|dhan|univest|paytmmoney|hdfcsec|icicisec|icicidirect|5paisa|motilal|sharekhan|iccl|nseclearing|bsestar|mfcentral|cams|kfin|nuinvestors)[a-z0-9._-]*@[a-z0-9]+)(?:\\s*\\(upi\\s+ref(?:\\s+no\\.?)?\\s*(?<ref_upiRef>\\d+)\\))?[\\s\\S]*?avl\\.?\\s*bal(?:ance)?\\.?\\s*[:\\-]?\\s*(?:rs\\.?|inr|₹)\\s*(?<bal>[\\d,]+(?:\\.\\d{1,2})?)",
+      "flags": "i",
+      "rejectAny": [
+        "failed",
+        "declined"
+      ]
+    },
+    "emit": [
+      {
+        "factType": "movement",
+        "attrs": {
+          "direction": "debit",
+          "purpose": "investment",
+          "rail": "upi"
+        },
+        "amounts": [
+          {
+            "role": "posted",
+            "from": "amt",
+            "unit": "INR"
+          }
+        ],
+        "occurredAt": {
+          "from": "date"
+        },
+        "instrument": {
+          "kind": "bank_account",
+          "maskFrom": "mask"
+        },
+        "counterparty": {
+          "kind": "merchant",
+          "vpaFrom": "vpa"
+        }
+      },
+      {
+        "factType": "balance_snapshot",
+        "amounts": [
+          {
+            "role": "available_balance",
+            "from": "bal",
+            "unit": "INR"
+          }
+        ],
+        "instrument": {
+          "sameAs": 0
+        },
+        "attrs": {
+          "asOf": {
+            "sameAs": 0,
+            "field": "occurredAt"
+          }
+        }
+      }
+    ],
+    "confidence": 0.97,
+    "examples": [
+      {
+        "sender": "VM-HDFCBK-S",
+        "body": "Rs.5,000.00 debited from A/c XX1234 on 05-11-26 to VPA groww.mf@validhdfc (UPI Ref No 432112345678). Avl bal Rs 47,310.40",
+        "expectFactTypes": [
+          "movement",
+          "balance_snapshot"
+        ]
+      },
+      {
+        "sender": "VM-HDFCBK-S",
+        "body": "Rs.5,000.00 debited from A/c XX1234 on 05-11-26 to VPA add-money@paytm (UPI Ref No 432155555555).",
+        "expectFactTypes": []
+      }
+    ],
+    "status": "active",
+    "createdBy": "baseline",
+    "updatedAt": "2026-11-20T00:00:00Z"
+  },
+  {
+    "id": "INV-BROKER-WITHDRAW-CREDIT-01",
+    "version": 1,
+    "family": "broker_withdraw",
+    "senders": [
+      "*"
+    ],
+    "priority": 840,
+    "match": {
+      "pattern": "(?:(?:a/c|acct?\\.?|account)\\s*(?:no\\.?\\s*)?(?:ending\\s*(?:with\\s*|in\\s*)?)?(?:[x*•.]+\\s*)?(?<mask>\\d{2,16})\\b\\s+)?credit(?:ed)?\\s+(?:by|with|of|for)\\s+(?:rs\\.?|inr|₹)\\s*(?<amt>[\\d,]+(?:\\.\\d{1,2})?)[\\s\\S]{0,200}?(?<broker>(?:zerodha|groww|upstox|rksv|kotak\\s*sec\\w*|kotak\\s+neo|indmoney|ind\\s*money|angel\\s*(?:one|broking)|dhan\\b|univest|paytm\\s+money|hdfc\\s*sec\\w*|icici\\s*sec\\w*|icici\\s+direct|5\\s*paisa|motilal\\s+oswal|sharekhan|nu\\s*investors|iccl|indian\\s+clearing|nse\\s+clearing|bse\\s*star|coin\\s+by\\s+zerodha|smallcase|et\\s+money|kuvera|mutual\\s+fund|\\bmf\\b|cams\\b|kfin\\w*)[a-z0-9 .&]*?)(?=\\s*(?:[.,;()]|[\\r\\n]|\\s(?:ref|refno|on|upi|via|umrn|avl|utr|if|call|sms)\\b|-\\s*[a-z]|$))",
+      "flags": "i",
+      "rejectAny": [
+        "dividend",
+        "idcw",
+        "interest",
+        "failed",
+        "will be credited",
+        "refund"
+      ]
+    },
+    "emit": [
+      {
+        "factType": "movement",
+        "attrs": {
+          "direction": "credit",
+          "purpose": "investment",
+          "rail": "unknown"
+        },
+        "amounts": [
+          {
+            "role": "posted",
+            "from": "amt",
+            "unit": "INR"
+          }
+        ],
+        "instrument": {
+          "kind": "bank_account",
+          "maskFrom": "mask"
+        },
+        "counterparty": {
+          "kind": "merchant",
+          "nameFrom": "broker",
+          "transforms": [
+            "sanitizeNarration"
+          ]
+        }
+      }
+    ],
+    "confidence": 0.93,
+    "examples": [
+      {
+        "sender": "AD-SBIBNK-S",
+        "body": "Your A/c XX1234 credited by Rs.15500.00 on 12Nov26 by NEFT UTR N123456789012 - KOTAKSECURITIES LTD, MUMBAI. -SBI",
+        "expectFactTypes": [
+          "movement"
+        ]
+      },
+      {
+        "sender": "AD-SBIBNK-S",
+        "body": "Your A/c XX1234 credit of Rs.20,000.00 on 13Nov26 by IMPS-UPSTOX SECURITIES PRIVATE LTD. -SBI",
+        "expectFactTypes": [
+          "movement"
+        ]
+      },
+      {
+        "sender": "AD-SBIBNK-S",
+        "body": "Your A/c XX1234 credited by Rs.15500.00 on 12Nov26 by NEFT UTR N123456789012 - ACME TECHNOLOGIES LTD, MUMBAI. -SBI",
+        "expectFactTypes": []
+      }
+    ],
+    "status": "active",
+    "createdBy": "baseline",
+    "updatedAt": "2026-11-20T00:00:00Z"
+  },
+  {
+    "id": "INV-BROKER-WITHDRAW-CREDIT-02",
+    "version": 1,
+    "family": "broker_withdraw",
+    "senders": [
+      "*"
+    ],
+    "priority": 840,
+    "match": {
+      "pattern": "(?:rs\\.?|inr|₹)\\s*(?<amt>[\\d,]+(?:\\.\\d{1,2})?)\\s+(?:has been\\s+|is\\s+|was\\s+)?(?:credited|deposited|received)(?:[\\s\\S]{0,60}?(?:a/c|acct?\\.?|account)\\s*(?:no\\.?\\s*)?(?:ending\\s*(?:with\\s*|in\\s*)?)?(?:[x*•.]+\\s*)?(?<mask>\\d{2,16})\\b)?[\\s\\S]{0,200}?(?<broker>(?:zerodha|groww|upstox|rksv|kotak\\s*sec\\w*|kotak\\s+neo|indmoney|ind\\s*money|angel\\s*(?:one|broking)|dhan\\b|univest|paytm\\s+money|hdfc\\s*sec\\w*|icici\\s*sec\\w*|icici\\s+direct|5\\s*paisa|motilal\\s+oswal|sharekhan|nu\\s*investors|iccl|indian\\s+clearing|nse\\s+clearing|bse\\s*star|coin\\s+by\\s+zerodha|smallcase|et\\s+money|kuvera|mutual\\s+fund|\\bmf\\b|cams\\b|kfin\\w*)[a-z0-9 .&]*?)(?=\\s*(?:[.,;()]|[\\r\\n]|\\s(?:ref|refno|on|upi|via|umrn|avl|utr|if|call|sms)\\b|-\\s*[a-z]|$))",
+      "flags": "i",
+      "rejectAny": [
+        "dividend",
+        "idcw",
+        "interest",
+        "failed",
+        "will be credited",
+        "refund",
+        "debited"
+      ]
+    },
+    "emit": [
+      {
+        "factType": "movement",
+        "attrs": {
+          "direction": "credit",
+          "purpose": "investment",
+          "rail": "unknown"
+        },
+        "amounts": [
+          {
+            "role": "posted",
+            "from": "amt",
+            "unit": "INR"
+          }
+        ],
+        "instrument": {
+          "kind": "bank_account",
+          "maskFrom": "mask"
+        },
+        "counterparty": {
+          "kind": "merchant",
+          "nameFrom": "broker",
+          "transforms": [
+            "sanitizeNarration"
+          ]
+        }
+      }
+    ],
+    "confidence": 0.9,
+    "examples": [
+      {
+        "sender": "VM-HDFCBK-S",
+        "body": "Rs.12,000.00 credited to your A/c XX1234 on 12-11-26 by NEFT from KOTAK SECURITIES LTD. UTR N123456789012.",
+        "expectFactTypes": [
+          "movement"
+        ]
+      },
+      {
+        "sender": "VM-KOTAKB-S",
+        "body": "INR 8,500.00 has been credited to your Kotak Bank account XX1234 by UPI from UPSTOX SECURITIES PVT LTD.",
+        "expectFactTypes": [
+          "movement"
+        ]
+      },
+      {
+        "sender": "VM-HDFCBK-S",
+        "body": "Rs.12,000.00 credited to your A/c XX1234 on 12-11-26 by NEFT from ACME TECHNOLOGIES LTD. UTR N123456789012.",
+        "expectFactTypes": []
+      }
+    ],
+    "status": "active",
+    "createdBy": "baseline",
+    "updatedAt": "2026-11-20T00:00:00Z"
+  },
+  {
+    "id": "INV-FUNDBAL-ANGEL-01",
+    "version": 1,
+    "family": "broker_balance",
+    "senders": [
+      "*"
+    ],
+    "priority": 450,
+    "match": {
+      "pattern": "(?:fund|funds|running\\s+account)\\s+bal(?:ance)?[\\s\\S]{0,60}?(?:reported\\s+by|with|at|held\\s+by)\\s+(?:angel\\s+(?:one|broking)(?:\\s+(?:ltd|limited))?)(?:[\\s\\S]{0,80}?as\\s+(?:on|of)\\s+(?<date>\\d{2}[-/ ](?:\\d{2}|(?:jan|feb|mar|apr|may|jun|jul|aug|sep|oct|nov|dec))[-/ ]\\d{2,4}|\\d{2}(?:jan|feb|mar|apr|may|jun|jul|aug|sep|oct|nov|dec)\\d{2,4}))[\\s\\S]{0,40}?(?:is|of|:|-)\\s*(?:rs\\.?|inr|₹)\\s*(?<bal>[\\d,]+(?:\\.\\d{1,2})?)",
+      "flags": "i",
+      "requireAll": [
+        "bal"
+      ],
+      "rejectAny": [
+        "payable"
+      ]
+    },
+    "emit": [
+      {
+        "factType": "balance_snapshot",
+        "amounts": [
+          {
+            "role": "available_balance",
+            "from": "bal",
+            "unit": "INR"
+          }
+        ],
+        "instrument": {
+          "kind": "broker",
+          "issuerSlug": "angel_one"
+        },
+        "occurredAt": {
+          "from": "date"
+        },
+        "attrs": {
+          "asOf": {
+            "from": "date"
+          }
+        }
+      }
+    ],
+    "confidence": 0.85,
+    "examples": [
+      {
+        "sender": "VM-NSEIND-S",
+        "body": "NSE: Dear Investor, your Fund Balance reported by ANGEL ONE LTD as on 31-Oct-26 is Rs.12,345.67 (excludes your bank balance). Contact your broker for details.",
+        "expectFactTypes": [
+          "balance_snapshot"
+        ]
+      },
+      {
+        "sender": "VM-NSEIND-S",
+        "body": "NSE: Dear Investor, trade value payable to you by ANGEL ONE LTD for all trades on 31-Oct-26 is Rs.12,345.67.",
+        "expectFactTypes": []
+      }
+    ],
+    "status": "active",
+    "createdBy": "baseline",
+    "updatedAt": "2026-11-20T00:00:00Z"
+  },
+  {
+    "id": "INV-FUNDBAL-DHAN-01",
+    "version": 1,
+    "family": "broker_balance",
+    "senders": [
+      "*"
+    ],
+    "priority": 450,
+    "match": {
+      "pattern": "(?:fund|funds|running\\s+account)\\s+bal(?:ance)?[\\s\\S]{0,60}?(?:reported\\s+by|with|at|held\\s+by)\\s+(?:dhan|raise\\s+securities)(?:[\\s\\S]{0,80}?as\\s+(?:on|of)\\s+(?<date>\\d{2}[-/ ](?:\\d{2}|(?:jan|feb|mar|apr|may|jun|jul|aug|sep|oct|nov|dec))[-/ ]\\d{2,4}|\\d{2}(?:jan|feb|mar|apr|may|jun|jul|aug|sep|oct|nov|dec)\\d{2,4}))[\\s\\S]{0,40}?(?:is|of|:|-)\\s*(?:rs\\.?|inr|₹)\\s*(?<bal>[\\d,]+(?:\\.\\d{1,2})?)",
+      "flags": "i",
+      "requireAll": [
+        "bal"
+      ],
+      "rejectAny": [
+        "payable"
+      ]
+    },
+    "emit": [
+      {
+        "factType": "balance_snapshot",
+        "amounts": [
+          {
+            "role": "available_balance",
+            "from": "bal",
+            "unit": "INR"
+          }
+        ],
+        "instrument": {
+          "kind": "broker",
+          "issuerSlug": "dhan"
+        },
+        "occurredAt": {
+          "from": "date"
+        },
+        "attrs": {
+          "asOf": {
+            "from": "date"
+          }
+        }
+      }
+    ],
+    "confidence": 0.85,
+    "examples": [
+      {
+        "sender": "VM-NSEIND-S",
+        "body": "NSE: Dear Investor, your Fund Balance reported by RAISE SECURITIES PVT LTD as on 31-Oct-26 is Rs.12,345.67 (excludes your bank balance). Contact your broker for details.",
+        "expectFactTypes": [
+          "balance_snapshot"
+        ]
+      },
+      {
+        "sender": "VM-NSEIND-S",
+        "body": "NSE: Dear Investor, trade value payable to you by RAISE SECURITIES PVT LTD for all trades on 31-Oct-26 is Rs.12,345.67.",
+        "expectFactTypes": []
+      }
+    ],
+    "status": "active",
+    "createdBy": "baseline",
+    "updatedAt": "2026-11-20T00:00:00Z"
+  },
+  {
+    "id": "INV-FUNDBAL-FIVEPAISA-01",
+    "version": 1,
+    "family": "broker_balance",
+    "senders": [
+      "*"
+    ],
+    "priority": 450,
+    "match": {
+      "pattern": "(?:fund|funds|running\\s+account)\\s+bal(?:ance)?[\\s\\S]{0,60}?(?:reported\\s+by|with|at|held\\s+by)\\s+(?:5\\s*paisa(?:\\s+capital)?(?:\\s+(?:ltd|limited))?)(?:[\\s\\S]{0,80}?as\\s+(?:on|of)\\s+(?<date>\\d{2}[-/ ](?:\\d{2}|(?:jan|feb|mar|apr|may|jun|jul|aug|sep|oct|nov|dec))[-/ ]\\d{2,4}|\\d{2}(?:jan|feb|mar|apr|may|jun|jul|aug|sep|oct|nov|dec)\\d{2,4}))[\\s\\S]{0,40}?(?:is|of|:|-)\\s*(?:rs\\.?|inr|₹)\\s*(?<bal>[\\d,]+(?:\\.\\d{1,2})?)",
+      "flags": "i",
+      "requireAll": [
+        "bal"
+      ],
+      "rejectAny": [
+        "payable"
+      ]
+    },
+    "emit": [
+      {
+        "factType": "balance_snapshot",
+        "amounts": [
+          {
+            "role": "available_balance",
+            "from": "bal",
+            "unit": "INR"
+          }
+        ],
+        "instrument": {
+          "kind": "broker",
+          "issuerSlug": "five_paisa"
+        },
+        "occurredAt": {
+          "from": "date"
+        },
+        "attrs": {
+          "asOf": {
+            "from": "date"
+          }
+        }
+      }
+    ],
+    "confidence": 0.85,
+    "examples": [
+      {
+        "sender": "VM-NSEIND-S",
+        "body": "NSE: Dear Investor, your Fund Balance reported by 5PAISA CAPITAL LTD as on 31-Oct-26 is Rs.12,345.67 (excludes your bank balance). Contact your broker for details.",
+        "expectFactTypes": [
+          "balance_snapshot"
+        ]
+      },
+      {
+        "sender": "VM-NSEIND-S",
+        "body": "NSE: Dear Investor, trade value payable to you by 5PAISA CAPITAL LTD for all trades on 31-Oct-26 is Rs.12,345.67.",
+        "expectFactTypes": []
+      }
+    ],
+    "status": "active",
+    "createdBy": "baseline",
+    "updatedAt": "2026-11-20T00:00:00Z"
+  },
+  {
+    "id": "INV-FUNDBAL-GROWW-01",
+    "version": 1,
+    "family": "broker_balance",
+    "senders": [
+      "*"
+    ],
+    "priority": 450,
+    "match": {
+      "pattern": "(?:fund|funds|running\\s+account)\\s+bal(?:ance)?[\\s\\S]{0,60}?(?:reported\\s+by|with|at|held\\s+by)\\s+(?:groww(?:\\s+invest\\w*)?(?:\\s+(?:ltd|limited))?)(?:[\\s\\S]{0,80}?as\\s+(?:on|of)\\s+(?<date>\\d{2}[-/ ](?:\\d{2}|(?:jan|feb|mar|apr|may|jun|jul|aug|sep|oct|nov|dec))[-/ ]\\d{2,4}|\\d{2}(?:jan|feb|mar|apr|may|jun|jul|aug|sep|oct|nov|dec)\\d{2,4}))[\\s\\S]{0,40}?(?:is|of|:|-)\\s*(?:rs\\.?|inr|₹)\\s*(?<bal>[\\d,]+(?:\\.\\d{1,2})?)",
+      "flags": "i",
+      "requireAll": [
+        "bal"
+      ],
+      "rejectAny": [
+        "payable"
+      ]
+    },
+    "emit": [
+      {
+        "factType": "balance_snapshot",
+        "amounts": [
+          {
+            "role": "available_balance",
+            "from": "bal",
+            "unit": "INR"
+          }
+        ],
+        "instrument": {
+          "kind": "broker",
+          "issuerSlug": "groww"
+        },
+        "occurredAt": {
+          "from": "date"
+        },
+        "attrs": {
+          "asOf": {
+            "from": "date"
+          }
+        }
+      }
+    ],
+    "confidence": 0.85,
+    "examples": [
+      {
+        "sender": "VM-NSEIND-S",
+        "body": "NSE: Dear Investor, your Fund Balance reported by GROWW INVEST TECH PVT LTD as on 31-Oct-26 is Rs.12,345.67 (excludes your bank balance). Contact your broker for details.",
+        "expectFactTypes": [
+          "balance_snapshot"
+        ]
+      },
+      {
+        "sender": "VM-NSEIND-S",
+        "body": "NSE: Dear Investor, trade value payable to you by GROWW INVEST TECH PVT LTD for all trades on 31-Oct-26 is Rs.12,345.67.",
+        "expectFactTypes": []
+      }
+    ],
+    "status": "active",
+    "createdBy": "baseline",
+    "updatedAt": "2026-11-20T00:00:00Z"
+  },
+  {
+    "id": "INV-FUNDBAL-HDFCSEC-01",
+    "version": 1,
+    "family": "broker_balance",
+    "senders": [
+      "*"
+    ],
+    "priority": 450,
+    "match": {
+      "pattern": "(?:fund|funds|running\\s+account)\\s+bal(?:ance)?[\\s\\S]{0,60}?(?:reported\\s+by|with|at|held\\s+by)\\s+(?:hdfc\\s+securities(?:\\s+(?:ltd|limited))?)(?:[\\s\\S]{0,80}?as\\s+(?:on|of)\\s+(?<date>\\d{2}[-/ ](?:\\d{2}|(?:jan|feb|mar|apr|may|jun|jul|aug|sep|oct|nov|dec))[-/ ]\\d{2,4}|\\d{2}(?:jan|feb|mar|apr|may|jun|jul|aug|sep|oct|nov|dec)\\d{2,4}))[\\s\\S]{0,40}?(?:is|of|:|-)\\s*(?:rs\\.?|inr|₹)\\s*(?<bal>[\\d,]+(?:\\.\\d{1,2})?)",
+      "flags": "i",
+      "requireAll": [
+        "bal"
+      ],
+      "rejectAny": [
+        "payable"
+      ]
+    },
+    "emit": [
+      {
+        "factType": "balance_snapshot",
+        "amounts": [
+          {
+            "role": "available_balance",
+            "from": "bal",
+            "unit": "INR"
+          }
+        ],
+        "instrument": {
+          "kind": "broker",
+          "issuerSlug": "hdfc_securities"
+        },
+        "occurredAt": {
+          "from": "date"
+        },
+        "attrs": {
+          "asOf": {
+            "from": "date"
+          }
+        }
+      }
+    ],
+    "confidence": 0.85,
+    "examples": [
+      {
+        "sender": "VM-NSEIND-S",
+        "body": "NSE: Dear Investor, your Fund Balance reported by HDFC SECURITIES LTD as on 31-Oct-26 is Rs.12,345.67 (excludes your bank balance). Contact your broker for details.",
+        "expectFactTypes": [
+          "balance_snapshot"
+        ]
+      },
+      {
+        "sender": "VM-NSEIND-S",
+        "body": "NSE: Dear Investor, trade value payable to you by HDFC SECURITIES LTD for all trades on 31-Oct-26 is Rs.12,345.67.",
+        "expectFactTypes": []
+      }
+    ],
+    "status": "active",
+    "createdBy": "baseline",
+    "updatedAt": "2026-11-20T00:00:00Z"
+  },
+  {
+    "id": "INV-FUNDBAL-ICICISEC-01",
+    "version": 1,
+    "family": "broker_balance",
+    "senders": [
+      "*"
+    ],
+    "priority": 450,
+    "match": {
+      "pattern": "(?:fund|funds|running\\s+account)\\s+bal(?:ance)?[\\s\\S]{0,60}?(?:reported\\s+by|with|at|held\\s+by)\\s+(?:icici\\s+securities(?:\\s+(?:ltd|limited))?)(?:[\\s\\S]{0,80}?as\\s+(?:on|of)\\s+(?<date>\\d{2}[-/ ](?:\\d{2}|(?:jan|feb|mar|apr|may|jun|jul|aug|sep|oct|nov|dec))[-/ ]\\d{2,4}|\\d{2}(?:jan|feb|mar|apr|may|jun|jul|aug|sep|oct|nov|dec)\\d{2,4}))[\\s\\S]{0,40}?(?:is|of|:|-)\\s*(?:rs\\.?|inr|₹)\\s*(?<bal>[\\d,]+(?:\\.\\d{1,2})?)",
+      "flags": "i",
+      "requireAll": [
+        "bal"
+      ],
+      "rejectAny": [
+        "payable"
+      ]
+    },
+    "emit": [
+      {
+        "factType": "balance_snapshot",
+        "amounts": [
+          {
+            "role": "available_balance",
+            "from": "bal",
+            "unit": "INR"
+          }
+        ],
+        "instrument": {
+          "kind": "broker",
+          "issuerSlug": "icici_securities"
+        },
+        "occurredAt": {
+          "from": "date"
+        },
+        "attrs": {
+          "asOf": {
+            "from": "date"
+          }
+        }
+      }
+    ],
+    "confidence": 0.85,
+    "examples": [
+      {
+        "sender": "VM-NSEIND-S",
+        "body": "NSE: Dear Investor, your Fund Balance reported by ICICI SECURITIES LTD as on 31-Oct-26 is Rs.12,345.67 (excludes your bank balance). Contact your broker for details.",
+        "expectFactTypes": [
+          "balance_snapshot"
+        ]
+      },
+      {
+        "sender": "VM-NSEIND-S",
+        "body": "NSE: Dear Investor, trade value payable to you by ICICI SECURITIES LTD for all trades on 31-Oct-26 is Rs.12,345.67.",
+        "expectFactTypes": []
+      }
+    ],
+    "status": "active",
+    "createdBy": "baseline",
+    "updatedAt": "2026-11-20T00:00:00Z"
+  },
+  {
+    "id": "INV-FUNDBAL-INDMONEY-01",
+    "version": 1,
+    "family": "broker_balance",
+    "senders": [
+      "*"
+    ],
+    "priority": 450,
+    "match": {
+      "pattern": "(?:fund|funds|running\\s+account)\\s+bal(?:ance)?[\\s\\S]{0,60}?(?:reported\\s+by|with|at|held\\s+by)\\s+(?:ind\\s*money|indwealth)(?:[\\s\\S]{0,80}?as\\s+(?:on|of)\\s+(?<date>\\d{2}[-/ ](?:\\d{2}|(?:jan|feb|mar|apr|may|jun|jul|aug|sep|oct|nov|dec))[-/ ]\\d{2,4}|\\d{2}(?:jan|feb|mar|apr|may|jun|jul|aug|sep|oct|nov|dec)\\d{2,4}))[\\s\\S]{0,40}?(?:is|of|:|-)\\s*(?:rs\\.?|inr|₹)\\s*(?<bal>[\\d,]+(?:\\.\\d{1,2})?)",
+      "flags": "i",
+      "requireAll": [
+        "bal"
+      ],
+      "rejectAny": [
+        "payable"
+      ]
+    },
+    "emit": [
+      {
+        "factType": "balance_snapshot",
+        "amounts": [
+          {
+            "role": "available_balance",
+            "from": "bal",
+            "unit": "INR"
+          }
+        ],
+        "instrument": {
+          "kind": "broker",
+          "issuerSlug": "indmoney"
+        },
+        "occurredAt": {
+          "from": "date"
+        },
+        "attrs": {
+          "asOf": {
+            "from": "date"
+          }
+        }
+      }
+    ],
+    "confidence": 0.85,
+    "examples": [
+      {
+        "sender": "VM-NSEIND-S",
+        "body": "NSE: Dear Investor, your Fund Balance reported by INDMONEY PRIVATE LTD as on 31-Oct-26 is Rs.12,345.67 (excludes your bank balance). Contact your broker for details.",
+        "expectFactTypes": [
+          "balance_snapshot"
+        ]
+      },
+      {
+        "sender": "VM-NSEIND-S",
+        "body": "NSE: Dear Investor, trade value payable to you by INDMONEY PRIVATE LTD for all trades on 31-Oct-26 is Rs.12,345.67.",
+        "expectFactTypes": []
+      }
+    ],
+    "status": "active",
+    "createdBy": "baseline",
+    "updatedAt": "2026-11-20T00:00:00Z"
+  },
+  {
+    "id": "INV-FUNDBAL-KOTAK-01",
+    "version": 1,
+    "family": "broker_balance",
+    "senders": [
+      "*"
+    ],
+    "priority": 450,
+    "match": {
+      "pattern": "(?:fund|funds|running\\s+account)\\s+bal(?:ance)?[\\s\\S]{0,60}?(?:reported\\s+by|with|at|held\\s+by)\\s+(?:kotak\\s+securities(?:\\s+(?:ltd|limited))?)(?:[\\s\\S]{0,80}?as\\s+(?:on|of)\\s+(?<date>\\d{2}[-/ ](?:\\d{2}|(?:jan|feb|mar|apr|may|jun|jul|aug|sep|oct|nov|dec))[-/ ]\\d{2,4}|\\d{2}(?:jan|feb|mar|apr|may|jun|jul|aug|sep|oct|nov|dec)\\d{2,4}))[\\s\\S]{0,40}?(?:is|of|:|-)\\s*(?:rs\\.?|inr|₹)\\s*(?<bal>[\\d,]+(?:\\.\\d{1,2})?)",
+      "flags": "i",
+      "requireAll": [
+        "bal"
+      ],
+      "rejectAny": [
+        "payable"
+      ]
+    },
+    "emit": [
+      {
+        "factType": "balance_snapshot",
+        "amounts": [
+          {
+            "role": "available_balance",
+            "from": "bal",
+            "unit": "INR"
+          }
+        ],
+        "instrument": {
+          "kind": "broker",
+          "issuerSlug": "kotak_securities"
+        },
+        "occurredAt": {
+          "from": "date"
+        },
+        "attrs": {
+          "asOf": {
+            "from": "date"
+          }
+        }
+      }
+    ],
+    "confidence": 0.85,
+    "examples": [
+      {
+        "sender": "VM-NSEIND-S",
+        "body": "NSE: Dear Investor, your Fund Balance reported by KOTAK SECURITIES LTD as on 31-Oct-26 is Rs.12,345.67 (excludes your bank balance). Contact your broker for details.",
+        "expectFactTypes": [
+          "balance_snapshot"
+        ]
+      },
+      {
+        "sender": "VM-NSEIND-S",
+        "body": "NSE: Dear Investor, trade value payable to you by KOTAK SECURITIES LTD for all trades on 31-Oct-26 is Rs.12,345.67.",
+        "expectFactTypes": []
+      }
+    ],
+    "status": "active",
+    "createdBy": "baseline",
+    "updatedAt": "2026-11-20T00:00:00Z"
+  },
+  {
+    "id": "INV-FUNDBAL-PAYTMMONEY-01",
+    "version": 1,
+    "family": "broker_balance",
+    "senders": [
+      "*"
+    ],
+    "priority": 450,
+    "match": {
+      "pattern": "(?:fund|funds|running\\s+account)\\s+bal(?:ance)?[\\s\\S]{0,60}?(?:reported\\s+by|with|at|held\\s+by)\\s+(?:paytm\\s+money)(?:[\\s\\S]{0,80}?as\\s+(?:on|of)\\s+(?<date>\\d{2}[-/ ](?:\\d{2}|(?:jan|feb|mar|apr|may|jun|jul|aug|sep|oct|nov|dec))[-/ ]\\d{2,4}|\\d{2}(?:jan|feb|mar|apr|may|jun|jul|aug|sep|oct|nov|dec)\\d{2,4}))[\\s\\S]{0,40}?(?:is|of|:|-)\\s*(?:rs\\.?|inr|₹)\\s*(?<bal>[\\d,]+(?:\\.\\d{1,2})?)",
+      "flags": "i",
+      "requireAll": [
+        "bal"
+      ],
+      "rejectAny": [
+        "payable"
+      ]
+    },
+    "emit": [
+      {
+        "factType": "balance_snapshot",
+        "amounts": [
+          {
+            "role": "available_balance",
+            "from": "bal",
+            "unit": "INR"
+          }
+        ],
+        "instrument": {
+          "kind": "broker",
+          "issuerSlug": "paytm_money"
+        },
+        "occurredAt": {
+          "from": "date"
+        },
+        "attrs": {
+          "asOf": {
+            "from": "date"
+          }
+        }
+      }
+    ],
+    "confidence": 0.85,
+    "examples": [
+      {
+        "sender": "VM-NSEIND-S",
+        "body": "NSE: Dear Investor, your Fund Balance reported by PAYTM MONEY LTD as on 31-Oct-26 is Rs.12,345.67 (excludes your bank balance). Contact your broker for details.",
+        "expectFactTypes": [
+          "balance_snapshot"
+        ]
+      },
+      {
+        "sender": "VM-NSEIND-S",
+        "body": "NSE: Dear Investor, trade value payable to you by PAYTM MONEY LTD for all trades on 31-Oct-26 is Rs.12,345.67.",
+        "expectFactTypes": []
+      }
+    ],
+    "status": "active",
+    "createdBy": "baseline",
+    "updatedAt": "2026-11-20T00:00:00Z"
+  },
+  {
+    "id": "INV-FUNDBAL-UNIVEST-01",
+    "version": 1,
+    "family": "broker_balance",
+    "senders": [
+      "*"
+    ],
+    "priority": 450,
+    "match": {
+      "pattern": "(?:fund|funds|running\\s+account)\\s+bal(?:ance)?[\\s\\S]{0,60}?(?:reported\\s+by|with|at|held\\s+by)\\s+(?:univest|uniapps)(?:[\\s\\S]{0,80}?as\\s+(?:on|of)\\s+(?<date>\\d{2}[-/ ](?:\\d{2}|(?:jan|feb|mar|apr|may|jun|jul|aug|sep|oct|nov|dec))[-/ ]\\d{2,4}|\\d{2}(?:jan|feb|mar|apr|may|jun|jul|aug|sep|oct|nov|dec)\\d{2,4}))[\\s\\S]{0,40}?(?:is|of|:|-)\\s*(?:rs\\.?|inr|₹)\\s*(?<bal>[\\d,]+(?:\\.\\d{1,2})?)",
+      "flags": "i",
+      "requireAll": [
+        "bal"
+      ],
+      "rejectAny": [
+        "payable"
+      ]
+    },
+    "emit": [
+      {
+        "factType": "balance_snapshot",
+        "amounts": [
+          {
+            "role": "available_balance",
+            "from": "bal",
+            "unit": "INR"
+          }
+        ],
+        "instrument": {
+          "kind": "broker",
+          "issuerSlug": "univest"
+        },
+        "occurredAt": {
+          "from": "date"
+        },
+        "attrs": {
+          "asOf": {
+            "from": "date"
+          }
+        }
+      }
+    ],
+    "confidence": 0.85,
+    "examples": [
+      {
+        "sender": "VM-NSEIND-S",
+        "body": "NSE: Dear Investor, your Fund Balance reported by UNIAPPS FINTECH PVT LTD as on 31-Oct-26 is Rs.12,345.67 (excludes your bank balance). Contact your broker for details.",
+        "expectFactTypes": [
+          "balance_snapshot"
+        ]
+      },
+      {
+        "sender": "VM-NSEIND-S",
+        "body": "NSE: Dear Investor, trade value payable to you by UNIAPPS FINTECH PVT LTD for all trades on 31-Oct-26 is Rs.12,345.67.",
+        "expectFactTypes": []
+      }
+    ],
+    "status": "active",
+    "createdBy": "baseline",
+    "updatedAt": "2026-11-20T00:00:00Z"
+  },
+  {
+    "id": "INV-FUNDBAL-UPSTOX-01",
+    "version": 1,
+    "family": "broker_balance",
+    "senders": [
+      "*"
+    ],
+    "priority": 450,
+    "match": {
+      "pattern": "(?:fund|funds|running\\s+account)\\s+bal(?:ance)?[\\s\\S]{0,60}?(?:reported\\s+by|with|at|held\\s+by)\\s+(?:upstox|rksv\\s+securities)(?:[\\s\\S]{0,80}?as\\s+(?:on|of)\\s+(?<date>\\d{2}[-/ ](?:\\d{2}|(?:jan|feb|mar|apr|may|jun|jul|aug|sep|oct|nov|dec))[-/ ]\\d{2,4}|\\d{2}(?:jan|feb|mar|apr|may|jun|jul|aug|sep|oct|nov|dec)\\d{2,4}))[\\s\\S]{0,40}?(?:is|of|:|-)\\s*(?:rs\\.?|inr|₹)\\s*(?<bal>[\\d,]+(?:\\.\\d{1,2})?)",
+      "flags": "i",
+      "requireAll": [
+        "bal"
+      ],
+      "rejectAny": [
+        "payable"
+      ]
+    },
+    "emit": [
+      {
+        "factType": "balance_snapshot",
+        "amounts": [
+          {
+            "role": "available_balance",
+            "from": "bal",
+            "unit": "INR"
+          }
+        ],
+        "instrument": {
+          "kind": "broker",
+          "issuerSlug": "upstox"
+        },
+        "occurredAt": {
+          "from": "date"
+        },
+        "attrs": {
+          "asOf": {
+            "from": "date"
+          }
+        }
+      }
+    ],
+    "confidence": 0.85,
+    "examples": [
+      {
+        "sender": "VM-NSEIND-S",
+        "body": "NSE: Dear Investor, your Fund Balance reported by RKSV SECURITIES INDIA PVT LTD as on 31-Oct-26 is Rs.12,345.67 (excludes your bank balance). Contact your broker for details.",
+        "expectFactTypes": [
+          "balance_snapshot"
+        ]
+      },
+      {
+        "sender": "VM-NSEIND-S",
+        "body": "NSE: Dear Investor, trade value payable to you by RKSV SECURITIES INDIA PVT LTD for all trades on 31-Oct-26 is Rs.12,345.67.",
+        "expectFactTypes": []
+      }
+    ],
+    "status": "active",
+    "createdBy": "baseline",
+    "updatedAt": "2026-11-20T00:00:00Z"
+  },
+  {
+    "id": "INV-FUNDBAL-ZERODHA-01",
+    "version": 1,
+    "family": "broker_balance",
+    "senders": [
+      "*"
+    ],
+    "priority": 450,
+    "match": {
+      "pattern": "(?:fund|funds|running\\s+account)\\s+bal(?:ance)?[\\s\\S]{0,60}?(?:reported\\s+by|with|at|held\\s+by)\\s+(?:zerodha(?:\\s+broking)?(?:\\s+(?:ltd|limited))?)(?:[\\s\\S]{0,80}?as\\s+(?:on|of)\\s+(?<date>\\d{2}[-/ ](?:\\d{2}|(?:jan|feb|mar|apr|may|jun|jul|aug|sep|oct|nov|dec))[-/ ]\\d{2,4}|\\d{2}(?:jan|feb|mar|apr|may|jun|jul|aug|sep|oct|nov|dec)\\d{2,4}))[\\s\\S]{0,40}?(?:is|of|:|-)\\s*(?:rs\\.?|inr|₹)\\s*(?<bal>[\\d,]+(?:\\.\\d{1,2})?)",
+      "flags": "i",
+      "requireAll": [
+        "bal"
+      ],
+      "rejectAny": [
+        "payable"
+      ]
+    },
+    "emit": [
+      {
+        "factType": "balance_snapshot",
+        "amounts": [
+          {
+            "role": "available_balance",
+            "from": "bal",
+            "unit": "INR"
+          }
+        ],
+        "instrument": {
+          "kind": "broker",
+          "issuerSlug": "zerodha"
+        },
+        "occurredAt": {
+          "from": "date"
+        },
+        "attrs": {
+          "asOf": {
+            "from": "date"
+          }
+        }
+      }
+    ],
+    "confidence": 0.85,
+    "examples": [
+      {
+        "sender": "VM-NSEIND-S",
+        "body": "NSE: Dear Investor, your Fund Balance reported by ZERODHA BROKING LTD as on 31-Oct-26 is Rs.12,345.67 (excludes your bank balance). Contact your broker for details.",
+        "expectFactTypes": [
+          "balance_snapshot"
+        ]
+      },
+      {
+        "sender": "VM-NSEIND-S",
+        "body": "NSE: Dear Investor, trade value payable to you by ZERODHA BROKING LTD for all trades on 31-Oct-26 is Rs.12,345.67.",
+        "expectFactTypes": []
+      }
+    ],
+    "status": "active",
+    "createdBy": "baseline",
+    "updatedAt": "2026-11-20T00:00:00Z"
+  }
+]

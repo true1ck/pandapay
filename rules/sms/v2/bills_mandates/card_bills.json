@@ -1,0 +1,1479 @@
+[
+  {
+    "id": "BIL-CC-CRED-90",
+    "version": 1,
+    "family": "card_due",
+    "senders": [
+      "CREDCL"
+    ],
+    "priority": 660,
+    "match": {
+      "pattern": "(?:your\\s+)?[a-z][a-z ]{1,25}?(?:\\s+bank)?\\s+(?:credit\\s+)?card\\s*(?:ending|xx|x)?\\s*(?:with\\s+)?(?:[x*•.]+\\s*)?(?<mask>\\d{2,16})\\b[\\s\\S]{0,40}?bill\\s+of\\s+(?:rs\\.?|inr|₹)\\s*(?<tot>[\\d,]+(?:\\.\\d{1,2})?)\\s+(?:is\\s+)?(?:due|payable)\\s+(?:on|by)\\s+(?<due>\\d{2}[-/ ](?:\\d{2}|(?:jan|feb|mar|apr|may|jun|jul|aug|sep|oct|nov|dec))[-/ ]\\d{2,4}|\\d{2}(?:jan|feb|mar|apr|may|jun|jul|aug|sep|oct|nov|dec)\\d{2,4})",
+      "flags": "i",
+      "rejectAny": [
+        "was paid",
+        "paid on"
+      ]
+    },
+    "emit": [
+      {
+        "factType": "bill_due",
+        "attrs": {
+          "dueDate": {
+            "from": "due"
+          }
+        },
+        "amounts": [
+          {
+            "role": "due_total",
+            "from": "tot",
+            "unit": "INR"
+          }
+        ],
+        "instrument": {
+          "kind": "credit_card",
+          "maskFrom": "mask"
+        }
+      }
+    ],
+    "confidence": 0.8,
+    "examples": [
+      {
+        "sender": "VM-CREDCL-S",
+        "body": "CRED: Your Jana Small Finance Bank credit card ending 1234 bill of ₹3,000 is due on 20-Nov-26.",
+        "expectFactTypes": [
+          "bill_due"
+        ]
+      },
+      {
+        "sender": "VM-CREDCL-S",
+        "body": "CRED: Your Jana Small Finance Bank credit card ending 1234 bill of ₹3,000 was paid on 20-Nov-26.",
+        "expectFactTypes": []
+      }
+    ],
+    "status": "active",
+    "createdBy": "baseline",
+    "updatedAt": "2026-11-20T00:00:00Z"
+  },
+  {
+    "id": "BIL-CC-CRED-AMEX-01",
+    "version": 1,
+    "family": "card_due",
+    "senders": [
+      "*"
+    ],
+    "priority": 685,
+    "match": {
+      "pattern": "(?:your\\s+)?(?:american\\s+express|amex)(?:\\s+bank)?\\s+(?:credit\\s+)?card\\s*(?:ending|xx|x)?\\s*(?:with\\s+)?(?:[x*•.]+\\s*)?(?<mask>\\d{2,16})\\b[\\s\\S]{0,40}?bill\\s+of\\s+(?:rs\\.?|inr|₹)\\s*(?<tot>[\\d,]+(?:\\.\\d{1,2})?)\\s+(?:is\\s+)?(?:due|payable)\\s+(?:on|by)\\s+(?<due>\\d{2}[-/ ](?:\\d{2}|(?:jan|feb|mar|apr|may|jun|jul|aug|sep|oct|nov|dec))[-/ ]\\d{2,4}|\\d{2}(?:jan|feb|mar|apr|may|jun|jul|aug|sep|oct|nov|dec)\\d{2,4})",
+      "flags": "i",
+      "rejectAny": [
+        "was paid",
+        "paid on"
+      ]
+    },
+    "emit": [
+      {
+        "factType": "bill_due",
+        "attrs": {
+          "dueDate": {
+            "from": "due"
+          }
+        },
+        "amounts": [
+          {
+            "role": "due_total",
+            "from": "tot",
+            "unit": "INR"
+          }
+        ],
+        "instrument": {
+          "kind": "credit_card",
+          "issuerSlug": "amex",
+          "maskFrom": "mask"
+        }
+      }
+    ],
+    "confidence": 0.9,
+    "examples": [
+      {
+        "sender": "VM-CREDCL-S",
+        "body": "CRED: Your American Express credit card ending 1234 bill of ₹3,000 is due on 20-Nov-26. Pay on CRED to earn coins.",
+        "expectFactTypes": [
+          "bill_due"
+        ]
+      },
+      {
+        "sender": "VM-CREDCL-S",
+        "body": "CRED: Your American Express credit card ending 1234 bill of ₹3,000 was paid on 20-Nov-26. Coins credited.",
+        "expectFactTypes": []
+      }
+    ],
+    "status": "active",
+    "createdBy": "baseline",
+    "updatedAt": "2026-11-20T00:00:00Z"
+  },
+  {
+    "id": "BIL-CC-CRED-AU-01",
+    "version": 1,
+    "family": "card_due",
+    "senders": [
+      "*"
+    ],
+    "priority": 685,
+    "match": {
+      "pattern": "(?:your\\s+)?(?:au(?:\\s+small\\s+finance)?)(?:\\s+bank)?\\s+(?:credit\\s+)?card\\s*(?:ending|xx|x)?\\s*(?:with\\s+)?(?:[x*•.]+\\s*)?(?<mask>\\d{2,16})\\b[\\s\\S]{0,40}?bill\\s+of\\s+(?:rs\\.?|inr|₹)\\s*(?<tot>[\\d,]+(?:\\.\\d{1,2})?)\\s+(?:is\\s+)?(?:due|payable)\\s+(?:on|by)\\s+(?<due>\\d{2}[-/ ](?:\\d{2}|(?:jan|feb|mar|apr|may|jun|jul|aug|sep|oct|nov|dec))[-/ ]\\d{2,4}|\\d{2}(?:jan|feb|mar|apr|may|jun|jul|aug|sep|oct|nov|dec)\\d{2,4})",
+      "flags": "i",
+      "rejectAny": [
+        "was paid",
+        "paid on"
+      ]
+    },
+    "emit": [
+      {
+        "factType": "bill_due",
+        "attrs": {
+          "dueDate": {
+            "from": "due"
+          }
+        },
+        "amounts": [
+          {
+            "role": "due_total",
+            "from": "tot",
+            "unit": "INR"
+          }
+        ],
+        "instrument": {
+          "kind": "credit_card",
+          "issuerSlug": "au",
+          "maskFrom": "mask"
+        }
+      }
+    ],
+    "confidence": 0.9,
+    "examples": [
+      {
+        "sender": "VM-CREDCL-S",
+        "body": "CRED: Your AU Small Finance Bank credit card ending 1234 bill of ₹3,000 is due on 20-Nov-26. Pay on CRED to earn coins.",
+        "expectFactTypes": [
+          "bill_due"
+        ]
+      },
+      {
+        "sender": "VM-CREDCL-S",
+        "body": "CRED: Your AU Small Finance Bank credit card ending 1234 bill of ₹3,000 was paid on 20-Nov-26. Coins credited.",
+        "expectFactTypes": []
+      }
+    ],
+    "status": "active",
+    "createdBy": "baseline",
+    "updatedAt": "2026-11-20T00:00:00Z"
+  },
+  {
+    "id": "BIL-CC-CRED-AXIS-01",
+    "version": 1,
+    "family": "card_due",
+    "senders": [
+      "*"
+    ],
+    "priority": 685,
+    "match": {
+      "pattern": "(?:your\\s+)?(?:axis)(?:\\s+bank)?\\s+(?:credit\\s+)?card\\s*(?:ending|xx|x)?\\s*(?:with\\s+)?(?:[x*•.]+\\s*)?(?<mask>\\d{2,16})\\b[\\s\\S]{0,40}?bill\\s+of\\s+(?:rs\\.?|inr|₹)\\s*(?<tot>[\\d,]+(?:\\.\\d{1,2})?)\\s+(?:is\\s+)?(?:due|payable)\\s+(?:on|by)\\s+(?<due>\\d{2}[-/ ](?:\\d{2}|(?:jan|feb|mar|apr|may|jun|jul|aug|sep|oct|nov|dec))[-/ ]\\d{2,4}|\\d{2}(?:jan|feb|mar|apr|may|jun|jul|aug|sep|oct|nov|dec)\\d{2,4})",
+      "flags": "i",
+      "rejectAny": [
+        "was paid",
+        "paid on"
+      ]
+    },
+    "emit": [
+      {
+        "factType": "bill_due",
+        "attrs": {
+          "dueDate": {
+            "from": "due"
+          }
+        },
+        "amounts": [
+          {
+            "role": "due_total",
+            "from": "tot",
+            "unit": "INR"
+          }
+        ],
+        "instrument": {
+          "kind": "credit_card",
+          "issuerSlug": "axis",
+          "maskFrom": "mask"
+        }
+      }
+    ],
+    "confidence": 0.9,
+    "examples": [
+      {
+        "sender": "VM-CREDCL-S",
+        "body": "CRED: Your Axis Bank credit card ending 1234 bill of ₹3,000 is due on 20-Nov-26. Pay on CRED to earn coins.",
+        "expectFactTypes": [
+          "bill_due"
+        ]
+      },
+      {
+        "sender": "VM-CREDCL-S",
+        "body": "CRED: Your Axis Bank credit card ending 1234 bill of ₹3,000 was paid on 20-Nov-26. Coins credited.",
+        "expectFactTypes": []
+      }
+    ],
+    "status": "active",
+    "createdBy": "baseline",
+    "updatedAt": "2026-11-20T00:00:00Z"
+  },
+  {
+    "id": "BIL-CC-CRED-BOB-01",
+    "version": 1,
+    "family": "card_due",
+    "senders": [
+      "*"
+    ],
+    "priority": 685,
+    "match": {
+      "pattern": "(?:your\\s+)?(?:bank\\s+of\\s+baroda|bob(?:card)?)(?:\\s+bank)?\\s+(?:credit\\s+)?card\\s*(?:ending|xx|x)?\\s*(?:with\\s+)?(?:[x*•.]+\\s*)?(?<mask>\\d{2,16})\\b[\\s\\S]{0,40}?bill\\s+of\\s+(?:rs\\.?|inr|₹)\\s*(?<tot>[\\d,]+(?:\\.\\d{1,2})?)\\s+(?:is\\s+)?(?:due|payable)\\s+(?:on|by)\\s+(?<due>\\d{2}[-/ ](?:\\d{2}|(?:jan|feb|mar|apr|may|jun|jul|aug|sep|oct|nov|dec))[-/ ]\\d{2,4}|\\d{2}(?:jan|feb|mar|apr|may|jun|jul|aug|sep|oct|nov|dec)\\d{2,4})",
+      "flags": "i",
+      "rejectAny": [
+        "was paid",
+        "paid on"
+      ]
+    },
+    "emit": [
+      {
+        "factType": "bill_due",
+        "attrs": {
+          "dueDate": {
+            "from": "due"
+          }
+        },
+        "amounts": [
+          {
+            "role": "due_total",
+            "from": "tot",
+            "unit": "INR"
+          }
+        ],
+        "instrument": {
+          "kind": "credit_card",
+          "issuerSlug": "bob",
+          "maskFrom": "mask"
+        }
+      }
+    ],
+    "confidence": 0.9,
+    "examples": [
+      {
+        "sender": "VM-CREDCL-S",
+        "body": "CRED: Your Bank of Baroda credit card ending 1234 bill of ₹3,000 is due on 20-Nov-26. Pay on CRED to earn coins.",
+        "expectFactTypes": [
+          "bill_due"
+        ]
+      },
+      {
+        "sender": "VM-CREDCL-S",
+        "body": "CRED: Your Bank of Baroda credit card ending 1234 bill of ₹3,000 was paid on 20-Nov-26. Coins credited.",
+        "expectFactTypes": []
+      }
+    ],
+    "status": "active",
+    "createdBy": "baseline",
+    "updatedAt": "2026-11-20T00:00:00Z"
+  },
+  {
+    "id": "BIL-CC-CRED-CITI-01",
+    "version": 1,
+    "family": "card_due",
+    "senders": [
+      "*"
+    ],
+    "priority": 685,
+    "match": {
+      "pattern": "(?:your\\s+)?(?:citi(?:bank)?)(?:\\s+bank)?\\s+(?:credit\\s+)?card\\s*(?:ending|xx|x)?\\s*(?:with\\s+)?(?:[x*•.]+\\s*)?(?<mask>\\d{2,16})\\b[\\s\\S]{0,40}?bill\\s+of\\s+(?:rs\\.?|inr|₹)\\s*(?<tot>[\\d,]+(?:\\.\\d{1,2})?)\\s+(?:is\\s+)?(?:due|payable)\\s+(?:on|by)\\s+(?<due>\\d{2}[-/ ](?:\\d{2}|(?:jan|feb|mar|apr|may|jun|jul|aug|sep|oct|nov|dec))[-/ ]\\d{2,4}|\\d{2}(?:jan|feb|mar|apr|may|jun|jul|aug|sep|oct|nov|dec)\\d{2,4})",
+      "flags": "i",
+      "rejectAny": [
+        "was paid",
+        "paid on"
+      ]
+    },
+    "emit": [
+      {
+        "factType": "bill_due",
+        "attrs": {
+          "dueDate": {
+            "from": "due"
+          }
+        },
+        "amounts": [
+          {
+            "role": "due_total",
+            "from": "tot",
+            "unit": "INR"
+          }
+        ],
+        "instrument": {
+          "kind": "credit_card",
+          "issuerSlug": "citi",
+          "maskFrom": "mask"
+        }
+      }
+    ],
+    "confidence": 0.9,
+    "examples": [
+      {
+        "sender": "VM-CREDCL-S",
+        "body": "CRED: Your Citibank credit card ending 1234 bill of ₹3,000 is due on 20-Nov-26. Pay on CRED to earn coins.",
+        "expectFactTypes": [
+          "bill_due"
+        ]
+      },
+      {
+        "sender": "VM-CREDCL-S",
+        "body": "CRED: Your Citibank credit card ending 1234 bill of ₹3,000 was paid on 20-Nov-26. Coins credited.",
+        "expectFactTypes": []
+      }
+    ],
+    "status": "active",
+    "createdBy": "baseline",
+    "updatedAt": "2026-11-20T00:00:00Z"
+  },
+  {
+    "id": "BIL-CC-CRED-FEDERAL-01",
+    "version": 1,
+    "family": "card_due",
+    "senders": [
+      "*"
+    ],
+    "priority": 685,
+    "match": {
+      "pattern": "(?:your\\s+)?(?:federal)(?:\\s+bank)?\\s+(?:credit\\s+)?card\\s*(?:ending|xx|x)?\\s*(?:with\\s+)?(?:[x*•.]+\\s*)?(?<mask>\\d{2,16})\\b[\\s\\S]{0,40}?bill\\s+of\\s+(?:rs\\.?|inr|₹)\\s*(?<tot>[\\d,]+(?:\\.\\d{1,2})?)\\s+(?:is\\s+)?(?:due|payable)\\s+(?:on|by)\\s+(?<due>\\d{2}[-/ ](?:\\d{2}|(?:jan|feb|mar|apr|may|jun|jul|aug|sep|oct|nov|dec))[-/ ]\\d{2,4}|\\d{2}(?:jan|feb|mar|apr|may|jun|jul|aug|sep|oct|nov|dec)\\d{2,4})",
+      "flags": "i",
+      "rejectAny": [
+        "was paid",
+        "paid on"
+      ]
+    },
+    "emit": [
+      {
+        "factType": "bill_due",
+        "attrs": {
+          "dueDate": {
+            "from": "due"
+          }
+        },
+        "amounts": [
+          {
+            "role": "due_total",
+            "from": "tot",
+            "unit": "INR"
+          }
+        ],
+        "instrument": {
+          "kind": "credit_card",
+          "issuerSlug": "federal",
+          "maskFrom": "mask"
+        }
+      }
+    ],
+    "confidence": 0.9,
+    "examples": [
+      {
+        "sender": "VM-CREDCL-S",
+        "body": "CRED: Your Federal Bank credit card ending 1234 bill of ₹3,000 is due on 20-Nov-26. Pay on CRED to earn coins.",
+        "expectFactTypes": [
+          "bill_due"
+        ]
+      },
+      {
+        "sender": "VM-CREDCL-S",
+        "body": "CRED: Your Federal Bank credit card ending 1234 bill of ₹3,000 was paid on 20-Nov-26. Coins credited.",
+        "expectFactTypes": []
+      }
+    ],
+    "status": "active",
+    "createdBy": "baseline",
+    "updatedAt": "2026-11-20T00:00:00Z"
+  },
+  {
+    "id": "BIL-CC-CRED-HDFC-01",
+    "version": 1,
+    "family": "card_due",
+    "senders": [
+      "*"
+    ],
+    "priority": 685,
+    "match": {
+      "pattern": "(?:your\\s+)?(?:hdfc)(?:\\s+bank)?\\s+(?:credit\\s+)?card\\s*(?:ending|xx|x)?\\s*(?:with\\s+)?(?:[x*•.]+\\s*)?(?<mask>\\d{2,16})\\b[\\s\\S]{0,40}?bill\\s+of\\s+(?:rs\\.?|inr|₹)\\s*(?<tot>[\\d,]+(?:\\.\\d{1,2})?)\\s+(?:is\\s+)?(?:due|payable)\\s+(?:on|by)\\s+(?<due>\\d{2}[-/ ](?:\\d{2}|(?:jan|feb|mar|apr|may|jun|jul|aug|sep|oct|nov|dec))[-/ ]\\d{2,4}|\\d{2}(?:jan|feb|mar|apr|may|jun|jul|aug|sep|oct|nov|dec)\\d{2,4})",
+      "flags": "i",
+      "rejectAny": [
+        "was paid",
+        "paid on"
+      ]
+    },
+    "emit": [
+      {
+        "factType": "bill_due",
+        "attrs": {
+          "dueDate": {
+            "from": "due"
+          }
+        },
+        "amounts": [
+          {
+            "role": "due_total",
+            "from": "tot",
+            "unit": "INR"
+          }
+        ],
+        "instrument": {
+          "kind": "credit_card",
+          "issuerSlug": "hdfc",
+          "maskFrom": "mask"
+        }
+      }
+    ],
+    "confidence": 0.9,
+    "examples": [
+      {
+        "sender": "VM-CREDCL-S",
+        "body": "CRED: Your HDFC Bank credit card ending 1234 bill of ₹3,000 is due on 20-Nov-26. Pay on CRED to earn coins.",
+        "expectFactTypes": [
+          "bill_due"
+        ]
+      },
+      {
+        "sender": "VM-CREDCL-S",
+        "body": "CRED: Your HDFC Bank credit card ending 1234 bill of ₹3,000 was paid on 20-Nov-26. Coins credited.",
+        "expectFactTypes": []
+      }
+    ],
+    "status": "active",
+    "createdBy": "baseline",
+    "updatedAt": "2026-11-20T00:00:00Z"
+  },
+  {
+    "id": "BIL-CC-CRED-HSBC-01",
+    "version": 1,
+    "family": "card_due",
+    "senders": [
+      "*"
+    ],
+    "priority": 685,
+    "match": {
+      "pattern": "(?:your\\s+)?(?:hsbc)(?:\\s+bank)?\\s+(?:credit\\s+)?card\\s*(?:ending|xx|x)?\\s*(?:with\\s+)?(?:[x*•.]+\\s*)?(?<mask>\\d{2,16})\\b[\\s\\S]{0,40}?bill\\s+of\\s+(?:rs\\.?|inr|₹)\\s*(?<tot>[\\d,]+(?:\\.\\d{1,2})?)\\s+(?:is\\s+)?(?:due|payable)\\s+(?:on|by)\\s+(?<due>\\d{2}[-/ ](?:\\d{2}|(?:jan|feb|mar|apr|may|jun|jul|aug|sep|oct|nov|dec))[-/ ]\\d{2,4}|\\d{2}(?:jan|feb|mar|apr|may|jun|jul|aug|sep|oct|nov|dec)\\d{2,4})",
+      "flags": "i",
+      "rejectAny": [
+        "was paid",
+        "paid on"
+      ]
+    },
+    "emit": [
+      {
+        "factType": "bill_due",
+        "attrs": {
+          "dueDate": {
+            "from": "due"
+          }
+        },
+        "amounts": [
+          {
+            "role": "due_total",
+            "from": "tot",
+            "unit": "INR"
+          }
+        ],
+        "instrument": {
+          "kind": "credit_card",
+          "issuerSlug": "hsbc",
+          "maskFrom": "mask"
+        }
+      }
+    ],
+    "confidence": 0.9,
+    "examples": [
+      {
+        "sender": "VM-CREDCL-S",
+        "body": "CRED: Your HSBC credit card ending 1234 bill of ₹3,000 is due on 20-Nov-26. Pay on CRED to earn coins.",
+        "expectFactTypes": [
+          "bill_due"
+        ]
+      },
+      {
+        "sender": "VM-CREDCL-S",
+        "body": "CRED: Your HSBC credit card ending 1234 bill of ₹3,000 was paid on 20-Nov-26. Coins credited.",
+        "expectFactTypes": []
+      }
+    ],
+    "status": "active",
+    "createdBy": "baseline",
+    "updatedAt": "2026-11-20T00:00:00Z"
+  },
+  {
+    "id": "BIL-CC-CRED-ICICI-01",
+    "version": 1,
+    "family": "card_due",
+    "senders": [
+      "*"
+    ],
+    "priority": 685,
+    "match": {
+      "pattern": "(?:your\\s+)?(?:icici)(?:\\s+bank)?\\s+(?:credit\\s+)?card\\s*(?:ending|xx|x)?\\s*(?:with\\s+)?(?:[x*•.]+\\s*)?(?<mask>\\d{2,16})\\b[\\s\\S]{0,40}?bill\\s+of\\s+(?:rs\\.?|inr|₹)\\s*(?<tot>[\\d,]+(?:\\.\\d{1,2})?)\\s+(?:is\\s+)?(?:due|payable)\\s+(?:on|by)\\s+(?<due>\\d{2}[-/ ](?:\\d{2}|(?:jan|feb|mar|apr|may|jun|jul|aug|sep|oct|nov|dec))[-/ ]\\d{2,4}|\\d{2}(?:jan|feb|mar|apr|may|jun|jul|aug|sep|oct|nov|dec)\\d{2,4})",
+      "flags": "i",
+      "rejectAny": [
+        "was paid",
+        "paid on"
+      ]
+    },
+    "emit": [
+      {
+        "factType": "bill_due",
+        "attrs": {
+          "dueDate": {
+            "from": "due"
+          }
+        },
+        "amounts": [
+          {
+            "role": "due_total",
+            "from": "tot",
+            "unit": "INR"
+          }
+        ],
+        "instrument": {
+          "kind": "credit_card",
+          "issuerSlug": "icici",
+          "maskFrom": "mask"
+        }
+      }
+    ],
+    "confidence": 0.9,
+    "examples": [
+      {
+        "sender": "VM-CREDCL-S",
+        "body": "CRED: Your ICICI Bank credit card ending 1234 bill of ₹3,000 is due on 20-Nov-26. Pay on CRED to earn coins.",
+        "expectFactTypes": [
+          "bill_due"
+        ]
+      },
+      {
+        "sender": "VM-CREDCL-S",
+        "body": "CRED: Your ICICI Bank credit card ending 1234 bill of ₹3,000 was paid on 20-Nov-26. Coins credited.",
+        "expectFactTypes": []
+      }
+    ],
+    "status": "active",
+    "createdBy": "baseline",
+    "updatedAt": "2026-11-20T00:00:00Z"
+  },
+  {
+    "id": "BIL-CC-CRED-IDFC-01",
+    "version": 1,
+    "family": "card_due",
+    "senders": [
+      "*"
+    ],
+    "priority": 685,
+    "match": {
+      "pattern": "(?:your\\s+)?(?:idfc(?:\\s+first)?)(?:\\s+bank)?\\s+(?:credit\\s+)?card\\s*(?:ending|xx|x)?\\s*(?:with\\s+)?(?:[x*•.]+\\s*)?(?<mask>\\d{2,16})\\b[\\s\\S]{0,40}?bill\\s+of\\s+(?:rs\\.?|inr|₹)\\s*(?<tot>[\\d,]+(?:\\.\\d{1,2})?)\\s+(?:is\\s+)?(?:due|payable)\\s+(?:on|by)\\s+(?<due>\\d{2}[-/ ](?:\\d{2}|(?:jan|feb|mar|apr|may|jun|jul|aug|sep|oct|nov|dec))[-/ ]\\d{2,4}|\\d{2}(?:jan|feb|mar|apr|may|jun|jul|aug|sep|oct|nov|dec)\\d{2,4})",
+      "flags": "i",
+      "rejectAny": [
+        "was paid",
+        "paid on"
+      ]
+    },
+    "emit": [
+      {
+        "factType": "bill_due",
+        "attrs": {
+          "dueDate": {
+            "from": "due"
+          }
+        },
+        "amounts": [
+          {
+            "role": "due_total",
+            "from": "tot",
+            "unit": "INR"
+          }
+        ],
+        "instrument": {
+          "kind": "credit_card",
+          "issuerSlug": "idfc",
+          "maskFrom": "mask"
+        }
+      }
+    ],
+    "confidence": 0.9,
+    "examples": [
+      {
+        "sender": "VM-CREDCL-S",
+        "body": "CRED: Your IDFC FIRST Bank credit card ending 1234 bill of ₹3,000 is due on 20-Nov-26. Pay on CRED to earn coins.",
+        "expectFactTypes": [
+          "bill_due"
+        ]
+      },
+      {
+        "sender": "VM-CREDCL-S",
+        "body": "CRED: Your IDFC FIRST Bank credit card ending 1234 bill of ₹3,000 was paid on 20-Nov-26. Coins credited.",
+        "expectFactTypes": []
+      }
+    ],
+    "status": "active",
+    "createdBy": "baseline",
+    "updatedAt": "2026-11-20T00:00:00Z"
+  },
+  {
+    "id": "BIL-CC-CRED-INDUSIND-01",
+    "version": 1,
+    "family": "card_due",
+    "senders": [
+      "*"
+    ],
+    "priority": 685,
+    "match": {
+      "pattern": "(?:your\\s+)?(?:indusind)(?:\\s+bank)?\\s+(?:credit\\s+)?card\\s*(?:ending|xx|x)?\\s*(?:with\\s+)?(?:[x*•.]+\\s*)?(?<mask>\\d{2,16})\\b[\\s\\S]{0,40}?bill\\s+of\\s+(?:rs\\.?|inr|₹)\\s*(?<tot>[\\d,]+(?:\\.\\d{1,2})?)\\s+(?:is\\s+)?(?:due|payable)\\s+(?:on|by)\\s+(?<due>\\d{2}[-/ ](?:\\d{2}|(?:jan|feb|mar|apr|may|jun|jul|aug|sep|oct|nov|dec))[-/ ]\\d{2,4}|\\d{2}(?:jan|feb|mar|apr|may|jun|jul|aug|sep|oct|nov|dec)\\d{2,4})",
+      "flags": "i",
+      "rejectAny": [
+        "was paid",
+        "paid on"
+      ]
+    },
+    "emit": [
+      {
+        "factType": "bill_due",
+        "attrs": {
+          "dueDate": {
+            "from": "due"
+          }
+        },
+        "amounts": [
+          {
+            "role": "due_total",
+            "from": "tot",
+            "unit": "INR"
+          }
+        ],
+        "instrument": {
+          "kind": "credit_card",
+          "issuerSlug": "indusind",
+          "maskFrom": "mask"
+        }
+      }
+    ],
+    "confidence": 0.9,
+    "examples": [
+      {
+        "sender": "VM-CREDCL-S",
+        "body": "CRED: Your IndusInd Bank credit card ending 1234 bill of ₹3,000 is due on 20-Nov-26. Pay on CRED to earn coins.",
+        "expectFactTypes": [
+          "bill_due"
+        ]
+      },
+      {
+        "sender": "VM-CREDCL-S",
+        "body": "CRED: Your IndusInd Bank credit card ending 1234 bill of ₹3,000 was paid on 20-Nov-26. Coins credited.",
+        "expectFactTypes": []
+      }
+    ],
+    "status": "active",
+    "createdBy": "baseline",
+    "updatedAt": "2026-11-20T00:00:00Z"
+  },
+  {
+    "id": "BIL-CC-CRED-KOTAK-01",
+    "version": 1,
+    "family": "card_due",
+    "senders": [
+      "*"
+    ],
+    "priority": 685,
+    "match": {
+      "pattern": "(?:your\\s+)?(?:kotak)(?:\\s+bank)?\\s+(?:credit\\s+)?card\\s*(?:ending|xx|x)?\\s*(?:with\\s+)?(?:[x*•.]+\\s*)?(?<mask>\\d{2,16})\\b[\\s\\S]{0,40}?bill\\s+of\\s+(?:rs\\.?|inr|₹)\\s*(?<tot>[\\d,]+(?:\\.\\d{1,2})?)\\s+(?:is\\s+)?(?:due|payable)\\s+(?:on|by)\\s+(?<due>\\d{2}[-/ ](?:\\d{2}|(?:jan|feb|mar|apr|may|jun|jul|aug|sep|oct|nov|dec))[-/ ]\\d{2,4}|\\d{2}(?:jan|feb|mar|apr|may|jun|jul|aug|sep|oct|nov|dec)\\d{2,4})",
+      "flags": "i",
+      "rejectAny": [
+        "was paid",
+        "paid on"
+      ]
+    },
+    "emit": [
+      {
+        "factType": "bill_due",
+        "attrs": {
+          "dueDate": {
+            "from": "due"
+          }
+        },
+        "amounts": [
+          {
+            "role": "due_total",
+            "from": "tot",
+            "unit": "INR"
+          }
+        ],
+        "instrument": {
+          "kind": "credit_card",
+          "issuerSlug": "kotak",
+          "maskFrom": "mask"
+        }
+      }
+    ],
+    "confidence": 0.9,
+    "examples": [
+      {
+        "sender": "VM-CREDCL-S",
+        "body": "CRED: Your Kotak credit card ending 1234 bill of ₹3,000 is due on 20-Nov-26. Pay on CRED to earn coins.",
+        "expectFactTypes": [
+          "bill_due"
+        ]
+      },
+      {
+        "sender": "VM-CREDCL-S",
+        "body": "CRED: Your Kotak credit card ending 1234 bill of ₹3,000 was paid on 20-Nov-26. Coins credited.",
+        "expectFactTypes": []
+      }
+    ],
+    "status": "active",
+    "createdBy": "baseline",
+    "updatedAt": "2026-11-20T00:00:00Z"
+  },
+  {
+    "id": "BIL-CC-CRED-RBL-01",
+    "version": 1,
+    "family": "card_due",
+    "senders": [
+      "*"
+    ],
+    "priority": 685,
+    "match": {
+      "pattern": "(?:your\\s+)?(?:rbl)(?:\\s+bank)?\\s+(?:credit\\s+)?card\\s*(?:ending|xx|x)?\\s*(?:with\\s+)?(?:[x*•.]+\\s*)?(?<mask>\\d{2,16})\\b[\\s\\S]{0,40}?bill\\s+of\\s+(?:rs\\.?|inr|₹)\\s*(?<tot>[\\d,]+(?:\\.\\d{1,2})?)\\s+(?:is\\s+)?(?:due|payable)\\s+(?:on|by)\\s+(?<due>\\d{2}[-/ ](?:\\d{2}|(?:jan|feb|mar|apr|may|jun|jul|aug|sep|oct|nov|dec))[-/ ]\\d{2,4}|\\d{2}(?:jan|feb|mar|apr|may|jun|jul|aug|sep|oct|nov|dec)\\d{2,4})",
+      "flags": "i",
+      "rejectAny": [
+        "was paid",
+        "paid on"
+      ]
+    },
+    "emit": [
+      {
+        "factType": "bill_due",
+        "attrs": {
+          "dueDate": {
+            "from": "due"
+          }
+        },
+        "amounts": [
+          {
+            "role": "due_total",
+            "from": "tot",
+            "unit": "INR"
+          }
+        ],
+        "instrument": {
+          "kind": "credit_card",
+          "issuerSlug": "rbl",
+          "maskFrom": "mask"
+        }
+      }
+    ],
+    "confidence": 0.9,
+    "examples": [
+      {
+        "sender": "VM-CREDCL-S",
+        "body": "CRED: Your RBL Bank credit card ending 1234 bill of ₹3,000 is due on 20-Nov-26. Pay on CRED to earn coins.",
+        "expectFactTypes": [
+          "bill_due"
+        ]
+      },
+      {
+        "sender": "VM-CREDCL-S",
+        "body": "CRED: Your RBL Bank credit card ending 1234 bill of ₹3,000 was paid on 20-Nov-26. Coins credited.",
+        "expectFactTypes": []
+      }
+    ],
+    "status": "active",
+    "createdBy": "baseline",
+    "updatedAt": "2026-11-20T00:00:00Z"
+  },
+  {
+    "id": "BIL-CC-CRED-SBI-01",
+    "version": 1,
+    "family": "card_due",
+    "senders": [
+      "*"
+    ],
+    "priority": 685,
+    "match": {
+      "pattern": "(?:your\\s+)?(?:sbi)(?:\\s+bank)?\\s+(?:credit\\s+)?card\\s*(?:ending|xx|x)?\\s*(?:with\\s+)?(?:[x*•.]+\\s*)?(?<mask>\\d{2,16})\\b[\\s\\S]{0,40}?bill\\s+of\\s+(?:rs\\.?|inr|₹)\\s*(?<tot>[\\d,]+(?:\\.\\d{1,2})?)\\s+(?:is\\s+)?(?:due|payable)\\s+(?:on|by)\\s+(?<due>\\d{2}[-/ ](?:\\d{2}|(?:jan|feb|mar|apr|may|jun|jul|aug|sep|oct|nov|dec))[-/ ]\\d{2,4}|\\d{2}(?:jan|feb|mar|apr|may|jun|jul|aug|sep|oct|nov|dec)\\d{2,4})",
+      "flags": "i",
+      "rejectAny": [
+        "was paid",
+        "paid on"
+      ]
+    },
+    "emit": [
+      {
+        "factType": "bill_due",
+        "attrs": {
+          "dueDate": {
+            "from": "due"
+          }
+        },
+        "amounts": [
+          {
+            "role": "due_total",
+            "from": "tot",
+            "unit": "INR"
+          }
+        ],
+        "instrument": {
+          "kind": "credit_card",
+          "issuerSlug": "sbi",
+          "maskFrom": "mask"
+        }
+      }
+    ],
+    "confidence": 0.9,
+    "examples": [
+      {
+        "sender": "VM-CREDCL-S",
+        "body": "CRED: Your SBI credit card ending 1234 bill of ₹3,000 is due on 20-Nov-26. Pay on CRED to earn coins.",
+        "expectFactTypes": [
+          "bill_due"
+        ]
+      },
+      {
+        "sender": "VM-CREDCL-S",
+        "body": "CRED: Your SBI credit card ending 1234 bill of ₹3,000 was paid on 20-Nov-26. Coins credited.",
+        "expectFactTypes": []
+      }
+    ],
+    "status": "active",
+    "createdBy": "baseline",
+    "updatedAt": "2026-11-20T00:00:00Z"
+  },
+  {
+    "id": "BIL-CC-CRED-SC-01",
+    "version": 1,
+    "family": "card_due",
+    "senders": [
+      "*"
+    ],
+    "priority": 685,
+    "match": {
+      "pattern": "(?:your\\s+)?(?:standard\\s+chartered)(?:\\s+bank)?\\s+(?:credit\\s+)?card\\s*(?:ending|xx|x)?\\s*(?:with\\s+)?(?:[x*•.]+\\s*)?(?<mask>\\d{2,16})\\b[\\s\\S]{0,40}?bill\\s+of\\s+(?:rs\\.?|inr|₹)\\s*(?<tot>[\\d,]+(?:\\.\\d{1,2})?)\\s+(?:is\\s+)?(?:due|payable)\\s+(?:on|by)\\s+(?<due>\\d{2}[-/ ](?:\\d{2}|(?:jan|feb|mar|apr|may|jun|jul|aug|sep|oct|nov|dec))[-/ ]\\d{2,4}|\\d{2}(?:jan|feb|mar|apr|may|jun|jul|aug|sep|oct|nov|dec)\\d{2,4})",
+      "flags": "i",
+      "rejectAny": [
+        "was paid",
+        "paid on"
+      ]
+    },
+    "emit": [
+      {
+        "factType": "bill_due",
+        "attrs": {
+          "dueDate": {
+            "from": "due"
+          }
+        },
+        "amounts": [
+          {
+            "role": "due_total",
+            "from": "tot",
+            "unit": "INR"
+          }
+        ],
+        "instrument": {
+          "kind": "credit_card",
+          "issuerSlug": "sc",
+          "maskFrom": "mask"
+        }
+      }
+    ],
+    "confidence": 0.9,
+    "examples": [
+      {
+        "sender": "VM-CREDCL-S",
+        "body": "CRED: Your Standard Chartered credit card ending 1234 bill of ₹3,000 is due on 20-Nov-26. Pay on CRED to earn coins.",
+        "expectFactTypes": [
+          "bill_due"
+        ]
+      },
+      {
+        "sender": "VM-CREDCL-S",
+        "body": "CRED: Your Standard Chartered credit card ending 1234 bill of ₹3,000 was paid on 20-Nov-26. Coins credited.",
+        "expectFactTypes": []
+      }
+    ],
+    "status": "active",
+    "createdBy": "baseline",
+    "updatedAt": "2026-11-20T00:00:00Z"
+  },
+  {
+    "id": "BIL-CC-CRED-YES-01",
+    "version": 1,
+    "family": "card_due",
+    "senders": [
+      "*"
+    ],
+    "priority": 685,
+    "match": {
+      "pattern": "(?:your\\s+)?(?:yes)(?:\\s+bank)?\\s+(?:credit\\s+)?card\\s*(?:ending|xx|x)?\\s*(?:with\\s+)?(?:[x*•.]+\\s*)?(?<mask>\\d{2,16})\\b[\\s\\S]{0,40}?bill\\s+of\\s+(?:rs\\.?|inr|₹)\\s*(?<tot>[\\d,]+(?:\\.\\d{1,2})?)\\s+(?:is\\s+)?(?:due|payable)\\s+(?:on|by)\\s+(?<due>\\d{2}[-/ ](?:\\d{2}|(?:jan|feb|mar|apr|may|jun|jul|aug|sep|oct|nov|dec))[-/ ]\\d{2,4}|\\d{2}(?:jan|feb|mar|apr|may|jun|jul|aug|sep|oct|nov|dec)\\d{2,4})",
+      "flags": "i",
+      "rejectAny": [
+        "was paid",
+        "paid on"
+      ]
+    },
+    "emit": [
+      {
+        "factType": "bill_due",
+        "attrs": {
+          "dueDate": {
+            "from": "due"
+          }
+        },
+        "amounts": [
+          {
+            "role": "due_total",
+            "from": "tot",
+            "unit": "INR"
+          }
+        ],
+        "instrument": {
+          "kind": "credit_card",
+          "issuerSlug": "yes",
+          "maskFrom": "mask"
+        }
+      }
+    ],
+    "confidence": 0.9,
+    "examples": [
+      {
+        "sender": "VM-CREDCL-S",
+        "body": "CRED: Your YES Bank credit card ending 1234 bill of ₹3,000 is due on 20-Nov-26. Pay on CRED to earn coins.",
+        "expectFactTypes": [
+          "bill_due"
+        ]
+      },
+      {
+        "sender": "VM-CREDCL-S",
+        "body": "CRED: Your YES Bank credit card ending 1234 bill of ₹3,000 was paid on 20-Nov-26. Coins credited.",
+        "expectFactTypes": []
+      }
+    ],
+    "status": "active",
+    "createdBy": "baseline",
+    "updatedAt": "2026-11-20T00:00:00Z"
+  },
+  {
+    "id": "BIL-CC-DUE-01",
+    "version": 1,
+    "family": "card_due",
+    "senders": [
+      "*"
+    ],
+    "priority": 680,
+    "match": {
+      "pattern": "(?:credit\\s+)?card\\s*(?:no\\.?\\s*)?(?:ending\\s*(?:with\\s*|in\\s*)?)?(?:[x*•.]+\\s*)?(?<mask>\\d{2,16})\\b[\\s\\S]{0,40}?(?:pay\\s*(?:by|before|on)|due\\s+(?:on|by|date|before)|payable\\s+by|payment\\s+due\\s+(?:date|on|by)|last\\s+date(?:\\s+to\\s+pay)?)\\s*[:\\-]?\\s*(?:is\\s+)?(?:on\\s+)?(?<due>\\d{2}[-/ ](?:\\d{2}|(?:jan|feb|mar|apr|may|jun|jul|aug|sep|oct|nov|dec))[-/ ]\\d{2,4}|\\d{2}(?:jan|feb|mar|apr|may|jun|jul|aug|sep|oct|nov|dec)\\d{2,4})[\\s\\S]{0,20}?total\\s+(?:amount\\s+|amt\\s+)?due\\s*[:\\-]?\\s*(?:is\\s+)?(?:rs\\.?|inr|₹)\\s*(?<tot>[\\d,]+(?:\\.\\d{1,2})?)",
+      "flags": "i",
+      "rejectAny": [
+        "received",
+        "credited",
+        "thank you for your payment"
+      ]
+    },
+    "emit": [
+      {
+        "factType": "bill_due",
+        "attrs": {
+          "dueDate": {
+            "from": "due"
+          }
+        },
+        "amounts": [
+          {
+            "role": "due_total",
+            "from": "tot",
+            "unit": "INR"
+          }
+        ],
+        "instrument": {
+          "kind": "credit_card",
+          "maskFrom": "mask"
+        }
+      }
+    ],
+    "confidence": 0.95,
+    "examples": [
+      {
+        "sender": "VM-HDFCBK-S",
+        "body": "Your credit card XX4321 payment due on 20-Oct-2026. Total amount due INR 3000.",
+        "expectFactTypes": [
+          "bill_due"
+        ]
+      },
+      {
+        "sender": "AX-AXISBK-S",
+        "body": "Your credit card ending 7105 payment is due by 20-Oct-2026. Total amount due Rs 900.",
+        "expectFactTypes": [
+          "bill_due"
+        ]
+      },
+      {
+        "sender": "VM-HDFCBK-S",
+        "body": "Your credit card XX4321 payment of INR 3000 was received on 20-Oct-2026.",
+        "expectFactTypes": []
+      }
+    ],
+    "status": "active",
+    "createdBy": "baseline",
+    "updatedAt": "2026-11-20T00:00:00Z"
+  },
+  {
+    "id": "BIL-CC-DUE-02",
+    "version": 1,
+    "family": "card_due",
+    "senders": [
+      "*"
+    ],
+    "priority": 680,
+    "match": {
+      "pattern": "total\\s+(?:amount\\s+|amt\\s+)?due\\s*[:\\-]?\\s*(?:is\\s+)?(?:on\\s+your\\s+[a-z ]*?)?(?:credit\\s+)?card\\s*(?:no\\.?\\s*)?(?:[x*•.]+\\s*)?(?<mask>\\d{2,16})\\s+is\\s+(?:rs\\.?|inr|₹)\\s*(?<tot>[\\d,]+(?:\\.\\d{1,2})?)\\s+and\\s+min(?:imum)?\\s+(?:amount\\s+|amt\\s+)?(?:due|payable)\\s*[:\\-]?\\s*(?:is\\s+)?(?:rs\\.?|inr|₹)\\s*(?<min>[\\d,]+(?:\\.\\d{1,2})?)[\\s\\S]*?(?:pay\\s*(?:by|before|on)|due\\s+(?:on|by|date|before)|payable\\s+by|payment\\s+due\\s+(?:date|on|by)|last\\s+date(?:\\s+to\\s+pay)?)\\s*[:\\-]?\\s*(?:is\\s+)?(?:on\\s+)?(?<due>\\d{2}[-/ ](?:\\d{2}|(?:jan|feb|mar|apr|may|jun|jul|aug|sep|oct|nov|dec))[-/ ]\\d{2,4}|\\d{2}(?:jan|feb|mar|apr|may|jun|jul|aug|sep|oct|nov|dec)\\d{2,4})",
+      "flags": "i",
+      "rejectAny": [
+        "already paid",
+        "thank you for your payment",
+        "received"
+      ]
+    },
+    "emit": [
+      {
+        "factType": "bill_due",
+        "attrs": {
+          "dueDate": {
+            "from": "due"
+          }
+        },
+        "amounts": [
+          {
+            "role": "due_total",
+            "from": "tot",
+            "unit": "INR"
+          },
+          {
+            "role": "due_minimum",
+            "from": "min",
+            "unit": "INR"
+          }
+        ],
+        "instrument": {
+          "kind": "credit_card",
+          "maskFrom": "mask"
+        }
+      }
+    ],
+    "confidence": 0.93,
+    "examples": [
+      {
+        "sender": "VM-HDFCBK-S",
+        "body": "Total Amount Due on your HDFC Credit Card XX1234 is INR 8,900.00 and Min Due is INR 900.00 pay by 10-Nov-26.",
+        "expectFactTypes": [
+          "bill_due"
+        ]
+      },
+      {
+        "sender": "VM-HDFCBK-S",
+        "body": "Total Amount Due on your HDFC Credit Card XX1234 is INR 8,900.00 and Min Due is INR 900.00, already paid on 10-Nov-26. Thank you.",
+        "expectFactTypes": []
+      }
+    ],
+    "status": "active",
+    "createdBy": "baseline",
+    "updatedAt": "2026-11-20T00:00:00Z"
+  },
+  {
+    "id": "BIL-CC-DUE-03",
+    "version": 1,
+    "family": "card_due",
+    "senders": [
+      "*"
+    ],
+    "priority": 680,
+    "match": {
+      "pattern": "payment\\s+of\\s+(?:rs\\.?|inr|₹)\\s*(?<tot>[\\d,]+(?:\\.\\d{1,2})?)\\s+for\\s+(?:[a-z]+\\s+)?(?:[a-z]+\\s+)?(?:credit\\s+)?card\\s*(?:no\\.?\\s*)?(?:ending\\s*(?:with\\s*|in\\s*)?)?(?:[x*•.]+\\s*)?(?<mask>\\d{2,16})\\b\\s+is\\s+due\\s+on\\s+(?<due>\\d{2}[-/ ](?:\\d{2}|(?:jan|feb|mar|apr|may|jun|jul|aug|sep|oct|nov|dec))[-/ ]\\d{2,4}|\\d{2}(?:jan|feb|mar|apr|may|jun|jul|aug|sep|oct|nov|dec)\\d{2,4})(?:\\s+with\\s+min(?:imum)?\\s+(?:amount\\s+|amt\\s+)?(?:due|payable)\\s*[:\\-]?\\s*(?:is\\s+)?(?:rs\\.?|inr|₹)\\s*(?<min>[\\d,]+(?:\\.\\d{1,2})?))?",
+      "flags": "i",
+      "rejectAny": [
+        "was received",
+        "has been received"
+      ]
+    },
+    "emit": [
+      {
+        "factType": "bill_due",
+        "attrs": {
+          "dueDate": {
+            "from": "due"
+          }
+        },
+        "amounts": [
+          {
+            "role": "due_total",
+            "from": "tot",
+            "unit": "INR"
+          },
+          {
+            "role": "due_minimum",
+            "from": "min",
+            "unit": "INR"
+          }
+        ],
+        "instrument": {
+          "kind": "credit_card",
+          "maskFrom": "mask"
+        }
+      }
+    ],
+    "confidence": 0.93,
+    "examples": [
+      {
+        "sender": "AX-AXISBK-S",
+        "body": "Payment of INR 132 for Axis Bank Credit Card no. XX7105 is due on 03-10-26 with minimum amount due of INR 100. Ignore if paid.",
+        "expectFactTypes": [
+          "bill_due"
+        ]
+      },
+      {
+        "sender": "AX-AXISBK-S",
+        "body": "Payment of INR 5590.75 for Axis Bank Credit Card no. XX7105 is due on 02-04-26. Ignore if paid.",
+        "expectFactTypes": [
+          "bill_due"
+        ]
+      },
+      {
+        "sender": "AX-AXISBK-S",
+        "body": "Payment of INR 5590.75 for Axis Bank Credit Card no. XX7105 was received on 02-04-26. Thank you.",
+        "expectFactTypes": []
+      }
+    ],
+    "status": "active",
+    "createdBy": "baseline",
+    "updatedAt": "2026-11-20T00:00:00Z"
+  },
+  {
+    "id": "BIL-CC-OUTSTANDING-01",
+    "version": 1,
+    "family": "card_due",
+    "senders": [
+      "*"
+    ],
+    "priority": 670,
+    "match": {
+      "pattern": "(?:rs\\.?|inr|₹)\\s*(?<tot>[\\d,]+(?:\\.\\d{1,2})?)\\s+outstanding\\s+on\\s+your\\s+(?:[a-z]+\\s+)?(?:[a-z]+\\s+)?(?:credit\\s+)?card\\s*(?:no\\.?\\s*)?(?:ending\\s*(?:with\\s*|in\\s*)?)?(?:[x*•.]+\\s*)?(?<mask>\\d{2,16})\\b\\s+as\\s+on\\s+(?<asof>\\d{2}[-/ ](?:\\d{2}|(?:jan|feb|mar|apr|may|jun|jul|aug|sep|oct|nov|dec))[-/ ]\\d{2,4}|\\d{2}(?:jan|feb|mar|apr|may|jun|jul|aug|sep|oct|nov|dec)\\d{2,4})[\\s\\S]*?(?:pay\\s*(?:by|before|on)|due\\s+(?:on|by|date|before)|payable\\s+by|payment\\s+due\\s+(?:date|on|by)|last\\s+date(?:\\s+to\\s+pay)?)\\s*[:\\-]?\\s*(?:is\\s+)?(?:on\\s+)?(?<due>\\d{2}[-/ ](?:\\d{2}|(?:jan|feb|mar|apr|may|jun|jul|aug|sep|oct|nov|dec))[-/ ]\\d{2,4}|\\d{2}(?:jan|feb|mar|apr|may|jun|jul|aug|sep|oct|nov|dec)\\d{2,4})",
+      "flags": "i",
+      "rejectAny": [
+        "payment received"
+      ]
+    },
+    "emit": [
+      {
+        "factType": "bill_due",
+        "attrs": {
+          "dueDate": {
+            "from": "due"
+          }
+        },
+        "amounts": [
+          {
+            "role": "due_total",
+            "from": "tot",
+            "unit": "INR"
+          }
+        ],
+        "instrument": {
+          "kind": "credit_card",
+          "maskFrom": "mask"
+        }
+      }
+    ],
+    "confidence": 0.93,
+    "examples": [
+      {
+        "sender": "VM-HDFCBK-S",
+        "body": "INR 4,000.00 outstanding on your HDFC credit card XX4321 as on 10-11-26. Pay by 15-11-26 to avoid interest.",
+        "expectFactTypes": [
+          "bill_due"
+        ]
+      },
+      {
+        "sender": "VM-HDFCBK-S",
+        "body": "INR 4,000.00 outstanding on your HDFC credit card XX4321 as on 10-11-26. Payment received, thank you.",
+        "expectFactTypes": []
+      }
+    ],
+    "status": "active",
+    "createdBy": "baseline",
+    "updatedAt": "2026-11-20T00:00:00Z"
+  },
+  {
+    "id": "BIL-CC-STMT-01",
+    "version": 1,
+    "family": "card_statement",
+    "senders": [
+      "*"
+    ],
+    "priority": 700,
+    "match": {
+      "pattern": "(?:credit\\s+)?card\\s*(?:no\\.?\\s*)?(?:ending\\s*(?:with\\s*|in\\s*)?)?(?:[x*•.]+\\s*)?(?<mask>\\d{2,16})\\b[\\s\\S]{0,60}?(?:e-?statement|statement|bill)\\s+(?:is\\s+)?(?:generated|dated|issued|for|ready)\\s*(?:on\\s+|dated\\s+|of\\s+)?(?:(?<sdate>\\d{2}[-/ ](?:\\d{2}|(?:jan|feb|mar|apr|may|jun|jul|aug|sep|oct|nov|dec))[-/ ]\\d{2,4}|\\d{2}(?:jan|feb|mar|apr|may|jun|jul|aug|sep|oct|nov|dec)\\d{2,4}))?[\\s\\S]*?total\\s+(?:amount\\s+|amt\\s+)?due\\s*[:\\-]?\\s*(?:is\\s+)?(?:rs\\.?|inr|₹)\\s*(?<tot>[\\d,]+(?:\\.\\d{1,2})?)[\\s\\S]*?min(?:imum)?\\s+(?:amount\\s+|amt\\s+)?(?:due|payable)\\s*[:\\-]?\\s*(?:is\\s+)?(?:rs\\.?|inr|₹)\\s*(?<min>[\\d,]+(?:\\.\\d{1,2})?)[\\s\\S]*?(?:pay\\s*(?:by|before|on)|due\\s+(?:on|by|date|before)|payable\\s+by|payment\\s+due\\s+(?:date|on|by)|last\\s+date(?:\\s+to\\s+pay)?)\\s*[:\\-]?\\s*(?:is\\s+)?(?:on\\s+)?(?<due>\\d{2}[-/ ](?:\\d{2}|(?:jan|feb|mar|apr|may|jun|jul|aug|sep|oct|nov|dec))[-/ ]\\d{2,4}|\\d{2}(?:jan|feb|mar|apr|may|jun|jul|aug|sep|oct|nov|dec)\\d{2,4})",
+      "flags": "i",
+      "rejectAny": [
+        "payment received",
+        "thank you for your payment",
+        "credited"
+      ]
+    },
+    "emit": [
+      {
+        "factType": "bill_due",
+        "attrs": {
+          "dueDate": {
+            "from": "due"
+          },
+          "statementDate": {
+            "from": "sdate"
+          }
+        },
+        "amounts": [
+          {
+            "role": "due_total",
+            "from": "tot",
+            "unit": "INR"
+          },
+          {
+            "role": "due_minimum",
+            "from": "min",
+            "unit": "INR"
+          }
+        ],
+        "instrument": {
+          "kind": "credit_card",
+          "maskFrom": "mask"
+        }
+      }
+    ],
+    "confidence": 0.97,
+    "examples": [
+      {
+        "sender": "AX-AXISBK-S",
+        "body": "Your Axis Bank Credit Card XX4321 e-statement generated on 12-10-26. Total Amount Due INR 3,000.00, Minimum Amount Due INR 600.00, pay by 05-Nov-26.",
+        "expectFactTypes": [
+          "bill_due"
+        ]
+      },
+      {
+        "sender": "AX-ICICIT-S",
+        "body": "Your ICICI Bank Credit Card XX1234 statement dated 12-Oct-26 is ready. Total Amount Due: Rs 3,000.00; Minimum Amount Due: Rs 150.00; Payment Due Date: 05-Nov-26.",
+        "expectFactTypes": [
+          "bill_due"
+        ]
+      },
+      {
+        "sender": "AD-SBICRD-S",
+        "body": "Your SBI Card ending 1234 statement generated on 12/10/26. Total Amt Due Rs 3,000, Min Amt Due Rs 150, Payment Due Date 05/11/26.",
+        "expectFactTypes": [
+          "bill_due"
+        ]
+      },
+      {
+        "sender": "VM-YESBNK-S",
+        "body": "Dear Customer, your YES BANK Credit Card ending 1234 statement is generated on 12-10-2026. Total Due: Rs. 3,000.00, Min Due: Rs. 150.00, due by 05-11-2026.",
+        "expectFactTypes": [
+          "bill_due"
+        ]
+      },
+      {
+        "sender": "AX-AXISBK-S",
+        "body": "Your Axis Bank Credit Card XX4321 e-statement generated on 12-10-26. Payment of Rs 3,000.00 received. Thank you.",
+        "expectFactTypes": []
+      }
+    ],
+    "status": "active",
+    "createdBy": "baseline",
+    "updatedAt": "2026-11-20T00:00:00Z"
+  },
+  {
+    "id": "BIL-CC-STMT-02",
+    "version": 1,
+    "family": "card_statement",
+    "senders": [
+      "*"
+    ],
+    "priority": 695,
+    "match": {
+      "pattern": "(?:credit\\s+)?card\\s*(?:no\\.?\\s*)?(?:ending\\s*(?:with\\s*|in\\s*)?)?(?:[x*•.]+\\s*)?(?<mask>\\d{2,16})\\b[\\s\\S]{0,60}?(?:e-?statement|statement|bill)\\s+(?:is\\s+)?(?:generated|dated|issued|for|ready)\\s*(?:on\\s+|dated\\s+|of\\s+)?(?:(?<sdate>\\d{2}[-/ ](?:\\d{2}|(?:jan|feb|mar|apr|may|jun|jul|aug|sep|oct|nov|dec))[-/ ]\\d{2,4}|\\d{2}(?:jan|feb|mar|apr|may|jun|jul|aug|sep|oct|nov|dec)\\d{2,4}))?[\\s\\S]*?total\\s+(?:amount\\s+|amt\\s+)?due\\s*[:\\-]?\\s*(?:is\\s+)?(?:rs\\.?|inr|₹)\\s*(?<tot>[\\d,]+(?:\\.\\d{1,2})?)[\\s\\S]*?(?:pay\\s*(?:by|before|on)|due\\s+(?:on|by|date|before)|payable\\s+by|payment\\s+due\\s+(?:date|on|by)|last\\s+date(?:\\s+to\\s+pay)?)\\s*[:\\-]?\\s*(?:is\\s+)?(?:on\\s+)?(?<due>\\d{2}[-/ ](?:\\d{2}|(?:jan|feb|mar|apr|may|jun|jul|aug|sep|oct|nov|dec))[-/ ]\\d{2,4}|\\d{2}(?:jan|feb|mar|apr|may|jun|jul|aug|sep|oct|nov|dec)\\d{2,4})",
+      "flags": "i"
+    },
+    "emit": [
+      {
+        "factType": "bill_due",
+        "attrs": {
+          "dueDate": {
+            "from": "due"
+          },
+          "statementDate": {
+            "from": "sdate"
+          }
+        },
+        "amounts": [
+          {
+            "role": "due_total",
+            "from": "tot",
+            "unit": "INR"
+          }
+        ],
+        "instrument": {
+          "kind": "credit_card",
+          "maskFrom": "mask"
+        }
+      }
+    ],
+    "confidence": 0.95,
+    "examples": [
+      {
+        "sender": "VM-YESBNK-S",
+        "body": "Your YES BANK Credit Card ending 1234 statement dated 12-10-26. Total Amount Due Rs 3,000.00. Pay by 05-11-26 to avoid late fee.",
+        "expectFactTypes": [
+          "bill_due"
+        ]
+      },
+      {
+        "sender": "VM-HDFCBK-S",
+        "body": "Your HDFC Bank Credit Card XX1234 statement is ready. Total Amount Due Rs 8,900.00 payable by 10-Nov-26.",
+        "expectFactTypes": [
+          "bill_due"
+        ]
+      },
+      {
+        "sender": "VM-YESBNK-S",
+        "body": "Your YES BANK Credit Card ending 1234 statement dated 12-10-26. Total Amount Due Rs 3,000.00. Please log in to view.",
+        "expectFactTypes": []
+      }
+    ],
+    "status": "active",
+    "createdBy": "baseline",
+    "updatedAt": "2026-11-20T00:00:00Z"
+  },
+  {
+    "id": "BIL-CC-STMT-03",
+    "version": 1,
+    "family": "card_statement",
+    "senders": [
+      "*"
+    ],
+    "priority": 690,
+    "match": {
+      "pattern": "statement\\s+for\\s+[\\s\\S]{0,40}?(?:credit\\s+)?card\\s*(?:no\\.?\\s*)?(?:ending\\s*(?:with\\s*|in\\s*)?)?(?:[x*•.]+\\s*)?(?<mask>\\d{2,16})\\b\\s*(?:dated\\s+(?<sdate>\\d{2}[-/ ](?:\\d{2}|(?:jan|feb|mar|apr|may|jun|jul|aug|sep|oct|nov|dec))[-/ ]\\d{2,4}|\\d{2}(?:jan|feb|mar|apr|may|jun|jul|aug|sep|oct|nov|dec)\\d{2,4}))?[\\s\\S]*?(?:pay\\s*(?:by|before|on)|due\\s+(?:on|by|date|before)|payable\\s+by|payment\\s+due\\s+(?:date|on|by)|last\\s+date(?:\\s+to\\s+pay)?)\\s*[:\\-]?\\s*(?:is\\s+)?(?:on\\s+)?(?<due>\\d{2}[-/ ](?:\\d{2}|(?:jan|feb|mar|apr|may|jun|jul|aug|sep|oct|nov|dec))[-/ ]\\d{2,4}|\\d{2}(?:jan|feb|mar|apr|may|jun|jul|aug|sep|oct|nov|dec)\\d{2,4})[\\s\\S]*?total\\s+(?:amount\\s+|amt\\s+)?due\\s*[:\\-]?\\s*(?:is\\s+)?(?:rs\\.?|inr|₹)\\s*(?<tot>[\\d,]+(?:\\.\\d{1,2})?)(?:[\\s\\S]*?min(?:imum)?\\s+(?:amount\\s+|amt\\s+)?(?:due|payable)\\s*[:\\-]?\\s*(?:is\\s+)?(?:rs\\.?|inr|₹)\\s*(?<min>[\\d,]+(?:\\.\\d{1,2})?))?",
+      "flags": "i"
+    },
+    "emit": [
+      {
+        "factType": "bill_due",
+        "attrs": {
+          "dueDate": {
+            "from": "due"
+          },
+          "statementDate": {
+            "from": "sdate"
+          }
+        },
+        "amounts": [
+          {
+            "role": "due_total",
+            "from": "tot",
+            "unit": "INR"
+          },
+          {
+            "role": "due_minimum",
+            "from": "min",
+            "unit": "INR"
+          }
+        ],
+        "instrument": {
+          "kind": "credit_card",
+          "maskFrom": "mask"
+        }
+      }
+    ],
+    "confidence": 0.93,
+    "examples": [
+      {
+        "sender": "AX-ICICIT-S",
+        "body": "Statement for ICICI Bank Credit Card XX1234 dated 12-Oct-26 is generated. Payment due date 05-Nov-26. Total amount due Rs 3,000.00. Minimum amount due Rs 150.00.",
+        "expectFactTypes": [
+          "bill_due"
+        ]
+      },
+      {
+        "sender": "AX-ICICIT-S",
+        "body": "Statement for ICICI Bank Credit Card XX1234 dated 12-Oct-26 is generated. Payment due date 05-Nov-26. Total amount due Rs 3,000.00.",
+        "expectFactTypes": [
+          "bill_due"
+        ]
+      },
+      {
+        "sender": "AX-ICICIT-S",
+        "body": "Statement for ICICI Bank Credit Card XX1234 dated 12-Oct-26 is generated. Payment of Rs 3,000.00 received, thank you.",
+        "expectFactTypes": []
+      }
+    ],
+    "status": "active",
+    "createdBy": "baseline",
+    "updatedAt": "2026-11-20T00:00:00Z"
+  },
+  {
+    "id": "BIL-CC-ZERO-01",
+    "version": 1,
+    "family": "card_statement",
+    "senders": [
+      "*"
+    ],
+    "priority": 760,
+    "match": {
+      "pattern": "total\\s+(?:amount\\s+|amt\\s+)?due\\s*[:\\-]?\\s*(?:is\\s+)?(?:rs\\.?|inr|₹)\\s*0+(?:\\.0+)?(?![\\d,.]*[1-9])",
+      "flags": "i",
+      "requireAll": [
+        "total"
+      ],
+      "rejectAny": [
+        "minimum"
+      ]
+    },
+    "emit": [
+      {
+        "factType": "info",
+        "attrs": {
+          "category": "service"
+        }
+      }
+    ],
+    "confidence": 0.9,
+    "examples": [
+      {
+        "sender": "AD-SBICRD-S",
+        "body": "Your SBI Card statement - Tata Neu Infinity SBI Credit Card. Total amount due Rs 0. Enjoy rewards",
+        "expectFactTypes": [
+          "info"
+        ]
+      },
+      {
+        "sender": "AD-SBICRD-S",
+        "body": "Your SBI Card statement - Tata Neu Infinity SBI Credit Card. Total amount due Rs 4,200. Pay by 05-Nov-26.",
+        "expectFactTypes": []
+      }
+    ],
+    "status": "active",
+    "createdBy": "baseline",
+    "updatedAt": "2026-11-20T00:00:00Z"
+  }
+]

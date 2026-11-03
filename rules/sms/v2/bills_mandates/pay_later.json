@@ -1,0 +1,490 @@
+[
+  {
+    "id": "BIL-PAYLATER-AMZ-01",
+    "version": 1,
+    "family": "pay_later",
+    "senders": [
+      "*"
+    ],
+    "priority": 620,
+    "match": {
+      "pattern": "availed\\s+(?:amazon\\s+)?pay\\s*later\\s+credit\\s+of\\s+(?:rs\\.?|inr|₹)\\s*(?<amt>[\\d,]+(?:\\.\\d{1,2})?)(?:\\s+for\\s+(?:order\\s+on\\s+)?(?<m>[a-z0-9&. ]+?)(?=\\s+(?:on|for|using|via|ref|your|avl|available|to report|for more)\\b|\\s*[.,;]|\\s*$))?",
+      "flags": "i",
+      "rejectAny": [
+        "declined",
+        "failed"
+      ]
+    },
+    "emit": [
+      {
+        "factType": "movement",
+        "attrs": {
+          "direction": "debit",
+          "purpose": "purchase",
+          "rail": "unknown"
+        },
+        "amounts": [
+          {
+            "role": "posted",
+            "from": "amt",
+            "unit": "INR"
+          }
+        ],
+        "instrument": {
+          "kind": "pay_later",
+          "issuerSlug": "amazon_pay_later"
+        },
+        "counterparty": {
+          "nameFrom": "m",
+          "transforms": [
+            "sanitizeNarration"
+          ]
+        }
+      }
+    ],
+    "confidence": 0.93,
+    "examples": [
+      {
+        "sender": "AX-AMAZON",
+        "body": "You have availed Amazon Pay Later credit of Rs. 250.00 for order on Amazon.",
+        "expectFactTypes": [
+          "movement"
+        ]
+      },
+      {
+        "sender": "AX-AMAZON",
+        "body": "You have availed Amazon Pay Later credit of Rs. 450.00 for order on Swiggy.",
+        "expectFactTypes": [
+          "movement"
+        ]
+      },
+      {
+        "sender": "AX-AMAZON",
+        "body": "Your Amazon Pay Later credit request of Rs. 450.00 was declined.",
+        "expectFactTypes": []
+      }
+    ],
+    "status": "active",
+    "createdBy": "baseline",
+    "updatedAt": "2026-11-20T00:00:00Z"
+  },
+  {
+    "id": "BIL-PAYLATER-AMZ-02",
+    "version": 1,
+    "family": "pay_later",
+    "senders": [
+      "*"
+    ],
+    "priority": 620,
+    "match": {
+      "pattern": "availed\\s+credit\\s+of\\s+(?:rs\\.?|inr|₹)\\s*(?<amt>[\\d,]+(?:\\.\\d{1,2})?)\\s+using\\s+amazon\\s+pay\\s*later",
+      "flags": "i"
+    },
+    "emit": [
+      {
+        "factType": "movement",
+        "attrs": {
+          "direction": "debit",
+          "purpose": "purchase",
+          "rail": "unknown"
+        },
+        "amounts": [
+          {
+            "role": "posted",
+            "from": "amt",
+            "unit": "INR"
+          }
+        ],
+        "instrument": {
+          "kind": "pay_later",
+          "issuerSlug": "amazon_pay_later"
+        }
+      }
+    ],
+    "confidence": 0.93,
+    "examples": [
+      {
+        "sender": "AX-AMAZON",
+        "body": "Availed credit of Rs. 350 using Amazon Pay Later",
+        "expectFactTypes": [
+          "movement"
+        ]
+      },
+      {
+        "sender": "AX-AMAZON",
+        "body": "Credit of Rs. 350 using Amazon Pay Later is pending.",
+        "expectFactTypes": []
+      }
+    ],
+    "status": "active",
+    "createdBy": "baseline",
+    "updatedAt": "2026-11-20T00:00:00Z"
+  },
+  {
+    "id": "BIL-PAYLATER-AVAIL-01",
+    "version": 1,
+    "family": "pay_later",
+    "senders": [
+      "*"
+    ],
+    "priority": 620,
+    "match": {
+      "pattern": "availing\\s+pay\\s*later\\s+credit\\s+of\\s+(?:rs\\.?|inr|₹)\\s*(?<amt>[\\d,]+(?:\\.\\d{1,2})?)(?:\\s+(?:at|for)\\s+(?<m>[a-z0-9&. ]+?)(?=\\s+(?:on|for|using|via|ref|your|avl|available|to report|for more)\\b|\\s*[.,;]|\\s*$))?(?:\\s+on\\s+(?<date>\\d{2}[-/ ](?:\\d{2}|(?:jan|feb|mar|apr|may|jun|jul|aug|sep|oct|nov|dec))[-/ ]\\d{2,4}|\\d{2}(?:jan|feb|mar|apr|may|jun|jul|aug|sep|oct|nov|dec)\\d{2,4}))?",
+      "flags": "i"
+    },
+    "emit": [
+      {
+        "factType": "movement",
+        "attrs": {
+          "direction": "debit",
+          "purpose": "purchase",
+          "rail": "unknown"
+        },
+        "amounts": [
+          {
+            "role": "posted",
+            "from": "amt",
+            "unit": "INR"
+          }
+        ],
+        "occurredAt": {
+          "from": "date"
+        },
+        "instrument": {
+          "kind": "pay_later"
+        },
+        "counterparty": {
+          "nameFrom": "m",
+          "transforms": [
+            "sanitizeNarration"
+          ]
+        }
+      }
+    ],
+    "confidence": 0.92,
+    "examples": [
+      {
+        "sender": "VD-AXIOPL-S",
+        "body": "Availing Pay Later credit of Rs 500 on 24-10-26.",
+        "expectFactTypes": [
+          "movement"
+        ]
+      },
+      {
+        "sender": "VD-AXIOPL-S",
+        "body": "Thank you for availing Pay Later credit of Rs 499 at Amazon on 12-Mar-2026.",
+        "expectFactTypes": [
+          "movement"
+        ]
+      },
+      {
+        "sender": "VD-AXIOPL-S",
+        "body": "Thank you for availing Pay Later credit of Rs299.0. For more info click https://u.axio.ac/axo/UqpJfCtWpqntk To report misuse call 180012001637 -axio",
+        "expectFactTypes": [
+          "movement"
+        ]
+      },
+      {
+        "sender": "VD-AXIOPL-S",
+        "body": "Pay Later credit of Rs 500 is available for you. Apply now.",
+        "expectFactTypes": []
+      }
+    ],
+    "status": "active",
+    "createdBy": "baseline",
+    "updatedAt": "2026-11-20T00:00:00Z"
+  },
+  {
+    "id": "BIL-PAYLATER-AVAIL-02",
+    "version": 1,
+    "family": "pay_later",
+    "senders": [
+      "*"
+    ],
+    "priority": 625,
+    "match": {
+      "pattern": "availing\\s+pay\\s*later\\s+credit\\s+of\\s+(?:rs\\.?|inr|₹)\\s*(?<amt>[\\d,]+(?:\\.\\d{1,2})?)(?:\\s+(?:at|for)\\s+(?<m>[a-z0-9&. ]+?)(?=\\s+(?:on|for|using|via|ref|your|avl|available|to report|for more)\\b|\\s*[.,;]|\\s*$))?(?:\\s+on\\s+(?<date>\\d{2}[-/ ](?:\\d{2}|(?:jan|feb|mar|apr|may|jun|jul|aug|sep|oct|nov|dec))[-/ ]\\d{2,4}|\\d{2}(?:jan|feb|mar|apr|may|jun|jul|aug|sep|oct|nov|dec)\\d{2,4}))?[\\s\\S]*?(?:available|avl)\\s+limit\\s+(?:is\\s+)?(?:rs\\.?|inr|₹)\\s*(?<lim>[\\d,]+(?:\\.\\d{1,2})?)",
+      "flags": "i"
+    },
+    "emit": [
+      {
+        "factType": "movement",
+        "attrs": {
+          "direction": "debit",
+          "purpose": "purchase",
+          "rail": "unknown"
+        },
+        "amounts": [
+          {
+            "role": "posted",
+            "from": "amt",
+            "unit": "INR"
+          }
+        ],
+        "occurredAt": {
+          "from": "date"
+        },
+        "instrument": {
+          "kind": "pay_later"
+        },
+        "counterparty": {
+          "nameFrom": "m",
+          "transforms": [
+            "sanitizeNarration"
+          ]
+        }
+      },
+      {
+        "factType": "balance_snapshot",
+        "amounts": [
+          {
+            "role": "available_credit",
+            "from": "lim",
+            "unit": "INR"
+          }
+        ],
+        "instrument": {
+          "sameAs": 0
+        },
+        "attrs": {
+          "asOf": {
+            "sameAs": 0,
+            "field": "occurredAt"
+          }
+        }
+      }
+    ],
+    "confidence": 0.93,
+    "examples": [
+      {
+        "sender": "VD-AXIOPL-S",
+        "body": "Thank you for availing Pay Later credit of Rs 499 at Amazon on 12-Mar-2026. Your available limit is Rs 15,000",
+        "expectFactTypes": [
+          "movement",
+          "balance_snapshot"
+        ]
+      },
+      {
+        "sender": "VD-AXIOPL-S",
+        "body": "Pay Later credit of Rs 500 is available for you. Your available limit is Rs 15,000",
+        "expectFactTypes": []
+      }
+    ],
+    "status": "active",
+    "createdBy": "baseline",
+    "updatedAt": "2026-11-20T00:00:00Z"
+  },
+  {
+    "id": "BIL-PAYLATER-BILL-01",
+    "version": 1,
+    "family": "pay_later",
+    "senders": [
+      "*"
+    ],
+    "priority": 620,
+    "match": {
+      "pattern": "pay\\s*later[\\s\\S]{0,40}?bill\\s+(?:amount\\s+)?of\\s+(?:rs\\.?|inr|₹)\\s*(?<amt>[\\d,]+(?:\\.\\d{1,2})?)\\s+is\\s+due\\s+on\\s+(?<due>\\d{2}[-/ ](?:\\d{2}|(?:jan|feb|mar|apr|may|jun|jul|aug|sep|oct|nov|dec))[-/ ]\\d{2,4}|\\d{2}(?:jan|feb|mar|apr|may|jun|jul|aug|sep|oct|nov|dec)\\d{2,4})",
+      "flags": "i",
+      "rejectAny": [
+        "was paid"
+      ]
+    },
+    "emit": [
+      {
+        "factType": "bill_due",
+        "attrs": {
+          "dueDate": {
+            "from": "due"
+          }
+        },
+        "amounts": [
+          {
+            "role": "due_total",
+            "from": "amt",
+            "unit": "INR"
+          }
+        ],
+        "instrument": {
+          "kind": "pay_later"
+        }
+      }
+    ],
+    "confidence": 0.93,
+    "examples": [
+      {
+        "sender": "VD-AXIOPL-S",
+        "body": "Axio Pay Later: Your bill amount of INR 5,300.00 is due on 05-Nov-2026. Auto debit will be processed on the due date.",
+        "expectFactTypes": [
+          "bill_due"
+        ]
+      },
+      {
+        "sender": "VD-AXIOPL-S",
+        "body": "Axio Pay Later: Your bill amount of INR 5,300.00 was paid on 05-Nov-2026.",
+        "expectFactTypes": []
+      }
+    ],
+    "status": "active",
+    "createdBy": "baseline",
+    "updatedAt": "2026-11-20T00:00:00Z"
+  },
+  {
+    "id": "BIL-PAYLATER-DEBIT-SOON-01",
+    "version": 1,
+    "family": "pay_later",
+    "senders": [
+      "*"
+    ],
+    "priority": 620,
+    "match": {
+      "pattern": "pay\\s*later\\s+(?:bill|emi)\\s+of\\s+(?:rs\\.?|inr|₹)\\s*(?<amt>[\\d,]+(?:\\.\\d{1,2})?)\\s+(?:will be|has been)\\s+(?:debited|scheduled)",
+      "flags": "i"
+    },
+    "emit": [
+      {
+        "factType": "attempt",
+        "attrs": {
+          "status": "scheduled",
+          "direction": "debit",
+          "purpose": "bill_payment"
+        },
+        "amounts": [
+          {
+            "role": "scheduled",
+            "from": "amt",
+            "unit": "INR"
+          }
+        ],
+        "instrument": {
+          "kind": "pay_later"
+        }
+      }
+    ],
+    "confidence": 0.88,
+    "examples": [
+      {
+        "sender": "AX-AMAZON",
+        "body": "Your Pay Later bill of Rs 1038 will be debited on 5th of this month from your bank account.",
+        "expectFactTypes": [
+          "attempt"
+        ]
+      },
+      {
+        "sender": "AX-AMAZON",
+        "body": "Your Amazon Pay Later EMI of Rs 1,450 has been scheduled",
+        "expectFactTypes": [
+          "attempt"
+        ]
+      },
+      {
+        "sender": "AX-AMAZON",
+        "body": "Your Pay Later bill is ready. View it in the app.",
+        "expectFactTypes": []
+      }
+    ],
+    "status": "active",
+    "createdBy": "baseline",
+    "updatedAt": "2026-11-20T00:00:00Z"
+  },
+  {
+    "id": "BIL-PAYLATER-LAZYPAY-01",
+    "version": 1,
+    "family": "pay_later",
+    "senders": [
+      "*"
+    ],
+    "priority": 620,
+    "match": {
+      "pattern": "(?:rs\\.?|inr|₹)\\s*(?<amt>[\\d,]+(?:\\.\\d{1,2})?)\\s+paid\\s+at\\s+(?<m>[a-z0-9&. ]+?)\\s+using\\s+lazypay",
+      "flags": "i",
+      "rejectAny": [
+        "failed"
+      ]
+    },
+    "emit": [
+      {
+        "factType": "movement",
+        "attrs": {
+          "direction": "debit",
+          "purpose": "purchase",
+          "rail": "unknown"
+        },
+        "amounts": [
+          {
+            "role": "posted",
+            "from": "amt",
+            "unit": "INR"
+          }
+        ],
+        "instrument": {
+          "kind": "pay_later",
+          "issuerSlug": "lazypay"
+        },
+        "counterparty": {
+          "kind": "merchant",
+          "nameFrom": "m",
+          "transforms": [
+            "sanitizeNarration"
+          ]
+        }
+      }
+    ],
+    "confidence": 0.93,
+    "examples": [
+      {
+        "sender": "VM-LAZYPY-S",
+        "body": "Rs 250 paid at Swiggy using LazyPay",
+        "expectFactTypes": [
+          "movement"
+        ]
+      },
+      {
+        "sender": "VM-LAZYPY-S",
+        "body": "Rs 250 payment at Swiggy using LazyPay failed",
+        "expectFactTypes": []
+      }
+    ],
+    "status": "active",
+    "createdBy": "baseline",
+    "updatedAt": "2026-11-20T00:00:00Z"
+  },
+  {
+    "id": "BIL-PAYLATER-REPAID-01",
+    "version": 1,
+    "family": "pay_later",
+    "senders": [
+      "*"
+    ],
+    "priority": 620,
+    "match": {
+      "pattern": "received\\s+your\\s+(?:timely\\s+)?repayment\\s+towards\\s+your\\s+pay\\s*later",
+      "flags": "i"
+    },
+    "emit": [
+      {
+        "factType": "info",
+        "attrs": {
+          "category": "service"
+        }
+      }
+    ],
+    "confidence": 0.8,
+    "examples": [
+      {
+        "sender": "VD-AXIOPL-S",
+        "body": "Congrats Sujay, We have received your timely repayment towards your Pay Later XXX6016 a/c .You can now check your updated personal loan eligibility here https://u.axio.ac/axo/1XOUraa9OMgJw7 -axio",
+        "expectFactTypes": [
+          "info"
+        ]
+      },
+      {
+        "sender": "VD-AXIOPL-S",
+        "body": "Reminder: please make your repayment towards your Pay Later account before the due date.",
+        "expectFactTypes": []
+      }
+    ],
+    "status": "active",
+    "createdBy": "baseline",
+    "updatedAt": "2026-11-20T00:00:00Z"
+  }
+]

@@ -1,0 +1,698 @@
+[
+  {
+    "id": "BIL-INS-PREMIUM-01",
+    "version": 1,
+    "family": "bill_due",
+    "senders": [
+      "*"
+    ],
+    "priority": 600,
+    "match": {
+      "pattern": "premium\\s+of\\s+(?:rs\\.?|inr|₹)\\s*(?<amt>[\\d,]+(?:\\.\\d{1,2})?)\\s+for\\s+(?<biller>[a-z][a-z0-9&. ]{1,30}?)\\s+policy(?:\\s+(?:no\\.?\\s*)?[a-z0-9]+)?\\s+is\\s+due\\s+(?:on|by)\\s+(?<due>\\d{2}[-/ ](?:\\d{2}|(?:jan|feb|mar|apr|may|jun|jul|aug|sep|oct|nov|dec))[-/ ]\\d{2,4}|\\d{2}(?:jan|feb|mar|apr|may|jun|jul|aug|sep|oct|nov|dec)\\d{2,4})",
+      "flags": "i"
+    },
+    "emit": [
+      {
+        "factType": "bill_due",
+        "attrs": {
+          "dueDate": {
+            "from": "due"
+          },
+          "billerName": {
+            "from": "biller",
+            "transforms": [
+              "upperTrim"
+            ]
+          }
+        },
+        "amounts": [
+          {
+            "role": "due_total",
+            "from": "amt",
+            "unit": "INR"
+          }
+        ]
+      }
+    ],
+    "confidence": 0.95,
+    "examples": [
+      {
+        "sender": "VM-LICIND-S",
+        "body": "Dear Customer, premium of Rs 12,450 for LIC Policy 123456789 is due on 28-Oct-26.",
+        "expectFactTypes": [
+          "bill_due"
+        ]
+      },
+      {
+        "sender": "VM-LICIND-S",
+        "body": "Dear Customer, premium of Rs 12,450 for LIC Policy 123456789 has been received on 28-Oct-26.",
+        "expectFactTypes": []
+      }
+    ],
+    "status": "active",
+    "createdBy": "baseline",
+    "updatedAt": "2026-11-20T00:00:00Z"
+  },
+  {
+    "id": "BIL-INS-PREMIUM-02",
+    "version": 1,
+    "family": "bill_due",
+    "senders": [
+      "*"
+    ],
+    "priority": 600,
+    "match": {
+      "pattern": "your\\s+(?<biller>[a-z][a-z0-9&. ]{1,30}?)\\s+policy\\s+premium\\s+of\\s+(?:rs\\.?|inr|₹)\\s*(?<amt>[\\d,]+(?:\\.\\d{1,2})?)\\s+is\\s+due\\s+(?:on|by)\\s+(?<due>\\d{2}[-/ ](?:\\d{2}|(?:jan|feb|mar|apr|may|jun|jul|aug|sep|oct|nov|dec))[-/ ]\\d{2,4}|\\d{2}(?:jan|feb|mar|apr|may|jun|jul|aug|sep|oct|nov|dec)\\d{2,4})",
+      "flags": "i"
+    },
+    "emit": [
+      {
+        "factType": "bill_due",
+        "attrs": {
+          "dueDate": {
+            "from": "due"
+          },
+          "billerName": {
+            "from": "biller",
+            "transforms": [
+              "upperTrim"
+            ]
+          }
+        },
+        "amounts": [
+          {
+            "role": "due_total",
+            "from": "amt",
+            "unit": "INR"
+          }
+        ]
+      }
+    ],
+    "confidence": 0.95,
+    "examples": [
+      {
+        "sender": "VM-LICIND-S",
+        "body": "Your LIC policy premium of Rs. 4,500 is due on 15-Nov-2026. Pay before due date.",
+        "expectFactTypes": [
+          "bill_due"
+        ]
+      },
+      {
+        "sender": "VM-LICIND-S",
+        "body": "Your LIC policy premium of Rs. 4,500 was paid on 15-Nov-2026.",
+        "expectFactTypes": []
+      }
+    ],
+    "status": "active",
+    "createdBy": "baseline",
+    "updatedAt": "2026-11-20T00:00:00Z"
+  },
+  {
+    "id": "BIL-INS-PREMIUM-DEBIT-01",
+    "version": 1,
+    "family": "bill_upcoming",
+    "senders": [
+      "*"
+    ],
+    "priority": 600,
+    "match": {
+      "pattern": "keep\\s+sufficient\\s+(?:funds|balance)[\\s\\S]{0,80}?(?<biller>[a-z]+)\\s+policy[\\s\\S]{0,40}?premium\\s+(?:of\\s+)?(?:rs\\.?|inr|₹)\\s*(?<amt>[\\d,]+(?:\\.\\d{1,2})?)[\\s\\S]{0,40}?will be\\s+debited\\s+on\\s+(?<due>\\d{2}[-/ ](?:\\d{2}|(?:jan|feb|mar|apr|may|jun|jul|aug|sep|oct|nov|dec))[-/ ]\\d{2,4}|\\d{2}(?:jan|feb|mar|apr|may|jun|jul|aug|sep|oct|nov|dec)\\d{2,4})",
+      "flags": "i"
+    },
+    "emit": [
+      {
+        "factType": "attempt",
+        "attrs": {
+          "status": "scheduled",
+          "direction": "debit",
+          "purpose": "bill_payment",
+          "dueAt": {
+            "from": "due"
+          }
+        },
+        "amounts": [
+          {
+            "role": "scheduled",
+            "from": "amt",
+            "unit": "INR"
+          }
+        ]
+      }
+    ],
+    "confidence": 0.9,
+    "examples": [
+      {
+        "sender": "VM-LICIND-S",
+        "body": "Please keep sufficient funds in your account for LIC policy no 123456789 premium Rs. 2500 which will be debited on 25-10-2026.",
+        "expectFactTypes": [
+          "attempt"
+        ]
+      },
+      {
+        "sender": "VM-LICIND-S",
+        "body": "Premium Rs. 2500 for LIC policy no 123456789 has been debited on 25-10-2026.",
+        "expectFactTypes": []
+      }
+    ],
+    "status": "active",
+    "createdBy": "baseline",
+    "updatedAt": "2026-11-20T00:00:00Z"
+  },
+  {
+    "id": "BIL-LOAN-EMI-DUE-01",
+    "version": 1,
+    "family": "bill_due",
+    "senders": [
+      "*"
+    ],
+    "priority": 600,
+    "match": {
+      "pattern": "emi\\s+of\\s+(?:rs\\.?|inr|₹)\\s*(?<amt>[\\d,]+(?:\\.\\d{1,2})?)\\s+(?:for|towards|on)\\s+(?:your\\s+)?(?:[a-z]+\\s+)?(?:[a-z]+\\s+)?loan\\s+(?:a/c|acct?\\.?|account)\\s*(?:no\\.?\\s*)?(?:ending\\s*(?:with\\s*|in\\s*)?)?(?:[x*•.]+\\s*)?(?<mask>\\d{2,16})\\b[\\s\\S]{0,20}?(?:is|are)\\s+due\\s+(?:on|by)\\s+(?<due>\\d{2}[-/ ](?:\\d{2}|(?:jan|feb|mar|apr|may|jun|jul|aug|sep|oct|nov|dec))[-/ ]\\d{2,4}|\\d{2}(?:jan|feb|mar|apr|may|jun|jul|aug|sep|oct|nov|dec)\\d{2,4})",
+      "flags": "i"
+    },
+    "emit": [
+      {
+        "factType": "bill_due",
+        "attrs": {
+          "dueDate": {
+            "from": "due"
+          }
+        },
+        "amounts": [
+          {
+            "role": "due_total",
+            "from": "amt",
+            "unit": "INR"
+          }
+        ],
+        "instrument": {
+          "kind": "loan",
+          "maskFrom": "mask"
+        }
+      }
+    ],
+    "confidence": 0.93,
+    "examples": [
+      {
+        "sender": "VM-HDFCBK-S",
+        "body": "Your EMI of Rs 12,345 for your Personal Loan A/c XX1234 is due on 05-Nov-26. Please maintain sufficient balance.",
+        "expectFactTypes": [
+          "bill_due"
+        ]
+      },
+      {
+        "sender": "VM-HDFCBK-S",
+        "body": "Dear Customer, EMI of Rs. 8,500.00 for loan account 7788 is due on 05-11-2026.",
+        "expectFactTypes": [
+          "bill_due"
+        ]
+      },
+      {
+        "sender": "VM-HDFCBK-S",
+        "body": "Your EMI of Rs 12,345 for your Personal Loan A/c XX1234 was received on 05-Nov-26. Thank you.",
+        "expectFactTypes": []
+      }
+    ],
+    "status": "active",
+    "createdBy": "baseline",
+    "updatedAt": "2026-11-20T00:00:00Z"
+  },
+  {
+    "id": "BIL-LOAN-EMI-RECEIVED-01",
+    "version": 1,
+    "family": "bill_receipt",
+    "senders": [
+      "*"
+    ],
+    "priority": 600,
+    "match": {
+      "pattern": "(?:received|paid)\\s+(?:your\\s+)?emi\\s+of\\s+(?:rs\\.?|inr|₹)\\s*(?<amt>[\\d,]+(?:\\.\\d{1,2})?)\\s+(?:for|towards)\\s+(?:your\\s+)?(?:[a-z]+\\s+)?(?:[a-z]+\\s+)?loan\\s+(?:a/c|acct?\\.?|account)\\s*(?:no\\.?\\s*)?(?:ending\\s*(?:with\\s*|in\\s*)?)?(?:[x*•.]+\\s*)?(?<mask>\\d{2,16})\\b",
+      "flags": "i",
+      "rejectAny": [
+        "is due"
+      ]
+    },
+    "emit": [
+      {
+        "factType": "movement",
+        "attrs": {
+          "direction": "debit",
+          "purpose": "emi",
+          "rail": "unknown",
+          "evidenceOnly": true
+        },
+        "amounts": [
+          {
+            "role": "posted",
+            "from": "amt",
+            "unit": "INR"
+          }
+        ],
+        "instrument": {
+          "kind": "loan",
+          "maskFrom": "mask"
+        }
+      }
+    ],
+    "confidence": 0.9,
+    "examples": [
+      {
+        "sender": "VM-HDFCBK-S",
+        "body": "We have received your EMI of Rs 12,345 for your Personal Loan A/c XX1234. Thank you for the timely payment.",
+        "expectFactTypes": [
+          "movement"
+        ]
+      },
+      {
+        "sender": "VM-HDFCBK-S",
+        "body": "Your EMI of Rs 12,345 for your Personal Loan A/c XX1234 is due on 05-Nov-26.",
+        "expectFactTypes": []
+      }
+    ],
+    "status": "active",
+    "createdBy": "baseline",
+    "updatedAt": "2026-11-20T00:00:00Z"
+  },
+  {
+    "id": "BIL-RECEIPT-PAYMENT-01",
+    "version": 1,
+    "family": "bill_receipt",
+    "senders": [
+      "*"
+    ],
+    "priority": 550,
+    "match": {
+      "pattern": "(?:bill\\s+)?(?:payment|recharge)\\s+of\\s+(?:rs\\.?|inr|₹)\\s*(?<amt>[\\d,]+(?:\\.\\d{1,2})?)\\s+(?:for|towards)\\s+(?<biller>[a-z0-9][a-z0-9&. ]{1,40}?)\\s+(?:is\\s+|was\\s+|has been\\s+)?(?:received|successful|successfully\\s+(?:done|processed|completed)|completed)",
+      "flags": "i",
+      "rejectAny": [
+        "failed",
+        "unsuccessful",
+        "declined",
+        "pending",
+        "will be",
+        "credit card",
+        "card no",
+        "card ending",
+        "a/c"
+      ]
+    },
+    "emit": [
+      {
+        "factType": "movement",
+        "attrs": {
+          "direction": "debit",
+          "purpose": "bill_payment",
+          "rail": "unknown",
+          "evidenceOnly": true
+        },
+        "amounts": [
+          {
+            "role": "posted",
+            "from": "amt",
+            "unit": "INR"
+          }
+        ],
+        "counterparty": {
+          "kind": "merchant",
+          "nameFrom": "biller",
+          "transforms": [
+            "upperTrim"
+          ]
+        }
+      }
+    ],
+    "confidence": 0.9,
+    "examples": [
+      {
+        "sender": "VM-JIOPAY-S",
+        "body": "Payment of Rs 999.00 for JioFiber has been received. Thank you for staying with Jio.",
+        "expectFactTypes": [
+          "movement"
+        ]
+      },
+      {
+        "sender": "VM-JIOPAY-S",
+        "body": "Payment of Rs 999.00 for JioFiber failed. Please retry.",
+        "expectFactTypes": []
+      }
+    ],
+    "status": "active",
+    "createdBy": "baseline",
+    "updatedAt": "2026-11-20T00:00:00Z"
+  },
+  {
+    "id": "BIL-RECEIPT-RENT-01",
+    "version": 1,
+    "family": "bill_receipt",
+    "senders": [
+      "*"
+    ],
+    "priority": 550,
+    "match": {
+      "pattern": "rent\\s+payment\\s+of\\s+(?:rs\\.?|inr|₹)\\s*(?<amt>[\\d,]+(?:\\.\\d{1,2})?)\\s+(?:to|for)\\s+(?<m>[a-z0-9][a-z0-9&. ]{1,40}?)\\s+(?:is|was|has been)\\s+successful",
+      "flags": "i",
+      "rejectAny": [
+        "failed",
+        "refund"
+      ]
+    },
+    "emit": [
+      {
+        "factType": "movement",
+        "attrs": {
+          "direction": "debit",
+          "purpose": "bill_payment",
+          "rail": "unknown",
+          "evidenceOnly": true
+        },
+        "amounts": [
+          {
+            "role": "posted",
+            "from": "amt",
+            "unit": "INR"
+          }
+        ],
+        "counterparty": {
+          "kind": "person",
+          "nameFrom": "m",
+          "transforms": [
+            "upperTrim"
+          ]
+        }
+      }
+    ],
+    "confidence": 0.88,
+    "examples": [
+      {
+        "sender": "VM-CREDCL-S",
+        "body": "Rent payment of Rs 25,000.00 to SUNIL PROPERTIES is successful. Receipt sent to your email.",
+        "expectFactTypes": [
+          "movement"
+        ]
+      },
+      {
+        "sender": "VM-CREDCL-S",
+        "body": "Rent payment of Rs 25,000.00 to SUNIL PROPERTIES has failed. Amount refunded.",
+        "expectFactTypes": []
+      }
+    ],
+    "status": "active",
+    "createdBy": "baseline",
+    "updatedAt": "2026-11-20T00:00:00Z"
+  },
+  {
+    "id": "BIL-RECEIPT-THANKS-01",
+    "version": 1,
+    "family": "bill_receipt",
+    "senders": [
+      "*"
+    ],
+    "priority": 550,
+    "match": {
+      "pattern": "thank\\s+you\\s+for\\s+(?:the\\s+)?(?:paying|payment\\s+of)\\s+(?:rs\\.?|inr|₹)\\s*(?<amt>[\\d,]+(?:\\.\\d{1,2})?)\\s+(?:for|towards)\\s+(?:your\\s+)?(?<biller>[a-z0-9][a-z0-9&. ]{1,40}?)(?:\\s+bill)?(?=\\s*(?:[.,;]|on\\b|$))",
+      "flags": "i",
+      "rejectAny": [
+        "credit card",
+        "card no",
+        "card ending",
+        "a/c"
+      ]
+    },
+    "emit": [
+      {
+        "factType": "movement",
+        "attrs": {
+          "direction": "debit",
+          "purpose": "bill_payment",
+          "rail": "unknown",
+          "evidenceOnly": true
+        },
+        "amounts": [
+          {
+            "role": "posted",
+            "from": "amt",
+            "unit": "INR"
+          }
+        ],
+        "counterparty": {
+          "kind": "merchant",
+          "nameFrom": "biller",
+          "transforms": [
+            "upperTrim"
+          ]
+        }
+      }
+    ],
+    "confidence": 0.88,
+    "examples": [
+      {
+        "sender": "VM-JIOPAY-S",
+        "body": "Thank you for paying Rs 999.00 for your JioFiber bill.",
+        "expectFactTypes": [
+          "movement"
+        ]
+      },
+      {
+        "sender": "VM-JIOPAY-S",
+        "body": "Thank you for choosing JioFiber. Your bill of Rs 999.00 is due soon.",
+        "expectFactTypes": []
+      }
+    ],
+    "status": "active",
+    "createdBy": "baseline",
+    "updatedAt": "2026-11-20T00:00:00Z"
+  },
+  {
+    "id": "BIL-UTIL-BILL-01",
+    "version": 1,
+    "family": "bill_due",
+    "senders": [
+      "*"
+    ],
+    "priority": 600,
+    "match": {
+      "pattern": "your\\s+(?<biller>[a-z][a-z0-9&. ]{1,30}?)\\s+(?:(?:electricity|water|gas|broadband|postpaid|prepaid|mobile|internet|dth|landline|fibre|fiber|cylinder)\\s+)?bill\\s+(?:amount\\s+)?of\\s+(?:rs\\.?|inr|₹)\\s*(?<amt>[\\d,]+(?:\\.\\d{1,2})?)\\s+is\\s+(?:due|payable|pending)\\s+(?:on|by)\\s+(?<due>\\d{2}[-/ ](?:\\d{2}|(?:jan|feb|mar|apr|may|jun|jul|aug|sep|oct|nov|dec))[-/ ]\\d{2,4}|\\d{2}(?:jan|feb|mar|apr|may|jun|jul|aug|sep|oct|nov|dec)\\d{2,4})",
+      "flags": "i",
+      "rejectAny": [
+        "has been paid",
+        "payment received",
+        "was paid"
+      ]
+    },
+    "emit": [
+      {
+        "factType": "bill_due",
+        "attrs": {
+          "dueDate": {
+            "from": "due"
+          },
+          "billerName": {
+            "from": "biller",
+            "transforms": [
+              "upperTrim"
+            ]
+          }
+        },
+        "amounts": [
+          {
+            "role": "due_total",
+            "from": "amt",
+            "unit": "INR"
+          }
+        ]
+      }
+    ],
+    "confidence": 0.95,
+    "examples": [
+      {
+        "sender": "VM-TNBPAY-S",
+        "body": "Your TNEB electricity bill of Rs.1,500 is due on 18-10-26. Pay on TNEB app and get Rs.100 cashback offer!",
+        "expectFactTypes": [
+          "bill_due"
+        ]
+      },
+      {
+        "sender": "VM-ALEGRA-S",
+        "body": "Your Alegra broadband bill of Rs 590.00 is due on 05-Nov-26. Pay now to avoid disconnection.",
+        "expectFactTypes": [
+          "bill_due"
+        ]
+      },
+      {
+        "sender": "VM-TNBPAY-S",
+        "body": "Your TNEB electricity bill of Rs.1,500 has been paid on 18-10-26. Thank you.",
+        "expectFactTypes": []
+      }
+    ],
+    "status": "active",
+    "createdBy": "baseline",
+    "updatedAt": "2026-11-20T00:00:00Z"
+  },
+  {
+    "id": "BIL-UTIL-BILL-90",
+    "version": 1,
+    "family": "bill_due",
+    "senders": [
+      "*"
+    ],
+    "priority": 250,
+    "match": {
+      "pattern": "(?<biller>[a-z][a-z0-9&. ]{1,30}?)\\s+(?:bill|invoice)\\s+(?:amount\\s+)?(?:of\\s+)?(?:rs\\.?|inr|₹)\\s*(?<amt>[\\d,]+(?:\\.\\d{1,2})?)\\s+(?:is\\s+)?(?:due|payable|pending)\\s+(?:on|by)\\s+(?<due>\\d{2}[-/ ](?:\\d{2}|(?:jan|feb|mar|apr|may|jun|jul|aug|sep|oct|nov|dec))[-/ ]\\d{2,4}|\\d{2}(?:jan|feb|mar|apr|may|jun|jul|aug|sep|oct|nov|dec)\\d{2,4})",
+      "flags": "i",
+      "rejectAny": [
+        "was paid",
+        "has been paid",
+        "received"
+      ]
+    },
+    "emit": [
+      {
+        "factType": "bill_due",
+        "attrs": {
+          "dueDate": {
+            "from": "due"
+          },
+          "billerName": {
+            "from": "biller",
+            "transforms": [
+              "upperTrim"
+            ]
+          }
+        },
+        "amounts": [
+          {
+            "role": "due_total",
+            "from": "amt",
+            "unit": "INR"
+          }
+        ]
+      }
+    ],
+    "confidence": 0.8,
+    "examples": [
+      {
+        "sender": "VM-BESCOM-S",
+        "body": "BESCOM electricity bill of Rs 1,240.00 is due on 12-Nov-26. Pay via BESCOM app.",
+        "expectFactTypes": [
+          "bill_due"
+        ]
+      },
+      {
+        "sender": "VM-BESCOM-S",
+        "body": "BESCOM electricity bill of Rs 1,240.00 was paid on 12-Nov-26.",
+        "expectFactTypes": []
+      }
+    ],
+    "status": "active",
+    "createdBy": "baseline",
+    "updatedAt": "2026-11-20T00:00:00Z"
+  },
+  {
+    "id": "BIL-UTIL-TELECOM-01",
+    "version": 1,
+    "family": "bill_due",
+    "senders": [
+      "*"
+    ],
+    "priority": 600,
+    "match": {
+      "pattern": "bill\\s+for\\s+your\\s+(?<biller>[a-z][a-z0-9&. ]{1,20}?)\\s+(?:postpaid\\s+)?(?:mobile\\s+)?(?:number|no\\.?|account|a/c|connection)\\s*[:#]?\\s*[\\dx*]+[\\s\\S]{0,40}?total\\s+(?:amount\\s+|amt\\s+)?due\\s*[:\\-]?\\s*(?:is\\s+)?(?:rs\\.?|inr|₹)\\s*(?<amt>[\\d,]+(?:\\.\\d{1,2})?)\\s+(?:payable\\s+)?(?:by|on)\\s+(?<due>\\d{2}[-/ ](?:\\d{2}|(?:jan|feb|mar|apr|may|jun|jul|aug|sep|oct|nov|dec))[-/ ]\\d{2,4}|\\d{2}(?:jan|feb|mar|apr|may|jun|jul|aug|sep|oct|nov|dec)\\d{2,4})",
+      "flags": "i"
+    },
+    "emit": [
+      {
+        "factType": "bill_due",
+        "attrs": {
+          "dueDate": {
+            "from": "due"
+          },
+          "billerName": {
+            "from": "biller",
+            "transforms": [
+              "upperTrim"
+            ]
+          }
+        },
+        "amounts": [
+          {
+            "role": "due_total",
+            "from": "amt",
+            "unit": "INR"
+          }
+        ]
+      }
+    ],
+    "confidence": 0.95,
+    "examples": [
+      {
+        "sender": "VM-JIOPAY-S",
+        "body": "Bill for your Jio number 9876543210 is ready. Total amount due is Rs 799 payable by 20-Nov-2026.",
+        "expectFactTypes": [
+          "bill_due"
+        ]
+      },
+      {
+        "sender": "VM-JIOPAY-S",
+        "body": "Bill for your Jio number 9876543210 is ready. Pay anytime from the MyJio app.",
+        "expectFactTypes": []
+      }
+    ],
+    "status": "active",
+    "createdBy": "baseline",
+    "updatedAt": "2026-11-20T00:00:00Z"
+  },
+  {
+    "id": "BIL-UTIL-TELECOM-02",
+    "version": 1,
+    "family": "bill_due",
+    "senders": [
+      "*"
+    ],
+    "priority": 600,
+    "match": {
+      "pattern": "(?<biller>[a-z]+)\\s+postpaid:?\\s+bill\\s+generated[\\s\\S]{0,60}?total\\s+(?:amount\\s+|amt\\s+)?due\\s*[:\\-]?\\s*(?:is\\s+)?(?:rs\\.?|inr|₹)\\s*(?<amt>[\\d,]+(?:\\.\\d{1,2})?)\\s+(?:payable\\s+)?(?:by|on)\\s+(?<due>\\d{2}[-/ ](?:\\d{2}|(?:jan|feb|mar|apr|may|jun|jul|aug|sep|oct|nov|dec))[-/ ]\\d{2,4}|\\d{2}(?:jan|feb|mar|apr|may|jun|jul|aug|sep|oct|nov|dec)\\d{2,4})",
+      "flags": "i"
+    },
+    "emit": [
+      {
+        "factType": "bill_due",
+        "attrs": {
+          "dueDate": {
+            "from": "due"
+          },
+          "billerName": {
+            "from": "biller",
+            "transforms": [
+              "upperTrim"
+            ]
+          }
+        },
+        "amounts": [
+          {
+            "role": "due_total",
+            "from": "amt",
+            "unit": "INR"
+          }
+        ]
+      }
+    ],
+    "confidence": 0.95,
+    "examples": [
+      {
+        "sender": "VM-VICARE-S",
+        "body": "Vi Postpaid: Bill generated for mobile 9822012345. Total amount due Rs. 701 by 12-Nov-2026.",
+        "expectFactTypes": [
+          "bill_due"
+        ]
+      },
+      {
+        "sender": "VM-VICARE-S",
+        "body": "Vi Postpaid: Bill generated for mobile 9822012345. Pay from the Vi app.",
+        "expectFactTypes": []
+      }
+    ],
+    "status": "active",
+    "createdBy": "baseline",
+    "updatedAt": "2026-11-20T00:00:00Z"
+  }
+]

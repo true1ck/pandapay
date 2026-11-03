@@ -1,0 +1,232 @@
+[
+  {
+    "brand": "ANGELO",
+    "issuerSlug": "angel_one",
+    "issuerKind": "broker",
+    "aliases": [
+      "ANGLEO",
+      "ANGELB",
+      "ANGLBR"
+    ]
+  },
+  {
+    "brand": "AXISMF",
+    "issuerSlug": "axis_mf",
+    "issuerKind": "other",
+    "aliases": [
+      "AXISMFS"
+    ]
+  },
+  {
+    "brand": "BSEIND",
+    "issuerSlug": "bse",
+    "issuerKind": "other",
+    "aliases": [
+      "BSEMKT",
+      "BSEIPO",
+      "BSEINF",
+      "BSESTR"
+    ]
+  },
+  {
+    "brand": "CAMSMF",
+    "issuerSlug": "cams",
+    "issuerKind": "other",
+    "aliases": [
+      "CAMSON",
+      "CAMSRG",
+      "CAMSCS"
+    ]
+  },
+  {
+    "brand": "DHANHQ",
+    "issuerSlug": "dhan",
+    "issuerKind": "broker",
+    "aliases": [
+      "DHANAI",
+      "DHANBR"
+    ]
+  },
+  {
+    "brand": "FIVEPS",
+    "issuerSlug": "five_paisa",
+    "issuerKind": "broker",
+    "aliases": [
+      "5PAISA",
+      "FIVEPAISA"
+    ]
+  },
+  {
+    "brand": "GROWW",
+    "issuerSlug": "groww",
+    "issuerKind": "broker",
+    "aliases": [
+      "GROWWZ",
+      "GROWWI",
+      "GRWWMF"
+    ]
+  },
+  {
+    "brand": "HDFCMF",
+    "issuerSlug": "hdfc_mf",
+    "issuerKind": "other",
+    "aliases": [
+      "HDFCMFS"
+    ]
+  },
+  {
+    "brand": "HDFCSC",
+    "issuerSlug": "hdfc_securities",
+    "issuerKind": "broker",
+    "aliases": [
+      "HDFCSE",
+      "HDFCSEC"
+    ]
+  },
+  {
+    "brand": "ICICID",
+    "issuerSlug": "icici_securities",
+    "issuerKind": "broker",
+    "aliases": [
+      "ICICIS",
+      "ICICIDIRECT"
+    ]
+  },
+  {
+    "brand": "ICICIP",
+    "issuerSlug": "icici_prudential_mf",
+    "issuerKind": "other",
+    "aliases": [
+      "ICICIMF",
+      "ICIPRU"
+    ]
+  },
+  {
+    "brand": "INDMNY",
+    "issuerSlug": "indmoney",
+    "issuerKind": "broker",
+    "aliases": [
+      "INDMON",
+      "INDMONEY"
+    ]
+  },
+  {
+    "brand": "KFINTC",
+    "issuerSlug": "kfintech",
+    "issuerKind": "other",
+    "aliases": [
+      "KFINTK",
+      "KARVYM",
+      "KFINTECH"
+    ]
+  },
+  {
+    "brand": "KOTAKN",
+    "issuerSlug": "kotak_securities",
+    "issuerKind": "broker",
+    "aliases": [
+      "KOTAKS",
+      "KSECUR",
+      "KOTSEC"
+    ]
+  },
+  {
+    "brand": "MIRAEM",
+    "issuerSlug": "mirae_mf",
+    "issuerKind": "other",
+    "aliases": [
+      "MIRAEAM"
+    ]
+  },
+  {
+    "brand": "MOSLTD",
+    "issuerSlug": "motilal_oswal",
+    "issuerKind": "broker",
+    "aliases": [
+      "MOTILAL",
+      "MOFSL"
+    ]
+  },
+  {
+    "brand": "NIPPON",
+    "issuerSlug": "nippon_mf",
+    "issuerKind": "other",
+    "aliases": [
+      "NIPPMF",
+      "NIPPONMF"
+    ]
+  },
+  {
+    "brand": "NSEIND",
+    "issuerSlug": "nse",
+    "issuerKind": "other",
+    "aliases": [
+      "NSEMKT",
+      "NSEINF",
+      "NSEIPO",
+      "NSECLG"
+    ]
+  },
+  {
+    "brand": "PAYTMM",
+    "issuerSlug": "paytm_money",
+    "issuerKind": "broker",
+    "aliases": [
+      "PTMMNY",
+      "PAYTMMONEY"
+    ]
+  },
+  {
+    "brand": "PPFAS",
+    "issuerSlug": "ppfas_mf",
+    "issuerKind": "other",
+    "aliases": [
+      "PPFASM"
+    ]
+  },
+  {
+    "brand": "SBIMFS",
+    "issuerSlug": "sbi_mf",
+    "issuerKind": "other",
+    "aliases": [
+      "SBIMF",
+      "SBIMFN"
+    ]
+  },
+  {
+    "brand": "SHRKHN",
+    "issuerSlug": "sharekhan",
+    "issuerKind": "broker",
+    "aliases": [
+      "SHAREK",
+      "SHRKHAN"
+    ]
+  },
+  {
+    "brand": "UNIVST",
+    "issuerSlug": "univest",
+    "issuerKind": "broker",
+    "aliases": [
+      "UNIVEST"
+    ]
+  },
+  {
+    "brand": "UPSTOX",
+    "issuerSlug": "upstox",
+    "issuerKind": "broker",
+    "aliases": [
+      "UPSTXS",
+      "RKSVSE",
+      "UPSTOXS"
+    ]
+  },
+  {
+    "brand": "ZERODH",
+    "issuerSlug": "zerodha",
+    "issuerKind": "broker",
+    "aliases": [
+      "ZERODHA",
+      "ZRDHA"
+    ]
+  }
+]
