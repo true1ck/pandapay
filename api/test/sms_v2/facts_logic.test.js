@@ -169,6 +169,15 @@ test('forbidden status changes', () => {
   }
 });
 
+test('explicit user-confirmed corrections replace wrong legs and roles', () => {
+  const initial = mkEvent('complete', [debit, credit]);
+  const corrected = mkEvent('user_confirmed', [{...debit, role:'original'}]);
+  const first = storage.mergeEvent(initial, corrected);
+  assert.equal(first.ok, true);
+  assert.deepEqual(first.merged.legs, corrected.legs);
+  assert.deepEqual(storage.mergeEvent(first.merged, corrected), {ok:true,merged:corrected,changed:false});
+});
+
 test('nothing leaves user_confirmed', () => {
   for (const to of ['awaiting_leg', 'ambiguous', 'complete']) {
     const r = storage.mergeEvent(mkEvent('user_confirmed', [debit, credit]), mkEvent(to, [debit, credit], { type: 'unknown' }));

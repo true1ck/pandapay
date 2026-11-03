@@ -133,9 +133,15 @@ class CorrectionsService {
           if (event == null) throw ArgumentError('An event is required');
           event = event!.copyWith(type: EventType.unknown);
         } else if (correction.kind == CorrectionKind.wrongInstrument) {
+          if (originalFacts.isEmpty) {
+            throw ArgumentError('A source fact is required');
+          }
           final instrumentId = corrected['instrumentId'] as String;
-          if (InstrumentStore(_db, namespace: namespace).get(instrumentId) ==
-              null) {
+          final target = InstrumentStore(
+            _db,
+            namespace: namespace,
+          ).get(instrumentId);
+          if (target == null || target.status == InstrumentStatus.rejected) {
             throw ArgumentError('Instrument is not in this account');
           }
           for (final fact in originalFacts.values) {
@@ -188,11 +194,23 @@ class CorrectionsService {
             if (amount is! int || amount <= 0) {
               throw ArgumentError('Positive paise required');
             }
+            final role =
+                corrected['amountRole'] as String? ??
+                original.amounts
+                    .where((value) => value.role == AmountRole.posted)
+                    .firstOrNull
+                    ?.role
+                    .wire ??
+                original.amounts.firstOrNull?.role.wire;
+            if (role == null ||
+                !original.amounts.any((value) => value.role.wire == role)) {
+              throw ArgumentError('A printed amount role is required');
+            }
             patch['amounts'] = [
               for (final value in original.amounts)
                 {
                   ...value.toJson(),
-                  if (value.role == AmountRole.posted) 'minor': amount,
+                  if (value.role.wire == role) 'minor': amount,
                 },
             ];
           }
@@ -243,7 +261,20 @@ class CorrectionsService {
           final check = event!.validate();
           if (!check.ok) throw ContractException(check.errors);
           event = _events.upsert(event!, fromUser: true);
-          final previousEntries = _ledger.forEvent(event!.eventId);
+          final affected = <String, Event>{
+            event!.eventId: event!,
+            for (final related in _events.findByFactIds(correction.factIds))
+              if (related.eventId != event!.eventId) related.eventId: related,
+          };
+          final previousEntries = [
+            for (final related in affected.values)
+              ..._ledger.forEvent(related.eventId),
+          ];
+          for (final saved in _ledger.categoryDecisions().entries) {
+            if (saved.value.source == CategorySource.user) {
+              locked.putIfAbsent(saved.key, () => saved.value);
+            }
+          }
           final allFacts = {
             for (final fact in _facts.since(DateTime.utc(1900)))
               fact.factId: fact,
@@ -261,7 +292,7 @@ class CorrectionsService {
             aliases: bundle.merchantAliases,
           );
           final snapshot = LedgerSnapshot.project(
-            events: [event!],
+            events: affected.values,
             factsById: allFacts,
             instrumentsById: instruments,
             bundle: bundle,
@@ -288,7 +319,9 @@ class CorrectionsService {
               ]);
             }
           }
-          _outbox.enqueue('event', event!.eventId, event!.toJson());
+          for (final changed in affected.values) {
+            _outbox.enqueue('event', changed.eventId, changed.toJson());
+          }
           for (final entry in snapshot.entries) {
             _outbox.enqueue('ledger', entry.entryId, entry.toJson());
           }
