@@ -57,8 +57,10 @@ async function submitCorrection(client, profileId, body, { sharedLearningEligibl
     const event = await client.query('SELECT event_id FROM sms_v2_events WHERE profile_id=$1 AND event_id=$2', [profileId, body.eventId]);
     if (!event.rows.length) throw Object.assign(new Error('correction_event_not_found'), { status: 400 });
   }
+  await client.query('SELECT pg_advisory_xact_lock(hashtextextended($1::text,0))',
+    ['sms-shared-learning-consent:' + profileId]);
   const consent = await client.query(
-    "SELECT granted FROM user_consents WHERE profile_id=$1 AND purpose='sms_shared_learning'",
+    "SELECT granted FROM user_consents WHERE profile_id=$1 AND purpose='sms_shared_learning' ORDER BY granted_at DESC,granted ASC,id DESC LIMIT 1",
     [profileId],
   );
   const shared = consent.rows[0]?.granted === true;
