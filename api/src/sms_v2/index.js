@@ -82,6 +82,8 @@ function registerSmsV2(app, deps) {
   const rules = registerRules(app, { ...deps, ...shared, hooks: { ...hooks, security: lazySecurity }, requireAdmin: deps.requireAdmin, signer });
   hooks.latestBundleVersion = rules.latestBundleVersion;
 
+  require('./corrections_route').registerCorrections(app, shared);
+
   // WP-10, WP-12 and WP-13 each add one registration line here.
   return { hooks };
 }

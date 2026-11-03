@@ -4,6 +4,10 @@
   "updated": "2026-11-02",
   "comment": "Schema-aware inventory of PostgreSQL CREATE TABLE objects in db/supabase/migrations. Public-schema keys remain unqualified for contract compatibility; non-public schemas are qualified. This registry covers server migration tables only, not SQLite tables or individual fields, and is not a full database disaster-recovery manifest. Portable export and restore services have separate device, integration and recovery acceptance gates; excluded user-linked rows remain explicit coverage gaps.",
   "tables": {
+    "sms_v2_correction_cases": {
+      "disposition": "platform_ops",
+      "reason": "Correction review and operational decisions are preserved by full database recovery. Per-account portable restore cannot recreate administrator review decisions."
+    },
     "sms_v2_rate_counters": {
       "disposition": "platform_ops",
       "reason": "Ephemeral admission counters contain installation digests and account quota usage. Full database recovery preserves operational limits. Per-account portable restores cannot reset admission quotas."

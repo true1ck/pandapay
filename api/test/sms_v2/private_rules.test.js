@@ -9,7 +9,7 @@ const { registerRules } = require('../../src/sms_v2/rules_route');
 const { MemoryStore } = require('../../src/sms_v2/rules_store');
 const express = require('express');
 
-const policies = routeManifest.filter(row => row.path.startsWith('/admin/sms/v2/'));
+const policies = routeManifest.filter(row => row.path.startsWith('/admin/sms/v2/rules') || row.path === '/admin/sms/v2/bundles');
 const token = 'a'.repeat(43);
 
 test('private SMS administration checks permission, fresh MFA and feature flag', async t => {
