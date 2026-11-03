@@ -250,5 +250,14 @@
     "pattern": "^[^\\r\\n]{1,160} has requested money from you on PhonePe\\.\\s+(?:rs\\.?|inr|₹)\\s*[\\d,]+(?:\\.\\d{1,2})?\\s+will be debited from your account on approving the request\\s*-\\s*https?://\\S+\\s*$",
     "flags": "i",
     "reason": "service"
+  },
+  {
+    "id": "IGN-ICICI-TRANSACTION-PASSWORD",
+    "senders": [
+      "ICICIO"
+    ],
+    "pattern": "^\\s*\\d{4,8}\\s+is\\s+one[- ]time\\s+password\\s+for\\s+(?:rs\\.?|inr|₹)\\s*\\d[\\d,.]*\\s+transaction\\s+towards\\b[^\\r\\n]{1,180}\\busing\\s+icici\\s+bank\\s+credit\\s+card\\b",
+    "flags": "i",
+    "reason": "otp"
   }
 ]
