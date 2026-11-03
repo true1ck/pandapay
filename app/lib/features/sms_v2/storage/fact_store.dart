@@ -41,6 +41,17 @@ ON CONFLICT(namespace, fact_id) DO NOTHING
   List<Fact> since(DateTime from) =>
       _read('observed_at >= ?', [_timestamp(from)]);
 
+  Fact? get(String factId) => _read('fact_id = ?', [factId]).firstOrNull;
+
+  Map<String, String> instrumentIdsSince(DateTime from) => {
+    for (final row in _db.select(
+      'SELECT fact_id, instrument_id FROM v2_facts '
+      'WHERE namespace = ? AND observed_at >= ? AND instrument_id IS NOT NULL',
+      [namespace, _timestamp(from)],
+    ))
+      row['fact_id'] as String: row['instrument_id'] as String,
+  };
+
   /// Info facts stay on the phone and are never eligible for upload.
   List<Fact> pendingUpload({required int limit}) {
     if (limit <= 0) throw ArgumentError.value(limit, 'limit');

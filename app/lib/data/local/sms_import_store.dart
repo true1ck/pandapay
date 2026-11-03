@@ -2,6 +2,9 @@ import 'dart:convert';
 
 import 'package:pandapay_domain/pandapay_domain.dart';
 
+import 'package:pandapay_domain/sms_v2.dart' as sms_v2;
+import '../../features/sms_v2/pipeline/sms_v2_pipeline.dart';
+
 import '../commitments_repository.dart';
 import '../past_bill_receipts.dart';
 import '../pending_bills.dart';
@@ -53,6 +56,8 @@ class SmsAiResolutionResult {
 /// and the Android background isolate. Upload is deliberately separate.
 class SmsImportStore {
   final FinancialStore store;
+  final SmsV2Pipeline? v2Pipeline;
+  final bool deferToSmsV2;
   // Drain profile name into the parser for own-name self-transfer matching.
   final String? ownUserName;
   final SmsRuleBundle? downloadedRules;
@@ -60,10 +65,16 @@ class SmsImportStore {
   SmsImportStore(
     this.store, {
     this.ownUserName,
+    this.v2Pipeline,
+    this.deferToSmsV2 = false,
     this.downloadedRules,
     this.candidateRules = const [],
   });
   void captureBatch(String namespace, List<QueuedSms> messages) {
+    if (v2Pipeline != null || deferToSmsV2) {
+      _captureV2(namespace, messages);
+      return;
+    }
     store.batch(() {
       final db = store.database.db;
       final cards = store
@@ -106,6 +117,10 @@ class SmsImportStore {
   }
 
   void capture(String namespace, QueuedSms message) {
+    if (v2Pipeline != null || deferToSmsV2) {
+      _captureV2(namespace, [message]);
+      return;
+    }
     _capture(
       namespace,
       message,
@@ -115,6 +130,84 @@ class SmsImportStore {
       SmsRuleBundleStore(store.database).loadSharedCategoryRulesSync(),
       SelfTransferRules(store.database, namespace: namespace).load(),
     );
+  }
+
+  void _captureV2(String namespace, List<QueuedSms> messages) {
+    final pipeline = v2Pipeline;
+    if (pipeline != null && pipeline.namespace != namespace) {
+      throw ArgumentError('SMS pipeline account mismatch');
+    }
+    final intake = SmsIntakeRepository(store.database);
+    final candidates = <sms_v2.SmsMessage>[];
+    store.batch(() {
+      final db = store.database.db;
+      db.execute('SAVEPOINT sms_v2_capture');
+      try {
+        final feedback = SmsLearningFeedback(store.database, namespace: namespace);
+        for (final message in messages) {
+          final triage = classifySmsTriage(message.sender, message.body);
+          if (triage.kind == SmsTriageKind.sensitive) continue;
+          final sourceKey = smsSourceKey(namespace, message.sender, message.body);
+          if (triage.kind == SmsTriageKind.unrelated || triage.kind == SmsTriageKind.promotion) {
+            intake.recordDecision(
+              namespace, sourceKey: sourceKey, decision: 'ignored', state: 'final',
+              reasonCode: triage.reasonCode, receivedAt: message.receivedAt.millisecondsSinceEpoch,
+              policyVersion: 'v2',
+            );
+            continue;
+          }
+          if (feedback.matchesFalseTransactionRuleSync(sender: message.sender, body: message.body)) {
+            intake.recordDecision(
+              namespace, sourceKey: sourceKey, decision: 'user_corrected_not_financial',
+              state: 'final', reasonCode: 'user_false_transaction_rule',
+              receivedAt: message.receivedAt.millisecondsSinceEpoch, policyVersion: 'v2',
+            );
+            intake.forgetRaw(namespace, sourceKey);
+            continue;
+          }
+          intake.remember(namespace, message);
+          if (pipeline == null) {
+            db.execute(
+              'INSERT INTO sms_intake(namespace,id,sender,body,received_at) VALUES (?,?,?,?,?) '
+              'ON CONFLICT(namespace,id) DO NOTHING',
+              [namespace, sourceKey, message.sender, message.body, message.receivedAt.millisecondsSinceEpoch],
+            );
+            continue;
+          }
+          if (message.sender.trim().isEmpty) {
+            addNeedsReviewSync(store.database, namespace, NeedsReviewItem(
+              id: sourceKey, sender: '', body: message.body, reason: 'sender_unavailable',
+              receivedAt: message.receivedAt,
+            ));
+            intake.acknowledge(namespace, sourceKey);
+            continue;
+          }
+          candidates.add(sms_v2.SmsMessage(
+            sender: message.sender,
+            body: message.body,
+            observedAt: message.receivedAt.toUtc(),
+            sourceKey: sourceKey,
+            iosFilter: sms_v2.normalizeSenderBrand(message.sender).iosFilter,
+          ));
+        }
+        if (pipeline != null) {
+          for (var start = 0; start < candidates.length; start += 500) {
+            final end = (start + 500).clamp(0, candidates.length);
+            final chunk = candidates.sublist(start, end);
+            pipeline.processBatch(chunk);
+            for (final message in chunk) {
+              intake.acknowledge(namespace, message.sourceKey);
+            }
+          }
+        }
+        db.execute('RELEASE SAVEPOINT sms_v2_capture');
+        store.notifyExternalChanges(namespace, const ['observations', 'needs_review']);
+      } catch (_) {
+        db.execute('ROLLBACK TO SAVEPOINT sms_v2_capture');
+        db.execute('RELEASE SAVEPOINT sms_v2_capture');
+        rethrow;
+      }
+    });
   }
 
   void _capture(
