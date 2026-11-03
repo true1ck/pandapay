@@ -1997,7 +1997,7 @@
   },
   {
     "id": "ICICI-INFO-CREDIT-IMPS-SALARY-B",
-    "version": 1,
+    "version": 2,
     "family": "salary",
     "senders": [
       "ICICIB",
@@ -2008,7 +2008,7 @@
     ],
     "priority": 711,
     "match": {
-      "pattern": "(?:icici\\s+bank\\s+)?(?:account|acct)\\s*[x*•.]*\\s?(?<mask>\\d{2,18})\\s+(?:has\\s+been\\s+|is\\s+)?credited\\s+(?:with|for)\\s+(?:\\b(?:rs\\.?|inr)|₹)\\s*:?\\s*(?<amt>\\d[\\d,]*(?:\\.\\d{1,2})?)\\s+on\\s+(?<date>\\d{4}-\\d{2}-\\d{2}(?:[: ]\\d{2}:\\d{2}(?::\\d{2})?)?|\\d{1,2}[-/]\\d{1,2}[-/]\\d{2,4}(?:,?\\s*\\d{2}:\\d{2}(?::\\d{2})?)?|\\d{1,2}[-/ ]?[a-z]{3}[-/ ,]*\\d{2,4}(?:,?\\s*\\d{2}:\\d{2}(?::\\d{2})?)?)\\.?\\s*info\\s*:?\\s*imps\\s*[-/]\\s*(?:[a-z0-9]+\\s*[-/]\\s*)?(?<payee>[^\\n]+?)\\s*[-/]?\\s*(?:salary|sal|payroll)\\b[\\s\\S]*?\\b(?:avl|avail(?:able)?|total\\s+avail(?:able)?|clear|current|new|closing|updated|remaining)?\\.?\\s*bal(?:ance)?\\.?\\s*(?:is|of)?\\s*[:\\-]?\\s*(?:\\b(?:rs\\.?|inr)|₹)\\s*:?\\s*(?<bal>\\d[\\d,]*(?:\\.\\d{1,2})?)",
+      "pattern": "(?:icici\\s+bank\\s+)?(?:account|acct)\\s*[x*•.]*\\s?(?<mask>\\d{2,18})\\s+(?:has\\s+been\\s+|is\\s+)?credited(?:\\s+(?:with|for)\\s+|\\s*:\\s*)(?:\\b(?:rs\\.?|inr)|₹)\\s*:?\\s*(?<amt>\\d[\\d,]*(?:\\.\\d{1,2})?)\\s+on\\s+(?<date>\\d{4}-\\d{2}-\\d{2}(?:[: ]\\d{2}:\\d{2}(?::\\d{2})?)?|\\d{1,2}[-/]\\d{1,2}[-/]\\d{2,4}(?:,?\\s*\\d{2}:\\d{2}(?::\\d{2})?)?|\\d{1,2}[-/ ]?[a-z]{3}[-/ ,]*\\d{2,4}(?:,?\\s*\\d{2}:\\d{2}(?::\\d{2})?)?)\\.?\\s*info\\s*:?\\s*imps\\s*[-/]\\s*(?:[a-z0-9]+\\s*[-/]\\s*)?(?<payee>[^\\n]+?)\\s*[-/]?\\s*(?:salary|sal|payroll)\\b[\\s\\S]*?\\b(?:avl|avail(?:able)?|total\\s+avail(?:able)?|clear|current|new|closing|updated|remaining)?\\.?\\s*bal(?:ance)?\\.?\\s*(?:is|of)?\\s*[:\\-]?\\s*(?:\\b(?:rs\\.?|inr)|₹)\\s*:?\\s*(?<bal>\\d[\\d,]*(?:\\.\\d{1,2})?)",
       "flags": "i"
     },
     "emit": [
@@ -2153,7 +2153,7 @@
   },
   {
     "id": "ICICI-INFO-CREDIT-NEFT-SALARY-B",
-    "version": 1,
+    "version": 2,
     "family": "salary",
     "senders": [
       "ICICIB",
@@ -2164,7 +2164,7 @@
     ],
     "priority": 711,
     "match": {
-      "pattern": "(?:icici\\s+bank\\s+)?(?:account|acct)\\s*[x*•.]*\\s?(?<mask>\\d{2,18})\\s+(?:has\\s+been\\s+|is\\s+)?credited\\s+(?:with|for)\\s+(?:\\b(?:rs\\.?|inr)|₹)\\s*:?\\s*(?<amt>\\d[\\d,]*(?:\\.\\d{1,2})?)\\s+on\\s+(?<date>\\d{4}-\\d{2}-\\d{2}(?:[: ]\\d{2}:\\d{2}(?::\\d{2})?)?|\\d{1,2}[-/]\\d{1,2}[-/]\\d{2,4}(?:,?\\s*\\d{2}:\\d{2}(?::\\d{2})?)?|\\d{1,2}[-/ ]?[a-z]{3}[-/ ,]*\\d{2,4}(?:,?\\s*\\d{2}:\\d{2}(?::\\d{2})?)?)\\.?\\s*info\\s*:?\\s*neft\\s*[-/]\\s*(?:[a-z0-9]+\\s*[-/]\\s*)?(?<payee>[^\\n]+?)\\s*[-/]?\\s*(?:salary|sal|payroll)\\b[\\s\\S]*?\\b(?:avl|avail(?:able)?|total\\s+avail(?:able)?|clear|current|new|closing|updated|remaining)?\\.?\\s*bal(?:ance)?\\.?\\s*(?:is|of)?\\s*[:\\-]?\\s*(?:\\b(?:rs\\.?|inr)|₹)\\s*:?\\s*(?<bal>\\d[\\d,]*(?:\\.\\d{1,2})?)",
+      "pattern": "(?:icici\\s+bank\\s+)?(?:account|acct)\\s*[x*•.]*\\s?(?<mask>\\d{2,18})\\s+(?:has\\s+been\\s+|is\\s+)?credited(?:\\s+(?:with|for)\\s+|\\s*:\\s*)(?:\\b(?:rs\\.?|inr)|₹)\\s*:?\\s*(?<amt>\\d[\\d,]*(?:\\.\\d{1,2})?)\\s+on\\s+(?<date>\\d{4}-\\d{2}-\\d{2}(?:[: ]\\d{2}:\\d{2}(?::\\d{2})?)?|\\d{1,2}[-/]\\d{1,2}[-/]\\d{2,4}(?:,?\\s*\\d{2}:\\d{2}(?::\\d{2})?)?|\\d{1,2}[-/ ]?[a-z]{3}[-/ ,]*\\d{2,4}(?:,?\\s*\\d{2}:\\d{2}(?::\\d{2})?)?)\\.?\\s*info\\s*:?\\s*neft\\s*[-/]\\s*(?:[a-z0-9]+\\s*[-/]\\s*)?(?<payee>[^\\n]+?)\\s*[-/]?\\s*(?:salary|sal|payroll)\\b[\\s\\S]*?\\b(?:avl|avail(?:able)?|total\\s+avail(?:able)?|clear|current|new|closing|updated|remaining)?\\.?\\s*bal(?:ance)?\\.?\\s*(?:is|of)?\\s*[:\\-]?\\s*(?:\\b(?:rs\\.?|inr)|₹)\\s*:?\\s*(?<bal>\\d[\\d,]*(?:\\.\\d{1,2})?)",
       "flags": "i"
     },
     "emit": [
@@ -2309,7 +2309,7 @@
   },
   {
     "id": "ICICI-INFO-CREDIT-RTGS-SALARY-B",
-    "version": 1,
+    "version": 2,
     "family": "salary",
     "senders": [
       "ICICIB",
@@ -2320,7 +2320,7 @@
     ],
     "priority": 711,
     "match": {
-      "pattern": "(?:icici\\s+bank\\s+)?(?:account|acct)\\s*[x*•.]*\\s?(?<mask>\\d{2,18})\\s+(?:has\\s+been\\s+|is\\s+)?credited\\s+(?:with|for)\\s+(?:\\b(?:rs\\.?|inr)|₹)\\s*:?\\s*(?<amt>\\d[\\d,]*(?:\\.\\d{1,2})?)\\s+on\\s+(?<date>\\d{4}-\\d{2}-\\d{2}(?:[: ]\\d{2}:\\d{2}(?::\\d{2})?)?|\\d{1,2}[-/]\\d{1,2}[-/]\\d{2,4}(?:,?\\s*\\d{2}:\\d{2}(?::\\d{2})?)?|\\d{1,2}[-/ ]?[a-z]{3}[-/ ,]*\\d{2,4}(?:,?\\s*\\d{2}:\\d{2}(?::\\d{2})?)?)\\.?\\s*info\\s*:?\\s*rtgs\\s*[-/]\\s*(?:[a-z0-9]+\\s*[-/]\\s*)?(?<payee>[^\\n]+?)\\s*[-/]?\\s*(?:salary|sal|payroll)\\b[\\s\\S]*?\\b(?:avl|avail(?:able)?|total\\s+avail(?:able)?|clear|current|new|closing|updated|remaining)?\\.?\\s*bal(?:ance)?\\.?\\s*(?:is|of)?\\s*[:\\-]?\\s*(?:\\b(?:rs\\.?|inr)|₹)\\s*:?\\s*(?<bal>\\d[\\d,]*(?:\\.\\d{1,2})?)",
+      "pattern": "(?:icici\\s+bank\\s+)?(?:account|acct)\\s*[x*•.]*\\s?(?<mask>\\d{2,18})\\s+(?:has\\s+been\\s+|is\\s+)?credited(?:\\s+(?:with|for)\\s+|\\s*:\\s*)(?:\\b(?:rs\\.?|inr)|₹)\\s*:?\\s*(?<amt>\\d[\\d,]*(?:\\.\\d{1,2})?)\\s+on\\s+(?<date>\\d{4}-\\d{2}-\\d{2}(?:[: ]\\d{2}:\\d{2}(?::\\d{2})?)?|\\d{1,2}[-/]\\d{1,2}[-/]\\d{2,4}(?:,?\\s*\\d{2}:\\d{2}(?::\\d{2})?)?|\\d{1,2}[-/ ]?[a-z]{3}[-/ ,]*\\d{2,4}(?:,?\\s*\\d{2}:\\d{2}(?::\\d{2})?)?)\\.?\\s*info\\s*:?\\s*rtgs\\s*[-/]\\s*(?:[a-z0-9]+\\s*[-/]\\s*)?(?<payee>[^\\n]+?)\\s*[-/]?\\s*(?:salary|sal|payroll)\\b[\\s\\S]*?\\b(?:avl|avail(?:able)?|total\\s+avail(?:able)?|clear|current|new|closing|updated|remaining)?\\.?\\s*bal(?:ance)?\\.?\\s*(?:is|of)?\\s*[:\\-]?\\s*(?:\\b(?:rs\\.?|inr)|₹)\\s*:?\\s*(?<bal>\\d[\\d,]*(?:\\.\\d{1,2})?)",
       "flags": "i"
     },
     "emit": [
@@ -2779,7 +2779,7 @@
   },
   {
     "id": "ICICI-INFO-CREDIT-IMPS-B",
-    "version": 1,
+    "version": 2,
     "family": "imps_credit",
     "senders": [
       "ICICIB",
@@ -2790,7 +2790,7 @@
     ],
     "priority": 709,
     "match": {
-      "pattern": "(?:icici\\s+bank\\s+)?(?:account|acct)\\s*[x*•.]*\\s?(?<mask>\\d{2,18})\\s+(?:has\\s+been\\s+|is\\s+)?credited\\s+(?:with|for)\\s+(?:\\b(?:rs\\.?|inr)|₹)\\s*:?\\s*(?<amt>\\d[\\d,]*(?:\\.\\d{1,2})?)\\s+on\\s+(?<date>\\d{4}-\\d{2}-\\d{2}(?:[: ]\\d{2}:\\d{2}(?::\\d{2})?)?|\\d{1,2}[-/]\\d{1,2}[-/]\\d{2,4}(?:,?\\s*\\d{2}:\\d{2}(?::\\d{2})?)?|\\d{1,2}[-/ ]?[a-z]{3}[-/ ,]*\\d{2,4}(?:,?\\s*\\d{2}:\\d{2}(?::\\d{2})?)?)\\.?\\s*info\\s*:?\\s*imps\\s*[-/]\\s*(?:[a-z0-9]+\\s*[-/]\\s*)?(?<payee>[^\\n]+?)(?=\\.\\s|\\.$|$)[\\s\\S]*?\\b(?:avl|avail(?:able)?|total\\s+avail(?:able)?|clear|current|new|closing|updated|remaining)?\\.?\\s*bal(?:ance)?\\.?\\s*(?:is|of)?\\s*[:\\-]?\\s*(?:\\b(?:rs\\.?|inr)|₹)\\s*:?\\s*(?<bal>\\d[\\d,]*(?:\\.\\d{1,2})?)",
+      "pattern": "(?:icici\\s+bank\\s+)?(?:account|acct)\\s*[x*•.]*\\s?(?<mask>\\d{2,18})\\s+(?:has\\s+been\\s+|is\\s+)?credited(?:\\s+(?:with|for)\\s+|\\s*:\\s*)(?:\\b(?:rs\\.?|inr)|₹)\\s*:?\\s*(?<amt>\\d[\\d,]*(?:\\.\\d{1,2})?)\\s+on\\s+(?<date>\\d{4}-\\d{2}-\\d{2}(?:[: ]\\d{2}:\\d{2}(?::\\d{2})?)?|\\d{1,2}[-/]\\d{1,2}[-/]\\d{2,4}(?:,?\\s*\\d{2}:\\d{2}(?::\\d{2})?)?|\\d{1,2}[-/ ]?[a-z]{3}[-/ ,]*\\d{2,4}(?:,?\\s*\\d{2}:\\d{2}(?::\\d{2})?)?)\\.?\\s*info\\s*:?\\s*imps\\s*[-/]\\s*(?:[a-z0-9]+\\s*[-/]\\s*)?(?<payee>[^\\n]+?)(?=\\.\\s|\\.$|$)[\\s\\S]*?\\b(?:avl|avail(?:able)?|total\\s+avail(?:able)?|clear|current|new|closing|updated|remaining)?\\.?\\s*bal(?:ance)?\\.?\\s*(?:is|of)?\\s*[:\\-]?\\s*(?:\\b(?:rs\\.?|inr)|₹)\\s*:?\\s*(?<bal>\\d[\\d,]*(?:\\.\\d{1,2})?)",
       "flags": "i"
     },
     "emit": [
@@ -2935,7 +2935,7 @@
   },
   {
     "id": "ICICI-INFO-CREDIT-NEFT-B",
-    "version": 1,
+    "version": 2,
     "family": "neft_credit",
     "senders": [
       "ICICIB",
@@ -2946,7 +2946,7 @@
     ],
     "priority": 709,
     "match": {
-      "pattern": "(?:icici\\s+bank\\s+)?(?:account|acct)\\s*[x*•.]*\\s?(?<mask>\\d{2,18})\\s+(?:has\\s+been\\s+|is\\s+)?credited\\s+(?:with|for)\\s+(?:\\b(?:rs\\.?|inr)|₹)\\s*:?\\s*(?<amt>\\d[\\d,]*(?:\\.\\d{1,2})?)\\s+on\\s+(?<date>\\d{4}-\\d{2}-\\d{2}(?:[: ]\\d{2}:\\d{2}(?::\\d{2})?)?|\\d{1,2}[-/]\\d{1,2}[-/]\\d{2,4}(?:,?\\s*\\d{2}:\\d{2}(?::\\d{2})?)?|\\d{1,2}[-/ ]?[a-z]{3}[-/ ,]*\\d{2,4}(?:,?\\s*\\d{2}:\\d{2}(?::\\d{2})?)?)\\.?\\s*info\\s*:?\\s*neft\\s*[-/]\\s*(?:[a-z0-9]+\\s*[-/]\\s*)?(?<payee>[^\\n]+?)(?=\\.\\s|\\.$|$)[\\s\\S]*?\\b(?:avl|avail(?:able)?|total\\s+avail(?:able)?|clear|current|new|closing|updated|remaining)?\\.?\\s*bal(?:ance)?\\.?\\s*(?:is|of)?\\s*[:\\-]?\\s*(?:\\b(?:rs\\.?|inr)|₹)\\s*:?\\s*(?<bal>\\d[\\d,]*(?:\\.\\d{1,2})?)",
+      "pattern": "(?:icici\\s+bank\\s+)?(?:account|acct)\\s*[x*•.]*\\s?(?<mask>\\d{2,18})\\s+(?:has\\s+been\\s+|is\\s+)?credited(?:\\s+(?:with|for)\\s+|\\s*:\\s*)(?:\\b(?:rs\\.?|inr)|₹)\\s*:?\\s*(?<amt>\\d[\\d,]*(?:\\.\\d{1,2})?)\\s+on\\s+(?<date>\\d{4}-\\d{2}-\\d{2}(?:[: ]\\d{2}:\\d{2}(?::\\d{2})?)?|\\d{1,2}[-/]\\d{1,2}[-/]\\d{2,4}(?:,?\\s*\\d{2}:\\d{2}(?::\\d{2})?)?|\\d{1,2}[-/ ]?[a-z]{3}[-/ ,]*\\d{2,4}(?:,?\\s*\\d{2}:\\d{2}(?::\\d{2})?)?)\\.?\\s*info\\s*:?\\s*neft\\s*[-/]\\s*(?:[a-z0-9]+\\s*[-/]\\s*)?(?<payee>[^\\n]+?)(?=\\.\\s|\\.$|$)[\\s\\S]*?\\b(?:avl|avail(?:able)?|total\\s+avail(?:able)?|clear|current|new|closing|updated|remaining)?\\.?\\s*bal(?:ance)?\\.?\\s*(?:is|of)?\\s*[:\\-]?\\s*(?:\\b(?:rs\\.?|inr)|₹)\\s*:?\\s*(?<bal>\\d[\\d,]*(?:\\.\\d{1,2})?)",
       "flags": "i"
     },
     "emit": [
@@ -3073,6 +3073,14 @@
     "examples": [
       {
         "sender": "AX-ICICIT-S",
+        "body": "ICICI Bank Account XX123 credited:Rs.2500 on 01-Nov-26. Info NEFT-N123456789-EXAMPLE STORE. Available Balance is Rs.12000.",
+        "expectFactTypes": [
+          "movement",
+          "balance_snapshot"
+        ]
+      },
+      {
+        "sender": "AX-ICICIT-S",
         "body": "Dear Customer, your ICICI Bank Account XX123 has been credited with INR 2,500.00 on 01-Nov-26. Info: NEFT-N123456789-RAHUL KUMAR. Avl Bal Rs.12,345.67",
         "expectFactTypes": [
           "movement",
@@ -3091,7 +3099,7 @@
   },
   {
     "id": "ICICI-INFO-CREDIT-RTGS-B",
-    "version": 1,
+    "version": 2,
     "family": "rtgs_credit",
     "senders": [
       "ICICIB",
@@ -3102,7 +3110,7 @@
     ],
     "priority": 709,
     "match": {
-      "pattern": "(?:icici\\s+bank\\s+)?(?:account|acct)\\s*[x*•.]*\\s?(?<mask>\\d{2,18})\\s+(?:has\\s+been\\s+|is\\s+)?credited\\s+(?:with|for)\\s+(?:\\b(?:rs\\.?|inr)|₹)\\s*:?\\s*(?<amt>\\d[\\d,]*(?:\\.\\d{1,2})?)\\s+on\\s+(?<date>\\d{4}-\\d{2}-\\d{2}(?:[: ]\\d{2}:\\d{2}(?::\\d{2})?)?|\\d{1,2}[-/]\\d{1,2}[-/]\\d{2,4}(?:,?\\s*\\d{2}:\\d{2}(?::\\d{2})?)?|\\d{1,2}[-/ ]?[a-z]{3}[-/ ,]*\\d{2,4}(?:,?\\s*\\d{2}:\\d{2}(?::\\d{2})?)?)\\.?\\s*info\\s*:?\\s*rtgs\\s*[-/]\\s*(?:[a-z0-9]+\\s*[-/]\\s*)?(?<payee>[^\\n]+?)(?=\\.\\s|\\.$|$)[\\s\\S]*?\\b(?:avl|avail(?:able)?|total\\s+avail(?:able)?|clear|current|new|closing|updated|remaining)?\\.?\\s*bal(?:ance)?\\.?\\s*(?:is|of)?\\s*[:\\-]?\\s*(?:\\b(?:rs\\.?|inr)|₹)\\s*:?\\s*(?<bal>\\d[\\d,]*(?:\\.\\d{1,2})?)",
+      "pattern": "(?:icici\\s+bank\\s+)?(?:account|acct)\\s*[x*•.]*\\s?(?<mask>\\d{2,18})\\s+(?:has\\s+been\\s+|is\\s+)?credited(?:\\s+(?:with|for)\\s+|\\s*:\\s*)(?:\\b(?:rs\\.?|inr)|₹)\\s*:?\\s*(?<amt>\\d[\\d,]*(?:\\.\\d{1,2})?)\\s+on\\s+(?<date>\\d{4}-\\d{2}-\\d{2}(?:[: ]\\d{2}:\\d{2}(?::\\d{2})?)?|\\d{1,2}[-/]\\d{1,2}[-/]\\d{2,4}(?:,?\\s*\\d{2}:\\d{2}(?::\\d{2})?)?|\\d{1,2}[-/ ]?[a-z]{3}[-/ ,]*\\d{2,4}(?:,?\\s*\\d{2}:\\d{2}(?::\\d{2})?)?)\\.?\\s*info\\s*:?\\s*rtgs\\s*[-/]\\s*(?:[a-z0-9]+\\s*[-/]\\s*)?(?<payee>[^\\n]+?)(?=\\.\\s|\\.$|$)[\\s\\S]*?\\b(?:avl|avail(?:able)?|total\\s+avail(?:able)?|clear|current|new|closing|updated|remaining)?\\.?\\s*bal(?:ance)?\\.?\\s*(?:is|of)?\\s*[:\\-]?\\s*(?:\\b(?:rs\\.?|inr)|₹)\\s*:?\\s*(?<bal>\\d[\\d,]*(?:\\.\\d{1,2})?)",
       "flags": "i"
     },
     "emit": [
@@ -4001,7 +4009,7 @@
   },
   {
     "id": "ICICI-INFO-CREDIT-IMPS-SALARY",
-    "version": 1,
+    "version": 2,
     "family": "salary",
     "senders": [
       "ICICIB",
@@ -4012,7 +4020,7 @@
     ],
     "priority": 706,
     "match": {
-      "pattern": "(?:icici\\s+bank\\s+)?(?:account|acct)\\s*[x*•.]*\\s?(?<mask>\\d{2,18})\\s+(?:has\\s+been\\s+|is\\s+)?credited\\s+(?:with|for)\\s+(?:\\b(?:rs\\.?|inr)|₹)\\s*:?\\s*(?<amt>\\d[\\d,]*(?:\\.\\d{1,2})?)\\s+on\\s+(?<date>\\d{4}-\\d{2}-\\d{2}(?:[: ]\\d{2}:\\d{2}(?::\\d{2})?)?|\\d{1,2}[-/]\\d{1,2}[-/]\\d{2,4}(?:,?\\s*\\d{2}:\\d{2}(?::\\d{2})?)?|\\d{1,2}[-/ ]?[a-z]{3}[-/ ,]*\\d{2,4}(?:,?\\s*\\d{2}:\\d{2}(?::\\d{2})?)?)\\.?\\s*info\\s*:?\\s*imps\\s*[-/]\\s*(?:[a-z0-9]+\\s*[-/]\\s*)?(?<payee>[^\\n]+?)\\s*[-/]?\\s*(?:salary|sal|payroll)\\b",
+      "pattern": "(?:icici\\s+bank\\s+)?(?:account|acct)\\s*[x*•.]*\\s?(?<mask>\\d{2,18})\\s+(?:has\\s+been\\s+|is\\s+)?credited(?:\\s+(?:with|for)\\s+|\\s*:\\s*)(?:\\b(?:rs\\.?|inr)|₹)\\s*:?\\s*(?<amt>\\d[\\d,]*(?:\\.\\d{1,2})?)\\s+on\\s+(?<date>\\d{4}-\\d{2}-\\d{2}(?:[: ]\\d{2}:\\d{2}(?::\\d{2})?)?|\\d{1,2}[-/]\\d{1,2}[-/]\\d{2,4}(?:,?\\s*\\d{2}:\\d{2}(?::\\d{2})?)?|\\d{1,2}[-/ ]?[a-z]{3}[-/ ,]*\\d{2,4}(?:,?\\s*\\d{2}:\\d{2}(?::\\d{2})?)?)\\.?\\s*info\\s*:?\\s*imps\\s*[-/]\\s*(?:[a-z0-9]+\\s*[-/]\\s*)?(?<payee>[^\\n]+?)\\s*[-/]?\\s*(?:salary|sal|payroll)\\b",
       "flags": "i"
     },
     "emit": [
@@ -4137,7 +4145,7 @@
   },
   {
     "id": "ICICI-INFO-CREDIT-NEFT-SALARY",
-    "version": 1,
+    "version": 2,
     "family": "salary",
     "senders": [
       "ICICIB",
@@ -4148,7 +4156,7 @@
     ],
     "priority": 706,
     "match": {
-      "pattern": "(?:icici\\s+bank\\s+)?(?:account|acct)\\s*[x*•.]*\\s?(?<mask>\\d{2,18})\\s+(?:has\\s+been\\s+|is\\s+)?credited\\s+(?:with|for)\\s+(?:\\b(?:rs\\.?|inr)|₹)\\s*:?\\s*(?<amt>\\d[\\d,]*(?:\\.\\d{1,2})?)\\s+on\\s+(?<date>\\d{4}-\\d{2}-\\d{2}(?:[: ]\\d{2}:\\d{2}(?::\\d{2})?)?|\\d{1,2}[-/]\\d{1,2}[-/]\\d{2,4}(?:,?\\s*\\d{2}:\\d{2}(?::\\d{2})?)?|\\d{1,2}[-/ ]?[a-z]{3}[-/ ,]*\\d{2,4}(?:,?\\s*\\d{2}:\\d{2}(?::\\d{2})?)?)\\.?\\s*info\\s*:?\\s*neft\\s*[-/]\\s*(?:[a-z0-9]+\\s*[-/]\\s*)?(?<payee>[^\\n]+?)\\s*[-/]?\\s*(?:salary|sal|payroll)\\b",
+      "pattern": "(?:icici\\s+bank\\s+)?(?:account|acct)\\s*[x*•.]*\\s?(?<mask>\\d{2,18})\\s+(?:has\\s+been\\s+|is\\s+)?credited(?:\\s+(?:with|for)\\s+|\\s*:\\s*)(?:\\b(?:rs\\.?|inr)|₹)\\s*:?\\s*(?<amt>\\d[\\d,]*(?:\\.\\d{1,2})?)\\s+on\\s+(?<date>\\d{4}-\\d{2}-\\d{2}(?:[: ]\\d{2}:\\d{2}(?::\\d{2})?)?|\\d{1,2}[-/]\\d{1,2}[-/]\\d{2,4}(?:,?\\s*\\d{2}:\\d{2}(?::\\d{2})?)?|\\d{1,2}[-/ ]?[a-z]{3}[-/ ,]*\\d{2,4}(?:,?\\s*\\d{2}:\\d{2}(?::\\d{2})?)?)\\.?\\s*info\\s*:?\\s*neft\\s*[-/]\\s*(?:[a-z0-9]+\\s*[-/]\\s*)?(?<payee>[^\\n]+?)\\s*[-/]?\\s*(?:salary|sal|payroll)\\b",
       "flags": "i"
     },
     "emit": [
@@ -4273,7 +4281,7 @@
   },
   {
     "id": "ICICI-INFO-CREDIT-RTGS-SALARY",
-    "version": 1,
+    "version": 2,
     "family": "salary",
     "senders": [
       "ICICIB",
@@ -4284,7 +4292,7 @@
     ],
     "priority": 706,
     "match": {
-      "pattern": "(?:icici\\s+bank\\s+)?(?:account|acct)\\s*[x*•.]*\\s?(?<mask>\\d{2,18})\\s+(?:has\\s+been\\s+|is\\s+)?credited\\s+(?:with|for)\\s+(?:\\b(?:rs\\.?|inr)|₹)\\s*:?\\s*(?<amt>\\d[\\d,]*(?:\\.\\d{1,2})?)\\s+on\\s+(?<date>\\d{4}-\\d{2}-\\d{2}(?:[: ]\\d{2}:\\d{2}(?::\\d{2})?)?|\\d{1,2}[-/]\\d{1,2}[-/]\\d{2,4}(?:,?\\s*\\d{2}:\\d{2}(?::\\d{2})?)?|\\d{1,2}[-/ ]?[a-z]{3}[-/ ,]*\\d{2,4}(?:,?\\s*\\d{2}:\\d{2}(?::\\d{2})?)?)\\.?\\s*info\\s*:?\\s*rtgs\\s*[-/]\\s*(?:[a-z0-9]+\\s*[-/]\\s*)?(?<payee>[^\\n]+?)\\s*[-/]?\\s*(?:salary|sal|payroll)\\b",
+      "pattern": "(?:icici\\s+bank\\s+)?(?:account|acct)\\s*[x*•.]*\\s?(?<mask>\\d{2,18})\\s+(?:has\\s+been\\s+|is\\s+)?credited(?:\\s+(?:with|for)\\s+|\\s*:\\s*)(?:\\b(?:rs\\.?|inr)|₹)\\s*:?\\s*(?<amt>\\d[\\d,]*(?:\\.\\d{1,2})?)\\s+on\\s+(?<date>\\d{4}-\\d{2}-\\d{2}(?:[: ]\\d{2}:\\d{2}(?::\\d{2})?)?|\\d{1,2}[-/]\\d{1,2}[-/]\\d{2,4}(?:,?\\s*\\d{2}:\\d{2}(?::\\d{2})?)?|\\d{1,2}[-/ ]?[a-z]{3}[-/ ,]*\\d{2,4}(?:,?\\s*\\d{2}:\\d{2}(?::\\d{2})?)?)\\.?\\s*info\\s*:?\\s*rtgs\\s*[-/]\\s*(?:[a-z0-9]+\\s*[-/]\\s*)?(?<payee>[^\\n]+?)\\s*[-/]?\\s*(?:salary|sal|payroll)\\b",
       "flags": "i"
     },
     "emit": [
@@ -4717,7 +4725,7 @@
   },
   {
     "id": "ICICI-INFO-CREDIT-IMPS",
-    "version": 1,
+    "version": 2,
     "family": "imps_credit",
     "senders": [
       "ICICIB",
@@ -4728,7 +4736,7 @@
     ],
     "priority": 704,
     "match": {
-      "pattern": "(?:icici\\s+bank\\s+)?(?:account|acct)\\s*[x*•.]*\\s?(?<mask>\\d{2,18})\\s+(?:has\\s+been\\s+|is\\s+)?credited\\s+(?:with|for)\\s+(?:\\b(?:rs\\.?|inr)|₹)\\s*:?\\s*(?<amt>\\d[\\d,]*(?:\\.\\d{1,2})?)\\s+on\\s+(?<date>\\d{4}-\\d{2}-\\d{2}(?:[: ]\\d{2}:\\d{2}(?::\\d{2})?)?|\\d{1,2}[-/]\\d{1,2}[-/]\\d{2,4}(?:,?\\s*\\d{2}:\\d{2}(?::\\d{2})?)?|\\d{1,2}[-/ ]?[a-z]{3}[-/ ,]*\\d{2,4}(?:,?\\s*\\d{2}:\\d{2}(?::\\d{2})?)?)\\.?\\s*info\\s*:?\\s*imps\\s*[-/]\\s*(?:[a-z0-9]+\\s*[-/]\\s*)?(?<payee>[^\\n]+?)(?=\\.\\s|\\.$|$)",
+      "pattern": "(?:icici\\s+bank\\s+)?(?:account|acct)\\s*[x*•.]*\\s?(?<mask>\\d{2,18})\\s+(?:has\\s+been\\s+|is\\s+)?credited(?:\\s+(?:with|for)\\s+|\\s*:\\s*)(?:\\b(?:rs\\.?|inr)|₹)\\s*:?\\s*(?<amt>\\d[\\d,]*(?:\\.\\d{1,2})?)\\s+on\\s+(?<date>\\d{4}-\\d{2}-\\d{2}(?:[: ]\\d{2}:\\d{2}(?::\\d{2})?)?|\\d{1,2}[-/]\\d{1,2}[-/]\\d{2,4}(?:,?\\s*\\d{2}:\\d{2}(?::\\d{2})?)?|\\d{1,2}[-/ ]?[a-z]{3}[-/ ,]*\\d{2,4}(?:,?\\s*\\d{2}:\\d{2}(?::\\d{2})?)?)\\.?\\s*info\\s*:?\\s*imps\\s*[-/]\\s*(?:[a-z0-9]+\\s*[-/]\\s*)?(?<payee>[^\\n]+?)(?=\\.\\s|\\.$|$)",
       "flags": "i"
     },
     "emit": [
@@ -4853,7 +4861,7 @@
   },
   {
     "id": "ICICI-INFO-CREDIT-NEFT",
-    "version": 1,
+    "version": 2,
     "family": "neft_credit",
     "senders": [
       "ICICIB",
@@ -4864,7 +4872,7 @@
     ],
     "priority": 704,
     "match": {
-      "pattern": "(?:icici\\s+bank\\s+)?(?:account|acct)\\s*[x*•.]*\\s?(?<mask>\\d{2,18})\\s+(?:has\\s+been\\s+|is\\s+)?credited\\s+(?:with|for)\\s+(?:\\b(?:rs\\.?|inr)|₹)\\s*:?\\s*(?<amt>\\d[\\d,]*(?:\\.\\d{1,2})?)\\s+on\\s+(?<date>\\d{4}-\\d{2}-\\d{2}(?:[: ]\\d{2}:\\d{2}(?::\\d{2})?)?|\\d{1,2}[-/]\\d{1,2}[-/]\\d{2,4}(?:,?\\s*\\d{2}:\\d{2}(?::\\d{2})?)?|\\d{1,2}[-/ ]?[a-z]{3}[-/ ,]*\\d{2,4}(?:,?\\s*\\d{2}:\\d{2}(?::\\d{2})?)?)\\.?\\s*info\\s*:?\\s*neft\\s*[-/]\\s*(?:[a-z0-9]+\\s*[-/]\\s*)?(?<payee>[^\\n]+?)(?=\\.\\s|\\.$|$)",
+      "pattern": "(?:icici\\s+bank\\s+)?(?:account|acct)\\s*[x*•.]*\\s?(?<mask>\\d{2,18})\\s+(?:has\\s+been\\s+|is\\s+)?credited(?:\\s+(?:with|for)\\s+|\\s*:\\s*)(?:\\b(?:rs\\.?|inr)|₹)\\s*:?\\s*(?<amt>\\d[\\d,]*(?:\\.\\d{1,2})?)\\s+on\\s+(?<date>\\d{4}-\\d{2}-\\d{2}(?:[: ]\\d{2}:\\d{2}(?::\\d{2})?)?|\\d{1,2}[-/]\\d{1,2}[-/]\\d{2,4}(?:,?\\s*\\d{2}:\\d{2}(?::\\d{2})?)?|\\d{1,2}[-/ ]?[a-z]{3}[-/ ,]*\\d{2,4}(?:,?\\s*\\d{2}:\\d{2}(?::\\d{2})?)?)\\.?\\s*info\\s*:?\\s*neft\\s*[-/]\\s*(?:[a-z0-9]+\\s*[-/]\\s*)?(?<payee>[^\\n]+?)(?=\\.\\s|\\.$|$)",
       "flags": "i"
     },
     "emit": [
@@ -4989,7 +4997,7 @@
   },
   {
     "id": "ICICI-INFO-CREDIT-RTGS",
-    "version": 1,
+    "version": 2,
     "family": "rtgs_credit",
     "senders": [
       "ICICIB",
@@ -5000,7 +5008,7 @@
     ],
     "priority": 704,
     "match": {
-      "pattern": "(?:icici\\s+bank\\s+)?(?:account|acct)\\s*[x*•.]*\\s?(?<mask>\\d{2,18})\\s+(?:has\\s+been\\s+|is\\s+)?credited\\s+(?:with|for)\\s+(?:\\b(?:rs\\.?|inr)|₹)\\s*:?\\s*(?<amt>\\d[\\d,]*(?:\\.\\d{1,2})?)\\s+on\\s+(?<date>\\d{4}-\\d{2}-\\d{2}(?:[: ]\\d{2}:\\d{2}(?::\\d{2})?)?|\\d{1,2}[-/]\\d{1,2}[-/]\\d{2,4}(?:,?\\s*\\d{2}:\\d{2}(?::\\d{2})?)?|\\d{1,2}[-/ ]?[a-z]{3}[-/ ,]*\\d{2,4}(?:,?\\s*\\d{2}:\\d{2}(?::\\d{2})?)?)\\.?\\s*info\\s*:?\\s*rtgs\\s*[-/]\\s*(?:[a-z0-9]+\\s*[-/]\\s*)?(?<payee>[^\\n]+?)(?=\\.\\s|\\.$|$)",
+      "pattern": "(?:icici\\s+bank\\s+)?(?:account|acct)\\s*[x*•.]*\\s?(?<mask>\\d{2,18})\\s+(?:has\\s+been\\s+|is\\s+)?credited(?:\\s+(?:with|for)\\s+|\\s*:\\s*)(?:\\b(?:rs\\.?|inr)|₹)\\s*:?\\s*(?<amt>\\d[\\d,]*(?:\\.\\d{1,2})?)\\s+on\\s+(?<date>\\d{4}-\\d{2}-\\d{2}(?:[: ]\\d{2}:\\d{2}(?::\\d{2})?)?|\\d{1,2}[-/]\\d{1,2}[-/]\\d{2,4}(?:,?\\s*\\d{2}:\\d{2}(?::\\d{2})?)?|\\d{1,2}[-/ ]?[a-z]{3}[-/ ,]*\\d{2,4}(?:,?\\s*\\d{2}:\\d{2}(?::\\d{2})?)?)\\.?\\s*info\\s*:?\\s*rtgs\\s*[-/]\\s*(?:[a-z0-9]+\\s*[-/]\\s*)?(?<payee>[^\\n]+?)(?=\\.\\s|\\.$|$)",
       "flags": "i"
     },
     "emit": [

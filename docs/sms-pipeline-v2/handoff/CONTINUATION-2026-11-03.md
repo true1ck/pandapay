@@ -157,3 +157,9 @@ From `tools/sms_rules_cli`, repeat the first baseline build command with output 
 A synthetic PhonePe collect request failed the expected ignored outcome before the change and passed afterward. The sender-scoped service rule requires wording that makes the debit conditional on approval. It emits no movement.
 
 From the CLI directory, rerun the baseline build with output `"$p/phonepe-service-v0.json"` and run `dart --packages=.dart_tool/package_config.json "$p/probe.dart" "$p/phonepe-service-v0.json" "$p/sms.jsonl" "$p/phonepe-service-misses.jsonl"`. Build validation passed 1,507 examples with 725 rules and 28 ignore rules. On the same corpus, 72 unknowns became ignores. Totals are 1,344 matched, 1,532 ignored and 2,320 unknown (44.65%). Accuracy and end-to-end accounting gates remain open.
+
+### ICICI Info credit formats
+
+The synthetic colon-delimited NEFT credit returned unknown before the fix and matched after it. Existing ICICI Info credit rules for NEFT, IMPS and RTGS accept the colon form while retaining their existing direction, salary classification and balance handling.
+
+From the CLI directory, run the baseline build with output `"$p/icici-v0.json"`. It passed 1,508 examples. Run the probe with that bundle against `"$p/icici-synthetic.jsonl"` and then `"$p/sms.jsonl"`. The corpus now has 1,359 matches, 1,532 ignores and 2,305 unknowns. The 15 additional matches are extraction outcomes. The labeled accuracy and full-pipeline gates remain open.
