@@ -215,7 +215,7 @@ class CorrectionsService {
               'occurredAt': corrected['occurredAt'],
             if (correction.kind == CorrectionKind.wrongMerchant)
               'counterparty': <String, Object?>{
-                ...?original.counterparty?.toJson(),
+                ...(original.counterparty ?? const Counterparty()).toJson(),
                 'name': corrected['merchantName'],
               },
           };
