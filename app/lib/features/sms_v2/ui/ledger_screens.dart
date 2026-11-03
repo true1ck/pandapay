@@ -219,7 +219,7 @@ class InstrumentUsageSection extends StatelessWidget {
     final holds = ipoApplications(
       model.facts,
       ownEvents,
-    ).where((i) => i.status == 'blocked' || i.status == 'partially_allotted');
+    ).where((i) => i.remainingHoldMinor > 0);
     return Card(
       child: Padding(
         padding: const EdgeInsets.all(16),
@@ -240,7 +240,7 @@ class InstrumentUsageSection extends StatelessWidget {
             if (holds.isEmpty) const Text('No active IPO holds'),
             for (final hold in holds)
               Text(
-                '${smsMoney(hold.blockedMinor - hold.investedMinor)} blocked for ${hold.company}',
+                '${smsMoney(hold.remainingHoldMinor)} blocked for ${hold.company}',
               ),
           ],
         ),

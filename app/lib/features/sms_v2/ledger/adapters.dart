@@ -517,11 +517,17 @@ class IpoApplication {
     required this.status,
     required this.blockedMinor,
     required this.investedMinor,
+    this.releasedMinor = 0,
     this.accountMask,
     this.platform,
   });
   final String eventId, company, status;
-  final int blockedMinor, investedMinor;
+  final int blockedMinor, investedMinor, releasedMinor;
+  int get remainingHoldMinor {
+    final remaining = blockedMinor - investedMinor - releasedMinor;
+    return remaining > 0 ? remaining : 0;
+  }
+
   final String? accountMask, platform;
 }
 
@@ -557,6 +563,7 @@ List<IpoApplication> ipoApplications(
             : 'blocked',
         blockedMinor: blocked,
         investedMinor: invested,
+        releasedMinor: released,
         accountMask: (money ?? hold)?.instrument?.maskDigits,
         platform: money?.counterparty?.name,
       ),

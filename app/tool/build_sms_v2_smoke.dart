@@ -29,7 +29,7 @@ void main(List<String> args) {
   rule['status'] = 'provisional';
   rule['createdBy'] = 'ai:synthetic-smoke';
   (rule['match'] as Map)['templateHash'] = smsTemplateHash(
-    'HDFC',
+    smsTemplateBrand('VM-HDFCBK-S'),
     smsSkeleton(body),
   );
   final check = RuleEngine().interpretDetailed(

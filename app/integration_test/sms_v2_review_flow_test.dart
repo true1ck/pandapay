@@ -24,6 +24,10 @@ import 'package:pandapay_domain/sms_v2.dart';
 
 void main() {
   final binding = IntegrationTestWidgetsFlutterBinding.ensureInitialized();
+  // The emulator's accessibility service can enable semantics during startup.
+  // Establish it before the test records its baseline handle count.
+  binding.platformDispatcher.semanticsEnabledTestValue = true;
+  tearDownAll(binding.platformDispatcher.clearSemanticsEnabledTestValue);
   testWidgets(
     'synthetic import confirms accounts and resolves a grouped format',
     (tester) async {
@@ -85,6 +89,16 @@ void main() {
           receivedAt: DateTime.utc(2026, 11, 1, 8),
         ),
       ], backfill: true);
+      expect(
+        InstrumentStore(database.db, namespace: namespace).list(),
+        isNotEmpty,
+        reason: 'Synthetic capture must detect its bank account',
+      );
+      expect(
+        await container.read(instrumentsProvider.future),
+        isNotEmpty,
+        reason: 'The provider must read the captured account',
+      );
       Widget screen(Widget child) => UncontrolledProviderScope(
         container: container,
         child: MaterialApp(home: child),

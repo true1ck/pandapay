@@ -266,4 +266,53 @@ void main() {
       );
     },
   );
+  test(
+    'a partial IPO allotment subtracts released residual money from active holds',
+    () {
+      final hold = fixture(
+        'hold.ipo_placed',
+        changes: {
+          'amounts': [
+            {'role': 'held', 'minor': 50000, 'unit': 'INR'},
+          ],
+        },
+      );
+      final release = fixture(
+        'hold.ipo_released',
+        changes: {
+          'amounts': [
+            {'role': 'released', 'minor': 40000, 'unit': 'INR'},
+          ],
+        },
+      );
+      final money = fixture(
+        'movement.card_spend',
+        changes: {
+          'amounts': [
+            {'role': 'posted', 'minor': 10000, 'unit': 'INR'},
+          ],
+        },
+      );
+      final event = Event(
+        eventId: hold.factId,
+        type: EventType.ipoApplication,
+        status: EventStatus.complete,
+        legs: [
+          EventLeg(factId: hold.factId, role: LegRole.holdPlaced),
+          EventLeg(factId: money.factId, role: LegRole.debitLeg),
+          EventLeg(factId: release.factId, role: LegRole.holdReleased),
+        ],
+        confidence: 1,
+        occurredAt: hold.effectiveAt,
+        amountMinor: 10000,
+      );
+      final application = ipoApplications(
+        [hold, money, release],
+        [event],
+      ).single;
+      expect(application.investedMinor, 10000);
+      expect(application.releasedMinor, 40000);
+      expect(application.remainingHoldMinor, 0);
+    },
+  );
 }
