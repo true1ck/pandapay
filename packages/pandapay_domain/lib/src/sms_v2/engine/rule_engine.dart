@@ -493,6 +493,11 @@ class RuleEngine implements SmsInterpreter {
       }
     }
 
+    // A balance with no printed date is as of the fact's own time.
+    if (factTypeWire == 'balance_snapshot' && attrs['asOf'] == null) {
+      attrs['asOf'] = formatUtc(occurredAt ?? msg.observedAt);
+    }
+
     final ruleId = rule.id;
     return {
       'contractVersion': Fact.contractVersion,

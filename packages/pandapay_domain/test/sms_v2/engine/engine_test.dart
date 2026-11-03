@@ -299,6 +299,33 @@ void main() {
     });
   });
 
+  group('balance_snapshot asOf default', () {
+    List<Map<String, Object?>> emit({bool dated = false}) => [
+          {
+            'factType': 'balance_snapshot',
+            'amounts': [
+              {'role': 'available_balance', 'from': 'amt', 'unit': 'INR'},
+            ],
+            if (dated) 'occurredAt': {'from': 'date', 'formats': ['dd-MM-yyyy']},
+          },
+        ];
+    test('defaults to observedAt when nothing is printed', () {
+      final b = _bundle([_rule(id: 'BAL', pattern: r'balance is Rs (?<amt>[\d.]+)', emit: emit())]);
+      final r = run(b, _msg('VM-HDFCBK-S', 'Your wallet balance is Rs 380'));
+      expect(r.outcome, InterpretOutcome.matched);
+      expect((r.facts.single as BalanceSnapshotFact).asOf, DateTime.utc(2026, 11, 1, 8));
+    });
+    test('defaults to occurredAt when a date is printed', () {
+      final b = _bundle([
+        _rule(id: 'BAL', pattern: r'balance is Rs (?<amt>[\d.]+) on (?<date>\S+)', emit: emit(dated: true)),
+      ]);
+      final r = run(b, _msg('VM-HDFCBK-S', 'balance is Rs 380 on 01-11-2026'));
+      final f = r.facts.single as BalanceSnapshotFact;
+      expect(f.asOf, f.occurredAt);
+      expect(f.asOf, DateTime.utc(2026, 10, 31, 18, 30));
+    });
+  });
+
   group('factId and determinism', () {
     final bundle = RuleBundle.fromJson(_fixture());
     test('factId = sha256(sourceKey|ruleId|emitIndex)', () {
