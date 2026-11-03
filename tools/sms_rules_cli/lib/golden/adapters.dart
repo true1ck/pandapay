@@ -4,6 +4,9 @@ import 'dart:io';
 import 'package:pandapay_domain/sms_v2.dart'
     show linkForGolden, resolveInstrumentsForGolden, smsEngineVersion;
 
+import 'package:pandapay_domain/sms_v2.dart' as v2;
+import 'package:pandapay_domain/sms_v2_ledger.dart' as ledger;
+
 import 'engine_stage.dart';
 import 'models.dart';
 
@@ -36,8 +39,7 @@ class InterpretedMessage {
   final bool unknown;
 
   /// Not financial: nothing but `info` facts, and not unknown.
-  bool get ignored =>
-      !unknown && facts.every((f) => f['factType'] == 'info');
+  bool get ignored => !unknown && facts.every((f) => f['factType'] == 'info');
 }
 
 /// Stage 1: SmsInterpreter.
@@ -150,10 +152,13 @@ GoldenAdapters loadDefaultAdapters({String? bundlePath}) {
     return const GoldenAdapters(label: 'unwired (no --bundle given)');
   }
   final interpreter = EngineInterpreterStage.fromFile(bundlePath);
+  final ledgerStage = _LedgerStage(interpreter);
   return GoldenAdapters(
     interpreter: interpreter,
     instruments: _RegistryInstrumentStage(interpreter),
     linker: _RuleLinkerStage(interpreter),
+    projector: ledgerStage,
+    categories: ledgerStage,
     label: 'rule engine $smsEngineVersion + $bundlePath',
   );
 }
@@ -190,7 +195,11 @@ class _RuleLinkerStage implements LinkerStage {
     required List<Map<String, dynamic>> facts,
     required List<Map<String, dynamic>> instruments,
   }) async => [
-    for (final e in linkForGolden(facts: facts, instruments: instruments, bundle: interpreter.bundle))
+    for (final e in linkForGolden(
+      facts: facts,
+      instruments: instruments,
+      bundle: interpreter.bundle,
+    ))
       e.cast<String, dynamic>(),
   ];
 }
@@ -211,7 +220,11 @@ class PrecomputedInterpreter implements InterpreterStage {
         keys[c.messages[i]] = '${c.id}#$i';
       }
     }
-    return PrecomputedInterpreter(j['engine'] as String? ?? path, results, keys);
+    return PrecomputedInterpreter(
+      j['engine'] as String? ?? path,
+      results,
+      keys,
+    );
   }
 
   final String label;
@@ -224,8 +237,76 @@ class PrecomputedInterpreter implements InterpreterStage {
     final r = key == null ? null : _results[key] as Map<String, dynamic>?;
     if (r == null) return const InterpretedMessage();
     return InterpretedMessage(
-      facts: [for (final f in (r['facts'] as List? ?? const [])) (f as Map).cast<String, dynamic>()],
+      facts: [
+        for (final f in (r['facts'] as List? ?? const []))
+          (f as Map).cast<String, dynamic>(),
+      ],
       unknown: r['unknown'] == true,
+    );
+  }
+}
+
+/// Project and categorise in one pass so refunds can inherit purchase context.
+class _LedgerStage implements ProjectorStage, CategoryStage {
+  _LedgerStage(this.interpreter);
+  final EngineInterpreterStage interpreter;
+  ledger.LedgerSnapshot? _snapshot;
+
+  @override
+  Future<List<Map<String, dynamic>>> project({
+    required List<Map<String, dynamic>> events,
+    required List<Map<String, dynamic>> facts,
+    required List<Map<String, dynamic>> instruments,
+  }) async {
+    final ids = <String, String>{};
+    final parsed = <String, v2.Fact>{};
+    for (final f in facts) {
+      final copy = Map<String, Object?>.from(f);
+      final id = copy.remove('instrumentId') as String?;
+      final fact = v2.Fact.fromJson(copy);
+      parsed[fact.factId] = fact;
+      if (id != null) ids[fact.factId] = id;
+    }
+    _snapshot = ledger.LedgerSnapshot.project(
+      events: events.map(v2.Event.fromJson),
+      factsById: parsed,
+      instrumentsById: {
+        for (final i in instruments)
+          i['instrumentId'] as String: v2.Instrument.fromJson(i),
+      },
+      bundle: interpreter.bundle,
+      instrumentIdByFactId: ids,
+    );
+    return [for (final e in _snapshot!.entries) e.toJson()];
+  }
+
+  @override
+  Future<List<Map<String, dynamic>>> categorize({
+    required List<Map<String, dynamic>> entries,
+  }) async => entries;
+
+  @override
+  Future<LedgerTotals> totals({
+    required List<Map<String, dynamic>> entries,
+    DateTime? from,
+    DateTime? to,
+  }) async {
+    final snapshot = _snapshot!;
+    final t =
+        ledger.DefaultLedgerProjector(
+          categoryByEvent: snapshot.categoryByEvent,
+        ).totals(
+          entries.map(v2.LedgerEntry.fromJson),
+          snapshot.events,
+          from ?? DateTime.utc(1900),
+          to ?? DateTime.utc(9999),
+        );
+    return LedgerTotals(
+      spendMinor: t.spendMinor,
+      incomeMinor: t.incomeMinor,
+      investmentMinor: t.investmentMinor,
+      transactionCount: t.transactionCount,
+      byCategory: t.byCategory,
     );
   }
 }

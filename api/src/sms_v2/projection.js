@@ -37,6 +37,7 @@ function ipoConverted(legs) {
 }
 
 function entryKindFor(event) {
+  if (event.status === 'ambiguous') return null;
   if (event.type === 'ipo_application') return ipoConverted(event.legs) ? 'investment' : null;
   return ENTRY_KIND_BY_TYPE[event.type] || null;
 }

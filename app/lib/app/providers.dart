@@ -1,3 +1,6 @@
+import '../features/sms_v2/ledger/providers.dart';
+import '../features/sms_v2/ledger/adapters.dart' as sms_v2_adapters;
+import 'package:pandapay_domain/sms_v2_ledger.dart' as sms_v2_ledger;
 import 'dart:async';
 import 'dart:convert';
 
@@ -426,6 +429,11 @@ final spendByCategoryRepositoryProvider = Provider<SpendByCategoryRepository?>((
 /// history to project from, so "nothing worth recommending yet" is the
 /// correct, unsurprising result rather than a screen-blocking error.
 final categorySpendProvider = FutureProvider<List<CategorySpend>>((ref) async {
+  if (ref.watch(smsV2ReportingEnabledProvider)) {
+    return (await ref.watch(
+      smsV2LedgerReadModelProvider.future,
+    )).categorySpend(ref.watch(clockProvider).now());
+  }
   final repo = ref.watch(spendByCategoryRepositoryProvider);
   if (repo == null) return const [];
   final cache = await _cacheOrNull(ref);
@@ -1340,6 +1348,16 @@ final commitmentsRepositoryProvider = Provider<CommitmentsRepository>((ref) {
 });
 
 final commitmentsProvider = FutureProvider<List<Commitment>>((ref) async {
+  if (ref.watch(smsV2ReportingEnabledProvider)) {
+    final model = await ref.watch(smsV2LedgerReadModelProvider.future);
+    final manual = await ref.watch(commitmentsRepositoryProvider).fetchAll();
+    return [
+      ...manual.where(
+        (item) => item.source != CommitmentSource.sms || item.isUserConfirmed,
+      ),
+      ...sms_v2_adapters.billsFromFacts(model.facts, model.ledger.events),
+    ];
+  }
   final markCommitmentsReady = _financialChanges(ref, 'commitments');
   final markObservationsReady = _financialChanges(ref, 'observations');
   final repo = ref.watch(commitmentsRepositoryProvider);
@@ -1614,6 +1632,14 @@ final pastBillReceiptsProvider = FutureProvider<List<PastBillReceipt>>((
 /// card-linked bills, autopay reminders, any bill whose payment the app
 /// never saw — with the settled/pending/payment-not-detected state each.
 final smsBillRowsProvider = FutureProvider<List<SmsBillRow>>((ref) async {
+  if (ref.watch(smsV2ReportingEnabledProvider)) {
+    final model = await ref.watch(smsV2LedgerReadModelProvider.future);
+    return sms_v2_adapters.smsBillRowsFromFacts(
+      model.facts,
+      model.ledger.events,
+      now: ref.watch(clockProvider).now(),
+    );
+  }
   var ready = false;
   ref.listen(financialStoreRevisionProvider('observations'), (_, next) {
     if (ready) ref.invalidateSelf();
@@ -2109,6 +2135,11 @@ spendReportProvider = FutureProvider.family<SpendReport?, SpendReportQuery>((
   ref,
   query,
 ) async {
+  if (ref.watch(smsV2ReportingEnabledProvider)) {
+    return (await ref.watch(
+      smsV2LedgerReadModelProvider.future,
+    )).spendReport(query, ref.watch(clockProvider).now());
+  }
   final markReady = _financialChanges(ref, 'transactions');
   try {
     final repo = ref.watch(spendReportsRepositoryProvider);
@@ -2287,6 +2318,14 @@ final budgetsProvider = FutureProvider<List<BudgetStatus>>((ref) async {
 /// Detected subscriptions, biggest annual cost first.
 final FutureProvider<RecurringReport?>
 recurringReportProvider = FutureProvider<RecurringReport?>((ref) async {
+  if (ref.watch(smsV2ReportingEnabledProvider)) {
+    final model = await ref.watch(smsV2LedgerReadModelProvider.future);
+    return sms_v2_adapters.recurringReportFromLedger(
+      model.facts,
+      model.ledger.events,
+      now: ref.watch(clockProvider).now(),
+    );
+  }
   final markReady = _financialChanges(ref, 'transactions');
   try {
     final repo = ref.watch(spendReportsRepositoryProvider);
@@ -2556,6 +2595,41 @@ class CardSpendSummary {
 }
 
 final cardSpendSummaryProvider = Provider<Map<String, CardSpendSummary>>((ref) {
+  if (ref.watch(smsV2ReportingEnabledProvider)) {
+    final model = ref.watch(smsV2LedgerReadModelProvider).valueOrNull;
+    final cards = ref.watch(myCardsProvider).valueOrNull;
+    if (model == null || cards == null) return const {};
+    final now = ref.watch(clockProvider).now();
+    final result = <String, CardSpendSummary>{};
+    for (final card in cards) {
+      final start = card.statementDay == null
+          ? DateTime(now.year, now.month)
+          : _previousStatementOccurrence(card.statementDay!, now);
+      final rows = model.transactions
+          .where(
+            (r) =>
+                r.userCardId == card.id &&
+                !r.occurredAt.isBefore(start) &&
+                !r.occurredAt.isAfter(now),
+          )
+          .toList();
+      final spends =
+          rows
+              .where(
+                (r) =>
+                    r.status == 'active' && r.entryKind == TxnEntryKind.spend,
+              )
+              .toList()
+            ..sort((a, b) => b.occurredAt.compareTo(a.occurredAt));
+      result[card.id] = CardSpendSummary(
+        cycleTotal: Money.fromPaise(
+          model.totalsForTransactions(rows).spendMinor,
+        ),
+        latestSpend: spends.firstOrNull,
+      );
+    }
+    return result;
+  }
   final cardsValue = ref.watch(myCardsProvider);
   final transactionsValue = ref.watch(utilizationTransactionsProvider);
   final cards = cardsValue.valueOrNull ?? const <UserCard>[];
@@ -3229,6 +3303,21 @@ final ownedCardsWithProductProvider =
 final creditUtilizationProvider = Provider<Map<String, UtilizationResult>>((
   ref,
 ) {
+  if (ref.watch(smsV2ReportingEnabledProvider)) {
+    final model = ref.watch(smsV2LedgerReadModelProvider).valueOrNull;
+    if (model == null) return const {};
+    return {
+      for (final instrument in model.instruments)
+        if (instrument.userCardId != null &&
+            instrument.creditLimitMinor != null &&
+            instrument.creditLimitMinor! > 0 &&
+            sms_v2_ledger.cardUsage(instrument) != null)
+          instrument.userCardId!: creditUtilization(
+            Money.fromPaise(sms_v2_ledger.cardUsage(instrument)!),
+            Money.fromPaise(instrument.creditLimitMinor!),
+          ),
+    };
+  }
   final pairs =
       ref.watch(ownedCardsWithProductProvider).valueOrNull ?? const [];
   final transactions =
@@ -3509,6 +3598,22 @@ final pointsLedgerProvider =
 /// for why only the current month is safe to always-recompute).
 final FutureProvider<MonthlyReport?>
 currentMonthlyReportProvider = FutureProvider<MonthlyReport?>((ref) async {
+  if (ref.watch(smsV2ReportingEnabledProvider)) {
+    final now = ref.watch(clockProvider).now();
+    final model = await ref.watch(smsV2LedgerReadModelProvider.future);
+    final report = model.spendReport(
+      const SpendReportQuery.preset(SpendPeriod.month),
+      now,
+    );
+    return MonthlyReport(
+      periodMonth: report.periodStart,
+      totalSpend: report.spend.total,
+      rewardsEarned: report.spend.rewards,
+      baselineSingleCard: const Money.zero(),
+      valueMissed: const Money.zero(),
+      extraEarned: report.spend.rewards,
+    );
+  }
   final markReady = _financialChanges(ref, 'transactions');
   try {
     final repo = ref.watch(userCardsRepositoryProvider);
@@ -3598,6 +3703,12 @@ currentMonthlyReportProvider = FutureProvider<MonthlyReport?>((ref) async {
 /// and the header hides the figures rather than showing ₹0 as if that were
 /// a measured result.
 final homeSummaryProvider = FutureProvider<HomeSummary?>((ref) async {
+  if (ref.watch(smsV2ReportingEnabledProvider)) {
+    if (ref.watch(userCardsRepositoryProvider) == null) return null;
+    return (await ref.watch(
+      smsV2LedgerReadModelProvider.future,
+    )).homeSummary(ref.watch(clockProvider).now());
+  }
   final repo = ref.watch(userCardsRepositoryProvider);
   if (repo == null) return null;
   final key = _scopedCacheKey(ref, 'home_summary');
@@ -3929,6 +4040,14 @@ final bankAccountSummariesProvider = FutureProvider<List<BankAccountSummary>>((
 final cardBillLedgerProvider = FutureProvider<Map<String, CardBillLedger>>((
   ref,
 ) async {
+  if (ref.watch(smsV2ReportingEnabledProvider)) {
+    final model = await ref.watch(smsV2LedgerReadModelProvider.future);
+    return sms_v2_adapters.cardBillLedgersFromFacts(
+      model.facts,
+      model.ledger.events,
+      model.instruments,
+    );
+  }
   final markReady = _financialChanges(ref, 'observations');
   final markTransactionsReady = _financialChanges(ref, 'transactions');
   final repo = ref.watch(userCardsRepositoryProvider);

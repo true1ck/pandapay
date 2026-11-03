@@ -1,3 +1,4 @@
+import '../sms_v2/ledger/providers.dart';
 import 'dart:async';
 
 import 'package:flutter/material.dart';
@@ -212,7 +213,17 @@ final paymentsDueProvider = FutureProvider<List<DuePayment>>((ref) async {
         : previousOccurrenceOf(card.statementDay!, today);
 
     var logged = const Money.zero();
-    if (cycleStart != null) {
+    if (ref.watch(smsV2ReportingEnabledProvider)) {
+        final model = await ref.watch(smsV2LedgerReadModelProvider.future);
+        final selected = model.transactions.where(
+          (r) =>
+              r.userCardId == card.id &&
+              (cycleStart == null || !r.occurredAt.isBefore(cycleStart)),
+        );
+        logged = Money.fromPaise(
+          model.totalsForTransactions(selected).spendMinor,
+        );
+      } else if (cycleStart != null) {
       for (final txn in transactions) {
         if (txn.status != 'active') continue;
         if (txn.entryKind != TxnEntryKind.spend ||

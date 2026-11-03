@@ -1,4 +1,5 @@
 import 'package:pandapay_domain/pandapay_domain.dart';
+import 'package:pandapay_domain/sms_v2.dart' show Totals;
 
 import '../../data/user_cards_repository.dart';
 
@@ -62,7 +63,10 @@ class ActivityProjection {
     required this.activeCount,
   });
 
-  factory ActivityProjection.build(List<TransactionEntry> entries) {
+  factory ActivityProjection.build(
+    List<TransactionEntry> entries, {
+    Totals? ledgerTotals,
+  }) {
     final byDay = <DateTime, List<TransactionEntry>>{};
     final counts = <String, int>{};
     var incomingPaise = 0;
@@ -73,7 +77,11 @@ class ActivityProjection {
       final date = entry.occurredAt;
       final day = DateTime(date.year, date.month, date.day);
       byDay.putIfAbsent(day, () => []).add(entry);
-      if (entry.status != 'active') continue;
+      if (ledgerTotals != null ||
+          entry.status != 'active' ||
+          entry.entryKind == TxnEntryKind.refund ||
+          entry.entryKind == TxnEntryKind.unknown)
+        continue;
       activeCount++;
       if (entry.amount.paise <= 0) continue;
       if (entry.entryKind == TxnEntryKind.income) {
@@ -83,8 +91,11 @@ class ActivityProjection {
         outgoingPaise += entry.amount.paise;
       }
     }
-    final incoming = Money.fromPaise(incomingPaise);
-    final outgoing = Money.fromPaise(outgoingPaise);
+    final incoming = Money.fromPaise(
+      ledgerTotals?.incomeMinor ?? incomingPaise,
+    );
+    final outgoing = Money.fromPaise(ledgerTotals?.spendMinor ?? outgoingPaise);
+    activeCount = ledgerTotals?.transactionCount ?? activeCount;
     final days = byDay.keys.toList()..sort((a, b) => b.compareTo(a));
     final rows = <ActivityListRow>[
       ActivityListRow.summary(
@@ -117,14 +128,23 @@ class ActivityProjection {
 class ActivityProjectionCache {
   List<TransactionEntry>? _entries;
   Object? _scope;
+  Totals? _ledgerTotals;
   ActivityProjection? _projection;
 
   ActivityProjection resolve(
     List<TransactionEntry> entries, {
     required Object scope,
+    Totals? ledgerTotals,
   }) {
-    if (identical(_entries, entries) && _scope == scope) return _projection!;
-    final projection = ActivityProjection.build(entries);
+    if (identical(_entries, entries) &&
+        _scope == scope &&
+        identical(_ledgerTotals, ledgerTotals))
+      return _projection!;
+    final projection = ActivityProjection.build(
+      entries,
+      ledgerTotals: ledgerTotals,
+    );
+    _ledgerTotals = ledgerTotals;
     _entries = entries;
     _scope = scope;
     _projection = projection;

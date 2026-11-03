@@ -1,3 +1,5 @@
+import 'package:pandapay_domain/sms_v2.dart' show Totals;
+import '../sms_v2/ledger/providers.dart';
 import 'dart:async';
 
 import 'package:flutter/material.dart';
@@ -193,6 +195,12 @@ class _ActivityScreenState extends ConsumerState<ActivityScreen> {
         cards: cards,
         tags: tags,
         categories: resolvedCategories,
+        totalForEntries: ref.read(smsV2ReportingEnabledProvider)
+            ? ref
+                  .read(smsV2LedgerReadModelProvider)
+                  .valueOrNull
+                  ?.totalsForTransactions
+            : null,
       ),
     );
 
@@ -809,9 +817,38 @@ class _ActivityScreenState extends ConsumerState<ActivityScreen> {
                     ),
                   );
                 }
+                final v2Enabled = ref.watch(smsV2ReportingEnabledProvider);
+                final ledgerState = v2Enabled
+                    ? ref.watch(smsV2LedgerReadModelProvider)
+                    : null;
+                final ledgerModel = ledgerState?.valueOrNull;
+                if (v2Enabled && ledgerModel == null) {
+                  return Center(
+                    child: ledgerState!.hasError
+                        ? Column(
+                            mainAxisSize: MainAxisSize.min,
+                            children: [
+                              const Text('Couldn’t load activity totals.'),
+                              TextButton(
+                                onPressed: () => ref.invalidate(
+                                  smsV2LedgerReadModelProvider,
+                                ),
+                                child: const Text('Retry'),
+                              ),
+                            ],
+                          )
+                        : const CircularProgressIndicator(),
+                  );
+                }
                 final projection = _projectionCache.resolve(
                   entries,
-                  scope: (ref.read(cacheNamespaceProvider), token, filter),
+                  scope: (
+                    ref.read(cacheNamespaceProvider),
+                    token,
+                    filter,
+                    v2Enabled,
+                  ),
+                  ledgerTotals: ledgerModel?.totalsForTransactions(entries),
                 );
                 final visibleSelected = projection.visibleSelectedCount(
                   _selectedIds,
@@ -1584,6 +1621,7 @@ class _ActivityFilterSheet extends StatefulWidget {
   final List<UserCard> cards;
   final List<TransactionTag> tags;
   final List<SpendCategory> categories;
+  final Totals Function(Iterable<TransactionEntry>)? totalForEntries;
 
   const _ActivityFilterSheet({
     required this.initial,
@@ -1591,6 +1629,7 @@ class _ActivityFilterSheet extends StatefulWidget {
     required this.cards,
     required this.tags,
     required this.categories,
+    this.totalForEntries,
   });
 
   @override
@@ -1639,6 +1678,8 @@ class _ActivityFilterSheetState extends State<_ActivityFilterSheet> {
   }
 
   Money get _matchingTotal {
+    final totals = widget.totalForEntries?.call(_matchingEntries);
+    if (totals != null) return Money.fromPaise(totals.spendMinor);
     return _matchingEntries
         .where(
           (e) => e.status == 'active' && e.entryKind != TxnEntryKind.income,
