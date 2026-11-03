@@ -34,7 +34,15 @@ async function harness({ flag = true, hooks } = {}) {
     readFlag: async () => (state.flag ? { key: 'sms_pipeline_v2_enabled', is_enabled: true, rollout_percent: 100 } : null),
     flagCacheMs: 0,
     signer: null,
-    hooks,
+    hooks: {
+      ...hooks,
+      security: {
+        verifyAttestation: async () => true,
+        checkRate: async () => true,
+        checkEntitlement: async () => true,
+        ...hooks?.security,
+      },
+    },
     loadUserCardForState: async () => null,
     applyTransactionState: async () => ({}),
     reverseTransactionState: async () => ({}),

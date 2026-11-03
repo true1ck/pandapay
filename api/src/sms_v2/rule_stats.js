@@ -13,12 +13,21 @@ const AUTO_PAUSE_REASON = 'auto_correction_rate';
 const AUTO_PAUSE_COHORTS = ['testers', 'pct5', 'pct25'];
 
 // POST /sms/v2/rule-stats:batch handler. Auth and the v2 flag are applied by the caller.
-function createStatsHandler({ store }) {
+function createStatsHandler({ store, security }) {
   return async function ruleStatsHandler(req, res) {
     const check = validateRequest('rule_stats_batch', req.body);
     if (!check.ok) return res.status(400).json({ error: check.errors[0].code, detail: check.errors.map((e) => `${e.code}@${e.path}`).join(', ') });
     const { day, appVersion, stats } = req.body;
     try {
+      if (security) {
+        const denied = value => value === false || value?.ok === false;
+        if (denied(await security.verifyAttestation(req))) return res.status(403).json({ error: 'attestation_required' });
+        if (denied(await security.checkRate(req, 'rule-stats', 1))) return res.status(429).json({ error: 'rate_limited' });
+      }
+      // Device telemetry may influence global pause decisions. Unverified
+      // requests retain admission telemetry, but cannot alter shared rollups.
+      if (req.smsV2Security?.sharedLearningEligible === false) return res.status(202).json({});
+
       await store.tx(req.userId, (s) => s.recordRuleStats(req.userId, day, appVersion, stats));
     } catch (err) {
       console.error('sms_v2 rule stats failed', err && err.code);

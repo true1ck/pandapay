@@ -29,6 +29,7 @@ function createRulesHandler({ store, getSigner, security, now = () => new Date()
     try {
       if (denied(await security.verifyAttestation(req))) return res.status(403).json({ error: 'attestation_required' });
       if (denied(await security.checkEntitlement(req))) return res.status(403).json({ error: 'entitlement_required' });
+      if (security.checkRate && denied(await security.checkRate(req, 'rules', 1))) return res.status(429).json({ error: 'rate_limited' });
     } catch (err) {
       console.error('sms_v2 rules security hook failed', err && err.code);
       return res.status(503).json({ error: 'security_unavailable' });
@@ -65,12 +66,13 @@ function registerRules(app, deps) {
   const security = {
     verifyAttestation: async () => true,
     checkEntitlement: async () => true,
+    checkRate: async () => true,
     ...((deps.hooks && deps.hooks.security) || {}),
   };
   const now = deps.now || (() => new Date());
 
   app.get('/sms/v2/rules', deps.requireSmsV2, requireMember, createRulesHandler({ store, getSigner, security, now }));
-  app.post('/sms/v2/rule-stats\\:batch', deps.requireSmsV2, requireMember, createStatsHandler({ store }));
+  app.post('/sms/v2/rule-stats\\:batch', deps.requireSmsV2, requireMember, createStatsHandler({ store, security }));
   registerRulesAdminRoutes(app, { ...deps, store, getSigner, now });
 
   return {

@@ -42,6 +42,7 @@ function registerSmsV2(app, deps) {
   const { signerFromEnv } = require('./signer');
 
   const hooks = createHooks(deps.hooks);
+  require('./security').installSecurity(hooks, deps);
   const withUserClient = deps.withUserClient;
   const requireSmsV2 = deps.requireSmsV2 || createRequireSmsV2({ withUserClient, readFlag: deps.readFlag, cacheMs: deps.flagCacheMs });
   const requireMember = deps.requireMember || deps.requireAuth;
@@ -75,6 +76,7 @@ function registerSmsV2(app, deps) {
   const lazySecurity = {
     verifyAttestation: (req) => hooks.security.verifyAttestation(req),
     checkEntitlement: (req) => hooks.security.checkEntitlement(req),
+    checkRate: (req, route, units) => hooks.security.checkRate(req, route, units),
   };
   const rules = registerRules(app, { ...deps, ...shared, hooks: { ...hooks, security: lazySecurity }, requireAdmin: deps.requireAdmin, signer });
   hooks.latestBundleVersion = rules.latestBundleVersion;
