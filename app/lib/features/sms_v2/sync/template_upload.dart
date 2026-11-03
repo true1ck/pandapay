@@ -2,11 +2,12 @@ import 'dart:convert';
 import 'dart:math';
 
 import 'package:http/http.dart' as http;
-import 'package:pandapay_domain/sms_v2.dart';
 import 'package:pandapay_domain/sms_v2_template.dart';
 
 import '../../../data/local/sms_intake_repository.dart';
 import '../storage/outbox_store.dart';
+import '../storage/sync_state_store.dart';
+import '../storage/template_origin_store.dart';
 
 /// Unknown templates enter this queue only with current sharing consent.
 class TemplateUpload {
@@ -30,10 +31,77 @@ class TemplateUpload {
   final bool Function() accountIsCurrent;
   final DateTime Function() clock;
 
-  Future<void> drain() async {
-    if (!accountIsCurrent() || !await hasConsent() || !accountIsCurrent()) {
-      return;
+  Future<bool> _canShare() async {
+    if (!accountIsCurrent()) return false;
+    final bool consent;
+    try {
+      consent = await hasConsent();
+    } catch (_) {
+      return false;
     }
+    if (!accountIsCurrent()) return false;
+    if (!consent) {
+      queue.db.execute('SAVEPOINT sms_v2_template_revoke');
+      try {
+        queue.db.execute(
+          "DELETE FROM v2_sync_state WHERE namespace=? AND (key LIKE 'ai:%' OR key LIKE 'template:sent:%' OR key LIKE 'template:origins:%')",
+          [queue.namespace],
+        );
+        queue.db.execute(
+          "DELETE FROM v2_outbox WHERE namespace=? AND kind='template'",
+          [queue.namespace],
+        );
+        queue.db.execute('RELEASE sms_v2_template_revoke');
+      } catch (_) {
+        queue.db.execute('ROLLBACK TO sms_v2_template_revoke');
+        queue.db.execute('RELEASE sms_v2_template_revoke');
+        rethrow;
+      }
+    }
+    return consent;
+  }
+
+  bool _validUpload(Map<String, Object?> item) {
+    final brand = item['senderBrand'], body = item['redactedBody'];
+    return brand is String &&
+        RegExp(r'^[A-Z0-9]{1,32}$').hasMatch(brand) &&
+        body is String &&
+        body.isNotEmpty &&
+        body.length <= 20000 &&
+        !_unsafe.hasMatch(body) &&
+        item['templateHash'] == smsTemplateHash(brand, body);
+  }
+
+  static final _unsafe = RegExp(
+    r'\d{6,}|https?://|www\.|[\w.+-]+@[\w.-]+|\b[a-z0-9-]+\.(?:com|in|co|io|ly|me|net|org)(?:\b|/)',
+    caseSensitive: false,
+  );
+
+  Future<void> drain() async {
+    if (!await _canShare()) return;
+    // Previous builds queued the original hash with a different redacted body.
+    // Rebuild those entries from the retained local capture before retrying.
+    for (final row in queue.db.select(
+      "SELECT id,payload FROM v2_outbox WHERE namespace=? AND kind='template'",
+      [queue.namespace],
+    )) {
+      var valid = false;
+      try {
+        valid = _validUpload(
+          (jsonDecode(row['payload'] as String) as Map).cast<String, Object?>(),
+        );
+      } catch (_) {
+        // A malformed old queue entry cannot be uploaded.
+      }
+      if (!valid) {
+        queue.db.execute('DELETE FROM v2_outbox WHERE namespace=? AND id=?', [
+          queue.namespace,
+          row['id'],
+        ]);
+      }
+    }
+    final state = SyncStateStore(queue.db, namespace: queue.namespace);
+    final origins = TemplateOriginStore(state);
     for (final row in queue.db.select(
       "SELECT payload FROM v2_review_items WHERE namespace=? AND kind='template' AND status='open'",
       [queue.namespace],
@@ -41,21 +109,8 @@ class TemplateUpload {
       final review = jsonDecode(row['payload'] as String) as Map;
       final key = review['sourceKey'];
       if (key is! String) continue;
-      final hash = review['templateHash'] as String;
-      if (queue.db.select(
-        'SELECT 1 FROM v2_outbox WHERE namespace=? AND id=?',
-        [queue.namespace, 'template:$hash'],
-      ).isNotEmpty) {
-        continue;
-      }
       final message = intake.capturedById(queue.namespace, key)?.message;
       if (message == null) continue;
-      if (queue.db.select(
-        'SELECT 1 FROM v2_sync_state WHERE namespace=? AND key=?',
-        [queue.namespace, 'template:sent:$hash'],
-      ).isNotEmpty) {
-        continue;
-      }
       final salt = base64UrlEncode(
         List.generate(32, (_) => Random.secure().nextInt(256)),
       );
@@ -66,21 +121,33 @@ class TemplateUpload {
         options: SmsRedactionOptions(salt: salt),
       );
       final safe = smsSkeleton(redacted.body);
-      if (RegExp(
-        r'\d{6,}|https?://|www\.|[\w.+-]+@[\w.-]+',
-        caseSensitive: false,
-      ).hasMatch(safe)) {
-        continue;
-      }
-      queue.enqueue('template', hash, {
+      final brand = smsTemplateBrand(message.sender);
+      final hash = smsTemplateHash(brand, safe);
+      final payload = <String, Object?>{
         'templateHash': hash,
-        'senderBrand': normalizeSenderBrand(message.sender).brand,
+        'senderBrand': brand,
         'redactedBody': safe,
         'observedAt': message.receivedAt.toUtc().toIso8601String(),
-      });
+      };
+      if (!_validUpload(payload) ||
+          !origins.remember(
+            remoteHash: hash,
+            localHash: smsTemplateHash(brand, smsSkeleton(message.body)),
+            senderBrand: brand,
+          )) {
+        continue;
+      }
+      if (state.get('template:sent:$hash') != null ||
+          queue.db.select(
+            'SELECT 1 FROM v2_outbox WHERE namespace=? AND id=?',
+            [queue.namespace, 'template:$hash'],
+          ).isNotEmpty) {
+        continue;
+      }
+      queue.enqueue('template', hash, payload);
     }
     while (accountIsCurrent()) {
-      if (!await hasConsent() || !accountIsCurrent()) return;
+      if (!await _canShare()) return;
       final records = queue
           .due(clock(), limit: 2500)
           .where((item) => item.kind == 'template')
@@ -88,16 +155,29 @@ class TemplateUpload {
           .toList();
       if (records.isEmpty) return;
       try {
+        final admission = await headers();
+        if (!await _canShare()) return;
         final response = await client
             .post(
               baseUri.resolve('/sms/v2/unknown-templates'),
-              headers: {...await headers(), 'Content-Type': 'application/json'},
+              headers: {...admission, 'Content-Type': 'application/json'},
               body: jsonEncode({
-                'items': records.map((record) => record.json).toList(),
+                'items': [
+                  for (final record in records)
+                    {
+                      for (final key in [
+                        'templateHash',
+                        'senderBrand',
+                        'redactedBody',
+                        'observedAt',
+                      ])
+                        key: record.json[key],
+                    },
+                ],
               }),
             )
             .timeout(const Duration(seconds: 30));
-        if (!accountIsCurrent()) return;
+        if (!await _canShare()) return;
         if (response.statusCode != 200 && response.statusCode != 202) {
           throw const FormatException('Template upload failed');
         }

@@ -90,7 +90,14 @@ class SmsV2Pipeline {
             appVersion: appVersion,
           );
           final result = outcome.result;
-          if (result.ruleId != null && (result.ruleVersion ?? 0) > 0) {
+          final provisional = bundle.rules.any(
+            (rule) =>
+                rule.id == result.ruleId &&
+                rule.status == RuleStatus.provisional,
+          );
+          if (!provisional &&
+              result.ruleId != null &&
+              (result.ruleVersion ?? 0) > 0) {
             StatsStore(_db, namespace: namespace).record(
               at: message.observedAt,
               ruleId: result.ruleId!,
@@ -109,11 +116,6 @@ class SmsV2Pipeline {
             }
           } else {
             incoming.addAll(result.facts);
-            final provisional = bundle.rules.any(
-              (rule) =>
-                  rule.id == result.ruleId &&
-                  rule.status == RuleStatus.provisional,
-            );
             if (result.facts.any((fact) => fact.confidence < .7) ||
                 provisional) {
               review.add(_templateReview(message, result));

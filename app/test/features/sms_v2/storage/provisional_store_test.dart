@@ -5,6 +5,7 @@ import 'package:flutter_test/flutter_test.dart';
 import 'package:pandapay/features/sms_v2/storage/provisional_store.dart';
 import 'package:pandapay/features/sms_v2/storage/schema.dart';
 import 'package:pandapay/features/sms_v2/storage/sync_state_store.dart';
+import 'package:pandapay/features/sms_v2/storage/template_origin_store.dart';
 import 'package:pandapay_domain/sms_v2.dart';
 import 'package:sqlite3/sqlite3.dart';
 
@@ -35,6 +36,12 @@ void main() {
         ],
       });
       final state = SyncStateStore(db, namespace: 'a');
+      final origins = TemplateOriginStore(state);
+      origins.remember(
+        remoteHash: rule.match.templateHash!,
+        localHash: 'a' * 64,
+        senderBrand: rule.senders.single,
+      );
       state.put(
         'ai:${rule.match.templateHash}',
         jsonEncode({
@@ -47,6 +54,8 @@ void main() {
       expect(first.bundle.rules, hasLength(shared.rules.length + 1));
       expect(shared.rules, hasLength(bundle.rules.length - 1));
       expect(first.revision, isNot('${shared.bundleVersion}'));
+      expect(first.bundle.rules.last.match.templateHash, 'a' * 64);
+      expect(first.bundle.rules.last.id, contains(':local:'));
       expect(
         ProvisionalStore(
           SyncStateStore(db, namespace: 'b'),
@@ -62,6 +71,60 @@ void main() {
         }),
       );
       expect(ProvisionalStore(state).overlay(shared).bundle, shared);
+    },
+  );
+
+  test(
+    'origin mappings bound each remote format and reject malformed state',
+    () {
+      final db = sqlite3.openInMemory();
+      addTearDown(db.dispose);
+      SmsV2Schema.ensure(db);
+      final state = SyncStateStore(db, namespace: 'a');
+      final origins = TemplateOriginStore(state);
+      final remote = 'a' * 64;
+      for (var i = 0; i < TemplateOriginStore.maxOrigins; i++) {
+        expect(
+          origins.remember(
+            remoteHash: remote,
+            localHash: i.toRadixString(16).padLeft(64, '0'),
+            senderBrand: 'HDFCBK',
+          ),
+          isTrue,
+        );
+      }
+      expect(
+        origins.remember(
+          remoteHash: remote,
+          localHash: 'b' * 64,
+          senderBrand: 'HDFCBK',
+        ),
+        isFalse,
+      );
+      expect(
+        origins.get(remote)!.localHashes,
+        hasLength(TemplateOriginStore.maxOrigins),
+      );
+      expect(
+        origins.remember(
+          remoteHash: remote,
+          localHash: '0' * 64,
+          senderBrand: 'OTHER',
+        ),
+        isFalse,
+      );
+      expect(
+        TemplateOriginStore(SyncStateStore(db, namespace: 'b')).get(remote),
+        isNull,
+      );
+      state.put(
+        'template:origins:$remote',
+        jsonEncode({
+          'senderBrand': 'HDFCBK',
+          'localHashes': ['bad'],
+        }),
+      );
+      expect(origins.get(remote), isNull);
     },
   );
 }
