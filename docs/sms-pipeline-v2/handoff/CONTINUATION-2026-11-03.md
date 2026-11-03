@@ -131,3 +131,17 @@ dart run bin/sms_rules.dart build --rules ../../rules/sms/v2 --created-at 2026-1
 ```
 
 The repository extractor attempted a read-only connection to the local Messages archive. SQLite could not open it and a direct file open confirmed macOS denied access with `Operation not permitted`. No corpus was extracted. Family accuracy, double counts and review rate remain unmeasured. The subsequent signing, import, correction, device and cutover checkpoints wait on this ordered accuracy step.
+
+### First real-corpus baseline
+
+After Full Disk Access was granted, the same read-only extractor retained 5,196 messages across 298 sender headers. The private evaluation directory is `/tmp/pandapay-real-sms.a1N9hk`. From `tools/sms_rules_cli`, the commands were:
+
+```sh
+p=/tmp/pandapay-real-sms.a1N9hk
+dart run bin/sms_rules.dart build --rules ../../rules/sms/v2 --bundle-version 0 --created-at 2026-11-04T00:00:00Z --out "$p/baseline-v0.json"
+dart --packages=.dart_tool/package_config.json "$p/probe.dart" "$p/baseline-v0.json" "$p/sms.jsonl" "$p/misses.jsonl"
+dart run bin/sms_rules.dart redact --in "$p/misses.jsonl" --out "$p/redacted-misses.jsonl"
+dart run bin/sms_rules.dart cluster --in "$p/redacted-misses.jsonl" --out "$p/miss-templates.json"
+```
+
+The engine matched 1,273, ignored 1,460 and returned unknown for 2,463 (47.4%). The unknowns clustered into 886 templates, with 640 covering 90% of unknown messages. These are engine outcomes. Accuracy requires reviewed expected readings. The phone review rate and double counts require running the full pipeline and checking event linkage. The family gate remains open.
