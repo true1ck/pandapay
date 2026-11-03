@@ -305,7 +305,10 @@ class RuleEngine implements SmsInterpreter {
     for (final a in e.amounts ?? const <EmitAmount>[]) {
       final raw = ctx.group(a.from);
       if (raw == null) continue;
-      final minor = parseAmountIndian(raw);
+      // POINTS are whole points, not paise.
+      final minor = a.unit == 'POINTS'
+          ? int.tryParse(raw.replaceAll(',', ''))
+          : parseAmountIndian(raw);
       if (minor == null) throw _Emitted('amount "${a.from}" is not a number: "$raw"');
       amounts.add({'role': a.role.wire, 'minor': minor, 'unit': a.unit});
       span('amounts.${a.role.wire}', a.from);

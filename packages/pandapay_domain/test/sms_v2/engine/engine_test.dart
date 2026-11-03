@@ -326,6 +326,27 @@ void main() {
     });
   });
 
+  group('POINTS amounts are whole points', () {
+    final b = _bundle([
+      _rule(id: 'PTS', pattern: r'earned (?<pts>[\d,]+) points', emit: [
+        {
+          'factType': 'reward',
+          'amounts': [
+            {'role': 'points_earned', 'from': 'pts', 'unit': 'POINTS'},
+          ],
+        },
+      ]),
+    ]);
+    test('"50 points" gives minor 50', () {
+      final r = run(b, _msg('VM-HDFCBK-S', 'You earned 50 points'));
+      expect(r.facts.single.amount(AmountRole.pointsEarned)!.minor, 50);
+    });
+    test('commas are removed', () {
+      final r = run(b, _msg('VM-HDFCBK-S', 'You earned 2,000 points'));
+      expect(r.facts.single.amount(AmountRole.pointsEarned)!.minor, 2000);
+    });
+  });
+
   group('factId and determinism', () {
     final bundle = RuleBundle.fromJson(_fixture());
     test('factId = sha256(sourceKey|ruleId|emitIndex)', () {
