@@ -37,6 +37,7 @@ class _SmsRuleEditorState extends State<SmsRuleEditor> {
   List<dynamic> _senders = const [];
   BrowserGoldenRunner? _runner;
   List<String> _coverage = [];
+  Map<String, dynamic>? _contextBundle;
   List<String> get _issues => validateEditor(_json.text, senders: _senders);
   @override
   void initState() {
@@ -52,7 +53,13 @@ class _SmsRuleEditorState extends State<SmsRuleEditor> {
     super.dispose();
   }
 
-  Future<void> _load() async {
+  Future<void> _load({int? preferredVersion, bool useGuidance = true}) async {
+    setState(() {
+      _saved = null;
+      _report = null;
+      _contextBundle = null;
+      _selectedVersion = null;
+    });
     try {
       final runner =
           await (widget.runner?.call() ?? BrowserGoldenRunner.load());
@@ -61,9 +68,15 @@ class _SmsRuleEditorState extends State<SmsRuleEditor> {
       final detail = await widget.api.detail(widget.ruleId);
       if (!mounted) return;
       final versions = (detail['versions'] as List).cast<Map>();
-      final latest = versions.last;
+      if (preferredVersion != null &&
+          !versions.any((row) => row['version'] == preferredVersion)) {
+        throw StateError('Saved version could not be refreshed. Retry.');
+      }
+      final latest =
+          versions.where((v) => v['version'] == preferredVersion).firstOrNull ??
+          versions.last;
       final original = (latest['body'] as Map).cast<String, dynamic>();
-      final guidance = widget.initialDraft;
+      final guidance = useGuidance ? widget.initialDraft : null;
       final body = guidance == null || guidance['match'] is Map
           ? guidance ?? original
           : {
@@ -75,14 +88,30 @@ class _SmsRuleEditorState extends State<SmsRuleEditor> {
                   'pattern': guidance['pattern'],
               },
             };
+      final candidate = await widget.api.candidate(
+        widget.ruleId,
+        latest['version'] as int,
+        _cohort,
+      );
+      if (!mounted) return;
+      _contextBundle = (candidate['bundle'] as Map).cast<String, dynamic>();
+      _senders = _contextBundle!['senders'] as List;
       setState(() {
         _detail = detail;
         _selectedVersion = latest['version'] as int;
         _setEditor(body);
+        if (guidance == null &&
+            ['draft', 'active', 'provisional'].contains(latest['status'])) {
+          _saved = {
+            'ruleId': widget.ruleId,
+            'version': latest['version'],
+            'status': latest['status'],
+          };
+        }
       });
     } catch (_) {
       if (!mounted) return;
-      if (widget.initialDraft != null) {
+      if (useGuidance && widget.initialDraft != null) {
         setState(() {
           _detail = {'versions': <Object?>[]};
           _setEditor(widget.initialDraft!);
@@ -103,11 +132,9 @@ class _SmsRuleEditorState extends State<SmsRuleEditor> {
     _report = null;
     _coverage = [];
     try {
-      final bundle = RuleBundle.fromJson({
-        ...?_runner?.contextBundle,
-        ...editorBundle({...body, 'status': 'active'}),
-        'senders': _senders,
-      });
+      final bundle = RuleBundle.fromJson(
+        localTestBundle(_contextBundle ?? editorBundle(body), body),
+      );
       for (final c in _runner?.cases.cases ?? []) {
         if (c.messages.any(
           (message) => RuleEngine()
@@ -161,9 +188,9 @@ class _SmsRuleEditorState extends State<SmsRuleEditor> {
       throw StateError('The rule ID must remain ${widget.ruleId}.');
     }
     final saved = await widget.api.save(body);
+    await _load(preferredVersion: saved['version'] as int, useGuidance: false);
     if (mounted) {
       setState(() {
-        _saved = saved;
         _report = null;
         _notice = 'Draft version ${saved['version']} saved.';
       });
@@ -178,9 +205,8 @@ class _SmsRuleEditorState extends State<SmsRuleEditor> {
     );
     await Future<void>.delayed(Duration.zero);
     final runner = await (widget.runner?.call() ?? BrowserGoldenRunner.load());
-    final result = await runner.run(
-      (candidate['bundle'] as Map).cast<String, dynamic>(),
-    );
+    final candidateBody = (candidate['bundle'] as Map).cast<String, dynamic>();
+    final result = await runner.run(candidateBody);
     if (result.report['bundleSha256'] != candidate['contentSha256']) {
       throw StateError(
         'Candidate content changed. Save and run the golden set again.',
@@ -189,6 +215,8 @@ class _SmsRuleEditorState extends State<SmsRuleEditor> {
     if (mounted) {
       setState(() {
         _report = result;
+        _contextBundle = candidateBody;
+        _senders = candidateBody['senders'] as List;
         _notice = result.passed
             ? 'The golden set passed.'
             : 'The golden set found failures.';
@@ -198,12 +226,9 @@ class _SmsRuleEditorState extends State<SmsRuleEditor> {
   Future<void> _publish() => _act(() async {
     if (_report?.passed != true || _reason.text.trim().isEmpty) return;
     final report = {..._report!.report, 'reason': _reason.text.trim()};
-    await widget.api.publish(
-      widget.ruleId,
-      _saved!['version'] as int,
-      _cohort,
-      report,
-    );
+    final version = _saved!['version'] as int;
+    await widget.api.publish(widget.ruleId, version, _cohort, report);
+    await _load(preferredVersion: version, useGuidance: false);
     if (mounted) {
       setState(() {
         _report = null;
@@ -215,7 +240,7 @@ class _SmsRuleEditorState extends State<SmsRuleEditor> {
     try {
       final body = (jsonDecode(_json.text) as Map).cast<String, dynamic>();
       final bundle = RuleBundle.fromJson(
-        editorBundle({...body, 'status': 'active'}),
+        localTestBundle(_contextBundle!, body),
       );
       final result = RuleEngine().interpret(
         SmsMessage(
@@ -243,8 +268,9 @@ class _SmsRuleEditorState extends State<SmsRuleEditor> {
   Future<void> _pause() async {
     if (!await confirmAdminAction(
       context,
-      title: 'Pause this rule?',
-      message: 'The affected cohort falls back to the prior live version.',
+      title: 'Pause ${widget.ruleId} version $_selectedVersion?',
+      message:
+          'This pauses the selected version in every cohort where it is live. Those cohorts fall back to a prior live version.',
     )) {
       return;
     }
@@ -254,6 +280,7 @@ class _SmsRuleEditorState extends State<SmsRuleEditor> {
         _selectedVersion!,
         _reason.text.trim(),
       );
+      await _load(preferredVersion: _selectedVersion, useGuidance: false);
       if (mounted) {
         setState(() {
           _notice = 'Rule paused.';
@@ -272,10 +299,14 @@ class _SmsRuleEditorState extends State<SmsRuleEditor> {
       return;
     }
     await _act(() async {
-      await widget.api.rollback(
+      final result = await widget.api.rollback(
         widget.ruleId,
         _selectedVersion!,
         _reason.text.trim(),
+      );
+      await _load(
+        preferredVersion: result['version'] as int?,
+        useGuidance: false,
       );
       if (mounted) {
         setState(() {
@@ -343,16 +374,9 @@ class _SmsRuleEditorState extends State<SmsRuleEditor> {
               ],
               onChanged: _busy
                   ? null
-                  : (value) => setState(() {
-                      _selectedVersion = value;
-                      _setEditor(
-                        (versions.firstWhere(
-                                  (v) => v['version'] == value,
-                                )['body']
-                                as Map)
-                            .cast<String, dynamic>(),
-                      );
-                    }),
+                  : (value) => _act(
+                      () => _load(preferredVersion: value, useGuidance: false),
+                    ),
             ),
             Text(
               'Changed by ${selected?['createdBy'] ?? 'Unknown'} · ${selected?['createdAt'] ?? ''}',
@@ -463,6 +487,25 @@ class _SmsRuleEditorState extends State<SmsRuleEditor> {
                     : (value) => setState(() {
                         _cohort = value!;
                         _report = null;
+                        _contextBundle = null;
+                        final version =
+                            _saved?['version'] as int? ?? _selectedVersion;
+                        if (version != null) {
+                          _act(() async {
+                            final candidate = await widget.api.candidate(
+                              widget.ruleId,
+                              version,
+                              _cohort,
+                            );
+                            if (mounted) {
+                              setState(() {
+                                _contextBundle = (candidate['bundle'] as Map)
+                                    .cast<String, dynamic>();
+                                _senders = _contextBundle!['senders'] as List;
+                              });
+                            }
+                          });
+                        }
                       }),
               ),
               OutlinedButton(
@@ -504,11 +547,15 @@ class _SmsRuleEditorState extends State<SmsRuleEditor> {
                         _reason.text.trim().isEmpty
                     ? null
                     : _publish,
-                child: Text('Publish to $_cohort'),
+                child: Text(
+                  'Publish v${_saved?['version'] ?? _selectedVersion} to $_cohort',
+                ),
               ),
               TextButton(
+                key: const Key('pause-rule'),
                 onPressed:
                     _busy ||
+                        selected?['status'] != 'active' ||
                         _selectedVersion == null ||
                         _reason.text.trim().isEmpty
                     ? null
@@ -544,7 +591,9 @@ class _SmsRuleEditorState extends State<SmsRuleEditor> {
           Align(
             alignment: Alignment.centerLeft,
             child: OutlinedButton(
-              onPressed: issues.isEmpty ? _testMessage : null,
+              onPressed: issues.isEmpty && _contextBundle != null
+                  ? _testMessage
+                  : null,
               child: const Text('Test locally'),
             ),
           ),
@@ -554,3 +603,19 @@ class _SmsRuleEditorState extends State<SmsRuleEditor> {
     );
   }
 }
+
+/// Runs the draft with the exact current candidate catalogue, aliases, ignore
+/// rules and purposes. Other rule versions remain available for precedence.
+Map<String, dynamic> localTestBundle(
+  Map<String, dynamic> context,
+  Map<String, dynamic> draft,
+) => {
+  ...context,
+  'bundleVersion': 0,
+  'signature': null,
+  'rules': [
+    for (final rule in context['rules'] as List? ?? const [])
+      if (rule['id'] != draft['id']) rule,
+    {...draft, 'status': 'active'},
+  ],
+};

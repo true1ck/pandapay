@@ -1,4 +1,7 @@
 import 'dart:convert';
+import 'dart:io';
+import 'package:pandapay_domain/sms_v2.dart';
+import 'package:pandapay_console/features/sms_rules/rule_editor.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_test/flutter_test.dart';
@@ -26,6 +29,80 @@ void main() {
       expect(result.report['counts']['casesPassed'], 1);
       expect(
         result.report['stages'].values.every((value) => value == 'available'),
+        isTrue,
+      );
+    },
+  );
+  test('local tester retains candidate issuer and alias context', () {
+    final context =
+        (jsonDecode(
+                  File(
+                    '../contracts/sms/v2/fixtures/valid/bundle/full.json',
+                  ).readAsStringSync(),
+                )
+                as Map)
+            .cast<String, dynamic>();
+    final draft = (context['rules'] as List).first as Map<String, dynamic>;
+    final bundle = RuleBundle.fromJson(localTestBundle(context, draft));
+    final body = (draft['examples'] as List).first['body'] as String;
+    final result = RuleEngine().interpret(
+      SmsMessage(
+        sender: 'AD-HDFCCC',
+        body: body,
+        observedAt: DateTime.utc(2026, 11, 1),
+        sourceKey: 'alias-test',
+      ),
+      bundle,
+      appVersion: 'console',
+    );
+    expect(result.facts, isNotEmpty);
+    expect(result.facts.first.envelope.instrument?.issuerSlug, 'hdfc');
+    expect(
+      bundle.counterpartyPurposes,
+      hasLength((context['counterpartyPurposes'] as List).length),
+    );
+  });
+  testWidgets(
+    'an existing active version can run golden for promotion without saving',
+    (tester) async {
+      final admin = FakeAdmin()
+        ..latestVersion = 2
+        ..latestStatus = 'active';
+      await tester.pumpWidget(
+        MaterialApp(
+          home: SmsRuleEditor(
+            api: SmsV2AdminApi(admin),
+            ruleId: 'CONSOLE-SPEND',
+            runner: () async => tinyRunner(),
+          ),
+        ),
+      );
+      await tester.pumpAndSettle();
+      final scroll = tester
+          .state<ScrollableState>(
+            find
+                .descendant(
+                  of: find.byKey(const Key('rule-editor-scroll')),
+                  matching: find.byType(Scrollable),
+                )
+                .first,
+          )
+          .position;
+      final run = find.byKey(const Key('run-golden'));
+      for (var i = 0; run.evaluate().isEmpty && i < 30; i++) {
+        scroll.jumpTo((scroll.pixels + 300).clamp(0, scroll.maxScrollExtent));
+        await tester.pump();
+      }
+      expect(tester.widget<OutlinedButton>(run).onPressed, isNotNull);
+      await tester.ensureVisible(run);
+      await tester.tap(run);
+      await tester.pumpAndSettle();
+      expect(find.text('Golden set passed'), findsOneWidget);
+      expect(admin.requests.any((r) => r.$1 == 'PUT'), isFalse);
+      expect(
+        admin.requests
+            .where((r) => r.$2.contains('/candidate?'))
+            .every((r) => r.$2.contains('version=2')),
         isTrue,
       );
     },
@@ -159,6 +236,18 @@ void main() {
       );
       expect(sent.$3!['cohort'], 'testers');
       expect(sent.$3!['goldenReport']['bundleSha256'], isNotEmpty);
+      expect(sent.$3!['version'], 2);
+      final pause = find.byKey(const Key('pause-rule'));
+      await reveal(pause, 300);
+      await tester.tap(pause);
+      await tester.pumpAndSettle();
+      expect(find.text('Pause CONSOLE-SPEND version 2?'), findsOneWidget);
+      await tester.tap(find.text('Confirm'));
+      await tester.pumpAndSettle();
+      expect(
+        admin.requests.singleWhere((r) => r.$2.contains('/pause?')).$2,
+        endsWith('version=2'),
+      );
       expect(tester.takeException(), isNull);
     },
   );

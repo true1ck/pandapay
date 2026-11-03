@@ -81,6 +81,8 @@ const caseId = '00000000-0000-4000-8000-000000000001';
 class FakeAdmin extends AdminApi {
   FakeAdmin()
     : super(apiBaseUrl: 'https://console.invalid', accessToken: 'fixture');
+  int latestVersion = 1;
+  String latestStatus = 'active';
   final requests = <(String, String, Map<String, dynamic>?)>[];
   @override
   Future<Map<String, dynamic>> smsV2Request(
@@ -145,24 +147,53 @@ class FakeAdmin extends AdminApi {
       };
     }
     if (path.contains('/candidate?')) {
-      final bundle = editorBundle({...rule(), 'status': 'active'});
+      final bundle = {
+        ...editorBundle({
+          ...rule(),
+          'version': latestVersion,
+          'status': 'active',
+        }),
+        'senders': catalog,
+      };
       return {'bundle': bundle, 'contentSha256': evaluationContentHash(bundle)};
     }
     if (path.endsWith('/draft')) {
+      latestVersion = 2;
+      latestStatus = 'draft';
       return {'ruleId': 'CONSOLE-SPEND', 'version': 2, 'status': 'draft'};
     }
-    if (path.endsWith('/publish')) return {'published': true};
+    if (path.endsWith('/publish')) {
+      latestStatus = 'active';
+      return {'published': true};
+    }
+    if (path.contains('/pause?')) {
+      latestStatus = 'paused';
+      return {'paused': true};
+    }
     if (path == '/admin/sms/v2/rules/CONSOLE-SPEND') {
       return {
         'ruleId': 'CONSOLE-SPEND',
         'versions': [
-          {
-            'version': 1,
-            'status': 'active',
-            'body': rule(),
-            'cohorts': <Object?>[],
-            'metrics7d': {'hits': 5},
-          },
+          for (var version = 1; version <= latestVersion; version++)
+            {
+              'version': version,
+              'status': version == latestVersion ? latestStatus : 'active',
+              'body': {
+                ...rule(),
+                'version': version,
+                'status': version == latestVersion ? latestStatus : 'active',
+              },
+              'cohorts': [
+                if (version == latestVersion && latestStatus != 'draft')
+                  {
+                    'cohort': 'testers',
+                    'pausedAt': latestStatus == 'paused'
+                        ? '2026-11-04T00:00:00Z'
+                        : null,
+                  },
+              ],
+              'metrics7d': {'hits': 5},
+            },
         ],
       };
     }
