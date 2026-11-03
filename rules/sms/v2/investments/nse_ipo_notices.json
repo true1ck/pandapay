@@ -1,0 +1,41 @@
+[
+  {
+    "id": "INV-IPO-NSE-COLLECT-NOTICE",
+    "version": 1,
+    "family": "ipo_notice",
+    "senders": [
+      "NSEIND"
+    ],
+    "priority": 425,
+    "match": {
+      "pattern": "^dear\\s+[^\\r\\n]{1,90}?\\s+ipo\\s+[^:\\r\\n]{1,120}\\s*:\\s*app(?:l)?\\s*no\\.?\\s*[:#]?\\s*[a-z0-9]+\\s+upi\\s+id\\s*:?\\s*[a-z0-9._-]+@[a-z0-9]+\\s+for\\s+(?:rs\\.?|inr|₹)\\s*\\d[\\d,]*(?:\\.\\d{1,2})?\\s+received\\.\\s*please\\s+check\\s+for\\s+upi[- ]mandate\\s+collect\\s+request\\s+for\\s+blocking\\s+of\\s+funds(?:\\s*-\\s*[a-z][a-z &]{0,35})?\\.?\\s*$",
+      "flags": "i"
+    },
+    "emit": [
+      {
+        "factType": "info",
+        "attrs": {
+          "category": "service"
+        }
+      }
+    ],
+    "confidence": 0.98,
+    "examples": [
+      {
+        "sender": "VM-NSEIPO-S",
+        "body": "Dear Investor IPO EXAMPLE INDUSTRIES Limited : App no 1234567 UPI ID demo@bank for Rs.14250 received. Please check for UPI-Mandate collect request for blocking of funds- NSE",
+        "expectFactTypes": [
+          "info"
+        ]
+      },
+      {
+        "sender": "VM-NSEIPO-S",
+        "body": "Dear Investor IPO EXAMPLE INDUSTRIES Limited : App no 1234567 UPI ID demo@bank for Rs.14250 rejected. Please check for UPI-Mandate collect request for blocking of funds- NSE",
+        "expectFactTypes": []
+      }
+    ],
+    "status": "active",
+    "createdBy": "baseline",
+    "updatedAt": "2026-11-04T00:00:00Z"
+  }
+]

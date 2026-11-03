@@ -1,0 +1,104 @@
+[
+  {
+    "id": "WAL-KIWI-CARD-BILL-RECEIPT",
+    "version": 1,
+    "family": "bill_pay_receipt",
+    "senders": [
+      "GKIWIP"
+    ],
+    "priority": 710,
+    "match": {
+      "pattern": "^your\\s+(?<issuer>[a-z][a-z ]{1,38}?)\\s+credit card\\s+[x*]{2,}[- ]?(?<mask>\\d{2,4})\\s+bill\\s+of\\s+(?:rs\\.?|inr|₹)\\s*(?<amt>\\d[\\d,]*(?:\\.\\d{1,2})?)\\s+has been successfully paid via kiwi\\.?\\s*$",
+      "flags": "i"
+    },
+    "emit": [
+      {
+        "factType": "movement",
+        "attrs": {
+          "direction": "debit",
+          "purpose": "card_payment",
+          "rail": "unknown",
+          "evidenceOnly": true
+        },
+        "amounts": [
+          {
+            "role": "posted",
+            "unit": "INR",
+            "from": "amt"
+          }
+        ],
+        "counterparty": {
+          "kind": "own",
+          "nameFrom": "issuer",
+          "accountMaskFrom": "mask"
+        }
+      }
+    ],
+    "confidence": 0.96,
+    "examples": [
+      {
+        "sender": "VM-GKIWIP-S",
+        "body": "Your YES Bank Credit Card XXXX-9876 bill of Rs.1200 has been successfully paid via Kiwi.",
+        "expectFactTypes": [
+          "movement"
+        ]
+      },
+      {
+        "sender": "VM-GKIWIP-S",
+        "body": "Your YES Bank Credit Card XXXX-9876 bill of Rs.1200 could not be paid via Kiwi.",
+        "expectFactTypes": []
+      }
+    ],
+    "status": "active",
+    "createdBy": "baseline",
+    "updatedAt": "2026-11-04T00:00:00Z"
+  },
+  {
+    "id": "WAL-KIWI-COLLECT-PENDING",
+    "version": 1,
+    "family": "payment_request",
+    "senders": [
+      "GKIWIP"
+    ],
+    "priority": 720,
+    "match": {
+      "pattern": "^[^\\r\\n]{1,150}\\s+has requested money from you on your kiwi app\\.\\s*on approving the request,\\s*(?:rs\\.?|inr|₹)\\s*(?<amt>\\d[\\d,]*(?:\\.\\d{1,2})?)\\s+will be debited from your account\\.\\s*-\\s*kiwi\\.?\\s*$",
+      "flags": "i"
+    },
+    "emit": [
+      {
+        "factType": "attempt",
+        "attrs": {
+          "status": "pending",
+          "direction": "debit",
+          "purpose": "unknown"
+        },
+        "amounts": [
+          {
+            "role": "scheduled",
+            "unit": "INR",
+            "from": "amt"
+          }
+        ]
+      }
+    ],
+    "confidence": 0.98,
+    "examples": [
+      {
+        "sender": "VM-GKIWIP-S",
+        "body": "EXAMPLE STORE has requested money from you on your Kiwi app. On approving the request, Rs.120 will be debited from your account. - Kiwi",
+        "expectFactTypes": [
+          "attempt"
+        ]
+      },
+      {
+        "sender": "VM-GKIWIP-S",
+        "body": "EXAMPLE STORE has requested money from you on your Kiwi app. On approving the request, Rs.120 was debited from your account. - Kiwi",
+        "expectFactTypes": []
+      }
+    ],
+    "status": "active",
+    "createdBy": "baseline",
+    "updatedAt": "2026-11-04T00:00:00Z"
+  }
+]

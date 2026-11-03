@@ -1,0 +1,50 @@
+[
+  {
+    "id": "WAL-PHONEPE-COLLECT-PENDING",
+    "version": 1,
+    "family": "payment_request",
+    "senders": [
+      "PHONPE"
+    ],
+    "priority": 720,
+    "match": {
+      "pattern": "^[^\\r\\n]{1,160} has requested money from you on PhonePe\\.\\s+(?:rs\\.?|inr|₹)\\s*(?<amt>[\\d,]+(?:\\.\\d{1,2})?)\\s+will be debited from your account on approving the request\\s*-\\s*https?://\\S+\\s*$",
+      "flags": "i"
+    },
+    "emit": [
+      {
+        "factType": "attempt",
+        "attrs": {
+          "status": "pending",
+          "direction": "debit",
+          "purpose": "unknown"
+        },
+        "amounts": [
+          {
+            "role": "scheduled",
+            "unit": "INR",
+            "from": "amt"
+          }
+        ]
+      }
+    ],
+    "confidence": 0.98,
+    "examples": [
+      {
+        "sender": "VM-PHONPE-S",
+        "body": "EXAMPLE STORES has requested money from you on PhonePe. Rs.120 will be debited from your account on approving the request - https://example.invalid/pay",
+        "expectFactTypes": [
+          "attempt"
+        ]
+      },
+      {
+        "sender": "VM-PHONPE-S",
+        "body": "EXAMPLE STORES has requested money from you on PhonePe. Rs.120 was debited from your account on approving the request - https://example.invalid/pay",
+        "expectFactTypes": []
+      }
+    ],
+    "status": "active",
+    "createdBy": "baseline",
+    "updatedAt": "2026-11-04T00:00:00Z"
+  }
+]
