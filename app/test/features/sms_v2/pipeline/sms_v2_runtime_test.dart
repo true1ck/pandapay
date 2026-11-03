@@ -67,6 +67,8 @@ void main() {
                     {'kind': kind, 'id': row[id], 'status': 'accepted'},
               ];
               return http.Response(jsonEncode({'results': results}), 200);
+            case '/sms/v2/rule-stats:batch':
+              return http.Response('{}', 202);
             case '/sms/v2/sync':
               return http.Response(
                 jsonEncode({
@@ -102,7 +104,12 @@ void main() {
         2,
       );
       expect(SmsIntakeRepository(db).pending('user:test'), isEmpty);
-      expect(paths, ['/sms/v2/rules', '/sms/v2/facts:batch', '/sms/v2/sync']);
+      expect(paths, [
+        '/sms/v2/rules',
+        '/sms/v2/facts:batch',
+        '/sms/v2/rule-stats:batch',
+        '/sms/v2/sync',
+      ]);
       await runtime.sync();
       expect(paths.where((path) => path == '/sms/v2/rules'), hasLength(1));
     },

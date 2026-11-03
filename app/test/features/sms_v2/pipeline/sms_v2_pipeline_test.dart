@@ -154,6 +154,34 @@ void main() {
     expect(financial.entities('user:test', 'transactions'), isEmpty);
   });
 
+  test(
+    'a newer bundle can retry an unknown format without reprocessing matches',
+    () {
+      final empty = RuleBundle.fromJson(
+        (jsonDecode(
+                  File(
+                    'assets/sms_rules/baseline_bundle.json',
+                  ).readAsStringSync(),
+                )
+                as Map)
+            .cast<String, Object?>(),
+      );
+      final sms = message();
+      final previous = SmsV2Pipeline(
+        financial: financial,
+        namespace: 'user:test',
+        bundle: empty,
+        appVersion: '2',
+      );
+      expect(previous.process(sms), isTrue);
+      expect(previous.process(sms), isFalse);
+      expect(db.db.select('SELECT * FROM v2_facts'), isEmpty);
+      expect(pipeline.process(sms), isTrue);
+      expect(pipeline.process(sms), isFalse);
+      expect(financial.entities('user:test', 'transactions'), hasLength(1));
+    },
+  );
+
   test('unknown layouts create local template review without raw SMS text', () {
     final sms = message(body: 'An unrecognised financial alert Rs.250.');
     expect(pipeline.process(sms), isTrue);

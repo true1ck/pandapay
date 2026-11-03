@@ -77,8 +77,9 @@ class SyncPull {
       final body = (decoded as Map).cast<String, Object?>();
       final next = body['cursor'] as String;
       final more = response.headers['x-sms-sync-has-more'] == '1';
-      if (more && next == cursor)
+      if (more && next == cursor) {
         throw const FormatException('Sync cursor did not advance');
+      }
       _apply(body);
       pages++;
       if (!more) return pages;
@@ -181,8 +182,9 @@ class SyncPull {
           if (protectedEvents.contains(incoming.eventId) ||
               _dirty('v2_events', 'event_id', incoming.eventId) ||
               _dirty('v2_ledger', 'entry_id', incoming.entryId) ||
-              !newer('ledger', incoming.entryId))
+              !newer('ledger', incoming.entryId)) {
             continue;
+          }
           final retained = _ledger
               .forEvent(incoming.eventId)
               .where((entry) => entry.entryId != incoming.entryId);
@@ -337,8 +339,9 @@ class SyncPull {
     for (final event in ready) {
       if (!_dirty('v2_events', 'event_id', event.eventId)) {
         for (final entry in _ledger.forEvent(event.eventId)) {
-          if (!dirtyBefore.contains(entry.entryId))
+          if (!dirtyBefore.contains(entry.entryId)) {
             _ledger.markClean([entry.entryId]);
+          }
         }
       }
     }

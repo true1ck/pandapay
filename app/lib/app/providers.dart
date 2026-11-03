@@ -1,3 +1,4 @@
+import '../features/sms_v2/instruments/bank_summary_adapter.dart';
 import '../features/sms_v2/flag.dart';
 import '../features/sms_v2/providers/runtime_provider.dart';
 import '../features/sms_v2/ledger/providers.dart';
@@ -3836,6 +3837,13 @@ final homeEngagementCheckInProvider = FutureProvider.family<void, String>((
 final bankAccountSummariesProvider = FutureProvider<List<BankAccountSummary>>((
   ref,
 ) async {
+  if (ref.watch(smsV2ReportingEnabledProvider)) {
+    final model = await ref.watch(smsV2LedgerReadModelProvider.future);
+    final cache = await ref.watch(responseCacheProvider.future);
+    ref.watch(financialStoreRevisionProvider('manual_bank_balances'));
+    return bankAccountSummariesFromInstruments(model.instruments,
+      manualBalances: cache.financialStore.manualBankBalances(ref.watch(cacheNamespaceProvider)));
+  }
   var ready = false;
   ref.listen(financialStoreRevisionProvider('observations'), (_, next) {
     if (ready) ref.invalidateSelf();

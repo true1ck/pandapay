@@ -58,8 +58,9 @@ class FactsUpload {
         'instrument',
         'event',
         'ledger',
-      }.contains(record.kind))
+      }.contains(record.kind)) {
         continue;
+      }
       final count = counts[record.kind] ?? 0;
       if (count >= 500) continue;
       candidates.add(record);

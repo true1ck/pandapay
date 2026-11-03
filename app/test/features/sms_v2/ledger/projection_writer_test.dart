@@ -99,6 +99,20 @@ void main() {
       expect(saved.entryKind, TxnEntryKind.spend);
       expect(saved.categoryId, 'cat-dining');
       expect(saved.status, 'active');
+      financial.saveTransactions('user:a', [
+        TransactionEntry.fromJson({
+          ...saved.toJson(),
+          'id': 'server-uuid',
+          'note': 'Server note',
+        }),
+      ]);
+      final merged = financial
+          .entities('user:a', 'transactions')
+          .map(TransactionEntry.fromJson)
+          .single;
+      expect(merged.id, saved.id);
+      expect(merged.eventId, saved.eventId);
+      expect(merged.note, 'Server note');
       expect(TransactionEntry.fromJson(saved.toJson()).eventId, e.eventId);
       expect(financial.entities('user:b', 'transactions'), isEmpty);
       financial.saveTransactions('user:b', [

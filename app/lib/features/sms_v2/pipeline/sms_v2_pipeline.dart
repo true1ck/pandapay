@@ -14,6 +14,7 @@ import '../storage/instrument_store.dart';
 import '../storage/ledger_store.dart';
 import '../storage/outbox_store.dart';
 import '../storage/schema.dart';
+import '../storage/stats_store.dart';
 
 /// The local part of WP-14. The caller supplies a verified bundle and a
 /// financial candidate that has already passed the existing safety gate.
@@ -26,6 +27,7 @@ class SmsV2Pipeline {
     this.userRules = const [],
     this.confirmedHistory = const {},
     this.categoryIdBySlug = const {},
+    this.revision,
     RuleEngine? engine,
   }) : engine = engine ?? RuleEngine(),
        _resolver = DefaultInstrumentResolver.fromBundle(bundle) {
@@ -39,6 +41,8 @@ class SmsV2Pipeline {
   final List<CategoryRule> userRules;
   final Map<String, String> confirmedHistory;
   final Map<String, String> categoryIdBySlug;
+  final String? revision;
+  String get processingRevision => revision ?? '${bundle.bundleVersion}';
   final RuleEngine engine;
   final DefaultInstrumentResolver _resolver;
 
@@ -63,8 +67,10 @@ class SmsV2Pipeline {
     }
     final unique = <String, SmsMessage>{};
     for (final message in messages) {
-      if (_intake.decision(namespace, message.sourceKey)?.policyVersion !=
-          'v2') {
+      final previous = _intake.decision(namespace, message.sourceKey);
+      if (previous?.policyVersion != 'v2' ||
+          previous?.decision == 'unknown' &&
+              previous?.parserVersion != processingRevision) {
         unique.putIfAbsent(message.sourceKey, () => message);
       }
     }
@@ -82,6 +88,16 @@ class SmsV2Pipeline {
             appVersion: appVersion,
           );
           final result = outcome.result;
+          if (result.ruleId != null && (result.ruleVersion ?? 0) > 0) {
+            StatsStore(_db, namespace: namespace).record(
+              at: message.observedAt,
+              ruleId: result.ruleId!,
+              ruleVersion: result.ruleVersion!,
+              toReview:
+                  result.outcome == InterpretOutcome.unknown ||
+                  result.facts.any((fact) => fact.confidence < .7),
+            );
+          }
           interpreted.add((message, outcome));
           if (result.outcome == InterpretOutcome.unknown) {
             review.add(_templateReview(message, result));
@@ -91,7 +107,13 @@ class SmsV2Pipeline {
             }
           } else {
             incoming.addAll(result.facts);
-            if (result.facts.any((fact) => fact.confidence < .7)) {
+            final provisional = bundle.rules.any(
+              (rule) =>
+                  rule.id == result.ruleId &&
+                  rule.status == RuleStatus.provisional,
+            );
+            if (result.facts.any((fact) => fact.confidence < .7) ||
+                provisional) {
               review.add(_templateReview(message, result));
             }
           }
@@ -117,6 +139,7 @@ class SmsV2Pipeline {
             reasonCode: outcome.reason ?? result.outcome.name,
             receivedAt: message.observedAt.millisecondsSinceEpoch,
             bundleVersion: bundle.bundleVersion,
+            parserVersion: processingRevision,
             policyVersion: 'v2',
           );
         }

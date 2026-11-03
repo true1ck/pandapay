@@ -5858,7 +5858,7 @@ app.get('/transactions', requireAuth, async (req, res) => {
            GROUP BY archived_card_id
           HAVING COUNT(*) = 1
         )
-        SELECT t.id, t.source_key, ${canonicalCardId} AS user_card_id, t.amount_inr, t.occurred_at, t.merchant_name,
+        SELECT t.id, t.source_key, t.event_id, t.pipeline_version, ${canonicalCardId} AS user_card_id, t.amount_inr, t.occurred_at, t.merchant_name,
                 t.merchant_vpa::text AS merchant_vpa,
                 t.category_id, t.user_category_id,
                 ucat.parent_user_category_id AS parent_user_category_id,
@@ -5950,7 +5950,7 @@ app.get('/transactions/:id', requireAuth, async (req, res) => {
            GROUP BY archived_card_id
           HAVING COUNT(*) = 1
         )
-        SELECT t.id, t.source_key, COALESCE(replacement.active_card_id, t.user_card_id) AS user_card_id,
+        SELECT t.id, t.source_key, t.event_id, t.pipeline_version, COALESCE(replacement.active_card_id, t.user_card_id) AS user_card_id,
                (SELECT o.metadata->'selfTransferRule' FROM transaction_observations o
                  WHERE o.transaction_id=t.id AND o.profile_id=t.profile_id
                    AND o.metadata->'selfTransferRule' IS NOT NULL LIMIT 1) AS self_transfer_rule,
@@ -6007,6 +6007,7 @@ app.get('/transactions/:id', requireAuth, async (req, res) => {
 });
 
 const TXN_SUMMARY_COLUMNS = `
+  t.event_id, t.pipeline_version,
   t.id, t.amount_inr, t.occurred_at, t.merchant_name, t.source, t.status,
   cp.name AS card_name, uc.nickname AS card_nickname
 `;

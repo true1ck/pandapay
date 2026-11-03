@@ -1329,6 +1329,17 @@ class FinancialStore {
     TransactionQuery? completeQuery,
     DateTime? at,
   }) {
+    final byEvent = <String, String>{};
+    for (final raw in entities(ns, 'transactions')) {
+      final eventId = raw['event_id'];
+      if (eventId is String) byEvent[eventId] = raw['id'] as String;
+    }
+    rows = [
+      for (final row in rows)
+        if (row.eventId != null && byEvent[row.eventId] != null && byEvent[row.eventId] != row.id)
+          TransactionEntry.fromJson({...row.toJson(), 'id': byEvent[row.eventId]})
+        else row,
+    ];
     var changed = false;
     final timestamp = (at ?? DateTime.now()).millisecondsSinceEpoch;
     _transaction(() {

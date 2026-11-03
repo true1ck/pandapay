@@ -77,7 +77,6 @@ function registerSmsV2(app, deps) {
     verifyAttestation: (req) => hooks.security.verifyAttestation(req),
     checkEntitlement: (req) => hooks.security.checkEntitlement(req),
     checkRate: (req, route, units) => hooks.security.checkRate(req, route, units),
-    checkRate: (req, route, units) => hooks.security.checkRate(req, route, units),
   };
   const rules = registerRules(app, { ...deps, ...shared, hooks: { ...hooks, security: lazySecurity }, requireAdmin: deps.requireAdmin, signer });
   hooks.latestBundleVersion = rules.latestBundleVersion;

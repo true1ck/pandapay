@@ -3,9 +3,14 @@ import 'dart:io';
 
 import 'package:http/http.dart' as http;
 import 'package:pandapay_domain/sms_v2.dart';
+import 'package:pandapay_domain/pandapay_domain.dart' show CardProduct;
 
 import '../../../data/local/financial_store.dart';
 import '../../../data/local/sms_import_store.dart';
+import '../../../data/user_cards_repository.dart';
+import '../instruments/instrument_seeder.dart';
+import '../storage/instrument_store.dart';
+import '../ledger/card_state_adapter.dart';
 import '../../../data/local/sms_intake_repository.dart';
 import '../../sms_import/sms_background_queue.dart';
 import '../../sms_import/sms_text_hint.dart';
@@ -14,6 +19,10 @@ import '../storage/bundle_store.dart';
 import '../storage/outbox_store.dart';
 import '../storage/schema.dart';
 import '../storage/sync_state_store.dart';
+import '../storage/provisional_store.dart';
+import '../storage/stats_store.dart';
+import '../sync/template_upload.dart';
+import '../sync/stats_upload.dart';
 import '../sync/facts_upload.dart';
 import '../sync/sync_pull.dart';
 import 'sms_v2_pipeline.dart';
@@ -32,12 +41,20 @@ class SmsV2Runtime {
     required this.verify,
     required this.loadShippedBundle,
     required this.accountIsCurrent,
+    this.hasSharingConsent = _noConsent,
+    this.catalogue = const [],
+    this.cardRepository,
+
     this.categoryIdBySlug = const {},
     DateTime Function()? clock,
   }) : clock = clock ?? DateTime.now {
     SmsV2Schema.ensure(financial.database.db);
   }
 
+  static Future<bool> _noConsent() async => false;
+  final Future<bool> Function() hasSharingConsent;
+  final List<CardProduct> catalogue;
+  final UserCardsRepository? cardRepository;
   final FinancialStore financial;
   final String namespace;
   final http.Client client;
@@ -85,7 +102,21 @@ class SmsV2Runtime {
   }
 
   Future<void> capture(List<QueuedSms> messages, {bool? backfill}) async {
-    final bundle = await _loadBundle();
+    final shared = await _loadBundle();
+    final overlay = ProvisionalStore(_state).overlay(shared);
+    final bundle = overlay.bundle;
+    final instrumentStore = InstrumentStore(
+      financial.database.db,
+      namespace: namespace,
+    );
+    InstrumentSeeder(instrumentStore).seed(
+      cards: financial
+          .entities(namespace, 'cards')
+          .map(UserCard.fromJson)
+          .toList(),
+      issuerSlugOf: cardIssuerSlugFromCatalogue(catalogue),
+      bankAccounts: const [],
+    );
     for (var start = 0; start < messages.length; start += 200) {
       _checkAccount();
       final chunk = messages.sublist(
@@ -106,6 +137,7 @@ class SmsV2Runtime {
         confirmedHistory: categories.confirmedHistory,
         categoryIdBySlug: categoryIdBySlug,
         engine: _engine,
+        revision: overlay.revision,
       );
       for (final history in [true, false]) {
         final selected = chunk
@@ -132,25 +164,45 @@ class SmsV2Runtime {
   Future<void> _refreshRules() async {
     final previous = DateTime.tryParse(_state.get('rules:last-check') ?? '');
     if (previous != null &&
-        clock().difference(previous) < const Duration(hours: 6))
+        clock().difference(previous) < const Duration(hours: 6)) {
       return;
+    }
     final current = await _loadBundle();
     _checkAccount();
     final response = await client
         .get(
           baseUri
               .resolve('/sms/v2/rules')
-              .replace(queryParameters: {'since': '${current.bundleVersion}'}),
+              .replace(
+                queryParameters: {
+                  'since':
+                      current.expiresAt.isBefore(
+                        clock().add(const Duration(days: 1)),
+                      )
+                      ? '0'
+                      : '${current.bundleVersion}',
+                },
+              ),
           headers: await headers(),
         )
         .timeout(const Duration(seconds: 30));
     _checkAccount();
-    if (response.statusCode != 200 && response.statusCode != 304) return;
+    if (response.statusCode != 200 && response.statusCode != 304) {
+      _state.put(
+        'rules:stale',
+        response.statusCode == 403
+            ? 'entitlement_or_attestation'
+            : 'download_failed',
+      );
+      return;
+    }
+    _state.put('rules:stale', '');
     if (response.statusCode == 200) {
       // HTTP may return gzip to clients that do not decompress automatically.
-      final raw = response.headers['content-encoding'] == 'gzip'
-          ? utf8.decode(gzip.decode(response.bodyBytes))
-          : response.body;
+      final bytes = response.bodyBytes;
+      final raw = bytes.length >= 2 && bytes[0] == 0x1f && bytes[1] == 0x8b
+          ? utf8.decode(gzip.decode(bytes))
+          : utf8.decode(bytes);
       if (await _bundles.install(raw)) {
         _bundle = await _bundles.load(shippedJson: _shipped!);
       }
@@ -166,6 +218,41 @@ class SmsV2Runtime {
       if (identical(_running, operation)) _running = null;
     });
     return _running = operation;
+  }
+
+  Future<void> _applyCardState() async {
+    final repository = cardRepository;
+    if (repository == null) return;
+    final cards = {
+      for (final json in financial.entities(namespace, 'cards'))
+        (json['id'] as String): UserCard.fromJson(json),
+    };
+    final instruments = InstrumentStore(
+      financial.database.db,
+      namespace: namespace,
+    ).list();
+    for (final instrument in instruments) {
+      if (!accountIsCurrent()) return;
+      final current = cards[instrument.userCardId];
+      if (current == null) continue;
+      final key = 'card:last-applied:${current.id}';
+      final raw = _state.get(key);
+      final previous = raw == null
+          ? null
+          : Instrument.fromJson(
+              (jsonDecode(raw) as Map).cast<String, Object?>(),
+            );
+      try {
+        if (await CardStateAdapter(
+          repository,
+        ).apply(instrument, current, lastApplied: previous)) {
+          _checkAccount();
+          _state.put(key, jsonEncode(instrument.toJson()));
+        }
+      } catch (_) {
+        // The next foreground pass retries learned card state independently.
+      }
+    }
   }
 
   Future<void> _sync() async {
@@ -189,7 +276,30 @@ class SmsV2Runtime {
       }
       await capture(pending.map((entry) => entry.message).toList());
     }
+    await _applyCardState();
     await _upload.drain();
+    await TemplateUpload(
+      intake: intake,
+      queue: OutboxStore(financial.database.db, namespace: namespace),
+      client: client,
+      baseUri: baseUri,
+      headers: headers,
+      hasConsent: hasSharingConsent,
+      accountIsCurrent: accountIsCurrent,
+      clock: clock,
+    ).drain();
+    await StatsUpload(
+      stats: StatsStore(financial.database.db, namespace: namespace),
+      state: _state,
+      client: client,
+      baseUri: baseUri,
+      headers: headers,
+      accountIsCurrent: accountIsCurrent,
+    ).send(
+      clock(),
+      appVersion: appVersion,
+      bundleVersion: _bundle!.bundleVersion,
+    );
     _checkAccount();
     await SyncPull(
       financial: financial,
@@ -205,6 +315,26 @@ class SmsV2Runtime {
     if (available > _bundle!.bundleVersion) {
       _state.put('rules:last-check', DateTime.utc(1970).toIso8601String());
       await _refreshRules();
+    }
+    final active = ProvisionalStore(_state).overlay(_bundle!);
+    final previousRevision = _state.get('pipeline:revision');
+    if (previousRevision != active.revision) {
+      final unknown = financial.database.db.select(
+        "SELECT source_key FROM sms_source_decisions WHERE namespace=? AND policy_version='v2' AND decision='unknown'",
+        [namespace],
+      );
+      for (var offset = 0; offset < unknown.length; offset += 200) {
+        _checkAccount();
+        final rows = unknown.skip(offset).take(200);
+        final messages = <QueuedSms>[
+          for (final row in rows)
+            if (intake.capturedById(namespace, row['source_key'] as String)
+                case final entry?)
+              entry.message,
+        ];
+        if (messages.isNotEmpty) await capture(messages, backfill: true);
+      }
+      _state.put('pipeline:revision', active.revision);
     }
   }
 }

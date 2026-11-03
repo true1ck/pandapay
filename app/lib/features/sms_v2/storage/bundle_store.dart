@@ -50,6 +50,7 @@ INSERT INTO v2_rule_bundle(bundle_version,json,sha256,signature,expires_at,fetch
 VALUES(?,?,?,?,?,?) ON CONFLICT(bundle_version) DO UPDATE SET
   json=excluded.json, sha256=excluded.sha256, signature=excluded.signature,
   expires_at=excluded.expires_at, fetched_at=excluded.fetched_at
+WHERE v2_rule_bundle.expires_at < excluded.expires_at
 ''',
       [
         bundle.bundleVersion,
