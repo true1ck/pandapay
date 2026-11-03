@@ -374,6 +374,36 @@ void main() {
   );
 
   test(
+    'a restored legacy transaction is replayed after interruption',
+    () async {
+      seed();
+      final target = financial
+          .entities(ns, 'transactions')
+          .singleWhere((row) => row['id'] == 'old-4');
+      financial.markInactive(ns, 'old-4');
+      var checks = 0;
+      await expectLater(
+        replay(current: () => ++checks == 1).run(chunkSize: 1),
+        throwsStateError,
+      );
+      financial.markActive(ns, 'old-4');
+
+      final report = await replay().run();
+
+      expect(report.complete, isTrue);
+      final replacements = financial
+          .entities(ns, 'transactions')
+          .where(
+            (row) =>
+                row['pipeline_version'] == 2 &&
+                row['status'] == 'active' &&
+                row['source_key'] == target['source_key'],
+          );
+      expect(replacements, hasLength(1));
+    },
+  );
+
+  test(
     'known bills and declined attempts supersede erroneous legacy spending',
     () async {
       final intake = SmsIntakeRepository(database);
