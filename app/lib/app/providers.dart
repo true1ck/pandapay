@@ -1355,7 +1355,11 @@ final commitmentsProvider = FutureProvider<List<Commitment>>((ref) async {
       ...manual.where(
         (item) => item.source != CommitmentSource.sms || item.isUserConfirmed,
       ),
-      ...sms_v2_adapters.billsFromFacts(model.facts, model.ledger.events),
+      ...sms_v2_adapters.billsFromFacts(
+        model.facts,
+        model.ledger.events,
+        transactionIdByEvent: model.transactionIdByEvent,
+      ),
     ];
   }
   final markCommitmentsReady = _financialChanges(ref, 'commitments');
@@ -1638,6 +1642,7 @@ final smsBillRowsProvider = FutureProvider<List<SmsBillRow>>((ref) async {
       model.facts,
       model.ledger.events,
       now: ref.watch(clockProvider).now(),
+      transactionIdByEvent: model.transactionIdByEvent,
     );
   }
   var ready = false;

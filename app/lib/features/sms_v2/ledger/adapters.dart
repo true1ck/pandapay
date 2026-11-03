@@ -267,8 +267,21 @@ List<_BillRecord> _billRecords(
             .firstWhere((a) => a.role == v2.AmountRole.dueMinimum)
             .toJson(),
     ];
+    final statementDate = cycle.reversed
+        .map((f) => f.statementDate)
+        .whereType<String>()
+        .firstOrNull;
+    final json = fact.toJson();
     final combined =
-        v2.Fact.fromJson({...fact.toJson(), 'amounts': amounts})
+        v2.Fact.fromJson({
+              ...json,
+              'amounts': amounts,
+              if (statementDate != null)
+                'attrs': <String, Object?>{
+                  ...(json['attrs'] as Map).cast<String, Object?>(),
+                  'statementDate': statementDate,
+                },
+            })
             as v2.BillDueFact;
     final due =
         _amount(combined, v2.AmountRole.dueTotal) ??
@@ -326,9 +339,16 @@ List<_BillRecord> _billRecords(
 
 List<Commitment> billsFromFacts(
   Iterable<v2.Fact> facts,
-  Iterable<v2.Event> events,
-) => [for (final record in _billRecords(facts, events)) _commitment(record)];
-Commitment _commitment(_BillRecord record) {
+  Iterable<v2.Event> events, {
+  Map<String, String> transactionIdByEvent = const {},
+}) => [
+  for (final record in _billRecords(facts, events))
+    _commitment(record, transactionIdByEvent: transactionIdByEvent),
+];
+Commitment _commitment(
+  _BillRecord record, {
+  Map<String, String> transactionIdByEvent = const {},
+}) {
   final bill = record.fact;
   final title =
       bill.billerName ??
@@ -346,7 +366,8 @@ Commitment _commitment(_BillRecord record) {
     paidOn: record.lastPayment?.occurredAt,
     linkedTransactionId: record.lastPayment == null
         ? null
-        : 'v2:${record.lastPayment!.eventId}',
+        : transactionIdByEvent[record.lastPayment!.eventId] ??
+              'v2:${record.lastPayment!.eventId}',
     confidence: bill.confidence,
   );
 }
@@ -568,8 +589,14 @@ List<SmsBillRow> smsBillRowsFromFacts(
   Iterable<v2.Fact> facts,
   Iterable<v2.Event> events, {
   required DateTime now,
+  Map<String, String> transactionIdByEvent = const {},
 }) {
-  final byId = _facts(facts), bills = billsFromFacts(facts, events);
+  final byId = _facts(facts);
+  final bills = billsFromFacts(
+    facts,
+    events,
+    transactionIdByEvent: transactionIdByEvent,
+  );
   return [
     for (final bill in bills)
       if (byId[bill.id.substring(3)] case final v2.BillDueFact fact)

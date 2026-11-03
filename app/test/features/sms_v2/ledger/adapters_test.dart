@@ -124,6 +124,14 @@ void main() {
     final paid = billsFromFacts([bill, payment], [event]);
     expect(paid.single.status.name, 'paid');
     expect(paid.single.linkedTransactionId, 'v2:${event.eventId}');
+    expect(
+      billsFromFacts(
+        [bill, payment],
+        [event],
+        transactionIdByEvent: {event.eventId: 'legacy-payment'},
+      ).single.linkedTransactionId,
+      'legacy-payment',
+    );
     expect(billsFromFacts([bill], const []).single.status.name, 'due');
   });
   test(
@@ -135,7 +143,10 @@ void main() {
                 changes: {
                   'observedAt': '2026-10-10T00:00:00Z',
                   'occurredAt': null,
-                  'attrs': {'dueDate': '2026-10-25'},
+                  'attrs': {
+                    'dueDate': '2026-10-25',
+                    'statementDate': '2026-10-10',
+                  },
                   'amounts': [
                     {'role': 'due_total', 'minor': 10000, 'unit': 'INR'},
                   ],
@@ -192,11 +203,25 @@ void main() {
         lastSeenAt: first.observedAt,
         evidenceCount: 1,
       );
+      final reminder = fixture(
+        'bill_due.total_only',
+        changes: {
+          'factId': 'd' * 64,
+          'sourceKey': 'sms:minimum-reminder',
+          'observedAt': '2026-10-15T00:00:00Z',
+          'occurredAt': null,
+          'attrs': {'dueDate': '2026-10-25'},
+          'amounts': [
+            {'role': 'due_minimum', 'minor': 1000, 'unit': 'INR'},
+          ],
+        },
+      );
       final ledger = cardBillLedgersFromFacts(
-        [first, partial],
+        [first, reminder, partial],
         [moneyEvent(partial, EventType.cardBillPayment)],
         [instrument],
       )['card']!;
+      expect(ledger.current!.statementDateVerified, isTrue);
       expect(ledger.current!.paidToward.paise, 4000);
       expect(ledger.current!.outstanding!.paise, 6000);
     },

@@ -107,11 +107,21 @@ class ProjectionWriter {
     Map<String, String> categoryIdBySlug = const {},
     Map<String, String> instrumentIdByFactId = const {},
   }) {
-    final existing = {
-      for (final raw in financial.entities(ledger.namespace, 'transactions'))
-        if (raw['event_id'] is String)
-          raw['event_id'] as String: TransactionEntry.fromJson(raw),
-    };
+    final existing = <String, TransactionEntry>{};
+    final legacyBySource = <String, List<TransactionEntry>>{};
+    for (final raw in financial.entities(ledger.namespace, 'transactions')) {
+      final eventId = raw['event_id'];
+      if (eventId is String) {
+        existing[eventId] = TransactionEntry.fromJson(raw);
+      } else if (raw['source_key'] case final String sourceKey) {
+        final row = TransactionEntry.fromJson(raw);
+        if (row.pipelineVersion == 1 &&
+            row.source == 'sms' &&
+            row.status == 'active') {
+          legacyBySource.putIfAbsent(sourceKey, () => []).add(row);
+        }
+      }
+    }
     final rowsByEvent = <String, List<v2.LedgerEntry>>{};
     for (final e in snapshot.entries) {
       rowsByEvent.putIfAbsent(e.eventId, () => []).add(e);
@@ -137,7 +147,14 @@ class ProjectionWriter {
             categoryIdBySlug: categoryIdBySlug,
             instrumentIdByFactId: instrumentIdByFactId,
           );
-          final old = existing[e.eventId];
+          var old = existing[e.eventId];
+          if (old == null && row != null) {
+            // Match the server's adoption of a legacy row for the same anchor.
+            final candidates = legacyBySource.remove(
+              factsById[e.eventId]?.sourceKey,
+            );
+            if (candidates?.length == 1) old = candidates!.single;
+          }
           if (row != null) {
             // Keep server-earned rewards and local display edits on re-projection.
             display.add(

@@ -25,6 +25,11 @@ class LedgerReadModel {
   final List<v2.Fact> facts;
   final List<v2.Instrument> instruments;
 
+  late final transactionIdByEvent = Map<String, String>.unmodifiable({
+    for (final row in transactions)
+      if (row.eventId != null && row.status == 'active') row.eventId!: row.id,
+  });
+
   LedgerSnapshot snapshot({Iterable<TransactionEntry>? selected}) {
     final rows = (selected ?? transactions)
         .where((r) => r.status == 'active')
@@ -149,6 +154,7 @@ class LedgerReadModel {
     SpendReportQuery query,
     DateTime now, {
     List<BankAccountSummary> bankAccounts = const [],
+    bool monthlySeries = false,
   }) {
     final (from, to) = reportBounds(query, now);
     final (previousFrom, previousTo) = query.isCustom
@@ -234,22 +240,21 @@ class LedgerReadModel {
           txnCount: g.value.map((e) => e.eventId).toSet().length,
         ),
     ]..sort((a, b) => b.total.paise.compareTo(a.total.paise));
-    DateTime bucket(DateTime date) =>
-        query.period == SpendPeriod.year || query.period == SpendPeriod.quarter
-        ? DateTime(date.toLocal().year, date.toLocal().month)
-        : DateTime(
-            date.toLocal().year,
-            date.toLocal().month,
-            date.toLocal().day,
-          );
+    final byMonth =
+        monthlySeries ||
+        query.period == SpendPeriod.year ||
+        query.period == SpendPeriod.quarter;
+    DateTime bucket(DateTime date) {
+      final local = date.toLocal();
+      return DateTime(local.year, local.month, byMonth ? 1 : local.day);
+    }
+
     final byDate = groups((e) => bucket(e.occurredAt).toIso8601String());
     final points = <SpendSeriesPoint>[];
     for (
       var date = bucket(from);
       date.isBefore(to);
-      date =
-          query.period == SpendPeriod.year ||
-              query.period == SpendPeriod.quarter
+      date = byMonth
           ? DateTime(date.year, date.month + 1)
           : DateTime(date.year, date.month, date.day + 1)
     ) {

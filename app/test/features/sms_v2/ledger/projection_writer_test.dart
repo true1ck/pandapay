@@ -101,6 +101,32 @@ void main() {
       expect(saved.status, 'active');
       expect(TransactionEntry.fromJson(saved.toJson()).eventId, e.eventId);
       expect(financial.entities('user:b', 'transactions'), isEmpty);
+      financial.saveTransactions('user:b', [
+        TransactionEntry.fromJson({
+          ...saved.toJson(),
+          'id': 'legacy-sms-row',
+          'event_id': null,
+          'pipeline_version': 1,
+          'note': 'Keep this note',
+        }),
+      ]);
+      ProjectionWriter(
+        financial,
+        LedgerStore(db.db, namespace: 'user:b'),
+      ).write(
+        snapshot,
+        factsById: {f.factId: f},
+        instrumentsById: {i.instrumentId: i},
+      );
+      final adopted = financial
+          .entities('user:b', 'transactions')
+          .map(TransactionEntry.fromJson)
+          .single;
+      expect(adopted.id, 'legacy-sms-row');
+      expect(adopted.eventId, e.eventId);
+      expect(adopted.pipelineVersion, 2);
+      expect(adopted.note, 'Keep this note');
+
       writer.write(
         LedgerSnapshot(
           entries: [],

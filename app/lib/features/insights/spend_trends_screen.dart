@@ -1248,7 +1248,15 @@ class _ReportBodyState extends ConsumerState<_ReportBody> {
     if (!ref.read(smsV2ReportingEnabledProvider)) return null;
     if (_ledgerReportCache != null) return _ledgerReportCache;
     final model = ref.read(smsV2LedgerReadModelProvider).valueOrNull;
-    if (model == null || widget.transactionDetailsLoading) return widget.report;
+    if (model == null) return null;
+    if (widget.transactionDetailsLoading) {
+      return _ledgerReportCache = model.spendReport(
+        widget.query,
+        ref.read(clockProvider).now(),
+        bankAccounts: _bankAccounts,
+        monthlySeries: true,
+      );
+    }
     final selection = SpendingSelection(
       payment: _paymentFilter,
       categories: _categoryFilters,
@@ -1273,6 +1281,7 @@ class _ReportBodyState extends ConsumerState<_ReportBody> {
       widget.query,
       ref.read(clockProvider).now(),
       bankAccounts: _bankAccounts,
+      monthlySeries: true,
     );
   }
 
@@ -1675,7 +1684,11 @@ class _ReportBodyState extends ConsumerState<_ReportBody> {
         widget.transactionDetailsLoading &&
         _spendEntries.isEmpty;
     final tagGroups = _tab == _SpendingTab.tags && !showFilteredLoading
-        ? projectSpendingTags(_visibleEntries, tagsFor: _tagsFor)
+        ? projectSpendingTags(
+            _visibleEntries,
+            tagsFor: _tagsFor,
+            subtotal: ref.read(smsV2ReportingEnabledProvider) ? _sum : null,
+          )
         : const <SpendingTagGroup>[];
 
     // Keep row metadata cheap. Transaction filtering and widget construction

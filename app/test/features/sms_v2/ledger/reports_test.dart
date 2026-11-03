@@ -53,6 +53,26 @@ void main() {
     },
   );
 
+  test('monthly comparison uses one point per month in a custom range', () {
+    final model = LedgerReadModel(
+      ledger: LedgerSnapshot(entries: [], events: []),
+      transactions: [
+        txn('sep', TxnEntryKind.spend, 10000, at: DateTime(2026, 9, 1)),
+        txn('oct', TxnEntryKind.spend, 20000, at: DateTime(2026, 10, 31)),
+      ],
+    );
+    final report = model.spendReport(
+      SpendReportQuery.custom(
+        from: DateTime(2026, 9, 1),
+        to: DateTime(2026, 10, 31),
+      ),
+      DateTime(2026, 11, 1),
+      monthlySeries: true,
+    );
+    expect(report.series.map((p) => p.periodStart.month), [9, 10]);
+    expect(report.series.map((p) => p.spend.paise), [10000, 20000]);
+  });
+
   for (final (period, now, previousStart, currentStart) in [
     (
       SpendPeriod.month,
