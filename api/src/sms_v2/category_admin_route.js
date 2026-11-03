@@ -14,8 +14,10 @@ const UUID = /^[0-9a-f]{8}-[0-9a-f]{4}-[1-8][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-
 const cleanKey = value => value.trim().replace(/\s+/g, ' ').toUpperCase();
 const identity = rule => canonicalize({ merchantKey: cleanKey(rule.merchantKey), match: rule.match,
   senders: rule.senders.map(cleanKey).sort(), context: rule.context.map(cleanKey).sort(), source: rule.source });
-function withCategory(parts, body) {
-  return { ...parts, categoryRules: [...(parts.categoryRules || []).filter(rule => identity(rule) !== identity(body)), body] };
+function withCategory(parts, body, previousPublishedBody = null) {
+  const replaced = new Set([identity(body)]);
+  if (previousPublishedBody) replaced.add(identity(previousPublishedBody));
+  return { ...parts, categoryRules: [...(parts.categoryRules || []).filter(rule => !replaced.has(identity(rule))), body] };
 }
 function assertObject(body, keys) {
   if (!body || typeof body !== 'object' || Array.isArray(body) || Object.keys(body).some(key => !keys.includes(key)) || keys.some(key => body[key] === undefined)) {
@@ -51,7 +53,8 @@ async function categoryCandidates(s, id, revision, { now }) {
   if (latest.revision !== revision) throw new HttpError(409,'category_draft_stale');
   const existing = await s.getParts();
   validateCategory(draft.body,existing,now);
-  const parts = withCategory(existing,draft.body), rules = await s.allRules(), cohorts = await s.allCohorts();
+  const previous = await s.previousPublishedCategoryDraft(id,revision);
+  const parts = withCategory(existing,draft.body,previous?.body), rules = await s.allRules(), cohorts = await s.allCohorts();
   return {draft,parts,candidates:COHORTS.map(cohort => {
     const bundle = candidateBundle({manifest:buildManifest(cohort,rules,cohorts,parts),rules,parts,now});
     return {cohort,bundle,contentSha256:contentSha256(bundle)};

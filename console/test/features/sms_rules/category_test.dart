@@ -113,6 +113,25 @@ void main() {
       isNotEmpty,
     );
   });
+  test(
+    'a narrowed published exact scope no longer categorizes a broader merchant',
+    () {
+      final resolver = DefaultCategoryResolver();
+      CategoryDecision resolve(String merchant, String match) =>
+          resolver.resolve(
+            CategoryInput(
+              counterparty: Counterparty(name: merchant),
+              senderBrand: 'TESTBK',
+              bundleRules: [
+                CategoryRule.fromJson({...category(), 'match': match}),
+              ],
+            ),
+          );
+      expect(resolve('SYNTHETIC SHOP EXTRA', 'contains').slug, 'dining');
+      expect(resolve('SYNTHETIC SHOP EXTRA', 'exact').slug, 'other');
+      expect(resolve('SYNTHETIC SHOP', 'exact').slug, 'dining');
+    },
+  );
   testWidgets(
     'category publish stays disabled if a required cohort is missing',
     (tester) async {

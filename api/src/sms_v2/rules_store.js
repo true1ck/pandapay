@@ -68,6 +68,10 @@ class PgTx {
     const result=await this.c.query('SELECT draft_id AS id,revision,status,body,created_by AS "createdBy",created_at AS "createdAt" FROM sms_v2_category_drafts WHERE draft_id=$1 AND ($2::int IS NULL OR revision=$2) ORDER BY revision DESC LIMIT 1',[id,revision ?? null]);
     return result.rows[0] || null;
   }
+  async previousPublishedCategoryDraft(id,revision) {
+    const result=await this.c.query("SELECT draft_id AS id,revision,body FROM sms_v2_category_drafts WHERE draft_id=$1 AND revision<$2 AND status='published' ORDER BY revision DESC LIMIT 1",[id,revision]);
+    return result.rows[0] || null;
+  }
   async listCategoryDrafts() { return (await this.c.query('SELECT DISTINCT ON (draft_id) draft_id AS id,revision,status,body,created_by AS "createdBy",created_at AS "createdAt" FROM sms_v2_category_drafts ORDER BY draft_id,revision DESC LIMIT 500')).rows; }
   async insertCategoryDraft(row) { await this.c.query('INSERT INTO sms_v2_category_drafts(draft_id,revision,status,body,created_by,created_at) VALUES($1,$2,$3,$4,$5,$6)',[row.id,row.revision,row.status,JSON.stringify(row.body),row.createdBy,row.createdAt]); }
   async publishCategoryDraft(id,revision) { await this.c.query("UPDATE sms_v2_category_drafts SET status='published' WHERE draft_id=$1 AND revision=$2",[id,revision]); }
@@ -173,6 +177,7 @@ class MemoryStore {
       async getParts() { return structuredClone(st().parts); },
       async setParts(parts) { Object.assign(st().parts, structuredClone(parts)); },
       async categoryDraft(id,revision) { const rows=st().categoryDrafts.filter(row=>row.id===id && (revision===undefined || row.revision===revision)).sort((a,b)=>b.revision-a.revision); return structuredClone(rows[0] || null); },
+      async previousPublishedCategoryDraft(id,revision) { return structuredClone(st().categoryDrafts.filter(row=>row.id===id&&row.revision<revision&&row.status==='published').sort((a,b)=>b.revision-a.revision)[0] || null); },
       async listCategoryDrafts() { return structuredClone(st().categoryDrafts.filter(row=>!st().categoryDrafts.some(other=>other.id===row.id && other.revision>row.revision))); },
       async insertCategoryDraft(row) { st().categoryDrafts.push(structuredClone(row)); },
       async publishCategoryDraft(id,revision) { st().categoryDrafts.find(row=>row.id===id && row.revision===revision).status='published'; },

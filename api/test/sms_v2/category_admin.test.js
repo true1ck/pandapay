@@ -57,3 +57,14 @@ test('category drafts cannot be reached without existing private permissions and
  const rows=routeManifest.filter(row=>row.path.startsWith('/admin/sms/v2/category-rules'));
  assert.equal(rows.length,4);for(const row of rows){assert.equal(row.permission,row.method==='GET'?'learning.read':'learning.publish');if(row.method!=='GET')assert.equal(row.freshMfa,true);}
 });
+
+test('revising a published draft replaces its previous matching scope instead of retaining a broad rule',async()=>{
+ const store=await fixture();await store.tx(adminId,s=>saveCategoryDraft(s,id,{...category(),match:'contains'},ctx));
+ await store.tx(adminId,async s=>publishCategory(s,id,{revision:1,reason:'broad review',goldenReports:await candidateReports(store)},ctx));
+ await store.tx(adminId,s=>saveCategoryDraft(s,id,category(),ctx));
+ const candidates=await store.tx(adminId,s=>categoryCandidates(s,id,2,ctx));
+ for(const candidate of candidates.candidates){const mine=candidate.bundle.categoryRules.filter(rule=>rule.merchantKey==='SYNTHETIC SHOP'&&rule.source==='shared');assert.equal(mine.length,1);assert.equal(mine[0].match,'exact');}
+ const reports=await candidateReports(store,2);await store.tx(adminId,s=>publishCategory(s,id,{revision:2,reason:'narrow to exact',goldenReports:reports},ctx));
+ for(const cohort of COHORTS){const row=await store.tx(adminId,s=>s.latestBundle(cohort));const mine=row.body.categoryRules.filter(rule=>rule.merchantKey==='SYNTHETIC SHOP'&&rule.source==='shared');assert.equal(mine.length,1);assert.equal(mine[0].match,'exact');}
+ assert.equal(store.state.categoryDrafts[0].body.match,'contains');
+});

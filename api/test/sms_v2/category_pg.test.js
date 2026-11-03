@@ -35,7 +35,7 @@ test('private category review publishes signed global parts on a fully migrated 
   registerRoutes:api=>registerPrivateCategoryRoutes(api,{signer,now:()=>now,getGates:()=>({m1:{}})})});
  server=app.listen(0,'127.0.0.1');await new Promise(resolve=>server.once('listening',resolve));
  const call=async(method,path,body)=>{const response=await fetch(`http://127.0.0.1:${server.address().port}/admin/sms/v2${path}`,{method,headers:{authorization:`Bearer ${'x'.repeat(43)}`,'content-type':'application/json'},body:body===undefined?undefined:JSON.stringify(body)});return {status:response.status,body:await response.json()};};
- const body={merchantKey:'SYNTHETIC SHOP',match:'exact',senders:['HDFCBK'],context:[],category:'dining',priority:100,source:'shared'};
+ const body={merchantKey:'SYNTHETIC SHOP',match:'contains',senders:['HDFCBK'],context:[],category:'dining',priority:100,source:'shared'};
  fresh=false;assert.equal((await call('PUT',`/category-rules/${id}/draft`,body)).status,403);fresh=true;
  const saved=await call('PUT',`/category-rules/${id}/draft`,body);assert.equal(saved.status,200,JSON.stringify(saved.body));assert.equal(saved.body.revision,1);
  await helpers.withAdminClient(actor,'learning.read',async client=>{const updated=await client.query("UPDATE sms_v2_category_drafts SET status='published' WHERE draft_id=$1",[id]);assert.equal(updated.rowCount,0);});
@@ -47,5 +47,10 @@ test('private category review publishes signed global parts on a fully migrated 
  const published=await call('POST',`/category-rules/${id}/publish`,{revision:1,reason:'Reviewed synthetic golden category case',goldenReports:reports});assert.equal(published.status,200,JSON.stringify(published.body));assert.equal(published.body.bundles.length,4);
  for(const cohort of ['testers','pct5','pct25','all']){const row=await store.tx(actor,s=>s.latestBundle(cohort));assert.ok(row.body.categoryRules.some(rule=>rule.merchantKey==='SYNTHETIC SHOP'&&rule.category==='dining'));assert.ok(verifyBundle({...row.body,signature:{alg:'Ed25519',keyId:row.keyId,value:row.signature}},signer.publicKeyPem));assert.deepEqual(row.goldenReport,reports[cohort]);}
  assert.equal((await store.tx(actor,s=>s.categoryDraft(id))).status,'published');
- const audit=(await pool.query("SELECT reason,entity FROM admin_audit_log WHERE admin_id=$1 AND action='sms_v2_category_publish'",[actor])).rows[0];assert.equal(audit.reason,'Reviewed synthetic golden category case');assert.equal(audit.entity,'sms_v2_category_rule');
+ const narrowed=await call('PUT',`/category-rules/${id}/draft`,{...body,match:'exact'});assert.equal(narrowed.body.revision,2);
+ const narrowCandidates=await call('GET',`/category-rules/${id}/candidate?revision=2`);
+ const narrowReports=Object.fromEntries(narrowCandidates.body.candidates.map(candidate=>[candidate.cohort,{bundleSha256:candidate.contentSha256,counts:{cases:1,casesPassed:1},metrics:{}}]));
+ const narrowedPublication=await call('POST',`/category-rules/${id}/publish`,{revision:2,reason:'Narrow published scope to exact',goldenReports:narrowReports});assert.equal(narrowedPublication.status,200,JSON.stringify(narrowedPublication.body));
+ for(const cohort of ['testers','pct5','pct25','all']){const row=await store.tx(actor,s=>s.latestBundle(cohort));const matches=row.body.categoryRules.filter(rule=>rule.merchantKey==='SYNTHETIC SHOP'&&rule.source==='shared');assert.equal(matches.length,1);assert.equal(matches[0].match,'exact');assert.ok(verifyBundle({...row.body,signature:{alg:'Ed25519',keyId:row.keyId,value:row.signature}},signer.publicKeyPem));}
+ const audit=(await pool.query("SELECT reason,entity FROM admin_audit_log WHERE admin_id=$1 AND action='sms_v2_category_publish' AND reason='Reviewed synthetic golden category case'",[actor])).rows[0];assert.equal(audit.reason,'Reviewed synthetic golden category case');assert.equal(audit.entity,'sms_v2_category_rule');
 });
