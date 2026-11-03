@@ -97,7 +97,7 @@ jobs:
         working-directory: api
         env:
           JWT_ACCESS_SECRET: ci_only_not_a_real_secret
-        run: node --test test/sms_v2/*.test.js
+        run: node --test --test-concurrency=1 test/sms_v2/*.test.js
 
       - name: Install auth dependencies
         working-directory: auth
@@ -166,6 +166,10 @@ jobs:
           # Run the complete suite serially so one test file cannot leak
           # state into another on a shared test VM.
           flutter test --concurrency=1
+
+      - name: App test with SMS v2 enabled
+        working-directory: app
+        run: flutter test --concurrency=1 --dart-define=SMS_PIPELINE_V2=true
 
       # A fresh runner has never built a debug APK and may have no fallback
       # keystore. This bundle is a manifest check, never a published release.

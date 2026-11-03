@@ -1,3 +1,5 @@
+import 'package:pandapay/app/design/app_theme.dart';
+import 'package:flutter_test/flutter_test.dart';
 import 'package:alchemist/alchemist.dart';
 import 'package:flutter/material.dart';
 import 'package:pandapay/features/sms_v2/ui/found_instruments_screen.dart';
@@ -9,6 +11,8 @@ import 'package:pandapay/features/sms_import/sms_background_queue.dart';
 import 'package:pandapay_domain/sms_v2.dart';
 
 void main() {
+  setUpAll(() => BambooFonts.useSystemFontsForTests = true);
+  tearDownAll(() => BambooFonts.useSystemFontsForTests = false);
   final instrument = Instrument(
     instrumentId: '11111111-1111-4111-8111-111111111111',
     kind: InstrumentKind.creditCard,
@@ -43,7 +47,7 @@ void main() {
   for (final dark in [false, true]) {
     final name = dark ? 'dark' : 'light';
     Widget frame(Widget child) => Theme(
-      data: dark ? ThemeData.dark() : ThemeData.light(),
+      data: dark ? AppTheme.dark() : AppTheme.light(),
       child: SizedBox(width: 390, height: 650, child: Material(child: child)),
     );
     goldenTest(

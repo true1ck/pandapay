@@ -708,6 +708,10 @@
     "sms_v2_ai_capacity": {
       "disposition": "platform_ops",
       "reason": "Provider capacity and AI cost accounting are platform operation state preserved by full database recovery."
+    },
+    "sms_v2_category_drafts": {
+      "disposition": "platform_ops",
+      "reason": "Reviewed category rule revisions and signed bundle publication are platform administration state preserved by full PostgreSQL recovery, outside a customer portable archive."
     }
   }
 }

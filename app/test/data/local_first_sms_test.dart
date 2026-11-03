@@ -1,3 +1,4 @@
+import 'package:pandapay/features/sms_v2/flag.dart';
 import 'dart:convert';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_test/flutter_test.dart';
@@ -170,44 +171,73 @@ void main() {
     ]) {
       final namespace = 'user:insurance-$cadence';
       final body = 'Your vehicle insurance expires on 25-Oct-2027. $evidence';
-      expect(classifySmsTriage('VM-HDFCER-S', body).kind,
-          SmsTriageKind.financialCandidate);
-      SmsImportStore(cache.financialStore).capture(namespace, QueuedSms(
-        sender: 'VM-HDFCER-S', body: body,
-        receivedAt: DateTime(2026, 10, 22),
-      ));
+      expect(
+        classifySmsTriage('VM-HDFCER-S', body).kind,
+        SmsTriageKind.financialCandidate,
+      );
+      SmsImportStore(cache.financialStore).capture(
+        namespace,
+        QueuedSms(
+          sender: 'VM-HDFCER-S',
+          body: body,
+          receivedAt: DateTime(2026, 10, 22),
+        ),
+      );
       final commitments = db.db.select(
-        'SELECT payload FROM local_commitments WHERE namespace=?', [namespace],
+        'SELECT payload FROM local_commitments WHERE namespace=?',
+        [namespace],
       );
       final commitment = jsonDecode(commitments.single['payload'] as String);
       expect(commitment['cadence'], cadence);
-      expect(cache.financialStore.entities(namespace, 'sms_observations'), hasLength(1));
+      expect(
+        cache.financialStore.entities(namespace, 'sms_observations'),
+        hasLength(1),
+      );
       expect(cache.financialStore.entities(namespace, 'transactions'), isEmpty);
     }
     const expiry = 'Your vehicle insurance expires tomorrow. Renew now.';
-    expect(classifySmsTriage('VM-HDFCER-P', expiry).kind,
-        SmsTriageKind.financialCandidate);
-    expect(classifySmsTriage('VM-HDFCER-S', '$expiry OTP 123456').kind,
-        SmsTriageKind.sensitive);
-    expect(classifySmsTriage('9876543210', expiry).kind,
-        SmsTriageKind.unrelated);
-    expect(capturesFinancialSms('Buy insurance now! Premium Rs 1000.',
-        sender: 'VM-HDFCER-P'), isFalse);
+    expect(
+      classifySmsTriage('VM-HDFCER-P', expiry).kind,
+      SmsTriageKind.financialCandidate,
+    );
+    expect(
+      classifySmsTriage('VM-HDFCER-S', '$expiry OTP 123456').kind,
+      SmsTriageKind.sensitive,
+    );
+    expect(
+      classifySmsTriage('9876543210', expiry).kind,
+      SmsTriageKind.unrelated,
+    );
+    expect(
+      capturesFinancialSms(
+        'Buy insurance now! Premium Rs 1000.',
+        sender: 'VM-HDFCER-P',
+      ),
+      isFalse,
+    );
   });
 
   test('capture and historical reads preserve explicitly cleared user dates', () {
     cache.financialStore.replaceCards('user:account-a', [
       const UserCard(
-        id: 'user-cleared', cardProductId: 'credit', cardName: 'Credit Card',
-        isDefault: false, last4: '8708',
-        dueDaySource: 'user', statementDaySource: 'user',
+        id: 'user-cleared',
+        cardProductId: 'credit',
+        cardName: 'Credit Card',
+        isDefault: false,
+        last4: '8708',
+        dueDaySource: 'user',
+        statementDaySource: 'user',
       ),
     ]);
-    SmsImportStore(cache.financialStore).capture('user:account-a', QueuedSms(
-      sender: 'HDFCBK',
-      body: 'Your credit card XX8708 statement is generated. Total amount due Rs 800. Pay by 24-10-2026.',
-      receivedAt: DateTime(2026, 10, 20),
-    ));
+    SmsImportStore(cache.financialStore).capture(
+      'user:account-a',
+      QueuedSms(
+        sender: 'HDFCBK',
+        body:
+            'Your credit card XX8708 statement is generated. Total amount due Rs 800. Pay by 24-10-2026.',
+        receivedAt: DateTime(2026, 10, 20),
+      ),
+    );
     final card = capturedCards().single;
     expect(card.dueDay, isNull);
     expect(card.statementDay, isNull);
@@ -217,14 +247,23 @@ void main() {
 
   test('aggregator utility notices cannot teach a saved HDFC card cycle', () {
     cache.financialStore.replaceCards('user:account-a', [
-      UserCard(id: 'hdfc', cardProductId: 'hdfc', cardName: 'HDFC Credit Card',
-        cardType: 'credit', last4: '8708', isDefault: false),
+      UserCard(
+        id: 'hdfc',
+        cardProductId: 'hdfc',
+        cardName: 'HDFC Credit Card',
+        cardType: 'credit',
+        last4: '8708',
+        isDefault: false,
+      ),
     ]);
-    SmsImportStore(cache.financialStore).capture('user:account-a', QueuedSms(
-      sender: 'JX-TNBPAY-S',
-      body: 'Alegra Broadband ... Payment of Rs.800/- is due on 24-10-2026.',
-      receivedAt: DateTime(2026, 10, 20),
-    ));
+    SmsImportStore(cache.financialStore).capture(
+      'user:account-a',
+      QueuedSms(
+        sender: 'JX-TNBPAY-S',
+        body: 'Alegra Broadband ... Payment of Rs.800/- is due on 24-10-2026.',
+        receivedAt: DateTime(2026, 10, 20),
+      ),
+    );
     final card = capturedCards().single;
     expect(card.dueDay, isNull);
     expect(card.statementDay, isNull);
@@ -233,39 +272,83 @@ void main() {
   test('ambiguous card suffixes never teach multiple credit-card cycles', () {
     cache.financialStore.replaceCards('user:account-a', [
       for (final id in ['one', 'two'])
-        UserCard(id: id, cardProductId: id, cardName: 'Credit Card $id',
-          cardType: 'credit', last4: '8708', isDefault: false),
+        UserCard(
+          id: id,
+          cardProductId: id,
+          cardName: 'Credit Card $id',
+          cardType: 'credit',
+          last4: '8708',
+          isDefault: false,
+        ),
     ]);
-    SmsImportStore(cache.financialStore).capture('user:account-a', QueuedSms(
-      sender: 'HDFCBK',
-      body: 'Your credit card XX8708 statement is generated. Total amount due Rs 800. Pay by 24-10-2026.',
-      receivedAt: DateTime(2026, 10, 20),
-    ));
+    SmsImportStore(cache.financialStore).capture(
+      'user:account-a',
+      QueuedSms(
+        sender: 'HDFCBK',
+        body:
+            'Your credit card XX8708 statement is generated. Total amount due Rs 800. Pay by 24-10-2026.',
+        receivedAt: DateTime(2026, 10, 20),
+      ),
+    );
     final cards = capturedCards();
-    expect(cards.every((card) => card.dueDay == null && card.statementDay == null), isTrue);
+    expect(
+      cards.every((card) => card.dueDay == null && card.statementDay == null),
+      isTrue,
+    );
   });
 
-  test('AutoPay learns due day without claiming reminder arrival as statement day', () {
-    cache.financialStore.replaceCards('user:account-a', [
-      UserCard(id: 'active', cardProductId: 'hdfc', cardName: 'HDFC Credit Card',
-        cardType: 'credit', last4: '8708', isDefault: false),
-      UserCard(id: 'archived', cardProductId: 'hdfc', cardName: 'HDFC Credit Card',
-        cardType: 'credit', last4: '8708', isDefault: false, isArchived: true),
-      UserCard(id: 'debit', cardProductId: 'debit', cardName: 'HDFC Debit Card',
-        cardType: 'debit', last4: '8708', isDefault: false),
-    ]);
-    SmsImportStore(cache.financialStore).capture('user:account-a', QueuedSms(
-      sender: 'HDFCBK',
-      body: 'AutoPay scheduled for your credit card ending in 8708 on 25-Oct-2026 for Rs 4500. Maintain sufficient balance in your account.',
-      receivedAt: DateTime(2026, 10, 20),
-    ));
-    final cards = capturedCards();
-    final active = cards.singleWhere((card) => card.id == 'active');
-    expect(active.dueDay, 25);
-    expect(active.dueDaySource, 'sms');
-    expect(cards.every((card) => card.statementDay == null), isTrue);
-    expect(cards.where((card) => card.id != 'active').every((card) => card.dueDay == null), isTrue);
-  });
+  test(
+    'AutoPay learns due day without claiming reminder arrival as statement day',
+    () {
+      cache.financialStore.replaceCards('user:account-a', [
+        UserCard(
+          id: 'active',
+          cardProductId: 'hdfc',
+          cardName: 'HDFC Credit Card',
+          cardType: 'credit',
+          last4: '8708',
+          isDefault: false,
+        ),
+        UserCard(
+          id: 'archived',
+          cardProductId: 'hdfc',
+          cardName: 'HDFC Credit Card',
+          cardType: 'credit',
+          last4: '8708',
+          isDefault: false,
+          isArchived: true,
+        ),
+        UserCard(
+          id: 'debit',
+          cardProductId: 'debit',
+          cardName: 'HDFC Debit Card',
+          cardType: 'debit',
+          last4: '8708',
+          isDefault: false,
+        ),
+      ]);
+      SmsImportStore(cache.financialStore).capture(
+        'user:account-a',
+        QueuedSms(
+          sender: 'HDFCBK',
+          body:
+              'AutoPay scheduled for your credit card ending in 8708 on 25-Oct-2026 for Rs 4500. Maintain sufficient balance in your account.',
+          receivedAt: DateTime(2026, 10, 20),
+        ),
+      );
+      final cards = capturedCards();
+      final active = cards.singleWhere((card) => card.id == 'active');
+      expect(active.dueDay, 25);
+      expect(active.dueDaySource, 'sms');
+      expect(cards.every((card) => card.statementDay == null), isTrue);
+      expect(
+        cards
+            .where((card) => card.id != 'active')
+            .every((card) => card.dueDay == null),
+        isTrue,
+      );
+    },
+  );
 
   test(
     'high-confidence promotion and AutoPay messages stop locally without spending',
@@ -391,6 +474,8 @@ void main() {
       );
       final container = ProviderContainer(
         overrides: [
+          // This fixture exercises the retained legacy import API.
+          smsPipelineV2EnabledProvider.overrideWithValue(false),
           accessTokenProvider.overrideWith((ref) => token),
           responseCacheProvider.overrideWith((ref) async => cache),
           authenticatedHttpClientProvider.overrideWithValue(client),
@@ -435,6 +520,8 @@ void main() {
       );
       final container = ProviderContainer(
         overrides: [
+          // This fixture exercises the retained legacy import API.
+          smsPipelineV2EnabledProvider.overrideWithValue(false),
           accessTokenProvider.overrideWith((ref) => token),
           responseCacheProvider.overrideWith((ref) async => cache),
           authenticatedHttpClientProvider.overrideWithValue(client),
@@ -497,6 +584,8 @@ void main() {
       );
       final container = ProviderContainer(
         overrides: [
+          // This fixture exercises the retained legacy import API.
+          smsPipelineV2EnabledProvider.overrideWithValue(false),
           accessTokenProvider.overrideWith((ref) => token),
           responseCacheProvider.overrideWith((ref) async => cache),
           authenticatedHttpClientProvider.overrideWithValue(client),
@@ -556,6 +645,8 @@ void main() {
       );
       final container = ProviderContainer(
         overrides: [
+          // This fixture exercises the retained legacy import API.
+          smsPipelineV2EnabledProvider.overrideWithValue(false),
           accessTokenProvider.overrideWith((ref) => token),
           responseCacheProvider.overrideWith((ref) async => cache),
           authenticatedHttpClientProvider.overrideWithValue(client),

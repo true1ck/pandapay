@@ -1,3 +1,4 @@
+import 'package:pandapay/features/sms_v2/flag.dart';
 import 'dart:async';
 import 'dart:convert';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
@@ -105,6 +106,8 @@ void main() {
           'e30.${base64Url.encode(utf8.encode('{"sub":"account-a"}')).replaceAll('=', '')}.sig';
       final scope = ProviderContainer(
         overrides: [
+          // Retained legacy upload/retry behavior; v2 has its own end-to-end tests.
+          smsPipelineV2EnabledProvider.overrideWithValue(false),
           accessTokenProvider.overrideWith((ref) => token),
           responseCacheProvider.overrideWith((ref) async => cache),
           smsListenerServiceProvider.overrideWithValue(inbox),
@@ -225,7 +228,10 @@ void main() {
                 [200, 503][aiIndex++],
               );
             default:
-              return http.Response('unexpected ${request.method} ${request.url.path}', 404);
+              return http.Response(
+                'unexpected ${request.method} ${request.url.path}',
+                404,
+              );
           }
         }),
       );
@@ -233,6 +239,8 @@ void main() {
           'e30.${base64Url.encode(utf8.encode('{"sub":"account-a"}')).replaceAll('=', '')}.sig';
       final scope = ProviderContainer(
         overrides: [
+          // Retained legacy upload/retry behavior; v2 has its own end-to-end tests.
+          smsPipelineV2EnabledProvider.overrideWithValue(false),
           accessTokenProvider.overrideWith((ref) => token),
           responseCacheProvider.overrideWith((ref) async => cache),
           smsListenerServiceProvider.overrideWithValue(inbox),

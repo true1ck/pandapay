@@ -1,3 +1,4 @@
+import '../storage/stats_store.dart';
 import 'dart:convert';
 
 import 'package:crypto/crypto.dart';
@@ -78,7 +79,53 @@ class CorrectionsService {
     bundle: bundle,
     appVersion: appVersion,
     categoryIdBySlug: categoryIdBySlug,
+    replaceReading: _replacePersonalReading,
   ).apply(choice: choice, sourceKeys: sourceKeys);
+
+  void _replacePersonalReading(
+    SmsMessage message,
+    Fact reading,
+    EventType type,
+    String instrumentId,
+  ) {
+    final originals = _facts.forSource(message.sourceKey);
+    final original =
+        originals.whereType<MovementFact>().firstOrNull ??
+        originals.whereType<HoldFact>().firstOrNull;
+    final events = _events.findByFactIds(originals.map((f) => f.factId));
+    if (original == null || events.length != 1)
+      throw ArgumentError('One stored payment is required');
+    apply(
+      SmsCorrection(
+        id: sha256
+            .convert(
+              utf8.encode(
+                'personal|${canonicalJson(reading.toJson())}|${type.wire}',
+              ),
+            )
+            .toString(),
+        sourceKey: message.sourceKey,
+        message: message,
+        factIds: [original.factId],
+        eventId: events.single.eventId,
+        kind: CorrectionKind.wrongKind,
+        reportCase: false,
+        corrected: {
+          'eventType': type.wire,
+          '_personalReading': reading.toJson(),
+          '_personalInstrumentId': instrumentId,
+        },
+        trace: DecisionTrace(
+          appVersion: reading.provenance.appVersion,
+          engineVersion: reading.provenance.engineVersion,
+          bundleVersion: bundle.bundleVersion,
+          outcome: 'matched',
+          facts: originals,
+          event: events.single,
+        ),
+      ),
+    );
+  }
 
   void apply(SmsCorrection correction) {
     if (correction.id.isEmpty) {
@@ -166,7 +213,8 @@ class CorrectionsService {
         } else if (correction.kind == CorrectionKind.duplicate) {
           if (event == null) throw ArgumentError('An event is required');
           event = event!.copyWith(type: EventType.unknown);
-        } else if (correction.kind == CorrectionKind.wrongInstrument) {
+        } else if (correction.kind == CorrectionKind.wrongInstrument &&
+            !corrected.containsKey('targetInstrumentId')) {
           if (originalFacts.isEmpty) {
             throw ArgumentError('A source fact is required');
           }
@@ -209,7 +257,15 @@ class CorrectionsService {
           final original =
               current ??
               (throw ArgumentError('An active event fact is required'));
-          final json = original.toJson();
+          final personalJson = corrected['_personalReading'];
+          if (personalJson != null &&
+              (correction.reportCase ||
+                  correction.kind != CorrectionKind.wrongKind)) {
+            throw ArgumentError('Personal format readings stay local');
+          }
+          final json = personalJson is Map
+              ? personalJson.cast<String, Object?>()
+              : original.toJson();
           final id = sha256
               .convert(utf8.encode('user|${correction.id}|${original.factId}'))
               .toString();
@@ -257,6 +313,38 @@ class CorrectionsService {
                 },
             ];
           }
+          if (correction.kind == CorrectionKind.wrongInstrument &&
+              corrected['targetInstrumentId'] is String) {
+            final target = InstrumentStore(
+              _db,
+              namespace: namespace,
+            ).get(corrected['targetInstrumentId'] as String);
+            if (event!.type != EventType.cardBillPayment ||
+                target?.kind != InstrumentKind.creditCard ||
+                target?.status != InstrumentStatus.confirmed ||
+                target?.maskDigits == null)
+              throw ArgumentError(
+                'Choose a confirmed credit card for this bill',
+              );
+            patch['counterparty'] = Counterparty(
+              name: target!.issuerSlug,
+              accountMask: target.maskDigits,
+              kind: CounterpartyKind.own,
+            ).toJson();
+          }
+          if (corrected['rail'] is String && original is MovementFact) {
+            patch['attrs'] = {
+              ...(patch['attrs'] as Map).cast<String, Object?>(),
+              'rail': corrected['rail'],
+            };
+          }
+          if (correction.kind == CorrectionKind.wrongDate &&
+              DateTime.parse(
+                corrected['occurredAt'] as String,
+              ).isAfter(original.observedAt))
+            throw ArgumentError(
+              'A payment date cannot be later than its message',
+            );
           final replacement = Fact.fromJson(patch);
           final previousInstrument =
               _db.select(
@@ -264,7 +352,24 @@ class CorrectionsService {
                     [namespace, original.factId],
                   ).single['instrument_id']
                   as String?;
-          _facts.insert(replacement, instrumentId: previousInstrument);
+          final personalInstrument =
+              corrected['_personalInstrumentId'] as String?;
+          if (personalInstrument != null) {
+            final selected = InstrumentStore(
+              _db,
+              namespace: namespace,
+            ).get(personalInstrument);
+            if (selected?.status != InstrumentStatus.confirmed ||
+                selected?.maskDigits != replacement.instrument?.maskDigits ||
+                selected?.issuerSlug != replacement.instrument?.issuerSlug ||
+                selected?.kind != replacement.instrument?.kind) {
+              throw ArgumentError('Choose a confirmed account for this format');
+            }
+          }
+          _facts.insert(
+            replacement,
+            instrumentId: personalInstrument ?? previousInstrument,
+          );
           _outbox.enqueue('source', source, {
             'sourceKey': source,
             'senderBrand': correction.message == null
@@ -291,14 +396,30 @@ class CorrectionsService {
                   if (leg.factId == event!.eventId ||
                       original.provenance.engine != Engine.user)
                     EventLeg(factId: leg.factId, role: LegRole.original),
-                  EventLeg(factId: replacement.factId, role: leg.role),
+                  EventLeg(
+                    factId: replacement.factId,
+                    role: personalJson == null
+                        ? leg.role
+                        : replacement is HoldFact
+                        ? (replacement.phase == HoldPhase.placed
+                              ? LegRole.holdPlaced
+                              : LegRole.holdReleased)
+                        : replacement is MovementFact &&
+                              replacement.direction == Direction.credit
+                        ? LegRole.creditLeg
+                        : LegRole.debitLeg,
+                  ),
                 ] else
                   leg,
             ],
-            amountMinor: correction.kind == CorrectionKind.wrongAmount
+            amountMinor: personalJson != null
+                ? replacement.amounts.first.minor
+                : correction.kind == CorrectionKind.wrongAmount
                 ? corrected['amountMinor'] as int
                 : null,
-            occurredAt: correction.kind == CorrectionKind.wrongDate
+            occurredAt: personalJson != null
+                ? replacement.effectiveAt
+                : correction.kind == CorrectionKind.wrongDate
                 ? replacement.effectiveAt
                 : null,
             type: correction.kind == CorrectionKind.wrongKind
@@ -424,6 +545,19 @@ class CorrectionsService {
             correction.reportCase ? 'pending' : 'resolved',
           ],
         );
+        if (correction.reportCase &&
+            correction.trace.ruleId != null &&
+            correction.trace.ruleVersion != null &&
+            originalFacts.isNotEmpty &&
+            correction.trace.facts.every(
+              (f) => f.provenance.engine != Engine.ai,
+            )) {
+          StatsStore(_db, namespace: namespace).correction(
+            at: originalFacts.values.first.observedAt,
+            ruleId: correction.trace.ruleId!,
+            ruleVersion: correction.trace.ruleVersion!,
+          );
+        }
         if (stage != null && correction.reportCase) {
           _queueCase(correction, stage);
         }

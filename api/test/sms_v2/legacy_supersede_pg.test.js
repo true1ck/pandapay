@@ -40,8 +40,9 @@ async function legacy(p, sourceKey, overrides = {}) {
 }
 async function ingest(p, body, backfill = false) {
   const { ingestBatch } = require('../../src/sms_v2/storage');
-  const { supersedeLegacy } = require('../../src/sms_v2/legacy_supersede');
-  return own(p, c => ingestBatch(c, p, body, { backfill, deps, hooks: { afterEventsStored: supersedeLegacy } }));
+  const hooks = {};
+  require('../../src/sms_v2/legacy_supersede').installLegacySupersede(hooks);
+  return own(p, c => ingestBatch(c, p, body, { backfill, deps, hooks }));
 }
 test.before(async () => { if (skip) return; pool = new (require('pg').Pool)({ connectionString: url }); });
 test.after(async () => {
@@ -140,4 +141,26 @@ test('actual reports exclude superseded legacy rows while including the v2 repla
   assert.equal(result.budget.txnCount, 1);
   assert.equal(result.instruments[0].totalInr, 499);
   assert.equal(result.instruments[0].txnCount, 1);
+});
+
+test('stored non-money facts hide only their own erroneous legacy spending without an event', { skip }, async () => {
+  const p = await profile(), other = await profile();
+  const f = h.fact({});
+  const balance = {
+    ...require('../../../contracts/sms/v2/fixtures/valid/fact/balance_snapshot.zero_balance.json'),
+    factId: f.factId, sourceKey: f.sourceKey, observedAt: h.T_OBS, occurredAt: h.T0,
+  };
+  assert.equal(require('../../src/sms_v2/contracts').validateFact(balance).ok, true);
+  const id = await legacy(p, f.sourceKey), otherId = await legacy(other, f.sourceKey);
+  const manual = await legacy(p, f.sourceKey + ':manual', { source: 'manual' });
+  const baseline = applies;
+  const body = h.batch({ items: [h.item([balance])] });
+  await ingest(p, body, true);
+  await ingest(p, body, true);
+  const rows = new Map((await pool.query('SELECT id,status::text,superseded_by_event_id FROM transactions WHERE id=ANY($1::uuid[])', [[id, otherId, manual]])).rows.map(r => [r.id,r]));
+  assert.equal(rows.get(id).status, 'superseded');
+  assert.equal(rows.get(id).superseded_by_event_id, null);
+  assert.equal(rows.get(otherId).status, 'active');
+  assert.equal(rows.get(manual).status, 'active');
+  assert.equal(applies, baseline);
 });

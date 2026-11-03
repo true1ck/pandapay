@@ -31,9 +31,11 @@ void main() {
     String date = '2026-11-01',
     String sender = 'VM-SYNTHBK-S',
     String mask = '5678',
+    String reference = '123456789012',
   }) => SmsMessage(
     sender: sender,
-    body: 'SYNTHBANK a/c **$mask posted INR $amount to $merchant on $date.',
+    body:
+        'SYNTHBANK a/c **$mask posted INR $amount to $merchant on $date. Ref $reference',
     observedAt: DateTime.utc(2026, 11, 3),
     sourceKey: source,
   );
@@ -225,6 +227,7 @@ void main() {
       });
       final next = message(
         'future',
+        reference: '998877665544',
         amount: '9,999.00',
         merchant: 'GAMMA',
         date: '2026-11-02',
@@ -313,6 +316,63 @@ void main() {
         PersonalRuleStore(
           SyncStateStore(database.db, namespace: 'user:other'),
         ).list(),
+        isEmpty,
+      );
+    },
+  );
+
+  test(
+    'fixing an existing format replaces each reading without duplicating its event',
+    () {
+      final first = message('a');
+      final wrong = buildPersonalRule(
+        message: first,
+        instrument: instrument,
+        choice: PersonalFormatChoice(
+          sourceKey: first.sourceKey,
+          instrumentId: instrument.instrumentId,
+          amount: span(first, '123456789012'),
+          merchant: span(first, 'ALPHA'),
+          date: span(first, '2026-11-01'),
+          dateFormat: 'yyyy-MM-dd',
+          type: EventType.purchase,
+          amountRole: AmountRole.posted,
+          rail: Rail.upi,
+        ),
+      );
+      bundle = RuleBundle.fromJson({
+        ...bundle.toJson(),
+        'rules': [wrong.rule.toJson()],
+      });
+      captured(first);
+      captured(message('b', amount: '100.00', reference: '987654321012'));
+      final events = EventStore(
+        database.db,
+        namespace: namespace,
+      ).listSince(DateTime.utc(1900));
+      expect(events, hasLength(2));
+      teach(choice(first), ['a', 'b']);
+      final after = EventStore(
+        database.db,
+        namespace: namespace,
+      ).listSince(DateTime.utc(1900));
+      expect(
+        after.map((e) => e.eventId).toSet(),
+        events.map((e) => e.eventId).toSet(),
+      );
+      expect(after.every((e) => e.status == EventStatus.userConfirmed), isTrue);
+      expect(
+        LedgerStore(
+          database.db,
+          namespace: namespace,
+        ).list().fold<int>(0, (n, e) => n + e.amountMinor),
+        20000,
+      );
+      expect(
+        OutboxStore(
+          database.db,
+          namespace: namespace,
+        ).due(DateTime.utc(2100)).where((e) => e.kind == 'correction'),
         isEmpty,
       );
     },

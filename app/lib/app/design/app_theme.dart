@@ -304,8 +304,12 @@ class AppTheme {
     );
 
     // Keep headings and body copy on Outfit throughout the app.
-    final display = GoogleFonts.outfitTextTheme();
-    final body = GoogleFonts.outfitTextTheme();
+    final display = BambooFonts.useSystemFontsForTests
+        ? ThemeData.light().textTheme
+        : GoogleFonts.outfitTextTheme();
+    final body = BambooFonts.useSystemFontsForTests
+        ? ThemeData.light().textTheme
+        : GoogleFonts.outfitTextTheme();
 
     final textTheme = body.copyWith(
       displayLarge: display.displayLarge?.copyWith(fontWeight: FontWeight.w700),
@@ -542,8 +546,12 @@ class AppTheme {
       error: const Color(0xFFEF5350),
     );
 
-    final display = GoogleFonts.outfitTextTheme(ThemeData.dark().textTheme);
-    final body = GoogleFonts.outfitTextTheme(ThemeData.dark().textTheme);
+    final display = BambooFonts.useSystemFontsForTests
+        ? ThemeData.dark().textTheme
+        : GoogleFonts.outfitTextTheme(ThemeData.dark().textTheme);
+    final body = BambooFonts.useSystemFontsForTests
+        ? ThemeData.dark().textTheme
+        : GoogleFonts.outfitTextTheme(ThemeData.dark().textTheme);
 
     final textTheme = body.copyWith(
       displayLarge: display.displayLarge?.copyWith(fontWeight: FontWeight.w700),

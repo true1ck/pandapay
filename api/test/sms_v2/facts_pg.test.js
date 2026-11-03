@@ -425,6 +425,16 @@ test('an event that stops counting retires its row and undoes card state', { ski
   assert.equal(calls.reverse.length, 1);
 });
 
+test('an explicit user restore reactivates one projection and reapplies card state once', { skip }, async () => {
+  const p=await newProfile();const userCard=await newCard(p);calls.apply.length=0;calls.reverse.length=0;
+  const spend=cardSpend({userCardId:userCard});await ingest(p,spend.body);
+  await ingest(p,h.batch({events:[{...spend.e,type:'unknown',status:'user_confirmed'}]}));
+  assert.equal((await txnsFor(p))[0].status,'ignored');
+  const restore=h.batch({events:[{...spend.e,status:'user_confirmed'}],ledger:[spend.l]});
+  await ingest(p,restore);await ingest(p,restore);
+  assert.equal((await txnsFor(p))[0].status,'active');assert.equal(calls.reverse.length,1);assert.equal(calls.apply.length,2);
+});
+
 test('a v1 row for the same message is adopted, not duplicated, and a shared message gets a distinct key', { skip }, async () => {
   const p = await newProfile();
   const sourceKey = `sms:synthetic:adopt:${crypto.randomUUID()}`;

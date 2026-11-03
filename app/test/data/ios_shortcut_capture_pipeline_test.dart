@@ -1,3 +1,4 @@
+import 'package:pandapay/features/sms_v2/flag.dart';
 import 'dart:convert';
 
 import 'package:flutter_riverpod/flutter_riverpod.dart';
@@ -75,6 +76,8 @@ void main() {
           'e30.${base64Url.encode(utf8.encode('{"sub":"account-a"}')).replaceAll('=', '')}.sig';
       final scope = ProviderContainer(
         overrides: [
+          // This fixture exercises the retained legacy import API.
+          smsPipelineV2EnabledProvider.overrideWithValue(false),
           accessTokenProvider.overrideWith((ref) => token),
           responseCacheProvider.overrideWith((ref) async => cache),
           smsListenerServiceProvider.overrideWithValue(_NoAndroidInbox()),

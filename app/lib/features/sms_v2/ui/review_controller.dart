@@ -231,7 +231,7 @@ Future<ReviewController> smsReviewController(WidgetRef ref) async {
   final runtime = await ref.read(smsV2RuntimeProvider.future);
   final bundle = await runtime?.activeBundle();
   final cache = await ref.read(app.responseCacheProvider.future);
-  final consent = await ref.read(app.smsSharedLearningConsentProvider.future);
+  final consent = ref.read(app.smsSharedLearningConsentProvider).valueOrNull;
   if (namespace != ref.read(app.cacheNamespaceProvider)) {
     throw StateError('Account changed');
   }

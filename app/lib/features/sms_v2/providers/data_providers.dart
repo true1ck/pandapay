@@ -12,6 +12,9 @@ import '../storage/schema.dart';
 import '../storage/fact_store.dart';
 import '../storage/event_store.dart';
 
+final merchantPromptMinimumOccurrencesProvider = Provider<int>((ref) => 2);
+final merchantPromptLargeAmountProvider = Provider<int>((ref) => 200000);
+
 final instrumentsProvider = FutureProvider<List<Instrument>>((ref) async {
   if (!ref.watch(smsPipelineV2EnabledProvider)) return const [];
   return (await ref.watch(smsV2LedgerReadModelProvider.future)).instruments;
@@ -119,7 +122,37 @@ final reviewItemsProvider = FutureProvider<List<LocalReviewItem>>((ref) async {
         .putIfAbsent(normalizeMerchantText(merchant), () => [])
         .add(event);
   }
+  final cards = model.instruments
+      .where(
+        (i) =>
+            i.kind == InstrumentKind.creditCard &&
+            i.status == InstrumentStatus.confirmed,
+      )
+      .toList();
+  final unresolvedBillIds = {
+    for (final entry in model.ledger.entries)
+      if (entry.to is OwnUnresolvedEndpoint &&
+          (entry.to as OwnUnresolvedEndpoint).kind == InstrumentKind.creditCard)
+        entry.eventId,
+  };
   return [
+    if (cards.length > 1)
+      for (final event in model.ledger.events.where(
+        (e) =>
+            e.type == EventType.cardBillPayment &&
+            unresolvedBillIds.contains(e.eventId),
+      ))
+        if (factsById[event.eventId]?.sourceKey case final source?)
+          LocalReviewItem(
+            id: 'bill-target:${event.eventId}',
+            kind: 'bill_target',
+            payload: {
+              'sourceKey': source,
+              'eventId': event.eventId,
+              'hasReading': true,
+            },
+            message: intake.capturedById(namespace, source),
+          ),
     for (final row in db.select(
       "SELECT review_id,kind,payload FROM v2_review_items WHERE namespace=? AND status='open' ORDER BY review_id",
       [namespace],
@@ -140,8 +173,12 @@ final reviewItemsProvider = FutureProvider<List<LocalReviewItem>>((ref) async {
               : null,
         ),
     for (final merchant in merchantEvents.entries)
-      if (merchant.value.length >= 2 ||
-          merchant.value.any((e) => e.amountMinor >= 200000))
+      if (merchant.value.length >=
+              ref.watch(merchantPromptMinimumOccurrencesProvider) ||
+          merchant.value.any(
+            (e) =>
+                e.amountMinor >= ref.watch(merchantPromptLargeAmountProvider),
+          ))
         for (final event in merchant.value)
           for (final source in [factsById[event.eventId]?.sourceKey])
             if (source != null)

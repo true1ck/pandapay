@@ -26,22 +26,32 @@ class StatsUpload {
     required String appVersion,
     required int bundleVersion,
   }) async {
-    final payload = stats.payload(
-      now,
-      appVersion: appVersion,
-      bundleVersion: bundleVersion,
-    );
-    if (payload == null || !accountIsCurrent()) return;
-    final day = payload['day'] as String;
     final sent = DateTime.tryParse(state.get('stats:last-sent') ?? '');
     if (sent != null && now.difference(sent) < const Duration(hours: 24)) {
       return;
     }
+    // Yesterday is closed, so hits arriving after today's daily upload are
+    // included tomorrow rather than permanently omitted at midnight.
+    final payload =
+        stats.payload(
+          now.toUtc().subtract(const Duration(days: 1)),
+          appVersion: appVersion,
+          bundleVersion: bundleVersion,
+        ) ??
+        stats.payload(
+          now,
+          appVersion: appVersion,
+          bundleVersion: bundleVersion,
+        );
+    if (payload == null || !accountIsCurrent()) return;
+    final day = payload['day'] as String;
     try {
+      final authHeaders = await headers();
+      if (!accountIsCurrent()) return;
       final response = await client
           .post(
             baseUri.resolve('/sms/v2/rule-stats:batch'),
-            headers: {...await headers(), 'Content-Type': 'application/json'},
+            headers: {...authHeaders, 'Content-Type': 'application/json'},
             body: jsonEncode(payload),
           )
           .timeout(const Duration(seconds: 30));

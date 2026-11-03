@@ -285,7 +285,11 @@ class SmsV2Pipeline {
               backfill: backfill,
             );
             instrumentIds[fact.factId] = base.instrumentId;
-            steps[fact.factId] = resolution.created
+            steps[fact.factId] =
+                fact.provenance.engine == Engine.user &&
+                    fact.provenance.ruleId.startsWith('PERSONAL-')
+                ? 'user_choice'
+                : resolution.created
                 ? 'created'
                 : mention.maskDigits == null
                 ? 'issuer_kind'

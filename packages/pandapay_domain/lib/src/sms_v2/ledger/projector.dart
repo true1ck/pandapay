@@ -190,6 +190,10 @@ class DefaultLedgerProjector implements LedgerProjector {
             (i) =>
                 i.kind == kind &&
                 i.status != InstrumentStatus.rejected &&
+                (anchor.provenance.engine != Engine.user ||
+                    name.isEmpty ||
+                    name == normalizeMerchantText(i.issuerSlug) ||
+                    name == normalizeMerchantText(i.displayName)) &&
                 (mask != null
                     ? i.maskDigits == mask
                     : name.isNotEmpty &&

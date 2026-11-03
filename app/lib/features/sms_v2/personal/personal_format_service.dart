@@ -7,6 +7,8 @@ import '../../../data/local/sms_intake_repository.dart';
 import '../category/category_snapshot.dart';
 import '../pipeline/sms_v2_pipeline.dart';
 import '../storage/instrument_store.dart';
+import '../storage/fact_store.dart';
+import '../storage/event_store.dart';
 import '../storage/sync_state_store.dart';
 import 'personal_rule_engine.dart';
 import 'personal_rule_store.dart';
@@ -78,7 +80,8 @@ PersonalRule buildPersonalRule({
       'Choose a confirmed account or card with masked digits',
     );
   }
-  if (message.body.length > 1800 || !personalFormatTypes.contains(choice.type)) {
+  if (message.body.length > 1800 ||
+      !personalFormatTypes.contains(choice.type)) {
     throw ArgumentError('This format cannot be taught here');
   }
   final amountText = choice.amount.text(message.body);
@@ -138,6 +141,25 @@ PersonalRule buildPersonalRule({
     pattern: RegExp.escape(mask),
   ));
   fields.sort((a, b) => a.span.start.compareTo(b.span.start));
+  String literal(String value) {
+    // References vary per payment; account masks remain exact literals. Only
+    // explicitly labelled reference digits can vary outside selected fields.
+    final out = StringBuffer();
+    var cursor = 0;
+    for (final reference in RegExp(
+      r'\b(?:ref(?:erence)?|utr|rrn|txn\s+id)\s*(?:no\.?\s*)?[:#-]?\s*([0-9]{6,24})',
+      caseSensitive: false,
+    ).allMatches(value)) {
+      final digits = reference.group(1)!;
+      final start = reference.end - digits.length;
+      out.write(RegExp.escape(value.substring(cursor, start)));
+      out.write(r'[0-9]{6,24}');
+      cursor = reference.end;
+    }
+    out.write(RegExp.escape(value.substring(cursor)));
+    return out.toString();
+  }
+
   final pattern = StringBuffer('^');
   final example = StringBuffer();
   var offset = 0;
@@ -146,9 +168,7 @@ PersonalRule buildPersonalRule({
     if (field.span.start < offset) {
       throw ArgumentError('Selected fields must not overlap');
     }
-    pattern.write(
-      RegExp.escape(message.body.substring(offset, field.span.start)),
-    );
+    pattern.write(literal(message.body.substring(offset, field.span.start)));
     example.write(message.body.substring(offset, field.span.start));
     example.write(switch (field.name) {
       'amount' => '1.00',
@@ -159,7 +179,7 @@ PersonalRule buildPersonalRule({
     pattern.write('(?<${field.name}>${field.pattern})');
     offset = field.span.end;
   }
-  pattern.write(RegExp.escape(message.body.substring(offset)));
+  pattern.write(literal(message.body.substring(offset)));
   example.write(message.body.substring(offset));
   pattern.write(r'$');
   if (lintRegexDialect(pattern.toString(), '').isNotEmpty) {
@@ -263,7 +283,9 @@ class PersonalFormatService {
     required this.bundle,
     required this.appVersion,
     this.categoryIdBySlug = const {},
+    this.replaceReading,
   });
+  final void Function(SmsMessage, Fact, EventType, String)? replaceReading;
   final FinancialStore financial;
   final String namespace, appVersion;
   final RuleBundle bundle;
@@ -274,9 +296,9 @@ class PersonalFormatService {
   }) {
     final sources = sourceKeys.toSet();
     if (sources.isEmpty ||
-        sources.length > 500 ||
+        sources.length > 20000 ||
         !sources.contains(choice.sourceKey)) {
-      throw ArgumentError('Choose up to 500 messages including the example');
+      throw ArgumentError('Choose up to 20,000 messages including the example');
     }
     final db = financial.database.db;
     final intake = SmsIntakeRepository(financial.database);
@@ -288,7 +310,9 @@ class PersonalFormatService {
         );
       }
       final decision = intake.decision(namespace, source);
-      if (decision?.policyVersion != 'v2' || decision?.decision != 'unknown') {
+      if (decision?.policyVersion != 'v2' ||
+          (decision?.decision != 'unknown' &&
+              !(sources.length > 1 && decision?.decision == 'matched'))) {
         throw ArgumentError('Only unread financial formats can be taught');
       }
       return SmsMessage(
@@ -305,10 +329,22 @@ class PersonalFormatService {
     if (instrument == null) {
       throw ArgumentError('The account or card is unavailable');
     }
-    final rule = buildPersonalRule(
+    final built = buildPersonalRule(
       message: messages.firstWhere((m) => m.sourceKey == choice.sourceKey),
       choice: choice,
       instrument: instrument,
+    );
+    final rule = PersonalRule(
+      instrumentId: built.instrumentId,
+      rule: Rule.fromJson({
+        ...built.rule.toJson(),
+        'senders': [
+          normalizeSenderBrand(
+            messages.firstWhere((m) => m.sourceKey == choice.sourceKey).sender,
+            bundle.senders,
+          ).brand,
+        ],
+      }),
     );
     final state = SyncStateStore(db, namespace: namespace);
     // Stage only in memory until every captured source passes the exact rule.
@@ -323,6 +359,7 @@ class PersonalFormatService {
       senders: bundle.senders,
       rules: [rule.rule],
     );
+    final readings = <String, Fact>{};
     for (final message in messages) {
       final safety = validation.interpretDetailed(
         message,
@@ -345,6 +382,7 @@ class PersonalFormatService {
           'Every selected message must match the chosen sender, account and printed fields',
         );
       }
+      readings[message.sourceKey] = parsed.result.facts.single;
     }
     financial.batch(() {
       db.execute('SAVEPOINT personal_format');
@@ -366,11 +404,47 @@ class PersonalFormatService {
           confirmedHistory: categories.confirmedHistory,
           categoryIdBySlug: categoryIdBySlug,
         );
-        if (pipeline.processBatch(messages, backfill: true) != messages.length) {
+        final pending = <SmsMessage>[];
+        for (final message in messages) {
+          final oldFacts = FactStore(
+            db,
+            namespace: namespace,
+          ).forSource(message.sourceKey);
+          final events = EventStore(
+            db,
+            namespace: namespace,
+          ).findByFactIds(oldFacts.map((f) => f.factId));
+          if (events.isNotEmpty) {
+            if (replaceReading == null || events.length != 1) {
+              throw ArgumentError(
+                'Resolve the matching payment before fixing its format',
+              );
+            }
+            replaceReading!(
+              message,
+              readings[message.sourceKey]!,
+              choice.type,
+              instrument.instrumentId,
+            );
+          } else {
+            db.execute(
+              'DELETE FROM sms_source_decisions WHERE namespace=? AND source_key=?',
+              [namespace, message.sourceKey],
+            );
+            pending.add(message);
+          }
+        }
+        var processed = messages.length - pending.length;
+        for (var start = 0; start < pending.length; start += 500) {
+          processed += pipeline.processBatch(
+            pending.sublist(start, (start + 500).clamp(0, pending.length)),
+            backfill: true,
+          );
+        }
+        if (processed != messages.length)
           throw StateError(
             'A selected message changed before it could be saved',
           );
-        }
         for (final message in messages) {
           final saved = state.get('trace:${message.sourceKey}');
           if (saved != null) {

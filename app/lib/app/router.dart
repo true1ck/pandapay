@@ -1,3 +1,4 @@
+import '../features/sms_v2/ui/migration_report_screen.dart';
 import '../features/sms_v2/flag.dart';
 import '../features/sms_v2/ui/found_instruments_screen.dart';
 import '../features/sms_v2/ui/review_inbox_screen.dart';
@@ -561,6 +562,10 @@ final goRouterProvider = Provider<GoRouter>((ref) {
     },
     routes: [
       if (ref.watch(smsPipelineV2EnabledProvider)) ...[
+        GoRoute(
+          path: '/sms-v2/migration',
+          builder: (_, _) => const MigrationReportScreen(),
+        ),
         GoRoute(
           path: '/sms-v2/instruments',
           builder: (_, _) => const FoundInstrumentsScreen(),

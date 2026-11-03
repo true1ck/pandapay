@@ -1,3 +1,6 @@
+import '../personal/personal_rule_engine.dart';
+import '../personal/personal_rule_store.dart';
+import '../migration/legacy_replay.dart';
 import 'dart:convert';
 import 'dart:io';
 
@@ -68,7 +71,25 @@ class SmsV2Runtime {
   final bool Function() accountIsCurrent;
   final Map<String, String> categoryIdBySlug;
   final DateTime Function() clock;
-  final RuleEngine _engine = RuleEngine();
+  late final PersonalRuleStore _personalRules = PersonalRuleStore(_state);
+  late final RuleEngine _engine = PersonalRuleEngine(
+    store: _personalRules,
+    instruments: InstrumentStore(financial.database.db, namespace: namespace),
+  );
+  String _revision(String shared) =>
+      '$shared:personal:${_personalRules.revision}';
+  LegacyReplay migration(RuleBundle bundle) => LegacyReplay(
+    financial: financial,
+    namespace: namespace,
+    bundle: bundle,
+    appVersion: appVersion,
+    catalogue: catalogue,
+    categoryIdBySlug: categoryIdBySlug,
+    accountIsCurrent: accountIsCurrent,
+    engine: _engine,
+  );
+  Future<ReplayReport> migrationDryRun() async =>
+      migration(await activeBundle()).dryRun();
   late final _state = SyncStateStore(
     financial.database.db,
     namespace: namespace,
@@ -141,7 +162,7 @@ class SmsV2Runtime {
         confirmedHistory: categories.confirmedHistory,
         categoryIdBySlug: categoryIdBySlug,
         engine: _engine,
-        revision: overlay.revision,
+        revision: _revision(overlay.revision),
       );
       for (final history in [true, false]) {
         final selected = chunk
@@ -268,6 +289,13 @@ class SmsV2Runtime {
       /* Retain the verified cache. */
     }
     _checkAccount();
+    final replay = migration(await activeBundle());
+    if (_bundle!.rules.isNotEmpty &&
+        replay.hasLegacyHistory &&
+        replay.savedReport() == null) {
+      await replay.run();
+    }
+    _checkAccount();
     final intake = SmsIntakeRepository(financial.database);
     while (accountIsCurrent()) {
       final pending = intake.pending(namespace, limit: 200);
@@ -330,7 +358,7 @@ class SmsV2Runtime {
     }
     final active = ProvisionalStore(_state).overlay(_bundle!);
     final previousRevision = _state.get('pipeline:revision');
-    if (previousRevision != active.revision) {
+    if (previousRevision != _revision(active.revision)) {
       final unknown = financial.database.db.select(
         "SELECT source_key FROM sms_source_decisions WHERE namespace=? AND policy_version='v2' AND decision='unknown'",
         [namespace],
@@ -346,7 +374,7 @@ class SmsV2Runtime {
         ];
         if (messages.isNotEmpty) await capture(messages, backfill: true);
       }
-      _state.put('pipeline:revision', active.revision);
+      _state.put('pipeline:revision', _revision(active.revision));
     }
   }
 }

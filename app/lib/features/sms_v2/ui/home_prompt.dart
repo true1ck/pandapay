@@ -1,3 +1,4 @@
+import 'migration_report_screen.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
@@ -12,6 +13,9 @@ class SmsV2HomePrompt extends ConsumerWidget {
     if (!ref.watch(smsPipelineV2EnabledProvider)) {
       return const SizedBox.shrink();
     }
+    final available =
+        ref.watch(instrumentsProvider).valueOrNull ?? const <Instrument>[];
+    if (available.isEmpty) return const SizedBox.shrink();
     final detected =
         (ref.watch(instrumentsProvider).valueOrNull ?? const <Instrument>[])
             .where((i) => i.status == InstrumentStatus.detected)
@@ -20,6 +24,17 @@ class SmsV2HomePrompt extends ConsumerWidget {
       padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 8),
       child: Column(
         children: [
+          if (ref.watch(migrationPromptProvider).valueOrNull case final report?)
+            Card(
+              child: ListTile(
+                leading: const Icon(Icons.history),
+                title: const Text('Your history has been rechecked'),
+                subtitle: Text(
+                  '${report.duplicatesMerged} duplicate entries merged • ${report.holdsRemoved} holds corrected',
+                ),
+                onTap: () => context.push('/sms-v2/migration'),
+              ),
+            ),
           if (detected > 0)
             Card(
               child: ListTile(
@@ -46,6 +61,14 @@ class SmsV2HomePrompt extends ConsumerWidget {
               ActionChip(
                 label: const Text('IPOs'),
                 onPressed: () => context.push('/sms-v2/ipos'),
+              ),
+              ActionChip(
+                label: const Text('History update'),
+                onPressed: () => context.push('/sms-v2/migration'),
+              ),
+              ActionChip(
+                label: const Text('Subscriptions'),
+                onPressed: () => context.push('/sms-v2/subscriptions'),
               ),
               ActionChip(
                 label: const Text('Money in'),

@@ -1,3 +1,5 @@
+import 'package:pandapay/features/sms_v2/ui/transaction_actions.dart';
+import 'package:pandapay/data/user_cards_repository.dart';
 import 'dart:convert';
 import 'dart:io';
 import 'package:flutter_test/flutter_test.dart';
@@ -392,6 +394,54 @@ void main() {
           database.db,
           namespace: namespace,
         ).get(target.eventId)!.legs.map((leg) => leg.toJson()).toList(),
+      );
+    },
+  );
+  test(
+    'transaction edit and delete update facts locally and never require legacy HTTP',
+    () {
+      final original = financial
+          .entities(namespace, 'transactions')
+          .map(TransactionEntry.fromJson)
+          .first;
+      final actions = SmsTransactionActions(controller: controller());
+      final date = DateTime.utc(2026, 10, 31);
+      actions.edit(
+        original,
+        amountMinor: 7500,
+        merchant: 'SYNTH EDITED',
+        occurredAt: date,
+        eventType: EventType.purchase,
+      );
+      final updated = financial
+          .entities(namespace, 'transactions')
+          .map(TransactionEntry.fromJson)
+          .singleWhere((r) => r.id == original.id);
+      expect(updated.amount.paise, 7500);
+      expect(updated.merchantName, 'SYNTH EDITED');
+      expect(updated.occurredAt, date);
+      actions.hide(updated);
+      expect(
+        EventStore(
+          database.db,
+          namespace: namespace,
+        ).get(original.eventId!)!.type,
+        EventType.unknown,
+      );
+      expect(
+        LedgerStore(
+          database.db,
+          namespace: namespace,
+        ).forEvent(original.eventId!),
+        isEmpty,
+      );
+      actions.restore(updated);
+      expect(
+        LedgerStore(
+          database.db,
+          namespace: namespace,
+        ).forEvent(original.eventId!).single.amountMinor,
+        7500,
       );
     },
   );

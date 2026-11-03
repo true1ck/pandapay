@@ -31,6 +31,22 @@ VALUES(?,?,?,?,1,?,?) ON CONFLICT(namespace,day,rule_id,rule_version) DO UPDATE 
     );
   }
 
+  void correction({
+    required DateTime at,
+    required String ruleId,
+    required int ruleVersion,
+  }) {
+    if (ruleVersion < 1 ||
+        ruleId.startsWith('PERSONAL-') ||
+        ruleId.contains(':local:'))
+      return;
+    final day = at.toUtc().toIso8601String().substring(0, 10);
+    db.execute(
+      'UPDATE v2_rule_stats_by_account SET corrected=corrected+1 WHERE namespace=? AND day=? AND rule_id=? AND rule_version=?',
+      [namespace, day, ruleId, ruleVersion],
+    );
+  }
+
   Map<String, Object?>? payload(
     DateTime now, {
     required String appVersion,

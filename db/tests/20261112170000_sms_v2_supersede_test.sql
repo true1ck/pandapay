@@ -16,6 +16,7 @@ INSERT INTO transactions(profile_id,source_key,source,amount_inr,occurred_at,sta
  VALUES(:'p1'::uuid,'synthetic:bank','sms',100,now(),'superseded',repeat('a',64),true),
        (:'p1'::uuid,'synthetic:card','sms_bulk',100,now(),'superseded',repeat('a',64),true),
        (:'p2'::uuid,'synthetic:other','sms',100,now(),'superseded',repeat('b',64),true),
+       (:'p1'::uuid,'synthetic:nonmoney','sms',100,now(),'superseded',NULL,true),
        (:'p1'::uuid,'synthetic:manual','manual',50,now(),'active',NULL,true),
        (:'p1'::uuid,'synthetic:deleted','sms',25,now(),'deleted',NULL,true);
 INSERT INTO transactions(profile_id,source_key,source,amount_inr,occurred_at,status,event_id,pipeline_version,state_applied,is_backfill)
@@ -62,13 +63,13 @@ DO $$ BEGIN
 END $$;
 SELECT set_config('pandapay.admin_permission','learning.publish',true);
 DO $$ BEGIN
- IF pandapay.sms_v2_unsupersede(current_setting('test.wp16_p1')::uuid)<>2 THEN RAISE EXCEPTION 'legacy restore count wrong'; END IF;
+ IF pandapay.sms_v2_unsupersede(current_setting('test.wp16_p1')::uuid)<>3 THEN RAISE EXCEPTION 'legacy restore count wrong'; END IF;
  IF pandapay.sms_v2_unsupersede(current_setting('test.wp16_p1')::uuid)<>0 THEN RAISE EXCEPTION 'rollback not idempotent'; END IF;
 END $$;
 RESET ROLE;
 RESET SESSION AUTHORIZATION;
 DO $$ BEGIN
- IF (SELECT count(*) FROM transactions WHERE profile_id=current_setting('test.wp16_p1')::uuid AND status='active')<>3 THEN RAISE EXCEPTION 'restore visibility wrong'; END IF;
+ IF (SELECT count(*) FROM transactions WHERE profile_id=current_setting('test.wp16_p1')::uuid AND status='active')<>4 THEN RAISE EXCEPTION 'restore visibility wrong'; END IF;
  IF (SELECT status::text FROM transactions WHERE source_key='synthetic:v2')<>'ignored' THEN RAISE EXCEPTION 'v2 replacement still visible'; END IF;
  IF (SELECT state_applied FROM transactions WHERE source_key='synthetic:bank')<>true THEN RAISE EXCEPTION 'historical card state changed'; END IF;
  IF (SELECT status::text FROM transactions WHERE source_key='synthetic:deleted')<>'deleted' THEN RAISE EXCEPTION 'deleted row resurrected'; END IF;

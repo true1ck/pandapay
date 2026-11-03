@@ -25,8 +25,9 @@ class TemplateOriginStore {
     final previous = get(remoteHash);
     if (previous != null && previous.senderBrand != senderBrand) return false;
     final hashes = {...?previous?.localHashes};
-    if (!hashes.contains(localHash) && hashes.length >= maxOrigins)
+    if (!hashes.contains(localHash) && hashes.length >= maxOrigins) {
       return false;
+    }
     hashes.add(localHash);
     state.put(
       'template:origins:$remoteHash',

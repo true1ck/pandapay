@@ -21,9 +21,9 @@ Each work package is self-contained: an agent needs only the Agent playbook, the
 | 12 | Correction trace and `sms-fix-case` skill | M2 | 00, 08 | `api/src/sms_v2/corrections_route.js`, corrections migration, `app/lib/features/sms_v2/pipeline/trace.dart`, `app/lib/features/sms_v2/sync/corrections_sync.dart`, `.claude/skills/sms-fix-case/` | Sonnet | Implemented locally; phone review integration in progress |
 | 13 | Security | M2 | 08, 09 | `api/src/sms_v2/security.js`, `app/lib/features/sms_v2/sync/{bundle_verifier,rule_keys,attestation}.dart`, `app/pubspec.yaml` (attestation plugin), platform setup files | Sonnet | In review; production keys, App Check and device audit gates open |
 | 14 | Phone pipeline wiring and batched sync | M2 | 02, 04, 05, 06, 07, 08 | `app/lib/features/sms_v2/pipeline/`, `sync/` (except WP-12 and WP-13 files), `storage/{fact_store,outbox_store,bundle_store,stats_store}.dart`, `providers/`, `app/lib/app/providers.dart` | Opus | In review; capture/sync tests pass, desktop history 103 s; physical device gates open |
-| 15 | Review and confirmation screens | M2 | 14 | `app/lib/features/sms_v2/ui/`, `app/lib/app/router.dart` | Sonnet | In progress; confirmation, inbox, trace and ledger screens |
-| 16 | Data migration and replay | M3 | 14, 08 | `app/lib/features/sms_v2/migration/`, `api/src/sms_v2/legacy_supersede.js`, supersede migration | Opus | In progress; server half implemented (3e1e05c), phone replay and owner dry-run open |
-| 17 | Cutover, cleanup and release | M3 | all | Flag removal, deletions listed in WP-17, minimum-version enforcement, release checklist | Opus + orchestrator | Not started |
+| 15 | Review and confirmation screens | M2 | 14 | `app/lib/features/sms_v2/ui/`, `app/lib/app/router.dart` | Sonnet | Implemented locally. Native acceptance and final review in progress |
+| 16 | Data migration and replay | M3 | 14, 08 | `app/lib/features/sms_v2/migration/`, `api/src/sms_v2/legacy_supersede.js`, supersede migration | Opus | Phone replay and server rollback implemented and tested locally. Owner dry run open |
+| 17 | Cutover, cleanup and release | M3 | all | Flag removal, deletions listed in WP-17, minimum-version enforcement, release checklist | Opus + orchestrator | Blocked on release entry gates |
 
 Parallel lanes in M1: `02 → 03`, `04 → 05 → 06` (06 also waits for 07), `07`, `08` and `09`. In M2, 10, 12 and 13 run in parallel, then 11; WP-14 starts once its M1 inputs are Done, then WP-15. In M3, WP-16 runs, then WP-17.
 

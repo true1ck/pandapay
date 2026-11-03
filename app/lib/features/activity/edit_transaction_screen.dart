@@ -1,3 +1,8 @@
+import '../sms_v2/flag.dart';
+import '../sms_v2/ui/review_controller.dart';
+import '../sms_v2/ui/transaction_actions.dart';
+import '../sms_v2/providers/data_providers.dart';
+import 'package:pandapay_domain/sms_v2.dart' as v2;
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
@@ -89,8 +94,10 @@ class _EditTransactionScreenState extends ConsumerState<EditTransactionScreen> {
     _occurredAt = entry.occurredAt;
     _entryKind = entry.entryKind;
     final destination = entry.selfTransferRule?['destination'];
-    if (entry.entryKind == TxnEntryKind.transfer && destination is Map &&
-        destination['bank'] is String && destination['accountLast4'] is String) {
+    if (entry.entryKind == TxnEntryKind.transfer &&
+        destination is Map &&
+        destination['bank'] is String &&
+        destination['accountLast4'] is String) {
       _selfTransfer = SelfTransferDestination(
         bank: destination['bank'] as String,
         accountLast4: destination['accountLast4'] as String,
@@ -156,7 +163,8 @@ class _EditTransactionScreenState extends ConsumerState<EditTransactionScreen> {
       if (financialChanged) {
         await _submitEdit(amount);
         await _rememberSelfTransfer();
-        if (_selfTransfer == null && _clearedSelfTransfer == null) await _recordSmsEditFeedbackSafely(amount);
+        if (_selfTransfer == null && _clearedSelfTransfer == null)
+          await _recordSmsEditFeedbackSafely(amount);
       }
       ref.invalidate(userCardsProvider);
       ref.invalidate(myCardsProvider);
@@ -173,7 +181,10 @@ class _EditTransactionScreenState extends ConsumerState<EditTransactionScreen> {
       // adapter is intentionally invoked through the dynamic boundary here so
       // old app builds and lightweight repository fakes can keep compiling
       // while the typed data-layer methods roll out.
-      if (categoryChanged && ref.read(isOnlineProvider).valueOrNull != false) {
+      if (categoryChanged &&
+          !(ref.read(smsPipelineV2EnabledProvider) &&
+              original.pipelineVersion == 2) &&
+          ref.read(isOnlineProvider).valueOrNull != false) {
         final result = await _offerCategoryBulkReview(
           targetCategoryId: _categoryId,
         );
@@ -200,7 +211,11 @@ class _EditTransactionScreenState extends ConsumerState<EditTransactionScreen> {
       // rejection five times before dropping it, while telling the user it
       // was saved.
       final offline = ref.read(isOnlineProvider).valueOrNull == false;
-      if (offline && _selfTransfer == null && _clearedSelfTransfer == null) {
+      if (offline &&
+          !(ref.read(smsPipelineV2EnabledProvider) &&
+              original?.pipelineVersion == 2) &&
+          _selfTransfer == null &&
+          _clearedSelfTransfer == null) {
         final queue = await ref.read(syncQueueProvider.future);
         final clientSeq = queue.enqueueUpdate(
           entity: 'transactions',
@@ -278,6 +293,82 @@ class _EditTransactionScreenState extends ConsumerState<EditTransactionScreen> {
   }
 
   Future<void> _submitEdit(double amount) async {
+    final original = _originalEntry;
+    if (ref.read(smsPipelineV2EnabledProvider) &&
+        original?.pipelineVersion == 2) {
+      final namespace = ref.read(cacheNamespaceProvider);
+      final controller = await smsReviewController(ref);
+      final instruments = await ref.read(instrumentsProvider.future);
+      if (!mounted || namespace != ref.read(cacheNamespaceProvider))
+        throw StateError('Account changed');
+      String? instrumentId;
+      if (_userCardId != original!.userCardId ||
+          _instrument != original.instrument) {
+        final matches = instruments
+            .where(
+              (i) =>
+                  i.status == v2.InstrumentStatus.confirmed &&
+                  (_userCardId != null
+                      ? i.userCardId == _userCardId
+                      : switch (_instrument) {
+                          TxnInstrument.upiBank =>
+                            i.kind == v2.InstrumentKind.bankAccount,
+                          TxnInstrument.wallet =>
+                            i.kind == v2.InstrumentKind.wallet,
+                          TxnInstrument.creditCard =>
+                            i.kind == v2.InstrumentKind.creditCard,
+                          TxnInstrument.debitCard =>
+                            i.kind == v2.InstrumentKind.debitCard,
+                          _ => false,
+                        }),
+            )
+            .toList();
+        if (matches.length != 1)
+          throw ArgumentError(
+            'Choose a confirmed account or card in Needs review',
+          );
+        instrumentId = matches.single.instrumentId;
+      }
+      String? category;
+      if (original.categoryId != _categoryId) {
+        category = ref
+            .read(categoriesProvider)
+            .valueOrNull
+            ?.where((c) => c.id == _categoryId)
+            .firstOrNull
+            ?.slug;
+        if (category == null && _categoryId != null)
+          throw ArgumentError(
+            'Choose a supported SMS category in Needs review',
+          );
+        category ??= 'other';
+      }
+      final kind = switch (_entryKind) {
+        TxnEntryKind.spend => v2.EventType.purchase,
+        TxnEntryKind.income => v2.EventType.income,
+        TxnEntryKind.investment => v2.EventType.investment,
+        TxnEntryKind.refund => v2.EventType.refund,
+        TxnEntryKind.transfer => v2.EventType.ownTransfer,
+        _ => v2.EventType.unknown,
+      };
+      final rail = _rail == original.rail
+          ? null
+          : _rail == TxnRail.upiQr
+          ? v2.Rail.upi
+          : v2.Rail.unknown;
+      SmsTransactionActions(controller: controller).edit(
+        original,
+        amountMinor: Money.fromRupees(amount).paise,
+        merchant: _merchantController.text.trim(),
+        occurredAt: _occurredAt ?? original.occurredAt,
+        category: category,
+        instrumentId: instrumentId,
+        eventType: kind,
+        rail: rail,
+      );
+      return;
+    }
+
     final repo = ref.read(userCardsRepositoryProvider);
     if (repo == null) {
       throw const AuthenticationUnavailableException();
@@ -353,7 +444,8 @@ class _EditTransactionScreenState extends ConsumerState<EditTransactionScreen> {
         ref.watch(bankAccountSummariesProvider).valueOrNull ?? const [];
     final choices = <String, SelfTransferDestination>{
       for (final account in accounts)
-        if (account.issuerSlug != null && account.accountLast4 != entry.accountLast4)
+        if (account.issuerSlug != null &&
+            account.accountLast4 != entry.accountLast4)
           '${canonicalBankSender(account.issuerSlug)}:${account.accountLast4}':
               SelfTransferDestination(
                 accountLast4: account.accountLast4,
@@ -404,6 +496,9 @@ class _EditTransactionScreenState extends ConsumerState<EditTransactionScreen> {
   /// Activity. Runs after the PATCH has committed, so a failed or offline save
   /// never produces evidence, and never blocks or fails the user's edit.
   Future<void> _recordSmsEditFeedback(double amount) async {
+    if (ref.read(smsPipelineV2EnabledProvider) &&
+        _originalEntry?.pipelineVersion == 2)
+      return;
     final original = _originalEntry;
     if (original == null) return;
     final categories = ref.read(categoriesProvider).valueOrNull ?? const [];
@@ -803,8 +898,12 @@ class _EditTransactionScreenState extends ConsumerState<EditTransactionScreen> {
                       style: BambooFonts.ui(14.5, color: BambooInk.ink900),
                       decoration: inputDecoration('Kind'),
                       items: [
-                        for (final kind in TxnEntryKind.values.where((kind) =>
-                          (kind != TxnEntryKind.refund && kind != TxnEntryKind.unknown) || kind == _entryKind))
+                        for (final kind in TxnEntryKind.values.where(
+                          (kind) =>
+                              (kind != TxnEntryKind.refund &&
+                                  kind != TxnEntryKind.unknown) ||
+                              kind == _entryKind,
+                        ))
                           DropdownMenuItem(
                             value: kind,
                             child: Text(kind.label),
@@ -857,7 +956,9 @@ class _EditTransactionScreenState extends ConsumerState<EditTransactionScreen> {
                                 () => _applyHistoricalSelfTransferChoice =
                                     value ?? false,
                               ),
-                        title: const Text('Apply to previous matching transfers'),
+                        title: const Text(
+                          'Apply to previous matching transfers',
+                        ),
                         subtitle: const Text(
                           'Reclassifies older matching bank SMS rows; user-locked rows are left unchanged.',
                         ),

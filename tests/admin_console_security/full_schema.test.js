@@ -54,11 +54,11 @@ test('private admin migrations coexist with the complete clean application schem
     '-X', '-q', '-v', 'ON_ERROR_STOP=1', '-f', path.resolve(__dirname, '../../db/tests/20261021143000_referral_operator_controls_test.sql'),
   ], { stdio: 'pipe' });
   // The SMS v2 service must use these same fully migrated private roles.
-  for (const name of ['20261110120000_sms_v2_rules_test.sql', '20261111120000_sms_v2_core_test.sql', '20261112140000_sms_v2_templates_test.sql', '20261112180000_sms_v2_category_drafts_test.sql']) {
+  for (const name of ['20261110120000_sms_v2_rules_test.sql', '20261111120000_sms_v2_core_test.sql', '20261112140000_sms_v2_templates_test.sql', '20261112180000_sms_v2_category_drafts_test.sql', '20261112130000_sms_v2_security_test.sql', '20261112150000_sms_v2_corrections_test.sql', '20261112160000_sms_v2_correction_consent_test.sql', '20261112170000_sms_v2_supersede_test.sql', '20261112190000_sms_v2_consent_lock_alignment_test.sql']) {
     execFileSync('psql', ['-h', socket, '-p', '55487', '-U', 'postgres', '-d', productName,
       '-X', '-q', '-v', 'ON_ERROR_STOP=1', '-f', path.resolve(__dirname, '../../db/tests', name)], { stdio: 'pipe' });
   }
-  execFileSync(process.execPath, ['--test', '--test-concurrency=1', 'api/test/sms_v2/rules_pg.test.js', 'api/test/sms_v2/facts_pg.test.js', 'api/test/sms_v2/templates_pg.test.js', 'api/test/sms_v2/category_pg.test.js'], {
+  execFileSync(process.execPath, ['--test', '--test-concurrency=1', 'api/test/sms_v2/rules_pg.test.js', 'api/test/sms_v2/facts_pg.test.js', 'api/test/sms_v2/templates_pg.test.js', 'api/test/sms_v2/category_pg.test.js', 'api/test/sms_v2/corrections_pg.test.js', 'api/test/sms_v2/legacy_supersede_pg.test.js', 'api/test/sms_v2/consent_ordering_pg.test.js'], {
     cwd: path.resolve(__dirname, '../..'), stdio: 'pipe',
     env: {
       ...process.env,

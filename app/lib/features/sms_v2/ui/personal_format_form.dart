@@ -195,10 +195,11 @@ class _PersonalFormatFormState extends State<PersonalFormatForm> {
               validator: (value) {
                 final text = value?.trim() ?? '';
                 if (text.isNotEmpty &&
-                    (widget.message.body.indexOf(text) < 0 ||
+                    (!widget.message.body.contains(text) ||
                         widget.message.body.indexOf(text) !=
-                            widget.message.body.lastIndexOf(text)))
+                            widget.message.body.lastIndexOf(text))) {
                   return 'Use a name that appears once in the message';
+                }
                 return null;
               },
             ),

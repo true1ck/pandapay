@@ -678,14 +678,15 @@ async function projectTransactions(client, profileId, eventIds, { backfill, deps
   const changed = [];
   for (const [id, row] of rowOf) {
     const spec = specs.get(id);
-    if (!spec || row.status !== 'active') continue;
+    const restoring = row.status === 'ignored' && events.get(id)?.status === 'user_confirmed';
+    if (!spec || (row.status !== 'active' && !restoring)) continue;
     const merged = {
       ...spec,
       merchantName: spec.merchantName ?? row.merchant_name,
       categoryId: spec.categoryId ?? row.category_id,
       userCardId: ['credit_card', 'debit_card'].includes(spec.instrument) ? (spec.userCardId ?? row.user_card_id) : null,
     };
-    if (!sameRow(row, merged)) changed.push({ row, spec: merged });
+    if (restoring || !sameRow(row, merged)) changed.push({ row, spec: merged });
   }
   for (const { row } of changed) {
     if (row.state_applied && rowMovesCard(row)) {
@@ -699,7 +700,7 @@ async function projectTransactions(client, profileId, eventIds, { backfill, deps
           SET amount_inr = r.amount_minor::numeric / 100, occurred_at = r.occurred_at, merchant_name = r.merchant_name,
               category_id = r.category_id, user_card_id = r.user_card_id, rail = r.rail::txn_rail,
               instrument = r.instrument::txn_instrument, entry_kind = r.entry_kind::txn_entry_kind,
-              pipeline_version = 2, state_applied = false
+              pipeline_version = 2, state_applied = false, status = 'active'
          FROM jsonb_to_recordset($2::jsonb) AS r(id uuid, amount_minor bigint, occurred_at timestamptz, merchant_name text,
            category_id uuid, user_card_id uuid, rail text, instrument text, entry_kind text)
         WHERE t.id = r.id AND t.profile_id = $1`,
@@ -756,6 +757,10 @@ async function ingestBatch(client, profileId, body, { backfill = false, deps, ho
   const results = [];
   await upsertInstruments(client, profileId, body.instruments, results);
   await insertFacts(client, profileId, body.items, results);
+  if (hooks?.afterFactsStored) {
+    const factIds = [...new Set(results.filter(r => r.kind === 'fact' && r.status !== 'rejected').map(r => r.id))];
+    if (factIds.length) await hooks.afterFactsStored(client, profileId, factIds);
+  }
   const storedEvents = await upsertEvents(client, profileId, body.events, results);
   if (storedEvents.length && hooks && hooks.afterEventsStored) await hooks.afterEventsStored(client, profileId, storedEvents);
   const acceptedLedger = await upsertLedger(client, profileId, body.ledger, results);

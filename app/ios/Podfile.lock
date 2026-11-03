@@ -26,6 +26,11 @@ PODS:
   - Firebase/Messaging (12.19.0):
     - Firebase/CoreOnly
     - FirebaseMessaging (~> 12.19.0)
+  - firebase_app_check (0.4.8):
+    - Firebase/CoreOnly (~> 12.19.0)
+    - firebase_core
+    - FirebaseAppCheck (~> 12.19.0)
+    - Flutter
   - firebase_core (4.15.0):
     - Firebase/CoreOnly (= 12.19.0)
     - Flutter
@@ -33,6 +38,13 @@ PODS:
     - Firebase/Messaging (= 12.19.0)
     - firebase_core
     - Flutter
+  - FirebaseAppCheck (12.19.0):
+    - AppCheckCore (~> 11.3)
+    - FirebaseAppCheckInterop (~> 12.19.0)
+    - FirebaseCore (~> 12.19.0)
+    - GoogleUtilities/Environment (~> 8.1)
+    - GoogleUtilities/UserDefaults (~> 8.1)
+  - FirebaseAppCheckInterop (12.19.0)
   - FirebaseCore (12.19.0):
     - FirebaseCoreInternal (~> 12.19.0)
     - GoogleUtilities/Environment (~> 8.1)
@@ -219,6 +231,7 @@ DEPENDENCIES:
   - camera_avfoundation (from `.symlinks/plugins/camera_avfoundation/ios`)
   - connectivity_plus (from `.symlinks/plugins/connectivity_plus/ios`)
   - file_picker (from `.symlinks/plugins/file_picker/darwin`)
+  - firebase_app_check (from `.symlinks/plugins/firebase_app_check/ios`)
   - firebase_core (from `.symlinks/plugins/firebase_core/ios`)
   - firebase_messaging (from `.symlinks/plugins/firebase_messaging/ios`)
   - Flutter (from `Flutter`)
@@ -251,6 +264,8 @@ SPEC REPOS:
     - CwlCatchException
     - CwlCatchExceptionSupport
     - Firebase
+    - FirebaseAppCheck
+    - FirebaseAppCheckInterop
     - FirebaseCore
     - FirebaseCoreInternal
     - FirebaseInstallations
@@ -280,6 +295,8 @@ EXTERNAL SOURCES:
     :path: ".symlinks/plugins/connectivity_plus/ios"
   file_picker:
     :path: ".symlinks/plugins/file_picker/darwin"
+  firebase_app_check:
+    :path: ".symlinks/plugins/firebase_app_check/ios"
   firebase_core:
     :path: ".symlinks/plugins/firebase_core/ios"
   firebase_messaging:
@@ -338,8 +355,11 @@ SPEC CHECKSUMS:
   CwlCatchExceptionSupport: 54ccab8d8c78907b57f99717fb19d4cc3bce02dc
   file_picker: 70164d9778c42c47218d6cd79ce435de0856b11a
   Firebase: 7ca191e43724142f79fae653547b3382c45413cc
+  firebase_app_check: ecc734ce54d8918ebbdd3689335312ba189d47c8
   firebase_core: 55de508663ceda7d1dc369a32b327a5655019ae2
   firebase_messaging: df68cb5feefa02766144a50fa5348362a0127008
+  FirebaseAppCheck: d8e84486d3502e42f7807e05562605d800043e5b
+  FirebaseAppCheckInterop: bd4b791ffaed7ae719304af6369d243ddee5e4a0
   FirebaseCore: c990214798d7c568ad436a15ba7da25c7a278c9a
   FirebaseCoreInternal: 656b1c2fd5a1c5976183dc54b73deda78fb26ee3
   FirebaseInstallations: f70a49eed611f5602f373e40974b3b01556ac217

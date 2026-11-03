@@ -21,7 +21,33 @@ async function supersedeLegacy(client, profileId, events) {
   return rows.rowCount;
 }
 
+// A successful non-money fact can replace a legacy parser's spending row
+// without creating an event. Retained facts/source_key provide its rollback
+// provenance; superseded_by_event_id stays null and unsupersede restores it.
+async function supersedeNonMoneyLegacy(client, profileId, factIds) {
+  if (!factIds.length) return 0;
+  const rows = await client.query(
+    `UPDATE transactions t SET status='superseded'
+       WHERE t.profile_id=$1 AND t.pipeline_version=1 AND t.event_id IS NULL
+         AND t.status='active' AND t.source IN ('sms','sms_bulk')
+         AND EXISTS (SELECT 1 FROM sms_v2_facts f
+           WHERE f.profile_id=$1 AND f.fact_id=ANY($2::text[])
+             AND f.source_key=t.source_key
+             AND f.fact_type IN ('bill_due','attempt','balance_snapshot','limit_change','mandate','reward','instrument_hint'))
+         AND NOT EXISTS (SELECT 1 FROM sms_v2_facts f
+           WHERE f.profile_id=$1 AND f.source_key=t.source_key
+             AND f.fact_type IN ('movement','hold'))`,
+    [profileId, factIds],
+  );
+  return rows.rowCount;
+}
+
 function installLegacySupersede(hooks) {
+  const previousFacts = hooks.afterFactsStored;
+  hooks.afterFactsStored = async (client, profileId, factIds) => {
+    await supersedeNonMoneyLegacy(client, profileId, factIds);
+    if (previousFacts) await previousFacts(client, profileId, factIds);
+  };
   const previous = hooks.afterEventsStored;
   hooks.afterEventsStored = async (client, profileId, events) => {
     await supersedeLegacy(client, profileId, events);
@@ -29,4 +55,4 @@ function installLegacySupersede(hooks) {
   };
 }
 
-module.exports = { supersedeLegacy, installLegacySupersede };
+module.exports = { supersedeLegacy, supersedeNonMoneyLegacy, installLegacySupersede };

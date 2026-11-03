@@ -25,6 +25,7 @@ function createHooks(overrides = {}) {
   return {
     aiResultsSince: async () => [], // WP-10
     correctionStatusSince: async () => [], // WP-12
+    afterFactsStored: async () => {}, // WP-16; owner-scoped stored fact ids
     afterEventsStored: async () => {}, // WP-06 / WP-12; runs inside the batch transaction
     latestBundleVersion: async () => 0, // set to the WP-09 rule service below
     ...overrides,

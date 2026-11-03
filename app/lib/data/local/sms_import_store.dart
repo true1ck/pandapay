@@ -1,3 +1,4 @@
+import '../../features/sms_v2/pipeline/intake_gate.dart';
 import 'dart:convert';
 
 import 'package:pandapay_domain/pandapay_domain.dart';
@@ -147,7 +148,7 @@ class SmsImportStore {
       try {
         final feedback = SmsLearningFeedback(store.database, namespace: namespace);
         for (final message in messages) {
-          final triage = classifySmsTriage(message.sender, message.body);
+          final triage = classifySmsV2Intake(message.sender, message.body);
           if (triage.kind == SmsTriageKind.sensitive) continue;
           final sourceKey = smsSourceKey(namespace, message.sender, message.body);
           if (triage.kind == SmsTriageKind.unrelated || triage.kind == SmsTriageKind.promotion) {

@@ -1,3 +1,5 @@
+import '../sms_v2/ui/review_controller.dart';
+import '../sms_v2/ui/transaction_actions.dart';
 import '../sms_v2/flag.dart';
 import '../sms_v2/ui/why_sheet.dart';
 import 'package:flutter/material.dart';
@@ -575,6 +577,21 @@ class _DetailBodyState extends ConsumerState<_DetailBody> {
     });
 
     try {
+      if (ref.read(smsPipelineV2EnabledProvider) &&
+          widget.entry.pipelineVersion == 2) {
+        final namespace = ref.read(cacheNamespaceProvider);
+        final controller = await smsReviewController(ref);
+        if (!mounted || namespace != ref.read(cacheNamespaceProvider)) return;
+        SmsTransactionActions(controller: controller).hide(widget.entry);
+        controller.financial.markInactive(
+          namespace,
+          widget.entry.id,
+          reason: deleting ? null : reason,
+        );
+        ref.invalidate(transactionDetailProvider(widget.entry.id));
+        if (mounted) context.pop(true);
+        return;
+      }
       final repo = ref.read(userCardsRepositoryProvider);
       if (repo == null) throw StateError('Account is unavailable.');
       // Server first: hiding the row locally before the server confirms it
@@ -680,6 +697,16 @@ class _DetailBodyState extends ConsumerState<_DetailBody> {
     });
 
     try {
+      if (ref.read(smsPipelineV2EnabledProvider) &&
+          widget.entry.pipelineVersion == 2) {
+        final namespace = ref.read(cacheNamespaceProvider);
+        final controller = await smsReviewController(ref);
+        if (!mounted || namespace != ref.read(cacheNamespaceProvider)) return;
+        SmsTransactionActions(controller: controller).restore(widget.entry);
+        controller.financial.markActive(namespace, widget.entry.id);
+        ref.invalidate(transactionDetailProvider(widget.entry.id));
+        return;
+      }
       final repo = ref.read(userCardsRepositoryProvider);
       if (repo == null) throw StateError('Account is unavailable.');
       await repo.restoreTransaction(widget.entry.id);

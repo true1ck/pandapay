@@ -1,3 +1,4 @@
+import 'package:pandapay/features/sms_v2/storage/instrument_store.dart';
 import 'dart:convert';
 import 'dart:io';
 
@@ -192,9 +193,79 @@ void main() {
       await puller(client: client).pull();
       expect(store.get(event.eventId)!.confidence, .7);
       (body['events'] as List).single['status'] = 'user_confirmed';
+      (body['updatedAt'] as Map)['events'] = {
+        event.eventId: '2026-11-01T08:00:00Z',
+      };
       await puller(client: client).pull();
       expect(store.get(event.eventId)!.status, EventStatus.userConfirmed);
       expect(store.get(event.eventId)!.confidence, .8);
+      (body['updatedAt'] as Map)['events'] = {
+        event.eventId: '2026-11-01T07:00:00Z',
+      };
+      (body['events'] as List).single['confidence'] = .5;
+      await puller(client: client).pull();
+      expect(store.get(event.eventId)!.confidence, .8);
+    },
+  );
+  test(
+    'instrument conflict adoption rewrites child parents and personal bindings',
+    () async {
+      final incoming = Instrument.fromJson(
+        ((body['instruments'] as List).single as Map).cast<String, Object?>(),
+      );
+      final oldId = generateUuidV4();
+      final local = Instrument.fromJson({
+        ...incoming.toJson(),
+        'instrumentId': oldId,
+      });
+      final child = Instrument(
+        instrumentId: generateUuidV4(),
+        kind: InstrumentKind.debitCard,
+        issuerSlug: local.issuerSlug,
+        maskDigits: '9911',
+        displayName: 'Synthetic child',
+        status: InstrumentStatus.confirmed,
+        parentInstrumentId: oldId,
+        firstSeenAt: local.firstSeenAt,
+        lastSeenAt: local.lastSeenAt,
+        evidenceCount: 1,
+      );
+      final instruments = InstrumentStore(database.db, namespace: 'target');
+      instruments.upsert(local);
+      instruments.upsert(child);
+      final queue = OutboxStore(database.db, namespace: 'target');
+      queue.enqueue('instrument', oldId, local.toJson());
+      queue.enqueue('instrument', child.instrumentId, child.toJson());
+      SyncStateStore(database.db, namespace: 'target').put(
+        'personal:rules',
+        jsonEncode([
+          {'instrumentId': oldId},
+        ]),
+      );
+      await puller(client: MockClient((_) async => response())).pull();
+      expect(instruments.get(oldId), isNull);
+      expect(
+        instruments.get(child.instrumentId)!.parentInstrumentId,
+        incoming.instrumentId,
+      );
+      expect(
+        queue
+            .due(DateTime.utc(2026, 12))
+            .singleWhere((r) => r.id == 'instrument:${child.instrumentId}')
+            .json['parentInstrumentId'],
+        incoming.instrumentId,
+      );
+      expect(
+        (jsonDecode(
+                  SyncStateStore(
+                    database.db,
+                    namespace: 'target',
+                  ).get('personal:rules')!,
+                )
+                as List)
+            .single['instrumentId'],
+        incoming.instrumentId,
+      );
     },
   );
 }

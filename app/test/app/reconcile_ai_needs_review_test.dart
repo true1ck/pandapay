@@ -1,3 +1,4 @@
+import 'package:pandapay/features/sms_v2/flag.dart';
 import 'dart:async';
 import 'dart:io';
 
@@ -120,6 +121,8 @@ void main() {
 
     container = ProviderContainer(
       overrides: [
+        // This suite exercises the retained v1 AI controller explicitly.
+        smsPipelineV2EnabledProvider.overrideWithValue(false),
         cacheNamespaceProvider.overrideWithValue(namespace),
         appDatabaseProvider.overrideWith((ref) async => db),
         responseCacheProvider.overrideWith((ref) async => cache),

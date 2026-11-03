@@ -207,10 +207,20 @@ class FoundInstrumentsList extends StatelessWidget {
                               label: Text('Confirmed'),
                             ),
                           TextButton(
+                            style: TextButton.styleFrom(
+                              foregroundColor: Theme.of(
+                                context,
+                              ).colorScheme.primary,
+                            ),
                             onPressed: () => onReject(instrument),
                             child: const Text('Not mine'),
                           ),
                           TextButton(
+                            style: TextButton.styleFrom(
+                              foregroundColor: Theme.of(
+                                context,
+                              ).colorScheme.primary,
+                            ),
                             onPressed: () => onRename(instrument),
                             child: const Text('Rename'),
                           ),
@@ -252,6 +262,9 @@ class _RenameDialogState extends State<_RenameDialog> {
     ),
     actions: [
       TextButton(
+        style: TextButton.styleFrom(
+          foregroundColor: Theme.of(context).colorScheme.primary,
+        ),
         onPressed: () => Navigator.pop(context),
         child: const Text('Cancel'),
       ),

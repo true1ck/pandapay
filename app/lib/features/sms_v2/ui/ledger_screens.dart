@@ -260,8 +260,9 @@ class LinkedInstrumentUsage extends ConsumerWidget {
   final String? userCardId, accountMask, issuerName;
   @override
   Widget build(BuildContext context, WidgetRef ref) {
-    if (!ref.watch(smsPipelineV2EnabledProvider))
+    if (!ref.watch(smsPipelineV2EnabledProvider)) {
       return const SizedBox.shrink();
+    }
     final model = ref.watch(smsV2LedgerReadModelProvider);
     return model.when(
       loading: () => const LinearProgressIndicator(),

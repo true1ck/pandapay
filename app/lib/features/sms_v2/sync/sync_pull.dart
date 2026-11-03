@@ -154,7 +154,8 @@ class SyncPull {
           final incoming = Event.fromJson(
             (json as Map).cast<String, Object?>(),
           );
-          if (incoming.status == EventStatus.userConfirmed ||
+          if (incoming.status == EventStatus.userConfirmed &&
+                  newer('events', incoming.eventId) ||
               !_dirty('v2_events', 'event_id', incoming.eventId) &&
                   newer('events', incoming.eventId)) {
             _events.upsert(
@@ -254,6 +255,27 @@ class SyncPull {
       'UPDATE v2_facts SET instrument_id=? WHERE namespace=? AND instrument_id=?',
       [serverId, namespace, local.instrumentId],
     );
+    for (final child in _instruments.list().where(
+      (item) => item.parentInstrumentId == local.instrumentId,
+    )) {
+      final dirty = _dirty(
+        'v2_instruments',
+        'instrument_id',
+        child.instrumentId,
+      );
+      _instruments.upsert(
+        child.copyWith(parentInstrumentId: serverId),
+        dirty: dirty,
+      );
+    }
+    final personal = _state.get('personal:rules');
+    if (personal != null) {
+      final rules = jsonDecode(personal) as List;
+      for (final rule in rules.whereType<Map>())
+        if (rule['instrumentId'] == local.instrumentId)
+          rule['instrumentId'] = serverId;
+      _state.put('personal:rules', jsonEncode(rules));
+    }
     void rewrite(Map<String, Object?> json) {
       for (final side in ['from', 'to']) {
         final endpoint = json[side];
@@ -290,6 +312,13 @@ class SyncPull {
         ]);
         json['instrumentId'] = serverId;
         queue.enqueue('instrument', serverId, json);
+      } else if (row['kind'] == 'instrument' &&
+          json['parentInstrumentId'] == local.instrumentId) {
+        json['parentInstrumentId'] = serverId;
+        _db.execute(
+          'UPDATE v2_outbox SET payload=? WHERE namespace=? AND id=?',
+          [jsonEncode(json), namespace, row['id']],
+        );
       } else if (row['kind'] == 'ledger') {
         rewrite(json);
         _db.execute(
