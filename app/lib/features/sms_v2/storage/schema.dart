@@ -11,7 +11,7 @@ abstract final class SmsV2Schema {
 
   /// Bump when a later package adds columns or tables; add the change to
   /// [_migrations] under the new number.
-  static const int version = 1;
+  static const int version = 2;
 
   /// Tables created by this module, in dependency order.
   static const List<String> tableNames = [
@@ -23,6 +23,8 @@ abstract final class SmsV2Schema {
     'v2_rule_bundle',
     'v2_rule_stats',
     'v2_review_items',
+    'v2_sync_state',
+    'v2_rule_stats_by_account',
   ];
 
   static const String _versionTable = 'sms_v2_schema_version';
@@ -121,6 +123,26 @@ CREATE TABLE IF NOT EXISTS v2_review_items (
   PRIMARY KEY (namespace, review_id)
 )''',
       'CREATE INDEX IF NOT EXISTS idx_v2_review_status ON v2_review_items (namespace, status)',
+    ],
+    2: [
+      '''
+CREATE TABLE IF NOT EXISTS v2_sync_state (
+  namespace TEXT NOT NULL,
+  key TEXT NOT NULL,
+  value TEXT NOT NULL,
+  PRIMARY KEY(namespace, key)
+)''',
+      '''
+CREATE TABLE IF NOT EXISTS v2_rule_stats_by_account (
+  namespace TEXT NOT NULL,
+  day TEXT NOT NULL,
+  rule_id TEXT NOT NULL,
+  rule_version INTEGER NOT NULL,
+  hits INTEGER NOT NULL DEFAULT 0,
+  to_review INTEGER NOT NULL DEFAULT 0,
+  corrected INTEGER NOT NULL DEFAULT 0,
+  PRIMARY KEY(namespace, day, rule_id, rule_version)
+)''',
     ],
   };
 
