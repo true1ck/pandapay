@@ -601,6 +601,30 @@
   },
   {
     "method": "GET",
+    "path": "/admin/sms/v2/category-rules",
+    "permission": "learning.read",
+    "freshMfa": false
+  },
+  {
+    "method": "GET",
+    "path": "/admin/sms/v2/category-rules/:id/candidate",
+    "permission": "learning.read",
+    "freshMfa": false
+  },
+  {
+    "method": "PUT",
+    "path": "/admin/sms/v2/category-rules/:id/draft",
+    "permission": "learning.publish",
+    "freshMfa": true
+  },
+  {
+    "method": "POST",
+    "path": "/admin/sms/v2/category-rules/:id/publish",
+    "permission": "learning.publish",
+    "freshMfa": true
+  },
+  {
+    "method": "GET",
     "path": "/admin/sms/v2/templates",
     "permission": "learning.read",
     "freshMfa": false

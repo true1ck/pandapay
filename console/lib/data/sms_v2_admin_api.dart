@@ -80,6 +80,32 @@ class SmsV2AdminApi {
   Future<Map<String, dynamic>> metrics() => request('GET', 'metrics');
   Future<List<Map<String, dynamic>>> bundles() async =>
       _rows((await request('GET', 'bundles'))['bundles']);
+  Future<Map<String, dynamic>> categories() => request('GET', 'category-rules');
+  Future<Map<String, dynamic>> saveCategory(
+    String id,
+    Map<String, dynamic> rule,
+  ) => request(
+    'PUT',
+    'category-rules/${Uri.encodeComponent(id)}/draft',
+    body: rule,
+  );
+  Future<Map<String, dynamic>> categoryCandidates(
+    String id,
+    int revision,
+  ) => request(
+    'GET',
+    'category-rules/${Uri.encodeComponent(id)}/candidate?revision=$revision',
+  );
+  Future<Map<String, dynamic>> publishCategory(
+    String id,
+    int revision,
+    String reason,
+    Map<String, dynamic> reports,
+  ) => request(
+    'POST',
+    'category-rules/${Uri.encodeComponent(id)}/publish',
+    body: {'revision': revision, 'reason': reason, 'goldenReports': reports},
+  );
   static List<Map<String, dynamic>> _rows(Object? rows) => [
     for (final row in rows as List? ?? const [])
       (row as Map).cast<String, dynamic>(),

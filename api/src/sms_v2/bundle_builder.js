@@ -158,7 +158,7 @@ async function mintBundles(s, opts) {
     const signed = signBundle(bundle, signer);
     const row = {
       bundleVersion: nextVersion, manifest, sha256: contentSha256(bundle), signature: signed.signature.value,
-      keyId: signer.keyId, cohort, goldenReport, status: 'active', publishedBy, createdAt: bundle.createdAt, body: bundle,
+      keyId: signer.keyId, cohort, goldenReport: opts.goldenReportsByCohort?.[cohort] || goldenReport, status: 'active', publishedBy, createdAt: bundle.createdAt, body: bundle,
     };
     if (current) await s.setBundleStatus(current.bundleVersion, supersededStatus);
     await s.insertBundle(row);
