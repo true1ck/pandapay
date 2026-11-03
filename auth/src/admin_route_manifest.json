@@ -630,6 +630,12 @@
     "freshMfa": false
   },
   {
+    "method": "PUT",
+    "path": "/admin/sms/v2/corrections/:caseId/example",
+    "permission": "learning.publish",
+    "freshMfa": true
+  },
+  {
     "method": "POST",
     "path": "/admin/sms/v2/corrections/:caseId/decision",
     "permission": "learning.publish",

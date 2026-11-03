@@ -337,7 +337,7 @@ function registerRuleHandlers(router, deps) {
   }));
   router.get('/bundles', wrap(async (req, res) => {
     const rows = await storeFor(req).tx(req.userId, (s) => s.listBundles(100));
-    res.json({ bundles: rows.map((b) => ({ bundleVersion: b.bundleVersion, cohort: b.cohort, status: b.status, manifest: b.manifest, sha256: b.sha256, keyId: b.keyId, publishedBy: b.publishedBy, createdAt: b.createdAt })) });
+    res.json({ bundles: rows.map((b) => ({ bundleVersion: b.bundleVersion, cohort: b.cohort, status: b.status, manifest: b.manifest, sha256: b.sha256, keyId: b.keyId, publishedBy: b.publishedBy, createdAt: b.createdAt, goldenSummary: b.goldenReport ? {counts:b.goldenReport.counts || reportCounts(b.goldenReport),metrics:b.goldenReport.metrics || {}} : null })) });
   }));
 
 }

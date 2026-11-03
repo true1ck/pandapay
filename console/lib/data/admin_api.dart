@@ -274,6 +274,33 @@ class AdminApi {
     'Content-Type': 'application/json',
   };
 
+  /// Feature transport shares this session's browser CSRF and native headers.
+  Future<Map<String, dynamic>> smsV2Request(
+    String method,
+    String path, {
+    Map<String, dynamic>? body,
+  }) async {
+    if (!path.startsWith('/admin/sms/v2/') ||
+        !{'GET', 'POST', 'PUT'}.contains(method)) {
+      throw ArgumentError('Unsupported SMS v2 admin request');
+    }
+    final request = http.Request(method, Uri.parse('$apiBaseUrl$path'))
+      ..headers.addAll(_headers);
+    if (body != null) request.body = jsonEncode(body);
+    final response = await http.Response.fromStream(
+      await _client.send(request).timeout(const Duration(seconds: 10)),
+    );
+    if (response.statusCode < 200 || response.statusCode >= 300) {
+      throw AdminApiException(
+        response.statusCode == 403
+            ? 'This action needs permission and recent passkey verification.'
+            : 'SMS rules request failed. Retry after checking the service.',
+        statusCode: response.statusCode,
+      );
+    }
+    return (jsonDecode(response.body) as Map).cast<String, dynamic>();
+  }
+
   Future<bool> isAdmin() async {
     final response = await _client.get(
       Uri.parse('$apiBaseUrl/admin/me'),

@@ -287,6 +287,9 @@ test('draft -> testers -> all -> pause -> rollback, with a bundle change at each
 
     // bundle history lists signer and cohort
     const hist = (await h.call('GET', '/admin/sms/v2/bundles')).json.bundles;
+    assert.ok(hist.some(bundle => bundle.goldenSummary?.counts || bundle.goldenSummary?.metrics));
+    assert.ok(hist.every(bundle => !Object.hasOwn(bundle, 'goldenReport')));
+    assert.ok(hist.some(bundle => bundle.goldenSummary === null));
     assert.ok(hist.length >= 8 && hist.every((b) => b.keyId === 'sms-rules-test' && b.cohort));
   } finally { h.close(); }
 });

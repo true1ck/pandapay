@@ -200,6 +200,8 @@ jobs:
         working-directory: console
         run: |
           flutter pub get
+          dart run tool/copy_golden.dart
+          git diff --exit-code -- assets/sms_golden/
           flutter analyze
 
       - name: Console session regressions and CSP bundle

@@ -62,6 +62,7 @@ flutter:
 
   assets:
     - assets/brand/pandapay_mark.png
+    - assets/sms_golden/
 
   # The private console's CSP permits local resources only. Bundle the text
   # font so Flutter never needs its network-hosted default font to render.
