@@ -14,3 +14,5 @@ The orchestrator also approved the stable-anchor index in the ledger snapshot an
 The golden CLI currently has no --only option. The skill runs the existing complete harness and directs the agent to the exported case's report entry. A future harness filter can make this narrower.
 
 The package syntax checkpoint found a pre-existing generated asset mismatch in api/sms_v2_assets/contracts/sms/v2/api/sync.response.schema.json. The orchestrator will regenerate the copied contracts when integrating the sync contract changes.
+
+The orchestrator approved an additive private PUT /admin/sms/v2/corrections/:caseId/example endpoint. It accepts only source:'synthetic', body, observedAt and expect, requires learning.publish and fresh MFA, locks the owner-authorized case, and audits a content digest. The existing decision request stays frozen. WP-11 can prepare a reviewed synthetic example before sending code_fix.
