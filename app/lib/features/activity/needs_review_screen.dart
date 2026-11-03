@@ -4528,7 +4528,8 @@ class _FillFieldsSheetState extends ConsumerState<_FillFieldsSheet> {
               style: BambooFonts.ui(14.5, color: BambooInk.ink900),
               decoration: inputDecoration('What happened?'),
               items: [
-                for (final kind in TxnEntryKind.values)
+                for (final kind in TxnEntryKind.values.where((kind) =>
+                          (kind != TxnEntryKind.refund && kind != TxnEntryKind.unknown) || kind == _entryKind))
                   DropdownMenuItem(value: kind, child: Text(kind.label)),
               ],
               onChanged: (v) =>

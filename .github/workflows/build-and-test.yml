@@ -93,6 +93,12 @@ jobs:
           JWT_ACCESS_SECRET: ci_only_not_a_real_secret
         run: npm test
 
+      - name: Test SMS v2 server modules
+        working-directory: api
+        env:
+          JWT_ACCESS_SECRET: ci_only_not_a_real_secret
+        run: node --test test/sms_v2/*.test.js
+
       - name: Install auth dependencies
         working-directory: auth
         run: npm ci
@@ -133,6 +139,13 @@ jobs:
         run: |
           (cd packages/pandapay_domain && dart test test/sms_v2/contract_fixtures_test.dart)
           (cd api && npm ci && node --test test/sms_v2/contracts.test.js)
+
+      - name: SMS v2 rule parity and complete golden pipeline
+        run: |
+          cd tools/sms_rules_cli
+          dart pub get
+          node test/regex_parity.mjs ../../rules/sms/v2
+          dart run tool/check_pipeline.dart --baseline ../sms_golden/reports/latest.json
 
       - name: App dependencies
         working-directory: app

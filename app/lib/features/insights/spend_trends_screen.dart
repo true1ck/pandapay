@@ -1,3 +1,6 @@
+import 'package:pandapay_domain/sms_v2.dart' show Totals;
+import '../sms_v2/ledger/providers.dart';
+import '../sms_v2/ledger/reports.dart';
 import 'dart:math' as math;
 
 import 'package:flutter/material.dart';
@@ -1194,7 +1197,9 @@ class _ReportBodyState extends ConsumerState<_ReportBody> {
           .where(
             (entry) =>
                 entry.status == 'active' &&
-                entry.entryKind == TxnEntryKind.spend,
+                (entry.entryKind == TxnEntryKind.spend ||
+                    (ref.read(smsV2ReportingEnabledProvider) &&
+                        entry.entryKind == TxnEntryKind.refund)),
           )
           .toList();
 
@@ -1226,10 +1231,59 @@ class _ReportBodyState extends ConsumerState<_ReportBody> {
   List<TransactionEntry> get _visibleEntries =>
       _filtersActive ? _entriesFor() : _spendEntries;
 
-  Money _sum(List<TransactionEntry> entries) => entries.fold<Money>(
-    const Money.zero(),
-    (sum, entry) => sum + entry.amount,
-  );
+  Money _sum(List<TransactionEntry> entries) {
+    if (ref.read(smsV2ReportingEnabledProvider)) {
+      final model = ref.read(smsV2LedgerReadModelProvider).valueOrNull;
+      if (model != null)
+        return Money.fromPaise(model.totalsForTransactions(entries).spendMinor);
+    }
+    return entries.fold<Money>(
+      const Money.zero(),
+      (sum, entry) => sum + entry.amount,
+    );
+  }
+
+  SpendReport? _ledgerReportCache;
+  SpendReport? get _ledgerReport {
+    if (!ref.read(smsV2ReportingEnabledProvider)) return null;
+    if (_ledgerReportCache != null) return _ledgerReportCache;
+    final model = ref.read(smsV2LedgerReadModelProvider).valueOrNull;
+    if (model == null) return null;
+    if (widget.transactionDetailsLoading) {
+      return _ledgerReportCache = model.spendReport(
+        widget.query,
+        ref.read(clockProvider).now(),
+        bankAccounts: _bankAccounts,
+        monthlySeries: true,
+      );
+    }
+    final selection = SpendingSelection(
+      payment: _paymentFilter,
+      categories: _categoryFilters,
+      merchant: _merchantFilter,
+      card: _cardFilter,
+      tagIds: _tagFilters,
+      untagged: _untagged,
+    );
+    final rows = widget.transactions
+        .where(
+          (entry) => selection.matches(
+            entry,
+            tags: _tagsFor(entry).map((t) => t.id),
+            bankAccounts: _bankAccounts,
+          ),
+        )
+        .toList();
+    return _ledgerReportCache = LedgerReadModel(
+      ledger: model.snapshot(selected: rows),
+      transactions: rows,
+    ).spendReport(
+      widget.query,
+      ref.read(clockProvider).now(),
+      bankAccounts: _bankAccounts,
+      monthlySeries: true,
+    );
+  }
 
   String _categoryName(TransactionEntry entry) => entry.categoryLabel;
 
@@ -1311,6 +1365,7 @@ class _ReportBodyState extends ConsumerState<_ReportBody> {
   }
 
   List<SpendBreakdownRow> _categoryRows() {
+    if (_ledgerReport case final report?) return report.byCategory;
     if (!_filtersActive && widget.report.byCategory.isNotEmpty) {
       return widget.report.byCategory;
     }
@@ -1318,6 +1373,7 @@ class _ReportBodyState extends ConsumerState<_ReportBody> {
   }
 
   List<SpendBreakdownRow> _merchantRows() {
+    if (_ledgerReport case final report?) return report.byMerchant;
     if (!_filtersActive && widget.report.byMerchant.isNotEmpty) {
       return widget.report.byMerchant;
     }
@@ -1325,6 +1381,7 @@ class _ReportBodyState extends ConsumerState<_ReportBody> {
   }
 
   List<CardSpendRow> _cardRows() {
+    if (_ledgerReport case final report?) return report.byCard;
     // Keep the aggregate report visible while detail rows are loading. Once
     // loaded, group the same transactions users can expand so bank-account
     // suffixes and unlinked cards are preserved consistently.
@@ -1362,6 +1419,7 @@ class _ReportBodyState extends ConsumerState<_ReportBody> {
   }
 
   List<InstrumentSpendRow> _instrumentRows() {
+    if (_ledgerReport case final report?) return report.byInstrument;
     if (!_filtersActive && widget.report.byInstrument.isNotEmpty) {
       return widget.report.byInstrument;
     }
@@ -1410,6 +1468,7 @@ class _ReportBodyState extends ConsumerState<_ReportBody> {
   }
 
   List<SpendSeriesPoint> _seriesFor(SpendReport report) {
+    if (_ledgerReport case final report?) return report.series;
     final totals = <DateTime, Money>{};
     final counts = <DateTime, int>{};
     for (final entry in _visibleEntries) {
@@ -1512,8 +1571,17 @@ class _ReportBodyState extends ConsumerState<_ReportBody> {
   }
 
   List<TransactionEntry> _transactionsForMerchant(SpendBreakdownRow row) {
+    if (ref.read(smsV2ReportingEnabledProvider)) {
+      final model = ref.read(smsV2LedgerReadModelProvider).valueOrNull;
+      if (model != null) {
+        return _visibleEntries
+            .where((entry) => model.merchantKeyForTransaction(entry) == row.label)
+            .toList();
+      }
+    }
     final target = row.label.trim().toLowerCase();
-    final isUnknownMerchantRow = target == 'unknown merchant' ||
+    final isUnknownMerchantRow =
+        target == 'unknown merchant' ||
         target == 'merchant unknown' ||
         target == 'recipient unknown' ||
         target == 'unknown';
@@ -1551,6 +1619,12 @@ class _ReportBodyState extends ConsumerState<_ReportBody> {
         bankAccounts: _bankAccounts,
         tags: _allTags,
         tagsFor: _tagsFor,
+        totalForEntries: ref.read(smsV2ReportingEnabledProvider)
+            ? ref
+                  .read(smsV2LedgerReadModelProvider)
+                  .valueOrNull
+                  ?.totalsForTransactions
+            : null,
         initial: _SpendFilterSelection(
           payment: _paymentFilter,
           categories: _categoryFilters,
@@ -1590,6 +1664,10 @@ class _ReportBodyState extends ConsumerState<_ReportBody> {
 
   @override
   Widget build(BuildContext context) {
+    _ledgerReportCache = null;
+    if (ref.watch(smsV2ReportingEnabledProvider))
+      ref.watch(smsV2LedgerReadModelProvider);
+
     ref.watch(transactionTagsProvider);
     ref.watch(bankAccountSummariesProvider);
     final report = widget.report;
@@ -1606,7 +1684,11 @@ class _ReportBodyState extends ConsumerState<_ReportBody> {
         widget.transactionDetailsLoading &&
         _spendEntries.isEmpty;
     final tagGroups = _tab == _SpendingTab.tags && !showFilteredLoading
-        ? projectSpendingTags(_visibleEntries, tagsFor: _tagsFor)
+        ? projectSpendingTags(
+            _visibleEntries,
+            tagsFor: _tagsFor,
+            subtotal: ref.read(smsV2ReportingEnabledProvider) ? _sum : null,
+          )
         : const <SpendingTagGroup>[];
 
     // Keep row metadata cheap. Transaction filtering and widget construction
@@ -1826,6 +1908,7 @@ class _ReportBodyState extends ConsumerState<_ReportBody> {
   }
 
   SpendReport _filteredReport(SpendReport report, Money total) {
+    if (_ledgerReport case final projected?) return projected;
     final count = _visibleCount();
     return SpendReport(
       period: report.period,
@@ -1928,8 +2011,7 @@ class _SpendingExpandableRow extends StatefulWidget {
   });
 
   @override
-  State<_SpendingExpandableRow> createState() =>
-      _SpendingExpandableRowState();
+  State<_SpendingExpandableRow> createState() => _SpendingExpandableRowState();
 }
 
 class _SpendingExpandableRowState extends State<_SpendingExpandableRow> {
@@ -2270,6 +2352,7 @@ class _SpendFilterSelection {
 
 class _SpendFilterSheet extends StatefulWidget {
   final SpendReport report;
+  final Totals Function(Iterable<TransactionEntry>)? totalForEntries;
   final List<TransactionEntry> transactions;
   final Map<String, String> categories;
   final List<String> merchants;
@@ -2281,6 +2364,7 @@ class _SpendFilterSheet extends StatefulWidget {
 
   const _SpendFilterSheet({
     required this.report,
+    this.totalForEntries,
     required this.transactions,
     required this.categories,
     required this.merchants,
@@ -2323,10 +2407,14 @@ class _SpendFilterSheetState extends State<_SpendFilterSheet> {
         .toList();
   }
 
-  Money get _total => _matching.fold<Money>(
-    const Money.zero(),
-    (sum, entry) => sum + entry.amount,
-  );
+  Money get _total {
+    final totals = widget.totalForEntries?.call(_matching);
+    if (totals != null) return Money.fromPaise(totals.spendMinor);
+    return _matching.fold<Money>(
+      const Money.zero(),
+      (sum, entry) => sum + entry.amount,
+    );
+  }
 
   @override
   Widget build(BuildContext context) {
@@ -3402,10 +3490,7 @@ class _InteractiveMonthlyBarChartState
             _monthlyChartMinSlot,
             viewport / widget.series.length,
           );
-          final contentWidth = math.max(
-            viewport,
-            slot * widget.series.length,
-          );
+          final contentWidth = math.max(viewport, slot * widget.series.length);
           final scrollable = contentWidth > viewport + 0.5;
           _slotWidth = contentWidth / widget.series.length;
           _viewportWidth = viewport;
@@ -3439,7 +3524,8 @@ class _InteractiveMonthlyBarChartState
                         height: _monthlyChartHeight,
                         child: GestureDetector(
                           behavior: HitTestBehavior.opaque,
-                          onTapUp: (details) => _selectAt(details.localPosition),
+                          onTapUp: (details) =>
+                              _selectAt(details.localPosition),
                           child: Semantics(
                             label: scrollable
                                 ? 'Monthly spending chart. Swipe sideways to scroll months. Tap a bar to select a month.'
@@ -3537,8 +3623,7 @@ class _MonthlyChartAxisPainter extends CustomPainter {
     final centerY = _monthlyChartHeight - _monthlyChartScrollbarInset;
     final trackPaint = Paint()
       ..color = BambooInk.ink500.withValues(alpha: 0.14);
-    final thumbPaint = Paint()
-      ..color = BambooInk.ink500.withValues(alpha: 0.5);
+    final thumbPaint = Paint()..color = BambooInk.ink500.withValues(alpha: 0.5);
     canvas.drawRRect(
       RRect.fromRectAndRadius(
         Rect.fromLTWH(
@@ -4721,7 +4806,7 @@ class _ExpandableMerchantRow extends StatelessWidget {
   }
 }
 
-class _MerchantGroup extends StatelessWidget {
+class _MerchantGroup extends ConsumerWidget {
   final String merchant;
   final String? vpa;
   final List<TransactionEntry> entries;
@@ -4735,11 +4820,16 @@ class _MerchantGroup extends StatelessWidget {
   });
 
   @override
-  Widget build(BuildContext context) {
-    final amount = entries.fold<Money>(
-      const Money.zero(),
-      (sum, entry) => sum + entry.amount,
-    );
+  Widget build(BuildContext context, WidgetRef ref) {
+    final model = ref.watch(smsV2ReportingEnabledProvider)
+        ? ref.watch(smsV2LedgerReadModelProvider).valueOrNull
+        : null;
+    final amount = model != null
+        ? Money.fromPaise(model.totalsForTransactions(entries).spendMinor)
+        : entries.fold<Money>(
+            const Money.zero(),
+            (sum, entry) => sum + entry.amount,
+          );
     final rewards = entries.fold<Money>(
       const Money.zero(),
       (sum, entry) => sum + (entry.rewardValue ?? const Money.zero()),
@@ -4837,10 +4927,7 @@ class _MerchantGroup extends StatelessWidget {
                           vpa!,
                           maxLines: 1,
                           overflow: TextOverflow.ellipsis,
-                          style: BambooFonts.ui(
-                            10.5,
-                            color: BambooInk.ink500,
-                          ),
+                          style: BambooFonts.ui(10.5, color: BambooInk.ink500),
                         ),
                     ],
                   ),
@@ -4863,8 +4950,7 @@ class _MerchantGroup extends StatelessWidget {
               style: BambooFonts.ui(11, color: BambooInk.ink500),
             ),
             if (entries.every(
-              (entry) =>
-                  MerchantIdentity.cleanName(entry.merchantName) == null,
+              (entry) => MerchantIdentity.cleanName(entry.merchantName) == null,
             ))
               Text(
                 'Tap the payment to add its merchant.',
@@ -4900,8 +4986,7 @@ class _MerchantGroup extends StatelessWidget {
               style: BambooFonts.ui(11, color: BambooInk.ink500),
             ),
             if (entries.every(
-              (entry) =>
-                  MerchantIdentity.cleanName(entry.merchantName) == null,
+              (entry) => MerchantIdentity.cleanName(entry.merchantName) == null,
             ))
               Text(
                 'Tap the payment to add its merchant.',

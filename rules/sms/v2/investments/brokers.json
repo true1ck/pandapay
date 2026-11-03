@@ -772,18 +772,17 @@
   },
   {
     "id": "INV-BROKER-WITHDRAW-CREDIT-01",
-    "version": 1,
+    "version": 2,
     "family": "broker_withdraw",
     "senders": [
       "*"
     ],
     "priority": 840,
     "match": {
-      "pattern": "(?:(?:a/c|acct?\\.?|account)\\s*(?:no\\.?\\s*)?(?:ending\\s*(?:with\\s*|in\\s*)?)?(?:[x*•.]+\\s*)?(?<mask>\\d{2,16})\\b\\s+)?credit(?:ed)?\\s+(?:by|with|of|for)\\s+(?:rs\\.?|inr|₹)\\s*(?<amt>[\\d,]+(?:\\.\\d{1,2})?)[\\s\\S]{0,200}?(?<broker>(?:zerodha|groww|upstox|rksv|kotak\\s*sec\\w*|kotak\\s+neo|indmoney|ind\\s*money|angel\\s*(?:one|broking)|dhan\\b|univest|paytm\\s+money|hdfc\\s*sec\\w*|icici\\s*sec\\w*|icici\\s+direct|5\\s*paisa|motilal\\s+oswal|sharekhan|nu\\s*investors|iccl|indian\\s+clearing|nse\\s+clearing|bse\\s*star|coin\\s+by\\s+zerodha|smallcase|et\\s+money|kuvera|mutual\\s+fund|\\bmf\\b|cams\\b|kfin\\w*)[a-z0-9 .&]*?)(?=\\s*(?:[.,;()]|[\\r\\n]|\\s(?:ref|refno|on|upi|via|umrn|avl|utr|if|call|sms)\\b|-\\s*[a-z]|$))",
+      "pattern": "^(?![\\s\\S]*\\b(?:idcw)\\b)[\\s\\S]*?(?:(?:(?:a/c|acct?\\.?|account)\\s*(?:no\\.?\\s*)?(?:ending\\s*(?:with\\s*|in\\s*)?)?(?:[x*•.]+\\s*)?(?<mask>\\d{2,16})\\b\\s+)?credit(?:ed)?\\s+(?:by|with|of|for)\\s+(?:rs\\.?|inr|₹)\\s*(?<amt>[\\d,]+(?:\\.\\d{1,2})?)[\\s\\S]{0,200}?(?<broker>(?:zerodha|groww|upstox|rksv|kotak\\s*sec\\w*|kotak\\s+neo|indmoney|ind\\s*money|angel\\s*(?:one|broking)|dhan\\b|univest|paytm\\s+money|hdfc\\s*sec\\w*|icici\\s*sec\\w*|icici\\s+direct|5\\s*paisa|motilal\\s+oswal|sharekhan|nu\\s*investors|iccl|indian\\s+clearing|nse\\s+clearing|bse\\s*star|coin\\s+by\\s+zerodha|smallcase|et\\s+money|kuvera|mutual\\s+fund|\\bmf\\b|cams\\b|kfin\\w*)[a-z0-9 .&]*?)(?=\\s*(?:[.,;()]|[\\r\\n]|\\s(?:ref|refno|on|upi|via|umrn|avl|utr|if|call|sms)\\b|-\\s*[a-z]|$)))",
       "flags": "i",
       "rejectAny": [
         "dividend",
-        "idcw",
         "interest",
         "failed",
         "will be credited",
@@ -846,18 +845,17 @@
   },
   {
     "id": "INV-BROKER-WITHDRAW-CREDIT-02",
-    "version": 1,
+    "version": 2,
     "family": "broker_withdraw",
     "senders": [
       "*"
     ],
     "priority": 840,
     "match": {
-      "pattern": "(?:rs\\.?|inr|₹)\\s*(?<amt>[\\d,]+(?:\\.\\d{1,2})?)\\s+(?:has been\\s+|is\\s+|was\\s+)?(?:credited|deposited|received)(?:[\\s\\S]{0,60}?(?:a/c|acct?\\.?|account)\\s*(?:no\\.?\\s*)?(?:ending\\s*(?:with\\s*|in\\s*)?)?(?:[x*•.]+\\s*)?(?<mask>\\d{2,16})\\b)?[\\s\\S]{0,200}?(?<broker>(?:zerodha|groww|upstox|rksv|kotak\\s*sec\\w*|kotak\\s+neo|indmoney|ind\\s*money|angel\\s*(?:one|broking)|dhan\\b|univest|paytm\\s+money|hdfc\\s*sec\\w*|icici\\s*sec\\w*|icici\\s+direct|5\\s*paisa|motilal\\s+oswal|sharekhan|nu\\s*investors|iccl|indian\\s+clearing|nse\\s+clearing|bse\\s*star|coin\\s+by\\s+zerodha|smallcase|et\\s+money|kuvera|mutual\\s+fund|\\bmf\\b|cams\\b|kfin\\w*)[a-z0-9 .&]*?)(?=\\s*(?:[.,;()]|[\\r\\n]|\\s(?:ref|refno|on|upi|via|umrn|avl|utr|if|call|sms)\\b|-\\s*[a-z]|$))",
+      "pattern": "^(?![\\s\\S]*\\b(?:idcw)\\b)[\\s\\S]*?(?:(?:rs\\.?|inr|₹)\\s*(?<amt>[\\d,]+(?:\\.\\d{1,2})?)\\s+(?:has been\\s+|is\\s+|was\\s+)?(?:credited|deposited|received)(?:[\\s\\S]{0,60}?(?:a/c|acct?\\.?|account)\\s*(?:no\\.?\\s*)?(?:ending\\s*(?:with\\s*|in\\s*)?)?(?:[x*•.]+\\s*)?(?<mask>\\d{2,16})\\b)?[\\s\\S]{0,200}?(?<broker>(?:zerodha|groww|upstox|rksv|kotak\\s*sec\\w*|kotak\\s+neo|indmoney|ind\\s*money|angel\\s*(?:one|broking)|dhan\\b|univest|paytm\\s+money|hdfc\\s*sec\\w*|icici\\s*sec\\w*|icici\\s+direct|5\\s*paisa|motilal\\s+oswal|sharekhan|nu\\s*investors|iccl|indian\\s+clearing|nse\\s+clearing|bse\\s*star|coin\\s+by\\s+zerodha|smallcase|et\\s+money|kuvera|mutual\\s+fund|\\bmf\\b|cams\\b|kfin\\w*)[a-z0-9 .&]*?)(?=\\s*(?:[.,;()]|[\\r\\n]|\\s(?:ref|refno|on|upi|via|umrn|avl|utr|if|call|sms)\\b|-\\s*[a-z]|$)))",
       "flags": "i",
       "rejectAny": [
         "dividend",
-        "idcw",
         "interest",
         "failed",
         "will be credited",

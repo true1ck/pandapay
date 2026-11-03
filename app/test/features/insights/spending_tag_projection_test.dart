@@ -2,6 +2,8 @@ import 'package:flutter_test/flutter_test.dart';
 import 'package:pandapay/data/user_cards_repository.dart';
 import 'package:pandapay/features/insights/spending_tag_projection.dart';
 import 'package:pandapay_domain/pandapay_domain.dart';
+import 'package:pandapay/features/sms_v2/ledger/reports.dart';
+import 'package:pandapay_domain/sms_v2_ledger.dart';
 
 TransactionEntry entry(
   String id,
@@ -25,6 +27,31 @@ TransactionEntry entry(
 void main() {
   const trip = TransactionTag(id: 'trip', name: 'Trip');
   const work = TransactionTag(id: 'work', name: 'Work');
+
+  test('ledger subtotal nets refunds for the tag and its category', () {
+    final rows = [
+      entry('purchase', 10000, categoryId: 'dining', tags: [trip]),
+      entry(
+        'refund',
+        4000,
+        categoryId: 'dining',
+        tags: [trip],
+      ).copyWith(entryKind: TxnEntryKind.refund),
+    ];
+    final model = LedgerReadModel(
+      ledger: LedgerSnapshot(entries: [], events: []),
+      transactions: rows,
+    );
+    final group = projectSpendingTags(
+      rows,
+      tagsFor: (row) => row.tags,
+      subtotal: (rows) =>
+          Money.fromPaise(model.totalsForTransactions(rows).spendMinor),
+    ).single;
+    expect(group.total.paise, 6000);
+    expect(group.categories.single.total.paise, 6000);
+    expect(group.entriesForCategory(group.categories.single), rows);
+  });
 
   test('resolves each visible row once and keeps overlapping tag totals', () {
     final first = entry('one', 500, categoryId: 'dining', tags: [trip, work]);

@@ -1,3 +1,5 @@
+import '../sms_v2/ledger/providers.dart';
+import '../../data/spend_reports_repository.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:pandapay_domain/pandapay_domain.dart';
 
@@ -240,16 +242,32 @@ insightsOverviewProvider = FutureProvider.family<InsightsOverview, InsightsPerio
   final productsByUserCardId = {for (final (uc, p) in pairs) uc.id: p};
   final allProducts = [for (final (_, p) in pairs) p];
 
-  final transactions = await loadTransactionsWithOfflineCache(
-    ref,
-    repo: repo,
-    cacheKey:
-        'insights_transactions:${period.name}:${from.toIso8601String()}:${toExclusive.toIso8601String()}',
-    from: from,
-    to: toInclusive,
-    preferCached: true,
-    onBackgroundRefresh: () => ref.invalidate(insightsOverviewProvider(period)),
+  final ledgerModel = ref.watch(smsV2ReportingEnabledProvider)
+      ? await ref.watch(smsV2LedgerReadModelProvider.future)
+      : null;
+  final ledgerReport = ledgerModel?.spendReport(
+    SpendReportQuery.custom(from: from, to: toInclusive),
+    now,
   );
+  final transactions =
+      ledgerModel?.transactions
+          .where(
+            (t) =>
+                !t.occurredAt.isBefore(from) &&
+                t.occurredAt.isBefore(toExclusive),
+          )
+          .toList() ??
+      await loadTransactionsWithOfflineCache(
+        ref,
+        repo: repo,
+        cacheKey:
+            'insights_transactions:${period.name}:${from.toIso8601String()}:${toExclusive.toIso8601String()}',
+        from: from,
+        to: toInclusive,
+        preferCached: true,
+        onBackgroundRefresh: () =>
+            ref.invalidate(insightsOverviewProvider(period)),
+      );
   // Insights is a spending/rewards view. Keep income, investments and
   // transfers out of both the spend total and the reward/card comparisons.
   // The API exposes entry_kind so this remains correct for SMS-imported rows
@@ -262,10 +280,10 @@ insightsOverviewProvider = FutureProvider.family<InsightsOverview, InsightsPerio
             t.amount.paise > 0,
       )
       .toList();
-  if (active.isEmpty) return InsightsOverview.empty;
+  if (active.isEmpty && ledgerReport == null) return InsightsOverview.empty;
 
   var earned = const Money.zero();
-  var spend = const Money.zero();
+  var spend = ledgerReport?.spend.total ?? const Money.zero();
   var missed = const Money.zero();
   var missedCount = 0;
   final byCategory = <String, Money>{};
@@ -273,7 +291,7 @@ insightsOverviewProvider = FutureProvider.family<InsightsOverview, InsightsPerio
   final missedRows = <MissedEarning>[];
 
   for (final txn in active) {
-    spend += txn.amount;
+    if (ledgerReport == null) spend += txn.amount;
 
     // Null reward means "not known", not "earned nothing" — such a row is
     // left out of the earned total and its category bar entirely rather
@@ -337,7 +355,7 @@ insightsOverviewProvider = FutureProvider.family<InsightsOverview, InsightsPerio
     spend: spend,
     missed: missed,
     missedCount: missedCount,
-    transactionCount: active.length,
+    transactionCount: ledgerReport?.spend.txnCount ?? active.length,
     byCategory: categories,
     byCard: cards,
     topMissed: missedRows.take(3).toList(),

@@ -273,16 +273,22 @@ enum TxnEntryKind {
   spend('spend', 'Spending'),
   income('income', 'Money in'),
   investment('investment', 'Investment'),
-  transfer('transfer', 'Transfer');
+  transfer('transfer', 'Transfer'),
+  refund('refund', 'Refund'),
+  unknown('unknown', 'Unknown');
 
   final String wireValue;
   final String label;
   const TxnEntryKind(this.wireValue, this.label);
 
-  static TxnEntryKind fromJson(String? value) => TxnEntryKind.values.firstWhere(
-    (k) => k.wireValue == value,
-    orElse: () => TxnEntryKind.spend,
-  );
+  // Historical receipt imports used `payment` for a spend. Keep that known
+  // alias explicit; an unrecognised future kind must never become spending.
+  static TxnEntryKind fromJson(String? value) => value == 'payment'
+      ? TxnEntryKind.spend
+      : TxnEntryKind.values.firstWhere(
+          (k) => k.wireValue == value,
+          orElse: () => TxnEntryKind.unknown,
+        );
 }
 
 /// What the user has told PandaPay about autopay on a card — migration
@@ -3217,6 +3223,8 @@ class TransactionEntry {
   final Map<String, dynamic>? selfTransferRule;
   final String? sourceKey;
   final String id;
+  final int pipelineVersion;
+  final String? eventId;
   final Money amount;
   final DateTime occurredAt;
   final String? merchantName;
@@ -3301,6 +3309,8 @@ class TransactionEntry {
     this.selfTransferRule,
     this.sourceKey,
     required this.id,
+    this.pipelineVersion = 1,
+    this.eventId,
     required this.amount,
     required this.occurredAt,
     this.merchantName,
@@ -3345,6 +3355,8 @@ class TransactionEntry {
         : null;
     return {
       'id': id,
+      'pipeline_version': pipelineVersion,
+      'event_id': eventId,
       'source_key': sourceKey,
       'amount_inr': amount.rupees,
       'occurred_at': occurredAt.toIso8601String(),
@@ -3390,6 +3402,8 @@ class TransactionEntry {
       selfTransferRule: selfTransferRule,
       sourceKey: sourceKey,
       id: id,
+      pipelineVersion: pipelineVersion,
+      eventId: eventId,
       amount: amount,
       occurredAt: occurredAt,
       merchantName: merchantName ?? this.merchantName,
@@ -3438,9 +3452,12 @@ class TransactionEntry {
     final rawCategoryId = json['category_id'] as String?;
     final userCategoryId = json['user_category_id'] as String?;
     return TransactionEntry(
-      selfTransferRule: (json['self_transfer_rule'] as Map?)?.cast<String, dynamic>(),
+      selfTransferRule: (json['self_transfer_rule'] as Map?)
+          ?.cast<String, dynamic>(),
       sourceKey: json['source_key'] as String?,
       id: json['id'] as String,
+      pipelineVersion: (json['pipeline_version'] as num?)?.toInt() ?? 1,
+      eventId: json['event_id'] as String?,
       amount: Money.fromRupees(_num(json['amount_inr'])),
       occurredAt: DateTime.parse(json['occurred_at'] as String),
       merchantName: json['merchant_name'] as String?,

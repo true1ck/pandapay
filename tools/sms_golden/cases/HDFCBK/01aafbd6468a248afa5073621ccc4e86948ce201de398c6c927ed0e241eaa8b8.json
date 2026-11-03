@@ -11,16 +11,9 @@
     }
   ],
   "expect": {
-    "facts": [
-      {
-        "factType": "attempt",
-        "attrs": {
-          "status": "failed",
-          "direction": "debit"
-        }
-      }
-    ]
+    "facts": [],
+    "unknown": true
   },
-  "note": "No amount is printed; contracts.md requires a posted or scheduled amount on an attempt. Contract gap to resolve in WP-03c.",
+  "note": "Financial failed-attempt notice with no printed amount. The frozen attempt contract requires a positive posted/scheduled amount; preserve this as review rather than inventing money or ignoring a financial message. See requests/WP-03c-attempt-without-amount.md.",
   "origin": "sms_family_corpus.json"
 }

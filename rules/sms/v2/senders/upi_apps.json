@@ -1,0 +1,10 @@
+[
+  {
+    "brand": "GPAY",
+    "issuerSlug": "googlepay",
+    "issuerKind": "other",
+    "aliases": [
+      "GOOGLEPAY"
+    ]
+  }
+]

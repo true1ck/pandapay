@@ -38,6 +38,7 @@ class SpendingTagGroup {
 List<SpendingTagGroup> projectSpendingTags(
   Iterable<TransactionEntry> entries, {
   required Iterable<TransactionTag> Function(TransactionEntry) tagsFor,
+  Money Function(List<TransactionEntry>)? subtotal,
 }) {
   final groups = <String, _TagAccumulator>{};
   for (final entry in entries) {
@@ -50,7 +51,7 @@ List<SpendingTagGroup> projectSpendingTags(
       group.add(entry);
     }
   }
-  final result = groups.values.map((group) => group.finish()).toList()
+  final result = groups.values.map((group) => group.finish(subtotal)).toList()
     ..sort((a, b) => b.total.paise.compareTo(a.total.paise));
   return List.unmodifiable(result);
 }
@@ -75,9 +76,10 @@ class _TagAccumulator {
         .add(entry);
   }
 
-  SpendingTagGroup finish() {
-    final rows = categories.values.map((category) => category.row).toList()
-      ..sort((a, b) => b.total.paise.compareTo(a.total.paise));
+  SpendingTagGroup finish(Money Function(List<TransactionEntry>)? subtotal) {
+    final rows =
+        categories.values.map((category) => category.row(subtotal)).toList()
+          ..sort((a, b) => b.total.paise.compareTo(a.total.paise));
     return SpendingTagGroup._(
       Map.unmodifiable({
         for (final category in categories.entries)
@@ -86,7 +88,7 @@ class _TagAccumulator {
           ),
       }),
       tag: tag,
-      total: Money.fromPaise(totalPaise),
+      total: subtotal?.call(entries) ?? Money.fromPaise(totalPaise),
       entries: List.unmodifiable(entries),
       categories: List.unmodifiable(rows),
     );
@@ -106,10 +108,11 @@ class _CategoryAccumulator {
     totalPaise += entry.amount.paise;
   }
 
-  SpendBreakdownRow get row => SpendBreakdownRow(
-    label: label,
-    categoryId: categoryId,
-    total: Money.fromPaise(totalPaise),
-    txnCount: entries.length,
-  );
+  SpendBreakdownRow row(Money Function(List<TransactionEntry>)? subtotal) =>
+      SpendBreakdownRow(
+        label: label,
+        categoryId: categoryId,
+        total: subtotal?.call(entries) ?? Money.fromPaise(totalPaise),
+        txnCount: entries.length,
+      );
 }

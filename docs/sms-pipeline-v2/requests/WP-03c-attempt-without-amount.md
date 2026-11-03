@@ -12,3 +12,7 @@
 **Files.** `tools/sms_golden/cases/HDFCBK/*` (case `corpus:autopay_failed`), or `contracts/sms/v2/fact.schema.json` for option 2.
 
 **Also noticed (engine, WP-02).** A `balance_snapshot` needs `asOf`, and the engine reads `asOf` only from a regex group. A statement or reminder that prints a total due but no date (for example "Your statement is generated. Total amount due INR 4,200.") therefore cannot become an `outstanding` snapshot and goes to review. Letting `attrs.asOf` fall back to `observedAt` when the group is absent would fix this class without a contract change.
+
+## Integration decision — 3 November 2026
+
+Use option 1: the unchanged amount-less synthetic message expects `unknown`/review, not an impossible amount-bearing attempt. It remains financial and remains in capture-recall and ask-rate measurements. No amount is fabricated, no ignore rule is added and no contract changes. This removes an inconsistent golden expectation; the case still requires review.
