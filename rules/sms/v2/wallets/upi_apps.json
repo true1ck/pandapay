@@ -1,0 +1,62 @@
+[
+  {
+    "id": "UPI-GPAY-PAID-01",
+    "version": 1,
+    "family": "upi_spend",
+    "senders": [
+      "GPAY"
+    ],
+    "priority": 650,
+    "match": {
+      "pattern": "^You paid\\s+(?:Rs\\.?|INR|₹)\\s*(?<amt>[\\d,]+(?:\\.\\d{1,2})?)\\s+to\\s+(?<merchant>.+?)\\s+using Google Pay\\.\\s*UPI Ref(?: No)?\\s*(?<ref_upiRef>\\d{8,})\\.?$",
+      "flags": "i",
+      "rejectAny": [
+        "failed",
+        "declined",
+        "will pay"
+      ]
+    },
+    "emit": [
+      {
+        "factType": "movement",
+        "attrs": {
+          "direction": "debit",
+          "purpose": "purchase",
+          "rail": "upi"
+        },
+        "amounts": [
+          {
+            "role": "posted",
+            "from": "amt",
+            "unit": "INR"
+          }
+        ],
+        "counterparty": {
+          "nameFrom": "merchant",
+          "kind": "merchant",
+          "transforms": [
+            "sanitizeNarration"
+          ]
+        }
+      }
+    ],
+    "confidence": 0.97,
+    "examples": [
+      {
+        "sender": "VM-GPAY-S",
+        "body": "You paid Rs.250.00 to Chai Point using Google Pay. UPI Ref 432100000001.",
+        "expectFactTypes": [
+          "movement"
+        ]
+      },
+      {
+        "sender": "VM-GPAY-S",
+        "body": "Your payment of Rs.250.00 to Chai Point failed using Google Pay.",
+        "expectFactTypes": []
+      }
+    ],
+    "status": "active",
+    "createdBy": "baseline",
+    "updatedAt": "2026-11-03T00:00:00Z"
+  }
+]

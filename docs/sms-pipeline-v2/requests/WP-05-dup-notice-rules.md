@@ -22,3 +22,7 @@ Message: `VM-GPAY-S` `You paid Rs.250.00 to Chai Point using Google Pay. UPI Ref
 ## Effect
 
 Golden today (bundle built from `rules/sms/v2`): `pairsLinked` 7/8 (87.5%), `scenarioEvents` 13/14. With both fixes: 8/8 and 14/14.
+
+## Resolution — 2026-11-03
+
+Implemented whole-word guards for the finance hand-off keywords across the rule source and a GPAY notice rule. GPAY uses the frozen `other` issuer kind and emits no instrument. Regression tests now require all 8 pairs and all 14 event scenarios, with zero duplicate money legs.
