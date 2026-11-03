@@ -30,6 +30,15 @@ COPY --from=deps --chown=node:node /app/node_modules ./node_modules
 COPY --chown=node:node package.json ./
 COPY --chown=node:node src ./src
 
+# SMS pipeline v2. The build context is api/, so contracts/sms/v2 and
+# tools/sms_golden/gates.json are vendored under sms_v2_assets/ (kept in step by
+# scripts/sync_sms_v2_assets.js, checked by `npm run check`). The server refuses
+# to start without the contracts, and rule publishing fails closed without the
+# gates file.
+COPY --chown=node:node sms_v2_assets ./sms_v2_assets
+ENV SMS_V2_CONTRACTS_DIR=/app/sms_v2_assets/contracts/sms/v2 \
+    SMS_V2_GATES_PATH=/app/sms_v2_assets/gates.json
+
 # Never root. A container that is compromised through a dependency should not
 # also be running as uid 0 — `node` is a non-root user the base image already
 # provides, so this costs nothing.

@@ -465,6 +465,22 @@
       "disposition": "platform_ops",
       "reason": "Platform-level worker, telemetry, or learning state; not part of the account-scoped portable export."
     },
+    "sms_v2_instruments": {
+      "disposition": "excluded_with_intent",
+      "reason": "wave-1 scope gap: user-linked SMS pipeline v2 state, not included in the portable export. The phone keeps the source facts and re-uploads on restore; complete PostgreSQL recovery preserves these rows."
+    },
+    "sms_v2_facts": {
+      "disposition": "excluded_with_intent",
+      "reason": "wave-1 scope gap: user-linked SMS pipeline v2 state, not included in the portable export. The phone keeps the source facts and re-uploads on restore; complete PostgreSQL recovery preserves these rows."
+    },
+    "sms_v2_events": {
+      "disposition": "excluded_with_intent",
+      "reason": "wave-1 scope gap: user-linked SMS pipeline v2 state, not included in the portable export. The phone keeps the source facts and re-uploads on restore; complete PostgreSQL recovery preserves these rows."
+    },
+    "sms_v2_ledger_entries": {
+      "disposition": "excluded_with_intent",
+      "reason": "wave-1 scope gap: user-linked SMS pipeline v2 state, not included in the portable export. The phone keeps the source facts and re-uploads on restore; complete PostgreSQL recovery preserves these rows."
+    },
     "sms_rule_bundles": {
       "disposition": "platform_ops",
       "reason": "Platform-level worker, telemetry, or learning state; not part of the account-scoped portable export."

@@ -1,0 +1,26 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://pandapay.app/contracts/sms/v2/api/admin_correction_decision.request.schema.json",
+  "title": "POST /admin/sms/v2/corrections/:caseId/decision request",
+  "type": "object",
+  "required": [
+    "decision",
+    "reason"
+  ],
+  "additionalProperties": false,
+  "properties": {
+    "decision": {
+      "type": "string",
+      "enum": [
+        "data_fix",
+        "code_fix",
+        "not_a_bug"
+      ],
+      "x-code": "request.admin_correction_decision.decision_invalid"
+    },
+    "reason": {
+      "type": "string",
+      "minLength": 1
+    }
+  }
+}

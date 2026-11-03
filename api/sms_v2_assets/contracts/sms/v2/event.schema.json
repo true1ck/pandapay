@@ -1,0 +1,118 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://pandapay.app/contracts/sms/v2/event.schema.json",
+  "title": "Event",
+  "type": "object",
+  "required": [
+    "eventId",
+    "type",
+    "status",
+    "legs",
+    "linkRuleId",
+    "confidence",
+    "occurredAt",
+    "amountMinor"
+  ],
+  "properties": {
+    "eventId": {
+      "type": "string",
+      "pattern": "^[0-9a-f]{64}$",
+      "x-code": "event.id_invalid"
+    },
+    "type": {
+      "type": "string",
+      "enum": [
+        "purchase",
+        "refund",
+        "cashback",
+        "income",
+        "p2p_out",
+        "p2p_in",
+        "own_transfer",
+        "card_bill_payment",
+        "wallet_topup",
+        "investment",
+        "ipo_application",
+        "investment_withdrawal",
+        "dividend",
+        "atm_withdrawal",
+        "fee",
+        "emi",
+        "bill_payment",
+        "subscription_charge",
+        "unknown"
+      ],
+      "x-code": "event.type_invalid"
+    },
+    "status": {
+      "type": "string",
+      "enum": [
+        "complete",
+        "awaiting_leg",
+        "ambiguous",
+        "user_confirmed"
+      ],
+      "x-code": "event.status_invalid"
+    },
+    "legs": {
+      "type": "array",
+      "minItems": 1,
+      "items": {
+        "type": "object",
+        "required": [
+          "factId",
+          "role"
+        ],
+        "additionalProperties": false,
+        "properties": {
+          "factId": {
+            "type": "string",
+            "pattern": "^[0-9a-f]{64}$",
+            "x-code": "event.leg_invalid"
+          },
+          "role": {
+            "type": "string",
+            "enum": [
+              "debit_leg",
+              "credit_leg",
+              "hold_placed",
+              "hold_released",
+              "hold_converted",
+              "original",
+              "reversal",
+              "charge",
+              "duplicate_notice"
+            ],
+            "x-code": "event.leg_role_invalid"
+          }
+        },
+        "x-code": "event.leg_invalid"
+      },
+      "x-codes": {
+        "minItems": "event.legs_empty"
+      }
+    },
+    "linkRuleId": {
+      "type": [
+        "string",
+        "null"
+      ],
+      "minLength": 1
+    },
+    "confidence": {
+      "type": "number",
+      "minimum": 0,
+      "maximum": 1,
+      "x-code": "event.confidence_invalid"
+    },
+    "occurredAt": {
+      "$ref": "common.schema.json#/$defs/utcTime"
+    },
+    "amountMinor": {
+      "type": "integer",
+      "minimum": 0,
+      "x-code": "event.amount_invalid"
+    }
+  },
+  "additionalProperties": false
+}

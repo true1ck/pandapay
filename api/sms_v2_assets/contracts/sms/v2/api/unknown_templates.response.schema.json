@@ -1,0 +1,18 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://pandapay.app/contracts/sms/v2/api/unknown_templates.response.schema.json",
+  "title": "POST /sms/v2/unknown-templates response",
+  "type": "object",
+  "required": [
+    "accepted"
+  ],
+  "additionalProperties": false,
+  "properties": {
+    "accepted": {
+      "type": "array",
+      "items": {
+        "$ref": "../common.schema.json#/$defs/sha256"
+      }
+    }
+  }
+}

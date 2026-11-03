@@ -1,0 +1,21 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://pandapay.app/contracts/sms/v2/api/admin_rule_rollback.request.schema.json",
+  "title": "POST /admin/sms/v2/rules/:id/rollback request",
+  "type": "object",
+  "required": [
+    "toVersion",
+    "reason"
+  ],
+  "additionalProperties": false,
+  "properties": {
+    "toVersion": {
+      "type": "integer",
+      "minimum": 1
+    },
+    "reason": {
+      "type": "string",
+      "minLength": 1
+    }
+  }
+}

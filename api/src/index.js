@@ -328,6 +328,8 @@ app.use(optionalAuth);
 app.use(requestLogger);
 app.use(rejectMalformedClientIp);
 app.use(...createCorsPolicy());
+// SMS pipeline v2 (WP-08): registered ahead of the global 100 KiB JSON parser because facts:batch reads its own, larger body. Routes answer 404 unless the sms_pipeline_v2_enabled flag is on.
+require('./sms_v2').registerSmsV2(app, { requireAuth, requireAdmin, withUserClient, loadUserCardForState, applyTransactionState, reverseTransactionState });
 app.use(jsonBodyParser);
 app.use(jsonBodyErrorHandler);
 
