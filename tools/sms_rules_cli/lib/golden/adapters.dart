@@ -1,7 +1,8 @@
 import 'dart:convert';
 import 'dart:io';
 
-import 'package:pandapay_domain/sms_v2.dart' show smsEngineVersion;
+import 'package:pandapay_domain/sms_v2.dart'
+    show linkForGolden, resolveInstrumentsForGolden, smsEngineVersion;
 
 import 'engine_stage.dart';
 import 'models.dart';
@@ -148,10 +149,50 @@ GoldenAdapters loadDefaultAdapters({String? bundlePath}) {
   if (bundlePath == null) {
     return const GoldenAdapters(label: 'unwired (no --bundle given)');
   }
+  final interpreter = EngineInterpreterStage.fromFile(bundlePath);
   return GoldenAdapters(
-    interpreter: EngineInterpreterStage.fromFile(bundlePath),
+    interpreter: interpreter,
+    instruments: _RegistryInstrumentStage(interpreter),
+    linker: _RuleLinkerStage(interpreter),
     label: 'rule engine $smsEngineVersion + $bundlePath',
   );
+}
+
+/// Stage 2: WP-04's instrument registry over the bundle's senders.
+class _RegistryInstrumentStage implements InstrumentStage {
+  _RegistryInstrumentStage(this.interpreter);
+  final EngineInterpreterStage interpreter;
+
+  @override
+  Future<InstrumentResolution> resolve({
+    required List<Map<String, dynamic>> facts,
+    required List<Map<String, dynamic>> knownInstruments,
+  }) async {
+    final r = resolveInstrumentsForGolden(
+      facts: facts,
+      knownInstruments: knownInstruments,
+      bundle: interpreter.bundle,
+    );
+    return InstrumentResolution(
+      instruments: [for (final i in r.instruments) i.cast<String, dynamic>()],
+      facts: [for (final f in r.facts) f.cast<String, dynamic>()],
+    );
+  }
+}
+
+/// Stage 3: WP-05's rule-driven linker with the bundle's link rules.
+class _RuleLinkerStage implements LinkerStage {
+  _RuleLinkerStage(this.interpreter);
+  final EngineInterpreterStage interpreter;
+
+  @override
+  Future<List<Map<String, dynamic>>> link({
+    required List<Map<String, dynamic>> facts,
+    required List<Map<String, dynamic>> instruments,
+  }) async => [
+    for (final e in linkForGolden(facts: facts, instruments: instruments, bundle: interpreter.bundle))
+      e.cast<String, dynamic>(),
+  ];
 }
 
 /// Replays interpretations that were computed elsewhere, such as the output of
