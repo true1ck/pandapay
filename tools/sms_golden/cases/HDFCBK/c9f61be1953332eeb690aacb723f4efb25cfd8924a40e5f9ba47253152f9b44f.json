@@ -1,0 +1,17 @@
+{
+  "id": "wp03d:emi_conversion_offer",
+  "templateHash": "c9f61be1953332eeb690aacb723f4efb25cfd8924a40e5f9ba47253152f9b44f",
+  "weight": 1,
+  "source": "synthetic",
+  "messages": [
+    {
+      "sender": "VM-HDFCBK-P",
+      "body": "Your txn of Rs. 15,000 on HDFC Bank Card ending 1234 is eligible for conversion to easy EMI. Apply now.",
+      "observedAt": "2026-12-01T09:00:00.000Z"
+    }
+  ],
+  "expect": {
+    "ignore": true
+  },
+  "origin": "wp03d"
+}

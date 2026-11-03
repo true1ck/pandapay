@@ -1,0 +1,33 @@
+{
+  "id": "wp03d:reward_earned_number_first",
+  "templateHash": "0a05b7d367e20f7aec22a1f57372ddbfa4cd5aa1084311a472bd8a534a273e93",
+  "weight": 1,
+  "source": "synthetic",
+  "messages": [
+    {
+      "sender": "VM-HDFCBK-S",
+      "body": "250 Reward Points have been credited to your HDFC Bank Credit Card XX5678 for your spends this month.",
+      "observedAt": "2026-12-01T09:00:00.000Z"
+    }
+  ],
+  "expect": {
+    "facts": [
+      {
+        "factType": "reward",
+        "amounts": [
+          {
+            "role": "points_earned",
+            "minor": 250,
+            "unit": "POINTS"
+          }
+        ],
+        "instrument": {
+          "kind": "credit_card",
+          "issuerSlug": "hdfc",
+          "maskDigits": "5678"
+        }
+      }
+    ]
+  },
+  "origin": "wp03d"
+}

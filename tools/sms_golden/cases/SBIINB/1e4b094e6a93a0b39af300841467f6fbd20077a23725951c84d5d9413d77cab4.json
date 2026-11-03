@@ -1,0 +1,36 @@
+{
+  "id": "wp03d:cashback_bank_account",
+  "templateHash": "1e4b094e6a93a0b39af300841467f6fbd20077a23725951c84d5d9413d77cab4",
+  "weight": 1,
+  "source": "synthetic",
+  "messages": [
+    {
+      "sender": "VM-SBIINB-S",
+      "body": "Cashback of Rs 10 credited to your A/c XX4321 on 02-11-26.",
+      "observedAt": "2026-12-01T09:00:00.000Z"
+    }
+  ],
+  "expect": {
+    "facts": [
+      {
+        "factType": "movement",
+        "attrs": {
+          "direction": "credit",
+          "purpose": "cashback"
+        },
+        "amounts": [
+          {
+            "role": "posted",
+            "minor": 1000
+          }
+        ],
+        "instrument": {
+          "kind": "bank_account",
+          "issuerSlug": "sbi",
+          "maskDigits": "4321"
+        }
+      }
+    ]
+  },
+  "origin": "wp03d"
+}

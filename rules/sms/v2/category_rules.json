@@ -1,0 +1,4529 @@
+[
+  {
+    "merchantKey": "SWIGGY INSTAMART",
+    "match": "token",
+    "senders": [
+      "*"
+    ],
+    "context": [],
+    "category": "groceries",
+    "priority": 900,
+    "source": "catalogue"
+  },
+  {
+    "merchantKey": "INSTAMART",
+    "match": "token",
+    "senders": [
+      "*"
+    ],
+    "context": [],
+    "category": "groceries",
+    "priority": 800,
+    "source": "catalogue"
+  },
+  {
+    "merchantKey": "BLINKIT",
+    "match": "token",
+    "senders": [
+      "*"
+    ],
+    "context": [],
+    "category": "groceries",
+    "priority": 800,
+    "source": "catalogue"
+  },
+  {
+    "merchantKey": "BLINK COMMERCE",
+    "match": "token",
+    "senders": [
+      "*"
+    ],
+    "context": [],
+    "category": "groceries",
+    "priority": 900,
+    "source": "catalogue"
+  },
+  {
+    "merchantKey": "GROFERS",
+    "match": "token",
+    "senders": [
+      "*"
+    ],
+    "context": [],
+    "category": "groceries",
+    "priority": 800,
+    "source": "catalogue"
+  },
+  {
+    "merchantKey": "ZEPTO",
+    "match": "token",
+    "senders": [
+      "*"
+    ],
+    "context": [],
+    "category": "groceries",
+    "priority": 800,
+    "source": "catalogue"
+  },
+  {
+    "merchantKey": "KIRANAKART",
+    "match": "token",
+    "senders": [
+      "*"
+    ],
+    "context": [],
+    "category": "groceries",
+    "priority": 800,
+    "source": "catalogue"
+  },
+  {
+    "merchantKey": "BIGBASKET",
+    "match": "token",
+    "senders": [
+      "*"
+    ],
+    "context": [],
+    "category": "groceries",
+    "priority": 800,
+    "source": "catalogue"
+  },
+  {
+    "merchantKey": "BIG BASKET",
+    "match": "token",
+    "senders": [
+      "*"
+    ],
+    "context": [],
+    "category": "groceries",
+    "priority": 900,
+    "source": "catalogue"
+  },
+  {
+    "merchantKey": "INNOVATIVE RETAIL",
+    "match": "token",
+    "senders": [
+      "*"
+    ],
+    "context": [],
+    "category": "groceries",
+    "priority": 900,
+    "source": "catalogue"
+  },
+  {
+    "merchantKey": "BBDAILY",
+    "match": "token",
+    "senders": [
+      "*"
+    ],
+    "context": [],
+    "category": "groceries",
+    "priority": 800,
+    "source": "catalogue"
+  },
+  {
+    "merchantKey": "BB DAILY",
+    "match": "token",
+    "senders": [
+      "*"
+    ],
+    "context": [],
+    "category": "groceries",
+    "priority": 900,
+    "source": "catalogue"
+  },
+  {
+    "merchantKey": "DMART",
+    "match": "token",
+    "senders": [
+      "*"
+    ],
+    "context": [],
+    "category": "groceries",
+    "priority": 800,
+    "source": "catalogue"
+  },
+  {
+    "merchantKey": "D MART",
+    "match": "token",
+    "senders": [
+      "*"
+    ],
+    "context": [],
+    "category": "groceries",
+    "priority": 900,
+    "source": "catalogue"
+  },
+  {
+    "merchantKey": "AVENUE SUPERMARTS",
+    "match": "token",
+    "senders": [
+      "*"
+    ],
+    "context": [],
+    "category": "groceries",
+    "priority": 900,
+    "source": "catalogue"
+  },
+  {
+    "merchantKey": "JIOMART",
+    "match": "token",
+    "senders": [
+      "*"
+    ],
+    "context": [],
+    "category": "groceries",
+    "priority": 800,
+    "source": "catalogue"
+  },
+  {
+    "merchantKey": "JIO MART",
+    "match": "token",
+    "senders": [
+      "*"
+    ],
+    "context": [],
+    "category": "groceries",
+    "priority": 900,
+    "source": "catalogue"
+  },
+  {
+    "merchantKey": "RELIANCE FRESH",
+    "match": "token",
+    "senders": [
+      "*"
+    ],
+    "context": [],
+    "category": "groceries",
+    "priority": 900,
+    "source": "catalogue"
+  },
+  {
+    "merchantKey": "RELIANCE SMART",
+    "match": "token",
+    "senders": [
+      "*"
+    ],
+    "context": [],
+    "category": "groceries",
+    "priority": 900,
+    "source": "catalogue"
+  },
+  {
+    "merchantKey": "RELIANCE RETAIL",
+    "match": "token",
+    "senders": [
+      "*"
+    ],
+    "context": [],
+    "category": "groceries",
+    "priority": 900,
+    "source": "catalogue"
+  },
+  {
+    "merchantKey": "MORE RETAIL",
+    "match": "token",
+    "senders": [
+      "*"
+    ],
+    "context": [],
+    "category": "groceries",
+    "priority": 900,
+    "source": "catalogue"
+  },
+  {
+    "merchantKey": "NATURES BASKET",
+    "match": "token",
+    "senders": [
+      "*"
+    ],
+    "context": [],
+    "category": "groceries",
+    "priority": 900,
+    "source": "catalogue"
+  },
+  {
+    "merchantKey": "SPAR",
+    "match": "token",
+    "senders": [
+      "*"
+    ],
+    "context": [],
+    "category": "groceries",
+    "priority": 800,
+    "source": "catalogue"
+  },
+  {
+    "merchantKey": "LICIOUS",
+    "match": "token",
+    "senders": [
+      "*"
+    ],
+    "context": [],
+    "category": "groceries",
+    "priority": 800,
+    "source": "catalogue"
+  },
+  {
+    "merchantKey": "COUNTRY DELIGHT",
+    "match": "token",
+    "senders": [
+      "*"
+    ],
+    "context": [],
+    "category": "groceries",
+    "priority": 900,
+    "source": "catalogue"
+  },
+  {
+    "merchantKey": "FRESHTOHOME",
+    "match": "token",
+    "senders": [
+      "*"
+    ],
+    "context": [],
+    "category": "groceries",
+    "priority": 800,
+    "source": "catalogue"
+  },
+  {
+    "merchantKey": "FRESH TO HOME",
+    "match": "token",
+    "senders": [
+      "*"
+    ],
+    "context": [],
+    "category": "groceries",
+    "priority": 900,
+    "source": "catalogue"
+  },
+  {
+    "merchantKey": "DELIGHTFUL GOURMET",
+    "match": "token",
+    "senders": [
+      "*"
+    ],
+    "context": [],
+    "category": "groceries",
+    "priority": 900,
+    "source": "catalogue"
+  },
+  {
+    "merchantKey": "OTIPY",
+    "match": "token",
+    "senders": [
+      "*"
+    ],
+    "context": [],
+    "category": "groceries",
+    "priority": 800,
+    "source": "catalogue"
+  },
+  {
+    "merchantKey": "MILKBASKET",
+    "match": "token",
+    "senders": [
+      "*"
+    ],
+    "context": [],
+    "category": "groceries",
+    "priority": 800,
+    "source": "catalogue"
+  },
+  {
+    "merchantKey": "MILK BASKET",
+    "match": "token",
+    "senders": [
+      "*"
+    ],
+    "context": [],
+    "category": "groceries",
+    "priority": 900,
+    "source": "catalogue"
+  },
+  {
+    "merchantKey": "SMART BAZAAR",
+    "match": "token",
+    "senders": [
+      "*"
+    ],
+    "context": [],
+    "category": "groceries",
+    "priority": 900,
+    "source": "catalogue"
+  },
+  {
+    "merchantKey": "STAR BAZAAR",
+    "match": "token",
+    "senders": [
+      "*"
+    ],
+    "context": [],
+    "category": "groceries",
+    "priority": 900,
+    "source": "catalogue"
+  },
+  {
+    "merchantKey": "SPENCERS",
+    "match": "token",
+    "senders": [
+      "*"
+    ],
+    "context": [],
+    "category": "groceries",
+    "priority": 800,
+    "source": "catalogue"
+  },
+  {
+    "merchantKey": "HYPERCITY",
+    "match": "token",
+    "senders": [
+      "*"
+    ],
+    "context": [],
+    "category": "groceries",
+    "priority": 800,
+    "source": "catalogue"
+  },
+  {
+    "merchantKey": "EASYDAY",
+    "match": "token",
+    "senders": [
+      "*"
+    ],
+    "context": [],
+    "category": "groceries",
+    "priority": 800,
+    "source": "catalogue"
+  },
+  {
+    "merchantKey": "VISHAL MEGA MART",
+    "match": "token",
+    "senders": [
+      "*"
+    ],
+    "context": [],
+    "category": "groceries",
+    "priority": 900,
+    "source": "catalogue"
+  },
+  {
+    "merchantKey": "METRO CASH AND CARRY",
+    "match": "token",
+    "senders": [
+      "*"
+    ],
+    "context": [],
+    "category": "groceries",
+    "priority": 900,
+    "source": "catalogue"
+  },
+  {
+    "merchantKey": "SUPERMARKET",
+    "match": "token",
+    "senders": [
+      "*"
+    ],
+    "context": [],
+    "category": "groceries",
+    "priority": 400,
+    "source": "catalogue"
+  },
+  {
+    "merchantKey": "SUPER MARKET",
+    "match": "token",
+    "senders": [
+      "*"
+    ],
+    "context": [],
+    "category": "groceries",
+    "priority": 400,
+    "source": "catalogue"
+  },
+  {
+    "merchantKey": "GROCERY",
+    "match": "token",
+    "senders": [
+      "*"
+    ],
+    "context": [],
+    "category": "groceries",
+    "priority": 400,
+    "source": "catalogue"
+  },
+  {
+    "merchantKey": "GROCERIES",
+    "match": "token",
+    "senders": [
+      "*"
+    ],
+    "context": [],
+    "category": "groceries",
+    "priority": 400,
+    "source": "catalogue"
+  },
+  {
+    "merchantKey": "KIRANA",
+    "match": "token",
+    "senders": [
+      "*"
+    ],
+    "context": [],
+    "category": "groceries",
+    "priority": 400,
+    "source": "catalogue"
+  },
+  {
+    "merchantKey": "FRUITS",
+    "match": "token",
+    "senders": [
+      "*"
+    ],
+    "context": [],
+    "category": "groceries",
+    "priority": 400,
+    "source": "catalogue"
+  },
+  {
+    "merchantKey": "VEGETABLES",
+    "match": "token",
+    "senders": [
+      "*"
+    ],
+    "context": [],
+    "category": "groceries",
+    "priority": 400,
+    "source": "catalogue"
+  },
+  {
+    "merchantKey": "DAIRY",
+    "match": "token",
+    "senders": [
+      "*"
+    ],
+    "context": [],
+    "category": "groceries",
+    "priority": 400,
+    "source": "catalogue"
+  },
+  {
+    "merchantKey": "PROVISIONS",
+    "match": "token",
+    "senders": [
+      "*"
+    ],
+    "context": [],
+    "category": "groceries",
+    "priority": 400,
+    "source": "catalogue"
+  },
+  {
+    "merchantKey": "GENERAL STORE",
+    "match": "token",
+    "senders": [
+      "*"
+    ],
+    "context": [],
+    "category": "groceries",
+    "priority": 400,
+    "source": "catalogue"
+  },
+  {
+    "merchantKey": "SWIGGY",
+    "match": "token",
+    "senders": [
+      "*"
+    ],
+    "context": [],
+    "category": "dining",
+    "priority": 800,
+    "source": "catalogue"
+  },
+  {
+    "merchantKey": "ZOMATO",
+    "match": "token",
+    "senders": [
+      "*"
+    ],
+    "context": [],
+    "category": "dining",
+    "priority": 800,
+    "source": "catalogue"
+  },
+  {
+    "merchantKey": "UBER EATS",
+    "match": "token",
+    "senders": [
+      "*"
+    ],
+    "context": [],
+    "category": "dining",
+    "priority": 900,
+    "source": "catalogue"
+  },
+  {
+    "merchantKey": "EATSURE",
+    "match": "token",
+    "senders": [
+      "*"
+    ],
+    "context": [],
+    "category": "dining",
+    "priority": 800,
+    "source": "catalogue"
+  },
+  {
+    "merchantKey": "MCDONALDS",
+    "match": "token",
+    "senders": [
+      "*"
+    ],
+    "context": [],
+    "category": "dining",
+    "priority": 800,
+    "source": "catalogue"
+  },
+  {
+    "merchantKey": "KFC",
+    "match": "token",
+    "senders": [
+      "*"
+    ],
+    "context": [],
+    "category": "dining",
+    "priority": 800,
+    "source": "catalogue"
+  },
+  {
+    "merchantKey": "DOMINOS",
+    "match": "token",
+    "senders": [
+      "*"
+    ],
+    "context": [],
+    "category": "dining",
+    "priority": 800,
+    "source": "catalogue"
+  },
+  {
+    "merchantKey": "PIZZA HUT",
+    "match": "token",
+    "senders": [
+      "*"
+    ],
+    "context": [],
+    "category": "dining",
+    "priority": 900,
+    "source": "catalogue"
+  },
+  {
+    "merchantKey": "BURGER KING",
+    "match": "token",
+    "senders": [
+      "*"
+    ],
+    "context": [],
+    "category": "dining",
+    "priority": 900,
+    "source": "catalogue"
+  },
+  {
+    "merchantKey": "STARBUCKS",
+    "match": "token",
+    "senders": [
+      "*"
+    ],
+    "context": [],
+    "category": "dining",
+    "priority": 800,
+    "source": "catalogue"
+  },
+  {
+    "merchantKey": "SUBWAY",
+    "match": "token",
+    "senders": [
+      "*"
+    ],
+    "context": [],
+    "category": "dining",
+    "priority": 800,
+    "source": "catalogue"
+  },
+  {
+    "merchantKey": "HALDIRAMS",
+    "match": "token",
+    "senders": [
+      "*"
+    ],
+    "context": [],
+    "category": "dining",
+    "priority": 800,
+    "source": "catalogue"
+  },
+  {
+    "merchantKey": "HALDIRAM",
+    "match": "token",
+    "senders": [
+      "*"
+    ],
+    "context": [],
+    "category": "dining",
+    "priority": 800,
+    "source": "catalogue"
+  },
+  {
+    "merchantKey": "EAZYDINER",
+    "match": "token",
+    "senders": [
+      "*"
+    ],
+    "context": [],
+    "category": "dining",
+    "priority": 800,
+    "source": "catalogue"
+  },
+  {
+    "merchantKey": "BARBEQUE NATION",
+    "match": "token",
+    "senders": [
+      "*"
+    ],
+    "context": [],
+    "category": "dining",
+    "priority": 900,
+    "source": "catalogue"
+  },
+  {
+    "merchantKey": "CHAAYOS",
+    "match": "token",
+    "senders": [
+      "*"
+    ],
+    "context": [],
+    "category": "dining",
+    "priority": 800,
+    "source": "catalogue"
+  },
+  {
+    "merchantKey": "CHAI POINT",
+    "match": "token",
+    "senders": [
+      "*"
+    ],
+    "context": [],
+    "category": "dining",
+    "priority": 900,
+    "source": "catalogue"
+  },
+  {
+    "merchantKey": "BLUE TOKAI",
+    "match": "token",
+    "senders": [
+      "*"
+    ],
+    "context": [],
+    "category": "dining",
+    "priority": 900,
+    "source": "catalogue"
+  },
+  {
+    "merchantKey": "THIRD WAVE COFFEE",
+    "match": "token",
+    "senders": [
+      "*"
+    ],
+    "context": [],
+    "category": "dining",
+    "priority": 900,
+    "source": "catalogue"
+  },
+  {
+    "merchantKey": "THEOBROMA",
+    "match": "token",
+    "senders": [
+      "*"
+    ],
+    "context": [],
+    "category": "dining",
+    "priority": 800,
+    "source": "catalogue"
+  },
+  {
+    "merchantKey": "WOW MOMO",
+    "match": "token",
+    "senders": [
+      "*"
+    ],
+    "context": [],
+    "category": "dining",
+    "priority": 900,
+    "source": "catalogue"
+  },
+  {
+    "merchantKey": "REBEL FOODS",
+    "match": "token",
+    "senders": [
+      "*"
+    ],
+    "context": [],
+    "category": "dining",
+    "priority": 900,
+    "source": "catalogue"
+  },
+  {
+    "merchantKey": "FAASOS",
+    "match": "token",
+    "senders": [
+      "*"
+    ],
+    "context": [],
+    "category": "dining",
+    "priority": 800,
+    "source": "catalogue"
+  },
+  {
+    "merchantKey": "BEHROUZ BIRYANI",
+    "match": "token",
+    "senders": [
+      "*"
+    ],
+    "context": [],
+    "category": "dining",
+    "priority": 900,
+    "source": "catalogue"
+  },
+  {
+    "merchantKey": "BOX8",
+    "match": "token",
+    "senders": [
+      "*"
+    ],
+    "context": [],
+    "category": "dining",
+    "priority": 800,
+    "source": "catalogue"
+  },
+  {
+    "merchantKey": "DUNKIN",
+    "match": "token",
+    "senders": [
+      "*"
+    ],
+    "context": [],
+    "category": "dining",
+    "priority": 800,
+    "source": "catalogue"
+  },
+  {
+    "merchantKey": "BASKIN ROBBINS",
+    "match": "token",
+    "senders": [
+      "*"
+    ],
+    "context": [],
+    "category": "dining",
+    "priority": 900,
+    "source": "catalogue"
+  },
+  {
+    "merchantKey": "CAFE COFFEE DAY",
+    "match": "token",
+    "senders": [
+      "*"
+    ],
+    "context": [],
+    "category": "dining",
+    "priority": 900,
+    "source": "catalogue"
+  },
+  {
+    "merchantKey": "BIKANERVALA",
+    "match": "token",
+    "senders": [
+      "*"
+    ],
+    "context": [],
+    "category": "dining",
+    "priority": 800,
+    "source": "catalogue"
+  },
+  {
+    "merchantKey": "SARAVANA BHAVAN",
+    "match": "token",
+    "senders": [
+      "*"
+    ],
+    "context": [],
+    "category": "dining",
+    "priority": 900,
+    "source": "catalogue"
+  },
+  {
+    "merchantKey": "BARISTA",
+    "match": "token",
+    "senders": [
+      "*"
+    ],
+    "context": [],
+    "category": "dining",
+    "priority": 800,
+    "source": "catalogue"
+  },
+  {
+    "merchantKey": "RESTAURANT",
+    "match": "token",
+    "senders": [
+      "*"
+    ],
+    "context": [],
+    "category": "dining",
+    "priority": 400,
+    "source": "catalogue"
+  },
+  {
+    "merchantKey": "RESTAURANTS",
+    "match": "token",
+    "senders": [
+      "*"
+    ],
+    "context": [],
+    "category": "dining",
+    "priority": 400,
+    "source": "catalogue"
+  },
+  {
+    "merchantKey": "DINING",
+    "match": "token",
+    "senders": [
+      "*"
+    ],
+    "context": [],
+    "category": "dining",
+    "priority": 400,
+    "source": "catalogue"
+  },
+  {
+    "merchantKey": "CAFE",
+    "match": "token",
+    "senders": [
+      "*"
+    ],
+    "context": [],
+    "category": "dining",
+    "priority": 400,
+    "source": "catalogue"
+  },
+  {
+    "merchantKey": "COFFEE",
+    "match": "token",
+    "senders": [
+      "*"
+    ],
+    "context": [],
+    "category": "dining",
+    "priority": 400,
+    "source": "catalogue"
+  },
+  {
+    "merchantKey": "BAKERY",
+    "match": "token",
+    "senders": [
+      "*"
+    ],
+    "context": [],
+    "category": "dining",
+    "priority": 400,
+    "source": "catalogue"
+  },
+  {
+    "merchantKey": "BIRYANI",
+    "match": "token",
+    "senders": [
+      "*"
+    ],
+    "context": [],
+    "category": "dining",
+    "priority": 400,
+    "source": "catalogue"
+  },
+  {
+    "merchantKey": "PIZZA",
+    "match": "token",
+    "senders": [
+      "*"
+    ],
+    "context": [],
+    "category": "dining",
+    "priority": 400,
+    "source": "catalogue"
+  },
+  {
+    "merchantKey": "BURGER",
+    "match": "token",
+    "senders": [
+      "*"
+    ],
+    "context": [],
+    "category": "dining",
+    "priority": 400,
+    "source": "catalogue"
+  },
+  {
+    "merchantKey": "SWEETS",
+    "match": "token",
+    "senders": [
+      "*"
+    ],
+    "context": [],
+    "category": "dining",
+    "priority": 400,
+    "source": "catalogue"
+  },
+  {
+    "merchantKey": "SWEET SHOP",
+    "match": "token",
+    "senders": [
+      "*"
+    ],
+    "context": [],
+    "category": "dining",
+    "priority": 400,
+    "source": "catalogue"
+  },
+  {
+    "merchantKey": "MITHAI",
+    "match": "token",
+    "senders": [
+      "*"
+    ],
+    "context": [],
+    "category": "dining",
+    "priority": 400,
+    "source": "catalogue"
+  },
+  {
+    "merchantKey": "CONFECTIONERY",
+    "match": "token",
+    "senders": [
+      "*"
+    ],
+    "context": [],
+    "category": "dining",
+    "priority": 400,
+    "source": "catalogue"
+  },
+  {
+    "merchantKey": "DHABA",
+    "match": "token",
+    "senders": [
+      "*"
+    ],
+    "context": [],
+    "category": "dining",
+    "priority": 400,
+    "source": "catalogue"
+  },
+  {
+    "merchantKey": "FOOD",
+    "match": "token",
+    "senders": [
+      "*"
+    ],
+    "context": [],
+    "category": "dining",
+    "priority": 350,
+    "source": "catalogue"
+  },
+  {
+    "merchantKey": "AMAZON",
+    "match": "token",
+    "senders": [
+      "*"
+    ],
+    "context": [],
+    "category": "online",
+    "priority": 800,
+    "source": "catalogue"
+  },
+  {
+    "merchantKey": "AMAZON SELLER",
+    "match": "token",
+    "senders": [
+      "*"
+    ],
+    "context": [],
+    "category": "online",
+    "priority": 900,
+    "source": "catalogue"
+  },
+  {
+    "merchantKey": "FLIPKART",
+    "match": "token",
+    "senders": [
+      "*"
+    ],
+    "context": [],
+    "category": "online",
+    "priority": 800,
+    "source": "catalogue"
+  },
+  {
+    "merchantKey": "MYNTRA",
+    "match": "token",
+    "senders": [
+      "*"
+    ],
+    "context": [],
+    "category": "online",
+    "priority": 800,
+    "source": "catalogue"
+  },
+  {
+    "merchantKey": "AJIO",
+    "match": "token",
+    "senders": [
+      "*"
+    ],
+    "context": [],
+    "category": "online",
+    "priority": 800,
+    "source": "catalogue"
+  },
+  {
+    "merchantKey": "NYKAA",
+    "match": "token",
+    "senders": [
+      "*"
+    ],
+    "context": [],
+    "category": "online",
+    "priority": 800,
+    "source": "catalogue"
+  },
+  {
+    "merchantKey": "MEESHO",
+    "match": "token",
+    "senders": [
+      "*"
+    ],
+    "context": [],
+    "category": "online",
+    "priority": 800,
+    "source": "catalogue"
+  },
+  {
+    "merchantKey": "TATA CLIQ",
+    "match": "token",
+    "senders": [
+      "*"
+    ],
+    "context": [],
+    "category": "online",
+    "priority": 900,
+    "source": "catalogue"
+  },
+  {
+    "merchantKey": "TATACLIQ",
+    "match": "token",
+    "senders": [
+      "*"
+    ],
+    "context": [],
+    "category": "online",
+    "priority": 800,
+    "source": "catalogue"
+  },
+  {
+    "merchantKey": "SHOPSY",
+    "match": "token",
+    "senders": [
+      "*"
+    ],
+    "context": [],
+    "category": "online",
+    "priority": 800,
+    "source": "catalogue"
+  },
+  {
+    "merchantKey": "CROMA",
+    "match": "token",
+    "senders": [
+      "*"
+    ],
+    "context": [],
+    "category": "online",
+    "priority": 800,
+    "source": "catalogue"
+  },
+  {
+    "merchantKey": "RELIANCE DIGITAL",
+    "match": "token",
+    "senders": [
+      "*"
+    ],
+    "context": [],
+    "category": "online",
+    "priority": 900,
+    "source": "catalogue"
+  },
+  {
+    "merchantKey": "DECATHLON",
+    "match": "token",
+    "senders": [
+      "*"
+    ],
+    "context": [],
+    "category": "online",
+    "priority": 800,
+    "source": "catalogue"
+  },
+  {
+    "merchantKey": "SHOPPERS STOP",
+    "match": "token",
+    "senders": [
+      "*"
+    ],
+    "context": [],
+    "category": "online",
+    "priority": 900,
+    "source": "catalogue"
+  },
+  {
+    "merchantKey": "ZARA",
+    "match": "token",
+    "senders": [
+      "*"
+    ],
+    "context": [],
+    "category": "online",
+    "priority": 800,
+    "source": "catalogue"
+  },
+  {
+    "merchantKey": "H&M",
+    "match": "token",
+    "senders": [
+      "*"
+    ],
+    "context": [],
+    "category": "online",
+    "priority": 800,
+    "source": "catalogue"
+  },
+  {
+    "merchantKey": "UNIQLO",
+    "match": "token",
+    "senders": [
+      "*"
+    ],
+    "context": [],
+    "category": "online",
+    "priority": 800,
+    "source": "catalogue"
+  },
+  {
+    "merchantKey": "IKEA",
+    "match": "token",
+    "senders": [
+      "*"
+    ],
+    "context": [],
+    "category": "online",
+    "priority": 800,
+    "source": "catalogue"
+  },
+  {
+    "merchantKey": "LENSKART",
+    "match": "token",
+    "senders": [
+      "*"
+    ],
+    "context": [],
+    "category": "online",
+    "priority": 800,
+    "source": "catalogue"
+  },
+  {
+    "merchantKey": "FIRSTCRY",
+    "match": "token",
+    "senders": [
+      "*"
+    ],
+    "context": [],
+    "category": "online",
+    "priority": 800,
+    "source": "catalogue"
+  },
+  {
+    "merchantKey": "PEPPERFRY",
+    "match": "token",
+    "senders": [
+      "*"
+    ],
+    "context": [],
+    "category": "online",
+    "priority": 800,
+    "source": "catalogue"
+  },
+  {
+    "merchantKey": "URBAN LADDER",
+    "match": "token",
+    "senders": [
+      "*"
+    ],
+    "context": [],
+    "category": "online",
+    "priority": 900,
+    "source": "catalogue"
+  },
+  {
+    "merchantKey": "SNAPDEAL",
+    "match": "token",
+    "senders": [
+      "*"
+    ],
+    "context": [],
+    "category": "online",
+    "priority": 800,
+    "source": "catalogue"
+  },
+  {
+    "merchantKey": "BEWAKOOF",
+    "match": "token",
+    "senders": [
+      "*"
+    ],
+    "context": [],
+    "category": "online",
+    "priority": 800,
+    "source": "catalogue"
+  },
+  {
+    "merchantKey": "MAMAEARTH",
+    "match": "token",
+    "senders": [
+      "*"
+    ],
+    "context": [],
+    "category": "online",
+    "priority": 800,
+    "source": "catalogue"
+  },
+  {
+    "merchantKey": "DRESSES",
+    "match": "token",
+    "senders": [
+      "*"
+    ],
+    "context": [],
+    "category": "online",
+    "priority": 400,
+    "source": "catalogue"
+  },
+  {
+    "merchantKey": "GARMENTS",
+    "match": "token",
+    "senders": [
+      "*"
+    ],
+    "context": [],
+    "category": "online",
+    "priority": 400,
+    "source": "catalogue"
+  },
+  {
+    "merchantKey": "APPAREL",
+    "match": "token",
+    "senders": [
+      "*"
+    ],
+    "context": [],
+    "category": "online",
+    "priority": 400,
+    "source": "catalogue"
+  },
+  {
+    "merchantKey": "CLOTHING",
+    "match": "token",
+    "senders": [
+      "*"
+    ],
+    "context": [],
+    "category": "online",
+    "priority": 400,
+    "source": "catalogue"
+  },
+  {
+    "merchantKey": "FASHION",
+    "match": "token",
+    "senders": [
+      "*"
+    ],
+    "context": [],
+    "category": "online",
+    "priority": 400,
+    "source": "catalogue"
+  },
+  {
+    "merchantKey": "BOUTIQUE",
+    "match": "token",
+    "senders": [
+      "*"
+    ],
+    "context": [],
+    "category": "online",
+    "priority": 400,
+    "source": "catalogue"
+  },
+  {
+    "merchantKey": "INDIAN OIL",
+    "match": "token",
+    "senders": [
+      "*"
+    ],
+    "context": [],
+    "category": "fuel",
+    "priority": 900,
+    "source": "catalogue"
+  },
+  {
+    "merchantKey": "INDIANOIL",
+    "match": "token",
+    "senders": [
+      "*"
+    ],
+    "context": [],
+    "category": "fuel",
+    "priority": 800,
+    "source": "catalogue"
+  },
+  {
+    "merchantKey": "IOCL",
+    "match": "token",
+    "senders": [
+      "*"
+    ],
+    "context": [],
+    "category": "fuel",
+    "priority": 800,
+    "source": "catalogue"
+  },
+  {
+    "merchantKey": "BHARAT PETROLEUM",
+    "match": "token",
+    "senders": [
+      "*"
+    ],
+    "context": [],
+    "category": "fuel",
+    "priority": 900,
+    "source": "catalogue"
+  },
+  {
+    "merchantKey": "BPCL",
+    "match": "token",
+    "senders": [
+      "*"
+    ],
+    "context": [],
+    "category": "fuel",
+    "priority": 800,
+    "source": "catalogue"
+  },
+  {
+    "merchantKey": "HINDUSTAN PETROLEUM",
+    "match": "token",
+    "senders": [
+      "*"
+    ],
+    "context": [],
+    "category": "fuel",
+    "priority": 900,
+    "source": "catalogue"
+  },
+  {
+    "merchantKey": "HPCL",
+    "match": "token",
+    "senders": [
+      "*"
+    ],
+    "context": [],
+    "category": "fuel",
+    "priority": 800,
+    "source": "catalogue"
+  },
+  {
+    "merchantKey": "SHELL",
+    "match": "token",
+    "senders": [
+      "*"
+    ],
+    "context": [],
+    "category": "fuel",
+    "priority": 800,
+    "source": "catalogue"
+  },
+  {
+    "merchantKey": "JIO BP",
+    "match": "token",
+    "senders": [
+      "*"
+    ],
+    "context": [],
+    "category": "fuel",
+    "priority": 900,
+    "source": "catalogue"
+  },
+  {
+    "merchantKey": "JIOBP",
+    "match": "token",
+    "senders": [
+      "*"
+    ],
+    "context": [],
+    "category": "fuel",
+    "priority": 800,
+    "source": "catalogue"
+  },
+  {
+    "merchantKey": "NAYARA",
+    "match": "token",
+    "senders": [
+      "*"
+    ],
+    "context": [],
+    "category": "fuel",
+    "priority": 800,
+    "source": "catalogue"
+  },
+  {
+    "merchantKey": "ESSAR OIL",
+    "match": "token",
+    "senders": [
+      "*"
+    ],
+    "context": [],
+    "category": "fuel",
+    "priority": 900,
+    "source": "catalogue"
+  },
+  {
+    "merchantKey": "RELIANCE PETROLEUM",
+    "match": "token",
+    "senders": [
+      "*"
+    ],
+    "context": [],
+    "category": "fuel",
+    "priority": 900,
+    "source": "catalogue"
+  },
+  {
+    "merchantKey": "COCO OUTLET",
+    "match": "token",
+    "senders": [
+      "*"
+    ],
+    "context": [],
+    "category": "fuel",
+    "priority": 900,
+    "source": "catalogue"
+  },
+  {
+    "merchantKey": "AUTO FUELS",
+    "match": "token",
+    "senders": [
+      "*"
+    ],
+    "context": [],
+    "category": "fuel",
+    "priority": 900,
+    "source": "catalogue"
+  },
+  {
+    "merchantKey": "PETRO PRODUCTS",
+    "match": "token",
+    "senders": [
+      "*"
+    ],
+    "context": [],
+    "category": "fuel",
+    "priority": 900,
+    "source": "catalogue"
+  },
+  {
+    "merchantKey": "PETROL BUNK",
+    "match": "token",
+    "senders": [
+      "*"
+    ],
+    "context": [],
+    "category": "fuel",
+    "priority": 900,
+    "source": "catalogue"
+  },
+  {
+    "merchantKey": "FILLING STATION",
+    "match": "token",
+    "senders": [
+      "*"
+    ],
+    "context": [],
+    "category": "fuel",
+    "priority": 900,
+    "source": "catalogue"
+  },
+  {
+    "merchantKey": "CNG STATION",
+    "match": "token",
+    "senders": [
+      "*"
+    ],
+    "context": [],
+    "category": "fuel",
+    "priority": 900,
+    "source": "catalogue"
+  },
+  {
+    "merchantKey": "IGL CNG",
+    "match": "token",
+    "senders": [
+      "*"
+    ],
+    "context": [],
+    "category": "fuel",
+    "priority": 900,
+    "source": "catalogue"
+  },
+  {
+    "merchantKey": "MGL CNG",
+    "match": "token",
+    "senders": [
+      "*"
+    ],
+    "context": [],
+    "category": "fuel",
+    "priority": 900,
+    "source": "catalogue"
+  },
+  {
+    "merchantKey": "TATA POWER EV",
+    "match": "token",
+    "senders": [
+      "*"
+    ],
+    "context": [],
+    "category": "fuel",
+    "priority": 900,
+    "source": "catalogue"
+  },
+  {
+    "merchantKey": "ZEON CHARGING",
+    "match": "token",
+    "senders": [
+      "*"
+    ],
+    "context": [],
+    "category": "fuel",
+    "priority": 900,
+    "source": "catalogue"
+  },
+  {
+    "merchantKey": "STATIQ",
+    "match": "token",
+    "senders": [
+      "*"
+    ],
+    "context": [],
+    "category": "fuel",
+    "priority": 800,
+    "source": "catalogue"
+  },
+  {
+    "merchantKey": "CHARGEZONE",
+    "match": "token",
+    "senders": [
+      "*"
+    ],
+    "context": [],
+    "category": "fuel",
+    "priority": 800,
+    "source": "catalogue"
+  },
+  {
+    "merchantKey": "ATHER GRID",
+    "match": "token",
+    "senders": [
+      "*"
+    ],
+    "context": [],
+    "category": "fuel",
+    "priority": 900,
+    "source": "catalogue"
+  },
+  {
+    "merchantKey": "FUEL",
+    "match": "token",
+    "senders": [
+      "*"
+    ],
+    "context": [],
+    "category": "fuel",
+    "priority": 400,
+    "source": "catalogue"
+  },
+  {
+    "merchantKey": "PETROL",
+    "match": "token",
+    "senders": [
+      "*"
+    ],
+    "context": [],
+    "category": "fuel",
+    "priority": 400,
+    "source": "catalogue"
+  },
+  {
+    "merchantKey": "DIESEL",
+    "match": "token",
+    "senders": [
+      "*"
+    ],
+    "context": [],
+    "category": "fuel",
+    "priority": 400,
+    "source": "catalogue"
+  },
+  {
+    "merchantKey": "PETROLEUM",
+    "match": "token",
+    "senders": [
+      "*"
+    ],
+    "context": [],
+    "category": "fuel",
+    "priority": 400,
+    "source": "catalogue"
+  },
+  {
+    "merchantKey": "FILLING",
+    "match": "token",
+    "senders": [
+      "*"
+    ],
+    "context": [],
+    "category": "fuel",
+    "priority": 400,
+    "source": "catalogue"
+  },
+  {
+    "merchantKey": "UBER",
+    "match": "token",
+    "senders": [
+      "*"
+    ],
+    "context": [],
+    "category": "travel",
+    "priority": 800,
+    "source": "catalogue"
+  },
+  {
+    "merchantKey": "UBER INDIA",
+    "match": "token",
+    "senders": [
+      "*"
+    ],
+    "context": [],
+    "category": "travel",
+    "priority": 900,
+    "source": "catalogue"
+  },
+  {
+    "merchantKey": "OLA CABS",
+    "match": "token",
+    "senders": [
+      "*"
+    ],
+    "context": [],
+    "category": "travel",
+    "priority": 900,
+    "source": "catalogue"
+  },
+  {
+    "merchantKey": "ANI TECHNOLOGIES",
+    "match": "token",
+    "senders": [
+      "*"
+    ],
+    "context": [],
+    "category": "travel",
+    "priority": 900,
+    "source": "catalogue"
+  },
+  {
+    "merchantKey": "RAPIDO",
+    "match": "token",
+    "senders": [
+      "*"
+    ],
+    "context": [],
+    "category": "travel",
+    "priority": 800,
+    "source": "catalogue"
+  },
+  {
+    "merchantKey": "ROPPEN TRANSPORTATION",
+    "match": "token",
+    "senders": [
+      "*"
+    ],
+    "context": [],
+    "category": "travel",
+    "priority": 900,
+    "source": "catalogue"
+  },
+  {
+    "merchantKey": "IRCTC",
+    "match": "token",
+    "senders": [
+      "*"
+    ],
+    "context": [],
+    "category": "travel",
+    "priority": 800,
+    "source": "catalogue"
+  },
+  {
+    "merchantKey": "MAKEMYTRIP",
+    "match": "token",
+    "senders": [
+      "*"
+    ],
+    "context": [],
+    "category": "travel",
+    "priority": 800,
+    "source": "catalogue"
+  },
+  {
+    "merchantKey": "MAKE MY TRIP",
+    "match": "token",
+    "senders": [
+      "*"
+    ],
+    "context": [],
+    "category": "travel",
+    "priority": 900,
+    "source": "catalogue"
+  },
+  {
+    "merchantKey": "GOIBIBO",
+    "match": "token",
+    "senders": [
+      "*"
+    ],
+    "context": [],
+    "category": "travel",
+    "priority": 800,
+    "source": "catalogue"
+  },
+  {
+    "merchantKey": "CLEARTRIP",
+    "match": "token",
+    "senders": [
+      "*"
+    ],
+    "context": [],
+    "category": "travel",
+    "priority": 800,
+    "source": "catalogue"
+  },
+  {
+    "merchantKey": "EASEMYTRIP",
+    "match": "token",
+    "senders": [
+      "*"
+    ],
+    "context": [],
+    "category": "travel",
+    "priority": 800,
+    "source": "catalogue"
+  },
+  {
+    "merchantKey": "EASE MY TRIP",
+    "match": "token",
+    "senders": [
+      "*"
+    ],
+    "context": [],
+    "category": "travel",
+    "priority": 900,
+    "source": "catalogue"
+  },
+  {
+    "merchantKey": "REDBUS",
+    "match": "token",
+    "senders": [
+      "*"
+    ],
+    "context": [],
+    "category": "travel",
+    "priority": 800,
+    "source": "catalogue"
+  },
+  {
+    "merchantKey": "ABHIBUS",
+    "match": "token",
+    "senders": [
+      "*"
+    ],
+    "context": [],
+    "category": "travel",
+    "priority": 800,
+    "source": "catalogue"
+  },
+  {
+    "merchantKey": "ZINGBUS",
+    "match": "token",
+    "senders": [
+      "*"
+    ],
+    "context": [],
+    "category": "travel",
+    "priority": 800,
+    "source": "catalogue"
+  },
+  {
+    "merchantKey": "NAMMA YATRI",
+    "match": "token",
+    "senders": [
+      "*"
+    ],
+    "context": [],
+    "category": "travel",
+    "priority": 900,
+    "source": "catalogue"
+  },
+  {
+    "merchantKey": "MOVING TECH",
+    "match": "token",
+    "senders": [
+      "*"
+    ],
+    "context": [],
+    "category": "travel",
+    "priority": 900,
+    "source": "catalogue"
+  },
+  {
+    "merchantKey": "DMRC",
+    "match": "token",
+    "senders": [
+      "*"
+    ],
+    "context": [],
+    "category": "travel",
+    "priority": 800,
+    "source": "catalogue"
+  },
+  {
+    "merchantKey": "BMRCL",
+    "match": "token",
+    "senders": [
+      "*"
+    ],
+    "context": [],
+    "category": "travel",
+    "priority": 800,
+    "source": "catalogue"
+  },
+  {
+    "merchantKey": "NAMMA METRO",
+    "match": "token",
+    "senders": [
+      "*"
+    ],
+    "context": [],
+    "category": "travel",
+    "priority": 900,
+    "source": "catalogue"
+  },
+  {
+    "merchantKey": "FASTAG",
+    "match": "token",
+    "senders": [
+      "*"
+    ],
+    "context": [],
+    "category": "travel",
+    "priority": 800,
+    "source": "catalogue"
+  },
+  {
+    "merchantKey": "NETC FASTAG",
+    "match": "token",
+    "senders": [
+      "*"
+    ],
+    "context": [],
+    "category": "travel",
+    "priority": 900,
+    "source": "catalogue"
+  },
+  {
+    "merchantKey": "IHMCL",
+    "match": "token",
+    "senders": [
+      "*"
+    ],
+    "context": [],
+    "category": "travel",
+    "priority": 800,
+    "source": "catalogue"
+  },
+  {
+    "merchantKey": "TOLL PLAZA",
+    "match": "token",
+    "senders": [
+      "*"
+    ],
+    "context": [],
+    "category": "travel",
+    "priority": 900,
+    "source": "catalogue"
+  },
+  {
+    "merchantKey": "KSRTC",
+    "match": "token",
+    "senders": [
+      "*"
+    ],
+    "context": [],
+    "category": "travel",
+    "priority": 800,
+    "source": "catalogue"
+  },
+  {
+    "merchantKey": "MSRTC",
+    "match": "token",
+    "senders": [
+      "*"
+    ],
+    "context": [],
+    "category": "travel",
+    "priority": 800,
+    "source": "catalogue"
+  },
+  {
+    "merchantKey": "APSRTC",
+    "match": "token",
+    "senders": [
+      "*"
+    ],
+    "context": [],
+    "category": "travel",
+    "priority": 800,
+    "source": "catalogue"
+  },
+  {
+    "merchantKey": "TSRTC",
+    "match": "token",
+    "senders": [
+      "*"
+    ],
+    "context": [],
+    "category": "travel",
+    "priority": 800,
+    "source": "catalogue"
+  },
+  {
+    "merchantKey": "AIR INDIA",
+    "match": "token",
+    "senders": [
+      "*"
+    ],
+    "context": [],
+    "category": "travel",
+    "priority": 900,
+    "source": "catalogue"
+  },
+  {
+    "merchantKey": "AIR INDIA EXPRESS",
+    "match": "token",
+    "senders": [
+      "*"
+    ],
+    "context": [],
+    "category": "travel",
+    "priority": 900,
+    "source": "catalogue"
+  },
+  {
+    "merchantKey": "INDIGO AIRLINES",
+    "match": "token",
+    "senders": [
+      "*"
+    ],
+    "context": [],
+    "category": "travel",
+    "priority": 900,
+    "source": "catalogue"
+  },
+  {
+    "merchantKey": "INTERGLOBE AVIATION",
+    "match": "token",
+    "senders": [
+      "*"
+    ],
+    "context": [],
+    "category": "travel",
+    "priority": 900,
+    "source": "catalogue"
+  },
+  {
+    "merchantKey": "VISTARA",
+    "match": "token",
+    "senders": [
+      "*"
+    ],
+    "context": [],
+    "category": "travel",
+    "priority": 800,
+    "source": "catalogue"
+  },
+  {
+    "merchantKey": "AKASA AIR",
+    "match": "token",
+    "senders": [
+      "*"
+    ],
+    "context": [],
+    "category": "travel",
+    "priority": 900,
+    "source": "catalogue"
+  },
+  {
+    "merchantKey": "SPICEJET",
+    "match": "token",
+    "senders": [
+      "*"
+    ],
+    "context": [],
+    "category": "travel",
+    "priority": 800,
+    "source": "catalogue"
+  },
+  {
+    "merchantKey": "OYO",
+    "match": "token",
+    "senders": [
+      "*"
+    ],
+    "context": [],
+    "category": "travel",
+    "priority": 800,
+    "source": "catalogue"
+  },
+  {
+    "merchantKey": "OYO ROOMS",
+    "match": "token",
+    "senders": [
+      "*"
+    ],
+    "context": [],
+    "category": "travel",
+    "priority": 900,
+    "source": "catalogue"
+  },
+  {
+    "merchantKey": "BOOKING COM",
+    "match": "token",
+    "senders": [
+      "*"
+    ],
+    "context": [],
+    "category": "travel",
+    "priority": 900,
+    "source": "catalogue"
+  },
+  {
+    "merchantKey": "AGODA",
+    "match": "token",
+    "senders": [
+      "*"
+    ],
+    "context": [],
+    "category": "travel",
+    "priority": 800,
+    "source": "catalogue"
+  },
+  {
+    "merchantKey": "AIRBNB",
+    "match": "token",
+    "senders": [
+      "*"
+    ],
+    "context": [],
+    "category": "travel",
+    "priority": 800,
+    "source": "catalogue"
+  },
+  {
+    "merchantKey": "YATRA",
+    "match": "token",
+    "senders": [
+      "*"
+    ],
+    "context": [],
+    "category": "travel",
+    "priority": 800,
+    "source": "catalogue"
+  },
+  {
+    "merchantKey": "IXIGO",
+    "match": "token",
+    "senders": [
+      "*"
+    ],
+    "context": [],
+    "category": "travel",
+    "priority": 800,
+    "source": "catalogue"
+  },
+  {
+    "merchantKey": "BLUSMART",
+    "match": "token",
+    "senders": [
+      "*"
+    ],
+    "context": [],
+    "category": "travel",
+    "priority": 800,
+    "source": "catalogue"
+  },
+  {
+    "merchantKey": "MERU CABS",
+    "match": "token",
+    "senders": [
+      "*"
+    ],
+    "context": [],
+    "category": "travel",
+    "priority": 900,
+    "source": "catalogue"
+  },
+  {
+    "merchantKey": "INDRIVE",
+    "match": "token",
+    "senders": [
+      "*"
+    ],
+    "context": [],
+    "category": "travel",
+    "priority": 800,
+    "source": "catalogue"
+  },
+  {
+    "merchantKey": "AIRLINES",
+    "match": "token",
+    "senders": [
+      "*"
+    ],
+    "context": [],
+    "category": "travel",
+    "priority": 400,
+    "source": "catalogue"
+  },
+  {
+    "merchantKey": "AIRWAYS",
+    "match": "token",
+    "senders": [
+      "*"
+    ],
+    "context": [],
+    "category": "travel",
+    "priority": 400,
+    "source": "catalogue"
+  },
+  {
+    "merchantKey": "TRAVELS",
+    "match": "token",
+    "senders": [
+      "*"
+    ],
+    "context": [],
+    "category": "travel",
+    "priority": 400,
+    "source": "catalogue"
+  },
+  {
+    "merchantKey": "TOURS",
+    "match": "token",
+    "senders": [
+      "*"
+    ],
+    "context": [],
+    "category": "travel",
+    "priority": 400,
+    "source": "catalogue"
+  },
+  {
+    "merchantKey": "CABS",
+    "match": "token",
+    "senders": [
+      "*"
+    ],
+    "context": [],
+    "category": "travel",
+    "priority": 400,
+    "source": "catalogue"
+  },
+  {
+    "merchantKey": "TAXI",
+    "match": "token",
+    "senders": [
+      "*"
+    ],
+    "context": [],
+    "category": "travel",
+    "priority": 400,
+    "source": "catalogue"
+  },
+  {
+    "merchantKey": "OLA",
+    "match": "exact",
+    "senders": [
+      "*"
+    ],
+    "context": [],
+    "category": "travel",
+    "priority": 700,
+    "source": "catalogue"
+  },
+  {
+    "merchantKey": "NETFLIX",
+    "match": "token",
+    "senders": [
+      "*"
+    ],
+    "context": [],
+    "category": "entertainment",
+    "priority": 800,
+    "source": "catalogue"
+  },
+  {
+    "merchantKey": "HOTSTAR",
+    "match": "token",
+    "senders": [
+      "*"
+    ],
+    "context": [],
+    "category": "entertainment",
+    "priority": 800,
+    "source": "catalogue"
+  },
+  {
+    "merchantKey": "DISNEY PLUS",
+    "match": "token",
+    "senders": [
+      "*"
+    ],
+    "context": [],
+    "category": "entertainment",
+    "priority": 900,
+    "source": "catalogue"
+  },
+  {
+    "merchantKey": "DISNEY HOTSTAR",
+    "match": "token",
+    "senders": [
+      "*"
+    ],
+    "context": [],
+    "category": "entertainment",
+    "priority": 900,
+    "source": "catalogue"
+  },
+  {
+    "merchantKey": "SPOTIFY",
+    "match": "token",
+    "senders": [
+      "*"
+    ],
+    "context": [],
+    "category": "entertainment",
+    "priority": 800,
+    "source": "catalogue"
+  },
+  {
+    "merchantKey": "BOOKMYSHOW",
+    "match": "token",
+    "senders": [
+      "*"
+    ],
+    "context": [],
+    "category": "entertainment",
+    "priority": 800,
+    "source": "catalogue"
+  },
+  {
+    "merchantKey": "BIGTREE ENTERTAINMENT",
+    "match": "token",
+    "senders": [
+      "*"
+    ],
+    "context": [],
+    "category": "entertainment",
+    "priority": 900,
+    "source": "catalogue"
+  },
+  {
+    "merchantKey": "SONYLIV",
+    "match": "token",
+    "senders": [
+      "*"
+    ],
+    "context": [],
+    "category": "entertainment",
+    "priority": 800,
+    "source": "catalogue"
+  },
+  {
+    "merchantKey": "SONY LIV",
+    "match": "token",
+    "senders": [
+      "*"
+    ],
+    "context": [],
+    "category": "entertainment",
+    "priority": 900,
+    "source": "catalogue"
+  },
+  {
+    "merchantKey": "ZEE5",
+    "match": "token",
+    "senders": [
+      "*"
+    ],
+    "context": [],
+    "category": "entertainment",
+    "priority": 800,
+    "source": "catalogue"
+  },
+  {
+    "merchantKey": "JIOCINEMA",
+    "match": "token",
+    "senders": [
+      "*"
+    ],
+    "context": [],
+    "category": "entertainment",
+    "priority": 800,
+    "source": "catalogue"
+  },
+  {
+    "merchantKey": "JIO CINEMA",
+    "match": "token",
+    "senders": [
+      "*"
+    ],
+    "context": [],
+    "category": "entertainment",
+    "priority": 900,
+    "source": "catalogue"
+  },
+  {
+    "merchantKey": "PRIME VIDEO",
+    "match": "token",
+    "senders": [
+      "*"
+    ],
+    "context": [],
+    "category": "entertainment",
+    "priority": 900,
+    "source": "catalogue"
+  },
+  {
+    "merchantKey": "AMAZON PRIME",
+    "match": "token",
+    "senders": [
+      "*"
+    ],
+    "context": [],
+    "category": "entertainment",
+    "priority": 900,
+    "source": "catalogue"
+  },
+  {
+    "merchantKey": "AMAZON PRIME VIDEO",
+    "match": "token",
+    "senders": [
+      "*"
+    ],
+    "context": [],
+    "category": "entertainment",
+    "priority": 900,
+    "source": "catalogue"
+  },
+  {
+    "merchantKey": "YOUTUBE",
+    "match": "token",
+    "senders": [
+      "*"
+    ],
+    "context": [],
+    "category": "entertainment",
+    "priority": 800,
+    "source": "catalogue"
+  },
+  {
+    "merchantKey": "YOUTUBE PREMIUM",
+    "match": "token",
+    "senders": [
+      "*"
+    ],
+    "context": [],
+    "category": "entertainment",
+    "priority": 900,
+    "source": "catalogue"
+  },
+  {
+    "merchantKey": "GOOGLE PLAY",
+    "match": "token",
+    "senders": [
+      "*"
+    ],
+    "context": [],
+    "category": "entertainment",
+    "priority": 900,
+    "source": "catalogue"
+  },
+  {
+    "merchantKey": "GOOGLE ONE",
+    "match": "token",
+    "senders": [
+      "*"
+    ],
+    "context": [],
+    "category": "entertainment",
+    "priority": 900,
+    "source": "catalogue"
+  },
+  {
+    "merchantKey": "APPLE MEDIA SERVICES",
+    "match": "token",
+    "senders": [
+      "*"
+    ],
+    "context": [],
+    "category": "entertainment",
+    "priority": 900,
+    "source": "catalogue"
+  },
+  {
+    "merchantKey": "APPLE SERVICES",
+    "match": "token",
+    "senders": [
+      "*"
+    ],
+    "context": [],
+    "category": "entertainment",
+    "priority": 900,
+    "source": "catalogue"
+  },
+  {
+    "merchantKey": "APPLE COM BILL",
+    "match": "token",
+    "senders": [
+      "*"
+    ],
+    "context": [],
+    "category": "entertainment",
+    "priority": 900,
+    "source": "catalogue"
+  },
+  {
+    "merchantKey": "ITUNES",
+    "match": "token",
+    "senders": [
+      "*"
+    ],
+    "context": [],
+    "category": "entertainment",
+    "priority": 800,
+    "source": "catalogue"
+  },
+  {
+    "merchantKey": "CHATGPT",
+    "match": "token",
+    "senders": [
+      "*"
+    ],
+    "context": [],
+    "category": "entertainment",
+    "priority": 800,
+    "source": "catalogue"
+  },
+  {
+    "merchantKey": "OPENAI",
+    "match": "token",
+    "senders": [
+      "*"
+    ],
+    "context": [],
+    "category": "entertainment",
+    "priority": 800,
+    "source": "catalogue"
+  },
+  {
+    "merchantKey": "GAANA",
+    "match": "token",
+    "senders": [
+      "*"
+    ],
+    "context": [],
+    "category": "entertainment",
+    "priority": 800,
+    "source": "catalogue"
+  },
+  {
+    "merchantKey": "WYNK",
+    "match": "token",
+    "senders": [
+      "*"
+    ],
+    "context": [],
+    "category": "entertainment",
+    "priority": 800,
+    "source": "catalogue"
+  },
+  {
+    "merchantKey": "PVR",
+    "match": "token",
+    "senders": [
+      "*"
+    ],
+    "context": [],
+    "category": "entertainment",
+    "priority": 800,
+    "source": "catalogue"
+  },
+  {
+    "merchantKey": "INOX",
+    "match": "token",
+    "senders": [
+      "*"
+    ],
+    "context": [],
+    "category": "entertainment",
+    "priority": 800,
+    "source": "catalogue"
+  },
+  {
+    "merchantKey": "PVR INOX",
+    "match": "token",
+    "senders": [
+      "*"
+    ],
+    "context": [],
+    "category": "entertainment",
+    "priority": 900,
+    "source": "catalogue"
+  },
+  {
+    "merchantKey": "AUDIBLE",
+    "match": "token",
+    "senders": [
+      "*"
+    ],
+    "context": [],
+    "category": "entertainment",
+    "priority": 800,
+    "source": "catalogue"
+  },
+  {
+    "merchantKey": "PHARMEASY",
+    "match": "token",
+    "senders": [
+      "*"
+    ],
+    "context": [],
+    "category": "health",
+    "priority": 800,
+    "source": "catalogue"
+  },
+  {
+    "merchantKey": "NETMEDS",
+    "match": "token",
+    "senders": [
+      "*"
+    ],
+    "context": [],
+    "category": "health",
+    "priority": 800,
+    "source": "catalogue"
+  },
+  {
+    "merchantKey": "APOLLO PHARMACY",
+    "match": "token",
+    "senders": [
+      "*"
+    ],
+    "context": [],
+    "category": "health",
+    "priority": 900,
+    "source": "catalogue"
+  },
+  {
+    "merchantKey": "APOLLO HOSPITALS",
+    "match": "token",
+    "senders": [
+      "*"
+    ],
+    "context": [],
+    "category": "health",
+    "priority": 900,
+    "source": "catalogue"
+  },
+  {
+    "merchantKey": "APOLLO CLINIC",
+    "match": "token",
+    "senders": [
+      "*"
+    ],
+    "context": [],
+    "category": "health",
+    "priority": 900,
+    "source": "catalogue"
+  },
+  {
+    "merchantKey": "APOLLO 247",
+    "match": "token",
+    "senders": [
+      "*"
+    ],
+    "context": [],
+    "category": "health",
+    "priority": 900,
+    "source": "catalogue"
+  },
+  {
+    "merchantKey": "TATA 1MG",
+    "match": "token",
+    "senders": [
+      "*"
+    ],
+    "context": [],
+    "category": "health",
+    "priority": 900,
+    "source": "catalogue"
+  },
+  {
+    "merchantKey": "1MG",
+    "match": "token",
+    "senders": [
+      "*"
+    ],
+    "context": [],
+    "category": "health",
+    "priority": 800,
+    "source": "catalogue"
+  },
+  {
+    "merchantKey": "PRACTO",
+    "match": "token",
+    "senders": [
+      "*"
+    ],
+    "context": [],
+    "category": "health",
+    "priority": 800,
+    "source": "catalogue"
+  },
+  {
+    "merchantKey": "MEDPLUS",
+    "match": "token",
+    "senders": [
+      "*"
+    ],
+    "context": [],
+    "category": "health",
+    "priority": 800,
+    "source": "catalogue"
+  },
+  {
+    "merchantKey": "CULT FIT",
+    "match": "token",
+    "senders": [
+      "*"
+    ],
+    "context": [],
+    "category": "health",
+    "priority": 900,
+    "source": "catalogue"
+  },
+  {
+    "merchantKey": "CULTFIT",
+    "match": "token",
+    "senders": [
+      "*"
+    ],
+    "context": [],
+    "category": "health",
+    "priority": 800,
+    "source": "catalogue"
+  },
+  {
+    "merchantKey": "CUREFIT",
+    "match": "token",
+    "senders": [
+      "*"
+    ],
+    "context": [],
+    "category": "health",
+    "priority": 800,
+    "source": "catalogue"
+  },
+  {
+    "merchantKey": "WELLNESS FOREVER",
+    "match": "token",
+    "senders": [
+      "*"
+    ],
+    "context": [],
+    "category": "health",
+    "priority": 900,
+    "source": "catalogue"
+  },
+  {
+    "merchantKey": "MEDLIFE",
+    "match": "token",
+    "senders": [
+      "*"
+    ],
+    "context": [],
+    "category": "health",
+    "priority": 800,
+    "source": "catalogue"
+  },
+  {
+    "merchantKey": "DR LAL PATHLABS",
+    "match": "token",
+    "senders": [
+      "*"
+    ],
+    "context": [],
+    "category": "health",
+    "priority": 900,
+    "source": "catalogue"
+  },
+  {
+    "merchantKey": "THYROCARE",
+    "match": "token",
+    "senders": [
+      "*"
+    ],
+    "context": [],
+    "category": "health",
+    "priority": 800,
+    "source": "catalogue"
+  },
+  {
+    "merchantKey": "LAL PATHLABS",
+    "match": "token",
+    "senders": [
+      "*"
+    ],
+    "context": [],
+    "category": "health",
+    "priority": 900,
+    "source": "catalogue"
+  },
+  {
+    "merchantKey": "PHARMACY",
+    "match": "token",
+    "senders": [
+      "*"
+    ],
+    "context": [],
+    "category": "health",
+    "priority": 400,
+    "source": "catalogue"
+  },
+  {
+    "merchantKey": "HOSPITAL",
+    "match": "token",
+    "senders": [
+      "*"
+    ],
+    "context": [],
+    "category": "health",
+    "priority": 400,
+    "source": "catalogue"
+  },
+  {
+    "merchantKey": "CLINIC",
+    "match": "token",
+    "senders": [
+      "*"
+    ],
+    "context": [],
+    "category": "health",
+    "priority": 400,
+    "source": "catalogue"
+  },
+  {
+    "merchantKey": "MEDICAL",
+    "match": "token",
+    "senders": [
+      "*"
+    ],
+    "context": [],
+    "category": "health",
+    "priority": 400,
+    "source": "catalogue"
+  },
+  {
+    "merchantKey": "MEDICALS",
+    "match": "token",
+    "senders": [
+      "*"
+    ],
+    "context": [],
+    "category": "health",
+    "priority": 400,
+    "source": "catalogue"
+  },
+  {
+    "merchantKey": "DIAGNOSTICS",
+    "match": "token",
+    "senders": [
+      "*"
+    ],
+    "context": [],
+    "category": "health",
+    "priority": 400,
+    "source": "catalogue"
+  },
+  {
+    "merchantKey": "PATHOLOGY",
+    "match": "token",
+    "senders": [
+      "*"
+    ],
+    "context": [],
+    "category": "health",
+    "priority": 400,
+    "source": "catalogue"
+  },
+  {
+    "merchantKey": "DENTAL",
+    "match": "token",
+    "senders": [
+      "*"
+    ],
+    "context": [],
+    "category": "health",
+    "priority": 400,
+    "source": "catalogue"
+  },
+  {
+    "merchantKey": "AIRTEL",
+    "match": "token",
+    "senders": [
+      "*"
+    ],
+    "context": [],
+    "category": "bills",
+    "priority": 800,
+    "source": "catalogue"
+  },
+  {
+    "merchantKey": "BHARTI AIRTEL",
+    "match": "token",
+    "senders": [
+      "*"
+    ],
+    "context": [],
+    "category": "bills",
+    "priority": 900,
+    "source": "catalogue"
+  },
+  {
+    "merchantKey": "RELIANCE JIO",
+    "match": "token",
+    "senders": [
+      "*"
+    ],
+    "context": [],
+    "category": "bills",
+    "priority": 900,
+    "source": "catalogue"
+  },
+  {
+    "merchantKey": "VODAFONE IDEA",
+    "match": "token",
+    "senders": [
+      "*"
+    ],
+    "context": [],
+    "category": "bills",
+    "priority": 900,
+    "source": "catalogue"
+  },
+  {
+    "merchantKey": "VODAFONE",
+    "match": "token",
+    "senders": [
+      "*"
+    ],
+    "context": [],
+    "category": "bills",
+    "priority": 800,
+    "source": "catalogue"
+  },
+  {
+    "merchantKey": "BSNL",
+    "match": "token",
+    "senders": [
+      "*"
+    ],
+    "context": [],
+    "category": "bills",
+    "priority": 800,
+    "source": "catalogue"
+  },
+  {
+    "merchantKey": "TATA POWER",
+    "match": "token",
+    "senders": [
+      "*"
+    ],
+    "context": [],
+    "category": "bills",
+    "priority": 900,
+    "source": "catalogue"
+  },
+  {
+    "merchantKey": "ADANI ELECTRICITY",
+    "match": "token",
+    "senders": [
+      "*"
+    ],
+    "context": [],
+    "category": "bills",
+    "priority": 900,
+    "source": "catalogue"
+  },
+  {
+    "merchantKey": "BESCOM",
+    "match": "token",
+    "senders": [
+      "*"
+    ],
+    "context": [],
+    "category": "bills",
+    "priority": 800,
+    "source": "catalogue"
+  },
+  {
+    "merchantKey": "BSES",
+    "match": "token",
+    "senders": [
+      "*"
+    ],
+    "context": [],
+    "category": "bills",
+    "priority": 800,
+    "source": "catalogue"
+  },
+  {
+    "merchantKey": "MAHADISCOM",
+    "match": "token",
+    "senders": [
+      "*"
+    ],
+    "context": [],
+    "category": "bills",
+    "priority": 800,
+    "source": "catalogue"
+  },
+  {
+    "merchantKey": "TSSPDCL",
+    "match": "token",
+    "senders": [
+      "*"
+    ],
+    "context": [],
+    "category": "bills",
+    "priority": 800,
+    "source": "catalogue"
+  },
+  {
+    "merchantKey": "TSNPDCL",
+    "match": "token",
+    "senders": [
+      "*"
+    ],
+    "context": [],
+    "category": "bills",
+    "priority": 800,
+    "source": "catalogue"
+  },
+  {
+    "merchantKey": "TANGEDCO",
+    "match": "token",
+    "senders": [
+      "*"
+    ],
+    "context": [],
+    "category": "bills",
+    "priority": 800,
+    "source": "catalogue"
+  },
+  {
+    "merchantKey": "TNEB",
+    "match": "token",
+    "senders": [
+      "*"
+    ],
+    "context": [],
+    "category": "bills",
+    "priority": 800,
+    "source": "catalogue"
+  },
+  {
+    "merchantKey": "UPPCL",
+    "match": "token",
+    "senders": [
+      "*"
+    ],
+    "context": [],
+    "category": "bills",
+    "priority": 800,
+    "source": "catalogue"
+  },
+  {
+    "merchantKey": "WBSEDCL",
+    "match": "token",
+    "senders": [
+      "*"
+    ],
+    "context": [],
+    "category": "bills",
+    "priority": 800,
+    "source": "catalogue"
+  },
+  {
+    "merchantKey": "DHBVN",
+    "match": "token",
+    "senders": [
+      "*"
+    ],
+    "context": [],
+    "category": "bills",
+    "priority": 800,
+    "source": "catalogue"
+  },
+  {
+    "merchantKey": "PSPCL",
+    "match": "token",
+    "senders": [
+      "*"
+    ],
+    "context": [],
+    "category": "bills",
+    "priority": 800,
+    "source": "catalogue"
+  },
+  {
+    "merchantKey": "KSEB",
+    "match": "token",
+    "senders": [
+      "*"
+    ],
+    "context": [],
+    "category": "bills",
+    "priority": 800,
+    "source": "catalogue"
+  },
+  {
+    "merchantKey": "JVVNL",
+    "match": "token",
+    "senders": [
+      "*"
+    ],
+    "context": [],
+    "category": "bills",
+    "priority": 800,
+    "source": "catalogue"
+  },
+  {
+    "merchantKey": "TORRENT POWER",
+    "match": "token",
+    "senders": [
+      "*"
+    ],
+    "context": [],
+    "category": "bills",
+    "priority": 900,
+    "source": "catalogue"
+  },
+  {
+    "merchantKey": "CESC",
+    "match": "token",
+    "senders": [
+      "*"
+    ],
+    "context": [],
+    "category": "bills",
+    "priority": 800,
+    "source": "catalogue"
+  },
+  {
+    "merchantKey": "NDMC",
+    "match": "token",
+    "senders": [
+      "*"
+    ],
+    "context": [],
+    "category": "bills",
+    "priority": 800,
+    "source": "catalogue"
+  },
+  {
+    "merchantKey": "MAHANAGAR GAS",
+    "match": "token",
+    "senders": [
+      "*"
+    ],
+    "context": [],
+    "category": "bills",
+    "priority": 900,
+    "source": "catalogue"
+  },
+  {
+    "merchantKey": "MGL",
+    "match": "token",
+    "senders": [
+      "*"
+    ],
+    "context": [],
+    "category": "bills",
+    "priority": 800,
+    "source": "catalogue"
+  },
+  {
+    "merchantKey": "INDRAPRASTHA GAS",
+    "match": "token",
+    "senders": [
+      "*"
+    ],
+    "context": [],
+    "category": "bills",
+    "priority": 900,
+    "source": "catalogue"
+  },
+  {
+    "merchantKey": "IGL",
+    "match": "token",
+    "senders": [
+      "*"
+    ],
+    "context": [],
+    "category": "bills",
+    "priority": 800,
+    "source": "catalogue"
+  },
+  {
+    "merchantKey": "ADANI GAS",
+    "match": "token",
+    "senders": [
+      "*"
+    ],
+    "context": [],
+    "category": "bills",
+    "priority": 900,
+    "source": "catalogue"
+  },
+  {
+    "merchantKey": "GUJARAT GAS",
+    "match": "token",
+    "senders": [
+      "*"
+    ],
+    "context": [],
+    "category": "bills",
+    "priority": 900,
+    "source": "catalogue"
+  },
+  {
+    "merchantKey": "HP GAS",
+    "match": "token",
+    "senders": [
+      "*"
+    ],
+    "context": [],
+    "category": "bills",
+    "priority": 900,
+    "source": "catalogue"
+  },
+  {
+    "merchantKey": "BHARAT GAS",
+    "match": "token",
+    "senders": [
+      "*"
+    ],
+    "context": [],
+    "category": "bills",
+    "priority": 900,
+    "source": "catalogue"
+  },
+  {
+    "merchantKey": "INDANE",
+    "match": "token",
+    "senders": [
+      "*"
+    ],
+    "context": [],
+    "category": "bills",
+    "priority": 800,
+    "source": "catalogue"
+  },
+  {
+    "merchantKey": "ACT FIBERNET",
+    "match": "token",
+    "senders": [
+      "*"
+    ],
+    "context": [],
+    "category": "bills",
+    "priority": 900,
+    "source": "catalogue"
+  },
+  {
+    "merchantKey": "ACT FIBRENET",
+    "match": "token",
+    "senders": [
+      "*"
+    ],
+    "context": [],
+    "category": "bills",
+    "priority": 900,
+    "source": "catalogue"
+  },
+  {
+    "merchantKey": "ACT CORP",
+    "match": "token",
+    "senders": [
+      "*"
+    ],
+    "context": [],
+    "category": "bills",
+    "priority": 900,
+    "source": "catalogue"
+  },
+  {
+    "merchantKey": "TATA PLAY",
+    "match": "token",
+    "senders": [
+      "*"
+    ],
+    "context": [],
+    "category": "bills",
+    "priority": 900,
+    "source": "catalogue"
+  },
+  {
+    "merchantKey": "TATA SKY",
+    "match": "token",
+    "senders": [
+      "*"
+    ],
+    "context": [],
+    "category": "bills",
+    "priority": 900,
+    "source": "catalogue"
+  },
+  {
+    "merchantKey": "DISH TV",
+    "match": "token",
+    "senders": [
+      "*"
+    ],
+    "context": [],
+    "category": "bills",
+    "priority": 900,
+    "source": "catalogue"
+  },
+  {
+    "merchantKey": "SUN DIRECT",
+    "match": "token",
+    "senders": [
+      "*"
+    ],
+    "context": [],
+    "category": "bills",
+    "priority": 900,
+    "source": "catalogue"
+  },
+  {
+    "merchantKey": "HATHWAY",
+    "match": "token",
+    "senders": [
+      "*"
+    ],
+    "context": [],
+    "category": "bills",
+    "priority": 800,
+    "source": "catalogue"
+  },
+  {
+    "merchantKey": "EXCITEL",
+    "match": "token",
+    "senders": [
+      "*"
+    ],
+    "context": [],
+    "category": "bills",
+    "priority": 800,
+    "source": "catalogue"
+  },
+  {
+    "merchantKey": "JIOFIBER",
+    "match": "token",
+    "senders": [
+      "*"
+    ],
+    "context": [],
+    "category": "bills",
+    "priority": 800,
+    "source": "catalogue"
+  },
+  {
+    "merchantKey": "JIO FIBER",
+    "match": "token",
+    "senders": [
+      "*"
+    ],
+    "context": [],
+    "category": "bills",
+    "priority": 900,
+    "source": "catalogue"
+  },
+  {
+    "merchantKey": "JIO",
+    "match": "token",
+    "senders": [
+      "*"
+    ],
+    "context": [],
+    "category": "bills",
+    "priority": 700,
+    "source": "catalogue"
+  },
+  {
+    "merchantKey": "ELECTRICITY",
+    "match": "token",
+    "senders": [
+      "*"
+    ],
+    "context": [],
+    "category": "bills",
+    "priority": 400,
+    "source": "catalogue"
+  },
+  {
+    "merchantKey": "BROADBAND",
+    "match": "token",
+    "senders": [
+      "*"
+    ],
+    "context": [],
+    "category": "bills",
+    "priority": 400,
+    "source": "catalogue"
+  },
+  {
+    "merchantKey": "DTH",
+    "match": "token",
+    "senders": [
+      "*"
+    ],
+    "context": [],
+    "category": "bills",
+    "priority": 400,
+    "source": "catalogue"
+  },
+  {
+    "merchantKey": "RECHARGE",
+    "match": "token",
+    "senders": [
+      "*"
+    ],
+    "context": [],
+    "category": "bills",
+    "priority": 400,
+    "source": "catalogue"
+  },
+  {
+    "merchantKey": "WATER BILL",
+    "match": "token",
+    "senders": [
+      "*"
+    ],
+    "context": [],
+    "category": "bills",
+    "priority": 400,
+    "source": "catalogue"
+  },
+  {
+    "merchantKey": "PIPED GAS",
+    "match": "token",
+    "senders": [
+      "*"
+    ],
+    "context": [],
+    "category": "bills",
+    "priority": 400,
+    "source": "catalogue"
+  },
+  {
+    "merchantKey": "VI",
+    "match": "exact",
+    "senders": [
+      "*"
+    ],
+    "context": [],
+    "category": "bills",
+    "priority": 700,
+    "source": "catalogue"
+  },
+  {
+    "merchantKey": "NOBROKER",
+    "match": "token",
+    "senders": [
+      "*"
+    ],
+    "context": [],
+    "category": "rent",
+    "priority": 800,
+    "source": "catalogue"
+  },
+  {
+    "merchantKey": "NO BROKER",
+    "match": "token",
+    "senders": [
+      "*"
+    ],
+    "context": [],
+    "category": "rent",
+    "priority": 900,
+    "source": "catalogue"
+  },
+  {
+    "merchantKey": "NOBROKERHOOD",
+    "match": "token",
+    "senders": [
+      "*"
+    ],
+    "context": [],
+    "category": "rent",
+    "priority": 800,
+    "source": "catalogue"
+  },
+  {
+    "merchantKey": "RED GIRAFFE",
+    "match": "token",
+    "senders": [
+      "*"
+    ],
+    "context": [],
+    "category": "rent",
+    "priority": 900,
+    "source": "catalogue"
+  },
+  {
+    "merchantKey": "REDGIRAFFE",
+    "match": "token",
+    "senders": [
+      "*"
+    ],
+    "context": [],
+    "category": "rent",
+    "priority": 800,
+    "source": "catalogue"
+  },
+  {
+    "merchantKey": "RED GIRRAFFE",
+    "match": "token",
+    "senders": [
+      "*"
+    ],
+    "context": [],
+    "category": "rent",
+    "priority": 900,
+    "source": "catalogue"
+  },
+  {
+    "merchantKey": "REDGIRRAFFE",
+    "match": "token",
+    "senders": [
+      "*"
+    ],
+    "context": [],
+    "category": "rent",
+    "priority": 800,
+    "source": "catalogue"
+  },
+  {
+    "merchantKey": "MAGICBRICKS",
+    "match": "token",
+    "senders": [
+      "*"
+    ],
+    "context": [],
+    "category": "rent",
+    "priority": 800,
+    "source": "catalogue"
+  },
+  {
+    "merchantKey": "RENT PAY",
+    "match": "token",
+    "senders": [
+      "*"
+    ],
+    "context": [],
+    "category": "rent",
+    "priority": 900,
+    "source": "catalogue"
+  },
+  {
+    "merchantKey": "RENTPAY",
+    "match": "token",
+    "senders": [
+      "*"
+    ],
+    "context": [],
+    "category": "rent",
+    "priority": 800,
+    "source": "catalogue"
+  },
+  {
+    "merchantKey": "RENT PAYMENT",
+    "match": "token",
+    "senders": [
+      "*"
+    ],
+    "context": [],
+    "category": "rent",
+    "priority": 900,
+    "source": "catalogue"
+  },
+  {
+    "merchantKey": "LIC",
+    "match": "token",
+    "senders": [
+      "*"
+    ],
+    "context": [],
+    "category": "insurance",
+    "priority": 800,
+    "source": "catalogue"
+  },
+  {
+    "merchantKey": "LIC OF INDIA",
+    "match": "token",
+    "senders": [
+      "*"
+    ],
+    "context": [],
+    "category": "insurance",
+    "priority": 900,
+    "source": "catalogue"
+  },
+  {
+    "merchantKey": "LICINDIA",
+    "match": "token",
+    "senders": [
+      "*"
+    ],
+    "context": [],
+    "category": "insurance",
+    "priority": 800,
+    "source": "catalogue"
+  },
+  {
+    "merchantKey": "POLICYBAZAAR",
+    "match": "token",
+    "senders": [
+      "*"
+    ],
+    "context": [],
+    "category": "insurance",
+    "priority": 800,
+    "source": "catalogue"
+  },
+  {
+    "merchantKey": "HDFC LIFE",
+    "match": "token",
+    "senders": [
+      "*"
+    ],
+    "context": [],
+    "category": "insurance",
+    "priority": 900,
+    "source": "catalogue"
+  },
+  {
+    "merchantKey": "SBI LIFE",
+    "match": "token",
+    "senders": [
+      "*"
+    ],
+    "context": [],
+    "category": "insurance",
+    "priority": 900,
+    "source": "catalogue"
+  },
+  {
+    "merchantKey": "MAX LIFE",
+    "match": "token",
+    "senders": [
+      "*"
+    ],
+    "context": [],
+    "category": "insurance",
+    "priority": 900,
+    "source": "catalogue"
+  },
+  {
+    "merchantKey": "ICICI PRUDENTIAL",
+    "match": "token",
+    "senders": [
+      "*"
+    ],
+    "context": [],
+    "category": "insurance",
+    "priority": 900,
+    "source": "catalogue"
+  },
+  {
+    "merchantKey": "ICICI LOMBARD",
+    "match": "token",
+    "senders": [
+      "*"
+    ],
+    "context": [],
+    "category": "insurance",
+    "priority": 900,
+    "source": "catalogue"
+  },
+  {
+    "merchantKey": "STAR HEALTH",
+    "match": "token",
+    "senders": [
+      "*"
+    ],
+    "context": [],
+    "category": "insurance",
+    "priority": 900,
+    "source": "catalogue"
+  },
+  {
+    "merchantKey": "CARE HEALTH",
+    "match": "token",
+    "senders": [
+      "*"
+    ],
+    "context": [],
+    "category": "insurance",
+    "priority": 900,
+    "source": "catalogue"
+  },
+  {
+    "merchantKey": "NIVA BUPA",
+    "match": "token",
+    "senders": [
+      "*"
+    ],
+    "context": [],
+    "category": "insurance",
+    "priority": 900,
+    "source": "catalogue"
+  },
+  {
+    "merchantKey": "BAJAJ ALLIANZ",
+    "match": "token",
+    "senders": [
+      "*"
+    ],
+    "context": [],
+    "category": "insurance",
+    "priority": 900,
+    "source": "catalogue"
+  },
+  {
+    "merchantKey": "TATA AIG",
+    "match": "token",
+    "senders": [
+      "*"
+    ],
+    "context": [],
+    "category": "insurance",
+    "priority": 900,
+    "source": "catalogue"
+  },
+  {
+    "merchantKey": "NEW INDIA ASSURANCE",
+    "match": "token",
+    "senders": [
+      "*"
+    ],
+    "context": [],
+    "category": "insurance",
+    "priority": 900,
+    "source": "catalogue"
+  },
+  {
+    "merchantKey": "ACKO",
+    "match": "token",
+    "senders": [
+      "*"
+    ],
+    "context": [],
+    "category": "insurance",
+    "priority": 800,
+    "source": "catalogue"
+  },
+  {
+    "merchantKey": "DIGIT INSURANCE",
+    "match": "token",
+    "senders": [
+      "*"
+    ],
+    "context": [],
+    "category": "insurance",
+    "priority": 900,
+    "source": "catalogue"
+  },
+  {
+    "merchantKey": "GO DIGIT",
+    "match": "token",
+    "senders": [
+      "*"
+    ],
+    "context": [],
+    "category": "insurance",
+    "priority": 900,
+    "source": "catalogue"
+  },
+  {
+    "merchantKey": "RELIANCE GENERAL",
+    "match": "token",
+    "senders": [
+      "*"
+    ],
+    "context": [],
+    "category": "insurance",
+    "priority": 900,
+    "source": "catalogue"
+  },
+  {
+    "merchantKey": "INSURANCE",
+    "match": "token",
+    "senders": [
+      "*"
+    ],
+    "context": [],
+    "category": "insurance",
+    "priority": 400,
+    "source": "catalogue"
+  },
+  {
+    "merchantKey": "ASSURANCE",
+    "match": "token",
+    "senders": [
+      "*"
+    ],
+    "context": [],
+    "category": "insurance",
+    "priority": 400,
+    "source": "catalogue"
+  },
+  {
+    "merchantKey": "BYJUS",
+    "match": "token",
+    "senders": [
+      "*"
+    ],
+    "context": [],
+    "category": "education",
+    "priority": 800,
+    "source": "catalogue"
+  },
+  {
+    "merchantKey": "UNACADEMY",
+    "match": "token",
+    "senders": [
+      "*"
+    ],
+    "context": [],
+    "category": "education",
+    "priority": 800,
+    "source": "catalogue"
+  },
+  {
+    "merchantKey": "UDEMY",
+    "match": "token",
+    "senders": [
+      "*"
+    ],
+    "context": [],
+    "category": "education",
+    "priority": 800,
+    "source": "catalogue"
+  },
+  {
+    "merchantKey": "COURSERA",
+    "match": "token",
+    "senders": [
+      "*"
+    ],
+    "context": [],
+    "category": "education",
+    "priority": 800,
+    "source": "catalogue"
+  },
+  {
+    "merchantKey": "UPGRAD",
+    "match": "token",
+    "senders": [
+      "*"
+    ],
+    "context": [],
+    "category": "education",
+    "priority": 800,
+    "source": "catalogue"
+  },
+  {
+    "merchantKey": "SIMPLILEARN",
+    "match": "token",
+    "senders": [
+      "*"
+    ],
+    "context": [],
+    "category": "education",
+    "priority": 800,
+    "source": "catalogue"
+  },
+  {
+    "merchantKey": "VEDANTU",
+    "match": "token",
+    "senders": [
+      "*"
+    ],
+    "context": [],
+    "category": "education",
+    "priority": 800,
+    "source": "catalogue"
+  },
+  {
+    "merchantKey": "PHYSICS WALLAH",
+    "match": "token",
+    "senders": [
+      "*"
+    ],
+    "context": [],
+    "category": "education",
+    "priority": 900,
+    "source": "catalogue"
+  },
+  {
+    "merchantKey": "PHYSICSWALLAH",
+    "match": "token",
+    "senders": [
+      "*"
+    ],
+    "context": [],
+    "category": "education",
+    "priority": 800,
+    "source": "catalogue"
+  },
+  {
+    "merchantKey": "TOPPR",
+    "match": "token",
+    "senders": [
+      "*"
+    ],
+    "context": [],
+    "category": "education",
+    "priority": 800,
+    "source": "catalogue"
+  },
+  {
+    "merchantKey": "WHITEHAT JR",
+    "match": "token",
+    "senders": [
+      "*"
+    ],
+    "context": [],
+    "category": "education",
+    "priority": 900,
+    "source": "catalogue"
+  },
+  {
+    "merchantKey": "SCHOOL",
+    "match": "token",
+    "senders": [
+      "*"
+    ],
+    "context": [],
+    "category": "education",
+    "priority": 400,
+    "source": "catalogue"
+  },
+  {
+    "merchantKey": "COLLEGE",
+    "match": "token",
+    "senders": [
+      "*"
+    ],
+    "context": [],
+    "category": "education",
+    "priority": 400,
+    "source": "catalogue"
+  },
+  {
+    "merchantKey": "UNIVERSITY",
+    "match": "token",
+    "senders": [
+      "*"
+    ],
+    "context": [],
+    "category": "education",
+    "priority": 400,
+    "source": "catalogue"
+  },
+  {
+    "merchantKey": "ACADEMY",
+    "match": "token",
+    "senders": [
+      "*"
+    ],
+    "context": [],
+    "category": "education",
+    "priority": 400,
+    "source": "catalogue"
+  },
+  {
+    "merchantKey": "TUITION",
+    "match": "token",
+    "senders": [
+      "*"
+    ],
+    "context": [],
+    "category": "education",
+    "priority": 400,
+    "source": "catalogue"
+  },
+  {
+    "merchantKey": "COACHING",
+    "match": "token",
+    "senders": [
+      "*"
+    ],
+    "context": [],
+    "category": "education",
+    "priority": 400,
+    "source": "catalogue"
+  },
+  {
+    "merchantKey": "PARIVAHAN",
+    "match": "token",
+    "senders": [
+      "*"
+    ],
+    "context": [],
+    "category": "government",
+    "priority": 800,
+    "source": "catalogue"
+  },
+  {
+    "merchantKey": "E CHALLAN",
+    "match": "token",
+    "senders": [
+      "*"
+    ],
+    "context": [],
+    "category": "government",
+    "priority": 900,
+    "source": "catalogue"
+  },
+  {
+    "merchantKey": "PASSPORT SEVA",
+    "match": "token",
+    "senders": [
+      "*"
+    ],
+    "context": [],
+    "category": "government",
+    "priority": 900,
+    "source": "catalogue"
+  },
+  {
+    "merchantKey": "INCOME TAX",
+    "match": "token",
+    "senders": [
+      "*"
+    ],
+    "context": [],
+    "category": "government",
+    "priority": 900,
+    "source": "catalogue"
+  },
+  {
+    "merchantKey": "INCOME TAX DEPARTMENT",
+    "match": "token",
+    "senders": [
+      "*"
+    ],
+    "context": [],
+    "category": "government",
+    "priority": 900,
+    "source": "catalogue"
+  },
+  {
+    "merchantKey": "GSTN",
+    "match": "token",
+    "senders": [
+      "*"
+    ],
+    "context": [],
+    "category": "government",
+    "priority": 800,
+    "source": "catalogue"
+  },
+  {
+    "merchantKey": "GST PAYMENT",
+    "match": "token",
+    "senders": [
+      "*"
+    ],
+    "context": [],
+    "category": "government",
+    "priority": 900,
+    "source": "catalogue"
+  },
+  {
+    "merchantKey": "TRAFFIC POLICE",
+    "match": "token",
+    "senders": [
+      "*"
+    ],
+    "context": [],
+    "category": "government",
+    "priority": 900,
+    "source": "catalogue"
+  },
+  {
+    "merchantKey": "STAMP DUTY",
+    "match": "token",
+    "senders": [
+      "*"
+    ],
+    "context": [],
+    "category": "government",
+    "priority": 900,
+    "source": "catalogue"
+  },
+  {
+    "merchantKey": "CBDT",
+    "match": "token",
+    "senders": [
+      "*"
+    ],
+    "context": [],
+    "category": "government",
+    "priority": 800,
+    "source": "catalogue"
+  },
+  {
+    "merchantKey": "RTO",
+    "match": "token",
+    "senders": [
+      "*"
+    ],
+    "context": [],
+    "category": "government",
+    "priority": 800,
+    "source": "catalogue"
+  },
+  {
+    "merchantKey": "CHALLAN",
+    "match": "token",
+    "senders": [
+      "*"
+    ],
+    "context": [],
+    "category": "government",
+    "priority": 400,
+    "source": "catalogue"
+  },
+  {
+    "merchantKey": "MUNICIPAL",
+    "match": "token",
+    "senders": [
+      "*"
+    ],
+    "context": [],
+    "category": "government",
+    "priority": 400,
+    "source": "catalogue"
+  },
+  {
+    "merchantKey": "BAJAJ FINANCE",
+    "match": "token",
+    "senders": [
+      "*"
+    ],
+    "context": [],
+    "category": "emi",
+    "priority": 900,
+    "source": "catalogue"
+  },
+  {
+    "merchantKey": "BAJAJ FINSERV",
+    "match": "token",
+    "senders": [
+      "*"
+    ],
+    "context": [],
+    "category": "emi",
+    "priority": 900,
+    "source": "catalogue"
+  },
+  {
+    "merchantKey": "TATA CAPITAL",
+    "match": "token",
+    "senders": [
+      "*"
+    ],
+    "context": [],
+    "category": "emi",
+    "priority": 900,
+    "source": "catalogue"
+  },
+  {
+    "merchantKey": "HOME CREDIT",
+    "match": "token",
+    "senders": [
+      "*"
+    ],
+    "context": [],
+    "category": "emi",
+    "priority": 900,
+    "source": "catalogue"
+  },
+  {
+    "merchantKey": "LIC HOUSING FINANCE",
+    "match": "token",
+    "senders": [
+      "*"
+    ],
+    "context": [],
+    "category": "emi",
+    "priority": 900,
+    "source": "catalogue"
+  },
+  {
+    "merchantKey": "LIC HOUSING",
+    "match": "token",
+    "senders": [
+      "*"
+    ],
+    "context": [],
+    "category": "emi",
+    "priority": 900,
+    "source": "catalogue"
+  },
+  {
+    "merchantKey": "MUTHOOT FINANCE",
+    "match": "token",
+    "senders": [
+      "*"
+    ],
+    "context": [],
+    "category": "emi",
+    "priority": 900,
+    "source": "catalogue"
+  },
+  {
+    "merchantKey": "MANAPPURAM FINANCE",
+    "match": "token",
+    "senders": [
+      "*"
+    ],
+    "context": [],
+    "category": "emi",
+    "priority": 900,
+    "source": "catalogue"
+  },
+  {
+    "merchantKey": "KREDITBEE",
+    "match": "token",
+    "senders": [
+      "*"
+    ],
+    "context": [],
+    "category": "emi",
+    "priority": 800,
+    "source": "catalogue"
+  },
+  {
+    "merchantKey": "MONEYVIEW",
+    "match": "token",
+    "senders": [
+      "*"
+    ],
+    "context": [],
+    "category": "emi",
+    "priority": 800,
+    "source": "catalogue"
+  },
+  {
+    "merchantKey": "FULLERTON INDIA",
+    "match": "token",
+    "senders": [
+      "*"
+    ],
+    "context": [],
+    "category": "emi",
+    "priority": 900,
+    "source": "catalogue"
+  },
+  {
+    "merchantKey": "L&T FINANCE",
+    "match": "token",
+    "senders": [
+      "*"
+    ],
+    "context": [],
+    "category": "emi",
+    "priority": 900,
+    "source": "catalogue"
+  },
+  {
+    "merchantKey": "HERO FINCORP",
+    "match": "token",
+    "senders": [
+      "*"
+    ],
+    "context": [],
+    "category": "emi",
+    "priority": 900,
+    "source": "catalogue"
+  },
+  {
+    "merchantKey": "ADITYA BIRLA FINANCE",
+    "match": "token",
+    "senders": [
+      "*"
+    ],
+    "context": [],
+    "category": "emi",
+    "priority": 900,
+    "source": "catalogue"
+  },
+  {
+    "merchantKey": "SHRIRAM FINANCE",
+    "match": "token",
+    "senders": [
+      "*"
+    ],
+    "context": [],
+    "category": "emi",
+    "priority": 900,
+    "source": "catalogue"
+  },
+  {
+    "merchantKey": "CHOLAMANDALAM",
+    "match": "token",
+    "senders": [
+      "*"
+    ],
+    "context": [],
+    "category": "emi",
+    "priority": 800,
+    "source": "catalogue"
+  },
+  {
+    "merchantKey": "TVS CREDIT",
+    "match": "token",
+    "senders": [
+      "*"
+    ],
+    "context": [],
+    "category": "emi",
+    "priority": 900,
+    "source": "catalogue"
+  },
+  {
+    "merchantKey": "EMI",
+    "match": "token",
+    "senders": [
+      "*"
+    ],
+    "context": [],
+    "category": "emi",
+    "priority": 400,
+    "source": "catalogue"
+  },
+  {
+    "merchantKey": "PAYTM WALLET",
+    "match": "token",
+    "senders": [
+      "*"
+    ],
+    "context": [],
+    "category": "wallet",
+    "priority": 900,
+    "source": "catalogue"
+  },
+  {
+    "merchantKey": "PHONEPE WALLET",
+    "match": "token",
+    "senders": [
+      "*"
+    ],
+    "context": [],
+    "category": "wallet",
+    "priority": 900,
+    "source": "catalogue"
+  },
+  {
+    "merchantKey": "MOBIKWIK",
+    "match": "token",
+    "senders": [
+      "*"
+    ],
+    "context": [],
+    "category": "wallet",
+    "priority": 800,
+    "source": "catalogue"
+  },
+  {
+    "merchantKey": "MOBIKWIK WALLET",
+    "match": "token",
+    "senders": [
+      "*"
+    ],
+    "context": [],
+    "category": "wallet",
+    "priority": 900,
+    "source": "catalogue"
+  },
+  {
+    "merchantKey": "FREECHARGE",
+    "match": "token",
+    "senders": [
+      "*"
+    ],
+    "context": [],
+    "category": "wallet",
+    "priority": 800,
+    "source": "catalogue"
+  },
+  {
+    "merchantKey": "WALLET LOAD",
+    "match": "token",
+    "senders": [
+      "*"
+    ],
+    "context": [],
+    "category": "wallet",
+    "priority": 900,
+    "source": "catalogue"
+  },
+  {
+    "merchantKey": "WALLET TOPUP",
+    "match": "token",
+    "senders": [
+      "*"
+    ],
+    "context": [],
+    "category": "wallet",
+    "priority": 900,
+    "source": "catalogue"
+  },
+  {
+    "merchantKey": "WALLET TOP UP",
+    "match": "token",
+    "senders": [
+      "*"
+    ],
+    "context": [],
+    "category": "wallet",
+    "priority": 900,
+    "source": "catalogue"
+  },
+  {
+    "merchantKey": "PAYZAPP WALLET",
+    "match": "token",
+    "senders": [
+      "*"
+    ],
+    "context": [],
+    "category": "wallet",
+    "priority": 900,
+    "source": "catalogue"
+  },
+  {
+    "merchantKey": "AMAZON PAY WALL",
+    "match": "token",
+    "senders": [
+      "*"
+    ],
+    "context": [],
+    "category": "wallet",
+    "priority": 950,
+    "source": "catalogue"
+  },
+  {
+    "merchantKey": "AMAZON PAY WALLET",
+    "match": "token",
+    "senders": [
+      "*"
+    ],
+    "context": [],
+    "category": "wallet",
+    "priority": 950,
+    "source": "catalogue"
+  },
+  {
+    "merchantKey": "AMAZON PAY IN E",
+    "match": "token",
+    "senders": [
+      "*"
+    ],
+    "context": [],
+    "category": "wallet",
+    "priority": 950,
+    "source": "catalogue"
+  },
+  {
+    "merchantKey": "INDIGO",
+    "match": "token",
+    "senders": [
+      "*"
+    ],
+    "context": [
+      "AIRLINES",
+      "AIRLINE",
+      "AVIATION",
+      "FLIGHT",
+      "6E"
+    ],
+    "category": "travel",
+    "priority": 950,
+    "source": "catalogue"
+  }
+]

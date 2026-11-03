@@ -1,0 +1,18 @@
+{
+  "id": "wp03d:telecom_retention_charge",
+  "templateHash": "3fc61636eb5c3aeb8e08396cdaf11087fa280f325cfb4f7758863988069d43c6",
+  "weight": 1,
+  "source": "synthetic",
+  "messages": [
+    {
+      "sender": "JX-JIOINF",
+      "body": "Number retention charges of Rs. 9.88 has been deducted from Top-up balance on Jio Number 9000000000 as there was no usage observed for last 90 days.",
+      "observedAt": "2026-12-01T09:00:00.000Z"
+    }
+  ],
+  "expect": {
+    "ignore": true
+  },
+  "note": "Deduction from prepaid talktime, not from a bank, card or wallet the user tracks.",
+  "origin": "wp03d"
+}

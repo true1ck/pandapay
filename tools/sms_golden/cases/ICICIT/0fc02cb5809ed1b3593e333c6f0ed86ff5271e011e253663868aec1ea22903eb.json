@@ -1,0 +1,35 @@
+{
+  "id": "wp03d:limit_spend_limit_changed",
+  "templateHash": "0fc02cb5809ed1b3593e333c6f0ed86ff5271e011e253663868aec1ea22903eb",
+  "weight": 1,
+  "source": "synthetic",
+  "messages": [
+    {
+      "sender": "AX-ICICIT-S",
+      "body": "Dear Customer, we have changed the spend limit on your ICICI Bank Credit Card XX1234 from INR 100000 to INR 150000 on 2026-11-02.",
+      "observedAt": "2026-12-01T09:00:00.000Z"
+    }
+  ],
+  "expect": {
+    "facts": [
+      {
+        "factType": "limit_change",
+        "attrs": {
+          "previousMinor": 10000000
+        },
+        "amounts": [
+          {
+            "role": "credit_limit",
+            "minor": 15000000
+          }
+        ],
+        "instrument": {
+          "kind": "credit_card",
+          "issuerSlug": "icici",
+          "maskDigits": "1234"
+        }
+      }
+    ]
+  },
+  "origin": "wp03d"
+}

@@ -1,0 +1,37 @@
+{
+  "id": "wp03d:reward_redeemed_verb_first",
+  "templateHash": "37d2c63304fb607d8af8f3889fa3cf1cfe8e692144338c37f872aa7e419da053",
+  "weight": 1,
+  "source": "synthetic",
+  "messages": [
+    {
+      "sender": "VM-HDFCBK-S",
+      "body": "You have redeemed 1,500 reward points on your HDFC Bank Credit Card XX5678 worth Rs 375.",
+      "observedAt": "2026-12-01T09:00:00.000Z"
+    }
+  ],
+  "expect": {
+    "facts": [
+      {
+        "factType": "reward",
+        "amounts": [
+          {
+            "role": "points_redeemed",
+            "minor": 1500,
+            "unit": "POINTS"
+          },
+          {
+            "role": "cash_value",
+            "minor": 37500
+          }
+        ],
+        "instrument": {
+          "kind": "credit_card",
+          "issuerSlug": "hdfc",
+          "maskDigits": "5678"
+        }
+      }
+    ]
+  },
+  "origin": "wp03d"
+}

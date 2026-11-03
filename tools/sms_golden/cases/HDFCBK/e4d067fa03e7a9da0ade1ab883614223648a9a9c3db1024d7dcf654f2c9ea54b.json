@@ -1,0 +1,17 @@
+{
+  "id": "wp03d:otp_login",
+  "templateHash": "e4d067fa03e7a9da0ade1ab883614223648a9a9c3db1024d7dcf654f2c9ea54b",
+  "weight": 1,
+  "source": "synthetic",
+  "messages": [
+    {
+      "sender": "VM-HDFCBK-S",
+      "body": "Your OTP for login is 123456. Do not share it with anyone.",
+      "observedAt": "2026-12-01T09:00:00.000Z"
+    }
+  ],
+  "expect": {
+    "ignore": true
+  },
+  "origin": "wp03d"
+}

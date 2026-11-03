@@ -1,0 +1,17 @@
+{
+  "id": "wp03d:limit_notice_no_amount",
+  "templateHash": "c77fa07b6c0c61f82195ff22fd6c53a5acf285dfbb4cce5274d347cc3f99f2e1",
+  "weight": 1,
+  "source": "synthetic",
+  "messages": [
+    {
+      "sender": "VK-BFDLPS-S",
+      "body": "New credit alert! Your loan limit is revised. Check your updated limit here: 1kx.in/abc T&C",
+      "observedAt": "2026-12-01T09:00:00.000Z"
+    }
+  ],
+  "expect": {
+    "ignore": true
+  },
+  "origin": "wp03d"
+}

@@ -1,0 +1,1885 @@
+[
+  {
+    "id": "LIM-INCREASE-01",
+    "version": 1,
+    "family": "limit_change",
+    "senders": [
+      "*"
+    ],
+    "priority": 290,
+    "match": {
+      "pattern": "^(?:(?=[\\s\\S]*?(?:ending(?:\\s+(?:with|in))?|\\bx{1,4}|\\*{2,})[\\s:-]*(?<mask>\\d{4,5})\\b)|)[\\s\\S]*?(?:(?:credit|card|total|spend)\\s+limit|limit\\s+(?:on|of|for)\\s+(?:your\\s+)?[^\\n]{0,40}?\\bcard\\b)[^\\n]{0,100}?\\b(?:has\\s+been\\s+|have\\s+been\\s+|is\\s+(?:now\\s+)?|was\\s+|are\\s+)?(?:enhanced|increased|upgraded|raised|extended)(?:\\s+from\\s+(?:rs\\.?|inr|₹)\\s*(?<prev>[\\d,]+(?:\\.\\d{1,2})?))?\\s+(?:up\\s*)?(?:to)\\s*(?:rs\\.?|inr|₹)\\s*(?<lim>[\\d,]+(?:\\.\\d{1,2})?)",
+      "flags": "i",
+      "rejectAny": [
+        "eligible for",
+        "pre-approved",
+        "pre approved",
+        "apply for",
+        "click here",
+        "would you like",
+        "transaction limit",
+        "txn limit",
+        "usage limit",
+        "upi limit",
+        "daily limit",
+        "atm limit",
+        "pos limit",
+        "online limit",
+        "contactless limit",
+        "international limit",
+        "per transaction",
+        "pinless"
+      ]
+    },
+    "emit": [
+      {
+        "factType": "limit_change",
+        "attrs": {
+          "reason": "increase",
+          "previousMinor": {
+            "from": "prev"
+          }
+        },
+        "amounts": [
+          {
+            "role": "credit_limit",
+            "from": "lim",
+            "unit": "INR"
+          }
+        ],
+        "instrument": {
+          "kind": "credit_card",
+          "maskFrom": "mask"
+        }
+      }
+    ],
+    "confidence": 0.97,
+    "examples": [
+      {
+        "sender": "VM-HDFCBK-S",
+        "body": "Congratulations! The credit limit on your HDFC Bank Credit Card XX5678 has been enhanced to Rs.3,00,000 effective 01-11-26.",
+        "expectFactTypes": [
+          "limit_change"
+        ]
+      },
+      {
+        "sender": "AX-AXISBK-S",
+        "body": "Credit limit across your Axis Bank Credit Card(s) has been increased to INR 80000 with immediate effect.",
+        "expectFactTypes": [
+          "limit_change"
+        ]
+      },
+      {
+        "sender": "AX-ICICIT-S",
+        "body": "Your credit limit on ICICI Bank Credit Card XX9012 has been increased from Rs 1,00,000 to Rs 1,50,000.",
+        "expectFactTypes": [
+          "limit_change"
+        ]
+      },
+      {
+        "sender": "VM-HDFCBK-P",
+        "body": "Your HDFC Bank Credit Card XX5678 is eligible for a limit increase up to Rs 3,50,000. Click hdfcbk.io/abc to accept. T&C",
+        "expectFactTypes": []
+      },
+      {
+        "sender": "VM-HDFCBK-S",
+        "body": "Your daily UPI transaction limit has been increased to Rs 1,00,000.",
+        "expectFactTypes": []
+      }
+    ],
+    "status": "active",
+    "createdBy": "baseline",
+    "updatedAt": "2026-11-03T00:00:00Z"
+  },
+  {
+    "id": "LIM-DECREASE-01",
+    "version": 1,
+    "family": "limit_change",
+    "senders": [
+      "*"
+    ],
+    "priority": 290,
+    "match": {
+      "pattern": "^(?:(?=[\\s\\S]*?(?:ending(?:\\s+(?:with|in))?|\\bx{1,4}|\\*{2,})[\\s:-]*(?<mask>\\d{4,5})\\b)|)[\\s\\S]*?(?:(?:credit|card|total|spend)\\s+limit|limit\\s+(?:on|of|for)\\s+(?:your\\s+)?[^\\n]{0,40}?\\bcard\\b)[^\\n]{0,100}?\\b(?:has\\s+been\\s+|have\\s+been\\s+|is\\s+(?:now\\s+)?|was\\s+|are\\s+)?(?:reduced|decreased|lowered|revised\\s+down(?:ward)?|cut)(?:\\s+from\\s+(?:rs\\.?|inr|₹)\\s*(?<prev>[\\d,]+(?:\\.\\d{1,2})?))?\\s+(?:up\\s*)?(?:to)\\s*(?:rs\\.?|inr|₹)\\s*(?<lim>[\\d,]+(?:\\.\\d{1,2})?)",
+      "flags": "i",
+      "rejectAny": [
+        "eligible for",
+        "pre-approved",
+        "pre approved",
+        "apply for",
+        "click here",
+        "would you like",
+        "transaction limit",
+        "txn limit",
+        "usage limit",
+        "upi limit",
+        "daily limit",
+        "atm limit",
+        "pos limit",
+        "online limit",
+        "contactless limit",
+        "international limit",
+        "per transaction",
+        "pinless"
+      ]
+    },
+    "emit": [
+      {
+        "factType": "limit_change",
+        "attrs": {
+          "reason": "decrease",
+          "previousMinor": {
+            "from": "prev"
+          }
+        },
+        "amounts": [
+          {
+            "role": "credit_limit",
+            "from": "lim",
+            "unit": "INR"
+          }
+        ],
+        "instrument": {
+          "kind": "credit_card",
+          "maskFrom": "mask"
+        }
+      }
+    ],
+    "confidence": 0.97,
+    "examples": [
+      {
+        "sender": "VM-HDFCBK-S",
+        "body": "The credit limit on your HDFC Bank Credit Card XX5678 has been reduced to Rs.1,00,000 effective 01-11-26.",
+        "expectFactTypes": [
+          "limit_change"
+        ]
+      },
+      {
+        "sender": "AX-AXISBK-S",
+        "body": "Your Axis Bank Credit Card credit limit has been decreased from INR 80000 to INR 60000.",
+        "expectFactTypes": [
+          "limit_change"
+        ]
+      },
+      {
+        "sender": "VM-HDFCBK-S",
+        "body": "Your credit limit reduction request for card XX5678 has been received.",
+        "expectFactTypes": []
+      }
+    ],
+    "status": "active",
+    "createdBy": "baseline",
+    "updatedAt": "2026-11-03T00:00:00Z"
+  },
+  {
+    "id": "LIM-UPDATED-01",
+    "version": 1,
+    "family": "limit_change",
+    "senders": [
+      "*"
+    ],
+    "priority": 286,
+    "match": {
+      "pattern": "^(?:(?=[\\s\\S]*?(?:ending(?:\\s+(?:with|in))?|\\bx{1,4}|\\*{2,})[\\s:-]*(?<mask>\\d{4,5})\\b)|)[\\s\\S]*?(?:(?:credit|card|total|spend)\\s+limit|limit\\s+(?:on|of|for)\\s+(?:your\\s+)?[^\\n]{0,40}?\\bcard\\b)[^\\n]{0,100}?\\b(?:has\\s+been\\s+|have\\s+been\\s+|is\\s+(?:now\\s+)?|was\\s+|are\\s+)?(?:updated|revised|changed|modified|set|fixed)(?:\\s+from\\s+(?:rs\\.?|inr|₹)\\s*(?<prev>[\\d,]+(?:\\.\\d{1,2})?))?\\s+(?:up\\s*)?(?:to|at)\\s*(?:rs\\.?|inr|₹)\\s*(?<lim>[\\d,]+(?:\\.\\d{1,2})?)",
+      "flags": "i",
+      "rejectAny": [
+        "eligible for",
+        "pre-approved",
+        "pre approved",
+        "apply for",
+        "click here",
+        "would you like",
+        "transaction limit",
+        "txn limit",
+        "usage limit",
+        "upi limit",
+        "daily limit",
+        "atm limit",
+        "pos limit",
+        "online limit",
+        "contactless limit",
+        "international limit",
+        "per transaction",
+        "pinless"
+      ]
+    },
+    "emit": [
+      {
+        "factType": "limit_change",
+        "attrs": {
+          "reason": "assigned",
+          "previousMinor": {
+            "from": "prev"
+          }
+        },
+        "amounts": [
+          {
+            "role": "credit_limit",
+            "from": "lim",
+            "unit": "INR"
+          }
+        ],
+        "instrument": {
+          "kind": "credit_card",
+          "maskFrom": "mask"
+        }
+      }
+    ],
+    "confidence": 0.97,
+    "examples": [
+      {
+        "sender": "VM-HDFCBK-S",
+        "body": "Your HDFC Bank Credit Card 1366 credit limit has been updated to INR 2,00,000.",
+        "expectFactTypes": [
+          "limit_change"
+        ]
+      },
+      {
+        "sender": "VM-HDFCBK-S",
+        "body": "Your HDFC Bank Credit Card ending 1366 credit limit has been set at INR 2,00,000.",
+        "expectFactTypes": [
+          "limit_change"
+        ]
+      },
+      {
+        "sender": "VM-HDFCBK-S",
+        "body": "Your transaction limit for pinless UPI on your slice credit card has been updated to Rs 5,000.",
+        "expectFactTypes": []
+      }
+    ],
+    "status": "active",
+    "createdBy": "baseline",
+    "updatedAt": "2026-11-03T00:00:00Z"
+  },
+  {
+    "id": "LIM-INCREASE-VERB-01",
+    "version": 1,
+    "family": "limit_change",
+    "senders": [
+      "*"
+    ],
+    "priority": 289,
+    "match": {
+      "pattern": "^(?:(?=[\\s\\S]*?(?:ending(?:\\s+(?:with|in))?|\\bx{1,4}|\\*{2,})[\\s:-]*(?<mask>\\d{4,5})\\b)|)[\\s\\S]*?\\b(?:enhanced|increased|upgraded|raised)\\s+(?:the\\s+|your\\s+)?(?:credit|spend|card|total)\\s+limit\\b[^\\n]{0,80}?(?:\\bfrom\\s+(?:rs\\.?|inr|₹)\\s*(?<prev>[\\d,]+(?:\\.\\d{1,2})?)\\s+)?\\bto\\s*(?:rs\\.?|inr|₹)\\s*(?<lim>[\\d,]+(?:\\.\\d{1,2})?)",
+      "flags": "i",
+      "rejectAny": [
+        "eligible for",
+        "pre-approved",
+        "pre approved",
+        "apply for",
+        "click here",
+        "would you like",
+        "transaction limit",
+        "txn limit",
+        "usage limit",
+        "upi limit",
+        "daily limit",
+        "atm limit",
+        "pos limit",
+        "online limit",
+        "contactless limit",
+        "international limit",
+        "per transaction",
+        "pinless"
+      ]
+    },
+    "emit": [
+      {
+        "factType": "limit_change",
+        "attrs": {
+          "reason": "increase",
+          "previousMinor": {
+            "from": "prev"
+          }
+        },
+        "amounts": [
+          {
+            "role": "credit_limit",
+            "from": "lim",
+            "unit": "INR"
+          }
+        ],
+        "instrument": {
+          "kind": "credit_card",
+          "maskFrom": "mask"
+        }
+      }
+    ],
+    "confidence": 0.95,
+    "examples": [
+      {
+        "sender": "VM-ICICIT-S",
+        "body": "We have increased the credit limit on your ICICI Bank Credit Card XX1234 from INR 100000 to INR 150000 on 02-12-2025.",
+        "expectFactTypes": [
+          "limit_change"
+        ]
+      },
+      {
+        "sender": "VM-ICICIT-S",
+        "body": "We can increase the credit limit on your ICICI Bank Credit Card XX1234 if you apply.",
+        "expectFactTypes": []
+      }
+    ],
+    "status": "active",
+    "createdBy": "baseline",
+    "updatedAt": "2026-11-03T00:00:00Z"
+  },
+  {
+    "id": "LIM-DECREASE-VERB-01",
+    "version": 1,
+    "family": "limit_change",
+    "senders": [
+      "*"
+    ],
+    "priority": 289,
+    "match": {
+      "pattern": "^(?:(?=[\\s\\S]*?(?:ending(?:\\s+(?:with|in))?|\\bx{1,4}|\\*{2,})[\\s:-]*(?<mask>\\d{4,5})\\b)|)[\\s\\S]*?\\b(?:reduced|decreased|lowered)\\s+(?:the\\s+|your\\s+)?(?:credit|spend|card|total)\\s+limit\\b[^\\n]{0,80}?(?:\\bfrom\\s+(?:rs\\.?|inr|₹)\\s*(?<prev>[\\d,]+(?:\\.\\d{1,2})?)\\s+)?\\bto\\s*(?:rs\\.?|inr|₹)\\s*(?<lim>[\\d,]+(?:\\.\\d{1,2})?)",
+      "flags": "i",
+      "rejectAny": [
+        "eligible for",
+        "pre-approved",
+        "pre approved",
+        "apply for",
+        "click here",
+        "would you like",
+        "transaction limit",
+        "txn limit",
+        "usage limit",
+        "upi limit",
+        "daily limit",
+        "atm limit",
+        "pos limit",
+        "online limit",
+        "contactless limit",
+        "international limit",
+        "per transaction",
+        "pinless"
+      ]
+    },
+    "emit": [
+      {
+        "factType": "limit_change",
+        "attrs": {
+          "reason": "decrease",
+          "previousMinor": {
+            "from": "prev"
+          }
+        },
+        "amounts": [
+          {
+            "role": "credit_limit",
+            "from": "lim",
+            "unit": "INR"
+          }
+        ],
+        "instrument": {
+          "kind": "credit_card",
+          "maskFrom": "mask"
+        }
+      }
+    ],
+    "confidence": 0.95,
+    "examples": [
+      {
+        "sender": "VM-ICICIT-S",
+        "body": "We have reduced the credit limit on your ICICI Bank Credit Card XX1234 from INR 150000 to INR 100000.",
+        "expectFactTypes": [
+          "limit_change"
+        ]
+      },
+      {
+        "sender": "VM-ICICIT-S",
+        "body": "Your request to reduce the credit limit on card XX1234 has been received.",
+        "expectFactTypes": []
+      }
+    ],
+    "status": "active",
+    "createdBy": "baseline",
+    "updatedAt": "2026-11-03T00:00:00Z"
+  },
+  {
+    "id": "LIM-CHANGED-VERB-01",
+    "version": 1,
+    "family": "limit_change",
+    "senders": [
+      "*"
+    ],
+    "priority": 289,
+    "match": {
+      "pattern": "^(?:(?=[\\s\\S]*?(?:ending(?:\\s+(?:with|in))?|\\bx{1,4}|\\*{2,})[\\s:-]*(?<mask>\\d{4,5})\\b)|)[\\s\\S]*?\\b(?:changed|revised|modified|updated)\\s+(?:the\\s+|your\\s+)?(?:credit|spend|card|total)\\s+limit\\b[^\\n]{0,80}?(?:\\bfrom\\s+(?:rs\\.?|inr|₹)\\s*(?<prev>[\\d,]+(?:\\.\\d{1,2})?)\\s+)?\\bto\\s*(?:rs\\.?|inr|₹)\\s*(?<lim>[\\d,]+(?:\\.\\d{1,2})?)",
+      "flags": "i",
+      "rejectAny": [
+        "eligible for",
+        "pre-approved",
+        "pre approved",
+        "apply for",
+        "click here",
+        "would you like",
+        "transaction limit",
+        "txn limit",
+        "usage limit",
+        "upi limit",
+        "daily limit",
+        "atm limit",
+        "pos limit",
+        "online limit",
+        "contactless limit",
+        "international limit",
+        "per transaction",
+        "pinless"
+      ]
+    },
+    "emit": [
+      {
+        "factType": "limit_change",
+        "attrs": {
+          "reason": "assigned",
+          "previousMinor": {
+            "from": "prev"
+          }
+        },
+        "amounts": [
+          {
+            "role": "credit_limit",
+            "from": "lim",
+            "unit": "INR"
+          }
+        ],
+        "instrument": {
+          "kind": "credit_card",
+          "maskFrom": "mask"
+        }
+      }
+    ],
+    "confidence": 0.95,
+    "examples": [
+      {
+        "sender": "VM-ICICIT-S",
+        "body": "Dear Customer, we have changed the spend limit on your ICICI Bank Credit Card XX1234 from INR 100000 to INR 150000 on 2025-12-02.",
+        "expectFactTypes": [
+          "limit_change"
+        ]
+      },
+      {
+        "sender": "VM-ICICIT-S",
+        "body": "We have changed your card PIN. Spend limit on the card is unchanged.",
+        "expectFactTypes": []
+      }
+    ],
+    "status": "active",
+    "createdBy": "baseline",
+    "updatedAt": "2026-11-03T00:00:00Z"
+  },
+  {
+    "id": "LIM-INCREASE-02",
+    "version": 1,
+    "family": "limit_change",
+    "senders": [
+      "*"
+    ],
+    "priority": 288,
+    "match": {
+      "pattern": "^(?:(?=[\\s\\S]*?(?:ending(?:\\s+(?:with|in))?|\\bx{1,4}|\\*{2,})[\\s:-]*(?<mask>\\d{4,5})\\b)|)[\\s\\S]*?\\b(?:credit|card|total)\\s+limit\\b[\\s\\S]{0,100}?\\b(?:enhanced|increased|upgraded|raised)\\b[\\s\\S]{0,100}?\\b(?:new|revised|updated)\\s+(?:credit\\s+|card\\s+)?limit\\s+(?:is|of|:|-)\\s*(?:rs\\.?|inr|₹)\\s*(?<lim>[\\d,]+(?:\\.\\d{1,2})?)",
+      "flags": "i",
+      "rejectAny": [
+        "eligible for",
+        "pre-approved",
+        "pre approved",
+        "apply for",
+        "click here",
+        "would you like",
+        "transaction limit",
+        "txn limit",
+        "usage limit",
+        "upi limit",
+        "daily limit",
+        "atm limit",
+        "pos limit",
+        "online limit",
+        "contactless limit",
+        "international limit",
+        "per transaction",
+        "pinless"
+      ]
+    },
+    "emit": [
+      {
+        "factType": "limit_change",
+        "attrs": {
+          "reason": "increase"
+        },
+        "amounts": [
+          {
+            "role": "credit_limit",
+            "from": "lim",
+            "unit": "INR"
+          }
+        ],
+        "instrument": {
+          "kind": "credit_card",
+          "maskFrom": "mask"
+        }
+      }
+    ],
+    "confidence": 0.95,
+    "examples": [
+      {
+        "sender": "VM-SBICRD-S",
+        "body": "Your SBI Card ending 4321 credit limit has been enhanced. New credit limit is Rs 2,50,000.",
+        "expectFactTypes": [
+          "limit_change"
+        ]
+      },
+      {
+        "sender": "VM-SBICRD-S",
+        "body": "Your SBI Card ending 4321 credit limit has been enhanced. Check the app for details.",
+        "expectFactTypes": []
+      }
+    ],
+    "status": "active",
+    "createdBy": "baseline",
+    "updatedAt": "2026-11-03T00:00:00Z"
+  },
+  {
+    "id": "LIM-ASSIGNED-01",
+    "version": 1,
+    "family": "limit_change",
+    "senders": [
+      "*"
+    ],
+    "priority": 285,
+    "match": {
+      "pattern": "^(?:(?=[\\s\\S]*?(?:ending(?:\\s+(?:with|in))?|\\bx{1,4}|\\*{2,})[\\s:-]*(?<mask>\\d{4,5})\\b)|)[\\s\\S]*?\\b(?:sanctioned|assigned|approved|allotted|activated|issued|set)\\b[^\\n]{0,80}?\\b(?:credit\\s+|card\\s+|total\\s+)limit\\s+(?:of|:|is)?\\s*(?:rs\\.?|inr|₹)\\s*(?<lim>[\\d,]+(?:\\.\\d{1,2})?)",
+      "flags": "i",
+      "rejectAny": [
+        "eligible for",
+        "pre-approved",
+        "pre approved",
+        "apply for",
+        "click here",
+        "would you like",
+        "transaction limit",
+        "txn limit",
+        "usage limit",
+        "upi limit",
+        "daily limit",
+        "atm limit",
+        "pos limit",
+        "online limit",
+        "contactless limit",
+        "international limit",
+        "per transaction",
+        "pinless",
+        "available",
+        "avl",
+        "avail"
+      ]
+    },
+    "emit": [
+      {
+        "factType": "limit_change",
+        "attrs": {
+          "reason": "assigned"
+        },
+        "amounts": [
+          {
+            "role": "credit_limit",
+            "from": "lim",
+            "unit": "INR"
+          }
+        ],
+        "instrument": {
+          "kind": "credit_card",
+          "maskFrom": "mask"
+        }
+      }
+    ],
+    "confidence": 0.93,
+    "examples": [
+      {
+        "sender": "VM-HDFCBK-S",
+        "body": "Welcome! Your HDFC Bank Credit Card ending 4321 is activated with a credit limit of Rs 1,00,000.",
+        "expectFactTypes": [
+          "limit_change"
+        ]
+      },
+      {
+        "sender": "VM-SBICRD-S",
+        "body": "Your new SBI Card ending 8812 has been sanctioned a credit limit of Rs 75,000.",
+        "expectFactTypes": [
+          "limit_change"
+        ]
+      },
+      {
+        "sender": "VM-HDFCBK-S",
+        "body": "Your HDFC Bank Credit Card ending 4321 is pre-approved for a credit limit of Rs 5,00,000. Apply now.",
+        "expectFactTypes": []
+      }
+    ],
+    "status": "active",
+    "createdBy": "baseline",
+    "updatedAt": "2026-11-03T00:00:00Z"
+  },
+  {
+    "id": "LIM-STATED-01",
+    "version": 1,
+    "family": "limit_change",
+    "senders": [
+      "*"
+    ],
+    "priority": 275,
+    "match": {
+      "pattern": "^(?:(?=[\\s\\S]*?(?:ending(?:\\s+(?:with|in))?|\\bx{1,4}|\\*{2,})[\\s:-]*(?<mask>\\d{4,5})\\b)|)[\\s\\S]*?\\b(?:credit|card|total)\\s+limit(?:\\s+(?:of|is)|\\s*[:-])\\s*(?:rs\\.?|inr|₹)\\s*(?<lim>[\\d,]+(?:\\.\\d{1,2})?)",
+      "flags": "i",
+      "rejectAny": [
+        "available",
+        "avl",
+        "avail",
+        "balance",
+        "outstanding",
+        "unused",
+        "eligible",
+        "pre-approved",
+        "pre approved",
+        "due",
+        "apply",
+        "joining fee",
+        "lifetime free",
+        "lifetime-free",
+        "upgrade",
+        "annual fee",
+        "zero fee"
+      ]
+    },
+    "emit": [
+      {
+        "factType": "limit_change",
+        "attrs": {
+          "reason": "assigned"
+        },
+        "amounts": [
+          {
+            "role": "credit_limit",
+            "from": "lim",
+            "unit": "INR"
+          }
+        ],
+        "instrument": {
+          "kind": "credit_card",
+          "maskFrom": "mask"
+        }
+      }
+    ],
+    "confidence": 0.85,
+    "examples": [
+      {
+        "sender": "VM-HDFCBK-S",
+        "body": "Total credit limit: ₹250000 on card XXXX1234",
+        "expectFactTypes": [
+          "limit_change"
+        ]
+      },
+      {
+        "sender": "VM-HDFCBK-S",
+        "body": "Your HDFC credit card ending 8406 has a credit limit of Rs. 1,50,000.",
+        "expectFactTypes": [
+          "limit_change"
+        ]
+      },
+      {
+        "sender": "VM-HDFCBK-S",
+        "body": "Available credit limit is Rs 80,000. Amount due is Rs 12,000.",
+        "expectFactTypes": []
+      }
+    ],
+    "status": "active",
+    "createdBy": "baseline",
+    "updatedAt": "2026-11-03T00:00:00Z"
+  },
+  {
+    "id": "REW-EARNED-BAL-CARD",
+    "version": 1,
+    "family": "rewards",
+    "senders": [
+      "*"
+    ],
+    "priority": 290,
+    "match": {
+      "pattern": "^(?:(?=[\\s\\S]*?(?:ending(?:\\s+(?:with|in))?|\\bx{1,4}|\\*{2,})[\\s:-]*(?<mask>\\d{4,5})\\b)|)[\\s\\S]*?\\b(?:earned|credited|awarded|accrued|received)\\s+(?<pts>[\\d,]+)\\s+(?:[a-z0-9+&' -]{0,60}?\\s)?(?:reward\\s+|bonus\\s+|loyalty\\s+|membership\\s+reward\\s+|neu\\s*)?\\w{0,15}(?:points?|coins?)\\b(?:[^\\n]{0,60}?\\bworth\\s+(?:rs\\.?|inr|₹)\\s*(?<cash>[\\d,]+(?:\\.\\d{1,2})?))?[\\s\\S]*?\\b(?:(?:total|available|current|closing|new)\\s+)?(?:reward\\s+)?(?:points?\\s+)?(?:balance|bal)\\b[^\\d\\n]{0,20}(?<bal>[\\d,]+)\\s*(?:reward\\s+)?(?:points?|pts)\\b",
+      "flags": "i",
+      "requireAll": [
+        "card"
+      ],
+      "rejectAny": [
+        "debited",
+        "spent",
+        "withdrawn",
+        "will be credited",
+        "get up to",
+        "eligible"
+      ]
+    },
+    "emit": [
+      {
+        "factType": "reward",
+        "attrs": {},
+        "amounts": [
+          {
+            "role": "points_earned",
+            "from": "pts",
+            "unit": "POINTS"
+          },
+          {
+            "role": "cash_value",
+            "from": "cash",
+            "unit": "INR"
+          }
+        ],
+        "instrument": {
+          "kind": "credit_card",
+          "maskFrom": "mask"
+        }
+      },
+      {
+        "factType": "balance_snapshot",
+        "amounts": [
+          {
+            "role": "points_balance",
+            "from": "bal",
+            "unit": "POINTS"
+          }
+        ],
+        "attrs": {
+          "asOf": {
+            "sameAs": 0,
+            "field": "occurredAt"
+          }
+        },
+        "instrument": {
+          "sameAs": 0
+        }
+      }
+    ],
+    "confidence": 0.97,
+    "examples": [
+      {
+        "sender": "AX-ICICIT-S",
+        "body": "You have earned 50 Amazon Pay ICICI Credit Card reward points worth Rs 50 on your transaction of Rs 1,299.00. Total balance 1,250 points.",
+        "expectFactTypes": [
+          "reward",
+          "balance_snapshot"
+        ]
+      },
+      {
+        "sender": "VM-HDFCBK-S",
+        "body": "Rs.1,499.00 spent on your HDFC Bank Credit Card ending 4321 at AMAZON RETAIL on 04-08-26. You earned 15 reward points.",
+        "expectFactTypes": []
+      }
+    ],
+    "status": "active",
+    "createdBy": "baseline",
+    "updatedAt": "2026-11-03T00:00:00Z"
+  },
+  {
+    "id": "REW-EARNED-CARD",
+    "version": 1,
+    "family": "rewards",
+    "senders": [
+      "*"
+    ],
+    "priority": 285,
+    "match": {
+      "pattern": "^(?:(?=[\\s\\S]*?(?:ending(?:\\s+(?:with|in))?|\\bx{1,4}|\\*{2,})[\\s:-]*(?<mask>\\d{4,5})\\b)|)(?:(?=[\\s\\S]*?\\bexpir(?:es?|ing|y|ed)\\b\\W{0,12}(?:on|by|from)?\\W{0,3}(?<exp>\\d{1,2}[-/ ](?:\\d{1,2}|[a-z]{3,9})[-/ ]\\d{2,4})\\b)|)[\\s\\S]*?\\b(?:earned|credited|awarded|accrued|received)\\s+(?<pts>[\\d,]+)\\s+(?:[a-z0-9+&' -]{0,60}?\\s)?(?:reward\\s+|bonus\\s+|loyalty\\s+|membership\\s+reward\\s+|neu\\s*)?\\w{0,15}(?:points?|coins?)\\b(?:[^\\n]{0,60}?\\bworth\\s+(?:rs\\.?|inr|₹)\\s*(?<cash>[\\d,]+(?:\\.\\d{1,2})?))?",
+      "flags": "i",
+      "requireAll": [
+        "card"
+      ],
+      "rejectAny": [
+        "debited",
+        "spent",
+        "withdrawn",
+        "will be credited",
+        "get up to",
+        "eligible"
+      ]
+    },
+    "emit": [
+      {
+        "factType": "reward",
+        "attrs": {
+          "expiresAt": {
+            "from": "exp"
+          }
+        },
+        "amounts": [
+          {
+            "role": "points_earned",
+            "from": "pts",
+            "unit": "POINTS"
+          },
+          {
+            "role": "cash_value",
+            "from": "cash",
+            "unit": "INR"
+          }
+        ],
+        "instrument": {
+          "kind": "credit_card",
+          "maskFrom": "mask"
+        }
+      }
+    ],
+    "confidence": 0.95,
+    "examples": [
+      {
+        "sender": "VM-HDFCBK-S",
+        "body": "You have earned 120 reward points on your HDFC Bank Credit Card XX5678 for your transaction. Points expire on 31-12-2027.",
+        "expectFactTypes": [
+          "reward"
+        ]
+      },
+      {
+        "sender": "VM-HDFCBK-S",
+        "body": "Rs.1,499.00 spent on your HDFC Bank Credit Card ending 4321 at AMAZON RETAIL on 04-08-26. You earned 15 reward points.",
+        "expectFactTypes": []
+      }
+    ],
+    "status": "active",
+    "createdBy": "baseline",
+    "updatedAt": "2026-11-03T00:00:00Z"
+  },
+  {
+    "id": "REW-EARNED-BAL-ANY",
+    "version": 1,
+    "family": "rewards",
+    "senders": [
+      "*"
+    ],
+    "priority": 270,
+    "match": {
+      "pattern": "^[\\s\\S]*?\\b(?:earned|credited|awarded|accrued|received)\\s+(?<pts>[\\d,]+)\\s+(?:[a-z0-9+&' -]{0,60}?\\s)?(?:reward\\s+|bonus\\s+|loyalty\\s+|membership\\s+reward\\s+|neu\\s*)?\\w{0,15}(?:points?|coins?)\\b(?:[^\\n]{0,60}?\\bworth\\s+(?:rs\\.?|inr|₹)\\s*(?<cash>[\\d,]+(?:\\.\\d{1,2})?))?[\\s\\S]*?\\b(?:(?:total|available|current|closing|new)\\s+)?(?:reward\\s+)?(?:points?\\s+)?(?:balance|bal)\\b[^\\d\\n]{0,20}(?<bal>[\\d,]+)\\s*(?:reward\\s+)?(?:points?|pts)\\b",
+      "flags": "i",
+      "rejectAny": [
+        "debited",
+        "spent",
+        "withdrawn",
+        "will be credited",
+        "get up to",
+        "eligible"
+      ]
+    },
+    "emit": [
+      {
+        "factType": "reward",
+        "attrs": {},
+        "amounts": [
+          {
+            "role": "points_earned",
+            "from": "pts",
+            "unit": "POINTS"
+          },
+          {
+            "role": "cash_value",
+            "from": "cash",
+            "unit": "INR"
+          }
+        ]
+      },
+      {
+        "factType": "balance_snapshot",
+        "amounts": [
+          {
+            "role": "points_balance",
+            "from": "bal",
+            "unit": "POINTS"
+          }
+        ],
+        "attrs": {
+          "asOf": {
+            "sameAs": 0,
+            "field": "occurredAt"
+          }
+        }
+      }
+    ],
+    "confidence": 0.97,
+    "examples": [
+      {
+        "sender": "AX-MYNTRA",
+        "body": "You have earned 80 Myntra Insider points worth Rs 8. Total balance 940 points.",
+        "expectFactTypes": [
+          "reward",
+          "balance_snapshot"
+        ]
+      },
+      {
+        "sender": "VM-HDFCBK-S",
+        "body": "Rs.1,499.00 spent on your HDFC Bank Credit Card ending 4321 at AMAZON RETAIL on 04-08-26. You earned 15 reward points.",
+        "expectFactTypes": []
+      }
+    ],
+    "status": "active",
+    "createdBy": "baseline",
+    "updatedAt": "2026-11-03T00:00:00Z"
+  },
+  {
+    "id": "REW-EARNED-ANY",
+    "version": 1,
+    "family": "rewards",
+    "senders": [
+      "*"
+    ],
+    "priority": 265,
+    "match": {
+      "pattern": "^(?:(?=[\\s\\S]*?\\bexpir(?:es?|ing|y|ed)\\b\\W{0,12}(?:on|by|from)?\\W{0,3}(?<exp>\\d{1,2}[-/ ](?:\\d{1,2}|[a-z]{3,9})[-/ ]\\d{2,4})\\b)|)[\\s\\S]*?\\b(?:earned|credited|awarded|accrued|received)\\s+(?<pts>[\\d,]+)\\s+(?:[a-z0-9+&' -]{0,60}?\\s)?(?:reward\\s+|bonus\\s+|loyalty\\s+|membership\\s+reward\\s+|neu\\s*)?\\w{0,15}(?:points?|coins?)\\b(?:[^\\n]{0,60}?\\bworth\\s+(?:rs\\.?|inr|₹)\\s*(?<cash>[\\d,]+(?:\\.\\d{1,2})?))?",
+      "flags": "i",
+      "rejectAny": [
+        "debited",
+        "spent",
+        "withdrawn",
+        "will be credited",
+        "get up to",
+        "eligible"
+      ]
+    },
+    "emit": [
+      {
+        "factType": "reward",
+        "attrs": {
+          "expiresAt": {
+            "from": "exp"
+          }
+        },
+        "amounts": [
+          {
+            "role": "points_earned",
+            "from": "pts",
+            "unit": "POINTS"
+          },
+          {
+            "role": "cash_value",
+            "from": "cash",
+            "unit": "INR"
+          }
+        ]
+      }
+    ],
+    "confidence": 0.95,
+    "examples": [
+      {
+        "sender": "AX-FLIPKT",
+        "body": "You have earned 40 SuperCoins on your order. Valid till 31-12-2027.",
+        "expectFactTypes": [
+          "reward"
+        ]
+      },
+      {
+        "sender": "VM-HDFCBK-S",
+        "body": "Rs.1,499.00 spent on your HDFC Bank Credit Card ending 4321 at AMAZON RETAIL on 04-08-26. You earned 15 reward points.",
+        "expectFactTypes": []
+      }
+    ],
+    "status": "active",
+    "createdBy": "baseline",
+    "updatedAt": "2026-11-03T00:00:00Z"
+  },
+  {
+    "id": "REW-EARNED-NUMFIRST-CARD",
+    "version": 1,
+    "family": "rewards",
+    "senders": [
+      "*"
+    ],
+    "priority": 289,
+    "match": {
+      "pattern": "^(?:(?=[\\s\\S]*?(?:ending(?:\\s+(?:with|in))?|\\bx{1,4}|\\*{2,})[\\s:-]*(?<mask>\\d{4,5})\\b)|)(?:(?=[\\s\\S]*?\\bexpir(?:es?|ing|y|ed)\\b\\W{0,12}(?:on|by|from)?\\W{0,3}(?<exp>\\d{1,2}[-/ ](?:\\d{1,2}|[a-z]{3,9})[-/ ]\\d{2,4})\\b)|)[\\s\\S]*?\\b(?<pts>[\\d,]+)\\s+(?:[a-z0-9+&' -]{0,60}?\\s)?(?:reward\\s+|bonus\\s+|loyalty\\s+|membership\\s+reward\\s+|neu\\s*)?\\w{0,15}(?:points?|coins?)\\b\\s+(?:have\\s+been\\s+|has\\s+been\\s+|were\\s+|was\\s+)?(?:credited|earned|awarded|added|accrued)\\b(?:[^\\n]{0,60}?\\bworth\\s+(?:rs\\.?|inr|₹)\\s*(?<cash>[\\d,]+(?:\\.\\d{1,2})?))?",
+      "flags": "i",
+      "requireAll": [
+        "card"
+      ],
+      "rejectAny": [
+        "debited",
+        "spent",
+        "withdrawn",
+        "will be credited",
+        "get up to",
+        "eligible"
+      ]
+    },
+    "emit": [
+      {
+        "factType": "reward",
+        "attrs": {
+          "expiresAt": {
+            "from": "exp"
+          }
+        },
+        "amounts": [
+          {
+            "role": "points_earned",
+            "from": "pts",
+            "unit": "POINTS"
+          },
+          {
+            "role": "cash_value",
+            "from": "cash",
+            "unit": "INR"
+          }
+        ],
+        "instrument": {
+          "kind": "credit_card",
+          "maskFrom": "mask"
+        }
+      }
+    ],
+    "confidence": 0.94,
+    "examples": [
+      {
+        "sender": "VM-HDFCBK-S",
+        "body": "250 Reward Points have been credited to your HDFC Bank Credit Card XX5678 for your spends this month.",
+        "expectFactTypes": [
+          "reward"
+        ]
+      },
+      {
+        "sender": "VM-HDFCBK-S",
+        "body": "Earn 250 Reward Points on your next purchase with your HDFC Bank Credit Card XX5678.",
+        "expectFactTypes": []
+      }
+    ],
+    "status": "active",
+    "createdBy": "baseline",
+    "updatedAt": "2026-11-03T00:00:00Z"
+  },
+  {
+    "id": "REW-EARNED-NUMFIRST-ANY",
+    "version": 1,
+    "family": "rewards",
+    "senders": [
+      "*"
+    ],
+    "priority": 269,
+    "match": {
+      "pattern": "^(?:(?=[\\s\\S]*?\\bexpir(?:es?|ing|y|ed)\\b\\W{0,12}(?:on|by|from)?\\W{0,3}(?<exp>\\d{1,2}[-/ ](?:\\d{1,2}|[a-z]{3,9})[-/ ]\\d{2,4})\\b)|)[\\s\\S]*?\\b(?<pts>[\\d,]+)\\s+(?:[a-z0-9+&' -]{0,60}?\\s)?(?:reward\\s+|bonus\\s+|loyalty\\s+|membership\\s+reward\\s+|neu\\s*)?\\w{0,15}(?:points?|coins?)\\b\\s+(?:have\\s+been\\s+|has\\s+been\\s+|were\\s+|was\\s+)?(?:credited|earned|awarded|added|accrued)\\b(?:[^\\n]{0,60}?\\bworth\\s+(?:rs\\.?|inr|₹)\\s*(?<cash>[\\d,]+(?:\\.\\d{1,2})?))?",
+      "flags": "i",
+      "rejectAny": [
+        "debited",
+        "spent",
+        "withdrawn",
+        "will be credited",
+        "get up to",
+        "eligible"
+      ]
+    },
+    "emit": [
+      {
+        "factType": "reward",
+        "attrs": {
+          "expiresAt": {
+            "from": "exp"
+          }
+        },
+        "amounts": [
+          {
+            "role": "points_earned",
+            "from": "pts",
+            "unit": "POINTS"
+          },
+          {
+            "role": "cash_value",
+            "from": "cash",
+            "unit": "INR"
+          }
+        ]
+      }
+    ],
+    "confidence": 0.94,
+    "examples": [
+      {
+        "sender": "AX-MYNTRA",
+        "body": "80 Insider points added to your account for your order.",
+        "expectFactTypes": [
+          "reward"
+        ]
+      },
+      {
+        "sender": "VM-HDFCBK-S",
+        "body": "Earn 250 Reward Points on your next purchase with your HDFC Bank Credit Card XX5678.",
+        "expectFactTypes": []
+      }
+    ],
+    "status": "active",
+    "createdBy": "baseline",
+    "updatedAt": "2026-11-03T00:00:00Z"
+  },
+  {
+    "id": "REW-REDEEMED-CARD",
+    "version": 1,
+    "family": "rewards",
+    "senders": [
+      "*"
+    ],
+    "priority": 290,
+    "match": {
+      "pattern": "^(?:(?=[\\s\\S]*?(?:ending(?:\\s+(?:with|in))?|\\bx{1,4}|\\*{2,})[\\s:-]*(?<mask>\\d{4,5})\\b)|)[\\s\\S]*?\\b(?<pts>[\\d,]+)\\s+(?:[a-z0-9+&' -]{0,60}?\\s)?(?:reward\\s+|bonus\\s+|loyalty\\s+|membership\\s+reward\\s+|neu\\s*)?\\w{0,15}(?:points?|coins?)\\b\\s+(?:have\\s+been\\s+|has\\s+been\\s+|were\\s+|was\\s+)?(?:redeemed|used|utili[sz]ed|debited|deducted|encashed)\\b(?:[^\\n]{0,80}?\\b(?:for|worth|of|=|against)\\s*(?:rs\\.?|inr|₹)\\s*(?<cash>[\\d,]+(?:\\.\\d{1,2})?))?",
+      "flags": "i",
+      "requireAll": [
+        "card"
+      ],
+      "rejectAny": [
+        "can be redeemed",
+        "redeem now",
+        "redeem your",
+        "to redeem",
+        "eligible"
+      ]
+    },
+    "emit": [
+      {
+        "factType": "reward",
+        "attrs": {},
+        "amounts": [
+          {
+            "role": "points_redeemed",
+            "from": "pts",
+            "unit": "POINTS"
+          },
+          {
+            "role": "cash_value",
+            "from": "cash",
+            "unit": "INR"
+          }
+        ],
+        "instrument": {
+          "kind": "credit_card",
+          "maskFrom": "mask"
+        }
+      }
+    ],
+    "confidence": 0.96,
+    "examples": [
+      {
+        "sender": "VM-HDFCBK-S",
+        "body": "2,000 Reward Points redeemed against your HDFC Bank Credit Card XX5678 for Rs 500 statement credit.",
+        "expectFactTypes": [
+          "reward"
+        ]
+      },
+      {
+        "sender": "VM-HDFCBK-S",
+        "body": "Your 2,000 Reward Points on HDFC Bank Credit Card XX5678 can be redeemed for Rs 500. Redeem now.",
+        "expectFactTypes": []
+      }
+    ],
+    "status": "active",
+    "createdBy": "baseline",
+    "updatedAt": "2026-11-03T00:00:00Z"
+  },
+  {
+    "id": "REW-REDEEMED-VERB-CARD",
+    "version": 1,
+    "family": "rewards",
+    "senders": [
+      "*"
+    ],
+    "priority": 288,
+    "match": {
+      "pattern": "^(?:(?=[\\s\\S]*?(?:ending(?:\\s+(?:with|in))?|\\bx{1,4}|\\*{2,})[\\s:-]*(?<mask>\\d{4,5})\\b)|)[\\s\\S]*?\\bredeemed\\s+(?<pts>[\\d,]+)\\s+(?:[a-z0-9+&' -]{0,60}?\\s)?(?:reward\\s+|bonus\\s+|loyalty\\s+|membership\\s+reward\\s+|neu\\s*)?\\w{0,15}(?:points?|coins?)\\b(?:[^\\n]{0,80}?\\b(?:for|worth|of|=|against)\\s*(?:rs\\.?|inr|₹)\\s*(?<cash>[\\d,]+(?:\\.\\d{1,2})?))?",
+      "flags": "i",
+      "requireAll": [
+        "card"
+      ],
+      "rejectAny": [
+        "can be redeemed",
+        "redeem now",
+        "redeem your",
+        "to redeem",
+        "eligible"
+      ]
+    },
+    "emit": [
+      {
+        "factType": "reward",
+        "attrs": {},
+        "amounts": [
+          {
+            "role": "points_redeemed",
+            "from": "pts",
+            "unit": "POINTS"
+          },
+          {
+            "role": "cash_value",
+            "from": "cash",
+            "unit": "INR"
+          }
+        ],
+        "instrument": {
+          "kind": "credit_card",
+          "maskFrom": "mask"
+        }
+      }
+    ],
+    "confidence": 0.95,
+    "examples": [
+      {
+        "sender": "VM-HDFCBK-S",
+        "body": "You have redeemed 1,500 reward points on your HDFC Bank Credit Card XX5678 worth Rs 375.",
+        "expectFactTypes": [
+          "reward"
+        ]
+      },
+      {
+        "sender": "VM-HDFCBK-S",
+        "body": "Your 2,000 Reward Points on HDFC Bank Credit Card XX5678 can be redeemed for Rs 500. Redeem now.",
+        "expectFactTypes": []
+      }
+    ],
+    "status": "active",
+    "createdBy": "baseline",
+    "updatedAt": "2026-11-03T00:00:00Z"
+  },
+  {
+    "id": "REW-REDEEMED-ANY",
+    "version": 1,
+    "family": "rewards",
+    "senders": [
+      "*"
+    ],
+    "priority": 270,
+    "match": {
+      "pattern": "^[\\s\\S]*?\\b(?<pts>[\\d,]+)\\s+(?:[a-z0-9+&' -]{0,60}?\\s)?(?:reward\\s+|bonus\\s+|loyalty\\s+|membership\\s+reward\\s+|neu\\s*)?\\w{0,15}(?:points?|coins?)\\b\\s+(?:have\\s+been\\s+|has\\s+been\\s+|were\\s+|was\\s+)?(?:redeemed|used|utili[sz]ed|debited|deducted|encashed)\\b(?:[^\\n]{0,80}?\\b(?:for|worth|of|=|against)\\s*(?:rs\\.?|inr|₹)\\s*(?<cash>[\\d,]+(?:\\.\\d{1,2})?))?",
+      "flags": "i",
+      "rejectAny": [
+        "can be redeemed",
+        "redeem now",
+        "redeem your",
+        "to redeem",
+        "eligible"
+      ]
+    },
+    "emit": [
+      {
+        "factType": "reward",
+        "attrs": {},
+        "amounts": [
+          {
+            "role": "points_redeemed",
+            "from": "pts",
+            "unit": "POINTS"
+          },
+          {
+            "role": "cash_value",
+            "from": "cash",
+            "unit": "INR"
+          }
+        ]
+      }
+    ],
+    "confidence": 0.96,
+    "examples": [
+      {
+        "sender": "AX-MYNTRA",
+        "body": "300 Insider points have been redeemed on your order for Rs 30 off.",
+        "expectFactTypes": [
+          "reward"
+        ]
+      },
+      {
+        "sender": "VM-HDFCBK-S",
+        "body": "Your 2,000 Reward Points on HDFC Bank Credit Card XX5678 can be redeemed for Rs 500. Redeem now.",
+        "expectFactTypes": []
+      }
+    ],
+    "status": "active",
+    "createdBy": "baseline",
+    "updatedAt": "2026-11-03T00:00:00Z"
+  },
+  {
+    "id": "REW-REDEEMED-VERB-ANY",
+    "version": 1,
+    "family": "rewards",
+    "senders": [
+      "*"
+    ],
+    "priority": 268,
+    "match": {
+      "pattern": "^[\\s\\S]*?\\bredeemed\\s+(?<pts>[\\d,]+)\\s+(?:[a-z0-9+&' -]{0,60}?\\s)?(?:reward\\s+|bonus\\s+|loyalty\\s+|membership\\s+reward\\s+|neu\\s*)?\\w{0,15}(?:points?|coins?)\\b(?:[^\\n]{0,80}?\\b(?:for|worth|of|=|against)\\s*(?:rs\\.?|inr|₹)\\s*(?<cash>[\\d,]+(?:\\.\\d{1,2})?))?",
+      "flags": "i",
+      "rejectAny": [
+        "can be redeemed",
+        "redeem now",
+        "redeem your",
+        "to redeem",
+        "eligible"
+      ]
+    },
+    "emit": [
+      {
+        "factType": "reward",
+        "attrs": {},
+        "amounts": [
+          {
+            "role": "points_redeemed",
+            "from": "pts",
+            "unit": "POINTS"
+          },
+          {
+            "role": "cash_value",
+            "from": "cash",
+            "unit": "INR"
+          }
+        ]
+      }
+    ],
+    "confidence": 0.95,
+    "examples": [
+      {
+        "sender": "AX-MYNTRA",
+        "body": "You redeemed 300 Insider points worth Rs 30.",
+        "expectFactTypes": [
+          "reward"
+        ]
+      },
+      {
+        "sender": "VM-HDFCBK-S",
+        "body": "Your 2,000 Reward Points on HDFC Bank Credit Card XX5678 can be redeemed for Rs 500. Redeem now.",
+        "expectFactTypes": []
+      }
+    ],
+    "status": "active",
+    "createdBy": "baseline",
+    "updatedAt": "2026-11-03T00:00:00Z"
+  },
+  {
+    "id": "CBK-CREDIT-CARD-A",
+    "version": 1,
+    "family": "cashback",
+    "senders": [
+      "*"
+    ],
+    "priority": 297,
+    "match": {
+      "pattern": "^(?:(?=[\\s\\S]*?(?:ending(?:\\s+(?:with|in))?|\\bx{1,4}|\\*{2,})[\\s:-]*(?<mask>\\d{4,5})\\b)|)(?:(?=[\\s\\S]*?\\bon\\s+(?<date>\\d{1,2}[-/ ](?:\\d{1,2}|[a-z]{3,9})[-/ ]\\d{2,4})\\b)|)[\\s\\S]*?\\bcashback\\s+(?:of\\s+|worth\\s+)?(?:rs\\.?|inr|₹)\\s*(?<amt>[\\d,]+(?:\\.\\d{1,2})?)[^\\n]{0,60}?\\b(?:has\\s+been\\s+|was\\s+|is\\s+)?(?:credited|added|posted|received|reversed)\\b[^\\n]{0,60}?\\b(?:to|in|into|on)\\s+(?:your\\s+)?[^\\n]{0,40}?\\bcard\\b",
+      "flags": "i",
+      "requireAll": [
+        "card"
+      ],
+      "rejectAny": [
+        "will be credited",
+        "will get",
+        "get up to",
+        "get rs",
+        "eligible",
+        "on spending",
+        "if you",
+        "offer",
+        "debit card"
+      ]
+    },
+    "emit": [
+      {
+        "factType": "movement",
+        "attrs": {
+          "direction": "credit",
+          "purpose": "cashback",
+          "rail": "card"
+        },
+        "amounts": [
+          {
+            "role": "posted",
+            "from": "amt",
+            "unit": "INR"
+          }
+        ],
+        "instrument": {
+          "kind": "credit_card",
+          "maskFrom": "mask"
+        },
+        "occurredAt": {
+          "from": "date"
+        }
+      }
+    ],
+    "confidence": 0.96,
+    "examples": [
+      {
+        "sender": "VM-HDFCBK-S",
+        "body": "Cashback of Rs.150.00 credited to your HDFC Bank Credit Card XX5678 on 01-11-26.",
+        "expectFactTypes": [
+          "movement"
+        ]
+      },
+      {
+        "sender": "VM-HDFCBK-S",
+        "body": "Get Rs 150 cashback credited to your HDFC Bank Credit Card XX5678 when you spend Rs 5,000. T&C apply.",
+        "expectFactTypes": []
+      }
+    ],
+    "status": "active",
+    "createdBy": "baseline",
+    "updatedAt": "2026-11-03T00:00:00Z"
+  },
+  {
+    "id": "CBK-CREDIT-CARD-B",
+    "version": 1,
+    "family": "cashback",
+    "senders": [
+      "*"
+    ],
+    "priority": 296,
+    "match": {
+      "pattern": "^(?:(?=[\\s\\S]*?(?:ending(?:\\s+(?:with|in))?|\\bx{1,4}|\\*{2,})[\\s:-]*(?<mask>\\d{4,5})\\b)|)(?:(?=[\\s\\S]*?\\bon\\s+(?<date>\\d{1,2}[-/ ](?:\\d{1,2}|[a-z]{3,9})[-/ ]\\d{2,4})\\b)|)[\\s\\S]*?\\b(?:rs\\.?|inr|₹)\\s*(?<amt>[\\d,]+(?:\\.\\d{1,2})?)\\s+cashback\\b[^\\n]{0,60}?\\b(?:has\\s+been\\s+|was\\s+|is\\s+)?(?:credited|added|posted|received|reversed)\\b[^\\n]{0,60}?\\b(?:to|in|into|on)\\s+(?:your\\s+)?[^\\n]{0,40}?\\bcard\\b",
+      "flags": "i",
+      "requireAll": [
+        "card"
+      ],
+      "rejectAny": [
+        "will be credited",
+        "will get",
+        "get up to",
+        "get rs",
+        "eligible",
+        "on spending",
+        "if you",
+        "offer",
+        "debit card"
+      ]
+    },
+    "emit": [
+      {
+        "factType": "movement",
+        "attrs": {
+          "direction": "credit",
+          "purpose": "cashback",
+          "rail": "card"
+        },
+        "amounts": [
+          {
+            "role": "posted",
+            "from": "amt",
+            "unit": "INR"
+          }
+        ],
+        "instrument": {
+          "kind": "credit_card",
+          "maskFrom": "mask"
+        },
+        "occurredAt": {
+          "from": "date"
+        }
+      }
+    ],
+    "confidence": 0.96,
+    "examples": [
+      {
+        "sender": "VM-HDFCBK-S",
+        "body": "Rs 150 cashback credited to your HDFC Bank Credit Card XX5678.",
+        "expectFactTypes": [
+          "movement"
+        ]
+      },
+      {
+        "sender": "VM-HDFCBK-S",
+        "body": "Get Rs 150 cashback credited to your HDFC Bank Credit Card XX5678 when you spend Rs 5,000. T&C apply.",
+        "expectFactTypes": []
+      }
+    ],
+    "status": "active",
+    "createdBy": "baseline",
+    "updatedAt": "2026-11-03T00:00:00Z"
+  },
+  {
+    "id": "CBK-DEBIT-CARD-A",
+    "version": 1,
+    "family": "cashback",
+    "senders": [
+      "*"
+    ],
+    "priority": 299,
+    "match": {
+      "pattern": "^(?:(?=[\\s\\S]*?(?:ending(?:\\s+(?:with|in))?|\\bx{1,4}|\\*{2,})[\\s:-]*(?<mask>\\d{4,5})\\b)|)(?:(?=[\\s\\S]*?\\bon\\s+(?<date>\\d{1,2}[-/ ](?:\\d{1,2}|[a-z]{3,9})[-/ ]\\d{2,4})\\b)|)[\\s\\S]*?\\bcashback\\s+(?:of\\s+|worth\\s+)?(?:rs\\.?|inr|₹)\\s*(?<amt>[\\d,]+(?:\\.\\d{1,2})?)[^\\n]{0,60}?\\b(?:has\\s+been\\s+|was\\s+|is\\s+)?(?:credited|added|posted|received|reversed)\\b[^\\n]{0,60}?\\b(?:to|in|into|on)\\s+(?:your\\s+)?[^\\n]{0,40}?\\bdebit\\s+card\\b",
+      "flags": "i",
+      "requireAll": [
+        "debit card"
+      ],
+      "rejectAny": [
+        "will be credited",
+        "will get",
+        "get up to",
+        "get rs",
+        "eligible",
+        "on spending",
+        "if you",
+        "offer"
+      ]
+    },
+    "emit": [
+      {
+        "factType": "movement",
+        "attrs": {
+          "direction": "credit",
+          "purpose": "cashback",
+          "rail": "card"
+        },
+        "amounts": [
+          {
+            "role": "posted",
+            "from": "amt",
+            "unit": "INR"
+          }
+        ],
+        "instrument": {
+          "kind": "debit_card",
+          "maskFrom": "mask"
+        },
+        "occurredAt": {
+          "from": "date"
+        }
+      }
+    ],
+    "confidence": 0.96,
+    "examples": [
+      {
+        "sender": "VM-HDFCBK-S",
+        "body": "Cashback of Rs 20 credited to your HDFC Bank Debit Card ending 4321.",
+        "expectFactTypes": [
+          "movement"
+        ]
+      },
+      {
+        "sender": "VM-HDFCBK-S",
+        "body": "Cashback of Rs 20 will be credited to your HDFC Bank Debit Card ending 4321 within 7 days.",
+        "expectFactTypes": []
+      }
+    ],
+    "status": "active",
+    "createdBy": "baseline",
+    "updatedAt": "2026-11-03T00:00:00Z"
+  },
+  {
+    "id": "CBK-DEBIT-CARD-B",
+    "version": 1,
+    "family": "cashback",
+    "senders": [
+      "*"
+    ],
+    "priority": 298,
+    "match": {
+      "pattern": "^(?:(?=[\\s\\S]*?(?:ending(?:\\s+(?:with|in))?|\\bx{1,4}|\\*{2,})[\\s:-]*(?<mask>\\d{4,5})\\b)|)(?:(?=[\\s\\S]*?\\bon\\s+(?<date>\\d{1,2}[-/ ](?:\\d{1,2}|[a-z]{3,9})[-/ ]\\d{2,4})\\b)|)[\\s\\S]*?\\b(?:rs\\.?|inr|₹)\\s*(?<amt>[\\d,]+(?:\\.\\d{1,2})?)\\s+cashback\\b[^\\n]{0,60}?\\b(?:has\\s+been\\s+|was\\s+|is\\s+)?(?:credited|added|posted|received|reversed)\\b[^\\n]{0,60}?\\b(?:to|in|into|on)\\s+(?:your\\s+)?[^\\n]{0,40}?\\bdebit\\s+card\\b",
+      "flags": "i",
+      "requireAll": [
+        "debit card"
+      ],
+      "rejectAny": [
+        "will be credited",
+        "will get",
+        "get up to",
+        "get rs",
+        "eligible",
+        "on spending",
+        "if you",
+        "offer"
+      ]
+    },
+    "emit": [
+      {
+        "factType": "movement",
+        "attrs": {
+          "direction": "credit",
+          "purpose": "cashback",
+          "rail": "card"
+        },
+        "amounts": [
+          {
+            "role": "posted",
+            "from": "amt",
+            "unit": "INR"
+          }
+        ],
+        "instrument": {
+          "kind": "debit_card",
+          "maskFrom": "mask"
+        },
+        "occurredAt": {
+          "from": "date"
+        }
+      }
+    ],
+    "confidence": 0.96,
+    "examples": [
+      {
+        "sender": "VM-HDFCBK-S",
+        "body": "Rs 20 cashback has been credited to your HDFC Bank Debit Card ending 4321.",
+        "expectFactTypes": [
+          "movement"
+        ]
+      },
+      {
+        "sender": "VM-HDFCBK-S",
+        "body": "Cashback of Rs 20 will be credited to your HDFC Bank Debit Card ending 4321 within 7 days.",
+        "expectFactTypes": []
+      }
+    ],
+    "status": "active",
+    "createdBy": "baseline",
+    "updatedAt": "2026-11-03T00:00:00Z"
+  },
+  {
+    "id": "CBK-WALLET-A",
+    "version": 1,
+    "family": "cashback",
+    "senders": [
+      "*"
+    ],
+    "priority": 295,
+    "match": {
+      "pattern": "^(?:(?=[\\s\\S]*?\\bon\\s+(?<date>\\d{1,2}[-/ ](?:\\d{1,2}|[a-z]{3,9})[-/ ]\\d{2,4})\\b)|)[\\s\\S]*?\\bcashback\\s+(?:of\\s+|worth\\s+)?(?:rs\\.?|inr|₹)\\s*(?<amt>[\\d,]+(?:\\.\\d{1,2})?)[^\\n]{0,60}?\\b(?:has\\s+been\\s+|was\\s+|is\\s+)?(?:credited|added|posted|received|reversed)\\b[^\\n]{0,60}?\\b(?:to|in|into)\\s+(?:your\\s+)?[^\\n]{0,40}?\\b(?:wallet|pay\\s+balance|money\\s+balance)\\b",
+      "flags": "i",
+      "rejectAny": [
+        "will be credited",
+        "will get",
+        "get up to",
+        "get rs",
+        "eligible",
+        "on spending",
+        "if you",
+        "offer"
+      ]
+    },
+    "emit": [
+      {
+        "factType": "movement",
+        "attrs": {
+          "direction": "credit",
+          "purpose": "cashback",
+          "rail": "wallet"
+        },
+        "amounts": [
+          {
+            "role": "posted",
+            "from": "amt",
+            "unit": "INR"
+          }
+        ],
+        "instrument": {
+          "kind": "wallet"
+        },
+        "occurredAt": {
+          "from": "date"
+        }
+      }
+    ],
+    "confidence": 0.96,
+    "examples": [
+      {
+        "sender": "AX-ACMEPY",
+        "body": "Cashback of Rs 25 has been added to your Acme Pay balance.",
+        "expectFactTypes": [
+          "movement"
+        ]
+      },
+      {
+        "sender": "AX-ACMEPY",
+        "body": "Get Rs 25 cashback in your Acme Pay balance on your next order.",
+        "expectFactTypes": []
+      }
+    ],
+    "status": "active",
+    "createdBy": "baseline",
+    "updatedAt": "2026-11-03T00:00:00Z"
+  },
+  {
+    "id": "CBK-WALLET-B",
+    "version": 1,
+    "family": "cashback",
+    "senders": [
+      "*"
+    ],
+    "priority": 294,
+    "match": {
+      "pattern": "^(?:(?=[\\s\\S]*?\\bon\\s+(?<date>\\d{1,2}[-/ ](?:\\d{1,2}|[a-z]{3,9})[-/ ]\\d{2,4})\\b)|)[\\s\\S]*?\\b(?:rs\\.?|inr|₹)\\s*(?<amt>[\\d,]+(?:\\.\\d{1,2})?)\\s+cashback\\b[^\\n]{0,60}?\\b(?:has\\s+been\\s+|was\\s+|is\\s+)?(?:credited|added|posted|received|reversed)\\b[^\\n]{0,60}?\\b(?:to|in|into)\\s+(?:your\\s+)?[^\\n]{0,40}?\\b(?:wallet|pay\\s+balance|money\\s+balance)\\b",
+      "flags": "i",
+      "rejectAny": [
+        "will be credited",
+        "will get",
+        "get up to",
+        "get rs",
+        "eligible",
+        "on spending",
+        "if you",
+        "offer"
+      ]
+    },
+    "emit": [
+      {
+        "factType": "movement",
+        "attrs": {
+          "direction": "credit",
+          "purpose": "cashback",
+          "rail": "wallet"
+        },
+        "amounts": [
+          {
+            "role": "posted",
+            "from": "amt",
+            "unit": "INR"
+          }
+        ],
+        "instrument": {
+          "kind": "wallet"
+        },
+        "occurredAt": {
+          "from": "date"
+        }
+      }
+    ],
+    "confidence": 0.96,
+    "examples": [
+      {
+        "sender": "AX-ACMEPY",
+        "body": "Rs 25 cashback credited to your Acme Pay wallet for your order.",
+        "expectFactTypes": [
+          "movement"
+        ]
+      },
+      {
+        "sender": "AX-ACMEPY",
+        "body": "Get Rs 25 cashback in your Acme Pay balance on your next order.",
+        "expectFactTypes": []
+      }
+    ],
+    "status": "active",
+    "createdBy": "baseline",
+    "updatedAt": "2026-11-03T00:00:00Z"
+  },
+  {
+    "id": "CBK-BANK-ACCOUNT-A",
+    "version": 1,
+    "family": "cashback",
+    "senders": [
+      "*"
+    ],
+    "priority": 293,
+    "match": {
+      "pattern": "^(?:(?=[\\s\\S]*?(?:ending(?:\\s+(?:with|in))?|\\bx{1,4}|\\*{2,})[\\s:-]*(?<mask>\\d{4,5})\\b)|)(?:(?=[\\s\\S]*?\\bon\\s+(?<date>\\d{1,2}[-/ ](?:\\d{1,2}|[a-z]{3,9})[-/ ]\\d{2,4})\\b)|)[\\s\\S]*?\\bcashback\\s+(?:of\\s+|worth\\s+)?(?:rs\\.?|inr|₹)\\s*(?<amt>[\\d,]+(?:\\.\\d{1,2})?)[^\\n]{0,60}?\\b(?:has\\s+been\\s+|was\\s+|is\\s+)?(?:credited|added|posted|received|reversed)\\b[^\\n]{0,60}?\\b(?:to|in|into)\\s+(?:your\\s+)?(?:[a-z ]{0,30}?)(?:a/c|acct|account)\\b",
+      "flags": "i",
+      "rejectAny": [
+        "will be credited",
+        "will get",
+        "get up to",
+        "get rs",
+        "eligible",
+        "on spending",
+        "if you",
+        "offer"
+      ]
+    },
+    "emit": [
+      {
+        "factType": "movement",
+        "attrs": {
+          "direction": "credit",
+          "purpose": "cashback",
+          "rail": "unknown"
+        },
+        "amounts": [
+          {
+            "role": "posted",
+            "from": "amt",
+            "unit": "INR"
+          }
+        ],
+        "instrument": {
+          "kind": "bank_account",
+          "maskFrom": "mask"
+        },
+        "occurredAt": {
+          "from": "date"
+        }
+      }
+    ],
+    "confidence": 0.96,
+    "examples": [
+      {
+        "sender": "VM-SBIINB-S",
+        "body": "Cashback of Rs 10 credited to your A/c XX4321 on 02-11-26.",
+        "expectFactTypes": [
+          "movement"
+        ]
+      },
+      {
+        "sender": "VM-SBIINB-S",
+        "body": "Cashback of Rs 10 will be credited to your A/c XX4321 within 3 days.",
+        "expectFactTypes": []
+      }
+    ],
+    "status": "active",
+    "createdBy": "baseline",
+    "updatedAt": "2026-11-03T00:00:00Z"
+  },
+  {
+    "id": "CBK-BANK-ACCOUNT-B",
+    "version": 1,
+    "family": "cashback",
+    "senders": [
+      "*"
+    ],
+    "priority": 292,
+    "match": {
+      "pattern": "^(?:(?=[\\s\\S]*?(?:ending(?:\\s+(?:with|in))?|\\bx{1,4}|\\*{2,})[\\s:-]*(?<mask>\\d{4,5})\\b)|)(?:(?=[\\s\\S]*?\\bon\\s+(?<date>\\d{1,2}[-/ ](?:\\d{1,2}|[a-z]{3,9})[-/ ]\\d{2,4})\\b)|)[\\s\\S]*?\\b(?:rs\\.?|inr|₹)\\s*(?<amt>[\\d,]+(?:\\.\\d{1,2})?)\\s+cashback\\b[^\\n]{0,60}?\\b(?:has\\s+been\\s+|was\\s+|is\\s+)?(?:credited|added|posted|received|reversed)\\b[^\\n]{0,60}?\\b(?:to|in|into)\\s+(?:your\\s+)?(?:[a-z ]{0,30}?)(?:a/c|acct|account)\\b",
+      "flags": "i",
+      "rejectAny": [
+        "will be credited",
+        "will get",
+        "get up to",
+        "get rs",
+        "eligible",
+        "on spending",
+        "if you",
+        "offer"
+      ]
+    },
+    "emit": [
+      {
+        "factType": "movement",
+        "attrs": {
+          "direction": "credit",
+          "purpose": "cashback",
+          "rail": "unknown"
+        },
+        "amounts": [
+          {
+            "role": "posted",
+            "from": "amt",
+            "unit": "INR"
+          }
+        ],
+        "instrument": {
+          "kind": "bank_account",
+          "maskFrom": "mask"
+        },
+        "occurredAt": {
+          "from": "date"
+        }
+      }
+    ],
+    "confidence": 0.96,
+    "examples": [
+      {
+        "sender": "VM-SBIINB-S",
+        "body": "Rs 10 cashback credited to your A/c XX4321.",
+        "expectFactTypes": [
+          "movement"
+        ]
+      },
+      {
+        "sender": "VM-SBIINB-S",
+        "body": "Cashback of Rs 10 will be credited to your A/c XX4321 within 3 days.",
+        "expectFactTypes": []
+      }
+    ],
+    "status": "active",
+    "createdBy": "baseline",
+    "updatedAt": "2026-11-03T00:00:00Z"
+  }
+]

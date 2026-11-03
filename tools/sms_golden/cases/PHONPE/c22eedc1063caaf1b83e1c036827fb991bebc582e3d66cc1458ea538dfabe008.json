@@ -1,0 +1,18 @@
+{
+  "id": "wp03d:collect_request_phonepe",
+  "templateHash": "c22eedc1063caaf1b83e1c036827fb991bebc582e3d66cc1458ea538dfabe008",
+  "weight": 1,
+  "source": "synthetic",
+  "messages": [
+    {
+      "sender": "AX-PHONPE",
+      "body": "PhonePe: Rahul has requested Rs 500 from you via UPI collect request. Approve or decline in the app.",
+      "observedAt": "2026-12-01T09:00:00.000Z"
+    }
+  ],
+  "expect": {
+    "ignore": true
+  },
+  "note": "A UPI collect request moves no money until it is approved.",
+  "origin": "wp03d"
+}

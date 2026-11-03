@@ -1,0 +1,17 @@
+{
+  "id": "wp03d:recharge_promo",
+  "templateHash": "d4553bb56d1aff6a51660834a9f1d764035ab39ccf0089e3d6cc9fef3bd5f8a7",
+  "weight": 1,
+  "source": "synthetic",
+  "messages": [
+    {
+      "sender": "JX-JIOPAY",
+      "body": "Recharge with Rs 299 and get 1.5GB/day data for 28 days. Unlimited calls. Recharge now on the Jio app.",
+      "observedAt": "2026-12-01T09:00:00.000Z"
+    }
+  ],
+  "expect": {
+    "ignore": true
+  },
+  "origin": "wp03d"
+}

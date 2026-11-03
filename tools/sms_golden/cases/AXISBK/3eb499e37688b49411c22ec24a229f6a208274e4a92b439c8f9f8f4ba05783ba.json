@@ -1,0 +1,34 @@
+{
+  "id": "wp03d:limit_increased_no_mask",
+  "templateHash": "3eb499e37688b49411c22ec24a229f6a208274e4a92b439c8f9f8f4ba05783ba",
+  "weight": 1,
+  "source": "synthetic",
+  "messages": [
+    {
+      "sender": "AX-AXISBK-S",
+      "body": "Credit limit across your Axis Bank Credit Card(s) has been increased to INR 80000 with immediate effect.",
+      "observedAt": "2026-12-01T09:00:00.000Z"
+    }
+  ],
+  "expect": {
+    "facts": [
+      {
+        "factType": "limit_change",
+        "attrs": {
+          "reason": "increase"
+        },
+        "amounts": [
+          {
+            "role": "credit_limit",
+            "minor": 8000000
+          }
+        ],
+        "instrument": {
+          "kind": "credit_card",
+          "issuerSlug": "axis"
+        }
+      }
+    ]
+  },
+  "origin": "wp03d"
+}

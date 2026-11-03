@@ -1,0 +1,43 @@
+{
+  "id": "wp03d:reward_earned_with_balance_sbi",
+  "templateHash": "b2f54199cd234ce80a000c94358245af10691c2bb096b203fd0e28f252a4bac3",
+  "weight": 1,
+  "source": "synthetic",
+  "messages": [
+    {
+      "sender": "VM-SBICRD-S",
+      "body": "Congratulations! You've earned 250 reward points on your SBI Card ending 4321. Points balance: 3,400 points.",
+      "observedAt": "2026-12-01T09:00:00.000Z"
+    }
+  ],
+  "expect": {
+    "facts": [
+      {
+        "factType": "reward",
+        "amounts": [
+          {
+            "role": "points_earned",
+            "minor": 250,
+            "unit": "POINTS"
+          }
+        ],
+        "instrument": {
+          "kind": "credit_card",
+          "issuerSlug": "sbi",
+          "maskDigits": "4321"
+        }
+      },
+      {
+        "factType": "balance_snapshot",
+        "amounts": [
+          {
+            "role": "points_balance",
+            "minor": 3400,
+            "unit": "POINTS"
+          }
+        ]
+      }
+    ]
+  },
+  "origin": "wp03d"
+}

@@ -1,0 +1,17 @@
+{
+  "id": "wp03d:collect_request_sbi",
+  "templateHash": "26ddb6bc936d07d2570c2713ca9fd487900292d7a91aa75a46170daf6aaade9c",
+  "weight": 1,
+  "source": "synthetic",
+  "messages": [
+    {
+      "sender": "VM-SBIUPI-S",
+      "body": "Dear UPI user, you have received a collect request of Rs 250.00 from a merchant. Approve in your UPI app.",
+      "observedAt": "2026-12-01T09:00:00.000Z"
+    }
+  ],
+  "expect": {
+    "ignore": true
+  },
+  "origin": "wp03d"
+}

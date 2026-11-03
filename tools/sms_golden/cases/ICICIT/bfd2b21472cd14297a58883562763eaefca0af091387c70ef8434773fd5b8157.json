@@ -1,0 +1,36 @@
+{
+  "id": "wp03d:limit_increased_from_to",
+  "templateHash": "bfd2b21472cd14297a58883562763eaefca0af091387c70ef8434773fd5b8157",
+  "weight": 1,
+  "source": "synthetic",
+  "messages": [
+    {
+      "sender": "AX-ICICIT-S",
+      "body": "Your credit limit on ICICI Bank Credit Card XX9012 has been increased from Rs 1,00,000 to Rs 1,50,000.",
+      "observedAt": "2026-12-01T09:00:00.000Z"
+    }
+  ],
+  "expect": {
+    "facts": [
+      {
+        "factType": "limit_change",
+        "attrs": {
+          "reason": "increase",
+          "previousMinor": 10000000
+        },
+        "amounts": [
+          {
+            "role": "credit_limit",
+            "minor": 15000000
+          }
+        ],
+        "instrument": {
+          "kind": "credit_card",
+          "issuerSlug": "icici",
+          "maskDigits": "9012"
+        }
+      }
+    ]
+  },
+  "origin": "wp03d"
+}

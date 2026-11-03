@@ -1,0 +1,18 @@
+{
+  "id": "wp03d:card_upgrade_offer",
+  "templateHash": "ce20f28c6efc7ff4b60ed53ee224d0a6751d1f3799b9c9b2122bccfb209b39e9",
+  "weight": 1,
+  "source": "synthetic",
+  "messages": [
+    {
+      "sender": "VM-ICICIT-P",
+      "body": "Upgrade your ICICI Credit Card to Rubyx with credit limit of Rs. 5,00,000 at zero joining fee! Apply today.",
+      "observedAt": "2026-12-01T09:00:00.000Z"
+    }
+  ],
+  "expect": {
+    "ignore": true
+  },
+  "note": "A card offer that names a limit is not a limit change.",
+  "origin": "wp03d"
+}

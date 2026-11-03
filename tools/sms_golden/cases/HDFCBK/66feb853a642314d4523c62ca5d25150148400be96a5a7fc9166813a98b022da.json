@@ -1,0 +1,35 @@
+{
+  "id": "wp03d:limit_decreased",
+  "templateHash": "66feb853a642314d4523c62ca5d25150148400be96a5a7fc9166813a98b022da",
+  "weight": 1,
+  "source": "synthetic",
+  "messages": [
+    {
+      "sender": "VM-HDFCBK-S",
+      "body": "The credit limit on your HDFC Bank Credit Card XX5678 has been reduced to Rs.1,00,000 effective 01-11-26.",
+      "observedAt": "2026-12-01T09:00:00.000Z"
+    }
+  ],
+  "expect": {
+    "facts": [
+      {
+        "factType": "limit_change",
+        "attrs": {
+          "reason": "decrease"
+        },
+        "amounts": [
+          {
+            "role": "credit_limit",
+            "minor": 10000000
+          }
+        ],
+        "instrument": {
+          "kind": "credit_card",
+          "issuerSlug": "hdfc",
+          "maskDigits": "5678"
+        }
+      }
+    ]
+  },
+  "origin": "wp03d"
+}

@@ -1,0 +1,17 @@
+{
+  "id": "wp03d:insurance_renewal_promo",
+  "templateHash": "817841def728335976373c1a6262bbb10014c49668c756c31c09461c819888a3",
+  "weight": 1,
+  "source": "synthetic",
+  "messages": [
+    {
+      "sender": "VM-PBAZAR",
+      "body": "Your two wheeler insurance for MH01AB1234 has expired. Renew today at Rs 1,499. Visit policybazaar.com",
+      "observedAt": "2026-12-01T09:00:00.000Z"
+    }
+  ],
+  "expect": {
+    "ignore": true
+  },
+  "origin": "wp03d"
+}

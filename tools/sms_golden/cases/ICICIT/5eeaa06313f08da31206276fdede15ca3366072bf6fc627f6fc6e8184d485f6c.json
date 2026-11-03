@@ -1,0 +1,17 @@
+{
+  "id": "wp03d:otp_upi_merchant",
+  "templateHash": "5eeaa06313f08da31206276fdede15ca3366072bf6fc627f6fc6e8184d485f6c",
+  "weight": 1,
+  "source": "synthetic",
+  "messages": [
+    {
+      "sender": "AX-ICICIT-S",
+      "body": "812345 is your OTP for transaction of INR 500 at SWIGGY. Do not share OTP.",
+      "observedAt": "2026-12-01T09:00:00.000Z"
+    }
+  ],
+  "expect": {
+    "ignore": true
+  },
+  "origin": "wp03d"
+}

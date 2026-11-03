@@ -1,0 +1,17 @@
+{
+  "id": "wp03d:scam_prize",
+  "templateHash": "73fc133b218aa29a1b3c464148a27ae588ab8ca13eb746efd2c57bafd3ceccc2",
+  "weight": 1,
+  "source": "synthetic",
+  "messages": [
+    {
+      "sender": "VM-HDFCBK-S",
+      "body": "Dear Customer, your phone number has won a cash prize of Rs. 1,00,000. Click to transfer: bit.ly/prize-claim",
+      "observedAt": "2026-12-01T09:00:00.000Z"
+    }
+  ],
+  "expect": {
+    "ignore": true
+  },
+  "origin": "wp03d"
+}

@@ -1,0 +1,17 @@
+{
+  "id": "wp03d:pre_approved_loan",
+  "templateHash": "b5a8a75b8efbd3094272edfd7943642a2947d576f0d6c093e002af6c712f1ea7",
+  "weight": 1,
+  "source": "synthetic",
+  "messages": [
+    {
+      "sender": "VM-HDFCBK-P",
+      "body": "Pre-approved personal loan of Rs. 5 Lakhs! Apply now. Disbursal in 10 seconds.",
+      "observedAt": "2026-12-01T09:00:00.000Z"
+    }
+  ],
+  "expect": {
+    "ignore": true
+  },
+  "origin": "wp03d"
+}

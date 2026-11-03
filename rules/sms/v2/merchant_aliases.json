@@ -1,0 +1,392 @@
+[
+  {
+    "alias": "AMAZON PAY IN",
+    "merchantKey": "AMAZON",
+    "kind": "marketplace"
+  },
+  {
+    "alias": "AMAZON PAY INDIA",
+    "merchantKey": "AMAZON",
+    "kind": "marketplace"
+  },
+  {
+    "alias": "AMAZON SELLER SERVICES",
+    "merchantKey": "AMAZON",
+    "kind": "marketplace"
+  },
+  {
+    "alias": "AMAZON RETAIL",
+    "merchantKey": "AMAZON",
+    "kind": "marketplace"
+  },
+  {
+    "alias": "AMAZON IN",
+    "merchantKey": "AMAZON",
+    "kind": "marketplace"
+  },
+  {
+    "alias": "AMAZON INDIA",
+    "merchantKey": "AMAZON",
+    "kind": "marketplace"
+  },
+  {
+    "alias": "AMAZON DIGITAL",
+    "merchantKey": "AMAZON",
+    "kind": "marketplace"
+  },
+  {
+    "alias": "AMZN MKTP IN",
+    "merchantKey": "AMAZON",
+    "kind": "marketplace"
+  },
+  {
+    "alias": "AMZN MKTP",
+    "merchantKey": "AMAZON",
+    "kind": "marketplace"
+  },
+  {
+    "alias": "FLIPKART INTERNET",
+    "merchantKey": "FLIPKART",
+    "kind": "marketplace"
+  },
+  {
+    "alias": "FLIPKART INDIA",
+    "merchantKey": "FLIPKART",
+    "kind": "marketplace"
+  },
+  {
+    "alias": "MYNTRA DESIGNS",
+    "merchantKey": "MYNTRA",
+    "kind": "legal_name"
+  },
+  {
+    "alias": "FSN E COMMERCE VENTURES",
+    "merchantKey": "NYKAA",
+    "kind": "legal_name"
+  },
+  {
+    "alias": "FSN E-COMMERCE VENTURES",
+    "merchantKey": "NYKAA",
+    "kind": "legal_name"
+  },
+  {
+    "alias": "INFINITI RETAIL",
+    "merchantKey": "CROMA",
+    "kind": "legal_name"
+  },
+  {
+    "alias": "BUNDL TECHNOLOGIES",
+    "merchantKey": "SWIGGY",
+    "kind": "legal_name"
+  },
+  {
+    "alias": "SWIGGY LIMITED",
+    "merchantKey": "SWIGGY",
+    "kind": "legal_name"
+  },
+  {
+    "alias": "ETERNAL",
+    "merchantKey": "ZOMATO",
+    "kind": "legal_name"
+  },
+  {
+    "alias": "ZOMATO MEDIA",
+    "merchantKey": "ZOMATO",
+    "kind": "legal_name"
+  },
+  {
+    "alias": "HARDCASTLE RESTAURANTS",
+    "merchantKey": "MCDONALDS",
+    "kind": "legal_name"
+  },
+  {
+    "alias": "WESTLIFE FOODWORLD",
+    "merchantKey": "MCDONALDS",
+    "kind": "legal_name"
+  },
+  {
+    "alias": "WESTLIFE DEVELOPMENT",
+    "merchantKey": "MCDONALDS",
+    "kind": "legal_name"
+  },
+  {
+    "alias": "JUBILANT FOODWORKS",
+    "merchantKey": "DOMINOS",
+    "kind": "legal_name"
+  },
+  {
+    "alias": "TATA STARBUCKS",
+    "merchantKey": "STARBUCKS",
+    "kind": "legal_name"
+  },
+  {
+    "alias": "RESTAURANT BRANDS ASIA",
+    "merchantKey": "BURGER KING",
+    "kind": "legal_name"
+  },
+  {
+    "alias": "BURGER KING INDIA",
+    "merchantKey": "BURGER KING",
+    "kind": "legal_name"
+  },
+  {
+    "alias": "DEVYANI INTERNATIONAL",
+    "merchantKey": "KFC",
+    "kind": "legal_name"
+  },
+  {
+    "alias": "BLINK COMMERCE",
+    "merchantKey": "BLINKIT",
+    "kind": "legal_name"
+  },
+  {
+    "alias": "GROFERS INDIA",
+    "merchantKey": "BLINKIT",
+    "kind": "legal_name"
+  },
+  {
+    "alias": "KIRANAKART TECHNOLOGIES",
+    "merchantKey": "ZEPTO",
+    "kind": "legal_name"
+  },
+  {
+    "alias": "INNOVATIVE RETAIL CONCEPTS",
+    "merchantKey": "BIGBASKET",
+    "kind": "legal_name"
+  },
+  {
+    "alias": "AVENUE SUPERMARTS",
+    "merchantKey": "DMART",
+    "kind": "legal_name"
+  },
+  {
+    "alias": "SWIGGYINSTAMART",
+    "merchantKey": "SWIGGY INSTAMART",
+    "kind": "abbreviation"
+  },
+  {
+    "alias": "MCDONALD'S",
+    "merchantKey": "MCDONALDS",
+    "kind": "variant"
+  },
+  {
+    "alias": "MC DONALDS",
+    "merchantKey": "MCDONALDS",
+    "kind": "variant"
+  },
+  {
+    "alias": "MC DONALD'S",
+    "merchantKey": "MCDONALDS",
+    "kind": "variant"
+  },
+  {
+    "alias": "DOMINO'S",
+    "merchantKey": "DOMINOS",
+    "kind": "variant"
+  },
+  {
+    "alias": "DOMINO'S PIZZA",
+    "merchantKey": "DOMINOS",
+    "kind": "variant"
+  },
+  {
+    "alias": "DOMINOS PIZZA",
+    "merchantKey": "DOMINOS",
+    "kind": "variant"
+  },
+  {
+    "alias": "HALDIRAM'S",
+    "merchantKey": "HALDIRAMS",
+    "kind": "variant"
+  },
+  {
+    "alias": "NATURE'S BASKET",
+    "merchantKey": "NATURES BASKET",
+    "kind": "variant"
+  },
+  {
+    "alias": "BYJU'S",
+    "merchantKey": "BYJUS",
+    "kind": "variant"
+  },
+  {
+    "alias": "BYJU S",
+    "merchantKey": "BYJUS",
+    "kind": "variant"
+  },
+  {
+    "alias": "THINK AND LEARN",
+    "merchantKey": "BYJUS",
+    "kind": "legal_name"
+  },
+  {
+    "alias": "ANI TECHNOLOGIES",
+    "merchantKey": "OLA CABS",
+    "kind": "legal_name"
+  },
+  {
+    "alias": "ROPPEN TRANSPORTATION",
+    "merchantKey": "RAPIDO",
+    "kind": "legal_name"
+  },
+  {
+    "alias": "MOVING TECH",
+    "merchantKey": "NAMMA YATRI",
+    "kind": "legal_name"
+  },
+  {
+    "alias": "INTERGLOBE AVIATION",
+    "merchantKey": "INDIGO AIRLINES",
+    "kind": "legal_name"
+  },
+  {
+    "alias": "UBER INDIA SYSTEMS",
+    "merchantKey": "UBER",
+    "kind": "legal_name"
+  },
+  {
+    "alias": "MAKE MY TRIP",
+    "merchantKey": "MAKEMYTRIP",
+    "kind": "variant"
+  },
+  {
+    "alias": "MAKEMYTRIP INDIA",
+    "merchantKey": "MAKEMYTRIP",
+    "kind": "legal_name"
+  },
+  {
+    "alias": "IBIBO GROUP",
+    "merchantKey": "GOIBIBO",
+    "kind": "legal_name"
+  },
+  {
+    "alias": "INDIAN RAILWAY CATERING AND TOURISM",
+    "merchantKey": "IRCTC",
+    "kind": "legal_name"
+  },
+  {
+    "alias": "BIGTREE ENTERTAINMENT",
+    "merchantKey": "BOOKMYSHOW",
+    "kind": "legal_name"
+  },
+  {
+    "alias": "APPLE COM BILL",
+    "merchantKey": "APPLE SERVICES",
+    "kind": "abbreviation"
+  },
+  {
+    "alias": "APPLE.COM/BILL",
+    "merchantKey": "APPLE SERVICES",
+    "kind": "abbreviation"
+  },
+  {
+    "alias": "GOOGLE PLAY STORE",
+    "merchantKey": "GOOGLE PLAY",
+    "kind": "variant"
+  },
+  {
+    "alias": "OPENAI LLC",
+    "merchantKey": "OPENAI",
+    "kind": "legal_name"
+  },
+  {
+    "alias": "OPENAILLC",
+    "merchantKey": "OPENAI",
+    "kind": "legal_name"
+  },
+  {
+    "alias": "NETFLIX COM",
+    "merchantKey": "NETFLIX",
+    "kind": "variant"
+  },
+  {
+    "alias": "SPOTIFY INDIA",
+    "merchantKey": "SPOTIFY",
+    "kind": "variant"
+  },
+  {
+    "alias": "DISNEY STAR",
+    "merchantKey": "DISNEY HOTSTAR",
+    "kind": "legal_name"
+  },
+  {
+    "alias": "BHARTI AIRTEL",
+    "merchantKey": "AIRTEL",
+    "kind": "legal_name"
+  },
+  {
+    "alias": "RELIANCE JIO INFOCOMM",
+    "merchantKey": "JIO",
+    "kind": "legal_name"
+  },
+  {
+    "alias": "RELIANCE JIO",
+    "merchantKey": "JIO",
+    "kind": "legal_name"
+  },
+  {
+    "alias": "VODAFONE IDEA",
+    "merchantKey": "VI",
+    "kind": "legal_name"
+  },
+  {
+    "alias": "TATA POWER DELHI DISTRIBUTION",
+    "merchantKey": "TATA POWER",
+    "kind": "legal_name"
+  },
+  {
+    "alias": "BSES RAJDHANI",
+    "merchantKey": "BSES",
+    "kind": "legal_name"
+  },
+  {
+    "alias": "BSES YAMUNA",
+    "merchantKey": "BSES",
+    "kind": "legal_name"
+  },
+  {
+    "alias": "ATRIA CONVERGENCE",
+    "merchantKey": "ACT FIBERNET",
+    "kind": "legal_name"
+  },
+  {
+    "alias": "TATA SKY",
+    "merchantKey": "TATA PLAY",
+    "kind": "legal_name"
+  },
+  {
+    "alias": "ONE97 COMMUNICATIONS",
+    "merchantKey": "PAYTM",
+    "kind": "legal_name"
+  },
+  {
+    "alias": "PAYTM PAYMENTS SERVICES",
+    "merchantKey": "PAYTM",
+    "kind": "legal_name"
+  },
+  {
+    "alias": "DREAMPLUG TECHNOLOGIES",
+    "merchantKey": "CRED",
+    "kind": "legal_name"
+  },
+  {
+    "alias": "DREAMPLUG PAYTECH",
+    "merchantKey": "CRED",
+    "kind": "legal_name"
+  },
+  {
+    "alias": "NEXTBILLION TECHNOLOGY",
+    "merchantKey": "GROWW",
+    "kind": "legal_name"
+  },
+  {
+    "alias": "RKSV SECURITIES",
+    "merchantKey": "UPSTOX",
+    "kind": "legal_name"
+  },
+  {
+    "alias": "ZERODHA BROKING",
+    "merchantKey": "ZERODHA",
+    "kind": "legal_name"
+  }
+]

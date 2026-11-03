@@ -1,0 +1,320 @@
+[
+  {
+    "id": "LINK-IPO",
+    "eventType": "ipo_application",
+    "legs": [
+      {
+        "role": "hold_placed",
+        "match": {
+          "factType": "hold",
+          "phase": [
+            "placed"
+          ],
+          "purpose": [
+            "ipo_asba",
+            "upi_mandate_block"
+          ]
+        }
+      },
+      {
+        "role": "hold_released",
+        "match": {
+          "factType": "hold",
+          "phase": [
+            "released"
+          ],
+          "purpose": [
+            "ipo_asba",
+            "upi_mandate_block"
+          ]
+        }
+      },
+      {
+        "role": "hold_converted",
+        "match": {
+          "factType": "hold",
+          "phase": [
+            "converted"
+          ],
+          "purpose": [
+            "ipo_asba",
+            "upi_mandate_block"
+          ]
+        }
+      },
+      {
+        "role": "debit_leg",
+        "match": {
+          "factType": "movement",
+          "direction": "debit",
+          "purpose": [
+            "investment"
+          ],
+          "instrumentKind": [
+            "bank_account"
+          ]
+        }
+      }
+    ],
+    "join": {
+      "amountRole": "held",
+      "amountTolerancePct": 100,
+      "windowHours": 504,
+      "reference": "prefer"
+    },
+    "singleLeg": "awaiting_leg",
+    "priority": 120
+  },
+  {
+    "id": "LINK-MANDATE-CHARGE",
+    "eventType": "subscription_charge",
+    "legs": [
+      {
+        "role": "original",
+        "match": {
+          "factType": "mandate"
+        }
+      },
+      {
+        "role": "charge",
+        "match": {
+          "factType": "movement",
+          "direction": "debit",
+          "evidenceOnly": false
+        }
+      }
+    ],
+    "join": {
+      "amountRole": "posted",
+      "amountTolerancePct": 100,
+      "windowHours": 8784,
+      "reference": "prefer"
+    },
+    "singleLeg": "complete",
+    "priority": 110
+  },
+  {
+    "id": "LINK-CARD-BILL",
+    "eventType": "card_bill_payment",
+    "legs": [
+      {
+        "role": "debit_leg",
+        "match": {
+          "factType": "movement",
+          "direction": "debit",
+          "purpose": [
+            "card_payment"
+          ],
+          "instrumentKind": [
+            "bank_account"
+          ]
+        }
+      },
+      {
+        "role": "credit_leg",
+        "match": {
+          "factType": "movement",
+          "direction": "credit",
+          "purpose": [
+            "card_payment"
+          ],
+          "instrumentKind": [
+            "credit_card"
+          ]
+        }
+      }
+    ],
+    "join": {
+      "amountRole": "posted",
+      "amountTolerancePct": 0,
+      "windowHours": 72,
+      "reference": "prefer"
+    },
+    "singleLeg": "complete",
+    "priority": 100
+  },
+  {
+    "id": "LINK-WALLET-TOPUP",
+    "eventType": "wallet_topup",
+    "legs": [
+      {
+        "role": "debit_leg",
+        "match": {
+          "factType": "movement",
+          "direction": "debit",
+          "purpose": [
+            "wallet_topup"
+          ],
+          "instrumentKind": [
+            "bank_account",
+            "credit_card",
+            "debit_card",
+            "prepaid_card"
+          ]
+        }
+      },
+      {
+        "role": "credit_leg",
+        "match": {
+          "factType": "movement",
+          "direction": "credit",
+          "purpose": [
+            "wallet_topup"
+          ],
+          "instrumentKind": [
+            "wallet"
+          ]
+        }
+      }
+    ],
+    "join": {
+      "amountRole": "posted",
+      "amountTolerancePct": 0,
+      "windowHours": 48,
+      "reference": "prefer"
+    },
+    "singleLeg": "complete",
+    "priority": 100
+  },
+  {
+    "id": "LINK-REFUND",
+    "eventType": "refund",
+    "legs": [
+      {
+        "role": "original",
+        "match": {
+          "factType": "movement",
+          "direction": "debit",
+          "purpose": [
+            "purchase",
+            "bill_payment",
+            "fee",
+            "emi"
+          ],
+          "evidenceOnly": false
+        }
+      },
+      {
+        "role": "reversal",
+        "match": {
+          "factType": "movement",
+          "direction": "credit",
+          "purpose": [
+            "refund",
+            "reversal"
+          ]
+        }
+      }
+    ],
+    "join": {
+      "amountRole": "posted",
+      "amountTolerancePct": 100,
+      "windowHours": 2880,
+      "reference": "prefer"
+    },
+    "singleLeg": "complete",
+    "priority": 90
+  },
+  {
+    "id": "LINK-OWN-TRANSFER",
+    "eventType": "own_transfer",
+    "legs": [
+      {
+        "role": "debit_leg",
+        "match": {
+          "factType": "movement",
+          "direction": "debit",
+          "purpose": [
+            "transfer",
+            "p2p"
+          ],
+          "instrumentKind": [
+            "bank_account"
+          ]
+        }
+      },
+      {
+        "role": "credit_leg",
+        "match": {
+          "factType": "movement",
+          "direction": "credit",
+          "purpose": [
+            "transfer",
+            "p2p"
+          ],
+          "instrumentKind": [
+            "bank_account"
+          ]
+        }
+      }
+    ],
+    "join": {
+      "amountRole": "posted",
+      "amountTolerancePct": 0,
+      "windowHours": 24,
+      "reference": "prefer"
+    },
+    "singleLeg": "complete",
+    "priority": 80
+  },
+  {
+    "id": "LINK-RECEIPT",
+    "eventType": "purchase",
+    "legs": [
+      {
+        "role": "duplicate_notice",
+        "match": {
+          "factType": "movement",
+          "direction": "debit",
+          "evidenceOnly": true
+        }
+      },
+      {
+        "role": "debit_leg",
+        "match": {
+          "factType": "movement",
+          "direction": "debit",
+          "evidenceOnly": false
+        }
+      }
+    ],
+    "join": {
+      "amountRole": "posted",
+      "amountTolerancePct": 0,
+      "windowHours": 72,
+      "reference": "ignore"
+    },
+    "singleLeg": "review",
+    "priority": 70
+  },
+  {
+    "id": "LINK-DUP-NOTIFY",
+    "eventType": "purchase",
+    "legs": [
+      {
+        "role": "debit_leg",
+        "match": {
+          "factType": "movement",
+          "direction": "debit",
+          "evidenceOnly": false
+        }
+      },
+      {
+        "role": "duplicate_notice",
+        "match": {
+          "factType": "movement",
+          "direction": "debit",
+          "evidenceOnly": false
+        }
+      }
+    ],
+    "join": {
+      "amountRole": "posted",
+      "amountTolerancePct": 0,
+      "windowHours": 0.1667,
+      "reference": "prefer"
+    },
+    "singleLeg": "complete",
+    "priority": 60
+  }
+]

@@ -1,0 +1,17 @@
+{
+  "id": "wp03d:promo_cashback_next_purchase",
+  "templateHash": "3824ad1e4126434becafe8f17e5096e764949763a68a1d5217dff36e5a59d439",
+  "weight": 1,
+  "source": "synthetic",
+  "messages": [
+    {
+      "sender": "AX-AMAZON-P",
+      "body": "Get 10% cashback on your next Amazon purchase. Offer valid till 30 Nov.",
+      "observedAt": "2026-12-01T09:00:00.000Z"
+    }
+  ],
+  "expect": {
+    "ignore": true
+  },
+  "origin": "wp03d"
+}

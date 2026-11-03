@@ -1,0 +1,18 @@
+{
+  "id": "wp03d:broker_payable_trades",
+  "templateHash": "7a4e07d4478c93e0b18eeef2dcf2fa6629f6ee215a8cd6f52c83f44ca6424f77",
+  "weight": 1,
+  "source": "synthetic",
+  "messages": [
+    {
+      "sender": "VM-KOTSEC",
+      "body": "Dear Client, an amount of Rs 12,345.67 is payable to you for all trades done till 02-NOV-26. Please check your ledger.",
+      "observedAt": "2026-12-01T09:00:00.000Z"
+    }
+  ],
+  "expect": {
+    "ignore": true
+  },
+  "note": "Broker payable notice: not a movement. NSE and BSE fund-balance reports are balance snapshots, not this.",
+  "origin": "wp03d"
+}

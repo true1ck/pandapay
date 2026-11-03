@@ -1,0 +1,18 @@
+{
+  "id": "wp03d:reward_points_expiry_notice",
+  "templateHash": "7fabc4a4231f5374a37c2b4313f43b0427b8750d9808f52473c078c991c50773",
+  "weight": 1,
+  "source": "synthetic",
+  "messages": [
+    {
+      "sender": "VM-HDFCBK-S",
+      "body": "Your 1,250 reward points will expire on 30-11-26. Redeem now on the app.",
+      "observedAt": "2026-12-01T09:00:00.000Z"
+    }
+  ],
+  "expect": {
+    "ignore": true
+  },
+  "note": "The contract has no role for points about to expire; treated as service noise (see handoff).",
+  "origin": "wp03d"
+}

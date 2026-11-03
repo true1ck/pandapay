@@ -1,0 +1,34 @@
+{
+  "id": "wp03d:reward_earned_no_balance",
+  "templateHash": "bd054caa96eb5f0379bd18f40159b1953b416ae3a9b9ce445659fc0fec08b41a",
+  "weight": 1,
+  "source": "synthetic",
+  "messages": [
+    {
+      "sender": "VM-HDFCBK-S",
+      "body": "You have earned 120 reward points on your HDFC Bank Credit Card XX5678 for your transaction. Points expire on 31-12-2027.",
+      "observedAt": "2026-12-01T09:00:00.000Z"
+    }
+  ],
+  "expect": {
+    "facts": [
+      {
+        "factType": "reward",
+        "amounts": [
+          {
+            "role": "points_earned",
+            "minor": 120,
+            "unit": "POINTS"
+          }
+        ],
+        "instrument": {
+          "kind": "credit_card",
+          "issuerSlug": "hdfc",
+          "maskDigits": "5678"
+        }
+      }
+    ]
+  },
+  "note": "Whole points: minor 120, not paise.",
+  "origin": "wp03d"
+}

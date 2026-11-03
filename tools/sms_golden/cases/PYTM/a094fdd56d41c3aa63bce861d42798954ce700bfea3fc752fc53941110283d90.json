@@ -1,0 +1,17 @@
+{
+  "id": "wp03d:wallet_zero_balance_nag",
+  "templateHash": "a094fdd56d41c3aa63bce861d42798954ce700bfea3fc752fc53941110283d90",
+  "weight": 1,
+  "source": "synthetic",
+  "messages": [
+    {
+      "sender": "AD-PYTM",
+      "body": "Your Paytm wallet balance is Rs 0. Add money to wallet to enjoy seamless payments.",
+      "observedAt": "2026-12-01T09:00:00.000Z"
+    }
+  ],
+  "expect": {
+    "ignore": true
+  },
+  "origin": "wp03d"
+}

@@ -1,0 +1,17 @@
+{
+  "id": "wp03d:data_pack_expired",
+  "templateHash": "cb6c888ca79e9ed9b15c2c8faa0efbdaf7dac2873a570e131cb17787452b6278",
+  "weight": 1,
+  "source": "synthetic",
+  "messages": [
+    {
+      "sender": "VM-VIINFO",
+      "body": "Your data pack has expired. Buy a 2GB booster pack at Rs 49 to continue browsing.",
+      "observedAt": "2026-12-01T09:00:00.000Z"
+    }
+  ],
+  "expect": {
+    "ignore": true
+  },
+  "origin": "wp03d"
+}

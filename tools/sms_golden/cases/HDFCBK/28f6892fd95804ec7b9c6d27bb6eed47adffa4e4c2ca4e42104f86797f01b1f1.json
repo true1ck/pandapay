@@ -1,0 +1,36 @@
+{
+  "id": "wp03d:cashback_debit_card",
+  "templateHash": "28f6892fd95804ec7b9c6d27bb6eed47adffa4e4c2ca4e42104f86797f01b1f1",
+  "weight": 1,
+  "source": "synthetic",
+  "messages": [
+    {
+      "sender": "VM-HDFCBK-S",
+      "body": "Cashback of Rs 20 credited to your HDFC Bank Debit Card ending 4321.",
+      "observedAt": "2026-12-01T09:00:00.000Z"
+    }
+  ],
+  "expect": {
+    "facts": [
+      {
+        "factType": "movement",
+        "attrs": {
+          "direction": "credit",
+          "purpose": "cashback"
+        },
+        "amounts": [
+          {
+            "role": "posted",
+            "minor": 2000
+          }
+        ],
+        "instrument": {
+          "kind": "debit_card",
+          "issuerSlug": "hdfc",
+          "maskDigits": "4321"
+        }
+      }
+    ]
+  },
+  "origin": "wp03d"
+}

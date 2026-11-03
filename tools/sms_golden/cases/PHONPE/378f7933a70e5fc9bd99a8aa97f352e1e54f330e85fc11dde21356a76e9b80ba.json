@@ -1,0 +1,34 @@
+{
+  "id": "wp03d:cashback_wallet_phonepe",
+  "templateHash": "378f7933a70e5fc9bd99a8aa97f352e1e54f330e85fc11dde21356a76e9b80ba",
+  "weight": 1,
+  "source": "synthetic",
+  "messages": [
+    {
+      "sender": "AX-PHONPE",
+      "body": "Cashback of Rs 50 added to your PhonePe wallet.",
+      "observedAt": "2026-12-01T09:00:00.000Z"
+    }
+  ],
+  "expect": {
+    "facts": [
+      {
+        "factType": "movement",
+        "attrs": {
+          "direction": "credit",
+          "purpose": "cashback"
+        },
+        "amounts": [
+          {
+            "role": "posted",
+            "minor": 5000
+          }
+        ],
+        "instrument": {
+          "kind": "wallet"
+        }
+      }
+    ]
+  },
+  "origin": "wp03d"
+}

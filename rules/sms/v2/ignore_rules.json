@@ -1,0 +1,245 @@
+[
+  {
+    "id": "IGN-OTP-CODE",
+    "senders": [
+      "*"
+    ],
+    "pattern": "^(?![\\s\\S]*?(?:\\b(?:has\\s+been|was|is|are|were)\\s+(?:successfully\\s+)?(?:debited|credited|charged|deducted|withdrawn|transferred|paid|refunded|reversed|blocked|released)\\b|\\b(?:debited|credited|deducted|withdrawn|charged|spent|paid|sent|received|transferred|refunded)\\s*(?:by|with|for|of|from|to|on|at|towards|using|via)?\\s*(?:rs\\.?|inr|₹)\\s*\\d|(?:rs\\.?|inr|₹)\\s*[\\d,]+(?:\\.\\d+)?\\s*(?:has\\s+been\\s+|is\\s+|was\\s+|were\\s+)?(?:debited|credited|spent|paid|received|withdrawn|transferred|deducted|charged|refunded|blocked|reversed|sent)\\b|\\b(?:avl|avail|available)\\.?\\s*(?:lmt|limit|bal(?:ance)?|credit)\\b))[\\s\\S]*?(?:\\b(?:otp|one[- ]?time\\s+(?:password|pin|passcode)|verification\\s+code|security\\s+code|auth(?:orization|entication)?\\s+code|login\\s+code)\\b[^\\n]{0,60}?\\b\\d{4,8}\\b|\\b\\d{4,8}\\b[^\\n]{0,40}?\\b(?:is|as)\\s+(?:your|the)\\s+(?:otp|one[- ]?time|verification|security|login|auth)|\\b(?:use|enter)\\s+\\d{4,8}\\s+(?:as\\s+)?(?:otp|code|to\\s+(?:log|verify|authori[sz]e|complete)))",
+    "flags": "i",
+    "reason": "otp"
+  },
+  {
+    "id": "IGN-SECURITY-ALERT",
+    "senders": [
+      "*"
+    ],
+    "pattern": "^(?![\\s\\S]*?(?:\\b(?:has\\s+been|was|is|are|were)\\s+(?:successfully\\s+)?(?:debited|credited|charged|deducted|withdrawn|transferred|paid|refunded|reversed|blocked|released)\\b|\\b(?:debited|credited|deducted|withdrawn|charged|spent|paid|sent|received|transferred|refunded)\\s*(?:by|with|for|of|from|to|on|at|towards|using|via)?\\s*(?:rs\\.?|inr|₹)\\s*\\d|(?:rs\\.?|inr|₹)\\s*[\\d,]+(?:\\.\\d+)?\\s*(?:has\\s+been\\s+|is\\s+|was\\s+|were\\s+)?(?:debited|credited|spent|paid|received|withdrawn|transferred|deducted|charged|refunded|blocked|reversed|sent)\\b|\\b(?:avl|avail|available)\\.?\\s*(?:lmt|limit|bal(?:ance)?|credit)\\b|\\b(?:total\\s+amount\\s+due|minimum\\s+(?:amount\\s+)?due|amount\\s+payable|payment\\s+due|due\\s+(?:date|on|by)|due\\s+for\\s+payment|statement\\s+(?:for|dated|generated))\\b|\\b(?:upi\\s*ref|utr|rrn|ref(?:erence)?\\s*(?:no|number|id))\\.?\\s*[:.-]?\\s*\\w*\\d{5,}|\\bpayment\\s+of\\s*(?:rs\\.?|inr|₹)|\\b(?:received|processed)\\s+your\\s+payment\\b|\\b(?:cashback|rewards?|refund|points?)\\b[^\\n]{0,50}\\b(?:has\\s+been\\s+|was\\s+|is\\s+)?(?:credited|added|received|reversed|redeemed|earned)\\b|\\b(?:earned|credited|awarded|redeemed|accrued)\\s+[\\d,]*\\s*(?:[a-z0-9+&' -]{0,40}?\\s)?(?:cashback|rewards?|points?|coins?)\\b|\\b(?:mandate|autopay|auto[- ]?debit|standing\\s+instruction|e-?nach|asba|lien|funds?\\s+blocked|amount\\s+blocked)\\b|\\b(?:recharge|payment|transaction|purchase|settlement|payout)\\b[^\\n]{0,45}\\b(?:successful|completed|processed)\\b))[\\s\\S]*?(?:\\btransaction\\s+check\\s+alert\\b|\\bwe\\s+tried\\s+to\\s+contact\\s+you\\b|\\bconfirm\\s+(?:the\\s+)?(?:following\\s+)?(?:txn|transaction)\\b|\\bsim\\s+swap\\b|\\b(?:suspicious|unusual)\\s+(?:activity|txns?|transactions?|log-?in)\\b|\\b(?:new|unrecogni[sz]ed)\\s+device\\b|\\b(?:password|mpin|upi\\s*pin)\\s+(?:has\\s+been\\s+)?(?:changed|reset|updated|set)\\b|\\bregistration\\s+alert\\b|\\bdevice\\s+(?:binding|registration)\\b|\\b(?:log-?in|sign-?in)\\s+(?:alert|attempt|detected)\\b)",
+    "flags": "i",
+    "reason": "security"
+  },
+  {
+    "id": "IGN-SECURITY-SCAM",
+    "senders": [
+      "*"
+    ],
+    "pattern": "^(?![\\s\\S]*?(?:\\b(?:has\\s+been|was|is|are|were)\\s+(?:successfully\\s+)?(?:debited|credited|charged|deducted|withdrawn|transferred|paid|refunded|reversed|blocked|released)\\b|\\b(?:debited|credited|deducted|withdrawn|charged|spent|paid|sent|received|transferred|refunded)\\s*(?:by|with|for|of|from|to|on|at|towards|using|via)?\\s*(?:rs\\.?|inr|₹)\\s*\\d|(?:rs\\.?|inr|₹)\\s*[\\d,]+(?:\\.\\d+)?\\s*(?:has\\s+been\\s+|is\\s+|was\\s+|were\\s+)?(?:debited|credited|spent|paid|received|withdrawn|transferred|deducted|charged|refunded|blocked|reversed|sent)\\b|\\b(?:avl|avail|available)\\.?\\s*(?:lmt|limit|bal(?:ance)?|credit)\\b|\\b(?:total\\s+amount\\s+due|minimum\\s+(?:amount\\s+)?due|amount\\s+payable|payment\\s+due|due\\s+(?:date|on|by)|due\\s+for\\s+payment|statement\\s+(?:for|dated|generated))\\b|\\b(?:upi\\s*ref|utr|rrn|ref(?:erence)?\\s*(?:no|number|id))\\.?\\s*[:.-]?\\s*\\w*\\d{5,}|\\bpayment\\s+of\\s*(?:rs\\.?|inr|₹)|\\b(?:received|processed)\\s+your\\s+payment\\b|\\b(?:cashback|rewards?|refund|points?)\\b[^\\n]{0,50}\\b(?:has\\s+been\\s+|was\\s+|is\\s+)?(?:credited|added|received|reversed|redeemed|earned)\\b|\\b(?:earned|credited|awarded|redeemed|accrued)\\s+[\\d,]*\\s*(?:[a-z0-9+&' -]{0,40}?\\s)?(?:cashback|rewards?|points?|coins?)\\b|\\b(?:mandate|autopay|auto[- ]?debit|standing\\s+instruction|e-?nach|asba|lien|funds?\\s+blocked|amount\\s+blocked)\\b|\\b(?:recharge|payment|transaction|purchase|settlement|payout)\\b[^\\n]{0,45}\\b(?:successful|completed|processed)\\b))[\\s\\S]*?(?:\\b(?:bank|we)\\s+(?:will\\s+)?never\\s+(?:call|ask)\\s+for\\b[^\\n]{0,60}\\b(?:otp|pin|cvv|password)\\b|\\bbeware\\s+(?:of\\s+)?(?:fraud|scam|unsolicited|dealing)\\b|\\bunsolicited\\s+tips\\b|\\bonline\\s+investment\\s+scams\\b|\\b(?:deactivated|suspended|blocked)\\b[^\\n]{0,80}\\b(?:update|verify|click)\\b|\\bupdate\\s+(?:your\\s+)?(?:pan|kyc|aadhaar)\\b|\\b(?:won|winner)\\b[^\\n]{0,40}\\b(?:prize|lucky\\s+draw|lottery|cash\\s+reward)\\b)",
+    "flags": "i",
+    "reason": "security"
+  },
+  {
+    "id": "IGN-PROMO-CASHBACK-OFFER",
+    "senders": [
+      "*"
+    ],
+    "pattern": "^(?![\\s\\S]*?(?:\\b(?:has\\s+been|was|is|are|were)\\s+(?:successfully\\s+)?(?:debited|credited|charged|deducted|withdrawn|transferred|paid|refunded|reversed|blocked|released)\\b|\\b(?:debited|credited|deducted|withdrawn|charged|spent|paid|sent|received|transferred|refunded)\\s*(?:by|with|for|of|from|to|on|at|towards|using|via)?\\s*(?:rs\\.?|inr|₹)\\s*\\d|(?:rs\\.?|inr|₹)\\s*[\\d,]+(?:\\.\\d+)?\\s*(?:has\\s+been\\s+|is\\s+|was\\s+|were\\s+)?(?:debited|credited|spent|paid|received|withdrawn|transferred|deducted|charged|refunded|blocked|reversed|sent)\\b|\\b(?:avl|avail|available)\\.?\\s*(?:lmt|limit|bal(?:ance)?|credit)\\b|\\b(?:total\\s+amount\\s+due|minimum\\s+(?:amount\\s+)?due|amount\\s+payable|payment\\s+due|due\\s+(?:date|on|by)|due\\s+for\\s+payment|statement\\s+(?:for|dated|generated))\\b|\\b(?:upi\\s*ref|utr|rrn|ref(?:erence)?\\s*(?:no|number|id))\\.?\\s*[:.-]?\\s*\\w*\\d{5,}|\\bpayment\\s+of\\s*(?:rs\\.?|inr|₹)|\\b(?:received|processed)\\s+your\\s+payment\\b|\\b(?:cashback|rewards?|refund|points?)\\b[^\\n]{0,50}\\b(?:has\\s+been\\s+|was\\s+|is\\s+)?(?:credited|added|received|reversed|redeemed|earned)\\b|\\b(?:earned|credited|awarded|redeemed|accrued)\\s+[\\d,]*\\s*(?:[a-z0-9+&' -]{0,40}?\\s)?(?:cashback|rewards?|points?|coins?)\\b|\\b(?:mandate|autopay|auto[- ]?debit|standing\\s+instruction|e-?nach|asba|lien|funds?\\s+blocked|amount\\s+blocked)\\b|\\b(?:recharge|payment|transaction|purchase|settlement|payout)\\b[^\\n]{0,45}\\b(?:successful|completed|processed)\\b))[\\s\\S]*?(?:\\b(?:get|earn|win|avail|enjoy|receive|grab|unlock)\\b[^\\n]{0,60}?\\b(?:cashback|reward\\s+points?|vouchers?|coupons?|gift\\s*cards?|discount)\\b|\\bcashback\\s+offer\\b|\\boffer\\b[^\\n]{0,40}\\bcashback\\b|\\bspend\\s+(?:rs\\.?|inr|₹)?\\s*[\\d,]+[^\\n]{0,60}?\\b(?:get|and\\s+get|to\\s+get|earn|win)\\b|\\bcashback\\s+(?:when|on)\\s+(?:you\\s+)?(?:spend|shop|pay|recharge|book)\\b|\\b(?:with|extra|flat|instant|bank)\\s+cashback\\b|\\bcashback\\s+(?:of|up\\s*to|upto)\\s*(?:rs\\.?|inr|₹)\\s*\\d)",
+    "flags": "i",
+    "reason": "promotion"
+  },
+  {
+    "id": "IGN-LIMIT-OFFER",
+    "senders": [
+      "*"
+    ],
+    "pattern": "^(?![\\s\\S]*?(?:\\b(?:has\\s+been|was|is|are|were)\\s+(?:successfully\\s+)?(?:debited|credited|charged|deducted|withdrawn|transferred|paid|refunded|reversed|blocked|released)\\b|\\b(?:debited|credited|deducted|withdrawn|charged|spent|paid|sent|received|transferred|refunded)\\s*(?:by|with|for|of|from|to|on|at|towards|using|via)?\\s*(?:rs\\.?|inr|₹)\\s*\\d|(?:rs\\.?|inr|₹)\\s*[\\d,]+(?:\\.\\d+)?\\s*(?:has\\s+been\\s+|is\\s+|was\\s+|were\\s+)?(?:debited|credited|spent|paid|received|withdrawn|transferred|deducted|charged|refunded|blocked|reversed|sent)\\b|\\b(?:avl|avail|available)\\.?\\s*(?:lmt|limit|bal(?:ance)?|credit)\\b|\\b(?:total\\s+amount\\s+due|minimum\\s+(?:amount\\s+)?due|amount\\s+payable|payment\\s+due|due\\s+(?:date|on|by)|due\\s+for\\s+payment|statement\\s+(?:for|dated|generated))\\b|\\b(?:upi\\s*ref|utr|rrn|ref(?:erence)?\\s*(?:no|number|id))\\.?\\s*[:.-]?\\s*\\w*\\d{5,}|\\bpayment\\s+of\\s*(?:rs\\.?|inr|₹)|\\b(?:received|processed)\\s+your\\s+payment\\b|\\b(?:cashback|rewards?|refund|points?)\\b[^\\n]{0,50}\\b(?:has\\s+been\\s+|was\\s+|is\\s+)?(?:credited|added|received|reversed|redeemed|earned)\\b|\\b(?:earned|credited|awarded|redeemed|accrued)\\s+[\\d,]*\\s*(?:[a-z0-9+&' -]{0,40}?\\s)?(?:cashback|rewards?|points?|coins?)\\b|\\b(?:mandate|autopay|auto[- ]?debit|standing\\s+instruction|e-?nach|asba|lien|funds?\\s+blocked|amount\\s+blocked)\\b|\\b(?:recharge|payment|transaction|purchase|settlement|payout)\\b[^\\n]{0,45}\\b(?:successful|completed|processed)\\b))[\\s\\S]*?(?:eligible\\s+for\\s+an?\\s+(?:credit\\s+)?limit\\s+(?:increase|enhancement|upgrade)|\\bpre[- ]?approved\\b|\\b(?:limit|credit\\s+limit)\\s+(?:increase|enhancement|upgrade)\\s+(?:offer|up\\s*to)\\b|\\beligible\\s+for\\s+(?:an?\\s+)?(?:[a-z0-9 ]{0,25}?)(?:loan|emis?|flexipay|credit\\s+limit|upgrade|credit\\s+card)\\b)",
+    "flags": "i",
+    "reason": "promotion"
+  },
+  {
+    "id": "IGN-EMI-AND-CARD-OFFER",
+    "senders": [
+      "*"
+    ],
+    "pattern": "^(?![\\s\\S]*?(?:\\b(?:has\\s+been|was|is|are|were)\\s+(?:successfully\\s+)?(?:debited|credited|charged|deducted|withdrawn|transferred|paid|refunded|reversed|blocked|released)\\b|\\b(?:debited|credited|deducted|withdrawn|charged|spent|paid|sent|received|transferred|refunded)\\s*(?:by|with|for|of|from|to|on|at|towards|using|via)?\\s*(?:rs\\.?|inr|₹)\\s*\\d|(?:rs\\.?|inr|₹)\\s*[\\d,]+(?:\\.\\d+)?\\s*(?:has\\s+been\\s+|is\\s+|was\\s+|were\\s+)?(?:debited|credited|spent|paid|received|withdrawn|transferred|deducted|charged|refunded|blocked|reversed|sent)\\b|\\b(?:avl|avail|available)\\.?\\s*(?:lmt|limit|bal(?:ance)?|credit)\\b|\\b(?:total\\s+amount\\s+due|minimum\\s+(?:amount\\s+)?due|amount\\s+payable|payment\\s+due|due\\s+(?:date|on|by)|due\\s+for\\s+payment|statement\\s+(?:for|dated|generated))\\b|\\b(?:upi\\s*ref|utr|rrn|ref(?:erence)?\\s*(?:no|number|id))\\.?\\s*[:.-]?\\s*\\w*\\d{5,}|\\bpayment\\s+of\\s*(?:rs\\.?|inr|₹)|\\b(?:received|processed)\\s+your\\s+payment\\b|\\b(?:cashback|rewards?|refund|points?)\\b[^\\n]{0,50}\\b(?:has\\s+been\\s+|was\\s+|is\\s+)?(?:credited|added|received|reversed|redeemed|earned)\\b|\\b(?:earned|credited|awarded|redeemed|accrued)\\s+[\\d,]*\\s*(?:[a-z0-9+&' -]{0,40}?\\s)?(?:cashback|rewards?|points?|coins?)\\b|\\b(?:mandate|autopay|auto[- ]?debit|standing\\s+instruction|e-?nach|asba|lien|funds?\\s+blocked|amount\\s+blocked)\\b|\\b(?:recharge|payment|transaction|purchase|settlement|payout)\\b[^\\n]{0,45}\\b(?:successful|completed|processed)\\b))[\\s\\S]*?(?:\\bconvert(?:ed|ing)?\\b[^\\n]{0,60}?\\b(?:in)?to\\s+(?:smart\\s+|flexipay\\s+|easy\\s+)?emis?\\b|\\bcan\\s+(?:now\\s+)?be\\s+converted\\b|\\binstant\\s+(?:cash|loan)\\b|\\b(?:credit|digital)\\s+power\\s+is\\s+(?:now\\s+)?active\\b|\\bclaim\\s+your\\b[^\\n]{0,30}\\bemi\\s+card\\b|\\bavail\\s+(?:credit\\s+)?card\\s+with\\s+limit\\b|\\buse\\s+card\\s+loan\\s+limit\\b|\\bapply\\s+(?:now|today|here|online)\\b|\\b(?:zero|no)\\s+(?:joining|annual)\\s+fee\\b|\\blifetime[- ]free\\b|\\bupgrade\\s+your\\b[^\\n]{0,40}\\bcard\\b)",
+    "flags": "i",
+    "reason": "promotion"
+  },
+  {
+    "id": "IGN-LIMIT-NOTICE-NO-AMOUNT",
+    "senders": [
+      "*"
+    ],
+    "pattern": "^(?![\\s\\S]*?(?:rs\\.?|inr|₹)\\s*\\d)[\\s\\S]*?(?:\\b(?:loan|credit)\\s+limit\\b[^\\n]{0,30}\\b(?:revised|increased|enhanced|updated)\\b|\\bnew\\s+credit\\s+alert\\b|\\b(?:view|check)\\s+(?:your\\s+)?updated\\s+limit\\b|\\bupdated\\s+limit\\s+here\\b)",
+    "flags": "i",
+    "reason": "promotion"
+  },
+  {
+    "id": "IGN-LOAN-OFFER-CONSENT",
+    "senders": [
+      "*"
+    ],
+    "pattern": "^(?![\\s\\S]*?(?:\\b(?:has\\s+been|was|is|are|were)\\s+(?:successfully\\s+)?(?:debited|credited|charged|deducted|withdrawn|transferred|paid|refunded|reversed|blocked|released)\\b|\\b(?:debited|credited|deducted|withdrawn|charged|spent|paid|sent|received|transferred|refunded)\\s*(?:by|with|for|of|from|to|on|at|towards|using|via)?\\s*(?:rs\\.?|inr|₹)\\s*\\d|(?:rs\\.?|inr|₹)\\s*[\\d,]+(?:\\.\\d+)?\\s*(?:has\\s+been\\s+|is\\s+|was\\s+|were\\s+)?(?:debited|credited|spent|paid|received|withdrawn|transferred|deducted|charged|refunded|blocked|reversed|sent)\\b|\\b(?:avl|avail|available)\\.?\\s*(?:lmt|limit|bal(?:ance)?|credit)\\b|\\b(?:total\\s+amount\\s+due|minimum\\s+(?:amount\\s+)?due|amount\\s+payable|payment\\s+due|due\\s+(?:date|on|by)|due\\s+for\\s+payment|statement\\s+(?:for|dated|generated))\\b|\\b(?:upi\\s*ref|utr|rrn|ref(?:erence)?\\s*(?:no|number|id))\\.?\\s*[:.-]?\\s*\\w*\\d{5,}|\\bpayment\\s+of\\s*(?:rs\\.?|inr|₹)|\\b(?:received|processed)\\s+your\\s+payment\\b|\\b(?:cashback|rewards?|refund|points?)\\b[^\\n]{0,50}\\b(?:has\\s+been\\s+|was\\s+|is\\s+)?(?:credited|added|received|reversed|redeemed|earned)\\b|\\b(?:earned|credited|awarded|redeemed|accrued)\\s+[\\d,]*\\s*(?:[a-z0-9+&' -]{0,40}?\\s)?(?:cashback|rewards?|points?|coins?)\\b|\\b(?:mandate|autopay|auto[- ]?debit|standing\\s+instruction|e-?nach|asba|lien|funds?\\s+blocked|amount\\s+blocked)\\b|\\b(?:recharge|payment|transaction|purchase|settlement|payout)\\b[^\\n]{0,45}\\b(?:successful|completed|processed)\\b))[\\s\\S]*?(?:\\b(?:funds?|loan|amount)\\b[\\s\\S]{0,100}?\\b(?:require|requires|need|needs|awaiting|pending)\\b[\\s\\S]{0,30}?\\bconsent\\b[\\s\\S]{0,60}?\\bdisburs|\\bconsent\\b[^\\n]{0,40}\\bcontinue\\s+(?:with\\s+)?(?:the\\s+)?disbursement\\b)",
+    "flags": "i",
+    "reason": "promotion"
+  },
+  {
+    "id": "IGN-BROKER-PAYABLE-TRADES",
+    "senders": [
+      "*"
+    ],
+    "pattern": "^(?![\\s\\S]*?(?:\\b(?:has\\s+been|was|is|are|were)\\s+(?:successfully\\s+)?(?:debited|credited|charged|deducted|withdrawn|transferred|paid|refunded|reversed|blocked|released)\\b|\\b(?:debited|credited|deducted|withdrawn|charged|spent|paid|sent|received|transferred|refunded)\\s*(?:by|with|for|of|from|to|on|at|towards|using|via)?\\s*(?:rs\\.?|inr|₹)\\s*\\d|(?:rs\\.?|inr|₹)\\s*[\\d,]+(?:\\.\\d+)?\\s*(?:has\\s+been\\s+|is\\s+|was\\s+|were\\s+)?(?:debited|credited|spent|paid|received|withdrawn|transferred|deducted|charged|refunded|blocked|reversed|sent)\\b|\\b(?:avl|avail|available)\\.?\\s*(?:lmt|limit|bal(?:ance)?|credit)\\b))[\\s\\S]*?(?:\\b(?:payable|receivable)\\s+(?:to|by)\\s+you\\b[\\s\\S]{0,120}?\\bfor\\s+all\\s+(?:your\\s+)?trades\\b|\\bfor\\s+all\\s+(?:your\\s+)?trades\\b[\\s\\S]{0,120}?\\b(?:payable|receivable)\\s+(?:to|by)\\s+you\\b)",
+    "flags": "i",
+    "reason": "service"
+  },
+  {
+    "id": "IGN-UPI-COLLECT-REQUEST",
+    "senders": [
+      "*"
+    ],
+    "pattern": "^(?![\\s\\S]*?(?:\\b(?:has\\s+been|was|is|are|were)\\s+(?:successfully\\s+)?(?:debited|credited|charged|deducted|withdrawn|transferred|paid|refunded|reversed|blocked|released)\\b|\\b(?:debited|credited|deducted|withdrawn|charged|spent|paid|sent|received|transferred|refunded)\\s*(?:by|with|for|of|from|to|on|at|towards|using|via)?\\s*(?:rs\\.?|inr|₹)\\s*\\d|(?:rs\\.?|inr|₹)\\s*[\\d,]+(?:\\.\\d+)?\\s*(?:has\\s+been\\s+|is\\s+|was\\s+|were\\s+)?(?:debited|credited|spent|paid|received|withdrawn|transferred|deducted|charged|refunded|blocked|reversed|sent)\\b|\\b(?:avl|avail|available)\\.?\\s*(?:lmt|limit|bal(?:ance)?|credit)\\b))[\\s\\S]*?(?:\\bcollect\\s+(?:money\\s+)?request\\b|\\bcollect\\s+req\\b|\\brequested\\s+(?:rs\\.?|inr|₹)\\s*[\\d,]+(?:\\.\\d+)?\\s+(?:from\\s+you|via\\s+upi|on\\s+upi)\\b|\\bpending\\s+(?:upi\\s+)?(?:collect|payment)\\s+request\\b|\\b(?:approve|decline|reject)\\b[^\\n]{0,30}\\b(?:payment\\s+request|collect)\\b)",
+    "flags": "i",
+    "reason": "service"
+  },
+  {
+    "id": "IGN-RECHARGE-PROMO",
+    "senders": [
+      "*"
+    ],
+    "pattern": "^(?![\\s\\S]*?(?:\\b(?:has\\s+been|was|is|are|were)\\s+(?:successfully\\s+)?(?:debited|credited|charged|deducted|withdrawn|transferred|paid|refunded|reversed|blocked|released)\\b|\\b(?:debited|credited|deducted|withdrawn|charged|spent|paid|sent|received|transferred|refunded)\\s*(?:by|with|for|of|from|to|on|at|towards|using|via)?\\s*(?:rs\\.?|inr|₹)\\s*\\d|(?:rs\\.?|inr|₹)\\s*[\\d,]+(?:\\.\\d+)?\\s*(?:has\\s+been\\s+|is\\s+|was\\s+|were\\s+)?(?:debited|credited|spent|paid|received|withdrawn|transferred|deducted|charged|refunded|blocked|reversed|sent)\\b|\\b(?:avl|avail|available)\\.?\\s*(?:lmt|limit|bal(?:ance)?|credit)\\b|\\b(?:total\\s+amount\\s+due|minimum\\s+(?:amount\\s+)?due|amount\\s+payable|payment\\s+due|due\\s+(?:date|on|by)|due\\s+for\\s+payment|statement\\s+(?:for|dated|generated))\\b|\\b(?:upi\\s*ref|utr|rrn|ref(?:erence)?\\s*(?:no|number|id))\\.?\\s*[:.-]?\\s*\\w*\\d{5,}|\\bpayment\\s+of\\s*(?:rs\\.?|inr|₹)|\\b(?:received|processed)\\s+your\\s+payment\\b|\\b(?:cashback|rewards?|refund|points?)\\b[^\\n]{0,50}\\b(?:has\\s+been\\s+|was\\s+|is\\s+)?(?:credited|added|received|reversed|redeemed|earned)\\b|\\b(?:earned|credited|awarded|redeemed|accrued)\\s+[\\d,]*\\s*(?:[a-z0-9+&' -]{0,40}?\\s)?(?:cashback|rewards?|points?|coins?)\\b|\\b(?:mandate|autopay|auto[- ]?debit|standing\\s+instruction|e-?nach|asba|lien|funds?\\s+blocked|amount\\s+blocked)\\b|\\b(?:recharge|payment|transaction|purchase|settlement|payout)\\b[^\\n]{0,45}\\b(?:successful|completed|processed)\\b))[\\s\\S]*?(?:\\b(?:recharge|top[- ]?up)\\b[^\\n]{0,80}\\b(?:get|enjoy|unlimited|free|extra|bonus|offer|data|validity|\\d+(?:\\.\\d+)?\\s*gb)\\b|\\b(?:unlimited|\\d+(?:\\.\\d+)?\\s*gb)\\b[^\\n]{0,40}\\b(?:data|calls?|validity|per\\s+day|/day)\\b|\\bdata\\s+(?:pack|booster)\\b|\\brecharge\\s+now\\b|\\bvalidity\\s+(?:is\\s+)?(?:expiring|expires|expired|ending|about\\s+to)\\b|\\binternational\\s+roaming\\s+pack\\b)",
+    "flags": "i",
+    "reason": "promotion"
+  },
+  {
+    "id": "IGN-TELECOM-SERVICE",
+    "senders": [
+      "*"
+    ],
+    "pattern": "^(?![\\s\\S]*?(?:\\b(?:has\\s+been|was|is|are|were)\\s+(?:successfully\\s+)?(?:debited|credited|charged|deducted|withdrawn|transferred|paid|refunded|reversed|blocked|released)\\b|\\b(?:debited|credited|deducted|withdrawn|charged|spent|paid|sent|received|transferred|refunded)\\s*(?:by|with|for|of|from|to|on|at|towards|using|via)?\\s*(?:rs\\.?|inr|₹)\\s*\\d|(?:rs\\.?|inr|₹)\\s*[\\d,]+(?:\\.\\d+)?\\s*(?:has\\s+been\\s+|is\\s+|was\\s+|were\\s+)?(?:debited|credited|spent|paid|received|withdrawn|transferred|deducted|charged|refunded|blocked|reversed|sent)\\b|\\b(?:avl|avail|available)\\.?\\s*(?:lmt|limit|bal(?:ance)?|credit)\\b|\\b(?:total\\s+amount\\s+due|minimum\\s+(?:amount\\s+)?due|amount\\s+payable|payment\\s+due|due\\s+(?:date|on|by)|due\\s+for\\s+payment|statement\\s+(?:for|dated|generated))\\b|\\b(?:upi\\s*ref|utr|rrn|ref(?:erence)?\\s*(?:no|number|id))\\.?\\s*[:.-]?\\s*\\w*\\d{5,}|\\bpayment\\s+of\\s*(?:rs\\.?|inr|₹)|\\b(?:received|processed)\\s+your\\s+payment\\b|\\b(?:cashback|rewards?|refund|points?)\\b[^\\n]{0,50}\\b(?:has\\s+been\\s+|was\\s+|is\\s+)?(?:credited|added|received|reversed|redeemed|earned)\\b|\\b(?:earned|credited|awarded|redeemed|accrued)\\s+[\\d,]*\\s*(?:[a-z0-9+&' -]{0,40}?\\s)?(?:cashback|rewards?|points?|coins?)\\b|\\b(?:mandate|autopay|auto[- ]?debit|standing\\s+instruction|e-?nach|asba|lien|funds?\\s+blocked|amount\\s+blocked)\\b|\\b(?:recharge|payment|transaction|purchase|settlement|payout)\\b[^\\n]{0,45}\\b(?:successful|completed|processed)\\b))[\\s\\S]*?(?:\\bcall\\s+forwarding\\s+is\\s+(?:now\\s+)?(?:active|activated|deactivated|enabled|disabled)\\b|\\bcalls?\\s+are\\s+being\\s+forwarded\\b|\\bto\\s+(?:de)?activate\\s+(?:this\\s+)?service\\b|\\b(?:number\\s+)?retention\\s+charges?\\b|\\bno\\s+usage\\s+observed\\b|\\bdata\\s+(?:pack\\s+)?(?:expired|exhausted|quota)\\b|\\b\\d+%\\s+(?:of\\s+)?(?:your\\s+)?daily\\s+data\\s+(?:used|consumed)\\b|\\b(?:talktime|prepaid)\\s+bal(?:ance)?\\b|\\blow\\s+talktime\\b|\\brecharge\\s+your\\b[^\\n]{0,30}\\bnumber\\b[^\\n]{0,60}\\bto\\s+avoid\\b)",
+    "flags": "i",
+    "reason": "service"
+  },
+  {
+    "id": "IGN-TELECOM-PREPAID-DEDUCTION",
+    "senders": [
+      "*"
+    ],
+    "pattern": "^[\\s\\S]*?(?:\\b(?:deducted|debited)\\s+from\\s+(?:your\\s+)?(?:top-?up|talktime|prepaid|main|core|data)\\s+bal(?:ance)?\\b)",
+    "flags": "i",
+    "reason": "service"
+  },
+  {
+    "id": "IGN-DELIVERY-STATUS",
+    "senders": [
+      "*"
+    ],
+    "pattern": "^(?![\\s\\S]*?(?:\\b(?:has\\s+been|was|is|are|were)\\s+(?:successfully\\s+)?(?:debited|credited|charged|deducted|withdrawn|transferred|paid|refunded|reversed|blocked|released)\\b|\\b(?:debited|credited|deducted|withdrawn|charged|spent|paid|sent|received|transferred|refunded)\\s*(?:by|with|for|of|from|to|on|at|towards|using|via)?\\s*(?:rs\\.?|inr|₹)\\s*\\d|(?:rs\\.?|inr|₹)\\s*[\\d,]+(?:\\.\\d+)?\\s*(?:has\\s+been\\s+|is\\s+|was\\s+|were\\s+)?(?:debited|credited|spent|paid|received|withdrawn|transferred|deducted|charged|refunded|blocked|reversed|sent)\\b|\\b(?:avl|avail|available)\\.?\\s*(?:lmt|limit|bal(?:ance)?|credit)\\b|\\b(?:total\\s+amount\\s+due|minimum\\s+(?:amount\\s+)?due|amount\\s+payable|payment\\s+due|due\\s+(?:date|on|by)|due\\s+for\\s+payment|statement\\s+(?:for|dated|generated))\\b|\\b(?:upi\\s*ref|utr|rrn|ref(?:erence)?\\s*(?:no|number|id))\\.?\\s*[:.-]?\\s*\\w*\\d{5,}|\\bpayment\\s+of\\s*(?:rs\\.?|inr|₹)|\\b(?:received|processed)\\s+your\\s+payment\\b|\\b(?:cashback|rewards?|refund|points?)\\b[^\\n]{0,50}\\b(?:has\\s+been\\s+|was\\s+|is\\s+)?(?:credited|added|received|reversed|redeemed|earned)\\b|\\b(?:earned|credited|awarded|redeemed|accrued)\\s+[\\d,]*\\s*(?:[a-z0-9+&' -]{0,40}?\\s)?(?:cashback|rewards?|points?|coins?)\\b|\\b(?:mandate|autopay|auto[- ]?debit|standing\\s+instruction|e-?nach|asba|lien|funds?\\s+blocked|amount\\s+blocked)\\b|\\b(?:recharge|payment|transaction|purchase|settlement|payout)\\b[^\\n]{0,45}\\b(?:successful|completed|processed)\\b))[\\s\\S]*?(?:\\b(?:order|shipment|parcel|package|consignment|courier)\\b[^\\n]{0,60}\\b(?:out\\s+for\\s+delivery|delivered|dispatched|shipped|arriving|picked\\s+up|is\\s+on\\s+the\\s+way|will\\s+be\\s+delivered)\\b|\\bhas\\s+been\\s+(?:dispatched|delivered|shipped)\\b|\\bdelivery\\s+(?:otp|code)\\b|\\bout\\s+for\\s+delivery\\b|\\b(?:pls|please)\\s+share\\s+delivery\\s+code\\b|\\btrack\\s+(?:your\\s+)?(?:order|shipment|parcel)\\b|\\bwe\\s+have\\s+received\\s+your\\s+order\\b|\\bdelivery\\s+partner\\b)",
+    "flags": "i",
+    "reason": "delivery"
+  },
+  {
+    "id": "IGN-SERVICE-SURVEY",
+    "senders": [
+      "*"
+    ],
+    "pattern": "^(?![\\s\\S]*?(?:\\b(?:has\\s+been|was|is|are|were)\\s+(?:successfully\\s+)?(?:debited|credited|charged|deducted|withdrawn|transferred|paid|refunded|reversed|blocked|released)\\b|\\b(?:debited|credited|deducted|withdrawn|charged|spent|paid|sent|received|transferred|refunded)\\s*(?:by|with|for|of|from|to|on|at|towards|using|via)?\\s*(?:rs\\.?|inr|₹)\\s*\\d|(?:rs\\.?|inr|₹)\\s*[\\d,]+(?:\\.\\d+)?\\s*(?:has\\s+been\\s+|is\\s+|was\\s+|were\\s+)?(?:debited|credited|spent|paid|received|withdrawn|transferred|deducted|charged|refunded|blocked|reversed|sent)\\b|\\b(?:avl|avail|available)\\.?\\s*(?:lmt|limit|bal(?:ance)?|credit)\\b|\\b(?:total\\s+amount\\s+due|minimum\\s+(?:amount\\s+)?due|amount\\s+payable|payment\\s+due|due\\s+(?:date|on|by)|due\\s+for\\s+payment|statement\\s+(?:for|dated|generated))\\b|\\b(?:upi\\s*ref|utr|rrn|ref(?:erence)?\\s*(?:no|number|id))\\.?\\s*[:.-]?\\s*\\w*\\d{5,}|\\bpayment\\s+of\\s*(?:rs\\.?|inr|₹)|\\b(?:received|processed)\\s+your\\s+payment\\b|\\b(?:cashback|rewards?|refund|points?)\\b[^\\n]{0,50}\\b(?:has\\s+been\\s+|was\\s+|is\\s+)?(?:credited|added|received|reversed|redeemed|earned)\\b|\\b(?:earned|credited|awarded|redeemed|accrued)\\s+[\\d,]*\\s*(?:[a-z0-9+&' -]{0,40}?\\s)?(?:cashback|rewards?|points?|coins?)\\b|\\b(?:mandate|autopay|auto[- ]?debit|standing\\s+instruction|e-?nach|asba|lien|funds?\\s+blocked|amount\\s+blocked)\\b|\\b(?:recharge|payment|transaction|purchase|settlement|payout)\\b[^\\n]{0,45}\\b(?:successful|completed|processed)\\b))[\\s\\S]*?(?:\\bshare\\s+yours?\\s+feedback\\b|\\bhelp\\s+us\\s+serve\\b|\\brate\\s+yours?\\s+(?:experience|service|stay|purchase|ride)\\b|\\bexperience\\s+(?:matters\\s+to\\s+us|and\\s+feedback)\\b|\\b(?:csat|nps)\\s+(?:score|survey)\\b|\\bnet\\s+promoter\\s+score\\b|\\btake\\s+(?:a\\s+)?(?:quick\\s+)?survey\\b|\\bsurvey\\s+(?:link|earn)\\b|\\breport\\s+spam\\b|\\btrai\\s+dnd\\b|\\btelecommunications\\s+act\\b|\\bsanchar\\s+saathi\\b|\\bchakshu\\b)",
+    "flags": "i",
+    "reason": "service"
+  },
+  {
+    "id": "IGN-SERVICE-KYC-CONTROLS",
+    "senders": [
+      "*"
+    ],
+    "pattern": "^(?![\\s\\S]*?(?:\\b(?:has\\s+been|was|is|are|were)\\s+(?:successfully\\s+)?(?:debited|credited|charged|deducted|withdrawn|transferred|paid|refunded|reversed|blocked|released)\\b|\\b(?:debited|credited|deducted|withdrawn|charged|spent|paid|sent|received|transferred|refunded)\\s*(?:by|with|for|of|from|to|on|at|towards|using|via)?\\s*(?:rs\\.?|inr|₹)\\s*\\d|(?:rs\\.?|inr|₹)\\s*[\\d,]+(?:\\.\\d+)?\\s*(?:has\\s+been\\s+|is\\s+|was\\s+|were\\s+)?(?:debited|credited|spent|paid|received|withdrawn|transferred|deducted|charged|refunded|blocked|reversed|sent)\\b|\\b(?:avl|avail|available)\\.?\\s*(?:lmt|limit|bal(?:ance)?|credit)\\b|\\b(?:total\\s+amount\\s+due|minimum\\s+(?:amount\\s+)?due|amount\\s+payable|payment\\s+due|due\\s+(?:date|on|by)|due\\s+for\\s+payment|statement\\s+(?:for|dated|generated))\\b|\\b(?:upi\\s*ref|utr|rrn|ref(?:erence)?\\s*(?:no|number|id))\\.?\\s*[:.-]?\\s*\\w*\\d{5,}|\\bpayment\\s+of\\s*(?:rs\\.?|inr|₹)|\\b(?:received|processed)\\s+your\\s+payment\\b|\\b(?:cashback|rewards?|refund|points?)\\b[^\\n]{0,50}\\b(?:has\\s+been\\s+|was\\s+|is\\s+)?(?:credited|added|received|reversed|redeemed|earned)\\b|\\b(?:earned|credited|awarded|redeemed|accrued)\\s+[\\d,]*\\s*(?:[a-z0-9+&' -]{0,40}?\\s)?(?:cashback|rewards?|points?|coins?)\\b|\\b(?:mandate|autopay|auto[- ]?debit|standing\\s+instruction|e-?nach|asba|lien|funds?\\s+blocked|amount\\s+blocked)\\b|\\b(?:recharge|payment|transaction|purchase|settlement|payout)\\b[^\\n]{0,45}\\b(?:successful|completed|processed)\\b))[\\s\\S]*?(?:\\bckyc\\s+record\\b|\\bcentral\\s+kyc\\s+registry\\b|\\bekyc\\s+has\\s+been\\s+successfully\\s+completed\\b)",
+    "flags": "i",
+    "reason": "service"
+  },
+  {
+    "id": "IGN-SERVICE-CARD-CONTROLS",
+    "senders": [
+      "*"
+    ],
+    "pattern": "^(?![\\s\\S]*?(?:\\b(?:has\\s+been|was|is|are|were)\\s+(?:successfully\\s+)?(?:debited|credited|charged|deducted|withdrawn|transferred|paid|refunded|reversed|blocked|released)\\b|\\b(?:debited|credited|deducted|withdrawn|charged|spent|paid|sent|received|transferred|refunded)\\s*(?:by|with|for|of|from|to|on|at|towards|using|via)?\\s*(?:rs\\.?|inr|₹)\\s*\\d|(?:rs\\.?|inr|₹)\\s*[\\d,]+(?:\\.\\d+)?\\s*(?:has\\s+been\\s+|is\\s+|was\\s+|were\\s+)?(?:debited|credited|spent|paid|received|withdrawn|transferred|deducted|charged|refunded|blocked|reversed|sent)\\b|\\b(?:avl|avail|available)\\.?\\s*(?:lmt|limit|bal(?:ance)?|credit)\\b))[\\s\\S]*?(?:\\bmodification\\s+success\\b|\\bcard\\s+(?:usage\\s+)?(?:settings?|controls?|limits?|preferences?)\\s+(?:for|modified|updated|changed)\\b|\\bcard\\s+usage\\s+(?:settings?|limits?|controls?|preferences?)\\b|\\busage\\s+(?:&|and)\\s+transaction\\s+limit\\b|\\b(?:transaction|usage)\\s+limits?\\b[^\\n]{0,60}\\b(?:has|have|is|are)\\s+been\\s+(?:updated|changed|modified|set)\\b|(?<!credit\\s)(?<!card\\s)\\blimits?\\s+(?:have|has)\\s+been\\s+updated\\b|\\busage\\s+options?\\s+(?:have|has)\\s+been\\s+updated\\b|\\bset\\s+limit\\s+on\\b[^\\n]{0,40}\\bcard\\b|\\benable\\s+online[, ]+international\\s+(?:and|&)\\s+contactless\\b)",
+    "flags": "i",
+    "reason": "service"
+  },
+  {
+    "id": "IGN-SERVICE-ADVICE",
+    "senders": [
+      "*"
+    ],
+    "pattern": "^(?![\\s\\S]*?(?:\\b(?:has\\s+been|was|is|are|were)\\s+(?:successfully\\s+)?(?:debited|credited|charged|deducted|withdrawn|transferred|paid|refunded|reversed|blocked|released)\\b|\\b(?:debited|credited|deducted|withdrawn|charged|spent|paid|sent|received|transferred|refunded)\\s*(?:by|with|for|of|from|to|on|at|towards|using|via)?\\s*(?:rs\\.?|inr|₹)\\s*\\d|(?:rs\\.?|inr|₹)\\s*[\\d,]+(?:\\.\\d+)?\\s*(?:has\\s+been\\s+|is\\s+|was\\s+|were\\s+)?(?:debited|credited|spent|paid|received|withdrawn|transferred|deducted|charged|refunded|blocked|reversed|sent)\\b|\\b(?:avl|avail|available)\\.?\\s*(?:lmt|limit|bal(?:ance)?|credit)\\b|\\b(?:total\\s+amount\\s+due|minimum\\s+(?:amount\\s+)?due|amount\\s+payable|payment\\s+due|due\\s+(?:date|on|by)|due\\s+for\\s+payment|statement\\s+(?:for|dated|generated))\\b|\\b(?:upi\\s*ref|utr|rrn|ref(?:erence)?\\s*(?:no|number|id))\\.?\\s*[:.-]?\\s*\\w*\\d{5,}|\\bpayment\\s+of\\s*(?:rs\\.?|inr|₹)|\\b(?:received|processed)\\s+your\\s+payment\\b|\\b(?:cashback|rewards?|refund|points?)\\b[^\\n]{0,50}\\b(?:has\\s+been\\s+|was\\s+|is\\s+)?(?:credited|added|received|reversed|redeemed|earned)\\b|\\b(?:earned|credited|awarded|redeemed|accrued)\\s+[\\d,]*\\s*(?:[a-z0-9+&' -]{0,40}?\\s)?(?:cashback|rewards?|points?|coins?)\\b|\\b(?:mandate|autopay|auto[- ]?debit|standing\\s+instruction|e-?nach|asba|lien|funds?\\s+blocked|amount\\s+blocked)\\b|\\b(?:recharge|payment|transaction|purchase|settlement|payout)\\b[^\\n]{0,45}\\b(?:successful|completed|processed)\\b))[\\s\\S]*?(?:\\bsecurity\\s+tip\\b|\\blifetime[- ]free\\s+credit\\s+card\\s+facility\\s+has\\s+been\\s+enabled\\b|\\bregistration\\s+for\\s+(?:fingerprint|face\\s+id|biometric)\\b)",
+    "flags": "i",
+    "reason": "service"
+  },
+  {
+    "id": "IGN-SERVICE-PF-NOTICE",
+    "senders": [
+      "*"
+    ],
+    "pattern": "^[\\s\\S]*?(?:\\buan\\b[\\s\\S]{0,300}?\\b(?:passbook|contribution|claim|kyc|member|pf\\s+(?:balance|account|a/c)|provident\\s+fund|epf)\\b|\\b(?:passbook|contribution|claim|kyc|member|pf\\s+(?:balance|account|a/c)|provident\\s+fund|epf)\\b[\\s\\S]{0,300}?\\buan\\b)",
+    "flags": "i",
+    "reason": "service"
+  },
+  {
+    "id": "IGN-SERVICE-OPS-NOTICE",
+    "senders": [
+      "*"
+    ],
+    "pattern": "^(?![\\s\\S]*?(?:\\b(?:has\\s+been|was|is|are|were)\\s+(?:successfully\\s+)?(?:debited|credited|charged|deducted|withdrawn|transferred|paid|refunded|reversed|blocked|released)\\b|\\b(?:debited|credited|deducted|withdrawn|charged|spent|paid|sent|received|transferred|refunded)\\s*(?:by|with|for|of|from|to|on|at|towards|using|via)?\\s*(?:rs\\.?|inr|₹)\\s*\\d|(?:rs\\.?|inr|₹)\\s*[\\d,]+(?:\\.\\d+)?\\s*(?:has\\s+been\\s+|is\\s+|was\\s+|were\\s+)?(?:debited|credited|spent|paid|received|withdrawn|transferred|deducted|charged|refunded|blocked|reversed|sent)\\b|\\b(?:avl|avail|available)\\.?\\s*(?:lmt|limit|bal(?:ance)?|credit)\\b|\\b(?:total\\s+amount\\s+due|minimum\\s+(?:amount\\s+)?due|amount\\s+payable|payment\\s+due|due\\s+(?:date|on|by)|due\\s+for\\s+payment|statement\\s+(?:for|dated|generated))\\b|\\b(?:upi\\s*ref|utr|rrn|ref(?:erence)?\\s*(?:no|number|id))\\.?\\s*[:.-]?\\s*\\w*\\d{5,}|\\bpayment\\s+of\\s*(?:rs\\.?|inr|₹)|\\b(?:received|processed)\\s+your\\s+payment\\b|\\b(?:cashback|rewards?|refund|points?)\\b[^\\n]{0,50}\\b(?:has\\s+been\\s+|was\\s+|is\\s+)?(?:credited|added|received|reversed|redeemed|earned)\\b|\\b(?:earned|credited|awarded|redeemed|accrued)\\s+[\\d,]*\\s*(?:[a-z0-9+&' -]{0,40}?\\s)?(?:cashback|rewards?|points?|coins?)\\b|\\b(?:mandate|autopay|auto[- ]?debit|standing\\s+instruction|e-?nach|asba|lien|funds?\\s+blocked|amount\\s+blocked)\\b|\\b(?:recharge|payment|transaction|purchase|settlement|payout)\\b[^\\n]{0,45}\\b(?:successful|completed|processed)\\b))[\\s\\S]*?(?:\\bwill\\s+remain\\s+open\\s+and\\s+fully\\s+operational\\b|\\bavailable\\s+at\\s+our\\s+branches\\s+during\\s+normal\\s+working\\s+hours\\b|\\bsubmission\\s+of\\s+positive\\s+pay\\s+details\\b|\\bdone\\s+\\d+\\s+out\\s+of\\s+\\d+\\s+free\\s+transactions\\s+at\\b|\\btrack\\s+it\\s+using\\s+this\\s+ticket\\s+id\\b|\\bticket\\s+id\\s*:\\s*\\d+\\s+on\\s+the\\s+help\\s+section\\b|\\bdue\\s+to\\s+scheduled\\s+maintenance\\b[^\\n]{0,80}\\b(?:paused|unavailable|interrupted)\\b|\\bcoupons?\\s+expire\\b|\\bpuc\\s+certificate\\s+for\\s+vehicle\\b|\\byour\\s+itr\\s+for\\s+ay\\b[^\\n]{0,30}\\bawaits\\s+at\\s+the\\s+e-?filing\\s+portal\\b)",
+    "flags": "i",
+    "reason": "service"
+  },
+  {
+    "id": "IGN-SERVICE-DEMAT-NOTICE",
+    "senders": [
+      "*"
+    ],
+    "pattern": "^(?![\\s\\S]*?(?:\\b(?:has\\s+been|was|is|are|were)\\s+(?:successfully\\s+)?(?:debited|credited|charged|deducted|withdrawn|transferred|paid|refunded|reversed|blocked|released)\\b|\\b(?:debited|credited|deducted|withdrawn|charged|spent|paid|sent|received|transferred|refunded)\\s*(?:by|with|for|of|from|to|on|at|towards|using|via)?\\s*(?:rs\\.?|inr|₹)\\s*\\d|(?:rs\\.?|inr|₹)\\s*[\\d,]+(?:\\.\\d+)?\\s*(?:has\\s+been\\s+|is\\s+|was\\s+|were\\s+)?(?:debited|credited|spent|paid|received|withdrawn|transferred|deducted|charged|refunded|blocked|reversed|sent)\\b|\\b(?:avl|avail|available)\\.?\\s*(?:lmt|limit|bal(?:ance)?|credit)\\b))[\\s\\S]*?(?:\\bcdsl\\s*:\\s*(?:un)?pledge\\b|\\bnsdl\\s*:\\s*(?:un)?pledge\\b|\\bwelcome\\s+to\\s+nse,?\\s+you\\s+have\\s+been\\s+registered\\b|\\bregistered\\s+with\\s+[\\w ]{1,40}\\s+in\\s+segment\\(?s?\\)?\\b|\\bupdated\\s+(?:your\\s+)?address\\s+(?:under|of)\\s+folio\\b|\\bbased\\s+on\\s+(?:the\\s+)?feed\\s+received\\s+from\\s+kra\\b|\\bday\\s+of\\s+settlement\\b)",
+    "flags": "i",
+    "reason": "service"
+  },
+  {
+    "id": "IGN-SERVICE-BILLER-ONBOARDING",
+    "senders": [
+      "*"
+    ],
+    "pattern": "^(?![\\s\\S]*?(?:rs\\.?|inr|₹)\\s*\\d)[\\s\\S]*?(?:\\b(?:added|registered|enrolled|linked|activated|subscribed|enabled)\\b[^\\n]{0,80}\\b(?:bill\\s*pay|billpay|bill\\s*payment\\s+service|biller|payee|e-?bill|paperless|bill\\s+fetch|bill\\s+alerts?)\\b|\\b(?:bill\\s*pay|billpay|biller|payee|e-?bill|paperless|bill\\s+fetch|bill\\s+alerts?)\\b[^\\n]{0,60}\\b(?:added|registered|enrolled|linked|activated|subscribed|enabled|registration)\\b|\\bonce\\s+(?:the\\s+)?bill\\s+is\\s+generated\\b|\\bbill\\s+will\\s+be\\s+generated\\b)",
+    "flags": "i",
+    "reason": "service"
+  },
+  {
+    "id": "IGN-REWARD-EXPIRY-NOTICE",
+    "senders": [
+      "*"
+    ],
+    "pattern": "^(?![\\s\\S]*?(?:\\b(?:has\\s+been|was|is|are|were)\\s+(?:successfully\\s+)?(?:debited|credited|charged|deducted|withdrawn|transferred|paid|refunded|reversed|blocked|released)\\b|\\b(?:debited|credited|deducted|withdrawn|charged|spent|paid|sent|received|transferred|refunded)\\s*(?:by|with|for|of|from|to|on|at|towards|using|via)?\\s*(?:rs\\.?|inr|₹)\\s*\\d|(?:rs\\.?|inr|₹)\\s*[\\d,]+(?:\\.\\d+)?\\s*(?:has\\s+been\\s+|is\\s+|was\\s+|were\\s+)?(?:debited|credited|spent|paid|received|withdrawn|transferred|deducted|charged|refunded|blocked|reversed|sent)\\b|\\b(?:avl|avail|available)\\.?\\s*(?:lmt|limit|bal(?:ance)?|credit)\\b|\\b(?:total\\s+amount\\s+due|minimum\\s+(?:amount\\s+)?due|amount\\s+payable|payment\\s+due|due\\s+(?:date|on|by)|due\\s+for\\s+payment|statement\\s+(?:for|dated|generated))\\b|\\b(?:upi\\s*ref|utr|rrn|ref(?:erence)?\\s*(?:no|number|id))\\.?\\s*[:.-]?\\s*\\w*\\d{5,}|\\bpayment\\s+of\\s*(?:rs\\.?|inr|₹)|\\b(?:received|processed)\\s+your\\s+payment\\b|\\b(?:cashback|rewards?|refund|points?)\\b[^\\n]{0,50}\\b(?:has\\s+been\\s+|was\\s+|is\\s+)?(?:credited|added|received|reversed|redeemed|earned)\\b|\\b(?:earned|credited|awarded|redeemed|accrued)\\s+[\\d,]*\\s*(?:[a-z0-9+&' -]{0,40}?\\s)?(?:cashback|rewards?|points?|coins?)\\b|\\b(?:mandate|autopay|auto[- ]?debit|standing\\s+instruction|e-?nach|asba|lien|funds?\\s+blocked|amount\\s+blocked)\\b|\\b(?:recharge|payment|transaction|purchase|settlement|payout)\\b[^\\n]{0,45}\\b(?:successful|completed|processed)\\b))[\\s\\S]*?(?:\\b(?:points?|coins?)\\b[^\\n]{0,60}\\b(?:will\\s+)?(?:expire|expires|expiring|lapse)\\b|\\b(?:expiring|expire|lapsing)\\b[^\\n]{0,40}\\b(?:reward\\s+)?(?:points?|coins?)\\b)",
+    "flags": "i",
+    "reason": "service"
+  },
+  {
+    "id": "IGN-SERVICE-WALLET-NAG",
+    "senders": [
+      "*"
+    ],
+    "pattern": "^(?![\\s\\S]*?(?:\\b(?:has\\s+been|was|is|are|were)\\s+(?:successfully\\s+)?(?:debited|credited|charged|deducted|withdrawn|transferred|paid|refunded|reversed|blocked|released)\\b|\\b(?:debited|credited|deducted|withdrawn|charged|spent|paid|sent|received|transferred|refunded)\\s*(?:by|with|for|of|from|to|on|at|towards|using|via)?\\s*(?:rs\\.?|inr|₹)\\s*\\d|(?:rs\\.?|inr|₹)\\s*[\\d,]+(?:\\.\\d+)?\\s*(?:has\\s+been\\s+|is\\s+|was\\s+|were\\s+)?(?:debited|credited|spent|paid|received|withdrawn|transferred|deducted|charged|refunded|blocked|reversed|sent)\\b|\\b(?:avl|avail|available)\\.?\\s*(?:lmt|limit|bal(?:ance)?|credit)\\b))[\\s\\S]*?(?:\\badd\\s+money\\s+to\\s+(?:your\\s+)?wallet\\b|\\bwallet\\s+balance\\s+is\\s+(?:rs\\.?|inr|₹)\\s*0(?:\\.0+)?\\b)",
+    "flags": "i",
+    "reason": "service"
+  },
+  {
+    "id": "IGN-PROMO-GAMBLING",
+    "senders": [
+      "*"
+    ],
+    "pattern": "^(?![\\s\\S]*?(?:\\b(?:has\\s+been|was|is|are|were)\\s+(?:successfully\\s+)?(?:debited|credited|charged|deducted|withdrawn|transferred|paid|refunded|reversed|blocked|released)\\b|\\b(?:debited|credited|deducted|withdrawn|charged|spent|paid|sent|received|transferred|refunded)\\s*(?:by|with|for|of|from|to|on|at|towards|using|via)?\\s*(?:rs\\.?|inr|₹)\\s*\\d|(?:rs\\.?|inr|₹)\\s*[\\d,]+(?:\\.\\d+)?\\s*(?:has\\s+been\\s+|is\\s+|was\\s+|were\\s+)?(?:debited|credited|spent|paid|received|withdrawn|transferred|deducted|charged|refunded|blocked|reversed|sent)\\b|\\b(?:avl|avail|available)\\.?\\s*(?:lmt|limit|bal(?:ance)?|credit)\\b|\\b(?:total\\s+amount\\s+due|minimum\\s+(?:amount\\s+)?due|amount\\s+payable|payment\\s+due|due\\s+(?:date|on|by)|due\\s+for\\s+payment|statement\\s+(?:for|dated|generated))\\b|\\b(?:upi\\s*ref|utr|rrn|ref(?:erence)?\\s*(?:no|number|id))\\.?\\s*[:.-]?\\s*\\w*\\d{5,}|\\bpayment\\s+of\\s*(?:rs\\.?|inr|₹)|\\b(?:received|processed)\\s+your\\s+payment\\b|\\b(?:cashback|rewards?|refund|points?)\\b[^\\n]{0,50}\\b(?:has\\s+been\\s+|was\\s+|is\\s+)?(?:credited|added|received|reversed|redeemed|earned)\\b|\\b(?:earned|credited|awarded|redeemed|accrued)\\s+[\\d,]*\\s*(?:[a-z0-9+&' -]{0,40}?\\s)?(?:cashback|rewards?|points?|coins?)\\b|\\b(?:mandate|autopay|auto[- ]?debit|standing\\s+instruction|e-?nach|asba|lien|funds?\\s+blocked|amount\\s+blocked)\\b|\\b(?:recharge|payment|transaction|purchase|settlement|payout)\\b[^\\n]{0,45}\\b(?:successful|completed|processed)\\b))[\\s\\S]*?(?:\\b(?:betting\\s+(?:site|app)|gullybet|casino|aviator|cockfight|fancy\\s+bet|teen\\s+patti|online\\s+gambling|gbets\\.win|slots?\\s+(?:bonus|game|win))\\b|\\bhuge\\s+bonus\\b[^\\n]{0,30}\\b(?:bet|casino|slots|win)\\b)",
+    "flags": "i",
+    "reason": "promotion"
+  },
+  {
+    "id": "IGN-PROMO-INSURANCE-RENEWAL",
+    "senders": [
+      "*"
+    ],
+    "pattern": "^(?![\\s\\S]*?(?:\\b(?:has\\s+been|was|is|are|were)\\s+(?:successfully\\s+)?(?:debited|credited|charged|deducted|withdrawn|transferred|paid|refunded|reversed|blocked|released)\\b|\\b(?:debited|credited|deducted|withdrawn|charged|spent|paid|sent|received|transferred|refunded)\\s*(?:by|with|for|of|from|to|on|at|towards|using|via)?\\s*(?:rs\\.?|inr|₹)\\s*\\d|(?:rs\\.?|inr|₹)\\s*[\\d,]+(?:\\.\\d+)?\\s*(?:has\\s+been\\s+|is\\s+|was\\s+|were\\s+)?(?:debited|credited|spent|paid|received|withdrawn|transferred|deducted|charged|refunded|blocked|reversed|sent)\\b|\\b(?:avl|avail|available)\\.?\\s*(?:lmt|limit|bal(?:ance)?|credit)\\b|\\b(?:total\\s+amount\\s+due|minimum\\s+(?:amount\\s+)?due|amount\\s+payable|payment\\s+due|due\\s+(?:date|on|by)|due\\s+for\\s+payment|statement\\s+(?:for|dated|generated))\\b|\\b(?:upi\\s*ref|utr|rrn|ref(?:erence)?\\s*(?:no|number|id))\\.?\\s*[:.-]?\\s*\\w*\\d{5,}|\\bpayment\\s+of\\s*(?:rs\\.?|inr|₹)|\\b(?:received|processed)\\s+your\\s+payment\\b|\\b(?:cashback|rewards?|refund|points?)\\b[^\\n]{0,50}\\b(?:has\\s+been\\s+|was\\s+|is\\s+)?(?:credited|added|received|reversed|redeemed|earned)\\b|\\b(?:earned|credited|awarded|redeemed|accrued)\\s+[\\d,]*\\s*(?:[a-z0-9+&' -]{0,40}?\\s)?(?:cashback|rewards?|points?|coins?)\\b|\\b(?:mandate|autopay|auto[- ]?debit|standing\\s+instruction|e-?nach|asba|lien|funds?\\s+blocked|amount\\s+blocked)\\b|\\b(?:recharge|payment|transaction|purchase|settlement|payout)\\b[^\\n]{0,45}\\b(?:successful|completed|processed)\\b))[\\s\\S]*?(?:\\brenew\\s+now\\s+with\\s+policybazaar\\b|\\brenew\\s+(?:your\\s+)?expired\\b|\\bis\\s+still\\s+not\\s+renewed\\b|\\brenew\\s+to\\s+avoid\\s+unexpected\\s+expenses\\b|\\brenew\\s+before\\s+expiry\\s+on\\b|\\binsurance\\s+(?:for\\s+[^\\n]{0,30}?)?(?:has\\s+)?expired\\b|\\bdue\\s+for\\s+renewal\\b)",
+    "flags": "i",
+    "reason": "promotion"
+  },
+  {
+    "id": "IGN-PROMO-GENERIC",
+    "senders": [
+      "*"
+    ],
+    "pattern": "^(?![\\s\\S]*?(?:\\b(?:has\\s+been|was|is|are|were)\\s+(?:successfully\\s+)?(?:debited|credited|charged|deducted|withdrawn|transferred|paid|refunded|reversed|blocked|released)\\b|\\b(?:debited|credited|deducted|withdrawn|charged|spent|paid|sent|received|transferred|refunded)\\s*(?:by|with|for|of|from|to|on|at|towards|using|via)?\\s*(?:rs\\.?|inr|₹)\\s*\\d|(?:rs\\.?|inr|₹)\\s*[\\d,]+(?:\\.\\d+)?\\s*(?:has\\s+been\\s+|is\\s+|was\\s+|were\\s+)?(?:debited|credited|spent|paid|received|withdrawn|transferred|deducted|charged|refunded|blocked|reversed|sent)\\b|\\b(?:avl|avail|available)\\.?\\s*(?:lmt|limit|bal(?:ance)?|credit)\\b|\\b(?:total\\s+amount\\s+due|minimum\\s+(?:amount\\s+)?due|amount\\s+payable|payment\\s+due|due\\s+(?:date|on|by)|due\\s+for\\s+payment|statement\\s+(?:for|dated|generated))\\b|\\b(?:upi\\s*ref|utr|rrn|ref(?:erence)?\\s*(?:no|number|id))\\.?\\s*[:.-]?\\s*\\w*\\d{5,}|\\bpayment\\s+of\\s*(?:rs\\.?|inr|₹)|\\b(?:received|processed)\\s+your\\s+payment\\b|\\b(?:cashback|rewards?|refund|points?)\\b[^\\n]{0,50}\\b(?:has\\s+been\\s+|was\\s+|is\\s+)?(?:credited|added|received|reversed|redeemed|earned)\\b|\\b(?:earned|credited|awarded|redeemed|accrued)\\s+[\\d,]*\\s*(?:[a-z0-9+&' -]{0,40}?\\s)?(?:cashback|rewards?|points?|coins?)\\b|\\b(?:mandate|autopay|auto[- ]?debit|standing\\s+instruction|e-?nach|asba|lien|funds?\\s+blocked|amount\\s+blocked)\\b|\\b(?:recharge|payment|transaction|purchase|settlement|payout)\\b[^\\n]{0,45}\\b(?:successful|completed|processed)\\b))[\\s\\S]*?(?:\\b(?:sale|discounts?|vouchers?|coupons?|buy\\s+now|shop\\s+(?:now|at)|grab\\s+(?:now|the|your)|festive\\s+(?:offer|sale|shopping)|prices?\\s+slashed|treat\\s+yourself|limited[- ](?:period|time)\\s+offer|exclusive\\s+offer|hurry|use\\s+code|promo\\s*code)\\b|\\bflat\\s+\\d+%\\s*off\\b|\\bupto\\s+\\d+%\\s*off\\b|\\bup\\s+to\\s+\\d+%\\s*off\\b|\\b\\d+%\\s*off\\b|\\boffers?\\b[^\\n]{0,60}\\b(?:valid|expires?|ends?|till|until|t&c|click|visit|download|apply)\\b|\\b(?:reply|sms)\\s+stop\\s+to\\b|\\bto\\s+(?:opt[- ]?out|unsubscribe)\\b|\\bclaim\\s+(?:your\\s+)?(?:free|gift|reward)\\b)",
+    "flags": "i",
+    "reason": "promotion"
+  }
+]

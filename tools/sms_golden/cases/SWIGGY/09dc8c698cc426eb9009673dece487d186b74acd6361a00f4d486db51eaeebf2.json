@@ -1,0 +1,17 @@
+{
+  "id": "wp03d:delivery_status",
+  "templateHash": "09dc8c698cc426eb9009673dece487d186b74acd6361a00f4d486db51eaeebf2",
+  "weight": 1,
+  "source": "synthetic",
+  "messages": [
+    {
+      "sender": "AX-SWIGGY",
+      "body": "Your Swiggy order of Rs 450 is out for delivery with our delivery partner.",
+      "observedAt": "2026-12-01T09:00:00.000Z"
+    }
+  ],
+  "expect": {
+    "ignore": true
+  },
+  "origin": "wp03d"
+}

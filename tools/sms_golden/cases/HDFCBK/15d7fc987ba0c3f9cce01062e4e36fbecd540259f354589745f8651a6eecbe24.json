@@ -1,0 +1,35 @@
+{
+  "id": "wp03d:limit_assigned_new_card",
+  "templateHash": "15d7fc987ba0c3f9cce01062e4e36fbecd540259f354589745f8651a6eecbe24",
+  "weight": 1,
+  "source": "synthetic",
+  "messages": [
+    {
+      "sender": "VM-HDFCBK-S",
+      "body": "Welcome! Your HDFC Bank Credit Card ending 4321 is activated with a credit limit of Rs 1,00,000.",
+      "observedAt": "2026-12-01T09:00:00.000Z"
+    }
+  ],
+  "expect": {
+    "facts": [
+      {
+        "factType": "limit_change",
+        "attrs": {
+          "reason": "assigned"
+        },
+        "amounts": [
+          {
+            "role": "credit_limit",
+            "minor": 10000000
+          }
+        ],
+        "instrument": {
+          "kind": "credit_card",
+          "issuerSlug": "hdfc",
+          "maskDigits": "4321"
+        }
+      }
+    ]
+  },
+  "origin": "wp03d"
+}

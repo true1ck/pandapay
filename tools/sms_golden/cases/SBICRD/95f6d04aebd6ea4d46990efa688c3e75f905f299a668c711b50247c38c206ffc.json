@@ -1,0 +1,35 @@
+{
+  "id": "wp03d:limit_new_limit_stated",
+  "templateHash": "95f6d04aebd6ea4d46990efa688c3e75f905f299a668c711b50247c38c206ffc",
+  "weight": 1,
+  "source": "synthetic",
+  "messages": [
+    {
+      "sender": "VM-SBICRD-S",
+      "body": "Your SBI Card ending 4321 credit limit has been enhanced. New credit limit is Rs 2,50,000.",
+      "observedAt": "2026-12-01T09:00:00.000Z"
+    }
+  ],
+  "expect": {
+    "facts": [
+      {
+        "factType": "limit_change",
+        "attrs": {
+          "reason": "increase"
+        },
+        "amounts": [
+          {
+            "role": "credit_limit",
+            "minor": 25000000
+          }
+        ],
+        "instrument": {
+          "kind": "credit_card",
+          "issuerSlug": "sbi",
+          "maskDigits": "4321"
+        }
+      }
+    ]
+  },
+  "origin": "wp03d"
+}
