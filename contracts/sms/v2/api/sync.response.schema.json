@@ -65,6 +65,9 @@
           "ruleVersion": {
             "type": "integer",
             "minimum": 1
+          },
+          "rule": {
+            "$ref": "../rule_bundle.schema.json#/$defs/rule"
           }
         }
       }
@@ -123,6 +126,36 @@
     "latestBundleVersion": {
       "type": "integer",
       "minimum": 0
+    },
+    "facts": {
+      "type": "array",
+      "items": {
+        "$ref": "../fact.schema.json"
+      }
+    },
+    "updatedAt": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "instruments": {
+          "type": "object",
+          "additionalProperties": {
+            "$ref": "../common.schema.json#/$defs/utcTime"
+          }
+        },
+        "events": {
+          "type": "object",
+          "additionalProperties": {
+            "$ref": "../common.schema.json#/$defs/utcTime"
+          }
+        },
+        "ledger": {
+          "type": "object",
+          "additionalProperties": {
+            "$ref": "../common.schema.json#/$defs/utcTime"
+          }
+        }
+      }
     }
   }
 }

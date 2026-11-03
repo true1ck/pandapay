@@ -441,3 +441,10 @@ The Activity, Home and Insights screens keep reading `TransactionEntry`. WP-06 w
 - **Engine** versions are semver. A phone refuses a bundle whose `minEngineVersion` is higher than its engine and keeps its last good bundle.
 - **Taxonomy** is versioned in the registry (WP-07). A category is never renamed; it is deprecated and given an alias.
 - **Who may change:** only WP-01 changes `contracts/`. After the M0 gate, any change needs a contract change request (Agent playbook).
+
+
+## CCR-001 additive sync context, approved 3 November 2026
+
+The sync response may also include `facts` with empty evidence and sanitized instrument mentions, `updatedAt` maps keyed by instrument/event/ledger IDs, and `aiResults[].rule` using the existing Rule type. The response schemas and conformance fixtures define these optional fields. The opaque cursor may page immutable source facts by their creation time.
+
+Local schema version 2 adds `v2_sync_state(namespace, key, value)` and `v2_rule_stats_by_account(namespace, day, rule_id, rule_version, hits, to_review, corrected)`. The old unscoped stats table remains available for compatibility. New account-specific stats never read its unowned counters.

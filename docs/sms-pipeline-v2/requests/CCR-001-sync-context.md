@@ -1,6 +1,6 @@
 # CCR-001. Sync context for phone wiring and provisional rules
 
-Status. Proposed by the WP-14 implementer for orchestrator review.
+Status. Approved by the orchestrator on 3 November 2026. The owner authorized implementation of the remaining plan. The additions supply data already stored for the authenticated account and preserve the existing required response shape.
 
 The frozen sync response contains events and ledger, but omits their immutable source facts and update clocks. Another device cannot reconstruct Activity, bills or instrument evidence from that response. WP-14's merge rule also needs server update times. WP-10 requires delivery of a provisional rule, while the frozen AI result carries only its identifiers.
 
