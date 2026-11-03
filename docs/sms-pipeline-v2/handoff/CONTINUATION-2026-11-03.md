@@ -195,3 +195,24 @@ On the integration checkout, `flutter test --no-pub --dart-define=SMS_PIPELINE_V
 A synthetic Jio fraud education notice returned unknown before the sender-scoped ignore and ignored afterward. On the same 5,196 messages, 14 unknowns moved to ignored. Counts are 1,580 matched, 1,590 ignored and 2,026 unknown. From the CLI directory, the baseline build with output `"$p/noise-v0.json"` passed 1,546 examples. `dart run tool/check_pipeline.dart` passed 115 cases and 15 scenarios. `node test/regex_parity.mjs` passed 47,926 comparisons with zero mismatches. Regex parity is already wired in build-and-test.yml.
 
 On the integration checkout, `bash scripts/test_private_admin.sh` passed 35 top-level Node tests and three Python tests. Its full-schema test invokes the real PostgreSQL rule, ingestion, template, category, correction and migration suites. This checks the migrated rule fixture and category publication locally. A production-equivalent deployment rehearsal and a real admin session remain separate checks.
+
+### Plan and placeholder audit
+
+No tracked zero-byte files were found under the SMS v2 plans, phone or API implementation, or rule sources. The scan found no TODO or UnimplementedError markers in the phone and API feature directories. The shipped version-zero bundle is a deliberate placeholder until a signed candidate is verified. WP-17 has a specification and waits on its entry criteria, including seven tester days and a correction rate below 1%.
+
+| Area | Evidence and remaining work |
+| --- | --- |
+| WP-00, WP-03, WP-07 | Synthetic gate passes. Review expected readings and categories in the private sample, then measure labeled accuracy and full-phone accounting on the corpus. |
+| WP-06 | Refund category decisions are local metadata. Standalone cross-device refund category transport still needs an explicit design. |
+| WP-08, WP-09, WP-11 | Migrated scratch database and category publication pass. Signed baseline import and verification, production rehearsal and live admin acceptance remain. |
+| WP-10, WP-12, WP-13 | Consent, private draft delivery and corrections have local tests. Consent copy, production provider credentials, signing, App Check and the device security audit remain. |
+| WP-14, WP-15, WP-16 | Focused integration tests passed 23 cases. Native acceptance for the final candidate, physical-device performance, restore during interrupted replay, and owner history review remain. |
+| WP-17 | Cutover waits on the preceding gates and owner approval. |
+
+The amount-less failed AutoPay case already has a recorded decision in WP-03c-attempt-without-amount.md. It goes to review under the frozen contract. Regex parity already runs in CI. The three WP-15 regression cases for replacement money facts, refreshed explanations and released IPO holds are present and passed.
+
+From the integration checkout's app directory:
+
+```sh
+flutter test --no-pub --dart-define=SMS_PIPELINE_V2=true test/features/sms_v2/migration/legacy_replay_test.dart test/features/sms_v2/ui/review_actions_test.dart test/features/sms_v2/ledger/adapters_test.dart --reporter expanded
+```
