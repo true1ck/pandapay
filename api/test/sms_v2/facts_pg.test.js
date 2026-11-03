@@ -524,6 +524,37 @@ test('sync returns contract-shaped documents and never another profile\'s rows',
   assert.deepEqual([theirs.instruments.length, theirs.events.length, theirs.ledger.length, theirs.facts.length], [0, 0, 0, 0]);
 });
 
+test('instrument-only rejection retires ledger and card effects, and stale uploads cannot restore them', { skip }, async () => {
+  const p = await newProfile();
+  const card = await newCard(p);
+  const s = cardSpend({ userCardId: card });
+  await ingest(p, s.body);
+  const initial = await withUserClient(p, (client) => storage.readChanges(client, p, {}));
+  assert.equal((await txnsFor(p))[0].state_applied, true);
+  const reversals = calls.reverse.length;
+  const rejected = { ...s.inst, status: 'rejected' };
+  await ingest(p, h.batch({ instruments: [rejected] }));
+  const after = (await txnsFor(p))[0];
+  assert.equal(after.status, 'ignored');
+  assert.equal(after.state_applied, false);
+  assert.equal(calls.reverse.length, reversals + 1);
+  const remaining = () => pool.query('SELECT count(*)::int AS n FROM sms_v2_ledger_entries WHERE profile_id = $1', [p]);
+  assert.equal((await remaining()).rows[0].n, 0);
+  const changed = await withUserClient(p, (client) => storage.readChanges(client, p, storage.decodeCursor(initial.cursor)));
+  assert.equal(changed.instruments[0].status, 'rejected');
+  assert.equal(changed.events[0].eventId, s.e.eventId, 'unchanged event is emitted to retire client ledger');
+  await ingest(p, h.batch({ events: [s.e] }));
+  await ingest(p, s.body); // stale detected instrument, original facts/event/ledger
+  assert.equal((await remaining()).rows[0].n, 0);
+  assert.equal((await txnsFor(p))[0].status, 'ignored');
+  assert.equal(calls.reverse.length, reversals + 1, 'card state is reversed only once');
+  assert.equal((await pool.query('SELECT status FROM sms_v2_instruments WHERE profile_id = $1', [p])).rows[0].status, 'rejected');
+  const other = await newProfile();
+  const wrongOwner = await ingest(other, h.batch({ instruments: [{ ...rejected, userCardId: null }] }));
+  assert.equal(wrongOwner.results[0].status, 'rejected');
+  assert.equal((await txnsFor(p))[0].status, 'ignored');
+});
+
 // ---------- HTTP end to end ----------
 
 test('POST /sms/v2/facts:batch and GET /sms/v2/sync over HTTP with the real wiring', { skip }, async () => {
