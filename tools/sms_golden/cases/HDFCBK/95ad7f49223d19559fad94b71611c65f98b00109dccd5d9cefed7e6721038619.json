@@ -1,0 +1,39 @@
+{
+  "id": "probe:cheque_cleared",
+  "templateHash": "95ad7f49223d19559fad94b71611c65f98b00109dccd5d9cefed7e6721038619",
+  "weight": 1,
+  "source": "synthetic",
+  "messages": [
+    {
+      "sender": "VM-HDFCBK-S",
+      "body": "Rs.5,000.00 debited from A/c XX1234 on 01-11-26 by Chq No 000123 cleared in clearing. Avl Bal Rs.46,661.40",
+      "observedAt": "2026-12-01T09:00:00.000Z"
+    }
+  ],
+  "expect": {
+    "facts": [
+      {
+        "factType": "movement",
+        "attrs": {
+          "direction": "debit",
+          "rail": "cheque"
+        },
+        "amounts": [
+          {
+            "role": "posted",
+            "minor": 500000
+          }
+        ],
+        "instrument": {
+          "kind": "bank_account",
+          "issuerSlug": "hdfc",
+          "maskDigits": "1234"
+        },
+        "references": {
+          "chequeNo": "000123"
+        }
+      }
+    ]
+  },
+  "origin": "probe_cases.json"
+}

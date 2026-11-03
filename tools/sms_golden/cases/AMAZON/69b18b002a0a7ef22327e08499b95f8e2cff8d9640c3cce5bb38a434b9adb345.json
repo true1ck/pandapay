@@ -1,0 +1,48 @@
+{
+  "id": "probe:amazon_pay_balance_spend",
+  "templateHash": "69b18b002a0a7ef22327e08499b95f8e2cff8d9640c3cce5bb38a434b9adb345",
+  "weight": 1,
+  "source": "synthetic",
+  "messages": [
+    {
+      "sender": "AX-AMAZON",
+      "body": "Rs 499.00 paid using Amazon Pay Balance for your order. Balance: Rs 1,201.00",
+      "observedAt": "2026-12-01T09:00:00.000Z"
+    }
+  ],
+  "expect": {
+    "facts": [
+      {
+        "factType": "movement",
+        "attrs": {
+          "direction": "debit",
+          "purpose": "purchase",
+          "evidenceOnly": true
+        },
+        "amounts": [
+          {
+            "role": "posted",
+            "minor": 49900
+          }
+        ],
+        "instrument": {
+          "kind": "wallet"
+        }
+      },
+      {
+        "factType": "balance_snapshot",
+        "amounts": [
+          {
+            "role": "available_balance",
+            "minor": 120100
+          }
+        ],
+        "instrument": {
+          "kind": "wallet"
+        }
+      }
+    ]
+  },
+  "note": "Amazon Pay is a partial-visibility wallet: the top-up counted as a purchase, so a balance payment is wallet activity only and never counts.",
+  "origin": "probe_cases.json"
+}

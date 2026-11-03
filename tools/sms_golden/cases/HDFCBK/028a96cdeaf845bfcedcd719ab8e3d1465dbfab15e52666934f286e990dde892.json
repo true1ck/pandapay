@@ -1,0 +1,37 @@
+{
+  "id": "probe:cc_bill_bank_side",
+  "templateHash": "028a96cdeaf845bfcedcd719ab8e3d1465dbfab15e52666934f286e990dde892",
+  "weight": 1,
+  "source": "synthetic",
+  "messages": [
+    {
+      "sender": "VM-HDFCBK-S",
+      "body": "Rs.25,000.00 debited from A/c XX1234 on 10-11-26 towards BillPay - HDFC Bank Credit Card XX5678. Ref 9876543. -HDFC Bank",
+      "observedAt": "2026-12-01T09:00:00.000Z"
+    }
+  ],
+  "expect": {
+    "facts": [
+      {
+        "factType": "movement",
+        "attrs": {
+          "direction": "debit",
+          "purpose": "card_payment"
+        },
+        "amounts": [
+          {
+            "role": "posted",
+            "minor": 2500000
+          }
+        ],
+        "instrument": {
+          "kind": "bank_account",
+          "issuerSlug": "hdfc",
+          "maskDigits": "1234"
+        }
+      }
+    ]
+  },
+  "note": "Bank side of a card bill payment; the card side is cc_bill_card_side.",
+  "origin": "probe_cases.json"
+}

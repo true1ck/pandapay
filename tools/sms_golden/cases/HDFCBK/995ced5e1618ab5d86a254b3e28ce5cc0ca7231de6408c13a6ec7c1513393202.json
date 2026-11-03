@@ -1,0 +1,35 @@
+{
+  "id": "corpus:outstanding_reminder",
+  "templateHash": "995ced5e1618ab5d86a254b3e28ce5cc0ca7231de6408c13a6ec7c1513393202",
+  "weight": 1,
+  "source": "synthetic",
+  "messages": [
+    {
+      "sender": "HDFCBK",
+      "body": "INR 4,000.00 outstanding on your HDFC credit card XX4321 as on 10-11-26. Pay by 15-11-26 to avoid interest.",
+      "observedAt": "2026-11-20T09:00:00.000Z"
+    }
+  ],
+  "expect": {
+    "facts": [
+      {
+        "factType": "bill_due",
+        "attrs": {
+          "dueDate": "2026-11-15"
+        },
+        "amounts": [
+          {
+            "role": "due_total",
+            "minor": 400000
+          }
+        ],
+        "instrument": {
+          "kind": "credit_card",
+          "issuerSlug": "hdfc",
+          "maskDigits": "4321"
+        }
+      }
+    ]
+  },
+  "origin": "sms_family_corpus.json"
+}

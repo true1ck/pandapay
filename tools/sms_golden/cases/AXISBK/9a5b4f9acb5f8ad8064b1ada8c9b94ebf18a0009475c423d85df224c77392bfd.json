@@ -1,0 +1,36 @@
+{
+  "id": "corpus:card_bill_payment",
+  "templateHash": "9a5b4f9acb5f8ad8064b1ada8c9b94ebf18a0009475c423d85df224c77392bfd",
+  "weight": 1,
+  "source": "synthetic",
+  "messages": [
+    {
+      "sender": "AXISBK",
+      "body": "Rs.12,000.00 debited from your Axis Bank A/c XX8801 towards your Axis Bank Credit Card bill payment on 12-11-26.",
+      "observedAt": "2026-11-20T09:00:00.000Z"
+    }
+  ],
+  "expect": {
+    "facts": [
+      {
+        "factType": "movement",
+        "attrs": {
+          "direction": "debit",
+          "purpose": "card_payment"
+        },
+        "amounts": [
+          {
+            "role": "posted",
+            "minor": 1200000
+          }
+        ],
+        "instrument": {
+          "kind": "bank_account",
+          "issuerSlug": "axis",
+          "maskDigits": "8801"
+        }
+      }
+    ]
+  },
+  "origin": "sms_family_corpus.json"
+}

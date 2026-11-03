@@ -1,0 +1,47 @@
+{
+  "id": "probe:reward_points_earned",
+  "templateHash": "4314f7f97427d08c9bf3026ddf79d7442b905b2d764173b1a278bd5f46233937",
+  "weight": 1,
+  "source": "synthetic",
+  "messages": [
+    {
+      "sender": "AX-ICICIT-S",
+      "body": "You have earned 50 Amazon Pay ICICI Credit Card reward points worth Rs 50 on your transaction of Rs 1,299.00. Total balance 1,250 points.",
+      "observedAt": "2026-12-01T09:00:00.000Z"
+    }
+  ],
+  "expect": {
+    "facts": [
+      {
+        "factType": "reward",
+        "amounts": [
+          {
+            "role": "points_earned",
+            "minor": 50,
+            "unit": "POINTS"
+          },
+          {
+            "role": "cash_value",
+            "minor": 5000
+          }
+        ],
+        "instrument": {
+          "kind": "credit_card",
+          "issuerSlug": "icici"
+        }
+      },
+      {
+        "factType": "balance_snapshot",
+        "amounts": [
+          {
+            "role": "points_balance",
+            "minor": 1250,
+            "unit": "POINTS"
+          }
+        ]
+      }
+    ]
+  },
+  "note": "\"Earned 50 points worth Rs 50\" is a reward, not a Rs 50 transfer.",
+  "origin": "probe_cases.json"
+}

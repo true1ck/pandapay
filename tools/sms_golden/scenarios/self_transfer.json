@@ -1,0 +1,59 @@
+{
+  "id": "self_transfer",
+  "description": "A transfer between two own accounts is one event and no spending or income.",
+  "knownInstruments": [
+    {
+      "kind": "bank_account",
+      "issuerSlug": "hdfc",
+      "maskDigits": "1234"
+    },
+    {
+      "kind": "bank_account",
+      "issuerSlug": "hdfc",
+      "maskDigits": "9999"
+    }
+  ],
+  "messages": [
+    {
+      "sender": "VM-HDFCBK-S",
+      "body": "Rs.20,000.00 debited from A/c XX1234 on 01-11-26 via IMPS to A/c XX9999 (Self). IMPS Ref 432112345678. Avl Bal Rs.26,661.40",
+      "observedAt": "2026-11-01T10:00:00Z"
+    },
+    {
+      "sender": "VM-HDFCBK-S",
+      "body": "Rs.20,000.00 credited to A/c XX9999 on 01-11-26 by IMPS Ref 432112345678 from A/c XX1234.",
+      "observedAt": "2026-11-01T10:00:30Z"
+    }
+  ],
+  "expect": {
+    "events": [
+      {
+        "type": "own_transfer",
+        "legRoles": [
+          "debit_leg",
+          "credit_leg"
+        ]
+      }
+    ],
+    "instruments": [
+      {
+        "kind": "bank_account",
+        "issuerSlug": "hdfc",
+        "maskDigits": "1234"
+      },
+      {
+        "kind": "bank_account",
+        "issuerSlug": "hdfc",
+        "maskDigits": "9999"
+      }
+    ],
+    "totals": {
+      "from": "2026-11-01T00:00:00Z",
+      "to": "2026-12-01T00:00:00Z",
+      "spendMinor": 0,
+      "incomeMinor": 0,
+      "investmentMinor": 0,
+      "transactionCount": 0
+    }
+  }
+}

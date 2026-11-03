@@ -1,0 +1,50 @@
+{
+  "id": "probe:spotify_card_si",
+  "templateHash": "effdd2be07a1ea5946218136281d1023a7a2123242be512298f2b25907452dc9",
+  "weight": 1,
+  "source": "synthetic",
+  "messages": [
+    {
+      "sender": "AX-ICICIT-S",
+      "body": "INR 119.00 spent using ICICI Bank Card XX9012 on 01-Nov-26 on SPOTIFY SI. Avl Limit: INR 1,48,582.00.",
+      "observedAt": "2026-12-01T09:00:00.000Z"
+    }
+  ],
+  "expect": {
+    "facts": [
+      {
+        "factType": "movement",
+        "attrs": {
+          "direction": "debit",
+          "purpose": "purchase"
+        },
+        "amounts": [
+          {
+            "role": "posted",
+            "minor": 11900
+          }
+        ],
+        "instrument": {
+          "kind": "credit_card",
+          "issuerSlug": "icici",
+          "maskDigits": "9012"
+        }
+      },
+      {
+        "factType": "balance_snapshot",
+        "amounts": [
+          {
+            "role": "available_credit",
+            "minor": 14858200
+          }
+        ],
+        "instrument": {
+          "kind": "credit_card",
+          "issuerSlug": "icici",
+          "maskDigits": "9012"
+        }
+      }
+    ]
+  },
+  "origin": "probe_cases.json"
+}

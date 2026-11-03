@@ -1,0 +1,36 @@
+{
+  "id": "probe:ipo_unblock",
+  "templateHash": "d61ebf8e3e3a9d61195ac048b0cfc72f108127bb936ea8c2d8e6333956c2ec9f",
+  "weight": 1,
+  "source": "synthetic",
+  "messages": [
+    {
+      "sender": "VM-HDFCBK-S",
+      "body": "Rs.14,250.00 blocked in your A/c XX1234 towards ASBA for TATA TECHNOLOGIES LTD has been released on 30-11-26. -HDFC Bank",
+      "observedAt": "2026-12-01T09:00:00.000Z"
+    }
+  ],
+  "expect": {
+    "facts": [
+      {
+        "factType": "hold",
+        "attrs": {
+          "phase": "released",
+          "purpose": "ipo_asba"
+        },
+        "amounts": [
+          {
+            "role": "released",
+            "minor": 1425000
+          }
+        ],
+        "instrument": {
+          "kind": "bank_account",
+          "issuerSlug": "hdfc",
+          "maskDigits": "1234"
+        }
+      }
+    ]
+  },
+  "origin": "probe_cases.json"
+}

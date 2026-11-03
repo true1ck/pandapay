@@ -1,0 +1,31 @@
+{
+  "id": "local:05",
+  "templateHash": "c6bbec3fa52fb7626cffff5d253dee973e5c6c38e6496a59f9d179cd2c4a65e9",
+  "weight": 1,
+  "source": "synthetic",
+  "messages": [
+    {
+      "sender": "HDFCBK",
+      "body": "Rs.1200 debited towards your credit card bill.",
+      "observedAt": "2026-11-20T09:00:00.000Z"
+    }
+  ],
+  "expect": {
+    "facts": [
+      {
+        "factType": "movement",
+        "attrs": {
+          "direction": "debit",
+          "purpose": "card_payment"
+        },
+        "amounts": [
+          {
+            "role": "posted",
+            "minor": 120000
+          }
+        ]
+      }
+    ]
+  },
+  "origin": "local_sms_cases.json"
+}

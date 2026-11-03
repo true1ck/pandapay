@@ -1,0 +1,49 @@
+{
+  "id": "ipo_block_then_allotment",
+  "description": "An IPO block followed by the allotment debit becomes one investment of the debited amount.",
+  "knownInstruments": [
+    {
+      "kind": "bank_account",
+      "issuerSlug": "hdfc",
+      "maskDigits": "1234"
+    }
+  ],
+  "messages": [
+    {
+      "sender": "VM-HDFCBK-S",
+      "body": "Rs.14,250.00 has been blocked in your A/c XX1234 towards ASBA application for TATA TECHNOLOGIES LTD IPO on 22-11-26. -HDFC Bank",
+      "observedAt": "2026-11-22T09:00:00Z"
+    },
+    {
+      "sender": "VM-HDFCBK-S",
+      "body": "Rs.14,250.00 debited from A/c XX1234 on 30-11-26 towards IPO allotment of TATA TECHNOLOGIES LTD. Avl Bal Rs.52,310.40 -HDFC Bank",
+      "observedAt": "2026-11-30T09:00:00Z"
+    }
+  ],
+  "expect": {
+    "events": [
+      {
+        "type": "ipo_application",
+        "legRoles": [
+          "hold_placed",
+          "debit_leg"
+        ]
+      }
+    ],
+    "instruments": [
+      {
+        "kind": "bank_account",
+        "issuerSlug": "hdfc",
+        "maskDigits": "1234"
+      }
+    ],
+    "totals": {
+      "from": "2026-11-01T00:00:00Z",
+      "to": "2026-12-01T00:00:00Z",
+      "spendMinor": 0,
+      "incomeMinor": 0,
+      "investmentMinor": 1425000,
+      "transactionCount": 1
+    }
+  }
+}

@@ -1,0 +1,27 @@
+{
+  "_note": "Targets from docs/sms-pipeline-v2/test-and-release.md (Golden set and metric gates). Ratios are fractions (0.99 = 99%). doubleCounts is a count of scenarios. A metric whose stage is not available is skipped, not failed.",
+  "m1": {
+    "captureRecall": { "min": 0.99 },
+    "ignorePrecision": { "min": 0.995 },
+    "eventKind": { "min": 0.97 },
+    "amountRole": { "min": 0.99 },
+    "instrument": { "min": 0.98 },
+    "doubleCounts": { "max": 0 },
+    "pairsLinked": { "min": 0.95 },
+    "category": { "min": 0.90 },
+    "askRate": { "max": 0.05 },
+    "scenarioTotals": { "min": 1.0 }
+  },
+  "release": {
+    "captureRecall": { "min": 0.995 },
+    "ignorePrecision": { "min": 0.999 },
+    "eventKind": { "min": 0.99 },
+    "amountRole": { "min": 0.995 },
+    "instrument": { "min": 0.99 },
+    "doubleCounts": { "max": 0 },
+    "pairsLinked": { "min": 0.98 },
+    "category": { "min": 0.95 },
+    "askRate": { "max": 0.02 },
+    "scenarioTotals": { "min": 1.0 }
+  }
+}

@@ -1,0 +1,35 @@
+{
+  "id": "local:04",
+  "templateHash": "10892d9af72bb02ba3c49fa101e109976142c47a492f26b10f738aba12adc598",
+  "weight": 1,
+  "source": "synthetic",
+  "messages": [
+    {
+      "sender": "HDFCBK",
+      "body": "Your account XX1234 credited INR 50000 as salary on 16-10-26.",
+      "observedAt": "2026-11-20T09:00:00.000Z"
+    }
+  ],
+  "expect": {
+    "facts": [
+      {
+        "factType": "movement",
+        "attrs": {
+          "direction": "credit",
+          "purpose": "salary"
+        },
+        "amounts": [
+          {
+            "role": "posted",
+            "minor": 5000000
+          }
+        ],
+        "instrument": {
+          "kind": "bank_account",
+          "maskDigits": "1234"
+        }
+      }
+    ]
+  },
+  "origin": "local_sms_cases.json"
+}

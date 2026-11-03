@@ -1,0 +1,44 @@
+{
+  "id": "probe:ipo_upi_mandate_block",
+  "templateHash": "c5bef96b1b44650d534e8b5c4433ab4dabebfd787917cfa6e960e87d917e5c09",
+  "weight": 1,
+  "source": "synthetic",
+  "messages": [
+    {
+      "sender": "AX-ICICIT-S",
+      "body": "Dear Customer, UPI Mandate for Rs 14,250.00 for IPO of TATA TECH has been successfully created and amount is blocked in A/c XX1234. UMRN 1234567890. -ICICI Bank",
+      "observedAt": "2026-12-01T09:00:00.000Z"
+    }
+  ],
+  "expect": {
+    "facts": [
+      {
+        "factType": "hold",
+        "attrs": {
+          "phase": "placed",
+          "purpose": "upi_mandate_block"
+        },
+        "amounts": [
+          {
+            "role": "held",
+            "minor": 1425000
+          }
+        ],
+        "instrument": {
+          "kind": "bank_account",
+          "issuerSlug": "icici",
+          "maskDigits": "1234"
+        }
+      },
+      {
+        "factType": "mandate",
+        "attrs": {
+          "phase": "created",
+          "mandatePurpose": "ipo"
+        }
+      }
+    ]
+  },
+  "note": "An IPO mandate is a hold plus a one-time mandate; it never becomes a subscription.",
+  "origin": "probe_cases.json"
+}

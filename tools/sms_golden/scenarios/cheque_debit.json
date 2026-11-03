@@ -1,0 +1,43 @@
+{
+  "id": "cheque_debit",
+  "description": "A cleared cheque is a debit from the account and counts once.",
+  "knownInstruments": [
+    {
+      "kind": "bank_account",
+      "issuerSlug": "hdfc",
+      "maskDigits": "1234"
+    }
+  ],
+  "messages": [
+    {
+      "sender": "VM-HDFCBK-S",
+      "body": "Rs.5,000.00 debited from A/c XX1234 on 01-11-26 by Chq No 000123 cleared in clearing. Avl Bal Rs.46,661.40",
+      "observedAt": "2026-11-01T16:00:00Z"
+    }
+  ],
+  "expect": {
+    "events": [
+      {
+        "type": "purchase",
+        "legRoles": [
+          "debit_leg"
+        ]
+      }
+    ],
+    "instruments": [
+      {
+        "kind": "bank_account",
+        "issuerSlug": "hdfc",
+        "maskDigits": "1234"
+      }
+    ],
+    "totals": {
+      "from": "2026-11-01T00:00:00Z",
+      "to": "2026-12-01T00:00:00Z",
+      "spendMinor": 500000,
+      "incomeMinor": 0,
+      "investmentMinor": 0,
+      "transactionCount": 1
+    }
+  }
+}

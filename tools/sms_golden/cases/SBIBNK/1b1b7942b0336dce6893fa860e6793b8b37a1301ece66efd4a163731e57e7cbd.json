@@ -1,0 +1,37 @@
+{
+  "id": "probe:sbi_upi_p2p",
+  "templateHash": "1b1b7942b0336dce6893fa860e6793b8b37a1301ece66efd4a163731e57e7cbd",
+  "weight": 1,
+  "source": "synthetic",
+  "messages": [
+    {
+      "sender": "AD-SBIBNK-S",
+      "body": "Dear UPI user A/C X1234 debited by 250.0 on date 01Nov26 trf to RAMESH KUMAR Refno 432112345678. If not u? call 1800111109. -SBI",
+      "observedAt": "2026-12-01T09:00:00.000Z"
+    }
+  ],
+  "expect": {
+    "facts": [
+      {
+        "factType": "movement",
+        "attrs": {
+          "direction": "debit",
+          "purpose": "p2p",
+          "rail": "upi"
+        },
+        "amounts": [
+          {
+            "role": "posted",
+            "minor": 25000
+          }
+        ],
+        "instrument": {
+          "kind": "bank_account",
+          "issuerSlug": "sbi",
+          "maskDigits": "1234"
+        }
+      }
+    ]
+  },
+  "origin": "probe_cases.json"
+}

@@ -1,0 +1,17 @@
+{
+  "id": "corpus:otp_security",
+  "templateHash": "e2489bb410e73f6c3b54b3b588f619762d28a00d306ca7d32ee7577f5bd6c8a6",
+  "weight": 1,
+  "source": "synthetic",
+  "messages": [
+    {
+      "sender": "VM-HDFCBK-S",
+      "body": "OTP 483921 for txn of Rs.2,500 on your HDFC card XX4321. Do not share.",
+      "observedAt": "2026-11-20T09:00:00.000Z"
+    }
+  ],
+  "expect": {
+    "ignore": true
+  },
+  "origin": "sms_family_corpus.json"
+}

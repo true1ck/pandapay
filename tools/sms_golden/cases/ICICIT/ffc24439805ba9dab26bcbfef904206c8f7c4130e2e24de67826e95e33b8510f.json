@@ -1,0 +1,41 @@
+{
+  "id": "probe:cc_bill_via_cred",
+  "templateHash": "ffc24439805ba9dab26bcbfef904206c8f7c4130e2e24de67826e95e33b8510f",
+  "weight": 1,
+  "source": "synthetic",
+  "messages": [
+    {
+      "sender": "AX-ICICIT-S",
+      "body": "ICICI Bank Acct XX1234 debited for Rs 25000.00 on 10-Nov-26; CRED Club credited. UPI:432198765432. Call 18002662 for dispute. SMS BLOCK 1234 to 9215676766.",
+      "observedAt": "2026-12-01T09:00:00.000Z"
+    }
+  ],
+  "expect": {
+    "facts": [
+      {
+        "factType": "movement",
+        "attrs": {
+          "direction": "debit",
+          "purpose": "card_payment",
+          "rail": "upi"
+        },
+        "amounts": [
+          {
+            "role": "posted",
+            "minor": 2500000
+          }
+        ],
+        "instrument": {
+          "kind": "bank_account",
+          "issuerSlug": "icici",
+          "maskDigits": "1234"
+        },
+        "counterparty": {
+          "kind": "own"
+        }
+      }
+    ]
+  },
+  "note": "A CRED payment is a card payment, not money received.",
+  "origin": "probe_cases.json"
+}

@@ -1,0 +1,35 @@
+{
+  "id": "local:06",
+  "templateHash": "699e48a758020b2bff454ec11bfca83f24360630e9aabca4b35ee0ff666713c7",
+  "weight": 1,
+  "source": "synthetic",
+  "messages": [
+    {
+      "sender": "HDFCBK",
+      "body": "Your A/c *1797 is debited by Rs.5000 towards Groww. Ref 123456789012.",
+      "observedAt": "2026-11-20T09:00:00.000Z"
+    }
+  ],
+  "expect": {
+    "facts": [
+      {
+        "factType": "movement",
+        "attrs": {
+          "direction": "debit",
+          "purpose": "investment"
+        },
+        "amounts": [
+          {
+            "role": "posted",
+            "minor": 500000
+          }
+        ],
+        "instrument": {
+          "kind": "bank_account",
+          "maskDigits": "1797"
+        }
+      }
+    ]
+  },
+  "origin": "local_sms_cases.json"
+}

@@ -1,0 +1,30 @@
+{
+  "id": "limit_enhancement",
+  "description": "A limit enhancement updates the card's limit and changes no total.",
+  "messages": [
+    {
+      "sender": "VM-HDFCBK-S",
+      "body": "Congratulations! The credit limit on your HDFC Bank Credit Card XX5678 has been enhanced to Rs.3,00,000 effective 01-11-26.",
+      "observedAt": "2026-11-01T08:00:00Z"
+    }
+  ],
+  "expect": {
+    "events": [],
+    "instruments": [
+      {
+        "kind": "credit_card",
+        "issuerSlug": "hdfc",
+        "maskDigits": "5678",
+        "creditLimitMinor": 30000000
+      }
+    ],
+    "totals": {
+      "from": "2026-11-01T00:00:00Z",
+      "to": "2026-12-01T00:00:00Z",
+      "spendMinor": 0,
+      "incomeMinor": 0,
+      "investmentMinor": 0,
+      "transactionCount": 0
+    }
+  }
+}

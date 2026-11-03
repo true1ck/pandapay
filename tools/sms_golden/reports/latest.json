@@ -1,0 +1,181 @@
+{
+  "schema": "pandapay.sms.golden-report/1",
+  "engine": "unwired (WP-01 not merged)",
+  "stages": {
+    "interpreter": "not_available",
+    "instruments": "not_available",
+    "linker": "not_available",
+    "projector": "not_available",
+    "categories": "not_available"
+  },
+  "counts": {
+    "cases": 0,
+    "casesPassed": 0,
+    "scenarios": 15,
+    "scenariosPassed": null,
+    "scenariosEvaluated": false,
+    "messages": 0,
+    "weight": 0.0
+  },
+  "metrics": {
+    "captureRecall": {
+      "status": "not_available",
+      "value": null,
+      "numerator": 0.0,
+      "denominator": 0.0
+    },
+    "ignorePrecision": {
+      "status": "not_available",
+      "value": null,
+      "numerator": 0.0,
+      "denominator": 0.0
+    },
+    "eventKind": {
+      "status": "not_available",
+      "value": null,
+      "numerator": 0.0,
+      "denominator": 0.0
+    },
+    "amountRole": {
+      "status": "not_available",
+      "value": null,
+      "numerator": 0.0,
+      "denominator": 0.0
+    },
+    "instrument": {
+      "status": "not_available",
+      "value": null,
+      "numerator": 0.0,
+      "denominator": 0.0
+    },
+    "doubleCounts": {
+      "status": "not_available",
+      "value": null,
+      "numerator": 0.0,
+      "denominator": 0.0
+    },
+    "pairsLinked": {
+      "status": "not_available",
+      "value": null,
+      "numerator": 0.0,
+      "denominator": 0.0
+    },
+    "category": {
+      "status": "not_available",
+      "value": null,
+      "numerator": 0.0,
+      "denominator": 0.0
+    },
+    "askRate": {
+      "status": "not_available",
+      "value": null,
+      "numerator": 0.0,
+      "denominator": 0.0
+    },
+    "scenarioTotals": {
+      "status": "not_available",
+      "value": null,
+      "numerator": 0.0,
+      "denominator": 0.0
+    },
+    "eventKindByAmount": {
+      "status": "not_available",
+      "value": null,
+      "numerator": 0.0,
+      "denominator": 0.0
+    },
+    "amountRoleByAmount": {
+      "status": "not_available",
+      "value": null,
+      "numerator": 0.0,
+      "denominator": 0.0
+    },
+    "instrumentByAmount": {
+      "status": "not_available",
+      "value": null,
+      "numerator": 0.0,
+      "denominator": 0.0
+    },
+    "scenarioEvents": {
+      "status": "not_available",
+      "value": null,
+      "numerator": 0.0,
+      "denominator": 0.0
+    },
+    "scenarioInstruments": {
+      "status": "not_available",
+      "value": null,
+      "numerator": 0.0,
+      "denominator": 0.0
+    }
+  },
+  "byFamily": {},
+  "byBrand": {},
+  "failures": [],
+  "gates": {
+    "profile": "m1",
+    "passed": true,
+    "results": [
+      {
+        "metric": "captureRecall",
+        "status": "skipped",
+        "value": null,
+        "limit": ">= 0.99"
+      },
+      {
+        "metric": "ignorePrecision",
+        "status": "skipped",
+        "value": null,
+        "limit": ">= 0.995"
+      },
+      {
+        "metric": "eventKind",
+        "status": "skipped",
+        "value": null,
+        "limit": ">= 0.97"
+      },
+      {
+        "metric": "amountRole",
+        "status": "skipped",
+        "value": null,
+        "limit": ">= 0.99"
+      },
+      {
+        "metric": "instrument",
+        "status": "skipped",
+        "value": null,
+        "limit": ">= 0.98"
+      },
+      {
+        "metric": "doubleCounts",
+        "status": "skipped",
+        "value": null,
+        "limit": "<= 0.0"
+      },
+      {
+        "metric": "pairsLinked",
+        "status": "skipped",
+        "value": null,
+        "limit": ">= 0.95"
+      },
+      {
+        "metric": "category",
+        "status": "skipped",
+        "value": null,
+        "limit": ">= 0.9"
+      },
+      {
+        "metric": "askRate",
+        "status": "skipped",
+        "value": null,
+        "limit": "<= 0.05"
+      },
+      {
+        "metric": "scenarioTotals",
+        "status": "skipped",
+        "value": null,
+        "limit": ">= 1.0"
+      }
+    ]
+  }
+}

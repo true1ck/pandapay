@@ -1,0 +1,41 @@
+{
+  "id": "probe:self_transfer_imps",
+  "templateHash": "310776559c74d8df44c2145866378fcf61302606ff795e376a2ba23afcdf2940",
+  "weight": 1,
+  "source": "synthetic",
+  "messages": [
+    {
+      "sender": "VM-HDFCBK-S",
+      "body": "Rs.20,000.00 debited from A/c XX1234 on 01-11-26 via IMPS to A/c XX9999 (Self). IMPS Ref 432112345678. Avl Bal Rs.26,661.40",
+      "observedAt": "2026-12-01T09:00:00.000Z"
+    }
+  ],
+  "expect": {
+    "facts": [
+      {
+        "factType": "movement",
+        "attrs": {
+          "direction": "debit",
+          "purpose": "transfer",
+          "rail": "imps"
+        },
+        "amounts": [
+          {
+            "role": "posted",
+            "minor": 2000000
+          }
+        ],
+        "instrument": {
+          "kind": "bank_account",
+          "issuerSlug": "hdfc",
+          "maskDigits": "1234"
+        },
+        "counterparty": {
+          "kind": "own",
+          "accountMask": "9999"
+        }
+      }
+    ]
+  },
+  "origin": "probe_cases.json"
+}

@@ -1,0 +1,31 @@
+{
+  "id": "corpus:autopay_scheduled",
+  "templateHash": "9880837c27de0859c9b501ed439bc5375a33062b73718a15652cc36146c0c7b7",
+  "weight": 1,
+  "source": "synthetic",
+  "messages": [
+    {
+      "sender": "HDFCBK",
+      "body": "Your Netflix AutoPay of INR 799 is scheduled for 17-10-26. The next payment due on 18-10-26.",
+      "observedAt": "2026-11-20T09:00:00.000Z"
+    }
+  ],
+  "expect": {
+    "facts": [
+      {
+        "factType": "attempt",
+        "attrs": {
+          "status": "scheduled",
+          "direction": "debit"
+        },
+        "amounts": [
+          {
+            "role": "scheduled",
+            "minor": 79900
+          }
+        ]
+      }
+    ]
+  },
+  "origin": "sms_family_corpus.json"
+}

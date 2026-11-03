@@ -1,0 +1,46 @@
+{
+  "id": "probe:zomato_money_spend",
+  "templateHash": "b7edce627e1dec0e10a0fd96d36ae28045a7ac8a1a6a3c3663c5595ea980fa8f",
+  "weight": 1,
+  "source": "synthetic",
+  "messages": [
+    {
+      "sender": "VM-ZOMATO-S",
+      "body": "Rs 350 has been debited from your Zomato Money balance for order #123456. Current balance Rs 650.",
+      "observedAt": "2026-12-01T09:00:00.000Z"
+    }
+  ],
+  "expect": {
+    "facts": [
+      {
+        "factType": "movement",
+        "attrs": {
+          "direction": "debit",
+          "purpose": "purchase"
+        },
+        "amounts": [
+          {
+            "role": "posted",
+            "minor": 35000
+          }
+        ],
+        "instrument": {
+          "kind": "wallet"
+        }
+      },
+      {
+        "factType": "balance_snapshot",
+        "amounts": [
+          {
+            "role": "available_balance",
+            "minor": 65000
+          }
+        ],
+        "instrument": {
+          "kind": "wallet"
+        }
+      }
+    ]
+  },
+  "origin": "probe_cases.json"
+}

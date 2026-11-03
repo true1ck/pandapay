@@ -1,0 +1,36 @@
+{
+  "id": "probe:upcoming_autopay",
+  "templateHash": "061e43c69401929ebafd39ffc6dc09f37f41a1d3bc7e86197adfa7d0036939b3",
+  "weight": 1,
+  "source": "synthetic",
+  "messages": [
+    {
+      "sender": "VM-HDFCBK-S",
+      "body": "Your A/c XX1234 will be debited for Rs.649.00 on 05-11-26 towards NETFLIX UPI AutoPay. Ensure sufficient balance.",
+      "observedAt": "2026-12-01T09:00:00.000Z"
+    }
+  ],
+  "expect": {
+    "facts": [
+      {
+        "factType": "attempt",
+        "attrs": {
+          "status": "scheduled",
+          "direction": "debit"
+        },
+        "amounts": [
+          {
+            "role": "scheduled",
+            "minor": 64900
+          }
+        ],
+        "instrument": {
+          "kind": "bank_account",
+          "issuerSlug": "hdfc",
+          "maskDigits": "1234"
+        }
+      }
+    ]
+  },
+  "origin": "probe_cases.json"
+}

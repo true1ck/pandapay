@@ -1,0 +1,17 @@
+{
+  "id": "corpus:hdfc_txn_check_alert",
+  "templateHash": "ae7cf08bada2eea4dff1806a20f80d594e2525e7bbf5f81f7bf6967c8dca9af2",
+  "weight": 1,
+  "source": "synthetic",
+  "messages": [
+    {
+      "sender": "VM-HDFCBK-S",
+      "body": "Transaction Check Alert! We tried to contact you twice to confirm the following txn: Rs.2,000.00 on Card XX4321 at AMAZON on 16-10-26. If this was not you, call 1860-266-2661",
+      "observedAt": "2026-11-20T09:00:00.000Z"
+    }
+  ],
+  "expect": {
+    "ignore": true
+  },
+  "origin": "sms_family_corpus.json"
+}

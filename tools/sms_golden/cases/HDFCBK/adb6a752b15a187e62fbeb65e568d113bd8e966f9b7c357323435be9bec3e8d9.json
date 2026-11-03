@@ -1,0 +1,18 @@
+{
+  "id": "probe:limit_offer",
+  "templateHash": "adb6a752b15a187e62fbeb65e568d113bd8e966f9b7c357323435be9bec3e8d9",
+  "weight": 1,
+  "source": "synthetic",
+  "messages": [
+    {
+      "sender": "VM-HDFCBK-P",
+      "body": "Your HDFC Bank Credit Card XX5678 is eligible for a limit increase up to Rs 3,50,000. Click hdfcbk.io/abc to accept. T&C",
+      "observedAt": "2026-12-01T09:00:00.000Z"
+    }
+  ],
+  "expect": {
+    "ignore": true
+  },
+  "note": "A limit offer is a promotion, never a review item.",
+  "origin": "probe_cases.json"
+}

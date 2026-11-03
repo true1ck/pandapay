@@ -1,0 +1,29 @@
+{
+  "id": "local:21",
+  "templateHash": "042dcf86d40f33b56cc232d17e7fffafceebf0ad98ee05209024bc2dc71212ef",
+  "weight": 1,
+  "source": "synthetic",
+  "messages": [
+    {
+      "sender": "HDFCBK",
+      "body": "INR 500 credit failed to account XX1234.",
+      "observedAt": "2026-11-20T09:00:00.000Z"
+    }
+  ],
+  "expect": {
+    "facts": [
+      {
+        "factType": "attempt",
+        "attrs": {
+          "status": "failed",
+          "direction": "credit"
+        },
+        "instrument": {
+          "kind": "bank_account",
+          "maskDigits": "1234"
+        }
+      }
+    ]
+  },
+  "origin": "local_sms_cases.json"
+}

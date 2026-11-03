@@ -1,0 +1,36 @@
+{
+  "id": "probe:cc_bill_card_side",
+  "templateHash": "ecd56cea5561bcd21f777c535e46cf451d3700a148db7c85f05142aa71f83726",
+  "weight": 1,
+  "source": "synthetic",
+  "messages": [
+    {
+      "sender": "VM-HDFCBK-S",
+      "body": "Payment of Rs.25,000.00 received towards your HDFC Bank Credit Card XX5678 on 10-11-26. Thank you. -HDFC Bank",
+      "observedAt": "2026-12-01T09:00:00.000Z"
+    }
+  ],
+  "expect": {
+    "facts": [
+      {
+        "factType": "movement",
+        "attrs": {
+          "direction": "credit",
+          "purpose": "card_payment"
+        },
+        "amounts": [
+          {
+            "role": "posted",
+            "minor": 2500000
+          }
+        ],
+        "instrument": {
+          "kind": "credit_card",
+          "issuerSlug": "hdfc",
+          "maskDigits": "5678"
+        }
+      }
+    ]
+  },
+  "origin": "probe_cases.json"
+}

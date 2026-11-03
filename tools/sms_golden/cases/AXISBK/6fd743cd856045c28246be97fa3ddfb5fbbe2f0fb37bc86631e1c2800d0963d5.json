@@ -1,0 +1,38 @@
+{
+  "id": "probe:axis_multiline",
+  "templateHash": "6fd743cd856045c28246be97fa3ddfb5fbbe2f0fb37bc86631e1c2800d0963d5",
+  "weight": 1,
+  "source": "synthetic",
+  "messages": [
+    {
+      "sender": "AX-AXISBK-S",
+      "body": "INR 1500.00 debited\nA/c no. XX123456\n01-11-26, 12:30:11\nUPI/P2M/432112345678/BIGBASKET\nNot you? SMS BLOCKUPI Cust ID to 919951860002\nAxis Bank",
+      "observedAt": "2026-12-01T09:00:00.000Z"
+    }
+  ],
+  "expect": {
+    "facts": [
+      {
+        "factType": "movement",
+        "attrs": {
+          "direction": "debit",
+          "purpose": "purchase",
+          "rail": "upi"
+        },
+        "amounts": [
+          {
+            "role": "posted",
+            "minor": 150000
+          }
+        ],
+        "instrument": {
+          "kind": "bank_account",
+          "issuerSlug": "axis",
+          "maskDigits": "123456"
+        }
+      }
+    ]
+  },
+  "note": "Axis prints a 6-digit mask (A/c no. XX123456).",
+  "origin": "probe_cases.json"
+}

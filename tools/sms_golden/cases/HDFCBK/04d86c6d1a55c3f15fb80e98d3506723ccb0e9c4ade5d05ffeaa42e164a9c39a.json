@@ -1,0 +1,36 @@
+{
+  "id": "local:03",
+  "templateHash": "04d86c6d1a55c3f15fb80e98d3506723ccb0e9c4ade5d05ffeaa42e164a9c39a",
+  "weight": 1,
+  "source": "synthetic",
+  "messages": [
+    {
+      "sender": "HDFCBK",
+      "body": "INR 100 spent using debit card XX1234 at SHOP on 16-10-26.",
+      "observedAt": "2026-11-20T09:00:00.000Z"
+    }
+  ],
+  "expect": {
+    "facts": [
+      {
+        "factType": "movement",
+        "attrs": {
+          "direction": "debit",
+          "purpose": "purchase",
+          "rail": "card"
+        },
+        "amounts": [
+          {
+            "role": "posted",
+            "minor": 10000
+          }
+        ],
+        "instrument": {
+          "kind": "debit_card",
+          "maskDigits": "1234"
+        }
+      }
+    ]
+  },
+  "origin": "local_sms_cases.json"
+}

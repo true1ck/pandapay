@@ -1,0 +1,35 @@
+{
+  "id": "local:17",
+  "templateHash": "bdb3b44dab99317064a75d87c08938256286b16916cbef313b99ac70a922193a",
+  "weight": 1,
+  "source": "synthetic",
+  "messages": [
+    {
+      "sender": "HDFCBK",
+      "body": "Your bank account XX1234 received INR 4500 from RAVI.",
+      "observedAt": "2026-11-20T09:00:00.000Z"
+    }
+  ],
+  "expect": {
+    "facts": [
+      {
+        "factType": "movement",
+        "attrs": {
+          "direction": "credit",
+          "purpose": "p2p"
+        },
+        "amounts": [
+          {
+            "role": "posted",
+            "minor": 450000
+          }
+        ],
+        "instrument": {
+          "kind": "bank_account",
+          "maskDigits": "1234"
+        }
+      }
+    ]
+  },
+  "origin": "local_sms_cases.json"
+}

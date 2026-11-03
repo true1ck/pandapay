@@ -1,0 +1,17 @@
+{
+  "id": "local:11",
+  "templateHash": "8671bfe8d03e522978d7356000dc5801f36459a2ae4b15c68b220e5ce4f2f1c6",
+  "weight": 1,
+  "source": "synthetic",
+  "messages": [
+    {
+      "sender": "HDFCBK",
+      "body": "Spend INR 15000 on card XX4321 and get cashback INR 250.",
+      "observedAt": "2026-11-20T09:00:00.000Z"
+    }
+  ],
+  "expect": {
+    "ignore": true
+  },
+  "origin": "local_sms_cases.json"
+}

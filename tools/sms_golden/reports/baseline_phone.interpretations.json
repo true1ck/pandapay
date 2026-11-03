@@ -1,0 +1,1461 @@
+{
+  "engine": "phone: LocalSmsParser.parse (capture gate + parser)",
+  "results": {
+    "probe:amazon_pay_balance_spend#0": {
+      "facts": [],
+      "unknown": true
+    },
+    "probe:amazon_pay_cashback#0": {
+      "facts": [],
+      "unknown": true
+    },
+    "probe:cc_payment_amex#0": {
+      "facts": [
+        {
+          "factType": "movement",
+          "attrs": {
+            "purpose": "transfer"
+          },
+          "amounts": [
+            {
+              "role": "posted",
+              "minor": 1200000
+            }
+          ],
+          "instrument": {
+            "kind": "credit_card",
+            "maskDigits": "2026"
+          }
+        }
+      ],
+      "unknown": false
+    },
+    "probe:cc_payment_axis#0": {
+      "facts": [
+        {
+          "factType": "movement",
+          "attrs": {
+            "purpose": "transfer"
+          },
+          "amounts": [
+            {
+              "role": "posted",
+              "minor": 850000
+            }
+          ],
+          "instrument": {
+            "kind": "credit_card",
+            "maskDigits": "9012"
+          }
+        }
+      ],
+      "unknown": false
+    },
+    "probe:axis_multiline#0": {
+      "facts": [
+        {
+          "factType": "movement",
+          "attrs": {
+            "direction": "debit",
+            "purpose": "purchase"
+          },
+          "amounts": [
+            {
+              "role": "posted",
+              "minor": 150000
+            }
+          ],
+          "instrument": {
+            "kind": "bank_account"
+          }
+        }
+      ],
+      "unknown": false
+    },
+    "corpus:card_bill_payment#0": {
+      "facts": [
+        {
+          "factType": "movement",
+          "attrs": {
+            "purpose": "transfer"
+          },
+          "amounts": [
+            {
+              "role": "posted",
+              "minor": 1200000
+            }
+          ]
+        }
+      ],
+      "unknown": false
+    },
+    "corpus:card_statement#0": {
+      "facts": [
+        {
+          "factType": "bill_due",
+          "attrs": {
+            "dueDate": "2026-11-05"
+          },
+          "amounts": [
+            {
+              "role": "due_total",
+              "minor": 300000
+            },
+            {
+              "role": "due_minimum",
+              "minor": 60000
+            }
+          ],
+          "instrument": {
+            "kind": "credit_card",
+            "maskDigits": "4321"
+          }
+        }
+      ],
+      "unknown": false
+    },
+    "corpus:ambiguous_suffix_two_banks_second#0": {
+      "facts": [
+        {
+          "factType": "movement",
+          "attrs": {
+            "direction": "credit"
+          },
+          "amounts": [
+            {
+              "role": "posted",
+              "minor": 300000
+            }
+          ],
+          "instrument": {
+            "kind": "bank_account",
+            "maskDigits": "9080"
+          }
+        }
+      ],
+      "unknown": false
+    },
+    "corpus:autopay_failed#0": {
+      "facts": [
+        {
+          "factType": "attempt",
+          "attrs": {
+            "status": "failed"
+          }
+        }
+      ],
+      "unknown": false
+    },
+    "probe:cc_bill_bank_side#0": {
+      "facts": [
+        {
+          "factType": "movement",
+          "attrs": {
+            "purpose": "transfer"
+          },
+          "amounts": [
+            {
+              "role": "posted",
+              "minor": 2500000
+            }
+          ],
+          "instrument": {
+            "kind": "credit_card",
+            "maskDigits": "5678"
+          }
+        }
+      ],
+      "unknown": false
+    },
+    "local:21#0": {
+      "facts": [
+        {
+          "factType": "attempt",
+          "attrs": {
+            "status": "failed"
+          },
+          "instrument": {
+            "kind": "bank_account",
+            "maskDigits": "1234"
+          }
+        }
+      ],
+      "unknown": false
+    },
+    "local:03#0": {
+      "facts": [
+        {
+          "factType": "movement",
+          "attrs": {
+            "direction": "debit",
+            "purpose": "purchase"
+          },
+          "amounts": [
+            {
+              "role": "posted",
+              "minor": 10000
+            }
+          ],
+          "instrument": {
+            "kind": "debit_card",
+            "maskDigits": "1234"
+          }
+        }
+      ],
+      "unknown": false
+    },
+    "probe:upcoming_autopay#0": {
+      "facts": [
+        {
+          "factType": "bill_due",
+          "attrs": {
+            "dueDate": "2026-11-05"
+          },
+          "amounts": [
+            {
+              "role": "due_total",
+              "minor": 64900
+            }
+          ],
+          "instrument": {
+            "kind": "bank_account",
+            "maskDigits": "1234"
+          }
+        }
+      ],
+      "unknown": false
+    },
+    "corpus:refund_with_offer#0": {
+      "facts": [
+        {
+          "factType": "movement",
+          "attrs": {
+            "purpose": "transfer"
+          },
+          "amounts": [
+            {
+              "role": "posted",
+              "minor": 49900
+            }
+          ],
+          "instrument": {
+            "kind": "credit_card",
+            "maskDigits": "4321"
+          }
+        }
+      ],
+      "unknown": false
+    },
+    "probe:ipo_asba_block#0": {
+      "facts": [],
+      "unknown": false
+    },
+    "local:04#0": {
+      "facts": [
+        {
+          "factType": "movement",
+          "attrs": {
+            "direction": "credit"
+          },
+          "amounts": [
+            {
+              "role": "posted",
+              "minor": 5000000
+            }
+          ],
+          "instrument": {
+            "kind": "bank_account",
+            "maskDigits": "1234"
+          }
+        }
+      ],
+      "unknown": false
+    },
+    "corpus:salary_income#0": {
+      "facts": [
+        {
+          "factType": "movement",
+          "attrs": {
+            "direction": "credit"
+          },
+          "amounts": [
+            {
+              "role": "posted",
+              "minor": 5000000
+            }
+          ],
+          "instrument": {
+            "kind": "bank_account",
+            "maskDigits": "1234"
+          }
+        }
+      ],
+      "unknown": false
+    },
+    "local:18#0": {
+      "facts": [],
+      "unknown": true
+    },
+    "probe:spend_avl_lmt_hdfc#0": {
+      "facts": [
+        {
+          "factType": "movement",
+          "attrs": {
+            "direction": "debit",
+            "purpose": "purchase"
+          },
+          "amounts": [
+            {
+              "role": "posted",
+              "minor": 49900
+            }
+          ],
+          "instrument": {
+            "kind": "credit_card",
+            "maskDigits": "5678"
+          }
+        }
+      ],
+      "unknown": false
+    },
+    "corpus:atm_withdrawal#0": {
+      "facts": [
+        {
+          "factType": "movement",
+          "attrs": {
+            "purpose": "transfer"
+          },
+          "amounts": [
+            {
+              "role": "posted",
+              "minor": 2000000
+            }
+          ],
+          "instrument": {
+            "kind": "debit_card",
+            "maskDigits": "8406"
+          }
+        }
+      ],
+      "unknown": false
+    },
+    "probe:salary_neft#0": {
+      "facts": [
+        {
+          "factType": "movement",
+          "attrs": {
+            "direction": "credit"
+          },
+          "amounts": [
+            {
+              "role": "posted",
+              "minor": 8500000
+            }
+          ],
+          "instrument": {
+            "kind": "bank_account",
+            "maskDigits": "1234"
+          }
+        },
+        {
+          "factType": "balance_snapshot",
+          "amounts": [
+            {
+              "role": "available_balance",
+              "minor": 13766140
+            }
+          ],
+          "instrument": {
+            "kind": "bank_account",
+            "maskDigits": "1234"
+          }
+        }
+      ],
+      "unknown": false
+    },
+    "corpus:upi_person_spend#0": {
+      "facts": [
+        {
+          "factType": "movement",
+          "attrs": {
+            "direction": "debit",
+            "purpose": "purchase"
+          },
+          "amounts": [
+            {
+              "role": "posted",
+              "minor": 25000
+            }
+          ],
+          "instrument": {
+            "kind": "bank_account",
+            "maskDigits": "1234"
+          }
+        }
+      ],
+      "unknown": false
+    },
+    "probe:limit_enhanced#0": {
+      "facts": [],
+      "unknown": false
+    },
+    "probe:self_transfer_imps#0": {
+      "facts": [
+        {
+          "factType": "movement",
+          "attrs": {
+            "purpose": "transfer"
+          },
+          "amounts": [
+            {
+              "role": "posted",
+              "minor": 2000000
+            }
+          ],
+          "instrument": {
+            "kind": "bank_account",
+            "maskDigits": "1234"
+          }
+        },
+        {
+          "factType": "balance_snapshot",
+          "amounts": [
+            {
+              "role": "available_balance",
+              "minor": 2666140
+            }
+          ],
+          "instrument": {
+            "kind": "bank_account",
+            "maskDigits": "1234"
+          }
+        }
+      ],
+      "unknown": false
+    },
+    "corpus:send_debit_with_balance#0": {
+      "facts": [
+        {
+          "factType": "movement",
+          "attrs": {
+            "direction": "debit",
+            "purpose": "purchase"
+          },
+          "amounts": [
+            {
+              "role": "posted",
+              "minor": 125050
+            }
+          ],
+          "instrument": {
+            "kind": "bank_account",
+            "maskDigits": "1234"
+          }
+        },
+        {
+          "factType": "balance_snapshot",
+          "amounts": [
+            {
+              "role": "available_balance",
+              "minor": 875025
+            }
+          ],
+          "instrument": {
+            "kind": "bank_account",
+            "maskDigits": "1234"
+          }
+        }
+      ],
+      "unknown": false
+    },
+    "local:19#0": {
+      "facts": [],
+      "unknown": true
+    },
+    "local:10#0": {
+      "facts": [
+        {
+          "factType": "bill_due",
+          "attrs": {
+            "dueDate": "2026-10-20"
+          },
+          "amounts": [
+            {
+              "role": "due_total",
+              "minor": 300000
+            }
+          ],
+          "instrument": {
+            "kind": "credit_card",
+            "maskDigits": "4321"
+          }
+        }
+      ],
+      "unknown": false
+    },
+    "probe:ipo_allotment_debit#0": {
+      "facts": [
+        {
+          "factType": "movement",
+          "attrs": {
+            "direction": "debit",
+            "purpose": "investment"
+          },
+          "amounts": [
+            {
+              "role": "posted",
+              "minor": 1425000
+            }
+          ],
+          "instrument": {
+            "kind": "bank_account",
+            "maskDigits": "1234"
+          }
+        },
+        {
+          "factType": "balance_snapshot",
+          "amounts": [
+            {
+              "role": "available_balance",
+              "minor": 5231040
+            }
+          ],
+          "instrument": {
+            "kind": "bank_account",
+            "maskDigits": "1234"
+          }
+        }
+      ],
+      "unknown": false
+    },
+    "probe:mandate_registered#0": {
+      "facts": [
+        {
+          "factType": "mandate",
+          "attrs": {
+            "phase": "created"
+          },
+          "amounts": [
+            {
+              "role": "ceiling",
+              "minor": 149900
+            }
+          ]
+        }
+      ],
+      "unknown": false
+    },
+    "local:07#0": {
+      "facts": [],
+      "unknown": false
+    },
+    "local:06#0": {
+      "facts": [
+        {
+          "factType": "movement",
+          "attrs": {
+            "direction": "debit",
+            "purpose": "investment"
+          },
+          "amounts": [
+            {
+              "role": "posted",
+              "minor": 500000
+            }
+          ],
+          "instrument": {
+            "kind": "bank_account",
+            "maskDigits": "1797"
+          }
+        }
+      ],
+      "unknown": false
+    },
+    "probe:reward_points_redeemed#0": {
+      "facts": [
+        {
+          "factType": "info",
+          "attrs": {
+            "category": "promotion"
+          }
+        }
+      ],
+      "unknown": false
+    },
+    "local:12#0": {
+      "facts": [
+        {
+          "factType": "balance_snapshot",
+          "amounts": [
+            {
+              "role": "available_balance",
+              "minor": 300000
+            }
+          ],
+          "instrument": {
+            "kind": "bank_account",
+            "maskDigits": "1234"
+          }
+        }
+      ],
+      "unknown": false
+    },
+    "local:09#0": {
+      "facts": [
+        {
+          "factType": "movement",
+          "attrs": {
+            "purpose": "transfer"
+          },
+          "amounts": [
+            {
+              "role": "posted",
+              "minor": 50000
+            }
+          ],
+          "instrument": {
+            "kind": "credit_card",
+            "maskDigits": "4321"
+          }
+        }
+      ],
+      "unknown": false
+    },
+    "corpus:autopay_mandate#0": {
+      "facts": [
+        {
+          "factType": "mandate",
+          "attrs": {
+            "phase": "created"
+          },
+          "amounts": [
+            {
+              "role": "ceiling",
+              "minor": 200000
+            }
+          ],
+          "instrument": {
+            "kind": "bank_account",
+            "maskDigits": "1797"
+          }
+        }
+      ],
+      "unknown": false
+    },
+    "probe:netflix_upi_autopay_debit#0": {
+      "facts": [
+        {
+          "factType": "movement",
+          "attrs": {
+            "direction": "debit",
+            "purpose": "purchase"
+          },
+          "amounts": [
+            {
+              "role": "posted",
+              "minor": 64900
+            }
+          ],
+          "instrument": {
+            "kind": "bank_account",
+            "maskDigits": "1234"
+          }
+        },
+        {
+          "factType": "balance_snapshot",
+          "amounts": [
+            {
+              "role": "available_balance",
+              "minor": 5166140
+            }
+          ],
+          "instrument": {
+            "kind": "bank_account",
+            "maskDigits": "1234"
+          }
+        }
+      ],
+      "unknown": false
+    },
+    "local:11#0": {
+      "facts": [],
+      "unknown": false
+    },
+    "local:00#0": {
+      "facts": [
+        {
+          "factType": "movement",
+          "attrs": {
+            "direction": "debit",
+            "purpose": "purchase"
+          },
+          "amounts": [
+            {
+              "role": "posted",
+              "minor": 149900
+            }
+          ],
+          "instrument": {
+            "kind": "credit_card",
+            "maskDigits": "4321"
+          }
+        }
+      ],
+      "unknown": false
+    },
+    "probe:cheque_cleared#0": {
+      "facts": [
+        {
+          "factType": "movement",
+          "attrs": {
+            "direction": "debit",
+            "purpose": "purchase"
+          },
+          "amounts": [
+            {
+              "role": "posted",
+              "minor": 500000
+            }
+          ],
+          "instrument": {
+            "kind": "bank_account",
+            "maskDigits": "1234"
+          }
+        },
+        {
+          "factType": "balance_snapshot",
+          "amounts": [
+            {
+              "role": "available_balance",
+              "minor": 4666140
+            }
+          ],
+          "instrument": {
+            "kind": "bank_account",
+            "maskDigits": "1234"
+          }
+        }
+      ],
+      "unknown": false
+    },
+    "local:20#0": {
+      "facts": [],
+      "unknown": false
+    },
+    "corpus:autopay_scheduled#0": {
+      "facts": [
+        {
+          "factType": "mandate",
+          "attrs": {
+            "phase": "created"
+          },
+          "amounts": [
+            {
+              "role": "ceiling",
+              "minor": 79900
+            }
+          ]
+        }
+      ],
+      "unknown": false
+    },
+    "corpus:outstanding_reminder#0": {
+      "facts": [],
+      "unknown": false
+    },
+    "probe:limit_offer#0": {
+      "facts": [],
+      "unknown": false
+    },
+    "corpus:hdfc_txn_check_alert#0": {
+      "facts": [],
+      "unknown": false
+    },
+    "local:16#0": {
+      "facts": [
+        {
+          "factType": "movement",
+          "attrs": {
+            "purpose": "transfer"
+          },
+          "amounts": [
+            {
+              "role": "posted",
+              "minor": 120000
+            }
+          ],
+          "instrument": {
+            "kind": "wallet"
+          }
+        }
+      ],
+      "unknown": false
+    },
+    "probe:cashback_on_card#0": {
+      "facts": [
+        {
+          "factType": "movement",
+          "attrs": {
+            "purpose": "transfer"
+          },
+          "amounts": [
+            {
+              "role": "posted",
+              "minor": 15000
+            }
+          ],
+          "instrument": {
+            "kind": "credit_card",
+            "maskDigits": "5678"
+          }
+        }
+      ],
+      "unknown": false
+    },
+    "local:14#0": {
+      "facts": [
+        {
+          "factType": "movement",
+          "attrs": {
+            "purpose": "transfer"
+          },
+          "amounts": [
+            {
+              "role": "posted",
+              "minor": 50000
+            }
+          ],
+          "instrument": {
+            "kind": "bank_account",
+            "maskDigits": "1234"
+          }
+        }
+      ],
+      "unknown": false
+    },
+    "local:17#0": {
+      "facts": [
+        {
+          "factType": "movement",
+          "attrs": {
+            "purpose": "transfer"
+          },
+          "amounts": [
+            {
+              "role": "posted",
+              "minor": 450000
+            }
+          ],
+          "instrument": {
+            "kind": "bank_account",
+            "maskDigits": "1234"
+          }
+        }
+      ],
+      "unknown": false
+    },
+    "local:22#0": {
+      "facts": [
+        {
+          "factType": "attempt",
+          "attrs": {
+            "status": "failed"
+          }
+        }
+      ],
+      "unknown": false
+    },
+    "corpus:ambiguous_suffix_two_banks#0": {
+      "facts": [
+        {
+          "factType": "movement",
+          "attrs": {
+            "direction": "debit",
+            "purpose": "purchase"
+          },
+          "amounts": [
+            {
+              "role": "posted",
+              "minor": 300000
+            }
+          ],
+          "instrument": {
+            "kind": "bank_account",
+            "maskDigits": "9080"
+          }
+        }
+      ],
+      "unknown": false
+    },
+    "local:05#0": {
+      "facts": [
+        {
+          "factType": "movement",
+          "attrs": {
+            "purpose": "transfer"
+          },
+          "amounts": [
+            {
+              "role": "posted",
+              "minor": 120000
+            }
+          ]
+        }
+      ],
+      "unknown": false
+    },
+    "corpus:reversed_credit#0": {
+      "facts": [
+        {
+          "factType": "movement",
+          "attrs": {
+            "purpose": "transfer"
+          },
+          "amounts": [
+            {
+              "role": "posted",
+              "minor": 50000
+            }
+          ],
+          "instrument": {
+            "kind": "bank_account",
+            "maskDigits": "1234"
+          }
+        }
+      ],
+      "unknown": false
+    },
+    "local:13#0": {
+      "facts": [
+        {
+          "factType": "movement",
+          "attrs": {
+            "purpose": "transfer"
+          },
+          "amounts": [
+            {
+              "role": "posted",
+              "minor": 250000
+            }
+          ],
+          "instrument": {
+            "kind": "bank_account"
+          }
+        }
+      ],
+      "unknown": false
+    },
+    "probe:ipo_unblock#0": {
+      "facts": [],
+      "unknown": false
+    },
+    "probe:refund_on_card#0": {
+      "facts": [
+        {
+          "factType": "movement",
+          "attrs": {
+            "purpose": "transfer"
+          },
+          "amounts": [
+            {
+              "role": "posted",
+              "minor": 49900
+            }
+          ],
+          "instrument": {
+            "kind": "credit_card",
+            "maskDigits": "5678"
+          }
+        }
+      ],
+      "unknown": false
+    },
+    "corpus:otp_security#0": {
+      "facts": [],
+      "unknown": false
+    },
+    "local:23#0": {
+      "facts": [],
+      "unknown": false
+    },
+    "probe:groww_sip_upi#0": {
+      "facts": [
+        {
+          "factType": "movement",
+          "attrs": {
+            "direction": "debit",
+            "purpose": "investment"
+          },
+          "amounts": [
+            {
+              "role": "posted",
+              "minor": 500000
+            }
+          ],
+          "instrument": {
+            "kind": "bank_account",
+            "maskDigits": "1234"
+          }
+        },
+        {
+          "factType": "balance_snapshot",
+          "amounts": [
+            {
+              "role": "available_balance",
+              "minor": 4731040
+            }
+          ],
+          "instrument": {
+            "kind": "bank_account",
+            "maskDigits": "1234"
+          }
+        }
+      ],
+      "unknown": false
+    },
+    "probe:cc_bill_card_side#0": {
+      "facts": [
+        {
+          "factType": "movement",
+          "attrs": {
+            "purpose": "transfer"
+          },
+          "amounts": [
+            {
+              "role": "posted",
+              "minor": 2500000
+            }
+          ],
+          "instrument": {
+            "kind": "credit_card",
+            "maskDigits": "5678"
+          }
+        }
+      ],
+      "unknown": false
+    },
+    "corpus:mandate_cancelled#0": {
+      "facts": [
+        {
+          "factType": "attempt",
+          "attrs": {
+            "status": "failed"
+          },
+          "instrument": {
+            "kind": "bank_account",
+            "maskDigits": "1797"
+          }
+        }
+      ],
+      "unknown": false
+    },
+    "local:02#0": {
+      "facts": [
+        {
+          "factType": "movement",
+          "attrs": {
+            "direction": "debit",
+            "purpose": "purchase"
+          },
+          "amounts": [
+            {
+              "role": "posted",
+              "minor": 50000
+            }
+          ],
+          "instrument": {
+            "kind": "bank_account",
+            "maskDigits": "1234"
+          }
+        }
+      ],
+      "unknown": false
+    },
+    "probe:paytm_wallet_load_bank#0": {
+      "facts": [
+        {
+          "factType": "movement",
+          "attrs": {
+            "direction": "debit",
+            "purpose": "purchase"
+          },
+          "amounts": [
+            {
+              "role": "posted",
+              "minor": 50000
+            }
+          ],
+          "instrument": {
+            "kind": "bank_account",
+            "maskDigits": "1234"
+          }
+        }
+      ],
+      "unknown": false
+    },
+    "local:15#0": {
+      "facts": [
+        {
+          "factType": "movement",
+          "attrs": {
+            "purpose": "transfer"
+          },
+          "amounts": [
+            {
+              "role": "posted",
+              "minor": 20000
+            }
+          ],
+          "instrument": {
+            "kind": "bank_account",
+            "maskDigits": "1234"
+          }
+        }
+      ],
+      "unknown": false
+    },
+    "local:08#0": {
+      "facts": [
+        {
+          "factType": "attempt",
+          "attrs": {
+            "status": "failed"
+          },
+          "instrument": {
+            "kind": "credit_card",
+            "maskDigits": "4321"
+          }
+        }
+      ],
+      "unknown": false
+    },
+    "corpus:declined_attempt#0": {
+      "facts": [
+        {
+          "factType": "attempt",
+          "attrs": {
+            "status": "failed"
+          },
+          "instrument": {
+            "kind": "credit_card",
+            "maskDigits": "4321"
+          }
+        }
+      ],
+      "unknown": false
+    },
+    "probe:spend_avl_limit_icici#0": {
+      "facts": [
+        {
+          "factType": "movement",
+          "attrs": {
+            "direction": "debit",
+            "purpose": "purchase"
+          },
+          "amounts": [
+            {
+              "role": "posted",
+              "minor": 129900
+            }
+          ],
+          "instrument": {
+            "kind": "credit_card",
+            "maskDigits": "9012"
+          }
+        }
+      ],
+      "unknown": false
+    },
+    "probe:ipo_mandate_executed#0": {
+      "facts": [
+        {
+          "factType": "movement",
+          "attrs": {
+            "direction": "debit",
+            "purpose": "investment"
+          },
+          "amounts": [
+            {
+              "role": "posted",
+              "minor": 1425000
+            }
+          ],
+          "instrument": {
+            "kind": "bank_account",
+            "maskDigits": "1234"
+          }
+        }
+      ],
+      "unknown": false
+    },
+    "probe:reward_points_earned#0": {
+      "facts": [
+        {
+          "factType": "movement",
+          "attrs": {
+            "purpose": "transfer"
+          },
+          "amounts": [
+            {
+              "role": "posted",
+              "minor": 5000
+            }
+          ],
+          "instrument": {
+            "kind": "credit_card"
+          }
+        },
+        {
+          "factType": "balance_snapshot",
+          "amounts": [
+            {
+              "role": "available_balance",
+              "minor": 125000
+            }
+          ],
+          "instrument": {
+            "kind": "credit_card"
+          }
+        }
+      ],
+      "unknown": false
+    },
+    "local:01#0": {
+      "facts": [
+        {
+          "factType": "movement",
+          "attrs": {
+            "direction": "debit",
+            "purpose": "purchase"
+          },
+          "amounts": [
+            {
+              "role": "posted",
+              "minor": 25000
+            }
+          ],
+          "instrument": {
+            "kind": "credit_card",
+            "maskDigits": "7788"
+          }
+        }
+      ],
+      "unknown": false
+    },
+    "probe:ipo_upi_mandate_block#0": {
+      "facts": [
+        {
+          "factType": "mandate",
+          "attrs": {
+            "phase": "created"
+          },
+          "amounts": [
+            {
+              "role": "ceiling",
+              "minor": 1425000
+            }
+          ],
+          "instrument": {
+            "kind": "bank_account",
+            "maskDigits": "1234"
+          }
+        }
+      ],
+      "unknown": false
+    },
+    "probe:spotify_card_si#0": {
+      "facts": [
+        {
+          "factType": "movement",
+          "attrs": {
+            "direction": "debit",
+            "purpose": "purchase"
+          },
+          "amounts": [
+            {
+              "role": "posted",
+              "minor": 11900
+            }
+          ],
+          "instrument": {
+            "kind": "credit_card",
+            "maskDigits": "9012"
+          }
+        }
+      ],
+      "unknown": false
+    },
+    "probe:cc_bill_via_cred#0": {
+      "facts": [
+        {
+          "factType": "movement",
+          "attrs": {
+            "direction": "credit"
+          },
+          "amounts": [
+            {
+              "role": "posted",
+              "minor": 2500000
+            }
+          ],
+          "instrument": {
+            "kind": "bank_account"
+          }
+        }
+      ],
+      "unknown": false
+    },
+    "probe:paytm_wallet_spend#0": {
+      "facts": [
+        {
+          "factType": "movement",
+          "attrs": {
+            "direction": "debit",
+            "purpose": "purchase"
+          },
+          "amounts": [
+            {
+              "role": "posted",
+              "minor": 12000
+            }
+          ],
+          "instrument": {
+            "kind": "wallet",
+            "maskDigits": "Paytm"
+          }
+        },
+        {
+          "factType": "balance_snapshot",
+          "amounts": [
+            {
+              "role": "available_balance",
+              "minor": 38000
+            }
+          ],
+          "instrument": {
+            "kind": "wallet",
+            "maskDigits": "Paytm"
+          }
+        }
+      ],
+      "unknown": false
+    },
+    "probe:kotak_sent#0": {
+      "facts": [
+        {
+          "factType": "movement",
+          "attrs": {
+            "direction": "debit",
+            "purpose": "purchase"
+          },
+          "amounts": [
+            {
+              "role": "posted",
+              "minor": 30000
+            }
+          ],
+          "instrument": {
+            "kind": "bank_account",
+            "maskDigits": "1234"
+          }
+        }
+      ],
+      "unknown": false
+    },
+    "corpus:kotak_settlement#0": {
+      "facts": [],
+      "unknown": true
+    },
+    "corpus:cashback_offer_only#0": {
+      "facts": [],
+      "unknown": false
+    },
+    "probe:sbi_upi_p2p#0": {
+      "facts": [
+        {
+          "factType": "movement",
+          "attrs": {
+            "direction": "debit",
+            "purpose": "purchase"
+          },
+          "amounts": [
+            {
+              "role": "posted",
+              "minor": 25000
+            }
+          ],
+          "instrument": {
+            "kind": "bank_account",
+            "maskDigits": "1234"
+          }
+        }
+      ],
+      "unknown": false
+    },
+    "probe:sbi_card_spend#0": {
+      "facts": [
+        {
+          "factType": "movement",
+          "attrs": {
+            "direction": "debit",
+            "purpose": "purchase"
+          },
+          "amounts": [
+            {
+              "role": "posted",
+              "minor": 79900
+            }
+          ],
+          "instrument": {
+            "kind": "credit_card",
+            "maskDigits": "3456"
+          }
+        }
+      ],
+      "unknown": false
+    },
+    "corpus:balance_only#0": {
+      "facts": [
+        {
+          "factType": "balance_snapshot",
+          "amounts": [
+            {
+              "role": "available_balance",
+              "minor": 900000
+            }
+          ],
+          "instrument": {
+            "kind": "bank_account",
+            "maskDigits": "9876"
+          }
+        }
+      ],
+      "unknown": false
+    },
+    "corpus:bill_with_offer#0": {
+      "facts": [
+        {
+          "factType": "bill_due",
+          "attrs": {
+            "dueDate": "2026-10-18"
+          },
+          "amounts": [
+            {
+              "role": "due_total",
+              "minor": 150000
+            }
+          ]
+        }
+      ],
+      "unknown": false
+    },
+    "corpus:call_forwarding_vicare#0": {
+      "facts": [],
+      "unknown": false
+    },
+    "probe:zomato_money_spend#0": {
+      "facts": [],
+      "unknown": true
+    }
+  }
+}

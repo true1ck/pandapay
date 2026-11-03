@@ -1,0 +1,17 @@
+{
+  "id": "local:07",
+  "templateHash": "636e2d51e454f633cfb7e29ac85fe8a417aa40530d4140a9e0f75e17357ee5d9",
+  "weight": 1,
+  "source": "synthetic",
+  "messages": [
+    {
+      "sender": "HDFCBK",
+      "body": "OTP 123456 for transaction INR 500 on card XX4321. Do not share.",
+      "observedAt": "2026-11-20T09:00:00.000Z"
+    }
+  ],
+  "expect": {
+    "ignore": true
+  },
+  "origin": "local_sms_cases.json"
+}

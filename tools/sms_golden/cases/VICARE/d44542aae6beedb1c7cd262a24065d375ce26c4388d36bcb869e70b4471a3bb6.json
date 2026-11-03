@@ -1,0 +1,17 @@
+{
+  "id": "corpus:call_forwarding_vicare",
+  "templateHash": "d44542aae6beedb1c7cd262a24065d375ce26c4388d36bcb869e70b4471a3bb6",
+  "weight": 1,
+  "source": "synthetic",
+  "messages": [
+    {
+      "sender": "VZ-ViCARE-S",
+      "body": "Call Forwarding is now active on your Vodafone idea number.",
+      "observedAt": "2026-11-20T09:00:00.000Z"
+    }
+  ],
+  "expect": {
+    "ignore": true
+  },
+  "origin": "sms_family_corpus.json"
+}

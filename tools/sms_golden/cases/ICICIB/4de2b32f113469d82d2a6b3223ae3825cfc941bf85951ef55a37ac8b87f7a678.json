@@ -1,0 +1,36 @@
+{
+  "id": "corpus:declined_attempt",
+  "templateHash": "4de2b32f113469d82d2a6b3223ae3825cfc941bf85951ef55a37ac8b87f7a678",
+  "weight": 1,
+  "source": "synthetic",
+  "messages": [
+    {
+      "sender": "ICICIB",
+      "body": "INR 500 purchase declined on credit card XX4321.",
+      "observedAt": "2026-11-20T09:00:00.000Z"
+    }
+  ],
+  "expect": {
+    "facts": [
+      {
+        "factType": "attempt",
+        "attrs": {
+          "status": "declined",
+          "direction": "debit"
+        },
+        "amounts": [
+          {
+            "role": "posted",
+            "minor": 50000
+          }
+        ],
+        "instrument": {
+          "kind": "credit_card",
+          "issuerSlug": "icici",
+          "maskDigits": "4321"
+        }
+      }
+    ]
+  },
+  "origin": "sms_family_corpus.json"
+}

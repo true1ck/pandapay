@@ -1,6 +1,11 @@
 testfile.tmp
 db/audit-logs/
 
+# SMS pipeline v2 golden set: real exports live only here and are never committed
+tools/sms_golden/private/
+# default output folder of `sms_rules golden`
+tools/sms_golden/reports/run/
+
 # Isolated per-plan git worktrees (superpowers:using-git-worktrees)
 .worktrees/
 

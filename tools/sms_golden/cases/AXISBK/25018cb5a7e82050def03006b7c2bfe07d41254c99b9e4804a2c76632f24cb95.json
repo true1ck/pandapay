@@ -1,0 +1,36 @@
+{
+  "id": "probe:cc_payment_axis",
+  "templateHash": "25018cb5a7e82050def03006b7c2bfe07d41254c99b9e4804a2c76632f24cb95",
+  "weight": 1,
+  "source": "synthetic",
+  "messages": [
+    {
+      "sender": "AX-AXISBK-S",
+      "body": "Payment of INR 8,500 has been credited to your Axis Bank Credit Card XX9012 on 10-11-2026.",
+      "observedAt": "2026-12-01T09:00:00.000Z"
+    }
+  ],
+  "expect": {
+    "facts": [
+      {
+        "factType": "movement",
+        "attrs": {
+          "direction": "credit",
+          "purpose": "card_payment"
+        },
+        "amounts": [
+          {
+            "role": "posted",
+            "minor": 850000
+          }
+        ],
+        "instrument": {
+          "kind": "credit_card",
+          "issuerSlug": "axis",
+          "maskDigits": "9012"
+        }
+      }
+    ]
+  },
+  "origin": "probe_cases.json"
+}

@@ -1,0 +1,36 @@
+{
+  "id": "probe:kotak_sent",
+  "templateHash": "8f6712f7c86be86af0780fc0d7b13fc8e258641b7bbfa60101f7d44ab8b66c1e",
+  "weight": 1,
+  "source": "synthetic",
+  "messages": [
+    {
+      "sender": "AD-KOTAKB-S",
+      "body": "Sent Rs.300.00 from Kotak Bank AC X1234 to merchant@okaxis on 01-11-26.UPI Ref 432112345678. Not you, https://kotak.com/KBANKT/Fraud",
+      "observedAt": "2026-12-01T09:00:00.000Z"
+    }
+  ],
+  "expect": {
+    "facts": [
+      {
+        "factType": "movement",
+        "attrs": {
+          "direction": "debit",
+          "rail": "upi"
+        },
+        "amounts": [
+          {
+            "role": "posted",
+            "minor": 30000
+          }
+        ],
+        "instrument": {
+          "kind": "bank_account",
+          "issuerSlug": "kotak",
+          "maskDigits": "1234"
+        }
+      }
+    ]
+  },
+  "origin": "probe_cases.json"
+}

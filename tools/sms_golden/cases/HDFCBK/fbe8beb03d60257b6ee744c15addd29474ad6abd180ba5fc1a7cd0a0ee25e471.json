@@ -1,0 +1,35 @@
+{
+  "id": "local:15",
+  "templateHash": "fbe8beb03d60257b6ee744c15addd29474ad6abd180ba5fc1a7cd0a0ee25e471",
+  "weight": 1,
+  "source": "synthetic",
+  "messages": [
+    {
+      "sender": "HDFCBK",
+      "body": "INR 200 reversed to your account XX1234.",
+      "observedAt": "2026-11-20T09:00:00.000Z"
+    }
+  ],
+  "expect": {
+    "facts": [
+      {
+        "factType": "movement",
+        "attrs": {
+          "direction": "credit",
+          "purpose": "reversal"
+        },
+        "amounts": [
+          {
+            "role": "posted",
+            "minor": 20000
+          }
+        ],
+        "instrument": {
+          "kind": "bank_account",
+          "maskDigits": "1234"
+        }
+      }
+    ]
+  },
+  "origin": "local_sms_cases.json"
+}

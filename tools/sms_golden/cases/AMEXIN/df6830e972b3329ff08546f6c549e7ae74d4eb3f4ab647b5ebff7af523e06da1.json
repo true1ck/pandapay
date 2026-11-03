@@ -1,0 +1,37 @@
+{
+  "id": "probe:cc_payment_amex",
+  "templateHash": "df6830e972b3329ff08546f6c549e7ae74d4eb3f4ab647b5ebff7af523e06da1",
+  "weight": 1,
+  "source": "synthetic",
+  "messages": [
+    {
+      "sender": "AD-AMEXIN",
+      "body": "We have received your payment of INR 12,000.00 towards your American Express Card ending 10005 on 10 Nov 2026.",
+      "observedAt": "2026-12-01T09:00:00.000Z"
+    }
+  ],
+  "expect": {
+    "facts": [
+      {
+        "factType": "movement",
+        "attrs": {
+          "direction": "credit",
+          "purpose": "card_payment"
+        },
+        "amounts": [
+          {
+            "role": "posted",
+            "minor": 1200000
+          }
+        ],
+        "instrument": {
+          "kind": "credit_card",
+          "issuerSlug": "amex",
+          "maskDigits": "10005"
+        }
+      }
+    ]
+  },
+  "note": "Amex \"ending 10005 on 10 Nov 2026\": the mask is 10005, never the year.",
+  "origin": "probe_cases.json"
+}

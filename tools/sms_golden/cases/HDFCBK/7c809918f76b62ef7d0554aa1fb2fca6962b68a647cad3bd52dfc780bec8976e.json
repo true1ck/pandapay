@@ -1,0 +1,35 @@
+{
+  "id": "local:09",
+  "templateHash": "7c809918f76b62ef7d0554aa1fb2fca6962b68a647cad3bd52dfc780bec8976e",
+  "weight": 1,
+  "source": "synthetic",
+  "messages": [
+    {
+      "sender": "HDFCBK",
+      "body": "INR 500 refunded to credit card XX4321.",
+      "observedAt": "2026-11-20T09:00:00.000Z"
+    }
+  ],
+  "expect": {
+    "facts": [
+      {
+        "factType": "movement",
+        "attrs": {
+          "direction": "credit",
+          "purpose": "refund"
+        },
+        "amounts": [
+          {
+            "role": "posted",
+            "minor": 50000
+          }
+        ],
+        "instrument": {
+          "kind": "credit_card",
+          "maskDigits": "4321"
+        }
+      }
+    ]
+  },
+  "origin": "local_sms_cases.json"
+}

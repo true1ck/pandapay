@@ -1,0 +1,30 @@
+{
+  "id": "local:20",
+  "templateHash": "972f9ce06c70c4cd7154b872d1c71ca50d0c5099ffe10022a19372486e2da23f",
+  "weight": 1,
+  "source": "synthetic",
+  "messages": [
+    {
+      "sender": "HDFCBK",
+      "body": "Refund INR 500 initiated to account XX1234.",
+      "observedAt": "2026-11-20T09:00:00.000Z"
+    }
+  ],
+  "expect": {
+    "facts": [
+      {
+        "factType": "attempt",
+        "attrs": {
+          "status": "pending",
+          "direction": "credit",
+          "purpose": "refund"
+        },
+        "instrument": {
+          "kind": "bank_account",
+          "maskDigits": "1234"
+        }
+      }
+    ]
+  },
+  "origin": "local_sms_cases.json"
+}

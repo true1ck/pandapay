@@ -1,0 +1,48 @@
+{
+  "id": "amazon_pay_topup_counts_as_spend",
+  "description": "Amazon Pay has partial visibility: the bank top-up counts as a purchase, and the later balance payment is wallet activity only.",
+  "knownInstruments": [
+    {
+      "kind": "bank_account",
+      "issuerSlug": "hdfc",
+      "maskDigits": "1234"
+    }
+  ],
+  "messages": [
+    {
+      "sender": "VM-HDFCBK-S",
+      "body": "Rs.1,000.00 debited from A/c XX1234 on 03-11-26 to VPA amazonpay@apl (UPI Ref No 432100112233). Avl bal Rs 60,000.00",
+      "observedAt": "2026-11-03T11:00:00Z"
+    },
+    {
+      "sender": "AX-AMAZON",
+      "body": "Rs 499.00 paid using Amazon Pay Balance for your order. Balance: Rs 501.00",
+      "observedAt": "2026-11-04T09:30:00Z"
+    }
+  ],
+  "expect": {
+    "events": [
+      {
+        "type": "purchase",
+        "legRoles": [
+          "debit_leg"
+        ]
+      }
+    ],
+    "instruments": [
+      {
+        "kind": "bank_account",
+        "issuerSlug": "hdfc",
+        "maskDigits": "1234"
+      }
+    ],
+    "totals": {
+      "from": "2026-11-01T00:00:00Z",
+      "to": "2026-12-01T00:00:00Z",
+      "spendMinor": 100000,
+      "incomeMinor": 0,
+      "investmentMinor": 0,
+      "transactionCount": 1
+    }
+  }
+}

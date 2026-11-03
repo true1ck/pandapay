@@ -1,0 +1,48 @@
+{
+  "id": "points_earned_on_card_spend",
+  "description": "Points stay in points: the card spend counts, the reward message adds no rupees.",
+  "knownInstruments": [
+    {
+      "kind": "credit_card",
+      "issuerSlug": "icici",
+      "maskDigits": "9012"
+    }
+  ],
+  "messages": [
+    {
+      "sender": "AX-ICICIT-S",
+      "body": "INR 1,299.00 spent using ICICI Bank Card XX9012 on 01-Nov-26 on AMAZON PAY IN. Avl Limit: INR 1,48,701.00.",
+      "observedAt": "2026-11-01T14:00:00Z"
+    },
+    {
+      "sender": "AX-ICICIT-S",
+      "body": "You have earned 50 Amazon Pay ICICI Credit Card reward points worth Rs 50 on your transaction of Rs 1,299.00. Total balance 1,250 points.",
+      "observedAt": "2026-11-01T14:05:00Z"
+    }
+  ],
+  "expect": {
+    "events": [
+      {
+        "type": "purchase",
+        "legRoles": [
+          "debit_leg"
+        ]
+      }
+    ],
+    "instruments": [
+      {
+        "kind": "credit_card",
+        "issuerSlug": "icici",
+        "maskDigits": "9012"
+      }
+    ],
+    "totals": {
+      "from": "2026-11-01T00:00:00Z",
+      "to": "2026-12-01T00:00:00Z",
+      "spendMinor": 129900,
+      "incomeMinor": 0,
+      "investmentMinor": 0,
+      "transactionCount": 1
+    }
+  }
+}
