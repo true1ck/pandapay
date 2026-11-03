@@ -1,0 +1,102 @@
+[
+  {
+    "brand": "PAYTM",
+    "issuerSlug": "paytm",
+    "issuerKind": "wallet",
+    "aliases": [
+      "PYTM",
+      "IPAYTM"
+    ],
+    "walletSpendVisibility": "sms"
+  },
+  {
+    "brand": "PHONPE",
+    "issuerSlug": "phonepe",
+    "issuerKind": "wallet",
+    "aliases": [
+      "PHONEPE"
+    ],
+    "walletSpendVisibility": "sms"
+  },
+  {
+    "brand": "AMAZON",
+    "issuerSlug": "amazonpay",
+    "issuerKind": "wallet",
+    "aliases": [],
+    "walletSpendVisibility": "partial"
+  },
+  {
+    "brand": "ZOMATO",
+    "issuerSlug": "zomato_money",
+    "issuerKind": "wallet",
+    "aliases": [],
+    "walletSpendVisibility": "sms"
+  },
+  {
+    "brand": "PLUXEE",
+    "issuerSlug": "pluxee",
+    "issuerKind": "wallet",
+    "aliases": [
+      "SODEXO"
+    ],
+    "walletSpendVisibility": "sms"
+  },
+  {
+    "brand": "MOBIKW",
+    "issuerSlug": "mobikwik",
+    "issuerKind": "wallet",
+    "aliases": [
+      "MOBIKWIK"
+    ],
+    "walletSpendVisibility": "sms"
+  },
+  {
+    "brand": "FRCHRG",
+    "issuerSlug": "freecharge",
+    "issuerKind": "wallet",
+    "aliases": [
+      "FREECHARGE"
+    ],
+    "walletSpendVisibility": "sms"
+  },
+  {
+    "brand": "TINYMT",
+    "issuerSlug": "tinymart",
+    "issuerKind": "wallet",
+    "aliases": [
+      "TINYMART"
+    ],
+    "walletSpendVisibility": "sms"
+  },
+  {
+    "brand": "JUSPAY",
+    "issuerSlug": "juspay",
+    "issuerKind": "gateway",
+    "aliases": []
+  },
+  {
+    "brand": "PINELB",
+    "issuerSlug": "pinelabs",
+    "issuerKind": "gateway",
+    "aliases": [
+      "PINELABS"
+    ]
+  },
+  {
+    "brand": "TATNEU",
+    "issuerSlug": "tataneu",
+    "issuerKind": "other",
+    "aliases": [
+      "TATANEU",
+      "TNEU"
+    ]
+  },
+  {
+    "brand": "PAYZPP",
+    "issuerSlug": "payzapp",
+    "issuerKind": "other",
+    "aliases": [
+      "PAYZAPP"
+    ]
+  }
+]

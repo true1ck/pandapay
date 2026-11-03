@@ -1,0 +1,252 @@
+[
+  {
+    "id": "WAL-GEN-DEBIT-01",
+    "version": 1,
+    "family": "wallet_spend",
+    "senders": [
+      "*"
+    ],
+    "priority": 200,
+    "match": {
+      "pattern": "^(?:rs\\.?|inr|₹)\\s*(?<amt>[\\d,]+(?:\\.\\d{1,2})?) (?:has been |was )?(?:debited|deducted|spent|charged) (?:from|using|via) (?:your )?(?<prov>paytm|phonepe|mobikwik|freecharge) wallet(?=(?:.*?\\b(?:txn|transaction|ref)\\s*(?:id|no|number)?\\.?:?\\s*#?(?<ref_txnId>(?=[a-z]*\\d)[a-z0-9]{6,}))?)",
+      "flags": "is",
+      "rejectAny": [
+        "failed",
+        "unsuccessful",
+        "declined",
+        "could not",
+        "unable to",
+        "will be",
+        "reversed"
+      ]
+    },
+    "emit": [
+      {
+        "factType": "movement",
+        "attrs": {
+          "direction": "debit",
+          "purpose": "purchase",
+          "rail": "wallet"
+        },
+        "amounts": [
+          {
+            "role": "posted",
+            "from": "amt",
+            "unit": "INR"
+          }
+        ],
+        "instrument": {
+          "kind": "wallet",
+          "issuerSlugFrom": "prov"
+        }
+      }
+    ],
+    "confidence": 0.85,
+    "examples": [
+      {
+        "sender": "AD-UPIAPP",
+        "body": "Rs.75.5 debited from your MobiKwik wallet.",
+        "expectFactTypes": [
+          "movement"
+        ]
+      },
+      {
+        "sender": "AD-UPIAPP",
+        "body": "Rs.75.5 could not be debited from your MobiKwik wallet.",
+        "expectFactTypes": []
+      }
+    ],
+    "status": "active",
+    "createdBy": "baseline",
+    "updatedAt": "2026-11-03T00:00:00Z"
+  },
+  {
+    "id": "WAL-GEN-DEBIT-LAST",
+    "version": 1,
+    "family": "wallet_spend",
+    "senders": [
+      "*"
+    ],
+    "priority": 60,
+    "match": {
+      "pattern": "^(?:rs\\.?|inr|₹)\\s*(?<amt>[\\d,]+(?:\\.\\d{1,2})?) (?:has been |was )?(?:debited|deducted) from (?:your )?wallet",
+      "flags": "is",
+      "rejectAny": [
+        "failed",
+        "unsuccessful",
+        "declined",
+        "could not",
+        "unable to",
+        "will be",
+        "reversed"
+      ]
+    },
+    "emit": [
+      {
+        "factType": "movement",
+        "attrs": {
+          "direction": "debit",
+          "purpose": "unknown",
+          "rail": "wallet"
+        },
+        "amounts": [
+          {
+            "role": "posted",
+            "from": "amt",
+            "unit": "INR"
+          }
+        ],
+        "instrument": {
+          "kind": "wallet"
+        }
+      }
+    ],
+    "confidence": 0.6,
+    "examples": [
+      {
+        "sender": "AD-UPIAPP",
+        "body": "Rs 64 debited from your wallet for a recent purchase.",
+        "expectFactTypes": [
+          "movement"
+        ]
+      },
+      {
+        "sender": "AD-UPIAPP",
+        "body": "Rs 64 could not be debited from your wallet. Please retry.",
+        "expectFactTypes": []
+      }
+    ],
+    "status": "active",
+    "createdBy": "baseline",
+    "updatedAt": "2026-11-03T00:00:00Z"
+  },
+  {
+    "id": "WAL-GEN-LOAD-01",
+    "version": 1,
+    "family": "wallet_load",
+    "senders": [
+      "*"
+    ],
+    "priority": 190,
+    "match": {
+      "pattern": "^(?:rs\\.?|inr|₹)\\s*(?<amt>[\\d,]+(?:\\.\\d{1,2})?) (?:has been |was )?(?:successfully )?(?:added|loaded) (?:to|in|into) (?:your )?(?<prov>paytm|phonepe|mobikwik|freecharge) wallet(?=(?:.*?\\b(?:txn|transaction|ref)\\s*(?:id|no|number)?\\.?:?\\s*#?(?<ref_txnId>(?=[a-z]*\\d)[a-z0-9]{6,}))?)",
+      "flags": "is",
+      "rejectAny": [
+        "cashback",
+        "refund",
+        "reward",
+        "reversal",
+        "reversed",
+        "bonus",
+        "gift",
+        "promo",
+        "compensation",
+        "will be",
+        "failed"
+      ]
+    },
+    "emit": [
+      {
+        "factType": "movement",
+        "attrs": {
+          "direction": "credit",
+          "purpose": "wallet_topup",
+          "rail": "wallet"
+        },
+        "amounts": [
+          {
+            "role": "posted",
+            "from": "amt",
+            "unit": "INR"
+          }
+        ],
+        "instrument": {
+          "kind": "wallet",
+          "issuerSlugFrom": "prov"
+        }
+      }
+    ],
+    "confidence": 0.85,
+    "examples": [
+      {
+        "sender": "AD-UPIAPP",
+        "body": "Rs.2000 added to your Freecharge wallet.",
+        "expectFactTypes": [
+          "movement"
+        ]
+      },
+      {
+        "sender": "AD-UPIAPP",
+        "body": "Rs.2000 will be added to your Freecharge wallet after verification.",
+        "expectFactTypes": []
+      }
+    ],
+    "status": "active",
+    "createdBy": "baseline",
+    "updatedAt": "2026-11-03T00:00:00Z"
+  },
+  {
+    "id": "WAL-GEN-LOAD-LAST",
+    "version": 1,
+    "family": "wallet_load",
+    "senders": [
+      "*"
+    ],
+    "priority": 55,
+    "match": {
+      "pattern": "^(?:rs\\.?|inr|₹)\\s*(?<amt>[\\d,]+(?:\\.\\d{1,2})?) (?:has been |was )?(?:deposited|added|loaded|credited) (?:into|to|in) (?:your )?wallet",
+      "flags": "is",
+      "rejectAny": [
+        "cashback",
+        "refund",
+        "reward",
+        "reversal",
+        "reversed",
+        "bonus",
+        "gift",
+        "promo",
+        "compensation",
+        "will be",
+        "failed"
+      ]
+    },
+    "emit": [
+      {
+        "factType": "movement",
+        "attrs": {
+          "direction": "credit",
+          "purpose": "wallet_topup",
+          "rail": "wallet"
+        },
+        "amounts": [
+          {
+            "role": "posted",
+            "from": "amt",
+            "unit": "INR"
+          }
+        ],
+        "instrument": {
+          "kind": "wallet"
+        }
+      }
+    ],
+    "confidence": 0.75,
+    "examples": [
+      {
+        "sender": "HDFCBK",
+        "body": "INR 1200 deposited into your wallet.",
+        "expectFactTypes": [
+          "movement"
+        ]
+      },
+      {
+        "sender": "HDFCBK",
+        "body": "INR 1200 will be deposited into your wallet once the order is delivered.",
+        "expectFactTypes": []
+      }
+    ],
+    "status": "active",
+    "createdBy": "baseline",
+    "updatedAt": "2026-11-03T00:00:00Z"
+  }
+]

@@ -1,0 +1,146 @@
+[
+  {
+    "id": "WAL-TINYMART-STORE-01",
+    "version": 1,
+    "family": "wallet_receipt",
+    "senders": [
+      "TINYMT"
+    ],
+    "priority": 600,
+    "match": {
+      "pattern": "^(?:rs\\.?|inr|₹)\\s*(?<amt>[\\d,]+(?:\\.\\d{1,2})?) (?:has been |was |is )?(?:paid|debited|deducted|spent|charged)(?: from| using| via| on| at| to)? (?:your )?tiny ?mart(?: store)?(?: account| wallet| balance| credit)?(?=(?:.*?\\b(?:txn|transaction|ref)\\s*(?:id|no|number)?\\.?:?\\s*#?(?<ref_txnId>(?=[a-z]*\\d)[a-z0-9]{6,}))?).*?\\b(?:(?:updated|available|current|remaining|closing|wallet) )?bal(?:ance)?\\b\\.?\\s*(?:is|:|-|=)?\\s*(?:rs\\.?|inr|₹)\\s*(?<bal>[\\d,]+(?:\\.\\d{1,2})?)",
+      "flags": "is",
+      "rejectAny": [
+        "failed",
+        "unsuccessful",
+        "declined",
+        "could not",
+        "unable to",
+        "will be",
+        "reversed"
+      ]
+    },
+    "emit": [
+      {
+        "factType": "movement",
+        "attrs": {
+          "direction": "debit",
+          "purpose": "purchase",
+          "rail": "wallet",
+          "evidenceOnly": true
+        },
+        "amounts": [
+          {
+            "role": "posted",
+            "from": "amt",
+            "unit": "INR"
+          }
+        ],
+        "instrument": {
+          "kind": "wallet",
+          "issuerSlug": "tinymart"
+        }
+      },
+      {
+        "factType": "balance_snapshot",
+        "amounts": [
+          {
+            "role": "available_balance",
+            "from": "bal",
+            "unit": "INR"
+          }
+        ],
+        "instrument": {
+          "sameAs": 0
+        },
+        "attrs": {
+          "asOf": {
+            "sameAs": 0,
+            "field": "occurredAt"
+          }
+        }
+      }
+    ],
+    "confidence": 0.9,
+    "examples": [
+      {
+        "sender": "VM-TINYMT-S",
+        "body": "Rs 240 paid from your TinyMart store account. Balance: Rs 760. Txn ID 4455667788",
+        "expectFactTypes": [
+          "movement",
+          "balance_snapshot"
+        ]
+      },
+      {
+        "sender": "VM-TINYMT-S",
+        "body": "Rs 240 payment from your TinyMart store account failed. Balance: Rs 1,000.",
+        "expectFactTypes": []
+      }
+    ],
+    "status": "active",
+    "createdBy": "baseline",
+    "updatedAt": "2026-11-03T00:00:00Z"
+  },
+  {
+    "id": "WAL-TINYMART-STORE-02",
+    "version": 1,
+    "family": "wallet_receipt",
+    "senders": [
+      "TINYMT"
+    ],
+    "priority": 450,
+    "match": {
+      "pattern": "^(?:rs\\.?|inr|₹)\\s*(?<amt>[\\d,]+(?:\\.\\d{1,2})?) (?:has been |was |is )?(?:paid|debited|deducted|spent|charged)(?: from| using| via| on| at| to)? (?:your )?tiny ?mart(?: store)?(?: account| wallet| balance| credit)?(?=(?:.*?\\b(?:txn|transaction|ref)\\s*(?:id|no|number)?\\.?:?\\s*#?(?<ref_txnId>(?=[a-z]*\\d)[a-z0-9]{6,}))?)",
+      "flags": "is",
+      "rejectAny": [
+        "failed",
+        "unsuccessful",
+        "declined",
+        "could not",
+        "unable to",
+        "will be",
+        "reversed"
+      ]
+    },
+    "emit": [
+      {
+        "factType": "movement",
+        "attrs": {
+          "direction": "debit",
+          "purpose": "purchase",
+          "rail": "wallet",
+          "evidenceOnly": true
+        },
+        "amounts": [
+          {
+            "role": "posted",
+            "from": "amt",
+            "unit": "INR"
+          }
+        ],
+        "instrument": {
+          "kind": "wallet",
+          "issuerSlug": "tinymart"
+        }
+      }
+    ],
+    "confidence": 0.88,
+    "examples": [
+      {
+        "sender": "VM-TINYMT-S",
+        "body": "Rs 240 debited from your TinyMart account.",
+        "expectFactTypes": [
+          "movement"
+        ]
+      },
+      {
+        "sender": "VM-TINYMT-S",
+        "body": "Rs 240 could not be debited from your TinyMart account.",
+        "expectFactTypes": []
+      }
+    ],
+    "status": "active",
+    "createdBy": "baseline",
+    "updatedAt": "2026-11-03T00:00:00Z"
+  }
+]

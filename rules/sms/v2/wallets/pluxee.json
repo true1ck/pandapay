@@ -1,0 +1,1145 @@
+[
+  {
+    "id": "WAL-PLUXEE-CASHBACK-01",
+    "version": 1,
+    "family": "wallet_cashback",
+    "senders": [
+      "PLUXEE"
+    ],
+    "priority": 700,
+    "match": {
+      "pattern": "^(?:rs\\.?|inr|₹)\\s*(?<amt>[\\d,]+(?:\\.\\d{1,2})?)\\b[^.]{0,30}?\\bcashback\\b[^.]{0,60}?\\b(?:credited|added|received)\\b[^.]{0,40}?\\b(?:pluxee|sodexo)(?: meal| gift| food)?(?: card| wallet| balance| account)?(?:\\s*(?:ending|no\\.?|xx|x)\\s*(?<mask>\\d{4}))?",
+      "flags": "is",
+      "requireAll": [
+        "cashback"
+      ],
+      "rejectAny": [
+        "will be",
+        "when you",
+        "if you",
+        "eligible",
+        "up to",
+        "upto",
+        "win ",
+        "failed"
+      ]
+    },
+    "emit": [
+      {
+        "factType": "movement",
+        "attrs": {
+          "direction": "credit",
+          "purpose": "cashback",
+          "rail": "wallet"
+        },
+        "amounts": [
+          {
+            "role": "posted",
+            "from": "amt",
+            "unit": "INR"
+          }
+        ],
+        "instrument": {
+          "kind": "wallet",
+          "issuerSlug": "pluxee",
+          "maskFrom": "mask"
+        }
+      }
+    ],
+    "confidence": 0.96,
+    "examples": [
+      {
+        "sender": "VM-PLUXEE-S",
+        "body": "Rs 25 cashback credited to your Pluxee card ending 1234 for your order.",
+        "expectFactTypes": [
+          "movement"
+        ]
+      },
+      {
+        "sender": "VM-PLUXEE-S",
+        "body": "Rs 25 cashback will be credited to your Pluxee card ending 1234 within 48 hours.",
+        "expectFactTypes": []
+      }
+    ],
+    "status": "active",
+    "createdBy": "baseline",
+    "updatedAt": "2026-11-03T00:00:00Z"
+  },
+  {
+    "id": "WAL-PLUXEE-DEBIT-01",
+    "version": 1,
+    "family": "wallet_spend",
+    "senders": [
+      "PLUXEE"
+    ],
+    "priority": 600,
+    "match": {
+      "pattern": "^(?:rs\\.?|inr|₹)\\s*(?<amt>[\\d,]+(?:\\.\\d{1,2})?) (?:has been |was |is )?(?:debited|deducted|spent|charged)(?: from| using| via| on| at)? (?:your )?(?:pluxee|sodexo)(?: meal| gift| food)?(?: card| wallet| balance| account)?(?:\\s*(?:ending|no\\.?|xx|x)\\s*(?<mask>\\d{4}))?(?: (?:to|at) (?<merchant>[^.,\\n]+?)(?:\\.|,|\\s+(?:for|on|using|via|txn|ref|order|bal|balance)\\b|\\s*$))?(?=(?:.*?\\b(?:txn|transaction|ref)\\s*(?:id|no|number)?\\.?:?\\s*#?(?<ref_txnId>(?=[a-z]*\\d)[a-z0-9]{6,}))?).*?\\b(?:(?:updated|available|current|remaining|closing|wallet) )?bal(?:ance)?\\b\\.?\\s*(?:is|:|-|=)?\\s*(?:rs\\.?|inr|₹)\\s*(?<bal>[\\d,]+(?:\\.\\d{1,2})?)",
+      "flags": "is",
+      "rejectAny": [
+        "failed",
+        "unsuccessful",
+        "declined",
+        "could not",
+        "unable to",
+        "will be",
+        "reversed"
+      ]
+    },
+    "emit": [
+      {
+        "factType": "movement",
+        "attrs": {
+          "direction": "debit",
+          "purpose": "purchase",
+          "rail": "wallet"
+        },
+        "amounts": [
+          {
+            "role": "posted",
+            "from": "amt",
+            "unit": "INR"
+          }
+        ],
+        "instrument": {
+          "kind": "wallet",
+          "issuerSlug": "pluxee",
+          "maskFrom": "mask"
+        },
+        "counterparty": {
+          "nameFrom": "merchant",
+          "kind": "merchant",
+          "transforms": [
+            "sanitizeNarration"
+          ]
+        }
+      },
+      {
+        "factType": "balance_snapshot",
+        "amounts": [
+          {
+            "role": "available_balance",
+            "from": "bal",
+            "unit": "INR"
+          }
+        ],
+        "instrument": {
+          "sameAs": 0
+        },
+        "attrs": {
+          "asOf": {
+            "sameAs": 0,
+            "field": "occurredAt"
+          }
+        }
+      }
+    ],
+    "confidence": 0.97,
+    "examples": [
+      {
+        "sender": "VM-PLUXEE-S",
+        "body": "Rs 120 has been debited from your Pluxee card ending 1234. Updated balance: Rs 380. Txn ID 12345678901",
+        "expectFactTypes": [
+          "movement",
+          "balance_snapshot"
+        ]
+      },
+      {
+        "sender": "VM-PLUXEE-S",
+        "body": "Rs 120 could not be debited from your Pluxee card ending 1234. Payment failed, please retry.",
+        "expectFactTypes": []
+      }
+    ],
+    "status": "active",
+    "createdBy": "baseline",
+    "updatedAt": "2026-11-03T00:00:00Z"
+  },
+  {
+    "id": "WAL-PLUXEE-DEBIT-02",
+    "version": 1,
+    "family": "wallet_spend",
+    "senders": [
+      "PLUXEE"
+    ],
+    "priority": 450,
+    "match": {
+      "pattern": "^(?:rs\\.?|inr|₹)\\s*(?<amt>[\\d,]+(?:\\.\\d{1,2})?) (?:has been |was |is )?(?:debited|deducted|spent|charged)(?: from| using| via| on| at)? (?:your )?(?:pluxee|sodexo)(?: meal| gift| food)?(?: card| wallet| balance| account)?(?:\\s*(?:ending|no\\.?|xx|x)\\s*(?<mask>\\d{4}))?(?: (?:to|at) (?<merchant>[^.,\\n]+?)(?:\\.|,|\\s+(?:for|on|using|via|txn|ref|order|bal|balance)\\b|\\s*$))?(?=(?:.*?\\b(?:txn|transaction|ref)\\s*(?:id|no|number)?\\.?:?\\s*#?(?<ref_txnId>(?=[a-z]*\\d)[a-z0-9]{6,}))?)",
+      "flags": "is",
+      "rejectAny": [
+        "failed",
+        "unsuccessful",
+        "declined",
+        "could not",
+        "unable to",
+        "will be",
+        "reversed"
+      ]
+    },
+    "emit": [
+      {
+        "factType": "movement",
+        "attrs": {
+          "direction": "debit",
+          "purpose": "purchase",
+          "rail": "wallet"
+        },
+        "amounts": [
+          {
+            "role": "posted",
+            "from": "amt",
+            "unit": "INR"
+          }
+        ],
+        "instrument": {
+          "kind": "wallet",
+          "issuerSlug": "pluxee",
+          "maskFrom": "mask"
+        },
+        "counterparty": {
+          "nameFrom": "merchant",
+          "kind": "merchant",
+          "transforms": [
+            "sanitizeNarration"
+          ]
+        }
+      }
+    ],
+    "confidence": 0.93,
+    "examples": [
+      {
+        "sender": "AX-PLUXEE",
+        "body": "Rs.50.0 debited from your Pluxee card ending 1234",
+        "expectFactTypes": [
+          "movement"
+        ]
+      },
+      {
+        "sender": "VM-PLUXEE-S",
+        "body": "Rs 120 could not be debited from your Pluxee card ending 1234. Payment failed, please retry.",
+        "expectFactTypes": []
+      }
+    ],
+    "status": "active",
+    "createdBy": "baseline",
+    "updatedAt": "2026-11-03T00:00:00Z"
+  },
+  {
+    "id": "WAL-PLUXEE-FAILED-01",
+    "version": 1,
+    "family": "wallet_failed",
+    "senders": [
+      "PLUXEE"
+    ],
+    "priority": 750,
+    "match": {
+      "pattern": "^(?:your )?(?:payment|transaction|txn|order)\\b[^\\n]*?(?:rs\\.?|inr|₹)\\s*(?<amt>[\\d,]+(?:\\.\\d{1,2})?)[^\\n]*?\\b(?:pluxee|sodexo)(?: meal| gift| food)?(?: card| wallet| balance| account)?(?:\\s*(?:ending|no\\.?|xx|x)\\s*(?<mask>\\d{4}))?[^\\n]*?\\b(?:failed|was unsuccessful|declined|could not be (?:completed|processed))",
+      "flags": "is",
+      "rejectAny": [
+        "successful",
+        "successfully"
+      ]
+    },
+    "emit": [
+      {
+        "factType": "attempt",
+        "attrs": {
+          "status": "failed",
+          "direction": "debit",
+          "purpose": "purchase"
+        },
+        "amounts": [
+          {
+            "role": "posted",
+            "from": "amt",
+            "unit": "INR"
+          }
+        ],
+        "instrument": {
+          "kind": "wallet",
+          "issuerSlug": "pluxee",
+          "maskFrom": "mask"
+        }
+      }
+    ],
+    "confidence": 0.9,
+    "examples": [
+      {
+        "sender": "VM-PLUXEE-S",
+        "body": "Your payment of Rs 120 from Pluxee card ending 1234 failed. Money will not be deducted.",
+        "expectFactTypes": [
+          "attempt"
+        ]
+      },
+      {
+        "sender": "VM-PLUXEE-S",
+        "body": "Your payment of Rs 120 from Pluxee card ending 1234 was successful.",
+        "expectFactTypes": []
+      }
+    ],
+    "status": "active",
+    "createdBy": "baseline",
+    "updatedAt": "2026-11-03T00:00:00Z"
+  },
+  {
+    "id": "WAL-PLUXEE-FAILED-02",
+    "version": 1,
+    "family": "wallet_failed",
+    "senders": [
+      "PLUXEE"
+    ],
+    "priority": 745,
+    "match": {
+      "pattern": "^(?:your )?(?:add money|top-?up|wallet load|load)\\b[^\\n]*?(?:rs\\.?|inr|₹)\\s*(?<amt>[\\d,]+(?:\\.\\d{1,2})?)[^\\n]*?\\b(?:pluxee|sodexo)(?: meal| gift| food)?(?: card| wallet| balance| account)?(?:\\s*(?:ending|no\\.?|xx|x)\\s*(?<mask>\\d{4}))?[^\\n]*?\\b(?:failed|was unsuccessful|declined|could not be (?:completed|processed))",
+      "flags": "is",
+      "rejectAny": [
+        "successful",
+        "successfully"
+      ]
+    },
+    "emit": [
+      {
+        "factType": "attempt",
+        "attrs": {
+          "status": "failed",
+          "direction": "credit",
+          "purpose": "wallet_topup"
+        },
+        "amounts": [
+          {
+            "role": "posted",
+            "from": "amt",
+            "unit": "INR"
+          }
+        ],
+        "instrument": {
+          "kind": "wallet",
+          "issuerSlug": "pluxee",
+          "maskFrom": "mask"
+        }
+      }
+    ],
+    "confidence": 0.88,
+    "examples": [
+      {
+        "sender": "VM-PLUXEE-S",
+        "body": "Your add money request of Rs 500 to Pluxee card ending 1234 failed. Amount debited, if any, will be refunded.",
+        "expectFactTypes": [
+          "attempt"
+        ]
+      },
+      {
+        "sender": "VM-PLUXEE-S",
+        "body": "Your add money request of Rs 500 to Pluxee card ending 1234 was successful.",
+        "expectFactTypes": []
+      }
+    ],
+    "status": "active",
+    "createdBy": "baseline",
+    "updatedAt": "2026-11-03T00:00:00Z"
+  },
+  {
+    "id": "WAL-PLUXEE-FEE-01",
+    "version": 1,
+    "family": "wallet_fee",
+    "senders": [
+      "PLUXEE"
+    ],
+    "priority": 800,
+    "match": {
+      "pattern": "^(?:rs\\.?|inr|₹)\\s*(?<amt>[\\d,]+(?:\\.\\d{1,2})?) (?:has been |was )?(?:deducted|debited|charged)\\b[^.]{0,60}?\\b(?:as|towards|for) (?:a )?(?:convenience|service|processing|platform) fee",
+      "flags": "is",
+      "rejectAny": [
+        "will be",
+        "may be",
+        "failed",
+        "reversed"
+      ]
+    },
+    "emit": [
+      {
+        "factType": "movement",
+        "attrs": {
+          "direction": "debit",
+          "purpose": "fee",
+          "rail": "wallet"
+        },
+        "amounts": [
+          {
+            "role": "posted",
+            "from": "amt",
+            "unit": "INR"
+          }
+        ],
+        "instrument": {
+          "kind": "wallet",
+          "issuerSlug": "pluxee"
+        }
+      }
+    ],
+    "confidence": 0.95,
+    "examples": [
+      {
+        "sender": "VM-PLUXEE-S",
+        "body": "Rs 5.90 has been deducted from your Pluxee card as convenience fee for your last transaction.",
+        "expectFactTypes": [
+          "movement"
+        ]
+      },
+      {
+        "sender": "VM-PLUXEE-S",
+        "body": "Rs 5.90 will be deducted from your Pluxee card as convenience fee on your next transaction.",
+        "expectFactTypes": []
+      }
+    ],
+    "status": "active",
+    "createdBy": "baseline",
+    "updatedAt": "2026-11-03T00:00:00Z"
+  },
+  {
+    "id": "WAL-PLUXEE-FEE-02",
+    "version": 1,
+    "family": "wallet_fee",
+    "senders": [
+      "PLUXEE"
+    ],
+    "priority": 800,
+    "match": {
+      "pattern": "^(?:a )?(?:convenience|service|processing|platform) fee of (?:rs\\.?|inr|₹)\\s*(?<amt>[\\d,]+(?:\\.\\d{1,2})?) (?:has been |was )?(?:deducted|debited|charged)\\b",
+      "flags": "is",
+      "rejectAny": [
+        "will be",
+        "may be",
+        "failed",
+        "reversed"
+      ]
+    },
+    "emit": [
+      {
+        "factType": "movement",
+        "attrs": {
+          "direction": "debit",
+          "purpose": "fee",
+          "rail": "wallet"
+        },
+        "amounts": [
+          {
+            "role": "posted",
+            "from": "amt",
+            "unit": "INR"
+          }
+        ],
+        "instrument": {
+          "kind": "wallet",
+          "issuerSlug": "pluxee"
+        }
+      }
+    ],
+    "confidence": 0.95,
+    "examples": [
+      {
+        "sender": "VM-PLUXEE-S",
+        "body": "A convenience fee of Rs 5.90 has been deducted from your Pluxee wallet.",
+        "expectFactTypes": [
+          "movement"
+        ]
+      },
+      {
+        "sender": "VM-PLUXEE-S",
+        "body": "A convenience fee of Rs 5.90 may be deducted from your Pluxee wallet on use of Pluxee Pay.",
+        "expectFactTypes": []
+      }
+    ],
+    "status": "active",
+    "createdBy": "baseline",
+    "updatedAt": "2026-11-03T00:00:00Z"
+  },
+  {
+    "id": "WAL-PLUXEE-LOAD-01",
+    "version": 1,
+    "family": "wallet_load",
+    "senders": [
+      "PLUXEE"
+    ],
+    "priority": 580,
+    "match": {
+      "pattern": "^(?:rs\\.?|inr|₹)\\s*(?<amt>[\\d,]+(?:\\.\\d{1,2})?) (?:has been |was |is )?(?:successfully )?(?:added|loaded|credited|received)(?: in| into| to| in to) (?:your )?(?:pluxee|sodexo)(?: meal| gift| food)?(?: card| wallet| balance| account)?(?:\\s*(?:ending|no\\.?|xx|x)\\s*(?<mask>\\d{4}))?(?=(?:.*?\\bupi ref(?:erence)?(?: no)?\\.?:?\\s*(?<ref_upiRef>\\d{6,}))?)(?=(?:.*?\\b(?:txn|transaction)\\s*(?:id|no|number)?\\.?:?\\s*#?(?<ref_txnId>(?=[a-z]*\\d)[a-z0-9]{6,}))?).*?\\b(?:(?:updated|available|current|remaining|closing|wallet) )?bal(?:ance)?\\b\\.?\\s*(?:is|:|-|=)?\\s*(?:rs\\.?|inr|₹)\\s*(?<bal>[\\d,]+(?:\\.\\d{1,2})?)",
+      "flags": "is",
+      "rejectAny": [
+        "cashback",
+        "refund",
+        "reward",
+        "reversal",
+        "reversed",
+        "bonus",
+        "gift",
+        "promo",
+        "compensation",
+        "will be",
+        "failed"
+      ]
+    },
+    "emit": [
+      {
+        "factType": "movement",
+        "attrs": {
+          "direction": "credit",
+          "purpose": "wallet_topup",
+          "rail": "wallet"
+        },
+        "amounts": [
+          {
+            "role": "posted",
+            "from": "amt",
+            "unit": "INR"
+          }
+        ],
+        "instrument": {
+          "kind": "wallet",
+          "issuerSlug": "pluxee",
+          "maskFrom": "mask"
+        }
+      },
+      {
+        "factType": "balance_snapshot",
+        "amounts": [
+          {
+            "role": "available_balance",
+            "from": "bal",
+            "unit": "INR"
+          }
+        ],
+        "instrument": {
+          "sameAs": 0
+        },
+        "attrs": {
+          "asOf": {
+            "sameAs": 0,
+            "field": "occurredAt"
+          }
+        }
+      }
+    ],
+    "confidence": 0.96,
+    "examples": [
+      {
+        "sender": "VM-PLUXEE-S",
+        "body": "Rs 500 has been added to your Pluxee card ending 1234. Updated balance: Rs 500. Txn ID 12345678900",
+        "expectFactTypes": [
+          "movement",
+          "balance_snapshot"
+        ]
+      },
+      {
+        "sender": "VM-PLUXEE-S",
+        "body": "Add money to your Pluxee card ending 1234 and get Rs 100 cashback on your first load. Offer valid till 30 Nov.",
+        "expectFactTypes": []
+      }
+    ],
+    "status": "active",
+    "createdBy": "baseline",
+    "updatedAt": "2026-11-03T00:00:00Z"
+  },
+  {
+    "id": "WAL-PLUXEE-LOAD-02",
+    "version": 1,
+    "family": "wallet_load",
+    "senders": [
+      "PLUXEE"
+    ],
+    "priority": 440,
+    "match": {
+      "pattern": "^(?:rs\\.?|inr|₹)\\s*(?<amt>[\\d,]+(?:\\.\\d{1,2})?) (?:has been |was |is )?(?:successfully )?(?:added|loaded|credited|received)(?: in| into| to| in to) (?:your )?(?:pluxee|sodexo)(?: meal| gift| food)?(?: card| wallet| balance| account)?(?:\\s*(?:ending|no\\.?|xx|x)\\s*(?<mask>\\d{4}))?(?=(?:.*?\\bupi ref(?:erence)?(?: no)?\\.?:?\\s*(?<ref_upiRef>\\d{6,}))?)(?=(?:.*?\\b(?:txn|transaction)\\s*(?:id|no|number)?\\.?:?\\s*#?(?<ref_txnId>(?=[a-z]*\\d)[a-z0-9]{6,}))?)",
+      "flags": "is",
+      "rejectAny": [
+        "cashback",
+        "refund",
+        "reward",
+        "reversal",
+        "reversed",
+        "bonus",
+        "gift",
+        "promo",
+        "compensation",
+        "will be",
+        "failed"
+      ]
+    },
+    "emit": [
+      {
+        "factType": "movement",
+        "attrs": {
+          "direction": "credit",
+          "purpose": "wallet_topup",
+          "rail": "wallet"
+        },
+        "amounts": [
+          {
+            "role": "posted",
+            "from": "amt",
+            "unit": "INR"
+          }
+        ],
+        "instrument": {
+          "kind": "wallet",
+          "issuerSlug": "pluxee",
+          "maskFrom": "mask"
+        }
+      }
+    ],
+    "confidence": 0.93,
+    "examples": [
+      {
+        "sender": "AX-PLUXEE",
+        "body": "Rs.5000 added to Pluxee card ending 1234 from your bank account. UPI Ref 123456789012.",
+        "expectFactTypes": [
+          "movement"
+        ]
+      },
+      {
+        "sender": "VM-PLUXEE-S",
+        "body": "Add money to your Pluxee card ending 1234 and get Rs 100 cashback on your first load. Offer valid till 30 Nov.",
+        "expectFactTypes": []
+      }
+    ],
+    "status": "active",
+    "createdBy": "baseline",
+    "updatedAt": "2026-11-03T00:00:00Z"
+  },
+  {
+    "id": "WAL-PLUXEE-PAID-01",
+    "version": 1,
+    "family": "wallet_spend",
+    "senders": [
+      "PLUXEE"
+    ],
+    "priority": 620,
+    "match": {
+      "pattern": "^(?:rs\\.?|inr|₹)\\s*(?<amt>[\\d,]+(?:\\.\\d{1,2})?) (?:has been |was |is )?paid (?:from|using|via|with) (?:your )?(?:pluxee|sodexo)(?: meal| gift| food)?(?: card| wallet| balance| account)?(?:\\s*(?:ending|no\\.?|xx|x)\\s*(?<mask>\\d{4}))?(?: (?:to|at) (?<merchant>[^.,\\n]+?)(?:\\.|,|\\s+(?:for|on|using|via|txn|ref|order|bal|balance)\\b|\\s*$))?(?=(?:.*?\\b(?:txn|transaction|ref)\\s*(?:id|no|number)?\\.?:?\\s*#?(?<ref_txnId>(?=[a-z]*\\d)[a-z0-9]{6,}))?).*?\\b(?:(?:updated|available|current|remaining|closing|wallet) )?bal(?:ance)?\\b\\.?\\s*(?:is|:|-|=)?\\s*(?:rs\\.?|inr|₹)\\s*(?<bal>[\\d,]+(?:\\.\\d{1,2})?)",
+      "flags": "is",
+      "rejectAny": [
+        "failed",
+        "unsuccessful",
+        "declined",
+        "could not",
+        "unable to",
+        "will be",
+        "reversed"
+      ]
+    },
+    "emit": [
+      {
+        "factType": "movement",
+        "attrs": {
+          "direction": "debit",
+          "purpose": "purchase",
+          "rail": "wallet"
+        },
+        "amounts": [
+          {
+            "role": "posted",
+            "from": "amt",
+            "unit": "INR"
+          }
+        ],
+        "instrument": {
+          "kind": "wallet",
+          "issuerSlug": "pluxee",
+          "maskFrom": "mask"
+        },
+        "counterparty": {
+          "nameFrom": "merchant",
+          "kind": "merchant",
+          "transforms": [
+            "sanitizeNarration"
+          ]
+        }
+      },
+      {
+        "factType": "balance_snapshot",
+        "amounts": [
+          {
+            "role": "available_balance",
+            "from": "bal",
+            "unit": "INR"
+          }
+        ],
+        "instrument": {
+          "sameAs": 0
+        },
+        "attrs": {
+          "asOf": {
+            "sameAs": 0,
+            "field": "occurredAt"
+          }
+        }
+      }
+    ],
+    "confidence": 0.97,
+    "examples": [
+      {
+        "sender": "VM-PLUXEE-S",
+        "body": "Rs 120 paid from Pluxee card ending 1234 to Cafe Mocha. Updated balance: Rs 380. Txn ID 12345678901",
+        "expectFactTypes": [
+          "movement",
+          "balance_snapshot"
+        ]
+      },
+      {
+        "sender": "VM-PLUXEE-S",
+        "body": "Rs 120 payment from Pluxee card ending 1234 was declined. Please try again.",
+        "expectFactTypes": []
+      }
+    ],
+    "status": "active",
+    "createdBy": "baseline",
+    "updatedAt": "2026-11-03T00:00:00Z"
+  },
+  {
+    "id": "WAL-PLUXEE-PAID-02",
+    "version": 1,
+    "family": "wallet_spend",
+    "senders": [
+      "PLUXEE"
+    ],
+    "priority": 460,
+    "match": {
+      "pattern": "^(?:rs\\.?|inr|₹)\\s*(?<amt>[\\d,]+(?:\\.\\d{1,2})?) (?:has been |was |is )?paid (?:from|using|via|with) (?:your )?(?:pluxee|sodexo)(?: meal| gift| food)?(?: card| wallet| balance| account)?(?:\\s*(?:ending|no\\.?|xx|x)\\s*(?<mask>\\d{4}))?(?: (?:to|at) (?<merchant>[^.,\\n]+?)(?:\\.|,|\\s+(?:for|on|using|via|txn|ref|order|bal|balance)\\b|\\s*$))?(?=(?:.*?\\b(?:txn|transaction|ref)\\s*(?:id|no|number)?\\.?:?\\s*#?(?<ref_txnId>(?=[a-z]*\\d)[a-z0-9]{6,}))?)",
+      "flags": "is",
+      "rejectAny": [
+        "failed",
+        "unsuccessful",
+        "declined",
+        "could not",
+        "unable to",
+        "will be",
+        "reversed"
+      ]
+    },
+    "emit": [
+      {
+        "factType": "movement",
+        "attrs": {
+          "direction": "debit",
+          "purpose": "purchase",
+          "rail": "wallet"
+        },
+        "amounts": [
+          {
+            "role": "posted",
+            "from": "amt",
+            "unit": "INR"
+          }
+        ],
+        "instrument": {
+          "kind": "wallet",
+          "issuerSlug": "pluxee",
+          "maskFrom": "mask"
+        },
+        "counterparty": {
+          "nameFrom": "merchant",
+          "kind": "merchant",
+          "transforms": [
+            "sanitizeNarration"
+          ]
+        }
+      }
+    ],
+    "confidence": 0.93,
+    "examples": [
+      {
+        "sender": "AX-PLUXEE",
+        "body": "Rs 499.00 paid using Pluxee card ending 1234 for your order",
+        "expectFactTypes": [
+          "movement"
+        ]
+      },
+      {
+        "sender": "VM-PLUXEE-S",
+        "body": "Rs 120 payment from Pluxee card ending 1234 was declined. Please try again.",
+        "expectFactTypes": []
+      }
+    ],
+    "status": "active",
+    "createdBy": "baseline",
+    "updatedAt": "2026-11-03T00:00:00Z"
+  },
+  {
+    "id": "WAL-PLUXEE-PAID-03",
+    "version": 1,
+    "family": "wallet_spend",
+    "senders": [
+      "PLUXEE"
+    ],
+    "priority": 610,
+    "match": {
+      "pattern": "^(?:you have )?paid (?:rs\\.?|inr|₹)\\s*(?<amt>[\\d,]+(?:\\.\\d{1,2})?) to (?<merchant>[^.,\\n]+?) (?:using|via|from|with) (?:your )?(?:pluxee|sodexo)(?: meal| gift| food)?(?: card| wallet| balance| account)?(?:\\s*(?:ending|no\\.?|xx|x)\\s*(?<mask>\\d{4}))?(?=(?:.*?\\b(?:txn|transaction|ref)\\s*(?:id|no|number)?\\.?:?\\s*#?(?<ref_txnId>(?=[a-z]*\\d)[a-z0-9]{6,}))?).*?\\b(?:(?:updated|available|current|remaining|closing|wallet) )?bal(?:ance)?\\b\\.?\\s*(?:is|:|-|=)?\\s*(?:rs\\.?|inr|₹)\\s*(?<bal>[\\d,]+(?:\\.\\d{1,2})?)",
+      "flags": "is",
+      "rejectAny": [
+        "failed",
+        "unsuccessful",
+        "declined",
+        "could not",
+        "unable to",
+        "will be",
+        "reversed"
+      ]
+    },
+    "emit": [
+      {
+        "factType": "movement",
+        "attrs": {
+          "direction": "debit",
+          "purpose": "purchase",
+          "rail": "wallet"
+        },
+        "amounts": [
+          {
+            "role": "posted",
+            "from": "amt",
+            "unit": "INR"
+          }
+        ],
+        "instrument": {
+          "kind": "wallet",
+          "issuerSlug": "pluxee",
+          "maskFrom": "mask"
+        },
+        "counterparty": {
+          "nameFrom": "merchant",
+          "kind": "merchant",
+          "transforms": [
+            "sanitizeNarration"
+          ]
+        }
+      },
+      {
+        "factType": "balance_snapshot",
+        "amounts": [
+          {
+            "role": "available_balance",
+            "from": "bal",
+            "unit": "INR"
+          }
+        ],
+        "instrument": {
+          "sameAs": 0
+        },
+        "attrs": {
+          "asOf": {
+            "sameAs": 0,
+            "field": "occurredAt"
+          }
+        }
+      }
+    ],
+    "confidence": 0.97,
+    "examples": [
+      {
+        "sender": "VM-PLUXEE-S",
+        "body": "Paid Rs 120 to Cafe Mocha using Pluxee card ending 1234. Balance: Rs 380. Txn ID 12345678901",
+        "expectFactTypes": [
+          "movement",
+          "balance_snapshot"
+        ]
+      },
+      {
+        "sender": "VM-PLUXEE-S",
+        "body": "Paid Rs 120 to Cafe Mocha using Pluxee card ending 1234 failed",
+        "expectFactTypes": []
+      }
+    ],
+    "status": "active",
+    "createdBy": "baseline",
+    "updatedAt": "2026-11-03T00:00:00Z"
+  },
+  {
+    "id": "WAL-PLUXEE-PAID-04",
+    "version": 1,
+    "family": "wallet_spend",
+    "senders": [
+      "PLUXEE"
+    ],
+    "priority": 455,
+    "match": {
+      "pattern": "^(?:you have )?paid (?:rs\\.?|inr|₹)\\s*(?<amt>[\\d,]+(?:\\.\\d{1,2})?) to (?<merchant>[^.,\\n]+?) (?:using|via|from|with) (?:your )?(?:pluxee|sodexo)(?: meal| gift| food)?(?: card| wallet| balance| account)?(?:\\s*(?:ending|no\\.?|xx|x)\\s*(?<mask>\\d{4}))?(?=(?:.*?\\b(?:txn|transaction|ref)\\s*(?:id|no|number)?\\.?:?\\s*#?(?<ref_txnId>(?=[a-z]*\\d)[a-z0-9]{6,}))?)",
+      "flags": "is",
+      "rejectAny": [
+        "failed",
+        "unsuccessful",
+        "declined",
+        "could not",
+        "unable to",
+        "will be",
+        "reversed"
+      ]
+    },
+    "emit": [
+      {
+        "factType": "movement",
+        "attrs": {
+          "direction": "debit",
+          "purpose": "purchase",
+          "rail": "wallet"
+        },
+        "amounts": [
+          {
+            "role": "posted",
+            "from": "amt",
+            "unit": "INR"
+          }
+        ],
+        "instrument": {
+          "kind": "wallet",
+          "issuerSlug": "pluxee",
+          "maskFrom": "mask"
+        },
+        "counterparty": {
+          "nameFrom": "merchant",
+          "kind": "merchant",
+          "transforms": [
+            "sanitizeNarration"
+          ]
+        }
+      }
+    ],
+    "confidence": 0.93,
+    "examples": [
+      {
+        "sender": "AX-PLUXEE",
+        "body": "Paid Rs 85.50 to Cafe Mocha from Pluxee card ending 1234",
+        "expectFactTypes": [
+          "movement"
+        ]
+      },
+      {
+        "sender": "VM-PLUXEE-S",
+        "body": "Paid Rs 120 to Cafe Mocha using Pluxee card ending 1234 failed",
+        "expectFactTypes": []
+      }
+    ],
+    "status": "active",
+    "createdBy": "baseline",
+    "updatedAt": "2026-11-03T00:00:00Z"
+  },
+  {
+    "id": "WAL-PLUXEE-REFUND-01",
+    "version": 1,
+    "family": "wallet_refund",
+    "senders": [
+      "PLUXEE"
+    ],
+    "priority": 690,
+    "match": {
+      "pattern": "^(?:refund of )?(?:rs\\.?|inr|₹)\\s*(?<amt>[\\d,]+(?:\\.\\d{1,2})?)\\b[^.]{0,60}?\\b(?:refunded|credited|added|returned|received)\\b[^.]{0,40}?\\b(?:pluxee|sodexo)(?: meal| gift| food)?(?: card| wallet| balance| account)?(?:\\s*(?:ending|no\\.?|xx|x)\\s*(?<mask>\\d{4}))?",
+      "flags": "is",
+      "requireAll": [
+        "refund"
+      ],
+      "rejectAny": [
+        "will be",
+        "initiated",
+        "failed",
+        "request",
+        "eligible"
+      ]
+    },
+    "emit": [
+      {
+        "factType": "movement",
+        "attrs": {
+          "direction": "credit",
+          "purpose": "refund",
+          "rail": "wallet"
+        },
+        "amounts": [
+          {
+            "role": "posted",
+            "from": "amt",
+            "unit": "INR"
+          }
+        ],
+        "instrument": {
+          "kind": "wallet",
+          "issuerSlug": "pluxee",
+          "maskFrom": "mask"
+        }
+      }
+    ],
+    "confidence": 0.95,
+    "examples": [
+      {
+        "sender": "VM-PLUXEE-S",
+        "body": "Refund of Rs 120 has been credited to your Pluxee card ending 1234 for order cancelled.",
+        "expectFactTypes": [
+          "movement"
+        ]
+      },
+      {
+        "sender": "VM-PLUXEE-S",
+        "body": "Refund of Rs 120 will be credited to your Pluxee card ending 1234 in 3-5 working days.",
+        "expectFactTypes": []
+      }
+    ],
+    "status": "active",
+    "createdBy": "baseline",
+    "updatedAt": "2026-11-03T00:00:00Z"
+  },
+  {
+    "id": "WAL-PLUXEE-SPEND-01",
+    "version": 1,
+    "family": "wallet_spend",
+    "senders": [
+      "PLUXEE"
+    ],
+    "priority": 700,
+    "match": {
+      "pattern": "^(?:rs\\.?|inr|₹)\\s*(?<amt>[\\d,]+(?:\\.\\d{1,2})?) (?:has been |was )?(?:spent|used|debited|charged) (?:on|from|using|via) (?:your )?(?:pluxee|sodexo)(?: meal| gift| food)?(?: card| wallet)?(?:\\s*(?:ending|no\\.?|xx|x)\\s*(?<mask>\\d{4}))? (?:at|to|towards) (?<merchant>[^.,\\n]+?)(?:\\.|,|\\s+(?:for|on|using|via|txn|ref|order|bal|balance)\\b|\\s*$)(?=(?:.*?\\b(?:txn|transaction|ref)\\s*(?:id|no|number)?\\.?:?\\s*#?(?<ref_txnId>(?=[a-z]*\\d)[a-z0-9]{6,}))?).*?\\b(?:(?:updated|available|current|remaining|closing|wallet) )?bal(?:ance)?\\b\\.?\\s*(?:is|:|-|=)?\\s*(?:rs\\.?|inr|₹)\\s*(?<bal>[\\d,]+(?:\\.\\d{1,2})?)",
+      "flags": "is",
+      "rejectAny": [
+        "failed",
+        "unsuccessful",
+        "declined",
+        "could not",
+        "unable to",
+        "will be",
+        "reversed"
+      ]
+    },
+    "emit": [
+      {
+        "factType": "movement",
+        "attrs": {
+          "direction": "debit",
+          "purpose": "purchase",
+          "rail": "wallet"
+        },
+        "amounts": [
+          {
+            "role": "posted",
+            "from": "amt",
+            "unit": "INR"
+          }
+        ],
+        "instrument": {
+          "kind": "wallet",
+          "issuerSlug": "pluxee",
+          "maskFrom": "mask"
+        },
+        "counterparty": {
+          "nameFrom": "merchant",
+          "kind": "merchant",
+          "transforms": [
+            "sanitizeNarration"
+          ]
+        }
+      },
+      {
+        "factType": "balance_snapshot",
+        "amounts": [
+          {
+            "role": "available_balance",
+            "from": "bal",
+            "unit": "INR"
+          }
+        ],
+        "instrument": {
+          "sameAs": 0
+        },
+        "attrs": {
+          "asOf": {
+            "sameAs": 0,
+            "field": "occurredAt"
+          }
+        }
+      }
+    ],
+    "confidence": 0.97,
+    "examples": [
+      {
+        "sender": "VM-PLUXEE-S",
+        "body": "Rs 250 has been spent on your Pluxee card ending 1234 at Cafe Mocha. Available balance Rs 1,750. Txn ID 99887766",
+        "expectFactTypes": [
+          "movement",
+          "balance_snapshot"
+        ]
+      },
+      {
+        "sender": "VM-PLUXEE-S",
+        "body": "Rs 250 could not be spent on your Pluxee card ending 1234 at Cafe Mocha. Transaction declined.",
+        "expectFactTypes": []
+      }
+    ],
+    "status": "active",
+    "createdBy": "baseline",
+    "updatedAt": "2026-11-03T00:00:00Z"
+  },
+  {
+    "id": "WAL-PLUXEE-SPEND-02",
+    "version": 1,
+    "family": "wallet_spend",
+    "senders": [
+      "PLUXEE"
+    ],
+    "priority": 560,
+    "match": {
+      "pattern": "^(?:rs\\.?|inr|₹)\\s*(?<amt>[\\d,]+(?:\\.\\d{1,2})?) (?:has been |was )?(?:spent|used|debited|charged) (?:on|from|using|via) (?:your )?(?:pluxee|sodexo)(?: meal| gift| food)?(?: card| wallet)?(?:\\s*(?:ending|no\\.?|xx|x)\\s*(?<mask>\\d{4}))? (?:at|to|towards) (?<merchant>[^.,\\n]+?)(?:\\.|,|\\s+(?:for|on|using|via|txn|ref|order|bal|balance)\\b|\\s*$)(?=(?:.*?\\b(?:txn|transaction|ref)\\s*(?:id|no|number)?\\.?:?\\s*#?(?<ref_txnId>(?=[a-z]*\\d)[a-z0-9]{6,}))?)",
+      "flags": "is",
+      "rejectAny": [
+        "failed",
+        "unsuccessful",
+        "declined",
+        "could not",
+        "unable to",
+        "will be",
+        "reversed"
+      ]
+    },
+    "emit": [
+      {
+        "factType": "movement",
+        "attrs": {
+          "direction": "debit",
+          "purpose": "purchase",
+          "rail": "wallet"
+        },
+        "amounts": [
+          {
+            "role": "posted",
+            "from": "amt",
+            "unit": "INR"
+          }
+        ],
+        "instrument": {
+          "kind": "wallet",
+          "issuerSlug": "pluxee",
+          "maskFrom": "mask"
+        },
+        "counterparty": {
+          "nameFrom": "merchant",
+          "kind": "merchant",
+          "transforms": [
+            "sanitizeNarration"
+          ]
+        }
+      }
+    ],
+    "confidence": 0.93,
+    "examples": [
+      {
+        "sender": "AX-PLUXEE",
+        "body": "Rs 90 used on your Sodexo meal card xx4321 at Food Court",
+        "expectFactTypes": [
+          "movement"
+        ]
+      },
+      {
+        "sender": "AX-PLUXEE",
+        "body": "Rs 90 declined on your Sodexo meal card xx4321 at Food Court",
+        "expectFactTypes": []
+      }
+    ],
+    "status": "active",
+    "createdBy": "baseline",
+    "updatedAt": "2026-11-03T00:00:00Z"
+  }
+]

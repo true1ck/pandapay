@@ -1,0 +1,859 @@
+[
+  {
+    "id": "WAL-PAYTM-CASHBACK-01",
+    "version": 1,
+    "family": "wallet_cashback",
+    "senders": [
+      "PAYTM"
+    ],
+    "priority": 700,
+    "match": {
+      "pattern": "^(?:rs\\.?|inr|₹)\\s*(?<amt>[\\d,]+(?:\\.\\d{1,2})?)\\b[^.]{0,30}?\\bcashback\\b[^.]{0,60}?\\b(?:credited|added|received)\\b[^.]{0,40}?\\bpaytm(?: wallet| balance)?",
+      "flags": "is",
+      "requireAll": [
+        "cashback"
+      ],
+      "rejectAny": [
+        "will be",
+        "when you",
+        "if you",
+        "eligible",
+        "up to",
+        "upto",
+        "win ",
+        "failed"
+      ]
+    },
+    "emit": [
+      {
+        "factType": "movement",
+        "attrs": {
+          "direction": "credit",
+          "purpose": "cashback",
+          "rail": "wallet"
+        },
+        "amounts": [
+          {
+            "role": "posted",
+            "from": "amt",
+            "unit": "INR"
+          }
+        ],
+        "instrument": {
+          "kind": "wallet",
+          "issuerSlug": "paytm"
+        }
+      }
+    ],
+    "confidence": 0.96,
+    "examples": [
+      {
+        "sender": "JM-iPaytm",
+        "body": "Rs 25 cashback credited to your Paytm Wallet for your order.",
+        "expectFactTypes": [
+          "movement"
+        ]
+      },
+      {
+        "sender": "JM-iPaytm",
+        "body": "Rs 25 cashback will be credited to your Paytm Wallet within 48 hours.",
+        "expectFactTypes": []
+      }
+    ],
+    "status": "active",
+    "createdBy": "baseline",
+    "updatedAt": "2026-11-03T00:00:00Z"
+  },
+  {
+    "id": "WAL-PAYTM-DEBIT-01",
+    "version": 1,
+    "family": "wallet_spend",
+    "senders": [
+      "PAYTM"
+    ],
+    "priority": 600,
+    "match": {
+      "pattern": "^(?:rs\\.?|inr|₹)\\s*(?<amt>[\\d,]+(?:\\.\\d{1,2})?) (?:has been |was |is )?(?:debited|deducted|spent|charged)(?: from| using| via| on| at)? (?:your )?paytm(?: wallet| balance)?(?: (?:to|at) (?<merchant>[^.,\\n]+?)(?:\\.|,|\\s+(?:for|on|using|via|txn|ref|order|bal|balance)\\b|\\s*$))?(?=(?:.*?\\b(?:txn|transaction|ref)\\s*(?:id|no|number)?\\.?:?\\s*#?(?<ref_txnId>(?=[a-z]*\\d)[a-z0-9]{6,}))?).*?\\b(?:(?:updated|available|current|remaining|closing|wallet) )?bal(?:ance)?\\b\\.?\\s*(?:is|:|-|=)?\\s*(?:rs\\.?|inr|₹)\\s*(?<bal>[\\d,]+(?:\\.\\d{1,2})?)",
+      "flags": "is",
+      "rejectAny": [
+        "failed",
+        "unsuccessful",
+        "declined",
+        "could not",
+        "unable to",
+        "will be",
+        "reversed"
+      ]
+    },
+    "emit": [
+      {
+        "factType": "movement",
+        "attrs": {
+          "direction": "debit",
+          "purpose": "purchase",
+          "rail": "wallet"
+        },
+        "amounts": [
+          {
+            "role": "posted",
+            "from": "amt",
+            "unit": "INR"
+          }
+        ],
+        "instrument": {
+          "kind": "wallet",
+          "issuerSlug": "paytm"
+        },
+        "counterparty": {
+          "nameFrom": "merchant",
+          "kind": "merchant",
+          "transforms": [
+            "sanitizeNarration"
+          ]
+        }
+      },
+      {
+        "factType": "balance_snapshot",
+        "amounts": [
+          {
+            "role": "available_balance",
+            "from": "bal",
+            "unit": "INR"
+          }
+        ],
+        "instrument": {
+          "sameAs": 0
+        },
+        "attrs": {
+          "asOf": {
+            "sameAs": 0,
+            "field": "occurredAt"
+          }
+        }
+      }
+    ],
+    "confidence": 0.97,
+    "examples": [
+      {
+        "sender": "JM-iPaytm",
+        "body": "Rs 120 has been debited from your Paytm Wallet to Chai Point. Updated balance: Rs 380. Txn ID 12345678901",
+        "expectFactTypes": [
+          "movement",
+          "balance_snapshot"
+        ]
+      },
+      {
+        "sender": "JM-iPaytm",
+        "body": "Rs 120 could not be debited from your Paytm Wallet. Payment failed, please retry.",
+        "expectFactTypes": []
+      }
+    ],
+    "status": "active",
+    "createdBy": "baseline",
+    "updatedAt": "2026-11-03T00:00:00Z"
+  },
+  {
+    "id": "WAL-PAYTM-DEBIT-02",
+    "version": 1,
+    "family": "wallet_spend",
+    "senders": [
+      "PAYTM"
+    ],
+    "priority": 450,
+    "match": {
+      "pattern": "^(?:rs\\.?|inr|₹)\\s*(?<amt>[\\d,]+(?:\\.\\d{1,2})?) (?:has been |was |is )?(?:debited|deducted|spent|charged)(?: from| using| via| on| at)? (?:your )?paytm(?: wallet| balance)?(?: (?:to|at) (?<merchant>[^.,\\n]+?)(?:\\.|,|\\s+(?:for|on|using|via|txn|ref|order|bal|balance)\\b|\\s*$))?(?=(?:.*?\\b(?:txn|transaction|ref)\\s*(?:id|no|number)?\\.?:?\\s*#?(?<ref_txnId>(?=[a-z]*\\d)[a-z0-9]{6,}))?)",
+      "flags": "is",
+      "rejectAny": [
+        "failed",
+        "unsuccessful",
+        "declined",
+        "could not",
+        "unable to",
+        "will be",
+        "reversed"
+      ]
+    },
+    "emit": [
+      {
+        "factType": "movement",
+        "attrs": {
+          "direction": "debit",
+          "purpose": "purchase",
+          "rail": "wallet"
+        },
+        "amounts": [
+          {
+            "role": "posted",
+            "from": "amt",
+            "unit": "INR"
+          }
+        ],
+        "instrument": {
+          "kind": "wallet",
+          "issuerSlug": "paytm"
+        },
+        "counterparty": {
+          "nameFrom": "merchant",
+          "kind": "merchant",
+          "transforms": [
+            "sanitizeNarration"
+          ]
+        }
+      }
+    ],
+    "confidence": 0.93,
+    "examples": [
+      {
+        "sender": "DM-PYTM-P",
+        "body": "Rs.50.0 debited from your Paytm Wallet",
+        "expectFactTypes": [
+          "movement"
+        ]
+      },
+      {
+        "sender": "JM-iPaytm",
+        "body": "Rs 120 could not be debited from your Paytm Wallet. Payment failed, please retry.",
+        "expectFactTypes": []
+      }
+    ],
+    "status": "active",
+    "createdBy": "baseline",
+    "updatedAt": "2026-11-03T00:00:00Z"
+  },
+  {
+    "id": "WAL-PAYTM-FAILED-01",
+    "version": 1,
+    "family": "wallet_failed",
+    "senders": [
+      "PAYTM"
+    ],
+    "priority": 750,
+    "match": {
+      "pattern": "^(?:your )?(?:payment|transaction|txn|order)\\b[^\\n]*?(?:rs\\.?|inr|₹)\\s*(?<amt>[\\d,]+(?:\\.\\d{1,2})?)[^\\n]*?\\bpaytm(?: wallet| balance)?[^\\n]*?\\b(?:failed|was unsuccessful|declined|could not be (?:completed|processed))",
+      "flags": "is",
+      "rejectAny": [
+        "successful",
+        "successfully"
+      ]
+    },
+    "emit": [
+      {
+        "factType": "attempt",
+        "attrs": {
+          "status": "failed",
+          "direction": "debit",
+          "purpose": "purchase"
+        },
+        "amounts": [
+          {
+            "role": "posted",
+            "from": "amt",
+            "unit": "INR"
+          }
+        ],
+        "instrument": {
+          "kind": "wallet",
+          "issuerSlug": "paytm"
+        }
+      }
+    ],
+    "confidence": 0.9,
+    "examples": [
+      {
+        "sender": "JM-iPaytm",
+        "body": "Your payment of Rs 120 from Paytm Wallet failed. Money will not be deducted.",
+        "expectFactTypes": [
+          "attempt"
+        ]
+      },
+      {
+        "sender": "JM-iPaytm",
+        "body": "Your payment of Rs 120 from Paytm Wallet was successful.",
+        "expectFactTypes": []
+      }
+    ],
+    "status": "active",
+    "createdBy": "baseline",
+    "updatedAt": "2026-11-03T00:00:00Z"
+  },
+  {
+    "id": "WAL-PAYTM-FAILED-02",
+    "version": 1,
+    "family": "wallet_failed",
+    "senders": [
+      "PAYTM"
+    ],
+    "priority": 745,
+    "match": {
+      "pattern": "^(?:your )?(?:add money|top-?up|wallet load|load)\\b[^\\n]*?(?:rs\\.?|inr|₹)\\s*(?<amt>[\\d,]+(?:\\.\\d{1,2})?)[^\\n]*?\\bpaytm(?: wallet| balance)?[^\\n]*?\\b(?:failed|was unsuccessful|declined|could not be (?:completed|processed))",
+      "flags": "is",
+      "rejectAny": [
+        "successful",
+        "successfully"
+      ]
+    },
+    "emit": [
+      {
+        "factType": "attempt",
+        "attrs": {
+          "status": "failed",
+          "direction": "credit",
+          "purpose": "wallet_topup"
+        },
+        "amounts": [
+          {
+            "role": "posted",
+            "from": "amt",
+            "unit": "INR"
+          }
+        ],
+        "instrument": {
+          "kind": "wallet",
+          "issuerSlug": "paytm"
+        }
+      }
+    ],
+    "confidence": 0.88,
+    "examples": [
+      {
+        "sender": "JM-iPaytm",
+        "body": "Your add money request of Rs 500 to Paytm Wallet failed. Amount debited, if any, will be refunded.",
+        "expectFactTypes": [
+          "attempt"
+        ]
+      },
+      {
+        "sender": "JM-iPaytm",
+        "body": "Your add money request of Rs 500 to Paytm Wallet was successful.",
+        "expectFactTypes": []
+      }
+    ],
+    "status": "active",
+    "createdBy": "baseline",
+    "updatedAt": "2026-11-03T00:00:00Z"
+  },
+  {
+    "id": "WAL-PAYTM-LOAD-01",
+    "version": 1,
+    "family": "wallet_load",
+    "senders": [
+      "PAYTM"
+    ],
+    "priority": 580,
+    "match": {
+      "pattern": "^(?:rs\\.?|inr|₹)\\s*(?<amt>[\\d,]+(?:\\.\\d{1,2})?) (?:has been |was |is )?(?:successfully )?(?:added|loaded|credited|received)(?: in| into| to| in to) (?:your )?paytm(?: wallet| balance)?(?=(?:.*?\\bupi ref(?:erence)?(?: no)?\\.?:?\\s*(?<ref_upiRef>\\d{6,}))?)(?=(?:.*?\\b(?:txn|transaction)\\s*(?:id|no|number)?\\.?:?\\s*#?(?<ref_txnId>(?=[a-z]*\\d)[a-z0-9]{6,}))?).*?\\b(?:(?:updated|available|current|remaining|closing|wallet) )?bal(?:ance)?\\b\\.?\\s*(?:is|:|-|=)?\\s*(?:rs\\.?|inr|₹)\\s*(?<bal>[\\d,]+(?:\\.\\d{1,2})?)",
+      "flags": "is",
+      "rejectAny": [
+        "cashback",
+        "refund",
+        "reward",
+        "reversal",
+        "reversed",
+        "bonus",
+        "gift",
+        "promo",
+        "compensation",
+        "will be",
+        "failed"
+      ]
+    },
+    "emit": [
+      {
+        "factType": "movement",
+        "attrs": {
+          "direction": "credit",
+          "purpose": "wallet_topup",
+          "rail": "wallet"
+        },
+        "amounts": [
+          {
+            "role": "posted",
+            "from": "amt",
+            "unit": "INR"
+          }
+        ],
+        "instrument": {
+          "kind": "wallet",
+          "issuerSlug": "paytm"
+        }
+      },
+      {
+        "factType": "balance_snapshot",
+        "amounts": [
+          {
+            "role": "available_balance",
+            "from": "bal",
+            "unit": "INR"
+          }
+        ],
+        "instrument": {
+          "sameAs": 0
+        },
+        "attrs": {
+          "asOf": {
+            "sameAs": 0,
+            "field": "occurredAt"
+          }
+        }
+      }
+    ],
+    "confidence": 0.96,
+    "examples": [
+      {
+        "sender": "JM-iPaytm",
+        "body": "Rs 500 has been added to your Paytm Wallet. Updated balance: Rs 500. Txn ID 12345678900",
+        "expectFactTypes": [
+          "movement",
+          "balance_snapshot"
+        ]
+      },
+      {
+        "sender": "JM-iPaytm",
+        "body": "Add money to your Paytm Wallet and get Rs 100 cashback on your first load. Offer valid till 30 Nov.",
+        "expectFactTypes": []
+      }
+    ],
+    "status": "active",
+    "createdBy": "baseline",
+    "updatedAt": "2026-11-03T00:00:00Z"
+  },
+  {
+    "id": "WAL-PAYTM-LOAD-02",
+    "version": 1,
+    "family": "wallet_load",
+    "senders": [
+      "PAYTM"
+    ],
+    "priority": 440,
+    "match": {
+      "pattern": "^(?:rs\\.?|inr|₹)\\s*(?<amt>[\\d,]+(?:\\.\\d{1,2})?) (?:has been |was |is )?(?:successfully )?(?:added|loaded|credited|received)(?: in| into| to| in to) (?:your )?paytm(?: wallet| balance)?(?=(?:.*?\\bupi ref(?:erence)?(?: no)?\\.?:?\\s*(?<ref_upiRef>\\d{6,}))?)(?=(?:.*?\\b(?:txn|transaction)\\s*(?:id|no|number)?\\.?:?\\s*#?(?<ref_txnId>(?=[a-z]*\\d)[a-z0-9]{6,}))?)",
+      "flags": "is",
+      "rejectAny": [
+        "cashback",
+        "refund",
+        "reward",
+        "reversal",
+        "reversed",
+        "bonus",
+        "gift",
+        "promo",
+        "compensation",
+        "will be",
+        "failed"
+      ]
+    },
+    "emit": [
+      {
+        "factType": "movement",
+        "attrs": {
+          "direction": "credit",
+          "purpose": "wallet_topup",
+          "rail": "wallet"
+        },
+        "amounts": [
+          {
+            "role": "posted",
+            "from": "amt",
+            "unit": "INR"
+          }
+        ],
+        "instrument": {
+          "kind": "wallet",
+          "issuerSlug": "paytm"
+        }
+      }
+    ],
+    "confidence": 0.93,
+    "examples": [
+      {
+        "sender": "DM-PYTM-P",
+        "body": "Rs.5000 added to Paytm Wallet from your bank account. UPI Ref 123456789012.",
+        "expectFactTypes": [
+          "movement"
+        ]
+      },
+      {
+        "sender": "JM-iPaytm",
+        "body": "Add money to your Paytm Wallet and get Rs 100 cashback on your first load. Offer valid till 30 Nov.",
+        "expectFactTypes": []
+      }
+    ],
+    "status": "active",
+    "createdBy": "baseline",
+    "updatedAt": "2026-11-03T00:00:00Z"
+  },
+  {
+    "id": "WAL-PAYTM-PAID-01",
+    "version": 1,
+    "family": "wallet_spend",
+    "senders": [
+      "PAYTM"
+    ],
+    "priority": 620,
+    "match": {
+      "pattern": "^(?:rs\\.?|inr|₹)\\s*(?<amt>[\\d,]+(?:\\.\\d{1,2})?) (?:has been |was |is )?paid (?:from|using|via|with) (?:your )?paytm(?: wallet| balance)?(?: (?:to|at) (?<merchant>[^.,\\n]+?)(?:\\.|,|\\s+(?:for|on|using|via|txn|ref|order|bal|balance)\\b|\\s*$))?(?=(?:.*?\\b(?:txn|transaction|ref)\\s*(?:id|no|number)?\\.?:?\\s*#?(?<ref_txnId>(?=[a-z]*\\d)[a-z0-9]{6,}))?).*?\\b(?:(?:updated|available|current|remaining|closing|wallet) )?bal(?:ance)?\\b\\.?\\s*(?:is|:|-|=)?\\s*(?:rs\\.?|inr|₹)\\s*(?<bal>[\\d,]+(?:\\.\\d{1,2})?)",
+      "flags": "is",
+      "rejectAny": [
+        "failed",
+        "unsuccessful",
+        "declined",
+        "could not",
+        "unable to",
+        "will be",
+        "reversed"
+      ]
+    },
+    "emit": [
+      {
+        "factType": "movement",
+        "attrs": {
+          "direction": "debit",
+          "purpose": "purchase",
+          "rail": "wallet"
+        },
+        "amounts": [
+          {
+            "role": "posted",
+            "from": "amt",
+            "unit": "INR"
+          }
+        ],
+        "instrument": {
+          "kind": "wallet",
+          "issuerSlug": "paytm"
+        },
+        "counterparty": {
+          "nameFrom": "merchant",
+          "kind": "merchant",
+          "transforms": [
+            "sanitizeNarration"
+          ]
+        }
+      },
+      {
+        "factType": "balance_snapshot",
+        "amounts": [
+          {
+            "role": "available_balance",
+            "from": "bal",
+            "unit": "INR"
+          }
+        ],
+        "instrument": {
+          "sameAs": 0
+        },
+        "attrs": {
+          "asOf": {
+            "sameAs": 0,
+            "field": "occurredAt"
+          }
+        }
+      }
+    ],
+    "confidence": 0.97,
+    "examples": [
+      {
+        "sender": "JM-iPaytm",
+        "body": "Rs 120 paid from Paytm Wallet to Chai Point. Updated balance: Rs 380. Txn ID 12345678901",
+        "expectFactTypes": [
+          "movement",
+          "balance_snapshot"
+        ]
+      },
+      {
+        "sender": "JM-iPaytm",
+        "body": "Rs 120 payment from Paytm Wallet was declined. Please try again.",
+        "expectFactTypes": []
+      }
+    ],
+    "status": "active",
+    "createdBy": "baseline",
+    "updatedAt": "2026-11-03T00:00:00Z"
+  },
+  {
+    "id": "WAL-PAYTM-PAID-02",
+    "version": 1,
+    "family": "wallet_spend",
+    "senders": [
+      "PAYTM"
+    ],
+    "priority": 460,
+    "match": {
+      "pattern": "^(?:rs\\.?|inr|₹)\\s*(?<amt>[\\d,]+(?:\\.\\d{1,2})?) (?:has been |was |is )?paid (?:from|using|via|with) (?:your )?paytm(?: wallet| balance)?(?: (?:to|at) (?<merchant>[^.,\\n]+?)(?:\\.|,|\\s+(?:for|on|using|via|txn|ref|order|bal|balance)\\b|\\s*$))?(?=(?:.*?\\b(?:txn|transaction|ref)\\s*(?:id|no|number)?\\.?:?\\s*#?(?<ref_txnId>(?=[a-z]*\\d)[a-z0-9]{6,}))?)",
+      "flags": "is",
+      "rejectAny": [
+        "failed",
+        "unsuccessful",
+        "declined",
+        "could not",
+        "unable to",
+        "will be",
+        "reversed"
+      ]
+    },
+    "emit": [
+      {
+        "factType": "movement",
+        "attrs": {
+          "direction": "debit",
+          "purpose": "purchase",
+          "rail": "wallet"
+        },
+        "amounts": [
+          {
+            "role": "posted",
+            "from": "amt",
+            "unit": "INR"
+          }
+        ],
+        "instrument": {
+          "kind": "wallet",
+          "issuerSlug": "paytm"
+        },
+        "counterparty": {
+          "nameFrom": "merchant",
+          "kind": "merchant",
+          "transforms": [
+            "sanitizeNarration"
+          ]
+        }
+      }
+    ],
+    "confidence": 0.93,
+    "examples": [
+      {
+        "sender": "DM-PYTM-P",
+        "body": "Rs 499.00 paid using Paytm Wallet for your order",
+        "expectFactTypes": [
+          "movement"
+        ]
+      },
+      {
+        "sender": "JM-iPaytm",
+        "body": "Rs 120 payment from Paytm Wallet was declined. Please try again.",
+        "expectFactTypes": []
+      }
+    ],
+    "status": "active",
+    "createdBy": "baseline",
+    "updatedAt": "2026-11-03T00:00:00Z"
+  },
+  {
+    "id": "WAL-PAYTM-PAID-03",
+    "version": 1,
+    "family": "wallet_spend",
+    "senders": [
+      "PAYTM"
+    ],
+    "priority": 610,
+    "match": {
+      "pattern": "^(?:you have )?paid (?:rs\\.?|inr|₹)\\s*(?<amt>[\\d,]+(?:\\.\\d{1,2})?) to (?<merchant>[^.,\\n]+?) (?:using|via|from|with) (?:your )?paytm(?: wallet| balance)?(?=(?:.*?\\b(?:txn|transaction|ref)\\s*(?:id|no|number)?\\.?:?\\s*#?(?<ref_txnId>(?=[a-z]*\\d)[a-z0-9]{6,}))?).*?\\b(?:(?:updated|available|current|remaining|closing|wallet) )?bal(?:ance)?\\b\\.?\\s*(?:is|:|-|=)?\\s*(?:rs\\.?|inr|₹)\\s*(?<bal>[\\d,]+(?:\\.\\d{1,2})?)",
+      "flags": "is",
+      "rejectAny": [
+        "failed",
+        "unsuccessful",
+        "declined",
+        "could not",
+        "unable to",
+        "will be",
+        "reversed"
+      ]
+    },
+    "emit": [
+      {
+        "factType": "movement",
+        "attrs": {
+          "direction": "debit",
+          "purpose": "purchase",
+          "rail": "wallet"
+        },
+        "amounts": [
+          {
+            "role": "posted",
+            "from": "amt",
+            "unit": "INR"
+          }
+        ],
+        "instrument": {
+          "kind": "wallet",
+          "issuerSlug": "paytm"
+        },
+        "counterparty": {
+          "nameFrom": "merchant",
+          "kind": "merchant",
+          "transforms": [
+            "sanitizeNarration"
+          ]
+        }
+      },
+      {
+        "factType": "balance_snapshot",
+        "amounts": [
+          {
+            "role": "available_balance",
+            "from": "bal",
+            "unit": "INR"
+          }
+        ],
+        "instrument": {
+          "sameAs": 0
+        },
+        "attrs": {
+          "asOf": {
+            "sameAs": 0,
+            "field": "occurredAt"
+          }
+        }
+      }
+    ],
+    "confidence": 0.97,
+    "examples": [
+      {
+        "sender": "JM-iPaytm",
+        "body": "Paid Rs 120 to Chai Point using Paytm Wallet. Balance: Rs 380. Txn ID 12345678901",
+        "expectFactTypes": [
+          "movement",
+          "balance_snapshot"
+        ]
+      },
+      {
+        "sender": "JM-iPaytm",
+        "body": "Paid Rs 120 to Chai Point using Paytm Wallet failed",
+        "expectFactTypes": []
+      }
+    ],
+    "status": "active",
+    "createdBy": "baseline",
+    "updatedAt": "2026-11-03T00:00:00Z"
+  },
+  {
+    "id": "WAL-PAYTM-PAID-04",
+    "version": 1,
+    "family": "wallet_spend",
+    "senders": [
+      "PAYTM"
+    ],
+    "priority": 455,
+    "match": {
+      "pattern": "^(?:you have )?paid (?:rs\\.?|inr|₹)\\s*(?<amt>[\\d,]+(?:\\.\\d{1,2})?) to (?<merchant>[^.,\\n]+?) (?:using|via|from|with) (?:your )?paytm(?: wallet| balance)?(?=(?:.*?\\b(?:txn|transaction|ref)\\s*(?:id|no|number)?\\.?:?\\s*#?(?<ref_txnId>(?=[a-z]*\\d)[a-z0-9]{6,}))?)",
+      "flags": "is",
+      "rejectAny": [
+        "failed",
+        "unsuccessful",
+        "declined",
+        "could not",
+        "unable to",
+        "will be",
+        "reversed"
+      ]
+    },
+    "emit": [
+      {
+        "factType": "movement",
+        "attrs": {
+          "direction": "debit",
+          "purpose": "purchase",
+          "rail": "wallet"
+        },
+        "amounts": [
+          {
+            "role": "posted",
+            "from": "amt",
+            "unit": "INR"
+          }
+        ],
+        "instrument": {
+          "kind": "wallet",
+          "issuerSlug": "paytm"
+        },
+        "counterparty": {
+          "nameFrom": "merchant",
+          "kind": "merchant",
+          "transforms": [
+            "sanitizeNarration"
+          ]
+        }
+      }
+    ],
+    "confidence": 0.93,
+    "examples": [
+      {
+        "sender": "DM-PYTM-P",
+        "body": "Paid Rs 85.50 to Chai Point from Paytm Wallet",
+        "expectFactTypes": [
+          "movement"
+        ]
+      },
+      {
+        "sender": "JM-iPaytm",
+        "body": "Paid Rs 120 to Chai Point using Paytm Wallet failed",
+        "expectFactTypes": []
+      }
+    ],
+    "status": "active",
+    "createdBy": "baseline",
+    "updatedAt": "2026-11-03T00:00:00Z"
+  },
+  {
+    "id": "WAL-PAYTM-REFUND-01",
+    "version": 1,
+    "family": "wallet_refund",
+    "senders": [
+      "PAYTM"
+    ],
+    "priority": 690,
+    "match": {
+      "pattern": "^(?:refund of )?(?:rs\\.?|inr|₹)\\s*(?<amt>[\\d,]+(?:\\.\\d{1,2})?)\\b[^.]{0,60}?\\b(?:refunded|credited|added|returned|received)\\b[^.]{0,40}?\\bpaytm(?: wallet| balance)?",
+      "flags": "is",
+      "requireAll": [
+        "refund"
+      ],
+      "rejectAny": [
+        "will be",
+        "initiated",
+        "failed",
+        "request",
+        "eligible"
+      ]
+    },
+    "emit": [
+      {
+        "factType": "movement",
+        "attrs": {
+          "direction": "credit",
+          "purpose": "refund",
+          "rail": "wallet"
+        },
+        "amounts": [
+          {
+            "role": "posted",
+            "from": "amt",
+            "unit": "INR"
+          }
+        ],
+        "instrument": {
+          "kind": "wallet",
+          "issuerSlug": "paytm"
+        }
+      }
+    ],
+    "confidence": 0.95,
+    "examples": [
+      {
+        "sender": "JM-iPaytm",
+        "body": "Refund of Rs 120 has been credited to your Paytm Wallet for order cancelled.",
+        "expectFactTypes": [
+          "movement"
+        ]
+      },
+      {
+        "sender": "JM-iPaytm",
+        "body": "Refund of Rs 120 will be credited to your Paytm Wallet in 3-5 working days.",
+        "expectFactTypes": []
+      }
+    ],
+    "status": "active",
+    "createdBy": "baseline",
+    "updatedAt": "2026-11-03T00:00:00Z"
+  }
+]
