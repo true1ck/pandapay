@@ -145,3 +145,9 @@ dart run bin/sms_rules.dart cluster --in "$p/redacted-misses.jsonl" --out "$p/mi
 ```
 
 The engine matched 1,273, ignored 1,460 and returned unknown for 2,463 (47.4%). The unknowns clustered into 886 templates, with 640 covering 90% of unknown messages. These are engine outcomes. Accuracy requires reviewed expected readings. The phone review rate and double counts require running the full pipeline and checking event linkage. The family gate remains open.
+
+### Wallet accuracy pass 1
+
+The synthetic Zomato Money success notice first returned unknown under the baseline probe. The new sender-scoped rule emits the posted debit and the separate remaining balance. Its negative example covers unsuccessful payment.
+
+From `tools/sms_rules_cli`, repeat the first baseline build command with output `"$p/candidate-v0.json"`. It passes 1,507 examples for 725 rules. Run the same probe against that candidate, first using `"$p/zomato-synthetic.jsonl"` and then `"$p/sms.jsonl"`. The synthetic case now matches. On the same 5,196 messages, matches rose from 1,273 to 1,344 and unknowns fell from 2,463 to 2,392. The 1,460 ignores were unchanged. These are extraction outcomes. Family accuracy, review routing and double counts remain open.

@@ -855,5 +855,86 @@
     "status": "active",
     "createdBy": "baseline",
     "updatedAt": "2026-11-03T00:00:00Z"
+  },
+  {
+    "id": "WAL-ZOMATO-PAYMENT-SUCCESS-01",
+    "version": 1,
+    "family": "wallet_spend",
+    "senders": [
+      "ZOMATO"
+    ],
+    "priority": 600,
+    "match": {
+      "pattern": "^payment of\\s+(?:rs\\.?|inr|₹)\\s*(?<amt>[\\d,]+(?:\\.\\d{1,2})?)\\s+from zomato money balance is successful\\.\\s+updated balance:\\s*(?:rs\\.?|inr|₹)\\s*(?<bal>[\\d,]+(?:\\.\\d{1,2})?)(?![\\d,])(?:\\.|\\s|$)",
+      "flags": "is",
+      "rejectAny": [
+        "failed",
+        "unsuccessful",
+        "declined",
+        "could not",
+        "unable to",
+        "will be",
+        "reversed"
+      ]
+    },
+    "emit": [
+      {
+        "factType": "movement",
+        "attrs": {
+          "direction": "debit",
+          "purpose": "purchase",
+          "rail": "wallet"
+        },
+        "amounts": [
+          {
+            "role": "posted",
+            "from": "amt",
+            "unit": "INR"
+          }
+        ],
+        "instrument": {
+          "kind": "wallet",
+          "issuerSlug": "zomato_money"
+        }
+      },
+      {
+        "factType": "balance_snapshot",
+        "amounts": [
+          {
+            "role": "available_balance",
+            "from": "bal",
+            "unit": "INR"
+          }
+        ],
+        "instrument": {
+          "sameAs": 0
+        },
+        "attrs": {
+          "asOf": {
+            "sameAs": 0,
+            "field": "occurredAt"
+          }
+        }
+      }
+    ],
+    "confidence": 0.97,
+    "examples": [
+      {
+        "sender": "VM-ZOMATO-S",
+        "body": "Payment of Rs.120 from Zomato Money Balance is successful. Updated balance: Rs.380.",
+        "expectFactTypes": [
+          "movement",
+          "balance_snapshot"
+        ]
+      },
+      {
+        "sender": "VM-ZOMATO-S",
+        "body": "Payment of Rs.120 from Zomato Money Balance is unsuccessful. Updated balance: Rs.380.",
+        "expectFactTypes": []
+      }
+    ],
+    "status": "active",
+    "createdBy": "baseline",
+    "updatedAt": "2026-11-03T00:00:00Z"
   }
 ]
