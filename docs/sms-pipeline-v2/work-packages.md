@@ -13,7 +13,7 @@ Each work package is self-contained: an agent needs only the Agent playbook, the
 | 04 | Instrument registry and detection | M1 | 01 | `pandapay_domain/.../sms_v2/instruments/`, `app/lib/features/sms_v2/storage/instrument_store.dart`, `app/lib/features/sms_v2/instruments/` | Sonnet | Not started |
 | 05 | Event linker | M1 | 01, 04 | `pandapay_domain/.../sms_v2/linker/`, `app/lib/features/sms_v2/storage/event_store.dart` | Opus | Not started |
 | 06 | Ledger and projections | M1 | 05, 07 | `pandapay_domain/.../sms_v2/ledger/`, `app/lib/features/sms_v2/ledger/`, `storage/ledger_store.dart`, totals call sites (hotspot owner) | Sonnet | Not started |
-| 07 | Category resolver and taxonomy | M1 | 01 | `pandapay_domain/.../sms_v2/category/`, `app/lib/features/sms_v2/category/` | Sonnet | Not started |
+| 07 | Category resolver and taxonomy | M1 | 01 | `pandapay_domain/.../sms_v2/category/`, `app/lib/features/sms_v2/category/` | Sonnet | Done (c60d3fb) |
 | 08 | Server facts ingestion v2 | M1 | 01 | `api/src/sms_v2/{index,facts_route,sync_route,storage,guard}.js`, `scripts/check_sms_v2.js`, migrations for instruments, facts, events, ledger and `transactions` columns | Sonnet | Not started |
 | 09 | Rule service v2 | M1 | 01, 02 (bundle shape) | `api/src/sms_v2/{rules_route,rules_admin_route,bundle_builder,signer,rule_stats}.js`, `api/scripts/import_sms_v2_rules.js`, rule migrations | Sonnet | Done (cb05c0b) |
 | 10 | AI per template | M2 | 09 | `api/src/sms_v2/{ai_templates,template_worker}.js`, template migration`s` | Sonnet | Not started |
