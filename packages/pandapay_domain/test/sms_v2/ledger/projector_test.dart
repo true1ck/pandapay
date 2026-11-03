@@ -49,6 +49,55 @@ void main() {
   };
 
   test(
+    'linked refund retains category through a corrected non-anchor payment',
+    () {
+      final anchor = h.debit(
+        'purchase',
+        sourceKey: 'sms:earlier-receipt',
+        10000,
+        at: at.toIso8601String(),
+        inst: h.hdfcCard,
+      );
+      final corrected = h.debit(
+        'purchase',
+        sourceKey: 'sms:user-correction',
+        8000,
+        at: at.toIso8601String(),
+        inst: h.hdfcCard,
+      );
+      final purchase = event(
+        EventType.purchase,
+        [anchor, debit, corrected],
+        roles: [LegRole.duplicateNotice, LegRole.original, LegRole.debitLeg],
+        status: EventStatus.userConfirmed,
+      );
+      final refund = event(
+        EventType.refund,
+        [credit, debit],
+        roles: [LegRole.reversal, LegRole.original],
+      );
+      final snapshot = LedgerSnapshot.project(
+        events: [purchase, refund],
+        factsById: facts([anchor, debit, corrected, credit]),
+        instrumentsById: h.allInstruments,
+        bundle: RuleBundle(
+          bundleVersion: 0,
+          createdAt: at,
+          expiresAt: at.add(const Duration(days: 1)),
+          minEngineVersion: '2.0.0',
+          taxonomyVersion: 1,
+        ),
+        lockedCategories: {purchase.eventId: dining},
+      );
+      expect(snapshot.categoryByEvent[refund.eventId]?.slug, 'dining');
+      expect(
+        moneyFactForEvent(purchase, facts([anchor, debit, corrected]))!.factId,
+        corrected.factId,
+      );
+    },
+  );
+
+  test(
     'linked refund follows the stable anchor after its money fact is corrected',
     () {
       final corrected = h.debit(

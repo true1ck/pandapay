@@ -13,6 +13,7 @@ import 'package:pandapay/features/sms_v2/storage/instrument_store.dart';
 import 'package:pandapay/features/sms_v2/storage/ledger_store.dart';
 import 'package:pandapay/features/sms_v2/storage/outbox_store.dart';
 import 'package:pandapay/features/sms_v2/storage/schema.dart';
+import 'package:pandapay/features/sms_v2/storage/sync_state_store.dart';
 import 'package:pandapay_domain/sms_v2.dart';
 import 'package:pandapay/features/sms_v2/ledger/projection_writer.dart';
 import 'package:pandapay_domain/sms_v2_ledger.dart';
@@ -369,6 +370,104 @@ void main() {
                 as InstrumentEndpoint)
             .instrumentId,
         instrument.instrumentId,
+      );
+      service.apply(
+        correction(CorrectionKind.wrongAmount, {'amountMinor': 8000}),
+      );
+      expect(
+        (LedgerStore(
+                  db.db,
+                  namespace: 'user:a',
+                ).forEvent(event.eventId).single.from
+                as InstrumentEndpoint)
+            .instrumentId,
+        instrument.instrumentId,
+      );
+      final explanation =
+          jsonDecode(
+                SyncStateStore(
+                  db.db,
+                  namespace: 'user:a',
+                ).get('trace:${fact.sourceKey}')!,
+              )
+              as Map;
+      expect(
+        (explanation['instruments'] as List).single,
+        containsPair('step', 'user_choice'),
+      );
+    },
+  );
+
+  test(
+    'a late failing repeated edit restores the current fact, trace, totals and queue',
+    () {
+      service.apply(
+        correction(CorrectionKind.wrongAmount, {'amountMinor': 8000}),
+      );
+      final beforeFacts = FactStore(
+        db.db,
+        namespace: 'user:a',
+      ).since(DateTime.utc(1900)).map((fact) => fact.toJson()).toList();
+      final beforeEvent = EventStore(
+        db.db,
+        namespace: 'user:a',
+      ).get(event.eventId)!.toJson();
+      final beforeTrace = SyncStateStore(
+        db.db,
+        namespace: 'user:a',
+      ).get('trace:${fact.sourceKey}');
+      final beforeQueue = OutboxStore(
+        db.db,
+        namespace: 'user:a',
+      ).due(DateTime.now()).map((row) => row.json).toList();
+      expect(
+        () => service.apply(
+          SmsCorrection(
+            id: 'late-invalid',
+            sourceKey: fact.sourceKey,
+            kind: CorrectionKind.wrongAmount,
+            corrected: {
+              'amountMinor': 6000,
+              '_retireEventIds': ['invalid'],
+            },
+            trace: trace,
+            factIds: [fact.factId],
+            eventId: event.eventId,
+          ),
+        ),
+        throwsArgumentError,
+      );
+      expect(
+        FactStore(
+          db.db,
+          namespace: 'user:a',
+        ).since(DateTime.utc(1900)).map((fact) => fact.toJson()),
+        beforeFacts,
+      );
+      expect(
+        EventStore(db.db, namespace: 'user:a').get(event.eventId)!.toJson(),
+        beforeEvent,
+      );
+      expect(
+        SyncStateStore(
+          db.db,
+          namespace: 'user:a',
+        ).get('trace:${fact.sourceKey}'),
+        beforeTrace,
+      );
+      expect(
+        OutboxStore(
+          db.db,
+          namespace: 'user:a',
+        ).due(DateTime.now()).map((row) => row.json),
+        beforeQueue,
+      );
+      expect(
+        LedgerStore(
+          db.db,
+          namespace: 'user:a',
+        ).forEvent(event.eventId).single.amountMinor,
+        8000,
       );
     },
   );

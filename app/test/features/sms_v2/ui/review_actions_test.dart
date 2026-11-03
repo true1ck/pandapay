@@ -8,6 +8,9 @@ import 'package:pandapay/features/sms_v2/pipeline/sms_v2_pipeline.dart';
 import 'package:pandapay/features/sms_v2/pipeline/trace.dart';
 import 'package:pandapay/features/sms_v2/providers/data_providers.dart';
 import 'package:pandapay/features/sms_v2/storage/event_store.dart';
+import 'package:pandapay/features/sms_v2/storage/fact_store.dart';
+import 'package:pandapay/features/sms_v2/storage/sync_state_store.dart';
+import 'package:pandapay_domain/sms_v2_ledger.dart';
 import 'package:pandapay/features/sms_v2/storage/instrument_store.dart';
 import 'package:pandapay/features/sms_v2/storage/ledger_store.dart';
 import 'package:pandapay/features/sms_v2/storage/outbox_store.dart';
@@ -202,6 +205,194 @@ void main() {
       expect(stored.get(other.eventId)!.type, EventType.unknown);
       expect(stored.get(target.eventId)!.legs, hasLength(2));
       expect(stored.get(target.eventId)!.legs.first.factId, target.eventId);
+    },
+  );
+  test(
+    'repeated edits use current money but report the original receipt identity',
+    () {
+      final item = items.first;
+      final source = item.payload['sourceKey'] as String;
+      final facts = FactStore(database.db, namespace: namespace);
+      final original = facts.forSource(source).whereType<MovementFact>().first;
+      for (final amount in [10000, 8000, 6000]) {
+        controller().apply(
+          items: [item],
+          kind: CorrectionKind.wrongAmount,
+          corrected: {'amountMinor': amount},
+        );
+        expect(
+          LedgerStore(
+            database.db,
+            namespace: namespace,
+          ).forEvent(original.factId).single.amountMinor,
+          amount,
+        );
+      }
+      for (final merchant in ['SYNTHETIC FIRST SHOP', 'SYNTHETIC FINAL SHOP']) {
+        controller().apply(
+          items: [item],
+          kind: CorrectionKind.wrongMerchant,
+          corrected: {'merchantName': merchant},
+        );
+      }
+      for (final date in ['2026-10-30T07:00:00Z', '2026-10-31T07:00:00Z']) {
+        controller().apply(
+          items: [item],
+          kind: CorrectionKind.wrongDate,
+          corrected: {'occurredAt': date},
+        );
+      }
+      final event = EventStore(
+        database.db,
+        namespace: namespace,
+      ).get(original.factId)!;
+      final active = moneyFactForEvent(event, {
+        for (final leg in event.legs) leg.factId: facts.get(leg.factId)!,
+      })!;
+      expect(active.amounts.first.minor, 6000);
+      expect(active.counterparty!.name, 'SYNTHETIC FINAL SHOP');
+      expect(active.occurredAt, DateTime.utc(2026, 10, 31, 7));
+      expect(event.legs, hasLength(2));
+      expect(event.legs.first.role, LegRole.original);
+      expect(
+        facts.forSource(source).whereType<MovementFact>().single.toJson(),
+        original.toJson(),
+      );
+      final queued = OutboxStore(
+        database.db,
+        namespace: namespace,
+      ).due(DateTime.now()).where((row) => row.kind == 'correction');
+      expect(queued, hasLength(7));
+      for (final row in queued) {
+        expect(row.json['sourceKey'], source);
+        expect(row.json['factIds'], [original.factId]);
+      }
+      final saved =
+          jsonDecode(
+                SyncStateStore(
+                  database.db,
+                  namespace: namespace,
+                ).get('trace:$source')!,
+              )
+              as Map;
+      expect(
+        (saved['facts'] as List).map((row) => (row as Map)['factId']),
+        contains(active.factId),
+      );
+      expect(
+        (saved['facts'] as List).map((row) => (row as Map)['factId']),
+        isNot(contains(original.factId)),
+      );
+      expect(
+        saved['userChoices'],
+        containsAll(['wrong_amount', 'wrong_merchant', 'wrong_date']),
+      );
+    },
+  );
+
+  test(
+    'a grouped correction rolls back refreshed traces and prior successful edits',
+    () {
+      final source = items.first.payload['sourceKey'] as String;
+      final previousTrace = SyncStateStore(
+        database.db,
+        namespace: namespace,
+      ).get('trace:$source');
+      final previousFacts = database.db
+          .select('SELECT fact_id FROM v2_facts ORDER BY fact_id')
+          .map((row) => row['fact_id'])
+          .toList();
+      final previousLedger = LedgerStore(
+        database.db,
+        namespace: namespace,
+      ).list().map((entry) => entry.toJson()).toList();
+      final previousQueue = OutboxStore(
+        database.db,
+        namespace: namespace,
+      ).due(DateTime.now()).map((row) => row.json).toList();
+      expect(
+        () => controller().apply(
+          items: [
+            items.first,
+            const LocalReviewItem(
+              id: 'missing',
+              kind: 'event',
+              payload: {'sourceKey': 'missing-source'},
+            ),
+          ],
+          kind: CorrectionKind.wrongAmount,
+          corrected: {'amountMinor': 8000},
+        ),
+        throwsArgumentError,
+      );
+      expect(
+        SyncStateStore(database.db, namespace: namespace).get('trace:$source'),
+        previousTrace,
+      );
+      expect(
+        database.db
+            .select('SELECT fact_id FROM v2_facts ORDER BY fact_id')
+            .map((row) => row['fact_id']),
+        previousFacts,
+      );
+      expect(
+        LedgerStore(
+          database.db,
+          namespace: namespace,
+        ).list().map((entry) => entry.toJson()),
+        previousLedger,
+      );
+      expect(
+        OutboxStore(
+          database.db,
+          namespace: namespace,
+        ).due(DateTime.now()).map((row) => row.json),
+        previousQueue,
+      );
+    },
+  );
+
+  test(
+    'category and link corrections refresh the source explanation from saved state',
+    () {
+      final source = items.first.payload['sourceKey'] as String;
+      controller().apply(
+        items: [items.first],
+        kind: CorrectionKind.wrongCategory,
+        corrected: {'category': 'groceries'},
+      );
+      final store = SyncStateStore(database.db, namespace: namespace);
+      var saved = jsonDecode(store.get('trace:$source')!) as Map;
+      expect(saved['category'], containsPair('source', 'user'));
+      expect(saved['category'], containsPair('slug', 'groceries'));
+      final events = EventStore(
+        database.db,
+        namespace: namespace,
+      ).listSince(DateTime.utc(1900));
+      final target = events.firstWhere(
+        (event) => event.eventId != (saved['event'] as Map)['eventId'],
+      );
+      controller().apply(
+        items: [
+          LocalReviewItem(
+            id: 'merge',
+            kind: 'link',
+            payload: {'sourceKey': source, 'linkRuleId': 'LINK-DUPLICATE'},
+          ),
+        ],
+        kind: CorrectionKind.wrongLink,
+        corrected: {'_matchEventId': target.eventId},
+      );
+      saved = jsonDecode(store.get('trace:$source')!) as Map;
+      expect((saved['event'] as Map)['eventId'], target.eventId);
+      expect(saved['userChoices'], contains('wrong_link'));
+      expect(
+        (saved['event'] as Map)['legs'],
+        EventStore(
+          database.db,
+          namespace: namespace,
+        ).get(target.eventId)!.legs.map((leg) => leg.toJson()).toList(),
+      );
     },
   );
 }

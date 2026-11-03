@@ -8,20 +8,42 @@ import 'screen_parts.dart';
 
 List<String> explainDecision(Map<String, Object?> trace) {
   final result = <String>[];
+  final choices = (trace['userChoices'] as List? ?? const []).toSet();
+  for (final choice in choices) {
+    final explanation = switch (choice) {
+      'wrong_amount' => 'You corrected the amount of this entry.',
+      'wrong_merchant' => 'You corrected the merchant for this entry.',
+      'wrong_date' => 'You corrected the date of this entry.',
+      'wrong_kind' => 'You changed the type of this entry.',
+      'wrong_link' => 'You chose which messages belong to this entry.',
+      'not_financial' =>
+        'You marked this message as not financial, so it stays out of totals.',
+      'duplicate' =>
+        'You marked this entry as a duplicate, so it stays out of totals.',
+      _ => null,
+    };
+    if (explanation != null) result.add(explanation);
+  }
   final rule = trace['ruleId'];
   if (rule != null) {
     result.add(
-      'Read with ${rule.toString().replaceAll('-', ' ')} (version ${trace['ruleVersion'] ?? 'unknown'}).',
+      '${choices.isEmpty ? 'Read' : 'Originally read'} with ${rule.toString().replaceAll('-', ' ')} (version ${trace['ruleVersion'] ?? 'unknown'}).',
     );
   }
   final instruments = trace['instruments'];
   if (instruments is List && instruments.isNotEmpty) {
     result.add(
-      'Matched to your account using the bank and masked digits in the message.',
+      instruments.any((row) => row is Map && row['step'] == 'user_choice')
+          ? 'You chose the account or card for this entry.'
+          : 'Matched to your account using the bank and masked digits in the message.',
     );
   }
   final event = trace['event'];
-  if (event is Map && event['linkRuleId'] != null) {
+  if (event is Map &&
+      event['linkRuleId'] != null &&
+      !choices.any(
+        ['wrong_kind', 'wrong_link', 'not_financial', 'duplicate'].contains,
+      )) {
     final rule = event['linkRuleId'].toString().toLowerCase();
     result.add(switch (rule) {
       String r when r.contains('card') =>
@@ -118,13 +140,14 @@ Future<void> showSmsWhy(
         trace: trace,
         onReport: () {
           Navigator.pop(sheetContext);
-          if (namespace == ref.read(app.cacheNamespaceProvider))
+          if (namespace == ref.read(app.cacheNamespaceProvider)) {
             showSmsCorrection(
               context,
               ref,
               sourceKey: sourceKey,
               eventId: eventId,
             );
+          }
         },
       ),
     );

@@ -30,6 +30,7 @@ class DecisionTrace {
     this.instruments = const [],
     this.event,
     this.category,
+    this.userChoices = const [],
   });
 
   final String appVersion, engineVersion, outcome;
@@ -40,6 +41,7 @@ class DecisionTrace {
   final List<({String factId, String instrumentId, String step})> instruments;
   final Event? event;
   final CategoryDecision? category;
+  final List<CorrectionKind> userChoices;
 
   String? stage(CorrectionKind kind, {bool extractedMaskCorrect = true}) =>
       switch (kind) {
@@ -66,6 +68,8 @@ class DecisionTrace {
   Map<String, Object?> toJson() => {
     ...compact('extraction')..remove('stage'),
     'outcome': outcome,
+    if (userChoices.isNotEmpty)
+      'userChoices': [for (final choice in userChoices) choice.wire],
     'facts': [
       for (final fact in facts)
         {
@@ -85,10 +89,16 @@ class DecisionTrace {
     if (event != null)
       'event': {
         'eventId': event!.eventId,
+        'type': event!.type.wire,
+        'status': event!.status.wire,
         'linkRuleId': event!.linkRuleId,
         'legs': [for (final leg in event!.legs) leg.toJson()],
       },
     if (category != null)
-      'category': {'source': category!.source.wire, 'ruleId': category!.ruleId},
+      'category': {
+        'source': category!.source.wire,
+        'ruleId': category!.ruleId,
+        'slug': category!.slug,
+      },
   };
 }

@@ -4,6 +4,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:uuid/uuid.dart';
 import 'package:pandapay_domain/sms_v2.dart';
 import 'package:pandapay_domain/sms_v2_category.dart';
+import 'package:pandapay_domain/sms_v2_ledger.dart';
 import '../../../app/providers.dart' as app;
 import '../../../data/local/financial_store.dart';
 import '../../../data/local/sms_intake_repository.dart';
@@ -58,15 +59,12 @@ class ReviewController {
           }
           if (!sources.add(source)) continue;
           final facts = FactStore(db, namespace: namespace).forSource(source);
+          final events = EventStore(db, namespace: namespace);
           var event =
-              EventStore(db, namespace: namespace)
-                  .findByFactIds(facts.map((f) => f.factId))
-                  .where((e) => e.eventId == item.payload['eventId'])
-                  .firstOrNull ??
-              EventStore(
-                db,
-                namespace: namespace,
-              ).findByFactIds(facts.map((f) => f.factId)).firstOrNull;
+              (item.payload['eventId'] is String
+                  ? events.get(item.payload['eventId'] as String)
+                  : null) ??
+              events.findByFactIds(facts.map((f) => f.factId)).firstOrNull;
           final raw =
               item.message ??
               SmsIntakeRepository(
@@ -80,15 +78,29 @@ class ReviewController {
                   observedAt: raw.message.receivedAt.toUtc(),
                   sourceKey: source,
                 );
-          final money =
+          // The wire case remains attached to this receipt's original facts.
+          // Its event can already contain newer user facts from earlier edits.
+          final receipt =
               facts.whereType<MovementFact>().firstOrNull ?? facts.firstOrNull;
+          final activeFacts = <String, Fact>{
+            if (event != null)
+              for (final leg in event.legs)
+                leg.factId: ?FactStore(
+                  db,
+                  namespace: namespace,
+                ).get(leg.factId),
+          };
+          final money = event == null
+              ? receipt
+              : moneyFactForEvent(event, activeFacts) ?? receipt;
           final patch = <String, Object?>{...corrected};
           if (patch.remove('_matchEventId') case final String matchId) {
             final target = EventStore(db, namespace: namespace).get(matchId);
             if (kind != CorrectionKind.wrongLink ||
                 target == null ||
-                money == null)
+                money == null) {
               throw ArgumentError('This match is no longer available');
+            }
             final rule =
                 item.payload['linkRuleId']?.toString().toLowerCase() ?? '';
             final notice =
@@ -123,8 +135,9 @@ class ReviewController {
             patch['legs'] = legs.values.map((l) => l.toJson()).toList();
             patch['eventType'] =
                 (notice ? target.type : previous?.type ?? target.type).wire;
-            if (previous != null && previous.eventId != target.eventId)
+            if (previous != null && previous.eventId != target.eventId) {
               patch['_retireEventIds'] = [previous.eventId];
+            }
             patch.remove('_candidateFactId');
             patch.remove('_candidateRole');
             event = target;
@@ -158,7 +171,7 @@ class ReviewController {
               sourceKey: source,
               kind: kind,
               corrected: patch,
-              factIds: money == null ? const [] : [money.factId],
+              factIds: receipt == null ? const [] : [receipt.factId],
               eventId: event?.eventId,
               message: message,
               sharedLearningConsent: hasConsent,
@@ -173,7 +186,14 @@ class ReviewController {
                 ruleVersion:
                     trace['ruleVersion'] as int? ??
                     money?.provenance.ruleVersion,
-                facts: facts,
+                facts: event == null
+                    ? facts
+                    : [
+                        for (final leg in event.legs)
+                          if (leg.role != LegRole.original &&
+                              activeFacts[leg.factId] != null)
+                            activeFacts[leg.factId]!,
+                      ],
                 event: event,
                 category: event == null
                     ? null

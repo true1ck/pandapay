@@ -43,7 +43,11 @@ class LedgerSnapshot {
         // first for stable event identity and linked-refund references.
         ownerByFact[event.eventId] = event;
         for (final leg in event.legs) {
-          if (moneyLegRoles.contains(leg.role)) ownerByFact[leg.factId] = event;
+          if (moneyLegRoles.contains(leg.role) ||
+              (leg.role == LegRole.original &&
+                  factsById[leg.factId] is MovementFact)) {
+            ownerByFact[leg.factId] = event;
+          }
         }
       }
     }

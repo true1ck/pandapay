@@ -16,6 +16,7 @@ import '../storage/fact_store.dart';
 import '../storage/instrument_store.dart';
 import '../storage/ledger_store.dart';
 import '../storage/outbox_store.dart';
+import '../storage/sync_state_store.dart';
 
 /// A device-local correction. [corrected] uses contract field names such as
 /// amountMinor, occurredAt, merchantName, instrumentId, category, or legs.
@@ -94,6 +95,22 @@ class CorrectionsService {
     if (correction.eventId != null && event == null) {
       throw ArgumentError('Event is not in this account');
     }
+    final eventFacts = <String, Fact>{
+      if (event != null)
+        for (final leg in event.legs) leg.factId: ?_facts.get(leg.factId),
+    };
+    final current = event == null
+        ? null
+        : moneyFactForEvent(event, eventFacts) ??
+              event.legs
+                  .where(
+                    (leg) =>
+                        leg.role != LegRole.original &&
+                        leg.role != LegRole.duplicateNotice,
+                  )
+                  .map((leg) => eventFacts[leg.factId])
+                  .nonNulls
+                  .firstOrNull;
     final stage = correction.trace.stage(
       correction.kind,
       extractedMaskCorrect: correction.extractedMaskCorrect,
@@ -148,7 +165,9 @@ class CorrectionsService {
           if (target == null || target.status == InstrumentStatus.rejected) {
             throw ArgumentError('Instrument is not in this account');
           }
-          for (final fact in originalFacts.values) {
+          final reassigned = {...originalFacts};
+          if (current != null) reassigned[current.factId] = current;
+          for (final fact in reassigned.values) {
             _db.execute(
               'UPDATE v2_facts SET instrument_id=? WHERE namespace=? AND fact_id=?',
               [instrumentId, namespace, fact.factId],
@@ -174,7 +193,9 @@ class CorrectionsService {
           if (event == null || originalFacts.length != 1) {
             throw ArgumentError('One source fact and event are required');
           }
-          final original = originalFacts.values.single;
+          final original =
+              current ??
+              (throw ArgumentError('An active event fact is required'));
           final json = original.toJson();
           final id = sha256
               .convert(utf8.encode('user|${correction.id}|${original.factId}'))
@@ -224,7 +245,13 @@ class CorrectionsService {
             ];
           }
           final replacement = Fact.fromJson(patch);
-          _facts.insert(replacement);
+          final previousInstrument =
+              _db.select(
+                    'SELECT instrument_id FROM v2_facts WHERE namespace=? AND fact_id=?',
+                    [namespace, original.factId],
+                  ).single['instrument_id']
+                  as String?;
+          _facts.insert(replacement, instrumentId: previousInstrument);
           _outbox.enqueue('source', source, {
             'sourceKey': source,
             'senderBrand': correction.message == null
@@ -248,7 +275,8 @@ class CorrectionsService {
             legs: [
               for (final leg in event!.legs)
                 if (leg.factId == original.factId) ...[
-                  if (leg.factId == event!.eventId)
+                  if (leg.factId == event!.eventId ||
+                      original.provenance.engine != Engine.user)
                     EventLeg(factId: leg.factId, role: LegRole.original),
                   EventLeg(factId: replacement.factId, role: leg.role),
                 ] else
@@ -279,13 +307,15 @@ class CorrectionsService {
               in correction.corrected['_retireEventIds'] as List? ?? const []) {
             if (correction.kind != CorrectionKind.wrongLink ||
                 id is! String ||
-                id == event!.eventId)
+                id == event!.eventId) {
               throw ArgumentError('Invalid merged event');
+            }
             final other = _events.get(id);
             final linked = event!.legs.map((leg) => leg.factId).toSet();
             if (other == null ||
-                other.legs.any((leg) => !linked.contains(leg.factId)))
+                other.legs.any((leg) => !linked.contains(leg.factId))) {
               throw ArgumentError('Every merged message must remain linked');
+            }
             affected[id] = _events.upsert(
               other.copyWith(
                 type: EventType.unknown,
@@ -353,6 +383,19 @@ class CorrectionsService {
           for (final entry in snapshot.entries) {
             _outbox.enqueue('ledger', entry.entryId, entry.toJson());
           }
+          final instrumentIds = _facts.instrumentIdsSince(DateTime.utc(1900));
+          // Primary merged-event traces win over the event retired by a link edit.
+          for (final changed in affected.values.toList().reversed) {
+            _refreshTrace(
+              correction,
+              changed,
+              allFacts,
+              instruments,
+              instrumentIds,
+              snapshot.categoryByEvent[changed.eventId],
+              primary: changed.eventId == event!.eventId,
+            );
+          }
         }
         _db.execute(
           'INSERT INTO v2_review_items(namespace,review_id,kind,payload,status) VALUES(?,?,?,?,?)',
@@ -368,8 +411,9 @@ class CorrectionsService {
             correction.reportCase ? 'pending' : 'resolved',
           ],
         );
-        if (stage != null && correction.reportCase)
+        if (stage != null && correction.reportCase) {
           _queueCase(correction, stage);
+        }
         _db.execute('RELEASE sms_v2_correction');
         financial.notifyExternalChanges(namespace, const [
           'transactions',
@@ -381,6 +425,94 @@ class CorrectionsService {
         rethrow;
       }
     });
+  }
+
+  void _refreshTrace(
+    SmsCorrection correction,
+    Event event,
+    Map<String, Fact> facts,
+    Map<String, Instrument> instruments,
+    Map<String, String> instrumentIds,
+    CategoryDecision? category, {
+    required bool primary,
+  }) {
+    final active = [
+      for (final leg in event.legs)
+        if (leg.role != LegRole.original && facts[leg.factId] != null)
+          facts[leg.factId]!,
+    ];
+    final money = moneyFactForEvent(event, facts);
+    final sources = {
+      if (primary) correction.sourceKey,
+      if (facts[event.eventId] case final anchor?) anchor.sourceKey,
+      for (final fact in active) fact.sourceKey,
+    };
+    final state = SyncStateStore(_db, namespace: namespace);
+    for (final source in sources) {
+      final saved = state.get('trace:$source');
+      final previous = saved == null
+          ? correction.trace.toJson()
+          : (jsonDecode(saved) as Map).cast<String, Object?>();
+      final choices = <CorrectionKind>{
+        for (final wire in previous['userChoices'] as List? ?? const [])
+          for (final kind in CorrectionKind.values)
+            if (kind.wire == wire) kind,
+      };
+      if (primary) {
+        if ([
+          CorrectionKind.wrongKind,
+          CorrectionKind.notFinancial,
+          CorrectionKind.duplicate,
+        ].contains(correction.kind)) {
+          choices.removeAll([
+            CorrectionKind.wrongKind,
+            CorrectionKind.notFinancial,
+            CorrectionKind.duplicate,
+          ]);
+        }
+        choices.add(correction.kind);
+      }
+      final previousSteps = {
+        for (final row in previous['instruments'] as List? ?? const [])
+          if (row is Map) row['factId']: row['step'],
+      };
+      final trace = DecisionTrace(
+        appVersion:
+            previous['appVersion'] as String? ?? correction.trace.appVersion,
+        engineVersion:
+            previous['engineVersion'] as String? ??
+            correction.trace.engineVersion,
+        bundleVersion:
+            previous['bundleVersion'] as int? ?? correction.trace.bundleVersion,
+        outcome: event.status.wire,
+        ruleId: previous['ruleId'] as String? ?? correction.trace.ruleId,
+        ruleVersion:
+            previous['ruleVersion'] as int? ?? correction.trace.ruleVersion,
+        facts: active,
+        instruments: [
+          for (final fact in active)
+            if (instrumentForFact(
+                  fact,
+                  instruments,
+                  instrumentIdByFactId: instrumentIds,
+                )
+                case final instrument?)
+              (
+                factId: fact.factId,
+                instrumentId: instrument.instrumentId,
+                step:
+                    fact.factId == money?.factId &&
+                        choices.contains(CorrectionKind.wrongInstrument)
+                    ? 'user_choice'
+                    : previousSteps[fact.factId] as String? ?? 'stored',
+              ),
+        ],
+        event: event,
+        category: category,
+        userChoices: choices.toList(),
+      );
+      state.put('trace:$source', jsonEncode(trace.toJson()));
+    }
   }
 
   void _queueCase(SmsCorrection correction, String stage) {
