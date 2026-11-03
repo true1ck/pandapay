@@ -8,6 +8,8 @@ import 'app/providers.dart';
 import 'data/admin_api.dart';
 import 'data/private_admin_auth.dart';
 import 'features/alerts/alerts_screen.dart';
+import 'features/sms_rules/sms_rules_screen.dart';
+import 'features/sms_rules/providers.dart';
 import 'features/auth/login_screen.dart';
 import 'features/catalogue/catalogue_screen.dart';
 import 'features/crowdsource/acceptance_rates_screen.dart';
@@ -346,6 +348,14 @@ class _ConsoleHomeState extends ConsumerState<_ConsoleHome> {
       icon: Icons.privacy_tip_outlined,
       screen: const AnonymizationAuditScreen(),
       refresh: (ref) => ref.invalidate(anonymizationAuditRunsProvider),
+    ),
+    _ConsoleDestination(
+      group: 'SMS rules',
+      label: 'SMS Pipeline Rules',
+      description: 'Review v2 rules, run the golden set, publish cohorts and resolve correction cases.',
+      icon: Icons.account_tree_outlined,
+      screen: const SmsRulesScreen(),
+      refresh: (ref) => ref.invalidate(smsV2RulesProvider),
     ),
     _ConsoleDestination(
       group: 'SMS rules',
