@@ -38,7 +38,7 @@ class SmsTemplate {
 ///
 /// Amounts, dates, masks, UPI IDs and references become placeholders, and every
 /// word seen in fewer than [minMessages] messages (merchant and person names
-/// included) becomes `<W>`. Replacing only numbers left 1,772 groups on the
+/// included) becomes `<W>`. Replacing only numbers left thousands of groups on
 /// a year of real messages; this step is what reaches a few hundred.
 ///
 /// The result is sorted by count, highest first.
