@@ -1,0 +1,105 @@
+{
+  "note": "Canonical JSON: keys sorted by UTF-16 code unit, no whitespace, JSON.stringify string escaping, UTF-8. Signature = Ed25519 over canonical bytes of the bundle without its signature member. WP-13 Dart verifier uses the same file.",
+  "testKey": {
+    "publicKeyPem": "-----BEGIN PUBLIC KEY-----\nMCowBQYDK2VwAyEAg74tPZDifBPNP4lvq1WpLxqNkzBE6QvX4QaUhbapRaQ=\n-----END PUBLIC KEY-----\n",
+    "privateKeyPem": "-----BEGIN PRIVATE KEY-----\nMC4CAQAwBQYDK2VwBCIEIFb8eq0aD0JDh9+Droj6p+qFkb2yCEQGuQ7LXUsWkpEx\n-----END PRIVATE KEY-----\n"
+  },
+  "canonical": [
+    {
+      "name": "key_order",
+      "input": {
+        "b": 1,
+        "a": {
+          "d": [
+            3,
+            2,
+            1
+          ],
+          "c": null
+        },
+        "A": "x"
+      },
+      "canonical": "{\"A\":\"x\",\"a\":{\"c\":null,\"d\":[3,2,1]},\"b\":1}",
+      "sha256": "67c18ec9f8d42ba360b0319840fba6f338b5faafe566d6edf6eae08dee32174e"
+    },
+    {
+      "name": "whitespace_and_escapes",
+      "input": {
+        "s": "line\nbreak \t \"quoted\" back\\slash",
+        "e": ""
+      },
+      "canonical": "{\"e\":\"\",\"s\":\"line\\nbreak \\t \\\"quoted\\\" back\\\\slash\"}",
+      "sha256": "f6d2de6a110c3ed9c65055fa62a598e7ab34454ad525b13a44fa69a12fb5d702"
+    },
+    {
+      "name": "unicode",
+      "input": {
+        "name": "café ₹ 🐼",
+        "é": 1,
+        "z": 2
+      },
+      "canonical": "{\"name\":\"café ₹ 🐼\",\"z\":2,\"é\":1}",
+      "sha256": "64e1462e06f89da2097bc766a123f227aad75a34cada1149544d2e88475b975d"
+    },
+    {
+      "name": "numbers",
+      "input": {
+        "i": 0,
+        "n": -12,
+        "f": 0.99,
+        "big": 4500000
+      },
+      "canonical": "{\"big\":4500000,\"f\":0.99,\"i\":0,\"n\":-12}",
+      "sha256": "2976fea37cd0e5434167b0dca48f2c230a0928e98c553e62aa887ceb241dd052"
+    },
+    {
+      "name": "nested_arrays",
+      "input": [
+        [],
+        {},
+        [
+          {
+            "b": 2,
+            "a": 1
+          }
+        ],
+        [
+          null,
+          true,
+          false
+        ]
+      ],
+      "canonical": "[[],{},[{\"a\":1,\"b\":2}],[null,true,false]]",
+      "sha256": "f7a66d6ac1b29e1f4ce26e4058d47595f9acf783634af38fd5c7a838619c183e"
+    }
+  ],
+  "signedBundle": {
+    "input": {
+      "schema": "pandapay.sms.rules/2",
+      "bundleVersion": 7,
+      "createdAt": "2026-11-20T00:00:00Z",
+      "expiresAt": "2026-11-27T00:00:00Z",
+      "minEngineVersion": "2.0.0",
+      "taxonomyVersion": 1,
+      "senders": [
+        {
+          "brand": "HDFCBK",
+          "issuerSlug": "hdfc",
+          "issuerKind": "bank",
+          "aliases": []
+        }
+      ],
+      "ignoreRules": [],
+      "rules": [],
+      "counterpartyPurposes": [],
+      "linkRules": [],
+      "categoryRules": [],
+      "merchantAliases": [],
+      "signature": null
+    },
+    "keyId": "sms-rules-test",
+    "canonical": "{\"bundleVersion\":7,\"categoryRules\":[],\"counterpartyPurposes\":[],\"createdAt\":\"2026-11-20T00:00:00Z\",\"expiresAt\":\"2026-11-27T00:00:00Z\",\"ignoreRules\":[],\"linkRules\":[],\"merchantAliases\":[],\"minEngineVersion\":\"2.0.0\",\"rules\":[],\"schema\":\"pandapay.sms.rules/2\",\"senders\":[{\"aliases\":[],\"brand\":\"HDFCBK\",\"issuerKind\":\"bank\",\"issuerSlug\":\"hdfc\"}],\"taxonomyVersion\":1}",
+    "sha256": "2e21990146e2367885e03f3cb74ca1a90b21a2b86e0112fb81ef27af72f28412",
+    "signatureBase64": "pXOrOcJ1mzdOZl6H1GRjhKOHmx175Iz/6jkkkfUfksLvoKeB569dVdpNlkQmes3nCNxF6WzBKSQK0gu92TE7CQ=="
+  }
+}

@@ -437,6 +437,34 @@
       "disposition": "platform_ops",
       "reason": "Platform-level worker, telemetry, or learning state; not part of the account-scoped portable export."
     },
+    "sms_v2_rules": {
+      "disposition": "platform_ops",
+      "reason": "Platform-level worker, telemetry, or learning state; not part of the account-scoped portable export."
+    },
+    "sms_v2_rule_cohorts": {
+      "disposition": "platform_ops",
+      "reason": "Platform-level worker, telemetry, or learning state; not part of the account-scoped portable export."
+    },
+    "sms_v2_bundles": {
+      "disposition": "platform_ops",
+      "reason": "Platform-level worker, telemetry, or learning state; not part of the account-scoped portable export."
+    },
+    "sms_v2_bundle_parts": {
+      "disposition": "platform_ops",
+      "reason": "Platform-level worker, telemetry, or learning state; not part of the account-scoped portable export."
+    },
+    "sms_v2_testers": {
+      "disposition": "platform_ops",
+      "reason": "Platform-level worker, telemetry, or learning state; not part of the account-scoped portable export."
+    },
+    "sms_v2_rule_stats_daily": {
+      "disposition": "platform_ops",
+      "reason": "Platform-level worker, telemetry, or learning state; not part of the account-scoped portable export."
+    },
+    "sms_v2_rule_stats_profile_daily": {
+      "disposition": "platform_ops",
+      "reason": "Platform-level worker, telemetry, or learning state; not part of the account-scoped portable export."
+    },
     "sms_rule_bundles": {
       "disposition": "platform_ops",
       "reason": "Platform-level worker, telemetry, or learning state; not part of the account-scoped portable export."
