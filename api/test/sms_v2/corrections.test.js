@@ -27,7 +27,7 @@ test('redacted skeleton hash must match the normalized brand and exact content',
 test('absent consent persists compact trace and kind without corrected values or template', async () => {
   let inserted;
   const client = { query:async (sql,args) => {
-    if (sql.includes('FROM sms_v2_facts')) return {rows:base.factIds.map(fact_id=>({fact_id}))};
+    if (sql.includes('FROM sms_v2_facts')) return {rows:base.factIds.map(fact_id=>({fact_id,source_key:base.sourceKey}))};
     if (sql.includes('FROM sms_v2_events')) return {rows:[{event_id:base.eventId}]};
     if (sql.includes('FROM user_consents')) return {rows:[{granted:false}]};
     inserted = args; return {rows:[{case_id:'case'}]};
@@ -71,4 +71,31 @@ test('status sync is owner scoped and advances an opaque sequence cursor', async
   },'profile','4');
   assert.equal(result.cursor,'8');
   assert.equal(result.items[0].caseId,'c');
+});
+
+test('private synthetic example preparation is strict, audited and supports the frozen decision request', async () => {
+  const {saveSyntheticExample,validateSyntheticExample,decideCase}=require('../../src/sms_v2/corrections_route');
+  const id='00000000-0000-4000-8000-000000000001';
+  const row={case_id:id,sender_brand:'HDFCBK',redacted_template:'Rs.<AMT> spent',template_hash:'a'.repeat(64),
+    status:'open',stage:'extraction',corrected:{},decision:null};
+  let audits=0;
+  const client={query:async(sql,args)=>{
+    if(sql.startsWith('SELECT'))return{rows:[row]};
+    if(sql.includes('corrected=jsonb_set'))row.corrected.goldenExample=JSON.parse(args[1]);
+    if(sql.includes("SET status='decided'")){row.status='decided';row.output=args[3];}
+    if(sql.includes('INSERT INTO admin_audit_log'))audits++;
+    return{rows:[]};
+  }};
+  const example={source:'synthetic',body:'Rs.10 spent',observedAt:'2026-11-01T12:00:00Z',
+    expect:{facts:[{factType:'movement',amounts:[{role:'posted',minor:1000,unit:'INR'}]}]}};
+  for(const invalid of [
+    {...example,source:'redacted_real'}, {...example,extra:true},
+    {...example,observedAt:'not-a-date'}, {...example,expect:{facts:[{factType:'typo'}]}},
+    {...example,expect:{facts:[]}}, {...example,expect:{facts:[],unknown:true,ignore:true}},
+  ])assert.throws(()=>validateSyntheticExample(invalid),/synthetic_example_invalid/);
+  assert.equal((await saveSyntheticExample(client,id,example,'actor')).readyForCodeFix,true);
+  const decided=await decideCase(client,id,{decision:'code_fix',reason:'Synthetic extraction regression'},'actor');
+  assert.equal(decided.goldenCase.messages[0].body,'Rs.10 spent');
+  assert.equal(decided.goldenCase.source,'synthetic');
+  assert.equal(audits,2);
 });

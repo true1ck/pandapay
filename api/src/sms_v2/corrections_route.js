@@ -48,8 +48,9 @@ async function submitCorrection(client, profileId, body, { sharedLearningEligibl
   if (body.trace.stage !== stage) throw Object.assign(new Error('correction_stage_mismatch'), { status: 400 });
   // A signed-in account may report only its own persisted facts/events.
   if (body.factIds.length) {
-    const owned = await client.query('SELECT fact_id FROM sms_v2_facts WHERE profile_id=$1 AND fact_id=ANY($2::text[])', [profileId, body.factIds]);
-    if (new Set(owned.rows.map(row => row.fact_id)).size !== new Set(body.factIds).size)
+    const owned = await client.query('SELECT fact_id,source_key FROM sms_v2_facts WHERE profile_id=$1 AND fact_id=ANY($2::text[])', [profileId, body.factIds]);
+    if (new Set(owned.rows.map(row => row.fact_id)).size !== new Set(body.factIds).size ||
+        owned.rows.some(row => row.source_key !== body.sourceKey))
       throw Object.assign(new Error('correction_facts_not_found'), { status: 400 });
   }
   if (body.eventId) {
@@ -154,6 +155,69 @@ function decisionOutput(row, decision) {
   } };
 }
 
+function validateSyntheticExample(body) {
+  const fail = () => { throw Object.assign(new Error('synthetic_example_invalid'), { status:400 }); };
+  if (!body || typeof body !== 'object' || Array.isArray(body) ||
+      Object.keys(body).sort().join(',') !== 'body,expect,observedAt,source' ||
+      body.source !== 'synthetic' || typeof body.body !== 'string' ||
+      !body.body.trim() || body.body.length > 20000 ||
+      typeof body.observedAt !== 'string' ||
+      !/^\d{4}-\d{2}-\d{2}T.*Z$/.test(body.observedAt) ||
+      !Number.isFinite(Date.parse(body.observedAt)) ||
+      !body.expect || typeof body.expect !== 'object' || Array.isArray(body.expect) ||
+      !Array.isArray(body.expect.facts) || body.expect.facts.length > 20 ||
+      Object.keys(body.expect).some(key => !['facts','unknown','ignore'].includes(key)) ||
+      ['unknown','ignore'].some(key => body.expect[key] !== undefined && typeof body.expect[key] !== 'boolean') ||
+      body.expect.unknown === true && body.expect.ignore === true ||
+      body.expect.facts.length === 0 && body.expect.unknown !== true && body.expect.ignore !== true ||
+      body.expect.facts.length > 0 && (body.expect.unknown === true || body.expect.ignore === true)) fail();
+  const types = new Set(['movement','attempt','hold','balance_snapshot','limit_change',
+    'bill_due','mandate','reward','info','instrument_hint']);
+  const amountRoles = new Set(['posted','held','released','scheduled','due_total','due_minimum',
+    'outstanding','available_balance','available_credit','credit_limit','ceiling',
+    'points_earned','points_redeemed','points_balance','cash_value']);
+  const fields = new Set(['factType','instrument','counterparty','amounts','attrs',
+    'references','confidence','occurredAt']);
+  for (const fact of body.expect.facts) {
+    if (!fact || typeof fact !== 'object' || Array.isArray(fact) ||
+        !types.has(fact.factType) || Object.keys(fact).some(key => !fields.has(key))) fail();
+    if (fact.amounts !== undefined && (!Array.isArray(fact.amounts) ||
+        fact.amounts.length > 20 || fact.amounts.some(amount =>
+          !amount || typeof amount !== 'object' || Array.isArray(amount) ||
+          Object.keys(amount).sort().join(',') !== 'minor,role,unit' ||
+          !amountRoles.has(amount.role) ||
+          !Number.isSafeInteger(amount.minor) || amount.minor < 0 ||
+          !['INR','POINTS'].includes(amount.unit)))) fail();
+    if (fact.confidence !== undefined &&
+        (typeof fact.confidence !== 'number' || fact.confidence < 0 || fact.confidence > 1)) fail();
+    if (fact.occurredAt !== undefined && fact.occurredAt !== null &&
+        (typeof fact.occurredAt !== 'string' || !Number.isFinite(Date.parse(fact.occurredAt)))) fail();
+    for (const key of ['instrument','counterparty','attrs','references']) {
+      if (fact[key] !== undefined && fact[key] !== null &&
+          (typeof fact[key] !== 'object' || Array.isArray(fact[key]))) fail();
+    }
+  }
+  if (Buffer.byteLength(JSON.stringify(body.expect)) > 32768) fail();
+  return { body:body.body, observedAt:body.observedAt, expect:body.expect };
+}
+
+async function saveSyntheticExample(client, caseId, body, actorId) {
+  if (!uuid.test(caseId)) throw Object.assign(new Error('case_id_invalid'), {status:400});
+  const example = validateSyntheticExample(body);
+  const found = await client.query('SELECT * FROM sms_v2_correction_cases WHERE case_id=$1 FOR UPDATE', [caseId]);
+  const row = found.rows[0];
+  if (!row) throw Object.assign(new Error('case_not_found'), {status:404});
+  if (!row.sender_brand) throw Object.assign(new Error('sender_brand_required'), {status:409});
+  if (row.status !== 'open') throw Object.assign(new Error('case_already_decided'), {status:409});
+  await client.query(
+    "UPDATE sms_v2_correction_cases SET corrected=jsonb_set(corrected,'{goldenExample}',$2::jsonb),updated_at=clock_timestamp() WHERE case_id=$1",
+    [caseId,JSON.stringify(example)]);
+  await client.query(
+    "INSERT INTO admin_audit_log(admin_id,action,entity,entity_id,after_value,reason) VALUES($1,'sms_v2_correction_example','sms_v2_correction_cases',$2,$3,'Reviewed synthetic regression example')",
+    [actorId,caseId,{source:'synthetic',exampleSha256:digest(canonicalize(example))}]);
+  return { caseId, readyForCodeFix:true };
+}
+
 async function listCases(client, query) {
   const groupBy = query.groupBy || 'template';
   if (!['template', 'stage'].includes(groupBy) ||
@@ -210,6 +274,8 @@ function registerPrivateCorrections(api) {
     });
   }
   route('get', '/admin/sms/v2/corrections', (client, req) => listCases(client, req.query));
+  route('put', '/admin/sms/v2/corrections/:caseId/example', (client, req) =>
+    saveSyntheticExample(client, req.params.caseId, req.body, req.admin.userId));
   route('post', '/admin/sms/v2/corrections/:caseId/decision', (client, req) =>
     decideCase(client, req.params.caseId, req.body, req.admin.userId));
   route('get', '/admin/sms/v2/corrections/:caseId/export', async (client, req) => {
@@ -221,5 +287,5 @@ function registerPrivateCorrections(api) {
 }
 
 module.exports = { stageFor, templateMetadata, submitCorrection, correctionStatusSince,
-  patternFromSkeleton, decisionOutput, listCases, decideCase,
+  patternFromSkeleton, decisionOutput, validateSyntheticExample, saveSyntheticExample, listCases, decideCase,
   createCorrectionsHandler, registerCorrections, registerPrivateCorrections };
