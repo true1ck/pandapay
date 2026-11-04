@@ -1,0 +1,121 @@
+[
+  {
+    "id": "BRK-EXCH-FUNDBAL-01",
+    "version": 1,
+    "family": "broker_balance",
+    "senders": [
+      "*"
+    ],
+    "priority": 460,
+    "match": {
+      "pattern": "^\\s*(?<broker>[a-z0-9]+?)(?=\\s|securit|broking|stock|invest|capital|financ|tech|ltd|limited|private|pvt)[a-z0-9 .&]*?\\s+(?:on|at\\s+eod)\\s+(?<date>\\d{2}[-/]\\d{2}[-/]\\d{2,4})\\s+reported\\s+your\\s+fund\\s+bal(?:ance)?\\s+(?:rs\\.?|inr|₹)\\s*(?<bal>\\d[\\d,]*(?:\\.\\d+)?)(?![\\d.])",
+      "flags": "i"
+    },
+    "emit": [
+      {
+        "factType": "balance_snapshot",
+        "amounts": [
+          {
+            "role": "available_balance",
+            "from": "bal",
+            "unit": "INR"
+          }
+        ],
+        "instrument": {
+          "kind": "broker",
+          "issuerSlugFrom": "broker"
+        },
+        "occurredAt": {
+          "from": "date",
+          "formats": [
+            "dd-MM-yyyy",
+            "dd-MM-yy",
+            "dd/MM/yyyy",
+            "dd/MM/yy"
+          ]
+        }
+      }
+    ],
+    "confidence": 0.92,
+    "examples": [
+      {
+        "sender": "VM-NSESMS-S",
+        "body": "ACME SECURITIES PRIVATE LIMITED on 05-11-26 reported your Fund bal Rs.1250.500 & Securities bal 0. This excludes your Bank, DP & PMS bal with the broker-NSE",
+        "expectFactTypes": [
+          "balance_snapshot"
+        ]
+      },
+      {
+        "sender": "VM-BSELTD-S",
+        "body": "ACMEBROKINGLTD at EOD 05/11/2026 reported your Fund bal Rs 0.000 & Securities bal 0. This excludes your Bank, DP and PMS bal with the broker-BSE",
+        "expectFactTypes": [
+          "balance_snapshot"
+        ]
+      },
+      {
+        "sender": "VM-NSESMS-S",
+        "body": "ACME SECURITIES PRIVATE LIMITED on 05-11-26 reported your Fund bal Rs.-85.250 & Securities bal 0. This excludes your Bank, DP & PMS bal with the broker-NSE",
+        "expectFactTypes": []
+      }
+    ],
+    "status": "active",
+    "createdBy": "lane-i",
+    "updatedAt": "2026-11-05T00:00:00Z"
+  },
+  {
+    "id": "BRK-EXCH-FUNDBAL-NEG-01",
+    "version": 1,
+    "family": "broker_balance",
+    "senders": [
+      "*"
+    ],
+    "priority": 461,
+    "match": {
+      "pattern": "^\\s*(?<broker>[a-z0-9]+?)(?=\\s|securit|broking|stock|invest|capital|financ|tech|ltd|limited|private|pvt)[a-z0-9 .&]*?\\s+(?:on|at\\s+eod)\\s+(?<date>\\d{2}[-/]\\d{2}[-/]\\d{2,4})\\s+reported\\s+your\\s+fund\\s+bal(?:ance)?\\s+(?:rs\\.?|inr|₹)\\s*-\\s*(?<owed>\\d[\\d,]*(?:\\.\\d+)?)(?![\\d.])",
+      "flags": "i"
+    },
+    "emit": [
+      {
+        "factType": "balance_snapshot",
+        "amounts": [
+          {
+            "role": "outstanding",
+            "from": "owed",
+            "unit": "INR"
+          }
+        ],
+        "instrument": {
+          "kind": "broker",
+          "issuerSlugFrom": "broker"
+        },
+        "occurredAt": {
+          "from": "date",
+          "formats": [
+            "dd-MM-yyyy",
+            "dd-MM-yy",
+            "dd/MM/yyyy",
+            "dd/MM/yy"
+          ]
+        }
+      }
+    ],
+    "confidence": 0.9,
+    "examples": [
+      {
+        "sender": "VM-NSESMS-S",
+        "body": "ACME SECURITIES PRIVATE LIMITED on 05-11-26 reported your Fund bal Rs.-85.250 & Securities bal 0. This excludes your Bank, DP & PMS bal with the broker-NSE",
+        "expectFactTypes": [
+          "balance_snapshot"
+        ]
+      },
+      {
+        "sender": "VM-NSESMS-S",
+        "body": "Dear Investor, trade value payable to you by ACME SECURITIES PRIVATE LIMITED on 05-11-26 is Rs.1250.50.",
+        "expectFactTypes": []
+      }
+    ],
+    "status": "active",
+    "createdBy": "lane-i",
+    "updatedAt": "2026-11-05T00:00:00Z"
+  }
+]

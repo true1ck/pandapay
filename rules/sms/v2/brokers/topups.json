@@ -1,0 +1,127 @@
+[
+  {
+    "id": "BRK-TOPUP-SENT-01",
+    "version": 1,
+    "family": "broker_topup",
+    "senders": [
+      "*"
+    ],
+    "priority": 845,
+    "match": {
+      "pattern": "sent\\s+(?:rs\\.?|inr|₹)\\s*(?<amt>[\\d,]+(?:\\.\\d{1,2})?)[\\s\\S]{0,80}?from\\s+[a-z ]*?(?:a/c|acct?\\.?|account)\\s*(?:no\\.?\\s*)?(?:ending\\s*(?:with\\s*|in\\s*)?)?(?:[x*•.]+\\s*)?(?<mask>\\d{2,16})\\b[\\s\\S]{0,80}?\\bto\\s+(?<broker>(?:zerodha|groww|upstox|rksv|kotak\\s*sec\\w*|kotak\\s+neo|indmoney|ind\\s*money|angel\\s*(?:one|broking)|dhan\\b|univest|paytm\\s+money|hdfc\\s*sec\\w*|icici\\s*sec\\w*|icici\\s+direct|5\\s*paisa|motilal\\s+oswal|sharekhan|nu\\s*investors|iccl|indian\\s+clearing|nse\\s+clearing|bse\\s*star|coin\\s+by\\s+zerodha|smallcase|et\\s+money|kuvera|mutual\\s+fund|\\bmf\\b|cams\\b|kfin\\w*)[a-z0-9 .&]*?)(?=\\s*(?:[.,;()]|[\\r\\n]|\\s(?:ref|refno|on|upi|via|umrn|avl|utr|if|call|sms)\\b|-\\s*[a-z]|$))",
+      "flags": "i",
+      "rejectAny": [
+        "failed",
+        "declined"
+      ]
+    },
+    "emit": [
+      {
+        "factType": "movement",
+        "attrs": {
+          "direction": "debit",
+          "purpose": "investment",
+          "rail": "upi"
+        },
+        "amounts": [
+          {
+            "role": "posted",
+            "from": "amt",
+            "unit": "INR"
+          }
+        ],
+        "instrument": {
+          "kind": "bank_account",
+          "maskFrom": "mask"
+        },
+        "counterparty": {
+          "kind": "merchant",
+          "nameFrom": "broker",
+          "transforms": [
+            "sanitizeNarration"
+          ]
+        }
+      }
+    ],
+    "confidence": 0.9,
+    "examples": [
+      {
+        "sender": "VM-HDFCBK-S",
+        "body": "Sent Rs.5000.00 From Example Bank A/c *1234 To BSE STAR MF On 05/11/26 Ref 432198765432",
+        "expectFactTypes": [
+          "movement"
+        ]
+      },
+      {
+        "sender": "VM-HDFCBK-S",
+        "body": "Sent Rs.5000.00 From Example Bank A/c *1234 To RAVI KUMAR On 05/11/26 Ref 432198765432",
+        "expectFactTypes": []
+      }
+    ],
+    "status": "active",
+    "createdBy": "lane-i",
+    "updatedAt": "2026-11-05T00:00:00Z"
+  },
+  {
+    "id": "BRK-MF-NACH-DEBIT-01",
+    "version": 1,
+    "family": "mf_debit",
+    "senders": [
+      "*"
+    ],
+    "priority": 835,
+    "match": {
+      "pattern": "(?:rs\\.?|inr|₹)\\s*(?<amt>[\\d,]+(?:\\.\\d{1,2})?)\\s+(?:has been\\s+|is\\s+|was\\s+)?debited\\s+(?:from|in)\\s+(?:your\\s+)?(?:a/c|acct?\\.?|account)\\s*(?:no\\.?\\s*)?(?:ending\\s*(?:with\\s*|in\\s*)?)?(?:[x*•.]+\\s*)?(?<mask>\\d{2,16})\\b[\\s\\S]{0,80}?(?:nach|ecs|si)[\\s/-]*(?:dr[\\s/-]*)?(?:iccl|indian\\s+clearing|nse\\s+clearing|bse\\s*star|mutual\\s+fund|\\bmf\\b|\\bamc\\b|\\bsip\\b)",
+      "flags": "i",
+      "rejectAny": [
+        "failed",
+        "returned",
+        "unpaid",
+        "bounced",
+        "insufficient"
+      ]
+    },
+    "emit": [
+      {
+        "factType": "movement",
+        "attrs": {
+          "direction": "debit",
+          "purpose": "investment",
+          "rail": "nach"
+        },
+        "amounts": [
+          {
+            "role": "posted",
+            "from": "amt",
+            "unit": "INR"
+          }
+        ],
+        "instrument": {
+          "kind": "bank_account",
+          "maskFrom": "mask"
+        },
+        "counterparty": {
+          "kind": "merchant"
+        }
+      }
+    ],
+    "confidence": 0.88,
+    "examples": [
+      {
+        "sender": "VM-EXMPBK-S",
+        "body": "Rs.5,000.00 debited from A/c XX1234 on 05-11-26 towards NACH-DR-ICCL SIP. Avl Bal Rs 20,000.00",
+        "expectFactTypes": [
+          "movement"
+        ]
+      },
+      {
+        "sender": "VM-EXMPBK-S",
+        "body": "Rs.5,000.00 debited from A/c XX1234 on 05-11-26 towards NACH-DR-ELECTRICITY BILL. Avl Bal Rs 20,000.00",
+        "expectFactTypes": []
+      }
+    ],
+    "status": "active",
+    "createdBy": "lane-i",
+    "updatedAt": "2026-11-05T00:00:00Z"
+  }
+]
