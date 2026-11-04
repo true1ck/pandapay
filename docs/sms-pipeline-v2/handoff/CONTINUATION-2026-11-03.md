@@ -275,3 +275,9 @@ SMS_V2_LOCAL_RIG=/tmp/pandapay-sms-rig.EXAMPLE flutter test --no-pub --concurren
 ```
 
 All 19 tests passed. The local runbook has the simulator and later physical-device instructions. No shared service or physical phone was changed.
+
+#### USB signing and install attempt
+
+Xcode Settings showed the signed-in Personal Team. The command-line build still reported `No Accounts` when requesting new profiles. Building Runner in Xcode with the wired iPhone selected created development provisioning profiles for the separate `app.pandapay.pandapay.smsv2rig` app and widget. The Debug build succeeded, and `codesign --verify --deep --strict` passed for the app bundle. The rig health endpoint also returned 200 with its test CA.
+
+Xcode Run reached the install step. iOS rejected the app because the phone already had three apps installed with a free developer profile. The existing apps stayed installed, and the temporary build settings were restored. The owner can free a development-app slot before the next USB attempt. Physical sign-in, sync and the Shortcut smoke remain unverified.
