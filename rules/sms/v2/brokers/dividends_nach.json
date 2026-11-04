@@ -1,0 +1,426 @@
+[
+  {
+    "id": "BRK-DIV-NACH-DIV-B-01",
+    "version": 1,
+    "family": "dividend",
+    "senders": [
+      "*"
+    ],
+    "priority": 721,
+    "match": {
+      "pattern": "(?:a/c|acct?\\.?|account)\\s*(?:no\\.?\\s*)?(?:ending\\s*(?:with\\s*|in\\s*)?)?(?:[x*•.]+\\s*)?\\d*?(?<mask>\\d{2,4})\\b\\s+has\\s+a\\s+credit\\s+by\\s+nach\\s*[-:]\\s*(?<payer>[a-z0-9 .&_-]*?div[a-z0-9 .&_-]*?)\\s+of\\s+(?:rs\\.?|inr|₹)\\s*(?<amt>[\\d,]+(?:\\.\\d{1,2})?)\\s+on\\s+(?<date>\\d{2}[-/]\\d{2}[-/]\\d{2,4})\\.?\\s*avl\\s+bal\\s*(?:rs\\.?|inr|₹)\\s*(?<bal>[\\d,]+(?:\\.\\d{1,2})?)",
+      "flags": "i"
+    },
+    "emit": [
+      {
+        "factType": "movement",
+        "attrs": {
+          "direction": "credit",
+          "purpose": "dividend",
+          "rail": "nach"
+        },
+        "amounts": [
+          {
+            "role": "posted",
+            "from": "amt",
+            "unit": "INR"
+          }
+        ],
+        "occurredAt": {
+          "from": "date",
+          "formats": [
+            "dd-MM-yyyy",
+            "dd-MM-yy",
+            "dd/MM/yyyy",
+            "dd/MM/yy"
+          ]
+        },
+        "instrument": {
+          "kind": "bank_account",
+          "maskFrom": "mask"
+        },
+        "counterparty": {
+          "kind": "merchant",
+          "nameFrom": "payer",
+          "transforms": [
+            "sanitizeNarration"
+          ]
+        }
+      },
+      {
+        "factType": "balance_snapshot",
+        "amounts": [
+          {
+            "role": "available_balance",
+            "from": "bal",
+            "unit": "INR"
+          }
+        ],
+        "instrument": {
+          "sameAs": 0
+        },
+        "attrs": {
+          "asOf": {
+            "sameAs": 0,
+            "field": "occurredAt"
+          }
+        }
+      }
+    ],
+    "confidence": 0.92,
+    "examples": [
+      {
+        "sender": "VM-SBIBNK-S",
+        "body": "Dear Customer,Your A/C XXXXX654321 has a credit by NACH- ACME CORP DIV 2026 of Rs 12.00 on 05/11/26. Avl Bal Rs 1,500.25. Download YONO-SBI",
+        "expectFactTypes": [
+          "movement",
+          "balance_snapshot"
+        ]
+      },
+      {
+        "sender": "VM-SBIBNK-S",
+        "body": "Dear Customer,Your A/C XXXXX654321 has a debit by NACH- ACME CORP DIV 2026 of Rs 12.00 on 05/11/26. Avl Bal Rs 1,500.25.",
+        "expectFactTypes": []
+      }
+    ],
+    "status": "active",
+    "createdBy": "lane-i",
+    "updatedAt": "2026-11-05T00:00:00Z"
+  },
+  {
+    "id": "BRK-DIV-NACH-DIV-01",
+    "version": 1,
+    "family": "dividend",
+    "senders": [
+      "*"
+    ],
+    "priority": 720,
+    "match": {
+      "pattern": "(?:a/c|acct?\\.?|account)\\s*(?:no\\.?\\s*)?(?:ending\\s*(?:with\\s*|in\\s*)?)?(?:[x*•.]+\\s*)?\\d*?(?<mask>\\d{2,4})\\b\\s+has\\s+a\\s+credit\\s+by\\s+nach\\s*[-:]\\s*(?<payer>[a-z0-9 .&_-]*?div[a-z0-9 .&_-]*?)\\s+of\\s+(?:rs\\.?|inr|₹)\\s*(?<amt>[\\d,]+(?:\\.\\d{1,2})?)\\s+on\\s+(?<date>\\d{2}[-/]\\d{2}[-/]\\d{2,4})",
+      "flags": "i"
+    },
+    "emit": [
+      {
+        "factType": "movement",
+        "attrs": {
+          "direction": "credit",
+          "purpose": "dividend",
+          "rail": "nach"
+        },
+        "amounts": [
+          {
+            "role": "posted",
+            "from": "amt",
+            "unit": "INR"
+          }
+        ],
+        "occurredAt": {
+          "from": "date",
+          "formats": [
+            "dd-MM-yyyy",
+            "dd-MM-yy",
+            "dd/MM/yyyy",
+            "dd/MM/yy"
+          ]
+        },
+        "instrument": {
+          "kind": "bank_account",
+          "maskFrom": "mask"
+        },
+        "counterparty": {
+          "kind": "merchant",
+          "nameFrom": "payer",
+          "transforms": [
+            "sanitizeNarration"
+          ]
+        }
+      }
+    ],
+    "confidence": 0.9,
+    "examples": [
+      {
+        "sender": "VM-SBIBNK-S",
+        "body": "Dear Customer,Your A/C XXXXX654321 has a credit by NACH- ACME CORP DIV 2026 of Rs 12.00 on 05/11/26. Download YONO-SBI",
+        "expectFactTypes": [
+          "movement"
+        ]
+      },
+      {
+        "sender": "VM-SBIBNK-S",
+        "body": "Dear Customer,Your A/C XXXXX654321 has a debit by NACH- ACME CORP DIV 2026 of Rs 12.00 on 05/11/26. Avl Bal Rs 1,500.25.",
+        "expectFactTypes": []
+      }
+    ],
+    "status": "active",
+    "createdBy": "lane-i",
+    "updatedAt": "2026-11-05T00:00:00Z"
+  },
+  {
+    "id": "BRK-DIV-NACH-GENERIC-B-01",
+    "version": 1,
+    "family": "dividend",
+    "senders": [
+      "*"
+    ],
+    "priority": 701,
+    "match": {
+      "pattern": "(?:a/c|acct?\\.?|account)\\s*(?:no\\.?\\s*)?(?:ending\\s*(?:with\\s*|in\\s*)?)?(?:[x*•.]+\\s*)?\\d*?(?<mask>\\d{2,4})\\b\\s+has\\s+a\\s+credit\\s+by\\s+nach\\s*[-:]\\s*(?<payer>[a-z0-9 .&_-]+?)\\s+of\\s+(?:rs\\.?|inr|₹)\\s*(?<amt>[\\d,]+(?:\\.\\d{1,2})?)\\s+on\\s+(?<date>\\d{2}[-/]\\d{2}[-/]\\d{2,4})\\.?\\s*avl\\s+bal\\s*(?:rs\\.?|inr|₹)\\s*(?<bal>[\\d,]+(?:\\.\\d{1,2})?)",
+      "flags": "i",
+      "rejectAny": [
+        "salary",
+        "refund",
+        "pension",
+        "subsid",
+        "dbt",
+        "lpg",
+        "gst",
+        "income tax",
+        "epfo",
+        "insurance",
+        "premium",
+        "emi",
+        "loan",
+        "cashback",
+        "reversal",
+        "pfms",
+        "govt",
+        "government",
+        "scholarship",
+        "interest",
+        "wages",
+        "bonus"
+      ]
+    },
+    "emit": [
+      {
+        "factType": "movement",
+        "attrs": {
+          "direction": "credit",
+          "purpose": "dividend",
+          "rail": "nach"
+        },
+        "amounts": [
+          {
+            "role": "posted",
+            "from": "amt",
+            "unit": "INR"
+          }
+        ],
+        "occurredAt": {
+          "from": "date",
+          "formats": [
+            "dd-MM-yyyy",
+            "dd-MM-yy",
+            "dd/MM/yyyy",
+            "dd/MM/yy"
+          ]
+        },
+        "instrument": {
+          "kind": "bank_account",
+          "maskFrom": "mask"
+        },
+        "counterparty": {
+          "kind": "merchant",
+          "nameFrom": "payer",
+          "transforms": [
+            "sanitizeNarration"
+          ]
+        }
+      },
+      {
+        "factType": "balance_snapshot",
+        "amounts": [
+          {
+            "role": "available_balance",
+            "from": "bal",
+            "unit": "INR"
+          }
+        ],
+        "instrument": {
+          "sameAs": 0
+        },
+        "attrs": {
+          "asOf": {
+            "sameAs": 0,
+            "field": "occurredAt"
+          }
+        }
+      }
+    ],
+    "confidence": 0.72,
+    "examples": [
+      {
+        "sender": "VM-SBIBNK-S",
+        "body": "Dear Customer,Your A/C XXXXX654321 has a credit by NACH- ACME INDUSTRIES LTD of Rs 6.00 on 05/11/26. Avl Bal Rs 1,500.25. Download YONO-SBI",
+        "expectFactTypes": [
+          "movement",
+          "balance_snapshot"
+        ]
+      },
+      {
+        "sender": "VM-SBIBNK-S",
+        "body": "Dear Customer,Your A/C XXXXX654321 has a credit by NACH- STATE SUBSIDY DBT of Rs 6.00 on 05/11/26. Avl Bal Rs 1,500.25.",
+        "expectFactTypes": []
+      }
+    ],
+    "status": "active",
+    "createdBy": "lane-i",
+    "updatedAt": "2026-11-05T00:00:00Z"
+  },
+  {
+    "id": "BRK-DIV-NACH-GENERIC-01",
+    "version": 1,
+    "family": "dividend",
+    "senders": [
+      "*"
+    ],
+    "priority": 700,
+    "match": {
+      "pattern": "(?:a/c|acct?\\.?|account)\\s*(?:no\\.?\\s*)?(?:ending\\s*(?:with\\s*|in\\s*)?)?(?:[x*•.]+\\s*)?\\d*?(?<mask>\\d{2,4})\\b\\s+has\\s+a\\s+credit\\s+by\\s+nach\\s*[-:]\\s*(?<payer>[a-z0-9 .&_-]+?)\\s+of\\s+(?:rs\\.?|inr|₹)\\s*(?<amt>[\\d,]+(?:\\.\\d{1,2})?)\\s+on\\s+(?<date>\\d{2}[-/]\\d{2}[-/]\\d{2,4})",
+      "flags": "i",
+      "rejectAny": [
+        "salary",
+        "refund",
+        "pension",
+        "subsid",
+        "dbt",
+        "lpg",
+        "gst",
+        "income tax",
+        "epfo",
+        "insurance",
+        "premium",
+        "emi",
+        "loan",
+        "cashback",
+        "reversal",
+        "pfms",
+        "govt",
+        "government",
+        "scholarship",
+        "interest",
+        "wages",
+        "bonus"
+      ]
+    },
+    "emit": [
+      {
+        "factType": "movement",
+        "attrs": {
+          "direction": "credit",
+          "purpose": "dividend",
+          "rail": "nach"
+        },
+        "amounts": [
+          {
+            "role": "posted",
+            "from": "amt",
+            "unit": "INR"
+          }
+        ],
+        "occurredAt": {
+          "from": "date",
+          "formats": [
+            "dd-MM-yyyy",
+            "dd-MM-yy",
+            "dd/MM/yyyy",
+            "dd/MM/yy"
+          ]
+        },
+        "instrument": {
+          "kind": "bank_account",
+          "maskFrom": "mask"
+        },
+        "counterparty": {
+          "kind": "merchant",
+          "nameFrom": "payer",
+          "transforms": [
+            "sanitizeNarration"
+          ]
+        }
+      }
+    ],
+    "confidence": 0.7,
+    "examples": [
+      {
+        "sender": "VM-SBIBNK-S",
+        "body": "Dear Customer,Your A/C XXXXX654321 has a credit by NACH- ACME INDUSTRIES LTD of Rs 6.00 on 05/11/26. Download YONO-SBI",
+        "expectFactTypes": [
+          "movement"
+        ]
+      },
+      {
+        "sender": "VM-SBIBNK-S",
+        "body": "Dear Customer,Your A/C XXXXX654321 has a credit by NACH- STATE SUBSIDY DBT of Rs 6.00 on 05/11/26. Avl Bal Rs 1,500.25.",
+        "expectFactTypes": []
+      }
+    ],
+    "status": "active",
+    "createdBy": "lane-i",
+    "updatedAt": "2026-11-05T00:00:00Z"
+  },
+  {
+    "id": "BRK-DIV-NACH-NARR-01",
+    "version": 1,
+    "family": "dividend",
+    "senders": [
+      "*"
+    ],
+    "priority": 690,
+    "match": {
+      "pattern": "(?:rs\\.?|inr|₹)\\s*(?<amt>[\\d,]+(?:\\.\\d{1,2})?)\\s+(?:has been\\s+|is\\s+|was\\s+)?credited\\s+(?:to|in)\\s+(?:your\\s+)?(?:a/c|acct?\\.?|account)\\s*(?:no\\.?\\s*)?(?:ending\\s*(?:with\\s*|in\\s*)?)?(?:[x*•.]+\\s*)?(?<mask>\\d{2,16})\\b[\\s\\S]{0,60}?(?:nach|ecs)[\\s/-]*(?:cr[\\s/-]*)?(?<payer>[a-z0-9 .&_-]*?(?:div|idcw)[a-z0-9 .&_-]*?)(?=\\s*(?:[.,;()]|[\\r\\n]|\\s(?:ref|on|utr|avl)\\b|$))",
+      "flags": "i",
+      "rejectAny": [
+        "debited",
+        "salary",
+        "refund"
+      ]
+    },
+    "emit": [
+      {
+        "factType": "movement",
+        "attrs": {
+          "direction": "credit",
+          "purpose": "dividend",
+          "rail": "nach"
+        },
+        "amounts": [
+          {
+            "role": "posted",
+            "from": "amt",
+            "unit": "INR"
+          }
+        ],
+        "instrument": {
+          "kind": "bank_account",
+          "maskFrom": "mask"
+        },
+        "counterparty": {
+          "kind": "merchant",
+          "nameFrom": "payer",
+          "transforms": [
+            "sanitizeNarration"
+          ]
+        }
+      }
+    ],
+    "confidence": 0.85,
+    "examples": [
+      {
+        "sender": "VM-ACMEBK-S",
+        "body": "Rs 25.00 credited to your A/c XX7654 on 05-11-26 by NACH CR ACME CORP DIV 2026. Avl Bal Rs 900.00.",
+        "expectFactTypes": [
+          "movement"
+        ]
+      },
+      {
+        "sender": "VM-ACMEBK-S",
+        "body": "Rs 25.00 credited to your A/c XX7654 on 05-11-26 by NACH CR ACME SALARY. Avl Bal Rs 900.00.",
+        "expectFactTypes": []
+      }
+    ],
+    "status": "active",
+    "createdBy": "lane-i",
+    "updatedAt": "2026-11-05T00:00:00Z"
+  }
+]
