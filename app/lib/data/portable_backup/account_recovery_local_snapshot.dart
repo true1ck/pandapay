@@ -237,6 +237,7 @@ class AccountRecoveryLocalSnapshot {
     final receipts = data['receipts'] as List;
     if (data['include_receipts'] != true &&
         (declared.containsKey('transaction_attachments') ||
+            declared.containsKey('shared_editor_receipts') ||
             receipts.isNotEmpty)) {
       throw const FormatException('Recovery receipt scope mismatch');
     }
@@ -504,7 +505,8 @@ class AccountRecoveryLocalSnapshot {
       for (final entry in tables.entries)
         if (entry.value.contains('namespace') &&
             !_excluded.contains(entry.key) &&
-            entry.key != 'transaction_attachments')
+            entry.key != 'transaction_attachments' &&
+            (includeReceipts || entry.key != 'shared_editor_receipts'))
           entry.key: entry.value,
     };
     if (includeReceipts &&
@@ -538,6 +540,7 @@ class AccountRecoveryLocalSnapshot {
       }
       for (final entry in tables.entries) {
         if (_excluded.contains(entry.key) ||
+            (!includeReceipts && entry.key == 'shared_editor_receipts') ||
             entry.key == 'transaction_attachments') {
           continue;
         }
@@ -778,6 +781,7 @@ class AccountRecoveryLocalSnapshot {
     }
     if (data['include_receipts'] != true &&
         (expectedReceipts.isNotEmpty ||
+            tables.containsKey('shared_editor_receipts') ||
             (data['receipts'] as List).isNotEmpty)) {
       throw const FormatException('Recovery receipt scope mismatch');
     }

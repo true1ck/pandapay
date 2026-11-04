@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'dart:typed_data';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:http/http.dart' as http;
@@ -23,6 +24,7 @@ const account = '11111111-1111-4111-8111-111111111111',
     group = '44444444-4444-4444-8444-444444444444';
 
 class Runtime extends SharedExpensesRuntime {
+  bool failFlush = false;
   Runtime(
     SharedExpensesStore store,
     SharedExpensesHttpTransport remote,
@@ -39,7 +41,9 @@ class Runtime extends SharedExpensesRuntime {
     ],
   );
   @override
-  Future<void> flushEditor() async {}
+  Future<void> flushEditor() async {
+    if (failFlush) throw StateError('offline');
+  }
 }
 
 void main() {
@@ -196,6 +200,95 @@ void main() {
       await tester.ensureVisible(find.text('Shared with · 2/50'));
       await tester.pumpAndSettle();
       expect(tester.takeException(), isNull);
+    },
+  );
+  testWidgets(
+    'a failed submit resumes the same sealed operation instead of claiming a new draft',
+    (tester) async {
+      final editor = SharedEditor(store: runtime.store, accountId: account);
+      editor.selectContext(group, 'Flatmates', const [
+        SharedEditorMember(me, 'You'),
+        SharedEditorMember(friend, 'Rahul'),
+      ], me);
+      editor.choosePayer(friend);
+      editor.setBill('900');
+      editor.setTitle('Dinner');
+      await editor.persist();
+      final id = editor.id;
+      editor.dispose();
+      runtime.failFlush = true;
+      await launch(tester, draft: id);
+      await tester.tap(find.text('Submit shared expense'));
+      await tester.pumpAndSettle();
+      expect(runtime.store.pendingCount, 1);
+      expect(find.text('Check submission'), findsOneWidget);
+      expect(
+        tester
+            .widget<TextField>(
+              find.byKey(const ValueKey('quick-add-amount-field')),
+            )
+            .readOnly,
+        isTrue,
+      );
+      expect(
+        tester
+            .widget<TextField>(
+              find.byKey(const ValueKey('quick-add-merchant-field')),
+            )
+            .readOnly,
+        isTrue,
+      );
+      runtime.failFlush = false;
+      await tester.tap(find.text('Check submission'));
+      await tester.pumpAndSettle();
+      expect(find.text('Open'), findsOneWidget);
+      expect(runtime.store.pendingCount, 1);
+      expect(runtime.store.editorDrafts(), isEmpty);
+    },
+  );
+  testWidgets(
+    'draft recovery retains the note and private receipt reference after Back',
+    (tester) async {
+      final editor = SharedEditor(store: runtime.store, accountId: account);
+      editor.selectContext(group, 'Flatmates', const [
+        SharedEditorMember(me, 'You'),
+        SharedEditorMember(friend, 'Rahul'),
+      ], me);
+      editor.choosePayer(friend);
+      editor.setBill('900');
+      editor.setTitle('Dinner');
+      await editor.persist();
+      final receipt = await runtime.store.saveEditorReceipt(
+        editor.id,
+        name: 'Bill.jpg',
+        bytes: Uint8List.fromList([1, 2, 3, 4]),
+      );
+      editor.setPrivateFields({
+        'note': 'Dinner receipt',
+        'receiptHash': receipt.hash,
+        'receiptName': 'Bill.jpg',
+        'tagIds': <String>[],
+      });
+      await editor.persist();
+      final id = editor.id;
+      editor.dispose();
+      await launch(tester, draft: id);
+      await tester.pageBack();
+      await tester.pumpAndSettle();
+      final saved = runtime.store.editorDraft(id)!;
+      expect(saved.value['title'], 'Dinner');
+      expect(saved.value['billText'], '900');
+      expect((saved.value['privateFields'] as Map)['note'], 'Dinner receipt');
+      expect(
+        (saved.value['privateFields'] as Map)['receiptHash'],
+        receipt.hash,
+      );
+      expect(runtime.store.editorReceipt(id, receipt.hash)!.bytes, [
+        1,
+        2,
+        3,
+        4,
+      ]);
     },
   );
 }

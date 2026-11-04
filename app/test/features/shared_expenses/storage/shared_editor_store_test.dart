@@ -1,4 +1,5 @@
 import 'dart:io';
+import 'dart:typed_data';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:pandapay/data/local/app_database.dart';
 import 'package:pandapay/features/shared_expenses/data/shared_commands.dart';
@@ -156,6 +157,47 @@ void main() {
         store.sealEditorDraft(f.op1, expectedVersion: 1, command: command()),
         throwsA(isA<SharedLocalException>()),
       );
+    },
+  );
+  test(
+    'private receipt bytes survive restart and never cross the account boundary',
+    () async {
+      await store.saveEditorDraft(
+        f.op1,
+        contextId: f.contextId,
+        expectedVersion: 0,
+        value: value,
+      );
+      final receipt = await store.saveEditorReceipt(
+        f.op1,
+        name: 'Bill.jpg',
+        mimeType: 'image/jpeg',
+        bytes: Uint8List.fromList([1, 2, 3, 4]),
+      );
+      db.close();
+      db = AppDatabase.openFile('${folder.path}/data.sqlite');
+      store = SharedExpensesStore(db, namespace: f.accountA);
+      expect(store.editorReceipt(f.op1, receipt.hash)!.bytes, [1, 2, 3, 4]);
+      expect(
+        SharedExpensesStore(
+          db,
+          namespace: f.accountB,
+        ).editorReceipt(f.op1, receipt.hash),
+        isNull,
+      );
+      await store.saveEditorReceipt(
+        f.op1,
+        name: 'Same.jpg',
+        bytes: Uint8List.fromList([1, 2, 3, 4]),
+      );
+      expect(
+        db.db
+            .select('SELECT count(*) n FROM shared_editor_receipts')
+            .single['n'],
+        1,
+      );
+      await store.revokeContext(f.contextId);
+      expect(store.editorReceipt(f.op1, receipt.hash), isNull);
     },
   );
 }

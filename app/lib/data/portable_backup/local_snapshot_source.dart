@@ -89,7 +89,7 @@ class LocalPortableSnapshotSource implements PortableLocalSnapshotSource {
         <Object?>[namespace],
       ],
       'shared_editor_drafts': [
-        'SELECT COUNT(*) FROM shared_editor_drafts WHERE namespace=? AND operation_id IS NULL',
+        'SELECT COUNT(*) FROM shared_editor_drafts WHERE namespace=?',
         <Object?>[namespace],
       ],
       'shared_command_dependencies': [

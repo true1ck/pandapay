@@ -1,5 +1,6 @@
 import 'dart:convert';
 import 'dart:math';
+import 'package:crypto/crypto.dart';
 
 import 'package:flutter/foundation.dart';
 
@@ -76,6 +77,14 @@ final class SharedEditorRecord {
           jsonDecode(row['value_json'] as String) as Map,
         ),
       );
+}
+
+final class SharedEditorReceipt {
+  final String hash, name;
+  final String? mimeType;
+  final Uint8List bytes;
+  SharedEditorReceipt(this.hash, this.name, this.mimeType, Uint8List bytes)
+    : bytes = Uint8List.fromList(bytes).asUnmodifiableView();
 }
 
 /// Durable account-bound storage. Immutable wire payloads are distinct from
@@ -397,6 +406,72 @@ INSERT INTO shared_editor_drafts(namespace,draft_id,context_id,value_json,versio
       [command.operationId, namespace, id],
     );
   });
+
+  SharedEditorReceipt? editorReceipt(String draftId, String hash) {
+    if (editorDraft(draftId) == null) return null;
+    final rows = database.db.select(
+      'SELECT name,mime_type,bytes FROM shared_editor_receipts WHERE namespace=? AND draft_id=? AND hash=?',
+      [namespace, draftId, hash],
+    );
+    if (rows.isEmpty) return null;
+    final row = rows.single, bytes = row['bytes'] as Uint8List;
+    if (sha256.convert(bytes).toString() != hash) {
+      throw const SharedLocalException('receipt_corrupt');
+    }
+    return SharedEditorReceipt(
+      hash,
+      row['name'] as String,
+      row['mime_type'] as String?,
+      bytes,
+    );
+  }
+
+  /// Receipts stay private and content-addressed. Replacing a selection cannot
+  /// overwrite bytes referenced by an older editor; backups carry these bytes.
+  Future<SharedEditorReceipt> saveEditorReceipt(
+    String draftId, {
+    required String name,
+    required Uint8List bytes,
+    String? mimeType,
+  }) {
+    if (bytes.isEmpty || bytes.length > 8388608) {
+      return Future.error(const SharedLocalException('invalid_receipt'));
+    }
+    final frozen = Uint8List.fromList(bytes);
+    final hash = sha256.convert(frozen).toString();
+    return _write(() {
+      final draft = editorDraft(draftId);
+      if (draft == null ||
+          draft.operationId != null ||
+          name.trim().isEmpty ||
+          name.length > 256 ||
+          RegExp(r'[\x00-\x1f\x7f]').hasMatch(name) ||
+          frozen.isEmpty ||
+          frozen.length > 8388608 ||
+          mimeType != null &&
+              (mimeType.length > 128 ||
+                  !RegExp(
+                    r'^[a-zA-Z0-9.+-]+/[a-zA-Z0-9.+-]+$',
+                  ).hasMatch(mimeType))) {
+        throw const SharedLocalException('invalid_receipt');
+      }
+      final old = editorReceipt(draftId, hash);
+      if (old != null) return old;
+      final usage = database.db.select(
+        'SELECT count(*) n,coalesce(sum(length(bytes)),0) size FROM shared_editor_receipts WHERE namespace=?',
+        [namespace],
+      ).single;
+      if ((usage['n'] as int) >= 256 ||
+          (usage['size'] as int) + frozen.length > 134217728) {
+        throw const SharedLocalException('receipt_storage_limit');
+      }
+      database.db.execute(
+        'INSERT INTO shared_editor_receipts VALUES(?,?,?,?,?,?)',
+        [namespace, draftId, hash, name, mimeType, frozen],
+      );
+      return SharedEditorReceipt(hash, name, mimeType, frozen);
+    });
+  }
 
   /// Resolves only a durable scheduling dependency. It never changes the source
   /// identity, payload, hash or operation ID; finalizing a different draft needs

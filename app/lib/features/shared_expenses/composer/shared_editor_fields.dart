@@ -27,6 +27,7 @@ class SharedEditorFields extends StatelessWidget {
   }) => TextFormField(
     key: ValueKey('$label:${editor.contextId}:${editor.mode.name}'),
     initialValue: value,
+    readOnly: editor.sealed,
     style: BambooFonts.ui(14),
     keyboardType: const TextInputType.numberWithOptions(decimal: true),
     textInputAction: TextInputAction.done,

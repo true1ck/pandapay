@@ -2,7 +2,7 @@ import 'package:sqlite3/sqlite3.dart';
 
 /// Additive module on the existing AppDatabase connection, not a second pool.
 abstract final class SharedExpensesSchema {
-  static const version = 3;
+  static const version = 4;
   static const tableNames = [
     'shared_commands',
     'shared_command_dependencies',
@@ -12,6 +12,7 @@ abstract final class SharedExpensesSchema {
     'shared_projections',
     'shared_sync_state',
     'shared_editor_drafts',
+    'shared_editor_receipts',
   ];
 
   /// The core database may skip only a known future module version so rollback
@@ -87,6 +88,16 @@ CREATE TABLE shared_editor_drafts (
 CREATE INDEX shared_editor_context ON shared_editor_drafts(namespace,context_id,draft_id);
 CREATE INDEX shared_editor_unfinished ON shared_editor_drafts(namespace,draft_id) WHERE operation_id IS NULL;
 UPDATE shared_schema_version SET version=3 WHERE module='shared_expenses';
+''');
+      }
+      if (installed < 4) {
+        db.execute('''
+CREATE TABLE shared_editor_receipts (
+ namespace TEXT NOT NULL,draft_id TEXT NOT NULL,hash TEXT NOT NULL,
+ name TEXT NOT NULL,mime_type TEXT,bytes BLOB NOT NULL CHECK(length(bytes) BETWEEN 1 AND 8388608),
+ PRIMARY KEY(namespace,draft_id,hash)
+);
+UPDATE shared_schema_version SET version=4 WHERE module='shared_expenses';
 ''');
       }
       db.execute('RELEASE shared_schema_ensure');

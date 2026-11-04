@@ -1,5 +1,6 @@
 import 'dart:async';
 import 'dart:io';
+import 'dart:typed_data';
 
 import 'package:file_picker/file_picker.dart';
 import 'package:flutter/material.dart';
@@ -148,12 +149,14 @@ class _PendingReceipt {
   final String? path;
   final List<int>? bytes;
   final String? mimeType;
+  final String? sharedHash;
 
   const _PendingReceipt({
     required this.name,
     this.path,
     this.bytes,
     this.mimeType,
+    this.sharedHash,
   });
 }
 
@@ -213,6 +216,7 @@ class _QuickAddScreenState extends ConsumerState<QuickAddScreen>
   SharedEditor? _sharedEditor;
   SharedExpensesRuntime? _sharedRuntime;
   bool _sharing = false, _sharingLoading = false, _allowSharedPop = false;
+  bool _restoringSharedInput = false;
   String? _sharingError;
   final _amountController = TextEditingController();
   final _merchantController = TextEditingController();
@@ -224,6 +228,10 @@ class _QuickAddScreenState extends ConsumerState<QuickAddScreen>
   DateTime? _date;
   final ImagePicker _imagePicker = ImagePicker();
   _PendingReceipt? _receipt;
+  String get _receiptName =>
+      _receipt?.sharedHash != null && _receipt?.bytes == null
+      ? '${_receipt!.name} · reattach to view'
+      : _receipt?.name ?? '';
   bool _pickingReceipt = false;
   bool _scanningReceipt = false;
   String? _receiptScanMessage;
@@ -350,6 +358,7 @@ class _QuickAddScreenState extends ConsumerState<QuickAddScreen>
   }
 
   void _updateSharedInput() {
+    if (_restoringSharedInput) return;
     final editor = _sharedEditor;
     if (editor == null || editor.sealed) return;
     if (editor.billText != _amountController.text) {
@@ -376,24 +385,44 @@ class _QuickAddScreenState extends ConsumerState<QuickAddScreen>
       _sharedRuntime = runtime;
       _sharedEditor = editor;
       if (widget.sharedDraftId != null) {
-        _amountController.text = editor.billText;
-        _merchantController.text = editor.title;
-        _selectedCategoryId = editor.privateFields['categoryId'] as String?;
-        _selectedTagIds =
-            (editor.privateFields['tagIds'] as List?)?.cast<String>().toSet() ??
-            {};
-        _date = DateTime.tryParse(editor.occurredOn);
-        final receiptPath = editor.privateFields['receiptPath'] as String?;
-        if (receiptPath != null) {
-          _receipt = _PendingReceipt(
-            name:
-                editor.privateFields['receiptName'] as String? ??
-                'Saved receipt',
-            path: receiptPath,
-            mimeType: editor.privateFields['receiptMimeType'] as String?,
-          );
+        _restoringSharedInput = true;
+        try {
+          _amountController.text = editor.billText;
+          _merchantController.text = editor.title;
+          _selectedCategoryId = editor.privateFields['categoryId'] as String?;
+          _selectedTagIds =
+              (editor.privateFields['tagIds'] as List?)
+                  ?.cast<String>()
+                  .toSet() ??
+              {};
+          _date = DateTime.tryParse(editor.occurredOn);
+          final receiptPath = editor.privateFields['receiptPath'] as String?;
+          final receiptHash = editor.privateFields['receiptHash'] as String?;
+          if (receiptHash != null) {
+            final saved = runtime.store.editorReceipt(editor.id, receiptHash);
+            _receipt = _PendingReceipt(
+              name:
+                  saved?.name ??
+                  editor.privateFields['receiptName'] as String? ??
+                  'Saved receipt',
+              bytes: saved?.bytes,
+              mimeType: saved?.mimeType,
+              sharedHash: receiptHash,
+            );
+          }
+          if (receiptPath != null) {
+            _receipt = _PendingReceipt(
+              name:
+                  editor.privateFields['receiptName'] as String? ??
+                  'Saved receipt',
+              path: receiptPath,
+              mimeType: editor.privateFields['receiptMimeType'] as String?,
+            );
+          }
+          _noteController.text = editor.privateFields['note'] as String? ?? '';
+        } finally {
+          _restoringSharedInput = false;
         }
-        _noteController.text = editor.privateFields['note'] as String? ?? '';
       } else {
         _updateSharedInput();
         _sharedPrivateFields();
@@ -623,6 +652,7 @@ class _QuickAddScreenState extends ConsumerState<QuickAddScreen>
   }
 
   void _sharedPrivateFields() {
+    if (_restoringSharedInput) return;
     final editor = _sharedEditor;
     if (editor == null || editor.sealed) return;
     editor.setDate(_date ?? DateTime.now());
@@ -633,6 +663,11 @@ class _QuickAddScreenState extends ConsumerState<QuickAddScreen>
       if (_receipt?.path != null) 'receiptPath': _receipt!.path,
       if (_receipt?.path != null) 'receiptName': _receipt!.name,
       if (_receipt?.path != null) 'receiptMimeType': _receipt!.mimeType,
+      if (_receipt?.sharedHash != null) ...{
+        'receiptHash': _receipt!.sharedHash,
+        'receiptName': _receipt!.name,
+        'receiptMimeType': _receipt!.mimeType,
+      },
     });
   }
 
@@ -668,7 +703,7 @@ class _QuickAddScreenState extends ConsumerState<QuickAddScreen>
     setState(() => _saving = true);
     try {
       _sharedPrivateFields();
-      if (!editor.canSubmit || !runtime.proposalsEnabled) {
+      if (!editor.sealed && (!editor.canSubmit || !runtime.proposalsEnabled)) {
         await editor.persist();
         if (mounted) {
           final messenger = ScaffoldMessenger.of(context);
@@ -816,18 +851,20 @@ class _QuickAddScreenState extends ConsumerState<QuickAddScreen>
     if (option == null || !mounted) return;
     setState(() => _pickingReceipt = true);
     try {
+      late final _PendingReceipt candidate;
       if (option == _ReceiptPickOption.file) {
         final selection = await FilePicker.pickFiles(type: FileType.any);
         if (selection == null || selection.files.isEmpty) return;
         final file = selection.files.single;
+        if (_sharing && await file.length() > 8388608) {
+          throw const FormatException('Choose a receipt up to 8 MB');
+        }
         final bytes = file.path == null ? await file.readAsBytes() : null;
-        setState(
-          () => _receipt = _PendingReceipt(
-            name: file.name,
-            path: file.path,
-            bytes: bytes,
-            mimeType: file.extension == null ? null : _mimeFor(file.extension!),
-          ),
+        candidate = _PendingReceipt(
+          name: file.name,
+          path: file.path,
+          bytes: bytes,
+          mimeType: file.extension == null ? null : _mimeFor(file.extension!),
         );
       } else {
         final image = await _imagePicker.pickImage(
@@ -837,13 +874,16 @@ class _QuickAddScreenState extends ConsumerState<QuickAddScreen>
           imageQuality: 95,
         );
         if (image == null) return;
-        setState(
-          () => _receipt = _PendingReceipt(
-            name: image.name,
-            path: image.path,
-            mimeType: image.mimeType ?? 'image/jpeg',
-          ),
+        candidate = _PendingReceipt(
+          name: image.name,
+          path: image.path,
+          mimeType: image.mimeType ?? 'image/jpeg',
         );
+      }
+      if (_sharing) {
+        await _keepSharedReceipt(candidate);
+      } else if (mounted) {
+        setState(() => _receipt = candidate);
       }
     } catch (error) {
       if (mounted) {
@@ -880,11 +920,13 @@ class _QuickAddScreenState extends ConsumerState<QuickAddScreen>
         final parsed = scan.parsedLine;
         if (!mounted) return;
         setState(() {
-          _receipt = _PendingReceipt(
-            name: image.name,
-            path: image.path,
-            mimeType: 'image/jpeg',
-          );
+          if (!_sharing) {
+            _receipt = _PendingReceipt(
+              name: image.name,
+              path: image.path,
+              mimeType: 'image/jpeg',
+            );
+          }
           _scannedReceipt = parsed;
           _receiptScanMessage = !scan.looksLikeReceipt
               ? 'Receipt photo attached. We couldn’t confidently identify the bill fields, so enter the details below.'
@@ -902,6 +944,15 @@ class _QuickAddScreenState extends ConsumerState<QuickAddScreen>
           if (scan.date != null) _date = scan.date;
           // Stay on Scan Bill so the user reviews OCR results inline.
         });
+        if (_sharing) {
+          await _keepSharedReceipt(
+            _PendingReceipt(
+              name: image.name,
+              path: image.path,
+              mimeType: 'image/jpeg',
+            ),
+          );
+        }
       } finally {
         await ocr.dispose();
       }
@@ -920,6 +971,53 @@ class _QuickAddScreenState extends ConsumerState<QuickAddScreen>
         });
       }
     }
+  }
+
+  Future<void> _keepSharedReceipt(_PendingReceipt receipt) async {
+    final editor = _sharedEditor, runtime = _sharedRuntime;
+    if (editor == null || runtime == null || !runtime.isCurrent()) {
+      throw const SharedRuntimeUnavailable();
+    }
+    final path = receipt.path;
+    Uint8List bytes;
+    if (receipt.bytes != null) {
+      bytes = Uint8List.fromList(receipt.bytes!);
+    } else if (path != null) {
+      final file = File(path);
+      if (await file.length() > 8388608) {
+        throw const FormatException('Choose a receipt up to 8 MB');
+      }
+      // Enforce the cap during the read as well, even if a picked file changes.
+      final builder = BytesBuilder(copy: false);
+      await for (final chunk in file.openRead()) {
+        if (builder.length + chunk.length > 8388608) {
+          throw const FormatException('Choose a receipt up to 8 MB');
+        }
+        builder.add(chunk);
+      }
+      bytes = builder.takeBytes();
+    } else {
+      return;
+    }
+    if (!mounted || !runtime.isCurrent() || _sharedEditor != editor) return;
+    await editor.persist();
+    final saved = await runtime.store.saveEditorReceipt(
+      editor.id,
+      name: receipt.name,
+      mimeType: receipt.mimeType,
+      bytes: bytes,
+    );
+    if (!mounted || !runtime.isCurrent() || _sharedEditor != editor) return;
+    setState(
+      () => _receipt = _PendingReceipt(
+        name: saved.name,
+        bytes: saved.bytes,
+        mimeType: saved.mimeType,
+        sharedHash: saved.hash,
+      ),
+    );
+    _sharedPrivateFields();
+    await editor.persist();
   }
 
   Future<void> _saveReceipt(String transactionId) async {
@@ -1029,6 +1127,8 @@ class _QuickAddScreenState extends ConsumerState<QuickAddScreen>
     if (_sharing) {
       return _sharedEditor != null &&
           !_sharingLoading &&
+          !_pickingReceipt &&
+          !_scanningReceipt &&
           _sharedRuntime?.isCurrent() == true &&
           _sharedEditor!.persistenceError == null;
     }
@@ -1451,10 +1551,12 @@ class _QuickAddScreenState extends ConsumerState<QuickAddScreen>
                     padding: const EdgeInsets.fromLTRB(20, 4, 20, 0),
                     child: AddFlowTabs(
                       selected: _activePage,
-                      onSelected: (page) {
-                        FocusManager.instance.primaryFocus?.unfocus();
-                        setState(() => _activePage = page);
-                      },
+                      onSelected: _sharedEditor?.sealed == true
+                          ? null
+                          : (page) {
+                              FocusManager.instance.primaryFocus?.unfocus();
+                              setState(() => _activePage = page);
+                            },
                     ),
                   ),
                   Expanded(
@@ -1463,96 +1565,101 @@ class _QuickAddScreenState extends ConsumerState<QuickAddScreen>
                         padding: const EdgeInsets.fromLTRB(20, 0, 20, 24),
                         keyboardDismissBehavior:
                             ScrollViewKeyboardDismissBehavior.onDrag,
-                        child: Column(
-                          crossAxisAlignment: CrossAxisAlignment.stretch,
-                          children: [
-                            _buildAmountHeader(),
-                            if (sharingAvailable &&
-                                !_sharing &&
-                                _entryKind == TxnEntryKind.spend)
-                              Align(
-                                alignment: Alignment.centerLeft,
-                                child: TextButton.icon(
-                                  icon: const Icon(
-                                    Icons.people_outline_rounded,
+                        child: IgnorePointer(
+                          ignoring: _sharedEditor?.sealed == true,
+                          child: Column(
+                            crossAxisAlignment: CrossAxisAlignment.stretch,
+                            children: [
+                              _buildAmountHeader(),
+                              if (sharingAvailable &&
+                                  !_sharing &&
+                                  _entryKind == TxnEntryKind.spend)
+                                Align(
+                                  alignment: Alignment.centerLeft,
+                                  child: TextButton.icon(
+                                    icon: const Icon(
+                                      Icons.people_outline_rounded,
+                                    ),
+                                    label: const Text('Split with people'),
+                                    onPressed: () {
+                                      setState(() => _sharing = true);
+                                      unawaited(_startSharing());
+                                    },
                                   ),
-                                  label: const Text('Split with people'),
-                                  onPressed: () {
-                                    setState(() => _sharing = true);
-                                    unawaited(_startSharing());
-                                  },
+                                ),
+                              if (_sharing && _sharedEditor != null)
+                                SharedEditorFields(
+                                  editor: _sharedEditor!,
+                                  onChooseContext: () =>
+                                      unawaited(_chooseSharedContext()),
+                                  onAddMember: _sharedEditor!.contextId == null
+                                      ? null
+                                      : () => unawaited(_addSharedMember()),
+                                  loading: _sharingLoading,
+                                  error: _sharingError,
+                                ),
+                              if (_sharing && _sharedEditor == null)
+                                Padding(
+                                  padding: const EdgeInsets.all(16),
+                                  child: _sharingLoading
+                                      ? const LinearProgressIndicator(
+                                          color: BambooInk.slate,
+                                        )
+                                      : TextButton(
+                                          onPressed: _startSharing,
+                                          child: Text(
+                                            _sharingError ?? 'Retry sharing',
+                                          ),
+                                        ),
+                                ),
+                              if (recommendations != null && !_sharing)
+                                _buildSpendRecommendation(
+                                  recommendations,
+                                  userCards,
+                                ),
+                              CardSummaryPanel(
+                                elevated: false,
+                                padding: const EdgeInsets.all(18),
+                                child: Column(
+                                  crossAxisAlignment:
+                                      CrossAxisAlignment.stretch,
+                                  children: [
+                                    _buildMerchantField(merchants),
+                                    const _FormDivider(),
+                                    _buildCategories(categories),
+                                    const _FormDivider(),
+                                    TransactionTagField(
+                                      selectedIds: _selectedTagIds,
+                                      enabled: !_saving,
+                                      onChanged: (ids) => _editPrivate(
+                                        () => _selectedTagIds = ids,
+                                      ),
+                                    ),
+                                  ],
                                 ),
                               ),
-                            if (_sharing && _sharedEditor != null)
-                              SharedEditorFields(
-                                editor: _sharedEditor!,
-                                onChooseContext: () =>
-                                    unawaited(_chooseSharedContext()),
-                                onAddMember: _sharedEditor!.contextId == null
-                                    ? null
-                                    : () => unawaited(_addSharedMember()),
-                                loading: _sharingLoading,
-                                error: _sharingError,
-                              ),
-                            if (_sharing && _sharedEditor == null)
-                              Padding(
-                                padding: const EdgeInsets.all(16),
-                                child: _sharingLoading
-                                    ? const LinearProgressIndicator(
-                                        color: BambooInk.slate,
-                                      )
-                                    : TextButton(
-                                        onPressed: _startSharing,
-                                        child: Text(
-                                          _sharingError ?? 'Retry sharing',
-                                        ),
-                                      ),
-                              ),
-                            if (recommendations != null && !_sharing)
-                              _buildSpendRecommendation(
-                                recommendations,
-                                userCards,
-                              ),
-                            CardSummaryPanel(
-                              elevated: false,
-                              padding: const EdgeInsets.all(18),
-                              child: Column(
-                                crossAxisAlignment: CrossAxisAlignment.stretch,
-                                children: [
-                                  _buildMerchantField(merchants),
-                                  const _FormDivider(),
-                                  _buildCategories(categories),
-                                  const _FormDivider(),
-                                  TransactionTagField(
-                                    selectedIds: _selectedTagIds,
-                                    enabled: !_saving,
-                                    onChanged: (ids) => _editPrivate(
-                                      () => _selectedTagIds = ids,
-                                    ),
-                                  ),
-                                ],
-                              ),
-                            ),
-                            const SizedBox(height: 12),
-                            CardSummaryPanel(
-                              elevated: false,
-                              padding: const EdgeInsets.all(18),
-                              child: Column(
-                                crossAxisAlignment: CrossAxisAlignment.stretch,
-                                children: [
-                                  if (!_sharing ||
-                                      _sharedEditor?.someoneElsePaid !=
-                                          true) ...[
-                                    _buildPaymentMethods(userCards),
-                                    const _FormDivider(),
+                              const SizedBox(height: 12),
+                              CardSummaryPanel(
+                                elevated: false,
+                                padding: const EdgeInsets.all(18),
+                                child: Column(
+                                  crossAxisAlignment:
+                                      CrossAxisAlignment.stretch,
+                                  children: [
+                                    if (!_sharing ||
+                                        _sharedEditor?.someoneElsePaid !=
+                                            true) ...[
+                                      _buildPaymentMethods(userCards),
+                                      const _FormDivider(),
+                                    ],
+                                    _buildDateField(),
                                   ],
-                                  _buildDateField(),
-                                ],
+                                ),
                               ),
-                            ),
-                            const SizedBox(height: 12),
-                            _buildExtras(),
-                          ],
+                              const SizedBox(height: 12),
+                              _buildExtras(),
+                            ],
+                          ),
                         ),
                       ),
                       AddFlowPage.scanBill => _buildScanBill(),
@@ -2028,6 +2135,7 @@ class _QuickAddScreenState extends ConsumerState<QuickAddScreen>
                   width: width,
                   child: TextField(
                     key: const ValueKey('quick-add-amount-field'),
+                    readOnly: _sharedEditor?.sealed == true,
                     controller: _amountController,
                     autofocus: widget.autofocus,
                     onTapOutside: (_) =>
@@ -2132,6 +2240,7 @@ class _QuickAddScreenState extends ConsumerState<QuickAddScreen>
         children: [
           TextField(
             key: const ValueKey('quick-add-merchant-field'),
+            readOnly: _sharedEditor?.sealed == true,
             controller: _merchantController,
             focusNode: _merchantFocusNode,
             onTapOutside: (_) => FocusManager.instance.primaryFocus?.unfocus(),
@@ -2637,7 +2746,7 @@ class _QuickAddScreenState extends ConsumerState<QuickAddScreen>
                       const SizedBox(width: 8),
                       Expanded(
                         child: Text(
-                          _receipt!.name,
+                          _receiptName,
                           maxLines: 1,
                           overflow: TextOverflow.ellipsis,
                           style: BambooFonts.ui(12),
@@ -2736,8 +2845,10 @@ class _QuickAddScreenState extends ConsumerState<QuickAddScreen>
                         _saving
                             ? 'Saving…'
                             : _sharing
-                            ? (_sharedEditor?.canSubmit == true &&
-                                      _sharedRuntime?.proposalsEnabled == true
+                            ? (_sharedEditor?.sealed == true
+                                  ? 'Check submission'
+                                  : _sharedEditor?.canSubmit == true &&
+                                        _sharedRuntime?.proposalsEnabled == true
                                   ? 'Submit shared expense'
                                   : 'Save draft')
                             : switch (_entryKind) {
@@ -2983,7 +3094,7 @@ class _QuickAddScreenState extends ConsumerState<QuickAddScreen>
                     const SizedBox(width: 8),
                     Expanded(
                       child: Text(
-                        _receipt!.name,
+                        _receiptName,
                         maxLines: 1,
                         overflow: TextOverflow.ellipsis,
                         style: BambooFonts.ui(13),
@@ -3000,7 +3111,9 @@ class _QuickAddScreenState extends ConsumerState<QuickAddScreen>
                 ),
                 const SizedBox(height: 4),
                 Text(
-                  'Receipt photo will be saved with this transaction.',
+                  _sharing
+                      ? 'Receipt kept privately on this device.'
+                      : 'Receipt photo will be saved with this transaction.',
                   style: BambooFonts.ui(11, color: BambooInk.ink500),
                 ),
               ],
