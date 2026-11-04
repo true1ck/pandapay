@@ -3,8 +3,10 @@ import 'dart:async';
 import 'package:flutter/services.dart';
 import 'package:flutter/widgets.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:http/http.dart' as http;
 
 import '../../../app/providers.dart' as app;
+import '../../../data/api_request_headers_client.dart';
 import '../../../data/authenticated_http_client.dart';
 import '../../../app/env.dart';
 import '../../../app/local_sms_rig_http_client.dart';
@@ -29,7 +31,11 @@ smsV2RuntimeProvider = FutureProvider<SmsV2Runtime?>((ref) async {
   if (!current()) return null;
   final coordinator = ref.read(app.sessionRefreshCoordinatorProvider);
   final client = AuthenticatedHttpClient(
-    inner: localSmsRigHttpClient(),
+    inner: ApiRequestHeadersClient(
+      inner: localSmsRigHttpClient() ?? http.Client(),
+      apiBaseUrl: Uri.parse(Env.apiBaseUrl),
+      pipelineV2Enabled: () => ref.read(smsPipelineV2EnabledProvider),
+    ),
     refreshAccessToken: () async {
       if (!current()) return null;
       final token = await coordinator.refresh();

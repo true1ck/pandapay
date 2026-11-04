@@ -3,6 +3,7 @@ import 'dart:async';
 import 'package:alchemist/alchemist.dart';
 import 'package:flutter_secure_storage_platform_interface/flutter_secure_storage_platform_interface.dart';
 import 'package:flutter_test/flutter_test.dart';
+import 'package:package_info_plus/package_info_plus.dart';
 
 /// `flutter test` runs on the headless `flutter_tester` harness, which never
 /// registers real platform plugins — `FlutterSecureStorage`'s default
@@ -54,6 +55,18 @@ Future<void> testExecutable(FutureOr<void> Function() testMain) async {
   // global across every test declared in every file, same as this
   // function wrapping every file's main().
   setUp(fakeSecureStorage.clear);
+  // ApiRequestHeadersClient reads the app version from PackageInfo before each
+  // API request; without a mock that platform call never completes under
+  // FakeAsync and leaves the request in flight when a widget test ends.
+  setUp(
+    () => PackageInfo.setMockInitialValues(
+      appName: 'PandaPay',
+      packageName: 'com.pandapay.app',
+      version: '0.0.0-test',
+      buildNumber: '0',
+      buildSignature: '',
+    ),
+  );
   return AlchemistConfig.runWithConfig(
     config: const AlchemistConfig(),
     run: testMain,
