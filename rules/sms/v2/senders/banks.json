@@ -189,7 +189,9 @@
     "brand": "FEDSMS",
     "issuerSlug": "federal",
     "issuerKind": "bank",
-    "aliases": ["FEDSCP"]
+    "aliases": [
+      "FEDSCP"
+    ]
   },
   {
     "brand": "HDFCBK",
@@ -531,7 +533,10 @@
     "brand": "YESBNK",
     "issuerSlug": "yes",
     "issuerKind": "bank",
-    "aliases": []
+    "aliases": [
+      "YESBCC",
+      "YESBAK"
+    ]
   },
   {
     "brand": "YESCRD",
