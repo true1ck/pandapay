@@ -144,7 +144,7 @@ Never merge across issuers. A card and an account with the same digits stay sepa
 | `from`, `to` | `{instrumentId}``, {external: counterpartyKey}, or {ownUnresolved: kind} when money went to one of the user's own instruments that the SMS does not name (for example a card bill paid through CHEQ); it still counts as own to own` | `counterpartyKey` = normalised merchant, UPI ID or person name |
 | `amountMinor`, `unit` | int, `INR` or `POINTS` |  |
 | `occurredAt` | time |  |
-| `category`, `categorySource` | slug, enum | Set only when `to` is external and the event is a spend type. Source is `user`, `shared`, `catalogue`, `mcc`, `history_confirmed`, `ai` or `default`. |
+| `category`, `categorySource` | slug, enum | Set when `to` is external and the event is a spend type. Also allowed on a refund entry (external to own, with `isSpend`, `isIncome` and `isInvestment` all false), where it is the category of the purchase the refund reverses (CCR-003); a standalone refund carries its resolved category or `other` with source `default`. Source is `user`, `shared`, `catalogue`, `mcc`, `history_confirmed`, `ai` or `default`. |
 | `countsAsTransaction`, `isSpend`, `isIncome`, `isInvestment` | booleans | Derived from the event type, using the table below |
 
 ### Totals and counts

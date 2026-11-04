@@ -208,7 +208,11 @@ void main() {
         !transfer.contains(type),
         reason: type.wire,
       );
-      expect(row.category, spend.contains(type) ? 'dining' : null);
+      // CCR-003: a refund row carries its category; no other non-spend row does.
+      expect(
+        row.category,
+        spend.contains(type) || type == EventType.refund ? 'dining' : null,
+      );
     }
   });
 
@@ -326,6 +330,64 @@ void main() {
   );
 
   test(
+    'CCR-003: a refund linked to an earlier-month purchase carries that purchase category on its row and reduces its total',
+    () {
+      final purchase = event(EventType.purchase, [
+        debit,
+      ]).copyWith(occurredAt: DateTime.utc(2026, 10, 5, 12));
+      final refund = event(
+        EventType.refund,
+        [credit, debit],
+        roles: [LegRole.reversal, LegRole.original],
+      );
+      final bundle = RuleBundle(
+        bundleVersion: 0,
+        createdAt: at,
+        expiresAt: at.add(const Duration(days: 1)),
+        minEngineVersion: '2.0.0',
+        taxonomyVersion: 1,
+      );
+      final snapshot = LedgerSnapshot.project(
+        events: [purchase, refund],
+        factsById: facts([debit, credit]),
+        instrumentsById: h.allInstruments,
+        bundle: bundle,
+        lockedCategories: {purchase.eventId: dining},
+      );
+      final refundRow = snapshot.entries.singleWhere(
+        (e) => e.eventId == refund.eventId,
+      );
+      expect(refundRow.category, 'dining');
+      expect(refundRow.categorySource, CategorySource.user);
+      expect(refundRow.validate().ok, isTrue);
+      final oct = snapshot.totals(
+        DateTime.utc(2026, 10),
+        DateTime.utc(2026, 11),
+      );
+      final nov = snapshot.totals(
+        DateTime.utc(2026, 11),
+        DateTime.utc(2026, 12),
+      );
+      expect(oct.byCategory, {'dining': 10000});
+      expect(nov.byCategory, {'dining': -10000});
+      // A device holding only the synced refund row (no purchase entry, no
+      // local metadata) reads the same category total.
+      final remote = LedgerSnapshot(entries: [refundRow], events: [refund]);
+      expect(
+        remote
+            .totals(DateTime.utc(2026, 11), DateTime.utc(2026, 12))
+            .byCategory,
+        nov.byCategory,
+      );
+      // Wire JSON round-trips through the validator unchanged.
+      expect(
+        LedgerEntry.fromJson(refundRow.toJson()).toJson(),
+        refundRow.toJson(),
+      );
+    },
+  );
+
+  test(
     'refunds net the linked purchase category even outside the reporting period',
     () {
       final purchase = event(EventType.purchase, [
@@ -356,30 +418,68 @@ void main() {
   );
 
   test(
-    'standalone refunds use explicit category context without invalid ledger fields',
+    'standalone refunds carry the resolved category on the row (CCR-003)',
     () {
       final refund = event(
         EventType.refund,
         [credit],
         roles: [LegRole.reversal],
       );
+      final p = DefaultLedgerProjector();
+      final rows = p.project(refund, facts([credit]), h.allInstruments, dining);
+      expect(rows.single.category, 'dining');
+      expect(rows.single.categorySource, CategorySource.user);
+      expect(rows.single.isRefundShaped, isTrue);
+      expect(rows.single.validate().ok, isTrue);
+      final from = DateTime.utc(2026, 11), to = DateTime.utc(2026, 12);
+      expect(p.totals(rows, [refund], from, to).byCategory, {'dining': -10000});
+    },
+  );
+
+  test('a standalone refund with no decision falls back to other', () {
+    final refund = event(EventType.refund, [credit], roles: [LegRole.reversal]);
+    final rows = projector.project(
+      refund,
+      facts([credit]),
+      h.allInstruments,
+      null,
+    );
+    expect(rows.single.category, 'other');
+    expect(rows.single.categorySource, CategorySource.fallback);
+    expect(rows.single.validate().ok, isTrue);
+    final t = projector.totals(
+      rows,
+      [refund],
+      DateTime.utc(2026, 11),
+      DateTime.utc(2026, 12),
+    );
+    expect(t.byCategory, {'other': -10000});
+    expect(t.spendMinor, -10000);
+  });
+
+  test(
+    'a refund row written before CCR-003 still uses explicit category context',
+    () {
+      final refund = event(
+        EventType.refund,
+        [credit],
+        roles: [LegRole.reversal],
+      );
+      final old = projector
+          .project(refund, facts([credit]), h.allInstruments, dining)
+          .single
+          .withCategory(null, null);
+      expect(old.validate().ok, isTrue);
       final p = DefaultLedgerProjector(
         categoryByEvent: {refund.eventId: dining},
       );
-      final rows = p.project(refund, facts([credit]), h.allInstruments, dining);
-      expect(rows.single.category, isNull);
-      expect(rows.single.validate().ok, isTrue);
-      expect(
-        p
-            .totals(
-              rows,
-              [refund],
-              DateTime.utc(2026, 11),
-              DateTime.utc(2026, 12),
-            )
-            .byCategory,
-        {'dining': -10000},
-      );
+      final from = DateTime.utc(2026, 11), to = DateTime.utc(2026, 12);
+      expect(p.totals([old], [refund], from, to).byCategory, {
+        'dining': -10000,
+      });
+      expect(projector.totals([old], [refund], from, to).byCategory, {
+        'other': -10000,
+      });
     },
   );
 

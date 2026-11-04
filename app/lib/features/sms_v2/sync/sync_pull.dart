@@ -68,7 +68,11 @@ class SyncPull {
                 .replace(
                   queryParameters: cursor == null ? null : {'cursor': cursor},
                 ),
-            headers: await headers(),
+            headers: {
+              ...await headers(),
+              // CCR-003: this build reads a category on refund ledger entries.
+              'X-Sms-Contract-Features': 'refund-category',
+            },
           )
           .timeout(const Duration(seconds: 30));
       if (!accountIsCurrent() || response.statusCode != 200) return pages;
@@ -201,7 +205,11 @@ class SyncPull {
             incoming.eventId,
             [...retained, incoming],
             dirty: false,
-            category: _ledger.categoryDecisions()[incoming.eventId],
+            // A refund entry carries its own category on the wire (CCR-003);
+            // a retained local decision must not overwrite it.
+            category: incoming.isRefundShaped
+                ? null
+                : _ledger.categoryDecisions()[incoming.eventId],
           );
           record('ledger', incoming.entryId);
         }
@@ -402,9 +410,11 @@ class SyncPull {
           ...event.legs.map((leg) => leg.factId),
         },
     };
-    // Refund categories are derived from their purchase and are absent from
-    // wire entries. Retaining an old automatic decision would hide a category
-    // refresh received from another device.
+    // A refund linked to a purchase inherits its category. Its row carries the
+    // inherited value (CCR-003), but retaining it as a lock would hide a
+    // category refresh of the purchase received from another device. A
+    // standalone refund keeps the category its row carries.
+    final inheritingRefunds = <String>{};
     for (final event in ready) {
       final inheritsPurchase = event.legs.any(
         (leg) =>
@@ -414,6 +424,9 @@ class SyncPull {
           (inheritsPurchase ||
               locked[event.eventId]?.source != CategorySource.user)) {
         locked.remove(event.eventId);
+      }
+      if (event.type == EventType.refund && inheritsPurchase) {
+        inheritingRefunds.add(event.eventId);
       }
     }
     final projectedCategories = LedgerSnapshot.project(
@@ -425,7 +438,8 @@ class SyncPull {
       lockedCategories: {
         ...locked,
         for (final entry in entries)
-          if (entry.category != null)
+          if (entry.category != null &&
+              !inheritingRefunds.contains(entry.eventId))
             entry.eventId: CategoryDecision(
               slug: entry.category!,
               source: entry.categorySource ?? CategorySource.shared,
