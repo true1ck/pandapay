@@ -18,10 +18,10 @@ if rig.parent != tmp or not rig.name.startswith("pandapay-sms-rig."):
 if args.simulator and not re.fullmatch(r"[0-9a-fA-F-]{36}", args.simulator):
     parser.error("Pass an explicit simulator UUID")
 defines = rig / "flutter-defines.json"
-ca = rig / "tls/rootCA.pem"
 data = json.loads(defines.read_text())
-if data.get("PANDAPAY_ENV") != "dev" or data.get("SMS_PIPELINE_V2") != "true":
-    parser.error("Expected the local SMS v2 Debug defines")
+if (data.get("PANDAPAY_ENV") != "dev" or data.get("SMS_PIPELINE_V2") != "true"
+        or not data.get("SMS_V2_LOCAL_CA_PEM")):
+    parser.error("Expected the local SMS v2 Debug defines and scratch CA")
 if args.simulator:
     devices = json.loads(subprocess.check_output(
         ["xcrun", "simctl", "list", "devices", "booted", "-j"]
@@ -60,8 +60,5 @@ finally:
 
 built = app / "build/ios/iphonesimulator/Runner.app"
 if args.simulator:
-    subprocess.run(
-        ["xcrun", "simctl", "keychain", args.simulator, "add-root-cert", str(ca)], check=True,
-    )
     subprocess.run(["xcrun", "simctl", "install", args.simulator, str(built)], check=True)
 print(built)

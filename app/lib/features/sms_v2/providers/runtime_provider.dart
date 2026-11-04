@@ -8,6 +8,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import '../../../app/providers.dart' as app;
 import '../../../data/authenticated_http_client.dart';
 import '../../../app/env.dart';
+import '../../../app/local_sms_rig_http_client.dart';
 import '../flag.dart';
 import '../pipeline/sms_v2_runtime.dart';
 import '../sync/bundle_verifier.dart';
@@ -28,6 +29,7 @@ final FutureProvider<SmsV2Runtime?> smsV2RuntimeProvider =
       if (!current()) return null;
       final coordinator = ref.read(app.sessionRefreshCoordinatorProvider);
       final client = AuthenticatedHttpClient(
+        inner: localSmsRigHttpClient(),
         refreshAccessToken: () async {
           if (!current()) return null;
           final token = await coordinator.refresh();

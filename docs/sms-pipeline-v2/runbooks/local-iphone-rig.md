@@ -35,14 +35,14 @@ python3 scripts/build_sms_v2_local_ios.py /tmp/pandapay-sms-rig.EXAMPLE \
 xcrun simctl launch <booted-simulator-uuid> app.pandapay.pandapay.smsv2rig
 ```
 
-The recipe compiles a Debug app with the printed Flutter defines, installs the test CA on the selected simulator and installs the separate app identity. Use a simulator reserved for the rig. The ephemeral Ed25519 public key is accepted only in Debug builds using the development environment. The production key list is unchanged. A restarted rig creates new URLs, certificates, and a new key, so rebuild against its fresh defines.
+The recipe compiles a Debug app with the printed Flutter defines and installs the separate app identity. Use a simulator reserved for the rig. The development build trusts the scratch CA for the two local HTTPS origins and accepts the ephemeral Ed25519 bundle key. A restarted rig creates new URLs, certificates, and a new key, so rebuild against its fresh defines.
 
 ## Physical iPhone checklist for a later session
 
 1. Start the rig on the Mac's private LAN address. Make sure the iPhone can reach that interface over the trusted test network.
-2. Transfer only the rig's public `tls/rootCA.pem` to the device. Install and enable full trust for that specific test root in iOS settings. Remove the test root after the session.
-3. Open `app/ios/Runner.xcworkspace` in Xcode with the device connected. Use a separate Debug app identity and development provisioning. Feed the printed `flutter-defines.json` to Flutter's debug build or encode its entries as Xcode `DART_DEFINES`. Keep the test build separate from the normal app install and its storage.
-4. Sign in with the rig account, confirm rule download, then import a synthetic tagged-bank message and verify the synced Activity row. Check the Shortcut automation with a tagged sender, a missing sender with a named issuer, and a contact handle. Record which values Shortcuts actually delivers.
+2. Open `app/ios/Runner.xcworkspace` in Xcode with the device connected. Use a separate Debug app identity and development provisioning. For a side-by-side installation, omit the regular app's URL scheme from the Debug manifest. Feed the printed `flutter-defines.json` to Flutter's Debug build or encode its entries as Xcode `DART_DEFINES`. The app uses its own scratch CA trust for the two rig origins. Remove any test certificate profile installed for earlier builds.
+3. Allow Local Network access when prompted. Use **Sign in** with `test@example.com`, `9999999999` in the required phone field, and verification code `1234`. The returning-user sign-in sends the email and keeps phone linkage unchanged. Confirm rule download, import a synthetic tagged-bank message and verify the synced Activity row.
+4. Check a test Shortcut automation with a tagged sender, a missing sender with a named issuer, and a contact handle. Record which values Shortcuts delivers. Existing shortcuts stay bound to their saved app identities.
 5. Validate the five history screens and interrupted replay in the test build. Actual device history and production App Check are separate acceptance checks.
 
 Only the public CA and bundle trust anchor go to a test device. The rig's private key and CA signing key stay on the Mac.

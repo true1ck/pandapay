@@ -3,7 +3,8 @@ import 'dart:convert';
 import 'dart:io';
 
 import 'package:flutter_test/flutter_test.dart';
-import 'package:http/io_client.dart';
+import 'package:http/http.dart' as http;
+import 'package:pandapay/app/local_sms_rig_http_client.dart';
 import 'package:pandapay/data/auth_api.dart';
 import 'package:pandapay/data/local/app_database.dart';
 import 'package:pandapay/data/local/financial_store.dart';
@@ -28,16 +29,21 @@ void main() {
       final apiUrl = Uri.parse(defines['PANDAPAY_API_BASE_URL'] as String);
       for (final endpoint in [apiUrl, Uri.parse(authUrl)]) {
         expect(endpoint.scheme, 'https');
-        expect(
-          endpoint.host,
-          '127.0.0.1',
-          reason: 'Run the test on the default rig',
-        );
       }
-      final context = SecurityContext(withTrustedRoots: false)
-        ..setTrustedCertificates('$root/tls/rootCA.pem');
-      final client = IOClient(HttpClient(context: context));
+      final client = LocalSmsRigHttpClient(
+        authUri: Uri.parse(authUrl),
+        apiUri: apiUrl,
+        caPem: File('$root/tls/rootCA.pem').readAsBytesSync(),
+      );
       addTearDown(client.close);
+      await expectLater(
+        client.get(apiUrl.replace(port: apiUrl.port + 1)),
+        throwsA(isA<http.ClientException>()),
+      );
+      await expectLater(
+        client.get(apiUrl.replace(scheme: 'http')),
+        throwsA(isA<http.ClientException>()),
+      );
       final auth = AuthApi(authBaseUrl: authUrl, client: client);
       const device = 'sms-v2-local-flutter-test';
       await auth.requestEmailOtp('test@example.com');

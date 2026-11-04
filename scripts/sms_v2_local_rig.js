@@ -268,6 +268,7 @@ async function main() {
       PANDAPAY_ENV: 'dev', PANDAPAY_API_BASE_URL: apiBase, PANDAPAY_AUTH_BASE_URL: authBase,
       PANDAPAY_LEGAL_BASE_URL: apiBase + '/legal/', SMS_PIPELINE_V2: 'true',
       SMS_V2_LOCAL_RULE_PUBLIC_KEY: publicKey,
+      SMS_V2_LOCAL_CA_PEM: ca.toString('base64'),
     }, null, 2));
     console.log('HTTPS OTP login, signed rules fetch, tamper rejection, fact upload and sync passed.');
     console.log('API:', apiBase, '\nAuth:', authBase, '\nTest login:', email, '(OTP 1234)');

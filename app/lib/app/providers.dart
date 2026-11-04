@@ -106,6 +106,7 @@ import '../features/sms_import/sms_text_hint.dart';
 import '../features/settings/settings_sync.dart';
 import '../features/sync/sync_engine.dart';
 import 'env.dart';
+import 'local_sms_rig_http_client.dart';
 
 /// api/'s and auth/'s base URLs, fixed at compile time by `--dart-define`
 /// (plan Phase 0.3). These were plain hardcoded `localhost` consts until
@@ -159,9 +160,15 @@ bool _isExplicitAiRefusal(Object error) {
   return false;
 }
 
-final authApiProvider = Provider<AuthApi>(
-  (ref) => AuthApi(authBaseUrl: _authBaseUrl, versionedOtpEnabled: Env.versionedOtpEnabled),
-);
+final authApiProvider = Provider<AuthApi>((ref) {
+  final client = localSmsRigHttpClient();
+  if (client != null) ref.onDispose(client.close);
+  return AuthApi(
+    authBaseUrl: _authBaseUrl,
+    client: client,
+    versionedOtpEnabled: Env.versionedOtpEnabled,
+  );
+});
 
 /// Owns the short post-authentication idle window used to serialize
 /// non-critical maintenance. This prevents sync, outbox, notification and
@@ -182,6 +189,7 @@ final authenticatedHttpClientProvider = Provider<AuthenticatedHttpClient>((
 ) {
   final refreshCoordinator = ref.read(sessionRefreshCoordinatorProvider);
   final client = AuthenticatedHttpClient(
+    inner: localSmsRigHttpClient(),
     refreshAccessToken: () async {
       return refreshCoordinator.refresh();
     },
