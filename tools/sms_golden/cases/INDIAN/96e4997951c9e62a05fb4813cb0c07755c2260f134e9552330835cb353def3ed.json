@@ -1,0 +1,33 @@
+{
+  "id": "laneq:acct_cr_imps_unregistered",
+  "templateHash": "96e4997951c9e62a05fb4813cb0c07755c2260f134e9552330835cb353def3ed",
+  "weight": 1,
+  "source": "synthetic",
+  "messages": [
+    {
+      "sender": "VM-INDIAN-S",
+      "body": "Rs.5000.00 Cr. to A/c XXXX1234 by IMPS Ref:IMPS12345 on 01-11-2026. AvlBal:Rs17000 -Indian Bank",
+      "observedAt": "2026-11-20T09:00:00.000Z"
+    }
+  ],
+  "expect": {
+    "facts": [
+      {
+        "factType": "movement",
+        "attrs": {
+          "direction": "credit",
+          "purpose": "unknown",
+          "rail": "imps"
+        },
+        "amounts": [
+          {
+            "role": "posted",
+            "minor": 500000
+          }
+        ]
+      }
+    ]
+  },
+  "note": "Dr./Cr. abbreviation style on an unregistered handle (INDIAN). Note: Bank of Baroda IMPS credits with a 12-digit reference are read as UPI p2p by the existing BOB-UPI-CREDIT rule; see the handoff.",
+  "origin": "lane-q"
+}

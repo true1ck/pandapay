@@ -1,0 +1,154 @@
+[
+  {
+    "id": "GENZ-SIP-EXECUTED",
+    "version": 1,
+    "family": "sip_receipt",
+    "senders": [
+      "*"
+    ],
+    "priority": 600,
+    "match": {
+      "pattern": "\\bsip\\s+(?:instal?ment\\s+|purchase\\s+|payment\\s+)?(?:of|for)\\s+(?:\\b(?:rs\\.?|inr)|₹)\\s*:?\\s*(?<amt>\\d[\\d,]*(?:\\.\\d{1,2})?)\\s+(?:in|for|towards|into)\\s+(?<fund>[^\\n]+?)\\s+(?:(?:has\\s+been|was|is)\\s+(?:successfully\\s+)?(?:processed|executed|completed|successful|debited|done)|successfully\\s+(?:processed|executed|completed|debited))\\b(?:\\s+(?:on|dated)\\s+(?<date>\\d{2}[-/ ](?:\\d{2}|(?:jan|feb|mar|apr|may|jun|jul|aug|sep|oct|nov|dec))[-/ ]\\d{2,4}|\\d{2}(?:jan|feb|mar|apr|may|jun|jul|aug|sep|oct|nov|dec)\\d{2,4}))?",
+      "flags": "i",
+      "rejectAny": [
+        "failed",
+        "rejected",
+        "unsuccessful",
+        "start a sip",
+        "start sip",
+        "offer",
+        "invest now",
+        "registered",
+        "will be debited",
+        "will be processed",
+        "will be deducted",
+        "will be executed",
+        "is due",
+        "is scheduled",
+        "was not",
+        "not been"
+      ]
+    },
+    "emit": [
+      {
+        "factType": "movement",
+        "attrs": {
+          "direction": "debit",
+          "purpose": "investment",
+          "rail": "nach",
+          "evidenceOnly": true
+        },
+        "amounts": [
+          {
+            "role": "posted",
+            "from": "amt",
+            "unit": "INR"
+          }
+        ],
+        "occurredAt": {
+          "from": "date"
+        },
+        "counterparty": {
+          "kind": "merchant",
+          "nameFrom": "fund",
+          "transforms": [
+            "upperTrim"
+          ]
+        }
+      }
+    ],
+    "confidence": 0.88,
+    "examples": [
+      {
+        "sender": "VM-GENMFD-S",
+        "body": "Your SIP of Rs.2,000.00 in Sample Equity Fund - Direct Growth has been processed on 01-11-2026. Thank you for investing.",
+        "expectFactTypes": [
+          "movement"
+        ]
+      },
+      {
+        "sender": "VM-GENMFD-S",
+        "body": "Your SIP of Rs.2,000.00 in Sample Equity Fund - Direct Growth has failed due to insufficient balance.",
+        "expectFactTypes": []
+      }
+    ],
+    "status": "active",
+    "createdBy": "baseline",
+    "updatedAt": "2026-11-05T00:00:00Z"
+  },
+  {
+    "id": "GENZ-MF-PURCHASE-PROCESSED",
+    "version": 1,
+    "family": "mf_receipt",
+    "senders": [
+      "*"
+    ],
+    "priority": 680,
+    "match": {
+      "pattern": "\\b(?:your\\s+)?(?:purchase|investment|sip)\\s+of\\s+(?:\\b(?:rs\\.?|inr)|₹)\\s*:?\\s*(?<amt>\\d[\\d,]*(?:\\.\\d{1,2})?)\\s+in\\s+(?<fund>[^\\n]+?)(?:\\s*[,(]\\s*folio[^\\n]{0,30}?)?\\s+(?:is|was|has\\s+been)\\s+(?:processed|allotted|allocated|successful)\\b[^\\n]{0,60}?\\bunits?\\b",
+      "flags": "i",
+      "rejectAny": [
+        "failed",
+        "rejected",
+        "unsuccessful",
+        "start a sip",
+        "start sip",
+        "offer",
+        "invest now",
+        "registered",
+        "will be debited",
+        "will be processed",
+        "will be deducted",
+        "will be executed",
+        "is due",
+        "is scheduled",
+        "was not",
+        "not been",
+        "no units"
+      ]
+    },
+    "emit": [
+      {
+        "factType": "movement",
+        "attrs": {
+          "direction": "debit",
+          "purpose": "investment",
+          "rail": "unknown",
+          "evidenceOnly": true
+        },
+        "amounts": [
+          {
+            "role": "posted",
+            "from": "amt",
+            "unit": "INR"
+          }
+        ],
+        "counterparty": {
+          "kind": "merchant",
+          "nameFrom": "fund",
+          "transforms": [
+            "upperTrim"
+          ]
+        }
+      }
+    ],
+    "confidence": 0.85,
+    "examples": [
+      {
+        "sender": "VM-GENMFD-S",
+        "body": "Dear Investor, your purchase of Rs.2,000.00 in Sample Equity Fund Folio 12345678 is processed at NAV 45.1234. Units allotted: 44.321.",
+        "expectFactTypes": [
+          "movement"
+        ]
+      },
+      {
+        "sender": "VM-GENMFD-S",
+        "body": "Dear Investor, your purchase of Rs.2,000.00 in Sample Equity Fund Folio 12345678 was rejected. No units allotted.",
+        "expectFactTypes": []
+      }
+    ],
+    "status": "active",
+    "createdBy": "baseline",
+    "updatedAt": "2026-11-05T00:00:00Z"
+  }
+]

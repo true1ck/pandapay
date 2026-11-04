@@ -1,0 +1,36 @@
+{
+  "id": "laneq:limit_up_idfc",
+  "templateHash": "58a5277829aea24283a43392da62387eeb38fcd940c1897b44aee9a969adda62",
+  "weight": 1,
+  "source": "synthetic",
+  "messages": [
+    {
+      "sender": "VM-IDFCFB-S",
+      "body": "Great news! Your IDFC FIRST Bank Credit Card XX1234 limit has been increased to INR 2,00,000.",
+      "observedAt": "2026-11-20T09:00:00.000Z"
+    }
+  ],
+  "expect": {
+    "facts": [
+      {
+        "factType": "limit_change",
+        "attrs": {
+          "reason": "increase"
+        },
+        "amounts": [
+          {
+            "role": "credit_limit",
+            "minor": 20000000
+          }
+        ],
+        "instrument": {
+          "kind": "credit_card",
+          "issuerSlug": "idfc",
+          "maskDigits": "1234"
+        }
+      }
+    ]
+  },
+  "note": "Wording guess: the word \"limit\" comes after the card.",
+  "origin": "lane-q"
+}

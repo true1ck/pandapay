@@ -1,0 +1,52 @@
+{
+  "id": "laneq:atm_canara_debited_for_atm",
+  "templateHash": "81b142ec44a96913c924c2a84605a5bd9b735850416be0bce0d2142a77afd842",
+  "weight": 1,
+  "source": "synthetic",
+  "messages": [
+    {
+      "sender": "AD-CANBNK-S",
+      "body": "An amount of INR 5,000.00 has been DEBITED to your account XXX1234 on 01/11/2026 for ATM cash withdrawal. Total Avail.bal INR 12,000.00 - Canara Bank",
+      "observedAt": "2026-11-20T09:00:00.000Z"
+    }
+  ],
+  "expect": {
+    "facts": [
+      {
+        "factType": "movement",
+        "attrs": {
+          "direction": "debit",
+          "purpose": "atm",
+          "rail": "cash"
+        },
+        "amounts": [
+          {
+            "role": "posted",
+            "minor": 500000
+          }
+        ],
+        "instrument": {
+          "kind": "bank_account",
+          "issuerSlug": "canara",
+          "maskDigits": "1234"
+        }
+      },
+      {
+        "factType": "balance_snapshot",
+        "amounts": [
+          {
+            "role": "available_balance",
+            "minor": 1200000
+          }
+        ],
+        "instrument": {
+          "kind": "bank_account",
+          "issuerSlug": "canara",
+          "maskDigits": "1234"
+        }
+      }
+    ]
+  },
+  "note": "The baseline Canara debit rule gives purpose unknown for this ATM wording.",
+  "origin": "lane-q"
+}

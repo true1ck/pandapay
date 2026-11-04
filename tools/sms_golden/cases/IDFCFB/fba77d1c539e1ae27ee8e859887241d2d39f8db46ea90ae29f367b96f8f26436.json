@@ -1,0 +1,38 @@
+{
+  "id": "laneq:card_declined_stays_attempt_idfc",
+  "templateHash": "fba77d1c539e1ae27ee8e859887241d2d39f8db46ea90ae29f367b96f8f26436",
+  "weight": 1,
+  "source": "synthetic",
+  "messages": [
+    {
+      "sender": "VM-IDFCFB-S",
+      "body": "Transaction of INR 1,250.00 was declined on your IDFC FIRST Bank Credit Card ending 1234 at ACME STORE on 01-NOV-26.",
+      "observedAt": "2026-11-20T09:00:00.000Z"
+    }
+  ],
+  "expect": {
+    "facts": [
+      {
+        "factType": "attempt",
+        "attrs": {
+          "status": "declined",
+          "direction": "debit",
+          "purpose": "purchase"
+        },
+        "amounts": [
+          {
+            "role": "posted",
+            "minor": 125000
+          }
+        ],
+        "instrument": {
+          "kind": "credit_card",
+          "issuerSlug": "idfc",
+          "maskDigits": "1234"
+        }
+      }
+    ]
+  },
+  "note": "Near miss of the new spend rules: a declined card transaction stays an attempt.",
+  "origin": "lane-q"
+}

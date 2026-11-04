@@ -1,0 +1,40 @@
+{
+  "id": "laneq:statement_pnb",
+  "templateHash": "0f7e53f78a6767ff0ee93505950764ca00dac4283c69a3fbf8383a56df6e9bc8",
+  "weight": 1,
+  "source": "synthetic",
+  "messages": [
+    {
+      "sender": "VM-PNBSMS-S",
+      "body": "Your PNB Credit Card ending 3344 statement: Total Amount Due Rs 4,500.00 Minimum Amount Due Rs 225.00 Due Date 20-11-2026.",
+      "observedAt": "2026-11-20T09:00:00.000Z"
+    }
+  ],
+  "expect": {
+    "facts": [
+      {
+        "factType": "bill_due",
+        "attrs": {
+          "dueDate": "2026-11-20"
+        },
+        "amounts": [
+          {
+            "role": "due_total",
+            "minor": 450000
+          },
+          {
+            "role": "due_minimum",
+            "minor": 22500
+          }
+        ],
+        "instrument": {
+          "kind": "credit_card",
+          "issuerSlug": "pnb",
+          "maskDigits": "3344"
+        }
+      }
+    ]
+  },
+  "note": "Wording guess.",
+  "origin": "lane-q"
+}

@@ -1,0 +1,725 @@
+[
+  {
+    "id": "GENZ-INS-PREMIUM-DUE-LOOSE",
+    "version": 1,
+    "family": "bill_due",
+    "senders": [
+      "*"
+    ],
+    "priority": 590,
+    "match": {
+      "pattern": "^(?=[\\s\\S]*\\bpolicy\\b)(?:(?=[\\s\\S]*?\\b(?:your|dear\\s+policy\\s*holder,?\\s+your)\\s+(?<biller>[a-z][a-z0-9&.]{1,20}(?:\\s[a-z][a-z0-9&.]{1,14}){0,2}?)\\s+(?:life\\s+|health\\s+|motor\\s+|car\\s+|two\\s+wheeler\\s+|general\\s+|term\\s+|travel\\s+)?(?:insurance\\s+)?policy\\b)|)(?=[\\s\\S]*?\\bpremium\\b[^\\d\\n]{0,30}?(?:\\b(?:rs\\.?|inr)|₹)\\s*:?\\s*(?<amt>\\d[\\d,]*(?:\\.\\d{1,2})?))(?=[\\s\\S]*?\\b(?:due|payable|falls\\s+due|is\\s+pending)\\b[^\\n\\d]{0,25}?(?:on|by|before|date)[^\\d\\n]{0,12}?(?<due>\\d{2}[-/ ](?:\\d{2}|(?:jan|feb|mar|apr|may|jun|jul|aug|sep|oct|nov|dec))[-/ ]\\d{2,4}|\\d{2}(?:jan|feb|mar|apr|may|jun|jul|aug|sep|oct|nov|dec)\\d{2,4}))",
+      "flags": "i",
+      "rejectAny": [
+        "expired",
+        "has lapsed",
+        "lapsed",
+        "failed",
+        "declined",
+        "received",
+        "has been debited",
+        "was debited",
+        "paid successfully",
+        "thank you for",
+        "offer",
+        "get a free",
+        "quote",
+        "cashback"
+      ]
+    },
+    "emit": [
+      {
+        "factType": "bill_due",
+        "attrs": {
+          "dueDate": {
+            "from": "due"
+          },
+          "billerName": {
+            "from": "biller",
+            "transforms": [
+              "upperTrim"
+            ]
+          }
+        },
+        "amounts": [
+          {
+            "role": "due_total",
+            "from": "amt",
+            "unit": "INR"
+          }
+        ]
+      }
+    ],
+    "confidence": 0.88,
+    "examples": [
+      {
+        "sender": "VM-GENINS-S",
+        "body": "Dear Policyholder, your Sample Life policy no 123456789 premium of Rs.12,500.00 is due on 15-11-2026. Pay online to avoid lapse.",
+        "expectFactTypes": [
+          "bill_due"
+        ]
+      },
+      {
+        "sender": "VM-GENINS-S",
+        "body": "Dear Policyholder, your Sample Life policy no 123456789 premium of Rs.12,500.00 was due on 15-11-2026 and has lapsed.",
+        "expectFactTypes": []
+      }
+    ],
+    "status": "active",
+    "createdBy": "baseline",
+    "updatedAt": "2026-11-05T00:00:00Z"
+  },
+  {
+    "id": "GENZ-INS-RENEWAL-DUE",
+    "version": 1,
+    "family": "bill_due",
+    "senders": [
+      "*"
+    ],
+    "priority": 585,
+    "match": {
+      "pattern": "^(?=[\\s\\S]*\\bpolicy\\b)(?:(?=[\\s\\S]*?\\b(?:your|dear\\s+policy\\s*holder,?\\s+your)\\s+(?<biller>[a-z][a-z0-9&.]{1,20}(?:\\s[a-z][a-z0-9&.]{1,14}){0,2}?)\\s+(?:life\\s+|health\\s+|motor\\s+|car\\s+|two\\s+wheeler\\s+|general\\s+|term\\s+|travel\\s+)?(?:insurance\\s+)?policy\\b)|)(?=[\\s\\S]*?\\b(?:expires?|expiring|due\\s+for\\s+renewal|renewal\\s+due|valid\\s+(?:till|until|upto))\\b[^\\d\\n]{0,12}?(?:on|by|from)?[^\\d\\n]{0,6}?(?<due>\\d{2}[-/ ](?:\\d{2}|(?:jan|feb|mar|apr|may|jun|jul|aug|sep|oct|nov|dec))[-/ ]\\d{2,4}|\\d{2}(?:jan|feb|mar|apr|may|jun|jul|aug|sep|oct|nov|dec)\\d{2,4}))(?=[\\s\\S]*?\\b(?:renewal\\s+)?premium\\b[^\\d\\n]{0,30}?(?:\\b(?:rs\\.?|inr)|₹)\\s*:?\\s*(?<amt>\\d[\\d,]*(?:\\.\\d{1,2})?))",
+      "flags": "i",
+      "rejectAny": [
+        "expired",
+        "has lapsed",
+        "lapsed",
+        "failed",
+        "declined",
+        "received",
+        "has been debited",
+        "was debited",
+        "paid successfully",
+        "thank you for",
+        "offer",
+        "get a free",
+        "quote",
+        "cashback"
+      ]
+    },
+    "emit": [
+      {
+        "factType": "bill_due",
+        "attrs": {
+          "dueDate": {
+            "from": "due"
+          },
+          "billerName": {
+            "from": "biller",
+            "transforms": [
+              "upperTrim"
+            ]
+          }
+        },
+        "amounts": [
+          {
+            "role": "due_total",
+            "from": "amt",
+            "unit": "INR"
+          }
+        ]
+      }
+    ],
+    "confidence": 0.85,
+    "examples": [
+      {
+        "sender": "VM-GENINS-S",
+        "body": "Your Sample Health policy 123456789 expires on 30-11-2026. Renewal premium Rs.9,500.00. Renew now to continue cover.",
+        "expectFactTypes": [
+          "bill_due"
+        ]
+      },
+      {
+        "sender": "VM-GENINS-S",
+        "body": "Your Sample Health policy 123456789 expired on 30-10-2026. Renewal premium Rs.9,500.00.",
+        "expectFactTypes": []
+      }
+    ],
+    "status": "active",
+    "createdBy": "baseline",
+    "updatedAt": "2026-11-05T00:00:00Z"
+  },
+  {
+    "id": "GENZ-INS-PREMIUM-RECEIVED",
+    "version": 1,
+    "family": "bill_receipt",
+    "senders": [
+      "*"
+    ],
+    "priority": 551,
+    "match": {
+      "pattern": "\\bpremium\\s+(?:of\\s+)?(?:\\b(?:rs\\.?|inr)|₹)\\s*:?\\s*(?<amt>\\d[\\d,]*(?:\\.\\d{1,2})?)\\s+(?:has\\s+been\\s+|was\\s+)?(?:received|paid|credited)\\s+(?:for|towards|against)\\s+(?:your\\s+)?(?:policy|[a-z][a-z0-9 ]{1,20}\\s+policy)\\b[^\\n]{0,30}?\\b(?:on|dated)\\s+(?<date>\\d{4}-\\d{2}-\\d{2}(?:[: ]\\d{2}:\\d{2}(?::\\d{2})?)?|\\d{1,2}[-/]\\d{1,2}[-/]\\d{2,4}(?:,?\\s*\\d{2}:\\d{2}(?::\\d{2})?)?|\\d{1,2}[-/ ]?[a-z]{3}[-/ ,]*\\d{2,4}(?:,?\\s*\\d{2}:\\d{2}(?::\\d{2})?)?)",
+      "flags": "i",
+      "rejectAny": [
+        "not received",
+        "failed",
+        "bounced",
+        "dishonour",
+        "due"
+      ]
+    },
+    "emit": [
+      {
+        "factType": "movement",
+        "attrs": {
+          "direction": "debit",
+          "purpose": "bill_payment",
+          "rail": "unknown",
+          "evidenceOnly": true
+        },
+        "amounts": [
+          {
+            "role": "posted",
+            "from": "amt",
+            "unit": "INR"
+          }
+        ],
+        "occurredAt": {
+          "from": "date",
+          "formats": [
+            "dd-MM-yyyy",
+            "dd-MM-yyyy, HH:mm:ss",
+            "dd-MM-yyyy,HH:mm:ss",
+            "dd-MM-yyyy, HH:mm",
+            "dd-MM-yyyy HH:mm:ss",
+            "dd-MM-yy",
+            "dd-MM-yy, HH:mm:ss",
+            "dd-MM-yy,HH:mm:ss",
+            "dd-MM-yy, HH:mm",
+            "dd-MM-yy HH:mm:ss",
+            "dd/MM/yyyy",
+            "dd/MM/yyyy, HH:mm:ss",
+            "dd/MM/yyyy,HH:mm:ss",
+            "dd/MM/yyyy, HH:mm",
+            "dd/MM/yyyy HH:mm:ss",
+            "dd/MM/yy",
+            "dd/MM/yy, HH:mm:ss",
+            "dd/MM/yy,HH:mm:ss",
+            "dd/MM/yy, HH:mm",
+            "dd/MM/yy HH:mm:ss",
+            "dd-MMM-yyyy",
+            "dd-MMM-yyyy, HH:mm:ss",
+            "dd-MMM-yyyy,HH:mm:ss",
+            "dd-MMM-yyyy, HH:mm",
+            "dd-MMM-yyyy HH:mm:ss",
+            "dd-MMM-yy",
+            "dd-MMM-yy, HH:mm:ss",
+            "dd-MMM-yy,HH:mm:ss",
+            "dd-MMM-yy, HH:mm",
+            "dd-MMM-yy HH:mm:ss",
+            "ddMMMyyyy",
+            "ddMMMyyyy, HH:mm:ss",
+            "ddMMMyyyy,HH:mm:ss",
+            "ddMMMyyyy, HH:mm",
+            "ddMMMyyyy HH:mm:ss",
+            "ddMMMyy",
+            "ddMMMyy, HH:mm:ss",
+            "ddMMMyy,HH:mm:ss",
+            "ddMMMyy, HH:mm",
+            "ddMMMyy HH:mm:ss",
+            "dd MMM yyyy",
+            "dd MMM yyyy, HH:mm:ss",
+            "dd MMM yyyy,HH:mm:ss",
+            "dd MMM yyyy, HH:mm",
+            "dd MMM yyyy HH:mm:ss",
+            "dd MMM yy",
+            "dd MMM yy, HH:mm:ss",
+            "dd MMM yy,HH:mm:ss",
+            "dd MMM yy, HH:mm",
+            "dd MMM yy HH:mm:ss",
+            "dd-MMM yyyy",
+            "dd-MMM yyyy, HH:mm:ss",
+            "dd-MMM yyyy,HH:mm:ss",
+            "dd-MMM yyyy, HH:mm",
+            "dd-MMM yyyy HH:mm:ss",
+            "dd.MM.yyyy",
+            "dd.MM.yyyy, HH:mm:ss",
+            "dd.MM.yyyy,HH:mm:ss",
+            "dd.MM.yyyy, HH:mm",
+            "dd.MM.yyyy HH:mm:ss",
+            "dd.MM.yy",
+            "dd.MM.yy, HH:mm:ss",
+            "dd.MM.yy,HH:mm:ss",
+            "dd.MM.yy, HH:mm",
+            "dd.MM.yy HH:mm:ss",
+            "yyyy-MM-dd",
+            "yyyy-MM-dd:HH:mm:ss",
+            "yyyy-MM-dd HH:mm:ss",
+            "yyyy-MM-dd HH:mm"
+          ]
+        }
+      }
+    ],
+    "confidence": 0.88,
+    "examples": [
+      {
+        "sender": "VM-GENINS-S",
+        "body": "Premium of Rs.12,500.00 received for your policy no 123456789 on 01-11-2026. Thank you for your payment.",
+        "expectFactTypes": [
+          "movement"
+        ]
+      },
+      {
+        "sender": "VM-GENINS-S",
+        "body": "Premium of Rs.12,500.00 due for your policy no 123456789 on 01-11-2026.",
+        "expectFactTypes": []
+      }
+    ],
+    "status": "active",
+    "createdBy": "baseline",
+    "updatedAt": "2026-11-05T00:00:00Z"
+  },
+  {
+    "id": "GENZ-UTIL-BILL-DUE-LOOSE",
+    "version": 1,
+    "family": "bill_due",
+    "senders": [
+      "*"
+    ],
+    "priority": 240,
+    "match": {
+      "pattern": "^(?=[\\s\\S]*\\b(?:(?:electricity|power|water|gas|piped\\s{1,3}gas|lpg|broadband|internet|fibre|fiber|landline|postpaid|mobile|dth|cable|cylinder|maintenance|society|property\\s{1,3}tax|municipal)|bill)\\b)(?:(?=[\\s\\S]*?\\b(?:your|dear\\s+customer,?\\s+your)\\s+(?<biller>[a-z][a-z0-9&.]{1,20}(?:\\s[a-z][a-z0-9&.]{1,14}){0,2}?)\\s+(?:(?:electricity|power|water|gas|piped\\s{1,3}gas|lpg|broadband|internet|fibre|fiber|landline|postpaid|mobile|dth|cable|cylinder|maintenance|society|property\\s{1,3}tax|municipal)\\s{1,3}){0,2}(?:bill|invoice)\\b)|)(?=[\\s\\S]*?\\b(?:bill|invoice)\\b[^\\n\\d]{0,30}?(?:of|for|is|amount(?:\\s+of)?|:)[^\\d\\n]{0,6}?(?:\\b(?:rs\\.?|inr)|₹)\\s*:?\\s*(?<amt>\\d[\\d,]*(?:\\.\\d{1,2})?))(?=[\\s\\S]*?\\b(?:is\\s+)?(?:due|payable|pending)\\b[^\\n\\d]{0,12}?(?:on|by|before|date)[^\\d\\n]{0,12}?(?<due>\\d{2}[-/ ](?:\\d{2}|(?:jan|feb|mar|apr|may|jun|jul|aug|sep|oct|nov|dec))[-/ ]\\d{2,4}|\\d{2}(?:jan|feb|mar|apr|may|jun|jul|aug|sep|oct|nov|dec)\\d{2,4}))",
+      "flags": "i",
+      "rejectAny": [
+        "has been paid",
+        "payment received",
+        "was paid",
+        "paid successfully",
+        "cashback",
+        "cash back",
+        "offer",
+        "win ",
+        "discount",
+        "failed",
+        "overdue",
+        "disconnected",
+        "disconnection notice",
+        "thank you for",
+        "received"
+      ]
+    },
+    "emit": [
+      {
+        "factType": "bill_due",
+        "attrs": {
+          "dueDate": {
+            "from": "due"
+          },
+          "billerName": {
+            "from": "biller",
+            "transforms": [
+              "upperTrim"
+            ]
+          }
+        },
+        "amounts": [
+          {
+            "role": "due_total",
+            "from": "amt",
+            "unit": "INR"
+          }
+        ]
+      }
+    ],
+    "confidence": 0.88,
+    "examples": [
+      {
+        "sender": "VM-GENUTL-S",
+        "body": "Dear Customer, your Sample Power electricity bill of Rs.1,250.00 for RR No ABC123 is due on 15-11-2026. Pay online to avoid disconnection.",
+        "expectFactTypes": [
+          "bill_due"
+        ]
+      },
+      {
+        "sender": "VM-GENUTL-S",
+        "body": "Dear Customer, your Sample Power electricity bill of Rs.1,250.00 for RR No ABC123 has been paid on 15-11-2026. Thank you.",
+        "expectFactTypes": []
+      }
+    ],
+    "status": "active",
+    "createdBy": "baseline",
+    "updatedAt": "2026-11-05T00:00:00Z"
+  },
+  {
+    "id": "GENZ-UTIL-PAYMENT-RECEIVED",
+    "version": 1,
+    "family": "bill_receipt",
+    "senders": [
+      "*"
+    ],
+    "priority": 553,
+    "match": {
+      "pattern": "\\b(?:payment|amount)\\s+of\\s+(?:\\b(?:rs\\.?|inr)|₹)\\s*:?\\s*(?<amt>\\d[\\d,]*(?:\\.\\d{1,2})?)\\s+(?:has\\s+been\\s+|was\\s+)?(?:received|paid|credited)\\s+(?:for|towards|against)\\s+(?:your\\s+)?(?:rr\\s*no|consumer|customer|ca\\s*no|account|a/c|connection|mobile|bill|policy|meter|k\\s*number|crn|id)\\b[^\\n]{0,40}?\\b(?:on|dated)\\s+(?<date>\\d{4}-\\d{2}-\\d{2}(?:[: ]\\d{2}:\\d{2}(?::\\d{2})?)?|\\d{1,2}[-/]\\d{1,2}[-/]\\d{2,4}(?:,?\\s*\\d{2}:\\d{2}(?::\\d{2})?)?|\\d{1,2}[-/ ]?[a-z]{3}[-/ ,]*\\d{2,4}(?:,?\\s*\\d{2}:\\d{2}(?::\\d{2})?)?)",
+      "flags": "i",
+      "rejectAny": [
+        "failed",
+        "not received",
+        "will be",
+        "card",
+        "due"
+      ]
+    },
+    "emit": [
+      {
+        "factType": "movement",
+        "attrs": {
+          "direction": "debit",
+          "purpose": "bill_payment",
+          "rail": "unknown",
+          "evidenceOnly": true
+        },
+        "amounts": [
+          {
+            "role": "posted",
+            "from": "amt",
+            "unit": "INR"
+          }
+        ],
+        "occurredAt": {
+          "from": "date",
+          "formats": [
+            "dd-MM-yyyy",
+            "dd-MM-yyyy, HH:mm:ss",
+            "dd-MM-yyyy,HH:mm:ss",
+            "dd-MM-yyyy, HH:mm",
+            "dd-MM-yyyy HH:mm:ss",
+            "dd-MM-yy",
+            "dd-MM-yy, HH:mm:ss",
+            "dd-MM-yy,HH:mm:ss",
+            "dd-MM-yy, HH:mm",
+            "dd-MM-yy HH:mm:ss",
+            "dd/MM/yyyy",
+            "dd/MM/yyyy, HH:mm:ss",
+            "dd/MM/yyyy,HH:mm:ss",
+            "dd/MM/yyyy, HH:mm",
+            "dd/MM/yyyy HH:mm:ss",
+            "dd/MM/yy",
+            "dd/MM/yy, HH:mm:ss",
+            "dd/MM/yy,HH:mm:ss",
+            "dd/MM/yy, HH:mm",
+            "dd/MM/yy HH:mm:ss",
+            "dd-MMM-yyyy",
+            "dd-MMM-yyyy, HH:mm:ss",
+            "dd-MMM-yyyy,HH:mm:ss",
+            "dd-MMM-yyyy, HH:mm",
+            "dd-MMM-yyyy HH:mm:ss",
+            "dd-MMM-yy",
+            "dd-MMM-yy, HH:mm:ss",
+            "dd-MMM-yy,HH:mm:ss",
+            "dd-MMM-yy, HH:mm",
+            "dd-MMM-yy HH:mm:ss",
+            "ddMMMyyyy",
+            "ddMMMyyyy, HH:mm:ss",
+            "ddMMMyyyy,HH:mm:ss",
+            "ddMMMyyyy, HH:mm",
+            "ddMMMyyyy HH:mm:ss",
+            "ddMMMyy",
+            "ddMMMyy, HH:mm:ss",
+            "ddMMMyy,HH:mm:ss",
+            "ddMMMyy, HH:mm",
+            "ddMMMyy HH:mm:ss",
+            "dd MMM yyyy",
+            "dd MMM yyyy, HH:mm:ss",
+            "dd MMM yyyy,HH:mm:ss",
+            "dd MMM yyyy, HH:mm",
+            "dd MMM yyyy HH:mm:ss",
+            "dd MMM yy",
+            "dd MMM yy, HH:mm:ss",
+            "dd MMM yy,HH:mm:ss",
+            "dd MMM yy, HH:mm",
+            "dd MMM yy HH:mm:ss",
+            "dd-MMM yyyy",
+            "dd-MMM yyyy, HH:mm:ss",
+            "dd-MMM yyyy,HH:mm:ss",
+            "dd-MMM yyyy, HH:mm",
+            "dd-MMM yyyy HH:mm:ss",
+            "dd.MM.yyyy",
+            "dd.MM.yyyy, HH:mm:ss",
+            "dd.MM.yyyy,HH:mm:ss",
+            "dd.MM.yyyy, HH:mm",
+            "dd.MM.yyyy HH:mm:ss",
+            "dd.MM.yy",
+            "dd.MM.yy, HH:mm:ss",
+            "dd.MM.yy,HH:mm:ss",
+            "dd.MM.yy, HH:mm",
+            "dd.MM.yy HH:mm:ss",
+            "yyyy-MM-dd",
+            "yyyy-MM-dd:HH:mm:ss",
+            "yyyy-MM-dd HH:mm:ss",
+            "yyyy-MM-dd HH:mm"
+          ]
+        }
+      }
+    ],
+    "confidence": 0.85,
+    "examples": [
+      {
+        "sender": "VM-GENUTL-S",
+        "body": "Payment of Rs.1,250.00 received for RR No ABC123 on 01-11-2026. Thank you. Sample Power",
+        "expectFactTypes": [
+          "movement"
+        ]
+      },
+      {
+        "sender": "VM-GENUTL-S",
+        "body": "Payment of Rs.1,250.00 for RR No ABC123 failed on 01-11-2026. Please retry.",
+        "expectFactTypes": []
+      }
+    ],
+    "status": "active",
+    "createdBy": "baseline",
+    "updatedAt": "2026-11-05T00:00:00Z"
+  },
+  {
+    "id": "GENZ-TELECOM-RECHARGE-SUCCESS-B",
+    "version": 1,
+    "family": "bill_receipt",
+    "senders": [
+      "*"
+    ],
+    "priority": 545,
+    "match": {
+      "pattern": "\\brecharge\\s+success(?:ful|fully)?\\b[\\s!.:-]{0,4}(?:\\b(?:rs\\.?|inr)|₹)\\s*:?\\s*(?<amt>\\d[\\d,]*(?:\\.\\d{1,2})?)\\s+(?:credited|added|done|received|applied)\\b",
+      "flags": "i",
+      "rejectAny": [
+        "unsuccessful",
+        "not successful",
+        "failed",
+        "pending",
+        "refund",
+        "offer"
+      ]
+    },
+    "emit": [
+      {
+        "factType": "movement",
+        "attrs": {
+          "direction": "debit",
+          "purpose": "bill_payment",
+          "rail": "unknown",
+          "evidenceOnly": true
+        },
+        "amounts": [
+          {
+            "role": "posted",
+            "from": "amt",
+            "unit": "INR"
+          }
+        ]
+      }
+    ],
+    "confidence": 0.88,
+    "examples": [
+      {
+        "sender": "VM-GENTEL-S",
+        "body": "Recharge successful! Rs.299.00 credited to 98XXXXX123. Validity 28 days. Thank you.",
+        "expectFactTypes": [
+          "movement"
+        ]
+      },
+      {
+        "sender": "VM-GENTEL-S",
+        "body": "Recharge unsuccessful! Rs.299.00 will be refunded to 98XXXXX123 in 3 days.",
+        "expectFactTypes": []
+      }
+    ],
+    "status": "active",
+    "createdBy": "baseline",
+    "updatedAt": "2026-11-05T00:00:00Z"
+  },
+  {
+    "id": "GENZ-FASTAG-TOLL-DEDUCTED",
+    "version": 1,
+    "family": "bill_receipt",
+    "senders": [
+      "*"
+    ],
+    "priority": 560,
+    "match": {
+      "pattern": "\\b(?:\\b(?:rs\\.?|inr)|₹)\\s*:?\\s*(?<amt>\\d[\\d,]*(?:\\.\\d{1,2})?)\\s+(?:has\\s+been\\s+|was\\s+)?(?:deducted|debited|charged)\\s+(?:from|in)\\s+(?:your\\s+)?(?:[a-z][a-z .&'-]{0,30}?\\s)?fastag\\b[^\\n]{0,60}?\\btoll\\b(?:[^\\n]{0,60}?\\b(?:on|dated)\\s+(?<date>\\d{4}-\\d{2}-\\d{2}(?:[: ]\\d{2}:\\d{2}(?::\\d{2})?)?|\\d{1,2}[-/]\\d{1,2}[-/]\\d{2,4}(?:,?\\s*\\d{2}:\\d{2}(?::\\d{2})?)?|\\d{1,2}[-/ ]?[a-z]{3}[-/ ,]*\\d{2,4}(?:,?\\s*\\d{2}:\\d{2}(?::\\d{2})?)?))?",
+      "flags": "i",
+      "rejectAny": [
+        "failed",
+        "refund",
+        "revers",
+        "low balance",
+        "blacklist",
+        "insufficient"
+      ]
+    },
+    "emit": [
+      {
+        "factType": "movement",
+        "attrs": {
+          "direction": "debit",
+          "purpose": "purchase",
+          "rail": "wallet",
+          "evidenceOnly": true
+        },
+        "amounts": [
+          {
+            "role": "posted",
+            "from": "amt",
+            "unit": "INR"
+          }
+        ],
+        "occurredAt": {
+          "from": "date",
+          "formats": [
+            "dd-MM-yyyy",
+            "dd-MM-yyyy, HH:mm:ss",
+            "dd-MM-yyyy,HH:mm:ss",
+            "dd-MM-yyyy, HH:mm",
+            "dd-MM-yyyy HH:mm:ss",
+            "dd-MM-yy",
+            "dd-MM-yy, HH:mm:ss",
+            "dd-MM-yy,HH:mm:ss",
+            "dd-MM-yy, HH:mm",
+            "dd-MM-yy HH:mm:ss",
+            "dd/MM/yyyy",
+            "dd/MM/yyyy, HH:mm:ss",
+            "dd/MM/yyyy,HH:mm:ss",
+            "dd/MM/yyyy, HH:mm",
+            "dd/MM/yyyy HH:mm:ss",
+            "dd/MM/yy",
+            "dd/MM/yy, HH:mm:ss",
+            "dd/MM/yy,HH:mm:ss",
+            "dd/MM/yy, HH:mm",
+            "dd/MM/yy HH:mm:ss",
+            "dd-MMM-yyyy",
+            "dd-MMM-yyyy, HH:mm:ss",
+            "dd-MMM-yyyy,HH:mm:ss",
+            "dd-MMM-yyyy, HH:mm",
+            "dd-MMM-yyyy HH:mm:ss",
+            "dd-MMM-yy",
+            "dd-MMM-yy, HH:mm:ss",
+            "dd-MMM-yy,HH:mm:ss",
+            "dd-MMM-yy, HH:mm",
+            "dd-MMM-yy HH:mm:ss",
+            "ddMMMyyyy",
+            "ddMMMyyyy, HH:mm:ss",
+            "ddMMMyyyy,HH:mm:ss",
+            "ddMMMyyyy, HH:mm",
+            "ddMMMyyyy HH:mm:ss",
+            "ddMMMyy",
+            "ddMMMyy, HH:mm:ss",
+            "ddMMMyy,HH:mm:ss",
+            "ddMMMyy, HH:mm",
+            "ddMMMyy HH:mm:ss",
+            "dd MMM yyyy",
+            "dd MMM yyyy, HH:mm:ss",
+            "dd MMM yyyy,HH:mm:ss",
+            "dd MMM yyyy, HH:mm",
+            "dd MMM yyyy HH:mm:ss",
+            "dd MMM yy",
+            "dd MMM yy, HH:mm:ss",
+            "dd MMM yy,HH:mm:ss",
+            "dd MMM yy, HH:mm",
+            "dd MMM yy HH:mm:ss",
+            "dd-MMM yyyy",
+            "dd-MMM yyyy, HH:mm:ss",
+            "dd-MMM yyyy,HH:mm:ss",
+            "dd-MMM yyyy, HH:mm",
+            "dd-MMM yyyy HH:mm:ss",
+            "dd.MM.yyyy",
+            "dd.MM.yyyy, HH:mm:ss",
+            "dd.MM.yyyy,HH:mm:ss",
+            "dd.MM.yyyy, HH:mm",
+            "dd.MM.yyyy HH:mm:ss",
+            "dd.MM.yy",
+            "dd.MM.yy, HH:mm:ss",
+            "dd.MM.yy,HH:mm:ss",
+            "dd.MM.yy, HH:mm",
+            "dd.MM.yy HH:mm:ss",
+            "yyyy-MM-dd",
+            "yyyy-MM-dd:HH:mm:ss",
+            "yyyy-MM-dd HH:mm:ss",
+            "yyyy-MM-dd HH:mm"
+          ]
+        }
+      }
+    ],
+    "confidence": 0.8,
+    "examples": [
+      {
+        "sender": "VM-GENFTG-S",
+        "body": "Rs.350.00 deducted from your Sample Bank FASTag for toll at SAMPLE PLAZA on 01-11-2026. Bal Rs.650.00.",
+        "expectFactTypes": [
+          "movement"
+        ]
+      },
+      {
+        "sender": "VM-GENFTG-S",
+        "body": "Your Sample Bank FASTag balance is low. Recharge now to avoid toll penalties.",
+        "expectFactTypes": []
+      }
+    ],
+    "status": "active",
+    "createdBy": "baseline",
+    "updatedAt": "2026-11-05T00:00:00Z"
+  },
+  {
+    "id": "GENZ-TRAVEL-BOOKING-CONFIRMED",
+    "version": 1,
+    "family": "bill_receipt",
+    "senders": [
+      "*"
+    ],
+    "priority": 120,
+    "match": {
+      "pattern": "^(?=[\\s\\S]*\\b(?:pnr|flight|train|bus|journey|hotel|check-?in|itinerary|cab|ride|airline)\\b)(?=[\\s\\S]*?\\b(?:booking|ticket|reservation)\\b)(?=[\\s\\S]*?\\b(?:confirmed|successful|booked|issued)\\b)(?=[\\s\\S]*?\\b(?:fare|amount\\s+paid|total\\s+paid|paid|amount|total)\\b[^\\d\\n]{0,20}?(?:\\b(?:rs\\.?|inr)|₹)\\s*:?\\s*(?<amt>\\d[\\d,]*(?:\\.\\d{1,2})?))",
+      "flags": "i",
+      "rejectAny": [
+        "not confirmed",
+        "refund",
+        "cancel",
+        "offer",
+        "discount",
+        "cashback",
+        "cash back",
+        "win ",
+        "failed",
+        "otp",
+        "will be",
+        "pending",
+        "waitlist"
+      ]
+    },
+    "emit": [
+      {
+        "factType": "movement",
+        "attrs": {
+          "direction": "debit",
+          "purpose": "purchase",
+          "rail": "unknown",
+          "evidenceOnly": true
+        },
+        "amounts": [
+          {
+            "role": "posted",
+            "from": "amt",
+            "unit": "INR"
+          }
+        ]
+      }
+    ],
+    "confidence": 0.75,
+    "examples": [
+      {
+        "sender": "VM-GENTRV-S",
+        "body": "Your booking ABC123 is confirmed. Amount paid Rs.5,250.00. Flight DEL-BOM on 05-11-2026. Sample Travel",
+        "expectFactTypes": [
+          "movement"
+        ]
+      },
+      {
+        "sender": "VM-GENTRV-S",
+        "body": "Your booking ABC123 is not confirmed yet. Amount paid Rs.5,250.00 will be refunded within 5 days.",
+        "expectFactTypes": []
+      }
+    ],
+    "status": "active",
+    "createdBy": "baseline",
+    "updatedAt": "2026-11-05T00:00:00Z"
+  }
+]

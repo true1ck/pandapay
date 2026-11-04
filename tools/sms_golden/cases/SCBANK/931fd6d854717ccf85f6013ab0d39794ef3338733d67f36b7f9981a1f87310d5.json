@@ -1,0 +1,38 @@
+{
+  "id": "laneq:card_was_used_for_sc",
+  "templateHash": "931fd6d854717ccf85f6013ab0d39794ef3338733d67f36b7f9981a1f87310d5",
+  "weight": 1,
+  "source": "synthetic",
+  "messages": [
+    {
+      "sender": "VM-SCBANK-S",
+      "body": "Your Standard Chartered Credit Card ending 5566 was used for INR 899.00 at SAMPLE CAFE on 03-Nov-26",
+      "observedAt": "2026-11-20T09:00:00.000Z"
+    }
+  ],
+  "expect": {
+    "facts": [
+      {
+        "factType": "movement",
+        "attrs": {
+          "direction": "debit",
+          "purpose": "purchase",
+          "rail": "card"
+        },
+        "amounts": [
+          {
+            "role": "posted",
+            "minor": 89900
+          }
+        ],
+        "instrument": {
+          "kind": "credit_card",
+          "issuerSlug": "sc",
+          "maskDigits": "5566"
+        }
+      }
+    ]
+  },
+  "note": "Wording guess: \"was used for\".",
+  "origin": "lane-q"
+}

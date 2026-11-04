@@ -1,0 +1,38 @@
+{
+  "id": "laneq:bill_debit_bbps_hdfc",
+  "templateHash": "40d470f2fd6013ca3bf31c874d22f401bb3fa973aa6d8967cfdad71e72b3d74f",
+  "weight": 1,
+  "source": "synthetic",
+  "messages": [
+    {
+      "sender": "VM-HDFCBK-S",
+      "body": "Rs.1250.00 debited from HDFC Bank A/c XX1234 on 01-11-26 towards SAMPLE POWER electricity bill via BBPS. Ref 432112345678.",
+      "observedAt": "2026-11-20T09:00:00.000Z"
+    }
+  ],
+  "expect": {
+    "facts": [
+      {
+        "factType": "movement",
+        "attrs": {
+          "direction": "debit",
+          "purpose": "bill_payment",
+          "rail": "unknown"
+        },
+        "amounts": [
+          {
+            "role": "posted",
+            "minor": 125000
+          }
+        ],
+        "instrument": {
+          "kind": "bank_account",
+          "issuerSlug": "hdfc",
+          "maskDigits": "1234"
+        }
+      }
+    ]
+  },
+  "note": "Bank debit for a utility bill; purpose bill_payment.",
+  "origin": "lane-q"
+}

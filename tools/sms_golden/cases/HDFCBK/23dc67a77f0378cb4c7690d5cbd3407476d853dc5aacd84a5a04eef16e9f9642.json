@@ -1,0 +1,36 @@
+{
+  "id": "laneq:due_reminder_amount_first_hdfc",
+  "templateHash": "23dc67a77f0378cb4c7690d5cbd3407476d853dc5aacd84a5a04eef16e9f9642",
+  "weight": 1,
+  "source": "synthetic",
+  "messages": [
+    {
+      "sender": "VM-HDFCBK-S",
+      "body": "Reminder: Rs.12,345.00 is due on your HDFC Bank Credit Card ending 1234 by 20-11-2026. Ignore if paid.",
+      "observedAt": "2026-11-20T09:00:00.000Z"
+    }
+  ],
+  "expect": {
+    "facts": [
+      {
+        "factType": "bill_due",
+        "attrs": {
+          "dueDate": "2026-11-20"
+        },
+        "amounts": [
+          {
+            "role": "due_total",
+            "minor": 1234500
+          }
+        ],
+        "instrument": {
+          "kind": "credit_card",
+          "issuerSlug": "hdfc",
+          "maskDigits": "1234"
+        }
+      }
+    ]
+  },
+  "note": "Wording guess.",
+  "origin": "lane-q"
+}

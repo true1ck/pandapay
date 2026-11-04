@@ -1,0 +1,34 @@
+{
+  "id": "laneq:upiapp_paid_bhim_unregistered",
+  "templateHash": "c1510450da6381aed5359f4cf4114b3165747370dfd82dcd614a3cd6f3b6a69c",
+  "weight": 1,
+  "source": "synthetic",
+  "messages": [
+    {
+      "sender": "VM-GENAPP-S",
+      "body": "Rs.250 paid to ACME STORE using BHIM UPI on 01-11-2026. Ref 432112345678",
+      "observedAt": "2026-11-20T09:00:00.000Z"
+    }
+  ],
+  "expect": {
+    "facts": [
+      {
+        "factType": "movement",
+        "attrs": {
+          "direction": "debit",
+          "purpose": "purchase",
+          "rail": "upi",
+          "evidenceOnly": true
+        },
+        "amounts": [
+          {
+            "role": "posted",
+            "minor": 25000
+          }
+        ]
+      }
+    ]
+  },
+  "note": "Unregistered app sender, scoped by the app name in the text.",
+  "origin": "lane-q"
+}

@@ -1,0 +1,34 @@
+{
+  "id": "laneq:upiapp_paid_phonepe",
+  "templateHash": "71407b6bde7e230eac23b23b3d02ada896c1e06d1ee365923a2354364aa59e29",
+  "weight": 1,
+  "source": "synthetic",
+  "messages": [
+    {
+      "sender": "PHONPE",
+      "body": "Paid Rs.250 to ACME STORE. UPI Ref 432112345678. Debited from your bank account.",
+      "observedAt": "2026-11-20T09:00:00.000Z"
+    }
+  ],
+  "expect": {
+    "facts": [
+      {
+        "factType": "movement",
+        "attrs": {
+          "direction": "debit",
+          "purpose": "purchase",
+          "rail": "upi",
+          "evidenceOnly": true
+        },
+        "amounts": [
+          {
+            "role": "posted",
+            "minor": 25000
+          }
+        ]
+      }
+    ]
+  },
+  "note": "Evidence only: the bank SMS is the counted UPI debit.",
+  "origin": "lane-q"
+}

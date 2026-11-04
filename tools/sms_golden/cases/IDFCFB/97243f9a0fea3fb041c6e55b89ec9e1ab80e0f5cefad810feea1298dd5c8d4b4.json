@@ -1,0 +1,40 @@
+{
+  "id": "laneq:statement_idfc",
+  "templateHash": "97243f9a0fea3fb041c6e55b89ec9e1ab80e0f5cefad810feea1298dd5c8d4b4",
+  "weight": 1,
+  "source": "synthetic",
+  "messages": [
+    {
+      "sender": "VM-IDFCFB-S",
+      "body": "Your IDFC FIRST Bank Credit Card XX1234 statement: Total due INR 12,345.00, Min due INR 617.00 by 20-NOV-26.",
+      "observedAt": "2026-11-20T09:00:00.000Z"
+    }
+  ],
+  "expect": {
+    "facts": [
+      {
+        "factType": "bill_due",
+        "attrs": {
+          "dueDate": "2026-11-20"
+        },
+        "amounts": [
+          {
+            "role": "due_total",
+            "minor": 1234500
+          },
+          {
+            "role": "due_minimum",
+            "minor": 61700
+          }
+        ],
+        "instrument": {
+          "kind": "credit_card",
+          "issuerSlug": "idfc",
+          "maskDigits": "1234"
+        }
+      }
+    ]
+  },
+  "note": "Wording guess; order-independent statement rule.",
+  "origin": "lane-q"
+}

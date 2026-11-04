@@ -1,0 +1,34 @@
+{
+  "id": "laneq:gateway_payment_razorpay",
+  "templateHash": "4c3127c2990a896421a99eb6c285ff5a3e5b93314d60fb725272cc131cf7d12c",
+  "weight": 1,
+  "source": "synthetic",
+  "messages": [
+    {
+      "sender": "VM-RZRPAY-S",
+      "body": "Payment of Rs.250.00 to ACME STORE was successful. Payment ID pay_ABC123. Powered by Razorpay",
+      "observedAt": "2026-11-20T09:00:00.000Z"
+    }
+  ],
+  "expect": {
+    "facts": [
+      {
+        "factType": "movement",
+        "attrs": {
+          "direction": "debit",
+          "purpose": "purchase",
+          "rail": "unknown",
+          "evidenceOnly": true
+        },
+        "amounts": [
+          {
+            "role": "posted",
+            "minor": 25000
+          }
+        ]
+      }
+    ]
+  },
+  "note": "Gateway sender is unregistered; scoped by the gateway name in the text.",
+  "origin": "lane-q"
+}

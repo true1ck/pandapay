@@ -1,0 +1,38 @@
+{
+  "id": "laneq:card_payment_received_for_indusind",
+  "templateHash": "28e5477bcad4384cf64310da337aae4c53c7c1d9bb5c8c3b06c1fcf03452484e",
+  "weight": 1,
+  "source": "synthetic",
+  "messages": [
+    {
+      "sender": "VM-INDUSB-S",
+      "body": "Payment of Rs. 15,000.00 received for your IndusInd Bank Credit Card ending 1234 on 01-11-26. Thank you.",
+      "observedAt": "2026-11-20T09:00:00.000Z"
+    }
+  ],
+  "expect": {
+    "facts": [
+      {
+        "factType": "movement",
+        "attrs": {
+          "direction": "credit",
+          "purpose": "card_payment",
+          "rail": "unknown"
+        },
+        "amounts": [
+          {
+            "role": "posted",
+            "minor": 1500000
+          }
+        ],
+        "instrument": {
+          "kind": "credit_card",
+          "issuerSlug": "indusind",
+          "maskDigits": "1234"
+        }
+      }
+    ]
+  },
+  "note": "Credit side of a card bill payment; never income.",
+  "origin": "lane-q"
+}

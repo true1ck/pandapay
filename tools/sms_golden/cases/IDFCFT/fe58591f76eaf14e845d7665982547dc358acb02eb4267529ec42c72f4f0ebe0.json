@@ -1,0 +1,34 @@
+{
+  "id": "laneq:fastag_toll_unregistered",
+  "templateHash": "fe58591f76eaf14e845d7665982547dc358acb02eb4267529ec42c72f4f0ebe0",
+  "weight": 1,
+  "source": "synthetic",
+  "messages": [
+    {
+      "sender": "VM-IDFCFT-S",
+      "body": "Rs.350.00 deducted from your Sample Bank FASTag for toll at SAMPLE PLAZA on 01-11-2026. Bal Rs.650.00.",
+      "observedAt": "2026-11-20T09:00:00.000Z"
+    }
+  ],
+  "expect": {
+    "facts": [
+      {
+        "factType": "movement",
+        "attrs": {
+          "direction": "debit",
+          "purpose": "purchase",
+          "rail": "wallet",
+          "evidenceOnly": true
+        },
+        "amounts": [
+          {
+            "role": "posted",
+            "minor": 35000
+          }
+        ]
+      }
+    ]
+  },
+  "note": "Evidence only so a FASTag recharge and the toll are never both counted.",
+  "origin": "lane-q"
+}

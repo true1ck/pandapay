@@ -1,0 +1,31 @@
+{
+  "id": "laneq:electricity_due_bescom",
+  "templateHash": "dabcfaca1d309e5ff2bf28283d3dd6f98dc2b743c47cf122f3dbc7d30801f75c",
+  "weight": 1,
+  "source": "synthetic",
+  "messages": [
+    {
+      "sender": "BESCOM",
+      "body": "Dear Customer, your electricity bill of Rs.1,250.00 for RR No ABC123 is due on 15-11-2026. Pay online to avoid disconnection.",
+      "observedAt": "2026-11-20T09:00:00.000Z"
+    }
+  ],
+  "expect": {
+    "facts": [
+      {
+        "factType": "bill_due",
+        "attrs": {
+          "dueDate": "2026-11-15"
+        },
+        "amounts": [
+          {
+            "role": "due_total",
+            "minor": 125000
+          }
+        ]
+      }
+    ]
+  },
+  "note": "Wording guess.",
+  "origin": "lane-q"
+}
