@@ -77,6 +77,48 @@ void main() {
   tearDown(() => BambooFonts.useSystemFontsForTests = false);
 
   testWidgets(
+    'shared-only financial amounts are not labeled as the full bill or full payment',
+    (tester) async {
+      final data = SharedGroupPresentation(
+        id: 'partial',
+        title: 'Flatmates',
+        expenses: SharedPage(
+          items: const [
+            SharedExpenseRow(
+              id: 'expense',
+              title: 'Dinner',
+              paidBy: 'You',
+              payerLabel: 'Shared amount paid by',
+              totalLabel: 'Shared total',
+              paidLabel: 'Your shared contribution',
+              billTotal: Money.fromPaise(120000),
+              yourPaid: Money.fromPaise(120000),
+              yourShare: Money.fromPaise(40000),
+            ),
+          ],
+        ),
+        balances: SharedPage(),
+        totals: const SharedExpenseTotals(
+          totalLabel: 'Shared expense total',
+          paidLabel: 'Your shared contributions',
+          billTotal: Money.fromPaise(120000),
+          yourPaid: Money.fromPaise(120000),
+          yourShare: Money.fromPaise(40000),
+        ),
+      );
+      await pump(tester, SharedGroupScreen(data: data));
+      expect(find.text('Shared total'), findsOneWidget);
+      expect(find.text('Your shared contribution'), findsOneWidget);
+      expect(find.text('Bill total'), findsNothing);
+      expect(find.text('You paid'), findsNothing);
+      await tester.tap(find.text('Totals'));
+      await tester.pumpAndSettle();
+      expect(find.text('Your shared contributions'), findsOneWidget);
+      expect(find.text('You paid'), findsNothing);
+    },
+  );
+
+  testWidgets(
     'hub has one familiar top tab level and no replacement bottom bar',
     (tester) async {
       await pump(tester, SharedExpensesScreen(data: hub()));

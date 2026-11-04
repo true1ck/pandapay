@@ -37,3 +37,15 @@ Root added four meaningful UI tests (single header, original standalone behavior
 4. Extend fixtures for recipient consent, individual balance drill-down, permissions and complete group lifecycle after P00/P03/P05 contracts are available. Do not enable new financial writes from shell tests.
 
 Sources used: `docs/design/mobile-ui-guidelines.md`, actual `app_theme.dart`, `widgets.dart`, existing `GroupedInsightScreen` and product/production plans. A separately installed Bamboo skill was absent; implementation uses the app's canonical Bamboo Ink source directly.
+
+## Root runtime integration, 4 November 2026
+
+Insights now conditionally exposes the single Splits tile under independent `PANDAPAY_SHARED_EXPENSES_ENABLED` (default false). Actual authenticated runtime adapters back the hub and selected-context routes. Existing main navigation, transaction detail and Quick Add remain intact. P05's immutable local queue and account owner are reused; no second local database or fabricated runtime demo data is wired into the app.
+
+Each top tab has scoped search and bounded Next/Previous page history. The displayed page owns its cursor; selecting another context cannot overwrite it through a global cursor map. Group amounts distinguish Shared total / Your shared contribution / Your share because full bill metadata is still a P06 persistence gate. The partial-sharing display must not call a shared contribution the full bank payment; a new failing UI contract test was added before those labels. Payer captions use known contribution data, without exposing implementation details. All-time accepted totals are supplied by the server projection, independent of loaded pages. Pending local work and incomplete/offline data have separate notices.
+
+Root widget/API-client checks reproduce and verify: retained group search/selected tab across paging, context-parameter replacement, automatic removal of visible revoked content, in-flight aggregate/cache fencing, and recovery draining query/cache publication. The earlier combined runtime/HTTP/presenter/router/Insights suite passed **44 tests**; subsequent runtime-focused suite passed **nine tests**. Presenter fixtures used by tests remain labeled test data; production routes use authenticated providers only.
+
+All entry/review/member/settlement callbacks are not complete; null actions are not presented as successful features. Source funding and the feature rollout remain off. Actual rendered fonts/device navigation and the full integrated financial flow still require emulator acceptance after implementation. No emulator install, reset, production change or push has occurred.
+
+Latest combined presenter/runtime/router regression after shared-only label changes: **32 passed** (17 Bamboo presenter tests, nine runtime/client interaction cases and six existing/router cases). Log: `.flutter-direct-appdata3/shared-ui-final.log`. Keep multi-request read snapshot/sequence consistency and complete pending-review visibility in the next integration gate; these read adapters do not yet establish a coherent report-wide financial snapshot or complete review UI.

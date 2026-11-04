@@ -3,6 +3,8 @@ import '../features/sms_v2/flag.dart';
 import '../features/sms_v2/ui/found_instruments_screen.dart';
 import '../features/sms_v2/ui/review_inbox_screen.dart';
 import '../features/sms_v2/ui/ledger_screens.dart';
+import '../features/shared_expenses/runtime/shared_providers.dart';
+import '../features/shared_expenses/runtime/shared_routes.dart';
 import 'dart:async';
 import 'dart:developer' as developer;
 import 'dart:ui';
@@ -176,6 +178,8 @@ abstract final class AppRoute {
   static const limitsAndPerks = '/insights/limits';
   static const rewardsGroup = '/insights/rewards';
   static const paymentsGroup = '/insights/payments';
+  static const splits = '/insights/splits';
+  static const splitContext = '/insights/splits/:contextId';
   static const myContributions = '/insights/my-contributions';
 
   /// Group F (Data Import & Sync) — implementation-plan-group-e-f-g.md §3.
@@ -891,6 +895,8 @@ final goRouterProvider = Provider<GoRouter>((ref) {
         path: AppRoute.paymentsGroup,
         builder: (context, state) => PaymentsInsightScreen(initialTab:state.uri.queryParameters['tab']),
       ),
+      GoRoute(path:AppRoute.splits,builder:(context,state)=>SharedExpensesRoute(onOpenContext:(id)=>context.push('${AppRoute.splits}/$id'))),
+      GoRoute(path:AppRoute.splitContext,builder:(context,state)=>SharedContextRoute(contextId:state.pathParameters['contextId']!)),
       GoRoute(
         path: AppRoute.myContributions,
         builder: (context, state) => Scaffold(
@@ -1212,6 +1218,7 @@ class _AppShellState extends ConsumerState<_AppShell> {
       // returns. Same "read once from the shell" reasoning as
       // sessionKeepAliveProvider above.
       ref.watch(cacheLifecycleProvider);
+      ref.watch(sharedExpensesLifecycleProvider);
       ref.watch(outboxFlushProvider);
       // Plan Phase 1.1: on each sign-in, pull the account's preference blob
       // down onto this device. Anonymous wallet migration is intentionally

@@ -371,7 +371,9 @@ class SharedPageBody extends StatefulWidget {
   final bool loadingMore;
   final VoidCallback? onRetry;
   final VoidCallback? onLoadMore;
+  final String nextLabel;
   const SharedPageBody({
+    this.nextLabel = 'Load more',
     super.key,
     required this.state,
     required this.hasItems,
@@ -447,7 +449,10 @@ class _SharedPageBodyState extends State<SharedPageBody>
               ? const SharedNotice('Loading more…')
               : widget.onLoadMore == null
               ? const SharedNotice('More results available')
-              : SharedAction(label: 'Load more', onTap: widget.onLoadMore!),
+              : SharedAction(
+                  label: widget.nextLabel,
+                  onTap: widget.onLoadMore!,
+                ),
         ),
       );
     }

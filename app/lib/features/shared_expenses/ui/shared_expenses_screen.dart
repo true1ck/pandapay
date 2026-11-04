@@ -18,6 +18,7 @@ class SharedExpensesScreen extends StatefulWidget {
   final void Function(SharedHubTab, String)? onSearchChanged;
   final ValueChanged<SharedHubTab>? onRetry;
   final ValueChanged<SharedHubTab>? onLoadMore;
+  final ValueChanged<SharedHubTab>? onPreviousPage;
   const SharedExpensesScreen({
     super.key,
     required this.data,
@@ -31,6 +32,7 @@ class SharedExpensesScreen extends StatefulWidget {
     this.onSearchChanged,
     this.onRetry,
     this.onLoadMore,
+    this.onPreviousPage,
   });
   @override
   State<SharedExpensesScreen> createState() => _SharedExpensesScreenState();
@@ -53,6 +55,10 @@ class _SharedExpensesScreenState extends State<SharedExpensesScreen> {
   }
 
   List<Widget> _header(SharedHubTab tab, {required bool incomplete}) => [
+    if (widget.data.pendingChanges > 0)
+      SharedNotice(
+        '${widget.data.pendingChanges} changes pending sync or review',
+      ),
     if (widget.data.offline)
       const SharedNotice(
         'Offline · showing saved splits',
@@ -96,8 +102,14 @@ class _SharedExpensesScreenState extends State<SharedExpensesScreen> {
       key: ValueKey(tab.name),
       state: page.state,
       hasItems: page.items.isNotEmpty,
+      nextLabel: page.nextLabel,
       header: permitted
           ? [
+              if (page.hasPrevious && widget.onPreviousPage != null)
+                SharedAction(
+                  label: 'Previous page',
+                  onTap: () => widget.onPreviousPage!(tab),
+                ),
               ..._header(tab, incomplete: page.incomplete),
               Align(
                 alignment: Alignment.centerLeft,
@@ -165,11 +177,19 @@ class _SharedExpensesScreenState extends State<SharedExpensesScreen> {
     final page = widget.data.activity;
     return SharedPageBody(
       key: const ValueKey('activity'),
+      nextLabel: page.nextLabel,
       state: page.state,
       hasItems: page.items.isNotEmpty,
       header: page.state == SharedLoadState.accessRevoked
           ? const []
-          : _header(SharedHubTab.activity, incomplete: page.incomplete),
+          : [
+              if (page.hasPrevious && widget.onPreviousPage != null)
+                SharedAction(
+                  label: 'Previous page',
+                  onTap: () => widget.onPreviousPage!(SharedHubTab.activity),
+                ),
+              ..._header(SharedHubTab.activity, incomplete: page.incomplete),
+            ],
       itemCount: page.items.length,
       itemBuilder: (_, index) {
         final row = page.items[index];

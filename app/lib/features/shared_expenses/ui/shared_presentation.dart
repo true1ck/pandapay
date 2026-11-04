@@ -30,12 +30,18 @@ class SharedPage<T> {
   final bool incomplete;
   final bool hasMore;
   final bool loadingMore;
+  final bool hasPrevious;
+  final String nextLabel;
+  final String? nextCursor;
   SharedPage({
     List<T> items = const [],
     this.state = SharedLoadState.ready,
     this.incomplete = false,
     this.hasMore = false,
     this.loadingMore = false,
+    this.hasPrevious = false,
+    this.nextLabel = 'Load more',
+    this.nextCursor,
   }) : items = List.unmodifiable(items) {
     if (items.length > 100) {
       throw ArgumentError.value(items.length, 'items', 'Page limit is 100');
@@ -102,6 +108,8 @@ class SharedActivityRow {
 }
 
 class SharedExpenseRow {
+  final String totalLabel;
+  final String paidLabel, payerLabel;
   final String id;
   final String title;
   final String paidBy;
@@ -113,6 +121,9 @@ class SharedExpenseRow {
   final SharedParticipation participation;
   final SharedContextState state;
   const SharedExpenseRow({
+    this.totalLabel = 'Bill total',
+    this.paidLabel = 'You paid',
+    this.payerLabel = 'Paid by',
     required this.id,
     required this.title,
     required this.paidBy,
@@ -127,6 +138,8 @@ class SharedExpenseRow {
 }
 
 class SharedExpenseTotals {
+  final String totalLabel;
+  final String paidLabel;
   final Money billTotal;
   final Money yourPaid;
   final Money yourShare;
@@ -134,6 +147,8 @@ class SharedExpenseTotals {
   final String? periodLabel;
   final bool incomplete;
   const SharedExpenseTotals({
+    this.totalLabel = 'Total bills',
+    this.paidLabel = 'You paid',
     required this.billTotal,
     required this.yourPaid,
     required this.yourShare,
@@ -150,6 +165,7 @@ class SharedHubPresentation {
   final SharedPage<SharedActivityRow> activity;
   final bool offline;
   final bool hideAmounts;
+  final int pendingChanges;
   const SharedHubPresentation({
     this.summary,
     required this.friends,
@@ -157,6 +173,7 @@ class SharedHubPresentation {
     required this.activity,
     this.offline = false,
     this.hideAmounts = false,
+    this.pendingChanges = 0,
   });
 }
 

@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:go_router/go_router.dart';
+import 'package:pandapay/features/shared_expenses/runtime/shared_providers.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:pandapay/app/design/app_theme.dart';
@@ -164,6 +165,22 @@ void main() {
     expect(router.routeInformationProvider.value.uri.queryParameters['tab'],'subscriptions');
     expect(router.routeInformationProvider.value.uri.queryParameters['from'],'notification');
     expect(find.byKey(const ValueKey('appShellNavBar')),findsNothing);
+  });
+
+  testWidgets('split rollout stays gated and never replaces Insights or existing data pages',(tester) async {
+    await _pumpApp(tester);
+    final scope=ProviderScope.containerOf(tester.element(find.byType(MaterialApp)));
+    expect(scope.read(sharedExpensesEnabledProvider),isFalse);
+    scope.read(goRouterProvider).go(AppRoute.splits);
+    await tester.pumpAndSettle();
+    expect(find.text('Splits'),findsOneWidget);
+    expect(find.textContaining('Existing transactions and private splits are still available'),findsOneWidget);
+    expect(find.byKey(const ValueKey('appShellNavBar')),findsNothing);
+    scope.read(goRouterProvider).go(AppRoute.insights);
+    await tester.pumpAndSettle();
+    expect(find.byType(InsightsHubScreen),findsOneWidget);
+    expect(find.byKey(const ValueKey('appShellNavBar')),findsOneWidget);
+    expect(find.text('Splits'),findsNothing);
   });
 
   testWidgets('the scan FAB is present on every tab (not just Home)', (

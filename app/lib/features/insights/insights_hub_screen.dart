@@ -14,6 +14,7 @@ import '../../data/api_exception.dart';
 import '../../data/user_cards_repository.dart' show UserCard;
 import '../../main.dart' show MoneyText;
 import 'insights_overview.dart';
+import '../shared_expenses/runtime/shared_providers.dart';
 import '../cards/card_visual.dart';
 
 /// Design 04 "Insights · what you earned", over ui-spec.md's E1 Insights
@@ -245,6 +246,8 @@ class InsightsHubScreen extends ConsumerWidget {
             : 'Bills · Subscriptions $subscriptionHeadline',
         onTap: () => context.push(AppRoute.paymentsGroup),
       ),
+      if(ref.watch(sharedExpensesEnabledProvider))
+        _InsightTile(icon:Icons.call_split_rounded,label:'Splits',headline:'Shared expenses & balances',onTap:()=>context.push(AppRoute.splits)),
     ];
 
     final tiles = [

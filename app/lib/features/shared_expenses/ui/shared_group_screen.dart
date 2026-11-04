@@ -16,6 +16,7 @@ class SharedGroupScreen extends StatelessWidget {
   final ValueChanged<String>? onOpenBalance;
   final ValueChanged<SharedGroupTab>? onRetry;
   final ValueChanged<SharedGroupTab>? onLoadMore;
+  final ValueChanged<SharedGroupTab>? onPreviousPage;
   const SharedGroupScreen({
     super.key,
     required this.data,
@@ -27,6 +28,7 @@ class SharedGroupScreen extends StatelessWidget {
     this.onOpenBalance,
     this.onRetry,
     this.onLoadMore,
+    this.onPreviousPage,
   });
 
   List<Widget> _header({bool incomplete = false}) => [
@@ -44,7 +46,15 @@ class SharedGroupScreen extends StatelessWidget {
     key: ValueKey('${data.id}:expenses'),
     state: data.expenses.state,
     hasItems: data.expenses.items.isNotEmpty,
-    header: _header(incomplete: data.expenses.incomplete),
+    nextLabel: data.expenses.nextLabel,
+    header: [
+      if (data.expenses.hasPrevious && onPreviousPage != null)
+        SharedAction(
+          label: 'Previous page',
+          onTap: () => onPreviousPage!(SharedGroupTab.expenses),
+        ),
+      ..._header(incomplete: data.expenses.incomplete),
+    ],
     itemCount: data.expenses.items.length,
     itemBuilder: (_, index) => SharedExpenseTile(
       row: data.expenses.items[index],
@@ -67,7 +77,15 @@ class SharedGroupScreen extends StatelessWidget {
     key: ValueKey('${data.id}:balances'),
     state: data.balances.state,
     hasItems: data.balances.items.isNotEmpty,
-    header: _header(incomplete: data.balances.incomplete),
+    nextLabel: data.balances.nextLabel,
+    header: [
+      if (data.balances.hasPrevious && onPreviousPage != null)
+        SharedAction(
+          label: 'Previous page',
+          onTap: () => onPreviousPage!(SharedGroupTab.balances),
+        ),
+      ..._header(incomplete: data.balances.incomplete),
+    ],
     itemCount: data.balances.items.length,
     itemBuilder: (_, index) => SharedContextTile(
       row: data.balances.items[index],
@@ -110,13 +128,13 @@ class SharedGroupScreen extends StatelessWidget {
                 style: BambooFonts.ui(13, color: BambooInk.ink700),
               ),
             SharedMoneyLine(
-              'Total bills',
+              totals.totalLabel,
               totals.billTotal,
               confidence: totals.confidence,
               hidden: data.hideAmounts,
             ),
             SharedMoneyLine(
-              'You paid',
+              totals.paidLabel,
               totals.yourPaid,
               confidence: totals.confidence,
               hidden: data.hideAmounts,
@@ -188,7 +206,7 @@ class SharedExpenseTile extends StatelessWidget {
             style: BambooFonts.ui(12, color: BambooInk.ink700),
           ),
         Text(
-          'Paid by ${row.paidBy}',
+          '${row.payerLabel} ${row.paidBy}',
           style: BambooFonts.ui(13, color: BambooInk.ink700),
         ),
         if (sharedStateLabel(row.state) case final label?)
@@ -205,13 +223,13 @@ class SharedExpenseTile extends StatelessWidget {
           ),
         const SizedBox(height: AppSpace.sm),
         SharedMoneyLine(
-          'Bill total',
+          row.totalLabel,
           row.billTotal,
           confidence: row.confidence,
           hidden: hideAmounts,
         ),
         SharedMoneyLine(
-          'You paid',
+          row.paidLabel,
           row.yourPaid,
           confidence: row.confidence,
           hidden: hideAmounts,
