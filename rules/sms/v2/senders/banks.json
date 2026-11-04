@@ -189,7 +189,7 @@
     "brand": "FEDSMS",
     "issuerSlug": "federal",
     "issuerKind": "bank",
-    "aliases": []
+    "aliases": ["FEDSCP"]
   },
   {
     "brand": "HDFCBK",
