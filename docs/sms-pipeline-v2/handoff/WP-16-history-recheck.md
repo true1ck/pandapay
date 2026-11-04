@@ -69,6 +69,10 @@ Both final SMS v2 runs passed 256, skipped 2, failed 0 on `a4af434`. Logs are `/
 
 ## Device acceptance
 
-The build containing these commits has not been installed on the owner's iPhone. The physical history check and phone performance remain unverified. Follow `../history-recheck-plan.md` after a local Debug build and local API update. Preserve account storage; review the preview before applying. The normal app and the separate rig app retain their existing Shortcut bindings.
+On 5 November 2026, the owner requested installation. A signed Debug build 106 containing the integration at `a3af62f` was installed over the existing `app.pandapay.pandapay.smsv2rig` app by USB. `codesign --verify --deep --strict` passed, devicectl confirmed build 106, and Flutter launched it with a running Dart VM service. The regular app stayed at build 109. The Debug manifest omits the regular app's URL scheme, retaining the existing Shortcut bindings. No app container was deleted, and temporary Xcode project/manifest changes were restored.
+
+The local API was restarted to load the category endpoint. The original rig supervisor stopped its sibling services when its API exited. The services were restored using the existing Postgres data, HTTPS origins, CA and SMS bundle signing key. Local auth refresh and lookup keys had to be regenerated; phone equality hashes were refreshed locally without changing user IDs or contact values. Existing local sessions may require email sign-in again with the test OTP. No hosted service was changed. Resumption files, private environment, PID files and build/device logs stay under `/tmp`; they are not committed.
+
+Both HTTPS readiness endpoints returned 200 after restoration, and the category endpoint enforced authentication with 401 for an anonymous request. This establishes installation, launch and Mac-side service readiness. The physical history check, phone-to-Mac sync and phone performance remain unverified. Follow `../history-recheck-plan.md`, reviewing the preview before applying.
 
 Production migration approval, complete matched-fact reprocessing, real-message accuracy targets, production keys/App Check and real-phone Shortcut/history acceptance remain separate gates. Existing owner approval to test locally does not change shared rollout flags.
