@@ -56,6 +56,7 @@ void main() {
     try {
       final store=SharedExpensesStore(owner,namespace:namespace);
       await store.enqueue(command(),provisional:{'title':'Draft'});
+      await store.saveEditorDraft(operation,contextId:contextId,expectedVersion:0,value:{'billText':'100.','title':'Unsaved dinner'});
       await SharedExpensesStore(owner,namespace:otherNamespace).enqueue(command());
       owner.db.execute("UPDATE shared_commands SET state='sending',lease_id='old-phone',lease_expires=999999,next_attempt=999999 WHERE namespace=?",[namespace]);
       owner.db.execute("INSERT INTO shared_sync_state(namespace,key,value) VALUES(?,'cursor','old-device-cursor')",[namespace]);
@@ -72,6 +73,7 @@ void main() {
       expect(restored.operation(operation)!.command.requestHash,command().requestHash);
       expect(restored.operation(operation)!.state,SharedCommandState.retry);
       expect(restored.provisional(operation),{'title':'Draft'});
+      expect(restored.editorDraft(operation)!.value,{'billText':'100.','title':'Unsaved dinner'});
       expect(target.db.select('SELECT * FROM shared_commands WHERE namespace=?',[otherNamespace]),isEmpty);
       final row=target.db.select('SELECT lease_id,lease_expires,next_attempt FROM shared_commands WHERE namespace=?',[namespace]).single;
       expect(row['lease_id'],isNull);

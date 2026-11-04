@@ -61,6 +61,23 @@ final class SharedStoredPage {
   const SharedStoredPage(this.items, this.nextId);
 }
 
+final class SharedEditorRecord {
+  final String id;
+  final String? contextId, operationId;
+  final int version;
+  final Map<String, Object?> value;
+  SharedEditorRecord(Map<String, Object?> row)
+    : id = row['draft_id'] as String,
+      contextId = row['context_id'] as String?,
+      operationId = row['operation_id'] as String?,
+      version = row['version'] as int,
+      value = Map.unmodifiable(
+        Map<String, Object?>.from(
+          jsonDecode(row['value_json'] as String) as Map,
+        ),
+      );
+}
+
 /// Durable account-bound storage. Immutable wire payloads are distinct from
 /// retry/lease metadata and private provisional overlays. Never coalesces money.
 class SharedExpensesStore {
@@ -181,7 +198,23 @@ class SharedExpensesStore {
     List<String> sourceDependencies = const [],
     Map<String, Object?>? provisional,
     int createdAt = 0,
-  }) => _write(() {
+  }) => _write(
+    () => _enqueue(
+      command,
+      dependsOn: dependsOn,
+      sourceDependencies: sourceDependencies,
+      provisional: provisional,
+      createdAt: createdAt,
+    ),
+  );
+
+  void _enqueue(
+    SharedCommand command, {
+    List<String> dependsOn = const [],
+    List<String> sourceDependencies = const [],
+    Map<String, Object?>? provisional,
+    int createdAt = 0,
+  }) {
     if (dependsOn.length > 100 ||
         sourceDependencies.length > 100 ||
         dependsOn.toSet().length != dependsOn.length ||
@@ -242,6 +275,127 @@ class SharedExpensesStore {
         overlay,
       ]);
     }
+  }
+
+  SharedEditorRecord? editorDraft(String id) {
+    if (!isCurrent()) throw const SharedLocalException('account_changed');
+    final rows = database.db.select(
+      'SELECT * FROM shared_editor_drafts WHERE namespace=? AND draft_id=?',
+      [namespace, id],
+    );
+    if (rows.isEmpty) return null;
+    final record = SharedEditorRecord(rows.single);
+    return record.contextId != null && isContextRevoked(record.contextId!)
+        ? null
+        : record;
+  }
+
+  List<SharedEditorRecord> editorDrafts({
+    String after = '',
+    int limit = 50,
+    bool includeSubmitted = false,
+  }) {
+    if (!isCurrent()) throw const SharedLocalException('account_changed');
+    if (limit < 1 || limit > 100 || after.isNotEmpty && !sharedUuid(after)) {
+      throw const SharedLocalException('invalid_page');
+    }
+    return [
+      for (final row in database.db.select(
+        '''
+SELECT d.* FROM shared_editor_drafts d WHERE d.namespace=? AND d.draft_id>?
+ ${includeSubmitted ? '' : 'AND d.operation_id IS NULL'} AND NOT EXISTS(SELECT 1 FROM shared_sync_state s
+ WHERE s.namespace=d.namespace AND s.key='revoked:'||d.context_id)
+ ORDER BY d.draft_id LIMIT ?''',
+        [namespace, after, limit],
+      ))
+        SharedEditorRecord(row),
+    ];
+  }
+
+  Future<SharedEditorRecord> saveEditorDraft(
+    String id, {
+    required String? contextId,
+    required int expectedVersion,
+    required Map<String, Object?> value,
+    int updatedAt = 0,
+  }) => _write(() {
+    if (!sharedUuid(id) ||
+        contextId != null && !sharedUuid(contextId) ||
+        expectedVersion < 0 ||
+        expectedVersion >= 9007199254740991 ||
+        updatedAt < 0) {
+      throw const SharedLocalException('invalid_editor');
+    }
+    if (contextId != null && isContextRevoked(contextId)) {
+      throw const SharedLocalException('context_revoked');
+    }
+    final retained = database.db.select(
+      'SELECT * FROM shared_editor_drafts WHERE namespace=? AND draft_id=?',
+      [namespace, id],
+    );
+    final before = retained.isEmpty
+        ? null
+        : SharedEditorRecord(retained.single);
+    if (before?.contextId != null && isContextRevoked(before!.contextId!)) {
+      throw const SharedLocalException('context_revoked');
+    }
+    if (before?.operationId != null) {
+      throw const SharedLocalException('editor_sealed');
+    }
+    if ((before?.version ?? 0) != expectedVersion) {
+      throw const SharedLocalException('editor_conflict');
+    }
+    final encoded = sharedCanonicalJson(value);
+    database.db.execute(
+      '''
+INSERT INTO shared_editor_drafts(namespace,draft_id,context_id,value_json,version,updated_at)
+ VALUES(?,?,?,?,?,?) ON CONFLICT(namespace,draft_id) DO UPDATE SET
+ context_id=excluded.context_id,value_json=excluded.value_json,
+ version=excluded.version,updated_at=excluded.updated_at''',
+      [namespace, id, contextId, encoded, expectedVersion + 1, updatedAt],
+    );
+    return editorDraft(id)!;
+  });
+
+  Future<void> sealEditorDraft(
+    String id, {
+    required int expectedVersion,
+    required SharedCommand command,
+    Map<String, Object?>? provisional,
+    List<String> dependsOn = const [],
+    List<String> sourceDependencies = const [],
+    int createdAt = 0,
+  }) => _write(() {
+    final before = editorDraft(id);
+    if (before == null ||
+        before.contextId != command.contextId ||
+        command.kind != 'expense.propose' ||
+        isContextRevoked(command.contextId)) {
+      throw const SharedLocalException('invalid_editor');
+    }
+    if (before.operationId != null) {
+      if (before.operationId == command.operationId &&
+          operation(command.operationId)?.command.canonicalJson ==
+              command.canonicalJson) {
+        return;
+      }
+      throw const SharedLocalException('editor_sealed');
+    }
+    if (before.version != expectedVersion) {
+      throw const SharedLocalException('editor_conflict');
+    }
+    _enqueue(
+      command,
+      dependsOn: dependsOn,
+      sourceDependencies: sourceDependencies,
+      provisional: provisional,
+      createdAt: createdAt,
+    );
+    database.db.execute(
+      '''UPDATE shared_editor_drafts SET operation_id=?,version=version+1
+ WHERE namespace=? AND draft_id=?''',
+      [command.operationId, namespace, id],
+    );
   });
 
   /// Resolves only a durable scheduling dependency. It never changes the source

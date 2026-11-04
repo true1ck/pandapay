@@ -88,6 +88,10 @@ class LocalPortableSnapshotSource implements PortableLocalSnapshotSource {
         "SELECT COUNT(*) FROM shared_commands WHERE namespace=? AND state!='committed'",
         <Object?>[namespace],
       ],
+      'shared_editor_drafts': [
+        'SELECT COUNT(*) FROM shared_editor_drafts WHERE namespace=? AND operation_id IS NULL',
+        <Object?>[namespace],
+      ],
       'shared_command_dependencies': [
         "SELECT COUNT(*) FROM shared_command_dependencies d JOIN shared_commands c ON c.namespace=d.namespace AND c.operation_id=d.operation_id WHERE d.namespace=? AND c.state!='committed'",
         <Object?>[namespace],

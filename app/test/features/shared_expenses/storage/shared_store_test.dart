@@ -190,6 +190,7 @@ void main() {
       await store.enqueue(expected, provisional: {'title': 'Pending'});
       db.db.execute('DROP INDEX shared_projection_overview');
       db.db.execute('DROP INDEX shared_command_context');
+      db.db.execute('DROP TABLE shared_editor_drafts');
       db.db.execute(
         "UPDATE shared_schema_version SET version=1 WHERE module='shared_expenses'",
       );
