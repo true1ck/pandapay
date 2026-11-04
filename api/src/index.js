@@ -330,6 +330,8 @@ app.use(rejectMalformedClientIp);
 app.use(...createCorsPolicy());
 // SMS pipeline v2 (WP-08): registered ahead of the global 100 KiB JSON parser because facts:batch reads its own, larger body. Routes answer 404 unless the sms_pipeline_v2_enabled flag is on.
 require('./sms_v2').registerSmsV2(app, { requireAuth, requireAdmin, withUserClient, loadUserCardForState, applyTransactionState, reverseTransactionState });
+// WP-17: 426 Upgrade Required on the legacy SMS routes after the configured cutoff (off unless LEGACY_SMS_CUTOFF_DATE is set).
+app.use(require('./legacy_version_gate').createLegacyVersionGate({ cutoffAt: config.legacySmsCutoffAt, firstV2Version: config.smsV2FirstAppVersion, blockMissingVersion: config.legacySmsBlockMissingVersion }));
 app.use(jsonBodyParser);
 app.use(jsonBodyErrorHandler);
 

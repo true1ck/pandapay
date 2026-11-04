@@ -30,6 +30,9 @@ async function main() {
   const { openRuleAdminStore } = require('../src/sms_v2/admin_store');
   const { importBundle } = require('../src/sms_v2/rules_admin_route');
   const bundle = JSON.parse(fs.readFileSync(input, 'utf8'));
+  // The tools CLI `build` output is unsigned (signature null). The server signs at mint time; the
+  // contract validator only needs a well-formed placeholder, which is never stored.
+  if (!bundle.signature) bundle.signature = { alg: 'Ed25519', keyId: 'unsigned-build', value: 'AAAA' };
   const { store, pool } = await openRuleAdminStore();
   try {
     const result = await store.tx(adminId, (s) => importBundle(s, bundle, { signer, adminId }));
