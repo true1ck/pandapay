@@ -1,5 +1,6 @@
 import 'dart:async';
 
+import 'package:flutter/foundation.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter/widgets.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
@@ -10,6 +11,7 @@ import '../../../app/env.dart';
 import '../flag.dart';
 import '../pipeline/sms_v2_runtime.dart';
 import '../sync/bundle_verifier.dart';
+import '../sync/rule_keys.dart';
 import '../sync/attestation.dart';
 
 final FutureProvider<SmsV2Runtime?> smsV2RuntimeProvider =
@@ -35,7 +37,14 @@ final FutureProvider<SmsV2Runtime?> smsV2RuntimeProvider =
             current() ? ref.read(app.accessTokenProvider) : null,
       );
       ref.onDispose(client.close);
-      final verifier = BundleVerifier();
+      const localKey = String.fromEnvironment('SMS_V2_LOCAL_RULE_PUBLIC_KEY');
+      final verifier = BundleVerifier(
+        trustedKeys: {
+          ...smsV2RuleKeys,
+          if (kDebugMode && Env.isDev && localKey.isNotEmpty)
+            'local-rig': localKey,
+        },
+      );
       final attestation = DeviceAttestation(deviceId: deviceId);
       final categories =
           ref.watch(app.categoriesProvider).valueOrNull ?? const [];

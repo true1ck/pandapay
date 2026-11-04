@@ -259,3 +259,19 @@ Commits 67d8689 and b42c89f add posted Federal card refund/reversal variants and
 From the CLI directory, build with output `"$p/refunds-v0.json"`, then run `dart run tool/check_pipeline.dart` and `node test/regex_parity.mjs`. The build passed 1,562 examples for 752 rules, the golden gate passed 115 cases and 15 scenarios, and parity passed 46,860 comparisons with zero mismatches. The offline phone harness replayed the full corpus and draft sample with the new bundle. Score with `dart run tool/score_private.dart "$p/refunds-v0.json" "$p/label-sample.drafted.jsonl" "$p/score-refunds-phone.json" "$p/sample-refunds-phone.json"`.
 
 All five targeted sure rows now agree with the drafts. The refund stratum rose from 10/32 to 15/32, and overall sure agreement from 139/316 to 144/316. The sure financial unknown or unprocessed count fell from 64 to 59 of 222. Full replay produced 1,037 counted transactions and 738 open review rows. No money fact was reused across counted events. The narrower invariant does not establish zero duplicate payments. The 752-rule build still needs the signed scratch import and candidate-level release verification. No production or physical-device changes were made.
+
+### Phase 1 isolated iPhone rig
+
+- T1: `node scripts/sms_v2_local_rig.js --check-only` passed on fresh scratch Postgres. It migrated both databases, imported 752 rules, minted four signed cohorts and started both real services. HTTPS OTP login, rules fetch, tamper rejection, facts upload and ledger read-back passed. The live rig also passed the app-client smoke using AuthApi and SmsV2Runtime over the rig CA.
+- T2: each rig generates an ephemeral Ed25519 key. Only Debug development builds accept the supplied test public key. The production anchors are unchanged. Dart BundleVerifier rejected a tampered server response in the app-client smoke.
+- T3: `python3 scripts/build_sms_v2_local_ios.py <rig> --simulator <uuid>` built and installed the distinct Debug app on a dedicated iPhone 17 simulator. This verified the recipe and installation. Interactive sign-in on the simulator and cable installation on the physical iPhone were not performed.
+- T4: tests exercised all five filter tags and the live gate with a tagged bank handle, a personal phone handle and missing sender evidence. The live adapter preserves missing identity instead of fabricating an issuer. The actual Shortcut automation remains a physical-device check.
+- T5: the runtime replays synthetic IPO, salary and subscription history into the five screens. The widget smoke exposed and now covers the Money in display honoring an explicit salary fact.
+
+From app, with a live default rig:
+
+```sh
+SMS_V2_LOCAL_RIG=/tmp/pandapay-sms-rig.EXAMPLE flutter test --no-pub --concurrency=1 --dart-define=SMS_PIPELINE_V2=true test/features/sms_v2/pipeline/local_rig_test.dart test/features/sms_import/ios_shortcut_sms_test.dart test/features/sms_v2/ui/history_screens_test.dart test/features/sms_v2/ledger/adapters_test.dart --reporter expanded
+```
+
+All 19 tests passed. The local runbook has the simulator and later physical-device instructions. No shared service or physical phone was changed.

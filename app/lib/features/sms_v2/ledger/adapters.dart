@@ -437,7 +437,9 @@ List<MoneyInItem> moneyIn(
               ? 'cashback'
               : e.type == v2.EventType.p2pIn
               ? 'person'
-              : salary.contains(normalizeMerchantText(_name(f)))
+              : f is v2.MovementFact &&
+                        f.purpose == v2.MovementPurpose.salary ||
+                    salary.contains(normalizeMerchantText(_name(f)))
               ? 'salary'
               : 'other',
           payer: _name(f),
