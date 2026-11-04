@@ -395,12 +395,24 @@ class SyncPull {
     final locked = Map<String, CategoryDecision>.of(
       _ledger.categoryDecisions(),
     );
+    final purchaseFacts = {
+      for (final event in ready)
+        if (spendEventTypes.contains(event.type)) ...{
+          event.eventId,
+          ...event.legs.map((leg) => leg.factId),
+        },
+    };
     // Refund categories are derived from their purchase and are absent from
     // wire entries. Retaining an old automatic decision would hide a category
     // refresh received from another device.
     for (final event in ready) {
+      final inheritsPurchase = event.legs.any(
+        (leg) =>
+            leg.role == LegRole.original && purchaseFacts.contains(leg.factId),
+      );
       if (event.type == EventType.refund &&
-          locked[event.eventId]?.source != CategorySource.user) {
+          (inheritsPurchase ||
+              locked[event.eventId]?.source != CategorySource.user)) {
         locked.remove(event.eventId);
       }
     }

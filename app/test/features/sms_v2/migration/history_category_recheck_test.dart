@@ -374,6 +374,45 @@ void main() {
       changed.map((entry) => ledger().categoryDecisions()[entry.eventId]!.slug),
       everyElement('groceries'),
     );
+    final purchase = changed.singleWhere((entry) => entry.isSpend);
+    final refund = changed.singleWhere((entry) => !entry.isSpend);
+    ledger().replaceForEvent(
+      refund.eventId,
+      [refund],
+      category: const CategoryDecision(
+        slug: 'groceries',
+        source: CategorySource.user,
+        confidence: 1,
+      ),
+    );
+    ledger().replaceForEvent(
+      purchase.eventId,
+      [
+        LedgerEntry.fromJson({
+          ...purchase.toJson(),
+          'category': 'fuel',
+          'categorySource': 'user',
+        }),
+      ],
+      category: const CategoryDecision(
+        slug: 'fuel',
+        source: CategorySource.user,
+        confidence: 1,
+      ),
+    );
+    database.db.execute('DELETE FROM v2_outbox');
+    await HistoryCategoryRecheck(
+      financial: financial,
+      namespace: namespace,
+      bundle: revised,
+      from: DateTime.utc(2026, 11, 1),
+      to: DateTime.utc(2026, 11, 2),
+      accountIsCurrent: () => true,
+    ).run();
+    expect(
+      changed.map((entry) => ledger().categoryDecisions()[entry.eventId]!.slug),
+      everyElement('fuel'),
+    );
   });
 
   test('display corrections and deletions survive category updates', () async {

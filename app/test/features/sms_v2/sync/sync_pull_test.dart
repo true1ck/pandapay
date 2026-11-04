@@ -214,6 +214,23 @@ void main() {
       await puller(client: client).pull();
       expect(ledger.categoryDecisions()[refund.eventId]!.slug, 'groceries');
       expect(ledger.forEvent(refund.eventId).single.category, isNull);
+      // An inherited user decision is still derived context. The next user
+      // correction of the purchase must reach the refund too.
+      for (final (day, category) in [(6, 'fuel'), (7, 'groceries')]) {
+        body['ledger'] = [
+          {...purchase, 'category': category, 'categorySource': 'user'},
+        ];
+        body['cursor'] = 'user-category-$day';
+        body['updatedAt'] = {
+          'events': {},
+          'instruments': {},
+          'ledger': {
+            purchase['entryId']: DateTime.utc(2026, 11, day).toIso8601String(),
+          },
+        };
+        await puller(client: client).pull();
+        expect(ledger.categoryDecisions()[refund.eventId]!.slug, category);
+      }
     },
   );
 

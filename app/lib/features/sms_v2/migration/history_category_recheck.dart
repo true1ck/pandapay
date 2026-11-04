@@ -87,6 +87,11 @@ class HistoryCategoryRecheck {
       'taxonomy': bundle.taxonomyVersion,
       'personalRules': personal.userRules.map((rule) => rule.toJson()).toList(),
       'confirmedHistory': personal.confirmedHistory,
+      'userDecisions': {
+        for (final entry in _ledger.categoryDecisions().entries)
+          if (entry.value.source == CategorySource.user)
+            entry.key: entry.value.slug,
+      },
       'from': from.toUtc().toIso8601String(),
       'to': to.toUtc().toIso8601String(),
       'targets': _targets,
@@ -243,6 +248,24 @@ class HistoryCategoryRecheck {
                 affected[id]!.occurredAt.isBefore(to) &&
                     !affected[id]!.occurredAt.isBefore(from)),
       );
+    final purchaseFacts = {
+      for (final event in affected.values)
+        if (spendEventTypes.contains(event.type)) ...{
+          event.eventId,
+          ...event.legs.map((leg) => leg.factId),
+        },
+    };
+    for (final event in affected.values) {
+      if (event.type == EventType.refund &&
+          !customCategories.contains(event.eventId) &&
+          event.legs.any(
+            (leg) =>
+                leg.role == LegRole.original &&
+                purchaseFacts.contains(leg.factId),
+          )) {
+        locked.remove(event.eventId);
+      }
+    }
     final categories = CategorySnapshot.load(
       financial.database,
       namespace: namespace,
