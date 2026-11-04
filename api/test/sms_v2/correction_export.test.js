@@ -22,6 +22,6 @@ test('export creates one synthetic file and refuses overwriting or credential re
  }finally{fs.rmSync(root,{recursive:true,force:true});}
 });
 test('sms-fix-case skill frontmatter names its exact trigger',()=>{
- const source=fs.readFileSync(path.resolve(__dirname,'../../../.claude/skills/sms-fix-case/SKILL.md'),'utf8');
+ const source=fs.readFileSync(path.resolve(__dirname,'../../../.claude/skills/sms-fix-case/SKILL.md'),'utf8').replace(/\r\n/g,'\n');
  assert.match(source,/^---\nname: sms-fix-case\ndescription: Use when fixing an SMS classification correction case marked Code fix in the admin console\.\n---/);
 });
