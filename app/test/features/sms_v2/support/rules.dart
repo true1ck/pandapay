@@ -29,7 +29,7 @@ RuleBundle testRuleBundle() {
   final root = Directory(_rulesDir);
   for (final f in root.listSync(recursive: true).whereType<File>()) {
     if (!f.path.endsWith('.json')) continue;
-    final rel = f.path.substring(root.path.length + 1);
+    final rel = f.path.substring(root.path.length + 1).replaceAll('\\', '/');
     if (rel == 'meta.json') continue;
     final decoded = jsonDecode(f.readAsStringSync());
     final base = rel.split('/').last;
