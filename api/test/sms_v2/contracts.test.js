@@ -83,6 +83,21 @@ test('later contract additions are accepted', () => {
   assert.equal(mandate.attrs.oneTime, true);
   assert.equal(mandate.attrs.mandatePurpose, 'ipo');
   assert.equal(c.validateFact(mandate).ok, true);
+  const infoAmount = read(path.join(FIX, 'valid', 'fact', 'info.ipo_application_amount.json'));
+  assert.equal(infoAmount.attrs.amountMinor, 1500000);
+  assert.deepEqual(infoAmount.amounts, []);
+  assert.equal(c.validateFact(infoAmount).ok, true);
+  const oldInfo = read(path.join(FIX, 'valid', 'fact', 'info.service.json'));
+  assert.equal('amountMinor' in oldInfo.attrs, false);
+  assert.equal(c.validateFact(oldInfo).ok, true);
+  for (const bad of [0, -1, 1.5, 'x']) {
+    const r = c.validateFact({ ...infoAmount, attrs: { category: 'service', amountMinor: bad } });
+    assert.equal(r.ok, false, String(bad));
+    assert.ok(JSON.stringify(r).includes('fact.info.amountMinor_invalid'), String(bad));
+  }
+  const asMoney = c.validateFact({ ...infoAmount, attrs: { category: 'service' }, amounts: [{ role: 'informational', minor: 1500000, unit: 'INR' }] });
+  assert.equal(asMoney.ok, false);
+  assert.ok(JSON.stringify(asMoney).includes('fact.info.amount_count'));
   const ev = read(path.join(FIX, 'valid', 'event', 'card_bill_payment_complete.json'));
   for (const type of ['investment_withdrawal', 'dividend']) assert.equal(c.validateEvent({ ...ev, type }).ok, true, type);
   const dup = { ...ev, legs: [ev.legs[0], { factId: ev.legs[1].factId, role: 'duplicate_notice' }] };

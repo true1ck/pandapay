@@ -72,7 +72,7 @@ A fact is one thing a message states. A message produces zero or more facts. Fac
 | `mandate` | A standing instruction changed | `ceiling` optional | `phase` (`created`, `modified`, `paused`, `resumed`, `revoked`, `expired`); `frequency?`; `merchantName?`; oneTime?; mandatePurpose? (ipo, subscription, bill, sip, loan, other). A one-time or IPO mandate never becomes a subscription. |
 | `reward` | Points earned or redeemed | `points_earned` or `points_redeemed`; `cash_value` optional | `program?`; `expiresAt?` |
 | `instrument_hint` | Identity only, no money | none | `hint` (`card_issued`, `card_activated`, `account_opened`, `product_name`, `linked_upi`) |
-| `info` | Not financial | none | `category` (`otp`, `security`, `promotion`, `service`, `delivery`, `other`). Never stored or uploaded; only counted. |
+| `info` | Not financial | none | `category` (`otp`, `security`, `promotion`, `service`, `delivery`, `other`); `amountMinor?` (positive integer paise, a printed amount that is informational only and never money, CCR-002). Never stored or uploaded; only counted. |
 
 ### Invariants (checked on the phone and the server)
 

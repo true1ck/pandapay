@@ -549,7 +549,7 @@ class RuleEngine implements SmsInterpreter {
       if (d == null) throw _Emitted('attr $key: cannot read date "$raw"');
       return formatUtc(d);
     }
-    if (key == 'previousMinor') {
+    if (key == 'previousMinor' || key == 'amountMinor') {
       final n = parseAmountIndian(raw);
       if (n == null) throw _Emitted('attr $key: not an amount "$raw"');
       return n;
