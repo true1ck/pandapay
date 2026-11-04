@@ -1,6 +1,8 @@
 # Planned-image versus implemented-layout verification
 
-Verified 4 November 2026. Result: **visual acceptance NOT MET**. Current Bamboo token/font compliance and functional route tests do not establish conformity to the planned composition. This finding supersedes any implication in the earlier theme audit that the screens visually match the approved samples.
+Historical baseline audit of build 8126, 4 November 2026. Result: **visual acceptance NOT MET**. Current Bamboo token/font compliance and functional route tests do not establish conformity to the planned composition. This finding supersedes any implication in the earlier theme audit that the screens visually match the approved samples.
+
+**Follow-up:** the [implemented correction and final-build evidence](layout-correction-20261104.md) supersede the current-layout column below for the corrected hub/Activity/presenter items. Full visual acceptance remains partial because editor/member/group-summary/settlement dependencies remain open. This table is retained as the original mismatch record.
 
 ## Comparison sources
 

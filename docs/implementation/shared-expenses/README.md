@@ -4,7 +4,7 @@ Baseline `sms-v2/integration` @ `bf6bec9b`. Started 4 November 2026. Root owns t
 
 ## Status vocabulary
 
-Visual acceptance is currently **NOT MET**: [comparison against both planned image sheets](visual-layout-audit-20261104.md). The live backend/hub checks and Bamboo theme audit prove separate things; they do not establish layout fidelity. Continue against the original image composition, preserving the existing main app navigation and original Subscription body.
+Visual acceptance is **partial** after the [build 8128 layout correction](layout-correction-20261104.md). Hub/Activity/presenter hierarchy now follows the original samples; actual-font fictional renders and signed-in native checks are recorded separately. Existing editor/Scan/member/group-summary/settlement dependencies remain open, so neither P04 nor the full feature is complete. The [original build 8126 mismatch audit](visual-layout-audit-20261104.md) remains as history.
 
 `not_started` → `implementing` → `review` → `integrated` → `verified`; `blocked` records an explicit dependency. A verified sub-increment does not complete its whole packet. Each entry includes owned paths, contract version, dependency commit, implemented behavior, exact test results, scenario IDs, unresolved gates and next owner. Evidence and completed behavior are append-only history; correct a superseded claim explicitly.
 
@@ -73,3 +73,8 @@ The local backend follow-up preserved all original column values in 26 server tr
 Continue P01 source guards/admission and P06 existing-owner entry/save integration before enabling source-funded sharing. First preserve full bill/full payer metadata in the immutable proposal/consent contract; a financial shared snapshot alone cannot supply it. Then connect the existing Quick Add/detail controls to the tested draft, with no duplicate form or fake own debit. Complete pending/rejected/conflicted review visibility and coherent read snapshots, source-to-personal-cost reporting, shared lifecycle/recovery and settlement/UPI/link UI. Read the production plan's corrected owner/resource/context lock order before writing guards. No new guard migration has been authored yet; the sourceFunding capability is still hard false.
 
 The four unchanged SMS screenshot-baseline failures require separate visual-baseline investigation; do not regenerate images merely to get a green run. Emulator hub/group and existing navigation smoke evidence is now recorded above; full financial acceptance remains pending until those implementations are complete. Before any further install, record the exact serial/local backend and use update-install with existing sign-in/data preserved under AGENTS.md.
+
+
+## Layout correction checkpoint — 4 November
+
+Code checkpoint **`2c443370`** (local only), **127 scoped tests passed**, changed analyzer clean, and one separate actual-font render check passed. The [correction handoff](layout-correction-20261104.md) records owned presentation/tests, red/green regressions, labeled visual fixtures, final local emulator build 8128 and scoped data preservation. Main app navigation and the original Payments/Subscriptions body remain intact. Continue the existing P01/P06 owner boundary; no financial source/ledger contract or rollout flag was changed by this UI increment.
