@@ -88,10 +88,11 @@ int? cardUsage(Instrument instrument) =>
 
 /// Pure projection. Refund decisions are explicit input, never cached state.
 ///
-/// Refund ledger rows cannot carry category under the frozen contract because
-/// their destination is own. Linked refunds derive it from the purchase; an
-/// unlinked refund uses [categoryByEvent], reconstructed by LedgerSnapshot from
-/// facts and the category resolver. Pass the same context when reading totals.
+/// A refund row carries the category of the purchase it reverses (CCR-003),
+/// so another device reads the same category from the synced row. A linked
+/// refund takes the purchase's decision; an unlinked refund takes the decision
+/// LedgerSnapshot resolved for it, falling back to `other`. Rows written before
+/// CCR-003 have no category; [categoryByEvent] still covers them in totals.
 class DefaultLedgerProjector implements LedgerProjector {
   DefaultLedgerProjector({
     Map<String, CategoryDecision> categoryByEvent = const {},
@@ -173,6 +174,7 @@ class DefaultLedgerProjector implements LedgerProjector {
     final external = ExternalEndpoint(key.isEmpty ? 'UNKNOWN' : key);
     final transfer = ownTransferEventTypes.contains(event.type);
     final spend = spendEventTypes.contains(event.type);
+    final refund = event.type == EventType.refund;
     final investment =
         event.type == EventType.investment ||
         event.type == EventType.ipoApplication ||
@@ -256,8 +258,8 @@ class DefaultLedgerProjector implements LedgerProjector {
         amountMinor: amount,
         unit: LedgerUnit.inr,
         occurredAt: event.occurredAt,
-        category: spend ? decision.slug : null,
-        categorySource: spend ? decision.source : null,
+        category: spend || refund ? decision.slug : null,
+        categorySource: spend || refund ? decision.source : null,
         countsAsTransaction: !transfer,
         isSpend: spend,
         isIncome: incomeEventTypes.contains(event.type),
@@ -323,7 +325,11 @@ class DefaultLedgerProjector implements LedgerProjector {
           }
           if (category != null) break;
         }
-        category ??= categoryByEvent[event.eventId]?.slug ?? 'other';
+        // Purchase entry first, so a corrected purchase category is followed
+        // live; then the refund row's own category (CCR-003); then explicit
+        // context for rows written before CCR-003; then `other`.
+        category ??=
+            row.category ?? categoryByEvent[event.eventId]?.slug ?? 'other';
         byCategory.update(
           category,
           (v) => v - row.amountMinor,

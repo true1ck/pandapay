@@ -104,7 +104,15 @@ List<ContractError> _eventSemantics(Map<String, Object?> e, String base) {
 List<ContractError> _ledgerSemantics(Map<String, Object?> l, String base) {
   final errs = <ContractError>[];
   final to = l['to'] as Map;
-  if (l['category'] != null && !to.containsKey('external')) {
+  // CCR-003: a refund entry (external to own, no spend/income/investment flag)
+  // may carry the category of the purchase it reverses.
+  final refundShaped = (l['from'] as Map).containsKey('external') &&
+      !to.containsKey('external') &&
+      l['countsAsTransaction'] == true &&
+      l['isSpend'] == false &&
+      l['isIncome'] == false &&
+      l['isInvestment'] == false;
+  if (l['category'] != null && !to.containsKey('external') && !refundShaped) {
     errs.add(ContractError('ledger.category_requires_external_to', '$base/category'));
   }
   if ((l['category'] == null) != (l['categorySource'] == null)) {

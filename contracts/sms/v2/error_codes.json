@@ -171,7 +171,7 @@
   "instrument.status_invalid": "Instrument status is not one of the contract values.",
   "ledger.amount_invalid": "amountMinor must be an integer above 0.",
   "ledger.category_invalid": "category must be a lower snake case slug or null.",
-  "ledger.category_requires_external_to": "A category is set but the entry does not go to an external counterparty.",
+  "ledger.category_requires_external_to": "A category is set but the entry neither goes to an external counterparty nor is a refund entry (external to own, not spend, income or investment).",
   "ledger.category_source_invalid": "categorySource is not one of the contract values.",
   "ledger.category_source_mismatch": "category and categorySource must be both set or both null.",
   "ledger.endpoint_invalid": "from/to must be exactly one of {instrumentId}, {external}, {ownUnresolved: kind}.",

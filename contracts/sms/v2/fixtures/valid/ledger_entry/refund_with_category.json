@@ -1,0 +1,19 @@
+{
+  "entryId": "a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1",
+  "eventId": "b0461c8d7702e3af18830fc4a8009c7243f03fb4424e2ac905fcf291a5ebb659",
+  "from": {
+    "external": "AMAZON"
+  },
+  "to": {
+    "instrumentId": "b1e2d3c4-a5f6-4789-a0b1-c2d3e4f5a6b7"
+  },
+  "amountMinor": 49900,
+  "unit": "INR",
+  "occurredAt": "2026-11-03T07:00:11Z",
+  "category": "shopping",
+  "categorySource": "catalogue",
+  "countsAsTransaction": true,
+  "isSpend": false,
+  "isIncome": false,
+  "isInvestment": false
+}

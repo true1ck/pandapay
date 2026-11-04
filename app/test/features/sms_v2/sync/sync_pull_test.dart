@@ -189,13 +189,20 @@ void main() {
                   '2026-11-04T00:00:00Z',
           },
       };
-      final client = MockClient((_) async => response());
+      final sentFeatures = <String?>[];
+      final client = MockClient((request) async {
+        sentFeatures.add(request.headers['X-Sms-Contract-Features']);
+        return response();
+      });
       await puller(client: client).pull();
+      expect(sentFeatures, everyElement('refund-category'));
       final ledger = LedgerStore(database.db, namespace: 'target');
       final refund = EventStore(database.db, namespace: 'target')
           .listSince(DateTime.utc(2026))
           .singleWhere((event) => event.type == EventType.refund);
       expect(ledger.categoryDecisions()[refund.eventId]!.slug, 'dining');
+      // CCR-003: the pulled refund row itself carries the category.
+      expect(ledger.forEvent(refund.eventId).single.category, 'dining');
       final purchase = (body['ledger'] as List)
           .cast<Map<String, Object?>>()
           .singleWhere((row) => row['isSpend'] == true);
@@ -213,7 +220,7 @@ void main() {
       };
       await puller(client: client).pull();
       expect(ledger.categoryDecisions()[refund.eventId]!.slug, 'groceries');
-      expect(ledger.forEvent(refund.eventId).single.category, isNull);
+      expect(ledger.forEvent(refund.eventId).single.category, 'groceries');
       // An inherited user decision is still derived context. The next user
       // correction of the purchase must reach the refund too.
       for (final (day, category) in [(6, 'fuel'), (7, 'groceries')]) {
