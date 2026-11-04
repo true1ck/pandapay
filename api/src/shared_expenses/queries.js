@@ -60,7 +60,8 @@ async function listContexts(client,actorId,query={}) {
   const [beforeDate,beforeId]=dateCursor(request,scope);
   const {rows}=await client.query(`SELECT c.context_id,c.kind,c.name,c.currency,c.state,c.committed_sequence::text,c.created_at,
       to_char(c.created_at AT TIME ZONE 'UTC','YYYY-MM-DD"T"HH24:MI:SS.US"Z"') AS created_at_key,me.state AS membership_state,me.member_id,
-      coalesce(t.expense_count,0)::text expense_count,b.owed_minor,b.owing_minor
+      coalesce(t.expense_count,0)::text expense_count,b.owed_minor,b.owing_minor,
+      EXISTS(SELECT FROM shared_expenses.expenses p WHERE p.context_id=c.context_id AND p.accepted_revision_id IS NULL) AS has_unaccepted_expenses
     FROM shared_expenses.members me JOIN shared_expenses.contexts c ON c.context_id=me.context_id
     LEFT JOIN shared_expenses.context_totals t ON t.context_id=c.context_id
     LEFT JOIN LATERAL(SELECT coalesce(sum(greatest(CASE WHEN p.low_member_id=me.member_id THEN p.balance_minor::numeric ELSE -p.balance_minor::numeric END,0)),0)::text owed_minor,
@@ -70,7 +71,7 @@ async function listContexts(client,actorId,query={}) {
       AND ($5::text IS NULL OR c.kind=$5::text) AND ($6::text='' OR position(lower($6::text) in lower(c.name))>0)
       AND ($2::timestamptz IS NULL OR (c.created_at,c.context_id)<($2::timestamptz,$3::uuid))
     ORDER BY c.created_at DESC,c.context_id DESC LIMIT $4::int`,[actorId,beforeDate,beforeId,request.limit+1,kind,filter]);
-  return page(scope,request,rows,row=>[row.created_at_key??timestamp(row.created_at),row.context_id],row=>({contextId:row.context_id,kind:row.kind,name:row.name,currency:row.currency,state:row.state,membershipState:row.membership_state,committedSequence:row.committed_sequence,createdAt:row.created_at_key??timestamp(row.created_at),memberId:row.member_id??null,expenseCount:row.expense_count??'0',owedMinor:row.owed_minor??null,owingMinor:row.owing_minor??null}));
+  return page(scope,request,rows,row=>[row.created_at_key??timestamp(row.created_at),row.context_id],row=>({contextId:row.context_id,kind:row.kind,name:row.name,currency:row.currency,state:row.state,membershipState:row.membership_state,committedSequence:row.committed_sequence,createdAt:row.created_at_key??timestamp(row.created_at),memberId:row.member_id??null,expenseCount:row.expense_count??'0',hasUnacceptedExpenses:row.has_unaccepted_expenses===true,owedMinor:row.owed_minor??null,owingMinor:row.owing_minor??null}));
 }
 async function readContext(client,actorId,contextId) {
   scopeFor(actorId,'context',contextId);

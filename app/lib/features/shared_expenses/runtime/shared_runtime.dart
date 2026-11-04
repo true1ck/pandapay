@@ -564,6 +564,8 @@ class SharedExpensesRuntime extends ChangeNotifier {
           ? SharedContextState.pendingInvite
           : !known
           ? SharedContextState.incomplete
+          : row['hasUnacceptedExpenses'] == true
+          ? SharedContextState.pendingReview
           : row['expenseCount'] == '0'
           ? SharedContextState.noExpenses
           : balance.owedToYou.isZero && balance.youOwe.isZero

@@ -55,6 +55,7 @@ test('real PostgreSQL: forced RLS, source eligibility, replay and fail-closed wr
   }
   await db.query(fs.readFileSync(path.resolve(__dirname,'../supabase/migrations/20261112213000_shared_expense_totals.sql'),'utf8'));
   await db.query(fs.readFileSync(path.resolve(__dirname,'../supabase/migrations/20261112220000_shared_expense_bill_metadata.sql'),'utf8'));
+  await db.query(fs.readFileSync(path.resolve(__dirname,'../supabase/migrations/20261112230000_shared_expense_review_indexes.sql'),'utf8'));
   // Replay the pre-existing role setup's broad grants. A new isolated schema
   // must retain its ACL even when public and pandapay grants are restored.
   await db.query('GRANT USAGE ON SCHEMA public,pandapay TO app_user; GRANT SELECT,INSERT,UPDATE,DELETE ON ALL TABLES IN SCHEMA public TO app_user; GRANT EXECUTE ON ALL FUNCTIONS IN SCHEMA pandapay TO app_user');
@@ -129,6 +130,8 @@ test('real PostgreSQL: forced RLS, source eligibility, replay and fail-closed wr
     assert.equal(pendingRow.totalMinor,null,'pending money must not impersonate accepted money');
     assert.equal(pendingRow.pendingRevision.revisionId,rev);
     assert.equal(pendingRow.pendingRevision.totalMinor,'120000');
+    const contextList=await actor(b,()=>queries.listContexts(db,b,{}));
+    assert.equal(contextList.items.find(item=>item.contextId===ctx).hasUnacceptedExpenses,true);
     const review=await actor(b,()=>queries.listExpenseRevisions(db,b,ctx,exp,{}));
     assert.equal(review.items[0].reviewState,'awaiting_approval');
     assert.equal(review.items[0].canRespond,true);
