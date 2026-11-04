@@ -1,0 +1,26 @@
+{
+  "source_slug": "axis-bank-ace",
+  "changes": [
+    {
+      "path": "cap_rules[id=ace-accelerated-cashback-500].metric",
+      "value": "total_reward_points",
+      "reason": "Cap is on cashback (Rs 500 combined for 5% and 4% categories per statement), not on eligible spend.",
+      "source_url": "https://www.axis.bank.in/docs/default-source/default-document-library/credit-card/axis-bank-ace-credit-card-tncs.pdf",
+      "checked_on": "2026-11-05"
+    },
+    {
+      "path": "cap_rules[id=ace-accelerated-cashback-500].limit_value",
+      "value": 500,
+      "reason": "Native cashback amount in rupees.",
+      "source_url": "https://www.axis.bank.in/docs/default-source/default-document-library/credit-card/axis-bank-ace-credit-card-tncs.pdf",
+      "checked_on": "2026-11-05"
+    },
+    {
+      "path": "cap_rules[id=ace-accelerated-cashback-500].limit_value_inr",
+      "value": 500,
+      "reason": "Was 10000 (spend); issuer cap is Rs 500 cashback.",
+      "source_url": "https://www.axis.bank.in/docs/default-source/default-document-library/credit-card/axis-bank-ace-credit-card-tncs.pdf",
+      "checked_on": "2026-11-05"
+    }
+  ]
+}

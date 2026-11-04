@@ -1,0 +1,306 @@
+{
+  "source_slug": "axis-bank-ace",
+  "cardpipeline_id": "axis-bank-axis-bank-ace",
+  "card_name": "Axis Bank ACE Credit Card",
+  "verified_on": "2026-11-05",
+  "sources": [
+    {
+      "url": "https://www.axis.bank.in/docs/default-source/default-document-library/credit-card/axis-bank-ace-credit-card-tncs.pdf",
+      "doc": "ACE T&C cashback proposition",
+      "quote": "combined cashback earned on 5% and 4% category eligible transactions is capped at Rs.500"
+    },
+    {
+      "url": "https://www.axis.bank.in/docs/default-source/default-document-library/credit-card/axis-bank-ace-credit-card-tncs.pdf",
+      "doc": "ACE T&C cashback proposition",
+      "quote": "cashback will be rounded off to the nearest rupee value for each individual transaction"
+    },
+    {
+      "url": "https://www.axis.bank.in/docs/default-source/default-document-library/credit-card/terms-and-conditions-axis-bank-ace-credit-card.pdf",
+      "doc": "Public revision effective 20 Apr 2024",
+      "quote": "will earn a base cashback of 1.5%"
+    }
+  ],
+  "examples": [
+    {
+      "id": "001",
+      "title": "Rs 2,000 general retail spend",
+      "ctx": {
+        "amount": 2000,
+        "occurred": "2026-11-10T10:00:00+05:30",
+        "category_id": null,
+        "category_slug": "shopping",
+        "mcc": "5311",
+        "merchant_name": "Generic department store",
+        "merchant_vpa": null,
+        "merchant_slug": null,
+        "platform": null,
+        "rail": "swipe"
+      },
+      "state_before": {
+        "caps_by_source_id": {}
+      },
+      "expect": {
+        "currency": "cashback_inr",
+        "amount": 30,
+        "value_inr": null,
+        "excluded": false,
+        "cap_deltas_by_source_id": {}
+      },
+      "why": "All other eligible spends earn 1.5% (2000 x 1.5% = 30). Not in the 5%/4% pool so the Rs 500 cap is untouched."
+    },
+    {
+      "id": "002",
+      "title": "Rs 3,000 electricity bill on Google Pay",
+      "ctx": {
+        "amount": 3000,
+        "occurred": "2026-11-10T10:00:00+05:30",
+        "category_id": null,
+        "category_slug": "utility",
+        "mcc": "4900",
+        "merchant_name": "Electricity board",
+        "merchant_vpa": null,
+        "merchant_slug": null,
+        "platform": "google_pay",
+        "rail": "online"
+      },
+      "state_before": {
+        "caps_by_source_id": {}
+      },
+      "expect": {
+        "currency": "cashback_inr",
+        "amount": 150,
+        "value_inr": null,
+        "excluded": false,
+        "cap_deltas_by_source_id": {
+          "ace-accelerated-cashback-500": 150
+        }
+      },
+      "why": "5% on utility bills paid through Google Pay (3000 x 5% = 150). Counts fully to the combined Rs 500 statement cap."
+    },
+    {
+      "id": "003",
+      "title": "Rs 1,000 Swiggy order",
+      "ctx": {
+        "amount": 1000,
+        "occurred": "2026-11-10T10:00:00+05:30",
+        "category_id": null,
+        "category_slug": "dining",
+        "mcc": null,
+        "merchant_name": "Swiggy",
+        "merchant_vpa": null,
+        "merchant_slug": "swiggy",
+        "platform": null,
+        "rail": "online"
+      },
+      "state_before": {
+        "caps_by_source_id": {}
+      },
+      "expect": {
+        "currency": "cashback_inr",
+        "amount": 40,
+        "value_inr": null,
+        "excluded": false,
+        "cap_deltas_by_source_id": {
+          "ace-accelerated-cashback-500": 40
+        }
+      },
+      "why": "4% on Swiggy, Zomato and Ola (1000 x 4% = 40). Shares the same combined Rs 500 cap as the 5% category."
+    },
+    {
+      "id": "004",
+      "title": "Rs 2,000 electricity bill NOT on Google Pay",
+      "ctx": {
+        "amount": 2000,
+        "occurred": "2026-11-10T10:00:00+05:30",
+        "category_id": null,
+        "category_slug": "utility",
+        "mcc": "4900",
+        "merchant_name": "Electricity board",
+        "merchant_vpa": null,
+        "merchant_slug": null,
+        "platform": null,
+        "rail": "online"
+      },
+      "state_before": {
+        "caps_by_source_id": {}
+      },
+      "expect": {
+        "currency": "cashback_inr",
+        "amount": 0,
+        "value_inr": null,
+        "excluded": true,
+        "cap_deltas_by_source_id": {}
+      },
+      "why": "Since 20 Apr 2024 utility spends (MCC 4814/4816/4899/4900) on any platform except Google Pay earn no cashback."
+    },
+    {
+      "id": "005",
+      "title": "Rs 10,000 mobile recharge on Google Pay with Rs 400 of cap already used",
+      "ctx": {
+        "amount": 10000,
+        "occurred": "2026-11-10T10:00:00+05:30",
+        "category_id": null,
+        "category_slug": "utility",
+        "mcc": "4814",
+        "merchant_name": "Mobile recharge",
+        "merchant_vpa": null,
+        "merchant_slug": null,
+        "platform": "google_pay",
+        "rail": "online"
+      },
+      "state_before": {
+        "caps_by_source_id": {
+          "ace-accelerated-cashback-500": 400
+        }
+      },
+      "expect": {
+        "currency": "cashback_inr",
+        "amount": 100,
+        "value_inr": null,
+        "excluded": false,
+        "cap_deltas_by_source_id": {
+          "ace-accelerated-cashback-500": 100
+        }
+      },
+      "why": "5% would be Rs 500 but only Rs 100 of the combined Rs 500 statement cap remains, so Rs 100 is credited."
+    },
+    {
+      "id": "006",
+      "title": "Rs 1,150 retail spend rounds down per transaction",
+      "ctx": {
+        "amount": 1150,
+        "occurred": "2026-11-10T10:00:00+05:30",
+        "category_id": null,
+        "category_slug": "shopping",
+        "mcc": "5651",
+        "merchant_name": "Apparel store",
+        "merchant_vpa": null,
+        "merchant_slug": null,
+        "platform": null,
+        "rail": "swipe"
+      },
+      "state_before": {
+        "caps_by_source_id": {}
+      },
+      "expect": {
+        "currency": "cashback_inr",
+        "amount": 17,
+        "value_inr": null,
+        "excluded": false,
+        "cap_deltas_by_source_id": {}
+      },
+      "why": "Cashback is rounded to the nearest rupee per transaction: 1150 x 1.5% = 17.25 -> Rs 17. (The Rs 17 is what the bank credits; paise are not credited.)"
+    },
+    {
+      "id": "007",
+      "title": "Rs 1,250 retail spend rounds up per transaction",
+      "ctx": {
+        "amount": 1250,
+        "occurred": "2026-11-10T10:00:00+05:30",
+        "category_id": null,
+        "category_slug": "shopping",
+        "mcc": "5651",
+        "merchant_name": "Apparel store",
+        "merchant_vpa": null,
+        "merchant_slug": null,
+        "platform": null,
+        "rail": "swipe"
+      },
+      "state_before": {
+        "caps_by_source_id": {}
+      },
+      "expect": {
+        "currency": "cashback_inr",
+        "amount": 19,
+        "value_inr": null,
+        "excluded": false,
+        "cap_deltas_by_source_id": {}
+      },
+      "why": "Per-transaction rounding to nearest rupee: 1250 x 1.5% = 18.75 -> Rs 19."
+    },
+    {
+      "id": "008",
+      "title": "Rs 3,000 fuel",
+      "ctx": {
+        "amount": 3000,
+        "occurred": "2026-11-10T10:00:00+05:30",
+        "category_id": null,
+        "category_slug": "fuel",
+        "mcc": "5541",
+        "merchant_name": "Fuel station",
+        "merchant_vpa": null,
+        "merchant_slug": null,
+        "platform": null,
+        "rail": "swipe"
+      },
+      "state_before": {
+        "caps_by_source_id": {}
+      },
+      "expect": {
+        "currency": "cashback_inr",
+        "amount": 0,
+        "value_inr": null,
+        "excluded": true,
+        "cap_deltas_by_source_id": {}
+      },
+      "why": "Fuel spends are listed as not eligible for cashback."
+    },
+    {
+      "id": "009",
+      "title": "Rs 5,000 EMI purchase",
+      "ctx": {
+        "amount": 5000,
+        "occurred": "2026-11-10T10:00:00+05:30",
+        "category_id": null,
+        "category_slug": "shopping",
+        "mcc": null,
+        "merchant_name": "Electronics store",
+        "merchant_vpa": null,
+        "merchant_slug": null,
+        "platform": null,
+        "rail": "emi"
+      },
+      "state_before": {
+        "caps_by_source_id": {}
+      },
+      "expect": {
+        "currency": "cashback_inr",
+        "amount": 0,
+        "value_inr": null,
+        "excluded": true,
+        "cap_deltas_by_source_id": {}
+      },
+      "why": "EMI transactions, and purchases converted to EMI later, earn no cashback."
+    }
+  ],
+  "research_notes": [
+    {
+      "item": "cap ace-accelerated-cashback-500",
+      "cardpipeline_says": "eligible_spend_amount cap of Rs 10,000 per statement cycle, falls back to base rate",
+      "issuer_says": "The cap is on CASHBACK: combined 5% and 4% cashback is capped at Rs 500 per statement (T&C worked example: Rs 650 becomes Rs 500).",
+      "proposed_fix": "override",
+      "override_file": "api/scripts/catalogue_overrides/axis-bank-ace.json"
+    },
+    {
+      "item": "rounding",
+      "cardpipeline_says": "accrual rounding_mode round, base_cashback 1.5",
+      "issuer_says": "Cashback is rounded to the nearest rupee for each individual transaction (17.25 -> 17, 18.75 -> 19).",
+      "proposed_fix": "engine",
+      "override_file": null
+    },
+    {
+      "item": "post-cap behaviour for 5%/4% categories",
+      "cardpipeline_says": "downgrade_to_base_rate",
+      "issuer_says": "T&C do not say what Swiggy/Zomato/Ola/GPay spend above the cap earns; only that 1.5% on other eligible spends is unlimited. Not modelled in examples.",
+      "proposed_fix": "none",
+      "override_file": null
+    },
+    {
+      "item": "Google Pay platform slug",
+      "cardpipeline_says": "platform: Google Pay",
+      "issuer_says": "Rule is Google Pay only (Android per CardPipeline).",
+      "proposed_fix": "importer: needs a google_pay platform slug in merchant_directory.json (WP5); platform inference is a caller job",
+      "override_file": null
+    }
+  ]
+}
