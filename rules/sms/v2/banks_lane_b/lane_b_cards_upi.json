@@ -1,0 +1,956 @@
+[
+  {
+    "id": "ICICI-CARD-PAYMENT-ACCOUNT-RECEIVED",
+    "version": 1,
+    "family": "card_payment_received",
+    "senders": [
+      "ICICIB",
+      "ICICIT",
+      "ICICIO",
+      "ICICIS",
+      "ICICIC"
+    ],
+    "priority": 745,
+    "match": {
+      "pattern": "\\bpayment\\s+of\\s+(?:\\b(?:rs\\.?|inr)|₹)\\s*:?\\s*(?<amt>\\d[\\d,]*(?:\\.\\d{1,2})?)\\s+(?:has\\s+been\\s+)?received\\s+on\\s+your\\s+icici\\s+bank\\s+credit\\s+card\\s+account\\s+\\d?[x*]+(?<mask>\\d{4})\\b(?:\\s+on\\s+(?<date>\\d{1,2}-[a-z]{3}-\\d{2,4}))?",
+      "flags": "i",
+      "rejectAny": [
+        "will be",
+        "due",
+        "failed",
+        "refund",
+        "revers"
+      ]
+    },
+    "emit": [
+      {
+        "factType": "movement",
+        "attrs": {
+          "direction": "credit",
+          "purpose": "card_payment",
+          "rail": "unknown"
+        },
+        "amounts": [
+          {
+            "role": "posted",
+            "from": "amt",
+            "unit": "INR"
+          }
+        ],
+        "occurredAt": {
+          "from": "date",
+          "formats": [
+            "dd-MMM-yy",
+            "dd-MMM-yyyy"
+          ]
+        },
+        "instrument": {
+          "kind": "credit_card",
+          "issuerSlug": "icici",
+          "maskFrom": "mask"
+        }
+      }
+    ],
+    "confidence": 0.96,
+    "examples": [
+      {
+        "sender": "VM-ICICIT-S",
+        "body": "Dear Customer, Payment of INR 1,500.00 has been received on your ICICI Bank Credit Card Account 4xxx1234 on 29-APR-26.Thank you.",
+        "expectFactTypes": [
+          "movement"
+        ]
+      },
+      {
+        "sender": "VM-ICICIT-S",
+        "body": "Dear Customer, Payment of INR 1,500.00 will be received on your ICICI Bank Credit Card Account 4xxx1234 on 29-APR-26.",
+        "expectFactTypes": []
+      }
+    ],
+    "status": "active",
+    "createdBy": "lane-b",
+    "updatedAt": "2026-11-05T00:00:00Z"
+  },
+  {
+    "id": "HDFC-CARD-ONLINE-PAYMENT-CREDITED",
+    "version": 1,
+    "family": "card_payment_received",
+    "senders": [
+      "HDFCBK",
+      "HDFCBN",
+      "HDFCCB",
+      "HDFCCC"
+    ],
+    "priority": 745,
+    "match": {
+      "pattern": "\\bonline\\s+payment\\s+of\\s+(?:\\b(?:rs\\.?|inr)|₹)\\s*:?\\s*(?<amt>\\d[\\d,]*(?:\\.\\d{1,2})?)\\s+vide\\s+ref\\s*#?\\s*:?\\s*(?<ref_txnId>[a-z0-9]{6,})\\s+(?:was|has\\s+been)\\s+credited\\s+to\\s+your\\s+card\\s+ending\\s+(?<mask>\\d{4})\\s+on\\s+(?<date>\\d{1,2}/[a-z]{3}/\\d{4})",
+      "flags": "i",
+      "rejectAny": [
+        "will be",
+        "failed",
+        "revers",
+        "refund"
+      ]
+    },
+    "emit": [
+      {
+        "factType": "movement",
+        "attrs": {
+          "direction": "credit",
+          "purpose": "card_payment",
+          "rail": "unknown"
+        },
+        "amounts": [
+          {
+            "role": "posted",
+            "from": "amt",
+            "unit": "INR"
+          }
+        ],
+        "occurredAt": {
+          "from": "date",
+          "formats": [
+            "dd/MMM/yyyy"
+          ]
+        },
+        "instrument": {
+          "kind": "credit_card",
+          "issuerSlug": "hdfc",
+          "maskFrom": "mask"
+        }
+      }
+    ],
+    "confidence": 0.95,
+    "examples": [
+      {
+        "sender": "VM-HDFCBK-S",
+        "body": "HDFC Bank Cardmember, Online Payment of Rs.3000 vide Ref# ABCD1234 was credited to your card ending 1234 On 07/OCT/2026_value Date 06/OCT/2026",
+        "expectFactTypes": [
+          "movement"
+        ]
+      },
+      {
+        "sender": "VM-HDFCBK-S",
+        "body": "HDFC Bank Cardmember, Online Payment of Rs.3000 vide Ref# ABCD1234 was reversed to your card ending 1234 On 07/OCT/2026",
+        "expectFactTypes": []
+      }
+    ],
+    "status": "active",
+    "createdBy": "lane-b",
+    "updatedAt": "2026-11-05T00:00:00Z"
+  },
+  {
+    "id": "SBI-UPI-COLLECT-REQUEST",
+    "version": 1,
+    "family": "payment_request",
+    "senders": [
+      "SBIUPI",
+      "SBIBNK",
+      "SBIINB",
+      "SBYONO",
+      "SBMSMS"
+    ],
+    "priority": 725,
+    "match": {
+      "pattern": "^(?<merchant>[^\\r\\n]{1,150}?)\\s+has\\s+requested\\s+(?:\\b(?:rs\\.?|inr)|₹)\\s*:?\\s*(?<amt>\\d[\\d,]*(?:\\.\\d{1,2})?)\\s+(?:frm|from)\\s+(?:u|you)\\s+on\\s+(?<app>[a-z][a-z ]{1,30}?)\\s+app\\.?\\s*once\\s+approved,?\\s+money\\s+will\\s+be\\s+debited\\s+(?:frm|from)\\s+(?:ur|your)\\s+a/c",
+      "flags": "i"
+    },
+    "emit": [
+      {
+        "factType": "attempt",
+        "attrs": {
+          "status": "pending",
+          "direction": "debit",
+          "purpose": "unknown"
+        },
+        "amounts": [
+          {
+            "role": "scheduled",
+            "from": "amt",
+            "unit": "INR"
+          }
+        ],
+        "counterparty": {
+          "nameFrom": "merchant",
+          "kind": "merchant",
+          "transforms": [
+            "sanitizeNarration"
+          ]
+        }
+      }
+    ],
+    "confidence": 0.97,
+    "examples": [
+      {
+        "sender": "VM-SBIUPI-S",
+        "body": "EXAMPLE STORE has requested Rs120 frm u on Google Pay app. Once approved, money will be debited frm ur a/c -SBI",
+        "expectFactTypes": [
+          "attempt"
+        ]
+      },
+      {
+        "sender": "VM-SBIUPI-S",
+        "body": "Rs120 has been debited frm ur a/c on Google Pay app by EXAMPLE STORE. Once approved, money was debited -SBI",
+        "expectFactTypes": []
+      }
+    ],
+    "status": "active",
+    "createdBy": "lane-b",
+    "updatedAt": "2026-11-05T00:00:00Z"
+  },
+  {
+    "id": "ICICI-CREDIT-CARD-TXN-DECLINED",
+    "version": 1,
+    "family": "attempt_card",
+    "senders": [
+      "ICICIB",
+      "ICICIT",
+      "ICICIO",
+      "ICICIS",
+      "ICICIC"
+    ],
+    "priority": 760,
+    "match": {
+      "pattern": "^(?:\\b(?:rs\\.?|inr)|₹)\\s*:?\\s*(?<amt>\\d[\\d,]*(?:\\.\\d{1,2})?)\\s+(?:txn|transaction)\\s+declined\\b[^\\n]{0,140}?\\bicici\\s+bank\\s+credit\\s+card\\s+[x*]*(?<mask>\\d{4})\\b",
+      "flags": "i"
+    },
+    "emit": [
+      {
+        "factType": "attempt",
+        "attrs": {
+          "status": "declined",
+          "direction": "debit",
+          "purpose": "unknown"
+        },
+        "amounts": [
+          {
+            "role": "posted",
+            "from": "amt",
+            "unit": "INR"
+          }
+        ],
+        "instrument": {
+          "kind": "credit_card",
+          "issuerSlug": "icici",
+          "maskFrom": "mask"
+        }
+      }
+    ],
+    "confidence": 0.93,
+    "examples": [
+      {
+        "sender": "VM-ICICIT-S",
+        "body": "INR 2.00 txn declined at merchant outlet contactless domestic txn for ICICI Bank Credit Card XX1234 disabled. Enable at https://example.invalid/cc",
+        "expectFactTypes": [
+          "attempt"
+        ]
+      },
+      {
+        "sender": "VM-ICICIT-S",
+        "body": "INR 2.00 txn of INR 2.00 was successful for ICICI Bank Credit Card XX1234.",
+        "expectFactTypes": []
+      }
+    ],
+    "status": "active",
+    "createdBy": "lane-b",
+    "updatedAt": "2026-11-05T00:00:00Z"
+  },
+  {
+    "id": "ICICI-DEBIT-CARD-TXN-DECLINED",
+    "version": 1,
+    "family": "attempt_card",
+    "senders": [
+      "ICICIB",
+      "ICICIT",
+      "ICICIO",
+      "ICICIS",
+      "ICICIC"
+    ],
+    "priority": 760,
+    "match": {
+      "pattern": "^(?:\\b(?:rs\\.?|inr)|₹)\\s*:?\\s*(?<amt>\\d[\\d,]*(?:\\.\\d{1,2})?)\\s+(?:txn|transaction)\\s+declined\\b[^\\n]{0,140}?\\bicici\\s+bank\\s+debit\\s+card\\s+[x*]*(?<mask>\\d{4})\\b",
+      "flags": "i"
+    },
+    "emit": [
+      {
+        "factType": "attempt",
+        "attrs": {
+          "status": "declined",
+          "direction": "debit",
+          "purpose": "unknown"
+        },
+        "amounts": [
+          {
+            "role": "posted",
+            "from": "amt",
+            "unit": "INR"
+          }
+        ],
+        "instrument": {
+          "kind": "debit_card",
+          "issuerSlug": "icici",
+          "maskFrom": "mask"
+        }
+      }
+    ],
+    "confidence": 0.93,
+    "examples": [
+      {
+        "sender": "VM-ICICIT-S",
+        "body": "INR 2.00 txn declined at merchant outlet contactless domestic txn for ICICI Bank Debit Card XX1234 disabled. Enable at https://example.invalid/cc",
+        "expectFactTypes": [
+          "attempt"
+        ]
+      },
+      {
+        "sender": "VM-ICICIT-S",
+        "body": "INR 2.00 txn of INR 2.00 was successful for ICICI Bank Debit Card XX1234.",
+        "expectFactTypes": []
+      }
+    ],
+    "status": "active",
+    "createdBy": "lane-b",
+    "updatedAt": "2026-11-05T00:00:00Z"
+  },
+  {
+    "id": "FED-SCAPIA-CARD-SPEND-INR",
+    "version": 1,
+    "family": "card_spend",
+    "senders": [
+      "FEDSCP",
+      "FEDSMS",
+      "FEDBNK"
+    ],
+    "priority": 700,
+    "match": {
+      "pattern": "^(?:hi!?\\s*)?your\\s+txn\\s+of\\s+(?:₹|rs\\.?|inr)\\s*(?<amt>\\d[\\d,]*(?:\\.\\d{1,2})?)\\s+at\\s+(?<merchant>[^\\n]+?)\\s+on\\s+your\\s+scapia\\s+federal\\s+(?:visa\\s+|rupay\\s+|mastercard\\s+)?credit\\s+card\\b(?:\\s+was\\s+successful|\\s+earned\\s+you\\b)",
+      "flags": "i",
+      "rejectAny": [
+        "not successful",
+        "unsuccessful",
+        "declined",
+        "failed",
+        "reversed"
+      ]
+    },
+    "emit": [
+      {
+        "factType": "movement",
+        "attrs": {
+          "direction": "debit",
+          "purpose": "purchase",
+          "rail": "card"
+        },
+        "amounts": [
+          {
+            "role": "posted",
+            "from": "amt",
+            "unit": "INR"
+          }
+        ],
+        "instrument": {
+          "kind": "credit_card",
+          "issuerSlug": "federal"
+        },
+        "counterparty": {
+          "nameFrom": "merchant",
+          "kind": "merchant",
+          "transforms": [
+            "sanitizeNarration"
+          ]
+        }
+      }
+    ],
+    "confidence": 0.95,
+    "examples": [
+      {
+        "sender": "VM-FEDSCP-S",
+        "body": "Hi! Your txn of ₹1,200.00 at EXAMPLE STORE on your Scapia Federal Visa credit card was successful. Not you? Go to Scapia support on the app.- Federal Bank",
+        "expectFactTypes": [
+          "movement"
+        ]
+      },
+      {
+        "sender": "VM-FEDSCP-S",
+        "body": "Hi! Your txn of ₹1,200.00 at EXAMPLE STORE on your Scapia Federal Visa credit card was not successful. Not you? Go to Scapia support on the app.- Federal Bank",
+        "expectFactTypes": []
+      }
+    ],
+    "status": "active",
+    "createdBy": "lane-b",
+    "updatedAt": "2026-11-05T00:00:00Z"
+  },
+  {
+    "id": "FED-SCAPIA-CARD-DECLINED-INR",
+    "version": 1,
+    "family": "attempt_card",
+    "senders": [
+      "FEDSCP",
+      "FEDSMS",
+      "FEDBNK"
+    ],
+    "priority": 705,
+    "match": {
+      "pattern": "^(?:hi!?\\s*)?your\\s+txn\\s+of\\s+(?:₹|rs\\.?|inr)\\s*(?<amt>\\d[\\d,]*(?:\\.\\d{1,2})?)\\s+at\\s+(?<merchant>[^\\n]+?)\\s+is\\s+declined\\b[^\\n]{0,120}?\\bscapia\\s+federal\\s+(?:visa\\s+|rupay\\s+|mastercard\\s+)?credit\\s+card\\b",
+      "flags": "i"
+    },
+    "emit": [
+      {
+        "factType": "attempt",
+        "attrs": {
+          "status": "declined",
+          "direction": "debit",
+          "purpose": "unknown"
+        },
+        "amounts": [
+          {
+            "role": "posted",
+            "from": "amt",
+            "unit": "INR"
+          }
+        ],
+        "instrument": {
+          "kind": "credit_card",
+          "issuerSlug": "federal"
+        },
+        "counterparty": {
+          "nameFrom": "merchant",
+          "kind": "merchant",
+          "transforms": [
+            "sanitizeNarration"
+          ]
+        }
+      }
+    ],
+    "confidence": 0.93,
+    "examples": [
+      {
+        "sender": "VM-FEDSCP-S",
+        "body": "Hi! Your txn of ₹1,200.00 at EXAMPLE STORE is declined as you've disabled the international ECOM facility on your Scapia Federal Visa credit card. To enable, log in to the app.-Federal Bank",
+        "expectFactTypes": [
+          "attempt"
+        ]
+      },
+      {
+        "sender": "VM-FEDSCP-S",
+        "body": "Hi! Your txn of ₹1,200.00 at EXAMPLE STORE on your Scapia Federal Visa credit card was successful.-Federal Bank",
+        "expectFactTypes": []
+      }
+    ],
+    "status": "active",
+    "createdBy": "lane-b",
+    "updatedAt": "2026-11-05T00:00:00Z"
+  },
+  {
+    "id": "FED-SCAPIA-CARD-SPEND-USD",
+    "version": 1,
+    "family": "card_spend",
+    "senders": [
+      "FEDSCP",
+      "FEDSMS",
+      "FEDBNK"
+    ],
+    "priority": 700,
+    "match": {
+      "pattern": "^(?:hi!?\\s*)?your\\s+txn\\s+of\\s+(?:\\$|usd)\\s*(?<amt>\\d[\\d,]*(?:\\.\\d{1,2})?)\\s+at\\s+(?<merchant>[^\\n]+?)\\s+on\\s+your\\s+scapia\\s+federal\\s+(?:visa\\s+|rupay\\s+|mastercard\\s+)?credit\\s+card\\b(?:\\s+was\\s+successful|\\s+earned\\s+you\\b)",
+      "flags": "i",
+      "rejectAny": [
+        "not successful",
+        "unsuccessful",
+        "declined",
+        "failed",
+        "reversed"
+      ]
+    },
+    "emit": [
+      {
+        "factType": "movement",
+        "attrs": {
+          "direction": "debit",
+          "purpose": "purchase",
+          "rail": "card"
+        },
+        "amounts": [
+          {
+            "role": "posted",
+            "from": "amt",
+            "unit": "USD"
+          }
+        ],
+        "instrument": {
+          "kind": "credit_card",
+          "issuerSlug": "federal"
+        },
+        "counterparty": {
+          "nameFrom": "merchant",
+          "kind": "merchant",
+          "transforms": [
+            "sanitizeNarration"
+          ]
+        }
+      }
+    ],
+    "confidence": 0.95,
+    "examples": [
+      {
+        "sender": "VM-FEDSCP-S",
+        "body": "Hi! Your txn of $12.50 at EXAMPLE STORE on your Scapia Federal Visa credit card was successful. Not you? Go to Scapia support on the app.- Federal Bank",
+        "expectFactTypes": [
+          "movement"
+        ]
+      },
+      {
+        "sender": "VM-FEDSCP-S",
+        "body": "Hi! Your txn of $12.50 at EXAMPLE STORE on your Scapia Federal Visa credit card was not successful. Not you? Go to Scapia support on the app.- Federal Bank",
+        "expectFactTypes": []
+      }
+    ],
+    "status": "active",
+    "createdBy": "lane-b",
+    "updatedAt": "2026-11-05T00:00:00Z"
+  },
+  {
+    "id": "FED-SCAPIA-CARD-DECLINED-USD",
+    "version": 1,
+    "family": "attempt_card",
+    "senders": [
+      "FEDSCP",
+      "FEDSMS",
+      "FEDBNK"
+    ],
+    "priority": 705,
+    "match": {
+      "pattern": "^(?:hi!?\\s*)?your\\s+txn\\s+of\\s+(?:\\$|usd)\\s*(?<amt>\\d[\\d,]*(?:\\.\\d{1,2})?)\\s+at\\s+(?<merchant>[^\\n]+?)\\s+is\\s+declined\\b[^\\n]{0,120}?\\bscapia\\s+federal\\s+(?:visa\\s+|rupay\\s+|mastercard\\s+)?credit\\s+card\\b",
+      "flags": "i"
+    },
+    "emit": [
+      {
+        "factType": "attempt",
+        "attrs": {
+          "status": "declined",
+          "direction": "debit",
+          "purpose": "unknown"
+        },
+        "amounts": [
+          {
+            "role": "posted",
+            "from": "amt",
+            "unit": "USD"
+          }
+        ],
+        "instrument": {
+          "kind": "credit_card",
+          "issuerSlug": "federal"
+        },
+        "counterparty": {
+          "nameFrom": "merchant",
+          "kind": "merchant",
+          "transforms": [
+            "sanitizeNarration"
+          ]
+        }
+      }
+    ],
+    "confidence": 0.93,
+    "examples": [
+      {
+        "sender": "VM-FEDSCP-S",
+        "body": "Hi! Your txn of $12.50 at EXAMPLE STORE is declined as you've disabled the international ECOM facility on your Scapia Federal Visa credit card. To enable, log in to the app.-Federal Bank",
+        "expectFactTypes": [
+          "attempt"
+        ]
+      },
+      {
+        "sender": "VM-FEDSCP-S",
+        "body": "Hi! Your txn of $12.50 at EXAMPLE STORE on your Scapia Federal Visa credit card was successful.-Federal Bank",
+        "expectFactTypes": []
+      }
+    ],
+    "status": "active",
+    "createdBy": "lane-b",
+    "updatedAt": "2026-11-05T00:00:00Z"
+  },
+  {
+    "id": "FED-SCAPIA-CARD-PAYMENT-RECEIVED",
+    "version": 1,
+    "family": "card_payment_received",
+    "senders": [
+      "FEDSCP",
+      "FEDSMS",
+      "FEDBNK"
+    ],
+    "priority": 745,
+    "match": {
+      "pattern": "^(?:yay!?\\s*)?we.ve\\s+received\\s+your\\s+payment\\s+of\\s+(?:₹|rs\\.?|inr)\\s*(?<amt>\\d[\\d,]*(?:\\.\\d{1,2})?)\\s+towards\\s+your\\s+scapia\\s+federal\\s+(?:visa\\s+|rupay\\s+)?credit\\s+card",
+      "flags": "i",
+      "rejectAny": [
+        "will be",
+        "due",
+        "failed",
+        "refund",
+        "revers"
+      ]
+    },
+    "emit": [
+      {
+        "factType": "movement",
+        "attrs": {
+          "direction": "credit",
+          "purpose": "card_payment",
+          "rail": "unknown"
+        },
+        "amounts": [
+          {
+            "role": "posted",
+            "from": "amt",
+            "unit": "INR"
+          }
+        ],
+        "instrument": {
+          "kind": "credit_card",
+          "issuerSlug": "federal"
+        }
+      }
+    ],
+    "confidence": 0.95,
+    "examples": [
+      {
+        "sender": "VM-FEDSCP-S",
+        "body": "Yay! We've received your payment of ₹2,000.00 towards your Scapia Federal credit card. -Federal Bank",
+        "expectFactTypes": [
+          "movement"
+        ]
+      },
+      {
+        "sender": "VM-FEDSCP-S",
+        "body": "Reminder: please make your payment of ₹2,000.00 towards your Scapia Federal credit card by the due date. -Federal Bank",
+        "expectFactTypes": []
+      }
+    ],
+    "status": "active",
+    "createdBy": "lane-b",
+    "updatedAt": "2026-11-05T00:00:00Z"
+  },
+  {
+    "id": "SBI-CARD-PAYMENT-BBPS-RECEIVED",
+    "version": 1,
+    "family": "card_payment_received",
+    "senders": [
+      "SBICRD",
+      "SBICARD",
+      "SBIBNK"
+    ],
+    "priority": 745,
+    "match": {
+      "pattern": "^we\\s+have\\s+received\\s+payment\\s+of\\s+(?:\\b(?:rs\\.?|inr)|₹)\\s*:?\\s*(?<amt>\\d[\\d,]*(?:\\.\\d{1,2})?)\\s+via\\s+(?<via>[a-z][a-z ]{1,25}?)\\s*(?:&|and)\\s*the\\s+same\\s+has\\s+been\\s+credited\\s+to\\s+your\\s+sbi\\s+(?:credit\\s+)?card\\b",
+      "flags": "i",
+      "rejectAny": [
+        "will be",
+        "due",
+        "failed",
+        "refund",
+        "revers"
+      ]
+    },
+    "emit": [
+      {
+        "factType": "movement",
+        "attrs": {
+          "direction": "credit",
+          "purpose": "card_payment",
+          "rail": "unknown"
+        },
+        "amounts": [
+          {
+            "role": "posted",
+            "from": "amt",
+            "unit": "INR"
+          }
+        ],
+        "instrument": {
+          "kind": "credit_card",
+          "issuerSlug": "sbi"
+        }
+      }
+    ],
+    "confidence": 0.95,
+    "examples": [
+      {
+        "sender": "VM-SBICRD-S",
+        "body": "We have received payment of Rs.3,000.00 via BBPS & the same has been credited to your SBI Credit Card. Your available limit is Rs.100,000.00.",
+        "expectFactTypes": [
+          "movement"
+        ]
+      },
+      {
+        "sender": "VM-SBICRD-S",
+        "body": "We have received a request for payment of Rs.3,000.00 via BBPS & the same will be credited to your SBI Credit Card.",
+        "expectFactTypes": []
+      }
+    ],
+    "status": "active",
+    "createdBy": "lane-b",
+    "updatedAt": "2026-11-05T00:00:00Z"
+  },
+  {
+    "id": "YES-CARD-PAYMENT-RECEIVED-MASKED",
+    "version": 1,
+    "family": "card_payment_received",
+    "senders": [
+      "*"
+    ],
+    "priority": 749,
+    "match": {
+      "pattern": "\\bpayment\\s+of\\s+(?:\\b(?:rs\\.?|inr)|₹)\\s*:?\\s*(?<amt>\\d[\\d,]*(?:\\.\\d{1,2})?)\\s+has\\s+been\\s+received\\s+towards\\s+your\\s+yes\\s+bank\\s+credit\\s+card\\s+ending\\s+(?:with\\s+)?(?:[x*]{4}\\s{1,2}){0,3}[x*]*\\s*(?<mask>\\d{4})\\b(?=(?:[\\s\\S]*?\\bref\\.?\\s*no\\.?\\s*(?:is\\s+)?:?\\s*(?<ref_txnId>(?=[a-z]*\\d)[a-z0-9]{6,}))?)",
+      "flags": "i",
+      "rejectAny": [
+        "will be",
+        "due",
+        "failed",
+        "refund",
+        "revers"
+      ]
+    },
+    "emit": [
+      {
+        "factType": "movement",
+        "attrs": {
+          "direction": "credit",
+          "purpose": "card_payment",
+          "rail": "unknown"
+        },
+        "amounts": [
+          {
+            "role": "posted",
+            "from": "amt",
+            "unit": "INR"
+          }
+        ],
+        "instrument": {
+          "kind": "credit_card",
+          "issuerSlug": "yes",
+          "maskFrom": "mask"
+        }
+      }
+    ],
+    "confidence": 0.95,
+    "examples": [
+      {
+        "sender": "VM-YESBCC-S",
+        "body": "Dear Cardmember, Payment of Rs.10000.00 has been received towards your YES BANK Credit Card ending with xxxx xxxx xxxx 1234 . Ref. no. is ABC123XYZ456.",
+        "expectFactTypes": [
+          "movement"
+        ]
+      },
+      {
+        "sender": "VM-YESBCC-S",
+        "body": "Dear Cardmember, Payment of Rs.10000.00 is due towards your YES BANK Credit Card ending with xxxx xxxx xxxx 1234 .",
+        "expectFactTypes": []
+      }
+    ],
+    "status": "active",
+    "createdBy": "lane-b",
+    "updatedAt": "2026-11-05T00:00:00Z"
+  },
+  {
+    "id": "ICICI-CARD-SPEND-USD-USING",
+    "version": 1,
+    "family": "card_spend",
+    "senders": [
+      "ICICIB",
+      "ICICIT",
+      "ICICIO",
+      "ICICIS",
+      "ICICIC"
+    ],
+    "priority": 786,
+    "match": {
+      "pattern": "^usd\\s*(?<amt>\\d[\\d,]*(?:\\.\\d{1,2})?)\\s+spent\\s+using\\s+icici\\s+bank\\s+(?:credit\\s+)?card\\s*[x*•.]*\\s?(?<mask>\\d{2,6})\\s+on\\s+(?<date>\\d{1,2}-[a-z]{3}-\\d{2,4})\\s+on\\s+(?<merchant>[^\\n]+?)\\s*\\.(?:\\s|$)",
+      "flags": "i",
+      "rejectAny": [
+        "will be",
+        "declined",
+        "failed",
+        "reversed",
+        "refund"
+      ]
+    },
+    "emit": [
+      {
+        "factType": "movement",
+        "attrs": {
+          "direction": "debit",
+          "purpose": "purchase",
+          "rail": "card"
+        },
+        "amounts": [
+          {
+            "role": "posted",
+            "from": "amt",
+            "unit": "USD"
+          }
+        ],
+        "occurredAt": {
+          "from": "date",
+          "formats": [
+            "dd-MMM-yy",
+            "dd-MMM-yyyy"
+          ]
+        },
+        "instrument": {
+          "kind": "credit_card",
+          "issuerSlug": "icici",
+          "maskFrom": "mask"
+        },
+        "counterparty": {
+          "nameFrom": "merchant",
+          "kind": "merchant",
+          "transforms": [
+            "sanitizeNarration"
+          ]
+        }
+      }
+    ],
+    "confidence": 0.95,
+    "examples": [
+      {
+        "sender": "VM-ICICIT-S",
+        "body": "USD 5.90 spent using ICICI Bank Card XX1234 on 22-Nov-25 on EXAMPLE SAAS. Avl Limit: INR 2,99,464.48. If not you, call 1800 0000/SMS BLOCK 1234 to 5676700000.",
+        "expectFactTypes": [
+          "movement"
+        ]
+      },
+      {
+        "sender": "VM-ICICIT-S",
+        "body": "USD 5.90 will be spent using ICICI Bank Card XX1234 on 22-Nov-25 on EXAMPLE SAAS. Avl Limit: INR 2,99,464.48.",
+        "expectFactTypes": []
+      }
+    ],
+    "status": "active",
+    "createdBy": "lane-b",
+    "updatedAt": "2026-11-05T00:00:00Z"
+  },
+  {
+    "id": "UPI-APP-COLLECT-REQUEST-GENERIC",
+    "version": 1,
+    "family": "payment_request",
+    "senders": [
+      "*"
+    ],
+    "priority": 700,
+    "match": {
+      "pattern": "^(?<merchant>[^\\r\\n]{1,150}?)\\s+has\\s+requested\\s+money\\s+from\\s+you\\s+on\\s+(?:your\\s+)?(?<app>[a-z][a-z ]{1,30}?)\\s+app\\.?\\s*on\\s+approving\\s+the\\s+request,?\\s*(?:\\b(?:rs\\.?|inr)|₹)\\s*:?\\s*(?<amt>\\d[\\d,]*(?:\\.\\d{1,2})?)\\s+will\\s+be\\s+debited\\s+from\\s+your\\s+(?:a/c|account)",
+      "flags": "i"
+    },
+    "emit": [
+      {
+        "factType": "attempt",
+        "attrs": {
+          "status": "pending",
+          "direction": "debit",
+          "purpose": "unknown"
+        },
+        "amounts": [
+          {
+            "role": "scheduled",
+            "from": "amt",
+            "unit": "INR"
+          }
+        ],
+        "counterparty": {
+          "nameFrom": "merchant",
+          "kind": "merchant",
+          "transforms": [
+            "sanitizeNarration"
+          ]
+        }
+      }
+    ],
+    "confidence": 0.97,
+    "examples": [
+      {
+        "sender": "VM-BHIMAP-S",
+        "body": "EXAMPLE STORE PRIVATE LIMITED has requested money from you on your BHIM app. On approving the request, INR 352.00 will be debited from your account. NPCI",
+        "expectFactTypes": [
+          "attempt"
+        ]
+      },
+      {
+        "sender": "VM-BHIMAP-S",
+        "body": "EXAMPLE STORE PRIVATE LIMITED has requested money from you on your BHIM app. On approving the request, INR 352.00 was debited from your account. NPCI",
+        "expectFactTypes": []
+      }
+    ],
+    "status": "active",
+    "createdBy": "lane-b",
+    "updatedAt": "2026-11-05T00:00:00Z"
+  },
+  {
+    "id": "SBI-ACCOUNT-UPI-CREDIT-FOR",
+    "version": 1,
+    "family": "bank_credit",
+    "senders": [
+      "CBSSBI",
+      "SBIBNK",
+      "SBIINB",
+      "SBIUPI",
+      "SBMSMS"
+    ],
+    "priority": 735,
+    "match": {
+      "pattern": "^your\\s+a/c\\s+(?<mask>[x*]+\\d{4,})\\s+has\\s+credit\\s+for\\s+upi/[a-z]{2,6}/(?<ref_upiRef>\\d{6,})/\\S*\\s+of\\s+(?:\\b(?:rs\\.?|inr)|₹)\\s*:?\\s*(?<amt>\\d[\\d,]*(?:\\.\\d{1,2})?)\\s+on\\s+(?<date>\\d{1,2}/\\d{1,2}/\\d{2,4})\\b",
+      "flags": "i",
+      "rejectAny": [
+        "debit",
+        "failed",
+        "revers"
+      ]
+    },
+    "emit": [
+      {
+        "factType": "movement",
+        "attrs": {
+          "direction": "credit",
+          "purpose": "unknown",
+          "rail": "upi"
+        },
+        "amounts": [
+          {
+            "role": "posted",
+            "from": "amt",
+            "unit": "INR"
+          }
+        ],
+        "occurredAt": {
+          "from": "date",
+          "formats": [
+            "dd/MM/yy",
+            "dd/MM/yyyy"
+          ]
+        },
+        "instrument": {
+          "kind": "bank_account",
+          "issuerSlug": "sbi",
+          "maskFrom": "mask"
+        }
+      }
+    ],
+    "confidence": 0.9,
+    "examples": [
+      {
+        "sender": "VM-CBSSBI-S",
+        "body": "Your A/C XXXXX123456 has credit for UPI/DRC/123456789012/30112025/ of Rs 10.71 on 01/12/25. Avl Bal Rs 1,000.00.-SBI",
+        "expectFactTypes": [
+          "movement"
+        ]
+      },
+      {
+        "sender": "VM-CBSSBI-S",
+        "body": "Your A/C XXXXX123456 has debit for UPI/DRC/123456789012/30112025/ of Rs 10.71 on 01/12/25. Avl Bal Rs 1,000.00.-SBI",
+        "expectFactTypes": []
+      }
+    ],
+    "status": "active",
+    "createdBy": "lane-b",
+    "updatedAt": "2026-11-05T00:00:00Z"
+  }
+]
