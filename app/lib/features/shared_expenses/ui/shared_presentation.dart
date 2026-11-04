@@ -108,6 +108,8 @@ class SharedActivityRow {
 }
 
 class SharedExpenseRow {
+  final bool proposed;
+  final String? reviewLabel;
   final String totalLabel;
   final String paidLabel, payerLabel;
   final String id;
@@ -121,6 +123,8 @@ class SharedExpenseRow {
   final SharedParticipation participation;
   final SharedContextState state;
   const SharedExpenseRow({
+    this.proposed = false,
+    this.reviewLabel,
     this.totalLabel = 'Bill total',
     this.paidLabel = 'You paid',
     this.payerLabel = 'Paid by',

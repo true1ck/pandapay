@@ -29,6 +29,11 @@ import '../import/import_hub_screen.dart';
 import '../insights/spending_visuals.dart'
     show spendingCategoryVisual, spendingInstrumentVisual;
 import '../../main.dart' show MoneyText;
+import '../shared_expenses/composer/shared_editor.dart';
+import '../shared_expenses/composer/shared_editor_fields.dart';
+import '../shared_expenses/runtime/shared_providers.dart';
+import '../shared_expenses/runtime/shared_runtime.dart';
+import '../shared_expenses/storage/shared_store.dart';
 
 const _lastUsedCardKey = 'pandapay_app.quick_add_last_used_card_v1';
 const _recentMerchantsKey = 'pandapay_app.quick_add_recent_merchants_v1';
@@ -182,6 +187,8 @@ class QuickAddScreen extends ConsumerStatefulWidget {
   final String? initialCategoryName;
   final bool autofocus;
   final Key? manualEntryKey;
+  final bool sharedExpense;
+  final String? sharedContextId, sharedDraftId;
 
   const QuickAddScreen({
     super.key,
@@ -192,13 +199,21 @@ class QuickAddScreen extends ConsumerStatefulWidget {
     this.initialCategoryName,
     this.autofocus = true,
     this.manualEntryKey,
+    this.sharedExpense = false,
+    this.sharedContextId,
+    this.sharedDraftId,
   });
 
   @override
   ConsumerState<QuickAddScreen> createState() => _QuickAddScreenState();
 }
 
-class _QuickAddScreenState extends ConsumerState<QuickAddScreen> {
+class _QuickAddScreenState extends ConsumerState<QuickAddScreen>
+    with WidgetsBindingObserver {
+  SharedEditor? _sharedEditor;
+  SharedExpensesRuntime? _sharedRuntime;
+  bool _sharing = false, _sharingLoading = false, _allowSharedPop = false;
+  String? _sharingError;
   final _amountController = TextEditingController();
   final _merchantController = TextEditingController();
   final _noteController = TextEditingController();
@@ -243,6 +258,7 @@ class _QuickAddScreenState extends ConsumerState<QuickAddScreen> {
   @override
   void initState() {
     super.initState();
+    WidgetsBinding.instance.addObserver(this);
     if (widget.initialAmount != null && !widget.initialAmount!.isZero) {
       _amountController.text = widget.initialAmount!.rupees.toStringAsFixed(0);
     }
@@ -261,6 +277,13 @@ class _QuickAddScreenState extends ConsumerState<QuickAddScreen> {
     }
     _loadRecentMerchants();
     _merchantFocusNode.addListener(_onMerchantFocusChanged);
+    _amountController.addListener(_updateSharedInput);
+    _merchantController.addListener(_updateSharedInput);
+    _noteController.addListener(_sharedPrivateFields);
+    if (widget.sharedExpense) {
+      _sharing = true;
+      unawaited(_startSharing());
+    }
   }
 
   Future<void> _resolveInitialCategory(String name) async {
@@ -276,7 +299,7 @@ class _QuickAddScreenState extends ConsumerState<QuickAddScreen> {
             query.contains(label);
       }).firstOrNull;
       if (mounted && match != null && _selectedCategoryId == null) {
-        setState(() => _selectedCategoryId = match.id);
+        _editPrivate(() => _selectedCategoryId = match.id);
       }
     } catch (_) {
       // Assistant category text is only a convenience. The user can still
@@ -286,13 +309,409 @@ class _QuickAddScreenState extends ConsumerState<QuickAddScreen> {
 
   @override
   void dispose() {
+    WidgetsBinding.instance.removeObserver(this);
+    _amountController.removeListener(_updateSharedInput);
+    _merchantController.removeListener(_updateSharedInput);
+    _sharedEditor?.removeListener(_sharedChanged);
+    _sharedEditor?.dispose();
     _amountController.dispose();
     _merchantController.dispose();
+    _noteController.removeListener(_sharedPrivateFields);
     _noteController.dispose();
     _merchantFocusNode.removeListener(_onMerchantFocusChanged);
     _merchantFocusNode.dispose();
     _merchantDebounce?.cancel();
     super.dispose();
+  }
+
+  void _sharedChanged() {
+    if (mounted) setState(() {});
+  }
+
+  @override
+  void didChangeAppLifecycleState(AppLifecycleState state) {
+    if (state == AppLifecycleState.inactive ||
+        state == AppLifecycleState.paused) {
+      _sharedPrivateFields();
+      final editor = _sharedEditor;
+      if (editor != null) {
+        unawaited(
+          editor.persist().catchError((Object _) {
+            if (mounted) {
+              setState(
+                () => _sharingError =
+                    'Draft could not be saved. Keep this form open and try again.',
+              );
+            }
+          }),
+        );
+      }
+    }
+  }
+
+  void _updateSharedInput() {
+    final editor = _sharedEditor;
+    if (editor == null || editor.sealed) return;
+    if (editor.billText != _amountController.text) {
+      editor.setBill(_amountController.text);
+    }
+    if (editor.title != _merchantController.text) {
+      editor.setTitle(_merchantController.text);
+    }
+  }
+
+  Future<void> _startSharing() async {
+    setState(() {
+      _sharingLoading = true;
+      _sharingError = null;
+    });
+    try {
+      final runtime = await ref.read(sharedExpensesRuntimeProvider.future);
+      if (!mounted || !runtime.isCurrent()) return;
+      final editor = SharedEditor(
+        store: runtime.store,
+        accountId: runtime.accountId,
+        draftId: widget.sharedDraftId,
+      );
+      _sharedRuntime = runtime;
+      _sharedEditor = editor;
+      if (widget.sharedDraftId != null) {
+        _amountController.text = editor.billText;
+        _merchantController.text = editor.title;
+        _selectedCategoryId = editor.privateFields['categoryId'] as String?;
+        _selectedTagIds =
+            (editor.privateFields['tagIds'] as List?)?.cast<String>().toSet() ??
+            {};
+        _date = DateTime.tryParse(editor.occurredOn);
+        final receiptPath = editor.privateFields['receiptPath'] as String?;
+        if (receiptPath != null) {
+          _receipt = _PendingReceipt(
+            name:
+                editor.privateFields['receiptName'] as String? ??
+                'Saved receipt',
+            path: receiptPath,
+            mimeType: editor.privateFields['receiptMimeType'] as String?,
+          );
+        }
+        _noteController.text = editor.privateFields['note'] as String? ?? '';
+      } else {
+        _updateSharedInput();
+        _sharedPrivateFields();
+      }
+      editor.addListener(_sharedChanged);
+      final contextId = editor.contextId ?? widget.sharedContextId;
+      if (contextId != null) await _loadSharedContext(contextId);
+    } catch (_) {
+      if (mounted) {
+        _sharingError =
+            'Sharing could not be loaded. Your existing transaction data is unchanged.';
+      }
+    } finally {
+      if (mounted) setState(() => _sharingLoading = false);
+    }
+  }
+
+  Future<void> _loadSharedContext(String id) async {
+    final runtime = _sharedRuntime!, editor = _sharedEditor!;
+    setState(() {
+      _sharingLoading = true;
+      _sharingError = null;
+    });
+    try {
+      final value = await runtime.editorContext(id);
+      if (!mounted || !runtime.isCurrent() || _sharedEditor != editor) return;
+      editor.selectContext(id, value.name, value.members, value.ownMemberId);
+    } catch (_) {
+      if (mounted) {
+        _sharingError =
+            'Group members changed or are unavailable. Refresh before submitting.';
+      }
+    } finally {
+      if (mounted) setState(() => _sharingLoading = false);
+    }
+  }
+
+  Future<void> _chooseSharedContext() async {
+    final runtime = _sharedRuntime;
+    if (runtime == null || _sharingLoading) return;
+    final history = <String?>[null];
+    var request = runtime.contexts();
+    final selected = await showModalBottomSheet<String>(
+      context: context,
+      backgroundColor: BambooInk.paper,
+      isScrollControlled: true,
+      builder: (sheet) => StatefulBuilder(
+        builder: (sheet, update) => SafeArea(
+          child: SizedBox(
+            height: MediaQuery.sizeOf(sheet).height * .7,
+            child: Column(
+              children: [
+                Padding(
+                  padding: const EdgeInsets.all(16),
+                  child: Text(
+                    'Choose group or friend',
+                    style: BambooFonts.heading(18),
+                  ),
+                ),
+                Expanded(
+                  child: FutureBuilder<Map<String, Object?>>(
+                    future: request,
+                    builder: (context, snapshot) {
+                      if (snapshot.hasError) {
+                        return Center(
+                          child: TextButton(
+                            onPressed: () => update(() {
+                              request = runtime.contexts(after: history.last);
+                            }),
+                            child: const Text('Try again'),
+                          ),
+                        );
+                      }
+                      if (!snapshot.hasData) {
+                        return const Center(
+                          child: CircularProgressIndicator(
+                            color: BambooInk.slate,
+                          ),
+                        );
+                      }
+                      final page = snapshot.data!, rows = page['items'] as List;
+                      return ListView(
+                        children: [
+                          for (final raw in rows)
+                            if ((raw as Map)['membershipState'] == 'active')
+                              ListTile(
+                                leading: const Icon(
+                                  Icons.people_outline_rounded,
+                                ),
+                                title: Text(
+                                  raw['name'] as String,
+                                  style: BambooFonts.ui(15),
+                                ),
+                                onTap: () => Navigator.pop(
+                                  sheet,
+                                  raw['contextId'] as String,
+                                ),
+                              ),
+                          if (rows.isEmpty)
+                            const Padding(
+                              padding: EdgeInsets.all(16),
+                              child: Text(
+                                'Create a group to share this expense.',
+                              ),
+                            ),
+                          if (history.length > 1)
+                            TextButton(
+                              onPressed: () => update(() {
+                                history.removeLast();
+                                request = runtime.contexts(after: history.last);
+                              }),
+                              child: const Text('Previous page'),
+                            ),
+                          if (page['hasMore'] == true)
+                            TextButton(
+                              onPressed: () => update(() {
+                                history.add(page['nextCursor'] as String);
+                                request = runtime.contexts(after: history.last);
+                              }),
+                              child: const Text('Next page'),
+                            ),
+                        ],
+                      );
+                    },
+                  ),
+                ),
+                TextButton.icon(
+                  onPressed: () => Navigator.pop(sheet, 'create'),
+                  icon: const Icon(Icons.group_add_outlined),
+                  label: const Text('Create group'),
+                ),
+              ],
+            ),
+          ),
+        ),
+      ),
+    );
+    if (!mounted || !runtime.isCurrent() || selected == null) return;
+    if (selected == 'create') {
+      final name = await _sharedNameDialog('Create group', 'Group name');
+      if (name == null || !mounted) return;
+      try {
+        setState(() => _sharingLoading = true);
+        final id = const Uuid().v4();
+        await runtime.submit('context.create', {
+          'contextId': id,
+          'contextKind': 'group',
+          'name': name,
+        });
+        if (mounted) await _loadSharedContext(id);
+      } catch (_) {
+        if (mounted) {
+          setState(
+            () => _sharingError =
+                'Group could not be confirmed. Check pending work before creating it again.',
+          );
+        }
+      } finally {
+        if (mounted) setState(() => _sharingLoading = false);
+      }
+    } else {
+      await _loadSharedContext(selected);
+    }
+  }
+
+  Future<String?> _sharedNameDialog(String title, String label) async {
+    var name = '';
+    return showDialog<String>(
+      context: context,
+      builder: (dialog) => AlertDialog(
+        title: Text(title, style: BambooFonts.heading(18)),
+        content: TextField(
+          autofocus: true,
+          maxLength: 120,
+          style: BambooFonts.ui(14),
+          decoration: InputDecoration(labelText: label),
+          onChanged: (value) => name = value,
+          textInputAction: TextInputAction.done,
+          onSubmitted: (value) {
+            if (value.trim().isNotEmpty) Navigator.pop(dialog, value.trim());
+          },
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(dialog),
+            child: const Text('Cancel'),
+          ),
+          TextButton(
+            onPressed: () {
+              if (name.trim().isNotEmpty) Navigator.pop(dialog, name.trim());
+            },
+            child: const Text('Add'),
+          ),
+        ],
+      ),
+    );
+  }
+
+  Future<void> _addSharedMember() async {
+    if (_sharingLoading) return;
+    final editor = _sharedEditor!, runtime = _sharedRuntime!;
+    final name = await _sharedNameDialog('Add person', 'Name');
+    if (name == null ||
+        !mounted ||
+        !runtime.isCurrent() ||
+        editor.contextId == null) {
+      return;
+    }
+    try {
+      setState(() => _sharingLoading = true);
+      await runtime.submit('member.invite', {
+        'contextId': editor.contextId,
+        'memberId': const Uuid().v4(),
+        'displayName': name,
+      });
+      if (mounted) await _loadSharedContext(editor.contextId!);
+    } catch (_) {
+      if (mounted) {
+        setState(
+          () => _sharingError =
+              'Person could not be confirmed. Check pending work before adding again.',
+        );
+      }
+    } finally {
+      if (mounted) setState(() => _sharingLoading = false);
+    }
+  }
+
+  void _sharedPrivateFields() {
+    final editor = _sharedEditor;
+    if (editor == null || editor.sealed) return;
+    editor.setDate(_date ?? DateTime.now());
+    editor.setPrivateFields({
+      'categoryId': _selectedCategoryId,
+      'tagIds': _selectedTagIds.toList(),
+      'note': _noteController.text,
+      if (_receipt?.path != null) 'receiptPath': _receipt!.path,
+      if (_receipt?.path != null) 'receiptName': _receipt!.name,
+      if (_receipt?.path != null) 'receiptMimeType': _receipt!.mimeType,
+    });
+  }
+
+  void _editPrivate(VoidCallback change) {
+    setState(change);
+    _sharedPrivateFields();
+  }
+
+  Future<void> _leaveShared() async {
+    if (_saving) return;
+    try {
+      _sharedPrivateFields();
+      await _sharedEditor?.persist();
+      if (mounted) {
+        setState(() => _allowSharedPop = true);
+        Navigator.of(context).pop();
+      }
+    } catch (_) {
+      if (mounted) {
+        setState(
+          () => _sharingError =
+              'Draft could not be saved. Keep this form open to avoid losing changes.',
+        );
+      }
+    }
+  }
+
+  Future<void> _saveShared() async {
+    final editor = _sharedEditor, runtime = _sharedRuntime;
+    if (editor == null || runtime == null || !runtime.isCurrent() || _saving) {
+      return;
+    }
+    setState(() => _saving = true);
+    try {
+      _sharedPrivateFields();
+      if (!editor.canSubmit || !runtime.proposalsEnabled) {
+        await editor.persist();
+        if (mounted) {
+          final messenger = ScaffoldMessenger.of(context);
+          setState(() => _allowSharedPop = true);
+          Navigator.pop(context);
+          messenger.showSnackBar(
+            const SnackBar(
+              content: Text('Shared expense draft saved on this device'),
+            ),
+          );
+        }
+        return;
+      }
+      if (!runtime.proposalsEnabled) throw const SharedRuntimeUnavailable();
+      final command = await editor.seal();
+      await runtime.flushEditor();
+      final queued = runtime.store.operation(command.operationId),
+          receipt = runtime.store.receipt(command.operationId);
+      final result = receipt?.result;
+      final accepted = result is Map && result['status'] == 'accepted';
+      final message = accepted
+          ? 'Shared expense saved'
+          : queued?.state == SharedCommandState.rejected
+          ? 'Expense saved locally but not accepted. Review it in Splits.'
+          : receipt != null
+          ? 'Submitted for review. Balances change after approval.'
+          : 'Saved on this device · waiting to sync';
+      if (mounted) {
+        final messenger = ScaffoldMessenger.of(context);
+        setState(() => _allowSharedPop = true);
+        Navigator.pop(context);
+        messenger.showSnackBar(SnackBar(content: Text(message)));
+      }
+    } catch (_) {
+      if (mounted) {
+        setState(
+          () => _sharingError =
+              'Expense was not submitted. Your draft is kept; check its status before trying again.',
+        );
+      }
+    } finally {
+      if (mounted) setState(() => _saving = false);
+    }
   }
 
   Future<void> _loadLastUsedCard() async {
@@ -607,6 +1026,12 @@ class _QuickAddScreenState extends ConsumerState<QuickAddScreen> {
   }
 
   bool get _canSave {
+    if (_sharing) {
+      return _sharedEditor != null &&
+          !_sharingLoading &&
+          _sharedRuntime?.isCurrent() == true &&
+          _sharedEditor!.persistenceError == null;
+    }
     final amount = double.tryParse(_amountController.text);
     if (amount == null || amount <= 0) return false;
     // A card is required only for a credit-card entry. Cash, a debit swipe,
@@ -679,19 +1104,23 @@ class _QuickAddScreenState extends ConsumerState<QuickAddScreen> {
       selectedId: _selectedCategoryId,
     );
     if (selection != null && mounted) {
-      setState(() => _selectedCategoryId = selection);
+      _editPrivate(() => _selectedCategoryId = selection);
     }
   }
 
   void _selectParentCategory(SpendCategory category) {
-    setState(() => _selectedCategoryId = category.id);
+    _editPrivate(() => _selectedCategoryId = category.id);
   }
 
   void _selectSubcategory(String parentId, String? subcategoryId) {
-    setState(() => _selectedCategoryId = subcategoryId ?? parentId);
+    _editPrivate(() => _selectedCategoryId = subcategoryId ?? parentId);
   }
 
   Future<void> _save() async {
+    if (_sharing) {
+      await _saveShared();
+      return;
+    }
     final amount = double.tryParse(_amountController.text);
     if (amount == null || amount <= 0) {
       setState(() => _amountError = 'Enter an amount greater than ₹0');
@@ -961,7 +1390,8 @@ class _QuickAddScreenState extends ConsumerState<QuickAddScreen> {
     final merchants = _rankedMerchants(history);
     final amount = double.tryParse(_amountController.text);
     final recommendationQuery =
-        _entryKind == TxnEntryKind.spend &&
+        !_sharing &&
+            _entryKind == TxnEntryKind.spend &&
             _instrument == TxnInstrument.creditCard &&
             amount != null &&
             amount > 0
@@ -982,98 +1412,166 @@ class _QuickAddScreenState extends ConsumerState<QuickAddScreen> {
         ? null
         : ref.watch(quickAddRecommendationsProvider(recommendationQuery));
 
-    return Scaffold(
-      backgroundColor: BambooInk.paper,
-      appBar: AppBar(
+    final sharingAvailable = ref.watch(sharedExpensesEnabledProvider);
+    if (_sharing && sharingAvailable) ref.watch(sharedExpensesRuntimeProvider);
+    if (_sharing && _sharedRuntime != null && !_sharedRuntime!.isCurrent()) {
+      return const Scaffold(
+        body: SafeArea(
+          child: Center(
+            child: Text('Account changed. Reopen this expense from Splits.'),
+          ),
+        ),
+      );
+    }
+    return PopScope(
+      canPop: !_sharing || _allowSharedPop,
+      onPopInvokedWithResult: (didPop, _) {
+        if (!didPop) unawaited(_leaveShared());
+      },
+      child: Scaffold(
         backgroundColor: BambooInk.paper,
-        foregroundColor: BambooInk.ink900,
-        surfaceTintColor: Colors.transparent,
-        elevation: 0,
-        title: Text('Add transaction', style: BambooFonts.heading(18)),
-      ),
-      body: AppBackground(
-        child: Align(
-          alignment: Alignment.topCenter,
-          child: ConstrainedBox(
-            constraints: const BoxConstraints(maxWidth: 560),
-            child: Column(
-              children: [
-                Padding(
-                  padding: const EdgeInsets.fromLTRB(20, 4, 20, 0),
-                  child: AddFlowTabs(
-                    selected: _activePage,
-                    onSelected: (page) {
-                      FocusManager.instance.primaryFocus?.unfocus();
-                      setState(() => _activePage = page);
+        appBar: AppBar(
+          backgroundColor: BambooInk.paper,
+          foregroundColor: BambooInk.ink900,
+          surfaceTintColor: Colors.transparent,
+          elevation: 0,
+          title: Text(
+            _sharing ? 'Add shared expense' : 'Add transaction',
+            style: BambooFonts.heading(18),
+          ),
+        ),
+        body: AppBackground(
+          child: Align(
+            alignment: Alignment.topCenter,
+            child: ConstrainedBox(
+              constraints: const BoxConstraints(maxWidth: 560),
+              child: Column(
+                children: [
+                  Padding(
+                    padding: const EdgeInsets.fromLTRB(20, 4, 20, 0),
+                    child: AddFlowTabs(
+                      selected: _activePage,
+                      onSelected: (page) {
+                        FocusManager.instance.primaryFocus?.unfocus();
+                        setState(() => _activePage = page);
+                      },
+                    ),
+                  ),
+                  Expanded(
+                    child: switch (_activePage) {
+                      AddFlowPage.quickAdd => SingleChildScrollView(
+                        padding: const EdgeInsets.fromLTRB(20, 0, 20, 24),
+                        keyboardDismissBehavior:
+                            ScrollViewKeyboardDismissBehavior.onDrag,
+                        child: Column(
+                          crossAxisAlignment: CrossAxisAlignment.stretch,
+                          children: [
+                            _buildAmountHeader(),
+                            if (sharingAvailable &&
+                                !_sharing &&
+                                _entryKind == TxnEntryKind.spend)
+                              Align(
+                                alignment: Alignment.centerLeft,
+                                child: TextButton.icon(
+                                  icon: const Icon(
+                                    Icons.people_outline_rounded,
+                                  ),
+                                  label: const Text('Split with people'),
+                                  onPressed: () {
+                                    setState(() => _sharing = true);
+                                    unawaited(_startSharing());
+                                  },
+                                ),
+                              ),
+                            if (_sharing && _sharedEditor != null)
+                              SharedEditorFields(
+                                editor: _sharedEditor!,
+                                onChooseContext: () =>
+                                    unawaited(_chooseSharedContext()),
+                                onAddMember: _sharedEditor!.contextId == null
+                                    ? null
+                                    : () => unawaited(_addSharedMember()),
+                                loading: _sharingLoading,
+                                error: _sharingError,
+                              ),
+                            if (_sharing && _sharedEditor == null)
+                              Padding(
+                                padding: const EdgeInsets.all(16),
+                                child: _sharingLoading
+                                    ? const LinearProgressIndicator(
+                                        color: BambooInk.slate,
+                                      )
+                                    : TextButton(
+                                        onPressed: _startSharing,
+                                        child: Text(
+                                          _sharingError ?? 'Retry sharing',
+                                        ),
+                                      ),
+                              ),
+                            if (recommendations != null && !_sharing)
+                              _buildSpendRecommendation(
+                                recommendations,
+                                userCards,
+                              ),
+                            CardSummaryPanel(
+                              elevated: false,
+                              padding: const EdgeInsets.all(18),
+                              child: Column(
+                                crossAxisAlignment: CrossAxisAlignment.stretch,
+                                children: [
+                                  _buildMerchantField(merchants),
+                                  const _FormDivider(),
+                                  _buildCategories(categories),
+                                  const _FormDivider(),
+                                  TransactionTagField(
+                                    selectedIds: _selectedTagIds,
+                                    enabled: !_saving,
+                                    onChanged: (ids) => _editPrivate(
+                                      () => _selectedTagIds = ids,
+                                    ),
+                                  ),
+                                ],
+                              ),
+                            ),
+                            const SizedBox(height: 12),
+                            CardSummaryPanel(
+                              elevated: false,
+                              padding: const EdgeInsets.all(18),
+                              child: Column(
+                                crossAxisAlignment: CrossAxisAlignment.stretch,
+                                children: [
+                                  if (!_sharing ||
+                                      _sharedEditor?.someoneElsePaid !=
+                                          true) ...[
+                                    _buildPaymentMethods(userCards),
+                                    const _FormDivider(),
+                                  ],
+                                  _buildDateField(),
+                                ],
+                              ),
+                            ),
+                            const SizedBox(height: 12),
+                            _buildExtras(),
+                          ],
+                        ),
+                      ),
+                      AddFlowPage.scanBill => _buildScanBill(),
+                      AddFlowPage.import => const ImportHubScreen(
+                        embedded: true,
+                      ),
                     },
                   ),
-                ),
-                Expanded(
-                  child: switch (_activePage) {
-                    AddFlowPage.quickAdd => SingleChildScrollView(
-                      padding: const EdgeInsets.fromLTRB(20, 0, 20, 24),
-                      keyboardDismissBehavior:
-                          ScrollViewKeyboardDismissBehavior.onDrag,
-                      child: Column(
-                        crossAxisAlignment: CrossAxisAlignment.stretch,
-                        children: [
-                          _buildAmountHeader(),
-                          if (recommendations != null)
-                            _buildSpendRecommendation(
-                              recommendations,
-                              userCards,
-                            ),
-                          CardSummaryPanel(
-                            elevated: false,
-                            padding: const EdgeInsets.all(18),
-                            child: Column(
-                              crossAxisAlignment: CrossAxisAlignment.stretch,
-                              children: [
-                                _buildMerchantField(merchants),
-                                const _FormDivider(),
-                                _buildCategories(categories),
-                                const _FormDivider(),
-                                TransactionTagField(
-                                  selectedIds: _selectedTagIds,
-                                  enabled: !_saving,
-                                  onChanged: (ids) =>
-                                      setState(() => _selectedTagIds = ids),
-                                ),
-                              ],
-                            ),
-                          ),
-                          const SizedBox(height: 12),
-                          CardSummaryPanel(
-                            elevated: false,
-                            padding: const EdgeInsets.all(18),
-                            child: Column(
-                              crossAxisAlignment: CrossAxisAlignment.stretch,
-                              children: [
-                                _buildPaymentMethods(userCards),
-                                const _FormDivider(),
-                                _buildDateField(),
-                              ],
-                            ),
-                          ),
-                          const SizedBox(height: 12),
-                          _buildExtras(),
-                        ],
-                      ),
-                    ),
-                    AddFlowPage.scanBill => _buildScanBill(),
-                    AddFlowPage.import => const ImportHubScreen(embedded: true),
-                  },
-                ),
-              ],
+                ],
+              ),
             ),
           ),
         ),
+        bottomNavigationBar:
+            _activePage == AddFlowPage.quickAdd ||
+                (_activePage == AddFlowPage.scanBill && _receipt != null)
+            ? _saveBar()
+            : null,
       ),
-      bottomNavigationBar:
-          _activePage == AddFlowPage.quickAdd ||
-              (_activePage == AddFlowPage.scanBill && _receipt != null)
-          ? _saveBar()
-          : null,
     );
   }
 
@@ -1505,7 +2003,11 @@ class _QuickAddScreenState extends ConsumerState<QuickAddScreen> {
               textScaler: MediaQuery.textScalerOf(context),
             )..layout();
             final width = (painter.width + 12)
-                .clamp(110.0, constraints.maxWidth - 62)
+                .clamp(
+                  0.0,
+                  constraints.maxWidth -
+                      42 * MediaQuery.textScalerOf(context).scale(1),
+                )
                 .toDouble();
             painter.dispose();
             return Row(
@@ -1568,52 +2070,53 @@ class _QuickAddScreenState extends ConsumerState<QuickAddScreen> {
             ),
           ),
         const SizedBox(height: 10),
-        LayoutBuilder(
-          builder: (context, constraints) {
-            final compact =
-                constraints.maxWidth < 330 ||
-                MediaQuery.textScalerOf(context).scale(1) > 1.3;
-            final columns = compact ? 2 : 4;
-            final width =
-                (constraints.maxWidth - 8 - (columns - 1) * 4) / columns;
-            return Container(
-              padding: const EdgeInsets.all(4),
-              decoration: BoxDecoration(
-                color: BambooInk.slate.withValues(alpha: 0.045),
-                borderRadius: BorderRadius.circular(14),
-              ),
-              child: Wrap(
-                spacing: 4,
-                runSpacing: 4,
-                children: [
-                  for (final kind in const [
-                    TxnEntryKind.spend,
-                    TxnEntryKind.income,
-                    TxnEntryKind.transfer,
-                    TxnEntryKind.investment,
-                  ])
-                    SizedBox(
-                      width: width,
-                      child: _KindOption(
-                        label: kind == TxnEntryKind.income
-                            ? 'Income'
-                            : kind.label,
-                        selected: _entryKind == kind,
-                        onTap: () => setState(() {
-                          _entryKind = kind;
-                          if (kind != TxnEntryKind.spend &&
-                              _instrument == TxnInstrument.creditCard) {
-                            _instrument = TxnInstrument.upiBank;
-                            _selectedUserCardId = null;
-                          }
-                        }),
+        if (!_sharing)
+          LayoutBuilder(
+            builder: (context, constraints) {
+              final compact =
+                  constraints.maxWidth < 330 ||
+                  MediaQuery.textScalerOf(context).scale(1) > 1.3;
+              final columns = compact ? 2 : 4;
+              final width =
+                  (constraints.maxWidth - 8 - (columns - 1) * 4) / columns;
+              return Container(
+                padding: const EdgeInsets.all(4),
+                decoration: BoxDecoration(
+                  color: BambooInk.slate.withValues(alpha: 0.045),
+                  borderRadius: BorderRadius.circular(14),
+                ),
+                child: Wrap(
+                  spacing: 4,
+                  runSpacing: 4,
+                  children: [
+                    for (final kind in const [
+                      TxnEntryKind.spend,
+                      TxnEntryKind.income,
+                      TxnEntryKind.transfer,
+                      TxnEntryKind.investment,
+                    ])
+                      SizedBox(
+                        width: width,
+                        child: _KindOption(
+                          label: kind == TxnEntryKind.income
+                              ? 'Income'
+                              : kind.label,
+                          selected: _entryKind == kind,
+                          onTap: () => setState(() {
+                            _entryKind = kind;
+                            if (kind != TxnEntryKind.spend &&
+                                _instrument == TxnInstrument.creditCard) {
+                              _instrument = TxnInstrument.upiBank;
+                              _selectedUserCardId = null;
+                            }
+                          }),
+                        ),
                       ),
-                    ),
-                ],
-              ),
-            );
-          },
-        ),
+                  ],
+                ),
+              );
+            },
+          ),
       ],
     ),
   );
@@ -2044,9 +2547,9 @@ class _QuickAddScreenState extends ConsumerState<QuickAddScreen> {
                       : !today && !yesterday,
                   onTap: () async {
                     if (choice == 'Today') {
-                      setState(() => _date = null);
+                      _editPrivate(() => _date = null);
                     } else if (choice == 'Yesterday') {
-                      setState(
+                      _editPrivate(
                         () =>
                             _date = DateTime(now.year, now.month, now.day - 1),
                       );
@@ -2058,7 +2561,7 @@ class _QuickAddScreenState extends ConsumerState<QuickAddScreen> {
                         lastDate: DateTime(now.year + 1),
                       );
                       if (picked != null && mounted) {
-                        setState(() => _date = picked);
+                        _editPrivate(() => _date = picked);
                       }
                     }
                   },
@@ -2144,7 +2647,7 @@ class _QuickAddScreenState extends ConsumerState<QuickAddScreen> {
                         tooltip: 'Remove attachment',
                         onPressed: _saving
                             ? null
-                            : () => setState(() => _receipt = null),
+                            : () => _editPrivate(() => _receipt = null),
                         icon: const Icon(Icons.close_rounded, size: 18),
                       ),
                     ],
@@ -2232,6 +2735,11 @@ class _QuickAddScreenState extends ConsumerState<QuickAddScreen> {
                       child: Text(
                         _saving
                             ? 'Saving…'
+                            : _sharing
+                            ? (_sharedEditor?.canSubmit == true &&
+                                      _sharedRuntime?.proposalsEnabled == true
+                                  ? 'Submit shared expense'
+                                  : 'Save draft')
                             : switch (_entryKind) {
                                 TxnEntryKind.spend => 'Save expense',
                                 TxnEntryKind.income => 'Save income',
@@ -2417,7 +2925,7 @@ class _QuickAddScreenState extends ConsumerState<QuickAddScreen> {
                 TransactionTagField(
                   selectedIds: _selectedTagIds,
                   enabled: !_saving,
-                  onChanged: (ids) => setState(() => _selectedTagIds = ids),
+                  onChanged: (ids) => _editPrivate(() => _selectedTagIds = ids),
                 ),
               ],
             ),
@@ -2485,7 +2993,7 @@ class _QuickAddScreenState extends ConsumerState<QuickAddScreen> {
                       tooltip: 'Remove attachment',
                       onPressed: _saving
                           ? null
-                          : () => setState(() => _receipt = null),
+                          : () => _editPrivate(() => _receipt = null),
                       icon: const Icon(Icons.close_rounded, size: 18),
                     ),
                   ],

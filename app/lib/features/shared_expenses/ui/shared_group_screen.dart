@@ -234,6 +234,11 @@ class SharedExpenseTile extends StatelessWidget {
                     label,
                     style: BambooFonts.ui(12, color: BambooInk.ink700),
                   ),
+                if (row.reviewLabel != null)
+                  Text(
+                    row.reviewLabel!,
+                    style: BambooFonts.ui(12, color: BambooInk.clayInk),
+                  ),
                 if (row.participation == SharedParticipation.paidForOthers)
                   Text(
                     'You paid for others',

@@ -9,16 +9,20 @@ import '../ui/shared_group_screen.dart';
 import '../ui/shared_presentation.dart';
 import 'shared_providers.dart';
 import 'shared_runtime.dart';
+import '../storage/shared_store.dart';
+import 'shared_expense_review.dart';
 
 /// Production-backed screen adapter. App router supplies destinations; this
 /// layer never adds an app dock, invents balances or writes bank transactions.
 class SharedExpensesRoute extends ConsumerStatefulWidget {
   final ValueChanged<String> onOpenContext;
   final VoidCallback onAddExpense;
+  final ValueChanged<String>? onResumeDraft;
   const SharedExpensesRoute({
     super.key,
     required this.onOpenContext,
     required this.onAddExpense,
+    this.onResumeDraft,
   });
   @override
   ConsumerState<SharedExpensesRoute> createState() =>
@@ -104,6 +108,123 @@ class _SharedExpensesRouteState extends ConsumerState<SharedExpensesRoute> {
     }
   }
 
+  Future<void> _drafts(SharedExpensesRuntime runtime) async {
+    final history = <String>[''];
+    final selected = await showModalBottomSheet<String>(
+      context: context,
+      backgroundColor: BambooInk.paper,
+      isScrollControlled: true,
+      builder: (sheet) => StatefulBuilder(
+        builder: (sheet, update) {
+          if (!runtime.isCurrent()) return const SizedBox.shrink();
+          final rows = runtime.store.editorDrafts(
+            after: history.last,
+            includeSubmitted: true,
+          );
+          return SafeArea(
+            child: SizedBox(
+              height: MediaQuery.sizeOf(sheet).height * .7,
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.stretch,
+                children: [
+                  Padding(
+                    padding: const EdgeInsets.all(16),
+                    child: Text(
+                      'Drafts & submissions',
+                      style: BambooFonts.heading(18),
+                    ),
+                  ),
+                  Expanded(
+                    child: ListView(
+                      children: [
+                        for (final row in rows)
+                          ListTile(
+                            leading: Icon(
+                              row.operationId == null
+                                  ? Icons.edit_outlined
+                                  : Icons.schedule_rounded,
+                            ),
+                            title: Text(
+                              (row.value['title'] as String?)
+                                          ?.trim()
+                                          .isNotEmpty ==
+                                      true
+                                  ? row.value['title'] as String
+                                  : 'Untitled expense',
+                              style: BambooFonts.ui(15),
+                            ),
+                            subtitle: Text(
+                              '${row.value['contextName'] ?? 'Choose a group'} · ${_draftStatus(runtime, row)}',
+                              style: BambooFonts.ui(12),
+                            ),
+                            onTap:
+                                row.operationId == null &&
+                                    widget.onResumeDraft != null
+                                ? () => Navigator.pop(sheet, row.id)
+                                : null,
+                          ),
+                        if (rows.isEmpty)
+                          const Padding(
+                            padding: EdgeInsets.all(16),
+                            child: Text('No drafts or submissions yet.'),
+                          ),
+                        if (history.length > 1)
+                          TextButton(
+                            onPressed: () => update(() => history.removeLast()),
+                            child: const Text('Previous page'),
+                          ),
+                        if (rows.length == 50)
+                          TextButton(
+                            onPressed: () =>
+                                update(() => history.add(rows.last.id)),
+                            child: const Text('Next page'),
+                          ),
+                      ],
+                    ),
+                  ),
+                  TextButton.icon(
+                    onPressed: () async {
+                      await runtime.flushEditor();
+                      if (sheet.mounted) update(() {});
+                    },
+                    icon: const Icon(Icons.sync_rounded),
+                    label: const Text('Sync now'),
+                  ),
+                ],
+              ),
+            ),
+          );
+        },
+      ),
+    );
+    if (selected != null && mounted && runtime.isCurrent()) {
+      widget.onResumeDraft?.call(selected);
+    }
+  }
+
+  String _draftStatus(SharedExpensesRuntime runtime, SharedEditorRecord row) {
+    if (row.operationId == null) return 'Saved draft';
+    final operation = runtime.store.operation(row.operationId!),
+        receipt = runtime.store.receipt(row.operationId!);
+    final result = receipt?.result;
+    if (result is Map) {
+      return switch (result['status']) {
+        'accepted' => 'Accepted',
+        'awaiting_approval' => 'Awaiting review',
+        'awaiting_activation' => 'Recorded · balances not active yet',
+        'awaiting_source_authorization' => 'Payment link needs review',
+        _ => 'Submitted',
+      };
+    }
+    return switch (operation?.state) {
+      SharedCommandState.conflict => 'Conflicting edit · needs review',
+      SharedCommandState.rejected => 'Not accepted · needs review',
+      SharedCommandState.awaitingAuth => 'Sign in to sync',
+      SharedCommandState.sending => 'Syncing',
+      _ => 'Saved locally · waiting to sync',
+    };
+  }
+
   @override
   Widget build(BuildContext context) {
     final state = ref.watch(sharedExpensesRuntimeProvider);
@@ -151,6 +272,7 @@ class _SharedExpensesRouteState extends ConsumerState<SharedExpensesRoute> {
               onOpenGroup: widget.onOpenContext,
               onOpenActivity: widget.onOpenContext,
               onAddExpense: widget.onAddExpense,
+              onOpenDrafts: () => unawaited(_drafts(runtime)),
               onCreateGroup: runtime.proposalsEnabled
                   ? () => _create(runtime)
                   : null,
@@ -301,7 +423,20 @@ class _SharedContextRouteState extends ConsumerState<SharedContextRoute> {
                     _reload();
                   }
                 },
-                onOpenExpense: widget.onOpenExpense,
+                onOpenExpense:
+                    widget.onOpenExpense ??
+                    (id) => unawaited(
+                      showModalBottomSheet<void>(
+                        context: context,
+                        isScrollControlled: true,
+                        backgroundColor: BambooInk.paper,
+                        builder: (_) => SharedExpenseReviewSheet(
+                          runtime: runtime,
+                          contextId: widget.contextId,
+                          expenseId: id,
+                        ),
+                      ),
+                    ),
               );
             },
           );

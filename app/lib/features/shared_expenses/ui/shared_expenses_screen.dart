@@ -17,6 +17,7 @@ class SharedExpensesScreen extends StatefulWidget {
   final VoidCallback? onAddExpense;
   final VoidCallback? onAddFriend;
   final VoidCallback? onCreateGroup;
+  final VoidCallback? onOpenDrafts;
   final void Function(SharedHubTab, String)? onSearchChanged;
   final ValueChanged<SharedHubTab>? onRetry;
   final ValueChanged<SharedHubTab>? onLoadMore;
@@ -31,6 +32,7 @@ class SharedExpensesScreen extends StatefulWidget {
     this.onAddExpense,
     this.onAddFriend,
     this.onCreateGroup,
+    this.onOpenDrafts,
     this.onSearchChanged,
     this.onRetry,
     this.onLoadMore,
@@ -120,6 +122,15 @@ class _SharedExpensesScreenState extends State<SharedExpensesScreen>
   }
 
   List<Widget> _header(SharedHubTab tab, {required bool incomplete}) => [
+    if (widget.onOpenDrafts != null)
+      Align(
+        alignment: Alignment.centerLeft,
+        child: SharedTextAction(
+          label: 'Drafts & submissions',
+          icon: Icons.edit_note_rounded,
+          onTap: widget.onOpenDrafts!,
+        ),
+      ),
     if (widget.data.pendingChanges > 0)
       SharedNotice(
         '${widget.data.pendingChanges} changes pending sync or review',

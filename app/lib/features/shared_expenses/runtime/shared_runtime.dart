@@ -10,6 +10,8 @@ import '../data/shared_transport.dart';
 import '../storage/shared_store.dart';
 import '../sync/shared_sync.dart';
 import '../ui/shared_presentation.dart';
+import '../composer/shared_editor.dart';
+import 'shared_expense_mapping.dart';
 
 class SharedRuntimeUnavailable implements Exception {
   const SharedRuntimeUnavailable();
@@ -219,6 +221,94 @@ class SharedExpensesRuntime extends ChangeNotifier {
     'contexts:${after ?? 'first'}',
     () => remote.fetchContexts(after: after, limit: 50),
   );
+
+  Future<({String name, String ownMemberId, List<SharedEditorMember> members})>
+  editorContext(String id) async {
+    final before = await context(id);
+    final roster = <SharedEditorMember>[];
+    String? after, own;
+    for (var page = 0; page < 2; page++) {
+      final result = await members(id, after: after);
+      for (final raw in result['items'] as List) {
+        final row = raw as Map;
+        if (!['active', 'invited'].contains(row['state'])) continue;
+        if (row['profileId'] == accountId && row['state'] == 'active') {
+          own = row['memberId'] as String;
+        }
+        roster.add(
+          SharedEditorMember(
+            row['memberId'] as String,
+            row['profileId'] == accountId
+                ? 'You'
+                : row['displayName'] as String? ?? 'Member',
+          ),
+        );
+      }
+      if (result['hasMore'] != true) {
+        after = null;
+        break;
+      }
+      final cursor = result['nextCursor'] as String?;
+      if (cursor == null || cursor == after) {
+        throw const SharedRuntimeUnavailable();
+      }
+      after = cursor;
+    }
+    final current = await context(id);
+    if (after != null ||
+        own == null ||
+        current['state'] != 'active' ||
+        before['committedSequence'] != current['committedSequence']) {
+      throw const SharedRuntimeUnavailable();
+    }
+    _current();
+    return (
+      name: current['name'] as String,
+      ownMemberId: own,
+      members: List<SharedEditorMember>.unmodifiable(roster),
+    );
+  }
+
+  Future<void> flushEditor() async {
+    _current();
+    syncLag = true;
+    _notify();
+    await refresh();
+  }
+
+  String expenseResponseId(
+    String contextId,
+    String expenseId,
+    String revisionId,
+  ) => const Uuid().v5(
+    Namespace.url.value,
+    'pandapay:expense-review:v1:$accountId:$contextId:$expenseId:$revisionId',
+  );
+  Future<String> respondToExpense(
+    String contextId,
+    String expenseId,
+    String revisionId,
+    String decision,
+  ) async {
+    _current();
+    if (!proposalsEnabled || !{'approve', 'reject'}.contains(decision)) {
+      throw const SharedRuntimeUnavailable();
+    }
+    final command = SharedCommand(
+      operationId: expenseResponseId(contextId, expenseId, revisionId),
+      kind: 'expense.respond',
+      payload: {
+        'contextId': contextId,
+        'expenseId': expenseId,
+        'revisionId': revisionId,
+        'decision': decision,
+      },
+    );
+    await store.enqueue(command);
+    await flushEditor();
+    return command.operationId;
+  }
+
   Future<Map<String, Object?>> context(String id) => _query(
     'context:$id:detail',
     () => remote.fetchContext(id),
@@ -248,6 +338,47 @@ class SharedExpensesRuntime extends ChangeNotifier {
   }) => _query(
     'context:$id:revision:$expenseId:${after ?? 'first'}',
     () => remote.fetchExpenseRevisions(id, expenseId, after: after, limit: 50),
+    contextId: id,
+  );
+  Future<Map<String, Object?>> expenseReviewPage(
+    String contextId,
+    String expenseId, {
+    String? after,
+  }) async {
+    final before = await context(contextId);
+    final names = <String, String>{};
+    String? cursor;
+    for (var page = 0; page < 2; page++) {
+      final roster = await members(contextId, after: cursor);
+      for (final raw in roster['items'] as List) {
+        final member = raw as Map;
+        names[member['memberId'] as String] = member['profileId'] == accountId
+            ? 'You'
+            : member['displayName'] as String? ?? 'Member';
+      }
+      if (roster['hasMore'] != true) {
+        cursor = null;
+        break;
+      }
+      final next = roster['nextCursor'] as String?;
+      if (next == null || next == cursor) {
+        throw const SharedRuntimeUnavailable();
+      }
+      cursor = next;
+    }
+    if (cursor != null) throw const SharedRuntimeUnavailable();
+    final page = await revisions(contextId, expenseId, after: after);
+    final current = await context(contextId);
+    if (before['committedSequence'] != current['committedSequence']) {
+      throw const SharedRuntimeUnavailable();
+    }
+    _current();
+    return {...page, 'memberNames': Map<String, String>.unmodifiable(names)};
+  }
+
+  Future<Map<String, Object?>> expense(String id, String expenseId) => _query(
+    'context:$id:expense:$expenseId',
+    () => remote.fetchExpense(id, expenseId),
     contextId: id,
   );
   Future<Map<String, Object?>> activity(String id, {String? after}) => _query(
@@ -283,34 +414,8 @@ class SharedExpensesRuntime extends ChangeNotifier {
     final expenseRows = <SharedExpenseRow>[];
     for (final raw in expensePage['items'] as List) {
       final row = Map<String, Object?>.from(raw as Map);
-      // Awaiting revision rows have no accepted financial amounts. Their review
-      // flow is separate; never fabricate a zero bill or accepted personal cost.
-      if (row['totalMinor'] == null || row['void'] == true) continue;
-      final paid = sharedMoneyFromMinor(row['yourPaidMinor']),
-          share = sharedMoneyFromMinor(row['yourShareMinor']);
-      expenseRows.add(
-        SharedExpenseRow(
-          id: row['expenseId'] as String,
-          title: row['title'] as String,
-          paidBy: paid.paise == sharedMoneyFromMinor(row['totalMinor']).paise
-              ? 'You'
-              : !paid.isZero
-              ? 'You and others'
-              : 'Other members',
-          payerLabel: 'Shared amount paid by',
-          totalLabel: 'Shared total',
-          paidLabel: 'Your shared contribution',
-          billTotal: sharedMoneyFromMinor(row['totalMinor']),
-          yourPaid: paid,
-          yourShare: share,
-          occurredAtLabel: row['occurredOn'] as String?,
-          participation: paid.isZero && share.isZero
-              ? SharedParticipation.notIncluded
-              : !paid.isZero && share.isZero
-              ? SharedParticipation.paidForOthers
-              : SharedParticipation.included,
-        ),
-      );
+      final expense = mapSharedExpenseRecord(row, own);
+      if (expense != null) expenseRows.add(expense);
     }
     final balanceRows = <SharedContextRow>[];
     for (final raw in balancePage['items'] as List) {

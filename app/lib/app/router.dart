@@ -835,6 +835,9 @@ final goRouterProvider = Provider<GoRouter>((ref) {
                 : Money.fromRupees(request!.amount!),
             initialMerchant: request?.merchant,
             initialCategoryName: request?.category,
+            sharedExpense: state.uri.queryParameters['shared'] == 'true',
+            sharedContextId: state.uri.queryParameters['contextId'],
+            sharedDraftId: state.uri.queryParameters['draftId'],
           );
         },
       ),
@@ -863,10 +866,15 @@ final goRouterProvider = Provider<GoRouter>((ref) {
       ),
       GoRoute(
         path: AppRoute.subscriptions,
-        redirect: (context,state) => state.uri.replace(
-          path:AppRoute.paymentsGroup,
-          queryParameters:{...state.uri.queryParameters,'tab':'subscriptions'},
-        ).toString(),
+        redirect: (context, state) => state.uri
+            .replace(
+              path: AppRoute.paymentsGroup,
+              queryParameters: {
+                ...state.uri.queryParameters,
+                'tab': 'subscriptions',
+              },
+            )
+            .toString(),
       ),
 
       // Grouped insights. The tab bodies are the ORIGINAL screens — each was
@@ -893,20 +901,36 @@ final goRouterProvider = Provider<GoRouter>((ref) {
       ),
       GoRoute(
         path: AppRoute.paymentsGroup,
-        builder: (context, state) => PaymentsInsightScreen(initialTab:state.uri.queryParameters['tab']),
+        builder: (context, state) =>
+            PaymentsInsightScreen(initialTab: state.uri.queryParameters['tab']),
       ),
       GoRoute(
         path: AppRoute.splits,
         builder: (context, state) => SharedExpensesRoute(
           onOpenContext: (id) => context.push('${AppRoute.splits}/$id'),
-          onAddExpense: () => context.push(AppRoute.assistantAddSpend),
+          onAddExpense: () =>
+              context.push('${AppRoute.assistantAddSpend}?shared=true'),
+          onResumeDraft: (id) => context.push(
+            Uri(
+              path: AppRoute.assistantAddSpend,
+              queryParameters: {'shared': 'true', 'draftId': id},
+            ).toString(),
+          ),
         ),
       ),
       GoRoute(
         path: AppRoute.splitContext,
         builder: (context, state) => SharedContextRoute(
           contextId: state.pathParameters['contextId']!,
-          onAddExpense: () => context.push(AppRoute.assistantAddSpend),
+          onAddExpense: () => context.push(
+            Uri(
+              path: AppRoute.assistantAddSpend,
+              queryParameters: {
+                'shared': 'true',
+                'contextId': state.pathParameters['contextId']!,
+              },
+            ).toString(),
+          ),
         ),
       ),
       GoRoute(
