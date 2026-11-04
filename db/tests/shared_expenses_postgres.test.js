@@ -54,6 +54,7 @@ test('real PostgreSQL: forced RLS, source eligibility, replay and fail-closed wr
     try { await db.query(statement); } catch (error) { error.message += ` [migration statement ${index}]`; throw error; }
   }
   await db.query(fs.readFileSync(path.resolve(__dirname,'../supabase/migrations/20261112213000_shared_expense_totals.sql'),'utf8'));
+  await db.query(fs.readFileSync(path.resolve(__dirname,'../supabase/migrations/20261112220000_shared_expense_bill_metadata.sql'),'utf8'));
   // Replay the pre-existing role setup's broad grants. A new isolated schema
   // must retain its ACL even when public and pandapay grants are restored.
   await db.query('GRANT USAGE ON SCHEMA public,pandapay TO app_user; GRANT SELECT,INSERT,UPDATE,DELETE ON ALL TABLES IN SCHEMA public TO app_user; GRANT EXECUTE ON ALL FUNCTIONS IN SCHEMA pandapay TO app_user');
@@ -325,4 +326,45 @@ test('real PostgreSQL: forced RLS, source eligibility, replay and fail-closed wr
     assert.ok(!JSON.stringify(records).includes('source_links'));
     assert.ok(!JSON.stringify(records).includes('private_snapshot'));
   });
+  await t.test('full bill and split mode are immutable consent data with exact independent sums',async()=>{
+    const {executeCommand}=requireApi('./src/shared_expenses/commands');
+    const mine=(await db.query('SELECT member_id FROM shared_expenses.members WHERE context_id=$1 AND profile_id=$2',[ctx,a])).rows[0].member_id;
+    const payload={contextId:ctx,expenseId:crypto.randomUUID(),revisionId:crypto.randomUUID(),expectedHeadRevisionId:null,
+      title:'Partial shared bill',occurredOn:'2026-11-04',void:false,sources:[],
+      snapshot:{currency:'INR',totalMinor:'120000',contributions:[{memberId:mine,amountMinor:'120000'}],shares:[{memberId:mine,amountMinor:'120000'}],memberOrder:[mine]},
+      bill:{currency:'INR',totalMinor:'140000',contributions:[{memberId:mine,amountMinor:'140000'}],allocation:{mode:'equal',participants:[{memberId:mine}],tieOrder:[mine]}}};
+    await actor(a,()=>executeCommand(db,{schemaVersion:1,operationId:crypto.randomUUID(),kind:'expense.propose',payload}));
+    const saved=await actor(a,()=>db.query('SELECT total_minor::text,bill,revision_hash FROM shared_expenses.expense_revisions WHERE revision_id=$1',[payload.revisionId]));
+    assert.equal(saved.rows[0].total_minor,'120000');assert.deepEqual(saved.rows[0].bill,payload.bill);
+    const hash=(await db.query("SELECT encode(sha256(convert_to($1::jsonb::text,'UTF8')),'hex') hash",[JSON.stringify(payload)])).rows[0].hash;
+    assert.equal(saved.rows[0].revision_hash,hash);
+    await assert.rejects(actor(a,()=>db.query('UPDATE shared_expenses.expense_revisions SET bill=NULL WHERE revision_id=$1',[payload.revisionId])),/permission denied/);
+    await db.query('SAVEPOINT immutable_bill');
+    await assert.rejects(db.query('UPDATE shared_expenses.expense_revisions SET bill=NULL WHERE revision_id=$1',[payload.revisionId]),/immutable/);
+    await db.query('ROLLBACK TO immutable_bill');
+    for(const change of [
+      {totalMinor:'110000'},
+      {contributions:[{memberId:mine,amountMinor:'139999'}]},
+      {allocation:{mode:'exact',participants:[{memberId:mine,amountMinor:'119999'}],tieOrder:[mine]}},
+      {allocation:{mode:'percentage',participants:[{memberId:mine,weight:'9999'}],tieOrder:[mine]}},
+      {allocation:{mode:'shares',participants:[{memberId:mine,weight:'0'}],tieOrder:[mine]}},
+    ]) {
+      const invalid={...payload,expenseId:crypto.randomUUID(),revisionId:crypto.randomUUID(),bill:{...payload.bill,...change}};
+      await assert.rejects(actor(a,()=>db.query('SELECT shared_expenses.submit_proposal($1::jsonb,$2::uuid,$3)',[JSON.stringify(invalid),crypto.randomUUID(),'e'.repeat(64)])),/invalid_bill/);
+    }
+    const {allocateExpense}=requireApi('./src/shared_expenses/domain');
+    const ids=[mine,crypto.randomUUID(),crypto.randomUUID()];
+    for(const [mode,total,weights] of [['equal','1',[]],['equal','100',[]],['percentage','1000000000',['3334','3333','3333']],['shares','999999999',['0','1000000','1']],['exact','100',['0','33','67']]]) {
+      const participants=ids.map((memberId,index)=>({memberId,...(mode==='equal'?{}:{[mode==='exact'?'amountMinor':'weight']:weights[index]})}));
+      const allocation={mode,participants,tieOrder:ids};
+      const financial={currency:'INR',totalMinor:total,contributions:[{memberId:mine,amountMinor:total}],shares:allocateExpense({currency:'INR',totalMinor:total,...allocation}).allocations,memberOrder:ids};
+      const full={currency:'INR',totalMinor:total,contributions:financial.contributions,allocation};
+      await db.query('SELECT shared_expenses._validate_bill($1::jsonb,$2::jsonb)',[JSON.stringify(full),JSON.stringify(financial)]);
+    }
+    const legacy=(await db.query('SELECT bill FROM shared_expenses.expense_revisions WHERE revision_id<>$1 LIMIT 1',[payload.revisionId])).rows[0];
+    assert.equal(legacy.bill,null);
+    const outsider='10000000-0000-0000-0000-000000000099';
+    assert.equal((await actor(outsider,()=>db.query('SELECT bill FROM shared_expenses.expense_revisions WHERE revision_id=$1',[payload.revisionId]))).rowCount,0);
+  });
+
 });

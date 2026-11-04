@@ -2,6 +2,7 @@
 const v=require('./validation');
 const {canonicalJson,commandHash}=require('./canonical');
 const {projectExpense}=require('./domain');
+const {validateBill}=require('./bill');
 const {parseSharedExpenseSourceReference}=require('./source_reference');
 const UUID=/^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/;
 function uuid(value,field) {if(!v.matches(UUID,value))v.fail('INVALID_INPUT',field);return value;}
@@ -18,12 +19,16 @@ function validateSnapshot(snapshot) {
   for(const [i,id] of snapshot.memberOrder.entries())uuid(id,`payload.snapshot.memberOrder[${i}]`);
 }
 function proposal(p) {
-  v.record(p,['contextId','expenseId','revisionId','expectedHeadRevisionId','snapshot','title','occurredOn','sources','void'],'payload');
+  v.record(p,['contextId','expenseId','revisionId','expectedHeadRevisionId','snapshot','title','occurredOn','sources','void'],'payload','INVALID_INPUT',['bill']);
   uuid(p.expenseId,'payload.expenseId');uuid(p.revisionId,'payload.revisionId');
   if(p.expectedHeadRevisionId!==null)uuid(p.expectedHeadRevisionId,'payload.expectedHeadRevisionId');
   text(p.title,'payload.title',200);day(p.occurredOn,'payload.occurredOn');
   if(typeof p.void!=='boolean'||(p.void?p.snapshot!==null:p.snapshot===null))v.fail('INVALID_INPUT','payload.snapshot');
   if(!p.void)validateSnapshot(p.snapshot);
+  if(Object.hasOwn(p,'bill')) {
+    if(p.void)v.fail('INVALID_INPUT','payload.bill');
+    validateBill(p.bill,p.snapshot);
+  }
   if(!Array.isArray(p.sources)||p.sources.length>8||(p.void&&p.sources.length))v.fail('INVALID_INPUT','payload.sources');
   const sources=new Map(),paid=new Map((p.snapshot?.contributions??[]).map(row=>[row.memberId,BigInt(row.amountMinor)]));
   for(const [i,row] of p.sources.entries()) {

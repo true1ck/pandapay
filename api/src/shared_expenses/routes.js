@@ -11,7 +11,7 @@ const SQL_ERRORS=new Map([
   ['authentication_required',401],['feature_disabled',503],
   ...['context_not_authorized','member_not_authorized','membership_not_authorized','revision_not_authorized','source_not_authorized','receiver_confirmation_required','settlement_member_not_authorized'].map(code=>[code,403]),
   ...['operation_conflict','operation_already_finished','approval_conflict','membership_conflict','revision_head_conflict','context_not_active','settlement_terminal_conflict','source_version_mismatch','source_explicit_review_required','source_not_eligible'].map(code=>[code,409]),
-  ...['invalid_context','invalid_invitation','invalid_member_order','invalid_operation','invalid_pair','invalid_proposal','invalid_response','invalid_settlement_response','invalid_settlement','invalid_snapshot','invalid_source_link','invalid_source_reference','invalid_void','snapshot_total_mismatch','context_member_limit','aggregate_limit_exceeded','source_overallocated'].map(code=>[code,400]),
+  ...['invalid_bill','invalid_context','invalid_invitation','invalid_member_order','invalid_operation','invalid_pair','invalid_proposal','invalid_response','invalid_settlement_response','invalid_settlement','invalid_snapshot','invalid_source_link','invalid_source_reference','invalid_void','snapshot_total_mismatch','context_member_limit','aggregate_limit_exceeded','source_overallocated'].map(code=>[code,400]),
 ]);
 function sendError(res,error) {
   if(error instanceof SharedExpenseError) {

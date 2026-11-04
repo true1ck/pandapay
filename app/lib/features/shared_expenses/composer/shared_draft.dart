@@ -36,6 +36,7 @@ class SharedDraftPreview {
       yourBalance;
   final Map<String, Money> shares;
   final Map<String, Object?> financialSnapshot;
+  final Map<String, Object?> billMetadata;
   SharedDraftPreview({
     required this.billTotal,
     required this.sharedTotal,
@@ -47,8 +48,10 @@ class SharedDraftPreview {
     required this.yourBalance,
     required Map<String, Money> shares,
     required Map<String, Object?> financialSnapshot,
+    required Map<String, Object?> billMetadata,
   }) : shares = Map.unmodifiable(shares),
-       financialSnapshot = Map.unmodifiable(financialSnapshot);
+       financialSnapshot = Map.unmodifiable(financialSnapshot),
+       billMetadata = Map.unmodifiable(billMetadata);
 }
 
 class SharedDraftEvaluation {
@@ -196,7 +199,7 @@ class SharedExpenseDraft {
       blockers.add(SharedDraftBlocker.unconfirmedValuation);
     }
     final allocationInputs = <Map<String, String>>[];
-    for (final id in participants) {
+    for (final id in memberOrder.where(participants.contains)) {
       final row = <String, String>{'memberId': id};
       if (mode == SharedSplitMode.exact) {
         final parsed = amount(splitInputs[id] ?? '', 'split:$id');
@@ -277,6 +280,28 @@ class SharedExpenseDraft {
           yourBalance: Money.fromPaise(ownShared - share.paise),
           shares: shares,
           financialSnapshot: snapshot,
+          billMetadata: {
+            'currency': 'INR',
+            'totalMinor': '$bill',
+            'contributions': List.unmodifiable([
+              for (final id in memberOrder)
+                if ((fullPaid[id] ?? 0) > 0)
+                  Map<String, String>.unmodifiable({
+                    'memberId': id,
+                    'amountMinor': '${fullPaid[id]}',
+                  }),
+            ]),
+            'allocation': Map<String, Object?>.unmodifiable({
+              'mode': mode.name,
+              'participants': List.unmodifiable([
+                for (final input in allocationInputs)
+                  Map<String, String>.unmodifiable(input),
+              ]),
+              'tieOrder': List.unmodifiable(
+                memberOrder.where(selected.contains),
+              ),
+            }),
+          },
         ),
       );
     } on SharedExpenseException {

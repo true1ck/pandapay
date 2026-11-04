@@ -93,14 +93,14 @@ async function listContextExpenses(client,actorId,contextId,query={}) {
   const request=pageRequest(query),scope=scopeFor(actorId,'expenses',contextId),after=cursorUuid(request,scope);
   await authorizeContext(client,contextId);
   const {rows}=await client.query(`SELECT e.expense_id,e.created_by,e.accepted_revision_id,e.head_version::text,
-      r.title,r.occurred_on::text,r.currency,r.total_minor::text,r.is_void,r.revision_hash,r.projection_version,
+      r.title,r.occurred_on::text,r.currency,r.total_minor::text,r.is_void,r.revision_hash,r.projection_version,r.bill,
       coalesce(own.paid_minor,0)::text your_paid_minor,coalesce(own.share_minor,0)::text your_share_minor
     FROM shared_expenses.expenses e LEFT JOIN shared_expenses.expense_revisions r
       ON r.context_id=e.context_id AND r.expense_id=e.expense_id AND r.revision_id=e.accepted_revision_id
     LEFT JOIN shared_expenses.revision_members own ON own.context_id=e.context_id AND own.revision_id=e.accepted_revision_id AND own.approver_profile_id=$4::uuid
     WHERE e.context_id=$1::uuid AND ($2::uuid IS NULL OR e.expense_id>$2::uuid)
     ORDER BY e.expense_id LIMIT $3::int`,[contextId,after,request.limit+1,actorId]);
-  return page(scope,request,rows,row=>[row.expense_id],row=>({contextId,expenseId:row.expense_id,createdBy:row.created_by,acceptedRevisionId:row.accepted_revision_id,headVersion:row.head_version,title:row.title??null,occurredOn:row.occurred_on??null,currency:row.currency??'INR',totalMinor:row.total_minor??null,void:row.is_void??false,revisionHash:row.revision_hash??null,projectionVersion:row.projection_version??null,yourPaidMinor:row.your_paid_minor??'0',yourShareMinor:row.your_share_minor??'0'}));
+  return page(scope,request,rows,row=>[row.expense_id],row=>({contextId,expenseId:row.expense_id,createdBy:row.created_by,acceptedRevisionId:row.accepted_revision_id,headVersion:row.head_version,title:row.title??null,occurredOn:row.occurred_on??null,currency:row.currency??'INR',totalMinor:row.total_minor??null,void:row.is_void??false,revisionHash:row.revision_hash??null,projectionVersion:row.projection_version??null,yourPaidMinor:row.your_paid_minor??'0',yourShareMinor:row.your_share_minor??'0',bill:row.bill??null}));
 }
 async function readBalances(client,actorId,contextId,query={}) {
   const request=pageRequest(query),scope=scopeFor(actorId,'pairs',contextId);
@@ -156,13 +156,13 @@ async function listExpenseRevisions(client,actorId,contextId,expenseId,query={})
   const request=pageRequest(query),scope={...scopeFor(actorId,'revisions',contextId),expenseId};
   const [beforeDate,beforeId]=dateCursor(request,scope);
   await authorizeContext(client,contextId);
-  const {rows}=await client.query(`SELECT revision_id,author_profile_id,expected_head_revision_id,revision_hash,projection_version,title,occurred_on::text,currency,total_minor::text,is_void,snapshot,projected_edges,created_at,
+  const {rows}=await client.query(`SELECT revision_id,author_profile_id,expected_head_revision_id,revision_hash,projection_version,title,occurred_on::text,currency,total_minor::text,is_void,snapshot,projected_edges,bill,created_at,
       to_char(created_at AT TIME ZONE 'UTC','YYYY-MM-DD"T"HH24:MI:SS.US"Z"') AS created_at_key
     FROM shared_expenses.expense_revisions
     WHERE context_id=$1::uuid AND expense_id=$2::uuid
       AND ($3::timestamptz IS NULL OR (created_at,revision_id)<($3::timestamptz,$4::uuid))
     ORDER BY created_at DESC,revision_id DESC LIMIT $5::int`,[contextId,expenseId,beforeDate,beforeId,request.limit+1]);
-  return page(scope,request,rows,row=>[row.created_at_key??timestamp(row.created_at),row.revision_id],row=>({contextId,expenseId,revisionId:row.revision_id,authorProfileId:row.author_profile_id,expectedHeadRevisionId:row.expected_head_revision_id,revisionHash:row.revision_hash,projectionVersion:row.projection_version,title:row.title,occurredOn:row.occurred_on,currency:row.currency,totalMinor:row.total_minor,void:row.is_void,snapshot:row.snapshot,projectedEdges:row.projected_edges,createdAt:row.created_at_key??timestamp(row.created_at)}));
+  return page(scope,request,rows,row=>[row.created_at_key??timestamp(row.created_at),row.revision_id],row=>({contextId,expenseId,revisionId:row.revision_id,authorProfileId:row.author_profile_id,expectedHeadRevisionId:row.expected_head_revision_id,revisionHash:row.revision_hash,projectionVersion:row.projection_version,title:row.title,occurredOn:row.occurred_on,currency:row.currency,totalMinor:row.total_minor,void:row.is_void,snapshot:row.snapshot,bill:row.bill??null,projectedEdges:row.projected_edges,createdAt:row.created_at_key??timestamp(row.created_at)}));
 }
 async function listSettlementReports(client,actorId,contextId,query={}) {
   const request=pageRequest(query),scope=scopeFor(actorId,'settlements',contextId),after=cursorUuid(request,scope);
@@ -206,7 +206,7 @@ const PROJECTION_FEED_SQL=`WITH selected_events AS MATERIALIZED (
   UNION ALL
   SELECT p.profile_sequence,'20_expense:'||e.expense_id::text,'expenses',e.expense_id::text,p.context_id,p.revision,
     jsonb_build_object('recordType','head','contextId',p.context_id,'expenseId',e.expense_id,'createdBy',e.created_by,'acceptedRevisionId',e.accepted_revision_id,'headVersion',e.head_version::text,
-      'accepted',CASE WHEN r.revision_id IS NULL THEN NULL ELSE jsonb_build_object('revisionId',r.revision_id,'title',r.title,'occurredOn',r.occurred_on,'currency',r.currency,'totalMinor',r.total_minor::text,'void',r.is_void,'snapshot',r.snapshot,'projectionVersion',r.projection_version) END),false,NULL::text
+      'accepted',CASE WHEN r.revision_id IS NULL THEN NULL ELSE jsonb_build_object('revisionId',r.revision_id,'title',r.title,'occurredOn',r.occurred_on,'currency',r.currency,'totalMinor',r.total_minor::text,'void',r.is_void,'snapshot',r.snapshot,'bill',r.bill,'projectionVersion',r.projection_version) END),false,NULL::text
   FROM visible p CROSS JOIN LATERAL (
     SELECT expense_id,created_by,accepted_revision_id,head_version FROM shared_expenses.expenses
     WHERE context_id=p.context_id AND (p.full_grant OR expense_id=(p.event_payload->>'expenseId')::uuid)
@@ -216,9 +216,9 @@ const PROJECTION_FEED_SQL=`WITH selected_events AS MATERIALIZED (
   WHERE p.readable
   UNION ALL
   SELECT p.profile_sequence,'21_revision:'||r.revision_id::text,'expenses',r.expense_id::text||':'||r.revision_id::text,p.context_id,p.revision,
-    jsonb_build_object('recordType','revision','contextId',p.context_id,'expenseId',r.expense_id,'revisionId',r.revision_id,'authorProfileId',r.author_profile_id,'expectedHeadRevisionId',r.expected_head_revision_id,'revisionHash',r.revision_hash,'projectionVersion',r.projection_version,'title',r.title,'occurredOn',r.occurred_on,'currency',r.currency,'totalMinor',r.total_minor::text,'void',r.is_void,'snapshot',r.snapshot,'projectedEdges',r.projected_edges),false,NULL::text
+    jsonb_build_object('recordType','revision','contextId',p.context_id,'expenseId',r.expense_id,'revisionId',r.revision_id,'authorProfileId',r.author_profile_id,'expectedHeadRevisionId',r.expected_head_revision_id,'revisionHash',r.revision_hash,'projectionVersion',r.projection_version,'title',r.title,'occurredOn',r.occurred_on,'currency',r.currency,'totalMinor',r.total_minor::text,'void',r.is_void,'snapshot',r.snapshot,'bill',r.bill,'projectedEdges',r.projected_edges),false,NULL::text
   FROM visible p CROSS JOIN LATERAL (
-    SELECT revision_id,expense_id,author_profile_id,expected_head_revision_id,revision_hash,projection_version,title,occurred_on,currency,total_minor,is_void,snapshot,projected_edges
+    SELECT revision_id,expense_id,author_profile_id,expected_head_revision_id,revision_hash,projection_version,title,occurred_on,currency,total_minor,is_void,snapshot,projected_edges,bill
     FROM shared_expenses.expense_revisions WHERE context_id=p.context_id AND revision_id=p.origin_id
       AND (p.profile_sequence>$2::bigint OR $5::int<21 OR ($5::int=21 AND revision_id>$6::uuid))
     ORDER BY revision_id LIMIT $4::int

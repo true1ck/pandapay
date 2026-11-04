@@ -35,6 +35,25 @@ SharedExpenseDraft draft({
   confirmedValuation: confirmedValuation,
 );
 void main() {
+  test(
+    'proposal metadata preserves full bill payers and allocation inputs',
+    () {
+      final value = draft(bill: '1400', shared: '1200').evaluate().preview!;
+      expect(value.billMetadata['totalMinor'], '140000');
+      expect((value.billMetadata['contributions'] as List).single, {
+        'memberId': me,
+        'amountMinor': '140000',
+      });
+      final allocation = value.billMetadata['allocation'] as Map;
+      expect(allocation['mode'], 'equal');
+      expect(allocation['tieOrder'], [me, rahul, priya]);
+      expect(() => allocation['mode'] = 'exact', throwsUnsupportedError);
+      expect(
+        () => (allocation['participants'] as List).clear(),
+        throwsUnsupportedError,
+      );
+    },
+  );
   test('persisted remainder order is detached from mutable roster input', () {
     final order = [me, rahul, priya];
     final value = SharedExpenseDraft(
@@ -92,6 +111,7 @@ void main() {
       expect(a.preview!.shares[me]!.paise, 3334);
       expect(a.preview!.shares[rahul]!.paise, 3333);
       expect(a.preview!.financialSnapshot, b.preview!.financialSnapshot);
+      expect(a.preview!.billMetadata, b.preview!.billMetadata);
     },
   );
   test(
