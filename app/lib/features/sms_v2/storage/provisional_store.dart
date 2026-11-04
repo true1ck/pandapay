@@ -34,6 +34,12 @@ class ProvisionalStore {
             rule.senders.single != origin.senderBrand) {
           continue;
         }
+        // These rules are not covered by the bundle signature, so the engine's
+        // regex dialect (no backtracking blow-up, 2,000 characters) is checked
+        // here before the pattern can reach the matcher.
+        if (lintRegexDialect(rule.match.pattern, rule.match.flags).isNotEmpty) {
+          continue;
+        }
         if (shared.rules.any((installed) => installed.id == rule.id)) continue;
         final sender = normalizeSenderBrand(
           origin.senderBrand,
