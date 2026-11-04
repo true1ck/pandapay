@@ -9,8 +9,10 @@
 // pandapay.sms_v2_release_metrics, an aggregate-only security-definer function,
 // because the v2 event, fact and rate tables are owner-scoped.
 //
-// Signals the server cannot see are reported as {available:false, reason} and
-// are never guessed: sync errors and migration failures happen on the phone.
+// Sync errors and migration failures happen on the phone. They come from the
+// aggregate counters the app uploads (client_metrics_route.js, read through
+// pandapay.sms_v2_client_metrics_report). Until a phone has reported, they stay
+// {available:false, reason}: a missing signal is never guessed and never read as zero.
 
 const { cohortFor } = require('./bundle_builder');
 
@@ -44,6 +46,28 @@ function judge(value, max) {
 }
 
 const unavailable = (reason) => ({ available: false, reason });
+
+const SYNC_ERROR_REASONS = ['network', 'timeout', 'server', 'storage', 'data', 'other'];
+
+// Sync error rate: errored sync runs over sync runs. Both counts are phone-reported.
+function syncErrorSignal(totals) {
+  const attempts = num(totals.sync_attempts);
+  const byReason = Object.fromEntries(SYNC_ERROR_REASONS.map((reason) => [reason, num(totals[`sync_errors_${reason}`])]));
+  const errors = Object.values(byReason).reduce((sum, n) => sum + n, 0);
+  if (attempts === 0) return unavailable('No phone has reported sync attempts in this window yet (consented, v2 builds only).');
+  return { available: true, source: 'client_metrics', value: ratio(errors, attempts), attempts, errors, byReason };
+}
+
+// Migration failure rate: failed over finished runs (completed + failed). A run that
+// is still going, or was interrupted and resumed, is not yet an outcome.
+function migrationFailureSignal(totals) {
+  const started = num(totals.migration_started);
+  const completed = num(totals.migration_completed);
+  const failed = num(totals.migration_failed);
+  const finished = completed + failed;
+  if (finished === 0) return unavailable('No phone has reported a finished history migration in this window yet.');
+  return { available: true, source: 'client_metrics', value: ratio(failed, finished), started, completed, failed };
+}
 
 async function aiRows(client) {
   const result = await client.query(
@@ -139,6 +163,7 @@ async function collectMetrics(client, { days = DEFAULT_DAYS, now = new Date() } 
     `SELECT cohort,bundle_version,key_id,created_at,golden_report->'counts' AS golden_counts
        FROM sms_v2_bundles WHERE status='active' ORDER BY cohort`,
   );
+  const clientReport = await client.query('SELECT pandapay.sms_v2_client_metrics_report($1) AS r', [iso]);
   const rolledBack = await client.query("SELECT count(*)::int AS n FROM sms_v2_bundles WHERE status='rolled_back' AND created_at >= $1", [iso]);
 
   const m = core.rows[0].m || {};
@@ -153,12 +178,16 @@ async function collectMetrics(client, { days = DEFAULT_DAYS, now = new Date() } 
   const corrected = num(dailyRow.corrected);
   const activeProfiles30d = num(m.activeProfiles30d);
 
-  const syncError = unavailable('The phone reports sync failures; the server keeps no per-request outcome store. Use app telemetry.');
-  const migrationFailure = unavailable('The migration runs on the phone; its report is not uploaded. Use app telemetry or the owner dry-run report.');
+  const clientData = clientReport.rows[0]?.r || {};
+  const clientTotals = clientData.totals || {};
+  const syncError = syncErrorSignal(clientTotals);
+  const migrationFailure = migrationFailureSignal(clientTotals);
   const gates = {
     correctionRate: { value: correctionRate, limit: GATES.correctionRate.max, status: judge(correctionRate, GATES.correctionRate.max) },
-    syncErrorRate: { value: null, limit: GATES.syncErrorRate.max, status: 'unknown' },
-    migrationFailureRate: { value: null, limit: GATES.migrationFailureRate.max, status: 'unknown' },
+    syncErrorRate: { value: syncError.available ? syncError.value : null, limit: GATES.syncErrorRate.max,
+      status: syncError.available ? judge(syncError.value, GATES.syncErrorRate.max) : 'unknown' },
+    migrationFailureRate: { value: migrationFailure.available ? migrationFailure.value : null, limit: GATES.migrationFailureRate.max,
+      status: migrationFailure.available ? judge(migrationFailure.value, GATES.migrationFailureRate.max) : 'unknown' },
   };
   const statuses = Object.values(gates).map((gate) => gate.status);
   const decision = statuses.includes('fail') ? 'no-go' : statuses.every((s) => s === 'pass') ? 'go' : 'incomplete';
@@ -182,6 +211,21 @@ async function collectMetrics(client, { days = DEFAULT_DAYS, now = new Date() } 
     },
     syncErrorRate: syncError,
     migrationFailureRate: migrationFailure,
+    clientReports: {
+      // Upload receipts in the window (one per device per day); versions are aggregate rows only.
+      reports: num(clientData.reports),
+      bundleDownloadFailures: num(clientTotals.bundle_download_failures),
+      byVersion: (clientData.byVersion || []).map((row) => ({
+        appVersion: row.appVersion,
+        attestation: row.attestation,
+        syncAttempts: num(row.counters?.sync_attempts),
+        syncErrors: SYNC_ERROR_REASONS.reduce((sum, reason) => sum + num(row.counters?.[`sync_errors_${reason}`]), 0),
+        migrationStarted: num(row.counters?.migration_started),
+        migrationCompleted: num(row.counters?.migration_completed),
+        migrationFailed: num(row.counters?.migration_failed),
+        bundleDownloadFailures: num(row.counters?.bundle_download_failures),
+      })),
+    },
     migration: {
       profilesWithV2Facts: num(m.profilesWithV2Facts),
       profilesWithSupersededLegacy: num(m.profilesWithSupersededLegacy),

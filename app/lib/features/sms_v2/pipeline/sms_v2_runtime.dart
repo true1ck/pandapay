@@ -27,6 +27,7 @@ import '../storage/provisional_store.dart';
 import '../storage/stats_store.dart';
 import '../sync/template_upload.dart';
 import '../sync/stats_upload.dart';
+import '../telemetry/client_metrics.dart';
 import '../sync/corrections_sync.dart';
 import '../sync/facts_upload.dart';
 import '../sync/sync_pull.dart';
@@ -110,6 +111,12 @@ class SmsV2Runtime {
   late final _state = SyncStateStore(
     financial.database.db,
     namespace: namespace,
+  );
+  // Lane N: aggregate counters only, and only with the sharing consent.
+  late final _metrics = ClientMetrics(
+    state: _state,
+    hasConsent: hasSharingConsent,
+    clock: clock,
   );
   late final _bundles = BundleStore(
     financial.database.db,
@@ -230,6 +237,7 @@ class SmsV2Runtime {
         .timeout(const Duration(seconds: 30));
     _checkAccount();
     if (response.statusCode != 200 && response.statusCode != 304) {
+      await _metrics.bundleDownloadFailed();
       _state.put(
         'rules:stale',
         response.statusCode == 403
@@ -256,10 +264,24 @@ class SmsV2Runtime {
     final running = _running;
     if (running != null) return running;
     late final Future<void> operation;
-    operation = _sync().whenComplete(() {
+    operation = _syncAndReport().whenComplete(() {
       if (identical(_running, operation)) _running = null;
     });
     return _running = operation;
+  }
+
+  Future<void> _syncAndReport() async {
+    try {
+      await _metrics.measureSync(_sync);
+    } finally {
+      await _metrics.upload(
+        client: client,
+        baseUri: baseUri,
+        headers: headers,
+        appVersion: appVersion,
+        accountIsCurrent: accountIsCurrent,
+      );
+    }
   }
 
   Future<void> _applyCardState() async {
@@ -304,13 +326,14 @@ class SmsV2Runtime {
       await _refreshRules();
     } catch (_) {
       /* Retain the verified cache. */
+      await _metrics.bundleDownloadFailed();
     }
     _checkAccount();
     final replay = migration(await activeBundle());
     if (_bundle!.rules.isNotEmpty &&
         replay.hasLegacyHistory &&
         replay.savedReport() == null) {
-      await replay.run();
+      await _metrics.measureMigration(() => replay.run());
     }
     _checkAccount();
     final intake = SmsIntakeRepository(financial.database);

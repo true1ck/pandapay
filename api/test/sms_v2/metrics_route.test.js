@@ -45,6 +45,7 @@ function fakeClient(overrides = {}) {
       seen.push({ sql, params });
       if (/sms_v2_template_attempts/.test(sql)) return { rows: data.ai };
       if (/sms_v2_release_metrics/.test(sql)) return { rows: [{ m: data.core }] };
+      if (/sms_v2_client_metrics_report/.test(sql)) return { rows: [{ r: data.clientReport || {} }] };
       if (/FROM sms_v2_correction_cases.*GROUP BY stage/s.test(sql)) return { rows: data.stages };
       if (/FROM sms_v2_correction_cases/.test(sql)) return { rows: [data.corrections] };
       if (/sms_v2_template_submitters/.test(sql)) return { rows: [data.templates] };

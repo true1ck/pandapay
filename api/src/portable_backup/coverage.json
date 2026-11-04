@@ -12,6 +12,14 @@
       "disposition": "platform_ops",
       "reason": "Ephemeral admission counters contain installation digests and account quota usage. Full database recovery preserves operational limits. Per-account portable restores cannot reset admission quotas."
     },
+    "sms_v2_client_metrics_daily": {
+      "disposition": "platform_ops",
+      "reason": "Aggregate daily release counters reported by phones (sync errors, migration outcomes) by app version and attestation status. No profile or device identifier. Operational release metrics, not account data."
+    },
+    "sms_v2_client_metric_receipts": {
+      "disposition": "platform_ops",
+      "reason": "Short-lived (14 day) upload receipts holding profile, device digest and day so a re-sent counter upload counts once. Operational de-duplication, never read by admin code. Per-account portable restores must not replay it."
+    },
     "admin_control.provisioning_receipts": {
       "disposition": "platform_ops",
       "reason": "Maintenance-only admin provisioning receipts preserve cross-database operation identity and audit in full PostgreSQL recovery; per-account portable restore cannot replay grants or enable administrators."
