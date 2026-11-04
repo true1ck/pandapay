@@ -43,6 +43,7 @@ class LocalPortableSnapshotSource implements PortableLocalSnapshotSource {
     'device/push identifiers',
     'SMS provider cursor and inbox progress',
     'local sync cursors and cache refresh requests',
+    'shared accepted projections (server canonical; shared pending commands must drain)',
     'cached_responses blobs (server re-serves them)',
     'split_documents staging (server splits are canonical)',
     'SMS intake raw ingest log (parsed observations travel)',
@@ -83,6 +84,18 @@ class LocalPortableSnapshotSource implements PortableLocalSnapshotSource {
       'duplicate_resolution_outbox': namespaced('duplicate_resolution_outbox'),
       'transaction_tag_outbox': namespaced('transaction_tag_outbox'),
       'foreign_payments_outbox': namespaced('foreign_payments_outbox'),
+      'shared_commands': [
+        "SELECT COUNT(*) FROM shared_commands WHERE namespace=? AND state!='committed'",
+        <Object?>[namespace],
+      ],
+      'shared_command_dependencies': [
+        "SELECT COUNT(*) FROM shared_command_dependencies d JOIN shared_commands c ON c.namespace=d.namespace AND c.operation_id=d.operation_id WHERE d.namespace=? AND c.state!='committed'",
+        <Object?>[namespace],
+      ],
+      'shared_source_dependencies': [
+        "SELECT COUNT(*) FROM shared_source_dependencies d JOIN shared_commands c ON c.namespace=d.namespace AND c.operation_id=d.operation_id WHERE d.namespace=? AND d.resolved=0 AND c.state!='committed'",
+        <Object?>[namespace],
+      ],
       'sms_facts_outbox': namespaced('sms_facts_outbox'),
       'sms_fact_override_outbox': namespaced('sms_fact_override_outbox'),
       'sms_rule_exposure_outbox': namespaced('sms_rule_exposure_outbox'),

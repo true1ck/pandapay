@@ -3,6 +3,7 @@ import 'dart:io';
 import 'package:path/path.dart' as p;
 import 'package:path_provider/path_provider.dart';
 import 'package:sqlite3/sqlite3.dart';
+import '../../features/shared_expenses/storage/shared_schema.dart';
 
 /// UA-0.3 offline cache (GAP_ANALYSIS.md §2) — plain sqlite3, not drift.
 /// drift_dev's build_runner codegen was tried first and dropped: every
@@ -345,6 +346,9 @@ class AppDatabase {
       }
       db.execute('PRAGMA user_version = $_schemaVersion');
     }
+    // Prepare the additive module before account capture/restore can enumerate
+    // its tables. Its independent version never changes legacy user_version.
+    SharedExpensesSchema.ensure(db, allowNewerVersion: true);
     _connections.add(this);
   }
 

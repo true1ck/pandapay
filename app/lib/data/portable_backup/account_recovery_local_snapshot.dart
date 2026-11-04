@@ -32,6 +32,10 @@ class AccountRecoveryLocalSnapshot {
     // Device registration and pull cursors must never be replayed on a new
     // device. Pending mutation rows above retain their original UUIDs.
     'sync_state',
+    // Module metadata is prepared by AppDatabase, not account content.
+    'shared_schema_version',
+    // Device traversal state cannot authorize replay on a different phone.
+    'shared_sync_state',
     // Keyset traversal progress belongs to one device/session, rather than
     // the account's financial history restored on another device.
     'financial_transaction_pages',
@@ -907,6 +911,14 @@ class AccountRecoveryLocalSnapshot {
             values.values.toList(),
           );
         }
+      }
+      if (_tables(db).containsKey('shared_commands')) {
+        // Preserve immutable operation/payload/hash and terminal review states.
+        // A vanished phone's lease must not delay same-ID receipt lookup/retry.
+        db.execute(
+          "UPDATE shared_commands SET state=CASE WHEN state='sending' THEN 'retry' ELSE state END, lease_id=NULL,lease_expires=0,next_attempt=0 WHERE namespace=?",
+          [namespace],
+        );
       }
       db.execute('RELEASE SAVEPOINT account_recovery_restore');
       transactionStarted = false;
