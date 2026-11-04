@@ -84,6 +84,8 @@ function registerSmsV2(app, deps) {
 
   require('./corrections_route').registerCorrections(app, shared);
 
+  require('./client_metrics_route').registerClientMetrics(app, shared); // Lane N
+
   require('./ai_templates').registerTemplates(app, shared);
 
   require('./legacy_supersede').installLegacySupersede(hooks);
