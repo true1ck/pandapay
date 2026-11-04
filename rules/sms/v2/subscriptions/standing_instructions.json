@@ -1,0 +1,531 @@
+[
+  {
+    "id": "SUB-SI-ACTIVATED-INR-01",
+    "version": 1,
+    "family": "standing_instruction_created",
+    "senders": [
+      "*"
+    ],
+    "priority": 650,
+    "match": {
+      "pattern": "activated\\s+standing\\s+instructions?\\s+on\\s+(?:your\\s+)?(?:[a-z]{1,15}\\s+)?(?:[a-z]{1,15}\\s+)?(?:[a-z]{1,15}\\s+)?credit\\s+card\\s+(?:no\\.?\\s*)?(?:ending\\s*(?:with\\s*|in\\s*)?)?(?:[x*•.]+\\s*)?(?<mask>\\d{2,6})\\b[\\s\\S]{0,20}?merchant\\s*:\\s*(?<m>[^,\\n]{1,60}?)\\s*,\\s*max(?:imum)?\\s+amount\\s*:\\s*(?:rs\\.?|inr|₹)\\s*(?<cap>[\\d,]+(?:\\.\\d{1,2})?)(?:\\s*,\\s*frequency\\s*:\\s*(?<freq>[a-z ]{3,20}?)\\s*,)?",
+      "flags": "i",
+      "rejectAny": [
+        "could not",
+        "failed",
+        "unable"
+      ]
+    },
+    "emit": [
+      {
+        "factType": "mandate",
+        "attrs": {
+          "phase": "created",
+          "merchantName": {
+            "from": "m",
+            "transforms": [
+              "sanitizeNarration"
+            ]
+          },
+          "frequency": {
+            "from": "freq",
+            "transforms": [
+              "upperTrim"
+            ]
+          },
+          "mandatePurpose": "subscription"
+        },
+        "amounts": [
+          {
+            "role": "ceiling",
+            "from": "cap",
+            "unit": "INR"
+          }
+        ],
+        "instrument": {
+          "kind": "credit_card",
+          "maskFrom": "mask"
+        }
+      }
+    ],
+    "confidence": 0.95,
+    "examples": [
+      {
+        "sender": "VM-EXAMPL-S",
+        "body": "We have activated Standing Instructions on Example Bank Credit Card 1234. Merchant: ExampleTV, Maximum Amount: INR 500.00, Frequency: monthly, Start Date: 01/12/2026, End Date: 01/12/2036, Mandate ID: AbCd12.",
+        "expectFactTypes": [
+          "mandate"
+        ]
+      },
+      {
+        "sender": "VM-EXAMPL-S",
+        "body": "We could not activate Standing Instructions on Example Bank Credit Card 1234. Merchant: ExampleTV, Maximum Amount: INR 500.00, Frequency: monthly.",
+        "expectFactTypes": []
+      }
+    ],
+    "status": "active",
+    "createdBy": "baseline",
+    "updatedAt": "2026-11-05T00:00:00Z"
+  },
+  {
+    "id": "SUB-SI-ACTIVATED-USD-01",
+    "version": 1,
+    "family": "standing_instruction_created",
+    "senders": [
+      "*"
+    ],
+    "priority": 650,
+    "match": {
+      "pattern": "activated\\s+standing\\s+instructions?\\s+on\\s+(?:your\\s+)?(?:[a-z]{1,15}\\s+)?(?:[a-z]{1,15}\\s+)?(?:[a-z]{1,15}\\s+)?credit\\s+card\\s+(?:no\\.?\\s*)?(?:ending\\s*(?:with\\s*|in\\s*)?)?(?:[x*•.]+\\s*)?(?<mask>\\d{2,6})\\b[\\s\\S]{0,20}?merchant\\s*:\\s*(?<m>[^,\\n]{1,60}?)\\s*,\\s*max(?:imum)?\\s+amount\\s*:\\s*(?:usd|\\$)\\s*(?<cap>[\\d,]+(?:\\.\\d{1,2})?)(?:\\s*,\\s*frequency\\s*:\\s*(?<freq>[a-z ]{3,20}?)\\s*,)?",
+      "flags": "i",
+      "rejectAny": [
+        "could not",
+        "failed",
+        "unable"
+      ]
+    },
+    "emit": [
+      {
+        "factType": "mandate",
+        "attrs": {
+          "phase": "created",
+          "merchantName": {
+            "from": "m",
+            "transforms": [
+              "sanitizeNarration"
+            ]
+          },
+          "frequency": {
+            "from": "freq",
+            "transforms": [
+              "upperTrim"
+            ]
+          },
+          "mandatePurpose": "subscription"
+        },
+        "amounts": [
+          {
+            "role": "ceiling",
+            "from": "cap",
+            "unit": "USD"
+          }
+        ],
+        "instrument": {
+          "kind": "credit_card",
+          "maskFrom": "mask"
+        }
+      }
+    ],
+    "confidence": 0.95,
+    "examples": [
+      {
+        "sender": "VM-EXAMPL-S",
+        "body": "We have activated Standing Instructions on Example Bank Credit Card 1234. Merchant: ExampleTV, Maximum Amount: USD 500.00, Frequency: monthly, Start Date: 01/12/2026, End Date: 01/12/2036, Mandate ID: AbCd12.",
+        "expectFactTypes": [
+          "mandate"
+        ]
+      },
+      {
+        "sender": "VM-EXAMPL-S",
+        "body": "We could not activate Standing Instructions on Example Bank Credit Card 1234. Merchant: ExampleTV, Maximum Amount: USD 500.00, Frequency: monthly.",
+        "expectFactTypes": []
+      }
+    ],
+    "status": "active",
+    "createdBy": "baseline",
+    "updatedAt": "2026-11-05T00:00:00Z"
+  },
+  {
+    "id": "SUB-SI-APPROVAL-DUE-01",
+    "version": 1,
+    "family": "standing_instruction_due",
+    "senders": [
+      "*"
+    ],
+    "priority": 650,
+    "match": {
+      "pattern": "payment\\s+of\\s+(?:rs\\.?|inr|₹)\\s*(?<amt>[\\d,]+(?:\\.\\d{1,2})?)\\s+(?:towards|for)\\s+(?<m>[a-z0-9&.' _*-]+?)\\s*,\\s+as\\s+per\\s+the\\s+standing\\s+instructions?\\s+on\\s+your\\s+(?:[a-z]{1,15}\\s+)?(?:[a-z]{1,15}\\s+)?(?:[a-z]{1,15}\\s+)?credit\\s+card\\s+(?:no\\.?\\s*)?(?:ending\\s*(?:with\\s*|in\\s*)?)?(?:[x*•.]+\\s*)?(?<mask>\\d{2,6})\\b[\\s\\S]{0,40}?due\\s+(?:by|on)\\s+(?<due>\\d{2}[-/ ](?:\\d{2}|(?:jan|feb|mar|apr|may|jun|jul|aug|sep|oct|nov|dec))[-/ ]\\d{2,4}|\\d{2}(?:jan|feb|mar|apr|may|jun|jul|aug|sep|oct|nov|dec)\\d{2,4})\\s+requires\\s+your\\s+approval",
+      "flags": "i",
+      "rejectAny": [
+        "was approved",
+        "has been approved"
+      ]
+    },
+    "emit": [
+      {
+        "factType": "attempt",
+        "attrs": {
+          "status": "scheduled",
+          "direction": "debit",
+          "purpose": "purchase",
+          "dueAt": {
+            "from": "due"
+          }
+        },
+        "amounts": [
+          {
+            "role": "scheduled",
+            "from": "amt",
+            "unit": "INR"
+          }
+        ],
+        "counterparty": {
+          "kind": "merchant",
+          "nameFrom": "m",
+          "transforms": [
+            "sanitizeNarration"
+          ]
+        },
+        "instrument": {
+          "kind": "credit_card",
+          "maskFrom": "mask"
+        }
+      }
+    ],
+    "confidence": 0.95,
+    "examples": [
+      {
+        "sender": "VM-EXAMPL-S",
+        "body": "Dear Customer, payment of INR 100.00 towards ExampleTV, as per the Standing Instructions on your Example Bank Credit Card 1234 AbCd12, due by 05/12/2026 requires your approval. To approve, visit the Example Bank site.",
+        "expectFactTypes": [
+          "attempt"
+        ]
+      },
+      {
+        "sender": "VM-EXAMPL-S",
+        "body": "Dear Customer, payment of INR 100.00 towards ExampleTV, as per the Standing Instructions on your Example Bank Credit Card 1234 AbCd12, due by 05/12/2026 was approved by you.",
+        "expectFactTypes": []
+      }
+    ],
+    "status": "active",
+    "createdBy": "baseline",
+    "updatedAt": "2026-11-05T00:00:00Z"
+  },
+  {
+    "id": "SUB-SI-CHARGED-01",
+    "version": 1,
+    "family": "standing_instruction_charged",
+    "senders": [
+      "*"
+    ],
+    "priority": 650,
+    "match": {
+      "pattern": "successfully\\s+processed\\s+(?:the\\s+)?payment\\s+of\\s+(?:rs\\.?|inr|₹)\\s*(?<amt>[\\d,]+(?:\\.\\d{1,2})?)\\s+(?:to|for)\\s+(?:merchant\\s+)?(?<m>[a-z0-9&.' _*-]+?)\\s*,?\\s+as\\s+per\\s+(?:the\\s+)?standing\\s+instructions?\\s+[a-z0-9]+\\s*,?\\s+on\\s+(?<date>\\d{2}[-/ ](?:\\d{2}|(?:jan|feb|mar|apr|may|jun|jul|aug|sep|oct|nov|dec))[-/ ]\\d{2,4}|\\d{2}(?:jan|feb|mar|apr|may|jun|jul|aug|sep|oct|nov|dec)\\d{2,4})\\s+for\\s+(?:your\\s+)?(?:[a-z]{1,15}\\s+)?(?:[a-z]{1,15}\\s+)?(?:[a-z]{1,15}\\s+)?credit\\s+card\\s+(?:no\\.?\\s*)?(?:ending\\s*(?:with\\s*|in\\s*)?)?(?:[x*•.]+\\s*)?(?<mask>\\d{2,6})\\b",
+      "flags": "i",
+      "rejectAny": [
+        "could not",
+        "failed",
+        "unsuccessful"
+      ]
+    },
+    "emit": [
+      {
+        "factType": "movement",
+        "attrs": {
+          "direction": "debit",
+          "purpose": "purchase",
+          "rail": "card",
+          "evidenceOnly": true
+        },
+        "amounts": [
+          {
+            "role": "posted",
+            "from": "amt",
+            "unit": "INR"
+          }
+        ],
+        "counterparty": {
+          "kind": "merchant",
+          "nameFrom": "m",
+          "transforms": [
+            "sanitizeNarration"
+          ]
+        },
+        "instrument": {
+          "kind": "credit_card",
+          "maskFrom": "mask"
+        },
+        "occurredAt": {
+          "from": "date",
+          "formats": [
+            "dd/MM/yyyy",
+            "dd-MM-yyyy",
+            "dd/MM/yy"
+          ]
+        }
+      }
+    ],
+    "confidence": 0.95,
+    "examples": [
+      {
+        "sender": "VM-EXAMPL-S",
+        "body": "Dear Customer, we have successfully processed the payment of INR 100.00 for ExampleTV, as per the Standing Instruction AbCd12, on 05/12/2026 for your Example Bank Credit Card 1234. To manage your Standing Instructions, visit the Example Bank site.",
+        "expectFactTypes": [
+          "movement"
+        ]
+      },
+      {
+        "sender": "VM-EXAMPL-S",
+        "body": "Dear Customer, we could not process the payment of INR 100.00 for ExampleTV, as per the Standing Instruction AbCd12, on 05/12/2026 for your Example Bank Credit Card 1234.",
+        "expectFactTypes": []
+      }
+    ],
+    "status": "active",
+    "createdBy": "baseline",
+    "updatedAt": "2026-11-05T00:00:00Z"
+  },
+  {
+    "id": "SUB-SI-DELETED-01",
+    "version": 1,
+    "family": "standing_instruction_revoked",
+    "senders": [
+      "*"
+    ],
+    "priority": 650,
+    "match": {
+      "pattern": "(?:deleted|cancelled|canceled|deactivated|removed)\\s+(?:the\\s+)?standing\\s+instructions?[\\s\\S]{0,60}?credit\\s+card\\s+(?:no\\.?\\s*)?(?:ending\\s*(?:with\\s*|in\\s*)?)?(?:[x*•.]+\\s*)?(?<mask>\\d{2,6})\\b[\\s\\S]{0,30}?merchant\\s*:\\s*(?<m>[^,\\n.]{1,60}?)\\s*[,.]",
+      "flags": "i",
+      "rejectAny": [
+        "could not",
+        "failed",
+        "unable"
+      ]
+    },
+    "emit": [
+      {
+        "factType": "mandate",
+        "attrs": {
+          "phase": "revoked",
+          "merchantName": {
+            "from": "m",
+            "transforms": [
+              "sanitizeNarration"
+            ]
+          }
+        },
+        "amounts": [],
+        "instrument": {
+          "kind": "credit_card",
+          "maskFrom": "mask"
+        }
+      }
+    ],
+    "confidence": 0.9,
+    "examples": [
+      {
+        "sender": "VM-EXAMPL-S",
+        "body": "We have deleted the Standing Instruction on Example Bank Credit Card 1234. Merchant: ExampleTV, Mandate ID: AbCd12.",
+        "expectFactTypes": [
+          "mandate"
+        ]
+      },
+      {
+        "sender": "VM-EXAMPL-S",
+        "body": "We could not delete the Standing Instruction on Example Bank Credit Card 1234. Merchant: ExampleTV, Mandate ID: AbCd12.",
+        "expectFactTypes": []
+      }
+    ],
+    "status": "active",
+    "createdBy": "baseline",
+    "updatedAt": "2026-11-05T00:00:00Z"
+  },
+  {
+    "id": "SUB-SI-DUE-INR-01",
+    "version": 1,
+    "family": "standing_instruction_due",
+    "senders": [
+      "*"
+    ],
+    "priority": 650,
+    "match": {
+      "pattern": "payment\\s+of\\s+(?:rs\\.?|inr|₹)\\s*(?<amt>[\\d,]+(?:\\.\\d{1,2})?)\\s+(?:towards|for)\\s+(?:merchant\\s+)?(?<m>[a-z0-9&.' _*-]+?)\\s*,?\\s+(?:to\\s+be\\s+debited|as\\s+per)[\\s\\S]{0,80}?credit\\s+card\\s+(?:no\\.?\\s*)?(?:ending\\s*(?:with\\s*|in\\s*)?)?(?:[x*•.]+\\s*)?(?<mask>\\d{2,6})\\b[\\s\\S]{0,80}?due\\s+(?:by|on)\\s+(?<due>\\d{2}[-/ ](?:\\d{2}|(?:jan|feb|mar|apr|may|jun|jul|aug|sep|oct|nov|dec))[-/ ]\\d{2,4}|\\d{2}(?:jan|feb|mar|apr|may|jun|jul|aug|sep|oct|nov|dec)\\d{2,4})",
+      "flags": "i",
+      "rejectAny": [
+        "could not",
+        "has been debited",
+        "was debited",
+        "processed"
+      ]
+    },
+    "emit": [
+      {
+        "factType": "attempt",
+        "attrs": {
+          "status": "scheduled",
+          "direction": "debit",
+          "purpose": "purchase",
+          "dueAt": {
+            "from": "due"
+          }
+        },
+        "amounts": [
+          {
+            "role": "scheduled",
+            "from": "amt",
+            "unit": "INR"
+          }
+        ],
+        "counterparty": {
+          "kind": "merchant",
+          "nameFrom": "m",
+          "transforms": [
+            "sanitizeNarration"
+          ]
+        },
+        "instrument": {
+          "kind": "credit_card",
+          "maskFrom": "mask"
+        }
+      }
+    ],
+    "confidence": 0.95,
+    "examples": [
+      {
+        "sender": "VM-EXAMPL-S",
+        "body": "Dear Customer, payment of INR 100.00 towards Merchant ExampleTV to be debited from Example Bank Credit Card 1234, as per Standing Instruction AbCd12, is due by 05/12/2026. To cancel this debit, visit the Example Bank site.",
+        "expectFactTypes": [
+          "attempt"
+        ]
+      },
+      {
+        "sender": "VM-EXAMPL-S",
+        "body": "Dear Customer, payment of INR 100.00 towards Merchant ExampleTV to be debited from Example Bank Credit Card 1234, as per Standing Instruction AbCd12, could not be processed on 05/12/2026.",
+        "expectFactTypes": []
+      }
+    ],
+    "status": "active",
+    "createdBy": "baseline",
+    "updatedAt": "2026-11-05T00:00:00Z"
+  },
+  {
+    "id": "SUB-SI-DUE-USD-01",
+    "version": 1,
+    "family": "standing_instruction_due",
+    "senders": [
+      "*"
+    ],
+    "priority": 650,
+    "match": {
+      "pattern": "payment\\s+of\\s+(?:usd|\\$)\\s*(?<amt>[\\d,]+(?:\\.\\d{1,2})?)\\s+(?:towards|for)\\s+(?:merchant\\s+)?(?<m>[a-z0-9&.' _*-]+?)\\s*,?\\s+(?:to\\s+be\\s+debited|as\\s+per)[\\s\\S]{0,80}?credit\\s+card\\s+(?:no\\.?\\s*)?(?:ending\\s*(?:with\\s*|in\\s*)?)?(?:[x*•.]+\\s*)?(?<mask>\\d{2,6})\\b[\\s\\S]{0,80}?due\\s+(?:by|on)\\s+(?<due>\\d{2}[-/ ](?:\\d{2}|(?:jan|feb|mar|apr|may|jun|jul|aug|sep|oct|nov|dec))[-/ ]\\d{2,4}|\\d{2}(?:jan|feb|mar|apr|may|jun|jul|aug|sep|oct|nov|dec)\\d{2,4})",
+      "flags": "i",
+      "rejectAny": [
+        "could not",
+        "has been debited",
+        "was debited",
+        "processed"
+      ]
+    },
+    "emit": [
+      {
+        "factType": "attempt",
+        "attrs": {
+          "status": "scheduled",
+          "direction": "debit",
+          "purpose": "purchase",
+          "dueAt": {
+            "from": "due"
+          }
+        },
+        "amounts": [
+          {
+            "role": "scheduled",
+            "from": "amt",
+            "unit": "USD"
+          }
+        ],
+        "counterparty": {
+          "kind": "merchant",
+          "nameFrom": "m",
+          "transforms": [
+            "sanitizeNarration"
+          ]
+        },
+        "instrument": {
+          "kind": "credit_card",
+          "maskFrom": "mask"
+        }
+      }
+    ],
+    "confidence": 0.95,
+    "examples": [
+      {
+        "sender": "VM-EXAMPL-S",
+        "body": "Dear Customer, payment of USD 100.00 towards Merchant ExampleTV to be debited from Example Bank Credit Card 1234, as per Standing Instruction AbCd12, is due by 05/12/2026. To cancel this debit, visit the Example Bank site.",
+        "expectFactTypes": [
+          "attempt"
+        ]
+      },
+      {
+        "sender": "VM-EXAMPL-S",
+        "body": "Dear Customer, payment of USD 100.00 towards Merchant ExampleTV to be debited from Example Bank Credit Card 1234, as per Standing Instruction AbCd12, could not be processed on 05/12/2026.",
+        "expectFactTypes": []
+      }
+    ],
+    "status": "active",
+    "createdBy": "baseline",
+    "updatedAt": "2026-11-05T00:00:00Z"
+  },
+  {
+    "id": "SUB-SI-FAILED-01",
+    "version": 1,
+    "family": "standing_instruction_failed",
+    "senders": [
+      "*"
+    ],
+    "priority": 650,
+    "match": {
+      "pattern": "payment\\s+of\\s+(?:rs\\.?|inr|₹)\\s*(?<amt>[\\d,]+(?:\\.\\d{1,2})?)\\s+(?:towards|for)\\s+(?<m>[a-z0-9&.' _*-]+?)\\s+(?:for|as\\s+per)\\s+(?:the\\s+)?standing\\s+instructions?[\\s\\S]{0,60}?credit\\s+card\\s+(?:no\\.?\\s*)?(?:ending\\s*(?:with\\s*|in\\s*)?)?(?:[x*•.]+\\s*)?(?<mask>\\d{2,6})\\b[\\s\\S]{0,40}?(?:could\\s+not\\s+be\\s+processed|has\\s+failed|failed|was\\s+unsuccessful|not\\s+processed|declined)",
+      "flags": "i",
+      "rejectAny": [
+        "processed successfully",
+        "has been processed"
+      ]
+    },
+    "emit": [
+      {
+        "factType": "attempt",
+        "attrs": {
+          "status": "failed",
+          "direction": "debit",
+          "purpose": "purchase"
+        },
+        "amounts": [
+          {
+            "role": "posted",
+            "from": "amt",
+            "unit": "INR"
+          }
+        ],
+        "counterparty": {
+          "kind": "merchant",
+          "nameFrom": "m",
+          "transforms": [
+            "sanitizeNarration"
+          ]
+        },
+        "instrument": {
+          "kind": "credit_card",
+          "maskFrom": "mask"
+        }
+      }
+    ],
+    "confidence": 0.95,
+    "examples": [
+      {
+        "sender": "VM-EXAMPL-S",
+        "body": "Dear Customer, payment of INR 100.00 for ExampleTV for Standing Instructions AbCd12 on your Example Bank Credit Card 1234 could not be processed. To manage the Standing Instructions, visit the Example Bank site.",
+        "expectFactTypes": [
+          "attempt"
+        ]
+      },
+      {
+        "sender": "VM-EXAMPL-S",
+        "body": "Dear Customer, payment of INR 100.00 for ExampleTV for Standing Instructions AbCd12 on your Example Bank Credit Card 1234 has been processed successfully.",
+        "expectFactTypes": []
+      }
+    ],
+    "status": "active",
+    "createdBy": "baseline",
+    "updatedAt": "2026-11-05T00:00:00Z"
+  }
+]

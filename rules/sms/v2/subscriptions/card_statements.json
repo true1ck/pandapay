@@ -1,0 +1,438 @@
+[
+  {
+    "id": "SUB-CC-AMOUNT-DUE-PAY-BY-01",
+    "version": 1,
+    "family": "card_due",
+    "senders": [
+      "*"
+    ],
+    "priority": 700,
+    "match": {
+      "pattern": "amount\\s+due\\s+(?:rs\\.?|inr|₹)\\s*(?<tot>[\\d,]+(?:\\.\\d{1,2})?)\\s+on\\s+(?:[a-z]{1,15}\\s+)?(?:[a-z]{1,15}\\s+)?(?:[a-z]{1,15}\\s+)?credit\\s+card\\s+(?:no\\.?\\s*)?(?:ending\\s*(?:with\\s*|in\\s*)?)?(?:[x*•.]+\\s*)?(?<mask>\\d{2,6})\\b\\s*\\.\\s*pay\\s+(?:instantly\\s+)?by\\s+(?<due>\\d{2}[-/ ](?:\\d{2}|(?:jan|feb|mar|apr|may|jun|jul|aug|sep|oct|nov|dec))[-/ ]\\d{2,4}|\\d{2}(?:jan|feb|mar|apr|may|jun|jul|aug|sep|oct|nov|dec)\\d{2,4})",
+      "flags": "i",
+      "rejectAny": [
+        "was paid",
+        "already paid"
+      ]
+    },
+    "emit": [
+      {
+        "factType": "bill_due",
+        "attrs": {
+          "dueDate": {
+            "from": "due",
+            "formats": [
+              "dd/MMM/yyyy",
+              "dd/MM/yyyy",
+              "dd-MMM-yyyy"
+            ]
+          }
+        },
+        "amounts": [
+          {
+            "role": "due_total",
+            "from": "tot",
+            "unit": "INR"
+          }
+        ],
+        "instrument": {
+          "kind": "credit_card",
+          "maskFrom": "mask"
+        }
+      }
+    ],
+    "confidence": 0.95,
+    "examples": [
+      {
+        "sender": "VM-EXAMPL-S",
+        "body": "Amount Due\nRs.403 on Example Bank Credit Card 1234. Pay instantly by 09/JAN/2026 via the Example app > Bill Pay > Credit Card: https://example.invalid/p",
+        "expectFactTypes": [
+          "bill_due"
+        ]
+      },
+      {
+        "sender": "VM-EXAMPL-S",
+        "body": "Amount Due\nRs.403 on Example Bank Credit Card 1234 was paid by 09/JAN/2026 via the Example app.",
+        "expectFactTypes": []
+      }
+    ],
+    "status": "active",
+    "createdBy": "baseline",
+    "updatedAt": "2026-11-05T00:00:00Z"
+  },
+  {
+    "id": "SUB-CC-CRED-REMINDER-NOMASK-01",
+    "version": 1,
+    "family": "card_due",
+    "senders": [
+      "*"
+    ],
+    "priority": 700,
+    "match": {
+      "pattern": "^update\\s+from\\s+cred:\\s*payment\\s+for\\s+your\\s+(?:[a-z]{1,15}\\s+)(?:[a-z]{1,15}\\s+)?(?:[a-z]{1,15}\\s+)?credit\\s+card\\s+[x*]{2,}[- ][x*]{2,}\\s+is\\s+due\\s+on\\s+(?<due>[a-z]{3}\\s+\\d{1,2},\\s+\\d{4})\\.\\s*bill\\s+amount:\\s*(?:rs\\.?|inr|₹)\\s*(?<tot>[\\d,]+(?:\\.\\d{1,2})?)(?![\\d,])",
+      "flags": "i",
+      "rejectAny": [
+        "was paid",
+        "paid on"
+      ]
+    },
+    "emit": [
+      {
+        "factType": "bill_due",
+        "attrs": {
+          "dueDate": {
+            "from": "due",
+            "formats": [
+              "MMM dd, yyyy",
+              "MMM d, yyyy"
+            ]
+          }
+        },
+        "amounts": [
+          {
+            "role": "due_total",
+            "from": "tot",
+            "unit": "INR"
+          }
+        ],
+        "instrument": {
+          "kind": "credit_card"
+        }
+      }
+    ],
+    "confidence": 0.95,
+    "examples": [
+      {
+        "sender": "VM-EXAMPL-S",
+        "body": "Update from CRED: Payment for your Example Bank credit card XXXX-XXXX is due on Feb 12, 2026. Bill amount: INR 2,089 Tap on the link to pay and avoid late payment fees.",
+        "expectFactTypes": [
+          "bill_due"
+        ]
+      },
+      {
+        "sender": "VM-EXAMPL-S",
+        "body": "Update from CRED: Payment for your Example Bank credit card XXXX-XXXX was paid on Feb 12, 2026. Bill amount: INR 2,089",
+        "expectFactTypes": []
+      }
+    ],
+    "status": "active",
+    "createdBy": "baseline",
+    "updatedAt": "2026-11-05T00:00:00Z"
+  },
+  {
+    "id": "SUB-CC-DUE-MIN-TOTAL-01",
+    "version": 1,
+    "family": "card_due",
+    "senders": [
+      "*"
+    ],
+    "priority": 700,
+    "match": {
+      "pattern": "payment\\s+of\\s+(?:[a-z]{1,15}\\s+)?card\\s+(?:[x*•.]+\\s*)?(?<mask>\\d{2,6})\\s+is\\s+due\\s+on\\s+(?<due>\\d{2}[-/ ](?:\\d{2}|(?:jan|feb|mar|apr|may|jun|jul|aug|sep|oct|nov|dec))[-/ ]\\d{2,4}|\\d{2}(?:jan|feb|mar|apr|may|jun|jul|aug|sep|oct|nov|dec)\\d{2,4})\\.?\\s*min\\.?\\s*due\\s+(?:rs\\.?|inr|₹)\\s*(?<min>[\\d,]+(?:\\.\\d{1,2})?)\\.?\\s*total\\s+due\\s+(?:rs\\.?|inr|₹)\\s*(?<tot>[\\d,]+(?:\\.\\d{1,2})?)",
+      "flags": "i",
+      "rejectAny": [
+        "was received",
+        "already paid"
+      ]
+    },
+    "emit": [
+      {
+        "factType": "bill_due",
+        "attrs": {
+          "dueDate": {
+            "from": "due"
+          }
+        },
+        "amounts": [
+          {
+            "role": "due_total",
+            "from": "tot",
+            "unit": "INR"
+          },
+          {
+            "role": "due_minimum",
+            "from": "min",
+            "unit": "INR"
+          }
+        ],
+        "instrument": {
+          "kind": "credit_card",
+          "maskFrom": "mask"
+        }
+      }
+    ],
+    "confidence": 0.95,
+    "examples": [
+      {
+        "sender": "VM-EXAMPL-S",
+        "body": "Payment of Credit Card X1234 is due on 06/07/26. Min due Rs.200.00. Total Due Rs.5000.00. Pay before last date to avoid charges. Ignore if paid-Example Bank",
+        "expectFactTypes": [
+          "bill_due"
+        ]
+      },
+      {
+        "sender": "VM-EXAMPL-S",
+        "body": "Payment of Credit Card X1234 was received on 06/07/26. Min due Rs.0.00. Total Due Rs.0.00. Thank you-Example Bank",
+        "expectFactTypes": []
+      }
+    ],
+    "status": "active",
+    "createdBy": "baseline",
+    "updatedAt": "2026-11-05T00:00:00Z"
+  },
+  {
+    "id": "SUB-CC-ESTMT-DATED-01",
+    "version": 1,
+    "family": "card_statement",
+    "senders": [
+      "*"
+    ],
+    "priority": 710,
+    "match": {
+      "pattern": "e-?statement\\s+of\\s+(?:[a-z]{1,15}\\s+)?(?:[a-z]{1,15}\\s+)?(?:[a-z]{1,15}\\s+)?credit\\s+card\\s+ending\\s+(?:[x*•.]+\\s*)?(?<mask>\\d{2,6})\\s+dated\\s+(?<sdate>\\d{2}[-/ ](?:\\d{2}|(?:jan|feb|mar|apr|may|jun|jul|aug|sep|oct|nov|dec))[-/ ]\\d{2,4}|\\d{2}(?:jan|feb|mar|apr|may|jun|jul|aug|sep|oct|nov|dec)\\d{2,4})[\\s\\S]{0,120}?total\\s+amt\\s+due\\s+(?:rs\\.?|inr|₹)\\s*(?<tot>[\\d,]+(?:\\.\\d{1,2})?)\\s*;?\\s*min(?:imum)?\\s+amt\\s+due\\s+(?:rs\\.?|inr|₹)\\s*(?<min>[\\d,]+(?:\\.\\d{1,2})?)\\s*;?\\s*payable\\s+by\\s+(?<due>\\d{2}[-/ ](?:\\d{2}|(?:jan|feb|mar|apr|may|jun|jul|aug|sep|oct|nov|dec))[-/ ]\\d{2,4}|\\d{2}(?:jan|feb|mar|apr|may|jun|jul|aug|sep|oct|nov|dec)\\d{2,4})",
+      "flags": "i",
+      "rejectAny": [
+        "amt due rs 0;"
+      ]
+    },
+    "emit": [
+      {
+        "factType": "bill_due",
+        "attrs": {
+          "dueDate": {
+            "from": "due"
+          },
+          "statementDate": {
+            "from": "sdate"
+          }
+        },
+        "amounts": [
+          {
+            "role": "due_total",
+            "from": "tot",
+            "unit": "INR"
+          },
+          {
+            "role": "due_minimum",
+            "from": "min",
+            "unit": "INR"
+          }
+        ],
+        "instrument": {
+          "kind": "credit_card",
+          "maskFrom": "mask"
+        }
+      }
+    ],
+    "confidence": 0.95,
+    "examples": [
+      {
+        "sender": "VM-EXAMPL-S",
+        "body": "E-statement of Example Credit Card ending XX12 dated 09/09/2026 has been mailed. If not received, SMS ENRS to 00000. Total Amt Due Rs 5000; Min Amt Due Rs 250; Payable by 29/09/2026. Click the link to pay your bill",
+        "expectFactTypes": [
+          "bill_due"
+        ]
+      },
+      {
+        "sender": "VM-EXAMPL-S",
+        "body": "E-statement of Example Credit Card ending XX12 dated 09/09/2026 has been mailed. Total Amt Due Rs 0; Min Amt Due Rs 0; Payable by 29/09/2026.",
+        "expectFactTypes": []
+      }
+    ],
+    "status": "active",
+    "createdBy": "baseline",
+    "updatedAt": "2026-11-05T00:00:00Z"
+  },
+  {
+    "id": "SUB-CC-RUPAY-AUTOPAY-DEBIT-01",
+    "version": 1,
+    "family": "mandate_exec",
+    "senders": [
+      "*"
+    ],
+    "priority": 700,
+    "match": {
+      "pattern": "credit\\s+card\\s+has\\s+been\\s+successfully\\s+debited\\s+with\\s+(?:rs\\.?|inr|₹)\\s*(?<amt>[\\d,]+(?:\\.\\d{1,2})?)\\s+on\\s+(?<date>\\d{2}[-/ ](?:\\d{2}|(?:jan|feb|mar|apr|may|jun|jul|aug|sep|oct|nov|dec))[-/ ]\\d{2,4}|\\d{2}(?:jan|feb|mar|apr|may|jun|jul|aug|sep|oct|nov|dec)\\d{2,4})\\s+towards\\s+(?<m>[a-z0-9&.' _*-]+?)\\s+upi\\s+autopay",
+      "flags": "i",
+      "rejectAny": [
+        "could not",
+        "failed",
+        "unsuccessful"
+      ]
+    },
+    "emit": [
+      {
+        "factType": "movement",
+        "attrs": {
+          "direction": "debit",
+          "purpose": "purchase",
+          "rail": "card"
+        },
+        "amounts": [
+          {
+            "role": "posted",
+            "from": "amt",
+            "unit": "INR"
+          }
+        ],
+        "counterparty": {
+          "kind": "merchant",
+          "nameFrom": "m",
+          "transforms": [
+            "sanitizeNarration"
+          ]
+        },
+        "instrument": {
+          "kind": "credit_card"
+        },
+        "occurredAt": {
+          "from": "date",
+          "formats": [
+            "dd/MM/yyyy",
+            "dd-MM-yyyy",
+            "dd/MM/yy"
+          ]
+        }
+      }
+    ],
+    "confidence": 0.9,
+    "examples": [
+      {
+        "sender": "VM-EXAMPL-S",
+        "body": "Your Example Credit Card has been successfully debited with Rs.500.00 on 08/12/2025 towards EXAMPLEPAY UPI AutoPay, abc123@example.-Example Bank",
+        "expectFactTypes": [
+          "movement"
+        ]
+      },
+      {
+        "sender": "VM-EXAMPL-S",
+        "body": "Your Example Credit Card could not be debited with Rs.500.00 on 08/12/2025 towards EXAMPLEPAY UPI AutoPay, abc123@example.-Example Bank",
+        "expectFactTypes": []
+      }
+    ],
+    "status": "active",
+    "createdBy": "baseline",
+    "updatedAt": "2026-11-05T00:00:00Z"
+  },
+  {
+    "id": "SUB-CC-STMT-SENT-01",
+    "version": 1,
+    "family": "card_statement",
+    "senders": [
+      "*"
+    ],
+    "priority": 710,
+    "match": {
+      "pattern": "credit\\s+card\\s+(?:[x*•.]+\\s*)?(?<mask>\\d{2,16})\\s+statement\\s+is\\s+sent\\s+to\\s+\\S+[\\s\\S]{0,20}?total\\s+of\\s+(?:rs\\.?|inr|₹)\\s*(?<tot>[\\d,]+(?:\\.\\d{1,2})?)\\s+or\\s+minimum\\s+of\\s+(?:rs\\.?|inr|₹)\\s*(?<min>[\\d,]+(?:\\.\\d{1,2})?)\\s+is\\s+due\\s+by\\s+(?<due>\\d{2}[-/ ](?:\\d{2}|(?:jan|feb|mar|apr|may|jun|jul|aug|sep|oct|nov|dec))[-/ ]\\d{2,4}|\\d{2}(?:jan|feb|mar|apr|may|jun|jul|aug|sep|oct|nov|dec)\\d{2,4})",
+      "flags": "i",
+      "rejectAny": [
+        "total of rs 0.00",
+        "total of rs 0 "
+      ]
+    },
+    "emit": [
+      {
+        "factType": "bill_due",
+        "attrs": {
+          "dueDate": {
+            "from": "due"
+          }
+        },
+        "amounts": [
+          {
+            "role": "due_total",
+            "from": "tot",
+            "unit": "INR"
+          },
+          {
+            "role": "due_minimum",
+            "from": "min",
+            "unit": "INR"
+          }
+        ],
+        "instrument": {
+          "kind": "credit_card",
+          "maskFrom": "mask"
+        }
+      }
+    ],
+    "confidence": 0.95,
+    "examples": [
+      {
+        "sender": "VM-EXAMPL-S",
+        "body": "Example Bank Credit Card XX1234 Statement is sent to ab***@example.invalid. Total of Rs 5,000.00 or minimum of Rs 250.00 is due by 30-JUN-26.",
+        "expectFactTypes": [
+          "bill_due"
+        ]
+      },
+      {
+        "sender": "VM-EXAMPL-S",
+        "body": "Example Bank Credit Card XX1234 Statement is sent to ab***@example.invalid. Total of Rs 0.00 or minimum of Rs 0.00 is due by 30-JUN-26.",
+        "expectFactTypes": []
+      }
+    ],
+    "status": "active",
+    "createdBy": "baseline",
+    "updatedAt": "2026-11-05T00:00:00Z"
+  },
+  {
+    "id": "SUB-CC-STMT-TOTAL-MIN-01",
+    "version": 1,
+    "family": "card_statement",
+    "senders": [
+      "*"
+    ],
+    "priority": 710,
+    "match": {
+      "pattern": "credit\\s+card\\s+(?:[x*•.]+\\s*)?(?<mask>\\d{2,16})\\s+statement\\s*:\\s*total\\s+due\\s*:\\s*(?:rs\\.?|inr|₹)\\s*(?<tot>[\\d,]+(?:\\.\\d{1,2})?)\\s*min\\.?\\s*due\\s*:\\s*(?:rs\\.?|inr|₹)\\s*(?<min>[\\d,]+(?:\\.\\d{1,2})?)\\s*pay\\s+by\\s+(?<due>\\d{2}[-/ ](?:\\d{2}|(?:jan|feb|mar|apr|may|jun|jul|aug|sep|oct|nov|dec))[-/ ]\\d{2,4}|\\d{2}(?:jan|feb|mar|apr|may|jun|jul|aug|sep|oct|nov|dec)\\d{2,4})",
+      "flags": "i",
+      "rejectAny": [
+        "pay by nil"
+      ]
+    },
+    "emit": [
+      {
+        "factType": "bill_due",
+        "attrs": {
+          "dueDate": {
+            "from": "due"
+          }
+        },
+        "amounts": [
+          {
+            "role": "due_total",
+            "from": "tot",
+            "unit": "INR"
+          },
+          {
+            "role": "due_minimum",
+            "from": "min",
+            "unit": "INR"
+          }
+        ],
+        "instrument": {
+          "kind": "credit_card",
+          "maskFrom": "mask"
+        }
+      }
+    ],
+    "confidence": 0.95,
+    "examples": [
+      {
+        "sender": "VM-EXAMPL-S",
+        "body": "Example Bank Credit Card XX1234 Statement:\nTotal due: Rs.5,000.00\nMin.due: Rs.250.00\nPay by 10-05-2026\nView: https://example.invalid/s",
+        "expectFactTypes": [
+          "bill_due"
+        ]
+      },
+      {
+        "sender": "VM-EXAMPL-S",
+        "body": "Example Bank Credit Card XX1234 Statement:\nTotal due: Rs.0.00\nMin.due: Rs.0.00\nPay by Nil",
+        "expectFactTypes": []
+      }
+    ],
+    "status": "active",
+    "createdBy": "baseline",
+    "updatedAt": "2026-11-05T00:00:00Z"
+  }
+]
