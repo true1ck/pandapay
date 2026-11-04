@@ -14,7 +14,12 @@ import 'shared_runtime.dart';
 /// layer never adds an app dock, invents balances or writes bank transactions.
 class SharedExpensesRoute extends ConsumerStatefulWidget {
   final ValueChanged<String> onOpenContext;
-  const SharedExpensesRoute({super.key, required this.onOpenContext});
+  final VoidCallback onAddExpense;
+  const SharedExpensesRoute({
+    super.key,
+    required this.onOpenContext,
+    required this.onAddExpense,
+  });
   @override
   ConsumerState<SharedExpensesRoute> createState() =>
       _SharedExpensesRouteState();
@@ -145,6 +150,7 @@ class _SharedExpensesRouteState extends ConsumerState<SharedExpensesRoute> {
               onOpenFriend: widget.onOpenContext,
               onOpenGroup: widget.onOpenContext,
               onOpenActivity: widget.onOpenContext,
+              onAddExpense: widget.onAddExpense,
               onCreateGroup: runtime.proposalsEnabled
                   ? () => _create(runtime)
                   : null,
@@ -188,10 +194,12 @@ class _SharedExpensesRouteState extends ConsumerState<SharedExpensesRoute> {
 
 class SharedContextRoute extends ConsumerStatefulWidget {
   final String contextId;
+  final VoidCallback onAddExpense;
   final ValueChanged<String>? onOpenExpense;
   const SharedContextRoute({
     super.key,
     required this.contextId,
+    required this.onAddExpense,
     this.onOpenExpense,
   });
   @override
@@ -273,6 +281,7 @@ class _SharedContextRouteState extends ConsumerState<SharedContextRoute> {
               return SharedGroupScreen(
                 key: ValueKey('${runtime.store.namespace}:${widget.contextId}'),
                 data: snapshot.data!,
+                onAddExpense: widget.onAddExpense,
                 onRetry: (_) => _reload(),
                 onLoadMore: (tab) {
                   final view = snapshot.data!;

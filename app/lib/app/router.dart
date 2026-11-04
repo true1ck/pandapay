@@ -895,8 +895,20 @@ final goRouterProvider = Provider<GoRouter>((ref) {
         path: AppRoute.paymentsGroup,
         builder: (context, state) => PaymentsInsightScreen(initialTab:state.uri.queryParameters['tab']),
       ),
-      GoRoute(path:AppRoute.splits,builder:(context,state)=>SharedExpensesRoute(onOpenContext:(id)=>context.push('${AppRoute.splits}/$id'))),
-      GoRoute(path:AppRoute.splitContext,builder:(context,state)=>SharedContextRoute(contextId:state.pathParameters['contextId']!)),
+      GoRoute(
+        path: AppRoute.splits,
+        builder: (context, state) => SharedExpensesRoute(
+          onOpenContext: (id) => context.push('${AppRoute.splits}/$id'),
+          onAddExpense: () => context.push(AppRoute.assistantAddSpend),
+        ),
+      ),
+      GoRoute(
+        path: AppRoute.splitContext,
+        builder: (context, state) => SharedContextRoute(
+          contextId: state.pathParameters['contextId']!,
+          onAddExpense: () => context.push(AppRoute.assistantAddSpend),
+        ),
+      ),
       GoRoute(
         path: AppRoute.myContributions,
         builder: (context, state) => Scaffold(

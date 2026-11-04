@@ -200,17 +200,26 @@ void main() {
       final old = runtime, visible = _VisibleRuntime(runtime, paging: true);
       runtime = visible;
       old.dispose();
+      var added = 0;
       await tester.pumpWidget(
         ProviderScope(
           overrides: [
             sharedExpensesRuntimeProvider.overrideWith((ref) async => runtime),
           ],
-          child: MaterialApp(home: SharedExpensesRoute(onOpenContext: (_) {})),
+          child: MaterialApp(
+            home: SharedExpensesRoute(
+              onOpenContext: (_) {},
+              onAddExpense: () => added++,
+            ),
+          ),
         ),
       );
       await tester.pumpAndSettle();
       await tester.tap(find.text('Groups'));
       await tester.pumpAndSettle();
+      await tester.tap(find.byTooltip('Add expense'));
+      await tester.pumpAndSettle();
+      expect(added, 1);
       await tester.tap(find.byTooltip('Search splits'));
       await tester.pumpAndSettle();
       await tester.enterText(find.byType(TextField), 'flat');
@@ -239,16 +248,22 @@ void main() {
       final old = runtime;
       runtime = _VisibleRuntime(runtime);
       old.dispose();
+      var added = 0;
       final override = sharedExpensesRuntimeProvider.overrideWith(
         (ref) async => runtime,
       );
       Widget subject(String id) => ProviderScope(
         overrides: [override],
-        child: MaterialApp(home: SharedContextRoute(contextId: id)),
+        child: MaterialApp(
+          home: SharedContextRoute(contextId: id, onAddExpense: () => added++),
+        ),
       );
       await tester.pumpWidget(subject(fixtures.contextId));
       await tester.pumpAndSettle();
       expect(find.text('Flatmates'), findsOneWidget);
+      await tester.tap(find.byTooltip('Add expense'));
+      await tester.pumpAndSettle();
+      expect(added, 1);
       await tester.pumpWidget(subject(fixtures.op1));
       await tester.pumpAndSettle();
       expect(find.text('Flatmates'), findsNothing);
@@ -266,7 +281,12 @@ void main() {
           overrides: [
             sharedExpensesRuntimeProvider.overrideWith((ref) async => runtime),
           ],
-          child: MaterialApp(home: SharedExpensesRoute(onOpenContext: (_) {})),
+          child: MaterialApp(
+            home: SharedExpensesRoute(
+              onOpenContext: (_) {},
+              onAddExpense: () {},
+            ),
+          ),
         ),
       );
       await tester.pumpAndSettle();

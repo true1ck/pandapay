@@ -42,7 +42,15 @@ class SharedTabbedFrame extends StatelessWidget {
           overflow: TextOverflow.ellipsis,
           style: BambooFonts.heading(17),
         ),
-        actions: actions,
+        actions: [
+          ...actions,
+          if (onAddExpense != null)
+            IconButton(
+              tooltip: 'Add expense',
+              onPressed: onAddExpense,
+              icon: const Icon(Icons.add_rounded, color: BambooInk.slate),
+            ),
+        ],
         bottom: TabBar(
           controller: controller,
           isScrollable:
@@ -64,20 +72,6 @@ class SharedTabbedFrame extends StatelessWidget {
       body: AppBackground(
         child: TabBarView(controller: controller, children: children),
       ),
-      bottomNavigationBar: onAddExpense == null
-          ? null
-          : SafeArea(
-              top: false,
-              child: Padding(
-                padding: const EdgeInsets.all(AppSpace.lg),
-                child: SharedAction(
-                  label: 'Add expense',
-                  icon: Icons.add_rounded,
-                  onTap: onAddExpense!,
-                  primary: true,
-                ),
-              ),
-            ),
     ),
   );
 }

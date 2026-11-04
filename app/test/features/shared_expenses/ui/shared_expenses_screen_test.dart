@@ -228,10 +228,52 @@ void main() {
       await tester.tap(find.text('Rahul'));
       await tester.pumpAndSettle();
       expect(opened, 'rahul');
-      await tester.tap(find.text('Add expense'));
+      final add = find.byTooltip('Add expense');
+      expect(
+        find.descendant(of: find.byType(AppBar), matching: add),
+        findsOneWidget,
+      );
+      expect(tester.getCenter(add).dx, greaterThan(300));
+      await tester.tap(add);
       await tester.pumpAndSettle();
       expect(added, 1);
-      expect(find.text('Add expense'), findsOneWidget);
+      expect(add, findsOneWidget);
+      expect(find.text('Add expense'), findsNothing);
+      for (final label in ['Groups', 'Activity']) {
+        await tester.tap(find.text(label));
+        await tester.pumpAndSettle();
+        await tester.tap(add);
+        await tester.pumpAndSettle();
+      }
+      expect(added, 3);
+    },
+  );
+
+  testWidgets(
+    'group plus is reachable on every tab and creates no duplicate footer',
+    (tester) async {
+      var added = 0;
+      await pump(
+        tester,
+        SharedGroupScreen(
+          data: SharedGroupPresentation(
+            id: 'g',
+            title: 'Flatmates',
+            expenses: SharedPage(),
+            balances: SharedPage(),
+          ),
+          onAddExpense: () => added++,
+        ),
+      );
+      for (final tab in ['Expenses', 'Balances', 'Totals']) {
+        await tester.tap(find.text(tab));
+        await tester.pumpAndSettle();
+        await tester.tap(find.byTooltip('Add expense'));
+        await tester.pumpAndSettle();
+      }
+      expect(added, 3);
+      expect(find.byTooltip('Add expense'), findsOneWidget);
+      expect(find.text('Add expense'), findsNothing);
     },
   );
 
