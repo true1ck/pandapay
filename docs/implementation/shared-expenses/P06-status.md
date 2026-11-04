@@ -2,6 +2,8 @@
 
 Owner: root, after command/API worker capacity ended. Baseline `sms-v2/integration`, dependency `a120130c` plus the P01/P03/P05 integration under review. Status: **implementing**, calculation foundation verified; existing-form save/source integration remains incomplete. No other writer currently owns these files.
 
+Calculation checkpoint: **`731806dd`**. Integrated dependencies: server `941aeffb`, local/HTTP/recovery `360110fd`, gated runtime/navigation `a6991f61`. These are local commits only. Use their packet contracts and retained failing/passing evidence before extending the editor; no new source-guard migration or source-funded save path exists yet.
+
 ## Delivered calculation sub-increment
 
 - `app/lib/features/shared_expenses/composer/shared_amount_input.dart`: bounded ASCII decimal input with distinct empty/incomplete/valid/invalid states. Convert rupee text to paise using BigInt; never round a fractional paisa or keep a previous valid value after an invalid edit. Integer formatting avoids a rupee-double roundtrip.

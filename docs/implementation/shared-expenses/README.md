@@ -9,13 +9,17 @@ Baseline `sms-v2/integration` @ `bf6bec9b`. Started 4 November 2026. Root owns t
 | Packet | Status | Current sub-increment / next gate |
 | --- | --- | --- |
 | P00 | implementing | [Foundation contract](../../contracts/shared-expenses-v1/README.md) implemented and tested as a subset; [P00 handoff](P00-status.md) lists independent review and full contract gates. |
-| P01 | not_started | Real isolated PG/RLS/migration/role-setup/backup proof needed; no shared migration deployed. |
-| P02 | implementing | Exact allocation, one-expense balances, personal cost and checked source adapters delivered/tested in Node and Dart; [P02 handoff](P02-status.md). Foundation subset awaits independent review; accepted journal/corrections/settlement math remain open. |
-| P03–P13 | not_started | Follow [work packages](../../design/shared-expenses-agent-work-packages.md); source-linked vertical slice awaits P01/P03/P05 integration. |
+| P01 | implementing | Isolated schema/commands/journal, exact balances/totals and source inspection. Real PostgreSQL races plus complete product-history upgrade/role setup preserve the synthetic existing transaction: 53 combined checks passed. [P01 handoff](P01-status.md); source guards, lifecycle, portable scope and capacity remain open. |
+| P02 | implementing | Exact allocation/cost/source helpers plus scoped revision/payment journal parity delivered. [P02 handoff](P02-status.md); full financial recognition, independent review and complete regression gates remain open. |
+| P03 | implementing | Immutable commands/receipts, authorized bounded query/change feed, exact overview/totals and scoped search. Full API: 1,501 passed / nine skipped. [P03 handoff](P03-status.md); friend aggregation, lifecycle and source funding remain open. |
+| P04 | implementing | Existing Payments/Subscriptions integration plus gated Insights → Splits and real runtime read adapters. Bamboo top tabs and main dock retained. [P04 handoff](P04-status.md); full entry/review/settlement actions and device proof remain open. |
+| P05 | implementing | Durable SQLite/HTTP/sync/recovery bridge integrated into existing owners; account/revocation/cache/restore fences tested. [P05 handoff](P05-status.md); complete shared portable recovery/lifecycle and device acceptance remain open. |
+| P06 | implementing | Exact editable draft calculations for full/shared amount, all payer modes and four allocation modes, including retained typed source intent. [P06 handoff](P06-status.md); existing-form UI/save/source orchestration not yet integrated. |
+| P07–P13 | not_started | Follow [work packages](../../design/shared-expenses-agent-work-packages.md). Some prerequisite reads/journal helpers exist, but no complete packet is claimed. |
 
 ## Ownership and handoff
 
-Root currently owns new `api/src/shared_expenses/**`, `api/test/shared_expenses*.test.js`, `packages/pandapay_domain/lib/src/shared_expenses/**`, public export, scoped tests, `scripts/check_shared_expenses_web.py`, `contracts/shared_expenses/v1/**` and packet status files. No other live writer is assigned. Parallel agents were unavailable due to usage limits at this increment; independent review remains a gate, not a claimed pass.
+Root owns integration files, domain/journal helpers, global role-policy/backup/recovery wiring and the register. P01/P03/P04/P05 workers have delivered their scoped files and released ownership to root. Worker capacity is currently exhausted; root continues integration and P06. No active concurrent file lease is assumed and no full feature independent approval is claimed. A future agent must read the current packet handoff and obtain one explicit path lease before editing.
 
 Before the next worker starts, record its packet/path lease, accepted contract version and dependency evidence. Root alone integrates router/providers/API bootstrap/global schema/lockfiles and migration assignments. Do not edit another packet's file concurrently or stage unrelated local artifacts.
 
@@ -23,7 +27,7 @@ Before the next worker starts, record its packet/path lease, accepted contract v
 
 Old draft contracts and original samples/plans are retained in stash `30cb0be3f60acb810970147417f063de99e3cc4e`; do not pop/drop/reapply automatically. New contract files are revised for SMS v2. Existing untracked Flutter appdata, logs/device images and AGENTS.md predate this work and remain out of scope.
 
-No production rollout, source cutover, DB mutation or device verification occurred in this increment. Ordinary local feature implementation and verification continue under the user's instruction and AGENTS.md.
+No production rollout, source cutover or device verification has occurred. SQL changes were applied only inside task-owned disposable local PostgreSQL fixtures. Ordinary implementation and verification continue under the user's instruction and AGENTS.md.
 
 ## Execution log
 
@@ -36,9 +40,30 @@ No production rollout, source cutover, DB mutation or device verification occurr
 
 ## Next work, in dependency order
 
-1. Independent review of the foundation contracts/math and source-reference boundaries; root keeps the integration lease until reassigned.
+1. Complete review/integration of current P01/P03/P04/P05 seams; keep financial write capabilities disabled until their real data/authorization/source/recovery gates pass.
 2. Finish P00 authenticated source-admission/version/remap, whole-revision consent, command/event/ACL/recovery contracts and executable fixtures. A syntactically valid ID is not funding authorization.
 3. P01 additive isolated PostgreSQL/RLS/role-setup/backup coverage, plus P03/P05 canonical source + immutable local command vertical slice. Real populated-DB and concurrency proof required before accepted shared writes.
-4. P04/P06 existing-form integration, then Insights tabs and Payments subscription routing using actual Bamboo fonts/components. No new UI has been wired by this foundation increment.
+4. P06 existing-form integration using the tested draft preview, then complete review/settlement/member flows. Insights tabs/read routes and Payments subscription routing are already wired behind the independent rollout gate; do not recreate them or the app dock.
 
 Each future update must record test failures/skips as well as passes. Keep whole packets open when only a sub-increment is verified. Record the eventual integration commit in the packet handoff before another agent depends on it.
+
+## Latest integrated increments, 4 November 2026
+
+- Existing local save points: `56d904b7` exact scoped revision/payment journal and fixtures; `a120130c` Bamboo split presenters and Payments/Subscriptions relocation. No push/deployment.
+- Server P01/P03: isolated immutable financial commands, explicit revision consent, receiver-confirmed partial payments, current pair/member projections, bounded access-aware change feed, read/search routes and exact accepted totals. Full API **1,501 passed / nine skipped**. Real PostgreSQL foundation/financial/race/full-upgrade/role replay suite **53 passed / zero skipped**. Full global privilege audit, source guards, erasure and representative load remain open.
+- P05/root recovery: additive future-compatible SQLite module, immutable queue/receipts/dependencies, exact retry identities, account fences and restored delivery-state reset. Storage/sync plus root recovery suite **37 passed**. Source/private accepted server history is an explicit portable coverage gap, not silently marked complete.
+- P04/runtime: real authenticated read adapters, independent client/server capability gates, bounded per-tab search/Next/Previous pages, all-time accepted totals independent of loaded pages, and offline saved display. A payment receipt does not fabricate a fresh balance. Existing bottom navigation stays intact. Earlier combined runtime/HTTP/Bamboo/router/Insights suite **44 passed** before the subsequent new privacy/recovery regressions.
+- Subsequent runtime defects reproduced and fixed: late requests cannot repopulate revoked aggregates; visible screens observe runtime updates; account recovery drains a query through cache publication; each displayed page owns its opaque next cursor. Runtime + draft focused suite **23 passed**. These are mocked HTTP/presenter and actual SQLite tests, not signed-in device proof.
+- P06 calculation foundation: **16 tests passed** for exact input, stable remainder order, each payer's full/shared amounts, separate own residual/share/personal cost, friend-paid zero own funding, four split modes and incomplete/invalid text. Linked-source and estimated-valuation intents retain their blockers; no fallback unlinked bank expense is generated. Editor rendering and durable submission still await their contracts/integration.
+- Subsequent controlled serial domain regression, with no concurrent build: **1,054 passed, zero failed**, including the existing SMS timing benchmarks with unchanged thresholds. Log: `.flutter-direct-appdata3/shared-domain-controlled.log`. This supersedes the earlier inconclusive/failed timing acceptance result while preserving its history in P02. Full Flutter app regression is running separately; no whole-feature or capacity claim follows from a domain pass.
+- Local server checkpoint **`941aeffb`** contains P01/P03, isolated migrations, exact accepted totals, global policy/portable inventory, tests and handoffs. No push/deployment. Runtime paging/context/revocation/recovery widget/client suite now has **nine passing tests**; the 16 draft cases remain separately passing.
+- Local P05 checkpoint **`360110fd`** contains immutable local/HTTP/sync/recovery integration. Test-only checkpoint **`e1dcc20b`** normalizes the app SMS fixture path on Windows; no production parser/rule/UI source changed in that fix.
+- Full Flutter app run: **2,950 passed / four skipped / 16 failed**. Twelve failures came from the Windows fixture helper misclassifying sender files; after its fix, **55 affected replay/stored-pipeline/runtime/bill-target tests passed**. The four remaining unchanged SMS visual comparisons have missing Windows reference images (two) and 0.12% / 951-pixel CI differences (two). References were not regenerated or tolerances weakened. The full suite is **not green**. Logs: `.flutter-direct-appdata3/shared-app-regression.log`, `shared-sms-fixture-regression.log`.
+- Changed app/storage/recovery/router/shared/test analyzer: **no issues found**. Final combined shared presenters/runtime/router run after accurate shared-contribution labels: **32 passed**. Full bill metadata, review UI and coherent multi-read snapshot acceptance remain explicit integration gates.
+- Runtime/navigation checkpoint **`a6991f61`** includes real authenticated read adapters, bounded per-page cursors, account/revocation/recovery fences and accurate shared-only labels. P06 calculation checkpoint **`731806dd`** retains its next-owner boundary in P06. Updated MD/HTML remain aligned; standalone HTML checks passed for all 113 inventoried screens, approved navigation/tab/font contracts, filters, print state and widths 320–1440.
+
+## Exact next implementation boundary
+
+Continue P01 source guards/admission and P06 existing-owner entry/save integration before enabling source-funded sharing. First preserve full bill/full payer metadata in the immutable proposal/consent contract; a financial shared snapshot alone cannot supply it. Then connect the existing Quick Add/detail controls to the tested draft, with no duplicate form or fake own debit. Complete pending/rejected/conflicted review visibility and coherent read snapshots, source-to-personal-cost reporting, shared lifecycle/recovery and settlement/UPI/link UI. Read the production plan's corrected owner/resource/context lock order before writing guards. No new guard migration has been authored yet; the sourceFunding capability is still hard false.
+
+The four unchanged SMS screenshot-baseline failures require separate visual-baseline investigation; do not regenerate images merely to get a green run. Emulator testing remains pending until the intended implementation is complete, per the user's instruction. Before any eventual install, record the exact serial/local backend and use update-install with existing sign-in/data preserved under AGENTS.md.

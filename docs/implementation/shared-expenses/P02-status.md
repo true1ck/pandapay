@@ -79,3 +79,7 @@ Root self-review: correctness and conservation, readability, isolation from exis
 Remaining P02: accepted journal/revision recognition, partial/overpayment and settlement allocation, exact refund/correction/reversal behavior, recognition-period fixtures and DB-backed property/race reconciliation with P01/P03/P09. These functions preview one snapshot; they do not constitute that journal. General multi-currency settlement/gifts/write-offs remain unsupported.
 
 No Flutter UI was wired, no device was installed/tested, no PostgreSQL migration was applied, no source cutover happened and no deployment/push occurred in this increment. Existing split storage, pending edits, rewards and source histories were not rewritten. Continue with [P00 gates](P00-status.md) and [the implementation register](README.md).
+
+### Controlled full regression follow-up
+
+After the other build/test processes completed, root ran the entire domain package serially: **1,054 passed, zero failed** in approximately 11 seconds. Existing SMS benchmark thresholds were unchanged. Log: `.flutter-direct-appdata3/shared-domain-controlled.log`; command: direct SDK `dart test --concurrency=1 --reporter expanded` from `packages/pandapay_domain`, using the established repository-local SDK/cache environment. This closes the earlier controlled domain-regression recheck, not app/device/capacity or all P02 gates. Source paths and journal helpers were unchanged between the contention failure and this serial pass.
