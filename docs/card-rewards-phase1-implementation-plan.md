@@ -1,0 +1,625 @@
+# Card Rewards — Phase 1 Implementation Plan ("Trust the rules")
+
+**Date:** 2026-11-05 · **Branch:** `card-rewards/phase1` (integration) ·
+**Feature spec:** [card-rewards-intelligence-feature-spec-2026-11-05.md](card-rewards-intelligence-feature-spec-2026-11-05.md) ·
+**Agent plan:** [card-rewards-phase1-agent-plan.md](card-rewards-phase1-agent-plan.md) ·
+**Status:** [card-rewards-status.md](card-rewards-status.md) ·
+**Later phases:** [card-rewards-later-phases.md](card-rewards-later-phases.md)
+
+---
+
+## 1. Goal
+
+Every card in the catalogue earns, caps and unlocks in PandaPay the way it does
+at the bank. This is fixed **as patterns for all cards**, not per card. At the
+end of Phase 1:
+
+1. No bonus rule is dropped or widened. Anything we can't model is shown as
+   information and never ranked.
+2. Merchant, app/portal, MCC, rounding and cap semantics are modelled the same
+   way in the phone engine (Dart) and the server engine (JS).
+3. Caps work: bonus-only vs total, caps inside caps, native units (points,
+   ₹ cashback, spend, count), and the right post-cap behaviour.
+4. Milestones run on the right clock.
+5. Spend-gated benefits (lounge etc.) are structured data. Showing progress is
+   Phase 2.
+6. Each card carries a model status (Verified / Partial / Basic). About 50 cards
+   are Verified against worked examples from issuer documents.
+7. The Cards page shows live cap bars in native units, with 80% / 100% alerts (B1).
+8. Old app installs keep working.
+
+**Out of Phase 1:** points ledger UI, statement reconciliation, milestone and
+unlock progress UI, monthly plan, "Ask". See [later phases](card-rewards-later-phases.md).
+
+## 2. Hard constraints (read before writing code)
+
+| # | Constraint | Why |
+|---|---|---|
+| H1 | **The v1 feed (`GET /catalogue`) keeps its exact shape and enum values.** Installed apps parse the whole catalogue in one go (`catalogueProvider` → `CardProductJson.fromJson`); one unknown enum value (unit, measure, period, rail, network, benefit kind) makes the whole feed fail and the app falls back to 9 bundled cards. New semantics ship only in the v2 feed (`GET /catalogue?schema=2`). | Old installs |
+| H2 | **Never widen.** A rule whose restriction we can't express becomes `rule_role = 'info'` (shown, never ranked) and is excluded from v1. Hiding a bonus (under-recommend) is acceptable; applying it everywhere (over-recommend) is not. | Trust |
+| H3 | **Additive database changes only.** New columns are nullable or defaulted; no column is dropped or renamed. Old server code must keep working against the new schema during rollout. | Zero-downtime deploy |
+| H4 | **Engines stay in step.** Dart (`packages/pandapay_domain`) and JS (`api/src/reward_math_v2.js`) must pass the same scenario files in `db/fixtures/reward_v2_scenarios/`. v1-shaped cards (no v2 fields) must give exactly today's answers; all existing tests pass unchanged. | Parity |
+| H5 | **No production actions by agents.** No deploys, no prod DB, no publishing, no pushes. Rollout (§9) is done by the owner. | Safety |
+| H6 | **Privacy.** No real SMS content, account numbers or personal data in fixtures or commits. Research quotes from issuer pages stay under 25 words. | DPDP, copyright |
+| H7 | **Batch heavy checks.** Each work package runs its own targeted tests. Full suites and app builds run at integration checkpoints only. | Owner preference |
+
+## 3. Architecture (Phase 1)
+
+```
+CardPipeline JSON (v5, sibling repo)
+   │  api/scripts/import_card_pipeline.js  →  catalogue_v2/transform.js (pure)
+   │      + catalogue_overrides/<slug>.json (reviewed research fixes)
+   │      + db/fixtures/merchant_directory.json (merchant + platform slugs)
+   ▼
+Postgres catalogue (additive v2 columns + new tables)          coverage report
+   │                                                           (.staging/*.json/md)
+   ├─ v_card_catalogue_export      → GET /catalogue            (v1, filtered, unchanged shape)
+   └─ v_card_catalogue_export_v2   → GET /catalogue?schema=2   (v2 + merchants + platforms)
+                                         │
+              ┌──────────────────────────┴───────────────────────────┐
+              ▼                                                      ▼
+   Phone: CardProductJson v2 (tolerant)                  Server: reward_math_v2.js
+          RecommendationEngine v2                                applyTransactionState v2
+          Cards page cap bars (B1)                               cap_states (native units, multi-cap)
+              ▲                                                      ▲
+              └────────── db/fixtures/reward_v2_scenarios/*.json ────┘  (shared contract tests)
+                          db/fixtures/card_worked_examples/*.json       (issuer-verified examples)
+```
+
+## 4. Contracts
+
+These are the interfaces between work packages. Agents must implement to them
+exactly. A change to a contract is made by the lead in this file first, then
+announced to affected work packages.
+
+### C1 — Database schema v2
+
+Migration file: `db/supabase/migrations/20261105120000_card_rules_v2.sql`. All
+new child tables get the existing `pandapay.bump_card_data_version()` trigger.
+Mirror the existing RLS pattern (published-or-admin read, admin write) on every
+new table.
+
+**`card_products`** (add)
+
+| Column | Type | Notes |
+|---|---|---|
+| `accrual_block_inr` | `int` null | Default points block (100/125/150/200/500) |
+| `accrual_rounding` | `text` null, check in (`floor`,`round`,`none`) | Per-transaction rounding of blocks |
+| `points_expiry_months` | `int` null | |
+| `model_status` | `text not null default 'basic'`, check in (`verified`,`partial`,`basic`) | |
+| `model_coverage` | `jsonb not null default '{}'` | Shape in C7.10 |
+
+**`reward_rules`** (add)
+
+| Column | Type | Notes |
+|---|---|---|
+| `rule_role` | `text not null default 'earn'`, check in (`base`,`earn`,`exclusion`,`info`) | `info` = never ranked |
+| `merchant_slugs` | `text[] not null default '{}'` | Any-of; slugs from `merchant_brands` |
+| `platform_slugs` | `text[] not null default '{}'` | Any-of; slugs from `payment_platforms` |
+| `mcc_include` | `text[] not null default '{}'` | 4-digit strings |
+| `mcc_exclude` | `text[] not null default '{}'` | |
+| `block_inr` | `int` null | Overrides the unit's block; `rate` = points per `block_inr` |
+| `min_engine_version` | `int not null default 1`, check between 1 and 2 | 2 ⇒ hidden from the v1 feed |
+| `source_local_id` | `text` null | CardPipeline rule id |
+| `display_note` | `text` null | Plain-language rule text for the UI |
+
+**`cap_rules`** (add)
+
+| Column | Type | Notes |
+|---|---|---|
+| `cap_kind` | `text` null, check in (`bonus_points`,`total_points`,`bonus_cashback`,`total_cashback`,`eligible_spend`,`txn_count`) | null = legacy row (see C3.6) |
+| `cap_amount` | `numeric(14,2)` null | **Native units:** points, ₹ cashback, ₹ spend, or a count |
+| `scope` | `text not null default 'targets'`, check in (`targets`,`card`) | `card` = applies to all earning on the card |
+| `parent_cap_id` | `uuid` null → `cap_rules(id)` on delete set null | Cap inside a cap |
+| `post_cap_behavior` | `text` null, check in (`base_rate`,`zero`,`custom_rate`) | Used by `eligible_spend` / `txn_count` |
+| `anchor` | `text` null, same values as `milestone_rules.anchor` | For card-year caps |
+| `min_engine_version` | `int not null default 1` | |
+| `source_local_id` | `text` null | |
+
+**`cap_rule_targets`** (new): `cap_rule_id uuid → cap_rules on delete cascade`,
+`reward_rule_id uuid → reward_rules on delete cascade`, primary key (both).
+
+**`milestone_rules`** (add): `reward_points numeric(14,2)` null; `reward_kind text`
+null, check in (`points`,`voucher`,`cashback`,`fee_waiver`,`benefit`,`other`);
+`excluded_category_ids uuid[] not null default '{}'`; `window_days int` null
+(e.g. welcome "₹15,000 in 90 days"); `source_local_id text` null.
+
+**`benefit_unlock_rules`** (new)
+
+| Column | Type |
+|---|---|
+| `id` | `uuid pk default gen_random_uuid()` |
+| `card_product_id` | `uuid not null → card_products on delete cascade` |
+| `card_benefit_id` | `uuid` null → `card_benefits on delete cascade` |
+| `kind` | `text not null`, check in (`lounge_domestic`,`lounge_international`,`lounge_railway`,`fee_waiver`,`tier`,`welcome`,`membership`,`other`) |
+| `label` | `text not null` |
+| `spend_threshold_inr` | `numeric(14,2) not null` |
+| `spend_window` | `text not null`, check in (`previous_calendar_quarter`,`current_calendar_quarter`,`previous_calendar_month`,`calendar_month`,`card_year`,`calendar_year`,`first_days_after_issue`,`rolling_days`) |
+| `window_days` | `int` null |
+| `unlocks_quota` | `int` null |
+| `unlocks_period` | `cap_period` null |
+| `tier_label` | `text` null |
+| `excluded_category_ids` | `uuid[] not null default '{}'` |
+| `notes` | `text` null |
+| `source_local_id` | `text` null |
+| `created_at` | `timestamptz not null default now()` |
+
+**`merchant_brands`** (new, public read): `slug text pk`, `name text not null`,
+`parent_slug text null → merchant_brands(slug)`, `category_slug text` null,
+`aliases text[] not null default '{}'`, `vpa_prefixes text[] not null default '{}'`,
+`mcc text[] not null default '{}'`, `is_active boolean not null default true`,
+`updated_at timestamptz not null default now()`.
+
+**`payment_platforms`** (new, public read): `slug text pk`, `name text not null`,
+`kind text not null` check in (`payment_app`,`bank_portal`,`merchant_app`,`network_program`),
+`issuer_slug text` null, `aliases text[] not null default '{}'`, `notes text` null,
+`is_active boolean not null default true`.
+
+These are seeded from `db/fixtures/merchant_directory.json` by
+`api/scripts/seed_merchant_directory.js` (idempotent upsert).
+
+### C2 — Catalogue feeds
+
+**v1 — `GET /catalogue` (unchanged contract).** `v_card_catalogue_export` is
+redefined to:
+- include `reward_rules` only where `min_engine_version = 1 and rule_role <> 'info'`;
+- include `cap_rules` only where `min_engine_version = 1`;
+- keep every existing key, type and enum domain.
+
+New columns appear inside rule objects (because of `to_jsonb`); v1 clients
+ignore unknown keys. That's acceptable, but the v1 `measure`, `unit`, `period`
+and `rail` values must stay within today's enums.
+
+**v2 — `GET /catalogue?schema=2`.** `v_card_catalogue_export_v2` plus the
+directory. Response:
+
+```json
+{
+  "schema": 2,
+  "cards": [ { "...all v1 card keys...": "...",
+    "accrual_block_inr": 100, "accrual_rounding": "floor", "points_expiry_months": 24,
+    "model_status": "partial", "model_coverage": { },
+    "reward_rules": [ { "...v1 keys...": "...", "rule_role": "earn", "merchant_slugs": [], "platform_slugs": ["phonepe_app"],
+                        "mcc_include": [], "mcc_exclude": [], "block_inr": null, "min_engine_version": 2,
+                        "source_local_id": "phonepe-10x", "display_note": "10 pts/₹100 on eligible PhonePe-app spends" } ],
+    "cap_rules": [ { "...v1 keys...": "...", "cap_kind": "bonus_points", "cap_amount": 1500, "scope": "targets",
+                     "targets": ["<reward_rule uuid>"], "parent_cap_id": null, "post_cap_behavior": null,
+                     "anchor": null, "min_engine_version": 2, "source_local_id": "phonepe-other-monthly" } ],
+    "milestone_rules": [ { "...v1 keys...": "...", "reward_points": 10000, "reward_kind": "points",
+                           "excluded_category_ids": [], "window_days": null } ],
+    "unlock_rules": [ { "id": "...", "kind": "lounge_domestic", "label": "...", "spend_threshold_inr": 50000,
+                        "spend_window": "previous_calendar_quarter", "unlocks_quota": 2, "unlocks_period": "quarter" } ],
+    "redemption_options": [ { "program_name": "...", "method": "statement_credit", "value_per_point_inr": 0.25, "min_points": null } ]
+  } ],
+  "merchants": [ { "slug": "swiggy", "name": "Swiggy", "parent_slug": null, "category_slug": "dining",
+                   "aliases": ["swiggy", "bundl technologies"], "vpa_prefixes": ["swiggy"], "mcc": ["5814"] } ],
+  "platforms": [ { "slug": "phonepe_app", "name": "PhonePe app", "kind": "payment_app", "aliases": ["phonepe"] } ]
+}
+```
+
+The v2 view publishes **all** rules (all roles and engine versions). Rule `id`s
+are the same in both feeds. Route code lives in a new `api/src/catalogue_route.js`;
+`index.js` only registers it.
+
+### C3 — Reward engine v2 semantics (both engines)
+
+**C3.1 Context**
+
+| Field | Notes |
+|---|---|
+| `amount` | ₹ > 0 |
+| `occurred` | date/time |
+| `category_id` / `category_slug` | |
+| `mcc` | 4-digit string or null |
+| `merchant_name` | Raw text from SMS/QR/search |
+| `merchant_vpa` | |
+| `merchant_slug` | Resolved; if null, the engine resolves it per C5 |
+| `platform` | Slug or null. **The engine never infers it**; callers do. |
+| `rail` | `upi_qr` / `swipe` / `online` / `contactless` / `atm` / `emi` / `unknown` |
+
+**C3.2 v1 compatibility switch.** A card is **v2-shaped** if any of its
+rules/caps carries a v2 field (`rule_role` present, or `cap_kind` non-null), or
+the card has `accrual_rounding`. v1-shaped cards use today's code path,
+byte-for-byte.
+
+**C3.3 Rule applicability (v2).** All restrictions are AND-ed:
+1. Effective dates: same as v1.
+2. `rule_role` is `base` or `earn` for earning, `exclusion` for exclusions; `info` never applies.
+3. `category_id` set ⇒ must equal `ctx.category_id` (v1 semantics).
+4. `excluded_categories` contains `ctx.category_id` ⇒ no.
+5. `merchant_slugs` non-empty ⇒ the resolved merchant slug, **or any of its
+   ancestors** via `parent_slug`, is in the set. Unknown merchant ⇒ no.
+6. `platform_slugs` non-empty ⇒ `ctx.platform` is in the set. Unknown ⇒ no.
+7. `mcc_include` non-empty ⇒ `ctx.mcc` is in the set. If `ctx.mcc` is unknown and
+   the rule also has `category_id`, the category match (step 3) stands in for
+   the MCC; otherwise no.
+8. `mcc_exclude` contains `ctx.mcc` ⇒ no.
+9. `rail` set ⇒ `ctx.rail` must equal it. **Unknown rail does not match on
+   v2-shaped cards** (v1 keeps its old "unknown passes" behaviour).
+10. `min_txn_inr` ⇒ `amount ≥ min`.
+
+**C3.4 Rule selection.**
+1. If any applicable `exclusion` rule matches, or the card's `excluded_categories`
+   contains the category, the result is excluded: 0 earned, `excluded = true`,
+   reason from `display_note`.
+2. Otherwise, among applicable `base`/`earn` rules, choose the lowest `priority`.
+   On a tie, choose the highest effective ₹-per-₹ rate.
+3. If none applies, use the card's base unit/rate as an implicit base rule
+   (id `null`).
+
+**C3.5 Accrual.**
+- Spend that is eligible for the rule is `min(amount, max_txn_inr)`. Spend above
+  `max_txn_inr` earns the base rate (v1 behaviour).
+- **Cashback / discount units:** `cashback = eligible × rate / 100`, kept to
+  paise.
+- **Points units:**
+  - `block = rule.block_inr ?? unitBlock(unit)`, where unitBlock is
+    points_per_100 → 100, points_per_150 → 150, points_per_200 → 200,
+    miles_per_100 → 100.
+  - `blocks = round_mode(eligible / block)`. `round_mode` is the card's
+    `accrual_rounding`: `floor` (default when null on a v2 card), `round`
+    (half-up), or `none` (fractional).
+  - `points = blocks × rate`.
+- **Flat points:** `points = rate` once per transaction.
+- **Base vs bonus.** `base_accrual` is the card's base unit/rate on the same
+  eligible spend, with the same rounding and the base unit's own block.
+  `bonus = max(0, rule_accrual − base_accrual)`, but only if the rule and the
+  base are the same currency (both points or both cashback). Otherwise
+  `bonus = rule_accrual` and `base_accrual = 0`. For `base` rules, `bonus = 0`.
+- **Value:** `value_inr = points × point_value_inr`, or the cashback in ₹,
+  rounded half-up to 2 decimals.
+
+**C3.6 Caps.** Every cap amount is in native units: points for `*_points`, ₹ for
+`*_cashback` and `eligible_spend`, a count for `txn_count`.
+
+*Which caps apply.* The applicable set is:
+- caps with `scope = 'targets'` whose `targets` include the chosen rule;
+- legacy fallbacks when `targets` is empty: `reward_rule_id` equals the rule id,
+  or (`reward_rule_id` null and `category_id` equals the context category);
+- all `scope = 'card'` caps (never for excluded spends);
+- **plus every ancestor** via `parent_cap_id`, deduplicated.
+
+`remaining(cap) = max(0, cap_amount − consumed_before[cap.id])`.
+
+*Legacy cap rows* (`cap_kind` null) are converted:
+- `spend_amount` → `eligible_spend` with `cap_amount = cap_value`;
+- `txn_count` → `txn_count`;
+- `reward_value` on a cashback rule → `total_cashback (₹)`;
+- `reward_value` on a points rule → `total_points` with
+  `cap_amount = cap_value / point_value_inr` (ignored if `point_value_inr` is 0).
+
+*Order of application:*
+1. **Eligible-spend caps.** `rule_spend = min(eligible, min remaining over them)`.
+   `overflow = eligible − rule_spend` earns according to the binding cap's
+   `post_cap_behavior`: `base_rate` (default) gives base accrual; `zero` gives
+   nothing; `custom_rate` uses `post_cap_unit`/`post_cap_rate`. Each
+   eligible-spend cap consumes `rule_spend`.
+2. **Transaction-count caps.** If any has `remaining < 1`, the whole eligible
+   spend is treated as overflow (as above). Otherwise each consumes 1.
+3. Accrue on `rule_spend` (C3.5) → `base_accrual`, `bonus`; accrue the overflow
+   → `overflow_accrual`.
+4. **Bonus caps** (`bonus_points` for points accrual, `bonus_cashback` for
+   cashback): `allowed_bonus = min(bonus, min remaining over them)`.
+5. `earned = base_accrual + allowed_bonus + overflow_accrual`.
+6. **Total caps** (`total_points` / `total_cashback`):
+   `allowed_total = min(earned, min remaining over them)`. Excess earns nothing.
+   `cut = earned − allowed_total` comes off the bonus first.
+7. **Consumption deltas:**
+   - bonus caps: `max(0, allowed_bonus − cut)`;
+   - total caps: `allowed_total`;
+   - eligible-spend caps: `rule_spend`;
+   - count caps: 1 (or 0 if they forced overflow).
+   Only non-zero deltas are reported.
+8. **Result:** `points` (points cards), `cashback_inr` (cashback cards),
+   `value_inr`, `rule_id`, `cap_deltas {cap_id: delta}`, `excluded`,
+   `reasons[]`, `assumptions[]` (e.g. `"merchant_resolved_by_alias"`).
+
+**C3.7 Milestone windows.** `milestone_rules.period` + `anchor`:
+- `card_anniversary` uses the user card's `anniversary_on ?? opened_on`. If both
+  are null, use the date the card was added and mark the result `approximate`.
+- `calendar_year` and `fiscal_year` are calendar-based.
+- `window_days` counts from the anchor date.
+
+Qualifying spend excludes the card's `excluded_categories` and the milestone's
+`excluded_category_ids`. Phase 1 changes only the window maths; the UI comes in
+Phase 2.
+
+### C4 — Shared scenario files
+
+Directory `db/fixtures/reward_v2_scenarios/`. Both test suites load **every**
+`*.json` file in it.
+
+| File | Owner |
+|---|---|
+| `00_contract.json` | Lead only |
+| `10_dart.json` | WP3 |
+| `20_js.json` | WP4 |
+| `30_integration.json` | WP7 |
+
+Scenario shape:
+
+```json
+{ "name": "...", "why": "...",
+  "card": { "...v2 wire card (C2)...": "..." },
+  "ctx": { "amount": 2000, "category_id": null, "category_slug": null, "mcc": null,
+           "merchant_name": "...", "merchant_vpa": null, "merchant_slug": null,
+           "platform": "phonepe_app", "rail": "unknown", "occurred": "2026-11-10T10:00:00+05:30" },
+  "cap_consumed_before": { "<cap id>": 0 },
+  "expect": { "points": 200, "cashback_inr": null, "value_inr": 50.0, "rule_id": "...",
+              "excluded": false, "cap_deltas": { "<cap id>": 180 } } }
+```
+
+A file may add a top-level `"directory": {"merchants": [...], "platforms": [...]}`.
+Otherwise suites use `db/fixtures/merchant_directory.json`. Assertions: `points`,
+`cashback_inr` and `value_inr` exactly (to 2 decimals); `rule_id`; `excluded`;
+`cap_deltas` exactly (keys and values).
+
+### C5 — Merchant and platform directory
+
+File `db/fixtures/merchant_directory.json` (format below), seeded into C1 tables.
+
+```json
+{ "version": 1,
+  "merchants": [ { "slug": "instamart", "name": "Swiggy Instamart", "parent_slug": "swiggy", "category_slug": "groceries",
+                   "aliases": ["swiggy instamart", "instamart"], "vpa_prefixes": [], "mcc": [], "notes": "" } ],
+  "platforms": [ { "slug": "hdfc_smartbuy", "name": "HDFC SmartBuy", "kind": "bank_portal", "issuer_slug": "hdfc-bank",
+                   "aliases": ["smartbuy"], "notes": "" } ] }
+```
+
+**Resolution algorithm** (identical in both engines):
+1. `normalize(s)` = lowercase, then replace every non-alphanumeric run with one
+   space, then trim.
+2. A VPA match wins: the part before `@`, normalized, starts with a
+   `vpa_prefix`.
+3. Otherwise, an alias matches if the alias, normalized, appears in the
+   normalized merchant name **on word boundaries**. The longest matching alias
+   wins; ties go to the slug that sorts first.
+4. Ancestors come from `parent_slug`, with a maximum depth of 5 and cycle-safe.
+
+Slugs are lowercase `[a-z0-9_]`. A slug, once published, is never renamed; it
+may be deactivated.
+
+### C6 — Worked examples (issuer-verified)
+
+Directory `db/fixtures/card_worked_examples/`, one file per card,
+`<source_slug>.json`. `source_slug` is the CardPipeline checklist `source_slug`.
+
+```json
+{ "source_slug": "sbi-phonepe-select-black", "cardpipeline_id": "state-bank-of-india-...", "card_name": "...",
+  "verified_on": "2026-11-05",
+  "sources": [ { "url": "https://...", "doc": "MITC Jul 2026", "quote": "≤25 words" } ],
+  "examples": [ { "id": "001", "title": "₹2,000 electricity bill in PhonePe app",
+                  "ctx": { "...C3.1 fields...": "..." },
+                  "state_before": { "caps_by_source_id": { "phonepe-other-monthly": 0 } },
+                  "expect": { "currency": "points", "amount": 200, "value_inr": null, "excluded": false,
+                              "cap_deltas_by_source_id": { "phonepe-other-monthly": 180 } },
+                  "why": "10 pts/₹100 in-app; base 1 pt; bonus 180 counts to monthly bonus cap" } ],
+  "research_notes": [ { "item": "cap phonepe-other-monthly", "cardpipeline_says": "...", "issuer_says": "...",
+                        "proposed_fix": "override | importer | engine | none", "override_file": "api/scripts/catalogue_overrides/<slug>.json" } ] }
+```
+
+Each card needs at least 6 examples:
+- base spend;
+- each bonus rule;
+- one exclusion;
+- one cap boundary (partly consumed);
+- one post-cap spend;
+- one rounding case (points cards).
+
+Caps are referenced by CardPipeline local ids, so examples don't depend on
+database UUIDs.
+
+### C7 — Loader v2 (CardPipeline → catalogue) mapping rules
+
+1. **Split pure from database code.** Add
+   `catalogue_v2/transform.js → transformCardRecordV2(record, {directory, overrides}) → {card, rewardRules, capRules, capTargets, milestones, feeWaivers, benefits, unlockRules, redemptionOptions, coverage}`,
+   with no I/O. `import_card_pipeline.js` writes the result.
+   Bump `import_transform_version`, so the publish gate requires re-review.
+2. **Overrides first.** If `api/scripts/catalogue_overrides/<source_slug>.json`
+   exists, apply it to the source record before the transform. Format:
+   `{ "source_slug", "changes": [ { "path": "cap_rules[id=swiggy_cashback_cap].metric", "value": "...", "reason": "...", "source_url": "...", "checked_on": "YYYY-MM-DD" } ] }`.
+   Path syntax: dotted keys, `[n]` index, `[id=x]` selector. Applied overrides
+   are listed in the coverage report.
+3. **Rule category token** (`reward_rules[].category_id` in the source), resolved in order:
+   1. `CATEGORY_MAP` (existing, extended) → `category_id`.
+   2. `MERCHANT_TOKEN_MAP` (e.g. `swiggy_app → [swiggy]`, `amazon_shopping → [amazon]`) → `merchant_slugs`.
+   3. `PLATFORM_TOKEN_MAP` (e.g. `phonepe → [phonepe_app]`, `smartbuy → [hdfc_smartbuy]`) → `platform_slugs`.
+   4. `all_retail` / `other` / `other_retail` → unrestricted.
+   5. Composite tokens (`dining_movies`, `dining_grocery_departmental_movies`) →
+      one rule per mapped part, with the same rate, and cap targets cloned to
+      every part.
+   6. Anything else → `rule_role = 'info'`, reported.
+4. **Condition keys:**
+
+   | Source keys | Becomes |
+   |---|---|
+   | `mcc`, `mcc_list`, `mcc_in`, `mccs` | `mcc_include` |
+   | `merchant_pattern`, `merchant`, `merchant_names`, `eligible_merchants`, `merchant_platform` | Resolved through the directory → `merchant_slugs` |
+   | `platform`, `app`, `channel` / `channel_type` naming an app or portal | `platform_slugs` |
+   | `minimum_transaction_inr` | `min_txn_inr` |
+   | `excluded_categories` | Excluded categories |
+   | `channel_type ∈ {all, online_and_retail}` and similar | No restriction |
+   | Any other restricting key (`birthday_window`, `selected_plan`, `booking_type`, `variant`, `transaction_type`, `app: not_X`, …) | Rule becomes `info` |
+
+5. **Roles:**
+   - source `exclusion` → `exclusion` (rate 0);
+   - `standard_accrual` / `fallback` with no restriction → `base`;
+   - `accelerator` / `standard_accrual` with restrictions → `earn`;
+   - an `accelerator` with **no** restriction at all after mapping → `earn`, but
+     flagged `unrestricted_accelerator` for review.
+6. **Engine version.** `min_engine_version = 2` if the rule uses `platform_slugs`,
+   `mcc_include` / `mcc_exclude`, more than one merchant slug, `block_inr`, or
+   `rule_role = 'info'`.
+   A single merchant slug stays v1-visible, with
+   `merchant_pattern = <that merchant's shortest distinctive alias>`.
+   MCC-only exclusions are v2-only. Category exclusions stay v1-visible at
+   rate 0.
+7. **Caps.**
+
+   | Source `metric` | `cap_kind` |
+   |---|---|
+   | `bonus_reward_points` / `accelerated_reward_points` | `bonus_points` (or `bonus_cashback` if the targeted rule is cashback) |
+   | `total_reward_points` | `total_points` / `total_cashback` by the targeted rule's currency |
+   | `eligible_spend_amount` | `eligible_spend` |
+   | `txn_count` | `txn_count` |
+   | `waiver_amount*` | Skip (fuel waiver lives in `fuel_surcharge_rules`) |
+
+   - `cap_amount` = `limit_value` (native) ?? `limit_value_inr`.
+   - Targets come from every rule whose `action.cap_reference` names the cap,
+     plus `target_rule_ids`.
+   - No targets and a total metric → `scope = 'card'`.
+   - `parent_cap_id` comes from `parent_cap_id`.
+   - Post-limit: `downgrade_to_base_rate` / `earn_base_rate` → `base_rate`;
+     `zero_accrual` → `zero` (meaningful only for eligible-spend/count caps;
+     bonus and total kinds already encode it).
+   - Period: `day` caps → kept, but `min_engine_version 2` and marked
+     `unenforced_period` (no daily period in Phase 1); `calendar_year` →
+     `annual` + anchor `calendar_year`.
+   - **v1 projection** (for `GET /catalogue`):
+     - bonus kinds → `measure = reward_value`,
+       `cap_value = cap_amount × point_value` (₹ for cashback),
+       `post_cap_rate = NULL` (base continues);
+     - total kinds → `reward_value`, `post_cap_rate = 0`;
+     - `eligible_spend` → `spend_amount`, with `post_cap_rate` NULL for
+       `base_rate`, or 0 for `zero`;
+     - `reward_rule_id` = the single target if there is exactly one, else
+       NULL **and** `min_engine_version = 2`.
+   - **Sanity flags** (reported, not fixed):
+     - `suspect_cap_unit`: an `eligible_spend` cap ≤ ₹5,000 on a rule with ≥ 5%
+       cashback;
+     - `missing_cap_value`;
+     - `orphan_cap`: no targets, no category, not card-wide.
+8. **Milestones.**
+   - `card_anniversary_year` → `annual` / `card_anniversary`;
+   - `calendar_year` → `annual` / `calendar_year`;
+   - `fiscal_year` → `annual` / `fiscal_year`;
+   - `quarter` / `calendar_quarter` → `quarter` / `calendar_year`;
+   - `calendar_month` → `calendar_month` / `calendar_year`;
+   - `statement_cycle` → `statement_cycle` / `statement_cycle`.
+   Fix the existing bug where both branches return `card_anniversary`.
+   Welcome-type milestones ("within 90 days") → `window_days`. Fill
+   `reward_points` / `reward_kind` where the source gives them.
+9. **Unlock rules.** Normalize
+   `lifestyle_and_network_benefits[].evaluation_engine.conditions` keys
+   (`spend_threshold_inr`, `minimum_spend_inr`, `previous_quarter_spend_inr`,
+   `eligible_spend_milestones_inr[]`, `spend_period`, `unlock_period`,
+   `access_period`, …) into `benefit_unlock_rules` rows: one per threshold, linked
+   to the benefit. Tiered benefits (Atlas Silver/Gold/Platinum) → `kind = 'tier'`
+   rows with `tier_label`. A benefit that mentions spend but can't be parsed gets
+   the `unparsed_unlock` flag.
+10. **Card fields and coverage.**
+    - `accrual_block_inr`, `accrual_rounding` (`N/A` → null; `floor_to_nearest_paisa`
+      → `none`; `nearest_integer` → `round`), and `points_expiry_months` come from
+      the source.
+    - `model_coverage` =
+      `{rules_total, rules_modelled, rules_info, caps_total, caps_enforced, flags: [{code, source_local_id, detail}], overrides_applied: [...]}`.
+    - `model_status`:
+      - `basic` if there is no earning rule beyond base;
+      - `partial` if any `info` rule, unenforced cap, or unresolved flag exists;
+      - otherwise `partial` until WP7 marks it `verified`, after its worked
+        examples pass. Verified slugs are listed in
+        `api/scripts/catalogue_overrides/verified_cards.json`.
+11. **Reports.** The loader writes `api/scripts/.staging/coverage-report.json` and
+    `.md`. These hold per-card coverage plus catalogue-wide metrics: unmapped
+    tokens by frequency, info rules, unrestricted accelerators, orphan caps,
+    suspect units, and milestone anchors. `api/scripts/audit_catalogue.js` takes
+    any catalogue JSON (v1 or v2 feed) and prints the R1–R9 metrics from the
+    feature spec, for before/after comparison.
+
+## 5. Work packages
+
+File ownership is exclusive. A work package edits only its own files. A file
+not listed below needs the lead's approval.
+
+### Wave 1 (parallel; depends only on the contracts above)
+
+| WP | Title | Owns | Done when |
+|---|---|---|---|
+| **WP1** | Schema, feeds and directory seeding | `db/supabase/migrations/20261105120000_card_rules_v2.sql`; `db/tests/20261105120000_card_rules_v2_test.sql`; `api/src/catalogue_route.js` (new); the `/catalogue` handler lines in `api/src/index.js` (replace with module registration only); `api/scripts/seed_merchant_directory.js`; `api/test/catalogue_route.test.js` | Migration applies on a fresh Postgres after all existing migrations. The DB test proves: v1 view hides `min_engine_version=2` / `info` rows; v2 view returns targets, unlock rules and redemption options; RLS for the new tables; data_version bumps. Route tests cover v1 unchanged and v2 shape. The seed script is idempotent. |
+| **WP2** | Loader v2 and audit | `api/scripts/import_card_pipeline.js`; `api/scripts/catalogue_v2/**` (new); `api/scripts/catalogue_overrides/README.md` + the loader for that folder (not the per-card files); `api/scripts/audit_catalogue.js`; `api/test/catalogue_v2_*.test.js`; `api/test/fixtures/cardpipeline/*.json` (copies of 5–8 real CardPipeline records) | Unit tests on the pure transform for real records: a co-brand card, an app-platform card, a brand-portal card, an app-bonus card with an unknown cap, a premium card with many caps, a tiered-lounge card, and a cashback card. Every C7 rule has a test. Running the transform over the full local CardPipeline set (dry run, no DB) produces the coverage report. Report numbers go in the WP2 summary. |
+| **WP3** | Dart engine v2 | `packages/pandapay_domain/lib/**`; `packages/pandapay_domain/test/**`; `db/fixtures/reward_v2_scenarios/10_dart.json` | v2 fields parse **tolerantly**: an unknown enum value in a v2 field skips that rule or cap, never the card. All C3 semantics and the C5 resolver are in. All files in `reward_v2_scenarios/` pass. **All existing package tests pass unchanged.** Add a `CardProductJson` round-trip for v2 fields. |
+| **WP4** | JS engine v2 | `api/src/reward_math_v2.js` (new); `api/src/merchant_directory.js` (new resolver); `api/test/reward_math_v2.test.js`; `db/fixtures/reward_v2_scenarios/20_js.json` | Same C3/C5 semantics. All scenario files pass. `reward_math.js` (v1) is untouched and its tests still pass. Exports: `computeTransactionRewardV2`, `ruleAppliesV2`, `resolveMerchant`, `isV2Card`. |
+| **WP5** | Merchant and platform directory data | `db/fixtures/merchant_directory.json` | At least 120 merchants covering every co-brand and every merchant named in CardPipeline accelerator rules and conditions (scan the local CardPipeline set). Includes sub-brands and parent links, legal-entity names seen on bank SMS when publicly known, MCCs where publicly documented, and all bank portals and payment apps referenced by card rules. No personal data. A short report lists the CardPipeline tokens still unmapped. |
+| **WP6a** | Worked examples: HDFC and SBI Card (20 cards) | `db/fixtures/card_worked_examples/<slug>.json` for its cards; `api/scripts/catalogue_overrides/<slug>.json` for its cards | C6 files for each card in Appendix C of the feature spec (HDFC + SBI). Verified against issuer pages (MITC / product page). Research errors captured as override files with source URLs. |
+| **WP6b** | Worked examples: ICICI, Axis, Amex, IDFC, others (≈26 cards) | Same, for its cards | Same. |
+
+### Wave 2 (after wave 1 is merged into `card-rewards/phase1`)
+
+| WP | Title | Owns | Done when |
+|---|---|---|---|
+| **WP7** | Integration and verification | `api/test/card_worked_examples.test.js`; `packages/pandapay_domain/test/card_worked_examples_test.dart`; `db/fixtures/catalogue_v2_cards/*.json` (generated snapshots of the transform for golden cards); `db/fixtures/reward_v2_scenarios/30_integration.json`; `api/scripts/catalogue_overrides/verified_cards.json`; fixes in other WPs' files **only via the lead** | Both engines pass every worked example for the golden cards. Mismatches are triaged into override / loader / engine fixes. Before/after audit numbers are recorded in the status doc. |
+| **WP8** | Server recording v2 | `api/src/card_state_v2.js` (new); the `applyTransactionState` / `reverseTransactionState` regions of `api/src/index.js`; `api/src/cycles.js`; `api/scripts/recompute_card_state.js` (new); tests | v2 cards record through `reward_math_v2`, updating multiple caps per transaction (targets, card scope, parents) in native units. `expected_points` uses rounding. Milestone windows follow C3.7. The reverse path mirrors it. The recompute script rebuilds current-period `cap_states` / `milestone_states` and expected values after a catalogue publish (dry-run by default). `GET /user-cards` adds `cap_kind` / `cap_amount`. |
+| **WP9** | App: v2 feed and cap bars (B1) | `app/lib/data/catalogue_repository.dart`; the catalogue section of `app/lib/app/providers.dart`; `app/lib/features/cards/my_cards_screen.dart`; the caps tab of `card_detail_screen.dart`; `app/lib/features/insights/caps_screen.dart`; cap notification triggers; their tests | The app fetches `?schema=2`, falling back to v1, then cache, then bundle. Parsing is per card (one bad card is skipped and logged, never the whole feed). The cache key is versioned. The merchant directory feeds the context builder. Cards show cap bars in native units ("1,240 / 1,500 pts · resets 1 Dec · then 1 pt/₹100"). Alerts fire at 80% and 100% with the next-best card. Card detail shows the Partial / Basic label. Widget tests plus one golden (Alchemist) per new widget. |
+
+### Wave 3 — Rollout (owner only; see §9)
+
+## 6. Merge order and integration checkpoints
+
+1. Lead commits docs, contracts, `00_contract.json` and the directory skeleton on
+   `card-rewards/phase1`.
+2. Wave 1 branches merge into `card-rewards/phase1` in this order:
+   WP5 → WP1 → WP4 → WP3 → WP2 → WP6a → WP6b. Data first, schema next, engines
+   before the loader that targets them.
+3. **Checkpoint A** (lead), after wave 1:
+   - `cd api && npm test`;
+   - `cd packages/pandapay_domain && dart test`;
+   - DB migration test on a fresh container;
+   - loader dry run over the full CardPipeline set;
+   - `audit_catalogue.js` before/after numbers into the status doc.
+4. Wave 2: WP7 and WP8 in parallel (disjoint files), then WP9.
+5. **Checkpoint B** (lead), after wave 2:
+   - everything in A;
+   - `flutter analyze` + app tests;
+   - one Android emulator pass of the Cards page.
+6. Owner review, then rollout (§9).
+
+## 7. Testing strategy
+
+| Layer | Test | Where |
+|---|---|---|
+| Contract | Shared scenario files, both engines | `db/fixtures/reward_v2_scenarios/` |
+| Real cards | Worked examples, both engines, against generated snapshots | `db/fixtures/card_worked_examples/`, `catalogue_v2_cards/` |
+| Loader | Pure transform on real records; every C7 rule | `api/test/catalogue_v2_*.test.js` |
+| Database | Migration, views, RLS, triggers | `db/tests/20261105120000_card_rules_v2_test.sql` |
+| API | v1 unchanged, v2 shape | `api/test/catalogue_route.test.js` |
+| Backward compatibility | v1 feed parses in the **current released** `CardProductJson` (copy the v1 output into `packages/pandapay_domain/test/fixtures_catalogue_response.json` and keep it passing) | WP1 + WP3 |
+| App | Widget tests + Alchemist goldens for cap bars | WP9 |
+
+## 8. Phase 1 success numbers (measured by `audit_catalogue.js` on the v2 feed)
+
+| Metric | Now | Target |
+|---|---|---|
+| Accelerators in unmapped categories (dropped) | 176 / 500 | 0 dropped (each is modelled or `info`) |
+| Unrestricted accelerators | 98 rules / 74 cards | 0 unreviewed |
+| Caps linked to nothing | 238 / 641 | 0 (enforced, card-wide, or flagged `unenforced_period`) |
+| Bonus caps that zero out the base | ~428 post-cap 0 | 0 |
+| Milestones on the wrong anchor | 292 / 292 | 0 |
+| Spend-gated lounges as structured unlocks | 0 / 124 | ≥ 110 |
+| Cards Verified (worked examples pass) | 0 | ≈ 46 (Appendix C, excluding cards not yet in the catalogue) |
+| Old app installs parse v1 feed | yes | yes |
+
+## 9. Rollout (owner-run, after Checkpoint B)
+
+1. Review and merge `card-rewards/phase1` into the deploy branch; deploy (the
+   migration applies automatically).
+2. `node api/scripts/seed_merchant_directory.js --dry-run`, then a real run.
+3. `api/scripts/sync_card_catalogue.sh --dry-run`. Review
+   `.staging/coverage-report.md`. Real import (cards become drafts).
+4. `publish_card_pipeline.js --dry-run`, then publish (existing review gate,
+   audit log).
+5. `node api/scripts/recompute_card_state.js --dry-run`, then a real run.
+6. Run `audit_catalogue.js` against `https://api.pandapath.site/catalogue?schema=2`
+   and record the numbers in the status doc.
+7. Release the app build with WP9. Old installs keep using v1, which is now
+   safer: no widened bonuses and correct bonus caps.
+
+## 10. Risks
+
+| Risk | Mitigation |
+|---|---|
+| v1 feed change breaks installed apps | H1; the backward-compatibility test pins the released parser |
+| Engines drift | Shared scenario files; WP7 runs worked examples on both |
+| Research errors look like engine bugs | Worked examples cite the issuer; errors become override files, reviewed |
+| Over-conservative v2 (unknown rail/platform) under-states rewards | Shown as "estimated"; Phase 2 reconciliation measures the gap; the SMS layer can supply rail/platform |
+| Parallel Codex/agent sessions collide | Exclusive file ownership; check `git worktree list` before launching; never push |
+| `index.js` is dirty in the owner's main checkout | WP1/WP8 keep `index.js` edits to small, clearly bounded regions; conflicts are resolved at merge by the lead |

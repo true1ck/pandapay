@@ -1,0 +1,774 @@
+{
+  "_readme": [
+    "Merchant and platform directory (plan C5). Seeded into merchant_brands / payment_platforms.",
+    "Slugs are permanent: never rename, deactivate instead. Aliases match on word boundaries after normalization; longest wins.",
+    "Skeleton by the lead on 2026-11-05; WP5 enriches (aliases, sub-brands, MCC, VPA prefixes, more merchants and portals)."
+  ],
+  "version": 1,
+  "merchants": [
+    {
+      "slug": "swiggy",
+      "name": "Swiggy",
+      "parent_slug": null,
+      "category_slug": "dining",
+      "aliases": [
+        "swiggy",
+        "bundl technologies"
+      ],
+      "vpa_prefixes": [],
+      "mcc": [],
+      "notes": ""
+    },
+    {
+      "slug": "instamart",
+      "name": "Swiggy Instamart",
+      "parent_slug": "swiggy",
+      "category_slug": "groceries",
+      "aliases": [
+        "swiggy instamart",
+        "instamart"
+      ],
+      "vpa_prefixes": [],
+      "mcc": [],
+      "notes": ""
+    },
+    {
+      "slug": "swiggy_dineout",
+      "name": "Swiggy Dineout",
+      "parent_slug": "swiggy",
+      "category_slug": "dining",
+      "aliases": [
+        "swiggy dineout",
+        "dineout"
+      ],
+      "vpa_prefixes": [],
+      "mcc": [],
+      "notes": ""
+    },
+    {
+      "slug": "zomato",
+      "name": "Zomato",
+      "parent_slug": null,
+      "category_slug": "dining",
+      "aliases": [
+        "zomato"
+      ],
+      "vpa_prefixes": [],
+      "mcc": [],
+      "notes": ""
+    },
+    {
+      "slug": "blinkit",
+      "name": "Blinkit",
+      "parent_slug": "zomato",
+      "category_slug": "groceries",
+      "aliases": [
+        "blinkit"
+      ],
+      "vpa_prefixes": [],
+      "mcc": [],
+      "notes": ""
+    },
+    {
+      "slug": "zepto",
+      "name": "Zepto",
+      "parent_slug": null,
+      "category_slug": "groceries",
+      "aliases": [
+        "zepto"
+      ],
+      "vpa_prefixes": [],
+      "mcc": [],
+      "notes": ""
+    },
+    {
+      "slug": "amazon",
+      "name": "Amazon",
+      "parent_slug": null,
+      "category_slug": "online",
+      "aliases": [
+        "amazon"
+      ],
+      "vpa_prefixes": [],
+      "mcc": [],
+      "notes": ""
+    },
+    {
+      "slug": "flipkart",
+      "name": "Flipkart",
+      "parent_slug": null,
+      "category_slug": "online",
+      "aliases": [
+        "flipkart"
+      ],
+      "vpa_prefixes": [],
+      "mcc": [],
+      "notes": ""
+    },
+    {
+      "slug": "myntra",
+      "name": "Myntra",
+      "parent_slug": "flipkart",
+      "category_slug": "online",
+      "aliases": [
+        "myntra"
+      ],
+      "vpa_prefixes": [],
+      "mcc": [],
+      "notes": ""
+    },
+    {
+      "slug": "cleartrip",
+      "name": "Cleartrip",
+      "parent_slug": "flipkart",
+      "category_slug": "travel",
+      "aliases": [
+        "cleartrip"
+      ],
+      "vpa_prefixes": [],
+      "mcc": [],
+      "notes": ""
+    },
+    {
+      "slug": "tata_neu",
+      "name": "Tata Neu",
+      "parent_slug": null,
+      "category_slug": "online",
+      "aliases": [
+        "tata neu",
+        "tataneu"
+      ],
+      "vpa_prefixes": [],
+      "mcc": [],
+      "notes": ""
+    },
+    {
+      "slug": "bigbasket",
+      "name": "BigBasket",
+      "parent_slug": "tata_neu",
+      "category_slug": "groceries",
+      "aliases": [
+        "bigbasket",
+        "big basket"
+      ],
+      "vpa_prefixes": [],
+      "mcc": [],
+      "notes": ""
+    },
+    {
+      "slug": "croma",
+      "name": "Croma",
+      "parent_slug": "tata_neu",
+      "category_slug": "online",
+      "aliases": [
+        "croma"
+      ],
+      "vpa_prefixes": [],
+      "mcc": [],
+      "notes": ""
+    },
+    {
+      "slug": "tata_cliq",
+      "name": "Tata CLiQ",
+      "parent_slug": "tata_neu",
+      "category_slug": "online",
+      "aliases": [
+        "tata cliq",
+        "tatacliq"
+      ],
+      "vpa_prefixes": [],
+      "mcc": [],
+      "notes": ""
+    },
+    {
+      "slug": "ajio",
+      "name": "AJIO",
+      "parent_slug": null,
+      "category_slug": "online",
+      "aliases": [
+        "ajio"
+      ],
+      "vpa_prefixes": [],
+      "mcc": [],
+      "notes": ""
+    },
+    {
+      "slug": "nykaa",
+      "name": "Nykaa",
+      "parent_slug": null,
+      "category_slug": "online",
+      "aliases": [
+        "nykaa"
+      ],
+      "vpa_prefixes": [],
+      "mcc": [],
+      "notes": ""
+    },
+    {
+      "slug": "jiomart",
+      "name": "JioMart",
+      "parent_slug": null,
+      "category_slug": "groceries",
+      "aliases": [
+        "jiomart"
+      ],
+      "vpa_prefixes": [],
+      "mcc": [],
+      "notes": ""
+    },
+    {
+      "slug": "dmart",
+      "name": "DMart",
+      "parent_slug": null,
+      "category_slug": "groceries",
+      "aliases": [
+        "dmart",
+        "avenue supermarts"
+      ],
+      "vpa_prefixes": [],
+      "mcc": [],
+      "notes": ""
+    },
+    {
+      "slug": "irctc",
+      "name": "IRCTC",
+      "parent_slug": null,
+      "category_slug": "travel",
+      "aliases": [
+        "irctc"
+      ],
+      "vpa_prefixes": [],
+      "mcc": [],
+      "notes": ""
+    },
+    {
+      "slug": "makemytrip",
+      "name": "MakeMyTrip",
+      "parent_slug": null,
+      "category_slug": "travel",
+      "aliases": [
+        "makemytrip",
+        "make my trip"
+      ],
+      "vpa_prefixes": [],
+      "mcc": [],
+      "notes": ""
+    },
+    {
+      "slug": "goibibo",
+      "name": "Goibibo",
+      "parent_slug": "makemytrip",
+      "category_slug": "travel",
+      "aliases": [
+        "goibibo"
+      ],
+      "vpa_prefixes": [],
+      "mcc": [],
+      "notes": ""
+    },
+    {
+      "slug": "yatra",
+      "name": "Yatra",
+      "parent_slug": null,
+      "category_slug": "travel",
+      "aliases": [
+        "yatra"
+      ],
+      "vpa_prefixes": [],
+      "mcc": [],
+      "notes": ""
+    },
+    {
+      "slug": "easemytrip",
+      "name": "EaseMyTrip",
+      "parent_slug": null,
+      "category_slug": "travel",
+      "aliases": [
+        "easemytrip"
+      ],
+      "vpa_prefixes": [],
+      "mcc": [],
+      "notes": ""
+    },
+    {
+      "slug": "ixigo",
+      "name": "ixigo",
+      "parent_slug": null,
+      "category_slug": "travel",
+      "aliases": [
+        "ixigo"
+      ],
+      "vpa_prefixes": [],
+      "mcc": [],
+      "notes": ""
+    },
+    {
+      "slug": "indigo",
+      "name": "IndiGo",
+      "parent_slug": null,
+      "category_slug": "travel",
+      "aliases": [
+        "indigo",
+        "interglobe aviation"
+      ],
+      "vpa_prefixes": [],
+      "mcc": [],
+      "notes": ""
+    },
+    {
+      "slug": "air_india",
+      "name": "Air India",
+      "parent_slug": null,
+      "category_slug": "travel",
+      "aliases": [
+        "air india"
+      ],
+      "vpa_prefixes": [],
+      "mcc": [],
+      "notes": ""
+    },
+    {
+      "slug": "vistara",
+      "name": "Vistara",
+      "parent_slug": "air_india",
+      "category_slug": "travel",
+      "aliases": [
+        "vistara"
+      ],
+      "vpa_prefixes": [],
+      "mcc": [],
+      "notes": ""
+    },
+    {
+      "slug": "spicejet",
+      "name": "SpiceJet",
+      "parent_slug": null,
+      "category_slug": "travel",
+      "aliases": [
+        "spicejet"
+      ],
+      "vpa_prefixes": [],
+      "mcc": [],
+      "notes": ""
+    },
+    {
+      "slug": "taj",
+      "name": "Taj Hotels (IHCL)",
+      "parent_slug": null,
+      "category_slug": "travel",
+      "aliases": [
+        "taj hotels",
+        "ihcl",
+        "indian hotels"
+      ],
+      "vpa_prefixes": [],
+      "mcc": [],
+      "notes": ""
+    },
+    {
+      "slug": "marriott",
+      "name": "Marriott",
+      "parent_slug": null,
+      "category_slug": "travel",
+      "aliases": [
+        "marriott"
+      ],
+      "vpa_prefixes": [],
+      "mcc": [],
+      "notes": ""
+    },
+    {
+      "slug": "ola",
+      "name": "Ola",
+      "parent_slug": null,
+      "category_slug": "travel",
+      "aliases": [
+        "ola cabs",
+        "ani technologies"
+      ],
+      "vpa_prefixes": [],
+      "mcc": [],
+      "notes": ""
+    },
+    {
+      "slug": "uber",
+      "name": "Uber",
+      "parent_slug": null,
+      "category_slug": "travel",
+      "aliases": [
+        "uber"
+      ],
+      "vpa_prefixes": [],
+      "mcc": [],
+      "notes": ""
+    },
+    {
+      "slug": "indianoil",
+      "name": "IndianOil",
+      "parent_slug": null,
+      "category_slug": "fuel",
+      "aliases": [
+        "indianoil",
+        "indian oil",
+        "iocl"
+      ],
+      "vpa_prefixes": [],
+      "mcc": [],
+      "notes": ""
+    },
+    {
+      "slug": "bpcl",
+      "name": "Bharat Petroleum",
+      "parent_slug": null,
+      "category_slug": "fuel",
+      "aliases": [
+        "bpcl",
+        "bharat petroleum"
+      ],
+      "vpa_prefixes": [],
+      "mcc": [],
+      "notes": ""
+    },
+    {
+      "slug": "hpcl",
+      "name": "Hindustan Petroleum",
+      "parent_slug": null,
+      "category_slug": "fuel",
+      "aliases": [
+        "hpcl",
+        "hindustan petroleum"
+      ],
+      "vpa_prefixes": [],
+      "mcc": [],
+      "notes": ""
+    },
+    {
+      "slug": "jio_bp",
+      "name": "Jio-bp",
+      "parent_slug": null,
+      "category_slug": "fuel",
+      "aliases": [
+        "jio bp"
+      ],
+      "vpa_prefixes": [],
+      "mcc": [],
+      "notes": ""
+    },
+    {
+      "slug": "airtel",
+      "name": "Airtel",
+      "parent_slug": null,
+      "category_slug": "bills",
+      "aliases": [
+        "airtel",
+        "bharti airtel"
+      ],
+      "vpa_prefixes": [],
+      "mcc": [],
+      "notes": ""
+    },
+    {
+      "slug": "jio",
+      "name": "Jio",
+      "parent_slug": null,
+      "category_slug": "bills",
+      "aliases": [
+        "reliance jio",
+        "jio recharge"
+      ],
+      "vpa_prefixes": [],
+      "mcc": [],
+      "notes": ""
+    },
+    {
+      "slug": "vodafone_idea",
+      "name": "Vi (Vodafone Idea)",
+      "parent_slug": null,
+      "category_slug": "bills",
+      "aliases": [
+        "vodafone idea"
+      ],
+      "vpa_prefixes": [],
+      "mcc": [],
+      "notes": ""
+    },
+    {
+      "slug": "bookmyshow",
+      "name": "BookMyShow",
+      "parent_slug": null,
+      "category_slug": "entertainment",
+      "aliases": [
+        "bookmyshow",
+        "book my show"
+      ],
+      "vpa_prefixes": [],
+      "mcc": [],
+      "notes": ""
+    },
+    {
+      "slug": "pvr",
+      "name": "PVR INOX",
+      "parent_slug": null,
+      "category_slug": "entertainment",
+      "aliases": [
+        "pvr",
+        "inox"
+      ],
+      "vpa_prefixes": [],
+      "mcc": [],
+      "notes": ""
+    },
+    {
+      "slug": "apollo",
+      "name": "Apollo",
+      "parent_slug": null,
+      "category_slug": "health",
+      "aliases": [
+        "apollo pharmacy",
+        "apollo hospitals",
+        "apollo 247"
+      ],
+      "vpa_prefixes": [],
+      "mcc": [],
+      "notes": ""
+    },
+    {
+      "slug": "shoppers_stop",
+      "name": "Shoppers Stop",
+      "parent_slug": null,
+      "category_slug": "online",
+      "aliases": [
+        "shoppers stop"
+      ],
+      "vpa_prefixes": [],
+      "mcc": [],
+      "notes": ""
+    },
+    {
+      "slug": "landmark",
+      "name": "Landmark Group stores",
+      "parent_slug": null,
+      "category_slug": "online",
+      "aliases": [
+        "landmark group"
+      ],
+      "vpa_prefixes": [],
+      "mcc": [],
+      "notes": ""
+    },
+    {
+      "slug": "lifestyle_stores",
+      "name": "Lifestyle",
+      "parent_slug": "landmark",
+      "category_slug": "online",
+      "aliases": [
+        "lifestyle stores"
+      ],
+      "vpa_prefixes": [],
+      "mcc": [],
+      "notes": ""
+    },
+    {
+      "slug": "max_fashion",
+      "name": "Max Fashion",
+      "parent_slug": "landmark",
+      "category_slug": "online",
+      "aliases": [
+        "max fashion"
+      ],
+      "vpa_prefixes": [],
+      "mcc": [],
+      "notes": ""
+    },
+    {
+      "slug": "fabindia",
+      "name": "Fabindia",
+      "parent_slug": null,
+      "category_slug": "online",
+      "aliases": [
+        "fabindia"
+      ],
+      "vpa_prefixes": [],
+      "mcc": [],
+      "notes": ""
+    },
+    {
+      "slug": "tanishq",
+      "name": "Tanishq",
+      "parent_slug": null,
+      "category_slug": "online",
+      "aliases": [
+        "tanishq"
+      ],
+      "vpa_prefixes": [],
+      "mcc": [],
+      "notes": ""
+    },
+    {
+      "slug": "lenskart",
+      "name": "Lenskart",
+      "parent_slug": null,
+      "category_slug": "online",
+      "aliases": [
+        "lenskart"
+      ],
+      "vpa_prefixes": [],
+      "mcc": [],
+      "notes": ""
+    },
+    {
+      "slug": "decathlon",
+      "name": "Decathlon",
+      "parent_slug": null,
+      "category_slug": "online",
+      "aliases": [
+        "decathlon"
+      ],
+      "vpa_prefixes": [],
+      "mcc": [],
+      "notes": ""
+    }
+  ],
+  "platforms": [
+    {
+      "slug": "phonepe_app",
+      "name": "PhonePe app",
+      "kind": "payment_app",
+      "issuer_slug": null,
+      "aliases": [
+        "phonepe"
+      ],
+      "notes": ""
+    },
+    {
+      "slug": "paytm_app",
+      "name": "Paytm app",
+      "kind": "payment_app",
+      "issuer_slug": null,
+      "aliases": [
+        "paytm"
+      ],
+      "notes": ""
+    },
+    {
+      "slug": "amazon_pay",
+      "name": "Amazon Pay",
+      "kind": "payment_app",
+      "issuer_slug": null,
+      "aliases": [
+        "amazon pay"
+      ],
+      "notes": ""
+    },
+    {
+      "slug": "cred_app",
+      "name": "CRED app",
+      "kind": "payment_app",
+      "issuer_slug": null,
+      "aliases": [
+        "cred"
+      ],
+      "notes": ""
+    },
+    {
+      "slug": "kiwi_app",
+      "name": "Kiwi app",
+      "kind": "payment_app",
+      "issuer_slug": null,
+      "aliases": [
+        "kiwi"
+      ],
+      "notes": ""
+    },
+    {
+      "slug": "tata_neu_app",
+      "name": "Tata Neu app",
+      "kind": "merchant_app",
+      "issuer_slug": null,
+      "aliases": [
+        "tata neu app"
+      ],
+      "notes": ""
+    },
+    {
+      "slug": "swiggy_app",
+      "name": "Swiggy app",
+      "kind": "merchant_app",
+      "issuer_slug": null,
+      "aliases": [
+        "swiggy app"
+      ],
+      "notes": ""
+    },
+    {
+      "slug": "airtel_thanks_app",
+      "name": "Airtel Thanks app",
+      "kind": "merchant_app",
+      "issuer_slug": null,
+      "aliases": [
+        "airtel thanks"
+      ],
+      "notes": ""
+    },
+    {
+      "slug": "hdfc_smartbuy",
+      "name": "HDFC SmartBuy",
+      "kind": "bank_portal",
+      "issuer_slug": "hdfc",
+      "aliases": [
+        "smartbuy"
+      ],
+      "notes": ""
+    },
+    {
+      "slug": "icici_ishop",
+      "name": "ICICI iShop",
+      "kind": "bank_portal",
+      "issuer_slug": "icici",
+      "aliases": [
+        "ishop"
+      ],
+      "notes": ""
+    },
+    {
+      "slug": "axis_travel_edge",
+      "name": "Axis Travel EDGE",
+      "kind": "bank_portal",
+      "issuer_slug": "axis",
+      "aliases": [
+        "travel edge"
+      ],
+      "notes": ""
+    },
+    {
+      "slug": "axis_grab_deals",
+      "name": "Axis Grab Deals",
+      "kind": "bank_portal",
+      "issuer_slug": "axis",
+      "aliases": [
+        "grab deals"
+      ],
+      "notes": ""
+    },
+    {
+      "slug": "amex_reward_multiplier",
+      "name": "Amex Reward Multiplier",
+      "kind": "bank_portal",
+      "issuer_slug": "amex",
+      "aliases": [
+        "reward multiplier"
+      ],
+      "notes": ""
+    },
+    {
+      "slug": "intermiles_portal",
+      "name": "InterMiles portal",
+      "kind": "merchant_app",
+      "issuer_slug": null,
+      "aliases": [
+        "intermiles"
+      ],
+      "notes": ""
+    }
+  ]
+}
