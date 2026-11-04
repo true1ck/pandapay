@@ -12,7 +12,8 @@
     "account_recovery",
     "maintenance",
     "notification_delivery",
-    "feedback_admission"
+    "feedback_admission",
+    "shared_expenses"
   ],
   "roles": [
     {
@@ -198,6 +199,11 @@
     {
       "name": "notification_monitor_runtime",
       "kind": "runtime",
+      "required": false
+    },
+    {
+      "name": "shared_expenses_owner",
+      "kind": "owner",
       "required": false
     }
   ],
@@ -651,6 +657,58 @@
     {
       "role": "notification_monitor_runtime",
       "identity": "notification_delivery.health()"
+    },
+    {
+      "role": "app_user",
+      "identity": "shared_expenses.capabilities()"
+    },
+    {
+      "role": "app_user",
+      "identity": "shared_expenses.create_context(uuid,text,text,uuid,text)"
+    },
+    {
+      "role": "app_user",
+      "identity": "shared_expenses.respond_membership(uuid,uuid,boolean,uuid,text)"
+    },
+    {
+      "role": "app_user",
+      "identity": "shared_expenses.inspect_source(jsonb)"
+    },
+    {
+      "role": "app_user",
+      "identity": "shared_expenses.admit_source(jsonb)"
+    },
+    {
+      "role": "app_user",
+      "identity": "shared_expenses.submit_proposal(jsonb,uuid,text)"
+    },
+    {
+      "role": "app_user",
+      "identity": "shared_expenses.respond_expense(jsonb,uuid,text)"
+    },
+    {
+      "role": "app_user",
+      "identity": "shared_expenses.report_settlement(jsonb,uuid,text)"
+    },
+    {
+      "role": "app_user",
+      "identity": "shared_expenses.respond_settlement(jsonb,uuid,text)"
+    },
+    {
+      "role": "app_user",
+      "identity": "shared_expenses.invite_member(jsonb,uuid,text)"
+    },
+    {
+      "role": "app_user",
+      "identity": "shared_expenses._can_read_context(uuid)"
+    },
+    {
+      "role": "app_user",
+      "identity": "shared_expenses._can_read_revision(uuid,uuid)"
+    },
+    {
+      "role": "app_user",
+      "identity": "shared_expenses._can_read_invitation(uuid)"
     }
   ],
   "acceptedFindings": [],
@@ -798,6 +856,110 @@
     {
       "role": "app_user",
       "identity": "notification_delivery.health()"
+    },
+    {
+      "role": "anon",
+      "identity": "shared_expenses.capabilities()"
+    },
+    {
+      "role": "authenticated",
+      "identity": "shared_expenses.capabilities()"
+    },
+    {
+      "role": "anon",
+      "identity": "shared_expenses.create_context(uuid,text,text,uuid,text)"
+    },
+    {
+      "role": "authenticated",
+      "identity": "shared_expenses.create_context(uuid,text,text,uuid,text)"
+    },
+    {
+      "role": "anon",
+      "identity": "shared_expenses.respond_membership(uuid,uuid,boolean,uuid,text)"
+    },
+    {
+      "role": "authenticated",
+      "identity": "shared_expenses.respond_membership(uuid,uuid,boolean,uuid,text)"
+    },
+    {
+      "role": "anon",
+      "identity": "shared_expenses.inspect_source(jsonb)"
+    },
+    {
+      "role": "authenticated",
+      "identity": "shared_expenses.inspect_source(jsonb)"
+    },
+    {
+      "role": "anon",
+      "identity": "shared_expenses.admit_source(jsonb)"
+    },
+    {
+      "role": "authenticated",
+      "identity": "shared_expenses.admit_source(jsonb)"
+    },
+    {
+      "role": "anon",
+      "identity": "shared_expenses.submit_proposal(jsonb,uuid,text)"
+    },
+    {
+      "role": "authenticated",
+      "identity": "shared_expenses.submit_proposal(jsonb,uuid,text)"
+    },
+    {
+      "role": "anon",
+      "identity": "shared_expenses.respond_expense(jsonb,uuid,text)"
+    },
+    {
+      "role": "authenticated",
+      "identity": "shared_expenses.respond_expense(jsonb,uuid,text)"
+    },
+    {
+      "role": "anon",
+      "identity": "shared_expenses.report_settlement(jsonb,uuid,text)"
+    },
+    {
+      "role": "authenticated",
+      "identity": "shared_expenses.report_settlement(jsonb,uuid,text)"
+    },
+    {
+      "role": "anon",
+      "identity": "shared_expenses.respond_settlement(jsonb,uuid,text)"
+    },
+    {
+      "role": "authenticated",
+      "identity": "shared_expenses.respond_settlement(jsonb,uuid,text)"
+    },
+    {
+      "role": "anon",
+      "identity": "shared_expenses.invite_member(jsonb,uuid,text)"
+    },
+    {
+      "role": "authenticated",
+      "identity": "shared_expenses.invite_member(jsonb,uuid,text)"
+    },
+    {
+      "role": "anon",
+      "identity": "shared_expenses._can_read_context(uuid)"
+    },
+    {
+      "role": "authenticated",
+      "identity": "shared_expenses._can_read_context(uuid)"
+    },
+    {
+      "role": "anon",
+      "identity": "shared_expenses._can_read_revision(uuid,uuid)"
+    },
+    {
+      "role": "authenticated",
+      "identity": "shared_expenses._can_read_revision(uuid,uuid)"
+    },
+    {
+      "role": "anon",
+      "identity": "shared_expenses._can_read_invitation(uuid)"
+    },
+    {
+      "role": "authenticated",
+      "identity": "shared_expenses._can_read_invitation(uuid)"
     }
   ]
 }

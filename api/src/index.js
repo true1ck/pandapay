@@ -27,6 +27,7 @@ const {
 } = require('./referral_routes');
 const { registerPortableBackupRoutes } = require('./portable_backup/routes');
 const { registerPortableBackupRestoreRoutes } = require('./portable_backup/restore_routes');
+const { registerSharedExpenseRoutes } = require('./shared_expenses/routes');
 const { registerSupportTicketRoute } = require('./support_tickets');
 const { registerDataErrorReportRoute } = require('./data_error_reports');
 const { createReadinessHandler } = require('./readiness');
@@ -369,6 +370,7 @@ const accountBackupPool=config.accountLifecycleEnabled?{
 registerReferralRoutes(app);
 registerPortableBackupRoutes(app, { requireAuth, pool:accountBackupPool });
 registerPortableBackupRestoreRoutes(app, { requireAuth, pool:accountBackupPool });
+registerSharedExpenseRoutes(app, { requireAuth, withUserClient });
 require('./account_recovery_routes').registerAccountRecoveryRoutes(app,{
   requireAuth,withUserClient,enabled:['true','1'].includes(process.env.ACCOUNT_RECOVERY_ENABLED),
   wrappingKeyBase64:process.env.ACCOUNT_RECOVERY_WRAPPING_KEY,wrappingKeyId:process.env.ACCOUNT_RECOVERY_WRAPPING_KEY_ID,

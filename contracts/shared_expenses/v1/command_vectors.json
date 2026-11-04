@@ -1,0 +1,100 @@
+{
+  "contractVersion": "1.0.0-foundation",
+  "cases": [
+    {
+      "id": "create_group_unicode",
+      "input": {
+        "schemaVersion": 1,
+        "operationId": "33333333-3333-4333-8333-333333333333",
+        "kind": "context.create",
+        "payload": {
+          "contextId": "22222222-2222-4222-8222-222222222222",
+          "contextKind": "group",
+          "name": "Flatmates · ₹ & 🍜"
+        }
+      },
+      "canonical": "{\"kind\":\"context.create\",\"operationId\":\"33333333-3333-4333-8333-333333333333\",\"payload\":{\"contextId\":\"22222222-2222-4222-8222-222222222222\",\"contextKind\":\"group\",\"name\":\"Flatmates · ₹ & 🍜\"},\"schemaVersion\":1}",
+      "sha256": "27cea53d7589d2317176e31cb8a0d57ad078ea54fa8c5309ba57eafdf3714f1c"
+    },
+    {
+      "id": "invite_shadow",
+      "input": {
+        "schemaVersion": 1,
+        "operationId": "33333333-3333-4333-8333-333333333333",
+        "kind": "member.invite",
+        "payload": {
+          "contextId": "22222222-2222-4222-8222-222222222222",
+          "memberId": "44444444-4444-4444-8444-444444444444",
+          "displayName": "Rahul"
+        }
+      },
+      "canonical": "{\"kind\":\"member.invite\",\"operationId\":\"33333333-3333-4333-8333-333333333333\",\"payload\":{\"contextId\":\"22222222-2222-4222-8222-222222222222\",\"displayName\":\"Rahul\",\"memberId\":\"44444444-4444-4444-8444-444444444444\"},\"schemaVersion\":1}",
+      "sha256": "60194c3bc19a921d57d639853ea106346a5f5ec6553392e9d0ed9b0906527f44"
+    },
+    {
+      "id": "exact_expense_snapshot",
+      "input": {
+        "schemaVersion": 1,
+        "operationId": "33333333-3333-4333-8333-333333333333",
+        "kind": "expense.propose",
+        "payload": {
+          "contextId": "22222222-2222-4222-8222-222222222222",
+          "expenseId": "33333333-3333-4333-8333-333333333333",
+          "revisionId": "44444444-4444-4444-8444-444444444444",
+          "expectedHeadRevisionId": null,
+          "snapshot": {
+            "currency": "INR",
+            "totalMinor": "10001",
+            "contributions": [
+              {
+                "memberId": "11111111-1111-4111-8111-111111111111",
+                "amountMinor": "10001"
+              }
+            ],
+            "shares": [
+              {
+                "memberId": "11111111-1111-4111-8111-111111111111",
+                "amountMinor": "5001"
+              },
+              {
+                "memberId": "44444444-4444-4444-8444-444444444444",
+                "amountMinor": "5000"
+              }
+            ],
+            "memberOrder": [
+              "11111111-1111-4111-8111-111111111111",
+              "44444444-4444-4444-8444-444444444444"
+            ]
+          },
+          "title": "Dinner \"together\"",
+          "occurredOn": "2026-11-04",
+          "sources": [],
+          "void": false
+        }
+      },
+      "canonical": "{\"kind\":\"expense.propose\",\"operationId\":\"33333333-3333-4333-8333-333333333333\",\"payload\":{\"contextId\":\"22222222-2222-4222-8222-222222222222\",\"expectedHeadRevisionId\":null,\"expenseId\":\"33333333-3333-4333-8333-333333333333\",\"occurredOn\":\"2026-11-04\",\"revisionId\":\"44444444-4444-4444-8444-444444444444\",\"snapshot\":{\"contributions\":[{\"amountMinor\":\"10001\",\"memberId\":\"11111111-1111-4111-8111-111111111111\"}],\"currency\":\"INR\",\"memberOrder\":[\"11111111-1111-4111-8111-111111111111\",\"44444444-4444-4444-8444-444444444444\"],\"shares\":[{\"amountMinor\":\"5001\",\"memberId\":\"11111111-1111-4111-8111-111111111111\"},{\"amountMinor\":\"5000\",\"memberId\":\"44444444-4444-4444-8444-444444444444\"}],\"totalMinor\":\"10001\"},\"sources\":[],\"title\":\"Dinner \\\"together\\\"\",\"void\":false},\"schemaVersion\":1}",
+      "sha256": "9f9690e3732bd6410bee18847d380e5d81471a2952bc9e8c5c4ccfadcbf0c150"
+    },
+    {
+      "id": "partial_upi_report",
+      "input": {
+        "schemaVersion": 1,
+        "operationId": "33333333-3333-4333-8333-333333333333",
+        "kind": "settlement.report",
+        "payload": {
+          "contextId": "22222222-2222-4222-8222-222222222222",
+          "settlementId": "33333333-3333-4333-8333-333333333333",
+          "payerMemberId": "11111111-1111-4111-8111-111111111111",
+          "receiverMemberId": "44444444-4444-4444-8444-444444444444",
+          "amountMinor": "30000",
+          "currency": "INR",
+          "method": "upi",
+          "paidOn": "2026-11-04",
+          "reference": "utr:synthetic-123"
+        }
+      },
+      "canonical": "{\"kind\":\"settlement.report\",\"operationId\":\"33333333-3333-4333-8333-333333333333\",\"payload\":{\"amountMinor\":\"30000\",\"contextId\":\"22222222-2222-4222-8222-222222222222\",\"currency\":\"INR\",\"method\":\"upi\",\"paidOn\":\"2026-11-04\",\"payerMemberId\":\"11111111-1111-4111-8111-111111111111\",\"receiverMemberId\":\"44444444-4444-4444-8444-444444444444\",\"reference\":\"utr:synthetic-123\",\"settlementId\":\"33333333-3333-4333-8333-333333333333\"},\"schemaVersion\":1}",
+      "sha256": "3740c69edfc07bd866dc90db9cf6cdde86c2b280efabd45d0f68d0ea9719cc16"
+    }
+  ]
+}

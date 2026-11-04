@@ -1,7 +1,7 @@
 {
   "formatVersion": 1,
   "label": "portable-backup-table-coverage-v1",
-  "updated": "2026-11-02",
+  "updated": "2026-11-04",
   "comment": "Schema-aware inventory of PostgreSQL CREATE TABLE objects in db/supabase/migrations. Public-schema keys remain unqualified for contract compatibility; non-public schemas are qualified. This registry covers server migration tables only, not SQLite tables or individual fields, and is not a full database disaster-recovery manifest. Portable export and restore services have separate device, integration and recovery acceptance gates; excluded user-linked rows remain explicit coverage gaps.",
   "tables": {
     "sms_v2_correction_cases": {
@@ -712,6 +712,106 @@
     "sms_v2_category_drafts": {
       "disposition": "platform_ops",
       "reason": "Reviewed category rule revisions and signed bundle publication are platform administration state preserved by full PostgreSQL recovery, outside a customer portable archive."
+    },
+    "shared_expenses.settings": {
+      "disposition": "platform_ops",
+      "reason": "Shared feature capability or committed traversal state; full PostgreSQL recovery preserves it, while device/archive cursors must be reinitialized. No portable financial replay."
+    },
+    "shared_expenses.contexts": {
+      "disposition": "excluded_with_intent",
+      "reason": "Shared-history portable scope gate: these multi-actor or private financial records require an authorized shared export/recovery contract; never insert a portable copy as new accepted money. Full PostgreSQL recovery preserves this isolated schema. P01/P05/P13 require explicit pending-command and account recovery proof before feature activation; classification is inventory, not complete portable coverage."
+    },
+    "shared_expenses.members": {
+      "disposition": "excluded_with_intent",
+      "reason": "Shared-history portable scope gate: these multi-actor or private financial records require an authorized shared export/recovery contract; never insert a portable copy as new accepted money. Full PostgreSQL recovery preserves this isolated schema. P01/P05/P13 require explicit pending-command and account recovery proof before feature activation; classification is inventory, not complete portable coverage."
+    },
+    "shared_expenses.expenses": {
+      "disposition": "excluded_with_intent",
+      "reason": "Shared-history portable scope gate: these multi-actor or private financial records require an authorized shared export/recovery contract; never insert a portable copy as new accepted money. Full PostgreSQL recovery preserves this isolated schema. P01/P05/P13 require explicit pending-command and account recovery proof before feature activation; classification is inventory, not complete portable coverage."
+    },
+    "shared_expenses.expense_revisions": {
+      "disposition": "excluded_with_intent",
+      "reason": "Shared-history portable scope gate: these multi-actor or private financial records require an authorized shared export/recovery contract; never insert a portable copy as new accepted money. Full PostgreSQL recovery preserves this isolated schema. P01/P05/P13 require explicit pending-command and account recovery proof before feature activation; classification is inventory, not complete portable coverage."
+    },
+    "shared_expenses.revision_members": {
+      "disposition": "excluded_with_intent",
+      "reason": "Shared-history portable scope gate: these multi-actor or private financial records require an authorized shared export/recovery contract; never insert a portable copy as new accepted money. Full PostgreSQL recovery preserves this isolated schema. P01/P05/P13 require explicit pending-command and account recovery proof before feature activation; classification is inventory, not complete portable coverage."
+    },
+    "shared_expenses.revision_approvals": {
+      "disposition": "excluded_with_intent",
+      "reason": "Shared-history portable scope gate: these multi-actor or private financial records require an authorized shared export/recovery contract; never insert a portable copy as new accepted money. Full PostgreSQL recovery preserves this isolated schema. P01/P05/P13 require explicit pending-command and account recovery proof before feature activation; classification is inventory, not complete portable coverage."
+    },
+    "shared_expenses.source_resources": {
+      "disposition": "excluded_with_intent",
+      "reason": "Shared-history portable scope gate: these multi-actor or private financial records require an authorized shared export/recovery contract; never insert a portable copy as new accepted money. Full PostgreSQL recovery preserves this isolated schema. P01/P05/P13 require explicit pending-command and account recovery proof before feature activation; classification is inventory, not complete portable coverage."
+    },
+    "shared_expenses.source_aliases": {
+      "disposition": "excluded_with_intent",
+      "reason": "Shared-history portable scope gate: these multi-actor or private financial records require an authorized shared export/recovery contract; never insert a portable copy as new accepted money. Full PostgreSQL recovery preserves this isolated schema. P01/P05/P13 require explicit pending-command and account recovery proof before feature activation; classification is inventory, not complete portable coverage."
+    },
+    "shared_expenses.source_reservations": {
+      "disposition": "excluded_with_intent",
+      "reason": "Shared-history portable scope gate: these multi-actor or private financial records require an authorized shared export/recovery contract; never insert a portable copy as new accepted money. Full PostgreSQL recovery preserves this isolated schema. P01/P05/P13 require explicit pending-command and account recovery proof before feature activation; classification is inventory, not complete portable coverage."
+    },
+    "shared_expenses.settlement_reports": {
+      "disposition": "excluded_with_intent",
+      "reason": "Shared-history portable scope gate: these multi-actor or private financial records require an authorized shared export/recovery contract; never insert a portable copy as new accepted money. Full PostgreSQL recovery preserves this isolated schema. P01/P05/P13 require explicit pending-command and account recovery proof before feature activation; classification is inventory, not complete portable coverage."
+    },
+    "shared_expenses.settlement_events": {
+      "disposition": "excluded_with_intent",
+      "reason": "Shared-history portable scope gate: these multi-actor or private financial records require an authorized shared export/recovery contract; never insert a portable copy as new accepted money. Full PostgreSQL recovery preserves this isolated schema. P01/P05/P13 require explicit pending-command and account recovery proof before feature activation; classification is inventory, not complete portable coverage."
+    },
+    "shared_expenses.journal_entries": {
+      "disposition": "excluded_with_intent",
+      "reason": "Shared-history portable scope gate: these multi-actor or private financial records require an authorized shared export/recovery contract; never insert a portable copy as new accepted money. Full PostgreSQL recovery preserves this isolated schema. P01/P05/P13 require explicit pending-command and account recovery proof before feature activation; classification is inventory, not complete portable coverage."
+    },
+    "shared_expenses.obligation_edges": {
+      "disposition": "excluded_with_intent",
+      "reason": "Shared-history portable scope gate: these multi-actor or private financial records require an authorized shared export/recovery contract; never insert a portable copy as new accepted money. Full PostgreSQL recovery preserves this isolated schema. P01/P05/P13 require explicit pending-command and account recovery proof before feature activation; classification is inventory, not complete portable coverage."
+    },
+    "shared_expenses.settlement_allocations": {
+      "disposition": "excluded_with_intent",
+      "reason": "Shared-history portable scope gate: these multi-actor or private financial records require an authorized shared export/recovery contract; never insert a portable copy as new accepted money. Full PostgreSQL recovery preserves this isolated schema. P01/P05/P13 require explicit pending-command and account recovery proof before feature activation; classification is inventory, not complete portable coverage."
+    },
+    "shared_expenses.operation_receipts": {
+      "disposition": "excluded_with_intent",
+      "reason": "Shared-history portable scope gate: these multi-actor or private financial records require an authorized shared export/recovery contract; never insert a portable copy as new accepted money. Full PostgreSQL recovery preserves this isolated schema. P01/P05/P13 require explicit pending-command and account recovery proof before feature activation; classification is inventory, not complete portable coverage."
+    },
+    "shared_expenses.context_events": {
+      "disposition": "excluded_with_intent",
+      "reason": "Shared-history portable scope gate: these multi-actor or private financial records require an authorized shared export/recovery contract; never insert a portable copy as new accepted money. Full PostgreSQL recovery preserves this isolated schema. P01/P05/P13 require explicit pending-command and account recovery proof before feature activation; classification is inventory, not complete portable coverage."
+    },
+    "shared_expenses.profile_stream_heads": {
+      "disposition": "platform_ops",
+      "reason": "Shared feature capability or committed traversal state; full PostgreSQL recovery preserves it, while device/archive cursors must be reinitialized. No portable financial replay."
+    },
+    "shared_expenses.profile_events": {
+      "disposition": "excluded_with_intent",
+      "reason": "Shared-history portable scope gate: these multi-actor or private financial records require an authorized shared export/recovery contract; never insert a portable copy as new accepted money. Full PostgreSQL recovery preserves this isolated schema. P01/P05/P13 require explicit pending-command and account recovery proof before feature activation; classification is inventory, not complete portable coverage."
+    },
+    "shared_expenses.member_balances": {
+      "disposition": "excluded_with_intent",
+      "reason": "Shared-history portable scope gate: these multi-actor or private financial records require an authorized shared export/recovery contract; never insert a portable copy as new accepted money. Full PostgreSQL recovery preserves this isolated schema. P01/P05/P13 require explicit pending-command and account recovery proof before feature activation; classification is inventory, not complete portable coverage."
+    },
+    "shared_expenses.pair_balances": {
+      "disposition": "excluded_with_intent",
+      "reason": "Shared-history portable scope gate: these multi-actor or private financial records require an authorized shared export/recovery contract; never insert a portable copy as new accepted money. Full PostgreSQL recovery preserves this isolated schema. P01/P05/P13 require explicit pending-command and account recovery proof before feature activation; classification is inventory, not complete portable coverage."
+    },
+    "shared_expenses.private_cost_facts": {
+      "disposition": "excluded_with_intent",
+      "reason": "Shared-history portable scope gate: these multi-actor or private financial records require an authorized shared export/recovery contract; never insert a portable copy as new accepted money. Full PostgreSQL recovery preserves this isolated schema. P01/P05/P13 require explicit pending-command and account recovery proof before feature activation; classification is inventory, not complete portable coverage."
+    },
+    "shared_expenses.settlement_private_references": {
+      "disposition": "excluded_with_intent",
+      "reason": "Private optional payment reference metadata is isolated from immutable settlement history and denied runtime access. Full PostgreSQL recovery preserves it; authorized private export/erasure is an explicit P01/P05/P13 activation gate, not permission to replay a payment from an archive."
+    },
+    "shared_expenses.context_totals": {
+      "disposition": "excluded_with_intent",
+      "reason": "Exact current accepted shared totals are rebuildable from immutable accepted expense heads and revision members. Do not restore as new financial effects; authorized server/shared recovery remains a release gate."
+    },
+    "shared_expenses.member_totals": {
+      "disposition": "excluded_with_intent",
+      "reason": "Exact current accepted shared totals are rebuildable from immutable accepted expense heads and revision members. Do not restore as new financial effects; authorized server/shared recovery remains a release gate."
     }
   }
 }
