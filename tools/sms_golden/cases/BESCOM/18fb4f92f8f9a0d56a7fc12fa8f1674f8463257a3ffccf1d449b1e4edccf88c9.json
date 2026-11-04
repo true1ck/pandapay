@@ -1,0 +1,34 @@
+{
+  "id": "laneq:utility_payment_received_bescom",
+  "templateHash": "18fb4f92f8f9a0d56a7fc12fa8f1674f8463257a3ffccf1d449b1e4edccf88c9",
+  "weight": 1,
+  "source": "synthetic",
+  "messages": [
+    {
+      "sender": "BESCOM",
+      "body": "Payment of Rs.1,250.00 received for RR No ABC123 on 01-11-2026. Thank you. BESCOM",
+      "observedAt": "2026-11-20T09:00:00.000Z"
+    }
+  ],
+  "expect": {
+    "facts": [
+      {
+        "factType": "movement",
+        "attrs": {
+          "direction": "debit",
+          "purpose": "bill_payment",
+          "rail": "unknown",
+          "evidenceOnly": true
+        },
+        "amounts": [
+          {
+            "role": "posted",
+            "minor": 125000
+          }
+        ]
+      }
+    ]
+  },
+  "note": "Biller receipt, evidence only.",
+  "origin": "lane-q"
+}

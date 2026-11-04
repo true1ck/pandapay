@@ -1,0 +1,34 @@
+{
+  "id": "laneq:upiapp_paid_amazon_upi",
+  "templateHash": "f7708c7c1f5355a8fe432dffe14e59a160e75d8d92c20aa06c1dc272c3cc066f",
+  "weight": 1,
+  "source": "synthetic",
+  "messages": [
+    {
+      "sender": "AMAZON",
+      "body": "Rs.250.00 paid to ACME STORE using Amazon Pay UPI. UPI Ref 432112345678.",
+      "observedAt": "2026-11-20T09:00:00.000Z"
+    }
+  ],
+  "expect": {
+    "facts": [
+      {
+        "factType": "movement",
+        "attrs": {
+          "direction": "debit",
+          "purpose": "purchase",
+          "rail": "upi",
+          "evidenceOnly": true
+        },
+        "amounts": [
+          {
+            "role": "posted",
+            "minor": 25000
+          }
+        ]
+      }
+    ]
+  },
+  "note": "Evidence only.",
+  "origin": "lane-q"
+}

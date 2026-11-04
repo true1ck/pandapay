@@ -1,0 +1,31 @@
+{
+  "id": "laneq:postpaid_due_jio",
+  "templateHash": "b80c6349aa8663da37a31d7f0671c4d5c68b645a75e9bde5d64f5ea0eeb3d4ad",
+  "weight": 1,
+  "source": "synthetic",
+  "messages": [
+    {
+      "sender": "JIOPAY",
+      "body": "Your Jio postpaid bill of Rs.799.00 for mobile 98XXXXX123 is due on 20-11-2026. Pay now.",
+      "observedAt": "2026-11-20T09:00:00.000Z"
+    }
+  ],
+  "expect": {
+    "facts": [
+      {
+        "factType": "bill_due",
+        "attrs": {
+          "dueDate": "2026-11-20"
+        },
+        "amounts": [
+          {
+            "role": "due_total",
+            "minor": 79900
+          }
+        ]
+      }
+    ]
+  },
+  "note": "Wording guess.",
+  "origin": "lane-q"
+}

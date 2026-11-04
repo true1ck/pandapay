@@ -1,0 +1,33 @@
+{
+  "id": "laneq:card_spent_onecard_unregistered",
+  "templateHash": "b5eecc46995d010a49ed6d94b7ef7fc19abd2732e05a8dae3ca6384835d55727",
+  "weight": 1,
+  "source": "synthetic",
+  "messages": [
+    {
+      "sender": "VM-ONECRD-S",
+      "body": "Rs. 1,250.00 spent on your OneCard ending 9911 at ACME STORE on 01 Nov 26.",
+      "observedAt": "2026-11-20T09:00:00.000Z"
+    }
+  ],
+  "expect": {
+    "facts": [
+      {
+        "factType": "movement",
+        "attrs": {
+          "direction": "debit",
+          "purpose": "purchase",
+          "rail": "card"
+        },
+        "amounts": [
+          {
+            "role": "posted",
+            "minor": 125000
+          }
+        ]
+      }
+    ]
+  },
+  "note": "Unregistered sender handle (ONECRD): the movement is captured, the issuer is not, so no instrument is asserted. See requests/LANE-Q-generalisation.md.",
+  "origin": "lane-q"
+}

@@ -1,0 +1,33 @@
+{
+  "id": "laneq:card_payment_received_onecard_unregistered",
+  "templateHash": "1f49f9fb57b7b30f40f56dd411627d0c365f3c44cb2a7859c36c07cd0d49e26b",
+  "weight": 1,
+  "source": "synthetic",
+  "messages": [
+    {
+      "sender": "VM-ONECRD-S",
+      "body": "Payment of Rs. 6,500.00 received on your OneCard ending 9911 on 01 Nov 26. Thanks!",
+      "observedAt": "2026-11-20T09:00:00.000Z"
+    }
+  ],
+  "expect": {
+    "facts": [
+      {
+        "factType": "movement",
+        "attrs": {
+          "direction": "credit",
+          "purpose": "card_payment",
+          "rail": "unknown"
+        },
+        "amounts": [
+          {
+            "role": "posted",
+            "minor": 650000
+          }
+        ]
+      }
+    ]
+  },
+  "note": "Unregistered sender handle (ONECRD): no issuer, so no instrument is asserted.",
+  "origin": "lane-q"
+}

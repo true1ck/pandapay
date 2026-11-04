@@ -1,0 +1,33 @@
+{
+  "id": "laneq:card_was_used_for_citi_nokind",
+  "templateHash": "67539770609f4627f6d706afb1af36746ba9210e24aab766d44075a7f4c5533b",
+  "weight": 1,
+  "source": "synthetic",
+  "messages": [
+    {
+      "sender": "VM-CITIBK-S",
+      "body": "Citi Card ending 7788 was used for INR 1,100.00 at SAMPLE BOOKS on 04-NOV-26.",
+      "observedAt": "2026-11-20T09:00:00.000Z"
+    }
+  ],
+  "expect": {
+    "facts": [
+      {
+        "factType": "movement",
+        "attrs": {
+          "direction": "debit",
+          "purpose": "purchase",
+          "rail": "card"
+        },
+        "amounts": [
+          {
+            "role": "posted",
+            "minor": 110000
+          }
+        ]
+      }
+    ]
+  },
+  "note": "Card kind is not printed, so no instrument is asserted: a kind-less mention can only attach to a card the user already has.",
+  "origin": "lane-q"
+}

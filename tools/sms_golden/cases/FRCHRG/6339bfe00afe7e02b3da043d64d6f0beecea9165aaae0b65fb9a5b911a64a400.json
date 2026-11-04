@@ -1,0 +1,37 @@
+{
+  "id": "laneq:wallet_paid_freecharge",
+  "templateHash": "6339bfe00afe7e02b3da043d64d6f0beecea9165aaae0b65fb9a5b911a64a400",
+  "weight": 1,
+  "source": "synthetic",
+  "messages": [
+    {
+      "sender": "FRCHRG",
+      "body": "Rs.250 paid to ACME STORE from your Freecharge wallet. Balance Rs.400.",
+      "observedAt": "2026-11-20T09:00:00.000Z"
+    }
+  ],
+  "expect": {
+    "facts": [
+      {
+        "factType": "movement",
+        "attrs": {
+          "direction": "debit",
+          "purpose": "purchase",
+          "rail": "wallet"
+        },
+        "amounts": [
+          {
+            "role": "posted",
+            "minor": 25000
+          }
+        ],
+        "instrument": {
+          "kind": "wallet",
+          "issuerSlug": "freecharge"
+        }
+      }
+    ]
+  },
+  "note": "Wording guess for a wallet spend.",
+  "origin": "lane-q"
+}

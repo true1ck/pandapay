@@ -1,0 +1,38 @@
+{
+  "id": "laneq:emi_upcoming_icici",
+  "templateHash": "9aaff1997b3b3cf05c4ddf7c36a15afac3bd20554ae888a3a48b437eeebb60d3",
+  "weight": 1,
+  "source": "synthetic",
+  "messages": [
+    {
+      "sender": "VM-ICICIB-S",
+      "body": "Dear Customer, your loan EMI of Rs.5,000.00 will be debited from A/c XX5678 on 05-Nov-26. Please maintain sufficient balance.",
+      "observedAt": "2026-11-20T09:00:00.000Z"
+    }
+  ],
+  "expect": {
+    "facts": [
+      {
+        "factType": "attempt",
+        "attrs": {
+          "status": "scheduled",
+          "direction": "debit",
+          "purpose": "emi"
+        },
+        "amounts": [
+          {
+            "role": "scheduled",
+            "minor": 500000
+          }
+        ],
+        "instrument": {
+          "kind": "bank_account",
+          "issuerSlug": "icici",
+          "maskDigits": "5678"
+        }
+      }
+    ]
+  },
+  "note": "Scheduled attempt only.",
+  "origin": "lane-q"
+}
