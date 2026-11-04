@@ -19,7 +19,7 @@ A bounded request does not drain interrupted migration sources from another peri
 
 ## Release flow
 
-The testing action is Debug-only. Fresh monthly messages continue through ordinary capture once. A production historical update needs a separately reviewed migration identifier, supported app version, bounded period, rollout policy, before/after evidence and rollback procedure. Downloading a rule bundle alone never schedules it.
+The testing action is available in Debug and explicitly opted-in local-rig Profile builds. It is excluded from release builds. Fresh monthly messages continue through ordinary capture once. A production historical update needs a separately reviewed migration identifier, supported app version, bounded period, rollout policy, before/after evidence and rollback procedure. Downloading a rule bundle alone never schedules it.
 
 Existing matched v2 facts are immutable. Reinterpreting them under different extraction/linking rules needs a versioned replacement protocol covering retired facts, merged events, server sync and rollback. Category refresh must not silently invent this protocol. Record that follow-up explicitly and keep it outside this category operation.
 

@@ -76,3 +76,27 @@ The local API was restarted to load the category endpoint. The original rig supe
 Both HTTPS readiness endpoints returned 200 after restoration, and the category endpoint enforced authentication with 401 for an anonymous request. This establishes installation, launch and Mac-side service readiness. The physical history check, phone-to-Mac sync and phone performance remain unverified. Follow `../history-recheck-plan.md`, reviewing the preview before applying.
 
 Production migration approval, complete matched-fact reprocessing, real-message accuracy targets, production keys/App Check and real-phone Shortcut/history acceptance remain separate gates. Existing owner approval to test locally does not change shared rollout flags.
+
+## White-screen follow-up — standalone local iPhone build
+
+The owner reported a white screen after build 106. The Mac's local API and auth readiness endpoints both returned 200, but the Debug process had stopped with SIGKILL before an API request. A direct launch captured the native Flutter diagnostic: a Debug engine cannot start on iOS without Flutter tooling or Xcode. It then exited with signal 11. This reproduced the Home Screen launch failure independently of backend requests.
+
+The local defines file also lacked the CA field at this point. Its public CA was restored from the existing rig certificate before the next build. No new CA, SMS signing key, database or production flag was created.
+
+Commit `615f652` adds an explicitly opted-in local Profile build and the physical-device build/install recipe. It reuses the installed test bundle identity and omits the regular Shortcut scheme. Local TLS, development bundle trust, test App Check provider and history controls require exact dev environment, both public anchors and a Profile opt-in. Release builds cannot enable this path. The HTTP client retains the existing private-origin and redirect restrictions. Production anchors and release App Check providers remain unchanged.
+
+Test-first log: `/tmp/sms-v2-standalone-red.log` failed before the build policy existed. With the local rig running, from `app`:
+
+```sh
+SMS_V2_LOCAL_RIG=/tmp/pandapay-sms-rig.EXAMPLE flutter test --no-pub --concurrency=2 --dart-define=SMS_PIPELINE_V2=true test/features/sms_v2 test/app/local_sms_rig_build_test.dart
+flutter test --no-pub test/app/local_sms_rig_build_test.dart test/features/sms_v2/sync/bundle_verifier_test.dart test/features/sms_v2/sync/attestation_test.dart test/features/sms_v2/ui/history_update_panel_test.dart
+flutter test --no-pub --dart-define-from-file=/tmp/pandapay-sms-rig.EXAMPLE/flutter-defines.json --dart-define=SMS_V2_LOCAL_TEST_BUILD=true test/app/local_sms_rig_build_test.dart
+```
+
+The full focused suite passed 266, skipped 1, failed 0, including live app-client login, signed rule verification, tamper rejection and fact sync. The smaller regression suite passed 17. Commit `b96c1fb` adds the compiled-configuration transport check; with the rig defines all 10 policy/transport cases passed, including real HTTPS readiness for both services and rejection of an unrelated origin. Targeted static analysis passed with no issues. The Python recipe rejected three invalid target/build argument combinations before any build and passed compilation.
+
+The checked-in recipe built and installed Profile build 107 as **PandaPay SMS v2 Test** on 5 November 2026. Code signature verification passed, devicectl confirmed the installed version, and the app launched without Flutter or Xcode attached. The regular app remained at build 109. Temporary Xcode/manifest/lock changes were restored.
+
+After that cold launch, the phone completed email sign-in and received successful API responses for transactions, cards, Home and other account data. The local API also recorded `GET /sms/v2/sync` with HTTP 200 from the app. This verifies phone-to-Mac HTTPS and authenticated SMS v2 sync for this standalone build. The saved local data was not deleted. A later manual history preview/apply, Shortcut automation and full history acceptance remain owner checks.
+
+Build/install log: `/tmp/sms-v2-standalone-profile-build.log`. The Debug failure, device inventory, service and test logs remain local under `/tmp`. The earlier claim of a running Debug VM did not establish Home Screen relaunch acceptance; build 107 supersedes that artifact for manual testing.
