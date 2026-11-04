@@ -22,6 +22,11 @@ abstract final class AdminColors {
   static const successBg = Color(0xFFEDF7F0);
   static const error = Color(0xFFB42318);
   static const errorBg = Color(0xFFFFF1F0);
+  // BambooInk accents for environment and attention states.
+  static const clay = Color(0xFFE8623C);
+  static const clayInk = Color(0xFFB4441F);
+  static const amber = Color(0xFFD97706);
+  static const wash = Color(0xFFE4F2CF);
 }
 
 ThemeData adminConsoleTheme() {

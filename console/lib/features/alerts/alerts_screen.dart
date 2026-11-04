@@ -95,6 +95,8 @@ class _AlertTileState extends ConsumerState<_AlertTile> {
   Widget build(BuildContext context) {
     final a = widget.alert;
     final isOpen = a['state'] == 'open';
+    // Parked alerts stay decidable once more evidence arrives.
+    final isParked = a['state'] == 'needs_more_evidence';
     return Card(
       margin: const EdgeInsets.only(bottom: 8),
       child: ExpansionTile(
@@ -113,7 +115,7 @@ class _AlertTileState extends ConsumerState<_AlertTile> {
               child: CircularProgressIndicator(),
             ),
           if (_detail != null) ..._buildDetail(_detail!),
-          if (isOpen)
+          if (isOpen || isParked)
             Padding(
               padding: const EdgeInsets.all(12),
               child: Wrap(
@@ -128,12 +130,13 @@ class _AlertTileState extends ConsumerState<_AlertTile> {
                     onPressed: _busy ? null : () => _decide('rejected'),
                     child: const Text('Reject'),
                   ),
-                  OutlinedButton(
-                    onPressed: _busy
-                        ? null
-                        : () => _decide('needs_more_evidence'),
-                    child: const Text('Needs more evidence'),
-                  ),
+                  if (isOpen)
+                    OutlinedButton(
+                      onPressed: _busy
+                          ? null
+                          : () => _decide('needs_more_evidence'),
+                      child: const Text('Needs more evidence'),
+                    ),
                 ],
               ),
             ),
