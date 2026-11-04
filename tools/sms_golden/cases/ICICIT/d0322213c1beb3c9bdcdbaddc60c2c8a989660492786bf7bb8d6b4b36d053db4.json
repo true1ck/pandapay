@@ -1,0 +1,37 @@
+{
+  "id": "lanej:moneyin_dividend_credited",
+  "templateHash": "d0322213c1beb3c9bdcdbaddc60c2c8a989660492786bf7bb8d6b4b36d053db4",
+  "weight": 1,
+  "source": "synthetic",
+  "messages": [
+    {
+      "sender": "VM-ICICIT-S",
+      "body": "Dividend credit: Rs 640.00 from EXAMPLE CORP has been credited to your demat linked A/c XX1234 on 15-11-26.",
+      "observedAt": "2026-12-01T09:00:00.000Z"
+    }
+  ],
+  "expect": {
+    "facts": [
+      {
+        "factType": "movement",
+        "attrs": {
+          "direction": "credit",
+          "purpose": "dividend",
+          "rail": "unknown"
+        },
+        "amounts": [
+          {
+            "role": "posted",
+            "minor": 64000
+          }
+        ],
+        "instrument": {
+          "kind": "bank_account",
+          "maskDigits": "1234"
+        }
+      }
+    ]
+  },
+  "note": "Dividend credited to a bank account.",
+  "origin": "lane-j"
+}

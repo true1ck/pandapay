@@ -1,0 +1,33 @@
+{
+  "id": "lanej:refund_credited_clinic_cancellation",
+  "templateHash": "9d403f67128d6c7afef8dc09ea83f30eef4d90a6726a1a0331a7ea66bcf929bb",
+  "weight": 1,
+  "source": "synthetic",
+  "messages": [
+    {
+      "sender": "VM-EXCARE-S",
+      "body": "REFUND PROCESSED! Refund of INR 750 for your CANCELLED Appointment with Appointment ID 24144779 is successful. Need help? Visit example.com/help",
+      "observedAt": "2026-12-01T09:00:00.000Z"
+    }
+  ],
+  "expect": {
+    "facts": [
+      {
+        "factType": "movement",
+        "attrs": {
+          "direction": "credit",
+          "purpose": "refund",
+          "rail": "unknown"
+        },
+        "amounts": [
+          {
+            "role": "posted",
+            "minor": 75000
+          }
+        ]
+      }
+    ]
+  },
+  "note": "A clinic cancellation refund that says it is successful is money back.",
+  "origin": "lane-j"
+}

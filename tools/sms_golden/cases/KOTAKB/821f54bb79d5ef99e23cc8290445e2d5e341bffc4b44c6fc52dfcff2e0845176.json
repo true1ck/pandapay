@@ -1,0 +1,37 @@
+{
+  "id": "lanej:salary_rtgs_account_first",
+  "templateHash": "821f54bb79d5ef99e23cc8290445e2d5e341bffc4b44c6fc52dfcff2e0845176",
+  "weight": 1,
+  "source": "synthetic",
+  "messages": [
+    {
+      "sender": "VM-KOTAKB-S",
+      "body": "Example Bank Acct XX1234 credited Rs. 85,000.00 on 01-Nov-26; RTGS-EXAM0000001-ACME TECHNOLOGIES-PAYROLL OCT. Avl Bal Rs 1,37,661.40.",
+      "observedAt": "2026-12-01T09:00:00.000Z"
+    }
+  ],
+  "expect": {
+    "facts": [
+      {
+        "factType": "movement",
+        "attrs": {
+          "direction": "credit",
+          "purpose": "salary",
+          "rail": "rtgs"
+        },
+        "amounts": [
+          {
+            "role": "posted",
+            "minor": 8500000
+          }
+        ],
+        "instrument": {
+          "kind": "bank_account",
+          "maskDigits": "1234"
+        }
+      }
+    ]
+  },
+  "note": "Salary by RTGS, account-first wording.",
+  "origin": "lane-j"
+}

@@ -1,0 +1,37 @@
+{
+  "id": "lanej:refund_credited_card_cancelled_by_merchant",
+  "templateHash": "1b4cef601e74cd60cd4e5bd763a491745398e51a462386774b77ba5a93bf8f47",
+  "weight": 1,
+  "source": "synthetic",
+  "messages": [
+    {
+      "sender": "VM-SBICRD-S",
+      "body": "Dear Cardholder, Trxn. of Rs.99.00 on your Example credit card ending 1234 at EXAMPLE MERCHANT dated 05-10-26 has been cancelled and refunded by the merchant. For details call us.",
+      "observedAt": "2026-12-01T09:00:00.000Z"
+    }
+  ],
+  "expect": {
+    "facts": [
+      {
+        "factType": "movement",
+        "attrs": {
+          "direction": "credit",
+          "purpose": "refund",
+          "rail": "card"
+        },
+        "amounts": [
+          {
+            "role": "posted",
+            "minor": 9900
+          }
+        ],
+        "instrument": {
+          "kind": "credit_card",
+          "maskDigits": "1234"
+        }
+      }
+    ]
+  },
+  "note": "Merchant cancellation refunded to a credit card.",
+  "origin": "lane-j"
+}

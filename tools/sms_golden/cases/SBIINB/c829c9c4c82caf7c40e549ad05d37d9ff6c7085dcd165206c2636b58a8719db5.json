@@ -1,0 +1,37 @@
+{
+  "id": "lanej:salary_neft_account_first",
+  "templateHash": "c829c9c4c82caf7c40e549ad05d37d9ff6c7085dcd165206c2636b58a8719db5",
+  "weight": 1,
+  "source": "synthetic",
+  "messages": [
+    {
+      "sender": "VM-SBIINB-S",
+      "body": "Example Bank Acct XX1234 credited Rs. 85,000.00 on 01-Nov-26; NEFT-EXAM0000001-ACME TECHNOLOGIES PVT LTD-SALARY NOV. Avl Bal Rs 1,37,661.40.",
+      "observedAt": "2026-12-01T09:00:00.000Z"
+    }
+  ],
+  "expect": {
+    "facts": [
+      {
+        "factType": "movement",
+        "attrs": {
+          "direction": "credit",
+          "purpose": "salary",
+          "rail": "neft"
+        },
+        "amounts": [
+          {
+            "role": "posted",
+            "minor": 8500000
+          }
+        ],
+        "instrument": {
+          "kind": "bank_account",
+          "maskDigits": "1234"
+        }
+      }
+    ]
+  },
+  "note": "Salary by NEFT, account-first wording.",
+  "origin": "lane-j"
+}

@@ -1,0 +1,37 @@
+{
+  "id": "lanej:moneyin_interest_period_narration",
+  "templateHash": "fa59e52ffee7ede51f5a2206edf5b3adac21c2bdd8b87e8c753cb34ae4d9a5d2",
+  "weight": 1,
+  "source": "synthetic",
+  "messages": [
+    {
+      "sender": "VM-AXISBK-S",
+      "body": "Your a/c no. XXXXXXXX1234 is credited by Rs.1,200.00 on 30-09-26 by Int.Pd:01-07-2026 to 30-09-2026.",
+      "observedAt": "2026-12-01T09:00:00.000Z"
+    }
+  ],
+  "expect": {
+    "facts": [
+      {
+        "factType": "movement",
+        "attrs": {
+          "direction": "credit",
+          "purpose": "interest",
+          "rail": "unknown"
+        },
+        "amounts": [
+          {
+            "role": "posted",
+            "minor": 120000
+          }
+        ],
+        "instrument": {
+          "kind": "bank_account",
+          "maskDigits": "1234"
+        }
+      }
+    ]
+  },
+  "note": "Interest for a period.",
+  "origin": "lane-j"
+}

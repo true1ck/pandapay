@@ -1,0 +1,1751 @@
+[
+  {
+    "id": "MONEYIN-SALARY-NEFT-AMT-FIRST",
+    "version": 1,
+    "family": "money_in",
+    "senders": [
+      "*"
+    ],
+    "priority": 420,
+    "match": {
+      "pattern": "(?:update!?\\s*)?(?:\\b(?:rs\\.?|inr)|₹)\\s*:?\\s*(?<amt>\\d[\\d,]*(?:\\.\\d{1,2})?)\\s+(?:has\\s+been\\s+|is\\s+|was\\s+)?(?:credited|deposited|received)\\s+(?:to|in|into)\\s+(?:(?:your|the)\\s+)?(?:[a-z][a-z .&'-]{0,30}?\\s)?(?:a/?c(?:ct)?\\.?|account|acc\\.?)(?:\\s*(?:no|number|num)\\.?)?(?:\\s+(?:ending|ends)(?:\\s+(?:with|in))?)?\\s*[:\\-]?\\s*[x*•.]*\\s?(?<mask>\\d{2,18})(?=[\\s\\S]*?\\b(?:on|dated|date)\\s+(?<date>\\d{4}-\\d{2}-\\d{2}(?:[: ]\\d{2}:\\d{2}(?::\\d{2})?)?|\\d{1,2}[-/]\\d{1,2}[-/]\\d{2,4}(?:,?\\s*\\d{2}:\\d{2}(?::\\d{2})?)?|\\d{1,2}[-/ ]?[a-z]{3}[-/ ,]*\\d{2,4}(?:,?\\s*\\d{2}:\\d{2}(?::\\d{2})?)?)|)[^\\n]{0,80}?\\bneft\\b[\\s\\-/:]*(?:cr\\b[\\s\\-/:]*)?(?:(?:p2a|p2p|inb)[\\s\\-/:]*)?(?:[a-z]{4}0[a-z0-9]{6}|[a-z]{4}[a-z0-9]?\\d{9,16})[\\s\\-/:]*(?<payer>[a-z][a-z0-9 .&']{2,60}?)[\\s\\-/:]+(?:salary|payroll|sal)\\b",
+      "flags": "i",
+      "rejectAny": [
+        "not credited",
+        "could not",
+        "failed",
+        "refund",
+        "reversal",
+        "reversed",
+        "debited",
+        "will be"
+      ]
+    },
+    "emit": [
+      {
+        "factType": "movement",
+        "attrs": {
+          "direction": "credit",
+          "purpose": "salary",
+          "rail": "neft"
+        },
+        "amounts": [
+          {
+            "role": "posted",
+            "from": "amt",
+            "unit": "INR"
+          }
+        ],
+        "occurredAt": {
+          "from": "date",
+          "formats": [
+            "dd-MM-yyyy",
+            "dd-MM-yyyy, HH:mm:ss",
+            "dd-MM-yyyy,HH:mm:ss",
+            "dd-MM-yyyy, HH:mm",
+            "dd-MM-yyyy HH:mm:ss",
+            "dd-MM-yy",
+            "dd-MM-yy, HH:mm:ss",
+            "dd-MM-yy,HH:mm:ss",
+            "dd-MM-yy, HH:mm",
+            "dd-MM-yy HH:mm:ss",
+            "dd/MM/yyyy",
+            "dd/MM/yyyy, HH:mm:ss",
+            "dd/MM/yyyy,HH:mm:ss",
+            "dd/MM/yyyy, HH:mm",
+            "dd/MM/yyyy HH:mm:ss",
+            "dd/MM/yy",
+            "dd/MM/yy, HH:mm:ss",
+            "dd/MM/yy,HH:mm:ss",
+            "dd/MM/yy, HH:mm",
+            "dd/MM/yy HH:mm:ss",
+            "dd-MMM-yyyy",
+            "dd-MMM-yyyy, HH:mm:ss",
+            "dd-MMM-yyyy,HH:mm:ss",
+            "dd-MMM-yyyy, HH:mm",
+            "dd-MMM-yyyy HH:mm:ss",
+            "dd-MMM-yy",
+            "dd-MMM-yy, HH:mm:ss",
+            "dd-MMM-yy,HH:mm:ss",
+            "dd-MMM-yy, HH:mm",
+            "dd-MMM-yy HH:mm:ss",
+            "ddMMMyyyy",
+            "ddMMMyyyy, HH:mm:ss",
+            "ddMMMyyyy,HH:mm:ss",
+            "ddMMMyyyy, HH:mm",
+            "ddMMMyyyy HH:mm:ss",
+            "ddMMMyy",
+            "ddMMMyy, HH:mm:ss",
+            "ddMMMyy,HH:mm:ss",
+            "ddMMMyy, HH:mm",
+            "ddMMMyy HH:mm:ss",
+            "dd MMM yyyy",
+            "dd MMM yyyy, HH:mm:ss",
+            "dd MMM yyyy,HH:mm:ss",
+            "dd MMM yyyy, HH:mm",
+            "dd MMM yyyy HH:mm:ss",
+            "dd MMM yy",
+            "dd MMM yy, HH:mm:ss",
+            "dd MMM yy,HH:mm:ss",
+            "dd MMM yy, HH:mm",
+            "dd MMM yy HH:mm:ss",
+            "dd-MMM yyyy",
+            "dd-MMM yyyy, HH:mm:ss",
+            "dd-MMM yyyy,HH:mm:ss",
+            "dd-MMM yyyy, HH:mm",
+            "dd-MMM yyyy HH:mm:ss",
+            "dd.MM.yyyy",
+            "dd.MM.yyyy, HH:mm:ss",
+            "dd.MM.yyyy,HH:mm:ss",
+            "dd.MM.yyyy, HH:mm",
+            "dd.MM.yyyy HH:mm:ss",
+            "dd.MM.yy",
+            "dd.MM.yy, HH:mm:ss",
+            "dd.MM.yy,HH:mm:ss",
+            "dd.MM.yy, HH:mm",
+            "dd.MM.yy HH:mm:ss",
+            "yyyy-MM-dd",
+            "yyyy-MM-dd:HH:mm:ss",
+            "yyyy-MM-dd HH:mm:ss",
+            "yyyy-MM-dd HH:mm"
+          ]
+        },
+        "instrument": {
+          "kind": "bank_account",
+          "maskFrom": "mask"
+        },
+        "counterparty": {
+          "nameFrom": "payer",
+          "transforms": [
+            "sanitizeNarration"
+          ]
+        }
+      }
+    ],
+    "confidence": 0.94,
+    "examples": [
+      {
+        "sender": "VM-EXBANK-S",
+        "body": "Update! INR 85,000.00 deposited in Example Bank A/c XX1234 on 01-NOV-26 for NEFT Cr-EXAM0000001-ACME TECHNOLOGIES PVT LTD-SALARY NOV. Avl bal INR 1,37,661.40.",
+        "expectFactTypes": [
+          "movement"
+        ]
+      },
+      {
+        "sender": "VM-EXBANK-S",
+        "body": "Update! INR 85,000.00 deposited in Example Bank A/c XX1234 on 01-NOV-26 for NEFT Cr-EXAM0000001-ACME TECHNOLOGIES PVT LTD-INVOICE 42. Avl bal INR 1,37,661.40.",
+        "expectFactTypes": []
+      }
+    ],
+    "status": "active",
+    "createdBy": "lane-j",
+    "updatedAt": "2026-11-05T00:00:00Z"
+  },
+  {
+    "id": "MONEYIN-SALARY-NEFT-ACCT-FIRST",
+    "version": 1,
+    "family": "money_in",
+    "senders": [
+      "*"
+    ],
+    "priority": 420,
+    "match": {
+      "pattern": "(?:(?:your|the)\\s+)?(?:[a-z][a-z .&'-]{0,30}?\\s)?(?:a/?c(?:ct)?\\.?|account|acc\\.?)(?:\\s*(?:no|number|num)\\.?)?(?:\\s+(?:ending|ends)(?:\\s+(?:with|in))?)?\\s*[:\\-]?\\s*[x*•.]*\\s?(?<mask>\\d{2,18})\\s+(?:has\\s+been\\s+|is\\s+|was\\s+)?credited\\s+(?:with|by|for|of)?\\s*(?:\\b(?:rs\\.?|inr)|₹)\\s*:?\\s*(?<amt>\\d[\\d,]*(?:\\.\\d{1,2})?)(?=[\\s\\S]*?\\b(?:on|dated|date)\\s+(?<date>\\d{4}-\\d{2}-\\d{2}(?:[: ]\\d{2}:\\d{2}(?::\\d{2})?)?|\\d{1,2}[-/]\\d{1,2}[-/]\\d{2,4}(?:,?\\s*\\d{2}:\\d{2}(?::\\d{2})?)?|\\d{1,2}[-/ ]?[a-z]{3}[-/ ,]*\\d{2,4}(?:,?\\s*\\d{2}:\\d{2}(?::\\d{2})?)?)|)[^\\n]{0,80}?\\bneft\\b[\\s\\-/:]*(?:cr\\b[\\s\\-/:]*)?(?:(?:p2a|p2p|inb)[\\s\\-/:]*)?(?:[a-z]{4}0[a-z0-9]{6}|[a-z]{4}[a-z0-9]?\\d{9,16})[\\s\\-/:]*(?<payer>[a-z][a-z0-9 .&']{2,60}?)[\\s\\-/:]+(?:salary|payroll|sal)\\b",
+      "flags": "i",
+      "rejectAny": [
+        "not credited",
+        "could not",
+        "failed",
+        "refund",
+        "reversal",
+        "reversed",
+        "debited",
+        "will be"
+      ]
+    },
+    "emit": [
+      {
+        "factType": "movement",
+        "attrs": {
+          "direction": "credit",
+          "purpose": "salary",
+          "rail": "neft"
+        },
+        "amounts": [
+          {
+            "role": "posted",
+            "from": "amt",
+            "unit": "INR"
+          }
+        ],
+        "occurredAt": {
+          "from": "date",
+          "formats": [
+            "dd-MM-yyyy",
+            "dd-MM-yyyy, HH:mm:ss",
+            "dd-MM-yyyy,HH:mm:ss",
+            "dd-MM-yyyy, HH:mm",
+            "dd-MM-yyyy HH:mm:ss",
+            "dd-MM-yy",
+            "dd-MM-yy, HH:mm:ss",
+            "dd-MM-yy,HH:mm:ss",
+            "dd-MM-yy, HH:mm",
+            "dd-MM-yy HH:mm:ss",
+            "dd/MM/yyyy",
+            "dd/MM/yyyy, HH:mm:ss",
+            "dd/MM/yyyy,HH:mm:ss",
+            "dd/MM/yyyy, HH:mm",
+            "dd/MM/yyyy HH:mm:ss",
+            "dd/MM/yy",
+            "dd/MM/yy, HH:mm:ss",
+            "dd/MM/yy,HH:mm:ss",
+            "dd/MM/yy, HH:mm",
+            "dd/MM/yy HH:mm:ss",
+            "dd-MMM-yyyy",
+            "dd-MMM-yyyy, HH:mm:ss",
+            "dd-MMM-yyyy,HH:mm:ss",
+            "dd-MMM-yyyy, HH:mm",
+            "dd-MMM-yyyy HH:mm:ss",
+            "dd-MMM-yy",
+            "dd-MMM-yy, HH:mm:ss",
+            "dd-MMM-yy,HH:mm:ss",
+            "dd-MMM-yy, HH:mm",
+            "dd-MMM-yy HH:mm:ss",
+            "ddMMMyyyy",
+            "ddMMMyyyy, HH:mm:ss",
+            "ddMMMyyyy,HH:mm:ss",
+            "ddMMMyyyy, HH:mm",
+            "ddMMMyyyy HH:mm:ss",
+            "ddMMMyy",
+            "ddMMMyy, HH:mm:ss",
+            "ddMMMyy,HH:mm:ss",
+            "ddMMMyy, HH:mm",
+            "ddMMMyy HH:mm:ss",
+            "dd MMM yyyy",
+            "dd MMM yyyy, HH:mm:ss",
+            "dd MMM yyyy,HH:mm:ss",
+            "dd MMM yyyy, HH:mm",
+            "dd MMM yyyy HH:mm:ss",
+            "dd MMM yy",
+            "dd MMM yy, HH:mm:ss",
+            "dd MMM yy,HH:mm:ss",
+            "dd MMM yy, HH:mm",
+            "dd MMM yy HH:mm:ss",
+            "dd-MMM yyyy",
+            "dd-MMM yyyy, HH:mm:ss",
+            "dd-MMM yyyy,HH:mm:ss",
+            "dd-MMM yyyy, HH:mm",
+            "dd-MMM yyyy HH:mm:ss",
+            "dd.MM.yyyy",
+            "dd.MM.yyyy, HH:mm:ss",
+            "dd.MM.yyyy,HH:mm:ss",
+            "dd.MM.yyyy, HH:mm",
+            "dd.MM.yyyy HH:mm:ss",
+            "dd.MM.yy",
+            "dd.MM.yy, HH:mm:ss",
+            "dd.MM.yy,HH:mm:ss",
+            "dd.MM.yy, HH:mm",
+            "dd.MM.yy HH:mm:ss",
+            "yyyy-MM-dd",
+            "yyyy-MM-dd:HH:mm:ss",
+            "yyyy-MM-dd HH:mm:ss",
+            "yyyy-MM-dd HH:mm"
+          ]
+        },
+        "instrument": {
+          "kind": "bank_account",
+          "maskFrom": "mask"
+        },
+        "counterparty": {
+          "nameFrom": "payer",
+          "transforms": [
+            "sanitizeNarration"
+          ]
+        }
+      }
+    ],
+    "confidence": 0.94,
+    "examples": [
+      {
+        "sender": "VM-EXBANK-S",
+        "body": "Example Bank Acct XX123 credited Rs. 85,000.00 on 01-Nov-26; NEFT-EXAM0000001-ACME TECHNOLOGIES PVT LTD-SALARY NOV. Avl Bal Rs 1,37,661.40.",
+        "expectFactTypes": [
+          "movement"
+        ]
+      },
+      {
+        "sender": "VM-EXBANK-S",
+        "body": "Example Bank Acct XX123 credited Rs. 85,000.00 on 01-Nov-26; NEFT-EXAM0000001-ACME TECHNOLOGIES PVT LTD-SUPPLIES NOV. Avl Bal Rs 1,37,661.40.",
+        "expectFactTypes": []
+      }
+    ],
+    "status": "active",
+    "createdBy": "lane-j",
+    "updatedAt": "2026-11-05T00:00:00Z"
+  },
+  {
+    "id": "MONEYIN-SALARY-IMPS-AMT-FIRST",
+    "version": 1,
+    "family": "money_in",
+    "senders": [
+      "*"
+    ],
+    "priority": 420,
+    "match": {
+      "pattern": "(?:update!?\\s*)?(?:\\b(?:rs\\.?|inr)|₹)\\s*:?\\s*(?<amt>\\d[\\d,]*(?:\\.\\d{1,2})?)\\s+(?:has\\s+been\\s+|is\\s+|was\\s+)?(?:credited|deposited|received)\\s+(?:to|in|into)\\s+(?:(?:your|the)\\s+)?(?:[a-z][a-z .&'-]{0,30}?\\s)?(?:a/?c(?:ct)?\\.?|account|acc\\.?)(?:\\s*(?:no|number|num)\\.?)?(?:\\s+(?:ending|ends)(?:\\s+(?:with|in))?)?\\s*[:\\-]?\\s*[x*•.]*\\s?(?<mask>\\d{2,18})(?=[\\s\\S]*?\\b(?:on|dated|date)\\s+(?<date>\\d{4}-\\d{2}-\\d{2}(?:[: ]\\d{2}:\\d{2}(?::\\d{2})?)?|\\d{1,2}[-/]\\d{1,2}[-/]\\d{2,4}(?:,?\\s*\\d{2}:\\d{2}(?::\\d{2})?)?|\\d{1,2}[-/ ]?[a-z]{3}[-/ ,]*\\d{2,4}(?:,?\\s*\\d{2}:\\d{2}(?::\\d{2})?)?)|)[^\\n]{0,80}?\\bimps\\b[\\s\\-/:]*(?:cr\\b[\\s\\-/:]*)?(?:(?:p2a|p2p|inb)[\\s\\-/:]*)?(?:[a-z]{4}0[a-z0-9]{6}[\\s\\-/:]*)?(?:\\d{9,18}[\\s\\-/:]*)?(?<payer>[a-z][a-z0-9 .&']{2,60}?)[\\s\\-/:]+(?:salary|payroll|sal)\\b",
+      "flags": "i",
+      "rejectAny": [
+        "not credited",
+        "could not",
+        "failed",
+        "refund",
+        "reversal",
+        "reversed",
+        "debited",
+        "will be"
+      ]
+    },
+    "emit": [
+      {
+        "factType": "movement",
+        "attrs": {
+          "direction": "credit",
+          "purpose": "salary",
+          "rail": "imps"
+        },
+        "amounts": [
+          {
+            "role": "posted",
+            "from": "amt",
+            "unit": "INR"
+          }
+        ],
+        "occurredAt": {
+          "from": "date",
+          "formats": [
+            "dd-MM-yyyy",
+            "dd-MM-yyyy, HH:mm:ss",
+            "dd-MM-yyyy,HH:mm:ss",
+            "dd-MM-yyyy, HH:mm",
+            "dd-MM-yyyy HH:mm:ss",
+            "dd-MM-yy",
+            "dd-MM-yy, HH:mm:ss",
+            "dd-MM-yy,HH:mm:ss",
+            "dd-MM-yy, HH:mm",
+            "dd-MM-yy HH:mm:ss",
+            "dd/MM/yyyy",
+            "dd/MM/yyyy, HH:mm:ss",
+            "dd/MM/yyyy,HH:mm:ss",
+            "dd/MM/yyyy, HH:mm",
+            "dd/MM/yyyy HH:mm:ss",
+            "dd/MM/yy",
+            "dd/MM/yy, HH:mm:ss",
+            "dd/MM/yy,HH:mm:ss",
+            "dd/MM/yy, HH:mm",
+            "dd/MM/yy HH:mm:ss",
+            "dd-MMM-yyyy",
+            "dd-MMM-yyyy, HH:mm:ss",
+            "dd-MMM-yyyy,HH:mm:ss",
+            "dd-MMM-yyyy, HH:mm",
+            "dd-MMM-yyyy HH:mm:ss",
+            "dd-MMM-yy",
+            "dd-MMM-yy, HH:mm:ss",
+            "dd-MMM-yy,HH:mm:ss",
+            "dd-MMM-yy, HH:mm",
+            "dd-MMM-yy HH:mm:ss",
+            "ddMMMyyyy",
+            "ddMMMyyyy, HH:mm:ss",
+            "ddMMMyyyy,HH:mm:ss",
+            "ddMMMyyyy, HH:mm",
+            "ddMMMyyyy HH:mm:ss",
+            "ddMMMyy",
+            "ddMMMyy, HH:mm:ss",
+            "ddMMMyy,HH:mm:ss",
+            "ddMMMyy, HH:mm",
+            "ddMMMyy HH:mm:ss",
+            "dd MMM yyyy",
+            "dd MMM yyyy, HH:mm:ss",
+            "dd MMM yyyy,HH:mm:ss",
+            "dd MMM yyyy, HH:mm",
+            "dd MMM yyyy HH:mm:ss",
+            "dd MMM yy",
+            "dd MMM yy, HH:mm:ss",
+            "dd MMM yy,HH:mm:ss",
+            "dd MMM yy, HH:mm",
+            "dd MMM yy HH:mm:ss",
+            "dd-MMM yyyy",
+            "dd-MMM yyyy, HH:mm:ss",
+            "dd-MMM yyyy,HH:mm:ss",
+            "dd-MMM yyyy, HH:mm",
+            "dd-MMM yyyy HH:mm:ss",
+            "dd.MM.yyyy",
+            "dd.MM.yyyy, HH:mm:ss",
+            "dd.MM.yyyy,HH:mm:ss",
+            "dd.MM.yyyy, HH:mm",
+            "dd.MM.yyyy HH:mm:ss",
+            "dd.MM.yy",
+            "dd.MM.yy, HH:mm:ss",
+            "dd.MM.yy,HH:mm:ss",
+            "dd.MM.yy, HH:mm",
+            "dd.MM.yy HH:mm:ss",
+            "yyyy-MM-dd",
+            "yyyy-MM-dd:HH:mm:ss",
+            "yyyy-MM-dd HH:mm:ss",
+            "yyyy-MM-dd HH:mm"
+          ]
+        },
+        "instrument": {
+          "kind": "bank_account",
+          "maskFrom": "mask"
+        },
+        "counterparty": {
+          "nameFrom": "payer",
+          "transforms": [
+            "sanitizeNarration"
+          ]
+        }
+      }
+    ],
+    "confidence": 0.94,
+    "examples": [
+      {
+        "sender": "VM-EXBANK-S",
+        "body": "INR 85000.00 credited to A/c no. XX1234 on 01-11-26 through IMPS/P2A/123456789012/ACME TECHNOLOGIES/SALARY NOV. Avl bal INR 100000.00.",
+        "expectFactTypes": [
+          "movement"
+        ]
+      },
+      {
+        "sender": "VM-EXBANK-S",
+        "body": "INR 85000.00 credited to A/c no. XX1234 on 01-11-26 through IMPS/P2A/123456789012/ACME TECHNOLOGIES/RENT NOV. Avl bal INR 100000.00.",
+        "expectFactTypes": []
+      }
+    ],
+    "status": "active",
+    "createdBy": "lane-j",
+    "updatedAt": "2026-11-05T00:00:00Z"
+  },
+  {
+    "id": "MONEYIN-SALARY-IMPS-ACCT-FIRST",
+    "version": 1,
+    "family": "money_in",
+    "senders": [
+      "*"
+    ],
+    "priority": 420,
+    "match": {
+      "pattern": "(?:(?:your|the)\\s+)?(?:[a-z][a-z .&'-]{0,30}?\\s)?(?:a/?c(?:ct)?\\.?|account|acc\\.?)(?:\\s*(?:no|number|num)\\.?)?(?:\\s+(?:ending|ends)(?:\\s+(?:with|in))?)?\\s*[:\\-]?\\s*[x*•.]*\\s?(?<mask>\\d{2,18})\\s+(?:has\\s+been\\s+|is\\s+|was\\s+)?credited\\s+(?:with|by|for|of)?\\s*(?:\\b(?:rs\\.?|inr)|₹)\\s*:?\\s*(?<amt>\\d[\\d,]*(?:\\.\\d{1,2})?)(?=[\\s\\S]*?\\b(?:on|dated|date)\\s+(?<date>\\d{4}-\\d{2}-\\d{2}(?:[: ]\\d{2}:\\d{2}(?::\\d{2})?)?|\\d{1,2}[-/]\\d{1,2}[-/]\\d{2,4}(?:,?\\s*\\d{2}:\\d{2}(?::\\d{2})?)?|\\d{1,2}[-/ ]?[a-z]{3}[-/ ,]*\\d{2,4}(?:,?\\s*\\d{2}:\\d{2}(?::\\d{2})?)?)|)[^\\n]{0,80}?\\bimps\\b[\\s\\-/:]*(?:cr\\b[\\s\\-/:]*)?(?:(?:p2a|p2p|inb)[\\s\\-/:]*)?(?:[a-z]{4}0[a-z0-9]{6}[\\s\\-/:]*)?(?:\\d{9,18}[\\s\\-/:]*)?(?<payer>[a-z][a-z0-9 .&']{2,60}?)[\\s\\-/:]+(?:salary|payroll|sal)\\b",
+      "flags": "i",
+      "rejectAny": [
+        "not credited",
+        "could not",
+        "failed",
+        "refund",
+        "reversal",
+        "reversed",
+        "debited",
+        "will be"
+      ]
+    },
+    "emit": [
+      {
+        "factType": "movement",
+        "attrs": {
+          "direction": "credit",
+          "purpose": "salary",
+          "rail": "imps"
+        },
+        "amounts": [
+          {
+            "role": "posted",
+            "from": "amt",
+            "unit": "INR"
+          }
+        ],
+        "occurredAt": {
+          "from": "date",
+          "formats": [
+            "dd-MM-yyyy",
+            "dd-MM-yyyy, HH:mm:ss",
+            "dd-MM-yyyy,HH:mm:ss",
+            "dd-MM-yyyy, HH:mm",
+            "dd-MM-yyyy HH:mm:ss",
+            "dd-MM-yy",
+            "dd-MM-yy, HH:mm:ss",
+            "dd-MM-yy,HH:mm:ss",
+            "dd-MM-yy, HH:mm",
+            "dd-MM-yy HH:mm:ss",
+            "dd/MM/yyyy",
+            "dd/MM/yyyy, HH:mm:ss",
+            "dd/MM/yyyy,HH:mm:ss",
+            "dd/MM/yyyy, HH:mm",
+            "dd/MM/yyyy HH:mm:ss",
+            "dd/MM/yy",
+            "dd/MM/yy, HH:mm:ss",
+            "dd/MM/yy,HH:mm:ss",
+            "dd/MM/yy, HH:mm",
+            "dd/MM/yy HH:mm:ss",
+            "dd-MMM-yyyy",
+            "dd-MMM-yyyy, HH:mm:ss",
+            "dd-MMM-yyyy,HH:mm:ss",
+            "dd-MMM-yyyy, HH:mm",
+            "dd-MMM-yyyy HH:mm:ss",
+            "dd-MMM-yy",
+            "dd-MMM-yy, HH:mm:ss",
+            "dd-MMM-yy,HH:mm:ss",
+            "dd-MMM-yy, HH:mm",
+            "dd-MMM-yy HH:mm:ss",
+            "ddMMMyyyy",
+            "ddMMMyyyy, HH:mm:ss",
+            "ddMMMyyyy,HH:mm:ss",
+            "ddMMMyyyy, HH:mm",
+            "ddMMMyyyy HH:mm:ss",
+            "ddMMMyy",
+            "ddMMMyy, HH:mm:ss",
+            "ddMMMyy,HH:mm:ss",
+            "ddMMMyy, HH:mm",
+            "ddMMMyy HH:mm:ss",
+            "dd MMM yyyy",
+            "dd MMM yyyy, HH:mm:ss",
+            "dd MMM yyyy,HH:mm:ss",
+            "dd MMM yyyy, HH:mm",
+            "dd MMM yyyy HH:mm:ss",
+            "dd MMM yy",
+            "dd MMM yy, HH:mm:ss",
+            "dd MMM yy,HH:mm:ss",
+            "dd MMM yy, HH:mm",
+            "dd MMM yy HH:mm:ss",
+            "dd-MMM yyyy",
+            "dd-MMM yyyy, HH:mm:ss",
+            "dd-MMM yyyy,HH:mm:ss",
+            "dd-MMM yyyy, HH:mm",
+            "dd-MMM yyyy HH:mm:ss",
+            "dd.MM.yyyy",
+            "dd.MM.yyyy, HH:mm:ss",
+            "dd.MM.yyyy,HH:mm:ss",
+            "dd.MM.yyyy, HH:mm",
+            "dd.MM.yyyy HH:mm:ss",
+            "dd.MM.yy",
+            "dd.MM.yy, HH:mm:ss",
+            "dd.MM.yy,HH:mm:ss",
+            "dd.MM.yy, HH:mm",
+            "dd.MM.yy HH:mm:ss",
+            "yyyy-MM-dd",
+            "yyyy-MM-dd:HH:mm:ss",
+            "yyyy-MM-dd HH:mm:ss",
+            "yyyy-MM-dd HH:mm"
+          ]
+        },
+        "instrument": {
+          "kind": "bank_account",
+          "maskFrom": "mask"
+        },
+        "counterparty": {
+          "nameFrom": "payer",
+          "transforms": [
+            "sanitizeNarration"
+          ]
+        }
+      }
+    ],
+    "confidence": 0.94,
+    "examples": [
+      {
+        "sender": "VM-EXBANK-S",
+        "body": "Example Bank Acct XX123 credited Rs. 85,000.00 on 01-Nov-26; IMPS-123456789012-ACME TECHNOLOGIES-SALARY NOV. Avl Bal Rs 1,37,661.40.",
+        "expectFactTypes": [
+          "movement"
+        ]
+      },
+      {
+        "sender": "VM-EXBANK-S",
+        "body": "Example Bank Acct XX123 credited Rs. 85,000.00 on 01-Nov-26; IMPS-123456789012-ACME TECHNOLOGIES-GIFT. Avl Bal Rs 1,37,661.40.",
+        "expectFactTypes": []
+      }
+    ],
+    "status": "active",
+    "createdBy": "lane-j",
+    "updatedAt": "2026-11-05T00:00:00Z"
+  },
+  {
+    "id": "MONEYIN-SALARY-RTGS-AMT-FIRST",
+    "version": 1,
+    "family": "money_in",
+    "senders": [
+      "*"
+    ],
+    "priority": 420,
+    "match": {
+      "pattern": "(?:update!?\\s*)?(?:\\b(?:rs\\.?|inr)|₹)\\s*:?\\s*(?<amt>\\d[\\d,]*(?:\\.\\d{1,2})?)\\s+(?:has\\s+been\\s+|is\\s+|was\\s+)?(?:credited|deposited|received)\\s+(?:to|in|into)\\s+(?:(?:your|the)\\s+)?(?:[a-z][a-z .&'-]{0,30}?\\s)?(?:a/?c(?:ct)?\\.?|account|acc\\.?)(?:\\s*(?:no|number|num)\\.?)?(?:\\s+(?:ending|ends)(?:\\s+(?:with|in))?)?\\s*[:\\-]?\\s*[x*•.]*\\s?(?<mask>\\d{2,18})(?=[\\s\\S]*?\\b(?:on|dated|date)\\s+(?<date>\\d{4}-\\d{2}-\\d{2}(?:[: ]\\d{2}:\\d{2}(?::\\d{2})?)?|\\d{1,2}[-/]\\d{1,2}[-/]\\d{2,4}(?:,?\\s*\\d{2}:\\d{2}(?::\\d{2})?)?|\\d{1,2}[-/ ]?[a-z]{3}[-/ ,]*\\d{2,4}(?:,?\\s*\\d{2}:\\d{2}(?::\\d{2})?)?)|)[^\\n]{0,80}?\\brtgs\\b[\\s\\-/:]*(?:cr\\b[\\s\\-/:]*)?(?:(?:p2a|p2p|inb)[\\s\\-/:]*)?(?:[a-z]{4}0[a-z0-9]{6}[\\s\\-/:]*)?(?:\\d{9,18}[\\s\\-/:]*)?(?<payer>[a-z][a-z0-9 .&']{2,60}?)[\\s\\-/:]+(?:salary|payroll|sal)\\b",
+      "flags": "i",
+      "rejectAny": [
+        "not credited",
+        "could not",
+        "failed",
+        "refund",
+        "reversal",
+        "reversed",
+        "debited",
+        "will be"
+      ]
+    },
+    "emit": [
+      {
+        "factType": "movement",
+        "attrs": {
+          "direction": "credit",
+          "purpose": "salary",
+          "rail": "rtgs"
+        },
+        "amounts": [
+          {
+            "role": "posted",
+            "from": "amt",
+            "unit": "INR"
+          }
+        ],
+        "occurredAt": {
+          "from": "date",
+          "formats": [
+            "dd-MM-yyyy",
+            "dd-MM-yyyy, HH:mm:ss",
+            "dd-MM-yyyy,HH:mm:ss",
+            "dd-MM-yyyy, HH:mm",
+            "dd-MM-yyyy HH:mm:ss",
+            "dd-MM-yy",
+            "dd-MM-yy, HH:mm:ss",
+            "dd-MM-yy,HH:mm:ss",
+            "dd-MM-yy, HH:mm",
+            "dd-MM-yy HH:mm:ss",
+            "dd/MM/yyyy",
+            "dd/MM/yyyy, HH:mm:ss",
+            "dd/MM/yyyy,HH:mm:ss",
+            "dd/MM/yyyy, HH:mm",
+            "dd/MM/yyyy HH:mm:ss",
+            "dd/MM/yy",
+            "dd/MM/yy, HH:mm:ss",
+            "dd/MM/yy,HH:mm:ss",
+            "dd/MM/yy, HH:mm",
+            "dd/MM/yy HH:mm:ss",
+            "dd-MMM-yyyy",
+            "dd-MMM-yyyy, HH:mm:ss",
+            "dd-MMM-yyyy,HH:mm:ss",
+            "dd-MMM-yyyy, HH:mm",
+            "dd-MMM-yyyy HH:mm:ss",
+            "dd-MMM-yy",
+            "dd-MMM-yy, HH:mm:ss",
+            "dd-MMM-yy,HH:mm:ss",
+            "dd-MMM-yy, HH:mm",
+            "dd-MMM-yy HH:mm:ss",
+            "ddMMMyyyy",
+            "ddMMMyyyy, HH:mm:ss",
+            "ddMMMyyyy,HH:mm:ss",
+            "ddMMMyyyy, HH:mm",
+            "ddMMMyyyy HH:mm:ss",
+            "ddMMMyy",
+            "ddMMMyy, HH:mm:ss",
+            "ddMMMyy,HH:mm:ss",
+            "ddMMMyy, HH:mm",
+            "ddMMMyy HH:mm:ss",
+            "dd MMM yyyy",
+            "dd MMM yyyy, HH:mm:ss",
+            "dd MMM yyyy,HH:mm:ss",
+            "dd MMM yyyy, HH:mm",
+            "dd MMM yyyy HH:mm:ss",
+            "dd MMM yy",
+            "dd MMM yy, HH:mm:ss",
+            "dd MMM yy,HH:mm:ss",
+            "dd MMM yy, HH:mm",
+            "dd MMM yy HH:mm:ss",
+            "dd-MMM yyyy",
+            "dd-MMM yyyy, HH:mm:ss",
+            "dd-MMM yyyy,HH:mm:ss",
+            "dd-MMM yyyy, HH:mm",
+            "dd-MMM yyyy HH:mm:ss",
+            "dd.MM.yyyy",
+            "dd.MM.yyyy, HH:mm:ss",
+            "dd.MM.yyyy,HH:mm:ss",
+            "dd.MM.yyyy, HH:mm",
+            "dd.MM.yyyy HH:mm:ss",
+            "dd.MM.yy",
+            "dd.MM.yy, HH:mm:ss",
+            "dd.MM.yy,HH:mm:ss",
+            "dd.MM.yy, HH:mm",
+            "dd.MM.yy HH:mm:ss",
+            "yyyy-MM-dd",
+            "yyyy-MM-dd:HH:mm:ss",
+            "yyyy-MM-dd HH:mm:ss",
+            "yyyy-MM-dd HH:mm"
+          ]
+        },
+        "instrument": {
+          "kind": "bank_account",
+          "maskFrom": "mask"
+        },
+        "counterparty": {
+          "nameFrom": "payer",
+          "transforms": [
+            "sanitizeNarration"
+          ]
+        }
+      }
+    ],
+    "confidence": 0.94,
+    "examples": [
+      {
+        "sender": "VM-EXBANK-S",
+        "body": "INR 85000.00 credited to A/c no. XX1234 on 01-11-26 at 09:30:10 through RTGS/ACME TECHNOLOGIES PVT LTD/PAYROLL OCT. Avl bal INR 100000.00.",
+        "expectFactTypes": [
+          "movement"
+        ]
+      },
+      {
+        "sender": "VM-EXBANK-S",
+        "body": "INR 85000.00 credited to A/c no. XX1234 on 01-11-26 at 09:30:10 through RTGS/ACME TECHNOLOGIES PVT LTD/PURCHASE OCT. Avl bal INR 100000.00.",
+        "expectFactTypes": []
+      }
+    ],
+    "status": "active",
+    "createdBy": "lane-j",
+    "updatedAt": "2026-11-05T00:00:00Z"
+  },
+  {
+    "id": "MONEYIN-SALARY-RTGS-ACCT-FIRST",
+    "version": 1,
+    "family": "money_in",
+    "senders": [
+      "*"
+    ],
+    "priority": 420,
+    "match": {
+      "pattern": "(?:(?:your|the)\\s+)?(?:[a-z][a-z .&'-]{0,30}?\\s)?(?:a/?c(?:ct)?\\.?|account|acc\\.?)(?:\\s*(?:no|number|num)\\.?)?(?:\\s+(?:ending|ends)(?:\\s+(?:with|in))?)?\\s*[:\\-]?\\s*[x*•.]*\\s?(?<mask>\\d{2,18})\\s+(?:has\\s+been\\s+|is\\s+|was\\s+)?credited\\s+(?:with|by|for|of)?\\s*(?:\\b(?:rs\\.?|inr)|₹)\\s*:?\\s*(?<amt>\\d[\\d,]*(?:\\.\\d{1,2})?)(?=[\\s\\S]*?\\b(?:on|dated|date)\\s+(?<date>\\d{4}-\\d{2}-\\d{2}(?:[: ]\\d{2}:\\d{2}(?::\\d{2})?)?|\\d{1,2}[-/]\\d{1,2}[-/]\\d{2,4}(?:,?\\s*\\d{2}:\\d{2}(?::\\d{2})?)?|\\d{1,2}[-/ ]?[a-z]{3}[-/ ,]*\\d{2,4}(?:,?\\s*\\d{2}:\\d{2}(?::\\d{2})?)?)|)[^\\n]{0,80}?\\brtgs\\b[\\s\\-/:]*(?:cr\\b[\\s\\-/:]*)?(?:(?:p2a|p2p|inb)[\\s\\-/:]*)?(?:[a-z]{4}0[a-z0-9]{6}[\\s\\-/:]*)?(?:\\d{9,18}[\\s\\-/:]*)?(?<payer>[a-z][a-z0-9 .&']{2,60}?)[\\s\\-/:]+(?:salary|payroll|sal)\\b",
+      "flags": "i",
+      "rejectAny": [
+        "not credited",
+        "could not",
+        "failed",
+        "refund",
+        "reversal",
+        "reversed",
+        "debited",
+        "will be"
+      ]
+    },
+    "emit": [
+      {
+        "factType": "movement",
+        "attrs": {
+          "direction": "credit",
+          "purpose": "salary",
+          "rail": "rtgs"
+        },
+        "amounts": [
+          {
+            "role": "posted",
+            "from": "amt",
+            "unit": "INR"
+          }
+        ],
+        "occurredAt": {
+          "from": "date",
+          "formats": [
+            "dd-MM-yyyy",
+            "dd-MM-yyyy, HH:mm:ss",
+            "dd-MM-yyyy,HH:mm:ss",
+            "dd-MM-yyyy, HH:mm",
+            "dd-MM-yyyy HH:mm:ss",
+            "dd-MM-yy",
+            "dd-MM-yy, HH:mm:ss",
+            "dd-MM-yy,HH:mm:ss",
+            "dd-MM-yy, HH:mm",
+            "dd-MM-yy HH:mm:ss",
+            "dd/MM/yyyy",
+            "dd/MM/yyyy, HH:mm:ss",
+            "dd/MM/yyyy,HH:mm:ss",
+            "dd/MM/yyyy, HH:mm",
+            "dd/MM/yyyy HH:mm:ss",
+            "dd/MM/yy",
+            "dd/MM/yy, HH:mm:ss",
+            "dd/MM/yy,HH:mm:ss",
+            "dd/MM/yy, HH:mm",
+            "dd/MM/yy HH:mm:ss",
+            "dd-MMM-yyyy",
+            "dd-MMM-yyyy, HH:mm:ss",
+            "dd-MMM-yyyy,HH:mm:ss",
+            "dd-MMM-yyyy, HH:mm",
+            "dd-MMM-yyyy HH:mm:ss",
+            "dd-MMM-yy",
+            "dd-MMM-yy, HH:mm:ss",
+            "dd-MMM-yy,HH:mm:ss",
+            "dd-MMM-yy, HH:mm",
+            "dd-MMM-yy HH:mm:ss",
+            "ddMMMyyyy",
+            "ddMMMyyyy, HH:mm:ss",
+            "ddMMMyyyy,HH:mm:ss",
+            "ddMMMyyyy, HH:mm",
+            "ddMMMyyyy HH:mm:ss",
+            "ddMMMyy",
+            "ddMMMyy, HH:mm:ss",
+            "ddMMMyy,HH:mm:ss",
+            "ddMMMyy, HH:mm",
+            "ddMMMyy HH:mm:ss",
+            "dd MMM yyyy",
+            "dd MMM yyyy, HH:mm:ss",
+            "dd MMM yyyy,HH:mm:ss",
+            "dd MMM yyyy, HH:mm",
+            "dd MMM yyyy HH:mm:ss",
+            "dd MMM yy",
+            "dd MMM yy, HH:mm:ss",
+            "dd MMM yy,HH:mm:ss",
+            "dd MMM yy, HH:mm",
+            "dd MMM yy HH:mm:ss",
+            "dd-MMM yyyy",
+            "dd-MMM yyyy, HH:mm:ss",
+            "dd-MMM yyyy,HH:mm:ss",
+            "dd-MMM yyyy, HH:mm",
+            "dd-MMM yyyy HH:mm:ss",
+            "dd.MM.yyyy",
+            "dd.MM.yyyy, HH:mm:ss",
+            "dd.MM.yyyy,HH:mm:ss",
+            "dd.MM.yyyy, HH:mm",
+            "dd.MM.yyyy HH:mm:ss",
+            "dd.MM.yy",
+            "dd.MM.yy, HH:mm:ss",
+            "dd.MM.yy,HH:mm:ss",
+            "dd.MM.yy, HH:mm",
+            "dd.MM.yy HH:mm:ss",
+            "yyyy-MM-dd",
+            "yyyy-MM-dd:HH:mm:ss",
+            "yyyy-MM-dd HH:mm:ss",
+            "yyyy-MM-dd HH:mm"
+          ]
+        },
+        "instrument": {
+          "kind": "bank_account",
+          "maskFrom": "mask"
+        },
+        "counterparty": {
+          "nameFrom": "payer",
+          "transforms": [
+            "sanitizeNarration"
+          ]
+        }
+      }
+    ],
+    "confidence": 0.94,
+    "examples": [
+      {
+        "sender": "VM-EXBANK-S",
+        "body": "Example Bank Acct XX123 credited Rs. 85,000.00 on 01-Nov-26; RTGS-EXAM0000001-ACME TECHNOLOGIES-PAYROLL OCT. Avl Bal Rs 1,37,661.40.",
+        "expectFactTypes": [
+          "movement"
+        ]
+      },
+      {
+        "sender": "VM-EXBANK-S",
+        "body": "Example Bank Acct XX123 credited Rs. 85,000.00 on 01-Nov-26; RTGS-EXAM0000001-ACME TECHNOLOGIES-ADVANCE. Avl Bal Rs 1,37,661.40.",
+        "expectFactTypes": []
+      }
+    ],
+    "status": "active",
+    "createdBy": "lane-j",
+    "updatedAt": "2026-11-05T00:00:00Z"
+  },
+  {
+    "id": "MONEYIN-SALARY-UPI-RECEIVED-FROM-VPA",
+    "version": 1,
+    "family": "money_in",
+    "senders": [
+      "*"
+    ],
+    "priority": 420,
+    "match": {
+      "pattern": "\\breceived\\s+(?:\\b(?:rs\\.?|inr)|₹)\\s*:?\\s*(?<amt>\\d[\\d,]*(?:\\.\\d{1,2})?)\\s+in\\s+(?:your\\s+)?(?:(?:your|the)\\s+)?(?:[a-z][a-z .&'-]{0,30}?\\s)?(?:a/?c(?:ct)?\\.?|account|acc\\.?)(?:\\s*(?:no|number|num)\\.?)?(?:\\s+(?:ending|ends)(?:\\s+(?:with|in))?)?\\s*[:\\-]?\\s*[x*•.]*\\s?(?<mask>\\d{2,18})\\s+from\\s+(?<payer>[a-z0-9._-]+@[a-z0-9.-]+)\\s+on\\s+(?<date>\\d{4}-\\d{2}-\\d{2}(?:[: ]\\d{2}:\\d{2}(?::\\d{2})?)?|\\d{1,2}[-/]\\d{1,2}[-/]\\d{2,4}(?:,?\\s*\\d{2}:\\d{2}(?::\\d{2})?)?|\\d{1,2}[-/ ]?[a-z]{3}[-/ ,]*\\d{2,4}(?:,?\\s*\\d{2}:\\d{2}(?::\\d{2})?)?)[^\\n]{0,80}?\\b(?:salary|payroll|sal)\\b",
+      "flags": "i",
+      "rejectAny": [
+        "not credited",
+        "could not",
+        "failed",
+        "refund",
+        "reversal",
+        "reversed",
+        "debited",
+        "will be"
+      ]
+    },
+    "emit": [
+      {
+        "factType": "movement",
+        "attrs": {
+          "direction": "credit",
+          "purpose": "salary",
+          "rail": "upi"
+        },
+        "amounts": [
+          {
+            "role": "posted",
+            "from": "amt",
+            "unit": "INR"
+          }
+        ],
+        "occurredAt": {
+          "from": "date",
+          "formats": [
+            "dd-MM-yyyy",
+            "dd-MM-yyyy, HH:mm:ss",
+            "dd-MM-yyyy,HH:mm:ss",
+            "dd-MM-yyyy, HH:mm",
+            "dd-MM-yyyy HH:mm:ss",
+            "dd-MM-yy",
+            "dd-MM-yy, HH:mm:ss",
+            "dd-MM-yy,HH:mm:ss",
+            "dd-MM-yy, HH:mm",
+            "dd-MM-yy HH:mm:ss",
+            "dd/MM/yyyy",
+            "dd/MM/yyyy, HH:mm:ss",
+            "dd/MM/yyyy,HH:mm:ss",
+            "dd/MM/yyyy, HH:mm",
+            "dd/MM/yyyy HH:mm:ss",
+            "dd/MM/yy",
+            "dd/MM/yy, HH:mm:ss",
+            "dd/MM/yy,HH:mm:ss",
+            "dd/MM/yy, HH:mm",
+            "dd/MM/yy HH:mm:ss",
+            "dd-MMM-yyyy",
+            "dd-MMM-yyyy, HH:mm:ss",
+            "dd-MMM-yyyy,HH:mm:ss",
+            "dd-MMM-yyyy, HH:mm",
+            "dd-MMM-yyyy HH:mm:ss",
+            "dd-MMM-yy",
+            "dd-MMM-yy, HH:mm:ss",
+            "dd-MMM-yy,HH:mm:ss",
+            "dd-MMM-yy, HH:mm",
+            "dd-MMM-yy HH:mm:ss",
+            "ddMMMyyyy",
+            "ddMMMyyyy, HH:mm:ss",
+            "ddMMMyyyy,HH:mm:ss",
+            "ddMMMyyyy, HH:mm",
+            "ddMMMyyyy HH:mm:ss",
+            "ddMMMyy",
+            "ddMMMyy, HH:mm:ss",
+            "ddMMMyy,HH:mm:ss",
+            "ddMMMyy, HH:mm",
+            "ddMMMyy HH:mm:ss",
+            "dd MMM yyyy",
+            "dd MMM yyyy, HH:mm:ss",
+            "dd MMM yyyy,HH:mm:ss",
+            "dd MMM yyyy, HH:mm",
+            "dd MMM yyyy HH:mm:ss",
+            "dd MMM yy",
+            "dd MMM yy, HH:mm:ss",
+            "dd MMM yy,HH:mm:ss",
+            "dd MMM yy, HH:mm",
+            "dd MMM yy HH:mm:ss",
+            "dd-MMM yyyy",
+            "dd-MMM yyyy, HH:mm:ss",
+            "dd-MMM yyyy,HH:mm:ss",
+            "dd-MMM yyyy, HH:mm",
+            "dd-MMM yyyy HH:mm:ss",
+            "dd.MM.yyyy",
+            "dd.MM.yyyy, HH:mm:ss",
+            "dd.MM.yyyy,HH:mm:ss",
+            "dd.MM.yyyy, HH:mm",
+            "dd.MM.yyyy HH:mm:ss",
+            "dd.MM.yy",
+            "dd.MM.yy, HH:mm:ss",
+            "dd.MM.yy,HH:mm:ss",
+            "dd.MM.yy, HH:mm",
+            "dd.MM.yy HH:mm:ss",
+            "yyyy-MM-dd",
+            "yyyy-MM-dd:HH:mm:ss",
+            "yyyy-MM-dd HH:mm:ss",
+            "yyyy-MM-dd HH:mm"
+          ]
+        },
+        "instrument": {
+          "kind": "bank_account",
+          "maskFrom": "mask"
+        },
+        "counterparty": {
+          "nameFrom": "payer",
+          "vpaFrom": "payer",
+          "transforms": [
+            "sanitizeNarration"
+          ]
+        }
+      }
+    ],
+    "confidence": 0.94,
+    "examples": [
+      {
+        "sender": "VM-EXBANK-S",
+        "body": "Received Rs. 85,000.00 in your Example Bank AC X1234 from acme.corp@okbank on 01-11-26 for SALARY NOV. UPI Ref: 123456789012.",
+        "expectFactTypes": [
+          "movement"
+        ]
+      },
+      {
+        "sender": "VM-EXBANK-S",
+        "body": "Received Rs. 85,000.00 in your Example Bank AC X1234 from acme.corp@okbank on 01-11-26 for LUNCH. UPI Ref: 123456789012.",
+        "expectFactTypes": []
+      }
+    ],
+    "status": "active",
+    "createdBy": "lane-j",
+    "updatedAt": "2026-11-05T00:00:00Z"
+  },
+  {
+    "id": "MONEYIN-SALARY-UPI-VIA-PAYER",
+    "version": 1,
+    "family": "money_in",
+    "senders": [
+      "*"
+    ],
+    "priority": 420,
+    "match": {
+      "pattern": "(?:\\b(?:rs\\.?|inr)|₹)\\s*:?\\s*(?<amt>\\d[\\d,]*(?:\\.\\d{1,2})?)\\s+(?:has\\s+been\\s+|is\\s+|was\\s+)?credited\\s+(?:to|in|into)\\s+(?:(?:your|the)\\s+)?(?:[a-z][a-z .&'-]{0,30}?\\s)?(?:a/?c(?:ct)?\\.?|account|acc\\.?)(?:\\s*(?:no|number|num)\\.?)?(?:\\s+(?:ending|ends)(?:\\s+(?:with|in))?)?\\s*[:\\-]?\\s*[x*•.]*\\s?(?<mask>\\d{2,18})(?=[\\s\\S]*?\\b(?:on|dated|date)\\s+(?<date>\\d{4}-\\d{2}-\\d{2}(?:[: ]\\d{2}:\\d{2}(?::\\d{2})?)?|\\d{1,2}[-/]\\d{1,2}[-/]\\d{2,4}(?:,?\\s*\\d{2}:\\d{2}(?::\\d{2})?)?|\\d{1,2}[-/ ]?[a-z]{3}[-/ ,]*\\d{2,4}(?:,?\\s*\\d{2}:\\d{2}(?::\\d{2})?)?)|)[^\\n]{0,60}?\\bvia\\s+upi\\s+from\\s+(?<payer>[a-z][a-z0-9 .&'@-]{2,60}?)\\s*[(,;.\\-][^\\n]{0,80}?\\b(?:salary|payroll|sal)\\b",
+      "flags": "i",
+      "rejectAny": [
+        "not credited",
+        "could not",
+        "failed",
+        "refund",
+        "reversal",
+        "reversed",
+        "debited",
+        "will be"
+      ]
+    },
+    "emit": [
+      {
+        "factType": "movement",
+        "attrs": {
+          "direction": "credit",
+          "purpose": "salary",
+          "rail": "upi"
+        },
+        "amounts": [
+          {
+            "role": "posted",
+            "from": "amt",
+            "unit": "INR"
+          }
+        ],
+        "occurredAt": {
+          "from": "date",
+          "formats": [
+            "dd-MM-yyyy",
+            "dd-MM-yyyy, HH:mm:ss",
+            "dd-MM-yyyy,HH:mm:ss",
+            "dd-MM-yyyy, HH:mm",
+            "dd-MM-yyyy HH:mm:ss",
+            "dd-MM-yy",
+            "dd-MM-yy, HH:mm:ss",
+            "dd-MM-yy,HH:mm:ss",
+            "dd-MM-yy, HH:mm",
+            "dd-MM-yy HH:mm:ss",
+            "dd/MM/yyyy",
+            "dd/MM/yyyy, HH:mm:ss",
+            "dd/MM/yyyy,HH:mm:ss",
+            "dd/MM/yyyy, HH:mm",
+            "dd/MM/yyyy HH:mm:ss",
+            "dd/MM/yy",
+            "dd/MM/yy, HH:mm:ss",
+            "dd/MM/yy,HH:mm:ss",
+            "dd/MM/yy, HH:mm",
+            "dd/MM/yy HH:mm:ss",
+            "dd-MMM-yyyy",
+            "dd-MMM-yyyy, HH:mm:ss",
+            "dd-MMM-yyyy,HH:mm:ss",
+            "dd-MMM-yyyy, HH:mm",
+            "dd-MMM-yyyy HH:mm:ss",
+            "dd-MMM-yy",
+            "dd-MMM-yy, HH:mm:ss",
+            "dd-MMM-yy,HH:mm:ss",
+            "dd-MMM-yy, HH:mm",
+            "dd-MMM-yy HH:mm:ss",
+            "ddMMMyyyy",
+            "ddMMMyyyy, HH:mm:ss",
+            "ddMMMyyyy,HH:mm:ss",
+            "ddMMMyyyy, HH:mm",
+            "ddMMMyyyy HH:mm:ss",
+            "ddMMMyy",
+            "ddMMMyy, HH:mm:ss",
+            "ddMMMyy,HH:mm:ss",
+            "ddMMMyy, HH:mm",
+            "ddMMMyy HH:mm:ss",
+            "dd MMM yyyy",
+            "dd MMM yyyy, HH:mm:ss",
+            "dd MMM yyyy,HH:mm:ss",
+            "dd MMM yyyy, HH:mm",
+            "dd MMM yyyy HH:mm:ss",
+            "dd MMM yy",
+            "dd MMM yy, HH:mm:ss",
+            "dd MMM yy,HH:mm:ss",
+            "dd MMM yy, HH:mm",
+            "dd MMM yy HH:mm:ss",
+            "dd-MMM yyyy",
+            "dd-MMM yyyy, HH:mm:ss",
+            "dd-MMM yyyy,HH:mm:ss",
+            "dd-MMM yyyy, HH:mm",
+            "dd-MMM yyyy HH:mm:ss",
+            "dd.MM.yyyy",
+            "dd.MM.yyyy, HH:mm:ss",
+            "dd.MM.yyyy,HH:mm:ss",
+            "dd.MM.yyyy, HH:mm",
+            "dd.MM.yyyy HH:mm:ss",
+            "dd.MM.yy",
+            "dd.MM.yy, HH:mm:ss",
+            "dd.MM.yy,HH:mm:ss",
+            "dd.MM.yy, HH:mm",
+            "dd.MM.yy HH:mm:ss",
+            "yyyy-MM-dd",
+            "yyyy-MM-dd:HH:mm:ss",
+            "yyyy-MM-dd HH:mm:ss",
+            "yyyy-MM-dd HH:mm"
+          ]
+        },
+        "instrument": {
+          "kind": "bank_account",
+          "maskFrom": "mask"
+        },
+        "counterparty": {
+          "nameFrom": "payer",
+          "transforms": [
+            "sanitizeNarration"
+          ]
+        }
+      }
+    ],
+    "confidence": 0.94,
+    "examples": [
+      {
+        "sender": "VM-EXBANK-S",
+        "body": "Rs 85000.00 credited to A/c XX1234 on 01-11-26 via UPI from ACME TECHNOLOGIES (UPI Ref No 123456789012) Salary for Nov.",
+        "expectFactTypes": [
+          "movement"
+        ]
+      },
+      {
+        "sender": "VM-EXBANK-S",
+        "body": "Rs 85000.00 credited to A/c XX1234 on 01-11-26 via UPI from ACME TECHNOLOGIES (UPI Ref No 123456789012) for dinner.",
+        "expectFactTypes": []
+      }
+    ],
+    "status": "active",
+    "createdBy": "lane-j",
+    "updatedAt": "2026-11-05T00:00:00Z"
+  },
+  {
+    "id": "MONEYIN-REFUND-NARRATION-ON-TRANSFER",
+    "version": 1,
+    "family": "money_in",
+    "senders": [
+      "*"
+    ],
+    "priority": 430,
+    "match": {
+      "pattern": "^(?=[\\s\\S]*?\\bcredit(?:ed)?\\b)(?=[\\s\\S]*?(?:\\b(?:rs\\.?|inr)|₹)\\s*:?\\s*(?<amt>\\d[\\d,]*(?:\\.\\d{1,2})?))(?=[\\s\\S]*?(?:a/?c(?:ct)?\\.?|account|acc\\.?)(?:\\s*(?:no|number|num)\\.?)?(?:\\s+(?:ending|ends)(?:\\s+(?:with|in))?)?\\s*[:\\-]?\\s*[x*•.]*\\s?(?<mask>\\d{2,18}))(?=[\\s\\S]*?\\b(?:on|dated|date)\\s+(?<date>\\d{4}-\\d{2}-\\d{2}(?:[: ]\\d{2}:\\d{2}(?::\\d{2})?)?|\\d{1,2}[-/]\\d{1,2}[-/]\\d{2,4}(?:,?\\s*\\d{2}:\\d{2}(?::\\d{2})?)?|\\d{1,2}[-/ ]?[a-z]{3}[-/ ,]*\\d{2,4}(?:,?\\s*\\d{2}:\\d{2}(?::\\d{2})?)?)|)[\\s\\S]*?\\b(?:neft|imps|rtgs)\\b[^\\n]{0,100}?\\b(?:refund(?:ed)?|reversal|reversed)\\b",
+      "flags": "i",
+      "rejectAny": [
+        "debited",
+        "will be",
+        "failed",
+        "could not",
+        "salary",
+        "payroll",
+        "dividend",
+        "interest"
+      ]
+    },
+    "emit": [
+      {
+        "factType": "movement",
+        "attrs": {
+          "direction": "credit",
+          "purpose": "refund",
+          "rail": "unknown"
+        },
+        "amounts": [
+          {
+            "role": "posted",
+            "from": "amt",
+            "unit": "INR"
+          }
+        ],
+        "occurredAt": {
+          "from": "date",
+          "formats": [
+            "dd-MM-yyyy",
+            "dd-MM-yyyy, HH:mm:ss",
+            "dd-MM-yyyy,HH:mm:ss",
+            "dd-MM-yyyy, HH:mm",
+            "dd-MM-yyyy HH:mm:ss",
+            "dd-MM-yy",
+            "dd-MM-yy, HH:mm:ss",
+            "dd-MM-yy,HH:mm:ss",
+            "dd-MM-yy, HH:mm",
+            "dd-MM-yy HH:mm:ss",
+            "dd/MM/yyyy",
+            "dd/MM/yyyy, HH:mm:ss",
+            "dd/MM/yyyy,HH:mm:ss",
+            "dd/MM/yyyy, HH:mm",
+            "dd/MM/yyyy HH:mm:ss",
+            "dd/MM/yy",
+            "dd/MM/yy, HH:mm:ss",
+            "dd/MM/yy,HH:mm:ss",
+            "dd/MM/yy, HH:mm",
+            "dd/MM/yy HH:mm:ss",
+            "dd-MMM-yyyy",
+            "dd-MMM-yyyy, HH:mm:ss",
+            "dd-MMM-yyyy,HH:mm:ss",
+            "dd-MMM-yyyy, HH:mm",
+            "dd-MMM-yyyy HH:mm:ss",
+            "dd-MMM-yy",
+            "dd-MMM-yy, HH:mm:ss",
+            "dd-MMM-yy,HH:mm:ss",
+            "dd-MMM-yy, HH:mm",
+            "dd-MMM-yy HH:mm:ss",
+            "ddMMMyyyy",
+            "ddMMMyyyy, HH:mm:ss",
+            "ddMMMyyyy,HH:mm:ss",
+            "ddMMMyyyy, HH:mm",
+            "ddMMMyyyy HH:mm:ss",
+            "ddMMMyy",
+            "ddMMMyy, HH:mm:ss",
+            "ddMMMyy,HH:mm:ss",
+            "ddMMMyy, HH:mm",
+            "ddMMMyy HH:mm:ss",
+            "dd MMM yyyy",
+            "dd MMM yyyy, HH:mm:ss",
+            "dd MMM yyyy,HH:mm:ss",
+            "dd MMM yyyy, HH:mm",
+            "dd MMM yyyy HH:mm:ss",
+            "dd MMM yy",
+            "dd MMM yy, HH:mm:ss",
+            "dd MMM yy,HH:mm:ss",
+            "dd MMM yy, HH:mm",
+            "dd MMM yy HH:mm:ss",
+            "dd-MMM yyyy",
+            "dd-MMM yyyy, HH:mm:ss",
+            "dd-MMM yyyy,HH:mm:ss",
+            "dd-MMM yyyy, HH:mm",
+            "dd-MMM yyyy HH:mm:ss",
+            "dd.MM.yyyy",
+            "dd.MM.yyyy, HH:mm:ss",
+            "dd.MM.yyyy,HH:mm:ss",
+            "dd.MM.yyyy, HH:mm",
+            "dd.MM.yyyy HH:mm:ss",
+            "dd.MM.yy",
+            "dd.MM.yy, HH:mm:ss",
+            "dd.MM.yy,HH:mm:ss",
+            "dd.MM.yy, HH:mm",
+            "dd.MM.yy HH:mm:ss",
+            "yyyy-MM-dd",
+            "yyyy-MM-dd:HH:mm:ss",
+            "yyyy-MM-dd HH:mm:ss",
+            "yyyy-MM-dd HH:mm"
+          ]
+        },
+        "instrument": {
+          "kind": "bank_account",
+          "maskFrom": "mask"
+        }
+      }
+    ],
+    "confidence": 0.94,
+    "examples": [
+      {
+        "sender": "VM-EXBANK-S",
+        "body": "INR 640.00 credited to A/c no. XX1234 on 01-11-26 through IMPS/P2A/123456789012/EXAMPLE STORE/REFUND ORDER 42. Avl bal INR 10000.00.",
+        "expectFactTypes": [
+          "movement"
+        ]
+      },
+      {
+        "sender": "VM-EXBANK-S",
+        "body": "INR 640.00 credited to A/c no. XX1234 on 01-11-26 through IMPS/P2A/123456789012/EXAMPLE STORE/ORDER 42. Avl bal INR 10000.00.",
+        "expectFactTypes": []
+      }
+    ],
+    "status": "active",
+    "createdBy": "lane-j",
+    "updatedAt": "2026-11-05T00:00:00Z"
+  },
+  {
+    "id": "MONEYIN-DIVIDEND-ACH",
+    "version": 1,
+    "family": "money_in",
+    "senders": [
+      "*"
+    ],
+    "priority": 410,
+    "match": {
+      "pattern": "^(?=[\\s\\S]*?\\bcredit(?:ed)?\\b)(?=[\\s\\S]*?(?:\\b(?:rs\\.?|inr)|₹)\\s*:?\\s*(?<amt>\\d[\\d,]*(?:\\.\\d{1,2})?))(?=[\\s\\S]*?(?:a/?c(?:ct)?\\.?|account|acc\\.?)(?:\\s*(?:no|number|num)\\.?)?(?:\\s+(?:ending|ends)(?:\\s+(?:with|in))?)?\\s*[:\\-]?\\s*[x*•.]*\\s?(?<mask>\\d{2,18}))(?=[\\s\\S]*?\\b(?:on|dated|date)\\s+(?<date>\\d{4}-\\d{2}-\\d{2}(?:[: ]\\d{2}:\\d{2}(?::\\d{2})?)?|\\d{1,2}[-/]\\d{1,2}[-/]\\d{2,4}(?:,?\\s*\\d{2}:\\d{2}(?::\\d{2})?)?|\\d{1,2}[-/ ]?[a-z]{3}[-/ ,]*\\d{2,4}(?:,?\\s*\\d{2}:\\d{2}(?::\\d{2})?)?)|)[\\s\\S]*?\\b(?:ach|nach|ecs)\\b[\\s\\-/:]*(?:cr\\b[\\s\\-/:]*)?(?:\\d{4,}[\\s\\-/:]+)?(?<payer>[a-z][a-z0-9 .&']{2,60}?)[\\s\\-/:]+(?:final\\s+|interim\\s+|special\\s+)?(?:dividend|div|idcw)\\b",
+      "flags": "i",
+      "rejectAny": [
+        "debited",
+        "will be credited",
+        "declared",
+        "record date",
+        "per share",
+        "could not"
+      ]
+    },
+    "emit": [
+      {
+        "factType": "movement",
+        "attrs": {
+          "direction": "credit",
+          "purpose": "dividend",
+          "rail": "nach"
+        },
+        "amounts": [
+          {
+            "role": "posted",
+            "from": "amt",
+            "unit": "INR"
+          }
+        ],
+        "occurredAt": {
+          "from": "date",
+          "formats": [
+            "dd-MM-yyyy",
+            "dd-MM-yyyy, HH:mm:ss",
+            "dd-MM-yyyy,HH:mm:ss",
+            "dd-MM-yyyy, HH:mm",
+            "dd-MM-yyyy HH:mm:ss",
+            "dd-MM-yy",
+            "dd-MM-yy, HH:mm:ss",
+            "dd-MM-yy,HH:mm:ss",
+            "dd-MM-yy, HH:mm",
+            "dd-MM-yy HH:mm:ss",
+            "dd/MM/yyyy",
+            "dd/MM/yyyy, HH:mm:ss",
+            "dd/MM/yyyy,HH:mm:ss",
+            "dd/MM/yyyy, HH:mm",
+            "dd/MM/yyyy HH:mm:ss",
+            "dd/MM/yy",
+            "dd/MM/yy, HH:mm:ss",
+            "dd/MM/yy,HH:mm:ss",
+            "dd/MM/yy, HH:mm",
+            "dd/MM/yy HH:mm:ss",
+            "dd-MMM-yyyy",
+            "dd-MMM-yyyy, HH:mm:ss",
+            "dd-MMM-yyyy,HH:mm:ss",
+            "dd-MMM-yyyy, HH:mm",
+            "dd-MMM-yyyy HH:mm:ss",
+            "dd-MMM-yy",
+            "dd-MMM-yy, HH:mm:ss",
+            "dd-MMM-yy,HH:mm:ss",
+            "dd-MMM-yy, HH:mm",
+            "dd-MMM-yy HH:mm:ss",
+            "ddMMMyyyy",
+            "ddMMMyyyy, HH:mm:ss",
+            "ddMMMyyyy,HH:mm:ss",
+            "ddMMMyyyy, HH:mm",
+            "ddMMMyyyy HH:mm:ss",
+            "ddMMMyy",
+            "ddMMMyy, HH:mm:ss",
+            "ddMMMyy,HH:mm:ss",
+            "ddMMMyy, HH:mm",
+            "ddMMMyy HH:mm:ss",
+            "dd MMM yyyy",
+            "dd MMM yyyy, HH:mm:ss",
+            "dd MMM yyyy,HH:mm:ss",
+            "dd MMM yyyy, HH:mm",
+            "dd MMM yyyy HH:mm:ss",
+            "dd MMM yy",
+            "dd MMM yy, HH:mm:ss",
+            "dd MMM yy,HH:mm:ss",
+            "dd MMM yy, HH:mm",
+            "dd MMM yy HH:mm:ss",
+            "dd-MMM yyyy",
+            "dd-MMM yyyy, HH:mm:ss",
+            "dd-MMM yyyy,HH:mm:ss",
+            "dd-MMM yyyy, HH:mm",
+            "dd-MMM yyyy HH:mm:ss",
+            "dd.MM.yyyy",
+            "dd.MM.yyyy, HH:mm:ss",
+            "dd.MM.yyyy,HH:mm:ss",
+            "dd.MM.yyyy, HH:mm",
+            "dd.MM.yyyy HH:mm:ss",
+            "dd.MM.yy",
+            "dd.MM.yy, HH:mm:ss",
+            "dd.MM.yy,HH:mm:ss",
+            "dd.MM.yy, HH:mm",
+            "dd.MM.yy HH:mm:ss",
+            "yyyy-MM-dd",
+            "yyyy-MM-dd:HH:mm:ss",
+            "yyyy-MM-dd HH:mm:ss",
+            "yyyy-MM-dd HH:mm"
+          ]
+        },
+        "instrument": {
+          "kind": "bank_account",
+          "maskFrom": "mask"
+        },
+        "counterparty": {
+          "nameFrom": "payer",
+          "transforms": [
+            "sanitizeNarration"
+          ]
+        }
+      }
+    ],
+    "confidence": 0.94,
+    "examples": [
+      {
+        "sender": "VM-EXBANK-S",
+        "body": "Example Bank Acct XX123 credited Rs. 640.00 on 15-Nov-26; ACH-CR-EXAMPLE CORP DIVIDEND. Avl Bal Rs 41,200.00.",
+        "expectFactTypes": [
+          "movement"
+        ]
+      },
+      {
+        "sender": "VM-EXBANK-S",
+        "body": "Example Bank Acct XX123 debited Rs. 640.00 on 15-Nov-26; ACH-DR-EXAMPLE CORP LOAN EMI. Avl Bal Rs 41,200.00.",
+        "expectFactTypes": []
+      }
+    ],
+    "status": "active",
+    "createdBy": "lane-j",
+    "updatedAt": "2026-11-05T00:00:00Z"
+  },
+  {
+    "id": "MONEYIN-INTEREST-PERIOD-NARRATION",
+    "version": 1,
+    "family": "money_in",
+    "senders": [
+      "*"
+    ],
+    "priority": 400,
+    "match": {
+      "pattern": "^(?=[\\s\\S]*?\\bcredit(?:ed)?\\b)(?=[\\s\\S]*?(?:\\b(?:rs\\.?|inr)|₹)\\s*:?\\s*(?<amt>\\d[\\d,]*(?:\\.\\d{1,2})?))(?=[\\s\\S]*?(?:a/?c(?:ct)?\\.?|account|acc\\.?)(?:\\s*(?:no|number|num)\\.?)?(?:\\s+(?:ending|ends)(?:\\s+(?:with|in))?)?\\s*[:\\-]?\\s*[x*•.]*\\s?(?<mask>\\d{2,18}))(?=[\\s\\S]*?\\b(?:on|dated|date)\\s+(?<date>\\d{4}-\\d{2}-\\d{2}(?:[: ]\\d{2}:\\d{2}(?::\\d{2})?)?|\\d{1,2}[-/]\\d{1,2}[-/]\\d{2,4}(?:,?\\s*\\d{2}:\\d{2}(?::\\d{2})?)?|\\d{1,2}[-/ ]?[a-z]{3}[-/ ,]*\\d{2,4}(?:,?\\s*\\d{2}:\\d{2}(?::\\d{2})?)?)|)[\\s\\S]*?\\b(?:int\\.?\\s*pd|int\\.?\\s*cr(?:edited)?|interest\\s+(?:credit(?:ed)?|paid|payout)|(?:fd|fixed\\s+deposit|savings|sb)\\s+interest)\\b",
+      "flags": "i",
+      "rejectAny": [
+        "debited",
+        "loan",
+        "emi",
+        "overdue",
+        "charged",
+        "will be credited",
+        "repayment",
+        "could not",
+        "refund",
+        "salary"
+      ]
+    },
+    "emit": [
+      {
+        "factType": "movement",
+        "attrs": {
+          "direction": "credit",
+          "purpose": "interest",
+          "rail": "unknown"
+        },
+        "amounts": [
+          {
+            "role": "posted",
+            "from": "amt",
+            "unit": "INR"
+          }
+        ],
+        "occurredAt": {
+          "from": "date",
+          "formats": [
+            "dd-MM-yyyy",
+            "dd-MM-yyyy, HH:mm:ss",
+            "dd-MM-yyyy,HH:mm:ss",
+            "dd-MM-yyyy, HH:mm",
+            "dd-MM-yyyy HH:mm:ss",
+            "dd-MM-yy",
+            "dd-MM-yy, HH:mm:ss",
+            "dd-MM-yy,HH:mm:ss",
+            "dd-MM-yy, HH:mm",
+            "dd-MM-yy HH:mm:ss",
+            "dd/MM/yyyy",
+            "dd/MM/yyyy, HH:mm:ss",
+            "dd/MM/yyyy,HH:mm:ss",
+            "dd/MM/yyyy, HH:mm",
+            "dd/MM/yyyy HH:mm:ss",
+            "dd/MM/yy",
+            "dd/MM/yy, HH:mm:ss",
+            "dd/MM/yy,HH:mm:ss",
+            "dd/MM/yy, HH:mm",
+            "dd/MM/yy HH:mm:ss",
+            "dd-MMM-yyyy",
+            "dd-MMM-yyyy, HH:mm:ss",
+            "dd-MMM-yyyy,HH:mm:ss",
+            "dd-MMM-yyyy, HH:mm",
+            "dd-MMM-yyyy HH:mm:ss",
+            "dd-MMM-yy",
+            "dd-MMM-yy, HH:mm:ss",
+            "dd-MMM-yy,HH:mm:ss",
+            "dd-MMM-yy, HH:mm",
+            "dd-MMM-yy HH:mm:ss",
+            "ddMMMyyyy",
+            "ddMMMyyyy, HH:mm:ss",
+            "ddMMMyyyy,HH:mm:ss",
+            "ddMMMyyyy, HH:mm",
+            "ddMMMyyyy HH:mm:ss",
+            "ddMMMyy",
+            "ddMMMyy, HH:mm:ss",
+            "ddMMMyy,HH:mm:ss",
+            "ddMMMyy, HH:mm",
+            "ddMMMyy HH:mm:ss",
+            "dd MMM yyyy",
+            "dd MMM yyyy, HH:mm:ss",
+            "dd MMM yyyy,HH:mm:ss",
+            "dd MMM yyyy, HH:mm",
+            "dd MMM yyyy HH:mm:ss",
+            "dd MMM yy",
+            "dd MMM yy, HH:mm:ss",
+            "dd MMM yy,HH:mm:ss",
+            "dd MMM yy, HH:mm",
+            "dd MMM yy HH:mm:ss",
+            "dd-MMM yyyy",
+            "dd-MMM yyyy, HH:mm:ss",
+            "dd-MMM yyyy,HH:mm:ss",
+            "dd-MMM yyyy, HH:mm",
+            "dd-MMM yyyy HH:mm:ss",
+            "dd.MM.yyyy",
+            "dd.MM.yyyy, HH:mm:ss",
+            "dd.MM.yyyy,HH:mm:ss",
+            "dd.MM.yyyy, HH:mm",
+            "dd.MM.yyyy HH:mm:ss",
+            "dd.MM.yy",
+            "dd.MM.yy, HH:mm:ss",
+            "dd.MM.yy,HH:mm:ss",
+            "dd.MM.yy, HH:mm",
+            "dd.MM.yy HH:mm:ss",
+            "yyyy-MM-dd",
+            "yyyy-MM-dd:HH:mm:ss",
+            "yyyy-MM-dd HH:mm:ss",
+            "yyyy-MM-dd HH:mm"
+          ]
+        },
+        "instrument": {
+          "kind": "bank_account",
+          "maskFrom": "mask"
+        }
+      }
+    ],
+    "confidence": 0.94,
+    "examples": [
+      {
+        "sender": "VM-EXBANK-S",
+        "body": "Your a/c no. XXXXXXXX1234 is credited by Rs.1,200.00 on 30-09-26 by Int.Pd:01-07-2026 to 30-09-2026.",
+        "expectFactTypes": [
+          "movement"
+        ]
+      },
+      {
+        "sender": "VM-EXBANK-S",
+        "body": "Your a/c no. XXXXXXXX1234 is credited by Rs.1,200.00 on 30-09-26 by transfer from EXAMPLE PERSON.",
+        "expectFactTypes": []
+      }
+    ],
+    "status": "active",
+    "createdBy": "lane-j",
+    "updatedAt": "2026-11-05T00:00:00Z"
+  },
+  {
+    "id": "MONEYIN-INTEREST-AMOUNT-AFTER-WORD",
+    "version": 1,
+    "family": "money_in",
+    "senders": [
+      "*"
+    ],
+    "priority": 400,
+    "match": {
+      "pattern": "\\b(?:(?:fd|fixed\\s+deposit|rd|savings|sb)\\s+)?interest\\s+(?:of\\s+|amount\\s+(?:of\\s+)?|credit\\s+(?:of\\s+)?)?(?:\\b(?:rs\\.?|inr)|₹)\\s*:?\\s*(?<amt>\\d[\\d,]*(?:\\.\\d{1,2})?)\\s+(?:has\\s+been\\s+|is\\s+|was\\s+)?(?:credited|paid|deposited)\\s+(?:to|in|into)\\s+(?:(?:your|the)\\s+)?(?:[a-z][a-z .&'-]{0,30}?\\s)?(?:a/?c(?:ct)?\\.?|account|acc\\.?)(?:\\s*(?:no|number|num)\\.?)?(?:\\s+(?:ending|ends)(?:\\s+(?:with|in))?)?\\s*[:\\-]?\\s*[x*•.]*\\s?(?<mask>\\d{2,18})(?=[\\s\\S]*?\\b(?:on|dated|date)\\s+(?<date>\\d{4}-\\d{2}-\\d{2}(?:[: ]\\d{2}:\\d{2}(?::\\d{2})?)?|\\d{1,2}[-/]\\d{1,2}[-/]\\d{2,4}(?:,?\\s*\\d{2}:\\d{2}(?::\\d{2})?)?|\\d{1,2}[-/ ]?[a-z]{3}[-/ ,]*\\d{2,4}(?:,?\\s*\\d{2}:\\d{2}(?::\\d{2})?)?)|)",
+      "flags": "i",
+      "rejectAny": [
+        "debited",
+        "loan",
+        "emi",
+        "overdue",
+        "charged",
+        "due",
+        "could not",
+        "will be credited"
+      ]
+    },
+    "emit": [
+      {
+        "factType": "movement",
+        "attrs": {
+          "direction": "credit",
+          "purpose": "interest",
+          "rail": "unknown"
+        },
+        "amounts": [
+          {
+            "role": "posted",
+            "from": "amt",
+            "unit": "INR"
+          }
+        ],
+        "occurredAt": {
+          "from": "date",
+          "formats": [
+            "dd-MM-yyyy",
+            "dd-MM-yyyy, HH:mm:ss",
+            "dd-MM-yyyy,HH:mm:ss",
+            "dd-MM-yyyy, HH:mm",
+            "dd-MM-yyyy HH:mm:ss",
+            "dd-MM-yy",
+            "dd-MM-yy, HH:mm:ss",
+            "dd-MM-yy,HH:mm:ss",
+            "dd-MM-yy, HH:mm",
+            "dd-MM-yy HH:mm:ss",
+            "dd/MM/yyyy",
+            "dd/MM/yyyy, HH:mm:ss",
+            "dd/MM/yyyy,HH:mm:ss",
+            "dd/MM/yyyy, HH:mm",
+            "dd/MM/yyyy HH:mm:ss",
+            "dd/MM/yy",
+            "dd/MM/yy, HH:mm:ss",
+            "dd/MM/yy,HH:mm:ss",
+            "dd/MM/yy, HH:mm",
+            "dd/MM/yy HH:mm:ss",
+            "dd-MMM-yyyy",
+            "dd-MMM-yyyy, HH:mm:ss",
+            "dd-MMM-yyyy,HH:mm:ss",
+            "dd-MMM-yyyy, HH:mm",
+            "dd-MMM-yyyy HH:mm:ss",
+            "dd-MMM-yy",
+            "dd-MMM-yy, HH:mm:ss",
+            "dd-MMM-yy,HH:mm:ss",
+            "dd-MMM-yy, HH:mm",
+            "dd-MMM-yy HH:mm:ss",
+            "ddMMMyyyy",
+            "ddMMMyyyy, HH:mm:ss",
+            "ddMMMyyyy,HH:mm:ss",
+            "ddMMMyyyy, HH:mm",
+            "ddMMMyyyy HH:mm:ss",
+            "ddMMMyy",
+            "ddMMMyy, HH:mm:ss",
+            "ddMMMyy,HH:mm:ss",
+            "ddMMMyy, HH:mm",
+            "ddMMMyy HH:mm:ss",
+            "dd MMM yyyy",
+            "dd MMM yyyy, HH:mm:ss",
+            "dd MMM yyyy,HH:mm:ss",
+            "dd MMM yyyy, HH:mm",
+            "dd MMM yyyy HH:mm:ss",
+            "dd MMM yy",
+            "dd MMM yy, HH:mm:ss",
+            "dd MMM yy,HH:mm:ss",
+            "dd MMM yy, HH:mm",
+            "dd MMM yy HH:mm:ss",
+            "dd-MMM yyyy",
+            "dd-MMM yyyy, HH:mm:ss",
+            "dd-MMM yyyy,HH:mm:ss",
+            "dd-MMM yyyy, HH:mm",
+            "dd-MMM yyyy HH:mm:ss",
+            "dd.MM.yyyy",
+            "dd.MM.yyyy, HH:mm:ss",
+            "dd.MM.yyyy,HH:mm:ss",
+            "dd.MM.yyyy, HH:mm",
+            "dd.MM.yyyy HH:mm:ss",
+            "dd.MM.yy",
+            "dd.MM.yy, HH:mm:ss",
+            "dd.MM.yy,HH:mm:ss",
+            "dd.MM.yy, HH:mm",
+            "dd.MM.yy HH:mm:ss",
+            "yyyy-MM-dd",
+            "yyyy-MM-dd:HH:mm:ss",
+            "yyyy-MM-dd HH:mm:ss",
+            "yyyy-MM-dd HH:mm"
+          ]
+        },
+        "instrument": {
+          "kind": "bank_account",
+          "maskFrom": "mask"
+        }
+      }
+    ],
+    "confidence": 0.94,
+    "examples": [
+      {
+        "sender": "VM-EXBANK-S",
+        "body": "Interest of Rs 432.00 credited to your Example Bank A/c XX1234 on 30-09-26 for quarter ending 30-09-26.",
+        "expectFactTypes": [
+          "movement"
+        ]
+      },
+      {
+        "sender": "VM-EXBANK-S",
+        "body": "Interest of Rs 432.00 is due on your Example Bank loan A/c XX1234 on 30-09-26. Please pay on time.",
+        "expectFactTypes": []
+      }
+    ],
+    "status": "active",
+    "createdBy": "lane-j",
+    "updatedAt": "2026-11-05T00:00:00Z"
+  },
+  {
+    "id": "MONEYIN-UPI-APP-RECEIVED-FROM-PERSON",
+    "version": 1,
+    "family": "money_in",
+    "senders": [
+      "*"
+    ],
+    "priority": 380,
+    "match": {
+      "pattern": "^(?:you\\s+(?:have\\s+)?)?received\\s+(?:\\b(?:rs\\.?|inr)|₹)\\s*:?\\s*(?<amt>\\d[\\d,]*(?:\\.\\d{1,2})?)\\s+from\\s+(?<payer>[a-z][a-z .'-]{2,40}?)\\s+(?:on|via|using|in)\\s+(?:your\\s+)?(?:phonepe|paytm(?:\\s+payments\\s+bank)?|google\\s*pay|gpay|bhim|upi)\\b",
+      "flags": "i",
+      "rejectAny": [
+        "request",
+        "will be",
+        "failed",
+        "pending",
+        "could not"
+      ]
+    },
+    "emit": [
+      {
+        "factType": "movement",
+        "attrs": {
+          "direction": "credit",
+          "purpose": "p2p",
+          "rail": "upi"
+        },
+        "amounts": [
+          {
+            "role": "posted",
+            "from": "amt",
+            "unit": "INR"
+          }
+        ],
+        "counterparty": {
+          "nameFrom": "payer",
+          "kind": "person",
+          "transforms": [
+            "sanitizeNarration"
+          ]
+        }
+      }
+    ],
+    "confidence": 0.94,
+    "examples": [
+      {
+        "sender": "VM-EXUPI-S",
+        "body": "Received Rs 500 from Example Person on PhonePe. UPI Ref 123456789012.",
+        "expectFactTypes": [
+          "movement"
+        ]
+      },
+      {
+        "sender": "VM-EXUPI-S",
+        "body": "Request: Example Person requested Rs 500 from you on PhonePe. Approve in the app.",
+        "expectFactTypes": []
+      }
+    ],
+    "status": "active",
+    "createdBy": "lane-j",
+    "updatedAt": "2026-11-05T00:00:00Z"
+  }
+]

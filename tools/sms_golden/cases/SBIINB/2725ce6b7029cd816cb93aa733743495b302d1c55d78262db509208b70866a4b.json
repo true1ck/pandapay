@@ -1,0 +1,37 @@
+{
+  "id": "lanej:salary_neft_with_payer",
+  "templateHash": "2725ce6b7029cd816cb93aa733743495b302d1c55d78262db509208b70866a4b",
+  "weight": 1,
+  "source": "synthetic",
+  "messages": [
+    {
+      "sender": "VM-SBIINB-S",
+      "body": "Update! INR 85,000.00 deposited in Example Bank A/c XX1234 on 01-NOV-26 for NEFT Cr-EXAM0000001-ACME TECHNOLOGIES PVT LTD-SALARY NOV. Avl bal INR 1,37,661.40.",
+      "observedAt": "2026-12-01T09:00:00.000Z"
+    }
+  ],
+  "expect": {
+    "facts": [
+      {
+        "factType": "movement",
+        "attrs": {
+          "direction": "credit",
+          "purpose": "salary",
+          "rail": "neft"
+        },
+        "amounts": [
+          {
+            "role": "posted",
+            "minor": 8500000
+          }
+        ],
+        "instrument": {
+          "kind": "bank_account",
+          "maskDigits": "1234"
+        }
+      }
+    ]
+  },
+  "note": "Salary by NEFT.",
+  "origin": "lane-j"
+}

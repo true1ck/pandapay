@@ -36,8 +36,8 @@ void main() {
             browserReport = shared.reportJson(browser);
         for (final field in ['stages', 'counts', 'metrics', 'failures'])
           expect(browserReport[field], cliReport[field]);
-        expect(browser.casesPassed, 115);
-        expect(browser.scenariosPassed, 15);
+        expect(browser.casesPassed, golden.cases.length);
+        expect(browser.scenariosPassed, golden.scenarios.length);
       } finally {
         directory.deleteSync(recursive: true);
       }

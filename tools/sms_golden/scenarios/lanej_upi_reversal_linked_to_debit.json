@@ -1,0 +1,55 @@
+{
+  "id": "lanej_upi_reversal_linked_to_debit",
+  "description": "A UPI reversal that carries the original UPI reference joins the earlier debit and nets it to zero.",
+  "knownInstruments": [
+    {
+      "kind": "bank_account",
+      "issuerSlug": "hdfc",
+      "maskDigits": "1234"
+    }
+  ],
+  "messages": [
+    {
+      "sender": "VM-HDFCBK-S",
+      "body": "Rs.250.00 debited from A/c XX1234 on 05-11-26 to VPA chaipoint@okaxis (UPI Ref No 432100000001). Avl bal Rs 40,000.00",
+      "observedAt": "2026-11-05T13:00:00Z"
+    },
+    {
+      "sender": "VM-HDFCBK-S",
+      "body": "UPI reversal: Rs.250.00 credited to A/c XX1234 on 07-11-26 against failed UPI transaction Ref No 432100000001.",
+      "observedAt": "2026-11-07T10:00:00Z"
+    }
+  ],
+  "expect": {
+    "events": [
+      {
+        "type": "purchase",
+        "legRoles": [
+          "debit_leg"
+        ]
+      },
+      {
+        "type": "refund",
+        "legRoles": [
+          "original",
+          "reversal"
+        ]
+      }
+    ],
+    "instruments": [
+      {
+        "kind": "bank_account",
+        "issuerSlug": "hdfc",
+        "maskDigits": "1234"
+      }
+    ],
+    "totals": {
+      "from": "2026-10-31T18:30:00Z",
+      "to": "2026-11-30T18:30:00Z",
+      "spendMinor": 0,
+      "incomeMinor": 0,
+      "investmentMinor": 0,
+      "transactionCount": 2
+    }
+  }
+}
