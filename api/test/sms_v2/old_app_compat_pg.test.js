@@ -246,25 +246,62 @@ test('v2 rows: replaying a legacy SMS batch whose rows were superseded answers 2
 });
 
 // ---------------------------------------------------------------------------
-// 4. Findings (see docs/sms-pipeline-v2/requests/LANE-D-old-app-compat.md).
-//    `todo` tests run and report but do not fail the suite. Remove `todo`
-//    once the fix proposed in the request is applied.
+// 4. Lane G fixes for the lane D findings (see
+//    docs/sms-pipeline-v2/requests/LANE-D-old-app-compat.md).
 // ---------------------------------------------------------------------------
-const TODO = 'FINDING LANE-D-1/2: see docs/sms-pipeline-v2/requests/LANE-D-old-app-compat.md';
+const V2 = { 'X-Sms-Pipeline': 'v2' };
 
-test('FINDING 1: legacy GET /transactions must not emit entry_kind values a v1 app maps to spend', { skip, todo: TODO }, async () => {
+test('LANE-D-1: a request without X-Sms-Pipeline: v2 never sees entry_kind values a v1 app maps to spend', { skip }, async () => {
   // The shipped app's TxnEntryKind.fromJson falls back to `spend` for any
   // value it does not know (6c17d46:app/lib/data/user_cards_repository.dart).
   const p = await newProfile(admin);
   await seedV2(admin, p, { withExtras: true });
-  const list = await stack.call(p, 'GET', '/transactions'); // no X-App-Version: the v1 app never sends one
+  const refundId = await idOf(admin, p, 'lane-d-refund');
+  const list = await stack.call(p, 'GET', '/transactions'); // no headers: the v1 app never sends X-Sms-Pipeline
   const bad = list.body.transactions.filter((t) => !LEGACY_KINDS.includes(t.entry_kind));
   assert.deepEqual(bad.map((t) => t.entry_kind), [], 'a refund row would be shown to a v1 app as spending');
-  const detail = await stack.call(p, 'GET', `/transactions/${await idOf(admin, p, 'lane-d-refund')}`);
-  assert.ok(LEGACY_KINDS.includes(detail.body.transaction.entry_kind));
+  assert.equal(list.body.transactions.find((t) => t.id === refundId).entry_kind, 'transfer');
+  const withVersion = await stack.call(p, 'GET', '/transactions', undefined, { 'X-App-Version': '9.9.9' });
+  assert.equal(withVersion.body.transactions.find((t) => t.id === refundId).entry_kind, 'transfer', 'X-App-Version alone does not opt in');
+  const detail = await stack.call(p, 'GET', `/transactions/${refundId}`);
+  assert.equal(detail.body.transaction.entry_kind, 'transfer');
+  // write responses too
+  const patched = await stack.call(p, 'PATCH', `/transactions/${refundId}`, { merchantName: 'Refund shop' });
+  assert.ok(patched.status < 500, patched.text);
+  if (patched.status === 200) assert.notEqual(patched.body.transaction.entry_kind, 'refund');
+  for (const [route] of [[`/transactions/${refundId}/ignore`], [`/transactions/${refundId}/restore`]]) {
+    const r = await stack.call(p, 'POST', route, route.endsWith('ignore') ? { reason: 'refund' } : {});
+    assert.equal(r.status, 200, r.text);
+    assert.doesNotMatch(r.text, /"refund"/, `${route} leaks a refund kind to a legacy client`);
+  }
+  // stored data is untouched
+  const stored = await admin.query('SELECT entry_kind::text FROM transactions WHERE id=$1', [refundId]);
+  assert.equal(stored.rows[0].entry_kind, 'refund');
 });
 
-test('FINDING 2: a legacy SMS replay must not rewrite a row projected by v2', { skip, todo: TODO }, async () => {
+test('LANE-D-1: a v2 client (X-Sms-Pipeline: v2) still receives refund unchanged', { skip }, async () => {
+  const p = await newProfile(admin);
+  await seedV2(admin, p, { withExtras: true });
+  const refundId = await idOf(admin, p, 'lane-d-refund');
+  const list = await stack.call(p, 'GET', '/transactions', undefined, V2);
+  assert.equal(list.body.transactions.find((t) => t.id === refundId).entry_kind, 'refund');
+  const detail = await stack.call(p, 'GET', `/transactions/${refundId}`, undefined, V2);
+  assert.equal(detail.body.transaction.entry_kind, 'refund');
+});
+
+test('LANE-D-1: reports and totals do not depend on the header', { skip }, async () => {
+  const p = await newProfile(admin);
+  await seedV2(admin, p, { withExtras: true });
+  for (const route of ['/spend-by-category', '/spend-report?period=month&anchor=2026-10-20T00:00:00Z', '/home-summary', '/monthly-reports']) {
+    const a = await stack.call(p, 'GET', route);
+    const b = await stack.call(p, 'GET', route, undefined, V2);
+    const drop = (x) => JSON.parse(JSON.stringify(h.normalise(x.body, new Map()), (k, v) => (['generated_at', 'elapsedFraction'].includes(k) ? undefined : v)));
+    assert.equal(a.status, 200, route);
+    assert.deepEqual(drop(a), drop(b), `${route} differs by header`);
+  }
+});
+
+test('LANE-D-2: a legacy SMS replay does not rewrite a row projected by v2', { skip }, async () => {
   const p = await newProfile(admin);
   assert.equal((await stack.call(p, 'POST', '/transactions/from-sms/batch', { messages: [MSGS.refund] })).status, 200);
   const k = sourceKeyFor(p, MSGS.refund);
@@ -272,7 +309,43 @@ test('FINDING 2: a legacy SMS replay must not rewrite a row projected by v2', { 
   await admin.query(`INSERT INTO sms_v2_events(event_id,profile_id,type,status,legs,confidence,occurred_at,amount_minor)
                      VALUES($1,$2,'refund','complete','[{"role":"credit_leg"}]'::jsonb,0.9,'2026-10-20T10:00:00Z',25000)`, [ev, p]);
   await admin.query("UPDATE transactions SET entry_kind='refund', pipeline_version=2, event_id=$3 WHERE profile_id=$1 AND source_key=$2", [p, k, ev]);
-  assert.equal((await stack.call(p, 'POST', '/transactions/from-sms/batch', { messages: [MSGS.refund] })).status, 200);
-  const row = (await admin.query('SELECT entry_kind::text, pipeline_version FROM transactions WHERE profile_id=$1 AND source_key=$2', [p, k])).rows[0];
-  assert.deepEqual(row, { entry_kind: 'refund', pipeline_version: 2 }, 'legacy replay changed a v2-owned row');
+  const before = (await admin.query('SELECT * FROM transactions WHERE profile_id=$1 AND source_key=$2', [p, k])).rows[0];
+  const obsBefore = (await admin.query('SELECT count(*)::int AS n FROM transaction_observations WHERE profile_id=$1', [p])).rows[0].n;
+  const replay = await stack.call(p, 'POST', '/transactions/from-sms/batch', { messages: [MSGS.refund] });
+  assert.equal(replay.status, 200);
+  const after = (await admin.query('SELECT * FROM transactions WHERE profile_id=$1 AND source_key=$2', [p, k])).rows[0];
+  assert.deepEqual(after, before, 'legacy replay changed a v2-owned row');
+  assert.equal(after.entry_kind, 'refund');
+  assert.equal(after.pipeline_version, 2);
+  assert.equal((await admin.query('SELECT count(*)::int AS n FROM transaction_observations WHERE profile_id=$1', [p])).rows[0].n, obsBefore, 'no observation recorded');
+  assert.doesNotMatch(replay.text, /"refund"/, 'a legacy client is told transfer, never refund');
+});
+
+test('LANE-D-2: a legacy SMS replay leaves a superseded row exactly as it was', { skip }, async () => {
+  const p = await newProfile(admin);
+  assert.equal((await stack.call(p, 'POST', '/transactions/from-sms/batch', { messages: [MSGS.debit] })).status, 200);
+  const k = sourceKeyFor(p, MSGS.debit);
+  await admin.query("UPDATE transactions SET status='superseded', entry_kind='transfer' WHERE profile_id=$1 AND source_key=$2", [p, k]);
+  const before = (await admin.query('SELECT * FROM transactions WHERE profile_id=$1 AND source_key=$2', [p, k])).rows[0];
+  assert.equal((await stack.call(p, 'POST', '/transactions/from-sms/batch', { messages: [MSGS.debit] })).status, 200);
+  const after = (await admin.query('SELECT * FROM transactions WHERE profile_id=$1 AND source_key=$2', [p, k])).rows[0];
+  assert.deepEqual(after, before);
+});
+
+test('LANE-D-2: an ordinary legacy duplicate (pipeline_version 1, active) behaves as before', { skip }, async () => {
+  const p = await newProfile(admin);
+  const first = await stack.call(p, 'POST', '/transactions/from-sms/batch', { messages: [MSGS.debit] });
+  assert.equal(first.status, 200);
+  const k = sourceKeyFor(p, MSGS.debit);
+  const before = (await admin.query('SELECT * FROM transactions WHERE profile_id=$1 AND source_key=$2', [p, k])).rows[0];
+  assert.equal(before.pipeline_version, 1);
+  const again = await stack.call(p, 'POST', '/transactions/from-sms/batch', { messages: [MSGS.debit] });
+  assert.equal(again.status, 200);
+  const rows = (await admin.query('SELECT id, status::text FROM transactions WHERE profile_id=$1 AND source_key=$2', [p, k])).rows;
+  assert.deepEqual(rows, [{ id: before.id, status: 'active' }], 'one active row, no duplicate');
+  // a stale classification is still refreshed for a v1-owned row (the legacy duplicate branch runs)
+  await admin.query("UPDATE transactions SET entry_kind='income', state_applied=true WHERE id=$1", [before.id]);
+  assert.equal((await stack.call(p, 'POST', '/transactions/from-sms/batch', { messages: [MSGS.debit] })).status, 200);
+  const kind = (await admin.query('SELECT entry_kind::text FROM transactions WHERE id=$1', [before.id])).rows[0].entry_kind;
+  assert.equal(kind, 'spend', 'legacy reclassification of a v1 row is unchanged');
 });

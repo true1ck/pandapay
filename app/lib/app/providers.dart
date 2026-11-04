@@ -15,6 +15,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_local_notifications/flutter_local_notifications.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:http/http.dart' as http;
 import 'package:package_info_plus/package_info_plus.dart';
 import 'package:pandapay_domain/pandapay_domain.dart';
 import 'package:shared_preferences/shared_preferences.dart';
@@ -27,6 +28,7 @@ import '../data/app_status_repository.dart';
 import '../data/api_exception.dart';
 import '../data/auth_api.dart';
 import '../data/product_access_api.dart';
+import '../data/api_request_headers_client.dart';
 import '../data/authenticated_http_client.dart';
 import '../data/card_bill_ledger.dart';
 import '../data/card_feedback_repository.dart';
@@ -189,7 +191,11 @@ final authenticatedHttpClientProvider = Provider<AuthenticatedHttpClient>((
 ) {
   final refreshCoordinator = ref.read(sessionRefreshCoordinatorProvider);
   final client = AuthenticatedHttpClient(
-    inner: localSmsRigHttpClient(),
+    inner: ApiRequestHeadersClient(
+      inner: localSmsRigHttpClient() ?? http.Client(),
+      apiBaseUrl: Uri.parse(_apiBaseUrl),
+      pipelineV2Enabled: () => ref.read(smsPipelineV2EnabledProvider),
+    ),
     refreshAccessToken: () async {
       return refreshCoordinator.refresh();
     },
