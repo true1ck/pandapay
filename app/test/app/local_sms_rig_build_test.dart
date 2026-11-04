@@ -1,7 +1,29 @@
 import 'package:flutter_test/flutter_test.dart';
 import 'package:pandapay/app/local_sms_rig_build.dart';
+import 'package:pandapay/app/env.dart';
+import 'package:pandapay/app/local_sms_rig_http_client.dart';
+import 'package:http/http.dart' as http;
 
 void main() {
+  test(
+    'compiled local trust reaches both configured HTTPS services',
+    () async {
+      expect(LocalSmsRigBuild.enabled, isTrue);
+      final client = localSmsRigHttpClient();
+      expect(client, isA<LocalSmsRigHttpClient>());
+      addTearDown(client!.close);
+      for (final base in [Env.apiBaseUrl, Env.authBaseUrl]) {
+        expect((await client.get(Uri.parse('$base/ready'))).statusCode, 200);
+      }
+      await expectLater(
+        client.get(Uri.parse('https://example.invalid/')),
+        throwsA(isA<http.ClientException>()),
+      );
+    },
+    skip: LocalSmsRigBuild.encodedCa.isEmpty
+        ? 'Pass the local rig build defines for the compiled transport check'
+        : false,
+  );
   bool allowed({
     bool release = false,
     bool debug = false,
