@@ -1,0 +1,225 @@
+[
+  {
+    "id": "IPO-NSE-APP-RECEIVED-UPI",
+    "version": 1,
+    "family": "ipo_notice",
+    "senders": [
+      "*"
+    ],
+    "priority": 440,
+    "match": {
+      "pattern": "^dear\\s+[^\\r\\n]{1,90}?\\s+ipo\\s+[^:\\r\\n]{1,120}?\\s*:\\s*app(?:l)?\\s*no\\.?\\s*[:#]?\\s*(?<ref_asbaRef>[a-z0-9]+)\\s+upi\\s+id\\s*:?\\s*[a-z0-9._-]+@[a-z0-9]+\\s+for\\s+(?:rs\\.?|inr|₹)\\s+(?<amt>\\d[\\d,]*(?:\\.\\d{1,2})?)\\s+received\\.\\s*please\\s+check\\s+for\\s+upi[- ]mandate\\s+collect\\s+request\\s+for\\s+blocking\\s+of\\s+funds",
+      "flags": "i",
+      "rejectAny": [
+        "rejected",
+        "failed",
+        "cancelled"
+      ]
+    },
+    "emit": [
+      {
+        "factType": "info",
+        "attrs": {
+          "category": "service",
+          "amountMinor": {
+            "from": "amt"
+          }
+        },
+        "references": {
+          "asbaRef": "ref_asbaRef"
+        }
+      }
+    ],
+    "confidence": 0.98,
+    "examples": [
+      {
+        "sender": "VM-NSEIPO-S",
+        "body": "Dear Investor IPO SAMPLE WORKS Limited : App no UPSAMPLE00012345 UPI ID demo@bank for Rs 15000.00 received. Please check for UPI-Mandate collect request for blocking of funds- NSEIL",
+        "expectFactTypes": [
+          "info"
+        ]
+      },
+      {
+        "sender": "VM-NSEIPO-S",
+        "body": "Dear Investor IPO SAMPLE WORKS Limited : App no UPSAMPLE00012345 UPI ID demo@bank for Rs 15000.00 rejected. Please check for UPI-Mandate collect request for blocking of funds- NSEIL",
+        "expectFactTypes": []
+      }
+    ],
+    "status": "active",
+    "createdBy": "lane-h",
+    "updatedAt": "2026-11-05T00:00:00Z"
+  },
+  {
+    "id": "IPO-NSE-APP-RECEIVED-EMAIL",
+    "version": 1,
+    "family": "ipo_notice",
+    "senders": [
+      "*"
+    ],
+    "priority": 440,
+    "match": {
+      "pattern": "^dear\\s+[^\\r\\n]{1,90}?\\s+ipo\\s+[^:\\r\\n]{1,120}?\\s*:\\s*app(?:l)?\\s*no\\.?\\s*[:#]?\\s*(?<ref_asbaRef>[a-z0-9]+)\\s+for\\s+(?:rs\\.?|inr|₹)\\s*(?<amt>\\d[\\d,]*(?:\\.\\d{1,2})?)\\s+received\\b[.\\s]*refer\\s+your\\s+registered\\s+e-?mail",
+      "flags": "i",
+      "rejectAny": [
+        "rejected",
+        "failed",
+        "cancelled"
+      ]
+    },
+    "emit": [
+      {
+        "factType": "info",
+        "attrs": {
+          "category": "service",
+          "amountMinor": {
+            "from": "amt"
+          }
+        },
+        "references": {
+          "asbaRef": "ref_asbaRef"
+        }
+      }
+    ],
+    "confidence": 0.97,
+    "examples": [
+      {
+        "sender": "VM-NSEIPO-S",
+        "body": "Dear Investor IPO SAMPLE WORKS Limited : App no 10020030 for Rs 15000.00 received. Refer your registered email id for details- NSEIL",
+        "expectFactTypes": [
+          "info"
+        ]
+      },
+      {
+        "sender": "VM-NSEIPO-S",
+        "body": "Dear Investor IPO SAMPLE WORKS Limited : App no 10020030 for Rs 15000.00 rejected. Refer your registered email id for details- NSEIL",
+        "expectFactTypes": []
+      }
+    ],
+    "status": "active",
+    "createdBy": "lane-h",
+    "updatedAt": "2026-11-05T00:00:00Z"
+  },
+  {
+    "id": "IPO-NSE-SHARES-ALLOTTED",
+    "version": 1,
+    "family": "ipo_notice",
+    "senders": [
+      "*"
+    ],
+    "priority": 440,
+    "match": {
+      "pattern": "^dear\\s+[^\\r\\n]{1,90}?\\s+ipo\\s+[^:\\r\\n]{1,120}?\\s*:\\s*(?<shares>\\d+)\\s+shares?\\s+allotted\\s+at\\s+(?:rs\\.?|inr|₹)\\s*[\\d,]+(?:\\.\\d{1,2})?\\s+for\\s+app(?:l)?\\s*no\\.?\\s*[:#]?\\s*(?<ref_asbaRef>[a-z0-9]+)",
+      "flags": "i"
+    },
+    "emit": [
+      {
+        "factType": "info",
+        "attrs": {
+          "category": "service"
+        },
+        "references": {
+          "asbaRef": "ref_asbaRef"
+        }
+      }
+    ],
+    "confidence": 0.95,
+    "examples": [
+      {
+        "sender": "VM-NSEIPO-S",
+        "body": "Dear Investor IPO SAMPLE WORKS Limited: 10 shares allotted at Rs 150.00 for App no UPSAMPLE00012345. Refer registered email id for details- NSEIL",
+        "expectFactTypes": [
+          "info"
+        ]
+      },
+      {
+        "sender": "VM-NSEIPO-S",
+        "body": "Dear Investor IPO SAMPLE WORKS Limited : App no 10020030 for Rs 15000.00 received. Refer your registered email id for details- NSEIL",
+        "expectFactTypes": []
+      }
+    ],
+    "status": "active",
+    "createdBy": "lane-h",
+    "updatedAt": "2026-11-05T00:00:00Z"
+  },
+  {
+    "id": "IPO-REG-BID-FUND-NOT-BLOCKED",
+    "version": 1,
+    "family": "ipo_notice",
+    "senders": [
+      "*"
+    ],
+    "priority": 440,
+    "match": {
+      "pattern": "bid\\s+rec(?:ei)?ve?d\\s+from\\s+exchange\\s+for\\s+(?<issue>[a-z0-9&.' ()-]+?)\\s+ipo\\s+ap{1,2}l\\s*no\\.?\\s*(?<ref_asbaRef>[a-z0-9]+?)(?=\\s|[.,;]|due\\b|$)[\\s\\S]{0,20}?but\\s+funds?\\s+not\\s+blocked\\s+by\\s+bank",
+      "flags": "i"
+    },
+    "emit": [
+      {
+        "factType": "info",
+        "attrs": {
+          "category": "service"
+        },
+        "references": {
+          "asbaRef": "ref_asbaRef"
+        }
+      }
+    ],
+    "confidence": 0.95,
+    "examples": [
+      {
+        "sender": "VM-BSSIPO-S",
+        "body": "Bid recvd from exchange for SAMPLEWORK IPO aplno UPSAMPLE00012345 but fund not blocked by bank. Pls contact your bank if req - Registrar Services Pvt Ltd",
+        "expectFactTypes": [
+          "info"
+        ]
+      },
+      {
+        "sender": "VM-BSSIPO-S",
+        "body": "Bid recvd from exchange for SAMPLEWORK IPO aplno UPSAMPLE00012345 and fund blocked by bank. Pls contact your bank if req - Registrar Services Pvt Ltd",
+        "expectFactTypes": []
+      }
+    ],
+    "status": "active",
+    "createdBy": "lane-h",
+    "updatedAt": "2026-11-05T00:00:00Z"
+  },
+  {
+    "id": "IPO-DEMAT-IPO-CREDIT",
+    "version": 1,
+    "family": "ipo_notice",
+    "senders": [
+      "*"
+    ],
+    "priority": 440,
+    "match": {
+      "pattern": "credit\\s+in\\s+a/c\\s+[*x]*\\d{4,16}\\s+through\\s+ipo(?:/fpo)?\\s+for\\s+",
+      "flags": "i"
+    },
+    "emit": [
+      {
+        "factType": "info",
+        "attrs": {
+          "category": "service"
+        }
+      }
+    ],
+    "confidence": 0.95,
+    "examples": [
+      {
+        "sender": "VM-CDSLTX-S",
+        "body": "CDSL: Credit in a/c *12345678 through IPO/FPO for 10-SAMPLE WORKS-EQ on 18DEC",
+        "expectFactTypes": [
+          "info"
+        ]
+      },
+      {
+        "sender": "VM-CDSLTX-S",
+        "body": "CDSL: Credit in a/c *12345678 through off market transfer for 10-SAMPLE WORKS-EQ on 18DEC",
+        "expectFactTypes": []
+      }
+    ],
+    "status": "active",
+    "createdBy": "lane-h",
+    "updatedAt": "2026-11-05T00:00:00Z"
+  }
+]
