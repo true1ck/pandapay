@@ -51,6 +51,24 @@ void main() {
     expect(await verifier.verify('{'), isNull);
   });
 
+  test('hostile payloads of any shape are refused, never thrown', () async {
+    final hostile = <String>[
+      jsonEncode({...signed, 'rules': 5}),
+      jsonEncode({...signed, 'signature': 'text'}),
+      jsonEncode({...signed, 'signature': {'alg': 'Ed25519', 'keyId': 7, 'value': 1}}),
+      jsonEncode({...signed, 'signature': {'alg': 'Ed25519', 'keyId': keyId, 'value': '!!!'}}),
+      jsonEncode({...signed, 'bundleVersion': 'x'}),
+      jsonEncode({...signed, 'senders': [1, 2]}),
+      '${'[' * 5000}${']' * 5000}',
+      '"string"',
+      'null',
+      '',
+    ];
+    for (final payload in hostile) {
+      expect(await verifier.verify(payload), isNull, reason: payload.substring(0, payload.length.clamp(0, 60)));
+    }
+  });
+
   test('trust comes from installed keys and supports key rotation', () async {
     final next = base64Encode(List<int>.filled(32, 9));
     final both = BundleVerifier(trustedKeys: {keyId: rawKey, 'next': next});
