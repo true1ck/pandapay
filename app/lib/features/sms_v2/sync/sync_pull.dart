@@ -271,9 +271,11 @@ class SyncPull {
     final personal = _state.get('personal:rules');
     if (personal != null) {
       final rules = jsonDecode(personal) as List;
-      for (final rule in rules.whereType<Map>())
-        if (rule['instrumentId'] == local.instrumentId)
+      for (final rule in rules.whereType<Map>()) {
+        if (rule['instrumentId'] == local.instrumentId) {
           rule['instrumentId'] = serverId;
+        }
+      }
       _state.put('personal:rules', jsonEncode(rules));
     }
     void rewrite(Map<String, Object?> json) {
@@ -390,7 +392,18 @@ class SyncPull {
         )
         .toList();
     final dirtyBefore = _ledger.dirty().map((entry) => entry.entryId).toSet();
-    final locked = _ledger.categoryDecisions();
+    final locked = Map<String, CategoryDecision>.of(
+      _ledger.categoryDecisions(),
+    );
+    // Refund categories are derived from their purchase and are absent from
+    // wire entries. Retaining an old automatic decision would hide a category
+    // refresh received from another device.
+    for (final event in ready) {
+      if (event.type == EventType.refund &&
+          locked[event.eventId]?.source != CategorySource.user) {
+        locked.remove(event.eventId);
+      }
+    }
     final projectedCategories = LedgerSnapshot.project(
       events: ready,
       factsById: facts,

@@ -49,7 +49,7 @@ function readBody(req) {
   }
 }
 
-function createFactsHandler({ withUserClient, hooks, deps }) {
+function createFactsHandler({ withUserClient, hooks, deps, categoryOnly = false }) {
   return async function factsHandler(req, res) {
     try {
       if (denied(await hooks.security.verifyAttestation(req))) return fail(res, 403, 'attestation_required');
@@ -74,9 +74,12 @@ function createFactsHandler({ withUserClient, hooks, deps }) {
     if (!check.ok) {
       return fail(res, 400, check.errors[0].code, `${check.errors.length} validation error(s)`, { errors: check.errors.slice(0, 50) });
     }
-    const backfill = String(req.query.backfill || '').toLowerCase() === 'true';
+    if (categoryOnly && (body.items.length || body.instruments.length || body.events.length)) {
+      return fail(res, 400, 'invalid_request', 'A category refresh contains ledger entries only.');
+    }
+    const backfill = categoryOnly || String(req.query.backfill || '').toLowerCase() === 'true';
     try {
-      const out = await withUserClient(req.userId, (client) => storage.ingestBatch(client, req.userId, body, { backfill, deps, hooks }));
+      const out = await withUserClient(req.userId, (client) => storage.ingestBatch(client, req.userId, body, { backfill, categoryOnly, deps, hooks }));
       return res.status(200).json({ results: out.results, serverTime: new Date().toISOString() });
     } catch (err) {
       console.error('sms_v2 facts:batch failed', safeErrorCode(err));
@@ -111,6 +114,8 @@ function readRawBody(req, res, next) {
 
 function registerFactsRoute(app, { requireSmsV2, requireMember, withUserClient, hooks, deps }) {
   app.post(ROUTE, requireSmsV2, requireMember, readRawBody, createFactsHandler({ withUserClient, hooks, deps }));
+  app.post('/sms/v2/categories\\:batch', requireSmsV2, requireMember, readRawBody,
+    createFactsHandler({ withUserClient, hooks, deps, categoryOnly: true }));
 }
 
 module.exports = { registerFactsRoute, createFactsHandler, readBody, MAX_BODY_BYTES, MAX_INFLATED_BYTES, MAX_ITEMS, ROUTE };

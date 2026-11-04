@@ -1,6 +1,7 @@
 import '../personal/personal_rule_engine.dart';
 import '../personal/personal_rule_store.dart';
 import '../migration/legacy_replay.dart';
+import '../migration/history_update.dart';
 import 'dart:convert';
 import 'dart:io';
 
@@ -90,6 +91,22 @@ class SmsV2Runtime {
   );
   Future<ReplayReport> migrationDryRun() async =>
       migration(await activeBundle()).dryRun();
+  Future<HistoryUpdate> historyUpdate(DateTime from, DateTime to) async {
+    _checkAccount();
+    return HistoryUpdate(
+      financial: financial,
+      namespace: namespace,
+      bundle: await activeBundle(),
+      appVersion: appVersion,
+      from: from,
+      to: to,
+      accountIsCurrent: accountIsCurrent,
+      categoryIdBySlug: categoryIdBySlug,
+      catalogue: catalogue,
+      engine: _engine,
+    );
+  }
+
   late final _state = SyncStateStore(
     financial.database.db,
     namespace: namespace,

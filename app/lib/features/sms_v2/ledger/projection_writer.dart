@@ -194,6 +194,11 @@ class ProjectionWriter {
                   'expected_value_inr': old.rewardValue?.rupees,
                   'note': old.note,
                   'tags': old.tags.map((t) => t.toJson()).toList(),
+                  if (old.userCategoryId != null) ...{
+                    'category_id': null,
+                    'user_category_id': old.userCategoryId,
+                    'category_name': old.categoryName,
+                  },
                 },
               }),
             );

@@ -75,13 +75,17 @@ CREATE TABLE IF NOT EXISTS sms_v2_migration_sources(namespace TEXT NOT NULL,sour
     );
   }
 
-  Map<String, Map<String, Object?>> _messages() {
+  Map<String, Map<String, Object?>> _messages({DateTime? from, DateTime? to}) {
     final result = <String, Map<String, Object?>>{};
     for (final table in ['sms_captured_messages', 'sms_intake']) {
       if (!_exists(table)) continue;
       for (final row in db.select(
-        'SELECT id,sender,body,received_at FROM $table WHERE namespace=? ORDER BY received_at,id',
-        [namespace],
+        'SELECT id,sender,body,received_at FROM $table WHERE namespace=?${from == null ? '' : ' AND received_at>=?'}${to == null ? '' : ' AND received_at<?'} ORDER BY received_at,id',
+        [
+          namespace,
+          if (from != null) from.millisecondsSinceEpoch,
+          if (to != null) to.millisecondsSinceEpoch,
+        ],
       )) {
         if ((row['body'] as String).trim().isEmpty ||
             classifySmsV2Intake(
@@ -125,6 +129,12 @@ CREATE TABLE IF NOT EXISTS sms_v2_migration_sources(namespace TEXT NOT NULL,sour
         );
       }
     }
+    result.removeWhere((_, message) {
+      final date = DateTime.tryParse(message['observedAt'] as String? ?? '');
+      return date == null ||
+          from != null && date.isBefore(from) ||
+          to != null && !date.isBefore(to);
+    });
     return result;
   }
 
@@ -147,8 +157,9 @@ CREATE TABLE IF NOT EXISTS sms_v2_migration_sources(namespace TEXT NOT NULL,sour
         }
         if (j['correctionKind'] == 'false_transaction' ||
             j['action'] == 'dismissed') {
-          if (sources == null || sources.contains(row['source_key']))
+          if (sources == null || sources.contains(row['source_key'])) {
             add(row['source_key'] as String, {'deleted': true});
+          }
         }
       }
     }
@@ -161,8 +172,9 @@ CREATE TABLE IF NOT EXISTS sms_v2_migration_sources(namespace TEXT NOT NULL,sour
         );
     for (final row in legacy) {
       final source = row['source_key'];
-      if (source is! String || sources != null && !sources.contains(source))
+      if (source is! String || sources != null && !sources.contains(source)) {
         continue;
+      }
       if (row['status'] == 'ignored' ||
           row['status'] == 'deleted' ||
           (row['note'] as String? ?? '').startsWith('[deleted')) {
@@ -170,6 +182,9 @@ CREATE TABLE IF NOT EXISTS sms_v2_migration_sources(namespace TEXT NOT NULL,sour
       }
       if (row['status'] == 'active' && result[source]?['deleted'] != true) {
         add(source, {'deleted': false});
+      }
+      if (row['user_category_id'] case final String chosenCategory) {
+        add(source, {'categoryId': chosenCategory});
       }
       // Explicit edit evidence is separate from parser output. A plain legacy
       // reading never becomes a user fact just because the new parser differs.
@@ -220,21 +235,30 @@ CREATE TABLE IF NOT EXISTS sms_v2_migration_sources(namespace TEXT NOT NULL,sour
       for (final row in db.select(
         "SELECT r.source_key FROM sync_pending_changes p JOIN financial_source_receipts r ON r.namespace=p.namespace AND r.transaction_id=p.entity_id WHERE p.namespace=? AND p.entity='transactions' AND p.op='delete'",
         [namespace],
-      ))
-        if (sources == null || sources.contains(row['source_key']))
+      )) {
+        if (sources == null || sources.contains(row['source_key'])) {
           add(row['source_key'] as String, {'deleted': true});
+        }
+      }
     }
     return result;
   }
 
-  void _prepare() {
+  void _prepare({
+    bool includeNewSources = false,
+    DateTime? from,
+    DateTime? to,
+  }) {
     _ensure();
-    if (db.select('SELECT 1 FROM sms_v2_migration_state WHERE namespace=?', [
-      namespace,
-    ]).isNotEmpty) {
+    final previous = db.select(
+      'SELECT status FROM sms_v2_migration_state WHERE namespace=?',
+      [namespace],
+    ).firstOrNull;
+    final prepared = previous != null;
+    if (prepared && !includeNewSources) {
       return;
     }
-    final messages = _messages();
+    final messages = _messages(from: from, to: to);
     final choices = _choices();
     final before = _monthly();
     db.execute('SAVEPOINT sms_migration_prepare');
@@ -261,12 +285,25 @@ CREATE TABLE IF NOT EXISTS sms_v2_migration_sources(namespace TEXT NOT NULL,sour
         [namespace],
       )) {
         final source = pending['id'] as String;
-        if (!messages.containsKey(source)) _review(source);
+        if (from == null && to == null && !messages.containsKey(source)) {
+          _review(source);
+        }
       }
-      db.execute(
-        'INSERT INTO sms_v2_migration_state(namespace,status,before_json) VALUES(?,?,?)',
-        [namespace, 'running', jsonEncode(before)],
-      );
+      if (!prepared) {
+        db.execute(
+          'INSERT INTO sms_v2_migration_state(namespace,status,before_json) VALUES(?,?,?)',
+          [namespace, 'running', jsonEncode(before)],
+        );
+      } else if (previous['status'] == 'complete' &&
+          db.select(
+            'SELECT 1 FROM sms_v2_migration_sources WHERE namespace=? AND done=0 LIMIT 1',
+            [namespace],
+          ).isNotEmpty) {
+        db.execute(
+          "UPDATE sms_v2_migration_state SET status='running',report_json=NULL,before_json=? WHERE namespace=?",
+          [jsonEncode(before), namespace],
+        );
+      }
       InstrumentSeeder(InstrumentStore(db, namespace: namespace)).seed(
         cards: financial
             .entities(namespace, 'cards')
@@ -309,17 +346,26 @@ CREATE TABLE IF NOT EXISTS sms_v2_migration_sources(namespace TEXT NOT NULL,sour
   Future<ReplayReport> run({
     int chunkSize = 200,
     void Function(int)? onChunk,
+    bool includeNewSources = false,
+    DateTime? from,
+    DateTime? to,
   }) async {
     if (chunkSize < 1 || chunkSize > 500) {
       throw ArgumentError('Use chunks of 1 to 500');
     }
     _check();
-    _prepare();
+    if (from != null && to != null && !from.isBefore(to)) {
+      throw ArgumentError('Choose a nonempty period');
+    }
+    _prepare(includeNewSources: includeNewSources, from: from, to: to);
     final saved = db.select(
       'SELECT status,report_json FROM sms_v2_migration_state WHERE namespace=?',
       [namespace],
     ).single;
     if (saved['status'] == 'complete') {
+      if (from != null || to != null) {
+        return _report(from: from, to: to);
+      }
       return ReplayReport(
         (jsonDecode(saved['report_json'] as String) as Map)
             .cast<String, Object?>(),
@@ -329,8 +375,13 @@ CREATE TABLE IF NOT EXISTS sms_v2_migration_sources(namespace TEXT NOT NULL,sour
     while (true) {
       _check();
       final rows = db.select(
-        'SELECT source_key,message_json,choices_json FROM sms_v2_migration_sources WHERE namespace=? AND done=0 ORDER BY json_extract(message_json,\'\$.observedAt\'),source_key LIMIT ?',
-        [namespace, chunkSize],
+        'SELECT source_key,message_json,choices_json FROM sms_v2_migration_sources WHERE namespace=? AND done=0${from == null ? '' : ' AND julianday(json_extract(message_json,\'\$.observedAt\'))>=julianday(?)'}${to == null ? '' : ' AND julianday(json_extract(message_json,\'\$.observedAt\'))<julianday(?)'} ORDER BY json_extract(message_json,\'\$.observedAt\'),source_key LIMIT ?',
+        [
+          namespace,
+          if (from != null) from.toUtc().toIso8601String(),
+          if (to != null) to.toUtc().toIso8601String(),
+          chunkSize,
+        ],
       );
       if (rows.isEmpty) break;
       financial.batch(() {
@@ -357,8 +408,9 @@ CREATE TABLE IF NOT EXISTS sms_v2_migration_sources(namespace TEXT NOT NULL,sour
           };
           for (final current in financial.entities(namespace, 'transactions')) {
             if ((current['pipeline_version'] ?? 1) != 1 ||
-                !sourceIds.contains(current['source_key']))
+                !sourceIds.contains(current['source_key'])) {
               continue;
+            }
             db.execute(
               'INSERT INTO sms_v2_migration_originals VALUES(?,?,?,?) '
               'ON CONFLICT(namespace,id) DO UPDATE SET payload=excluded.payload',
@@ -522,12 +574,22 @@ CREATE TABLE IF NOT EXISTS sms_v2_migration_sources(namespace TEXT NOT NULL,sour
       await Future<void>.delayed(Duration.zero);
     }
     _check();
-    final report = _report();
+    final complete = db.select(
+      'SELECT 1 FROM sms_v2_migration_sources WHERE namespace=? AND done=0 LIMIT 1',
+      [namespace],
+    ).isEmpty;
+    final report = _report(complete: complete);
     db.execute(
-      "UPDATE sms_v2_migration_state SET status='complete',report_json=? WHERE namespace=?",
-      [jsonEncode(report.toJson()), namespace],
+      'UPDATE sms_v2_migration_state SET status=?,report_json=? WHERE namespace=?',
+      [
+        complete ? 'complete' : 'running',
+        jsonEncode(report.toJson()),
+        namespace,
+      ],
     );
-    return report;
+    return from == null && to == null
+        ? report
+        : _report(complete: complete, from: from, to: to);
   }
 
   List<Map<String, Object?>> _originalFor(String source) => [
@@ -611,10 +673,11 @@ CREATE TABLE IF NOT EXISTS sms_v2_migration_sources(namespace TEXT NOT NULL,sour
         'amountMinor': (amount * 100).round(),
       });
     }
-    if (choices['merchant'] case final String merchant)
+    if (choices['merchant'] case final String merchant) {
       if (merchant.trim().isNotEmpty) {
         apply(CorrectionKind.wrongMerchant, {'merchantName': merchant});
       }
+    }
     if (choices['occurredAt'] case final String date) {
       apply(CorrectionKind.wrongDate, {
         'occurredAt': DateTime.parse(date).toUtc().toIso8601String(),
@@ -690,7 +753,7 @@ CREATE TABLE IF NOT EXISTS sms_v2_migration_sources(namespace TEXT NOT NULL,sour
     return months;
   }
 
-  ReplayReport _report() {
+  ReplayReport _report({bool complete = true, DateTime? from, DateTime? to}) {
     final originals = [
       for (final r in db.select(
         'SELECT payload FROM sms_v2_migration_originals WHERE namespace=?',
@@ -699,15 +762,28 @@ CREATE TABLE IF NOT EXISTS sms_v2_migration_sources(namespace TEXT NOT NULL,sour
         (jsonDecode(r['payload'] as String) as Map).cast<String, Object?>(),
     ];
     final sources = db.select(
-      'SELECT source_key,checked FROM sms_v2_migration_sources WHERE namespace=?',
-      [namespace],
+      'SELECT source_key,checked FROM sms_v2_migration_sources WHERE namespace=?${from == null ? '' : ' AND julianday(json_extract(message_json,\'\$.observedAt\'))>=julianday(?)'}${to == null ? '' : ' AND julianday(json_extract(message_json,\'\$.observedAt\'))<julianday(?)'}',
+      [
+        namespace,
+        if (from != null) from.toUtc().toIso8601String(),
+        if (to != null) to.toUtc().toIso8601String(),
+      ],
     );
     final retained = sources.map((r) => r['source_key']).toSet();
     final oldSms = originals
         .where(
           (r) =>
               ['sms', 'sms_bulk'].contains(r['source']) &&
-              (r['pipeline_version'] ?? 1) == 1,
+              (r['pipeline_version'] ?? 1) == 1 &&
+              (from == null && to == null ||
+                  () {
+                    final date = DateTime.tryParse(
+                      r['occurred_at'] as String? ?? '',
+                    );
+                    return date != null &&
+                        (from == null || !date.isBefore(from)) &&
+                        (to == null || date.isBefore(to));
+                  }()),
         )
         .toList();
     final events = EventStore(
@@ -742,7 +818,7 @@ CREATE TABLE IF NOT EXISTS sms_v2_migration_sources(namespace TEXT NOT NULL,sour
           as String,
     );
     return ReplayReport({
-      'complete': true,
+      'complete': complete,
       'retainedMessages': sources.length,
       'legacyWithoutText': oldSms
           .where((r) => !retained.contains(r['source_key']))

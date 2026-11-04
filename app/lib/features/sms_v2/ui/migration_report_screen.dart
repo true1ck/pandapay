@@ -7,6 +7,7 @@ import '../providers/runtime_provider.dart';
 import '../migration/legacy_replay.dart';
 import '../storage/sync_state_store.dart';
 import 'screen_parts.dart';
+import 'history_update_panel.dart';
 
 final migrationReportProvider = FutureProvider<ReplayReport?>((ref) async {
   ref.watch(app.financialStoreRevisionProvider('transactions'));
@@ -90,6 +91,11 @@ class _MigrationReportScreenState extends ConsumerState<MigrationReportScreen> {
           data: (saved) => ListView(
             padding: const EdgeInsets.all(24),
             children: [
+              if (kDebugMode)
+                HistoryUpdatePanel(
+                  key: ValueKey(ref.watch(app.cacheNamespaceProvider)),
+                  onApplied: () => ref.invalidate(migrationReportProvider),
+                ),
               Text(
                 _preview == null ? 'Your retained history' : 'Dry-run preview',
                 style: Theme.of(context).textTheme.headlineSmall,

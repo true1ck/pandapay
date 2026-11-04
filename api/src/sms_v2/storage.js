@@ -59,6 +59,10 @@ function canon(v) {
   return v;
 }
 const sameDoc = (a, b) => isDeepStrictEqual(canon(a), canon(b));
+function ledgerMoney(entry) {
+  const { category, categorySource, ...money } = entry;
+  return money;
+}
 
 // Keep the value with the later timestamp; a missing value never wins.
 function pickLatest(exVal, exAt, incVal, incAt) {
@@ -423,7 +427,7 @@ async function upsertEvents(client, profileId, events, results) {
   return stored;
 }
 
-async function upsertLedger(client, profileId, ledger, results) {
+async function upsertLedger(client, profileId, ledger, results, { categoryOnly = false } = {}) {
   const accepted = [];
   if (!ledger.length) return accepted;
   const list = [];
@@ -476,11 +480,29 @@ async function upsertLedger(client, profileId, ledger, results) {
   const existing = new Map(existingRows.rows.map((x) => [x.id, x.doc]));
   const toInsert = [];
   const toUpdate = [];
+  const refresh = [];
   for (const l of valid) {
     const ex = existing.get(l.entryId);
-    if (!ex) toInsert.push(l);
-    else if (sameDoc(l, ex)) results.push(ok(l.entryId, 'ledger', 'duplicate'));
-    else toUpdate.push(l);
+    if (categoryOnly && !ex) {
+      results.push(rej(l.entryId, 'ledger', 'ledger_event_unknown', '/eventId'));
+      continue;
+    }
+    const next = ex?.categorySource === 'user' && l.categorySource !== 'user'
+      ? { ...l, category: ex.category, categorySource: ex.categorySource }
+      : l;
+    // A historical category pass cannot replace a newer money correction.
+    // Re-emit the server reading so the uploader's next pull can converge.
+    if (categoryOnly && !sameDoc(ledgerMoney(l), ledgerMoney(ex))) {
+      results.push(ok(l.entryId, 'ledger', 'duplicate'));
+      refresh.push(ex);
+    } else if (!ex) toInsert.push(next);
+    else if (sameDoc(next, ex)) {
+      results.push(ok(l.entryId, 'ledger', 'duplicate'));
+      if (categoryOnly || !sameDoc(next, l)) refresh.push(ex);
+    } else toUpdate.push(next);
+  }
+  if (refresh.length) {
+    await client.query('UPDATE sms_v2_ledger_entries SET updated_at=clock_timestamp() WHERE profile_id=$1 AND entry_id=ANY($2::text[])', [profileId, refresh.map((entry) => entry.entryId)]);
   }
   if (toInsert.length) {
     const inserted = await insertNew(
@@ -521,7 +543,7 @@ async function upsertLedger(client, profileId, ledger, results) {
 
 // ---------- transactions projection ----------
 
-const TXN_COLS = `t.id, t.event_id, t.source_key, t.pipeline_version, t.amount_inr, t.occurred_at, t.merchant_name, t.category_id,
+const TXN_COLS = `t.id, t.event_id, t.source_key, t.pipeline_version, t.amount_inr, t.occurred_at, t.merchant_name, t.category_id, t.user_category_id,
   t.user_card_id, t.entry_kind::text AS entry_kind, t.instrument::text AS instrument, t.rail::text AS rail, t.status::text AS status,
   t.state_applied, t.is_backfill`;
 
@@ -534,7 +556,7 @@ const sameRow = (row, spec) => Math.round(Number(row.amount_inr) * 100) === spec
 
 const rowMovesCard = (r) => r.entry_kind === 'spend' && r.instrument === 'credit_card' && Boolean(r.user_card_id);
 
-async function projectTransactions(client, profileId, eventIds, { backfill, deps }) {
+async function projectTransactions(client, profileId, eventIds, { backfill, categoryOnly = false, deps }) {
   if (!eventIds.length) return { inserted: 0, updated: 0, stateApplied: 0 };
   const evRows = await client.query(`SELECT event_id AS id, ${EVENT_DOC} AS doc FROM sms_v2_events WHERE profile_id = $1 AND event_id = ANY($2::text[])`, [profileId, eventIds]);
   const events = new Map(evRows.rows.map((x) => [x.id, x.doc]));
@@ -603,6 +625,22 @@ async function projectTransactions(client, profileId, eventIds, { backfill, deps
     return cards.get(id);
   };
   const stats = { inserted: 0, updated: 0, stateApplied: 0 };
+  if (categoryOnly) {
+    const updates = [];
+    for (const [eventId, row] of rowOf) {
+      const spec = specs.get(eventId);
+      if (spec && row.status === 'active' && !row.user_category_id && (row.category_id || null) !== (spec.categoryId || null)) {
+        updates.push({ id: row.id, category_id: spec.categoryId });
+      }
+    }
+    if (updates.length) {
+      await client.query(`UPDATE transactions t SET category_id=r.category_id
+        FROM jsonb_to_recordset($2::jsonb) AS r(id uuid, category_id uuid)
+        WHERE t.profile_id=$1 AND t.id=r.id AND t.status='active' AND t.user_category_id IS NULL`, [profileId, J(updates)]);
+    }
+    stats.updated = updates.length;
+    return stats;
+  }
 
   // ---- events that no longer map to a row: retire the row, undo its card state ----
   for (const [id, row] of rowOf) {
@@ -752,7 +790,7 @@ async function projectTransactions(client, profileId, eventIds, { backfill, deps
  * The whole batch, inside the caller's transaction.
  * @returns {{results: object[], stats: object}}
  */
-async function ingestBatch(client, profileId, body, { backfill = false, deps, hooks }) {
+async function ingestBatch(client, profileId, body, { backfill = false, categoryOnly = false, deps, hooks }) {
   await takeProfileLock(client, profileId);
   const results = [];
   await upsertInstruments(client, profileId, body.instruments, results);
@@ -763,7 +801,7 @@ async function ingestBatch(client, profileId, body, { backfill = false, deps, ho
   }
   const storedEvents = await upsertEvents(client, profileId, body.events, results);
   if (storedEvents.length && hooks && hooks.afterEventsStored) await hooks.afterEventsStored(client, profileId, storedEvents);
-  const acceptedLedger = await upsertLedger(client, profileId, body.ledger, results);
+  const acceptedLedger = await upsertLedger(client, profileId, body.ledger, results, { categoryOnly });
   const affected = new Set([...storedEvents.map((e) => e.eventId), ...acceptedLedger.map((l) => l.eventId)]);
   const uploadedInstruments = results.filter((r) => r.kind === 'instrument' && r.status !== 'rejected').map((r) => r.id);
   if (uploadedInstruments.length) {
@@ -776,7 +814,7 @@ async function ingestBatch(client, profileId, body, { backfill = false, deps, ho
     );
     rejected.rows.forEach((r) => affected.add(r.event_id));
   }
-  const stats = await projectTransactions(client, profileId, [...affected], { backfill, deps });
+  const stats = await projectTransactions(client, profileId, [...affected], { backfill, categoryOnly, deps });
   return { results, stats };
 }
 

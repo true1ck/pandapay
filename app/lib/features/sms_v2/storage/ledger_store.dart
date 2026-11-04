@@ -106,9 +106,9 @@ payload=excluded.payload,dirty=excluded.dirty WHERE v2_ledger.payload != exclude
     }
   }
 
-  Map<String, CategoryDecision> categoryDecisions() {
+  Map<String, CategoryDecision> categoryDecisions({Set<String>? eventIds}) {
     final result = <String, CategoryDecision>{};
-    for (final r in _rows()) {
+    for (final r in _rows(eventIds: eventIds)) {
       final j = jsonDecode(r['payload'] as String) as Map;
       final c = j['_categoryDecision'] as Map?;
       if (c != null) {
@@ -123,10 +123,24 @@ payload=excluded.payload,dirty=excluded.dirty WHERE v2_ledger.payload != exclude
     return Map.unmodifiable(result);
   }
 
-  ResultSet _rows({bool dirty = false}) => db.select(
-    'SELECT event_id,payload FROM v2_ledger WHERE namespace=?${dirty ? ' AND dirty=1' : ''} ORDER BY occurred_at,entry_id',
-    [namespace],
-  );
+  Iterable<Row> _rows({bool dirty = false, Set<String>? eventIds}) sync* {
+    final groups = eventIds == null
+        ? [<String>[]]
+        : [
+            for (var start = 0; start < eventIds.length; start += 400)
+              eventIds.skip(start).take(400).toList(),
+          ];
+    for (final ids in groups) {
+      final filter = eventIds == null
+          ? ''
+          : ' AND event_id IN (${List.filled(ids.length, '?').join(',')})';
+      yield* db.select(
+        'SELECT event_id,payload FROM v2_ledger WHERE namespace=?${dirty ? ' AND dirty=1' : ''}$filter ORDER BY occurred_at,entry_id',
+        [namespace, ...ids],
+      );
+    }
+  }
+
   LedgerEntry _decode(String payload) => LedgerEntry.fromJson(
     (jsonDecode(payload) as Map).cast<String, Object?>()
       ..remove('_categoryDecision'),
