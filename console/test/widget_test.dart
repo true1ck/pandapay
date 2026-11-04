@@ -26,6 +26,15 @@ http.Client _mockClient(Map<String, dynamic> Function(Uri) responder) {
 /// would need SharedPreferences.setMockInitialValues, a separate concern).
 final _noSessionInit = sessionInitProvider.overrideWith((ref) async {});
 
+/// The console lands on Overview; the navigation rail is the first
+/// scrollable in the tablet-width test viewport.
+final _navScrollable = find.byType(Scrollable).first;
+
+Future<void> _openCatalogue(WidgetTester tester) async {
+  await tester.tap(find.text('Catalogue'));
+  await tester.pumpAndSettle();
+}
+
 void main() {
   testWidgets('signed-out (no token) shows the login screen, not the console shell',
       (tester) async {
@@ -95,6 +104,7 @@ void main() {
       ),
     );
     await tester.pumpAndSettle();
+    await _openCatalogue(tester);
 
     expect(find.text('Test Card — draft'), findsOneWidget);
   });
@@ -122,6 +132,10 @@ void main() {
                     }),
                     200,
                   );
+                }
+                if (request.url.path != '/admin/cards') {
+                  // Overview requests on landing are not catalogue loads.
+                  return http.Response(jsonEncode({'cards': []}), 200);
                 }
                 cardsCallCount++;
                 final status = cardsCallCount == 1 ? 'draft' : 'in_review';
@@ -152,6 +166,7 @@ void main() {
       ),
     );
     await tester.pumpAndSettle();
+    await _openCatalogue(tester);
 
     expect(find.text('Test Card — draft'), findsOneWidget);
     await tester.tap(find.text('Test Card — draft'));
@@ -222,6 +237,7 @@ void main() {
       ),
     );
     await tester.pumpAndSettle();
+    await _openCatalogue(tester);
 
     await tester.tap(find.text('Test Card — draft'));
     await tester.pumpAndSettle();
@@ -314,7 +330,7 @@ void main() {
                         {
                           'id': 'report-1',
                           'card_name': 'SBI Cashback Card',
-                          'field_path': 'reward_rules.rule-1.rate',
+                          'field_path': 'reward_rules.11111111-2222-3333-4444-555555555555.rate',
                           'shown_value': '5',
                           'claimed_value': '4.5',
                           'source_url': 'https://example.com',
@@ -337,7 +353,7 @@ void main() {
     await tester.tap(find.text('Error Reports'));
     await tester.pumpAndSettle();
 
-    expect(find.text('SBI Cashback Card — reward_rules.rule-1.rate'), findsOneWidget);
+    expect(find.text('SBI Cashback Card — reward_rules.11111111-2222-3333-4444-555555555555.rate'), findsOneWidget);
     expect(find.text('5'), findsOneWidget);
     expect(find.text('4.5'), findsOneWidget);
 
@@ -831,7 +847,7 @@ void main() {
       ),
     );
     await tester.pumpAndSettle();
-    await tester.scrollUntilVisible(find.text('Acceptance & Rates'), 100);
+    await tester.scrollUntilVisible(find.text('Acceptance & Rates'), 100, scrollable: _navScrollable);
     await tester.tap(find.text('Acceptance & Rates'));
     await tester.pumpAndSettle();
 
@@ -891,7 +907,7 @@ void main() {
       ),
     );
     await tester.pumpAndSettle();
-    await tester.scrollUntilVisible(find.text('Data Quality'), 100);
+    await tester.scrollUntilVisible(find.text('Data Quality'), 100, scrollable: _navScrollable);
     await tester.tap(find.text('Data Quality'));
     await tester.pumpAndSettle();
 
@@ -967,7 +983,7 @@ void main() {
     // Chunk 35: the rail grew to 10 destinations and is now genuinely
     // scrollable on a short viewport (see main.dart) — this one needs
     // scrolling into view before it's tappable, unlike the earlier tabs.
-    await tester.scrollUntilVisible(find.text('Anonymization Audit'), 100);
+    await tester.scrollUntilVisible(find.text('Anonymization Audit'), 100, scrollable: _navScrollable);
     await tester.tap(find.text('Anonymization Audit'));
     await tester.pumpAndSettle();
 
@@ -1030,7 +1046,7 @@ void main() {
       ),
     );
     await tester.pumpAndSettle();
-    await tester.scrollUntilVisible(find.text('Parser Patterns'), 100);
+    await tester.scrollUntilVisible(find.text('Parser Patterns'), 100, scrollable: _navScrollable);
     await tester.tap(find.text('Parser Patterns'));
     await tester.pumpAndSettle();
 
@@ -1100,7 +1116,7 @@ void main() {
       ),
     );
     await tester.pumpAndSettle();
-    await tester.scrollUntilVisible(find.text('Sources'), 100);
+    await tester.scrollUntilVisible(find.text('Sources'), 100, scrollable: _navScrollable);
     await tester.tap(find.text('Sources'));
     await tester.pumpAndSettle();
 
@@ -1254,7 +1270,7 @@ void main() {
       ),
     );
     await tester.pumpAndSettle();
-    await tester.scrollUntilVisible(find.text('SMS AI Operations'), 100);
+    await tester.scrollUntilVisible(find.text('SMS AI Operations'), 100, scrollable: _navScrollable);
     await tester.tap(find.text('SMS AI Operations'));
     await tester.pumpAndSettle();
 
@@ -1363,7 +1379,7 @@ void main() {
       ),
     );
     await tester.pumpAndSettle();
-    await tester.scrollUntilVisible(find.text('SMS AI Operations'), 100);
+    await tester.scrollUntilVisible(find.text('SMS AI Operations'), 100, scrollable: _navScrollable);
     await tester.tap(find.text('SMS AI Operations'));
     await tester.pumpAndSettle();
 
@@ -1491,7 +1507,7 @@ void main() {
       ),
     );
     await tester.pumpAndSettle();
-    await tester.scrollUntilVisible(find.text('SMS AI Operations'), 100);
+    await tester.scrollUntilVisible(find.text('SMS AI Operations'), 100, scrollable: _navScrollable);
     await tester.tap(find.text('SMS AI Operations'));
     await tester.pumpAndSettle();
 
@@ -1595,7 +1611,7 @@ void main() {
       ),
     );
     await tester.pumpAndSettle();
-    await tester.scrollUntilVisible(find.text('SMS AI Operations'), 100);
+    await tester.scrollUntilVisible(find.text('SMS AI Operations'), 100, scrollable: _navScrollable);
     await tester.tap(find.text('SMS AI Operations'));
     await tester.pumpAndSettle();
 
