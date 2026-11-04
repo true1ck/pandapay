@@ -251,3 +251,11 @@ Final local checks on 6e8a6e7:
 - The final replay attached open review rows to 721 distinct sources out of 4,097 distinct corpus sources (17.6%). On the draft sample, 64 of 222 sure financial rows attached to an open review item (28.8%). The corpus denominator includes non-financial input. The sample is stratified and these raw rates are not population estimates.
 
 Owner spot-check files are local. The phone report lists every disagreement by zero-based index, with a money-only subset and 17 label adjudication candidates. Those candidates cover registrar instructions versus actual releases, application amounts that cannot be represented by InfoFact, and Kiwi receipts without a funding leg. The supplied labels are unchanged.
+
+### Refund follow-up
+
+Commits 67d8689 and b42c89f add posted Federal card refund/reversal variants and dated HDFC card refund alerts. Synthetic notices returned unknown before the changes. The new examples separate completed credits from initiated refunds and future reversals. Federal notices without a printed suffix do not invent one.
+
+From the CLI directory, build with output `"$p/refunds-v0.json"`, then run `dart run tool/check_pipeline.dart` and `node test/regex_parity.mjs`. The build passed 1,562 examples for 752 rules, the golden gate passed 115 cases and 15 scenarios, and parity passed 46,860 comparisons with zero mismatches. The offline phone harness replayed the full corpus and draft sample with the new bundle. Score with `dart run tool/score_private.dart "$p/refunds-v0.json" "$p/label-sample.drafted.jsonl" "$p/score-refunds-phone.json" "$p/sample-refunds-phone.json"`.
+
+All five targeted sure rows now agree with the drafts. The refund stratum rose from 10/32 to 15/32, and overall sure agreement from 139/316 to 144/316. The sure financial unknown or unprocessed count fell from 64 to 59 of 222. Full replay produced 1,037 counted transactions and 738 open review rows. No money fact was reused across counted events. The narrower invariant does not establish zero duplicate payments. The 752-rule build still needs the signed scratch import and candidate-level release verification. No production or physical-device changes were made.
