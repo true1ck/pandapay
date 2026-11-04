@@ -1,0 +1,36 @@
+{
+  "id": "lanej:refund_to_wallet_balance",
+  "templateHash": "81ac4e3768eeb849263efb37791b0a225df5a990284b6dcf59fcff0b1a3ebfb6",
+  "weight": 1,
+  "source": "synthetic",
+  "messages": [
+    {
+      "sender": "VM-EXWAL-S",
+      "body": "Rs 120.00 has been refunded to your Example Pay balance. Updated balance is Rs 520.00.",
+      "observedAt": "2026-12-01T09:00:00.000Z"
+    }
+  ],
+  "expect": {
+    "facts": [
+      {
+        "factType": "movement",
+        "attrs": {
+          "direction": "credit",
+          "purpose": "refund",
+          "rail": "wallet"
+        },
+        "amounts": [
+          {
+            "role": "posted",
+            "minor": 12000
+          }
+        ],
+        "instrument": {
+          "kind": "wallet"
+        }
+      }
+    ]
+  },
+  "note": "Refund to a wallet balance.",
+  "origin": "lane-j"
+}

@@ -1,0 +1,33 @@
+{
+  "id": "lanej:moneyin_credit_from_person_upi_app",
+  "templateHash": "497a02c82a41a1739ea7e657dd0ac74dd0fa6466ff06d5bcd094ccf6eba180f2",
+  "weight": 1,
+  "source": "synthetic",
+  "messages": [
+    {
+      "sender": "VM-EXUPI-S",
+      "body": "Received Rs 500 from Example Person on PhonePe. UPI Ref 123456789012.",
+      "observedAt": "2026-12-01T09:00:00.000Z"
+    }
+  ],
+  "expect": {
+    "facts": [
+      {
+        "factType": "movement",
+        "attrs": {
+          "direction": "credit",
+          "purpose": "p2p",
+          "rail": "upi"
+        },
+        "amounts": [
+          {
+            "role": "posted",
+            "minor": 50000
+          }
+        ]
+      }
+    ]
+  },
+  "note": "Credit from a person in a UPI app.",
+  "origin": "lane-j"
+}

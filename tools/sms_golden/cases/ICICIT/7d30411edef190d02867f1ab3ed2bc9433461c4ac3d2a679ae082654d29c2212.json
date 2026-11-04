@@ -1,0 +1,37 @@
+{
+  "id": "lanej:salary_upi_via_payer",
+  "templateHash": "7d30411edef190d02867f1ab3ed2bc9433461c4ac3d2a679ae082654d29c2212",
+  "weight": 1,
+  "source": "synthetic",
+  "messages": [
+    {
+      "sender": "VM-ICICIT-S",
+      "body": "Rs 85000.00 credited to A/c XX1234 on 01-11-26 via UPI from ACME TECHNOLOGIES (UPI Ref No 123456789012) Salary for Nov.",
+      "observedAt": "2026-12-01T09:00:00.000Z"
+    }
+  ],
+  "expect": {
+    "facts": [
+      {
+        "factType": "movement",
+        "attrs": {
+          "direction": "credit",
+          "purpose": "salary",
+          "rail": "upi"
+        },
+        "amounts": [
+          {
+            "role": "posted",
+            "minor": 8500000
+          }
+        ],
+        "instrument": {
+          "kind": "bank_account",
+          "maskDigits": "1234"
+        }
+      }
+    ]
+  },
+  "note": "Salary by UPI with a named payer.",
+  "origin": "lane-j"
+}

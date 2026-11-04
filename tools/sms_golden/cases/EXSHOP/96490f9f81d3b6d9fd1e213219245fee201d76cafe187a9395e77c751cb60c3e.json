@@ -1,0 +1,33 @@
+{
+  "id": "lanej:refund_initiated_for_order",
+  "templateHash": "96490f9f81d3b6d9fd1e213219245fee201d76cafe187a9395e77c751cb60c3e",
+  "weight": 1,
+  "source": "synthetic",
+  "messages": [
+    {
+      "sender": "VM-EXSHOP-S",
+      "body": "Refund of Rs. 224.75 for your Example Shop order from Sample Cafe has been initiated and will be credited by Nov 22, 2026. -EXSHOP",
+      "observedAt": "2026-12-01T09:00:00.000Z"
+    }
+  ],
+  "expect": {
+    "facts": [
+      {
+        "factType": "attempt",
+        "attrs": {
+          "status": "pending",
+          "direction": "credit",
+          "purpose": "refund"
+        },
+        "amounts": [
+          {
+            "role": "posted",
+            "minor": 22475
+          }
+        ]
+      }
+    ]
+  },
+  "note": "Refund initiated: no money has moved yet.",
+  "origin": "lane-j"
+}

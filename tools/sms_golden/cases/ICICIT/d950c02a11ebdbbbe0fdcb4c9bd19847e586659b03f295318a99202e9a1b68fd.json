@@ -1,0 +1,37 @@
+{
+  "id": "lanej:salary_imps_account_first",
+  "templateHash": "d950c02a11ebdbbbe0fdcb4c9bd19847e586659b03f295318a99202e9a1b68fd",
+  "weight": 1,
+  "source": "synthetic",
+  "messages": [
+    {
+      "sender": "VM-ICICIT-S",
+      "body": "Example Bank Acct XX1234 credited Rs. 85,000.00 on 01-Nov-26; IMPS-123456789012-ACME TECHNOLOGIES-SALARY NOV. Avl Bal Rs 1,37,661.40.",
+      "observedAt": "2026-12-01T09:00:00.000Z"
+    }
+  ],
+  "expect": {
+    "facts": [
+      {
+        "factType": "movement",
+        "attrs": {
+          "direction": "credit",
+          "purpose": "salary",
+          "rail": "imps"
+        },
+        "amounts": [
+          {
+            "role": "posted",
+            "minor": 8500000
+          }
+        ],
+        "instrument": {
+          "kind": "bank_account",
+          "maskDigits": "1234"
+        }
+      }
+    ]
+  },
+  "note": "Salary by IMPS, account-first wording.",
+  "origin": "lane-j"
+}

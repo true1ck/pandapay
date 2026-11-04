@@ -1,0 +1,36 @@
+{
+  "id": "lanej:refund_wallet_credited_as_refund",
+  "templateHash": "4f09433efff53e9a10cba1cbae1dd83d121bc368e5b7218e386a22bc2f2559dc",
+  "weight": 1,
+  "source": "synthetic",
+  "messages": [
+    {
+      "sender": "VM-EXWAL-S",
+      "body": "Your Example Pay wallet has been credited with Rs 75.00 as refund for order 12345.",
+      "observedAt": "2026-12-01T09:00:00.000Z"
+    }
+  ],
+  "expect": {
+    "facts": [
+      {
+        "factType": "movement",
+        "attrs": {
+          "direction": "credit",
+          "purpose": "refund",
+          "rail": "wallet"
+        },
+        "amounts": [
+          {
+            "role": "posted",
+            "minor": 7500
+          }
+        ],
+        "instrument": {
+          "kind": "wallet"
+        }
+      }
+    ]
+  },
+  "note": "Wallet credited as refund.",
+  "origin": "lane-j"
+}

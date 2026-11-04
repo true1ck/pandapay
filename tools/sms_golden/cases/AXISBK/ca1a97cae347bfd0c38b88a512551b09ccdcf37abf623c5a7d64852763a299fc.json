@@ -1,0 +1,37 @@
+{
+  "id": "lanej:moneyin_imps_non_salary_is_p2p",
+  "templateHash": "ca1a97cae347bfd0c38b88a512551b09ccdcf37abf623c5a7d64852763a299fc",
+  "weight": 1,
+  "source": "synthetic",
+  "messages": [
+    {
+      "sender": "VM-AXISBK-S",
+      "body": "INR 85000.00 credited to A/c no. XX1234 on 01-11-26 through IMPS/P2A/123456789012/ACME TECHNOLOGIES/RENT NOV. Avl bal INR 100000.00.",
+      "observedAt": "2026-12-01T09:00:00.000Z"
+    }
+  ],
+  "expect": {
+    "facts": [
+      {
+        "factType": "movement",
+        "attrs": {
+          "direction": "credit",
+          "purpose": "p2p",
+          "rail": "imps"
+        },
+        "amounts": [
+          {
+            "role": "posted",
+            "minor": 8500000
+          }
+        ],
+        "instrument": {
+          "kind": "bank_account",
+          "maskDigits": "1234"
+        }
+      }
+    ]
+  },
+  "note": "Without a salary word an IMPS credit is money from someone, not salary.",
+  "origin": "lane-j"
+}
