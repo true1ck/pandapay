@@ -148,13 +148,47 @@ void main() {
   });
 
   testWidgets(
+    'mixed obligations show the informational net and both gross directions',
+    (tester) async {
+      await pump(
+        tester,
+        SharedExpensesScreen(
+          data: hub(
+            friends: SharedPage(
+              items: const [
+                SharedContextRow(
+                  id: 'mixed',
+                  title: 'Mixed balances',
+                  balance: SharedBalanceSummary(
+                    owedToYou: Money.fromPaise(1000),
+                    youOwe: Money.fromPaise(300),
+                    netBalance: Money.fromPaise(700),
+                  ),
+                ),
+              ],
+            ),
+          ),
+        ),
+      );
+      expect(find.text('Net owed to you'), findsOneWidget);
+      expect(find.text(const Money.fromPaise(700).format()), findsOneWidget);
+      expect(find.text(const Money.fromPaise(1000).format()), findsOneWidget);
+      expect(find.text(const Money.fromPaise(300).format()), findsOneWidget);
+    },
+  );
+
+  testWidgets(
     'settled visibility is reversible and a new active obligation reappears',
     (tester) async {
       await pump(tester, SharedExpensesScreen(data: hub()));
-      await tester.tap(find.text('Show settled'));
+      expect(
+        tester.getTopLeft(find.text('Show settled friends')).dy,
+        greaterThan(tester.getBottomLeft(find.text('Rahul')).dy),
+      );
+      await tester.tap(find.text('Show settled friends'));
       await tester.pumpAndSettle();
       expect(find.text('Old trip'), findsOneWidget);
-      await tester.tap(find.text('Hide settled'));
+      await tester.tap(find.text('Hide settled friends'));
       await tester.pumpAndSettle();
       expect(find.text('Old trip'), findsNothing);
       await pump(
@@ -212,6 +246,9 @@ void main() {
         onSearchChanged: (tab, query) => searches.add('${tab.name}:$query'),
       ),
     );
+    expect(find.byType(TextField), findsNothing);
+    await tester.tap(find.byTooltip('Search splits'));
+    await tester.pumpAndSettle();
     await tester.enterText(find.byType(TextField), 'Rah');
     await tester.tap(find.text('Groups'));
     await tester.pumpAndSettle();
@@ -222,6 +259,45 @@ void main() {
       'Rah',
     );
     expect(searches, ['friends:Rah']);
+    await tester.tap(find.byTooltip('Clear search'));
+    await tester.pumpAndSettle();
+    expect(searches, ['friends:Rah', 'friends:']);
+  });
+
+  testWidgets('filter applies to the selected tab without hiding active debt', (
+    tester,
+  ) async {
+    await pump(tester, SharedExpensesScreen(data: hub()));
+    await tester.tap(find.byTooltip('Filter splits'));
+    await tester.pumpAndSettle();
+    await tester.tap(find.text('Include settled friends'));
+    await tester.pumpAndSettle();
+    await tester.tap(find.text('Done'));
+    await tester.pumpAndSettle();
+    expect(find.text('Old trip'), findsOneWidget);
+    expect(find.text('Rahul'), findsOneWidget);
+    await tester.tap(find.text('Groups'));
+    await tester.pumpAndSettle();
+    expect(find.text('Show settled groups'), findsOneWidget);
+  });
+
+  testWidgets('hub balance and compact rows fit narrow screens at large text', (
+    tester,
+  ) async {
+    await pump(tester, SharedExpensesScreen(data: hub()), width: 320, scale: 2);
+    expect(tester.takeException(), isNull);
+    await tester.scrollUntilVisible(
+      find.text('Rahul'),
+      160,
+      scrollable: find
+          .descendant(
+            of: find.byKey(const ValueKey('friends')),
+            matching: find.byType(Scrollable),
+          )
+          .first,
+    );
+    expect(tester.takeException(), isNull);
+    expect(find.text('You owe'), findsWidgets);
   });
 
   testWidgets(
@@ -513,11 +589,53 @@ void main() {
       );
       expect(find.text('Awaiting your review'), findsOneWidget);
       expect(find.text('Settled'), findsNothing);
-      await tester.tap(find.text('View update'));
+      expect(find.text('Recent changes'), findsOneWidget);
+      expect(find.text('View update'), findsNothing);
+      await tester.tap(find.text('Rahul updated Dinner'));
       await tester.pumpAndSettle();
       expect(opened, 'event');
     },
   );
+
+  testWidgets('activity groups actual timestamps and keeps pending copy', (
+    tester,
+  ) async {
+    final now = DateTime.now();
+    await pump(
+      tester,
+      SharedExpensesScreen(
+        initialIndex: 2,
+        data: SharedHubPresentation(
+          summary: balances,
+          friends: SharedPage(),
+          groups: SharedPage(),
+          activity: SharedPage(
+            items: [
+              SharedActivityRow(
+                id: 'a',
+                description: 'Payment reported',
+                occurredAtLabel: now.toUtc().toIso8601String(),
+                impactLabel: 'Awaiting your confirmation',
+              ),
+              SharedActivityRow(
+                id: 'b',
+                description: 'Group created',
+                occurredAtLabel: now
+                    .subtract(const Duration(days: 1))
+                    .toUtc()
+                    .toIso8601String(),
+              ),
+            ],
+          ),
+        ),
+      ),
+    );
+    expect(find.text('Today'), findsOneWidget);
+    expect(find.text('Yesterday'), findsOneWidget);
+    expect(find.text('Awaiting your confirmation'), findsOneWidget);
+    expect(find.text(now.toUtc().toIso8601String()), findsNothing);
+    expect(find.text('You are owed'), findsNothing);
+  });
 
   test('oversized page DTOs are rejected rather than silently truncating', () {
     expect(

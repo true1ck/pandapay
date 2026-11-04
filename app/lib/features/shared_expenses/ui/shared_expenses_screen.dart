@@ -1,6 +1,8 @@
 import 'package:flutter/material.dart';
+import 'package:intl/intl.dart';
 
 import '../../../app/design/app_theme.dart';
+import '../../../app/design/widgets.dart';
 import 'shared_components.dart';
 import 'shared_presentation.dart';
 
@@ -38,7 +40,10 @@ class SharedExpensesScreen extends StatefulWidget {
   State<SharedExpensesScreen> createState() => _SharedExpensesScreenState();
 }
 
-class _SharedExpensesScreenState extends State<SharedExpensesScreen> {
+class _SharedExpensesScreenState extends State<SharedExpensesScreen>
+    with SingleTickerProviderStateMixin {
+  late final TabController _tabs;
+  final _searchVisible = <SharedHubTab>{};
   final _search = {
     for (final tab in SharedHubTab.values) tab: TextEditingController(),
   };
@@ -47,11 +52,71 @@ class _SharedExpensesScreenState extends State<SharedExpensesScreen> {
     SharedHubTab.groups: false,
   };
   @override
+  void initState() {
+    super.initState();
+    _tabs = TabController(
+      length: 3,
+      vsync: this,
+      initialIndex: widget.initialIndex.clamp(0, 2),
+    );
+    _tabs.addListener(_tabChanged);
+  }
+
+  void _tabChanged() {
+    FocusScope.of(context).unfocus();
+    setState(() {});
+  }
+
+  SharedHubTab get _selected => SharedHubTab.values[_tabs.index];
+
+  @override
   void dispose() {
+    _tabs.removeListener(_tabChanged);
+    _tabs.dispose();
     for (final controller in _search.values) {
       controller.dispose();
     }
     super.dispose();
+  }
+
+  Future<void> _filter() async {
+    final tab = _selected;
+    await showModalBottomSheet<void>(
+      context: context,
+      backgroundColor: BambooInk.paper,
+      builder: (context) => StatefulBuilder(
+        builder: (context, update) => SafeArea(
+          child: Padding(
+            padding: const EdgeInsets.all(AppSpace.lg),
+            child: Column(
+              mainAxisSize: MainAxisSize.min,
+              crossAxisAlignment: CrossAxisAlignment.stretch,
+              children: [
+                Text('Filter ${tab.name}', style: BambooFonts.heading(18)),
+                SwitchListTile.adaptive(
+                  contentPadding: EdgeInsets.zero,
+                  activeTrackColor: BambooInk.slate,
+                  title: Text(
+                    'Include settled ${tab.name}',
+                    style: BambooFonts.ui(14),
+                  ),
+                  value: _showSettled[tab]!,
+                  onChanged: (value) {
+                    if (!mounted) return;
+                    setState(() => _showSettled[tab] = value);
+                    update(() {});
+                  },
+                ),
+                SharedTextAction(
+                  label: 'Done',
+                  onTap: () => Navigator.pop(context),
+                ),
+              ],
+            ),
+          ),
+        ),
+      ),
+    );
   }
 
   List<Widget> _header(SharedHubTab tab, {required bool incomplete}) => [
@@ -64,29 +129,77 @@ class _SharedExpensesScreenState extends State<SharedExpensesScreen> {
         'Offline · showing saved splits',
         icon: Icons.cloud_off_outlined,
       ),
-    if (widget.data.summary case final summary?)
-      SharedSummaryCard(summary: summary, hideAmounts: widget.data.hideAmounts),
-    if (incomplete) const SharedNotice('Some results are still syncing'),
-    Padding(
-      padding: const EdgeInsets.only(bottom: AppSpace.md),
-      child: TextField(
-        controller: _search[tab],
-        style: BambooFonts.ui(14),
-        textInputAction: TextInputAction.search,
-        onChanged: (value) => widget.onSearchChanged?.call(tab, value),
-        onSubmitted: (_) => FocusScope.of(context).unfocus(),
-        onTapOutside: (_) => FocusScope.of(context).unfocus(),
-        decoration: InputDecoration(
-          labelText: 'Search ${tab.name}',
-          labelStyle: BambooFonts.ui(13, color: BambooInk.ink700),
-          prefixIcon: const Icon(Icons.search_rounded, color: BambooInk.ink700),
-          border: OutlineInputBorder(
+    if (tab != SharedHubTab.activity) ...[
+      if (widget.data.summary case final summary?)
+        SharedSummaryCard(
+          summary: summary,
+          hideAmounts: widget.data.hideAmounts,
+        ),
+    ],
+    if (tab == SharedHubTab.activity) ...[
+      Padding(
+        padding: const EdgeInsets.only(bottom: AppSpace.md),
+        child: Text('Recent changes', style: BambooFonts.heading(19)),
+      ),
+      if (widget.data.summary case final summary?)
+        Container(
+          padding: const EdgeInsets.all(AppSpace.md),
+          margin: const EdgeInsets.only(bottom: AppSpace.md),
+          decoration: BoxDecoration(
+            color: BambooInk.rankBadgeBg,
             borderRadius: BorderRadius.circular(AppRadius.md),
-            borderSide: const BorderSide(color: BambooInk.hairlineOnPaper),
+          ),
+          child: SharedMoneyLine(
+            sharedNetLabel(summary),
+            sharedNetMagnitude(summary),
+            confidence: summary.confidence,
+            hidden: widget.data.hideAmounts,
+            color: summary.netBalance.paise < 0
+                ? BambooInk.clayInk
+                : BambooInk.ink900,
+          ),
+        ),
+      if (widget.data.summary?.incomplete == true)
+        const SharedNotice('Balance snapshot incomplete'),
+      if (widget.data.summary != null &&
+          !widget.data.summary!.confidence.isConfirmed)
+        const SharedNotice('Estimated amounts'),
+    ],
+    if (incomplete) const SharedNotice('Some results are still syncing'),
+    if (_searchVisible.contains(tab))
+      Padding(
+        padding: const EdgeInsets.only(bottom: AppSpace.md),
+        child: TextField(
+          controller: _search[tab],
+          style: BambooFonts.ui(14),
+          textInputAction: TextInputAction.search,
+          onChanged: (value) => widget.onSearchChanged?.call(tab, value),
+          onSubmitted: (_) => FocusScope.of(context).unfocus(),
+          onTapOutside: (_) => FocusScope.of(context).unfocus(),
+          decoration: InputDecoration(
+            labelText: 'Search ${tab.name}',
+            labelStyle: BambooFonts.ui(13, color: BambooInk.ink700),
+            prefixIcon: const Icon(
+              Icons.search_rounded,
+              color: BambooInk.ink700,
+            ),
+            suffixIcon: IconButton(
+              tooltip: 'Clear search',
+              icon: const Icon(Icons.close_rounded),
+              onPressed: () {
+                _search[tab]!.clear();
+                widget.onSearchChanged?.call(tab, '');
+                FocusScope.of(context).unfocus();
+                setState(() => _searchVisible.remove(tab));
+              },
+            ),
+            border: OutlineInputBorder(
+              borderRadius: BorderRadius.circular(AppRadius.md),
+              borderSide: const BorderSide(color: BambooInk.hairlineOnPaper),
+            ),
           ),
         ),
       ),
-    ),
   ];
 
   Widget _contexts(
@@ -95,7 +208,10 @@ class _SharedExpensesScreenState extends State<SharedExpensesScreen> {
     ValueChanged<String>? open,
   ) {
     final visible = page.items
-        .where((row) => _showSettled[tab]! || !row.canHideAsSettled)
+        .where((row) => !row.canHideAsSettled)
+        .toList(growable: false);
+    final settled = page.items
+        .where((row) => row.canHideAsSettled)
         .toList(growable: false);
     final permitted = page.state != SharedLoadState.accessRevoked;
     return SharedPageBody(
@@ -111,23 +227,12 @@ class _SharedExpensesScreenState extends State<SharedExpensesScreen> {
                   onTap: () => widget.onPreviousPage!(tab),
                 ),
               ..._header(tab, incomplete: page.incomplete),
-              Align(
-                alignment: Alignment.centerLeft,
-                child: Padding(
-                  padding: const EdgeInsets.only(bottom: AppSpace.md),
-                  child: SharedAction(
-                    label: _showSettled[tab]! ? 'Hide settled' : 'Show settled',
-                    onTap: () =>
-                        setState(() => _showSettled[tab] = !_showSettled[tab]!),
-                  ),
-                ),
-              ),
               if (tab == SharedHubTab.friends && widget.onAddFriend != null)
                 Align(
                   alignment: Alignment.centerLeft,
                   child: Padding(
                     padding: const EdgeInsets.only(bottom: AppSpace.md),
-                    child: SharedAction(
+                    child: SharedTextAction(
                       label: 'Add friend',
                       onTap: widget.onAddFriend!,
                       icon: Icons.person_add_outlined,
@@ -139,7 +244,7 @@ class _SharedExpensesScreenState extends State<SharedExpensesScreen> {
                   alignment: Alignment.centerLeft,
                   child: Padding(
                     padding: const EdgeInsets.only(bottom: AppSpace.md),
-                    child: SharedAction(
+                    child: SharedTextAction(
                       label: 'Create group',
                       onTap: widget.onCreateGroup!,
                       icon: Icons.group_add_outlined,
@@ -155,9 +260,34 @@ class _SharedExpensesScreenState extends State<SharedExpensesScreen> {
       itemCount: visible.length,
       itemBuilder: (_, index) => SharedContextTile(
         row: visible[index],
+        isGroup: tab == SharedHubTab.groups,
         hideAmounts: widget.data.hideAmounts,
         onTap: open == null ? null : () => open(visible[index].id),
       ),
+      footer: permitted
+          ? [
+              SharedTextAction(
+                label:
+                    '${_showSettled[tab]! ? 'Hide' : 'Show'} settled ${tab.name}',
+                icon: _showSettled[tab]!
+                    ? Icons.expand_less_rounded
+                    : Icons.expand_more_rounded,
+                onTap: () =>
+                    setState(() => _showSettled[tab] = !_showSettled[tab]!),
+              ),
+              if (_showSettled[tab]!) ...[
+                for (final row in settled)
+                  SharedContextTile(
+                    row: row,
+                    isGroup: tab == SharedHubTab.groups,
+                    hideAmounts: widget.data.hideAmounts,
+                    onTap: open == null ? null : () => open(row.id),
+                  ),
+                if (settled.isEmpty)
+                  const SharedNotice('No settled splits on this page'),
+              ],
+            ]
+          : const [],
       emptyTitle: tab == SharedHubTab.friends
           ? 'No shared expenses yet'
           : 'No groups yet',
@@ -193,12 +323,29 @@ class _SharedExpensesScreenState extends State<SharedExpensesScreen> {
       itemCount: page.items.length,
       itemBuilder: (_, index) {
         final row = page.items[index];
-        return SharedActivityTile(
-          row: row,
-          hideAmounts: widget.data.hideAmounts,
-          onTap: widget.onOpenActivity == null
-              ? null
-              : () => widget.onOpenActivity!(row.id),
+        final day = _activityDay(row.occurredAtLabel);
+        final previous = index == 0
+            ? null
+            : _activityDay(page.items[index - 1].occurredAtLabel);
+        return Column(
+          crossAxisAlignment: CrossAxisAlignment.stretch,
+          children: [
+            if (day != null && day != previous)
+              Padding(
+                padding: const EdgeInsets.only(
+                  top: AppSpace.sm,
+                  bottom: AppSpace.md,
+                ),
+                child: Text(day, style: BambooFonts.heading(15)),
+              ),
+            SharedActivityTile(
+              row: row,
+              hideAmounts: widget.data.hideAmounts,
+              onTap: widget.onOpenActivity == null
+                  ? null
+                  : () => widget.onOpenActivity!(row.id),
+            ),
+          ],
         );
       },
       emptyTitle: 'No shared activity yet',
@@ -220,13 +367,53 @@ class _SharedExpensesScreenState extends State<SharedExpensesScreen> {
     title: 'Splits',
     tabs: const ['Friends', 'Groups', 'Activity'],
     initialIndex: widget.initialIndex,
+    controller: _tabs,
     onAddExpense: widget.onAddExpense,
+    actions: [
+      IconButton(
+        tooltip: 'Search splits',
+        icon: const Icon(Icons.search_rounded),
+        onPressed: () => setState(() {
+          if (!_searchVisible.add(_selected)) {
+            _searchVisible.remove(_selected);
+            if (_search[_selected]!.text.isNotEmpty) {
+              _search[_selected]!.clear();
+              widget.onSearchChanged?.call(_selected, '');
+            }
+            FocusScope.of(context).unfocus();
+          }
+        }),
+      ),
+      if (_selected != SharedHubTab.activity)
+        IconButton(
+          tooltip: 'Filter splits',
+          icon: const Icon(Icons.filter_list_rounded),
+          onPressed: _filter,
+        ),
+    ],
     children: [
       _contexts(SharedHubTab.friends, widget.data.friends, widget.onOpenFriend),
       _contexts(SharedHubTab.groups, widget.data.groups, widget.onOpenGroup),
       _activity(),
     ],
   );
+}
+
+String? _activityDay(String value) {
+  final time = DateTime.tryParse(value)?.toLocal();
+  if (time == null) return null;
+  final today = DateUtils.dateOnly(DateTime.now());
+  final date = DateUtils.dateOnly(time);
+  if (date == today) return 'Today';
+  if (date == DateTime(today.year, today.month, today.day - 1)) {
+    return 'Yesterday';
+  }
+  return DateFormat.yMMMd().format(time);
+}
+
+String _activityTime(String value) {
+  final time = DateTime.tryParse(value)?.toLocal();
+  return time == null ? value : DateFormat.jm().format(time);
 }
 
 class SharedActivityTile extends StatelessWidget {
@@ -240,41 +427,64 @@ class SharedActivityTile extends StatelessWidget {
     this.onTap,
   });
   @override
-  Widget build(BuildContext context) => SharedPanel(
-    child: Column(
-      crossAxisAlignment: CrossAxisAlignment.stretch,
-      children: [
-        Text(
-          row.description,
-          style: BambooFonts.ui(15, weight: FontWeight.w600),
-        ),
-        if (row.contextLabel != null)
-          Text(
-            row.contextLabel!,
-            style: BambooFonts.ui(12, color: BambooInk.ink700),
+  Widget build(BuildContext context) => Pressable(
+    onTap: onTap,
+    child: SharedPanel(
+      child: Row(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          const ExcludeSemantics(
+            child: CircleAvatar(
+              radius: 20,
+              backgroundColor: BambooInk.rankBadgeBg,
+              child: Icon(
+                Icons.history_rounded,
+                size: 21,
+                color: BambooInk.jade,
+              ),
+            ),
           ),
-        if (row.impactAmount case final amount?)
-          SharedMoneyLine(
-            row.impactLabel ?? 'Your impact',
-            amount,
-            confidence: row.confidence,
-            hidden: hideAmounts,
-          )
-        else if (row.impactLabel != null)
-          Text(
-            row.impactLabel!,
-            style: BambooFonts.ui(13, color: BambooInk.ink700),
+          const SizedBox(width: AppSpace.md),
+          Expanded(
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.stretch,
+              children: [
+                Text(
+                  row.description,
+                  style: BambooFonts.ui(15, weight: FontWeight.w600),
+                ),
+                if (row.contextLabel != null)
+                  Text(
+                    row.contextLabel!,
+                    style: BambooFonts.ui(12, color: BambooInk.ink700),
+                  ),
+                if (row.impactAmount case final amount?)
+                  SharedMoneyLine(
+                    row.impactLabel ?? 'Your impact',
+                    amount,
+                    confidence: row.confidence,
+                    hidden: hideAmounts,
+                  )
+                else if (row.impactLabel != null)
+                  Text(
+                    row.impactLabel!,
+                    style: BambooFonts.ui(13, color: BambooInk.ink700),
+                  ),
+                Text(
+                  _activityTime(row.occurredAtLabel),
+                  style: BambooFonts.ui(12, color: BambooInk.ink700),
+                ),
+              ],
+            ),
           ),
-        Text(
-          row.occurredAtLabel,
-          style: BambooFonts.ui(12, color: BambooInk.ink700),
-        ),
-        if (onTap != null)
-          Align(
-            alignment: Alignment.centerLeft,
-            child: SharedAction(label: 'View update', onTap: onTap!),
-          ),
-      ],
+          if (onTap != null)
+            const Icon(
+              Icons.chevron_right_rounded,
+              size: 18,
+              color: BambooInk.ink700,
+            ),
+        ],
+      ),
     ),
   );
 }

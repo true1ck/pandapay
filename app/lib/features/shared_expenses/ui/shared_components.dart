@@ -14,6 +14,7 @@ class SharedTabbedFrame extends StatelessWidget {
   final List<Widget> children;
   final List<Widget> actions;
   final int initialIndex;
+  final TabController? controller;
   final VoidCallback? onAddExpense;
   const SharedTabbedFrame({
     super.key,
@@ -22,6 +23,7 @@ class SharedTabbedFrame extends StatelessWidget {
     required this.children,
     this.actions = const [],
     this.initialIndex = 0,
+    this.controller,
     this.onAddExpense,
   });
 
@@ -42,8 +44,15 @@ class SharedTabbedFrame extends StatelessWidget {
         ),
         actions: actions,
         bottom: TabBar(
-          isScrollable: true,
-          tabAlignment: TabAlignment.start,
+          controller: controller,
+          isScrollable:
+              MediaQuery.sizeOf(context).width <
+              330 * MediaQuery.textScalerOf(context).scale(1),
+          tabAlignment:
+              MediaQuery.sizeOf(context).width <
+                  330 * MediaQuery.textScalerOf(context).scale(1)
+              ? TabAlignment.start
+              : TabAlignment.fill,
           labelColor: BambooInk.slate,
           unselectedLabelColor: BambooInk.ink500,
           indicatorColor: BambooInk.slate,
@@ -52,7 +61,9 @@ class SharedTabbedFrame extends StatelessWidget {
           tabs: [for (final label in tabs) Tab(text: label)],
         ),
       ),
-      body: AppBackground(child: TabBarView(children: children)),
+      body: AppBackground(
+        child: TabBarView(controller: controller, children: children),
+      ),
       bottomNavigationBar: onAddExpense == null
           ? null
           : SafeArea(
@@ -105,7 +116,7 @@ class SharedAction extends StatelessWidget {
             Icon(
               icon,
               size: 20,
-              color: primary ? BambooInk.onSlate : BambooInk.ink900,
+              color: primary ? BambooInk.lime : BambooInk.ink900,
             ),
             const SizedBox(width: AppSpace.sm),
           ],
@@ -115,7 +126,7 @@ class SharedAction extends StatelessWidget {
               style: BambooFonts.ui(
                 14,
                 weight: FontWeight.w700,
-                color: primary ? BambooInk.onSlate : BambooInk.ink900,
+                color: primary ? BambooInk.lime : BambooInk.ink900,
               ),
             ),
           ),
@@ -243,36 +254,187 @@ class SharedSummaryCard extends StatelessWidget {
     this.hideAmounts = false,
   });
   @override
-  Widget build(BuildContext context) => SharedPanel(
+  Widget build(BuildContext context) => Container(
+    padding: const EdgeInsets.all(AppSpace.lg),
+    margin: const EdgeInsets.only(bottom: AppSpace.sm),
+    decoration: BoxDecoration(
+      color: BambooInk.slate,
+      borderRadius: BorderRadius.circular(AppRadius.lg),
+    ),
     child: Column(
       crossAxisAlignment: CrossAxisAlignment.stretch,
       children: [
-        SharedMoneyLine(
-          'You are owed',
-          summary.owedToYou,
-          confidence: summary.confidence,
-          hidden: hideAmounts,
-          color: BambooInk.jade,
+        Text(
+          sharedNetLabel(summary),
+          style: BambooFonts.ui(
+            13,
+            color: BambooInk.onSlate,
+            weight: FontWeight.w600,
+          ),
         ),
-        SharedMoneyLine(
-          'You owe',
-          summary.youOwe,
-          confidence: summary.confidence,
-          hidden: hideAmounts,
-          color: BambooInk.clayInk,
+        const SizedBox(height: AppSpace.sm),
+        Align(
+          alignment: Alignment.centerLeft,
+          child: SharedAmount(
+            sharedNetMagnitude(summary),
+            confidence: summary.confidence,
+            hidden: hideAmounts,
+            color: BambooInk.lime,
+            size: 32,
+          ),
         ),
-        const Divider(color: BambooInk.hairlineOnPaper),
-        SharedMoneyLine(
-          'Net balance',
-          summary.netBalance,
-          confidence: summary.confidence,
-          hidden: hideAmounts,
+        const Padding(
+          padding: EdgeInsets.symmetric(vertical: AppSpace.xs),
+          child: Divider(color: BambooInk.slateHairline),
+        ),
+        LayoutBuilder(
+          builder: (context, constraints) {
+            Widget value(String label, Money money) => Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Text(
+                  label,
+                  style: BambooFonts.ui(12, color: BambooInk.onSlateSubtle),
+                ),
+                const SizedBox(height: AppSpace.xs),
+                Align(
+                  alignment: Alignment.centerLeft,
+                  child: SharedAmount(
+                    money,
+                    confidence: summary.confidence,
+                    hidden: hideAmounts,
+                    color: BambooInk.onSlate,
+                    size: 19,
+                  ),
+                ),
+              ],
+            );
+            final owed = value('You are owed', summary.owedToYou);
+            final owing = value('You owe', summary.youOwe);
+            if (constraints.maxWidth <
+                260 * MediaQuery.textScalerOf(context).scale(1)) {
+              return Column(
+                crossAxisAlignment: CrossAxisAlignment.stretch,
+                children: [
+                  owed,
+                  const SizedBox(height: AppSpace.md),
+                  owing,
+                ],
+              );
+            }
+            return IntrinsicHeight(
+              child: Row(
+                crossAxisAlignment: CrossAxisAlignment.stretch,
+                children: [
+                  Expanded(child: owed),
+                  const VerticalDivider(
+                    color: BambooInk.slateHairline,
+                    width: 28,
+                  ),
+                  Expanded(child: owing),
+                ],
+              ),
+            );
+          },
         ),
         if (summary.incomplete)
-          const SharedNotice('Balance snapshot incomplete'),
+          Padding(
+            padding: const EdgeInsets.only(top: AppSpace.sm),
+            child: Text(
+              'Balance snapshot incomplete',
+              style: BambooFonts.ui(12, color: BambooInk.onSlateSubtle),
+            ),
+          ),
         if (!summary.confidence.isConfirmed)
-          const SharedNotice('Estimated amounts'),
+          Padding(
+            padding: const EdgeInsets.only(top: AppSpace.sm),
+            child: Text(
+              'Estimated amounts',
+              style: BambooFonts.ui(12, color: BambooInk.onSlateSubtle),
+            ),
+          ),
       ],
+    ),
+  );
+}
+
+String sharedNetLabel(SharedBalanceSummary summary) =>
+    summary.netBalance.paise > 0
+    ? 'Net owed to you'
+    : summary.netBalance.paise < 0
+    ? 'Net you owe'
+    : 'Net balance';
+
+Money sharedNetMagnitude(SharedBalanceSummary summary) =>
+    Money.fromPaise(summary.netBalance.paise.abs());
+
+/// Secondary list controls retain a full touch target without outlined panels.
+class SharedTextAction extends StatelessWidget {
+  final String label;
+  final VoidCallback onTap;
+  final IconData? icon;
+  const SharedTextAction({
+    super.key,
+    required this.label,
+    required this.onTap,
+    this.icon,
+  });
+  @override
+  Widget build(BuildContext context) => Pressable(
+    semanticLabel: label,
+    onTap: onTap,
+    child: Padding(
+      padding: const EdgeInsets.symmetric(vertical: AppSpace.sm),
+      child: Row(
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          if (icon != null) ...[
+            Icon(icon, size: 20, color: BambooInk.slate),
+            const SizedBox(width: AppSpace.sm),
+          ],
+          Flexible(
+            child: Text(
+              label,
+              style: BambooFonts.ui(13, weight: FontWeight.w600),
+            ),
+          ),
+        ],
+      ),
+    ),
+  );
+}
+
+class SharedAvatar extends StatelessWidget {
+  final String name;
+  final bool group;
+  const SharedAvatar({super.key, required this.name, this.group = false});
+  @override
+  Widget build(BuildContext context) => ExcludeSemantics(
+    child: Container(
+      width: 40,
+      height: 40,
+      alignment: Alignment.center,
+      decoration: const BoxDecoration(
+        color: BambooInk.rankBadgeBg,
+        shape: BoxShape.circle,
+      ),
+      child: group
+          ? const Icon(
+              Icons.people_outline_rounded,
+              color: BambooInk.jade,
+              size: 22,
+            )
+          : Text(
+              name.trim().isEmpty
+                  ? '·'
+                  : name.trim().characters.first.toUpperCase(),
+              textScaler: TextScaler.noScaling,
+              style: BambooFonts.ui(
+                17,
+                weight: FontWeight.w600,
+                color: BambooInk.jade,
+              ),
+            ),
     ),
   );
 }
@@ -293,47 +455,132 @@ class SharedContextTile extends StatelessWidget {
   final SharedContextRow row;
   final bool hideAmounts;
   final VoidCallback? onTap;
+  final bool isGroup;
   const SharedContextTile({
     super.key,
     required this.row,
     this.hideAmounts = false,
     this.onTap,
+    this.isGroup = false,
   });
+
   @override
-  Widget build(BuildContext context) => Pressable(
-    onTap: onTap,
-    child: SharedPanel(
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.stretch,
-        children: [
-          Row(
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: [
-              Expanded(child: Text(row.title, style: BambooFonts.heading(16))),
-              if (onTap != null)
-                const Icon(
-                  Icons.chevron_right_rounded,
-                  color: BambooInk.ink500,
-                ),
-            ],
+  Widget build(BuildContext context) {
+    final mixed = !row.balance.owedToYou.isZero && !row.balance.youOwe.isZero;
+    final owed = row.balance.youOwe.isZero;
+    final label = mixed
+        ? (row.balance.netBalance.isZero ? 'Net' : sharedNetLabel(row.balance))
+        : owed
+        ? 'You are owed'
+        : 'You owe';
+    final color = mixed
+        ? (row.balance.netBalance.paise > 0
+              ? BambooInk.jade
+              : row.balance.netBalance.paise < 0
+              ? BambooInk.clayInk
+              : BambooInk.ink900)
+        : owed
+        ? BambooInk.jade
+        : BambooInk.clayInk;
+    final value = mixed
+        ? sharedNetMagnitude(row.balance)
+        : owed
+        ? row.balance.owedToYou
+        : row.balance.youOwe;
+    final hasBalance =
+        !row.balance.owedToYou.isZero || !row.balance.youOwe.isZero;
+    final state =
+        row.state == SharedContextState.settled && !row.canHideAsSettled
+        ? 'Balance changed · needs review'
+        : sharedStateLabel(row.state);
+    final identity = Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        Text(row.title, style: BambooFonts.heading(15)),
+        if (row.subtitle != null)
+          Text(
+            row.subtitle!,
+            style: BambooFonts.ui(12, color: BambooInk.ink700),
           ),
-          if (row.subtitle != null)
-            Text(
-              row.subtitle!,
-              style: BambooFonts.ui(12, color: BambooInk.ink700),
+      ],
+    );
+    final position = Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        if (state != null)
+          Text(state, style: BambooFonts.ui(12, color: BambooInk.ink700)),
+        if (hasBalance) ...[
+          Text(label, style: BambooFonts.ui(12, color: color)),
+          const SizedBox(height: AppSpace.xs),
+          Align(
+            alignment: Alignment.centerLeft,
+            child: SharedAmount(
+              value,
+              confidence: row.balance.confidence,
+              hidden: hideAmounts,
+              color: color,
             ),
-          if (row.state == SharedContextState.settled && !row.canHideAsSettled)
-            const SharedNotice('Balance changed · needs review')
-          else if (sharedStateLabel(row.state) case final label?)
-            Padding(
-              padding: const EdgeInsets.only(top: AppSpace.sm),
-              child: Text(
-                label,
-                style: BambooFonts.ui(12, color: BambooInk.ink700),
-              ),
+          ),
+        ],
+        if (row.balance.incomplete)
+          Text(
+            'Balance snapshot incomplete',
+            style: BambooFonts.ui(12, color: BambooInk.ink700),
+          ),
+        if (!row.balance.confidence.isConfirmed)
+          Text(
+            'Estimated amounts',
+            style: BambooFonts.ui(12, color: BambooInk.ink700),
+          ),
+      ],
+    );
+    return Pressable(
+      onTap: onTap,
+      child: SharedPanel(
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.stretch,
+          children: [
+            LayoutBuilder(
+              builder: (context, constraints) {
+                final stacked =
+                    constraints.maxWidth <
+                    285 * MediaQuery.textScalerOf(context).scale(1);
+                return Row(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    SharedAvatar(name: row.title, group: isGroup),
+                    const SizedBox(width: AppSpace.md),
+                    Expanded(
+                      child: stacked
+                          ? Column(
+                              crossAxisAlignment: CrossAxisAlignment.stretch,
+                              children: [identity, position],
+                            )
+                          : Row(
+                              crossAxisAlignment: CrossAxisAlignment.center,
+                              children: [
+                                Expanded(child: identity),
+                                const SizedBox(width: AppSpace.sm),
+                                Flexible(child: position),
+                              ],
+                            ),
+                    ),
+                    if (onTap != null)
+                      const Padding(
+                        padding: EdgeInsets.only(top: AppSpace.sm),
+                        child: Icon(
+                          Icons.chevron_right_rounded,
+                          size: 18,
+                          color: BambooInk.ink700,
+                        ),
+                      ),
+                  ],
+                );
+              },
             ),
-          if (!row.canHideAsSettled) ...[
-            if (!row.balance.owedToYou.isZero)
+            // Netting is informational; opposite obligations stay distinct below it.
+            if (mixed) ...[
+              const Divider(color: BambooInk.hairlineOnPaper),
               SharedMoneyLine(
                 'You are owed',
                 row.balance.owedToYou,
@@ -341,7 +588,6 @@ class SharedContextTile extends StatelessWidget {
                 hidden: hideAmounts,
                 color: BambooInk.jade,
               ),
-            if (!row.balance.youOwe.isZero)
               SharedMoneyLine(
                 'You owe',
                 row.balance.youOwe,
@@ -349,13 +595,12 @@ class SharedContextTile extends StatelessWidget {
                 hidden: hideAmounts,
                 color: BambooInk.clayInk,
               ),
-            if (row.balance.incomplete)
-              const SharedNotice('Balance snapshot incomplete'),
+            ],
           ],
-        ],
+        ),
       ),
-    ),
-  );
+    );
+  }
 }
 
 /// Keeps each tab's scroll and local controls while another tab is selected.
@@ -363,6 +608,7 @@ class SharedPageBody extends StatefulWidget {
   final SharedLoadState state;
   final bool hasItems;
   final List<Widget> header;
+  final List<Widget> footer;
   final int itemCount;
   final Widget Function(BuildContext, int) itemBuilder;
   final String emptyTitle;
@@ -378,6 +624,7 @@ class SharedPageBody extends StatefulWidget {
     required this.state,
     required this.hasItems,
     required this.header,
+    this.footer = const [],
     required this.itemCount,
     required this.itemBuilder,
     required this.emptyTitle,
@@ -460,12 +707,18 @@ class _SharedPageBodyState extends State<SharedPageBody>
       key: PageStorageKey(widget.key),
       padding: const EdgeInsets.all(AppSpace.lg),
       keyboardDismissBehavior: ScrollViewKeyboardDismissBehavior.onDrag,
-      itemCount: widget.header.length + widget.itemCount + tail.length,
+      itemCount:
+          widget.header.length +
+          widget.itemCount +
+          widget.footer.length +
+          tail.length,
       itemBuilder: (context, index) {
         if (index < widget.header.length) return widget.header[index];
         final row = index - widget.header.length;
         if (row < widget.itemCount) return widget.itemBuilder(context, row);
-        return tail[row - widget.itemCount];
+        final end = row - widget.itemCount;
+        if (end < widget.footer.length) return widget.footer[end];
+        return tail[end - widget.footer.length];
       },
     );
   }

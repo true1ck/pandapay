@@ -211,6 +211,8 @@ void main() {
       await tester.pumpAndSettle();
       await tester.tap(find.text('Groups'));
       await tester.pumpAndSettle();
+      await tester.tap(find.byTooltip('Search splits'));
+      await tester.pumpAndSettle();
       await tester.enterText(find.byType(TextField), 'flat');
       await tester.pump(const Duration(milliseconds: 301));
       await tester.pumpAndSettle();
