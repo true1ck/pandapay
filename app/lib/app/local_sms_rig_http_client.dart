@@ -27,17 +27,8 @@ final class LocalSmsRigHttpClient extends http.BaseClient {
     required Uri authUri,
     required List<int> caPem,
   }) : _origins = {_localOrigin(apiUri), _localOrigin(authUri)} {
-    final context = SecurityContext(withTrustedRoots: false);
-    // Dart's iOS trust API takes a single DER certificate.
-    final certificate = Platform.isIOS
-        ? base64Decode(
-            const LineSplitter()
-                .convert(ascii.decode(caPem))
-                .where((line) => !line.startsWith('-----'))
-                .join(),
-          )
-        : caPem;
-    context.setTrustedCertificatesBytes(certificate);
+    final context = SecurityContext(withTrustedRoots: false)
+      ..setTrustedCertificatesBytes(caPem);
     _inner = IOClient(HttpClient(context: context));
   }
 
