@@ -1,0 +1,486 @@
+import 'package:flutter/material.dart';
+import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:flutter_test/flutter_test.dart';
+import 'package:pandapay/app/design/app_theme.dart';
+import 'package:pandapay/app/design/widgets.dart';
+import 'package:pandapay/features/shared_expenses/ui/shared_expenses_screen.dart';
+import 'package:pandapay/features/shared_expenses/ui/shared_group_screen.dart';
+import 'package:pandapay/features/shared_expenses/ui/shared_presentation.dart';
+import 'package:pandapay_domain/pandapay_domain.dart';
+import 'package:shared_preferences/shared_preferences.dart';
+
+const zero = Money.zero();
+const balances = SharedBalanceSummary(
+  owedToYou: Money.fromPaise(1408181),
+  youOwe: Money.fromPaise(1408181),
+  netBalance: zero,
+);
+const rahul = SharedContextRow(id: 'rahul', title: 'Rahul', balance: balances);
+const settled = SharedContextRow(
+  id: 'old',
+  title: 'Old trip',
+  state: SharedContextState.settled,
+  balance: SharedBalanceSummary(
+    owedToYou: zero,
+    youOwe: zero,
+    netBalance: zero,
+  ),
+);
+SharedHubPresentation hub({
+  bool offline = false,
+  bool hideAmounts = false,
+  SharedPage<SharedContextRow>? friends,
+}) => SharedHubPresentation(
+  summary: balances,
+  friends: friends ?? SharedPage(items: [rahul, settled]),
+  groups: SharedPage(
+    items: const [
+      SharedContextRow(id: 'home', title: 'Home', balance: balances),
+    ],
+  ),
+  activity: SharedPage(items: const []),
+  offline: offline,
+  hideAmounts: hideAmounts,
+);
+
+Future<void> pump(
+  WidgetTester tester,
+  Widget child, {
+  double width = 430,
+  double scale = 1,
+}) async {
+  tester.view.physicalSize = Size(width, 1000);
+  tester.view.devicePixelRatio = 1;
+  addTearDown(tester.view.resetPhysicalSize);
+  addTearDown(tester.view.resetDevicePixelRatio);
+  await tester.pumpWidget(
+    ProviderScope(
+      child: MaterialApp(
+        builder: (context, child) => MediaQuery(
+          data: MediaQuery.of(
+            context,
+          ).copyWith(textScaler: TextScaler.linear(scale)),
+          child: child!,
+        ),
+        home: child,
+      ),
+    ),
+  );
+  await tester.pumpAndSettle();
+}
+
+void main() {
+  setUp(() {
+    BambooFonts.useSystemFontsForTests = true;
+    SharedPreferences.setMockInitialValues({});
+  });
+  tearDown(() => BambooFonts.useSystemFontsForTests = false);
+
+  testWidgets(
+    'hub has one familiar top tab level and no replacement bottom bar',
+    (tester) async {
+      await pump(tester, SharedExpensesScreen(data: hub()));
+      expect(find.byType(TabBar), findsOneWidget);
+      for (final label in ['Friends', 'Groups', 'Activity']) {
+        expect(find.text(label), findsOneWidget);
+      }
+      expect(find.byType(BottomNavigationBar), findsNothing);
+      expect(find.byType(Scaffold), findsOneWidget);
+      expect(find.text('Rahul'), findsOneWidget);
+      await tester.tap(find.text('Groups'));
+      await tester.pumpAndSettle();
+      expect(find.text('Home'), findsOneWidget);
+      expect(find.text('Expenses'), findsNothing);
+    },
+  );
+
+  testWidgets('gross directions survive net zero and never imply all settled', (
+    tester,
+  ) async {
+    await pump(tester, SharedExpensesScreen(data: hub()));
+    expect(find.text('You are owed'), findsWidgets);
+    expect(find.text('You owe'), findsWidgets);
+    expect(find.text('Net balance'), findsOneWidget);
+    expect(find.text('All settled'), findsNothing);
+    expect(find.text('Old trip'), findsNothing);
+  });
+
+  testWidgets(
+    'settled visibility is reversible and a new active obligation reappears',
+    (tester) async {
+      await pump(tester, SharedExpensesScreen(data: hub()));
+      await tester.tap(find.text('Show settled'));
+      await tester.pumpAndSettle();
+      expect(find.text('Old trip'), findsOneWidget);
+      await tester.tap(find.text('Hide settled'));
+      await tester.pumpAndSettle();
+      expect(find.text('Old trip'), findsNothing);
+      await pump(
+        tester,
+        SharedExpensesScreen(
+          data: hub(
+            friends: SharedPage(
+              items: const [
+                rahul,
+                SharedContextRow(
+                  id: 'old',
+                  title: 'Old trip',
+                  balance: balances,
+                ),
+              ],
+            ),
+          ),
+        ),
+      );
+      expect(find.text('Old trip'), findsOneWidget);
+    },
+  );
+
+  testWidgets(
+    'row navigation and one primary add action use caller callbacks',
+    (tester) async {
+      String? opened;
+      var added = 0;
+      await pump(
+        tester,
+        SharedExpensesScreen(
+          data: hub(),
+          onOpenFriend: (id) => opened = id,
+          onAddExpense: () => added++,
+        ),
+      );
+      await tester.tap(find.text('Rahul'));
+      await tester.pumpAndSettle();
+      expect(opened, 'rahul');
+      await tester.tap(find.text('Add expense'));
+      await tester.pumpAndSettle();
+      expect(added, 1);
+      expect(find.text('Add expense'), findsOneWidget);
+    },
+  );
+
+  testWidgets('search and selected tab state remain when switching tabs', (
+    tester,
+  ) async {
+    final searches = <String>[];
+    await pump(
+      tester,
+      SharedExpensesScreen(
+        data: hub(),
+        onSearchChanged: (tab, query) => searches.add('${tab.name}:$query'),
+      ),
+    );
+    await tester.enterText(find.byType(TextField), 'Rah');
+    await tester.tap(find.text('Groups'));
+    await tester.pumpAndSettle();
+    await tester.tap(find.text('Friends'));
+    await tester.pumpAndSettle();
+    expect(
+      (tester.widget<TextField>(find.byType(TextField))).controller!.text,
+      'Rah',
+    );
+    expect(searches, ['friends:Rah']);
+  });
+
+  testWidgets(
+    'offline and incomplete coverage are explicit and retain cached content',
+    (tester) async {
+      await pump(
+        tester,
+        SharedExpensesScreen(
+          data: hub(
+            offline: true,
+            friends: SharedPage(items: const [rahul], incomplete: true),
+          ),
+        ),
+      );
+      expect(find.text('Offline · showing saved splits'), findsOneWidget);
+      expect(find.text('Some results are still syncing'), findsOneWidget);
+      expect(find.text('Rahul'), findsOneWidget);
+      expect(find.text('Settled!'), findsNothing);
+    },
+  );
+
+  testWidgets('initial loading does not fabricate zero balances', (
+    tester,
+  ) async {
+    await pump(
+      tester,
+      SharedExpensesScreen(
+        data: SharedHubPresentation(
+          friends: SharedPage(state: SharedLoadState.loading),
+          groups: SharedPage(state: SharedLoadState.loading),
+          activity: SharedPage(state: SharedLoadState.loading),
+        ),
+      ),
+    );
+    expect(find.byType(SkeletonList), findsOneWidget);
+    expect(find.text('Net balance'), findsNothing);
+    expect(find.text('All settled'), findsNothing);
+  });
+
+  testWidgets('error retries and load-more stay explicit, bounded actions', (
+    tester,
+  ) async {
+    var retried = 0, loaded = 0;
+    await pump(
+      tester,
+      SharedExpensesScreen(
+        data: hub(friends: SharedPage(state: SharedLoadState.error)),
+        onRetry: (_) => retried++,
+      ),
+    );
+    await tester.tap(find.text('Try again'));
+    await tester.pumpAndSettle();
+    expect(retried, 1);
+    await pump(
+      tester,
+      SharedExpensesScreen(
+        data: hub(friends: SharedPage(items: const [rahul], hasMore: true)),
+        onLoadMore: (_) => loaded++,
+      ),
+    );
+    await tester.tap(find.text('Load more'));
+    await tester.pumpAndSettle();
+    expect(loaded, 1);
+  });
+
+  testWidgets('revoked access never renders cached private rows or summary', (
+    tester,
+  ) async {
+    await pump(
+      tester,
+      SharedExpensesScreen(
+        data: hub(
+          friends: SharedPage(
+            items: const [rahul],
+            state: SharedLoadState.accessRevoked,
+          ),
+        ),
+      ),
+    );
+    expect(find.text('Rahul'), findsNothing);
+    expect(find.text('You no longer have access'), findsOneWidget);
+    expect(find.text('Net balance'), findsNothing);
+  });
+
+  testWidgets('hidden amount preference hides every numeric money semantics', (
+    tester,
+  ) async {
+    final semantics = tester.ensureSemantics();
+    try {
+      await pump(tester, SharedExpensesScreen(data: hub(hideAmounts: true)));
+      expect(find.textContaining('₹'), findsNothing);
+      expect(find.bySemanticsLabel(RegExp('₹')), findsNothing);
+      expect(find.text('You owe'), findsWidgets);
+      expect(find.text('••••'), findsWidgets);
+    } finally {
+      semantics.dispose();
+    }
+  });
+
+  testWidgets(
+    'group has one tab level and shows exact bill paid and share separately',
+    (tester) async {
+      final data = SharedGroupPresentation(
+        id: 'g',
+        title: 'Flatmates',
+        summary: balances,
+        expenses: SharedPage(
+          items: const [
+            SharedExpenseRow(
+              id: 'e',
+              title: 'Dinner',
+              paidBy: 'Rahul',
+              billTotal: Money.fromPaise(120000),
+              yourPaid: zero,
+              yourShare: Money.fromPaise(40000),
+            ),
+          ],
+        ),
+        balances: SharedPage(items: const [rahul]),
+        totals: const SharedExpenseTotals(
+          billTotal: Money.fromPaise(120000),
+          yourPaid: zero,
+          yourShare: Money.fromPaise(40000),
+        ),
+      );
+      await pump(tester, SharedGroupScreen(data: data));
+      expect(find.byType(TabBar), findsOneWidget);
+      for (final label in ['Expenses', 'Balances', 'Totals']) {
+        expect(find.text(label), findsOneWidget);
+      }
+      expect(find.text('Friends'), findsNothing);
+      expect(find.text('Paid by Rahul'), findsOneWidget);
+      for (final label in ['Bill total', 'You paid', 'Your share']) {
+        expect(find.text(label), findsOneWidget);
+      }
+      await tester.tap(find.text('Totals'));
+      await tester.pumpAndSettle();
+      expect(find.text('Total bills'), findsOneWidget);
+    },
+  );
+
+  testWidgets(
+    'payer-only and uninvolved rows have different honest copy at large text',
+    (tester) async {
+      await pump(
+        tester,
+        SharedGroupScreen(
+          data: SharedGroupPresentation(
+            id: 'g',
+            title: 'A very long flatmates group name with many people',
+            expenses: SharedPage(
+              items: const [
+                SharedExpenseRow(
+                  id: 'e',
+                  title: 'You bought groceries for the entire shared apartment',
+                  paidBy: 'You',
+                  billTotal: Money.fromPaise(120000),
+                  yourPaid: Money.fromPaise(120000),
+                  yourShare: zero,
+                  participation: SharedParticipation.paidForOthers,
+                ),
+                SharedExpenseRow(
+                  id: 'f',
+                  title: 'Another members internet subscription',
+                  paidBy: 'Rahul',
+                  billTotal: Money.fromPaise(10000),
+                  yourPaid: zero,
+                  yourShare: zero,
+                  participation: SharedParticipation.notIncluded,
+                ),
+              ],
+            ),
+            balances: SharedPage(),
+          ),
+        ),
+        width: 320,
+        scale: 2,
+      );
+      expect(tester.takeException(), isNull);
+      expect(find.text('You paid for others'), findsOneWidget);
+      await tester.scrollUntilVisible(
+        find.text('Not included in this split'),
+        180,
+        scrollable: find
+            .descendant(
+              of: find.byKey(const ValueKey('g:expenses')),
+              matching: find.byType(Scrollable),
+            )
+            .first,
+      );
+      expect(find.text('Not included in this split'), findsOneWidget);
+      expect(tester.takeException(), isNull);
+    },
+  );
+
+  testWidgets(
+    'stale settled metadata cannot hide an outstanding gross balance',
+    (tester) async {
+      await pump(
+        tester,
+        SharedExpensesScreen(
+          data: hub(
+            friends: SharedPage(
+              items: const [
+                SharedContextRow(
+                  id: 'stale',
+                  title: 'New balance',
+                  state: SharedContextState.settled,
+                  balance: balances,
+                ),
+              ],
+            ),
+          ),
+        ),
+      );
+      expect(find.text('New balance'), findsOneWidget);
+      expect(find.text('Balance changed · needs review'), findsOneWidget);
+      expect(find.text('Settled'), findsNothing);
+      expect(find.text('You owe'), findsWidgets);
+    },
+  );
+
+  testWidgets(
+    'maximum exact money stays bounded with complete accessible value',
+    (tester) async {
+      final semantics = tester.ensureSemantics();
+      try {
+        const maximum = Money.fromPaise(9007199254740991);
+        await pump(
+          tester,
+          SharedGroupScreen(
+            data: SharedGroupPresentation(
+              id: 'g',
+              title: 'Totals',
+              expenses: SharedPage(),
+              balances: SharedPage(),
+              totals: const SharedExpenseTotals(
+                billTotal: maximum,
+                yourPaid: maximum,
+                yourShare: maximum,
+              ),
+            ),
+            initialIndex: 2,
+          ),
+          width: 320,
+          scale: 2,
+        );
+        expect(tester.takeException(), isNull);
+        expect(find.text(maximum.format()), findsNWidgets(3));
+        // Label and value may merge into one accessible row. Check the full
+        // value survives rather than requiring a particular node topology.
+        for (var index = 0; index < 3; index++) {
+          expect(
+            tester.getSemantics(find.text(maximum.format()).at(index)).label,
+            contains(maximum.format()),
+          );
+        }
+      } finally {
+        semantics.dispose();
+      }
+    },
+  );
+
+  testWidgets(
+    'activity routes an existing update without creating a payment action',
+    (tester) async {
+      String? opened;
+      await pump(
+        tester,
+        SharedExpensesScreen(
+          initialIndex: 2,
+          onOpenActivity: (id) => opened = id,
+          data: SharedHubPresentation(
+            friends: SharedPage(),
+            groups: SharedPage(),
+            activity: SharedPage(
+              items: const [
+                SharedActivityRow(
+                  id: 'event',
+                  description: 'Rahul updated Dinner',
+                  occurredAtLabel: 'Today at 12:03',
+                  contextLabel: 'Flatmates',
+                  impactLabel: 'Awaiting your review',
+                ),
+              ],
+            ),
+          ),
+        ),
+      );
+      expect(find.text('Awaiting your review'), findsOneWidget);
+      expect(find.text('Settled'), findsNothing);
+      await tester.tap(find.text('View update'));
+      await tester.pumpAndSettle();
+      expect(opened, 'event');
+    },
+  );
+
+  test('oversized page DTOs are rejected rather than silently truncating', () {
+    expect(
+      () => SharedPage(items: List.filled(101, rahul)),
+      throwsArgumentError,
+    );
+  });
+}

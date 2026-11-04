@@ -158,7 +158,8 @@ String _subscriptionStatus(RecurringSeries series) {
 /// much; ₹7,788 a year does, and that is the same fact stated in the unit
 /// people actually make decisions in.
 class SubscriptionsScreen extends ConsumerWidget {
-  const SubscriptionsScreen({super.key});
+  final bool showChrome;
+  const SubscriptionsScreen({super.key, this.showChrome = true});
 
   @override
   Widget build(BuildContext context, WidgetRef ref) {
@@ -219,7 +220,8 @@ class SubscriptionsScreen extends ConsumerWidget {
     final hasSubscriptionAutopays =
         uniqueLocalMandates.isNotEmpty || uniqueCentralMandates.isNotEmpty;
 
-    return Scaffold(
+    return _SubscriptionFrame(
+      showChrome: showChrome,
       backgroundColor: BambooInk.paper,
       appBar: AppBar(
         backgroundColor: BambooInk.paper,
@@ -807,6 +809,41 @@ class SubscriptionsScreen extends ConsumerWidget {
         ).showSnackBar(SnackBar(content: Text(userFacingErrorMessage(error))));
       }
     }
+  }
+}
+
+/// The existing subscription body and actions have one owner. Payments embeds
+/// them without a nested Scaffold, title, Back button or duplicated service list.
+class _SubscriptionFrame extends StatelessWidget {
+  final bool showChrome;
+  final Color backgroundColor;
+  final AppBar appBar;
+  final Widget body;
+  const _SubscriptionFrame({
+    required this.showChrome,
+    required this.backgroundColor,
+    required this.appBar,
+    required this.body,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    if (showChrome) {
+      return Scaffold(backgroundColor: backgroundColor, appBar: appBar, body: body);
+    }
+    return Column(
+      children: [
+        if (appBar.actions?.isNotEmpty == true)
+          Align(
+            alignment: Alignment.centerRight,
+            child: Padding(
+              padding: const EdgeInsets.only(right: AppSpace.sm),
+              child: Row(mainAxisSize: MainAxisSize.min, children: appBar.actions!),
+            ),
+          ),
+        Expanded(child: body),
+      ],
+    );
   }
 }
 

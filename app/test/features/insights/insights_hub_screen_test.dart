@@ -101,12 +101,12 @@ Future<void> _openInsights(WidgetTester tester) async {
 }
 
 void main() {
-  testWidgets('the grid offers six grouped insights, not eighteen', (
+  testWidgets('the grid keeps grouped insights and places subscriptions under Payments', (
     tester,
   ) async {
     // The grid had grown one tile per shipped screen and most of them
-    // answered slices of the same few questions. These six are the whole
-    // list now; anything that used to be its own tile is a tab behind one
+    // answered slices of the same few questions. Subscriptions now belongs
+    // to Payments; anything that used to be its own tile is a tab behind one
     // of them (see GroupedInsightScreen).
     await _openInsights(tester);
 
@@ -119,7 +119,6 @@ void main() {
       'Budgets',
       'Rewards',
       'Payments',
-      'Subscriptions',
     ]) {
       await _reveal(tester, label);
       expect(
@@ -128,6 +127,8 @@ void main() {
         reason: '$label tile should be reachable by scrolling',
       );
     }
+    expect(find.text('Subscriptions'), findsNothing);
+    expect(find.text('Bills, due dates & subscriptions'), findsOneWidget);
   });
 
   testWidgets('the tiles that were merged away are gone from the grid', (

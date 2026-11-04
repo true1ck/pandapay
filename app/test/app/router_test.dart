@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'package:go_router/go_router.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:pandapay/app/design/app_theme.dart';
@@ -148,6 +149,22 @@ void main() {
       expect(find.byType(AccountScreen), findsOneWidget);
     },
   );
+
+  testWidgets('legacy subscription links open the Payments subscription tab', (tester) async {
+    await _pumpApp(tester);
+    final context=tester.element(find.byType(HomeScreen));
+    GoRouter.of(context).go('${AppRoute.subscriptions}?from=notification');
+    await tester.pumpAndSettle();
+    expect(find.text('Payments'),findsOneWidget);
+    expect(find.text('Subscriptions'),findsOneWidget);
+    expect(find.byType(TabBar),findsOneWidget);
+    expect(find.byType(AppBar),findsOneWidget);
+    final router=GoRouter.of(tester.element(find.byType(TabBar)));
+    expect(router.routeInformationProvider.value.uri.path,AppRoute.paymentsGroup);
+    expect(router.routeInformationProvider.value.uri.queryParameters['tab'],'subscriptions');
+    expect(router.routeInformationProvider.value.uri.queryParameters['from'],'notification');
+    expect(find.byKey(const ValueKey('appShellNavBar')),findsNothing);
+  });
 
   testWidgets('the scan FAB is present on every tab (not just Home)', (
     tester,

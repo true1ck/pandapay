@@ -240,14 +240,10 @@ class InsightsHubScreen extends ConsumerWidget {
       _InsightTile(
         icon: Icons.event_available_outlined,
         label: 'Payments',
-        headline: 'Bills & due dates',
+        headline: subscriptionHeadline == null
+            ? 'Bills, due dates & subscriptions'
+            : 'Bills · Subscriptions $subscriptionHeadline',
         onTap: () => context.push(AppRoute.paymentsGroup),
-      ),
-      _InsightTile(
-        icon: Icons.autorenew_rounded,
-        label: 'Subscriptions',
-        headline: subscriptionHeadline,
-        onTap: () => context.push(AppRoute.subscriptions),
       ),
     ];
 

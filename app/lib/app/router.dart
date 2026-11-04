@@ -54,13 +54,12 @@ import '../features/insights/milestones_screen.dart';
 import '../features/insights/missed_opportunities_screen.dart';
 import '../features/insights/monthly_savings_screen.dart';
 import '../features/insights/my_contributions_screen.dart';
-import '../features/insights/payments_due_screen.dart';
 import '../features/insights/portfolio_audit_screen.dart';
 import '../features/insights/budgets_screen.dart';
 import '../features/insights/grouped_insight_screen.dart';
 import '../features/insights/limits_and_perks_screen.dart';
 import '../features/insights/spend_trends_screen.dart';
-import '../features/insights/subscriptions_screen.dart';
+import '../features/insights/payments_insight_screen.dart';
 import '../features/onboarding/add_first_card_screen.dart';
 import '../features/onboarding/card_details_setup_screen.dart';
 import '../features/onboarding/permissions_screen.dart';
@@ -860,7 +859,10 @@ final goRouterProvider = Provider<GoRouter>((ref) {
       ),
       GoRoute(
         path: AppRoute.subscriptions,
-        builder: (context, state) => const SubscriptionsScreen(),
+        redirect: (context,state) => state.uri.replace(
+          path:AppRoute.paymentsGroup,
+          queryParameters:{...state.uri.queryParameters,'tab':'subscriptions'},
+        ).toString(),
       ),
 
       // Grouped insights. The tab bodies are the ORIGINAL screens — each was
@@ -887,13 +889,7 @@ final goRouterProvider = Provider<GoRouter>((ref) {
       ),
       GoRoute(
         path: AppRoute.paymentsGroup,
-        builder: (context, state) => const GroupedInsightScreen(
-          title: 'Payments',
-          tabs: [
-            (label: 'Bills & commitments', body: BillsAndCommitmentsTab()),
-            (label: 'Due dates', body: DueDateCalendarScreen()),
-          ],
-        ),
+        builder: (context, state) => PaymentsInsightScreen(initialTab:state.uri.queryParameters['tab']),
       ),
       GoRoute(
         path: AppRoute.myContributions,
