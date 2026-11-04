@@ -374,8 +374,13 @@ class _Run {
         final cands = _candidates(rule, leg, f);
         if (cands.isEmpty) continue;
         final narrowed = _narrow(rule, f, cands);
-        final eventId = narrowed.length == 1
-            ? _join(rule, leg.role, f, narrowed.single)
+        // Several mandates of one merchant (a notice with a reference and one
+        // without, or two references) are not an ambiguity about the money: the
+        // debit is a charge either way. `_mandateCandidates` lists the most
+        // recently active mandate first, so the debit joins that one and keeps
+        // its charge leg and its ledger row.
+        final eventId = narrowed.length == 1 || kind == LinkRuleKind.mandateCharge
+            ? _join(rule, leg.role, f, narrowed.first)
             : _ambiguous(rule, leg.role, f, narrowed);
         _afterMoney(f, eventId);
         _done(f);
@@ -720,7 +725,7 @@ class _Run {
           : 'name:${_key(_party(g))}';
       groups.putIfAbsent(key, () => []).add(g);
     }
-    final out = <_Cand>[];
+    final out = <(DateTime, String, _Cand)>[];
     for (final group in groups.values) {
       group.sort(_order);
       final upTo = [
@@ -743,9 +748,14 @@ class _Run {
       }
       final posted = _principal(f);
       if (ceiling != null && posted != null && posted > ceiling) continue;
-      out.add(_Cand.fact(original, LegRole.original));
+      out.add((upTo.last.effectiveAt, upTo.last.factId, _Cand.fact(original, LegRole.original)));
     }
-    return out;
+    // Most recently active mandate first (ties by fact id, so it is stable).
+    out.sort((a, b) {
+      final t = b.$1.compareTo(a.$1);
+      return t != 0 ? t : b.$2.compareTo(a.$2);
+    });
+    return [for (final c in out) c.$3];
   }
 
   List<_Cand> _duplicateCandidates(LinkRule rule, MovementFact f) {
