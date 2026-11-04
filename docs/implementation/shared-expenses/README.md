@@ -4,6 +4,8 @@ Baseline `sms-v2/integration` @ `bf6bec9b`. Started 4 November 2026. Root owns t
 
 ## Status vocabulary
 
+Visual acceptance is currently **NOT MET**: [comparison against both planned image sheets](visual-layout-audit-20261104.md). The live backend/hub checks and Bamboo theme audit prove separate things; they do not establish layout fidelity. Continue against the original image composition, preserving the existing main app navigation and original Subscription body.
+
 `not_started` → `implementing` → `review` → `integrated` → `verified`; `blocked` records an explicit dependency. A verified sub-increment does not complete its whole packet. Each entry includes owned paths, contract version, dependency commit, implemented behavior, exact test results, scenario IDs, unresolved gates and next owner. Evidence and completed behavior are append-only history; correct a superseded claim explicitly.
 
 | Packet | Status | Current sub-increment / next gate |

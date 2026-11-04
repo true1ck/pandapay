@@ -1,5 +1,7 @@
 # P04 handoff: isolated Bamboo split presentation shell
 
+**Visual acceptance correction, 4 November:** [planned-image layout audit](visual-layout-audit-20261104.md) verifies that current build 8126 does **not** match the planned screen composition. Font/token compliance is retained, but hub toolbar/tab distribution/summary/row density/action placement, Activity composition and group details remain open. Passing functional tests and the earlier theme audit must not be treated as visual sign-off. This is a layout/implementation gap, not merely an empty-data difference.
+
 Updated 4 November 2026. Writer: `/root/split_ui_shell`. Baseline `sms-v2/integration` @ `2608053b`, internal calculation/source contract `1.0.0-foundation`. Packet status **implementing**; isolated presentation sub-increment **ready for review**, with 16 focused Flutter tests passing and scoped static analysis clean. No root routes or real repositories wired by this writer. Independent review and emulator/production evidence remain pending.
 
 ## Owned paths and delivered boundary
