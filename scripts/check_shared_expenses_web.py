@@ -27,6 +27,7 @@ def main():
     data = json.dumps({
         'domain': json.loads((fixtures / 'domain_vectors.json').read_text(encoding='utf-8')),
         'sources': json.loads((fixtures / 'source_reference_vectors.json').read_text(encoding='utf-8')),
+        'journal': json.loads((fixtures / 'journal_vectors.json').read_text(encoding='utf-8')),
     }).encode('utf-8')
     # Byte literals keep fixture text out of executable Dart syntax.
     source = '''import 'dart:convert';
@@ -50,6 +51,23 @@ void main() {
     if (reference.canonicalLegacySplitTarget != vector['target'] ||
         jsonEncode(reference.toJson()) != jsonEncode(vector['input'])) {
       throw StateError('JavaScript source mismatch: ${vector['id']}');
+    }
+    count++;
+  }
+  for (final vector in fixtures['journal']['cases']) {
+    Map<String,Object?> current = {'contextId':vector['contextId'],'currency':'INR','members':[],'pairs':[]};
+    for (final step in vector['steps']) {
+      final delta = step['kind']=='revision' ? expenseRevisionDelta(step['input']) : settlementDelta(step['input']);
+      current = applyBalanceDelta({'current':current,'delta':delta});
+    }
+    if (jsonEncode(current) != jsonEncode(vector['expected'])) {
+      throw StateError('JavaScript journal mismatch: ${vector['id']}');
+    }
+    count++;
+  }
+  for (final vector in fixtures['journal']['allocations']) {
+    if (jsonEncode(allocateSettlement(vector['input'])) != jsonEncode(vector['expected'])) {
+      throw StateError('JavaScript settlement mismatch: ${vector['id']}');
     }
     count++;
   }

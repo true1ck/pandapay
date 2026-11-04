@@ -4,4 +4,5 @@ library;
 
 export 'src/shared_expenses/domain.dart';
 export 'src/shared_expenses/source_reference.dart';
+export 'src/shared_expenses/journal.dart';
 export 'src/shared_expenses/validation.dart' show SharedExpenseException;

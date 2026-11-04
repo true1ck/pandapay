@@ -64,6 +64,16 @@ Domain assertions support the **calculation portions** of M01–M11, M14 and V14
 
 ## Review and next owner
 
+### Subsequent journal increment, 4 November 2026
+
+- Added `api/src/shared_expenses/journal.js` and matching Dart `src/shared_expenses/journal.dart`, [scoped journal contract](../../contracts/shared-expenses-v1/journal.md) and shared `journal_vectors.json`. Tests were written and failed before implementation in both runtimes.
+- Confirmed-payment deltas are separate from expense revision deltas. Partial settlement, explicit overpayment credit, decrease/void after settlement, refund counterparties, payment reversal and circular obligations preserve original payment effects. Settlement allocation is bounded and follows persisted selected obligation order.
+- Root focused suites: **18 Node journal tests and 18 Dart journal tests passed**; combined existing/new Node domain/source/journal: **54 passed**. Dart2JS common expected-result fixtures increased from 23 to **36**, all passed, plus Money bounds. Scoped new Dart journal analyzer: no issues.
+- Independent P04/P05 agent review found a gross-overflow gap in a zero-net circular graph and a future frozen-edge compatibility risk. Added failing Node/Dart reproductions, then checked context gross as well as pair/member net limits. SQL persists `pair_v1` and frozen prior edges; corrections subtract stored edges. Pure v1 matching must not silently change in future versions.
+- Full domain run under concurrent Flutter/Docker work hit two existing SMS timing benchmarks. Those timing failures are not a green full-suite claim; isolate/recheck under controlled scheduling before recording the next full regression result. Functional journal checks passed. No SMS production source changed in this increment.
+
+The journal helpers remain pure. Authenticated SQL commands and local immutable operation queues are separate P01/P03/P05 implementations undergoing integration; source funding, UI entry/report integration and release/device acceptance remain incomplete.
+
 Root self-review: correctness and conservation, readability, isolation from existing financial/source modules, strict input/error privacy and bounded processing checked. Independent reviewers are currently unavailable due to agent usage limits; no independent approval is claimed. Next reviewer leases only these foundation paths and checks the public contract and expected results before P03/P06 consumes them.
 
 Remaining P02: accepted journal/revision recognition, partial/overpayment and settlement allocation, exact refund/correction/reversal behavior, recognition-period fixtures and DB-backed property/race reconciliation with P01/P03/P09. These functions preview one snapshot; they do not constitute that journal. General multi-currency settlement/gifts/write-offs remain unsupported.

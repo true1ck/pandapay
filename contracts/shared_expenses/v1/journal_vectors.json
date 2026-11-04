@@ -1,0 +1,1195 @@
+{
+  "contractVersion": "1.0.0-foundation",
+  "cases": [
+    {
+      "id": "C01_accepted_you_paid",
+      "contextId": "home",
+      "steps": [
+        {
+          "kind": "revision",
+          "input": {
+            "contextId": "home",
+            "currency": "INR",
+            "previous": null,
+            "next": {
+              "currency": "INR",
+              "totalMinor": "120000",
+              "contributions": [
+                {
+                  "memberId": "you",
+                  "amountMinor": "120000"
+                }
+              ],
+              "shares": [
+                {
+                  "memberId": "you",
+                  "amountMinor": "40000"
+                },
+                {
+                  "memberId": "rahul",
+                  "amountMinor": "40000"
+                },
+                {
+                  "memberId": "priya",
+                  "amountMinor": "40000"
+                }
+              ],
+              "memberOrder": [
+                "you",
+                "rahul",
+                "priya"
+              ]
+            }
+          }
+        }
+      ],
+      "expected": {
+        "contextId": "home",
+        "currency": "INR",
+        "members": [
+          {
+            "memberId": "priya",
+            "balanceMinor": "-40000"
+          },
+          {
+            "memberId": "rahul",
+            "balanceMinor": "-40000"
+          },
+          {
+            "memberId": "you",
+            "balanceMinor": "80000"
+          }
+        ],
+        "pairs": [
+          {
+            "lowMemberId": "priya",
+            "highMemberId": "you",
+            "balanceMinor": "-40000"
+          },
+          {
+            "lowMemberId": "rahul",
+            "highMemberId": "you",
+            "balanceMinor": "-40000"
+          }
+        ]
+      }
+    },
+    {
+      "id": "C06_partial_settlement",
+      "contextId": "home",
+      "steps": [
+        {
+          "kind": "revision",
+          "input": {
+            "contextId": "home",
+            "currency": "INR",
+            "previous": null,
+            "next": {
+              "currency": "INR",
+              "totalMinor": "120000",
+              "contributions": [
+                {
+                  "memberId": "you",
+                  "amountMinor": "120000"
+                }
+              ],
+              "shares": [
+                {
+                  "memberId": "you",
+                  "amountMinor": "40000"
+                },
+                {
+                  "memberId": "rahul",
+                  "amountMinor": "40000"
+                },
+                {
+                  "memberId": "priya",
+                  "amountMinor": "40000"
+                }
+              ],
+              "memberOrder": [
+                "you",
+                "rahul",
+                "priya"
+              ]
+            }
+          }
+        },
+        {
+          "kind": "settlement",
+          "input": {
+            "contextId": "home",
+            "currency": "INR",
+            "payerId": "rahul",
+            "receiverId": "you",
+            "amountMinor": "30000",
+            "direction": "confirm"
+          }
+        }
+      ],
+      "expected": {
+        "contextId": "home",
+        "currency": "INR",
+        "members": [
+          {
+            "memberId": "priya",
+            "balanceMinor": "-40000"
+          },
+          {
+            "memberId": "rahul",
+            "balanceMinor": "-10000"
+          },
+          {
+            "memberId": "you",
+            "balanceMinor": "50000"
+          }
+        ],
+        "pairs": [
+          {
+            "lowMemberId": "priya",
+            "highMemberId": "you",
+            "balanceMinor": "-40000"
+          },
+          {
+            "lowMemberId": "rahul",
+            "highMemberId": "you",
+            "balanceMinor": "-10000"
+          }
+        ]
+      }
+    },
+    {
+      "id": "C07_fully_settled",
+      "contextId": "home",
+      "steps": [
+        {
+          "kind": "revision",
+          "input": {
+            "contextId": "home",
+            "currency": "INR",
+            "previous": null,
+            "next": {
+              "currency": "INR",
+              "totalMinor": "120000",
+              "contributions": [
+                {
+                  "memberId": "you",
+                  "amountMinor": "120000"
+                }
+              ],
+              "shares": [
+                {
+                  "memberId": "you",
+                  "amountMinor": "40000"
+                },
+                {
+                  "memberId": "rahul",
+                  "amountMinor": "40000"
+                },
+                {
+                  "memberId": "priya",
+                  "amountMinor": "40000"
+                }
+              ],
+              "memberOrder": [
+                "you",
+                "rahul",
+                "priya"
+              ]
+            }
+          }
+        },
+        {
+          "kind": "settlement",
+          "input": {
+            "contextId": "home",
+            "currency": "INR",
+            "payerId": "rahul",
+            "receiverId": "you",
+            "amountMinor": "40000",
+            "direction": "confirm"
+          }
+        },
+        {
+          "kind": "settlement",
+          "input": {
+            "contextId": "home",
+            "currency": "INR",
+            "payerId": "priya",
+            "receiverId": "you",
+            "amountMinor": "40000",
+            "direction": "confirm"
+          }
+        }
+      ],
+      "expected": {
+        "contextId": "home",
+        "currency": "INR",
+        "members": [
+          {
+            "memberId": "priya",
+            "balanceMinor": "0"
+          },
+          {
+            "memberId": "rahul",
+            "balanceMinor": "0"
+          },
+          {
+            "memberId": "you",
+            "balanceMinor": "0"
+          }
+        ],
+        "pairs": []
+      }
+    },
+    {
+      "id": "C08_decrease_after_settlement",
+      "contextId": "home",
+      "steps": [
+        {
+          "kind": "revision",
+          "input": {
+            "contextId": "home",
+            "currency": "INR",
+            "previous": null,
+            "next": {
+              "currency": "INR",
+              "totalMinor": "120000",
+              "contributions": [
+                {
+                  "memberId": "you",
+                  "amountMinor": "120000"
+                }
+              ],
+              "shares": [
+                {
+                  "memberId": "you",
+                  "amountMinor": "40000"
+                },
+                {
+                  "memberId": "rahul",
+                  "amountMinor": "40000"
+                },
+                {
+                  "memberId": "priya",
+                  "amountMinor": "40000"
+                }
+              ],
+              "memberOrder": [
+                "you",
+                "rahul",
+                "priya"
+              ]
+            }
+          }
+        },
+        {
+          "kind": "settlement",
+          "input": {
+            "contextId": "home",
+            "currency": "INR",
+            "payerId": "rahul",
+            "receiverId": "you",
+            "amountMinor": "40000",
+            "direction": "confirm"
+          }
+        },
+        {
+          "kind": "settlement",
+          "input": {
+            "contextId": "home",
+            "currency": "INR",
+            "payerId": "priya",
+            "receiverId": "you",
+            "amountMinor": "40000",
+            "direction": "confirm"
+          }
+        },
+        {
+          "kind": "revision",
+          "input": {
+            "contextId": "home",
+            "currency": "INR",
+            "previous": {
+              "currency": "INR",
+              "totalMinor": "120000",
+              "contributions": [
+                {
+                  "memberId": "you",
+                  "amountMinor": "120000"
+                }
+              ],
+              "shares": [
+                {
+                  "memberId": "you",
+                  "amountMinor": "40000"
+                },
+                {
+                  "memberId": "rahul",
+                  "amountMinor": "40000"
+                },
+                {
+                  "memberId": "priya",
+                  "amountMinor": "40000"
+                }
+              ],
+              "memberOrder": [
+                "you",
+                "rahul",
+                "priya"
+              ]
+            },
+            "next": {
+              "currency": "INR",
+              "totalMinor": "90000",
+              "contributions": [
+                {
+                  "memberId": "you",
+                  "amountMinor": "90000"
+                }
+              ],
+              "shares": [
+                {
+                  "memberId": "you",
+                  "amountMinor": "30000"
+                },
+                {
+                  "memberId": "rahul",
+                  "amountMinor": "30000"
+                },
+                {
+                  "memberId": "priya",
+                  "amountMinor": "30000"
+                }
+              ],
+              "memberOrder": [
+                "you",
+                "rahul",
+                "priya"
+              ]
+            }
+          }
+        }
+      ],
+      "expected": {
+        "contextId": "home",
+        "currency": "INR",
+        "members": [
+          {
+            "memberId": "priya",
+            "balanceMinor": "10000"
+          },
+          {
+            "memberId": "rahul",
+            "balanceMinor": "10000"
+          },
+          {
+            "memberId": "you",
+            "balanceMinor": "-20000"
+          }
+        ],
+        "pairs": [
+          {
+            "lowMemberId": "priya",
+            "highMemberId": "you",
+            "balanceMinor": "10000"
+          },
+          {
+            "lowMemberId": "rahul",
+            "highMemberId": "you",
+            "balanceMinor": "10000"
+          }
+        ]
+      }
+    },
+    {
+      "id": "C09_void_after_settlement",
+      "contextId": "home",
+      "steps": [
+        {
+          "kind": "revision",
+          "input": {
+            "contextId": "home",
+            "currency": "INR",
+            "previous": null,
+            "next": {
+              "currency": "INR",
+              "totalMinor": "120000",
+              "contributions": [
+                {
+                  "memberId": "you",
+                  "amountMinor": "120000"
+                }
+              ],
+              "shares": [
+                {
+                  "memberId": "you",
+                  "amountMinor": "40000"
+                },
+                {
+                  "memberId": "rahul",
+                  "amountMinor": "40000"
+                },
+                {
+                  "memberId": "priya",
+                  "amountMinor": "40000"
+                }
+              ],
+              "memberOrder": [
+                "you",
+                "rahul",
+                "priya"
+              ]
+            }
+          }
+        },
+        {
+          "kind": "settlement",
+          "input": {
+            "contextId": "home",
+            "currency": "INR",
+            "payerId": "rahul",
+            "receiverId": "you",
+            "amountMinor": "40000",
+            "direction": "confirm"
+          }
+        },
+        {
+          "kind": "settlement",
+          "input": {
+            "contextId": "home",
+            "currency": "INR",
+            "payerId": "priya",
+            "receiverId": "you",
+            "amountMinor": "40000",
+            "direction": "confirm"
+          }
+        },
+        {
+          "kind": "revision",
+          "input": {
+            "contextId": "home",
+            "currency": "INR",
+            "previous": {
+              "currency": "INR",
+              "totalMinor": "120000",
+              "contributions": [
+                {
+                  "memberId": "you",
+                  "amountMinor": "120000"
+                }
+              ],
+              "shares": [
+                {
+                  "memberId": "you",
+                  "amountMinor": "40000"
+                },
+                {
+                  "memberId": "rahul",
+                  "amountMinor": "40000"
+                },
+                {
+                  "memberId": "priya",
+                  "amountMinor": "40000"
+                }
+              ],
+              "memberOrder": [
+                "you",
+                "rahul",
+                "priya"
+              ]
+            },
+            "next": null
+          }
+        }
+      ],
+      "expected": {
+        "contextId": "home",
+        "currency": "INR",
+        "members": [
+          {
+            "memberId": "priya",
+            "balanceMinor": "40000"
+          },
+          {
+            "memberId": "rahul",
+            "balanceMinor": "40000"
+          },
+          {
+            "memberId": "you",
+            "balanceMinor": "-80000"
+          }
+        ],
+        "pairs": [
+          {
+            "lowMemberId": "priya",
+            "highMemberId": "you",
+            "balanceMinor": "40000"
+          },
+          {
+            "lowMemberId": "rahul",
+            "highMemberId": "you",
+            "balanceMinor": "40000"
+          }
+        ]
+      }
+    },
+    {
+      "id": "C10_partial_refund_before_settlement",
+      "contextId": "home",
+      "steps": [
+        {
+          "kind": "revision",
+          "input": {
+            "contextId": "home",
+            "currency": "INR",
+            "previous": null,
+            "next": {
+              "currency": "INR",
+              "totalMinor": "120000",
+              "contributions": [
+                {
+                  "memberId": "you",
+                  "amountMinor": "120000"
+                }
+              ],
+              "shares": [
+                {
+                  "memberId": "you",
+                  "amountMinor": "40000"
+                },
+                {
+                  "memberId": "rahul",
+                  "amountMinor": "40000"
+                },
+                {
+                  "memberId": "priya",
+                  "amountMinor": "40000"
+                }
+              ],
+              "memberOrder": [
+                "you",
+                "rahul",
+                "priya"
+              ]
+            }
+          }
+        },
+        {
+          "kind": "revision",
+          "input": {
+            "contextId": "home",
+            "currency": "INR",
+            "previous": {
+              "currency": "INR",
+              "totalMinor": "120000",
+              "contributions": [
+                {
+                  "memberId": "you",
+                  "amountMinor": "120000"
+                }
+              ],
+              "shares": [
+                {
+                  "memberId": "you",
+                  "amountMinor": "40000"
+                },
+                {
+                  "memberId": "rahul",
+                  "amountMinor": "40000"
+                },
+                {
+                  "memberId": "priya",
+                  "amountMinor": "40000"
+                }
+              ],
+              "memberOrder": [
+                "you",
+                "rahul",
+                "priya"
+              ]
+            },
+            "next": {
+              "currency": "INR",
+              "totalMinor": "90000",
+              "contributions": [
+                {
+                  "memberId": "you",
+                  "amountMinor": "90000"
+                }
+              ],
+              "shares": [
+                {
+                  "memberId": "you",
+                  "amountMinor": "30000"
+                },
+                {
+                  "memberId": "rahul",
+                  "amountMinor": "30000"
+                },
+                {
+                  "memberId": "priya",
+                  "amountMinor": "30000"
+                }
+              ],
+              "memberOrder": [
+                "you",
+                "rahul",
+                "priya"
+              ]
+            }
+          }
+        }
+      ],
+      "expected": {
+        "contextId": "home",
+        "currency": "INR",
+        "members": [
+          {
+            "memberId": "priya",
+            "balanceMinor": "-30000"
+          },
+          {
+            "memberId": "rahul",
+            "balanceMinor": "-30000"
+          },
+          {
+            "memberId": "you",
+            "balanceMinor": "60000"
+          }
+        ],
+        "pairs": [
+          {
+            "lowMemberId": "priya",
+            "highMemberId": "you",
+            "balanceMinor": "-30000"
+          },
+          {
+            "lowMemberId": "rahul",
+            "highMemberId": "you",
+            "balanceMinor": "-30000"
+          }
+        ]
+      }
+    },
+    {
+      "id": "overpayment_remains_pair_credit",
+      "contextId": "home",
+      "steps": [
+        {
+          "kind": "revision",
+          "input": {
+            "contextId": "home",
+            "currency": "INR",
+            "previous": null,
+            "next": {
+              "currency": "INR",
+              "totalMinor": "120000",
+              "contributions": [
+                {
+                  "memberId": "you",
+                  "amountMinor": "120000"
+                }
+              ],
+              "shares": [
+                {
+                  "memberId": "you",
+                  "amountMinor": "40000"
+                },
+                {
+                  "memberId": "rahul",
+                  "amountMinor": "40000"
+                },
+                {
+                  "memberId": "priya",
+                  "amountMinor": "40000"
+                }
+              ],
+              "memberOrder": [
+                "you",
+                "rahul",
+                "priya"
+              ]
+            }
+          }
+        },
+        {
+          "kind": "settlement",
+          "input": {
+            "contextId": "home",
+            "currency": "INR",
+            "payerId": "rahul",
+            "receiverId": "you",
+            "amountMinor": "50000",
+            "direction": "confirm"
+          }
+        }
+      ],
+      "expected": {
+        "contextId": "home",
+        "currency": "INR",
+        "members": [
+          {
+            "memberId": "priya",
+            "balanceMinor": "-40000"
+          },
+          {
+            "memberId": "rahul",
+            "balanceMinor": "10000"
+          },
+          {
+            "memberId": "you",
+            "balanceMinor": "30000"
+          }
+        ],
+        "pairs": [
+          {
+            "lowMemberId": "priya",
+            "highMemberId": "you",
+            "balanceMinor": "-40000"
+          },
+          {
+            "lowMemberId": "rahul",
+            "highMemberId": "you",
+            "balanceMinor": "10000"
+          }
+        ]
+      }
+    },
+    {
+      "id": "C21_circular_obligations_not_simplified",
+      "contextId": "home",
+      "steps": [
+        {
+          "kind": "revision",
+          "input": {
+            "contextId": "home",
+            "currency": "INR",
+            "previous": null,
+            "next": {
+              "currency": "INR",
+              "totalMinor": "100",
+              "contributions": [
+                {
+                  "memberId": "b",
+                  "amountMinor": "100"
+                }
+              ],
+              "shares": [
+                {
+                  "memberId": "a",
+                  "amountMinor": "100"
+                }
+              ],
+              "memberOrder": [
+                "b",
+                "a"
+              ]
+            }
+          }
+        },
+        {
+          "kind": "revision",
+          "input": {
+            "contextId": "home",
+            "currency": "INR",
+            "previous": null,
+            "next": {
+              "currency": "INR",
+              "totalMinor": "100",
+              "contributions": [
+                {
+                  "memberId": "c",
+                  "amountMinor": "100"
+                }
+              ],
+              "shares": [
+                {
+                  "memberId": "b",
+                  "amountMinor": "100"
+                }
+              ],
+              "memberOrder": [
+                "c",
+                "b"
+              ]
+            }
+          }
+        },
+        {
+          "kind": "revision",
+          "input": {
+            "contextId": "home",
+            "currency": "INR",
+            "previous": null,
+            "next": {
+              "currency": "INR",
+              "totalMinor": "100",
+              "contributions": [
+                {
+                  "memberId": "a",
+                  "amountMinor": "100"
+                }
+              ],
+              "shares": [
+                {
+                  "memberId": "c",
+                  "amountMinor": "100"
+                }
+              ],
+              "memberOrder": [
+                "a",
+                "c"
+              ]
+            }
+          }
+        }
+      ],
+      "expected": {
+        "contextId": "home",
+        "currency": "INR",
+        "members": [
+          {
+            "memberId": "a",
+            "balanceMinor": "0"
+          },
+          {
+            "memberId": "b",
+            "balanceMinor": "0"
+          },
+          {
+            "memberId": "c",
+            "balanceMinor": "0"
+          }
+        ],
+        "pairs": [
+          {
+            "lowMemberId": "a",
+            "highMemberId": "b",
+            "balanceMinor": "-100"
+          },
+          {
+            "lowMemberId": "a",
+            "highMemberId": "c",
+            "balanceMinor": "100"
+          },
+          {
+            "lowMemberId": "b",
+            "highMemberId": "c",
+            "balanceMinor": "-100"
+          }
+        ]
+      }
+    },
+    {
+      "id": "creditor_change_preserves_refund_recipient",
+      "contextId": "home",
+      "steps": [
+        {
+          "kind": "revision",
+          "input": {
+            "contextId": "home",
+            "currency": "INR",
+            "previous": null,
+            "next": {
+              "currency": "INR",
+              "totalMinor": "100",
+              "contributions": [
+                {
+                  "memberId": "b",
+                  "amountMinor": "100"
+                }
+              ],
+              "shares": [
+                {
+                  "memberId": "a",
+                  "amountMinor": "100"
+                }
+              ],
+              "memberOrder": [
+                "b",
+                "a"
+              ]
+            }
+          }
+        },
+        {
+          "kind": "settlement",
+          "input": {
+            "contextId": "home",
+            "currency": "INR",
+            "payerId": "a",
+            "receiverId": "b",
+            "amountMinor": "100",
+            "direction": "confirm"
+          }
+        },
+        {
+          "kind": "revision",
+          "input": {
+            "contextId": "home",
+            "currency": "INR",
+            "previous": {
+              "currency": "INR",
+              "totalMinor": "100",
+              "contributions": [
+                {
+                  "memberId": "b",
+                  "amountMinor": "100"
+                }
+              ],
+              "shares": [
+                {
+                  "memberId": "a",
+                  "amountMinor": "100"
+                }
+              ],
+              "memberOrder": [
+                "b",
+                "a"
+              ]
+            },
+            "next": {
+              "currency": "INR",
+              "totalMinor": "100",
+              "contributions": [
+                {
+                  "memberId": "c",
+                  "amountMinor": "100"
+                }
+              ],
+              "shares": [
+                {
+                  "memberId": "a",
+                  "amountMinor": "100"
+                }
+              ],
+              "memberOrder": [
+                "c",
+                "a"
+              ]
+            }
+          }
+        }
+      ],
+      "expected": {
+        "contextId": "home",
+        "currency": "INR",
+        "members": [
+          {
+            "memberId": "a",
+            "balanceMinor": "0"
+          },
+          {
+            "memberId": "b",
+            "balanceMinor": "-100"
+          },
+          {
+            "memberId": "c",
+            "balanceMinor": "100"
+          }
+        ],
+        "pairs": [
+          {
+            "lowMemberId": "a",
+            "highMemberId": "b",
+            "balanceMinor": "100"
+          },
+          {
+            "lowMemberId": "a",
+            "highMemberId": "c",
+            "balanceMinor": "-100"
+          }
+        ]
+      }
+    },
+    {
+      "id": "payment_reversal_restores_original_obligation",
+      "contextId": "home",
+      "steps": [
+        {
+          "kind": "revision",
+          "input": {
+            "contextId": "home",
+            "currency": "INR",
+            "previous": null,
+            "next": {
+              "currency": "INR",
+              "totalMinor": "120000",
+              "contributions": [
+                {
+                  "memberId": "you",
+                  "amountMinor": "120000"
+                }
+              ],
+              "shares": [
+                {
+                  "memberId": "you",
+                  "amountMinor": "40000"
+                },
+                {
+                  "memberId": "rahul",
+                  "amountMinor": "40000"
+                },
+                {
+                  "memberId": "priya",
+                  "amountMinor": "40000"
+                }
+              ],
+              "memberOrder": [
+                "you",
+                "rahul",
+                "priya"
+              ]
+            }
+          }
+        },
+        {
+          "kind": "settlement",
+          "input": {
+            "contextId": "home",
+            "currency": "INR",
+            "payerId": "rahul",
+            "receiverId": "you",
+            "amountMinor": "40000",
+            "direction": "confirm"
+          }
+        },
+        {
+          "kind": "settlement",
+          "input": {
+            "contextId": "home",
+            "currency": "INR",
+            "payerId": "rahul",
+            "receiverId": "you",
+            "amountMinor": "40000",
+            "direction": "reverse"
+          }
+        }
+      ],
+      "expected": {
+        "contextId": "home",
+        "currency": "INR",
+        "members": [
+          {
+            "memberId": "priya",
+            "balanceMinor": "-40000"
+          },
+          {
+            "memberId": "rahul",
+            "balanceMinor": "-40000"
+          },
+          {
+            "memberId": "you",
+            "balanceMinor": "80000"
+          }
+        ],
+        "pairs": [
+          {
+            "lowMemberId": "priya",
+            "highMemberId": "you",
+            "balanceMinor": "-40000"
+          },
+          {
+            "lowMemberId": "rahul",
+            "highMemberId": "you",
+            "balanceMinor": "-40000"
+          }
+        ]
+      }
+    }
+  ],
+  "allocations": [
+    {
+      "id": "partial_payment_fifo",
+      "input": {
+        "amountMinor": "30000",
+        "obligations": [
+          {
+            "obligationId": "older",
+            "outstandingMinor": "20000"
+          },
+          {
+            "obligationId": "newer",
+            "outstandingMinor": "40000"
+          }
+        ],
+        "allocationOrder": [
+          "older",
+          "newer"
+        ]
+      },
+      "expected": {
+        "allocations": [
+          {
+            "obligationId": "older",
+            "amountMinor": "20000"
+          },
+          {
+            "obligationId": "newer",
+            "amountMinor": "10000"
+          }
+        ],
+        "creditMinor": "0"
+      }
+    },
+    {
+      "id": "selected_order_is_preserved",
+      "input": {
+        "amountMinor": "30000",
+        "obligations": [
+          {
+            "obligationId": "older",
+            "outstandingMinor": "20000"
+          },
+          {
+            "obligationId": "newer",
+            "outstandingMinor": "40000"
+          }
+        ],
+        "allocationOrder": [
+          "newer",
+          "older"
+        ]
+      },
+      "expected": {
+        "allocations": [
+          {
+            "obligationId": "newer",
+            "amountMinor": "30000"
+          }
+        ],
+        "creditMinor": "0"
+      }
+    },
+    {
+      "id": "excess_is_explicit_credit",
+      "input": {
+        "amountMinor": "50000",
+        "obligations": [
+          {
+            "obligationId": "one",
+            "outstandingMinor": "40000"
+          },
+          {
+            "obligationId": "zero",
+            "outstandingMinor": "0"
+          }
+        ],
+        "allocationOrder": [
+          "zero",
+          "one"
+        ]
+      },
+      "expected": {
+        "allocations": [
+          {
+            "obligationId": "one",
+            "amountMinor": "40000"
+          }
+        ],
+        "creditMinor": "10000"
+      }
+    }
+  ]
+}
