@@ -131,6 +131,15 @@ class SmsV2Pipeline {
             backfill: backfill,
           );
         }
+        // One read per chunk: a per-message json_extract scan of the review
+        // table made a long history import quadratic.
+        final openTemplateSources = {
+          for (final row in _db.select(
+            "SELECT json_extract(payload,'\$.sourceKey') AS source FROM v2_review_items WHERE namespace=? AND kind='template' AND status!='resolved'",
+            [namespace],
+          ))
+            row['source'],
+        };
         for (final (message, outcome) in interpreted) {
           final result = outcome.result;
           final trace =
@@ -148,7 +157,8 @@ class SmsV2Pipeline {
             _db,
             namespace: namespace,
           ).put('trace:${message.sourceKey}', jsonEncode(trace.toJson()));
-          if (result.outcome != InterpretOutcome.unknown) {
+          if (result.outcome != InterpretOutcome.unknown &&
+              openTemplateSources.contains(message.sourceKey)) {
             _db.execute(
               "UPDATE v2_review_items SET status='resolved' WHERE namespace=? AND kind='template' AND json_extract(payload,'\$.sourceKey')=?",
               [namespace, message.sourceKey],

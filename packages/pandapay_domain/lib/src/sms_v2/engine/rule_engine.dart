@@ -185,8 +185,9 @@ class RuleEngine implements SmsInterpreter {
       for (final c in cb.rulesFor(brand)) {
         final th = c.templateHash;
         if (th != null && th != hash) continue;
+        if (!c.passes(lower)) continue;
         final m = c.regex.firstMatch(body);
-        if (m == null || !c.passes(lower)) continue;
+        if (m == null) continue;
         final id = c.rule.id;
         List<Fact> facts;
         try {
