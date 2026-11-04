@@ -357,6 +357,13 @@ CREATE TABLE IF NOT EXISTS sms_v2_migration_sources(namespace TEXT NOT NULL,sour
     if (from != null && to != null && !from.isBefore(to)) {
       throw ArgumentError('Choose a nonempty period');
     }
+    // A requested maintenance preview compares against the account now, not
+    // the initial migration's archived baseline. Keep the saved global report.
+    final requestedBefore = from == null && to == null ? null : _monthly();
+    ReplayReport requestedReport({bool complete = true}) => ReplayReport({
+      ..._report(complete: complete, from: from, to: to).toJson(),
+      'beforeByMonth': requestedBefore,
+    });
     _prepare(includeNewSources: includeNewSources, from: from, to: to);
     final saved = db.select(
       'SELECT status,report_json FROM sms_v2_migration_state WHERE namespace=?',
@@ -364,7 +371,7 @@ CREATE TABLE IF NOT EXISTS sms_v2_migration_sources(namespace TEXT NOT NULL,sour
     ).single;
     if (saved['status'] == 'complete') {
       if (from != null || to != null) {
-        return _report(from: from, to: to);
+        return requestedReport();
       }
       return ReplayReport(
         (jsonDecode(saved['report_json'] as String) as Map)
@@ -589,7 +596,7 @@ CREATE TABLE IF NOT EXISTS sms_v2_migration_sources(namespace TEXT NOT NULL,sour
     );
     return from == null && to == null
         ? report
-        : _report(complete: complete, from: from, to: to);
+        : requestedReport(complete: complete);
   }
 
   List<Map<String, Object?>> _originalFor(String source) => [

@@ -210,6 +210,12 @@ void main() {
         2,
       );
       expect((await replay().run(includeNewSources: true)).retainedBodies, 6);
+      final repeated = await replay().run(
+        includeNewSources: true,
+        from: DateTime.utc(2026, 11),
+        to: DateTime.utc(2026, 12),
+      );
+      expect(repeated.data['beforeByMonth'], repeated.data['afterByMonth']);
       final outside = await replay().run(
         includeNewSources: true,
         from: DateTime.utc(2027),
