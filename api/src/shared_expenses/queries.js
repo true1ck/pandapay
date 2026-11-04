@@ -94,13 +94,21 @@ async function listContextExpenses(client,actorId,contextId,query={}) {
   await authorizeContext(client,contextId);
   const {rows}=await client.query(`SELECT e.expense_id,e.created_by,e.accepted_revision_id,e.head_version::text,
       r.title,r.occurred_on::text,r.currency,r.total_minor::text,r.is_void,r.revision_hash,r.projection_version,r.bill,
-      coalesce(own.paid_minor,0)::text your_paid_minor,coalesce(own.share_minor,0)::text your_share_minor
+      coalesce(own.paid_minor,0)::text your_paid_minor,coalesce(own.share_minor,0)::text your_share_minor,
+      CASE WHEN latest.revision_id IS NOT NULL AND latest.revision_id IS DISTINCT FROM e.accepted_revision_id THEN
+        jsonb_build_object('revisionId',latest.revision_id,'title',latest.title,'occurredOn',latest.occurred_on::text,
+          'totalMinor',latest.total_minor::text,'bill',latest.bill,'void',latest.is_void,
+          'yourPaidMinor',coalesce(pending_own.paid_minor,0)::text,'yourShareMinor',coalesce(pending_own.share_minor,0)::text)
+        ELSE NULL END AS pending_revision
     FROM shared_expenses.expenses e LEFT JOIN shared_expenses.expense_revisions r
       ON r.context_id=e.context_id AND r.expense_id=e.expense_id AND r.revision_id=e.accepted_revision_id
     LEFT JOIN shared_expenses.revision_members own ON own.context_id=e.context_id AND own.revision_id=e.accepted_revision_id AND own.approver_profile_id=$4::uuid
+    LEFT JOIN LATERAL(SELECT revision_id,title,occurred_on,total_minor,bill,is_void FROM shared_expenses.expense_revisions
+      WHERE context_id=e.context_id AND expense_id=e.expense_id ORDER BY created_at DESC,revision_id DESC LIMIT 1) latest ON true
+    LEFT JOIN shared_expenses.revision_members pending_own ON pending_own.context_id=e.context_id AND pending_own.revision_id=latest.revision_id AND pending_own.approver_profile_id=$4::uuid
     WHERE e.context_id=$1::uuid AND ($2::uuid IS NULL OR e.expense_id>$2::uuid)
     ORDER BY e.expense_id LIMIT $3::int`,[contextId,after,request.limit+1,actorId]);
-  return page(scope,request,rows,row=>[row.expense_id],row=>({contextId,expenseId:row.expense_id,createdBy:row.created_by,acceptedRevisionId:row.accepted_revision_id,headVersion:row.head_version,title:row.title??null,occurredOn:row.occurred_on??null,currency:row.currency??'INR',totalMinor:row.total_minor??null,void:row.is_void??false,revisionHash:row.revision_hash??null,projectionVersion:row.projection_version??null,yourPaidMinor:row.your_paid_minor??'0',yourShareMinor:row.your_share_minor??'0',bill:row.bill??null}));
+  return page(scope,request,rows,row=>[row.expense_id],row=>({contextId,expenseId:row.expense_id,createdBy:row.created_by,acceptedRevisionId:row.accepted_revision_id,headVersion:row.head_version,title:row.title??null,occurredOn:row.occurred_on??null,currency:row.currency??'INR',totalMinor:row.total_minor??null,void:row.is_void??false,revisionHash:row.revision_hash??null,projectionVersion:row.projection_version??null,yourPaidMinor:row.your_paid_minor??'0',yourShareMinor:row.your_share_minor??'0',bill:row.bill??null,pendingRevision:row.pending_revision??null}));
 }
 async function readBalances(client,actorId,contextId,query={}) {
   const request=pageRequest(query),scope=scopeFor(actorId,'pairs',contextId);
@@ -156,13 +164,23 @@ async function listExpenseRevisions(client,actorId,contextId,expenseId,query={})
   const request=pageRequest(query),scope={...scopeFor(actorId,'revisions',contextId),expenseId};
   const [beforeDate,beforeId]=dateCursor(request,scope);
   await authorizeContext(client,contextId);
-  const {rows}=await client.query(`SELECT revision_id,author_profile_id,expected_head_revision_id,revision_hash,projection_version,title,occurred_on::text,currency,total_minor::text,is_void,snapshot,projected_edges,bill,created_at,
-      to_char(created_at AT TIME ZONE 'UTC','YYYY-MM-DD"T"HH24:MI:SS.US"Z"') AS created_at_key
-    FROM shared_expenses.expense_revisions
-    WHERE context_id=$1::uuid AND expense_id=$2::uuid
-      AND ($3::timestamptz IS NULL OR (created_at,revision_id)<($3::timestamptz,$4::uuid))
-    ORDER BY created_at DESC,revision_id DESC LIMIT $5::int`,[contextId,expenseId,beforeDate,beforeId,request.limit+1]);
-  return page(scope,request,rows,row=>[row.created_at_key??timestamp(row.created_at),row.revision_id],row=>({contextId,expenseId,revisionId:row.revision_id,authorProfileId:row.author_profile_id,expectedHeadRevisionId:row.expected_head_revision_id,revisionHash:row.revision_hash,projectionVersion:row.projection_version,title:row.title,occurredOn:row.occurred_on,currency:row.currency,totalMinor:row.total_minor,void:row.is_void,snapshot:row.snapshot,bill:row.bill??null,projectedEdges:row.projected_edges,createdAt:row.created_at_key??timestamp(row.created_at)}));
+  const {rows}=await client.query(`SELECT r.revision_id,r.author_profile_id,r.expected_head_revision_id,r.revision_hash,r.projection_version,r.title,r.occurred_on::text,r.currency,r.total_minor::text,r.is_void,r.snapshot,r.projected_edges,r.bill,r.created_at,
+      to_char(r.created_at AT TIME ZONE 'UTC','YYYY-MM-DD"T"HH24:MI:SS.US"Z"') AS created_at_key,
+      CASE WHEN e.accepted_revision_id=r.revision_id THEN CASE WHEN r.is_void THEN 'voided' ELSE 'accepted' END
+        WHEN r.expected_head_revision_id IS DISTINCT FROM e.accepted_revision_id THEN 'superseded'
+        WHEN EXISTS(SELECT FROM shared_expenses.revision_approvals d WHERE d.context_id=r.context_id AND d.revision_id=r.revision_id AND d.decision='reject') THEN 'rejected'
+        WHEN EXISTS(SELECT FROM shared_expenses.revision_members m WHERE m.context_id=r.context_id AND m.revision_id=r.revision_id AND m.approval_required
+          AND (m.approver_profile_id IS NULL OR NOT EXISTS(SELECT FROM shared_expenses.revision_approvals d WHERE d.context_id=m.context_id AND d.revision_id=m.revision_id AND d.member_id=m.member_id AND d.actor_profile_id=m.approver_profile_id AND d.revision_hash=r.revision_hash AND d.decision='approve'))) THEN 'awaiting_approval'
+        ELSE 'awaiting_acceptance' END AS review_state,
+      EXISTS(SELECT FROM shared_expenses.revision_members m WHERE m.context_id=r.context_id AND m.revision_id=r.revision_id AND m.approver_profile_id=$6::uuid AND m.approval_required) AS actor_required,
+      (SELECT d.decision FROM shared_expenses.revision_approvals d WHERE d.context_id=r.context_id AND d.revision_id=r.revision_id AND d.actor_profile_id=$6::uuid LIMIT 1) AS your_decision,
+      coalesce(own.paid_minor,0)::text your_paid_minor,coalesce(own.share_minor,0)::text your_share_minor,own.member_id AS own_member_id
+    FROM shared_expenses.expense_revisions r JOIN shared_expenses.expenses e ON e.context_id=r.context_id AND e.expense_id=r.expense_id
+    LEFT JOIN shared_expenses.revision_members own ON own.context_id=r.context_id AND own.revision_id=r.revision_id AND own.approver_profile_id=$6::uuid
+    WHERE r.context_id=$1::uuid AND r.expense_id=$2::uuid
+      AND ($3::timestamptz IS NULL OR (r.created_at,r.revision_id)<($3::timestamptz,$4::uuid))
+    ORDER BY r.created_at DESC,r.revision_id DESC LIMIT $5::int`,[contextId,expenseId,beforeDate,beforeId,request.limit+1,actorId]);
+  return page(scope,request,rows,row=>[row.created_at_key??timestamp(row.created_at),row.revision_id],row=>({contextId,expenseId,revisionId:row.revision_id,authorProfileId:row.author_profile_id,expectedHeadRevisionId:row.expected_head_revision_id,revisionHash:row.revision_hash,projectionVersion:row.projection_version,title:row.title,occurredOn:row.occurred_on,currency:row.currency,totalMinor:row.total_minor,void:row.is_void,snapshot:row.snapshot,bill:row.bill??null,projectedEdges:row.projected_edges,createdAt:row.created_at_key??timestamp(row.created_at),reviewState:row.review_state??'unknown',canRespond:row.actor_required===true&&!row.your_decision&&row.review_state==='awaiting_approval',yourDecision:row.your_decision??null,yourPaidMinor:row.your_paid_minor??'0',yourShareMinor:row.your_share_minor??'0',ownMemberId:row.own_member_id??null}));
 }
 async function listSettlementReports(client,actorId,contextId,query={}) {
   const request=pageRequest(query),scope=scopeFor(actorId,'settlements',contextId),after=cursorUuid(request,scope);
