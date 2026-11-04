@@ -293,3 +293,13 @@ The first certificate-scoped build failed on the phone during trust setup with `
 The owner completed login on the local Debug app. Auth returned 200 for the email request and verification, and the API created the scratch profile with 201. Moving the app into the background exposed a native crash because the headless engine registered message handlers before `run`. The engine now starts before plugin and channel registration. The rebuilt device app launched, and the four Dart background-processing tests and both native intake/sender harnesses passed.
 
 The physical acceptance test remains unverified. The first run invalidated its runtime while catalogue/category providers loaded. Later runs failed at `GET /profile` with `No route to host` for the Mac's LAN address. The API remained healthy on the Mac. The owner requested manual phone instructions with diagnosis from logs. The normal Debug entry point is being restored after the acceptance attempt. Real-message replay and native Shortcut acceptance remain pending.
+
+### Explicit historical category checks
+
+The owner asked why previously synced/imported history did not visibly use newer SMS rules, and requested a deliberate refresh that does not repeat on each sync. Worktree `codex/sms-v2-history-recheck` started from `d8e6edd`; implementation commits are `04ad071`, `584574a` and `a4af434`.
+
+The Debug action previews a chosen period on a private memory copy, then requires an explicit apply. It checks newly retained legacy sources through the existing pipeline, and refreshes automatic categories from stored v2 events/facts. Durable small chunks preserve account boundaries, corrections, custom categories, notes, tags and deletions. Unsent original money records wait for sync. Category-only uploads use a restricted server endpoint and never reapply card reward state. A pulled purchase correction refreshes linked refunds, including a second user correction.
+
+Already-matched v2 facts remain immutable; this action does not reparse those messages or relink their events. A versioned replacement/retirement sync protocol is required for that broader migration. Its proposal, release controls and manual phone checklist are in `../history-recheck-plan.md`. No changes in this batch were installed on the iPhone or deployed to the running server. No owner messages were added to the repository. Accuracy targets and physical acceptance remain open.
+
+The reproducible commands, failure-first evidence, scope limits and final validation counts are recorded in `WP-16-history-recheck.md`.
