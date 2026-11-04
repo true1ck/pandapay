@@ -1,22 +1,20 @@
 import 'dart:convert';
 import 'dart:io';
 
-import 'package:flutter/foundation.dart';
 import 'package:http/http.dart' as http;
 import 'package:http/io_client.dart';
 
 import 'env.dart';
+import 'local_sms_rig_build.dart';
 
 http.Client? localSmsRigHttpClient() {
-  const encodedCa = String.fromEnvironment('SMS_V2_LOCAL_CA_PEM');
-  const environment = String.fromEnvironment('PANDAPAY_ENV');
-  if (!kDebugMode || kIsWeb || environment != 'dev' || encodedCa.isEmpty) {
+  if (!LocalSmsRigBuild.enabled) {
     return null;
   }
   return LocalSmsRigHttpClient(
     apiUri: Uri.parse(Env.apiBaseUrl),
     authUri: Uri.parse(Env.authBaseUrl),
-    caPem: base64Decode(encodedCa),
+    caPem: base64Decode(LocalSmsRigBuild.encodedCa),
   );
 }
 

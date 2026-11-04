@@ -1,5 +1,5 @@
 import 'migration_report_screen.dart';
-import 'package:flutter/foundation.dart';
+import '../../../app/local_sms_rig_build.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
@@ -17,7 +17,7 @@ class SmsV2HomePrompt extends ConsumerWidget {
     final available =
         ref.watch(instrumentsProvider).valueOrNull ?? const <Instrument>[];
     if (available.isEmpty) {
-      return kDebugMode
+      return LocalSmsRigBuild.controlsEnabled
           ? ActionChip(
               label: const Text('History update'),
               onPressed: () => context.push('/sms-v2/migration'),

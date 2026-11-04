@@ -4,6 +4,7 @@ import 'dart:convert';
 import 'package:firebase_app_check/firebase_app_check.dart';
 import 'package:firebase_core/firebase_core.dart';
 import 'package:flutter/foundation.dart';
+import '../../../app/local_sms_rig_build.dart';
 
 /// App Check headers for the phone sync client. The installation ID is stored
 /// by the caller and is an admission identifier rather than a hardware claim.
@@ -11,9 +12,8 @@ final class DeviceAttestation {
   DeviceAttestation({
     required this.deviceId,
     DateTime Function()? now,
-    Future<String?> Function(bool forceRefresh)? fetchToken,
-  }) : _now = now ?? DateTime.now,
-       _fetchToken = fetchToken {
+    this._fetchToken,
+  }) : _now = now ?? DateTime.now {
     if (!RegExp(r'^[A-Za-z0-9_-]{8,128}$').hasMatch(deviceId)) {
       throw ArgumentError.value(deviceId, 'deviceId');
     }
@@ -30,10 +30,7 @@ final class DeviceAttestation {
 
   Future<Map<String, String>> headers() async {
     final token = await _getToken();
-    return {
-      'X-Sms-Device-Id': deviceId,
-      if (token != null) 'X-Device-Attestation': token,
-    };
+    return {'X-Sms-Device-Id': deviceId, 'X-Device-Attestation': ?token};
   }
 
   Future<String?> _getToken() async {
@@ -84,10 +81,10 @@ final class DeviceAttestation {
   Future<void> _activate() async {
     await Firebase.initializeApp();
     await FirebaseAppCheck.instance.activate(
-      providerAndroid: kDebugMode
+      providerAndroid: LocalSmsRigBuild.controlsEnabled
           ? const AndroidDebugProvider()
           : const AndroidPlayIntegrityProvider(),
-      providerApple: kDebugMode
+      providerApple: LocalSmsRigBuild.controlsEnabled
           ? const AppleDebugProvider()
           : const AppleAppAttestProvider(),
     );

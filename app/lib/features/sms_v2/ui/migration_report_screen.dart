@@ -1,5 +1,5 @@
 import 'dart:convert';
-import 'package:flutter/foundation.dart';
+import '../../../app/local_sms_rig_build.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import '../../../app/providers.dart' as app;
@@ -91,7 +91,7 @@ class _MigrationReportScreenState extends ConsumerState<MigrationReportScreen> {
           data: (saved) => ListView(
             padding: const EdgeInsets.all(24),
             children: [
-              if (kDebugMode)
+              if (LocalSmsRigBuild.controlsEnabled)
                 HistoryUpdatePanel(
                   key: ValueKey(ref.watch(app.cacheNamespaceProvider)),
                   onApplied: () => ref.invalidate(migrationReportProvider),
@@ -142,13 +142,13 @@ class _MigrationReportScreenState extends ConsumerState<MigrationReportScreen> {
                 ),
               if (_busy) const LinearProgressIndicator(),
               if (_error != null) Text(_error!),
-              if (kDebugMode)
+              if (LocalSmsRigBuild.controlsEnabled)
                 OutlinedButton.icon(
                   onPressed: _busy ? null : _dryRun,
                   icon: const Icon(Icons.science_outlined),
                   label: const Text('Dry run without changing history'),
                 ),
-              if (kDebugMode && _preview != null)
+              if (LocalSmsRigBuild.controlsEnabled && _preview != null)
                 TextButton(
                   onPressed: () => showDialog<void>(
                     context: context,

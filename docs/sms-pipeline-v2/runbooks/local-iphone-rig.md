@@ -37,10 +37,21 @@ xcrun simctl launch <booted-simulator-uuid> app.pandapay.pandapay.smsv2rig
 
 The recipe compiles a Debug app with the printed Flutter defines and installs the separate app identity. Use a simulator reserved for the rig. The development build trusts the scratch CA for the two local HTTPS origins and accepts the ephemeral Ed25519 bundle key. A restarted rig creates new URLs, certificates, and a new key, so rebuild against its fresh defines.
 
-## Physical iPhone checklist for a later session
+## Physical iPhone installation
+
+An iOS Flutter Debug app needs Flutter or Xcode attached whenever it starts. Opening it directly from the Home Screen can fail before Dart starts and leave a white screen. Use a standalone Profile build for manual iPhone testing:
+
+```sh
+python3 scripts/build_sms_v2_local_ios.py /tmp/pandapay-sms-rig.EXAMPLE \
+  --device <connected-iPhone-UDID> --build-number <next-test-build-number>
+```
+
+The recipe builds, signs, installs and launches **PandaPay SMS v2 Test**. It keeps the existing `app.pandapay.pandapay.smsv2rig` identity and data, omits the regular app's Shortcut URL scheme, and restores temporary Xcode/manifest changes. Profile builds use `SMS_V2_LOCAL_TEST_BUILD=true`; local CA/bundle trust and history controls require that opt-in, exact `PANDAPAY_ENV=dev` and both public trust anchors. Release builds reject local trust regardless of these defines. The actual HTTP client still accepts only the two configured private IPv4 HTTPS origins and rejects redirects. Production signing keys and App Check provisioning remain separate owner tasks.
+
+## Physical iPhone checklist
 
 1. Start the rig on the Mac's private LAN address. Make sure the iPhone can reach that interface over the trusted test network.
-2. Open `app/ios/Runner.xcworkspace` in Xcode with the device connected. Use a separate Debug app identity and development provisioning. For a side-by-side installation, omit the regular app's URL scheme from the Debug manifest. Feed the printed `flutter-defines.json` to Flutter's Debug build or encode its entries as Xcode `DART_DEFINES`. The app uses its own scratch CA trust for the two rig origins. Remove any test certificate profile installed for earlier builds.
+2. Run the Profile installation recipe above with the device connected. The app uses its own scratch CA trust for the two rig origins. Remove any test certificate profile installed for earlier builds.
 3. Allow Local Network access when prompted. Use **Sign in** with `test@example.com`, `9999999999` in the required phone field, and verification code `1234`. The returning-user sign-in sends the email and keeps phone linkage unchanged. Confirm rule download, import a synthetic tagged-bank message and verify the synced Activity row.
 4. Check a test Shortcut automation with a tagged sender, a missing sender with a named issuer, and a contact handle. Record which values Shortcuts delivers. Existing shortcuts stay bound to their saved app identities.
 5. Validate the five history screens and interrupted replay in the test build. Actual device history and production App Check are separate acceptance checks.
