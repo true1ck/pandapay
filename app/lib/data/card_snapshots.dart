@@ -74,6 +74,18 @@ CapUsage resolveCapUsage(UserCard? owned, CapRule cap, {required DateTime now}) 
   final native = row.consumedNative;
   if (native == null) return CapUsage.unknown(row);
   final end = row.periodEnd;
+  // `period_end` is an India (IST) calendar day; `now` is the device's local
+  // day. Near midnight the two can disagree by up to a day, in either
+  // direction. This stays within H2 (never promise more than is certain):
+  //  - a device AHEAD of IST sees the new day early, so a live period reads
+  //    as ended, becomes "unknown", and is fed to the engine as used up: the
+  //    headroom shown can only go down;
+  //  - a device BEHIND IST still sees the old day, so a just-ended period
+  //    counts as current for a few hours. That is the same staleness any
+  //    cached wallet read has (the row is last-known state, and the new
+  //    period has had at most those few hours of spend); an online read
+  //    after IST midnight already returns the new period's rows. The next
+  //    sync corrects it.
   if (end != null && _day(now).isAfter(end)) {
     // The period this figure belongs to has ended (a cached wallet read
     // after a rollover): this period's usage is not known yet.
