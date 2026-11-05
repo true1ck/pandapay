@@ -29,10 +29,10 @@ Status values: `not started` · `running` · `done (branch ready)` · `merged` �
 | WP | Title | Wave | Branch | Status | Updated | Notes |
 |---|---|---|---|---|---|---|
 | WP0 | Docs, contracts, scenario seed, directory skeleton | 0 | `card-rewards/phase1` | merged | 2026-11-05 | Lead |
-| WP1 | Schema v2, v1/v2 feeds, directory seeding | 1 | `card-rewards/wp1-schema` | done (in review) | 2026-11-06 | 1391 api tests pass; follow-ups D1, D2, D4, D6 |
+| WP1 | Schema v2, v1/v2 feeds, directory seeding | 1 | `card-rewards/wp1-schema` | **merged** | 2026-11-06 | Review approved + 1 fix round (D1, D2, D7, CI step); 1393 api tests; DB test fresh + incremental; seeder loads 164/61 |
 | WP2 | Loader v2 (pure transform), coverage, audit script | 1 | `card-rewards/wp2-loader` | running | 2026-11-05 | |
 | WP3 | Dart engine v2 + tolerant parsing | 1 | `card-rewards/wp3-dart-engine` | running | 2026-11-05 | |
-| WP4 | JS engine v2 + merchant resolver | 1 | `card-rewards/wp4-js-engine` | running | 2026-11-05 | |
+| WP4 | JS engine v2 + merchant resolver | 1 | `card-rewards/wp4-js-engine` | done (in review) | 2026-11-06 | 117/117 engine tests (20 contract + 32 JS scenarios); judgement calls ratified as D9; D10 switch fix pending |
 | WP5 | Merchant and platform directory data | 1 | `card-rewards/wp5-directory` | **merged** | 2026-11-06 | 164 merchants (9 true sub-brand parents, `group` tags per D6), 61 platforms; review + 1 fix round clean; IHCL brands kept under `taj` (ruling in ledger) |
 | WP6a | Worked examples: HDFC, SBI Card | 1 | `card-rewards/wp6a-examples-hdfc-sbi` | running (9/21 cards done) | 2026-11-06 | Found CardPipeline errors (Infinia/Swiggy/Tata Neu caps, SmartBuy split, Tata Neu rounding, Millennia points, IndianOil exclusions) → contract D7/D8 |
 | WP6b | Worked examples: ICICI, Axis, Amex, IDFC, others | 1 | `card-rewards/wp6b-examples-others` | running | 2026-11-05 | |
@@ -67,9 +67,11 @@ Status values: `not started` · `running` · `done (branch ready)` · `merged` �
 | 2026-11-05 | Unknown rail/platform does not satisfy a restriction on v2 cards. | Lead (plan C3.3) |
 | 2026-11-05/06 | Contract changes D1–D8 (identity indexes, v1 cap filter, cap engine version, issuer slugs, coverage.json, parent vs group, rounding modes, loader/data rules) — plan §4 C8. | Lead |
 | 2026-11-06 | IHCL hotel brands stay under `taj` (taj = IHCL). | Lead (ledger ruling) |
+| 2026-11-06 | D10: cards switch to the v2 engine only when re-imported by the v2 loader (DB defaults alone never switch a card), so existing cards keep today's behaviour until re-import. | Lead |
 
 ## Changelog
 
+- **2026-11-06:** WP1 merged (schema v2, feeds, seeder; backward-compatibility test now in CI).
 - **2026-11-06:** WP5 merged into `card-rewards/phase1` after one fix round.
 - **2026-11-06:** All agents paused by the 5-hour usage limit, then resumed. WP1 finished (review pending). WP5 finished, in fix round 1 (Titan parent links, bare "indigo" alias, contract D6). Contract changes D1–D6 recorded in plan §4 C8.
 - **2026-11-05:** Feature spec approved with the card-wide change. Phase 1 plan,
