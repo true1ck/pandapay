@@ -265,3 +265,101 @@ for (const [slug, doc] of probesBySlug) {
     });
   }
 }
+
+// C8 D29c: never lose a cap for installed apps. The single-spend scans cannot
+// see a lost cap, so replay a month of spends through the v1 engine on the
+// v1 feed of each card whose v1-visible caps WP7 changed, before WP7
+// (_pre_wp7_v1.json) and now (the v1 view of the current snapshot).
+const { computeTransactionReward, pickRule, pickCapRule } = require('../src/reward_math');
+
+/** The v1 feed of a v2 card (v_card_catalogue_export): no v2-only or info rows. */
+function v1Feed(card) {
+  const v1Rule = (r) => r != null && (r.min_engine_version ?? 1) === 1 && r.rule_role !== 'info';
+  const byId = new Map(card.reward_rules.map((r) => [r.id, r]));
+  return {
+    card,
+    rules: card.reward_rules.filter(v1Rule),
+    caps: card.cap_rules.filter((k) => (k.min_engine_version ?? 1) === 1 &&
+      (k.reward_rule_id == null || v1Rule(byId.get(k.reward_rule_id))) &&
+      (k.targets || []).every((t) => v1Rule(byId.get(t)))),
+  };
+}
+
+/** Replays `spends` in order with v1 cap consumption; returns the running value after each. */
+function replayV1({ card, rules, caps }, spends) {
+  const consumed = {};
+  let total = 0;
+  return spends.map((ctx) => {
+    const excluded = ctx.categoryId && (card.excluded_categories || []).includes(ctx.categoryId);
+    const rule = excluded ? null : pickRule(rules, ctx);
+    const cap = rule ? pickCapRule(caps, rule, ctx) : null;
+    const r = computeTransactionReward({ card, rewardRules: rules, capRules: caps, capConsumedBefore: cap ? consumed[cap.id] || 0 : 0, ctx });
+    if (r.capRuleId) consumed[r.capRuleId] = (consumed[r.capRuleId] || 0) + r.capConsumedDelta;
+    total += r.valueInr;
+    return total;
+  });
+}
+
+const preWp7 = readJson(path.join(SNAPSHOT_DIR, '_pre_wp7_v1.json'));
+const MONTH_CATEGORIES = ['groceries', 'dining', 'bills', 'insurance', 'travel', 'online', 'other', 'fuel', 'rent', 'wallet', 'education', 'entertainment', 'health', 'government', 'emi', null];
+const MONTH_RAILS = ['unknown', 'swipe', 'online', 'upi_qr', 'emi'];
+const TXNS_PER_KIND = 25; // 25 x Rs10,000 = Rs2.5 lakh per kind: past every monthly cap here
+const monthSpend = (kind) => ({ ...kind, amount: 10000, occurred: '2026-11-10T10:00:00+05:30' });
+/** Index of the first point where `now` has paid more than `before` so far, or -1. */
+const firstOverpay = (before, now) => now.findIndex((v, n) => money2(v) > money2(before[n]));
+
+/** Over-payments of `now` against `before` over a month of `kinds`, alone and interleaved. */
+function monthOverpays(before, now, kinds) {
+  const fail = [];
+  // Each kind of spend alone for a month: a cap that bound before must still bind.
+  for (const kind of kinds) {
+    const spends = Array.from({ length: TXNS_PER_KIND }, () => monthSpend(kind));
+    const a = replayV1(before, spends);
+    const b = replayV1(now, spends);
+    const i = firstOverpay(a, b);
+    if (i >= 0) fail.push(`${JSON.stringify(kind)} after ${i + 1} spends: now ${money2(b[i])} > before ${money2(a[i])}`);
+  }
+  // Every kind interleaved in one month: caps shared across kinds.
+  const mixed = [];
+  for (let n = 0; n < TXNS_PER_KIND; n++) for (const kind of kinds) mixed.push(monthSpend(kind));
+  const a = replayV1(before, mixed);
+  const b = replayV1(now, mixed);
+  const i = firstOverpay(a, b);
+  if (i >= 0) fail.push(`mixed month after ${i + 1} spends: now ${money2(b[i])} > before ${money2(a[i])}`);
+  return fail;
+}
+
+for (const [slug, before] of Object.entries(preWp7.cards)) {
+  test(`v1 month replay: ${slug} never pays more than before WP7 (C8 D29c)`, () => {
+    const snap = snapshotFor(slug);
+    assert.ok(snap, `no snapshot for ${slug}`);
+    const now = v1Feed(snap.card);
+    const old = { card: before, rules: before.reward_rules, caps: before.cap_rules };
+    const merchants = [...new Set([...old.rules, ...now.rules].map((r) => r.merchant_pattern).filter(Boolean)), null];
+    const kinds = [];
+    for (const cat of MONTH_CATEGORIES) for (const merchantName of merchants) for (const rail of MONTH_RAILS) {
+      kinds.push({ categoryId: cat ? `cat-${cat}` : null, merchantName, rail });
+    }
+    const residual = (preWp7.residuals || {})[slug];
+    const atResidual = (k) => residual != null && k.merchantName === residual.merchant_pattern;
+    const fail = monthOverpays(old, now, kinds.filter((k) => !atResidual(k)));
+    assert.deepStrictEqual(fail.slice(0, 5), [], `${slug}: v1 pays more than before WP7 (${fail.length} cases)`);
+    if (residual) {
+      // A reported residual (routed to the lead) must still be real; drop it once fixed.
+      assert.ok(monthOverpays(old, now, kinds.filter(atResidual)).length > 0,
+        `${slug}: the ${residual.merchant_pattern} residual no longer over-pays: remove it from _pre_wp7_v1.json`);
+    }
+  });
+}
+
+test('the v1 month replay notices a lost cap', () => {
+  const before = preWp7.cards['tata-neu-infinity-hdfc-bank'];
+  const old = { card: before, rules: before.reward_rules, caps: before.cap_rules };
+  const lost = { ...old, caps: old.caps.filter((k) => k.source_local_id !== 'grocery_monthly_2000') };
+  const spends = Array.from({ length: TXNS_PER_KIND }, () => monthSpend({ categoryId: 'cat-groceries', merchantName: null, rail: 'swipe' }));
+  const a = replayV1(old, spends);
+  const b = replayV1(lost, spends);
+  assert.strictEqual(money2(a[a.length - 1]), 2000, 'before: 1.5% capped at 2,000 NeuCoins (Rs1 each)');
+  assert.strictEqual(money2(b[b.length - 1]), 3750, 'without the cap: 1.5% of Rs2.5 lakh');
+  assert.strictEqual(firstOverpay(a, b), 13, 'the 14th Rs10,000 spend (2,100 NeuCoins so far) passes the 2,000 cap');
+});

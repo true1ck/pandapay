@@ -686,15 +686,6 @@
       "checked_on": "2026-11-05"
     },
     {
-      "path": "cap_rules[id=grocery_monthly_2000].target_rule_ids",
-      "value": [
-        "tata_partner_bigbasket_wp7"
-      ],
-      "reason": "WP7: The 2,000 NeuCoin grocery cap also counts BigBasket partner NeuCoins (conservative: the T&C states the cap on grocery transactions).",
-      "source_url": "https://www.hdfc.bank.in/content/dam/hdfcbankpws/in/en/personal-banking/discover-products/cards/credit-cards/tata-neu-infinity-credit-card/pdf/tata_neu_infinity_card_tnc.pdf",
-      "checked_on": "2026-11-05"
-    },
-    {
       "path": "reward_rules",
       "op": "append",
       "value": {
@@ -750,6 +741,33 @@
       "path": "reward_rules[id=base_non_tata_non_emi].channel_type",
       "value": "all",
       "reason": "WP7: See conditions.",
+      "source_url": "https://www.hdfc.bank.in/content/dam/hdfcbankpws/in/en/personal-banking/discover-products/cards/credit-cards/tata-neu-infinity-credit-card/pdf/tata_neu_infinity_card_tnc.pdf",
+      "checked_on": "2026-11-05"
+    },
+    {
+      "path": "cap_rules",
+      "op": "append",
+      "value": {
+        "id": "wp7_bigbasket_grocery_share",
+        "category_id": "all_retail",
+        "metric": "total_reward_points",
+        "mcc_target_list": [],
+        "period": "calendar_month",
+        "target_rule_ids": [
+          "tata_partner_bigbasket_wp7"
+        ],
+        "limit_value": 2000,
+        "limit_value_inr": null,
+        "post_limit_behavior": {
+          "action": "zero_accrual",
+          "points_per_block": null
+        },
+        "parent_cap_id": "grocery_monthly_2000",
+        "reset_day": 1,
+        "effective_from": "2024-01-01",
+        "effective_to": null
+      },
+      "reason": "WP7: D29c: BigBasket partner NeuCoins count toward the 2,000 NeuCoin grocery cap (grocery_monthly_2000; WP7's conservative reading, kept by D29b). Modelled as a child of that cap, so grocery_monthly_2000 keeps its single target and stays visible to the v1 feed with its pre-WP7 reach; the child itself is v2-only (its target is).",
       "source_url": "https://www.hdfc.bank.in/content/dam/hdfcbankpws/in/en/personal-banking/discover-products/cards/credit-cards/tata-neu-infinity-credit-card/pdf/tata_neu_infinity_card_tnc.pdf",
       "checked_on": "2026-11-05"
     }

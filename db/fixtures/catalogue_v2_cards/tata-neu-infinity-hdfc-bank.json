@@ -4,7 +4,7 @@
   "inputs": {
     "transform_version": "7",
     "source_record_sha256": "93890edb87a631081cfe42490e8b5b7e0183887b346200ba6b50a4e3d1500cc4",
-    "override_sha256": "04a52034ca5fd74b3019c8d6c63e013ace324cd13ba81208ec4856b06c8b8b38",
+    "override_sha256": "170e7737046be3b96c6c2081f29dadfb0d53f30a9b6fb8786723587dd6b6fa68",
     "directory_sha256": "b1094d54b77e848d22f7a9a64f3ae6d1ef43ca3eb2fc8e40cd43ed1994664694",
     "verified": false
   },
@@ -30,8 +30,8 @@
       "rules_total": 31,
       "rules_modelled": 23,
       "rules_info": 8,
-      "caps_total": 18,
-      "caps_enforced": 18,
+      "caps_total": 19,
+      "caps_enforced": 19,
       "flags": [
         {
           "code": "info_rule",
@@ -489,14 +489,6 @@
           "checked_on": "2026-11-05"
         },
         {
-          "path": "cap_rules[id=grocery_monthly_2000].target_rule_ids",
-          "op": "set",
-          "value_sha256": "6ec6764d4685f226",
-          "reason": "WP7: The 2,000 NeuCoin grocery cap also counts BigBasket partner NeuCoins (conservative: the T&C states the cap on grocery transactions).",
-          "source_url": "https://www.hdfc.bank.in/content/dam/hdfcbankpws/in/en/personal-banking/discover-products/cards/credit-cards/tata-neu-infinity-credit-card/pdf/tata_neu_infinity_card_tnc.pdf",
-          "checked_on": "2026-11-05"
-        },
-        {
           "path": "reward_rules",
           "op": "append",
           "value_sha256": "6e528ae0c87868d2",
@@ -533,6 +525,14 @@
           "op": "set",
           "value_sha256": "5cf7504d9781301d",
           "reason": "WP7: See conditions.",
+          "source_url": "https://www.hdfc.bank.in/content/dam/hdfcbankpws/in/en/personal-banking/discover-products/cards/credit-cards/tata-neu-infinity-credit-card/pdf/tata_neu_infinity_card_tnc.pdf",
+          "checked_on": "2026-11-05"
+        },
+        {
+          "path": "cap_rules",
+          "op": "append",
+          "value_sha256": "b73e232ca7508bef",
+          "reason": "WP7: D29c: BigBasket partner NeuCoins count toward the 2,000 NeuCoin grocery cap (grocery_monthly_2000; WP7's conservative reading, kept by D29b). Modelled as a child of that cap, so grocery_monthly_2000 keeps its single target and stays visible to the v1 feed with its pre-WP7 reach; the child itself is v2-only (its target is).",
           "source_url": "https://www.hdfc.bank.in/content/dam/hdfcbankpws/in/en/personal-banking/discover-products/cards/credit-cards/tata-neu-infinity-credit-card/pdf/tata_neu_infinity_card_tnc.pdf",
           "checked_on": "2026-11-05"
         }
@@ -1904,7 +1904,7 @@
     "cap_rules": [
       {
         "id": "tata-neu-infinity-hdfc-bank:cap:grocery_monthly_2000",
-        "reward_rule_id": null,
+        "reward_rule_id": "tata-neu-infinity-hdfc-bank:rule:grocery_standard_capped",
         "category_id": null,
         "category_slug": null,
         "benefit_kind": null,
@@ -1919,13 +1919,12 @@
         "cap_amount": 2000,
         "scope": "targets",
         "targets": [
-          "tata-neu-infinity-hdfc-bank:rule:grocery_standard_capped",
-          "tata-neu-infinity-hdfc-bank:rule:tata_partner_bigbasket_wp7"
+          "tata-neu-infinity-hdfc-bank:rule:grocery_standard_capped"
         ],
         "parent_cap_id": null,
         "post_cap_behavior": null,
         "anchor": null,
-        "min_engine_version": 2,
+        "min_engine_version": 1,
         "source_local_id": "grocery_monthly_2000"
       },
       {
@@ -2355,6 +2354,31 @@
         "anchor": null,
         "min_engine_version": 2,
         "source_local_id": "wp7_fair_usage_statement_cycle"
+      },
+      {
+        "id": "tata-neu-infinity-hdfc-bank:cap:wp7_bigbasket_grocery_share",
+        "reward_rule_id": "tata-neu-infinity-hdfc-bank:rule:tata_partner_bigbasket_wp7",
+        "category_id": null,
+        "category_slug": null,
+        "benefit_kind": null,
+        "label": "Wp7 bigbasket grocery share",
+        "measure": "reward_value",
+        "period": "calendar_month",
+        "cap_value": 2000,
+        "post_cap_unit": null,
+        "post_cap_rate": 0,
+        "resets_on_day": 1,
+        "cap_kind": "total_points",
+        "cap_amount": 2000,
+        "scope": "targets",
+        "targets": [
+          "tata-neu-infinity-hdfc-bank:rule:tata_partner_bigbasket_wp7"
+        ],
+        "parent_cap_id": "tata-neu-infinity-hdfc-bank:cap:grocery_monthly_2000",
+        "post_cap_behavior": null,
+        "anchor": null,
+        "min_engine_version": 2,
+        "source_local_id": "wp7_bigbasket_grocery_share"
       }
     ],
     "milestone_rules": [],
