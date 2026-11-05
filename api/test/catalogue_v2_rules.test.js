@@ -1096,6 +1096,29 @@ test('D19h an MCC-only reduced rate projects onto one v1-only row per app catego
   assert.ok(rows.some((x) => x.min_engine_version === 2 && x.mcc_include.length === 4 && x.max_engine_version === null));
 });
 
+test('D20b an "exclusion" stating a positive rate is a reduced-rate earn rule ahead of the accelerator', () => {
+  const dir = { ...DIRECTORY, merchants: [...DIRECTORY.merchants, { slug: 'best_price', name: 'Best Price', aliases: ['best price', 'walmart'] }] };
+  const r = transformCardRecordV2(card({
+    accrual: { base_points_per_block: 2, base_cashback_percent: null },
+    rules: [
+      rule({ id: 'dept_5x', category_id: 'grocery', priority: 10, action: { points_per_block: 10 } }),
+      rule({ id: 'wholesale_carve_out', category_id: 'grocery', evaluation_type: 'exclusion', priority: 50, conditions: { merchant: 'Best Price' },
+        action: { points_per_block: 2, multiplier: 1, reason: 'Accelerated 5X Reward Points are not available at the specified wholesale merchants; eligible spend falls to the standard rate.' } }),
+      rule({ id: 'utility_carve_out', category_id: 'utility', evaluation_type: 'exclusion', priority: 60,
+        action: { points_per_block: 1, multiplier: 1, reason: 'Accelerated Reward Points do not accrue on utility bill payments; eligible spend receives the base 1 RP per Rs 100.' } }),
+      rule({ id: 'no_rate', category_id: 'rent', evaluation_type: 'exclusion', action: { points_per_block: 0, reason: 'Accelerated Reward Points do not accrue on rental payments.' } }),
+    ],
+  }), { directory: dir });
+  const [carve] = only(r, 'wholesale_carve_out');
+  assert.deepEqual([carve.rule_role, carve.rate, carve.merchant_slugs.join(), carve.category_slug], ['earn', 2, 'best_price', 'groceries']);
+  assert.ok(carve.priority < 10, 'ahead of the accelerator');
+  assert.ok(carve.flags.includes('exclusion_with_stated_rate'));
+  const util = only(r, 'utility_carve_out');
+  assert.ok(util.every((x) => x.rule_role === 'earn' && x.rate === 1));
+  assert.ok(!util[0].flags.includes('bonus_only_exclusion'));
+  assert.equal(only(r, 'no_rate')[0].rule_role, 'info', 'no stated rate: bonus_only_exclusion as before');
+});
+
 // ── C8 D13: terms that depend on the cardholder; override conventions ───
 
 test('D13a a cap sized by the credit limit keeps its kind with a null amount and is flagged', () => {

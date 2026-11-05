@@ -193,7 +193,12 @@ function transformRule(src, idx, ctx) {
   const unmappedTokens = [];
   const needsDirectory = [];
   const evaluationType = String(src?.evaluation_type || '').toLowerCase();
-  const isExclusion = evaluationType === 'exclusion';
+  // D20b: an "exclusion" whose action states a positive earn rate ("base 1
+  // RP", "earns at the standard rate") is a reduced-rate earning rule on the
+  // excluded scope — a carve-out from an accelerator — not an exclusion.
+  const statedRate = (asNumber(src?.action?.points_per_block) ?? 0) > 0 || (asNumber(src?.action?.cashback_percent) ?? 0) > 0;
+  const isCarveOut = evaluationType === 'exclusion' && statedRate;
+  const isExclusion = evaluationType === 'exclusion' && !isCarveOut;
   const isAccelerator = evaluationType === 'accelerator';
   const rawToken = isNA(src?.category_id) ? '' : String(src.category_id);
 
@@ -599,10 +604,11 @@ function transformRule(src, idx, ctx) {
   // rule's other restrictions. Never exception lists.
   // D18e: "non-LIC insurance" with excluded_merchants ["LIC"] — a brand
   // listed against a "non-/other than/except" exclusion is its exception.
-  const negatedScope = isExclusion && /(^|[_\s-])non[_\s-]|other than|except|excluding/i.test(`${rawToken} ${src?.action?.reason || ''} ${src?.id || ''}`);
-  const listedCats = isExclusion ? cond.excludedCategorySlugs : [];
-  const listedMerchants = isExclusion && !negatedScope ? cond.listedExcludedMerchants : [];
-  const listedPlatforms = isExclusion && !negatedScope ? cond.listedExcludedPlatforms : [];
+  const scopeLists = isExclusion || isCarveOut;
+  const negatedScope = scopeLists && /(^|[_\s-])non[_\s-]|other than|except|excluding/i.test(`${rawToken} ${src?.action?.reason || ''} ${src?.id || ''}`);
+  const listedCats = scopeLists ? cond.excludedCategorySlugs : [];
+  const listedMerchants = scopeLists && !negatedScope ? cond.listedExcludedMerchants : [];
+  const listedPlatforms = scopeLists && !negatedScope ? cond.listedExcludedPlatforms : [];
   if (listedCats.length || listedMerchants.length || listedPlatforms.length) {
     const expanded = [];
     for (const p of parts) {
@@ -622,9 +628,9 @@ function transformRule(src, idx, ctx) {
     flags.push('exclusion_list_expanded');
     if (cond.unmappedExcluded.length) flags.push('partial_category_list');
   }
-  const ruleExcludedCategories = isExclusion ? [] : cond.excludedCategorySlugs;
-  const exceptMerchants = uniq([...cond.exceptMerchantSlugs, ...(isExclusion && !negatedScope ? [] : cond.listedExcludedMerchants)]).sort();
-  const exceptPlatforms = uniq([...cond.exceptPlatformSlugs, ...(isExclusion && !negatedScope ? [] : cond.listedExcludedPlatforms)]).sort();
+  const ruleExcludedCategories = scopeLists ? [] : cond.excludedCategorySlugs;
+  const exceptMerchants = uniq([...cond.exceptMerchantSlugs, ...(scopeLists && !negatedScope ? [] : cond.listedExcludedMerchants)]).sort();
+  const exceptPlatforms = uniq([...cond.exceptPlatformSlugs, ...(scopeLists && !negatedScope ? [] : cond.listedExcludedPlatforms)]).sort();
 
   // D18e / D19a: an exclusion that only takes away an accelerated/bonus rate
   // (or only counts against a milestone) is not a full exclusion. Only when
@@ -738,7 +744,12 @@ function transformRule(src, idx, ctx) {
   if (!isNA(src?.effective_from) && !effectiveFrom) flags.push('unreadable_effective_date');
 
   const isInfo = info.length > 0;
-  const priority = Number.isInteger(src?.priority) ? src.priority : 100;
+  let priority = Number.isInteger(src?.priority) ? src.priority : 100;
+  if (isCarveOut) {
+    // Ahead of the accelerator it carves out of.
+    if (ctx.minAcceleratorPriority != null) priority = Math.max(0, Math.min(priority, ctx.minAcceleratorPriority - 1));
+    flags.push('exclusion_with_stated_rate');
+  }
   const sourceId = isNA(src?.id) ? null : String(src.id);
   const capRefs = uniq([src?.action?.cap_reference, ...cond.capRefs].filter((v) => !isNA(v)).map(String));
   const displayNote = typeof src?.action?.reason === 'string' && src.action.reason.trim()
@@ -758,6 +769,7 @@ function transformRule(src, idx, ctx) {
       // An exclusion with nothing to match on would exclude every spend.
       rowInfo.push('unrestricted_exclusion');
     }
+    if (isCarveOut && !restricted) rowInfo.push('unrestricted_carve_out'); // nothing to scope the stated rate to
     // D18h: "PayTM spends except via PayTM" can never apply.
     const selfContradictory = platformSlugs.some((x) => exceptPlatforms.includes(x)) ||
       merchantSlugs.some((x) => exceptMerchants.includes(x));
@@ -1012,7 +1024,11 @@ function mergeMccAlternatives(parts) {
  * All of a record's reward rules.
  * @returns {{rows, perSource: object[]}}
  */
-function transformRewardRules(record, ctx) {
+function transformRewardRules(record, ctxIn) {
+  const accPriorities = (record?.reward_rules || [])
+    .filter((r) => String(r?.evaluation_type) === 'accelerator' && Number.isInteger(r?.priority))
+    .map((r) => r.priority);
+  const ctx = { ...ctxIn, minAcceleratorPriority: accPriorities.length ? Math.min(...accPriorities) : null };
   const rows = [];
   const perSource = [];
   const usedKeys = new Set();
