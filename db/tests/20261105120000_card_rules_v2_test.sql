@@ -245,6 +245,32 @@ begin
     raise exception 'except list default must be empty';
   end if;
 
+  -- D18(a): v1-only rows (min 1, max 1)
+  insert into reward_rules (card_product_id, unit, rate, notes, max_engine_version)
+    values (v_card, 'points_per_100', 9, 'v1 only', 1) returning id into v_dr;
+  select to_jsonb(x) into v1 from v_card_catalogue_export x where x.id = v_card;
+  select to_jsonb(x) into v2 from v_card_catalogue_export_v2 x where x.id = v_card;
+  if not exists (select 1 from jsonb_array_elements(v1->'reward_rules') r where (r->>'id')::uuid = v_dr) then
+    raise exception 'v1-only rule must appear in v1';
+  end if;
+  if (select r->>'max_engine_version' from jsonb_array_elements(v2->'reward_rules') r
+       where (r->>'id')::uuid = v_dr) <> '1' then
+    raise exception 'v2 must return max_engine_version 1 for the v1-only rule';
+  end if;
+  begin
+    insert into reward_rules (card_product_id, unit, rate, min_engine_version, max_engine_version)
+      values (v_card, 'points_per_100', 1, 2, 1);
+    raise exception 'max < min must be rejected';
+  exception when check_violation then null; end;
+  begin
+    insert into reward_rules (card_product_id, unit, rate, max_engine_version)
+      values (v_card, 'points_per_100', 1, 3);
+    raise exception 'max > 2 must be rejected';
+  exception when check_violation then null; end;
+  insert into reward_rules (card_product_id, unit, rate, notes, max_engine_version)
+    values (v_card, 'points_per_100', 9, 'v1 only', null);
+  delete from reward_rules where id = v_dr;
+
   -- D7: extra rounding modes
   update card_products set accrual_rounding = 'points_half_up' where id = v_card;
   update card_products set accrual_rounding = 'points_floor' where id = v_card;
