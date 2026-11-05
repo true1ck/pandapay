@@ -155,16 +155,27 @@ function statesUpToRate(reason) {
   return false;
 }
 
-// True when the rule earns more per rupee than the card's base: in the card's
-// own currency (works without a ₹ point value), else by ₹ value.
-function aboveBase(ur, card) {
-  if (ur.rate === null || ur.unit === null) return false;
-  if (ur.currency && ur.currency === card.baseCurrency && card.baseEarnPerRupee != null) {
+// The rule against the card's base: 'above', 'not_above', or null when it
+// can't be decided (no rate, no base, or different currencies with no ₹
+// value per point). In the card's own currency when it can be (works
+// without a ₹ point value), else by ₹ value.
+function compareToBase(ur, card) {
+  if (ur.rate === null || ur.rate === undefined || ur.unit === null) return null;
+  if (ur.currency && ur.currency === card.baseCurrency) {
+    if (card.baseEarnPerRupee == null) return null;
     const e = valuePerRupee(ur.unit, ur.rate, 1, ur.blockInr);
-    return e !== null && e > card.baseEarnPerRupee + 1e-12;
+    if (e === null) return null;
+    return e > card.baseEarnPerRupee + 1e-12 ? 'above' : 'not_above';
   }
+  const pointsInvolved = ur.currency === 'points' || card.baseCurrency === 'points';
+  if (pointsInvolved && !(card.pointValueInr > 0)) return null;
   const v = valuePerRupee(ur.unit, ur.rate, card.pointValueInr, ur.blockInr);
-  return v !== null && card.baseValue != null && v > card.baseValue + 1e-12;
+  if (v === null || card.baseValue == null) return null;
+  return v > card.baseValue + 1e-12 ? 'above' : 'not_above';
+}
+
+function aboveBase(ur, card) {
+  return compareToBase(ur, card) === 'above';
 }
 
 // A merchant and a platform that share a name or alias are one brand in both
@@ -1022,7 +1033,8 @@ function transformRule(src, idx, ctx) {
     if (ur.unit === null) v2Reasons.push('no_unit');
     // D24b: v1 matches an unknown rail, and most SMS spends have none, so a
     // UPI-rail rule above base would pay the UPI rate on almost everything.
-    if (['earn', 'base'].includes(role) && p.rail === 'upi_qr' && aboveBase(ur, ctx.card)) v2Reasons.push('upi_rail_above_base');
+    // D27c: when it can't be decided, it counts as above base.
+    if (['earn', 'base'].includes(role) && p.rail === 'upi_qr' && compareToBase(ur, ctx.card) !== 'not_above') v2Reasons.push('upi_rail_above_base');
     const minEngineVersion = v2Reasons.length ? 2 : 1;
 
     return {

@@ -1189,6 +1189,12 @@ test('D24b a UPI-rail earn rule above base is v2-only; at base, or on the online
   assert.deepEqual(v('upi_base'), [['upi_qr', 1]]);
   assert.deepEqual(v('upi_reduced'), [['upi_qr', 1]]);
   assert.deepEqual(only(r, 'online_5x').map((x) => x.min_engine_version), [1]);
+  // D27c: when "above base" can't be decided (points on a 1% cashback card with no ₹ point value), v2-only
+  const nv = run(card({ rules: [
+    rule({ id: 'upi_pts', category_id: 'upi', action: { points_per_block: 5, cashback_percent: null } }),
+  ], cp: { point_value_inr_baseline: null } }));
+  assert.deepEqual(only(nv, 'upi_pts').map((x) => [x.rail, x.unit, x.min_engine_version]), [['upi_qr', 'points_per_100', 2]]);
+  assert.ok(only(nv, 'upi_pts')[0].v2_reasons.includes('upi_rail_above_base'));
 });
 
 test('an EMI exclusion on the EMI category and the EMI rail excludes either (alternatives, not AND)', () => {
