@@ -13,8 +13,8 @@
 // This module never decides the rule's role; it reports what it found.
 
 const { asNumber, isNA, normalizeMccList, normalizeText, uniq } = require('./util');
-const { resolveMerchantText, resolvePlatformText, splitNames } = require('./directory');
-const { mapCategorySlug, resolveCategoryToken } = require('./category_tokens');
+const { findContainedNames, resolveMerchantText, resolvePlatformText, splitNames } = require('./directory');
+const { mapCategorySlugs, resolveCategoryToken } = require('./category_tokens');
 
 const MIN_TXN_KEYS = [
   'minimum_transaction_inr', 'minimum_transaction_amount_inr', 'minimum_transaction_value_inr',
@@ -229,6 +229,8 @@ function emptyMapping() {
     mccExclude: [],
     exceptMerchantSlugs: [],
     exceptPlatformSlugs: [],
+    listedExcludedMerchants: [],
+    listedExcludedPlatforms: [],
     mentions: [],
     merchantSlugs: [],
     platformSlugs: [],
@@ -335,7 +337,20 @@ function mapNameValue(m, key, value, index, { allowRail }) {
     // style keys and short values — a merchant list that happens to say
     // "online and retail Landmark stores: ..." is not a wildcard.
     if (allowRail && n.split(' ').length <= 6 && isWildcard(raw)) continue;
-    if (/\b(mid|tid|mids|tids|merchant ids?|terminal ids?)\b/.test(n) && !resolveName(raw, index)) continue; // how merchants are identified, not which
+    if (/\b(mid|tid|mids|tids|merchant ids?|terminal ids?)\b/.test(n) && !resolveName(raw, index)) {
+      // D17(c): "identified by MID/TID" says how merchants are identified.
+      // Skipped only when it names no brand; a named brand is the restriction.
+      const named = findContainedNames(raw, index);
+      if (named.merchants.length || named.platforms.length) {
+        m.merchantSlugs.push(...named.merchants);
+        m.platformSlugs.push(...named.platforms);
+        m.flags.push('brand_from_identification_text');
+      } else if (/[A-Z]{3,}|[a-z][A-Z]/.test(raw.replace(/\b(MIDs?|TIDs?|MID\/TID|ID|IDs)\b/g, ''))) {
+        // An unknown brand-looking word: can't tell which merchants qualify.
+        m.merchantProse.push({ key, text: raw, partial: false });
+      }
+      continue;
+    }
     const push = (hit) => {
       if (hit.merchant) m.merchantSlugs.push(hit.merchant);
       if (hit.platform) m.platformSlugs.push(hit.platform);
@@ -351,9 +366,19 @@ function mapNameValue(m, key, value, index, { allowRail }) {
     if (pieces.length > 1) {
       const hits = pieces.map((piece) => resolveName(piece, index));
       const resolved = hits.filter(Boolean);
+      const leftover = pieces.filter((piece, i) => !hits[i] && !(allowRail && (RAIL_WORDS[normalizeText(piece)] || isWildcard(piece))));
+      if (allowRail) {
+        for (const piece of pieces) if (RAIL_WORDS[normalizeText(piece)]) m.rails.push({ ...RAIL_WORDS[normalizeText(piece)], key });
+      }
       resolved.forEach(push);
-      if (resolved.length === pieces.length) continue;
+      if (!leftover.length) continue;
       if (resolved.length > 0) {
+        if (allowRail) {
+          // D17e: on a channel/app key the rest of the phrase ("RuPay credit
+          // card on UPI") is a further condition, not another option.
+          block(m, key, raw);
+          continue;
+        }
         m.merchantProse.push({ key, text: raw, partial: true });
         continue;
       }
@@ -370,19 +395,22 @@ function mapCategoryListValue(m, key, value) {
   m.categoryListKey = key;
 }
 
+// Source exclusion lists. On an earning rule they narrow it (excluded
+// categories; excluded merchants/apps become except lists, D16). On an
+// exclusion rule they are the exclusion's own scope (D17d) — the caller
+// decides, so they are kept apart from "not via X" exceptions.
 function mapExcludedCategories(m, value, index) {
   const list = Array.isArray(value) ? value : typeof value === 'string' ? splitNames(value) : [];
   for (const item of list) {
     if (typeof item !== 'string') continue;
-    const slug = mapCategorySlug(item);
-    if (slug) {
-      m.excludedCategorySlugs.push(slug);
+    const slugs = mapCategorySlugs(item);
+    if (slugs.length) {
+      m.excludedCategorySlugs.push(...slugs);
       continue;
     }
-    // An excluded merchant or app ("Paytm Mall") is an exception list (D16).
     const hit = index ? resolveName(item, index) : null;
-    if (hit?.merchant) m.exceptMerchantSlugs.push(hit.merchant);
-    else if (hit?.platform) m.exceptPlatformSlugs.push(hit.platform);
+    if (hit?.merchant) m.listedExcludedMerchants.push(hit.merchant);
+    else if (hit?.platform) m.listedExcludedPlatforms.push(hit.platform);
     else m.unmappedExcluded.push(item);
   }
 }
@@ -545,6 +573,17 @@ function mapOne(m, key, value, ctx) {
     return;
   }
   if (/^non_/.test(lower) && value === true && (m.exceptMerchantSlugs.length || m.exceptPlatformSlugs.length)) return;
+  // "payzapp_exception": "PayZapp transactions can qualify ..." names the
+  // exception in prose: the brands it names are the except list.
+  if (/exceptions?$|^exception/.test(lower) && typeof value === 'string') {
+    const named = findContainedNames(value, ctx.index);
+    if (named.merchants.length || named.platforms.length) {
+      m.exceptMerchantSlugs.push(...named.merchants);
+      m.exceptPlatformSlugs.push(...named.platforms);
+      m.flags.push('exception_from_prose');
+      return;
+    }
+  }
   // A key whose value just names a merchant ("location": "HPCL petrol pump"):
   // the caller checks it restates the rule's own merchant.
   if (typeof value === 'string') {
@@ -613,6 +652,8 @@ function mapRuleConditions(rule, ctx) {
   m.platformSlugs = uniq(m.platformSlugs).sort();
   m.excludedCategorySlugs = uniq(m.excludedCategorySlugs).sort();
   m.exceptMerchantSlugs = uniq(m.exceptMerchantSlugs).sort();
+  m.listedExcludedMerchants = uniq(m.listedExcludedMerchants).sort();
+  m.listedExcludedPlatforms = uniq(m.listedExcludedPlatforms).sort();
   m.exceptPlatformSlugs = uniq(m.exceptPlatformSlugs).sort();
   m.capRefs = uniq(m.capRefs);
   return m;

@@ -114,9 +114,9 @@ function resolvePlatformText(text, index) {
   if (!index || typeof text !== 'string') return null;
   const exact = lookup(index.platformKeys, text);
   if (exact) return exact;
-  // A portal named inside a longer phrase ("BOBCARD SmartDeal logged-in
-  // mobile app or portal"). Platforms only: a platform restriction narrows a
-  // rule; a merchant found inside prose would not be safe the same way.
+  // A portal named inside a longer phrase ("HDFC SmartBuy portal"):
+  // accepted only when nothing else in the phrase could restrict the rule
+  // (D17e) — "PhonePe app / RuPay credit card on UPI" is not just PhonePe.
   const n = ` ${normalizeText(text)} `;
   let best = null;
   for (const [key, slugs] of index.platformKeys) {
@@ -124,7 +124,40 @@ function resolvePlatformText(text, index) {
     if (!n.includes(` ${key} `)) continue;
     if (!best || key.length > best.key.length) best = { key, slug: [...slugs][0] };
   }
-  return best ? best.slug : null;
+  if (!best) return null;
+  return residualWords(n.replace(` ${best.key} `, ' ')).length ? null : best.slug;
+}
+
+const FILLER = new Set([
+  'a', 'an', 'the', 'of', 'for', 'by', 'to', 'with', 'only', 'any', 'all', 'its', 'their', 'via',
+  'through', 'using', 'on', 'at', 'in', 'and', 'or', 'logged', 'login', 'made', 'done', 'paid',
+  'booked', 'bookings', 'booking', 'purchases', 'purchase', 'orders', 'order',
+  // Issuer names around a portal's name ("American Express Reward Multiplier").
+  'american', 'express', 'amex', 'hdfc', 'icici', 'axis', 'sbi', 'idfc', 'first', 'kotak', 'hsbc',
+  'yes', 'rbl', 'indusind', 'bobcard', 'bank', 'card', 'cards', 'credit', 'standard', 'chartered',
+]);
+
+// Words left in a phrase once generic and filler words are removed.
+function residualWords(normalized) {
+  return normalizeText(normalized).split(' ').filter((w) => w && !GENERIC_WORDS.has(w) && !FILLER.has(w));
+}
+
+// D17(c): brands named anywhere in a phrase ("select IndianOil fuel stations
+// identified by IOCL-provided MID/TID" -> indianoil). Containment, longest
+// alias first; aliases shorter than 4 characters are ignored.
+function findContainedNames(text, index) {
+  const n = ` ${normalizeText(text)} `;
+  const merchants = new Set();
+  const platforms = new Set();
+  const scan = (keys, out) => {
+    for (const [key, slugs] of keys) {
+      if (key.length < 4 || slugs.size !== 1 || GENERIC_WORDS.has(key)) continue;
+      if (n.includes(` ${key} `)) out.add([...slugs][0]);
+    }
+  };
+  scan(index.merchantKeys, merchants);
+  scan(index.platformKeys, platforms);
+  return { merchants: [...merchants].sort(), platforms: [...platforms].sort() };
 }
 
 // Splits a source string naming several merchants ("Amazon, Flipkart and
@@ -144,6 +177,8 @@ function groupMembers(group, index) {
 
 module.exports = {
   DEFAULT_DIRECTORY_PATH,
+  findContainedNames,
+  residualWords,
   buildDirectoryIndex,
   groupMembers,
   loadDirectory,

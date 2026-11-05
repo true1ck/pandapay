@@ -18,6 +18,7 @@ const { asNumber, isNA, normalizeText, uniq } = require('./util');
 const {
   APP_CATEGORIES,
   ISSUER_PORTAL,
+  NARROW_TOKEN_MCC,
   resolveCategoryToken,
 } = require('./category_tokens');
 const { isWildcard, mapRuleConditions, rewardRuleHasUnsupportedTrigger } = require('./conditions');
@@ -222,8 +223,7 @@ function transformRule(src, idx, ctx) {
     parts = token.parts.map((p) => ({ ...p }));
     if (token.kind === 'composite' && token.unmapped.length) {
       unmappedTokens.push(rawToken);
-      if (isExclusion) info.push('composite_partially_mapped');
-      else flags.push('composite_partial');
+      flags.push('composite_partial');
     }
     if (token.kind === 'merchant') {
       for (const p of parts) for (const s of p.merchantSlugs || []) if (!ctx.index.merchants.has(s)) needsDirectory.push(s);
@@ -246,25 +246,39 @@ function transformRule(src, idx, ctx) {
     }
     if (t2.kind === 'category') {
       const slug = t2.parts[0].categorySlug;
+      const narrower = t2.parts[0].broad;
       if (tokenHasCategory) {
-        if (!parts.every((p) => p.categorySlug === slug)) {
-          // A different label for the same thing is common ("supermarket" on
-          // a grocery rule); a genuinely different category is a conflict.
-          if (!parts.some((p) => p.categorySlug === slug)) info.push(`category_conflict:${key}`);
+        if (!parts.some((p) => p.categorySlug === slug)) {
+          // A genuinely different category is a conflict.
+          info.push(`category_conflict:${key}`);
+        } else if (narrower) {
+          // "hotels" on a travel rule narrows it (D17f): the narrow token
+          // decides the MCCs below (D17a), never the whole of travel.
+          parts = parts.map((p) => (p.categorySlug === slug
+            ? { ...p, broad: true, narrowTokens: [t2.parts[0].token] }
+            : p));
         }
+        // Same category, not narrower ("supermarket" on a grocery rule): a restatement.
       } else if (!tokenHasBrand) {
-        parts = parts.map((p) => ({ ...p, categorySlug: slug, broad: t2.parts[0].broad }));
-        if (t2.flags.includes('broad_category')) flags.push('broad_category');
+        parts = parts.map((p) => ({ ...p, categorySlug: slug, broad: narrower, narrowTokens: narrower ? [t2.parts[0].token] : [] }));
       }
       continue;
     }
-    // Merchant/platform/unknown label. Harmless when the rule is already
-    // restricted to a category or brand; otherwise it narrows in a way we
-    // can't express.
+    // Merchant/platform/unknown label.
     if (!tokenHasCategory && !tokenHasBrand) {
       if (['merchant', 'platform'].includes(t2.kind)) {
         parts = parts.map((p) => andPart(p, t2.parts[0]) || p);
       } else if (!cond.mccInclude.length) {
+        info.push(`unmapped_condition_category:${key}`);
+        unmappedTokens.push(String(value));
+      }
+    } else if (tokenHasCategory && !['merchant', 'platform'].includes(t2.kind) && !cond.mccInclude.length) {
+      // D17f: an unknown sub-category on a category rule ("flights" vs
+      // "hotels" on two travel rules at different rates) narrows it in a way
+      // we can't express. An earning rule becomes info; an exclusion may
+      // ignore it (it then excludes more).
+      if (isExclusion) flags.push('exclusion_scope_broadened');
+      else {
         info.push(`unmapped_condition_category:${key}`);
         unmappedTokens.push(String(value));
       }
@@ -296,7 +310,7 @@ function transformRule(src, idx, ctx) {
       if (tokenHasCategory) {
         if (!parts.some((p) => p.categorySlug === slug)) info.push('channel_category_conflict');
       } else if (!tokenHasBrand) {
-        parts = parts.map((p) => ({ ...p, categorySlug: slug }));
+        parts = parts.map((p) => ({ ...p, categorySlug: slug, broad: ct.parts[0].broad, narrowTokens: ct.parts[0].narrowTokens || [] }));
       }
     } else if (ct.kind === 'composite') {
       if (!tokenHasCategory && !tokenHasBrand) info.push('channel_type');
@@ -327,8 +341,7 @@ function transformRule(src, idx, ctx) {
     } else {
       if (listUnmapped.length) {
         unmappedTokens.push(...listUnmapped);
-        if (isExclusion) info.push('category_list_partially_mapped');
-        else flags.push('partial_category_list');
+        flags.push('partial_category_list');
       }
       const crossed = [];
       for (const p of parts) {
@@ -363,8 +376,7 @@ function transformRule(src, idx, ctx) {
     if (!alts.length) info.push('unmappable_alternatives');
     else {
       if (unmappable) {
-        if (isExclusion) info.push('alternatives_partially_mapped');
-        else flags.push('partial_alternatives');
+        flags.push('partial_alternatives');
       }
       const crossed = [];
       for (const p of parts) for (const a of alts) {
@@ -406,8 +418,7 @@ function transformRule(src, idx, ctx) {
     const anyMerchant = parts.some((p) => p.merchantSlugs?.length);
     const text = String(prose.text);
     if (prose.partial) {
-      if (isExclusion) info.push(`partial_merchant_list:${prose.key}`);
-      else flags.push('partial_merchant_list');
+      flags.push('partial_merchant_list');
       continue;
     }
     if (anyPlatform && /(participating|partner|select|eligible|brands|merchants|\d+\s*\+|leading|catalogue)/i.test(text)) {
@@ -545,20 +556,83 @@ function transformRule(src, idx, ctx) {
     if (p.categorySlug && !APP_CATEGORIES.has(p.categorySlug)) info.push(`invalid_category:${p.categorySlug}`);
   }
 
+  // 10b. D17(d): on an exclusion, the source's excluded categories /
+  // merchants are the exclusion's own scope ("PayZapp: no accelerator on
+  // rent, education, ..."): one exclusion row per listed item, within the
+  // rule's other restrictions. Never exception lists.
+  const listedCats = isExclusion ? cond.excludedCategorySlugs : [];
+  const listedMerchants = isExclusion ? cond.listedExcludedMerchants : [];
+  const listedPlatforms = isExclusion ? cond.listedExcludedPlatforms : [];
+  if (listedCats.length || listedMerchants.length || listedPlatforms.length) {
+    const expanded = [];
+    for (const p of parts) {
+      const extras = [
+        ...listedCats.map((c) => ({ categorySlug: c })),
+        ...listedMerchants.map((m) => ({ merchantSlugs: [m] })),
+        ...listedPlatforms.map((pl) => ({ platformSlugs: [pl] })),
+      ];
+      if (p.categorySlug) expanded.push(p); // its own category stays excluded too
+      const base = p.categorySlug ? { ...p, categorySlug: null, broad: false, narrowTokens: [], mccInclude: [] } : p;
+      for (const extra of extras) {
+        const merged = andPart(base, extra);
+        if (merged) expanded.push(merged);
+      }
+    }
+    parts = dedupeParts(expanded);
+    flags.push('exclusion_list_expanded');
+    if (cond.unmappedExcluded.length) flags.push('partial_category_list');
+  }
+  const ruleExcludedCategories = isExclusion ? [] : cond.excludedCategorySlugs;
+  const exceptMerchants = uniq([...cond.exceptMerchantSlugs, ...(isExclusion ? [] : cond.listedExcludedMerchants)]).sort();
+  const exceptPlatforms = uniq([...cond.exceptPlatformSlugs, ...(isExclusion ? [] : cond.listedExcludedPlatforms)]).sort();
+
+  // 10c. D17(a): a narrow token on an earning rule ("pharmacy", "hotels")
+  // never widens to its app category. It is restricted to the token's MCCs
+  // and the category is dropped (so an unknown MCC can't stand in for it);
+  // with no MCC mapping the part is left out, and with no part left the
+  // rule is info. An exclusion keeps the broad category (it excludes more).
+  if (!isExclusion) {
+    const kept = [];
+    let dropped = 0;
+    for (const p of parts) {
+      if (!p.broad || !p.categorySlug) {
+        kept.push(p);
+        continue;
+      }
+      if (p.mccInclude?.length) {
+        // The source's own MCC list already pins it.
+        kept.push({ ...p, categorySlug: null, broad: false, narrowedByMcc: true });
+        continue;
+      }
+      const tokens = p.narrowTokens?.length ? p.narrowTokens : [p.token].filter(Boolean);
+      const mccs = tokens.map((tk) => NARROW_TOKEN_MCC[tk]);
+      if (tokens.length && mccs.every(Boolean)) {
+        kept.push({ ...p, categorySlug: null, broad: false, mccInclude: uniq(mccs.flat()).sort(), narrowedByMcc: true });
+      } else {
+        dropped += 1;
+      }
+    }
+    if (kept.some((p) => p.narrowedByMcc)) flags.push('narrow_token_to_mcc');
+    if (dropped && kept.length) flags.push('composite_partial');
+    if (dropped && !kept.length) info.push('narrow_category_without_mcc');
+    if (kept.length) parts = dedupeParts(kept);
+  }
+
   // 11. Exclusions with a category AND an MCC list: one row per restriction,
   // because an exclusion applies to the union (the category, or any listed
-  // MCC). The category row stays v1-visible; the MCC row is v2-only.
+  // MCC). The category row stays v1-visible — also for a narrow token
+  // (D17b: dropping it would let v1 pay there); the MCC row is v2-only.
   if (isExclusion && !info.length) {
     const split = [];
     for (const p of parts) {
       if (p.categorySlug && p.mccInclude?.length && !p.merchantSlugs?.length && !p.platformSlugs?.length) {
-        if (!p.broad) split.push({ ...p, mccInclude: [] });
+        split.push({ ...p, mccInclude: [] });
         split.push({ ...p, categorySlug: null, broad: false });
       } else {
         split.push(p);
       }
     }
-    parts = split;
+    parts = dedupeParts(split);
   }
 
   const effectiveFrom = !isNA(src?.effective_from) && DATE.test(String(src.effective_from)) ? String(src.effective_from) : null;
@@ -579,7 +653,7 @@ function transformRule(src, idx, ctx) {
     const mccInclude = uniq(p.mccInclude || []).sort();
     const mccExclude = uniq(p.mccExclude || []).sort();
     const restricted = hasRestriction({ ...p, minTxn, maxTxn }) ||
-      cond.exceptMerchantSlugs.length > 0 || cond.exceptPlatformSlugs.length > 0;
+      exceptMerchants.length > 0 || exceptPlatforms.length > 0;
     const rowInfo = [...info];
     if (isExclusion && !isInfo && !p.categorySlug && !merchantSlugs.length && !platformSlugs.length &&
         !mccInclude.length && !p.rail && maxTxn === null) {
@@ -612,7 +686,7 @@ function transformRule(src, idx, ctx) {
     // D16c: an earn rule with exceptions is v2-only; an exclusion with
     // exceptions stays v1 (v1 ignores them and excludes more, which is safe);
     // an exclusion bounded by max_txn_inr would exclude everything in v1.
-    if ((cond.exceptMerchantSlugs.length || cond.exceptPlatformSlugs.length) && role !== 'exclusion') v2Reasons.push('except_lists');
+    if ((exceptMerchants.length || exceptPlatforms.length) && role !== 'exclusion') v2Reasons.push('except_lists');
     if (role === 'exclusion' && maxTxn !== null) v2Reasons.push('exclusion_max_txn');
     if (role === 'exclusion' && !p.categorySlug && !merchantSlugs.length && !platformSlugs.length && !mccInclude.length && p.rail) {
       // v1 treats an unknown rail as a match, so a rail-only exclusion would
@@ -638,14 +712,14 @@ function transformRule(src, idx, ctx) {
       priority,
       effective_from: effectiveFrom,
       effective_to: effectiveTo,
-      excluded_category_slugs: cond.excludedCategorySlugs,
+      excluded_category_slugs: ruleExcludedCategories,
       rule_role: role,
       merchant_slugs: merchantSlugs,
       platform_slugs: platformSlugs,
       mcc_include: mccInclude,
       mcc_exclude: mccExclude,
-      except_merchant_slugs: cond.exceptMerchantSlugs,
-      except_platform_slugs: cond.exceptPlatformSlugs,
+      except_merchant_slugs: exceptMerchants,
+      except_platform_slugs: exceptPlatforms,
       block_inr: ur.blockInr,
       min_engine_version: minEngineVersion,
       display_note: displayNote,
@@ -673,13 +747,25 @@ function transformRule(src, idx, ctx) {
 }
 
 function dedupeParts(parts) {
-  const seen = new Set();
+  const seen = new Map();
   const out = [];
   for (const p of parts) {
     const sig = JSON.stringify([p.categorySlug, p.merchantSlugs, p.platformSlugs, p.mccInclude, p.mccExclude, p.rail]);
-    if (seen.has(sig)) continue;
-    seen.add(sig);
-    out.push(p);
+    const prior = seen.get(sig);
+    if (prior) {
+      // Same row twice: it is narrow only if every source of it was narrow
+      // ("recharges" + "utilities" on bills is all of bills).
+      if (!p.broad) {
+        prior.broad = false;
+        prior.narrowTokens = [];
+      } else if (prior.broad) {
+        prior.narrowTokens = uniq([...(prior.narrowTokens || []), ...(p.narrowTokens || [])]);
+      }
+      continue;
+    }
+    const copy = { ...p };
+    seen.set(sig, copy);
+    out.push(copy);
   }
   return out;
 }

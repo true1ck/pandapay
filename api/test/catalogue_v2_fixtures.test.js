@@ -194,7 +194,8 @@ test('tiered-lounge card (Axis Atlas): tier unlock rows; travel alternatives bec
   );
   const [travel] = rows(t, 'travel-accelerated');
   assert.equal(travel.rule_role, 'earn');
-  assert.equal(travel.category_slug, 'travel');
+  assert.equal(travel.category_slug, null, 'narrow token: MCC-only, never all of travel (D17a)');
+  assert.equal(travel.min_engine_version, 2);
   assert.ok(travel.mcc_include.includes('4511') && travel.mcc_include.includes('7011') && travel.mcc_include.includes('3000'));
   assert.equal(rows(t, 'travel-above-monthly-cap')[0].rule_role, 'info', 'cumulative-spend trigger');
   const spendCap = cap(t, 'travel-accelerated-monthly-spend-cap');

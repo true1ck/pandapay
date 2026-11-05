@@ -185,7 +185,8 @@ test('C7.3.5 composite tokens: one rule per mapped part, same rate, cap targets 
     caps: [{ id: 'dm-cap', category_id: 'dining_movies', metric: 'total_reward_points', limit_value: 500, period: 'calendar_month', post_limit_behavior: { action: 'zero_accrual' } }],
   }));
   const rows = only(r, 'dm');
-  assert.deepEqual(rows.map((x) => x.category_slug).sort(), ['dining', 'entertainment']);
+  // "movies" is narrower than entertainment: its part is pinned to MCC 7832 (D17a).
+  assert.deepEqual(rows.map((x) => [x.category_slug, x.mcc_include.join()]), [['dining', ''], [null, '7832']]);
   assert.ok(rows.every((x) => x.rate === 5));
   assert.deepEqual(rows.map((x) => x.key).sort(), ['dm#1', 'dm#2']);
   const cap = r.capRules[0];
@@ -194,16 +195,19 @@ test('C7.3.5 composite tokens: one rule per mapped part, same rate, cap targets 
   assert.equal(cap.reward_rule_key, null);
 });
 
-test('C7.3.5 composite with an unmapped piece keeps the mapped parts of an earn rule, but an exclusion becomes info', () => {
+test('C7.3.5 composite with an unmapped piece keeps the mapped parts (earn and exclusion), flagged', () => {
   const r = run(card({
     rules: [
       rule({ id: 'earn', category_id: 'dining_movies_international' }),
       rule({ id: 'excl', category_id: 'dining_jewellery', evaluation_type: 'exclusion', action: { cashback_percent: 0 } }),
     ],
   }));
-  assert.deepEqual(only(r, 'earn').map((x) => x.category_slug).sort(), ['dining', 'entertainment']);
+  assert.deepEqual(only(r, 'earn').map((x) => [x.category_slug, x.mcc_include.join()]), [['dining', ''], [null, '7832']]);
   assert.ok(only(r, 'earn')[0].flags.includes('composite_partial'));
-  assert.equal(only(r, 'excl')[0].rule_role, 'info');
+  // An exclusion that maps only partly still excludes what it can: an info
+  // exclusion would exclude nothing.
+  assert.deepEqual(only(r, 'excl').map((x) => [x.rule_role, x.category_slug]), [['exclusion', 'dining']]);
+  assert.ok(only(r, 'excl')[0].flags.includes('composite_partial'));
 });
 
 test('C7.3.6 an unknown token becomes info (shown, never ranked, hidden from v1) — never dropped, never widened', () => {
@@ -609,7 +613,7 @@ test('D14b international / birthday rules are info with depends_on_txn_attribute
     assert.ok(row.flags.includes('depends_on_txn_attribute'), id);
   }
   // The international part of a composite is left out (and flagged); the rest is modelled.
-  assert.deepEqual(only(r, 'dmi').map((x) => x.category_slug).sort(), ['dining', 'entertainment']);
+  assert.deepEqual(only(r, 'dmi').map((x) => [x.category_slug, x.mcc_include.join()]), [['dining', ''], [null, '7832']]);
   assert.ok(only(r, 'dmi')[0].flags.includes('depends_on_txn_attribute'));
 });
 
@@ -684,6 +688,102 @@ test('D16b a minimum on an exclusion becomes max_txn_inr (v2); a card-wide floor
     ],
   }));
   assert.equal(notWide.rewardRules.find((x) => x.key === 'other#min-amount'), undefined, 'dining has no floor, so the floor is not card-wide');
+});
+
+// ── C8 D17: never widen (WP2 review) ────────────────────────────────────
+
+const D17_DIRECTORY = {
+  ...DIRECTORY,
+  merchants: [...DIRECTORY.merchants, { slug: 'indianoil', name: 'IndianOil', aliases: ['indianoil', 'indian oil', 'iocl'] }],
+  platforms: [...DIRECTORY.platforms,
+    { slug: 'payzapp', name: 'PayZapp', kind: 'payment_app', issuer_slug: 'hdfc', aliases: ['payzapp'] },
+    { slug: 'axis_travel_edge', name: 'Axis Travel EDGE', kind: 'bank_portal', issuer_slug: 'axis', aliases: ['travel edge'] }],
+};
+function runD17(record) {
+  return transformCardRecordV2(record, { directory: D17_DIRECTORY });
+}
+
+test('D17c "identified by MID/TID" text that names a brand restricts the rule to that brand', () => {
+  const r = runD17(card({
+    accrual: { base_points_per_block: 1, base_cashback_percent: null },
+    rules: [
+      rule({ id: 'indianoil_accelerated_fuel', category_id: 'fuel', priority: 1, action: { points_per_block: 10 },
+        conditions: { merchant_pattern: 'select IndianOil fuel stations identified by IOCL-provided MID/TID', transaction_amount_block_inr: 100 } }),
+      rule({ id: 'mid_only', category_id: 'dining', conditions: { merchant_identification: 'identified by MID/TID' } }),
+    ],
+  }));
+  const [fuel] = only(r, 'indianoil_accelerated_fuel');
+  assert.deepEqual(fuel.merchant_slugs, ['indianoil'], 'never all fuel');
+  assert.equal(fuel.category_slug, 'fuel');
+  assert.equal(only(r, 'mid_only')[0].rule_role, 'earn', 'no brand named: the text is just how merchants are identified');
+});
+
+test('D17a narrow tokens on earning rules get the token MCCs (v2-only) or become info; exclusions keep the category', () => {
+  const r = run(card({
+    rules: [
+      rule({ id: 'pharm', category_id: 'pharmacy', action: { cashback_percent: 10 } }),
+      rule({ id: 'hotel', category_id: 'travel_hotels', action: { cashback_percent: 10 } }),
+      rule({ id: 'food', category_id: 'food_delivery', action: { cashback_percent: 10 } }),
+      rule({ id: 'ex-movie', category_id: 'movie', evaluation_type: 'exclusion', action: { cashback_percent: 0 } }),
+    ],
+  }));
+  const [pharm] = only(r, 'pharm');
+  assert.deepEqual([pharm.category_slug, pharm.mcc_include.join(), pharm.min_engine_version], [null, '5912', 2]);
+  const [hotel] = only(r, 'hotel');
+  assert.ok(hotel.mcc_include.includes('7011') && hotel.mcc_include.includes('3501') && hotel.mcc_include.includes('3999'));
+  assert.equal(only(r, 'food')[0].rule_role, 'info', 'no MCC table entry: info, never all of dining');
+  const [exMovie] = only(r, 'ex-movie');
+  assert.deepEqual([exMovie.rule_role, exMovie.category_slug, exMovie.min_engine_version], ['exclusion', 'entertainment', 1]);
+});
+
+test('D17b an exclusion with a narrow token and MCCs keeps its v1 category row as well as the v2 MCC row', () => {
+  const r = run(card({
+    rules: [rule({ id: 'exclude_railways', category_id: 'railways', evaluation_type: 'exclusion', conditions: { category: 'railways', mcc_list: [4011, 4112] }, action: { cashback_percent: 0 } })],
+  }));
+  assert.deepEqual(only(r, 'exclude_railways').map((x) => [x.category_slug, x.mcc_include.join(), x.min_engine_version]),
+    [['travel', '', 1], [null, '4011,4112', 2]]);
+});
+
+test('D17d excluded categories on an exclusion are its own scope (extra rows), never exceptions', () => {
+  const r = runD17(card({
+    rules: [rule({ id: 'payzapp_accelerator_exclusions', category_id: 'business_spend', evaluation_type: 'exclusion', rail: 'online', channel_type: 'PayZapp',
+      conditions: { excluded_categories: ['clubs', 'rent', 'hospital', 'education', 'wallet_load'] }, action: { cashback_percent: 0 } })],
+  }));
+  const rows = only(r, 'payzapp_accelerator_exclusions');
+  assert.ok(rows.every((x) => x.rule_role === 'exclusion' && x.platform_slugs.join() === 'payzapp'));
+  assert.deepEqual(rows.map((x) => x.category_slug).sort(), ['education', 'health', 'rent', 'wallet']);
+  assert.ok(rows.every((x) => !x.except_merchant_slugs.length && !x.except_platform_slugs.length && !x.excluded_category_slugs.length));
+});
+
+test('D17e a platform named inside a longer clause does not stand in for the clause', () => {
+  const r = runD17(card({
+    rules: [
+      rule({ id: 'travel_edge_above_200k', category_id: 'travel', action: { points_per_block: 35 },
+        conditions: { monthly_travel_edge_spend: 'Above ₹2,00,000 cumulative Travel EDGE transactions' } }),
+      rule({ id: 'uno', category_id: 'all_retail', action: { cashback_percent: 1 }, conditions: { platform: 'PhonePe app / RuPay credit card on UPI where applicable' } }),
+      rule({ id: 'clean', category_id: 'travel', action: { points_per_block: 5 }, conditions: { portal: 'Axis Travel EDGE portal' } }),
+    ],
+  }));
+  assert.equal(only(r, 'travel_edge_above_200k')[0].rule_role, 'info');
+  assert.equal(only(r, 'uno')[0].rule_role, 'info');
+  assert.deepEqual(only(r, 'clean')[0].platform_slugs, ['axis_travel_edge']);
+});
+
+test('D17f an unknown or narrower sub-category on a category rule is never silently dropped', () => {
+  const r = run(card({
+    rules: [
+      rule({ id: 'travel-hotel-bonus', category_id: 'travel', action: { points_per_block: 52 }, conditions: { category: 'hotels' } }),
+      rule({ id: 'travel-flight-bonus', category_id: 'travel', action: { points_per_block: 32 }, conditions: { category: 'flights' } }),
+      rule({ id: 'odd', category_id: 'travel', conditions: { category: 'luxury_stays' } }),
+      rule({ id: 'ex', category_id: 'education', evaluation_type: 'exclusion', conditions: { category: 'school_and_educational_services' }, action: { cashback_percent: 0 } }),
+    ],
+  }));
+  const hotel = only(r, 'travel-hotel-bonus')[0];
+  const flight = only(r, 'travel-flight-bonus')[0];
+  assert.ok(hotel.mcc_include.includes('7011') && !hotel.mcc_include.includes('4511'));
+  assert.ok(flight.mcc_include.includes('4511') && !flight.mcc_include.includes('7011'));
+  assert.equal(only(r, 'odd')[0].rule_role, 'info');
+  assert.equal(only(r, 'ex')[0].rule_role, 'exclusion', 'an exclusion may ignore it (excludes more)');
 });
 
 // ── C8 D13: terms that depend on the cardholder; override conventions ───

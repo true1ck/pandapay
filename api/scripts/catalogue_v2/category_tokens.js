@@ -84,6 +84,36 @@ const CATEGORY_MAP = {
   emi: exact('emi'),
   merchant_emi: exact('emi'),
   emi_conversion: exact('emi'),
+  emi_transactions: exact('emi'),
+  post_purchase_emi: exact('emi'),
+  instant_emi: exact('emi'),
+  emi_on_call: exact('emi'),
+  smart_emi: exact('emi'),
+  dial_an_emi: exact('emi'),
+  post_facto_emi: exact('emi'),
+  post_facto_emi_conversion: exact('emi'),
+  flexipay_emi: exact('emi'),
+  e_wallet: exact('wallet'),
+  e_wallets: exact('wallet'),
+  e_wallet_loading: exact('wallet'),
+  e_wallet_loads: exact('wallet'),
+  e_wallet_load: exact('wallet'),
+  ewallet: exact('wallet'),
+  mobile_wallet_loading: exact('wallet'),
+  third_party_wallet: exact('wallet'),
+  wallets_service_providers: exact('wallet'),
+  wallet_service_providers: exact('wallet'),
+  prepaid_card_load: exact('wallet'),
+  prepaid_instrument_load_or_reload: exact('wallet'),
+  property_management: exact('rent'),
+  rent_property: exact('rent'),
+  real_estate_rental: exact('rent'),
+  rental_payments: exact('rent'),
+  rent_payments: exact('rent'),
+  education_services: exact('education'),
+  school_fees: exact('education'),
+  utility_bills: exact('bills'),
+  utility_telecom: broad('bills'),
 
   // Narrower than the app category they land in.
   travel_flights: broad('travel'),
@@ -132,6 +162,35 @@ const CATEGORY_MAP = {
   recharges: broad('bills'),
   recharge: broad('bills'),
 };
+
+// D17(a): a narrow token on an earning rule is never widened to its app
+// category. It is restricted to these MCCs instead (v2-only); a narrow token
+// with no entry here makes the rule `info`. MCCs per the card networks'
+// published merchant category code lists.
+const NARROW_TOKEN_MCC = (() => {
+  const range = (lo, hi) => Array.from({ length: hi - lo + 1 }, (_, i) => String(lo + i).padStart(4, '0'));
+  const airlines = [...range(3000, 3299), '4511'];
+  const hotels = ['7011', ...range(3501, 3999)];
+  const rail = ['4112'];
+  const carRental = ['7512', ...range(3351, 3441)];
+  const table = {
+    travel_flights: airlines, flights: airlines, flight: airlines, airlines: airlines, airline: airlines,
+    travel_hotels: hotels, travel_hotel: hotels, hotels: hotels, hotel: hotels,
+    travel_flights_hotels: [...airlines, ...hotels], travel_flights_and_hotels: [...airlines, ...hotels],
+    railways: rail, railway: rail, travel_rail: rail, travel_railways: rail, travel_railway: rail,
+    travel_train: rail, passenger_railways: rail,
+    taxi: ['4121'], local_transport: ['4111', '4121', '4131'], transport: ['4111', '4121', '4131'],
+    transportation: ['4111', '4121', '4131'], travel_transport: ['4111', '4121', '4131'],
+    car_rental: carRental, travel_car_rental: carRental, travel_car_rentals: carRental,
+    movie: ['7832'], movies: ['7832'],
+    gaming: ['5816'], digital_gaming: ['5816'], online_gaming: ['5816'], online_skill_based_gaming: ['5816'],
+    pharmacy: ['5912'], pharmacies: ['5912'], medical_supplies: ['5047'], hospital: ['8062'],
+    fast_food: ['5814'], bars_pubs: ['5813'],
+    telecom: ['4812', '4814'], telecommunication: ['4812', '4814'], telecom_cable: ['4814', '4899'],
+    recharges: ['4814'], recharge: ['4814'], utility_telecom: ['4814', '4899', '4900'],
+  };
+  return Object.fromEntries(Object.entries(table).map(([k, v]) => [k, [...new Set(v)].sort()]));
+})();
 
 // Brand tokens -> merchant slugs. Slugs not yet in the directory are still
 // emitted (merchant_slugs is text[], no FK) and listed as "needs directory
@@ -354,7 +413,9 @@ function parseComposite(token, ctx) {
 }
 
 function partFromPiece(piece) {
-  if (piece.kind === 'category') return { categorySlug: piece.categorySlug, broad: piece.broad, token: piece.key };
+  if (piece.kind === 'category') {
+    return { categorySlug: piece.categorySlug, broad: piece.broad, token: piece.key, narrowTokens: piece.broad ? [piece.key] : [] };
+  }
   if (piece.kind === 'merchant') return { merchantSlugs: piece.merchantSlugs, token: piece.key, group: piece.group };
   if (piece.kind === 'platform') return { platformSlugs: piece.platformSlugs, token: piece.key };
   return null;
@@ -414,7 +475,7 @@ function resolveCategoryToken(token, ctx = {}) {
     });
     const parts = [];
     const unmapped = [];
-    const seen = new Set();
+    const seen = new Map();
     pieces.forEach((p, idx) => {
       if (p.kind === 'qualifier') {
         unmapped.push(p.key);
@@ -426,8 +487,14 @@ function resolveCategoryToken(token, ctx = {}) {
         return;
       }
       const sig = JSON.stringify([part.categorySlug, part.merchantSlugs, part.platformSlugs]);
-      if (seen.has(sig)) return;
-      seen.add(sig);
+      const prior = seen.get(sig);
+      if (prior) {
+        // travel_flights_hotels: both narrow -> both MCC sets; an exact piece wins.
+        if (!part.broad) Object.assign(prior, { broad: false, narrowTokens: [] });
+        else if (prior.broad) prior.narrowTokens = [...new Set([...prior.narrowTokens, ...part.narrowTokens])];
+        return;
+      }
+      seen.set(sig, part);
       if (part.broad) flags.push('broad_category');
       parts.push(part);
     });
@@ -448,7 +515,20 @@ function mapCategorySlug(token) {
   return hit ? hit.slug : null;
 }
 
+// Every app category a token names ("education_government" -> both).
+// Used for exclusion lists, where naming more is conservative.
+function mapCategorySlugs(token) {
+  const direct = mapCategorySlug(token);
+  if (direct) return [direct];
+  if (typeof token !== 'string') return [];
+  const t = token.trim().toLowerCase().replace(/[^a-z0-9]+/g, '_').replace(/^_|_$/g, '');
+  const r = resolveCategoryToken(t, {});
+  if (r.kind !== 'composite' || r.unmapped.length) return [];
+  return [...new Set(r.parts.map((p) => p.categorySlug).filter(Boolean))];
+}
+
 module.exports = {
+  NARROW_TOKEN_MCC,
   APP_CATEGORIES,
   CATEGORY_MAP,
   GROUP_TOKEN_MAP,
@@ -461,6 +541,7 @@ module.exports = {
   UNRESTRICTED_TOKENS,
   isNoCategoryToken,
   mapCategorySlug,
+  mapCategorySlugs,
   parseComposite,
   resolveCategoryToken,
 };
