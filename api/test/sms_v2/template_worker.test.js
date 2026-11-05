@@ -385,3 +385,85 @@ test("a layout no active rule reads still goes to the provider", async () => {
   assert.equal(calls, 1);
 });
 
+// ---- learning loop B2: better input for the AI
+
+const { rankSimilarRules } = require("../../src/sms_v2/template_worker");
+
+const ruleWith = (id, body) => ({ ...rule(), id, examples: [{ sender: "TESTBK", body, expectFactTypes: ["movement"] }] });
+
+test("the prompt carries what people reported and past admin rejections, as counts and layouts only", () => {
+  const empty = JSON.parse(buildPrompt(template));
+  assert.deepEqual(empty.userReports, {});
+  assert.deepEqual(empty.previousMistakes, []);
+  const prompt = JSON.parse(
+    buildPrompt(template, [], [], {
+      userReports: { not_financial: 3, wrong_amount: 1 },
+      previousMistakes: [
+        { redactedBody: "<AMT> will be debited.", reason: "overmatches" },
+        { redactedBody: "<AMT> blocked.", reason: "wrong_fact_type" },
+        { redactedBody: "<AMT> paid.", reason: "misses_fields" },
+        { redactedBody: "<AMT> fourth.", reason: "other" },
+      ],
+    }),
+  );
+  assert.deepEqual(prompt.userReports, { not_financial: 3, wrong_amount: 1 });
+  assert.equal(prompt.previousMistakes.length, 3, "at most three past mistakes");
+  assert.deepEqual(Object.keys(prompt.previousMistakes[0]).sort(), ["reason", "redactedBody"]);
+});
+
+test("the domain rules tell the AI how to treat user reports", () => {
+  const prompt = JSON.parse(buildPrompt(template));
+  assert.ok(prompt.domainRules.includes("If people reported this layout as not financial, draft a rule that emits only an info fact."));
+  assert.ok(prompt.domainRules.includes("A user report is a hint, not proof: the printed text decides."));
+});
+
+test("existing rules are chosen by word overlap with the layout, not by rule id", () => {
+  const rules = [
+    ruleWith("A-ALPHA", "Statement ready for your credit card please review"),
+    ruleWith("B-BETA", "Rs. 127.45 paid to SYNTHETIC STORE."),
+    ruleWith("C-GAMMA", "Rs. 50.00 paid to MY SHOP."),
+    ruleWith("D-DELTA", "Your OTP is 123456"),
+    ruleWith("E-EPSILON", "Account balance is low"),
+    ruleWith("F-ZETA", "Rs. 10.00 paid to SOME STORE today"),
+  ];
+  const ranked = rankSimilarRules(template, rules, 3).map((entry) => entry.id);
+  assert.deepEqual(ranked.slice(0, 2).sort(), ["B-BETA", "C-GAMMA"].sort());
+  assert.equal(ranked.length, 3);
+  assert.ok(!ranked.includes("A-ALPHA"), "the lowest rule id is not enough to be included");
+  const prompt = JSON.parse(buildPrompt(template, rules));
+  assert.equal(prompt.existingRules.length, 5);
+  assert.deepEqual(Object.keys(prompt.existingRules[0]).sort(), ["emit", "family", "match"], "example bodies never reach the prompt");
+});
+
+test("a draft that reads a sibling layout with its own rule is refused", () => {
+  const sibling = { template_hash: "b".repeat(64), redacted_body: "<AMT> paid to <PARTY>." };
+  // The sibling has the same words, so the broad draft pattern reads it too.
+  assert.ok(validateDraft(rule(), template, config.model, [sibling]).includes("draft_overmatches_other_layouts"));
+  const different = { template_hash: "c".repeat(64), redacted_body: "<AMT> credited to your account." };
+  assert.ok(!validateDraft(rule(), template, config.model, [different]).includes("draft_overmatches_other_layouts"));
+  // The layout itself never counts against its own draft.
+  assert.deepEqual(validateDraft(rule(), template, config.model, [{ ...template }]), []);
+  assert.deepEqual(validateDraft(rule(), template, config.model), []);
+});
+
+test("the worker hands the report counts, past mistakes and sibling layouts to the prompt and the check", async () => {
+  let prompt;
+  let siblings = 0;
+  let leased = false;
+  const sibling = { template_hash: "b".repeat(64), redacted_body: "<AMT> credited to your account." };
+  const store = {
+    claim: async () => (leased ? null : ((leased = true), template)),
+    ruleCandidates: async () => [],
+    userReports: async () => ({ not_financial: 2 }),
+    previousMistakes: async () => [{ redactedBody: "<AMT> blocked.", reason: "overmatches" }],
+    siblingLayouts: async () => { siblings++; return [sibling]; },
+    beginAttempt: async () => null,
+    recordAttempt: async () => {},
+    finish: async () => {},
+  };
+  const provider = { generate: async (input) => { prompt = JSON.parse(input.prompt); return { rule: rule(), inputTokens: 1, outputTokens: 1, totalTokens: 2 }; } };
+  assert.equal((await runTemplateWorkerOnce({ store, provider, config })).status, "ready");
+  assert.deepEqual(prompt.userReports, { not_financial: 2 });
+  assert.equal(prompt.previousMistakes[0].reason, "overmatches");
+  assert.equal(siblings, 1);
+});

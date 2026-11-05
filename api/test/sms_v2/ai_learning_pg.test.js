@@ -72,3 +72,40 @@ test("prompt versions are stored and a covered layout reaches phones as queued",
   assert.deepEqual(seen.items.map((entry) => [entry.templateHash, entry.status]), [[template.template_hash, "queued"]]);
 });
 
+test("the worker store counts distinct reporters per kind and finds sibling layouts", { skip: !url || !adminUrl }, async (t) => {
+  const pool = new Pool({ connectionString: url });
+  const privatePool = new Pool({ connectionString: adminUrl });
+  const people = [crypto.randomUUID(), crypto.randomUUID(), crypto.randomUUID()];
+  const admin = crypto.randomUUID();
+  const other = { hash: "d".repeat(64), body: "<AMT> credited to your account." };
+  t.after(async () => {
+    await pool.query("DELETE FROM profiles WHERE id=ANY($1::uuid[])", [people]);
+    await pool.query("DELETE FROM sms_v2_unknown_templates WHERE template_hash=ANY($1::text[])", [[template.template_hash, other.hash]]);
+    await pool.query("DELETE FROM admin_users WHERE id=$1", [admin]);
+    await Promise.all([pool.end(), privatePool.end()]);
+  });
+  for (const id of people) await pool.query("INSERT INTO profiles(id) VALUES($1)", [id]);
+  await pool.query("INSERT INTO admin_users(id,email,role) VALUES($1,$2,'owner')", [admin, `${admin}@example.invalid`]);
+  const report = (profile, kind, eligible = true, repeat = 0) => pool.query(
+    `INSERT INTO sms_v2_correction_cases(profile_id,source_key,fact_ids,correction_kind,stage,trace,template_hash,sender_brand,redacted_template,shared_learning_eligible,request_hash)
+     VALUES($1,$2,'{}',$3,'gate','{}'::jsonb,$4,'TESTBK',$5,$6,$7)`,
+    [profile, `sms:synthetic:${repeat}`, kind, template.template_hash, template.redacted_body, eligible, crypto.randomUUID()]);
+  await report(people[0], "not_financial");
+  await report(people[0], "not_financial", true, 1); // the same person twice is one person
+  await report(people[1], "not_financial");
+  await report(people[2], "wrong_amount");
+  await report(people[2], "wrong_date", false); // not shared: never counted
+  const worker = createPgWorkerStore({ ...createAdminDbHelpers(privatePool), adminId: admin });
+  const row = { template_hash: template.template_hash, sender_brand: template.sender_brand };
+  assert.deepEqual(await worker.userReports(row), { not_financial: 2, wrong_amount: 1 });
+  assert.deepEqual(await worker.userReports({ ...row, template_hash: "e".repeat(64) }), {});
+
+  // Siblings: another layout of the sender with a ready rule counts; a queued one does not.
+  await pool.query("INSERT INTO sms_v2_unknown_templates(template_hash,sender_brand,redacted_body,ai_status) VALUES($1,'TESTBK',$2,'ready')", [other.hash, other.body]);
+  await pool.query("INSERT INTO sms_v2_unknown_templates(template_hash,sender_brand,redacted_body,ai_status) VALUES($1,'TESTBK',$2,'ready')", [template.template_hash, template.redacted_body]);
+  const siblings = await worker.siblingLayouts(row);
+  assert.deepEqual(siblings.map((entry) => entry.template_hash), [other.hash]);
+  await pool.query("UPDATE sms_v2_unknown_templates SET ai_status='queued' WHERE template_hash=$1", [other.hash]);
+  assert.deepEqual(await worker.siblingLayouts(row), []);
+  assert.ok((await worker.ruleCandidates()).every((body) => body && body.id));
+});

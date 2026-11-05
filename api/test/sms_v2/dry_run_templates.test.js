@@ -150,3 +150,47 @@ test("gemini mode refuses to start without a key, before reading any layout", as
     /SMS_V2_JOB_ADMIN_ID_required/,
   );
 });
+
+// ---- learning loop B2: --eval counts how many approved drafts the current prompt reproduces
+
+test("--eval drafts approved layouts again and counts those that read and emit the same", async () => {
+  const { evalApproved, draftSignature } = require("../../scripts/dry_run_sms_v2_templates");
+  const approved = [
+    { ...template, ai_draft: rule() },
+    { ...template, template_hash: "b".repeat(64), redacted_body: "<AMT> paid to <PARTY>.", ai_draft: { ...rule(), emit: [{ ...rule().emit[0], factType: "attempt" }] } },
+  ];
+  assert.notEqual(draftSignature(approved[0].ai_draft), draftSignature(approved[1].ai_draft));
+  // The fake model drafts a movement for any layout, scoped to the layout asked about.
+  const provider = {
+    generate: async ({ prompt }) => {
+      const asked = JSON.parse(prompt);
+      const draft = rule();
+      draft.id = asked.expectedRuleId;
+      draft.match.templateHash = asked.templateHash;
+      return { rule: draft, inputTokens: 1, outputTokens: 1, totalTokens: 2 };
+    },
+  };
+  const { results, summary } = await evalApproved({ approved, examplesFor: async () => [], provider, config });
+  assert.deepEqual(summary, { approved: 2, reproduced: 1 });
+  assert.deepEqual(results.map((row) => row.reproduced), [true, false]);
+  assert.equal(results[1].valid, true, "valid, but a different reading than the approved one");
+});
+
+test("--eval from a layouts file prints 'N of M approved drafts reproduced' and writes a private file", async () => {
+  const dir = tmp();
+  const layouts = path.join(dir, "approved.json");
+  fs.writeFileSync(layouts, JSON.stringify([
+    { senderBrand: "TESTBK", redactedBody: template.redacted_body, approvedDraft: rule() },
+    { senderBrand: "TESTBK", redactedBody: "<AMT> credited." },
+  ]));
+  const out = path.join(dir, "eval.json");
+  const lines = [];
+  await main(["node", "x", "--provider", "fake", "--eval", "--layouts", layouts, "--out", out], {}, { log: (line) => lines.push(line) });
+  const written = JSON.parse(fs.readFileSync(out, "utf8"));
+  assert.equal(written.mode, "eval");
+  assert.deepEqual(written.summary, { approved: 1, reproduced: 0 }, "the fake provider reproduces nothing; rows without an approved draft are skipped");
+  assert.match(lines.at(-1), /^0 of 1 approved drafts reproduced/);
+  if (process.platform !== "win32") assert.equal(fs.statSync(out).mode & 0o777, 0o600);
+  assert.equal(parseArgs(["node", "x", "--out", out, "--eval"]).evalMode, true);
+  assert.equal(parseArgs(["node", "x", "--out", out]).evalMode, false);
+});

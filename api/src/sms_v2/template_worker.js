@@ -131,9 +131,41 @@ const SMS_DOMAIN_RULES = Object.freeze([
   "Telecom talktime or validity deductions, loan or Pay Later offers, credit-limit upgrade offers, OTPs, gambling or promotional messages and general service alerts are info facts with category otp, security, promotion or service. They never create a movement.",
   "An available-balance or balance-after amount is never the movement amount.",
   "If the layout holds more than one separate money movement, emit a fact for each printed amount; never keep one and drop the others.",
+  "If people reported this layout as not financial, draft a rule that emits only an info fact.",
+  "A user report is a hint, not proof: the printed text decides.",
 ]);
 
-function buildPrompt(template, rules = [], repairErrors = []) {
+// Upper-cased words of a layout or an example, without placeholders.
+const wordSet = (text) =>
+  new Set(
+    String(text ?? "")
+      .replace(/<[A-Z_]+>/g, " ")
+      .toUpperCase()
+      .match(/[A-Z]{2,}/g) ?? [],
+  );
+
+function jaccard(a, b) {
+  if (!a.size || !b.size) return 0;
+  let shared = 0;
+  for (const word of a) if (b.has(word)) shared++;
+  return shared / (a.size + b.size - shared);
+}
+
+// The rules whose first example reads most like this layout (Jaccard overlap of
+// upper-cased words), most similar first; ties go to the lower rule id.
+function rankSimilarRules(template, rules, limit = 5) {
+  const own = wordSet(template.redacted_body);
+  return rules
+    .map((rule) => ({
+      rule,
+      score: jaccard(own, wordSet(rule.examples?.find((e) => e.expectFactTypes?.length)?.body ?? rule.examples?.[0]?.body)),
+    }))
+    .sort((a, b) => b.score - a.score || String(a.rule.id).localeCompare(String(b.rule.id)))
+    .slice(0, limit)
+    .map((entry) => entry.rule);
+}
+
+function buildPrompt(template, rules = [], repairErrors = [], context = {}) {
   const error = redactionError(template.redacted_body);
   if (
     error ||
@@ -141,8 +173,7 @@ function buildPrompt(template, rules = [], repairErrors = []) {
     !/^[a-f0-9]{64}$/.test(template.template_hash)
   )
     throw new Error("template_redaction_required");
-  const examples = rules
-    .slice(0, 5)
+  const examples = rankSimilarRules(template, rules, 5)
     .map((rule) => ({
       family: rule.family,
       match: rule.match,
@@ -189,6 +220,10 @@ function buildPrompt(template, rules = [], repairErrors = []) {
     senderBrand: template.sender_brand,
     redactedBody: template.redacted_body,
     existingRules: examples,
+    // What people said about this layout, as counts of distinct people by kind.
+    userReports: context.userReports ?? {},
+    // Up to three layouts of this sender whose AI draft the admin rejected, and why.
+    previousMistakes: (context.previousMistakes ?? []).slice(0, 3),
     repairErrors: repairErrors.slice(0, 12),
     promptVersion: PROMPT_VERSION,
   });
@@ -238,7 +273,7 @@ function captureReferences(rule) {
   return names;
 }
 
-function validateDraft(rule, template, model) {
+function validateDraft(rule, template, model, otherLayouts = []) {
   const structural = validateRequest("admin_rule_draft", rule);
   if (!structural.ok) return structural.errors.map((error) => error.code);
   const errors = [];
@@ -281,6 +316,15 @@ function validateDraft(rule, template, model) {
   const sample = matches(fillSynthetic(template.redacted_body));
   if (!sample || references.some((name) => !sample.groups?.[name]))
     errors.push("template_sample_mismatch");
+  // Once promoted, this rule reads more than one layout. It must not read a
+  // sibling layout of the same sender that already has its own rule.
+  for (const other of otherLayouts.slice(0, 50)) {
+    if (other.template_hash === template.template_hash) continue;
+    if (matches(fillSynthetic(other.redacted_body))) {
+      errors.push("draft_overmatches_other_layouts");
+      break;
+    }
+  }
   const priorAttrs = [];
   for (const emit of rule.emit) {
     const attrs = {};
@@ -354,17 +398,17 @@ function validateDraft(rule, template, model) {
   return [...new Set(errors)];
 }
 
-async function validateDraftSafely(rule, template, model) {
+async function validateDraftSafely(rule, template, model, otherLayouts = []) {
   const { Worker } = require("node:worker_threads");
   const worker = new Worker(
     `
     const { parentPort, workerData } = require('node:worker_threads');
     try {
       const { validateDraft } = require(workerData.module);
-      parentPort.postMessage(validateDraft(workerData.rule, workerData.template, workerData.model));
+      parentPort.postMessage(validateDraft(workerData.rule, workerData.template, workerData.model, workerData.otherLayouts));
     } catch { parentPort.postMessage(['draft_invalid']); }
   `,
-    { eval: true, workerData: { module: __filename, rule, template, model } },
+    { eval: true, workerData: { module: __filename, rule, template, model, otherLayouts } },
   );
   return new Promise((resolve) => {
     const finish = (errors) => {
@@ -437,6 +481,44 @@ function createPgWorkerStore({ withAdminClient, adminId }) {
             [template.sender_brand],
           )
         ).rows.map((row) => row.body),
+      );
+    },
+    // Active rule bodies to rank for similarity with the layout (any sender).
+    ruleCandidates() {
+      return tx(async (client) =>
+        (
+          await client.query(
+            "SELECT body FROM sms_v2_rules WHERE status='active' ORDER BY rule_id,version DESC LIMIT 500",
+          )
+        ).rows.map((row) => row.body),
+      );
+    },
+    // Counts of distinct people by correction kind for this layout.
+    userReports(template) {
+      return tx(async (client) =>
+        Object.fromEntries(
+          (
+            await client.query(
+              `SELECT correction_kind, count(DISTINCT profile_id) AS people FROM sms_v2_correction_cases
+                WHERE template_hash=$1 AND shared_learning_eligible GROUP BY correction_kind ORDER BY correction_kind`,
+              [template.template_hash],
+            )
+          ).rows.map((row) => [row.correction_kind, Number(row.people)]),
+        ),
+      );
+    },
+    // Other layouts of the sender that already have their own ready or published rule (up to 50).
+    siblingLayouts(template) {
+      return tx(async (client) =>
+        (
+          await client.query(
+            `SELECT t.template_hash, t.redacted_body FROM sms_v2_unknown_templates t
+              WHERE t.sender_brand=$1 AND t.template_hash<>$2
+                AND (t.ai_status='ready' OR EXISTS(SELECT 1 FROM sms_v2_rules r WHERE r.rule_id='AI-'||t.template_hash AND r.status IN ('active','provisional')))
+              ORDER BY t.last_seen DESC LIMIT 50`,
+            [template.sender_brand, template.template_hash],
+          )
+        ).rows,
       );
     },
     examples(template) {
@@ -584,9 +666,20 @@ async function runTemplateWorkerOnce({
         return { status: "covered", templateHash: template.template_hash, covered };
       }
     }
-    const examples = await store.examples(template);
+    const examples =
+      typeof store.ruleCandidates === "function"
+        ? await store.ruleCandidates(template)
+        : await store.examples(template);
+    const context = {
+      userReports:
+        typeof store.userReports === "function" ? await store.userReports(template) : {},
+      previousMistakes:
+        typeof store.previousMistakes === "function" ? await store.previousMistakes(template) : [],
+    };
+    const siblings =
+      typeof store.siblingLayouts === "function" ? await store.siblingLayouts(template) : [];
     for (let attempt = 1; attempt <= 2; attempt++) {
-      const prompt = buildPrompt(template, examples, errors);
+      const prompt = buildPrompt(template, examples, errors, context);
       const blocked = await store.beginAttempt(
         template,
         attempt,
@@ -615,7 +708,7 @@ async function runTemplateWorkerOnce({
           typeof response.rule === "string"
             ? JSON.parse(response.rule)
             : response.rule;
-        errors = await validateDraftSafely(rule, template, config.model);
+        errors = await validateDraftSafely(rule, template, config.model, siblings);
       } catch {
         errors = ["provider_or_json_invalid"];
       }
@@ -724,6 +817,7 @@ function createGeminiTemplateProvider({
 module.exports = {
   PROMPT_VERSION,
   coveredBy,
+  rankSimilarRules,
   SMS_PLACEHOLDERS,
   SMS_DOMAIN_RULES,
   workerConfig,
