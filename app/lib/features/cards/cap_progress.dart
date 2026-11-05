@@ -185,6 +185,21 @@ class CapProgress {
     ].join(' · ');
   }
 
+  /// What a reached cap means for the next spend, in the same words as
+  /// [thenText]: "extra spend here earns nothing" (total caps), "extra spend
+  /// here earns only 1 pt/₹100" (a stated base or post-cap rate), or, when
+  /// the rate cannot be stated, a clause that names no rate.
+  String get reachedConsequence {
+    final then = thenText;
+    if (then == 'nothing') return 'extra spend here earns nothing';
+    if (then != null) return 'extra spend here earns only $then';
+    return switch (kind) {
+      CapKind.bonusPoints ||
+      CapKind.bonusCashback => 'extra spend here won\'t earn the bonus rate',
+      _ => 'extra spend here won\'t earn the capped rate',
+    };
+  }
+
   /// For tests and diagnostics only: never rendered.
   @override
   String toString() => 'CapProgress(${cap.id}, $kind, $summary)';

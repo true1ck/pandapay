@@ -103,7 +103,6 @@ void main() {
       for (final native in [1500, 1600]) {
         final alerts = _plan(_ownedA(native));
         expect(alerts.single.title, 'Rewards Card cap reached');
-        expect(alerts.single.body, contains('extra spend here won\'t earn'));
         expect(alerts.single.dedupeKey, endsWith(':reached'));
       }
     });
@@ -133,6 +132,117 @@ void main() {
     test('the v1 measure is never used: v1 consumed 0, high native: alert',
         () {
       expect(_plan(_ownedA(1400, consumedV1: 0)), hasLength(1));
+    });
+  });
+
+  group('the reached body says what the cap means for its kind', () {
+    /// A reached alert for a cap of [kind] (the row has used all of it).
+    String reachedBody(
+      String kind, {
+      num amount = 1500,
+      Map<String, dynamic> capExtra = const {},
+      Map<String, dynamic> cardExtra = const {},
+    }) {
+      final product = parseCard({
+        ...v2CardJson(
+          'a',
+          name: 'Rewards Card',
+          categoryId: 'cat-dining',
+          capKind: kind,
+          capAmount: amount,
+          capExtra: capExtra,
+        ),
+        ...cardExtra,
+      });
+      final owned = parseUserCard(
+        userCardJson(
+          'ua',
+          'a',
+          capStates: [
+            capStateRowJson(
+              'a-cap',
+              consumed: 0,
+              consumedNative: amount,
+              capKind: kind,
+              capAmount: amount,
+              periodStart: '2026-11-01',
+              periodEnd: '2026-11-30',
+            ),
+          ],
+        ),
+      );
+      return NotificationTriggerRunner.planV2CapAlerts(
+        userCard: owned,
+        product: product,
+        owned: [(owned, product)],
+        categories: const [_dining],
+        now: _now,
+      ).single.body;
+    }
+
+    test('a bonus cap: extra spend earns only the base rate', () {
+      expect(
+        reachedBody('bonus_points'),
+        contains('extra spend here earns only 1 pt/₹100'),
+      );
+    });
+
+    test('a total cap: extra spend earns nothing', () {
+      expect(
+        reachedBody('total_points'),
+        contains('extra spend here earns nothing'),
+      );
+      expect(
+        reachedBody('total_cashback', amount: 500),
+        contains('extra spend here earns nothing'),
+      );
+    });
+
+    test('an eligible-spend cap follows its post-cap behaviour', () {
+      expect(
+        reachedBody(
+          'eligible_spend',
+          amount: 20000,
+          capExtra: {'post_cap_behavior': 'zero'},
+        ),
+        contains('earns nothing'),
+      );
+      expect(
+        reachedBody(
+          'eligible_spend',
+          amount: 20000,
+          capExtra: {
+            'post_cap_behavior': 'custom_rate',
+            'post_cap_unit': 'points_per_100',
+            'post_cap_rate': 2,
+          },
+        ),
+        contains('earns only 2 pts/₹100'),
+      );
+    });
+
+    test('a count cap whose post-cap rate is unsure names no rate', () {
+      final body = reachedBody(
+        'txn_count',
+        amount: 3,
+        capExtra: {'post_cap_behavior': 'custom_rate'},
+      );
+      expect(body, contains('won\'t earn the capped rate'));
+      expect(body, isNot(contains('earns only')));
+    });
+
+    test('a bonus cap whose base is unsure falls back to the bonus wording',
+        () {
+      final body = reachedBody(
+        'bonus_points',
+        cardExtra: {'base_reward_unit': null, 'base_reward_rate': null},
+      );
+      expect(body, contains('won\'t earn the bonus rate'));
+    });
+
+    test('the warning body is unchanged (percentage and label only)', () {
+      final alerts = _plan(_ownedA(1250));
+      expect(alerts.single.body, isNot(contains('earns')));
     });
   });
 
