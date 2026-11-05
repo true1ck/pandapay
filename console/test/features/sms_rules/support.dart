@@ -83,6 +83,8 @@ class FakeAdmin extends AdminApi {
     : super(apiBaseUrl: 'https://console.invalid', accessToken: 'fixture');
   int latestVersion = 1;
   String latestStatus = 'active';
+  List<Object?> templates = <Object?>[];
+  Map<String, dynamic> metrics = {'ai': <Object?>[]};
   final requests = <(String, String, Map<String, dynamic>?)>[];
   @override
   Future<Map<String, dynamic>> smsV2Request(
@@ -105,8 +107,8 @@ class FakeAdmin extends AdminApi {
         ],
       };
     }
-    if (path == '/admin/sms/v2/templates') return {'templates': <Object?>[]};
-    if (path == '/admin/sms/v2/metrics') return {'ai': <Object?>[]};
+    if (path == '/admin/sms/v2/templates') return {'templates': templates};
+    if (path == '/admin/sms/v2/metrics') return metrics;
     if (path == '/admin/sms/v2/bundles') return {'bundles': <Object?>[]};
     if (path == '/admin/sms/v2/category-rules') {
       return {'drafts': <Object?>[], 'rules': <Object?>[]};

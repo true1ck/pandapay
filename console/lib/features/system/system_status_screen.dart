@@ -569,6 +569,8 @@ class _ServiceRow extends StatelessWidget {
     'backup': Icons.backup_outlined,
     'admin-gateway': Icons.shield_outlined,
     'admin-api': Icons.admin_panel_settings_outlined,
+    'sms-v2-rule-jobs': Icons.verified_outlined,
+    'sms-v2-template-worker': Icons.auto_awesome_outlined,
   };
 
   static const _runs = <String, String>{

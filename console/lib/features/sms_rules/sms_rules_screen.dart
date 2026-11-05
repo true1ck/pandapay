@@ -74,7 +74,11 @@ class SmsRulesScreen extends ConsumerWidget {
                   return ExpansionTile(
                     title: Text('${row['sender_brand']} · ${row['ai_status']}'),
                     subtitle: Text(
-                      '${row['redacted_body']}\n${row['seen_count']} sightings · ${row['distinct_profiles']} profiles',
+                      [
+                        '${row['redacted_body']}',
+                        '${row['seen_count']} sightings · ${row['distinct_profiles']} profiles',
+                        ?templateStatusReason(row),
+                      ].join('\n'),
                     ),
                     trailing: TextButton(
                       onPressed: row['ai_status'] == 'ready'
@@ -198,6 +202,7 @@ class SmsRulesScreen extends ConsumerWidget {
                     ),
                   const Divider(),
                   const Text('AI usage by day', style: TextStyle(fontSize: 20)),
+                  ?templateSubmissionsLine(rows.firstOrNull),
                   for (final row
                       in (rows.firstOrNull?['ai'] as List? ?? const []))
                     ListTile(
@@ -241,6 +246,27 @@ class SmsRulesScreen extends ConsumerWidget {
       ),
     );
   }
+}
+
+/// Why a shared layout is not drafted: held ones never reach the AI, failed
+/// ones carry the worker's failure code. Null for every other status.
+String? templateStatusReason(Map row) => switch (row['ai_status']) {
+  'held' =>
+    'Held: sent without a valid App Check token, so it was not sent to the AI',
+  'failed' => 'Failed: ${row['failure_code'] ?? 'unknown'}',
+  _ => null,
+};
+
+/// "Layouts sent to the AI: n · Held: m" from the metrics' template counts.
+Widget? templateSubmissionsLine(Map? metrics) {
+  final counts = (metrics?['attestation'] as Map?)?['templateSubmissions'];
+  if (counts is! Map) return null;
+  return Padding(
+    padding: const EdgeInsets.symmetric(vertical: 8),
+    child: Text(
+      'Layouts sent to the AI: ${counts['verified'] ?? 0} · Held: ${counts['unverified'] ?? 0}',
+    ),
+  );
 }
 
 class SmsRulesTable extends StatefulWidget {

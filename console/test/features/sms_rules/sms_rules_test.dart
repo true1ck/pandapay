@@ -154,8 +154,9 @@ void main() {
   Future<FakeAdmin> screen(
     WidgetTester tester, {
     void Function(String, String)? download,
+    FakeAdmin? fake,
   }) async {
-    final admin = FakeAdmin();
+    final admin = fake ?? FakeAdmin();
     await tester.pumpWidget(
       ProviderScope(
         overrides: [
@@ -172,6 +173,73 @@ void main() {
     await tester.pumpAndSettle();
     return admin;
   }
+
+  testWidgets('templates say why a layout is held or failed', (tester) async {
+    final fake = FakeAdmin()
+      ..templates = [
+        {
+          'template_hash': 'a' * 64,
+          'sender_brand': 'TESTBK',
+          'redacted_body': '<AMT> paid to <PARTY>.',
+          'seen_count': 1,
+          'distinct_profiles': 0,
+          'ai_status': 'held',
+          'failure_code': null,
+        },
+        {
+          'template_hash': 'b' * 64,
+          'sender_brand': 'TESTBK',
+          'redacted_body': '<AMT> spent on card <MASK>.',
+          'seen_count': 2,
+          'distinct_profiles': 1,
+          'ai_status': 'failed',
+          'failure_code': 'draft_validation_failed',
+        },
+        {
+          'template_hash': 'c' * 64,
+          'sender_brand': 'TESTBK',
+          'redacted_body': '<AMT> credited.',
+          'seen_count': 1,
+          'distinct_profiles': 1,
+          'ai_status': 'queued',
+          'failure_code': null,
+        },
+      ];
+    await screen(tester, fake: fake);
+    await tester.tap(find.text('Templates'));
+    await tester.pumpAndSettle();
+    expect(
+      find.textContaining(
+        'Held: sent without a valid App Check token, so it was not sent to the AI',
+      ),
+      findsOneWidget,
+    );
+    expect(
+      find.textContaining('Failed: draft_validation_failed'),
+      findsOneWidget,
+    );
+    expect(find.textContaining('Held:'), findsOneWidget);
+    expect(find.textContaining('Failed:'), findsOneWidget);
+    expect(tester.takeException(), isNull);
+  });
+
+  testWidgets(
+    'metrics show how many layouts reached the AI and how many are held',
+    (tester) async {
+      final fake = FakeAdmin()
+        ..metrics = {
+          'ai': <Object?>[],
+          'attestation': {
+            'templateSubmissions': {'verified': 3, 'unverified': 2},
+          },
+        };
+      await screen(tester, fake: fake);
+      await tester.tap(find.text('Metrics'));
+      await tester.pumpAndSettle();
+      expect(find.text('Layouts sent to the AI: 3 · Held: 2'), findsOneWidget);
+      expect(tester.takeException(), isNull);
+    },
+  );
 
   Future<void> correction(WidgetTester tester, String label) async {
     await tester.tap(find.text('Corrections'));
