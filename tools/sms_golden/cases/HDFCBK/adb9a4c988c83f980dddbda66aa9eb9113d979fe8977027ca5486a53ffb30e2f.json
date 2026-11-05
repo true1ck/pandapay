@@ -1,0 +1,42 @@
+{
+  "id": "foreign:atm_foreign_first_approx_inr",
+  "templateHash": "adb9a4c988c83f980dddbda66aa9eb9113d979fe8977027ca5486a53ffb30e2f",
+  "weight": 1,
+  "source": "synthetic",
+  "messages": [
+    {
+      "sender": "VM-HDFCBK-S",
+      "body": "USD 200.00 (approx INR 17,450.00) withdrawn at ATM using Credit Card XX1234 on 01-11-26.",
+      "observedAt": "2026-11-03T10:00:00.000Z"
+    }
+  ],
+  "expect": {
+    "facts": [
+      {
+        "factType": "movement",
+        "attrs": {
+          "direction": "debit",
+          "purpose": "atm",
+          "rail": "cash"
+        },
+        "amounts": [
+          {
+            "role": "posted",
+            "minor": 1745000,
+            "unit": "INR",
+            "original": {
+              "minor": 20000,
+              "currency": "USD"
+            }
+          }
+        ],
+        "instrument": {
+          "maskDigits": "1234",
+          "kind": "credit_card"
+        }
+      }
+    ]
+  },
+  "note": "Foreign first, approximate INR posted.",
+  "origin": "foreign-v2-more"
+}

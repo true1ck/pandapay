@@ -1,0 +1,42 @@
+{
+  "id": "foreign:atm_inr_with_original_paren",
+  "templateHash": "7bd94d032687b5c0c8237be6cb21137983ac4836efec39c872b40014810090d8",
+  "weight": 1,
+  "source": "synthetic",
+  "messages": [
+    {
+      "sender": "VM-SBICRD-S",
+      "body": "Rs.17,450.00 withdrawn from Credit Card ending 1234 at ATM on 01/11/26 (USD 200.00)",
+      "observedAt": "2026-11-03T10:00:00.000Z"
+    }
+  ],
+  "expect": {
+    "facts": [
+      {
+        "factType": "movement",
+        "attrs": {
+          "direction": "debit",
+          "purpose": "atm",
+          "rail": "cash"
+        },
+        "amounts": [
+          {
+            "role": "posted",
+            "minor": 1745000,
+            "unit": "INR",
+            "original": {
+              "minor": 20000,
+              "currency": "USD"
+            }
+          }
+        ],
+        "instrument": {
+          "maskDigits": "1234",
+          "kind": "credit_card"
+        }
+      }
+    ]
+  },
+  "note": "INR posted, the foreign amount in brackets is the original.",
+  "origin": "foreign-v2-more"
+}

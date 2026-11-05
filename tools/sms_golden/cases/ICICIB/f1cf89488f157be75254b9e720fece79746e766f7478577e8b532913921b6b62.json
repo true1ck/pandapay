@@ -1,0 +1,18 @@
+{
+  "id": "foreign:emi_conversion_successful",
+  "templateHash": "f1cf89488f157be75254b9e720fece79746e766f7478577e8b532913921b6b62",
+  "weight": 1,
+  "source": "synthetic",
+  "messages": [
+    {
+      "sender": "VM-ICICIB-S",
+      "body": "EMI conversion successful for transaction of USD 500.00 on Card XX1234. Monthly EMI Rs 7,350.00 for 6 months.",
+      "observedAt": "2026-11-03T10:00:00.000Z"
+    }
+  ],
+  "expect": {
+    "ignore": true
+  },
+  "note": "Read as a purchase before; it is a conversion notice.",
+  "origin": "foreign-v2-more"
+}

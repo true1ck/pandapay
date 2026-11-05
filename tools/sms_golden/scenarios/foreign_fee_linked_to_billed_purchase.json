@@ -1,0 +1,48 @@
+{
+  "id": "foreign_fee_linked_to_billed_purchase",
+  "description": "A markup fee on a purchase billed in INR adds only the fee.",
+  "knownInstruments": [
+    {
+      "kind": "credit_card",
+      "issuerSlug": "hdfc",
+      "maskDigits": "1234"
+    }
+  ],
+  "messages": [
+    {
+      "sender": "VM-HDFCBK-S",
+      "body": "Spent Rs.1,750.00 on Credit Card x1234 at SAMPLE AI (USD 20.00) on 2026-11-01:07:00:11.",
+      "observedAt": "2026-11-01T07:00:20Z"
+    },
+    {
+      "sender": "VM-HDFCBK-S",
+      "body": "Forex markup fee of Rs 52.50 charged on your Credit Card XX1234 for transaction of USD 20.00 at SAMPLE AI on 03-11-26.",
+      "observedAt": "2026-11-03T10:00:00Z"
+    }
+  ],
+  "expect": {
+    "events": [
+      {
+        "type": "purchase",
+        "legRoles": [
+          "debit_leg"
+        ]
+      },
+      {
+        "type": "fee",
+        "legRoles": [
+          "charge",
+          "original"
+        ]
+      }
+    ],
+    "totals": {
+      "from": "2026-10-31T18:30:00Z",
+      "to": "2026-11-30T18:30:00Z",
+      "spendMinor": 180250,
+      "incomeMinor": 0,
+      "investmentMinor": 0,
+      "transactionCount": 2
+    }
+  }
+}

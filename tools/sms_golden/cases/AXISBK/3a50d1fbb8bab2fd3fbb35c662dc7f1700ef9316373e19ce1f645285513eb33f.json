@@ -1,0 +1,38 @@
+{
+  "id": "foreign:atm_used_for_withdrawal",
+  "templateHash": "3a50d1fbb8bab2fd3fbb35c662dc7f1700ef9316373e19ce1f645285513eb33f",
+  "weight": 1,
+  "source": "synthetic",
+  "messages": [
+    {
+      "sender": "VM-AXISBK-S",
+      "body": "Your Debit Card XX4321 has been used for an ATM withdrawal of THB 5,000.00 at SAMPLE BANK ATM on 01-11-26.",
+      "observedAt": "2026-11-03T10:00:00.000Z"
+    }
+  ],
+  "expect": {
+    "facts": [
+      {
+        "factType": "movement",
+        "attrs": {
+          "direction": "debit",
+          "purpose": "atm",
+          "rail": "cash"
+        },
+        "amounts": [
+          {
+            "role": "posted",
+            "minor": 500000,
+            "unit": "THB"
+          }
+        ],
+        "instrument": {
+          "maskDigits": "4321",
+          "kind": "debit_card"
+        }
+      }
+    ]
+  },
+  "note": "Card used for a foreign ATM withdrawal.",
+  "origin": "foreign-v2-more"
+}

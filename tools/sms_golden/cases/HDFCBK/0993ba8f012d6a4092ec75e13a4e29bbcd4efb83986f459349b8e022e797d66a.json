@@ -1,0 +1,42 @@
+{
+  "id": "foreign:fee_markup_with_transaction",
+  "templateHash": "0993ba8f012d6a4092ec75e13a4e29bbcd4efb83986f459349b8e022e797d66a",
+  "weight": 1,
+  "source": "synthetic",
+  "messages": [
+    {
+      "sender": "VM-HDFCBK-S",
+      "body": "Forex markup fee of Rs 52.50 charged on your Credit Card XX1234 for transaction of USD 20.00 at SAMPLE AI on 01-11-26.",
+      "observedAt": "2026-11-03T10:00:00.000Z"
+    }
+  ],
+  "expect": {
+    "facts": [
+      {
+        "factType": "movement",
+        "attrs": {
+          "direction": "debit",
+          "purpose": "fee",
+          "rail": "card"
+        },
+        "amounts": [
+          {
+            "role": "posted",
+            "minor": 5250,
+            "unit": "INR",
+            "original": {
+              "minor": 2000,
+              "currency": "USD"
+            }
+          }
+        ],
+        "instrument": {
+          "maskDigits": "1234",
+          "kind": "credit_card"
+        }
+      }
+    ]
+  },
+  "note": "Markup fee: INR fee, the transaction amount is its original.",
+  "origin": "foreign-v2-more"
+}

@@ -1,0 +1,38 @@
+{
+  "id": "foreign:fee_cross_currency_levied",
+  "templateHash": "df5f56a2415183e77fde6b8dd7c01010c3310a7e2d42e5ede4f07e38079fbb8e",
+  "weight": 1,
+  "source": "synthetic",
+  "messages": [
+    {
+      "sender": "VM-SBICRD-S",
+      "body": "Cross currency markup of Rs 52.50 levied on your Credit Card ending 1234 on 01/11/26.",
+      "observedAt": "2026-11-03T10:00:00.000Z"
+    }
+  ],
+  "expect": {
+    "facts": [
+      {
+        "factType": "movement",
+        "attrs": {
+          "direction": "debit",
+          "purpose": "fee",
+          "rail": "card"
+        },
+        "amounts": [
+          {
+            "role": "posted",
+            "minor": 5250,
+            "unit": "INR"
+          }
+        ],
+        "instrument": {
+          "maskDigits": "1234",
+          "kind": "credit_card"
+        }
+      }
+    ]
+  },
+  "note": "Markup fee with no transaction detail: an ordinary INR fee.",
+  "origin": "foreign-v2-more"
+}

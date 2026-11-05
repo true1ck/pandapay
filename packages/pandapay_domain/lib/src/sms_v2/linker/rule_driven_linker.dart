@@ -4,6 +4,7 @@ import '../contract/fact.dart';
 import '../contract/instrument.dart';
 import '../contract/interfaces.dart';
 import '../contract/rule_bundle.dart';
+import '../contract/types.dart';
 import 'link_context.dart';
 import 'receipt_policy.dart';
 
@@ -36,6 +37,11 @@ enum LinkRuleKind {
   /// A `duplicate_notice` leg on a normal debit (`LINK-DUP-NOTIFY`).
   duplicateNotice,
 
+  /// `fee` with a `charge` and an `original` leg (CCR-005): a fee posted on
+  /// its own takes the transaction it was charged on as a shared reference.
+  /// Exact evidence only; otherwise the fee stands alone, never ambiguous.
+  feeCharge,
+
   /// Any other rule: joined on its parameters only.
   generic,
 }
@@ -48,6 +54,11 @@ LinkRuleKind linkRuleKindOf(LinkRule rule) {
           ? LinkRuleKind.receipt
           : LinkRuleKind.duplicateNotice;
     }
+  }
+  if (rule.eventType == EventType.fee &&
+      rule.legs.any((l) => l.role == LegRole.charge) &&
+      rule.legs.any((l) => l.role == LegRole.original)) {
+    return LinkRuleKind.feeCharge;
   }
   return switch (rule.eventType) {
     EventType.ipoApplication => LinkRuleKind.ipo,
@@ -435,7 +446,10 @@ class _Run {
       _done(f);
       return;
     }
-    if (f is MovementFact) _lateOriginal(f);
+    if (f is MovementFact) {
+      _lateOriginal(f);
+      _lateFeeOriginal(f);
+    }
 
     // 1. Pair rules, by priority: join the one other leg that is found.
     for (final rule in rules) {
@@ -625,6 +639,10 @@ class _Run {
   List<_Cand> _candidates(LinkRule rule, LinkLeg leg, Fact f) {
     final kind = kinds[rule]!;
     if (kind == LinkRuleKind.mandateCharge) return _mandateCandidates(rule, f);
+    if (kind == LinkRuleKind.feeCharge) {
+      final one = _feeTransaction(rule, f);
+      return one == null ? const [] : [_Cand.fact(one, LegRole.original)];
+    }
     final role = leg.role;
     final placed = rule.legs
         .where((l) => l.role == LegRole.holdPlaced)
@@ -1217,6 +1235,126 @@ class _Run {
     }
   }
 
+  // ------------------------------------------------------- fees (CCR-005)
+
+  /// The one transaction [fee] was charged on, or null. Exact evidence only:
+  /// the same resolved card or account, not after the fee and within the
+  /// rule's window before it, no conflicting reference, and a shared reference
+  /// or the same foreign amount (the fee's `original` against the
+  /// transaction's foreign price). Notices of one transaction are one
+  /// candidate. Two transactions that fit give null: a fee is then an
+  /// ordinary fee, never an ambiguous event. [extra] is a transaction being
+  /// processed now, not indexed yet.
+  Fact? _feeTransaction(LinkRule rule, Fact fee, {MovementFact? extra}) {
+    if (fee is! MovementFact) return null;
+    final originalLeg = rule.legs
+        .where((l) => l.role == LegRole.original)
+        .firstOrNull;
+    final i = _instId(fee);
+    if (originalLeg == null || i == null) return null;
+    final charged = fee.amount(AmountRole.posted)?.original;
+    if (charged == null && _refs(fee).isEmpty) return null;
+    final window = _hours(rule.join.windowHours);
+    final pool = <String, Fact>{
+      for (final g
+          in byInstrument[i]?.range(
+                fee.effectiveAt.subtract(window + _slack),
+                fee.effectiveAt.add(_slack),
+              ) ??
+              const <Fact>[])
+        if (processed.contains(g.factId)) g.factId: g,
+    };
+    if (extra != null) pool[extra.factId] = extra;
+    final byTransaction = <String, Fact>{};
+    for (final g in pool.values) {
+      if (g.factId == fee.factId || g.sourceKey == fee.sourceKey) continue;
+      if (!_legMatches(rule, originalLeg, g)) continue;
+      if (!_feeEvidence(rule, fee, charged, g)) continue;
+      final key = eventOfFact[g.factId] ?? g.factId;
+      final seen = byTransaction[key];
+      final moneyLeg =
+          events[key]?.legs.any(
+            (l) => l.factId == g.factId && l.role == LegRole.debitLeg,
+          ) ??
+          false;
+      if (seen == null || moneyLeg) byTransaction[key] = g;
+    }
+    return byTransaction.length == 1 ? byTransaction.values.single : null;
+  }
+
+  bool _feeEvidence(
+    LinkRule rule,
+    MovementFact fee,
+    OriginalAmount? charged,
+    Fact g,
+  ) {
+    if (g is! MovementFact || g.direction != Direction.debit) return false;
+    if (g.evidenceOnly == true || _instId(g) != _instId(fee)) return false;
+    if (g.effectiveAt.isAfter(fee.effectiveAt.add(_slack))) return false;
+    if (!_within(fee, g, rule.join.windowHours)) return false;
+    final shared = _sharesRef(fee, g);
+    if (shared) return true;
+    if (_conflictingRefs(fee, g)) return false;
+    final price = g.amount(AmountRole.posted)?.foreign;
+    return charged != null &&
+        price != null &&
+        price.minor == charged.minor &&
+        price.currency == charged.currency;
+  }
+
+  /// A transaction that arrived after a fee charged on it: each fee that stands
+  /// alone and has exactly this transaction as its evidence takes it as
+  /// `original`. The fee's event keeps its id; the transaction keeps its own
+  /// event, as with [_lateOriginal].
+  void _lateFeeOriginal(MovementFact p) {
+    final rule = _firstOf(LinkRuleKind.feeCharge);
+    if (rule == null ||
+        p.direction != Direction.debit ||
+        p.evidenceOnly == true) {
+      return;
+    }
+    final originalLeg = rule.legs
+        .where((l) => l.role == LegRole.original)
+        .firstOrNull;
+    final chargeLeg = rule.legs
+        .where((l) => l.role == LegRole.charge)
+        .firstOrNull;
+    if (originalLeg == null ||
+        chargeLeg == null ||
+        !_legMatches(rule, originalLeg, p)) {
+      return;
+    }
+    final i = _instId(p);
+    if (i == null) return;
+    final window = _hours(rule.join.windowHours);
+    final found = <Fact>[];
+    for (final g
+        in byInstrument[i]?.range(
+              p.effectiveAt.subtract(_slack),
+              p.effectiveAt.add(window + _slack),
+            ) ??
+            const <Fact>[]) {
+      if (g.sourceKey == p.sourceKey) continue;
+      if (!processed.contains(g.factId) || !_hasEvent(g)) continue;
+      if (!_legMatches(rule, chargeLeg, g)) continue;
+      final e = events[eventOfFact[g.factId]!]!;
+      if (e.type != EventType.fee || !_joinable(rule, e, LegRole.original)) {
+        continue;
+      }
+      if (_feeTransaction(rule, g, extra: p)?.factId != p.factId) continue;
+      found.add(g);
+    }
+    found.sort(_order);
+    for (final g in found) {
+      _join(
+        rule,
+        LegRole.original,
+        p,
+        _Cand.event(eventOfFact[g.factId]!, g, LegRole.charge),
+      );
+    }
+  }
+
   // ----------------------------------------------------------------- joins
 
   String _join(LinkRule rule, LegRole role, Fact f, _Cand c) {
@@ -1673,6 +1811,7 @@ class _Run {
       case LinkRuleKind.refund:
       case LinkRuleKind.receipt:
       case LinkRuleKind.duplicateNotice:
+      case LinkRuleKind.feeCharge:
         return false; // the purpose typing below gives these their one-leg type
       case LinkRuleKind.generic:
         return role == rule.legs.first.role &&

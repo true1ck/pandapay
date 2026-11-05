@@ -1305,6 +1305,7 @@ void main() {
         'LINK-MANDATE-CHARGE': LinkRuleKind.mandateCharge,
         'LINK-CARD-BILL': LinkRuleKind.cardBill,
         'LINK-WALLET-TOPUP': LinkRuleKind.walletTopup,
+        'LINK-FEE-ON-TXN': LinkRuleKind.feeCharge,
         'LINK-REFUND': LinkRuleKind.refund,
         'LINK-OWN-TRANSFER': LinkRuleKind.ownTransfer,
         'LINK-RECEIPT': LinkRuleKind.receipt,

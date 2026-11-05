@@ -1,0 +1,38 @@
+{
+  "id": "foreign:atm_withdrawn_credit_card_with_limit",
+  "templateHash": "e9b9ec38d80d3e5a39939b78894395b3ff71efd374eaf3e437a0730c771fc4c4",
+  "weight": 1,
+  "source": "synthetic",
+  "messages": [
+    {
+      "sender": "VM-ICICIB-S",
+      "body": "USD 200.00 withdrawn from Credit Card XX4321 at ATM on 01-11-26. Avl Lmt: INR 1,00,000.00",
+      "observedAt": "2026-11-03T10:00:00.000Z"
+    }
+  ],
+  "expect": {
+    "facts": [
+      {
+        "factType": "movement",
+        "attrs": {
+          "direction": "debit",
+          "purpose": "atm",
+          "rail": "cash"
+        },
+        "amounts": [
+          {
+            "role": "posted",
+            "minor": 20000,
+            "unit": "USD"
+          }
+        ],
+        "instrument": {
+          "maskDigits": "4321",
+          "kind": "credit_card"
+        }
+      }
+    ]
+  },
+  "note": "Amount-first foreign ATM withdrawal on a credit card; the INR limit is not the amount.",
+  "origin": "foreign-v2-more"
+}

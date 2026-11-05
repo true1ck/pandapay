@@ -1,0 +1,52 @@
+{
+  "contractVersion": "2.0",
+  "factId": "a3c1e6b0d2f4e8a7c9b1d3f5e7a9c2b4d6f8e0a2c4b6d8f0e2a4c6b8d0f2e4a6",
+  "sourceKey": "sms:synthetic:0023",
+  "factType": "movement",
+  "observedAt": "2026-11-01T07:00:20Z",
+  "occurredAt": "2026-11-01T07:00:11Z",
+  "instrument": {
+    "kind": "credit_card",
+    "issuerSlug": "hdfc",
+    "maskDigits": "5678",
+    "maskLength": 16,
+    "productName": null,
+    "raw": "x5678"
+  },
+  "counterparty": null,
+  "amounts": [
+    {
+      "role": "posted",
+      "minor": 5250,
+      "unit": "INR",
+      "original": {
+        "minor": 2000,
+        "currency": "USD"
+      }
+    }
+  ],
+  "references": {
+    "txnId": "612345678901"
+  },
+  "attrs": {
+    "direction": "debit",
+    "purpose": "fee",
+    "rail": "card"
+  },
+  "provenance": {
+    "engine": "rules",
+    "ruleId": "SYN-RULE-FX-FEE",
+    "ruleVersion": 1,
+    "bundleVersion": 1,
+    "engineVersion": "2.0.0",
+    "appVersion": "1.0.0+1"
+  },
+  "evidence": [
+    {
+      "field": "amt",
+      "start": 0,
+      "end": 10
+    }
+  ],
+  "confidence": 0.99
+}

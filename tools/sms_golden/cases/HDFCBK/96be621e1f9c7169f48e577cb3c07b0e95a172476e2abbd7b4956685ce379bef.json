@@ -1,0 +1,18 @@
+{
+  "id": "foreign:emi_conversion_has_been_converted",
+  "templateHash": "96be621e1f9c7169f48e577cb3c07b0e95a172476e2abbd7b4956685ce379bef",
+  "weight": 1,
+  "source": "synthetic",
+  "messages": [
+    {
+      "sender": "VM-HDFCBK-S",
+      "body": "Your transaction of USD 500.00 at SAMPLE STORE on Credit Card XX1234 has been converted to EMI of Rs 7,350.00 for 6 months.",
+      "observedAt": "2026-11-03T10:00:00.000Z"
+    }
+  ],
+  "expect": {
+    "ignore": true
+  },
+  "note": "EMI conversion of a foreign transaction: not a second spend.",
+  "origin": "foreign-v2-more"
+}

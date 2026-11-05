@@ -1,0 +1,44 @@
+{
+  "id": "foreign:account_debit_amount_first",
+  "templateHash": "b93d61e4602b962b2bbff697f4cdd5f29cb8a869bd1b625f760e92886f2d73eb",
+  "weight": 1,
+  "source": "synthetic",
+  "messages": [
+    {
+      "sender": "VM-HDFCBK-S",
+      "body": "USD 100.00 debited from your A/c XX1234 on 01-11-26 towards SAMPLE REMIT. Ref 612345678901.",
+      "observedAt": "2026-11-03T10:00:00.000Z"
+    }
+  ],
+  "expect": {
+    "facts": [
+      {
+        "factType": "movement",
+        "attrs": {
+          "direction": "debit",
+          "purpose": "purchase",
+          "rail": "unknown"
+        },
+        "amounts": [
+          {
+            "role": "posted",
+            "minor": 10000,
+            "unit": "USD"
+          }
+        ],
+        "instrument": {
+          "maskDigits": "1234",
+          "kind": "bank_account"
+        },
+        "references": {
+          "txnId": "612345678901"
+        },
+        "counterparty": {
+          "name": "SAMPLE REMIT"
+        }
+      }
+    ]
+  },
+  "note": "Foreign debit from a bank account, reference kept.",
+  "origin": "foreign-v2-more"
+}

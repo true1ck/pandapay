@@ -1,0 +1,38 @@
+{
+  "id": "foreign:fee_debited_towards_markup",
+  "templateHash": "bf9dd9a2d718bef098a6373c076f1646909342c5e37fc6088ff0a99ac5b035fe",
+  "weight": 1,
+  "source": "synthetic",
+  "messages": [
+    {
+      "sender": "VM-AXISBK-S",
+      "body": "Rs 52.50 debited from your Credit Card XX4321 towards foreign currency markup fee on 01-11-26.",
+      "observedAt": "2026-11-03T10:00:00.000Z"
+    }
+  ],
+  "expect": {
+    "facts": [
+      {
+        "factType": "movement",
+        "attrs": {
+          "direction": "debit",
+          "purpose": "fee",
+          "rail": "card"
+        },
+        "amounts": [
+          {
+            "role": "posted",
+            "minor": 5250,
+            "unit": "INR"
+          }
+        ],
+        "instrument": {
+          "maskDigits": "4321",
+          "kind": "credit_card"
+        }
+      }
+    ]
+  },
+  "note": "Read as a purchase before; it is a fee.",
+  "origin": "foreign-v2-more"
+}

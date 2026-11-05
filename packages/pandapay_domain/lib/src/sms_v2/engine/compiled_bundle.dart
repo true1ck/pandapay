@@ -12,7 +12,12 @@ import 'transforms.dart';
 /// 2.2.0: an emit amount may read its unit from the message (`unitFrom`) and an
 /// INR posting may carry the foreign amount printed beside it (`original`),
 /// CCR-004. A 2.1.x engine refuses a bundle that uses either field.
-const String smsEngineVersion = '2.2.0';
+///
+/// 2.3.0: the linker reads a `fee` link rule with `charge` and `original` legs
+/// (a markup fee and the transaction it was charged on, CCR-005). An older
+/// linker would join such a rule on its parameters alone, so the bundle that
+/// ships it requires 2.3.0.
+const String smsEngineVersion = '2.3.0';
 
 /// Why a bundle cannot be used.
 class BundleRefusedException implements Exception {

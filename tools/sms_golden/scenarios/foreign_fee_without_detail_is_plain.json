@@ -1,0 +1,47 @@
+{
+  "id": "foreign_fee_without_detail_is_plain",
+  "description": "A markup fee that names no transaction is an ordinary INR fee.",
+  "knownInstruments": [
+    {
+      "kind": "credit_card",
+      "issuerSlug": "hdfc",
+      "maskDigits": "1234"
+    }
+  ],
+  "messages": [
+    {
+      "sender": "VM-HDFCBK-S",
+      "body": "Spent USD 20.00 on Credit Card x1234 at SAMPLE AI on 2026-11-01:07:00:11.",
+      "observedAt": "2026-11-01T07:00:20Z"
+    },
+    {
+      "sender": "VM-HDFCBK-S",
+      "body": "Cross currency markup of Rs 52.50 levied on your Credit Card XX1234 on 03-11-26.",
+      "observedAt": "2026-11-03T10:00:00Z"
+    }
+  ],
+  "expect": {
+    "events": [
+      {
+        "type": "purchase",
+        "legRoles": [
+          "debit_leg"
+        ]
+      },
+      {
+        "type": "fee",
+        "legRoles": [
+          "debit_leg"
+        ]
+      }
+    ],
+    "totals": {
+      "from": "2026-10-31T18:30:00Z",
+      "to": "2026-11-30T18:30:00Z",
+      "spendMinor": 5250,
+      "incomeMinor": 0,
+      "investmentMinor": 0,
+      "transactionCount": 1
+    }
+  }
+}

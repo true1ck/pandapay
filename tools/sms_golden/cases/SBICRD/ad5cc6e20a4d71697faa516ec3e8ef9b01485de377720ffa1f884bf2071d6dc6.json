@@ -1,0 +1,18 @@
+{
+  "id": "foreign:emi_conversion_inr_and_original",
+  "templateHash": "ad5cc6e20a4d71697faa516ec3e8ef9b01485de377720ffa1f884bf2071d6dc6",
+  "weight": 1,
+  "source": "synthetic",
+  "messages": [
+    {
+      "sender": "VM-SBICRD-S",
+      "body": "Dear Customer, txn of Rs 43,500.00 (USD 500.00) on your Credit Card ending 1234 at SAMPLE STORE is converted into 6 EMIs of Rs 7,350.00.",
+      "observedAt": "2026-11-03T10:00:00.000Z"
+    }
+  ],
+  "expect": {
+    "ignore": true
+  },
+  "note": "EMI conversion stating INR and the foreign amount.",
+  "origin": "foreign-v2-more"
+}
