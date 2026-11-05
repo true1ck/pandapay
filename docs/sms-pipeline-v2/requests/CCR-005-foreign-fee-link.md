@@ -21,11 +21,36 @@ On a movement with `purpose: fee`, the posted amount is the fee in INR and `orig
 
 Why not a new attribute: movement `attrs` and `amounts` have `additionalProperties: false`. A new field would make a build without this change reject such a fact when it pulls it from another device (`sync_pull` validates every fact), and would need a sync capability header like CCR-003. Reusing `original` keeps every fact valid for every build.
 
+### Part 2. The fee event links the transaction (linker, engine 2.3.0)
+
+A link rule, `LINK-FEE-ON-TXN` in `rules/sms/v2/link_rules.json`:
+
+```json
+{"id": "LINK-FEE-ON-TXN", "eventType": "fee",
+ "legs": [{"role": "charge", "match": {"factType": "movement", "direction": "debit", "purpose": ["fee"], "evidenceOnly": false}},
+          {"role": "original", "match": {"factType": "movement", "direction": "debit", "purpose": ["purchase", "atm"], "evidenceOnly": false}}],
+ "join": {"amountRole": "posted", "amountTolerancePct": 100, "windowHours": 1080, "reference": "prefer"},
+ "singleLeg": "complete", "priority": 95}
+```
+
+The linker reads an event type `fee` with a `charge` and an `original` leg as a new kind, `LinkRuleKind.feeCharge` (chosen from the event type and leg roles, never the id). Matching is code:
+
+- The fee joins one transaction only on exact evidence: the same resolved card or account; the transaction not after the fee (two days' slack for a printed date) and at most 45 days before it; no conflicting reference of the same kind; and either a shared reference, or the fee's `original` equal (minor and currency) to the transaction's foreign price (`posted.foreign`: the foreign-only amount, or the original beside an INR posting).
+- Notices of one transaction count as one candidate. Two transactions that fit give no link, and the fee is an ordinary fee. A fee is never an `ambiguous` event and never a review item, because an ambiguous event would drop the fee from totals.
+- The result is `fee [charge, original]`. As with a refund, the transaction is a shared reference: it keeps its own event and its own ledger row (none for a foreign-only amount), and is never money in the fee's event. The fee's ledger row is the fee's INR amount, spend, exactly as before. The event id is the fee's, in any arrival order: a transaction that arrives after its fee is attached to the fee's event (`_lateFeeOriginal`), the same as a purchase arriving after its refund.
+- A fee with no evidence keeps the shape it always had (`fee [debit_leg]`, no link rule), so existing fee events do not change.
+
+Why a version bump: a linker before 2.3.0 reads this rule as a generic rule, joins on its parameters alone and could make an ambiguous fee event, which counts nothing. `smsEngineVersion` is 2.3.0 and `rules/sms/v2/meta.json` requires it, so an older build refuses the bundle and keeps its last good one.
+
+Tests: `packages/pandapay_domain/test/sms_v2/linker/foreign_fee_link_test.dart`; golden scenarios `foreign_fee_*`.
+
 ## Compatibility
 
 - Facts: unchanged shape; old builds read a fee with an original as an INR fee, which is what it is.
-- `contractVersion` stays `2.0`.
+- Events: `fee` with `charge` and `original` legs is valid under the frozen event schema. Server projection reads the fee as spend (`ENTRY_KIND_BY_TYPE.fee`); `original` legs are not money there either.
+- Bundles: `minEngineVersion` 2.3.0 (above). `contractVersion` stays `2.0`.
+- Known order effect: if two transactions that both fit a fee arrive only after it, the first to arrive is linked (legs only grow). A transaction normally precedes its fee.
 
 ## Rollback
 
-Revert the rules. Facts already produced stay valid.
+Remove `LINK-FEE-ON-TXN` and revert the rules. Stored fee events keep their `original` leg, which every consumer reads as a non-money reference; facts stay valid. `minEngineVersion` can then go back to 2.2.0.

@@ -177,6 +177,43 @@
     "priority": 100
   },
   {
+    "id": "LINK-FEE-ON-TXN",
+    "eventType": "fee",
+    "legs": [
+      {
+        "role": "charge",
+        "match": {
+          "factType": "movement",
+          "direction": "debit",
+          "purpose": [
+            "fee"
+          ],
+          "evidenceOnly": false
+        }
+      },
+      {
+        "role": "original",
+        "match": {
+          "factType": "movement",
+          "direction": "debit",
+          "purpose": [
+            "purchase",
+            "atm"
+          ],
+          "evidenceOnly": false
+        }
+      }
+    ],
+    "join": {
+      "amountRole": "posted",
+      "amountTolerancePct": 100,
+      "windowHours": 1080,
+      "reference": "prefer"
+    },
+    "singleLeg": "complete",
+    "priority": 95
+  },
+  {
     "id": "LINK-REFUND",
     "eventType": "refund",
     "legs": [
