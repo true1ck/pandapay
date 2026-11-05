@@ -44,15 +44,7 @@ class SharedTabbedFrame extends StatelessWidget {
           overflow: TextOverflow.ellipsis,
           style: BambooFonts.heading(17),
         ),
-        actions: [
-          ...actions,
-          if (onAddExpense != null)
-            IconButton(
-              tooltip: 'Add expense',
-              onPressed: onAddExpense,
-              icon: const Icon(Icons.add_rounded, color: BambooInk.slate),
-            ),
-        ],
+        actions: actions,
         bottom: TabBar(
           controller: controller,
           isScrollable:
@@ -71,6 +63,9 @@ class SharedTabbedFrame extends StatelessWidget {
           tabs: [for (final label in tabs) Tab(text: label)],
         ),
       ),
+      floatingActionButton: onAddExpense == null
+          ? null
+          : AppAddButton(tooltip: 'Add expense', onPressed: onAddExpense!),
       body: AppBackground(
         child: Column(
           children: [
@@ -730,7 +725,12 @@ class _SharedPageBodyState extends State<SharedPageBody>
     }
     return ListView.builder(
       key: PageStorageKey(widget.key),
-      padding: const EdgeInsets.all(AppSpace.lg),
+      padding: const EdgeInsets.fromLTRB(
+        AppSpace.lg,
+        AppSpace.lg,
+        AppSpace.lg,
+        96,
+      ),
       keyboardDismissBehavior: ScrollViewKeyboardDismissBehavior.onDrag,
       itemCount:
           widget.header.length +

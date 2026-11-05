@@ -223,6 +223,7 @@ class SubscriptionsScreen extends ConsumerWidget {
     return _SubscriptionFrame(
       showChrome: showChrome,
       backgroundColor: BambooInk.paper,
+      onAdd: signedIn ? () => _addSubscription(context, ref) : null,
       appBar: AppBar(
         backgroundColor: BambooInk.paper,
         elevation: 0,
@@ -237,15 +238,6 @@ class SubscriptionsScreen extends ConsumerWidget {
           'Subscriptions',
           style: BambooFonts.heading(20, color: BambooInk.ink900),
         ),
-        actions: [
-          if (signedIn)
-            IconButton(
-              tooltip: 'Add subscription',
-              onPressed: () => _addSubscription(context, ref),
-              icon: const Icon(Icons.add_rounded, size: 27),
-              color: BambooInk.jade,
-            ),
-        ],
       ),
       body: AppBackground(
         child: report.when(
@@ -819,29 +811,38 @@ class _SubscriptionFrame extends StatelessWidget {
   final Color backgroundColor;
   final AppBar appBar;
   final Widget body;
+  final VoidCallback? onAdd;
   const _SubscriptionFrame({
     required this.showChrome,
     required this.backgroundColor,
     required this.appBar,
     required this.body,
+    this.onAdd,
   });
 
   @override
   Widget build(BuildContext context) {
+    final add = onAdd == null
+        ? null
+        : AppAddButton(tooltip: 'Add subscription', onPressed: onAdd!);
     if (showChrome) {
-      return Scaffold(backgroundColor: backgroundColor, appBar: appBar, body: body);
+      return Scaffold(
+        backgroundColor: backgroundColor,
+        appBar: appBar,
+        body: body,
+        floatingActionButton: add,
+      );
     }
-    return Column(
+    return Stack(
+      fit: StackFit.expand,
       children: [
-        if (appBar.actions?.isNotEmpty == true)
-          Align(
-            alignment: Alignment.centerRight,
-            child: Padding(
-              padding: const EdgeInsets.only(right: AppSpace.sm),
-              child: Row(mainAxisSize: MainAxisSize.min, children: appBar.actions!),
-            ),
+        body,
+        if (add != null)
+          Positioned(
+            right: AppSpace.lg,
+            bottom: AppSpace.lg,
+            child: SafeArea(top: false, left: false, child: add),
           ),
-        Expanded(child: body),
       ],
     );
   }

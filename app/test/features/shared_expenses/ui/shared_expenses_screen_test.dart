@@ -232,9 +232,10 @@ void main() {
       final add = find.byTooltip('Add expense');
       expect(
         find.descendant(of: find.byType(AppBar), matching: add),
-        findsOneWidget,
+        findsNothing,
       );
       expect(tester.getCenter(add).dx, greaterThan(300));
+      expect(tester.getCenter(add).dy, greaterThan(900));
       await tester.tap(add);
       await tester.pumpAndSettle();
       expect(added, 1);

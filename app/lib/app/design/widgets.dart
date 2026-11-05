@@ -3,6 +3,28 @@ import 'package:flutter/services.dart';
 
 import 'app_theme.dart';
 
+/// The shared, accessible add action for Subscriptions and Splits.
+class AppAddButton extends StatelessWidget {
+  final String tooltip;
+  final VoidCallback onPressed;
+  const AppAddButton({
+    super.key,
+    required this.tooltip,
+    required this.onPressed,
+  });
+
+  @override
+  Widget build(BuildContext context) => FloatingActionButton(
+    heroTag: null,
+    tooltip: tooltip,
+    onPressed: onPressed,
+    backgroundColor: BambooInk.slate,
+    foregroundColor: Colors.white,
+    shape: const CircleBorder(),
+    child: const Icon(Icons.add_rounded, size: 28),
+  );
+}
+
 /// PandaPay's brand mark — a rounded panda-ear silhouette in a teal tile.
 /// Used on the login screen and anywhere the app needs to introduce
 /// itself, so there's one real "this is PandaPay" moment instead of a
