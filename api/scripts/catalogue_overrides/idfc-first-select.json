@@ -1,0 +1,14 @@
+{
+  "source_slug": "idfc-first-select",
+  "changes": [
+    {
+      "path": "reward_rules[id=base_3x_eligible].conditions",
+      "value": {
+        "points_basis": "1X = 1 Reward Point per Rs 200 spent"
+      },
+      "reason": "Removes the invented statement-cycle spend threshold; issuer applies 3X to all eligible spends.",
+      "source_url": "https://www.idfcfirst.bank.in/content/idfcfirstbank/en/credit-card/select.html",
+      "checked_on": "2026-11-05"
+    }
+  ]
+}

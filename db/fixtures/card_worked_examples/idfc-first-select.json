@@ -1,0 +1,300 @@
+{
+  "source_slug": "idfc-first-select",
+  "cardpipeline_id": "idfc-first-bank-first-select",
+  "card_name": "IDFC FIRST Select Credit Card",
+  "verified_on": "2026-11-05",
+  "sources": [
+    {
+      "url": "https://www.idfcfirst.bank.in/content/idfcfirstbank/en/credit-card/select.html",
+      "doc": "FIRST Select page",
+      "quote": "1X = 1 Reward Point per Rs 200 spent | 1 Reward point = Rs 0.25"
+    },
+    {
+      "url": "https://www.idfcfirst.bank.in/content/idfcfirstbank/en/credit-card/select.html",
+      "doc": "FIRST Select page",
+      "quote": "Reward program not applicable on Fuel, EMI transactions and Cash withdrawals."
+    }
+  ],
+  "examples": [
+    {
+      "id": "001",
+      "title": "Rs 10,000 general retail spend",
+      "ctx": {
+        "amount": 10000,
+        "occurred": "2026-11-10T10:00:00+05:30",
+        "category_id": null,
+        "category_slug": "other",
+        "mcc": "5651",
+        "merchant_name": "Apparel store",
+        "merchant_vpa": null,
+        "merchant_slug": null,
+        "platform": null,
+        "rail": "swipe"
+      },
+      "state_before": {
+        "caps_by_source_id": {}
+      },
+      "expect": {
+        "currency": "points",
+        "amount": 150,
+        "value_inr": 37.5,
+        "excluded": false,
+        "cap_deltas_by_source_id": {}
+      },
+      "why": "All other eligible spend earns 3X; 1X = 1 reward point per Rs 200, so 50 blocks x 3 = 150. One point = Rs 0.25."
+    },
+    {
+      "id": "002",
+      "title": "Rs 2,000 restaurant spend",
+      "ctx": {
+        "amount": 2000,
+        "occurred": "2026-11-10T10:00:00+05:30",
+        "category_id": null,
+        "category_slug": "dining",
+        "mcc": "5812",
+        "merchant_name": "Restaurant",
+        "merchant_vpa": null,
+        "merchant_slug": null,
+        "platform": null,
+        "rail": "swipe"
+      },
+      "state_before": {
+        "caps_by_source_id": {}
+      },
+      "expect": {
+        "currency": "points",
+        "amount": 100,
+        "value_inr": 25.0,
+        "excluded": false,
+        "cap_deltas_by_source_id": {}
+      },
+      "why": "10X on dining from the first eligible transaction: 10 blocks x 10 = 100."
+    },
+    {
+      "id": "003",
+      "title": "Rs 20,000 flight booked with the airline",
+      "ctx": {
+        "amount": 20000,
+        "occurred": "2026-11-10T10:00:00+05:30",
+        "category_id": null,
+        "category_slug": "travel",
+        "mcc": "4511",
+        "merchant_name": "Airline direct",
+        "merchant_vpa": null,
+        "merchant_slug": null,
+        "platform": null,
+        "rail": "online"
+      },
+      "state_before": {
+        "caps_by_source_id": {}
+      },
+      "expect": {
+        "currency": "points",
+        "amount": 1000,
+        "value_inr": 250.0,
+        "excluded": false,
+        "cap_deltas_by_source_id": {}
+      },
+      "why": "10X on travel: 100 blocks x 10 = 1,000."
+    },
+    {
+      "id": "004",
+      "title": "Rs 10,000 international purchase",
+      "ctx": {
+        "amount": 10000,
+        "occurred": "2026-11-10T10:00:00+05:30",
+        "category_id": null,
+        "category_slug": "other",
+        "mcc": "5651",
+        "merchant_name": "Overseas store (non-INR)",
+        "merchant_vpa": null,
+        "merchant_slug": null,
+        "platform": null,
+        "rail": "online"
+      },
+      "state_before": {
+        "caps_by_source_id": {}
+      },
+      "expect": {
+        "currency": "points",
+        "amount": 500,
+        "value_inr": 125.0,
+        "excluded": false,
+        "cap_deltas_by_source_id": {}
+      },
+      "why": "10X on international purchases: 50 blocks x 10 = 500."
+    },
+    {
+      "id": "005",
+      "title": "Rs 4,000 electricity bill",
+      "ctx": {
+        "amount": 4000,
+        "occurred": "2026-11-10T10:00:00+05:30",
+        "category_id": null,
+        "category_slug": "bills",
+        "mcc": "4900",
+        "merchant_name": "Electricity board",
+        "merchant_vpa": null,
+        "merchant_slug": null,
+        "platform": null,
+        "rail": "online"
+      },
+      "state_before": {
+        "caps_by_source_id": {}
+      },
+      "expect": {
+        "currency": "points",
+        "amount": 20,
+        "value_inr": 5.0,
+        "excluded": false,
+        "cap_deltas_by_source_id": {}
+      },
+      "why": "Utility bill payments earn only 1X: 20 blocks x 1 = 20."
+    },
+    {
+      "id": "006",
+      "title": "Rs 10,000 insurance premium",
+      "ctx": {
+        "amount": 10000,
+        "occurred": "2026-11-10T10:00:00+05:30",
+        "category_id": null,
+        "category_slug": "insurance",
+        "mcc": "6300",
+        "merchant_name": "Insurer",
+        "merchant_vpa": null,
+        "merchant_slug": null,
+        "platform": null,
+        "rail": "online"
+      },
+      "state_before": {
+        "caps_by_source_id": {}
+      },
+      "expect": {
+        "currency": "points",
+        "amount": 50,
+        "value_inr": 12.5,
+        "excluded": false,
+        "cap_deltas_by_source_id": {}
+      },
+      "why": "Insurance premium payments earn 1X: 50 blocks x 1 = 50."
+    },
+    {
+      "id": "007",
+      "title": "Rs 2,000 train ticket",
+      "ctx": {
+        "amount": 2000,
+        "occurred": "2026-11-10T10:00:00+05:30",
+        "category_id": null,
+        "category_slug": "travel",
+        "mcc": "4112",
+        "merchant_name": "Railway",
+        "merchant_vpa": null,
+        "merchant_slug": null,
+        "platform": null,
+        "rail": "online"
+      },
+      "state_before": {
+        "caps_by_source_id": {}
+      },
+      "expect": {
+        "currency": "points",
+        "amount": 10,
+        "value_inr": 2.5,
+        "excluded": false,
+        "cap_deltas_by_source_id": {}
+      },
+      "why": "Railway spends earn 1X: 10 blocks x 1 = 10."
+    },
+    {
+      "id": "008",
+      "title": "Rs 10,000 EMI purchase",
+      "ctx": {
+        "amount": 10000,
+        "occurred": "2026-11-10T10:00:00+05:30",
+        "category_id": null,
+        "category_slug": "emi",
+        "mcc": null,
+        "merchant_name": "Electronics store",
+        "merchant_vpa": null,
+        "merchant_slug": null,
+        "platform": null,
+        "rail": "emi"
+      },
+      "state_before": {
+        "caps_by_source_id": {}
+      },
+      "expect": {
+        "currency": "points",
+        "amount": 0,
+        "value_inr": null,
+        "excluded": true,
+        "cap_deltas_by_source_id": {}
+      },
+      "why": "The reward programme is not applicable on EMI transactions."
+    },
+    {
+      "id": "009",
+      "title": "Rs 3,000 fuel",
+      "ctx": {
+        "amount": 3000,
+        "occurred": "2026-11-10T10:00:00+05:30",
+        "category_id": null,
+        "category_slug": "fuel",
+        "mcc": "5541",
+        "merchant_name": "Fuel station",
+        "merchant_vpa": null,
+        "merchant_slug": null,
+        "platform": null,
+        "rail": "swipe"
+      },
+      "state_before": {
+        "caps_by_source_id": {}
+      },
+      "expect": {
+        "currency": "points",
+        "amount": 0,
+        "value_inr": null,
+        "excluded": true,
+        "cap_deltas_by_source_id": {}
+      },
+      "why": "The reward programme is not applicable on fuel."
+    }
+  ],
+  "research_notes": [
+    {
+      "item": "spend beyond the credit limit",
+      "cardpipeline_says": "cap reference reward-credit-limit-cycle (no numeric limit)",
+      "issuer_says": "Points are earned only on spends up to the cardholder credit limit per billing cycle. The limit is per user, so no static cap exists and no cap-boundary example is possible.",
+      "proposed_fix": "engine: per-user cap from the credit limit",
+      "override_file": null
+    },
+    {
+      "item": "rounding",
+      "cardpipeline_says": "rounding_mode floor",
+      "issuer_says": "The issuer pages state 1X = 1 point per Rs 200 but not how a partial block is treated; examples use whole blocks.",
+      "proposed_fix": "none",
+      "override_file": null
+    },
+    {
+      "item": "birthday 10X",
+      "cardpipeline_says": "birthday rule modelled",
+      "issuer_says": "Needs the cardholder birthday (user attribute); not exemplified.",
+      "proposed_fix": "engine: user attribute",
+      "override_file": null
+    },
+    {
+      "item": "bonus travel via IDFC app",
+      "cardpipeline_says": "not modelled",
+      "issuer_says": "Wealth/Select/Millennia: extra 20% (hotels) / 10% (flights) bonus points on bookings made through the FIRST Rewards Gallery in the app; separate programme.",
+      "proposed_fix": "none",
+      "override_file": null
+    },
+    {
+      "item": "stray 20,000 threshold on base 3X",
+      "cardpipeline_says": "base_3x_eligible has condition statement_cycle_eligible_spend \"Up to 20,000\"",
+      "issuer_says": "No Rs 20,000 per-cycle threshold exists on the issuer page; 3X applies to all eligible spends. The stray condition would turn the base rule into an info rule.",
+      "proposed_fix": "override",
+      "override_file": "api/scripts/catalogue_overrides/idfc-first-select.json"
+    }
+  ]
+}
