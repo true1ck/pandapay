@@ -10,7 +10,7 @@ const path = require('node:path');
 const { spawnSync } = require('node:child_process');
 
 const root = path.resolve(__dirname, '..');
-const dirs = [path.join(root, 'src', 'sms_v2')];
+const dirs = [path.join(root, 'src', 'sms_v2'), path.join(root, 'src', 'sms_v2', 'jobs')];
 const extra = fs.readdirSync(path.join(root, 'scripts'))
   .filter((f) => /sms_v2.*\.js$/.test(f))
   .map((f) => path.join(root, 'scripts', f));

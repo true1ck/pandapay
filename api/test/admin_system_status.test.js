@@ -80,7 +80,8 @@ test('status reports jobs the role may read, marks overdue/failed/unavailable, a
   assert.equal(body.database.ok, true);
   assert.equal(body.database.version, 'PostgreSQL 18.4');
   const jobs = Object.fromEntries(body.jobs.map(j => [j.key, j.state]));
-  assert.deepEqual(jobs, { backup: 'overdue', privacy_audit: 'never', scraper: 'unavailable' });
+  assert.deepEqual(jobs, { backup: 'overdue', privacy_audit: 'never', scraper: 'unavailable',
+    sms_v2_rule_signing: 'never', sms_v2_ai_drafts: 'never' });
   assert.ok(log.includes('ROLLBACK TO SAVEPOINT system_status_job'), 'failed job query is isolated');
 
   assert.deepEqual(body.checks.map(c => [c.key, c.ok, c.error || null]), [['api', true, null], ['auth', false, 'timeout']]);
@@ -96,6 +97,54 @@ test('status reports jobs the role may read, marks overdue/failed/unavailable, a
   await handler({ admin: { permissions: ['operations.read'] } }, res2, { withAdminClient: fakeDb({ scrape_runs: {} }) });
   assert.deepEqual(res2.body.jobs.map(j => j.key), ['scraper']);
   assert.equal(fetched.length, 2, 'second request within the cache window makes no new probes');
+});
+
+test('the SMS rule job and AI drafts are listed as private admin services with their own health', async () => {
+  const handler = createSystemStatus({ env: { ADMIN_HEALTH_PROBES: 'none' }, repoRoot: os.tmpdir(), clock: () => NOW });
+  const learning = ['operations.read', 'learning.read'];
+  const run = async (rows, permissions = learning) => {
+    const res = fakeResponse();
+    await handler({ admin: { permissions } }, res, { withAdminClient: fakeDb(rows) });
+    return res.body;
+  };
+  const fresh = await run({
+    sms_v2_bundles: { last_run_at: new Date(NOW - 2 * HOUR), last_status: 'fresh', last_success_at: new Date(NOW - 2 * HOUR) },
+    sms_v2_unknown_templates: { last_run_at: new Date(NOW), last_status: 'ok', last_success_at: new Date(NOW - 3 * HOUR) },
+  });
+  const services = Object.fromEntries(fresh.services.map(s => [s.key, s]));
+  assert.equal(services['sms-v2-rule-jobs'].runs, 'admin_only');
+  assert.equal(services['sms-v2-rule-jobs'].health, 'job:sms_v2_rule_signing');
+  assert.equal(services['sms-v2-template-worker'].runs, 'admin_only');
+  assert.equal(services['sms-v2-template-worker'].health, 'job:sms_v2_ai_drafts');
+  const state = body => Object.fromEntries(body.jobs.filter(j => j.key.startsWith('sms_v2')).map(j => [j.key, j.state]));
+  assert.deepEqual(state(fresh), { sms_v2_rule_signing: 'ok', sms_v2_ai_drafts: 'ok' });
+
+  // A rule set within 48 hours of expiry, or layouts queued for over an hour, is a failure.
+  const stale = await run({
+    sms_v2_bundles: { last_run_at: new Date(NOW - 100 * HOUR), last_status: 'expiring', last_success_at: new Date(NOW - 100 * HOUR) },
+    sms_v2_unknown_templates: { last_run_at: new Date(NOW), last_status: 'backlog', last_success_at: null },
+  });
+  assert.deepEqual(state(stale), { sms_v2_rule_signing: 'failed', sms_v2_ai_drafts: 'failed' });
+  // Signed more than 5 days ago but still fresh means the hourly job is not running.
+  const old = await run({
+    sms_v2_bundles: { last_run_at: new Date(NOW - 121 * HOUR), last_status: 'fresh', last_success_at: new Date(NOW - 121 * HOUR) },
+  });
+  assert.equal(state(old).sms_v2_rule_signing, 'overdue');
+
+  // The tables are readable only with learning.read (RLS), so other roles do not see the jobs.
+  assert.deepEqual(state(await run({}, ['operations.read'])), {});
+});
+
+test('the SMS job queries read only the expected tables, and never bodies or drafts', () => {
+  const { JOBS } = require('../src/admin/system_status');
+  const signing = JOBS.find(j => j.key === 'sms_v2_rule_signing');
+  const drafts = JOBS.find(j => j.key === 'sms_v2_ai_drafts');
+  assert.equal(signing.permission, 'learning.read');
+  assert.equal(drafts.permission, 'learning.read');
+  assert.match(signing.sql, /FROM sms_v2_bundles WHERE status = 'active'/);
+  assert.match(drafts.sql, /sms_v2_unknown_templates/);
+  assert.match(drafts.sql, /sms_v2_template_attempts/);
+  for (const sql of [signing.sql, drafts.sql]) assert.doesNotMatch(sql, /redacted_body|ai_draft|served_body|\bbody\b/);
 });
 
 test('database failure is reported without failing the whole status', async () => {

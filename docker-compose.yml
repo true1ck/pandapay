@@ -115,11 +115,6 @@ services:
       REFERRAL_PREVIEW_SECRET: dev_referral_preview_secret_change_me_32_bytes
       ENGAGEMENT_RECEIPT_SECRET: dev_engagement_receipt_secret_change_me_32_bytes
       REWARD_WORKER_INTERNAL_SECRET: dev_reward_worker_internal_secret_change_me_32_bytes
-      # A blank token keeps both AI acceptance and worker endpoints disabled.
-      # Set AI_WORKER_TOKEN and GEMINI_API_KEY in the local .env to opt in.
-      AI_WORKER_TOKEN: "${AI_WORKER_TOKEN:-}"
-      GEMINI_REQUESTS_PER_MINUTE: "${GEMINI_REQUESTS_PER_MINUTE:-10}"
-      GEMINI_TOKENS_PER_MINUTE: "${GEMINI_TOKENS_PER_MINUTE:-24000}"
       SMS_LEARNING_HMAC_KEY: "${SMS_LEARNING_HMAC_KEY:-dev_sms_learning_hmac_key_change_me_32_bytes}"
       PRODUCT_TERMS_VERSION: "2026-11-15"
       INBOUND_EMAIL_WEBHOOK_SECRET: dev_inbound_secret_change_me

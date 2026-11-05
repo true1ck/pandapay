@@ -32,6 +32,8 @@ const SERVICES = Object.freeze([
   { key: 'db-migrate', runs: 'per_deploy', name: 'Database migrations', purpose: 'Runs once per deploy before the services start.', health: 'none' },
   { key: 'admin-gateway', runs: 'admin_only', name: 'Admin gateway', purpose: 'Admin sign-in, sessions and request filtering.', health: 'self' },
   { key: 'admin-api', runs: 'admin_only', name: 'Admin API', purpose: 'Serves this console. Private, never public.', health: 'self' },
+  { key: 'sms-v2-rule-jobs', runs: 'admin_only', name: 'SMS rule job', purpose: 'Every hour: re-signs the SMS rule sets phones download (they expire after 7 days) and pauses rules with too many corrections.', health: 'job:sms_v2_rule_signing' },
+  { key: 'sms-v2-template-worker', runs: 'admin_only', name: 'SMS AI drafts', purpose: 'Asks Gemini to draft a rule for each shared message layout.', health: 'job:sms_v2_ai_drafts' },
 ]);
 
 // Scheduled work with a run history. expectedEveryHours drives "overdue".
@@ -61,6 +63,29 @@ const JOBS = Object.freeze([
             FROM scrape_runs
            WHERE started_at IS NOT NULL`,
     ok: status => status !== 'failed',
+  },
+  // SMS v2 tables are readable by the private admin role only with learning.read
+  // (RLS), so these two jobs are shown to roles that hold it.
+  {
+    // Served rule sets expire 7 days after signing; the hourly job re-signs them
+    // when less than 72 hours remain. Under 48 hours left means it is not running.
+    key: 'sms_v2_rule_signing', name: 'SMS rule set signing', permission: 'learning.read', expectedEveryHours: 120,
+    sql: `SELECT max(served_expires_at) - interval '7 days' AS last_run_at,
+                 CASE WHEN min(served_expires_at) > now() + interval '48 hours' THEN 'fresh' ELSE 'expiring' END AS last_status,
+                 max(served_expires_at) - interval '7 days' AS last_success_at
+            FROM sms_v2_bundles WHERE status = 'active'`,
+    ok: status => status === 'fresh',
+  },
+  {
+    // A shared layout waiting over an hour for a draft means the worker is down
+    // or out of capacity.
+    key: 'sms_v2_ai_drafts', name: 'SMS AI drafts', permission: 'learning.read', expectedEveryHours: 24,
+    sql: `SELECT now() AS last_run_at,
+                 CASE WHEN EXISTS (SELECT 1 FROM sms_v2_unknown_templates
+                                    WHERE ai_status = 'queued' AND first_seen < now() - interval '1 hour')
+                      THEN 'backlog' ELSE 'ok' END AS last_status,
+                 (SELECT max(started_at) FROM sms_v2_template_attempts WHERE outcome = 'valid') AS last_success_at`,
+    ok: status => status === 'ok',
   },
 ]);
 

@@ -298,23 +298,10 @@ if [ -n "${GOOGLE_PLACES_API_KEY:-}" ]; then
   echo "    google places api key configuration updated"
 fi
 
-if [ -n "${GEMINI_API_KEY:-}" ] || [ -n "${AI_WORKER_TOKEN:-}" ]; then
-  [ -n "${GEMINI_API_KEY:-}" ] && [ -n "${AI_WORKER_TOKEN:-}" ] || {
-    echo "FATAL: AI_WORKER_TOKEN and GEMINI_API_KEY must be supplied together"
-    exit 1
-  }
-  upsert_env_value AI_WORKER_TOKEN "$AI_WORKER_TOKEN"
-  upsert_env_value GEMINI_API_KEY "$GEMINI_API_KEY"
-  [ -n "${GEMINI_FALLBACK_API_KEY:-}" ] && upsert_env_value GEMINI_FALLBACK_API_KEY "$GEMINI_FALLBACK_API_KEY"
-  [ -n "${GEMINI_MODEL:-}" ] && upsert_env_value GEMINI_MODEL "$GEMINI_MODEL"
-  [ -n "${GEMINI_FALLBACK_MODEL:-}" ] && upsert_env_value GEMINI_FALLBACK_MODEL "$GEMINI_FALLBACK_MODEL"
-  upsert_env_value GEMINI_REQUESTS_PER_MINUTE "${GEMINI_REQUESTS_PER_MINUTE:-30}"
-  echo "    Gemini worker configuration updated"
-fi
-
-# Gemini is a server-only, opt-in integration. Require a strong worker token
-# when enabled, and persist only values supplied by the host operator/secret
-# store. Never print either secret.
+# The SMS AI drafts worker and its Gemini key run only on the private admin
+# host (deploy/admin/compose.private.yml); this public deploy never sends them.
+# Optional keys below are persisted only from values supplied by the host
+# operator/secret store. Never print a secret.
 ensure_optional_env_key() {
   local key="$1"
   local count
@@ -327,25 +314,9 @@ ensure_optional_env_key() {
     upsert_env_value "$key" ""
   fi
 }
-ensure_optional_env_key AI_WORKER_TOKEN
-ensure_optional_env_key GEMINI_API_KEY
-ensure_optional_env_key GEMINI_FALLBACK_API_KEY
-ensure_optional_env_key GEMINI_MODEL
-ensure_optional_env_key GEMINI_FALLBACK_MODEL
 ensure_optional_env_key SMS_LEARNING_DATABASE_URL
 ensure_optional_env_key SMS_LEARNING_HMAC_KEY
 ensure_optional_env_key SMS_LEARNING_WORKER_DB_PASSWORD
-AI_WORKER_TOKEN_VALUE="$(sed -n 's/^AI_WORKER_TOKEN=//p' .env | sed 's/^"//; s/"$//')"
-GEMINI_API_KEY_VALUE="$(sed -n 's/^GEMINI_API_KEY=//p' .env | sed 's/^"//; s/"$//')"
-if { [ -n "$AI_WORKER_TOKEN_VALUE" ] && [ -z "$GEMINI_API_KEY_VALUE" ]; } \
-  || { [ -z "$AI_WORKER_TOKEN_VALUE" ] && [ -n "$GEMINI_API_KEY_VALUE" ]; }; then
-  echo "FATAL: AI_WORKER_TOKEN and GEMINI_API_KEY must both be set or both be blank"
-  exit 1
-fi
-if [ -n "$AI_WORKER_TOKEN_VALUE" ] && [ "${#AI_WORKER_TOKEN_VALUE}" -lt 32 ]; then
-  echo "FATAL: AI_WORKER_TOKEN must contain at least 32 characters"
-  exit 1
-fi
 SMS_LEARNING_DATABASE_URL_VALUE="$(sed -n 's/^SMS_LEARNING_DATABASE_URL=//p' .env | sed 's/^"//; s/"$//')"
 SMS_LEARNING_HMAC_KEY_VALUE="$(sed -n 's/^SMS_LEARNING_HMAC_KEY=//p' .env | sed 's/^"//; s/"$//')"
 if [ -z "$SMS_LEARNING_HMAC_KEY_VALUE" ]; then
