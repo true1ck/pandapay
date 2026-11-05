@@ -35,11 +35,16 @@
 
 const rewardV2 = require('./reward_math_v2');
 const { loadDirectory } = require('./merchant_directory');
-const { periodBounds, cardAnchorDate, windowBoundsV2, calendarDay, addDays } = require('./cycles');
+const {
+  periodBounds, cardAnchorDate, cardIssueAnchorDate, windowBoundsV2, calendarDay, istDay, addDays,
+} = require('./cycles');
 
 const RECORD_VERSION = 1;
 const RECORD_SECTIONS = ['caps', 'milestones', 'fee_waivers'];
 const LEDGER_REASON = 'points earned on transaction';
+// The cashback part of a spend on a card that earns points AND cashback. Kept
+// apart so the points total (GET /user-cards total_points_earned) stays points.
+const LEDGER_CASHBACK_REASON = 'cashback earned on transaction';
 const DIRECTORY_TTL_MS = 5 * 60 * 1000;
 const MAX_PERIODS_PER_CAP = 5000;
 const PAISE_EPS = 1e-6;
@@ -64,10 +69,9 @@ function round2(value) {
   return r === 0 ? 0 : r;
 }
 
-/** UTC calendar day of a transaction timestamp — the day periodBounds uses. */
+/** India calendar day of a transaction timestamp — the day v2 windows use (C8 D23c). */
 function dayOf(value) {
-  const d = value instanceof Date ? value : new Date(value);
-  return d.toISOString().slice(0, 10);
+  return istDay(value);
 }
 
 function minDay(a, b) {
@@ -86,7 +90,10 @@ const key = (id, start) => `${id}|${start}`;
 
 /**
  * Everything recording needs about one user card: the engine card fields,
- * its rules, caps (with `targets`), milestones, and the C3.7 anchor date.
+ * its rules, caps (with `targets`), milestones, and two anchor dates: the
+ * card-year anchor (C3.7: anniversary_on ?? opened_on ?? created_at) and the
+ * issue anchor for welcome windows (C8 D22b: opened_on ?? anniversary_on ??
+ * created_at).
  */
 function buildV2Card({ userCard, rules, caps, milestones }) {
   const u = userCard;
@@ -106,6 +113,8 @@ function buildV2Card({ userCard, rules, caps, milestones }) {
     cardProductId: u.card_product_id,
     statementDay: u.statement_day ?? null,
     anchor: cardAnchorDate({ anniversaryOn: u.anniversary_on, openedOn: u.opened_on, createdAt: u.created_at }),
+    issueAnchor: cardIssueAnchorDate({ anniversaryOn: u.anniversary_on, openedOn: u.opened_on, createdAt: u.created_at }),
+    openedOn: calendarDay(u.opened_on),
     card,
     rules: arr(rules),
     caps: capList,
@@ -123,13 +132,16 @@ function capWindow(v2, cap, when) {
   });
 }
 
+/** Welcome milestones (window_days) count from the issue date; the rest from the card-year anchor. */
 function milestoneWindow(v2, milestone, when) {
+  const windowDays = milestone.window_days ?? null;
+  const anchor = windowDays != null ? v2.issueAnchor : v2.anchor;
   return windowBoundsV2(milestone.period, when, {
     statementDay: v2.statementDay,
     anchor: milestone.anchor,
-    anchorDate: v2.anchor.date,
-    anchorApproximate: v2.anchor.approximate,
-    windowDays: milestone.window_days ?? null,
+    anchorDate: anchor.date,
+    anchorApproximate: anchor.approximate,
+    windowDays,
   });
 }
 
@@ -149,11 +161,38 @@ function capNativeAmount(cap, kind, card) {
   return value;
 }
 
-/** v1's single native figure: points on a points card, ₹ of cashback otherwise. */
+/**
+ * The figure expected_points carries, as v1 did: points when the spend earns
+ * points, else ₹ of cashback (a cashback card). The cashback of a spend that
+ * earns both is not lost: it is kept in expected_cashback_inr and its own
+ * ledger row (see earnedSplit).
+ */
 function nativeAmount(result) {
   if (result.points != null) return result.points;
   if (result.cashbackInr != null) return result.cashbackInr;
   return 0;
+}
+
+/** Points and ₹ cashback kept apart, each null when the result has none. */
+function earnedSplit(result) {
+  return {
+    points: result.points != null ? round2(result.points) : null,
+    cashback: result.cashbackInr != null ? round2(result.cashbackInr) : null,
+  };
+}
+
+/**
+ * Ledger rows for one spend: the expected_points figure under the v1 reason,
+ * plus — on a spend that earns points AND cashback — the cashback under its
+ * own reason, so a points total never adds rupees.
+ */
+function ledgerRows(outcome) {
+  const rows = [];
+  if (outcome.native > 0) rows.push({ reason: LEDGER_REASON, delta: outcome.native });
+  if (outcome.points != null && outcome.cashback != null && outcome.cashback > 0) {
+    rows.push({ reason: LEDGER_CASHBACK_REASON, delta: outcome.cashback });
+  }
+  return rows;
 }
 
 /** C3.1 context from a stored transaction row (or the same fields from a write path). */
@@ -174,14 +213,20 @@ function transactionContext(row) {
 // One transaction
 // ---------------------------------------------------------------------------
 
-/** The rule this transaction earns under and the caps it counts against, each with its window. */
+/**
+ * The rule this transaction earns under and the caps it counts against, each
+ * with its window; `excluded` when the engine excludes the spend (an
+ * exclusion rule, including a D16b minimum amount, or the card's excluded
+ * categories).
+ */
 function capPlan(v2, directory, ctx) {
   const c = rewardV2.resolveContext(ctx, directory);
   const pick = rewardV2.pickRuleV2(v2.rules, c, v2.card);
-  if (pick.excluded || !(c.amount > 0)) return { ctx: c, caps: [] };
+  if (pick.excluded || !(c.amount > 0)) return { ctx: c, caps: [], excluded: Boolean(pick.excluded) };
   const caps = rewardV2.applicableCaps({ card: v2.card, capRules: v2.caps, rule: pick.rule, ctx: c });
   return {
     ctx: c,
+    excluded: false,
     caps: caps.map((cap) => ({ cap, window: capWindow(v2, v2.capById.get(cap.id), c.occurred) })),
   };
 }
@@ -191,7 +236,8 @@ function capPlan(v2, directory, ctx) {
  * each cap's native consumption before this transaction, in the period the
  * transaction falls in. Returns the engine result, one cap entry per cap
  * that moved (`{ id, kind, amount, start, end, approximate, delta }`), the
- * native figure for expected_points / the ledger, and the ₹ value.
+ * native figure for expected_points, points and cashback apart, the ₹ value,
+ * and whether the spend is excluded.
  */
 function computeTransactionV2(v2, directory, ctx, consumedOf, plan = null) {
   const p = plan || capPlan(v2, directory, ctx);
@@ -209,18 +255,27 @@ function computeTransactionV2(v2, directory, ctx, consumedOf, plan = null) {
       start: window.start, end: window.end, approximate: window.approximate, delta,
     });
   }
-  return { result, capEntries, native: round2(nativeAmount(result)), value: round2(result.valueInr) };
+  return {
+    result,
+    capEntries,
+    native: round2(nativeAmount(result)),
+    ...earnedSplit(result),
+    value: round2(result.valueInr),
+    excluded: Boolean(result.excluded || p.excluded),
+  };
 }
 
 /**
- * C3.7: the milestone rows this spend qualifies for. Qualifying spend
- * excludes the card's excluded_categories and the milestone's
- * excluded_category_ids; welcome milestones only inside their window.
+ * C3.7 + C8 D22a: the milestone rows this spend qualifies for. A spend the
+ * engine excludes (`excluded`: an exclusion rule, a minimum amount, the
+ * card's excluded categories) never qualifies; neither does a category in
+ * the milestone's excluded_category_ids. Welcome milestones only count
+ * inside their window.
  */
-function milestoneEntries(v2, ctx) {
+function milestoneEntries(v2, ctx, { excluded = false } = {}) {
   const category = ctx.category_id || null;
   const amount = Number(ctx.amount);
-  if (!(amount > 0)) return [];
+  if (excluded || !(amount > 0)) return [];
   if (category != null && v2.card.excluded_categories.includes(category)) return [];
   const out = [];
   for (const m of v2.milestones) {
@@ -295,8 +350,10 @@ async function loadDirectoryCached(client, { now = Date.now() } = {}) {
   return directory;
 }
 
+/** Drops the directory and v1-shape caches (tests; after a catalogue publish in-process). */
 function clearDirectoryCache() {
   directoryCache = null;
+  v1ShapeCache.clear();
 }
 
 // ---------------------------------------------------------------------------
@@ -308,28 +365,41 @@ const RULE_COLUMNS = `id, category_id, merchant_pattern, rail, unit, rate, min_t
        platform_slugs, mcc_include, mcc_exclude, except_merchant_slugs, except_platform_slugs,
        block_inr, min_engine_version, max_engine_version, display_note`;
 
+// Card products known to be v1-shaped at a given data_version (bumped by every
+// rule/cap change) and rounding settings, so a v1 card costs one query here.
+const V1_SHAPE_CACHE_MAX = 5000;
+const v1ShapeCache = new Set();
+
+function shapeKey(row) {
+  return `${row.card_product_id}|${row.data_version}|${row.accrual_rounding ?? ''}|${row.cashback_rounding ?? ''}`;
+}
+
 /**
  * The user card as a v2 card, or null when its product is v1-shaped (or the
- * card isn't visible). Rules and caps keep catalogue (table) order, as the
- * v2 feed does, because ties between equally binding caps go to the first
- * (C8 D9(8)).
+ * card isn't visible, or belongs to another profile when `profileId` is
+ * given — C8 D23e). Rules and caps are read in the v2 feed's order (C8 D22d:
+ * rules by priority, source_local_id nulls last, id; caps by
+ * source_local_id nulls last, id): that is the "catalogue order" that breaks
+ * ties between equally binding caps (D9(8)).
  */
-async function loadV2Card(client, userCardId) {
+async function loadV2Card(client, userCardId, { profileId = null } = {}) {
   if (!userCardId) return null;
   const cards = await client.query(
     `SELECT uc.id, uc.profile_id, uc.card_product_id, uc.statement_day, uc.opened_on,
-            uc.anniversary_on, uc.created_at,
+            uc.anniversary_on, uc.created_at, cp.data_version,
             cp.point_value_inr, cp.base_reward_unit, cp.base_reward_rate, cp.excluded_categories,
             cp.accrual_rounding, cp.cashback_rounding, cp.accrual_block_inr
        FROM user_cards uc
        JOIN card_products cp ON cp.id = uc.card_product_id
-      WHERE uc.id = $1`,
-    [userCardId],
+      WHERE uc.id = $1 AND ($2::uuid IS NULL OR uc.profile_id = $2)`,
+    [userCardId, profileId],
   );
   const userCard = cards.rows[0];
   if (!userCard) return null;
+  if (v1ShapeCache.has(shapeKey(userCard))) return null;
   const rules = await client.query(
-    `SELECT ${RULE_COLUMNS} FROM reward_rules WHERE card_product_id = $1`,
+    `SELECT ${RULE_COLUMNS} FROM reward_rules WHERE card_product_id = $1
+      ORDER BY priority, source_local_id NULLS LAST, id`,
     [userCard.card_product_id],
   );
   const caps = await client.query(
@@ -338,14 +408,19 @@ async function loadV2Card(client, userCardId) {
             k.post_cap_behavior, k.anchor, k.min_engine_version,
             COALESCE((SELECT array_agg(t.reward_rule_id::text ORDER BY t.reward_rule_id)
                         FROM cap_rule_targets t WHERE t.cap_rule_id = k.id), '{}'::text[]) AS targets
-       FROM cap_rules k WHERE k.card_product_id = $1`,
+       FROM cap_rules k WHERE k.card_product_id = $1
+      ORDER BY k.source_local_id NULLS LAST, k.id`,
     [userCard.card_product_id],
   );
   const card = {
     accrual_rounding: userCard.accrual_rounding,
     cashback_rounding: userCard.cashback_rounding,
   };
-  if (!rewardV2.isV2Card(card, rules.rows, caps.rows)) return null;
+  if (!rewardV2.isV2Card(card, rules.rows, caps.rows)) {
+    if (v1ShapeCache.size >= V1_SHAPE_CACHE_MAX) v1ShapeCache.clear();
+    v1ShapeCache.add(shapeKey(userCard));
+    return null;
+  }
   const milestones = await client.query(
     `SELECT id, label, period, anchor, threshold_spend_inr, window_days, excluded_category_ids
        FROM milestone_rules WHERE card_product_id = $1`,
@@ -388,7 +463,7 @@ async function settleFeeWaiver(client, state, threshold) {
  * only: a row that no longer exists (its rule was deleted with a catalogue
  * re-import) has nothing left to undo.
  */
-async function reverseRecord(client, record) {
+async function reverseRecord(client, profileId, record) {
   const out = { capStates: [], milestoneStates: [], feeWaiverStates: [] };
   if (!record || typeof record !== 'object') return out;
   const userCardId = record.user_card_id;
@@ -396,9 +471,9 @@ async function reverseRecord(client, record) {
     const updated = await client.query(
       `UPDATE cap_states
           SET consumed = GREATEST(0::numeric, consumed - $4::numeric), updated_at = now()
-        WHERE user_card_id = $1 AND cap_rule_id = $2 AND period_start = $3
+        WHERE user_card_id = $1 AND cap_rule_id = $2 AND period_start = $3 AND profile_id = $5
         RETURNING ${CAP_STATE_RETURNING}`,
-      [userCardId, e.id, e.start, e.delta],
+      [userCardId, e.id, e.start, e.delta, profileId],
     );
     if (updated.rows[0]) out.capStates.push(updated.rows[0]);
   }
@@ -406,9 +481,9 @@ async function reverseRecord(client, record) {
     const updated = await client.query(
       `UPDATE milestone_states
           SET qualified_spend = GREATEST(0::numeric, qualified_spend - $4::numeric), updated_at = now()
-        WHERE user_card_id = $1 AND milestone_rule_id = $2 AND period_start = $3
+        WHERE user_card_id = $1 AND milestone_rule_id = $2 AND period_start = $3 AND profile_id = $5
         RETURNING ${MILESTONE_STATE_RETURNING}`,
-      [userCardId, e.id, e.start, e.delta],
+      [userCardId, e.id, e.start, e.delta, profileId],
     );
     if (updated.rows[0]) out.milestoneStates.push(updated.rows[0]);
   }
@@ -416,10 +491,10 @@ async function reverseRecord(client, record) {
     const updated = await client.query(
       `UPDATE fee_waiver_states fw
           SET qualified_spend = GREATEST(0::numeric, fw.qualified_spend - $4::numeric), updated_at = now()
-        WHERE fw.user_card_id = $1 AND fw.fee_waiver_rule_id = $2 AND fw.period_start = $3
+        WHERE fw.user_card_id = $1 AND fw.fee_waiver_rule_id = $2 AND fw.period_start = $3 AND fw.profile_id = $5
         RETURNING fw.id, fw.fee_waiver_rule_id, fw.period_start, fw.period_end, fw.qualified_spend, fw.waived_at,
                   (SELECT r.threshold_spend_inr FROM fee_waiver_rules r WHERE r.id = fw.fee_waiver_rule_id) AS threshold`,
-      [userCardId, e.id, e.start, e.delta],
+      [userCardId, e.id, e.start, e.delta, profileId],
     );
     const row = updated.rows[0];
     if (!row) continue;
@@ -434,14 +509,14 @@ async function reverseRecord(client, record) {
 // ---------------------------------------------------------------------------
 
 /** Reads each planned cap's row for its period. `stale` = a row the v1 path wrote (no cap_kind). */
-async function readCapRows(client, userCardId, plan) {
+async function readCapRows(client, v2, plan) {
   const consumed = new Map();
   let stale = false;
   for (const { cap, window } of plan.caps) {
     const row = await client.query(
       `SELECT consumed, cap_kind FROM cap_states
-        WHERE user_card_id = $1 AND cap_rule_id = $2 AND period_start = $3`,
-      [userCardId, cap.id, window.start],
+        WHERE user_card_id = $1 AND cap_rule_id = $2 AND period_start = $3 AND profile_id = $4`,
+      [v2.userCardId, cap.id, window.start, v2.profileId],
     );
     if (!row.rows[0]) continue;
     if (row.rows[0].cap_kind == null) stale = true;
@@ -454,15 +529,15 @@ async function applyTransactionV2(client, userId, v2, args) {
   const { txnId, amount, occurred, categoryId, merchantName, rail } = args;
   const userCardId = v2.userCardId;
   const stored = await client.query(
-    `SELECT merchant_vpa, mcc, card_state_v2 FROM transactions WHERE id = $1`,
-    [txnId],
+    `SELECT merchant_vpa, mcc, card_state_v2 FROM transactions WHERE id = $1 AND profile_id = $2`,
+    [txnId, userId],
   );
   const txn = stored.rows[0] || {};
   // Applying twice must not count twice: undo whatever this transaction
   // still carries before recording it again.
   if (txn.card_state_v2) {
-    await reverseRecord(client, txn.card_state_v2);
-    await client.query(`DELETE FROM points_ledger WHERE transaction_id = $1`, [txnId]);
+    await reverseRecord(client, userId, txn.card_state_v2);
+    await client.query(`DELETE FROM points_ledger WHERE transaction_id = $1 AND profile_id = $2`, [txnId, userId]);
   }
 
   const directory = await loadDirectoryCached(client);
@@ -471,12 +546,12 @@ async function applyTransactionV2(client, userId, v2, args) {
     merchant_vpa: txn.merchant_vpa, mcc: txn.mcc, rail,
   });
   const plan = capPlan(v2, directory, ctx);
-  let rows = await readCapRows(client, userCardId, plan);
+  let rows = await readCapRows(client, v2, plan);
   if (rows.stale) {
     // A row in v1 units (written before this card became v2-shaped): rebuild
     // the card's periods around this date from the ledger, then price.
     await rebuildCardState(client, userId, v2, { asOf: occurred, caps: true, excludeTxnIds: [txnId] });
-    rows = await readCapRows(client, userCardId, plan);
+    rows = await readCapRows(client, v2, plan);
   }
   const outcome = computeTransactionV2(v2, directory, ctx, (id, start) => rows.consumed.get(key(id, start)) || 0, plan);
 
@@ -499,7 +574,8 @@ async function applyTransactionV2(client, userId, v2, args) {
     capStates.push(upserted.rows[0]);
   }
 
-  const milestones = milestoneEntries(v2, ctx);
+  // C8 D22a: an excluded spend makes no milestone or fee-waiver progress.
+  const milestones = milestoneEntries(v2, ctx, { excluded: outcome.excluded });
   const milestoneStates = [];
   for (const e of milestones) {
     const upserted = await client.query(
@@ -516,15 +592,20 @@ async function applyTransactionV2(client, userId, v2, args) {
     milestoneStates.push(upserted.rows[0]);
   }
 
-  // Fee waivers: the v1 rules exactly (spend-based, rule-level exclusions,
-  // calendar periods), only recorded so reversal can undo them.
-  const feeWaiverRules = await client.query(
-    `SELECT id, threshold_spend_inr, period, excluded_categories FROM fee_waiver_rules
-      WHERE card_product_id = $1`,
-    [v2.cardProductId],
-  );
+  // Fee waivers: v1's spend-based rules and periods, recorded so reversal can
+  // undo them. C8 D22a: an excluded spend (which covers the card's excluded
+  // categories) counts toward none of them; the rule's own excluded
+  // categories still apply. One rounding for the row and the record.
+  const feeWaiverRules = outcome.excluded
+    ? { rows: [] }
+    : await client.query(
+      `SELECT id, threshold_spend_inr, period, excluded_categories FROM fee_waiver_rules
+        WHERE card_product_id = $1`,
+      [v2.cardProductId],
+    );
   const feeWaiverStates = [];
   const feeWaiverEntries = [];
+  const feeWaiverDelta = round2(Number(amount));
   for (const rule of feeWaiverRules.rows) {
     if (categoryId && arr(rule.excluded_categories).includes(categoryId)) continue;
     const { start, end } = periodBounds(rule.period, occurred instanceof Date ? occurred : new Date(occurred), {
@@ -536,29 +617,30 @@ async function applyTransactionV2(client, userId, v2, args) {
        ON CONFLICT (user_card_id, fee_waiver_rule_id, period_start)
        DO UPDATE SET qualified_spend = GREATEST(0::numeric, fee_waiver_states.qualified_spend + $6::numeric), updated_at = now()
        RETURNING ${FEE_WAIVER_STATE_RETURNING}`,
-      [userId, userCardId, rule.id, start, end, amount],
+      [userId, userCardId, rule.id, start, end, feeWaiverDelta],
     );
     feeWaiverStates.push(await settleFeeWaiver(client, upserted.rows[0], rule.threshold_spend_inr));
-    feeWaiverEntries.push({ id: rule.id, start, end, delta: amount });
+    feeWaiverEntries.push({ id: rule.id, start, end, delta: feeWaiverDelta });
   }
 
   const record = toRecord(userCardId, { caps: outcome.capEntries, milestones, fee_waivers: feeWaiverEntries });
   await client.query(
     `UPDATE transactions
-        SET expected_value_inr = $2, expected_points = $3, card_state_v2 = $4::jsonb, updated_at = now()
-      WHERE id = $1`,
-    [txnId, outcome.value, outcome.native, record ? JSON.stringify(record) : null],
+        SET expected_value_inr = $3, expected_points = $4, expected_cashback_inr = $5,
+            card_state_v2 = $6::jsonb, updated_at = now()
+      WHERE id = $1 AND profile_id = $2`,
+    [txnId, userId, outcome.value, outcome.native, outcome.cashback, record ? JSON.stringify(record) : null],
   );
 
   let pointsLedgerEntry = null;
-  if (outcome.native > 0) {
+  for (const row of ledgerRows(outcome)) {
     const inserted = await client.query(
       `INSERT INTO points_ledger (profile_id, user_card_id, transaction_id, delta_points, reason, state, occurred_at)
        VALUES ($1, $2, $3, $4, $5, 'estimated', $6)
        RETURNING id, delta_points, reason, occurred_at`,
-      [userId, userCardId, txnId, outcome.native, LEDGER_REASON, occurred],
+      [userId, userCardId, txnId, row.delta, row.reason, occurred],
     );
-    pointsLedgerEntry = inserted.rows[0];
+    if (row.reason === LEDGER_REASON) pointsLedgerEntry = inserted.rows[0];
   }
 
   return { capStates, milestoneStates, pointsLedgerEntry, feeWaiverStates };
@@ -571,27 +653,34 @@ async function applyTransactionV2(client, userId, v2, args) {
  * nothing to v2 state, so there is nothing to subtract.
  */
 async function reverseTransactionV2(client, userId, v2, args) {
-  const stored = await client.query(`SELECT card_state_v2 FROM transactions WHERE id = $1`, [args.txnId]);
+  const stored = await client.query(
+    `SELECT card_state_v2 FROM transactions WHERE id = $1 AND profile_id = $2`,
+    [args.txnId, userId],
+  );
   const record = stored.rows[0] && stored.rows[0].card_state_v2;
-  const reversed = await reverseRecord(client, record);
+  const reversed = await reverseRecord(client, userId, record);
   await client.query(
     `UPDATE transactions
-        SET expected_value_inr = 0, expected_points = 0, card_state_v2 = NULL, updated_at = now()
-      WHERE id = $1`,
-    [args.txnId],
+        SET expected_value_inr = 0, expected_points = 0,
+            expected_cashback_inr = CASE WHEN expected_cashback_inr IS NULL THEN NULL ELSE 0 END,
+            card_state_v2 = NULL, updated_at = now()
+      WHERE id = $1 AND profile_id = $2`,
+    [args.txnId, userId],
   );
-  await client.query(`DELETE FROM points_ledger WHERE transaction_id = $1`, [args.txnId]);
+  await client.query(`DELETE FROM points_ledger WHERE transaction_id = $1 AND profile_id = $2`, [args.txnId, userId]);
   return { ...reversed, pointsLedgerEntry: null };
 }
 
 /**
  * index.js's applyTransactionState hook. Returns the state updates for a
  * v2-shaped card (sign +1 records, sign −1 reverses), or null so the v1
- * path runs unchanged.
+ * path runs unchanged. Callers that change an existing transaction hold the
+ * user's `transaction-ingest:<user>` advisory lock first (C8 D23d), so a
+ * rebuild never interleaves; this hook takes no lock of its own.
  */
 async function applyIfV2(client, userId, userCard, args) {
   const userCardId = (args && args.userCardId) || (userCard && userCard.id);
-  const v2 = await loadV2Card(client, userCardId);
+  const v2 = await loadV2Card(client, userCardId, { profileId: userId });
   if (!v2) return null;
   return args.sign < 0
     ? reverseTransactionV2(client, userId, v2, args)
@@ -621,9 +710,18 @@ function monthStart(day) {
  *
  * Expected values are priced against the replayed caps, so `expected`
  * implies a cap rebuild.
+ *
+ * `floor` (C8 D23f) is the first day the card can have spends — opened_on or
+ * its first transaction. Nothing is read or replayed before it, so a
+ * lifetime cap or milestone rebuilds from the card's start, not from 1970.
+ * Period keys are unchanged (a lifetime row still starts 1970-01-01).
  */
-function rebuildRange(v2, { asOf = new Date(), since = null, caps = true, milestones = false, expected = false } = {}) {
+function rebuildRange(v2, {
+  asOf = new Date(), since = null, caps = true, milestones = false, expected = false, floor = null,
+} = {}) {
   const day = dayOf(asOf);
+  const floorDay = floor ? minDay(calendarDay(floor), day) : null;
+  const atFloor = (d) => (floorDay ? maxDay(d, floorDay) : d);
   let capRange = null;
   if (caps || expected) {
     let start = day;
@@ -635,13 +733,14 @@ function rebuildRange(v2, { asOf = new Date(), since = null, caps = true, milest
     }
     if (expected) start = minDay(start, monthStart(day));
     if (since) start = minDay(start, calendarDay(since));
+    start = atFloor(start);
     let seedFrom = start;
     let seedTo = end;
     for (const cap of v2.caps) {
       seedFrom = minDay(seedFrom, capWindow(v2, cap, start).start);
       seedTo = maxDay(seedTo, capWindow(v2, cap, end).end);
     }
-    capRange = { start, end, seedFrom, seedTo };
+    capRange = { start, end, seedFrom: atFloor(seedFrom), seedTo };
   }
   const milestoneWindows = [];
   if (milestones) {
@@ -653,7 +752,7 @@ function rebuildRange(v2, { asOf = new Date(), since = null, caps = true, milest
   let loadFrom = capRange ? capRange.seedFrom : null;
   let loadTo = capRange ? capRange.seedTo : null;
   for (const w of milestoneWindows) {
-    loadFrom = loadFrom == null ? w.start : minDay(loadFrom, w.start);
+    loadFrom = loadFrom == null ? atFloor(w.start) : minDay(loadFrom, atFloor(w.start));
     loadTo = loadTo == null ? w.end : maxDay(loadTo, w.end);
   }
   return { asOf: day, caps: capRange, milestones: milestoneWindows, loadFrom, loadTo };
@@ -758,10 +857,12 @@ function planReplay({
         });
       }
       newCapEntries.set(String(t.id), out.capEntries);
-      if (expected && !(sameNumber(t.expected_points, out.native) && sameNumber(t.expected_value_inr, out.value))) {
+      if (expected && !(sameNumber(t.expected_points, out.native) && sameNumber(t.expected_value_inr, out.value)
+          && sameNumber(t.expected_cashback_inr, out.cashback))) {
         expectedUpdates.push({
           id: t.id, occurred_at: t.occurred_at, native: out.native, value: out.value,
-          before: { native: num(t.expected_points), value: num(t.expected_value_inr) },
+          points: out.points, cashback: out.cashback,
+          before: { native: num(t.expected_points), value: num(t.expected_value_inr), cashback: num(t.expected_cashback_inr) },
         });
       }
     }
@@ -785,7 +886,11 @@ function planReplay({
   if (milestoneRows.size > 0) {
     for (const t of ordered) {
       if (!isEligible(t)) continue;
-      const entries = milestoneEntries(v2, transactionContext(t)).filter((e) => milestoneRows.has(key(e.id, e.start)));
+      const ctx = transactionContext(t);
+      // C8 D22a: the same exclusion test the engine applies to the reward.
+      const { excluded: spendExcluded } = capPlan(v2, directory, ctx);
+      const entries = milestoneEntries(v2, ctx, { excluded: spendExcluded })
+        .filter((e) => milestoneRows.has(key(e.id, e.start)));
       for (const e of entries) milestoneRows.get(key(e.id, e.start)).qualified_spend += e.delta;
       newMilestoneEntries.set(String(t.id), entries);
     }
@@ -908,32 +1013,50 @@ function planReplay({
   };
 }
 
+// Days are India calendar days (C8 D23c); rows are the card owner's only (D23e).
 const TXN_SELECT = `SELECT id, amount_inr, occurred_at, category_id, merchant_name, merchant_vpa, mcc, rail,
-       status, instrument, entry_kind, is_backfill, expected_points, expected_value_inr, card_state_v2
+       status, instrument, entry_kind, is_backfill, expected_points, expected_value_inr,
+       expected_cashback_inr, card_state_v2
   FROM transactions
- WHERE user_card_id = $1
-   AND occurred_at >= ($2::date::timestamp AT TIME ZONE 'UTC')
-   AND occurred_at < (($3::date + 1)::timestamp AT TIME ZONE 'UTC')
+ WHERE user_card_id = $1 AND profile_id = $4
+   AND occurred_at >= ($2::date::timestamp AT TIME ZONE 'Asia/Kolkata')
+   AND occurred_at < (($3::date + 1)::timestamp AT TIME ZONE 'Asia/Kolkata')
    AND (card_state_v2 IS NOT NULL
         OR (status = 'active' AND instrument = 'credit_card' AND entry_kind = 'spend'
             AND COALESCE(is_backfill, false) = false))
  ORDER BY occurred_at ASC, id ASC`;
 
+/**
+ * C8 D23f: the first day the card can have spends — the earlier of
+ * opened_on and its first transaction (India day); null when neither exists.
+ */
+async function cardFloorDay(client, v2) {
+  const first = await client.query(
+    `SELECT to_char(min(occurred_at) AT TIME ZONE 'Asia/Kolkata', 'YYYY-MM-DD') AS day
+       FROM transactions WHERE user_card_id = $1 AND profile_id = $2`,
+    [v2.userCardId, v2.profileId],
+  );
+  const firstDay = first.rows[0] && first.rows[0].day;
+  if (v2.openedOn && firstDay) return minDay(v2.openedOn, firstDay);
+  return v2.openedOn || firstDay || null;
+}
+
 /** Reads what a rebuild needs and plans it (no writes). */
 async function planCardRebuild(client, v2, opts = {}) {
-  const range = rebuildRange(v2, opts);
+  const floor = await cardFloorDay(client, v2);
+  const range = rebuildRange(v2, { ...opts, floor: floor || dayOf(opts.asOf || new Date()) });
   if (range.loadFrom == null) {
     return planReplay({ v2, directory: null, range, transactions: [] });
   }
   const directory = await loadDirectoryCached(client);
-  const transactions = await client.query(TXN_SELECT, [v2.userCardId, range.loadFrom, range.loadTo]);
+  const transactions = await client.query(TXN_SELECT, [v2.userCardId, range.loadFrom, range.loadTo, v2.profileId]);
   const existingCapRows = range.caps
     ? (await client.query(
       `SELECT cap_rule_id, to_char(period_start, 'YYYY-MM-DD') AS period_start,
               to_char(period_end, 'YYYY-MM-DD') AS period_end, consumed, cap_kind, cap_amount, approximate_window
          FROM cap_states
-        WHERE user_card_id = $1 AND period_start <= $3::date AND period_end >= $2::date`,
-      [v2.userCardId, range.caps.start, range.caps.end],
+        WHERE user_card_id = $1 AND profile_id = $4 AND period_start <= $3::date AND period_end >= $2::date`,
+      [v2.userCardId, range.caps.start, range.caps.end, v2.profileId],
     )).rows
     : [];
   const existingMilestoneRows = range.milestones.length > 0
@@ -941,8 +1064,8 @@ async function planCardRebuild(client, v2, opts = {}) {
       `SELECT milestone_rule_id, to_char(period_start, 'YYYY-MM-DD') AS period_start,
               to_char(period_end, 'YYYY-MM-DD') AS period_end, qualified_spend, approximate_window
          FROM milestone_states
-        WHERE user_card_id = $1 AND milestone_rule_id = ANY($2::uuid[])`,
-      [v2.userCardId, range.milestones.map((w) => w.id)],
+        WHERE user_card_id = $1 AND profile_id = $3 AND milestone_rule_id = ANY($2::uuid[])`,
+      [v2.userCardId, range.milestones.map((w) => w.id), v2.profileId],
     )).rows
     : [];
   return planReplay({
@@ -972,8 +1095,8 @@ async function applyCardRebuild(client, userId, v2, plan) {
   }
   for (const r of plan.capsToDelete) {
     await client.query(
-      `DELETE FROM cap_states WHERE user_card_id = $1 AND cap_rule_id = $2 AND period_start = $3`,
-      [v2.userCardId, r.cap_rule_id, r.period_start],
+      `DELETE FROM cap_states WHERE user_card_id = $1 AND cap_rule_id = $2 AND period_start = $3 AND profile_id = $4`,
+      [v2.userCardId, r.cap_rule_id, r.period_start, userId],
     );
   }
   const changedMilestones = new Set(plan.diff.milestones.map((d) => key(d.milestone_rule_id, d.period_start)));
@@ -991,31 +1114,35 @@ async function applyCardRebuild(client, userId, v2, plan) {
   }
   for (const r of plan.milestonesToDelete) {
     await client.query(
-      `DELETE FROM milestone_states WHERE user_card_id = $1 AND milestone_rule_id = $2 AND period_start = $3`,
-      [v2.userCardId, r.milestone_rule_id, r.period_start],
+      `DELETE FROM milestone_states
+        WHERE user_card_id = $1 AND milestone_rule_id = $2 AND period_start = $3 AND profile_id = $4`,
+      [v2.userCardId, r.milestone_rule_id, r.period_start, userId],
     );
   }
   for (const u of plan.txnRecordUpdates) {
     await client.query(
-      `UPDATE transactions SET card_state_v2 = $2::jsonb, updated_at = now() WHERE id = $1`,
-      [u.id, u.record ? JSON.stringify(u.record) : null],
+      `UPDATE transactions SET card_state_v2 = $3::jsonb, updated_at = now() WHERE id = $1 AND profile_id = $2`,
+      [u.id, userId, u.record ? JSON.stringify(u.record) : null],
     );
   }
   for (const u of plan.txnExpectedUpdates) {
     await client.query(
-      `UPDATE transactions SET expected_points = $2, expected_value_inr = $3, updated_at = now() WHERE id = $1`,
-      [u.id, u.native, u.value],
+      `UPDATE transactions
+          SET expected_points = $3, expected_value_inr = $4, expected_cashback_inr = $5, updated_at = now()
+        WHERE id = $1 AND profile_id = $2`,
+      [u.id, userId, u.native, u.value, u.cashback],
     );
-    // The estimated earn row follows the transaction; confirmed rows are left alone.
+    // The estimated earn rows follow the transaction; confirmed rows are left alone.
     await client.query(
-      `DELETE FROM points_ledger WHERE transaction_id = $1 AND reason = $2 AND state = 'estimated'`,
-      [u.id, LEDGER_REASON],
+      `DELETE FROM points_ledger
+        WHERE transaction_id = $1 AND profile_id = $2 AND reason = ANY($3::text[]) AND state = 'estimated'`,
+      [u.id, userId, [LEDGER_REASON, LEDGER_CASHBACK_REASON]],
     );
-    if (u.native > 0) {
+    for (const row of ledgerRows(u)) {
       await client.query(
         `INSERT INTO points_ledger (profile_id, user_card_id, transaction_id, delta_points, reason, state, occurred_at)
          VALUES ($1, $2, $3, $4, $5, 'estimated', $6)`,
-        [userId, v2.userCardId, u.id, u.native, LEDGER_REASON, u.occurred_at],
+        [userId, v2.userCardId, u.id, row.delta, row.reason, u.occurred_at],
       );
     }
   }
@@ -1036,12 +1163,13 @@ async function rebuildCardState(client, userId, v2, opts = {}) {
 /**
  * index.js's reconcileCurrentCapStates hook: for a v2-shaped card, rebuild
  * the current cap periods in native units (and the records that back them);
- * null for a v1-shaped card so the v1 repair runs unchanged.
+ * null for a v1-shaped card so the v1 repair runs unchanged. "Current" is
+ * the India calendar day now (C8 D23c), not the caller's server date.
  */
-async function reconcileIfV2(client, userId, userCardId, asOf) {
-  const v2 = await loadV2Card(client, userCardId);
+async function reconcileIfV2(client, userId, userCardId) {
+  const v2 = await loadV2Card(client, userCardId, { profileId: userId });
   if (!v2) return null;
-  const { plan } = await rebuildCardState(client, userId, v2, { asOf, caps: true });
+  const { plan } = await rebuildCardState(client, userId, v2, { asOf: new Date(), caps: true });
   return { rebuiltCaps: plan.capRows.length };
 }
 
@@ -1049,19 +1177,39 @@ async function reconcileIfV2(client, userId, userCardId, asOf) {
 // Reads for GET /user-cards
 // ---------------------------------------------------------------------------
 
+const POINTS_KINDS = ['bonus_points', 'total_points'];
+
 /**
- * Current-period cap rows for the wallet. `consumed` is native for v2 rows
- * (`cap_kind` set) and the v1 measure for v1 rows (`cap_kind` null).
- * Dates are 'YYYY-MM-DD'.
+ * Current-period cap rows for the wallet (C8 D22c).
+ *   - `consumed` keeps its v1 meaning for installed apps (H1): for a points
+ *     kind it is native consumption × point_value_inr (₹ reward value, 2 dp);
+ *     for ₹, spend and count kinds, and for v1 rows, it is as stored.
+ *   - `consumed_native` is the stored native figure, null on a v1 row
+ *     (`cap_kind` null) so v2 clients can tell the two apart.
+ *   - `cap_kind`, `cap_amount` (native), `period_start` / `period_end`
+ *     ('YYYY-MM-DD') and `approximate_window`.
+ * "Current" is the India calendar day for v2 rows (their windows are IST)
+ * and the database date for v1 rows, as before.
  */
 async function currentCapStates(client, userCardId) {
   const result = await client.query(
-    `SELECT cap_rule_id, consumed, cap_value_snapshot, cap_kind, cap_amount,
-            to_char(period_start, 'YYYY-MM-DD') AS period_start,
-            to_char(period_end, 'YYYY-MM-DD') AS period_end, approximate_window
-       FROM cap_states
-      WHERE user_card_id = $1 AND period_start <= CURRENT_DATE AND period_end >= CURRENT_DATE`,
-    [userCardId],
+    `SELECT cs.cap_rule_id,
+            CASE WHEN cs.cap_kind = ANY($2::text[])
+                 THEN round(cs.consumed * COALESCE(cp.point_value_inr, 0), 2)
+                 ELSE cs.consumed END AS consumed,
+            CASE WHEN cs.cap_kind IS NULL THEN NULL ELSE cs.consumed END AS consumed_native,
+            cs.cap_value_snapshot, cs.cap_kind, cs.cap_amount,
+            to_char(cs.period_start, 'YYYY-MM-DD') AS period_start,
+            to_char(cs.period_end, 'YYYY-MM-DD') AS period_end, cs.approximate_window
+       FROM cap_states cs
+       JOIN user_cards uc ON uc.id = cs.user_card_id
+       JOIN card_products cp ON cp.id = uc.card_product_id
+      WHERE cs.user_card_id = $1
+        AND cs.period_start <= CASE WHEN cs.cap_kind IS NULL THEN CURRENT_DATE
+                                    ELSE (now() AT TIME ZONE 'Asia/Kolkata')::date END
+        AND cs.period_end >= CASE WHEN cs.cap_kind IS NULL THEN CURRENT_DATE
+                                  ELSE (now() AT TIME ZONE 'Asia/Kolkata')::date END`,
+    [userCardId, POINTS_KINDS],
   );
   return result.rows;
 }
@@ -1102,6 +1250,7 @@ module.exports = {
   planReplay,
   toRecord,
   nativeAmount,
+  ledgerRows,
   capNativeAmount,
   capWindow,
   milestoneWindow,

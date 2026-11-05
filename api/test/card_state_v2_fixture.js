@@ -7,6 +7,7 @@
 //   dining 5X      earn, category dining                → bonus cap (1,000 pts / month)
 //   swiggy 10X     earn, merchant_slugs [swiggy]        → eligible-spend cap (₹20,000 / month, then base)
 //   wallet         exclusion, category wallet
+//   minimum        exclusion below ₹100 (C8 D16b)
 //   parent total   2,500 pts / month, parent of the bonus and eligible-spend caps
 //   card-year      total 6,000 pts per card year (card scope, card_anniversary)
 //   swiggy count   2 transactions / month on the swiggy rule (post-cap: zero)
@@ -24,6 +25,7 @@ const RULE = {
   dining: '00000000-0000-4000-8000-0000000000a1',
   swiggy: '00000000-0000-4000-8000-0000000000a2',
   wallet: '00000000-0000-4000-8000-0000000000a3',
+  minimum: '00000000-0000-4000-8000-0000000000a4',
 };
 
 const CAP = {
@@ -64,6 +66,8 @@ const RULES = [
   rule({ id: RULE.dining, category_id: CATEGORY.dining, unit: 'points_per_100', rate: '5.0000', display_note: 'dining 5X' }),
   rule({ id: RULE.swiggy, merchant_slugs: ['swiggy'], unit: 'points_per_100', rate: '10.0000', display_note: 'swiggy 10X' }),
   rule({ id: RULE.wallet, rule_role: 'exclusion', category_id: CATEGORY.wallet, unit: 'points_per_100', rate: '0.0000', display_note: 'no points on wallet loads' }),
+  // C8 D16b: on an exclusion, max_txn_inr means "only below it".
+  rule({ id: RULE.minimum, rule_role: 'exclusion', max_txn_inr: '100.00', unit: 'points_per_100', rate: '0.0000', priority: 0, display_note: 'no points below ₹100' }),
 ];
 
 function cap(overrides) {

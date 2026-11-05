@@ -147,6 +147,105 @@ test('milestones: welcome window from the anchor date; per-milestone and card ex
   assert.deepEqual(cardStateV2.milestoneEntries(excludedCard, cardStateV2.transactionContext(txn('2026-11-10', 9000, { category_id: F.CATEGORY.rent }))), []);
 });
 
+test('C8 D22a: an excluded spend makes no milestone progress (exclusion rule, minimum amount, card category)', () => {
+  const v2 = v2card({ excluded_categories: [F.CATEGORY.rent] });
+  const outcomeOf = (row) => cardStateV2.computeTransactionV2(v2, directory, cardStateV2.transactionContext(row), () => 0);
+  const cases = {
+    wallet: txn('2026-11-10', 500, { category_id: F.CATEGORY.wallet }),
+    minimum: dining('2026-11-10', 99),
+    cardCategory: txn('2026-11-10', 9000, { category_id: F.CATEGORY.rent }),
+  };
+  for (const [name, row] of Object.entries(cases)) {
+    const out = outcomeOf(row);
+    assert.equal(out.excluded, true, name);
+    assert.deepEqual(cardStateV2.milestoneEntries(v2, cardStateV2.transactionContext(row), { excluded: out.excluded }), [], name);
+  }
+  // ₹100 is not below the minimum: it earns and qualifies.
+  const hundred = dining('2026-11-10', 100);
+  const out = outcomeOf(hundred);
+  assert.equal(out.excluded, false);
+  assert.equal(cardStateV2.milestoneEntries(v2, cardStateV2.transactionContext(hundred), { excluded: out.excluded }).length, 2);
+  // The replay applies the same test.
+  const range = cardStateV2.rebuildRange(v2, { asOf: new Date('2026-11-20T12:00:00Z'), milestones: true });
+  const plan = cardStateV2.planReplay({ v2, directory, range, transactions: [...Object.values(cases), hundred] });
+  assert.deepEqual(plan.milestoneRows.map((r) => r.qualified_spend), [100, 100]);
+});
+
+test('C8 D22b: welcome windows count from opened_on even when anniversary_on differs', () => {
+  const v2 = v2card({ opened_on: '2026-10-01', anniversary_on: '2026-12-15' });
+  const ctx = cardStateV2.transactionContext(dining('2026-11-03', 2000));
+  const welcome = cardStateV2.milestoneEntries(v2, ctx).find((e) => e.id === F.MILESTONE.welcome);
+  assert.deepEqual([welcome.start, welcome.end, welcome.approximate], ['2026-10-01', '2026-12-29', false]);
+  const cardYear = cardStateV2.computeTransactionV2(v2, directory, ctx, () => 0).capEntries.find((e) => e.id === F.CAP.cardYear);
+  assert.deepEqual([cardYear.start, cardYear.end], ['2025-12-15', '2026-12-14']); // card year from anniversary_on
+  const fromCreated = v2card({ opened_on: null, anniversary_on: null });
+  const w = cardStateV2.milestoneEntries(fromCreated, ctx).find((e) => e.id === F.MILESTONE.welcome);
+  assert.deepEqual([w.start, w.approximate], ['2026-10-20', true]);
+});
+
+test('C8 D23c: a spend at 03:00 IST on 1 Dec counts in December', () => {
+  const v2 = v2card();
+  const late = txn('2026-11-30', 2000, { category_id: F.CATEGORY.dining, occurred_at: new Date('2026-11-30T21:30:00Z') });
+  const out = cardStateV2.computeTransactionV2(v2, directory, cardStateV2.transactionContext(late), () => 0);
+  assert.deepEqual(out.capEntries.find((e) => e.id === F.CAP.parent).start, '2026-12-01');
+  const range = cardStateV2.rebuildRange(v2, { asOf: new Date('2026-12-10T06:00:00Z'), caps: true });
+  const plan = cardStateV2.planReplay({ v2, directory, range, transactions: [late] });
+  assert.equal(plan.capRows.find((r) => r.cap_rule_id === F.CAP.parent).period_start, '2026-12-01');
+  assert.equal(plan.capRows.find((r) => r.cap_rule_id === F.CAP.parent).consumed, 100);
+});
+
+test('C8 D23b: statement-cycle caps on day 31 and day 1 give one row per period and a bounded rebuild', () => {
+  for (const statementDay of [1, 31]) {
+    const caps = F.CAPS.map((c) => (c.period === 'calendar_month' ? { ...c, period: 'statement_cycle' } : c));
+    const v2 = cardStateV2.buildV2Card({ userCard: F.userCardRow({ statement_day: statementDay }), rules: F.RULES, caps, milestones: [] });
+    const rows = [dining('2026-11-01', 2000), dining('2026-11-30', 2000), dining('2026-12-01', 2000)];
+    const range = cardStateV2.rebuildRange(v2, { asOf: new Date('2026-12-01T06:00:00Z'), caps: true });
+    const plan = cardStateV2.planReplay({ v2, directory, range, transactions: rows });
+    const parents = plan.capRows.filter((r) => r.cap_rule_id === F.CAP.parent);
+    const starts = new Set(parents.map((r) => r.period_start));
+    assert.equal(starts.size, parents.length, `day ${statementDay}: one row per period`);
+    for (let i = 1; i < parents.length; i += 1) assert.ok(parents[i - 1].period_end < parents[i].period_start);
+    assert.equal(parents.reduce((s, r) => s + r.consumed, 0), 300, `day ${statementDay}: every spend counted once`);
+  }
+});
+
+test('C8 D23f: lifetime caps rebuild from the card floor, not 1970', () => {
+  const caps = [...F.CAPS, {
+    id: '00000000-0000-4000-8000-0000000000c9', reward_rule_id: null, category_id: null, label: 'lifetime',
+    measure: 'reward_value', period: 'lifetime', cap_value: '1000', cap_kind: 'total_points', cap_amount: '4000',
+    scope: 'card', parent_cap_id: null, post_cap_behavior: null, post_cap_rate: '0', anchor: null, targets: [],
+  }];
+  const v2 = cardStateV2.buildV2Card({ userCard: F.userCardRow(), rules: F.RULES, caps, milestones: F.MILESTONES });
+  const asOf = new Date('2026-11-20T12:00:00Z');
+  assert.ok(cardStateV2.rebuildRange(v2, { asOf, caps: true }).loadFrom < '1971-01-01', 'without a floor: all history');
+  const range = cardStateV2.rebuildRange(v2, { asOf, caps: true, floor: '2026-10-01' });
+  assert.deepEqual([range.caps.start, range.caps.seedFrom, range.loadFrom], ['2026-10-01', '2026-10-01', '2026-10-01']);
+  const plan = cardStateV2.planReplay({ v2, directory, range, transactions: [dining('2026-10-05', 2000), dining('2026-11-03', 2000)] });
+  const lifetime = plan.capRows.find((r) => r.cap_rule_id === '00000000-0000-4000-8000-0000000000c9');
+  assert.deepEqual([lifetime.period_start, lifetime.consumed], ['1970-01-01', 200]);
+});
+
+test('a spend that earns points and cashback keeps both: expected_points, the cashback field and two ledger rows', () => {
+  const rules = [...F.RULES, {
+    ...F.RULES[0], id: '00000000-0000-4000-8000-0000000000a9', category_id: F.CATEGORY.other,
+    unit: 'cashback_percent', rate: '5.0000', display_note: '5% cashback on other',
+  }];
+  const v2 = cardStateV2.buildV2Card({ userCard: F.userCardRow(), rules, caps: [], milestones: [] });
+  const out = cardStateV2.computeTransactionV2(v2, directory, cardStateV2.transactionContext(
+    txn('2026-11-10', 1000, { category_id: F.CATEGORY.other })), () => 0);
+  assert.deepEqual([out.native, out.points, out.cashback, out.value], [0, 0, 50, 50]);
+  assert.deepEqual(cardStateV2.ledgerRows(out), [{ reason: 'cashback earned on transaction', delta: 50 }]);
+  const pointsCard = cardStateV2.computeTransactionV2(v2, directory, cardStateV2.transactionContext(dining('2026-11-10', 1000)), () => 0);
+  assert.deepEqual([pointsCard.native, pointsCard.points, pointsCard.cashback], [50, 50, null]);
+  assert.deepEqual(cardStateV2.ledgerRows({ native: 120, points: 120, cashback: 30 }), [
+    { reason: 'points earned on transaction', delta: 120 },
+    { reason: 'cashback earned on transaction', delta: 30 },
+  ]);
+  assert.deepEqual(cardStateV2.ledgerRows({ native: 49.5, points: null, cashback: 49.5 }), [
+    { reason: 'points earned on transaction', delta: 49.5 },
+  ]);
+});
+
 test('replay rebuilds rows equal to sequential recording, and writes each transaction its record', () => {
   const v2 = v2card();
   const rows = [dining('2026-11-03', 2000), swiggy('2026-11-04', 30000), dining('2026-11-05', 30000), swiggy('2026-11-06', 1000)];
