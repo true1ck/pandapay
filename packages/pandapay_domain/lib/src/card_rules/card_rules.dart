@@ -248,6 +248,11 @@ class RewardRule {
   /// 2 means hidden from the v1 feed (plan C1).
   final int minEngineVersion;
 
+  /// Plan C8/D18a: null = no maximum. 1 marks a v1-only row (e.g. a broad
+  /// v1 projection of a precise v2 rule): the v2 engine ignores it
+  /// entirely. Non-null marks the card v2-shaped.
+  final int? maxEngineVersion;
+
   /// CardPipeline rule id. Not part of identity.
   final String? sourceLocalId;
 
@@ -276,9 +281,14 @@ class RewardRule {
     this.exceptPlatformSlugs = const [],
     this.blockInr,
     this.minEngineVersion = 1,
+    this.maxEngineVersion,
     this.sourceLocalId,
     this.displayNote,
   });
+
+  /// D18a: whether the v2 engine must ignore this row (v1-only).
+  bool get isV1Only =>
+      maxEngineVersion != null && maxEngineVersion! < kRewardEngineVersion;
 
   /// The role the v2 engine uses: a v1 row on a v2 card is an earning rule.
   RuleRole get effectiveRole => role ?? RuleRole.earn;
@@ -297,7 +307,8 @@ class RewardRule {
       exceptPlatformSlugs.isNotEmpty ||
       (role == RuleRole.exclusion && maxTxn != null) ||
       blockInr != null ||
-      minEngineVersion >= 2;
+      minEngineVersion >= 2 ||
+      maxEngineVersion != null;
 
   /// Whether any v2-only field differs from its v1 default.
   bool get hasV2Fields =>
@@ -310,6 +321,7 @@ class RewardRule {
       exceptPlatformSlugs.isNotEmpty ||
       blockInr != null ||
       minEngineVersion != 1 ||
+      maxEngineVersion != null ||
       sourceLocalId != null ||
       displayNote != null;
 }
@@ -872,6 +884,8 @@ String rewardRuleIdentityKey(RewardRule rule) =>
         _catalogueListKey(rule.exceptMerchantSlugs),
         _catalogueListKey(rule.exceptPlatformSlugs),
       ],
+      // D18a: likewise appended only when set.
+      if (rule.maxEngineVersion != null) 'max${rule.maxEngineVersion}',
     ]);
 
 List<RewardRule> uniqueRewardRules(Iterable<RewardRule> rules) {
