@@ -120,4 +120,26 @@ void main() {
     expect(rows.single.amountMinor, 175000);
     expect(rows.single.unit, LedgerUnit.inr);
   });
+
+  test('a foreign-only refund is not shown to be part of an INR purchase', () {
+    final purchase = move(
+      'debit',
+      'purchase',
+      175000,
+      at: '2026-11-10T09:00:00Z',
+      inst: hdfcCard,
+      original: {'minor': 2000, 'currency': 'USD'},
+      counterparty: party(name: 'SAMPLE AI', kind: 'merchant'),
+      rail: 'card',
+    );
+    final refund = foreignDebit(
+      2000,
+      at: '2026-11-12T09:00:00Z',
+      purpose: 'refund',
+      direction: 'credit',
+    );
+    final r = linkAll([purchase, refund]);
+    expect(eventsOf(r), hasLength(2), reason: shapes(r).toString());
+    expect(eventsOf(r).every((e) => e.legs.length == 1), isTrue);
+  });
 }

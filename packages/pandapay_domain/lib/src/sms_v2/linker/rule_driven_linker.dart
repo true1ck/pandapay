@@ -749,8 +749,13 @@ class _Run {
     final pa = _priced(f);
     final pb = _priced(g);
     final tol = rule.join.amountTolerancePct ?? 0;
-    // Amounts in different units (paise against cents) never compare.
-    if (pa == null || pb == null || pa.unit != pb.unit) return tol >= 100;
+    // Amounts in different units (paise against cents) never compare. An
+    // "up to" rule treats that as an unknown amount, except a refund: a
+    // foreign-only refund is not shown to be part of an INR purchase.
+    if (pa != null && pb != null && pa.unit != pb.unit) {
+      return tol >= 100 && kinds[rule] != LinkRuleKind.refund;
+    }
+    if (pa == null || pb == null) return tol >= 100;
     final a = pa.minor;
     final b = pb.minor;
     if (tol >= 100) {

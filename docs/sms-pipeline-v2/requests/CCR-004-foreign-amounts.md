@@ -28,7 +28,7 @@ The fact contract is unchanged. It already carried both shapes:
 
 ## Money safety
 
-- The projector already ignores any posted amount whose unit is not INR. The linker now does the same in `_principal`: a foreign minor is never compared with paise and never becomes an event's `amountMinor`.
+- The projector already ignores any posted amount whose unit is not INR. The linker now does the same in `_principal`: a foreign minor is never compared with paise and never becomes an event's `amountMinor`. Amounts in different units join only under an "up to" rule that tolerates an unknown amount (a mandate and its charge), never under the refund rule: a foreign-only refund is not shown to be part of an INR purchase.
 - A foreign-only event has `amountMinor 0`, no ledger entry, no transaction, no card or reward effect. The server projection needs an INR ledger row and an event amount above 0, so it makes no row either.
 - Linking a later INR-billed message to the foreign-only one is done by the app bridge, see `foreign-payments-v2.md`.
 
