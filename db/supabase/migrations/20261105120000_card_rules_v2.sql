@@ -14,6 +14,7 @@ begin;
 alter table card_products
   add column if not exists accrual_block_inr    int,
   add column if not exists accrual_rounding     text,
+  add column if not exists cashback_rounding    text,
   add column if not exists points_expiry_months int,
   add column if not exists model_status         text not null default 'basic',
   add column if not exists model_coverage       jsonb not null default '{}'::jsonb;
@@ -22,6 +23,9 @@ alter table card_products
   add constraint card_accrual_rounding_known
     check (accrual_rounding is null or accrual_rounding in
       ('floor','round','none','points_half_up','points_floor')),
+  add constraint card_cashback_rounding_known
+    check (cashback_rounding is null or cashback_rounding in
+      ('paise','rupee_floor','rupee_half_up')),
   add constraint card_model_status_known
     check (model_status in ('verified','partial','basic'));
 
@@ -349,7 +353,7 @@ select
     from card_product_network_variants v
     where v.card_product_id = c.id and v.is_active
   ), '[]'::jsonb) as network_variants,
-  c.accrual_block_inr, c.accrual_rounding, c.points_expiry_months,
+  c.accrual_block_inr, c.accrual_rounding, c.cashback_rounding, c.points_expiry_months,
   c.model_status, c.model_coverage,
   coalesce((select jsonb_agg(to_jsonb(u) - 'card_product_id') from benefit_unlock_rules u
              where u.card_product_id = c.id), '[]'::jsonb) as unlock_rules,
@@ -397,7 +401,7 @@ select
     from card_product_network_variants v
     where v.card_product_id = c.id and v.is_active
   ), '[]'::jsonb) as network_variants,
-  c.accrual_block_inr, c.accrual_rounding, c.points_expiry_months,
+  c.accrual_block_inr, c.accrual_rounding, c.cashback_rounding, c.points_expiry_months,
   c.model_status, c.model_coverage,
   coalesce((select jsonb_agg(to_jsonb(u) - 'card_product_id') from benefit_unlock_rules u
              where u.card_product_id = c.id), '[]'::jsonb) as unlock_rules
