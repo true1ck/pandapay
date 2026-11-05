@@ -106,7 +106,7 @@ void main() {
     for (final (screen, evidence) in [
       (SmsLedgerScreen.investments, 'Net invested'),
       (SmsLedgerScreen.ipos, 'Blocked'),
-      (SmsLedgerScreen.moneyIn, 'salary'),
+      (SmsLedgerScreen.moneyIn, 'Salary'),
       (SmsLedgerScreen.subscriptions, 'NETFLIX'),
     ]) {
       await show(SmsLedgerScreenView(screen: screen));
