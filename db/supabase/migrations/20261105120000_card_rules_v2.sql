@@ -317,10 +317,10 @@ select
   c.annual_fee_inr, c.joining_fee_inr, c.is_upi_linkable,
   c.art_asset, c.art_primary_color, c.point_value_inr,
   i.slug as issuer_slug, i.name as issuer_name,
-  coalesce((select jsonb_agg(to_jsonb(r) - 'card_product_id') from reward_rules r
+  coalesce((select jsonb_agg(to_jsonb(r) - 'card_product_id' order by r.priority, r.source_local_id nulls last, r.id) from reward_rules r
              where r.card_product_id = c.id
                and r.min_engine_version = 1 and r.rule_role <> 'info'), '[]'::jsonb) as reward_rules,
-  coalesce((select jsonb_agg(to_jsonb(k) - 'card_product_id') from cap_rules k
+  coalesce((select jsonb_agg(to_jsonb(k) - 'card_product_id' order by k.source_local_id nulls last, k.id) from cap_rules k
              where k.card_product_id = c.id
                and k.min_engine_version = 1
                and not exists (select 1 from reward_rules rr
@@ -363,12 +363,13 @@ select
   c.annual_fee_inr, c.joining_fee_inr, c.is_upi_linkable,
   c.art_asset, c.art_primary_color, c.point_value_inr,
   i.slug as issuer_slug, i.name as issuer_name,
-  coalesce((select jsonb_agg(to_jsonb(r) - 'card_product_id') from reward_rules r
+  coalesce((select jsonb_agg(to_jsonb(r) - 'card_product_id' order by r.priority, r.source_local_id nulls last, r.id) from reward_rules r
              where r.card_product_id = c.id), '[]'::jsonb) as reward_rules,
   coalesce((select jsonb_agg(
               (to_jsonb(k) - 'card_product_id') || jsonb_build_object('targets',
                 coalesce((select jsonb_agg(t.reward_rule_id order by t.reward_rule_id)
-                            from cap_rule_targets t where t.cap_rule_id = k.id), '[]'::jsonb)))
+                            from cap_rule_targets t where t.cap_rule_id = k.id), '[]'::jsonb))
+              order by k.source_local_id nulls last, k.id)
               from cap_rules k
              where k.card_product_id = c.id), '[]'::jsonb) as cap_rules,
   coalesce((select jsonb_agg(to_jsonb(m) - 'card_product_id') from milestone_rules m
@@ -408,12 +409,13 @@ select
   c.verified_at, c.annual_fee_inr, c.joining_fee_inr, c.is_upi_linkable,
   c.art_asset, c.art_primary_color, c.point_value_inr,
   i.slug as issuer_slug, i.name as issuer_name,
-  coalesce((select jsonb_agg(to_jsonb(r) - 'card_product_id') from reward_rules r
+  coalesce((select jsonb_agg(to_jsonb(r) - 'card_product_id' order by r.priority, r.source_local_id nulls last, r.id) from reward_rules r
              where r.card_product_id = c.id), '[]'::jsonb) as reward_rules,
   coalesce((select jsonb_agg(
               (to_jsonb(k) - 'card_product_id') || jsonb_build_object('targets',
                 coalesce((select jsonb_agg(t.reward_rule_id order by t.reward_rule_id)
-                            from cap_rule_targets t where t.cap_rule_id = k.id), '[]'::jsonb)))
+                            from cap_rule_targets t where t.cap_rule_id = k.id), '[]'::jsonb))
+              order by k.source_local_id nulls last, k.id)
               from cap_rules k
              where k.card_product_id = c.id), '[]'::jsonb) as cap_rules,
   coalesce((select jsonb_agg(to_jsonb(m) - 'card_product_id') from milestone_rules m
