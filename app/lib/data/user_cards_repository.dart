@@ -24,6 +24,147 @@ Money _nonNegativeMoney(dynamic v) {
   return value.isNegative ? const Money.zero() : value;
 }
 
+/// Like [_num] but never throws: anything unreadable is null. Used for the
+/// v2 cap-state fields, where a bad value must read as "unknown" and never
+/// fail the whole wallet.
+double? _numOrNullTolerant(dynamic v) {
+  if (v == null) return null;
+  if (v is num) return v.toDouble();
+  if (v is String) return double.tryParse(v);
+  return null;
+}
+
+/// 'YYYY-MM-DD' (or a full ISO date) to a date-only local `DateTime`; null
+/// when absent or unreadable.
+DateTime? _calendarDayOrNull(dynamic v) {
+  if (v is! String || v.length < 10) return null;
+  final parsed = DateTime.tryParse(v.substring(0, 10));
+  return parsed == null
+      ? null
+      : DateTime(parsed.year, parsed.month, parsed.day);
+}
+
+String _calendarDayToWire(DateTime d) =>
+    '${d.year.toString().padLeft(4, '0')}-'
+    '${d.month.toString().padLeft(2, '0')}-'
+    '${d.day.toString().padLeft(2, '0')}';
+
+/// Card Rewards Phase 1 (WP9, plan C8 D15f/D22c): one current-period cap row
+/// from `GET /user-cards`, in the cap's NATIVE unit.
+///
+/// `consumed` on the wire stays the v1 measure (a ₹ reward value for points
+/// caps) so installed apps keep working; it lives in [UserCard.capConsumed]
+/// and is never read as a native figure. This class carries only the v2
+/// fields. [consumedNative] is null on a v1 row (written before the
+/// server's recompute): on a v2-shaped card that means *unknown*, not
+/// empty. The absence of a row for a cap means nothing was consumed this
+/// period.
+class CapStateRow {
+  final String capRuleId;
+
+  /// Points, ₹ cashback, ₹ spend or a count, per [capKindWire]. Null =
+  /// unknown (v1 row, or an unreadable value).
+  final double? consumedNative;
+
+  /// The server's `cap_kind` as sent (`bonus_points`, ...), null on a v1 row.
+  final String? capKindWire;
+
+  /// The amount the row was recorded against, in native units.
+  final double? capAmount;
+  final DateTime? periodStart;
+  final DateTime? periodEnd;
+
+  /// True when the period bounds were estimated (e.g. no statement day).
+  final bool approximateWindow;
+
+  const CapStateRow({
+    required this.capRuleId,
+    this.consumedNative,
+    this.capKindWire,
+    this.capAmount,
+    this.periodStart,
+    this.periodEnd,
+    this.approximateWindow = false,
+  });
+
+  /// The server's kind as the domain enum; null when absent or not one this
+  /// build knows.
+  CapKind? get capKind {
+    final wire = capKindWire;
+    if (wire == null) return null;
+    final camel = wire.replaceAllMapped(
+      RegExp(r'_([a-z])'),
+      (m) => m.group(1)!.toUpperCase(),
+    );
+    for (final kind in CapKind.values) {
+      if (kind.name == camel) return kind;
+    }
+    return null;
+  }
+
+  /// Whether this row carries any v2 field at all.
+  bool get hasV2Fields =>
+      consumedNative != null ||
+      capKindWire != null ||
+      capAmount != null ||
+      periodStart != null ||
+      periodEnd != null ||
+      approximateWindow;
+
+  factory CapStateRow.fromJson(Map<String, dynamic> json) => CapStateRow(
+    capRuleId: json['cap_rule_id'] as String,
+    consumedNative: _numOrNullTolerant(json['consumed_native']),
+    capKindWire: json['cap_kind'] is String ? json['cap_kind'] as String : null,
+    capAmount: _numOrNullTolerant(json['cap_amount']),
+    periodStart: _calendarDayOrNull(json['period_start']),
+    periodEnd: _calendarDayOrNull(json['period_end']),
+    approximateWindow: json['approximate_window'] == true,
+  );
+
+  /// Two rows for one cap (not expected: the server returns the current
+  /// period only): the more conservative one. Unknown beats known, then the
+  /// larger consumption.
+  CapStateRow mergedWith(CapStateRow other) {
+    final a = consumedNative;
+    final b = other.consumedNative;
+    final pickThis = a == null || (b != null && a >= b);
+    final keep = pickThis ? this : other;
+    return CapStateRow(
+      capRuleId: capRuleId,
+      consumedNative: (a == null || b == null) ? null : keep.consumedNative,
+      capKindWire: keep.capKindWire,
+      capAmount: keep.capAmount,
+      periodStart: keep.periodStart,
+      periodEnd: keep.periodEnd,
+      approximateWindow: keep.approximateWindow,
+    );
+  }
+
+  /// The v2 keys of the wire row, for the offline cache round trip.
+  Map<String, dynamic> toWireFields() => {
+    'consumed_native': consumedNative,
+    'cap_kind': capKindWire,
+    'cap_amount': capAmount,
+    'period_start': periodStart == null
+        ? null
+        : _calendarDayToWire(periodStart!),
+    'period_end': periodEnd == null ? null : _calendarDayToWire(periodEnd!),
+    'approximate_window': approximateWindow,
+  };
+}
+
+Map<String, CapStateRow> _parseCapStates(List<Map<String, dynamic>> rows) {
+  final out = <String, CapStateRow>{};
+  for (final row in rows) {
+    final parsed = CapStateRow.fromJson(row);
+    final existing = out[parsed.capRuleId];
+    out[parsed.capRuleId] = existing == null
+        ? parsed
+        : existing.mergedWith(parsed);
+  }
+  return out;
+}
+
 /// Chunk 17: the CURRENTLY-ACTIVE period's cap/milestone consumption for
 /// this owned card — a missing entry for a given cap/milestone rule id
 /// means nothing's been logged against it yet this period (full headroom),
@@ -42,6 +183,11 @@ class UserCard {
   final bool isDefault;
   final Map<String, Money>
   capConsumed; // capRule.id -> consumed (in the cap's own measure unit)
+
+  /// capRule.id -> the v2 native-unit view of the same current-period row
+  /// (WP9). [capConsumed] keeps the v1 measure and is untouched; v2-shaped
+  /// cards read this map instead (see `buildCardSnapshot`).
+  final Map<String, CapStateRow> capStates;
   final Map<String, Money>
   milestoneQualifiedSpend; // milestoneRule.id -> qualified spend so far
   final Map<String, DateTime>
@@ -122,6 +268,7 @@ class UserCard {
     required this.isDefault,
     this.isUnresolved = false,
     this.capConsumed = const {},
+    this.capStates = const {},
     this.milestoneQualifiedSpend = const {},
     this.milestonePeriodEnd = const {},
     this.totalPointsEarned = 0,
@@ -158,6 +305,7 @@ class UserCard {
         for (final s in capStates)
           s['cap_rule_id'] as String: Money.fromRupees(_num(s['consumed'])),
       },
+      capStates: _parseCapStates(capStates),
       milestoneQualifiedSpend: {
         for (final s in milestoneStates)
           s['milestone_rule_id'] as String: Money.fromRupees(
@@ -210,7 +358,13 @@ class UserCard {
     'is_default': isDefault,
     'cap_states': [
       for (final entry in capConsumed.entries)
-        {'cap_rule_id': entry.key, 'consumed': entry.value.rupees},
+        {
+          'cap_rule_id': entry.key,
+          'consumed': entry.value.rupees,
+          // v2 keys only on a row that has them, so a v1 blob is unchanged.
+          if (capStates[entry.key]?.hasV2Fields == true)
+            ...capStates[entry.key]!.toWireFields(),
+        },
     ],
     'milestone_states': [
       for (final entry in milestoneQualifiedSpend.entries)

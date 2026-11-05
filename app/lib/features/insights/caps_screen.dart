@@ -6,7 +6,12 @@ import '../../app/design/app_theme.dart';
 import '../../app/design/widgets.dart';
 import '../../app/providers.dart';
 import '../../data/api_exception.dart';
+import '../../data/card_snapshots.dart';
+import '../../data/catalogue_repository.dart' show SpendCategory;
 import '../../data/user_cards_repository.dart';
+import '../cards/cap_progress.dart';
+import '../cards/next_best_card.dart';
+import '../cards/widgets/cap_bar.dart';
 import '../../main.dart' show MoneyText;
 import 'grouped_insight_screen.dart';
 
@@ -60,20 +65,33 @@ class CapsScreen extends ConsumerWidget {
               'Card-wide';
         }
 
+        // WP9: v2-shaped cards list every cap by id and rank by the native
+        // ratio (an unknown cap sorts as full); v1 cards are unchanged.
+        final now = ref.watch(clockProvider).now();
         final rows = <(UserCard, CardProduct, CapRule)>[
           for (final (userCard, product) in owned)
-            for (final cap in uniqueCapRules(product.capRules))
+            for (final cap in product.isV2Shaped
+                ? product.capRules
+                : uniqueCapRules(product.capRules))
               (userCard, product, cap),
         ];
+        double urgencyRatio((UserCard, CardProduct, CapRule) row) {
+          final progress = row.$2.isV2Shaped
+              ? capProgressFor(
+                  product: row.$2,
+                  cap: row.$3,
+                  owned: row.$1,
+                  now: now,
+                )
+              : null;
+          if (progress != null) return progress.ratio ?? 1.0;
+          final consumed = row.$1.capConsumed[row.$3.id] ?? const Money.zero();
+          return capRatio(consumed, row.$3.capValue);
+        }
+
         rows.sort((a, b) {
-          final consumedA = a.$1.capConsumed[a.$3.id] ?? const Money.zero();
-          final consumedB = b.$1.capConsumed[b.$3.id] ?? const Money.zero();
-          final scoreA = UrgencyScore(
-            ratioConsumed: capRatio(consumedA, a.$3.capValue),
-          );
-          final scoreB = UrgencyScore(
-            ratioConsumed: capRatio(consumedB, b.$3.capValue),
-          );
+          final scoreA = UrgencyScore(ratioConsumed: urgencyRatio(a));
+          final scoreB = UrgencyScore(ratioConsumed: urgencyRatio(b));
           return scoreA.compareTo(scoreB);
         });
 
@@ -157,7 +175,9 @@ class CapsScreen extends ConsumerWidget {
                         product: group.product,
                         cap: cap,
                         categoryName: categoryName(cap.categoryId),
+                        categories: categories,
                         allOwned: owned,
+                        now: now,
                       ),
                   ],
                   if (group.fuels.isNotEmpty) ...[
@@ -179,17 +199,79 @@ class _CapTile extends StatelessWidget {
   final CardProduct product;
   final CapRule cap;
   final String categoryName;
+  final List<SpendCategory> categories;
   final List<(UserCard, CardProduct)> allOwned;
+
+  /// The app clock (clockProvider): bars, suggestions and the engine agree.
+  final DateTime now;
   const _CapTile({
     required this.userCard,
     required this.product,
     required this.cap,
     required this.categoryName,
+    required this.categories,
     required this.allOwned,
+    required this.now,
   });
 
   @override
   Widget build(BuildContext context) {
+    // WP9 (B1): v2-shaped cards show the cap in its native unit, with the
+    // next-best owned card once the cap is nearly used. A cap that cannot be
+    // stated natively falls back to the v1 tile below.
+    final progress = product.isV2Shaped
+        ? capProgressFor(
+            product: product,
+            cap: cap,
+            owned: userCard,
+            now: now,
+          )
+        : null;
+    if (progress != null) {
+      final ratio = progress.ratio ?? 0;
+      // From the 80% alert line, as the cap alerts do.
+      final suggestion = ratio >= 0.8
+          ? nextBestOwnedCard(
+              owned: allOwned,
+              cappedCard: userCard,
+              cappedProduct: product,
+              cap: cap,
+              categories: categories,
+              now: now,
+            )
+          : null;
+      return Container(
+        decoration: BoxDecoration(
+          color: BambooInk.glassFillOnPaper,
+          borderRadius: BorderRadius.circular(AppRadius.lg),
+          border: Border.all(color: BambooInk.hairlineOnPaper),
+        ),
+        padding: const EdgeInsets.all(AppSpace.lg),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Text(
+              capRuleDisplayLabel(cap, categoryName: categoryName),
+              style: BambooFonts.heading(14.5, color: BambooInk.ink900),
+            ),
+            const SizedBox(height: AppSpace.md),
+            CapBar(progress: progress),
+            if (suggestion != null) ...[
+              const SizedBox(height: AppSpace.sm),
+              Text(
+                suggestion.message,
+                key: const ValueKey('cap-next-best'),
+                style: BambooFonts.ui(
+                  12.5,
+                  weight: FontWeight.w600,
+                  color: BambooInk.jade,
+                ),
+              ),
+            ],
+          ],
+        ),
+      );
+    }
     final consumed = userCard.capConsumed[cap.id] ?? const Money.zero();
     final remainingPaise = (cap.capValue.paise - consumed.paise).clamp(
       0,
@@ -298,6 +380,7 @@ class _CapTile extends StatelessWidget {
               currentCard: userCard,
               cap: cap,
               allOwned: allOwned,
+              now: now,
             ),
           ],
         ],
@@ -325,10 +408,12 @@ class _SwitchToSuggestion extends StatelessWidget {
   final UserCard currentCard;
   final CapRule cap;
   final List<(UserCard, CardProduct)> allOwned;
+  final DateTime now;
   const _SwitchToSuggestion({
     required this.currentCard,
     required this.cap,
     required this.allOwned,
+    required this.now,
   });
 
   @override
@@ -338,8 +423,11 @@ class _SwitchToSuggestion extends StatelessWidget {
     if (others.isEmpty) return const SizedBox.shrink();
 
     const engine = RecommendationEngine();
+    // WP9: the other cards carry their own cap state (a card whose bonus is
+    // already used up must not be named), built in one place.
     final snapshots = [
-      for (final (_, product) in others) CardSnapshot(product: product),
+      for (final (userCard, product) in others)
+        buildCardSnapshot(product, owned: userCard, now: now),
     ];
     final ranked = engine.rank(
       RecommendationContext(
@@ -350,7 +438,7 @@ class _SwitchToSuggestion extends StatelessWidget {
         rail: TxnRail.swipe,
         // "Switch to X after this cap" must not name a card whose better
         // rate expired last quarter.
-        now: DateTime.now(),
+        now: now,
       ),
       snapshots,
     );

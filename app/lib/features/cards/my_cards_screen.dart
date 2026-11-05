@@ -16,7 +16,9 @@ import 'card_picker_screen.dart';
 import 'find_cards_screen.dart';
 import 'card_add_guard.dart';
 import 'card_summary.dart';
+import 'cap_progress.dart';
 import 'card_visual.dart';
+import 'widgets/cap_bar.dart';
 import 'package:intl/intl.dart';
 import '../insights/credit_utilization_ui.dart';
 import '../insights/payments_due_screen.dart';
@@ -450,6 +452,7 @@ class _MyCardTileState extends ConsumerState<_MyCardTile> {
                   card: card,
                   product: product,
                   categories: categories,
+                  now: ref.watch(clockProvider).now(),
                 ),
                 if (utilization != null) ...[
                   const SizedBox(height: AppSpace.sm),
@@ -665,14 +668,36 @@ class _NearestCapBar extends StatelessWidget {
   final CardProduct product;
   final List<SpendCategory> categories;
 
+  /// The app clock (clockProvider), so the bar and the engine agree on today.
+  final DateTime now;
+
   const _NearestCapBar({
     required this.card,
     required this.product,
     required this.categories,
+    required this.now,
   });
 
   @override
   Widget build(BuildContext context) {
+    // WP9 (B1): a v2-shaped card shows its fullest cap in native units
+    // ("1,240 / 1,500 pts · resets 1 Dec · then 1 pt/₹100"), or "Updating…"
+    // while a cap's native figure is unknown. v1 cards keep today's bar.
+    if (product.isV2Shaped) {
+      final fullest = fullestCapProgress(
+        capProgressesFor(product: product, owned: card, now: now),
+      );
+      if (fullest != null) {
+        final categoryName = categories
+            .where((category) => category.id == fullest.cap.categoryId)
+            .map((category) => category.name)
+            .firstOrNull;
+        return CapBar(
+          progress: fullest,
+          title: capRuleDisplayLabel(fullest.cap, categoryName: categoryName),
+        );
+      }
+    }
     final caps = uniqueCapRules(product.capRules);
     if (caps.isEmpty) return const SizedBox.shrink();
     CapRule? worst;
