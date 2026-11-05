@@ -1,0 +1,295 @@
+{
+  "source_slug": "axis-bank-magnus",
+  "cardpipeline_id": "axis-bank-axis-bank-magnus",
+  "card_name": "Axis Bank Magnus Credit Card",
+  "verified_on": "2026-11-05",
+  "sources": [
+    {
+      "url": "https://www.axis.bank.in/docs/default-source/default-document-library/credit-card-tnc/terms-and-conditions-for-magnus-credit-card.pdf?sfvrsn=1d8117ef_1",
+      "doc": "Magnus T&C revision eff. 20 Jun 2025",
+      "quote": "You will earn 35 EDGE REWARD Points per INR 200 on spends^ above INR 1.5 lakhs"
+    },
+    {
+      "url": "https://www.axis.bank.in/docs/default-source/default-document-library/credit-cards/terms-and-conditions-for-accelerated-35-edge-reward-points.pdf",
+      "doc": "Magnus accelerated reward points T&C",
+      "quote": "earn 12 EDGE Reward Points per Rs. 200 on spends upto Rs. 1.50 Lakhs"
+    },
+    {
+      "url": "https://www.axis.bank.in/docs/default-source/default-document-library/credit-cards/terms-and-conditions-for-accelerated-35-edge-reward-points.pdf",
+      "doc": "Magnus accelerated reward points T&C",
+      "quote": "Wallet loads/payments (MCC 6540)"
+    },
+    {
+      "url": "https://www.axis.bank.in/docs/default-source/default-document-library/credit-card-tnc/terms-and-conditions-for-magnus-credit-card.pdf?sfvrsn=1d8117ef_1",
+      "doc": "Magnus T&C revision eff. 20 Jun 2025",
+      "quote": "Rent (capped at INR 50,000 per month)"
+    }
+  ],
+  "examples": [
+    {
+      "id": "001",
+      "title": "Rs 10,000 grocery spend early in the month",
+      "ctx": {
+        "amount": 10000,
+        "occurred": "2026-11-10T10:00:00+05:30",
+        "category_id": null,
+        "category_slug": "groceries",
+        "mcc": "5411",
+        "merchant_name": "Supermarket",
+        "merchant_vpa": null,
+        "merchant_slug": null,
+        "platform": null,
+        "rail": "swipe"
+      },
+      "state_before": {
+        "caps_by_source_id": {}
+      },
+      "expect": {
+        "currency": "points",
+        "amount": 600,
+        "value_inr": null,
+        "excluded": false,
+        "cap_deltas_by_source_id": {
+          "base_150k_spend": 10000
+        }
+      },
+      "why": "12 EDGE Reward Points per Rs 200 up to Rs 1.5 lakh of eligible monthly spend: 50 blocks x 12 = 600."
+    },
+    {
+      "id": "002",
+      "title": "Rs 50,000 on Axis Travel EDGE",
+      "ctx": {
+        "amount": 50000,
+        "occurred": "2026-11-10T10:00:00+05:30",
+        "category_id": null,
+        "category_slug": "travel",
+        "mcc": null,
+        "merchant_name": "Axis Travel EDGE",
+        "merchant_vpa": null,
+        "merchant_slug": null,
+        "platform": "axis_travel_edge",
+        "rail": "online"
+      },
+      "state_before": {
+        "caps_by_source_id": {}
+      },
+      "expect": {
+        "currency": "points",
+        "amount": 15000,
+        "value_inr": null,
+        "excluded": false,
+        "cap_deltas_by_source_id": {
+          "travel_edge_200k_spend": 50000
+        }
+      },
+      "why": "Travel EDGE earns 5x the base, 60 points per Rs 200, up to Rs 2 lakh per month: 250 x 60 = 15,000. Travel EDGE spend up to Rs 2 lakh is outside the Rs 1.5 lakh threshold calculation."
+    },
+    {
+      "id": "003",
+      "title": "Rs 3,000 fuel",
+      "ctx": {
+        "amount": 3000,
+        "occurred": "2026-11-10T10:00:00+05:30",
+        "category_id": null,
+        "category_slug": "fuel",
+        "mcc": "5541",
+        "merchant_name": "Fuel station",
+        "merchant_vpa": null,
+        "merchant_slug": null,
+        "platform": null,
+        "rail": "swipe"
+      },
+      "state_before": {
+        "caps_by_source_id": {}
+      },
+      "expect": {
+        "currency": "points",
+        "amount": 0,
+        "value_inr": null,
+        "excluded": true,
+        "cap_deltas_by_source_id": {}
+      },
+      "why": "Fuel MCCs (5541, 5542, 5983) earn no base or accelerated points."
+    },
+    {
+      "id": "004",
+      "title": "Rs 20,000 wallet load",
+      "ctx": {
+        "amount": 20000,
+        "occurred": "2026-11-10T10:00:00+05:30",
+        "category_id": null,
+        "category_slug": "wallet",
+        "mcc": "6540",
+        "merchant_name": "Wallet top-up",
+        "merchant_vpa": null,
+        "merchant_slug": null,
+        "platform": null,
+        "rail": "online"
+      },
+      "state_before": {
+        "caps_by_source_id": {}
+      },
+      "expect": {
+        "currency": "points",
+        "amount": 0,
+        "value_inr": null,
+        "excluded": true,
+        "cap_deltas_by_source_id": {}
+      },
+      "why": "Wallet loads (MCC 6540) earn nothing and are excluded from the threshold."
+    },
+    {
+      "id": "005",
+      "title": "Rs 20,000 rent after Rs 50,000 of rent this month",
+      "ctx": {
+        "amount": 20000,
+        "occurred": "2026-11-10T10:00:00+05:30",
+        "category_id": null,
+        "category_slug": "rent",
+        "mcc": "6513",
+        "merchant_name": "Rent payment",
+        "merchant_vpa": null,
+        "merchant_slug": null,
+        "platform": null,
+        "rail": "online"
+      },
+      "state_before": {
+        "caps_by_source_id": {
+          "rental_50k_spend": 50000
+        }
+      },
+      "expect": {
+        "currency": "points",
+        "amount": 0,
+        "value_inr": null,
+        "excluded": true,
+        "cap_deltas_by_source_id": {}
+      },
+      "why": "Rent earns only on the first Rs 50,000 per calendar month; incremental rent earns no base or accelerated points."
+    },
+    {
+      "id": "006",
+      "title": "Rs 10,000 spend that crosses the Rs 1.5 lakh monthly line",
+      "ctx": {
+        "amount": 10000,
+        "occurred": "2026-11-10T10:00:00+05:30",
+        "category_id": null,
+        "category_slug": "shopping",
+        "mcc": "5311",
+        "merchant_name": "Department store",
+        "merchant_vpa": null,
+        "merchant_slug": null,
+        "platform": null,
+        "rail": "swipe"
+      },
+      "state_before": {
+        "caps_by_source_id": {
+          "base_150k_spend": 145000
+        }
+      },
+      "expect": {
+        "currency": "points",
+        "amount": 1175,
+        "value_inr": null,
+        "excluded": false,
+        "cap_deltas_by_source_id": {
+          "base_150k_spend": 5000
+        }
+      },
+      "why": "Rs 1,45,000 already eligible this month. Base: 50 blocks x 12 = 600 on the full Rs 10,000. Accelerated: extra 23 per Rs 200 on the Rs 5,000 above Rs 1.5 lakh = 25 x 23 = 575. Total 1,175 (35 per Rs 200 on the top Rs 5,000 plus 12 on the first Rs 5,000). The accelerated part is credited about 45 days after month end."
+    },
+    {
+      "id": "007",
+      "title": "Rs 20,000 spend after Rs 1.5 lakh is already used (credit limit well above)",
+      "ctx": {
+        "amount": 20000,
+        "occurred": "2026-11-10T10:00:00+05:30",
+        "category_id": null,
+        "category_slug": "shopping",
+        "mcc": "5311",
+        "merchant_name": "Department store",
+        "merchant_vpa": null,
+        "merchant_slug": null,
+        "platform": null,
+        "rail": "swipe"
+      },
+      "state_before": {
+        "caps_by_source_id": {
+          "base_150k_spend": 150000
+        }
+      },
+      "expect": {
+        "currency": "points",
+        "amount": 3500,
+        "value_inr": null,
+        "excluded": false,
+        "cap_deltas_by_source_id": {}
+      },
+      "why": "Above Rs 1.5 lakh in the month eligible spend earns 35 per Rs 200 until spends reach credit limit + Rs 1.5 lakh: 100 x 35 = 3,500."
+    },
+    {
+      "id": "008",
+      "title": "Rs 5,000 EMI purchase",
+      "ctx": {
+        "amount": 5000,
+        "occurred": "2026-11-10T10:00:00+05:30",
+        "category_id": null,
+        "category_slug": "shopping",
+        "mcc": null,
+        "merchant_name": "Electronics store",
+        "merchant_vpa": null,
+        "merchant_slug": null,
+        "platform": null,
+        "rail": "emi"
+      },
+      "state_before": {
+        "caps_by_source_id": {}
+      },
+      "expect": {
+        "currency": "points",
+        "amount": 0,
+        "value_inr": null,
+        "excluded": true,
+        "cap_deltas_by_source_id": {}
+      },
+      "why": "EMI transactions are excluded from rewards."
+    }
+  ],
+  "research_notes": [
+    {
+      "item": "cap accelerated_spend_cap",
+      "cardpipeline_says": "limit_value and limit_value_inr both null",
+      "issuer_says": "Ceiling is the cardholder assigned credit limit + Rs 1.5 lakh per calendar month, so it cannot be a static catalogue number.",
+      "proposed_fix": "engine: per-user ceiling needs the card limit; until then the 35x band is unbounded (over-states for very high spend)",
+      "override_file": null
+    },
+    {
+      "item": "structure of 35x",
+      "cardpipeline_says": "base rule capped at Rs 1.5 lakh then falls to a separate 35 accelerator",
+      "issuer_says": "Base 12 per Rs 200 is credited on all eligible spend; the accelerated part adds 23 per Rs 200 on cumulative eligible spend above Rs 1.5 lakh and is credited ~45 days after month end.",
+      "proposed_fix": "none: equivalent total, modelled with an eligible-spend cap and a custom post-cap rate of 35 per Rs 200",
+      "override_file": null
+    },
+    {
+      "item": "Travel EDGE above Rs 2 lakh",
+      "cardpipeline_says": "rule travel_edge_above_200k: 35 per Rs 200 unconditionally",
+      "issuer_says": "Bank table treats Travel EDGE beyond Rs 2 lakh as normal eligible spend (12 base, plus 23 extra only once monthly eligible spend passes Rs 1.5 lakh). Not exemplified.",
+      "proposed_fix": "importer: review",
+      "override_file": null
+    },
+    {
+      "item": "rounding",
+      "cardpipeline_says": "rounding_mode floor",
+      "issuer_says": "T&C give no rounding rule for blocks of Rs 200; no rounding example written.",
+      "proposed_fix": "none",
+      "override_file": null
+    },
+    {
+      "item": "exclusions by category not MCC",
+      "cardpipeline_says": "MCC lists on exclusion rules",
+      "issuer_says": "Revision effective 20 Jun 2025: exclusions are identified by spend category, not the 4-digit MCC. MCC lists remain a close proxy.",
+      "proposed_fix": "none",
+      "override_file": null
+    }
+  ]
+}
