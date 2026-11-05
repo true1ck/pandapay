@@ -56,11 +56,12 @@ function windowFromText(text) {
   if (!s.trim()) return null;
   let m = s.match(/(?:within|first|in)\s+(\d{1,3})\s*days?/) || s.match(/(\d{1,3})\s*days?\s*(?:of|from|after)\s*(?:card\s*)?(?:issu|open|activation|receipt|setup)/);
   if (m) return { window: 'first_days_after_issue', days: Number(m[1]) };
-  if (/(previous|preceding|prior|last)\s*(3|three)\s*(calendar\s*)?months/.test(s)) return { window: 'rolling_days', days: 90 };
+  if (/(previous|preceding|prior|last)\b(?:\s+\w+){0,2}\s+(3|three)\s*(calendar\s*)?months/.test(s) ||
+      /(previous|preceding|prior|last)\s*(3|three)\s*(calendar\s*)?months/.test(s)) return { window: 'rolling_days', days: 90 };
   m = s.match(/(\d{1,3})\s*day\s*period/);
   if (m) return { window: 'rolling_days', days: Number(m[1]) };
-  if (/(previous|preceding|prior|last)\s*(calendar\s*)?quarter|preceding spends? quarter|preceding spend quarter/.test(s)) return { window: 'previous_calendar_quarter' };
-  if (/(previous|preceding|prior|last)\s*(calendar\s*)?month/.test(s)) return { window: 'previous_calendar_month' };
+  if (/(previous|preceding|prior|last)\b(?:\s+\w+){0,2}?\s*(calendar\s*)?quarter|preceding spends? quarter/.test(s)) return { window: 'previous_calendar_quarter' };
+  if (/(previous|preceding|prior|last)\b(?:\s+\w+){0,2}?\s*(calendar\s*)?month\b/.test(s)) return { window: 'previous_calendar_month' };
   if (/(previous|preceding|prior|last)\s*(monthly\s*)?(statement|billing)/.test(s)) return { window: 'previous_calendar_month', approx: 'statement_cycle' };
   if (/(current|this|same|in (a|the))\s*(calendar\s*)?quarter|calendar quarter|quarterly|per quarter|\bquarter\b/.test(s)) return { window: 'current_calendar_quarter' };
   if (/calendar month|monthly|per month|in (a|the) month|\bmonth\b|statement cycle|billing cycle/.test(s)) return { window: 'calendar_month' };
@@ -119,7 +120,9 @@ function extractGates(conditions) {
     const emptyValue = typeof value === 'string' && /^(none|n\/a|no|nil|not applicable|no spend.*|false)$/i.test(value.trim());
     if (!emptyValue && value !== false && value !== null &&
         (/spen[dt]/.test(pathText) || (typeof value === 'string' && /spen[dt]/i.test(value)))) mentionsSpend = true;
-    if (WINDOW_KEYS.has(last) && typeof value === 'string') windowTexts.push(value);
+    if (typeof value === 'string' && (WINDOW_KEYS.has(last) || /(period|lookback|window|basis|cycle|evaluation)/.test(last))) {
+      windowTexts.push(`${last.replace(/_/g, ' ')} ${value}`);
+    }
     const n = asNumber(value);
     const numericLeaf = typeof value === 'number' || (typeof value === 'string' && n !== null);
     if (numericLeaf) {
@@ -201,6 +204,20 @@ function transformBenefits(record) {
     for (const t of [...thresholds.map((t) => t.gate.pathText), ...windowTexts]) {
       windowSpec = windowFromText(t);
       if (windowSpec) break;
+    }
+    // "Spend in a quarter, use it in the following quarter" is, seen from the
+    // day the benefit is used, the previous quarter.
+    const usedLater = [...windowTexts, JSON.stringify(cond || '')].some((t) =>
+      /(following|subsequent|next|succeeding)[\s_]+(calendar[\s_]+)?(quarter|month)/i.test(String(t)));
+    if (windowSpec && usedLater) {
+      if (windowSpec.window === 'current_calendar_quarter') windowSpec = { ...windowSpec, window: 'previous_calendar_quarter' };
+      if (windowSpec.window === 'calendar_month') windowSpec = { ...windowSpec, window: 'previous_calendar_month' };
+    }
+    if (!windowSpec && ['annual', 'card_anniversary_year', 'year', 'yearly'].includes(String(b?.quota_period || '').toLowerCase())) {
+      // An annual entitlement unlocked by spend: the card year is the only
+      // reading that fits; flagged so a reviewer can confirm.
+      windowSpec = { window: 'card_year', approx: 'quota_period' };
+      flags.push({ code: 'unlock_window_from_quota_period', source_local_id: sourceId, detail: null });
     }
     if (!windowSpec) {
       flags.push({ code: 'unparsed_unlock', source_local_id: sourceId, detail: 'threshold read, window not' });

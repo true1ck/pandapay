@@ -540,6 +540,21 @@ test('C7.9 spend-gated benefits become unlock rows: one per threshold, tiers lab
   assert.equal(windowFromText('minimum_spend_previous_3_calendar_months_inr').window, 'rolling_days');
 });
 
+test('C7.9 "spend this quarter, use it next quarter" reads as the previous quarter; lookbacks read as rolling days', () => {
+  const r = run(card({
+    benefits: [
+      { benefit_id: 'q', category_id: 'lounge', label: 'Lounge', quota_count: 2, quota_period: 'quarter', evaluation_engine: { conditions: { spend_threshold_inr: 75000, spend_period: 'calendar_quarter', unlock_period: 'following_calendar_quarter' } } },
+      { benefit_id: 'l', category_id: 'lounge', label: 'Lounge', quota_count: 2, quota_period: 'quarter', evaluation_engine: { conditions: { eligible_spend_inr: 50000, lookback_period: 'last 3 months' } } },
+      { benefit_id: 'none', category_id: 'lounge', label: 'Lounge', evaluation_engine: { conditions: { spend_condition: 'None' } } },
+    ],
+  }));
+  const by = Object.fromEntries(r.unlockRules.map((u) => [u.benefit_key, u]));
+  assert.equal(by.q.spend_window, 'previous_calendar_quarter');
+  assert.deepEqual([by.l.spend_window, by.l.window_days], ['rolling_days', 90]);
+  assert.equal(by.none, undefined);
+  assert.ok(!r.card.model_coverage.flags.some((f) => f.source_local_id === 'none'), '"None" is not an unparsed gate');
+});
+
 // ── C7.10 card fields, coverage and status ──────────────────────────────
 
 test('C7.10 / D7 / D10 / D11 rounding: mapped from source, assumed when silent, cashback rounding only from source', () => {
