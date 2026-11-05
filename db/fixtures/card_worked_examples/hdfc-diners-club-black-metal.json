@@ -1,0 +1,337 @@
+{
+  "source_slug": "hdfc-diners-club-black-metal",
+  "cardpipeline_id": "hdfc-bank-diners-club-black-metal-edition",
+  "card_name": "Diners Club Black Metal Edition",
+  "verified_on": "2026-11-05",
+  "sources": [
+    {
+      "url": "https://www.hdfc.bank.in/content/dam/hdfcbankpws/in/en/personal-banking/discover-products/cards/credit-cards/personal-mitc/mitc-in-english.pdf",
+      "doc": "HDFC Bank credit card MITC v4.18, Oct 2026",
+      "quote": "For Infinia / Infinia Metal, Diners Black / Diners Black Metal ... multiple of ₹150, residual amounts ... will not earn"
+    },
+    {
+      "url": "https://www.hdfc.bank.in/content/dam/hdfcbankpws/in/en/personal-banking/discover-products/cards/credit-cards/personal-mitc/mitc-in-english.pdf",
+      "doc": "HDFC Bank credit card MITC v4.18, Oct 2026",
+      "quote": "maximum cap of ... 5,000 per month for Diners Black Metal Edition, Diners Black, BizBlack Metal Cards"
+    },
+    {
+      "url": "https://www.hdfc.bank.in/content/dam/hdfcbankpws/in/en/personal-banking/discover-products/cards/credit-cards/personal-mitc/mitc-in-english.pdf",
+      "doc": "HDFC Bank credit card MITC v4.18, Oct 2026",
+      "quote": "2000 Reward Points for Infinia, Diners Black Metal Edition ... (grocery, per month)"
+    },
+    {
+      "url": "https://offers.smartbuy.hdfc.bank.in/v2/accelerated-earn-rules",
+      "doc": "SmartBuy accelerated earn rules (valid to 31 Mar 2027)",
+      "quote": "Diners Black Metal & BizBlack Metal (Reward Points) 10,000 per month"
+    },
+    {
+      "url": "https://www.hdfc.bank.in/credit-cards/diners-club-black-metal-edition-credit-card",
+      "doc": "Diners Black Metal product page",
+      "quote": "Get 10X rewards on hotels and 5X on flights when you book via SmartBUY"
+    }
+  ],
+  "examples": [
+    {
+      "id": "001",
+      "title": "Rs 15,000 retail swipe",
+      "ctx": {
+        "amount": 15000,
+        "occurred": "2026-11-05T10:00:00+05:30",
+        "category_slug": "other",
+        "mcc": 5651,
+        "merchant_name": "Fashion store",
+        "merchant_vpa": null,
+        "merchant_slug": null,
+        "platform": null,
+        "rail": "swipe"
+      },
+      "state_before": {
+        "caps_by_source_id": {}
+      },
+      "expect": {
+        "currency": "points",
+        "amount": 500,
+        "value_inr": null,
+        "excluded": false,
+        "cap_deltas_by_source_id": {}
+      },
+      "why": "5 RP per Rs150: 100 blocks = 500."
+    },
+    {
+      "id": "002",
+      "title": "Rs 1,000 swipe, partial block dropped",
+      "ctx": {
+        "amount": 1000,
+        "occurred": "2026-11-05T10:00:00+05:30",
+        "category_slug": "other",
+        "mcc": 5311,
+        "merchant_name": "Department store",
+        "merchant_vpa": null,
+        "merchant_slug": null,
+        "platform": null,
+        "rail": "swipe"
+      },
+      "state_before": {
+        "caps_by_source_id": {}
+      },
+      "expect": {
+        "currency": "points",
+        "amount": 30,
+        "value_inr": null,
+        "excluded": false,
+        "cap_deltas_by_source_id": {}
+      },
+      "why": "Residual below the Rs150 block earns nothing: 6 blocks x 5 = 30."
+    },
+    {
+      "id": "003",
+      "title": "Rs 3,000 fuel",
+      "ctx": {
+        "amount": 3000,
+        "occurred": "2026-11-05T10:00:00+05:30",
+        "category_slug": "fuel",
+        "mcc": 5541,
+        "merchant_name": "Petrol pump",
+        "merchant_vpa": null,
+        "merchant_slug": null,
+        "platform": null,
+        "rail": "swipe"
+      },
+      "state_before": {
+        "caps_by_source_id": {}
+      },
+      "expect": {
+        "currency": "points",
+        "amount": 0,
+        "value_inr": null,
+        "excluded": true,
+        "cap_deltas_by_source_id": {}
+      },
+      "why": "No points on fuel."
+    },
+    {
+      "id": "004",
+      "title": "Rs 6,000 grocery within cap",
+      "ctx": {
+        "amount": 6000,
+        "occurred": "2026-11-05T10:00:00+05:30",
+        "category_slug": "groceries",
+        "mcc": 5411,
+        "merchant_name": "Supermarket",
+        "merchant_vpa": null,
+        "merchant_slug": null,
+        "platform": null,
+        "rail": "swipe"
+      },
+      "state_before": {
+        "caps_by_source_id": {}
+      },
+      "expect": {
+        "currency": "points",
+        "amount": 200,
+        "value_inr": null,
+        "excluded": false,
+        "cap_deltas_by_source_id": {
+          "grocery_monthly": 200
+        }
+      },
+      "why": "40 blocks x 5 = 200; grocery capped at 2,000 RP per month."
+    },
+    {
+      "id": "005",
+      "title": "Rs 15,000 grocery after cap used",
+      "ctx": {
+        "amount": 15000,
+        "occurred": "2026-11-05T10:00:00+05:30",
+        "category_slug": "groceries",
+        "mcc": 5411,
+        "merchant_name": "Supermarket",
+        "merchant_vpa": null,
+        "merchant_slug": null,
+        "platform": null,
+        "rail": "swipe"
+      },
+      "state_before": {
+        "caps_by_source_id": {
+          "grocery_monthly": 2000
+        }
+      },
+      "expect": {
+        "currency": "points",
+        "amount": 0,
+        "value_inr": null,
+        "excluded": false,
+        "cap_deltas_by_source_id": {}
+      },
+      "why": "Grocery cap of 2,000 RP/month is used; nothing more is earned."
+    },
+    {
+      "id": "006",
+      "title": "Rs 30,000 insurance with 4,990 of 5,000 cap used",
+      "ctx": {
+        "amount": 30000,
+        "occurred": "2026-11-05T10:00:00+05:30",
+        "category_slug": "insurance",
+        "mcc": 6300,
+        "merchant_name": "Insurance premium",
+        "merchant_vpa": null,
+        "merchant_slug": null,
+        "platform": null,
+        "rail": "online"
+      },
+      "state_before": {
+        "caps_by_source_id": {
+          "insurance_monthly": 4990
+        }
+      },
+      "expect": {
+        "currency": "points",
+        "amount": 10,
+        "value_inr": null,
+        "excluded": false,
+        "cap_deltas_by_source_id": {
+          "insurance_monthly": 10
+        }
+      },
+      "why": "Would be 1,000 RP; insurance is capped at 5,000 RP per month for Diners Black Metal, so 10 remain."
+    },
+    {
+      "id": "007",
+      "title": "Rs 15,000 hotel via SmartBuy (10X)",
+      "ctx": {
+        "amount": 15000,
+        "occurred": "2026-11-05T10:00:00+05:30",
+        "category_slug": "travel",
+        "mcc": 7011,
+        "merchant_name": "Hotel booking",
+        "merchant_vpa": null,
+        "merchant_slug": null,
+        "platform": "hdfc_smartbuy",
+        "rail": "online"
+      },
+      "state_before": {
+        "caps_by_source_id": {}
+      },
+      "expect": {
+        "currency": "points",
+        "amount": 5000,
+        "value_inr": null,
+        "excluded": false,
+        "cap_deltas_by_source_id": {
+          "smartbuy_accelerated_monthly": 4500
+        }
+      },
+      "why": "Hotels 10X = 50 RP per Rs150: 100 blocks = 5,000 (500 base + 4,500 accelerated)."
+    },
+    {
+      "id": "008",
+      "title": "Rs 30,000 flight via SmartBuy (5X)",
+      "ctx": {
+        "amount": 30000,
+        "occurred": "2026-11-05T10:00:00+05:30",
+        "category_slug": "travel",
+        "mcc": 4511,
+        "merchant_name": "Flight booking",
+        "merchant_vpa": null,
+        "merchant_slug": null,
+        "platform": "hdfc_smartbuy",
+        "rail": "online"
+      },
+      "state_before": {
+        "caps_by_source_id": {}
+      },
+      "expect": {
+        "currency": "points",
+        "amount": 5000,
+        "value_inr": null,
+        "excluded": false,
+        "cap_deltas_by_source_id": {
+          "smartbuy_accelerated_monthly": 4000
+        }
+      },
+      "why": "Flights 5X = 25 RP per Rs150: 200 blocks = 5,000 (1,000 base + 4,000 accelerated)."
+    },
+    {
+      "id": "009",
+      "title": "Rs 15,000 hotel via SmartBuy with 9,000 of 10,000 accelerated cap used",
+      "ctx": {
+        "amount": 15000,
+        "occurred": "2026-11-05T10:00:00+05:30",
+        "category_slug": "travel",
+        "mcc": 7011,
+        "merchant_name": "Hotel booking",
+        "merchant_vpa": null,
+        "merchant_slug": null,
+        "platform": "hdfc_smartbuy",
+        "rail": "online"
+      },
+      "state_before": {
+        "caps_by_source_id": {
+          "smartbuy_accelerated_monthly": 9000
+        }
+      },
+      "expect": {
+        "currency": "points",
+        "amount": 1500,
+        "value_inr": null,
+        "excluded": false,
+        "cap_deltas_by_source_id": {
+          "smartbuy_accelerated_monthly": 1000
+        }
+      },
+      "why": "Accelerated points are capped at 10,000/month: 1,000 accelerated remain, plus 500 base. Reads the cap as covering the accelerated part only."
+    },
+    {
+      "id": "010",
+      "title": "Rs 40,000 rent via app",
+      "ctx": {
+        "amount": 40000,
+        "occurred": "2026-11-05T10:00:00+05:30",
+        "category_slug": "rent",
+        "mcc": 6513,
+        "merchant_name": "Rent payment",
+        "merchant_vpa": null,
+        "merchant_slug": null,
+        "platform": null,
+        "rail": "online"
+      },
+      "state_before": {
+        "caps_by_source_id": {}
+      },
+      "expect": {
+        "currency": "points",
+        "amount": 0,
+        "value_inr": null,
+        "excluded": true,
+        "cap_deltas_by_source_id": {}
+      },
+      "why": "Rent never earns."
+    }
+  ],
+  "research_notes": [
+    {
+      "item": "SmartBuy multipliers",
+      "cardpipeline_says": "Three rules (10X hotels/IGP/Jockey/PharmEasy, 5X flights/etc, 3X trains) with merchant-category names only.",
+      "issuer_says": "Matches the SmartBuy page. Needs one rule per travel type with platform and MCC (D8b).",
+      "proposed_fix": "importer"
+    },
+    {
+      "item": "weekend dining 2X",
+      "cardpipeline_says": "2X at MCC 5811-5814 on Sat/Sun, min Rs150, cap 1,000/day.",
+      "issuer_says": "Product page: 2X on weekend dining at \"participating restaurants\". Participating list and day cap not published in sources read, so no example.",
+      "proposed_fix": "none"
+    },
+    {
+      "item": "caps grocery/insurance/utility/telecom",
+      "cardpipeline_says": "total_reward_points with zero accrual.",
+      "issuer_says": "Matches MITC (grocery 2,000, utility 2,000, telecom 2,000, insurance 5,000 per month).",
+      "proposed_fix": "none"
+    },
+    {
+      "item": "SmartBuy cap per day",
+      "cardpipeline_says": "Monthly 10,000.",
+      "issuer_says": "SmartBuy page also lists 10,000 per day. Not modelled.",
+      "proposed_fix": "none"
+    }
+  ]
+}
