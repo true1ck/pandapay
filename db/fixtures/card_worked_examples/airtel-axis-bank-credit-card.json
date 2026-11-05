@@ -28,7 +28,7 @@
         "amount": 25000,
         "occurred": "2026-11-10T10:00:00+05:30",
         "category_id": null,
-        "category_slug": "shopping",
+        "category_slug": "other",
         "mcc": "5732",
         "merchant_name": "Electronics store",
         "merchant_vpa": null,
@@ -55,7 +55,7 @@
         "amount": 1560,
         "occurred": "2026-11-10T10:00:00+05:30",
         "category_id": null,
-        "category_slug": "shopping",
+        "category_slug": "other",
         "mcc": "5651",
         "merchant_name": "Apparel store",
         "merchant_vpa": null,
@@ -163,7 +163,7 @@
         "amount": 5000,
         "occurred": "2026-11-10T10:00:00+05:30",
         "category_id": null,
-        "category_slug": "utility",
+        "category_slug": "bills",
         "mcc": "4900",
         "merchant_name": "Electricity board",
         "merchant_vpa": null,
@@ -190,7 +190,7 @@
         "amount": 5000,
         "occurred": "2026-11-10T10:00:00+05:30",
         "category_id": null,
-        "category_slug": "shopping",
+        "category_slug": "emi",
         "mcc": null,
         "merchant_name": "Electronics store",
         "merchant_vpa": null,
@@ -229,9 +229,9 @@
     {
       "item": "rounding",
       "cardpipeline_says": "rounding_mode floor",
-      "issuer_says": "Cashback is rounded down per transaction.",
-      "proposed_fix": "engine: integer floor for cashback",
-      "override_file": null
+      "issuer_says": "Cashback is rounded down per transaction. Correct accrual_rounding: points_floor (applies to the final per-transaction amount, whole rupees).",
+      "proposed_fix": "override",
+      "override_file": "api/scripts/catalogue_overrides/airtel-axis-bank-credit-card.json"
     }
   ]
 }

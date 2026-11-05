@@ -21,6 +21,13 @@
       "reason": "Cap is the base cashback earned in the statement month (dynamic); cannot be enforced as a static cap yet.",
       "source_url": "https://www.axis.bank.in/docs/default-source/default-document-library/terms-and-conditions-for-airtel-cbcc-cvp.pdf?sfvrsn=9deed8c1_5",
       "checked_on": "2026-11-05"
+    },
+    {
+      "path": "accrual_engine.rounding_mode",
+      "value": "points_floor",
+      "reason": "Cashback is rounded down per transaction (15.6 -> 15).",
+      "source_url": "https://www.axis.bank.in/docs/default-source/default-document-library/credit-cards/terms-and-conditions-for-cashback-for-airtel-axis-bank-credit-card.pdf",
+      "checked_on": "2026-11-05"
     }
   ]
 }
