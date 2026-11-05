@@ -1154,9 +1154,12 @@ function classifyExclusionText(raw) {
   const all = String(raw || '').toLowerCase().replace(/[_]+/g, ' ');
   if (!all.trim()) return null;
   const clauses = all.split(/[.;]|,\s*(?:while|whereas|but)\b|\bwhile\b|\bbut\b|\bwhereas\b/).map((c) => c.trim()).filter(Boolean);
+  // Core/base or zero earning anywhere in the text makes it full (the
+  // conservative side); only the qualifier scan is limited to the excluding
+  // clause(s) ("... remains eligible for 5X" elsewhere doesn't count).
+  if (CORE_MENTION.test(all) || ZERO_EARN.test(all)) return 'full';
   const excluding = clauses.filter((c) => EXCLUDING_CLAUSE.test(c));
   const t = (excluding.length ? excluding : clauses).join('. ');
-  if (CORE_MENTION.test(t) || ZERO_EARN.test(t)) return 'full';
   let m;
   REWARD_WORD.lastIndex = 0;
   while ((m = REWARD_WORD.exec(t))) {

@@ -999,6 +999,9 @@ test('D19a full-exclusion phrasings are never bonus_only', () => {
     'Offline UPI transactions under INR 2,000 at small merchants are not eligible for reward points, voucher benefits, milestone benefits or other product benefits unless stated otherwise.',
     // D20c: the "5X" is in the non-excluding clause.
     'Fast-food restaurant MCC 5814 is excluded; dining MCC 5812 remains eligible for 5X.',
+    // core / zero earning stated in another clause of the text still counts (full text)
+    'Wallet loads are excluded from accelerated rewards. Base reward points are also not earned on them.',
+    'Rent is excluded from the accelerated programme. Effectively no reward points accrue on rent.',
   ];
   for (const text of full) assert.equal(classifyExclusionText(text), 'full', text);
   const bonus = [
