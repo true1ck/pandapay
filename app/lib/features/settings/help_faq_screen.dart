@@ -230,8 +230,10 @@ const List<FaqEntry> _faqEntries = [
     answer:
         'There are three channels, and none is required. Email forwarding gives you a '
         'dedicated address to forward bank emails to — works on any platform but depends on your '
-        'bank actually emailing you. SMS auto-read parses bank SMS on-device in real time, but it '
-        "is Android-only (iOS doesn't allow apps to read SMS) and needs the SMS permission granted. "
+        'bank actually emailing you. SMS reading happens on your phone: on Android, bank SMS are '
+        'read on this phone as they arrive; on iPhone, you share bank messages with PandaPay through '
+        'a Shortcut. Either way it needs your agreement first, and only the transaction details are '
+        'sent to your account, never the message text. '
         'Manual or statement-PDF import lets you drop in a password-protected statement for a '
         'one-off bulk catch-up — it is what turns estimated reward figures into bank-confirmed ones, '
         'but it is not automatic, you have to do it per statement.',
@@ -263,13 +265,13 @@ const List<FaqEntry> _faqEntries = [
   FaqEntry(
     question: 'What does PandaPay know about where I shop?',
     answer:
-        'Location signals used for merchant/category detection are grid-snapped to roughly 50 '
+        'Location signals used for merchant/category detection are rounded to roughly 11 '
         'metres before anything is stored — the system knows "a shop exists near here," never '
         'exactly where you personally stood. If you opt in to crowdsourcing (off by default, a '
         'separate toggle you control), your contribution is anonymized and stripped of identity '
         'before it ever leaves your phone or gets attached to your account — anonymization is '
-        'architectural, not a policy promise layered on top. Raw SMS content and statement PDFs are '
-        'parsed entirely on-device and never uploaded; only the extracted financial fields sync if '
-        'you are signed in.',
+        'architectural, not a policy promise layered on top. The text of your bank SMS stays on this '
+        'phone and is never sent; only the transaction details (amount, merchant, date, card or '
+        'account ending, and type) sync if you are signed in.',
   ),
 ];

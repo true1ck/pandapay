@@ -321,7 +321,7 @@ class _AutoSmsSyncScreenState extends ConsumerState<AutoSmsSyncScreen>
             icon: Icons.cloud_sync_outlined,
             title: 'Connected to your account',
             body:
-                'Matching financial SMS text is sent to PandaPay’s server for processing and account sync.',
+                'Only the transaction details (amount, merchant, date, card or account ending, and type) are sent to your account. The message text stays on this phone.',
           ),
           const SizedBox(height: 14),
           _body(

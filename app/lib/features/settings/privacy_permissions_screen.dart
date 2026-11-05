@@ -148,14 +148,16 @@ class _PrivacyPermissionsScreenState
             const _DataHandlingSection(
               title: 'Stays on this phone',
               bullets: [
-                'Transaction amounts and exact timestamps are never uploaded.',
-                'Your device\'s raw location is only used locally to match nearby merchants.',
+                'The text of your bank SMS and the messages waiting for your review.',
+                'Receipts and files you attach.',
+                'Your location is sent only when you search for nearby merchants or turn on location alerts.',
               ],
             ),
             const SizedBox(height: AppSpace.md),
             const _DataHandlingSection(
               title: 'Uploaded to sync your account',
               bullets: [
+                'Transaction details read from your SMS: amount, merchant, date, card or account ending, and type. The message text is not sent.',
                 'Your cards, wallet, and profile settings sync so you can restore them on a new device.',
                 'Auth exists for your own benefit (sync, backup) — never to attach identity to shared data.',
               ],
@@ -166,7 +168,7 @@ class _PrivacyPermissionsScreenState
               bullets: [
                 'Merchant records carry no user identity, ever — the row is about the shop, not the shopper.',
                 'No amounts and no individual timestamps are included in shared records.',
-                'Coordinates are grid-snapped (~50m) before upload — we store "a shop exists near here," never "a person was here."',
+                'Coordinates are rounded to about 11 metres before upload — we store "a shop exists near here," never "a person was here."',
               ],
             ),
             const SizedBox(height: AppSpace.xl),

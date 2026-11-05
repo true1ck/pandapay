@@ -437,6 +437,21 @@ void main() {
     },
   );
 
+  testWidgets('the SMS step does not claim message text is sent to the server', (
+    tester,
+  ) async {
+    await _pump(tester);
+    expect(find.textContaining('SMS text is sent'), findsNothing);
+    expect(
+      find.textContaining(
+        'Only the transaction details (amount, merchant, date, card or account '
+        'ending, and type) are sent to your account. The message text stays on '
+        'this phone.',
+      ),
+      findsOneWidget,
+    );
+  }, variant: TargetPlatformVariant.only(TargetPlatform.android));
+
   group('SMS disclosure comes before any SMS access', () {
     const disclosureTitle = 'PandaPay reads your bank SMS on this phone';
 

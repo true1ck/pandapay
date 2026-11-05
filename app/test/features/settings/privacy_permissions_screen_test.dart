@@ -243,4 +243,25 @@ void main() {
       expect(tester.widget<SwitchListTile>(_switchFor(title)).value, isFalse);
     });
   });
+
+  testWidgets('"How your data is handled" says what is and is not uploaded', (
+    tester,
+  ) async {
+    await _pump(tester, _Server());
+
+    expect(
+      find.text('The text of your bank SMS and the messages waiting for your review.'),
+      findsOneWidget,
+    );
+    expect(
+      find.textContaining(
+        'Transaction details read from your SMS: amount, merchant, date, card or '
+        'account ending, and type. The message text is not sent.',
+      ),
+      findsOneWidget,
+    );
+    expect(find.textContaining('never uploaded'), findsNothing);
+    expect(find.textContaining('only used locally'), findsNothing);
+    expect(find.textContaining('~50m'), findsNothing);
+  });
 }

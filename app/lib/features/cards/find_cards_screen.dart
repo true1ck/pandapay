@@ -1034,7 +1034,7 @@ class _DiscoveryEmptyState extends StatelessWidget {
           const SizedBox(height: AppSpace.sm),
           Text(
             readNothing
-                ? 'Detect cards instantly on-device from your bank emails or SMS, or select them directly from the catalogue.'
+                ? 'Detect cards from your bank SMS on this phone or from forwarded bank emails, or select them directly from the catalogue.'
                 : 'We scanned $scannedSummary and could not match any card in our catalogue. Add your cards directly instead.',
             style: BambooFonts.ui(13.5, color: BambooInk.ink500, height: 1.5),
             textAlign: TextAlign.center,
