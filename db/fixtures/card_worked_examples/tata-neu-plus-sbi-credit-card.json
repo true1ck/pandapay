@@ -18,6 +18,11 @@
       "url": "https://www.sbicard.com/sbi-card-en/assets/docs/pdf/ekit-tncs/Tata-Neu-Plus-Booklet.pdf",
       "doc": "Tata Neu Plus SBI Credit Card T&C booklet (Jul 2026)",
       "quote": "1 Reward Point = 1 NeuCoin = INR 1 savings"
+    },
+    {
+      "url": "https://www.sbicard.com/sbi-card-en/assets/docs/pdf/ekit-tncs/Tata-Neu-Plus-Booklet.pdf",
+      "doc": "T&C booklet 11.4(a) and 11.6(e)",
+      "quote": "NeuCoins ... forfeited ... The transaction on which NeuCoins were accrued, got converted to EMI."
     }
   ],
   "examples": [
@@ -288,6 +293,89 @@
         "cap_deltas_by_source_id": {}
       },
       "why": "Wallet loads excluded."
+    },
+    {
+      "state_before": {
+        "caps_by_source_id": {}
+      },
+      "id": "011",
+      "title": "Rs 4,900 merchant EMI at Croma",
+      "ctx": {
+        "amount": 4900,
+        "occurred": "2026-11-10T10:00:00+05:30",
+        "category_id": null,
+        "category_slug": "online",
+        "mcc": "5732",
+        "merchant_name": "Croma",
+        "merchant_vpa": null,
+        "merchant_slug": "croma",
+        "platform": null,
+        "rail": "emi"
+      },
+      "expect": {
+        "currency": "points",
+        "amount": 0,
+        "value_inr": null,
+        "excluded": true,
+        "cap_deltas_by_source_id": {}
+      },
+      "why": "T&C 11.4(a) excludes Merchant EMI / Flexipay and 11.6(e) forfeits NeuCoins on EMI conversion, so nothing is earned (C8 D25e)."
+    },
+    {
+      "state_before": {
+        "caps_by_source_id": {}
+      },
+      "id": "012",
+      "title": "Rs 3,000 at Croma by UPI QR (RuPay variant)",
+      "ctx": {
+        "amount": 3000,
+        "occurred": "2026-11-10T10:00:00+05:30",
+        "category_id": null,
+        "category_slug": "online",
+        "mcc": "5732",
+        "merchant_name": "Croma",
+        "merchant_vpa": null,
+        "merchant_slug": "croma",
+        "platform": null,
+        "rail": "upi_qr"
+      },
+      "expect": {
+        "currency": "points",
+        "amount": 30,
+        "value_inr": 30,
+        "excluded": false,
+        "cap_deltas_by_source_id": {
+          "upi-neucoins-cap": 30
+        }
+      },
+      "why": "T&C 11.3(e): UPI spends earn the UPI rate (1%), including at partner brands; the partner rate does not apply on UPI. Counts toward the 500 NeuCoin UPI cap."
+    },
+    {
+      "state_before": {
+        "caps_by_source_id": {}
+      },
+      "id": "013",
+      "title": "Rs 20,000 rent, no MCC on the SMS",
+      "ctx": {
+        "amount": 20000,
+        "occurred": "2026-11-10T10:00:00+05:30",
+        "category_id": null,
+        "category_slug": "rent",
+        "mcc": null,
+        "merchant_name": "Rent payment",
+        "merchant_vpa": null,
+        "merchant_slug": null,
+        "platform": null,
+        "rail": "online"
+      },
+      "expect": {
+        "currency": "points",
+        "amount": 0,
+        "value_inr": null,
+        "excluded": true,
+        "cap_deltas_by_source_id": {}
+      },
+      "why": "T&C 11.4: NeuCoins are not accrued for Rental transactions. Proves the rent category row."
     }
   ],
   "research_notes": [
@@ -316,6 +404,13 @@
       "cardpipeline_says": "Extra up to 5% on select Tata Neu categories.",
       "issuer_says": "\"Upto 5% on select category spends on Tata Neu App/Website\", categories not listed in the booklet, so no example.",
       "proposed_fix": "importer"
+    },
+    {
+      "item": "WP7 r2: examples 011-013",
+      "cardpipeline_says": "EMI at partner brands was modelled at the base rate (copied from the HDFC card).",
+      "issuer_says": "SBI T&C 11.4(a) and 11.6(e): no NeuCoins on EMI (D25e). UPI at partner brands earns the UPI rate (11.3(e)). Rent excluded by category as well as MCC 6513.",
+      "proposed_fix": "override",
+      "override_file": "api/scripts/catalogue_overrides/tata-neu-plus-sbi-credit-card.json"
     }
   ]
 }

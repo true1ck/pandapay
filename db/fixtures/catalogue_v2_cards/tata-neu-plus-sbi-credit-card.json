@@ -4,7 +4,7 @@
   "inputs": {
     "transform_version": "7",
     "source_record_sha256": "9d0b13f66d28f1dbd68ce624da340f4bbce0d18ec71d896aad0112bed04b2dc7",
-    "override_sha256": "74f7d61cb133ac66bf709179f4dec725dbf99a92d0cd39d2bb097603419a381e",
+    "override_sha256": "ef9c7104260f374120dd96f54d764e2ad92cd2f2084d56f4e66805ade6945f8b",
     "directory_sha256": "b1094d54b77e848d22f7a9a64f3ae6d1ef43ca3eb2fc8e40cd43ed1994664694",
     "verified": true
   },
@@ -27,8 +27,8 @@
     "points_expiry_months": 12,
     "model_status": "verified",
     "model_coverage": {
-      "rules_total": 16,
-      "rules_modelled": 12,
+      "rules_total": 18,
+      "rules_modelled": 14,
       "rules_info": 4,
       "caps_total": 5,
       "caps_enforced": 5,
@@ -40,11 +40,6 @@
         },
         {
           "code": "partial_merchant_list",
-          "source_local_id": "tata-neu-partner-brands-2pct",
-          "detail": null
-        },
-        {
-          "code": "channel_type_restates_brand",
           "source_local_id": "tata-neu-partner-brands-2pct",
           "detail": null
         },
@@ -136,11 +131,6 @@
         {
           "code": "broad_exclusion_v1_only",
           "source_local_id": "exclude-gaming",
-          "detail": null
-        },
-        {
-          "code": "partial_merchant_list",
-          "source_local_id": "tata-neu-partner-emi-wp7",
           "detail": null
         },
         {
@@ -252,18 +242,50 @@
           "checked_on": "2026-11-05"
         },
         {
-          "path": "reward_rules",
-          "op": "append",
-          "value_sha256": "607e2767edf54bc7",
-          "reason": "WP7: D24d: the 2% partner rule is for non-EMI spends (record spend_type non_emi), which the loader dropped, so EMI at partners paid 2%. Base-rate carve-out at a lower priority number.",
+          "path": "reward_rules[id=tata-neu-partner-brands-2pct].conditions.eligible_partner_brands",
+          "op": "set",
+          "value_sha256": "cd2b55424d900c12",
+          "reason": "WP7: T&C 11.3(b)/(d): value back on \"spends on Tata Neu App/Website and partner Tata Brands\" (Air India & AI Express, Big Basket, Tata Cliq, Taj, Tata 1MG, Titan & Tanishq, Croma, Westside, Qmin). One list feeds the partner rule and its UPI carve-out, so they always cover the same merchants.",
+          "source_url": "https://www.sbicard.com/sbi-card-en/assets/docs/pdf/ekit-tncs/Tata-Neu-Plus-Booklet.pdf",
+          "checked_on": "2026-11-05"
+        },
+        {
+          "path": "reward_rules[id=tata-neu-partner-brands-2pct].channel_type",
+          "op": "set",
+          "value_sha256": "5cf7504d9781301d",
+          "reason": "WP7: Tata Neu is now in the brand list itself (it was only implied by the channel text).",
           "source_url": "https://www.sbicard.com/sbi-card-en/assets/docs/pdf/ekit-tncs/Tata-Neu-Plus-Booklet.pdf",
           "checked_on": "2026-11-05"
         },
         {
           "path": "reward_rules",
           "op": "append",
-          "value_sha256": "5d86641290380a96",
-          "reason": "WP7: D24d: record rupay-upi-1pct: \"Eligible UPI spends on the RuPay variant earn 1% NeuCoins, including UPI spends at partner Tata brands\" - so the 2% partner rate must not apply on UPI.",
+          "value_sha256": "ea3e4dcb8f40b0ea",
+          "reason": "WP7: T&C 11.3(e): \"UPI Spends : Any UPI Spends on Rupay Credit Card (Including partner Tata Brands) : 1% back as NeuCoins\" - so the 2% partner rate must not apply on UPI.",
+          "source_url": "https://www.sbicard.com/sbi-card-en/assets/docs/pdf/ekit-tncs/Tata-Neu-Plus-Booklet.pdf",
+          "checked_on": "2026-11-05"
+        },
+        {
+          "path": "reward_rules",
+          "op": "append",
+          "value_sha256": "f875ab007f65a078",
+          "reason": "WP7: D25e: T&C 11.4(a) excludes \"Merchant EMI - Flexipay\" (Infinity) / \"Flexipay\" (Plus), and 11.6(e) forfeits NeuCoins when \"The transaction on which NeuCoins were accrued, got converted to EMI\". Rail-EMI exclusion on all spend, as on Millennia (the record's category emi AND rail emi row missed EMI in other categories).",
+          "source_url": "https://www.sbicard.com/sbi-card-en/assets/docs/pdf/ekit-tncs/Tata-Neu-Plus-Booklet.pdf",
+          "checked_on": "2026-11-05"
+        },
+        {
+          "path": "reward_rules",
+          "op": "append",
+          "value_sha256": "3586e3be78712a67",
+          "reason": "WP7: D25d: T&C 11.4 lists MCC 7349 with rent (6513) and education MCCs 5111, 5192, 5942, 5943, 5947, 8351 besides 8211-8299; the record carried only part of each list.",
+          "source_url": "https://www.sbicard.com/sbi-card-en/assets/docs/pdf/ekit-tncs/Tata-Neu-Plus-Booklet.pdf",
+          "checked_on": "2026-11-05"
+        },
+        {
+          "path": "reward_rules",
+          "op": "append",
+          "value_sha256": "eaca59be20ec5085",
+          "reason": "WP7: D25d: T&C 11.4(a) \"NeuCoins will not be accrued for Rental and Government related transactions\"; the record's rent row was MCC 6513 only, so a rent-category spend with another or no MCC earned.",
           "source_url": "https://www.sbicard.com/sbi-card-en/assets/docs/pdf/ekit-tncs/Tata-Neu-Plus-Booklet.pdf",
           "checked_on": "2026-11-05"
         }
@@ -287,8 +309,7 @@
           "info_reasons": [],
           "flags": [
             "group_replaced_by_condition_list",
-            "partial_merchant_list",
-            "channel_type_restates_brand"
+            "partial_merchant_list"
           ]
         },
         "notes": null,
@@ -1163,51 +1184,6 @@
         "display_note": "Gaming transactions do not earn NeuCoins."
       },
       {
-        "id": "tata-neu-plus-sbi-credit-card:rule:tata-neu-partner-emi-wp7",
-        "category_id": null,
-        "category_slug": null,
-        "merchant_pattern": null,
-        "rail": "emi",
-        "unit": "points_per_100",
-        "rate": 1,
-        "min_txn_inr": null,
-        "max_txn_inr": null,
-        "priority": 9,
-        "conditions": {
-          "source_local_id": "tata-neu-partner-emi-wp7",
-          "part": null,
-          "info_reasons": [],
-          "flags": [
-            "partial_merchant_list"
-          ]
-        },
-        "notes": null,
-        "effective_from": "2025-04-01",
-        "effective_to": null,
-        "excluded_categories": [],
-        "rule_role": "earn",
-        "merchant_slugs": [
-          "air_india",
-          "air_india_express",
-          "bigbasket",
-          "croma",
-          "taj",
-          "tanishq",
-          "tata_1mg",
-          "tata_cliq"
-        ],
-        "platform_slugs": [],
-        "mcc_include": [],
-        "mcc_exclude": [],
-        "except_merchant_slugs": [],
-        "except_platform_slugs": [],
-        "block_inr": null,
-        "min_engine_version": 2,
-        "max_engine_version": null,
-        "source_local_id": "tata-neu-partner-emi-wp7",
-        "display_note": "EMI spends at partner Tata brands earn the base 1%."
-      },
-      {
         "id": "tata-neu-plus-sbi-credit-card:rule:tata-neu-partner-upi-wp7",
         "category_id": null,
         "category_slug": null,
@@ -1239,7 +1215,8 @@
           "taj",
           "tanishq",
           "tata_1mg",
-          "tata_cliq"
+          "tata_cliq",
+          "tata_neu"
         ],
         "platform_slugs": [],
         "mcc_include": [],
@@ -1250,7 +1227,117 @@
         "min_engine_version": 2,
         "max_engine_version": null,
         "source_local_id": "tata-neu-partner-upi-wp7",
-        "display_note": "UPI spends at partner Tata brands earn the 1% UPI rate."
+        "display_note": "UPI spends at partner Tata brands earn the UPI rate, not the partner rate."
+      },
+      {
+        "id": "tata-neu-plus-sbi-credit-card:rule:wp7_emi_rail_exclusion",
+        "category_id": null,
+        "category_slug": null,
+        "merchant_pattern": null,
+        "rail": "emi",
+        "unit": "points_per_100",
+        "rate": 0,
+        "min_txn_inr": null,
+        "max_txn_inr": null,
+        "priority": 0,
+        "conditions": {
+          "source_local_id": "wp7_emi_rail_exclusion",
+          "part": null,
+          "info_reasons": [],
+          "flags": []
+        },
+        "notes": null,
+        "effective_from": "2025-04-01",
+        "effective_to": null,
+        "excluded_categories": [],
+        "rule_role": "exclusion",
+        "merchant_slugs": [],
+        "platform_slugs": [],
+        "mcc_include": [],
+        "mcc_exclude": [],
+        "except_merchant_slugs": [],
+        "except_platform_slugs": [],
+        "block_inr": null,
+        "min_engine_version": 2,
+        "max_engine_version": null,
+        "source_local_id": "wp7_emi_rail_exclusion",
+        "display_note": "Merchant EMI / Flexipay earn no NeuCoins; NeuCoins are forfeited when a spend is converted to EMI."
+      },
+      {
+        "id": "tata-neu-plus-sbi-credit-card:rule:wp7_rent_education_mcc_exclusion",
+        "category_id": null,
+        "category_slug": null,
+        "merchant_pattern": null,
+        "rail": null,
+        "unit": "points_per_100",
+        "rate": 0,
+        "min_txn_inr": null,
+        "max_txn_inr": null,
+        "priority": 3,
+        "conditions": {
+          "source_local_id": "wp7_rent_education_mcc_exclusion",
+          "part": null,
+          "info_reasons": [],
+          "flags": []
+        },
+        "notes": null,
+        "effective_from": "2025-04-01",
+        "effective_to": null,
+        "excluded_categories": [],
+        "rule_role": "exclusion",
+        "merchant_slugs": [],
+        "platform_slugs": [],
+        "mcc_include": [
+          "5111",
+          "5192",
+          "5942",
+          "5943",
+          "5947",
+          "7349",
+          "8351"
+        ],
+        "mcc_exclude": [],
+        "except_merchant_slugs": [],
+        "except_platform_slugs": [],
+        "block_inr": null,
+        "min_engine_version": 2,
+        "max_engine_version": null,
+        "source_local_id": "wp7_rent_education_mcc_exclusion",
+        "display_note": "Rental/maintenance and education MCCs listed by the issuer earn no NeuCoins."
+      },
+      {
+        "id": "tata-neu-plus-sbi-credit-card:rule:wp7_rent_category_exclusion",
+        "category_id": "cat-rent",
+        "category_slug": "rent",
+        "merchant_pattern": null,
+        "rail": null,
+        "unit": "points_per_100",
+        "rate": 0,
+        "min_txn_inr": null,
+        "max_txn_inr": null,
+        "priority": 3,
+        "conditions": {
+          "source_local_id": "wp7_rent_category_exclusion",
+          "part": null,
+          "info_reasons": [],
+          "flags": []
+        },
+        "notes": null,
+        "effective_from": "2025-04-01",
+        "effective_to": null,
+        "excluded_categories": [],
+        "rule_role": "exclusion",
+        "merchant_slugs": [],
+        "platform_slugs": [],
+        "mcc_include": [],
+        "mcc_exclude": [],
+        "except_merchant_slugs": [],
+        "except_platform_slugs": [],
+        "block_inr": null,
+        "min_engine_version": 1,
+        "max_engine_version": null,
+        "source_local_id": "wp7_rent_category_exclusion",
+        "display_note": "Rental transactions earn no NeuCoins."
       }
     ],
     "cap_rules": [
