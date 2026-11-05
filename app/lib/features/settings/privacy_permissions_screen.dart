@@ -737,7 +737,7 @@ class _PurposeConsents extends ConsumerWidget {
                   style: BambooFonts.heading(14.5, color: BambooInk.ink900),
                 ),
                 subtitle: Text(
-                  TemplateSharingCopy.body,
+                  TemplateSharingCopy.summary,
                   style: BambooFonts.ui(12.5, color: BambooInk.ink500),
                 ),
                 value:

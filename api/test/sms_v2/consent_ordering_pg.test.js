@@ -40,7 +40,7 @@ function consent(profile,granted,options={}) {
  new Function('app','requireAuth','withUserClient','CONSENT_PURPOSES','safeErrorCode',source.slice(start,end))(
   {post:(_path,_auth,fn)=>{handler=fn;}},()=>{},(p,fn)=>own(p,fn,options),['sms_shared_learning'],e=>e?.code||'unknown');
  const res={code:null,body:null,status(n){this.code=n;return this;},json(body){this.body=body;return this;}};
- return handler({userId:profile,body:{purpose:'sms_shared_learning',granted,policyVersion:'sms-shared-learning-v2',sourceScreen:'synthetic-test'}},res).then(()=>res);
+ return handler({userId:profile,body:{purpose:'sms_shared_learning',granted,policyVersion:'sms-shared-learning-v3',sourceScreen:'synthetic-test'}},res).then(()=>res);
 }
 const template=()=>({templateHash:crypto.randomBytes(32).toString('hex'),senderBrand:'TESTBK',redactedBody:'<AMT> paid to <PARTY>.',observedAt:new Date().toISOString()});
 const submit=(profile,item,options)=>own(profile,c=>c.query('SELECT pandapay.sms_v2_submit_templates($1::jsonb,true)',[JSON.stringify([item])]),options);

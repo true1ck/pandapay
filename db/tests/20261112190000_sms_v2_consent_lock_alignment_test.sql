@@ -3,7 +3,7 @@ BEGIN;
 SELECT gen_random_uuid()::text AS profile \gset
 INSERT INTO profiles(id) VALUES(:'profile');
 INSERT INTO user_consents(profile_id,purpose,policy_version,granted,granted_at)
- VALUES(:'profile','sms_shared_learning','synthetic',true,'2026-11-01');
+ VALUES(:'profile','sms_shared_learning','sms-shared-learning-v3',true,'2026-11-01');
 SET LOCAL ROLE app_user;
 SELECT set_config('app.user_id',:'profile',true);
 SELECT pandapay.sms_v2_submit_templates(jsonb_build_array(jsonb_build_object(

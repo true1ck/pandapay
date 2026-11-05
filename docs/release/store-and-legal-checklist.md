@@ -85,7 +85,7 @@ Data types (collected = leaves the phone):
 | Personal info | User IDs | Yes | No | No | App functionality, Account management | Account ID |
 | Financial info | Purchase history | Yes | No | No | App functionality | Transaction details read from SMS, entered by hand or imported |
 | Financial info | Other financial info | Yes | No | No | App functionality | Card names, card or account ending, bills, limits, balances. No full card number, PIN or CVV |
-| Messages | SMS or MMS | Yes | No | Yes | App functionality | Only redacted templates, only when "Help PandaPay read new bank messages" is on. The SMS text itself is never sent |
+| Messages | SMS or MMS | Yes | No | Yes | App functionality | Only redacted templates, only when "Help PandaPay get better for everyone" is on. The SMS text itself is never sent |
 | Messages | Emails | Yes | No | Yes | App functionality | Only when email import is connected; deleted once read, unread ones within 30 days |
 | Location | Approximate location | Yes | No | Yes | App functionality | Nearby merchants and alerts |
 | Location | Precise location | Yes | No | Yes | App functionality | Nearby merchants and alerts; coordinates pass to Google Places or OpenStreetMap-based providers acting for us |

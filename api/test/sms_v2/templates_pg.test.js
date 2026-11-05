@@ -74,7 +74,7 @@ test(
     );
     const consent = async (id, granted) =>
       pool.query(
-        "INSERT INTO user_consents(profile_id,purpose,policy_version,granted,granted_at) VALUES($1,'sms_shared_learning','sms-shared-learning-v2',$2,clock_timestamp())",
+        "INSERT INTO user_consents(profile_id,purpose,policy_version,granted,granted_at) VALUES($1,'sms_shared_learning','sms-shared-learning-v3',$2,clock_timestamp())",
         [id, granted],
       );
     const withUserClient = async (id, operation) => {

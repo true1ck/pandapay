@@ -5,7 +5,7 @@ select gen_random_uuid()::text as p1,gen_random_uuid()::text as p2,gen_random_uu
 insert into profiles(id) values(:'p1'),(:'p2');
 insert into admin_users(id,email,role) values(:'admin','template-fixture@example.invalid','owner');
 insert into user_consents(profile_id,purpose,policy_version,granted)
- values(:'p1','sms_shared_learning','sms-shared-learning-v2',true),(:'p2','sms_shared_learning','sms-shared-learning-v2',true);
+ values(:'p1','sms_shared_learning','sms-shared-learning-v3',true),(:'p2','sms_shared_learning','sms-shared-learning-v3',true);
 set local role app_user;
 select set_config('app.user_id',:'p1',true);
 select pandapay.sms_v2_submit_templates(jsonb_build_array(jsonb_build_object('templateHash',repeat('e',64),'senderBrand','TESTBK',
@@ -38,7 +38,7 @@ end $$;
 reset role;
 reset session authorization;
 insert into user_consents(profile_id,purpose,policy_version,granted,granted_at)
- values(:'p1','sms_shared_learning','sms-shared-learning-v2',false,clock_timestamp());
+ values(:'p1','sms_shared_learning','sms-shared-learning-v3',false,clock_timestamp());
 do $$ begin
  if exists(select 1 from sms_v2_template_submitters) then raise exception 'revoked submitter retained'; end if;
  if exists(select 1 from sms_v2_unknown_templates) then raise exception 'orphan template retained'; end if;

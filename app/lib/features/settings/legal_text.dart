@@ -47,7 +47,7 @@ const termsOfServiceSections = <LegalSection>[
   LegalSection(
     '4. Optional features and your consent',
     [
-      LegalBlock.paragraph('Reading your bank SMS, sharing redacted message templates, and email import are optional. Each asks for your agreement on its own screen, is described in the Privacy Policy, and can be turned off at any time. PandaPay works for manual entry without them.'),
+      LegalBlock.paragraph('Reading your bank SMS, sharing message layouts and shop names, and email import are optional. Each asks for your agreement on its own screen, is described in the Privacy Policy, and can be turned off at any time. PandaPay works for manual entry without them.'),
     ],
   ),
   LegalSection(
@@ -154,9 +154,14 @@ const privacyPolicySections = <LegalSection>[
     ],
   ),
   LegalSection(
-    '5. Optional: sharing redacted message templates',
+    '5. Optional: sharing message layouts, shop categories and shop names',
     [
-      LegalBlock.paragraph('This is off unless you turn it on ("Help PandaPay read new bank messages"). When PandaPay can\'t read a message, it can send a copy with every amount, name, number and date removed, so a rule can be added for everyone. These copies may be processed by Google Gemini, a service of Google, to suggest the rule. Nothing is sent unless you turn this on. You can turn it off at any time in Settings, Privacy & Permissions. Turning it off stops new copies and removes the ones we still hold.'),
+      LegalBlock.paragraph('This is off unless you turn it on ("Help PandaPay get better for everyone"). If you turn it on, PandaPay shares:'),
+      LegalBlock.bullets([
+        'The layout of bank messages it can\'t read, with every amount, name, number and date removed.',
+        'The shop names it couldn\'t put in a category, and the categories and shop names you pick for shops.',
+      ]),
+      LegalBlock.paragraph('It never shares your messages, amounts, account numbers or the people you pay. A shop name is looked at only once several different people have shared it, and only if it has no long numbers or personal details. Google Gemini, a service of Google, may process message layouts and shop names to suggest new rules, and a person at PandaPay approves every rule before it is added for everyone. Nothing is shared unless you turn this on. You can turn it off at any time in Settings, Privacy & Permissions. If you turn it off, what you shared is deleted. Rules already added for everyone stay, and they contain nothing about you.'),
     ],
   ),
   LegalSection(
@@ -179,7 +184,7 @@ const privacyPolicySections = <LegalSection>[
         'Hosting and storage of your account data: [OWNER TO FILL: hosting provider and region].',
         'Push notifications: Novu and Google Firebase Cloud Messaging.',
         'Error reports: GlitchTip ([OWNER TO FILL: where error reports are hosted]).',
-        'Google Gemini: only if you turn on template sharing (section 5).',
+        'Google Gemini: only if you turn on sharing message layouts and shop names (section 5).',
         'Google Places or OpenStreetMap-based providers: for nearby merchant searches (section 4).',
         'Google: only if you use Google sign-in.',
       ]),
@@ -210,7 +215,7 @@ const privacyPolicySections = <LegalSection>[
         'Access: export your transactions and cards as JSON or CSV from Settings.',
         'Correction: edit your details and transactions in the app, or ask the grievance officer.',
         'Deletion: delete your account from Settings.',
-        'Withdrawing consent: turn off SMS reading, template sharing or other optional settings in Settings, Privacy & Permissions, or disconnect email import. Withdrawing does not affect what we did before you withdrew.',
+        'Withdrawing consent: turn off SMS reading, shared learning or other optional settings in Settings, Privacy & Permissions, or disconnect email import. Withdrawing does not affect what we did before you withdrew.',
         'Complaints: write to the grievance officer (section 1). If we have not resolved it, you can complain to the Data Protection Board of India.',
       ]),
       LegalBlock.paragraph('If you are in India, we provide these rights consistent with the Digital Personal Data Protection Act, 2023.'),

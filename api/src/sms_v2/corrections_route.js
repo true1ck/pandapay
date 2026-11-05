@@ -60,11 +60,9 @@ async function submitCorrection(client, profileId, body, { sharedLearningEligibl
   }
   await client.query('SELECT pg_advisory_xact_lock(hashtextextended($1::text,0))',
     ['sms-shared-learning-consent:' + profileId]);
-  const consent = await client.query(
-    "SELECT granted FROM user_consents WHERE profile_id=$1 AND purpose='sms_shared_learning' ORDER BY granted_at DESC,granted ASC,id DESC LIMIT 1",
-    [profileId],
-  );
-  const shared = consent.rows[0]?.granted === true;
+  // Only the current policy version (v3) counts as an opt-in to sharing.
+  const consent = await client.query('SELECT pandapay.sms_shared_learning_granted($1) AS shared', [profileId]);
+  const shared = consent.rows[0]?.shared === true;
   const metadata = shared ? templateMetadata(body) : null;
   // Even with consent, only the reviewed categorical fields are kept. Free text
   // from a modified client never reaches the admin review queue.

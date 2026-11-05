@@ -175,7 +175,7 @@ test('LO-07: shared corrections keep only category and merchantKey, never free t
   const client = { query: async (sql, args) => {
     if (sql.includes('FROM sms_v2_facts')) return { rows: base.factIds.map((fact_id) => ({ fact_id, source_key: base.sourceKey })) };
     if (sql.includes('FROM sms_v2_events')) return { rows: [{ event_id: base.eventId }] };
-    if (sql.includes('FROM user_consents')) return { rows: [{ granted: true }] };
+    if (sql.includes('sms_shared_learning_granted')) return { rows: [{ shared: true }] };
     inserted = args; return { rows: [{ case_id: 'case' }] };
   } };
   const body = { ...base, redactedTemplate, corrected: {

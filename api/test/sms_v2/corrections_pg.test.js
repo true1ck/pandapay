@@ -48,7 +48,7 @@ test('latest consent, withdrawal, regrant and concurrent admission erase shared 
  const pool=new Pool({connectionString:url});
  const profile=crypto.randomUUID();
  const grant=async(value,at)=>pool.query(
-  "INSERT INTO user_consents(profile_id,purpose,policy_version,granted,granted_at) VALUES($1,'sms_shared_learning','test',$2,$3)",[profile,value,at]);
+  "INSERT INTO user_consents(profile_id,purpose,policy_version,granted,granted_at) VALUES($1,'sms_shared_learning','sms-shared-learning-v3',$2,$3)",[profile,value,at]);
  const skeleton='Rs.<AMT> spent';
  const body=sourceKey=>({sourceKey,factIds:[],correctionKind:'missing',corrected:{category:'dining',_template:{
   senderBrand:'HDFCBK',hash:crypto.createHash('sha256').update('HDFCBK\n'+skeleton).digest('hex'),

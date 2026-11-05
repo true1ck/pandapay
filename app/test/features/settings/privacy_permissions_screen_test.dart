@@ -7,6 +7,7 @@ import 'package:http/http.dart' as http;
 import 'package:http/testing.dart';
 import 'package:pandapay/app/providers.dart';
 import 'package:pandapay/data/consents_api.dart';
+import 'package:pandapay/features/consent/template_sharing_disclosure.dart';
 import 'package:pandapay/features/settings/privacy_permissions_screen.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 
@@ -174,21 +175,28 @@ void main() {
     );
   });
 
-  group('template sharing opt-in names the AI provider', () {
-    const title = 'Help PandaPay read new bank messages';
-    const body =
-        'When PandaPay can\'t read a message, it can send a copy with every '
-        'amount, name, number and date removed, so a rule can be added for '
-        'everyone. These copies may be processed by Google Gemini to suggest '
-        'the rule. Nothing is sent unless you turn this on, and you can turn '
-        'it off at any time.';
+  group('shared learning opt-in names what is shared and the AI provider', () {
+    const title = 'Help PandaPay get better for everyone';
+    const intro = 'If you turn this on, PandaPay shares:';
+    const bulletLayouts =
+        'the layout of bank messages it can\'t read, with every amount, name, '
+        'number and date removed';
+    const bulletShops =
+        'the shop names it couldn\'t put in a category, and the categories and '
+        'shop names you pick for shops';
+    const footer =
+        'It never shares your messages, amounts, account numbers or the '
+        'people you pay. Google Gemini may process message layouts and shop '
+        'names to suggest new rules. Nothing is shared unless you turn this '
+        'on. If you turn it off, what you shared is deleted. Rules already '
+        'added for everyone stay, and they contain nothing about you.';
 
-    testWidgets('is off by default and the tile carries the exact copy', (
+    testWidgets('is off by default and the tile says what it covers', (
       tester,
     ) async {
       await _pump(tester, _Server());
       expect(tester.widget<SwitchListTile>(_switchFor(title)).value, isFalse);
-      expect(find.text(body), findsOneWidget);
+      expect(find.text(TemplateSharingCopy.summary), findsOneWidget);
       expect(find.text('Improve shared SMS decisions'), findsNothing);
     });
 
@@ -201,9 +209,13 @@ void main() {
       await tester.tap(_switchFor(title));
       await tester.pumpAndSettle();
 
-      // One copy on the tile, one in the sheet.
-      expect(find.text(body), findsNWidgets(2));
-      expect(find.textContaining('Google Gemini'), findsNWidgets(2));
+      // The tile and the sheet both carry the title; only the sheet has the list.
+      expect(find.text(title), findsNWidgets(2));
+      expect(find.text(intro), findsOneWidget);
+      expect(find.text(bulletLayouts), findsOneWidget);
+      expect(find.text(bulletShops), findsOneWidget);
+      expect(find.text(footer), findsOneWidget);
+      expect(find.textContaining('Google Gemini'), findsOneWidget);
       expect(find.text('Turn on'), findsOneWidget);
       expect(find.text('Not now'), findsOneWidget);
       expect(server.posted, isEmpty);
@@ -223,7 +235,7 @@ void main() {
         {
           'purpose': 'sms_shared_learning',
           'granted': true,
-          'policyVersion': 'sms-shared-learning-v2',
+          'policyVersion': 'sms-shared-learning-v3',
           'sourceScreen': 'privacy_permissions',
         },
       ]);

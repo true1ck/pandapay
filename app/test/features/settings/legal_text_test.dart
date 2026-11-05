@@ -83,7 +83,7 @@ void main() {
         '2. Data we collect',
         '3. What stays on your phone',
         '4. Why we use your data',
-        '5. Optional: sharing redacted message templates',
+        '5. Optional: sharing message layouts, shop categories and shop names',
         '5a. Optional: email import',
         '6. Service providers',
         '7. Security',
@@ -110,10 +110,13 @@ void main() {
       expect(section('3.'), contains('never sent to us'));
     });
 
-    test('names Google Gemini and says the sharing is off by default', () {
+    test('names Google Gemini, what is shared, and the sharing is off by default', () {
       final text = section('5.');
       expect(text, contains('Google Gemini'));
       expect(text, contains('off unless you turn it on'));
+      expect(text, contains('the categories and shop names you pick for shops'));
+      expect(text, contains('It never shares your messages, amounts, account numbers or the people you pay.'));
+      expect(text, contains('If you turn it off, what you shared is deleted.'));
     });
 
     test('email import: bank senders only, deleted once read, 30 days', () {

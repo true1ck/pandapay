@@ -6,22 +6,34 @@ import '../../app/providers.dart';
 import '../../data/api_exception.dart';
 import '../../data/consents_api.dart';
 
-/// The strings are fixed by the release plan (Task 5.2). The body names the
-/// AI provider, so it must change together with the server's provider and the
-/// store declarations.
+/// The strings are fixed by the learning-loop plan (L1, Task A2). The footer
+/// names the AI provider, so it must change together with the server's
+/// provider, the privacy policy (section 5) and the store declarations.
 class TemplateSharingCopy {
   const TemplateSharingCopy._();
 
-  static const title = 'Help PandaPay read new bank messages';
-  static const body =
-      'When PandaPay can\'t read a message, it can send a copy with every '
-      'amount, name, number and date removed, so a rule can be added for '
-      'everyone. These copies may be processed by Google Gemini to suggest '
-      'the rule. Nothing is sent unless you turn this on, and you can turn '
-      'it off at any time.';
+  static const title = 'Help PandaPay get better for everyone';
+  static const intro = 'If you turn this on, PandaPay shares:';
+  static const bullets = <String>[
+    'the layout of bank messages it can\'t read, with every amount, name, '
+        'number and date removed',
+    'the shop names it couldn\'t put in a category, and the categories and '
+        'shop names you pick for shops',
+  ];
+  static const footer =
+      'It never shares your messages, amounts, account numbers or the people '
+      'you pay. Google Gemini may process message layouts and shop names to '
+      'suggest new rules. Nothing is shared unless you turn this on. If you '
+      'turn it off, what you shared is deleted. Rules already added for '
+      'everyone stay, and they contain nothing about you.';
+
+  /// One-paragraph form for the Settings tile, which opens the full sheet.
+  static const summary =
+      'Share anonymised message layouts and the categories and shop names you '
+      'pick, so a rule can be added for everyone. Off unless you turn it on.';
 }
 
-/// Optional sharing of redacted message templates (consent purpose
+/// Optional shared learning: message layouts, shop categories and shop names (consent purpose
 /// `sms_shared_learning`). Off by default: it is only ever switched on by an
 /// explicit "Turn on" here.
 ///
@@ -110,7 +122,36 @@ class _TemplateSharingDisclosureState
           ),
           const SizedBox(height: AppSpace.md),
           Text(
-            TemplateSharingCopy.body,
+            TemplateSharingCopy.intro,
+            style: BambooFonts.ui(14, color: BambooInk.ink900, height: 1.45),
+          ),
+          const SizedBox(height: AppSpace.xs),
+          for (final bullet in TemplateSharingCopy.bullets)
+            Padding(
+              padding: const EdgeInsets.only(bottom: AppSpace.xs),
+              child: Row(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Text(
+                    '•  ',
+                    style: BambooFonts.ui(14, color: BambooInk.ink900),
+                  ),
+                  Expanded(
+                    child: Text(
+                      bullet,
+                      style: BambooFonts.ui(
+                        14,
+                        color: BambooInk.ink900,
+                        height: 1.45,
+                      ),
+                    ),
+                  ),
+                ],
+              ),
+            ),
+          const SizedBox(height: AppSpace.xs),
+          Text(
+            TemplateSharingCopy.footer,
             style: BambooFonts.ui(14, color: BambooInk.ink900, height: 1.45),
           ),
           const SizedBox(height: AppSpace.lg),
