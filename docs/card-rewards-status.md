@@ -29,11 +29,11 @@ Status values: `not started` · `running` · `done (branch ready)` · `merged` �
 | WP | Title | Wave | Branch | Status | Updated | Notes |
 |---|---|---|---|---|---|---|
 | WP0 | Docs, contracts, scenario seed, directory skeleton | 0 | `card-rewards/phase1` | merged | 2026-11-05 | Lead |
-| WP1 | Schema v2, v1/v2 feeds, directory seeding | 1 | `card-rewards/wp1-schema` | running | 2026-11-05 | |
+| WP1 | Schema v2, v1/v2 feeds, directory seeding | 1 | `card-rewards/wp1-schema` | done (in review) | 2026-11-06 | 1391 api tests pass; follow-ups D1, D2, D4, D6 |
 | WP2 | Loader v2 (pure transform), coverage, audit script | 1 | `card-rewards/wp2-loader` | running | 2026-11-05 | |
 | WP3 | Dart engine v2 + tolerant parsing | 1 | `card-rewards/wp3-dart-engine` | running | 2026-11-05 | |
 | WP4 | JS engine v2 + merchant resolver | 1 | `card-rewards/wp4-js-engine` | running | 2026-11-05 | |
-| WP5 | Merchant and platform directory data | 1 | `card-rewards/wp5-directory` | running | 2026-11-05 | |
+| WP5 | Merchant and platform directory data | 1 | `card-rewards/wp5-directory` | **merged** | 2026-11-06 | 164 merchants (9 true sub-brand parents, `group` tags per D6), 61 platforms; review + 1 fix round clean; IHCL brands kept under `taj` (ruling in ledger) |
 | WP6a | Worked examples: HDFC, SBI Card | 1 | `card-rewards/wp6a-examples-hdfc-sbi` | running | 2026-11-05 | |
 | WP6b | Worked examples: ICICI, Axis, Amex, IDFC, others | 1 | `card-rewards/wp6b-examples-others` | running | 2026-11-05 | |
 | WP7 | Integration: worked examples through both engines | 2 | — | not started | | Needs wave 1 merged |
@@ -68,6 +68,8 @@ Status values: `not started` · `running` · `done (branch ready)` · `merged` �
 
 ## Changelog
 
+- **2026-11-06:** WP5 merged into `card-rewards/phase1` after one fix round.
+- **2026-11-06:** All agents paused by the 5-hour usage limit, then resumed. WP1 finished (review pending). WP5 finished, in fix round 1 (Titan parent links, bare "indigo" alias, contract D6). Contract changes D1–D6 recorded in plan §4 C8.
 - **2026-11-05:** Feature spec approved with the card-wide change. Phase 1 plan,
   agent plan, later-phases summary and this tracker written. Integration worktree
   created from `33ee22f`. Wave 1 agents launched.
