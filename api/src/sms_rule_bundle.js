@@ -453,7 +453,7 @@ function registerSmsRuleBundleRoutes(app, { requireAuth, requireAdmin, withUserC
                      c.category_slug LIMIT 500`,
         );
         return result.rows.map((row) => {
-          const { safeAdminPattern } = require('./sms_learning');
+          const { safeAdminPattern } = require('./sms_admin_pattern');
           const redactedPattern = safeAdminPattern(row.redacted_pattern);
           return {
             ...row,
@@ -482,7 +482,7 @@ function registerSmsRuleBundleRoutes(app, { requireAuth, requireAdmin, withUserC
     const { merchantKey, senderKey, contextKey, factFamily, categorySlug, decision, reason } = req.body || {};
     if (typeof merchantKey !== 'string' || merchantKey.length < 3 || merchantKey.length > 80 ||
         typeof senderKey !== 'string' || !/^[A-Z]{2}-[A-Z0-9]{3,10}(?:-[A-Z])?$/.test(senderKey) ||
-        !require('./sms_learning_feedback_route').validCategoryContextKey(contextKey) ||
+        !require('./sms_admin_pattern').validCategoryContextKey(contextKey) ||
         factFamily !== 'posted_movement' ||
         typeof categorySlug !== 'string' || !/^[a-z0-9_-]{1,64}$/.test(categorySlug) ||
         !['approved', 'rejected'].includes(decision) ||

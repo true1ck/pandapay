@@ -100,20 +100,8 @@ if (!jwtKeys[jwtActiveKeyId]) {
   throw new Error(`JWT_ACTIVE_KEY_ID ${jwtActiveKeyId} is not present in JWT_KEYS_JSON`);
 }
 
-// WP-17 legacy SMS route cutoff. Unset (the default) leaves the 426 upgrade gate off.
-const legacyVersionGate = require('./legacy_version_gate');
-const legacySmsCutoffAt = legacyVersionGate.parseCutoff(process.env.LEGACY_SMS_CUTOFF_DATE);
-const smsV2FirstAppVersion = legacyVersionGate.parseFirstVersion(process.env.SMS_V2_FIRST_APP_VERSION);
-if (legacySmsCutoffAt && !smsV2FirstAppVersion) {
-  throw new Error('SMS_V2_FIRST_APP_VERSION is required when LEGACY_SMS_CUTOFF_DATE is set');
-}
-
 module.exports = {
   ...securityFeatures,
-  legacySmsCutoffAt,
-  smsV2FirstAppVersion,
-  // Builds before v2 send no X-App-Version; after the cutoff they count as old unless this is "false".
-  legacySmsBlockMissingVersion: process.env.LEGACY_SMS_BLOCK_MISSING_VERSION !== 'false',
   isProduction,
   port: Number(process.env.PORT) || 4000,
   // Prefer the product database when both service URLs live in a shared

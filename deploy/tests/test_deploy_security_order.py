@@ -9,7 +9,7 @@ import unittest
 
 ROOT = Path(__file__).resolve().parents[2]
 SCRIPT = ROOT / "deploy" / "deploy.sh"
-WRITERS = {"auth", "api", "rewards-worker", "gemini-worker", "sms-learning-worker"}
+WRITERS = {"auth", "api", "rewards-worker"}
 
 GIT_STUB = r'''#!/usr/bin/env python3
 import io, json, os, sys, tarfile
@@ -74,7 +74,7 @@ elif args[:1]==['compose']:
             pos += 2 if args[pos] == '--timeout' else 1
         running.difference_update(args[pos:])
     elif 'up' in args:
-        services=[item for item in args if item in {'db-migrate','auth','api','rewards-worker','backup','gemini-worker','sms-learning-worker'}]
+        services=[item for item in args if item in {'db-migrate','auth','api','rewards-worker','backup'}]
         if 'db-migrate' in services and os.environ.get('FAIL_MIGRATION')=='1': sys.exit(22)
         running.update(services)
     elif 'run' in args and 'backup' in args and os.environ.get('FAIL_BACKUP')=='1':

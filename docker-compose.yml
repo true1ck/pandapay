@@ -137,52 +137,6 @@ services:
       # Novu API using port 4000 (for example, PANDAPAY_API_HOST_PORT=4001).
       - "${PANDAPAY_API_HOST_PORT:-4000}:4000"
 
-  # Opt-in development worker. It only runs when `--profile sms-ai` is used,
-  # and the API only accepts AI jobs when the matching worker token is set.
-  # Keep the Gemini API key in the local .env; it is never passed to the API.
-  gemini-worker:
-    profiles: ["sms-ai"]
-    build:
-      context: ./api
-    command: ["node", "src/gemini_worker.js"]
-    depends_on:
-      api:
-        condition: service_started
-    restart: "on-failure:5"
-    environment:
-      AI_WORKER_API_BASE_URL: http://api:4000
-      AI_WORKER_TOKEN: "${AI_WORKER_TOKEN:-}"
-      GEMINI_API_KEY: "${GEMINI_API_KEY:-}"
-      GEMINI_FALLBACK_API_KEY: "${GEMINI_FALLBACK_API_KEY:-}"
-      GEMINI_API_KEYS: "${GEMINI_API_KEYS:-}"
-      GEMINI_MODEL: "${GEMINI_MODEL:-gemini-3.5-flash-lite}"
-      GEMINI_REQUESTS_PER_MINUTE: "${GEMINI_REQUESTS_PER_MINUTE:-30}"
-      GEMINI_TOKENS_PER_MINUTE: "${GEMINI_TOKENS_PER_MINUTE:-24000}"
-      GEMINI_REQUESTS_PER_DAY: "${GEMINI_REQUESTS_PER_DAY:-3000}"
-      AI_WORKER_INTERVAL_MS: "${AI_WORKER_INTERVAL_MS:-2000}"
-      AI_WORKER_BATCH_MAX: "${AI_WORKER_BATCH_MAX:-4}"
-      AI_WORKER_BATCH_WINDOW_MS: "${AI_WORKER_BATCH_WINDOW_MS:-300}"
-      AI_PROVIDER_TIMEOUT_MS: "${AI_PROVIDER_TIMEOUT_MS:-20000}"
-
-  # Opt-in autonomous learner. It uses the dedicated role created by
-  # db/setup_app_role.sql and therefore exercises the same RLS/grant boundary
-  # as staging and production.
-  sms-learning-worker:
-    profiles: ["sms-learning"]
-    build:
-      context: ./api
-    command: ["node", "src/sms_learning_worker_runner.js"]
-    depends_on:
-      db-migrate:
-        condition: service_completed_successfully
-    restart: "on-failure:5"
-    environment:
-      SMS_LEARNING_DATABASE_URL: postgres://sms_learning_worker:sms_learning_worker_dev_pw@db:5432/pandapay
-      SMS_LEARNING_HMAC_KEY: "${SMS_LEARNING_HMAC_KEY:-dev_sms_learning_hmac_key_change_me_32_bytes}"
-      SMS_LEARNING_WORKER_ROLE: sms_learning_worker
-      SMS_AUTONOMOUS_WORKER_INTERVAL_MS: "${SMS_AUTONOMOUS_WORKER_INTERVAL_MS:-300000}"
-      DB_SSL: "false"
-
   rewards-worker:
     build:
       context: ./api

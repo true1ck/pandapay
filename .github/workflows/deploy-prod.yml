@@ -188,63 +188,6 @@ jobs:
           ssh -i ~/.ssh/id_deploy -o BatchMode=yes -o ServerAliveInterval=30 -o ServerAliveCountMax=20 "$DEPLOY_USER@$HOST" \
             'curl -fsS -m 10 http://127.0.0.1:4000/ready && echo && curl -fsS -m 10 http://127.0.0.1:3210/ready'
 
-      - name: Check Gemini pipeline activity (aggregate only)
-        env:
-          HOST: ${{ secrets.PROD_HOST }}
-          DEPLOY_USER: ${{ secrets.PROD_USER }}
-        run: |
-          bash deploy/ssh_script.sh "$DEPLOY_USER@$HOST" <<'REMOTE'
-          set -euo pipefail
-          cd /home/ubuntu/apps/pandapay
-          DBURL="$(sed -n 's/^ADMIN_DATABASE_URL=//p' .env | sed 's/^"//; s/"$//')"
-          test -n "$DBURL"
-          docker run --rm -i -e U="$DBURL" postgres:17-alpine sh -lc 'psql "$U" -X -qAt -v ON_ERROR_STOP=1' <<'SQL'
-          SELECT json_build_object(
-            'smsAiQueueEnabled', COALESCE((
-              SELECT is_enabled FROM public.feature_flags WHERE key = 'sms_ai_queue_enabled'
-            ), false),
-            'jobsLast24Hours', (
-              SELECT count(*) FROM public.ai_jobs WHERE created_at > now() - interval '24 hours'
-            ),
-            'jobsByStatusLast24Hours', COALESCE((
-              SELECT json_object_agg(status, job_count)
-              FROM (
-                SELECT status, count(*) AS job_count FROM public.ai_jobs
-                WHERE created_at > now() - interval '24 hours' GROUP BY status
-              ) AS counts
-            ), '{}'::json),
-            'providerReservationsLast10Minutes', (
-              SELECT count(*) FROM public.ai_provider_reservations
-              WHERE created_at > now() - interval '10 minutes'
-            ),
-            'capacityChecksByOutcomeLast24Hours', COALESCE((
-              SELECT json_object_agg(outcome, check_count)
-              FROM (
-                SELECT outcome, count(*) AS check_count FROM public.ai_provider_capacity_checks
-                WHERE checked_at > now() - interval '24 hours' GROUP BY outcome
-              ) AS capacity_checks
-            ), '{}'::json),
-            'successfulResultsLast24Hours', (
-              SELECT count(*) FROM public.ai_events
-              WHERE event_type = 'result' AND created_at > now() - interval '24 hours'
-            ),
-            'providerRetriesLast24Hours', (
-              SELECT count(*) FROM public.ai_events
-              WHERE event_type = 'provider_retry' AND created_at > now() - interval '24 hours'
-            ),
-            'providerRetriesByReasonLast24Hours', COALESCE((
-              SELECT json_object_agg(reason, retry_count)
-              FROM (
-                SELECT COALESCE(payload->>'reason', 'unspecified') AS reason, count(*) AS retry_count
-                FROM public.ai_events
-                WHERE event_type = 'provider_retry' AND created_at > now() - interval '24 hours'
-                GROUP BY COALESCE(payload->>'reason', 'unspecified')
-              ) AS retry_reasons
-            ), '{}'::json)
-          );
-          SQL
-          REMOTE
-
       - name: Smoke test authenticated nearby discovery API
         env:
           HOST: ${{ secrets.PROD_HOST }}
@@ -288,7 +231,7 @@ jobs:
             if (response.status === 503
               && payload.error === 'nearby_discovery_unavailable'
               && payload.unavailable === true) {
-              console.log('::warning::Nearby providers are unavailable; API health and Gemini checks passed.');
+              console.log('::warning::Nearby providers are unavailable; API health checks passed.');
               return;
             }
             if (!response.ok || count < 0

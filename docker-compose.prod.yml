@@ -12,7 +12,7 @@
 #
 # Migration sequencing: never run `db-migrate` while an old API/auth process or
 # writer worker is serving. Build the target images first, stop auth, API,
-# rewards-worker and optional gemini-worker, take and verify the final paired
+# rewards-worker, take and verify the final paired
 # backup, then migrate and start only those target images. `deploy/deploy.sh`
 # enforces this order; see deploy/DEPLOY.md for the bounded manual sequence.
 # Usage: see deploy/DEPLOY.md for the full bounded backup/fence/migrate/start
@@ -167,65 +167,6 @@ services:
       NOTIFICATION_SERVICE_TIMEOUT_MS: "${NOTIFICATION_SERVICE_TIMEOUT_MS:-4000}"
     ports:
       - "127.0.0.1:4000:4000"
-
-  # Opt-in because AI acceptance is disabled until both server credentials
-  # are configured. Never expose GEMINI_API_KEY to the API or mobile app.
-  gemini-worker:
-    profiles: ["sms-ai"]
-    build:
-      context: ./api
-    command: ["node", "src/gemini_worker.js"]
-    restart: unless-stopped
-    logging: *default-logging
-    depends_on:
-      api:
-        condition: service_healthy
-    healthcheck:
-      test:
-        - CMD
-        - node
-        - -e
-        - >-
-          process.exit(require('fs').readFileSync('/proc/1/cmdline', 'utf8')
-          .includes('src/gemini_worker.js') ? 0 : 1)
-      interval: 10s
-      timeout: 3s
-      retries: 3
-      start_period: 10s
-    environment:
-      NODE_ENV: production
-      AI_WORKER_API_BASE_URL: http://api:4000
-      AI_WORKER_TOKEN: "${AI_WORKER_TOKEN:-}"
-      GEMINI_API_KEY: "${GEMINI_API_KEY:-}"
-      GEMINI_FALLBACK_API_KEY: "${GEMINI_FALLBACK_API_KEY:-}"
-      GEMINI_API_KEYS: "${GEMINI_API_KEYS:-}"
-      GEMINI_MODEL: "${GEMINI_MODEL:-gemini-3.5-flash-lite}"
-      GEMINI_FALLBACK_MODEL: "${GEMINI_FALLBACK_MODEL:-gemini-flash-lite-latest}"
-      AI_WORKER_INTERVAL_MS: "${AI_WORKER_INTERVAL_MS:-2000}"
-      AI_WORKER_BATCH_MAX: "${AI_WORKER_BATCH_MAX:-4}"
-      AI_WORKER_BATCH_WINDOW_MS: "${AI_WORKER_BATCH_WINDOW_MS:-300}"
-      AI_PROVIDER_TIMEOUT_MS: "${AI_PROVIDER_TIMEOUT_MS:-20000}"
-      GEMINI_REQUESTS_PER_MINUTE: "${GEMINI_REQUESTS_PER_MINUTE:-10}"
-      GEMINI_TOKENS_PER_MINUTE: "${GEMINI_TOKENS_PER_MINUTE:-24000}"
-
-  sms-learning-worker:
-    profiles: ["sms-learning"]
-    build:
-      context: ./api
-    command: ["node", "src/sms_learning_worker_runner.js"]
-    restart: unless-stopped
-    logging: *default-logging
-    depends_on:
-      api:
-        condition: service_started
-    environment:
-      NODE_ENV: production
-      SMS_LEARNING_DATABASE_URL: "${SMS_LEARNING_DATABASE_URL:-}"
-      SMS_LEARNING_HMAC_KEY: "${SMS_LEARNING_HMAC_KEY:-}"
-      SMS_LEARNING_WORKER_ROLE: "${SMS_LEARNING_WORKER_ROLE:-sms_learning_worker}"
-      SMS_AUTONOMOUS_WORKER_INTERVAL_MS: "${SMS_AUTONOMOUS_WORKER_INTERVAL_MS:-300000}"
-      DB_SSL: "${DB_SSL:-true}"
-      DB_SSL_CA: "${DB_SSL_CA:-}"
 
   rewards-worker:
     build:

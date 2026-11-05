@@ -25,8 +25,6 @@ const SERVICES = Object.freeze([
   { key: 'api', runs: 'always_on', name: 'Customer API', purpose: 'Serves the mobile app: cards, transactions, SMS import, rewards.', health: 'probe' },
   { key: 'auth', runs: 'always_on', name: 'Auth service', purpose: 'Customer sign-in, OTP codes and sessions.', health: 'probe' },
   { key: 'postgres', runs: 'hosted', name: 'Product database', purpose: 'PostgreSQL holding catalogue, users and transactions.', health: 'database' },
-  { key: 'gemini-worker', runs: 'always_on', name: 'SMS AI worker', purpose: 'Classifies hard SMS messages with Gemini.', health: 'ai_queue' },
-  { key: 'sms-learning-worker', runs: 'always_on', name: 'SMS learning worker', purpose: 'Turns user corrections into candidate rules every 5 minutes.', health: 'job:sms_learning' },
   { key: 'rewards-worker', runs: 'always_on', name: 'Rewards worker', purpose: 'Recomputes reward, cap and milestone progress.', health: 'none' },
   { key: 'backup', runs: 'always_on', name: 'Backup', purpose: 'Encrypted database backup every night at 02:15.', health: 'job:backup' },
   { key: 'operational-maintenance', runs: 'manual', name: 'Operational maintenance', purpose: 'Bounded cleanup and reward-divergence checks. Off by default.', health: 'none' },
@@ -45,14 +43,6 @@ const JOBS = Object.freeze([
                  max(ran_at) FILTER (WHERE status = 'success') AS last_success_at
             FROM backup_runs`,
     ok: status => status === 'success',
-  },
-  {
-    key: 'sms_learning', name: 'SMS learning worker', permission: 'learning.read', expectedEveryHours: 1,
-    sql: `SELECT max(finished_at) AS last_run_at,
-                 (array_agg(status ORDER BY finished_at DESC))[1] AS last_status,
-                 max(finished_at) FILTER (WHERE status = 'succeeded') AS last_success_at
-            FROM public.sms_learning_worker_runs`,
-    ok: status => status === 'succeeded',
   },
   {
     key: 'privacy_audit', name: 'Privacy audit', permission: 'admin.audit.read', expectedEveryHours: 26,

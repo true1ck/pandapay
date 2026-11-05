@@ -33,41 +33,7 @@ INTERVAL="${DEPLOY_HEALTH_INTERVAL_SECONDS:-5}"
 [[ "$ATTEMPTS" =~ ^[1-9][0-9]*$ ]] || { echo 'FATAL: invalid health attempts'; exit 1; }
 [[ "$INTERVAL" =~ ^[1-9][0-9]*$ ]] || { echo 'FATAL: invalid health interval'; exit 1; }
 
-# Keep the optional AI worker behavior from deploy.sh. Read the token only to
-# decide whether to start the worker; never print or pass the secret onward.
-AI_WORKER_TOKEN_VALUE=""
-if [ -r .env ]; then
-  AI_WORKER_TOKEN_VALUE="$(sed -n 's/^AI_WORKER_TOKEN=//p' .env | sed 's/^"//; s/"$//')"
-fi
 SERVICES=(auth api rewards-worker backup)
-if [ -n "$AI_WORKER_TOKEN_VALUE" ]; then
-  SERVICES+=(gemini-worker)
-fi
-unset AI_WORKER_TOKEN_VALUE
-
-# SMS learning is an opt-in database writer. Its dedicated login URL, HMAC
-# key, and bootstrap password must all be present before starting it. The API
-# feedback key can exist independently while the cross-user worker stays off.
-# A disabled worker configuration stops a previously opted-in worker.
-SMS_LEARNING_DATABASE_URL_VALUE=""
-SMS_LEARNING_HMAC_KEY_VALUE=""
-SMS_LEARNING_WORKER_DB_PASSWORD_VALUE=""
-if [ -r .env ]; then
-  SMS_LEARNING_DATABASE_URL_VALUE="$(sed -n 's/^SMS_LEARNING_DATABASE_URL=//p' .env | sed 's/^"//; s/"$//')"
-  SMS_LEARNING_HMAC_KEY_VALUE="$(sed -n 's/^SMS_LEARNING_HMAC_KEY=//p' .env | sed 's/^"//; s/"$//')"
-  SMS_LEARNING_WORKER_DB_PASSWORD_VALUE="$(sed -n 's/^SMS_LEARNING_WORKER_DB_PASSWORD=//p' .env | sed 's/^"//; s/"$//')"
-fi
-if { [ -n "$SMS_LEARNING_DATABASE_URL_VALUE" ] \
-     || [ -n "$SMS_LEARNING_WORKER_DB_PASSWORD_VALUE" ]; } \
-   && { [ -z "$SMS_LEARNING_DATABASE_URL_VALUE" ] || [ -z "$SMS_LEARNING_HMAC_KEY_VALUE" ] \
-        || [ -z "$SMS_LEARNING_WORKER_DB_PASSWORD_VALUE" ]; }; then
-  echo 'FATAL: SMS learning requires SMS_LEARNING_DATABASE_URL, SMS_LEARNING_HMAC_KEY, and SMS_LEARNING_WORKER_DB_PASSWORD together.' >&2
-  exit 1
-fi
-if [ -n "$SMS_LEARNING_DATABASE_URL_VALUE" ]; then
-  SERVICES+=(sms-learning-worker)
-fi
-unset SMS_LEARNING_DATABASE_URL_VALUE SMS_LEARNING_HMAC_KEY_VALUE SMS_LEARNING_WORKER_DB_PASSWORD_VALUE
 
 wait_for_service() {
   local service="$1" url="$2" id status attempt
@@ -104,16 +70,6 @@ else
     echo "==> Building $service"
     "${COMPOSE[@]}" build "$service"
   done
-fi
-
-if [[ ! " ${SERVICES[*]} " =~ ' gemini-worker ' ]]; then
-  # Disable a worker left by a previous opt-in deployment after all builds
-  # have succeeded, so a failed build leaves the running stack untouched.
-  "${COMPOSE[@]}" stop gemini-worker >/dev/null 2>&1 || true
-fi
-if [[ ! " ${SERVICES[*]} " =~ ' sms-learning-worker ' ]]; then
-  # Preserve the opt-in contract when standalone restarts disable SMS learning.
-  "${COMPOSE[@]}" stop sms-learning-worker >/dev/null 2>&1 || true
 fi
 
 for service in "${SERVICES[@]}"; do

@@ -70,10 +70,10 @@ The deployment preflight inventories containers carrying the exact
 fencing. The retired `maps-scraper` container is allowed only under that exact
 project/service identity because its reviewed source is a stateless scraper
 with no database configuration; this rollout leaves it running. Unknown or
-unlabeled project containers stop the release before downtime. The optional
-`sms-learning-worker` remains a database writer: deployments fence it even
-when its opt-in configuration is blank, and restart it only when its dedicated
-database URL, HMAC key, and bootstrap password are all configured.
+unlabeled project containers stop the release before downtime. The legacy
+`gemini-worker` and `sms-learning-worker` services were removed with the
+fresh-start release: stop and remove any such container left on the host
+before deploying, or the inventory check refuses the release.
 
 Docker-based, works on any Linux VM with Docker installed — Oracle Cloud,
 Lightsail, a bare-metal box, whatever ends up hosting this. Nothing below is
@@ -249,9 +249,9 @@ images before the manual window, then run the remaining sequence under one
 bounded 30-minute window:
 
 ```bash
-docker compose --profile sms-ai --profile sms-learning -f docker-compose.prod.yml --env-file .env build api auth rewards-worker backup db-migrate gemini-worker sms-learning-worker
+docker compose --profile sms-ai --profile sms-learning -f docker-compose.prod.yml --env-file .env build api auth rewards-worker backup db-migrate
 timeout --foreground 1800s bash -euo pipefail -c '
-  docker compose --profile sms-ai --profile sms-learning -f docker-compose.prod.yml --env-file .env stop --timeout 30 auth api rewards-worker gemini-worker sms-learning-worker
+  docker compose --profile sms-ai --profile sms-learning -f docker-compose.prod.yml --env-file .env stop --timeout 30 auth api rewards-worker
   docker compose -f docker-compose.prod.yml --env-file .env run --rm --no-deps backup /backup/backup.sh
   docker compose -f docker-compose.prod.yml --env-file .env run --rm db-migrate
   DEPLOY_IMAGES_PREBUILT=1 bash deploy/restart-services.sh

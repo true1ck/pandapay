@@ -1,7 +1,6 @@
 const test = require('node:test');
 const assert = require('node:assert/strict');
 const { registerSmsRuleBundleRoutes, computeBundleHash } = require('../src/sms_rule_bundle');
-const { registerSmsLearningAdminRoutes } = require('../src/sms_learning');
 
 const PROFILE = '12111111-1111-4111-8111-111111111111';
 const PAUSED_ID = 'paused-shared-rule-1';
@@ -156,51 +155,4 @@ test('a healthy rule is unaffected by another rule reaching the threshold', asyn
   const result = await call('/sms/rules/active');
   const ids = result.body.candidateRules.map((rule) => rule.candidateId);
   assert.deepEqual(ids, [PAUSED_ID, PAUSED_ASSIGNED_ID, HEALTHY_ID]);
-});
-
-test('admin negative-evidence rollup exposes counts, pause verdicts and the threshold', async () => {
-  const handlers = new Map();
-  const app = {
-    post: (path, ...chain) => handlers.set(`POST ${path}`, chain),
-    get: (path, ...chain) => handlers.set(`GET ${path}`, chain),
-  };
-  const db = {
-    async query(sql) {
-      const q = sql.replace(/\s+/g, ' ').trim();
-      if (q.includes('FROM pandapay.sms_rule_negative_evidence()')) {
-        return { rows: [
-          { decision_rule_id: PAUSED_ID, negative_evidence_count: 4,
-            distinct_reporting_profiles: 3, paused: true },
-          { decision_rule_id: HEALTHY_ID, negative_evidence_count: 1,
-            distinct_reporting_profiles: 1, paused: false },
-        ] };
-      }
-      if (q.includes('pandapay.sms_shared_rule_pause_threshold()')) {
-        return { rows: [{ threshold: 3 }] };
-      }
-      throw new Error(`unexpected statement: ${q.slice(0, 140)}`);
-    },
-  };
-  registerSmsLearningAdminRoutes(app, {
-    requireAdmin: (req, res, next) => next(),
-    withUserClient: async (_userId, work) => work(db),
-  });
-  const chain = handlers.get('GET /admin/sms-learning/rule-negative-evidence');
-  const req = { userId: PROFILE, query: {} };
-  let status = 200;
-  let payload = null;
-  const res = {
-    status(code) { status = code; return this; },
-    json(value) { payload = value; return this; },
-  };
-  for (const middleware of chain.slice(0, -1)) await middleware(req, res, () => {});
-  await chain[chain.length - 1](req, res);
-  assert.equal(status, 200);
-  assert.equal(payload.pauseThreshold, 3);
-  assert.deepEqual(payload.rules, [
-    { decisionRuleId: PAUSED_ID, negativeEvidenceCount: 4,
-      distinctReportingProfiles: 3, paused: true },
-    { decisionRuleId: HEALTHY_ID, negativeEvidenceCount: 1,
-      distinctReportingProfiles: 1, paused: false },
-  ]);
 });
