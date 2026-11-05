@@ -43,6 +43,10 @@ const USER_DEPENDENT = /(credit[_\s-]?limit|of[_\s-]?limit|limit[_\s-]?based|tie
 // Caps that limit something other than reward earning: redemptions, point
 // transfers, fee thresholds, surcharge waivers, transaction charges (D17g).
 const NON_EARNING_CAP = /(redemption|redeem|statement_credit|lounge|(?:^|[-_\s])(?:transfers?|fees?|surcharges?|waivers?|thresholds?|charges?)(?:[-_\s]|$))/;
+// D19f: caps on benefits, not on earning: lounge, golf, concierge,
+// insurance cover, and counts of movie tickets.
+const BENEFIT_CAP = /(lounge|golf|concierge|priority[_\s-]?pass|meet[_\s-]?(?:and|n)[_\s-]?greet|airport[_\s-]?(?:spa|transfer|pickup)|insurance[_\s-]?cover|cover(?:age)?[_\s-]?(?:cap|limit|amount)|complimentary[_\s-]?visits?)/;
+const BENEFIT_CATEGORY = new Set(['lounge', 'airport_lounge', 'golf', 'concierge', 'priority_pass', 'insurance_cover', 'spa', 'movie_tickets']);
 // D8d: "fuel_cap_first_6_months", "fuel_first_6m" / "fuel_post_6m".
 const CARD_AGE_TIER = /((first|initial|after|post)[_-]?\d+[_-]?(m|mo|mon|months?)(?![a-z])|card[_-]?age|months?[_-]?(from|after)[_-]?(issu|open|activation))/;
 const INTRO_TIER = /(first|initial)[_-]?\d+[_-]?(m|mo|mon|months?)(?![a-z])/;
@@ -95,6 +99,11 @@ function transformCaps(record, rules, ctx) {
     // D18g: id and label only (a description may mention fees in passing).
     const capText = [sourceId, c.label].filter((v) => typeof v === 'string').join(' ').toLowerCase();
     if (NON_EARNING_CAP.test(capText)) return skip('non_earning_cap_skipped');
+    const capMetric = String(firstDefined(c.metric, c.cap_type) || '').toLowerCase();
+    if (BENEFIT_CAP.test(capText) || BENEFIT_CATEGORY.has(categoryToken) ||
+        (capMetric === 'txn_count' && /tickets?/.test(capText))) {
+      return skip('non_earning_cap_skipped');
+    }
     const metric = String(firstDefined(c.metric, c.cap_type) || '').toLowerCase();
     if (/^waiver_amount/.test(metric)) return skip('fuel_waiver_cap_skipped');
 

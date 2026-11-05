@@ -1069,6 +1069,18 @@ test('D19e a v1-visible accelerator whose cap is v2-only is hidden from v1', () 
   assert.equal(r.capRules[0].min_engine_version, 2);
 });
 
+test('D19f caps on benefits (lounge, golf, concierge, cover, movie-ticket counts) are non-earning', () => {
+  const r = run(capCard([
+    { ...capBase, id: 'priority_pass_annual_complimentary_visits', category_id: 'lounge', metric: 'txn_count', limit_value: 4 },
+    { ...capBase, id: 'golf_rounds_quarterly', category_id: 'golf', metric: 'txn_count', limit_value: 2 },
+    { ...capBase, id: 'pvr_monthly_ticket_cap', category_id: 'movie', metric: 'txn_count', limit_value: 2 },
+    { ...capBase, id: 'air_ticket_reward_cap', category_id: 'travel_flights', metric: 'bonus_reward_points', limit_value: 750 },
+    { ...capBase, id: 'insurance_monthly', category_id: 'insurance', metric: 'total_reward_points', limit_value: 2000 },
+  ]));
+  assert.deepEqual(r.capRules.map((c) => c.key).sort(), ['air_ticket_reward_cap', 'insurance_monthly']);
+  assert.equal(r.coverage.capsSkipped.filter((x) => x.reason === 'non_earning_cap_skipped').length, 3);
+});
+
 // ── C8 D13: terms that depend on the cardholder; override conventions ───
 
 test('D13a a cap sized by the credit limit keeps its kind with a null amount and is flagged', () => {
