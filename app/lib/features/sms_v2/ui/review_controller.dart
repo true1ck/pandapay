@@ -9,6 +9,7 @@ import '../../../app/providers.dart' as app;
 import '../../../data/local/financial_store.dart';
 import '../../../data/local/sms_intake_repository.dart';
 import '../corrections/corrections_service.dart';
+import '../pipeline/receipt_review.dart';
 import '../pipeline/trace.dart';
 import '../providers/data_providers.dart';
 import '../providers/runtime_provider.dart';
@@ -241,6 +242,24 @@ Future<ReviewController> smsReviewController(WidgetRef ref) async {
     namespace: namespace,
     bundle: bundle,
     hasConsent: consent != null,
+  );
+}
+
+/// The receipt question's answers for the signed-in account.
+Future<ReceiptReviews> smsReceiptReviews(WidgetRef ref) async {
+  final namespace = ref.read(app.cacheNamespaceProvider);
+  final runtime = await ref.read(smsV2RuntimeProvider.future);
+  final bundle = await runtime?.activeBundle();
+  final cache = await ref.read(app.responseCacheProvider.future);
+  if (namespace != ref.read(app.cacheNamespaceProvider)) {
+    throw StateError('Account changed');
+  }
+  if (bundle == null) throw StateError('No verified rules');
+  return ReceiptReviews(
+    financial: cache.financialStore,
+    namespace: namespace,
+    bundle: bundle,
+    clock: runtime?.clock,
   );
 }
 

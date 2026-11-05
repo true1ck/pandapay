@@ -5,6 +5,7 @@ import '../contract/instrument.dart';
 import '../contract/interfaces.dart';
 import '../contract/rule_bundle.dart';
 import 'link_context.dart';
+import 'receipt_policy.dart';
 
 /// What a link rule means to the matching code. Link rules only set
 /// parameters (contracts: "The matching algorithm is code"); the behaviour
@@ -135,12 +136,34 @@ class RuleDrivenLinker implements EventLinker {
 
   /// Turns `awaiting_leg` events whose rule window has passed into `complete`
   /// ones, and (with a [RuleLinkContext]) raises a review item for each
-  /// receipt whose window passed with no payment.
+  /// receipt that [reviewReceipts] would.
   LinkResult expire({
     required DateTime now,
     required LinkContext context,
     required List<LinkRule> rules,
   }) => _Run(this, context, rules, now.toUtc(), const []).expire();
+
+  /// The receipt question and nothing else (no event is changed): one review
+  /// item for each receipt that has no funding debit, is from the current IST
+  /// calendar month and has waited [kReceiptWaitPeriod]. Receipts from an
+  /// earlier month are skipped silently. Needs a [RuleLinkContext] (a plain
+  /// context cannot tell which receipts are already joined).
+  ///
+  /// [alreadyRaised] holds the review ids and dedupe keys that exist already,
+  /// in any status, so a receipt that was asked about, answered or dismissed is
+  /// never asked about again.
+  LinkResult reviewReceipts({
+    required DateTime now,
+    required LinkContext context,
+    required List<LinkRule> rules,
+    Set<String> alreadyRaised = const {},
+  }) => _Run(
+    this,
+    context,
+    rules,
+    now.toUtc(),
+    const [],
+  ).reviewReceipts(alreadyRaised);
 }
 
 class _TopupTarget {
@@ -304,7 +327,6 @@ class _Run {
   /// Purchase fact id to the refunds already linked to it.
   final refunded = <String, int>{};
   final reviews = <String, ReviewItem>{};
-  final pendingReceipts = <MovementFact>[];
   final ambiguousReceipts = <String>{};
   final pendingIpoMandates = <MandateFact>[];
   final _instCache = <String, Instrument?>{};
@@ -343,7 +365,6 @@ class _Run {
       _process(f);
     }
     _attachIpoMandates();
-    _receiptReviews();
     return _result();
   }
 
@@ -358,22 +379,12 @@ class _Run {
         _put(e.copyWith(status: EventStatus.complete));
       }
     }
-    if (complete) {
-      final receiptRule = _firstOf(LinkRuleKind.receipt);
-      if (receiptRule != null) {
-        for (final f in facts.values) {
-          if (f is MovementFact &&
-              f.evidenceOnly == true &&
-              f.direction == Direction.debit &&
-              !eventOfFact.containsKey(f.factId) &&
-              !_isPartialWalletFact(f) &&
-              now.difference(_latest(f)) >
-                  _hours(receiptRule.join.windowHours)) {
-            _receiptReview(f);
-          }
-        }
-      }
-    }
+    if (complete) _raiseReceiptReviews(const {});
+    return _result();
+  }
+
+  LinkResult reviewReceipts(Set<String> alreadyRaised) {
+    if (complete) _raiseReceiptReviews(alreadyRaised);
     return _result();
   }
 
@@ -408,6 +419,15 @@ class _Run {
       default:
         _done(f);
         return;
+    }
+
+    // A debit for a receipt the user already confirmed is that same payment.
+    if (f is MovementFact &&
+        f.direction == Direction.debit &&
+        f.evidenceOnly != true &&
+        _lateFundingDebit(f)) {
+      _done(f);
+      return;
     }
 
     // 0. Legs that arrived before this one (see [_lateHold], [_lateOriginal]).
@@ -1383,6 +1403,41 @@ class _Run {
     );
   }
 
+  /// A debit that arrives after the user answered "Yes, I paid it" for its
+  /// receipt is the same payment, which the confirmed event already counts: it
+  /// becomes a one-leg `unknown` event (no money), so the payment counts once.
+  /// The confirmed event itself is never changed (user_confirmed).
+  bool _lateFundingDebit(MovementFact f) {
+    final rule = _firstOf(LinkRuleKind.receipt);
+    final a = _principal(f);
+    if (rule == null || a == null) return false;
+    for (final r in byAmount[a] ?? const <Fact>[]) {
+      if (r is! MovementFact ||
+          r.evidenceOnly != true ||
+          r.direction != Direction.debit ||
+          r.sourceKey == f.sourceKey ||
+          !_within(f, r, rule.join.windowHours)) {
+        continue;
+      }
+      final eventId = eventOfFact[r.factId];
+      final e = eventId == null ? null : events[eventId];
+      if (e == null || e.status != EventStatus.userConfirmed) continue;
+      final confirmed = e.legs.any(
+        (l) =>
+            _moneyRoles.contains(l.role) &&
+            facts[l.factId]?.provenance.ruleId == kReceiptConfirmedRuleId,
+      );
+      if (!confirmed) continue;
+      _put(
+        _build(f.factId, EventType.unknown, EventStatus.complete, [
+          EventLeg(factId: f.factId, role: LegRole.duplicateNotice),
+        ], rule.id),
+      );
+      return true;
+    }
+    return false;
+  }
+
   /// A biller's or app's receipt: joins the debit it confirms, never makes an
   /// event of its own.
   void _processReceipt(MovementFact f) {
@@ -1409,10 +1464,8 @@ class _Run {
       if (role != LegRole.debitLeg && role != LegRole.charge) continue;
       byEvent[eventId] = _Cand.event(eventId, g, role);
     }
-    if (byEvent.isEmpty) {
-      pendingReceipts.add(f);
-      return;
-    }
+    if (byEvent.isEmpty) return; // [reviewReceipts] decides later
+
     final list = _narrow(rule, f, [...byEvent.values]);
     if (list.length > 1) {
       ambiguousReceipts.add(f.factId);
@@ -1436,31 +1489,80 @@ class _Run {
     );
   }
 
-  void _receiptReviews() {
+  /// A receipt with no funding debit and no event, in arrival order.
+  List<MovementFact> _unpaidReceipts() => [
+    for (final f in facts.values)
+      if (f is MovementFact &&
+          f.evidenceOnly == true &&
+          f.direction == Direction.debit &&
+          !eventOfFact.containsKey(f.factId) &&
+          !_isPartialWalletFact(f))
+        f,
+  ]..sort(_arrival);
+
+  /// True when a non-receipt debit of the receipt's amount sits inside the
+  /// join window, whatever event it is in (an ambiguous or confirmed one
+  /// cannot take the receipt as a leg, but the payment is not missing).
+  bool _hasFundingDebit(MovementFact r, LinkRule rule) {
+    final a = _principal(r);
+    if (a == null) return false;
+    for (final g in byAmount[a] ?? const <Fact>[]) {
+      if (g is MovementFact &&
+          g.direction == Direction.debit &&
+          g.evidenceOnly != true &&
+          g.sourceKey != r.sourceKey &&
+          _within(r, g, rule.join.windowHours)) {
+        return true;
+      }
+    }
+    return false;
+  }
+
+  void _raiseReceiptReviews(Set<String> alreadyRaised) {
     final rule = _firstOf(LinkRuleKind.receipt);
     if (rule == null) return;
-    for (final f in pendingReceipts) {
-      if (eventOfFact.containsKey(f.factId)) continue;
-      if (now.difference(_latest(f)) <= _hours(rule.join.windowHours)) continue;
-      _receiptReview(f);
+    final keys = <String>{};
+    for (final f in _unpaidReceipts()) {
+      final disposition = receiptDisposition(receiptAt: _latest(f), now: now);
+      if (disposition != ReceiptDisposition.review) continue;
+      final id = 'link:receipt:${f.factId}';
+      final key = receiptDedupeKey(f);
+      if (alreadyRaised.contains(id) ||
+          alreadyRaised.contains(key) ||
+          alreadyRaised.contains('link:ambiguous:${f.factId}') ||
+          ambiguousReceipts.contains(f.factId) ||
+          !keys.add(key) ||
+          _hasFundingDebit(f, rule)) {
+        continue;
+      }
+      _receiptReview(f, key);
     }
   }
 
-  void _receiptReview(MovementFact f) {
+  void _receiptReview(MovementFact f, String dedupeKey) {
     final id = 'link:receipt:${f.factId}';
     final biller =
         f.counterparty?.name ?? f.instrument?.issuerSlug ?? 'a biller';
     final minor = _principal(f) ?? 0;
+    final cardBill = f.purpose == MovementPurpose.cardPayment;
     reviews[id] = ReviewItem(
       kind: ReviewKind.event,
       payload: {
         'reviewId': id,
-        'reason': 'receipt_without_payment',
+        'reason': kReceiptWithoutPaymentReason,
         'factId': f.factId,
+        'dedupeKey': dedupeKey,
         'biller': biller,
         'amountMinor': minor,
-        'message':
-            'We saw a receipt from $biller for ${_rupees(minor)} but no payment. Add it?',
+        'receiptAt': _latest(f).toUtc().toIso8601String(),
+        'cardBill': cardBill,
+        'purpose': f.purpose.wire,
+        'message': kReceiptReviewTextEn.question(
+          cardBill: cardBill,
+          amount: formatReceiptRupees(minor),
+          date: formatReceiptDate(_latest(f)),
+          app: biller,
+        ),
       },
     );
   }
@@ -1948,10 +2050,4 @@ class _Run {
 
   bool _namesCompatible(String? a, String? b) =>
       _key(a).isEmpty || _key(b).isEmpty || _sameParty(a, b);
-
-  static String _rupees(int minor) {
-    final r = minor ~/ 100;
-    final p = (minor % 100).toString().padLeft(2, '0');
-    return 'Rs $r.$p';
-  }
 }

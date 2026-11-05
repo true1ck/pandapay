@@ -11,6 +11,30 @@ import 'correction_form.dart';
 import 'review_controller.dart';
 import 'screen_parts.dart';
 
+/// The receipt question (Lane X): a bill-payment receipt with no matching debit.
+bool isReceiptQuestion(LocalReviewItem item) =>
+    item.payload['reason'] == kReceiptWithoutPaymentReason;
+
+/// The kind that decides which section and buttons an item gets.
+String reviewKindOf(LocalReviewItem item) =>
+    isReceiptQuestion(item) ? 'receipt' : item.kind;
+
+/// The question, from the stored facts of the receipt and the wording set.
+String receiptQuestion(LocalReviewItem item, [String locale = 'en']) {
+  final payload = item.payload;
+  final minor = (payload['amountMinor'] as num?)?.toInt() ?? 0;
+  final at = DateTime.tryParse(payload['receiptAt'] as String? ?? '');
+  return receiptReviewText(locale).question(
+    cardBill: payload['cardBill'] == true,
+    amount: formatReceiptRupees(minor),
+    date: at == null ? '' : formatReceiptDate(at),
+    app: (payload['app'] ?? payload['biller']) as String?,
+  );
+}
+
+/// Sentinel the account picker returns for "Another account".
+const _anotherAccount = '__another_account__';
+
 class ReviewInboxScreen extends ConsumerStatefulWidget {
   const ReviewInboxScreen({super.key});
   @override
@@ -23,6 +47,10 @@ class _ReviewInboxScreenState extends ConsumerState<ReviewInboxScreen> {
     if (_saving) return;
     final namespace = ref.read(app.cacheNamespaceProvider);
     CorrectionEdit? edit;
+    if (action.startsWith('receipt-')) {
+      await _answerReceipt(group, action, namespace);
+      return;
+    }
     if (action == 'choose-card') {
       final cards = (await ref.read(instrumentsProvider.future))
           .where(
@@ -174,6 +202,84 @@ class _ReviewInboxScreenState extends ConsumerState<ReviewInboxScreen> {
     }
   }
 
+  Future<void> _answerReceipt(
+    List<LocalReviewItem> group,
+    String action,
+    String namespace,
+  ) async {
+    final text = receiptReviewText();
+    if (action == 'receipt-unsure') {
+      // Stays in review: nothing changes.
+      ScaffoldMessenger.of(
+        context,
+      ).showSnackBar(SnackBar(content: Text(text.notSureSnack)));
+      return;
+    }
+    String? funding;
+    if (action == 'receipt-yes') {
+      final accounts = (await ref.read(instrumentsProvider.future))
+          .where(
+            (i) =>
+                (i.kind == InstrumentKind.bankAccount ||
+                    i.kind == InstrumentKind.wallet) &&
+                i.status == InstrumentStatus.confirmed,
+          )
+          .toList();
+      if (!mounted || namespace != ref.read(app.cacheNamespaceProvider)) return;
+      final chosen = await showDialog<String>(
+        context: context,
+        builder: (context) => SimpleDialog(
+          title: Text(text.chooseAccountTitle),
+          children: [
+            for (final account in accounts)
+              SimpleDialogOption(
+                onPressed: () => Navigator.pop(context, account.instrumentId),
+                child: Text(
+                  '${account.displayName} ••${account.maskDigits ?? 'unknown'}',
+                ),
+              ),
+            SimpleDialogOption(
+              onPressed: () => Navigator.pop(context, _anotherAccount),
+              child: Text(text.anotherAccount),
+            ),
+          ],
+        ),
+      );
+      if (chosen == null ||
+          !mounted ||
+          namespace != ref.read(app.cacheNamespaceProvider)) {
+        return;
+      }
+      funding = chosen == _anotherAccount ? null : chosen;
+    }
+    setState(() => _saving = true);
+    try {
+      final reviews = await smsReceiptReviews(ref);
+      if (!mounted || namespace != ref.read(app.cacheNamespaceProvider)) return;
+      for (final item in group) {
+        if (action == 'receipt-yes') {
+          reviews.confirm(reviewId: item.id, fundingInstrumentId: funding);
+        } else {
+          reviews.dismiss(reviewId: item.id);
+        }
+      }
+      ref.invalidate(reviewItemsProvider);
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text(
+              action == 'receipt-yes' ? text.countedSnack : text.dismissedSnack,
+            ),
+          ),
+        );
+      }
+    } catch (error) {
+      if (mounted) smsShowError(context, error);
+    } finally {
+      if (mounted) setState(() => _saving = false);
+    }
+  }
+
   @override
   Widget build(BuildContext context) => Scaffold(
     appBar: AppBar(title: const Text('Needs review')),
@@ -208,11 +314,14 @@ class ReviewInboxList extends StatelessWidget {
     }
     final groups = <String, List<LocalReviewItem>>{};
     for (final item in items) {
-      groups.putIfAbsent('${item.kind}:${item.groupKey}', () => []).add(item);
+      groups
+          .putIfAbsent('${reviewKindOf(item)}:${item.groupKey}', () => [])
+          .add(item);
     }
     final sections = <String, List<List<LocalReviewItem>>>{};
     for (final group in groups.values) {
-      final title = switch (group.first.kind) {
+      final title = switch (reviewKindOf(group.first)) {
+        'receipt' => receiptReviewText().title,
         'template' => 'New message formats',
         'link' => 'Is this the same payment?',
         'category' => 'What is this merchant?',
@@ -247,10 +356,13 @@ class ReviewInboxList extends StatelessWidget {
                       style: Theme.of(context).textTheme.labelLarge,
                     ),
                     const SizedBox(height: 8),
-                    Text(
-                      group.first.message?.message.body ??
-                          'The original message is no longer on this phone.',
-                    ),
+                    if (reviewKindOf(group.first) == 'receipt')
+                      Text(receiptQuestion(group.first))
+                    else
+                      Text(
+                        group.first.message?.message.body ??
+                            'The original message is no longer on this phone.',
+                      ),
                     if (group.first.payload['reading']
                         case final String reading)
                       Padding(
@@ -261,7 +373,26 @@ class ReviewInboxList extends StatelessWidget {
                     Wrap(
                       spacing: 8,
                       children: [
-                        if (group.first.kind == 'bill_target')
+                        if (reviewKindOf(group.first) == 'receipt') ...[
+                          FilledButton(
+                            onPressed: busy
+                                ? null
+                                : () => onAction(group, 'receipt-yes'),
+                            child: Text(receiptReviewText().yes),
+                          ),
+                          OutlinedButton(
+                            onPressed: busy
+                                ? null
+                                : () => onAction(group, 'receipt-no'),
+                            child: Text(receiptReviewText().no),
+                          ),
+                          TextButton(
+                            onPressed: busy
+                                ? null
+                                : () => onAction(group, 'receipt-unsure'),
+                            child: Text(receiptReviewText().notSure),
+                          ),
+                        ] else if (group.first.kind == 'bill_target')
                           FilledButton(
                             onPressed: busy
                                 ? null
@@ -290,7 +421,8 @@ class ReviewInboxList extends StatelessWidget {
                                 : () => onAction(group, 'correct'),
                             child: const Text('Correct'),
                           ),
-                        if (group.first.kind != 'link' &&
+                        if (reviewKindOf(group.first) != 'receipt' &&
+                            group.first.kind != 'link' &&
                             group.first.kind != 'bill_target')
                           OutlinedButton(
                             onPressed: busy
@@ -298,7 +430,8 @@ class ReviewInboxList extends StatelessWidget {
                                 : () => onAction(group, 'fix'),
                             child: const Text('Fix'),
                           ),
-                        if (group.every((i) => i.message != null))
+                        if (reviewKindOf(group.first) != 'receipt' &&
+                            group.every((i) => i.message != null))
                           TextButton(
                             style: TextButton.styleFrom(
                               foregroundColor: Theme.of(
