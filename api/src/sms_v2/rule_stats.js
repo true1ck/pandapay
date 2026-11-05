@@ -51,7 +51,7 @@ function createStatsHandler({ store, security }) {
 
 // Pure decision. `stats`: [{ruleId, version, hits, corrected}] for the last 24 hours.
 // `rules`/`cohorts`: all rule rows and cohort rows. Returns the versions to pause.
-function evaluateAutoPause({ rules, cohorts, stats }) {
+function evaluateAutoPause({ rules, cohorts, stats, minHits = AUTO_PAUSE_MIN_HITS, minRate = AUTO_PAUSE_MIN_RATE }) {
   const byKey = new Map(stats.map((x) => [`${x.ruleId}\u0000${x.version}`, x]));
   const rate = (x) => (x && x.hits > 0 ? x.corrected / x.hits : 0);
   const released = new Map(); // key -> widest unpaused cohort rank
@@ -66,7 +66,7 @@ function evaluateAutoPause({ rules, cohorts, stats }) {
   for (const [k, widest] of released) {
     if (widest >= COHORT_RANK.all) continue;
     const cur = byKey.get(k);
-    if (!cur || cur.hits < AUTO_PAUSE_MIN_HITS) continue;
+    if (!cur || cur.hits < minHits) continue;
     if (Number.isFinite(cur.devices) && cur.devices < AUTO_PAUSE_MIN_DEVICES) continue;
     const [ruleId, vs] = k.split('\u0000');
     const version = Number(vs);
@@ -74,7 +74,7 @@ function evaluateAutoPause({ rules, cohorts, stats }) {
       .filter((r) => r.ruleId === ruleId && r.version < version && everReleased.has(`${ruleId}\u0000${r.version}`))
       .sort((a, b) => b.version - a.version)[0];
     const prevRate = prev ? rate(byKey.get(`${ruleId}\u0000${prev.version}`)) : 0;
-    const threshold = Math.max(AUTO_PAUSE_MIN_RATE, 2 * prevRate);
+    const threshold = Math.max(minRate, 2 * prevRate);
     const r = rate(cur);
     if (r > threshold) out.push({ ruleId, version, hits: cur.hits, corrected: cur.corrected, rate: r, threshold });
   }
@@ -98,7 +98,12 @@ async function runRuleJobs({ store, signer, adminId, now = new Date(), refreshBe
     const rolled = await s.rollupRuleStats();
     const since = utcDay(new Date(now.getTime() - 24 * 60 * 60 * 1000));
     const stats = await s.statsSince(since);
-    const toPause = evaluateAutoPause({ rules: await s.allRules(), cohorts: await s.allCohorts(), stats });
+    // Thresholds and retention are console settings (settings.js).
+    const settings = typeof s.settings === 'function' ? await s.settings() : {};
+    const toPause = evaluateAutoPause({
+      rules: await s.allRules(), cohorts: await s.allCohorts(), stats,
+      minHits: settings.auto_pause_min_hits, minRate: settings.auto_pause_min_rate,
+    });
     for (const p of toPause) {
       await pauseRuleVersion(s, { ruleId: p.ruleId, version: p.version, reason: AUTO_PAUSE_REASON, adminId, now });
     }

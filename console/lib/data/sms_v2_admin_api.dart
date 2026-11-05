@@ -106,6 +106,51 @@ class SmsV2AdminApi {
     'category-rules/${Uri.encodeComponent(id)}/publish',
     body: {'revision': revision, 'reason': reason, 'goldenReports': reports},
   );
+
+  // ---- Settings and per-user limits (learning-loop A4).
+  Future<List<Map<String, dynamic>>> settings() async =>
+      _rows((await request('GET', 'settings'))['settings']);
+  Future<Map<String, dynamic>> saveSetting(
+    String key,
+    Object? value,
+    String reason,
+    String? expectedUpdatedAt,
+  ) => request(
+    'PUT',
+    'settings/${Uri.encodeComponent(key)}',
+    body: {
+      'value': value,
+      'reason': reason,
+      'expectedUpdatedAt': expectedUpdatedAt,
+    },
+  );
+  Future<List<Map<String, dynamic>>> userLimits() async =>
+      _rows((await request('GET', 'user-limits'))['limits']);
+  Future<Map<String, dynamic>> saveUserLimit(
+    String profileId,
+    String key,
+    int value,
+    DateTime expiresAt,
+    String reason,
+  ) => request(
+    'PUT',
+    'user-limits/${Uri.encodeComponent(profileId)}/${Uri.encodeComponent(key)}',
+    body: {
+      'value': value,
+      'expiresAt': expiresAt.toUtc().toIso8601String(),
+      'reason': reason,
+    },
+  );
+  Future<Map<String, dynamic>> deleteUserLimit(
+    String profileId,
+    String key,
+    String reason,
+  ) => request(
+    'DELETE',
+    'user-limits/${Uri.encodeComponent(profileId)}/${Uri.encodeComponent(key)}',
+    body: {'reason': reason},
+  );
+
   static List<Map<String, dynamic>> _rows(Object? rows) => [
     for (final row in rows as List? ?? const [])
       (row as Map).cast<String, dynamic>(),

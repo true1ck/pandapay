@@ -670,5 +670,35 @@
     "path": "/admin/sms/v2/corrections/:caseId/decision",
     "permission": "learning.publish",
     "freshMfa": true
+  },
+  {
+    "method": "GET",
+    "path": "/admin/sms/v2/settings",
+    "permission": "learning.read",
+    "freshMfa": false
+  },
+  {
+    "method": "PUT",
+    "path": "/admin/sms/v2/settings/:key",
+    "permission": "learning.publish",
+    "freshMfa": true
+  },
+  {
+    "method": "GET",
+    "path": "/admin/sms/v2/user-limits",
+    "permission": "learning.read",
+    "freshMfa": false
+  },
+  {
+    "method": "PUT",
+    "path": "/admin/sms/v2/user-limits/:profileId/:key",
+    "permission": "learning.publish",
+    "freshMfa": true
+  },
+  {
+    "method": "DELETE",
+    "path": "/admin/sms/v2/user-limits/:profileId/:key",
+    "permission": "learning.publish",
+    "freshMfa": true
   }
 ]

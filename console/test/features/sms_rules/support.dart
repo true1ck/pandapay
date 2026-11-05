@@ -78,6 +78,42 @@ BrowserGoldenRunner tinyRunner() => BrowserGoldenRunner(
 );
 const caseId = '00000000-0000-4000-8000-000000000001';
 
+/// One row per registry key, as GET /admin/sms/v2/settings returns them.
+List<Map<String, dynamic>> fixtureSettings({Map<String, Object?> values = const {}}) {
+  Map<String, dynamic> row(String key, String type, Object? def, {num? min, num? max, List<String>? allowed}) => {
+    'key': key,
+    'type': type,
+    'value': values.containsKey(key) ? values[key] : def,
+    'default': def,
+    'min': min,
+    'max': max,
+    'ceiling': max,
+    'allowed': allowed,
+    'stored': values.containsKey(key),
+    'updatedAt': values.containsKey(key) ? '2026-11-06T09:00:00.000000Z' : null,
+    'updatedBy': null,
+    'reason': values.containsKey(key) ? 'Fixture change' : null,
+  };
+  return [
+    row('templates_per_user_per_day', 'int', 50, min: 1, max: 500),
+    row('corrections_per_user_per_day', 'int', 200, min: 1, max: 2000),
+    row('signals_per_user_per_day', 'int', 500, min: 1, max: 5000),
+    row('signals_min_distinct_users', 'int', 3, min: 2, max: 20),
+    row('signals_retention_days', 'int', 180, min: 30, max: 730),
+    row('intake_enabled', 'bool', true),
+    row('ai_enabled', 'bool', true),
+    row('ai_merchant_suggestions_enabled', 'bool', false),
+    row('ai_model', 'model', null, allowed: ['model-a', 'model-b']),
+    row('ai_rpm', 'int', 30, min: 1, max: 60),
+    row('ai_tpm', 'int', 100000, min: 1000, max: 200000),
+    row('ai_temperature', 'number', 0.1, min: 0, max: 1),
+    row('ai_max_output_tokens', 'int', 4096, min: 512, max: 8192),
+    row('ai_monthly_budget_usd', 'number', 10, min: 0, max: 1000),
+    row('auto_pause_min_hits', 'int', 50, min: 10, max: 10000),
+    row('auto_pause_min_rate', 'number', 0.01, min: 0.001, max: 0.5),
+  ];
+}
+
 class FakeAdmin extends AdminApi {
   FakeAdmin()
     : super(apiBaseUrl: 'https://console.invalid', accessToken: 'fixture');
@@ -85,6 +121,11 @@ class FakeAdmin extends AdminApi {
   String latestStatus = 'active';
   List<Object?> templates = <Object?>[];
   Map<String, dynamic> metrics = {'ai': <Object?>[]};
+  List<Map<String, dynamic>> settings = fixtureSettings();
+  List<Object?> userLimits = <Object?>[];
+
+  /// When set, the next settings save answers with this HTTP status.
+  int? failSettingSaveWith;
   final requests = <(String, String, Map<String, dynamic>?)>[];
   @override
   Future<Map<String, dynamic>> smsV2Request(
@@ -107,6 +148,15 @@ class FakeAdmin extends AdminApi {
         ],
       };
     }
+    if (path == '/admin/sms/v2/settings') return {'settings': settings};
+    if (path.startsWith('/admin/sms/v2/settings/')) {
+      if (failSettingSaveWith != null) {
+        throw AdminApiException('failed', statusCode: failSettingSaveWith);
+      }
+      return {'setting': <String, dynamic>{}};
+    }
+    if (path == '/admin/sms/v2/user-limits') return {'limits': userLimits};
+    if (path.startsWith('/admin/sms/v2/user-limits/')) return {'deleted': true};
     if (path == '/admin/sms/v2/templates') return {'templates': templates};
     if (path == '/admin/sms/v2/metrics') return metrics;
     if (path == '/admin/sms/v2/bundles') return {'bundles': <Object?>[]};

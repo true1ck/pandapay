@@ -95,6 +95,12 @@ add('GET', '/admin/sms/v2/corrections/:caseId/export', 'learning.read');
 add('PUT', '/admin/sms/v2/corrections/:caseId/example', 'learning.publish', true);
 add('POST', '/admin/sms/v2/corrections/:caseId/decision', 'learning.publish', true);
 
+add('GET', '/admin/sms/v2/settings', 'learning.read');
+add('PUT', '/admin/sms/v2/settings/:key', 'learning.publish', true);
+add('GET', '/admin/sms/v2/user-limits', 'learning.read');
+add('PUT', '/admin/sms/v2/user-limits/:profileId/:key', 'learning.publish', true);
+add('DELETE', '/admin/sms/v2/user-limits/:profileId/:key', 'learning.publish', true);
+
 const routeManifest = Object.freeze(definitions.map(([method, path, permission, freshMfa]) =>
   Object.freeze({ method, path, permission, freshMfa })
 ));

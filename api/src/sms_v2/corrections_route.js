@@ -4,6 +4,7 @@ const crypto = require('node:crypto');
 const { validateRequest } = require('./contracts');
 const { canonicalize } = require('./signer');
 const { createRequireSmsV2 } = require('./guard');
+const { intakeOpen } = require('./settings');
 
 const SHARED_CORRECTED_FIELDS = ['category', 'merchantKey'];
 const denied = value => value === false || value?.ok === false;
@@ -41,7 +42,7 @@ function templateMetadata(body) {
   return { hash, senderBrand: metadata.senderBrand, observedAt: metadata.observedAt };
 }
 
-async function submitCorrection(client, profileId, body, { sharedLearningEligible = false } = {}) {
+async function submitCorrection(client, profileId, body, { sharedLearningEligible = false, intakeEnabled = true } = {}) {
   const check = validateRequest('corrections', body);
   if (!check.ok) throw Object.assign(new Error(check.errors[0].code), { status: 400 });
   if (body.correctionKind === 'preference_only') throw Object.assign(new Error('preference_only_local'), { status: 400 });
@@ -62,7 +63,8 @@ async function submitCorrection(client, profileId, body, { sharedLearningEligibl
     ['sms-shared-learning-consent:' + profileId]);
   // Only the current policy version (v3) counts as an opt-in to sharing.
   const consent = await client.query('SELECT pandapay.sms_shared_learning_granted($1) AS shared', [profileId]);
-  const shared = consent.rows[0]?.shared === true;
+  // With intake paused the case is kept, but nothing is shared, as if the user had not opted in.
+  const shared = intakeEnabled && consent.rows[0]?.shared === true;
   const metadata = shared ? templateMetadata(body) : null;
   // Even with consent, only the reviewed categorical fields are kept. Free text
   // from a modified client never reaches the admin review queue.
@@ -93,8 +95,10 @@ function createCorrectionsHandler({ withUserClient, hooks }) {
     try {
       if (denied(await hooks.security.verifyAttestation(req))) return res.status(403).json({ error: 'attestation_required' });
       if (denied(await hooks.security.checkRate(req, 'corrections', 1))) return res.status(429).json({ error: 'rate_limited' });
+      const intakeEnabled = await intakeOpen(hooks.security, req);
       const response = await withUserClient(req.userId, client => submitCorrection(client, req.userId, req.body, {
         sharedLearningEligible: req.smsV2Security?.sharedLearningEligible === true,
+        intakeEnabled,
       }));
       return res.status(200).json(response);
     } catch (error) {

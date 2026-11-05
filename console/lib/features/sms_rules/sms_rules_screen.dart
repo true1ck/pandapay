@@ -7,6 +7,7 @@ import 'providers.dart';
 import 'rule_editor.dart';
 import 'category_editor.dart';
 import 'golden_runner.dart';
+import 'settings_tab.dart';
 import 'package:pandapay_domain/sms_v2_template.dart';
 import 'download_stub.dart' if (dart.library.js_interop) 'download_web.dart';
 
@@ -34,7 +35,7 @@ class SmsRulesScreen extends ConsumerWidget {
     }
 
     return DefaultTabController(
-      length: 5,
+      length: 6,
       child: Scaffold(
         appBar: AppBar(
           title: const Text('SMS pipeline rules'),
@@ -46,6 +47,7 @@ class SmsRulesScreen extends ConsumerWidget {
               Tab(text: 'Categories'),
               Tab(text: 'Corrections'),
               Tab(text: 'Metrics'),
+              Tab(text: 'Settings'),
             ],
           ),
         ),
@@ -241,6 +243,7 @@ class SmsRulesScreen extends ConsumerWidget {
                 ],
               ),
             ),
+            SmsSettingsTab(api: api),
           ],
         ),
       ),

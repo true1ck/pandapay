@@ -4,6 +4,7 @@ const crypto = require("node:crypto");
 const { validateRequest, validateBundle } = require("./contracts");
 const { lintPattern } = require("./rules_admin_route");
 const { redactionError } = require("./ai_templates");
+const { readSettings } = require("./settings");
 
 const path = require("node:path");
 const { SCHEMA_DIR } = require("./contracts");
@@ -53,6 +54,23 @@ function workerConfig(env = process.env) {
     maxOutputTokens: positiveInteger(env, "SMS_V2_AI_MAX_OUTPUT_TOKENS", 4096),
     inputPrice: price("SMS_V2_AI_INPUT_USD_PER_MILLION"),
     outputPrice: price("SMS_V2_AI_OUTPUT_USD_PER_MILLION"),
+  };
+}
+
+// Console settings (settings.js) over the environment-derived config. The
+// environment stays a hard ceiling for rate limits.
+function applyWorkerSettings(config, settings, env = process.env) {
+  const capped = (value, key) =>
+    env[key] !== undefined && Number.isFinite(Number(env[key]))
+      ? Math.min(value, Number(env[key]))
+      : value;
+  return {
+    ...config,
+    model: settings.ai_model || config.model,
+    rpm: capped(settings.ai_rpm, "SMS_V2_AI_RPM"),
+    tpm: capped(settings.ai_tpm, "SMS_V2_AI_TPM"),
+    temperature: settings.ai_temperature,
+    maxOutputTokens: settings.ai_max_output_tokens,
   };
 }
 
@@ -337,6 +355,22 @@ function createPgWorkerStore({ withAdminClient, adminId }) {
   const currentConsent = `EXISTS(SELECT 1 FROM sms_v2_template_submitters s WHERE s.template_hash=t.template_hash AND s.eligible
     AND pandapay.sms_v2_template_has_consent(s.profile_id))`;
   return {
+    // Admin-set values, read fresh at each loop (settings.js).
+    settings() {
+      return tx((client) => readSettings(client, { force: true }));
+    },
+    // Month-to-date provider spend in USD (UTC month).
+    monthSpend() {
+      return tx(async (client) =>
+        Number(
+          (
+            await client.query(
+              "SELECT coalesce(sum(cost_usd),0) AS spent FROM sms_v2_template_attempts WHERE started_at >= date_trunc('month', clock_timestamp() AT TIME ZONE 'utc') AT TIME ZONE 'utc'",
+            )
+          ).rows[0].spent,
+        ),
+      );
+    },
     async claim() {
       return tx(async (client) => {
         await client.query(
@@ -479,9 +513,20 @@ function createPgWorkerStore({ withAdminClient, adminId }) {
 async function runTemplateWorkerOnce({
   store,
   provider,
-  config = workerConfig(),
+  config: baseConfig = workerConfig(),
   clock = Date.now,
 }) {
+  let config = baseConfig;
+  if (typeof store.settings === "function") {
+    const settings = await store.settings();
+    if (settings.ai_enabled === false) return { status: "disabled" };
+    if (
+      typeof store.monthSpend === "function" &&
+      (await store.monthSpend()) >= settings.ai_monthly_budget_usd
+    )
+      return { status: "budget" };
+    config = applyWorkerSettings(baseConfig, settings);
+  }
   const template = await store.claim();
   if (!template) return { status: "idle" };
   let errors = [];
@@ -624,6 +669,7 @@ module.exports = {
   SMS_PLACEHOLDERS,
   SMS_DOMAIN_RULES,
   workerConfig,
+  applyWorkerSettings,
   fillSynthetic,
   buildPrompt,
   validateDraft,

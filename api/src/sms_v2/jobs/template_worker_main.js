@@ -43,12 +43,16 @@ async function main() {
         }),
       );
       if (process.argv.includes("--once") || stopped) break;
+      // disabled: an admin switched AI drafting off. budget: this month's cap is
+      // spent. Layouts wait in the queue meanwhile.
       await delay(
         result.status === "idle"
           ? 15000
-          : result.status === "capacity"
+          : result.status === "capacity" || result.status === "disabled"
             ? 60000
-            : 1000,
+            : result.status === "budget"
+              ? 600000
+              : 1000,
       );
     } while (!stopped);
   } finally {

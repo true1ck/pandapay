@@ -34,6 +34,17 @@ void main() {
       throwsArgumentError,
     );
     expect(() => api.smsV2Request('GET', '/admin/other'), throwsArgumentError);
+    // DELETE is allowed only to remove a per-user limit.
+    await api.smsV2Request(
+      'DELETE',
+      '/admin/sms/v2/user-limits/00000000-0000-4000-8000-0000000000aa/signals_per_user_per_day',
+      body: {'reason': 'resolved'},
+    );
+    expect(requests.last.method, 'DELETE');
+    expect(
+      () => api.smsV2Request('DELETE', '/admin/sms/v2/settings/ai_rpm'),
+      throwsArgumentError,
+    );
   });
   test(
     'SMS admin transport retains native bearer and sanitizes errors',

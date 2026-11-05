@@ -729,6 +729,14 @@
       "disposition": "platform_ops",
       "reason": "Reviewed category rule revisions and signed bundle publication are platform administration state preserved by full PostgreSQL recovery, outside a customer portable archive."
     },
+    "sms_v2_settings": {
+      "disposition": "platform_ops",
+      "reason": "Admin-set learning and AI settings are platform administration state preserved by full PostgreSQL recovery, outside a customer portable archive."
+    },
+    "sms_v2_user_limits": {
+      "disposition": "excluded_with_intent",
+      "reason": "Admin-set, time-limited abuse and capacity overrides for one account are operations state, not the person's data. They expire within 90 days and are preserved by full PostgreSQL recovery."
+    },
     "shared_expenses.group_links": {
       "disposition": "excluded_with_intent",
       "reason": "Shared-history portable scope gate: invitations, join links and identity bindings involve more than one person and hold hashed secrets; they are never restored from a portable copy. Full PostgreSQL recovery preserves this isolated schema."

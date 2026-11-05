@@ -2,6 +2,7 @@
 
 const crypto = require('node:crypto');
 const jwt = require('jsonwebtoken');
+const { SETTINGS, readPublicSettings } = require('./settings');
 
 const HOUR = 3600;
 const DAY = 86400;
@@ -13,8 +14,11 @@ const ROUTES = Object.freeze({
   ],
   rules: [{ bucket: 'rules', seconds: HOUR, limit: 30, env: 'SMS_V2_RULES_PER_HOUR' }],
   sync: [{ bucket: 'sync', seconds: HOUR, limit: 120, env: 'SMS_V2_SYNC_PER_HOUR' }],
-  'unknown-templates': [{ bucket: 'unknown-templates', seconds: DAY, limit: 50, env: 'SMS_V2_UNKNOWN_TEMPLATES_PER_DAY', items: true }],
-  corrections: [{ bucket: 'corrections', seconds: DAY, limit: 200, env: 'SMS_V2_CORRECTIONS_PER_DAY', items: true }],
+  // `setting` names the console setting that may lower or raise this limit; the
+  // environment value, when set, is its hard ceiling (see settings.js).
+  'unknown-templates': [{ bucket: 'unknown-templates', seconds: DAY, limit: 50, env: 'SMS_V2_UNKNOWN_TEMPLATES_PER_DAY', items: true, setting: 'templates_per_user_per_day' }],
+  corrections: [{ bucket: 'corrections', seconds: DAY, limit: 200, env: 'SMS_V2_CORRECTIONS_PER_DAY', items: true, setting: 'corrections_per_user_per_day' }],
+  'learning-signals': [{ bucket: 'learning-signals', seconds: DAY, limit: 500, env: 'SMS_V2_LEARNING_SIGNALS_PER_DAY', items: true, setting: 'signals_per_user_per_day' }],
   'rule-stats': [{ bucket: 'rule-stats', seconds: DAY, limit: 24, env: 'SMS_V2_RULE_STATS_PER_DAY' }],
 });
 
@@ -180,7 +184,7 @@ function defaultAccessTokenProvider() {
   return async () => auth.getAccessToken();
 }
 
-const DEFAULT_LIMITED_USE_ROUTES = 'unknown-templates,corrections,rule-stats';
+const DEFAULT_LIMITED_USE_ROUTES = 'unknown-templates,corrections,rule-stats,learning-signals';
 
 function deviceDigestOf(req) {
   const rawDevice = req.headers?.['x-sms-device-id'];
@@ -214,6 +218,11 @@ function createSecurity({
   fetchImpl,
   bindAttestation,
   consumeLimitedUse,
+  // Console-set values for the public keys (settings.js). Failing open to the
+  // built-in defaults keeps phones working if the settings table is unreadable.
+  readStoredSettings = req => withUserClient
+    ? withUserClient(req.userId, client => readPublicSettings(client))
+    : Promise.resolve({}),
 } = {}) {
   const mode = env.SMS_V2_ATTESTATION_MODE || 'monitor';
   if (!['monitor', 'enforce'].includes(mode)) throw new Error('sms_v2_attestation_mode_invalid');
@@ -237,7 +246,13 @@ function createSecurity({
     consumeToken = createLimitedUseConsumer({ projectNumber: env.SMS_V2_FIREBASE_PROJECT_NUMBER, getAccessToken: provider, fetchImpl });
   }
   const limits = Object.fromEntries(Object.entries(ROUTES).map(([route, specs]) =>
-    [route, specs.map(spec => ({ ...spec, limit: configuredLimit(env, spec) }))]));
+    [route, specs.map(spec => ({
+      ...spec,
+      limit: configuredLimit(env, spec),
+      // A console setting may not exceed the operator's environment value; with
+      // none set, the registry maximum applies.
+      ceiling: spec.setting && env[spec.env] === undefined ? SETTINGS[spec.setting].max : configuredLimit(env, spec),
+    }))]));
   const results = new WeakMap();
   const security = {
     async verifyAttestation(req) {
@@ -261,6 +276,10 @@ function createSecurity({
       const state = Object.freeze({ verified, sharedLearningEligible: verified, appId: claims?.appId || null });
       Object.defineProperty(req, 'smsV2Security', { value: state, configurable: true });
     },
+    // Stored console settings for the public keys; {} when unreadable.
+    async storedSettings(req) {
+      try { return (await readStoredSettings(req)) || {}; } catch { return {}; }
+    },
     async checkRate(req, route, units = 1) {
       if (!await security.verifyAttestation(req)) return false;
       const specs = limits[route];
@@ -273,11 +292,16 @@ function createSecurity({
         if (mode === 'enforce') return false;
       }
       const multiplier = req.smsV2Security.verified ? 1 : 0.5;
-      const checks = specs.map(spec => ({
-        bucket: spec.bucket, seconds: spec.seconds,
-        limit: Math.max(1, Math.floor(spec.limit * multiplier)),
-        units: spec.items ? units : 1,
-      }));
+      const stored = specs.some(spec => spec.setting) ? await security.storedSettings(req) : {};
+      const checks = specs.map(spec => {
+        const chosen = spec.setting && Number.isSafeInteger(stored[spec.setting]) && stored[spec.setting] >= 1
+          ? Math.min(stored[spec.setting], spec.ceiling) : spec.limit;
+        return {
+          bucket: spec.bucket, seconds: spec.seconds,
+          limit: Math.max(1, Math.floor(chosen * multiplier)),
+          units: spec.items ? units : 1,
+        };
+      });
       const result = await consume(req.userId, deviceDigestOf(req), checks);
       if (!result.allowed) req.res?.set('Retry-After', String(result.retryAfterSeconds));
       return result.allowed;

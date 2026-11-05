@@ -280,8 +280,11 @@ class AdminApi {
     String path, {
     Map<String, dynamic>? body,
   }) async {
-    if (!path.startsWith('/admin/sms/v2/') ||
-        !{'GET', 'POST', 'PUT'}.contains(method)) {
+    // DELETE exists only for removing a per-user limit override.
+    final allowed = method == 'DELETE'
+        ? path.startsWith('/admin/sms/v2/user-limits/')
+        : {'GET', 'POST', 'PUT'}.contains(method);
+    if (!path.startsWith('/admin/sms/v2/') || !allowed) {
       throw ArgumentError('Unsupported SMS v2 admin request');
     }
     final request = http.Request(method, Uri.parse('$apiBaseUrl$path'))

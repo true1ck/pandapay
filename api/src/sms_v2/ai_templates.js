@@ -4,6 +4,7 @@ const { validateRequest } = require("./contracts");
 const { createRequireSmsV2 } = require("./guard");
 const { createPgStore } = require("./rules_store");
 const { saveDraft, HttpError } = require("./rules_admin_route");
+const { intakeOpen } = require("./settings");
 
 const MAX_BODY = 20000;
 const UNREDACTED =
@@ -76,6 +77,12 @@ function createTemplateHandler({ store, security }) {
         return res.status(400).json({ error: error || "sender_brand_invalid" });
     }
     try {
+      // An admin can pause all intake from the console (setting intake_enabled).
+      // Phones keep their outbox and try again later.
+      if (!(await intakeOpen(security, req))) {
+        res.set("Retry-After", "3600");
+        return res.status(503).json({ error: "learning_paused" });
+      }
       if (denied(await security.verifyAttestation(req)))
         return res.status(403).json({ error: "attestation_required" });
       if (
