@@ -124,7 +124,8 @@ void main() {
       return target;
     }
 
-    // A purchase that was never refunded, so category totals must move.
+    // A purchase that was never refunded, so category totals must move. A
+    // foreign-only purchase has no ledger row and so no category: not eligible.
     final refunded = {
       for (final e in events)
         if (e.type == EventType.refund)
@@ -136,7 +137,8 @@ void main() {
           e.type == EventType.purchase &&
           !refunded.contains(e.eventId) &&
           e.eventId != purchase.eventId &&
-          category(before, e.eventId) != 'other' &&
+          ((before['categories'] as Map)[e.eventId] as String? ?? 'other') !=
+              'other' &&
           android.facts.get(e.eventId)?.counterparty?.name !=
               android.facts.get(purchase.eventId)?.counterparty?.name,
     );

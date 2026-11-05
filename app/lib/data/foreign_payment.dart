@@ -60,6 +60,13 @@ class ForeignPayment {
     this.syncError,
   });
 
+  /// The category the SMS bridge gives a foreign ATM or cash withdrawal. It
+  /// also keeps a withdrawal and a purchase of the same amount apart when an
+  /// earlier alert is settled by a later one.
+  static const cashWithdrawalCategory = 'Cash withdrawal';
+
+  bool get isCashWithdrawal => categoryName == cashWithdrawalCategory;
+
   bool get isConfirmed => valuationStatus == 'confirmed';
   bool get isIgnored => valuationStatus == 'ignored';
   bool get isPending => !isConfirmed && !isIgnored;

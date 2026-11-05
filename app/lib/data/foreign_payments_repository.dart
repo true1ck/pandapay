@@ -110,7 +110,8 @@ final _uuid = RegExp(
 ///
 /// A pair matches only on exact evidence: the same direction, currency and
 /// original amount, the same card (saved card, else last four digits, else the
-/// same merchant when neither names a card) and within [window]. A record that
+/// same merchant when neither names a card), both cash withdrawals or both
+/// not, and within [window]. A record that
 /// the user edited is left alone. A weak match, where one record could settle
 /// with several, is not made. Synchronous like [captureLocalForeignPayment].
 /// Returns how many records were settled.
@@ -162,6 +163,7 @@ int settleAwaitingForeignPayments(
       a.direction == b.direction &&
       a.originalCurrency == b.originalCurrency &&
       a.originalAmount == b.originalAmount &&
+      a.isCashWithdrawal == b.isCashWithdrawal &&
       a.occurredAt.difference(b.occurredAt).abs() <= window &&
       sameCard(a, b);
 

@@ -20,6 +20,12 @@ import '../../../data/local/app_database.dart';
 ///   when the message named none (`awaiting_amount`). It is never an INR amount
 ///   and never touches card, reward or cap state.
 ///
+/// Purchases (card, prepaid card or bank account), ATM cash withdrawals
+/// (category [ForeignPayment.cashWithdrawalCategory]) and refunds or reversals
+/// are recorded. A fee is not: it is INR spend in the ledger, and its original
+/// is the transaction it was charged on (CCR-005), not a price of its own. An
+/// EMI conversion notice is ignored by the rules and never reaches here.
+///
 /// Idempotent by source key: re-processing a message never adds a row or
 /// changes a row the user edited. Synchronous, so it runs in the pipeline's
 /// own savepoint. Raw SMS text never enters the table or its outbox.
@@ -59,8 +65,11 @@ class ForeignPaymentBridge {
 
   ForeignPayment? _paymentFor(v2.MovementFact fact, {v2.Instrument? instrument}) {
     if (!_sourceKey.hasMatch(fact.sourceKey)) return null;
-    final spend = fact.purpose == v2.MovementPurpose.purchase &&
+    final cash = fact.purpose == v2.MovementPurpose.atm &&
         fact.direction == v2.Direction.debit;
+    final spend = cash ||
+        fact.purpose == v2.MovementPurpose.purchase &&
+            fact.direction == v2.Direction.debit;
     final refund = fact.direction == v2.Direction.credit &&
         (fact.purpose == v2.MovementPurpose.refund ||
             fact.purpose == v2.MovementPurpose.reversal);
@@ -107,11 +116,11 @@ class ForeignPaymentBridge {
       originalCurrency: currency,
       originalAmount: amount,
       occurredAt: fact.effectiveAt,
-      merchantName: fact.counterparty?.name,
+      merchantName: fact.counterparty?.name ?? (cash ? 'ATM withdrawal' : null),
       cardLast4: card ? last4 : null,
       accountLast4: account ? last4 : null,
       userCardId: userCardId,
-      categoryName: 'Other',
+      categoryName: cash ? ForeignPayment.cashWithdrawalCategory : 'Other',
       valuationStatus: tx != null
           ? 'confirmed'
           : known
