@@ -35,6 +35,8 @@ const SOURCE_RAIL = {
 
 const V1_POINT_BLOCKS = { 100: 'points_per_100', 150: 'points_per_150', 200: 'points_per_200' };
 const DATE = /^\d{4}-\d{2}-\d{2}$/;
+const USER_ATTRIBUTE_KEY = /(membership|tier|prime|neon|selected_plan|plan$|pack|variant|relationship|customer_segment|salary|premier)/i;
+const ROLES = new Set(['base', 'earn', 'exclusion', 'info']);
 const BRANDISH = /(paytm|amazon|flipkart|smartbuy|phonepe|swiggy|zomato|tata|reliance|samsung|apple|kiwi|myntra|irctc|indigo|uber|ola|lic|hpcl|bpcl|indianoil|iocl|jio|airtel|partner|select|preferred|exclusive|promoted|accelerated|brand)/;
 
 function categoryKey(s) {
@@ -185,6 +187,12 @@ function transformRule(src, idx, ctx) {
     // D8(b): "up to 10X" is several rates folded into one.
     info.push('up_to_rate');
   }
+
+  // D13(d): an override may set rule_role on the source rule. `info` always
+  // wins; another role is honoured only if the rule maps cleanly (forcing
+  // `earn` onto a rule we couldn't restrict would widen it).
+  const forcedRole = ROLES.has(String(src?.rule_role || '')) ? String(src.rule_role) : null;
+  if (forcedRole === 'info') info.push('override_rule_role');
 
   // 1. Start from the token's parts.
   let parts;
@@ -434,6 +442,9 @@ function transformRule(src, idx, ctx) {
       continue;
     }
     info.push(`condition:${b.key}`);
+    // D13(b): terms that depend on who the cardholder is (tier, paid
+    // membership) are deferred, never guessed.
+    if (USER_ATTRIBUTE_KEY.test(b.key)) flags.push('depends_on_user_attribute');
   }
 
   // 10. Amounts, MCCs, excluded categories.
@@ -497,7 +508,8 @@ function transformRule(src, idx, ctx) {
     }
     const rowIsInfo = rowInfo.length > 0;
     let role;
-    if (rowIsInfo) role = 'info';
+    if (forcedRole && forcedRole !== 'info' && !rowIsInfo) role = forcedRole;
+    else if (rowIsInfo) role = 'info';
     else if (isExclusion) role = 'exclusion';
     else if (!isAccelerator && !restricted) role = 'base';
     else role = 'earn';

@@ -27,6 +27,7 @@ const PERIOD = {
   calendar_month: { period: 'calendar_month', anchor: 'calendar_year' },
   month: { period: 'calendar_month', anchor: 'calendar_year' },
   statement_cycle: { period: 'statement_cycle', anchor: 'statement_cycle' },
+  statement_cycle_quarter: { period: 'quarter', anchor: 'calendar_year', approximated: true },
   lifetime: { period: 'lifetime', anchor: 'card_anniversary' },
 };
 
@@ -96,6 +97,7 @@ function transformMilestones(record) {
       spec = { period: 'lifetime', anchor: 'card_anniversary' };
     }
     if (!spec) return flag('unsupported_milestone', `unknown period ${m?.period}`);
+    if (spec.approximated) flag('period_approximated', m?.period);
 
     let label = typeof m?.label === 'string' && m.label.trim() ? m.label.trim() : `₹${rewardValue} at ₹${threshold} spend`;
     if (usedLabels.has(label)) label = `${label} (${sourceId})`;

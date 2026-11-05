@@ -8,6 +8,7 @@ const { resolveCategoryToken } = require('./category_tokens');
 
 const PERIOD = {
   statement_cycle: { period: 'statement_cycle' },
+  statement_cycle_quarter: { period: 'quarter', approximated: true },
   calendar_month: { period: 'calendar_month' },
   month: { period: 'calendar_month' },
   monthly: { period: 'calendar_month' },
@@ -38,6 +39,7 @@ const POST_LIMIT = {
   no_cashback: 'zero',
 };
 
+const USER_DEPENDENT = /(credit[_\s-]?limit|of[_\s-]?limit|limit[_\s-]?based|tier|relationship|salary)/;
 const REDEMPTION_CAP = /(redemption|redeem|statement_credit|cash_redemption|cashback_redemption|travel_redemption|voucher_redemption|lounge)/;
 const CARD_AGE_TIER = /(first[_-]?\d+[_-]?months?|after[_-]?\d+[_-]?months?|card[_-]?age|months?[_-]?(from|after)[_-]?(issu|open|activation)|initial[_-]?\d+[_-]?months?)/;
 
@@ -138,7 +140,14 @@ function transformCaps(record, rules, ctx) {
     }
 
     const capAmount = asNumber(firstDefined(c.limit_value, c.limit_value_inr, c.cap_limit));
-    if (capAmount === null || capAmount <= 0) return skip('missing_cap_value');
+    // D13(a): an amount that depends on the cardholder (a share of the credit
+    // limit, a tier) is kept with a null amount; engines skip it.
+    const userDependent = capAmount === null && (
+      c.depends_on_user === true ||
+      USER_DEPENDENT.test(`${sourceId} ${categoryToken} ${[c.limit_value, c.limit_value_inr, c.cap_limit].filter((v) => typeof v === 'string').join(' ')}`.toLowerCase())
+    );
+    if (userDependent) flags.push('cap_depends_on_user');
+    else if (capAmount === null || capAmount <= 0) return skip('missing_cap_value');
 
     if (ageTiered.has(sourceId)) {
       const steady = sourceCaps.some((other) => {
@@ -163,6 +172,7 @@ function transformCaps(record, rules, ctx) {
       flags.push('cap_period_defaulted');
     }
     if (periodSpec.unenforced) flags.push('unenforced_period');
+    if (periodSpec.approximated) flags.push('period_approximated');
 
     const isTotal = capKind.startsWith('total_');
     const isBonus = capKind.startsWith('bonus_');
@@ -190,7 +200,7 @@ function transformCaps(record, rules, ctx) {
     if (!targets.length && !categorySlug && scope !== 'card') flags.push('orphan_cap');
     if (targets.length && targets.every((r) => r.rule_role === 'info')) flags.push('cap_targets_info_only');
 
-    if (capKind === 'eligible_spend' && capAmount <= 5000 &&
+    if (capKind === 'eligible_spend' && capAmount !== null && capAmount <= 5000 &&
         targets.some((r) => r.unit === 'cashback_percent' && Number(r.rate) >= 5)) {
       flags.push('suspect_cap_unit');
     }
@@ -201,7 +211,12 @@ function transformCaps(record, rules, ctx) {
     let capValue;
     let postCapRate;
     let v1Blocked = false;
-    if (isBonus || isTotal) {
+    if (capAmount === null) {
+      measure = isBonus || isTotal ? 'reward_value' : capKind === 'eligible_spend' ? 'spend_amount' : 'txn_count';
+      capValue = 0;
+      postCapRate = null;
+      v1Blocked = true;
+    } else if (isBonus || isTotal) {
       measure = 'reward_value';
       if (capKind.endsWith('_cashback')) capValue = capAmount;
       else if (pointValue !== null && pointValue > 0) capValue = Math.round(capAmount * pointValue * 100) / 100;
@@ -222,9 +237,9 @@ function transformCaps(record, rules, ctx) {
     if (periodSpec.unenforced) v2Reasons.push('day_period');
     if (targetKeys.length > 1) v2Reasons.push('multi_target');
     if (targets.some((r) => r.min_engine_version === 2 || r.rule_role === 'info')) v2Reasons.push('target_v2_only');
-    if (v1Blocked) v2Reasons.push('no_point_value');
+    if (v1Blocked) v2Reasons.push(capAmount === null ? 'amount_depends_on_user' : 'no_point_value');
 
-    const enforced = !periodSpec.unenforced &&
+    const enforced = !periodSpec.unenforced && capAmount !== null &&
       (scope === 'card' || Boolean(categorySlug) || targets.some((r) => r.rule_role !== 'info'));
 
     const cap = {
