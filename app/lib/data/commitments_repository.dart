@@ -2,9 +2,11 @@ import 'dart:convert';
 import 'package:flutter/material.dart';
 import 'package:pandapay_domain/pandapay_domain.dart';
 import 'package:shared_preferences/shared_preferences.dart';
+import 'package:uuid/uuid.dart';
 
 import '../app/design/app_theme.dart';
 import 'local/app_database.dart';
+import 'local/sync_queue.dart';
 
 enum CommitmentCategory {
   utility,
@@ -526,6 +528,16 @@ class Commitment {
   }
 }
 
+/// The id the server uses for a bill. Local ids are free-form strings
+/// (`manual-` plus a timestamp), the server wants a UUID, so the UUID is derived from
+/// the local id. The same bill gets the same id on every phone.
+String commitmentSyncId(String localId) => const Uuid().v5(
+  '6ba7b812-9dad-11d1-80b4-00c04fd430c8',
+  'pandapay.commitment:$localId',
+);
+
+const commitmentSyncEntity = 'user_commitments';
+
 const _commitmentsStorageKey = 'pandapay_app.commitments_v1';
 
 /// Offline-first repository for bills and commitments.
@@ -534,7 +546,15 @@ class CommitmentsRepository {
   final String namespace;
   final Future<AppDatabase> Function()? loadDatabase;
 
-  CommitmentsRepository({this.namespace = 'legacy', this.loadDatabase});
+  /// When set, every change a person makes to a bill is also queued for the
+  /// server, so bills survive a sign-out and move to a new phone.
+  final Future<SyncQueue?> Function()? loadSyncQueue;
+
+  CommitmentsRepository({
+    this.namespace = 'legacy',
+    this.loadDatabase,
+    this.loadSyncQueue,
+  });
 
   Future<SharedPreferences> get _prefs => SharedPreferences.getInstance();
 
@@ -675,10 +695,20 @@ class CommitmentsRepository {
     if (loadDatabase != null) {
       final db = await _database();
       if (db != null) {
+        final existed = db.db.select(
+          'SELECT 1 FROM local_commitments WHERE namespace = ? AND id = ?',
+          [namespace, id],
+        ).isNotEmpty;
         db.db.execute(
           'DELETE FROM local_commitments WHERE namespace = ? AND id = ?',
           [namespace, id],
         );
+        if (existed) {
+          (await _syncQueue())?.enqueueDelete(
+            entity: commitmentSyncEntity,
+            entityId: commitmentSyncId(id),
+          );
+        }
         return;
       }
     }
@@ -700,20 +730,103 @@ class CommitmentsRepository {
     await _persist(updated);
   }
 
+  Future<SyncQueue?> _syncQueue() async => loadSyncQueue?.call();
+
+  /// Queues what changed between [before] and [after] for the server.
+  Future<void> _queueChanges(
+    List<Commitment> before,
+    List<Commitment> after,
+  ) async {
+    final queue = await _syncQueue();
+    if (queue == null) return;
+    final previous = {for (final c in before) c.id: jsonEncode(c.toJson())};
+    for (final item in after) {
+      final json = item.toJson();
+      final old = previous[item.id];
+      if (old == null) {
+        queue.enqueueInsert(
+          entity: commitmentSyncEntity,
+          entityId: commitmentSyncId(item.id),
+          fields: json,
+        );
+      } else if (old != jsonEncode(json)) {
+        queue.enqueueUpdate(
+          entity: commitmentSyncEntity,
+          entityId: commitmentSyncId(item.id),
+          fields: json,
+        );
+      }
+    }
+    final kept = {for (final c in after) c.id};
+    for (final c in before) {
+      if (!kept.contains(c.id)) {
+        queue.enqueueDelete(
+          entity: commitmentSyncEntity,
+          entityId: commitmentSyncId(c.id),
+        );
+      }
+    }
+  }
+
+  /// Applies bills pulled from the person's other phones. Writes straight to
+  /// local storage so nothing is queued back to the server. A document that
+  /// cannot be read is skipped rather than failing the whole sync.
+  Future<void> applyRemote(List<Map<String, dynamic>> changes) async {
+    final db = await _database();
+    if (db == null) return;
+    for (final change in changes) {
+      if (change['entity'] != commitmentSyncEntity) continue;
+      final syncId = change['entity_id'];
+      final op = change['op'];
+      if (syncId is! String) continue;
+      if (op == 'delete') {
+        final rows = db.db.select(
+          'SELECT id FROM local_commitments WHERE namespace = ?',
+          [namespace],
+        );
+        for (final row in rows) {
+          final localId = row['id'] as String;
+          if (commitmentSyncId(localId) == syncId) {
+            db.db.execute(
+              'DELETE FROM local_commitments WHERE namespace = ? AND id = ?',
+              [namespace, localId],
+            );
+          }
+        }
+        continue;
+      }
+      final payload = change['payload'];
+      if (payload is! Map) continue;
+      try {
+        final commitment = Commitment.fromJson(
+          Map<String, dynamic>.from(payload),
+        );
+        if (commitmentSyncId(commitment.id) != syncId) continue;
+        db.db.execute(
+          'INSERT OR REPLACE INTO local_commitments VALUES (?, ?, ?)',
+          [namespace, commitment.id, jsonEncode(commitment.toJson())],
+        );
+      } catch (_) {
+        continue;
+      }
+    }
+  }
+
   Future<void> _persist(List<Commitment> items) async {
     if (loadDatabase != null) {
       final db = await _database();
       if (db != null) {
-        db.db.execute(
-          'DELETE FROM local_commitments WHERE namespace = ?',
-          [namespace],
-        );
+        final before = await fetchAll();
+        db.db.execute('DELETE FROM local_commitments WHERE namespace = ?', [
+          namespace,
+        ]);
         for (final item in items) {
           db.db.execute(
             'INSERT OR REPLACE INTO local_commitments VALUES (?, ?, ?)',
             [namespace, item.id, jsonEncode(item.toJson())],
           );
         }
+        await _queueChanges(before, items);
         return;
       }
     }

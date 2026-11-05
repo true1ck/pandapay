@@ -613,6 +613,10 @@
       "disposition": "platform_ops",
       "reason": "Platform workflow, rate-limit, worker, or operator-control state; not part of the account-scoped portable export."
     },
+    "user_commitments": {
+      "disposition": "exported_v1",
+      "section": "user_commitments"
+    },
     "user_merchant_category_rules": {
       "disposition": "exported_v1",
       "section": "user_merchant_category_rules"

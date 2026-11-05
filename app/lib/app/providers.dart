@@ -1172,6 +1172,9 @@ final commitmentsRepositoryProvider = Provider<CommitmentsRepository>((ref) {
     namespace: ns,
     loadDatabase: () async =>
         (await ref.watch(responseCacheProvider.future)).financialStore.database,
+    loadSyncQueue: () async => ns == 'signed-out'
+        ? null
+        : await ref.read(syncQueueProvider.future),
   );
 });
 

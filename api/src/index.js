@@ -1295,6 +1295,32 @@ app.post('/sync/push', requireAuth, async (req, res) => {
             });
             continue;
           }
+          if (entity === 'user_commitments') {
+            const billResult = await client.query(
+              `SELECT out_applied, out_conflicts, out_reason
+                 FROM pandapay.sync_apply_user_commitment(
+                   $1, $2, $3, $4, $5::jsonb, $6
+                 )`,
+              [
+                req.userId,
+                deviceId,
+                entityId,
+                op,
+                JSON.stringify(payload || {}),
+                Number.isFinite(clientSeq) ? clientSeq : 0,
+              ],
+            );
+            const billRow = billResult.rows[0];
+            await client.query('RELEASE SAVEPOINT sync_item');
+            out.push({
+              clientSeq: clientSeq ?? null,
+              entityId,
+              applied: billRow.out_applied,
+              conflicts: billRow.out_conflicts,
+              reason: billRow.out_reason,
+            });
+            continue;
+          }
           if (entity === 'user_merchant_category_rules') {
             const ruleResult = await client.query(
               `SELECT out_applied, out_conflicts, out_reason

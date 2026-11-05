@@ -16,6 +16,7 @@ import '../../data/sync_transaction_delta.dart';
 import 'split_sync.dart';
 import '../../data/local/financial_store.dart';
 import '../../data/local/self_transfer_rules.dart';
+import '../../data/commitments_repository.dart';
 import '../../data/user_categories_repository.dart';
 import '../../data/portable_backup/account_recovery_operation_gate.dart';
 import 'dart:convert';
@@ -319,6 +320,7 @@ class SyncEngine {
     var since = queue.lastServerSeq;
     final entities = <String>{};
     final transactionChanges = <Map<String, dynamic>>[];
+    final commitmentChanges = <Map<String, dynamic>>[];
     final namespace = queue.namespace;
     final sessionToken = _ref.read(accessTokenProvider);
     bool isCurrent() =>
@@ -348,6 +350,9 @@ class SyncEngine {
       transactionChanges.addAll(
         batch.changes.where((c) => c['entity'] == 'transactions'),
       );
+      commitmentChanges.addAll(
+        batch.changes.where((c) => c['entity'] == commitmentSyncEntity),
+      );
       since = batch.latestServerSeq;
       totalPulled += batch.changes.length;
       _pullHasMore = batch.hasMore;
@@ -369,6 +374,14 @@ class SyncEngine {
       // Other entity snapshots retain their existing authoritative path.
       await _materialize(api, entities.difference({'transactions'}), queue);
       if (!isCurrent()) throw StateError('Account changed during sync');
+      // Bills arrive complete in the change itself, so there is nothing to
+      // fetch. Applied before the cursor moves, like every other entity.
+      if (commitmentChanges.isNotEmpty) {
+        await _ref
+            .read(commitmentsRepositoryProvider)
+            .applyRemote(commitmentChanges);
+        if (!isCurrent()) throw StateError('Account changed during sync');
+      }
       final cache = await _ref.read(responseCacheProvider.future);
       if (!isCurrent()) throw StateError('Account changed during sync');
       cache.financialStore.commitTransactionDelta(
@@ -482,6 +495,9 @@ class SyncEngine {
     }
     if (entities.contains('user_categories')) {
       _ref.invalidate(categoriesProvider);
+    }
+    if (entities.contains(commitmentSyncEntity)) {
+      _ref.invalidate(commitmentsProvider);
     }
     // The ranking depends on all three, so it is refreshed whenever any of
     // them moved rather than being enumerated per entity.
