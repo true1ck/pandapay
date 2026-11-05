@@ -39,6 +39,7 @@ const DEFAULT_EXAMPLES_DIR = path.join(REPO, 'db/fixtures/card_worked_examples')
 const DEFAULT_OUT_DIR = path.join(REPO, 'db/fixtures/catalogue_v2_cards');
 const DEFAULT_PIPELINE = path.resolve(REPO, '../CardPipeline');
 const DIRECTORY_FILE = '_directory.json';
+const PROBES_FILE = '_probes.json';
 
 function sha256(text) {
   return crypto.createHash('sha256').update(text).digest('hex');
@@ -73,13 +74,19 @@ function parseArgs(argv) {
   return args;
 }
 
-function exampleSlugs(examplesDir) {
-  return fs
+/**
+ * Cards to snapshot: every worked-example card, plus the cards in
+ * <out-dir>/_probes.json (cards WP7 changed by override that have no worked
+ * examples; their probes are checked by the same harnesses).
+ */
+function exampleSlugs(examplesDir, outDir) {
+  const fromExamples = fs
     .readdirSync(examplesDir)
     .filter((f) => f.endsWith('.json'))
-    .map((f) => JSON.parse(fs.readFileSync(path.join(examplesDir, f), 'utf8')).source_slug)
-    .filter(Boolean)
-    .sort();
+    .map((f) => JSON.parse(fs.readFileSync(path.join(examplesDir, f), 'utf8')).source_slug);
+  const probesFile = path.join(outDir, PROBES_FILE);
+  const fromProbes = fs.existsSync(probesFile) ? Object.keys(JSON.parse(fs.readFileSync(probesFile, 'utf8')).cards || {}) : [];
+  return [...new Set([...fromExamples, ...fromProbes])].filter(Boolean).sort();
 }
 
 /**
@@ -141,7 +148,7 @@ function run(args) {
   const directory = JSON.parse(directoryText);
   const index = buildDirectoryIndex(directory);
   const verifiedSlugs = loadVerifiedSlugs(args.overridesDir);
-  const wanted = args.slugs.length ? args.slugs : exampleSlugs(args.examplesDir);
+  const wanted = args.slugs.length ? args.slugs : exampleSlugs(args.examplesDir, args.outDir);
   const { records, problems } = loadDoneRecords(args.pipeline);
   const bySlug = new Map();
   for (const r of records) if (!bySlug.has(r.sourceSlug)) bySlug.set(r.sourceSlug, r.record);
@@ -198,4 +205,4 @@ if (require.main === module) {
   }
 }
 
-module.exports = { DIRECTORY_FILE, buildSnapshot, fileSha256, run, sha256 };
+module.exports = { DIRECTORY_FILE, PROBES_FILE, buildSnapshot, fileSha256, run, sha256 };

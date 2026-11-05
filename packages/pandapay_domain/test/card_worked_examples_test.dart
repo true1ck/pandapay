@@ -338,4 +338,25 @@ void main() {
       }
     });
   }
+
+  // WP7 probes (catalogue_v2_cards/_probes.json): cards changed by a WP7
+  // override with no worked-examples file; checked like examples.
+  final probes = (_readJson('$_snapshotDir/_probes.json')['cards'] as Map)
+      .cast<String, dynamic>();
+  for (final entry in probes.entries) {
+    final slug = entry.key;
+    final wireCard =
+        (_readJson('$_snapshotDir/$slug.json')['card']) as Map<String, dynamic>;
+    final card = CardProductJson.fromJson(wireCard);
+    group('probe $slug', () {
+      for (final example
+          in ((entry.value as Map)['examples'] as List)
+              .cast<Map<String, dynamic>>()) {
+        test('$slug#${example['id']} ${example['title']}', () {
+          final problems = _check(wireCard, card, example, directory);
+          expect(problems, isEmpty, reason: '${example['why']}');
+        });
+      }
+    });
+  }
 }

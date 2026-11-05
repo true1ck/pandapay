@@ -32,6 +32,31 @@
       "reason": "WP7: Restates the cap's post-limit behaviour (base 2 Miles above Rs2,00,000), which travel-accelerated-monthly-spend-cap already models (base_rate); as an info rule it only blocked verification.",
       "source_url": "https://www.axis.bank.in/docs/default-source/atlas-credit-card/terms-and-conditions-of-features-of-axis-bank-atlas-credit-card.pdf",
       "checked_on": "2026-11-05"
+    },
+    {
+      "path": "reward_rules",
+      "op": "append",
+      "value": {
+        "id": "wp7_emi_rail_exclusion",
+        "category_id": "all_retail",
+        "priority": 0,
+        "evaluation_type": "exclusion",
+        "rail": "emi",
+        "channel_type": "all",
+        "conditions": {},
+        "action": {
+          "multiplier": 0,
+          "points_per_block": 0,
+          "cashback_percent": null,
+          "cap_reference": null,
+          "reason": "EMI transactions keep no EDGE Miles."
+        },
+        "effective_from": "2024-04-20",
+        "effective_to": null
+      },
+      "reason": "WP7: D29a: the record's Axis reward-ledger terms say \"EDGE Miles are debited when a credit-card transaction is converted to EMI; cancellation of the EMI does not restore the miles\". A debit-on-EMI clause counts as an EMI exclusion (D28c): rail-EMI exclusion on all spend. Atlas had no EMI row.",
+      "source_url": "https://www.axis.bank.in/docs/default-source/atlas-credit-card/terms-and-conditions-of-features-of-axis-bank-atlas-credit-card.pdf",
+      "checked_on": "2026-11-05"
     }
   ]
 }

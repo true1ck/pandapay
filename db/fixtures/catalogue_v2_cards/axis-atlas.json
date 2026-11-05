@@ -4,7 +4,7 @@
   "inputs": {
     "transform_version": "7",
     "source_record_sha256": "b678481535d322a425536c51fa71943d3e8bf2d8897bfed9e46d55163be46bd0",
-    "override_sha256": "33b860da0c7ea1b11a6e11016e49475173e60bbca6d626aad8e30847cec04f3b",
+    "override_sha256": "5a40799e812b0021ed41bf135b928e84cb840328db49da8c50906fe9b01ff401",
     "directory_sha256": "b1094d54b77e848d22f7a9a64f3ae6d1ef43ca3eb2fc8e40cd43ed1994664694",
     "verified": true
   },
@@ -25,8 +25,8 @@
     "points_expiry_months": null,
     "model_status": "verified",
     "model_coverage": {
-      "rules_total": 10,
-      "rules_modelled": 10,
+      "rules_total": 11,
+      "rules_modelled": 11,
       "rules_info": 0,
       "caps_total": 1,
       "caps_enforced": 1,
@@ -91,6 +91,14 @@
           "op": "remove",
           "value_sha256": "74234e98afe7498f",
           "reason": "WP7: Restates the cap's post-limit behaviour (base 2 Miles above Rs2,00,000), which travel-accelerated-monthly-spend-cap already models (base_rate); as an info rule it only blocked verification.",
+          "source_url": "https://www.axis.bank.in/docs/default-source/atlas-credit-card/terms-and-conditions-of-features-of-axis-bank-atlas-credit-card.pdf",
+          "checked_on": "2026-11-05"
+        },
+        {
+          "path": "reward_rules",
+          "op": "append",
+          "value_sha256": "6e5820d5438e4e97",
+          "reason": "WP7: D29a: the record's Axis reward-ledger terms say \"EDGE Miles are debited when a credit-card transaction is converted to EMI; cancellation of the EMI does not restore the miles\". A debit-on-EMI clause counts as an EMI exclusion (D28c): rail-EMI exclusion on all spend. Atlas had no EMI row.",
           "source_url": "https://www.axis.bank.in/docs/default-source/atlas-credit-card/terms-and-conditions-of-features-of-axis-bank-atlas-credit-card.pdf",
           "checked_on": "2026-11-05"
         }
@@ -1637,6 +1645,40 @@
         "max_engine_version": null,
         "source_local_id": "travel-edge-portal",
         "display_note": "5 EDGE Miles per Rs100 on Axis Bank Travel EDGE bookings, up to Rs2,00,000 cumulative travel spend per month."
+      },
+      {
+        "id": "axis-atlas:rule:wp7_emi_rail_exclusion",
+        "category_id": null,
+        "category_slug": null,
+        "merchant_pattern": null,
+        "rail": "emi",
+        "unit": "points_per_100",
+        "rate": 0,
+        "min_txn_inr": null,
+        "max_txn_inr": null,
+        "priority": 0,
+        "conditions": {
+          "source_local_id": "wp7_emi_rail_exclusion",
+          "part": null,
+          "info_reasons": [],
+          "flags": []
+        },
+        "notes": null,
+        "effective_from": "2024-04-20",
+        "effective_to": null,
+        "excluded_categories": [],
+        "rule_role": "exclusion",
+        "merchant_slugs": [],
+        "platform_slugs": [],
+        "mcc_include": [],
+        "mcc_exclude": [],
+        "except_merchant_slugs": [],
+        "except_platform_slugs": [],
+        "block_inr": null,
+        "min_engine_version": 2,
+        "max_engine_version": null,
+        "source_local_id": "wp7_emi_rail_exclusion",
+        "display_note": "EMI transactions keep no EDGE Miles."
       }
     ],
     "cap_rules": [

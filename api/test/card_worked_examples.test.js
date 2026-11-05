@@ -49,6 +49,10 @@ const examplesBySlug = new Map(exampleFiles.map((f) => {
   const doc = readJson(path.join(EXAMPLES_DIR, f));
   return [doc.source_slug, doc];
 }));
+// WP7 probes (catalogue_v2_cards/_probes.json): cards changed by a WP7 override
+// with no worked-examples file. Checked like examples; never verified.
+const probesBySlug = new Map(Object.entries(readJson(path.join(SNAPSHOT_DIR, '_probes.json')).cards)
+  .map(([slug, doc]) => [slug, { source_slug: slug, ...doc }]));
 const directoryFile = readJson(path.join(SNAPSHOT_DIR, '_directory.json'));
 const directory = { merchants: directoryFile.merchants, platforms: directoryFile.platforms };
 const knownFailures = readJson(path.join(SNAPSHOT_DIR, '_known_failures.json')).failures;
@@ -183,7 +187,7 @@ test('every worked-example card has a current snapshot', () => {
   const directoryHash = sha256(DIRECTORY_FILE);
   assert.strictEqual(directoryFile.directory_sha256, directoryHash,
     'catalogue_v2_cards/_directory.json is stale: run node api/scripts/catalogue_v2/snapshot_examples.js');
-  for (const slug of examplesBySlug.keys()) {
+  for (const slug of [...examplesBySlug.keys(), ...probesBySlug.keys()]) {
     const snap = snapshotFor(slug);
     assert.ok(snap, `no snapshot for ${slug}: run node api/scripts/catalogue_v2/snapshot_examples.js`);
     const stale = `${slug} snapshot is stale: run node api/scripts/catalogue_v2/snapshot_examples.js`;
@@ -246,6 +250,18 @@ for (const [slug, doc] of examplesBySlug) {
       assert.ok(snap, `no snapshot for ${slug}`);
       const problems = checkExample(snap.card, example);
       assert.deepStrictEqual(problems, [], `${key}: ${example.why}`);
+    });
+  }
+}
+
+for (const [slug, doc] of probesBySlug) {
+  assert.ok(!examplesBySlug.has(slug), `${slug}: has worked examples, so it is not a probe card`);
+  assert.ok(!verifiedSlugs.has(slug), `${slug}: a probe card is never verified`);
+  for (const example of doc.examples) {
+    test(`probe ${slug}#${example.id} ${example.title}`, () => {
+      const snap = snapshotFor(slug);
+      assert.ok(snap, `no snapshot for ${slug}`);
+      assert.deepStrictEqual(checkExample(snap.card, example), [], `${slug}#${example.id}: ${example.why}`);
     });
   }
 }
