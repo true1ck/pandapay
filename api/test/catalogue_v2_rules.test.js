@@ -1370,6 +1370,20 @@ test('D20d MCCs of one or two digits are dropped and flagged; an exclusion left 
 
 // ── C8 D13: terms that depend on the cardholder; override conventions ───
 
+test('D20b an "exclusion" stating a rate above base is info with a flag, not an earning rule', () => {
+  const r = run(pointsCard([
+    rule({ id: 'accel', category_id: 'dining', priority: 10, action: { points_per_block: 20 } }),
+    rule({ id: 'odd_carve', category_id: 'dining', evaluation_type: 'exclusion', priority: 50, conditions: { merchant: 'Amazon' },
+      action: { points_per_block: 5, reason: 'The 10X accelerator does not apply here; spends earn 5 points per Rs 100.' } }),
+    rule({ id: 'base_carve', category_id: 'dining', evaluation_type: 'exclusion', priority: 51, conditions: { merchant: 'Flipkart' },
+      action: { points_per_block: 2, reason: 'The 10X accelerator does not apply here; spends earn the base rate.' } }),
+  ]));
+  const [odd] = only(r, 'odd_carve');
+  assert.equal(odd.rule_role, 'info');
+  assert.ok(odd.flags.includes('exclusion_rate_above_base'));
+  assert.ok(only(r, 'base_carve').every((x) => x.rule_role === 'earn' && x.rate === 2));
+});
+
 test('D20d an earning rule whose MCC list is all malformed is info, never category-only', () => {
   const r = run(pointsCard([
     rule({ id: 'dining_bad_mcc', category_id: 'dining', conditions: { mcc_list: [58, 12] }, action: { points_per_block: 10 } }),

@@ -296,6 +296,12 @@ function transformRule(src, idx, ctx) {
   const isReduced = !isExclusion && ur.rate !== null && ur.currency && ur.currency === ctx.card.baseCurrency &&
     ruleEarn !== null && ctx.card.baseEarnPerRupee != null && ruleEarn < ctx.card.baseEarnPerRupee - 1e-12;
 
+  // D20b: a carve-out pays at or below base. An "exclusion" stating a rate
+  // above base contradicts itself: info, flagged for review.
+  if (isCarveOut && aboveBase(ur, ctx.card)) {
+    info.push('exclusion_rate_above_base');
+    flags.push('exclusion_rate_above_base');
+  }
   if (!isExclusion && rewardRuleHasUnsupportedTrigger(src)) info.push('unsupported_trigger');
   if (!isExclusion && statesUpToRate(src?.action?.reason)) {
     // D8(b): "up to 10X" is several rates folded into one.
