@@ -1081,6 +1081,15 @@ test('D19f caps on benefits (lounge, golf, concierge, cover, movie-ticket counts
   assert.equal(r.coverage.capsSkipped.filter((x) => x.reason === 'non_earning_cap_skipped').length, 3);
 });
 
+test('D19h an MCC-only reduced rate projects onto one v1-only row per app category of its MCCs', () => {
+  const r = run(pointsCard([
+    rule({ id: 'select_categories_1rp', category_id: 'select_categories', evaluation_type: 'standard_accrual', conditions: { mcc_in: [4900, 6300, 8211, 9399] }, action: { points_per_block: 1 } }),
+  ]));
+  const rows = only(r, 'select_categories_1rp');
+  assert.deepEqual(rows.filter((x) => x.max_engine_version === 1).map((x) => x.category_slug).sort(), ['bills', 'education', 'government', 'insurance']);
+  assert.ok(rows.some((x) => x.min_engine_version === 2 && x.mcc_include.length === 4 && x.max_engine_version === null));
+});
+
 // ── C8 D13: terms that depend on the cardholder; override conventions ───
 
 test('D13a a cap sized by the credit limit keeps its kind with a null amount and is flagged', () => {

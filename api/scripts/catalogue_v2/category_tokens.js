@@ -198,6 +198,26 @@ const NARROW_TOKEN_MCC = (() => {
   return Object.fromEntries(Object.entries(table).map(([k, v]) => [k, [...new Set(v)].sort()]));
 })();
 
+// D19h: MCC -> app category, for projecting a reduced-rate MCC list onto
+// v1-only category rows. Only codes whose category is unambiguous.
+const MCC_CATEGORY = (() => {
+  const t = {
+    bills: ['4812', '4814', '4816', '4899', '4900'],
+    insurance: ['5960', '6300', '6381', '6399'],
+    education: ['8211', '8220', '8241', '8244', '8249', '8299'],
+    government: ['9211', '9222', '9223', '9311', '9399', '9402', '9405', '9950'],
+    groceries: ['5411', '5422', '5441', '5451', '5499'],
+    fuel: ['5172', '5541', '5542', '5983'],
+    rent: ['6513'],
+    wallet: ['6540', '6541'],
+    dining: ['5812', '5813', '5814'],
+    health: ['5912', '8062'],
+  };
+  const out = {};
+  for (const [cat, codes] of Object.entries(t)) for (const c of codes) out[c] = cat;
+  return out;
+})();
+
 // D18i: merchants that are themselves an airline or a hotel brand (a
 // flights-vs-hotels split on them is not a booking-type guess).
 const AIRLINE_OR_HOTEL = new Set([
@@ -551,6 +571,7 @@ function mapCategorySlugs(token) {
 }
 
 module.exports = {
+  MCC_CATEGORY,
   AIRLINE_OR_HOTEL,
   NARROW_TOKEN_MCC,
   APP_CATEGORIES,

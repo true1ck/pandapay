@@ -18,6 +18,7 @@ const { asNumber, isNA, normalizeText, uniq } = require('./util');
 const {
   AIRLINE_OR_HOTEL,
   APP_CATEGORIES,
+  MCC_CATEGORY,
   ISSUER_PORTAL,
   NARROW_TOKEN_MCC,
   resolveCategoryToken,
@@ -865,15 +866,20 @@ function transformRule(src, idx, ctx) {
   // several merchants), add a v1-only row on the rule's category at the
   // reduced rate — broad is the conservative reading for a reduced rate.
   const earning = rows.filter((r) => ['earn', 'base'].includes(r.rule_role));
+  // D19h: an MCC-only reduced rate projects onto the app categories its MCCs
+  // belong to (YES Bank "select categories").
+  const projectionCategories = preNarrowCategories.length
+    ? preNarrowCategories
+    : uniq(earning.flatMap((r) => r.mcc_include.map((m) => MCC_CATEGORY[m]).filter(Boolean))).sort();
   if (isReduced && earning.length && !rows.some((r) => r.min_engine_version === 1 && r.rule_role !== 'info') &&
-      preNarrowCategories.length) {
+      projectionCategories.length) {
     const model = earning[0];
     const v1Unit = model.block_inr ? 'points_per_100' : model.unit;
     const v1Rate = model.block_inr ? Math.round((Number(model.rate) * 100 / model.block_inr) * 10000) / 10000 : model.rate;
-    for (const cat of preNarrowCategories) {
+    for (const cat of projectionCategories) {
       rows.push({
         ...model,
-        part: preNarrowCategories.length > 1 ? `v1-${cat}` : 'v1',
+        part: projectionCategories.length > 1 ? `v1-${cat}` : 'v1',
         category_slug: cat,
         merchant_pattern: model.merchant_slugs.length === 1 ? model.merchant_pattern : null,
         merchant_slugs: model.merchant_slugs.length === 1 ? model.merchant_slugs : [],
