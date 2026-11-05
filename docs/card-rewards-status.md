@@ -37,8 +37,8 @@ Status values: `not started` · `running` · `done (branch ready)` · `merged` �
 | WP6a | Worked examples: HDFC, SBI Card | 1 | `card-rewards/wp6a-examples-hdfc-sbi` | **merged** | 2026-11-06 | 21/21 cards, 15 override files; review + 1 fix round clean; Swiggy exact-half rounding parked |
 | WP6b | Worked examples: ICICI, Axis, Amex, IDFC, others | 1 | `card-rewards/wp6b-examples-others` | **merged** | 2026-11-06 | 23/25 cards (Amazon Pay ICICI, AU Zenith+ skipped), 13 override files; 2 fix rounds, verified with the real loader; 18-card loader mismatches carried to WP7 |
 | WP7 | Integration: worked examples through both engines | 2 | `card-rewards/wp7-integration` | needs rework (fix round 2) | 2026-11-06 | Round 1 confirmed (UNO, SimplyCLICK, Flipkart, IndiGo, EMI). Round 2: SBI Tata Neu cards still pay on EMI/UPI, missing issuer exclusions and limits on touched cards, 1-point rounding tolerance — D25 |
-| WP8 | Server recording v2 + recompute script | 2 | `card-rewards/wp8-server-state` | fix round 2 done, in re-review | 2026-11-06 | Round 2 in: cashback kept out of the points balance, the edit/recalc lock on all edit routes, Indian-time milestone window, steadier test; 309 server tests pass incl. 9 real-database |
-| WP9 | App: v2 feed, tolerant parse, cap bars, alerts | 2 | — | not started | | Starts after WP8 merges |
+| WP8 | Server recording v2 + recompute script | 2 | `card-rewards/wp8-server-state` | **merged** | 2026-11-06 | 2 fix rounds; 1,739 API tests pass on the merged branch; native-unit limit state, Indian-time windows, correct statement cycles, edit/recalc lock on every edit route. Parked: sync batch lock timing, 12 statement-cycle fee waivers |
+| WP9 | App: v2 feed, tolerant parse, cap bars, alerts | 2 | `card-rewards/wp9-app-caps` | running | 2026-11-06 | Launched after WP8 merged; brief in agent plan §4 |
 | — | Checkpoint A (after wave 1) | — | — | **passed** | 2026-11-06 | API 1695/0 fail; Dart 477/0; real DB import 376/376; old feed parsed by the released app parser with 0 errors; JS = Dart on 11,914 real-data purchases (0 mismatches) |
 | — | Checkpoint B (after wave 2) | — | — | not started | | |
 | — | Rollout (owner) | 3 | — | not started | | See plan §9 |
@@ -83,6 +83,7 @@ Status values: `not started` · `running` · `done (branch ready)` · `merged` �
 
 ## Changelog
 
+- **2026-11-06:** WP8 merged (server records limits in the card's own units, with Indian-time windows and safe edits). WP9 (app) started. WP7 and WP2 are in review/fix rounds.
 - **2026-11-06:** **Checkpoint A passed.** All tests green; all 376 cards import into a real database; the old feed parses in the app version installed today; the phone and server engines agree on 11,914 real-data purchases. Wave 2 next.
 - **2026-11-06:** WP2 merged — all of wave 1 is in. Checkpoint A started: all tests green; the first real database import loaded 365 of 376 cards and found 2 issues (index size on 9 cards, duplicate benefits on 2), now being fixed.
 - **2026-11-06:** WP3 merged (phone reward engine v2; same answers as the server on all shared scenarios).
