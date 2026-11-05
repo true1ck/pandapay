@@ -99,6 +99,11 @@ $flutterArgs = @(
   "--dart-define=PANDAPAY_LEGAL_BASE_URL=$LegalBaseUrl"
 )
 if ($SplitPerAbi) { $flutterArgs += '--split-per-abi' }
+# Release builds are obfuscated; the symbol map stays in build/debug-info
+# (relative to app/) for crash symbolication. See docs/release/symbolication.md.
+$debugInfoDir = if ([string]::IsNullOrWhiteSpace($env:PANDAPAY_DEBUG_INFO_DIR)) { 'build/debug-info' } else { $env:PANDAPAY_DEBUG_INFO_DIR }
+$flutterArgs += '--obfuscate'
+$flutterArgs += "--split-debug-info=$debugInfoDir"
 if (-not [string]::IsNullOrWhiteSpace($BuildNumber)) { $flutterArgs += "--build-number=$BuildNumber" }
 if (-not [string]::IsNullOrWhiteSpace($NearbyRadiusMeters)) {
   $flutterArgs += "--dart-define=PANDAPAY_NEARBY_RADIUS_METERS=$NearbyRadiusMeters"

@@ -20,6 +20,8 @@ platform :android do
         "prod",
         "appbundle",
         "--release",
+        "--obfuscate",
+        "--split-debug-info=build/debug-info",
         "--build-number",
         build_number.to_s
       )
@@ -30,6 +32,12 @@ platform :android do
       __dir__
     )
     UI.user_error!("Expected production AAB was not created: #{bundle_path}") unless File.file?(bundle_path)
+
+    # The symbol map for this exact build. Keep it with the release record;
+    # without it a crash report cannot be symbolicated (docs/release/symbolication.md).
+    debug_info_dir = File.expand_path("../../build/debug-info", __dir__)
+    UI.user_error!("Obfuscated build left no symbol files in #{debug_info_dir}") if Dir.glob(File.join(debug_info_dir, "app.*.symbols")).empty?
+    UI.important("Keep #{debug_info_dir} for build #{build_number}; it symbolicates this release's crash reports.")
 
     bundle_path
   end

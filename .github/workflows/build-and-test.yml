@@ -191,10 +191,22 @@ jobs:
         working-directory: app
         run: |
           flutter build appbundle --release --flavor prod \
+            --obfuscate --split-debug-info=build/debug-info \
             --dart-define=PANDAPAY_ENV=prod \
             --dart-define=PANDAPAY_API_BASE_URL=https://api.invalid \
             --dart-define=PANDAPAY_AUTH_BASE_URL=https://auth.invalid
           ../scripts/check_prod_manifest.sh
+
+      # Symbol map for the bundle above. Without it a crash from the matching
+      # release build cannot be symbolicated; see docs/release/symbolication.md.
+      # It holds code names only, no user data, but keep the retention finite.
+      - name: Keep debug-info for symbolication
+        uses: actions/upload-artifact@v4
+        with:
+          name: app-debug-info-${{ github.sha }}
+          path: app/build/debug-info/
+          if-no-files-found: error
+          retention-days: 90
 
       - name: Console analyze
         working-directory: console

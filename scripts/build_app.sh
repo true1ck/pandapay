@@ -133,8 +133,20 @@ echo "    PANDAPAY_API_BASE_URL=$API_BASE_URL"
 echo "    PANDAPAY_AUTH_BASE_URL=$AUTH_BASE_URL"
 echo "    PANDAPAY_LEGAL_BASE_URL=$LEGAL_BASE_URL"
 
+# Release and profile-less builds (Flutter's default for `build apk|appbundle`)
+# are obfuscated, and the symbol map is written to build/debug-info (relative
+# to app/) so crash reports can be symbolicated; see docs/release/symbolication.md.
+# Flutter rejects --obfuscate for debug/profile builds, so skip it there.
+OBFUSCATE_ARGS=()
+case " $* " in
+  *" --debug "*|*" --profile "*) ;;
+  *" --split-debug-info"*) OBFUSCATE_ARGS=(--obfuscate) ;;
+  *) OBFUSCATE_ARGS=(--obfuscate "--split-debug-info=${PANDAPAY_DEBUG_INFO_DIR:-build/debug-info}") ;;
+esac
+
 exec flutter build "$BUILD_TARGET" \
   --flavor "$FLAVOR" \
+  ${OBFUSCATE_ARGS[@]+"${OBFUSCATE_ARGS[@]}"} \
   --dart-define=PANDAPAY_ENV="$BACKEND_ENV_NAME" \
   --dart-define=PANDAPAY_API_BASE_URL="$API_BASE_URL" \
   --dart-define=PANDAPAY_AUTH_BASE_URL="$AUTH_BASE_URL" \
