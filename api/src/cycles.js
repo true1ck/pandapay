@@ -130,6 +130,92 @@ function periodBounds(period, occurredAt, opts = {}) {
   throw new Error(`Unknown cap_period: ${period}`);
 }
 
+// ---------------------------------------------------------------------------
+// Card Rewards Phase 1 (WP8) — v2 windows, plan C3.6 / C3.7.
+//
+// periodBounds above stays exactly as it was: v1-shaped cards keep their
+// windows byte-for-byte. v2-shaped cards (reward_math_v2.isV2Card) use
+// windowBoundsV2, which adds cap anchors, the C3.7 anchor-date fallback,
+// welcome windows (`window_days`) and an `approximate` flag readers can show.
+// ---------------------------------------------------------------------------
+
+const KNOWN_ANCHORS = new Set(['card_anniversary', 'calendar_year', 'fiscal_year', 'statement_cycle']);
+const DATE_ONLY = /^\d{4}-\d{2}-\d{2}$/;
+
+/**
+ * Calendar day of a date-ish value as 'YYYY-MM-DD', or null. A 'YYYY-MM-DD'
+ * string is taken as written. A Date uses its LOCAL calendar day, because
+ * node-pg parses a Postgres `date` column to local midnight.
+ */
+function calendarDay(value) {
+  if (value == null || value === '') return null;
+  if (typeof value === 'string' && DATE_ONLY.test(value.slice(0, 10)) && value.length <= 10) return value;
+  const d = value instanceof Date ? value : new Date(value);
+  if (Number.isNaN(d.getTime())) return null;
+  return `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())}`;
+}
+
+/**
+ * C3.7: the user card's anchor date is `anniversary_on ?? opened_on`; when
+ * both are null it is the day the card was added, and anything measured from
+ * it is `approximate`.
+ */
+function cardAnchorDate({ anniversaryOn, openedOn, createdAt } = {}) {
+  const anniversary = calendarDay(anniversaryOn);
+  if (anniversary) return { date: anniversary, approximate: false, source: 'anniversary_on' };
+  const opened = calendarDay(openedOn);
+  if (opened) return { date: opened, approximate: false, source: 'opened_on' };
+  const created = calendarDay(createdAt);
+  if (created) return { date: created, approximate: true, source: 'created_at' };
+  return { date: null, approximate: true, source: null };
+}
+
+function addDays(dateOnly, days) {
+  const d = new Date(`${dateOnly}T00:00:00.000Z`);
+  d.setUTCDate(d.getUTCDate() + days);
+  return toDateOnly(d);
+}
+
+/**
+ * The window a v2 cap or milestone counts this transaction in:
+ * `{ start, end, approximate }` (dates as 'YYYY-MM-DD'), or `null` when the
+ * rule has `windowDays` and the transaction falls outside that window.
+ *
+ * - `anchor` outside the known set is read as null (C8 D12c).
+ * - `windowDays` (welcome milestones, C3.7) counts from `anchorDate`: the
+ *   window is [anchorDate, anchorDate + windowDays − 1]. No anchor date →
+ *   nothing qualifies (never guessed).
+ * - `annual` + `card_anniversary` runs anniversary to anniversary from
+ *   `anchorDate` (`approximate` follows `anchorApproximate`); with no anchor
+ *   date it falls back to the calendar year, approximate.
+ * - `statement_cycle` without a statement day is the calendar month, approximate.
+ * - Everything else is exactly periodBounds.
+ */
+function windowBoundsV2(period, occurredAt, opts = {}) {
+  const { statementDay, anchorDate = null, anchorApproximate = false, windowDays = null } = opts;
+  const anchor = KNOWN_ANCHORS.has(opts.anchor) ? opts.anchor : null;
+  const ref = occurredAt instanceof Date ? occurredAt : new Date(occurredAt);
+
+  if (windowDays != null) {
+    const days = Number(windowDays);
+    if (!(days > 0) || !anchorDate) return null;
+    const start = calendarDay(anchorDate);
+    const end = addDays(start, Math.floor(days) - 1);
+    const day = toDateOnly(ref);
+    if (day < start || day > end) return null;
+    return { start, end, approximate: Boolean(anchorApproximate) };
+  }
+
+  if (period === 'annual' && anchor === 'card_anniversary') {
+    if (!anchorDate) return { ...calendarYearBounds(ref), approximate: true };
+    return { ...anniversaryYearBounds(ref, calendarDay(anchorDate)), approximate: Boolean(anchorApproximate) };
+  }
+
+  const bounds = periodBounds(period, ref, { statementDay, anchor });
+  const usesStatementCycle = period === 'statement_cycle' || (period === 'annual' && anchor === 'statement_cycle');
+  return { ...bounds, approximate: usesStatementCycle && !statementDay };
+}
+
 /**
  * Mirrors packages/pandapay_domain's RewardUnit.effectiveRatePerRupee —
  * kept in sync by hand (no shared package between the Node and Dart sides
@@ -184,4 +270,12 @@ function effectivePointsPerRupee(unit, rate) {
   }
 }
 
-module.exports = { periodBounds, effectiveRatePerRupee, effectivePointsPerRupee };
+module.exports = {
+  periodBounds,
+  effectiveRatePerRupee,
+  effectivePointsPerRupee,
+  cardAnchorDate,
+  windowBoundsV2,
+  calendarDay,
+  addDays,
+};
