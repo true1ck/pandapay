@@ -218,6 +218,32 @@
       "why": "Fuel excluded."
     },
     {
+      "id": "011",
+      "title": "Rs 99 online purchase, below the Rs100 minimum",
+      "ctx": {
+        "amount": 99,
+        "occurred": "2026-11-05T10:00:00+05:30",
+        "category_slug": "online",
+        "mcc": 5311,
+        "merchant_name": "Amazon",
+        "merchant_vpa": null,
+        "merchant_slug": "amazon",
+        "platform": null,
+        "rail": "online"
+      },
+      "state_before": {
+        "caps_by_source_id": {}
+      },
+      "expect": {
+        "currency": "points",
+        "amount": 0,
+        "value_inr": null,
+        "excluded": false,
+        "cap_deltas_by_source_id": {}
+      },
+      "why": "Reward program T&C: eligible for Reward Points on a minimum transaction size of Rs100."
+    },
+    {
       "id": "008",
       "title": "Rs 3,000 electricity bill outside the PhonePe app",
       "ctx": {
@@ -310,6 +336,12 @@
       "issuer_says": "Insurance (max 500) and non-insurance (max 1500) are listed as separate limits, not nested.",
       "proposed_fix": "override",
       "override_file": "api/scripts/catalogue_overrides/phonepe-sbi-select-black.json"
+    },
+    {
+      "item": "other-spends cap (other-monthly)",
+      "cardpipeline_says": "total_reward_points 2000.",
+      "issuer_says": "\"Other spends 1 RP/100 (Max 2000 / calendar month)\": a total cap. Matches, no override needed.",
+      "proposed_fix": "none"
     },
     {
       "item": "spill-over after the online cap",
