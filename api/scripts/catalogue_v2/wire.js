@@ -59,6 +59,7 @@ function toV2WireCard(t, opts = {}) {
       except_platform_slugs: r.except_platform_slugs || [],
       block_inr: r.block_inr,
       min_engine_version: r.min_engine_version,
+      max_engine_version: r.max_engine_version ?? null,
       source_local_id: r.source_local_id,
       display_note: r.display_note,
     })),

@@ -1821,11 +1821,11 @@ async function writeCardV2(client, cardProductId, t) {
           max_txn_inr, priority, conditions, effective_from, effective_to, excluded_categories,
           rule_role, merchant_slugs, platform_slugs, mcc_include, mcc_exclude, block_inr,
           min_engine_version, source_local_id, display_note, except_merchant_slugs,
-          except_platform_slugs)
+          except_platform_slugs, max_engine_version)
        VALUES ($1, (select id from spend_categories where slug = $2), $3, $4, $5, $6, $7,
          $8, $9, $10, $11, $12, ${categoryIdsSql(13)},
          $14, $15::text[], $16::text[], $17::text[], $18::text[], $19, $20, $21, $22,
-         $23::text[], $24::text[])
+         $23::text[], $24::text[], $25)
        RETURNING id`,
       [
         cardProductId,
@@ -1860,6 +1860,7 @@ async function writeCardV2(client, cardProductId, t) {
         r.display_note,
         r.except_merchant_slugs || [],
         r.except_platform_slugs || [],
+        r.max_engine_version ?? null,
       ]
     );
     ruleIds[r.key] = inserted.rows[0].id;
@@ -2304,11 +2305,14 @@ async function main() {
          (select count(*) from information_schema.columns
            where table_schema = 'public' and table_name = 'card_products'
              and column_name in ('model_status', 'model_coverage', 'accrual_rounding', 'cashback_rounding')) as card_columns,
+         (select count(*) from information_schema.columns
+           where table_schema = 'public' and table_name = 'reward_rules'
+             and column_name in ('except_merchant_slugs', 'except_platform_slugs', 'max_engine_version')) as rule_columns,
          to_regclass('public.cap_rule_targets') as targets,
          to_regclass('public.benefit_unlock_rules') as unlocks`
     );
     const v2Row = v2Schema.rows[0] || {};
-    if (Number(v2Row.card_columns) !== 4 || !v2Row.targets || !v2Row.unlocks) {
+    if (Number(v2Row.card_columns) !== 4 || Number(v2Row.rule_columns) !== 3 || !v2Row.targets || !v2Row.unlocks) {
       throw new Error(
         'database is missing the catalogue rules v2 schema; apply migration ' +
         '20261105120000_card_rules_v2.sql first.'
