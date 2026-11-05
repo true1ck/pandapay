@@ -4,8 +4,8 @@
   "inputs": {
     "transform_version": "7",
     "source_record_sha256": "657a9e89e7d34f8d89df45dcb26ec07ee33619ef2b1f7043b0f1f4710240916d",
-    "override_sha256": "691d6750f695c8b9dbd4ef8ae8e37193c1b19c7a37b28b074dda8746bbb3d13b",
-    "directory_sha256": "3d9f9f535481544d4b19262838290f77d8270eb3b4aec73c48608f10c39cedf2",
+    "override_sha256": "1b63a00b8987f545ec6aab420d38492ca14222460d83623304078716c005be9f",
+    "directory_sha256": "b1094d54b77e848d22f7a9a64f3ae6d1ef43ca3eb2fc8e40cd43ed1994664694",
     "verified": false
   },
   "blocking_flags": [
@@ -28,21 +28,16 @@
     "points_expiry_months": 12,
     "model_status": "partial",
     "model_coverage": {
-      "rules_total": 17,
-      "rules_modelled": 4,
-      "rules_info": 13,
+      "rules_total": 19,
+      "rules_modelled": 7,
+      "rules_info": 12,
       "caps_total": 5,
-      "caps_enforced": 4,
+      "caps_enforced": 5,
       "flags": [
         {
           "code": "info_rule",
           "source_local_id": "base_non_tata_non_upi",
           "detail": "condition:not"
-        },
-        {
-          "code": "info_rule",
-          "source_local_id": "partner_tata_brand_non_emi",
-          "detail": "condition:partner_tata_brand"
         },
         {
           "code": "info_rule",
@@ -148,11 +143,6 @@
           "code": "post_limit_conflict",
           "source_local_id": "upi_monthly_500",
           "detail": null
-        },
-        {
-          "code": "cap_targets_info_only",
-          "source_local_id": "upi_monthly_500",
-          "detail": null
         }
       ],
       "overrides_applied": [
@@ -227,6 +217,38 @@
           "reason": "Issuer rounds the final NeuCoins to nearest whole (half up) on the exact amount (D7).",
           "source_url": "https://www.hdfc.bank.in/content/dam/hdfcbankpws/in/en/personal-banking/discover-products/cards/credit-cards/tata-neu-plus-hdfc-bank-credit-card/pdfs/tata_neu_plus_card_tnc.pdf",
           "checked_on": "2026-11-05"
+        },
+        {
+          "path": "reward_rules[id=partner_tata_brand_non_emi].category_id",
+          "op": "set",
+          "value_sha256": "4e8ab60ca97557fc",
+          "reason": "WP7: D24e: partner Tata brands via the group token; the partner/emi/upi flags made the 2% rule info.",
+          "source_url": "https://www.hdfc.bank.in/content/dam/hdfcbankpws/in/en/personal-banking/discover-products/cards/credit-cards/tata-neu-plus-hdfc-bank-credit-card/pdfs/tata_neu_plus_card_tnc.pdf",
+          "checked_on": "2026-11-05"
+        },
+        {
+          "path": "reward_rules[id=partner_tata_brand_non_emi].conditions",
+          "op": "set",
+          "value_sha256": "44136fa355b3678a",
+          "reason": "WP7: Brand restated by the group token; non-EMI and non-UPI carried by the carve-out rows below.",
+          "source_url": "https://www.hdfc.bank.in/content/dam/hdfcbankpws/in/en/personal-banking/discover-products/cards/credit-cards/tata-neu-plus-hdfc-bank-credit-card/pdfs/tata_neu_plus_card_tnc.pdf",
+          "checked_on": "2026-11-05"
+        },
+        {
+          "path": "reward_rules",
+          "op": "append",
+          "value_sha256": "a5498d9b0e0a6344",
+          "reason": "WP7: Record merchant_emi: merchant EMI earns 1% (issuer worked example 006: EMI at a Tata brand earns only the base 1.0%).",
+          "source_url": "https://www.hdfc.bank.in/content/dam/hdfcbankpws/in/en/personal-banking/discover-products/cards/credit-cards/tata-neu-plus-hdfc-bank-credit-card/pdfs/tata_neu_plus_card_tnc.pdf",
+          "checked_on": "2026-11-05"
+        },
+        {
+          "path": "reward_rules",
+          "op": "append",
+          "value_sha256": "21a82fd1d7efbe7a",
+          "reason": "WP7: The record's partner 2% is \"upi: false\"; UPI earns 0.25% (record upi_other_id; 1% only with the Tata Neu UPI ID). Carve-out at the lowest stated UPI rate (H2).",
+          "source_url": "https://www.hdfc.bank.in/content/dam/hdfcbankpws/in/en/personal-banking/discover-products/cards/credit-cards/tata-neu-plus-hdfc-bank-credit-card/pdfs/tata_neu_plus_card_tnc.pdf",
+          "checked_on": "2026-11-05"
         }
       ]
     },
@@ -281,17 +303,22 @@
         "conditions": {
           "source_local_id": "partner_tata_brand_non_emi",
           "part": null,
-          "info_reasons": [
-            "condition:partner_tata_brand"
-          ],
+          "info_reasons": [],
           "flags": []
         },
         "notes": null,
         "effective_from": "2023-01-01",
         "effective_to": null,
         "excluded_categories": [],
-        "rule_role": "info",
-        "merchant_slugs": [],
+        "rule_role": "earn",
+        "merchant_slugs": [
+          "bigbasket",
+          "croma",
+          "tata_1mg",
+          "tata_cliq",
+          "tata_neu",
+          "tata_play"
+        ],
         "platform_slugs": [],
         "mcc_include": [],
         "mcc_exclude": [],
@@ -971,6 +998,90 @@
         "max_engine_version": null,
         "source_local_id": "online_skill_based_gaming_exclusion",
         "display_note": "Online skill-based gaming transactions under MCC 5816 do not earn NeuCoins."
+      },
+      {
+        "id": "tata-neu-plus-hdfc-bank:rule:tata_partner_emi_wp7",
+        "category_id": null,
+        "category_slug": null,
+        "merchant_pattern": null,
+        "rail": "emi",
+        "unit": "points_per_100",
+        "rate": 1,
+        "min_txn_inr": null,
+        "max_txn_inr": null,
+        "priority": 19,
+        "conditions": {
+          "source_local_id": "tata_partner_emi_wp7",
+          "part": null,
+          "info_reasons": [],
+          "flags": []
+        },
+        "notes": null,
+        "effective_from": "2023-01-01",
+        "effective_to": null,
+        "excluded_categories": [],
+        "rule_role": "earn",
+        "merchant_slugs": [
+          "bigbasket",
+          "croma",
+          "tata_1mg",
+          "tata_cliq",
+          "tata_neu",
+          "tata_play"
+        ],
+        "platform_slugs": [],
+        "mcc_include": [],
+        "mcc_exclude": [],
+        "except_merchant_slugs": [],
+        "except_platform_slugs": [],
+        "block_inr": null,
+        "min_engine_version": 2,
+        "max_engine_version": null,
+        "source_local_id": "tata_partner_emi_wp7",
+        "display_note": "Merchant EMI at partner Tata brands earns the base 1%."
+      },
+      {
+        "id": "tata-neu-plus-hdfc-bank:rule:tata_partner_upi_wp7",
+        "category_id": null,
+        "category_slug": null,
+        "merchant_pattern": null,
+        "rail": "upi_qr",
+        "unit": "points_per_100",
+        "rate": 0.25,
+        "min_txn_inr": null,
+        "max_txn_inr": null,
+        "priority": 18,
+        "conditions": {
+          "source_local_id": "tata_partner_upi_wp7",
+          "part": null,
+          "info_reasons": [],
+          "flags": [
+            "reduced_rate_no_v1_row"
+          ]
+        },
+        "notes": null,
+        "effective_from": "2024-08-01",
+        "effective_to": null,
+        "excluded_categories": [],
+        "rule_role": "earn",
+        "merchant_slugs": [
+          "bigbasket",
+          "croma",
+          "tata_1mg",
+          "tata_cliq",
+          "tata_neu",
+          "tata_play"
+        ],
+        "platform_slugs": [],
+        "mcc_include": [],
+        "mcc_exclude": [],
+        "except_merchant_slugs": [],
+        "except_platform_slugs": [],
+        "block_inr": null,
+        "min_engine_version": 2,
+        "max_engine_version": null,
+        "source_local_id": "tata_partner_upi_wp7",
+        "display_note": "UPI spends at partner Tata brands earn the UPI rate, not the 2% partner rate."
       }
     ],
     "cap_rules": [
@@ -1084,7 +1195,8 @@
         "scope": "targets",
         "targets": [
           "tata-neu-plus-hdfc-bank:rule:upi_other_id",
-          "tata-neu-plus-hdfc-bank:rule:upi_tata_neu_id"
+          "tata-neu-plus-hdfc-bank:rule:upi_tata_neu_id",
+          "tata-neu-plus-hdfc-bank:rule:tata_partner_upi_wp7"
         ],
         "parent_cap_id": null,
         "post_cap_behavior": null,

@@ -63,6 +63,70 @@
       "reason": "Issuer rounds the final NeuCoins to nearest whole (half up) on the exact amount (D7).",
       "source_url": "https://www.hdfc.bank.in/content/dam/hdfcbankpws/in/en/personal-banking/discover-products/cards/credit-cards/tata-neu-plus-hdfc-bank-credit-card/pdfs/tata_neu_plus_card_tnc.pdf",
       "checked_on": "2026-11-05"
+    },
+    {
+      "path": "reward_rules[id=partner_tata_brand_non_emi].category_id",
+      "value": "tata_neu_partner",
+      "reason": "WP7: D24e: partner Tata brands via the group token; the partner/emi/upi flags made the 2% rule info.",
+      "source_url": "https://www.hdfc.bank.in/content/dam/hdfcbankpws/in/en/personal-banking/discover-products/cards/credit-cards/tata-neu-plus-hdfc-bank-credit-card/pdfs/tata_neu_plus_card_tnc.pdf",
+      "checked_on": "2026-11-05"
+    },
+    {
+      "path": "reward_rules[id=partner_tata_brand_non_emi].conditions",
+      "value": {},
+      "reason": "WP7: Brand restated by the group token; non-EMI and non-UPI carried by the carve-out rows below.",
+      "source_url": "https://www.hdfc.bank.in/content/dam/hdfcbankpws/in/en/personal-banking/discover-products/cards/credit-cards/tata-neu-plus-hdfc-bank-credit-card/pdfs/tata_neu_plus_card_tnc.pdf",
+      "checked_on": "2026-11-05"
+    },
+    {
+      "path": "reward_rules",
+      "op": "append",
+      "value": {
+        "id": "tata_partner_emi_wp7",
+        "category_id": "tata_neu_partner",
+        "priority": 19,
+        "evaluation_type": "standard_accrual",
+        "rail": "emi",
+        "channel_type": "all",
+        "conditions": {},
+        "action": {
+          "multiplier": 1,
+          "points_per_block": 1,
+          "cashback_percent": null,
+          "cap_reference": null,
+          "reason": "Merchant EMI at partner Tata brands earns the base 1%."
+        },
+        "effective_from": "2023-01-01",
+        "effective_to": null
+      },
+      "reason": "WP7: Record merchant_emi: merchant EMI earns 1% (issuer worked example 006: EMI at a Tata brand earns only the base 1.0%).",
+      "source_url": "https://www.hdfc.bank.in/content/dam/hdfcbankpws/in/en/personal-banking/discover-products/cards/credit-cards/tata-neu-plus-hdfc-bank-credit-card/pdfs/tata_neu_plus_card_tnc.pdf",
+      "checked_on": "2026-11-05"
+    },
+    {
+      "path": "reward_rules",
+      "op": "append",
+      "value": {
+        "id": "tata_partner_upi_wp7",
+        "category_id": "tata_neu_partner",
+        "priority": 18,
+        "evaluation_type": "standard_accrual",
+        "rail": "upi_qr",
+        "channel_type": "all",
+        "conditions": {},
+        "action": {
+          "multiplier": 0.25,
+          "points_per_block": 0.25,
+          "cashback_percent": null,
+          "cap_reference": "upi_monthly_500",
+          "reason": "UPI spends at partner Tata brands earn the UPI rate, not the 2% partner rate."
+        },
+        "effective_from": "2024-08-01",
+        "effective_to": null
+      },
+      "reason": "WP7: The record's partner 2% is \"upi: false\"; UPI earns 0.25% (record upi_other_id; 1% only with the Tata Neu UPI ID). Carve-out at the lowest stated UPI rate (H2).",
+      "source_url": "https://www.hdfc.bank.in/content/dam/hdfcbankpws/in/en/personal-banking/discover-products/cards/credit-cards/tata-neu-plus-hdfc-bank-credit-card/pdfs/tata_neu_plus_card_tnc.pdf",
+      "checked_on": "2026-11-05"
     }
   ]
 }
