@@ -4,7 +4,7 @@
   "inputs": {
     "transform_version": "7",
     "source_record_sha256": "61935416c29b40b70a4cfd88628795f2ed0a4795ec48bb5ba448b2c89cde1cf6",
-    "override_sha256": "c72872150b9275f68e1669a7a714e085cfc05d4fd502d03d96107dc4976798c2",
+    "override_sha256": "b0642ca0baf8963d2614f7c2668f113b91c1089ec1cfa89c97039df28560f812",
     "directory_sha256": "b1094d54b77e848d22f7a9a64f3ae6d1ef43ca3eb2fc8e40cd43ed1994664694",
     "verified": false
   },
@@ -27,8 +27,8 @@
     "points_expiry_months": 0,
     "model_status": "partial",
     "model_coverage": {
-      "rules_total": 10,
-      "rules_modelled": 9,
+      "rules_total": 11,
+      "rules_modelled": 10,
       "rules_info": 1,
       "caps_total": 3,
       "caps_enforced": 3,
@@ -88,6 +88,14 @@
           "op": "set",
           "value_sha256": "c8353307acc930a7",
           "reason": "WP7: The old reason mentioned \"up to 1.5%\" HP Pay Happy Coins (a different currency), which tripped the loader's \"up to\" multi-rate check. Savings Maximiser: max Rs12,000 spend and 2,400 points per cycle = a fixed 30 per Rs150.",
+          "source_url": "https://www.idfcfirst.bank.in/content/dam/idfcfirstbank/pdf/Savings-Maximiser-FIRST-Power-plus.pdf",
+          "checked_on": "2026-11-05"
+        },
+        {
+          "path": "reward_rules",
+          "op": "append",
+          "value_sha256": "d1ce7445c9e718cd",
+          "reason": "WP7: D28c: Savings Maximiser: 3X \"Applicable on: All other retail spends excluding Insurance premium payments, non-HPCL fuel spends, EMI transactions, ATM cash withdrawals\". The record's EMI row needs category emi AND rail emi, so an EMI purchase in another category earned. Rail-EMI exclusion on all spend.",
           "source_url": "https://www.idfcfirst.bank.in/content/dam/idfcfirstbank/pdf/Savings-Maximiser-FIRST-Power-plus.pdf",
           "checked_on": "2026-11-05"
         }
@@ -616,6 +624,40 @@
         "max_engine_version": null,
         "source_local_id": "non_hpcl_fuel_exclusion",
         "display_note": "Non-HPCL fuel transactions do not earn reward points"
+      },
+      {
+        "id": "hpcl-idfc-first-power-plus:rule:wp7_emi_rail_exclusion",
+        "category_id": null,
+        "category_slug": null,
+        "merchant_pattern": null,
+        "rail": "emi",
+        "unit": "points_per_150",
+        "rate": 0,
+        "min_txn_inr": null,
+        "max_txn_inr": null,
+        "priority": 0,
+        "conditions": {
+          "source_local_id": "wp7_emi_rail_exclusion",
+          "part": null,
+          "info_reasons": [],
+          "flags": []
+        },
+        "notes": null,
+        "effective_from": "2024-05-01",
+        "effective_to": null,
+        "excluded_categories": [],
+        "rule_role": "exclusion",
+        "merchant_slugs": [],
+        "platform_slugs": [],
+        "mcc_include": [],
+        "mcc_exclude": [],
+        "except_merchant_slugs": [],
+        "except_platform_slugs": [],
+        "block_inr": null,
+        "min_engine_version": 2,
+        "max_engine_version": null,
+        "source_local_id": "wp7_emi_rail_exclusion",
+        "display_note": "EMI transactions earn no rewards."
       },
       {
         "id": "hpcl-idfc-first-power-plus:rule:other_retail_3x#min-amount",
