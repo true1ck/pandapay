@@ -102,9 +102,11 @@
         "amount": 1000,
         "value_inr": null,
         "excluded": false,
-        "cap_deltas_by_source_id": {}
+        "cap_deltas_by_source_id": {
+          "cap_exclusive_10x_monthly": 10000
+        }
       },
-      "why": "10X on exclusive online partners (Cleartrip is named in the T&C): 10 RP per Rs100 = 1,000. The T&C read states no cap for the 10X tier.",
+      "why": "10X on exclusive partners (Cleartrip): 100 x 10 = 1,000, within the 10X monthly cap of 10,000 RP (MITC booklet g, k). Not engine-checkable: affiliate-channel bookings do not earn 10X.",
       "engine_checkable": false,
       "not_checkable_reason": "D14a: 10X on Cleartrip excludes affiliate-channel bookings (T&C 11.1(i)); the booking channel is not in the context, so the 10X rule stays info."
     },

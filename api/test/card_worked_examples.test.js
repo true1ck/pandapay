@@ -80,6 +80,27 @@ function capIdsBySource(card) {
   return map;
 }
 
+/**
+ * C8 D25a: an example may allow the engine to under-state points by at most
+ * 1 (`expect.tolerance_points`, with `expect.tolerance_note` citing the
+ * issuer's own arithmetic) where the issuer rounds base and bonus separately.
+ * Anything else (above 1, negative, not an integer, or no note) is rejected.
+ */
+function toleranceOf(expect) {
+  const raw = expect.tolerance_points;
+  if (raw === undefined || raw === null) return { points: 0 };
+  if (!Number.isInteger(raw) || raw < 0 || raw > 1) return { error: `tolerance_points must be 0 or 1 (C8 D25a), got ${JSON.stringify(raw)}` };
+  if (raw > 0 && !(typeof expect.tolerance_note === 'string' && expect.tolerance_note.trim())) return { error: 'tolerance_points needs a tolerance_note citing the issuer arithmetic (C8 D25a)' };
+  return { points: raw };
+}
+
+/** actual in [expected − tolerance, expected] (2 dp): may under-state, never over-state. */
+function withinTolerance(actual, expected, tolerance) {
+  const a = money2(actual);
+  const e = money2(expected);
+  return a <= e && a >= money2(e - tolerance);
+}
+
 /** Runs one example; returns the list of mismatches (empty = pass). */
 function checkExample(card, example) {
   const bySource = capIdsBySource(card);
@@ -99,6 +120,8 @@ function checkExample(card, example) {
 
   const expect = example.expect;
   const problems = [];
+  const tol = toleranceOf(expect);
+  if (tol.error) return [tol.error];
   if (Boolean(result.excluded) !== Boolean(expect.excluded)) problems.push(`excluded ${result.excluded}, expected ${expect.excluded}`);
 
   // Currency: the expected currency's field is present (C8 D12f), and nothing
@@ -107,10 +130,11 @@ function checkExample(card, example) {
   const actual = isPoints ? result.points : result.cashbackInr;
   const other = isPoints ? result.cashbackInr : result.points;
   if (actual == null) problems.push(`currency: no ${isPoints ? 'points' : 'cashback_inr'} in the result, expected ${expect.currency}`);
-  else if (money2(actual) !== money2(Number(expect.amount))) problems.push(`${isPoints ? 'points' : 'cashback_inr'} ${actual}, expected ${expect.amount}`);
+  else if (!withinTolerance(actual, Number(expect.amount), isPoints ? tol.points : 0)) problems.push(`${isPoints ? 'points' : 'cashback_inr'} ${actual}, expected ${expect.amount}`);
   if (other != null && money2(other) !== 0) problems.push(`currency: earned ${other} in ${isPoints ? 'cashback_inr' : 'points'}, expected ${expect.currency} only`);
 
-  if (expect.value_inr != null && money2(result.valueInr) !== money2(Number(expect.value_inr))) {
+  const pointValue = Number(card.point_value_inr) || 0;
+  if (expect.value_inr != null && !withinTolerance(result.valueInr, Number(expect.value_inr), isPoints ? tol.points * pointValue : 0)) {
     problems.push(`value_inr ${result.valueInr}, expected ${expect.value_inr}`);
   }
 
@@ -123,14 +147,35 @@ function checkExample(card, example) {
   for (const [source, delta] of Object.entries(expect.cap_deltas_by_source_id || {})) {
     if (Number(delta) !== 0) wantDeltas[source] = money2(Number(delta));
   }
+  const pointsCapSources = new Set(card.cap_rules.filter((cap) => String(cap.cap_kind).endsWith('_points')).map((cap) => cap.source_local_id));
   for (const source of new Set([...Object.keys(gotDeltas), ...Object.keys(wantDeltas)])) {
-    if (gotDeltas[source] !== wantDeltas[source]) {
+    const capTol = pointsCapSources.has(source) ? tol.points : 0;
+    if (!withinTolerance(gotDeltas[source] ?? 0, wantDeltas[source] ?? 0, capTol)) {
       const note = bySource.has(source) ? '' : ' (cap not emitted)';
       problems.push(`cap ${source} delta ${gotDeltas[source] ?? 0}, expected ${wantDeltas[source] ?? 0}${note}`);
     }
   }
   return problems;
 }
+
+test('D25a tolerance: the engine may be 1 point under, never over; tolerance above 1 is rejected', () => {
+  const tol = toleranceOf({ tolerance_points: 1, tolerance_note: 'issuer rounds base and bonus separately' });
+  assert.deepStrictEqual(tol, { points: 1 });
+  assert.ok(withinTolerance(1055, 1056, tol.points), 'engine 1 below passes');
+  assert.ok(withinTolerance(1056, 1056, tol.points), 'exact passes');
+  assert.ok(!withinTolerance(1057, 1056, tol.points), 'engine 1 above fails');
+  assert.ok(!withinTolerance(1054, 1056, tol.points), 'engine 2 below fails');
+  assert.ok(!withinTolerance(1055, 1056, 0), 'no tolerance: exact only');
+  assert.match(toleranceOf({ tolerance_points: 2, tolerance_note: 'x' }).error, /0 or 1/);
+  assert.match(toleranceOf({ tolerance_points: 0.5, tolerance_note: 'x' }).error, /0 or 1/);
+  assert.match(toleranceOf({ tolerance_points: 1 }).error, /tolerance_note/);
+  // An example carrying tolerance 2 fails the harness even when the engine matches exactly.
+  const card = snapshotFor('tata-neu-infinity-hdfc-bank').card;
+  const example = examplesBySlug.get('tata-neu-infinity-hdfc-bank').examples.find((e) => e.id === '004');
+  assert.deepStrictEqual(checkExample(card, example), [], 'the issuer example passes with tolerance 1');
+  const tooLoose = { ...example, expect: { ...example.expect, tolerance_points: 2 } };
+  assert.match(checkExample(card, tooLoose).join(' '), /0 or 1/);
+});
 
 test('every worked-example card has a current snapshot', () => {
   assert.ok(examplesBySlug.size > 0);

@@ -63,6 +63,38 @@ RecommendationContext _context(Map<String, dynamic> ctx) {
   );
 }
 
+/// C8 D25a: an example may let the engine under-state points by at most 1
+/// (`expect.tolerance_points`, with a `tolerance_note` citing the issuer's
+/// arithmetic). Anything else is rejected.
+({int points, String? error}) _tolerance(Map<String, dynamic> expect_) {
+  final raw = expect_['tolerance_points'];
+  if (raw == null) return (points: 0, error: null);
+  if (raw is! int || raw < 0 || raw > 1) {
+    return (
+      points: 0,
+      error: 'tolerance_points must be 0 or 1 (C8 D25a), got $raw',
+    );
+  }
+  final note = expect_['tolerance_note'];
+  if (raw > 0 && (note is! String || note.trim().isEmpty)) {
+    return (
+      points: 0,
+      error:
+          'tolerance_points needs a tolerance_note citing the issuer '
+          'arithmetic (C8 D25a)',
+    );
+  }
+  return (points: raw, error: null);
+}
+
+/// actual in [expected - tolerance, expected] at 2 dp: may under-state,
+/// never over-state.
+bool _within(num actual, num expected, num tolerance) {
+  final a = _paise(actual);
+  final e = _paise(expected);
+  return a <= e && a >= _paise(expected - tolerance);
+}
+
 /// Runs one example; returns the mismatches (empty = pass).
 List<String> _check(
   Map<String, dynamic> wireCard,
@@ -95,6 +127,13 @@ List<String> _check(
 
   final expect_ = example['expect'] as Map<String, dynamic>;
   final problems = <String>[];
+  final tol = _tolerance(expect_);
+  if (tol.error != null) return [tol.error!];
+  final pointsCapSources = {
+    for (final cap in caps)
+      if ('${cap['cap_kind']}'.endsWith('_points'))
+        cap['source_local_id'] as String,
+  };
   if (result.excluded != (expect_['excluded'] as bool? ?? false)) {
     problems.add(
       'excluded ${result.excluded}, expected ${expect_['excluded']}',
@@ -110,7 +149,11 @@ List<String> _check(
       'currency: no ${isPoints ? 'points' : 'cashback_inr'} in the result, '
       'expected ${expect_['currency']}',
     );
-  } else if (_paise(actual) != _paise(expect_['amount'] as num)) {
+  } else if (!_within(
+    actual,
+    expect_['amount'] as num,
+    isPoints ? tol.points : 0,
+  )) {
     problems.add(
       '${isPoints ? 'points' : 'cashback_inr'} $actual, expected ${expect_['amount']}',
     );
@@ -122,7 +165,13 @@ List<String> _check(
     );
   }
   final value = expect_['value_inr'] as num?;
-  if (value != null && _paise(result.valueInr) != _paise(value)) {
+  final pointValue = (wireCard['point_value_inr'] as num?) ?? 0;
+  if (value != null &&
+      !_within(
+        result.valueInr,
+        value,
+        isPoints ? tol.points * pointValue : 0,
+      )) {
     problems.add('value_inr ${result.valueInr}, expected $value');
   }
 
@@ -137,7 +186,12 @@ List<String> _check(
       if ((e.value as num) != 0) e.key as String: _paise(e.value as num),
   };
   for (final source in {...gotDeltas.keys, ...wantDeltas.keys}) {
-    if (gotDeltas[source] != wantDeltas[source]) {
+    final capTol = pointsCapSources.contains(source) ? tol.points : 0;
+    if (!_within(
+      (gotDeltas[source] ?? 0) / 100,
+      (wantDeltas[source] ?? 0) / 100,
+      capTol,
+    )) {
       problems.add(
         'cap $source delta ${(gotDeltas[source] ?? 0) / 100}, '
         'expected ${(wantDeltas[source] ?? 0) / 100}',
@@ -163,6 +217,52 @@ void main() {
           .where((f) => f.path.endsWith('.json'))
           .toList()
         ..sort((a, b) => a.path.compareTo(b.path));
+
+  test(
+    'D25a tolerance: 1 point under passes, 1 over fails, tolerance 2 is rejected',
+    () {
+      final ok = _tolerance({
+        'tolerance_points': 1,
+        'tolerance_note': 'issuer rounds base and bonus separately',
+      });
+      expect(ok.error, isNull);
+      expect(_within(1055, 1056, ok.points), isTrue, reason: '1 below');
+      expect(_within(1056, 1056, ok.points), isTrue, reason: 'exact');
+      expect(_within(1057, 1056, ok.points), isFalse, reason: '1 above');
+      expect(_within(1054, 1056, ok.points), isFalse, reason: '2 below');
+      expect(_within(1055, 1056, 0), isFalse, reason: 'no tolerance');
+      expect(
+        _tolerance({'tolerance_points': 2, 'tolerance_note': 'x'}).error,
+        contains('0 or 1'),
+      );
+      expect(
+        _tolerance({'tolerance_points': 1}).error,
+        contains('tolerance_note'),
+      );
+      // A worked example carrying tolerance 2 fails the harness outright.
+      const slug = 'tata-neu-infinity-hdfc-bank';
+      final wire =
+          (_readJson('$_snapshotDir/$slug.json')['card'])
+              as Map<String, dynamic>;
+      final example =
+          ((_readJson('$_examplesDir/$slug.json')['examples']) as List)
+              .cast<Map<String, dynamic>>()
+              .firstWhere((e) => e['id'] == '004');
+      final card = CardProductJson.fromJson(wire);
+      expect(_check(wire, card, example, directory), isEmpty);
+      final tooLoose = {
+        ...example,
+        'expect': {
+          ...(example['expect'] as Map<String, dynamic>),
+          'tolerance_points': 2,
+        },
+      };
+      expect(
+        _check(wire, card, tooLoose, directory).join(' '),
+        contains('0 or 1'),
+      );
+    },
+  );
 
   test('worked examples and snapshots are present', () {
     expect(files, isNotEmpty);

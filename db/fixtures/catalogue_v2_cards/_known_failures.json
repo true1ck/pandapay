@@ -6,34 +6,40 @@
   ],
   "failures": {
     "axis-bank-magnus#006": {
-      "engines": ["js", "dart"],
+      "engines": [
+        "js",
+        "dart"
+      ],
       "category": "loader_bug",
       "routed_to": "WP2, then a WP6b/WP7 override",
       "summary": "35 pts/Rs200 above Rs1.5 lakh a month needs base_150k_spend to carry post_cap_behavior custom_rate (35 per Rs200). The loader only emits base_rate/zero, so the accelerated band earns the base 12."
     },
     "axis-bank-magnus#007": {
-      "engines": ["js", "dart"],
+      "engines": [
+        "js",
+        "dart"
+      ],
       "category": "loader_bug",
       "routed_to": "WP2, then a WP6b/WP7 override",
       "summary": "Same as #006: spend after the Rs1.5 lakh line should earn 35 per Rs200 (custom post-cap rate)."
     },
     "flipkart-axis-bank-credit-card#006": {
-      "engines": ["js", "dart"],
+      "engines": [
+        "js",
+        "dart"
+      ],
       "category": "research_data",
       "routed_to": "WP6b",
       "summary": "The preferred-merchant list is not published (research note), so preferred_merchants_cashback_4 stays info (H2). Cite an issuer list naming Swiggy (then override merchant Swiggy, except Instamart/Genie) or mark the example engine_checkable false."
     },
     "swiggy-hdfc-bank-credit-card#004": {
-      "engines": ["js", "dart"],
+      "engines": [
+        "js",
+        "dart"
+      ],
       "category": "research_data",
       "routed_to": "WP6a",
       "summary": "T&C 2.3: 5% online applies only to select merchants mapped under the Table 1.2 MCCs; the merchant list is not published, so an MCC-only rule would widen (H2) and online_5pct stays info. Needs the merchant list, or engine_checkable false."
-    },
-    "tata-neu-infinity-hdfc-bank#004": {
-      "engines": ["js", "dart"],
-      "category": "engine_bug",
-      "routed_to": "Lead (contract question on C3.5 rounding)",
-      "summary": "Not an engine defect against the contract: the issuer rounds the base 1.5% and the additional 3.5% separately (316.5 -> 317 plus 738.5 -> 739 = 1,056); C3.5/D7 round the rule's whole accrual once (1,055). Needs a component-wise rounding mode if the 1-point gap matters. The partner-brand rule itself now loads (group token + EMI/UPI carve-outs)."
     }
   }
 }

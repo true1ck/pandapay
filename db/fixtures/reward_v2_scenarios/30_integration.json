@@ -7198,7 +7198,7 @@
     },
     {
       "name": "WP7 indigo-kotak-credit-card#004: Rs 10,000 flight booked on the IndiGo website",
-      "why": "airline co-brand at the entry-tier rate (D13b). Issuer-verified worked example (db/fixtures/card_worked_examples/indigo-kotak-credit-card.json #004): Table B: of the 15 BluChips per Rs100 (Blu 3), 8 base and 4 channel are IndiGo's own programme for any member; the card adds 3 per Rs100 at every tier: 100 x 3 = 300 (D24a).",
+      "why": "airline co-brand: only the card-issued 3 BluChips per Rs100 count, not IndiGo programme BluChips (D24a). Issuer-verified worked example (db/fixtures/card_worked_examples/indigo-kotak-credit-card.json #004): Table B: of the 15 BluChips per Rs100 (Blu 3), 8 base and 4 channel are IndiGo's own programme for any member; the card adds 3 per Rs100 at every tier: 100 x 3 = 300 (D24a).",
       "card": {
         "id": "indigo-kotak-credit-card:card",
         "slug": "indigo-kotak-credit-card",
