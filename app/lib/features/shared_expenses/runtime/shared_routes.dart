@@ -7,14 +7,27 @@ import '../../../app/design/widgets.dart';
 import '../ui/shared_expenses_screen.dart';
 import '../ui/shared_group_screen.dart';
 import '../ui/shared_presentation.dart';
+import '../../../app/providers.dart' show upiPaymentServiceProvider;
 import 'shared_providers.dart';
 import 'shared_runtime.dart';
+import 'shared_expense_review.dart';
+import '../ui/shared_settle_sheet.dart';
+import '../ui/shared_members_sheet.dart';
+import '../ui/shared_name_sheet.dart';
+import '../ui/shared_add_friend_sheet.dart';
+import '../ui/shared_invite_inbox.dart';
+import '../ui/shared_settlements_sheet.dart';
 
 /// Production-backed screen adapter. App router supplies destinations; this
 /// layer never adds an app dock, invents balances or writes bank transactions.
 class SharedExpensesRoute extends ConsumerStatefulWidget {
   final ValueChanged<String> onOpenContext;
-  const SharedExpensesRoute({super.key, required this.onOpenContext});
+  final VoidCallback onAddExpense;
+  const SharedExpensesRoute({
+    super.key,
+    required this.onOpenContext,
+    required this.onAddExpense,
+  });
   @override
   ConsumerState<SharedExpensesRoute> createState() =>
       _SharedExpensesRouteState();
@@ -28,6 +41,7 @@ class _SharedExpensesRouteState extends ConsumerState<SharedExpensesRoute> {
   };
   final _searches = <SharedHubTab, String>{};
   Timer? _searchDebounce;
+  bool _creatingFriend = false;
   @override
   void dispose() {
     _searchDebounce?.cancel();
@@ -52,50 +66,53 @@ class _SharedExpensesRouteState extends ConsumerState<SharedExpensesRoute> {
   }
 
   Future<void> _create(SharedExpensesRuntime runtime) async {
-    var draftName = '';
-    final name = await showDialog<String>(
-      context: context,
-      builder: (context) => AlertDialog(
-        title: Text('Create group', style: BambooFonts.heading(20)),
-        content: TextField(
-          onChanged: (value) => draftName = value,
-          maxLength: 120,
-          autofocus: true,
-          decoration: const InputDecoration(labelText: 'Group name'),
-        ),
-        actions: [
-          TextButton(
-            onPressed: () => Navigator.pop(context),
-            child: const Text('Cancel'),
-          ),
-          TextButton(
-            onPressed: () {
-              final value = draftName.trim();
-              if (value.isNotEmpty) Navigator.pop(context, value);
-            },
-            child: const Text('Create'),
-          ),
-        ],
-      ),
+    final name = await SharedNameSheet.show(
+      context,
+      title: 'Create group',
+      label: 'Group name',
+      hint: 'You can add people to the group afterwards.',
+      action: 'Create group',
     );
     if (name == null || !mounted) return;
     try {
+      final id = const Uuid().v4();
       await runtime.submit('context.create', {
-        'contextId': const Uuid().v4(),
+        'contextId': id,
         'contextKind': 'group',
         'name': name,
       });
       _reload();
+      // A group is only useful with people in it: go straight to adding them.
+      if (mounted && runtime.isCurrent()) {
+        await SharedMembersSheet.show(
+          context,
+          runtime: runtime,
+          contextId: id,
+          groupName: name,
+        );
+        if (mounted) _reload();
+      }
     } catch (_) {
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
           const SnackBar(
             content: Text(
-              'Group could not be confirmed. Check pending work before trying again.',
+              'Could not save the group yet. Try again in a moment.',
             ),
           ),
         );
       }
+    }
+  }
+
+  Future<void> _createFriend(SharedExpensesRuntime runtime) async {
+    if (_creatingFriend) return;
+    _creatingFriend = true;
+    try {
+      final id = await runAddFriendFlow(context, runtime);
+      if (id != null && mounted) _reload();
+    } finally {
+      _creatingFriend = false;
     }
   }
 
@@ -142,11 +159,16 @@ class _SharedExpensesRouteState extends ConsumerState<SharedExpensesRoute> {
             return SharedExpensesScreen(
               key: ValueKey(runtime.store.namespace),
               data: snapshot.data!,
+              header: SharedInviteInbox(runtime: runtime, onJoined: _reload),
               onOpenFriend: widget.onOpenContext,
               onOpenGroup: widget.onOpenContext,
               onOpenActivity: widget.onOpenContext,
+              onAddExpense: widget.onAddExpense,
               onCreateGroup: runtime.proposalsEnabled
                   ? () => _create(runtime)
+                  : null,
+              onAddFriend: runtime.proposalsEnabled
+                  ? () => _createFriend(runtime)
                   : null,
               onRetry: (_) => _reload(),
               onLoadMore: (tab) {
@@ -188,10 +210,12 @@ class _SharedExpensesRouteState extends ConsumerState<SharedExpensesRoute> {
 
 class SharedContextRoute extends ConsumerStatefulWidget {
   final String contextId;
+  final VoidCallback onAddExpense;
   final ValueChanged<String>? onOpenExpense;
   const SharedContextRoute({
     super.key,
     required this.contextId,
+    required this.onAddExpense,
     this.onOpenExpense,
   });
   @override
@@ -199,6 +223,37 @@ class SharedContextRoute extends ConsumerStatefulWidget {
 }
 
 class _SharedContextRouteState extends ConsumerState<SharedContextRoute> {
+  /// Payments need two people who have actually joined. If the other person is
+  /// still only invited, say so instead of opening a sheet that cannot work.
+  Future<void> _settleIfPossible(
+    SharedExpensesRuntime runtime,
+    VoidCallback open,
+  ) async {
+    try {
+      final roster = await runtime.contextRoster(widget.contextId);
+      if (roster.members.where((m) => m.canSettle).length < 2) {
+        final waiting = roster.members
+            .where((m) => m.state == 'invited' && m.profileId == null)
+            .firstOrNull;
+        if (mounted) {
+          ScaffoldMessenger.of(context).showSnackBar(
+            SnackBar(
+              content: Text(
+                waiting != null
+                    ? 'Waiting for ${waiting.name} to join. You can record payments once they have joined.'
+                    : 'Add someone to this split before recording a payment.',
+              ),
+            ),
+          );
+        }
+        return;
+      }
+    } catch (_) {
+      // Fall through: the settle sheet shows its own recoverable error.
+    }
+    if (mounted) open();
+  }
+
   Future<SharedGroupPresentation>? _view;
   SharedExpensesRuntime? _runtime;
   final _history = {
@@ -212,6 +267,8 @@ class _SharedContextRouteState extends ConsumerState<SharedContextRoute> {
   }
 
   void _changed() {
+    // A split this person left is gone from their device; do not reload it.
+    if (_runtime?.store.isContextRevoked(widget.contextId) == true) return;
     if (_runtime?.busy == false) _reload();
   }
 
@@ -273,6 +330,68 @@ class _SharedContextRouteState extends ConsumerState<SharedContextRoute> {
               return SharedGroupScreen(
                 key: ValueKey('${runtime.store.namespace}:${widget.contextId}'),
                 data: snapshot.data!,
+                onAddExpense: widget.onAddExpense,
+                onMembers: () => unawaited(
+                  SharedMembersSheet.show(
+                    context,
+                    runtime: runtime,
+                    contextId: widget.contextId,
+                    groupName: snapshot.data!.title,
+                  ).then((left) {
+                    // Left the split: this screen has nothing left to show.
+                    if (left == true && mounted) {
+                      Navigator.of(context).maybePop();
+                    }
+                  }),
+                ),
+                onOpenBalance: !runtime.settlementsEnabled
+                    ? null
+                    : (memberId) {
+                        final row = snapshot.data!.balances.items.firstWhere(
+                          (row) => row.id == memberId,
+                        );
+                        // Opposite obligations can coexist. Prefill one gross
+                        // direction rather than offsetting debts or choosing
+                        // the same member on both sides of the payment.
+                        final paying = !row.balance.youOwe.isZero;
+                        return unawaited(
+                          _settleIfPossible(
+                            runtime,
+                            () => SharedSettleSheet.show(
+                              context,
+                              runtime: runtime,
+                              contextId: widget.contextId,
+                              upi: ref.read(upiPaymentServiceProvider),
+                              initialPayerId: paying ? null : memberId,
+                              initialReceiverId: paying ? memberId : null,
+                              initialAmount: paying
+                                  ? row.balance.youOwe
+                                  : row.balance.owedToYou,
+                            ),
+                          ),
+                        );
+                      },
+                onSettleUp: !runtime.settlementsEnabled
+                    ? null
+                    : () => unawaited(
+                        _settleIfPossible(
+                          runtime,
+                          () => SharedSettleSheet.show(
+                            context,
+                            runtime: runtime,
+                            contextId: widget.contextId,
+                            upi: ref.read(upiPaymentServiceProvider),
+                          ),
+                        ),
+                      ),
+                onViewSettlements: () => unawaited(
+                  SharedSettlementsSheet.show(
+                    context,
+                    runtime: runtime,
+                    contextId: widget.contextId,
+                    groupName: snapshot.data!.title,
+                  ),
+                ),
                 onRetry: (_) => _reload(),
                 onLoadMore: (tab) {
                   final view = snapshot.data!;
@@ -292,7 +411,20 @@ class _SharedContextRouteState extends ConsumerState<SharedContextRoute> {
                     _reload();
                   }
                 },
-                onOpenExpense: widget.onOpenExpense,
+                onOpenExpense:
+                    widget.onOpenExpense ??
+                    (id) => unawaited(
+                      showModalBottomSheet<void>(
+                        context: context,
+                        isScrollControlled: true,
+                        backgroundColor: BambooInk.paper,
+                        builder: (_) => SharedExpenseReviewSheet(
+                          runtime: runtime,
+                          contextId: widget.contextId,
+                          expenseId: id,
+                        ),
+                      ),
+                    ),
               );
             },
           );

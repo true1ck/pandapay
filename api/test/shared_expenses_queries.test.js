@@ -102,3 +102,14 @@ test('context detail returns only an authorized membership summary including inv
   assert.equal(result.contextId,context);assert.equal(result.membershipState,'invited');
   await assert.rejects(readContext({query:async()=>({rows:[]})},actor,context),{code:'CONTEXT_NOT_FOUND'});
 });
+
+test('expense reads preserve explicit full bill metadata and keep legacy totals unknown',async()=>{
+ const bill={currency:'INR',totalMinor:'140000',contributions:[],allocation:{mode:'equal',participants:[],tieOrder:[]}};
+ for(const value of [bill,null]) {
+  let count=0;
+  const client={query:async()=>++count===1?{rows:[{allowed:true}]}:{rows:[{expense_id:id,created_by:actor,accepted_revision_id:id,head_version:'1',total_minor:'120000',bill:value}]}};
+  const result=await listContextExpenses(client,actor,context,{});
+  assert.deepEqual(result.items[0].bill,value);
+  assert.equal(result.items[0].totalMinor,'120000');
+ }
+});

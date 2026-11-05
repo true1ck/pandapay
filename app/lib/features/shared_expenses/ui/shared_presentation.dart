@@ -108,6 +108,8 @@ class SharedActivityRow {
 }
 
 class SharedExpenseRow {
+  final bool proposed;
+  final String? reviewLabel;
   final String totalLabel;
   final String paidLabel, payerLabel;
   final String id;
@@ -121,6 +123,8 @@ class SharedExpenseRow {
   final SharedParticipation participation;
   final SharedContextState state;
   const SharedExpenseRow({
+    this.proposed = false,
+    this.reviewLabel,
     this.totalLabel = 'Bill total',
     this.paidLabel = 'You paid',
     this.payerLabel = 'Paid by',
@@ -187,6 +191,9 @@ class SharedGroupPresentation {
   final SharedLoadState totalsState;
   final bool offline;
   final bool hideAmounts;
+
+  /// A private one-to-one split with a friend rather than a named group.
+  final bool direct;
   const SharedGroupPresentation({
     required this.id,
     required this.title,
@@ -197,5 +204,6 @@ class SharedGroupPresentation {
     this.totalsState = SharedLoadState.ready,
     this.offline = false,
     this.hideAmounts = false,
+    this.direct = false,
   });
 }

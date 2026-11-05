@@ -1,10 +1,14 @@
 import 'package:flutter/material.dart';
+import '../shared_expenses/ui/shared_discoverable_tile.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:go_router/go_router.dart';
 import 'package:pandapay_domain/pandapay_domain.dart';
 
 import '../../app/design/app_theme.dart';
 import '../../app/design/widgets.dart';
 import '../../app/providers.dart';
+import '../../app/router.dart' show AppRoute;
+import '../shared_expenses/runtime/shared_providers.dart';
 import '../../data/api_exception.dart';
 import '../../main.dart' show MoneyText;
 import '../notifications/notifications_screen.dart';
@@ -105,12 +109,25 @@ class AccountScreen extends ConsumerWidget {
             const SizedBox(height: AppSpace.sm),
             AccountTile(
               icon: Icons.call_split_rounded,
-              label: 'Split planner',
+              label: 'Multi-Card Split Planner',
               onTap: () => Navigator.of(context).push(
                 MaterialPageRoute(builder: (_) => const SplitPlannerScreen()),
               ),
             ),
             const SizedBox(height: AppSpace.sm),
+            if (ref.watch(sharedExpensesEnabledProvider)) ...[
+              AccountTile(
+                icon: Icons.people_outline_rounded,
+                label: 'Splits',
+                badgeCount: ref.watch(sharedWaitingCountProvider).valueOrNull ?? 0,
+                onTap: () async {
+                  await context.push(AppRoute.splits);
+                  ref.invalidate(sharedWaitingCountProvider);
+                },
+              ),
+              const SizedBox(height: AppSpace.sm),
+              const SharedDiscoverableTile(),
+            ],
             AccountTile(
               icon: Icons.card_giftcard_rounded,
               label: 'Invite friends',

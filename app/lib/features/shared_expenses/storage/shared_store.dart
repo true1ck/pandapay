@@ -1,5 +1,6 @@
 import 'dart:convert';
 import 'dart:math';
+import 'package:crypto/crypto.dart';
 
 import 'package:flutter/foundation.dart';
 
@@ -61,6 +62,32 @@ final class SharedStoredPage {
   const SharedStoredPage(this.items, this.nextId);
 }
 
+/// Private attachment retained only as part of a submitted expense.
+final class SharedSubmissionReceipt {
+  final String hash, name;
+  final String? mimeType;
+  final Uint8List bytes;
+  SharedSubmissionReceipt({
+    required this.name,
+    this.mimeType,
+    required Uint8List bytes,
+  }) : bytes = Uint8List.fromList(bytes).asUnmodifiableView(),
+       hash = sha256.convert(bytes).toString() {
+    if (bytes.isEmpty ||
+        bytes.length > 8388608 ||
+        name.trim().isEmpty ||
+        name.length > 256 ||
+        RegExp(r'[\x00-\x1f\x7f]').hasMatch(name) ||
+        mimeType != null &&
+            (mimeType!.length > 128 ||
+                !RegExp(
+                  r'^[a-zA-Z0-9.+-]+/[a-zA-Z0-9.+-]+$',
+                ).hasMatch(mimeType!))) {
+      throw const SharedLocalException('invalid_receipt');
+    }
+  }
+}
+
 /// Durable account-bound storage. Immutable wire payloads are distinct from
 /// retry/lease metadata and private provisional overlays. Never coalesces money.
 class SharedExpensesStore {
@@ -85,6 +112,9 @@ class SharedExpensesStore {
     }
     if (this.recoveryGate.isRecovering) throw const AccountRecoveryBusy();
     SharedExpensesSchema.ensure(database.db);
+    // Old backups may contain abandoned forms. Remove only unsubmitted input;
+    // immutable commands, receipts and original bank transactions stay intact.
+    SharedExpensesSchema.discardUnsubmittedEditors(database.db, namespace);
   }
   static bool _alwaysCurrent() => true;
   Future<T> _write<T>(T Function() action) => recoveryGate.run(() async {
@@ -147,6 +177,15 @@ class SharedExpensesStore {
             [namespace],
           ).single['n']
           as int;
+
+  /// Commands still on their way to the server. A command the server refused
+  /// for good ('rejected' or 'conflict') will never send, so it is not "syncing".
+  int get waitingCount =>
+      database.db.select(
+            "SELECT COUNT(*) AS n FROM shared_commands WHERE namespace=? AND state NOT IN ('committed','rejected','conflict')",
+            [namespace],
+          ).single['n']
+          as int;
   Map<String, Object?>? provisional(String operationId) {
     final queued = operation(operationId);
     if (queued != null && isContextRevoked(queued.command.contextId)) {
@@ -181,7 +220,23 @@ class SharedExpensesStore {
     List<String> sourceDependencies = const [],
     Map<String, Object?>? provisional,
     int createdAt = 0,
-  }) => _write(() {
+  }) => _write(
+    () => _enqueue(
+      command,
+      dependsOn: dependsOn,
+      sourceDependencies: sourceDependencies,
+      provisional: provisional,
+      createdAt: createdAt,
+    ),
+  );
+
+  void _enqueue(
+    SharedCommand command, {
+    List<String> dependsOn = const [],
+    List<String> sourceDependencies = const [],
+    Map<String, Object?>? provisional,
+    int createdAt = 0,
+  }) {
     if (dependsOn.length > 100 ||
         sourceDependencies.length > 100 ||
         dependsOn.toSet().length != dependsOn.length ||
@@ -242,10 +297,85 @@ class SharedExpensesStore {
         overlay,
       ]);
     }
+  }
+
+  Future<void> enqueueFriendSetup(
+    SharedCommand context,
+    SharedCommand member,
+  ) => _write(() {
+    if (context.kind != 'context.create' ||
+        member.kind != 'member.invite' ||
+        context.contextId != member.contextId) {
+      throw const SharedLocalException('invalid_friend_setup');
+    }
+    _enqueue(context);
+    _enqueue(member, dependsOn: [context.operationId]);
   });
 
+  /// Submit once: command, private preview and optional receipt commit together.
+  /// The legacy receipt table/column names are retained for backup compatibility.
+  Future<void> enqueueExpenseSubmission(
+    SharedCommand command, {
+    required Map<String, Object?> provisional,
+    SharedSubmissionReceipt? receipt,
+    int createdAt = 0,
+  }) => _write(() {
+    if (command.kind != 'expense.propose' ||
+        isContextRevoked(command.contextId)) {
+      throw const SharedLocalException('invalid_submission');
+    }
+    final existing = operation(command.operationId);
+    _enqueue(command, provisional: provisional, createdAt: createdAt);
+    if (existing != null) {
+      if (receipt != null &&
+          submissionReceipt(command.operationId, receipt.hash) == null) {
+        throw const SharedLocalException('submission_reuse');
+      }
+      return;
+    }
+    if (receipt == null) return;
+    final usage = database.db.select(
+      'SELECT count(*) n,coalesce(sum(length(bytes)),0) size FROM shared_editor_receipts WHERE namespace=?',
+      [namespace],
+    ).single;
+    if ((usage['n'] as int) >= 256 ||
+        (usage['size'] as int) + receipt.bytes.length > 134217728) {
+      throw const SharedLocalException('receipt_storage_limit');
+    }
+    database.db
+        .execute('INSERT INTO shared_editor_receipts VALUES(?,?,?,?,?,?)', [
+          namespace,
+          command.operationId,
+          receipt.hash,
+          receipt.name,
+          receipt.mimeType,
+          receipt.bytes,
+        ]);
+  });
+
+  SharedSubmissionReceipt? submissionReceipt(String operationId, String hash) {
+    if (!isCurrent()) throw const SharedLocalException('account_changed');
+    final queued = operation(operationId);
+    if (queued == null || isContextRevoked(queued.command.contextId))
+      return null;
+    final rows = database.db.select(
+      'SELECT name,mime_type,bytes FROM shared_editor_receipts WHERE namespace=? AND draft_id=? AND hash=?',
+      [namespace, operationId, hash],
+    );
+    if (rows.isEmpty) return null;
+    final row = rows.single;
+    final receipt = SharedSubmissionReceipt(
+      name: row['name'] as String,
+      mimeType: row['mime_type'] as String?,
+      bytes: row['bytes'] as Uint8List,
+    );
+    if (receipt.hash != hash)
+      throw const SharedLocalException('receipt_corrupt');
+    return receipt;
+  }
+
   /// Resolves only a durable scheduling dependency. It never changes the source
-  /// identity, payload, hash or operation ID; finalizing a different draft needs
+  /// identity, payload, hash or operation ID; submitting a different expense needs
   /// a new explicit command and operation ID.
   Future<void> resolveSourceDependency(String key) => _write(
     () => database.db.execute(

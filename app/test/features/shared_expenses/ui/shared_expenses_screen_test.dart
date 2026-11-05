@@ -5,6 +5,7 @@ import 'package:pandapay/app/design/app_theme.dart';
 import 'package:pandapay/app/design/widgets.dart';
 import 'package:pandapay/features/shared_expenses/ui/shared_expenses_screen.dart';
 import 'package:pandapay/features/shared_expenses/ui/shared_group_screen.dart';
+import 'package:pandapay/features/shared_expenses/ui/shared_components.dart';
 import 'package:pandapay/features/shared_expenses/ui/shared_presentation.dart';
 import 'package:pandapay_domain/pandapay_domain.dart';
 import 'package:shared_preferences/shared_preferences.dart';
@@ -228,10 +229,52 @@ void main() {
       await tester.tap(find.text('Rahul'));
       await tester.pumpAndSettle();
       expect(opened, 'rahul');
-      await tester.tap(find.text('Add expense'));
+      final add = find.byTooltip('Add expense');
+      expect(
+        find.descendant(of: find.byType(AppBar), matching: add),
+        findsOneWidget,
+      );
+      expect(tester.getCenter(add).dx, greaterThan(300));
+      await tester.tap(add);
       await tester.pumpAndSettle();
       expect(added, 1);
-      expect(find.text('Add expense'), findsOneWidget);
+      expect(add, findsOneWidget);
+      expect(find.text('Add expense'), findsNothing);
+      for (final label in ['Groups', 'Activity']) {
+        await tester.tap(find.text(label));
+        await tester.pumpAndSettle();
+        await tester.tap(add);
+        await tester.pumpAndSettle();
+      }
+      expect(added, 3);
+    },
+  );
+
+  testWidgets(
+    'group plus is reachable on every tab and creates no duplicate footer',
+    (tester) async {
+      var added = 0;
+      await pump(
+        tester,
+        SharedGroupScreen(
+          data: SharedGroupPresentation(
+            id: 'g',
+            title: 'Flatmates',
+            expenses: SharedPage(),
+            balances: SharedPage(),
+          ),
+          onAddExpense: () => added++,
+        ),
+      );
+      for (final tab in ['Expenses', 'Balances', 'Totals']) {
+        await tester.tap(find.text(tab));
+        await tester.pumpAndSettle();
+        await tester.tap(find.byTooltip('Add expense'));
+        await tester.pumpAndSettle();
+      }
+      expect(added, 3);
+      expect(find.byTooltip('Add expense'), findsOneWidget);
+      expect(find.text('Add expense'), findsNothing);
     },
   );
 
@@ -313,7 +356,7 @@ void main() {
         ),
       );
       expect(find.text('Offline · showing saved splits'), findsOneWidget);
-      expect(find.text('Some results are still syncing'), findsOneWidget);
+      expect(find.text(sharedCatchingUpCopy), findsOneWidget);
       expect(find.text('Rahul'), findsOneWidget);
       expect(find.text('Settled!'), findsNothing);
     },

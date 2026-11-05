@@ -725,6 +725,26 @@
       "disposition": "platform_ops",
       "reason": "Reviewed category rule revisions and signed bundle publication are platform administration state preserved by full PostgreSQL recovery, outside a customer portable archive."
     },
+    "shared_expenses.group_links": {
+      "disposition": "excluded_with_intent",
+      "reason": "Shared-history portable scope gate: invitations, join links and identity bindings involve more than one person and hold hashed secrets; they are never restored from a portable copy. Full PostgreSQL recovery preserves this isolated schema."
+    },
+    "shared_expenses.invitations": {
+      "disposition": "excluded_with_intent",
+      "reason": "Shared-history portable scope gate: invitations, join links and identity bindings involve more than one person and hold hashed secrets; they are never restored from a portable copy. Full PostgreSQL recovery preserves this isolated schema."
+    },
+    "shared_expenses.member_identity_bindings": {
+      "disposition": "excluded_with_intent",
+      "reason": "Shared-history portable scope gate: invitations, join links and identity bindings involve more than one person and hold hashed secrets; they are never restored from a portable copy. Full PostgreSQL recovery preserves this isolated schema."
+    },
+    "shared_expenses.phone_directory": {
+      "disposition": "platform_ops",
+      "reason": "Phone directory and lookup counters hold only keyed hashes and rate-limit history for the shared feature; per-account portable restore must not replay them. Full PostgreSQL recovery preserves them and each device re-registers its own number."
+    },
+    "shared_expenses.phone_lookups": {
+      "disposition": "platform_ops",
+      "reason": "Phone directory and lookup counters hold only keyed hashes and rate-limit history for the shared feature; per-account portable restore must not replay them. Full PostgreSQL recovery preserves them and each device re-registers its own number."
+    },
     "shared_expenses.settings": {
       "disposition": "platform_ops",
       "reason": "Shared feature capability or committed traversal state; full PostgreSQL recovery preserves it, while device/archive cursors must be reinitialized. No portable financial replay."

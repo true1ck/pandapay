@@ -21,8 +21,10 @@ class SharedExpensesScreen extends StatefulWidget {
   final ValueChanged<SharedHubTab>? onRetry;
   final ValueChanged<SharedHubTab>? onLoadMore;
   final ValueChanged<SharedHubTab>? onPreviousPage;
+  final Widget? header;
   const SharedExpensesScreen({
     super.key,
+    this.header,
     required this.data,
     this.initialIndex = 0,
     this.onOpenFriend,
@@ -122,7 +124,8 @@ class _SharedExpensesScreenState extends State<SharedExpensesScreen>
   List<Widget> _header(SharedHubTab tab, {required bool incomplete}) => [
     if (widget.data.pendingChanges > 0)
       SharedNotice(
-        '${widget.data.pendingChanges} changes pending sync or review',
+        sharedPendingCopy(widget.data.pendingChanges),
+        icon: Icons.sync_rounded,
       ),
     if (widget.data.offline)
       const SharedNotice(
@@ -160,12 +163,13 @@ class _SharedExpensesScreenState extends State<SharedExpensesScreen>
           ),
         ),
       if (widget.data.summary?.incomplete == true)
-        const SharedNotice('Balance snapshot incomplete'),
+        const SharedNotice('Some balances may be missing'),
       if (widget.data.summary != null &&
           !widget.data.summary!.confidence.isConfirmed)
         const SharedNotice('Estimated amounts'),
     ],
-    if (incomplete) const SharedNotice('Some results are still syncing'),
+    if (incomplete && widget.data.pendingChanges == 0)
+      const SharedNotice(sharedCatchingUpCopy),
     if (_searchVisible.contains(tab))
       Padding(
         padding: const EdgeInsets.only(bottom: AppSpace.md),
@@ -365,6 +369,7 @@ class _SharedExpensesScreenState extends State<SharedExpensesScreen>
   @override
   Widget build(BuildContext context) => SharedTabbedFrame(
     title: 'Splits',
+    header: widget.header,
     tabs: const ['Friends', 'Groups', 'Activity'],
     initialIndex: widget.initialIndex,
     controller: _tabs,

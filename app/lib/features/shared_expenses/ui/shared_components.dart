@@ -16,8 +16,10 @@ class SharedTabbedFrame extends StatelessWidget {
   final int initialIndex;
   final TabController? controller;
   final VoidCallback? onAddExpense;
+  final Widget? header;
   const SharedTabbedFrame({
     super.key,
+    this.header,
     required this.title,
     required this.tabs,
     required this.children,
@@ -42,7 +44,15 @@ class SharedTabbedFrame extends StatelessWidget {
           overflow: TextOverflow.ellipsis,
           style: BambooFonts.heading(17),
         ),
-        actions: actions,
+        actions: [
+          ...actions,
+          if (onAddExpense != null)
+            IconButton(
+              tooltip: 'Add expense',
+              onPressed: onAddExpense,
+              icon: const Icon(Icons.add_rounded, color: BambooInk.slate),
+            ),
+        ],
         bottom: TabBar(
           controller: controller,
           isScrollable:
@@ -62,22 +72,15 @@ class SharedTabbedFrame extends StatelessWidget {
         ),
       ),
       body: AppBackground(
-        child: TabBarView(controller: controller, children: children),
-      ),
-      bottomNavigationBar: onAddExpense == null
-          ? null
-          : SafeArea(
-              top: false,
-              child: Padding(
-                padding: const EdgeInsets.all(AppSpace.lg),
-                child: SharedAction(
-                  label: 'Add expense',
-                  icon: Icons.add_rounded,
-                  onTap: onAddExpense!,
-                  primary: true,
-                ),
-              ),
+        child: Column(
+          children: [
+            ?header,
+            Expanded(
+              child: TabBarView(controller: controller, children: children),
             ),
+          ],
+        ),
+      ),
     ),
   );
 }
@@ -135,6 +138,23 @@ class SharedAction extends StatelessWidget {
     ),
   );
 }
+
+/// The one primary action style for Splits sheets and screens: slate with lime
+/// text, full width, 52 high. Use this instead of hand-copied button styles.
+ButtonStyle sharedPrimaryButtonStyle() => FilledButton.styleFrom(
+  backgroundColor: BambooInk.slate,
+  foregroundColor: BambooInk.lime,
+  minimumSize: const Size.fromHeight(52),
+);
+
+/// Plain-language status for work that is saved on this phone but not yet
+/// confirmed by the server. Never exposes queue or sync vocabulary.
+String sharedPendingCopy(int count) =>
+    'Syncing your latest changes. Balances will update in a moment.';
+
+/// Shown when a list is only partly loaded.
+const sharedCatchingUpCopy =
+    'Still loading the latest. Amounts may change shortly.';
 
 class SharedNotice extends StatelessWidget {
   final String text;
@@ -341,7 +361,7 @@ class SharedSummaryCard extends StatelessWidget {
           Padding(
             padding: const EdgeInsets.only(top: AppSpace.sm),
             child: Text(
-              'Balance snapshot incomplete',
+              'Some balances may be missing',
               style: BambooFonts.ui(12, color: BambooInk.onSlateSubtle),
             ),
           ),
@@ -448,7 +468,7 @@ String? sharedStateLabel(SharedContextState state) => switch (state) {
   SharedContextState.pendingPayment => 'Payment confirmation pending',
   SharedContextState.creditOwedBack => 'Credit owed back',
   SharedContextState.disputed => 'Needs review',
-  SharedContextState.incomplete => 'Snapshot incomplete',
+  SharedContextState.incomplete => 'Some balances missing',
 };
 
 class SharedContextTile extends StatelessWidget {
@@ -496,7 +516,12 @@ class SharedContextTile extends StatelessWidget {
     final identity = Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
-        Text(row.title, style: BambooFonts.heading(15)),
+        Text(
+          row.title,
+          maxLines: 2,
+          overflow: TextOverflow.ellipsis,
+          style: BambooFonts.heading(15),
+        ),
         if (row.subtitle != null)
           Text(
             row.subtitle!,
@@ -524,7 +549,7 @@ class SharedContextTile extends StatelessWidget {
         ],
         if (row.balance.incomplete)
           Text(
-            'Balance snapshot incomplete',
+            'Some balances may be missing',
             style: BambooFonts.ui(12, color: BambooInk.ink700),
           ),
         if (!row.balance.confidence.isConfirmed)

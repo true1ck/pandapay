@@ -190,6 +190,8 @@ void main() {
       await store.enqueue(expected, provisional: {'title': 'Pending'});
       db.db.execute('DROP INDEX shared_projection_overview');
       db.db.execute('DROP INDEX shared_command_context');
+      db.db.execute('DROP TABLE shared_editor_drafts');
+      db.db.execute('DROP TABLE shared_editor_receipts');
       db.db.execute(
         "UPDATE shared_schema_version SET version=1 WHERE module='shared_expenses'",
       );
@@ -659,6 +661,16 @@ void main() {
       expect(other.provisional(op1), isNull);
     },
   );
+  test('a command the server refused for good is not "syncing"', () async {
+    await store.enqueue(command());
+    expect(store.waitingCount, 1);
+    db.db.execute(
+      "UPDATE shared_commands SET state='rejected',error_code='http_403' WHERE namespace=?",
+      [accountA],
+    );
+    expect(store.waitingCount, 0);
+    expect(store.pendingCount, 1);
+  });
   test(
     'reusing an ID is idempotent for same bytes and rejects changed payload',
     () async {

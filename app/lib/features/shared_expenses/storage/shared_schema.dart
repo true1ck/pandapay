@@ -2,7 +2,7 @@ import 'package:sqlite3/sqlite3.dart';
 
 /// Additive module on the existing AppDatabase connection, not a second pool.
 abstract final class SharedExpensesSchema {
-  static const version = 2;
+  static const version = 7;
   static const tableNames = [
     'shared_commands',
     'shared_command_dependencies',
@@ -11,6 +11,8 @@ abstract final class SharedExpensesSchema {
     'shared_provisional',
     'shared_projections',
     'shared_sync_state',
+    'shared_editor_drafts',
+    'shared_editor_receipts',
   ];
 
   /// The core database may skip only a known future module version so rollback
@@ -75,11 +77,66 @@ INSERT INTO shared_schema_version VALUES('shared_expenses',1);
           "UPDATE shared_schema_version SET version=2 WHERE module='shared_expenses'",
         );
       }
+      if (installed < 3) {
+        db.execute('''
+CREATE TABLE shared_editor_drafts (
+ namespace TEXT NOT NULL,draft_id TEXT NOT NULL,context_id TEXT,
+ value_json TEXT NOT NULL,version INTEGER NOT NULL,operation_id TEXT,
+ updated_at INTEGER NOT NULL,
+ PRIMARY KEY(namespace,draft_id)
+);
+CREATE INDEX shared_editor_context ON shared_editor_drafts(namespace,context_id,draft_id);
+CREATE INDEX shared_editor_unfinished ON shared_editor_drafts(namespace,draft_id) WHERE operation_id IS NULL;
+UPDATE shared_schema_version SET version=3 WHERE module='shared_expenses';
+''');
+      }
+      if (installed < 4) {
+        db.execute('''
+CREATE TABLE shared_editor_receipts (
+ namespace TEXT NOT NULL,draft_id TEXT NOT NULL,hash TEXT NOT NULL,
+ name TEXT NOT NULL,mime_type TEXT,bytes BLOB NOT NULL CHECK(length(bytes) BETWEEN 1 AND 8388608),
+ PRIMARY KEY(namespace,draft_id,hash)
+);
+UPDATE shared_schema_version SET version=4 WHERE module='shared_expenses';
+''');
+      }
+      if (installed < 7) {
+        // No new form drafts are persisted. Keep legacy submitted metadata and
+        // receipt storage so prior queues and backups remain compatible.
+        db.execute('DROP INDEX IF EXISTS shared_editor_source_event');
+        db.execute('DROP INDEX IF EXISTS shared_editor_source_transaction');
+        db.execute('DROP INDEX IF EXISTS shared_editor_resume');
+        db.execute('DROP INDEX IF EXISTS shared_editor_context_resume');
+        db.execute(
+          "UPDATE shared_schema_version SET version=7 WHERE module='shared_expenses'",
+        );
+      }
       db.execute('RELEASE shared_schema_ensure');
       return true;
     } catch (_) {
       db.execute('ROLLBACK TO shared_schema_ensure');
       db.execute('RELEASE shared_schema_ensure');
+      rethrow;
+    }
+  }
+
+  static void discardUnsubmittedEditors(Database db, String namespace) {
+    db.execute('SAVEPOINT shared_discard_forms');
+    try {
+      db.execute(
+        '''DELETE FROM shared_editor_receipts WHERE namespace=?
+ AND draft_id IN (SELECT draft_id FROM shared_editor_drafts WHERE namespace=? AND operation_id IS NULL)
+ AND NOT EXISTS (SELECT 1 FROM shared_commands c WHERE c.namespace=shared_editor_receipts.namespace AND c.operation_id=shared_editor_receipts.draft_id)''',
+        [namespace, namespace],
+      );
+      db.execute(
+        'DELETE FROM shared_editor_drafts WHERE namespace=? AND operation_id IS NULL',
+        [namespace],
+      );
+      db.execute('RELEASE shared_discard_forms');
+    } catch (_) {
+      db.execute('ROLLBACK TO shared_discard_forms');
+      db.execute('RELEASE shared_discard_forms');
       rethrow;
     }
   }

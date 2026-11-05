@@ -78,3 +78,55 @@ The four unchanged SMS screenshot-baseline failures require separate visual-base
 ## Layout correction checkpoint — 4 November
 
 Code checkpoint **`2c443370`** (local only), **127 scoped tests passed**, changed analyzer clean, and one separate actual-font render check passed. The [correction handoff](layout-correction-20261104.md) records owned presentation/tests, red/green regressions, labeled visual fixtures, final local emulator build 8128 and scoped data preservation. Main app navigation and the original Payments/Subscriptions body remain intact. Continue the existing P01/P06 owner boundary; no financial source/ledger contract or rollout flag was changed by this UI increment.
+
+## Invite link, contacts picker and UPI handoff increment — 5 November 2026
+
+Uncommitted, local only. Adds the Stage 1/3/4 client pieces on top of the server invitation module: `createInvitation`/`previewInvitation`/`claimInvitation` transport calls and runtime methods; **Invite** share-sheet action and optional phone number plus **Pick from contacts** (permission requested only on tap, `flutter_contacts` 2.6.0, `READ_CONTACTS`) in the members sheet; join screen at `/split/join/:token` with Android app-link filters for `pandapay.app/split/join/` and `pandapay://split`; settle-sheet **Pay with UPI app** using the existing `app.pandapay/upi` channel and a typed receiver UPI ID. A returned UPI status is never treated as settlement: the payer must still tap Record payment and the receiver must confirm.
+
+Evidence: 169 Flutter tests passed (shared_expenses, router, Quick Add, transaction detail, recovery), API `shared_expenses*` 100 passed, analyzer shows only three pre-existing info lints in the shared scope. **Not verified:** Android Gradle build with the new plugin/manifest, App Links domain association for `/split/join/`, device/emulator behaviour, iOS `Info.plist` contacts string. Known gaps: signed-out users opening a join link lose the token at the onboarding redirect; the UPI attempt is not persisted server-side before launch (plan §4.1 payment attempts) and receiver UPI IDs are typed, not stored on a member profile.
+
+### Update — 5 November 2026 (invite flow, UI consistency)
+
+Local only, uncommitted. **Backend:** after a full backup (`product-before-invite-upgrade.dump`) and a rehearsal on a restored copy, the one additive migration `20261113000000_shared_expense_invitations.sql` was applied to the local `pandapay` DB (financial snapshots and migration ledger identical; feature flags left as they were: accepted writes and settlements were already on locally). Local API image rebuilt; script and overlay in `artifacts/shared-expenses-emulator-20261104/` (`invite-upgrade-local.cjs`).
+
+**Built:** inline Add person / Add friend / Create group sheets (no stacked dialogs); Friends and Groups shown separately in Quick Add with Add friend; friend-aware wording; plain-language pending/loading banners; inline UPI confirm and app picker; readable dates and no "snapshot"/"pending work" jargon; public install page `GET /split/join/:token` (never joins, no data); Play-referrer `split_join` key and a persistent pending-invite store so the token survives install and sign-in; Join screen dead-end Close.
+
+**Verified on emulator-5554 (local API 4001, auth 3210, build 8148, data intact):** Invite creates a real link and opens the share sheet; deep link opens the Join screen; invalid/expired link shows a recoverable state. 199 Flutter tests, 5 API invitation tests pass.
+
+**Not verified:** a second account actually claiming a link; fresh-install via Play referrer and sign-up resume (needs Play Store/second device); iOS; production domain/package/app-link association. Remaining audit items (shared button/avatar components, hidden-amount in review sheets, pending-invitee settle pre-check, remaining operation-status jargon) are listed in the audit hand-off.
+
+### Update — audit follow-ups (5 November 2026)
+
+Shared `sharedPrimaryButtonStyle()` replaces six hand-copied primary button styles; operation-status copy is plain language; long titles ellipsize; Settle up checks that both people have joined and otherwise says who it is waiting for (verified on emulator-5554, build 8149). **Not done:** hidden-amount threading, because no app-wide hide-amounts preference exists and Splits' `hideAmounts` flag is never populated; shared avatar/row component for Quick Add chooser vs hub; test for the settle pre-check. 200 Flutter tests pass.
+
+### Update — phone directory, friend lookup and invitee inbox (5 November 2026)
+
+Local only, uncommitted. **Migration `20261114000000_shared_expense_phone_directory.sql` (additive, NOT yet applied to the local `pandapay` DB; back up and rehearse first as before).** Stores only a keyed HMAC of a verified phone (`phone_directory`), never the number; `phone_lookups` for a 25/day per-person cap; `invitations.declined_at`. New functions: `register_phone`, `directory_status`, `lookup_phone`, `list_my_invitations`, `claim_invitation_by_id`, `decline_invitation`; `create_invitation` now refuses own number, a person already in the context, the same number twice in one context, and re-inviting someone who declined within 7 days; `list_invitations` reports declined/expired.
+
+**API:** `POST /shared-expenses/directory/lookup`, `GET|POST /shared-expenses/directory` (opt-out switch), `GET /shared-expenses/invitations/inbox`, `POST .../invitations/accept|decline`. The verified phone always comes from the session, never the request. Names are masked to first name + last initial. Directory registration piggybacks on authenticated inbox/status calls, at most once a day. An opted-out person is indistinguishable from an unregistered one.
+
+**App:** Add friend (Quick Add and Splits hub) is now one sheet: contacts picker, name, phone, live "on PandaPay / not yet" check, existing-friend shortcut, own-number guard; found friends get an in-app invite, others get the share sheet. Members sheet shows the same live check. Splits hub shows an invitee inbox banner (Join / Decline) on open and on resume; Account has "Let friends find me by phone". No push notification: the inbox endpoint is the data source a future push would wake.
+
+**Evidence:** real PostgreSQL suite 21 passed / 0 failed (new: directory, opt-out, self, rate limit, ACL, inbox, accept replay, decline, duplicate/member/declined guards, expiry); API shared_expenses 104 passed; Flutter shared_expenses + Quick Add + router + activity 327 passed, new data tests 3 passed; analyzer: no errors. Existing invitation test needed `accepted_writes_enabled` toggled around its approval step (it asserted `accepted` with the flag off).
+
+**Not verified:** emulator/device behaviour, two real accounts end to end, migration on the local product DB, iOS contacts string, home-screen badge for pending invites (inbox lives on Splits only), name staleness (display name refreshes daily).
+
+**Applied and checked on emulator-5554 (build 8151, local API 4001):** after a full backup (`product-before-phone-directory.dump`) and a verified rehearsal, migration `20261114000000` was applied to the local `pandapay` DB (financial snapshot and migration ledger unchanged); API image rebuilt. Signed-in account auto-registered in the directory (1 row), the "Let friends find me by phone" switch shows in You, the Add friend sheet opens from Splits and the live check answered "Not on PandaPay yet" for an unregistered number. The pending-sync banner now reads "Syncing your latest changes. Balances will update in a moment." Still unverified: a second account receiving/accepting an invite, contacts picker on device, share sheet.
+
+**Two-device run (5 November 2026):** emulator-5554 (dev build 8151, account `test@example.com`) and a physical phone (staging flavor, separate app id `.staging`, build 8155, dev test account "Smoke Test") over wireless debugging. The phone reached the laptop API through `adb reverse` to `127.0.0.1` because the app refuses non-loopback plain HTTP by design. Verified end to end: the phone registered in the directory; on the emulator the Add friend sheet showed "Smoke T. is on PandaPay…" and auto-filled the masked name; saving created a phone-bound invitation; the phone's Splits screen showed the invite banner on resume; Join bound the member (`invitation=joined`, member `active`, profile = the phone's account). Bug found and fixed on the way: the inbox loaded before capabilities arrived and never retried. Local test-data change: the "Smoke Test" auth user was given the repo's dev test email so it can use the email+phone login form. **Not yet verified on device:** Decline, expiry, existing-friend shortcut, contacts picker, share sheet for an unregistered number. **Follow-ups seen:** the invitee's hub names a direct split after the name the inviter typed (it shows the invitee their own name); an inviter with no profile name shows as "Someone".
+
+## Update: owners, former members, duplicates (5 November 2026)
+
+- Migration `20261114040000_shared_expense_owner_and_former.sql`: `transfer_owner`, `take_over_ownership`, and `_member_label` returns "Former member" when an account was deleted. API: `POST /shared-expenses/members/transfer-owner`, `POST /shared-expenses/contexts/take-over`.
+- App: Members sheet shows "Make owner" (owner), "Take over as owner" (only when the owner's account is gone), "Account no longer active · history kept"; add-friend warns about a same-name friend, asks which number when a contact has several, and offers "Try again" when the invite call fails; pickers mark people who have not joined; the Splits row in You shows a count of waiting invites and requests.
+- Portable-backup coverage now classifies the phone directory, lookups, invitations, group links and identity bindings.
+- Tests: PG suite 24, new Flutter widget tests (`shared_members_exit_test.dart`).
+
+### Device run, 5 November 2026 (emulator build 8190, phone build 8191)
+
+- Group link: owner created a link, the phone opened `pandapay://split/join/<token>` and sent a request. The owner saw "Smoke Test wants to join" with the number ending, the Splits row showed a badge of 1, Approve added them.
+- Owner transfer: Make owner moved ownership, the old owner became a plain member with "Leave this split" and no owner controls.
+- Leave: refused with "Settle up and clear any waiting expenses before leaving." while money or an expense was pending; allowed when settled, and the group screen now closes instead of showing an error.
+- Remove: an unjoined person was removed by the owner and dropped from the list.
+- Found and fixed on device: the "Syncing your latest changes" notice stuck forever after a server-refused command; the group screen errored after leaving; the Join button label was dark on dark.
+- Known small items: a left or owner member without a verified phone shows as "Member"; a lingering "Check status" link after adding a person.

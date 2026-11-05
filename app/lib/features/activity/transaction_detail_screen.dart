@@ -32,6 +32,9 @@ import 'foreign_payments_screen.dart';
 import '../sync/split_sync.dart';
 import '../insights/spend_trends_screen.dart';
 import 'sms_learning_capture.dart';
+import '../quickadd/quick_add_screen.dart';
+import '../shared_expenses/runtime/shared_providers.dart';
+import '../shared_expenses/composer/shared_source_seed.dart';
 
 /// D2 Transaction Detail (ui-spec Group D). Deep-linkable at /activity/:id.
 /// Full record incl. source and reconciliation status. Actions: edit (D3),
@@ -256,6 +259,7 @@ class _DetailBodyState extends ConsumerState<_DetailBody> {
   bool _savingSplits = false;
   SplitRepository? _splitStore;
   LocalSplitDocument? _localSplit;
+  late final String _openedNamespace;
 
   @override
   void dispose() {
@@ -279,6 +283,7 @@ class _DetailBodyState extends ConsumerState<_DetailBody> {
   @override
   void initState() {
     super.initState();
+    _openedNamespace = ref.read(cacheNamespaceProvider);
     _loadSplits();
   }
 
@@ -494,6 +499,94 @@ class _DetailBodyState extends ConsumerState<_DetailBody> {
           ),
         );
       }
+    }
+  }
+
+  Future<void> _showSplitOptions() async {
+    if (_savingSplits) return;
+    if (_loadingSplits) await _loadSplits();
+    if (!mounted || ref.read(cacheNamespaceProvider) != _openedNamespace) {
+      return;
+    }
+    if (_splitLoadError != null) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(
+          content: Text('Retry loading the current split before sharing it.'),
+        ),
+      );
+      return;
+    }
+    final entry = _entry;
+    final namespace = ref.read(cacheNamespaceProvider);
+    var knownIdentity = false;
+    if (namespace.startsWith('user:')) {
+      try {
+        SharedSourceSeed.fromTransaction(namespace.substring(5), entry);
+        knownIdentity = true;
+      } catch (_) {
+        /* The source must finish reconciliation first. */
+      }
+    }
+    final canShare =
+        knownIdentity &&
+        namespace.startsWith('user:') &&
+        entry.status == 'active' &&
+        entry.entryKind == TxnEntryKind.spend &&
+        entry.amount.paise > 0 &&
+        _localSplit?.pending != true;
+    final selection = await showModalBottomSheet<String>(
+      context: context,
+      backgroundColor: BambooInk.paper,
+      builder: (sheet) => SafeArea(
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            Padding(
+              padding: const EdgeInsets.all(16),
+              child: Text('Split this expense', style: BambooFonts.heading(18)),
+            ),
+            ListTile(
+              leading: const Icon(Icons.person_outline_rounded),
+              title: Text('Private allocations', style: BambooFonts.ui(15)),
+              subtitle: Text(
+                'Keep your existing labels and amounts',
+                style: BambooFonts.ui(12),
+              ),
+              onTap: () => Navigator.pop(sheet, 'private'),
+            ),
+            ListTile(
+              leading: const Icon(Icons.people_outline_rounded),
+              title: Text('Share with people', style: BambooFonts.ui(15)),
+              subtitle: Text(
+                _localSplit?.pending == true
+                    ? 'Sync your private allocations first'
+                    : !knownIdentity
+                    ? 'Finish payment reconciliation before sharing'
+                    : 'Use this payment in the shared expense editor',
+                style: BambooFonts.ui(12),
+              ),
+              enabled: canShare,
+              onTap: canShare ? () => Navigator.pop(sheet, 'shared') : null,
+            ),
+          ],
+        ),
+      ),
+    );
+    if (!mounted || ref.read(cacheNamespaceProvider) != namespace) return;
+    if (selection == 'private') {
+      await _showSplitSheet();
+    } else if (selection == 'shared') {
+      await Navigator.push<void>(
+        context,
+        MaterialPageRoute(
+          builder: (_) => QuickAddScreen(
+            sharedExpense: true,
+            sharedSourceEntry: entry,
+            sharedSourceAccountId: namespace.substring(5),
+            sharedSourceNote: _note,
+          ),
+        ),
+      );
     }
   }
 
@@ -1398,10 +1491,14 @@ class _DetailBodyState extends ConsumerState<_DetailBody> {
                     icon: Icons.call_split_rounded,
                     label: _savingSplits
                         ? 'Saving split…'
+                        : ref.watch(sharedExpensesEnabledProvider)
+                        ? 'Split options'
                         : _splits.isEmpty
                         ? 'Split this expense'
                         : 'Split across ${_splits.length} ${_splits.length == 1 ? 'share' : 'shares'}',
-                    onTap: _showSplitSheet,
+                    onTap: ref.watch(sharedExpensesEnabledProvider)
+                        ? _showSplitOptions
+                        : _showSplitSheet,
                   ),
                   if (_localSplit?.pending == true) ...[
                     const SizedBox(height: AppSpace.xs),
@@ -1594,8 +1691,9 @@ class _DetailBodyState extends ConsumerState<_DetailBody> {
         .map((observation) => observation.source)
         .toSet();
     final hasSms = sources.contains('sms') || sources.contains('sms_bulk');
-    if (hasSms && sources.length > 1)
+    if (hasSms && sources.length > 1) {
       return 'Matched to SMS and another source';
+    }
     if (hasSms) return 'Matched to SMS';
     if (sources.length > 1) return 'Matched to multiple sources';
     if (sources.isNotEmpty) return 'Single source report';
