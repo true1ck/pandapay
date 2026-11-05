@@ -268,6 +268,13 @@
       "issuer_says": "The YES BANK key fact statement was not read; rates and exclusions are verified from the Kiwi rewards policy, which governs Kiwi-issued RuPay cards. Treat as partially verified.",
       "proposed_fix": "none",
       "override_file": null
+    },
+    {
+      "item": "free-text restrictions on the regular Kiwi rules",
+      "cardpipeline_says": "conditions issued_via_kiwi / kiwi_neon_membership false / accrual unit and channel_type kiwi_online",
+      "issuer_says": "These describe the default Kiwi regular terms (entry-tier rate), not restrictions. Cleared by override so the 2 and 6 Kiwis per Rs 100 rules stay earn rules; the transportation exclusion is narrowed to the toll MCCs.",
+      "proposed_fix": "override",
+      "override_file": "api/scripts/catalogue_overrides/yes-bank-klick-rupay-kiwi.json"
     }
   ]
 }

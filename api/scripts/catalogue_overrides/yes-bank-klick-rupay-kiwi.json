@@ -82,10 +82,39 @@
           "parent_cap_id": null,
           "reset_day": 1,
           "effective_from": "2024-07-04",
-          "effective_to": null
+          "effective_to": null,
+          "depends_on_user": true
         }
       ],
-      "reason": "Issuer: monthly cap on Kiwis is 1% of the total credit limit on the card. Per-user amount, so the cap keeps its kind with a null amount (D13a, flag cap_depends_on_user). Also removes a dangling cap_reference monthly-kiwi-cap.",
+      "reason": "Issuer: monthly cap on Kiwis is 1% of the total credit limit on the card. Per-user amount, so the cap keeps its kind with a null amount (D13a, flag cap_depends_on_user). Also removes a dangling cap_reference monthly-kiwi-cap. depends_on_user: true so the loader keeps the cap with a null amount.",
+      "source_url": "https://gokiwi.in/rewards-policy-v2/",
+      "checked_on": "2026-11-05"
+    },
+    {
+      "path": "reward_rules[id=kiwi_regular_online].conditions",
+      "value": {},
+      "reason": "issued_via_kiwi / not-Neon / accrual-unit keys are the default Kiwi regular terms (entry-tier rate stated by the issuer, D13b) and must not turn the rule into info.",
+      "source_url": "https://gokiwi.in/rewards-policy-v2/",
+      "checked_on": "2026-11-05"
+    },
+    {
+      "path": "reward_rules[id=kiwi_regular_scan_pay].conditions",
+      "value": {},
+      "reason": "issued_via_kiwi / not-Neon / accrual-unit keys are the default Kiwi regular terms (entry-tier rate stated by the issuer, D13b) and must not turn the rule into info.",
+      "source_url": "https://gokiwi.in/rewards-policy-v2/",
+      "checked_on": "2026-11-05"
+    },
+    {
+      "path": "reward_rules[id=kiwi_excluded_transportation].category_id",
+      "value": "all_retail",
+      "reason": "Issuer excludes only toll MCCs 4784 and 4789; the transportation token maps to all travel, which over-excludes.",
+      "source_url": "https://gokiwi.in/rewards-policy-v2/",
+      "checked_on": "2026-11-05"
+    },
+    {
+      "path": "reward_rules[id=kiwi_regular_online].channel_type",
+      "value": "all",
+      "reason": "channel_type \"kiwi_online\" is prose for online spend (the rail already restricts it); it would turn the rule into info.",
       "source_url": "https://gokiwi.in/rewards-policy-v2/",
       "checked_on": "2026-11-05"
     }
