@@ -98,14 +98,21 @@ class SmsV2Pipeline {
                 rule.id == result.ruleId &&
                 rule.status == RuleStatus.provisional,
           );
-          if (!provisional &&
-              result.ruleId != null &&
-              (result.ruleVersion ?? 0) > 0) {
+          // A private AI rule reports under its layout's AI id, so the console
+          // can show how the draft fares on phones. Its matches always go to
+          // review, so each one is counted as sent to review.
+          final reported = result.ruleId == null
+              ? null
+              : provisional
+              ? StatsStore.reportedRuleId(result.ruleId!)
+              : result.ruleId;
+          if (reported != null && (result.ruleVersion ?? 0) > 0) {
             StatsStore(_db, namespace: namespace).record(
               at: message.observedAt,
-              ruleId: result.ruleId!,
+              ruleId: reported,
               ruleVersion: result.ruleVersion!,
               toReview:
+                  provisional ||
                   result.outcome == InterpretOutcome.unknown ||
                   result.facts.any((fact) => fact.confidence < .7),
             );

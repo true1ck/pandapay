@@ -109,3 +109,34 @@ test("the worker store counts distinct reporters per kind and finds sibling layo
   assert.deepEqual(await worker.siblingLayouts(row), []);
   assert.ok((await worker.ruleCandidates()).every((body) => body && body.id));
 });
+
+// ---- learning loop B6: how a private AI rule fares on phones, shown on its draft
+
+const { startLoopHarness: startRig, registerAllLoopAdminRoutes: registerAll, skip: rigSkip } = require("./helpers/loop_harness");
+const { runRuleJobs } = require("../../src/sms_v2/rule_stats");
+const { createPgStore } = require("../../src/sms_v2/rules_store");
+
+test("phones report a private AI rule, and its draft shows the 30-day totals", { skip: rigSkip }, async (t) => {
+  const rig = await startRig({ profileCount: 3, registerAdmin: registerAll });
+  t.after(() => rig.close());
+  const hash = "a".repeat(64);
+  const quiet = "b".repeat(64);
+  await rig.pool.query("INSERT INTO sms_v2_unknown_templates(template_hash,sender_brand,redacted_body,ai_status,ai_draft) VALUES($1,'TESTBK',$2,'ready',$3)",
+    [hash, template.redacted_body, JSON.stringify(rule())]);
+  await rig.pool.query("INSERT INTO sms_v2_unknown_templates(template_hash,sender_brand,redacted_body,ai_status) VALUES($1,'TESTBK',$2,'queued')", [quiet, "<AMT> credited."]);
+  const today = new Date().toISOString().slice(0, 10);
+  const report = (profile, stats) => rig.asUser(profile).post("/sms/v2/rule-stats:batch", { day: today, appVersion: "2.0.0", bundleVersion: 1, stats });
+  // The rule is not in sms_v2_rules: the server stores the counts all the same.
+  for (const [profile, hits, corrected] of [[rig.profiles[0], 5, 1], [rig.profiles[1], 4, 0], [rig.profiles[2], 3, 1]]) {
+    assert.equal((await report(profile, [{ ruleId: `AI-${hash}`, ruleVersion: 1, hits, toReview: hits, corrected }])).status, 202);
+  }
+  assert.equal((await rig.pool.query("SELECT count(*)::int AS n FROM sms_v2_rule_stats_profile_daily WHERE rule_id=$1", [`AI-${hash}`])).rows[0].n, 3);
+  const adminStore = createPgStore({ withUserClient: (admin, fn) => rig.helpers.withAdminClient(admin, "learning.publish", fn) });
+  await runRuleJobs({ store: adminStore, signer: rig.signer, adminId: rig.admin, now: new Date() });
+  const listed = (await rig.asAdmin().get("/admin/sms/v2/templates")).body.templates;
+  const byHash = Object.fromEntries(listed.map((row) => [row.template_hash, row]));
+  assert.deepEqual([byHash[hash].privateHits, byHash[hash].privateCorrected, byHash[hash].privatePhones], [12, 2, 3]);
+  assert.deepEqual([byHash[quiet].privateHits, byHash[quiet].privateCorrected, byHash[quiet].privatePhones], [null, null, null], "no reports, no line");
+  // Auto-pause never touches a private rule: it is in no cohort.
+  assert.deepEqual((await rig.pool.query("SELECT 1 FROM sms_v2_rule_cohorts")).rows, []);
+});

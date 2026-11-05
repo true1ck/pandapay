@@ -163,14 +163,20 @@ function registerPrivateTemplateRoutes(api) {
     // "rejected" is a decision on a draft that now sits at ai_status failed.
     const rows = await ctx.withAdminClient((client) =>
       client.query(
-        `SELECT template_hash,sender_brand,redacted_body,seen_count,distinct_profiles,ai_status,ai_draft,ai_model,failure_code,first_seen,last_seen,
-                covered_by,admin_decision,admin_reason,admin_note,decided_at
-       FROM sms_v2_unknown_templates
+        `SELECT t.template_hash,t.sender_brand,t.redacted_body,t.seen_count,t.distinct_profiles,t.ai_status,t.ai_draft,t.ai_model,t.failure_code,t.first_seen,t.last_seen,
+                t.covered_by,t.admin_decision,t.admin_reason,t.admin_note,t.decided_at,
+                p.hits::int AS "privateHits",p.corrected::int AS "privateCorrected",p.phones::int AS "privatePhones"
+       FROM sms_v2_unknown_templates t
+       LEFT JOIN LATERAL (
+         SELECT sum(d.hits) AS hits,sum(d.corrected) AS corrected,max(d.devices) AS phones
+           FROM sms_v2_rule_stats_daily d
+          WHERE d.rule_id='AI-'||t.template_hash AND d.day>=(now() AT TIME ZONE 'utc')::date-30
+       ) p ON p.phones IS NOT NULL
       WHERE ($1::text IS NULL
-         OR ($1='rejected' AND admin_decision='rejected')
-         OR ($1='failed' AND ai_status='failed' AND admin_decision IS DISTINCT FROM 'rejected')
-         OR ($1 NOT IN ('rejected','failed') AND ai_status=$1))
-      ORDER BY first_seen,template_hash LIMIT 200`,
+         OR ($1='rejected' AND t.admin_decision='rejected')
+         OR ($1='failed' AND t.ai_status='failed' AND t.admin_decision IS DISTINCT FROM 'rejected')
+         OR ($1 NOT IN ('rejected','failed') AND t.ai_status=$1))
+      ORDER BY t.first_seen,t.template_hash LIMIT 200`,
         [status || null],
       ),
     );

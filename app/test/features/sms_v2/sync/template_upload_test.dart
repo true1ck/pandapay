@@ -315,12 +315,17 @@ void main() {
           sourceKey: 'varying',
         ),
       );
+      // A private AI rule reports under its layout's AI id (never its
+      // per-phone local id), counted as sent to review.
+      final stats = db.db.select(
+        'SELECT rule_id,rule_version,hits,to_review,corrected FROM v2_rule_stats_by_account WHERE namespace=?',
+        [namespace],
+      );
+      expect(stats, hasLength(1));
+      expect(stats.single['rule_id'], matches(RegExp(r'^AI-[0-9a-f]{64}$')));
       expect(
-        db.db.select(
-          'SELECT * FROM v2_rule_stats_by_account WHERE namespace=?',
-          [namespace],
-        ),
-        isEmpty,
+        [stats.single['hits'], stats.single['to_review'], stats.single['corrected']],
+        [1, 1, 0],
       );
       expect(
         ProvisionalStore(

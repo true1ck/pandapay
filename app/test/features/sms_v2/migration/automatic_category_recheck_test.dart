@@ -7,7 +7,6 @@ import 'package:pandapay/features/sms_v2/migration/history_category_recheck.dart
 import 'package:pandapay/features/sms_v2/pipeline/sms_v2_pipeline.dart';
 import 'package:pandapay/features/sms_v2/storage/ledger_store.dart';
 import 'package:pandapay_domain/sms_v2.dart';
-import 'package:pandapay_domain/sms_v2_ledger.dart';
 import 'package:sqlite3/sqlite3.dart';
 
 import '../support/rules.dart';

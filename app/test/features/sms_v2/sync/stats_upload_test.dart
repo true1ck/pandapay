@@ -108,4 +108,40 @@ void main() {
       0,
     ]);
   });
+  group('private AI rules', main2);
+}
+
+// ---- learning loop B6: a private AI rule reports under its layout's AI id
+
+void main2() {
+  late Database db;
+  late StatsStore stats;
+  final day = DateTime.utc(2026, 11, 4, 8);
+  setUp(() {
+    db = sqlite3.openInMemory();
+    SmsV2Schema.ensure(db);
+    stats = StatsStore(db, namespace: 'a');
+  });
+  tearDown(() => db.dispose());
+
+  test('only a private AI rule maps to a shared id; personal and other private rules do not', () {
+    final hash = 'c' * 64;
+    expect(StatsStore.reportedRuleId('AI-$hash:local:${'d' * 64}'), 'AI-$hash');
+    expect(StatsStore.reportedRuleId('AI-$hash'), 'AI-$hash');
+    expect(StatsStore.reportedRuleId('HDFC-CARD-SPEND-03'), 'HDFC-CARD-SPEND-03');
+    expect(StatsStore.reportedRuleId('PERSONAL-1:local:x'), isNull);
+    expect(StatsStore.reportedRuleId('PRIVATE:local:hash'), isNull);
+    expect(StatsStore.reportedRuleId('SOMETHING-ELSE:local:hash'), isNull);
+  });
+
+  test('a correction on a private AI rule counts against the AI id', () {
+    final hash = 'c' * 64;
+    stats.record(at: day, ruleId: 'AI-$hash', ruleVersion: 1, toReview: true);
+    stats.record(at: day, ruleId: 'AI-$hash', ruleVersion: 1, toReview: true);
+    stats.correction(at: day, ruleId: 'AI-$hash:local:${'d' * 64}', ruleVersion: 1);
+    final payload = stats.payload(day, appVersion: '1', bundleVersion: 1)!;
+    expect(payload['stats'], [
+      {'ruleId': 'AI-$hash', 'ruleVersion': 1, 'hits': 2, 'toReview': 2, 'corrected': 1},
+    ]);
+  });
 }
