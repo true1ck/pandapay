@@ -13,7 +13,7 @@
 const { asNumber, isNA, uniq } = require('./util');
 const { buildDirectoryIndex } = require('./directory');
 const { NARROW_TOKEN_MCC, mapCategorySlugs, resolveCategoryToken } = require('./category_tokens');
-const { transformRewardRules } = require('./rules');
+const { transformRewardRules, valuePerRupee } = require('./rules');
 const { transformCaps } = require('./caps');
 const { transformMilestones } = require('./milestones');
 const { transformBenefits } = require('./unlocks');
@@ -130,6 +130,40 @@ function baseValuePerRupee(e) {
   if (e.baseUnit === 'cashback_percent') return e.baseRate / 100;
   const block = UNIT_BLOCK[e.baseUnit];
   return block ? (e.baseRate / block) * (e.pointValueInr || 0) : null;
+}
+
+// D19e: a v1-visible above-base earning rule whose governing cap isn't
+// v1-visible would pay above the cap in v1, so it is hidden from v1 too. A
+// v1 cap that now targets a v2-only rule follows D3. Repeated until stable.
+function hideUncappedFromV1(rules, caps, card) {
+  const byKey = new Map(rules.map((r) => [r.key, r]));
+  const hidden = [];
+  let changed = true;
+  while (changed) {
+    changed = false;
+    for (const cap of caps) {
+      if (cap.min_engine_version === 1) {
+        if (cap.target_keys.some((k) => byKey.get(k)?.min_engine_version === 2)) {
+          cap.min_engine_version = 2;
+          cap.v2_reasons = uniq([...cap.v2_reasons, 'target_v2_only']);
+          changed = true;
+        }
+        continue;
+      }
+      for (const k of cap.target_keys) {
+        const r = byKey.get(k);
+        if (!r || r.min_engine_version !== 1 || r.max_engine_version === 1 || r.rule_role !== 'earn') continue;
+        const v = valuePerRupee(r.unit, r.rate, card.pointValueInr, r.block_inr);
+        if (v === null || card.baseValue == null || !(v > card.baseValue + 1e-9)) continue;
+        r.min_engine_version = 2;
+        r.v2_reasons = uniq([...r.v2_reasons, 'cap_not_v1_visible']);
+        r.flags = uniq([...r.flags, 'hidden_from_v1_uncapped']);
+        hidden.push(r.key);
+        changed = true;
+      }
+    }
+  }
+  return hidden;
 }
 
 function feeWaiverRow(record) {
@@ -368,6 +402,10 @@ function transformCardRecordV2(rawRecord, opts = {}) {
   }
 
   const capResult = transformCaps(record, rewardRules, ctx);
+  const hiddenUncapped = hideUncappedFromV1(rewardRules, capResult.caps, ctx.card);
+  if (hiddenUncapped.length) {
+    extraFlags.push({ code: 'hidden_from_v1_uncapped', source_local_id: null, detail: hiddenUncapped.join(', ') });
+  }
   const milestoneResult = transformMilestones(record);
   const benefitResult = transformBenefits(record);
   const redemption = redemptionRows(record);

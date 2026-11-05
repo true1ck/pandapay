@@ -1096,6 +1096,7 @@ function addMinimumAmountExclusion(rows, perSource) {
 }
 
 module.exports = {
+  valuePerRupee,
   classifyExclusionText,
   distinctiveAlias,
   transformRewardRules,

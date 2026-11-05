@@ -1054,6 +1054,21 @@ test('D19c an exclusion with an explicit MCC list: v2 row MCC-only, category row
   assert.equal(v2TravelExclusions.length, 0);
 });
 
+test('D19e a v1-visible accelerator whose cap is v2-only is hidden from v1', () => {
+  const r = run(card({
+    rules: [
+      rule({ id: 'tenx_bookmyshow', category_id: 'bookmyshow', action: { cashback_percent: 10, cap_reference: 'shared' } }),
+      rule({ id: 'tenx_app', category_id: 'phonepe', action: { cashback_percent: 10, cap_reference: 'shared' } }),
+    ],
+    caps: [{ ...capBase, id: 'shared', category_id: 'all_retail', metric: 'total_reward_points', limit_value: 500 }],
+  }));
+  const [bms] = only(r, 'tenx_bookmyshow');
+  assert.deepEqual(bms.merchant_slugs, ['bookmyshow']);
+  assert.equal(bms.min_engine_version, 2, 'its cap (two targets, one v2-only) is v2-only');
+  assert.ok(bms.flags.includes('hidden_from_v1_uncapped'));
+  assert.equal(r.capRules[0].min_engine_version, 2);
+});
+
 // ── C8 D13: terms that depend on the cardholder; override conventions ───
 
 test('D13a a cap sized by the credit limit keeps its kind with a null amount and is flagged', () => {
