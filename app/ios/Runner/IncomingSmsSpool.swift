@@ -1,5 +1,12 @@
 import Foundation
+// The app links SQLCipher, whose headers shadow the system SQLite3 module and
+// stop it compiling. The spool is a plain (unkeyed) database, which SQLCipher
+// opens like ordinary SQLite, so the iOS app uses SQLCipher's module and the Mac test harness uses SQLite3.
+#if os(iOS)
+import SQLCipher
+#else
 import SQLite3
+#endif
 import CryptoKit
 
 /// Private acquisition storage, separate from the shared financial database.
