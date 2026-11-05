@@ -68,6 +68,9 @@ const { registerAdminReferralOperationsRoutes } = require('./admin_referral_oper
 const aiQueueRoute = require('./ai_queue_route');
 const aiProviderQuotaRoute = require('./ai_provider_quota_route');
 const rewardMath = require('./reward_math');
+// card-rewards v2 (WP8): v2-shaped cards record in native units; see the hooks
+// in applyTransactionState, reconcileCurrentCapStates and GET /user-cards.
+const cardStateV2 = require('./card_state_v2');
 const { registerSplitRoutes } = require('./transaction_splits');
 const transactionTags = require('./transaction_tags');
 const { registerUserMerchantCategoryRuleRoutes } = require('./user_merchant_category_rules');
@@ -1495,6 +1498,13 @@ app.post('/sync/push', requireAuth, async (req, res) => {
             JSON.stringify(payload), JSON.stringify(fieldClocks),
             Number.isFinite(clientSeq) ? clientSeq : 0,
           ];
+          // card-rewards (WP8, C8 D23d): the typed applier locks the row and
+          // reverses/re-applies card state; take the user's ingest lock first.
+          if (config.syncTypedWritesEnabled && entity === 'transactions') {
+            await client.query(`SELECT pg_advisory_xact_lock(hashtextextended($1::text, 0))`, [
+              `transaction-ingest:${req.userId}`,
+            ]);
+          }
           const row = config.syncTypedWritesEnabled && entity === 'transactions'
             ? await applyTransactionSync(client, {
                 userId: req.userId, deviceId, entityId, op, payload, fieldClocks, clientSeq,
@@ -2116,18 +2126,14 @@ app.get('/user-cards', requireAuth, async (req, res) => {
         await reconcileCurrentCapStates(client, req.userId);
 
         for (const card of cards.rows) {
-          const capStates = await client.query(
-            `SELECT cap_rule_id, consumed, cap_value_snapshot FROM cap_states
-              WHERE user_card_id = $1 AND period_start <= CURRENT_DATE AND period_end >= CURRENT_DATE`,
-            [card.id]
-          );
-          const milestoneStates = await client.query(
-            `SELECT milestone_rule_id, qualified_spend, period_end FROM milestone_states
-              WHERE user_card_id = $1 AND period_start <= CURRENT_DATE AND period_end >= CURRENT_DATE`,
-            [card.id]
-          );
-          card.cap_states = capStates.rows;
-          card.milestone_states = milestoneStates.rows;
+          // card-rewards v2 (WP8, C8 D22c): `consumed` keeps its v1 meaning
+          // for installed apps (points kinds: native × point_value_inr, ₹).
+          // Each cap row adds consumed_native (null on a v1 row), cap_kind
+          // (null = v1 row), cap_amount (native), period_start / period_end
+          // ('YYYY-MM-DD') and approximate_window. Milestone rows add
+          // period_start and approximate_window. Existing keys unchanged.
+          card.cap_states = await cardStateV2.currentCapStates(client, card.id);
+          card.milestone_states = await cardStateV2.currentMilestoneStates(client, card.id);
 
           const pointsTotal = await client.query(
             `SELECT COALESCE(SUM(delta_points), 0) AS total_points FROM points_ledger WHERE user_card_id = $1`,
@@ -3653,6 +3659,11 @@ async function importParsedMessage(client, userId, {
  * merged. The older/live row is retained; a backfill replay is ignored.
  */
 async function reconcileArchivedCardReferences(client, userId) {
+  // card-rewards (WP8, C8 D23d): the user's ingest lock before any row or
+  // card-state write (it remaps transactions and rebuilds caps below).
+  await client.query(`SELECT pg_advisory_xact_lock(hashtextextended($1::text, 0))`, [
+    `transaction-ingest:${userId}`,
+  ]);
   // A replacement is safe only when the physical identity is unique on both
   // sides: issuer + instrument type + last four. If two active catalogue rows
   // could match, leave the transaction unresolved instead of assigning it to
@@ -3768,6 +3779,11 @@ async function profileDisplayName(db, userId) {
 }
 
 async function repairSmsHistory(client, userId, { reviewCrossSource = false, reviewCardId = null } = {}) {
+  // card-rewards (WP8, C8 D23d): the user's ingest lock before any row lock
+  // or card-state write in this repair (re-entrant with the calls below).
+  await client.query(`SELECT pg_advisory_xact_lock(hashtextextended($1::text, 0))`, [
+    `transaction-ingest:${userId}`,
+  ]);
   const cardReplacement = await reconcileArchivedCardReferences(client, userId);
   // Parser upgrades retain their strongest decision in observation metadata.
   // Reconcile those rows before duplicate repair so a card-bill/transfer row
@@ -4263,6 +4279,15 @@ async function reconcileCurrentCapStates(client, userId) {
   let rebuiltCaps = 0;
 
   for (const card of cards.rows) {
+    // card-rewards v2 (WP8): a v2-shaped card rebuilds its current cap
+    // periods in native units from the same ledger (src/card_state_v2.js);
+    // replaying it through v1 would overwrite them in v1 measure.
+    const v2Rebuilt = await cardStateV2.reconcileIfV2(client, userId, card.id);
+    if (v2Rebuilt) {
+      rebuiltCaps += v2Rebuilt.rebuiltCaps;
+      continue;
+    }
+
     const rewardRules = await client.query(
       `SELECT id, category_id, merchant_pattern, rail, unit, rate,
               min_txn_inr, max_txn_inr, excluded_categories,
@@ -4453,6 +4478,15 @@ async function loadUserCardForState(client, userId, userCardId) {
 async function applyTransactionState(client, userId, userCard, {
   txnId, userCardId, amount, occurred, categoryId, sign, merchantName, rail,
 }) {
+  // card-rewards v2 (WP8, plan C3 / C8 D10): a v2-shaped card records through
+  // reward_math_v2 in native units, every applicable cap in its own period,
+  // and reverses from its per-transaction record (src/card_state_v2.js).
+  // A v1-shaped card gets null back and runs the unchanged v1 path below.
+  const v2State = await cardStateV2.applyIfV2(client, userId, userCard, {
+    txnId, userCardId, amount, occurred, categoryId, sign, merchantName, rail,
+  });
+  if (v2State) return v2State;
+
   // The full rule rows, not just (unit, rate): every constraint column here
   // is now enforced by src/reward_math.js's `ruleApplies`, which is the
   // same predicate the Dart engine runs. The old query selected two columns
@@ -6058,6 +6092,11 @@ app.post('/duplicate-candidates/:id/resolve', requireAuth, async (req, res) => {
   }
   try {
     const result = await withUserClient(req.userId, async (client) => {
+      // card-rewards (WP8, C8 D23d): the user's ingest lock first — before the
+      // duplicate-review lock, the order the insert path takes them in.
+      await client.query(`SELECT pg_advisory_xact_lock(hashtextextended($1::text, 0))`, [
+        `transaction-ingest:${req.userId}`,
+      ]);
       // Candidate creation uses the same transaction lock: no new edge may
       // appear after we enumerate the neighbors that this decision releases.
       await client.query("SELECT pg_advisory_xact_lock(hashtextextended('duplicate-review:' || $1::text, 0))", [req.userId]);
@@ -6250,6 +6289,12 @@ app.patch('/transactions/:id', requireAuth, async (req, res) => {
 
   try {
     const result = await withUserClient(req.userId, async (client) => {
+      // card-rewards (WP8, C8 D23d): the user's ingest lock BEFORE the row
+      // lock, the order inserts and the cap rebuild (reconcile) use, so a
+      // rebuild can't interleave with this reverse/re-apply.
+      await client.query(`SELECT pg_advisory_xact_lock(hashtextextended($1::text, 0))`, [
+        `transaction-ingest:${req.userId}`,
+      ]);
       // FOR UPDATE: this row is about to be reversed-then-reapplied: two
       // concurrent edits interleaving their reverse/apply halves would
       // corrupt the bucketed cap/milestone totals in a way that's very
@@ -6747,6 +6792,11 @@ app.post('/transactions/category-bulk-apply', requireAuth, async (req, res) => {
 
   try {
     const result = await withUserClient(req.userId, async (client) => {
+      // card-rewards (WP8, C8 D23d): the user's ingest lock first; this route
+      // locks transaction rows and reverses/re-applies their card state.
+      await client.query(`SELECT pg_advisory_xact_lock(hashtextextended($1::text, 0))`, [
+        `transaction-ingest:${req.userId}`,
+      ]);
       // Serialize attempts for this profile/key before checking or creating
       // the receipt. This avoids two retries doing the same state mutation and
       // lets us recover null-result markers left by the pre-fix 4xx path.
@@ -7024,6 +7074,10 @@ app.post('/transactions/:id/ignore', requireAuth, async (req, res) => {
   }
   try {
     const result = await withUserClient(req.userId, async (client) => {
+      // card-rewards (WP8, C8 D23d): ingest lock before the row lock.
+      await client.query(`SELECT pg_advisory_xact_lock(hashtextextended($1::text, 0))`, [
+        `transaction-ingest:${req.userId}`,
+      ]);
       const existing = await client.query(
         `SELECT id, user_card_id, amount_inr, occurred_at, category_id, rail, merchant_name,
                 status, note, instrument, entry_kind, state_applied, is_backfill
@@ -7073,6 +7127,10 @@ app.post('/transactions/:id/ignore', requireAuth, async (req, res) => {
 app.post('/transactions/:id/restore', requireAuth, async (req, res) => {
   try {
     const result = await withUserClient(req.userId, async (client) => {
+      // card-rewards (WP8, C8 D23d): ingest lock before the row lock.
+      await client.query(`SELECT pg_advisory_xact_lock(hashtextextended($1::text, 0))`, [
+        `transaction-ingest:${req.userId}`,
+      ]);
       const existing = await client.query(
         `SELECT id, user_card_id, amount_inr, occurred_at, category_id, rail,
                 merchant_name, status, note, instrument, entry_kind,
