@@ -26,6 +26,7 @@ import 'features/queues/support_tickets_screen.dart';
 import 'features/referrals/referral_operations_screen.dart';
 import 'features/scraper/scrape_diff_review_screen.dart';
 import 'features/scraper/sources_screen.dart';
+import 'features/system/system_status_screen.dart';
 
 void main() {
   runApp(const ProviderScope(child: PandaPayConsoleApp()));
@@ -247,6 +248,7 @@ class _ConsoleHomeState extends ConsumerState<_ConsoleHome> {
         ref.invalidate(dataQualityDashboardProvider);
         ref.invalidate(smsAiSummaryProvider);
         ref.invalidate(anonymizationAuditRunsProvider);
+        ref.invalidate(systemStatusProvider);
         ref.invalidate(smsCategoryProposalsProvider);
         ref.invalidate(smsParserProposalsProvider);
         ref.invalidate(smsAiProposalsProvider);
@@ -329,6 +331,18 @@ class _ConsoleHomeState extends ConsumerState<_ConsoleHome> {
       refresh: (ref) {
         ref.invalidate(acceptanceSummaryProvider);
         ref.invalidate(effectiveRateSummaryProvider);
+      },
+    ),
+    _ConsoleDestination(
+      group: 'System health',
+      label: 'System Status',
+      description:
+          'Which servers run, which code they run, whether they are healthy, and which branches exist.',
+      icon: Icons.dns_outlined,
+      screen: const SystemStatusScreen(),
+      refresh: (ref) {
+        ref.invalidate(systemStatusProvider);
+        ref.invalidate(smsAiSummaryProvider);
       },
     ),
     _ConsoleDestination(

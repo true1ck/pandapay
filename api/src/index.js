@@ -93,7 +93,7 @@ const { brandFor } = require('./brand_catalog');
 const { buildMonthlyReport } = require('./monthly_report');
 const { csvDocument } = require('./csv');
 const { startImapPoller, fetchRecentMessages } = require('./imap_poller');
-const { requestLogger, errorHandler } = require('./observability');
+const { requestLogger, errorHandler, telemetry } = require('./observability');
 const { importSourceKey } = require('./import_source_key');
 const { extractVpa, extractMcc } = require('./merchant_category');
 const {
@@ -10128,6 +10128,7 @@ const PORT = config.port;
 app.use(errorHandler);
 
 const server = app.listen(PORT, () => console.log(`pandapay-api running at http://localhost:${PORT}`));
+telemetry.start();
 
 // The background IMAP poller (F7). Off unless IMAP_POLL_INTERVAL_MINUTES is
 // set, so a development or test process never opens TLS connections to real

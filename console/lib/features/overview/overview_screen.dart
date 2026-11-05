@@ -4,6 +4,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import '../../app/admin_design.dart';
 import '../../app/admin_identity.dart';
 import '../../app/providers.dart';
+import '../../app/time_format.dart';
 
 /// Landing page: what is waiting for a decision, what looks broken, and
 /// which environment this is. Read-only by design; every action lives in
@@ -90,7 +91,12 @@ class OverviewScreen extends ConsumerWidget {
         ),
     ];
 
+    final system = canOpen('System Status')
+        ? ref.watch(systemStatusProvider)
+        : null;
+
     final health = <_TileData>[
+      if (system != null) _systemTile(system),
       if (dq != null && canOpen('Scrape Diff Review'))
         _TileData.problem(
           'Scraper failures · 7 days',
@@ -150,6 +156,7 @@ class OverviewScreen extends ConsumerWidget {
       if (dq != null) ref.invalidate(dataQualityDashboardProvider);
       if (smsAi != null) ref.invalidate(smsAiSummaryProvider);
       if (audits != null) ref.invalidate(anonymizationAuditRunsProvider);
+      if (system != null) ref.invalidate(systemStatusProvider);
       if (smsRules != null) _SmsRuleBacklog.invalidate(ref);
     }
 
@@ -207,6 +214,38 @@ class OverviewScreen extends ConsumerWidget {
     );
   }
 
+  /// Failed endpoint checks, an unreachable database, and failed or overdue
+  /// scheduled jobs, as reported by the system status endpoint.
+  static _TileData _systemTile(AsyncValue<Map<String, dynamic>> status) {
+    final data = status.valueOrNull;
+    if (data == null || data['services'] is! List) {
+      return _TileData.problem(
+        'Service problems',
+        'Servers, database and scheduled jobs',
+        Icons.dns_outlined,
+        status.isLoading ? const _Count.loading() : const _Count.failed(),
+        'System Status',
+      );
+    }
+    final problems = <String>[
+      if ((data['database'] as Map?)?['ok'] != true) 'Database',
+      for (final c in (data['checks'] as List? ?? const []).whereType<Map>())
+        if (c['ok'] != true) '${c['key']} check',
+      for (final j in (data['jobs'] as List? ?? const []).whereType<Map>())
+        if (j['state'] == 'failed' || j['state'] == 'overdue') '${j['name']}',
+    ];
+    return _TileData.problem(
+      'Service problems',
+      problems.isEmpty
+          ? 'Every check is passing'
+          : problems.take(2).join(' · ') +
+                (problems.length > 2 ? ' · +${problems.length - 2}' : ''),
+      Icons.dns_outlined,
+      _Count.value(problems.length),
+      'System Status',
+    );
+  }
+
   static _TileData _smsAiTile(AsyncValue<Map<String, dynamic>> summary) {
     final failed = _Count.fromAsync(summary, (s) => s['failureCount24h']);
     final data = summary.valueOrNull;
@@ -217,7 +256,7 @@ class OverviewScreen extends ConsumerWidget {
       'SMS AI failures · 24 h',
       data == null
           ? 'Processing queue health'
-          : '$queued queued${queued > 0 ? ' · oldest ${_formatAge(oldest)}' : ''}',
+          : '$queued queued${queued > 0 ? ' · oldest ${formatAge(oldest)}' : ''}',
       Icons.auto_awesome_outlined,
       failed,
       'SMS AI Operations',
@@ -260,7 +299,7 @@ class OverviewScreen extends ConsumerWidget {
           label: 'Privacy audit',
           caption:
               '${latest['checks_failed'] ?? 0} of ${latest['checks_total'] ?? 0} checks failed'
-              '${ranAt == null ? '' : ' · ${_formatAgo(ranAt)}'}',
+              '${ranAt == null ? '' : ' · ${formatAgo(ranAt)}'}',
           icon: Icons.privacy_tip_outlined,
           count: _Count.text(passed ? 'Passed' : 'Failed'),
           destination: 'Anonymization Audit',
@@ -369,19 +408,6 @@ int? _asInt(Object? value) => switch (value) {
   final String s => int.tryParse(s),
   _ => null,
 };
-
-String _formatAge(int seconds) {
-  if (seconds < 90) return '${seconds}s';
-  if (seconds < 5400) return '${(seconds / 60).round()} min';
-  if (seconds < 172800) return '${(seconds / 3600).round()} h';
-  return '${(seconds / 86400).round()} days';
-}
-
-String _formatAgo(DateTime at) {
-  final seconds = DateTime.now().difference(at).inSeconds;
-  if (seconds < 60) return 'just now';
-  return '${_formatAge(seconds)} ago';
-}
 
 /// A displayable count: loading, failed, an exact or lower-bound number,
 /// or a short status word.

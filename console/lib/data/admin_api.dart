@@ -922,6 +922,21 @@ class AdminApi {
     return body['dashboard'] as Map<String, dynamic>;
   }
 
+  /// Services, health checks, scheduled jobs, deployed commit and branches.
+  /// See api/src/admin/system_status.js for what each section contains.
+  Future<Map<String, dynamic>> fetchSystemStatus() async {
+    final response = await _client.get(
+      Uri.parse('$apiBaseUrl/admin/system/status'),
+      headers: _headers,
+    );
+    if (response.statusCode != 200) {
+      throw AdminApiException(
+        'GET /admin/system/status failed: ${response.statusCode}',
+      );
+    }
+    return jsonDecode(response.body) as Map<String, dynamic>;
+  }
+
   /// AD-9.1: full anonymization-audit run history.
   Future<List<Map<String, dynamic>>> fetchAnonymizationAuditRuns() async {
     final response = await _client.get(

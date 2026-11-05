@@ -1,0 +1,18 @@
+# Copy to /etc/pandapay/monitoring/agent.yml on the app VM (outside the repo)
+# and replace MONITORING_TAILSCALE_IP with the monitoring VM's Tailscale IP.
+global:
+  scrape_interval: 30s
+  external_labels:
+    environment: production
+    host: app-vm
+
+scrape_configs:
+  - job_name: api
+    static_configs: [{targets: ["api:9464"]}]
+  - job_name: auth
+    static_configs: [{targets: ["auth:9465"]}]
+  - job_name: node
+    static_configs: [{targets: ["node-exporter:9100"]}]
+
+remote_write:
+  - url: http://MONITORING_TAILSCALE_IP:9090/api/v1/write

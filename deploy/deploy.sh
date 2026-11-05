@@ -428,6 +428,8 @@ if ! git merge-base --is-ancestor "$SERVER_HEAD" "$TARGET_COMMIT"; then
   exit 1
 fi
 SHA="$TARGET_COMMIT"
+# Lets the services tag error reports and metrics with the release they run.
+export PANDAPAY_GIT_SHA="$SHA"
 # Build every target image before downtime from the reviewed commit archive.
 # This avoids doing Docker builds inside the bounded write-fencing window.
 DEPLOY_TARGET_STAGE="$(mktemp -d)"
