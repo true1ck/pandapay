@@ -342,7 +342,8 @@ test('C7.6 exclusions: category stays v1 at rate 0; MCC-only is v2; category+MCC
   const both = only(r, 'both');
   // D19c: the MCC list is the scope; the category-only row is v1-only and
   // the v2 row is category + MCCs (the category stands in for an unknown MCC).
-  assert.deepEqual(both.map((x) => [x.category_slug, x.mcc_include.length, x.min_engine_version, x.max_engine_version]), [['fuel', 0, 1, 1], ['fuel', 2, 2, null]]);
+  // D20a: plus an MCC-only v2 row (a known MCC in the list excludes under any category label).
+  assert.deepEqual(both.map((x) => [x.category_slug, x.mcc_include.length, x.min_engine_version, x.max_engine_version]), [['fuel', 0, 1, 1], ['fuel', 2, 2, null], [null, 2, 2, null]]);
   assert.equal(only(r, 'none')[0].rule_role, 'info', 'an exclusion with nothing to match would exclude everything');
 });
 
@@ -1050,7 +1051,7 @@ test('D19c an exclusion with an explicit MCC list: v2 row on its MCCs (category 
     rule({ id: 'cleartrip_cashback', category_id: 'travel', conditions: { merchant: 'Swiggy' }, action: { cashback_percent: 5 } }),
   ] }));
   assert.deepEqual(only(r, 'excluded_railways').map((x) => [x.category_slug, x.mcc_include.join(), x.min_engine_version, x.max_engine_version]),
-    [['travel', '', 1, 1], ['travel', '4011,4112', 2, null]]);
+    [['travel', '', 1, 1], ['travel', '4011,4112', 2, null], [null, '4011,4112', 2, null]]);
   // In v2 no category-ONLY travel exclusion remains: with a known MCC
   // outside the list (Cleartrip 4722) the exclusion does not apply.
   const v2CategoryOnly = r.rewardRules.filter((x) => x.rule_role === 'exclusion' && x.max_engine_version !== 1 && x.category_slug === 'travel' && !x.mcc_include.length);

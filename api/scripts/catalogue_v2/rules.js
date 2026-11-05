@@ -43,8 +43,8 @@ const ROLES = new Set(['base', 'earn', 'exclusion', 'info']);
 const BRANDISH_BRAND = /(paytm|amazon|flipkart|smartbuy|phonepe|swiggy|zomato|tata|neu|reliance|samsung|apple|kiwi|myntra|irctc|indigo|uber|\bola\b|lic|hpcl|bpcl|indianoil|iocl|jio|airtel|marriott|taj|vistara|air_india|makemytrip|yatra|cleartrip|bookmyshow|pvr|landmark|shoppers|lifestyle)/;
 const BRANDISH = /(paytm|amazon|flipkart|smartbuy|phonepe|swiggy|zomato|tata|reliance|samsung|apple|kiwi|myntra|irctc|indigo|uber|ola|lic|hpcl|bpcl|indianoil|iocl|jio|airtel|partner|select|preferred|exclusive|promoted|accelerated|brand)/;
 
-// D19c reading switch: true = v2 MCC row keeps the exact category (falls back
-// to it when the MCC is unknown); false = MCC-only v2 row.
+// D19c/D20a: true = also emit a v2 category + MCC row (the category stands in
+// for an unknown MCC) next to the v2 MCC-only row.
 const EXCLUSION_MCC_ROW_KEEPS_CATEGORY = true;
 
 const UNIT_BLOCK = { points_per_100: 100, points_per_150: 150, points_per_200: 200, miles_per_100: 100 };
@@ -721,7 +721,10 @@ function transformRule(src, idx, ctx) {
         // An MCC-only v2 row would stop excluding fuel/rent/wallet spend
         // whose MCC is unknown (most SMS) — widening v2 on ~770 exclusions.
         split.push({ ...p, mccInclude: [], maxEngine: 1, v1Projection: true });
-        split.push(EXCLUSION_MCC_ROW_KEEPS_CATEGORY ? { ...p } : { ...p, categorySlug: null, broad: false });
+        if (EXCLUSION_MCC_ROW_KEEPS_CATEGORY) split.push({ ...p });
+        // D20a: and an MCC-only v2 row, so a known MCC in the list excludes
+        // whatever category the transaction is labelled with.
+        split.push({ ...p, categorySlug: null, broad: false });
         flags.push('mcc_scoped_exclusion');
       } else {
         split.push(p);
