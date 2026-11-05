@@ -389,7 +389,7 @@ All new routes live under `/sms/v2` and `/admin/sms/v2`.
 | `GET /admin/sms/v2/templates?status=` and `POST /admin/sms/v2/templates/:hash/draft` | Unknown templates and their AI-drafted rules |
 | `GET /admin/sms/v2/metrics?days=7` | Golden scores per bundle, review rate, correction rate, AI spend |
 
-The old routes stay unchanged for the current production app until WP-17's minimum-version cutoff: `/transactions/from-sms/batch`, `/sms/facts`, `/ai/jobs*`, `/sms/rules/active`.
+The old routes (`/transactions/from-sms/batch`, `/sms/facts`, `/ai/jobs*`) were deleted in the fresh-start release; there are no old apps to serve.
 
 ## Storage
 

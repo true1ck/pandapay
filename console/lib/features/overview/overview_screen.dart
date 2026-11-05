@@ -27,9 +27,6 @@ class OverviewScreen extends ConsumerWidget {
     final dq = identity.can('operations.read')
         ? ref.watch(dataQualityDashboardProvider)
         : null;
-    final smsAi = canOpen('SMS AI Operations')
-        ? ref.watch(smsAiSummaryProvider)
-        : null;
     final audits = canOpen('Anonymization Audit')
         ? ref.watch(anonymizationAuditRunsProvider)
         : null;
@@ -114,7 +111,6 @@ class OverviewScreen extends ConsumerWidget {
           'Catalogue',
           severe: false,
         ),
-      if (smsAi != null) _smsAiTile(smsAi),
       if (audits != null) _auditTile(audits),
     ];
 
@@ -154,7 +150,6 @@ class OverviewScreen extends ConsumerWidget {
 
     void refreshAll() {
       if (dq != null) ref.invalidate(dataQualityDashboardProvider);
-      if (smsAi != null) ref.invalidate(smsAiSummaryProvider);
       if (audits != null) ref.invalidate(anonymizationAuditRunsProvider);
       if (system != null) ref.invalidate(systemStatusProvider);
       if (smsRules != null) _SmsRuleBacklog.invalidate(ref);
@@ -246,23 +241,6 @@ class OverviewScreen extends ConsumerWidget {
     );
   }
 
-  static _TileData _smsAiTile(AsyncValue<Map<String, dynamic>> summary) {
-    final failed = _Count.fromAsync(summary, (s) => s['failureCount24h']);
-    final data = summary.valueOrNull;
-    final counts = (data?['statusCounts'] as Map?) ?? const {};
-    final queued = _asInt(counts['queued']) ?? 0;
-    final oldest = _asInt(data?['oldestAgeSeconds']) ?? 0;
-    return _TileData.problem(
-      'SMS AI failures · 24 h',
-      data == null
-          ? 'Processing queue health'
-          : '$queued queued${queued > 0 ? ' · oldest ${formatAge(oldest)}' : ''}',
-      Icons.auto_awesome_outlined,
-      failed,
-      'SMS AI Operations',
-    );
-  }
-
   static _TileData _auditTile(AsyncValue<List<Map<String, dynamic>>> runs) {
     return runs.when(
       loading: () => const _TileData(
@@ -329,24 +307,17 @@ class _SmsRuleBacklog {
   final _Count count;
   final String caption;
 
-  static const _caps = {
-    'category': 500,
-    'parser': 200,
-    'ai': 100,
-    'cases': 100,
-  };
+  static const _caps = {'category': 500, 'parser': 200};
 
   static _SmsRuleBacklog from(WidgetRef ref) {
     final lists = <String, AsyncValue<List<Map<String, dynamic>>>>{
       'category': ref.watch(smsCategoryProposalsProvider),
       'parser': ref.watch(smsParserProposalsProvider),
-      'ai': ref.watch(smsAiProposalsProvider),
-      'cases': ref.watch(smsCorrectionCasesProvider),
     };
     if (lists.values.any((l) => l.isLoading && !l.hasValue)) {
       return const _SmsRuleBacklog(
         _Count.loading(),
-        'Category, parser, AI and correction reviews',
+        'Category and parser rule reviews',
       );
     }
     var total = 0;
@@ -373,7 +344,7 @@ class _SmsRuleBacklog {
     final caption = failed > 0
         ? 'Some review lists could not be loaded'
         : parts.isEmpty
-        ? 'Category, parser, AI and correction reviews'
+        ? 'Category and parser rule reviews'
         : parts.join(' · ');
     return _SmsRuleBacklog(
       _Count.value(total, atLeast: atLeast || failed > 0),
@@ -381,25 +352,15 @@ class _SmsRuleBacklog {
     );
   }
 
-  static const _names = {
-    'category': 'category',
-    'parser': 'parser',
-    'ai': 'AI',
-    'cases': 'correction',
-  };
+  static const _names = {'category': 'category', 'parser': 'parser'};
 
   // Mirrors each review card's own "can still be decided" rule.
-  static bool _isPending(String key, Map<String, dynamic> p) => switch (key) {
-    'category' || 'parser' => p['status'] == null || p['status'] == 'pending',
-    'ai' => p['status'] == 'pending',
-    _ => (p['reviewStatus'] ?? p['review_status'] ?? 'pending') == 'pending',
-  };
+  static bool _isPending(String key, Map<String, dynamic> p) =>
+      p['status'] == null || p['status'] == 'pending';
 
   static void invalidate(WidgetRef ref) {
     ref.invalidate(smsCategoryProposalsProvider);
     ref.invalidate(smsParserProposalsProvider);
-    ref.invalidate(smsAiProposalsProvider);
-    ref.invalidate(smsCorrectionCasesProvider);
   }
 }
 

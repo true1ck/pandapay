@@ -390,7 +390,7 @@ Lock these eight decisions first. Each is cheap to settle now and expensive to c
 
 ## Build plan: one release
 
-Everything ships to users in a single release. The work is split into 18 work packages across four internal milestones, and no milestone build reaches users. New code sits behind a build flag (`SMS_PIPELINE_V2`) until cutover, so the integration branch `sms-v2/main` always builds, passes its tests and runs today's pipeline unchanged. It starts from the production line (`codex/ios-shortcuts-prototype`) and merges back only at release; pushing either production branch deploys.
+Everything ships to users in a single release. The work is split into 18 work packages across four internal milestones, and no milestone build reaches users. During the build, new code sat behind a build flag (`SMS_PIPELINE_V2`) so the integration branch `sms-v2/main` always built and ran today's pipeline unchanged; the fresh-start release removed that flag and the legacy pipeline. It starts from the production line (`codex/ios-shortcuts-prototype`) and merges back only at release; pushing either production branch deploys.
 
 &#91;embedded content: build plan · 4 internal milestones, 18 work packages, one release\]
 

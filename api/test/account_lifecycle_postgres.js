@@ -152,35 +152,11 @@ async function main(){
   await assert.rejects(app.query('SELECT pandapay.execute_account_deletion($1)',[b]),denied);
   // Legacy cron owner call is now a harmless warning, with data intact.
   await product.query('SELECT pandapay.execute_account_deletion($1)',[a]);assert.equal((await product.query('SELECT id FROM transactions WHERE id=$1',[financial])).rowCount,1);
-  // Account recovery escrow is additive and bounded; uses the same real app
-  // login with UUID-scoped functions and the lifecycle transaction fence.
-  await product.query('BEGIN');try{await product.query(fs.readFileSync(path.join(migrationDir,'20261023192644_account_recovery_escrow.sql'),'utf8'));await product.query('COMMIT');}catch(error){await product.query('ROLLBACK');throw error;}
   const legacy=crypto.randomUUID();await product.query('INSERT INTO profiles(id) VALUES($1)',[legacy]);
   await product.query("UPDATE profiles SET deletion_requested_at=now(),deletion_due_at=now()+interval '30 days' WHERE id=$1",[legacy]);
   assert.equal((await product.query("SELECT status FROM account_lifecycle.requests WHERE profile_id=$1",[legacy])).rows[0].status,'pending');
   await product.query('UPDATE profiles SET deletion_requested_at=null,deletion_due_at=null WHERE id=$1',[legacy]);
   assert.equal((await product.query("SELECT status FROM account_lifecycle.requests WHERE profile_id=$1",[legacy])).rows[0].status,'cancelled','disabled legacy cancellation mirrors durable ledger');
-  const d=crypto.randomUUID(),e=crypto.randomUUID();await product.query('INSERT INTO profiles(id) VALUES($1),($2)',[d,e]);
-  await assert.rejects(scoped(app,d,'SELECT * FROM account_recovery.list_snapshots($1)'),error=>error.code==='55000');
-  await product.query('UPDATE account_recovery.control SET enabled=true');
-  const {PUT_SQL,READ_SQL,LIST_SQL,DELETE_SQL,wrapKey,unwrapKey,wrappingKey}=require('../src/account_recovery_routes');
-  const wrap=wrappingKey(crypto.randomBytes(32).toString('base64'),'synthetic-v1');const secret=crypto.randomBytes(32);
-  let latest;for(let i=0;i<3;i++){
-    await product.query("UPDATE account_recovery.snapshots SET created_at=created_at-interval '16 minutes' WHERE profile_id=$1",[d]);
-    const id=crypto.randomUUID(),cipher=Buffer.concat([Buffer.from('PDAR1'),crypto.randomBytes(80)]),digest=crypto.createHash('sha256').update(cipher).digest('hex');
-    const wrapped=wrapKey(secret,d,id,wrap);
-    const args=[d,id,wrapped,wrap.keyId,cipher,digest,true,true,'account-recovery-v1'];
-    await scoped(app,d,PUT_SQL,args);assert.equal((await scoped(app,d,PUT_SQL,args)).rows[0].created,false,'stable snapshot retry');latest=id;
-  }
-  const rows=(await scoped(app,d,LIST_SQL)).rows;assert.equal(rows.length,2,'two recovery snapshots per account');
-  const saved=(await scoped(app,d,READ_SQL,[d,latest])).rows[0];assert.deepEqual(unwrapKey(saved.wrapped_key,d,latest,saved.wrapping_key_id,wrap),secret);
-  assert.equal((await scoped(app,e,READ_SQL,[e,latest])).rowCount,0,'cross-account snapshot UUID reveals nothing');
-  await assert.rejects(scoped(app,e,READ_SQL,[d,latest]),denied);
-  await assert.rejects(app.query('SELECT * FROM account_recovery.snapshots'),denied);
-  await assert.rejects(app.query('SET ROLE account_recovery_owner'),denied);
-  await assert.rejects(scoped(app,d,PUT_SQL,[d,crypto.randomUUID(),Buffer.alloc(60),wrap.keyId,Buffer.alloc(5242881),'0'.repeat(64),true,true,'account-recovery-v1']),error=>error.code==='22023');
-  assert.equal((await scoped(app,d,DELETE_SQL)).rows[0].removed,2,'only explicitly discarded recovery copies removed');
-  assert.equal((await product.query('SELECT id FROM profiles WHERE id=$1',[d])).rowCount,1,'recovery discard preserves product profile');
   const failed=crypto.randomUUID();await product.query('INSERT INTO profiles(id) VALUES($1)',[failed]);
   await scoped(app,failed,'SELECT * FROM account_lifecycle.request_deletion($1)');
   await product.query("UPDATE profiles SET deletion_requested_at=now()-interval '31 days',deletion_due_at=now()-interval '1 day' WHERE id=$1",[failed]);
@@ -211,7 +187,7 @@ async function main(){
       console.log('PASS: real age journal operator bootstrap/replay with separate control/limited function logins, all pre-existing DB tombstones journaled before checkpoint install, repeat recovery and financial history preserved');
     }finally{await fsp.rm(directory,{recursive:true,force:true});}
   }
-  console.log('PASS: durable two-database deletion ledger, exact UUID preservation, 30-day grace/cancel race, one-worker leases, bounded retries, auth/session revocation, immutable soft tombstones, replay fencing, no financial/profile deletion, non-owner role denials, legacy cron safety and bounded account-recovery escrow/rotation');
+  console.log('PASS: durable two-database deletion ledger, exact UUID preservation, 30-day grace/cancel race, one-worker leases, bounded retries, auth/session revocation, immutable soft tombstones, replay fencing, no financial/profile deletion, non-owner role denials, legacy cron safety');
  }finally{await Promise.all(pools.map(pool=>pool.end()));}
 }
 if(require.main===module)main().catch(error=>{console.error('Synthetic account lifecycle fixture failed',error.stack);process.exitCode=1;});

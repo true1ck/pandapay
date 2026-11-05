@@ -2,6 +2,8 @@
 
 **Status:** plan only. Nothing in this document has been run against production, and no agent may run it. Every step marked **OWNER** needs the owner's explicit go-ahead.
 
+**Superseded by the fresh-start release:** this plan describes the earlier dark deploy next to live legacy apps. The fresh-start release has no old apps, no legacy SMS routes, no `426` gate, no client build flag, and no `gemini-worker` or `sms-learning-worker` containers. Only the server flag `sms_pipeline_v2_enabled` and the migration list below still apply.
+
 **Goal:** put the v2 server code and the 11 `*sms_v2*` migrations on the shared production host with `sms_pipeline_v2_enabled` OFF, so live Android users and the remote developer see no change, and nothing can write v2 data. The app and the flag come later (see Test and release).
 
 **Warning, read first.** The deploy workflows replace the **one** production host and database. `deploy-pushed-branch.yml` says so in its own header ("production replacement, not an isolated staging deployment"). There is no staging path. Everything below follows from that.
@@ -53,7 +55,7 @@ Nothing in the 11 files inserts the feature flag. **`feature_flags` has no `sms_
 2. Build target images (`api`, `auth`, workers, `backup`, `db-migrate`) **before** downtime.
 3. Read-only product migration and auth contact preflight (`product_migrate.js --check`: applied / legacy / pending counts, checksum check, baseline).
 4. Inventory the `pandapay-prod` Compose project; unknown or unlabeled containers abort before downtime.
-5. **Writer fence:** stop `auth`, `api`, `rewards-worker`, `gemini-worker`, `sms-learning-worker` (30 s graceful stop). The window is bounded (default 30 min, `DEPLOY_MAINTENANCE_WINDOW_SECONDS` 300 to 7200).
+5. **Writer fence:** stop `auth`, `api`, `rewards-worker` (30 s graceful stop). The window is bounded (default 30 min, `DEPLOY_MAINTENANCE_WINDOW_SECONDS` 300 to 7200).
 6. **Paired encrypted product/auth backup**, verified (offhost needs both destinations, or `BACKUP_MODE=local`). The script continues only after the backup confirms.
 7. Replace the working source (`git reset --hard`).
 8. **Migrate** (`db-migrate`): the 11 SMS v2 files plus any other pending files, in the product ledger, transactionally.

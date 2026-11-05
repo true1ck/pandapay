@@ -29,13 +29,11 @@
     "REFERRAL_IDENTITY_HMAC_KEY": null,
     "IMAP_ENCRYPTION_KEY": null,
     "CONSOLE_SESSION_ENCRYPTION_KEY": null,
-    "ACCOUNT_RECOVERY_WRAPPING_KEY": null,
     "ACCOUNT_LIFECYCLE_JOURNAL_AUTH_KEY": null
   },
   "features": {
     "consoleBrowser": false,
     "accountLifecycle": false,
-    "accountRecovery": false,
     "dbAccessLogging": false,
     "imapPolling": false,
     "legacyOtpRetirement": false,

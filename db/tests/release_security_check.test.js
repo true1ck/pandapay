@@ -198,7 +198,6 @@ test('configured retained readers need a registered label for every ID and expos
 test('malformed, duplicate, oversized, and active-key-duplicate retained lists fail through a safe missing gate',()=>{
  const invalid=[`{`,JSON.stringify([['same',key32],['same',key32]]),JSON.stringify([['bad/id',key32]]),JSON.stringify([['short',Buffer.alloc(31,4).toString('base64')]]),JSON.stringify(Array.from({length:9},(_,i)=>[`reader${i}`,key32])), ' '.repeat(8193)];
  for(const raw of invalid){const value=fixture();value.env.ENCRYPTION_READ_KEYS_JSON=raw;const report=evaluateRelease(value);assert.ok(report.missing_gates.includes('retained_read_key_inventory'));assert.equal(JSON.stringify(report).includes(key32),false);}
- const active=fixture();active.env.ACCOUNT_RECOVERY_WRAPPING_KEY_ID='current';active.env.ACCOUNT_RECOVERY_WRAPPING_READ_KEYS_JSON=JSON.stringify([['current',key32]]);assert.ok(evaluateRelease(active).missing_gates.includes('retained_read_key_inventory'));
 });
 
 test('retained-reader version labels are configuration evidence and invalidate stale exact-candidate proof',()=>{

@@ -68,7 +68,6 @@ const kDestinationPermissions = <String, String>{
   'Acceptance & Rates': 'catalogue.read',
   'System Status': 'operations.read',
   'Data Quality': 'operations.read',
-  'SMS AI Operations': 'ai.queue.read',
   'Anonymization Audit': 'admin.audit.read',
   'Parser Patterns': 'catalogue.read',
   'SMS Rule Approvals': 'learning.read',

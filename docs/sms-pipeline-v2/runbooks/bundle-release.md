@@ -66,13 +66,6 @@ The script then checks that all four cohorts were minted, or that nothing was ne
 | Signing key exposed | "Revoking a leaked rule key" in `signing-keys.md`: switch the maintenance environment to the spare key and run the hourly job once. |
 | `/sms/v2/rules` answers 503 `bundle_unavailable` | The served copy is missing or expired. Run `run_sms_v2_rule_jobs.js` on the maintenance host and fix whatever stopped the hourly job. |
 
-## Legacy route cutoff (WP-17)
+## Legacy routes
 
-The legacy SMS routes (`/transactions/from-sms/batch`, `/sms/facts`, `/ai/jobs*`, `/sms/rules/active`) answer `426 Upgrade Required` only after a cutoff date, and only to an `X-App-Version` below the first v2 build. Off by default. To announce and set it, after release:
-
-```
-LEGACY_SMS_CUTOFF_DATE=2027-01-15        # YYYY-MM-DD means 00:00 UTC that day
-SMS_V2_FIRST_APP_VERSION=<first v2 build, e.g. 1.1.0+120>
-```
-
-Both go in the API environment and take effect on restart; the date is compared on every request. Setting the date without the version stops the server at startup. Builds before v2 send no `X-App-Version`, so after the cutoff they count as old; set `LEGACY_SMS_BLOCK_MISSING_VERSION=false` to let header-less callers through. To switch the gate off again, unset `LEGACY_SMS_CUTOFF_DATE`. The AI worker's `/ai/jobs/lease`, `/heartbeat`, `/result`, `/retry` and `/fail` calls are never gated.
+The legacy SMS routes (`/transactions/from-sms/batch`, `/sms/facts`, `/ai/jobs*`) were deleted in the fresh-start release, and so was the `426 Upgrade Required` gate. There is no cutoff date to set. `LEGACY_SMS_CUTOFF_DATE`, `SMS_V2_FIRST_APP_VERSION` and `LEGACY_SMS_BLOCK_MISSING_VERSION` are no longer read and can be removed from the API environment.

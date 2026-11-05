@@ -10,8 +10,7 @@ Nothing reaches users until every gate on this tab passes. Each work package's d
 | Domain logic | Engine, instruments, linker, ledger, categories | `cd packages/pandapay_domain && dart test` | CI, every push |
 | Regex parity | Every rule pattern behaves the same in Dart and JavaScript | `node tools/sms_rules_cli/test/regex_parity.mjs` | CI (added by WP-02) |
 | Golden set | Accuracy gates, with no metric dropping | `cd tools/sms_rules_cli && dart run bin/sms_rules.dart golden --bundle ../../app/assets/sms_rules/baseline_bundle.json --baseline ../sms_golden/reports/latest.json` | CI (added by the orchestrator after WP-03), plus nightly |
-| App, flag off | Nothing changed for today's pipeline | `cd app && flutter test --concurrency=1` | CI |
-| App, flag on | v2 wiring, screens, migration | `cd app && flutter test --concurrency=1 --dart-define=SMS_PIPELINE_V2=true` | CI (orchestrator adds the step at M2) |
+| App | Today's pipeline is gone; v2 wiring, screens, review flow | `cd app && flutter test --concurrency=1` | CI |
 | Visual | Key screens in light and dark | Alchemist golden tests under `app/test/features/sms_v2/` | CI, using the CI variant |
 | Server | Routes, storage, security, jobs | `cd api && npm test` | CI |
 | Database | Migrations, row-level security, report queries excluding superseded rows | `db/tests/2026111*_sms_v2_*_test.sql` in the smoke job | CI |
@@ -81,7 +80,6 @@ The server ships first, the app second, and rule changes roll out on their own t
 - [ ] Bundle 1 is imported and active.
 - [ ] The rule-stats and auto-pause jobs are scheduled.
 - [ ] `sms_pipeline_v2_enabled` is on for testers, then for everyone.
-- [ ] Today's production app is checked against production using the legacy routes.
 
 **App:**
 
@@ -98,7 +96,6 @@ The server ships first, the app second, and rule changes roll out on their own t
 - [ ] Rule changes go testers → pct5 → pct25 → all, independently of app releases.
 - [ ] The correction queue is triaged daily for 2 weeks.
 - [ ] The legacy-route cutoff date is announced and set in `config.js`.
-- [ ] The tag `sms-v2-rc-flagged` (the last candidate built before WP-17 removed the flag) is kept until the cutoff date.
 
 ## Rollback and kill switches
 
@@ -113,4 +110,4 @@ Every switch below works without an app release, except the last one.
 | Attestation wrongly rejecting real devices | `SMS_V2_ATTESTATION_MODE=monitor` | Requests accepted, with lower limits | On-call |
 | Migration wrong for one user | `sms_v2_unsupersede(profile_id)` | That user's legacy rows are visible again | Admin or support |
 | Signing key exposed | Key rotation runbook (WP-13) | New key signs, old key removed in the next release | Owner |
-| Critical app bug after release | Halt the staged rollout, then ship a hotfix. In an emergency before the cutoff date, rebuild from `sms-v2-rc-flagged` with the flag off; the legacy routes still work until then. |  | Owner |
+| Critical app bug after release | Halt the staged rollout, then ship a hotfix. There is no flag to turn off and no legacy route to fall back to; fix forward. |  | Owner |

@@ -48,8 +48,6 @@ import '../data/portable_backup/account_recovery_operation_gate.dart';
 import '../data/local/response_cache.dart';
 import '../data/local/financial_store.dart';
 import '../data/local/financial_read_worker.dart';
-import '../data/local/sms_dismissal_outbox.dart';
-import '../data/local/sms_feedback_outbox.dart';
 import '../data/local/sms_intake_repository.dart';
 import '../data/local/sms_import_store.dart';
 import '../data/local/sync_queue.dart';
@@ -316,32 +314,6 @@ final consentsApiProvider = Provider<ConsentsApi?>((ref) {
     client: ref.read(authenticatedHttpClientProvider),
   );
 });
-
-Future<ConsentRecord?> _currentSmsSharedLearningConsent(Ref ref) async {
-  final cached = ref.read(smsSharedLearningConsentProvider).valueOrNull;
-  if (cached != null) return cached;
-  try {
-    return await ref.read(smsSharedLearningConsentProvider.future);
-  } catch (_) {
-    return null;
-  }
-}
-
-Future<void> _flushSmsLearningQueues(
-  Ref ref,
-  UserCardsRepository repository,
-  String namespace,
-) async {
-  if (ref.read(cacheNamespaceProvider) != namespace) return;
-  // Nothing queued means the consent lookup and both flushes would all be
-  // wasted work — offline they can only fail, and the reconnect flush owns
-  // the retry. The queue check is local, so it costs no network.
-  if (!await repository.hasPendingSmsLearningWork()) return;
-  final consent = await _currentSmsSharedLearningConsent(ref);
-  if (consent == null || ref.read(cacheNamespaceProvider) != namespace) return;
-  await repository.flushDismissalQueue();
-  await repository.flushSmsLearningFeedbackQueue();
-}
 
 /// Latest explicit SMS shared-learning permission. It is separate from
 /// merchant contributions consent because SMS feedback may include financial
@@ -1632,31 +1604,6 @@ final userCardsRepositoryProvider = Provider<UserCardsRepository?>((ref) {
     apiBaseUrl: _apiBaseUrl,
     accessToken: token,
     client: ref.read(authenticatedHttpClientProvider),
-    dismissalOutbox: () async {
-      if (ref.read(cacheNamespaceProvider) != namespace) {
-        throw StateError('Account changed before dismissal sync');
-      }
-      final cache = await ref.read(responseCacheProvider.future);
-      return SmsDismissalOutbox(cache.financialStore.database, namespace);
-    },
-    feedbackOutbox: () async {
-      if (ref.read(cacheNamespaceProvider) != namespace) {
-        throw StateError('Account changed before SMS feedback sync');
-      }
-      final cache = await ref.read(responseCacheProvider.future);
-      return SmsFeedbackOutbox(
-        cache.financialStore.database,
-        namespace: namespace,
-      );
-    },
-    loadSmsSharedLearningConsent: () async =>
-        (await _currentSmsSharedLearningConsent(ref))?.grantedAt,
-    isRepeatedSmsOccurrence: (sourceKey) async {
-      if (ref.read(cacheNamespaceProvider) != namespace) return true;
-      final cache = await ref.read(responseCacheProvider.future);
-      return SmsIntakeRepository(cache.financialStore.database)
-          .hasRepeatedOccurrence(namespace, sourceKey);
-    },
     onTransactionSaved: (mutationId, transactionId) {
       if (ref.read(cacheNamespaceProvider) != namespace) return;
       ref
@@ -1664,7 +1611,6 @@ final userCardsRepositoryProvider = Provider<UserCardsRepository?>((ref) {
           ?.remapTransaction('local-outbox:$mutationId', transactionId);
     },
   );
-  _flushSmsLearningQueues(ref, repository, namespace).ignore();
   return repository;
 });
 
@@ -2634,7 +2580,6 @@ final outboxFlushProvider = Provider<void>((ref) {
         duplicateResolutionOutboxRepositoryProvider.future,
       );
       final duplicateSent = await duplicateOutbox.flush(repo);
-      await _flushSmsLearningQueues(ref, repo, namespace);
       if (!disposed &&
           ref.read(cacheNamespaceProvider) == namespace &&
           (sent > 0 || duplicateSent > 0)) {

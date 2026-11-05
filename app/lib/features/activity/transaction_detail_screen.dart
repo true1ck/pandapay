@@ -28,7 +28,6 @@ import 'report_transaction_screen.dart';
 import 'foreign_payments_screen.dart';
 import '../sync/split_sync.dart';
 import '../insights/spend_trends_screen.dart';
-import 'sms_learning_capture.dart';
 import '../quickadd/quick_add_screen.dart';
 import '../shared_expenses/runtime/shared_providers.dart';
 import '../shared_expenses/composer/shared_source_seed.dart';
@@ -685,24 +684,6 @@ class _DetailBodyState extends ConsumerState<_DetailBody> {
       ref.invalidate(utilizationTransactionsProvider);
       ref.invalidate(homeSummaryProvider);
 
-      // L14: a wrong-transaction report is a durable dispute claim about the
-      // decision, not a lifecycle action like refund/reversal. It queues only
-      // after the local ignore committed; consent gating and the captured-SMS
-      // lookup happen inside the capture helper. Refund/reversal/transfer stay
-      // lifecycle-only and never produce learning evidence.
-      if (reason == 'wrong_transaction') {
-        unawaited(
-          queueSmsTransactionCorrection(
-            ref: ref,
-            original: widget.entry,
-            action: 'dismissed',
-            correctedFields: const {},
-            correctionKind: 'false_transaction',
-            reason: 'wrong_transaction_dispute',
-          ),
-        );
-      }
-
       if (mounted) {
         if (deleting) {
           ScaffoldMessenger.of(
@@ -788,10 +769,6 @@ class _DetailBodyState extends ConsumerState<_DetailBody> {
       ref.invalidate(utilizationTransactionsProvider);
       ref.invalidate(homeSummaryProvider);
 
-      if (previousNote?.contains('[ignored: wrong_transaction]') == true) {
-        unawaited(_recordSmsDisputeWithdrawal());
-      }
-
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
           const SnackBar(content: Text('Transaction restored to active.')),
@@ -823,30 +800,6 @@ class _DetailBodyState extends ConsumerState<_DetailBody> {
       return 'Withdraw report (restore to active)';
     }
     return 'Restore transaction';
-  }
-
-  /// L14: undoing a wrong-transaction report is the opposite claim — the
-  /// dismissal was wrong, the event is real. Queued after the local restore
-  /// committed; on the server it supersedes the earlier dispute for the same
-  /// fact while the dispute stays as superseded audit history.
-  Future<void> _recordSmsDisputeWithdrawal() async {
-    final entry = widget.entry;
-    if (entry.source != 'sms' && entry.source != 'sms_bulk') return;
-    await queueSmsLearningEvent(
-      ref: ref,
-      sourceKey: entry.sourceKey ?? '',
-      action: 'moved_to_review',
-      resolvedKind: 'transaction',
-      occurredAtIso: entry.occurredAt.toUtc().toIso8601String(),
-      originalDecision: {
-        'kind': 'dismissed',
-        'origin': 'manual',
-        'fields': const {},
-      },
-      correctedFields: const {},
-      correctionKind: 'false_dismissal',
-      reason: 'wrong_transaction_report_withdrawn',
-    );
   }
 
   Future<void> _showIgnoreSheet() async {

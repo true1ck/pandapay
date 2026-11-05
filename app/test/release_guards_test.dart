@@ -38,4 +38,25 @@ void main() {
     }
     expect(offenders, isEmpty);
   });
+
+  test('no client queue posts to the deleted SMS learning routes', () {
+    // v2 corrections use /sms/v2/corrections; the legacy feedback, dismissal
+    // and rule-exposure routes no longer exist on the server.
+    const banned = [
+      '/sms/learning-feedback',
+      '/sms/rule-exposures',
+      'SmsFeedbackOutbox',
+      'SmsDismissalOutbox',
+      'SmsRuleExposureOutbox',
+      'sms_learning_capture',
+    ];
+    final offenders = <String>[];
+    for (final f in _dartFiles('lib')) {
+      final text = f.readAsStringSync();
+      for (final b in banned) {
+        if (text.contains(b)) offenders.add('${f.path}: $b');
+      }
+    }
+    expect(offenders, isEmpty);
+  });
 }

@@ -3,7 +3,6 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import '../../app/admin_design.dart';
 import '../../app/providers.dart';
-import 'sms_correction_cases_screen.dart';
 
 /// Only aggregate merchant/category evidence is shown; no user's SMS or
 /// transaction fields are returned to the console.
@@ -14,9 +13,8 @@ class SmsCategoryProposalsScreen extends ConsumerWidget {
   Widget build(BuildContext context, WidgetRef ref) {
     final proposals = ref.watch(smsCategoryProposalsProvider);
     final parserProposals = ref.watch(smsParserProposalsProvider);
-    final aiProposals = ref.watch(smsAiProposalsProvider);
     return DefaultTabController(
-      length: 4,
+      length: 2,
       child: Column(
         children: [
           const Material(
@@ -26,8 +24,6 @@ class SmsCategoryProposalsScreen extends ConsumerWidget {
               tabs: [
                 Tab(text: 'Categories'),
                 Tab(text: 'Parser rules'),
-                Tab(text: 'AI decisions'),
-                Tab(text: 'Corrections'),
               ],
             ),
           ),
@@ -76,172 +72,10 @@ class SmsCategoryProposalsScreen extends ConsumerWidget {
                               _ParserProposalTile(rows[index]),
                         ),
                 ),
-                aiProposals.when(
-                  loading: () =>
-                      const Center(child: CircularProgressIndicator()),
-                  error: (error, _) => AdminLoadError(
-                    title: 'AI review decisions are unavailable',
-                    error: error,
-                    onRetry: () => ref.invalidate(smsAiProposalsProvider),
-                  ),
-                  data: (rows) => rows.isEmpty
-                      ? const AdminEmptyState(
-                          icon: Icons.auto_awesome_outlined,
-                          title: 'No AI decisions are waiting',
-                          message:
-                              'New anonymized learning evidence will be listed here for review before it can influence a candidate rule.',
-                        )
-                      : ListView.builder(
-                          itemCount: rows.length,
-                          itemBuilder: (context, index) =>
-                              _AiProposalTile(rows[index]),
-                        ),
-                ),
-                // C7: explicit user-correction cases — read-only, privacy-safe.
-                const SmsCorrectionCasesTab(),
               ],
             ),
           ),
         ],
-      ),
-    );
-  }
-}
-
-class _AiProposalTile extends ConsumerStatefulWidget {
-  const _AiProposalTile(this.proposal);
-  final Map<String, dynamic> proposal;
-
-  @override
-  ConsumerState<_AiProposalTile> createState() => _AiProposalTileState();
-}
-
-class _AiProposalTileState extends ConsumerState<_AiProposalTile> {
-  bool busy = false;
-
-  Future<void> review(String decision) async {
-    final reasonController = TextEditingController();
-    try {
-      final reason = await showDialog<String>(
-        context: context,
-        builder: (context) => AlertDialog(
-          title: Text(
-            '${decision == 'approved' ? 'Approve' : 'Reject'} AI learning evidence?',
-          ),
-          content: Column(
-            mainAxisSize: MainAxisSize.min,
-            children: [
-              const Text(
-                'Approval adds this pattern to candidate evidence. A separate parser rule approval is required before device delivery.',
-              ),
-              TextField(
-                controller: reasonController,
-                maxLength: 500,
-                decoration: const InputDecoration(
-                  labelText: 'Review reason (required)',
-                ),
-              ),
-            ],
-          ),
-          actions: [
-            TextButton(
-              onPressed: () => Navigator.pop(context),
-              child: const Text('Cancel'),
-            ),
-            FilledButton(
-              onPressed: () =>
-                  Navigator.pop(context, reasonController.text.trim()),
-              child: const Text('Save decision'),
-            ),
-          ],
-        ),
-      );
-      if (reason == null) return;
-      if (reason.length < 5) {
-        if (mounted) {
-          ScaffoldMessenger.of(context).showSnackBar(
-            const SnackBar(
-              content: Text('Enter a reason of at least 5 characters.'),
-            ),
-          );
-        }
-        return;
-      }
-      setState(() => busy = true);
-      await ref
-          .read(adminApiProvider)!
-          .reviewSmsAiProposal(
-            proposalId: widget.proposal['proposalId'] as String,
-            decision: decision,
-            reason: reason,
-          );
-      ref.invalidate(smsAiProposalsProvider);
-      if (mounted) {
-        ScaffoldMessenger.of(
-          context,
-        ).showSnackBar(SnackBar(content: Text('Evidence $decision')));
-      }
-    } catch (error) {
-      if (mounted) {
-        ScaffoldMessenger.of(
-          context,
-        ).showSnackBar(SnackBar(content: Text('$error')));
-      }
-    } finally {
-      reasonController.dispose();
-      if (mounted) setState(() => busy = false);
-    }
-  }
-
-  @override
-  Widget build(BuildContext context) {
-    final p = widget.proposal;
-    final pending = p['status'] == 'pending';
-    final hasTemplate =
-        (p['proposedRule'] is Map) &&
-        ((p['proposedRule'] as Map)['template'] is String);
-    final fields = p['proposedRule'] is Map
-        ? (p['proposedRule'] as Map)['fields']
-        : null;
-    final hasCategoryEvidence =
-        fields is Map &&
-        fields['merchant'] is String &&
-        fields['categorySlug'] is String;
-    final canApprove = hasTemplate || hasCategoryEvidence;
-    return Card(
-      child: Padding(
-        padding: const EdgeInsets.all(12),
-        child: Column(
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            Text(
-              '${p['proposedRule'] is Map ? (p['proposedRule'] as Map)['family'] : 'AI decision'} · ${p['status']}',
-              style: Theme.of(context).textTheme.titleMedium,
-            ),
-            const SizedBox(height: 8),
-            _ProposalEvidence(proposal: p),
-            if (!canApprove)
-              const Text(
-                'No safe parser or category evidence; reject or review manually.',
-              ),
-            const SizedBox(height: 8),
-            Wrap(
-              spacing: 8,
-              children: [
-                OutlinedButton(
-                  onPressed: busy || !pending ? null : () => review('rejected'),
-                  child: const Text('Reject'),
-                ),
-                FilledButton(
-                  onPressed: busy || !pending || !canApprove
-                      ? null
-                      : () => review('approved'),
-                  child: const Text('Approve evidence'),
-                ),
-              ],
-            ),
-          ],
-        ),
       ),
     );
   }

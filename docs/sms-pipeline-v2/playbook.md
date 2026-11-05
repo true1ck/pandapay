@@ -27,14 +27,11 @@ Every agent, whatever its model, follows these rules. They keep parallel work fr
 - Your work package lists **touch points**: the only edits allowed in shared files. Make them exactly as described.
 - Need something outside your lane? Stop, write a request at `docs/sms-pipeline-v2/requests/WP-XX-<slug>.md` (what, why, which files) and report to the orchestrator. Do not work around it, and do not stub a contract.
 
-### The build flag
+### The feature flag
 
-- **App:** `const bool kSmsPipelineV2 = bool.fromEnvironment('SMS_PIPELINE_V2');` in `app/lib/features/sms_v2/flag.dart` (created by WP-01).
-  - Every new behaviour on an app code path runs only when it is true.
-  - With the flag off, the app behaves exactly as today and every existing test passes unchanged.
-- **Server:** new routes are always registered, but return `404` unless the `sms_pipeline_v2_enabled` row in `feature_flags` is on. The guard `requireSmsV2` is built by WP-08.
-- **Domain package and console** need no flag: new code there is unused until it is wired in.
-- **Run with the flag:** `flutter run --dart-define=SMS_PIPELINE_V2=true` and `flutter test --dart-define=SMS_PIPELINE_V2=true`.
+- **App:** there is no build flag. The `SMS_PIPELINE_V2` define and `kSmsPipelineV2` were removed in the fresh-start release; v2 is the only pipeline.
+- **Server:** v2 routes are always registered, but return `404` unless the `sms_pipeline_v2_enabled` row in `feature_flags` is on. The guard is `requireSmsV2`.
+- **Domain package and console** need no flag.
 
 ### Tests and commands
 
@@ -45,8 +42,7 @@ Every agent, whatever its model, follows these rules. They keep parallel work fr
 | Suite | Command |
 | --- | --- |
 | Domain | `cd packages/pandapay_domain && dart test` |
-| App, flag off | `cd app && flutter analyze --no-fatal-infos && flutter test --concurrency=1` |
-| App, flag on | `cd app && flutter test --concurrency=1 --dart-define=SMS_PIPELINE_V2=true` |
+| App | `cd app && flutter analyze --no-fatal-infos && flutter test --concurrency=1` |
 | Codegen (when providers change) | `cd app && dart run build_runner build --delete-conflicting-outputs` |
 | Server | `cd api && npm test` |
 | Contracts | `cd packages/pandapay_domain && dart test test/sms_v2/contract_fixtures_test.dart` and `cd api && node --test test/sms_v2/contracts.test.js` |

@@ -18,7 +18,6 @@ import 'features/crowdsource/conflicts_screen.dart';
 import 'features/crowdsource/merchants_screen.dart';
 import 'features/dashboard/anonymization_audit_screen.dart';
 import 'features/dashboard/data_quality_dashboard_screen.dart';
-import 'features/dashboard/sms_ai_operations_screen.dart';
 import 'features/overview/overview_screen.dart';
 import 'features/parser_patterns/parser_patterns_screen.dart';
 import 'features/parser_patterns/sms_category_proposals_screen.dart';
@@ -248,13 +247,10 @@ class _ConsoleHomeState extends ConsumerState<_ConsoleHome> {
       screen: OverviewScreen(onOpen: _select),
       refresh: (ref) {
         ref.invalidate(dataQualityDashboardProvider);
-        ref.invalidate(smsAiSummaryProvider);
         ref.invalidate(anonymizationAuditRunsProvider);
         ref.invalidate(systemStatusProvider);
         ref.invalidate(smsCategoryProposalsProvider);
         ref.invalidate(smsParserProposalsProvider);
-        ref.invalidate(smsAiProposalsProvider);
-        ref.invalidate(smsCorrectionCasesProvider);
       },
     ),
     _ConsoleDestination(
@@ -344,7 +340,6 @@ class _ConsoleHomeState extends ConsumerState<_ConsoleHome> {
       screen: const SystemStatusScreen(),
       refresh: (ref) {
         ref.invalidate(systemStatusProvider);
-        ref.invalidate(smsAiSummaryProvider);
       },
     ),
     _ConsoleDestination(
@@ -355,23 +350,6 @@ class _ConsoleHomeState extends ConsumerState<_ConsoleHome> {
       icon: Icons.monitor_heart_outlined,
       screen: const DataQualityDashboardScreen(),
       refresh: (ref) => ref.invalidate(dataQualityDashboardProvider),
-    ),
-    _ConsoleDestination(
-      group: 'System health',
-      label: 'SMS AI Operations',
-      description:
-          'Monitor anonymized SMS processing, learning, rule rollout, quotas, and job health.',
-      icon: Icons.auto_awesome_outlined,
-      screen: const SmsAiOperationsScreen(),
-      refresh: (ref) {
-        ref.invalidate(smsAiSummaryProvider);
-        ref.invalidate(smsAiJobsProvider);
-        ref.invalidate(smsAiQuotaProvider);
-        ref.invalidate(smsLearningCandidatesProvider);
-        ref.invalidate(smsLearningOperationsProvider);
-        ref.invalidate(smsRolloutProvider);
-        ref.invalidate(smsRuleBundlesProvider);
-      },
     ),
     _ConsoleDestination(
       group: 'System health',
@@ -403,14 +381,12 @@ class _ConsoleHomeState extends ConsumerState<_ConsoleHome> {
       group: 'SMS rules',
       label: 'SMS Rule Approvals',
       description:
-          'Review category, parser, AI-learning, and correction evidence before any rule is delivered.',
+          'Review category and parser evidence before any rule is delivered.',
       icon: Icons.rule_outlined,
       screen: const SmsCategoryProposalsScreen(),
       refresh: (ref) {
         ref.invalidate(smsCategoryProposalsProvider);
         ref.invalidate(smsParserProposalsProvider);
-        ref.invalidate(smsAiProposalsProvider);
-        ref.invalidate(smsCorrectionCasesProvider);
       },
     ),
     _ConsoleDestination(

@@ -19,7 +19,6 @@ const _ownerPermissions = [
   'support.resolve',
   'scraper.configure',
   'scraper.run',
-  'ai.queue.read',
   'learning.read',
   'catalogue.publish',
   'learning.publish',
@@ -64,11 +63,6 @@ Future<List<String>> _pumpConsole(
           'locations_total': '2',
         },
       }),
-      '/admin/sms-ai/summary' => _json({
-        'statusCounts': {'queued': 2},
-        'failureCount24h': 0,
-        'oldestAgeSeconds': 120,
-      }),
       '/admin/anonymization-audit-runs' => _json({
         'auditRuns': [
           {
@@ -88,17 +82,6 @@ Future<List<String>> _pumpConsole(
         ],
       }),
       '/admin/sms-rules/parser-proposals' => _json({'proposals': []}),
-      '/admin/sms-learning/ai-proposals' => _json({
-        'proposals': [
-          {'status': 'pending'},
-        ],
-      }),
-      '/admin/sms-learning/feedback-events' => _json({
-        'correctionCases': [
-          {'reviewStatus': 'pending'},
-          {'reviewStatus': 'accepted'},
-        ],
-      }),
       '/admin/alerts' => _json({'alerts': []}),
       _ => _json({'cards': []}),
     };
@@ -141,11 +124,11 @@ void main() {
     );
 
     expect(find.text('LOCAL WORKSPACE'), findsOneWidget);
-    // 2 alerts + 1 error report + 3 SMS reviews + 0 tickets + 0 conflicts
+    // 2 alerts + 1 error report + 1 SMS review + 0 tickets + 0 conflicts
     // + 3 card requests.
-    expect(find.text('9'), findsOneWidget);
+    expect(find.text('7'), findsOneWidget);
     expect(find.text('awaiting review'), findsOneWidget);
-    expect(find.text('1 category · 1 AI · 1 correction'), findsOneWidget);
+    expect(find.text('1 category'), findsOneWidget);
     expect(find.text('Passed'), findsOneWidget);
     expect(find.textContaining('PRODUCTION'), findsNothing);
 
@@ -196,7 +179,6 @@ void main() {
       expect(find.text('SMS rules to review'), findsNothing);
       expect(requested, isNot(contains('/admin/sms-rules/category-proposals')));
       expect(requested, isNot(contains('/admin/anonymization-audit-runs')));
-      expect(requested, isNot(contains('/admin/sms-ai/summary')));
       expect(tester.takeException(), isNull);
     },
   );
