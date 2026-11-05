@@ -68,6 +68,9 @@ const { registerAdminReferralOperationsRoutes } = require('./admin_referral_oper
 const aiQueueRoute = require('./ai_queue_route');
 const aiProviderQuotaRoute = require('./ai_provider_quota_route');
 const rewardMath = require('./reward_math');
+// card-rewards v2 (WP8): v2-shaped cards record in native units; see the hooks
+// in applyTransactionState, reconcileCurrentCapStates and GET /user-cards.
+const cardStateV2 = require('./card_state_v2');
 const { registerSplitRoutes } = require('./transaction_splits');
 const transactionTags = require('./transaction_tags');
 const { registerUserMerchantCategoryRuleRoutes } = require('./user_merchant_category_rules');
@@ -2116,18 +2119,13 @@ app.get('/user-cards', requireAuth, async (req, res) => {
         await reconcileCurrentCapStates(client, req.userId);
 
         for (const card of cards.rows) {
-          const capStates = await client.query(
-            `SELECT cap_rule_id, consumed, cap_value_snapshot FROM cap_states
-              WHERE user_card_id = $1 AND period_start <= CURRENT_DATE AND period_end >= CURRENT_DATE`,
-            [card.id]
-          );
-          const milestoneStates = await client.query(
-            `SELECT milestone_rule_id, qualified_spend, period_end FROM milestone_states
-              WHERE user_card_id = $1 AND period_start <= CURRENT_DATE AND period_end >= CURRENT_DATE`,
-            [card.id]
-          );
-          card.cap_states = capStates.rows;
-          card.milestone_states = milestoneStates.rows;
+          // card-rewards v2 (WP8, C8 D15f): each cap row also carries
+          // cap_kind (null = a v1 row in v1 measure; otherwise `consumed`
+          // is native: points / ₹ / count), cap_amount, period_start /
+          // period_end ('YYYY-MM-DD') and approximate_window. Milestone rows
+          // add period_start and approximate_window. Existing keys unchanged.
+          card.cap_states = await cardStateV2.currentCapStates(client, card.id);
+          card.milestone_states = await cardStateV2.currentMilestoneStates(client, card.id);
 
           const pointsTotal = await client.query(
             `SELECT COALESCE(SUM(delta_points), 0) AS total_points FROM points_ledger WHERE user_card_id = $1`,
@@ -4263,6 +4261,15 @@ async function reconcileCurrentCapStates(client, userId) {
   let rebuiltCaps = 0;
 
   for (const card of cards.rows) {
+    // card-rewards v2 (WP8): a v2-shaped card rebuilds its current cap
+    // periods in native units from the same ledger (src/card_state_v2.js);
+    // replaying it through v1 would overwrite them in v1 measure.
+    const v2Rebuilt = await cardStateV2.reconcileIfV2(client, userId, card.id, asOf);
+    if (v2Rebuilt) {
+      rebuiltCaps += v2Rebuilt.rebuiltCaps;
+      continue;
+    }
+
     const rewardRules = await client.query(
       `SELECT id, category_id, merchant_pattern, rail, unit, rate,
               min_txn_inr, max_txn_inr, excluded_categories,
@@ -4453,6 +4460,15 @@ async function loadUserCardForState(client, userId, userCardId) {
 async function applyTransactionState(client, userId, userCard, {
   txnId, userCardId, amount, occurred, categoryId, sign, merchantName, rail,
 }) {
+  // card-rewards v2 (WP8, plan C3 / C8 D10): a v2-shaped card records through
+  // reward_math_v2 in native units, every applicable cap in its own period,
+  // and reverses from its per-transaction record (src/card_state_v2.js).
+  // A v1-shaped card gets null back and runs the unchanged v1 path below.
+  const v2State = await cardStateV2.applyIfV2(client, userId, userCard, {
+    txnId, userCardId, amount, occurred, categoryId, sign, merchantName, rail,
+  });
+  if (v2State) return v2State;
+
   // The full rule rows, not just (unit, rate): every constraint column here
   // is now enforced by src/reward_math.js's `ruleApplies`, which is the
   // same predicate the Dart engine runs. The old query selected two columns
