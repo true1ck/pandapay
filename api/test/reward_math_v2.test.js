@@ -123,10 +123,449 @@ test('ancestors: depth is limited to 5 and cycles are safe', () => {
   assert.deepStrictEqual(ancestors(self, 's'), []);
 });
 
+test('the informational "group" key (plan C8 D6) is ignored: siblings are not ancestors', () => {
+  const dir = loadDirectory({
+    merchants: [
+      { slug: 'flipkart', name: 'Flipkart', parent_slug: null, group: 'flipkart', aliases: ['flipkart'] },
+      { slug: 'myntra', name: 'Myntra', parent_slug: null, group: 'flipkart', aliases: ['myntra'] },
+    ],
+    platforms: [],
+  });
+  assert.strictEqual(resolveMerchant(dir, 'MYNTRA DESIGNS', null).slug, 'myntra');
+  assert.deepStrictEqual(ancestors(dir, 'myntra'), []);
+});
+
 test('loadDirectory: accepts an already-loaded directory and the checked-in fixture', () => {
   const dir = loadDirectory(DIR_JSON);
   assert.strictEqual(loadDirectory(dir), dir);
   const real = loadDirectory(JSON.parse(fs.readFileSync(path.join(FIXTURES, 'merchant_directory.json'), 'utf8')));
   assert.strictEqual(resolveMerchant(real, 'INSTAMART BLR', null).slug, 'instamart');
   assert.deepStrictEqual(ancestors(real, 'instamart'), ['swiggy']);
+});
+
+// ---------------------------------------------------------------------------
+// Engine v2 (C3)
+// ---------------------------------------------------------------------------
+
+const v1 = require('../src/reward_math');
+const {
+  isV2Card,
+  ruleAppliesV2,
+  pickRuleV2,
+  applicableCaps,
+  computeTransactionRewardV2,
+} = require('../src/reward_math_v2');
+
+const SCENARIO_DIR = path.join(FIXTURES, 'reward_v2_scenarios');
+const DEFAULT_DIRECTORY = JSON.parse(fs.readFileSync(path.join(FIXTURES, 'merchant_directory.json'), 'utf8'));
+
+/** Money/points compare to 2 decimals; null must stay null. */
+function assertAmount(actual, expected, label) {
+  if (expected === null || expected === undefined) {
+    assert.strictEqual(actual, null, `${label}: expected null, got ${actual}`);
+    return;
+  }
+  assert.ok(typeof actual === 'number' && Number.isFinite(actual), `${label}: expected ${expected}, got ${actual}`);
+  assert.ok(Math.abs(actual - expected) < 0.005, `${label}: expected ${expected}, got ${actual}`);
+}
+
+function assertDeltas(actual, expected, label) {
+  const a = Object.keys(actual || {}).sort();
+  const e = Object.keys(expected || {}).sort();
+  assert.deepStrictEqual(a, e, `${label}: cap ids ${JSON.stringify(actual)} vs expected ${JSON.stringify(expected)}`);
+  for (const k of e) assertAmount(actual[k], expected[k], `${label}[${k}]`);
+}
+
+function runScenario(scenario, directory) {
+  const card = scenario.card;
+  return computeTransactionRewardV2({
+    card,
+    rewardRules: card.reward_rules || [],
+    capRules: card.cap_rules || [],
+    capConsumedBefore: scenario.cap_consumed_before || {},
+    ctx: scenario.ctx,
+    directory,
+  });
+}
+
+const scenarioFiles = fs
+  .readdirSync(SCENARIO_DIR)
+  .filter((f) => f.endsWith('.json'))
+  .sort();
+
+test('scenario directory holds the contract file and the JS edge cases', () => {
+  assert.ok(scenarioFiles.includes('00_contract.json'));
+  assert.ok(scenarioFiles.includes('20_js.json'));
+  const js = JSON.parse(fs.readFileSync(path.join(SCENARIO_DIR, '20_js.json'), 'utf8'));
+  assert.ok(js.scenarios.length >= 15, `20_js.json has ${js.scenarios.length} scenarios, want >= 15`);
+});
+
+for (const file of scenarioFiles) {
+  test(`reward_v2_scenarios/${file}`, async (t) => {
+    const doc = JSON.parse(fs.readFileSync(path.join(SCENARIO_DIR, file), 'utf8'));
+    const directory = loadDirectory(doc.directory || DEFAULT_DIRECTORY);
+    assert.ok(Array.isArray(doc.scenarios) && doc.scenarios.length > 0, `${file} has no scenarios`);
+    for (const scenario of doc.scenarios) {
+      await t.test(scenario.name, () => {
+        const r = runScenario(scenario, directory);
+        const e = scenario.expect;
+        assertAmount(r.points, e.points, 'points');
+        assertAmount(r.cashbackInr, e.cashback_inr, 'cashback_inr');
+        assertAmount(r.valueInr, e.value_inr, 'value_inr');
+        assert.strictEqual(r.ruleId, e.rule_id, 'rule_id');
+        assert.strictEqual(r.excluded, e.excluded, 'excluded');
+        assertDeltas(r.capDeltas, e.cap_deltas, 'cap_deltas');
+      });
+    }
+  });
+}
+
+// --- v1 delegation (C3.2) -----------------------------------------------------
+
+test('v1-shaped parity cards delegate to reward_math.js and give identical answers', async (t) => {
+  const parity = JSON.parse(fs.readFileSync(path.join(FIXTURES, 'reward_parity_scenarios.json'), 'utf8'));
+  for (const scenario of parity.scenarios) {
+    await t.test(scenario.name, () => {
+      const card = scenario.card;
+      const txn = scenario.transaction;
+      const ctx = {
+        amount: txn.amountInr,
+        categoryId: txn.categoryId ?? null,
+        merchantName: txn.merchantName ?? null,
+        rail: txn.rail ?? 'unknown',
+        occurred: txn.occurredAt ? new Date(txn.occurredAt) : null,
+      };
+      assert.strictEqual(isV2Card(card), false, 'parity cards carry no v2 fields');
+
+      const rule = v1.pickRule(card.reward_rules || [], ctx);
+      const capRule = rule ? v1.pickCapRule(card.cap_rules || [], rule, ctx) : null;
+      const before = capRule ? (scenario.capConsumedBefore[capRule.id] ?? 0) : 0;
+      const expected = v1.computeTransactionReward({
+        card,
+        rewardRules: card.reward_rules || [],
+        capRules: card.cap_rules || [],
+        capConsumedBefore: before,
+        ctx,
+      });
+
+      const r = computeTransactionRewardV2({
+        card,
+        rewardRules: card.reward_rules || [],
+        capRules: card.cap_rules || [],
+        capConsumedBefore: scenario.capConsumedBefore,
+        ctx,
+        directory: DEFAULT_DIRECTORY,
+      });
+
+      assert.strictEqual(r.engine, 'v1');
+      assert.deepStrictEqual(r.v1, expected, 'raw v1 result is passed through untouched');
+      assert.strictEqual(r.valueInr, expected.valueInr);
+      // v1's `points` is the native amount: points, or ₹ on a cashback card.
+      assert.strictEqual(r.cashbackInr ?? r.points, expected.points);
+      assert.ok(r.points === null || r.cashbackInr === null, 'one native field per v1 card');
+      assert.strictEqual(r.ruleId, expected.ruleId);
+      assert.strictEqual(r.excluded, expected.excluded);
+      const wantDeltas = expected.capRuleId && expected.capConsumedDelta !== 0
+        ? { [expected.capRuleId]: expected.capConsumedDelta }
+        : {};
+      assert.deepStrictEqual(r.capDeltas, wantDeltas);
+    });
+  }
+});
+
+test('v1 delegation accepts snake_case ctx too', () => {
+  const card = {
+    base_reward_unit: 'cashback_percent', base_reward_rate: 1, point_value_inr: 0,
+    reward_rules: [{ id: 'r', merchant_pattern: 'amazon', unit: 'cashback_percent', rate: 5, priority: 10 }],
+    cap_rules: [],
+  };
+  const r = computeTransactionRewardV2({
+    card, capConsumedBefore: {}, ctx: { amount: 1000, merchant_name: 'AMAZON PAY', rail: 'unknown' },
+  });
+  assert.strictEqual(r.engine, 'v1');
+  assert.strictEqual(r.ruleId, 'r');
+  assert.strictEqual(r.cashbackInr, 50);
+  assert.strictEqual(r.points, null);
+});
+
+// --- isV2Card -----------------------------------------------------------------
+
+test('isV2Card: rule_role, a non-null cap_kind, or accrual_rounding make a card v2', () => {
+  const base = { base_reward_unit: 'points_per_100', base_reward_rate: 1 };
+  assert.strictEqual(isV2Card({ ...base, reward_rules: [{ id: 'r' }], cap_rules: [{ id: 'c' }] }), false);
+  assert.strictEqual(isV2Card({ ...base, reward_rules: [{ id: 'r', rule_role: 'earn' }], cap_rules: [] }), true);
+  assert.strictEqual(isV2Card({ ...base, reward_rules: [], cap_rules: [{ id: 'c', cap_kind: 'bonus_points' }] }), true);
+  assert.strictEqual(isV2Card({ ...base, reward_rules: [], cap_rules: [{ id: 'c', cap_kind: null }] }), false);
+  assert.strictEqual(isV2Card({ ...base, accrual_rounding: 'floor', reward_rules: [], cap_rules: [] }), true);
+  // Explicit rule/cap lists override the embedded ones.
+  assert.strictEqual(isV2Card({ ...base, reward_rules: [] }, [{ id: 'r', rule_role: 'base' }], []), true);
+  // A null rule_role is not "present".
+  assert.strictEqual(isV2Card({ ...base, reward_rules: [{ id: 'r', rule_role: null }] }), false);
+});
+
+// --- ruleAppliesV2 (C3.3) -------------------------------------------------------
+
+function ctxOf(over) {
+  return { amount: 1000, category_id: null, mcc: null, merchant_name: null, merchant_vpa: null,
+    merchant_slug: null, platform: null, rail: 'unknown', occurred: null, ...over };
+}
+
+test('ruleAppliesV2: info rules never apply, unknown roles never apply', () => {
+  assert.strictEqual(ruleAppliesV2({ id: 'i', rule_role: 'info', unit: 'cashback_percent', rate: 5 }, ctxOf({})), false);
+  assert.strictEqual(ruleAppliesV2({ id: 'x', rule_role: 'mystery', unit: 'cashback_percent', rate: 5 }, ctxOf({})), false);
+  assert.strictEqual(ruleAppliesV2({ id: 'e', rule_role: 'earn', unit: 'cashback_percent', rate: 5 }, ctxOf({})), true);
+});
+
+test('ruleAppliesV2: unknown rail does not satisfy a rail restriction', () => {
+  const rule = { id: 'r', rule_role: 'earn', rail: 'online', unit: 'cashback_percent', rate: 5 };
+  assert.strictEqual(ruleAppliesV2(rule, ctxOf({ rail: 'unknown' })), false);
+  assert.strictEqual(ruleAppliesV2(rule, ctxOf({ rail: null })), false);
+  assert.strictEqual(ruleAppliesV2(rule, ctxOf({ rail: 'swipe' })), false);
+  assert.strictEqual(ruleAppliesV2(rule, ctxOf({ rail: 'online' })), true);
+});
+
+test('ruleAppliesV2: merchant slugs match the resolved merchant or an ancestor', () => {
+  const dir = loadDirectory(DIR_JSON);
+  const rule = { id: 'r', rule_role: 'earn', merchant_slugs: ['swiggy'], unit: 'cashback_percent', rate: 10 };
+  assert.strictEqual(ruleAppliesV2(rule, ctxOf({ merchant_name: 'INSTAMART' }), dir), true);
+  assert.strictEqual(ruleAppliesV2(rule, ctxOf({ merchant_slug: 'instamart' }), dir), true);
+  assert.strictEqual(ruleAppliesV2(rule, ctxOf({ merchant_name: 'Zomato' }), dir), false);
+  assert.strictEqual(ruleAppliesV2(rule, ctxOf({ merchant_name: null }), dir), false);
+  // Without a directory only an explicit slug can match.
+  assert.strictEqual(ruleAppliesV2(rule, ctxOf({ merchant_slug: 'swiggy' })), true);
+  assert.strictEqual(ruleAppliesV2(rule, ctxOf({ merchant_name: 'Swiggy' })), false);
+});
+
+test('ruleAppliesV2: a v2 rule with only a legacy merchant_pattern still restricts (never widen)', () => {
+  const rule = { id: 'r', rule_role: 'earn', merchant_slugs: [], merchant_pattern: 'amazon', unit: 'cashback_percent', rate: 5 };
+  assert.strictEqual(ruleAppliesV2(rule, ctxOf({ merchant_name: 'AMAZON PAY INDIA' })), true);
+  assert.strictEqual(ruleAppliesV2(rule, ctxOf({ merchant_name: 'Flipkart' })), false);
+  assert.strictEqual(ruleAppliesV2(rule, ctxOf({ merchant_name: null })), false);
+});
+
+test('ruleAppliesV2: merchant_slugs take precedence over the v1 merchant_pattern projection', () => {
+  const dir = loadDirectory(DIR_JSON);
+  const rule = { id: 'r', rule_role: 'earn', merchant_slugs: ['swiggy'], merchant_pattern: 'swiggy', unit: 'cashback_percent', rate: 10 };
+  assert.strictEqual(ruleAppliesV2(rule, ctxOf({ merchant_name: 'BUNDL TECHNOLOGIES' }), dir), true);
+});
+
+test('ruleAppliesV2: platform must be given by the caller and be in the set', () => {
+  const rule = { id: 'r', rule_role: 'earn', platform_slugs: ['phonepe_app', 'hdfc_smartbuy'], unit: 'points_per_100', rate: 10 };
+  assert.strictEqual(ruleAppliesV2(rule, ctxOf({ platform: 'hdfc_smartbuy' })), true);
+  assert.strictEqual(ruleAppliesV2(rule, ctxOf({ platform: null, merchant_name: 'PhonePe recharge' })), false);
+  assert.strictEqual(ruleAppliesV2(rule, ctxOf({ platform: 'gpay' })), false);
+});
+
+test('ruleAppliesV2: mcc_include, category stand-in for unknown MCC, mcc_exclude', () => {
+  const inc = { id: 'r', rule_role: 'earn', mcc_include: ['5411', '5499'], unit: 'cashback_percent', rate: 5 };
+  assert.strictEqual(ruleAppliesV2(inc, ctxOf({ mcc: '5411' })), true);
+  assert.strictEqual(ruleAppliesV2(inc, ctxOf({ mcc: '5812' })), false);
+  assert.strictEqual(ruleAppliesV2(inc, ctxOf({ mcc: null })), false);
+
+  const withCat = { ...inc, category_id: 'cat-groc' };
+  assert.strictEqual(ruleAppliesV2(withCat, ctxOf({ mcc: null, category_id: 'cat-groc' })), true);
+  assert.strictEqual(ruleAppliesV2(withCat, ctxOf({ mcc: null, category_id: 'cat-dining' })), false);
+  // A known MCC outside the set fails even when the category matches.
+  assert.strictEqual(ruleAppliesV2(withCat, ctxOf({ mcc: '5812', category_id: 'cat-groc' })), false);
+
+  const exc = { id: 'r', rule_role: 'earn', mcc_exclude: ['6540'], unit: 'cashback_percent', rate: 5 };
+  assert.strictEqual(ruleAppliesV2(exc, ctxOf({ mcc: '6540' })), false);
+  assert.strictEqual(ruleAppliesV2(exc, ctxOf({ mcc: null })), true);
+  assert.strictEqual(ruleAppliesV2(exc, ctxOf({ mcc: '5411' })), true);
+});
+
+test('ruleAppliesV2: category, rule-level exclusions, min_txn and validity window', () => {
+  const rule = { id: 'r', rule_role: 'earn', category_id: 'cat-a', min_txn_inr: 500, excluded_categories: ['cat-b'],
+    effective_from: '2026-01-01', effective_to: '2026-03-31', unit: 'cashback_percent', rate: 5 };
+  assert.strictEqual(ruleAppliesV2(rule, ctxOf({ category_id: 'cat-a', amount: 500, occurred: new Date(2026, 2, 31, 23, 0) })), true);
+  assert.strictEqual(ruleAppliesV2(rule, ctxOf({ category_id: 'cat-a', amount: 499.99 })), false);
+  assert.strictEqual(ruleAppliesV2(rule, ctxOf({ category_id: 'cat-x' })), false);
+  assert.strictEqual(ruleAppliesV2(rule, ctxOf({ category_id: 'cat-a', occurred: new Date(2026, 3, 1, 0, 1) })), false);
+  assert.strictEqual(ruleAppliesV2(rule, ctxOf({ category_id: 'cat-a', occurred: new Date(2025, 11, 31, 12, 0) })), false);
+  const anyCat = { id: 'r2', rule_role: 'earn', excluded_categories: ['cat-b'], unit: 'cashback_percent', rate: 5 };
+  assert.strictEqual(ruleAppliesV2(anyCat, ctxOf({ category_id: 'cat-b' })), false);
+  assert.strictEqual(ruleAppliesV2(anyCat, ctxOf({ category_id: 'cat-c' })), true);
+});
+
+// --- pickRuleV2 (C3.4) ----------------------------------------------------------
+
+test('pickRuleV2: exclusion beats earn; card-level exclusion has no rule id', () => {
+  const card = { base_reward_unit: 'cashback_percent', base_reward_rate: 1, point_value_inr: 0, excluded_categories: ['cat-rent'] };
+  const rules = [
+    { id: 'earn', rule_role: 'earn', priority: 1, unit: 'cashback_percent', rate: 5 },
+    { id: 'excl', rule_role: 'exclusion', priority: 50, mcc_include: ['6540'], unit: 'cashback_percent', rate: 0 },
+  ];
+  const wallet = pickRuleV2(rules, ctxOf({ mcc: '6540' }), card);
+  assert.strictEqual(wallet.excluded, true);
+  assert.strictEqual(wallet.rule.id, 'excl');
+  const cardLevel = pickRuleV2(rules, ctxOf({ category_id: 'cat-rent' }), card);
+  assert.strictEqual(cardLevel.excluded, true);
+  assert.strictEqual(cardLevel.rule, null);
+  const earn = pickRuleV2(rules, ctxOf({}), card);
+  assert.strictEqual(earn.excluded, false);
+  assert.strictEqual(earn.rule.id, 'earn');
+});
+
+test('pickRuleV2: priority tie goes to the higher effective rupee-per-rupee rate', () => {
+  const card = { base_reward_unit: 'points_per_100', base_reward_rate: 1, point_value_inr: 0.5 };
+  const rules = [
+    { id: 'pts', rule_role: 'earn', priority: 10, unit: 'points_per_100', rate: 8 }, // 4%
+    { id: 'blk', rule_role: 'earn', priority: 10, unit: 'points_per_100', rate: 10, block_inr: 150 }, // 3.33%
+    { id: 'cb', rule_role: 'earn', priority: 10, unit: 'cashback_percent', rate: 5 }, // 5%
+  ];
+  assert.strictEqual(pickRuleV2(rules, ctxOf({}), card).rule.id, 'cb');
+  assert.strictEqual(pickRuleV2(rules.slice(0, 2), ctxOf({}), card).rule.id, 'pts');
+});
+
+test('pickRuleV2: nothing applicable gives the implicit base rule (id null)', () => {
+  const card = { base_reward_unit: 'points_per_100', base_reward_rate: 1, point_value_inr: 0.5 };
+  const r = pickRuleV2([{ id: 'x', rule_role: 'earn', rail: 'online', unit: 'points_per_100', rate: 5 }], ctxOf({}), card);
+  assert.strictEqual(r.excluded, false);
+  assert.strictEqual(r.rule.id, null);
+  assert.strictEqual(r.rule.unit, 'points_per_100');
+  assert.strictEqual(r.implicit, true);
+});
+
+// --- applicableCaps (C3.6) ------------------------------------------------------
+
+test('applicableCaps: targets, card scope, legacy fallbacks and parent chain (deduplicated)', () => {
+  const card = { base_reward_unit: 'points_per_100', base_reward_rate: 1, point_value_inr: 0.25 };
+  const rule = { id: 'r1', rule_role: 'earn', unit: 'points_per_100', rate: 10 };
+  const caps = [
+    { id: 'child', cap_kind: 'bonus_points', cap_amount: 500, scope: 'targets', targets: ['r1'], parent_cap_id: 'parent' },
+    { id: 'parent', cap_kind: 'bonus_points', cap_amount: 800, scope: 'targets', targets: ['r9'], parent_cap_id: 'grand' },
+    { id: 'grand', cap_kind: 'total_points', cap_amount: 5000, scope: 'targets', targets: [], parent_cap_id: 'child' },
+    { id: 'other', cap_kind: 'bonus_points', cap_amount: 100, scope: 'targets', targets: ['r2'] },
+    { id: 'cardwide', cap_kind: 'total_points', cap_amount: 9000, scope: 'card', targets: [] },
+    { id: 'legacy-rule', cap_kind: null, reward_rule_id: 'r1', category_id: null, measure: 'reward_value', cap_value: 50 },
+    { id: 'legacy-cat', cap_kind: null, reward_rule_id: null, category_id: 'cat-a', measure: 'spend_amount', cap_value: 3000 },
+    { id: 'orphan', cap_kind: null, reward_rule_id: null, category_id: null, measure: 'spend_amount', cap_value: 3000 },
+  ];
+  const got = applicableCaps({ card, capRules: caps, rule, ctx: ctxOf({ category_id: 'cat-a' }) });
+  assert.deepStrictEqual(got.map((c) => c.id).sort(), ['cardwide', 'child', 'grand', 'legacy-cat', 'legacy-rule', 'parent']);
+  const byId = Object.fromEntries(got.map((c) => [c.id, c]));
+  assert.strictEqual(byId['legacy-rule'].kind, 'total_points');
+  assert.strictEqual(byId['legacy-rule'].amount, 200); // ₹50 / ₹0.25 per point
+  assert.strictEqual(byId['legacy-cat'].kind, 'eligible_spend');
+  assert.strictEqual(byId['legacy-cat'].amount, 3000);
+});
+
+test('applicableCaps: never for excluded spends', () => {
+  const card = { base_reward_unit: 'points_per_100', base_reward_rate: 1, point_value_inr: 0.25 };
+  const caps = [{ id: 'cardwide', cap_kind: 'total_points', cap_amount: 9000, scope: 'card', targets: [] }];
+  assert.deepStrictEqual(applicableCaps({ card, capRules: caps, rule: null, ctx: ctxOf({}), excluded: true }), []);
+});
+
+test('applicableCaps: legacy conversion by the rule currency; a points value cap needs a point value', () => {
+  const rule = { id: 'r1', rule_role: 'earn', unit: 'cashback_percent', rate: 5 };
+  const caps = [
+    { id: 'cb', cap_kind: null, reward_rule_id: 'r1', measure: 'reward_value', cap_value: 300 },
+    { id: 'cnt', cap_kind: null, reward_rule_id: 'r1', measure: 'txn_count', cap_value: 4 },
+  ];
+  const card = { base_reward_unit: 'cashback_percent', base_reward_rate: 1, point_value_inr: 0 };
+  const got = applicableCaps({ card, capRules: caps, rule, ctx: ctxOf({}) });
+  assert.deepStrictEqual(got.map((c) => [c.id, c.kind, c.amount]), [['cb', 'total_cashback', 300], ['cnt', 'txn_count', 4]]);
+
+  const ptsRule = { id: 'r1', rule_role: 'earn', unit: 'points_per_100', rate: 5 };
+  const zeroPv = applicableCaps({ card: { ...card, base_reward_unit: 'points_per_100' }, capRules: caps.slice(0, 1), rule: ptsRule, ctx: ctxOf({}) });
+  assert.deepStrictEqual(zeroPv, []);
+});
+
+test('applicableCaps: unknown cap_kind / scope and a missing cap_amount are skipped, not guessed', () => {
+  const card = { base_reward_unit: 'points_per_100', base_reward_rate: 1, point_value_inr: 0.25 };
+  const rule = { id: 'r1', rule_role: 'earn', unit: 'points_per_100', rate: 10 };
+  const caps = [
+    { id: 'weird-kind', cap_kind: 'daily_points', cap_amount: 10, scope: 'card' },
+    { id: 'weird-scope', cap_kind: 'total_points', cap_amount: 10, scope: 'galaxy' },
+    { id: 'no-amount', cap_kind: 'bonus_points', cap_amount: null, scope: 'targets', targets: ['r1'] },
+  ];
+  assert.deepStrictEqual(applicableCaps({ card, capRules: caps, rule, ctx: ctxOf({}) }), []);
+});
+
+// --- computeTransactionRewardV2: details outside the shared scenarios ----------
+
+function pointsCard(over = {}) {
+  return {
+    id: 'p', point_value_inr: 0.25, base_reward_unit: 'points_per_100', base_reward_rate: 1,
+    accrual_rounding: 'floor', excluded_categories: [], reward_rules: [], cap_rules: [], ...over,
+  };
+}
+
+test('compute: non-positive or non-finite amounts earn nothing and consume nothing', () => {
+  for (const amount of [0, -100, Number.NaN]) {
+    const r = computeTransactionRewardV2({ card: pointsCard(), capConsumedBefore: {}, ctx: ctxOf({ amount }) });
+    assert.strictEqual(r.points, 0);
+    assert.strictEqual(r.cashbackInr, null);
+    assert.strictEqual(r.valueInr, 0);
+    assert.deepStrictEqual(r.capDeltas, {});
+    assert.strictEqual(r.excluded, false);
+  }
+});
+
+test('compute: a card with no base rate earns nothing on the implicit base path', () => {
+  const card = pointsCard({ base_reward_unit: null, base_reward_rate: null });
+  const r = computeTransactionRewardV2({ card, capConsumedBefore: {}, ctx: ctxOf({ amount: 1000 }) });
+  assert.strictEqual(r.valueInr, 0);
+  assert.strictEqual(r.ruleId, null);
+});
+
+test('compute: records how the merchant was resolved in assumptions', () => {
+  const card = pointsCard({
+    reward_rules: [{ id: 'sw', rule_role: 'earn', merchant_slugs: ['swiggy'], unit: 'points_per_100', rate: 5, priority: 10 }],
+  });
+  const viaAlias = computeTransactionRewardV2({ card, capConsumedBefore: {}, ctx: ctxOf({ merchant_name: 'Instamart' }), directory: DIR_JSON });
+  assert.strictEqual(viaAlias.ruleId, 'sw');
+  assert.ok(viaAlias.assumptions.includes('merchant_resolved_by_alias'));
+  const viaVpa = computeTransactionRewardV2({ card, capConsumedBefore: {}, ctx: ctxOf({ merchant_vpa: 'swiggy.pay@icici' }), directory: DIR_JSON });
+  assert.ok(viaVpa.assumptions.includes('merchant_resolved_by_vpa'));
+});
+
+test('compute: exclusion reason comes from display_note', () => {
+  const card = pointsCard({
+    reward_rules: [{ id: 'x', rule_role: 'exclusion', category_id: 'cat-fuel', unit: 'points_per_100', rate: 0, display_note: 'No points on fuel' }],
+  });
+  const r = computeTransactionRewardV2({ card, capConsumedBefore: {}, ctx: ctxOf({ category_id: 'cat-fuel' }) });
+  assert.strictEqual(r.excluded, true);
+  assert.deepStrictEqual(r.reasons, ['No points on fuel']);
+});
+
+test('compute: cashback rounds half-up to paise without float drift', () => {
+  const card = { id: 'c', point_value_inr: 0, base_reward_unit: 'cashback_percent', base_reward_rate: 1.5,
+    accrual_rounding: null, excluded_categories: [], reward_rules: [{ id: 'b', rule_role: 'base', unit: 'cashback_percent', rate: 1.5 }], cap_rules: [] };
+  // 1.5% of ₹67 = ₹1.005 → ₹1.01 (half-up), not ₹1.00 from binary float error.
+  const r = computeTransactionRewardV2({ card, capConsumedBefore: {}, ctx: ctxOf({ amount: 67 }) });
+  assert.strictEqual(r.cashbackInr, 1.01);
+  assert.strictEqual(r.valueInr, 1.01);
+});
+
+test('compute: with no post_cap_behavior, a legacy post_cap_rate of 0 means zero past an eligible-spend cap', () => {
+  const card = { id: 'c', point_value_inr: 0, base_reward_unit: 'cashback_percent', base_reward_rate: 1,
+    excluded_categories: [], cap_rules: [
+      { id: 'cap', cap_kind: 'eligible_spend', cap_amount: 1000, scope: 'targets', targets: ['g'], post_cap_behavior: null, post_cap_rate: 0 },
+    ],
+    reward_rules: [{ id: 'g', rule_role: 'earn', category_id: 'cat-g', unit: 'cashback_percent', rate: 5, priority: 10 }] };
+  const r = computeTransactionRewardV2({ card, capConsumedBefore: { cap: 500 }, ctx: ctxOf({ amount: 1000, category_id: 'cat-g' }) });
+  assert.strictEqual(r.cashbackInr, 25);
+  assert.deepStrictEqual(r.capDeltas, { cap: 500 });
+});
+
+test('compute: a base-role rule earns at its own rate with no bonus', () => {
+  const card = pointsCard({
+    base_reward_rate: 1,
+    reward_rules: [{ id: 'b', rule_role: 'base', unit: 'points_per_100', rate: 2, priority: 30 }],
+    cap_rules: [{ id: 'bonus', cap_kind: 'bonus_points', cap_amount: 1000, scope: 'card', targets: [] }],
+  });
+  const r = computeTransactionRewardV2({ card, capConsumedBefore: {}, ctx: ctxOf({ amount: 1000 }) });
+  assert.strictEqual(r.points, 20);
+  assert.deepStrictEqual(r.capDeltas, {});
+});
+
+test('compute: consumed values may arrive as numeric strings from pg', () => {
+  const card = pointsCard({
+    reward_rules: [{ id: 'r', rule_role: 'earn', platform_slugs: ['phonepe_app'], unit: 'points_per_100', rate: 10, priority: 10 }],
+    cap_rules: [{ id: 'cap', cap_kind: 'bonus_points', cap_amount: '1500.00', scope: 'targets', targets: ['r'] }],
+  });
+  const r = computeTransactionRewardV2({ card, capConsumedBefore: { cap: '1450.00' }, ctx: ctxOf({ amount: 2000, platform: 'phonepe_app' }) });
+  assert.strictEqual(r.points, 70);
+  assert.deepStrictEqual(r.capDeltas, { cap: 50 });
 });
