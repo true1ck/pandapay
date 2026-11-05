@@ -1289,6 +1289,7 @@ test('D16/D18e underscored negations ("non_iocl_fuel", "fuel_non_iocl", not_phon
     rule({ id: 'base_list', category_id: 'all_retail', evaluation_type: 'standard_accrual', conditions: { excluded_categories: ['non_iocl_fuel', 'insurance'] }, action: { points_per_block: 2 } }),
   ]), { directory: dir });
   const ex = (id) => only(r, id).filter((x) => x.max_engine_version !== 1);
+  for (const id of ['exclusion_non_iocl_fuel', 'x_token', 'x_list']) assert.ok(ex(id).length > 0, `${id} has v2 rows`);
   assert.ok(ex('exclusion_non_iocl_fuel').every((x) => x.rule_role === 'exclusion' && x.category_slug === 'fuel' && x.except_merchant_slugs.join() === 'indianoil'));
   assert.ok(ex('x_token').every((x) => x.rule_role === 'exclusion' && x.category_slug === 'fuel' && x.except_merchant_slugs.join() === 'indianoil'));
   const list = ex('x_list');
@@ -1321,7 +1322,14 @@ test('H2 a swipe/online rail on an exclusion already pinned by category or MCCs 
     rule({ id: 'wallet_online', category_id: 'wallet', evaluation_type: 'exclusion', rail: 'online', conditions: { mcc_list: [6540] }, action: { points_per_block: 0, reason: 'No points on wallet loads.' } }),
     rule({ id: 'atm_only', category_id: 'excluded_spend', evaluation_type: 'exclusion', rail: 'atm', action: { points_per_block: 0, reason: 'No points on cash.' } }),
     rule({ id: 'online_accel', category_id: 'online', rail: 'online', action: { points_per_block: 10 } }),
+    // category-only: the category pins it, the rail goes
+    rule({ id: 'fuel_pos_cat', category_id: 'fuel', evaluation_type: 'exclusion', rail: 'pos_terminal', action: { points_per_block: 0, reason: 'No points on fuel.' } }),
+    // nothing but the rail (empty MCC list): the rail is its whole scope and stays
+    rule({ id: 'online_only', category_id: 'excluded_spend', evaluation_type: 'exclusion', rail: 'online', conditions: { mcc_list: [] }, action: { points_per_block: 0, reason: 'No points online.' } }),
   ]));
+  assert.ok(only(r, 'fuel_pos_cat').every((x) => x.rule_role === 'exclusion' && x.category_slug === 'fuel' && x.rail === null));
+  assert.ok(only(r, 'online_only').length > 0);
+  assert.ok(only(r, 'online_only').every((x) => x.rail === 'online' && !x.flags.includes('exclusion_rail_dropped')));
   for (const id of ['fuel_pos', 'wallet_online']) {
     assert.ok(only(r, id).every((x) => x.rule_role === 'exclusion' && x.rail === null), id);
     assert.ok(only(r, id)[0].flags.includes('exclusion_rail_dropped'));
@@ -1504,7 +1512,7 @@ test('D13 an override can set a deferral flag explicitly on a rule or a cap, and
       { path: 'cap_rules[id=limit_cap].cap_depends_on_user', value: true },
     ],
   };
-  const r = run(record, { overrides });
+  const r = run(record, { overrides, verifiedSlugs: new Set(['test-card']) });
   const [neon] = only(r, 'neon');
   assert.equal(neon.rule_role, 'info');
   assert.ok(neon.flags.includes('depends_on_user_attribute'));
@@ -1513,8 +1521,16 @@ test('D13 an override can set a deferral flag explicitly on a rule or a cap, and
   assert.ok(intl.flags.includes('depends_on_txn_attribute'));
   const cap = r.capRules.find((c) => c.key === 'limit_cap');
   assert.ok(cap.flags.includes('cap_depends_on_user'));
-  // deferrals don't block verified
-  assert.ok(!r.card.model_coverage.verified_blocked_by?.some?.((f) => ['neon', 'intl'].includes(f.source_local_id)));
+  // deferrals don't block verified (the real field: coverage.verifiedBlockedBy)
+  assert.ok(Array.isArray(r.coverage.verifiedBlockedBy));
+  assert.deepEqual(r.coverage.verifiedBlockedBy, []);
+  assert.equal(r.card.model_status, 'verified');
+  // control: the same rule made info without a deferral does block
+  const blocked = run(record, { verifiedSlugs: new Set(['test-card']), overrides: { source_slug: 'test-card', changes: [
+    { path: 'reward_rules[id=intl].rule_role', value: 'info' },
+  ] } });
+  assert.equal(blocked.card.model_status, 'partial');
+  assert.ok(blocked.coverage.verifiedBlockedBy.includes('info_rule'));
 });
 
 test('D13d overrides may replace whole arrays, set nulls and set rule_role; statement_cycle_quarter maps to quarter', () => {
