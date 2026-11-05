@@ -4,13 +4,12 @@
   "inputs": {
     "transform_version": "7",
     "source_record_sha256": "cc3062a39eabf90bb0a381daf5ac98cf272928d0ff30320e17bf4d0ea1d3fc52",
-    "override_sha256": "6af5b90fc8e4525ca31ad585e1759d6e4dcb0236da962be3ab61ccdafe1e7c81",
-    "directory_sha256": "3d9f9f535481544d4b19262838290f77d8270eb3b4aec73c48608f10c39cedf2",
+    "override_sha256": "d2694067e3b83b7b656ac0d2053322edd8a9a84a0920d699209a4a3de9c02a51",
+    "directory_sha256": "b1094d54b77e848d22f7a9a64f3ae6d1ef43ca3eb2fc8e40cd43ed1994664694",
     "verified": false
   },
   "blocking_flags": [
-    "info_rule",
-    "post_limit_conflict"
+    "info_rule"
   ],
   "card": {
     "id": "sbi-simplyclick:card",
@@ -31,7 +30,7 @@
       "rules_total": 15,
       "rules_modelled": 11,
       "rules_info": 4,
-      "caps_total": 1,
+      "caps_total": 2,
       "caps_enforced": 1,
       "flags": [
         {
@@ -110,8 +109,8 @@
           "detail": null
         },
         {
-          "code": "post_limit_conflict",
-          "source_local_id": "cap_online_5x_monthly",
+          "code": "cap_targets_info_only",
+          "source_local_id": "cap_exclusive_10x_monthly",
           "detail": null
         },
         {
@@ -154,19 +153,67 @@
           "checked_on": "2026-11-05"
         },
         {
-          "path": "cap_rules[id=cap_exclusive_10x_monthly]",
-          "op": "remove",
-          "value_sha256": "74234e98afe7498f",
-          "reason": "WP7: T&C 11.1(h) caps only the 5X tier at 10,000 RP per month; no cap is stated for 10X (research note).",
-          "source_url": "https://www.sbicard.com/sbi-card-en/assets/docs/pdf/SimplyClick-TnC.pdf",
+          "path": "cap_rules[id=cap_online_5x_monthly].metric",
+          "op": "set",
+          "value_sha256": "57dedf4537fd9493",
+          "reason": "WP7: MITC booklet (g): cumulative 5X points on other online spends are capped at 10,000 RP a month, then \"standard Reward Points ... continue to accrue\". 10,000 RP at 5 per Rs100 is Rs2,00,000 of spend; an eligible-spend cap with base_rate models that exactly (a total-points cap paid 0 after it).",
+          "source_url": "https://www.sbicard.com/sbi-card-en/assets/docs/pdf/simply-click-tnc-MITC-booklet.pdf",
           "checked_on": "2026-11-05"
         },
         {
-          "path": "reward_rules[id=exclusive_partner_10x].action.cap_reference",
+          "path": "cap_rules[id=cap_online_5x_monthly].limit_value",
           "op": "set",
           "value_sha256": "74234e98afe7498f",
-          "reason": "WP7: Its cap is removed (no 10X cap in the T&C).",
-          "source_url": "https://www.sbicard.com/sbi-card-en/assets/docs/pdf/SimplyClick-TnC.pdf",
+          "reason": "WP7: Amount is in rupees of spend (limit_value_inr).",
+          "source_url": "https://www.sbicard.com/sbi-card-en/assets/docs/pdf/simply-click-tnc-MITC-booklet.pdf",
+          "checked_on": "2026-11-05"
+        },
+        {
+          "path": "cap_rules[id=cap_online_5x_monthly].limit_value_inr",
+          "op": "set",
+          "value_sha256": "b552e632666bbf61",
+          "reason": "WP7: 10,000 RP / 5 RP per Rs100 = Rs2,00,000.",
+          "source_url": "https://www.sbicard.com/sbi-card-en/assets/docs/pdf/simply-click-tnc-MITC-booklet.pdf",
+          "checked_on": "2026-11-05"
+        },
+        {
+          "path": "cap_rules[id=cap_online_5x_monthly].post_limit_behavior",
+          "op": "set",
+          "value_sha256": "0bf3a047a3fe5814",
+          "reason": "WP7: Standard points continue after the cap (MITC booklet g).",
+          "source_url": "https://www.sbicard.com/sbi-card-en/assets/docs/pdf/simply-click-tnc-MITC-booklet.pdf",
+          "checked_on": "2026-11-05"
+        },
+        {
+          "path": "cap_rules[id=cap_exclusive_10x_monthly].metric",
+          "op": "set",
+          "value_sha256": "57dedf4537fd9493",
+          "reason": "WP7: D24c: the 10X cap is issuer-documented (MITC booklet g and k: \"Exclusive partner transactions will have a monthly cap of 10,000 point\"), so it stays. 10,000 RP at 10 per Rs100 is Rs1,00,000 of spend, then standard points (g).",
+          "source_url": "https://www.sbicard.com/sbi-card-en/assets/docs/pdf/simply-click-tnc-MITC-booklet.pdf",
+          "checked_on": "2026-11-05"
+        },
+        {
+          "path": "cap_rules[id=cap_exclusive_10x_monthly].limit_value",
+          "op": "set",
+          "value_sha256": "74234e98afe7498f",
+          "reason": "WP7: Amount is in rupees of spend (limit_value_inr).",
+          "source_url": "https://www.sbicard.com/sbi-card-en/assets/docs/pdf/simply-click-tnc-MITC-booklet.pdf",
+          "checked_on": "2026-11-05"
+        },
+        {
+          "path": "cap_rules[id=cap_exclusive_10x_monthly].limit_value_inr",
+          "op": "set",
+          "value_sha256": "3bb78535cc9555ff",
+          "reason": "WP7: 10,000 RP / 10 RP per Rs100 = Rs1,00,000.",
+          "source_url": "https://www.sbicard.com/sbi-card-en/assets/docs/pdf/simply-click-tnc-MITC-booklet.pdf",
+          "checked_on": "2026-11-05"
+        },
+        {
+          "path": "cap_rules[id=cap_exclusive_10x_monthly].post_limit_behavior",
+          "op": "set",
+          "value_sha256": "0bf3a047a3fe5814",
+          "reason": "WP7: Standard points continue after the cap (MITC booklet g).",
+          "source_url": "https://www.sbicard.com/sbi-card-en/assets/docs/pdf/simply-click-tnc-MITC-booklet.pdf",
           "checked_on": "2026-11-05"
         }
       ]
@@ -1090,24 +1137,49 @@
         "category_slug": null,
         "benefit_kind": null,
         "label": "Cap online 5x monthly",
-        "measure": "reward_value",
+        "measure": "spend_amount",
         "period": "calendar_month",
-        "cap_value": 2500,
+        "cap_value": 200000,
         "post_cap_unit": null,
-        "post_cap_rate": 0,
+        "post_cap_rate": null,
         "resets_on_day": 1,
-        "cap_kind": "total_points",
-        "cap_amount": 10000,
+        "cap_kind": "eligible_spend",
+        "cap_amount": 200000,
         "scope": "targets",
         "targets": [
           "sbi-simplyclick:rule:online_5x",
           "sbi-simplyclick:rule:swiggy_5x"
         ],
         "parent_cap_id": null,
-        "post_cap_behavior": null,
+        "post_cap_behavior": "base_rate",
         "anchor": null,
         "min_engine_version": 2,
         "source_local_id": "cap_online_5x_monthly"
+      },
+      {
+        "id": "sbi-simplyclick:cap:cap_exclusive_10x_monthly",
+        "reward_rule_id": "sbi-simplyclick:rule:exclusive_partner_10x",
+        "category_id": null,
+        "category_slug": null,
+        "benefit_kind": null,
+        "label": "Cap exclusive 10x monthly",
+        "measure": "spend_amount",
+        "period": "calendar_month",
+        "cap_value": 100000,
+        "post_cap_unit": null,
+        "post_cap_rate": null,
+        "resets_on_day": 1,
+        "cap_kind": "eligible_spend",
+        "cap_amount": 100000,
+        "scope": "targets",
+        "targets": [
+          "sbi-simplyclick:rule:exclusive_partner_10x"
+        ],
+        "parent_cap_id": null,
+        "post_cap_behavior": "base_rate",
+        "anchor": null,
+        "min_engine_version": 2,
+        "source_local_id": "cap_exclusive_10x_monthly"
       }
     ],
     "milestone_rules": [
