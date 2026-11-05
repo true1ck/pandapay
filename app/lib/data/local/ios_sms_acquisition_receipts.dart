@@ -1,7 +1,7 @@
 import '../../features/sms_import/ios_shortcut_sms.dart';
 import '../../features/sms_import/sms_background_queue.dart';
 import '../../features/sms_import/sms_text_hint.dart';
-import '../local_sms_parser.dart';
+import '../sms_capture_signals.dart';
 import 'financial_store.dart';
 import 'sms_intake_repository.dart';
 
@@ -42,7 +42,7 @@ class IosSmsAcquisitionReceipts {
             SmsTriageKind.sensitive) {
           results.add({
             'id': row['id'] as String,
-            'parserVersion': LocalSmsParser.version,
+            'parserVersion': SmsCaptureSignals.version,
             'outcome': 'excluded_security',
           });
           continue;
@@ -73,14 +73,14 @@ class IosSmsAcquisitionReceipts {
             key,
             message.receivedAt.millisecondsSinceEpoch,
             row['dateProvenance'] ?? 'unknown',
-            LocalSmsParser.version,
+            SmsCaptureSignals.version,
             outcome,
           ],
         );
         results.add({
           'id': row['id'] as String,
           'sourceKey': key,
-          'parserVersion': LocalSmsParser.version,
+          'parserVersion': SmsCaptureSignals.version,
           'outcome': outcome,
           'occurrenceAmbiguous': intake.hasRepeatedOccurrence(namespace, key),
         });

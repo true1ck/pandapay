@@ -294,7 +294,6 @@ class AuthenticatedHttpClient extends http.BaseClient {
         path.contains('/import') ||
         path.contains('/backup') ||
         path.contains('/recovery') ||
-        path.contains('/from-sms') ||
         path.contains('/export');
     return longOperation
         ? AuthenticatedHttpTimeoutPolicy.longOperation

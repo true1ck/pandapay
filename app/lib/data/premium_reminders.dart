@@ -1,5 +1,5 @@
 import 'commitments_repository.dart';
-import 'local_sms_parser.dart';
+import 'sms_capture_signals.dart';
 import 'pending_bills.dart';
 
 /// An insurance renewal whose SMS named only a month ("Next Premium falls due
@@ -37,7 +37,7 @@ MonthOnlyPremium? parseMonthOnlyPremium(Map<String, dynamic> observation) {
   }
   final body = observation['sample_body'] as String?;
   if (body == null || body.isEmpty) return null;
-  final month = LocalSmsParser.nextPremiumDueMonth(body);
+  final month = SmsCaptureSignals.nextPremiumDueMonth(body);
   if (month == null) return null;
   return MonthOnlyPremium(
     title: _titleFor(observation),

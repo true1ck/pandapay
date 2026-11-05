@@ -42,10 +42,6 @@ void main() {
       final reopened = AppDatabase.forTesting(sqlite3.open(file));
       final store = FinancialStore(reopened);
       try {
-        expect(
-          store.transactions('user:a', const TransactionQuery())!.rows,
-          hasLength(2),
-        );
         expect(SmsIntakeRepository(reopened).pending('user:a'), hasLength(1));
         expect(SmsIntakeRepository(reopened).pending('user:b'), isEmpty);
       } finally {

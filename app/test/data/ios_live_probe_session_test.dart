@@ -38,63 +38,6 @@ void main() {
     },
   );
   test(
-    'forwarded live SMS keeps body timestamp separate from supplied receive time',
-    () {
-      final live = IosLiveProbeSession(openInMemoryForTesting());
-      addTearDown(live.dispose);
-      final row = liveRow('forwarded')
-        ..['body'] =
-            'Union Bank of India A/c *1234 Debited Rs:25.00 on '
-            '21-10-2026 01:26:04 by Mob Bk ref no SYNTHETIC, '
-            'Fvg: TEST SHOP Avl Bal Rs:1000.00';
-      expect(live.process([row]).single['outcome'], 'retained_new');
-      final transaction = live.intake.transactionList.single;
-      expect(
-        DateTime.parse(transaction['occurred_at'] as String),
-        DateTime(2026, 10, 21, 1, 26, 4),
-      );
-      expect(
-        DateTime.parse(transaction['sms_received_at'] as String),
-        DateTime.parse(row['receivedAt'] as String),
-      );
-      expect(
-        live.intake.retainedInputs.single.date,
-        DateTime.parse(row['receivedAt'] as String),
-      );
-    },
-  );
-  test(
-    'live intake is separate from range and keeps exact receive/import evidence',
-    () {
-      final history = IosDeviceProbeSession(openInMemoryForTesting());
-      final live = IosLiveProbeSession(openInMemoryForTesting());
-      addTearDown(history.dispose);
-      addTearDown(live.dispose);
-      history.accept([
-        {...liveRow('range'), 'runId': 'range', 'origin': 'range'},
-      ]);
-      expect(
-        live.process([
-          {...liveRow('range'), 'origin': 'range'},
-        ]),
-        isEmpty,
-      );
-      expect(live.intake.counts.captured, 0);
-      final outcomes = live.process([liveRow('one')]);
-      expect(outcomes.single['outcome'], 'retained_new');
-      expect(outcomes.single['senderInferred'], isTrue);
-      expect(outcomes.single['triageKind'], 'financialCandidate');
-      expect(outcomes.single['parserOutput'], contains('SWIGGY'));
-      expect(live.intake.transactionsForRun('live'), hasLength(1));
-      final source = live.intake.retainedInputsForRun('live').single;
-      expect(source.date, DateTime.utc(2026, 10, 29, 8));
-      expect(source.capturedAt, DateTime.utc(2026, 10, 29, 8, 1));
-      expect(source.senderInferred, isTrue);
-      expect(history.counts.captured, 1);
-      expect(history.runs.keys, ['range']);
-    },
-  );
-  test(
     'refresh and failed acknowledgement reuse outcome without duplicate intake',
     () {
       final live = IosLiveProbeSession(openInMemoryForTesting());
@@ -158,19 +101,5 @@ void main() {
     expect(live.process([unrelated]).single['outcome'], 'ignored');
     expect(live.intake.counts.captured, 0);
     expect(live.intake.retainedInputsForRun('live'), isEmpty);
-  });
-  test('ignored messages report the effective sender and actual decision', () {
-    final live = IosLiveProbeSession(openInMemoryForTesting());
-    addTearDown(live.dispose);
-    final row = liveRow('chat')..['body'] = 'Hi there';
-    final outcome = live.process([row]).single;
-    expect(outcome['outcome'], 'ignored');
-    // No issuer is named, so no sender is filled in.
-    expect(outcome['effectiveSender'], '');
-    expect(outcome['senderInferred'], false);
-    expect(outcome['triageKind'], 'unrelated');
-    expect(outcome['triageReason'], 'no_financial_signal');
-    expect(outcome['intakeDecision'], 'ignored_unrelated');
-    expect(outcome['intakeReason'], 'no_financial_signal');
   });
 }

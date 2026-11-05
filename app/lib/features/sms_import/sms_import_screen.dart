@@ -6,13 +6,12 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import '../../app/design/app_theme.dart';
 import '../../app/design/widgets.dart';
 import '../../app/providers.dart';
-import 'sms_backup_import_screen.dart';
 import 'sms_consent_screen.dart';
 import 'sms_listener_service.dart';
 
 /// UA-5.3 (Chunk 31): permission-request UI + the screen that wires the
-/// (unverified — see sms_listener_service.dart) live SMS listener to
-/// (verified — curl'd against live Postgres) POST /transactions/from-sms.
+/// (unverified — see sms_listener_service.dart) live SMS listener to the
+/// on-phone SMS v2 pipeline.
 ///
 /// Card selection is now OPTIONAL. This screen used to refuse to start
 /// listening until the user picked a card, and then logged every incoming
@@ -158,26 +157,6 @@ class _SmsImportScreenState extends ConsumerState<SmsImportScreen> {
                 'Automatically log spends from your bank\'s SMS alerts instead of '
                 'entering every transaction by hand. Requires SMS permission.',
                 style: BambooFonts.ui(13.5, color: BambooInk.ink500),
-              ),
-              const SizedBox(height: 16),
-              // F4: one-time backup-file import — always available, independent
-              // of the live auto-read permission/listener above (per the plan's
-              // explicit "always available" requirement).
-              OutlinedButton.icon(
-                style: OutlinedButton.styleFrom(
-                  foregroundColor: BambooInk.ink900,
-                  side: const BorderSide(color: BambooInk.hairlineOnPaper),
-                  shape: RoundedRectangleBorder(
-                    borderRadius: BorderRadius.circular(14),
-                  ),
-                ),
-                icon: const Icon(Icons.upload_file_outlined),
-                label: const Text('Import from an SMS backup file (one-time)'),
-                onPressed: () => Navigator.of(context).push(
-                  MaterialPageRoute(
-                    builder: (_) => const SmsBackupImportScreen(),
-                  ),
-                ),
               ),
               const SizedBox(height: 16),
               const Divider(color: BambooInk.hairlineOnPaper),

@@ -19,4 +19,23 @@ void main() {
     expect(offenders, isEmpty);
     expect(File('lib/features/sms_v2/flag.dart').existsSync(), isFalse);
   });
+
+  test('no client code can upload raw SMS text', () {
+    const banned = [
+      '/transactions/from-sms',
+      '/transactions/reconcile-sms',
+      '/transactions/sms-import-state',
+      "'/sms/facts'",
+      'logTransactionFromSms',
+      'logTransactionsFromSmsBatch',
+    ];
+    final offenders = <String>[];
+    for (final f in _dartFiles('lib')) {
+      final text = f.readAsStringSync();
+      for (final b in banned) {
+        if (text.contains(b)) offenders.add('${f.path}: $b');
+      }
+    }
+    expect(offenders, isEmpty);
+  });
 }

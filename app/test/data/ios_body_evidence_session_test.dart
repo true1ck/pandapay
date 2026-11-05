@@ -14,44 +14,6 @@ Map<Object?, Object?> input(String id, String body) => {
 };
 
 void main() {
-  test('extracts an expense with no sender and no invented bank header', () {
-    final session = IosBodyEvidenceSession();
-    session.process([input('completion', fixture.posted)]);
-    final record = session.records.single;
-    final facts = record['transaction_facts'] as Map;
-    expect(record['kind'], 'transaction_candidate');
-    expect(record['captured_sender'], isNull);
-    expect(record['sender_status'], 'unavailable');
-    expect(record['issuer_named_in_body'], 'SBI');
-    expect(record['payment_app_named_in_body'], isNull);
-    expect(record['posting_state'], 'not_posted');
-    expect(facts['amount_inr'], 42.5);
-    expect(facts['merchant_name'], 'TESTTECHNOLOGIES');
-    expect(facts['card_last4'], '4242');
-    expect(facts['instrument'], 'credit_card');
-    expect(facts['payment_method'], 'upi');
-    expect(facts.containsKey('status'), false);
-    expect(facts.containsKey('source_key'), false);
-    expect(jsonEncode(session.snapshot), isNot(contains('VM-')));
-  });
-
-  test('request stays separate from a completion and counts no spending', () {
-    final session = IosBodyEvidenceSession();
-    session.process([
-      input('request', fixture.request),
-      input('paid', fixture.posted),
-    ]);
-    expect(session.snapshot['transaction_candidates'], 1);
-    expect(session.snapshot['payment_requests'], 1);
-    final request = session.records.firstWhere(
-      (r) => r['kind'] == 'payment_request',
-    );
-    expect((request['request_facts'] as Map)['completion_confirmed'], false);
-    expect((request['request_facts'] as Map)['payment_app'], 'PhonePe');
-    expect((request['request_facts'] as Map)['spending_added'], 0);
-    expect(request['transaction_facts'], isNull);
-  });
-
   test(
     'two receivers share one preview, while distinct receive instants remain separate',
     () {
@@ -68,30 +30,6 @@ void main() {
         {...row, 'id': 'different-date', 'receivedAt': '2026-11-01T08:01:00Z'},
       ]);
       expect(session.records, hasLength(2));
-    },
-  );
-
-  test(
-    'preserves an actual supplied sender and uses the shared saved-card match',
-    () {
-      final session = IosBodyEvidenceSession(cards: [fixture.card]);
-      session.process([
-        {
-          ...input('card', fixture.posted),
-          'sender': 'SBICRD-S',
-          'senderEvidence': 'text',
-        },
-      ]);
-      final record = session.records.single;
-      expect(record['captured_sender'], 'SBICRD-S');
-      expect(
-        (record['transaction_facts'] as Map)['user_card_id'],
-        fixture.card.id,
-      );
-      expect(
-        (record['transaction_facts'] as Map)['card_name'],
-        fixture.card.nickname,
-      );
     },
   );
 

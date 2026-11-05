@@ -11,7 +11,6 @@ import 'package:http/testing.dart';
 import 'package:sqlite3/sqlite3.dart';
 import 'package:pandapay/app/providers.dart' as app;
 import 'package:pandapay/app/design/app_theme.dart';
-import 'package:pandapay/data/sms_backup_xml_parser.dart';
 import 'package:pandapay/features/sms_import/ios_shortcut_sms.dart';
 import 'package:pandapay/data/local/app_database.dart';
 import 'package:pandapay/data/local/response_cache.dart';
@@ -101,15 +100,11 @@ void main() {
               },
           ]).messages
         : [
-            for (final message in parseSmsBackupXml(
-              '<smses count="2">${[for (var index = 0; index < bodies.length; index++) '<sms address="VM-HDFCBK-S" '
-                    'date="${DateTime.utc(2026, 11, 1, 7 + index).millisecondsSinceEpoch}" '
-                    'body="${const HtmlEscape(HtmlEscapeMode.attribute).convert(bodies[index]).replaceAll('\n', '&#10;')}" />'].join()}</smses>',
-            ))
+            for (var index = 0; index < bodies.length; index++)
               QueuedSms(
-                sender: message.sender,
-                body: message.body,
-                receivedAt: message.sentAt!,
+                sender: 'VM-HDFCBK-S',
+                body: bodies[index],
+                receivedAt: DateTime.utc(2026, 11, 1, 7 + index),
               ),
           ];
     expect(messages, hasLength(2));

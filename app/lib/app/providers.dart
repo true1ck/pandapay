@@ -49,15 +49,10 @@ import '../data/portable_backup/account_recovery_operation_gate.dart';
 import '../data/local/response_cache.dart';
 import '../data/local/financial_store.dart';
 import '../data/local/financial_read_worker.dart';
-import '../data/local/auto_resolved_history_repository.dart';
-import '../data/local/sms_auto_resolution_controller.dart';
-import '../data/local/sms_rule_bundle.dart';
-import '../data/local/sms_rule_bundle_store.dart';
 import '../data/local/sms_dismissal_outbox.dart';
 import '../data/local/sms_feedback_outbox.dart';
 import '../data/local/sms_intake_repository.dart';
 import '../data/local/sms_import_store.dart';
-import '../data/local_sms_parser.dart';
 import '../data/local/sync_queue.dart';
 import '../data/local/duplicate_resolution_outbox.dart';
 import '../data/local/transaction_outbox_repository.dart';
@@ -67,7 +62,6 @@ import '../data/transaction_page_refresh.dart';
 import '../data/merchant_category_rules_repository.dart';
 import '../data/merchant_issue_rules_repository.dart';
 import '../data/merchant_search_repository.dart';
-import '../data/needs_review_repository.dart';
 import '../data/notification_preferences_repository.dart';
 import '../data/notification_devices_api.dart';
 import '../data/override_resolver.dart';
@@ -97,14 +91,13 @@ import '../features/notifications/notification_triggers.dart';
 import '../features/notifications/push_notification_service.dart';
 import '../features/sms_import/sms_listener_service.dart';
 import '../features/sms_import/sms_inbox_scanner.dart';
-import '../features/sms_import/sms_capture_worker.dart';
 import '../features/sms_import/sms_background_queue.dart';
 import '../features/sms_import/ios_shortcut_sms.dart';
-import '../features/sms_import/sms_text_hint.dart';
 import '../features/settings/settings_sync.dart';
 import '../features/sync/sync_engine.dart';
 import 'env.dart';
 import 'local_sms_rig_http_client.dart';
+import '../data/sms_security_policy.dart';
 
 /// api/'s and auth/'s base URLs, fixed at compile time by `--dart-define`
 /// (plan Phase 0.3). These were plain hardcoded `localhost` consts until
@@ -113,34 +106,6 @@ import 'local_sms_rig_http_client.dart';
 /// trying to reach the handset itself.
 const _apiBaseUrl = Env.apiBaseUrl;
 const _authBaseUrl = Env.authBaseUrl;
-
-/// A bank can send several messages that contain transaction-shaped words but
-/// do not represent money spent: OTPs, declines, reversals, refunds and
-/// credits. Those are expected negative matches, not parser failures, so they
-/// must never become a user-facing review item. Successful formats are
-/// recorded by the server as transactions; card attribution is optional.
-bool _isIgnorableSmsReason(String? reason) {
-  final normalized = (reason ?? '').trim().toLowerCase();
-  return normalized == 'security_message' ||
-      normalized == 'not_a_successful_spend' ||
-      normalized == 'non_transaction_message' ||
-      normalized == 'not_a_transaction_alert' ||
-      normalized == 'non_transaction_alert';
-}
-
-/// Determines whether an error during startup review replay is fatal to the pass.
-/// Server refusals on specific messages (4xx) should skip that message and continue,
-/// while transport/server failures (5xx, network drops) stop the pass for retry later.
-bool reviewReplayShouldStop(Object error) {
-  if (error is ApiException) {
-    final status = error.statusCode;
-    if (status != null && status >= 400 && status < 500) {
-      return false;
-    }
-    return true;
-  }
-  return true;
-}
 
 final authApiProvider = Provider<AuthApi>((ref) {
   final client = localSmsRigHttpClient();
@@ -713,20 +678,7 @@ Future<void> recoverLegacyPendingChanges(WidgetRef ref) async {
       ]);
     }
     for (final entry in intake.pending('legacy', limit: 100000)) {
-      final bundle = SmsRuleBundleStore(cache.financialStore.database)
-          .loadActiveBundleSync(
-            clientVersion: ref.read(appVersionProvider).valueOrNull ?? '1.0.0',
-          );
-      SmsImportStore(
-        cache.financialStore,
-        downloadedRules: bundle,
-        candidateRules: SmsRuleBundleStore(cache.financialStore.database)
-            .loadCandidateBundlesSync(
-              clientVersion:
-                  ref.read(appVersionProvider).valueOrNull ?? '1.0.0',
-              namespace: namespace,
-            ),
-      ).capture(namespace, entry.message);
+      SmsImportStore(cache.financialStore).capture(namespace, entry.message);
       intake.acknowledge('legacy', entry.id);
     }
     db.execute('RELEASE SAVEPOINT recover_pending');
@@ -1174,38 +1126,6 @@ class DueDateRemindersController extends StateNotifier<Set<String>> {
   }
 }
 
-/// Task D-4: on-device only, never uploaded — see NeedsReviewRepository's
-/// own doc-comment for why. Repository writes feed the existing financial
-/// revision stream, keeping the cheap badge count and reconciled list current.
-final _reviewFinancialChangesProvider = FutureProvider<void>((ref) async {
-  StreamSubscription<FinancialChange>? subscription;
-  var disposed = false;
-  ref.onDispose(() {
-    disposed = true;
-    subscription?.cancel();
-  });
-  final cache = await _cacheOrNull(ref);
-  if (disposed || cache == null) return;
-  final store = cache.financialStore;
-  subscription = NeedsReviewRepository.changesFor(store.database).listen(
-    (change) => store.notifyExternalChanges(change.namespace, [change.entity]),
-  );
-});
-
-final needsReviewRepositoryProvider = Provider<NeedsReviewRepository>((ref) {
-  final namespace = ref.watch(cacheNamespaceProvider);
-  final cacheFuture = ref.watch(responseCacheProvider.future);
-  final notificationsReady = ref.watch(_reviewFinancialChangesProvider.future);
-  return NeedsReviewRepository(
-    namespace: namespace,
-    loadDatabase: () async {
-      await notificationsReady;
-      final store = (await cacheFuture).financialStore;
-      return store.database;
-    },
-  );
-});
-
 final foreignPaymentsRepositoryProvider = Provider<ForeignPaymentsRepository>((ref) {
   final namespace = ref.watch(cacheNamespaceProvider);
   final cacheFuture = ref.watch(responseCacheProvider.future);
@@ -1239,91 +1159,6 @@ final foreignPaymentsProvider = FutureProvider<List<ForeignPayment>>((ref) async
 
 final foreignPaymentsSummaryProvider = Provider<ForeignPaymentsSummary>((ref) =>
   ForeignPaymentsSummary.fromPayments(ref.watch(foreignPaymentsProvider).valueOrNull ?? const []));
-
-final needsReviewItemsProvider = FutureProvider<List<NeedsReviewItem>>((
-  ref,
-) async {
-  final markReady = _financialChanges(ref, 'needs_review');
-  final markTransactionsReady = _financialChanges(ref, 'transactions');
-  final markObservationsReady = _financialChanges(ref, 'observations');
-  final items = await ref.watch(needsReviewRepositoryProvider).fetchAll();
-  markReady();
-  markTransactionsReady();
-  markObservationsReady();
-  return items;
-});
-
-/// Tier-1 auto-resolution receipts, newest first. A resolution is a normal
-/// financial-store change (entity 'auto_resolved_history'), so the same
-/// revision stream that refreshes transactions also refreshes this list.
-final autoResolvedHistoryProvider =
-    FutureProvider<List<AutoResolvedHistoryEntry>>((ref) async {
-      final markReady = _financialChanges(ref, 'auto_resolved_history');
-      final markTransactionsReady = _financialChanges(ref, 'transactions');
-      final store = (await ref.watch(
-        responseCacheProvider.future,
-      )).financialStore;
-      final rows = AutoResolvedHistoryRepository(
-        store.database,
-        namespace: ref.watch(cacheNamespaceProvider),
-      ).fetchAll();
-      markReady();
-      markTransactionsReady();
-      return rows;
-    });
-
-final autoResolvedCountProvider = FutureProvider<int>((ref) async {
-  final markReady = _financialChanges(ref, 'auto_resolved_history');
-  final store = (await ref.watch(responseCacheProvider.future)).financialStore;
-  final count = AutoResolvedHistoryRepository(
-    store.database,
-    namespace: ref.watch(cacheNamespaceProvider),
-  ).count();
-  markReady();
-  return count;
-});
-
-/// Undo/correct actions for the Auto-Resolved tab. Synchronous by contract:
-/// the Needs Review flow always initializes [responseCacheProvider] first, so
-/// a missing cache is a programming error rather than a loading state.
-final smsAutoResolutionControllerProvider =
-    Provider<SmsAutoResolutionController>((ref) {
-      final cache = ref.watch(responseCacheProvider).valueOrNull;
-      if (cache == null) {
-        throw StateError(
-          'smsAutoResolutionControllerProvider requires responseCacheProvider '
-          'to be initialized before it is read',
-        );
-      }
-      final consent = ref.watch(smsSharedLearningConsentProvider).valueOrNull;
-      return SmsAutoResolutionController(
-        database: cache.financialStore.database,
-        store: cache.financialStore,
-        reviewRepository: ref.watch(needsReviewRepositoryProvider),
-        namespace: ref.watch(cacheNamespaceProvider),
-        smsLearningConsentGrantedAt:
-            consent?.policyVersion == smsSharedLearningPolicyVersion &&
-                consent?.granted == true
-            ? consent!.grantedAt
-            : null,
-      );
-    });
-
-/// The shared SMS rule bundle the server publishes: a versioned set of
-/// sender/word patterns the device applies locally, so a parser improvement
-/// reaches a phone without an app release.
-final smsRuleBundleStoreProvider = FutureProvider<SmsRuleBundleStore>((
-  ref,
-) async {
-  final db = await ref.watch(appDatabaseProvider.future);
-  return SmsRuleBundleStore(db);
-});
-
-/// The bundle currently in force on this device.
-final activeSmsRuleBundleProvider = FutureProvider<SmsRuleBundle?>((ref) async {
-  final store = await ref.watch(smsRuleBundleStoreProvider.future);
-  return store.loadActiveBundle();
-});
 
 /// D1's badge (ui-spec §1: "Activity... with badge for D4 count") and
 /// Insights Hub's tile both read this rather than the full list, so
@@ -1789,31 +1624,6 @@ final userCardsRepositoryProvider = Provider<UserCardsRepository?>((ref) {
   final namespace = ref.read(cacheNamespaceProvider);
   late final UserCardsRepository repository;
   repository = UserCardsRepository(
-    onSmsV2Import: (messages, backfill) async {
-      final runtime = await ref.read(smsV2RuntimeProvider.future);
-      if (runtime == null) throw StateError('SMS v2 session unavailable');
-      final cache = await ref.read(responseCacheProvider.future);
-      final intake = SmsIntakeRepository(cache.financialStore.database);
-      final seen = <String>{};
-      final newSources = <String>{};
-      var duplicates = 0;
-      for (final message in messages) {
-        final key = smsSourceKey(namespace, message.sender, message.body);
-        if (!seen.add(key) || intake.decision(namespace, key)?.policyVersion == 'v2') {
-          duplicates++;
-        } else {
-          newSources.add(key);
-        }
-      }
-      await runtime.capture([
-        for (final message in messages) QueuedSms(sender: message.sender,
-          body: message.body, receivedAt: message.occurredAt),
-      ], backfill: backfill);
-      final imported = newSources.where((key) => intake.decision(namespace, key)?.decision == 'matched').length;
-      final review = newSources.where((key) => intake.decision(namespace, key)?.decision == 'unknown').length;
-      return SmsBatchImportResult(imported: imported, duplicate: duplicates,
-        unparsed: 0, invalid: 0, errored: 0, needsReview: review);
-    },
     apiBaseUrl: _apiBaseUrl,
     accessToken: token,
     client: ref.read(authenticatedHttpClientProvider),
@@ -1847,191 +1657,6 @@ final userCardsRepositoryProvider = Provider<UserCardsRepository?>((ref) {
       ref
           .read(transactionTagsProvider)
           ?.remapTransaction('local-outbox:$mutationId', transactionId);
-    },
-    onSmsCaptured: (message) async {
-      final runtime = await ref.read(smsV2RuntimeProvider.future);
-      if (runtime == null) throw StateError('SMS v2 session unavailable');
-      await runtime.capture([QueuedSms(sender: message.sender, body: message.body,
-        receivedAt: message.occurredAt)]);
-    },
-    onSmsBatchCaptured: (messages) async {
-      final runtime = await ref.read(smsV2RuntimeProvider.future);
-      if (runtime == null) throw StateError('SMS v2 session unavailable');
-      await runtime.capture([
-        for (final message in messages) QueuedSms(sender: message.sender,
-          body: message.body, receivedAt: message.occurredAt),
-      ]);
-    },
-    onSmsUploaded: (messages, results, notifyNewTransactions) async {
-      if (ref.read(cacheNamespaceProvider) != namespace) return;
-      final cache = await ref.read(responseCacheProvider.future);
-      final store = cache.financialStore;
-      final intake = SmsIntakeRepository(store.database);
-      final localEventByKey = <String, String>{
-        for (final observation in store.entities(namespace, 'sms_observations'))
-          if (observation['id'] is String &&
-              observation['event_type'] is String)
-            observation['id'] as String: observation['event_type'] as String,
-      };
-      List<TransactionEntry>? confirmed;
-      try {
-        // One reconciliation request per batch, not one request per message.
-        final dates = messages.map((m) => m.occurredAt).toList()..sort();
-        if (dates.isNotEmpty) {
-          confirmed = await repository.fetchTransactions(
-            from: dates.first.subtract(const Duration(days: 2)),
-            to: dates.last.add(const Duration(days: 1)),
-          );
-          if (ref.read(cacheNamespaceProvider) != namespace) return;
-          store.saveTransactions(namespace, confirmed);
-        }
-      } catch (_) {
-        /* The durable intake retries reconciliation later. */
-      }
-      final acknowledgements = <void Function()>[];
-      for (final result in results) {
-        final index = (result['index'] as num?)?.toInt();
-        if (index == null || index < 0 || index >= messages.length) continue;
-        final message = messages[index];
-        final key = smsSourceKey(namespace, message.sender, message.body);
-        final outcome = result['outcome'];
-        if (outcome == 'error' || outcome == 'invalid') continue;
-        final serverId = result['transactionId'] as String?;
-        final matched =
-            confirmed
-                ?.where(
-                  (t) =>
-                      t.sourceKey == key ||
-                      (serverId != null && t.id == serverId),
-                )
-                .toList() ??
-            const <TransactionEntry>[];
-        if (notifyNewTransactions && outcome == 'imported') {
-          final recorded = matched
-              .where((transaction) => transaction.id == serverId)
-              .where((transaction) => transaction.status == 'active')
-              .firstOrNull;
-          if (recorded != null) {
-            final merchant = recorded.merchantName?.trim();
-            final detail = merchant == null || merchant.isEmpty
-                ? '${recorded.amount.format(hidePaise: true)} was added to your spending.'
-                : '${recorded.amount.format(hidePaise: true)} at $merchant was added to your spending.';
-            try {
-              await ref
-                  .read(notificationGateProvider)
-                  .fire(
-                    category: 'transactions',
-                    title: 'Transaction recorded',
-                    body: detail,
-                    dedupeKey: 'transaction_recorded:${recorded.id}',
-                  );
-            } catch (_) {
-              // A notification failure must never hold up SMS reconciliation.
-            }
-          }
-        }
-        final negative =
-            outcome == 'unparsed' &&
-            _isIgnorableSmsReason(result['reason'] as String?);
-        final returned = result['transaction'] as Map?;
-        final inactive =
-            serverId != null &&
-            returned?['status'] != null &&
-            returned!['status'] != 'active';
-        if (matched.isNotEmpty ||
-            negative ||
-            inactive ||
-            outcome == 'imported' ||
-            outcome == 'duplicate' ||
-            store.hasReceipt(namespace, key)) {
-          acknowledgements.add(() {
-            if (matched.isNotEmpty ||
-                inactive ||
-                outcome == 'imported' ||
-                outcome == 'duplicate' ||
-                localEventByKey[key] != 'transaction') {
-              store.discardProvisional(
-                namespace,
-                key,
-                confirmedId: matched.isNotEmpty
-                    ? matched.first.id
-                    : inactive
-                    ? serverId
-                    : outcome == 'imported'
-                    ? serverId
-                    : null,
-              );
-            }
-            intake.acknowledge(namespace, key);
-          });
-        } else if (localEventByKey[key] == 'bill') {
-          // A bill observation is intentionally not a transaction. If the
-          // hosted transaction parser does not understand it, acknowledge the
-          // intake here and leave any bill-specific review item untouched.
-          acknowledgements.add(() {
-            store.discardProvisional(namespace, key);
-            intake.acknowledge(namespace, key);
-          });
-        } else if (outcome == 'needs_review' || outcome == 'unparsed') {
-          final isNoise = NeedsReviewRepository.isNoiseItem(
-            NeedsReviewItem(
-              id: key,
-              sender: message.sender,
-              body: message.body,
-              receivedAt: message.occurredAt,
-            ),
-          );
-          final isFinancialCandidate =
-              capturesFinancialSms(message.body, sender: message.sender) &&
-              !isNoise;
-          if (isNoise || (outcome == 'unparsed' && !isFinancialCandidate)) {
-            acknowledgements.add(() {
-              if (localEventByKey[key] != 'transaction') {
-                store.discardProvisional(namespace, key);
-              }
-              intake.acknowledge(namespace, key);
-            });
-          } else {
-            // Preserve unsupported input for review without silently retrying it
-            // forever or treating an unconfirmed local parse as final spending.
-            // Best-effort submit to the server AI queue for background classification.
-            repository
-                .submitAiJob(
-                  sourceKey: key,
-                  sender: message.sender,
-                  body: message.body,
-                  occurredAt: message.occurredAt,
-                )
-                .ignore();
-            await ref
-                .read(needsReviewRepositoryProvider)
-                .add(
-                  NeedsReviewItem(
-                    id: key,
-                    sender: message.sender,
-                    body: message.body,
-                    receivedAt: message.occurredAt,
-                    reason: result['reason'] as String?,
-                  ),
-                );
-            acknowledgements.add(() {
-              if (localEventByKey[key] != 'transaction') {
-                store.discardProvisional(namespace, key);
-              }
-              intake.acknowledge(namespace, key);
-            });
-          }
-        }
-      }
-      if (ref.read(cacheNamespaceProvider) != namespace) return;
-      store.batch(() {
-        for (final acknowledge in acknowledgements) {
-          acknowledge();
-        }
-      });
-      if (acknowledgements.isNotEmpty) {
-        ref.invalidate(pendingRecoveryStatusProvider);
-      }
     },
   );
   _flushSmsLearningQueues(ref, repository, namespace).ignore();
@@ -4709,7 +4334,6 @@ final financialStoreRevisionProvider = StreamProvider.family<int, String>((
   entity,
 ) {
   final namespace = ref.watch(cacheNamespaceProvider);
-  final notificationsReady = ref.watch(_reviewFinancialChangesProvider.future);
   final cacheFuture = _cacheOrNull(ref);
   final controller = StreamController<int>();
   StreamSubscription<FinancialChange>? subscription;
@@ -4737,8 +4361,6 @@ final financialStoreRevisionProvider = StreamProvider.family<int, String>((
       }
       controller.add(++version);
     });
-    await notificationsReady;
-    if (disposed) return;
     live = true;
     if (missed) controller.add(++version);
   }
@@ -6848,7 +6470,6 @@ class SmsAutoImportController {
       _retryTimer?.cancel();
       _inboxContinuation = null;
       _inboxContinuationNamespace = null;
-      _captureWorker?.dispose();
       inboxScanProgress.dispose();
     });
   }
@@ -6869,7 +6490,6 @@ class SmsAutoImportController {
   bool _disposed = false;
   bool _uploadAgainRequested = false;
   Future<void>? _starting;
-  SmsCaptureWorker? _captureWorker;
 
   /// iOS supplies the evidence through Shortcuts; everything after validation
   /// joins the same account-scoped capture owner as the Android inbox.
@@ -6965,18 +6585,6 @@ class SmsAutoImportController {
       if (_disposed || _ref.read(cacheNamespaceProvider) != namespace) {
         throw StateError('Account changed during SMS capture');
       }
-    }
-
-    final prefs = await SharedPreferences.getInstance();
-    final lastScanVer =
-        prefs.getInt('pandapay_app.sms_inbox_scanner_ver_$namespace') ?? 0;
-    if (lastScanVer < LocalSmsParser.version) {
-      // Version upgrade updates preferences without rewinding the scan checkpoint.
-      // Already captured transactions are safe; only strictly new messages are ingested.
-      await prefs.setInt(
-        'pandapay_app.sms_inbox_scanner_ver_$namespace',
-        LocalSmsParser.version,
-      );
     }
 
     final scanner = SmsInboxScanner(
@@ -7177,7 +6785,7 @@ class SmsAutoImportController {
   }
 
   Future<void> _handle(String sender, String body, DateTime receivedAt) async {
-    if (_disposed || LocalSmsParser.sensitive(body)) return;
+    if (_disposed || SmsSecurityPolicy.sensitive(body)) return;
     final namespace = _ref.read(cacheNamespaceProvider);
     try {
       await AccountRecoveryOperationGate.process.run(() =>

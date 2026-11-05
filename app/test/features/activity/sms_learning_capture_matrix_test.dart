@@ -5,7 +5,6 @@ import 'package:pandapay/app/providers.dart';
 import 'package:pandapay/data/catalogue_repository.dart';
 import 'package:pandapay/data/consents_api.dart';
 import 'package:pandapay/data/local/app_database.dart';
-import 'package:pandapay/data/local/auto_resolved_history_repository.dart';
 import 'package:pandapay/data/local/response_cache.dart';
 import 'package:pandapay/data/local/sms_feedback_outbox.dart';
 import 'package:pandapay/data/local/sms_intake_repository.dart';
@@ -311,97 +310,6 @@ void main() {
       expect(fixture.repository.flushes, 1);
     },
   );
-
-  testWidgets('AI-origin transaction reports an ai decision origin', (
-    tester,
-  ) async {
-    final database = openInMemoryForTesting();
-    addTearDown(database.close);
-    await captureSms(database);
-    final fixture = await _pump(
-      tester,
-      database: database,
-      consent: _granted(),
-      categories: canonicalCategories,
-    );
-    AutoResolvedHistoryRepository(
-      database,
-      namespace: _namespace,
-    ).record(
-      AutoResolvedHistoryEntry(
-        id: 'ai:$_sourceKey',
-        namespace: _namespace,
-        sourceKey: _sourceKey,
-        factIndex: 9,
-        sender: _sender,
-        resolvedKind: 'transaction',
-        title: 'SWIGGY',
-        amountPaise: 150000,
-        occurredAt: _occurredAt.toIso8601String(),
-        confidence: 0.95,
-        autoResolvedAt: 1,
-      ),
-    );
-
-    await queueSmsTransactionCorrection(
-      ref: fixture.ref,
-      original: _smsEntry(id: 'local-ai:t1'),
-      action: 'edited',
-      correctedFields: const {'amountInr': 1200.0},
-      correctionKind: 'wrong_amount',
-    );
-    await tester.pump();
-
-    final payload = fixture.outbox.pending().single.payload;
-    expect(payload['decisionOrigin'], 'ai');
-    expect(payload['factIndex'], 9);
-    expect(payload['correctionKind'], 'wrong_amount');
-    final originalDecision =
-        payload['originalDecision'] as Map<String, dynamic>;
-    expect(originalDecision['origin'], 'ai');
-  });
-
-  testWidgets('legacy AI transaction without receipt fact index abstains', (
-    tester,
-  ) async {
-    final database = openInMemoryForTesting();
-    addTearDown(database.close);
-    await captureSms(database);
-    final fixture = await _pump(
-      tester,
-      database: database,
-      consent: _granted(),
-      categories: canonicalCategories,
-    );
-    AutoResolvedHistoryRepository(
-      database,
-      namespace: _namespace,
-    ).record(
-      AutoResolvedHistoryEntry(
-        id: 'ai:$_sourceKey',
-        namespace: _namespace,
-        sourceKey: _sourceKey,
-        sender: _sender,
-        resolvedKind: 'transaction',
-        title: 'SWIGGY',
-        amountPaise: 150000,
-        occurredAt: _occurredAt.toIso8601String(),
-        confidence: 0.95,
-        autoResolvedAt: 1,
-      ),
-    );
-
-    await queueSmsTransactionCorrection(
-      ref: fixture.ref,
-      original: _smsEntry(id: 'local-ai:t1'),
-      action: 'edited',
-      correctedFields: const {'amountInr': 1200.0},
-      correctionKind: 'wrong_amount',
-    );
-
-    expect(fixture.outbox.count(), 0);
-    expect(fixture.repository.flushes, 0);
-  });
 
   testWidgets('a non-SMS transaction never queues a learning event', (
     tester,

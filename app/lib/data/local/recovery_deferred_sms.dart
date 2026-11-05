@@ -4,9 +4,9 @@ import 'package:path/path.dart' as path;
 import 'package:sqlite3/sqlite3.dart';
 
 import '../../features/sms_import/sms_background_queue.dart';
-import '../local_sms_parser.dart';
 import 'app_database.dart';
 import 'sms_intake_repository.dart';
+import '../sms_security_policy.dart';
 
 /// A separate append/ack spool for SMS arriving while recovery owns the main
 /// SQLite writer lock. Account labels are retained; no token or HTTP is used.
@@ -45,7 +45,7 @@ class RecoveryDeferredSms {
         namespace.length > 100 ||
         message.sender.length > 200 ||
         message.body.length > 16000 ||
-        LocalSmsParser.sensitive(message.body)) {
+        SmsSecurityPolicy.sensitive(message.body)) {
       throw const FormatException('Invalid deferred SMS');
     }
     final id = smsSourceKey(namespace, message.sender, message.body);

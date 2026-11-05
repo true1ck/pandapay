@@ -6,7 +6,6 @@ import '../../app/design/app_theme.dart';
 import '../../app/design/widgets.dart';
 import '../../app/providers.dart';
 import '../../data/local/sms_intake_repository.dart';
-import '../../data/local_sms_parser.dart';
 import '../../data/spend_reports_repository.dart';
 import '../../main.dart' show MoneyText;
 
@@ -74,40 +73,6 @@ class _SubscriptionDetailScreenState
     }
   }
 
-  void _enrichFromSms(SmsIntakeEntry captured) {
-    final parsed = LocalSmsParser.parse(
-      namespace: ref.read(cacheNamespaceProvider),
-      sender: captured.message.sender,
-      body: captured.message.body,
-      receivedAt: captured.message.receivedAt,
-    );
-    if (parsed == null) return;
-    if (parsed.isAutopay || parsed.billerName != null) {
-      final lim = parsed.autopayLimit ?? parsed.amountDue ?? parsed.amount;
-      final limitMoney = lim != null && lim.paise > 0
-          ? Money.fromPaise(lim.paise)
-          : null;
-      if (mounted) {
-        setState(() {
-          _series = _series.copyWith(
-            autopayLimit: _series.autopayLimit ?? limitMoney,
-            startDate: _series.startDate ?? parsed.startDate,
-            endDate: _series.endDate ?? parsed.endDate,
-            paymentMethod: _series.paymentMethod ?? parsed.paymentMethod,
-            lastSeenOn: _series.lastSeenOn ?? parsed.startDate ?? captured.message.receivedAt,
-            nextExpectedOn: _series.nextExpectedOn ?? (parsed.dueDate ?? parsed.endDate),
-            cadenceDays: _series.cadenceDays > 0
-                ? _series.cadenceDays
-                : (parsed.cadenceHint == 'asPresented' ? 0 : _series.cadenceDays),
-            cadenceConfirmed: _series.cadenceConfirmed || parsed.cadenceHint == 'asPresented',
-            isMandate: _series.isMandate || parsed.isAutopay,
-            setupConfirmed: true,
-          );
-        });
-      }
-    }
-  }
-
   Future<_SubscriptionEvidence?> _findEvidence() async {
     final namespace = ref.read(cacheNamespaceProvider);
     if (namespace == 'signed-out') return null;
@@ -118,7 +83,6 @@ class _SubscriptionDetailScreenState
     if (sourceKey != null && sourceKey.isNotEmpty) {
       final captured = repo.capturedById(namespace, sourceKey);
       if (captured != null) {
-        _enrichFromSms(captured);
         return _SubscriptionEvidence(captured, exact: true);
       }
     }
@@ -169,7 +133,6 @@ class _SubscriptionDetailScreenState
       }
       final captured = repo.capturedById(namespace, row['id'] as String);
       if (captured != null) {
-        _enrichFromSms(captured);
         return _SubscriptionEvidence(captured, exact: false);
       }
     }

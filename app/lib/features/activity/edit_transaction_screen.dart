@@ -17,7 +17,6 @@ import '../../data/catalogue_repository.dart'
     show categoryIdForServer, userCategoryIdForServer;
 import '../../data/local/sync_queue.dart';
 import '../../data/local/sms_feedback_outbox.dart';
-import '../../data/local/auto_resolved_history_repository.dart';
 import '../../data/merchant_category_rules_repository.dart';
 import '../../data/user_cards_repository.dart';
 import '../../data/self_transfer.dart';
@@ -548,17 +547,8 @@ class _EditTransactionScreenState extends ConsumerState<EditTransactionScreen> {
       cache.financialStore.database,
       namespace: ref.read(cacheNamespaceProvider),
     );
-    var factIndex = 0;
-    if (original.id.startsWith('local-ai:')) {
-      final history = AutoResolvedHistoryRepository(
-        cache.financialStore.database,
-        namespace: ref.read(cacheNamespaceProvider),
-      ).findById('ai:$sourceKey');
-      if (history?.factIndex == null) return;
-      factIndex = history!.factIndex!;
-    } else if (feedbackOutbox.hasMultiplePersistedFacts(sourceKey)) {
-      return;
-    }
+    const factIndex = 0;
+    if (feedbackOutbox.hasMultiplePersistedFacts(sourceKey)) return;
     // Persist this metadata before the edit screen closes or sync can run.
     // Sync checks the current grant and its timestamp before upload.
     final categories = ref.read(categoriesProvider).valueOrNull ?? const [];
@@ -589,7 +579,7 @@ class _EditTransactionScreenState extends ConsumerState<EditTransactionScreen> {
       if (_instrument != null) 'instrument': _instrument!.wireValue,
       'entryKind': _entryKind.wireValue,
     };
-    final origin = original.id.startsWith('local-ai:') ? 'ai' : 'parser';
+    const origin = 'parser';
     final feedback = <String, dynamic>{
       'sourceKey': sourceKey,
       'action': 'edited',

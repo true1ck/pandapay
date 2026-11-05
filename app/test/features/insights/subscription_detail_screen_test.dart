@@ -305,64 +305,6 @@ void main() {
     );
 
     testWidgets(
-      'enriches mandate details from local SMS intake repository evidence when series fields are unpopulated',
-      (tester) async {
-        final db = openInMemoryForTesting();
-        final cache = ResponseCache(db);
-        SmsIntakeRepository(db); // ensures tables exist
-
-        // Store the mandate SMS evidence directly in DB
-        db.db.execute(
-          'INSERT INTO sms_captured_messages(namespace, id, sender, body, received_at) VALUES (?, ?, ?, ?, ?)',
-          [
-            'user:test',
-            'sms-mandate-axis-1',
-            'VM-AXISBK-S',
-            'Your UPI ASPRESENTED mandate has been successfully created towards Google Asia Pacific Pte.Ltd from 10-07-26 to 31-12-36 for INR 4000.00 Axis Bank. UMRN is 123456789@axisbank',
-            DateTime(2026, 7, 10, 10, 0).millisecondsSinceEpoch,
-          ],
-        );
-
-        // Bare series without limit or dates
-        final bareSeries = const RecurringSeries(
-          id: 'google-bare',
-          displayName: 'Google Asia Pacific Pte',
-          typicalAmount: Money.zero(),
-          amountKnown: false,
-          cadenceDays: 0,
-          occurrenceCount: 0,
-          annualCost: Money.zero(),
-          setupConfirmed: true,
-          isMandate: true,
-          autopayStatus: 'active',
-          engineStatus: 'candidate',
-        );
-
-        await tester.pumpWidget(
-          ProviderScope(
-            overrides: [
-              cacheNamespaceProvider.overrideWithValue('user:test'),
-              responseCacheProvider.overrideWith((ref) => Future.value(cache)),
-            ],
-            child: MaterialApp(
-              home: SubscriptionDetailScreen(series: bareSeries),
-            ),
-          ),
-        );
-        await tester.pumpAndSettle();
-
-        // Must display parsed mandate ceiling, cadence, validity and payment method
-        expect(find.text('Subscription details'), findsOneWidget);
-        expect(find.text('Up to ₹4,000'), findsOneWidget);
-        expect(find.text('Up to ₹4,000.00 (Mandate limit)'), findsOneWidget);
-        expect(find.text('As presented (On-demand)'), findsNWidgets(2));
-        expect(find.text('10/7/2026 – 31/12/2036'), findsOneWidget);
-        expect(find.text('UPI AutoPay (Axis Bank)'), findsOneWidget);
-        expect(find.text('Related service message', skipOffstage: false), findsOneWidget);
-      },
-    );
-
-    testWidgets(
       'SubscriptionsScreen deduplicates Google Play variants and Microsoft 365 review candidates and excludes vending',
       (tester) async {
         final report = RecurringReport(

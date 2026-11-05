@@ -13,10 +13,9 @@ import 'sms_text_hint.dart';
 import '../../data/local/app_database.dart';
 import '../../data/local/sms_intake_repository.dart';
 import '../../data/local/financial_store.dart';
-import '../../data/local_sms_parser.dart';
 import '../../data/local/sms_import_store.dart';
-import '../../data/local/sms_rule_bundle_store.dart';
 import '../../data/local/recovery_deferred_sms.dart';
+import '../../data/sms_security_policy.dart';
 
 /// The background-isolate entry point for an SMS that arrives while the app
 /// is closed or backgrounded.
@@ -49,7 +48,7 @@ Future<void> smsBackgroundHandler(SmsMessage message) async {
   // messages (autopay mandate life-cycle, declined attempts) are captured
   // too, so their typed facts reach the server.
   if (!capturesFinancialSms(body, sender: sender) ||
-      LocalSmsParser.sensitive(body)) {
+      SmsSecurityPolicy.sensitive(body)) {
     return;
   }
 
@@ -70,14 +69,7 @@ Future<void> smsBackgroundHandler(SmsMessage message) async {
       try {
         final store = FinancialStore(database);
         try {
-          final ruleStore = SmsRuleBundleStore(database);
-          final bundle = ruleStore.loadActiveBundleSync();
-          SmsImportStore(
-            store,
-            deferToSmsV2: true,
-            downloadedRules: bundle,
-            candidateRules: ruleStore.loadCandidateBundlesSync(namespace: namespace),
-          ).capture(namespace, queued);
+          SmsImportStore(store).capture(namespace, queued);
         } finally {
           store.dispose();
         }
@@ -221,7 +213,7 @@ class SmsListenerService {
           body == null ||
           date == null ||
           !capturesFinancialSms(body, sender: sender) ||
-          LocalSmsParser.sensitive(body)) {
+          SmsSecurityPolicy.sensitive(body)) {
         continue;
       }
       messages.add(
@@ -373,7 +365,7 @@ class SmsListenerService {
       await legacy.reload();
       // This is upgrade-only input. All new callbacks append to SQLite.
       for (final message in SmsBackgroundQueue.read(legacy)) {
-        if (!LocalSmsParser.sensitive(message.body)) {
+        if (!SmsSecurityPolicy.sensitive(message.body)) {
           intake.capture('legacy', message);
         }
       }

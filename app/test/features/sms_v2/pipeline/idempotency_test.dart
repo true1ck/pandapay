@@ -7,7 +7,6 @@ import 'package:http/testing.dart';
 import 'package:pandapay/data/local/sms_intake_repository.dart';
 import 'package:pandapay/features/sms_import/sms_background_queue.dart';
 import 'package:pandapay/features/sms_v2/pipeline/sms_v2_runtime.dart';
-import 'package:pandapay_domain/sms_v2.dart';
 
 import '../support/rules.dart';
 import '../support/sync_harness.dart';

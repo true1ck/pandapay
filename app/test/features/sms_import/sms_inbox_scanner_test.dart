@@ -71,10 +71,6 @@ void main() {
       expect(progress.lastId('user:a'), 5);
       expect(progress.initialComplete('user:a'), isTrue);
       expect(SmsIntakeRepository(db).pending('user:a'), hasLength(5));
-      expect(
-        store.transactions('user:a', const TransactionQuery())!.rows,
-        hasLength(5),
-      );
       queries.clear();
       expect(await owner.scan('user:a'), 0);
       expect(queries, isEmpty);

@@ -18,7 +18,7 @@
 /// only, and callers must not treat it as a resolved card id.
 library;
 
-import '../../data/local_sms_parser.dart';
+import '../../data/sms_capture_signals.dart';
 import '../../data/sms_gate_filter.dart';
 import '../../data/sms_security_policy.dart';
 import 'ios_shortcut_sms.dart';
@@ -94,14 +94,13 @@ const _promoWords = [
 bool _looksPromotional(String lower) => _promoWords.any(lower.contains);
 
 /// Rough client-side pre-filter for "does this look like a bank
-/// transaction SMS at all" — used only to decide whether it's worth
-/// forwarding to POST /transactions/from-sms in the first place (avoids
-/// spamming the server/parser_failures table with every unrelated SMS a
-/// device receives, e.g. OTPs, delivery notifications, spam). This is
-/// intentionally loose/high-recall: the real accept/reject decision is the
-/// server-side regex match, not this. A false positive here just costs one
-/// extra API call; a false negative here means a real transaction is
-/// silently never even attempted.
+/// transaction SMS at all" — used only to decide whether it's worth handing
+/// to the on-phone SMS v2 pipeline in the first place (avoids storing every
+/// unrelated SMS a device receives, e.g. OTPs, delivery notifications, spam).
+/// This is intentionally loose/high-recall: the real accept/reject decision is
+/// the v2 rule match, not this. A false positive here just costs one extra
+/// parse; a false negative here means a real transaction is silently never
+/// even attempted.
 bool looksLikeTransactionSms(String smsBody) {
   final lower = smsBody.toLowerCase();
 
@@ -301,7 +300,7 @@ SmsTriageResult classifySmsTriage(String sender, String smsBody) {
     !RegExp(r'\b(?:apply\s+now|pre[-\s]?approved|upgrade\s+your|zero\s+joining\s+fee|no\s+annual\s+fee|lifetime\s+free)\b').hasMatch(lower)
   );
 
-  if (LocalSmsParser.isNonTransactionNoise(sender, smsBody) &&
+  if (SmsCaptureSignals.isNonTransactionNoise(sender, smsBody) &&
       !balanceSnapshotEvidence) {
     return const SmsTriageResult(SmsTriageKind.promotion, 'promotional_noise');
   }
@@ -314,7 +313,7 @@ SmsTriageResult classifySmsTriage(String sender, String smsBody) {
     r'\b(?:statement|bill|premium)\b[\s\S]{0,100}\b(?:generated|ready|available|due)\b|\bbill\s+generated\b|\be-statement\s+generated\b',
   ).hasMatch(lower);
 
-  final isAutoPay = LocalSmsParser.isAutoPayNotice(smsBody) ||
+  final isAutoPay = SmsCaptureSignals.isAutoPayNotice(smsBody) ||
       RegExp(r'\b(?:auto[-\s]?pay|e[-\s]?mandate|mandate|auto[-\s]?debit|sip\b|standing\s+instruction)\b').hasMatch(lower);
 
   final hasMovement = RegExp(
@@ -328,7 +327,7 @@ SmsTriageResult classifySmsTriage(String sender, String smsBody) {
       hasBillGenerated ||
       isAutoPay ||
       hasMovement ||
-      LocalSmsParser.isActionableInsuranceRenewal(smsBody);
+      SmsCaptureSignals.isActionableInsuranceRenewal(smsBody);
 
   if (!hasFinancialAnchor) {
     if (_looksPromotional(lower)) {
@@ -337,14 +336,14 @@ SmsTriageResult classifySmsTriage(String sender, String smsBody) {
     return const SmsTriageResult(SmsTriageKind.unrelated, 'no_financial_signal');
   }
 
-  if (LocalSmsParser.isActionableInsuranceRenewal(smsBody)) {
+  if (SmsCaptureSignals.isActionableInsuranceRenewal(smsBody)) {
     return const SmsTriageResult(
       SmsTriageKind.financialCandidate,
       'insurance_renewal',
     );
   }
 
-  if (LocalSmsParser.isMerchantReceiptOrEbill(smsBody)) {
+  if (SmsCaptureSignals.isMerchantReceiptOrEbill(smsBody)) {
     return const SmsTriageResult(
       SmsTriageKind.financialCandidate,
       'merchant_ebill_receipt',

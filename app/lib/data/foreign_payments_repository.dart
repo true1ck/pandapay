@@ -8,8 +8,6 @@ import 'api_exception.dart';
 import 'foreign_payment.dart';
 import 'foreign_money.dart';
 import 'local/app_database.dart';
-import 'needs_review_repository.dart';
-import 'user_cards_repository.dart' show UserCard;
 
 final _initializedForeignStores = <Object>{};
 void ensureForeignPaymentsSchema(AppDatabase database) {
@@ -128,7 +126,6 @@ class ForeignPaymentsRepository {
   }
 
   Future<List<ForeignPayment>> fetchAll({bool refresh = true}) async {
-    await backfillCapturedMessages();
     if (refresh && accessToken() != null && accountIsCurrent()) {
       try {
         await sync();
@@ -177,85 +174,6 @@ class ForeignPaymentsRepository {
   }
 
   Future<ForeignPayment?> findBySourceKey(String sourceKey) => find(sourceKey);
-
-  /// Replaying all captured sources is idempotent. It also upgrades prior
-  /// review-only foreign alerts without deleting their original SMS evidence.
-  Future<int> backfillCapturedMessages() async {
-    final db = await _db();
-    if (!accountIsCurrent()) return 0;
-    if (db.db
-        .select(
-          "SELECT 1 FROM sqlite_master WHERE type='table' AND name='sms_captured_messages'",
-        )
-        .isEmpty) {
-      return 0;
-    }
-    var changed = 0;
-    final rows = db.db.select(
-      'SELECT id,sender,body,received_at FROM sms_captured_messages WHERE namespace=? AND NOT EXISTS (SELECT 1 FROM foreign_payments_local f WHERE f.namespace=sms_captured_messages.namespace AND f.source_key=sms_captured_messages.id)',
-      [namespace],
-    );
-    final hasFinancialEntities = db.db
-        .select(
-          "SELECT 1 FROM sqlite_master WHERE type='table' AND name='financial_entities'",
-        )
-        .isNotEmpty;
-    final cards = hasFinancialEntities
-        ? db.db
-              .select(
-                "SELECT payload FROM financial_entities WHERE namespace=? AND entity='cards'",
-                [namespace],
-              )
-              .map(
-                (row) => UserCard.fromJson(
-                  jsonDecode(row['payload'] as String) as Map<String, dynamic>,
-                ),
-              )
-              .toList()
-        : <UserCard>[];
-    for (final row in rows) {
-      final payment = ForeignPaymentExtractor.fromSms(
-        namespace: namespace,
-        sourceKey: row['id'] as String,
-        sender: row['sender'] as String,
-        body: row['body'] as String,
-        receivedAt: DateTime.fromMillisecondsSinceEpoch(
-          row['received_at'] as int,
-        ),
-      );
-      if (payment == null) continue;
-      var linked = ForeignPaymentExtractor.bindCard(
-        payment,
-        row['sender'] as String,
-        row['body'] as String,
-        cards,
-      );
-      if (hasFinancialEntities && payment.billedInr != null) {
-        for (final transaction in db.db.select(
-          "SELECT payload FROM financial_entities WHERE namespace=? AND entity='transactions' AND source_key=?",
-          [namespace, payment.sourceKey],
-        )) {
-          final t =
-              jsonDecode(transaction['payload'] as String)
-                  as Map<String, dynamic>;
-          final amount = parseInrMoney(t['amount_inr']);
-          if (t['status'] == 'active' &&
-              amount == payment.billedInr &&
-              !t['id'].toString().startsWith('local-sms:')) {
-            linked = payment.withPatch({
-              'transaction_id': t['id'],
-              'user_card_id': t['user_card_id'],
-              'valuation_status': 'confirmed',
-            });
-            break;
-          }
-        }
-      }
-      if (captureLocalForeignPayment(db, namespace, linked)) changed++;
-    }
-    if (changed > 0) onChanged?.call();
-    return changed;
-  }
 
   Future<ForeignPayment> editOriginal(
     String id, {
@@ -441,34 +359,6 @@ class ForeignPaymentsRepository {
         'DELETE FROM local_needs_review WHERE namespace=? AND id=?',
         [namespace, payment.sourceKey],
       );
-    } else if (payment.userModified &&
-        (payment.originalAmount == null || payment.originalCurrency == null)) {
-      final sources = db.db.select(
-        "SELECT 1 FROM sqlite_master WHERE type='table' AND name='sms_captured_messages'",
-      );
-      if (sources.isNotEmpty) {
-        final originals = db.db.select(
-          'SELECT sender,body,received_at FROM sms_captured_messages WHERE namespace=? AND id=?',
-          [namespace, payment.sourceKey],
-        );
-        if (originals.isNotEmpty) {
-          final source = originals.single;
-          addNeedsReviewSync(
-            db,
-            namespace,
-            NeedsReviewItem(
-              id: payment.sourceKey,
-              sender: source['sender'] as String,
-              body: source['body'] as String,
-              receivedAt: DateTime.fromMillisecondsSinceEpoch(
-                source['received_at'] as int,
-              ),
-              reason: 'foreign_currency_needs_billed_inr',
-            ),
-            existingTransactions: const [],
-          );
-        }
-      }
     }
     if (payment.isConfirmed != wasConfirmed) onLedgerChanged?.call();
     onChanged?.call();
@@ -567,7 +457,6 @@ class ForeignPaymentsRepository {
   }
 
   Future<void> refresh() async {
-    await backfillCapturedMessages();
     await sync();
     if (accessToken() == null || !accountIsCurrent()) return;
     await _request('POST', '/foreign-payments/refresh', {});
