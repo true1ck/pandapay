@@ -1389,18 +1389,41 @@ test('D20d MCCs of one or two digits are dropped and flagged; an exclusion left 
 
 // ── C8 D13: terms that depend on the cardholder; override conventions ───
 
-test('D20b an "exclusion" stating a rate above base is info with a flag, not an earning rule', () => {
+test('D27a an above-base "exclusion" carves out of an overlapping accelerator at its stated rate; otherwise info', () => {
   const r = run(pointsCard([
     rule({ id: 'accel', category_id: 'dining', priority: 10, action: { points_per_block: 20 } }),
+    // above base (2), at or below the overlapping dining accelerator (20): a carve-out at 5
     rule({ id: 'odd_carve', category_id: 'dining', evaluation_type: 'exclusion', priority: 50, conditions: { merchant: 'Amazon' },
       action: { points_per_block: 5, reason: 'The 10X accelerator does not apply here; spends earn 5 points per Rs 100.' } }),
+    // at base: a carve-out as before
     rule({ id: 'base_carve', category_id: 'dining', evaluation_type: 'exclusion', priority: 51, conditions: { merchant: 'Flipkart' },
       action: { points_per_block: 2, reason: 'The 10X accelerator does not apply here; spends earn the base rate.' } }),
+    // above the overlapping accelerator's own rate: info
+    rule({ id: 'too_high', category_id: 'dining', evaluation_type: 'exclusion', priority: 52, conditions: { merchant: 'Myntra' },
+      action: { points_per_block: 30, reason: 'The accelerator does not apply here; spends earn 30 points per Rs 100.' } }),
+    // above base with no accelerator in its scope (travel): a lone bonus, info
+    rule({ id: 'lone', category_id: 'travel', evaluation_type: 'exclusion', priority: 53,
+      action: { points_per_block: 5, reason: 'Accelerated points do not apply to travel; travel earns 5 points per Rs 100.' } }),
   ]));
-  const [odd] = only(r, 'odd_carve');
-  assert.equal(odd.rule_role, 'info');
-  assert.ok(odd.flags.includes('exclusion_rate_above_base'));
+  const odd = only(r, 'odd_carve');
+  assert.ok(odd.every((x) => x.rule_role === 'earn' && x.rate === 5 && x.priority < 10), JSON.stringify(odd.map((x) => [x.rule_role, x.rate, x.priority])));
+  assert.ok(odd[0].flags.includes('exclusion_with_stated_rate'));
+  assert.ok(!odd[0].flags.includes('exclusion_rate_above_base'));
   assert.ok(only(r, 'base_carve').every((x) => x.rule_role === 'earn' && x.rate === 2));
+  for (const id of ['too_high', 'lone']) {
+    const rows = only(r, id);
+    assert.ok(rows.every((x) => x.rule_role === 'info' && x.flags.includes('exclusion_rate_above_base')), id);
+    assert.ok(rows.every((x) => x.max_engine_version !== 1), 'no v1-only row survives as info');
+  }
+  // D21b with a kept above-base carve-out that v1 can't show (two merchants):
+  // the accelerator paying more than it is hidden from v1.
+  const multi = run(pointsCard([
+    rule({ id: 'accel', category_id: 'dining', priority: 10, action: { points_per_block: 20 } }),
+    rule({ id: 'multi_carve', category_id: 'dining', evaluation_type: 'exclusion', priority: 50, conditions: { merchant: ['Amazon', 'Myntra'] },
+      action: { points_per_block: 5, reason: 'The accelerator does not apply here; spends earn 5 points per Rs 100.' } }),
+  ]));
+  assert.ok(only(multi, 'multi_carve').every((x) => x.rule_role === 'earn' && x.min_engine_version === 2));
+  assert.deepEqual(only(multi, 'accel').map((x) => [x.min_engine_version, x.flags.includes('hidden_from_v1_carve_out')]), [[2, true]]);
 });
 
 test('D20d an earning rule whose MCC list is all malformed is info, never category-only', () => {

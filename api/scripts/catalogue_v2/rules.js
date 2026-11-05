@@ -296,12 +296,10 @@ function transformRule(src, idx, ctx) {
   const isReduced = !isExclusion && ur.rate !== null && ur.currency && ur.currency === ctx.card.baseCurrency &&
     ruleEarn !== null && ctx.card.baseEarnPerRupee != null && ruleEarn < ctx.card.baseEarnPerRupee - 1e-12;
 
-  // D20b: a carve-out pays at or below base. An "exclusion" stating a rate
-  // above base contradicts itself: info, flagged for review.
-  if (isCarveOut && aboveBase(ur, ctx.card)) {
-    info.push('exclusion_rate_above_base');
-    flags.push('exclusion_rate_above_base');
-  }
+  // D27a: an "exclusion" stating a rate above base is a carve-out only if an
+  // accelerator overlaps its scope at a rate at least as high; that is
+  // decided once every rule is mapped (resolveAboveBaseCarveOuts).
+  if (isCarveOut && aboveBase(ur, ctx.card)) flags.push('carve_out_above_base');
   if (!isExclusion && rewardRuleHasUnsupportedTrigger(src)) info.push('unsupported_trigger');
   if (!isExclusion && statesUpToRate(src?.action?.reason)) {
     // D8(b): "up to 10X" is several rates folded into one.
@@ -1276,7 +1274,86 @@ function transformRewardRules(record, ctxIn) {
   });
   addMinimumAmountExclusion(rows, perSource);
   markBookingTypeSplits(rows, perSource);
+  resolveAboveBaseCarveOuts(rows, perSource, ctx);
   return { rows, perSource };
+}
+
+// Could one transaction match both rows? Conservative: anything that can't
+// be told apart overlaps.
+function scopesOverlap(a, b, index) {
+  if (a.rail && b.rail && a.rail !== b.rail) return false;
+  if (a.category_slug && b.category_slug && a.category_slug !== b.category_slug) return false;
+  for (const [x, y] of [[a, b], [b, a]]) {
+    if (x.category_slug && !y.category_slug && y.mcc_include.length) {
+      const cats = y.mcc_include.map((m) => MCC_CATEGORY[m]);
+      if (cats.every(Boolean) && !cats.includes(x.category_slug)) return false;
+    }
+  }
+  if (a.mcc_include.length && b.mcc_include.length && !a.mcc_include.some((m) => b.mcc_include.includes(m))) return false;
+  const chain = (slug) => {
+    const out = [];
+    for (let cur = slug, seen = new Set(); cur && !seen.has(cur); cur = index?.merchants?.get(cur)?.parent_slug || null) {
+      seen.add(cur);
+      out.push(cur);
+    }
+    return out;
+  };
+  if (a.merchant_slugs.length && b.merchant_slugs.length &&
+      !a.merchant_slugs.some((m) => chain(m).some((x) => b.merchant_slugs.includes(x))) &&
+      !b.merchant_slugs.some((m) => chain(m).some((x) => a.merchant_slugs.includes(x)))) return false;
+  if (a.platform_slugs.length && b.platform_slugs.length && !a.platform_slugs.some((p) => b.platform_slugs.includes(p))) return false;
+  return true;
+}
+
+// The row's earn per rupee in the card's currency (comparable without a ₹
+// point value), else its ₹ value; null when it can't be compared.
+function comparableEarn(r, card) {
+  if (r.currency && r.currency === card.baseCurrency) return { cur: 'own', v: valuePerRupee(r.unit, r.rate, 1, r.block_inr) };
+  if (!(card.pointValueInr > 0) && r.currency === 'points') return null;
+  return { cur: 'inr', v: valuePerRupee(r.unit, r.rate, card.pointValueInr, r.block_inr) };
+}
+
+// D27a: an above-base carve-out is kept (an earn rule at its stated rate,
+// ahead of the accelerator) only when an accelerator overlaps its scope at a
+// rate at least as high. Otherwise nothing would be carved out of, and a lone
+// above-base rate is a bonus, not a carve-out: info, exclusion_rate_above_base.
+function resolveAboveBaseCarveOuts(rows, perSource, ctx) {
+  const card = ctx.card;
+  const accelerators = rows.filter((r) => r.rule_role === 'earn' && r.max_engine_version !== 1 &&
+    !r.flags.includes('exclusion_with_stated_rate') &&
+    aboveBase({ unit: r.unit, rate: r.rate, blockInr: r.block_inr, currency: r.currency }, card));
+  const sources = uniq(rows.filter((r) => r.flags.includes('carve_out_above_base')).map((r) => r.source_local_id));
+  for (const sourceId of sources) {
+    const own = rows.filter((r) => r.source_local_id === sourceId);
+    const carve = own.filter((r) => ['earn', 'base'].includes(r.rule_role) && r.max_engine_version !== 1);
+    const kept = carve.length > 0 && carve.every((c) => {
+      const ce = comparableEarn(c, card);
+      return accelerators.some((a) => {
+        if (!scopesOverlap(a, c, ctx.index)) return false;
+        const ae = comparableEarn(a, card);
+        return ce && ae && ce.cur === ae.cur && ce.v !== null && ae.v !== null && ce.v <= ae.v + 1e-12;
+      });
+    });
+    if (kept) continue;
+    for (const r of own) {
+      if (r.max_engine_version === 1) {
+        rows.splice(rows.indexOf(r), 1); // a v1-only row can't be info
+        continue;
+      }
+      r.rule_role = 'info';
+      r.min_engine_version = 2;
+      r.v2_reasons = uniq([...(r.v2_reasons || []), 'info']);
+      r.info_reasons = uniq([...r.info_reasons, 'exclusion_rate_above_base']);
+      r.flags = uniq([...r.flags, 'exclusion_rate_above_base']);
+    }
+    const src = perSource.find((p) => p.source_local_id === sourceId);
+    if (src) {
+      src.keys = src.keys.filter((k) => rows.some((r) => r.key === k));
+      src.roles = uniq(rows.filter((r) => src.keys.includes(r.key)).map((r) => r.rule_role));
+      src.info_reasons = uniq([...src.info_reasons, 'exclusion_rate_above_base']);
+      src.flags = uniq([...src.flags, 'exclusion_rate_above_base']);
+    }
+  }
 }
 
 // D18i: a narrow token on a merchant rule adds no MCCs (an aggregator such
