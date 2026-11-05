@@ -301,8 +301,9 @@
     {
       "item": "rounding",
       "cardpipeline_says": "floor_to_nearest_paisa.",
-      "issuer_says": "Rounded down to a whole rupee for each transaction (149.95 becomes 149). Needs whole-rupee floor.",
-      "proposed_fix": "engine"
+      "issuer_says": "Rounded down to a whole rupee for each transaction (149.95 becomes 149).",
+      "proposed_fix": "override",
+      "override_file": "api/scripts/catalogue_overrides/cashback-sbi-card.json"
     },
     {
       "item": "caps cap_online_cashback_cycle / cap_offline_cashback_cycle",
