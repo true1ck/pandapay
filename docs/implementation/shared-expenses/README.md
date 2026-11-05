@@ -121,3 +121,12 @@ Local only, uncommitted. **Migration `20261114000000_shared_expense_phone_direct
 - App: Members sheet shows "Make owner" (owner), "Take over as owner" (only when the owner's account is gone), "Account no longer active · history kept"; add-friend warns about a same-name friend, asks which number when a contact has several, and offers "Try again" when the invite call fails; pickers mark people who have not joined; the Splits row in You shows a count of waiting invites and requests.
 - Portable-backup coverage now classifies the phone directory, lookups, invitations, group links and identity bindings.
 - Tests: PG suite 24, new Flutter widget tests (`shared_members_exit_test.dart`).
+
+### Device run, 5 November 2026 (emulator build 8190, phone build 8191)
+
+- Group link: owner created a link, the phone opened `pandapay://split/join/<token>` and sent a request. The owner saw "Smoke Test wants to join" with the number ending, the Splits row showed a badge of 1, Approve added them.
+- Owner transfer: Make owner moved ownership, the old owner became a plain member with "Leave this split" and no owner controls.
+- Leave: refused with "Settle up and clear any waiting expenses before leaving." while money or an expense was pending; allowed when settled, and the group screen now closes instead of showing an error.
+- Remove: an unjoined person was removed by the owner and dropped from the list.
+- Found and fixed on device: the "Syncing your latest changes" notice stuck forever after a server-refused command; the group screen errored after leaving; the Join button label was dark on dark.
+- Known small items: a left or owner member without a verified phone shows as "Member"; a lingering "Check status" link after adding a person.
