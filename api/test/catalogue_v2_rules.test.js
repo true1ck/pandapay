@@ -1119,6 +1119,17 @@ test('D20b an "exclusion" stating a positive rate is a reduced-rate earn rule ah
   assert.equal(only(r, 'no_rate')[0].rule_role, 'info', 'no stated rate: bonus_only_exclusion as before');
 });
 
+test('D20d MCCs of one or two digits are dropped and flagged; an exclusion left without MCCs keeps its category', () => {
+  assert.deepEqual(normalizeMccList([32, 2541, 4001, 5541, 742, '66']), { mccs: ['0742', '2541', '4001', '5541'], invalid: [], malformed: [32, '66'] });
+  const r = run(card({ rules: [
+    rule({ id: 'exclude_railways', category_id: 'railways', evaluation_type: 'exclusion', conditions: { mcc_list: [66, 4011, 4112] }, action: { cashback_percent: 0 } }),
+    rule({ id: 'odd', category_id: 'fuel', evaluation_type: 'exclusion', conditions: { mcc_list: [32, 66] }, action: { cashback_percent: 0 } }),
+  ] }));
+  assert.ok(only(r, 'exclude_railways').some((x) => x.mcc_include.join() === '4011,4112'));
+  assert.ok(only(r, 'exclude_railways')[0].flags.includes('malformed_mcc'));
+  assert.deepEqual(only(r, 'odd').map((x) => [x.rule_role, x.category_slug, x.mcc_include.length, x.min_engine_version]), [['exclusion', 'fuel', 0, 1]]);
+});
+
 // ── C8 D13: terms that depend on the cardholder; override conventions ───
 
 test('D13a a cap sized by the credit limit keeps its kind with a null amount and is flagged', () => {

@@ -48,14 +48,23 @@ const MAX_MCC_RANGE = 1000;
 function normalizeMccList(raw) {
   const out = [];
   const invalid = [];
+  // D20d: a code of one or two digits (or more than four) can't be a real
+  // MCC; it is reported and dropped rather than padded into a fake one.
+  // Three-digit codes are real (0742 veterinary, 0763 agriculture).
+  const malformed = [];
   const items = Array.isArray(raw) ? raw : isNA(raw) ? [] : [raw];
   for (const item of items) {
     if (item === null || item === undefined || item === '') continue;
-    if (typeof item === 'number' && Number.isInteger(item) && item >= 0 && item <= 9999) {
-      out.push(String(item).padStart(4, '0'));
+    if (typeof item === 'number' && Number.isInteger(item)) {
+      if (item >= 100 && item <= 9999) out.push(String(item).padStart(4, '0'));
+      else malformed.push(item);
       continue;
     }
     const text = String(item).trim();
+    if (/^\d{1,2}$|^\d{5,}$/.test(text)) {
+      malformed.push(item);
+      continue;
+    }
     // A comma-separated string of codes.
     if (/^\d{3,4}(\s*,\s*\d{3,4})+$/.test(text)) {
       for (const part of text.split(',')) out.push(part.trim().padStart(4, '0'));
@@ -77,7 +86,7 @@ function normalizeMccList(raw) {
     }
     invalid.push(item);
   }
-  return { mccs: uniq(out).sort(), invalid };
+  return { mccs: uniq(out).sort(), invalid, malformed };
 }
 
 function deepClone(value) {

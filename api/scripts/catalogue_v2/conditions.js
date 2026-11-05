@@ -270,7 +270,8 @@ function flattenMccValue(value) {
 }
 
 function addMccs(m, key, value, target) {
-  const { mccs, invalid } = normalizeMccList(flattenMccValue(value));
+  const { mccs, invalid, malformed } = normalizeMccList(flattenMccValue(value));
+  if (malformed.length) m.flags.push('malformed_mcc');
   if (invalid.length) {
     m.flags.push('unreadable_mcc');
     block(m, key, invalid);
