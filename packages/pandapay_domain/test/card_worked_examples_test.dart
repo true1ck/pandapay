@@ -69,14 +69,17 @@ RecommendationContext _context(Map<String, dynamic> ctx) {
 ({int points, String? error}) _tolerance(Map<String, dynamic> expect_) {
   final raw = expect_['tolerance_points'];
   if (raw == null) return (points: 0, error: null);
-  if (raw is! int || raw < 0 || raw > 1) {
+  // An integral number (1 or 1.0) is accepted, as in the JS harness
+  // (Number.isInteger).
+  if (raw is! num || raw != raw.roundToDouble() || raw < 0 || raw > 1) {
     return (
       points: 0,
       error: 'tolerance_points must be 0 or 1 (C8 D25a), got $raw',
     );
   }
+  final points = raw.toInt();
   final note = expect_['tolerance_note'];
-  if (raw > 0 && (note is! String || note.trim().isEmpty)) {
+  if (points > 0 && (note is! String || note.trim().isEmpty)) {
     return (
       points: 0,
       error:
@@ -84,7 +87,7 @@ RecommendationContext _context(Map<String, dynamic> ctx) {
           'arithmetic (C8 D25a)',
     );
   }
-  return (points: raw, error: null);
+  return (points: points, error: null);
 }
 
 /// actual in [expected - tolerance, expected] at 2 dp: may under-state,
@@ -233,6 +236,15 @@ void main() {
       expect(_within(1055, 1056, 0), isFalse, reason: 'no tolerance');
       expect(
         _tolerance({'tolerance_points': 2, 'tolerance_note': 'x'}).error,
+        contains('0 or 1'),
+      );
+      expect(
+        _tolerance({'tolerance_points': 1.0, 'tolerance_note': 'x'}),
+        (points: 1, error: null),
+        reason: 'an integral double is accepted, as in JS',
+      );
+      expect(
+        _tolerance({'tolerance_points': 0.5, 'tolerance_note': 'x'}).error,
         contains('0 or 1'),
       );
       expect(

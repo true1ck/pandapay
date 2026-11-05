@@ -60,7 +60,7 @@
     },
     {
       "source_slug": "indianoil-axis-bank-credit-card",
-      "examples_passed": 9,
+      "examples_passed": 10,
       "examples_not_checkable": 0,
       "checked_on": "2026-11-05"
     },
@@ -108,7 +108,7 @@
     },
     {
       "source_slug": "tata-neu-plus-sbi-credit-card",
-      "examples_passed": 13,
+      "examples_passed": 15,
       "examples_not_checkable": 0,
       "checked_on": "2026-11-05"
     },

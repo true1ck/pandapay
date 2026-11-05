@@ -168,6 +168,7 @@ test('D25a tolerance: the engine may be 1 point under, never over; tolerance abo
   assert.ok(!withinTolerance(1055, 1056, 0), 'no tolerance: exact only');
   assert.match(toleranceOf({ tolerance_points: 2, tolerance_note: 'x' }).error, /0 or 1/);
   assert.match(toleranceOf({ tolerance_points: 0.5, tolerance_note: 'x' }).error, /0 or 1/);
+  assert.deepStrictEqual(toleranceOf({ tolerance_points: 1.0, tolerance_note: 'x' }), { points: 1 }, 'an integral number is accepted (Dart accepts 1.0 too)');
   assert.match(toleranceOf({ tolerance_points: 1 }).error, /tolerance_note/);
   // An example carrying tolerance 2 fails the harness even when the engine matches exactly.
   const card = snapshotFor('tata-neu-infinity-hdfc-bank').card;
