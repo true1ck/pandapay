@@ -853,6 +853,125 @@ test('unmapped excluded categories on earning rules map through the token map (e
   assert.ok(only(r, 'base')[0].flags.includes('unmapped_excluded_category'), 'non-purchase items stay flagged');
 });
 
+// ── C8 D18: v1-only rows and the WP2 re-review rulings ──────────────────
+
+const pointsCard = (rules, extra = {}) => card({ accrual: { base_points_per_block: 2, base_cashback_percent: null }, rules, ...extra });
+
+test('D18b a narrow-token exclusion: broad row is v1-only, v2 uses the precise MCC row (source MCCs or the token table)', () => {
+  const r = run(pointsCard([
+    rule({ id: 'ex-fast-food', category_id: 'fast_food', evaluation_type: 'exclusion', conditions: { mcc_list: [5814] }, action: { points_per_block: 0 } }),
+    rule({ id: 'ex-tolls', category_id: 'transportation_tolls', evaluation_type: 'exclusion', conditions: { spend_category: 'Transportation & Tolls' }, action: { points_per_block: 0 } }),
+    rule({ id: 'dining-10x', category_id: 'dining', action: { points_per_block: 20 } }),
+  ]));
+  assert.deepEqual(only(r, 'ex-fast-food').map((x) => [x.category_slug, x.mcc_include.join(), x.min_engine_version, x.max_engine_version]),
+    [['dining', '', 1, 1], [null, '5814', 2, null]]);
+  const tolls = only(r, 'ex-tolls');
+  assert.deepEqual(tolls.map((x) => [x.category_slug, x.max_engine_version]), [['travel', 1], [null, null]]);
+  assert.deepEqual(tolls[1].mcc_include, ['4111', '4121', '4131', '4784']);
+  // In a v2 view (rows with max_engine_version 1 ignored) no category-only
+  // exclusion covers dining, so the dining bonus isn't zeroed.
+  const v2Exclusions = r.rewardRules.filter((x) => x.rule_role === 'exclusion' && x.max_engine_version !== 1);
+  assert.ok(!v2Exclusions.some((x) => x.category_slug === 'dining'));
+});
+
+test('D18c reduced-rate rules keep a v1 row: narrowed ones get a v1-only broad row, unmappable ones stay broad', () => {
+  const r = run(pointsCard([
+    rule({ id: 'reduced_rate_railway', category_id: 'railways', evaluation_type: 'standard_accrual', action: { points_per_block: 1 } }),
+    rule({ id: 'reduced_food', category_id: 'food_delivery', evaluation_type: 'standard_accrual', action: { points_per_block: 1 } }),
+    rule({ id: 'reduced_utility_mcc', category_id: 'utility', evaluation_type: 'standard_accrual', conditions: { mcc: [4900] }, action: { points_per_block: 1 } }),
+  ]));
+  assert.deepEqual(only(r, 'reduced_rate_railway').map((x) => [x.category_slug, x.mcc_include.join(), x.min_engine_version, x.max_engine_version, x.rate]),
+    [[null, '4112', 2, null, 1], ['travel', '', 1, 1, 1]]);
+  assert.deepEqual(only(r, 'reduced_food').map((x) => [x.rule_role, x.category_slug, x.min_engine_version, x.max_engine_version]),
+    [['earn', 'dining', 1, null]], 'no MCC table: broad in both feeds');
+  const util = only(r, 'reduced_utility_mcc');
+  assert.ok(util.some((x) => x.min_engine_version === 1 && x.max_engine_version === 1 && x.category_slug === 'bills' && !x.mcc_include.length));
+  assert.ok(util.some((x) => x.min_engine_version === 2 && x.mcc_include.join() === '4900'));
+});
+
+test('D18d a composite or synonym restatement of the rule\'s own category is not "unknown"', () => {
+  const r = run(pointsCard([
+    rule({ id: 'utility-reduced', category_id: 'utility', evaluation_type: 'standard_accrual', conditions: { category: 'utility_bill_payments' }, action: { points_per_block: 1 } }),
+    rule({ id: 'rent-reduced', category_id: 'rent', evaluation_type: 'standard_accrual', conditions: { category: 'real_estate_rental_payments' }, action: { points_per_block: 1 } }),
+    rule({ id: 'gov-reduced', category_id: 'government', evaluation_type: 'standard_accrual', conditions: { category: 'government_services_charges_payments' }, action: { points_per_block: 1 } }),
+    rule({ id: 'tel-reduced', category_id: 'utility', evaluation_type: 'standard_accrual', conditions: { category: 'telecom_and_utilities' }, action: { points_per_block: 1 } }),
+  ]));
+  for (const [id, cat] of [['utility-reduced', 'bills'], ['rent-reduced', 'rent'], ['gov-reduced', 'government'], ['tel-reduced', 'bills']]) {
+    assert.deepEqual(only(r, id).map((x) => [x.rule_role, x.category_slug, x.min_engine_version]), [['earn', cat, 1]], id);
+  }
+});
+
+test('D18e "other than X" on an exclusion is an exception; bonus-only exclusions are info', () => {
+  const dir = { ...DIRECTORY, merchants: [...DIRECTORY.merchants, { slug: 'lic_india', name: 'LIC of India', aliases: ['lic of india', 'lic'] }, { slug: 'bpcl', name: 'BPCL', aliases: ['bpcl', 'bharat petroleum'] }] };
+  const r = transformCardRecordV2(card({
+    rules: [
+      rule({ id: 'non-lic-insurance-exclusion', category_id: 'insurance_non_lic', evaluation_type: 'exclusion', conditions: { mcc_list: [5960, 6300], excluded_merchants: ['LIC of India'] }, action: { cashback_percent: 0, reason: 'No points on non-LIC insurance payments.' } }),
+      rule({ id: 'non_bpcl_fuel_exclusion', category_id: 'fuel', evaluation_type: 'exclusion', conditions: { merchant_scope: 'Petrol pumps/service stations other than eligible BPCL transactions' }, action: { cashback_percent: 0 } }),
+      rule({ id: 'five-pct-exclusions', category_id: 'excluded_spend', evaluation_type: 'exclusion', conditions: { excluded_categories: ['fuel', 'rent'] }, action: { cashback_percent: 0, reason: 'Transactions in excluded categories do not qualify for accelerated 5% CashBack.' } }),
+      rule({ id: 'exclude_rent_from_ticket_milestone', category_id: 'rent', evaluation_type: 'exclusion', conditions: { mcc_list: [6513] }, action: { cashback_percent: 0, reason: 'Rent payments are excluded from ticket milestone calculations.' } }),
+    ],
+  }), { directory: dir });
+  assert.ok(only(r, 'non-lic-insurance-exclusion').every((x) => x.rule_role === 'exclusion' && x.except_merchant_slugs.join() === 'lic_india' && !x.merchant_slugs.length));
+  assert.deepEqual(only(r, 'non_bpcl_fuel_exclusion').map((x) => [x.rule_role, x.category_slug, x.except_merchant_slugs.join()]), [['exclusion', 'fuel', 'bpcl']]);
+  for (const id of ['five-pct-exclusions', 'exclude_rent_from_ticket_milestone']) {
+    assert.ok(only(r, id).every((x) => x.rule_role === 'info' && x.flags.includes('bonus_only_exclusion')), id);
+  }
+});
+
+test('D18f narrow items inside combined restrictions keep their MCC pinning', () => {
+  const r = run(pointsCard([
+    rule({ id: 'pp-movies', category_id: 'phonepe', conditions: { categories: ['movies', 'dining'] }, action: { points_per_block: 10 } }),
+  ]));
+  const rows = only(r, 'pp-movies');
+  assert.deepEqual(rows.map((x) => [x.category_slug, x.mcc_include.join(), x.platform_slugs.join()]).sort(),
+    [['dining', '', 'phonepe_app'], [null, '7832', 'phonepe_app']].sort());
+});
+
+test('D18g caps: id and label only; MID/TID with no directory brand is skipped', () => {
+  const r = run(capCard([{ ...capBase, metric: 'bonus_reward_points', description: 'Fee waiver does not apply to this cap' }]));
+  assert.equal(r.capRules.length, 1, 'a description mentioning a fee is not a non-earning cap');
+  const m = run(card({ rules: [rule({ id: 'x', category_id: 'dining', conditions: { merchant_identification: 'Eligible ZYX Restaurants identified by MID/TID' } })] }));
+  assert.equal(only(m, 'x')[0].rule_role, 'earn');
+});
+
+test('D18h a rule whose platform is also in its own except list is info', () => {
+  const r = run(card({ rules: [rule({ id: 'other_paytm', category_id: 'phonepe', conditions: { app: 'not_PhonePe' } })] }));
+  const [row] = only(r, 'other_paytm');
+  assert.equal(row.rule_role, 'info');
+  assert.ok(row.flags.includes('self_contradictory_rule'));
+});
+
+test('D18i a narrow token on a merchant rule adds no MCCs; booking-type rate splits on an aggregator are info', () => {
+  const dir = { ...DIRECTORY, merchants: [...DIRECTORY.merchants,
+    { slug: 'makemytrip', name: 'MakeMyTrip', aliases: ['makemytrip'] },
+    { slug: 'indigo', name: 'IndiGo', aliases: ['indigo'] }] };
+  const r = transformCardRecordV2(card({ rules: [
+    rule({ id: 'mmt-flight', category_id: 'travel_flights', conditions: { merchant: 'MakeMyTrip' }, action: { cashback_percent: 3 } }),
+    rule({ id: 'mmt-hotel', category_id: 'travel_hotels', conditions: { merchant: 'MakeMyTrip' }, action: { cashback_percent: 6 } }),
+    rule({ id: 'indigo-flights', category_id: 'travel_flights', conditions: { merchant: 'IndiGo' }, action: { cashback_percent: 5 } }),
+  ] }), { directory: dir });
+  for (const id of ['mmt-flight', 'mmt-hotel']) {
+    const [row] = only(r, id);
+    assert.equal(row.rule_role, 'info', id);
+    assert.ok(row.flags.includes('depends_on_txn_attribute'));
+  }
+  const [indigo] = only(r, 'indigo-flights');
+  assert.deepEqual([indigo.rule_role, indigo.merchant_slugs.join(), indigo.mcc_include.length, indigo.category_slug], ['earn', 'indigo', 0, null]);
+});
+
+test('D18j verified is blocked only by the listed flags', () => {
+  const verifiedSlugs = new Set(['test-card']);
+  const informational = run(pointsCard([
+    rule({ id: 'e', category_id: 'dining', action: { points_per_block: 10 } }),
+    rule({ id: 'tier', category_id: 'travel_hotels', action: { points_per_block: 10 } }), // narrow_token_to_mcc: informational
+  ], { accrual: { rounding_mode: 'N/A', base_points_per_block: 2, base_cashback_percent: null } }), { verifiedSlugs });
+  assert.equal(informational.card.model_status, 'verified');
+  const blocked = run(pointsCard([
+    rule({ id: 'e', category_id: 'dining', action: { points_per_block: 10, cap_reference: 'nope' } }),
+  ]), { verifiedSlugs });
+  assert.equal(blocked.card.model_status, 'partial', 'dangling_cap_reference blocks');
+});
+
 // ── C8 D13: terms that depend on the cardholder; override conventions ───
 
 test('D13a a cap sized by the credit limit keeps its kind with a null amount and is flagged', () => {
