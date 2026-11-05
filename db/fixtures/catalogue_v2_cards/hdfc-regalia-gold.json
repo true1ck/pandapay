@@ -1,0 +1,909 @@
+{
+  "generated_by": "api/scripts/catalogue_v2/snapshot_examples.js",
+  "source_slug": "hdfc-regalia-gold",
+  "inputs": {
+    "transform_version": "7",
+    "source_record_sha256": "43666c620871e3bde0c0bcd3e6ae8d46ac8b81bce1c94543f621143f35fb842e",
+    "override_sha256": "bcc3c60452adc8b340624b4c1dd5992cb75e7a90e898ed37ebfe8ec0dbc99e33",
+    "directory_sha256": "b1094d54b77e848d22f7a9a64f3ae6d1ef43ca3eb2fc8e40cd43ed1994664694",
+    "verified": false
+  },
+  "blocking_flags": [
+    "info_rule"
+  ],
+  "card": {
+    "id": "hdfc-regalia-gold:card",
+    "slug": "hdfc-regalia-gold",
+    "name": "Regalia Gold",
+    "network": "unknown",
+    "issuer_slug": "hdfc",
+    "base_reward_unit": "points_per_200",
+    "base_reward_rate": 5,
+    "point_value_inr": 0.5,
+    "excluded_categories": [],
+    "accrual_block_inr": 200,
+    "accrual_rounding": "floor",
+    "cashback_rounding": null,
+    "points_expiry_months": 24,
+    "model_status": "partial",
+    "model_coverage": {
+      "rules_total": 10,
+      "rules_modelled": 9,
+      "rules_info": 1,
+      "caps_total": 6,
+      "caps_enforced": 6,
+      "flags": [
+        {
+          "code": "emi_alternatives",
+          "source_local_id": "emi_exclusion",
+          "detail": null
+        },
+        {
+          "code": "exclusion_rail_dropped",
+          "source_local_id": "education_third_party_exclusion",
+          "detail": null
+        },
+        {
+          "code": "exclusion_scope_broadened",
+          "source_local_id": "education_third_party_exclusion",
+          "detail": null
+        },
+        {
+          "code": "info_rule",
+          "source_local_id": "education_direct_standard",
+          "detail": "condition:channel_type"
+        },
+        {
+          "code": "broad_category",
+          "source_local_id": "telecom_reward_points_monthly",
+          "detail": null
+        }
+      ],
+      "overrides_applied": [
+        {
+          "path": "reward_rules[id=select_brand_5x].conditions.payment_requirement",
+          "op": "remove",
+          "value_sha256": "74234e98afe7498f",
+          "reason": "WP7: T&C: \"payment must be done directly using HDFC Bank Regalia Gold Credit Card\"; a wallet payment reaches the card as a wallet load (excluded), never as the brand, so the merchant list already enforces it. Removing it lets the 5X rule load (was info).",
+          "source_url": "https://www.hdfc.bank.in/content/dam/hdfcbankpws/in/en/personal-banking/discover-products/cards/credit-cards/regalia-gold-credit-card/pdfs/regalia-gold-credit-card-reward-points-t-and-cs.pdf",
+          "checked_on": "2026-11-05",
+          "citation": null
+        },
+        {
+          "path": "reward_rules[id=select_brand_5x].action.points_per_block",
+          "op": "set",
+          "value_sha256": "b7a56873cd771f2c",
+          "reason": "WP7: The loader reads points_per_block as the full rule rate. T&C: 5X on the four brands with \"Base reward points ... continue as is\"; 5X of the 5 RP/Rs200 base is 25 RP/Rs200 (100 base + 400 incremental on Rs4,000 in the worked example).",
+          "source_url": "https://www.hdfc.bank.in/content/dam/hdfcbankpws/in/en/personal-banking/discover-products/cards/credit-cards/regalia-gold-credit-card/pdfs/regalia-gold-credit-card-reward-points-t-and-cs.pdf",
+          "checked_on": "2026-11-05",
+          "citation": null
+        },
+        {
+          "path": "reward_rules[id=select_brand_5x].conditions.minimum_transaction_inr",
+          "op": "set",
+          "value_sha256": "27badc983df1780b",
+          "reason": "WP7: T&C: \"Minimum transaction value to be eligible for offer or reward points is Rs. 200.\"",
+          "source_url": "https://www.hdfc.bank.in/content/dam/hdfcbankpws/in/en/personal-banking/discover-products/cards/credit-cards/regalia-gold-credit-card/pdfs/regalia-gold-credit-card-reward-points-t-and-cs.pdf",
+          "checked_on": "2026-11-05",
+          "citation": null
+        },
+        {
+          "path": "reward_rules",
+          "op": "append",
+          "value_sha256": "b75fcb9574c9b415",
+          "reason": "WP7: D28c: Reward Points T&C item 4: \"EasyEMI and e-wallet loading transactions will not accrue Reward points\". The record's EMI row needs category emi AND rail emi, so an EMI purchase in another category earned. Rail-EMI exclusion on all spend.",
+          "source_url": "https://www.hdfc.bank.in/content/dam/hdfcbankpws/in/en/personal-banking/discover-products/cards/credit-cards/regalia-gold-credit-card/pdfs/regalia-gold-credit-card-reward-points-t-and-cs.pdf",
+          "checked_on": "2026-11-05",
+          "citation": null
+        }
+      ]
+    },
+    "reward_rules": [
+      {
+        "id": "hdfc-regalia-gold:rule:base_retail",
+        "category_id": null,
+        "category_slug": null,
+        "merchant_pattern": null,
+        "rail": null,
+        "unit": "points_per_200",
+        "rate": 5,
+        "min_txn_inr": null,
+        "max_txn_inr": null,
+        "priority": 100,
+        "conditions": {
+          "source_local_id": "base_retail",
+          "part": null,
+          "info_reasons": [],
+          "flags": []
+        },
+        "notes": null,
+        "effective_from": "2026-05-15",
+        "effective_to": null,
+        "excluded_categories": [],
+        "rule_role": "base",
+        "merchant_slugs": [],
+        "platform_slugs": [],
+        "mcc_include": [],
+        "mcc_exclude": [],
+        "except_merchant_slugs": [],
+        "except_platform_slugs": [],
+        "block_inr": null,
+        "min_engine_version": 1,
+        "max_engine_version": null,
+        "source_local_id": "base_retail",
+        "display_note": "5 Reward Points per ₹200 on eligible retail spends, effective 15 May 2026."
+      },
+      {
+        "id": "hdfc-regalia-gold:rule:select_brand_5x",
+        "category_id": null,
+        "category_slug": null,
+        "merchant_pattern": null,
+        "rail": null,
+        "unit": "points_per_200",
+        "rate": 25,
+        "min_txn_inr": 200,
+        "max_txn_inr": null,
+        "priority": 20,
+        "conditions": {
+          "source_local_id": "select_brand_5x",
+          "part": null,
+          "info_reasons": [],
+          "flags": []
+        },
+        "notes": null,
+        "effective_from": "2026-05-15",
+        "effective_to": null,
+        "excluded_categories": [],
+        "rule_role": "earn",
+        "merchant_slugs": [
+          "marks_spencer",
+          "myntra",
+          "nykaa",
+          "reliance_digital"
+        ],
+        "platform_slugs": [],
+        "mcc_include": [],
+        "mcc_exclude": [],
+        "except_merchant_slugs": [],
+        "except_platform_slugs": [],
+        "block_inr": null,
+        "min_engine_version": 2,
+        "max_engine_version": null,
+        "source_local_id": "select_brand_5x",
+        "display_note": "5X Reward Points on eligible select-brand spends. With the post-15-May-2026 base of 5 RP per ₹200, the accelerator contributes 20 bonus RP per ₹200, taking eligible spend to 25 RP per ₹200 before the monthly bonus cap."
+      },
+      {
+        "id": "hdfc-regalia-gold:rule:fuel_exclusion",
+        "category_id": "cat-fuel",
+        "category_slug": "fuel",
+        "merchant_pattern": null,
+        "rail": null,
+        "unit": "points_per_200",
+        "rate": 0,
+        "min_txn_inr": null,
+        "max_txn_inr": null,
+        "priority": 1,
+        "conditions": {
+          "source_local_id": "fuel_exclusion",
+          "part": null,
+          "info_reasons": [],
+          "flags": []
+        },
+        "notes": null,
+        "effective_from": "2026-05-15",
+        "effective_to": null,
+        "excluded_categories": [],
+        "rule_role": "exclusion",
+        "merchant_slugs": [],
+        "platform_slugs": [],
+        "mcc_include": [],
+        "mcc_exclude": [],
+        "except_merchant_slugs": [],
+        "except_platform_slugs": [],
+        "block_inr": null,
+        "min_engine_version": 1,
+        "max_engine_version": null,
+        "source_local_id": "fuel_exclusion",
+        "display_note": "Fuel is excluded from Reward Point accrual."
+      },
+      {
+        "id": "hdfc-regalia-gold:rule:rent_exclusion",
+        "category_id": "cat-rent",
+        "category_slug": "rent",
+        "merchant_pattern": null,
+        "rail": null,
+        "unit": "points_per_200",
+        "rate": 0,
+        "min_txn_inr": null,
+        "max_txn_inr": null,
+        "priority": 1,
+        "conditions": {
+          "source_local_id": "rent_exclusion",
+          "part": null,
+          "info_reasons": [],
+          "flags": []
+        },
+        "notes": null,
+        "effective_from": "2023-01-01",
+        "effective_to": null,
+        "excluded_categories": [],
+        "rule_role": "exclusion",
+        "merchant_slugs": [],
+        "platform_slugs": [],
+        "mcc_include": [],
+        "mcc_exclude": [],
+        "except_merchant_slugs": [],
+        "except_platform_slugs": [],
+        "block_inr": null,
+        "min_engine_version": 1,
+        "max_engine_version": null,
+        "source_local_id": "rent_exclusion",
+        "display_note": "Rental/property-management transactions are excluded."
+      },
+      {
+        "id": "hdfc-regalia-gold:rule:government_exclusion",
+        "category_id": "cat-government",
+        "category_slug": "government",
+        "merchant_pattern": null,
+        "rail": null,
+        "unit": "points_per_200",
+        "rate": 0,
+        "min_txn_inr": null,
+        "max_txn_inr": null,
+        "priority": 1,
+        "conditions": {
+          "source_local_id": "government_exclusion",
+          "part": null,
+          "info_reasons": [],
+          "flags": []
+        },
+        "notes": null,
+        "effective_from": "2023-01-01",
+        "effective_to": null,
+        "excluded_categories": [],
+        "rule_role": "exclusion",
+        "merchant_slugs": [],
+        "platform_slugs": [],
+        "mcc_include": [],
+        "mcc_exclude": [],
+        "except_merchant_slugs": [],
+        "except_platform_slugs": [],
+        "block_inr": null,
+        "min_engine_version": 1,
+        "max_engine_version": null,
+        "source_local_id": "government_exclusion",
+        "display_note": "Government transactions are excluded for consumer cards."
+      },
+      {
+        "id": "hdfc-regalia-gold:rule:wallet_exclusion",
+        "category_id": "cat-wallet",
+        "category_slug": "wallet",
+        "merchant_pattern": null,
+        "rail": null,
+        "unit": "points_per_200",
+        "rate": 0,
+        "min_txn_inr": null,
+        "max_txn_inr": null,
+        "priority": 1,
+        "conditions": {
+          "source_local_id": "wallet_exclusion",
+          "part": null,
+          "info_reasons": [],
+          "flags": []
+        },
+        "notes": null,
+        "effective_from": "2026-05-15",
+        "effective_to": null,
+        "excluded_categories": [],
+        "rule_role": "exclusion",
+        "merchant_slugs": [],
+        "platform_slugs": [],
+        "mcc_include": [],
+        "mcc_exclude": [],
+        "except_merchant_slugs": [],
+        "except_platform_slugs": [],
+        "block_inr": null,
+        "min_engine_version": 1,
+        "max_engine_version": null,
+        "source_local_id": "wallet_exclusion",
+        "display_note": "Wallet loading is excluded from Reward Point accrual."
+      },
+      {
+        "id": "hdfc-regalia-gold:rule:emi_exclusion#1",
+        "category_id": "cat-emi",
+        "category_slug": "emi",
+        "merchant_pattern": null,
+        "rail": null,
+        "unit": "points_per_200",
+        "rate": 0,
+        "min_txn_inr": null,
+        "max_txn_inr": null,
+        "priority": 1,
+        "conditions": {
+          "source_local_id": "emi_exclusion",
+          "part": 1,
+          "info_reasons": [],
+          "flags": [
+            "emi_alternatives"
+          ]
+        },
+        "notes": null,
+        "effective_from": "2026-05-15",
+        "effective_to": null,
+        "excluded_categories": [],
+        "rule_role": "exclusion",
+        "merchant_slugs": [],
+        "platform_slugs": [],
+        "mcc_include": [],
+        "mcc_exclude": [],
+        "except_merchant_slugs": [],
+        "except_platform_slugs": [],
+        "block_inr": null,
+        "min_engine_version": 1,
+        "max_engine_version": null,
+        "source_local_id": "emi_exclusion",
+        "display_note": "EMI transactions are excluded."
+      },
+      {
+        "id": "hdfc-regalia-gold:rule:emi_exclusion#2",
+        "category_id": null,
+        "category_slug": null,
+        "merchant_pattern": null,
+        "rail": "emi",
+        "unit": "points_per_200",
+        "rate": 0,
+        "min_txn_inr": null,
+        "max_txn_inr": null,
+        "priority": 1,
+        "conditions": {
+          "source_local_id": "emi_exclusion",
+          "part": 2,
+          "info_reasons": [],
+          "flags": [
+            "emi_alternatives"
+          ]
+        },
+        "notes": null,
+        "effective_from": "2026-05-15",
+        "effective_to": null,
+        "excluded_categories": [],
+        "rule_role": "exclusion",
+        "merchant_slugs": [],
+        "platform_slugs": [],
+        "mcc_include": [],
+        "mcc_exclude": [],
+        "except_merchant_slugs": [],
+        "except_platform_slugs": [],
+        "block_inr": null,
+        "min_engine_version": 2,
+        "max_engine_version": null,
+        "source_local_id": "emi_exclusion",
+        "display_note": "EMI transactions are excluded."
+      },
+      {
+        "id": "hdfc-regalia-gold:rule:education_third_party_exclusion",
+        "category_id": "cat-education",
+        "category_slug": "education",
+        "merchant_pattern": null,
+        "rail": null,
+        "unit": "points_per_200",
+        "rate": 0,
+        "min_txn_inr": null,
+        "max_txn_inr": null,
+        "priority": 1,
+        "conditions": {
+          "source_local_id": "education_third_party_exclusion",
+          "part": null,
+          "info_reasons": [],
+          "flags": [
+            "exclusion_rail_dropped",
+            "exclusion_scope_broadened"
+          ]
+        },
+        "notes": null,
+        "effective_from": "2024-09-01",
+        "effective_to": null,
+        "excluded_categories": [],
+        "rule_role": "exclusion",
+        "merchant_slugs": [],
+        "platform_slugs": [],
+        "mcc_include": [],
+        "mcc_exclude": [],
+        "except_merchant_slugs": [],
+        "except_platform_slugs": [],
+        "block_inr": null,
+        "min_engine_version": 1,
+        "max_engine_version": null,
+        "source_local_id": "education_third_party_exclusion",
+        "display_note": "Third-party education payments are excluded."
+      },
+      {
+        "id": "hdfc-regalia-gold:rule:education_direct_standard",
+        "category_id": "cat-education",
+        "category_slug": "education",
+        "merchant_pattern": null,
+        "rail": "swipe",
+        "unit": "points_per_200",
+        "rate": 5,
+        "min_txn_inr": null,
+        "max_txn_inr": null,
+        "priority": 50,
+        "conditions": {
+          "source_local_id": "education_direct_standard",
+          "part": null,
+          "info_reasons": [
+            "condition:channel_type"
+          ],
+          "flags": []
+        },
+        "notes": null,
+        "effective_from": "2026-08-05",
+        "effective_to": null,
+        "excluded_categories": [],
+        "rule_role": "info",
+        "merchant_slugs": [],
+        "platform_slugs": [],
+        "mcc_include": [],
+        "mcc_exclude": [],
+        "except_merchant_slugs": [],
+        "except_platform_slugs": [],
+        "block_inr": null,
+        "min_engine_version": 2,
+        "max_engine_version": null,
+        "source_local_id": "education_direct_standard",
+        "display_note": "Direct education payments remain eligible for base rewards."
+      },
+      {
+        "id": "hdfc-regalia-gold:rule:wp7_emi_rail_exclusion",
+        "category_id": null,
+        "category_slug": null,
+        "merchant_pattern": null,
+        "rail": "emi",
+        "unit": "points_per_200",
+        "rate": 0,
+        "min_txn_inr": null,
+        "max_txn_inr": null,
+        "priority": 0,
+        "conditions": {
+          "source_local_id": "wp7_emi_rail_exclusion",
+          "part": null,
+          "info_reasons": [],
+          "flags": []
+        },
+        "notes": null,
+        "effective_from": "2026-05-15",
+        "effective_to": null,
+        "excluded_categories": [],
+        "rule_role": "exclusion",
+        "merchant_slugs": [],
+        "platform_slugs": [],
+        "mcc_include": [],
+        "mcc_exclude": [],
+        "except_merchant_slugs": [],
+        "except_platform_slugs": [],
+        "block_inr": null,
+        "min_engine_version": 2,
+        "max_engine_version": null,
+        "source_local_id": "wp7_emi_rail_exclusion",
+        "display_note": "EMI transactions earn no rewards."
+      }
+    ],
+    "cap_rules": [
+      {
+        "id": "hdfc-regalia-gold:cap:statement_cycle_total_reward_points",
+        "reward_rule_id": null,
+        "category_id": null,
+        "category_slug": null,
+        "benefit_kind": null,
+        "label": "Statement cycle total reward points",
+        "measure": "reward_value",
+        "period": "statement_cycle",
+        "cap_value": 25000,
+        "post_cap_unit": null,
+        "post_cap_rate": 0,
+        "resets_on_day": null,
+        "cap_kind": "total_points",
+        "cap_amount": 50000,
+        "scope": "card",
+        "targets": [],
+        "parent_cap_id": null,
+        "post_cap_behavior": null,
+        "anchor": null,
+        "min_engine_version": 1,
+        "source_local_id": "statement_cycle_total_reward_points"
+      },
+      {
+        "id": "hdfc-regalia-gold:cap:select_brand_5x_monthly_bonus",
+        "reward_rule_id": "hdfc-regalia-gold:rule:select_brand_5x",
+        "category_id": null,
+        "category_slug": null,
+        "benefit_kind": null,
+        "label": "Select brand 5x monthly bonus",
+        "measure": "reward_value",
+        "period": "calendar_month",
+        "cap_value": 2500,
+        "post_cap_unit": null,
+        "post_cap_rate": null,
+        "resets_on_day": 1,
+        "cap_kind": "bonus_points",
+        "cap_amount": 5000,
+        "scope": "targets",
+        "targets": [
+          "hdfc-regalia-gold:rule:select_brand_5x"
+        ],
+        "parent_cap_id": null,
+        "post_cap_behavior": null,
+        "anchor": null,
+        "min_engine_version": 2,
+        "source_local_id": "select_brand_5x_monthly_bonus"
+      },
+      {
+        "id": "hdfc-regalia-gold:cap:grocery_reward_points_monthly",
+        "reward_rule_id": null,
+        "category_id": "cat-groceries",
+        "category_slug": "groceries",
+        "benefit_kind": null,
+        "label": "Grocery reward points monthly",
+        "measure": "reward_value",
+        "period": "calendar_month",
+        "cap_value": 1000,
+        "post_cap_unit": null,
+        "post_cap_rate": 0,
+        "resets_on_day": 1,
+        "cap_kind": "total_points",
+        "cap_amount": 2000,
+        "scope": "targets",
+        "targets": [],
+        "parent_cap_id": null,
+        "post_cap_behavior": null,
+        "anchor": null,
+        "min_engine_version": 1,
+        "source_local_id": "grocery_reward_points_monthly"
+      },
+      {
+        "id": "hdfc-regalia-gold:cap:utility_reward_points_monthly",
+        "reward_rule_id": null,
+        "category_id": "cat-bills",
+        "category_slug": "bills",
+        "benefit_kind": null,
+        "label": "Utility reward points monthly",
+        "measure": "reward_value",
+        "period": "calendar_month",
+        "cap_value": 1000,
+        "post_cap_unit": null,
+        "post_cap_rate": 0,
+        "resets_on_day": 1,
+        "cap_kind": "total_points",
+        "cap_amount": 2000,
+        "scope": "targets",
+        "targets": [],
+        "parent_cap_id": null,
+        "post_cap_behavior": null,
+        "anchor": null,
+        "min_engine_version": 1,
+        "source_local_id": "utility_reward_points_monthly"
+      },
+      {
+        "id": "hdfc-regalia-gold:cap:telecom_reward_points_monthly",
+        "reward_rule_id": null,
+        "category_id": "cat-bills",
+        "category_slug": "bills",
+        "benefit_kind": null,
+        "label": "Telecom reward points monthly",
+        "measure": "reward_value",
+        "period": "calendar_month",
+        "cap_value": 1000,
+        "post_cap_unit": null,
+        "post_cap_rate": 0,
+        "resets_on_day": 1,
+        "cap_kind": "total_points",
+        "cap_amount": 2000,
+        "scope": "targets",
+        "targets": [],
+        "parent_cap_id": null,
+        "post_cap_behavior": null,
+        "anchor": null,
+        "min_engine_version": 1,
+        "source_local_id": "telecom_reward_points_monthly"
+      },
+      {
+        "id": "hdfc-regalia-gold:cap:insurance_reward_points_daily",
+        "reward_rule_id": null,
+        "category_id": "cat-insurance",
+        "category_slug": "insurance",
+        "benefit_kind": null,
+        "label": "Insurance reward points daily",
+        "measure": "reward_value",
+        "period": "calendar_month",
+        "cap_value": 1000,
+        "post_cap_unit": null,
+        "post_cap_rate": 0,
+        "resets_on_day": 1,
+        "cap_kind": "total_points",
+        "cap_amount": 2000,
+        "scope": "targets",
+        "targets": [],
+        "parent_cap_id": null,
+        "post_cap_behavior": null,
+        "anchor": null,
+        "min_engine_version": 1,
+        "source_local_id": "insurance_reward_points_daily"
+      }
+    ],
+    "milestone_rules": [
+      {
+        "id": "hdfc-regalia-gold:milestone:quarterly_150k_voucher",
+        "label": "₹1,500 voucher on quarterly spend",
+        "period": "quarter",
+        "threshold_spend_inr": 150000,
+        "reward_description": "₹1,500 voucher on quarterly spend",
+        "reward_value_inr": 1500,
+        "is_repeatable": true,
+        "max_repeats": null,
+        "anchor": "calendar_year",
+        "reward_points": null,
+        "reward_kind": "voucher",
+        "excluded_category_ids": [],
+        "window_days": null,
+        "source_local_id": "quarterly_150k_voucher"
+      },
+      {
+        "id": "hdfc-regalia-gold:milestone:annual_5l_flight_voucher",
+        "label": "₹5,000 flight voucher at ₹5 lakh anniversary-year spend",
+        "period": "annual",
+        "threshold_spend_inr": 500000,
+        "reward_description": "₹5,000 flight voucher at ₹5 lakh anniversary-year spend",
+        "reward_value_inr": 5000,
+        "is_repeatable": false,
+        "max_repeats": null,
+        "anchor": "card_anniversary",
+        "reward_points": null,
+        "reward_kind": "voucher",
+        "excluded_category_ids": [],
+        "window_days": null,
+        "source_local_id": "annual_5l_flight_voucher"
+      },
+      {
+        "id": "hdfc-regalia-gold:milestone:annual_7_5l_flight_voucher",
+        "label": "Additional ₹5,000 flight voucher at ₹7.5 lakh anniversary-year spend",
+        "period": "annual",
+        "threshold_spend_inr": 750000,
+        "reward_description": "Additional ₹5,000 flight voucher at ₹7.5 lakh anniversary-year spend",
+        "reward_value_inr": 5000,
+        "is_repeatable": false,
+        "max_repeats": null,
+        "anchor": "card_anniversary",
+        "reward_points": null,
+        "reward_kind": "voucher",
+        "excluded_category_ids": [],
+        "window_days": null,
+        "source_local_id": "annual_7_5l_flight_voucher"
+      }
+    ],
+    "fee_waiver_rules": [
+      {
+        "id": "hdfc-regalia-gold:waiver:1",
+        "threshold_spend_inr": 400000,
+        "period": "annual",
+        "waives_fee_inr": 2500,
+        "excluded_category_slugs": [],
+        "notes": "Spend ₹4,00,000 within 12 billing cycles of the anniversary year to waive the renewal fee for the following year.",
+        "excluded_categories": []
+      }
+    ],
+    "benefits": [
+      {
+        "id": "hdfc-regalia-gold:benefit:domestic_lounge_access",
+        "key": "domestic_lounge_access",
+        "source_local_id": "domestic_lounge_access",
+        "kind": "lounge_domestic",
+        "label": "3 complimentary domestic airport lounge visits per calendar quarter",
+        "description": "Sponsor: HDFC Bank",
+        "quota_count": 3,
+        "quota_period": "quarter",
+        "network_program": "domestic_airport_lounge",
+        "value_estimate_inr": null,
+        "conditions": {
+          "source_category_id": "lounge",
+          "evaluation_engine": {
+            "conditions": {
+              "preceding_quarter_spend_inr": 60000,
+              "evaluation_period": "calendar_quarter",
+              "additional_note": "Spend ₹60,000 or more in the current calendar quarter to unlock 3 lounge visits in the next calendar quarter. Newly opened cards may receive an initial-quarter exemption as specified in the lounge terms."
+            },
+            "benefit_calculation": {
+              "visits": 3,
+              "period": "calendar_quarter"
+            },
+            "perks": [
+              "Domestic airport lounge access within India"
+            ]
+          }
+        }
+      },
+      {
+        "id": "hdfc-regalia-gold:benefit:priority_pass",
+        "key": "priority_pass",
+        "source_local_id": "priority_pass",
+        "kind": "lounge_international",
+        "label": "Up to 6 complimentary Priority Pass lounge accesses outside India per calendar year",
+        "description": "Sponsor: HDFC Bank",
+        "quota_count": 6,
+        "quota_period": "annual",
+        "network_program": "priority_pass",
+        "value_estimate_inr": null,
+        "conditions": {
+          "source_category_id": "lounge",
+          "evaluation_engine": {
+            "conditions": {
+              "membership_activation": "Priority Pass application is available after completion of a minimum of 4 retail transactions.",
+              "scope": "Complimentary quota applies outside India.",
+              "guest_access": "Guest visits are chargeable.",
+              "india_visits": "Priority Pass visits within India are chargeable at USD 27 equivalent plus applicable taxes per person per visit."
+            },
+            "benefit_calculation": {
+              "complimentary_visits": 6,
+              "period": "calendar_year",
+              "scope": "outside India"
+            },
+            "perks": [
+              "Priority Pass membership for primary and add-on members"
+            ]
+          }
+        }
+      },
+      {
+        "id": "hdfc-regalia-gold:benefit:boarding_edge",
+        "key": "boarding_edge",
+        "source_local_id": "boarding_edge",
+        "kind": "other",
+        "label": "Boarding Edge travel benefits",
+        "description": "Sponsor: HDFC Bank / DreamFolks",
+        "quota_count": 2,
+        "quota_period": "quarter",
+        "network_program": "boarding_edge",
+        "value_estimate_inr": null,
+        "conditions": {
+          "source_category_id": "other",
+          "evaluation_engine": {
+            "conditions": {
+              "required_action": "Upload flight boarding pass on SmartBuy.",
+              "selection_limit": 2,
+              "period": "calendar_quarter"
+            },
+            "benefit_calculation": {
+              "benefits_available": [
+                "Spa",
+                "Buffet",
+                "Hotel room upgrade",
+                "Airport transfer"
+              ]
+            },
+            "perks": [
+              "Any 2 benefits per calendar quarter"
+            ]
+          }
+        }
+      },
+      {
+        "id": "hdfc-regalia-gold:benefit:dining_good_food_trail",
+        "key": "dining_good_food_trail",
+        "source_local_id": "dining_good_food_trail",
+        "kind": "dining_program",
+        "label": "Dining privileges",
+        "description": "Sponsor: HDFC Bank / Swiggy Dineout",
+        "quota_count": null,
+        "quota_period": null,
+        "network_program": "good_food_trail",
+        "value_estimate_inr": null,
+        "conditions": {
+          "source_category_id": "dining",
+          "evaluation_engine": {
+            "conditions": {
+              "payment_method": "HDFC Bank Regalia Gold Credit Card"
+            },
+            "benefit_calculation": {
+              "maximum_discount_percent": 20
+            },
+            "perks": [
+              "Up to 20% savings on restaurant bill payments via Swiggy Dineout, inclusive of restaurant and Swiggy discounts."
+            ]
+          }
+        }
+      },
+      {
+        "id": "hdfc-regalia-gold:benefit:insurance:air_accidental_death",
+        "key": "insurance:air_accidental_death",
+        "source_local_id": null,
+        "kind": "insurance_travel",
+        "label": "Air Accidental Death",
+        "description": "Accidental air death cover for the cardholder, subject to the applicable insurance policy terms.",
+        "quota_count": null,
+        "quota_period": null,
+        "network_program": null,
+        "value_estimate_inr": 10000000,
+        "conditions": {
+          "coverage_usd": 125000
+        }
+      },
+      {
+        "id": "hdfc-regalia-gold:benefit:insurance:medical_emergency_overseas",
+        "key": "insurance:medical_emergency_overseas",
+        "source_local_id": null,
+        "kind": "other",
+        "label": "Medical Emergency Overseas",
+        "description": "Emergency overseas hospitalization for sudden unexpected illness or bodily injury while travelling internationally; pre-existing conditions are excluded.",
+        "quota_count": null,
+        "quota_period": null,
+        "network_program": null,
+        "value_estimate_inr": 1500000,
+        "conditions": {
+          "coverage_usd": 18750
+        }
+      },
+      {
+        "id": "hdfc-regalia-gold:benefit:insurance:credit_shield",
+        "key": "insurance:credit_shield",
+        "source_local_id": null,
+        "kind": "insurance_purchase",
+        "label": "Credit Shield",
+        "description": "Credit liability cover for the primary cardholder, subject to applicable policy terms.",
+        "quota_count": null,
+        "quota_period": null,
+        "network_program": null,
+        "value_estimate_inr": 900000,
+        "conditions": {
+          "coverage_usd": null
+        }
+      }
+    ],
+    "unlock_rules": [
+      {
+        "id": "hdfc-regalia-gold:unlock:domestic_lounge_access@1",
+        "card_benefit_id": "hdfc-regalia-gold:benefit:domestic_lounge_access",
+        "kind": "lounge_domestic",
+        "label": "3 complimentary domestic airport lounge visits per calendar quarter",
+        "spend_threshold_inr": 60000,
+        "spend_window": "previous_calendar_quarter",
+        "window_days": null,
+        "unlocks_quota": 3,
+        "unlocks_period": "quarter",
+        "tier_label": null,
+        "excluded_category_ids": [],
+        "notes": null,
+        "source_local_id": "domestic_lounge_access"
+      }
+    ],
+    "redemption_options": [
+      {
+        "program_name": "SmartBuy",
+        "method": "flight_hotel_booking",
+        "value_per_point_inr": 0.5,
+        "min_points": null,
+        "notes": "Redemption fee: ₹99"
+      },
+      {
+        "program_name": "SmartBuy / Gold Catalogue",
+        "method": "partner_catalogue",
+        "value_per_point_inr": 0.65,
+        "min_points": null,
+        "notes": "Redemption fee: ₹99"
+      },
+      {
+        "program_name": "NetBanking / SmartBuy",
+        "method": "partner_catalogue",
+        "value_per_point_inr": 0.35,
+        "min_points": null,
+        "notes": "Redemption fee: ₹99"
+      },
+      {
+        "program_name": "NetBanking",
+        "method": "statement_credit",
+        "value_per_point_inr": 0.15,
+        "min_points": null,
+        "notes": "Redemption fee: ₹99"
+      }
+    ],
+    "is_upi_linkable": true
+  }
+}

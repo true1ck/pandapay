@@ -1,0 +1,1665 @@
+{
+  "generated_by": "api/scripts/catalogue_v2/snapshot_examples.js",
+  "source_slug": "hdfc-millennia",
+  "inputs": {
+    "transform_version": "7",
+    "source_record_sha256": "e3b2de500ac15bd04ff08f437aae49ef6aada3c5292590b4dd0f845d85de70ef",
+    "override_sha256": "73b06f3b7dfb4ee3cda0636f7e82fd8f80d7edd243cf05a992525311105839d6",
+    "directory_sha256": "b1094d54b77e848d22f7a9a64f3ae6d1ef43ca3eb2fc8e40cd43ed1994664694",
+    "verified": false
+  },
+  "blocking_flags": [
+    "info_rule"
+  ],
+  "card": {
+    "id": "hdfc-millennia:card",
+    "slug": "hdfc-millennia",
+    "name": "Millennia Credit Card",
+    "network": "unknown",
+    "issuer_slug": "hdfc",
+    "base_reward_unit": "points_per_100",
+    "base_reward_rate": 1,
+    "point_value_inr": 1,
+    "excluded_categories": [
+      "cat-emi",
+      "cat-fuel",
+      "cat-government",
+      "cat-rent",
+      "cat-wallet"
+    ],
+    "accrual_block_inr": 100,
+    "accrual_rounding": "floor",
+    "cashback_rounding": null,
+    "points_expiry_months": 24,
+    "model_status": "partial",
+    "model_coverage": {
+      "rules_total": 16,
+      "rules_modelled": 10,
+      "rules_info": 6,
+      "caps_total": 5,
+      "caps_enforced": 3,
+      "flags": [
+        {
+          "code": "channel_type_restates_brand",
+          "source_local_id": "millennia-5pct-select-merchants",
+          "detail": null
+        },
+        {
+          "code": "token_replaced_by_conditions",
+          "source_local_id": "millennia-5pct-select-merchants",
+          "detail": null
+        },
+        {
+          "code": "info_rule",
+          "source_local_id": "millennia-5pct-merchant-exclusions",
+          "detail": "bonus_only_exclusion"
+        },
+        {
+          "code": "unmapped_excluded_category",
+          "source_local_id": "millennia-5pct-merchant-exclusions",
+          "detail": null
+        },
+        {
+          "code": "exclusion_list_expanded",
+          "source_local_id": "millennia-5pct-merchant-exclusions",
+          "detail": null
+        },
+        {
+          "code": "partial_category_list",
+          "source_local_id": "millennia-5pct-merchant-exclusions",
+          "detail": null
+        },
+        {
+          "code": "bonus_only_exclusion",
+          "source_local_id": "millennia-5pct-merchant-exclusions",
+          "detail": null
+        },
+        {
+          "code": "info_rule",
+          "source_local_id": "millennia-wallet-mcc6540-base",
+          "detail": "condition:merchant_networks"
+        },
+        {
+          "code": "info_rule",
+          "source_local_id": "millennia-wallet-mcc6540-base",
+          "detail": "condition:channel_type"
+        },
+        {
+          "code": "points_and_cashback_both",
+          "source_local_id": "millennia-wallet-mcc6540-base",
+          "detail": null
+        },
+        {
+          "code": "info_rule",
+          "source_local_id": "millennia-uber-eats-base",
+          "detail": "unresolved_merchant:merchant"
+        },
+        {
+          "code": "info_rule",
+          "source_local_id": "millennia-uber-eats-base",
+          "detail": "condition:channel_type"
+        },
+        {
+          "code": "channel_type_restates_brand",
+          "source_local_id": "millennia-uber-mcc4121",
+          "detail": null
+        },
+        {
+          "code": "narrow_token_on_merchant",
+          "source_local_id": "millennia-uber-mcc4121",
+          "detail": null
+        },
+        {
+          "code": "unmapped_excluded_category",
+          "source_local_id": "millennia-other-spends-1pct",
+          "detail": null
+        },
+        {
+          "code": "mcc_scoped_exclusion",
+          "source_local_id": "millennia-rent-zero",
+          "detail": null
+        },
+        {
+          "code": "mcc_scoped_exclusion",
+          "source_local_id": "millennia-government-zero",
+          "detail": null
+        },
+        {
+          "code": "mcc_scoped_exclusion",
+          "source_local_id": "millennia-fuel-zero",
+          "detail": null
+        },
+        {
+          "code": "emi_alternatives",
+          "source_local_id": "millennia-emi-zero",
+          "detail": null
+        },
+        {
+          "code": "exclusion_scope_broadened",
+          "source_local_id": "millennia-cash-advance-zero",
+          "detail": null
+        },
+        {
+          "code": "info_rule",
+          "source_local_id": "millennia-card-fees-zero",
+          "detail": "non_purchase_category"
+        },
+        {
+          "code": "info_rule",
+          "source_local_id": "millennia-card-fees-zero",
+          "detail": "non_purchase_channel"
+        },
+        {
+          "code": "info_rule",
+          "source_local_id": "millennia-outstanding-payment-zero",
+          "detail": "condition:channel_type"
+        },
+        {
+          "code": "info_rule",
+          "source_local_id": "millennia-outstanding-payment-zero",
+          "detail": "non_purchase_category"
+        },
+        {
+          "code": "exclusion_rail_dropped",
+          "source_local_id": "millennia-online-gaming-zero",
+          "detail": null
+        },
+        {
+          "code": "exclusion_scope_broadened",
+          "source_local_id": "millennia-online-gaming-zero",
+          "detail": null
+        },
+        {
+          "code": "broad_exclusion_v1_only",
+          "source_local_id": "millennia-online-gaming-zero",
+          "detail": null
+        },
+        {
+          "code": "info_rule",
+          "source_local_id": "millennia-education-third-party-zero",
+          "detail": "condition:third_party_apps"
+        },
+        {
+          "code": "exclusion_rail_dropped",
+          "source_local_id": "millennia-education-third-party-zero",
+          "detail": null
+        },
+        {
+          "code": "exclusion_scope_broadened",
+          "source_local_id": "millennia-education-third-party-zero",
+          "detail": null
+        },
+        {
+          "code": "non_earning_cap_skipped",
+          "source_local_id": "millennia-cashback-redemption-monthly-cap",
+          "detail": null
+        },
+        {
+          "code": "non_earning_cap_skipped",
+          "source_local_id": "millennia-flight-hotel-redemption-monthly-cap",
+          "detail": null
+        }
+      ],
+      "overrides_applied": [
+        {
+          "path": "accrual_engine.base_cashback_percent",
+          "op": "set",
+          "value_sha256": "74234e98afe7498f",
+          "reason": "CashPoints are whole points, 1 per Rs100 block (D8a).",
+          "source_url": "https://www.hdfc.bank.in/content/dam/hdfcbankpws/in/en/personal-banking/discover-products/cards/credit-cards/millennia-credit-card/pdf/millennia-tnc-20th-jul26.pdf",
+          "checked_on": "2026-11-05",
+          "citation": null
+        },
+        {
+          "path": "accrual_engine.base_points_per_block",
+          "op": "set",
+          "value_sha256": "6b86b273ff34fce1",
+          "reason": "1 CashPoint per Rs100.",
+          "source_url": "https://www.hdfc.bank.in/content/dam/hdfcbankpws/in/en/personal-banking/discover-products/cards/credit-cards/millennia-credit-card/pdf/millennia-tnc-20th-jul26.pdf",
+          "checked_on": "2026-11-05",
+          "citation": null
+        },
+        {
+          "path": "accrual_engine.base_block_inr",
+          "op": "set",
+          "value_sha256": "ad57366865126e55",
+          "reason": "Rs100 block.",
+          "source_url": "https://www.hdfc.bank.in/content/dam/hdfcbankpws/in/en/personal-banking/discover-products/cards/credit-cards/millennia-credit-card/pdf/millennia-tnc-20th-jul26.pdf",
+          "checked_on": "2026-11-05",
+          "citation": null
+        },
+        {
+          "path": "card_product.point_value_inr_baseline",
+          "op": "set",
+          "value_sha256": "6b86b273ff34fce1",
+          "reason": "1 CashPoint = Rs1 on statement redemption.",
+          "source_url": "https://www.hdfc.bank.in/content/dam/hdfcbankpws/in/en/personal-banking/discover-products/cards/credit-cards/millennia-credit-card/pdf/millennia-tnc-20th-jul26.pdf",
+          "checked_on": "2026-11-05",
+          "citation": null
+        },
+        {
+          "path": "reward_rules[id=millennia-5pct-select-merchants].action.cashback_percent",
+          "op": "set",
+          "value_sha256": "74234e98afe7498f",
+          "reason": "Model as points, not cashback percent (D8a).",
+          "source_url": "https://www.hdfc.bank.in/content/dam/hdfcbankpws/in/en/personal-banking/discover-products/cards/credit-cards/millennia-credit-card/pdf/millennia-tnc-20th-jul26.pdf",
+          "checked_on": "2026-11-05",
+          "citation": null
+        },
+        {
+          "path": "reward_rules[id=millennia-uber-mcc4121].action.cashback_percent",
+          "op": "set",
+          "value_sha256": "74234e98afe7498f",
+          "reason": "Model as points, not cashback percent (D8a).",
+          "source_url": "https://www.hdfc.bank.in/content/dam/hdfcbankpws/in/en/personal-banking/discover-products/cards/credit-cards/millennia-credit-card/pdf/millennia-tnc-20th-jul26.pdf",
+          "checked_on": "2026-11-05",
+          "citation": null
+        },
+        {
+          "path": "reward_rules[id=millennia-other-spends-1pct].action.cashback_percent",
+          "op": "set",
+          "value_sha256": "74234e98afe7498f",
+          "reason": "Model as points, not cashback percent (D8a).",
+          "source_url": "https://www.hdfc.bank.in/content/dam/hdfcbankpws/in/en/personal-banking/discover-products/cards/credit-cards/millennia-credit-card/pdf/millennia-tnc-20th-jul26.pdf",
+          "checked_on": "2026-11-05",
+          "citation": null
+        },
+        {
+          "path": "reward_rules[id=millennia-uber-eats-base].action.cashback_percent",
+          "op": "set",
+          "value_sha256": "74234e98afe7498f",
+          "reason": "Model as points, not cashback percent (D8a).",
+          "source_url": "https://www.hdfc.bank.in/content/dam/hdfcbankpws/in/en/personal-banking/discover-products/cards/credit-cards/millennia-credit-card/pdf/millennia-tnc-20th-jul26.pdf",
+          "checked_on": "2026-11-05",
+          "citation": null
+        },
+        {
+          "path": "reward_rules[id=millennia-5pct-select-merchants].conditions.uber_mcc",
+          "op": "remove",
+          "value_sha256": "74234e98afe7498f",
+          "reason": "WP7: Uber is modelled by its own rule millennia-uber-mcc4121 (issuer: only MCC 4121 Uber qualifies); the extra key made the 10-merchant rule info.",
+          "source_url": "https://www.hdfc.bank.in/content/dam/hdfcbankpws/in/en/personal-banking/discover-products/cards/credit-cards/millennia-credit-card/pdf/millennia-tnc-20th-jul26.pdf",
+          "checked_on": "2026-11-05",
+          "citation": null
+        },
+        {
+          "path": "reward_rules[id=millennia-5pct-select-merchants].conditions.merchant_names",
+          "op": "set",
+          "value_sha256": "78a645a5fc68d56c",
+          "reason": "WP7: Uber moves to millennia-uber-mcc4121 (MCC 4121 only), so Uber Eats never earns 5% here.",
+          "source_url": "https://www.hdfc.bank.in/content/dam/hdfcbankpws/in/en/personal-banking/discover-products/cards/credit-cards/millennia-credit-card/pdf/millennia-tnc-20th-jul26.pdf",
+          "checked_on": "2026-11-05",
+          "citation": null
+        },
+        {
+          "path": "reward_rules",
+          "op": "append",
+          "value_sha256": "d54789ba83bd44a2",
+          "reason": "WP7: Millennia T&C: EMI spends earn no CashPoints (record exclusion millennia-emi-zero; EMI is in the card's excluded categories). The record's EMI exclusion is emitted as category emi AND rail emi, so an EMI purchase in another category was not excluded (D24e: data fix while WP2 changes the loader). Rail-EMI exclusion on all spend, as on flipkart-sbi-card.",
+          "source_url": "https://www.hdfc.bank.in/content/dam/hdfcbankpws/in/en/personal-banking/discover-products/cards/credit-cards/millennia-credit-card/pdf/millennia-tnc-20th-jul26.pdf",
+          "checked_on": "2026-11-05",
+          "citation": null
+        }
+      ]
+    },
+    "reward_rules": [
+      {
+        "id": "hdfc-millennia:rule:millennia-5pct-select-merchants",
+        "category_id": null,
+        "category_slug": null,
+        "merchant_pattern": null,
+        "rail": "online",
+        "unit": "points_per_100",
+        "rate": 5,
+        "min_txn_inr": 100,
+        "max_txn_inr": null,
+        "priority": 10,
+        "conditions": {
+          "source_local_id": "millennia-5pct-select-merchants",
+          "part": null,
+          "info_reasons": [],
+          "flags": [
+            "channel_type_restates_brand",
+            "token_replaced_by_conditions"
+          ]
+        },
+        "notes": null,
+        "effective_from": "2021-11-01",
+        "effective_to": null,
+        "excluded_categories": [],
+        "rule_role": "earn",
+        "merchant_slugs": [
+          "amazon",
+          "bookmyshow",
+          "cult_fit",
+          "flipkart",
+          "myntra",
+          "sony_liv",
+          "swiggy",
+          "tata_cliq",
+          "zomato"
+        ],
+        "platform_slugs": [],
+        "mcc_include": [],
+        "mcc_exclude": [],
+        "except_merchant_slugs": [],
+        "except_platform_slugs": [],
+        "block_inr": null,
+        "min_engine_version": 2,
+        "max_engine_version": null,
+        "source_local_id": "millennia-5pct-select-merchants",
+        "display_note": "5% CashBack/CashPoints on ten select merchant partners."
+      },
+      {
+        "id": "hdfc-millennia:rule:millennia-5pct-merchant-exclusions#1",
+        "category_id": "cat-emi",
+        "category_slug": "emi",
+        "merchant_pattern": null,
+        "rail": null,
+        "unit": "points_per_100",
+        "rate": 0,
+        "min_txn_inr": null,
+        "max_txn_inr": null,
+        "priority": 11,
+        "conditions": {
+          "source_local_id": "millennia-5pct-merchant-exclusions",
+          "part": 1,
+          "info_reasons": [
+            "bonus_only_exclusion"
+          ],
+          "flags": [
+            "unmapped_excluded_category",
+            "exclusion_list_expanded",
+            "partial_category_list",
+            "bonus_only_exclusion"
+          ]
+        },
+        "notes": null,
+        "effective_from": "2021-11-01",
+        "effective_to": null,
+        "excluded_categories": [],
+        "rule_role": "info",
+        "merchant_slugs": [],
+        "platform_slugs": [],
+        "mcc_include": [],
+        "mcc_exclude": [],
+        "except_merchant_slugs": [],
+        "except_platform_slugs": [],
+        "block_inr": null,
+        "min_engine_version": 2,
+        "max_engine_version": null,
+        "source_local_id": "millennia-5pct-merchant-exclusions",
+        "display_note": "Transactions in excluded categories do not qualify for accelerated 5% CashBack."
+      },
+      {
+        "id": "hdfc-millennia:rule:millennia-5pct-merchant-exclusions#2",
+        "category_id": "cat-fuel",
+        "category_slug": "fuel",
+        "merchant_pattern": null,
+        "rail": null,
+        "unit": "points_per_100",
+        "rate": 0,
+        "min_txn_inr": null,
+        "max_txn_inr": null,
+        "priority": 11,
+        "conditions": {
+          "source_local_id": "millennia-5pct-merchant-exclusions",
+          "part": 2,
+          "info_reasons": [
+            "bonus_only_exclusion"
+          ],
+          "flags": [
+            "unmapped_excluded_category",
+            "exclusion_list_expanded",
+            "partial_category_list",
+            "bonus_only_exclusion"
+          ]
+        },
+        "notes": null,
+        "effective_from": "2021-11-01",
+        "effective_to": null,
+        "excluded_categories": [],
+        "rule_role": "info",
+        "merchant_slugs": [],
+        "platform_slugs": [],
+        "mcc_include": [],
+        "mcc_exclude": [],
+        "except_merchant_slugs": [],
+        "except_platform_slugs": [],
+        "block_inr": null,
+        "min_engine_version": 2,
+        "max_engine_version": null,
+        "source_local_id": "millennia-5pct-merchant-exclusions",
+        "display_note": "Transactions in excluded categories do not qualify for accelerated 5% CashBack."
+      },
+      {
+        "id": "hdfc-millennia:rule:millennia-5pct-merchant-exclusions#3",
+        "category_id": "cat-government",
+        "category_slug": "government",
+        "merchant_pattern": null,
+        "rail": null,
+        "unit": "points_per_100",
+        "rate": 0,
+        "min_txn_inr": null,
+        "max_txn_inr": null,
+        "priority": 11,
+        "conditions": {
+          "source_local_id": "millennia-5pct-merchant-exclusions",
+          "part": 3,
+          "info_reasons": [
+            "bonus_only_exclusion"
+          ],
+          "flags": [
+            "unmapped_excluded_category",
+            "exclusion_list_expanded",
+            "partial_category_list",
+            "bonus_only_exclusion"
+          ]
+        },
+        "notes": null,
+        "effective_from": "2021-11-01",
+        "effective_to": null,
+        "excluded_categories": [],
+        "rule_role": "info",
+        "merchant_slugs": [],
+        "platform_slugs": [],
+        "mcc_include": [],
+        "mcc_exclude": [],
+        "except_merchant_slugs": [],
+        "except_platform_slugs": [],
+        "block_inr": null,
+        "min_engine_version": 2,
+        "max_engine_version": null,
+        "source_local_id": "millennia-5pct-merchant-exclusions",
+        "display_note": "Transactions in excluded categories do not qualify for accelerated 5% CashBack."
+      },
+      {
+        "id": "hdfc-millennia:rule:millennia-5pct-merchant-exclusions#4",
+        "category_id": "cat-rent",
+        "category_slug": "rent",
+        "merchant_pattern": null,
+        "rail": null,
+        "unit": "points_per_100",
+        "rate": 0,
+        "min_txn_inr": null,
+        "max_txn_inr": null,
+        "priority": 11,
+        "conditions": {
+          "source_local_id": "millennia-5pct-merchant-exclusions",
+          "part": 4,
+          "info_reasons": [
+            "bonus_only_exclusion"
+          ],
+          "flags": [
+            "unmapped_excluded_category",
+            "exclusion_list_expanded",
+            "partial_category_list",
+            "bonus_only_exclusion"
+          ]
+        },
+        "notes": null,
+        "effective_from": "2021-11-01",
+        "effective_to": null,
+        "excluded_categories": [],
+        "rule_role": "info",
+        "merchant_slugs": [],
+        "platform_slugs": [],
+        "mcc_include": [],
+        "mcc_exclude": [],
+        "except_merchant_slugs": [],
+        "except_platform_slugs": [],
+        "block_inr": null,
+        "min_engine_version": 2,
+        "max_engine_version": null,
+        "source_local_id": "millennia-5pct-merchant-exclusions",
+        "display_note": "Transactions in excluded categories do not qualify for accelerated 5% CashBack."
+      },
+      {
+        "id": "hdfc-millennia:rule:millennia-5pct-merchant-exclusions#5",
+        "category_id": "cat-wallet",
+        "category_slug": "wallet",
+        "merchant_pattern": null,
+        "rail": null,
+        "unit": "points_per_100",
+        "rate": 0,
+        "min_txn_inr": null,
+        "max_txn_inr": null,
+        "priority": 11,
+        "conditions": {
+          "source_local_id": "millennia-5pct-merchant-exclusions",
+          "part": 5,
+          "info_reasons": [
+            "bonus_only_exclusion"
+          ],
+          "flags": [
+            "unmapped_excluded_category",
+            "exclusion_list_expanded",
+            "partial_category_list",
+            "bonus_only_exclusion"
+          ]
+        },
+        "notes": null,
+        "effective_from": "2021-11-01",
+        "effective_to": null,
+        "excluded_categories": [],
+        "rule_role": "info",
+        "merchant_slugs": [],
+        "platform_slugs": [],
+        "mcc_include": [],
+        "mcc_exclude": [],
+        "except_merchant_slugs": [],
+        "except_platform_slugs": [],
+        "block_inr": null,
+        "min_engine_version": 2,
+        "max_engine_version": null,
+        "source_local_id": "millennia-5pct-merchant-exclusions",
+        "display_note": "Transactions in excluded categories do not qualify for accelerated 5% CashBack."
+      },
+      {
+        "id": "hdfc-millennia:rule:millennia-wallet-mcc6540-base",
+        "category_id": "cat-wallet",
+        "category_slug": "wallet",
+        "merchant_pattern": null,
+        "rail": "online",
+        "unit": "points_per_100",
+        "rate": 1,
+        "min_txn_inr": 100,
+        "max_txn_inr": null,
+        "priority": 12,
+        "conditions": {
+          "source_local_id": "millennia-wallet-mcc6540-base",
+          "part": null,
+          "info_reasons": [
+            "condition:merchant_networks",
+            "condition:channel_type"
+          ],
+          "flags": [
+            "points_and_cashback_both"
+          ]
+        },
+        "notes": null,
+        "effective_from": "2024-08-13",
+        "effective_to": "2024-08-31",
+        "excluded_categories": [],
+        "rule_role": "info",
+        "merchant_slugs": [],
+        "platform_slugs": [],
+        "mcc_include": [
+          "6540"
+        ],
+        "mcc_exclude": [],
+        "except_merchant_slugs": [],
+        "except_platform_slugs": [],
+        "block_inr": null,
+        "min_engine_version": 2,
+        "max_engine_version": null,
+        "source_local_id": "millennia-wallet-mcc6540-base",
+        "display_note": "Historical wallet reload treatment; effective from 1 September 2024 wallet loading no longer earns Reward Points."
+      },
+      {
+        "id": "hdfc-millennia:rule:millennia-uber-eats-base",
+        "category_id": "cat-dining",
+        "category_slug": "dining",
+        "merchant_pattern": null,
+        "rail": "online",
+        "unit": "points_per_100",
+        "rate": 1,
+        "min_txn_inr": 100,
+        "max_txn_inr": null,
+        "priority": 13,
+        "conditions": {
+          "source_local_id": "millennia-uber-eats-base",
+          "part": null,
+          "info_reasons": [
+            "unresolved_merchant:merchant",
+            "condition:channel_type"
+          ],
+          "flags": []
+        },
+        "notes": null,
+        "effective_from": "2024-08-13",
+        "effective_to": null,
+        "excluded_categories": [],
+        "rule_role": "info",
+        "merchant_slugs": [],
+        "platform_slugs": [],
+        "mcc_include": [],
+        "mcc_exclude": [],
+        "except_merchant_slugs": [],
+        "except_platform_slugs": [],
+        "block_inr": null,
+        "min_engine_version": 2,
+        "max_engine_version": null,
+        "source_local_id": "millennia-uber-eats-base",
+        "display_note": "Uber Eats orders do not qualify for the Millennia 5% partner-merchant accelerator and otherwise fall under the 1% other-spends proposition."
+      },
+      {
+        "id": "hdfc-millennia:rule:millennia-uber-mcc4121",
+        "category_id": null,
+        "category_slug": null,
+        "merchant_pattern": "uber",
+        "rail": "online",
+        "unit": "points_per_100",
+        "rate": 5,
+        "min_txn_inr": 100,
+        "max_txn_inr": null,
+        "priority": 14,
+        "conditions": {
+          "source_local_id": "millennia-uber-mcc4121",
+          "part": null,
+          "info_reasons": [],
+          "flags": [
+            "channel_type_restates_brand",
+            "narrow_token_on_merchant"
+          ]
+        },
+        "notes": null,
+        "effective_from": "2024-08-13",
+        "effective_to": null,
+        "excluded_categories": [],
+        "rule_role": "earn",
+        "merchant_slugs": [
+          "uber"
+        ],
+        "platform_slugs": [],
+        "mcc_include": [
+          "4121"
+        ],
+        "mcc_exclude": [],
+        "except_merchant_slugs": [],
+        "except_platform_slugs": [],
+        "block_inr": null,
+        "min_engine_version": 2,
+        "max_engine_version": null,
+        "source_local_id": "millennia-uber-mcc4121",
+        "display_note": "Uber ride transactions under MCC 4121 qualify for 5% CashPoints accelerator."
+      },
+      {
+        "id": "hdfc-millennia:rule:millennia-other-spends-1pct",
+        "category_id": null,
+        "category_slug": null,
+        "merchant_pattern": null,
+        "rail": null,
+        "unit": "points_per_100",
+        "rate": 1,
+        "min_txn_inr": 100,
+        "max_txn_inr": null,
+        "priority": 50,
+        "conditions": {
+          "source_local_id": "millennia-other-spends-1pct",
+          "part": null,
+          "info_reasons": [],
+          "flags": [
+            "unmapped_excluded_category"
+          ]
+        },
+        "notes": null,
+        "effective_from": "2025-04-25",
+        "effective_to": null,
+        "excluded_categories": [
+          "cat-emi",
+          "cat-fuel",
+          "cat-government",
+          "cat-rent",
+          "cat-wallet"
+        ],
+        "rule_role": "earn",
+        "merchant_slugs": [],
+        "platform_slugs": [],
+        "mcc_include": [],
+        "mcc_exclude": [],
+        "except_merchant_slugs": [],
+        "except_platform_slugs": [],
+        "block_inr": null,
+        "min_engine_version": 1,
+        "max_engine_version": null,
+        "source_local_id": "millennia-other-spends-1pct",
+        "display_note": "1% CashPoints on all other eligible retail spends (offline and online)."
+      },
+      {
+        "id": "hdfc-millennia:rule:millennia-rent-zero#1",
+        "category_id": "cat-rent",
+        "category_slug": "rent",
+        "merchant_pattern": null,
+        "rail": null,
+        "unit": "points_per_100",
+        "rate": 0,
+        "min_txn_inr": null,
+        "max_txn_inr": null,
+        "priority": 1,
+        "conditions": {
+          "source_local_id": "millennia-rent-zero",
+          "part": 1,
+          "info_reasons": [],
+          "flags": [
+            "mcc_scoped_exclusion"
+          ]
+        },
+        "notes": null,
+        "effective_from": "2023-01-01",
+        "effective_to": null,
+        "excluded_categories": [],
+        "rule_role": "exclusion",
+        "merchant_slugs": [],
+        "platform_slugs": [],
+        "mcc_include": [],
+        "mcc_exclude": [],
+        "except_merchant_slugs": [],
+        "except_platform_slugs": [],
+        "block_inr": null,
+        "min_engine_version": 1,
+        "max_engine_version": 1,
+        "source_local_id": "millennia-rent-zero",
+        "display_note": "Rental payments excluded from reward accrual."
+      },
+      {
+        "id": "hdfc-millennia:rule:millennia-rent-zero#2",
+        "category_id": "cat-rent",
+        "category_slug": "rent",
+        "merchant_pattern": null,
+        "rail": null,
+        "unit": "points_per_100",
+        "rate": 0,
+        "min_txn_inr": null,
+        "max_txn_inr": null,
+        "priority": 1,
+        "conditions": {
+          "source_local_id": "millennia-rent-zero",
+          "part": 2,
+          "info_reasons": [],
+          "flags": [
+            "mcc_scoped_exclusion"
+          ]
+        },
+        "notes": null,
+        "effective_from": "2023-01-01",
+        "effective_to": null,
+        "excluded_categories": [],
+        "rule_role": "exclusion",
+        "merchant_slugs": [],
+        "platform_slugs": [],
+        "mcc_include": [
+          "6513"
+        ],
+        "mcc_exclude": [],
+        "except_merchant_slugs": [],
+        "except_platform_slugs": [],
+        "block_inr": null,
+        "min_engine_version": 2,
+        "max_engine_version": null,
+        "source_local_id": "millennia-rent-zero",
+        "display_note": "Rental payments excluded from reward accrual."
+      },
+      {
+        "id": "hdfc-millennia:rule:millennia-rent-zero#3",
+        "category_id": null,
+        "category_slug": null,
+        "merchant_pattern": null,
+        "rail": null,
+        "unit": "points_per_100",
+        "rate": 0,
+        "min_txn_inr": null,
+        "max_txn_inr": null,
+        "priority": 1,
+        "conditions": {
+          "source_local_id": "millennia-rent-zero",
+          "part": 3,
+          "info_reasons": [],
+          "flags": [
+            "mcc_scoped_exclusion"
+          ]
+        },
+        "notes": null,
+        "effective_from": "2023-01-01",
+        "effective_to": null,
+        "excluded_categories": [],
+        "rule_role": "exclusion",
+        "merchant_slugs": [],
+        "platform_slugs": [],
+        "mcc_include": [
+          "6513"
+        ],
+        "mcc_exclude": [],
+        "except_merchant_slugs": [],
+        "except_platform_slugs": [],
+        "block_inr": null,
+        "min_engine_version": 2,
+        "max_engine_version": null,
+        "source_local_id": "millennia-rent-zero",
+        "display_note": "Rental payments excluded from reward accrual."
+      },
+      {
+        "id": "hdfc-millennia:rule:millennia-government-zero#1",
+        "category_id": "cat-government",
+        "category_slug": "government",
+        "merchant_pattern": null,
+        "rail": null,
+        "unit": "points_per_100",
+        "rate": 0,
+        "min_txn_inr": null,
+        "max_txn_inr": null,
+        "priority": 2,
+        "conditions": {
+          "source_local_id": "millennia-government-zero",
+          "part": 1,
+          "info_reasons": [],
+          "flags": [
+            "mcc_scoped_exclusion"
+          ]
+        },
+        "notes": null,
+        "effective_from": "2023-01-01",
+        "effective_to": null,
+        "excluded_categories": [],
+        "rule_role": "exclusion",
+        "merchant_slugs": [],
+        "platform_slugs": [],
+        "mcc_include": [],
+        "mcc_exclude": [],
+        "except_merchant_slugs": [],
+        "except_platform_slugs": [],
+        "block_inr": null,
+        "min_engine_version": 1,
+        "max_engine_version": 1,
+        "source_local_id": "millennia-government-zero",
+        "display_note": "Government-related transactions excluded from reward accrual."
+      },
+      {
+        "id": "hdfc-millennia:rule:millennia-government-zero#2",
+        "category_id": "cat-government",
+        "category_slug": "government",
+        "merchant_pattern": null,
+        "rail": null,
+        "unit": "points_per_100",
+        "rate": 0,
+        "min_txn_inr": null,
+        "max_txn_inr": null,
+        "priority": 2,
+        "conditions": {
+          "source_local_id": "millennia-government-zero",
+          "part": 2,
+          "info_reasons": [],
+          "flags": [
+            "mcc_scoped_exclusion"
+          ]
+        },
+        "notes": null,
+        "effective_from": "2023-01-01",
+        "effective_to": null,
+        "excluded_categories": [],
+        "rule_role": "exclusion",
+        "merchant_slugs": [],
+        "platform_slugs": [],
+        "mcc_include": [
+          "9211",
+          "9222",
+          "9311",
+          "9399",
+          "9402"
+        ],
+        "mcc_exclude": [],
+        "except_merchant_slugs": [],
+        "except_platform_slugs": [],
+        "block_inr": null,
+        "min_engine_version": 2,
+        "max_engine_version": null,
+        "source_local_id": "millennia-government-zero",
+        "display_note": "Government-related transactions excluded from reward accrual."
+      },
+      {
+        "id": "hdfc-millennia:rule:millennia-government-zero#3",
+        "category_id": null,
+        "category_slug": null,
+        "merchant_pattern": null,
+        "rail": null,
+        "unit": "points_per_100",
+        "rate": 0,
+        "min_txn_inr": null,
+        "max_txn_inr": null,
+        "priority": 2,
+        "conditions": {
+          "source_local_id": "millennia-government-zero",
+          "part": 3,
+          "info_reasons": [],
+          "flags": [
+            "mcc_scoped_exclusion"
+          ]
+        },
+        "notes": null,
+        "effective_from": "2023-01-01",
+        "effective_to": null,
+        "excluded_categories": [],
+        "rule_role": "exclusion",
+        "merchant_slugs": [],
+        "platform_slugs": [],
+        "mcc_include": [
+          "9211",
+          "9222",
+          "9311",
+          "9399",
+          "9402"
+        ],
+        "mcc_exclude": [],
+        "except_merchant_slugs": [],
+        "except_platform_slugs": [],
+        "block_inr": null,
+        "min_engine_version": 2,
+        "max_engine_version": null,
+        "source_local_id": "millennia-government-zero",
+        "display_note": "Government-related transactions excluded from reward accrual."
+      },
+      {
+        "id": "hdfc-millennia:rule:millennia-fuel-zero#1",
+        "category_id": "cat-fuel",
+        "category_slug": "fuel",
+        "merchant_pattern": null,
+        "rail": null,
+        "unit": "points_per_100",
+        "rate": 0,
+        "min_txn_inr": null,
+        "max_txn_inr": null,
+        "priority": 3,
+        "conditions": {
+          "source_local_id": "millennia-fuel-zero",
+          "part": 1,
+          "info_reasons": [],
+          "flags": [
+            "mcc_scoped_exclusion"
+          ]
+        },
+        "notes": null,
+        "effective_from": "2021-11-01",
+        "effective_to": null,
+        "excluded_categories": [],
+        "rule_role": "exclusion",
+        "merchant_slugs": [],
+        "platform_slugs": [],
+        "mcc_include": [],
+        "mcc_exclude": [],
+        "except_merchant_slugs": [],
+        "except_platform_slugs": [],
+        "block_inr": null,
+        "min_engine_version": 1,
+        "max_engine_version": 1,
+        "source_local_id": "millennia-fuel-zero",
+        "display_note": "Fuel purchases are excluded from reward accrual."
+      },
+      {
+        "id": "hdfc-millennia:rule:millennia-fuel-zero#2",
+        "category_id": "cat-fuel",
+        "category_slug": "fuel",
+        "merchant_pattern": null,
+        "rail": null,
+        "unit": "points_per_100",
+        "rate": 0,
+        "min_txn_inr": null,
+        "max_txn_inr": null,
+        "priority": 3,
+        "conditions": {
+          "source_local_id": "millennia-fuel-zero",
+          "part": 2,
+          "info_reasons": [],
+          "flags": [
+            "mcc_scoped_exclusion"
+          ]
+        },
+        "notes": null,
+        "effective_from": "2021-11-01",
+        "effective_to": null,
+        "excluded_categories": [],
+        "rule_role": "exclusion",
+        "merchant_slugs": [],
+        "platform_slugs": [],
+        "mcc_include": [
+          "5172",
+          "5541",
+          "5542",
+          "5983"
+        ],
+        "mcc_exclude": [],
+        "except_merchant_slugs": [],
+        "except_platform_slugs": [],
+        "block_inr": null,
+        "min_engine_version": 2,
+        "max_engine_version": null,
+        "source_local_id": "millennia-fuel-zero",
+        "display_note": "Fuel purchases are excluded from reward accrual."
+      },
+      {
+        "id": "hdfc-millennia:rule:millennia-fuel-zero#3",
+        "category_id": null,
+        "category_slug": null,
+        "merchant_pattern": null,
+        "rail": null,
+        "unit": "points_per_100",
+        "rate": 0,
+        "min_txn_inr": null,
+        "max_txn_inr": null,
+        "priority": 3,
+        "conditions": {
+          "source_local_id": "millennia-fuel-zero",
+          "part": 3,
+          "info_reasons": [],
+          "flags": [
+            "mcc_scoped_exclusion"
+          ]
+        },
+        "notes": null,
+        "effective_from": "2021-11-01",
+        "effective_to": null,
+        "excluded_categories": [],
+        "rule_role": "exclusion",
+        "merchant_slugs": [],
+        "platform_slugs": [],
+        "mcc_include": [
+          "5172",
+          "5541",
+          "5542",
+          "5983"
+        ],
+        "mcc_exclude": [],
+        "except_merchant_slugs": [],
+        "except_platform_slugs": [],
+        "block_inr": null,
+        "min_engine_version": 2,
+        "max_engine_version": null,
+        "source_local_id": "millennia-fuel-zero",
+        "display_note": "Fuel purchases are excluded from reward accrual."
+      },
+      {
+        "id": "hdfc-millennia:rule:millennia-emi-zero#1",
+        "category_id": "cat-emi",
+        "category_slug": "emi",
+        "merchant_pattern": null,
+        "rail": null,
+        "unit": "points_per_100",
+        "rate": 0,
+        "min_txn_inr": null,
+        "max_txn_inr": null,
+        "priority": 4,
+        "conditions": {
+          "source_local_id": "millennia-emi-zero",
+          "part": 1,
+          "info_reasons": [],
+          "flags": [
+            "emi_alternatives"
+          ]
+        },
+        "notes": null,
+        "effective_from": "2024-09-01",
+        "effective_to": null,
+        "excluded_categories": [],
+        "rule_role": "exclusion",
+        "merchant_slugs": [],
+        "platform_slugs": [],
+        "mcc_include": [],
+        "mcc_exclude": [],
+        "except_merchant_slugs": [],
+        "except_platform_slugs": [],
+        "block_inr": null,
+        "min_engine_version": 1,
+        "max_engine_version": null,
+        "source_local_id": "millennia-emi-zero",
+        "display_note": "EMI conversions and transactions excluded from CashPoints accrual."
+      },
+      {
+        "id": "hdfc-millennia:rule:millennia-emi-zero#2",
+        "category_id": null,
+        "category_slug": null,
+        "merchant_pattern": null,
+        "rail": "emi",
+        "unit": "points_per_100",
+        "rate": 0,
+        "min_txn_inr": null,
+        "max_txn_inr": null,
+        "priority": 4,
+        "conditions": {
+          "source_local_id": "millennia-emi-zero",
+          "part": 2,
+          "info_reasons": [],
+          "flags": [
+            "emi_alternatives"
+          ]
+        },
+        "notes": null,
+        "effective_from": "2024-09-01",
+        "effective_to": null,
+        "excluded_categories": [],
+        "rule_role": "exclusion",
+        "merchant_slugs": [],
+        "platform_slugs": [],
+        "mcc_include": [],
+        "mcc_exclude": [],
+        "except_merchant_slugs": [],
+        "except_platform_slugs": [],
+        "block_inr": null,
+        "min_engine_version": 2,
+        "max_engine_version": null,
+        "source_local_id": "millennia-emi-zero",
+        "display_note": "EMI conversions and transactions excluded from CashPoints accrual."
+      },
+      {
+        "id": "hdfc-millennia:rule:millennia-cash-advance-zero",
+        "category_id": null,
+        "category_slug": null,
+        "merchant_pattern": null,
+        "rail": "atm",
+        "unit": "points_per_100",
+        "rate": 0,
+        "min_txn_inr": null,
+        "max_txn_inr": null,
+        "priority": 5,
+        "conditions": {
+          "source_local_id": "millennia-cash-advance-zero",
+          "part": null,
+          "info_reasons": [],
+          "flags": [
+            "exclusion_scope_broadened"
+          ]
+        },
+        "notes": null,
+        "effective_from": "2021-11-01",
+        "effective_to": null,
+        "excluded_categories": [],
+        "rule_role": "exclusion",
+        "merchant_slugs": [],
+        "platform_slugs": [],
+        "mcc_include": [
+          "6010",
+          "6011"
+        ],
+        "mcc_exclude": [],
+        "except_merchant_slugs": [],
+        "except_platform_slugs": [],
+        "block_inr": null,
+        "min_engine_version": 2,
+        "max_engine_version": null,
+        "source_local_id": "millennia-cash-advance-zero",
+        "display_note": "ATM cash advances do not earn CashPoints."
+      },
+      {
+        "id": "hdfc-millennia:rule:millennia-card-fees-zero",
+        "category_id": null,
+        "category_slug": null,
+        "merchant_pattern": null,
+        "rail": null,
+        "unit": "points_per_100",
+        "rate": 0,
+        "min_txn_inr": null,
+        "max_txn_inr": null,
+        "priority": 6,
+        "conditions": {
+          "source_local_id": "millennia-card-fees-zero",
+          "part": null,
+          "info_reasons": [
+            "non_purchase_category",
+            "non_purchase_channel"
+          ],
+          "flags": []
+        },
+        "notes": null,
+        "effective_from": "2021-11-01",
+        "effective_to": null,
+        "excluded_categories": [],
+        "rule_role": "info",
+        "merchant_slugs": [],
+        "platform_slugs": [],
+        "mcc_include": [],
+        "mcc_exclude": [],
+        "except_merchant_slugs": [],
+        "except_platform_slugs": [],
+        "block_inr": null,
+        "min_engine_version": 2,
+        "max_engine_version": null,
+        "source_local_id": "millennia-card-fees-zero",
+        "display_note": "Card membership fees, finance charges, and penal charges do not earn CashPoints."
+      },
+      {
+        "id": "hdfc-millennia:rule:millennia-outstanding-payment-zero",
+        "category_id": null,
+        "category_slug": null,
+        "merchant_pattern": null,
+        "rail": null,
+        "unit": "points_per_100",
+        "rate": 0,
+        "min_txn_inr": null,
+        "max_txn_inr": null,
+        "priority": 7,
+        "conditions": {
+          "source_local_id": "millennia-outstanding-payment-zero",
+          "part": null,
+          "info_reasons": [
+            "condition:channel_type",
+            "non_purchase_category"
+          ],
+          "flags": []
+        },
+        "notes": null,
+        "effective_from": "2021-11-01",
+        "effective_to": null,
+        "excluded_categories": [],
+        "rule_role": "info",
+        "merchant_slugs": [],
+        "platform_slugs": [],
+        "mcc_include": [],
+        "mcc_exclude": [],
+        "except_merchant_slugs": [],
+        "except_platform_slugs": [],
+        "block_inr": null,
+        "min_engine_version": 2,
+        "max_engine_version": null,
+        "source_local_id": "millennia-outstanding-payment-zero",
+        "display_note": "Payment of credit card outstanding balances does not earn CashPoints."
+      },
+      {
+        "id": "hdfc-millennia:rule:millennia-online-gaming-zero#1",
+        "category_id": "cat-entertainment",
+        "category_slug": "entertainment",
+        "merchant_pattern": null,
+        "rail": null,
+        "unit": "points_per_100",
+        "rate": 0,
+        "min_txn_inr": null,
+        "max_txn_inr": null,
+        "priority": 8,
+        "conditions": {
+          "source_local_id": "millennia-online-gaming-zero",
+          "part": 1,
+          "info_reasons": [],
+          "flags": [
+            "exclusion_rail_dropped",
+            "exclusion_scope_broadened",
+            "broad_exclusion_v1_only",
+            "broad_category"
+          ]
+        },
+        "notes": null,
+        "effective_from": "2025-07-01",
+        "effective_to": null,
+        "excluded_categories": [],
+        "rule_role": "exclusion",
+        "merchant_slugs": [],
+        "platform_slugs": [],
+        "mcc_include": [],
+        "mcc_exclude": [],
+        "except_merchant_slugs": [],
+        "except_platform_slugs": [],
+        "block_inr": null,
+        "min_engine_version": 1,
+        "max_engine_version": 1,
+        "source_local_id": "millennia-online-gaming-zero",
+        "display_note": "Online skill-based gaming transactions excluded from reward accrual."
+      },
+      {
+        "id": "hdfc-millennia:rule:millennia-online-gaming-zero#2",
+        "category_id": null,
+        "category_slug": null,
+        "merchant_pattern": null,
+        "rail": null,
+        "unit": "points_per_100",
+        "rate": 0,
+        "min_txn_inr": null,
+        "max_txn_inr": null,
+        "priority": 8,
+        "conditions": {
+          "source_local_id": "millennia-online-gaming-zero",
+          "part": 2,
+          "info_reasons": [],
+          "flags": [
+            "exclusion_rail_dropped",
+            "exclusion_scope_broadened",
+            "broad_exclusion_v1_only"
+          ]
+        },
+        "notes": null,
+        "effective_from": "2025-07-01",
+        "effective_to": null,
+        "excluded_categories": [],
+        "rule_role": "exclusion",
+        "merchant_slugs": [],
+        "platform_slugs": [],
+        "mcc_include": [
+          "5816",
+          "7995"
+        ],
+        "mcc_exclude": [],
+        "except_merchant_slugs": [],
+        "except_platform_slugs": [],
+        "block_inr": null,
+        "min_engine_version": 2,
+        "max_engine_version": null,
+        "source_local_id": "millennia-online-gaming-zero",
+        "display_note": "Online skill-based gaming transactions excluded from reward accrual."
+      },
+      {
+        "id": "hdfc-millennia:rule:millennia-education-third-party-zero",
+        "category_id": "cat-education",
+        "category_slug": "education",
+        "merchant_pattern": null,
+        "rail": null,
+        "unit": "points_per_100",
+        "rate": 0,
+        "min_txn_inr": null,
+        "max_txn_inr": null,
+        "priority": 9,
+        "conditions": {
+          "source_local_id": "millennia-education-third-party-zero",
+          "part": null,
+          "info_reasons": [
+            "condition:third_party_apps"
+          ],
+          "flags": [
+            "exclusion_rail_dropped",
+            "exclusion_scope_broadened"
+          ]
+        },
+        "notes": null,
+        "effective_from": "2024-09-01",
+        "effective_to": null,
+        "excluded_categories": [],
+        "rule_role": "info",
+        "merchant_slugs": [],
+        "platform_slugs": [],
+        "mcc_include": [
+          "8211",
+          "8220",
+          "8241",
+          "8244",
+          "8249",
+          "8299"
+        ],
+        "mcc_exclude": [],
+        "except_merchant_slugs": [],
+        "except_platform_slugs": [],
+        "block_inr": null,
+        "min_engine_version": 2,
+        "max_engine_version": null,
+        "source_local_id": "millennia-education-third-party-zero",
+        "display_note": "Education payments made through third-party aggregator apps do not earn CashPoints. Direct school/college website and POS payments remain eligible for reward accrual."
+      },
+      {
+        "id": "hdfc-millennia:rule:wp7_emi_rail_exclusion",
+        "category_id": null,
+        "category_slug": null,
+        "merchant_pattern": null,
+        "rail": "emi",
+        "unit": "points_per_100",
+        "rate": 0,
+        "min_txn_inr": null,
+        "max_txn_inr": null,
+        "priority": 0,
+        "conditions": {
+          "source_local_id": "wp7_emi_rail_exclusion",
+          "part": null,
+          "info_reasons": [],
+          "flags": []
+        },
+        "notes": null,
+        "effective_from": "2021-11-01",
+        "effective_to": null,
+        "excluded_categories": [],
+        "rule_role": "exclusion",
+        "merchant_slugs": [],
+        "platform_slugs": [],
+        "mcc_include": [],
+        "mcc_exclude": [],
+        "except_merchant_slugs": [],
+        "except_platform_slugs": [],
+        "block_inr": null,
+        "min_engine_version": 2,
+        "max_engine_version": null,
+        "source_local_id": "wp7_emi_rail_exclusion",
+        "display_note": "EMI transactions earn no rewards."
+      },
+      {
+        "id": "hdfc-millennia:rule:millennia-other-spends-1pct#min-amount",
+        "category_id": null,
+        "category_slug": null,
+        "merchant_pattern": null,
+        "rail": null,
+        "unit": "points_per_100",
+        "rate": 0,
+        "min_txn_inr": null,
+        "max_txn_inr": 100,
+        "priority": 0,
+        "conditions": {
+          "source_local_id": "millennia-other-spends-1pct",
+          "part": null,
+          "info_reasons": [],
+          "flags": [
+            "synthesized_min_amount_exclusion"
+          ]
+        },
+        "notes": null,
+        "effective_from": "2025-04-25",
+        "effective_to": null,
+        "excluded_categories": [],
+        "rule_role": "exclusion",
+        "merchant_slugs": [],
+        "platform_slugs": [],
+        "mcc_include": [],
+        "mcc_exclude": [],
+        "except_merchant_slugs": [],
+        "except_platform_slugs": [],
+        "block_inr": null,
+        "min_engine_version": 2,
+        "max_engine_version": null,
+        "source_local_id": "millennia-other-spends-1pct",
+        "display_note": "No rewards below ₹100"
+      }
+    ],
+    "cap_rules": [
+      {
+        "id": "hdfc-millennia:cap:millennia-5pct-monthly-cap",
+        "reward_rule_id": null,
+        "category_id": null,
+        "category_slug": null,
+        "benefit_kind": null,
+        "label": "Millennia 5pct monthly cap",
+        "measure": "reward_value",
+        "period": "calendar_month",
+        "cap_value": 1000,
+        "post_cap_unit": null,
+        "post_cap_rate": 0,
+        "resets_on_day": 1,
+        "cap_kind": "total_points",
+        "cap_amount": 1000,
+        "scope": "targets",
+        "targets": [
+          "hdfc-millennia:rule:millennia-5pct-select-merchants",
+          "hdfc-millennia:rule:millennia-uber-mcc4121"
+        ],
+        "parent_cap_id": null,
+        "post_cap_behavior": null,
+        "anchor": null,
+        "min_engine_version": 2,
+        "source_local_id": "millennia-5pct-monthly-cap"
+      },
+      {
+        "id": "hdfc-millennia:cap:millennia-1pct-monthly-cap",
+        "reward_rule_id": null,
+        "category_id": null,
+        "category_slug": null,
+        "benefit_kind": null,
+        "label": "Millennia 1pct monthly cap",
+        "measure": "reward_value",
+        "period": "calendar_month",
+        "cap_value": 1000,
+        "post_cap_unit": null,
+        "post_cap_rate": 0,
+        "resets_on_day": 1,
+        "cap_kind": "total_points",
+        "cap_amount": 1000,
+        "scope": "targets",
+        "targets": [
+          "hdfc-millennia:rule:millennia-wallet-mcc6540-base",
+          "hdfc-millennia:rule:millennia-uber-eats-base",
+          "hdfc-millennia:rule:millennia-other-spends-1pct"
+        ],
+        "parent_cap_id": null,
+        "post_cap_behavior": null,
+        "anchor": null,
+        "min_engine_version": 2,
+        "source_local_id": "millennia-1pct-monthly-cap"
+      },
+      {
+        "id": "hdfc-millennia:cap:millennia-insurance-monthly-cap",
+        "reward_rule_id": null,
+        "category_id": "cat-insurance",
+        "category_slug": "insurance",
+        "benefit_kind": null,
+        "label": "Millennia insurance monthly cap",
+        "measure": "reward_value",
+        "period": "calendar_month",
+        "cap_value": 2000,
+        "post_cap_unit": null,
+        "post_cap_rate": 0,
+        "resets_on_day": 1,
+        "cap_kind": "total_points",
+        "cap_amount": 2000,
+        "scope": "targets",
+        "targets": [],
+        "parent_cap_id": "hdfc-millennia:cap:millennia-1pct-monthly-cap",
+        "post_cap_behavior": null,
+        "anchor": null,
+        "min_engine_version": 1,
+        "source_local_id": "millennia-insurance-monthly-cap"
+      }
+    ],
+    "milestone_rules": [
+      {
+        "id": "hdfc-millennia:milestone:millennia-quarterly-1lakh",
+        "label": "Quarterly spend milestone",
+        "period": "quarter",
+        "threshold_spend_inr": 100000,
+        "reward_description": "Quarterly spend milestone",
+        "reward_value_inr": 1000,
+        "is_repeatable": true,
+        "max_repeats": null,
+        "anchor": "calendar_year",
+        "reward_points": null,
+        "reward_kind": null,
+        "excluded_category_ids": [],
+        "window_days": null,
+        "source_local_id": "millennia-quarterly-1lakh"
+      }
+    ],
+    "fee_waiver_rules": [
+      {
+        "id": "hdfc-millennia:waiver:1",
+        "threshold_spend_inr": 100000,
+        "period": "annual",
+        "waives_fee_inr": 1000,
+        "excluded_category_slugs": [],
+        "notes": "Spend ₹1,00,000 or more in the preceding 12 months before renewal to waive the renewal membership fee.",
+        "excluded_categories": []
+      }
+    ],
+    "benefits": [
+      {
+        "id": "hdfc-millennia:benefit:millennia-quarterly-lounge-or-voucher",
+        "key": "millennia-quarterly-lounge-or-voucher",
+        "source_local_id": "millennia-quarterly-lounge-or-voucher",
+        "kind": "lounge_domestic",
+        "label": "Quarterly ₹1 lakh spend milestone gives a choice of one domestic lounge access voucher or ₹1,000 brand voucher.",
+        "description": "Sponsor: HDFC Bank",
+        "quota_count": 1,
+        "quota_period": "quarter",
+        "network_program": "domestic_airport_lounge_program",
+        "value_estimate_inr": 1000,
+        "conditions": {
+          "source_category_id": "lounge",
+          "evaluation_engine": {
+            "conditions": {
+              "minimum_net_spend_inr": 100000,
+              "period": "calendar_quarter",
+              "quarters": [
+                "January-March",
+                "April-June",
+                "July-September",
+                "October-December"
+              ],
+              "eligible_spend_basis": "Net spends after reversals; retail purchases and eligible merchant EMI principal count; SmartEMI/Dial an EMI amounts do not count.",
+              "choice_required": true
+            },
+            "benefit_calculation": {
+              "choice_options": [
+                "one domestic airport lounge access voucher",
+                "₹1,000 gift voucher from partner brands"
+              ]
+            },
+            "perks": [
+              "Complimentary direct card-based lounge access was discontinued effective 1 December 2023.",
+              "Domestic lounge access is currently available through the quarterly spend milestone voucher.",
+              "Only one benefit (lounge voucher or ₹1,000 voucher) can be claimed per qualifying calendar quarter."
+            ]
+          }
+        }
+      },
+      {
+        "id": "hdfc-millennia:benefit:millennia-dineout",
+        "key": "millennia-dineout",
+        "source_local_id": "millennia-dineout",
+        "kind": "dining_program",
+        "label": "Up to 20% savings on restaurant bill payments through Swiggy Dineout.",
+        "description": "Sponsor: Swiggy",
+        "quota_count": null,
+        "quota_period": null,
+        "network_program": "Swiggy Dineout",
+        "value_estimate_inr": null,
+        "conditions": {
+          "source_category_id": "dining",
+          "evaluation_engine": {
+            "conditions": {
+              "payment_channel": "Swiggy App",
+              "restaurant_count_reference": "20,000+"
+            },
+            "benefit_calculation": null,
+            "perks": []
+          }
+        }
+      }
+    ],
+    "unlock_rules": [
+      {
+        "id": "hdfc-millennia:unlock:millennia-quarterly-lounge-or-voucher@1",
+        "card_benefit_id": "hdfc-millennia:benefit:millennia-quarterly-lounge-or-voucher",
+        "kind": "lounge_domestic",
+        "label": "Quarterly ₹1 lakh spend milestone gives a choice of one domestic lounge access voucher or ₹1,000 brand voucher.",
+        "spend_threshold_inr": 100000,
+        "spend_window": "current_calendar_quarter",
+        "window_days": null,
+        "unlocks_quota": 1,
+        "unlocks_period": "quarter",
+        "tier_label": null,
+        "excluded_category_ids": [],
+        "notes": null,
+        "source_local_id": "millennia-quarterly-lounge-or-voucher"
+      }
+    ],
+    "redemption_options": [
+      {
+        "program_name": "statement_balance",
+        "method": "statement_credit",
+        "value_per_point_inr": 1,
+        "min_points": 500,
+        "notes": "Redemption fee: ₹50"
+      },
+      {
+        "program_name": "SmartBuy Rewards Portal",
+        "method": "flight_hotel_booking",
+        "value_per_point_inr": 0.3,
+        "min_points": 500,
+        "notes": "Redemption fee: ₹0"
+      },
+      {
+        "program_name": "SmartBuy Rewards Portal",
+        "method": "partner_catalogue",
+        "value_per_point_inr": 0.3,
+        "min_points": 500,
+        "notes": "Redemption fee: ₹99"
+      }
+    ],
+    "is_upi_linkable": true
+  }
+}

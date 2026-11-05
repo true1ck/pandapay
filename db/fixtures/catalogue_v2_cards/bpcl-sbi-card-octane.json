@@ -1,0 +1,1225 @@
+{
+  "generated_by": "api/scripts/catalogue_v2/snapshot_examples.js",
+  "source_slug": "bpcl-sbi-card-octane",
+  "inputs": {
+    "transform_version": "7",
+    "source_record_sha256": "ee95449ec14a6d3c8bd2685eabfae0c976d0fac83742915531370a58aa58bef8",
+    "override_sha256": "c324bfbc12c7d1a02f39c6ecf46c8b14f9a83ae25207976eba018d08863ea4bd",
+    "directory_sha256": "b1094d54b77e848d22f7a9a64f3ae6d1ef43ca3eb2fc8e40cd43ed1994664694",
+    "verified": true
+  },
+  "blocking_flags": [],
+  "card": {
+    "id": "bpcl-sbi-card-octane:card",
+    "slug": "bpcl-sbi-card-octane",
+    "name": "BPCL SBI Card OCTANE",
+    "network": "visa",
+    "issuer_slug": "sbi-card",
+    "base_reward_unit": "points_per_100",
+    "base_reward_rate": 1,
+    "point_value_inr": 0.25,
+    "excluded_categories": [],
+    "accrual_block_inr": 100,
+    "accrual_rounding": "floor",
+    "cashback_rounding": null,
+    "points_expiry_months": 24,
+    "model_status": "verified",
+    "model_coverage": {
+      "rules_total": 16,
+      "rules_modelled": 12,
+      "rules_info": 4,
+      "caps_total": 3,
+      "caps_enforced": 3,
+      "flags": [
+        {
+          "code": "unmapped_excluded_category",
+          "source_local_id": "other_retail_base",
+          "detail": null
+        },
+        {
+          "code": "info_rule",
+          "source_local_id": "bpcl_fuel_upi_rupay_exclusion",
+          "detail": "condition:transaction_method"
+        },
+        {
+          "code": "info_rule",
+          "source_local_id": "balance_transfer_exclusion",
+          "detail": "transaction_type"
+        },
+        {
+          "code": "info_rule",
+          "source_local_id": "balance_transfer_exclusion",
+          "detail": "non_purchase_channel"
+        },
+        {
+          "code": "exclusion_rail_dropped",
+          "source_local_id": "wallet_load_exclusion",
+          "detail": null
+        },
+        {
+          "code": "mcc_scoped_exclusion",
+          "source_local_id": "wallet_load_exclusion",
+          "detail": null
+        },
+        {
+          "code": "info_rule",
+          "source_local_id": "financial_charges_exclusion",
+          "detail": "transaction_type"
+        },
+        {
+          "code": "info_rule",
+          "source_local_id": "financial_charges_exclusion",
+          "detail": "non_purchase_channel"
+        },
+        {
+          "code": "info_rule",
+          "source_local_id": "disputed_transaction_exclusion",
+          "detail": "condition:transaction_status"
+        },
+        {
+          "code": "info_rule",
+          "source_local_id": "disputed_transaction_exclusion",
+          "detail": "condition:channel_type"
+        },
+        {
+          "code": "exclusion_scope_broadened",
+          "source_local_id": "cash_advance_exclusion",
+          "detail": null
+        },
+        {
+          "code": "exception_from_prose",
+          "source_local_id": "non_bpcl_fuel_exclusion",
+          "detail": null
+        },
+        {
+          "code": "exclusion_scope_broadened",
+          "source_local_id": "non_bpcl_fuel_exclusion",
+          "detail": null
+        },
+        {
+          "code": "channel_type_restates_brand",
+          "source_local_id": "merchant_accelerator_exclusion",
+          "detail": null
+        },
+        {
+          "code": "exclusion_list_expanded",
+          "source_local_id": "merchant_accelerator_exclusion",
+          "detail": null
+        },
+        {
+          "code": "exclusion_with_stated_rate",
+          "source_local_id": "merchant_accelerator_exclusion",
+          "detail": null
+        },
+        {
+          "code": "mcc_scoped_exclusion",
+          "source_local_id": "rent_exclusion",
+          "detail": null
+        },
+        {
+          "code": "exclusion_scope_broadened",
+          "source_local_id": "flexipay_exclusion",
+          "detail": null
+        },
+        {
+          "code": "emi_alternatives",
+          "source_local_id": "merchant_emi_exclusion",
+          "detail": null
+        },
+        {
+          "code": "hidden_from_v1_uncapped",
+          "source_local_id": null,
+          "detail": "bpcl_fuel_25x, bpcl_lubricants_25x"
+        }
+      ],
+      "overrides_applied": [
+        {
+          "path": "cap_rules[id=bpcl_fuel_reward_cap].metric",
+          "op": "set",
+          "value_sha256": "7af78ba28cf9ccb3",
+          "reason": "Issuer caps total RP in the bucket per statement cycle.",
+          "source_url": "https://www.sbicard.com/sbi-card-en/assets/docs/pdf/ekit-tncs/BPCLOctanetnc.pdf",
+          "checked_on": "2026-11-05",
+          "citation": null
+        },
+        {
+          "path": "cap_rules[id=bharat_gas_reward_cap].metric",
+          "op": "set",
+          "value_sha256": "7af78ba28cf9ccb3",
+          "reason": "Issuer caps total RP in the bucket per statement cycle.",
+          "source_url": "https://www.sbicard.com/sbi-card-en/assets/docs/pdf/ekit-tncs/BPCLOctanetnc.pdf",
+          "checked_on": "2026-11-05",
+          "citation": null
+        },
+        {
+          "path": "cap_rules[id=lifestyle_reward_cap].metric",
+          "op": "set",
+          "value_sha256": "7af78ba28cf9ccb3",
+          "reason": "WP7: T&C 11.4(3): \"Cumulative 10X Reward Points accrued ... will have a maximum cap of 7,500 Reward Points per month\" - all 10X points, not only the bonus.",
+          "source_url": "https://www.sbicard.com/sbi-card-en/assets/docs/pdf/ekit-tncs/BPCLOctanetnc.pdf",
+          "checked_on": "2026-11-05",
+          "citation": null
+        },
+        {
+          "path": "cap_rules[id=lifestyle_reward_cap].post_limit_behavior",
+          "op": "set",
+          "value_sha256": "74234e98afe7498f",
+          "reason": "WP7: T&C states no fallback after the 7,500 cap (research note); left unstated.",
+          "source_url": "https://www.sbicard.com/sbi-card-en/assets/docs/pdf/ekit-tncs/BPCLOctanetnc.pdf",
+          "checked_on": "2026-11-05",
+          "citation": null
+        },
+        {
+          "path": "reward_rules[id=other_retail_base].conditions.eligible_scope",
+          "op": "remove",
+          "value_sha256": "74234e98afe7498f",
+          "reason": "WP7: T&C 11.4(4): \"1 Reward Point on all other retail spends, except fuel\"; the scope text restated the catch-all (rule was info).",
+          "source_url": "https://www.sbicard.com/sbi-card-en/assets/docs/pdf/ekit-tncs/BPCLOctanetnc.pdf",
+          "checked_on": "2026-11-05",
+          "citation": null
+        },
+        {
+          "path": "reward_rules[id=bpcl_bharat_gas_25x].conditions.channel",
+          "op": "remove",
+          "value_sha256": "74234e98afe7498f",
+          "reason": "WP7: T&C: \"Bharat Gas (Website & App only)\" restates rail online; the rule already has rail online and merchant Bharat Gas.",
+          "source_url": "https://www.sbicard.com/sbi-card-en/assets/docs/pdf/ekit-tncs/BPCLOctanetnc.pdf",
+          "checked_on": "2026-11-05",
+          "citation": null
+        }
+      ]
+    },
+    "reward_rules": [
+      {
+        "id": "bpcl-sbi-card-octane:rule:bpcl_fuel_25x",
+        "category_id": "cat-fuel",
+        "category_slug": "fuel",
+        "merchant_pattern": "bpcl",
+        "rail": "swipe",
+        "unit": "points_per_100",
+        "rate": 25,
+        "min_txn_inr": null,
+        "max_txn_inr": null,
+        "priority": 10,
+        "conditions": {
+          "source_local_id": "bpcl_fuel_25x",
+          "part": null,
+          "info_reasons": [],
+          "flags": [
+            "hidden_from_v1_uncapped"
+          ]
+        },
+        "notes": null,
+        "effective_from": "2020-12-01",
+        "effective_to": null,
+        "excluded_categories": [],
+        "rule_role": "earn",
+        "merchant_slugs": [
+          "bpcl"
+        ],
+        "platform_slugs": [],
+        "mcc_include": [],
+        "mcc_exclude": [],
+        "except_merchant_slugs": [],
+        "except_platform_slugs": [],
+        "block_inr": null,
+        "min_engine_version": 2,
+        "max_engine_version": null,
+        "source_local_id": "bpcl_fuel_25x",
+        "display_note": "25 Reward Points per ₹100 on eligible BPCL fuel purchases."
+      },
+      {
+        "id": "bpcl-sbi-card-octane:rule:bpcl_lubricants_25x",
+        "category_id": "cat-fuel",
+        "category_slug": "fuel",
+        "merchant_pattern": "bpcl",
+        "rail": "swipe",
+        "unit": "points_per_100",
+        "rate": 25,
+        "min_txn_inr": null,
+        "max_txn_inr": null,
+        "priority": 11,
+        "conditions": {
+          "source_local_id": "bpcl_lubricants_25x",
+          "part": null,
+          "info_reasons": [],
+          "flags": [
+            "hidden_from_v1_uncapped"
+          ]
+        },
+        "notes": null,
+        "effective_from": "2020-12-01",
+        "effective_to": null,
+        "excluded_categories": [],
+        "rule_role": "earn",
+        "merchant_slugs": [
+          "bpcl"
+        ],
+        "platform_slugs": [],
+        "mcc_include": [],
+        "mcc_exclude": [],
+        "except_merchant_slugs": [],
+        "except_platform_slugs": [],
+        "block_inr": null,
+        "min_engine_version": 2,
+        "max_engine_version": null,
+        "source_local_id": "bpcl_lubricants_25x",
+        "display_note": "BPCL card-specific terms include BPCL Fuel and lubricants in the 25X reward proposition."
+      },
+      {
+        "id": "bpcl-sbi-card-octane:rule:bpcl_bharat_gas_25x",
+        "category_id": null,
+        "category_slug": null,
+        "merchant_pattern": "bharatgas",
+        "rail": "online",
+        "unit": "points_per_100",
+        "rate": 25,
+        "min_txn_inr": null,
+        "max_txn_inr": null,
+        "priority": 20,
+        "conditions": {
+          "source_local_id": "bpcl_bharat_gas_25x",
+          "part": null,
+          "info_reasons": [],
+          "flags": []
+        },
+        "notes": null,
+        "effective_from": "2020-12-01",
+        "effective_to": null,
+        "excluded_categories": [],
+        "rule_role": "earn",
+        "merchant_slugs": [
+          "bharat_gas"
+        ],
+        "platform_slugs": [],
+        "mcc_include": [],
+        "mcc_exclude": [],
+        "except_merchant_slugs": [],
+        "except_platform_slugs": [],
+        "block_inr": null,
+        "min_engine_version": 1,
+        "max_engine_version": null,
+        "source_local_id": "bpcl_bharat_gas_25x",
+        "display_note": "25 Reward Points per ₹100 on Bharat Gas website/app LPG cylinder bookings."
+      },
+      {
+        "id": "bpcl-sbi-card-octane:rule:dining_grocery_departmental_movies_10x",
+        "category_id": null,
+        "category_slug": null,
+        "merchant_pattern": null,
+        "rail": null,
+        "unit": "points_per_100",
+        "rate": 10,
+        "min_txn_inr": null,
+        "max_txn_inr": null,
+        "priority": 30,
+        "conditions": {
+          "source_local_id": "dining_grocery_departmental_movies_10x",
+          "part": null,
+          "info_reasons": [],
+          "flags": []
+        },
+        "notes": null,
+        "effective_from": "2020-12-01",
+        "effective_to": null,
+        "excluded_categories": [],
+        "rule_role": "earn",
+        "merchant_slugs": [],
+        "platform_slugs": [],
+        "mcc_include": [
+          "5311",
+          "5411",
+          "5812",
+          "5813",
+          "5814",
+          "7832",
+          "7922"
+        ],
+        "mcc_exclude": [],
+        "except_merchant_slugs": [],
+        "except_platform_slugs": [],
+        "block_inr": null,
+        "min_engine_version": 2,
+        "max_engine_version": null,
+        "source_local_id": "dining_grocery_departmental_movies_10x",
+        "display_note": "10 Reward Points per ₹100 at Dining, Departmental Stores, Grocery and Movies."
+      },
+      {
+        "id": "bpcl-sbi-card-octane:rule:other_retail_base",
+        "category_id": null,
+        "category_slug": null,
+        "merchant_pattern": null,
+        "rail": null,
+        "unit": "points_per_100",
+        "rate": 1,
+        "min_txn_inr": null,
+        "max_txn_inr": null,
+        "priority": 100,
+        "conditions": {
+          "source_local_id": "other_retail_base",
+          "part": null,
+          "info_reasons": [],
+          "flags": [
+            "unmapped_excluded_category"
+          ]
+        },
+        "notes": null,
+        "effective_from": "2020-12-01",
+        "effective_to": null,
+        "excluded_categories": [
+          "cat-bills",
+          "cat-emi",
+          "cat-rent",
+          "cat-wallet"
+        ],
+        "rule_role": "base",
+        "merchant_slugs": [],
+        "platform_slugs": [],
+        "mcc_include": [],
+        "mcc_exclude": [],
+        "except_merchant_slugs": [],
+        "except_platform_slugs": [],
+        "block_inr": null,
+        "min_engine_version": 1,
+        "max_engine_version": null,
+        "source_local_id": "other_retail_base",
+        "display_note": "1 Reward Point per ₹100 on other eligible retail purchases."
+      },
+      {
+        "id": "bpcl-sbi-card-octane:rule:bpcl_fuel_upi_rupay_exclusion",
+        "category_id": "cat-fuel",
+        "category_slug": "fuel",
+        "merchant_pattern": "bpcl",
+        "rail": "upi_qr",
+        "unit": "points_per_100",
+        "rate": 0,
+        "min_txn_inr": null,
+        "max_txn_inr": null,
+        "priority": 1,
+        "conditions": {
+          "source_local_id": "bpcl_fuel_upi_rupay_exclusion",
+          "part": null,
+          "info_reasons": [
+            "condition:transaction_method"
+          ],
+          "flags": []
+        },
+        "notes": null,
+        "effective_from": "2023-08-10",
+        "effective_to": null,
+        "excluded_categories": [],
+        "rule_role": "info",
+        "merchant_slugs": [
+          "bpcl"
+        ],
+        "platform_slugs": [],
+        "mcc_include": [],
+        "mcc_exclude": [],
+        "except_merchant_slugs": [],
+        "except_platform_slugs": [],
+        "block_inr": null,
+        "min_engine_version": 2,
+        "max_engine_version": null,
+        "source_local_id": "bpcl_fuel_upi_rupay_exclusion",
+        "display_note": "Fuel spends using UPI functionality on SBI Credit Card on RuPay platform at BPCL petrol pumps do not earn Reward Points and the BPCL fuel surcharge waiver does not apply."
+      },
+      {
+        "id": "bpcl-sbi-card-octane:rule:balance_transfer_exclusion",
+        "category_id": null,
+        "category_slug": null,
+        "merchant_pattern": null,
+        "rail": null,
+        "unit": "points_per_100",
+        "rate": 0,
+        "min_txn_inr": null,
+        "max_txn_inr": null,
+        "priority": 2,
+        "conditions": {
+          "source_local_id": "balance_transfer_exclusion",
+          "part": null,
+          "info_reasons": [
+            "transaction_type",
+            "non_purchase_channel"
+          ],
+          "flags": []
+        },
+        "notes": null,
+        "effective_from": "2020-12-01",
+        "effective_to": null,
+        "excluded_categories": [],
+        "rule_role": "info",
+        "merchant_slugs": [],
+        "platform_slugs": [],
+        "mcc_include": [],
+        "mcc_exclude": [],
+        "except_merchant_slugs": [],
+        "except_platform_slugs": [],
+        "block_inr": null,
+        "min_engine_version": 2,
+        "max_engine_version": null,
+        "source_local_id": "balance_transfer_exclusion",
+        "display_note": "Balance transfers do not earn Reward Points."
+      },
+      {
+        "id": "bpcl-sbi-card-octane:rule:wallet_load_exclusion#1",
+        "category_id": "cat-wallet",
+        "category_slug": "wallet",
+        "merchant_pattern": null,
+        "rail": null,
+        "unit": "points_per_100",
+        "rate": 0,
+        "min_txn_inr": null,
+        "max_txn_inr": null,
+        "priority": 3,
+        "conditions": {
+          "source_local_id": "wallet_load_exclusion",
+          "part": 1,
+          "info_reasons": [],
+          "flags": [
+            "exclusion_rail_dropped",
+            "mcc_scoped_exclusion"
+          ]
+        },
+        "notes": null,
+        "effective_from": "2020-07-01",
+        "effective_to": null,
+        "excluded_categories": [],
+        "rule_role": "exclusion",
+        "merchant_slugs": [],
+        "platform_slugs": [],
+        "mcc_include": [],
+        "mcc_exclude": [],
+        "except_merchant_slugs": [],
+        "except_platform_slugs": [],
+        "block_inr": null,
+        "min_engine_version": 1,
+        "max_engine_version": 1,
+        "source_local_id": "wallet_load_exclusion",
+        "display_note": "e-Wallet loading/recharge transactions identified under MCC 6540 and 6541 do not earn Reward Points."
+      },
+      {
+        "id": "bpcl-sbi-card-octane:rule:wallet_load_exclusion#2",
+        "category_id": "cat-wallet",
+        "category_slug": "wallet",
+        "merchant_pattern": null,
+        "rail": null,
+        "unit": "points_per_100",
+        "rate": 0,
+        "min_txn_inr": null,
+        "max_txn_inr": null,
+        "priority": 3,
+        "conditions": {
+          "source_local_id": "wallet_load_exclusion",
+          "part": 2,
+          "info_reasons": [],
+          "flags": [
+            "exclusion_rail_dropped",
+            "mcc_scoped_exclusion"
+          ]
+        },
+        "notes": null,
+        "effective_from": "2020-07-01",
+        "effective_to": null,
+        "excluded_categories": [],
+        "rule_role": "exclusion",
+        "merchant_slugs": [],
+        "platform_slugs": [],
+        "mcc_include": [
+          "6540",
+          "6541"
+        ],
+        "mcc_exclude": [],
+        "except_merchant_slugs": [],
+        "except_platform_slugs": [],
+        "block_inr": null,
+        "min_engine_version": 2,
+        "max_engine_version": null,
+        "source_local_id": "wallet_load_exclusion",
+        "display_note": "e-Wallet loading/recharge transactions identified under MCC 6540 and 6541 do not earn Reward Points."
+      },
+      {
+        "id": "bpcl-sbi-card-octane:rule:wallet_load_exclusion#3",
+        "category_id": null,
+        "category_slug": null,
+        "merchant_pattern": null,
+        "rail": null,
+        "unit": "points_per_100",
+        "rate": 0,
+        "min_txn_inr": null,
+        "max_txn_inr": null,
+        "priority": 3,
+        "conditions": {
+          "source_local_id": "wallet_load_exclusion",
+          "part": 3,
+          "info_reasons": [],
+          "flags": [
+            "exclusion_rail_dropped",
+            "mcc_scoped_exclusion"
+          ]
+        },
+        "notes": null,
+        "effective_from": "2020-07-01",
+        "effective_to": null,
+        "excluded_categories": [],
+        "rule_role": "exclusion",
+        "merchant_slugs": [],
+        "platform_slugs": [],
+        "mcc_include": [
+          "6540",
+          "6541"
+        ],
+        "mcc_exclude": [],
+        "except_merchant_slugs": [],
+        "except_platform_slugs": [],
+        "block_inr": null,
+        "min_engine_version": 2,
+        "max_engine_version": null,
+        "source_local_id": "wallet_load_exclusion",
+        "display_note": "e-Wallet loading/recharge transactions identified under MCC 6540 and 6541 do not earn Reward Points."
+      },
+      {
+        "id": "bpcl-sbi-card-octane:rule:financial_charges_exclusion",
+        "category_id": null,
+        "category_slug": null,
+        "merchant_pattern": null,
+        "rail": null,
+        "unit": "points_per_100",
+        "rate": 0,
+        "min_txn_inr": null,
+        "max_txn_inr": null,
+        "priority": 4,
+        "conditions": {
+          "source_local_id": "financial_charges_exclusion",
+          "part": null,
+          "info_reasons": [
+            "transaction_type",
+            "non_purchase_channel"
+          ],
+          "flags": []
+        },
+        "notes": null,
+        "effective_from": "2020-12-01",
+        "effective_to": null,
+        "excluded_categories": [],
+        "rule_role": "info",
+        "merchant_slugs": [],
+        "platform_slugs": [],
+        "mcc_include": [],
+        "mcc_exclude": [],
+        "except_merchant_slugs": [],
+        "except_platform_slugs": [],
+        "block_inr": null,
+        "min_engine_version": 2,
+        "max_engine_version": null,
+        "source_local_id": "financial_charges_exclusion",
+        "display_note": "Financial charges and fees do not earn Reward Points."
+      },
+      {
+        "id": "bpcl-sbi-card-octane:rule:disputed_transaction_exclusion",
+        "category_id": null,
+        "category_slug": null,
+        "merchant_pattern": null,
+        "rail": null,
+        "unit": "points_per_100",
+        "rate": 0,
+        "min_txn_inr": null,
+        "max_txn_inr": null,
+        "priority": 5,
+        "conditions": {
+          "source_local_id": "disputed_transaction_exclusion",
+          "part": null,
+          "info_reasons": [
+            "condition:transaction_status",
+            "condition:channel_type"
+          ],
+          "flags": []
+        },
+        "notes": null,
+        "effective_from": "2020-12-01",
+        "effective_to": null,
+        "excluded_categories": [],
+        "rule_role": "info",
+        "merchant_slugs": [],
+        "platform_slugs": [],
+        "mcc_include": [],
+        "mcc_exclude": [],
+        "except_merchant_slugs": [],
+        "except_platform_slugs": [],
+        "block_inr": null,
+        "min_engine_version": 2,
+        "max_engine_version": null,
+        "source_local_id": "disputed_transaction_exclusion",
+        "display_note": "Disputed transactions do not earn Reward Points."
+      },
+      {
+        "id": "bpcl-sbi-card-octane:rule:cash_advance_exclusion",
+        "category_id": null,
+        "category_slug": null,
+        "merchant_pattern": null,
+        "rail": "atm",
+        "unit": "points_per_100",
+        "rate": 0,
+        "min_txn_inr": null,
+        "max_txn_inr": null,
+        "priority": 6,
+        "conditions": {
+          "source_local_id": "cash_advance_exclusion",
+          "part": null,
+          "info_reasons": [],
+          "flags": [
+            "exclusion_scope_broadened"
+          ]
+        },
+        "notes": null,
+        "effective_from": "2020-12-01",
+        "effective_to": null,
+        "excluded_categories": [],
+        "rule_role": "exclusion",
+        "merchant_slugs": [],
+        "platform_slugs": [],
+        "mcc_include": [],
+        "mcc_exclude": [],
+        "except_merchant_slugs": [],
+        "except_platform_slugs": [],
+        "block_inr": null,
+        "min_engine_version": 2,
+        "max_engine_version": null,
+        "source_local_id": "cash_advance_exclusion",
+        "display_note": "Cash advances do not earn Reward Points."
+      },
+      {
+        "id": "bpcl-sbi-card-octane:rule:non_bpcl_fuel_exclusion",
+        "category_id": "cat-fuel",
+        "category_slug": "fuel",
+        "merchant_pattern": null,
+        "rail": null,
+        "unit": "points_per_100",
+        "rate": 0,
+        "min_txn_inr": null,
+        "max_txn_inr": null,
+        "priority": 7,
+        "conditions": {
+          "source_local_id": "non_bpcl_fuel_exclusion",
+          "part": null,
+          "info_reasons": [],
+          "flags": [
+            "exception_from_prose",
+            "exclusion_scope_broadened"
+          ]
+        },
+        "notes": null,
+        "effective_from": "2020-12-01",
+        "effective_to": null,
+        "excluded_categories": [],
+        "rule_role": "exclusion",
+        "merchant_slugs": [],
+        "platform_slugs": [],
+        "mcc_include": [],
+        "mcc_exclude": [],
+        "except_merchant_slugs": [
+          "bpcl"
+        ],
+        "except_platform_slugs": [],
+        "block_inr": null,
+        "min_engine_version": 1,
+        "max_engine_version": null,
+        "source_local_id": "non_bpcl_fuel_exclusion",
+        "display_note": "Purchases at petrol pumps/service stations other than eligible BPCL transactions do not earn Reward Points."
+      },
+      {
+        "id": "bpcl-sbi-card-octane:rule:merchant_accelerator_exclusion#1",
+        "category_id": null,
+        "category_slug": null,
+        "merchant_pattern": "walmart",
+        "rail": null,
+        "unit": "points_per_100",
+        "rate": 1,
+        "min_txn_inr": null,
+        "max_txn_inr": null,
+        "priority": 8,
+        "conditions": {
+          "source_local_id": "merchant_accelerator_exclusion",
+          "part": 1,
+          "info_reasons": [],
+          "flags": [
+            "channel_type_restates_brand",
+            "exclusion_list_expanded",
+            "exclusion_with_stated_rate"
+          ]
+        },
+        "notes": null,
+        "effective_from": "2020-12-01",
+        "effective_to": null,
+        "excluded_categories": [],
+        "rule_role": "earn",
+        "merchant_slugs": [
+          "best_price"
+        ],
+        "platform_slugs": [],
+        "mcc_include": [
+          "5311",
+          "5411",
+          "5812",
+          "5813",
+          "5814",
+          "7832",
+          "7922"
+        ],
+        "mcc_exclude": [],
+        "except_merchant_slugs": [],
+        "except_platform_slugs": [],
+        "block_inr": null,
+        "min_engine_version": 2,
+        "max_engine_version": null,
+        "source_local_id": "merchant_accelerator_exclusion",
+        "display_note": "Specified Metro Cash & Carry, Walmart and other identified wholesale merchant transactions do not receive the accelerated Reward Point rate and earn base rate, with identification performed on a best-effort basis."
+      },
+      {
+        "id": "bpcl-sbi-card-octane:rule:merchant_accelerator_exclusion#2",
+        "category_id": null,
+        "category_slug": null,
+        "merchant_pattern": "metro wholesale",
+        "rail": null,
+        "unit": "points_per_100",
+        "rate": 1,
+        "min_txn_inr": null,
+        "max_txn_inr": null,
+        "priority": 8,
+        "conditions": {
+          "source_local_id": "merchant_accelerator_exclusion",
+          "part": 2,
+          "info_reasons": [],
+          "flags": [
+            "channel_type_restates_brand",
+            "exclusion_list_expanded",
+            "exclusion_with_stated_rate"
+          ]
+        },
+        "notes": null,
+        "effective_from": "2020-12-01",
+        "effective_to": null,
+        "excluded_categories": [],
+        "rule_role": "earn",
+        "merchant_slugs": [
+          "metro_cash_carry"
+        ],
+        "platform_slugs": [],
+        "mcc_include": [
+          "5311",
+          "5411",
+          "5812",
+          "5813",
+          "5814",
+          "7832",
+          "7922"
+        ],
+        "mcc_exclude": [],
+        "except_merchant_slugs": [],
+        "except_platform_slugs": [],
+        "block_inr": null,
+        "min_engine_version": 2,
+        "max_engine_version": null,
+        "source_local_id": "merchant_accelerator_exclusion",
+        "display_note": "Specified Metro Cash & Carry, Walmart and other identified wholesale merchant transactions do not receive the accelerated Reward Point rate and earn base rate, with identification performed on a best-effort basis."
+      },
+      {
+        "id": "bpcl-sbi-card-octane:rule:rent_exclusion#1",
+        "category_id": "cat-rent",
+        "category_slug": "rent",
+        "merchant_pattern": null,
+        "rail": null,
+        "unit": "points_per_100",
+        "rate": 0,
+        "min_txn_inr": null,
+        "max_txn_inr": null,
+        "priority": 9,
+        "conditions": {
+          "source_local_id": "rent_exclusion",
+          "part": 1,
+          "info_reasons": [],
+          "flags": [
+            "mcc_scoped_exclusion"
+          ]
+        },
+        "notes": null,
+        "effective_from": "2024-04-15",
+        "effective_to": null,
+        "excluded_categories": [],
+        "rule_role": "exclusion",
+        "merchant_slugs": [],
+        "platform_slugs": [],
+        "mcc_include": [],
+        "mcc_exclude": [],
+        "except_merchant_slugs": [],
+        "except_platform_slugs": [],
+        "block_inr": null,
+        "min_engine_version": 1,
+        "max_engine_version": 1,
+        "source_local_id": "rent_exclusion",
+        "display_note": "Reward Point accrual on rent payments identified under MCC 6513 is discontinued."
+      },
+      {
+        "id": "bpcl-sbi-card-octane:rule:rent_exclusion#2",
+        "category_id": "cat-rent",
+        "category_slug": "rent",
+        "merchant_pattern": null,
+        "rail": null,
+        "unit": "points_per_100",
+        "rate": 0,
+        "min_txn_inr": null,
+        "max_txn_inr": null,
+        "priority": 9,
+        "conditions": {
+          "source_local_id": "rent_exclusion",
+          "part": 2,
+          "info_reasons": [],
+          "flags": [
+            "mcc_scoped_exclusion"
+          ]
+        },
+        "notes": null,
+        "effective_from": "2024-04-15",
+        "effective_to": null,
+        "excluded_categories": [],
+        "rule_role": "exclusion",
+        "merchant_slugs": [],
+        "platform_slugs": [],
+        "mcc_include": [
+          "6513"
+        ],
+        "mcc_exclude": [],
+        "except_merchant_slugs": [],
+        "except_platform_slugs": [],
+        "block_inr": null,
+        "min_engine_version": 2,
+        "max_engine_version": null,
+        "source_local_id": "rent_exclusion",
+        "display_note": "Reward Point accrual on rent payments identified under MCC 6513 is discontinued."
+      },
+      {
+        "id": "bpcl-sbi-card-octane:rule:rent_exclusion#3",
+        "category_id": null,
+        "category_slug": null,
+        "merchant_pattern": null,
+        "rail": null,
+        "unit": "points_per_100",
+        "rate": 0,
+        "min_txn_inr": null,
+        "max_txn_inr": null,
+        "priority": 9,
+        "conditions": {
+          "source_local_id": "rent_exclusion",
+          "part": 3,
+          "info_reasons": [],
+          "flags": [
+            "mcc_scoped_exclusion"
+          ]
+        },
+        "notes": null,
+        "effective_from": "2024-04-15",
+        "effective_to": null,
+        "excluded_categories": [],
+        "rule_role": "exclusion",
+        "merchant_slugs": [],
+        "platform_slugs": [],
+        "mcc_include": [
+          "6513"
+        ],
+        "mcc_exclude": [],
+        "except_merchant_slugs": [],
+        "except_platform_slugs": [],
+        "block_inr": null,
+        "min_engine_version": 2,
+        "max_engine_version": null,
+        "source_local_id": "rent_exclusion",
+        "display_note": "Reward Point accrual on rent payments identified under MCC 6513 is discontinued."
+      },
+      {
+        "id": "bpcl-sbi-card-octane:rule:flexipay_exclusion",
+        "category_id": null,
+        "category_slug": null,
+        "merchant_pattern": null,
+        "rail": "emi",
+        "unit": "points_per_100",
+        "rate": 0,
+        "min_txn_inr": null,
+        "max_txn_inr": null,
+        "priority": 10,
+        "conditions": {
+          "source_local_id": "flexipay_exclusion",
+          "part": null,
+          "info_reasons": [],
+          "flags": [
+            "exclusion_scope_broadened"
+          ]
+        },
+        "notes": null,
+        "effective_from": "2020-11-20",
+        "effective_to": null,
+        "excluded_categories": [],
+        "rule_role": "exclusion",
+        "merchant_slugs": [],
+        "platform_slugs": [],
+        "mcc_include": [],
+        "mcc_exclude": [],
+        "except_merchant_slugs": [],
+        "except_platform_slugs": [],
+        "block_inr": null,
+        "min_engine_version": 2,
+        "max_engine_version": null,
+        "source_local_id": "flexipay_exclusion",
+        "display_note": "Flexipay transactions do not earn Reward Points; points previously accrued are reversed on conversion."
+      },
+      {
+        "id": "bpcl-sbi-card-octane:rule:merchant_emi_exclusion#1",
+        "category_id": "cat-emi",
+        "category_slug": "emi",
+        "merchant_pattern": null,
+        "rail": null,
+        "unit": "points_per_100",
+        "rate": 0,
+        "min_txn_inr": null,
+        "max_txn_inr": null,
+        "priority": 11,
+        "conditions": {
+          "source_local_id": "merchant_emi_exclusion",
+          "part": 1,
+          "info_reasons": [],
+          "flags": [
+            "emi_alternatives"
+          ]
+        },
+        "notes": null,
+        "effective_from": "2020-11-20",
+        "effective_to": null,
+        "excluded_categories": [],
+        "rule_role": "exclusion",
+        "merchant_slugs": [],
+        "platform_slugs": [],
+        "mcc_include": [],
+        "mcc_exclude": [],
+        "except_merchant_slugs": [],
+        "except_platform_slugs": [],
+        "block_inr": null,
+        "min_engine_version": 1,
+        "max_engine_version": null,
+        "source_local_id": "merchant_emi_exclusion",
+        "display_note": "Merchant EMI transactions do not earn Reward Points; points previously accrued are reversed on conversion."
+      },
+      {
+        "id": "bpcl-sbi-card-octane:rule:merchant_emi_exclusion#2",
+        "category_id": null,
+        "category_slug": null,
+        "merchant_pattern": null,
+        "rail": "emi",
+        "unit": "points_per_100",
+        "rate": 0,
+        "min_txn_inr": null,
+        "max_txn_inr": null,
+        "priority": 11,
+        "conditions": {
+          "source_local_id": "merchant_emi_exclusion",
+          "part": 2,
+          "info_reasons": [],
+          "flags": [
+            "emi_alternatives"
+          ]
+        },
+        "notes": null,
+        "effective_from": "2020-11-20",
+        "effective_to": null,
+        "excluded_categories": [],
+        "rule_role": "exclusion",
+        "merchant_slugs": [],
+        "platform_slugs": [],
+        "mcc_include": [],
+        "mcc_exclude": [],
+        "except_merchant_slugs": [],
+        "except_platform_slugs": [],
+        "block_inr": null,
+        "min_engine_version": 2,
+        "max_engine_version": null,
+        "source_local_id": "merchant_emi_exclusion",
+        "display_note": "Merchant EMI transactions do not earn Reward Points; points previously accrued are reversed on conversion."
+      }
+    ],
+    "cap_rules": [
+      {
+        "id": "bpcl-sbi-card-octane:cap:bpcl_fuel_reward_cap",
+        "reward_rule_id": null,
+        "category_id": null,
+        "category_slug": null,
+        "benefit_kind": null,
+        "label": "Bpcl fuel reward cap",
+        "measure": "reward_value",
+        "period": "statement_cycle",
+        "cap_value": 625,
+        "post_cap_unit": null,
+        "post_cap_rate": 0,
+        "resets_on_day": null,
+        "cap_kind": "total_points",
+        "cap_amount": 2500,
+        "scope": "targets",
+        "targets": [
+          "bpcl-sbi-card-octane:rule:bpcl_fuel_25x",
+          "bpcl-sbi-card-octane:rule:bpcl_lubricants_25x"
+        ],
+        "parent_cap_id": null,
+        "post_cap_behavior": null,
+        "anchor": null,
+        "min_engine_version": 2,
+        "source_local_id": "bpcl_fuel_reward_cap"
+      },
+      {
+        "id": "bpcl-sbi-card-octane:cap:bharat_gas_reward_cap",
+        "reward_rule_id": "bpcl-sbi-card-octane:rule:bpcl_bharat_gas_25x",
+        "category_id": null,
+        "category_slug": null,
+        "benefit_kind": null,
+        "label": "Bharat gas reward cap",
+        "measure": "reward_value",
+        "period": "statement_cycle",
+        "cap_value": 125,
+        "post_cap_unit": null,
+        "post_cap_rate": 0,
+        "resets_on_day": null,
+        "cap_kind": "total_points",
+        "cap_amount": 500,
+        "scope": "targets",
+        "targets": [
+          "bpcl-sbi-card-octane:rule:bpcl_bharat_gas_25x"
+        ],
+        "parent_cap_id": null,
+        "post_cap_behavior": null,
+        "anchor": null,
+        "min_engine_version": 1,
+        "source_local_id": "bharat_gas_reward_cap"
+      },
+      {
+        "id": "bpcl-sbi-card-octane:cap:lifestyle_reward_cap",
+        "reward_rule_id": "bpcl-sbi-card-octane:rule:dining_grocery_departmental_movies_10x",
+        "category_id": null,
+        "category_slug": null,
+        "benefit_kind": null,
+        "label": "Lifestyle reward cap",
+        "measure": "reward_value",
+        "period": "calendar_month",
+        "cap_value": 1875,
+        "post_cap_unit": null,
+        "post_cap_rate": 0,
+        "resets_on_day": 1,
+        "cap_kind": "total_points",
+        "cap_amount": 7500,
+        "scope": "targets",
+        "targets": [
+          "bpcl-sbi-card-octane:rule:dining_grocery_departmental_movies_10x"
+        ],
+        "parent_cap_id": null,
+        "post_cap_behavior": null,
+        "anchor": null,
+        "min_engine_version": 2,
+        "source_local_id": "lifestyle_reward_cap"
+      }
+    ],
+    "milestone_rules": [
+      {
+        "id": "bpcl-sbi-card-octane:milestone:annual_3l_voucher",
+        "label": "₹2,000 e-Gift Voucher on annual spend of ₹3 lakh",
+        "period": "annual",
+        "threshold_spend_inr": 300000,
+        "reward_description": "₹2,000 e-Gift Voucher on annual spend of ₹3 lakh",
+        "reward_value_inr": 2000,
+        "is_repeatable": false,
+        "max_repeats": null,
+        "anchor": "card_anniversary",
+        "reward_points": null,
+        "reward_kind": "voucher",
+        "excluded_category_ids": [],
+        "window_days": null,
+        "source_local_id": "annual_3l_voucher"
+      }
+    ],
+    "fee_waiver_rules": [
+      {
+        "id": "bpcl-sbi-card-octane:waiver:1",
+        "threshold_spend_inr": 200000,
+        "period": "annual",
+        "waives_fee_inr": 1499,
+        "excluded_category_slugs": [],
+        "notes": "Renewal fee is reversed if annual spend in the preceding card year reaches ₹2 lakh.",
+        "excluded_categories": []
+      }
+    ],
+    "benefits": [
+      {
+        "id": "bpcl-sbi-card-octane:benefit:domestic_visa_lounge",
+        "key": "domestic_visa_lounge",
+        "source_local_id": "domestic_visa_lounge",
+        "kind": "lounge_domestic",
+        "label": "4 complimentary domestic airport lounge visits per calendar year, maximum 1 per quarter",
+        "description": "Sponsor: SBI Card",
+        "quota_count": 4,
+        "quota_period": "annual",
+        "network_program": "visa_signature",
+        "value_estimate_inr": 3200,
+        "conditions": {
+          "source_category_id": "lounge",
+          "evaluation_engine": {
+            "conditions": {
+              "geography": "India",
+              "lounge_type": "domestic airport lounges",
+              "network": "Visa",
+              "visit_limit": "Maximum 1 visit per calendar quarter"
+            },
+            "benefit_calculation": {
+              "annual_visits": 4
+            },
+            "perks": [
+              "4 complimentary domestic lounge visits per calendar year (max 1/quarter)"
+            ]
+          }
+        }
+      },
+      {
+        "id": "bpcl-sbi-card-octane:benefit:insurance:other",
+        "key": "insurance:other",
+        "source_local_id": null,
+        "kind": "other",
+        "label": "Other",
+        "description": "Complimentary fraud liability protection for up to ₹1,00,000 of financial loss arising from fraudulent usage of the credit card, subject to policy conditions. Coverage is insured by ICICI Lombard General Insurance Company Ltd. Gross negligence, including sharing OTP, PIN or card details, is excluded. Claims must be reported within 45 days of the fraudulent transaction, with applicable investigation and documentation requirements.",
+        "quota_count": null,
+        "quota_period": null,
+        "network_program": null,
+        "value_estimate_inr": 100000,
+        "conditions": {
+          "coverage_usd": null
+        }
+      }
+    ],
+    "unlock_rules": [],
+    "redemption_options": [
+      {
+        "program_name": "BPCL instant POS redemption",
+        "method": "cashback",
+        "value_per_point_inr": 0.25,
+        "min_points": 0,
+        "notes": "Redemption fee: ₹0"
+      },
+      {
+        "program_name": "BPCL e-voucher",
+        "method": "other",
+        "value_per_point_inr": 0.25,
+        "min_points": 2000,
+        "notes": "Redemption fee: ₹99"
+      },
+      {
+        "program_name": "Shop n Smile Rewards Catalogue",
+        "method": "partner_catalogue",
+        "value_per_point_inr": 0.25,
+        "min_points": 2000,
+        "notes": "Redemption fee: ₹99"
+      }
+    ],
+    "is_upi_linkable": false
+  }
+}

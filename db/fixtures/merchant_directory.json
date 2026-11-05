@@ -383,8 +383,10 @@
         "goindigo"
       ],
       "vpa_prefixes": [],
-      "mcc": [],
-      "notes": "Bare \"indigo\" is not an alias (collides with Indigo Paints/Hotel); only qualified names."
+      "mcc": [
+        "4511"
+      ],
+      "notes": "Bare \"indigo\" is not an alias (collides with Indigo Paints/Hotel); only qualified names. MCC 4511 (airlines) added by WP7 so MCC-scoped carve-outs no longer hide IndiGo flight rules from v1."
     },
     {
       "slug": "air_india",
@@ -938,8 +940,26 @@
         "flipkart india wholesale"
       ],
       "vpa_prefixes": [],
+      "mcc": [
+        "5411",
+        "5311"
+      ],
+      "notes": "B2B; co-brand card is business-only. MCCs 5411/5311 added by WP7 (BoM/Central Bank SBI and BPCL OCTANE carve-outs name these wholesale merchants under both 5311 and 5411, identically). 5411 is listed first (D24f): cash-and-carry wholesale is grocery-led and the directory category is groceries.",
+      "group": "flipkart"
+    },
+    {
+      "slug": "flipkart_health",
+      "name": "Flipkart Health+",
+      "parent_slug": null,
+      "category_slug": "health",
+      "aliases": [
+        "flipkart health",
+        "flipkart health plus",
+        "flipkart healthplus"
+      ],
+      "vpa_prefixes": [],
       "mcc": [],
-      "notes": "B2B; co-brand card is business-only.",
+      "notes": "Separate brand from Flipkart for card terms (e.g. Flipkart Axis 5% excludes Flipkart Health); no parent_slug per D6. Added by WP7.",
       "group": "flipkart"
     },
     {
@@ -953,8 +973,11 @@
         "walmart india"
       ],
       "vpa_prefixes": [],
-      "mcc": [],
-      "notes": "Walmart HDFC card; \"best price\" alone not aliased."
+      "mcc": [
+        "5411",
+        "5311"
+      ],
+      "notes": "Walmart HDFC card; \"best price\" alone not aliased. MCCs 5411/5311 added by WP7 (BoM/Central Bank SBI and BPCL OCTANE carve-outs name these wholesale merchants under both 5311 and 5411, identically). 5411 is listed first (D24f): cash-and-carry wholesale is grocery-led and the directory category is groceries."
     },
     {
       "slug": "metro_cash_carry",
@@ -968,8 +991,11 @@
         "metro cash n carry"
       ],
       "vpa_prefixes": [],
-      "mcc": [],
-      "notes": ""
+      "mcc": [
+        "5411",
+        "5311"
+      ],
+      "notes": "MCCs 5411/5311 added by WP7 (BoM/Central Bank SBI and BPCL OCTANE carve-outs name these wholesale merchants under both 5311 and 5411, identically). 5411 is listed first (D24f): cash-and-carry wholesale is grocery-led and the directory category is groceries."
     },
     {
       "slug": "reliance_retail",

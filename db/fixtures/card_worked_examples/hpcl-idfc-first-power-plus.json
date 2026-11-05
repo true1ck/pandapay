@@ -153,7 +153,7 @@
         "merchant_name": "IDFC FIRST FASTag",
         "merchant_vpa": null,
         "merchant_slug": null,
-        "platform": null,
+        "platform": "idfc_mobile_app",
         "rail": "online"
       },
       "state_before": {
@@ -325,6 +325,13 @@
       "item": "FASTag cap",
       "cardpipeline_says": "Rs 1,000 per statement cycle",
       "issuer_says": "Matches: max Rs 1,000 spend, 200 points. Only for recharge via the IDFC FIRST Bank mobile banking app or FIRST Forward app.",
+      "proposed_fix": "none",
+      "override_file": null
+    },
+    {
+      "item": "WP7: example 005 platform",
+      "cardpipeline_says": "Example 005 had platform null.",
+      "issuer_says": "The 30X FASTag rate applies only to recharges via the IDFC FIRST mobile banking or FIRST Forward app (note above); engines never infer a platform (C3.1), so the example now carries platform idfc_mobile_app. Expected values unchanged.",
       "proposed_fix": "none",
       "override_file": null
     },

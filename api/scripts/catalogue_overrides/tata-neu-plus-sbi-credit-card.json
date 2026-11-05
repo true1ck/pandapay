@@ -63,6 +63,183 @@
       "reason": "Issuer rounds the exact-amount NeuCoins down to a whole number (D7).",
       "source_url": "https://www.sbicard.com/sbi-card-en/assets/docs/pdf/ekit-tncs/Tata-Neu-Plus-Booklet.pdf",
       "checked_on": "2026-11-05"
+    },
+    {
+      "path": "reward_rules[id=base-other-eligible-spends].conditions",
+      "value": {
+        "excluded_categories": [
+          "emi"
+        ]
+      },
+      "reason": "WP7: \"exclude_reward_exclusions\" restates the card's exclusion rules; \"exclude_emi\" kept as an excluded category. The rule pays the base 1% the implicit base already paid, so nothing widens; it was an info earning rule.",
+      "source_url": "https://www.sbicard.com/sbi-card-en/assets/docs/pdf/ekit-tncs/Tata-Neu-Plus-Booklet.pdf",
+      "checked_on": "2026-11-05"
+    },
+    {
+      "path": "reward_rules[id=rupay-upi-1pct].conditions.network",
+      "op": "remove",
+      "reason": "WP7: Replaced by card_variant below: UPI earn applies only to the RuPay variant of the card (research note).",
+      "source_url": "https://www.sbicard.com/sbi-card-en/assets/docs/pdf/ekit-tncs/Tata-Neu-Plus-Booklet.pdf",
+      "checked_on": "2026-11-05"
+    },
+    {
+      "path": "reward_rules[id=rupay-upi-1pct].conditions.card_variant",
+      "value": "RuPay",
+      "reason": "WP7: D13b: the rule depends on which card variant the user holds (RuPay only), a user attribute the context does not carry; stays info with depends_on_user_attribute.",
+      "source_url": "https://www.sbicard.com/sbi-card-en/assets/docs/pdf/ekit-tncs/Tata-Neu-Plus-Booklet.pdf",
+      "checked_on": "2026-11-05"
+    },
+    {
+      "path": "reward_rules[id=tata-neu-partner-brands-2pct].conditions.eligible_partner_brands",
+      "value": [
+        "Tata Neu",
+        "Air India",
+        "Air India Express",
+        "BigBasket",
+        "Tata CLiQ",
+        "Taj Hotels",
+        "Tata 1mg",
+        "Titan",
+        "Tanishq",
+        "Croma",
+        "Westside",
+        "Qmin"
+      ],
+      "reason": "WP7: T&C 11.3(b)/(d): value back on \"spends on Tata Neu App/Website and partner Tata Brands\" (Air India & AI Express, Big Basket, Tata Cliq, Taj, Tata 1MG, Titan & Tanishq, Croma, Westside, Qmin). One list feeds the partner rule and its UPI carve-out, so they always cover the same merchants.",
+      "source_url": "https://www.sbicard.com/sbi-card-en/assets/docs/pdf/ekit-tncs/Tata-Neu-Plus-Booklet.pdf",
+      "checked_on": "2026-11-05"
+    },
+    {
+      "path": "reward_rules[id=tata-neu-partner-brands-2pct].channel_type",
+      "value": "all",
+      "reason": "WP7: Tata Neu is now in the brand list itself (it was only implied by the channel text).",
+      "source_url": "https://www.sbicard.com/sbi-card-en/assets/docs/pdf/ekit-tncs/Tata-Neu-Plus-Booklet.pdf",
+      "checked_on": "2026-11-05"
+    },
+    {
+      "path": "reward_rules",
+      "op": "append",
+      "value": {
+        "id": "tata-neu-partner-upi-wp7",
+        "category_id": "all_retail",
+        "priority": 8,
+        "evaluation_type": "standard_accrual",
+        "rail": "upi_qr",
+        "channel_type": "all",
+        "conditions": {
+          "eligible_partner_brands": [
+            "Tata Neu",
+            "Air India",
+            "Air India Express",
+            "BigBasket",
+            "Tata CLiQ",
+            "Taj Hotels",
+            "Tata 1mg",
+            "Titan",
+            "Tanishq",
+            "Croma",
+            "Westside",
+            "Qmin"
+          ]
+        },
+        "action": {
+          "multiplier": 1,
+          "points_per_block": 1,
+          "cashback_percent": null,
+          "cap_reference": "upi-neucoins-cap",
+          "reason": "UPI spends at partner Tata brands earn the UPI rate, not the partner rate."
+        },
+        "effective_from": "2025-04-01",
+        "effective_to": null
+      },
+      "reason": "WP7: T&C 11.3(e): \"UPI Spends : Any UPI Spends on Rupay Credit Card (Including partner Tata Brands) : 1% back as NeuCoins\" - so the 2% partner rate must not apply on UPI.",
+      "source_url": "https://www.sbicard.com/sbi-card-en/assets/docs/pdf/ekit-tncs/Tata-Neu-Plus-Booklet.pdf",
+      "checked_on": "2026-11-05"
+    },
+    {
+      "path": "reward_rules",
+      "op": "append",
+      "value": {
+        "id": "wp7_emi_rail_exclusion",
+        "category_id": "all_retail",
+        "priority": 0,
+        "evaluation_type": "exclusion",
+        "rail": "emi",
+        "channel_type": "all",
+        "conditions": {},
+        "action": {
+          "multiplier": 0,
+          "points_per_block": 0,
+          "cashback_percent": null,
+          "cap_reference": null,
+          "reason": "Merchant EMI / Flexipay earn no NeuCoins; NeuCoins are forfeited when a spend is converted to EMI."
+        },
+        "effective_from": "2025-04-01",
+        "effective_to": null
+      },
+      "reason": "WP7: D25e: T&C 11.4(a) excludes \"Merchant EMI - Flexipay\" (Infinity) / \"Flexipay\" (Plus), and 11.6(e) forfeits NeuCoins when \"The transaction on which NeuCoins were accrued, got converted to EMI\". Rail-EMI exclusion on all spend, as on Millennia (the record's category emi AND rail emi row missed EMI in other categories).",
+      "source_url": "https://www.sbicard.com/sbi-card-en/assets/docs/pdf/ekit-tncs/Tata-Neu-Plus-Booklet.pdf",
+      "checked_on": "2026-11-05"
+    },
+    {
+      "path": "reward_rules",
+      "op": "append",
+      "value": {
+        "id": "wp7_rent_education_mcc_exclusion",
+        "category_id": "all_retail",
+        "priority": 3,
+        "evaluation_type": "exclusion",
+        "rail": "any",
+        "channel_type": "all",
+        "conditions": {
+          "mcc_list": [
+            7349,
+            5111,
+            5192,
+            5942,
+            5943,
+            5947,
+            8351
+          ]
+        },
+        "action": {
+          "multiplier": 0,
+          "points_per_block": 0,
+          "cashback_percent": null,
+          "cap_reference": null,
+          "reason": "Rental/maintenance and education MCCs listed by the issuer earn no NeuCoins."
+        },
+        "effective_from": "2025-04-01",
+        "effective_to": null
+      },
+      "reason": "WP7: D25d: T&C 11.4 lists MCC 7349 with rent (6513) and education MCCs 5111, 5192, 5942, 5943, 5947, 8351 besides 8211-8299; the record carried only part of each list.",
+      "source_url": "https://www.sbicard.com/sbi-card-en/assets/docs/pdf/ekit-tncs/Tata-Neu-Plus-Booklet.pdf",
+      "checked_on": "2026-11-05"
+    },
+    {
+      "path": "reward_rules",
+      "op": "append",
+      "value": {
+        "id": "wp7_rent_category_exclusion",
+        "category_id": "rent",
+        "priority": 3,
+        "evaluation_type": "exclusion",
+        "rail": "any",
+        "channel_type": "all",
+        "conditions": {},
+        "action": {
+          "multiplier": 0,
+          "points_per_block": 0,
+          "cashback_percent": null,
+          "cap_reference": null,
+          "reason": "Rental transactions earn no NeuCoins."
+        },
+        "effective_from": "2025-04-01",
+        "effective_to": null
+      },
+      "reason": "WP7: D25d: T&C 11.4(a) \"NeuCoins will not be accrued for Rental and Government related transactions\"; the record's rent row was MCC 6513 only, so a rent-category spend with another or no MCC earned.",
+      "source_url": "https://www.sbicard.com/sbi-card-en/assets/docs/pdf/ekit-tncs/Tata-Neu-Plus-Booklet.pdf",
+      "checked_on": "2026-11-05"
     }
   ]
 }

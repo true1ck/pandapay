@@ -28,6 +28,11 @@
       "url": "https://www.hdfc.bank.in/credit-cards/diners-club-black-metal-edition-credit-card",
       "doc": "Diners Black Metal product page",
       "quote": "Get 10X rewards on hotels and 5X on flights when you book via SmartBUY"
+    },
+    {
+      "url": "https://www.hdfc.bank.in/content/dam/hdfcbankpws/in/en/personal-banking/discover-products/cards/credit-cards/personal-mitc/mitc-in-english.pdf",
+      "doc": "HDFC Bank credit card MITC v4.18, Oct 2026 (Fair Usage Policy)",
+      "quote": "The maximum reward points that can be earned in a statement cycle for Diners Black Metal Edition, Diners Black Card is 75,000."
     }
   ],
   "examples": [
@@ -53,7 +58,9 @@
         "amount": 500,
         "value_inr": null,
         "excluded": false,
-        "cap_deltas_by_source_id": {}
+        "cap_deltas_by_source_id": {
+          "statement_cycle_total": 500
+        }
       },
       "why": "5 RP per Rs150: 100 blocks = 500."
     },
@@ -79,7 +86,9 @@
         "amount": 30,
         "value_inr": null,
         "excluded": false,
-        "cap_deltas_by_source_id": {}
+        "cap_deltas_by_source_id": {
+          "statement_cycle_total": 30
+        }
       },
       "why": "Residual below the Rs150 block earns nothing: 6 blocks x 5 = 30."
     },
@@ -132,7 +141,8 @@
         "value_inr": null,
         "excluded": false,
         "cap_deltas_by_source_id": {
-          "grocery_monthly": 200
+          "grocery_monthly": 200,
+          "statement_cycle_total": 200
         }
       },
       "why": "40 blocks x 5 = 200; grocery capped at 2,000 RP per month."
@@ -190,7 +200,8 @@
         "value_inr": null,
         "excluded": false,
         "cap_deltas_by_source_id": {
-          "insurance_monthly": 10
+          "insurance_monthly": 10,
+          "statement_cycle_total": 10
         }
       },
       "why": "Would be 1,000 RP; insurance is capped at 5,000 RP per month for Diners Black Metal, so 10 remain."
@@ -218,7 +229,8 @@
         "value_inr": null,
         "excluded": false,
         "cap_deltas_by_source_id": {
-          "smartbuy_accelerated_monthly": 4500
+          "smartbuy_accelerated_monthly": 4500,
+          "statement_cycle_total": 5000
         }
       },
       "why": "Hotels 10X = 50 RP per Rs150: 100 blocks = 5,000 (500 base + 4,500 accelerated)."
@@ -246,7 +258,8 @@
         "value_inr": null,
         "excluded": false,
         "cap_deltas_by_source_id": {
-          "smartbuy_accelerated_monthly": 4000
+          "smartbuy_accelerated_monthly": 4000,
+          "statement_cycle_total": 5000
         }
       },
       "why": "Flights 5X = 25 RP per Rs150: 200 blocks = 5,000 (1,000 base + 4,000 accelerated)."
@@ -276,7 +289,8 @@
         "value_inr": null,
         "excluded": false,
         "cap_deltas_by_source_id": {
-          "smartbuy_accelerated_monthly": 1000
+          "smartbuy_accelerated_monthly": 1000,
+          "statement_cycle_total": 1500
         }
       },
       "why": "Accelerated points are capped at 10,000/month: 1,000 accelerated remain, plus 500 base. Reads the cap as covering the accelerated part only."
@@ -331,6 +345,12 @@
       "item": "SmartBuy cap per day",
       "cardpipeline_says": "Monthly 10,000.",
       "issuer_says": "SmartBuy page also lists 10,000 per day. Not modelled.",
+      "proposed_fix": "none"
+    },
+    {
+      "item": "WP7: card-wide cap statement_cycle_total in examples 001, 002, 004, 006, 007, 008, 009",
+      "cardpipeline_says": "total_reward_points 75,000 per statement cycle, card-wide.",
+      "issuer_says": "Confirmed (HDFC Bank credit card MITC v4.18, Oct 2026 (Fair Usage Policy)). Every earning spend counts toward it, so each earning example now lists this cap's delta (= the points earned). Amounts unchanged.",
       "proposed_fix": "none"
     }
   ]

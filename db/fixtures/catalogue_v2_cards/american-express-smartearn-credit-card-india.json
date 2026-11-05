@@ -1,0 +1,826 @@
+{
+  "generated_by": "api/scripts/catalogue_v2/snapshot_examples.js",
+  "source_slug": "american-express-smartearn-credit-card-india",
+  "inputs": {
+    "transform_version": "7",
+    "source_record_sha256": "2b59c5235adb8aea359210c7cbb0ab2331f2c8797d71ed8540ba2691a328d2f5",
+    "override_sha256": null,
+    "directory_sha256": "b1094d54b77e848d22f7a9a64f3ae6d1ef43ca3eb2fc8e40cd43ed1994664694",
+    "verified": false
+  },
+  "blocking_flags": [
+    "info_rule"
+  ],
+  "card": {
+    "id": "american-express-smartearn-credit-card-india:card",
+    "slug": "american-express-smartearn-credit-card-india",
+    "name": "American Express SmartEarn Credit Card",
+    "network": "amex",
+    "issuer_slug": "american-express-india",
+    "base_reward_unit": "points_per_100",
+    "base_reward_rate": 2,
+    "point_value_inr": 0.25,
+    "excluded_categories": [],
+    "accrual_block_inr": 50,
+    "accrual_rounding": "floor",
+    "cashback_rounding": null,
+    "points_expiry_months": 0,
+    "model_status": "partial",
+    "model_coverage": {
+      "rules_total": 12,
+      "rules_modelled": 9,
+      "rules_info": 3,
+      "caps_total": 3,
+      "caps_enforced": 3,
+      "flags": [
+        {
+          "code": "token_replaced_by_conditions",
+          "source_local_id": "accelerator-10x-zomato-easemytrip",
+          "detail": null
+        },
+        {
+          "code": "token_replaced_by_conditions",
+          "source_local_id": "accelerator-10x-shopping-lifestyle",
+          "detail": null
+        },
+        {
+          "code": "token_replaced_by_conditions",
+          "source_local_id": "accelerator-5x-amazon",
+          "detail": null
+        },
+        {
+          "code": "info_rule",
+          "source_local_id": "reward-multiplier-up-to-5x",
+          "detail": "up_to_rate"
+        },
+        {
+          "code": "info_rule",
+          "source_local_id": "reward-multiplier-up-to-5x",
+          "detail": "condition:merchant_selection_required"
+        },
+        {
+          "code": "depends_on_user_attribute",
+          "source_local_id": "reward-multiplier-up-to-5x",
+          "detail": null
+        },
+        {
+          "code": "exclusion_scope_broadened",
+          "source_local_id": "exclusion-utilities",
+          "detail": null
+        },
+        {
+          "code": "exclusion_scope_broadened",
+          "source_local_id": "exclusion-cash-transactions",
+          "detail": null
+        },
+        {
+          "code": "emi_alternatives",
+          "source_local_id": "exclusion-merchant-emi",
+          "detail": null
+        },
+        {
+          "code": "exclusion_scope_broadened",
+          "source_local_id": "exclusion-merchant-emi",
+          "detail": null
+        },
+        {
+          "code": "info_rule",
+          "source_local_id": "standard-safekey-emi",
+          "detail": "condition:emi_origin"
+        },
+        {
+          "code": "info_rule",
+          "source_local_id": "standard-safekey-emi",
+          "detail": "condition:channel_type"
+        },
+        {
+          "code": "info_rule",
+          "source_local_id": "standard-post-purchase-emi",
+          "detail": "condition:emi_origin"
+        },
+        {
+          "code": "info_rule",
+          "source_local_id": "standard-post-purchase-emi",
+          "detail": "condition:channel_type"
+        }
+      ],
+      "overrides_applied": []
+    },
+    "reward_rules": [
+      {
+        "id": "american-express-smartearn-credit-card-india:rule:base-all-eligible-spend",
+        "category_id": null,
+        "category_slug": null,
+        "merchant_pattern": null,
+        "rail": null,
+        "unit": "points_per_100",
+        "rate": 1,
+        "min_txn_inr": null,
+        "max_txn_inr": null,
+        "priority": 100,
+        "conditions": {
+          "source_local_id": "base-all-eligible-spend",
+          "part": null,
+          "info_reasons": [],
+          "flags": []
+        },
+        "notes": null,
+        "effective_from": "2026-08-28",
+        "effective_to": null,
+        "excluded_categories": [],
+        "rule_role": "base",
+        "merchant_slugs": [],
+        "platform_slugs": [],
+        "mcc_include": [],
+        "mcc_exclude": [],
+        "except_merchant_slugs": [],
+        "except_platform_slugs": [],
+        "block_inr": 50,
+        "min_engine_version": 2,
+        "max_engine_version": null,
+        "source_local_id": "base-all-eligible-spend",
+        "display_note": "Earn 1 Membership Rewards point for every ₹50 spent, except excluded categories and transactions."
+      },
+      {
+        "id": "american-express-smartearn-credit-card-india:rule:accelerator-10x-zomato-easemytrip",
+        "category_id": null,
+        "category_slug": null,
+        "merchant_pattern": null,
+        "rail": null,
+        "unit": "points_per_100",
+        "rate": 10,
+        "min_txn_inr": null,
+        "max_txn_inr": null,
+        "priority": 10,
+        "conditions": {
+          "source_local_id": "accelerator-10x-zomato-easemytrip",
+          "part": null,
+          "info_reasons": [],
+          "flags": [
+            "token_replaced_by_conditions"
+          ]
+        },
+        "notes": null,
+        "effective_from": "2026-08-28",
+        "effective_to": null,
+        "excluded_categories": [],
+        "rule_role": "earn",
+        "merchant_slugs": [
+          "easemytrip",
+          "zomato"
+        ],
+        "platform_slugs": [],
+        "mcc_include": [],
+        "mcc_exclude": [],
+        "except_merchant_slugs": [],
+        "except_platform_slugs": [],
+        "block_inr": 50,
+        "min_engine_version": 2,
+        "max_engine_version": null,
+        "source_local_id": "accelerator-10x-zomato-easemytrip",
+        "display_note": "Earn 10X Membership Rewards points per ₹50 at participating Zomato and EaseMyTrip transactions, comprising 1 regular point plus 9 additional points."
+      },
+      {
+        "id": "american-express-smartearn-credit-card-india:rule:accelerator-10x-shopping-lifestyle",
+        "category_id": null,
+        "category_slug": null,
+        "merchant_pattern": null,
+        "rail": null,
+        "unit": "points_per_100",
+        "rate": 10,
+        "min_txn_inr": null,
+        "max_txn_inr": null,
+        "priority": 11,
+        "conditions": {
+          "source_local_id": "accelerator-10x-shopping-lifestyle",
+          "part": null,
+          "info_reasons": [],
+          "flags": [
+            "token_replaced_by_conditions"
+          ]
+        },
+        "notes": null,
+        "effective_from": "2026-08-28",
+        "effective_to": null,
+        "excluded_categories": [],
+        "rule_role": "earn",
+        "merchant_slugs": [
+          "ajio",
+          "blinkit",
+          "bookmyshow",
+          "flipkart",
+          "myntra",
+          "nykaa",
+          "pvr",
+          "uber"
+        ],
+        "platform_slugs": [],
+        "mcc_include": [],
+        "mcc_exclude": [],
+        "except_merchant_slugs": [],
+        "except_platform_slugs": [],
+        "block_inr": 50,
+        "min_engine_version": 2,
+        "max_engine_version": null,
+        "source_local_id": "accelerator-10x-shopping-lifestyle",
+        "display_note": "Earn 10X Membership Rewards points per ₹50 at participating merchants, comprising 1 regular point plus 9 additional points."
+      },
+      {
+        "id": "american-express-smartearn-credit-card-india:rule:accelerator-5x-amazon",
+        "category_id": null,
+        "category_slug": null,
+        "merchant_pattern": "amazon",
+        "rail": null,
+        "unit": "points_per_100",
+        "rate": 5,
+        "min_txn_inr": null,
+        "max_txn_inr": null,
+        "priority": 12,
+        "conditions": {
+          "source_local_id": "accelerator-5x-amazon",
+          "part": null,
+          "info_reasons": [],
+          "flags": [
+            "token_replaced_by_conditions"
+          ]
+        },
+        "notes": null,
+        "effective_from": "2026-08-28",
+        "effective_to": null,
+        "excluded_categories": [],
+        "rule_role": "earn",
+        "merchant_slugs": [
+          "amazon"
+        ],
+        "platform_slugs": [],
+        "mcc_include": [],
+        "mcc_exclude": [],
+        "except_merchant_slugs": [],
+        "except_platform_slugs": [],
+        "block_inr": 50,
+        "min_engine_version": 2,
+        "max_engine_version": null,
+        "source_local_id": "accelerator-5x-amazon",
+        "display_note": "Earn 5X Membership Rewards points per ₹50 at Amazon, comprising 1 regular point plus 4 additional points."
+      },
+      {
+        "id": "american-express-smartearn-credit-card-india:rule:reward-multiplier-up-to-5x",
+        "category_id": null,
+        "category_slug": null,
+        "merchant_pattern": null,
+        "rail": null,
+        "unit": "points_per_100",
+        "rate": 5,
+        "min_txn_inr": null,
+        "max_txn_inr": null,
+        "priority": 20,
+        "conditions": {
+          "source_local_id": "reward-multiplier-up-to-5x",
+          "part": null,
+          "info_reasons": [
+            "up_to_rate",
+            "condition:merchant_selection_required"
+          ],
+          "flags": [
+            "depends_on_user_attribute"
+          ]
+        },
+        "notes": null,
+        "effective_from": "2026-08-28",
+        "effective_to": null,
+        "excluded_categories": [],
+        "rule_role": "info",
+        "merchant_slugs": [],
+        "platform_slugs": [
+          "amex_reward_multiplier"
+        ],
+        "mcc_include": [],
+        "mcc_exclude": [],
+        "except_merchant_slugs": [],
+        "except_platform_slugs": [],
+        "block_inr": 50,
+        "min_engine_version": 2,
+        "max_engine_version": null,
+        "source_local_id": "reward-multiplier-up-to-5x",
+        "display_note": "American Express Reward Multiplier currently advertises up to 5X bonus points at participating merchants; merchant-specific terms apply."
+      },
+      {
+        "id": "american-express-smartearn-credit-card-india:rule:exclusion-fuel",
+        "category_id": "cat-fuel",
+        "category_slug": "fuel",
+        "merchant_pattern": null,
+        "rail": null,
+        "unit": "points_per_100",
+        "rate": 0,
+        "min_txn_inr": null,
+        "max_txn_inr": null,
+        "priority": 1,
+        "conditions": {
+          "source_local_id": "exclusion-fuel",
+          "part": null,
+          "info_reasons": [],
+          "flags": []
+        },
+        "notes": null,
+        "effective_from": "2025-06-12",
+        "effective_to": null,
+        "excluded_categories": [],
+        "rule_role": "exclusion",
+        "merchant_slugs": [],
+        "platform_slugs": [],
+        "mcc_include": [],
+        "mcc_exclude": [],
+        "except_merchant_slugs": [],
+        "except_platform_slugs": [],
+        "block_inr": null,
+        "min_engine_version": 1,
+        "max_engine_version": null,
+        "source_local_id": "exclusion-fuel",
+        "display_note": "No Membership Rewards points on fuel spends."
+      },
+      {
+        "id": "american-express-smartearn-credit-card-india:rule:exclusion-insurance",
+        "category_id": "cat-insurance",
+        "category_slug": "insurance",
+        "merchant_pattern": null,
+        "rail": null,
+        "unit": "points_per_100",
+        "rate": 0,
+        "min_txn_inr": null,
+        "max_txn_inr": null,
+        "priority": 2,
+        "conditions": {
+          "source_local_id": "exclusion-insurance",
+          "part": null,
+          "info_reasons": [],
+          "flags": []
+        },
+        "notes": null,
+        "effective_from": "2026-08-28",
+        "effective_to": null,
+        "excluded_categories": [],
+        "rule_role": "exclusion",
+        "merchant_slugs": [],
+        "platform_slugs": [],
+        "mcc_include": [],
+        "mcc_exclude": [],
+        "except_merchant_slugs": [],
+        "except_platform_slugs": [],
+        "block_inr": null,
+        "min_engine_version": 1,
+        "max_engine_version": null,
+        "source_local_id": "exclusion-insurance",
+        "display_note": "No Membership Rewards points on insurance spends."
+      },
+      {
+        "id": "american-express-smartearn-credit-card-india:rule:exclusion-utilities",
+        "category_id": "cat-bills",
+        "category_slug": "bills",
+        "merchant_pattern": null,
+        "rail": null,
+        "unit": "points_per_100",
+        "rate": 0,
+        "min_txn_inr": null,
+        "max_txn_inr": null,
+        "priority": 3,
+        "conditions": {
+          "source_local_id": "exclusion-utilities",
+          "part": null,
+          "info_reasons": [],
+          "flags": [
+            "exclusion_scope_broadened"
+          ]
+        },
+        "notes": null,
+        "effective_from": "2026-08-28",
+        "effective_to": null,
+        "excluded_categories": [],
+        "rule_role": "exclusion",
+        "merchant_slugs": [],
+        "platform_slugs": [],
+        "mcc_include": [],
+        "mcc_exclude": [],
+        "except_merchant_slugs": [],
+        "except_platform_slugs": [],
+        "block_inr": null,
+        "min_engine_version": 1,
+        "max_engine_version": null,
+        "source_local_id": "exclusion-utilities",
+        "display_note": "No Membership Rewards points on utility spends including electricity, water and gas."
+      },
+      {
+        "id": "american-express-smartearn-credit-card-india:rule:exclusion-cash-transactions",
+        "category_id": null,
+        "category_slug": null,
+        "merchant_pattern": null,
+        "rail": "atm",
+        "unit": "points_per_100",
+        "rate": 0,
+        "min_txn_inr": null,
+        "max_txn_inr": null,
+        "priority": 4,
+        "conditions": {
+          "source_local_id": "exclusion-cash-transactions",
+          "part": null,
+          "info_reasons": [],
+          "flags": [
+            "exclusion_scope_broadened"
+          ]
+        },
+        "notes": null,
+        "effective_from": "2026-08-28",
+        "effective_to": null,
+        "excluded_categories": [],
+        "rule_role": "exclusion",
+        "merchant_slugs": [],
+        "platform_slugs": [],
+        "mcc_include": [],
+        "mcc_exclude": [],
+        "except_merchant_slugs": [],
+        "except_platform_slugs": [],
+        "block_inr": null,
+        "min_engine_version": 2,
+        "max_engine_version": null,
+        "source_local_id": "exclusion-cash-transactions",
+        "display_note": "No Membership Rewards points on cash transactions/cash advances."
+      },
+      {
+        "id": "american-express-smartearn-credit-card-india:rule:exclusion-merchant-emi#1",
+        "category_id": "cat-emi",
+        "category_slug": "emi",
+        "merchant_pattern": null,
+        "rail": null,
+        "unit": "points_per_100",
+        "rate": 0,
+        "min_txn_inr": null,
+        "max_txn_inr": null,
+        "priority": 5,
+        "conditions": {
+          "source_local_id": "exclusion-merchant-emi",
+          "part": 1,
+          "info_reasons": [],
+          "flags": [
+            "emi_alternatives",
+            "exclusion_scope_broadened"
+          ]
+        },
+        "notes": null,
+        "effective_from": "2020-02-01",
+        "effective_to": null,
+        "excluded_categories": [],
+        "rule_role": "exclusion",
+        "merchant_slugs": [],
+        "platform_slugs": [],
+        "mcc_include": [],
+        "mcc_exclude": [],
+        "except_merchant_slugs": [],
+        "except_platform_slugs": [],
+        "block_inr": null,
+        "min_engine_version": 1,
+        "max_engine_version": null,
+        "source_local_id": "exclusion-merchant-emi",
+        "display_note": "No Membership Rewards points on EMI options selected from a merchant website or at a merchant terminal."
+      },
+      {
+        "id": "american-express-smartearn-credit-card-india:rule:exclusion-merchant-emi#2",
+        "category_id": null,
+        "category_slug": null,
+        "merchant_pattern": null,
+        "rail": "emi",
+        "unit": "points_per_100",
+        "rate": 0,
+        "min_txn_inr": null,
+        "max_txn_inr": null,
+        "priority": 5,
+        "conditions": {
+          "source_local_id": "exclusion-merchant-emi",
+          "part": 2,
+          "info_reasons": [],
+          "flags": [
+            "emi_alternatives",
+            "exclusion_scope_broadened"
+          ]
+        },
+        "notes": null,
+        "effective_from": "2020-02-01",
+        "effective_to": null,
+        "excluded_categories": [],
+        "rule_role": "exclusion",
+        "merchant_slugs": [],
+        "platform_slugs": [],
+        "mcc_include": [],
+        "mcc_exclude": [],
+        "except_merchant_slugs": [],
+        "except_platform_slugs": [],
+        "block_inr": null,
+        "min_engine_version": 2,
+        "max_engine_version": null,
+        "source_local_id": "exclusion-merchant-emi",
+        "display_note": "No Membership Rewards points on EMI options selected from a merchant website or at a merchant terminal."
+      },
+      {
+        "id": "american-express-smartearn-credit-card-india:rule:standard-safekey-emi",
+        "category_id": "cat-emi",
+        "category_slug": "emi",
+        "merchant_pattern": null,
+        "rail": "online",
+        "unit": "points_per_100",
+        "rate": 1,
+        "min_txn_inr": null,
+        "max_txn_inr": null,
+        "priority": 6,
+        "conditions": {
+          "source_local_id": "standard-safekey-emi",
+          "part": null,
+          "info_reasons": [
+            "condition:emi_origin",
+            "condition:channel_type"
+          ],
+          "flags": []
+        },
+        "notes": null,
+        "effective_from": "2020-02-01",
+        "effective_to": null,
+        "excluded_categories": [],
+        "rule_role": "info",
+        "merchant_slugs": [],
+        "platform_slugs": [],
+        "mcc_include": [],
+        "mcc_exclude": [],
+        "except_merchant_slugs": [],
+        "except_platform_slugs": [],
+        "block_inr": 50,
+        "min_engine_version": 2,
+        "max_engine_version": null,
+        "source_local_id": "standard-safekey-emi",
+        "display_note": "Membership Rewards points continue to be earned on EMI transactions through American Express SafeKey."
+      },
+      {
+        "id": "american-express-smartearn-credit-card-india:rule:standard-post-purchase-emi",
+        "category_id": "cat-emi",
+        "category_slug": "emi",
+        "merchant_pattern": null,
+        "rail": "emi",
+        "unit": "points_per_100",
+        "rate": 1,
+        "min_txn_inr": null,
+        "max_txn_inr": null,
+        "priority": 7,
+        "conditions": {
+          "source_local_id": "standard-post-purchase-emi",
+          "part": null,
+          "info_reasons": [
+            "condition:emi_origin",
+            "condition:channel_type"
+          ],
+          "flags": []
+        },
+        "notes": null,
+        "effective_from": "2020-02-01",
+        "effective_to": null,
+        "excluded_categories": [],
+        "rule_role": "info",
+        "merchant_slugs": [],
+        "platform_slugs": [],
+        "mcc_include": [],
+        "mcc_exclude": [],
+        "except_merchant_slugs": [],
+        "except_platform_slugs": [],
+        "block_inr": 50,
+        "min_engine_version": 2,
+        "max_engine_version": null,
+        "source_local_id": "standard-post-purchase-emi",
+        "display_note": "Membership Rewards points continue to be earned on post-purchase EMI conversions."
+      }
+    ],
+    "cap_rules": [
+      {
+        "id": "american-express-smartearn-credit-card-india:cap:cap-10x-zomato-easemytrip",
+        "reward_rule_id": "american-express-smartearn-credit-card-india:rule:accelerator-10x-zomato-easemytrip",
+        "category_id": null,
+        "category_slug": null,
+        "benefit_kind": null,
+        "label": "Cap 10x zomato easemytrip",
+        "measure": "reward_value",
+        "period": "calendar_month",
+        "cap_value": 125,
+        "post_cap_unit": null,
+        "post_cap_rate": null,
+        "resets_on_day": 1,
+        "cap_kind": "bonus_points",
+        "cap_amount": 500,
+        "scope": "targets",
+        "targets": [
+          "american-express-smartearn-credit-card-india:rule:accelerator-10x-zomato-easemytrip"
+        ],
+        "parent_cap_id": null,
+        "post_cap_behavior": null,
+        "anchor": null,
+        "min_engine_version": 2,
+        "source_local_id": "cap-10x-zomato-easemytrip"
+      },
+      {
+        "id": "american-express-smartearn-credit-card-india:cap:cap-10x-shopping-lifestyle",
+        "reward_rule_id": "american-express-smartearn-credit-card-india:rule:accelerator-10x-shopping-lifestyle",
+        "category_id": null,
+        "category_slug": null,
+        "benefit_kind": null,
+        "label": "Cap 10x shopping lifestyle",
+        "measure": "reward_value",
+        "period": "calendar_month",
+        "cap_value": 125,
+        "post_cap_unit": null,
+        "post_cap_rate": null,
+        "resets_on_day": 1,
+        "cap_kind": "bonus_points",
+        "cap_amount": 500,
+        "scope": "targets",
+        "targets": [
+          "american-express-smartearn-credit-card-india:rule:accelerator-10x-shopping-lifestyle"
+        ],
+        "parent_cap_id": null,
+        "post_cap_behavior": null,
+        "anchor": null,
+        "min_engine_version": 2,
+        "source_local_id": "cap-10x-shopping-lifestyle"
+      },
+      {
+        "id": "american-express-smartearn-credit-card-india:cap:cap-5x-amazon",
+        "reward_rule_id": "american-express-smartearn-credit-card-india:rule:accelerator-5x-amazon",
+        "category_id": null,
+        "category_slug": null,
+        "benefit_kind": null,
+        "label": "Cap 5x amazon",
+        "measure": "reward_value",
+        "period": "calendar_month",
+        "cap_value": 62.5,
+        "post_cap_unit": null,
+        "post_cap_rate": null,
+        "resets_on_day": 1,
+        "cap_kind": "bonus_points",
+        "cap_amount": 250,
+        "scope": "targets",
+        "targets": [
+          "american-express-smartearn-credit-card-india:rule:accelerator-5x-amazon"
+        ],
+        "parent_cap_id": null,
+        "post_cap_behavior": null,
+        "anchor": null,
+        "min_engine_version": 2,
+        "source_local_id": "cap-5x-amazon"
+      }
+    ],
+    "milestone_rules": [
+      {
+        "id": "american-express-smartearn-credit-card-india:milestone:milestone-120000",
+        "label": "₹500 voucher at ₹1.20 lakh spend",
+        "period": "annual",
+        "threshold_spend_inr": 120000,
+        "reward_description": "₹500 voucher at ₹1.20 lakh spend",
+        "reward_value_inr": 500,
+        "is_repeatable": false,
+        "max_repeats": null,
+        "anchor": "card_anniversary",
+        "reward_points": null,
+        "reward_kind": "voucher",
+        "excluded_category_ids": [],
+        "window_days": null,
+        "source_local_id": "milestone-120000"
+      },
+      {
+        "id": "american-express-smartearn-credit-card-india:milestone:milestone-180000",
+        "label": "Additional ₹500 voucher at ₹1.80 lakh spend",
+        "period": "annual",
+        "threshold_spend_inr": 180000,
+        "reward_description": "Additional ₹500 voucher at ₹1.80 lakh spend",
+        "reward_value_inr": 500,
+        "is_repeatable": false,
+        "max_repeats": null,
+        "anchor": "card_anniversary",
+        "reward_points": null,
+        "reward_kind": "voucher",
+        "excluded_category_ids": [],
+        "window_days": null,
+        "source_local_id": "milestone-180000"
+      },
+      {
+        "id": "american-express-smartearn-credit-card-india:milestone:milestone-240000",
+        "label": "Additional ₹500 voucher at ₹2.40 lakh spend",
+        "period": "annual",
+        "threshold_spend_inr": 240000,
+        "reward_description": "Additional ₹500 voucher at ₹2.40 lakh spend",
+        "reward_value_inr": 500,
+        "is_repeatable": false,
+        "max_repeats": null,
+        "anchor": "card_anniversary",
+        "reward_points": null,
+        "reward_kind": "voucher",
+        "excluded_category_ids": [],
+        "window_days": null,
+        "source_local_id": "milestone-240000"
+      }
+    ],
+    "fee_waiver_rules": [
+      {
+        "id": "american-express-smartearn-credit-card-india:waiver:1",
+        "threshold_spend_inr": 40000,
+        "period": "annual",
+        "waives_fee_inr": 495,
+        "excluded_category_slugs": [],
+        "notes": "Annual fee of ₹495 is 100% waived if total eligible spend in the immediately preceding Cardmembership year is ₹40,000 or more. Eligible spend excludes cash advances, Express Cash transactions, drafts made from the account, balance transfers and fees.",
+        "excluded_categories": []
+      }
+    ],
+    "benefits": [
+      {
+        "id": "american-express-smartearn-credit-card-india:benefit:contactless-payment",
+        "key": "contactless-payment",
+        "source_local_id": "contactless-payment",
+        "kind": "other",
+        "label": "Contactless payment",
+        "description": "Sponsor: American Express",
+        "quota_count": null,
+        "quota_period": null,
+        "network_program": "american_express",
+        "value_estimate_inr": null,
+        "conditions": {
+          "source_category_id": "other",
+          "evaluation_engine": {
+            "conditions": {
+              "pin_free_threshold_inr": 5000
+            },
+            "benefit_calculation": {
+              "type": "contactless_payment"
+            },
+            "perks": [
+              "Contactless transactions up to ₹5,000 can generally be made without PIN authentication at supported contactless terminals."
+            ]
+          }
+        }
+      },
+      {
+        "id": "american-express-smartearn-credit-card-india:benefit:zero-lost-card-liability",
+        "key": "zero-lost-card-liability",
+        "source_local_id": "zero-lost-card-liability",
+        "kind": "other",
+        "label": "Zero Lost Card Liability",
+        "description": "Sponsor: American Express",
+        "quota_count": null,
+        "quota_period": null,
+        "network_program": "american_express",
+        "value_estimate_inr": null,
+        "conditions": {
+          "source_category_id": "other",
+          "evaluation_engine": {
+            "conditions": {
+              "fraud_report_within_working_days": 3
+            },
+            "benefit_calculation": {
+              "liability_if_reported_within_3_working_days_inr": 0,
+              "maximum_liability_if_reported_later_inr": 1000
+            },
+            "perks": [
+              "Nil liability when eligible fraud is reported within 3 working days",
+              "Maximum liability of ₹1,000 when reported beyond the applicable reporting period"
+            ]
+          }
+        }
+      },
+      {
+        "id": "american-express-smartearn-credit-card-india:benefit:24x7-card-assistance",
+        "key": "24x7-card-assistance",
+        "source_local_id": "24x7-card-assistance",
+        "kind": "other",
+        "label": "24x7 card-related assistance",
+        "description": "Sponsor: American Express",
+        "quota_count": null,
+        "quota_period": null,
+        "network_program": "american_express",
+        "value_estimate_inr": null,
+        "conditions": {
+          "source_category_id": "other",
+          "evaluation_engine": {
+            "conditions": "N/A",
+            "benefit_calculation": "N/A",
+            "perks": [
+              "24x7 customer service",
+              "Dispute resolution",
+              "Emergency card assistance and replacement"
+            ]
+          }
+        }
+      }
+    ],
+    "unlock_rules": [],
+    "redemption_options": [
+      {
+        "program_name": "Statement/Card charges",
+        "method": "statement_credit",
+        "value_per_point_inr": 1,
+        "min_points": null,
+        "notes": null
+      }
+    ],
+    "is_upi_linkable": false
+  }
+}

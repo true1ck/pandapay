@@ -103,7 +103,7 @@
         "currency": "cashback",
         "amount": 0,
         "value_inr": 0,
-        "excluded": false,
+        "excluded": true,
         "cap_deltas_by_source_id": {}
       },
       "why": "No cashback on transactions below Rs100."
@@ -317,6 +317,13 @@
       "cardpipeline_says": "A third cap row with every field empty.",
       "issuer_says": "Rs4,000 total per cycle. Not addressable by id, so not overridden and no example (the two buckets already sum to 4,000).",
       "proposed_fix": "importer"
+    },
+    {
+      "item": "WP7: example 003 (below minimum)",
+      "cardpipeline_says": "No minimum in the record; example had excluded: false.",
+      "issuer_says": "\"Card Cashback is not applicable on transactions less than Rs100\" (T&C booklet). Modelled as an exclusion (C8 D16b) via override, so excluded is true. Amount unchanged (0).",
+      "proposed_fix": "override",
+      "override_file": "api/scripts/catalogue_overrides/cashback-sbi-card.json"
     }
   ]
 }

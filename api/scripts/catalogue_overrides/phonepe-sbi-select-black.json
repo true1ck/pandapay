@@ -28,6 +28,117 @@
       "reason": "Insurance (500) is a separate limit from non-insurance PhonePe spends (1,500).",
       "source_url": "https://www.sbicard.com/sbi-card-en/assets/media/images/personal/credit-cards/rewards/phonepe/tnc/RP-tnc.pdf",
       "checked_on": "2026-11-05"
+    },
+    {
+      "path": "reward_rules[id=utilities-outside-phonepe-base].evaluation_type",
+      "value": "exclusion",
+      "reason": "WP7: Revision notice eff. 1 Jul 2026, \"REWARD POINTS EXCLUSION\": Reward Points will not accrue on \"Utilities (non-PhonePe App spends) 4900, 4814, 4899\".",
+      "source_url": "https://www.sbicard.com/sbi-card-en/assets/docs/pdf/ekit-tncs/PhonePe-Black-pdf-27Apr2026.pdf",
+      "checked_on": "2026-11-05"
+    },
+    {
+      "path": "reward_rules[id=utilities-outside-phonepe-base].action",
+      "value": {
+        "multiplier": 0,
+        "points_per_block": 0,
+        "cashback_percent": null,
+        "cap_reference": null,
+        "reason": "Utility payments outside the PhonePe app earn no Reward Points."
+      },
+      "reason": "WP7: Exclusion, not base earn (same revision notice).",
+      "source_url": "https://www.sbicard.com/sbi-card-en/assets/docs/pdf/ekit-tncs/PhonePe-Black-pdf-27Apr2026.pdf",
+      "checked_on": "2026-11-05"
+    },
+    {
+      "path": "reward_rules[id=insurance-outside-phonepe-base].evaluation_type",
+      "value": "exclusion",
+      "reason": "WP7: Revision notice eff. 1 Jul 2026: Reward Points will not accrue on \"Insurance (non-PhonePe App spends) 5960, 6300, 6380\".",
+      "source_url": "https://www.sbicard.com/sbi-card-en/assets/docs/pdf/ekit-tncs/PhonePe-Black-pdf-27Apr2026.pdf",
+      "checked_on": "2026-11-05"
+    },
+    {
+      "path": "reward_rules[id=insurance-outside-phonepe-base].action",
+      "value": {
+        "multiplier": 0,
+        "points_per_block": 0,
+        "cashback_percent": null,
+        "cap_reference": null,
+        "reason": "Insurance payments outside the PhonePe app earn no Reward Points."
+      },
+      "reason": "WP7: Exclusion, not base earn (same revision notice).",
+      "source_url": "https://www.sbicard.com/sbi-card-en/assets/docs/pdf/ekit-tncs/PhonePe-Black-pdf-27Apr2026.pdf",
+      "checked_on": "2026-11-05"
+    },
+    {
+      "path": "reward_rules[id=phonepe-10x].conditions.cap_insurance",
+      "op": "remove",
+      "reason": "WP7: The insurance cap moves to the new phonepe-10x-insurance rule; this key linked it to the non-insurance rows.",
+      "source_url": "https://www.sbicard.com/sbi-card-en/assets/docs/pdf/ekit-tncs/PhonePe-Black-pdf-27Apr2026.pdf",
+      "checked_on": "2026-11-05"
+    },
+    {
+      "path": "reward_rules[id=phonepe-10x].conditions.eligible_categories",
+      "value": [
+        "recharges",
+        "utilities",
+        "bill_payments",
+        "travel"
+      ],
+      "reason": "WP7: Insurance in the PhonePe app has its own 500 RP cap, separate from the 1,500 RP non-insurance cap (revision notice); split into phonepe-10x-insurance so the non-insurance cap never counts it.",
+      "source_url": "https://www.sbicard.com/sbi-card-en/assets/docs/pdf/ekit-tncs/PhonePe-Black-pdf-27Apr2026.pdf",
+      "checked_on": "2026-11-05"
+    },
+    {
+      "path": "reward_rules",
+      "op": "append",
+      "value": {
+        "id": "phonepe-10x-insurance",
+        "category_id": "insurance",
+        "priority": 10,
+        "evaluation_type": "accelerator",
+        "rail": "any",
+        "channel_type": "all",
+        "conditions": {
+          "app": "PhonePe"
+        },
+        "action": {
+          "multiplier": 10,
+          "points_per_block": 10,
+          "cashback_percent": null,
+          "cap_reference": "phonepe-insurance-monthly",
+          "reason": "10 Reward Points per Rs100 on insurance paid in the PhonePe app (max 500 RP per month)."
+        },
+        "effective_from": "2025-07-22",
+        "effective_to": null
+      },
+      "reason": "WP7: Revision notice: \"Max. 500 RPs on Insurance Spends\" for eligible PhonePe spends, separate from \"Max. 1,500 RPs on Other Spends\".",
+      "source_url": "https://www.sbicard.com/sbi-card-en/assets/docs/pdf/ekit-tncs/PhonePe-Black-pdf-27Apr2026.pdf",
+      "checked_on": "2026-11-05"
+    },
+    {
+      "path": "reward_rules",
+      "op": "append",
+      "value": {
+        "id": "wp7_emi_rail_exclusion",
+        "category_id": "all_retail",
+        "priority": 0,
+        "evaluation_type": "exclusion",
+        "rail": "emi",
+        "channel_type": "all",
+        "conditions": {},
+        "action": {
+          "multiplier": 0,
+          "points_per_block": 0,
+          "cashback_percent": null,
+          "cap_reference": null,
+          "reason": "EMI transactions earn no rewards."
+        },
+        "effective_from": "2025-07-22",
+        "effective_to": null
+      },
+      "reason": "WP7: D28c: Reward Program T&C exclusions: \"Flexipay Transactions\" and \"Merchant EMI i.e. EMI's availed at the time of purchase at Merchant establishment or websites\". The record's EMI row needs category emi AND rail emi, so an EMI purchase in another category earned. Rail-EMI exclusion on all spend.",
+      "source_url": "https://www.sbicard.com/sbi-card-en/assets/media/images/personal/credit-cards/rewards/phonepe/tnc/RP-tnc.pdf",
+      "checked_on": "2026-11-05"
     }
   ]
 }

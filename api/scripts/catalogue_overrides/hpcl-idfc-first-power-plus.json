@@ -7,6 +7,38 @@
       "reason": "Issuer caps the 5% fuel reward points at Rs 12,000 per statement cycle (2,400 points); Rs 10,000 is the HP Pay Happy Coins limit.",
       "source_url": "https://www.idfcfirst.bank.in/content/dam/idfcfirstbank/pdf/Savings-Maximiser-FIRST-Power-plus.pdf",
       "checked_on": "2026-11-05"
+    },
+    {
+      "path": "reward_rules[id=fuel_hpcl_30x].action.reason",
+      "value": "30X Reward Points (5% at Rs0.25 per point) on HPCL fuel.",
+      "reason": "WP7: The old reason mentioned \"up to 1.5%\" HP Pay Happy Coins (a different currency), which tripped the loader's \"up to\" multi-rate check. Savings Maximiser: max Rs12,000 spend and 2,400 points per cycle = a fixed 30 per Rs150.",
+      "source_url": "https://www.idfcfirst.bank.in/content/dam/idfcfirstbank/pdf/Savings-Maximiser-FIRST-Power-plus.pdf",
+      "checked_on": "2026-11-05"
+    },
+    {
+      "path": "reward_rules",
+      "op": "append",
+      "value": {
+        "id": "wp7_emi_rail_exclusion",
+        "category_id": "all_retail",
+        "priority": 0,
+        "evaluation_type": "exclusion",
+        "rail": "emi",
+        "channel_type": "all",
+        "conditions": {},
+        "action": {
+          "multiplier": 0,
+          "points_per_block": 0,
+          "cashback_percent": null,
+          "cap_reference": null,
+          "reason": "EMI transactions earn no rewards."
+        },
+        "effective_from": "2024-05-01",
+        "effective_to": null
+      },
+      "reason": "WP7: D28c: Savings Maximiser: 3X \"Applicable on: All other retail spends excluding Insurance premium payments, non-HPCL fuel spends, EMI transactions, ATM cash withdrawals\". The record's EMI row needs category emi AND rail emi, so an EMI purchase in another category earned. Rail-EMI exclusion on all spend.",
+      "source_url": "https://www.idfcfirst.bank.in/content/dam/idfcfirstbank/pdf/Savings-Maximiser-FIRST-Power-plus.pdf",
+      "checked_on": "2026-11-05"
     }
   ]
 }

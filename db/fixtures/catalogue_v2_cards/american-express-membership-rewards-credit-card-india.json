@@ -1,0 +1,730 @@
+{
+  "generated_by": "api/scripts/catalogue_v2/snapshot_examples.js",
+  "source_slug": "american-express-membership-rewards-credit-card-india",
+  "inputs": {
+    "transform_version": "7",
+    "source_record_sha256": "a9dd9374a416c35b1c899516cd5ad0d80e91d7ba5e36f2fb3f2515ae84b54d6e",
+    "override_sha256": null,
+    "directory_sha256": "b1094d54b77e848d22f7a9a64f3ae6d1ef43ca3eb2fc8e40cd43ed1994664694",
+    "verified": false
+  },
+  "blocking_flags": [
+    "info_rule"
+  ],
+  "card": {
+    "id": "american-express-membership-rewards-credit-card-india:card",
+    "slug": "american-express-membership-rewards-credit-card-india",
+    "name": "American Express Membership Rewards Credit Card",
+    "network": "amex",
+    "issuer_slug": "american-express-india",
+    "base_reward_unit": "points_per_100",
+    "base_reward_rate": 2,
+    "point_value_inr": 0.25,
+    "excluded_categories": [],
+    "accrual_block_inr": 50,
+    "accrual_rounding": "floor",
+    "cashback_rounding": null,
+    "points_expiry_months": 0,
+    "model_status": "partial",
+    "model_coverage": {
+      "rules_total": 10,
+      "rules_modelled": 7,
+      "rules_info": 3,
+      "caps_total": 0,
+      "caps_enforced": 0,
+      "flags": [
+        {
+          "code": "exclusion_scope_broadened",
+          "source_local_id": "exclude_fuel",
+          "detail": null
+        },
+        {
+          "code": "exclusion_scope_broadened",
+          "source_local_id": "exclude_utilities",
+          "detail": null
+        },
+        {
+          "code": "emi_alternatives",
+          "source_local_id": "exclude_merchant_emi",
+          "detail": null
+        },
+        {
+          "code": "exclusion_scope_broadened",
+          "source_local_id": "exclude_merchant_emi",
+          "detail": null
+        },
+        {
+          "code": "info_rule",
+          "source_local_id": "safekey_emi_standard",
+          "detail": "condition:emi_channel"
+        },
+        {
+          "code": "info_rule",
+          "source_local_id": "safekey_emi_standard",
+          "detail": "condition:channel_type"
+        },
+        {
+          "code": "info_rule",
+          "source_local_id": "post_purchase_emi_standard",
+          "detail": "condition:conversion_type"
+        },
+        {
+          "code": "info_rule",
+          "source_local_id": "post_purchase_emi_standard",
+          "detail": "condition:channel_type"
+        },
+        {
+          "code": "info_rule",
+          "source_local_id": "excluded_fees_and_finance_charges",
+          "detail": "non_purchase_channel"
+        }
+      ],
+      "overrides_applied": []
+    },
+    "reward_rules": [
+      {
+        "id": "american-express-membership-rewards-credit-card-india:rule:base_standard_earn",
+        "category_id": null,
+        "category_slug": null,
+        "merchant_pattern": null,
+        "rail": null,
+        "unit": "points_per_100",
+        "rate": 1,
+        "min_txn_inr": null,
+        "max_txn_inr": null,
+        "priority": 10,
+        "conditions": {
+          "source_local_id": "base_standard_earn",
+          "part": null,
+          "info_reasons": [],
+          "flags": []
+        },
+        "notes": null,
+        "effective_from": "2026-08-28",
+        "effective_to": null,
+        "excluded_categories": [],
+        "rule_role": "base",
+        "merchant_slugs": [],
+        "platform_slugs": [],
+        "mcc_include": [],
+        "mcc_exclude": [],
+        "except_merchant_slugs": [],
+        "except_platform_slugs": [],
+        "block_inr": 50,
+        "min_engine_version": 2,
+        "max_engine_version": null,
+        "source_local_id": "base_standard_earn",
+        "display_note": "Earn 1 Membership Rewards Point for every ₹50 spent on eligible purchases."
+      },
+      {
+        "id": "american-express-membership-rewards-credit-card-india:rule:exclude_fuel",
+        "category_id": "cat-fuel",
+        "category_slug": "fuel",
+        "merchant_pattern": null,
+        "rail": null,
+        "unit": "points_per_100",
+        "rate": 0,
+        "min_txn_inr": null,
+        "max_txn_inr": null,
+        "priority": 1,
+        "conditions": {
+          "source_local_id": "exclude_fuel",
+          "part": null,
+          "info_reasons": [],
+          "flags": [
+            "exclusion_scope_broadened"
+          ]
+        },
+        "notes": null,
+        "effective_from": "2026-08-28",
+        "effective_to": null,
+        "excluded_categories": [],
+        "rule_role": "exclusion",
+        "merchant_slugs": [],
+        "platform_slugs": [],
+        "mcc_include": [],
+        "mcc_exclude": [],
+        "except_merchant_slugs": [],
+        "except_platform_slugs": [],
+        "block_inr": null,
+        "min_engine_version": 1,
+        "max_engine_version": null,
+        "source_local_id": "exclude_fuel",
+        "display_note": "No Membership Rewards Points on fuel, including petrol, diesel and CNG from Oil Marketing Companies."
+      },
+      {
+        "id": "american-express-membership-rewards-credit-card-india:rule:exclude_insurance",
+        "category_id": "cat-insurance",
+        "category_slug": "insurance",
+        "merchant_pattern": null,
+        "rail": null,
+        "unit": "points_per_100",
+        "rate": 0,
+        "min_txn_inr": null,
+        "max_txn_inr": null,
+        "priority": 1,
+        "conditions": {
+          "source_local_id": "exclude_insurance",
+          "part": null,
+          "info_reasons": [],
+          "flags": []
+        },
+        "notes": null,
+        "effective_from": "2026-08-28",
+        "effective_to": null,
+        "excluded_categories": [],
+        "rule_role": "exclusion",
+        "merchant_slugs": [],
+        "platform_slugs": [],
+        "mcc_include": [],
+        "mcc_exclude": [],
+        "except_merchant_slugs": [],
+        "except_platform_slugs": [],
+        "block_inr": null,
+        "min_engine_version": 1,
+        "max_engine_version": null,
+        "source_local_id": "exclude_insurance",
+        "display_note": "No Membership Rewards Points on insurance spend."
+      },
+      {
+        "id": "american-express-membership-rewards-credit-card-india:rule:exclude_utilities",
+        "category_id": "cat-bills",
+        "category_slug": "bills",
+        "merchant_pattern": null,
+        "rail": null,
+        "unit": "points_per_100",
+        "rate": 0,
+        "min_txn_inr": null,
+        "max_txn_inr": null,
+        "priority": 1,
+        "conditions": {
+          "source_local_id": "exclude_utilities",
+          "part": null,
+          "info_reasons": [],
+          "flags": [
+            "exclusion_scope_broadened"
+          ]
+        },
+        "notes": null,
+        "effective_from": "2026-08-28",
+        "effective_to": null,
+        "excluded_categories": [],
+        "rule_role": "exclusion",
+        "merchant_slugs": [],
+        "platform_slugs": [],
+        "mcc_include": [],
+        "mcc_exclude": [],
+        "except_merchant_slugs": [],
+        "except_platform_slugs": [],
+        "block_inr": null,
+        "min_engine_version": 1,
+        "max_engine_version": null,
+        "source_local_id": "exclude_utilities",
+        "display_note": "No Membership Rewards Points on household/domestic electricity, gas and water payments, including government, municipal, public-housing-society and apartment-association providers."
+      },
+      {
+        "id": "american-express-membership-rewards-credit-card-india:rule:exclude_cash_transactions",
+        "category_id": null,
+        "category_slug": null,
+        "merchant_pattern": null,
+        "rail": "atm",
+        "unit": "points_per_100",
+        "rate": 0,
+        "min_txn_inr": null,
+        "max_txn_inr": null,
+        "priority": 1,
+        "conditions": {
+          "source_local_id": "exclude_cash_transactions",
+          "part": null,
+          "info_reasons": [],
+          "flags": []
+        },
+        "notes": null,
+        "effective_from": "2026-08-28",
+        "effective_to": null,
+        "excluded_categories": [],
+        "rule_role": "exclusion",
+        "merchant_slugs": [],
+        "platform_slugs": [],
+        "mcc_include": [],
+        "mcc_exclude": [],
+        "except_merchant_slugs": [],
+        "except_platform_slugs": [],
+        "block_inr": null,
+        "min_engine_version": 2,
+        "max_engine_version": null,
+        "source_local_id": "exclude_cash_transactions",
+        "display_note": "Cash withdrawals, cash advances and other cash transactions do not earn Membership Rewards Points."
+      },
+      {
+        "id": "american-express-membership-rewards-credit-card-india:rule:exclude_merchant_emi#1",
+        "category_id": "cat-emi",
+        "category_slug": "emi",
+        "merchant_pattern": null,
+        "rail": null,
+        "unit": "points_per_100",
+        "rate": 0,
+        "min_txn_inr": null,
+        "max_txn_inr": null,
+        "priority": 1,
+        "conditions": {
+          "source_local_id": "exclude_merchant_emi",
+          "part": 1,
+          "info_reasons": [],
+          "flags": [
+            "emi_alternatives",
+            "exclusion_scope_broadened"
+          ]
+        },
+        "notes": null,
+        "effective_from": "2020-03-15",
+        "effective_to": null,
+        "excluded_categories": [],
+        "rule_role": "exclusion",
+        "merchant_slugs": [],
+        "platform_slugs": [],
+        "mcc_include": [],
+        "mcc_exclude": [],
+        "except_merchant_slugs": [],
+        "except_platform_slugs": [],
+        "block_inr": null,
+        "min_engine_version": 1,
+        "max_engine_version": null,
+        "source_local_id": "exclude_merchant_emi",
+        "display_note": "Effective 15 March 2020, no Membership Rewards Points are earned on EMI options selected at a merchant website or merchant terminal."
+      },
+      {
+        "id": "american-express-membership-rewards-credit-card-india:rule:exclude_merchant_emi#2",
+        "category_id": null,
+        "category_slug": null,
+        "merchant_pattern": null,
+        "rail": "emi",
+        "unit": "points_per_100",
+        "rate": 0,
+        "min_txn_inr": null,
+        "max_txn_inr": null,
+        "priority": 1,
+        "conditions": {
+          "source_local_id": "exclude_merchant_emi",
+          "part": 2,
+          "info_reasons": [],
+          "flags": [
+            "emi_alternatives",
+            "exclusion_scope_broadened"
+          ]
+        },
+        "notes": null,
+        "effective_from": "2020-03-15",
+        "effective_to": null,
+        "excluded_categories": [],
+        "rule_role": "exclusion",
+        "merchant_slugs": [],
+        "platform_slugs": [],
+        "mcc_include": [],
+        "mcc_exclude": [],
+        "except_merchant_slugs": [],
+        "except_platform_slugs": [],
+        "block_inr": null,
+        "min_engine_version": 2,
+        "max_engine_version": null,
+        "source_local_id": "exclude_merchant_emi",
+        "display_note": "Effective 15 March 2020, no Membership Rewards Points are earned on EMI options selected at a merchant website or merchant terminal."
+      },
+      {
+        "id": "american-express-membership-rewards-credit-card-india:rule:safekey_emi_standard",
+        "category_id": "cat-emi",
+        "category_slug": "emi",
+        "merchant_pattern": null,
+        "rail": "emi",
+        "unit": "points_per_100",
+        "rate": 1,
+        "min_txn_inr": null,
+        "max_txn_inr": null,
+        "priority": 5,
+        "conditions": {
+          "source_local_id": "safekey_emi_standard",
+          "part": null,
+          "info_reasons": [
+            "condition:emi_channel",
+            "condition:channel_type"
+          ],
+          "flags": []
+        },
+        "notes": null,
+        "effective_from": "2020-03-15",
+        "effective_to": null,
+        "excluded_categories": [],
+        "rule_role": "info",
+        "merchant_slugs": [],
+        "platform_slugs": [],
+        "mcc_include": [],
+        "mcc_exclude": [],
+        "except_merchant_slugs": [],
+        "except_platform_slugs": [],
+        "block_inr": 50,
+        "min_engine_version": 2,
+        "max_engine_version": null,
+        "source_local_id": "safekey_emi_standard",
+        "display_note": "Membership Rewards Points continue to accrue on EMI transactions through American Express SafeKey."
+      },
+      {
+        "id": "american-express-membership-rewards-credit-card-india:rule:post_purchase_emi_standard",
+        "category_id": "cat-emi",
+        "category_slug": "emi",
+        "merchant_pattern": null,
+        "rail": "emi",
+        "unit": "points_per_100",
+        "rate": 1,
+        "min_txn_inr": null,
+        "max_txn_inr": null,
+        "priority": 5,
+        "conditions": {
+          "source_local_id": "post_purchase_emi_standard",
+          "part": null,
+          "info_reasons": [
+            "condition:conversion_type",
+            "condition:channel_type"
+          ],
+          "flags": []
+        },
+        "notes": null,
+        "effective_from": "2020-03-15",
+        "effective_to": null,
+        "excluded_categories": [],
+        "rule_role": "info",
+        "merchant_slugs": [],
+        "platform_slugs": [],
+        "mcc_include": [],
+        "mcc_exclude": [],
+        "except_merchant_slugs": [],
+        "except_platform_slugs": [],
+        "block_inr": 50,
+        "min_engine_version": 2,
+        "max_engine_version": null,
+        "source_local_id": "post_purchase_emi_standard",
+        "display_note": "Membership Rewards Points continue to accrue on post-purchase EMI conversions."
+      },
+      {
+        "id": "american-express-membership-rewards-credit-card-india:rule:reward_multiplier_2x",
+        "category_id": null,
+        "category_slug": null,
+        "merchant_pattern": null,
+        "rail": null,
+        "unit": "points_per_100",
+        "rate": 2,
+        "min_txn_inr": null,
+        "max_txn_inr": null,
+        "priority": 3,
+        "conditions": {
+          "source_local_id": "reward_multiplier_2x",
+          "part": null,
+          "info_reasons": [],
+          "flags": []
+        },
+        "notes": null,
+        "effective_from": "2026-08-28",
+        "effective_to": null,
+        "excluded_categories": [],
+        "rule_role": "earn",
+        "merchant_slugs": [],
+        "platform_slugs": [
+          "amex_reward_multiplier"
+        ],
+        "mcc_include": [],
+        "mcc_exclude": [],
+        "except_merchant_slugs": [],
+        "except_platform_slugs": [],
+        "block_inr": 50,
+        "min_engine_version": 2,
+        "max_engine_version": null,
+        "source_local_id": "reward_multiplier_2x",
+        "display_note": "Eligible Reward Multiplier merchants earn 2X Membership Rewards Points on this card."
+      },
+      {
+        "id": "american-express-membership-rewards-credit-card-india:rule:excluded_fees_and_finance_charges",
+        "category_id": null,
+        "category_slug": null,
+        "merchant_pattern": null,
+        "rail": null,
+        "unit": "points_per_100",
+        "rate": 0,
+        "min_txn_inr": null,
+        "max_txn_inr": null,
+        "priority": 1,
+        "conditions": {
+          "source_local_id": "excluded_fees_and_finance_charges",
+          "part": null,
+          "info_reasons": [
+            "non_purchase_channel"
+          ],
+          "flags": []
+        },
+        "notes": null,
+        "effective_from": "2026-08-28",
+        "effective_to": null,
+        "excluded_categories": [],
+        "rule_role": "info",
+        "merchant_slugs": [],
+        "platform_slugs": [],
+        "mcc_include": [],
+        "mcc_exclude": [],
+        "except_merchant_slugs": [],
+        "except_platform_slugs": [],
+        "block_inr": null,
+        "min_engine_version": 2,
+        "max_engine_version": null,
+        "source_local_id": "excluded_fees_and_finance_charges",
+        "display_note": "Fees, charges, finance charges, interest, foreign-currency conversion charges and similar non-purchase amounts do not earn Membership Rewards Points."
+      }
+    ],
+    "cap_rules": [],
+    "milestone_rules": [],
+    "fee_waiver_rules": [
+      {
+        "id": "american-express-membership-rewards-credit-card-india:waiver:1",
+        "threshold_spend_inr": 150000,
+        "period": "annual",
+        "waives_fee_inr": 4500,
+        "excluded_category_slugs": [],
+        "notes": "100% waiver of the ₹4,500 annual membership renewal fee at ₹1,50,000 or above spend in the immediately preceding membership year; 50% waiver applies for spend of ₹90,000 to ₹1,49,999.",
+        "excluded_categories": []
+      }
+    ],
+    "benefits": [
+      {
+        "id": "american-express-membership-rewards-credit-card-india:benefit:monthly_four_transaction_bonus",
+        "key": "monthly_four_transaction_bonus",
+        "source_local_id": "monthly_four_transaction_bonus",
+        "kind": "other",
+        "label": "1,000 Bonus Membership Rewards Points for four qualifying transactions of ₹1,500 or above in a calendar month",
+        "description": "Sponsor: American Express",
+        "quota_count": 1000,
+        "quota_period": "calendar_month",
+        "network_program": "american_express_membership_rewards",
+        "value_estimate_inr": 250,
+        "conditions": {
+          "source_category_id": "other",
+          "evaluation_engine": {
+            "conditions": {
+              "period": "calendar_month",
+              "transaction_count": 4,
+              "minimum_transaction_amount_inr": 1500
+            },
+            "benefit_calculation": {
+              "bonus_points": 1000
+            },
+            "perks": [
+              "Bonus Membership Rewards Points"
+            ]
+          }
+        }
+      },
+      {
+        "id": "american-express-membership-rewards-credit-card-india:benefit:monthly_20000_spend_bonus",
+        "key": "monthly_20000_spend_bonus",
+        "source_local_id": "monthly_20000_spend_bonus",
+        "kind": "other",
+        "label": "1,000 additional Membership Rewards Points for ₹20,000 or more net spend in a calendar month",
+        "description": "Sponsor: American Express",
+        "quota_count": 1000,
+        "quota_period": "calendar_month",
+        "network_program": "american_express_membership_rewards",
+        "value_estimate_inr": 250,
+        "conditions": {
+          "source_category_id": "other",
+          "evaluation_engine": {
+            "conditions": {
+              "period": "calendar_month",
+              "minimum_spend_inr": 20000,
+              "enrollment_required": true,
+              "net_spend": true
+            },
+            "benefit_calculation": {
+              "bonus_points": 1000
+            },
+            "perks": [
+              "Enrollment-based monthly bonus"
+            ]
+          }
+        }
+      },
+      {
+        "id": "american-express-membership-rewards-credit-card-india:benefit:contactless_payment",
+        "key": "contactless_payment",
+        "source_local_id": "contactless_payment",
+        "kind": "other",
+        "label": "Contactless payments",
+        "description": "Sponsor: American Express",
+        "quota_count": null,
+        "quota_period": null,
+        "network_program": "amex_contactless",
+        "value_estimate_inr": null,
+        "conditions": {
+          "source_category_id": "other",
+          "evaluation_engine": {
+            "conditions": {
+              "contactless_symbol_required": true,
+              "pin_free_limit_inr": 5000
+            },
+            "benefit_calculation": "N/A",
+            "perks": [
+              "PIN/signature-free contactless purchases below ₹5,000 where supported by the terminal"
+            ]
+          }
+        }
+      },
+      {
+        "id": "american-express-membership-rewards-credit-card-india:benefit:zero_lost_card_liability",
+        "key": "zero_lost_card_liability",
+        "source_local_id": "zero_lost_card_liability",
+        "kind": "other",
+        "label": "Zero Lost Card Liability",
+        "description": "Sponsor: American Express",
+        "quota_count": null,
+        "quota_period": null,
+        "network_program": "american_express_card_protection",
+        "value_estimate_inr": null,
+        "conditions": {
+          "source_category_id": "other",
+          "evaluation_engine": {
+            "conditions": {
+              "fraud_report_window_working_days": 3
+            },
+            "benefit_calculation": {
+              "liability_if_reported_within_window_inr": 0,
+              "maximum_liability_if_reported_after_window_inr": 1000
+            },
+            "perks": [
+              "Fraud protection for unauthorized card use"
+            ]
+          }
+        }
+      }
+    ],
+    "unlock_rules": [
+      {
+        "id": "american-express-membership-rewards-credit-card-india:unlock:monthly_20000_spend_bonus@1",
+        "card_benefit_id": "american-express-membership-rewards-credit-card-india:benefit:monthly_20000_spend_bonus",
+        "kind": "membership",
+        "label": "1,000 additional Membership Rewards Points for ₹20,000 or more net spend in a calendar month",
+        "spend_threshold_inr": 20000,
+        "spend_window": "calendar_month",
+        "window_days": null,
+        "unlocks_quota": 1000,
+        "unlocks_period": "calendar_month",
+        "tier_label": null,
+        "excluded_category_ids": [],
+        "notes": null,
+        "source_local_id": "monthly_20000_spend_bonus"
+      }
+    ],
+    "redemption_options": [
+      {
+        "program_name": "pay_with_points",
+        "method": "statement_credit",
+        "value_per_point_inr": 0.25,
+        "min_points": 1000,
+        "notes": "Redemption fee: ₹0"
+      },
+      {
+        "program_name": "gold_collection_24k_taj",
+        "method": "partner_catalogue",
+        "value_per_point_inr": 0.583333,
+        "min_points": 24000,
+        "notes": "Redemption fee: ₹0"
+      },
+      {
+        "program_name": "gold_collection_24k_shoppers_stop",
+        "method": "partner_catalogue",
+        "value_per_point_inr": 0.416667,
+        "min_points": 24000,
+        "notes": "Redemption fee: ₹0"
+      },
+      {
+        "program_name": "gold_collection_24k_tata_cliq",
+        "method": "partner_catalogue",
+        "value_per_point_inr": 0.375,
+        "min_points": 24000,
+        "notes": "Redemption fee: ₹0"
+      },
+      {
+        "program_name": "gold_collection_24k_tanishq",
+        "method": "partner_catalogue",
+        "value_per_point_inr": 0.375,
+        "min_points": 24000,
+        "notes": "Redemption fee: ₹0"
+      },
+      {
+        "program_name": "gold_collection_24k_amazon",
+        "method": "partner_catalogue",
+        "value_per_point_inr": 0.333333,
+        "min_points": 24000,
+        "notes": "Redemption fee: ₹0"
+      },
+      {
+        "program_name": "gold_collection_24k_flipkart",
+        "method": "partner_catalogue",
+        "value_per_point_inr": 0.333333,
+        "min_points": 24000,
+        "notes": "Redemption fee: ₹0"
+      },
+      {
+        "program_name": "gold_collection_24k_reliance_digital",
+        "method": "partner_catalogue",
+        "value_per_point_inr": 0.333333,
+        "min_points": 24000,
+        "notes": "Redemption fee: ₹0"
+      },
+      {
+        "program_name": "gold_collection_18k_taj",
+        "method": "partner_catalogue",
+        "value_per_point_inr": 0.5,
+        "min_points": 18000,
+        "notes": "Redemption fee: ₹0"
+      },
+      {
+        "program_name": "gold_collection_18k_shoppers_stop",
+        "method": "partner_catalogue",
+        "value_per_point_inr": 0.388889,
+        "min_points": 18000,
+        "notes": "Redemption fee: ₹0"
+      },
+      {
+        "program_name": "gold_collection_18k_tata_cliq",
+        "method": "partner_catalogue",
+        "value_per_point_inr": 0.388889,
+        "min_points": 18000,
+        "notes": "Redemption fee: ₹0"
+      },
+      {
+        "program_name": "gold_collection_18k_myntra",
+        "method": "partner_catalogue",
+        "value_per_point_inr": 0.388889,
+        "min_points": 18000,
+        "notes": "Redemption fee: ₹0"
+      },
+      {
+        "program_name": "gold_collection_18k_amazon",
+        "method": "partner_catalogue",
+        "value_per_point_inr": 0.333333,
+        "min_points": 18000,
+        "notes": "Redemption fee: ₹0"
+      },
+      {
+        "program_name": "gold_collection_18k_flipkart",
+        "method": "partner_catalogue",
+        "value_per_point_inr": 0.333333,
+        "min_points": 18000,
+        "notes": "Redemption fee: ₹0"
+      },
+      {
+        "program_name": "gold_collection_18k_reliance_digital",
+        "method": "partner_catalogue",
+        "value_per_point_inr": 0.333333,
+        "min_points": 18000,
+        "notes": "Redemption fee: ₹0"
+      }
+    ],
+    "is_upi_linkable": false
+  }
+}

@@ -1,0 +1,1422 @@
+{
+  "generated_by": "api/scripts/catalogue_v2/snapshot_examples.js",
+  "source_slug": "axis-bank-ace",
+  "inputs": {
+    "transform_version": "7",
+    "source_record_sha256": "e59f700fc92a8c2562f66b0dcd1574d29c682c88f5a0d3d5e2647f102934800c",
+    "override_sha256": "10b9e1e965189d07dcd5c00164d17eb05c85aad289878ca7334d03d1aefd3f43",
+    "directory_sha256": "b1094d54b77e848d22f7a9a64f3ae6d1ef43ca3eb2fc8e40cd43ed1994664694",
+    "verified": true
+  },
+  "blocking_flags": [],
+  "card": {
+    "id": "axis-bank-ace:card",
+    "slug": "axis-bank-ace",
+    "name": "Axis Bank ACE Credit Card",
+    "network": "visa",
+    "issuer_slug": "axis-bank",
+    "base_reward_unit": "cashback_percent",
+    "base_reward_rate": 1.5,
+    "point_value_inr": null,
+    "excluded_categories": [],
+    "accrual_block_inr": null,
+    "accrual_rounding": "round",
+    "cashback_rounding": "rupee_half_up",
+    "points_expiry_months": null,
+    "model_status": "verified",
+    "model_coverage": {
+      "rules_total": 15,
+      "rules_modelled": 14,
+      "rules_info": 1,
+      "caps_total": 1,
+      "caps_enforced": 1,
+      "flags": [
+        {
+          "code": "unmapped_excluded_category",
+          "source_local_id": "ace-base-cashback-1-5pct",
+          "detail": null
+        },
+        {
+          "code": "exception_from_negated_token",
+          "source_local_id": "ace-exclude-utility-non-gpay",
+          "detail": null
+        },
+        {
+          "code": "mcc_scoped_exclusion",
+          "source_local_id": "ace-exclude-utility-non-gpay",
+          "detail": null
+        },
+        {
+          "code": "mcc_scoped_exclusion",
+          "source_local_id": "ace-exclude-fuel",
+          "detail": null
+        },
+        {
+          "code": "mcc_scoped_exclusion",
+          "source_local_id": "ace-exclude-insurance",
+          "detail": null
+        },
+        {
+          "code": "mcc_scoped_exclusion",
+          "source_local_id": "ace-exclude-rent",
+          "detail": null
+        },
+        {
+          "code": "mcc_scoped_exclusion",
+          "source_local_id": "ace-exclude-wallet",
+          "detail": null
+        },
+        {
+          "code": "mcc_scoped_exclusion",
+          "source_local_id": "ace-exclude-education",
+          "detail": null
+        },
+        {
+          "code": "mcc_scoped_exclusion",
+          "source_local_id": "ace-exclude-government",
+          "detail": null
+        },
+        {
+          "code": "exclusion_scope_broadened",
+          "source_local_id": "ace-exclude-cash-advance",
+          "detail": null
+        },
+        {
+          "code": "info_rule",
+          "source_local_id": "ace-exclude-card-fees-repayments",
+          "detail": "transaction_type"
+        }
+      ],
+      "overrides_applied": [
+        {
+          "path": "cap_rules[id=ace-accelerated-cashback-500].metric",
+          "op": "set",
+          "value_sha256": "7af78ba28cf9ccb3",
+          "reason": "Cap is on cashback (Rs 500 combined for 5% and 4% categories per statement), not on eligible spend.",
+          "source_url": "https://www.axis.bank.in/docs/default-source/default-document-library/credit-card/axis-bank-ace-credit-card-tncs.pdf",
+          "checked_on": "2026-11-05",
+          "citation": null
+        },
+        {
+          "path": "cap_rules[id=ace-accelerated-cashback-500].limit_value",
+          "op": "set",
+          "value_sha256": "0604cd3138feed20",
+          "reason": "Native cashback amount in rupees.",
+          "source_url": "https://www.axis.bank.in/docs/default-source/default-document-library/credit-card/axis-bank-ace-credit-card-tncs.pdf",
+          "checked_on": "2026-11-05",
+          "citation": null
+        },
+        {
+          "path": "cap_rules[id=ace-accelerated-cashback-500].limit_value_inr",
+          "op": "set",
+          "value_sha256": "0604cd3138feed20",
+          "reason": "Was 10000 (spend); issuer cap is Rs 500 cashback.",
+          "source_url": "https://www.axis.bank.in/docs/default-source/default-document-library/credit-card/axis-bank-ace-credit-card-tncs.pdf",
+          "checked_on": "2026-11-05",
+          "citation": null
+        },
+        {
+          "path": "accrual_engine.cashback_rounding",
+          "op": "set",
+          "value_sha256": "e98088164cee2b8c",
+          "reason": "Cashback is rounded to the nearest rupee per transaction (17.25 -> 17, 18.75 -> 19).",
+          "source_url": "https://www.axis.bank.in/docs/default-source/default-document-library/credit-card/axis-bank-ace-credit-card-tncs.pdf",
+          "checked_on": "2026-11-05",
+          "citation": null
+        },
+        {
+          "path": "reward_rules[id=ace-gpay-utility-5pct].conditions",
+          "op": "set",
+          "value_sha256": "afcac98be6e21cad",
+          "reason": "WP7: The eligible-category names (postpaid, DTH, electricity ...) are the utility MCCs the issuer uses for the Google Pay rule (4814/4816/4899/4900, as in ace-exclude-utility-non-gpay); the free-text payment requirement restated Google Pay. Rule was info.",
+          "source_url": "https://www.axis.bank.in/docs/default-source/default-document-library/credit-card/axis-bank-ace-credit-card-tncs.pdf",
+          "checked_on": "2026-11-05",
+          "citation": null
+        },
+        {
+          "path": "cap_rules[id=ace-accelerated-cashback-500].post_limit_behavior",
+          "op": "set",
+          "value_sha256": "74234e98afe7498f",
+          "reason": "WP7: Total cashback cap (override); what spend over the cap earns is not stated (research note), so no fallback.",
+          "source_url": "https://www.axis.bank.in/docs/default-source/default-document-library/credit-card/axis-bank-ace-credit-card-tncs.pdf",
+          "checked_on": "2026-11-05",
+          "citation": null
+        }
+      ]
+    },
+    "reward_rules": [
+      {
+        "id": "axis-bank-ace:rule:ace-gpay-utility-5pct",
+        "category_id": "cat-bills",
+        "category_slug": "bills",
+        "merchant_pattern": null,
+        "rail": null,
+        "unit": "cashback_percent",
+        "rate": 5,
+        "min_txn_inr": null,
+        "max_txn_inr": null,
+        "priority": 10,
+        "conditions": {
+          "source_local_id": "ace-gpay-utility-5pct",
+          "part": null,
+          "info_reasons": [],
+          "flags": []
+        },
+        "notes": null,
+        "effective_from": "2024-04-20",
+        "effective_to": null,
+        "excluded_categories": [],
+        "rule_role": "earn",
+        "merchant_slugs": [],
+        "platform_slugs": [
+          "google_pay"
+        ],
+        "mcc_include": [
+          "4814",
+          "4816",
+          "4899",
+          "4900"
+        ],
+        "mcc_exclude": [],
+        "except_merchant_slugs": [],
+        "except_platform_slugs": [],
+        "block_inr": null,
+        "min_engine_version": 2,
+        "max_engine_version": null,
+        "source_local_id": "ace-gpay-utility-5pct",
+        "display_note": "5% cashback on eligible utility bill payments and recharges through Google Pay."
+      },
+      {
+        "id": "axis-bank-ace:rule:ace-preferred-merchants-4pct",
+        "category_id": null,
+        "category_slug": null,
+        "merchant_pattern": null,
+        "rail": null,
+        "unit": "cashback_percent",
+        "rate": 4,
+        "min_txn_inr": null,
+        "max_txn_inr": null,
+        "priority": 20,
+        "conditions": {
+          "source_local_id": "ace-preferred-merchants-4pct",
+          "part": null,
+          "info_reasons": [],
+          "flags": []
+        },
+        "notes": null,
+        "effective_from": "2024-04-20",
+        "effective_to": null,
+        "excluded_categories": [],
+        "rule_role": "earn",
+        "merchant_slugs": [
+          "ola",
+          "swiggy",
+          "zomato"
+        ],
+        "platform_slugs": [],
+        "mcc_include": [],
+        "mcc_exclude": [],
+        "except_merchant_slugs": [],
+        "except_platform_slugs": [],
+        "block_inr": null,
+        "min_engine_version": 2,
+        "max_engine_version": null,
+        "source_local_id": "ace-preferred-merchants-4pct",
+        "display_note": "4% cashback on Swiggy, Zomato and Ola."
+      },
+      {
+        "id": "axis-bank-ace:rule:ace-base-cashback-1-5pct",
+        "category_id": null,
+        "category_slug": null,
+        "merchant_pattern": null,
+        "rail": null,
+        "unit": "cashback_percent",
+        "rate": 1.5,
+        "min_txn_inr": null,
+        "max_txn_inr": null,
+        "priority": 100,
+        "conditions": {
+          "source_local_id": "ace-base-cashback-1-5pct",
+          "part": null,
+          "info_reasons": [],
+          "flags": [
+            "unmapped_excluded_category"
+          ]
+        },
+        "notes": null,
+        "effective_from": "2024-04-20",
+        "effective_to": null,
+        "excluded_categories": [],
+        "rule_role": "earn",
+        "merchant_slugs": [],
+        "platform_slugs": [],
+        "mcc_include": [],
+        "mcc_exclude": [],
+        "except_merchant_slugs": [
+          "ola",
+          "swiggy",
+          "zomato"
+        ],
+        "except_platform_slugs": [],
+        "block_inr": null,
+        "min_engine_version": 2,
+        "max_engine_version": null,
+        "source_local_id": "ace-base-cashback-1-5pct",
+        "display_note": "All eligible transactions other than Google Pay accelerated categories, preferred merchants and excluded categories earn 1.5% cashback."
+      },
+      {
+        "id": "axis-bank-ace:rule:ace-exclude-utility-non-gpay#1",
+        "category_id": "cat-bills",
+        "category_slug": "bills",
+        "merchant_pattern": null,
+        "rail": null,
+        "unit": "cashback_percent",
+        "rate": 0,
+        "min_txn_inr": null,
+        "max_txn_inr": null,
+        "priority": 1,
+        "conditions": {
+          "source_local_id": "ace-exclude-utility-non-gpay",
+          "part": 1,
+          "info_reasons": [],
+          "flags": [
+            "exception_from_negated_token",
+            "mcc_scoped_exclusion"
+          ]
+        },
+        "notes": null,
+        "effective_from": "2024-04-20",
+        "effective_to": null,
+        "excluded_categories": [],
+        "rule_role": "exclusion",
+        "merchant_slugs": [],
+        "platform_slugs": [],
+        "mcc_include": [],
+        "mcc_exclude": [],
+        "except_merchant_slugs": [],
+        "except_platform_slugs": [
+          "google_pay"
+        ],
+        "block_inr": null,
+        "min_engine_version": 1,
+        "max_engine_version": 1,
+        "source_local_id": "ace-exclude-utility-non-gpay",
+        "display_note": "Utility spends outside Google Pay are excluded from cashback."
+      },
+      {
+        "id": "axis-bank-ace:rule:ace-exclude-utility-non-gpay#2",
+        "category_id": "cat-bills",
+        "category_slug": "bills",
+        "merchant_pattern": null,
+        "rail": null,
+        "unit": "cashback_percent",
+        "rate": 0,
+        "min_txn_inr": null,
+        "max_txn_inr": null,
+        "priority": 1,
+        "conditions": {
+          "source_local_id": "ace-exclude-utility-non-gpay",
+          "part": 2,
+          "info_reasons": [],
+          "flags": [
+            "exception_from_negated_token",
+            "mcc_scoped_exclusion"
+          ]
+        },
+        "notes": null,
+        "effective_from": "2024-04-20",
+        "effective_to": null,
+        "excluded_categories": [],
+        "rule_role": "exclusion",
+        "merchant_slugs": [],
+        "platform_slugs": [],
+        "mcc_include": [
+          "4814",
+          "4816",
+          "4899",
+          "4900"
+        ],
+        "mcc_exclude": [],
+        "except_merchant_slugs": [],
+        "except_platform_slugs": [
+          "google_pay"
+        ],
+        "block_inr": null,
+        "min_engine_version": 2,
+        "max_engine_version": null,
+        "source_local_id": "ace-exclude-utility-non-gpay",
+        "display_note": "Utility spends outside Google Pay are excluded from cashback."
+      },
+      {
+        "id": "axis-bank-ace:rule:ace-exclude-utility-non-gpay#3",
+        "category_id": null,
+        "category_slug": null,
+        "merchant_pattern": null,
+        "rail": null,
+        "unit": "cashback_percent",
+        "rate": 0,
+        "min_txn_inr": null,
+        "max_txn_inr": null,
+        "priority": 1,
+        "conditions": {
+          "source_local_id": "ace-exclude-utility-non-gpay",
+          "part": 3,
+          "info_reasons": [],
+          "flags": [
+            "exception_from_negated_token",
+            "mcc_scoped_exclusion"
+          ]
+        },
+        "notes": null,
+        "effective_from": "2024-04-20",
+        "effective_to": null,
+        "excluded_categories": [],
+        "rule_role": "exclusion",
+        "merchant_slugs": [],
+        "platform_slugs": [],
+        "mcc_include": [
+          "4814",
+          "4816",
+          "4899",
+          "4900"
+        ],
+        "mcc_exclude": [],
+        "except_merchant_slugs": [],
+        "except_platform_slugs": [
+          "google_pay"
+        ],
+        "block_inr": null,
+        "min_engine_version": 2,
+        "max_engine_version": null,
+        "source_local_id": "ace-exclude-utility-non-gpay",
+        "display_note": "Utility spends outside Google Pay are excluded from cashback."
+      },
+      {
+        "id": "axis-bank-ace:rule:ace-exclude-fuel#1",
+        "category_id": "cat-fuel",
+        "category_slug": "fuel",
+        "merchant_pattern": null,
+        "rail": null,
+        "unit": "cashback_percent",
+        "rate": 0,
+        "min_txn_inr": null,
+        "max_txn_inr": null,
+        "priority": 1,
+        "conditions": {
+          "source_local_id": "ace-exclude-fuel",
+          "part": 1,
+          "info_reasons": [],
+          "flags": [
+            "mcc_scoped_exclusion"
+          ]
+        },
+        "notes": null,
+        "effective_from": "2024-04-20",
+        "effective_to": null,
+        "excluded_categories": [],
+        "rule_role": "exclusion",
+        "merchant_slugs": [],
+        "platform_slugs": [],
+        "mcc_include": [],
+        "mcc_exclude": [],
+        "except_merchant_slugs": [],
+        "except_platform_slugs": [],
+        "block_inr": null,
+        "min_engine_version": 1,
+        "max_engine_version": 1,
+        "source_local_id": "ace-exclude-fuel",
+        "display_note": "Fuel transactions do not earn cashback."
+      },
+      {
+        "id": "axis-bank-ace:rule:ace-exclude-fuel#2",
+        "category_id": "cat-fuel",
+        "category_slug": "fuel",
+        "merchant_pattern": null,
+        "rail": null,
+        "unit": "cashback_percent",
+        "rate": 0,
+        "min_txn_inr": null,
+        "max_txn_inr": null,
+        "priority": 1,
+        "conditions": {
+          "source_local_id": "ace-exclude-fuel",
+          "part": 2,
+          "info_reasons": [],
+          "flags": [
+            "mcc_scoped_exclusion"
+          ]
+        },
+        "notes": null,
+        "effective_from": "2024-04-20",
+        "effective_to": null,
+        "excluded_categories": [],
+        "rule_role": "exclusion",
+        "merchant_slugs": [],
+        "platform_slugs": [],
+        "mcc_include": [
+          "5541",
+          "5542",
+          "5983"
+        ],
+        "mcc_exclude": [],
+        "except_merchant_slugs": [],
+        "except_platform_slugs": [],
+        "block_inr": null,
+        "min_engine_version": 2,
+        "max_engine_version": null,
+        "source_local_id": "ace-exclude-fuel",
+        "display_note": "Fuel transactions do not earn cashback."
+      },
+      {
+        "id": "axis-bank-ace:rule:ace-exclude-fuel#3",
+        "category_id": null,
+        "category_slug": null,
+        "merchant_pattern": null,
+        "rail": null,
+        "unit": "cashback_percent",
+        "rate": 0,
+        "min_txn_inr": null,
+        "max_txn_inr": null,
+        "priority": 1,
+        "conditions": {
+          "source_local_id": "ace-exclude-fuel",
+          "part": 3,
+          "info_reasons": [],
+          "flags": [
+            "mcc_scoped_exclusion"
+          ]
+        },
+        "notes": null,
+        "effective_from": "2024-04-20",
+        "effective_to": null,
+        "excluded_categories": [],
+        "rule_role": "exclusion",
+        "merchant_slugs": [],
+        "platform_slugs": [],
+        "mcc_include": [
+          "5541",
+          "5542",
+          "5983"
+        ],
+        "mcc_exclude": [],
+        "except_merchant_slugs": [],
+        "except_platform_slugs": [],
+        "block_inr": null,
+        "min_engine_version": 2,
+        "max_engine_version": null,
+        "source_local_id": "ace-exclude-fuel",
+        "display_note": "Fuel transactions do not earn cashback."
+      },
+      {
+        "id": "axis-bank-ace:rule:ace-exclude-jewellery",
+        "category_id": null,
+        "category_slug": null,
+        "merchant_pattern": null,
+        "rail": null,
+        "unit": "cashback_percent",
+        "rate": 0,
+        "min_txn_inr": null,
+        "max_txn_inr": null,
+        "priority": 1,
+        "conditions": {
+          "source_local_id": "ace-exclude-jewellery",
+          "part": null,
+          "info_reasons": [],
+          "flags": []
+        },
+        "notes": null,
+        "effective_from": "2024-04-20",
+        "effective_to": null,
+        "excluded_categories": [],
+        "rule_role": "exclusion",
+        "merchant_slugs": [],
+        "platform_slugs": [],
+        "mcc_include": [
+          "5944"
+        ],
+        "mcc_exclude": [],
+        "except_merchant_slugs": [],
+        "except_platform_slugs": [],
+        "block_inr": null,
+        "min_engine_version": 2,
+        "max_engine_version": null,
+        "source_local_id": "ace-exclude-jewellery",
+        "display_note": "Clock, jewellery, watch and silverware store transactions are excluded from cashback."
+      },
+      {
+        "id": "axis-bank-ace:rule:ace-exclude-insurance#1",
+        "category_id": "cat-insurance",
+        "category_slug": "insurance",
+        "merchant_pattern": null,
+        "rail": null,
+        "unit": "cashback_percent",
+        "rate": 0,
+        "min_txn_inr": null,
+        "max_txn_inr": null,
+        "priority": 1,
+        "conditions": {
+          "source_local_id": "ace-exclude-insurance",
+          "part": 1,
+          "info_reasons": [],
+          "flags": [
+            "mcc_scoped_exclusion"
+          ]
+        },
+        "notes": null,
+        "effective_from": "2024-04-20",
+        "effective_to": null,
+        "excluded_categories": [],
+        "rule_role": "exclusion",
+        "merchant_slugs": [],
+        "platform_slugs": [],
+        "mcc_include": [],
+        "mcc_exclude": [],
+        "except_merchant_slugs": [],
+        "except_platform_slugs": [],
+        "block_inr": null,
+        "min_engine_version": 1,
+        "max_engine_version": 1,
+        "source_local_id": "ace-exclude-insurance",
+        "display_note": "Insurance services and premium payments do not earn cashback."
+      },
+      {
+        "id": "axis-bank-ace:rule:ace-exclude-insurance#2",
+        "category_id": "cat-insurance",
+        "category_slug": "insurance",
+        "merchant_pattern": null,
+        "rail": null,
+        "unit": "cashback_percent",
+        "rate": 0,
+        "min_txn_inr": null,
+        "max_txn_inr": null,
+        "priority": 1,
+        "conditions": {
+          "source_local_id": "ace-exclude-insurance",
+          "part": 2,
+          "info_reasons": [],
+          "flags": [
+            "mcc_scoped_exclusion"
+          ]
+        },
+        "notes": null,
+        "effective_from": "2024-04-20",
+        "effective_to": null,
+        "excluded_categories": [],
+        "rule_role": "exclusion",
+        "merchant_slugs": [],
+        "platform_slugs": [],
+        "mcc_include": [
+          "5960",
+          "6300",
+          "6381"
+        ],
+        "mcc_exclude": [],
+        "except_merchant_slugs": [],
+        "except_platform_slugs": [],
+        "block_inr": null,
+        "min_engine_version": 2,
+        "max_engine_version": null,
+        "source_local_id": "ace-exclude-insurance",
+        "display_note": "Insurance services and premium payments do not earn cashback."
+      },
+      {
+        "id": "axis-bank-ace:rule:ace-exclude-insurance#3",
+        "category_id": null,
+        "category_slug": null,
+        "merchant_pattern": null,
+        "rail": null,
+        "unit": "cashback_percent",
+        "rate": 0,
+        "min_txn_inr": null,
+        "max_txn_inr": null,
+        "priority": 1,
+        "conditions": {
+          "source_local_id": "ace-exclude-insurance",
+          "part": 3,
+          "info_reasons": [],
+          "flags": [
+            "mcc_scoped_exclusion"
+          ]
+        },
+        "notes": null,
+        "effective_from": "2024-04-20",
+        "effective_to": null,
+        "excluded_categories": [],
+        "rule_role": "exclusion",
+        "merchant_slugs": [],
+        "platform_slugs": [],
+        "mcc_include": [
+          "5960",
+          "6300",
+          "6381"
+        ],
+        "mcc_exclude": [],
+        "except_merchant_slugs": [],
+        "except_platform_slugs": [],
+        "block_inr": null,
+        "min_engine_version": 2,
+        "max_engine_version": null,
+        "source_local_id": "ace-exclude-insurance",
+        "display_note": "Insurance services and premium payments do not earn cashback."
+      },
+      {
+        "id": "axis-bank-ace:rule:ace-exclude-financial-institutions",
+        "category_id": null,
+        "category_slug": null,
+        "merchant_pattern": null,
+        "rail": null,
+        "unit": "cashback_percent",
+        "rate": 0,
+        "min_txn_inr": null,
+        "max_txn_inr": null,
+        "priority": 1,
+        "conditions": {
+          "source_local_id": "ace-exclude-financial-institutions",
+          "part": null,
+          "info_reasons": [],
+          "flags": []
+        },
+        "notes": null,
+        "effective_from": "2024-04-20",
+        "effective_to": null,
+        "excluded_categories": [],
+        "rule_role": "exclusion",
+        "merchant_slugs": [],
+        "platform_slugs": [],
+        "mcc_include": [
+          "6011",
+          "6012",
+          "6051"
+        ],
+        "mcc_exclude": [],
+        "except_merchant_slugs": [],
+        "except_platform_slugs": [],
+        "block_inr": null,
+        "min_engine_version": 2,
+        "max_engine_version": null,
+        "source_local_id": "ace-exclude-financial-institutions",
+        "display_note": "Financial institution and cash withdrawal transactions do not earn cashback."
+      },
+      {
+        "id": "axis-bank-ace:rule:ace-exclude-rent#1",
+        "category_id": "cat-rent",
+        "category_slug": "rent",
+        "merchant_pattern": null,
+        "rail": null,
+        "unit": "cashback_percent",
+        "rate": 0,
+        "min_txn_inr": null,
+        "max_txn_inr": null,
+        "priority": 1,
+        "conditions": {
+          "source_local_id": "ace-exclude-rent",
+          "part": 1,
+          "info_reasons": [],
+          "flags": [
+            "mcc_scoped_exclusion"
+          ]
+        },
+        "notes": null,
+        "effective_from": "2024-04-20",
+        "effective_to": null,
+        "excluded_categories": [],
+        "rule_role": "exclusion",
+        "merchant_slugs": [],
+        "platform_slugs": [],
+        "mcc_include": [],
+        "mcc_exclude": [],
+        "except_merchant_slugs": [],
+        "except_platform_slugs": [],
+        "block_inr": null,
+        "min_engine_version": 1,
+        "max_engine_version": 1,
+        "source_local_id": "ace-exclude-rent",
+        "display_note": "Rental payments do not earn cashback."
+      },
+      {
+        "id": "axis-bank-ace:rule:ace-exclude-rent#2",
+        "category_id": "cat-rent",
+        "category_slug": "rent",
+        "merchant_pattern": null,
+        "rail": null,
+        "unit": "cashback_percent",
+        "rate": 0,
+        "min_txn_inr": null,
+        "max_txn_inr": null,
+        "priority": 1,
+        "conditions": {
+          "source_local_id": "ace-exclude-rent",
+          "part": 2,
+          "info_reasons": [],
+          "flags": [
+            "mcc_scoped_exclusion"
+          ]
+        },
+        "notes": null,
+        "effective_from": "2024-04-20",
+        "effective_to": null,
+        "excluded_categories": [],
+        "rule_role": "exclusion",
+        "merchant_slugs": [],
+        "platform_slugs": [],
+        "mcc_include": [
+          "6513"
+        ],
+        "mcc_exclude": [],
+        "except_merchant_slugs": [],
+        "except_platform_slugs": [],
+        "block_inr": null,
+        "min_engine_version": 2,
+        "max_engine_version": null,
+        "source_local_id": "ace-exclude-rent",
+        "display_note": "Rental payments do not earn cashback."
+      },
+      {
+        "id": "axis-bank-ace:rule:ace-exclude-rent#3",
+        "category_id": null,
+        "category_slug": null,
+        "merchant_pattern": null,
+        "rail": null,
+        "unit": "cashback_percent",
+        "rate": 0,
+        "min_txn_inr": null,
+        "max_txn_inr": null,
+        "priority": 1,
+        "conditions": {
+          "source_local_id": "ace-exclude-rent",
+          "part": 3,
+          "info_reasons": [],
+          "flags": [
+            "mcc_scoped_exclusion"
+          ]
+        },
+        "notes": null,
+        "effective_from": "2024-04-20",
+        "effective_to": null,
+        "excluded_categories": [],
+        "rule_role": "exclusion",
+        "merchant_slugs": [],
+        "platform_slugs": [],
+        "mcc_include": [
+          "6513"
+        ],
+        "mcc_exclude": [],
+        "except_merchant_slugs": [],
+        "except_platform_slugs": [],
+        "block_inr": null,
+        "min_engine_version": 2,
+        "max_engine_version": null,
+        "source_local_id": "ace-exclude-rent",
+        "display_note": "Rental payments do not earn cashback."
+      },
+      {
+        "id": "axis-bank-ace:rule:ace-exclude-wallet#1",
+        "category_id": "cat-wallet",
+        "category_slug": "wallet",
+        "merchant_pattern": null,
+        "rail": null,
+        "unit": "cashback_percent",
+        "rate": 0,
+        "min_txn_inr": null,
+        "max_txn_inr": null,
+        "priority": 1,
+        "conditions": {
+          "source_local_id": "ace-exclude-wallet",
+          "part": 1,
+          "info_reasons": [],
+          "flags": [
+            "mcc_scoped_exclusion"
+          ]
+        },
+        "notes": null,
+        "effective_from": "2024-04-20",
+        "effective_to": null,
+        "excluded_categories": [],
+        "rule_role": "exclusion",
+        "merchant_slugs": [],
+        "platform_slugs": [],
+        "mcc_include": [],
+        "mcc_exclude": [],
+        "except_merchant_slugs": [],
+        "except_platform_slugs": [],
+        "block_inr": null,
+        "min_engine_version": 1,
+        "max_engine_version": 1,
+        "source_local_id": "ace-exclude-wallet",
+        "display_note": "Wallet loading transactions do not earn cashback."
+      },
+      {
+        "id": "axis-bank-ace:rule:ace-exclude-wallet#2",
+        "category_id": "cat-wallet",
+        "category_slug": "wallet",
+        "merchant_pattern": null,
+        "rail": null,
+        "unit": "cashback_percent",
+        "rate": 0,
+        "min_txn_inr": null,
+        "max_txn_inr": null,
+        "priority": 1,
+        "conditions": {
+          "source_local_id": "ace-exclude-wallet",
+          "part": 2,
+          "info_reasons": [],
+          "flags": [
+            "mcc_scoped_exclusion"
+          ]
+        },
+        "notes": null,
+        "effective_from": "2024-04-20",
+        "effective_to": null,
+        "excluded_categories": [],
+        "rule_role": "exclusion",
+        "merchant_slugs": [],
+        "platform_slugs": [],
+        "mcc_include": [
+          "6540"
+        ],
+        "mcc_exclude": [],
+        "except_merchant_slugs": [],
+        "except_platform_slugs": [],
+        "block_inr": null,
+        "min_engine_version": 2,
+        "max_engine_version": null,
+        "source_local_id": "ace-exclude-wallet",
+        "display_note": "Wallet loading transactions do not earn cashback."
+      },
+      {
+        "id": "axis-bank-ace:rule:ace-exclude-wallet#3",
+        "category_id": null,
+        "category_slug": null,
+        "merchant_pattern": null,
+        "rail": null,
+        "unit": "cashback_percent",
+        "rate": 0,
+        "min_txn_inr": null,
+        "max_txn_inr": null,
+        "priority": 1,
+        "conditions": {
+          "source_local_id": "ace-exclude-wallet",
+          "part": 3,
+          "info_reasons": [],
+          "flags": [
+            "mcc_scoped_exclusion"
+          ]
+        },
+        "notes": null,
+        "effective_from": "2024-04-20",
+        "effective_to": null,
+        "excluded_categories": [],
+        "rule_role": "exclusion",
+        "merchant_slugs": [],
+        "platform_slugs": [],
+        "mcc_include": [
+          "6540"
+        ],
+        "mcc_exclude": [],
+        "except_merchant_slugs": [],
+        "except_platform_slugs": [],
+        "block_inr": null,
+        "min_engine_version": 2,
+        "max_engine_version": null,
+        "source_local_id": "ace-exclude-wallet",
+        "display_note": "Wallet loading transactions do not earn cashback."
+      },
+      {
+        "id": "axis-bank-ace:rule:ace-exclude-education#1",
+        "category_id": "cat-education",
+        "category_slug": "education",
+        "merchant_pattern": null,
+        "rail": null,
+        "unit": "cashback_percent",
+        "rate": 0,
+        "min_txn_inr": null,
+        "max_txn_inr": null,
+        "priority": 1,
+        "conditions": {
+          "source_local_id": "ace-exclude-education",
+          "part": 1,
+          "info_reasons": [],
+          "flags": [
+            "mcc_scoped_exclusion"
+          ]
+        },
+        "notes": null,
+        "effective_from": "2024-04-20",
+        "effective_to": null,
+        "excluded_categories": [],
+        "rule_role": "exclusion",
+        "merchant_slugs": [],
+        "platform_slugs": [],
+        "mcc_include": [],
+        "mcc_exclude": [],
+        "except_merchant_slugs": [],
+        "except_platform_slugs": [],
+        "block_inr": null,
+        "min_engine_version": 1,
+        "max_engine_version": 1,
+        "source_local_id": "ace-exclude-education",
+        "display_note": "Educational services do not earn cashback."
+      },
+      {
+        "id": "axis-bank-ace:rule:ace-exclude-education#2",
+        "category_id": "cat-education",
+        "category_slug": "education",
+        "merchant_pattern": null,
+        "rail": null,
+        "unit": "cashback_percent",
+        "rate": 0,
+        "min_txn_inr": null,
+        "max_txn_inr": null,
+        "priority": 1,
+        "conditions": {
+          "source_local_id": "ace-exclude-education",
+          "part": 2,
+          "info_reasons": [],
+          "flags": [
+            "mcc_scoped_exclusion"
+          ]
+        },
+        "notes": null,
+        "effective_from": "2024-04-20",
+        "effective_to": null,
+        "excluded_categories": [],
+        "rule_role": "exclusion",
+        "merchant_slugs": [],
+        "platform_slugs": [],
+        "mcc_include": [
+          "8211",
+          "8241",
+          "8244",
+          "8249",
+          "8299"
+        ],
+        "mcc_exclude": [],
+        "except_merchant_slugs": [],
+        "except_platform_slugs": [],
+        "block_inr": null,
+        "min_engine_version": 2,
+        "max_engine_version": null,
+        "source_local_id": "ace-exclude-education",
+        "display_note": "Educational services do not earn cashback."
+      },
+      {
+        "id": "axis-bank-ace:rule:ace-exclude-education#3",
+        "category_id": null,
+        "category_slug": null,
+        "merchant_pattern": null,
+        "rail": null,
+        "unit": "cashback_percent",
+        "rate": 0,
+        "min_txn_inr": null,
+        "max_txn_inr": null,
+        "priority": 1,
+        "conditions": {
+          "source_local_id": "ace-exclude-education",
+          "part": 3,
+          "info_reasons": [],
+          "flags": [
+            "mcc_scoped_exclusion"
+          ]
+        },
+        "notes": null,
+        "effective_from": "2024-04-20",
+        "effective_to": null,
+        "excluded_categories": [],
+        "rule_role": "exclusion",
+        "merchant_slugs": [],
+        "platform_slugs": [],
+        "mcc_include": [
+          "8211",
+          "8241",
+          "8244",
+          "8249",
+          "8299"
+        ],
+        "mcc_exclude": [],
+        "except_merchant_slugs": [],
+        "except_platform_slugs": [],
+        "block_inr": null,
+        "min_engine_version": 2,
+        "max_engine_version": null,
+        "source_local_id": "ace-exclude-education",
+        "display_note": "Educational services do not earn cashback."
+      },
+      {
+        "id": "axis-bank-ace:rule:ace-exclude-government#1",
+        "category_id": "cat-government",
+        "category_slug": "government",
+        "merchant_pattern": null,
+        "rail": null,
+        "unit": "cashback_percent",
+        "rate": 0,
+        "min_txn_inr": null,
+        "max_txn_inr": null,
+        "priority": 1,
+        "conditions": {
+          "source_local_id": "ace-exclude-government",
+          "part": 1,
+          "info_reasons": [],
+          "flags": [
+            "mcc_scoped_exclusion"
+          ]
+        },
+        "notes": null,
+        "effective_from": "2024-04-20",
+        "effective_to": null,
+        "excluded_categories": [],
+        "rule_role": "exclusion",
+        "merchant_slugs": [],
+        "platform_slugs": [],
+        "mcc_include": [],
+        "mcc_exclude": [],
+        "except_merchant_slugs": [],
+        "except_platform_slugs": [],
+        "block_inr": null,
+        "min_engine_version": 1,
+        "max_engine_version": 1,
+        "source_local_id": "ace-exclude-government",
+        "display_note": "Government services do not earn cashback."
+      },
+      {
+        "id": "axis-bank-ace:rule:ace-exclude-government#2",
+        "category_id": "cat-government",
+        "category_slug": "government",
+        "merchant_pattern": null,
+        "rail": null,
+        "unit": "cashback_percent",
+        "rate": 0,
+        "min_txn_inr": null,
+        "max_txn_inr": null,
+        "priority": 1,
+        "conditions": {
+          "source_local_id": "ace-exclude-government",
+          "part": 2,
+          "info_reasons": [],
+          "flags": [
+            "mcc_scoped_exclusion"
+          ]
+        },
+        "notes": null,
+        "effective_from": "2024-04-20",
+        "effective_to": null,
+        "excluded_categories": [],
+        "rule_role": "exclusion",
+        "merchant_slugs": [],
+        "platform_slugs": [],
+        "mcc_include": [
+          "9222",
+          "9311",
+          "9399",
+          "9402"
+        ],
+        "mcc_exclude": [],
+        "except_merchant_slugs": [],
+        "except_platform_slugs": [],
+        "block_inr": null,
+        "min_engine_version": 2,
+        "max_engine_version": null,
+        "source_local_id": "ace-exclude-government",
+        "display_note": "Government services do not earn cashback."
+      },
+      {
+        "id": "axis-bank-ace:rule:ace-exclude-government#3",
+        "category_id": null,
+        "category_slug": null,
+        "merchant_pattern": null,
+        "rail": null,
+        "unit": "cashback_percent",
+        "rate": 0,
+        "min_txn_inr": null,
+        "max_txn_inr": null,
+        "priority": 1,
+        "conditions": {
+          "source_local_id": "ace-exclude-government",
+          "part": 3,
+          "info_reasons": [],
+          "flags": [
+            "mcc_scoped_exclusion"
+          ]
+        },
+        "notes": null,
+        "effective_from": "2024-04-20",
+        "effective_to": null,
+        "excluded_categories": [],
+        "rule_role": "exclusion",
+        "merchant_slugs": [],
+        "platform_slugs": [],
+        "mcc_include": [
+          "9222",
+          "9311",
+          "9399",
+          "9402"
+        ],
+        "mcc_exclude": [],
+        "except_merchant_slugs": [],
+        "except_platform_slugs": [],
+        "block_inr": null,
+        "min_engine_version": 2,
+        "max_engine_version": null,
+        "source_local_id": "ace-exclude-government",
+        "display_note": "Government services do not earn cashback."
+      },
+      {
+        "id": "axis-bank-ace:rule:ace-exclude-emi",
+        "category_id": null,
+        "category_slug": null,
+        "merchant_pattern": null,
+        "rail": "emi",
+        "unit": "cashback_percent",
+        "rate": 0,
+        "min_txn_inr": null,
+        "max_txn_inr": null,
+        "priority": 1,
+        "conditions": {
+          "source_local_id": "ace-exclude-emi",
+          "part": null,
+          "info_reasons": [],
+          "flags": []
+        },
+        "notes": null,
+        "effective_from": "2024-04-20",
+        "effective_to": null,
+        "excluded_categories": [],
+        "rule_role": "exclusion",
+        "merchant_slugs": [],
+        "platform_slugs": [],
+        "mcc_include": [],
+        "mcc_exclude": [],
+        "except_merchant_slugs": [],
+        "except_platform_slugs": [],
+        "block_inr": null,
+        "min_engine_version": 2,
+        "max_engine_version": null,
+        "source_local_id": "ace-exclude-emi",
+        "display_note": "EMI transactions and purchases subsequently converted to EMI do not earn cashback."
+      },
+      {
+        "id": "axis-bank-ace:rule:ace-exclude-cash-advance",
+        "category_id": null,
+        "category_slug": null,
+        "merchant_pattern": null,
+        "rail": "atm",
+        "unit": "cashback_percent",
+        "rate": 0,
+        "min_txn_inr": null,
+        "max_txn_inr": null,
+        "priority": 1,
+        "conditions": {
+          "source_local_id": "ace-exclude-cash-advance",
+          "part": null,
+          "info_reasons": [],
+          "flags": [
+            "exclusion_scope_broadened"
+          ]
+        },
+        "notes": null,
+        "effective_from": "2024-04-20",
+        "effective_to": null,
+        "excluded_categories": [],
+        "rule_role": "exclusion",
+        "merchant_slugs": [],
+        "platform_slugs": [],
+        "mcc_include": [],
+        "mcc_exclude": [],
+        "except_merchant_slugs": [],
+        "except_platform_slugs": [],
+        "block_inr": null,
+        "min_engine_version": 2,
+        "max_engine_version": null,
+        "source_local_id": "ace-exclude-cash-advance",
+        "display_note": "Cash advances do not earn cashback."
+      },
+      {
+        "id": "axis-bank-ace:rule:ace-exclude-card-fees-repayments",
+        "category_id": null,
+        "category_slug": null,
+        "merchant_pattern": null,
+        "rail": null,
+        "unit": "cashback_percent",
+        "rate": 0,
+        "min_txn_inr": null,
+        "max_txn_inr": null,
+        "priority": 1,
+        "conditions": {
+          "source_local_id": "ace-exclude-card-fees-repayments",
+          "part": null,
+          "info_reasons": [
+            "transaction_type"
+          ],
+          "flags": []
+        },
+        "notes": null,
+        "effective_from": "2024-04-20",
+        "effective_to": null,
+        "excluded_categories": [],
+        "rule_role": "info",
+        "merchant_slugs": [],
+        "platform_slugs": [],
+        "mcc_include": [],
+        "mcc_exclude": [],
+        "except_merchant_slugs": [],
+        "except_platform_slugs": [],
+        "block_inr": null,
+        "min_engine_version": 2,
+        "max_engine_version": null,
+        "source_local_id": "ace-exclude-card-fees-repayments",
+        "display_note": "Outstanding balance payments, card fees and other card charges do not earn cashback."
+      }
+    ],
+    "cap_rules": [
+      {
+        "id": "axis-bank-ace:cap:ace-accelerated-cashback-500",
+        "reward_rule_id": null,
+        "category_id": null,
+        "category_slug": null,
+        "benefit_kind": null,
+        "label": "Ace accelerated cashback 500",
+        "measure": "reward_value",
+        "period": "statement_cycle",
+        "cap_value": 500,
+        "post_cap_unit": null,
+        "post_cap_rate": 0,
+        "resets_on_day": null,
+        "cap_kind": "total_cashback",
+        "cap_amount": 500,
+        "scope": "targets",
+        "targets": [
+          "axis-bank-ace:rule:ace-gpay-utility-5pct",
+          "axis-bank-ace:rule:ace-preferred-merchants-4pct"
+        ],
+        "parent_cap_id": null,
+        "post_cap_behavior": null,
+        "anchor": null,
+        "min_engine_version": 2,
+        "source_local_id": "ace-accelerated-cashback-500"
+      }
+    ],
+    "milestone_rules": [],
+    "fee_waiver_rules": [
+      {
+        "id": "axis-bank-ace:waiver:1",
+        "threshold_spend_inr": 200000,
+        "period": "annual",
+        "waives_fee_inr": 499,
+        "excluded_category_slugs": [
+          "rent",
+          "wallet"
+        ],
+        "notes": "Annual fee from the second year onward is waived when annual spends exceed ₹2,00,000. Rent transactions and wallet-load transactions are excluded from spend counted for the waiver.",
+        "excluded_categories": [
+          "cat-rent",
+          "cat-wallet"
+        ]
+      }
+    ],
+    "benefits": [
+      {
+        "id": "axis-bank-ace:benefit:ace-domestic-lounge",
+        "key": "ace-domestic-lounge",
+        "source_local_id": "ace-domestic-lounge",
+        "kind": "lounge_domestic",
+        "label": "4 complimentary domestic airport lounge visits per calendar year at select airports",
+        "description": "Sponsor: Axis Bank",
+        "quota_count": 4,
+        "quota_period": "annual",
+        "network_program": "visa_signature",
+        "value_estimate_inr": null,
+        "conditions": {
+          "source_category_id": "lounge",
+          "evaluation_engine": {
+            "conditions": {
+              "minimum_spend_inr": 50000,
+              "spend_period": "previous 3 calendar months",
+              "new_card_exception": "For a newly issued card, the minimum-spend criterion is waived for the month of issuance followed by the next 3 months."
+            },
+            "benefit_calculation": {
+              "complimentary_visits": 4,
+              "period": "calendar_year"
+            },
+            "perks": [
+              "Select domestic airport lounges in India"
+            ]
+          }
+        }
+      },
+      {
+        "id": "axis-bank-ace:benefit:ace-fuel-waiver",
+        "key": "ace-fuel-waiver",
+        "source_local_id": "ace-fuel-waiver",
+        "kind": "fuel_surcharge",
+        "label": "1% fuel surcharge waiver at fuel stations across India",
+        "description": "Sponsor: Axis Bank",
+        "quota_count": null,
+        "quota_period": null,
+        "network_program": null,
+        "value_estimate_inr": null,
+        "conditions": {
+          "source_category_id": "other",
+          "evaluation_engine": {
+            "conditions": {
+              "transaction_minimum_inr": 400,
+              "transaction_maximum_inr": 4000,
+              "statement_cap_inr": 500
+            },
+            "benefit_calculation": {
+              "waiver_percent": 1,
+              "maximum_benefit_inr": 500
+            },
+            "perks": [
+              "GST charged on fuel surcharge is not refundable",
+              "Fuel transactions do not earn cashback"
+            ]
+          }
+        }
+      },
+      {
+        "id": "axis-bank-ace:benefit:ace-dining-delights",
+        "key": "ace-dining-delights",
+        "source_local_id": "ace-dining-delights",
+        "kind": "dining_program",
+        "label": "Up to 15% off at partner restaurants, up to ₹500 monthly",
+        "description": "Sponsor: Axis Bank",
+        "quota_count": null,
+        "quota_period": "calendar_month",
+        "network_program": null,
+        "value_estimate_inr": null,
+        "conditions": {
+          "source_category_id": "dining",
+          "evaluation_engine": {
+            "conditions": {
+              "maximum_monthly_discount_inr": 500
+            },
+            "benefit_calculation": {
+              "discount_percent": 15
+            },
+            "perks": [
+              "Dining offers at partner restaurants"
+            ]
+          }
+        }
+      }
+    ],
+    "unlock_rules": [
+      {
+        "id": "axis-bank-ace:unlock:ace-domestic-lounge@1",
+        "card_benefit_id": "axis-bank-ace:benefit:ace-domestic-lounge",
+        "kind": "lounge_domestic",
+        "label": "4 complimentary domestic airport lounge visits per calendar year at select airports",
+        "spend_threshold_inr": 50000,
+        "spend_window": "rolling_days",
+        "window_days": 90,
+        "unlocks_quota": 4,
+        "unlocks_period": "annual",
+        "tier_label": null,
+        "excluded_category_ids": [],
+        "notes": null,
+        "source_local_id": "ace-domestic-lounge"
+      }
+    ],
+    "redemption_options": [],
+    "is_upi_linkable": false
+  }
+}

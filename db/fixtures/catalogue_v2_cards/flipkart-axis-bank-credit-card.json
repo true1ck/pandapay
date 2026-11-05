@@ -1,0 +1,1769 @@
+{
+  "generated_by": "api/scripts/catalogue_v2/snapshot_examples.js",
+  "source_slug": "flipkart-axis-bank-credit-card",
+  "inputs": {
+    "transform_version": "7",
+    "source_record_sha256": "564570fd404b4889badf1b8fba4492626a835a456feff11ee352bde310923908",
+    "override_sha256": "4103537139f1cf2af27e85b02c5f08cd4192a1f8befced90354bd9e4634f5fb0",
+    "directory_sha256": "b1094d54b77e848d22f7a9a64f3ae6d1ef43ca3eb2fc8e40cd43ed1994664694",
+    "verified": false
+  },
+  "blocking_flags": [
+    "info_rule"
+  ],
+  "card": {
+    "id": "flipkart-axis-bank-credit-card:card",
+    "slug": "flipkart-axis-bank-credit-card",
+    "name": "Flipkart Axis Bank Credit Card",
+    "network": "mastercard",
+    "issuer_slug": "axis-bank",
+    "base_reward_unit": "cashback_percent",
+    "base_reward_rate": 1,
+    "point_value_inr": 1,
+    "excluded_categories": [
+      "cat-bills",
+      "cat-education",
+      "cat-emi",
+      "cat-fuel",
+      "cat-government",
+      "cat-insurance",
+      "cat-rent",
+      "cat-wallet"
+    ],
+    "accrual_block_inr": 100,
+    "accrual_rounding": "floor",
+    "cashback_rounding": "rupee_floor",
+    "points_expiry_months": null,
+    "model_status": "partial",
+    "model_coverage": {
+      "rules_total": 20,
+      "rules_modelled": 17,
+      "rules_info": 3,
+      "caps_total": 3,
+      "caps_enforced": 3,
+      "flags": [
+        {
+          "code": "info_rule",
+          "source_local_id": "preferred_merchants_cashback_4",
+          "detail": "unmapped_category_token"
+        },
+        {
+          "code": "unmapped_excluded_category",
+          "source_local_id": "other_eligible_cashback_1",
+          "detail": null
+        },
+        {
+          "code": "mcc_scoped_exclusion",
+          "source_local_id": "utility_cashback_exclusion",
+          "detail": null
+        },
+        {
+          "code": "broad_exclusion_v1_only",
+          "source_local_id": "telecom_cashback_exclusion",
+          "detail": null
+        },
+        {
+          "code": "mcc_scoped_exclusion",
+          "source_local_id": "fuel_cashback_exclusion",
+          "detail": null
+        },
+        {
+          "code": "mcc_scoped_exclusion",
+          "source_local_id": "insurance_cashback_exclusion",
+          "detail": null
+        },
+        {
+          "code": "token_replaced_by_conditions",
+          "source_local_id": "financial_institutions_cashback_exclusion",
+          "detail": null
+        },
+        {
+          "code": "mcc_scoped_exclusion",
+          "source_local_id": "rent_cashback_exclusion",
+          "detail": null
+        },
+        {
+          "code": "mcc_scoped_exclusion",
+          "source_local_id": "wallet_cashback_exclusion",
+          "detail": null
+        },
+        {
+          "code": "mcc_scoped_exclusion",
+          "source_local_id": "education_cashback_exclusion",
+          "detail": null
+        },
+        {
+          "code": "mcc_scoped_exclusion",
+          "source_local_id": "government_cashback_exclusion",
+          "detail": null
+        },
+        {
+          "code": "info_rule",
+          "source_local_id": "gift_cards_cashback_exclusion",
+          "detail": "unmapped_condition_category:transaction_type"
+        },
+        {
+          "code": "exclusion_rail_dropped",
+          "source_local_id": "gift_cards_cashback_exclusion",
+          "detail": null
+        },
+        {
+          "code": "token_replaced_by_conditions",
+          "source_local_id": "gift_cards_cashback_exclusion",
+          "detail": null
+        },
+        {
+          "code": "emi_alternatives",
+          "source_local_id": "emi_cashback_exclusion",
+          "detail": null
+        },
+        {
+          "code": "exclusion_scope_broadened",
+          "source_local_id": "cash_advance_cashback_exclusion",
+          "detail": null
+        },
+        {
+          "code": "info_rule",
+          "source_local_id": "small_transaction_cashback_exclusion",
+          "detail": "condition:transaction_amount_less_than_inr"
+        },
+        {
+          "code": "period_approximated",
+          "source_local_id": "flipkart-quarterly-4000",
+          "detail": null
+        },
+        {
+          "code": "period_approximated",
+          "source_local_id": "myntra-quarterly-4000",
+          "detail": null
+        },
+        {
+          "code": "period_approximated",
+          "source_local_id": "cleartrip-quarterly-4000",
+          "detail": null
+        }
+      ],
+      "overrides_applied": [
+        {
+          "path": "cap_rules",
+          "op": "set",
+          "value_sha256": "1d0c8ad0bb66f96d",
+          "reason": "CardPipeline cap_rules is empty. Issuer T&C: Rs 4,000 cashback per statement quarter, separately for Flipkart, Myntra and Cleartrip. Loader period mapping for a statement-cycle quarter is to be confirmed by WP2 (closest: quarter).",
+          "source_url": "https://www.axis.bank.in/docs/default-source/default-document-library/cashback-tncs---final.pdf?sfvrsn=b55a0e1a_5",
+          "checked_on": "2026-11-05",
+          "citation": null
+        },
+        {
+          "path": "accrual_engine.cashback_rounding",
+          "op": "set",
+          "value_sha256": "657bf85a75fa70bf",
+          "reason": "Cashback is rounded down per transaction (11.80 -> 11).",
+          "source_url": "https://www.axis.bank.in/docs/default-source/default-document-library/cashback-tncs---final.pdf?sfvrsn=b55a0e1a_5",
+          "checked_on": "2026-11-05",
+          "citation": null
+        },
+        {
+          "path": "reward_rules[id=flipkart_cashback_5].conditions.excluded_subcategory",
+          "op": "remove",
+          "value_sha256": "74234e98afe7498f",
+          "reason": "WP7: The free-text sub-category made the 5% Flipkart rule info; Flipkart Health is restated as an except list below.",
+          "source_url": "https://www.axis.bank.in/docs/default-source/default-document-library/cashback-tncs---final.pdf?sfvrsn=b55a0e1a_5",
+          "checked_on": "2026-11-05",
+          "citation": null
+        },
+        {
+          "path": "reward_rules[id=flipkart_cashback_5].conditions.not_merchant",
+          "op": "set",
+          "value_sha256": "08c8a4614e8c6b1c",
+          "reason": "WP7: Flipkart Axis cashback T&C: 5% \"Valid on the website as well as mobile application of Flipkart excluding Flipkart Health\". except_merchant_slugs [flipkart_health] (D16a) makes the rule v2-only (D16c), so the v1 substring \"flipkart\" no longer pays 5% at Flipkart Health.",
+          "source_url": "https://www.axis.bank.in/docs/default-source/default-document-library/cashback-tncs---final.pdf?sfvrsn=b55a0e1a_5",
+          "checked_on": "2026-11-05",
+          "citation": null
+        },
+        {
+          "path": "reward_rules[id=jewellery_gold_cashback_exclusion].conditions",
+          "op": "set",
+          "value_sha256": "e3f40daa0d039251",
+          "reason": "WP7: D25d: cashback T&C exclude \"purchase of gold (in any form - gold bar, gold coin, jewelry, artifact etc.)\" and the MCC category \"Clock, Jewelry, Watch and Silverware Stores\"; the extra free-text key made it info.",
+          "source_url": "https://www.axis.bank.in/docs/default-source/default-document-library/cashback-tncs---final.pdf?sfvrsn=b55a0e1a_5",
+          "checked_on": "2026-11-05",
+          "citation": null
+        },
+        {
+          "path": "reward_rules[id=jewellery_gold_cashback_exclusion].category_id",
+          "op": "set",
+          "value_sha256": "1e08efd699e66ddd",
+          "reason": "WP7: MCC-scoped jewellery exclusion in any category.",
+          "source_url": "https://www.axis.bank.in/docs/default-source/default-document-library/cashback-tncs---final.pdf?sfvrsn=b55a0e1a_5",
+          "checked_on": "2026-11-05",
+          "citation": null
+        },
+        {
+          "path": "reward_rules[id=education_cashback_exclusion].conditions",
+          "op": "set",
+          "value_sha256": "c7e0bfaa920cc7c0",
+          "reason": "WP7: D25d: cashback T&C exclude the MCC category \"Educational Services\"; the third-party-app wording made it info. Category plus education MCC rows (D20a).",
+          "source_url": "https://www.axis.bank.in/docs/default-source/default-document-library/cashback-tncs---final.pdf?sfvrsn=b55a0e1a_5",
+          "checked_on": "2026-11-05",
+          "citation": null
+        },
+        {
+          "path": "reward_rules",
+          "op": "append",
+          "value_sha256": "5e02aa5e8d7f3cd5",
+          "reason": "WP7: D24e/D25d: cashback T&C exclude \"EMI transactions, purchases converted to EMI post-facto\"; the record's row is category emi AND rail emi.",
+          "source_url": "https://www.axis.bank.in/docs/default-source/default-document-library/cashback-tncs---final.pdf?sfvrsn=b55a0e1a_5",
+          "checked_on": "2026-11-05",
+          "citation": null
+        }
+      ]
+    },
+    "reward_rules": [
+      {
+        "id": "flipkart-axis-bank-credit-card:rule:myntra_cashback_7_5",
+        "category_id": null,
+        "category_slug": null,
+        "merchant_pattern": "myntra",
+        "rail": null,
+        "unit": "cashback_percent",
+        "rate": 7.5,
+        "min_txn_inr": 100,
+        "max_txn_inr": null,
+        "priority": 10,
+        "conditions": {
+          "source_local_id": "myntra_cashback_7_5",
+          "part": null,
+          "info_reasons": [],
+          "flags": []
+        },
+        "notes": null,
+        "effective_from": "2025-06-20",
+        "effective_to": null,
+        "excluded_categories": [],
+        "rule_role": "earn",
+        "merchant_slugs": [
+          "myntra"
+        ],
+        "platform_slugs": [],
+        "mcc_include": [],
+        "mcc_exclude": [],
+        "except_merchant_slugs": [],
+        "except_platform_slugs": [],
+        "block_inr": null,
+        "min_engine_version": 1,
+        "max_engine_version": null,
+        "source_local_id": "myntra_cashback_7_5",
+        "display_note": "7.5% cashback on Myntra spends, capped at ₹4,000 per statement quarter."
+      },
+      {
+        "id": "flipkart-axis-bank-credit-card:rule:flipkart_cashback_5",
+        "category_id": null,
+        "category_slug": null,
+        "merchant_pattern": "flipkart",
+        "rail": null,
+        "unit": "cashback_percent",
+        "rate": 5,
+        "min_txn_inr": 100,
+        "max_txn_inr": null,
+        "priority": 20,
+        "conditions": {
+          "source_local_id": "flipkart_cashback_5",
+          "part": null,
+          "info_reasons": [],
+          "flags": []
+        },
+        "notes": null,
+        "effective_from": "2025-06-20",
+        "effective_to": null,
+        "excluded_categories": [],
+        "rule_role": "earn",
+        "merchant_slugs": [
+          "flipkart"
+        ],
+        "platform_slugs": [],
+        "mcc_include": [],
+        "mcc_exclude": [],
+        "except_merchant_slugs": [
+          "flipkart_health"
+        ],
+        "except_platform_slugs": [],
+        "block_inr": null,
+        "min_engine_version": 2,
+        "max_engine_version": null,
+        "source_local_id": "flipkart_cashback_5",
+        "display_note": "5% cashback on Flipkart spends, capped at ₹4,000 per statement quarter."
+      },
+      {
+        "id": "flipkart-axis-bank-credit-card:rule:cleartrip_cashback_5",
+        "category_id": "cat-travel",
+        "category_slug": "travel",
+        "merchant_pattern": "cleartrip",
+        "rail": null,
+        "unit": "cashback_percent",
+        "rate": 5,
+        "min_txn_inr": 100,
+        "max_txn_inr": null,
+        "priority": 30,
+        "conditions": {
+          "source_local_id": "cleartrip_cashback_5",
+          "part": null,
+          "info_reasons": [],
+          "flags": []
+        },
+        "notes": null,
+        "effective_from": "2025-06-20",
+        "effective_to": null,
+        "excluded_categories": [],
+        "rule_role": "earn",
+        "merchant_slugs": [
+          "cleartrip"
+        ],
+        "platform_slugs": [],
+        "mcc_include": [],
+        "mcc_exclude": [],
+        "except_merchant_slugs": [],
+        "except_platform_slugs": [],
+        "block_inr": null,
+        "min_engine_version": 1,
+        "max_engine_version": null,
+        "source_local_id": "cleartrip_cashback_5",
+        "display_note": "5% cashback on Cleartrip spends, capped at ₹4,000 per statement quarter."
+      },
+      {
+        "id": "flipkart-axis-bank-credit-card:rule:preferred_merchants_cashback_4",
+        "category_id": null,
+        "category_slug": null,
+        "merchant_pattern": null,
+        "rail": null,
+        "unit": "cashback_percent",
+        "rate": 4,
+        "min_txn_inr": 100,
+        "max_txn_inr": null,
+        "priority": 40,
+        "conditions": {
+          "source_local_id": "preferred_merchants_cashback_4",
+          "part": null,
+          "info_reasons": [
+            "unmapped_category_token"
+          ],
+          "flags": []
+        },
+        "notes": null,
+        "effective_from": "2025-06-20",
+        "effective_to": null,
+        "excluded_categories": [],
+        "rule_role": "info",
+        "merchant_slugs": [],
+        "platform_slugs": [],
+        "mcc_include": [],
+        "mcc_exclude": [],
+        "except_merchant_slugs": [],
+        "except_platform_slugs": [],
+        "block_inr": null,
+        "min_engine_version": 2,
+        "max_engine_version": null,
+        "source_local_id": "preferred_merchants_cashback_4",
+        "display_note": "Unlimited 4% cashback at Preferred Merchants. The preferred-merchant list may be changed by Axis Bank without prior notice."
+      },
+      {
+        "id": "flipkart-axis-bank-credit-card:rule:other_eligible_cashback_1",
+        "category_id": null,
+        "category_slug": null,
+        "merchant_pattern": null,
+        "rail": null,
+        "unit": "cashback_percent",
+        "rate": 1,
+        "min_txn_inr": 100,
+        "max_txn_inr": null,
+        "priority": 100,
+        "conditions": {
+          "source_local_id": "other_eligible_cashback_1",
+          "part": null,
+          "info_reasons": [],
+          "flags": [
+            "unmapped_excluded_category"
+          ]
+        },
+        "notes": null,
+        "effective_from": "2025-06-20",
+        "effective_to": null,
+        "excluded_categories": [
+          "cat-bills",
+          "cat-education",
+          "cat-emi",
+          "cat-fuel",
+          "cat-government",
+          "cat-insurance",
+          "cat-rent",
+          "cat-wallet"
+        ],
+        "rule_role": "earn",
+        "merchant_slugs": [],
+        "platform_slugs": [],
+        "mcc_include": [],
+        "mcc_exclude": [],
+        "except_merchant_slugs": [],
+        "except_platform_slugs": [],
+        "block_inr": null,
+        "min_engine_version": 1,
+        "max_engine_version": null,
+        "source_local_id": "other_eligible_cashback_1",
+        "display_note": "1% unlimited cashback on other eligible spends."
+      },
+      {
+        "id": "flipkart-axis-bank-credit-card:rule:utility_cashback_exclusion#1",
+        "category_id": "cat-bills",
+        "category_slug": "bills",
+        "merchant_pattern": null,
+        "rail": null,
+        "unit": "cashback_percent",
+        "rate": 0,
+        "min_txn_inr": null,
+        "max_txn_inr": null,
+        "priority": 1,
+        "conditions": {
+          "source_local_id": "utility_cashback_exclusion",
+          "part": 1,
+          "info_reasons": [],
+          "flags": [
+            "mcc_scoped_exclusion"
+          ]
+        },
+        "notes": null,
+        "effective_from": "2025-06-20",
+        "effective_to": null,
+        "excluded_categories": [],
+        "rule_role": "exclusion",
+        "merchant_slugs": [],
+        "platform_slugs": [],
+        "mcc_include": [],
+        "mcc_exclude": [],
+        "except_merchant_slugs": [],
+        "except_platform_slugs": [],
+        "block_inr": null,
+        "min_engine_version": 1,
+        "max_engine_version": 1,
+        "source_local_id": "utility_cashback_exclusion",
+        "display_note": "Utility Services are excluded from cashback eligibility."
+      },
+      {
+        "id": "flipkart-axis-bank-credit-card:rule:utility_cashback_exclusion#2",
+        "category_id": "cat-bills",
+        "category_slug": "bills",
+        "merchant_pattern": null,
+        "rail": null,
+        "unit": "cashback_percent",
+        "rate": 0,
+        "min_txn_inr": null,
+        "max_txn_inr": null,
+        "priority": 1,
+        "conditions": {
+          "source_local_id": "utility_cashback_exclusion",
+          "part": 2,
+          "info_reasons": [],
+          "flags": [
+            "mcc_scoped_exclusion"
+          ]
+        },
+        "notes": null,
+        "effective_from": "2025-06-20",
+        "effective_to": null,
+        "excluded_categories": [],
+        "rule_role": "exclusion",
+        "merchant_slugs": [],
+        "platform_slugs": [],
+        "mcc_include": [
+          "4814",
+          "4899",
+          "4900"
+        ],
+        "mcc_exclude": [],
+        "except_merchant_slugs": [],
+        "except_platform_slugs": [],
+        "block_inr": null,
+        "min_engine_version": 2,
+        "max_engine_version": null,
+        "source_local_id": "utility_cashback_exclusion",
+        "display_note": "Utility Services are excluded from cashback eligibility."
+      },
+      {
+        "id": "flipkart-axis-bank-credit-card:rule:utility_cashback_exclusion#3",
+        "category_id": null,
+        "category_slug": null,
+        "merchant_pattern": null,
+        "rail": null,
+        "unit": "cashback_percent",
+        "rate": 0,
+        "min_txn_inr": null,
+        "max_txn_inr": null,
+        "priority": 1,
+        "conditions": {
+          "source_local_id": "utility_cashback_exclusion",
+          "part": 3,
+          "info_reasons": [],
+          "flags": [
+            "mcc_scoped_exclusion"
+          ]
+        },
+        "notes": null,
+        "effective_from": "2025-06-20",
+        "effective_to": null,
+        "excluded_categories": [],
+        "rule_role": "exclusion",
+        "merchant_slugs": [],
+        "platform_slugs": [],
+        "mcc_include": [
+          "4814",
+          "4899",
+          "4900"
+        ],
+        "mcc_exclude": [],
+        "except_merchant_slugs": [],
+        "except_platform_slugs": [],
+        "block_inr": null,
+        "min_engine_version": 2,
+        "max_engine_version": null,
+        "source_local_id": "utility_cashback_exclusion",
+        "display_note": "Utility Services are excluded from cashback eligibility."
+      },
+      {
+        "id": "flipkart-axis-bank-credit-card:rule:telecom_cashback_exclusion#1",
+        "category_id": "cat-bills",
+        "category_slug": "bills",
+        "merchant_pattern": null,
+        "rail": null,
+        "unit": "cashback_percent",
+        "rate": 0,
+        "min_txn_inr": null,
+        "max_txn_inr": null,
+        "priority": 2,
+        "conditions": {
+          "source_local_id": "telecom_cashback_exclusion",
+          "part": 1,
+          "info_reasons": [],
+          "flags": [
+            "broad_exclusion_v1_only",
+            "broad_category"
+          ]
+        },
+        "notes": null,
+        "effective_from": "2025-06-20",
+        "effective_to": null,
+        "excluded_categories": [],
+        "rule_role": "exclusion",
+        "merchant_slugs": [],
+        "platform_slugs": [],
+        "mcc_include": [],
+        "mcc_exclude": [],
+        "except_merchant_slugs": [],
+        "except_platform_slugs": [],
+        "block_inr": null,
+        "min_engine_version": 1,
+        "max_engine_version": 1,
+        "source_local_id": "telecom_cashback_exclusion",
+        "display_note": "Telecom is excluded from cashback eligibility."
+      },
+      {
+        "id": "flipkart-axis-bank-credit-card:rule:telecom_cashback_exclusion#2",
+        "category_id": null,
+        "category_slug": null,
+        "merchant_pattern": null,
+        "rail": null,
+        "unit": "cashback_percent",
+        "rate": 0,
+        "min_txn_inr": null,
+        "max_txn_inr": null,
+        "priority": 2,
+        "conditions": {
+          "source_local_id": "telecom_cashback_exclusion",
+          "part": 2,
+          "info_reasons": [],
+          "flags": [
+            "broad_exclusion_v1_only"
+          ]
+        },
+        "notes": null,
+        "effective_from": "2025-06-20",
+        "effective_to": null,
+        "excluded_categories": [],
+        "rule_role": "exclusion",
+        "merchant_slugs": [],
+        "platform_slugs": [],
+        "mcc_include": [
+          "4812",
+          "4814"
+        ],
+        "mcc_exclude": [],
+        "except_merchant_slugs": [],
+        "except_platform_slugs": [],
+        "block_inr": null,
+        "min_engine_version": 2,
+        "max_engine_version": null,
+        "source_local_id": "telecom_cashback_exclusion",
+        "display_note": "Telecom is excluded from cashback eligibility."
+      },
+      {
+        "id": "flipkart-axis-bank-credit-card:rule:fuel_cashback_exclusion#1",
+        "category_id": "cat-fuel",
+        "category_slug": "fuel",
+        "merchant_pattern": null,
+        "rail": null,
+        "unit": "cashback_percent",
+        "rate": 0,
+        "min_txn_inr": null,
+        "max_txn_inr": null,
+        "priority": 3,
+        "conditions": {
+          "source_local_id": "fuel_cashback_exclusion",
+          "part": 1,
+          "info_reasons": [],
+          "flags": [
+            "mcc_scoped_exclusion"
+          ]
+        },
+        "notes": null,
+        "effective_from": "2025-06-20",
+        "effective_to": null,
+        "excluded_categories": [],
+        "rule_role": "exclusion",
+        "merchant_slugs": [],
+        "platform_slugs": [],
+        "mcc_include": [],
+        "mcc_exclude": [],
+        "except_merchant_slugs": [],
+        "except_platform_slugs": [],
+        "block_inr": null,
+        "min_engine_version": 1,
+        "max_engine_version": 1,
+        "source_local_id": "fuel_cashback_exclusion",
+        "display_note": "No cashback is earned on fuel transactions."
+      },
+      {
+        "id": "flipkart-axis-bank-credit-card:rule:fuel_cashback_exclusion#2",
+        "category_id": "cat-fuel",
+        "category_slug": "fuel",
+        "merchant_pattern": null,
+        "rail": null,
+        "unit": "cashback_percent",
+        "rate": 0,
+        "min_txn_inr": null,
+        "max_txn_inr": null,
+        "priority": 3,
+        "conditions": {
+          "source_local_id": "fuel_cashback_exclusion",
+          "part": 2,
+          "info_reasons": [],
+          "flags": [
+            "mcc_scoped_exclusion"
+          ]
+        },
+        "notes": null,
+        "effective_from": "2025-06-20",
+        "effective_to": null,
+        "excluded_categories": [],
+        "rule_role": "exclusion",
+        "merchant_slugs": [],
+        "platform_slugs": [],
+        "mcc_include": [
+          "5172",
+          "5541",
+          "5542",
+          "5983"
+        ],
+        "mcc_exclude": [],
+        "except_merchant_slugs": [],
+        "except_platform_slugs": [],
+        "block_inr": null,
+        "min_engine_version": 2,
+        "max_engine_version": null,
+        "source_local_id": "fuel_cashback_exclusion",
+        "display_note": "No cashback is earned on fuel transactions."
+      },
+      {
+        "id": "flipkart-axis-bank-credit-card:rule:fuel_cashback_exclusion#3",
+        "category_id": null,
+        "category_slug": null,
+        "merchant_pattern": null,
+        "rail": null,
+        "unit": "cashback_percent",
+        "rate": 0,
+        "min_txn_inr": null,
+        "max_txn_inr": null,
+        "priority": 3,
+        "conditions": {
+          "source_local_id": "fuel_cashback_exclusion",
+          "part": 3,
+          "info_reasons": [],
+          "flags": [
+            "mcc_scoped_exclusion"
+          ]
+        },
+        "notes": null,
+        "effective_from": "2025-06-20",
+        "effective_to": null,
+        "excluded_categories": [],
+        "rule_role": "exclusion",
+        "merchant_slugs": [],
+        "platform_slugs": [],
+        "mcc_include": [
+          "5172",
+          "5541",
+          "5542",
+          "5983"
+        ],
+        "mcc_exclude": [],
+        "except_merchant_slugs": [],
+        "except_platform_slugs": [],
+        "block_inr": null,
+        "min_engine_version": 2,
+        "max_engine_version": null,
+        "source_local_id": "fuel_cashback_exclusion",
+        "display_note": "No cashback is earned on fuel transactions."
+      },
+      {
+        "id": "flipkart-axis-bank-credit-card:rule:jewellery_gold_cashback_exclusion",
+        "category_id": null,
+        "category_slug": null,
+        "merchant_pattern": null,
+        "rail": null,
+        "unit": "cashback_percent",
+        "rate": 0,
+        "min_txn_inr": null,
+        "max_txn_inr": null,
+        "priority": 4,
+        "conditions": {
+          "source_local_id": "jewellery_gold_cashback_exclusion",
+          "part": null,
+          "info_reasons": [],
+          "flags": []
+        },
+        "notes": null,
+        "effective_from": "2025-06-20",
+        "effective_to": null,
+        "excluded_categories": [],
+        "rule_role": "exclusion",
+        "merchant_slugs": [],
+        "platform_slugs": [],
+        "mcc_include": [
+          "5094",
+          "5944"
+        ],
+        "mcc_exclude": [],
+        "except_merchant_slugs": [],
+        "except_platform_slugs": [],
+        "block_inr": null,
+        "min_engine_version": 2,
+        "max_engine_version": null,
+        "source_local_id": "jewellery_gold_cashback_exclusion",
+        "display_note": "Jewellery/watch/clock/silverware categories and gold purchases are excluded."
+      },
+      {
+        "id": "flipkart-axis-bank-credit-card:rule:insurance_cashback_exclusion#1",
+        "category_id": "cat-insurance",
+        "category_slug": "insurance",
+        "merchant_pattern": null,
+        "rail": null,
+        "unit": "cashback_percent",
+        "rate": 0,
+        "min_txn_inr": null,
+        "max_txn_inr": null,
+        "priority": 5,
+        "conditions": {
+          "source_local_id": "insurance_cashback_exclusion",
+          "part": 1,
+          "info_reasons": [],
+          "flags": [
+            "mcc_scoped_exclusion"
+          ]
+        },
+        "notes": null,
+        "effective_from": "2025-06-20",
+        "effective_to": null,
+        "excluded_categories": [],
+        "rule_role": "exclusion",
+        "merchant_slugs": [],
+        "platform_slugs": [],
+        "mcc_include": [],
+        "mcc_exclude": [],
+        "except_merchant_slugs": [],
+        "except_platform_slugs": [],
+        "block_inr": null,
+        "min_engine_version": 1,
+        "max_engine_version": 1,
+        "source_local_id": "insurance_cashback_exclusion",
+        "display_note": "Insurance Services are excluded from cashback eligibility."
+      },
+      {
+        "id": "flipkart-axis-bank-credit-card:rule:insurance_cashback_exclusion#2",
+        "category_id": "cat-insurance",
+        "category_slug": "insurance",
+        "merchant_pattern": null,
+        "rail": null,
+        "unit": "cashback_percent",
+        "rate": 0,
+        "min_txn_inr": null,
+        "max_txn_inr": null,
+        "priority": 5,
+        "conditions": {
+          "source_local_id": "insurance_cashback_exclusion",
+          "part": 2,
+          "info_reasons": [],
+          "flags": [
+            "mcc_scoped_exclusion"
+          ]
+        },
+        "notes": null,
+        "effective_from": "2025-06-20",
+        "effective_to": null,
+        "excluded_categories": [],
+        "rule_role": "exclusion",
+        "merchant_slugs": [],
+        "platform_slugs": [],
+        "mcc_include": [
+          "5960",
+          "6300"
+        ],
+        "mcc_exclude": [],
+        "except_merchant_slugs": [],
+        "except_platform_slugs": [],
+        "block_inr": null,
+        "min_engine_version": 2,
+        "max_engine_version": null,
+        "source_local_id": "insurance_cashback_exclusion",
+        "display_note": "Insurance Services are excluded from cashback eligibility."
+      },
+      {
+        "id": "flipkart-axis-bank-credit-card:rule:insurance_cashback_exclusion#3",
+        "category_id": null,
+        "category_slug": null,
+        "merchant_pattern": null,
+        "rail": null,
+        "unit": "cashback_percent",
+        "rate": 0,
+        "min_txn_inr": null,
+        "max_txn_inr": null,
+        "priority": 5,
+        "conditions": {
+          "source_local_id": "insurance_cashback_exclusion",
+          "part": 3,
+          "info_reasons": [],
+          "flags": [
+            "mcc_scoped_exclusion"
+          ]
+        },
+        "notes": null,
+        "effective_from": "2025-06-20",
+        "effective_to": null,
+        "excluded_categories": [],
+        "rule_role": "exclusion",
+        "merchant_slugs": [],
+        "platform_slugs": [],
+        "mcc_include": [
+          "5960",
+          "6300"
+        ],
+        "mcc_exclude": [],
+        "except_merchant_slugs": [],
+        "except_platform_slugs": [],
+        "block_inr": null,
+        "min_engine_version": 2,
+        "max_engine_version": null,
+        "source_local_id": "insurance_cashback_exclusion",
+        "display_note": "Insurance Services are excluded from cashback eligibility."
+      },
+      {
+        "id": "flipkart-axis-bank-credit-card:rule:financial_institutions_cashback_exclusion",
+        "category_id": null,
+        "category_slug": null,
+        "merchant_pattern": null,
+        "rail": null,
+        "unit": "cashback_percent",
+        "rate": 0,
+        "min_txn_inr": null,
+        "max_txn_inr": null,
+        "priority": 6,
+        "conditions": {
+          "source_local_id": "financial_institutions_cashback_exclusion",
+          "part": null,
+          "info_reasons": [],
+          "flags": [
+            "token_replaced_by_conditions"
+          ]
+        },
+        "notes": null,
+        "effective_from": "2025-06-20",
+        "effective_to": null,
+        "excluded_categories": [],
+        "rule_role": "exclusion",
+        "merchant_slugs": [],
+        "platform_slugs": [],
+        "mcc_include": [
+          "6011",
+          "6012",
+          "6051",
+          "6211"
+        ],
+        "mcc_exclude": [],
+        "except_merchant_slugs": [],
+        "except_platform_slugs": [],
+        "block_inr": null,
+        "min_engine_version": 2,
+        "max_engine_version": null,
+        "source_local_id": "financial_institutions_cashback_exclusion",
+        "display_note": "Financial Institutions are excluded from cashback eligibility."
+      },
+      {
+        "id": "flipkart-axis-bank-credit-card:rule:rent_cashback_exclusion#1",
+        "category_id": "cat-rent",
+        "category_slug": "rent",
+        "merchant_pattern": null,
+        "rail": null,
+        "unit": "cashback_percent",
+        "rate": 0,
+        "min_txn_inr": null,
+        "max_txn_inr": null,
+        "priority": 7,
+        "conditions": {
+          "source_local_id": "rent_cashback_exclusion",
+          "part": 1,
+          "info_reasons": [],
+          "flags": [
+            "mcc_scoped_exclusion"
+          ]
+        },
+        "notes": null,
+        "effective_from": "2025-06-20",
+        "effective_to": null,
+        "excluded_categories": [],
+        "rule_role": "exclusion",
+        "merchant_slugs": [],
+        "platform_slugs": [],
+        "mcc_include": [],
+        "mcc_exclude": [],
+        "except_merchant_slugs": [],
+        "except_platform_slugs": [],
+        "block_inr": null,
+        "min_engine_version": 1,
+        "max_engine_version": 1,
+        "source_local_id": "rent_cashback_exclusion",
+        "display_note": "Rental Payments are excluded from cashback eligibility."
+      },
+      {
+        "id": "flipkart-axis-bank-credit-card:rule:rent_cashback_exclusion#2",
+        "category_id": "cat-rent",
+        "category_slug": "rent",
+        "merchant_pattern": null,
+        "rail": null,
+        "unit": "cashback_percent",
+        "rate": 0,
+        "min_txn_inr": null,
+        "max_txn_inr": null,
+        "priority": 7,
+        "conditions": {
+          "source_local_id": "rent_cashback_exclusion",
+          "part": 2,
+          "info_reasons": [],
+          "flags": [
+            "mcc_scoped_exclusion"
+          ]
+        },
+        "notes": null,
+        "effective_from": "2025-06-20",
+        "effective_to": null,
+        "excluded_categories": [],
+        "rule_role": "exclusion",
+        "merchant_slugs": [],
+        "platform_slugs": [],
+        "mcc_include": [
+          "6513"
+        ],
+        "mcc_exclude": [],
+        "except_merchant_slugs": [],
+        "except_platform_slugs": [],
+        "block_inr": null,
+        "min_engine_version": 2,
+        "max_engine_version": null,
+        "source_local_id": "rent_cashback_exclusion",
+        "display_note": "Rental Payments are excluded from cashback eligibility."
+      },
+      {
+        "id": "flipkart-axis-bank-credit-card:rule:rent_cashback_exclusion#3",
+        "category_id": null,
+        "category_slug": null,
+        "merchant_pattern": null,
+        "rail": null,
+        "unit": "cashback_percent",
+        "rate": 0,
+        "min_txn_inr": null,
+        "max_txn_inr": null,
+        "priority": 7,
+        "conditions": {
+          "source_local_id": "rent_cashback_exclusion",
+          "part": 3,
+          "info_reasons": [],
+          "flags": [
+            "mcc_scoped_exclusion"
+          ]
+        },
+        "notes": null,
+        "effective_from": "2025-06-20",
+        "effective_to": null,
+        "excluded_categories": [],
+        "rule_role": "exclusion",
+        "merchant_slugs": [],
+        "platform_slugs": [],
+        "mcc_include": [
+          "6513"
+        ],
+        "mcc_exclude": [],
+        "except_merchant_slugs": [],
+        "except_platform_slugs": [],
+        "block_inr": null,
+        "min_engine_version": 2,
+        "max_engine_version": null,
+        "source_local_id": "rent_cashback_exclusion",
+        "display_note": "Rental Payments are excluded from cashback eligibility."
+      },
+      {
+        "id": "flipkart-axis-bank-credit-card:rule:wallet_cashback_exclusion#1",
+        "category_id": "cat-wallet",
+        "category_slug": "wallet",
+        "merchant_pattern": null,
+        "rail": null,
+        "unit": "cashback_percent",
+        "rate": 0,
+        "min_txn_inr": null,
+        "max_txn_inr": null,
+        "priority": 8,
+        "conditions": {
+          "source_local_id": "wallet_cashback_exclusion",
+          "part": 1,
+          "info_reasons": [],
+          "flags": [
+            "mcc_scoped_exclusion"
+          ]
+        },
+        "notes": null,
+        "effective_from": "2025-06-20",
+        "effective_to": null,
+        "excluded_categories": [],
+        "rule_role": "exclusion",
+        "merchant_slugs": [],
+        "platform_slugs": [],
+        "mcc_include": [],
+        "mcc_exclude": [],
+        "except_merchant_slugs": [],
+        "except_platform_slugs": [],
+        "block_inr": null,
+        "min_engine_version": 1,
+        "max_engine_version": 1,
+        "source_local_id": "wallet_cashback_exclusion",
+        "display_note": "Wallet Load Transactions are excluded from cashback eligibility."
+      },
+      {
+        "id": "flipkart-axis-bank-credit-card:rule:wallet_cashback_exclusion#2",
+        "category_id": "cat-wallet",
+        "category_slug": "wallet",
+        "merchant_pattern": null,
+        "rail": null,
+        "unit": "cashback_percent",
+        "rate": 0,
+        "min_txn_inr": null,
+        "max_txn_inr": null,
+        "priority": 8,
+        "conditions": {
+          "source_local_id": "wallet_cashback_exclusion",
+          "part": 2,
+          "info_reasons": [],
+          "flags": [
+            "mcc_scoped_exclusion"
+          ]
+        },
+        "notes": null,
+        "effective_from": "2025-06-20",
+        "effective_to": null,
+        "excluded_categories": [],
+        "rule_role": "exclusion",
+        "merchant_slugs": [],
+        "platform_slugs": [],
+        "mcc_include": [
+          "6540"
+        ],
+        "mcc_exclude": [],
+        "except_merchant_slugs": [],
+        "except_platform_slugs": [],
+        "block_inr": null,
+        "min_engine_version": 2,
+        "max_engine_version": null,
+        "source_local_id": "wallet_cashback_exclusion",
+        "display_note": "Wallet Load Transactions are excluded from cashback eligibility."
+      },
+      {
+        "id": "flipkart-axis-bank-credit-card:rule:wallet_cashback_exclusion#3",
+        "category_id": null,
+        "category_slug": null,
+        "merchant_pattern": null,
+        "rail": null,
+        "unit": "cashback_percent",
+        "rate": 0,
+        "min_txn_inr": null,
+        "max_txn_inr": null,
+        "priority": 8,
+        "conditions": {
+          "source_local_id": "wallet_cashback_exclusion",
+          "part": 3,
+          "info_reasons": [],
+          "flags": [
+            "mcc_scoped_exclusion"
+          ]
+        },
+        "notes": null,
+        "effective_from": "2025-06-20",
+        "effective_to": null,
+        "excluded_categories": [],
+        "rule_role": "exclusion",
+        "merchant_slugs": [],
+        "platform_slugs": [],
+        "mcc_include": [
+          "6540"
+        ],
+        "mcc_exclude": [],
+        "except_merchant_slugs": [],
+        "except_platform_slugs": [],
+        "block_inr": null,
+        "min_engine_version": 2,
+        "max_engine_version": null,
+        "source_local_id": "wallet_cashback_exclusion",
+        "display_note": "Wallet Load Transactions are excluded from cashback eligibility."
+      },
+      {
+        "id": "flipkart-axis-bank-credit-card:rule:education_cashback_exclusion#1",
+        "category_id": "cat-education",
+        "category_slug": "education",
+        "merchant_pattern": null,
+        "rail": null,
+        "unit": "cashback_percent",
+        "rate": 0,
+        "min_txn_inr": null,
+        "max_txn_inr": null,
+        "priority": 9,
+        "conditions": {
+          "source_local_id": "education_cashback_exclusion",
+          "part": 1,
+          "info_reasons": [],
+          "flags": [
+            "mcc_scoped_exclusion"
+          ]
+        },
+        "notes": null,
+        "effective_from": "2025-06-20",
+        "effective_to": null,
+        "excluded_categories": [],
+        "rule_role": "exclusion",
+        "merchant_slugs": [],
+        "platform_slugs": [],
+        "mcc_include": [],
+        "mcc_exclude": [],
+        "except_merchant_slugs": [],
+        "except_platform_slugs": [],
+        "block_inr": null,
+        "min_engine_version": 1,
+        "max_engine_version": 1,
+        "source_local_id": "education_cashback_exclusion",
+        "display_note": "Educational Services are excluded from cashback eligibility."
+      },
+      {
+        "id": "flipkart-axis-bank-credit-card:rule:education_cashback_exclusion#2",
+        "category_id": "cat-education",
+        "category_slug": "education",
+        "merchant_pattern": null,
+        "rail": null,
+        "unit": "cashback_percent",
+        "rate": 0,
+        "min_txn_inr": null,
+        "max_txn_inr": null,
+        "priority": 9,
+        "conditions": {
+          "source_local_id": "education_cashback_exclusion",
+          "part": 2,
+          "info_reasons": [],
+          "flags": [
+            "mcc_scoped_exclusion"
+          ]
+        },
+        "notes": null,
+        "effective_from": "2025-06-20",
+        "effective_to": null,
+        "excluded_categories": [],
+        "rule_role": "exclusion",
+        "merchant_slugs": [],
+        "platform_slugs": [],
+        "mcc_include": [
+          "8211",
+          "8220",
+          "8241",
+          "8244",
+          "8249",
+          "8299"
+        ],
+        "mcc_exclude": [],
+        "except_merchant_slugs": [],
+        "except_platform_slugs": [],
+        "block_inr": null,
+        "min_engine_version": 2,
+        "max_engine_version": null,
+        "source_local_id": "education_cashback_exclusion",
+        "display_note": "Educational Services are excluded from cashback eligibility."
+      },
+      {
+        "id": "flipkart-axis-bank-credit-card:rule:education_cashback_exclusion#3",
+        "category_id": null,
+        "category_slug": null,
+        "merchant_pattern": null,
+        "rail": null,
+        "unit": "cashback_percent",
+        "rate": 0,
+        "min_txn_inr": null,
+        "max_txn_inr": null,
+        "priority": 9,
+        "conditions": {
+          "source_local_id": "education_cashback_exclusion",
+          "part": 3,
+          "info_reasons": [],
+          "flags": [
+            "mcc_scoped_exclusion"
+          ]
+        },
+        "notes": null,
+        "effective_from": "2025-06-20",
+        "effective_to": null,
+        "excluded_categories": [],
+        "rule_role": "exclusion",
+        "merchant_slugs": [],
+        "platform_slugs": [],
+        "mcc_include": [
+          "8211",
+          "8220",
+          "8241",
+          "8244",
+          "8249",
+          "8299"
+        ],
+        "mcc_exclude": [],
+        "except_merchant_slugs": [],
+        "except_platform_slugs": [],
+        "block_inr": null,
+        "min_engine_version": 2,
+        "max_engine_version": null,
+        "source_local_id": "education_cashback_exclusion",
+        "display_note": "Educational Services are excluded from cashback eligibility."
+      },
+      {
+        "id": "flipkart-axis-bank-credit-card:rule:government_cashback_exclusion#1",
+        "category_id": "cat-government",
+        "category_slug": "government",
+        "merchant_pattern": null,
+        "rail": null,
+        "unit": "cashback_percent",
+        "rate": 0,
+        "min_txn_inr": null,
+        "max_txn_inr": null,
+        "priority": 10,
+        "conditions": {
+          "source_local_id": "government_cashback_exclusion",
+          "part": 1,
+          "info_reasons": [],
+          "flags": [
+            "mcc_scoped_exclusion"
+          ]
+        },
+        "notes": null,
+        "effective_from": "2025-06-20",
+        "effective_to": null,
+        "excluded_categories": [],
+        "rule_role": "exclusion",
+        "merchant_slugs": [],
+        "platform_slugs": [],
+        "mcc_include": [],
+        "mcc_exclude": [],
+        "except_merchant_slugs": [],
+        "except_platform_slugs": [],
+        "block_inr": null,
+        "min_engine_version": 1,
+        "max_engine_version": 1,
+        "source_local_id": "government_cashback_exclusion",
+        "display_note": "Government Services are excluded from cashback eligibility."
+      },
+      {
+        "id": "flipkart-axis-bank-credit-card:rule:government_cashback_exclusion#2",
+        "category_id": "cat-government",
+        "category_slug": "government",
+        "merchant_pattern": null,
+        "rail": null,
+        "unit": "cashback_percent",
+        "rate": 0,
+        "min_txn_inr": null,
+        "max_txn_inr": null,
+        "priority": 10,
+        "conditions": {
+          "source_local_id": "government_cashback_exclusion",
+          "part": 2,
+          "info_reasons": [],
+          "flags": [
+            "mcc_scoped_exclusion"
+          ]
+        },
+        "notes": null,
+        "effective_from": "2025-06-20",
+        "effective_to": null,
+        "excluded_categories": [],
+        "rule_role": "exclusion",
+        "merchant_slugs": [],
+        "platform_slugs": [],
+        "mcc_include": [
+          "9211",
+          "9222",
+          "9311",
+          "9399",
+          "9402"
+        ],
+        "mcc_exclude": [],
+        "except_merchant_slugs": [],
+        "except_platform_slugs": [],
+        "block_inr": null,
+        "min_engine_version": 2,
+        "max_engine_version": null,
+        "source_local_id": "government_cashback_exclusion",
+        "display_note": "Government Services are excluded from cashback eligibility."
+      },
+      {
+        "id": "flipkart-axis-bank-credit-card:rule:government_cashback_exclusion#3",
+        "category_id": null,
+        "category_slug": null,
+        "merchant_pattern": null,
+        "rail": null,
+        "unit": "cashback_percent",
+        "rate": 0,
+        "min_txn_inr": null,
+        "max_txn_inr": null,
+        "priority": 10,
+        "conditions": {
+          "source_local_id": "government_cashback_exclusion",
+          "part": 3,
+          "info_reasons": [],
+          "flags": [
+            "mcc_scoped_exclusion"
+          ]
+        },
+        "notes": null,
+        "effective_from": "2025-06-20",
+        "effective_to": null,
+        "excluded_categories": [],
+        "rule_role": "exclusion",
+        "merchant_slugs": [],
+        "platform_slugs": [],
+        "mcc_include": [
+          "9211",
+          "9222",
+          "9311",
+          "9399",
+          "9402"
+        ],
+        "mcc_exclude": [],
+        "except_merchant_slugs": [],
+        "except_platform_slugs": [],
+        "block_inr": null,
+        "min_engine_version": 2,
+        "max_engine_version": null,
+        "source_local_id": "government_cashback_exclusion",
+        "display_note": "Government Services are excluded from cashback eligibility."
+      },
+      {
+        "id": "flipkart-axis-bank-credit-card:rule:gift_cards_cashback_exclusion",
+        "category_id": null,
+        "category_slug": null,
+        "merchant_pattern": null,
+        "rail": null,
+        "unit": "cashback_percent",
+        "rate": 0,
+        "min_txn_inr": null,
+        "max_txn_inr": null,
+        "priority": 11,
+        "conditions": {
+          "source_local_id": "gift_cards_cashback_exclusion",
+          "part": null,
+          "info_reasons": [
+            "unmapped_condition_category:transaction_type"
+          ],
+          "flags": [
+            "exclusion_rail_dropped",
+            "token_replaced_by_conditions"
+          ]
+        },
+        "notes": null,
+        "effective_from": "2025-06-20",
+        "effective_to": null,
+        "excluded_categories": [],
+        "rule_role": "info",
+        "merchant_slugs": [
+          "flipkart",
+          "myntra"
+        ],
+        "platform_slugs": [],
+        "mcc_include": [],
+        "mcc_exclude": [],
+        "except_merchant_slugs": [],
+        "except_platform_slugs": [],
+        "block_inr": null,
+        "min_engine_version": 2,
+        "max_engine_version": null,
+        "source_local_id": "gift_cards_cashback_exclusion",
+        "display_note": "Gift-card purchases on Flipkart and Myntra do not earn cashback."
+      },
+      {
+        "id": "flipkart-axis-bank-credit-card:rule:emi_cashback_exclusion#1",
+        "category_id": "cat-emi",
+        "category_slug": "emi",
+        "merchant_pattern": null,
+        "rail": null,
+        "unit": "cashback_percent",
+        "rate": 0,
+        "min_txn_inr": null,
+        "max_txn_inr": null,
+        "priority": 12,
+        "conditions": {
+          "source_local_id": "emi_cashback_exclusion",
+          "part": 1,
+          "info_reasons": [],
+          "flags": [
+            "emi_alternatives"
+          ]
+        },
+        "notes": null,
+        "effective_from": "2025-06-20",
+        "effective_to": null,
+        "excluded_categories": [],
+        "rule_role": "exclusion",
+        "merchant_slugs": [],
+        "platform_slugs": [],
+        "mcc_include": [],
+        "mcc_exclude": [],
+        "except_merchant_slugs": [],
+        "except_platform_slugs": [],
+        "block_inr": null,
+        "min_engine_version": 1,
+        "max_engine_version": null,
+        "source_local_id": "emi_cashback_exclusion",
+        "display_note": "EMI transactions and transactions subsequently converted to EMI do not earn cashback."
+      },
+      {
+        "id": "flipkart-axis-bank-credit-card:rule:emi_cashback_exclusion#2",
+        "category_id": null,
+        "category_slug": null,
+        "merchant_pattern": null,
+        "rail": "emi",
+        "unit": "cashback_percent",
+        "rate": 0,
+        "min_txn_inr": null,
+        "max_txn_inr": null,
+        "priority": 12,
+        "conditions": {
+          "source_local_id": "emi_cashback_exclusion",
+          "part": 2,
+          "info_reasons": [],
+          "flags": [
+            "emi_alternatives"
+          ]
+        },
+        "notes": null,
+        "effective_from": "2025-06-20",
+        "effective_to": null,
+        "excluded_categories": [],
+        "rule_role": "exclusion",
+        "merchant_slugs": [],
+        "platform_slugs": [],
+        "mcc_include": [],
+        "mcc_exclude": [],
+        "except_merchant_slugs": [],
+        "except_platform_slugs": [],
+        "block_inr": null,
+        "min_engine_version": 2,
+        "max_engine_version": null,
+        "source_local_id": "emi_cashback_exclusion",
+        "display_note": "EMI transactions and transactions subsequently converted to EMI do not earn cashback."
+      },
+      {
+        "id": "flipkart-axis-bank-credit-card:rule:cash_advance_cashback_exclusion",
+        "category_id": null,
+        "category_slug": null,
+        "merchant_pattern": null,
+        "rail": "atm",
+        "unit": "cashback_percent",
+        "rate": 0,
+        "min_txn_inr": null,
+        "max_txn_inr": null,
+        "priority": 13,
+        "conditions": {
+          "source_local_id": "cash_advance_cashback_exclusion",
+          "part": null,
+          "info_reasons": [],
+          "flags": [
+            "exclusion_scope_broadened"
+          ]
+        },
+        "notes": null,
+        "effective_from": "2025-06-20",
+        "effective_to": null,
+        "excluded_categories": [],
+        "rule_role": "exclusion",
+        "merchant_slugs": [],
+        "platform_slugs": [],
+        "mcc_include": [],
+        "mcc_exclude": [],
+        "except_merchant_slugs": [],
+        "except_platform_slugs": [],
+        "block_inr": null,
+        "min_engine_version": 2,
+        "max_engine_version": null,
+        "source_local_id": "cash_advance_cashback_exclusion",
+        "display_note": "Cash advances do not earn cashback."
+      },
+      {
+        "id": "flipkart-axis-bank-credit-card:rule:small_transaction_cashback_exclusion",
+        "category_id": null,
+        "category_slug": null,
+        "merchant_pattern": null,
+        "rail": null,
+        "unit": "cashback_percent",
+        "rate": 0,
+        "min_txn_inr": null,
+        "max_txn_inr": null,
+        "priority": 14,
+        "conditions": {
+          "source_local_id": "small_transaction_cashback_exclusion",
+          "part": null,
+          "info_reasons": [
+            "condition:transaction_amount_less_than_inr"
+          ],
+          "flags": []
+        },
+        "notes": null,
+        "effective_from": "2025-06-20",
+        "effective_to": null,
+        "excluded_categories": [],
+        "rule_role": "info",
+        "merchant_slugs": [],
+        "platform_slugs": [],
+        "mcc_include": [],
+        "mcc_exclude": [],
+        "except_merchant_slugs": [],
+        "except_platform_slugs": [],
+        "block_inr": null,
+        "min_engine_version": 2,
+        "max_engine_version": null,
+        "source_local_id": "small_transaction_cashback_exclusion",
+        "display_note": "Cashback is not applicable on transactions below ₹100."
+      },
+      {
+        "id": "flipkart-axis-bank-credit-card:rule:wp7_emi_rail_exclusion",
+        "category_id": null,
+        "category_slug": null,
+        "merchant_pattern": null,
+        "rail": "emi",
+        "unit": "cashback_percent",
+        "rate": 0,
+        "min_txn_inr": null,
+        "max_txn_inr": null,
+        "priority": 0,
+        "conditions": {
+          "source_local_id": "wp7_emi_rail_exclusion",
+          "part": null,
+          "info_reasons": [],
+          "flags": []
+        },
+        "notes": null,
+        "effective_from": "2025-06-20",
+        "effective_to": null,
+        "excluded_categories": [],
+        "rule_role": "exclusion",
+        "merchant_slugs": [],
+        "platform_slugs": [],
+        "mcc_include": [],
+        "mcc_exclude": [],
+        "except_merchant_slugs": [],
+        "except_platform_slugs": [],
+        "block_inr": null,
+        "min_engine_version": 2,
+        "max_engine_version": null,
+        "source_local_id": "wp7_emi_rail_exclusion",
+        "display_note": "EMI transactions earn no cashback."
+      },
+      {
+        "id": "flipkart-axis-bank-credit-card:rule:other_eligible_cashback_1#min-amount",
+        "category_id": null,
+        "category_slug": null,
+        "merchant_pattern": null,
+        "rail": null,
+        "unit": "cashback_percent",
+        "rate": 0,
+        "min_txn_inr": null,
+        "max_txn_inr": 100,
+        "priority": 0,
+        "conditions": {
+          "source_local_id": "other_eligible_cashback_1",
+          "part": null,
+          "info_reasons": [],
+          "flags": [
+            "synthesized_min_amount_exclusion"
+          ]
+        },
+        "notes": null,
+        "effective_from": "2025-06-20",
+        "effective_to": null,
+        "excluded_categories": [],
+        "rule_role": "exclusion",
+        "merchant_slugs": [],
+        "platform_slugs": [],
+        "mcc_include": [],
+        "mcc_exclude": [],
+        "except_merchant_slugs": [],
+        "except_platform_slugs": [],
+        "block_inr": null,
+        "min_engine_version": 2,
+        "max_engine_version": null,
+        "source_local_id": "other_eligible_cashback_1",
+        "display_note": "No rewards below ₹100"
+      }
+    ],
+    "cap_rules": [
+      {
+        "id": "flipkart-axis-bank-credit-card:cap:flipkart-quarterly-4000",
+        "reward_rule_id": "flipkart-axis-bank-credit-card:rule:flipkart_cashback_5",
+        "category_id": null,
+        "category_slug": null,
+        "benefit_kind": null,
+        "label": "Flipkart quarterly 4000",
+        "measure": "reward_value",
+        "period": "quarter",
+        "cap_value": 4000,
+        "post_cap_unit": null,
+        "post_cap_rate": 0,
+        "resets_on_day": null,
+        "cap_kind": "total_cashback",
+        "cap_amount": 4000,
+        "scope": "targets",
+        "targets": [
+          "flipkart-axis-bank-credit-card:rule:flipkart_cashback_5"
+        ],
+        "parent_cap_id": null,
+        "post_cap_behavior": null,
+        "anchor": null,
+        "min_engine_version": 2,
+        "source_local_id": "flipkart-quarterly-4000"
+      },
+      {
+        "id": "flipkart-axis-bank-credit-card:cap:myntra-quarterly-4000",
+        "reward_rule_id": "flipkart-axis-bank-credit-card:rule:myntra_cashback_7_5",
+        "category_id": null,
+        "category_slug": null,
+        "benefit_kind": null,
+        "label": "Myntra quarterly 4000",
+        "measure": "reward_value",
+        "period": "quarter",
+        "cap_value": 4000,
+        "post_cap_unit": null,
+        "post_cap_rate": 0,
+        "resets_on_day": null,
+        "cap_kind": "total_cashback",
+        "cap_amount": 4000,
+        "scope": "targets",
+        "targets": [
+          "flipkart-axis-bank-credit-card:rule:myntra_cashback_7_5"
+        ],
+        "parent_cap_id": null,
+        "post_cap_behavior": null,
+        "anchor": null,
+        "min_engine_version": 1,
+        "source_local_id": "myntra-quarterly-4000"
+      },
+      {
+        "id": "flipkart-axis-bank-credit-card:cap:cleartrip-quarterly-4000",
+        "reward_rule_id": "flipkart-axis-bank-credit-card:rule:cleartrip_cashback_5",
+        "category_id": null,
+        "category_slug": null,
+        "benefit_kind": null,
+        "label": "Cleartrip quarterly 4000",
+        "measure": "reward_value",
+        "period": "quarter",
+        "cap_value": 4000,
+        "post_cap_unit": null,
+        "post_cap_rate": 0,
+        "resets_on_day": null,
+        "cap_kind": "total_cashback",
+        "cap_amount": 4000,
+        "scope": "targets",
+        "targets": [
+          "flipkart-axis-bank-credit-card:rule:cleartrip_cashback_5"
+        ],
+        "parent_cap_id": null,
+        "post_cap_behavior": null,
+        "anchor": null,
+        "min_engine_version": 1,
+        "source_local_id": "cleartrip-quarterly-4000"
+      }
+    ],
+    "milestone_rules": [],
+    "fee_waiver_rules": [
+      {
+        "id": "flipkart-axis-bank-credit-card:waiver:1",
+        "threshold_spend_inr": 350000,
+        "period": "annual",
+        "waives_fee_inr": 500,
+        "excluded_category_slugs": [
+          "rent",
+          "wallet"
+        ],
+        "notes": "Annual fee is waived on annual spends greater than ₹3,50,000. Rent transactions with MCC 6513 and wallet-load transactions with MCC 6540 are excluded from the qualifying spend.",
+        "excluded_categories": [
+          "cat-rent",
+          "cat-wallet"
+        ]
+      }
+    ],
+    "benefits": [
+      {
+        "id": "flipkart-axis-bank-credit-card:benefit:dining_delights",
+        "key": "dining_delights",
+        "source_local_id": "dining_delights",
+        "kind": "dining_program",
+        "label": "Dining Delights Program",
+        "description": "Sponsor: Axis Bank",
+        "quota_count": null,
+        "quota_period": null,
+        "network_program": "axis_dining_delights",
+        "value_estimate_inr": null,
+        "conditions": {
+          "source_category_id": "dining",
+          "evaluation_engine": {
+            "conditions": null,
+            "benefit_calculation": null,
+            "perks": [
+              "Access to Axis Bank Dining Delights offers at participating restaurants across India."
+            ]
+          }
+        }
+      }
+    ],
+    "unlock_rules": [],
+    "redemption_options": [
+      {
+        "program_name": "credit_card_statement",
+        "method": "statement_credit",
+        "value_per_point_inr": 1,
+        "min_points": null,
+        "notes": "Redemption fee: ₹0"
+      }
+    ],
+    "is_upi_linkable": false
+  }
+}

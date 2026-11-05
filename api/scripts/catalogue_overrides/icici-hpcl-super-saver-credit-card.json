@@ -35,6 +35,23 @@
       "reason": "The 400-point cap is on the whole accelerated benefit.",
       "source_url": "https://www.icici.bank.in/managed-assets/docs/terms-condition/hpcl-super-saver-credit-card-tnc.pdf",
       "checked_on": "2026-11-05"
+    },
+    {
+      "path": "reward_rules[id=fuel_reward_points_exclusion].conditions.not_merchant",
+      "value": [
+        "HPCL",
+        "HP Pay"
+      ],
+      "reason": "WP7: T&C: 4% cashback on HPCL fuel (capped at Rs200 per month); the reward-point exclusion on fuel must not block HPCL fuel cashback (D16a except list).",
+      "source_url": "https://www.icici.bank.in/managed-assets/docs/terms-condition/hpcl-super-saver-credit-card-tnc.pdf",
+      "checked_on": "2026-11-05"
+    },
+    {
+      "path": "cap_rules[id=daily_essentials_reward_cap].post_limit_behavior",
+      "value": null,
+      "reason": "WP7: Total cap of 400 accelerated points per cycle (override); what follows after the cap is not stated (research note).",
+      "source_url": "https://www.icici.bank.in/managed-assets/docs/terms-condition/hpcl-super-saver-credit-card-tnc.pdf",
+      "checked_on": "2026-11-05"
     }
   ]
 }

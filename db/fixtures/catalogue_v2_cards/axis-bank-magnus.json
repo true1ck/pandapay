@@ -1,0 +1,1212 @@
+{
+  "generated_by": "api/scripts/catalogue_v2/snapshot_examples.js",
+  "source_slug": "axis-bank-magnus",
+  "inputs": {
+    "transform_version": "7",
+    "source_record_sha256": "47d373ddfe49e0b50e401f8c819727021c7cd7093d6ee7298a84a1033df38867",
+    "override_sha256": "2b98f65cee3aca6ac93fdfa851d38d573c9452ef42dd293a41e0548ccfb1f457",
+    "directory_sha256": "b1094d54b77e848d22f7a9a64f3ae6d1ef43ca3eb2fc8e40cd43ed1994664694",
+    "verified": false
+  },
+  "blocking_flags": [
+    "info_rule",
+    "missing_cap_value"
+  ],
+  "card": {
+    "id": "axis-bank-magnus:card",
+    "slug": "axis-bank-magnus",
+    "name": "Axis Bank Magnus",
+    "network": "mastercard",
+    "issuer_slug": "axis-bank",
+    "base_reward_unit": "points_per_200",
+    "base_reward_rate": 12,
+    "point_value_inr": 0.2,
+    "excluded_categories": [],
+    "accrual_block_inr": 200,
+    "accrual_rounding": "floor",
+    "cashback_rounding": null,
+    "points_expiry_months": 36,
+    "model_status": "partial",
+    "model_coverage": {
+      "rules_total": 17,
+      "rules_modelled": 10,
+      "rules_info": 7,
+      "caps_total": 7,
+      "caps_enforced": 3,
+      "flags": [
+        {
+          "code": "info_rule",
+          "source_local_id": "accelerated_35_above_150k",
+          "detail": "unsupported_trigger"
+        },
+        {
+          "code": "info_rule",
+          "source_local_id": "accelerated_35_above_150k",
+          "detail": "condition:calendar_month_spend"
+        },
+        {
+          "code": "info_rule",
+          "source_local_id": "travel_edge_above_200k",
+          "detail": "condition:monthly_travel_edge_spend"
+        },
+        {
+          "code": "info_rule",
+          "source_local_id": "education_direct_vs_aggregator",
+          "detail": "condition:direct_payment"
+        },
+        {
+          "code": "info_rule",
+          "source_local_id": "education_direct_vs_aggregator",
+          "detail": "condition:third_party_app"
+        },
+        {
+          "code": "exclusion_scope_broadened",
+          "source_local_id": "exclude_government",
+          "detail": null
+        },
+        {
+          "code": "info_rule",
+          "source_local_id": "exclude_rent_above_50k",
+          "detail": "condition:monthly_rental_spend"
+        },
+        {
+          "code": "mcc_scoped_exclusion",
+          "source_local_id": "exclude_insurance",
+          "detail": null
+        },
+        {
+          "code": "mcc_scoped_exclusion",
+          "source_local_id": "exclude_fuel",
+          "detail": null
+        },
+        {
+          "code": "token_replaced_by_conditions",
+          "source_local_id": "exclude_gold_jewellery",
+          "detail": null
+        },
+        {
+          "code": "exclusion_scope_broadened",
+          "source_local_id": "exclude_cash_advance",
+          "detail": null
+        },
+        {
+          "code": "info_rule",
+          "source_local_id": "exclude_fees_charges",
+          "detail": "transaction_type"
+        },
+        {
+          "code": "info_rule",
+          "source_local_id": "exclude_reversals",
+          "detail": "transaction_type"
+        },
+        {
+          "code": "info_rule",
+          "source_local_id": "exclude_repayments",
+          "detail": "transaction_type"
+        },
+        {
+          "code": "post_limit_above_cap_rate_allowed",
+          "source_local_id": "base_150k_spend",
+          "detail": null
+        },
+        {
+          "code": "missing_cap_value",
+          "source_local_id": "accelerated_spend_cap",
+          "detail": null
+        },
+        {
+          "code": "non_earning_cap_skipped",
+          "source_local_id": "miles_transfer_annual",
+          "detail": null
+        },
+        {
+          "code": "non_earning_cap_skipped",
+          "source_local_id": "miles_transfer_group_a",
+          "detail": null
+        },
+        {
+          "code": "non_earning_cap_skipped",
+          "source_local_id": "miles_transfer_group_b",
+          "detail": null
+        }
+      ],
+      "overrides_applied": [
+        {
+          "path": "reward_rules[id=travel_edge_60].conditions.monthly_travel_edge_spend",
+          "op": "remove",
+          "value_sha256": "74234e98afe7498f",
+          "reason": "WP7: \"Up to Rs2,00,000\" restates the travel_edge_200k_spend cap (base rate above); the rule was info.",
+          "source_url": "https://www.axis.bank.in/docs/default-source/default-document-library/credit-card-tnc/terms-and-conditions-for-magnus-credit-card.pdf?sfvrsn=1d8117ef_1",
+          "checked_on": "2026-11-05",
+          "citation": null
+        },
+        {
+          "path": "cap_rules[id=base_150k_spend].post_limit_behavior.points_per_block",
+          "op": "set",
+          "value_sha256": "9f14025af0065b30",
+          "reason": "WP7: D26a: Magnus T&C (revision effective 20 Jun 2025): 12 EDGE REWARD Points per Rs200 up to Rs1.5 lakh of monthly spend, 35 per Rs200 above it. The record stated 12 after the limit. Worked examples 006 and 007.",
+          "source_url": "https://www.axis.bank.in/docs/default-source/default-document-library/credit-card-tnc/terms-and-conditions-for-magnus-credit-card.pdf?sfvrsn=1d8117ef_1",
+          "checked_on": "2026-11-05",
+          "citation": null
+        },
+        {
+          "path": "cap_rules[id=base_150k_spend].allow_post_limit_above_cap_rate",
+          "op": "set",
+          "value_sha256": "b5bea41b6c623f7c",
+          "reason": "WP7: D26a: the post-limit rate (35 per Rs200) is above the in-cap rate (12), as the issuer states; the cited flag lets the loader emit it as custom_rate.",
+          "source_url": "https://www.axis.bank.in/docs/default-source/default-document-library/credit-card-tnc/terms-and-conditions-for-magnus-credit-card.pdf?sfvrsn=1d8117ef_1",
+          "checked_on": "2026-11-05",
+          "citation": "You will earn 35 EDGE REWARD Points per INR 200 on spends^ above INR 1.5 lakhs"
+        }
+      ]
+    },
+    "reward_rules": [
+      {
+        "id": "axis-bank-magnus:rule:standard_base_earn",
+        "category_id": null,
+        "category_slug": null,
+        "merchant_pattern": null,
+        "rail": null,
+        "unit": "points_per_200",
+        "rate": 12,
+        "min_txn_inr": null,
+        "max_txn_inr": null,
+        "priority": 100,
+        "conditions": {
+          "source_local_id": "standard_base_earn",
+          "part": null,
+          "info_reasons": [],
+          "flags": []
+        },
+        "notes": null,
+        "effective_from": "2025-06-20",
+        "effective_to": null,
+        "excluded_categories": [],
+        "rule_role": "base",
+        "merchant_slugs": [],
+        "platform_slugs": [],
+        "mcc_include": [],
+        "mcc_exclude": [],
+        "except_merchant_slugs": [],
+        "except_platform_slugs": [],
+        "block_inr": null,
+        "min_engine_version": 1,
+        "max_engine_version": null,
+        "source_local_id": "standard_base_earn",
+        "display_note": "12 EDGE Reward Points per ₹200"
+      },
+      {
+        "id": "axis-bank-magnus:rule:accelerated_35_above_150k",
+        "category_id": null,
+        "category_slug": null,
+        "merchant_pattern": null,
+        "rail": null,
+        "unit": "points_per_200",
+        "rate": 35,
+        "min_txn_inr": null,
+        "max_txn_inr": null,
+        "priority": 110,
+        "conditions": {
+          "source_local_id": "accelerated_35_above_150k",
+          "part": null,
+          "info_reasons": [
+            "unsupported_trigger",
+            "condition:calendar_month_spend"
+          ],
+          "flags": []
+        },
+        "notes": null,
+        "effective_from": "2025-06-20",
+        "effective_to": null,
+        "excluded_categories": [],
+        "rule_role": "info",
+        "merchant_slugs": [],
+        "platform_slugs": [],
+        "mcc_include": [],
+        "mcc_exclude": [],
+        "except_merchant_slugs": [],
+        "except_platform_slugs": [],
+        "block_inr": null,
+        "min_engine_version": 2,
+        "max_engine_version": null,
+        "source_local_id": "accelerated_35_above_150k",
+        "display_note": "35 EDGE Reward Points per ₹200 on incremental eligible spend above ₹1.50 lakh, up to assigned credit-card limit + ₹1.50 lakh per calendar month; thereafter earning reverts to 12 points per ₹200"
+      },
+      {
+        "id": "axis-bank-magnus:rule:travel_edge_60",
+        "category_id": "cat-travel",
+        "category_slug": "travel",
+        "merchant_pattern": null,
+        "rail": null,
+        "unit": "points_per_200",
+        "rate": 60,
+        "min_txn_inr": null,
+        "max_txn_inr": null,
+        "priority": 50,
+        "conditions": {
+          "source_local_id": "travel_edge_60",
+          "part": null,
+          "info_reasons": [],
+          "flags": []
+        },
+        "notes": null,
+        "effective_from": "2025-06-20",
+        "effective_to": null,
+        "excluded_categories": [],
+        "rule_role": "earn",
+        "merchant_slugs": [],
+        "platform_slugs": [
+          "axis_travel_edge"
+        ],
+        "mcc_include": [],
+        "mcc_exclude": [],
+        "except_merchant_slugs": [],
+        "except_platform_slugs": [],
+        "block_inr": null,
+        "min_engine_version": 2,
+        "max_engine_version": null,
+        "source_local_id": "travel_edge_60",
+        "display_note": "60 EDGE Reward Points per ₹200 on Travel EDGE"
+      },
+      {
+        "id": "axis-bank-magnus:rule:travel_edge_above_200k",
+        "category_id": "cat-travel",
+        "category_slug": "travel",
+        "merchant_pattern": null,
+        "rail": null,
+        "unit": "points_per_200",
+        "rate": 35,
+        "min_txn_inr": null,
+        "max_txn_inr": null,
+        "priority": 60,
+        "conditions": {
+          "source_local_id": "travel_edge_above_200k",
+          "part": null,
+          "info_reasons": [
+            "condition:monthly_travel_edge_spend"
+          ],
+          "flags": []
+        },
+        "notes": null,
+        "effective_from": "2025-06-20",
+        "effective_to": null,
+        "excluded_categories": [],
+        "rule_role": "info",
+        "merchant_slugs": [],
+        "platform_slugs": [
+          "axis_travel_edge"
+        ],
+        "mcc_include": [],
+        "mcc_exclude": [],
+        "except_merchant_slugs": [],
+        "except_platform_slugs": [],
+        "block_inr": null,
+        "min_engine_version": 2,
+        "max_engine_version": null,
+        "source_local_id": "travel_edge_above_200k",
+        "display_note": "35 EDGE Reward Points per ₹200 above ₹2 lakh cumulative Travel EDGE transactions per calendar month"
+      },
+      {
+        "id": "axis-bank-magnus:rule:exclude_wallet",
+        "category_id": "cat-wallet",
+        "category_slug": "wallet",
+        "merchant_pattern": null,
+        "rail": null,
+        "unit": "points_per_200",
+        "rate": 0,
+        "min_txn_inr": null,
+        "max_txn_inr": null,
+        "priority": 1,
+        "conditions": {
+          "source_local_id": "exclude_wallet",
+          "part": null,
+          "info_reasons": [],
+          "flags": []
+        },
+        "notes": null,
+        "effective_from": "2023-09-01",
+        "effective_to": null,
+        "excluded_categories": [],
+        "rule_role": "exclusion",
+        "merchant_slugs": [],
+        "platform_slugs": [],
+        "mcc_include": [],
+        "mcc_exclude": [],
+        "except_merchant_slugs": [],
+        "except_platform_slugs": [],
+        "block_inr": null,
+        "min_engine_version": 1,
+        "max_engine_version": null,
+        "source_local_id": "exclude_wallet",
+        "display_note": "No EDGE Reward Points; excluded from reward-threshold calculation"
+      },
+      {
+        "id": "axis-bank-magnus:rule:education_direct_vs_aggregator",
+        "category_id": "cat-education",
+        "category_slug": "education",
+        "merchant_pattern": null,
+        "rail": null,
+        "unit": "points_per_200",
+        "rate": 12,
+        "min_txn_inr": null,
+        "max_txn_inr": null,
+        "priority": 20,
+        "conditions": {
+          "source_local_id": "education_direct_vs_aggregator",
+          "part": null,
+          "info_reasons": [
+            "condition:direct_payment",
+            "condition:third_party_app"
+          ],
+          "flags": []
+        },
+        "notes": null,
+        "effective_from": "2024-12-20",
+        "effective_to": null,
+        "excluded_categories": [],
+        "rule_role": "info",
+        "merchant_slugs": [],
+        "platform_slugs": [],
+        "mcc_include": [],
+        "mcc_exclude": [],
+        "except_merchant_slugs": [],
+        "except_platform_slugs": [],
+        "block_inr": null,
+        "min_engine_version": 2,
+        "max_engine_version": null,
+        "source_local_id": "education_direct_vs_aggregator",
+        "display_note": "Base earning applies where the education transaction is otherwise eligible"
+      },
+      {
+        "id": "axis-bank-magnus:rule:exclude_government",
+        "category_id": "cat-government",
+        "category_slug": "government",
+        "merchant_pattern": null,
+        "rail": null,
+        "unit": "points_per_200",
+        "rate": 0,
+        "min_txn_inr": null,
+        "max_txn_inr": null,
+        "priority": 2,
+        "conditions": {
+          "source_local_id": "exclude_government",
+          "part": null,
+          "info_reasons": [],
+          "flags": [
+            "exclusion_scope_broadened"
+          ]
+        },
+        "notes": null,
+        "effective_from": "2023-09-01",
+        "effective_to": null,
+        "excluded_categories": [],
+        "rule_role": "exclusion",
+        "merchant_slugs": [],
+        "platform_slugs": [],
+        "mcc_include": [],
+        "mcc_exclude": [],
+        "except_merchant_slugs": [],
+        "except_platform_slugs": [],
+        "block_inr": null,
+        "min_engine_version": 1,
+        "max_engine_version": null,
+        "source_local_id": "exclude_government",
+        "display_note": "No EDGE Reward Points; excluded from reward-threshold calculation"
+      },
+      {
+        "id": "axis-bank-magnus:rule:exclude_utility_telecom",
+        "category_id": "cat-bills",
+        "category_slug": "bills",
+        "merchant_pattern": null,
+        "rail": null,
+        "unit": "points_per_200",
+        "rate": 0,
+        "min_txn_inr": null,
+        "max_txn_inr": null,
+        "priority": 3,
+        "conditions": {
+          "source_local_id": "exclude_utility_telecom",
+          "part": null,
+          "info_reasons": [],
+          "flags": [
+            "broad_category"
+          ]
+        },
+        "notes": null,
+        "effective_from": "2023-09-01",
+        "effective_to": null,
+        "excluded_categories": [],
+        "rule_role": "exclusion",
+        "merchant_slugs": [],
+        "platform_slugs": [],
+        "mcc_include": [],
+        "mcc_exclude": [],
+        "except_merchant_slugs": [],
+        "except_platform_slugs": [],
+        "block_inr": null,
+        "min_engine_version": 1,
+        "max_engine_version": null,
+        "source_local_id": "exclude_utility_telecom",
+        "display_note": "No EDGE Reward Points; excluded from reward-threshold calculation"
+      },
+      {
+        "id": "axis-bank-magnus:rule:exclude_rent_above_50k",
+        "category_id": "cat-rent",
+        "category_slug": "rent",
+        "merchant_pattern": null,
+        "rail": null,
+        "unit": "points_per_200",
+        "rate": 0,
+        "min_txn_inr": null,
+        "max_txn_inr": null,
+        "priority": 4,
+        "conditions": {
+          "source_local_id": "exclude_rent_above_50k",
+          "part": null,
+          "info_reasons": [
+            "condition:monthly_rental_spend"
+          ],
+          "flags": []
+        },
+        "notes": null,
+        "effective_from": "2023-09-01",
+        "effective_to": null,
+        "excluded_categories": [],
+        "rule_role": "info",
+        "merchant_slugs": [],
+        "platform_slugs": [],
+        "mcc_include": [],
+        "mcc_exclude": [],
+        "except_merchant_slugs": [],
+        "except_platform_slugs": [],
+        "block_inr": null,
+        "min_engine_version": 2,
+        "max_engine_version": null,
+        "source_local_id": "exclude_rent_above_50k",
+        "display_note": "Rental spend is reward-eligible only up to ₹50,000 per calendar month; incremental spend above ₹50,000 earns no base or accelerated points"
+      },
+      {
+        "id": "axis-bank-magnus:rule:exclude_insurance#1",
+        "category_id": "cat-insurance",
+        "category_slug": "insurance",
+        "merchant_pattern": null,
+        "rail": null,
+        "unit": "points_per_200",
+        "rate": 0,
+        "min_txn_inr": null,
+        "max_txn_inr": null,
+        "priority": 5,
+        "conditions": {
+          "source_local_id": "exclude_insurance",
+          "part": 1,
+          "info_reasons": [],
+          "flags": [
+            "mcc_scoped_exclusion"
+          ]
+        },
+        "notes": null,
+        "effective_from": "2024-04-20",
+        "effective_to": null,
+        "excluded_categories": [],
+        "rule_role": "exclusion",
+        "merchant_slugs": [],
+        "platform_slugs": [],
+        "mcc_include": [],
+        "mcc_exclude": [],
+        "except_merchant_slugs": [],
+        "except_platform_slugs": [],
+        "block_inr": null,
+        "min_engine_version": 1,
+        "max_engine_version": 1,
+        "source_local_id": "exclude_insurance",
+        "display_note": "Insurance MCCs excluded from base and accelerated EDGE Reward Points"
+      },
+      {
+        "id": "axis-bank-magnus:rule:exclude_insurance#2",
+        "category_id": "cat-insurance",
+        "category_slug": "insurance",
+        "merchant_pattern": null,
+        "rail": null,
+        "unit": "points_per_200",
+        "rate": 0,
+        "min_txn_inr": null,
+        "max_txn_inr": null,
+        "priority": 5,
+        "conditions": {
+          "source_local_id": "exclude_insurance",
+          "part": 2,
+          "info_reasons": [],
+          "flags": [
+            "mcc_scoped_exclusion"
+          ]
+        },
+        "notes": null,
+        "effective_from": "2024-04-20",
+        "effective_to": null,
+        "excluded_categories": [],
+        "rule_role": "exclusion",
+        "merchant_slugs": [],
+        "platform_slugs": [],
+        "mcc_include": [
+          "5960",
+          "6012",
+          "6051",
+          "6300",
+          "6381"
+        ],
+        "mcc_exclude": [],
+        "except_merchant_slugs": [],
+        "except_platform_slugs": [],
+        "block_inr": null,
+        "min_engine_version": 2,
+        "max_engine_version": null,
+        "source_local_id": "exclude_insurance",
+        "display_note": "Insurance MCCs excluded from base and accelerated EDGE Reward Points"
+      },
+      {
+        "id": "axis-bank-magnus:rule:exclude_insurance#3",
+        "category_id": null,
+        "category_slug": null,
+        "merchant_pattern": null,
+        "rail": null,
+        "unit": "points_per_200",
+        "rate": 0,
+        "min_txn_inr": null,
+        "max_txn_inr": null,
+        "priority": 5,
+        "conditions": {
+          "source_local_id": "exclude_insurance",
+          "part": 3,
+          "info_reasons": [],
+          "flags": [
+            "mcc_scoped_exclusion"
+          ]
+        },
+        "notes": null,
+        "effective_from": "2024-04-20",
+        "effective_to": null,
+        "excluded_categories": [],
+        "rule_role": "exclusion",
+        "merchant_slugs": [],
+        "platform_slugs": [],
+        "mcc_include": [
+          "5960",
+          "6012",
+          "6051",
+          "6300",
+          "6381"
+        ],
+        "mcc_exclude": [],
+        "except_merchant_slugs": [],
+        "except_platform_slugs": [],
+        "block_inr": null,
+        "min_engine_version": 2,
+        "max_engine_version": null,
+        "source_local_id": "exclude_insurance",
+        "display_note": "Insurance MCCs excluded from base and accelerated EDGE Reward Points"
+      },
+      {
+        "id": "axis-bank-magnus:rule:exclude_fuel#1",
+        "category_id": "cat-fuel",
+        "category_slug": "fuel",
+        "merchant_pattern": null,
+        "rail": null,
+        "unit": "points_per_200",
+        "rate": 0,
+        "min_txn_inr": null,
+        "max_txn_inr": null,
+        "priority": 6,
+        "conditions": {
+          "source_local_id": "exclude_fuel",
+          "part": 1,
+          "info_reasons": [],
+          "flags": [
+            "mcc_scoped_exclusion"
+          ]
+        },
+        "notes": null,
+        "effective_from": "2024-04-20",
+        "effective_to": null,
+        "excluded_categories": [],
+        "rule_role": "exclusion",
+        "merchant_slugs": [],
+        "platform_slugs": [],
+        "mcc_include": [],
+        "mcc_exclude": [],
+        "except_merchant_slugs": [],
+        "except_platform_slugs": [],
+        "block_inr": null,
+        "min_engine_version": 1,
+        "max_engine_version": 1,
+        "source_local_id": "exclude_fuel",
+        "display_note": "Fuel MCCs excluded from base and accelerated EDGE Reward Points"
+      },
+      {
+        "id": "axis-bank-magnus:rule:exclude_fuel#2",
+        "category_id": "cat-fuel",
+        "category_slug": "fuel",
+        "merchant_pattern": null,
+        "rail": null,
+        "unit": "points_per_200",
+        "rate": 0,
+        "min_txn_inr": null,
+        "max_txn_inr": null,
+        "priority": 6,
+        "conditions": {
+          "source_local_id": "exclude_fuel",
+          "part": 2,
+          "info_reasons": [],
+          "flags": [
+            "mcc_scoped_exclusion"
+          ]
+        },
+        "notes": null,
+        "effective_from": "2024-04-20",
+        "effective_to": null,
+        "excluded_categories": [],
+        "rule_role": "exclusion",
+        "merchant_slugs": [],
+        "platform_slugs": [],
+        "mcc_include": [
+          "5541",
+          "5542",
+          "5983"
+        ],
+        "mcc_exclude": [],
+        "except_merchant_slugs": [],
+        "except_platform_slugs": [],
+        "block_inr": null,
+        "min_engine_version": 2,
+        "max_engine_version": null,
+        "source_local_id": "exclude_fuel",
+        "display_note": "Fuel MCCs excluded from base and accelerated EDGE Reward Points"
+      },
+      {
+        "id": "axis-bank-magnus:rule:exclude_fuel#3",
+        "category_id": null,
+        "category_slug": null,
+        "merchant_pattern": null,
+        "rail": null,
+        "unit": "points_per_200",
+        "rate": 0,
+        "min_txn_inr": null,
+        "max_txn_inr": null,
+        "priority": 6,
+        "conditions": {
+          "source_local_id": "exclude_fuel",
+          "part": 3,
+          "info_reasons": [],
+          "flags": [
+            "mcc_scoped_exclusion"
+          ]
+        },
+        "notes": null,
+        "effective_from": "2024-04-20",
+        "effective_to": null,
+        "excluded_categories": [],
+        "rule_role": "exclusion",
+        "merchant_slugs": [],
+        "platform_slugs": [],
+        "mcc_include": [
+          "5541",
+          "5542",
+          "5983"
+        ],
+        "mcc_exclude": [],
+        "except_merchant_slugs": [],
+        "except_platform_slugs": [],
+        "block_inr": null,
+        "min_engine_version": 2,
+        "max_engine_version": null,
+        "source_local_id": "exclude_fuel",
+        "display_note": "Fuel MCCs excluded from base and accelerated EDGE Reward Points"
+      },
+      {
+        "id": "axis-bank-magnus:rule:exclude_gold_jewellery",
+        "category_id": null,
+        "category_slug": null,
+        "merchant_pattern": null,
+        "rail": null,
+        "unit": "points_per_200",
+        "rate": 0,
+        "min_txn_inr": null,
+        "max_txn_inr": null,
+        "priority": 7,
+        "conditions": {
+          "source_local_id": "exclude_gold_jewellery",
+          "part": null,
+          "info_reasons": [],
+          "flags": [
+            "token_replaced_by_conditions"
+          ]
+        },
+        "notes": null,
+        "effective_from": "2024-04-20",
+        "effective_to": null,
+        "excluded_categories": [],
+        "rule_role": "exclusion",
+        "merchant_slugs": [],
+        "platform_slugs": [],
+        "mcc_include": [
+          "5094",
+          "5944"
+        ],
+        "mcc_exclude": [],
+        "except_merchant_slugs": [],
+        "except_platform_slugs": [],
+        "block_inr": null,
+        "min_engine_version": 2,
+        "max_engine_version": null,
+        "source_local_id": "exclude_gold_jewellery",
+        "display_note": "Gold & Jewellery MCCs excluded from base and accelerated EDGE Reward Points"
+      },
+      {
+        "id": "axis-bank-magnus:rule:exclude_emi",
+        "category_id": null,
+        "category_slug": null,
+        "merchant_pattern": null,
+        "rail": "emi",
+        "unit": "points_per_200",
+        "rate": 0,
+        "min_txn_inr": null,
+        "max_txn_inr": null,
+        "priority": 8,
+        "conditions": {
+          "source_local_id": "exclude_emi",
+          "part": null,
+          "info_reasons": [],
+          "flags": []
+        },
+        "notes": null,
+        "effective_from": "2023-09-01",
+        "effective_to": null,
+        "excluded_categories": [],
+        "rule_role": "exclusion",
+        "merchant_slugs": [],
+        "platform_slugs": [],
+        "mcc_include": [],
+        "mcc_exclude": [],
+        "except_merchant_slugs": [],
+        "except_platform_slugs": [],
+        "block_inr": null,
+        "min_engine_version": 2,
+        "max_engine_version": null,
+        "source_local_id": "exclude_emi",
+        "display_note": "EMI transactions excluded; EDGE points are debited for credit-card transactions converted to EMI"
+      },
+      {
+        "id": "axis-bank-magnus:rule:exclude_cash_advance",
+        "category_id": null,
+        "category_slug": null,
+        "merchant_pattern": null,
+        "rail": "atm",
+        "unit": "points_per_200",
+        "rate": 0,
+        "min_txn_inr": null,
+        "max_txn_inr": null,
+        "priority": 9,
+        "conditions": {
+          "source_local_id": "exclude_cash_advance",
+          "part": null,
+          "info_reasons": [],
+          "flags": [
+            "exclusion_scope_broadened"
+          ]
+        },
+        "notes": null,
+        "effective_from": "2023-09-01",
+        "effective_to": null,
+        "excluded_categories": [],
+        "rule_role": "exclusion",
+        "merchant_slugs": [],
+        "platform_slugs": [],
+        "mcc_include": [],
+        "mcc_exclude": [],
+        "except_merchant_slugs": [],
+        "except_platform_slugs": [],
+        "block_inr": null,
+        "min_engine_version": 2,
+        "max_engine_version": null,
+        "source_local_id": "exclude_cash_advance",
+        "display_note": "Cash withdrawals excluded from rewards"
+      },
+      {
+        "id": "axis-bank-magnus:rule:exclude_fees_charges",
+        "category_id": null,
+        "category_slug": null,
+        "merchant_pattern": null,
+        "rail": null,
+        "unit": "points_per_200",
+        "rate": 0,
+        "min_txn_inr": null,
+        "max_txn_inr": null,
+        "priority": 10,
+        "conditions": {
+          "source_local_id": "exclude_fees_charges",
+          "part": null,
+          "info_reasons": [
+            "transaction_type"
+          ],
+          "flags": []
+        },
+        "notes": null,
+        "effective_from": "2023-09-01",
+        "effective_to": null,
+        "excluded_categories": [],
+        "rule_role": "info",
+        "merchant_slugs": [],
+        "platform_slugs": [],
+        "mcc_include": [],
+        "mcc_exclude": [],
+        "except_merchant_slugs": [],
+        "except_platform_slugs": [],
+        "block_inr": null,
+        "min_engine_version": 2,
+        "max_engine_version": null,
+        "source_local_id": "exclude_fees_charges",
+        "display_note": "Fees, charges and interest excluded from reward earning and threshold calculation"
+      },
+      {
+        "id": "axis-bank-magnus:rule:exclude_reversals",
+        "category_id": null,
+        "category_slug": null,
+        "merchant_pattern": null,
+        "rail": null,
+        "unit": "points_per_200",
+        "rate": 0,
+        "min_txn_inr": null,
+        "max_txn_inr": null,
+        "priority": 11,
+        "conditions": {
+          "source_local_id": "exclude_reversals",
+          "part": null,
+          "info_reasons": [
+            "transaction_type"
+          ],
+          "flags": []
+        },
+        "notes": null,
+        "effective_from": "2023-09-01",
+        "effective_to": null,
+        "excluded_categories": [],
+        "rule_role": "info",
+        "merchant_slugs": [],
+        "platform_slugs": [],
+        "mcc_include": [],
+        "mcc_exclude": [],
+        "except_merchant_slugs": [],
+        "except_platform_slugs": [],
+        "block_inr": null,
+        "min_engine_version": 2,
+        "max_engine_version": null,
+        "source_local_id": "exclude_reversals",
+        "display_note": "Reversed/cancelled/refunded transactions excluded"
+      },
+      {
+        "id": "axis-bank-magnus:rule:exclude_repayments",
+        "category_id": null,
+        "category_slug": null,
+        "merchant_pattern": null,
+        "rail": null,
+        "unit": "points_per_200",
+        "rate": 0,
+        "min_txn_inr": null,
+        "max_txn_inr": null,
+        "priority": 12,
+        "conditions": {
+          "source_local_id": "exclude_repayments",
+          "part": null,
+          "info_reasons": [
+            "transaction_type"
+          ],
+          "flags": []
+        },
+        "notes": null,
+        "effective_from": "2025-10-01",
+        "effective_to": null,
+        "excluded_categories": [],
+        "rule_role": "info",
+        "merchant_slugs": [],
+        "platform_slugs": [],
+        "mcc_include": [],
+        "mcc_exclude": [],
+        "except_merchant_slugs": [],
+        "except_platform_slugs": [],
+        "block_inr": null,
+        "min_engine_version": 2,
+        "max_engine_version": null,
+        "source_local_id": "exclude_repayments",
+        "display_note": "Repayments excluded from rewards"
+      }
+    ],
+    "cap_rules": [
+      {
+        "id": "axis-bank-magnus:cap:base_150k_spend",
+        "reward_rule_id": null,
+        "category_id": null,
+        "category_slug": null,
+        "benefit_kind": null,
+        "label": "Base 150k spend",
+        "measure": "spend_amount",
+        "period": "calendar_month",
+        "cap_value": 150000,
+        "post_cap_unit": "points_per_200",
+        "post_cap_rate": 35,
+        "resets_on_day": null,
+        "cap_kind": "eligible_spend",
+        "cap_amount": 150000,
+        "scope": "targets",
+        "targets": [
+          "axis-bank-magnus:rule:standard_base_earn",
+          "axis-bank-magnus:rule:education_direct_vs_aggregator"
+        ],
+        "parent_cap_id": null,
+        "post_cap_behavior": "custom_rate",
+        "anchor": null,
+        "min_engine_version": 2,
+        "source_local_id": "base_150k_spend"
+      },
+      {
+        "id": "axis-bank-magnus:cap:travel_edge_200k_spend",
+        "reward_rule_id": "axis-bank-magnus:rule:travel_edge_60",
+        "category_id": null,
+        "category_slug": null,
+        "benefit_kind": null,
+        "label": "Travel edge 200k spend",
+        "measure": "spend_amount",
+        "period": "calendar_month",
+        "cap_value": 200000,
+        "post_cap_unit": "points_per_200",
+        "post_cap_rate": 35,
+        "resets_on_day": null,
+        "cap_kind": "eligible_spend",
+        "cap_amount": 200000,
+        "scope": "targets",
+        "targets": [
+          "axis-bank-magnus:rule:travel_edge_60"
+        ],
+        "parent_cap_id": null,
+        "post_cap_behavior": "custom_rate",
+        "anchor": null,
+        "min_engine_version": 2,
+        "source_local_id": "travel_edge_200k_spend"
+      },
+      {
+        "id": "axis-bank-magnus:cap:rental_50k_spend",
+        "reward_rule_id": null,
+        "category_id": "cat-rent",
+        "category_slug": "rent",
+        "benefit_kind": null,
+        "label": "Rental 50k spend",
+        "measure": "spend_amount",
+        "period": "calendar_month",
+        "cap_value": 50000,
+        "post_cap_unit": null,
+        "post_cap_rate": 0,
+        "resets_on_day": null,
+        "cap_kind": "eligible_spend",
+        "cap_amount": 50000,
+        "scope": "targets",
+        "targets": [],
+        "parent_cap_id": null,
+        "post_cap_behavior": "zero",
+        "anchor": null,
+        "min_engine_version": 1,
+        "source_local_id": "rental_50k_spend"
+      }
+    ],
+    "milestone_rules": [],
+    "fee_waiver_rules": [
+      {
+        "id": "axis-bank-magnus:waiver:1",
+        "threshold_spend_inr": 2500000,
+        "period": "annual",
+        "waives_fee_inr": 12500,
+        "excluded_category_slugs": [
+          "rent",
+          "wallet",
+          "government",
+          "bills",
+          "emi",
+          "insurance",
+          "fuel"
+        ],
+        "notes": "Eligible spends in the preceding card anniversary year; excludes Rent, Wallet, Government Institutions, Utilities/Telecom, EMI conversions, Cash withdrawals, reversals, fees/charges, Priority Pass spending, Insurance, Gold & Jewellery and Fuel.",
+        "excluded_categories": [
+          "cat-rent",
+          "cat-wallet",
+          "cat-government",
+          "cat-bills",
+          "cat-emi",
+          "cat-insurance",
+          "cat-fuel"
+        ]
+      }
+    ],
+    "benefits": [
+      {
+        "id": "axis-bank-magnus:benefit:priority_pass_international",
+        "key": "priority_pass_international",
+        "source_local_id": "priority_pass_international",
+        "kind": "lounge_international",
+        "label": "Unlimited complimentary international lounge visits for primary cardholder plus 4 complimentary guest visits per year",
+        "description": "Sponsor: Priority Pass",
+        "quota_count": null,
+        "quota_period": "annual",
+        "network_program": "priority_pass",
+        "value_estimate_inr": null,
+        "conditions": {
+          "source_category_id": "lounge",
+          "evaluation_engine": {
+            "conditions": {
+              "primary_cardholder": "Unlimited complimentary international visits",
+              "guest_visits": "4 complimentary visits per year; primary cardholder must travel with guest"
+            },
+            "benefit_calculation": {
+              "primary_visits": "Unlimited",
+              "guest_visits": 4
+            },
+            "perks": [
+              "Priority Pass membership"
+            ]
+          }
+        }
+      },
+      {
+        "id": "axis-bank-magnus:benefit:domestic_lounge",
+        "key": "domestic_lounge",
+        "source_local_id": "domestic_lounge",
+        "kind": "lounge_domestic",
+        "label": "Unlimited complimentary domestic lounge visits at participating Indian lounges",
+        "description": "Sponsor: Axis Bank",
+        "quota_count": null,
+        "quota_period": "calendar_month",
+        "network_program": "axis_bank_airport_lounge_program",
+        "value_estimate_inr": null,
+        "conditions": {
+          "source_category_id": "lounge",
+          "evaluation_engine": {
+            "conditions": {
+              "minimum_spend_previous_3_calendar_months_inr": 50000,
+              "new_card_exception": "Spend criterion waived for month of issuance and following 3 calendar months"
+            },
+            "benefit_calculation": {
+              "eligible_visits": "Unlimited after applicable spend condition is satisfied"
+            },
+            "perks": []
+          }
+        }
+      },
+      {
+        "id": "axis-bank-magnus:benefit:dining_delights",
+        "key": "dining_delights",
+        "source_local_id": "dining_delights",
+        "kind": "dining_program",
+        "label": "Exclusive discounts at over 4,000 restaurants across India",
+        "description": "Sponsor: Axis Bank",
+        "quota_count": null,
+        "quota_period": null,
+        "network_program": "dining_delights",
+        "value_estimate_inr": null,
+        "conditions": {
+          "source_category_id": "dining",
+          "evaluation_engine": {
+            "conditions": "N/A",
+            "benefit_calculation": "N/A",
+            "perks": [
+              "Dining Delights restaurant discounts"
+            ]
+          }
+        }
+      },
+      {
+        "id": "axis-bank-magnus:benefit:leela_palace_offer",
+        "key": "leela_palace_offer",
+        "source_local_id": "leela_palace_offer",
+        "kind": "other",
+        "label": "15% savings on bed and breakfast rates",
+        "description": "Sponsor: The Leela Palace Hotels & Resorts",
+        "quota_count": null,
+        "quota_period": null,
+        "network_program": "axis_bank_offer",
+        "value_estimate_inr": null,
+        "conditions": {
+          "source_category_id": "other",
+          "evaluation_engine": {
+            "conditions": {
+              "valid_through": "2026-09-30"
+            },
+            "benefit_calculation": {
+              "savings_percent": 15
+            },
+            "perks": []
+          }
+        }
+      },
+      {
+        "id": "axis-bank-magnus:benefit:insurance:purchase_protection",
+        "key": "insurance:purchase_protection",
+        "source_local_id": null,
+        "kind": "insurance_purchase",
+        "label": "Purchase Protection",
+        "description": "Axis product page states purchase protection, but the cited current page does not publish the coverage amount or detailed claim conditions.",
+        "quota_count": null,
+        "quota_period": null,
+        "network_program": null,
+        "value_estimate_inr": null,
+        "conditions": {
+          "coverage_usd": null
+        }
+      },
+      {
+        "id": "axis-bank-magnus:benefit:insurance:other",
+        "key": "insurance:other",
+        "source_local_id": null,
+        "kind": "other",
+        "label": "Other",
+        "description": "Lost-card liability protection is stated on the current Axis Magnus product page; detailed coverage terms are not published in the cited page.",
+        "quota_count": null,
+        "quota_period": null,
+        "network_program": null,
+        "value_estimate_inr": null,
+        "conditions": {
+          "coverage_usd": null
+        }
+      }
+    ],
+    "unlock_rules": [
+      {
+        "id": "axis-bank-magnus:unlock:domestic_lounge@1",
+        "card_benefit_id": "axis-bank-magnus:benefit:domestic_lounge",
+        "kind": "lounge_domestic",
+        "label": "Unlimited complimentary domestic lounge visits at participating Indian lounges",
+        "spend_threshold_inr": 50000,
+        "spend_window": "rolling_days",
+        "window_days": 90,
+        "unlocks_quota": null,
+        "unlocks_period": "calendar_month",
+        "tier_label": null,
+        "excluded_category_ids": [],
+        "notes": null,
+        "source_local_id": "domestic_lounge"
+      }
+    ],
+    "redemption_options": [
+      {
+        "program_name": "EDGE Rewards catalogue",
+        "method": "partner_catalogue",
+        "value_per_point_inr": 0.2,
+        "min_points": 300,
+        "notes": "Redemption fee: ₹99"
+      },
+      {
+        "program_name": "Pay with Points / partner stores",
+        "method": "statement_credit",
+        "value_per_point_inr": 0.2,
+        "min_points": 300,
+        "notes": "Redemption fee: ₹99"
+      }
+    ],
+    "is_upi_linkable": false
+  }
+}

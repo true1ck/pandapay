@@ -18,6 +18,11 @@
       "url": "https://www.hdfc.bank.in/content/dam/hdfcbankpws/in/en/personal-banking/discover-products/cards/credit-cards/phonepe-hdfc-bank-uno-credit-card-/phonepe-hdfc-bank-uno-cc-reward-points-tncs.pdf",
       "doc": "PhonePe HDFC Bank Uno Reward Points T&C, Jul 2026",
       "quote": "No reward points will be given for EMI transactions, fuel, wallet load, gift cards"
+    },
+    {
+      "url": "https://www.hdfc.bank.in/content/dam/hdfcbankpws/in/en/personal-banking/discover-products/cards/credit-cards/phonepe-hdfc-bank-uno-credit-card-/phonepe-hdfc-bank-uno-cc-reward-points-tncs.pdf",
+      "doc": "PhonePe HDFC Bank UNO Reward Points T&C, Note 1",
+      "quote": "No reward points will be given for ... rental transactions, education fees, insurance, investments, jewelry purchases"
     }
   ],
   "examples": [
@@ -240,6 +245,168 @@
         "cap_deltas_by_source_id": {}
       },
       "why": "EMI is excluded."
+    },
+    {
+      "id": "009",
+      "title": "Rs 20,000 rent paid by UPI QR",
+      "ctx": {
+        "amount": 20000,
+        "occurred": "2026-11-10T10:00:00+05:30",
+        "category_id": null,
+        "category_slug": "rent",
+        "mcc": "6513",
+        "merchant_name": "Rent payment",
+        "merchant_vpa": null,
+        "merchant_slug": null,
+        "platform": null,
+        "rail": "upi_qr"
+      },
+      "state_before": {
+        "caps_by_source_id": {}
+      },
+      "expect": {
+        "currency": "points",
+        "amount": 0,
+        "value_inr": null,
+        "excluded": true,
+        "cap_deltas_by_source_id": {}
+      },
+      "why": "T&C Note 1: rental transactions earn no reward points, on any rail (the 1% Scan & Pay rate does not apply)."
+    },
+    {
+      "id": "010",
+      "title": "Rs 10,000 jewellery purchase",
+      "ctx": {
+        "amount": 10000,
+        "occurred": "2026-11-10T10:00:00+05:30",
+        "category_id": null,
+        "category_slug": "other",
+        "mcc": "5944",
+        "merchant_name": "Jewellery store",
+        "merchant_vpa": null,
+        "merchant_slug": null,
+        "platform": null,
+        "rail": "swipe"
+      },
+      "state_before": {
+        "caps_by_source_id": {}
+      },
+      "expect": {
+        "currency": "points",
+        "amount": 0,
+        "value_inr": null,
+        "excluded": true,
+        "cap_deltas_by_source_id": {}
+      },
+      "why": "T&C Note 1: jewelry purchases earn no reward points."
+    },
+    {
+      "state_before": {
+        "caps_by_source_id": {}
+      },
+      "id": "011",
+      "title": "Rs 20,000 rent by UPI QR, no MCC on the SMS",
+      "ctx": {
+        "amount": 20000,
+        "occurred": "2026-11-10T10:00:00+05:30",
+        "category_id": null,
+        "category_slug": "rent",
+        "mcc": null,
+        "merchant_name": "Rent payment",
+        "merchant_vpa": null,
+        "merchant_slug": null,
+        "platform": null,
+        "rail": "upi_qr"
+      },
+      "expect": {
+        "currency": "points",
+        "amount": 0,
+        "value_inr": null,
+        "excluded": true,
+        "cap_deltas_by_source_id": {}
+      },
+      "why": "T&C Note 1: rental transactions earn no points. Proves the rent category row (no MCC)."
+    },
+    {
+      "state_before": {
+        "caps_by_source_id": {}
+      },
+      "id": "012",
+      "title": "Rs 20,000 to a property manager (MCC 6513) by UPI QR, not categorised as rent",
+      "ctx": {
+        "amount": 20000,
+        "occurred": "2026-11-10T10:00:00+05:30",
+        "category_id": null,
+        "category_slug": "other",
+        "mcc": "6513",
+        "merchant_name": "Property services",
+        "merchant_vpa": null,
+        "merchant_slug": null,
+        "platform": null,
+        "rail": "upi_qr"
+      },
+      "expect": {
+        "currency": "points",
+        "amount": 0,
+        "value_inr": null,
+        "excluded": true,
+        "cap_deltas_by_source_id": {}
+      },
+      "why": "T&C Note 1: rental transactions earn no points. Proves the MCC 6513 row in any category."
+    },
+    {
+      "state_before": {
+        "caps_by_source_id": {}
+      },
+      "id": "013",
+      "title": "Rs 10,000 jewellery by UPI QR",
+      "ctx": {
+        "amount": 10000,
+        "occurred": "2026-11-10T10:00:00+05:30",
+        "category_id": null,
+        "category_slug": "other",
+        "mcc": "5944",
+        "merchant_name": "Jewellery store",
+        "merchant_vpa": null,
+        "merchant_slug": null,
+        "platform": null,
+        "rail": "upi_qr"
+      },
+      "expect": {
+        "currency": "points",
+        "amount": 0,
+        "value_inr": null,
+        "excluded": true,
+        "cap_deltas_by_source_id": {}
+      },
+      "why": "T&C Note 1: jewelry purchases earn no points, also on UPI Scan & Pay."
+    },
+    {
+      "state_before": {
+        "caps_by_source_id": {}
+      },
+      "id": "014",
+      "title": "Rs 10,000 investment (MCC 6211) by UPI QR",
+      "ctx": {
+        "amount": 10000,
+        "occurred": "2026-11-10T10:00:00+05:30",
+        "category_id": null,
+        "category_slug": "other",
+        "mcc": "6211",
+        "merchant_name": "Stock broker",
+        "merchant_vpa": null,
+        "merchant_slug": null,
+        "platform": null,
+        "rail": "upi_qr"
+      },
+      "expect": {
+        "currency": "points",
+        "amount": 0,
+        "value_inr": null,
+        "excluded": true,
+        "cap_deltas_by_source_id": {}
+      },
+      "why": "T&C Note 1: investments earn no points (MCC 6211, securities brokers/dealers)."
     }
   ],
   "research_notes": [
@@ -262,6 +429,19 @@
       "issuer_says": "T&C list only three earning categories and an exclusion list; no base earn on other spends is stated.",
       "proposed_fix": "override",
       "override_file": "api/scripts/catalogue_overrides/hdfc-phonepe-uno.json"
+    },
+    {
+      "item": "WP7 r1: rent and jewellery",
+      "cardpipeline_says": "excluded_rent and excluded_jewellery were info (free-text categories), so loaded rules paid on them.",
+      "issuer_says": "T&C Note 1 excludes rental transactions and jewelry purchases. Overridden to category/MCC exclusions; examples 009 and 010 added.",
+      "proposed_fix": "override",
+      "override_file": "api/scripts/catalogue_overrides/hdfc-phonepe-uno.json"
+    },
+    {
+      "item": "WP7 r2: examples 011-014",
+      "cardpipeline_says": "Example 009 combined category rent and MCC 6513; jewellery was tested on swipe only.",
+      "issuer_says": "Note 1 excludes rental transactions, jewelry purchases and investments. Each exclusion row is now proven on its own on the UPI rail (category-only rent, MCC-only rent, jewellery, investments).",
+      "proposed_fix": "none"
     }
   ]
 }

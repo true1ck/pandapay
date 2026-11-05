@@ -162,7 +162,7 @@
         "currency": "points",
         "amount": 0,
         "value_inr": null,
-        "excluded": true,
+        "excluded": false,
         "cap_deltas_by_source_id": {}
       },
       "why": "Rent earns only on the first Rs 50,000 per calendar month; incremental rent earns no base or accelerated points."
@@ -297,6 +297,12 @@
       "issuer_says": "Ceiling = assigned credit limit + Rs 1.5 lakh per calendar month. Keep the cap kind with a null amount (flag cap_depends_on_user); engines skip it.",
       "proposed_fix": "none",
       "override_file": null
+    },
+    {
+      "item": "WP7: example 005 (rent above Rs50,000)",
+      "cardpipeline_says": "Example had excluded: true.",
+      "issuer_says": "T&C: \"Rent (capped at INR 50,000 per month)\" - a monthly eligible-spend cap with nothing above it (rental_50k_spend, post-cap zero), not an exclusion rule. Points stay 0; excluded is false under C3.4.",
+      "proposed_fix": "none"
     }
   ]
 }

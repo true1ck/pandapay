@@ -1,0 +1,1449 @@
+{
+  "generated_by": "api/scripts/catalogue_v2/snapshot_examples.js",
+  "source_slug": "sbi-simplyclick",
+  "inputs": {
+    "transform_version": "7",
+    "source_record_sha256": "cc3062a39eabf90bb0a381daf5ac98cf272928d0ff30320e17bf4d0ea1d3fc52",
+    "override_sha256": "7fb325d5fe488af2df373488c54f8b8c0f21e003be03c6124f61bc74d9baff1b",
+    "directory_sha256": "b1094d54b77e848d22f7a9a64f3ae6d1ef43ca3eb2fc8e40cd43ed1994664694",
+    "verified": false
+  },
+  "blocking_flags": [
+    "info_rule"
+  ],
+  "card": {
+    "id": "sbi-simplyclick:card",
+    "slug": "sbi-simplyclick",
+    "name": "SimplyCLICK SBI Card",
+    "network": "unknown",
+    "issuer_slug": "sbi-card",
+    "base_reward_unit": "points_per_100",
+    "base_reward_rate": 1,
+    "point_value_inr": 0.25,
+    "excluded_categories": [],
+    "accrual_block_inr": 100,
+    "accrual_rounding": "floor",
+    "cashback_rounding": null,
+    "points_expiry_months": 24,
+    "model_status": "partial",
+    "model_coverage": {
+      "rules_total": 16,
+      "rules_modelled": 12,
+      "rules_info": 4,
+      "caps_total": 2,
+      "caps_enforced": 1,
+      "flags": [
+        {
+          "code": "info_rule",
+          "source_local_id": "exclusive_partner_10x",
+          "detail": "condition:online_flag"
+        },
+        {
+          "code": "info_rule",
+          "source_local_id": "exclusive_partner_10x",
+          "detail": "condition:affiliate_channel_excluded"
+        },
+        {
+          "code": "info_rule",
+          "source_local_id": "exclusive_partner_10x",
+          "detail": "condition:merchant_identifier_required"
+        },
+        {
+          "code": "token_replaced_by_conditions",
+          "source_local_id": "exclusive_partner_10x",
+          "detail": null
+        },
+        {
+          "code": "token_replaced_by_conditions",
+          "source_local_id": "swiggy_5x",
+          "detail": null
+        },
+        {
+          "code": "mcc_scoped_exclusion",
+          "source_local_id": "wallet_exclusion",
+          "detail": null
+        },
+        {
+          "code": "exclusion_scope_broadened",
+          "source_local_id": "cash_advance_exclusion",
+          "detail": null
+        },
+        {
+          "code": "info_rule",
+          "source_local_id": "balance_transfer_exclusion",
+          "detail": "non_purchase_category"
+        },
+        {
+          "code": "info_rule",
+          "source_local_id": "encash_exclusion",
+          "detail": "non_purchase_category"
+        },
+        {
+          "code": "emi_alternatives",
+          "source_local_id": "flexipay_exclusion",
+          "detail": null
+        },
+        {
+          "code": "exclusion_scope_broadened",
+          "source_local_id": "flexipay_exclusion",
+          "detail": null
+        },
+        {
+          "code": "emi_alternatives",
+          "source_local_id": "merchant_emi_exclusion",
+          "detail": null
+        },
+        {
+          "code": "mcc_scoped_exclusion",
+          "source_local_id": "offline_fuel_exclusion",
+          "detail": null
+        },
+        {
+          "code": "info_rule",
+          "source_local_id": "utility_sbi_platform_no_5x",
+          "detail": "condition:channel_type"
+        },
+        {
+          "code": "mcc_scoped_exclusion",
+          "source_local_id": "rent_exclusion",
+          "detail": null
+        },
+        {
+          "code": "mcc_scoped_exclusion",
+          "source_local_id": "government_exclusion",
+          "detail": null
+        },
+        {
+          "code": "broad_exclusion_v1_only",
+          "source_local_id": "digital_gaming_exclusion",
+          "detail": null
+        },
+        {
+          "code": "cap_targets_info_only",
+          "source_local_id": "cap_exclusive_10x_monthly",
+          "detail": null
+        },
+        {
+          "code": "hidden_from_v1_uncapped",
+          "source_local_id": null,
+          "detail": "online_5x, swiggy_5x"
+        }
+      ],
+      "overrides_applied": [
+        {
+          "path": "reward_rules[id=online_5x].conditions.online_flag",
+          "op": "remove",
+          "value_sha256": "74234e98afe7498f",
+          "reason": "WP7: Restates rail online.",
+          "source_url": "https://www.sbicard.com/sbi-card-en/assets/docs/pdf/SimplyClick-TnC.pdf",
+          "checked_on": "2026-11-05",
+          "citation": null
+        },
+        {
+          "path": "reward_rules[id=online_5x].conditions.exclusive_partner",
+          "op": "remove",
+          "value_sha256": "74234e98afe7498f",
+          "reason": "WP7: Exclusive partners have their own higher-priority 10X rule; the negated flag made the 5X rule info.",
+          "source_url": "https://www.sbicard.com/sbi-card-en/assets/docs/pdf/SimplyClick-TnC.pdf",
+          "checked_on": "2026-11-05",
+          "citation": null
+        },
+        {
+          "path": "reward_rules[id=offline_fuel_exclusion].channel_type",
+          "op": "set",
+          "value_sha256": "5cf7504d9781301d",
+          "reason": "WP7: Same as the rail change below: \"offline\" is not an exact rail, so the fuel-MCC exclusion applies on every rail (conservative).",
+          "source_url": "https://www.sbicard.com/sbi-card-en/assets/docs/pdf/SimplyClick-TnC.pdf",
+          "checked_on": "2026-11-05",
+          "citation": null
+        },
+        {
+          "path": "reward_rules[id=offline_fuel_exclusion].rail",
+          "op": "set",
+          "value_sha256": "251ecb599a3f3a2f",
+          "reason": "WP7: T&C 11.1(f): offline fuel (5172, 5541, 5983, 5542) is not in the program. The swipe-only rail was inexact (rule was info); excluding these MCCs on every rail is the conservative reading.",
+          "source_url": "https://www.sbicard.com/sbi-card-en/assets/docs/pdf/SimplyClick-TnC.pdf",
+          "checked_on": "2026-11-05",
+          "citation": null
+        },
+        {
+          "path": "cap_rules[id=cap_online_5x_monthly].metric",
+          "op": "set",
+          "value_sha256": "57dedf4537fd9493",
+          "reason": "WP7: MITC booklet (g): cumulative 5X points on other online spends are capped at 10,000 RP a month, then \"standard Reward Points ... continue to accrue\". 10,000 RP at 5 per Rs100 is Rs2,00,000 of spend; an eligible-spend cap with base_rate models that exactly (a total-points cap paid 0 after it).",
+          "source_url": "https://www.sbicard.com/sbi-card-en/assets/docs/pdf/simply-click-tnc-MITC-booklet.pdf",
+          "checked_on": "2026-11-05",
+          "citation": null
+        },
+        {
+          "path": "cap_rules[id=cap_online_5x_monthly].limit_value",
+          "op": "set",
+          "value_sha256": "74234e98afe7498f",
+          "reason": "WP7: Amount is in rupees of spend (limit_value_inr).",
+          "source_url": "https://www.sbicard.com/sbi-card-en/assets/docs/pdf/simply-click-tnc-MITC-booklet.pdf",
+          "checked_on": "2026-11-05",
+          "citation": null
+        },
+        {
+          "path": "cap_rules[id=cap_online_5x_monthly].limit_value_inr",
+          "op": "set",
+          "value_sha256": "b552e632666bbf61",
+          "reason": "WP7: 10,000 RP / 5 RP per Rs100 = Rs2,00,000.",
+          "source_url": "https://www.sbicard.com/sbi-card-en/assets/docs/pdf/simply-click-tnc-MITC-booklet.pdf",
+          "checked_on": "2026-11-05",
+          "citation": null
+        },
+        {
+          "path": "cap_rules[id=cap_online_5x_monthly].post_limit_behavior",
+          "op": "set",
+          "value_sha256": "0bf3a047a3fe5814",
+          "reason": "WP7: Standard points continue after the cap (MITC booklet g).",
+          "source_url": "https://www.sbicard.com/sbi-card-en/assets/docs/pdf/simply-click-tnc-MITC-booklet.pdf",
+          "checked_on": "2026-11-05",
+          "citation": null
+        },
+        {
+          "path": "cap_rules[id=cap_exclusive_10x_monthly].metric",
+          "op": "set",
+          "value_sha256": "57dedf4537fd9493",
+          "reason": "WP7: D24c: the 10X cap is issuer-documented (MITC booklet g and k: \"Exclusive partner transactions will have a monthly cap of 10,000 point\"), so it stays. 10,000 RP at 10 per Rs100 is Rs1,00,000 of spend, then standard points (g).",
+          "source_url": "https://www.sbicard.com/sbi-card-en/assets/docs/pdf/simply-click-tnc-MITC-booklet.pdf",
+          "checked_on": "2026-11-05",
+          "citation": null
+        },
+        {
+          "path": "cap_rules[id=cap_exclusive_10x_monthly].limit_value",
+          "op": "set",
+          "value_sha256": "74234e98afe7498f",
+          "reason": "WP7: Amount is in rupees of spend (limit_value_inr).",
+          "source_url": "https://www.sbicard.com/sbi-card-en/assets/docs/pdf/simply-click-tnc-MITC-booklet.pdf",
+          "checked_on": "2026-11-05",
+          "citation": null
+        },
+        {
+          "path": "cap_rules[id=cap_exclusive_10x_monthly].limit_value_inr",
+          "op": "set",
+          "value_sha256": "3bb78535cc9555ff",
+          "reason": "WP7: 10,000 RP / 10 RP per Rs100 = Rs1,00,000.",
+          "source_url": "https://www.sbicard.com/sbi-card-en/assets/docs/pdf/simply-click-tnc-MITC-booklet.pdf",
+          "checked_on": "2026-11-05",
+          "citation": null
+        },
+        {
+          "path": "cap_rules[id=cap_exclusive_10x_monthly].post_limit_behavior",
+          "op": "set",
+          "value_sha256": "0bf3a047a3fe5814",
+          "reason": "WP7: Standard points continue after the cap (MITC booklet g).",
+          "source_url": "https://www.sbicard.com/sbi-card-en/assets/docs/pdf/simply-click-tnc-MITC-booklet.pdf",
+          "checked_on": "2026-11-05",
+          "citation": null
+        },
+        {
+          "path": "reward_rules",
+          "op": "append",
+          "value_sha256": "bcdd7e8d8d0f3912",
+          "reason": "WP7: D28c: T&C: Reward Points are reversed for \"Merchant EMI i.e. EMI availed at the time of purchase at Merchant establishment or websites, w.e.f 20th November 2020\". The record's EMI row needs category emi AND rail emi, so an EMI purchase in another category earned. Rail-EMI exclusion on all spend.",
+          "source_url": "https://www.sbicard.com/sbi-card-en/assets/docs/pdf/SimplyClick-TnC.pdf",
+          "checked_on": "2026-11-05",
+          "citation": null
+        }
+      ]
+    },
+    "reward_rules": [
+      {
+        "id": "sbi-simplyclick:rule:base_all_spend",
+        "category_id": null,
+        "category_slug": null,
+        "merchant_pattern": null,
+        "rail": null,
+        "unit": "points_per_100",
+        "rate": 1,
+        "min_txn_inr": null,
+        "max_txn_inr": null,
+        "priority": 100,
+        "conditions": {
+          "source_local_id": "base_all_spend",
+          "part": null,
+          "info_reasons": [],
+          "flags": []
+        },
+        "notes": null,
+        "effective_from": "2015-09-15",
+        "effective_to": null,
+        "excluded_categories": [],
+        "rule_role": "base",
+        "merchant_slugs": [],
+        "platform_slugs": [],
+        "mcc_include": [],
+        "mcc_exclude": [],
+        "except_merchant_slugs": [],
+        "except_platform_slugs": [],
+        "block_inr": null,
+        "min_engine_version": 1,
+        "max_engine_version": null,
+        "source_local_id": "base_all_spend",
+        "display_note": "Base earn of 1 Reward Point per ₹100 on other eligible spends."
+      },
+      {
+        "id": "sbi-simplyclick:rule:online_5x",
+        "category_id": "cat-online",
+        "category_slug": "online",
+        "merchant_pattern": null,
+        "rail": "online",
+        "unit": "points_per_100",
+        "rate": 5,
+        "min_txn_inr": null,
+        "max_txn_inr": null,
+        "priority": 20,
+        "conditions": {
+          "source_local_id": "online_5x",
+          "part": null,
+          "info_reasons": [],
+          "flags": [
+            "hidden_from_v1_uncapped"
+          ]
+        },
+        "notes": null,
+        "effective_from": "2020-10-01",
+        "effective_to": null,
+        "excluded_categories": [],
+        "rule_role": "earn",
+        "merchant_slugs": [],
+        "platform_slugs": [],
+        "mcc_include": [],
+        "mcc_exclude": [],
+        "except_merchant_slugs": [],
+        "except_platform_slugs": [],
+        "block_inr": null,
+        "min_engine_version": 2,
+        "max_engine_version": null,
+        "source_local_id": "online_5x",
+        "display_note": "5X Reward Points (5 RPs per ₹100) on other eligible online spends. Subject to a monthly cap of 10,000 accelerated Reward Points, after which the base rate applies."
+      },
+      {
+        "id": "sbi-simplyclick:rule:exclusive_partner_10x",
+        "category_id": null,
+        "category_slug": null,
+        "merchant_pattern": null,
+        "rail": "online",
+        "unit": "points_per_100",
+        "rate": 10,
+        "min_txn_inr": null,
+        "max_txn_inr": null,
+        "priority": 10,
+        "conditions": {
+          "source_local_id": "exclusive_partner_10x",
+          "part": null,
+          "info_reasons": [
+            "condition:online_flag",
+            "condition:affiliate_channel_excluded",
+            "condition:merchant_identifier_required"
+          ],
+          "flags": [
+            "token_replaced_by_conditions"
+          ]
+        },
+        "notes": null,
+        "effective_from": "2023-01-01",
+        "effective_to": null,
+        "excluded_categories": [],
+        "rule_role": "info",
+        "merchant_slugs": [
+          "apollo",
+          "bookmyshow",
+          "cleartrip",
+          "dominos",
+          "gyftr",
+          "igp",
+          "myntra",
+          "netmeds",
+          "tata_cliq",
+          "yatra"
+        ],
+        "platform_slugs": [],
+        "mcc_include": [],
+        "mcc_exclude": [],
+        "except_merchant_slugs": [],
+        "except_platform_slugs": [],
+        "block_inr": null,
+        "min_engine_version": 2,
+        "max_engine_version": null,
+        "source_local_id": "exclusive_partner_10x",
+        "display_note": "10X Reward Points on eligible exclusive-partner online spends. Current SBI Card materials list Apollo 24x7, BookMyShow, Cleartrip, Dominos, IGP, Myntra, Netmeds, Yatra, Gyftr and Tata Cliq. Correct merchant identifiers and online transaction flags are required."
+      },
+      {
+        "id": "sbi-simplyclick:rule:swiggy_5x",
+        "category_id": null,
+        "category_slug": null,
+        "merchant_pattern": "swiggy",
+        "rail": "online",
+        "unit": "points_per_100",
+        "rate": 5,
+        "min_txn_inr": null,
+        "max_txn_inr": null,
+        "priority": 11,
+        "conditions": {
+          "source_local_id": "swiggy_5x",
+          "part": null,
+          "info_reasons": [],
+          "flags": [
+            "token_replaced_by_conditions",
+            "hidden_from_v1_uncapped"
+          ]
+        },
+        "notes": null,
+        "effective_from": "2025-04-01",
+        "effective_to": null,
+        "excluded_categories": [],
+        "rule_role": "earn",
+        "merchant_slugs": [
+          "swiggy"
+        ],
+        "platform_slugs": [],
+        "mcc_include": [],
+        "mcc_exclude": [],
+        "except_merchant_slugs": [],
+        "except_platform_slugs": [],
+        "block_inr": null,
+        "min_engine_version": 2,
+        "max_engine_version": null,
+        "source_local_id": "swiggy_5x",
+        "display_note": "Swiggy online Reward Points accrual was revised from 10X to 5X effective 1 April 2025."
+      },
+      {
+        "id": "sbi-simplyclick:rule:wallet_exclusion#1",
+        "category_id": "cat-wallet",
+        "category_slug": "wallet",
+        "merchant_pattern": null,
+        "rail": null,
+        "unit": "points_per_100",
+        "rate": 0,
+        "min_txn_inr": null,
+        "max_txn_inr": null,
+        "priority": 1,
+        "conditions": {
+          "source_local_id": "wallet_exclusion",
+          "part": 1,
+          "info_reasons": [],
+          "flags": [
+            "mcc_scoped_exclusion"
+          ]
+        },
+        "notes": null,
+        "effective_from": "2020-07-01",
+        "effective_to": null,
+        "excluded_categories": [],
+        "rule_role": "exclusion",
+        "merchant_slugs": [],
+        "platform_slugs": [],
+        "mcc_include": [],
+        "mcc_exclude": [],
+        "except_merchant_slugs": [],
+        "except_platform_slugs": [],
+        "block_inr": null,
+        "min_engine_version": 1,
+        "max_engine_version": 1,
+        "source_local_id": "wallet_exclusion",
+        "display_note": "Transactions identified under MCC 6540 and 6541 do not earn Reward Points."
+      },
+      {
+        "id": "sbi-simplyclick:rule:wallet_exclusion#2",
+        "category_id": "cat-wallet",
+        "category_slug": "wallet",
+        "merchant_pattern": null,
+        "rail": null,
+        "unit": "points_per_100",
+        "rate": 0,
+        "min_txn_inr": null,
+        "max_txn_inr": null,
+        "priority": 1,
+        "conditions": {
+          "source_local_id": "wallet_exclusion",
+          "part": 2,
+          "info_reasons": [],
+          "flags": [
+            "mcc_scoped_exclusion"
+          ]
+        },
+        "notes": null,
+        "effective_from": "2020-07-01",
+        "effective_to": null,
+        "excluded_categories": [],
+        "rule_role": "exclusion",
+        "merchant_slugs": [],
+        "platform_slugs": [],
+        "mcc_include": [
+          "6540",
+          "6541"
+        ],
+        "mcc_exclude": [],
+        "except_merchant_slugs": [],
+        "except_platform_slugs": [],
+        "block_inr": null,
+        "min_engine_version": 2,
+        "max_engine_version": null,
+        "source_local_id": "wallet_exclusion",
+        "display_note": "Transactions identified under MCC 6540 and 6541 do not earn Reward Points."
+      },
+      {
+        "id": "sbi-simplyclick:rule:wallet_exclusion#3",
+        "category_id": null,
+        "category_slug": null,
+        "merchant_pattern": null,
+        "rail": null,
+        "unit": "points_per_100",
+        "rate": 0,
+        "min_txn_inr": null,
+        "max_txn_inr": null,
+        "priority": 1,
+        "conditions": {
+          "source_local_id": "wallet_exclusion",
+          "part": 3,
+          "info_reasons": [],
+          "flags": [
+            "mcc_scoped_exclusion"
+          ]
+        },
+        "notes": null,
+        "effective_from": "2020-07-01",
+        "effective_to": null,
+        "excluded_categories": [],
+        "rule_role": "exclusion",
+        "merchant_slugs": [],
+        "platform_slugs": [],
+        "mcc_include": [
+          "6540",
+          "6541"
+        ],
+        "mcc_exclude": [],
+        "except_merchant_slugs": [],
+        "except_platform_slugs": [],
+        "block_inr": null,
+        "min_engine_version": 2,
+        "max_engine_version": null,
+        "source_local_id": "wallet_exclusion",
+        "display_note": "Transactions identified under MCC 6540 and 6541 do not earn Reward Points."
+      },
+      {
+        "id": "sbi-simplyclick:rule:cash_advance_exclusion",
+        "category_id": null,
+        "category_slug": null,
+        "merchant_pattern": null,
+        "rail": "atm",
+        "unit": "points_per_100",
+        "rate": 0,
+        "min_txn_inr": null,
+        "max_txn_inr": null,
+        "priority": 1,
+        "conditions": {
+          "source_local_id": "cash_advance_exclusion",
+          "part": null,
+          "info_reasons": [],
+          "flags": [
+            "exclusion_scope_broadened"
+          ]
+        },
+        "notes": null,
+        "effective_from": "2015-09-15",
+        "effective_to": null,
+        "excluded_categories": [],
+        "rule_role": "exclusion",
+        "merchant_slugs": [],
+        "platform_slugs": [],
+        "mcc_include": [],
+        "mcc_exclude": [],
+        "except_merchant_slugs": [],
+        "except_platform_slugs": [],
+        "block_inr": null,
+        "min_engine_version": 2,
+        "max_engine_version": null,
+        "source_local_id": "cash_advance_exclusion",
+        "display_note": "Cash Advance transactions are excluded from the Reward Points program."
+      },
+      {
+        "id": "sbi-simplyclick:rule:balance_transfer_exclusion",
+        "category_id": null,
+        "category_slug": null,
+        "merchant_pattern": null,
+        "rail": null,
+        "unit": "points_per_100",
+        "rate": 0,
+        "min_txn_inr": null,
+        "max_txn_inr": null,
+        "priority": 1,
+        "conditions": {
+          "source_local_id": "balance_transfer_exclusion",
+          "part": null,
+          "info_reasons": [
+            "non_purchase_category"
+          ],
+          "flags": []
+        },
+        "notes": null,
+        "effective_from": "2015-09-15",
+        "effective_to": null,
+        "excluded_categories": [],
+        "rule_role": "info",
+        "merchant_slugs": [],
+        "platform_slugs": [],
+        "mcc_include": [],
+        "mcc_exclude": [],
+        "except_merchant_slugs": [],
+        "except_platform_slugs": [],
+        "block_inr": null,
+        "min_engine_version": 2,
+        "max_engine_version": null,
+        "source_local_id": "balance_transfer_exclusion",
+        "display_note": "Balance Transfer transactions are excluded from the Reward Points program."
+      },
+      {
+        "id": "sbi-simplyclick:rule:encash_exclusion",
+        "category_id": null,
+        "category_slug": null,
+        "merchant_pattern": null,
+        "rail": null,
+        "unit": "points_per_100",
+        "rate": 0,
+        "min_txn_inr": null,
+        "max_txn_inr": null,
+        "priority": 1,
+        "conditions": {
+          "source_local_id": "encash_exclusion",
+          "part": null,
+          "info_reasons": [
+            "non_purchase_category"
+          ],
+          "flags": []
+        },
+        "notes": null,
+        "effective_from": "2015-09-15",
+        "effective_to": null,
+        "excluded_categories": [],
+        "rule_role": "info",
+        "merchant_slugs": [],
+        "platform_slugs": [],
+        "mcc_include": [],
+        "mcc_exclude": [],
+        "except_merchant_slugs": [],
+        "except_platform_slugs": [],
+        "block_inr": null,
+        "min_engine_version": 2,
+        "max_engine_version": null,
+        "source_local_id": "encash_exclusion",
+        "display_note": "Encash transactions are excluded from the Reward Points program."
+      },
+      {
+        "id": "sbi-simplyclick:rule:flexipay_exclusion#1",
+        "category_id": "cat-emi",
+        "category_slug": "emi",
+        "merchant_pattern": null,
+        "rail": null,
+        "unit": "points_per_100",
+        "rate": 0,
+        "min_txn_inr": null,
+        "max_txn_inr": null,
+        "priority": 1,
+        "conditions": {
+          "source_local_id": "flexipay_exclusion",
+          "part": 1,
+          "info_reasons": [],
+          "flags": [
+            "emi_alternatives",
+            "exclusion_scope_broadened"
+          ]
+        },
+        "notes": null,
+        "effective_from": "2020-11-20",
+        "effective_to": null,
+        "excluded_categories": [],
+        "rule_role": "exclusion",
+        "merchant_slugs": [],
+        "platform_slugs": [],
+        "mcc_include": [],
+        "mcc_exclude": [],
+        "except_merchant_slugs": [],
+        "except_platform_slugs": [],
+        "block_inr": null,
+        "min_engine_version": 1,
+        "max_engine_version": null,
+        "source_local_id": "flexipay_exclusion",
+        "display_note": "Reward Points on transactions converted to Flexipay are reversed."
+      },
+      {
+        "id": "sbi-simplyclick:rule:flexipay_exclusion#2",
+        "category_id": null,
+        "category_slug": null,
+        "merchant_pattern": null,
+        "rail": "emi",
+        "unit": "points_per_100",
+        "rate": 0,
+        "min_txn_inr": null,
+        "max_txn_inr": null,
+        "priority": 1,
+        "conditions": {
+          "source_local_id": "flexipay_exclusion",
+          "part": 2,
+          "info_reasons": [],
+          "flags": [
+            "emi_alternatives",
+            "exclusion_scope_broadened"
+          ]
+        },
+        "notes": null,
+        "effective_from": "2020-11-20",
+        "effective_to": null,
+        "excluded_categories": [],
+        "rule_role": "exclusion",
+        "merchant_slugs": [],
+        "platform_slugs": [],
+        "mcc_include": [],
+        "mcc_exclude": [],
+        "except_merchant_slugs": [],
+        "except_platform_slugs": [],
+        "block_inr": null,
+        "min_engine_version": 2,
+        "max_engine_version": null,
+        "source_local_id": "flexipay_exclusion",
+        "display_note": "Reward Points on transactions converted to Flexipay are reversed."
+      },
+      {
+        "id": "sbi-simplyclick:rule:merchant_emi_exclusion#1",
+        "category_id": "cat-emi",
+        "category_slug": "emi",
+        "merchant_pattern": null,
+        "rail": null,
+        "unit": "points_per_100",
+        "rate": 0,
+        "min_txn_inr": null,
+        "max_txn_inr": null,
+        "priority": 2,
+        "conditions": {
+          "source_local_id": "merchant_emi_exclusion",
+          "part": 1,
+          "info_reasons": [],
+          "flags": [
+            "emi_alternatives"
+          ]
+        },
+        "notes": null,
+        "effective_from": "2020-11-20",
+        "effective_to": null,
+        "excluded_categories": [],
+        "rule_role": "exclusion",
+        "merchant_slugs": [],
+        "platform_slugs": [],
+        "mcc_include": [],
+        "mcc_exclude": [],
+        "except_merchant_slugs": [],
+        "except_platform_slugs": [],
+        "block_inr": null,
+        "min_engine_version": 1,
+        "max_engine_version": null,
+        "source_local_id": "merchant_emi_exclusion",
+        "display_note": "Reward Points on Merchant EMI transactions are reversed."
+      },
+      {
+        "id": "sbi-simplyclick:rule:merchant_emi_exclusion#2",
+        "category_id": null,
+        "category_slug": null,
+        "merchant_pattern": null,
+        "rail": "emi",
+        "unit": "points_per_100",
+        "rate": 0,
+        "min_txn_inr": null,
+        "max_txn_inr": null,
+        "priority": 2,
+        "conditions": {
+          "source_local_id": "merchant_emi_exclusion",
+          "part": 2,
+          "info_reasons": [],
+          "flags": [
+            "emi_alternatives"
+          ]
+        },
+        "notes": null,
+        "effective_from": "2020-11-20",
+        "effective_to": null,
+        "excluded_categories": [],
+        "rule_role": "exclusion",
+        "merchant_slugs": [],
+        "platform_slugs": [],
+        "mcc_include": [],
+        "mcc_exclude": [],
+        "except_merchant_slugs": [],
+        "except_platform_slugs": [],
+        "block_inr": null,
+        "min_engine_version": 2,
+        "max_engine_version": null,
+        "source_local_id": "merchant_emi_exclusion",
+        "display_note": "Reward Points on Merchant EMI transactions are reversed."
+      },
+      {
+        "id": "sbi-simplyclick:rule:offline_fuel_exclusion#1",
+        "category_id": "cat-fuel",
+        "category_slug": "fuel",
+        "merchant_pattern": null,
+        "rail": null,
+        "unit": "points_per_100",
+        "rate": 0,
+        "min_txn_inr": null,
+        "max_txn_inr": null,
+        "priority": 1,
+        "conditions": {
+          "source_local_id": "offline_fuel_exclusion",
+          "part": 1,
+          "info_reasons": [],
+          "flags": [
+            "mcc_scoped_exclusion"
+          ]
+        },
+        "notes": null,
+        "effective_from": "2015-09-15",
+        "effective_to": null,
+        "excluded_categories": [],
+        "rule_role": "exclusion",
+        "merchant_slugs": [],
+        "platform_slugs": [],
+        "mcc_include": [],
+        "mcc_exclude": [],
+        "except_merchant_slugs": [],
+        "except_platform_slugs": [],
+        "block_inr": null,
+        "min_engine_version": 1,
+        "max_engine_version": 1,
+        "source_local_id": "offline_fuel_exclusion",
+        "display_note": "Fuel transactions identified under the applicable fuel MCCs are excluded from Reward Points accrual."
+      },
+      {
+        "id": "sbi-simplyclick:rule:offline_fuel_exclusion#2",
+        "category_id": "cat-fuel",
+        "category_slug": "fuel",
+        "merchant_pattern": null,
+        "rail": null,
+        "unit": "points_per_100",
+        "rate": 0,
+        "min_txn_inr": null,
+        "max_txn_inr": null,
+        "priority": 1,
+        "conditions": {
+          "source_local_id": "offline_fuel_exclusion",
+          "part": 2,
+          "info_reasons": [],
+          "flags": [
+            "mcc_scoped_exclusion"
+          ]
+        },
+        "notes": null,
+        "effective_from": "2015-09-15",
+        "effective_to": null,
+        "excluded_categories": [],
+        "rule_role": "exclusion",
+        "merchant_slugs": [],
+        "platform_slugs": [],
+        "mcc_include": [
+          "5172",
+          "5541",
+          "5542",
+          "5983"
+        ],
+        "mcc_exclude": [],
+        "except_merchant_slugs": [],
+        "except_platform_slugs": [],
+        "block_inr": null,
+        "min_engine_version": 2,
+        "max_engine_version": null,
+        "source_local_id": "offline_fuel_exclusion",
+        "display_note": "Fuel transactions identified under the applicable fuel MCCs are excluded from Reward Points accrual."
+      },
+      {
+        "id": "sbi-simplyclick:rule:offline_fuel_exclusion#3",
+        "category_id": null,
+        "category_slug": null,
+        "merchant_pattern": null,
+        "rail": null,
+        "unit": "points_per_100",
+        "rate": 0,
+        "min_txn_inr": null,
+        "max_txn_inr": null,
+        "priority": 1,
+        "conditions": {
+          "source_local_id": "offline_fuel_exclusion",
+          "part": 3,
+          "info_reasons": [],
+          "flags": [
+            "mcc_scoped_exclusion"
+          ]
+        },
+        "notes": null,
+        "effective_from": "2015-09-15",
+        "effective_to": null,
+        "excluded_categories": [],
+        "rule_role": "exclusion",
+        "merchant_slugs": [],
+        "platform_slugs": [],
+        "mcc_include": [
+          "5172",
+          "5541",
+          "5542",
+          "5983"
+        ],
+        "mcc_exclude": [],
+        "except_merchant_slugs": [],
+        "except_platform_slugs": [],
+        "block_inr": null,
+        "min_engine_version": 2,
+        "max_engine_version": null,
+        "source_local_id": "offline_fuel_exclusion",
+        "display_note": "Fuel transactions identified under the applicable fuel MCCs are excluded from Reward Points accrual."
+      },
+      {
+        "id": "sbi-simplyclick:rule:utility_sbi_platform_no_5x",
+        "category_id": "cat-bills",
+        "category_slug": "bills",
+        "merchant_pattern": null,
+        "rail": "online",
+        "unit": "points_per_100",
+        "rate": 1,
+        "min_txn_inr": null,
+        "max_txn_inr": null,
+        "priority": 30,
+        "conditions": {
+          "source_local_id": "utility_sbi_platform_no_5x",
+          "part": null,
+          "info_reasons": [
+            "condition:channel_type"
+          ],
+          "flags": []
+        },
+        "notes": null,
+        "effective_from": "2015-09-15",
+        "effective_to": null,
+        "excluded_categories": [],
+        "rule_role": "info",
+        "merchant_slugs": [],
+        "platform_slugs": [],
+        "mcc_include": [],
+        "mcc_exclude": [],
+        "except_merchant_slugs": [],
+        "except_platform_slugs": [],
+        "block_inr": null,
+        "min_engine_version": 2,
+        "max_engine_version": null,
+        "source_local_id": "utility_sbi_platform_no_5x",
+        "display_note": "Utility bill payments on the SBI Card website/mobile app do not receive the 5X online accelerator; base accrual applies where otherwise eligible."
+      },
+      {
+        "id": "sbi-simplyclick:rule:rent_exclusion#1",
+        "category_id": "cat-rent",
+        "category_slug": "rent",
+        "merchant_pattern": null,
+        "rail": null,
+        "unit": "points_per_100",
+        "rate": 0,
+        "min_txn_inr": null,
+        "max_txn_inr": null,
+        "priority": 1,
+        "conditions": {
+          "source_local_id": "rent_exclusion",
+          "part": 1,
+          "info_reasons": [],
+          "flags": [
+            "mcc_scoped_exclusion"
+          ]
+        },
+        "notes": null,
+        "effective_from": "2024-04-01",
+        "effective_to": null,
+        "excluded_categories": [],
+        "rule_role": "exclusion",
+        "merchant_slugs": [],
+        "platform_slugs": [],
+        "mcc_include": [],
+        "mcc_exclude": [],
+        "except_merchant_slugs": [],
+        "except_platform_slugs": [],
+        "block_inr": null,
+        "min_engine_version": 1,
+        "max_engine_version": 1,
+        "source_local_id": "rent_exclusion",
+        "display_note": "Reward accrual on rent payments was discontinued effective 1 April 2024 for applicable SBI cards; SimplyCLICK rent transactions therefore do not receive accelerated reward accrual."
+      },
+      {
+        "id": "sbi-simplyclick:rule:rent_exclusion#2",
+        "category_id": "cat-rent",
+        "category_slug": "rent",
+        "merchant_pattern": null,
+        "rail": null,
+        "unit": "points_per_100",
+        "rate": 0,
+        "min_txn_inr": null,
+        "max_txn_inr": null,
+        "priority": 1,
+        "conditions": {
+          "source_local_id": "rent_exclusion",
+          "part": 2,
+          "info_reasons": [],
+          "flags": [
+            "mcc_scoped_exclusion"
+          ]
+        },
+        "notes": null,
+        "effective_from": "2024-04-01",
+        "effective_to": null,
+        "excluded_categories": [],
+        "rule_role": "exclusion",
+        "merchant_slugs": [],
+        "platform_slugs": [],
+        "mcc_include": [
+          "6513"
+        ],
+        "mcc_exclude": [],
+        "except_merchant_slugs": [],
+        "except_platform_slugs": [],
+        "block_inr": null,
+        "min_engine_version": 2,
+        "max_engine_version": null,
+        "source_local_id": "rent_exclusion",
+        "display_note": "Reward accrual on rent payments was discontinued effective 1 April 2024 for applicable SBI cards; SimplyCLICK rent transactions therefore do not receive accelerated reward accrual."
+      },
+      {
+        "id": "sbi-simplyclick:rule:rent_exclusion#3",
+        "category_id": null,
+        "category_slug": null,
+        "merchant_pattern": null,
+        "rail": null,
+        "unit": "points_per_100",
+        "rate": 0,
+        "min_txn_inr": null,
+        "max_txn_inr": null,
+        "priority": 1,
+        "conditions": {
+          "source_local_id": "rent_exclusion",
+          "part": 3,
+          "info_reasons": [],
+          "flags": [
+            "mcc_scoped_exclusion"
+          ]
+        },
+        "notes": null,
+        "effective_from": "2024-04-01",
+        "effective_to": null,
+        "excluded_categories": [],
+        "rule_role": "exclusion",
+        "merchant_slugs": [],
+        "platform_slugs": [],
+        "mcc_include": [
+          "6513"
+        ],
+        "mcc_exclude": [],
+        "except_merchant_slugs": [],
+        "except_platform_slugs": [],
+        "block_inr": null,
+        "min_engine_version": 2,
+        "max_engine_version": null,
+        "source_local_id": "rent_exclusion",
+        "display_note": "Reward accrual on rent payments was discontinued effective 1 April 2024 for applicable SBI cards; SimplyCLICK rent transactions therefore do not receive accelerated reward accrual."
+      },
+      {
+        "id": "sbi-simplyclick:rule:government_exclusion#1",
+        "category_id": "cat-government",
+        "category_slug": "government",
+        "merchant_pattern": null,
+        "rail": null,
+        "unit": "points_per_100",
+        "rate": 0,
+        "min_txn_inr": null,
+        "max_txn_inr": null,
+        "priority": 1,
+        "conditions": {
+          "source_local_id": "government_exclusion",
+          "part": 1,
+          "info_reasons": [],
+          "flags": [
+            "mcc_scoped_exclusion"
+          ]
+        },
+        "notes": null,
+        "effective_from": "2024-06-01",
+        "effective_to": null,
+        "excluded_categories": [],
+        "rule_role": "exclusion",
+        "merchant_slugs": [],
+        "platform_slugs": [],
+        "mcc_include": [],
+        "mcc_exclude": [],
+        "except_merchant_slugs": [],
+        "except_platform_slugs": [],
+        "block_inr": null,
+        "min_engine_version": 1,
+        "max_engine_version": 1,
+        "source_local_id": "government_exclusion",
+        "display_note": "Government-related transactions are excluded from Reward Points accrual under the applicable SBI Card reward exclusions."
+      },
+      {
+        "id": "sbi-simplyclick:rule:government_exclusion#2",
+        "category_id": "cat-government",
+        "category_slug": "government",
+        "merchant_pattern": null,
+        "rail": null,
+        "unit": "points_per_100",
+        "rate": 0,
+        "min_txn_inr": null,
+        "max_txn_inr": null,
+        "priority": 1,
+        "conditions": {
+          "source_local_id": "government_exclusion",
+          "part": 2,
+          "info_reasons": [],
+          "flags": [
+            "mcc_scoped_exclusion"
+          ]
+        },
+        "notes": null,
+        "effective_from": "2024-06-01",
+        "effective_to": null,
+        "excluded_categories": [],
+        "rule_role": "exclusion",
+        "merchant_slugs": [],
+        "platform_slugs": [],
+        "mcc_include": [
+          "9311",
+          "9399"
+        ],
+        "mcc_exclude": [],
+        "except_merchant_slugs": [],
+        "except_platform_slugs": [],
+        "block_inr": null,
+        "min_engine_version": 2,
+        "max_engine_version": null,
+        "source_local_id": "government_exclusion",
+        "display_note": "Government-related transactions are excluded from Reward Points accrual under the applicable SBI Card reward exclusions."
+      },
+      {
+        "id": "sbi-simplyclick:rule:government_exclusion#3",
+        "category_id": null,
+        "category_slug": null,
+        "merchant_pattern": null,
+        "rail": null,
+        "unit": "points_per_100",
+        "rate": 0,
+        "min_txn_inr": null,
+        "max_txn_inr": null,
+        "priority": 1,
+        "conditions": {
+          "source_local_id": "government_exclusion",
+          "part": 3,
+          "info_reasons": [],
+          "flags": [
+            "mcc_scoped_exclusion"
+          ]
+        },
+        "notes": null,
+        "effective_from": "2024-06-01",
+        "effective_to": null,
+        "excluded_categories": [],
+        "rule_role": "exclusion",
+        "merchant_slugs": [],
+        "platform_slugs": [],
+        "mcc_include": [
+          "9311",
+          "9399"
+        ],
+        "mcc_exclude": [],
+        "except_merchant_slugs": [],
+        "except_platform_slugs": [],
+        "block_inr": null,
+        "min_engine_version": 2,
+        "max_engine_version": null,
+        "source_local_id": "government_exclusion",
+        "display_note": "Government-related transactions are excluded from Reward Points accrual under the applicable SBI Card reward exclusions."
+      },
+      {
+        "id": "sbi-simplyclick:rule:digital_gaming_exclusion#1",
+        "category_id": "cat-entertainment",
+        "category_slug": "entertainment",
+        "merchant_pattern": null,
+        "rail": null,
+        "unit": "points_per_100",
+        "rate": 0,
+        "min_txn_inr": null,
+        "max_txn_inr": null,
+        "priority": 1,
+        "conditions": {
+          "source_local_id": "digital_gaming_exclusion",
+          "part": 1,
+          "info_reasons": [],
+          "flags": [
+            "broad_exclusion_v1_only",
+            "broad_category"
+          ]
+        },
+        "notes": null,
+        "effective_from": "2024-12-01",
+        "effective_to": null,
+        "excluded_categories": [],
+        "rule_role": "exclusion",
+        "merchant_slugs": [],
+        "platform_slugs": [],
+        "mcc_include": [],
+        "mcc_exclude": [],
+        "except_merchant_slugs": [],
+        "except_platform_slugs": [],
+        "block_inr": null,
+        "min_engine_version": 1,
+        "max_engine_version": 1,
+        "source_local_id": "digital_gaming_exclusion",
+        "display_note": "Digital gaming transactions identified under the applicable gaming MCCs are excluded from Reward Points accrual."
+      },
+      {
+        "id": "sbi-simplyclick:rule:digital_gaming_exclusion#2",
+        "category_id": null,
+        "category_slug": null,
+        "merchant_pattern": null,
+        "rail": null,
+        "unit": "points_per_100",
+        "rate": 0,
+        "min_txn_inr": null,
+        "max_txn_inr": null,
+        "priority": 1,
+        "conditions": {
+          "source_local_id": "digital_gaming_exclusion",
+          "part": 2,
+          "info_reasons": [],
+          "flags": [
+            "broad_exclusion_v1_only"
+          ]
+        },
+        "notes": null,
+        "effective_from": "2024-12-01",
+        "effective_to": null,
+        "excluded_categories": [],
+        "rule_role": "exclusion",
+        "merchant_slugs": [],
+        "platform_slugs": [],
+        "mcc_include": [
+          "5816",
+          "7993",
+          "7994"
+        ],
+        "mcc_exclude": [],
+        "except_merchant_slugs": [],
+        "except_platform_slugs": [],
+        "block_inr": null,
+        "min_engine_version": 2,
+        "max_engine_version": null,
+        "source_local_id": "digital_gaming_exclusion",
+        "display_note": "Digital gaming transactions identified under the applicable gaming MCCs are excluded from Reward Points accrual."
+      },
+      {
+        "id": "sbi-simplyclick:rule:wp7_emi_rail_exclusion",
+        "category_id": null,
+        "category_slug": null,
+        "merchant_pattern": null,
+        "rail": "emi",
+        "unit": "points_per_100",
+        "rate": 0,
+        "min_txn_inr": null,
+        "max_txn_inr": null,
+        "priority": 0,
+        "conditions": {
+          "source_local_id": "wp7_emi_rail_exclusion",
+          "part": null,
+          "info_reasons": [],
+          "flags": []
+        },
+        "notes": null,
+        "effective_from": "2020-11-20",
+        "effective_to": null,
+        "excluded_categories": [],
+        "rule_role": "exclusion",
+        "merchant_slugs": [],
+        "platform_slugs": [],
+        "mcc_include": [],
+        "mcc_exclude": [],
+        "except_merchant_slugs": [],
+        "except_platform_slugs": [],
+        "block_inr": null,
+        "min_engine_version": 2,
+        "max_engine_version": null,
+        "source_local_id": "wp7_emi_rail_exclusion",
+        "display_note": "EMI transactions earn no rewards."
+      }
+    ],
+    "cap_rules": [
+      {
+        "id": "sbi-simplyclick:cap:cap_online_5x_monthly",
+        "reward_rule_id": null,
+        "category_id": null,
+        "category_slug": null,
+        "benefit_kind": null,
+        "label": "Cap online 5x monthly",
+        "measure": "spend_amount",
+        "period": "calendar_month",
+        "cap_value": 200000,
+        "post_cap_unit": null,
+        "post_cap_rate": null,
+        "resets_on_day": 1,
+        "cap_kind": "eligible_spend",
+        "cap_amount": 200000,
+        "scope": "targets",
+        "targets": [
+          "sbi-simplyclick:rule:online_5x",
+          "sbi-simplyclick:rule:swiggy_5x"
+        ],
+        "parent_cap_id": null,
+        "post_cap_behavior": "base_rate",
+        "anchor": null,
+        "min_engine_version": 2,
+        "source_local_id": "cap_online_5x_monthly"
+      },
+      {
+        "id": "sbi-simplyclick:cap:cap_exclusive_10x_monthly",
+        "reward_rule_id": "sbi-simplyclick:rule:exclusive_partner_10x",
+        "category_id": null,
+        "category_slug": null,
+        "benefit_kind": null,
+        "label": "Cap exclusive 10x monthly",
+        "measure": "spend_amount",
+        "period": "calendar_month",
+        "cap_value": 100000,
+        "post_cap_unit": null,
+        "post_cap_rate": null,
+        "resets_on_day": 1,
+        "cap_kind": "eligible_spend",
+        "cap_amount": 100000,
+        "scope": "targets",
+        "targets": [
+          "sbi-simplyclick:rule:exclusive_partner_10x"
+        ],
+        "parent_cap_id": null,
+        "post_cap_behavior": "base_rate",
+        "anchor": null,
+        "min_engine_version": 2,
+        "source_local_id": "cap_exclusive_10x_monthly"
+      }
+    ],
+    "milestone_rules": [
+      {
+        "id": "sbi-simplyclick:milestone:online_annual_1l",
+        "label": "₹2,000 Cleartrip/Yatra e-voucher at ₹1 lakh annual online spend",
+        "period": "annual",
+        "threshold_spend_inr": 100000,
+        "reward_description": "₹2,000 Cleartrip/Yatra e-voucher at ₹1 lakh annual online spend",
+        "reward_value_inr": 2000,
+        "is_repeatable": false,
+        "max_repeats": null,
+        "anchor": "card_anniversary",
+        "reward_points": null,
+        "reward_kind": "voucher",
+        "excluded_category_ids": [],
+        "window_days": null,
+        "source_local_id": "online_annual_1l"
+      },
+      {
+        "id": "sbi-simplyclick:milestone:online_annual_2l",
+        "label": "₹2,000 Cleartrip/Yatra e-voucher at ₹2 lakh annual online spend",
+        "period": "annual",
+        "threshold_spend_inr": 200000,
+        "reward_description": "₹2,000 Cleartrip/Yatra e-voucher at ₹2 lakh annual online spend",
+        "reward_value_inr": 2000,
+        "is_repeatable": false,
+        "max_repeats": null,
+        "anchor": "card_anniversary",
+        "reward_points": null,
+        "reward_kind": "voucher",
+        "excluded_category_ids": [],
+        "window_days": null,
+        "source_local_id": "online_annual_2l"
+      }
+    ],
+    "fee_waiver_rules": [
+      {
+        "id": "sbi-simplyclick:waiver:1",
+        "threshold_spend_inr": 100000,
+        "period": "annual",
+        "waives_fee_inr": 499,
+        "excluded_category_slugs": [],
+        "notes": "Renewal fee is reversed when annual eligible spends reach ₹1,00,000 in the preceding year.",
+        "excluded_categories": []
+      }
+    ],
+    "benefits": [
+      {
+        "id": "sbi-simplyclick:benefit:priority_pass_membership",
+        "key": "priority_pass_membership",
+        "source_local_id": "priority_pass_membership",
+        "kind": "lounge_international",
+        "label": "Complimentary Priority Pass membership with pay-per-use lounge visits",
+        "description": "Sponsor: SBI Card",
+        "quota_count": 0,
+        "quota_period": "annual",
+        "network_program": "priority_pass",
+        "value_estimate_inr": null,
+        "conditions": {
+          "source_category_id": "lounge",
+          "evaluation_engine": {
+            "conditions": {
+              "primary_cardholder_only": true
+            },
+            "benefit_calculation": {
+              "membership_value_usd": 99,
+              "complimentary_visits": 0
+            },
+            "perks": [
+              "SimplyCLICK does not include complimentary domestic or international lounge visits.",
+              "Priority Pass lounge visits are chargeable at the applicable network lounge visit rate."
+            ]
+          }
+        }
+      },
+      {
+        "id": "sbi-simplyclick:benefit:fuel_surcharge_waiver",
+        "key": "fuel_surcharge_waiver",
+        "source_local_id": "fuel_surcharge_waiver",
+        "kind": "fuel_surcharge",
+        "label": "1% fuel surcharge waiver",
+        "description": "Sponsor: SBI Card",
+        "quota_count": null,
+        "quota_period": "statement_cycle",
+        "network_program": null,
+        "value_estimate_inr": 1200,
+        "conditions": {
+          "source_category_id": "fuel",
+          "evaluation_engine": {
+            "conditions": {
+              "transaction_min_inr": 500,
+              "transaction_max_inr": 3000
+            },
+            "benefit_calculation": {
+              "waiver_percent": 1,
+              "monthly_cap_inr": 100
+            },
+            "perks": [
+              "Valid on fuel purchases across petrol pumps in India.",
+              "GST charged on the fuel surcharge is not reversed."
+            ]
+          }
+        }
+      }
+    ],
+    "unlock_rules": [],
+    "redemption_options": [
+      {
+        "program_name": "SBI Card Rewards Catalogue",
+        "method": "partner_catalogue",
+        "value_per_point_inr": 0.25,
+        "min_points": 2000,
+        "notes": "Redemption fee: ₹99"
+      },
+      {
+        "program_name": "SBI Card Rewards Statement Credit",
+        "method": "statement_credit",
+        "value_per_point_inr": 0.25,
+        "min_points": 4000,
+        "notes": "Redemption fee: ₹99"
+      }
+    ],
+    "is_upi_linkable": false
+  }
+}

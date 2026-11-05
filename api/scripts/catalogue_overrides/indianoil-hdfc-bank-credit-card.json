@@ -1,0 +1,151 @@
+{
+  "source_slug": "indianoil-hdfc-bank-credit-card",
+  "changes": [
+    {
+      "path": "reward_rules[id=iocl_fuel_5pct].conditions.merchant",
+      "value": "IndianOil",
+      "reason": "WP7: T&C: 5% as Fuel Points at IndianOil outlets. The free-text outlet name did not resolve (rule was info).",
+      "source_url": "https://www.hdfc.bank.in/content/dam/hdfcbankpws/in/en/personal-banking/discover-products/cards/credit-cards/indian-oil-hdfc-bank-credit-card/T-and-C-Indian-Oil-Credit-Card.pdf",
+      "checked_on": "2026-11-05"
+    },
+    {
+      "path": "reward_rules[id=iocl_fuel_5pct].conditions.tid_mid_required",
+      "op": "remove",
+      "reason": "WP7: MID/TID identification restates the IndianOil merchant (D17c).",
+      "source_url": "https://www.hdfc.bank.in/content/dam/hdfcbankpws/in/en/personal-banking/discover-products/cards/credit-cards/indian-oil-hdfc-bank-credit-card/T-and-C-Indian-Oil-Credit-Card.pdf",
+      "checked_on": "2026-11-05"
+    },
+    {
+      "path": "reward_rules[id=iocl_fuel_5pct].action.cap_reference",
+      "value": "fuel_post_6m",
+      "reason": "WP7: The source referenced a cap id that does not exist (dangling_cap_reference); the steady-state fuel cap is fuel_post_6m (D8d).",
+      "source_url": "https://www.hdfc.bank.in/content/dam/hdfcbankpws/in/en/personal-banking/discover-products/cards/credit-cards/indian-oil-hdfc-bank-credit-card/T-and-C-Indian-Oil-Credit-Card.pdf",
+      "checked_on": "2026-11-05"
+    },
+    {
+      "path": "reward_rules[id=exclusion_non_iocl_fuel].conditions",
+      "value": {
+        "not_merchant": "IndianOil"
+      },
+      "reason": "WP7: Non-IOCL fuel earns nothing; IndianOil fuel earns 5% (D16a except list). As written it excluded IndianOil fuel too.",
+      "source_url": "https://www.hdfc.bank.in/content/dam/hdfcbankpws/in/en/personal-banking/discover-products/cards/credit-cards/indian-oil-hdfc-bank-credit-card/T-and-C-Indian-Oil-Credit-Card.pdf",
+      "checked_on": "2026-11-05"
+    },
+    {
+      "path": "cap_rules[id=fuel_first_6m].tier_by_card_age",
+      "value": true,
+      "reason": "WP7: D8d: introductory 250 FP tier for the first 6 months; steady state is fuel_post_6m (150).",
+      "source_url": "https://www.hdfc.bank.in/content/dam/hdfcbankpws/in/en/personal-banking/discover-products/cards/credit-cards/indian-oil-hdfc-bank-credit-card/T-and-C-Indian-Oil-Credit-Card.pdf",
+      "checked_on": "2026-11-05"
+    },
+    {
+      "path": "cap_rules[id=fuel_first_6m].metric",
+      "value": "total_reward_points",
+      "reason": "WP7: Same kind as its steady-state sibling fuel_post_6m (total FP), so the loader recognises the pair and skips the intro tier (D8d).",
+      "source_url": "https://www.hdfc.bank.in/content/dam/hdfcbankpws/in/en/personal-banking/discover-products/cards/credit-cards/indian-oil-hdfc-bank-credit-card/T-and-C-Indian-Oil-Credit-Card.pdf",
+      "checked_on": "2026-11-05"
+    },
+    {
+      "path": "cap_rules[id=fuel_post_6m].metric",
+      "value": "total_reward_points",
+      "reason": "WP7: Fuel Points at IndianOil capped at 150 FP per month in total (5% of Rs3,000 = 150).",
+      "source_url": "https://www.hdfc.bank.in/content/dam/hdfcbankpws/in/en/personal-banking/discover-products/cards/credit-cards/indian-oil-hdfc-bank-credit-card/T-and-C-Indian-Oil-Credit-Card.pdf",
+      "checked_on": "2026-11-05"
+    },
+    {
+      "path": "cap_rules[id=grocery_monthly_cap].metric",
+      "value": "total_reward_points",
+      "reason": "WP7: T&C: \"Max 100 Fuel Points per month on each category (groceries, bill payments)\" - a total.",
+      "source_url": "https://www.hdfc.bank.in/content/dam/hdfcbankpws/in/en/personal-banking/discover-products/cards/credit-cards/indian-oil-hdfc-bank-credit-card/T-and-C-Indian-Oil-Credit-Card.pdf",
+      "checked_on": "2026-11-05"
+    },
+    {
+      "path": "cap_rules[id=utility_monthly_cap].metric",
+      "value": "total_reward_points",
+      "reason": "WP7: T&C: \"Max 100 Fuel Points per month on each category (groceries, bill payments)\" - a total.",
+      "source_url": "https://www.hdfc.bank.in/content/dam/hdfcbankpws/in/en/personal-banking/discover-products/cards/credit-cards/indian-oil-hdfc-bank-credit-card/T-and-C-Indian-Oil-Credit-Card.pdf",
+      "checked_on": "2026-11-05"
+    },
+    {
+      "path": "accrual_engine.rounding_mode",
+      "value": "points_floor",
+      "reason": "WP7: D7: \"Earn 5% of your spends as Fuel Points\" is 5% of the amount floored to whole FP (Rs1,000 grocery = 50 FP); per-Rs150 blocks would give 45. 1 FP per Rs150 elsewhere is unchanged by points_floor.",
+      "source_url": "https://www.hdfc.bank.in/content/dam/hdfcbankpws/in/en/personal-banking/discover-products/cards/credit-cards/indian-oil-hdfc-bank-credit-card/T-and-C-Indian-Oil-Credit-Card.pdf",
+      "checked_on": "2026-11-05"
+    },
+    {
+      "path": "reward_rules",
+      "op": "append",
+      "value": {
+        "id": "exclusion_insurance",
+        "category_id": "insurance",
+        "priority": 1,
+        "evaluation_type": "exclusion",
+        "rail": "any",
+        "channel_type": "all",
+        "conditions": {},
+        "action": {
+          "multiplier": 0,
+          "points_per_block": 0,
+          "cashback_percent": null,
+          "cap_reference": null,
+          "reason": "Insurance transactions do not accrue Fuel Points."
+        },
+        "effective_from": "2020-01-01",
+        "effective_to": null
+      },
+      "reason": "WP7: T&C 2.1: Reward Points will not be accrued for Wallet, Rent, Government, Insurance, EMI; the record had no insurance exclusion.",
+      "source_url": "https://www.hdfc.bank.in/content/dam/hdfcbankpws/in/en/personal-banking/discover-products/cards/credit-cards/indian-oil-hdfc-bank-credit-card/T-and-C-Indian-Oil-Credit-Card.pdf",
+      "checked_on": "2026-11-05"
+    },
+    {
+      "path": "cap_rules",
+      "op": "append",
+      "value": {
+        "id": "wp7_fair_usage_statement_cycle",
+        "category_id": "all_retail",
+        "metric": "total_reward_points",
+        "mcc_target_list": [],
+        "period": "statement_cycle",
+        "limit_value": 25000,
+        "limit_value_inr": null,
+        "post_limit_behavior": {
+          "action": "zero_accrual",
+          "points_per_block": 0
+        },
+        "parent_cap_id": null,
+        "reset_day": null,
+        "effective_from": "2023-10-01",
+        "effective_to": null
+      },
+      "reason": "WP7: HDFC MITC fair usage policy: \"The maximum reward points that can be earned in a statement cycle for ... IOCL, IRCTC* ... is 25,000.\" Card-wide total cap.",
+      "source_url": "https://www.hdfc.bank.in/content/dam/hdfcbankpws/in/en/personal-banking/discover-products/cards/credit-cards/personal-mitc/mitc-in-english.pdf",
+      "checked_on": "2026-11-05"
+    },
+    {
+      "path": "reward_rules",
+      "op": "append",
+      "value": {
+        "id": "wp7_emi_rail_exclusion",
+        "category_id": "all_retail",
+        "priority": 0,
+        "evaluation_type": "exclusion",
+        "rail": "emi",
+        "channel_type": "all",
+        "conditions": {},
+        "action": {
+          "multiplier": 0,
+          "points_per_block": 0,
+          "cashback_percent": null,
+          "cap_reference": null,
+          "reason": "EMI transactions earn no rewards."
+        },
+        "effective_from": "2020-01-01",
+        "effective_to": null
+      },
+      "reason": "WP7: D28c: T&C 2.1: \"Reward Points will not be accrued for ... Wallet, Rent, Government, Insurance, EMI\"; the record's EMI row was category-only. The record's EMI row needs category emi AND rail emi, so an EMI purchase in another category earned. Rail-EMI exclusion on all spend.",
+      "source_url": "https://www.hdfc.bank.in/content/dam/hdfcbankpws/in/en/personal-banking/discover-products/cards/credit-cards/indian-oil-hdfc-bank-credit-card/T-and-C-Indian-Oil-Credit-Card.pdf",
+      "checked_on": "2026-11-05"
+    }
+  ]
+}

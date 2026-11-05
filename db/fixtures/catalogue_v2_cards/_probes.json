@@ -1,0 +1,76 @@
+{
+  "_readme": [
+    "WP7 probes: cards changed by a WP7 override that have no worked-examples file (db/fixtures/card_worked_examples). snapshot_examples.js snapshots them too, and both harnesses run these probes exactly like worked examples (C6 shape; must pass; no known-failure list).",
+    "Probes are not issuer-verified worked examples: each cites the CardPipeline record text it checks. A probe card is never listed in verified_cards.json."
+  ],
+  "cards": {
+    "indigo-idfc-first-dual-card": {
+      "sources": [
+        {
+          "url": "https://www.idfcfirst.bank.in/credit-card/indigo-credit-card",
+          "doc": "CardPipeline record (emi_exclusion, government_reduced, other_spends_base)",
+          "quote": "No BluChips are awarded on transactions converted to EMI."
+        }
+      ],
+      "examples": [
+        {
+          "id": "P01",
+          "title": "Rs 10,000 electronics purchase on EMI",
+          "ctx": {
+            "amount": 10000,
+            "occurred": "2026-11-10T10:00:00+05:30",
+            "category_id": null,
+            "category_slug": "other",
+            "mcc": "5732",
+            "merchant_name": "Electronics store",
+            "merchant_vpa": null,
+            "merchant_slug": null,
+            "platform": null,
+            "rail": "emi"
+          },
+          "state_before": { "caps_by_source_id": {} },
+          "expect": { "currency": "points", "amount": 0, "value_inr": null, "excluded": true, "cap_deltas_by_source_id": {} },
+          "why": "Record: \"No BluChips are awarded on transactions converted to EMI.\" The record's emi_exclusion is already a rail-EMI exclusion on all spend (C8 D29a), so an EMI purchase in any category earns nothing."
+        },
+        {
+          "id": "P02",
+          "title": "Rs 5,000 government payment (MCC 9399)",
+          "ctx": {
+            "amount": 5000,
+            "occurred": "2026-11-10T10:00:00+05:30",
+            "category_id": null,
+            "category_slug": "government",
+            "mcc": "9399",
+            "merchant_name": "Government services",
+            "merchant_vpa": null,
+            "merchant_slug": null,
+            "platform": null,
+            "rail": "online"
+          },
+          "state_before": { "caps_by_source_id": {} },
+          "expect": { "currency": "points", "amount": 25, "value_inr": null, "excluded": false, "cap_deltas_by_source_id": {} },
+          "why": "Record: \"Government services with MCC 9000-9999 earn 0.5 BluChips per Rs100\" (the WP7 government_reduced override): 50 x 0.5 = 25, not the base 3."
+        },
+        {
+          "id": "P03",
+          "title": "Rs 5,000 other retail spend",
+          "ctx": {
+            "amount": 5000,
+            "occurred": "2026-11-10T10:00:00+05:30",
+            "category_id": null,
+            "category_slug": "other",
+            "mcc": "5651",
+            "merchant_name": "Apparel store",
+            "merchant_vpa": null,
+            "merchant_slug": null,
+            "platform": null,
+            "rail": "swipe"
+          },
+          "state_before": { "caps_by_source_id": {} },
+          "expect": { "currency": "points", "amount": 150, "value_inr": null, "excluded": false, "cap_deltas_by_source_id": {} },
+          "why": "Record base: 3 BluChips per Rs100 on other spends: 50 x 3 = 150."
+        }
+      ]
+    }
+  }
+}
