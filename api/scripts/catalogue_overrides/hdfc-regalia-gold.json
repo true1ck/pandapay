@@ -1,0 +1,26 @@
+{
+  "source_slug": "hdfc-regalia-gold",
+  "changes": [
+    {
+      "path": "reward_rules[id=select_brand_5x].conditions.payment_requirement",
+      "op": "remove",
+      "reason": "WP7: T&C: \"payment must be done directly using HDFC Bank Regalia Gold Credit Card\"; a wallet payment reaches the card as a wallet load (excluded), never as the brand, so the merchant list already enforces it. Removing it lets the 5X rule load (was info).",
+      "source_url": "https://www.hdfc.bank.in/content/dam/hdfcbankpws/in/en/personal-banking/discover-products/cards/credit-cards/regalia-gold-credit-card/pdfs/regalia-gold-credit-card-reward-points-t-and-cs.pdf",
+      "checked_on": "2026-11-05"
+    },
+    {
+      "path": "reward_rules[id=select_brand_5x].action.points_per_block",
+      "value": 25,
+      "reason": "WP7: The loader reads points_per_block as the full rule rate. T&C: 5X on the four brands with \"Base reward points ... continue as is\"; 5X of the 5 RP/Rs200 base is 25 RP/Rs200 (100 base + 400 incremental on Rs4,000 in the worked example).",
+      "source_url": "https://www.hdfc.bank.in/content/dam/hdfcbankpws/in/en/personal-banking/discover-products/cards/credit-cards/regalia-gold-credit-card/pdfs/regalia-gold-credit-card-reward-points-t-and-cs.pdf",
+      "checked_on": "2026-11-05"
+    },
+    {
+      "path": "reward_rules[id=select_brand_5x].conditions.minimum_transaction_inr",
+      "value": 200,
+      "reason": "WP7: T&C: \"Minimum transaction value to be eligible for offer or reward points is Rs. 200.\"",
+      "source_url": "https://www.hdfc.bank.in/content/dam/hdfcbankpws/in/en/personal-banking/discover-products/cards/credit-cards/regalia-gold-credit-card/pdfs/regalia-gold-credit-card-reward-points-t-and-cs.pdf",
+      "checked_on": "2026-11-05"
+    }
+  ]
+}

@@ -35,6 +35,33 @@
       "reason": "Cashback is rounded down to a whole rupee per transaction (D11).",
       "source_url": "https://www.sbicard.com/sbi-card-en/assets/docs/pdf/ekit-tncs/cashback-tnc-ekit.pdf",
       "checked_on": "2026-11-05"
+    },
+    {
+      "path": "reward_rules",
+      "op": "append",
+      "value": {
+        "id": "below_minimum_exclusion",
+        "category_id": "all_retail",
+        "priority": 0,
+        "evaluation_type": "exclusion",
+        "rail": "any",
+        "channel_type": "all",
+        "conditions": {
+          "minimum_transaction_inr": 100
+        },
+        "action": {
+          "multiplier": 0,
+          "points_per_block": null,
+          "cashback_percent": 0,
+          "cap_reference": null,
+          "reason": "Card Cashback is not applicable on transactions less than Rs100."
+        },
+        "effective_from": "2026-04-01",
+        "effective_to": null
+      },
+      "reason": "WP7: T&C booklet: \"Card Cashback is not applicable on transactions less than Rs100\" (D16b exclusion with max_txn_inr); the record had no minimum.",
+      "source_url": "https://www.sbicard.com/sbi-card-en/assets/docs/pdf/ekit-tncs/cashback-tnc-ekit.pdf",
+      "checked_on": "2026-11-05"
     }
   ]
 }

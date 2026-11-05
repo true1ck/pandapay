@@ -35,6 +35,27 @@
       "reason": "Issuer rounds the final NeuCoins to nearest whole (half up) on the exact amount (D7).",
       "source_url": "https://www.hdfc.bank.in/content/dam/hdfcbankpws/in/en/personal-banking/discover-products/cards/credit-cards/tata-neu-infinity-credit-card/pdf/tata_neu_infinity_card_tnc.pdf",
       "checked_on": "2026-11-05"
+    },
+    {
+      "path": "reward_rules[id=insurance_standard_capped].channel_type",
+      "value": "all",
+      "reason": "WP7: \"eligible_insurance\" restates the category; the rule earns the base rate on insurance and carries the 2,000 NeuCoin cap.",
+      "source_url": "https://www.hdfc.bank.in/content/dam/hdfcbankpws/in/en/personal-banking/discover-products/cards/credit-cards/tata-neu-infinity-credit-card/pdf/tata_neu_infinity_card_tnc.pdf",
+      "checked_on": "2026-11-05"
+    },
+    {
+      "path": "reward_rules[id=grocery_standard_capped].channel_type",
+      "value": "all",
+      "reason": "WP7: \"eligible_grocery\" restates the category (2,000 NeuCoin cap).",
+      "source_url": "https://www.hdfc.bank.in/content/dam/hdfcbankpws/in/en/personal-banking/discover-products/cards/credit-cards/tata-neu-infinity-credit-card/pdf/tata_neu_infinity_card_tnc.pdf",
+      "checked_on": "2026-11-05"
+    },
+    {
+      "path": "reward_rules[id=utility_standard_capped].channel_type",
+      "value": "all",
+      "reason": "WP7: \"eligible_utility\" restates the category (2,000 NeuCoin cap).",
+      "source_url": "https://www.hdfc.bank.in/content/dam/hdfcbankpws/in/en/personal-banking/discover-products/cards/credit-cards/tata-neu-infinity-credit-card/pdf/tata_neu_infinity_card_tnc.pdf",
+      "checked_on": "2026-11-05"
     }
   ]
 }

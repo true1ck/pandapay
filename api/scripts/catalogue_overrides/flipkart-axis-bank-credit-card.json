@@ -72,6 +72,13 @@
       "reason": "Cashback is rounded down per transaction (11.80 -> 11).",
       "source_url": "https://www.axis.bank.in/docs/default-source/default-document-library/cashback-tncs---final.pdf?sfvrsn=b55a0e1a_5",
       "checked_on": "2026-11-05"
+    },
+    {
+      "path": "reward_rules[id=flipkart_cashback_5].conditions.excluded_subcategory",
+      "op": "remove",
+      "reason": "WP7: Flipkart Health+ is now its own directory merchant (flipkart_health, no parent), so a Flipkart Health spend never resolves to flipkart; the free-text sub-category made the 5% Flipkart rule info.",
+      "source_url": "https://www.axis.bank.in/docs/default-source/default-document-library/cashback-tncs---final.pdf?sfvrsn=b55a0e1a_5",
+      "checked_on": "2026-11-05"
     }
   ]
 }

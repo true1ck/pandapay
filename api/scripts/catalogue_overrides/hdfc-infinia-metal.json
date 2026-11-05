@@ -56,6 +56,97 @@
       "reason": "Points above the cap are not earned at all.",
       "source_url": "https://www.hdfc.bank.in/content/dam/hdfcbankpws/in/en/personal-banking/discover-products/cards/credit-cards/personal-mitc/mitc-in-english.pdf",
       "checked_on": "2026-11-05"
+    },
+    {
+      "path": "reward_rules[id=smartbuy-up-to-10x].category_id",
+      "value": "smartbuy_10x",
+      "reason": "WP7: D8b: SmartBuy pays per travel type, never one \"up to\" rule. This row becomes the 10X hotels rule (same shape as the Diners Black Metal source).",
+      "source_url": "https://offers.smartbuy.hdfc.bank.in/v2/accelerated-earn-rules",
+      "checked_on": "2026-11-05"
+    },
+    {
+      "path": "reward_rules[id=smartbuy-up-to-10x].conditions",
+      "value": {
+        "merchant_categories": [
+          "hotels"
+        ]
+      },
+      "reason": "WP7: D8b: 10X on SmartBuy hotel bookings (hotel MCCs).",
+      "source_url": "https://offers.smartbuy.hdfc.bank.in/v2/accelerated-earn-rules",
+      "checked_on": "2026-11-05"
+    },
+    {
+      "path": "reward_rules[id=smartbuy-up-to-10x].action.reason",
+      "value": "10X Reward Points (50 RP per Rs150) on SmartBuy hotel bookings.",
+      "reason": "WP7: Drop the \"up to\" wording now that the row is one travel type.",
+      "source_url": "https://offers.smartbuy.hdfc.bank.in/v2/accelerated-earn-rules",
+      "checked_on": "2026-11-05"
+    },
+    {
+      "path": "reward_rules",
+      "op": "append",
+      "value": {
+        "id": "smartbuy-5x-flights",
+        "category_id": "smartbuy_5x",
+        "priority": 21,
+        "evaluation_type": "accelerator",
+        "rail": "smartbuy_or_equivalent_portal",
+        "channel_type": "all",
+        "conditions": {
+          "merchant_categories": [
+            "flights"
+          ]
+        },
+        "action": {
+          "multiplier": 5,
+          "points_per_block": 25,
+          "cashback_percent": null,
+          "cap_reference": "smartbuy-accelerated-rp",
+          "reason": "5X Reward Points (25 RP per Rs150) on SmartBuy flight bookings."
+        },
+        "effective_from": "2026-08-18",
+        "effective_to": null
+      },
+      "reason": "WP7: D8b: SmartBuy flights are 5X for Infinia (research note on the SmartBuy accelerated-earn page); counts to the 15,000/month SmartBuy cap.",
+      "source_url": "https://offers.smartbuy.hdfc.bank.in/v2/accelerated-earn-rules",
+      "checked_on": "2026-11-05"
+    },
+    {
+      "path": "reward_rules",
+      "op": "append",
+      "value": {
+        "id": "smartbuy-3x-trains",
+        "category_id": "smartbuy_3x",
+        "priority": 22,
+        "evaluation_type": "accelerator",
+        "rail": "smartbuy_or_equivalent_portal",
+        "channel_type": "all",
+        "conditions": {
+          "merchant_categories": [
+            "trains",
+            "IRCTC"
+          ]
+        },
+        "action": {
+          "multiplier": 3,
+          "points_per_block": 15,
+          "cashback_percent": null,
+          "cap_reference": "smartbuy-accelerated-rp",
+          "reason": "3X Reward Points (15 RP per Rs150) on SmartBuy train bookings."
+        },
+        "effective_from": "2026-08-18",
+        "effective_to": null
+      },
+      "reason": "WP7: D8b: SmartBuy trains are 3X (research note on the SmartBuy accelerated-earn page).",
+      "source_url": "https://offers.smartbuy.hdfc.bank.in/v2/accelerated-earn-rules",
+      "checked_on": "2026-11-05"
+    },
+    {
+      "path": "reward_rules[id=smartbuy-up-to-10x].id",
+      "value": "smartbuy-10x-hotels",
+      "reason": "WP7: Rename last: the old id (\"up-to-10x\") still tripped the loader's multi-rate \"up to\" check after the row became the single 10X hotels rate.",
+      "source_url": "https://offers.smartbuy.hdfc.bank.in/v2/accelerated-earn-rules",
+      "checked_on": "2026-11-05"
     }
   ]
 }

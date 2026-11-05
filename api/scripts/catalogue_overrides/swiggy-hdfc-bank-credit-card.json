@@ -70,6 +70,34 @@
       "reason": "Cashback is rounded to the nearest whole rupee per transaction (15.3 to 15, 15.6 to 16) (D11).",
       "source_url": "https://www.hdfc.bank.in/content/dam/hdfcbankpws/in/en/personal-banking/discover-products/cards/credit-cards/swiggy-hdfc-bank-credit-card/pdf/terms-and-conditions-swiggy-hdfc-bank-credit-card-18092026.pdf",
       "checked_on": "2026-11-05"
+    },
+    {
+      "path": "reward_rules",
+      "op": "append",
+      "value": {
+        "id": "swiggy_below_minimum_exclusion",
+        "category_id": "all_retail",
+        "priority": 0,
+        "evaluation_type": "exclusion",
+        "rail": "any",
+        "channel_type": "all",
+        "conditions": {
+          "merchant": "Swiggy",
+          "minimum_transaction_inr": 249
+        },
+        "action": {
+          "multiplier": 0,
+          "points_per_block": null,
+          "cashback_percent": 0,
+          "cap_reference": null,
+          "reason": "Swiggy transactions below Rs249 earn no cashback."
+        },
+        "effective_from": "2026-04-21",
+        "effective_to": null
+      },
+      "reason": "WP7: T&C 4.1: from 21 Apr 2026 the 10% Swiggy category needs at least Rs249; issuer worked example: a Rs150 Swiggy order earns 0 (not the 1% other rate). D16b: a no-reward-below-minimum term is an exclusion with max_txn_inr.",
+      "source_url": "https://www.hdfc.bank.in/content/dam/hdfcbankpws/in/en/personal-banking/discover-products/cards/credit-cards/swiggy-hdfc-bank-credit-card/pdf/terms-and-conditions-swiggy-hdfc-bank-credit-card-18092026.pdf",
+      "checked_on": "2026-11-05"
     }
   ]
 }

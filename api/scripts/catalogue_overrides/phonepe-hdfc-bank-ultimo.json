@@ -16,6 +16,27 @@
       "reason": "Issuer MCC list excludes 5262 and 7999.",
       "source_url": "https://www.hdfc.bank.in/content/dam/hdfcbankpws/in/en/personal-banking/discover-products/cards/credit-cards/phonepe-hdfc-bank-ultimo-credit-card/phonepe-hdfc-bank-ultimo-cc-reward-points-tncs.pdf",
       "checked_on": "2026-11-05"
+    },
+    {
+      "path": "reward_rules[id=scan_pay_1pct].conditions.transaction_type",
+      "op": "remove",
+      "reason": "WP7: \"UPI Scan & Pay\" restates rail upi_qr.",
+      "source_url": "https://www.hdfc.bank.in/content/dam/hdfcbankpws/in/en/personal-banking/discover-products/cards/credit-cards/phonepe-hdfc-bank-ultimo-credit-card/phonepe-hdfc-bank-ultimo-cc-reward-points-tncs.pdf",
+      "checked_on": "2026-11-05"
+    },
+    {
+      "path": "reward_rules[id=scan_pay_1pct].conditions.network",
+      "op": "remove",
+      "reason": "WP7: The card is a RuPay card; network restates the card.",
+      "source_url": "https://www.hdfc.bank.in/content/dam/hdfcbankpws/in/en/personal-banking/discover-products/cards/credit-cards/phonepe-hdfc-bank-ultimo-credit-card/phonepe-hdfc-bank-ultimo-cc-reward-points-tncs.pdf",
+      "checked_on": "2026-11-05"
+    },
+    {
+      "path": "reward_rules[id=scan_pay_1pct].conditions.merchant_payment",
+      "op": "remove",
+      "reason": "WP7: P2M restates a merchant QR payment (rail upi_qr).",
+      "source_url": "https://www.hdfc.bank.in/content/dam/hdfcbankpws/in/en/personal-banking/discover-products/cards/credit-cards/phonepe-hdfc-bank-ultimo-credit-card/phonepe-hdfc-bank-ultimo-cc-reward-points-tncs.pdf",
+      "checked_on": "2026-11-05"
     }
   ]
 }

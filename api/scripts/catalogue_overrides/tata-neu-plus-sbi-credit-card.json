@@ -63,6 +63,31 @@
       "reason": "Issuer rounds the exact-amount NeuCoins down to a whole number (D7).",
       "source_url": "https://www.sbicard.com/sbi-card-en/assets/docs/pdf/ekit-tncs/Tata-Neu-Plus-Booklet.pdf",
       "checked_on": "2026-11-05"
+    },
+    {
+      "path": "reward_rules[id=base-other-eligible-spends].conditions",
+      "value": {
+        "excluded_categories": [
+          "emi"
+        ]
+      },
+      "reason": "WP7: \"exclude_reward_exclusions\" restates the card's exclusion rules; \"exclude_emi\" kept as an excluded category. The rule pays the base 1% the implicit base already paid, so nothing widens; it was an info earning rule.",
+      "source_url": "https://www.sbicard.com/sbi-card-en/assets/docs/pdf/ekit-tncs/Tata-Neu-Plus-Booklet.pdf",
+      "checked_on": "2026-11-05"
+    },
+    {
+      "path": "reward_rules[id=rupay-upi-1pct].conditions.network",
+      "op": "remove",
+      "reason": "WP7: Replaced by card_variant below: UPI earn applies only to the RuPay variant of the card (research note).",
+      "source_url": "https://www.sbicard.com/sbi-card-en/assets/docs/pdf/ekit-tncs/Tata-Neu-Plus-Booklet.pdf",
+      "checked_on": "2026-11-05"
+    },
+    {
+      "path": "reward_rules[id=rupay-upi-1pct].conditions.card_variant",
+      "value": "RuPay",
+      "reason": "WP7: D13b: the rule depends on which card variant the user holds (RuPay only), a user attribute the context does not carry; stays info with depends_on_user_attribute.",
+      "source_url": "https://www.sbicard.com/sbi-card-en/assets/docs/pdf/ekit-tncs/Tata-Neu-Plus-Booklet.pdf",
+      "checked_on": "2026-11-05"
     }
   ]
 }

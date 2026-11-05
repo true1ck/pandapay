@@ -1,0 +1,12 @@
+{
+  "source_slug": "axis-bank-magnus",
+  "changes": [
+    {
+      "path": "reward_rules[id=travel_edge_60].conditions.monthly_travel_edge_spend",
+      "op": "remove",
+      "reason": "WP7: \"Up to Rs2,00,000\" restates the travel_edge_200k_spend cap (base rate above); the rule was info.",
+      "source_url": "https://www.axis.bank.in/docs/default-source/default-document-library/credit-card-tnc/terms-and-conditions-for-magnus-credit-card.pdf?sfvrsn=1d8117ef_1",
+      "checked_on": "2026-11-05"
+    }
+  ]
+}

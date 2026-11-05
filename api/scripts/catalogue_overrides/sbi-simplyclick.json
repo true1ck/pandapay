@@ -1,0 +1,47 @@
+{
+  "source_slug": "sbi-simplyclick",
+  "changes": [
+    {
+      "path": "reward_rules[id=online_5x].conditions.online_flag",
+      "op": "remove",
+      "reason": "WP7: Restates rail online.",
+      "source_url": "https://www.sbicard.com/sbi-card-en/assets/docs/pdf/SimplyClick-TnC.pdf",
+      "checked_on": "2026-11-05"
+    },
+    {
+      "path": "reward_rules[id=online_5x].conditions.exclusive_partner",
+      "op": "remove",
+      "reason": "WP7: Exclusive partners have their own higher-priority 10X rule; the negated flag made the 5X rule info.",
+      "source_url": "https://www.sbicard.com/sbi-card-en/assets/docs/pdf/SimplyClick-TnC.pdf",
+      "checked_on": "2026-11-05"
+    },
+    {
+      "path": "reward_rules[id=offline_fuel_exclusion].channel_type",
+      "value": "all",
+      "reason": "WP7: Same as the rail change below: \"offline\" is not an exact rail, so the fuel-MCC exclusion applies on every rail (conservative).",
+      "source_url": "https://www.sbicard.com/sbi-card-en/assets/docs/pdf/SimplyClick-TnC.pdf",
+      "checked_on": "2026-11-05"
+    },
+    {
+      "path": "reward_rules[id=offline_fuel_exclusion].rail",
+      "value": "any",
+      "reason": "WP7: T&C 11.1(f): offline fuel (5172, 5541, 5983, 5542) is not in the program. The swipe-only rail was inexact (rule was info); excluding these MCCs on every rail is the conservative reading.",
+      "source_url": "https://www.sbicard.com/sbi-card-en/assets/docs/pdf/SimplyClick-TnC.pdf",
+      "checked_on": "2026-11-05"
+    },
+    {
+      "path": "cap_rules[id=cap_exclusive_10x_monthly]",
+      "op": "remove",
+      "reason": "WP7: T&C 11.1(h) caps only the 5X tier at 10,000 RP per month; no cap is stated for 10X (research note).",
+      "source_url": "https://www.sbicard.com/sbi-card-en/assets/docs/pdf/SimplyClick-TnC.pdf",
+      "checked_on": "2026-11-05"
+    },
+    {
+      "path": "reward_rules[id=exclusive_partner_10x].action.cap_reference",
+      "value": null,
+      "reason": "WP7: Its cap is removed (no 10X cap in the T&C).",
+      "source_url": "https://www.sbicard.com/sbi-card-en/assets/docs/pdf/SimplyClick-TnC.pdf",
+      "checked_on": "2026-11-05"
+    }
+  ]
+}

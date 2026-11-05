@@ -1,0 +1,12 @@
+{
+  "source_slug": "icici-sapphiro",
+  "changes": [
+    {
+      "path": "reward_rules[id=grocery_standard].conditions",
+      "value": {},
+      "reason": "WP7: The condition restated the grocery/departmental category; the rule earns the domestic rate and carries the Rs40,000 grocery cap (MITC capped-MCC table). Rule was info, so the cap never applied.",
+      "source_url": "https://www.icicibank.com/managed-assets/docs/personal/cards/mitc_cc.pdf",
+      "checked_on": "2026-11-05"
+    }
+  ]
+}

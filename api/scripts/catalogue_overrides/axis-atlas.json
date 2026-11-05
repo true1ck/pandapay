@@ -1,0 +1,37 @@
+{
+  "source_slug": "axis-atlas",
+  "changes": [
+    {
+      "path": "reward_rules",
+      "op": "append",
+      "value": {
+        "id": "travel-edge-portal",
+        "category_id": "all_retail",
+        "priority": 10,
+        "evaluation_type": "accelerator",
+        "rail": "smartbuy_or_equivalent_portal",
+        "channel_type": "Axis Bank Travel EDGE",
+        "conditions": {},
+        "action": {
+          "multiplier": 2.5,
+          "points_per_block": 5,
+          "cashback_percent": null,
+          "cap_reference": "travel-accelerated-monthly-spend-cap",
+          "reason": "5 EDGE Miles per Rs100 on Axis Bank Travel EDGE bookings, up to Rs2,00,000 cumulative travel spend per month."
+        },
+        "effective_from": "2024-04-20",
+        "effective_to": null
+      },
+      "reason": "WP7: T&C: 5 EDGE Miles per Rs100 on Travel EDGE, direct airline and hotel spends up to Rs2,00,000 a month. The Travel EDGE alternative of travel-accelerated was dropped by the loader (merchant id text, partial_alternatives); restated as its own platform rule sharing the same cap.",
+      "source_url": "https://www.axis.bank.in/docs/default-source/atlas-credit-card/terms-and-conditions-of-features-of-axis-bank-atlas-credit-card.pdf",
+      "checked_on": "2026-11-05"
+    },
+    {
+      "path": "reward_rules[id=travel-above-monthly-cap]",
+      "op": "remove",
+      "reason": "WP7: Restates the cap's post-limit behaviour (base 2 Miles above Rs2,00,000), which travel-accelerated-monthly-spend-cap already models (base_rate); as an info rule it only blocked verification.",
+      "source_url": "https://www.axis.bank.in/docs/default-source/atlas-credit-card/terms-and-conditions-of-features-of-axis-bank-atlas-credit-card.pdf",
+      "checked_on": "2026-11-05"
+    }
+  ]
+}

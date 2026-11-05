@@ -23,6 +23,62 @@
       "reason": "T&C list no base earning on other spends.",
       "source_url": "https://www.hdfc.bank.in/content/dam/hdfcbankpws/in/en/personal-banking/discover-products/cards/credit-cards/phonepe-hdfc-bank-uno-credit-card-/phonepe-hdfc-bank-uno-cc-reward-points-tncs.pdf",
       "checked_on": "2026-11-05"
+    },
+    {
+      "path": "reward_rules[id=phonepe_categories_2pct].conditions.categories",
+      "op": "remove",
+      "reason": "WP7: The issuer MCC list (already overridden) defines the PhonePe categories exactly; the free-text category names conflicted with it (restriction_conflict -> info).",
+      "source_url": "https://www.hdfc.bank.in/content/dam/hdfcbankpws/in/en/personal-banking/discover-products/cards/credit-cards/phonepe-hdfc-bank-uno-credit-card-/phonepe-hdfc-bank-uno-cc-reward-points-tncs.pdf",
+      "checked_on": "2026-11-05"
+    },
+    {
+      "path": "reward_rules[id=phonepe_categories_2pct].conditions.pincode_condition",
+      "op": "remove",
+      "reason": "WP7: PINCODE note restates the RuPay-on-UPI channel; not a restriction on PhonePe-app category spends.",
+      "source_url": "https://www.hdfc.bank.in/content/dam/hdfcbankpws/in/en/personal-banking/discover-products/cards/credit-cards/phonepe-hdfc-bank-uno-credit-card-/phonepe-hdfc-bank-uno-cc-reward-points-tncs.pdf",
+      "checked_on": "2026-11-05"
+    },
+    {
+      "path": "reward_rules[id=rupay_upi_scan_pay_1pct].conditions.transaction_type",
+      "op": "remove",
+      "reason": "WP7: \"Scan and Pay\" restates rail upi_qr.",
+      "source_url": "https://www.hdfc.bank.in/content/dam/hdfcbankpws/in/en/personal-banking/discover-products/cards/credit-cards/phonepe-hdfc-bank-uno-credit-card-/phonepe-hdfc-bank-uno-cc-reward-points-tncs.pdf",
+      "checked_on": "2026-11-05"
+    },
+    {
+      "path": "reward_rules[id=rupay_upi_scan_pay_1pct].conditions.network",
+      "op": "remove",
+      "reason": "WP7: The card is a RuPay card; network restates the card.",
+      "source_url": "https://www.hdfc.bank.in/content/dam/hdfcbankpws/in/en/personal-banking/discover-products/cards/credit-cards/phonepe-hdfc-bank-uno-credit-card-/phonepe-hdfc-bank-uno-cc-reward-points-tncs.pdf",
+      "checked_on": "2026-11-05"
+    },
+    {
+      "path": "reward_rules[id=rupay_upi_scan_pay_1pct].channel_type",
+      "value": "all",
+      "reason": "WP7: \"RuPay credit card on UPI\" restates this RuPay card on rail upi_qr; it was read as a payment-app platform, so Scan & Pay never matched.",
+      "source_url": "https://www.hdfc.bank.in/content/dam/hdfcbankpws/in/en/personal-banking/discover-products/cards/credit-cards/phonepe-hdfc-bank-uno-credit-card-/phonepe-hdfc-bank-uno-cc-reward-points-tncs.pdf",
+      "checked_on": "2026-11-05"
+    },
+    {
+      "path": "cap_rules[id=phonepe_2pct_monthly_cap].metric",
+      "value": "total_reward_points",
+      "reason": "WP7: T&C: \"Capping of 500 reward points per calendar month\" on the category. The card has no base earn (base 0 override), so bonus = total; total removes the bonus-then-zero conflict flag.",
+      "source_url": "https://www.hdfc.bank.in/content/dam/hdfcbankpws/in/en/personal-banking/discover-products/cards/credit-cards/phonepe-hdfc-bank-uno-credit-card-/phonepe-hdfc-bank-uno-cc-reward-points-tncs.pdf",
+      "checked_on": "2026-11-05"
+    },
+    {
+      "path": "cap_rules[id=online_brands_1pct_monthly_cap].metric",
+      "value": "total_reward_points",
+      "reason": "WP7: Same as phonepe_2pct_monthly_cap (base 0).",
+      "source_url": "https://www.hdfc.bank.in/content/dam/hdfcbankpws/in/en/personal-banking/discover-products/cards/credit-cards/phonepe-hdfc-bank-uno-credit-card-/phonepe-hdfc-bank-uno-cc-reward-points-tncs.pdf",
+      "checked_on": "2026-11-05"
+    },
+    {
+      "path": "cap_rules[id=upi_scan_pay_1pct_monthly_cap].metric",
+      "value": "total_reward_points",
+      "reason": "WP7: Same as phonepe_2pct_monthly_cap (base 0).",
+      "source_url": "https://www.hdfc.bank.in/content/dam/hdfcbankpws/in/en/personal-banking/discover-products/cards/credit-cards/phonepe-hdfc-bank-uno-credit-card-/phonepe-hdfc-bank-uno-cc-reward-points-tncs.pdf",
+      "checked_on": "2026-11-05"
     }
   ]
 }

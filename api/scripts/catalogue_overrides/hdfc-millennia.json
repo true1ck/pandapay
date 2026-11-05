@@ -56,6 +56,30 @@
       "reason": "Model as points, not cashback percent (D8a).",
       "source_url": "https://www.hdfc.bank.in/content/dam/hdfcbankpws/in/en/personal-banking/discover-products/cards/credit-cards/millennia-credit-card/pdf/millennia-tnc-20th-jul26.pdf",
       "checked_on": "2026-11-05"
+    },
+    {
+      "path": "reward_rules[id=millennia-5pct-select-merchants].conditions.uber_mcc",
+      "op": "remove",
+      "reason": "WP7: Uber is modelled by its own rule millennia-uber-mcc4121 (issuer: only MCC 4121 Uber qualifies); the extra key made the 10-merchant rule info.",
+      "source_url": "https://www.hdfc.bank.in/content/dam/hdfcbankpws/in/en/personal-banking/discover-products/cards/credit-cards/millennia-credit-card/pdf/millennia-tnc-20th-jul26.pdf",
+      "checked_on": "2026-11-05"
+    },
+    {
+      "path": "reward_rules[id=millennia-5pct-select-merchants].conditions.merchant_names",
+      "value": [
+        "Amazon",
+        "BookMyShow",
+        "Cult.fit",
+        "Flipkart",
+        "Myntra",
+        "Sony LIV",
+        "Swiggy",
+        "Tata CLiQ",
+        "Zomato"
+      ],
+      "reason": "WP7: Uber moves to millennia-uber-mcc4121 (MCC 4121 only), so Uber Eats never earns 5% here.",
+      "source_url": "https://www.hdfc.bank.in/content/dam/hdfcbankpws/in/en/personal-banking/discover-products/cards/credit-cards/millennia-credit-card/pdf/millennia-tnc-20th-jul26.pdf",
+      "checked_on": "2026-11-05"
     }
   ]
 }

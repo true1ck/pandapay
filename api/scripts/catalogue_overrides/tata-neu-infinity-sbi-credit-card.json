@@ -42,6 +42,81 @@
       "reason": "Source holds the string N/A.",
       "source_url": "https://www.sbicard.com/sbi-card-en/assets/docs/pdf/ekit-tncs/Tata-Neu-Infinity-Booklet.pdf",
       "checked_on": "2026-11-05"
+    },
+    {
+      "path": "reward_rules",
+      "op": "append",
+      "value": {
+        "id": "grocery-standard-capped",
+        "category_id": "grocery",
+        "priority": 50,
+        "evaluation_type": "standard_accrual",
+        "rail": "any",
+        "channel_type": "all",
+        "conditions": {},
+        "action": {
+          "multiplier": 1,
+          "points_per_block": 1.5,
+          "cashback_percent": "N/A",
+          "cap_reference": "cap-grocery-monthly-2000",
+          "reason": "Grocery earns the base 1.5% as NeuCoins, capped at 2,000 NeuCoins per month."
+        },
+        "effective_from": "2025-04-16",
+        "effective_to": null
+      },
+      "reason": "WP7: T&C booklet: \"Maximum Capping per month on NeuCoins ... Grocery, Insurance, Utility, Telecom and cable\" - the cap covers all NeuCoins in the category, but the record tied it only to the extra-5% Tata Neu app rule (info). Base-rate rule carrying the cap.",
+      "source_url": "https://www.sbicard.com/sbi-card-en/assets/docs/pdf/ekit-tncs/Tata-Neu-Infinity-Booklet.pdf",
+      "checked_on": "2026-11-05"
+    },
+    {
+      "path": "reward_rules",
+      "op": "append",
+      "value": {
+        "id": "insurance-standard-capped",
+        "category_id": "insurance",
+        "priority": 50,
+        "evaluation_type": "standard_accrual",
+        "rail": "any",
+        "channel_type": "all",
+        "conditions": {},
+        "action": {
+          "multiplier": 1,
+          "points_per_block": 1.5,
+          "cashback_percent": "N/A",
+          "cap_reference": "cap-insurance-monthly-2000",
+          "reason": "Insurance earns the base 1.5% as NeuCoins, capped at 2,000 NeuCoins per month."
+        },
+        "effective_from": "2025-04-16",
+        "effective_to": null
+      },
+      "reason": "WP7: Same as grocery-standard-capped (insurance cap).",
+      "source_url": "https://www.sbicard.com/sbi-card-en/assets/docs/pdf/ekit-tncs/Tata-Neu-Infinity-Booklet.pdf",
+      "checked_on": "2026-11-05"
+    },
+    {
+      "path": "reward_rules",
+      "op": "append",
+      "value": {
+        "id": "utility-standard-capped",
+        "category_id": "utility",
+        "priority": 50,
+        "evaluation_type": "standard_accrual",
+        "rail": "any",
+        "channel_type": "all",
+        "conditions": {},
+        "action": {
+          "multiplier": 1,
+          "points_per_block": 1.5,
+          "cashback_percent": "N/A",
+          "cap_reference": "cap-utility-monthly-2000",
+          "reason": "Utilities earn the base 1.5% as NeuCoins, capped at 2,000 NeuCoins per month."
+        },
+        "effective_from": "2025-04-16",
+        "effective_to": null
+      },
+      "reason": "WP7: Same as grocery-standard-capped (utility cap).",
+      "source_url": "https://www.sbicard.com/sbi-card-en/assets/docs/pdf/ekit-tncs/Tata-Neu-Infinity-Booklet.pdf",
+      "checked_on": "2026-11-05"
     }
   ]
 }
