@@ -950,6 +950,40 @@
       "reason": "WP7: D29c: BigBasket partner NeuCoins count toward the 1,000 NeuCoin grocery cap (grocery_monthly_1000; WP7's conservative reading, kept by D29b). Modelled as a child of that cap, so grocery_monthly_1000 keeps its single target and stays visible to the v1 feed with its pre-WP7 reach; the child itself is v2-only (its target is).",
       "source_url": "https://www.hdfc.bank.in/content/dam/hdfcbankpws/in/en/personal-banking/discover-products/cards/credit-cards/tata-neu-plus-hdfc-bank-credit-card/pdfs/tata_neu_plus_card_tnc.pdf",
       "checked_on": "2026-11-05"
+    },
+    {
+      "path": "reward_rules[id=upi_other_id].conditions",
+      "value": {
+        "mcc_exclude": [
+          6513,
+          9311,
+          9399
+        ]
+      },
+      "reason": "WP7: D29d: T&C: \"0.25% back as NeuCoins for transactions done using any UPI ID (Google Pay, PhonePe, Cred, etc.)\"; the \"Additional 0.75% ... if the transaction is done using the Tata Neu UPI ID\" is the separate info rule. The UPI-ID/eligibility conditions made this rule info, so a non-partner UPI spend earned the base rate. mcc_exclude restates the card's rental/government MCC exclusion and keeps this UPI-rail rule v2-only (D24b): v1 treats an unknown rail as a match.",
+      "source_url": "https://www.hdfc.bank.in/content/dam/hdfcbankpws/in/en/personal-banking/discover-products/cards/credit-cards/tata-neu-plus-hdfc-bank-credit-card/pdfs/tata_neu_plus_card_tnc.pdf",
+      "checked_on": "2026-11-05"
+    },
+    {
+      "path": "reward_rules[id=upi_other_id].channel_type",
+      "value": "all",
+      "reason": "WP7: D29d: the UPI rail carries it (see conditions).",
+      "source_url": "https://www.hdfc.bank.in/content/dam/hdfcbankpws/in/en/personal-banking/discover-products/cards/credit-cards/tata-neu-plus-hdfc-bank-credit-card/pdfs/tata_neu_plus_card_tnc.pdf",
+      "checked_on": "2026-11-05"
+    },
+    {
+      "path": "reward_rules[id=upi_other_id].priority",
+      "value": 12,
+      "reason": "WP7: D29d: the UPI rate applies to \"Any UPI Spends\", so it outranks the capped category rules and the base rule; the partner UPI carve-out (9, same rate) still takes partner spends.",
+      "source_url": "https://www.hdfc.bank.in/content/dam/hdfcbankpws/in/en/personal-banking/discover-products/cards/credit-cards/tata-neu-plus-hdfc-bank-credit-card/pdfs/tata_neu_plus_card_tnc.pdf",
+      "checked_on": "2026-11-05"
+    },
+    {
+      "path": "cap_rules[id=upi_monthly_500].metric",
+      "value": "total_reward_points",
+      "reason": "WP7: D29d: T&C: \"The total NeuCoins earned on eligible UPI transactions are capped to 500 NeuCoins per month\". A bonus cap never binds on a UPI rate below the base rate (C3.5 bonus = 0), so the 500 cap is a total cap (as the Infinity record has it).",
+      "source_url": "https://www.hdfc.bank.in/content/dam/hdfcbankpws/in/en/personal-banking/discover-products/cards/credit-cards/tata-neu-plus-hdfc-bank-credit-card/pdfs/tata_neu_plus_card_tnc.pdf",
+      "checked_on": "2026-11-05"
     }
   ]
 }

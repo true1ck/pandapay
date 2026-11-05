@@ -4,7 +4,7 @@
   "inputs": {
     "transform_version": "7",
     "source_record_sha256": "93890edb87a631081cfe42490e8b5b7e0183887b346200ba6b50a4e3d1500cc4",
-    "override_sha256": "170e7737046be3b96c6c2081f29dadfb0d53f30a9b6fb8786723587dd6b6fa68",
+    "override_sha256": "adaedfd9686276a0141b8f70cd237aa43abd8c3118e36a34ea6902fbeea6b179",
     "directory_sha256": "b1094d54b77e848d22f7a9a64f3ae6d1ef43ca3eb2fc8e40cd43ed1994664694",
     "verified": false
   },
@@ -28,8 +28,8 @@
     "model_status": "partial",
     "model_coverage": {
       "rules_total": 31,
-      "rules_modelled": 23,
-      "rules_info": 8,
+      "rules_modelled": 24,
+      "rules_info": 7,
       "caps_total": 19,
       "caps_enforced": 19,
       "flags": [
@@ -81,26 +81,6 @@
         {
           "code": "bonus_only_exclusion",
           "source_local_id": "neupass_excluded_tanishq_tatapay_cultfit_airindia_tataplay",
-          "detail": null
-        },
-        {
-          "code": "info_rule",
-          "source_local_id": "upi_generic",
-          "detail": "condition:clause:upi_variant"
-        },
-        {
-          "code": "info_rule",
-          "source_local_id": "upi_generic",
-          "detail": "condition:clause:eligible_for_upi_rewards"
-        },
-        {
-          "code": "info_rule",
-          "source_local_id": "upi_generic",
-          "detail": "condition:channel_type"
-        },
-        {
-          "code": "depends_on_user_attribute",
-          "source_local_id": "upi_generic",
           "detail": null
         },
         {
@@ -535,6 +515,30 @@
           "reason": "WP7: D29c: BigBasket partner NeuCoins count toward the 2,000 NeuCoin grocery cap (grocery_monthly_2000; WP7's conservative reading, kept by D29b). Modelled as a child of that cap, so grocery_monthly_2000 keeps its single target and stays visible to the v1 feed with its pre-WP7 reach; the child itself is v2-only (its target is).",
           "source_url": "https://www.hdfc.bank.in/content/dam/hdfcbankpws/in/en/personal-banking/discover-products/cards/credit-cards/tata-neu-infinity-credit-card/pdf/tata_neu_infinity_card_tnc.pdf",
           "checked_on": "2026-11-05"
+        },
+        {
+          "path": "reward_rules[id=upi_generic].conditions",
+          "op": "set",
+          "value_sha256": "8aa93f2e26dd1b1a",
+          "reason": "WP7: D29d: T&C: \"0.50% back as NeuCoins for transactions done using any UPI ID (Google Pay, PhonePe, Cred, etc.)\"; the \"Additional 1% ... if the transaction is done using the Tata Neu UPI ID\" is the separate info rule. The UPI-ID/eligibility conditions made this rule info, so a non-partner UPI spend earned the base rate. mcc_exclude restates the card's rental/government MCC exclusion and keeps this UPI-rail rule v2-only (D24b): v1 treats an unknown rail as a match.",
+          "source_url": "https://www.hdfc.bank.in/content/dam/hdfcbankpws/in/en/personal-banking/discover-products/cards/credit-cards/tata-neu-infinity-credit-card/pdf/tata_neu_infinity_card_tnc.pdf",
+          "checked_on": "2026-11-05"
+        },
+        {
+          "path": "reward_rules[id=upi_generic].channel_type",
+          "op": "set",
+          "value_sha256": "5cf7504d9781301d",
+          "reason": "WP7: D29d: the UPI rail carries it (see conditions).",
+          "source_url": "https://www.hdfc.bank.in/content/dam/hdfcbankpws/in/en/personal-banking/discover-products/cards/credit-cards/tata-neu-infinity-credit-card/pdf/tata_neu_infinity_card_tnc.pdf",
+          "checked_on": "2026-11-05"
+        },
+        {
+          "path": "reward_rules[id=upi_generic].priority",
+          "op": "set",
+          "value_sha256": "6b51d431df5d7f14",
+          "reason": "WP7: D29d: the UPI rate applies to \"Any UPI Spends\", so it outranks the capped category rules and the base rule; the partner UPI carve-out (9, same rate) still takes partner spends.",
+          "source_url": "https://www.hdfc.bank.in/content/dam/hdfcbankpws/in/en/personal-banking/discover-products/cards/credit-cards/tata-neu-infinity-credit-card/pdf/tata_neu_infinity_card_tnc.pdf",
+          "checked_on": "2026-11-05"
         }
       ]
     },
@@ -790,28 +794,28 @@
         "rate": 0.5,
         "min_txn_inr": null,
         "max_txn_inr": null,
-        "priority": 50,
+        "priority": 12,
         "conditions": {
           "source_local_id": "upi_generic",
           "part": null,
-          "info_reasons": [
-            "condition:clause:upi_variant",
-            "condition:clause:eligible_for_upi_rewards",
-            "condition:channel_type"
-          ],
+          "info_reasons": [],
           "flags": [
-            "depends_on_user_attribute"
+            "reduced_rate_no_v1_row"
           ]
         },
         "notes": null,
         "effective_from": "2024-08-01",
         "effective_to": null,
         "excluded_categories": [],
-        "rule_role": "info",
+        "rule_role": "earn",
         "merchant_slugs": [],
         "platform_slugs": [],
         "mcc_include": [],
-        "mcc_exclude": [],
+        "mcc_exclude": [
+          "6513",
+          "9311",
+          "9399"
+        ],
         "except_merchant_slugs": [],
         "except_platform_slugs": [],
         "block_inr": null,

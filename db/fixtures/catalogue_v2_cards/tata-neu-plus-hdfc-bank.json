@@ -4,13 +4,12 @@
   "inputs": {
     "transform_version": "7",
     "source_record_sha256": "657a9e89e7d34f8d89df45dcb26ec07ee33619ef2b1f7043b0f1f4710240916d",
-    "override_sha256": "aae6df5735a962947096e1a8814c536a1645031d6268ead325a47d268ba6bbde",
+    "override_sha256": "5d57b0b20b63220a9470ffaa1e00b02579c02c1a13f039549565e8b4d35ee408",
     "directory_sha256": "b1094d54b77e848d22f7a9a64f3ae6d1ef43ca3eb2fc8e40cd43ed1994664694",
     "verified": false
   },
   "blocking_flags": [
-    "info_rule",
-    "post_limit_conflict"
+    "info_rule"
   ],
   "card": {
     "id": "tata-neu-plus-hdfc-bank:card",
@@ -29,8 +28,8 @@
     "model_status": "partial",
     "model_coverage": {
       "rules_total": 30,
-      "rules_modelled": 22,
-      "rules_info": 8,
+      "rules_modelled": 23,
+      "rules_info": 7,
       "caps_total": 19,
       "caps_enforced": 19,
       "flags": [
@@ -63,11 +62,6 @@
           "code": "depends_on_user_attribute",
           "source_local_id": "neupass_selected_tata_neu",
           "detail": null
-        },
-        {
-          "code": "info_rule",
-          "source_local_id": "upi_other_id",
-          "detail": "condition:upi_id"
         },
         {
           "code": "info_rule",
@@ -167,11 +161,6 @@
         {
           "code": "partial_merchant_list",
           "source_local_id": "tata_partner_upi_wp7",
-          "detail": null
-        },
-        {
-          "code": "post_limit_conflict",
-          "source_local_id": "upi_monthly_500",
           "detail": null
         }
       ],
@@ -567,6 +556,38 @@
           "reason": "WP7: D29c: BigBasket partner NeuCoins count toward the 1,000 NeuCoin grocery cap (grocery_monthly_1000; WP7's conservative reading, kept by D29b). Modelled as a child of that cap, so grocery_monthly_1000 keeps its single target and stays visible to the v1 feed with its pre-WP7 reach; the child itself is v2-only (its target is).",
           "source_url": "https://www.hdfc.bank.in/content/dam/hdfcbankpws/in/en/personal-banking/discover-products/cards/credit-cards/tata-neu-plus-hdfc-bank-credit-card/pdfs/tata_neu_plus_card_tnc.pdf",
           "checked_on": "2026-11-05"
+        },
+        {
+          "path": "reward_rules[id=upi_other_id].conditions",
+          "op": "set",
+          "value_sha256": "8aa93f2e26dd1b1a",
+          "reason": "WP7: D29d: T&C: \"0.25% back as NeuCoins for transactions done using any UPI ID (Google Pay, PhonePe, Cred, etc.)\"; the \"Additional 0.75% ... if the transaction is done using the Tata Neu UPI ID\" is the separate info rule. The UPI-ID/eligibility conditions made this rule info, so a non-partner UPI spend earned the base rate. mcc_exclude restates the card's rental/government MCC exclusion and keeps this UPI-rail rule v2-only (D24b): v1 treats an unknown rail as a match.",
+          "source_url": "https://www.hdfc.bank.in/content/dam/hdfcbankpws/in/en/personal-banking/discover-products/cards/credit-cards/tata-neu-plus-hdfc-bank-credit-card/pdfs/tata_neu_plus_card_tnc.pdf",
+          "checked_on": "2026-11-05"
+        },
+        {
+          "path": "reward_rules[id=upi_other_id].channel_type",
+          "op": "set",
+          "value_sha256": "5cf7504d9781301d",
+          "reason": "WP7: D29d: the UPI rail carries it (see conditions).",
+          "source_url": "https://www.hdfc.bank.in/content/dam/hdfcbankpws/in/en/personal-banking/discover-products/cards/credit-cards/tata-neu-plus-hdfc-bank-credit-card/pdfs/tata_neu_plus_card_tnc.pdf",
+          "checked_on": "2026-11-05"
+        },
+        {
+          "path": "reward_rules[id=upi_other_id].priority",
+          "op": "set",
+          "value_sha256": "6b51d431df5d7f14",
+          "reason": "WP7: D29d: the UPI rate applies to \"Any UPI Spends\", so it outranks the capped category rules and the base rule; the partner UPI carve-out (9, same rate) still takes partner spends.",
+          "source_url": "https://www.hdfc.bank.in/content/dam/hdfcbankpws/in/en/personal-banking/discover-products/cards/credit-cards/tata-neu-plus-hdfc-bank-credit-card/pdfs/tata_neu_plus_card_tnc.pdf",
+          "checked_on": "2026-11-05"
+        },
+        {
+          "path": "cap_rules[id=upi_monthly_500].metric",
+          "op": "set",
+          "value_sha256": "7af78ba28cf9ccb3",
+          "reason": "WP7: D29d: T&C: \"The total NeuCoins earned on eligible UPI transactions are capped to 500 NeuCoins per month\". A bonus cap never binds on a UPI rate below the base rate (C3.5 bonus = 0), so the 500 cap is a total cap (as the Infinity record has it).",
+          "source_url": "https://www.hdfc.bank.in/content/dam/hdfcbankpws/in/en/personal-banking/discover-products/cards/credit-cards/tata-neu-plus-hdfc-bank-credit-card/pdfs/tata_neu_plus_card_tnc.pdf",
+          "checked_on": "2026-11-05"
         }
       ]
     },
@@ -694,24 +715,28 @@
         "rate": 0.25,
         "min_txn_inr": null,
         "max_txn_inr": null,
-        "priority": 40,
+        "priority": 12,
         "conditions": {
           "source_local_id": "upi_other_id",
           "part": null,
-          "info_reasons": [
-            "condition:upi_id"
-          ],
-          "flags": []
+          "info_reasons": [],
+          "flags": [
+            "reduced_rate_no_v1_row"
+          ]
         },
         "notes": null,
         "effective_from": "2024-08-01",
         "effective_to": null,
         "excluded_categories": [],
-        "rule_role": "info",
+        "rule_role": "earn",
         "merchant_slugs": [],
         "platform_slugs": [],
         "mcc_include": [],
-        "mcc_exclude": [],
+        "mcc_exclude": [
+          "6513",
+          "9311",
+          "9399"
+        ],
         "except_merchant_slugs": [],
         "except_platform_slugs": [],
         "block_inr": null,
@@ -1947,9 +1972,9 @@
         "period": "calendar_month",
         "cap_value": 500,
         "post_cap_unit": null,
-        "post_cap_rate": null,
+        "post_cap_rate": 0,
         "resets_on_day": 1,
-        "cap_kind": "bonus_points",
+        "cap_kind": "total_points",
         "cap_amount": 500,
         "scope": "targets",
         "targets": [

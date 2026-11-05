@@ -345,6 +345,64 @@
         }
       },
       "why": "T&C: 2% back as NeuCoins on non-EMI spends at partner Tata Brands; Annex 1 lists Tata Play in its \"Others\" row (monthly eligible spend Rs1,00,000). The cable/DTH MCC 4899 also matches wp7_telecom_capped (1%, 2,000 NeuCoin cap), but the partner rule outranks it (C8 D29b): 1,500 x 2% = 30, counted against the Annex 1 caps only."
+    },
+    {
+      "state_before": {
+        "caps_by_source_id": {}
+      },
+      "id": "012",
+      "title": "Rs 4,000 UPI QR payment at a non-partner store",
+      "ctx": {
+        "amount": 4000,
+        "occurred": "2026-11-10T10:00:00+05:30",
+        "category_id": null,
+        "category_slug": "other",
+        "mcc": "5651",
+        "merchant_name": "Apparel store",
+        "merchant_vpa": null,
+        "merchant_slug": null,
+        "platform": null,
+        "rail": "upi_qr"
+      },
+      "expect": {
+        "currency": "points",
+        "amount": 10,
+        "value_inr": 10,
+        "excluded": false,
+        "cap_deltas_by_source_id": {
+          "upi_monthly_500": 10
+        }
+      },
+      "why": "T&C: \"0.25% back as NeuCoins for transactions done using any UPI ID (Google Pay, PhonePe, Cred, etc.)\"; the additional 0.75% needs the Tata Neu UPI ID and is posted to the Tata Neu account, not the card. 4,000 x 0.25% = 10, counted toward \"The total NeuCoins earned on eligible UPI transactions are capped to 500 NeuCoins per month\" (C8 D29d)."
+    },
+    {
+      "state_before": {
+        "caps_by_source_id": {}
+      },
+      "id": "013",
+      "title": "Rs 4,000 grocery bill paid by UPI QR",
+      "ctx": {
+        "amount": 4000,
+        "occurred": "2026-11-10T10:00:00+05:30",
+        "category_id": null,
+        "category_slug": "groceries",
+        "mcc": "5411",
+        "merchant_name": "Supermarket",
+        "merchant_vpa": null,
+        "merchant_slug": null,
+        "platform": null,
+        "rail": "upi_qr"
+      },
+      "expect": {
+        "currency": "points",
+        "amount": 10,
+        "value_inr": 10,
+        "excluded": false,
+        "cap_deltas_by_source_id": {
+          "upi_monthly_500": 10
+        }
+      },
+      "why": "The UPI rate covers \"Any UPI Spends on Rupay Credit Card\", so a grocery bill paid by UPI earns 0.25% (10) under the 500 UPI cap, not the wp7_grocery_capped (1%) grocery rate (C8 D29d; the lower reading)."
     }
   ],
   "research_notes": [
@@ -398,6 +456,13 @@
       "item": "WP7 r4: example 010 (grocery cap structure)",
       "cardpipeline_says": "Round 2 made BigBasket a second target of grocery_monthly_1000, which made the cap v2-only, so installed (v1) apps lost it.",
       "issuer_says": "The T&C cap grocery NeuCoins per month; counting BigBasket partner NeuCoins too is WP7's conservative reading (C8 D29b). grocery_monthly_1000 targets the grocery rule only again (v1-visible, pre-WP7 reach) and BigBasket counts through its child cap wp7_bigbasket_grocery_share (C8 D29c). Amounts unchanged; example 010 lists both caps.",
+      "proposed_fix": "override",
+      "override_file": "api/scripts/catalogue_overrides/tata-neu-plus-hdfc-bank.json"
+    },
+    {
+      "item": "WP7 r4: examples 012-013 (UPI at a non-partner merchant)",
+      "cardpipeline_says": "The any-UPI-ID rule was info (UPI-ID and eligibility conditions), so a non-partner UPI spend earned the base rate.",
+      "issuer_says": "T&C table: \"0.25% back as NeuCoins for transactions done using any UPI ID\"; the Tata Neu UPI ID extra (0.75%) is posted to the Tata Neu account and stays info (C8 D29d, D24a).",
       "proposed_fix": "override",
       "override_file": "api/scripts/catalogue_overrides/tata-neu-plus-hdfc-bank.json"
     }
