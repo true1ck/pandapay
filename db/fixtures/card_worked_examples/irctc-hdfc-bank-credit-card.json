@@ -1,0 +1,306 @@
+{
+  "source_slug": "irctc-hdfc-bank-credit-card",
+  "cardpipeline_id": "hdfc-bank-irctc-hdfc-bank-credit-card",
+  "card_name": "IRCTC HDFC Bank Credit Card",
+  "verified_on": "2026-11-05",
+  "sources": [
+    {
+      "url": "https://www.hdfc.bank.in/content/dam/hdfcbankpws/in/en/personal-banking/discover-products/cards/credit-cards/irctc-credit-card/irctc-tnc-09-10-25.pdf",
+      "doc": "IRCTC HDFC T&C (file dated 9 Oct 2025)",
+      "quote": "Reward Points will be awarded against spends in multiples of INR 100"
+    },
+    {
+      "url": "https://www.hdfc.bank.in/content/dam/hdfcbankpws/in/en/personal-banking/discover-products/cards/credit-cards/irctc-credit-card/irctc-tnc-09-10-25.pdf",
+      "doc": "IRCTC HDFC T&C (file dated 9 Oct 2025)",
+      "quote": "accrual of the 5X Reward Points on partner IRCTC spends is capped maximum at 1000 Reward Points per month and 12000 Reward Points Annually"
+    },
+    {
+      "url": "https://www.hdfc.bank.in/content/dam/hdfcbankpws/in/en/personal-banking/discover-products/cards/credit-cards/irctc-credit-card/irctc-tnc-09-10-25.pdf",
+      "doc": "IRCTC HDFC T&C (file dated 9 Oct 2025)",
+      "quote": "Reward points on UPI transactions will be capped at 500 per calendar month"
+    },
+    {
+      "url": "https://www.hdfc.bank.in/content/dam/hdfcbankpws/in/en/personal-banking/discover-products/cards/credit-cards/irctc-credit-card/irctc-tnc-09-10-25.pdf",
+      "doc": "IRCTC HDFC T&C (file dated 9 Oct 2025)",
+      "quote": "5% Cashback ... capped maximum at INR 1000 per month and INR 12000 Annually"
+    }
+  ],
+  "examples": [
+    {
+      "id": "001",
+      "title": "Rs 10,000 train ticket on IRCTC website",
+      "ctx": {
+        "amount": 10000,
+        "occurred": "2026-11-05T10:00:00+05:30",
+        "category_slug": "travel",
+        "mcc": 4112,
+        "merchant_name": "IRCTC",
+        "merchant_vpa": null,
+        "merchant_slug": "irctc",
+        "platform": null,
+        "rail": "online"
+      },
+      "state_before": {
+        "caps_by_source_id": {}
+      },
+      "expect": {
+        "currency": "points",
+        "amount": 500,
+        "value_inr": null,
+        "excluded": false,
+        "cap_deltas_by_source_id": {
+          "irctc-5x-monthly": 500,
+          "irctc-5x-annual": 500
+        }
+      },
+      "why": "Issuer worked example: 100 base + 400 additional = 500 RP (5 per Rs100)."
+    },
+    {
+      "id": "002",
+      "title": "Rs 10,000 train ticket via SmartBuy",
+      "ctx": {
+        "amount": 10000,
+        "occurred": "2026-11-05T10:00:00+05:30",
+        "category_slug": "travel",
+        "mcc": 4112,
+        "merchant_name": "IRCTC",
+        "merchant_vpa": null,
+        "merchant_slug": "irctc",
+        "platform": "hdfc_smartbuy",
+        "rail": "online"
+      },
+      "state_before": {
+        "caps_by_source_id": {}
+      },
+      "expect": {
+        "currency": "points",
+        "amount": 500,
+        "value_inr": null,
+        "excluded": false,
+        "cap_deltas_by_source_id": {
+          "irctc-5x-monthly": 500,
+          "irctc-5x-annual": 500
+        }
+      },
+      "why": "Issuer worked example: 500 RP (100 base + 400 additional) plus Rs500 cashback (5%). Cashback is a second currency and not in the expected amount."
+    },
+    {
+      "id": "003",
+      "title": "Rs 150 grocery, partial block",
+      "ctx": {
+        "amount": 150,
+        "occurred": "2026-11-05T10:00:00+05:30",
+        "category_slug": "groceries",
+        "mcc": 5411,
+        "merchant_name": "Grocery store",
+        "merchant_vpa": null,
+        "merchant_slug": null,
+        "platform": null,
+        "rail": "swipe"
+      },
+      "state_before": {
+        "caps_by_source_id": {}
+      },
+      "expect": {
+        "currency": "points",
+        "amount": 1,
+        "value_inr": null,
+        "excluded": false,
+        "cap_deltas_by_source_id": {
+          "grocery-monthly": 1
+        }
+      },
+      "why": "Issuer example: Rs150 on grocery earns 1 point (multiples of Rs100)."
+    },
+    {
+      "id": "004",
+      "title": "Rs 3,000 apparel store",
+      "ctx": {
+        "amount": 3000,
+        "occurred": "2026-11-05T10:00:00+05:30",
+        "category_slug": "other",
+        "mcc": 5651,
+        "merchant_name": "Apparel store",
+        "merchant_vpa": null,
+        "merchant_slug": null,
+        "platform": null,
+        "rail": "swipe"
+      },
+      "state_before": {
+        "caps_by_source_id": {}
+      },
+      "expect": {
+        "currency": "points",
+        "amount": 30,
+        "value_inr": null,
+        "excluded": false,
+        "cap_deltas_by_source_id": {
+          "other-spends-monthly": 30
+        }
+      },
+      "why": "Issuer worked example: 1X = 30 points."
+    },
+    {
+      "id": "005",
+      "title": "Rs 5,000 other spend with 980 of 1,000 cap used",
+      "ctx": {
+        "amount": 5000,
+        "occurred": "2026-11-05T10:00:00+05:30",
+        "category_slug": "other",
+        "mcc": 5712,
+        "merchant_name": "Furniture store",
+        "merchant_vpa": null,
+        "merchant_slug": null,
+        "platform": null,
+        "rail": "swipe"
+      },
+      "state_before": {
+        "caps_by_source_id": {
+          "other-spends-monthly": 980
+        }
+      },
+      "expect": {
+        "currency": "points",
+        "amount": 20,
+        "value_inr": null,
+        "excluded": false,
+        "cap_deltas_by_source_id": {
+          "other-spends-monthly": 20
+        }
+      },
+      "why": "Would be 50 points; other-spends cap is 1,000 per month, so 20 remain."
+    },
+    {
+      "id": "006",
+      "title": "Rs 5,000 other spend after cap used",
+      "ctx": {
+        "amount": 5000,
+        "occurred": "2026-11-05T10:00:00+05:30",
+        "category_slug": "other",
+        "mcc": 5712,
+        "merchant_name": "Furniture store",
+        "merchant_vpa": null,
+        "merchant_slug": null,
+        "platform": null,
+        "rail": "swipe"
+      },
+      "state_before": {
+        "caps_by_source_id": {
+          "other-spends-monthly": 1000
+        }
+      },
+      "expect": {
+        "currency": "points",
+        "amount": 0,
+        "value_inr": null,
+        "excluded": false,
+        "cap_deltas_by_source_id": {}
+      },
+      "why": "Other-spends cap of 1,000/month is used; nothing more."
+    },
+    {
+      "id": "007",
+      "title": "Rs 1,000 fuel",
+      "ctx": {
+        "amount": 1000,
+        "occurred": "2026-11-05T10:00:00+05:30",
+        "category_slug": "fuel",
+        "mcc": 5541,
+        "merchant_name": "Petrol pump",
+        "merchant_vpa": null,
+        "merchant_slug": null,
+        "platform": null,
+        "rail": "swipe"
+      },
+      "state_before": {
+        "caps_by_source_id": {}
+      },
+      "expect": {
+        "currency": "points",
+        "amount": 0,
+        "value_inr": null,
+        "excluded": true,
+        "cap_deltas_by_source_id": {}
+      },
+      "why": "Issuer worked example: fuel earns nothing."
+    },
+    {
+      "id": "008",
+      "title": "Rs 20,000 education payment",
+      "ctx": {
+        "amount": 20000,
+        "occurred": "2026-11-05T10:00:00+05:30",
+        "category_slug": "education",
+        "mcc": 8220,
+        "merchant_name": "College fee",
+        "merchant_vpa": null,
+        "merchant_slug": null,
+        "platform": null,
+        "rail": "online"
+      },
+      "state_before": {
+        "caps_by_source_id": {}
+      },
+      "expect": {
+        "currency": "points",
+        "amount": 0,
+        "value_inr": null,
+        "excluded": true,
+        "cap_deltas_by_source_id": {}
+      },
+      "why": "Education is on the T&C no-points list."
+    },
+    {
+      "id": "009",
+      "title": "Rs 3,000 wallet load",
+      "ctx": {
+        "amount": 3000,
+        "occurred": "2026-11-05T10:00:00+05:30",
+        "category_slug": "wallet",
+        "mcc": 6540,
+        "merchant_name": "Wallet top up",
+        "merchant_vpa": null,
+        "merchant_slug": null,
+        "platform": null,
+        "rail": "online"
+      },
+      "state_before": {
+        "caps_by_source_id": {}
+      },
+      "expect": {
+        "currency": "points",
+        "amount": 0,
+        "value_inr": null,
+        "excluded": true,
+        "cap_deltas_by_source_id": {}
+      },
+      "why": "Wallet loads do not earn."
+    }
+  ],
+  "research_notes": [
+    {
+      "item": "SmartBuy cashback caps",
+      "cardpipeline_says": "eligible_spend_amount 20,000/month and 240,000/year.",
+      "issuer_says": "Cashback capped at Rs1,000/month and Rs12,000/year, which equals 5% of those spends. Equivalent.",
+      "proposed_fix": "none"
+    },
+    {
+      "item": "5X cap meaning",
+      "cardpipeline_says": "total_reward_points 1,000/month on the 5X rule.",
+      "issuer_says": "\"Accrual of the 5X Reward Points ... capped at 1000\" per month. Not stated whether base 1X continues above the cap, so no 5X boundary example.",
+      "proposed_fix": "none"
+    },
+    {
+      "item": "education",
+      "cardpipeline_says": "Excluded by MCC.",
+      "issuer_says": "Excluded (no direct-school exception stated on this card).",
+      "proposed_fix": "none"
+    },
+    {
+      "item": "merchant EMI principal",
+      "cardpipeline_says": "EMI exclusion on other card rules.",
+      "issuer_says": "Only EMI principal earns 1X (Rs2,000 principal = 20 points); interest earns nothing. No example because which cap it counts toward is unstated.",
+      "proposed_fix": "none"
+    }
+  ]
+}
