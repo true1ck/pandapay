@@ -1286,6 +1286,21 @@ test('an exclusion keeps the merchants it resolves and flags the alternatives it
   assert.ok(src.needs_directory.some((n) => /zqxmart/i.test(n)));
 });
 
+test('H2 a swipe/online rail on an exclusion already pinned by category or MCCs is dropped (an unknown rail must not escape it)', () => {
+  const r = run(pointsCard([
+    rule({ id: 'fuel_pos', category_id: 'fuel', evaluation_type: 'exclusion', rail: 'pos_terminal', conditions: { mcc_list: [5541, 5542] }, action: { points_per_block: 0, reason: 'No points on fuel.' } }),
+    rule({ id: 'wallet_online', category_id: 'wallet', evaluation_type: 'exclusion', rail: 'online', conditions: { mcc_list: [6540] }, action: { points_per_block: 0, reason: 'No points on wallet loads.' } }),
+    rule({ id: 'atm_only', category_id: 'excluded_spend', evaluation_type: 'exclusion', rail: 'atm', action: { points_per_block: 0, reason: 'No points on cash.' } }),
+    rule({ id: 'online_accel', category_id: 'online', rail: 'online', action: { points_per_block: 10 } }),
+  ]));
+  for (const id of ['fuel_pos', 'wallet_online']) {
+    assert.ok(only(r, id).every((x) => x.rule_role === 'exclusion' && x.rail === null), id);
+    assert.ok(only(r, id)[0].flags.includes('exclusion_rail_dropped'));
+  }
+  assert.ok(only(r, 'atm_only').every((x) => x.rail === 'atm'));
+  assert.ok(only(r, 'online_accel').every((x) => x.rail === 'online'), 'earning rules keep their rail');
+});
+
 test('rows that would break a database identity index are deduplicated: first kept, the rest reported', () => {
   // bobcard-select: four empty lifestyle benefits; bobcard-corporate: two empty insurance rows.
   const emptyBenefit = { benefit_id: null, category_id: null, network_program: null, sponsor: null, label: null,

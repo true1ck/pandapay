@@ -641,6 +641,16 @@ function transformRule(src, idx, ctx) {
   if (anyPlatform && railSet.length && railSet.every((r) => r === 'online')) railSet = [];
   if (railSet.length > 1) info.push('rail_conflict');
   if (isExclusion && rails.some((r) => r.inexact)) info.push('inexact_rail_on_exclusion');
+  // H2: a swipe/online rail on an exclusion already pinned by a category,
+  // MCCs or a brand only describes the channel ("fuel at POS terminals").
+  // v2 never matches an unknown rail, so keeping it would let fuel or wallet
+  // spend with no rail (most SMS) escape the exclusion: the rail is dropped
+  // (the exclusion only covers more).
+  if (isExclusion && railSet.length === 1 && ['swipe', 'online'].includes(railSet[0]) &&
+      (cond.mccInclude.length || parts.every((p) => p.categorySlug || p.mccInclude?.length || p.merchantSlugs?.length || p.platformSlugs?.length))) {
+    railSet = [];
+    flags.push('exclusion_rail_dropped');
+  }
   if (railSet.length === 1) parts = parts.map((p) => andPart(p, { rail: railSet[0] }) || { ...p, conflict: true });
   // The EMI category and the EMI rail name the same thing. On an exclusion,
   // carve-out or reduced rate either one identifies it (as D21a for
