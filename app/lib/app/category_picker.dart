@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import '../app/design/bamboo_components.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import 'design/app_theme.dart';
@@ -76,6 +77,7 @@ Future<String?> showAddCategoryDialog(
           child: const Text('Cancel'),
         ),
         FilledButton(
+          style: BambooButtons.primary,
           onPressed: () => Navigator.of(dialogContext).pop(controller.text),
           child: const Text('Save'),
         ),

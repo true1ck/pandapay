@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import '../../app/design/bamboo_components.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 import 'package:pandapay_domain/pandapay_domain.dart';
@@ -635,6 +636,7 @@ class _DuplicateReviewListState extends State<_DuplicateReviewList> {
         content: Text(message),
         actions: [
           FilledButton(
+            style: BambooButtons.primary,
             onPressed: () {
               Navigator.of(dialogContext).pop();
               _goToInsights(context);
@@ -662,6 +664,7 @@ class _DuplicateReviewListState extends State<_DuplicateReviewList> {
         ),
         actions: [
           FilledButton(
+            style: BambooButtons.primary,
             onPressed: () => Navigator.of(dialogContext).pop(),
             child: const Text('Close'),
           ),
@@ -902,7 +905,7 @@ class _TxnCandidateCard extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final border = selected ? BambooInk.jade : BambooInk.hairlineOnPaper;
+    final border = selected ? BambooInk.slate : BambooInk.hairlineOnPaper;
     return Semantics(
       button: true,
       enabled: enabled,
@@ -914,7 +917,7 @@ class _TxnCandidateCard extends StatelessWidget {
         child: Container(
           padding: const EdgeInsets.all(12),
           decoration: BoxDecoration(
-            color: selected ? const Color(0xFFF8FFFB) : BambooInk.paperMuted,
+            color: selected ? BambooInk.paper : BambooInk.paperMuted,
             borderRadius: BorderRadius.circular(16),
             border: Border.all(color: border, width: selected ? 2 : 1),
           ),
@@ -929,7 +932,7 @@ class _TxnCandidateCard extends StatelessWidget {
                       style: BambooFonts.ui(
                         11.5,
                         weight: FontWeight.w700,
-                        color: selected ? BambooInk.jade : BambooInk.ink500,
+                        color: selected ? BambooInk.ink900 : BambooInk.ink500,
                       ).copyWith(letterSpacing: 0.6),
                     ),
                   ),
@@ -938,7 +941,7 @@ class _TxnCandidateCard extends StatelessWidget {
                         ? Icons.radio_button_checked
                         : Icons.radio_button_unchecked,
                     size: 19,
-                    color: selected ? BambooInk.jade : BambooInk.ink500,
+                    color: selected ? BambooInk.slate : BambooInk.ink500,
                   ),
                 ],
               ),
@@ -964,7 +967,7 @@ class _TxnCandidateCard extends StatelessWidget {
                 padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
                 decoration: BoxDecoration(
                   color: selected
-                      ? const Color(0xFFD9F6EA)
+                      ? BambooInk.rankBadgeBg
                       : const Color(0xFFECEBE7),
                   borderRadius: BorderRadius.circular(6),
                 ),
@@ -976,7 +979,7 @@ class _TxnCandidateCard extends StatelessWidget {
                     10.5,
                     weight: FontWeight.w600,
                     color: selected
-                        ? const Color(0xFF005D45)
+                        ? BambooInk.rankBadgeInk
                         : BambooInk.ink700,
                   ),
                 ),
@@ -997,9 +1000,10 @@ class _TxnCandidateCard extends StatelessWidget {
                         icon: const Icon(Icons.check, size: 16),
                         label: const Text('Keep this one ✓'),
                         style: FilledButton.styleFrom(
-                          backgroundColor: BambooInk.jade,
-                          disabledBackgroundColor: BambooInk.jade,
-                          disabledForegroundColor: Colors.white,
+                          backgroundColor: BambooInk.slate,
+                          foregroundColor: BambooInk.lime,
+                          disabledBackgroundColor: BambooInk.slate,
+                          disabledForegroundColor: BambooInk.lime,
                           padding: const EdgeInsets.symmetric(vertical: 10),
                           shape: RoundedRectangleBorder(
                             borderRadius: BorderRadius.circular(10),
@@ -1133,9 +1137,10 @@ class _ReviewFooter extends StatelessWidget {
                     : 'Confirm $resolved Decision${resolved == 1 ? '' : 's'}',
               ),
               style: FilledButton.styleFrom(
-                backgroundColor: BambooInk.jade,
-                disabledBackgroundColor: BambooInk.ink500,
-                foregroundColor: Colors.white,
+                backgroundColor: BambooInk.slate,
+                disabledBackgroundColor: BambooInk.slate.withValues(alpha: 0.12),
+                disabledForegroundColor: BambooInk.ink500,
+                foregroundColor: BambooInk.lime,
                 padding: const EdgeInsets.symmetric(vertical: 14),
                 shape: RoundedRectangleBorder(
                   borderRadius: BorderRadius.circular(15),

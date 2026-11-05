@@ -565,7 +565,7 @@ class _ActivityScreenState extends ConsumerState<ActivityScreen> {
             child: const Text('Cancel'),
           ),
           TextButton(
-            style: TextButton.styleFrom(foregroundColor: AppColors.error),
+            style: TextButton.styleFrom(foregroundColor: BambooInk.clayInk),
             onPressed: () => Navigator.of(dialogContext).pop(true),
             child: const Text('Delete'),
           ),
@@ -721,7 +721,7 @@ class _ActivityScreenState extends ConsumerState<ActivityScreen> {
                     ),
                     IconButton(
                       tooltip: 'Deleted transactions',
-                      color: AppColors.error,
+                      color: BambooInk.clayInk,
                       onPressed: () => Navigator.of(context).push(
                         MaterialPageRoute(
                           builder: (_) => const DeletedTransactionsScreen(),

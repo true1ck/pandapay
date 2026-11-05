@@ -1,6 +1,7 @@
 import 'dart:convert';
 
 import 'package:flutter/material.dart';
+import '../../app/design/bamboo_components.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:intl/intl.dart';
 import 'package:pandapay_domain/pandapay_domain.dart';
@@ -72,6 +73,7 @@ class _ImportReviewPanelState extends ConsumerState<ImportReviewPanel> {
             child: const Text('Cancel'),
           ),
           FilledButton(
+            style: BambooButtons.primary,
             onPressed: () {
               final names = parseImportedTagNames(controller.text);
               if (names.any((name) => name.length > 80)) return;
@@ -438,7 +440,7 @@ class _ImportReviewPanelState extends ConsumerState<ImportReviewPanel> {
                         Text(
                           warning,
                           style: TextStyle(
-                            color: Theme.of(context).colorScheme.error,
+                            color: BambooInk.clayInk,
                           ),
                         ),
                       if (widget.configure != null)
@@ -689,7 +691,7 @@ class _ImportReviewPanelState extends ConsumerState<ImportReviewPanel> {
           if (_error != null)
             Text(
               _error!,
-              style: TextStyle(color: Theme.of(context).colorScheme.error),
+              style: TextStyle(color: BambooInk.clayInk),
             ),
           if (session.reviewLocked) ...[
             Text(
@@ -1246,7 +1248,7 @@ class _EditImportRowState extends State<_EditImportRow> {
     final border = OutlineInputBorder(
       borderRadius: BorderRadius.circular(16),
       borderSide: BorderSide(
-        color: errorText == null ? BambooInk.hairlineOnPaper : AppColors.error,
+        color: errorText == null ? BambooInk.hairlineOnPaper : BambooInk.clayInk,
         width: errorText == null ? 1 : 1.6,
       ),
     );
@@ -1255,20 +1257,20 @@ class _EditImportRowState extends State<_EditImportRow> {
       helperText: helperText,
       helperMaxLines: helperMaxLines,
       errorText: errorText,
-      errorStyle: BambooFonts.ui(12, color: AppColors.error),
+      errorStyle: BambooFonts.ui(12, color: BambooInk.clayInk),
       border: border,
       enabledBorder: border,
       focusedBorder: border.copyWith(
         borderSide: BorderSide(
-          color: errorText == null ? BambooInk.slate : AppColors.error,
+          color: errorText == null ? BambooInk.slate : BambooInk.clayInk,
           width: 1.6,
         ),
       ),
       errorBorder: border.copyWith(
-        borderSide: const BorderSide(color: AppColors.error, width: 1.6),
+        borderSide: const BorderSide(color: BambooInk.clayInk, width: 1.6),
       ),
       focusedErrorBorder: border.copyWith(
-        borderSide: const BorderSide(color: AppColors.error, width: 1.8),
+        borderSide: const BorderSide(color: BambooInk.clayInk, width: 1.8),
       ),
     );
   }

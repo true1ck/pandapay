@@ -239,7 +239,7 @@ class _IosSmsImportScreenState extends ConsumerState<_IosSmsImportView> {
                   ),
                   Switch.adaptive(
                     value: state.enabled,
-                    activeTrackColor: BambooInk.jade,
+                    activeTrackColor: BambooInk.slate,
                     onChanged: _busy
                         ? null
                         : (value) => _run(() => controller.setEnabled(value)),

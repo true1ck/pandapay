@@ -295,7 +295,7 @@ class _PermissionRow extends ConsumerWidget {
           ),
           const SizedBox(width: AppSpace.sm),
           TextButton(
-            style: TextButton.styleFrom(foregroundColor: BambooInk.jade),
+            style: TextButton.styleFrom(foregroundColor: BambooInk.ink900),
             onPressed: () async {
               final opened = await openAppSettings();
               if (!opened && context.mounted) {
@@ -543,8 +543,6 @@ class _ContributionToggle extends ConsumerWidget {
             'your identity) to help other users\' recommendations.',
             style: BambooFonts.ui(12.5, color: BambooInk.ink500),
           ),
-          activeTrackColor: BambooInk.jade,
-          activeThumbColor: BambooInk.lime,
           value: optedIn,
           onChanged: (v) async {
             final repo = ref.read(userCardsRepositoryProvider);
@@ -685,7 +683,6 @@ class _PurposeConsents extends ConsumerWidget {
                   'transactions already recorded stay.',
                   style: BambooFonts.ui(12.5, color: BambooInk.ink500),
                 ),
-                activeTrackColor: BambooInk.jade,
                 value:
                     granted[smsReadingConsentPurpose]?.granted == true &&
                     granted[smsReadingConsentPurpose]?.revokedAt == null &&
@@ -709,7 +706,6 @@ class _PurposeConsents extends ConsumerWidget {
                   'individual transactions.',
                   style: BambooFonts.ui(12.5, color: BambooInk.ink500),
                 ),
-                activeTrackColor: BambooInk.jade,
                 value: granted['aggregate_insights']?.granted ?? false,
                 onChanged: (v) => set('aggregate_insights', v),
               ),
@@ -728,7 +724,6 @@ class _PurposeConsents extends ConsumerWidget {
                   'turn it on, and you can turn it off again at any time.',
                   style: BambooFonts.ui(12.5, color: BambooInk.ink500),
                 ),
-                activeTrackColor: BambooInk.jade,
                 value: granted['partner_sharing']?.granted ?? false,
                 onChanged: (v) => set('partner_sharing', v),
               ),
@@ -746,7 +741,6 @@ class _PurposeConsents extends ConsumerWidget {
                   TemplateSharingCopy.body,
                   style: BambooFonts.ui(12.5, color: BambooInk.ink500),
                 ),
-                activeTrackColor: BambooInk.jade,
                 value:
                     granted[smsSharedLearningPurpose]?.granted == true &&
                     granted[smsSharedLearningPurpose]?.policyVersion ==

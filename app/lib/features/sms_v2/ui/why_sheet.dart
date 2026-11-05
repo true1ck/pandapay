@@ -1,6 +1,8 @@
 import 'dart:convert';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+import '../../../app/design/app_theme.dart';
+import '../../../app/design/bamboo_components.dart';
 import '../../../app/providers.dart' as app;
 import '../storage/sync_state_store.dart';
 import 'review_controller.dart';
@@ -86,31 +88,66 @@ class WhyContent extends StatelessWidget {
   final Map<String, Object?> trace;
   final VoidCallback onReport;
   @override
-  Widget build(BuildContext context) => SafeArea(
-    child: SingleChildScrollView(
-      child: Padding(
-        padding: const EdgeInsets.all(24),
-        child: Column(
-          crossAxisAlignment: CrossAxisAlignment.start,
-          mainAxisSize: MainAxisSize.min,
-          children: [
-            Text('Why this?', style: Theme.of(context).textTheme.headlineSmall),
-            const SizedBox(height: 16),
-            for (final explanation in explainDecision(trace))
-              Padding(
-                padding: const EdgeInsets.only(bottom: 16),
-                child: Text(explanation),
-              ),
-            OutlinedButton.icon(
-              onPressed: onReport,
-              icon: const Icon(Icons.flag_outlined),
-              label: const Text('Report a problem'),
-            ),
-          ],
+  Widget build(BuildContext context) {
+    final reasons = explainDecision(trace);
+    return BambooSheet(
+      title: 'Why this?',
+      subtitle: 'How PandaPay read this message.',
+      icon: Icons.lightbulb_outline_rounded,
+      actions: [
+        OutlinedButton.icon(
+          onPressed: onReport,
+          icon: const Icon(Icons.flag_outlined, size: 18),
+          label: const Text('Report a problem'),
         ),
-      ),
-    ),
-  );
+      ],
+      children: [
+        BambooPanel(
+          padding: const EdgeInsets.fromLTRB(
+            AppSpace.lg,
+            AppSpace.md,
+            AppSpace.lg,
+            AppSpace.md,
+          ),
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.stretch,
+            children: [
+              for (final (index, explanation) in reasons.indexed) ...[
+                if (index > 0) const Divider(height: AppSpace.lg),
+                Row(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Padding(
+                      padding: const EdgeInsets.only(top: 6),
+                      child: Container(
+                        width: 6,
+                        height: 6,
+                        decoration: const BoxDecoration(
+                          color: BambooInk.slate,
+                          shape: BoxShape.circle,
+                        ),
+                      ),
+                    ),
+                    const SizedBox(width: AppSpace.md),
+                    Expanded(
+                      child: Text(
+                        explanation,
+                        style: BambooFonts.ui(
+                          14,
+                          color: BambooInk.ink900,
+                          height: 1.45,
+                        ),
+                      ),
+                    ),
+                  ],
+                ),
+              ],
+            ],
+          ),
+        ),
+      ],
+    );
+  }
 }
 
 Future<void> showSmsWhy(
@@ -132,10 +169,8 @@ Future<void> showSmsWhy(
     final trace = saved == null
         ? <String, Object?>{}
         : (jsonDecode(saved) as Map).cast<String, Object?>();
-    await showModalBottomSheet<void>(
+    await showBambooSheet<void>(
       context: context,
-      isScrollControlled: true,
-      showDragHandle: true,
       builder: (sheetContext) => WhyContent(
         trace: trace,
         onReport: () {

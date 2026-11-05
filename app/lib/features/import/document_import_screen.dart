@@ -203,7 +203,7 @@ class _DocumentImportScreenState extends State<DocumentImportScreen> {
         fillColor: BambooInk.paperMuted,
         focusedBorder: OutlineInputBorder(
           borderRadius: BorderRadius.circular(18),
-          borderSide: const BorderSide(color: BambooInk.jade, width: 1.5),
+          borderSide: const BorderSide(color: BambooInk.slate, width: 1.5),
         ),
       ),
       progressIndicatorTheme: const ProgressIndicatorThemeData(

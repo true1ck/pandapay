@@ -84,13 +84,10 @@ abstract final class AppRadius {
 /// Outfit carries headings and interface copy; IBM Plex Sans keeps monetary
 /// figures compact and easy to compare.
 ///
-/// Landed additively, alongside [AppColors]/[AppTheme] rather than
-/// replacing them: a global `ColorScheme`/`ThemeData` swap would silently
-/// touch every already-built, already-tested screen's buttons/contrast
-/// before each one gets its own reviewed restyle pass (most of those
-/// screens are real, shipped features with widget-test coverage — see
-/// PROGRESS.md). Home is the first screen migrated to these tokens;
-/// further screens adopt [BambooInk]/[BambooFonts] one at a time.
+/// [AppTheme.light] is built on these tokens, so Material defaults (buttons,
+/// fields, switches, chips, sheets, dialogs) match the hand-styled screens.
+/// [AppColors] is the legacy navy/teal palette, kept only for the unused
+/// dark theme and a few old references; don't use it for new UI.
 abstract final class BambooInk {
   // Decision surfaces — the dark slate cards/sheets that carry a verdict
   // or an action, per the design chat's "L2"/Slate #2B313A pick.
@@ -162,6 +159,18 @@ abstract final class BambooInk {
   // a genuine third "getting close" tier between "fine" (jade) and "over
   // the line" (clay) that's real functional signal, not decoration.
   static const amber = Color(0xFFD97706);
+}
+
+/// Neutral paper tones for the Material surface roles the theme fills in
+/// (menus, tracks, pressed states). Warm greys that sit with
+/// [BambooInk.paperMuted], instead of the tinted tones Material derives
+/// from a seed colour.
+abstract final class _BambooSurfaces {
+  static const low = Color(0xFFFBFAF7);
+  static const high = Color(0xFFF1F0EA);
+  static const highest = Color(0xFFE8E7E1);
+  static const dim = Color(0xFFE4E3DD);
+  static const outline = Color(0x4D2B313A); // rgba(43,49,58,.30)
 }
 
 /// Bright, light-theme colors for data visualizations.
@@ -292,244 +301,554 @@ abstract final class _AppColorsDark {
 class AppTheme {
   AppTheme._();
 
+  /// The app-wide theme, built on Bamboo Ink.
+  ///
+  /// Every Material default — buttons, fields, dropdown menus, switches,
+  /// checkboxes, chips, spinners, bottom sheets, dialogs, snack bars — takes
+  /// its colour from here. The old version seeded the scheme from the legacy
+  /// teal, so any widget a screen didn't hand-style (a loading spinner, a
+  /// focused field, a "Save" button in a sheet) came out teal-green and read
+  /// as a different app. The rules this follows:
+  ///
+  /// - Slate carries every interactive decision: filled buttons, the "on"
+  ///   state of switches/checkboxes/radios, selected chips, focus rings,
+  ///   progress.
+  /// - Lime only ever appears ON slate (button labels, switch thumbs, check
+  ///   marks), never as text on white.
+  /// - Surfaces are paper white with hairline borders, no tinted M3 tones.
   static ThemeData light() {
-    final colorScheme = ColorScheme.fromSeed(
-      seedColor: AppColors.teal500,
+    const colorScheme = ColorScheme(
       brightness: Brightness.light,
-      primary: AppColors.teal600,
-      onPrimary: Colors.white,
-      secondary: AppColors.navy700,
-      surface: AppColors.surface,
-      error: AppColors.error,
+      primary: BambooInk.slate,
+      onPrimary: BambooInk.onSlate,
+      primaryContainer: BambooInk.paperMuted,
+      onPrimaryContainer: BambooInk.ink900,
+      secondary: BambooInk.slate,
+      onSecondary: BambooInk.onSlate,
+      secondaryContainer: BambooInk.paperMuted,
+      onSecondaryContainer: BambooInk.ink900,
+      tertiary: BambooInk.jade,
+      onTertiary: Colors.white,
+      tertiaryContainer: BambooInk.rankBadgeBg,
+      onTertiaryContainer: BambooInk.rankBadgeInk,
+      error: BambooInk.clayInk,
+      onError: Colors.white,
+      errorContainer: BambooInk.warningBg,
+      onErrorContainer: BambooInk.clayInk,
+      surface: BambooInk.paper,
+      onSurface: BambooInk.ink900,
+      onSurfaceVariant: BambooInk.ink700,
+      surfaceDim: _BambooSurfaces.dim,
+      surfaceBright: BambooInk.paper,
+      surfaceContainerLowest: BambooInk.paper,
+      surfaceContainerLow: _BambooSurfaces.low,
+      surfaceContainer: BambooInk.paperMuted,
+      surfaceContainerHigh: _BambooSurfaces.high,
+      surfaceContainerHighest: _BambooSurfaces.highest,
+      outline: _BambooSurfaces.outline,
+      outlineVariant: BambooInk.hairlineOnPaper,
+      shadow: Colors.black,
+      scrim: Colors.black,
+      inverseSurface: BambooInk.slate,
+      onInverseSurface: BambooInk.onSlate,
+      inversePrimary: BambooInk.lime,
+      surfaceTint: Colors.transparent,
     );
 
-    // Keep headings and body copy on Outfit throughout the app.
-    final display = BambooFonts.useSystemFontsForTests
-        ? ThemeData.light().textTheme
+    // Outfit throughout, coloured with Bamboo Ink's warm inks rather than
+    // the legacy cool greys. Tests that opt into system fonts (see
+    // [BambooFonts.useSystemFontsForTests]) skip the remote font fetch.
+    final base = BambooFonts.useSystemFontsForTests
+        ? Typography.material2021().black
         : GoogleFonts.outfitTextTheme();
-    final body = BambooFonts.useSystemFontsForTests
-        ? ThemeData.light().textTheme
-        : GoogleFonts.outfitTextTheme();
-
-    final textTheme = body.copyWith(
-      displayLarge: display.displayLarge?.copyWith(fontWeight: FontWeight.w700),
-      displayMedium: display.displayMedium?.copyWith(
+    final textTheme = base.copyWith(
+      displayLarge: base.displayLarge?.copyWith(
         fontWeight: FontWeight.w700,
+        color: BambooInk.ink900,
       ),
-      displaySmall: display.displaySmall?.copyWith(fontWeight: FontWeight.w700),
-      headlineLarge: display.headlineLarge?.copyWith(
+      displayMedium: base.displayMedium?.copyWith(
         fontWeight: FontWeight.w700,
+        color: BambooInk.ink900,
       ),
-      headlineMedium: display.headlineMedium?.copyWith(
+      displaySmall: base.displaySmall?.copyWith(
         fontWeight: FontWeight.w700,
+        color: BambooInk.ink900,
       ),
-      headlineSmall: display.headlineSmall?.copyWith(
+      headlineLarge: base.headlineLarge?.copyWith(
         fontWeight: FontWeight.w700,
+        color: BambooInk.ink900,
       ),
-      titleLarge: display.titleLarge?.copyWith(
+      headlineMedium: base.headlineMedium?.copyWith(
         fontWeight: FontWeight.w700,
-        color: AppColors.ink900,
+        color: BambooInk.ink900,
       ),
-      titleMedium: display.titleMedium?.copyWith(
+      headlineSmall: base.headlineSmall?.copyWith(
+        fontWeight: FontWeight.w700,
+        color: BambooInk.ink900,
+      ),
+      titleLarge: base.titleLarge?.copyWith(
+        fontWeight: FontWeight.w700,
+        color: BambooInk.ink900,
+      ),
+      titleMedium: base.titleMedium?.copyWith(
         fontWeight: FontWeight.w600,
-        color: AppColors.ink900,
+        color: BambooInk.ink900,
       ),
-      titleSmall: display.titleSmall?.copyWith(
+      titleSmall: base.titleSmall?.copyWith(
         fontWeight: FontWeight.w600,
-        color: AppColors.ink900,
+        color: BambooInk.ink900,
       ),
-      bodyLarge: body.bodyLarge?.copyWith(color: AppColors.ink900, height: 1.5),
-      bodyMedium: body.bodyMedium?.copyWith(
-        color: AppColors.ink700,
+      bodyLarge: base.bodyLarge?.copyWith(color: BambooInk.ink900, height: 1.5),
+      bodyMedium: base.bodyMedium?.copyWith(
+        color: BambooInk.ink700,
         height: 1.5,
       ),
-      bodySmall: body.bodySmall?.copyWith(color: AppColors.ink500, height: 1.4),
-      labelLarge: body.labelLarge?.copyWith(
+      bodySmall: base.bodySmall?.copyWith(color: BambooInk.ink500, height: 1.4),
+      labelLarge: base.labelLarge?.copyWith(
         fontWeight: FontWeight.w600,
-        color: AppColors.ink900,
+        color: BambooInk.ink900,
       ),
-      labelMedium: body.labelMedium?.copyWith(
+      labelMedium: base.labelMedium?.copyWith(
         fontWeight: FontWeight.w600,
-        color: AppColors.ink700,
+        color: BambooInk.ink700,
       ),
-      labelSmall: body.labelSmall?.copyWith(
+      labelSmall: base.labelSmall?.copyWith(
         fontWeight: FontWeight.w500,
-        color: AppColors.ink500,
+        color: BambooInk.ink500,
       ),
     );
+
+    final fieldRadius = BorderRadius.circular(16);
+    final buttonShape = RoundedRectangleBorder(
+      borderRadius: BorderRadius.circular(AppRadius.md),
+    );
+    bool selected(Set<WidgetState> s) => s.contains(WidgetState.selected);
+    bool disabled(Set<WidgetState> s) => s.contains(WidgetState.disabled);
 
     return ThemeData(
       useMaterial3: true,
       colorScheme: colorScheme,
-      scaffoldBackgroundColor: AppColors.canvas,
+      scaffoldBackgroundColor: BambooInk.paper,
+      canvasColor: BambooInk.paper,
+      cardColor: BambooInk.paper,
+      dividerColor: BambooInk.hairlineOnPaper,
       textTheme: textTheme,
+      iconTheme: const IconThemeData(color: BambooInk.ink700),
+      textSelectionTheme: TextSelectionThemeData(
+        cursorColor: BambooInk.slate,
+        selectionColor: BambooInk.lime.withValues(alpha: 0.55),
+        selectionHandleColor: BambooInk.slate,
+      ),
       appBarTheme: AppBarTheme(
-        backgroundColor: AppColors.canvas,
-        foregroundColor: AppColors.ink900,
+        backgroundColor: BambooInk.paper,
+        foregroundColor: BambooInk.ink900,
         surfaceTintColor: Colors.transparent,
         elevation: 0,
+        scrolledUnderElevation: 0,
         centerTitle: false,
-        titleTextStyle: textTheme.titleLarge,
+        titleTextStyle: BambooFonts.heading(18, color: BambooInk.ink900),
+        iconTheme: const IconThemeData(color: BambooInk.ink900),
       ),
       cardTheme: CardThemeData(
-        color: AppColors.surface,
+        color: BambooInk.paper,
+        surfaceTintColor: Colors.transparent,
         elevation: 0,
         shape: RoundedRectangleBorder(
           borderRadius: BorderRadius.circular(AppRadius.lg),
+          side: const BorderSide(color: BambooInk.hairlineOnPaper),
         ),
         margin: EdgeInsets.zero,
       ),
+      listTileTheme: ListTileThemeData(
+        iconColor: BambooInk.ink700,
+        textColor: BambooInk.ink900,
+        titleTextStyle: BambooFonts.ui(
+          15,
+          weight: FontWeight.w500,
+          color: BambooInk.ink900,
+        ),
+        subtitleTextStyle: BambooFonts.ui(13, color: BambooInk.ink500),
+        leadingAndTrailingTextStyle: BambooFonts.ui(
+          14,
+          weight: FontWeight.w600,
+          color: BambooInk.ink900,
+        ),
+        selectedColor: BambooInk.ink900,
+      ),
+      expansionTileTheme: const ExpansionTileThemeData(
+        iconColor: BambooInk.ink900,
+        collapsedIconColor: BambooInk.ink500,
+        textColor: BambooInk.ink900,
+        collapsedTextColor: BambooInk.ink900,
+        shape: Border(),
+        collapsedShape: Border(),
+      ),
+      // Per-state colours rather than `color`: a theme-level `color` would
+      // override every chip's own backgroundColor/selectedColor.
       chipTheme: ChipThemeData(
-        backgroundColor: AppColors.surfaceMuted,
-        selectedColor: AppColors.teal50,
-        labelStyle: textTheme.labelLarge,
-        secondaryLabelStyle: textTheme.labelLarge?.copyWith(
-          color: AppColors.teal600,
+        backgroundColor: BambooInk.paper,
+        selectedColor: BambooInk.slate,
+        disabledColor: BambooInk.paperMuted,
+        checkmarkColor: BambooInk.lime,
+        labelStyle: BambooFonts.ui(
+          13,
+          weight: FontWeight.w600,
+          color: WidgetStateColor.resolveWith(
+            (s) => disabled(s)
+                ? BambooInk.ink500
+                : selected(s)
+                ? BambooInk.onSlate
+                : BambooInk.ink900,
+          ),
         ),
-        side: BorderSide.none,
-        shape: RoundedRectangleBorder(
-          borderRadius: BorderRadius.circular(AppRadius.pill),
+        iconTheme: const IconThemeData(color: BambooInk.ink700, size: 16),
+        side: WidgetStateBorderSide.resolveWith(
+          (s) => BorderSide(
+            color: selected(s) ? BambooInk.slate : BambooInk.hairlineOnPaper,
+          ),
         ),
+        shape: const StadiumBorder(),
         padding: const EdgeInsets.symmetric(
-          horizontal: AppSpace.md,
+          horizontal: AppSpace.sm,
           vertical: AppSpace.xs,
         ),
       ),
       inputDecorationTheme: InputDecorationTheme(
         filled: true,
-        fillColor: AppColors.surfaceMuted,
+        fillColor: BambooInk.glassFillOnPaper,
         contentPadding: const EdgeInsets.symmetric(
           horizontal: AppSpace.lg,
-          vertical: AppSpace.lg,
+          vertical: 14,
         ),
         border: OutlineInputBorder(
-          borderRadius: BorderRadius.circular(AppRadius.md),
-          borderSide: BorderSide.none,
+          borderRadius: fieldRadius,
+          borderSide: const BorderSide(color: BambooInk.hairlineOnPaper),
         ),
         enabledBorder: OutlineInputBorder(
-          borderRadius: BorderRadius.circular(AppRadius.md),
-          borderSide: BorderSide.none,
+          borderRadius: fieldRadius,
+          borderSide: const BorderSide(color: BambooInk.hairlineOnPaper),
+        ),
+        disabledBorder: OutlineInputBorder(
+          borderRadius: fieldRadius,
+          borderSide: const BorderSide(color: BambooInk.hairlineOnPaper),
         ),
         focusedBorder: OutlineInputBorder(
-          borderRadius: BorderRadius.circular(AppRadius.md),
-          borderSide: const BorderSide(color: AppColors.teal500, width: 1.5),
+          borderRadius: fieldRadius,
+          borderSide: const BorderSide(color: BambooInk.slate, width: 1.5),
         ),
         errorBorder: OutlineInputBorder(
-          borderRadius: BorderRadius.circular(AppRadius.md),
-          borderSide: const BorderSide(color: AppColors.error, width: 1.5),
+          borderRadius: fieldRadius,
+          borderSide: const BorderSide(color: BambooInk.clay, width: 1.2),
         ),
-        labelStyle: textTheme.bodyMedium,
-        hintStyle: textTheme.bodyMedium?.copyWith(color: AppColors.ink300),
+        focusedErrorBorder: OutlineInputBorder(
+          borderRadius: fieldRadius,
+          borderSide: const BorderSide(color: BambooInk.clay, width: 1.5),
+        ),
+        labelStyle: BambooFonts.ui(13.5, color: BambooInk.ink500),
+        floatingLabelStyle: BambooFonts.ui(
+          13.5,
+          weight: FontWeight.w600,
+          color: BambooInk.ink900,
+        ),
+        hintStyle: BambooFonts.ui(14, color: BambooInk.ink500),
+        helperStyle: BambooFonts.ui(12, color: BambooInk.ink500),
+        errorStyle: BambooFonts.ui(12, color: BambooInk.clayInk),
+        counterStyle: BambooFonts.ui(11, color: BambooInk.ink500),
+        prefixIconColor: BambooInk.ink500,
+        suffixIconColor: BambooInk.ink500,
+      ),
+      dropdownMenuTheme: DropdownMenuThemeData(
+        menuStyle: MenuStyle(
+          backgroundColor: const WidgetStatePropertyAll(BambooInk.paper),
+          surfaceTintColor: const WidgetStatePropertyAll(Colors.transparent),
+          shape: WidgetStatePropertyAll(
+            RoundedRectangleBorder(
+              borderRadius: BorderRadius.circular(AppRadius.md),
+              side: const BorderSide(color: BambooInk.hairlineOnPaper),
+            ),
+          ),
+        ),
+      ),
+      menuTheme: MenuThemeData(
+        style: MenuStyle(
+          backgroundColor: const WidgetStatePropertyAll(BambooInk.paper),
+          surfaceTintColor: const WidgetStatePropertyAll(Colors.transparent),
+          shape: WidgetStatePropertyAll(
+            RoundedRectangleBorder(
+              borderRadius: BorderRadius.circular(AppRadius.md),
+              side: const BorderSide(color: BambooInk.hairlineOnPaper),
+            ),
+          ),
+        ),
+      ),
+      popupMenuTheme: PopupMenuThemeData(
+        color: BambooInk.paper,
+        surfaceTintColor: Colors.transparent,
+        elevation: 6,
+        shadowColor: Colors.black.withValues(alpha: 0.18),
+        shape: RoundedRectangleBorder(
+          borderRadius: BorderRadius.circular(AppRadius.md),
+          side: const BorderSide(color: BambooInk.hairlineOnPaper),
+        ),
+        textStyle: BambooFonts.ui(14, color: BambooInk.ink900),
       ),
       filledButtonTheme: FilledButtonThemeData(
         style: FilledButton.styleFrom(
-          backgroundColor: AppColors.teal600,
-          foregroundColor: Colors.white,
+          backgroundColor: BambooInk.slate,
+          foregroundColor: BambooInk.lime,
+          iconColor: BambooInk.lime,
+          disabledBackgroundColor: BambooInk.slate.withValues(alpha: 0.12),
+          disabledForegroundColor: BambooInk.ink500,
           minimumSize: const Size.fromHeight(52),
           padding: const EdgeInsets.symmetric(horizontal: AppSpace.xl),
-          shape: RoundedRectangleBorder(
-            borderRadius: BorderRadius.circular(AppRadius.md),
-          ),
-          textStyle: textTheme.labelLarge?.copyWith(
-            color: Colors.white,
-            fontSize: 16,
-          ),
-          disabledBackgroundColor: AppColors.ink100,
-          disabledForegroundColor: AppColors.ink300,
+          shape: buttonShape,
+          textStyle: BambooFonts.ui(15.5, weight: FontWeight.w700),
+        ),
+      ),
+      elevatedButtonTheme: ElevatedButtonThemeData(
+        style: ElevatedButton.styleFrom(
+          backgroundColor: BambooInk.slate,
+          foregroundColor: BambooInk.lime,
+          elevation: 0,
+          shape: buttonShape,
+          textStyle: BambooFonts.ui(15, weight: FontWeight.w700),
         ),
       ),
       outlinedButtonTheme: OutlinedButtonThemeData(
         style: OutlinedButton.styleFrom(
-          foregroundColor: AppColors.navy800,
+          foregroundColor: BambooInk.ink900,
+          backgroundColor: BambooInk.paper,
+          disabledForegroundColor: BambooInk.ink500,
           minimumSize: const Size.fromHeight(48),
-          side: const BorderSide(color: AppColors.ink100, width: 1.5),
-          shape: RoundedRectangleBorder(
-            borderRadius: BorderRadius.circular(AppRadius.md),
-          ),
+          side: const BorderSide(color: BambooInk.hairlineOnPaper),
+          shape: buttonShape,
           padding: const EdgeInsets.symmetric(horizontal: AppSpace.lg),
+          textStyle: BambooFonts.ui(15, weight: FontWeight.w600),
         ),
       ),
       textButtonTheme: TextButtonThemeData(
         style: TextButton.styleFrom(
           foregroundColor: BambooInk.ink900,
-          textStyle: textTheme.labelLarge,
+          disabledForegroundColor: BambooInk.ink500,
+          shape: buttonShape,
+          textStyle: BambooFonts.ui(14.5, weight: FontWeight.w600),
         ),
       ),
+      iconButtonTheme: IconButtonThemeData(
+        style: IconButton.styleFrom(foregroundColor: BambooInk.ink900),
+      ),
+      segmentedButtonTheme: SegmentedButtonThemeData(
+        style: SegmentedButton.styleFrom(
+          backgroundColor: BambooInk.paper,
+          foregroundColor: BambooInk.ink900,
+          selectedBackgroundColor: BambooInk.slate,
+          selectedForegroundColor: BambooInk.lime,
+          side: const BorderSide(color: BambooInk.hairlineOnPaper),
+          textStyle: BambooFonts.ui(13.5, weight: FontWeight.w600),
+        ),
+      ),
+      switchTheme: SwitchThemeData(
+        thumbColor: WidgetStateProperty.resolveWith(
+          (s) => selected(s)
+              ? BambooInk.lime
+              : disabled(s)
+              ? BambooInk.paperMuted
+              : Colors.white,
+        ),
+        trackColor: WidgetStateProperty.resolveWith(
+          (s) => selected(s)
+              ? (disabled(s)
+                    ? BambooInk.slate.withValues(alpha: 0.35)
+                    : BambooInk.slate)
+              : _BambooSurfaces.highest,
+        ),
+        trackOutlineColor: WidgetStateProperty.resolveWith(
+          (s) => selected(s) ? Colors.transparent : _BambooSurfaces.outline,
+        ),
+        overlayColor: WidgetStatePropertyAll(
+          BambooInk.slate.withValues(alpha: 0.08),
+        ),
+      ),
+      checkboxTheme: CheckboxThemeData(
+        fillColor: WidgetStateProperty.resolveWith(
+          (s) => selected(s)
+              ? (disabled(s)
+                    ? BambooInk.slate.withValues(alpha: 0.35)
+                    : BambooInk.slate)
+              : Colors.transparent,
+        ),
+        checkColor: const WidgetStatePropertyAll(BambooInk.lime),
+        side: WidgetStateBorderSide.resolveWith(
+          (s) => selected(s)
+              ? const BorderSide(color: BambooInk.slate)
+              : const BorderSide(color: BambooInk.ink500, width: 1.5),
+        ),
+        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(5)),
+      ),
+      radioTheme: RadioThemeData(
+        fillColor: WidgetStateProperty.resolveWith(
+          (s) => selected(s) ? BambooInk.slate : BambooInk.ink500,
+        ),
+      ),
+      sliderTheme: SliderThemeData(
+        activeTrackColor: BambooInk.slate,
+        inactiveTrackColor: _BambooSurfaces.highest,
+        thumbColor: BambooInk.slate,
+        overlayColor: BambooInk.slate.withValues(alpha: 0.10),
+        valueIndicatorColor: BambooInk.slate,
+        valueIndicatorTextStyle: BambooFonts.ui(
+          12,
+          weight: FontWeight.w700,
+          color: BambooInk.lime,
+        ),
+      ),
+      progressIndicatorTheme: const ProgressIndicatorThemeData(
+        color: BambooInk.slate,
+        linearTrackColor: _BambooSurfaces.highest,
+        circularTrackColor: Colors.transparent,
+        refreshBackgroundColor: BambooInk.paper,
+      ),
+      tabBarTheme: TabBarThemeData(
+        labelColor: BambooInk.ink900,
+        unselectedLabelColor: BambooInk.ink500,
+        indicatorColor: BambooInk.slate,
+        dividerColor: BambooInk.hairlineOnPaper,
+        labelStyle: BambooFonts.ui(14, weight: FontWeight.w700),
+        unselectedLabelStyle: BambooFonts.ui(14, weight: FontWeight.w500),
+      ),
       floatingActionButtonTheme: const FloatingActionButtonThemeData(
-        backgroundColor: AppColors.navy900,
-        foregroundColor: Colors.white,
+        backgroundColor: BambooInk.slate,
+        foregroundColor: BambooInk.lime,
         elevation: 2,
       ),
       bottomAppBarTheme: const BottomAppBarThemeData(
-        color: AppColors.surface,
+        color: BambooInk.paper,
         elevation: 0,
         surfaceTintColor: Colors.transparent,
       ),
+      bottomSheetTheme: BottomSheetThemeData(
+        backgroundColor: BambooInk.paper,
+        modalBackgroundColor: BambooInk.paper,
+        surfaceTintColor: Colors.transparent,
+        elevation: 0,
+        modalElevation: 0,
+        clipBehavior: Clip.antiAlias,
+        shape: const RoundedRectangleBorder(
+          borderRadius: BorderRadius.vertical(top: Radius.circular(24)),
+        ),
+        dragHandleColor: BambooInk.slate.withValues(alpha: 0.18),
+        dragHandleSize: const Size(36, 4),
+        modalBarrierColor: BambooInk.slate.withValues(alpha: 0.42),
+      ),
       dividerTheme: const DividerThemeData(
-        color: AppColors.ink100,
+        color: BambooInk.hairlineOnPaper,
         thickness: 1,
         space: 1,
       ),
       snackBarTheme: SnackBarThemeData(
-        backgroundColor: AppColors.navy900,
-        contentTextStyle: textTheme.bodyMedium?.copyWith(color: Colors.white),
+        backgroundColor: BambooInk.slate,
+        contentTextStyle: BambooFonts.ui(14, color: BambooInk.onSlate),
+        actionTextColor: BambooInk.lime,
+        closeIconColor: BambooInk.onSlateSubtle,
         behavior: SnackBarBehavior.floating,
+        elevation: 0,
         shape: RoundedRectangleBorder(
-          borderRadius: BorderRadius.circular(AppRadius.sm),
+          borderRadius: BorderRadius.circular(AppRadius.md),
         ),
       ),
-      // Bamboo Ink dialog/date-picker chrome — additive, same reasoning as
-      // every per-screen restyle this session: AlertDialog/showDatePicker
-      // are cross-cutting overlays used from dozens of already-restyled
-      // screens (delete/restore confirmations, the future-date warning,
-      // help dialogs, tutorial completion) that would otherwise still pop
-      // up in this theme's old navy/teal M3 defaults, clashing with the
-      // Bamboo Ink screen underneath. Deliberately identical in light()
-      // and dark(): every Bamboo-restyled screen already renders on
-      // BambooInk.paper regardless of ThemeMode (see appearance_screen.dart's
-      // own doc-comment on text-scale/theme-mode scope), so a dialog that
-      // swapped to a dark surface under dark ThemeMode would itself clash
-      // with the light Bamboo screen behind it.
+      tooltipTheme: TooltipThemeData(
+        decoration: BoxDecoration(
+          color: BambooInk.slate,
+          borderRadius: BorderRadius.circular(8),
+        ),
+        textStyle: BambooFonts.ui(12, color: BambooInk.onSlate),
+      ),
+      // Dialogs and date pickers: paper surface, slate header, lime only on
+      // slate. Same values in light() and dark() — see main.dart for why the
+      // app is pinned to light.
       dialogTheme: DialogThemeData(
         backgroundColor: BambooInk.paper,
         surfaceTintColor: Colors.transparent,
+        elevation: 0,
         shape: RoundedRectangleBorder(
-          borderRadius: BorderRadius.circular(AppRadius.lg),
+          borderRadius: BorderRadius.circular(24),
         ),
-        titleTextStyle: BambooFonts.heading(17, color: BambooInk.ink900),
-        contentTextStyle: BambooFonts.ui(13.5, color: BambooInk.ink500),
+        titleTextStyle: BambooFonts.heading(18, color: BambooInk.ink900),
+        contentTextStyle: BambooFonts.ui(14, color: BambooInk.ink700),
+        barrierColor: BambooInk.slate.withValues(alpha: 0.42),
       ),
-      datePickerTheme: DatePickerThemeData(
+      datePickerTheme: _bambooDatePickerTheme,
+      timePickerTheme: TimePickerThemeData(
         backgroundColor: BambooInk.paper,
-        surfaceTintColor: Colors.transparent,
+        dialBackgroundColor: BambooInk.paperMuted,
+        dialHandColor: BambooInk.slate,
+        dialTextColor: WidgetStateColor.resolveWith(
+          (s) => selected(s) ? BambooInk.lime : BambooInk.ink900,
+        ),
+        hourMinuteColor: WidgetStateColor.resolveWith(
+          (s) => selected(s) ? BambooInk.slate : BambooInk.paperMuted,
+        ),
+        hourMinuteTextColor: WidgetStateColor.resolveWith(
+          (s) => selected(s) ? BambooInk.lime : BambooInk.ink900,
+        ),
+        dayPeriodColor: WidgetStateColor.resolveWith(
+          (s) => selected(s) ? BambooInk.slate : BambooInk.paper,
+        ),
+        dayPeriodTextColor: WidgetStateColor.resolveWith(
+          (s) => selected(s) ? BambooInk.lime : BambooInk.ink900,
+        ),
+        entryModeIconColor: BambooInk.ink700,
         shape: RoundedRectangleBorder(
-          borderRadius: BorderRadius.circular(AppRadius.lg),
-        ),
-        headerBackgroundColor: BambooInk.slate,
-        headerForegroundColor: BambooInk.lime,
-        todayForegroundColor: const WidgetStatePropertyAll(BambooInk.jade),
-        todayBorder: const BorderSide(color: BambooInk.jade, width: 1),
-        dayForegroundColor: WidgetStateProperty.resolveWith(
-          (states) => states.contains(WidgetState.selected)
-              ? BambooInk.onSlate
-              : BambooInk.ink900,
-        ),
-        dayBackgroundColor: WidgetStateProperty.resolveWith(
-          (states) =>
-              states.contains(WidgetState.selected) ? BambooInk.slate : null,
-        ),
-        yearForegroundColor: WidgetStateProperty.resolveWith(
-          (states) => states.contains(WidgetState.selected)
-              ? BambooInk.onSlate
-              : BambooInk.ink900,
-        ),
-        yearBackgroundColor: WidgetStateProperty.resolveWith(
-          (states) =>
-              states.contains(WidgetState.selected) ? BambooInk.slate : null,
+          borderRadius: BorderRadius.circular(24),
         ),
       ),
     );
   }
+
+  static final _bambooDatePickerTheme = DatePickerThemeData(
+    backgroundColor: BambooInk.paper,
+    surfaceTintColor: Colors.transparent,
+    shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(24)),
+    headerBackgroundColor: BambooInk.slate,
+    headerForegroundColor: BambooInk.lime,
+    todayForegroundColor: WidgetStateProperty.resolveWith(
+      (states) => states.contains(WidgetState.selected)
+          ? BambooInk.lime
+          : BambooInk.ink900,
+    ),
+    todayBorder: const BorderSide(color: BambooInk.slate, width: 1),
+    dayForegroundColor: WidgetStateProperty.resolveWith(
+      (states) => states.contains(WidgetState.disabled)
+          ? BambooInk.ink500.withValues(alpha: 0.5)
+          : states.contains(WidgetState.selected)
+          ? BambooInk.lime
+          : BambooInk.ink900,
+    ),
+    dayBackgroundColor: WidgetStateProperty.resolveWith(
+      (states) =>
+          states.contains(WidgetState.selected) ? BambooInk.slate : null,
+    ),
+    yearForegroundColor: WidgetStateProperty.resolveWith(
+      (states) => states.contains(WidgetState.selected)
+          ? BambooInk.lime
+          : BambooInk.ink900,
+    ),
+    yearBackgroundColor: WidgetStateProperty.resolveWith(
+      (states) =>
+          states.contains(WidgetState.selected) ? BambooInk.slate : null,
+    ),
+    rangePickerBackgroundColor: BambooInk.paper,
+    rangePickerSurfaceTintColor: Colors.transparent,
+    rangePickerHeaderBackgroundColor: BambooInk.slate,
+    rangePickerHeaderForegroundColor: BambooInk.lime,
+    rangeSelectionBackgroundColor: BambooInk.wash,
+    dividerColor: BambooInk.hairlineOnPaper,
+    cancelButtonStyle: TextButton.styleFrom(foregroundColor: BambooInk.ink700),
+    confirmButtonStyle: TextButton.styleFrom(
+      foregroundColor: BambooInk.ink900,
+      textStyle: BambooFonts.ui(14.5, weight: FontWeight.w700),
+    ),
+  );
 
   /// Task H6 (Appearance) — minimal dark variant. Mirrors light()'s
   /// structure component-for-component so both themes stay visually

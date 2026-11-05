@@ -63,8 +63,6 @@ class MyContributionsScreen extends ConsumerWidget {
               const SizedBox(width: AppSpace.md),
               Switch(
                 value: optedIn,
-                activeTrackColor: BambooChartColors.teal,
-                activeThumbColor: BambooInk.lime,
                 onChanged: (v) async {
                   final repo = ref.read(userCardsRepositoryProvider);
                   if (repo == null) return;

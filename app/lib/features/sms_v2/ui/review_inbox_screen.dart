@@ -4,6 +4,9 @@ import '../corrections/corrections_service.dart';
 import 'personal_format_form.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+import '../../../app/design/app_theme.dart';
+import '../../../app/design/bamboo_components.dart';
+import '../../../app/design/widgets.dart';
 import '../../../app/providers.dart' as app;
 import '../pipeline/trace.dart';
 import '../providers/data_providers.dart';
@@ -60,20 +63,22 @@ class _ReviewInboxScreenState extends ConsumerState<ReviewInboxScreen> {
           )
           .toList();
       if (!mounted || namespace != ref.read(app.cacheNamespaceProvider)) return;
-      final chosen = await showDialog<String>(
+      final chosen = await showBambooChoiceSheet<String>(
         context: context,
-        builder: (context) => SimpleDialog(
-          title: const Text('Which card did this pay?'),
-          children: [
-            for (final card in cards)
-              SimpleDialogOption(
-                onPressed: () => Navigator.pop(context, card.instrumentId),
-                child: Text(
-                  '${card.displayName} ••${card.maskDigits ?? 'unknown'}',
-                ),
-              ),
-          ],
-        ),
+        title: 'Which card did this pay?',
+        subtitle: 'The bill payment is counted once, against this card.',
+        icon: Icons.credit_card_rounded,
+        emptyMessage:
+            'Confirm your credit cards under Accounts first, then come back.',
+        options: [
+          for (final card in cards)
+            BambooChoice(
+              value: card.instrumentId,
+              label: card.displayName,
+              detail: '••${card.maskDigits ?? 'unknown'}',
+              icon: Icons.credit_card_rounded,
+            ),
+        ],
       );
       if (chosen == null ||
           !mounted ||
@@ -85,21 +90,21 @@ class _ReviewInboxScreenState extends ConsumerState<ReviewInboxScreen> {
     }
     if (action == 'match') {
       final candidates = group.first.payload['candidates'] as List? ?? const [];
-      final selected = await showDialog<Map>(
+      final selected = await showBambooChoiceSheet<Map>(
         context: context,
-        builder: (context) => SimpleDialog(
-          title: const Text('Which payment matches?'),
-          children: [
-            for (final candidate in candidates.whereType<Map>())
-              SimpleDialogOption(
-                onPressed: () => Navigator.pop(context, candidate),
-                child: Text(
+        title: 'Which payment matches?',
+        subtitle: 'The two messages will be counted as one payment.',
+        icon: Icons.link_rounded,
+        options: [
+          for (final candidate in candidates.whereType<Map>())
+            BambooChoice(
+              value: candidate,
+              label:
                   candidate['label'] as String? ??
-                      'Payment ${candidates.indexOf(candidate) + 1}',
-                ),
-              ),
-          ],
-        ),
+                  'Payment ${candidates.indexOf(candidate) + 1}',
+              icon: Icons.receipt_long_outlined,
+            ),
+        ],
       );
       if (selected == null ||
           !mounted ||
@@ -126,10 +131,8 @@ class _ReviewInboxScreenState extends ConsumerState<ReviewInboxScreen> {
         if (!mounted || namespace != ref.read(app.cacheNamespaceProvider)) {
           return;
         }
-        final choice = await showModalBottomSheet<PersonalFormatChoice>(
+        final choice = await showBambooSheet<PersonalFormatChoice>(
           context: context,
-          isScrollControlled: true,
-          showDragHandle: true,
           builder: (_) => PersonalFormatForm(
             message: SmsMessage(
               sender: raw.message.sender,
@@ -168,10 +171,8 @@ class _ReviewInboxScreenState extends ConsumerState<ReviewInboxScreen> {
       return;
     }
     if (action == 'fix') {
-      edit = await showModalBottomSheet<CorrectionEdit>(
+      edit = await showBambooSheet<CorrectionEdit>(
         context: context,
-        showDragHandle: true,
-        isScrollControlled: true,
         builder: (_) => CorrectionForm(groupCount: group.length),
       );
       if (edit == null ||
@@ -226,24 +227,26 @@ class _ReviewInboxScreenState extends ConsumerState<ReviewInboxScreen> {
           )
           .toList();
       if (!mounted || namespace != ref.read(app.cacheNamespaceProvider)) return;
-      final chosen = await showDialog<String>(
+      final chosen = await showBambooChoiceSheet<String>(
         context: context,
-        builder: (context) => SimpleDialog(
-          title: Text(text.chooseAccountTitle),
-          children: [
-            for (final account in accounts)
-              SimpleDialogOption(
-                onPressed: () => Navigator.pop(context, account.instrumentId),
-                child: Text(
-                  '${account.displayName} ••${account.maskDigits ?? 'unknown'}',
-                ),
-              ),
-            SimpleDialogOption(
-              onPressed: () => Navigator.pop(context, _anotherAccount),
-              child: Text(text.anotherAccount),
+        title: text.chooseAccountTitle,
+        icon: Icons.account_balance_outlined,
+        options: [
+          for (final account in accounts)
+            BambooChoice(
+              value: account.instrumentId,
+              label: account.displayName,
+              detail: '••${account.maskDigits ?? 'unknown'}',
+              icon: account.kind == InstrumentKind.wallet
+                  ? Icons.account_balance_wallet_outlined
+                  : Icons.account_balance_outlined,
             ),
-          ],
-        ),
+          BambooChoice(
+            value: _anotherAccount,
+            label: text.anotherAccount,
+            icon: Icons.more_horiz_rounded,
+          ),
+        ],
       );
       if (chosen == null ||
           !mounted ||
@@ -283,15 +286,19 @@ class _ReviewInboxScreenState extends ConsumerState<ReviewInboxScreen> {
   @override
   Widget build(BuildContext context) => Scaffold(
     appBar: AppBar(title: const Text('Needs review')),
-    body: ref
-        .watch(reviewItemsProvider)
-        .when(skipLoadingOnReload: true, skipLoadingOnRefresh: true, 
-          loading: () => const SmsLoading(),
-          error: (_, _) =>
-              SmsError(onRetry: () => ref.invalidate(reviewItemsProvider)),
-          data: (items) =>
-              ReviewInboxList(items: items, busy: _saving, onAction: _act),
-        ),
+    body: AppBackground(
+      child: ref
+          .watch(reviewItemsProvider)
+          .when(
+            skipLoadingOnReload: true,
+            skipLoadingOnRefresh: true,
+            loading: () => const SmsLoading(),
+            error: (_, _) =>
+                SmsError(onRetry: () => ref.invalidate(reviewItemsProvider)),
+            data: (items) =>
+                ReviewInboxList(items: items, busy: _saving, onAction: _act),
+          ),
+    ),
   );
 }
 
@@ -310,6 +317,7 @@ class ReviewInboxList extends StatelessWidget {
     if (items.isEmpty) {
       return const SmsEmpty(
         'You’re all caught up. New formats and payments that need your help will appear here.',
+        icon: Icons.task_alt_rounded,
       );
     }
     final groups = <String, List<LocalReviewItem>>{};
@@ -330,127 +338,211 @@ class ReviewInboxList extends StatelessWidget {
       sections.putIfAbsent(title, () => []).add(group);
     }
     return ListView(
-      padding: const EdgeInsets.all(16),
+      padding: const EdgeInsets.fromLTRB(
+        AppSpace.lg,
+        AppSpace.sm,
+        AppSpace.lg,
+        AppSpace.xxl,
+      ),
       children: [
-        const Text(
+        const BambooNote(
           'Your message text stays on this phone. A format choice applies to every message in that group.',
         ),
-        if (busy) const LinearProgressIndicator(),
-        for (final section in sections.entries) ...[
-          Padding(
-            padding: const EdgeInsets.symmetric(vertical: 16),
-            child: Text(
-              section.key,
-              style: Theme.of(context).textTheme.titleLarge,
+        if (busy)
+          const Padding(
+            padding: EdgeInsets.only(top: AppSpace.md),
+            child: ClipRRect(
+              borderRadius: BorderRadius.all(Radius.circular(AppRadius.pill)),
+              child: LinearProgressIndicator(minHeight: 3),
             ),
           ),
+        for (final section in sections.entries) ...[
+          BambooSectionLabel(section.key, asTitle: true),
           for (final group in section.value)
-            Card(
-              child: Padding(
-                padding: const EdgeInsets.all(16),
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    Text(
-                      '${group.length} ${group.length == 1 ? 'message' : 'messages'}',
-                      style: Theme.of(context).textTheme.labelLarge,
-                    ),
-                    const SizedBox(height: 8),
-                    if (reviewKindOf(group.first) == 'receipt')
-                      Text(receiptQuestion(group.first))
-                    else
-                      Text(
-                        group.first.message?.message.body ??
-                            'The original message is no longer on this phone.',
-                      ),
-                    if (group.first.payload['reading']
-                        case final String reading)
-                      Padding(
-                        padding: const EdgeInsets.only(top: 12),
-                        child: Text('Suggested reading: $reading'),
-                      ),
-                    const SizedBox(height: 12),
-                    Wrap(
-                      spacing: 8,
-                      children: [
-                        if (reviewKindOf(group.first) == 'receipt') ...[
-                          FilledButton(
-                            onPressed: busy
-                                ? null
-                                : () => onAction(group, 'receipt-yes'),
-                            child: Text(receiptReviewText().yes),
-                          ),
-                          OutlinedButton(
-                            onPressed: busy
-                                ? null
-                                : () => onAction(group, 'receipt-no'),
-                            child: Text(receiptReviewText().no),
-                          ),
-                          TextButton(
-                            onPressed: busy
-                                ? null
-                                : () => onAction(group, 'receipt-unsure'),
-                            child: Text(receiptReviewText().notSure),
-                          ),
-                        ] else if (group.first.kind == 'bill_target')
-                          FilledButton(
-                            onPressed: busy
-                                ? null
-                                : () => onAction(group, 'choose-card'),
-                            child: const Text('Which card did this pay?'),
-                          )
-                        else if (group.first.kind == 'link') ...[
-                          FilledButton(
-                            onPressed: busy
-                                ? null
-                                : () => onAction(group, 'match'),
-                            child: const Text('Choose match'),
-                          ),
-                          OutlinedButton(
-                            onPressed: busy
-                                ? null
-                                : () => onAction(group, 'separate'),
-                            child: const Text('Keep separate'),
-                          ),
-                        ] else if (group.every(
-                          (i) => i.payload['hasReading'] == true,
-                        ))
-                          FilledButton(
-                            onPressed: busy
-                                ? null
-                                : () => onAction(group, 'correct'),
-                            child: const Text('Correct'),
-                          ),
-                        if (reviewKindOf(group.first) != 'receipt' &&
-                            group.first.kind != 'link' &&
-                            group.first.kind != 'bill_target')
-                          OutlinedButton(
-                            onPressed: busy
-                                ? null
-                                : () => onAction(group, 'fix'),
-                            child: const Text('Fix'),
-                          ),
-                        if (reviewKindOf(group.first) != 'receipt' &&
-                            group.every((i) => i.message != null))
-                          TextButton(
-                            style: TextButton.styleFrom(
-                              foregroundColor: Theme.of(
-                                context,
-                              ).colorScheme.primary,
-                            ),
-                            onPressed: busy
-                                ? null
-                                : () => onAction(group, 'ignore'),
-                            child: const Text('Not financial'),
-                          ),
-                      ],
-                    ),
-                  ],
-                ),
+            Padding(
+              padding: const EdgeInsets.only(bottom: AppSpace.md),
+              child: _ReviewGroupPanel(
+                group: group,
+                busy: busy,
+                onAction: onAction,
               ),
             ),
         ],
       ],
+    );
+  }
+}
+
+class _ReviewGroupPanel extends StatelessWidget {
+  const _ReviewGroupPanel({
+    required this.group,
+    required this.busy,
+    required this.onAction,
+  });
+  final List<LocalReviewItem> group;
+  final bool busy;
+  final void Function(List<LocalReviewItem>, String) onAction;
+
+  VoidCallback? _on(String action) =>
+      busy ? null : () => onAction(group, action);
+
+  @override
+  Widget build(BuildContext context) {
+    final first = group.first;
+    final kind = reviewKindOf(first);
+    final isReceipt = kind == 'receipt';
+    final hasReading = group.every((i) => i.payload['hasReading'] == true);
+    final allMessages = group.every((i) => i.message != null);
+    final notFinancial = TextButton(
+      style: BambooButtons.quiet,
+      onPressed: _on('ignore'),
+      child: const Text('Not financial'),
+    );
+    Widget fix(bool primary) => primary
+        ? FilledButton(
+            style: BambooButtons.primary,
+            onPressed: _on('fix'),
+            child: const Text('Fix'),
+          )
+        : OutlinedButton(
+            style: BambooButtons.secondary,
+            onPressed: _on('fix'),
+            child: const Text('Fix'),
+          );
+
+    final Widget actions;
+    if (isReceipt) {
+      final text = receiptReviewText();
+      actions = BambooActionBar(
+        primary: FilledButton(
+          style: BambooButtons.primary,
+          onPressed: _on('receipt-yes'),
+          child: Text(text.yes),
+        ),
+        secondary: [
+          OutlinedButton(
+            style: BambooButtons.secondary,
+            onPressed: _on('receipt-no'),
+            child: Text(text.no),
+          ),
+        ],
+        quiet: [
+          TextButton(
+            style: BambooButtons.quiet,
+            onPressed: _on('receipt-unsure'),
+            child: Text(text.notSure),
+          ),
+        ],
+      );
+    } else if (first.kind == 'bill_target') {
+      actions = BambooActionBar(
+        primary: FilledButton(
+          style: BambooButtons.primary,
+          onPressed: _on('choose-card'),
+          child: const Text('Which card did this pay?'),
+        ),
+        quiet: [if (allMessages) notFinancial],
+      );
+    } else if (first.kind == 'link') {
+      actions = BambooActionBar(
+        primary: FilledButton(
+          style: BambooButtons.primary,
+          onPressed: _on('match'),
+          child: const Text('Choose match'),
+        ),
+        secondary: [
+          OutlinedButton(
+            style: BambooButtons.secondary,
+            onPressed: _on('separate'),
+            child: const Text('Keep separate'),
+          ),
+        ],
+        quiet: [if (allMessages) notFinancial],
+      );
+    } else {
+      actions = BambooActionBar(
+        primary: hasReading
+            ? FilledButton(
+                style: BambooButtons.primary,
+                onPressed: _on('correct'),
+                child: const Text('Correct'),
+              )
+            : fix(true),
+        secondary: [if (hasReading) fix(false)],
+        quiet: [if (allMessages) notFinancial],
+      );
+    }
+
+    return BambooPanel(
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.stretch,
+        children: [
+          Row(
+            children: [
+              Icon(
+                isReceipt ? Icons.receipt_long_outlined : Icons.sms_outlined,
+                size: 16,
+                color: BambooInk.ink500,
+              ),
+              const SizedBox(width: 6),
+              Text(
+                '${group.length} ${group.length == 1 ? 'message' : 'messages'}',
+                style: BambooFonts.ui(
+                  12.5,
+                  weight: FontWeight.w700,
+                  color: BambooInk.ink500,
+                ),
+              ),
+            ],
+          ),
+          const SizedBox(height: 10),
+          if (isReceipt)
+            Text(
+              receiptQuestion(first),
+              style: BambooFonts.ui(
+                14.5,
+                weight: FontWeight.w500,
+                color: BambooInk.ink900,
+                height: 1.45,
+              ),
+            )
+          else
+            BambooMessageQuote(
+              first.message?.message.body ??
+                  'The original message is no longer on this phone.',
+              sender: first.message?.message.sender,
+            ),
+          if (first.payload['reading'] case final String reading) ...[
+            const SizedBox(height: AppSpace.md),
+            Row(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                const Padding(
+                  padding: EdgeInsets.only(top: 2),
+                  child: Icon(
+                    Icons.auto_awesome_outlined,
+                    size: 16,
+                    color: BambooInk.ink700,
+                  ),
+                ),
+                const SizedBox(width: AppSpace.sm),
+                Expanded(
+                  child: Text(
+                    'Suggested reading: $reading',
+                    style: BambooFonts.ui(
+                      13.5,
+                      weight: FontWeight.w600,
+                      color: BambooInk.ink900,
+                    ),
+                  ),
+                ),
+              ],
+            ),
+          ],
+          const SizedBox(height: AppSpace.lg),
+          actions,
+        ],
+      ),
     );
   }
 }

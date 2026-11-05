@@ -179,7 +179,6 @@ class _IosSmsSharingSetupState extends ConsumerState<IosSmsSharingSetup> {
                     key: const ValueKey('ios-sms-sharing-confirmation'),
                     contentPadding: EdgeInsets.zero,
                     controlAffinity: ListTileControlAffinity.leading,
-                    activeColor: BambooInk.jade,
                     title: Text(
                       'I’ve enabled this setting',
                       style: BambooFonts.ui(

@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import '../../app/design/bamboo_components.dart';
 
 import '../../data/csv_statement_parser.dart';
 import '../../data/import_models.dart';
@@ -95,9 +96,12 @@ class _ImportMappingDialogState extends State<ImportMappingDialog> {
         child: SingleChildScrollView(
           child: Column(
             mainAxisSize: MainAxisSize.min,
+            crossAxisAlignment: CrossAxisAlignment.stretch,
+            spacing: 12,
             children: [
-              const Text(
+              const BambooNote(
                 'Automatic detection is the starting point. Choose formats or map unfamiliar columns here. Applying changes reparses the file and resets row edits.',
+                icon: Icons.info_outline,
               ),
               if (widget.tables.length > 1)
                 DropdownButtonFormField<String>(
@@ -202,17 +206,18 @@ class _ImportMappingDialogState extends State<ImportMappingDialog> {
                   },
                 ),
                 if (_header >= 0 && _header < rows.length)
-                  Text(
+                  BambooNote(
                     'Header: ${rows[_header].join(' | ')}',
-                    maxLines: 3,
-                    overflow: TextOverflow.ellipsis,
+                    icon: Icons.table_rows_outlined,
                   ),
                 for (final column in ImportColumn.values)
                   DropdownButtonFormField<int>(
                     key: ValueKey('$_sheet:$_header:${column.name}'),
                     initialValue: _columns[column] ?? -2,
                     isExpanded: true,
-                    decoration: InputDecoration(labelText: column.name),
+                    decoration: InputDecoration(
+                      labelText: _columnLabel(column.name),
+                    ),
                     items: [
                       const DropdownMenuItem(
                         value: -2,
@@ -240,17 +245,19 @@ class _ImportMappingDialogState extends State<ImportMappingDialog> {
                     },
                   ),
               ],
-              if (_error != null) Text(_error!),
+              if (_error != null) BambooAlertNote(_error!),
             ],
           ),
         ),
       ),
       actions: [
         TextButton(
+          style: BambooButtons.quiet,
           onPressed: () => Navigator.pop(context),
           child: const Text('Cancel'),
         ),
         FilledButton(
+          style: BambooButtons.primary,
           onPressed: () {
             final headerNumber = int.tryParse(_headerInput.text);
             if (rows.isNotEmpty &&
@@ -282,4 +289,12 @@ class _ImportMappingDialogState extends State<ImportMappingDialog> {
       ],
     );
   }
+}
+
+/// `transactionDate` → `Transaction date`.
+String _columnLabel(String name) {
+  final words = name
+      .replaceAllMapped(RegExp(r'(?<=[a-z])([A-Z])'), (m) => ' ${m[1]}')
+      .toLowerCase();
+  return words.isEmpty ? words : words[0].toUpperCase() + words.substring(1);
 }

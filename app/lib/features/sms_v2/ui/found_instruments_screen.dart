@@ -4,6 +4,10 @@ import 'package:go_router/go_router.dart';
 import 'package:pandapay_domain/pandapay_domain.dart' show CardProduct;
 import 'package:pandapay_domain/sms_v2.dart';
 
+import '../../../app/design/app_theme.dart';
+import '../../../app/design/bamboo_components.dart';
+import '../../../app/design/widgets.dart';
+
 import '../../../app/providers.dart' as app;
 import '../../cards/card_picker_screen.dart';
 import '../instruments/card_linker.dart';
@@ -110,16 +114,21 @@ class FoundInstrumentsScreen extends ConsumerWidget {
     final instruments = ref.watch(instrumentsProvider);
     return Scaffold(
       appBar: AppBar(title: const Text('Accounts and cards we found')),
-      body: instruments.when(skipLoadingOnReload: true, skipLoadingOnRefresh: true, 
-        loading: () => const SmsLoading(),
-        error: (_, _) =>
-            SmsError(onRetry: () => ref.invalidate(instrumentsProvider)),
-        data: (items) => FoundInstrumentsList(
-          instruments: items,
-          onConfirm: (i) => _act(context, ref, i, 'confirm'),
-          onReject: (i) => _act(context, ref, i, 'reject'),
-          onRename: (i) => _act(context, ref, i, 'rename'),
-          onOpen: (i) => context.push('/sms-v2/instruments/${i.instrumentId}'),
+      body: AppBackground(
+        child: instruments.when(
+          skipLoadingOnReload: true,
+          skipLoadingOnRefresh: true,
+          loading: () => const SmsLoading(),
+          error: (_, _) =>
+              SmsError(onRetry: () => ref.invalidate(instrumentsProvider)),
+          data: (items) => FoundInstrumentsList(
+            instruments: items,
+            onConfirm: (i) => _act(context, ref, i, 'confirm'),
+            onReject: (i) => _act(context, ref, i, 'reject'),
+            onRename: (i) => _act(context, ref, i, 'rename'),
+            onOpen: (i) =>
+                context.push('/sms-v2/instruments/${i.instrumentId}'),
+          ),
         ),
       ),
     );
@@ -149,89 +158,146 @@ class FoundInstrumentsList extends StatelessWidget {
     if (visible.isEmpty) {
       return const SmsEmpty(
         'No accounts found yet. Import your messages to find them here.',
+        icon: Icons.account_balance_outlined,
       );
     }
     return ListView(
-      padding: const EdgeInsets.all(16),
+      padding: const EdgeInsets.fromLTRB(
+        AppSpace.lg,
+        AppSpace.sm,
+        AppSpace.lg,
+        AppSpace.xxl,
+      ),
       children: [
-        const Text(
+        Text(
           'Confirm what belongs to you. You can change these choices later.',
+          style: BambooFonts.ui(14, color: BambooInk.ink700, height: 1.45),
         ),
         for (final kind in InstrumentKind.values)
           if (visible.any((i) => i.kind == kind)) ...[
-            Padding(
-              padding: const EdgeInsets.symmetric(vertical: 16),
-              child: Text(
-                instrumentKindLabel(kind),
-                style: Theme.of(context).textTheme.titleMedium,
-              ),
-            ),
+            BambooSectionLabel(instrumentKindLabel(kind), asTitle: true),
             for (final instrument in visible.where((i) => i.kind == kind))
-              Card(
-                child: Padding(
-                  padding: const EdgeInsets.all(12),
-                  child: Column(
-                    crossAxisAlignment: CrossAxisAlignment.start,
-                    children: [
-                      ListTile(
-                        contentPadding: EdgeInsets.zero,
-                        leading: Icon(
-                          kind == InstrumentKind.creditCard
-                              ? Icons.credit_card
-                              : Icons.account_balance_outlined,
-                        ),
-                        title: Text(instrument.displayName),
-                        subtitle: Text(
-                          '${instrument.issuerSlug.toUpperCase()} ••${instrument.maskDigits ?? 'unknown'}\nLast activity ${smsDate(instrument.lastSeenAt)}',
-                        ),
-                        isThreeLine: true,
-                        trailing: const Icon(Icons.chevron_right),
-                        onTap: () => onOpen(instrument),
-                      ),
-                      Text(
-                        kind == InstrumentKind.creditCard
-                            ? 'Limit ${smsMoney(instrument.creditLimitMinor)}'
-                            : 'Available ${smsMoney(instrument.availableMinor)}',
-                      ),
-                      Wrap(
-                        spacing: 8,
-                        children: [
-                          if (instrument.status == InstrumentStatus.detected)
-                            FilledButton(
-                              onPressed: () => onConfirm(instrument),
-                              child: const Text('Confirm'),
-                            )
-                          else
-                            const Chip(
-                              avatar: Icon(Icons.check, size: 16),
-                              label: Text('Confirmed'),
-                            ),
-                          TextButton(
-                            style: TextButton.styleFrom(
-                              foregroundColor: Theme.of(
-                                context,
-                              ).colorScheme.primary,
-                            ),
-                            onPressed: () => onReject(instrument),
-                            child: const Text('Not mine'),
-                          ),
-                          TextButton(
-                            style: TextButton.styleFrom(
-                              foregroundColor: Theme.of(
-                                context,
-                              ).colorScheme.primary,
-                            ),
-                            onPressed: () => onRename(instrument),
-                            child: const Text('Rename'),
-                          ),
-                        ],
-                      ),
-                    ],
-                  ),
+              Padding(
+                padding: const EdgeInsets.only(bottom: AppSpace.md),
+                child: _InstrumentPanel(
+                  instrument: instrument,
+                  onConfirm: onConfirm,
+                  onReject: onReject,
+                  onRename: onRename,
+                  onOpen: onOpen,
                 ),
               ),
           ],
       ],
+    );
+  }
+}
+
+IconData instrumentKindIcon(InstrumentKind kind) => switch (kind) {
+  InstrumentKind.creditCard ||
+  InstrumentKind.debitCard => Icons.credit_card_rounded,
+  InstrumentKind.wallet => Icons.account_balance_wallet_outlined,
+  InstrumentKind.broker => Icons.show_chart_rounded,
+  _ => Icons.account_balance_outlined,
+};
+
+class _InstrumentPanel extends StatelessWidget {
+  const _InstrumentPanel({
+    required this.instrument,
+    required this.onConfirm,
+    required this.onReject,
+    required this.onRename,
+    required this.onOpen,
+  });
+  final Instrument instrument;
+  final ValueChanged<Instrument> onConfirm, onReject, onRename, onOpen;
+
+  @override
+  Widget build(BuildContext context) {
+    final detected = instrument.status == InstrumentStatus.detected;
+    final isCard = instrument.kind == InstrumentKind.creditCard;
+    final quiet = [
+      TextButton(
+        style: BambooButtons.quiet,
+        onPressed: () => onReject(instrument),
+        child: const Text('Not mine'),
+      ),
+      TextButton(
+        style: BambooButtons.quiet,
+        onPressed: () => onRename(instrument),
+        child: const Text('Rename'),
+      ),
+    ];
+    return BambooPanel(
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.stretch,
+        children: [
+          Pressable(
+            onTap: () => onOpen(instrument),
+            semanticLabel: 'Open ${instrument.displayName}',
+            child: Row(
+              children: [
+                BambooIconTile(instrumentKindIcon(instrument.kind)),
+                const SizedBox(width: AppSpace.md),
+                Expanded(
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Text(
+                        instrument.displayName,
+                        style: BambooFonts.ui(
+                          15.5,
+                          weight: FontWeight.w700,
+                          color: BambooInk.ink900,
+                        ),
+                      ),
+                      const SizedBox(height: 2),
+                      Text(
+                        '${instrument.issuerSlug.toUpperCase()} ••${instrument.maskDigits ?? 'unknown'}',
+                        style: BambooFonts.ui(13, color: BambooInk.ink500),
+                      ),
+                    ],
+                  ),
+                ),
+                if (!detected) ...[
+                  const StatusPill(
+                    label: 'Confirmed',
+                    icon: Icons.check_rounded,
+                    foreground: BambooInk.rankBadgeInk,
+                    background: BambooInk.rankBadgeBg,
+                  ),
+                  const SizedBox(width: AppSpace.xs),
+                ],
+                const Icon(
+                  Icons.chevron_right_rounded,
+                  color: BambooInk.ink500,
+                ),
+              ],
+            ),
+          ),
+          const SizedBox(height: AppSpace.md),
+          const Divider(),
+          const SizedBox(height: AppSpace.xs),
+          BambooFigureRow(
+            isCard ? 'Limit' : 'Available',
+            smsMoney(
+              isCard ? instrument.creditLimitMinor : instrument.availableMinor,
+            ),
+          ),
+          BambooFigureRow('Last activity', smsDate(instrument.lastSeenAt)),
+          const SizedBox(height: AppSpace.md),
+          BambooActionBar(
+            primary: detected
+                ? FilledButton(
+                    style: BambooButtons.primary,
+                    onPressed: () => onConfirm(instrument),
+                    child: const Text('Confirm'),
+                  )
+                : null,
+            quiet: quiet,
+          ),
+        ],
+      ),
     );
   }
 }
@@ -258,17 +324,19 @@ class _RenameDialogState extends State<_RenameDialog> {
       controller: _controller,
       autofocus: true,
       maxLength: 80,
-      decoration: const InputDecoration(labelText: 'Name'),
+      decoration: const InputDecoration(
+        labelText: 'Name',
+        prefixIcon: Icon(Icons.edit_outlined),
+      ),
     ),
     actions: [
       TextButton(
-        style: TextButton.styleFrom(
-          foregroundColor: Theme.of(context).colorScheme.primary,
-        ),
+        style: BambooButtons.quiet,
         onPressed: () => Navigator.pop(context),
         child: const Text('Cancel'),
       ),
       FilledButton(
+        style: BambooButtons.primary,
         onPressed: () => Navigator.pop(context, _controller.text),
         child: const Text('Save'),
       ),

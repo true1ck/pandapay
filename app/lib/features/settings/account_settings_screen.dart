@@ -465,6 +465,7 @@ class _TypedConfirmDeletionFormState extends State<_TypedConfirmDeletionForm> {
           child: FilledButton(
             style: FilledButton.styleFrom(
               backgroundColor: BambooInk.clay,
+              foregroundColor: Colors.white,
               minimumSize: const Size.fromHeight(52),
               shape: RoundedRectangleBorder(
                 borderRadius: BorderRadius.circular(16),

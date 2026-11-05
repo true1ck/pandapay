@@ -164,7 +164,7 @@ class _DeletedTransactionCard extends StatelessWidget {
           children: [
             Row(
               children: [
-                const Icon(Icons.delete_sweep_outlined, color: AppColors.error),
+                const Icon(Icons.delete_sweep_outlined, color: BambooInk.clayInk),
                 const SizedBox(width: AppSpace.sm),
                 Expanded(
                   child: Text(
@@ -175,7 +175,7 @@ class _DeletedTransactionCard extends StatelessWidget {
                 MoneyText(
                   entry.amount,
                   confidence: Confidence.estimated,
-                  style: BambooFonts.money(16, color: AppColors.error),
+                  style: BambooFonts.money(16, color: BambooInk.clayInk),
                   showConfidenceIcon: false,
                   hidePaise: true,
                 ),

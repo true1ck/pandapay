@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+import '../../../app/design/bamboo_components.dart';
 import 'package:pandapay_domain/sms_v2.dart';
 import 'package:pandapay_domain/sms_v2_category.dart';
 import '../pipeline/trace.dart';
@@ -66,6 +67,21 @@ class _CorrectionFormState extends ConsumerState<CorrectionForm> {
     Navigator.pop(context, CorrectionEdit(_kind, corrected));
   }
 
+  Future<void> _pickDate() async {
+    final now = DateTime.now();
+    final current = DateTime.tryParse(_value.text.trim());
+    final picked = await showDatePicker(
+      context: context,
+      initialDate: current ?? now,
+      firstDate: DateTime(2000),
+      lastDate: now,
+    );
+    if (picked == null || !mounted) return;
+    final month = picked.month.toString().padLeft(2, '0');
+    final day = picked.day.toString().padLeft(2, '0');
+    setState(() => _value.text = '${picked.year}-$month-$day');
+  }
+
   @override
   Widget build(BuildContext context) {
     final instruments =
@@ -75,186 +91,187 @@ class _CorrectionFormState extends ConsumerState<CorrectionForm> {
       CorrectionKind.wrongDate,
       CorrectionKind.wrongMerchant,
     }.contains(_kind);
-    return SafeArea(
-      child: SingleChildScrollView(
-        padding: EdgeInsets.fromLTRB(
-          24,
-          8,
-          24,
-          24 + MediaQuery.viewInsetsOf(context).bottom,
-        ),
-        child: Form(
-          key: _form,
-          child: Column(
-            crossAxisAlignment: CrossAxisAlignment.stretch,
-            mainAxisSize: MainAxisSize.min,
-            children: [
-              Text(
-                'Report a problem',
-                style: Theme.of(context).textTheme.headlineSmall,
-              ),
-              const SizedBox(height: 16),
-              DropdownButtonFormField<CorrectionKind>(
-                initialValue: _kind,
-                isExpanded: true,
-                decoration: const InputDecoration(
-                  labelText: 'What needs changing?',
-                ),
-                items: [
-                  for (final kind in CorrectionKind.values)
-                    if (widget.groupCount == 1 ||
-                        !{
-                          CorrectionKind.wrongAmount,
-                          CorrectionKind.wrongDate,
-                          CorrectionKind.wrongLink,
-                          CorrectionKind.duplicate,
-                        }.contains(kind))
-                      DropdownMenuItem(
-                        value: kind,
-                        child: Text(correctionLabels[kind]!),
-                      ),
-                ],
-                onChanged: (value) => setState(() {
-                  _kind = value!;
-                  _value.clear();
-                }),
-              ),
-              if (widget.groupCount > 1)
-                Padding(
-                  padding: const EdgeInsets.only(top: 12),
-                  child: Text(
-                    'Applies to ${widget.groupCount} messages of this format. Each keeps its own amount and date.',
+    return Form(
+      key: _form,
+      child: BambooSheet(
+        title: 'Report a problem',
+        subtitle: 'Choose what’s wrong, then give the right value.',
+        icon: Icons.flag_outlined,
+        actions: [FilledButton(onPressed: _submit, child: const Text('Save'))],
+        children: [
+          DropdownButtonFormField<CorrectionKind>(
+            initialValue: _kind,
+            isExpanded: true,
+            decoration: const InputDecoration(
+              labelText: 'What needs changing?',
+              prefixIcon: Icon(Icons.edit_note_rounded),
+            ),
+            items: [
+              for (final kind in CorrectionKind.values)
+                if (widget.groupCount == 1 ||
+                    !{
+                      CorrectionKind.wrongAmount,
+                      CorrectionKind.wrongDate,
+                      CorrectionKind.wrongLink,
+                      CorrectionKind.duplicate,
+                    }.contains(kind))
+                  DropdownMenuItem(
+                    value: kind,
+                    child: Text(correctionLabels[kind]!),
                   ),
-                ),
-              if (_kind == CorrectionKind.wrongKind)
-                DropdownButtonFormField<EventType>(
-                  initialValue: _eventType,
-                  isExpanded: true,
-                  decoration: const InputDecoration(labelText: 'Payment type'),
-                  items: [
-                    for (final type in EventType.values)
-                      DropdownMenuItem(
-                        value: type,
-                        child: Text(type.wire.replaceAll('_', ' ')),
-                      ),
-                  ],
-                  onChanged: (value) => _eventType = value!,
-                ),
-              if (_kind == CorrectionKind.wrongCategory ||
-                  _kind == CorrectionKind.preferenceOnly)
-                DropdownButtonFormField<String>(
-                  initialValue: _category,
-                  isExpanded: true,
-                  decoration: const InputDecoration(labelText: 'Category'),
-                  items: [
-                    for (final category in TaxonomyRegistry.v1.categories)
-                      DropdownMenuItem(
-                        value: category.slug,
-                        child: Text(category.displayName),
-                      ),
-                  ],
-                  onChanged: (value) => _category = value!,
-                ),
-              if (_kind == CorrectionKind.wrongInstrument)
-                DropdownButtonFormField<String>(
-                  initialValue: _instrument,
-                  isExpanded: true,
-                  decoration: const InputDecoration(
-                    labelText: 'Account or card',
-                  ),
-                  items: [
-                    for (final instrument in instruments.where(
-                      (i) => i.status == InstrumentStatus.confirmed,
-                    ))
-                      DropdownMenuItem(
-                        value: instrument.instrumentId,
-                        child: Text(
-                          '${instrument.displayName} ••${instrument.maskDigits ?? ''}',
-                        ),
-                      ),
-                  ],
-                  validator: (value) => value == null
-                      ? 'Choose a confirmed account or card'
-                      : null,
-                  onChanged: (value) => _instrument = value,
-                ),
-              if (textValue)
-                TextFormField(
-                  controller: _value,
-                  keyboardType: _kind == CorrectionKind.wrongAmount
-                      ? const TextInputType.numberWithOptions(decimal: true)
-                      : TextInputType.text,
-                  decoration: InputDecoration(
-                    labelText: _kind == CorrectionKind.wrongAmount
-                        ? 'Amount in rupees'
-                        : _kind == CorrectionKind.wrongDate
-                        ? 'Date (YYYY-MM-DD)'
-                        : 'Merchant name',
-                  ),
-                  maxLength: _kind == CorrectionKind.wrongMerchant ? 120 : 32,
-                  validator: (value) {
-                    final text = value?.trim() ?? '';
-                    if (text.isEmpty) return 'Enter a value';
-                    if (_kind == CorrectionKind.wrongAmount &&
-                        (!RegExp(r'^\d+(\.\d{1,2})?$').hasMatch(text) ||
-                            (double.tryParse(text) ?? 0) <= 0)) {
-                      return 'Enter a positive amount with up to two decimals';
-                    }
-                    if (_kind == CorrectionKind.wrongDate &&
-                        (!RegExp(r'^\d{4}-\d{2}-\d{2}$').hasMatch(text) ||
-                            DateTime.tryParse(
-                                  text,
-                                )?.toIso8601String().substring(0, 10) !=
-                                text)) {
-                      return 'Enter a valid date';
-                    }
-                    return null;
-                  },
-                ),
-              if (_kind == CorrectionKind.wrongAmount)
-                DropdownButtonFormField<String>(
-                  initialValue: _role,
-                  decoration: const InputDecoration(
-                    labelText: 'What does this amount mean?',
-                  ),
-                  items: [
-                    for (final role in [
-                      'posted',
-                      'held',
-                      'released',
-                      'due_total',
-                      'due_minimum',
-                      'balance',
-                      'available',
-                      'limit',
-                    ])
-                      DropdownMenuItem(
-                        value: role,
-                        child: Text(role.replaceAll('_', ' ')),
-                      ),
-                  ],
-                  onChanged: (value) => _role = value!,
-                ),
-              if (_kind == CorrectionKind.missing)
-                const Padding(
-                  padding: EdgeInsets.all(12),
-                  child: Text(
-                    'We’ll report the missing reading for review. It will appear in totals once it has a reading you can confirm.',
-                  ),
-                ),
-              if (_kind == CorrectionKind.wrongLink)
-                const Padding(
-                  padding: EdgeInsets.all(12),
-                  child: Text(
-                    'Choose a match in the review inbox to change linked messages.',
-                  ),
-                ),
-              const SizedBox(height: 24),
-              FilledButton(onPressed: _submit, child: const Text('Save')),
             ],
+            onChanged: (value) => setState(() {
+              _kind = value!;
+              _value.clear();
+            }),
           ),
-        ),
+          if (widget.groupCount > 1)
+            BambooNote(
+              'Applies to ${widget.groupCount} messages of this format. Each keeps its own amount and date.',
+              icon: Icons.layers_outlined,
+            ),
+          if (_kind == CorrectionKind.wrongKind)
+            DropdownButtonFormField<EventType>(
+              initialValue: _eventType,
+              isExpanded: true,
+              decoration: const InputDecoration(
+                labelText: 'Payment type',
+                prefixIcon: Icon(Icons.swap_vert_rounded),
+              ),
+              items: [
+                for (final type in EventType.values)
+                  DropdownMenuItem(
+                    value: type,
+                    child: Text(_sentence(type.wire)),
+                  ),
+              ],
+              onChanged: (value) => _eventType = value!,
+            ),
+          if (_kind == CorrectionKind.wrongCategory ||
+              _kind == CorrectionKind.preferenceOnly)
+            DropdownButtonFormField<String>(
+              initialValue: _category,
+              isExpanded: true,
+              decoration: const InputDecoration(
+                labelText: 'Category',
+                prefixIcon: Icon(Icons.category_outlined),
+              ),
+              items: [
+                for (final category in TaxonomyRegistry.v1.categories)
+                  DropdownMenuItem(
+                    value: category.slug,
+                    child: Text(category.displayName),
+                  ),
+              ],
+              onChanged: (value) => _category = value!,
+            ),
+          if (_kind == CorrectionKind.wrongInstrument)
+            DropdownButtonFormField<String>(
+              initialValue: _instrument,
+              isExpanded: true,
+              decoration: const InputDecoration(
+                labelText: 'Account or card',
+                prefixIcon: Icon(Icons.account_balance_wallet_outlined),
+              ),
+              items: [
+                for (final instrument in instruments.where(
+                  (i) => i.status == InstrumentStatus.confirmed,
+                ))
+                  DropdownMenuItem(
+                    value: instrument.instrumentId,
+                    child: Text(
+                      '${instrument.displayName} ••${instrument.maskDigits ?? ''}',
+                    ),
+                  ),
+              ],
+              validator: (value) =>
+                  value == null ? 'Choose a confirmed account or card' : null,
+              onChanged: (value) => _instrument = value,
+            ),
+          if (textValue)
+            TextFormField(
+              controller: _value,
+              keyboardType: _kind == CorrectionKind.wrongAmount
+                  ? const TextInputType.numberWithOptions(decimal: true)
+                  : TextInputType.text,
+              decoration: InputDecoration(
+                labelText: _kind == CorrectionKind.wrongAmount
+                    ? 'Amount in rupees'
+                    : _kind == CorrectionKind.wrongDate
+                    ? 'Date (YYYY-MM-DD)'
+                    : 'Merchant name',
+                prefixIcon: Icon(switch (_kind) {
+                  CorrectionKind.wrongAmount => Icons.currency_rupee_rounded,
+                  CorrectionKind.wrongDate => Icons.event_outlined,
+                  _ => Icons.storefront_outlined,
+                }),
+                suffixIcon: _kind == CorrectionKind.wrongDate
+                    ? IconButton(
+                        tooltip: 'Pick a date',
+                        icon: const Icon(Icons.calendar_month_outlined),
+                        onPressed: _pickDate,
+                      )
+                    : null,
+              ),
+              maxLength: _kind == CorrectionKind.wrongMerchant ? 120 : 32,
+              validator: (value) {
+                final text = value?.trim() ?? '';
+                if (text.isEmpty) return 'Enter a value';
+                if (_kind == CorrectionKind.wrongAmount &&
+                    (!RegExp(r'^\d+(\.\d{1,2})?$').hasMatch(text) ||
+                        (double.tryParse(text) ?? 0) <= 0)) {
+                  return 'Enter a positive amount with up to two decimals';
+                }
+                if (_kind == CorrectionKind.wrongDate &&
+                    (!RegExp(r'^\d{4}-\d{2}-\d{2}$').hasMatch(text) ||
+                        DateTime.tryParse(
+                              text,
+                            )?.toIso8601String().substring(0, 10) !=
+                            text)) {
+                  return 'Enter a valid date';
+                }
+                return null;
+              },
+            ),
+          if (_kind == CorrectionKind.wrongAmount)
+            DropdownButtonFormField<String>(
+              initialValue: _role,
+              decoration: const InputDecoration(
+                labelText: 'What does this amount mean?',
+                prefixIcon: Icon(Icons.help_outline_rounded),
+              ),
+              items: [
+                for (final role in [
+                  'posted',
+                  'held',
+                  'released',
+                  'due_total',
+                  'due_minimum',
+                  'balance',
+                  'available',
+                  'limit',
+                ])
+                  DropdownMenuItem(value: role, child: Text(_sentence(role))),
+              ],
+              onChanged: (value) => _role = value!,
+            ),
+          if (_kind == CorrectionKind.missing)
+            const BambooNote(
+              'We’ll report the missing reading for review. It will appear in totals once it has a reading you can confirm.',
+              icon: Icons.info_outline,
+            ),
+          if (_kind == CorrectionKind.wrongLink)
+            const BambooNote(
+              'Choose a match in the review inbox to change linked messages.',
+              icon: Icons.info_outline,
+            ),
+        ],
       ),
     );
   }
+}
+
+String _sentence(String wire) {
+  final text = wire.replaceAll('_', ' ');
+  return text.isEmpty ? text : text[0].toUpperCase() + text.substring(1);
 }

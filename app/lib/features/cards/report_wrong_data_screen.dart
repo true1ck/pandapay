@@ -281,7 +281,6 @@ class _ReportWrongDataScreenState extends ConsumerState<ReportWrongDataScreen> {
                         _reportFieldOptions[index].label,
                         style: BambooFonts.ui(13.5, color: BambooInk.ink900),
                       ),
-                      activeColor: BambooInk.jade,
                       contentPadding: const EdgeInsets.symmetric(
                         horizontal: AppSpace.sm,
                       ),

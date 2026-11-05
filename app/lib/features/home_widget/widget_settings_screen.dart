@@ -354,11 +354,14 @@ class _WidgetSettingsScreenState extends ConsumerState<WidgetSettingsScreen> {
                       selected: _selectedVariant == option.$1,
                       onSelected: (_) =>
                           setState(() => _selectedVariant = option.$1),
-                      selectedColor: BambooInk.wash,
+                      selectedColor: BambooInk.slate,
+                      checkmarkColor: BambooInk.lime,
                       labelStyle: BambooFonts.ui(
                         12,
                         weight: FontWeight.w600,
-                        color: BambooInk.ink900,
+                        color: _selectedVariant == option.$1
+                            ? BambooInk.onSlate
+                            : BambooInk.ink900,
                       ),
                       side: BorderSide(color: BambooInk.hairlineOnPaper),
                     ),
@@ -371,8 +374,8 @@ class _WidgetSettingsScreenState extends ConsumerState<WidgetSettingsScreen> {
                 FilledButton.icon(
                   icon: const Icon(Icons.add_to_home_screen),
                   style: FilledButton.styleFrom(
-                    backgroundColor: BambooInk.jade,
-                    foregroundColor: Colors.white,
+                    backgroundColor: BambooInk.slate,
+                    foregroundColor: BambooInk.lime,
                     minimumSize: const Size.fromHeight(50),
                     shape: RoundedRectangleBorder(
                       borderRadius: BorderRadius.circular(16),

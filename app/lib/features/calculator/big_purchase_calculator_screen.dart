@@ -293,7 +293,7 @@ class _BigPurchaseCalculatorScreenState
               color: isBest
                   ? BambooInk.lime
                   : (completesMilestone
-                        ? const Color(0xFFE3F3EA)
+                        ? BambooInk.rankBadgeBg
                         : BambooInk.glassFillOnPaper),
               borderRadius: BorderRadius.circular(18),
               border: Border.all(

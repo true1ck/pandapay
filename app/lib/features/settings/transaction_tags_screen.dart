@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import '../../app/design/bamboo_components.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import '../../app/design/app_theme.dart';
@@ -72,6 +73,7 @@ class _TransactionTagsScreenState extends ConsumerState<TransactionTagsScreen> {
             child: const Text('Cancel'),
           ),
           FilledButton(
+            style: BambooButtons.primary,
             onPressed: () => Navigator.of(context).pop(true),
             child: const Text('Archive'),
           ),
@@ -127,6 +129,7 @@ class _TransactionTagsScreenState extends ConsumerState<TransactionTagsScreen> {
               child: const Text('Cancel'),
             ),
             FilledButton(
+              style: BambooButtons.primary,
               onPressed: targetId == null
                   ? null
                   : () => Navigator.of(context).pop(targetId),
@@ -362,6 +365,7 @@ class _TagEditorDialogState extends State<_TagEditorDialog> {
         child: const Text('Cancel'),
       ),
       FilledButton(
+        style: BambooButtons.primary,
         onPressed: _name.text.trim().isEmpty
             ? null
             : () => Navigator.of(context).pop((_name.text.trim(), _color)),

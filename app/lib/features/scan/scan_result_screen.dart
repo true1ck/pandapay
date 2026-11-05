@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import '../../app/design/bamboo_components.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:pandapay_domain/pandapay_domain.dart';
@@ -599,6 +600,7 @@ class _ScanResultScreenState extends ConsumerState<ScanResultScreen> {
               child: const Text('Cancel'),
             ),
             FilledButton(
+              style: BambooButtons.primary,
               onPressed: () => Navigator.pop(ctx, true),
               child: const Text('Yes, continue'),
             ),

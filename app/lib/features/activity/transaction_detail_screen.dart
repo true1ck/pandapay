@@ -828,16 +828,16 @@ class _DetailBodyState extends ConsumerState<_DetailBody> {
             ])
               ListTile(
                 leading: r == 'transfer'
-                    ? const Icon(Icons.delete_outline, color: AppColors.error)
+                    ? const Icon(Icons.delete_outline, color: BambooInk.clayInk)
                     : r == 'wrong_transaction'
-                    ? const Icon(Icons.flag_outlined, color: AppColors.error)
+                    ? const Icon(Icons.flag_outlined, color: BambooInk.clayInk)
                     : null,
                 title: Text(
                   _reasonLabel(r),
                   style: BambooFonts.ui(
                     14.5,
                     color: r == 'transfer' || r == 'wrong_transaction'
-                        ? AppColors.error
+                        ? BambooInk.clayInk
                         : BambooInk.ink900,
                   ),
                 ),
@@ -884,7 +884,8 @@ class _DetailBodyState extends ConsumerState<_DetailBody> {
                 Expanded(
                   child: FilledButton(
                     style: FilledButton.styleFrom(
-                      backgroundColor: AppColors.error,
+                      backgroundColor: BambooInk.clay,
+                      foregroundColor: Colors.white,
                       minimumSize: const Size(0, 52),
                     ),
                     onPressed: () => Navigator.of(context).pop(true),
@@ -1568,8 +1569,8 @@ class _DetailBodyState extends ConsumerState<_DetailBody> {
               ),
               child: FilledButton.icon(
                 style: FilledButton.styleFrom(
-                  backgroundColor: BambooInk.jade,
-                  foregroundColor: Colors.white,
+                  backgroundColor: BambooInk.slate,
+                  foregroundColor: BambooInk.lime,
                   minimumSize: const Size.fromHeight(52),
                   shape: RoundedRectangleBorder(
                     borderRadius: BorderRadius.circular(16),

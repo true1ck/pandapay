@@ -1407,8 +1407,8 @@ class _AppShellState extends ConsumerState<_AppShell> {
                   child: FloatingActionButton.small(
                     key: tutorialKeys.voiceFab,
                     heroTag: 'voiceCapture',
-                    backgroundColor: BambooInk.jade,
-                    foregroundColor: Colors.white,
+                    backgroundColor: BambooInk.slate,
+                    foregroundColor: BambooInk.lime,
                     tooltip: 'Add by voice',
                     onPressed: () => showVoiceInputSheet(context),
                     child: const Icon(Icons.mic_rounded),

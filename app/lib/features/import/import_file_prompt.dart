@@ -1,5 +1,7 @@
 import 'package:flutter/material.dart';
 
+import '../../app/design/app_theme.dart' show BambooInk;
+
 /// Uses the app's inherited typography, with no font/network work at file pick.
 class ImportFilePrompt extends StatelessWidget {
   final IconData icon;
@@ -19,8 +21,21 @@ class ImportFilePrompt extends StatelessWidget {
       child: Column(
         mainAxisSize: MainAxisSize.min,
         children: [
-          Icon(icon, size: 48, color: Theme.of(context).colorScheme.primary),
-          const SizedBox(height: 16),
+          Container(
+            width: 72,
+            height: 72,
+            decoration: BoxDecoration(
+              color: BambooInk.paperMuted,
+              borderRadius: BorderRadius.circular(22),
+              border: Border.all(color: BambooInk.hairlineOnPaper),
+            ),
+            child: Icon(
+              icon,
+              size: 34,
+              color: Theme.of(context).colorScheme.primary,
+            ),
+          ),
+          const SizedBox(height: 20),
           Text(
             title,
             style: Theme.of(context).textTheme.titleLarge,

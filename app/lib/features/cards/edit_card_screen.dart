@@ -621,10 +621,6 @@ class _EditCardScreenState extends ConsumerState<EditCardScreen> {
                               _annualFeeController.text = '0';
                             }
                           }),
-                          activeThumbColor: BambooInk.jade,
-                          activeTrackColor: BambooInk.jade.withValues(
-                            alpha: 0.35,
-                          ),
                         ),
                         if (_feeOverrideEnabled) ...[
                           const Divider(height: AppSpace.lg),
@@ -644,7 +640,6 @@ class _EditCardScreenState extends ConsumerState<EditCardScreen> {
                                 _annualFeeController.text = '0';
                               }
                             }),
-                            activeColor: BambooInk.jade,
                           ),
                           if (!_lifetimeFree)
                             TextField(

@@ -1,5 +1,6 @@
 import '../settings/feedback_support_screen.dart';
 import 'package:flutter/material.dart';
+import '../../app/design/bamboo_components.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 import 'package:pandapay_domain/pandapay_domain.dart';
@@ -307,6 +308,7 @@ class _MyCardTileState extends ConsumerState<_MyCardTile> {
             child: const Text('Cancel'),
           ),
           FilledButton(
+            style: BambooButtons.primary,
             onPressed: () => Navigator.pop(ctx, true),
             child: const Text('Remove'),
           ),

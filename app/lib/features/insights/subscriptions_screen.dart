@@ -1,6 +1,7 @@
 import 'dart:async';
 
 import 'package:flutter/material.dart';
+import '../../app/design/bamboo_components.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:pandapay_domain/pandapay_domain.dart';
 
@@ -2221,6 +2222,7 @@ class _SeriesCard extends ConsumerWidget {
               child: const Text('Cancel'),
             ),
             FilledButton(
+              style: BambooButtons.primary,
               onPressed: () {
                 if (formKey.currentState!.validate() && next != null) {
                   Navigator.pop(dialogContext, true);
@@ -2286,6 +2288,7 @@ class _SeriesCard extends ConsumerWidget {
             child: const Text('Keep'),
           ),
           FilledButton(
+            style: BambooButtons.primary,
             onPressed: () => Navigator.pop(ctx, true),
             child: const Text('Ignore'),
           ),

@@ -539,9 +539,13 @@ class StatusPill extends StatelessWidget {
         mainAxisSize: MainAxisSize.min,
         children: [
           if (icon != null) ...[Icon(icon, size: 12, color: foreground), const SizedBox(width: 4)],
-          Text(
-            label,
-            style: BambooFonts.ui(11, weight: FontWeight.w600, color: foreground),
+          Flexible(
+            child: Text(
+              label,
+              maxLines: 1,
+              overflow: TextOverflow.ellipsis,
+              style: BambooFonts.ui(11, weight: FontWeight.w600, color: foreground),
+            ),
           ),
         ],
       ),

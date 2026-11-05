@@ -183,10 +183,19 @@ class SharedEditorFields extends StatelessWidget {
                 children: [
                   for (final member in editor.members)
                     FilterChip(
-                      label: Text(member.label, style: BambooFonts.ui(13)),
+                      label: Text(
+                        member.label,
+                        style: BambooFonts.ui(
+                          13,
+                          weight: FontWeight.w600,
+                          color: editor.participants.contains(member.id)
+                              ? BambooInk.onSlate
+                              : BambooInk.ink900,
+                        ),
+                      ),
                       selected: editor.participants.contains(member.id),
-                      selectedColor: BambooInk.rankBadgeBg,
-                      checkmarkColor: BambooInk.jade,
+                      selectedColor: BambooInk.slate,
+                      checkmarkColor: BambooInk.lime,
                       onSelected: editor.sealed
                           ? null
                           : (value) =>
@@ -215,9 +224,18 @@ class SharedEditorFields extends StatelessWidget {
                         SharedSplitMode.exact => 'Exact ₹',
                         SharedSplitMode.percentage => '%',
                         SharedSplitMode.shares => 'Shares',
-                      }, style: BambooFonts.ui(13)),
+                      },
+                        style: BambooFonts.ui(
+                          13,
+                          weight: FontWeight.w600,
+                          color: editor.mode == mode
+                              ? BambooInk.onSlate
+                              : BambooInk.ink900,
+                        ),
+                      ),
                       selected: editor.mode == mode,
-                      selectedColor: BambooInk.rankBadgeBg,
+                      selectedColor: BambooInk.slate,
+                      checkmarkColor: BambooInk.lime,
                       onSelected: editor.sealed
                           ? null
                           : (_) => editor.setMode(mode),

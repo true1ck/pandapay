@@ -235,8 +235,6 @@ class _NearbyMerchantsScreenState extends ConsumerState<NearbyMerchantsScreen> {
                       background.description,
                       style: BambooFonts.ui(12.5, color: BambooInk.ink500),
                     ),
-                    activeTrackColor: BambooInk.jade,
-                    activeThumbColor: BambooInk.lime,
                     value: background.enabled,
                     onChanged: background.busy
                         ? null

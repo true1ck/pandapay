@@ -1911,7 +1911,6 @@ class _CardBillDetailSheetState extends ConsumerState<_CardBillDetailSheet> {
                       : 'Unpaid statement bill',
                   style: BambooFonts.ui(12, color: BambooInk.ink500),
                 ),
-                activeTrackColor: BambooInk.jade,
                 contentPadding: EdgeInsets.zero,
               ),
 

@@ -2,6 +2,7 @@ import 'dart:io' show Platform;
 
 import 'package:flutter/foundation.dart' show kIsWeb;
 import 'package:flutter/material.dart';
+import '../../app/design/bamboo_components.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:pandapay_domain/pandapay_domain.dart';
 
@@ -328,6 +329,7 @@ class _FindCardsScreenState extends ConsumerState<FindCardsScreen> {
             child: const Text('Not now'),
           ),
           FilledButton(
+            style: BambooButtons.primary,
             onPressed: () => Navigator.of(ctx).pop(true),
             child: const Text('Open Settings'),
           ),

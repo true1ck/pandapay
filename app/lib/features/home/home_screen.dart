@@ -814,7 +814,7 @@ class _HomeSpendChangePill extends StatelessWidget {
     return Container(
       padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
       decoration: BoxDecoration(
-        color: const Color(0xFFE7F8D8),
+        color: BambooInk.rankBadgeBg,
         borderRadius: BorderRadius.circular(8),
       ),
       child: Row(
@@ -825,7 +825,7 @@ class _HomeSpendChangePill extends StatelessWidget {
             style: BambooFonts.ui(
               11,
               weight: FontWeight.w800,
-              color: const Color(0xFF1C7B35),
+              color: BambooInk.rankBadgeInk,
             ),
           ),
           const SizedBox(width: 4),

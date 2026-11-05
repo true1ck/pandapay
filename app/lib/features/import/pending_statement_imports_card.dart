@@ -1,6 +1,9 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
+import '../../app/design/app_theme.dart';
+import '../../app/design/bamboo_components.dart';
+
 import '../../app/env.dart';
 import '../../app/providers.dart';
 import '../../data/local/statement_import_outbox.dart';
@@ -75,10 +78,12 @@ class _PendingStatementImportsCardState
         ),
         actions: [
           TextButton(
+            style: BambooButtons.quiet,
             onPressed: () => Navigator.pop(context, false),
             child: const Text('Keep import'),
           ),
           FilledButton(
+            style: BambooButtons.primary,
             onPressed: () => Navigator.pop(context, true),
             child: const Text('Discard remaining'),
           ),
@@ -118,15 +123,13 @@ class _PendingStatementImportsCardState
     if (!Env.statementImportContinuationEnabled) return const SizedBox.shrink();
     return ref
         .watch(statementImportContinuationProvider)
-        .when(skipLoadingOnReload: true, skipLoadingOnRefresh: true, 
+        .when(
+          skipLoadingOnReload: true,
+          skipLoadingOnRefresh: true,
           loading: () => const SizedBox.shrink(),
-          error: (_, _) => const Card(
-            child: Padding(
-              padding: EdgeInsets.all(16),
-              child: Text(
-                'Saved imports are temporarily unavailable. Existing encrypted work is retained on this phone.',
-              ),
-            ),
+          error: (_, _) => const BambooNote(
+            'Saved imports are temporarily unavailable. Existing encrypted work is retained on this phone.',
+            icon: Icons.info_outline,
           ),
           data: (continuation) {
             if (continuation == null) return const SizedBox.shrink();
@@ -134,61 +137,89 @@ class _PendingStatementImportsCardState
             if (sessions.isEmpty && _message == null) {
               return const SizedBox.shrink();
             }
-            return Card(
-              child: Padding(
-                padding: const EdgeInsets.all(16),
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    Text(
-                      'Saved file imports',
-                      style: Theme.of(context).textTheme.titleMedium,
-                    ),
-                    const SizedBox(height: 8),
-                    const Text(
-                      'Remaining batches are encrypted on this phone. Resume only while signed in to this account. A recovery copy waits until these imports finish or are discarded.',
-                    ),
-                    for (final session in sessions)
-                      ListTile(
-                        contentPadding: EdgeInsets.zero,
-                        title: Text(
-                          '${session.completedBatches} of ${session.batchCount} batches confirmed',
-                        ),
-                        subtitle: Text(
-                          session.needsReview
-                              ? 'Saved for more than 14 days. Review before continuing.'
-                              : 'Ready to continue when you choose.',
-                        ),
-                        trailing: TextButton(
-                          onPressed: _busy
-                              ? null
-                              : () => _cancel(continuation, session),
-                          child: const Text('Discard'),
+            return BambooPanel(
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.stretch,
+                children: [
+                  Row(
+                    children: [
+                      const BambooIconTile(Icons.inventory_2_outlined),
+                      const SizedBox(width: AppSpace.md),
+                      Expanded(
+                        child: Text(
+                          'Saved file imports',
+                          style: BambooFonts.heading(
+                            16.5,
+                            color: BambooInk.ink900,
+                          ),
                         ),
                       ),
-                    if (sessions.any((s) => !s.needsReview))
-                      FilledButton(
-                        onPressed: _busy ? null : () => _resume(continuation),
-                        child: const Text('Resume saved imports'),
+                    ],
+                  ),
+                  const SizedBox(height: AppSpace.sm),
+                  Text(
+                    'Remaining batches are encrypted on this phone. Resume only while signed in to this account. A recovery copy waits until these imports finish or are discarded.',
+                    style: BambooFonts.ui(
+                      13,
+                      color: BambooInk.ink500,
+                      height: 1.4,
+                    ),
+                  ),
+                  const SizedBox(height: AppSpace.sm),
+                  for (final session in sessions) ...[
+                    const Divider(),
+                    ListTile(
+                      contentPadding: EdgeInsets.zero,
+                      title: Text(
+                        '${session.completedBatches} of ${session.batchCount} batches confirmed',
                       ),
-                    for (final session in sessions.where((s) => s.needsReview))
-                      TextButton(
+                      subtitle: Text(
+                        session.needsReview
+                            ? 'Saved for more than 14 days. Review before continuing.'
+                            : 'Ready to continue when you choose.',
+                      ),
+                      trailing: TextButton(
+                        style: BambooButtons.quiet,
                         onPressed: _busy
                             ? null
-                            : () => _resume(
-                                continuation,
-                                reviewSession: session.sessionId,
-                              ),
-                        child: const Text('Continue retained import'),
+                            : () => _cancel(continuation, session),
+                        child: const Text('Discard'),
                       ),
-                    if (_busy) const LinearProgressIndicator(),
-                    if (_message != null)
-                      Padding(
-                        padding: const EdgeInsets.only(top: 8),
-                        child: Text(_message!),
-                      ),
+                    ),
                   ],
-                ),
+                  if (sessions.any((s) => !s.needsReview)) ...[
+                    const SizedBox(height: AppSpace.sm),
+                    FilledButton(
+                      style: BambooButtons.primary,
+                      onPressed: _busy ? null : () => _resume(continuation),
+                      child: const Text('Resume saved imports'),
+                    ),
+                  ],
+                  for (final session in sessions.where((s) => s.needsReview))
+                    OutlinedButton(
+                      style: BambooButtons.secondary,
+                      onPressed: _busy
+                          ? null
+                          : () => _resume(
+                              continuation,
+                              reviewSession: session.sessionId,
+                            ),
+                      child: const Text('Continue retained import'),
+                    ),
+                  if (_busy) ...[
+                    const SizedBox(height: AppSpace.md),
+                    const ClipRRect(
+                      borderRadius: BorderRadius.all(
+                        Radius.circular(AppRadius.pill),
+                      ),
+                      child: LinearProgressIndicator(minHeight: 3),
+                    ),
+                  ],
+                  if (_message != null) ...[
+                    const SizedBox(height: AppSpace.md),
+                    BambooNote(_message!, icon: Icons.info_outline),
+                  ],
+                ],
               ),
             );
           },

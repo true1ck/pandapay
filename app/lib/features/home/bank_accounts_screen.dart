@@ -1,5 +1,6 @@
 import '../sms_v2/ui/ledger_screens.dart';
 import 'package:flutter/material.dart';
+import '../../app/design/bamboo_components.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:intl/intl.dart';
@@ -129,6 +130,7 @@ class _BankAccountsScreenState extends ConsumerState<BankAccountsScreen> {
               child: const Text('Cancel'),
             ),
             FilledButton(
+              style: BambooButtons.primary,
               onPressed: () {
                 final parsed = double.tryParse(controller.text);
                 if (parsed != null && parsed >= 0) {

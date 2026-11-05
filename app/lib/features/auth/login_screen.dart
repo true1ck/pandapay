@@ -811,7 +811,7 @@ class _IdentifierStep extends StatelessWidget {
     ),
     focusedBorder: OutlineInputBorder(
       borderRadius: BorderRadius.circular(16),
-      borderSide: const BorderSide(color: BambooInk.jade, width: 1.5),
+      borderSide: const BorderSide(color: BambooInk.slate, width: 1.5),
     ),
   );
 
@@ -947,8 +947,8 @@ class _ConsentCheckbox extends StatelessWidget {
       checkboxShape: RoundedRectangleBorder(
         borderRadius: BorderRadius.circular(4),
       ),
-      activeColor: const Color(0xFFB0E34D),
-      checkColor: BambooInk.slate,
+      activeColor: BambooInk.slate,
+      checkColor: BambooInk.lime,
       side: const BorderSide(color: Color(0xFFACB2B6), width: 1.5),
       title: Text(
         label,

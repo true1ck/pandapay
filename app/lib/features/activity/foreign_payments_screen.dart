@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import '../../app/design/bamboo_components.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
@@ -473,6 +474,7 @@ class _ForeignPaymentDetailScreenState
             child: const Text('Cancel'),
           ),
           FilledButton(
+            style: BambooButtons.primary,
             onPressed: () {
               if (form.currentState!.validate()) {
                 Navigator.pop(dialogContext, true);
@@ -575,6 +577,7 @@ class _ForeignPaymentDetailScreenState
             child: const Text('Cancel'),
           ),
           FilledButton(
+            style: BambooButtons.primary,
             onPressed: () {
               if (form.currentState!.validate()) {
                 Navigator.pop(dialogContext, true);

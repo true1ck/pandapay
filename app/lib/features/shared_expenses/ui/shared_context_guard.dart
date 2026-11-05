@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+import '../../../app/design/bamboo_components.dart';
 import '../../../app/providers.dart' show cacheNamespaceProvider;
 import '../runtime/shared_runtime.dart';
 
@@ -27,7 +28,10 @@ class SharedContextGuard extends ConsumerWidget {
           return const SafeArea(
             child: Padding(
               padding: EdgeInsets.all(24),
-              child: Text('This shared expense is no longer available.'),
+              child: BambooNote(
+                'This shared expense is no longer available.',
+                icon: Icons.link_off_rounded,
+              ),
             ),
           );
         }

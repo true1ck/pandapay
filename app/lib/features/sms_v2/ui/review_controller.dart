@@ -1,5 +1,6 @@
 import 'dart:convert';
 import 'package:flutter/material.dart';
+import '../../../app/design/bamboo_components.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:uuid/uuid.dart';
 import 'package:pandapay_domain/sms_v2.dart';
@@ -284,10 +285,8 @@ Future<void> showSmsCorrection(
       payload: {'sourceKey': sourceKey, 'eventId': ?eventId},
       message: message,
     );
-    final edit = await showModalBottomSheet<CorrectionEdit>(
+    final edit = await showBambooSheet<CorrectionEdit>(
       context: context,
-      showDragHandle: true,
-      isScrollControlled: true,
       builder: (_) => const CorrectionForm(),
     );
     if (edit == null ||
