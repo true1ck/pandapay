@@ -3,6 +3,7 @@ import 'package:pandapay/data/card_snapshots.dart';
 import 'package:pandapay/data/user_cards_repository.dart';
 import 'package:pandapay_domain/pandapay_domain.dart';
 
+import '../support/v1_feed_view.dart' show fixtureCard;
 import '../support/v2_catalogue_fixtures.dart';
 
 /// WP9 "never mix measures": a v2-shaped card's snapshot carries native
@@ -93,16 +94,18 @@ void main() {
       expect(_points(snapshot), 500);
     });
 
-    test('null consumed_native is unknown: consumed = cap_amount, no bonus',
-        () {
+    test('null consumed_native is unknown (D32c): listed as unknown, no '
+        'consumption entry, and no capped bonus is promised', () {
       // A row written before the owner's recompute: v1 `consumed` only.
       final owned = _owned([
         _row(native: null, kind: null, amount: null, start: '2026-11-01'),
       ]);
       final snapshot = buildCardSnapshot(_v2Product(), owned: owned, now: _now);
-      expect(snapshot.capConsumed, {'p-cap': 1500});
+      expect(snapshot.unknownCapIds, {'p-cap'});
+      expect(snapshot.capConsumed, isEmpty);
       expect(snapshot.capRemaining, isEmpty);
-      // Nothing of the capped bonus is promised: base only.
+      // The engine evaluates it fresh (500 points) and used up (base only,
+      // 100 points) and keeps the lower: nothing of the bonus is promised.
       expect(_points(snapshot), 100);
     });
 
@@ -116,7 +119,8 @@ void main() {
           owned: owned,
           now: _now,
         );
-        expect(snapshot.capConsumed['p-cap'], 1500, reason: 'v1=$v1');
+        expect(snapshot.unknownCapIds, {'p-cap'}, reason: 'v1=$v1');
+        expect(snapshot.capConsumed, isEmpty, reason: 'v1=$v1');
       }
     });
 
@@ -129,7 +133,8 @@ void main() {
         capConsumed: const {'p-cap': Money.fromPaise(35000)},
       );
       final snapshot = buildCardSnapshot(_v2Product(), owned: owned, now: _now);
-      expect(snapshot.capConsumed['p-cap'], 1500);
+      expect(snapshot.unknownCapIds, {'p-cap'});
+      expect(_points(snapshot), 100);
     });
 
     test('a native figure for a period that has ended is unknown', () {
@@ -137,7 +142,8 @@ void main() {
         _row(native: 200, start: '2026-10-01', end: '2026-10-31'),
       ]);
       final snapshot = buildCardSnapshot(_v2Product(), owned: owned, now: _now);
-      expect(snapshot.capConsumed['p-cap'], 1500);
+      expect(snapshot.unknownCapIds, {'p-cap'});
+      expect(snapshot.capConsumed, isEmpty);
     });
 
     test('the last day of the period still counts', () {
@@ -153,19 +159,20 @@ void main() {
     test('a row recorded for a different cap kind is unknown', () {
       final owned = _owned([_row(native: 10, kind: 'total_points')]);
       final snapshot = buildCardSnapshot(_v2Product(), owned: owned, now: _now);
-      expect(snapshot.capConsumed['p-cap'], 1500);
+      expect(snapshot.unknownCapIds, {'p-cap'});
     });
 
     test('an unreadable native value is unknown, never a thrown error', () {
       final owned = _owned([_row(native: 'lots')]);
       expect(owned.capStates['p-cap']!.consumedNative, isNull);
       final snapshot = buildCardSnapshot(_v2Product(), owned: owned, now: _now);
-      expect(snapshot.capConsumed['p-cap'], 1500);
+      expect(snapshot.unknownCapIds, {'p-cap'});
     });
 
-    test('a legacy cap with no amount to feed is exhausted, not skipped', () {
-      // A v1 cap row on a v2-shaped card (cap_kind absent): the engine
-      // converts it itself, so the snapshot cannot name its native amount.
+    test('a legacy cap with an unknown figure is listed too (the engine '
+        'converts and uses it up itself)', () {
+      // A v1 cap row on a v2-shaped card (cap_kind absent): only the engine
+      // knows its native amount.
       final json = v2CardJson('p');
       (json['cap_rules'] as List).add({
         'id': 'legacy',
@@ -183,7 +190,50 @@ void main() {
         capStateRowJson('legacy', consumed: 5, consumedNative: null),
       ]);
       final snapshot = buildCardSnapshot(product, owned: owned, now: _now);
-      expect(snapshot.capConsumed['legacy'], kCapExhaustedSentinel);
+      expect(snapshot.unknownCapIds, {'legacy'});
+      expect(snapshot.capConsumed.containsKey('legacy'), isFalse);
+    });
+
+    test('a known cap is never listed as unknown, and an unknown one never '
+        'gets a consumption entry', () {
+      final known = buildCardSnapshot(
+        _v2Product(),
+        owned: _owned([_row(native: 1400)]),
+        now: _now,
+      );
+      expect(known.unknownCapIds, isEmpty);
+      expect(known.capConsumed, {'p-cap': 1400});
+    });
+
+    test('Magnus: an unknown cap is valued at its fresh ₹120, not the '
+        '₹350 a used-up cap would pay (D32c)', () {
+      final magnus = CardProductJson.fromJson(
+        fixtureCard('axis-bank-magnus'),
+      );
+      final cap = magnus.capRules.firstWhere(
+        (c) => c.id.endsWith('base_150k_spend'),
+      );
+      final owned = parseUserCard(
+        userCardJson(
+          'um',
+          magnus.id,
+          capStates: [capStateRowJson(cap.id, consumed: 0, consumedNative: null)],
+        ),
+      );
+      final snapshot = buildCardSnapshot(magnus, owned: owned, now: _now);
+      expect(snapshot.unknownCapIds, {cap.id});
+      final value = const RecommendationEngine()
+          .rank(
+            RecommendationContext(
+              amount: Money.fromRupees(10000),
+              rail: TxnRail.swipe,
+              now: _now,
+            ),
+            [snapshot],
+          )
+          .single
+          .expectedValue;
+      expect(value, Money.fromRupees(120));
     });
 
     test('v2 cards are not de-duplicated: every cap by id', () {
