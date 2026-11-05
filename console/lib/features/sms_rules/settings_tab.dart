@@ -60,7 +60,13 @@ class _SmsSettingsTabState extends State<SmsSettingsTab> {
     } catch (_) {
       metrics = null; // The banner is optional; the settings are not.
     }
-    return _Loaded(settings, limits, metrics);
+    List<Map<String, dynamic>> audit;
+    try {
+      audit = await widget.api.audit(limit: 50);
+    } catch (_) {
+      audit = const [];
+    }
+    return _Loaded(settings, limits, metrics, audit);
   }
 
   void _reload() => setState(() {
@@ -195,6 +201,23 @@ class _SmsSettingsTabState extends State<SmsSettingsTab> {
                 child: const Text('Remove'),
               ),
             ),
+          const SizedBox(height: 24),
+          Text('Recent changes', style: Theme.of(context).textTheme.titleLarge),
+          const SizedBox(height: 4),
+          const Text('Who changed what, when and why. Read-only.'),
+          if (data.audit.isEmpty)
+            const Padding(
+              padding: EdgeInsets.symmetric(vertical: 12),
+              child: Text('No changes recorded yet.'),
+            ),
+          for (final entry in data.audit)
+            ListTile(
+              dense: true,
+              key: Key('audit-${entry['at']}-${entry['action']}'),
+              title: Text(smsAuditActionLabels['${entry['action']}'] ?? '${entry['action']}'),
+              subtitle: Text('${entry['at']} · admin ${'${entry['adminId']}'.length > 8 ? '${entry['adminId']}'.substring(0, 8) : entry['adminId']}\n${entry['reason'] ?? ''}'),
+              isThreeLine: true,
+            ),
         ],
       );
     },
@@ -202,11 +225,29 @@ class _SmsSettingsTabState extends State<SmsSettingsTab> {
 }
 
 class _Loaded {
-  const _Loaded(this.settings, this.limits, this.metrics);
+  const _Loaded(this.settings, this.limits, this.metrics, this.audit);
   final List<Map<String, dynamic>> settings;
   final List<Map<String, dynamic>> limits;
   final Map<String, dynamic>? metrics;
+  final List<Map<String, dynamic>> audit;
 }
+
+/// What an audit action is called in "Recent changes".
+const smsAuditActionLabels = <String, String>{
+  'sms_v2_setting': 'Setting changed',
+  'sms_v2_user_limit': 'Per-user limit changed',
+  'sms_v2_learning_decision': 'Learning decision',
+  'sms_v2_template_reject': 'Draft rejected',
+  'sms_v2_template_approve': 'Draft approved',
+  'sms_v2_template_requeue': 'Layout requeued',
+  'sms_v2_template_block': 'Layout blocked',
+  'sms_v2_suggestion_ask_again': 'AI asked again',
+  'sms_v2_category_draft': 'Category draft saved',
+  'sms_v2_category_publish': 'Category rule published',
+  'sms_v2_alias_draft': 'Shop name draft saved',
+  'sms_v2_alias_publish': 'Shop name published',
+  'sms_v2_rule_pause': 'Rule paused',
+};
 
 class _Banner extends StatelessWidget {
   const _Banner({super.key, required this.text});

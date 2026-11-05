@@ -71,6 +71,7 @@ const kDestinationPermissions = <String, String>{
   'Anonymization Audit': 'admin.audit.read',
   'Parser Patterns': 'catalogue.read',
   'SMS Rule Approvals': 'learning.read',
+  'SMS Pipeline Rules': 'learning.read',
   'Sources': 'operations.read',
   'Scrape Diff Review': 'operations.read',
   'Referral Operations': 'referrals.read',

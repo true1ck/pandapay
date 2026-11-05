@@ -162,6 +162,8 @@ class FakeAdmin extends AdminApi {
   List<Map<String, dynamic>> settings = fixtureSettings();
   List<Object?> userLimits = <Object?>[];
   Map<String, dynamic> learningSummary = fixtureLearningSummary();
+  List<Object?> reporters = <Object?>[];
+  List<Object?> auditEntries = <Object?>[];
   List<Object?> learningCategories = <Object?>[];
   List<Object?> learningNames = <Object?>[];
   List<Object?> learningOther = <Object?>[];
@@ -201,6 +203,9 @@ class FakeAdmin extends AdminApi {
       return {'minUsers': 3, 'days': 90, 'taxonomyVersion': 1, 'candidates': learningOther};
     }
     if (path == '/admin/sms/v2/learning/decisions') return {'recorded': true};
+    if (path.startsWith('/admin/sms/v2/learning/reporters')) return {'days': 7, 'reporters': reporters};
+    if (path.startsWith('/admin/sms/v2/audit')) return {'entries': auditEntries};
+    if (path.startsWith('/admin/sms/v2/merchant-suggestions/')) return {'removed': true};
     if (path == '/admin/sms/v2/settings') return {'settings': settings};
     if (path.startsWith('/admin/sms/v2/settings/')) {
       if (failSettingSaveWith != null) {
@@ -213,6 +218,12 @@ class FakeAdmin extends AdminApi {
     if (path == '/admin/sms/v2/templates') return {'templates': templates};
     if (path.startsWith('/admin/sms/v2/templates/') && path.endsWith('/reject')) {
       return {'status': 'failed', 'decision': 'rejected'};
+    }
+    if (path.startsWith('/admin/sms/v2/templates/') && path.endsWith('/requeue')) {
+      return {'status': 'queued'};
+    }
+    if (path.startsWith('/admin/sms/v2/templates/') && path.endsWith('/block')) {
+      return {'status': 'blocked'};
     }
     if (path == '/admin/sms/v2/metrics') return metrics;
     if (path == '/admin/sms/v2/bundles') return {'bundles': <Object?>[]};

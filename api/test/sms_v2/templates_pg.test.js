@@ -399,3 +399,76 @@ test("rejecting a draft needs a reason, withdraws the private rule and teaches t
   assert.deepEqual(loaded.approved.map((entry) => entry.template_hash), [approved]);
   assert.equal(loaded.approved[0].ai_draft.id, `AI-${approved}`);
 });
+
+// ---- learning loop B7: requeue and block
+
+test("a failed or rejected layout can be requeued, and a blocked one never reaches the AI", { skip: loopSkip }, async (t) => {
+  const rig = await startLoopHarness({ profileCount: 2, registerAdmin: registerAllLoopAdminRoutes });
+  t.after(() => rig.close());
+  const { pool, profiles } = rig;
+  const admin = rig.asAdmin();
+  for (const id of profiles) await rig.consent(id, true);
+  const worker = createPgWorkerStore({ ...rig.helpers, adminId: rig.admin });
+  const phone = rig.asUser(profiles[0]);
+  const hash = template.template_hash;
+  const body = { items: [{ templateHash: hash, senderBrand: template.sender_brand, redactedBody: template.redacted_body, observedAt: new Date().toISOString() }] };
+  assert.equal((await phone.post("/sms/v2/unknown-templates", body)).status, 202);
+  let calls = 0;
+  const provider = { generate: async () => { calls++; return { rule: rule(), inputTokens: 1, outputTokens: 1, totalTokens: 2 }; } };
+  assert.equal((await runTemplateWorkerOnce({ store: worker, provider, config })).status, "ready");
+  const row = async () => (await pool.query("SELECT ai_status,ai_draft,failure_code,admin_decision,admin_reason,lease_id,result_revision FROM sms_v2_unknown_templates WHERE template_hash=$1", [hash])).rows[0];
+  const sync = async () => (await phone.get("/sms/v2/sync")).body.aiResults.find((entry) => entry.templateHash === hash);
+
+  const requeue = `/admin/sms/v2/templates/${hash}/requeue`;
+  const block = `/admin/sms/v2/templates/${hash}/block`;
+  // Reasons, fresh MFA, hash shape and unknown layouts.
+  assert.equal((await admin.post(requeue, {})).body.error, "reason_required");
+  assert.equal((await admin.post(requeue, { reason: "x" })).body.error, "reason_required");
+  assert.equal((await admin.post(block, {})).body.error, "reason_required");
+  assert.equal((await admin.post(`/admin/sms/v2/templates/${"f".repeat(64)}/requeue`, { reason: "try again" })).status, 404);
+  assert.equal((await admin.post(`/admin/sms/v2/templates/${"f".repeat(64)}/block`, { reason: "unwanted" })).status, 404);
+  assert.equal((await admin.post("/admin/sms/v2/templates/nothex/block", { reason: "unwanted" })).status, 400);
+  rig.setFreshMfa(false);
+  assert.equal((await admin.post(requeue, { reason: "try again" })).status, 403);
+  assert.equal((await admin.post(block, { reason: "unwanted" })).status, 403);
+  rig.setFreshMfa(true);
+
+  // Only a failed layout (including a rejected one) goes back in the queue.
+  const ready = await row();
+  assert.equal((await admin.post(requeue, { reason: "try again" })).body.error, "template_not_requeueable", "a ready draft is not requeued");
+  assert.equal((await admin.post(`/admin/sms/v2/templates/${hash}/reject`, { reason: "misses_fields" })).status, 200);
+  assert.equal((await row()).admin_decision, "rejected");
+  const requeued = await admin.post(requeue, { reason: "Prompt improved" });
+  assert.equal(requeued.status, 200, JSON.stringify(requeued.body));
+  const after = await row();
+  assert.deepEqual([after.ai_status, after.failure_code, after.admin_decision, after.admin_reason], ["queued", null, null, null]);
+  assert.ok(BigInt(after.result_revision) > BigInt(ready.result_revision));
+  assert.equal((await sync()).status, "queued", "the phone sees it queued again");
+  const claimed = await worker.claim();
+  assert.equal(claimed.template_hash, hash, "the worker takes it again");
+  await worker.finish(claimed, { model: "test-model", code: "worker_failed" });
+  assert.equal((await row()).ai_status, "failed");
+  assert.equal((await admin.post(requeue, { reason: "Once more" })).status, 200, "a plain failure can be requeued too");
+
+  // Block: the draft goes, the revision moves, the worker never claims it, and it stays blocked.
+  const callsBefore = calls;
+  const blocked = await admin.post(block, { reason: "Looks like marketing" });
+  assert.equal(blocked.status, 200, JSON.stringify(blocked.body));
+  const gone = await row();
+  assert.deepEqual([gone.ai_status, gone.ai_draft, gone.lease_id, gone.admin_reason], ["blocked", null, null, "Looks like marketing"]);
+  assert.equal((await sync()).status, "queued", "blocked is shown to phones as queued");
+  assert.equal(await worker.claim(), null);
+  assert.equal((await runTemplateWorkerOnce({ store: worker, provider, config })).status, "idle");
+  assert.equal(calls, callsBefore, "the provider is never called for a blocked layout");
+  assert.equal((await rig.asUser(profiles[1]).post("/sms/v2/unknown-templates", body)).status, 202);
+  assert.equal((await row()).ai_status, "blocked", "submitting it again keeps it blocked");
+  assert.equal((await admin.post(block, { reason: "again" })).body.error, "template_already_blocked");
+  assert.equal((await admin.post(requeue, { reason: "unblock" })).body.error, "template_not_requeueable", "a block is final until an admin changes it directly");
+  assert.deepEqual((await admin.get("/admin/sms/v2/templates?status=blocked")).body.templates.map((entry) => entry.template_hash), [hash]);
+  const actions = (await pool.query("SELECT action,reason FROM admin_audit_log WHERE admin_id=$1 AND action IN ('sms_v2_template_requeue','sms_v2_template_block') ORDER BY id", [rig.admin])).rows;
+  assert.deepEqual(actions, [
+    { action: "sms_v2_template_requeue", reason: "Prompt improved" },
+    { action: "sms_v2_template_requeue", reason: "Once more" },
+    { action: "sms_v2_template_block", reason: "Looks like marketing" },
+  ]);
+});

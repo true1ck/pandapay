@@ -7,7 +7,7 @@
 // totals. Nothing here publishes anything: "Create rule" opens the existing
 // category draft flow, and the admin publishes through the golden check.
 const { HttpError } = require('./rules_admin_route');
-const { readSettings } = require('./settings');
+const { readSettings, SETTINGS, USER_LIMIT_KEYS } = require('./settings');
 
 const KINDS = ['category_choice', 'merchant_name', 'uncategorised'];
 const KEY = /^[A-Z][A-Z0-9 &'.-]{1,59}$/;
@@ -292,6 +292,27 @@ async function recordDecision(client, { adminId, body }) {
   return { recorded: true, decision, usersAtDecision: keyUsers };
 }
 
+// The accounts that sent the most to the loop recently, with the limits that
+// apply to them and any override. Counts and the pseudonymous account id only.
+async function reporters(client, days) {
+  const top = (await client.query('SELECT * FROM pandapay.sms_v2_learning_reporters($1)', [days])).rows;
+  const out = [];
+  for (const row of top) {
+    const effectiveLimits = {};
+    for (const key of USER_LIMIT_KEYS) {
+      effectiveLimits[key] = num((await client.query('SELECT pandapay.sms_v2_limit($1,$2,$3) AS n', [row.profile_id, key, SETTINGS[key].default])).rows[0].n);
+    }
+    const override = (await client.query(
+      `SELECT key, value, expires_at AS "expiresAt" FROM sms_v2_user_limits
+        WHERE profile_id = $1 AND expires_at > now() ORDER BY expires_at DESC LIMIT 1`, [row.profile_id])).rows[0] || null;
+    out.push({
+      profileId: row.profile_id, signals: num(row.signals), layouts: num(row.layouts), corrections: num(row.corrections),
+      effectiveLimits, override,
+    });
+  }
+  return out;
+}
+
 function registerPrivateLearningRoutes(api) {
   const register = (method, path, operation) =>
     api.route(method, path, async (req, res, ctx) => {
@@ -325,11 +346,16 @@ function registerPrivateLearningRoutes(api) {
     const context = await candidateContext(client, req);
     return { minUsers: context.k, days: context.days, taxonomyVersion: context.parts.taxonomyVersion, candidates: await uncategorisedCandidates(client, context) };
   }));
+  register('GET', '/admin/sms/v2/learning/reporters', (req, ctx) => ctx.withAdminClient(async (client) => {
+    const days = parseDays(req.query.days, 7);
+    if (days > 90) throw new HttpError(400, 'learning_days_invalid');
+    return { days, reporters: await reporters(client, days) };
+  }));
   register('POST', '/admin/sms/v2/learning/decisions', (req, ctx) =>
     ctx.withAdminClient((client) => recordDecision(client, { adminId: req.admin.userId, body: req.body })));
 }
 
 module.exports = {
   registerPrivateLearningRoutes, categoryCandidates, merchantNameCandidates, uncategorisedCandidates,
-  buildSummary, recordDecision, readParts,
+  buildSummary, recordDecision, readParts, reporters,
 };

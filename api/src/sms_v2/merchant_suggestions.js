@@ -9,6 +9,7 @@
 const crypto = require('node:crypto');
 const { SPEND_CATEGORIES } = require('../sms_facts');
 const { readSettings } = require('./settings');
+const { HttpError } = require('./rules_admin_route');
 const { reserveCapacity, monthSpendUsd, recordUsage, applyWorkerSettings } = require('./template_worker');
 
 const SUGGESTION_PROMPT_VERSION = 'shop-2026-11-16';
@@ -143,6 +144,9 @@ function createPgSuggestionStore({ withAdminClient, adminId }) {
              FROM sms_v2_learning_signals s
             WHERE s.kind='uncategorised' AND s.eligible AND s.taxonomy_version=$1
               AND NOT EXISTS (SELECT 1 FROM sms_v2_merchant_suggestions m WHERE m.merchant_key=s.merchant_key)
+              AND NOT EXISTS (SELECT 1 FROM sms_v2_template_attempts a
+                               WHERE a.template_hash = encode(sha256(convert_to('shop' || chr(10) || s.merchant_key, 'UTF8')), 'hex')
+                                 AND a.started_at > clock_timestamp() - interval '24 hours')
             GROUP BY s.merchant_key HAVING count(DISTINCT s.profile_id) >= $2
             ORDER BY count(DISTINCT s.profile_id) DESC, max(s.last_at) DESC, s.merchant_key LIMIT 50`,
           [taxonomy, Math.max(2, settings.signals_min_distinct_users)])).rows;
@@ -171,7 +175,36 @@ function createPgSuggestionStore({ withAdminClient, adminId }) {
   };
 }
 
+// The console's "Ask again": forget the stored suggestion so the worker asks
+// once more. The worker itself asks at most once per 24 hours per shop key.
+function registerPrivateSuggestionRoutes(api) {
+  api.route('POST', '/admin/sms/v2/merchant-suggestions/:key/ask-again', async (req, res, ctx) => {
+    try {
+      const key = req.params.key;
+      if (!KEY.test(key) || /\d{4,}/.test(key)) throw new HttpError(400, 'shop_key_invalid');
+      const reason = typeof req.body?.reason === 'string' ? req.body.reason.trim() : '';
+      if (reason.length < 3 || reason.length > 500) throw new HttpError(400, 'reason_required');
+      const out = await ctx.withAdminClient(async (client) => {
+        await client.query("SELECT pg_advisory_xact_lock(hashtext('sms_v2_merchant_suggestions'))");
+        const removed = await client.query('DELETE FROM sms_v2_merchant_suggestions WHERE merchant_key=$1 RETURNING status,category', [key]);
+        if (!removed.rowCount) throw new HttpError(404, 'suggestion_not_found');
+        await client.query(
+          "INSERT INTO admin_audit_log (admin_id,action,entity,entity_id,before_value,reason) VALUES ($1,'sms_v2_suggestion_ask_again','sms_v2_merchant_suggestion',NULL,$2,$3)",
+          [req.admin.userId, JSON.stringify({ merchantKey: key, status: removed.rows[0].status, category: removed.rows[0].category }), reason]);
+        return { merchantKey: key, removed: true };
+      });
+      return res.json(out);
+    } catch (error) {
+      if (error instanceof HttpError) return res.status(error.status).json({ error: error.code });
+      if (error.code === 'ADMIN_PERMISSION_DENIED') return res.status(403).json({ error: 'admin_permission_required' });
+      console.error('sms_v2 suggestions admin failed', error.code || error.name);
+      return res.status(500).json({ error: 'suggestions_unavailable' });
+    }
+  });
+}
+
 module.exports = {
+  registerPrivateSuggestionRoutes,
   SUGGESTION_PROMPT_VERSION, MIN_CONFIDENCE, WHY, CATEGORY_MEANINGS,
   buildSuggestionPrompt, judgeSuggestion, runSuggestionOnce, createPgSuggestionStore, shopHash,
 };

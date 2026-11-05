@@ -113,6 +113,12 @@ add('POST', '/admin/sms/v2/merchant-aliases/:id/publish', 'learning.publish', tr
 
 add('POST', '/admin/sms/v2/templates/:hash/reject', 'learning.publish', true);
 
+add('GET', '/admin/sms/v2/learning/reporters', 'learning.read');
+add('POST', '/admin/sms/v2/templates/:hash/requeue', 'learning.publish', true);
+add('POST', '/admin/sms/v2/templates/:hash/block', 'learning.publish', true);
+add('POST', '/admin/sms/v2/merchant-suggestions/:key/ask-again', 'learning.publish', true);
+add('GET', '/admin/sms/v2/audit', 'learning.read');
+
 const routeManifest = Object.freeze(definitions.map(([method, path, permission, freshMfa]) =>
   Object.freeze({ method, path, permission, freshMfa })
 ));

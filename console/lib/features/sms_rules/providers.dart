@@ -13,3 +13,26 @@ final smsV2RulesProvider = FutureProvider<List<Map<String, dynamic>>>((
   if (api == null) throw StateError('Sign in to review SMS rules.');
   return api.rules();
 });
+
+/// The Learning page's numbers, for the Overview tile.
+final smsLearningSummaryProvider = FutureProvider<Map<String, dynamic>>((
+  ref,
+) async {
+  final api = ref.watch(smsV2AdminApiProvider);
+  if (api == null) throw StateError('Sign in to review SMS rules.');
+  return api.learningSummary();
+});
+
+/// Settings and this month's AI spend, for the Overview's AI drafting tile.
+final smsAiSettingsProvider = FutureProvider<Map<String, dynamic>>((ref) async {
+  final api = ref.watch(smsV2AdminApiProvider);
+  if (api == null) throw StateError('Sign in to review SMS rules.');
+  final settings = await api.settings();
+  Map<String, dynamic>? metrics;
+  try {
+    metrics = await api.metrics();
+  } catch (_) {
+    metrics = null;
+  }
+  return {'settings': settings, 'metrics': metrics};
+});

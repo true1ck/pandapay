@@ -123,6 +123,43 @@ class _SmsTemplatesTabState extends State<SmsTemplatesTab> {
     if (mounted) _reload();
   }
 
+  Future<void> _requeue(Map row) async {
+    final answer = await askReason(
+      context,
+      title: 'Put this layout back in the queue?',
+      message: 'The AI drafts it again, with the current prompt.',
+      label: 'Why try again?',
+      confirmLabel: 'Requeue',
+    );
+    if (answer == null) return;
+    try {
+      await widget.api.requeueTemplate(row['template_hash'] as String, answer.reason);
+      if (mounted) _say('Back in the queue.');
+    } catch (error) {
+      if (mounted) _say(_failure(error));
+    }
+    if (mounted) _reload();
+  }
+
+  Future<void> _block(Map row) async {
+    final answer = await askReason(
+      context,
+      title: 'Never send this layout to the AI?',
+      message:
+          'Phones drop any private rule for it and the layout stays blocked even if it is shared again.',
+      label: 'Why block it?',
+      confirmLabel: 'Block',
+    );
+    if (answer == null) return;
+    try {
+      await widget.api.blockTemplate(row['template_hash'] as String, answer.reason);
+      if (mounted) _say('Blocked.');
+    } catch (error) {
+      if (mounted) _say(_failure(error));
+    }
+    if (mounted) _reload();
+  }
+
   @override
   Widget build(BuildContext context) => FutureBuilder<List<Map<String, dynamic>>>(
     future: _future,
@@ -207,6 +244,18 @@ class _SmsTemplatesTabState extends State<SmsTemplatesTab> {
                           key: Key('reject-${row['template_hash']}'),
                           onPressed: () => _reject(row),
                           child: const Text('Reject'),
+                        ),
+                      if (status == 'failed' || status == 'rejected')
+                        TextButton(
+                          key: Key('requeue-${row['template_hash']}'),
+                          onPressed: () => _requeue(row),
+                          child: const Text('Requeue'),
+                        ),
+                      if (status != 'blocked')
+                        TextButton(
+                          key: Key('block-${row['template_hash']}'),
+                          onPressed: () => _block(row),
+                          child: const Text('Block'),
                         ),
                     ],
                   ),

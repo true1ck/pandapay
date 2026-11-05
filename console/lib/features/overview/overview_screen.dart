@@ -5,6 +5,8 @@ import '../../app/admin_design.dart';
 import '../../app/admin_identity.dart';
 import '../../app/providers.dart';
 import '../../app/time_format.dart';
+import '../sms_rules/ai_drafting_status.dart';
+import '../sms_rules/providers.dart';
 
 /// Landing page: what is waiting for a decision, what looks broken, and
 /// which environment this is. Read-only by design; every action lives in
@@ -34,6 +36,14 @@ class OverviewScreen extends ConsumerWidget {
         ? _SmsRuleBacklog.from(ref)
         : null;
 
+    // The Learning page's own destination; hidden for roles that cannot read it.
+    final learning = canOpen('SMS Pipeline Rules')
+        ? ref.watch(smsLearningSummaryProvider)
+        : null;
+    final aiSettings = canOpen('SMS Pipeline Rules')
+        ? ref.watch(smsAiSettingsProvider)
+        : null;
+
     _Count dqCount(String key) => _Count.fromAsync(dq, (d) => d?[key]);
 
     final attention = <_TileData>[
@@ -60,6 +70,17 @@ class OverviewScreen extends ConsumerWidget {
           Icons.rule_outlined,
           smsRules.count,
           'SMS Rule Approvals',
+        ),
+      if (learning != null)
+        _TileData.queue(
+          'Learning candidates',
+          'Shops and names people agree on',
+          Icons.lightbulb_outline,
+          _Count.fromAsync(
+            learning,
+            (d) => (d['candidates'] as Map?)?['total'],
+          ),
+          'SMS Pipeline Rules',
         ),
       if (dq != null && canOpen('Support Tickets'))
         _TileData.queue(
@@ -92,8 +113,31 @@ class OverviewScreen extends ConsumerWidget {
         ? ref.watch(systemStatusProvider)
         : null;
 
+    final aiProblems = aiSettings?.valueOrNull == null
+        ? const <String>[]
+        : aiDraftingProblems(
+            settings: [
+              for (final row in (aiSettings!.requireValue['settings'] as List? ?? const []))
+                (row as Map).cast<String, dynamic>(),
+            ],
+            metrics: aiSettings.requireValue['metrics'] as Map<String, dynamic>?,
+            jobs: [
+              for (final job in ((system?.valueOrNull?['jobs']) as List? ?? const []))
+                if (job is Map) job.cast<String, dynamic>(),
+            ],
+            now: DateTime.now(),
+          );
     final health = <_TileData>[
       if (system != null) _systemTile(system),
+      // Shown only when AI drafting is off, over budget, or its job is failing.
+      if (aiProblems.isNotEmpty)
+        _TileData.problem(
+          'AI drafting',
+          aiProblems.take(2).join(' · '),
+          Icons.auto_awesome_outlined,
+          _Count.value(aiProblems.length),
+          'System Status',
+        ),
       if (dq != null && canOpen('Scrape Diff Review'))
         _TileData.problem(
           'Scraper failures · 7 days',
@@ -153,6 +197,8 @@ class OverviewScreen extends ConsumerWidget {
       if (audits != null) ref.invalidate(anonymizationAuditRunsProvider);
       if (system != null) ref.invalidate(systemStatusProvider);
       if (smsRules != null) _SmsRuleBacklog.invalidate(ref);
+      if (learning != null) ref.invalidate(smsLearningSummaryProvider);
+      if (aiSettings != null) ref.invalidate(smsAiSettingsProvider);
     }
 
     return LayoutBuilder(

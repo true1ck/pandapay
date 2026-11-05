@@ -16,6 +16,8 @@ function registerAdminRoutes(api) {
   require('../sms_v2/category_admin_route').registerPrivateAliasRoutes(api);
   require('../sms_v2/settings_admin_route').registerPrivateSettingsRoutes(api);
   require('../sms_v2/learning_admin_route').registerPrivateLearningRoutes(api);
+  require('../sms_v2/merchant_suggestions').registerPrivateSuggestionRoutes(api);
+  require('../sms_v2/learning_audit_route').registerPrivateAuditRoutes(api);
   registerInlineAdminRoutes(legacyApp, legacyDependencies);
   registerAdminReferralOperationsRoutes(legacyApp, legacyDependencies);
 const REWARD_UNITS = [

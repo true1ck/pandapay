@@ -83,6 +83,12 @@ Future<List<String>> _pumpConsole(
       }),
       '/admin/sms-rules/parser-proposals' => _json({'proposals': []}),
       '/admin/alerts' => _json({'alerts': []}),
+      // The learning-loop tiles: nothing waiting, AI drafting healthy.
+      '/admin/sms/v2/learning/summary' => _json({
+        'candidates': {'total': 0},
+      }),
+      '/admin/sms/v2/settings' => _json({'settings': []}),
+      '/admin/sms/v2/metrics' => _json({'ai': []}),
       _ => _json({'cards': []}),
     };
   });

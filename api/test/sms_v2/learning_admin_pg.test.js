@@ -60,12 +60,8 @@ test('Learning page: counted, k-anonymous candidates on Postgres', { skip: !url 
   }
 
   const helpers = createAdminDbHelpers(privatePool);
-  const paths = new Set([
-    '/admin/sms/v2/learning/summary', '/admin/sms/v2/learning/categories', '/admin/sms/v2/learning/merchant-names',
-    '/admin/sms/v2/learning/uncategorised', '/admin/sms/v2/learning/decisions',
-  ]);
   const app = createAdminApiApp({
-    routeManifest: routeManifest.filter((row) => paths.has(row.path)),
+    routeManifest: routeManifest.filter((row) => row.path.startsWith('/admin/sms/v2/learning/')),
     introspectAdminSession: async () => ({
       active: true, userId: admin, sessionId: 'test', assurance: 'email+webauthn-uv',
       mfaVerifiedAt: new Date(), expiresAt: new Date(Date.now() + 60000),
@@ -178,4 +174,82 @@ test('Learning page: counted, k-anonymous candidates on Postgres', { skip: !url 
   clearSettingsCache();
   assert.equal((await rows('categories')).length, 0);
   assert.equal((await call('GET', '/admin/sms/v2/learning/categories')).body.minUsers, 8);
+});
+
+// ---- learning loop B7: reporters, ask again and the audit feed
+
+const { startLoopHarness: startRig, registerAllLoopAdminRoutes: registerAll, skip: rigSkip } = require('./helpers/loop_harness');
+
+test('reporters, ask-again and the audit feed on Postgres', { skip: rigSkip }, async (t) => {
+  const rig = await startRig({ profileCount: 4, registerAdmin: registerAll });
+  t.after(() => rig.close());
+  const { pool, profiles } = rig;
+  const admin = rig.asAdmin();
+  const signal = (profile, key, kind = 'category_choice', value = 'dining') => pool.query(
+    `INSERT INTO sms_v2_learning_signals(profile_id,kind,sender_brand,merchant_key,value,taxonomy_version,eligible,is_tester)
+     VALUES($1,$2,'HDFCBK',$3,$4,1,true,false)`, [profile, kind, key, kind === 'uncategorised' ? '' : value]);
+  // profile 0: 5 signals; profile 1: 2 signals + 1 layout + 1 correction; profile 2: 1 signal; profile 3: nothing.
+  for (const key of ['A1 SHOP', 'B1 SHOP', 'C1 SHOP', 'D1 SHOP', 'E1 SHOP']) await signal(profiles[0], key);
+  for (const key of ['A1 SHOP', 'B1 SHOP']) await signal(profiles[1], key);
+  await signal(profiles[2], 'A1 SHOP');
+  await pool.query("INSERT INTO sms_v2_unknown_templates(template_hash,sender_brand,redacted_body,ai_status) VALUES($1,'TESTBK','<AMT> paid.','queued')", ['a'.repeat(64)]);
+  await pool.query("INSERT INTO sms_v2_template_submitters(template_hash,profile_id,eligible) VALUES($1,$2,true)", ['a'.repeat(64), profiles[1]]);
+  await pool.query(
+    `INSERT INTO sms_v2_correction_cases(profile_id,source_key,fact_ids,correction_kind,stage,trace,request_hash)
+     VALUES($1,'sms:synthetic:1','{}','missing','gate','{}'::jsonb,'r1')`, [profiles[1]]);
+
+  const first = await admin.get('/admin/sms/v2/learning/reporters');
+  assert.equal(first.status, 200, JSON.stringify(first.body));
+  assert.deepEqual(first.body.reporters.map((row) => [row.profileId, row.signals, row.layouts, row.corrections]), [
+    [profiles[0], 5, 0, 0],
+    [profiles[1], 2, 1, 1],
+    [profiles[2], 1, 0, 0],
+  ], 'most active first; an account with nothing is not listed');
+  assert.deepEqual(first.body.reporters[0].effectiveLimits, { templates_per_user_per_day: 50, signals_per_user_per_day: 500 });
+  assert.equal(first.body.reporters[0].override, null);
+  assert.ok(!JSON.stringify(first.body).match(/@|email|phone/i), 'a pseudonymous id and counts only');
+  assert.equal((await admin.get('/admin/sms/v2/learning/reporters?days=0')).status, 400);
+  assert.equal((await admin.get('/admin/sms/v2/learning/reporters?days=91')).status, 400);
+
+  // A per-user limit shows as the effective limit and as the override.
+  const expiresAt = new Date(Date.now() + 2 * 86400000).toISOString();
+  const set = await admin.put(`/admin/sms/v2/user-limits/${profiles[0]}/signals_per_user_per_day`, { value: 20, expiresAt, reason: 'Heavy tester' });
+  assert.equal(set.status, 200, JSON.stringify(set.body));
+  const second = (await admin.get('/admin/sms/v2/learning/reporters')).body.reporters[0];
+  assert.equal(second.effectiveLimits.signals_per_user_per_day, 20);
+  assert.equal(second.override.key, 'signals_per_user_per_day');
+  assert.equal(second.override.value, 20);
+
+  // Ask again: delete the stored suggestion; unknown keys are 404; a reason is needed.
+  await pool.query("INSERT INTO sms_v2_merchant_suggestions(merchant_key,category,confidence,why,status) VALUES('BLINKIT','groceries',0.9,'brand_known','ready')");
+  const path = `/admin/sms/v2/merchant-suggestions/${encodeURIComponent('BLINKIT')}/ask-again`;
+  assert.equal((await admin.post(path, {})).body.error, 'reason_required');
+  assert.equal((await admin.post(`/admin/sms/v2/merchant-suggestions/${encodeURIComponent('NOPE SHOP')}/ask-again`, { reason: 'ask again please' })).status, 404);
+  assert.equal((await admin.post(`/admin/sms/v2/merchant-suggestions/${encodeURIComponent("BAD'; DROP")}/ask-again`, { reason: 'ask again please' })).body.error, 'shop_key_invalid');
+  const asked = await admin.post(path, { reason: 'Prompt improved since' });
+  assert.equal(asked.status, 200, JSON.stringify(asked.body));
+  assert.equal((await pool.query("SELECT 1 FROM sms_v2_merchant_suggestions WHERE merchant_key='BLINKIT'")).rows.length, 0);
+  assert.equal((await admin.post(path, { reason: 'twice' })).status, 404);
+  // Accepted again right away after the worker's next ask: the worker, not the route, limits it.
+  await pool.query("INSERT INTO sms_v2_merchant_suggestions(merchant_key,category,confidence,why,status) VALUES('BLINKIT','dining',0.8,'brand_known','ready')");
+  assert.equal((await admin.post(path, { reason: 'and again' })).status, 200);
+
+  // Decisions and settings reach the audit feed, newest first, with no bodies.
+  await admin.post('/admin/sms/v2/learning/decisions', { kind: 'category_choice', merchantKey: 'A1 SHOP', value: 'dining', decision: 'dismissed', reason: 'Too few people' });
+  const setting = (await admin.get('/admin/sms/v2/settings')).body.settings.find((row) => row.key === 'signals_min_distinct_users');
+  await admin.put('/admin/sms/v2/settings/signals_min_distinct_users', { value: 4, reason: 'Friends run', expectedUpdatedAt: setting.updatedAt });
+  const audit = await admin.get('/admin/sms/v2/audit?limit=50');
+  assert.equal(audit.status, 200);
+  assert.deepEqual(audit.body.entries.map((entry) => [entry.action, entry.reason]), [
+    ['sms_v2_setting', 'Friends run'],
+    ['sms_v2_learning_decision', 'Too few people'],
+    ['sms_v2_suggestion_ask_again', 'and again'],
+    ['sms_v2_suggestion_ask_again', 'Prompt improved since'],
+    ['sms_v2_user_limit', 'Heavy tester'],
+  ]);
+  assert.deepEqual(Object.keys(audit.body.entries[0]).sort(), ['action', 'adminId', 'at', 'entity', 'entityId', 'reason']);
+  assert.ok(!JSON.stringify(audit.body).includes('before_value') && !JSON.stringify(audit.body).includes('after_value'));
+  assert.equal((await admin.get('/admin/sms/v2/audit?limit=1')).body.entries.length, 1);
+  assert.equal((await admin.get('/admin/sms/v2/audit?limit=0')).status, 400);
+  assert.equal((await admin.get('/admin/sms/v2/audit?limit=500')).status, 400);
 });

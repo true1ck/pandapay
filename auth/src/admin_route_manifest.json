@@ -754,5 +754,35 @@
     "path": "/admin/sms/v2/templates/:hash/reject",
     "permission": "learning.publish",
     "freshMfa": true
+  },
+  {
+    "method": "GET",
+    "path": "/admin/sms/v2/learning/reporters",
+    "permission": "learning.read",
+    "freshMfa": false
+  },
+  {
+    "method": "POST",
+    "path": "/admin/sms/v2/templates/:hash/requeue",
+    "permission": "learning.publish",
+    "freshMfa": true
+  },
+  {
+    "method": "POST",
+    "path": "/admin/sms/v2/templates/:hash/block",
+    "permission": "learning.publish",
+    "freshMfa": true
+  },
+  {
+    "method": "POST",
+    "path": "/admin/sms/v2/merchant-suggestions/:key/ask-again",
+    "permission": "learning.publish",
+    "freshMfa": true
+  },
+  {
+    "method": "GET",
+    "path": "/admin/sms/v2/audit",
+    "permission": "learning.read",
+    "freshMfa": false
   }
 ]

@@ -3,6 +3,7 @@ import 'package:pandapay_domain/sms_v2_template.dart' show smsTemplateHash;
 import '../../data/admin_api.dart';
 import '../../data/sms_v2_admin_api.dart';
 import 'reason_dialog.dart';
+import 'settings_tab.dart' show smsSettingLabels;
 
 /// The category names the console shows for the canonical slugs.
 const _categoryNames = <String, String>{
@@ -99,7 +100,8 @@ class _SmsLearningTabState extends State<SmsLearningTab> {
     final categories = await api.learningCategories();
     final names = await api.learningMerchantNames();
     final uncategorised = await api.learningUncategorised();
-    return _Learning(summary, categories, names, uncategorised);
+    final reporters = await api.learningReporters();
+    return _Learning(summary, categories, names, uncategorised, reporters);
   }
 
   void _reload() => setState(() {
@@ -178,6 +180,44 @@ class _SmsLearningTabState extends State<SmsLearningTab> {
     final category = (row['suggestion'] as Map)['category'] as String;
     await _drafted('uncategorised', row, '', 'Opened the category draft from the AI suggestion');
     widget.onCreateCategoryRule(row['merchantKey'] as String, category);
+    if (mounted) _reload();
+  }
+
+  Future<void> _askAgain(Map row) async {
+    final answer = await askReason(
+      context,
+      title: 'Ask the AI about ${row['merchantKey']} again?',
+      message: 'The stored suggestion is removed and the worker asks once more (at most once a day for a shop).',
+      label: 'Why ask again?',
+      confirmLabel: 'Ask again',
+    );
+    if (answer == null) return;
+    try {
+      await widget.api.askAgain(row['merchantKey'] as String, answer.reason);
+    } catch (error) {
+      if (mounted) _say(_failure(error));
+    }
+    if (mounted) _reload();
+  }
+
+  Future<void> _setLimit(Map row) async {
+    final answer = await showDialog<_LimitAnswer>(
+      context: context,
+      builder: (_) => _SetLimitDialog(profileId: row['profileId'] as String),
+    );
+    if (answer == null) return;
+    try {
+      await widget.api.saveUserLimit(
+        row['profileId'] as String,
+        answer.key,
+        answer.value,
+        DateTime.now().toUtc().add(Duration(days: answer.days)),
+        answer.reason,
+      );
+      if (mounted) _say('Limit saved. It ends in ${answer.days} days.');
+    } catch (error) {
+      if (mounted) _say(_failure(error));
+    }
     if (mounted) _reload();
   }
 
@@ -270,8 +310,16 @@ class _SmsLearningTabState extends State<SmsLearningTab> {
                   row: row,
                   onPick: () => _pickCategory(row),
                   onUseSuggestion: () => _useSuggestion(row),
+                  onAskAgain: () => _askAgain(row),
                   onDismiss: () => _dismiss('uncategorised', row, ''),
                 ),
+            ],
+          ),
+          _Section(
+            title: 'Reporters',
+            empty: 'Nobody has reported anything in the last 7 days.',
+            children: [
+              for (final row in data.reporters) _ReporterRow(row: row, onSetLimit: () => _setLimit(row)),
             ],
           ),
           _Section(
@@ -300,9 +348,12 @@ class _SmsLearningTabState extends State<SmsLearningTab> {
 }
 
 class _Learning {
-  const _Learning(this.summary, this.categoriesPayload, this.namesPayload, this.otherPayload);
+  const _Learning(this.summary, this.categoriesPayload, this.namesPayload, this.otherPayload, this.reportersPayload);
   final Map<String, dynamic> summary;
-  final Map<String, dynamic> categoriesPayload, namesPayload, otherPayload;
+  final Map<String, dynamic> categoriesPayload, namesPayload, otherPayload, reportersPayload;
+  List<Map> get reporters => [
+    for (final row in (reportersPayload['reporters'] as List? ?? const [])) row as Map,
+  ];
   List<Map> get categories => _rows(categoriesPayload);
   List<Map> get names => _rows(namesPayload);
   List<Map> get uncategorised => _rows(otherPayload);
@@ -497,10 +548,11 @@ class _OtherRow extends StatelessWidget {
     required this.row,
     required this.onPick,
     required this.onUseSuggestion,
+    required this.onAskAgain,
     required this.onDismiss,
   });
   final Map row;
-  final VoidCallback onPick, onUseSuggestion, onDismiss;
+  final VoidCallback onPick, onUseSuggestion, onAskAgain, onDismiss;
   @override
   Widget build(BuildContext context) => Card(
     key: Key('other-${row['merchantKey']}'),
@@ -517,9 +569,131 @@ class _OtherRow extends StatelessWidget {
       trailing: Wrap(spacing: 4, children: [
         if (suggestionLine(row) != null)
           TextButton(key: Key('use-${row['merchantKey']}'), onPressed: onUseSuggestion, child: const Text('Use suggestion')),
+        if (suggestionLine(row) != null)
+          TextButton(key: Key('again-${row['merchantKey']}'), onPressed: onAskAgain, child: const Text('Ask again')),
         TextButton(key: Key('pick-${row['merchantKey']}'), onPressed: onPick, child: const Text('Pick category')),
         TextButton(key: Key('dismiss-other-${row['merchantKey']}'), onPressed: onDismiss, child: const Text('Dismiss')),
       ]),
     ),
+  );
+}
+
+String _plural(num n, String one, String many) => n == 1 ? one : many;
+
+class _ReporterRow extends StatelessWidget {
+  const _ReporterRow({required this.row, required this.onSetLimit});
+  final Map row;
+  final VoidCallback onSetLimit;
+  @override
+  Widget build(BuildContext context) {
+    final limits = (row['effectiveLimits'] as Map?) ?? const {};
+    final override = row['override'] as Map?;
+    final id = '${row['profileId']}';
+    return Card(
+      key: Key('reporter-$id'),
+      child: ListTile(
+        title: Text('Account ${id.length > 8 ? id.substring(0, 8) : id} · ${row['signals']} ${_plural(row['signals'] as num, 'signal', 'signals')} · ${row['layouts']} ${_plural(row['layouts'] as num, 'layout', 'layouts')} · ${row['corrections']} ${_plural(row['corrections'] as num, 'fix', 'fixes')}'),
+        subtitle: Text(
+          'Limits per day: layouts ${limits['templates_per_user_per_day']}, signals ${limits['signals_per_user_per_day']}'
+          '${override == null ? '' : '\nOverride: ${smsSettingLabelFor(override['key'])} ${override['value']} until ${override['expiresAt']}'}',
+        ),
+        isThreeLine: override != null,
+        trailing: TextButton(key: Key('limit-$id'), onPressed: onSetLimit, child: const Text('Set limit')),
+      ),
+    );
+  }
+}
+
+String smsSettingLabelFor(Object? key) => smsSettingLabels['$key'] ?? '$key';
+
+class _LimitAnswer {
+  const _LimitAnswer(this.key, this.value, this.days, this.reason);
+  final String key, reason;
+  final int value, days;
+}
+
+/// A temporary limit for one account: which limit, the new value, how long
+/// (up to 90 days) and why.
+class _SetLimitDialog extends StatefulWidget {
+  const _SetLimitDialog({required this.profileId});
+  final String profileId;
+  @override
+  State<_SetLimitDialog> createState() => _SetLimitDialogState();
+}
+
+class _SetLimitDialogState extends State<_SetLimitDialog> {
+  String _key = 'signals_per_user_per_day';
+  int _days = 7;
+  final _value = TextEditingController();
+  final _reason = TextEditingController();
+  @override
+  void dispose() {
+    _value.dispose();
+    _reason.dispose();
+    super.dispose();
+  }
+
+  int? get _parsed {
+    final n = int.tryParse(_value.text.trim());
+    return n != null && n >= 1 && n <= 100000 ? n : null;
+  }
+
+  @override
+  Widget build(BuildContext context) => AlertDialog(
+    title: const Text('Set a limit for this account'),
+    content: SizedBox(
+      width: 420,
+      child: Column(
+        mainAxisSize: MainAxisSize.min,
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          DropdownButtonFormField<String>(
+            key: const Key('limit-key'),
+            initialValue: _key,
+            isExpanded: true,
+            decoration: const InputDecoration(labelText: 'Limit'),
+            items: [
+              for (final key in const ['templates_per_user_per_day', 'signals_per_user_per_day'])
+                DropdownMenuItem(value: key, child: Text(smsSettingLabelFor(key))),
+            ],
+            onChanged: (value) => setState(() => _key = value!),
+          ),
+          TextField(
+            key: const Key('limit-value'),
+            controller: _value,
+            keyboardType: TextInputType.number,
+            decoration: const InputDecoration(labelText: 'New value per day'),
+            onChanged: (_) => setState(() {}),
+          ),
+          DropdownButtonFormField<int>(
+            key: const Key('limit-days'),
+            initialValue: _days,
+            decoration: const InputDecoration(labelText: 'Lasts'),
+            items: [
+              for (final days in const [1, 7, 30, 90])
+                DropdownMenuItem(value: days, child: Text('$days ${_plural(days, 'day', 'days')}')),
+            ],
+            onChanged: (value) => setState(() => _days = value!),
+          ),
+          TextField(
+            key: const Key('reason-text'),
+            controller: _reason,
+            maxLength: 500,
+            decoration: const InputDecoration(labelText: 'Why are you changing this?'),
+            onChanged: (_) => setState(() {}),
+          ),
+        ],
+      ),
+    ),
+    actions: [
+      TextButton(onPressed: () => Navigator.pop(context), child: const Text('Cancel')),
+      FilledButton(
+        key: const Key('limit-save'),
+        onPressed: _parsed == null || _reason.text.trim().length < 3
+            ? null
+            : () => Navigator.pop(context, _LimitAnswer(_key, _parsed!, _days, _reason.text.trim())),
+        child: const Text('Save'),
+      ),
+    ],
   );
 }

@@ -279,6 +279,85 @@ function registerPrivateTemplateRoutes(api) {
       return res.json(result);
     },
   );
+  const reasonOf = (body) => {
+    const reason = typeof body?.reason === "string" ? body.reason.trim() : "";
+    if (reason.length < 3 || reason.length > 500)
+      throw new HttpError(400, "reason_required");
+    return reason;
+  };
+  // Put a failed or rejected layout back in the queue, to be drafted again.
+  register(
+    "POST",
+    "/admin/sms/v2/templates/:hash/requeue",
+    async (req, res, ctx) => {
+      if (!/^[a-f0-9]{64}$/.test(req.params.hash))
+        throw new HttpError(400, "template_hash_invalid");
+      const reason = reasonOf(req.body);
+      const result = await ctx.withAdminClient(async (client) => {
+        await client.query(
+          "SELECT pg_advisory_xact_lock(hashtext('sms_v2_template_results'))",
+        );
+        const row = (
+          await client.query(
+            "SELECT ai_status FROM sms_v2_unknown_templates WHERE template_hash=$1 FOR UPDATE",
+            [req.params.hash],
+          )
+        ).rows[0];
+        if (!row) throw new HttpError(404, "template_not_found");
+        if (row.ai_status !== "failed")
+          throw new HttpError(409, "template_not_requeueable");
+        await client.query(
+          `UPDATE sms_v2_unknown_templates SET ai_status='queued',failure_code=NULL,admin_decision=NULL,admin_reason=NULL,admin_note=NULL,
+             decided_by=NULL,decided_at=NULL,result_revision=nextval('sms_v2_template_revision')
+           WHERE template_hash=$1`,
+          [req.params.hash],
+        );
+        await client.query(
+          "INSERT INTO admin_audit_log (admin_id,action,entity,entity_id,after_value,reason) VALUES ($1,'sms_v2_template_requeue','sms_v2_template',NULL,$2,$3)",
+          [req.admin.userId, JSON.stringify({ templateHash: req.params.hash }), reason],
+        );
+        return { templateHash: req.params.hash, status: "queued" };
+      });
+      return res.json(result);
+    },
+  );
+  // Never send this layout to the AI. The sender's phone drops any private
+  // rule; submitting the layout again leaves it blocked.
+  register(
+    "POST",
+    "/admin/sms/v2/templates/:hash/block",
+    async (req, res, ctx) => {
+      if (!/^[a-f0-9]{64}$/.test(req.params.hash))
+        throw new HttpError(400, "template_hash_invalid");
+      const reason = reasonOf(req.body);
+      const result = await ctx.withAdminClient(async (client) => {
+        await client.query(
+          "SELECT pg_advisory_xact_lock(hashtext('sms_v2_template_results'))",
+        );
+        const row = (
+          await client.query(
+            "SELECT ai_status FROM sms_v2_unknown_templates WHERE template_hash=$1 FOR UPDATE",
+            [req.params.hash],
+          )
+        ).rows[0];
+        if (!row) throw new HttpError(404, "template_not_found");
+        if (row.ai_status === "blocked")
+          throw new HttpError(409, "template_already_blocked");
+        await client.query(
+          `UPDATE sms_v2_unknown_templates SET ai_status='blocked',ai_draft=NULL,failure_code=NULL,lease_id=NULL,lease_expires_at=NULL,
+             admin_reason=$2,decided_by=$3,decided_at=clock_timestamp(),result_revision=nextval('sms_v2_template_revision')
+           WHERE template_hash=$1`,
+          [req.params.hash, reason, req.admin.userId],
+        );
+        await client.query(
+          "INSERT INTO admin_audit_log (admin_id,action,entity,entity_id,after_value,reason) VALUES ($1,'sms_v2_template_block','sms_v2_template',NULL,$2,$3)",
+          [req.admin.userId, JSON.stringify({ templateHash: req.params.hash }), reason],
+        );
+        return { templateHash: req.params.hash, status: "blocked" };
+      });
+      return res.json(result);
+    },
+  );
   // Lane C: the release go/no-go payload (still carries the `ai` rows).
   register("GET", "/admin/sms/v2/metrics", require("./metrics_route").metricsHandler);
 }

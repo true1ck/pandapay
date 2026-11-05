@@ -116,6 +116,30 @@ class SmsV2AdminApi {
     body: {'revision': revision, 'reason': reason, 'goldenReports': reports},
   );
 
+  // ---- Controls for everything the loop does (learning-loop B7).
+  Future<Map<String, dynamic>> requeueTemplate(String hash, String reason) =>
+      request(
+        'POST',
+        'templates/${Uri.encodeComponent(hash)}/requeue',
+        body: {'reason': reason},
+      );
+  Future<Map<String, dynamic>> blockTemplate(String hash, String reason) =>
+      request(
+        'POST',
+        'templates/${Uri.encodeComponent(hash)}/block',
+        body: {'reason': reason},
+      );
+  Future<Map<String, dynamic>> askAgain(String merchantKey, String reason) =>
+      request(
+        'POST',
+        'merchant-suggestions/${Uri.encodeComponent(merchantKey)}/ask-again',
+        body: {'reason': reason},
+      );
+  Future<Map<String, dynamic>> learningReporters({int days = 7}) =>
+      request('GET', 'learning/reporters?days=$days');
+  Future<List<Map<String, dynamic>>> audit({int limit = 50}) async =>
+      _rows((await request('GET', 'audit?limit=$limit'))['entries']);
+
   // ---- Shop names (merchant aliases, learning-loop A8).
   Future<Map<String, dynamic>> saveAlias(String id, Map<String, dynamic> alias) =>
       request('PUT', 'merchant-aliases/${Uri.encodeComponent(id)}/draft', body: alias);
