@@ -211,6 +211,9 @@ class FakeAdmin extends AdminApi {
     if (path == '/admin/sms/v2/user-limits') return {'limits': userLimits};
     if (path.startsWith('/admin/sms/v2/user-limits/')) return {'deleted': true};
     if (path == '/admin/sms/v2/templates') return {'templates': templates};
+    if (path.startsWith('/admin/sms/v2/templates/') && path.endsWith('/reject')) {
+      return {'status': 'failed', 'decision': 'rejected'};
+    }
     if (path == '/admin/sms/v2/metrics') return metrics;
     if (path == '/admin/sms/v2/bundles') return {'bundles': <Object?>[]};
     if (path == '/admin/sms/v2/category-rules') {

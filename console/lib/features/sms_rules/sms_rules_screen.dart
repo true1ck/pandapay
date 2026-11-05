@@ -9,6 +9,7 @@ import 'category_editor.dart';
 import 'golden_runner.dart';
 import 'settings_tab.dart';
 import 'learning_tab.dart';
+import 'templates_tab.dart';
 import 'package:pandapay_domain/sms_v2_template.dart';
 import 'download_stub.dart' if (dart.library.js_interop) 'download_web.dart';
 
@@ -98,55 +99,7 @@ class SmsRulesScreen extends ConsumerWidget {
                   loading: () =>
                       const Center(child: CircularProgressIndicator()),
                 ),
-            _RemotePanel(
-              load: api.templates,
-              builder: (rows) => ListView.builder(
-                itemCount: rows.length,
-                itemBuilder: (context, index) {
-                  final row = rows[index];
-                  return ExpansionTile(
-                    title: Text('${row['sender_brand']} · ${row['ai_status']}'),
-                    subtitle: Text(
-                      [
-                        '${row['redacted_body']}',
-                        '${row['seen_count']} sightings · ${row['distinct_profiles']} profiles',
-                        ?templateStatusReason(row),
-                      ].join('\n'),
-                    ),
-                    trailing: TextButton(
-                      onPressed: row['ai_status'] == 'ready'
-                          ? () async {
-                              try {
-                                final draft = await api.templateDraft(
-                                  row['template_hash'] as String,
-                                );
-                                open(draft['ruleId'] as String);
-                              } catch (error) {
-                                if (context.mounted) {
-                                  ScaffoldMessenger.of(context).showSnackBar(
-                                    SnackBar(content: Text(error.toString())),
-                                  );
-                                }
-                              }
-                            }
-                          : null,
-                      child: const Text('Create draft'),
-                    ),
-                    children: [
-                      if (row['ai_draft'] != null)
-                        Padding(
-                          padding: const EdgeInsets.all(16),
-                          child: SelectableText(
-                            const JsonEncoder.withIndent(
-                              '  ',
-                            ).convert(row['ai_draft']),
-                          ),
-                        ),
-                    ],
-                  );
-                },
-              ),
-            ),
+            SmsTemplatesTab(api: api, onOpenRule: (id) => open(id)),
             _RemotePanel(
               load: () async => [await api.categories()],
               builder: (rows) => ListView(
@@ -281,15 +234,6 @@ class SmsRulesScreen extends ConsumerWidget {
     );
   }
 }
-
-/// Why a shared layout is not drafted: held ones never reach the AI, failed
-/// ones carry the worker's failure code. Null for every other status.
-String? templateStatusReason(Map row) => switch (row['ai_status']) {
-  'held' =>
-    'Held: sent without a valid App Check token, so it was not sent to the AI',
-  'failed' => 'Failed: ${row['failure_code'] ?? 'unknown'}',
-  _ => null,
-};
 
 /// "Layouts sent to the AI: n · Held: m" from the metrics' template counts.
 Widget? templateSubmissionsLine(Map? metrics) {

@@ -493,6 +493,20 @@ function createPgWorkerStore({ withAdminClient, adminId }) {
         ).rows.map((row) => row.body),
       );
     },
+    // Up to three layouts of the sender whose AI draft the admin rejected, with
+    // the reason (never the free-text note).
+    previousMistakes(template) {
+      return tx(async (client) =>
+        (
+          await client.query(
+            `SELECT redacted_body,admin_reason FROM sms_v2_unknown_templates
+              WHERE sender_brand=$1 AND template_hash<>$2 AND admin_decision='rejected'
+              ORDER BY decided_at DESC LIMIT 3`,
+            [template.sender_brand, template.template_hash],
+          )
+        ).rows.map((row) => ({ redactedBody: row.redacted_body, reason: row.admin_reason })),
+      );
+    },
     // Counts of distinct people by correction kind for this layout.
     userReports(template) {
       return tx(async (client) =>

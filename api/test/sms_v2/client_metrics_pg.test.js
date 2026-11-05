@@ -91,7 +91,7 @@ test('client counters: consent, de-duplication and the go decision through the r
 
   const helpers = createAdminDbHelpers(privatePool);
   const adminApp = createAdminApiApp({
-    routeManifest: routeManifest.filter((row) => ['/admin/sms/v2/templates', '/admin/sms/v2/templates/:hash/draft', '/admin/sms/v2/metrics'].includes(row.path)),
+    routeManifest: routeManifest.filter((row) => row.path.startsWith('/admin/sms/v2/templates') || row.path === '/admin/sms/v2/metrics'),
     introspectAdminSession: async () => ({ active: true, userId: owner, sessionId: 'lane-n', assurance: 'email+webauthn-uv', mfaVerifiedAt: new Date(), expiresAt: new Date(Date.now() + 60000) }),
     ...helpers,
     registerRoutes: registerPrivateTemplateRoutes,

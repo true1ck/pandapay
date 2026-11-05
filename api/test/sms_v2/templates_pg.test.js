@@ -243,12 +243,10 @@ test(
     );
     const helpers = createAdminDbHelpers(privatePool);
     const adminApp = createAdminApiApp({
-      routeManifest: routeManifest.filter((row) =>
-        [
-          "/admin/sms/v2/templates",
-          "/admin/sms/v2/templates/:hash/draft",
-          "/admin/sms/v2/metrics",
-        ].includes(row.path),
+      routeManifest: routeManifest.filter(
+        (row) =>
+          row.path.startsWith("/admin/sms/v2/templates") ||
+          row.path === "/admin/sms/v2/metrics",
       ),
       introspectAdminSession: async () => ({
         active: true,
@@ -317,3 +315,87 @@ test(
     );
   },
 );
+
+// ---- learning loop B3: approve or reject an AI draft with a reason
+
+const { startLoopHarness, registerAllLoopAdminRoutes, skip: loopSkip } = require("./helpers/loop_harness");
+
+test("rejecting a draft needs a reason, withdraws the private rule and teaches the next prompt", { skip: loopSkip }, async (t) => {
+  const rig = await startLoopHarness({ profileCount: 3, registerAdmin: registerAllLoopAdminRoutes });
+  t.after(() => rig.close());
+  const { pool, profiles } = rig;
+  const admin = rig.asAdmin();
+  for (const id of profiles) await rig.consent(id, true);
+  const worker = createPgWorkerStore({ ...rig.helpers, adminId: rig.admin });
+  const phone = rig.asUser(profiles[0]);
+  const body = { items: [{ templateHash: template.template_hash, senderBrand: template.sender_brand, redactedBody: template.redacted_body, observedAt: new Date().toISOString() }] };
+  assert.equal((await phone.post("/sms/v2/unknown-templates", body)).status, 202);
+  const provider = { generate: async () => ({ rule: rule(), inputTokens: 10, outputTokens: 10, totalTokens: 20 }) };
+  assert.equal((await runTemplateWorkerOnce({ store: worker, provider, config })).status, "ready");
+  const hash = template.template_hash;
+  const state = async () => (await pool.query("SELECT ai_status,ai_draft,failure_code,admin_decision,admin_reason,admin_note,decided_by,result_revision FROM sms_v2_unknown_templates WHERE template_hash=$1", [hash])).rows[0];
+  const before = await state();
+  assert.equal(before.ai_status, "ready");
+  const sync = async () => (await phone.get("/sms/v2/sync")).body.aiResults.find((entry) => entry.templateHash === hash);
+  assert.equal((await sync()).status, "ready");
+
+  const path = `/admin/sms/v2/templates/${hash}/reject`;
+  assert.equal((await admin.post(path, {})).body.error, "reject_reason_invalid");
+  assert.equal((await admin.post(path, { reason: "because" })).body.error, "reject_reason_invalid");
+  assert.equal((await admin.post(path, { reason: "other" })).body.error, "reject_note_required");
+  assert.equal((await admin.post(path, { reason: "other", note: "x" })).body.error, "reject_note_required");
+  assert.equal((await admin.post(path, { reason: "overmatches", note: "n".repeat(301) })).body.error, "reject_note_invalid");
+  assert.equal((await admin.post(`/admin/sms/v2/templates/${"f".repeat(64)}/reject`, { reason: "overmatches" })).status, 404);
+  assert.equal((await admin.post("/admin/sms/v2/templates/nothex/reject", { reason: "overmatches" })).status, 400);
+  rig.setFreshMfa(false);
+  assert.equal((await admin.post(path, { reason: "overmatches" })).status, 403, "rejecting needs fresh MFA");
+  rig.setFreshMfa(true);
+  assert.equal((await state()).ai_status, "ready", "refused requests change nothing");
+
+  const rejected = await admin.post(path, { reason: "overmatches", note: "It also read card bills" });
+  assert.equal(rejected.status, 200, JSON.stringify(rejected.body));
+  const after = await state();
+  assert.equal(after.ai_status, "failed");
+  assert.equal(after.ai_draft, null);
+  assert.equal(after.failure_code, "admin_rejected");
+  assert.deepEqual([after.admin_decision, after.admin_reason, after.admin_note, after.decided_by], ["rejected", "overmatches", "It also read card bills", rig.admin]);
+  assert.ok(BigInt(after.result_revision) > BigInt(before.result_revision), "the revision moves so phones fetch the change");
+  assert.equal((await sync()).status, "failed", "the sender's next sync replaces the private rule with 'failed'");
+  assert.equal((await admin.post(path, { reason: "overmatches" })).status, 409, "already rejected");
+  const audited = (await pool.query("SELECT action,reason FROM admin_audit_log WHERE admin_id=$1 AND action='sms_v2_template_reject'", [rig.admin])).rows;
+  assert.deepEqual(audited, [{ action: "sms_v2_template_reject", reason: "It also read card bills" }]);
+
+  // The list filters: rejected is its own state, and failed excludes it.
+  const listed = async (status) => (await admin.get(`/admin/sms/v2/templates?status=${status}`)).body.templates.map((row) => row.template_hash);
+  assert.deepEqual(await listed("rejected"), [hash]);
+  assert.deepEqual(await listed("failed"), []);
+  assert.equal((await admin.get("/admin/sms/v2/templates?status=nonsense")).status, 400);
+  const row = (await admin.get("/admin/sms/v2/templates?status=rejected")).body.templates[0];
+  assert.deepEqual([row.admin_decision, row.admin_reason, row.admin_note], ["rejected", "overmatches", "It also read card bills"]);
+
+  // The next layout from this sender gets the rejection in its prompt.
+  const sibling = { template_hash: "c".repeat(64), sender_brand: template.sender_brand, redacted_body: "<AMT> debited at <PARTY>." };
+  assert.deepEqual(await worker.previousMistakes(sibling), [{ redactedBody: template.redacted_body, reason: "overmatches" }]);
+  assert.deepEqual(await worker.previousMistakes({ ...sibling, template_hash: hash }), [], "never its own rejection");
+  assert.deepEqual(await worker.previousMistakes({ ...sibling, sender_brand: "OTHERBK" }), []);
+
+  // Only a finished draft can be rejected.
+  const queued = "d".repeat(64);
+  await pool.query("INSERT INTO sms_v2_unknown_templates(template_hash,sender_brand,redacted_body,ai_status) VALUES($1,'TESTBK',$2,'queued')", [queued, "<AMT> queued layout."]);
+  assert.equal((await admin.post(`/admin/sms/v2/templates/${queued}/reject`, { reason: "overmatches" })).body.error, "template_not_rejectable");
+
+  // "Create draft" is the approval, and --eval can read approved drafts back.
+  const approved = "e".repeat(64);
+  const draft = rule();
+  draft.id = `AI-${approved}`;
+  draft.match.templateHash = approved;
+  await pool.query("INSERT INTO sms_v2_unknown_templates(template_hash,sender_brand,redacted_body,ai_status,ai_draft) VALUES($1,'TESTBK',$2,'ready',$3)", [approved, template.redacted_body, JSON.stringify(draft)]);
+  const made = await admin.post(`/admin/sms/v2/templates/${approved}/draft`);
+  assert.equal(made.status, 200, JSON.stringify(made.body));
+  const decided = (await pool.query("SELECT admin_decision,decided_by FROM sms_v2_unknown_templates WHERE template_hash=$1", [approved])).rows[0];
+  assert.deepEqual([decided.admin_decision, decided.decided_by], ["approved", rig.admin]);
+  const { loadApprovedFromDb } = require("../../scripts/dry_run_sms_v2_templates");
+  const loaded = await loadApprovedFromDb({ env: { ADMIN_API_DATABASE_URL: process.env.SMS_V2_TEST_ADMIN_DATABASE_URL, DB_SSL: "false", NODE_ENV: "test" }, adminId: rig.admin, limit: 10 });
+  assert.deepEqual(loaded.approved.map((entry) => entry.template_hash), [approved]);
+  assert.equal(loaded.approved[0].ai_draft.id, `AI-${approved}`);
+});

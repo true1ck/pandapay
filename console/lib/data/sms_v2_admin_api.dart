@@ -56,6 +56,15 @@ class SmsV2AdminApi {
       _rows((await request('GET', 'templates'))['templates']);
   Future<Map<String, dynamic>> templateDraft(String hash) =>
       request('POST', 'templates/${Uri.encodeComponent(hash)}/draft');
+  Future<Map<String, dynamic>> rejectTemplate(
+    String hash,
+    String reason,
+    String? note,
+  ) => request(
+    'POST',
+    'templates/${Uri.encodeComponent(hash)}/reject',
+    body: {'reason': reason, 'note': ?note},
+  );
   Future<List<Map<String, dynamic>>> correctionGroups() async =>
       _rows((await request('GET', 'corrections?groupBy=template'))['groups']);
   Future<Map<String, dynamic>> decide(

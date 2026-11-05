@@ -7,6 +7,10 @@ const { saveDraft, HttpError } = require("./rules_admin_route");
 const { intakeOpen } = require("./settings");
 
 const MAX_BODY = 20000;
+// Every state a layout can be shown in. "rejected" is an admin decision on a
+// draft; "blocked" is set by an admin and never reaches the AI.
+const TEMPLATE_STATUSES = ["held", "queued", "working", "ready", "failed", "covered", "rejected", "blocked"];
+const REJECT_REASONS = ["wrong_fact_type", "wrong_amount_role", "overmatches", "misses_fields", "should_be_ignored", "other"];
 const UNREDACTED =
   /\d{6,}|[\w.+-]+@[\w.-]+|https?:\/\/|\bwww\.|\b[a-z0-9-]+\.(?:com|in|co|io|ly|me|net|org)(?:\b|\/)|\+?\d(?:[ -]?\d){9,}/i;
 const denied = (value) => value === false || value?.ok === false;
@@ -154,15 +158,19 @@ function registerPrivateTemplateRoutes(api) {
     });
   register("GET", "/admin/sms/v2/templates", async (req, res, ctx) => {
     const status = req.query.status;
-    if (
-      status &&
-      !["held", "queued", "working", "ready", "failed"].includes(status)
-    )
+    if (status && !TEMPLATE_STATUSES.includes(status))
       throw new HttpError(400, "template_status_invalid");
+    // "rejected" is a decision on a draft that now sits at ai_status failed.
     const rows = await ctx.withAdminClient((client) =>
       client.query(
-        `SELECT template_hash,sender_brand,redacted_body,seen_count,distinct_profiles,ai_status,ai_draft,ai_model,failure_code,first_seen,last_seen
-       FROM sms_v2_unknown_templates WHERE ($1::text IS NULL OR ai_status=$1) ORDER BY first_seen,template_hash LIMIT 200`,
+        `SELECT template_hash,sender_brand,redacted_body,seen_count,distinct_profiles,ai_status,ai_draft,ai_model,failure_code,first_seen,last_seen,
+                covered_by,admin_decision,admin_reason,admin_note,decided_at
+       FROM sms_v2_unknown_templates
+      WHERE ($1::text IS NULL
+         OR ($1='rejected' AND admin_decision='rejected')
+         OR ($1='failed' AND ai_status='failed' AND admin_decision IS DISTINCT FROM 'rejected')
+         OR ($1 NOT IN ('rejected','failed') AND ai_status=$1))
+      ORDER BY first_seen,template_hash LIMIT 200`,
         [status || null],
       ),
     );
@@ -195,12 +203,72 @@ function registerPrivateTemplateRoutes(api) {
         const store = createPgStore({
           withUserClient: (_actor, fn) => fn(client),
         });
-        return store.tx(req.admin.userId, (tx) =>
+        const saved = await store.tx(req.admin.userId, (tx) =>
           saveDraft(tx, rule.id, rule, {
             adminId: req.admin.userId,
             now: new Date(),
           }),
         );
+        // Creating the draft is the approval; later prompt changes are
+        // evaluated against these approved drafts (dry run --eval).
+        await client.query(
+          `UPDATE sms_v2_unknown_templates SET admin_decision='approved',admin_reason=NULL,admin_note=NULL,decided_by=$2,decided_at=clock_timestamp()
+            WHERE template_hash=$1`,
+          [req.params.hash, req.admin.userId],
+        );
+        await client.query(
+          "INSERT INTO admin_audit_log (admin_id,action,entity,entity_id,after_value) VALUES ($1,'sms_v2_template_approve','sms_v2_template',NULL,$2)",
+          [req.admin.userId, JSON.stringify({ templateHash: req.params.hash, ruleId: rule.id })],
+        );
+        return saved;
+      });
+      return res.json(result);
+    },
+  );
+  register(
+    "POST",
+    "/admin/sms/v2/templates/:hash/reject",
+    async (req, res, ctx) => {
+      if (!/^[a-f0-9]{64}$/.test(req.params.hash))
+        throw new HttpError(400, "template_hash_invalid");
+      const { reason, note } = req.body || {};
+      if (!REJECT_REASONS.includes(reason))
+        throw new HttpError(400, "reject_reason_invalid");
+      const text = typeof note === "string" ? note.trim() : "";
+      if (note !== undefined && typeof note !== "string")
+        throw new HttpError(400, "reject_note_invalid");
+      if (text.length > 300) throw new HttpError(400, "reject_note_invalid");
+      if (reason === "other" && text.length < 3)
+        throw new HttpError(400, "reject_note_required");
+      const result = await ctx.withAdminClient(async (client) => {
+        await client.query(
+          "SELECT pg_advisory_xact_lock(hashtext('sms_v2_template_results'))",
+        );
+        const row = (
+          await client.query(
+            "SELECT ai_status FROM sms_v2_unknown_templates WHERE template_hash=$1 FOR UPDATE",
+            [req.params.hash],
+          )
+        ).rows[0];
+        if (!row) throw new HttpError(404, "template_not_found");
+        // Only a finished draft can be rejected; a busy or untouched layout cannot.
+        if (row.ai_status !== "ready")
+          throw new HttpError(409, "template_not_rejectable");
+        // The draft leaves the row, the revision moves, and the sender's next
+        // sync replaces the stored result with "failed": the phone drops the
+        // private rule and reads the message again.
+        await client.query(
+          `UPDATE sms_v2_unknown_templates SET ai_status='failed',ai_draft=NULL,failure_code='admin_rejected',
+             admin_decision='rejected',admin_reason=$2,admin_note=$3,decided_by=$4,decided_at=clock_timestamp(),
+             result_revision=nextval('sms_v2_template_revision')
+           WHERE template_hash=$1`,
+          [req.params.hash, reason, text || null, req.admin.userId],
+        );
+        await client.query(
+          "INSERT INTO admin_audit_log (admin_id,action,entity,entity_id,after_value,reason) VALUES ($1,'sms_v2_template_reject','sms_v2_template',NULL,$2,$3)",
+          [req.admin.userId, JSON.stringify({ templateHash: req.params.hash, reason }), text || reason],
+        );
+        return { templateHash: req.params.hash, status: "failed", decision: "rejected", reason };
       });
       return res.json(result);
     },
@@ -210,6 +278,8 @@ function registerPrivateTemplateRoutes(api) {
 }
 
 module.exports = {
+  TEMPLATE_STATUSES,
+  REJECT_REASONS,
   redactionError,
   createTemplateStore,
   createTemplateHandler,

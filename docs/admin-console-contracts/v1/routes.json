@@ -748,5 +748,11 @@
     "path": "/admin/sms/v2/merchant-aliases/:id/publish",
     "permission": "learning.publish",
     "freshMfa": true
+  },
+  {
+    "method": "POST",
+    "path": "/admin/sms/v2/templates/:hash/reject",
+    "permission": "learning.publish",
+    "freshMfa": true
   }
 ]
