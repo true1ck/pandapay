@@ -16,6 +16,31 @@ to resume.
 
 Nothing is running. Resume with the steps in "How to resume" below, plus: re-run the WP2 and WP7 scoped re-reviews (both were interrupted without a verdict), then merge WP2, then WP7 adds the Magnus correction; WP9 resumes from its branch `card-rewards/wp9-app-caps` (2 commits done).
 
+## Progress at a glance (lead's estimate, 2026-11-06)
+
+"% done" is the share of each package's planned scope that is finished **and** accepted. A package that is built but not yet merged is held below 100%. These are estimates, not measurements.
+
+| Item | % done | Basis |
+|---|---|---|
+| WP0 Docs and contracts | 100% | Spec, plan, agent plan, later phases, scenarios; contract rows D1–D28 kept current |
+| WP1 Schema and feeds | 100% | Merged |
+| WP2 Loader | 90% | Built and fixed; final re-review and merge outstanding |
+| WP3 Dart engine | 100% | Merged |
+| WP4 JS engine | 100% | Merged |
+| WP5 Merchant directory | 100% | Merged |
+| WP6a Worked examples (HDFC, SBI) | 100% | Merged |
+| WP6b Worked examples (others) | 100% | Merged (2 of 25 cards skipped by design) |
+| WP7 Integration | 85% | 401 of 405 checkable examples pass; re-review, Magnus correction and merge outstanding |
+| WP8 Server recording | 100% | Merged |
+| WP9 App | 35% | 2 of about 6 parts done (feed and cache, limit state); bars, alerts, label, engine wiring, tests left |
+| Checkpoint B (full test pass) | 0% | After WP2, WP7, WP9 merge |
+| Rollout (owner-run) | 0% | After Checkpoint B |
+| **Phase 1 overall** | **about 80%** | |
+| Phase 2 | 0% | Not started |
+| Phase 3 | 0% | Not started |
+| Phase 4 | 0% | Not started |
+| **Whole feature (rough)** | **about 28%** | Phases weighted roughly 35 / 25 / 25 / 15 |
+
 ## Phases
 
 | Phase | Scope | Status |
