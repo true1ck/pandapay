@@ -32,10 +32,10 @@ Status values: `not started` · `running` · `done (branch ready)` · `merged` �
 | WP1 | Schema v2, v1/v2 feeds, directory seeding | 1 | `card-rewards/wp1-schema` | **merged** | 2026-11-06 | Review approved + 1 fix round (D1, D2, D7, CI step); 1393 api tests; DB test fresh + incremental; seeder loads 164/61 |
 | WP2 | Loader v2 (pure transform), coverage, audit script | 1 | `card-rewards/wp2-loader` | running | 2026-11-05 | |
 | WP3 | Dart engine v2 + tolerant parsing | 1 | `card-rewards/wp3-dart-engine` | needs rework (fix round 1) | 2026-11-06 | Review approved; agrees with the server engine on 117/118 shared cases (K15 harness fix); applying D15 robustness rulings |
-| WP4 | JS engine v2 + merchant resolver | 1 | `card-rewards/wp4-js-engine` | **merged** | 2026-11-06 | Review approved + 1 fix round (D10–D12); 47 JS scenarios pin every ruling; 200/200 targeted tests on merged branch; Dart engine already agrees on 117/118 (K15 harness fix pending in WP3) |
+| WP4 | JS engine v2 + merchant resolver | 1 | `card-rewards/wp4-js-engine` | **merged** (incl. D15, D16) | 2026-11-06 | 190 targeted tests; 29 contract + 47 JS scenarios |
 | WP5 | Merchant and platform directory data | 1 | `card-rewards/wp5-directory` | **merged** | 2026-11-06 | 164 merchants (9 true sub-brand parents, `group` tags per D6), 61 platforms; review + 1 fix round clean; IHCL brands kept under `taj` (ruling in ledger) |
 | WP6a | Worked examples: HDFC, SBI Card | 1 | `card-rewards/wp6a-examples-hdfc-sbi` | **merged** | 2026-11-06 | 21/21 cards, 15 override files; review + 1 fix round clean; Swiggy exact-half rounding parked |
-| WP6b | Worked examples: ICICI, Axis, Amex, IDFC, others | 1 | `card-rewards/wp6b-examples-others` | fix round 2 in re-review | 2026-11-06 | 23/25 cards; Kiwi/IDFC Select/MMT fixed and checked with the real loader; remaining 18-card loader mismatches handed to WP7 after D16 |
+| WP6b | Worked examples: ICICI, Axis, Amex, IDFC, others | 1 | `card-rewards/wp6b-examples-others` | **merged** | 2026-11-06 | 23/25 cards (Amazon Pay ICICI, AU Zenith+ skipped), 13 override files; 2 fix rounds, verified with the real loader; 18-card loader mismatches carried to WP7 |
 | WP7 | Integration: worked examples through both engines | 2 | — | not started | | Needs wave 1 merged; inputs include WP6b's 18-card mismatch list (ledger) and D16 except-list modelling |
 | WP8 | Server recording v2 + recompute script | 2 | — | not started | | Needs WP1, WP4 |
 | WP9 | App: v2 feed, tolerant parse, cap bars, alerts | 2 | — | not started | | Needs WP1, WP3 |
@@ -75,6 +75,7 @@ Status values: `not started` · `running` · `done (branch ready)` · `merged` �
 
 ## Changelog
 
+- **2026-11-06:** WP6b merged (23 more cards with issuer-verified examples). WP4 follow-ups (D15, D16) merged.
 - **2026-11-06:** WP4 merged (server reward engine v2).
 - **2026-11-06:** WP6a merged (21 HDFC/SBI cards with issuer-verified examples and 15 correction files).
 - **2026-11-06:** WP1 merged (schema v2, feeds, seeder; backward-compatibility test now in CI).
