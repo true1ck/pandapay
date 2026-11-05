@@ -6,6 +6,7 @@ import '../../app/design/app_theme.dart';
 import '../../app/design/widgets.dart';
 import '../../app/providers.dart';
 import '../../data/api_exception.dart';
+import '../../data/card_snapshots.dart';
 import '../../data/user_cards_repository.dart';
 import '../../main.dart' show MoneyText;
 import 'grouped_insight_screen.dart';
@@ -338,8 +339,12 @@ class _SwitchToSuggestion extends StatelessWidget {
     if (others.isEmpty) return const SizedBox.shrink();
 
     const engine = RecommendationEngine();
+    final now = DateTime.now();
+    // WP9: the other cards carry their own cap state (a card whose bonus is
+    // already used up must not be named), built in one place.
     final snapshots = [
-      for (final (_, product) in others) CardSnapshot(product: product),
+      for (final (userCard, product) in others)
+        buildCardSnapshot(product, owned: userCard, now: now),
     ];
     final ranked = engine.rank(
       RecommendationContext(
@@ -350,7 +355,7 @@ class _SwitchToSuggestion extends StatelessWidget {
         rail: TxnRail.swipe,
         // "Switch to X after this cap" must not name a card whose better
         // rate expired last quarter.
-        now: DateTime.now(),
+        now: now,
       ),
       snapshots,
     );

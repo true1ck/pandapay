@@ -10,8 +10,10 @@ import '../../app/category_picker.dart';
 import '../../app/providers.dart';
 import '../../data/api_exception.dart';
 import '../../data/card_overrides_repository.dart';
+import '../../data/card_snapshots.dart';
 import '../../data/catalogue_repository.dart'
     show SpendCategory, categoryIdForServer;
+import '../../data/merchant_context.dart';
 import '../../data/merchant_search_repository.dart'
     show MerchantResolution, safeMerchantMccForUpiHandoff;
 import '../../data/override_resolver.dart';
@@ -301,7 +303,12 @@ class _ScanResultScreenState extends ConsumerState<ScanResultScreen> {
         .where((c) => c.id == selectedCategoryForRanking)
         .firstOrNull
         ?.slug;
-    final upiContext = RecommendationContext(
+    // WP9: the payee resolves through the C5 directory (slug, and the
+    // merchant's first listed MCC when neither the QR nor the directory
+    // lookup supplied one).
+    final directory = ref.watch(merchantDirectoryProvider);
+    final upiContext = buildRecommendationContext(
+      directory: directory,
       amount: _amount,
       categoryId: selectedCategoryForRanking,
       categorySlug: selectedCategorySlug,
@@ -311,7 +318,8 @@ class _ScanResultScreenState extends ConsumerState<ScanResultScreen> {
       rail: TxnRail.upiQr,
       now: now,
     );
-    final swipeContext = RecommendationContext(
+    final swipeContext = buildRecommendationContext(
+      directory: directory,
       amount: _amount,
       categoryId: selectedCategoryForRanking,
       categorySlug: selectedCategorySlug,
@@ -324,24 +332,14 @@ class _ScanResultScreenState extends ConsumerState<ScanResultScreen> {
 
     final snapshots = cards
         .where((c) => !_locallyRejectedCardIds.contains(c.id))
-        .map((c) {
-          final owned = wallet
-              .where((w) => w.cardProductId == c.id)
-              .firstOrNull;
-          final capRemaining = owned == null
-              ? const <String, Money>{}
-              : {
-                  for (final cap in uniqueCapRules(c.capRules))
-                    if (owned.capConsumed.containsKey(cap.id))
-                      cap.id: cap.capValue - owned.capConsumed[cap.id]!,
-                };
-          return CardSnapshot(
-            product: c,
-            capRemaining: capRemaining,
-            milestoneProgress: owned?.milestoneQualifiedSpend ?? const {},
+        .map(
+          (c) => buildCardSnapshot(
+            c,
+            owned: wallet.where((w) => w.cardProductId == c.id).firstOrNull,
+            now: now,
             forcedOverrideCardId: overrideProductId,
-          );
-        })
+          ),
+        )
         .toList();
 
     final upiRanked = engine.rank(upiContext, snapshots);

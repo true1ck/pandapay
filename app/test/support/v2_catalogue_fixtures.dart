@@ -47,6 +47,7 @@ Map<String, dynamic> v2CardJson(
   'id': id,
   'name': name,
   'network': 'visa',
+  'is_upi_linkable': true,
   'point_value_inr': 0.25,
   'base_reward_unit': 'points_per_100',
   'base_reward_rate': 1,
@@ -142,8 +143,8 @@ Map<String, dynamic> capStateRowJson(
   Object? consumedNative,
   String? capKind,
   Object? capAmount,
-  String? periodStart,
-  String? periodEnd,
+  Object? periodStart,
+  Object? periodEnd,
   bool approximate = false,
 }) => {
   'cap_rule_id': capRuleId,

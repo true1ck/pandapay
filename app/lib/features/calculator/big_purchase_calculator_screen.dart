@@ -8,6 +8,7 @@ import '../../app/category_picker.dart';
 import '../../app/providers.dart';
 import '../../data/api_exception.dart';
 import '../../data/card_overrides_repository.dart' show CardOverride;
+import '../../data/card_snapshots.dart';
 import '../../data/catalogue_repository.dart'
     show SpendCategory, categoryIdForServer;
 import '../../data/override_resolver.dart';
@@ -253,17 +254,14 @@ class _BigPurchaseCalculatorScreenState
       wallet: wallet,
       categoryId: effectiveCategoryId,
     );
+    // WP9: v1 cards keep the v1 measure; v2-shaped cards pass native
+    // consumption (data/card_snapshots.dart).
     final snapshots = owned.map((c) {
       final uc = wallet.where((w) => w.cardProductId == c.id).first;
-      final capRemaining = {
-        for (final cap in uniqueCapRules(c.capRules))
-          if (uc.capConsumed.containsKey(cap.id))
-            cap.id: cap.capValue - uc.capConsumed[cap.id]!,
-      };
-      return CardSnapshot(
-        product: c,
-        capRemaining: capRemaining,
-        milestoneProgress: uc.milestoneQualifiedSpend,
+      return buildCardSnapshot(
+        c,
+        owned: uc,
+        now: context.now ?? DateTime.now(),
         forcedOverrideCardId: overrideProductId,
       );
     }).toList();

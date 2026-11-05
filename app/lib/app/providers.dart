@@ -22,6 +22,7 @@ import '../data/auth_api.dart';
 import '../data/product_access_api.dart';
 import '../data/authenticated_http_client.dart';
 import '../data/card_bill_ledger.dart';
+import '../data/card_snapshots.dart';
 import '../data/card_feedback_repository.dart';
 import '../data/card_overrides_repository.dart';
 import '../data/card_requests_api.dart';
@@ -56,6 +57,7 @@ import '../data/local/duplicate_resolution_outbox.dart';
 import '../data/local/transaction_outbox_repository.dart';
 import '../data/local/transaction_attachments_repository.dart';
 import '../data/local_user_cards_repository.dart';
+import '../data/merchant_context.dart';
 import '../data/transaction_page_refresh.dart';
 import '../data/merchant_category_rules_repository.dart';
 import '../data/merchant_issue_rules_repository.dart';
@@ -3270,7 +3272,11 @@ final splitPlanProvider = Provider<List<SplitAllocation>>((ref) {
 
   final snapshots = [
     for (final (uc, product) in pairs)
-      _userCardSnapshots([product], [uc]).single,
+      _userCardSnapshots(
+        [product],
+        [uc],
+        now: ref.watch(clockProvider).now(),
+      ).single,
   ];
   final transactions =
       ref.watch(utilizationTransactionsProvider).valueOrNull ?? const [];
@@ -3340,7 +3346,11 @@ final emiAdviceProvider = Provider.family<EmiAdvice?, EmiAdviceParams>((
 
   final engine = ref.watch(recommendationEngineProvider);
   final principal = Money.fromRupees(params.principalRupees);
-  final snapshot = _userCardSnapshots([product], [userCard]).first;
+  final snapshot = _userCardSnapshots(
+    [product],
+    [userCard],
+    now: ref.watch(clockProvider).now(),
+  ).first;
   final rec = engine.rank(
     RecommendationContext(
       amount: principal,
@@ -6438,7 +6448,10 @@ AsyncValue<List<Recommendation>> _rankRecommendations(
     wallet: wallet,
     categoryId: resolvedCategoryId,
   );
-  final context = RecommendationContext(
+  // WP9: the merchant name resolves through the C5 directory (slug, and the
+  // merchant's first listed MCC when the context has none).
+  final context = buildRecommendationContext(
+    directory: ref.watch(merchantDirectoryProvider),
     amount: amount,
     categoryId: resolvedCategoryId,
     categorySlug: resolvedCategorySlug,
@@ -6451,6 +6464,7 @@ AsyncValue<List<Recommendation>> _rankRecommendations(
     cards,
     wallet,
     forcedOverrideCardId: overrideProductId,
+    now: ref.watch(clockProvider).now(),
   );
   final ranked = engine.rank(context, snapshots);
   return AsyncValue.data(
@@ -6467,23 +6481,20 @@ List<CardSnapshot> _userCardSnapshots(
   List<CardProduct> cards,
   List<UserCard> wallet, {
   String? forcedOverrideCardId,
+  required DateTime now,
 }) {
-  return cards.map((c) {
-    final owned = wallet.firstWhereOrNull((w) => w.cardProductId == c.id);
-    final capRemaining = owned == null
-        ? const <String, Money>{}
-        : {
-            for (final cap in uniqueCapRules(c.capRules))
-              if (owned.capConsumed.containsKey(cap.id))
-                cap.id: cap.capValue - owned.capConsumed[cap.id]!,
-          };
-    return CardSnapshot(
-      product: c,
-      capRemaining: capRemaining,
-      milestoneProgress: owned?.milestoneQualifiedSpend ?? const {},
-      forcedOverrideCardId: forcedOverrideCardId,
-    );
-  }).toList();
+  // WP9: cap state is assembled in data/card_snapshots.dart (v1 measure for
+  // v1-shaped cards, native units for v2-shaped cards; never mixed).
+  return cards
+      .map(
+        (c) => buildCardSnapshot(
+          c,
+          owned: wallet.firstWhereOrNull((w) => w.cardProductId == c.id),
+          now: now,
+          forcedOverrideCardId: forcedOverrideCardId,
+        ),
+      )
+      .toList();
 }
 
 /// UA-8 (Chunk 32): the app's first use of injectable `Clock` outside
@@ -8125,7 +8136,30 @@ final bestCardForMerchantProvider =
         cards,
         wallet,
         forcedOverrideCardId: overrideProductId,
+        now: ref.watch(clockProvider).now(),
       );
+
+      // WP9: with a merchant name the context resolves it through the C5
+      // directory (slug + first listed MCC), which BestCardForWidget's own
+      // context cannot carry; same "first non-excluded" pick otherwise.
+      if (merchantName != null && merchantName.trim().isNotEmpty) {
+        if (snapshots.isEmpty) return const AsyncValue.data(null);
+        final ranked = ref
+            .watch(recommendationEngineProvider)
+            .rank(
+              buildRecommendationContext(
+                directory: ref.watch(merchantDirectoryProvider),
+                amount: BestCardForWidget.defaultNominalAmount,
+                categoryId: resolvedCategoryId,
+                categorySlug: categorySlug,
+                merchantName: merchantName,
+                rail: TxnRail.swipe,
+                now: ref.watch(clockProvider).now(),
+              ),
+              snapshots,
+            );
+        return AsyncValue.data(ranked.where((r) => !r.isExcluded).firstOrNull);
+      }
 
       return AsyncValue.data(
         picker.pickBestCard(
