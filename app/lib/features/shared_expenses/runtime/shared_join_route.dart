@@ -176,7 +176,11 @@ class _SharedJoinRouteState extends ConsumerState<SharedJoinRoute> {
                         onPressed: _busy ? null : _join,
                         child: Text(
                           _busy ? 'Joining…' : 'Join',
-                          style: BambooFonts.ui(14, weight: FontWeight.w600),
+                          style: BambooFonts.ui(
+                            14,
+                            weight: FontWeight.w600,
+                            color: BambooInk.lime,
+                          ),
                         ),
                       ),
                       TextButton(

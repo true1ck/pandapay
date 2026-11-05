@@ -161,6 +161,18 @@ function registerInvitationRoutes(app,{protect,withUserClient,sendError,secret,a
     const result=await withUserClient(req.userId,async client=>(await client.query('SELECT shared_expenses.remove_member($1::uuid,$2::uuid,$3::uuid,$4::text) AS result',[b.contextId,b.memberId,b.operationId,rh])).rows[0].result);
     res.json(result);
   });
+  route('/shared-expenses/members/transfer-owner',async(req,res)=>{
+    const b=req.body;record(b,['contextId','memberId','operationId']);for(const f of ['contextId','memberId','operationId'])uuid(b[f],f);
+    const rh=requestHash({contextId:b.contextId,memberId:b.memberId,action:'transfer'});
+    const result=await withUserClient(req.userId,async client=>(await client.query('SELECT shared_expenses.transfer_owner($1::uuid,$2::uuid,$3::uuid,$4::text) AS result',[b.contextId,b.memberId,b.operationId,rh])).rows[0].result);
+    res.json(result);
+  });
+  route('/shared-expenses/contexts/take-over',async(req,res)=>{
+    const b=req.body;record(b,['contextId','operationId']);uuid(b.contextId,'contextId');uuid(b.operationId,'operationId');
+    const rh=requestHash({contextId:b.contextId,action:'takeover'});
+    const result=await withUserClient(req.userId,async client=>(await client.query('SELECT shared_expenses.take_over_ownership($1::uuid,$2::uuid,$3::text) AS result',[b.contextId,b.operationId,rh])).rows[0].result);
+    res.json(result);
+  });
   route('/shared-expenses/contexts/leave',async(req,res)=>{
     const b=req.body;record(b,['contextId','operationId']);uuid(b.contextId,'contextId');uuid(b.operationId,'operationId');
     const rh=requestHash({contextId:b.contextId,action:'leave'});

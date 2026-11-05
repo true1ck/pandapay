@@ -61,6 +61,7 @@ test('real PostgreSQL: forced RLS, source eligibility, replay and fail-closed wr
   await db.query(fs.readFileSync(path.resolve(__dirname,'../supabase/migrations/20261114010000_shared_expense_context_label.sql'),'utf8'));
   await db.query(fs.readFileSync(path.resolve(__dirname,'../supabase/migrations/20261114020000_shared_expense_group_links.sql'),'utf8'));
   await db.query(fs.readFileSync(path.resolve(__dirname,'../supabase/migrations/20261114030000_shared_expense_membership_exit.sql'),'utf8'));
+  await db.query(fs.readFileSync(path.resolve(__dirname,'../supabase/migrations/20261114040000_shared_expense_owner_and_former.sql'),'utf8'));
   // Replay the pre-existing role setup's broad grants. A new isolated schema
   // must retain its ACL even when public and pandapay grants are restored.
   await db.query('GRANT USAGE ON SCHEMA public,pandapay TO app_user; GRANT SELECT,INSERT,UPDATE,DELETE ON ALL TABLES IN SCHEMA public TO app_user; GRANT EXECUTE ON ALL FUNCTIONS IN SCHEMA pandapay TO app_user');
@@ -309,6 +310,25 @@ test('real PostgreSQL: forced RLS, source eligibility, replay and fail-closed wr
     await db.query("INSERT INTO shared_expenses.members(context_id,member_id,role,state,display_name) SELECT $1,gen_random_uuid(),'member','invited','x' FROM generate_series(1,20)",[g]);
     await db.query("INSERT INTO shared_expenses.invitations(invitation_id,context_id,member_id,issuer_profile_id,token_hash,claimed_profile_id,state,via_group_link) SELECT gen_random_uuid(),$1,m.member_id,$2,encode(sha256(convert_to(m.member_id::text,'UTF8')),'hex'),$2,'awaiting_owner',true FROM shared_expenses.members m WHERE m.context_id=$1 AND m.display_name='x'",[g,a]);
     await assert.rejects(claim(c,t3),/join_requests_full/);
+  });
+  await t.test('owner transfer, take-over when the owner account is gone, and "Former member" label',async()=>{
+    const H=(ch)=>ch.repeat(64), g=crypto.randomUUID(), q=crypto.randomUUID(), i=crypto.randomUUID();
+    await actor(a,()=>db.query("SELECT shared_expenses.create_context($1,'group','Own trip',$2,$3)",[g,crypto.randomUUID(),H('1')]));
+    await actor(a,()=>db.query('SELECT shared_expenses.invite_member($1,$2,$3)',[{contextId:g,memberId:q,displayName:'Bee'},crypto.randomUUID(),H('2')]));
+    const xfer=(who,member)=>actor(who,()=>db.query('SELECT shared_expenses.transfer_owner($1,$2,$3,$4) AS v',[g,member,crypto.randomUUID(),H('9')]));
+    await assert.rejects(xfer(a,q),/membership_conflict/,'target must be an active member');
+    await actor(a,()=>db.query('SELECT shared_expenses.create_invitation($1,$2)',[{invitationId:i,contextId:g,memberId:q,targetPhoneHash:H('b'),tokenHash:crypto.randomBytes(32).toString('hex')},H('5')]));
+    await actor(b,()=>db.query('SELECT shared_expenses.claim_invitation_by_id($1,$2,$3,$4,$5)',[i,H('b'),'3210',crypto.randomUUID(),H('6')]));
+    await assert.rejects(xfer(b,q),/context_not_authorized/,'only the owner transfers');
+    await assert.rejects(actor(b,()=>db.query('SELECT shared_expenses.take_over_ownership($1,$2,$3)',[g,crypto.randomUUID(),H('8')])),/owner_still_present/);
+    assert.equal((await xfer(a,q)).rows[0].v.status,'owner');
+    const roles=(await db.query("SELECT profile_id,role FROM shared_expenses.members WHERE context_id=$1 AND state='active'",[g])).rows;
+    assert.equal(roles.find(x=>x.role==='owner').profile_id,b);
+    // The old owner is now a plain member and may leave; the new owner may not.
+    await actor(a,()=>db.query('SELECT shared_expenses.leave_context($1,$2,$3)',[g,crypto.randomUUID(),H('7')]));
+    await assert.rejects(actor(b,()=>db.query('SELECT shared_expenses.leave_context($1,$2,$3)',[g,crypto.randomUUID(),H('7')])),/owner_cannot_leave/);
+    assert.equal((await db.query('SELECT shared_expenses._member_label(NULL,NULL) AS l')).rows[0].l,'Former member');
+    assert.equal((await db.query("SELECT shared_expenses._member_label('Asha',NULL) AS l")).rows[0].l,'Asha');
   });
   await t.test('leaving and removing: only unjoined people without expenses, and only when settled up',async()=>{
     const H=(ch)=>ch.repeat(64), g=crypto.randomUUID(), m1=crypto.randomUUID(), m2=crypto.randomUUID(), tok=()=>crypto.randomBytes(32).toString('hex');

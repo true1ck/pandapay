@@ -253,14 +253,15 @@ class _PandaPayAppState extends ConsumerState<PandaPayApp> {
   bool _resumingSplitJoin = false;
 
   /// Opens the Join screen for a remembered split invite once the user is
-  /// signed in and past onboarding. Never joins by itself.
+  /// signed in and past onboarding (waits up to about 30 minutes for slow
+  /// sign-up; the saved link lasts a week). Never joins by itself.
   Future<void> _resumePendingSplitJoin() async {
     if (_resumingSplitJoin) return;
     _resumingSplitJoin = true;
     try {
       final token = await PendingSplitInviteStore().read();
       if (token == null) return;
-      for (var attempt = 0; attempt < 150 && mounted; attempt += 1) {
+      for (var attempt = 0; attempt < 4500 && mounted; attempt += 1) {
         final signedIn = ref.read(cacheNamespaceProvider).startsWith('user:');
         final onboarding = ref.read(onboardingCompleteProvider);
         if (signedIn &&

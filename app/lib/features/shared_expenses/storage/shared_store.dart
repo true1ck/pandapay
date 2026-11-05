@@ -177,6 +177,15 @@ class SharedExpensesStore {
             [namespace],
           ).single['n']
           as int;
+
+  /// Commands still on their way to the server. A command the server refused
+  /// for good ('rejected' or 'conflict') will never send, so it is not "syncing".
+  int get waitingCount =>
+      database.db.select(
+            "SELECT COUNT(*) AS n FROM shared_commands WHERE namespace=? AND state NOT IN ('committed','rejected','conflict')",
+            [namespace],
+          ).single['n']
+          as int;
   Map<String, Object?>? provisional(String operationId) {
     final queued = operation(operationId);
     if (queued != null && isContextRevoked(queued.command.contextId)) {

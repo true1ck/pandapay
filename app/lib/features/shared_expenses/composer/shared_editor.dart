@@ -20,6 +20,10 @@ class SharedEditorMember {
     this.profileId,
   });
   bool get canSettle => state == 'active' && profileId != null;
+
+  /// Shown in pickers: someone who has not joined can still be added to an
+  /// expense, but it stays waiting until they join and approve.
+  String get label => state == 'invited' ? '$name (not joined yet)' : name;
 }
 
 /// Authenticated form state, embedded in Quick Add. No bank transaction writer.

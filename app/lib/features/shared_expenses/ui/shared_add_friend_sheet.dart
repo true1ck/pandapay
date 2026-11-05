@@ -160,8 +160,28 @@ Future<(String, String)?> sharedPickContact(BuildContext context) async {
     );
     final name = picked?.displayName?.trim() ?? '';
     if (picked == null || name.isEmpty) return null;
-    final raw = picked.phones.isEmpty ? '' : picked.phones.first.number;
-    return (name, sharedCleanPhone(raw) ?? '');
+    final numbers = [
+      for (final p in picked.phones)
+        if (sharedCleanPhone(p.number) != null) sharedCleanPhone(p.number)!,
+    ].toSet().toList();
+    if (numbers.length > 1 && context.mounted) {
+      final choice = await showDialog<String>(
+        context: context,
+        builder: (ctx) => SimpleDialog(
+          title: Text('Which number for $name?'),
+          children: [
+            for (final n in numbers)
+              SimpleDialogOption(
+                onPressed: () => Navigator.pop(ctx, n),
+                child: Text(n),
+              ),
+          ],
+        ),
+      );
+      if (choice == null) return null;
+      return (name, choice);
+    }
+    return (name, numbers.isEmpty ? '' : numbers.first);
   } catch (_) {
     return null;
   }
@@ -343,6 +363,30 @@ Future<String?> runAddFriendFlow(
   final existing = input.lookup.existingContextId;
   if (existing != null) return existing;
   final messenger = ScaffoldMessenger.of(context);
+  final same = await runtime.sameNameFriend(input.name);
+  if (same != null && context.mounted) {
+    final open = await showDialog<bool>(
+      context: context,
+      builder: (ctx) => AlertDialog(
+        title: Text('You already split with ${input.name}'),
+        content: const Text(
+          'Open that split, or add a separate person with the same name.',
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(ctx, false),
+            child: const Text('Add anyway'),
+          ),
+          TextButton(
+            onPressed: () => Navigator.pop(ctx, true),
+            child: const Text('Open existing'),
+          ),
+        ],
+      ),
+    );
+    if (open == true) return same;
+    if (open == null) return null;
+  }
   try {
     final added = await runtime.addFriend(name: input.name, phone: input.phone);
     if (added.link != null && !input.lookup.found) {
@@ -367,7 +411,39 @@ Future<String?> runAddFriendFlow(
       );
     } else if (added.inviteIssue != null) {
       messenger.showSnackBar(
-        SnackBar(content: Text('Friend saved. ${added.inviteIssue}')),
+        SnackBar(
+          content: Text('Friend saved. ${added.inviteIssue}'),
+          duration: const Duration(seconds: 8),
+          action: added.phone == null
+              ? null
+              : SnackBarAction(
+                  label: 'Try again',
+                  onPressed: () async {
+                    try {
+                      final link = await runtime.inviteLink(
+                        contextId: added.contextId,
+                        memberId: added.memberId,
+                        phoneNumber: added.phone,
+                      );
+                      await SharePlus.instance.share(
+                        ShareParams(
+                          subject: 'Join me on PandaPay',
+                          text: sharedInviteMessage(
+                            groupName: input.name,
+                            personName: input.name,
+                            url: link.url,
+                            direct: true,
+                          ),
+                        ),
+                      );
+                    } catch (e) {
+                      messenger.showSnackBar(
+                        SnackBar(content: Text(sharedInviteIssueMessage(e))),
+                      );
+                    }
+                  },
+                ),
+        ),
       );
     }
     return added.contextId;

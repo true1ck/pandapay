@@ -512,6 +512,39 @@ final class SharedExpensesHttpTransport implements SharedExpensesTransport {
     );
   }
 
+  Future<void> transferOwner({
+    required String contextId,
+    required String memberId,
+    required String operationId,
+  }) async {
+    for (final id in [contextId, memberId, operationId]) {
+      if (!sharedUuid(id)) throw ArgumentError('Invalid identifier');
+    }
+    await _request(
+      'POST',
+      '/shared-expenses/members/transfer-owner',
+      body: jsonEncode({
+        'contextId': contextId,
+        'memberId': memberId,
+        'operationId': operationId,
+      }),
+    );
+  }
+
+  Future<void> takeOverOwnership({
+    required String contextId,
+    required String operationId,
+  }) async {
+    if (!sharedUuid(contextId) || !sharedUuid(operationId)) {
+      throw ArgumentError('Invalid identifier');
+    }
+    await _request(
+      'POST',
+      '/shared-expenses/contexts/take-over',
+      body: jsonEncode({'contextId': contextId, 'operationId': operationId}),
+    );
+  }
+
   Future<void> leaveContext({
     required String contextId,
     required String operationId,

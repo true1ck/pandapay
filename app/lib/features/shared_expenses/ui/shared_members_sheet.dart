@@ -24,12 +24,13 @@ class SharedMembersSheet extends StatefulWidget {
     required this.contextId,
     required this.groupName,
   });
-  static Future<void> show(
+  /// Completes with true when the person left the split from this sheet.
+  static Future<bool?> show(
     BuildContext context, {
     required SharedExpensesRuntime runtime,
     required String contextId,
     required String groupName,
-  }) => showModalBottomSheet<void>(
+  }) => showModalBottomSheet<bool>(
     context: context,
     isScrollControlled: true,
     backgroundColor: BambooInk.paper,
@@ -129,7 +130,7 @@ class _SharedMembersSheetState extends State<SharedMembersSheet> {
     setState(() => _busy = true);
     try {
       await widget.runtime.leaveContext(widget.contextId);
-      if (mounted) Navigator.pop(context);
+      if (mounted) Navigator.pop(context, true);
     } catch (error) {
       if (mounted) {
         setState(() {
@@ -137,6 +138,52 @@ class _SharedMembersSheetState extends State<SharedMembersSheet> {
           _busy = false;
         });
       }
+    }
+  }
+
+  Future<void> _makeOwner(SharedEditorMember member) async {
+    if (_busy || !_authorized) return;
+    final ok = await _confirm(
+      'Make ${member.name} the owner?',
+      'They will approve people and manage this split. You stay a member and can leave later.',
+      'Make owner',
+    );
+    if (!ok || !mounted) return;
+    setState(() => _busy = true);
+    try {
+      await widget.runtime.transferOwner(widget.contextId, member.id);
+      if (!mounted) return;
+      setState(() {
+        _notice = '${member.name} is now the owner.';
+        _roster = widget.runtime.contextRoster(widget.contextId);
+      });
+    } catch (error) {
+      if (mounted) setState(() => _notice = sharedInviteIssueMessage(error));
+    } finally {
+      if (mounted) setState(() => _busy = false);
+    }
+  }
+
+  Future<void> _takeOver() async {
+    if (_busy || !_authorized) return;
+    final ok = await _confirm(
+      'Take over this split?',
+      'The owner account no longer exists. You will become the owner.',
+      'Take over',
+    );
+    if (!ok || !mounted) return;
+    setState(() => _busy = true);
+    try {
+      await widget.runtime.takeOverOwnership(widget.contextId);
+      if (!mounted) return;
+      setState(() {
+        _notice = 'You are now the owner.';
+        _roster = widget.runtime.contextRoster(widget.contextId);
+      });
+    } catch (error) {
+      if (mounted) setState(() => _notice = sharedInviteIssueMessage(error));
+    } finally {
+      if (mounted) setState(() => _busy = false);
     }
   }
 
@@ -633,7 +680,9 @@ class _SharedMembersSheetState extends State<SharedMembersSheet> {
                                       switch (member.state) {
                                         'active' =>
                                           member.profileId == null
-                                              ? 'Identity not verified'
+                                              ? 'Account no longer active · history kept'
+                                              : member.role == 'owner'
+                                              ? 'Owner'
                                               : 'Active member',
                                         'invited' =>
                                           member.profileId == null
@@ -726,6 +775,20 @@ class _SharedMembersSheetState extends State<SharedMembersSheet> {
                                               ),
                                             ],
                                           )
+                                        : roster.canShareLink &&
+                                              widget.runtime.proposalsEnabled &&
+                                              member.state == 'active' &&
+                                              member.profileId != null &&
+                                              member.id != roster.ownMemberId
+                                        ? TextButton(
+                                            onPressed: _busy
+                                                ? null
+                                                : () => _makeOwner(member),
+                                            child: Text(
+                                              'Make owner',
+                                              style: BambooFonts.ui(13),
+                                            ),
+                                          )
                                         : null,
                                   ),
                                 if (roster.canInvite &&
@@ -742,6 +805,22 @@ class _SharedMembersSheetState extends State<SharedMembersSheet> {
                                       style: BambooFonts.ui(
                                         14,
                                         color: BambooInk.lime,
+                                      ),
+                                    ),
+                                  ),
+                                if (roster.ownerGone &&
+                                    !roster.canShareLink &&
+                                    roster.ownMemberId.isNotEmpty)
+                                  Align(
+                                    alignment: Alignment.centerLeft,
+                                    child: TextButton(
+                                      onPressed: _busy ? null : _takeOver,
+                                      child: Text(
+                                        'The owner is gone · Take over as owner',
+                                        style: BambooFonts.ui(
+                                          13,
+                                          weight: FontWeight.w700,
+                                        ),
                                       ),
                                     ),
                                   ),

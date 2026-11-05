@@ -267,6 +267,8 @@ class _SharedContextRouteState extends ConsumerState<SharedContextRoute> {
   }
 
   void _changed() {
+    // A split this person left is gone from their device; do not reload it.
+    if (_runtime?.store.isContextRevoked(widget.contextId) == true) return;
     if (_runtime?.busy == false) _reload();
   }
 
@@ -335,7 +337,12 @@ class _SharedContextRouteState extends ConsumerState<SharedContextRoute> {
                     runtime: runtime,
                     contextId: widget.contextId,
                     groupName: snapshot.data!.title,
-                  ),
+                  ).then((left) {
+                    // Left the split: this screen has nothing left to show.
+                    if (left == true && mounted) {
+                      Navigator.of(context).maybePop();
+                    }
+                  }),
                 ),
                 onOpenBalance: !runtime.settlementsEnabled
                     ? null

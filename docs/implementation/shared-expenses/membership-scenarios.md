@@ -24,19 +24,23 @@ Status as of 5 November 2026 (local, uncommitted to any remote). "PG" = real Pos
 | Settle with someone who has not joined | Blocked with an explanation | Dart widget test |
 | Preview offline | Saved invite kept; retry offered | manual |
 | Groups up to 200 people | Roster reads 4 pages | code |
+| Leave / remove | Owner removes unjoined people with no expense; members leave only when settled (optional, groups persist across transactions) | PG |
+| Owner transfer | Owner can hand the group to an active member, then leave | PG, widget |
+| Deleted account | Shown as "Former member" with "history kept"; balances and expenses stay; if the owner is gone any active member can take over | PG, widget |
+| Same friend added twice | Warns "You already split with X" with Open existing / Add anyway | code |
+| Contact with several numbers | Short chooser before the number is used | code |
+| Add friend when the invite call fails | "Try again" on the message retries with the number kept for that session | code |
+| Not joined yet in expense pickers | Name shows "(not joined yet)" in paid-by and split lists | widget |
+| Saved link on slow sign-up | Waits up to 30 minutes (link itself lasts a week) | code |
+| Waiting invites outside Splits | Badge on You → Splits for invites and join requests | code |
+| Inbox, members sheet owner/leave states | Widget tests with a fake runtime | widget |
 
-## Open (decision or larger build needed)
+## Open
 
 | Gap | Why it matters | Proposed next step |
 | --- | --- | --- |
-| No leave / remove member / transfer owner / archive | A declined or abandoned person stays allocated forever; a full direct split cannot be reused | Needs product rules for balances: allow leave only at zero balance, remove only unjoined members, owner transfer. Server functions + UI. |
-| Deleted account leaves an active member with no profile | Pending approvals and settlement stall; if the owner is deleted nobody can invite | Part of account erasure design (README lists erasure as open) |
-| Recycled phone number | New holder of a number sees old invites | Invites expire after 7 days; consider also tying to account age |
-| Two accounts, same number | Auth enforces one active contact per number (migration 9001); no DB test across the two services | Add a cross-service test |
-| Same person added twice as separate friends by name | Two direct splits with one person | Warn on same name; suggest existing |
-| Add friend offline with a number | The number is not kept; invite step must be redone | Persist the number with the queued command |
-| Resume of a saved link gives up after 60 s of slow sign-up | Link is lost on slow onboarding | Resume on first home screen instead of a timer |
-| Editor pickers do not mark "not joined" | Expense stays pending without explanation | Add a "not joined yet" chip |
-| Contacts picker uses the first number | Wrong number for multi-number contacts | Let the user choose |
-| No widget tests for add-friend sheet, members sheet invite UI, inbox, join route | Regressions would be silent | Add widget tests with a fake runtime |
-| Inbox only on Splits | Invites are noticed only when Splits opens | Home badge, later push |
+| Recycled phone number | New holder of a number sees old invites for up to 7 days | Invites expire after 7 days; add a stronger rule only if abuse appears |
+| Two accounts, same number | Auth enforces one active contact per number; no DB test across the two services | Add a cross-service test |
+| Offline add keeps the number only for the session | Closing the app before retry loses the number | Persist with the queued command |
+| Home screen dot | Badge is on You → Splits only | Add to the Home tab when the notification project lands |
+| Push notifications | Invites are noticed on opening the app | Separate notification project |

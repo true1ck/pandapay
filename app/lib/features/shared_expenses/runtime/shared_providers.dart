@@ -84,11 +84,26 @@ final sharedExpensesLifecycleProvider = Provider.autoDispose<void>((ref) {
   });
   // Retry backoff is durable; this only schedules a small bounded attempt.
   final timer = Timer.periodic(const Duration(seconds: 45), (_) {
-    if (runtime.store.pendingCount > 0 || runtime.syncLag) refresh();
+    if (runtime.store.waitingCount > 0 || runtime.syncLag) refresh();
   });
   ref.onDispose(() {
     WidgetsBinding.instance.removeObserver(observer);
     unawaited(subscription.cancel());
     timer.cancel();
   });
+});
+
+/// Invites for me plus join requests waiting on me, shown as a badge on the
+/// Splits row. Quietly 0 whenever it cannot be read.
+final sharedWaitingCountProvider = FutureProvider.autoDispose<int>((ref) async {
+  if (!ref.watch(sharedExpensesEnabledProvider)) return 0;
+  try {
+    final runtime = await ref.watch(sharedExpensesRuntimeProvider.future);
+    if (!runtime.proposalsEnabled) return 0;
+    final invites = await runtime.inviteInbox();
+    final requests = await runtime.joinRequests();
+    return invites.length + requests.length;
+  } catch (_) {
+    return 0;
+  }
 });

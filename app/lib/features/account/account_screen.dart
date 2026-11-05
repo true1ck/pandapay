@@ -119,7 +119,11 @@ class AccountScreen extends ConsumerWidget {
               AccountTile(
                 icon: Icons.people_outline_rounded,
                 label: 'Splits',
-                onTap: () => context.push(AppRoute.splits),
+                badgeCount: ref.watch(sharedWaitingCountProvider).valueOrNull ?? 0,
+                onTap: () async {
+                  await context.push(AppRoute.splits);
+                  ref.invalidate(sharedWaitingCountProvider);
+                },
               ),
               const SizedBox(height: AppSpace.sm),
               const SharedDiscoverableTile(),

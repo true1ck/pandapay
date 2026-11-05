@@ -81,7 +81,7 @@ class SharedEditorFields extends StatelessWidget {
                   for (final m in editor.members)
                     DropdownMenuItem(
                       value: m.id,
-                      child: Text(m.name, style: BambooFonts.ui(14)),
+                      child: Text(m.label, style: BambooFonts.ui(14)),
                     ),
                 ],
                 onChanged: editor.sealed
@@ -114,7 +114,7 @@ class SharedEditorFields extends StatelessWidget {
                       children: [
                         Expanded(
                           child: Text(
-                            member.name,
+                            member.label,
                             style: BambooFonts.ui(14, weight: FontWeight.w600),
                           ),
                         ),
@@ -183,7 +183,7 @@ class SharedEditorFields extends StatelessWidget {
                 children: [
                   for (final member in editor.members)
                     FilterChip(
-                      label: Text(member.name, style: BambooFonts.ui(13)),
+                      label: Text(member.label, style: BambooFonts.ui(13)),
                       selected: editor.participants.contains(member.id),
                       selectedColor: BambooInk.rankBadgeBg,
                       checkmarkColor: BambooInk.jade,
@@ -276,7 +276,7 @@ class SharedEditorFields extends StatelessWidget {
                 for (final m in editor.members)
                   if (preview.shares.containsKey(m.id))
                     SharedMoneyLine(
-                      m.name,
+                      m.label,
                       preview.shares[m.id]!,
                       confidence: Confidence.confirmed,
                     ),

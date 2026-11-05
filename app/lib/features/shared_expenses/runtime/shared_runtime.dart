@@ -25,6 +25,9 @@ class SharedRoster {
   final String name, ownMemberId;
   final bool direct, canInvite;
 
+  /// The owner's account was deleted; any active member may take over.
+  final bool ownerGone;
+
   /// Sharing a join link for an existing unclaimed person only needs the
   /// owner role; adding another person to a two-person friend split does not.
   final bool canShareLink;
@@ -35,6 +38,7 @@ class SharedRoster {
     required this.members,
     required this.direct,
     required this.canInvite,
+    this.ownerGone = false,
     bool? canShareLink,
   }) : canShareLink = canShareLink ?? canInvite;
 }
@@ -264,6 +268,26 @@ class SharedExpensesRuntime extends ChangeNotifier {
     }
   }
 
+  /// An existing friend split with the same name, so a second one is not made
+  /// by accident. Best effort: a failure just means no warning.
+  Future<String?> sameNameFriend(String name) async {
+    try {
+      _current();
+      final wanted = name.trim().toLowerCase();
+      final page = await remote.fetchContexts(
+        kind: 'direct',
+        search: name.trim(),
+      );
+      for (final raw in (page['items'] as List? ?? const [])) {
+        final row = raw as Map;
+        if ((row['name'] as String? ?? '').trim().toLowerCase() == wanted) {
+          return row['contextId'] as String?;
+        }
+      }
+    } catch (_) {}
+    return null;
+  }
+
   Future<List<SharedInboxInvite>> inviteInbox() async {
     _current();
     if (!proposalsEnabled) return const [];
@@ -299,6 +323,35 @@ class SharedExpensesRuntime extends ChangeNotifier {
     await remote.removeMember(
       contextId: contextId,
       memberId: memberId,
+      operationId: const Uuid().v4(),
+    );
+    _current();
+    await refresh();
+  }
+
+  /// Owner hands the split to another active member, who then has owner rights.
+  Future<void> transferOwner(String contextId, String memberId) async {
+    _current();
+    if (!proposalsEnabled || store.isContextRevoked(contextId)) {
+      throw const SharedRuntimeUnavailable();
+    }
+    await remote.transferOwner(
+      contextId: contextId,
+      memberId: memberId,
+      operationId: const Uuid().v4(),
+    );
+    _current();
+    await refresh();
+  }
+
+  /// When the owner's account is gone, an active member takes over.
+  Future<void> takeOverOwnership(String contextId) async {
+    _current();
+    if (!proposalsEnabled || store.isContextRevoked(contextId)) {
+      throw const SharedRuntimeUnavailable();
+    }
+    await remote.takeOverOwnership(
+      contextId: contextId,
       operationId: const Uuid().v4(),
     );
     _current();
@@ -590,6 +643,12 @@ class SharedExpensesRuntime extends ChangeNotifier {
           ownMember.role == 'owner' &&
           (current['kind'] != 'direct' || roster.length < 2),
       canShareLink: proposalsEnabled && ownMember.role == 'owner',
+      ownerGone:
+          proposalsEnabled &&
+          !roster.any(
+            (m) =>
+                m.role == 'owner' && m.state == 'active' && m.profileId != null,
+          ),
     );
   }
 
@@ -965,7 +1024,7 @@ class SharedExpensesRuntime extends ChangeNotifier {
         nextCursor: activityPage['nextCursor'] as String?,
       ),
       offline: offline,
-      pendingChanges: store.pendingCount,
+      pendingChanges: store.waitingCount,
     );
   }
 

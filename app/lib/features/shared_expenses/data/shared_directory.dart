@@ -207,6 +207,8 @@ String sharedInviteIssueMessage(Object error) {
       'They already have expenses in this split, so they cannot be removed.',
     'owner_cannot_leave' =>
       'The owner cannot leave. Remove the people first, or ask the group to start a new split.',
+    'owner_still_present' =>
+        'This split still has an owner, so it cannot be taken over.',
     'settle_first' =>
       'Settle up and clear any waiting expenses before leaving.',
     'phone_not_verified' =>
