@@ -30,8 +30,8 @@ Status values: `not started` · `running` · `done (branch ready)` · `merged` �
 |---|---|---|---|---|---|---|
 | WP0 | Docs, contracts, scenario seed, directory skeleton | 0 | `card-rewards/phase1` | merged | 2026-11-05 | Lead |
 | WP1 | Schema v2, v1/v2 feeds, directory seeding | 1 | `card-rewards/wp1-schema` | **merged** | 2026-11-06 | Review approved + 1 fix round (D1, D2, D7, CI step); 1393 api tests; DB test fresh + incremental; seeder loads 164/61 |
-| WP2 | Loader v2 (pure transform), coverage, audit script | 1 | `card-rewards/wp2-loader` | running | 2026-11-05 | |
-| WP3 | Dart engine v2 + tolerant parsing | 1 | `card-rewards/wp3-dart-engine` | needs rework (fix round 1) | 2026-11-06 | Review approved; agrees with the server engine on 117/118 shared cases (K15 harness fix); applying D15 robustness rulings |
+| WP2 | Loader v2 (pure transform), coverage, audit script | 1 | `card-rewards/wp2-loader` | done (in review) | 2026-11-06 | All 376 cards transform; 27 override files apply (113 changes, 0 errors); see metrics below |
+| WP3 | Dart engine v2 + tolerant parsing | 1 | `card-rewards/wp3-dart-engine` | fix round 1 in re-review | 2026-11-06 | 464 tests; all 123 shared scenarios pass (same answers as the server engine) |
 | WP4 | JS engine v2 + merchant resolver | 1 | `card-rewards/wp4-js-engine` | **merged** (incl. D15, D16) | 2026-11-06 | 190 targeted tests; 29 contract + 47 JS scenarios |
 | WP5 | Merchant and platform directory data | 1 | `card-rewards/wp5-directory` | **merged** | 2026-11-06 | 164 merchants (9 true sub-brand parents, `group` tags per D6), 61 platforms; review + 1 fix round clean; IHCL brands kept under `taj` (ruling in ledger) |
 | WP6a | Worked examples: HDFC, SBI Card | 1 | `card-rewards/wp6a-examples-hdfc-sbi` | **merged** | 2026-11-06 | 21/21 cards, 15 override files; review + 1 fix round clean; Swiggy exact-half rounding parked |
@@ -47,13 +47,13 @@ Status values: `not started` · `running` · `done (branch ready)` · `merged` �
 
 | Metric | Baseline 2026-11-05 (prod v1) | After Phase 1 (v2) |
 |---|---|---|
-| Bonus rules dropped (unmapped category) | 176 / 500 (104 cards) | |
-| Unrestricted accelerators | 98 rules / 74 cards | |
-| Caps linked to nothing | 238 / 641 | |
-| Caps with post-cap 0 | 428 | |
-| Milestones on the wrong anchor | 292 / 292 | |
-| Spend-gated lounges structured | 0 / 124 | |
-| Co-brand cards with a merchant rule | 8 / 74 | |
+| Bonus rules dropped (unmapped category) | 176 / 500 (104 cards); WP2 count 249 / 147 cards | 0 dropped (361 modelled, 437 info) — WP2 dry run |
+| Unrestricted accelerators | 98 rules / 74 cards | 6 rules / 6 cards (2 flagged) — WP2 dry run |
+| Caps linked to nothing | 238 / 641 | 30 / 642, all flagged — WP2 dry run |
+| Caps with post-cap 0 | 428 (273 bonus caps zeroing base) | 0 bonus caps zeroing base — WP2 dry run |
+| Milestones on the wrong anchor | 292 / 292 (60 non-annual) | 0 / 308 — WP2 dry run |
+| Spend-gated lounges structured | 0 / 124 | 115 cards (195 unlock rows) — WP2 dry run |
+| Co-brand cards with a merchant rule | 8 / 74 (WP2 count 5 / 102) | 53 / 102 — WP2 dry run |
 | Cards Verified | 0 | |
 
 ## Decisions log
