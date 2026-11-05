@@ -78,29 +78,29 @@ void main() {
     expect(first['outbox']!.length, withReward['outbox']!.length);
   });
 
-  test('one batch and one-at-a-time agree on every non-IPO event', () {
+  test('one batch and one-at-a-time agree on every event, IPO applications included', () {
     final history = sharedHistory(bundle, synthetic: 120);
     final other = Device('other');
     addTearDown(other.dispose);
     device.capture(bundle, history);
     // Same messages, one at a time, in a second store.
+    // Each call numbers its messages from zero, so give every message its own
+    // prefix: two scenarios may carry the same text, and a repeated source key
+    // would be read as one message there but as two in the batch.
+    var n = 0;
     for (final message in history) {
-      other.capture(bundle, [message]);
+      other.capture(bundle, [message], sourcePrefix: 'seq${n++}:');
     }
     Map<String, int> kinds(Map<String, Object?> v) {
       final out = <String, int>{};
       for (final e in v['events'] as List) {
         final type = (e as Map)['type'] as String;
-        if (type == 'ipo_application') continue;
         final k = '$type/${e['status']}';
         out[k] = (out[k] ?? 0) + 1;
       }
       return out;
     }
 
-    // Known difference, reported in LANE-P.md: with several IPO blocks and
-    // releases for different applications in one batch the linker marks some
-    // applications ambiguous, where sequential processing links them.
     final a = digest(device), b = digest(other);
     expect(kinds(a), kinds(b));
     final ta = a['totals'] as Map, tb = b['totals'] as Map;

@@ -32,11 +32,16 @@ List<Map<String, Object?>> linkForGolden({
   }
   final byId = <String, Instrument>{
     for (final j in instruments)
-      (j['instrumentId'] as String): Instrument.fromJson(Map<String, Object?>.from(j)),
+      (j['instrumentId'] as String): Instrument.fromJson(
+        Map<String, Object?>.from(j),
+      ),
   };
   final linker = bundle == null
       ? RuleDrivenLinker(clock: now == null ? null : () => now)
-      : RuleDrivenLinker.fromBundle(bundle, clock: now == null ? null : () => now);
+      : RuleDrivenLinker.fromBundle(
+          bundle,
+          clock: now == null ? null : () => now,
+        );
   final result = linker.link(
     incoming: parsed,
     context: RuleLinkContext(

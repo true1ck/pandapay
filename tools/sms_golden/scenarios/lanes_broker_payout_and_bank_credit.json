@@ -1,0 +1,42 @@
+{
+  "id": "lanes_broker_payout_and_bank_credit",
+  "description": "A broker's 'transfer successful' payout notice and the bank's own credit alert for the same amount are one withdrawal.",
+  "knownInstruments": [
+    {
+      "kind": "bank_account",
+      "issuerSlug": "sbi",
+      "maskDigits": "1234"
+    }
+  ],
+  "messages": [
+    {
+      "sender": "AX-ACMEPY-S",
+      "body": "Monthly settlement: Transfer successful from Acme Invest  Amount: Rs. 15500.00 Initiated on: 2026-11-12 UTR no.: N123456789012 Bank: EXAMPLE BANK (XXXX1234)",
+      "observedAt": "2026-11-12T08:00:00Z"
+    },
+    {
+      "sender": "AD-SBIBNK-S",
+      "body": "Your A/c XX1234 credited by Rs.15500.00 on 12Nov26 by NEFT UTR N123456789012 - KOTAKSECURITIES LTD, MUMBAI. -SBI",
+      "observedAt": "2026-11-12T10:30:00Z"
+    }
+  ],
+  "expect": {
+    "events": [
+      {
+        "type": "investment_withdrawal",
+        "legRoles": [
+          "credit_leg",
+          "duplicate_notice"
+        ]
+      }
+    ],
+    "totals": {
+      "from": "2026-10-31T18:30:00Z",
+      "to": "2026-11-30T18:30:00Z",
+      "spendMinor": 0,
+      "incomeMinor": 0,
+      "investmentMinor": -1550000,
+      "transactionCount": 1
+    }
+  }
+}
