@@ -211,7 +211,8 @@ function transformRule(src, idx, ctx) {
     // MCC list, a merchant list, a category list). A label naming a brand
     // ("paytm_select_spends") additionally needs that brand in the
     // conditions. Checked after the conditions are mapped (step 12).
-    tokenNeedsConditions = BRANDISH_BRAND.test(rawToken) ? 'brand' : 'any';
+    tokenNeedsConditions = BRANDISH_BRAND.test(rawToken) || token.group ? 'brand' : 'any';
+    if (token.group) needsDirectory.push(`group:${token.group}`);
     unmappedTokens.push(rawToken);
     parts = [{}];
   } else {
@@ -535,6 +536,12 @@ function transformRule(src, idx, ctx) {
     else if (!isAccelerator && !restricted) role = 'base';
     else role = 'earn';
     const rowFlags = [];
+    if (['earn', 'base'].includes(role) && !restricted && !['unrestricted', 'none'].includes(token.kind) && !tokenNeedsConditions) {
+      // Safety net (H2): the token restricted this rule, and nothing of that
+      // survived mapping. Never let it become an every-spend rule.
+      rowInfo.push('restriction_lost');
+      role = 'info';
+    }
     if (role === 'earn' && isAccelerator && !restricted) rowFlags.push('unrestricted_accelerator');
     if (p.broad && role !== 'info') rowFlags.push('broad_category');
 

@@ -44,6 +44,7 @@ const MERCHANT_KEYS = new Set([
   'merchant_domain', 'merchant_platforms', 'merchant_partner_list', 'partner_list',
   'merchant_eligibility', 'eligible_merchant', 'eligible_partner_brands', 'merchant_group',
   'merchant_groups', 'merchant_brand', 'preferred_merchants', 'partner_merchant_list',
+  'merchant_identifier',
 ]);
 const PLATFORM_KEYS = new Set([
   'platform', 'platforms', 'app', 'apps', 'portal', 'program', 'programme', 'booking_channel',
@@ -73,7 +74,7 @@ const DESCRIPTIVE_KEYS = new Set([
   'period', 'merchant_mapping', 'retail_only', 'purpose', 'qualifying', 'eligible',
   'effective_date', 'eligible_services', 'eligible_purchase', 'eligible_transaction',
   'transaction_amount_basis', 'rounding', 'rounding_mode', 'accrual_rounding',
-  'merchant_identifier', 'merchant_id_basis', 'points_basis', 'reward_basis_note',
+  'merchant_id_basis', 'points_basis', 'reward_basis_note',
 ]);
 const DESCRIPTIVE_SUFFIX = /_(definition|description|note|notes|text|explanation|basis|rationale|identification|examples|source)$/;
 // Boolean flags that only restate that a rule is an exclusion.
@@ -310,7 +311,11 @@ function mapNameValue(m, key, value, index, { allowRail }) {
       m.rails.push({ ...RAIL_WORDS[n], key });
       continue;
     }
-    if (isWildcard(raw)) continue;
+    // "all", "online and offline": no channel restriction. Only for channel
+    // style keys and short values — a merchant list that happens to say
+    // "online and retail Landmark stores: ..." is not a wildcard.
+    if (allowRail && n.split(' ').length <= 6 && isWildcard(raw)) continue;
+    if (/\b(mid|tid|mids|tids|merchant ids?|terminal ids?)\b/.test(n) && !resolveName(raw, index)) continue; // how merchants are identified, not which
     const push = (hit) => {
       if (hit.merchant) m.merchantSlugs.push(hit.merchant);
       if (hit.platform) m.platformSlugs.push(hit.platform);

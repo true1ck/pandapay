@@ -375,6 +375,10 @@ function resolveCategoryToken(token, ctx = {}) {
   if (direct && direct.kind !== 'unmapped_noun') {
     const part = partFromPiece(direct);
     if (direct.kind === 'category' && direct.broad) flags.push('broad_category');
+    if (direct.kind === 'merchant' && !direct.merchantSlugs?.length) {
+      // A group the directory doesn't know yet: nothing to restrict to.
+      return { kind: 'unknown', parts: [], unmapped: [t], flags: ['group_not_in_directory'], group: direct.group };
+    }
     if (direct.kind === 'merchant' && direct.group && !direct.groupResolved) flags.push('group_not_in_directory');
     return { kind: direct.kind, parts: [part], unmapped: [], flags };
   }
