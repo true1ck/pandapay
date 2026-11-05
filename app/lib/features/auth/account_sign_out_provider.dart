@@ -13,11 +13,12 @@ import '../../data/portable_backup/account_recovery_operation_gate.dart';
 import '../sms_v2/providers/runtime_provider.dart';
 import '../sync/sync_engine.dart';
 import 'account_sign_out.dart';
+import 'storage_phone_wipe_hooks.dart';
 
 /// The storage-security hooks (install key, storage root, home widgets).
-/// Integration replaces [NoPhoneWipeHooks] with the real implementation.
+/// Tests override this with fakes.
 final phoneWipeHooksProvider = Provider<PhoneWipeHooks>(
-  (ref) => const NoPhoneWipeHooks(),
+  (ref) => StoragePhoneWipeHooks(),
 );
 
 /// Counts of phone-only data, read straight from SQLite. Tables that do not
