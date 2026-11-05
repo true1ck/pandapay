@@ -4,7 +4,7 @@
   "inputs": {
     "transform_version": "7",
     "source_record_sha256": "a64fd46907a426c27c52910331888b7b4f2ca9d2a00243d36e8ffc9269316e45",
-    "override_sha256": "3f97cf155d4451eec4aabed32906d84045cdf5a553c368d6bceff59430a0e6ed",
+    "override_sha256": "039bbe5697f88a17db2744dc35e5cab2d724eb16bc3b98b14d37c6b21852e463",
     "directory_sha256": "b1094d54b77e848d22f7a9a64f3ae6d1ef43ca3eb2fc8e40cd43ed1994664694",
     "verified": true
   },
@@ -25,8 +25,8 @@
     "points_expiry_months": 24,
     "model_status": "verified",
     "model_coverage": {
-      "rules_total": 12,
-      "rules_modelled": 12,
+      "rules_total": 13,
+      "rules_modelled": 13,
       "rules_info": 0,
       "caps_total": 7,
       "caps_enforced": 4,
@@ -172,6 +172,14 @@
           "value_sha256": "9452ceddb374f644",
           "reason": "WP7: HDFC MITC fair usage policy: \"The maximum reward points that can be earned in a statement cycle for ... IOCL, IRCTC* ... is 25,000.\" Card-wide total cap.",
           "source_url": "https://www.hdfc.bank.in/content/dam/hdfcbankpws/in/en/personal-banking/discover-products/cards/credit-cards/personal-mitc/mitc-in-english.pdf",
+          "checked_on": "2026-11-05"
+        },
+        {
+          "path": "reward_rules",
+          "op": "append",
+          "value_sha256": "8e948b1a49a6852c",
+          "reason": "WP7: D28c: T&C 2.1: \"Reward Points will not be accrued for ... Wallet, Rent, Government, Insurance, EMI\"; the record's EMI row was category-only. The record's EMI row needs category emi AND rail emi, so an EMI purchase in another category earned. Rail-EMI exclusion on all spend.",
+          "source_url": "https://www.hdfc.bank.in/content/dam/hdfcbankpws/in/en/personal-banking/discover-products/cards/credit-cards/indian-oil-hdfc-bank-credit-card/T-and-C-Indian-Oil-Credit-Card.pdf",
           "checked_on": "2026-11-05"
         }
       ]
@@ -855,6 +863,40 @@
         "max_engine_version": null,
         "source_local_id": "exclusion_insurance",
         "display_note": "Insurance transactions do not accrue Fuel Points."
+      },
+      {
+        "id": "indianoil-hdfc-bank-credit-card:rule:wp7_emi_rail_exclusion",
+        "category_id": null,
+        "category_slug": null,
+        "merchant_pattern": null,
+        "rail": "emi",
+        "unit": "points_per_150",
+        "rate": 0,
+        "min_txn_inr": null,
+        "max_txn_inr": null,
+        "priority": 0,
+        "conditions": {
+          "source_local_id": "wp7_emi_rail_exclusion",
+          "part": null,
+          "info_reasons": [],
+          "flags": []
+        },
+        "notes": null,
+        "effective_from": "2020-01-01",
+        "effective_to": null,
+        "excluded_categories": [],
+        "rule_role": "exclusion",
+        "merchant_slugs": [],
+        "platform_slugs": [],
+        "mcc_include": [],
+        "mcc_exclude": [],
+        "except_merchant_slugs": [],
+        "except_platform_slugs": [],
+        "block_inr": null,
+        "min_engine_version": 2,
+        "max_engine_version": null,
+        "source_local_id": "wp7_emi_rail_exclusion",
+        "display_note": "EMI transactions earn no rewards."
       },
       {
         "id": "indianoil-hdfc-bank-credit-card:rule:base_other_retail#min-amount",
