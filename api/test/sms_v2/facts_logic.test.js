@@ -306,3 +306,13 @@ test('startup fails clearly when the contracts are missing', () => {
     assert.doesNotThrow(() => assertContractsPresent());
   } finally { fs.rmSync(empty, { recursive: true, force: true }); }
 });
+
+test('a plain UPI payment keeps its payment method; other rails have none', () => {
+  const upi = projectEvent({ event: ev('purchase'), ledger: [led()], instruments, anchor: { ...anchor, rail: 'upi' } });
+  assert.equal(upi.paymentMethod, 'upi');
+  assert.equal(upi.rail, 'upi_qr');
+  for (const rail of ['card', 'imps', 'neft', 'wallet', 'cash', 'unknown', null]) {
+    const row = projectEvent({ event: ev('purchase'), ledger: [led()], instruments, anchor: { ...anchor, rail } });
+    assert.equal(row.paymentMethod, null, String(rail));
+  }
+});

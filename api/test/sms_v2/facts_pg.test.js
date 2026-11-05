@@ -67,7 +67,7 @@ const statusOf = (results, kind, id) => { const r = byId(results).get(`${kind}:$
 const errorsOf = (results, kind, id) => (byId(results).get(`${kind}:${id}`) || {}).errors;
 const txnsFor = async (profileId) => (await pool.query(
   `SELECT id, event_id, source_key, pipeline_version, amount_inr::float8 AS amount, merchant_name, category_id, user_card_id,
-          entry_kind::text AS entry_kind, instrument::text AS instrument, rail::text AS rail, status::text AS status, state_applied,
+          entry_kind::text AS entry_kind, instrument::text AS instrument, rail::text AS rail, payment_method, status::text AS status, state_applied,
           is_backfill, occurred_at, source::text AS source
      FROM transactions WHERE profile_id = $1 ORDER BY created_at, id`, [profileId])).rows;
 
@@ -683,4 +683,23 @@ test('POST /sms/v2/facts:batch and GET /sms/v2/sync over HTTP with the real wiri
     assert.equal((await post(s.body)).status, 404);
     assert.equal((await fetch(`${base}/sms/v2/sync`, { headers: { 'x-user': a } })).status, 404);
   } finally { server.closeAllConnections(); server.close(); }
+});
+
+test('a UPI movement stores its payment method and the transaction route can return it', { skip }, async () => {
+  const profile = await newProfile();
+  const inst = h.instrument({ kind: 'bank_account', userCardId: null });
+  const f = h.fact({ rail: 'upi', minor: 25000, instrument: h.mention({ kind: 'bank_account', maskDigits: '1234', maskLength: 4 }) });
+  const e = h.event(f, { type: 'purchase' });
+  const l = h.ledger(e, { fromInstrumentId: inst.instrumentId });
+  await ingest(profile, h.batch({ items: [h.item([f])], instruments: [inst], events: [e], ledger: [l] }));
+  const [row] = await txnsFor(profile);
+  assert.equal(row.payment_method, 'upi');
+  assert.equal(row.rail, 'upi_qr');
+
+  // A card payment has no payment method.
+  const card = cardSpend();
+  await ingest(profile, card.body);
+  const rows = await txnsFor(profile);
+  assert.equal(rows.filter((r) => r.payment_method === 'upi').length, 1);
+  assert.equal(rows.filter((r) => r.payment_method === null).length, 1);
 });

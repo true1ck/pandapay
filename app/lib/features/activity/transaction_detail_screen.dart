@@ -69,10 +69,7 @@ class TransactionDetailScreen extends ConsumerWidget {
     final txn = ref.watch(transactionDetailProvider(transactionId));
     // Activity and Spending already hold the complete row that was tapped.
     // Use it immediately while a live refresh is pending or unavailable.
-    final entry = _withLocalSmsEvidence(
-      txn.valueOrNull ?? initialEntry,
-      initialEntry,
-    );
+    final entry = txn.valueOrNull ?? initialEntry;
     return Scaffold(
       backgroundColor: BambooInk.paper,
       appBar: AppBar(
@@ -166,25 +163,6 @@ class TransactionDetailScreen extends ConsumerWidget {
   }
 }
 
-// The live API currently has QR-specific rail values, but no generic UPI
-// field. Retain local method evidence only for the exact same SMS identity.
-TransactionEntry? _withLocalSmsEvidence(
-  TransactionEntry? entry,
-  TransactionEntry? local,
-) {
-  if (entry == null ||
-      entry.paymentMethod != null ||
-      local?.paymentMethod != 'upi' ||
-      entry.sourceKey == null ||
-      entry.sourceKey != local?.sourceKey) {
-    return entry;
-  }
-  return TransactionEntry.fromJson({
-    ...entry.toJson(),
-    'payment_method': 'upi',
-  });
-}
-
 /// Shared so screens that change a transaction's lifecycle outside this one
 /// (Deleted transactions' restore) can drop the cached detail instead of
 /// showing the pre-restore status until the app restarts.
@@ -199,7 +177,7 @@ final transactionDetailProvider =
       final fallback = fromLoaded ?? cached;
       if (repo == null || id.startsWith('local-')) return fallback;
       try {
-        return _withLocalSmsEvidence(await repo.fetchTransaction(id), fallback);
+        return await repo.fetchTransaction(id);
       } catch (error) {
         if (isAuthenticationFailure(error) || fallback != null) return fallback;
         rethrow;

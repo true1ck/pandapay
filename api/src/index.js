@@ -5164,7 +5164,7 @@ app.get('/transactions', requireAuth, async (req, res) => {
                 ucat.parent_user_category_id AS parent_user_category_id,
                 COALESCE(parent_sc.name, parent_uc.name, sc.name, ucat.name) AS category_name,
                 CASE WHEN ucat.parent_category_id IS NOT NULL OR ucat.parent_user_category_id IS NOT NULL THEN ucat.name END AS subcategory_name,
-                t.rail, t.status, t.source, t.note,
+                t.rail, t.payment_method, t.status, t.source, t.note,
                 t.instrument, t.entry_kind, t.reward_state,
                 t.expected_value_inr,
                 (SELECT o.metadata->'selfTransferRule' FROM transaction_observations o
@@ -5259,7 +5259,7 @@ app.get('/transactions/:id', requireAuth, async (req, res) => {
                 ucat.parent_user_category_id AS parent_user_category_id,
                 COALESCE(parent_sc.name, parent_uc.name, sc.name, ucat.name) AS category_name,
                 CASE WHEN ucat.parent_category_id IS NOT NULL OR ucat.parent_user_category_id IS NOT NULL THEN ucat.name END AS subcategory_name,
-                t.rail, t.status, t.source, t.note,
+                t.rail, t.payment_method, t.status, t.source, t.note,
                 t.instrument, t.entry_kind, t.reward_state,
                 t.expected_value_inr,
                 COALESCE(t.source_account_last4,

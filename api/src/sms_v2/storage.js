@@ -544,7 +544,7 @@ async function upsertLedger(client, profileId, ledger, results, { categoryOnly =
 // ---------- transactions projection ----------
 
 const TXN_COLS = `t.id, t.event_id, t.source_key, t.pipeline_version, t.amount_inr, t.occurred_at, t.merchant_name, t.category_id, t.user_category_id,
-  t.user_card_id, t.entry_kind::text AS entry_kind, t.instrument::text AS instrument, t.rail::text AS rail, t.status::text AS status,
+  t.user_card_id, t.entry_kind::text AS entry_kind, t.instrument::text AS instrument, t.rail::text AS rail, t.payment_method, t.status::text AS status,
   t.state_applied, t.is_backfill`;
 
 const sameRow = (row, spec) => Math.round(Number(row.amount_inr) * 100) === spec.amountMinor
@@ -552,7 +552,8 @@ const sameRow = (row, spec) => Math.round(Number(row.amount_inr) * 100) === spec
   && (row.merchant_name || null) === (spec.merchantName || null)
   && (row.category_id || null) === (spec.categoryId || null)
   && (row.user_card_id || null) === (spec.userCardId || null)
-  && row.entry_kind === spec.entryKind && row.instrument === spec.instrument && row.rail === spec.rail;
+  && row.entry_kind === spec.entryKind && row.instrument === spec.instrument && row.rail === spec.rail
+  && (row.payment_method || null) === (spec.paymentMethod || null);
 
 const rowMovesCard = (r) => r.entry_kind === 'spend' && r.instrument === 'credit_card' && Boolean(r.user_card_id);
 
@@ -692,19 +693,19 @@ async function projectTransactions(client, profileId, eventIds, { backfill, cate
   const newRows = [];
   if (toInsert.length) {
     const r = await client.query(
-      `INSERT INTO transactions (profile_id, user_card_id, amount_inr, occurred_at, merchant_name, category_id, rail, source,
+      `INSERT INTO transactions (profile_id, user_card_id, amount_inr, occurred_at, merchant_name, category_id, rail, payment_method, source,
          status, reward_state, source_key, instrument, entry_kind, state_applied, is_backfill, event_id, pipeline_version)
-       SELECT $1, r.user_card_id, r.amount_minor::numeric / 100, r.occurred_at, r.merchant_name, r.category_id, r.rail::txn_rail,
+       SELECT $1, r.user_card_id, r.amount_minor::numeric / 100, r.occurred_at, r.merchant_name, r.category_id, r.rail::txn_rail, r.payment_method,
               'sms', 'active', 'estimated', r.source_key, r.instrument::txn_instrument, r.entry_kind::txn_entry_kind, false, r.is_backfill,
               r.event_id, 2
          FROM jsonb_to_recordset($2::jsonb) AS r(event_id text, amount_minor bigint, occurred_at timestamptz, merchant_name text,
-           category_id uuid, user_card_id uuid, rail text, instrument text, entry_kind text, source_key text, is_backfill boolean)
+           category_id uuid, user_card_id uuid, rail text, payment_method text, instrument text, entry_kind text, source_key text, is_backfill boolean)
        ON CONFLICT (profile_id, event_id) WHERE event_id IS NOT NULL DO NOTHING
        RETURNING id, event_id, amount_inr, occurred_at, merchant_name, category_id, user_card_id, rail::text AS rail,
                  entry_kind::text AS entry_kind, instrument::text AS instrument, is_backfill`,
       [profileId, J(toInsert.map((s) => ({
         event_id: s.eventId, amount_minor: s.amountMinor, occurred_at: s.occurredAt, merchant_name: s.merchantName,
-        category_id: s.categoryId, user_card_id: s.userCardId, rail: s.rail, instrument: s.instrument, entry_kind: s.entryKind,
+        category_id: s.categoryId, user_card_id: s.userCardId, rail: s.rail, payment_method: s.paymentMethod || null, instrument: s.instrument, entry_kind: s.entryKind,
         source_key: s.sourceKey, is_backfill: backfill === true || historyEvents.has(s.eventId),
       })))],
     );
@@ -736,15 +737,15 @@ async function projectTransactions(client, profileId, eventIds, { backfill, cate
     await client.query(
       `UPDATE transactions t
           SET amount_inr = r.amount_minor::numeric / 100, occurred_at = r.occurred_at, merchant_name = r.merchant_name,
-              category_id = r.category_id, user_card_id = r.user_card_id, rail = r.rail::txn_rail,
+              category_id = r.category_id, user_card_id = r.user_card_id, rail = r.rail::txn_rail, payment_method = r.payment_method,
               instrument = r.instrument::txn_instrument, entry_kind = r.entry_kind::txn_entry_kind,
               pipeline_version = 2, state_applied = false, status = 'active'
          FROM jsonb_to_recordset($2::jsonb) AS r(id uuid, amount_minor bigint, occurred_at timestamptz, merchant_name text,
-           category_id uuid, user_card_id uuid, rail text, instrument text, entry_kind text)
+           category_id uuid, user_card_id uuid, rail text, payment_method text, instrument text, entry_kind text)
         WHERE t.id = r.id AND t.profile_id = $1`,
       [profileId, J(changed.map(({ row, spec }) => ({
         id: row.id, amount_minor: spec.amountMinor, occurred_at: spec.occurredAt, merchant_name: spec.merchantName,
-        category_id: spec.categoryId, user_card_id: spec.userCardId, rail: spec.rail, instrument: spec.instrument, entry_kind: spec.entryKind,
+        category_id: spec.categoryId, user_card_id: spec.userCardId, rail: spec.rail, payment_method: spec.paymentMethod || null, instrument: spec.instrument, entry_kind: spec.entryKind,
       })))],
     );
     stats.updated += changed.length;

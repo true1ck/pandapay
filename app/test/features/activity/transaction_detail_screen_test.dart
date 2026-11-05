@@ -242,20 +242,14 @@ void main() {
           userCardId: 'saved-rupay',
           sourceKey: 'exact-sms-fixture',
           instrument: TxnInstrument.creditCard,
+          paymentMethod: 'upi',
           source: 'sms',
           status: 'active',
         ),
       );
-      final local = TransactionEntry.fromJson({
-        ...repo.entry.toJson(),
-        'payment_method': 'upi',
-      });
-      await _pump(
-        tester,
-        repo: repo,
-        initialEntry: local,
-        tagsRepository: tags,
-      );
+      // The server now returns the payment type, so a phone that has never
+      // seen the SMS shows it too.
+      await _pump(tester, repo: repo, tagsRepository: tags);
       expect(find.text('My SBI PhonePe RuPay card'), findsOneWidget);
       expect(find.text('UPI'), findsOneWidget);
       expect(find.text('UPI QR'), findsNothing);

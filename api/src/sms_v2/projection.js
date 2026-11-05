@@ -66,6 +66,11 @@ function railEnumFor(eventType, factRail) {
   return 'unknown';
 }
 
+// Plain UPI is shown to the person as a payment type; no other rail is.
+function paymentMethodFor(factRail) {
+  return factRail === 'upi' ? 'upi' : null;
+}
+
 const CARD_ENUMS = new Set(['credit_card', 'debit_card']);
 
 const byTimeThenId = (a, b) => {
@@ -116,6 +121,7 @@ function projectEvent({ event, ledger, instruments, anchor }) {
     userCardId: instrument && instrument.userCardId && CARD_ENUMS.has(instrumentEnum) ? instrument.userCardId : null,
     instrument: instrumentEnum,
     rail: railEnumFor(event.type, rail),
+    paymentMethod: paymentMethodFor(rail),
     sourceKey: anchor ? anchor.sourceKey : null,
   };
 }
@@ -126,4 +132,4 @@ function movesCardState(row) {
   return row.entryKind === 'spend' && row.instrument === 'credit_card' && Boolean(row.userCardId);
 }
 
-module.exports = { ENTRY_KIND_BY_TYPE, INFLOW_TYPES, entryKindFor, instrumentEnumFor, railEnumFor, projectEvent, movesCardState, ipoConverted };
+module.exports = { ENTRY_KIND_BY_TYPE, INFLOW_TYPES, entryKindFor, instrumentEnumFor, railEnumFor, paymentMethodFor, projectEvent, movesCardState, ipoConverted };
