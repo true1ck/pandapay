@@ -144,7 +144,19 @@ enum SmsImportBackgroundHost {
     }
     let created = FlutterEngine(name: "pandapay-sms-background", project: nil, allowHeadlessExecution: true)
     engine = created
+    // Start the engine first: registering handlers on an engine that is not
+    // running aborts the app ("Start the background SMS engine before
+    // registering handlers").
+    guard created.run(withEntrypoint: "iosSmsBackgroundMain") else {
+      running = false
+      complete(false)
+      return
+    }
+#if targetEnvironment(simulator)
+    SimulatorPluginRegistrant.register(with: created)
+#else
     GeneratedPluginRegistrant.register(with: created)
+#endif
     StorageBackupBridge.register(messenger: created.binaryMessenger)
     let bridge = FlutterMethodChannel(name: "pandapay/ios_sms_background", binaryMessenger: created.binaryMessenger)
     backgroundChannel = bridge
@@ -181,9 +193,6 @@ enum SmsImportBackgroundHost {
           DispatchQueue.main.async { result(FlutterError(code: "sms_background", message: "Saved messages remain queued.", details: nil)) }
         }
       }
-    }
-    if !created.run(withEntrypoint: "iosSmsBackgroundMain") {
-      running = false; complete(false)
     }
   }
 
