@@ -668,9 +668,13 @@
         "parent_cap_id": null,
         "reset_day": null,
         "effective_from": "2023-10-01",
-        "effective_to": null
+        "effective_to": null,
+        "target_rule_ids": [
+          "base_non_tata_non_emi",
+          "tata_partner_emi_wp7"
+        ]
       },
-      "reason": "WP7: HDFC MITC fair usage policy: the maximum reward points per statement cycle for Tata Neu Infinity* is 50,000. The asterisk's footnote could not be read; applied card-wide to all NeuCoins (conservative: can only under-state).",
+      "reason": "WP7: HDFC MITC fair usage policy: the maximum reward points per statement cycle for Tata Neu Infinity* is 50,000. MITC footnote: \"(*) applicable only on the spend categories that does not have an existing Fair Usage Policy\" (C8 D28b). So it targets only the rules without a fair-usage limit of their own: the base rule (base_non_tata_non_emi) and merchant EMI at partner brands (tata_partner_emi_wp7). The Annex 1 partner rules, the capped grocery/insurance/utility/telecom rules and UPI (500/month) keep their own limits.",
       "source_url": "https://www.hdfc.bank.in/content/dam/hdfcbankpws/in/en/personal-banking/discover-products/cards/credit-cards/personal-mitc/mitc-in-english.pdf",
       "checked_on": "2026-11-05"
     },
@@ -732,6 +736,20 @@
       "path": "reward_rules[id=fees_charges_exclusion].conditions.transaction_scope",
       "value": "card fees and other charges",
       "reason": "WP7: T&C exclusion: \"Payment of card fees and other charges\". Not expressible by MCC or category, so it stays info (D25d), flagged depends_on_txn_attribute (D14b).",
+      "source_url": "https://www.hdfc.bank.in/content/dam/hdfcbankpws/in/en/personal-banking/discover-products/cards/credit-cards/tata-neu-infinity-credit-card/pdf/tata_neu_infinity_card_tnc.pdf",
+      "checked_on": "2026-11-05"
+    },
+    {
+      "path": "reward_rules[id=base_non_tata_non_emi].conditions",
+      "value": {},
+      "reason": "WP7: The base rate on non-partner, non-EMI spends; the brand/EMI/UPI clauses restated what other rules carve out and made it info. Restated so the asterisked MITC cap can target it (D28b); it pays the same base rate the implicit base paid.",
+      "source_url": "https://www.hdfc.bank.in/content/dam/hdfcbankpws/in/en/personal-banking/discover-products/cards/credit-cards/tata-neu-infinity-credit-card/pdf/tata_neu_infinity_card_tnc.pdf",
+      "checked_on": "2026-11-05"
+    },
+    {
+      "path": "reward_rules[id=base_non_tata_non_emi].channel_type",
+      "value": "all",
+      "reason": "WP7: See conditions.",
       "source_url": "https://www.hdfc.bank.in/content/dam/hdfcbankpws/in/en/personal-banking/discover-products/cards/credit-cards/tata-neu-infinity-credit-card/pdf/tata_neu_infinity_card_tnc.pdf",
       "checked_on": "2026-11-05"
     }

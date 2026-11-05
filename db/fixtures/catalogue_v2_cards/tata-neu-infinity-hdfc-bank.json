@@ -4,7 +4,7 @@
   "inputs": {
     "transform_version": "7",
     "source_record_sha256": "93890edb87a631081cfe42490e8b5b7e0183887b346200ba6b50a4e3d1500cc4",
-    "override_sha256": "40af9ede86fea658df966d08abf444f82b92a3946f542e0fc0da7984822409e9",
+    "override_sha256": "7a38e194334c824adf2580ce41318226ba8d73533c103564429342b126c82558",
     "directory_sha256": "b1094d54b77e848d22f7a9a64f3ae6d1ef43ca3eb2fc8e40cd43ed1994664694",
     "verified": false
   },
@@ -28,31 +28,11 @@
     "model_status": "partial",
     "model_coverage": {
       "rules_total": 31,
-      "rules_modelled": 22,
-      "rules_info": 9,
+      "rules_modelled": 23,
+      "rules_info": 8,
       "caps_total": 18,
       "caps_enforced": 18,
       "flags": [
-        {
-          "code": "info_rule",
-          "source_local_id": "base_non_tata_non_emi",
-          "detail": "condition:clause:brand_type"
-        },
-        {
-          "code": "info_rule",
-          "source_local_id": "base_non_tata_non_emi",
-          "detail": "condition:clause:emi"
-        },
-        {
-          "code": "info_rule",
-          "source_local_id": "base_non_tata_non_emi",
-          "detail": "condition:channel_type"
-        },
-        {
-          "code": "negated_condition",
-          "source_local_id": "base_non_tata_non_emi",
-          "detail": null
-        },
         {
           "code": "info_rule",
           "source_local_id": "merchant_emi_any_brand",
@@ -495,8 +475,8 @@
         {
           "path": "cap_rules",
           "op": "append",
-          "value_sha256": "706638568ff237da",
-          "reason": "WP7: HDFC MITC fair usage policy: the maximum reward points per statement cycle for Tata Neu Infinity* is 50,000. The asterisk's footnote could not be read; applied card-wide to all NeuCoins (conservative: can only under-state).",
+          "value_sha256": "929acac666bed3ed",
+          "reason": "WP7: HDFC MITC fair usage policy: the maximum reward points per statement cycle for Tata Neu Infinity* is 50,000. MITC footnote: \"(*) applicable only on the spend categories that does not have an existing Fair Usage Policy\" (C8 D28b). So it targets only the rules without a fair-usage limit of their own: the base rule (base_non_tata_non_emi) and merchant EMI at partner brands (tata_partner_emi_wp7). The Annex 1 partner rules, the capped grocery/insurance/utility/telecom rules and UPI (500/month) keep their own limits.",
           "source_url": "https://www.hdfc.bank.in/content/dam/hdfcbankpws/in/en/personal-banking/discover-products/cards/credit-cards/personal-mitc/mitc-in-english.pdf",
           "checked_on": "2026-11-05"
         },
@@ -539,6 +519,22 @@
           "reason": "WP7: T&C exclusion: \"Payment of card fees and other charges\". Not expressible by MCC or category, so it stays info (D25d), flagged depends_on_txn_attribute (D14b).",
           "source_url": "https://www.hdfc.bank.in/content/dam/hdfcbankpws/in/en/personal-banking/discover-products/cards/credit-cards/tata-neu-infinity-credit-card/pdf/tata_neu_infinity_card_tnc.pdf",
           "checked_on": "2026-11-05"
+        },
+        {
+          "path": "reward_rules[id=base_non_tata_non_emi].conditions",
+          "op": "set",
+          "value_sha256": "44136fa355b3678a",
+          "reason": "WP7: The base rate on non-partner, non-EMI spends; the brand/EMI/UPI clauses restated what other rules carve out and made it info. Restated so the asterisked MITC cap can target it (D28b); it pays the same base rate the implicit base paid.",
+          "source_url": "https://www.hdfc.bank.in/content/dam/hdfcbankpws/in/en/personal-banking/discover-products/cards/credit-cards/tata-neu-infinity-credit-card/pdf/tata_neu_infinity_card_tnc.pdf",
+          "checked_on": "2026-11-05"
+        },
+        {
+          "path": "reward_rules[id=base_non_tata_non_emi].channel_type",
+          "op": "set",
+          "value_sha256": "5cf7504d9781301d",
+          "reason": "WP7: See conditions.",
+          "source_url": "https://www.hdfc.bank.in/content/dam/hdfcbankpws/in/en/personal-banking/discover-products/cards/credit-cards/tata-neu-infinity-credit-card/pdf/tata_neu_infinity_card_tnc.pdf",
+          "checked_on": "2026-11-05"
         }
       ]
     },
@@ -557,20 +553,14 @@
         "conditions": {
           "source_local_id": "base_non_tata_non_emi",
           "part": null,
-          "info_reasons": [
-            "condition:clause:brand_type",
-            "condition:clause:emi",
-            "condition:channel_type"
-          ],
-          "flags": [
-            "negated_condition"
-          ]
+          "info_reasons": [],
+          "flags": []
         },
         "notes": null,
         "effective_from": "2024-01-01",
         "effective_to": null,
         "excluded_categories": [],
-        "rule_role": "info",
+        "rule_role": "base",
         "merchant_slugs": [],
         "platform_slugs": [],
         "mcc_include": [],
@@ -578,7 +568,7 @@
         "except_merchant_slugs": [],
         "except_platform_slugs": [],
         "block_inr": null,
-        "min_engine_version": 2,
+        "min_engine_version": 1,
         "max_engine_version": null,
         "source_local_id": "base_non_tata_non_emi",
         "display_note": "1.5% back as NeuCoins on eligible non-Tata brand non-EMI spends."
@@ -2355,12 +2345,15 @@
         "resets_on_day": null,
         "cap_kind": "total_points",
         "cap_amount": 50000,
-        "scope": "card",
-        "targets": [],
+        "scope": "targets",
+        "targets": [
+          "tata-neu-infinity-hdfc-bank:rule:base_non_tata_non_emi",
+          "tata-neu-infinity-hdfc-bank:rule:tata_partner_emi_wp7"
+        ],
         "parent_cap_id": null,
         "post_cap_behavior": null,
         "anchor": null,
-        "min_engine_version": 1,
+        "min_engine_version": 2,
         "source_local_id": "wp7_fair_usage_statement_cycle"
       }
     ],
