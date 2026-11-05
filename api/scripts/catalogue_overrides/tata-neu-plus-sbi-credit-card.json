@@ -88,6 +88,84 @@
       "reason": "WP7: D13b: the rule depends on which card variant the user holds (RuPay only), a user attribute the context does not carry; stays info with depends_on_user_attribute.",
       "source_url": "https://www.sbicard.com/sbi-card-en/assets/docs/pdf/ekit-tncs/Tata-Neu-Plus-Booklet.pdf",
       "checked_on": "2026-11-05"
+    },
+    {
+      "path": "reward_rules",
+      "op": "append",
+      "value": {
+        "id": "tata-neu-partner-emi-wp7",
+        "category_id": "all_retail",
+        "priority": 9,
+        "evaluation_type": "standard_accrual",
+        "rail": "emi",
+        "channel_type": "all",
+        "conditions": {
+          "eligible_partner_brands": [
+            "Air India",
+            "Air India Express",
+            "BigBasket",
+            "Tata CLiQ",
+            "Taj Hotels",
+            "Tata 1mg",
+            "Titan",
+            "Tanishq",
+            "Croma",
+            "Westside",
+            "Qmin"
+          ]
+        },
+        "action": {
+          "multiplier": 1,
+          "points_per_block": 1,
+          "cashback_percent": null,
+          "cap_reference": null,
+          "reason": "EMI spends at partner Tata brands earn the base 1%."
+        },
+        "effective_from": "2025-04-01",
+        "effective_to": null
+      },
+      "reason": "WP7: D24d: the 2% partner rule is for non-EMI spends (record spend_type non_emi), which the loader dropped, so EMI at partners paid 2%. Base-rate carve-out at a lower priority number.",
+      "source_url": "https://www.sbicard.com/sbi-card-en/assets/docs/pdf/ekit-tncs/Tata-Neu-Plus-Booklet.pdf",
+      "checked_on": "2026-11-05"
+    },
+    {
+      "path": "reward_rules",
+      "op": "append",
+      "value": {
+        "id": "tata-neu-partner-upi-wp7",
+        "category_id": "all_retail",
+        "priority": 8,
+        "evaluation_type": "standard_accrual",
+        "rail": "upi_qr",
+        "channel_type": "all",
+        "conditions": {
+          "eligible_partner_brands": [
+            "Air India",
+            "Air India Express",
+            "BigBasket",
+            "Tata CLiQ",
+            "Taj Hotels",
+            "Tata 1mg",
+            "Titan",
+            "Tanishq",
+            "Croma",
+            "Westside",
+            "Qmin"
+          ]
+        },
+        "action": {
+          "multiplier": 1,
+          "points_per_block": 1,
+          "cashback_percent": null,
+          "cap_reference": "upi-neucoins-cap",
+          "reason": "UPI spends at partner Tata brands earn the 1% UPI rate."
+        },
+        "effective_from": "2025-04-01",
+        "effective_to": null
+      },
+      "reason": "WP7: D24d: record rupay-upi-1pct: \"Eligible UPI spends on the RuPay variant earn 1% NeuCoins, including UPI spends at partner Tata brands\" - so the 2% partner rate must not apply on UPI.",
+      "source_url": "https://www.sbicard.com/sbi-card-en/assets/docs/pdf/ekit-tncs/Tata-Neu-Plus-Booklet.pdf",
+      "checked_on": "2026-11-05"
     }
   ]
 }

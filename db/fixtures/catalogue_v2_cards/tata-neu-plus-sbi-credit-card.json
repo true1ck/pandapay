@@ -4,8 +4,8 @@
   "inputs": {
     "transform_version": "7",
     "source_record_sha256": "9d0b13f66d28f1dbd68ce624da340f4bbce0d18ec71d896aad0112bed04b2dc7",
-    "override_sha256": "a72bd1b22d05a381b166247fa2a00ec38fa1c2ec4d7277afb54771d2dd5b7b7e",
-    "directory_sha256": "3d9f9f535481544d4b19262838290f77d8270eb3b4aec73c48608f10c39cedf2",
+    "override_sha256": "74f7d61cb133ac66bf709179f4dec725dbf99a92d0cd39d2bb097603419a381e",
+    "directory_sha256": "b1094d54b77e848d22f7a9a64f3ae6d1ef43ca3eb2fc8e40cd43ed1994664694",
     "verified": true
   },
   "blocking_flags": [],
@@ -27,11 +27,11 @@
     "points_expiry_months": 12,
     "model_status": "verified",
     "model_coverage": {
-      "rules_total": 14,
-      "rules_modelled": 10,
+      "rules_total": 16,
+      "rules_modelled": 12,
       "rules_info": 4,
       "caps_total": 5,
-      "caps_enforced": 4,
+      "caps_enforced": 5,
       "flags": [
         {
           "code": "group_replaced_by_condition_list",
@@ -139,13 +139,18 @@
           "detail": null
         },
         {
-          "code": "broad_category",
-          "source_local_id": "telecom-cable-neucoins-cap",
+          "code": "partial_merchant_list",
+          "source_local_id": "tata-neu-partner-emi-wp7",
           "detail": null
         },
         {
-          "code": "cap_targets_info_only",
-          "source_local_id": "upi-neucoins-cap",
+          "code": "partial_merchant_list",
+          "source_local_id": "tata-neu-partner-upi-wp7",
+          "detail": null
+        },
+        {
+          "code": "broad_category",
+          "source_local_id": "telecom-cable-neucoins-cap",
           "detail": null
         }
       ],
@@ -243,6 +248,22 @@
           "op": "set",
           "value_sha256": "a862b80783ac5b88",
           "reason": "WP7: D13b: the rule depends on which card variant the user holds (RuPay only), a user attribute the context does not carry; stays info with depends_on_user_attribute.",
+          "source_url": "https://www.sbicard.com/sbi-card-en/assets/docs/pdf/ekit-tncs/Tata-Neu-Plus-Booklet.pdf",
+          "checked_on": "2026-11-05"
+        },
+        {
+          "path": "reward_rules",
+          "op": "append",
+          "value_sha256": "607e2767edf54bc7",
+          "reason": "WP7: D24d: the 2% partner rule is for non-EMI spends (record spend_type non_emi), which the loader dropped, so EMI at partners paid 2%. Base-rate carve-out at a lower priority number.",
+          "source_url": "https://www.sbicard.com/sbi-card-en/assets/docs/pdf/ekit-tncs/Tata-Neu-Plus-Booklet.pdf",
+          "checked_on": "2026-11-05"
+        },
+        {
+          "path": "reward_rules",
+          "op": "append",
+          "value_sha256": "5d86641290380a96",
+          "reason": "WP7: D24d: record rupay-upi-1pct: \"Eligible UPI spends on the RuPay variant earn 1% NeuCoins, including UPI spends at partner Tata brands\" - so the 2% partner rate must not apply on UPI.",
           "source_url": "https://www.sbicard.com/sbi-card-en/assets/docs/pdf/ekit-tncs/Tata-Neu-Plus-Booklet.pdf",
           "checked_on": "2026-11-05"
         }
@@ -1140,6 +1161,96 @@
         "max_engine_version": null,
         "source_local_id": "exclude-gaming",
         "display_note": "Gaming transactions do not earn NeuCoins."
+      },
+      {
+        "id": "tata-neu-plus-sbi-credit-card:rule:tata-neu-partner-emi-wp7",
+        "category_id": null,
+        "category_slug": null,
+        "merchant_pattern": null,
+        "rail": "emi",
+        "unit": "points_per_100",
+        "rate": 1,
+        "min_txn_inr": null,
+        "max_txn_inr": null,
+        "priority": 9,
+        "conditions": {
+          "source_local_id": "tata-neu-partner-emi-wp7",
+          "part": null,
+          "info_reasons": [],
+          "flags": [
+            "partial_merchant_list"
+          ]
+        },
+        "notes": null,
+        "effective_from": "2025-04-01",
+        "effective_to": null,
+        "excluded_categories": [],
+        "rule_role": "earn",
+        "merchant_slugs": [
+          "air_india",
+          "air_india_express",
+          "bigbasket",
+          "croma",
+          "taj",
+          "tanishq",
+          "tata_1mg",
+          "tata_cliq"
+        ],
+        "platform_slugs": [],
+        "mcc_include": [],
+        "mcc_exclude": [],
+        "except_merchant_slugs": [],
+        "except_platform_slugs": [],
+        "block_inr": null,
+        "min_engine_version": 2,
+        "max_engine_version": null,
+        "source_local_id": "tata-neu-partner-emi-wp7",
+        "display_note": "EMI spends at partner Tata brands earn the base 1%."
+      },
+      {
+        "id": "tata-neu-plus-sbi-credit-card:rule:tata-neu-partner-upi-wp7",
+        "category_id": null,
+        "category_slug": null,
+        "merchant_pattern": null,
+        "rail": "upi_qr",
+        "unit": "points_per_100",
+        "rate": 1,
+        "min_txn_inr": null,
+        "max_txn_inr": null,
+        "priority": 8,
+        "conditions": {
+          "source_local_id": "tata-neu-partner-upi-wp7",
+          "part": null,
+          "info_reasons": [],
+          "flags": [
+            "partial_merchant_list"
+          ]
+        },
+        "notes": null,
+        "effective_from": "2025-04-01",
+        "effective_to": null,
+        "excluded_categories": [],
+        "rule_role": "earn",
+        "merchant_slugs": [
+          "air_india",
+          "air_india_express",
+          "bigbasket",
+          "croma",
+          "taj",
+          "tanishq",
+          "tata_1mg",
+          "tata_cliq"
+        ],
+        "platform_slugs": [],
+        "mcc_include": [],
+        "mcc_exclude": [],
+        "except_merchant_slugs": [],
+        "except_platform_slugs": [],
+        "block_inr": null,
+        "min_engine_version": 2,
+        "max_engine_version": null,
+        "source_local_id": "tata-neu-partner-upi-wp7",
+        "display_note": "UPI spends at partner Tata brands earn the 1% UPI rate."
       }
     ],
     "cap_rules": [
@@ -1237,7 +1348,7 @@
       },
       {
         "id": "tata-neu-plus-sbi-credit-card:cap:upi-neucoins-cap",
-        "reward_rule_id": "tata-neu-plus-sbi-credit-card:rule:rupay-upi-1pct",
+        "reward_rule_id": null,
         "category_id": null,
         "category_slug": null,
         "benefit_kind": null,
@@ -1252,7 +1363,8 @@
         "cap_amount": 500,
         "scope": "targets",
         "targets": [
-          "tata-neu-plus-sbi-credit-card:rule:rupay-upi-1pct"
+          "tata-neu-plus-sbi-credit-card:rule:rupay-upi-1pct",
+          "tata-neu-plus-sbi-credit-card:rule:tata-neu-partner-upi-wp7"
         ],
         "parent_cap_id": null,
         "post_cap_behavior": null,
