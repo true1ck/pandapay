@@ -1,4 +1,6 @@
 import 'package:flutter_test/flutter_test.dart';
+import 'package:pandapay/features/shared_expenses/data/shared_pending_phones.dart';
+import 'package:shared_preferences/shared_preferences.dart';
 import 'package:pandapay/features/shared_expenses/data/shared_directory.dart';
 import 'package:pandapay/features/shared_expenses/data/shared_invitations.dart';
 import 'package:pandapay/features/shared_expenses/data/shared_transport.dart';
@@ -176,5 +178,15 @@ void main() {
         reason: code,
       );
     }
+  });
+
+  test('a typed number survives until the invite is sent, per account', () async {
+    SharedPreferences.setMockInitialValues({});
+    final a = SharedPendingPhones('user:a'), b = SharedPendingPhones('user:b');
+    await a.remember('m1', '+919876543210');
+    expect(await a.phoneFor('m1'), '+919876543210');
+    expect(await b.phoneFor('m1'), isNull);
+    await a.forget('m1');
+    expect(await a.phoneFor('m1'), isNull);
   });
 }

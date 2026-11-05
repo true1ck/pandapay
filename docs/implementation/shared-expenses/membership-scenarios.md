@@ -24,6 +24,8 @@ Status as of 5 November 2026 (local, uncommitted to any remote). "PG" = real Pos
 | Settle with someone who has not joined | Blocked with an explanation | Dart widget test |
 | Preview offline | Saved invite kept; retry offered | manual |
 | Groups up to 200 people | Roster reads 4 pages | code |
+| Number typed for an add that could not invite yet | Kept on the phone only, reused by Invite, deleted once the invite goes out, dropped after 14 days | Dart |
+| Nameless owner or leaver | Shown as "Group owner" / "Someone who left"; "Check status" hides once the add is confirmed | device |
 | Leave / remove | Owner removes unjoined people with no expense; members leave only when settled (optional, groups persist across transactions) | PG |
 | Owner transfer | Owner can hand the group to an active member, then leave | PG, widget |
 | Deleted account | Shown as "Former member" with "history kept"; balances and expenses stay; if the owner is gone any active member can take over | PG, widget |
@@ -41,6 +43,5 @@ Status as of 5 November 2026 (local, uncommitted to any remote). "PG" = real Pos
 | --- | --- | --- |
 | Recycled phone number | New holder of a number sees old invites for up to 7 days | Invites expire after 7 days; add a stronger rule only if abuse appears |
 | Two accounts, same number | Auth enforces one active contact per number; no DB test across the two services | Add a cross-service test |
-| Offline add keeps the number only for the session | Closing the app before retry loses the number | Persist with the queued command |
 | Home screen dot | Badge is on You → Splits only | Add to the Home tab when the notification project lands |
 | Push notifications | Invites are noticed on opening the app | Separate notification project |

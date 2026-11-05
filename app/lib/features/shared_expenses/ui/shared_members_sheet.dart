@@ -1,3 +1,5 @@
+import 'dart:async';
+import '../storage/shared_store.dart' show SharedCommandState;
 import 'package:flutter/material.dart';
 import 'package:flutter_contacts/flutter_contacts.dart';
 import 'package:permission_handler/permission_handler.dart';
@@ -24,6 +26,7 @@ class SharedMembersSheet extends StatefulWidget {
     required this.contextId,
     required this.groupName,
   });
+
   /// Completes with true when the person left the split from this sheet.
   static Future<bool?> show(
     BuildContext context, {
@@ -69,6 +72,16 @@ class _SharedMembersSheetState extends State<SharedMembersSheet> {
     _roster = widget.runtime.contextRoster(widget.contextId);
     _loadInvitations();
     _loadGroupLink();
+  }
+
+  /// A person without a saved name (no verified phone) still reads clearly.
+  String _displayName(SharedEditorMember m) {
+    if (m.name != 'Member') return m.name;
+    return switch ((m.role, m.state)) {
+      ('owner', _) => 'Group owner',
+      (_, 'left') => 'Someone who left',
+      _ => m.name,
+    };
   }
 
   Future<bool> _confirm(String title, String body, String action) async =>
@@ -404,13 +417,25 @@ class _SharedMembersSheetState extends State<SharedMembersSheet> {
       if (mounted && _authorized) {
         if (_pendingPhone != null && _pendingMemberId != null) {
           _phones[_pendingMemberId!] = _pendingPhone!;
+          unawaited(
+            widget.runtime.pendingPhones.remember(
+              _pendingMemberId!,
+              _pendingPhone!,
+            ),
+          );
         }
+        final opId = _pending!.operationId;
+        final confirmed =
+            widget.runtime.store.operation(opId)?.state ==
+            SharedCommandState.committed;
         setState(() {
           _adding = false;
           _formError = null;
           _nameField.clear();
           _phoneField.clear();
-          _notice = widget.runtime.operationStatus(_pending!.operationId);
+          _notice = widget.runtime.operationStatus(opId);
+          // Confirmed by the server: nothing left to check.
+          if (confirmed) _pending = null;
           _roster = widget.runtime.contextRoster(widget.contextId);
         });
         _loadInvitations();
@@ -670,7 +695,7 @@ class _SharedMembersSheetState extends State<SharedMembersSheet> {
                                     title: Text(
                                       member.id == roster.ownMemberId
                                           ? 'You'
-                                          : member.name,
+                                          : _displayName(member),
                                       style: BambooFonts.ui(
                                         14,
                                         weight: FontWeight.w600,

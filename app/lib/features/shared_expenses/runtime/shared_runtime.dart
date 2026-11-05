@@ -13,6 +13,7 @@ import '../storage/shared_store.dart';
 import '../sync/shared_sync.dart';
 import '../ui/shared_presentation.dart';
 import '../composer/shared_editor.dart';
+import '../data/shared_pending_phones.dart';
 import 'shared_expense_mapping.dart';
 
 class SharedRuntimeUnavailable implements Exception {
@@ -52,6 +53,9 @@ class SharedExpensesRuntime extends ChangeNotifier {
   final ResponseCache cache;
   final bool Function() isCurrent;
   late final SharedExpensesSync sync;
+
+  /// Numbers typed for people not yet invited; on this phone only.
+  late final pendingPhones = SharedPendingPhones(store.namespace);
   Map<String, Object?>? capabilities;
   bool _disposed = false, busy = false, offline = false, syncLag = true;
   Object? lastError;
@@ -240,6 +244,8 @@ class SharedExpensesRuntime extends ChangeNotifier {
       throw const SharedTransportException(code: 'invalid_phone');
     }
     final ids = await _enqueueFriend(name);
+    // Kept until the invite goes out, so offline or a failed call loses nothing.
+    if (cleaned != null) await pendingPhones.remember(ids.memberId, cleaned);
     if (cleaned == null) {
       return SharedFriendAdded(
         contextId: ids.contextId,
@@ -554,13 +560,15 @@ class SharedExpensesRuntime extends ChangeNotifier {
     if (!proposalsEnabled || store.isContextRevoked(contextId)) {
       throw const SharedRuntimeUnavailable();
     }
+    final number = phoneNumber ?? await pendingPhones.phoneFor(memberId);
     final link = await remote.createInvitation(
       invitationId: const Uuid().v4(),
       contextId: contextId,
       memberId: memberId,
-      phoneNumber: phoneNumber,
+      phoneNumber: number,
     );
     _current();
+    await pendingPhones.forget(memberId);
     return link;
   }
 
