@@ -8,6 +8,11 @@
 # Requires request-id-map.conf.example to also be installed (see that file
 # and deploy/DEPLOY.md) — it defines $req_id, used below.
 
+# Per-IP budget for the public catalogue feed (v1 ~1 MB, v2 several MB). This
+# file is included in the http context via sites-enabled, so the zone may be
+# declared here. The API also enforces its own per-IP limit (api/src/catalogue_route.js).
+limit_req_zone $binary_remote_addr zone=catalogue:10m rate=30r/m;
+
 server {
     listen 80;
     listen [::]:80;
@@ -81,6 +86,25 @@ server {
         alias /var/www/pandapay-legal/;
         index privacy.html;
         try_files $uri $uri/ =404;
+    }
+
+    # Public catalogue feed: compress the large JSON, rate-limit per IP, and
+    # let the API's ETag / Cache-Control through unchanged.
+    location = /catalogue {
+        limit_req zone=catalogue burst=10 nodelay;
+        limit_req_status 429;
+        gzip on;
+        gzip_types application/json;
+        gzip_min_length 1024;
+        gzip_proxied any;
+        gzip_vary on;
+        proxy_pass http://127.0.0.1:4000;
+        proxy_http_version 1.1;
+        proxy_set_header Host $host;
+        proxy_set_header X-Real-IP $remote_addr;
+        proxy_set_header X-Forwarded-For $remote_addr;
+        proxy_set_header X-Forwarded-Proto $scheme;
+        proxy_set_header X-Request-Id $req_id;
     }
 
     location / {
