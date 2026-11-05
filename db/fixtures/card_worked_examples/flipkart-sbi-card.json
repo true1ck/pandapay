@@ -1,0 +1,333 @@
+{
+  "source_slug": "flipkart-sbi-card",
+  "cardpipeline_id": "state-bank-of-india-flipkart-sbi-credit-card",
+  "card_name": "Flipkart SBI Credit Card",
+  "verified_on": "2026-11-05",
+  "sources": [
+    {
+      "url": "https://www.sbicard.com/sbi-card-en/assets/docs/pdf/ekit-tncs/Flipkart-SBI-CreditCard-TandC-Booklet.pdf",
+      "doc": "Flipkart SBI Card T&C booklet (Aug 2025; newest found)",
+      "quote": "Flipkart 5% Cashback, Cleartrip 5%, Myntra 7.5%, 4 Select Merchants 4%: Quarterly Cashback Limit of 4,000"
+    },
+    {
+      "url": "https://www.sbicard.com/sbi-card-en/assets/docs/pdf/ekit-tncs/Flipkart-SBI-CreditCard-TandC-Booklet.pdf",
+      "doc": "Flipkart SBI Card T&C booklet (Aug 2025; newest found)",
+      "quote": "Post reaching the capping limit, cardholder will not earn any cashback for that quarter"
+    },
+    {
+      "url": "https://www.sbicard.com/sbi-card-en/assets/docs/pdf/ekit-tncs/Flipkart-SBI-CreditCard-TandC-Booklet.pdf",
+      "doc": "Flipkart SBI Card T&C booklet (Aug 2025; newest found)",
+      "quote": "The Card Cashback will be rounded down for each individual transaction"
+    },
+    {
+      "url": "https://www.sbicard.com/sbi-card-en/assets/docs/pdf/ekit-tncs/Flipkart-SBI-CreditCard-TandC-Booklet.pdf",
+      "doc": "Flipkart SBI Card T&C booklet (Aug 2025; newest found)",
+      "quote": "5% of ₹25,000 = ₹1,250 1% of ₹10,000 = ₹100"
+    }
+  ],
+  "examples": [
+    {
+      "id": "001",
+      "title": "Rs 2,999 on Flipkart",
+      "ctx": {
+        "amount": 2999,
+        "occurred": "2026-11-05T10:00:00+05:30",
+        "category_slug": "online",
+        "mcc": 5311,
+        "merchant_name": "Flipkart",
+        "merchant_vpa": null,
+        "merchant_slug": "flipkart",
+        "platform": null,
+        "rail": "online"
+      },
+      "state_before": {
+        "caps_by_source_id": {}
+      },
+      "expect": {
+        "currency": "cashback",
+        "amount": 149,
+        "value_inr": 149,
+        "excluded": false,
+        "cap_deltas_by_source_id": {
+          "flipkart_qtr_4000": 2999
+        }
+      },
+      "why": "Issuer worked example: 5% of 2,999 = 149.95, rounded down to Rs149. Cap delta is eligible spend."
+    },
+    {
+      "id": "002",
+      "title": "Rs 2,000 on Myntra",
+      "ctx": {
+        "amount": 2000,
+        "occurred": "2026-11-05T10:00:00+05:30",
+        "category_slug": "online",
+        "mcc": 5651,
+        "merchant_name": "Myntra",
+        "merchant_vpa": null,
+        "merchant_slug": "myntra",
+        "platform": null,
+        "rail": "online"
+      },
+      "state_before": {
+        "caps_by_source_id": {}
+      },
+      "expect": {
+        "currency": "cashback",
+        "amount": 150,
+        "value_inr": 150,
+        "excluded": false,
+        "cap_deltas_by_source_id": {
+          "myntra_qtr_4000": 2000
+        }
+      },
+      "why": "7.5% = Rs150."
+    },
+    {
+      "id": "003",
+      "title": "Rs 10,000 on Cleartrip",
+      "ctx": {
+        "amount": 10000,
+        "occurred": "2026-11-05T10:00:00+05:30",
+        "category_slug": "travel",
+        "mcc": 4722,
+        "merchant_name": "Cleartrip",
+        "merchant_vpa": null,
+        "merchant_slug": "cleartrip",
+        "platform": null,
+        "rail": "online"
+      },
+      "state_before": {
+        "caps_by_source_id": {}
+      },
+      "expect": {
+        "currency": "cashback",
+        "amount": 500,
+        "value_inr": 500,
+        "excluded": false,
+        "cap_deltas_by_source_id": {
+          "cleartrip_qtr_4000": 10000
+        }
+      },
+      "why": "5% = Rs500."
+    },
+    {
+      "id": "004",
+      "title": "Rs 1,000 on Zomato (select merchant)",
+      "ctx": {
+        "amount": 1000,
+        "occurred": "2026-11-05T10:00:00+05:30",
+        "category_slug": "dining",
+        "mcc": 5814,
+        "merchant_name": "Zomato",
+        "merchant_vpa": null,
+        "merchant_slug": "zomato",
+        "platform": null,
+        "rail": "online"
+      },
+      "state_before": {
+        "caps_by_source_id": {}
+      },
+      "expect": {
+        "currency": "cashback",
+        "amount": 40,
+        "value_inr": 40,
+        "excluded": false,
+        "cap_deltas_by_source_id": {
+          "preferred_merchants_qtr_4000": 1000
+        }
+      },
+      "why": "4% = Rs40."
+    },
+    {
+      "id": "005",
+      "title": "Rs 5,000 at a clothes shop",
+      "ctx": {
+        "amount": 5000,
+        "occurred": "2026-11-05T10:00:00+05:30",
+        "category_slug": "other",
+        "mcc": 5651,
+        "merchant_name": "Clothes shop",
+        "merchant_vpa": null,
+        "merchant_slug": null,
+        "platform": null,
+        "rail": "swipe"
+      },
+      "state_before": {
+        "caps_by_source_id": {}
+      },
+      "expect": {
+        "currency": "cashback",
+        "amount": 50,
+        "value_inr": 50,
+        "excluded": false,
+        "cap_deltas_by_source_id": {}
+      },
+      "why": "1% unlimited base cashback = Rs50."
+    },
+    {
+      "id": "006",
+      "title": "Rs 5,000 on Flipkart after the Rs4,000 quarterly cap is reached",
+      "ctx": {
+        "amount": 5000,
+        "occurred": "2026-11-05T10:00:00+05:30",
+        "category_slug": "online",
+        "mcc": 5311,
+        "merchant_name": "Flipkart",
+        "merchant_vpa": null,
+        "merchant_slug": "flipkart",
+        "platform": null,
+        "rail": "online"
+      },
+      "state_before": {
+        "caps_by_source_id": {
+          "flipkart_qtr_4000": 80000
+        }
+      },
+      "expect": {
+        "currency": "cashback",
+        "amount": 0,
+        "value_inr": 0,
+        "excluded": false,
+        "cap_deltas_by_source_id": {}
+      },
+      "why": "Issuer: after the cap no cashback is earned in that quarter. Cap of Rs4,000 cashback = Rs80,000 of Flipkart spend."
+    },
+    {
+      "id": "007",
+      "title": "Rs 10,000 EMI purchase on Flipkart",
+      "ctx": {
+        "amount": 10000,
+        "occurred": "2026-11-05T10:00:00+05:30",
+        "category_slug": "emi",
+        "mcc": 5311,
+        "merchant_name": "Flipkart",
+        "merchant_vpa": null,
+        "merchant_slug": "flipkart",
+        "platform": null,
+        "rail": "emi"
+      },
+      "state_before": {
+        "caps_by_source_id": {}
+      },
+      "expect": {
+        "currency": "cashback",
+        "amount": 0,
+        "value_inr": 0,
+        "excluded": true,
+        "cap_deltas_by_source_id": {}
+      },
+      "why": "Merchant EMI earns nothing."
+    },
+    {
+      "id": "008",
+      "title": "Rs 2,000 fuel",
+      "ctx": {
+        "amount": 2000,
+        "occurred": "2026-11-05T10:00:00+05:30",
+        "category_slug": "fuel",
+        "mcc": 5541,
+        "merchant_name": "Petrol pump",
+        "merchant_vpa": null,
+        "merchant_slug": null,
+        "platform": null,
+        "rail": "swipe"
+      },
+      "state_before": {
+        "caps_by_source_id": {}
+      },
+      "expect": {
+        "currency": "cashback",
+        "amount": 0,
+        "value_inr": 0,
+        "excluded": true,
+        "cap_deltas_by_source_id": {}
+      },
+      "why": "Fuel excluded."
+    },
+    {
+      "id": "009",
+      "title": "Rs 5,000 insurance premium",
+      "ctx": {
+        "amount": 5000,
+        "occurred": "2026-11-05T10:00:00+05:30",
+        "category_slug": "insurance",
+        "mcc": 6300,
+        "merchant_name": "Insurance premium",
+        "merchant_vpa": null,
+        "merchant_slug": null,
+        "platform": null,
+        "rail": "online"
+      },
+      "state_before": {
+        "caps_by_source_id": {}
+      },
+      "expect": {
+        "currency": "cashback",
+        "amount": 0,
+        "value_inr": 0,
+        "excluded": true,
+        "cap_deltas_by_source_id": {}
+      },
+      "why": "Insurance excluded."
+    },
+    {
+      "id": "010",
+      "title": "Rs 20,000 rent",
+      "ctx": {
+        "amount": 20000,
+        "occurred": "2026-11-05T10:00:00+05:30",
+        "category_slug": "rent",
+        "mcc": 6513,
+        "merchant_name": "Rent payment",
+        "merchant_vpa": null,
+        "merchant_slug": null,
+        "platform": null,
+        "rail": "online"
+      },
+      "state_before": {
+        "caps_by_source_id": {}
+      },
+      "expect": {
+        "currency": "cashback",
+        "amount": 0,
+        "value_inr": 0,
+        "excluded": true,
+        "cap_deltas_by_source_id": {}
+      },
+      "why": "Rent excluded."
+    }
+  ],
+  "research_notes": [
+    {
+      "item": "rounding",
+      "cardpipeline_says": "floor, cashback percent paid as computed.",
+      "issuer_says": "Cashback rounded down to a whole rupee per transaction.",
+      "proposed_fix": "override",
+      "override_file": "api/scripts/catalogue_overrides/flipkart-sbi-card.json"
+    },
+    {
+      "item": "caps *_qtr_4000",
+      "cardpipeline_says": "eligible_spend caps (80,000 / 80,000 / 53,333 / 100,000).",
+      "issuer_says": "Rs4,000 cashback per quarter per bucket. Equivalent at the stated rates (4,000/5% = 80,000), so no override.",
+      "proposed_fix": "none"
+    },
+    {
+      "item": "document age",
+      "cardpipeline_says": "Dated 2025-08-26.",
+      "issuer_says": "Newest booklet found is dated Aug 2025; no 2026 revision located.",
+      "proposed_fix": "none"
+    },
+    {
+      "item": "cap boundary and base fallback",
+      "cardpipeline_says": "-",
+      "issuer_says": "Whether a transaction crossing the cap earns 1% on the rest is not stated, so no boundary example.",
+      "proposed_fix": "none"
+    },
+    {
+      "item": "Cleartrip/Myntra grouping",
+      "cardpipeline_says": "Separate rules.",
+      "issuer_says": "Confirmed separate buckets with their own Rs4,000 cap each.",
+      "proposed_fix": "none"
+    }
+  ]
+}

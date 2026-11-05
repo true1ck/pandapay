@@ -29,13 +29,13 @@ Status values: `not started` · `running` · `done (branch ready)` · `merged` �
 | WP | Title | Wave | Branch | Status | Updated | Notes |
 |---|---|---|---|---|---|---|
 | WP0 | Docs, contracts, scenario seed, directory skeleton | 0 | `card-rewards/phase1` | merged | 2026-11-05 | Lead |
-| WP1 | Schema v2, v1/v2 feeds, directory seeding | 1 | `card-rewards/wp1-schema` | done (in review) | 2026-11-06 | 1391 api tests pass; follow-ups D1, D2, D4, D6 |
+| WP1 | Schema v2, v1/v2 feeds, directory seeding | 1 | `card-rewards/wp1-schema` | **merged** | 2026-11-06 | Review approved + 1 fix round (D1, D2, D7, CI step); 1393 api tests; DB test fresh + incremental; seeder loads 164/61 |
 | WP2 | Loader v2 (pure transform), coverage, audit script | 1 | `card-rewards/wp2-loader` | running | 2026-11-05 | |
 | WP3 | Dart engine v2 + tolerant parsing | 1 | `card-rewards/wp3-dart-engine` | running | 2026-11-05 | |
-| WP4 | JS engine v2 + merchant resolver | 1 | `card-rewards/wp4-js-engine` | running | 2026-11-05 | |
+| WP4 | JS engine v2 + merchant resolver | 1 | `card-rewards/wp4-js-engine` | needs rework (fix round 1) | 2026-11-06 | Review approved; applying D10–D12 and pinning D9/D12 rulings as shared scenarios |
 | WP5 | Merchant and platform directory data | 1 | `card-rewards/wp5-directory` | **merged** | 2026-11-06 | 164 merchants (9 true sub-brand parents, `group` tags per D6), 61 platforms; review + 1 fix round clean; IHCL brands kept under `taj` (ruling in ledger) |
-| WP6a | Worked examples: HDFC, SBI Card | 1 | `card-rewards/wp6a-examples-hdfc-sbi` | running | 2026-11-05 | |
-| WP6b | Worked examples: ICICI, Axis, Amex, IDFC, others | 1 | `card-rewards/wp6b-examples-others` | running | 2026-11-05 | |
+| WP6a | Worked examples: HDFC, SBI Card | 1 | `card-rewards/wp6a-examples-hdfc-sbi` | **merged** | 2026-11-06 | 21/21 cards, 15 override files; review + 1 fix round clean; Swiggy exact-half rounding parked |
+| WP6b | Worked examples: ICICI, Axis, Amex, IDFC, others | 1 | `card-rewards/wp6b-examples-others` | needs rework (fix round 1) | 2026-11-06 | 23/25 cards; ACE/Flipkart Axis/HSBC Live+ verified; fixing IDFC Wealth override (lost exclusions, priorities, unmapped tokens), D11 rounding paths, D14 marks |
 | WP7 | Integration: worked examples through both engines | 2 | — | not started | | Needs wave 1 merged |
 | WP8 | Server recording v2 + recompute script | 2 | — | not started | | Needs WP1, WP4 |
 | WP9 | App: v2 feed, tolerant parse, cap bars, alerts | 2 | — | not started | | Needs WP1, WP3 |
@@ -65,9 +65,16 @@ Status values: `not started` · `running` · `done (branch ready)` · `merged` �
 | 2026-11-05 | New semantics ship only in the v2 feed (`?schema=2`); v1 shape frozen. | Lead (plan H1) |
 | 2026-11-05 | Unmodellable rules become `info`, never widened. | Lead (plan H2) |
 | 2026-11-05 | Unknown rail/platform does not satisfy a restriction on v2 cards. | Lead (plan C3.3) |
+| 2026-11-05/06 | Contract changes D1–D8 (identity indexes, v1 cap filter, cap engine version, issuer slugs, coverage.json, parent vs group, rounding modes, loader/data rules) — plan §4 C8. | Lead |
+| 2026-11-06 | IHCL hotel brands stay under `taj` (taj = IHCL). | Lead (ledger ruling) |
+| 2026-11-06 | D12: a category paying less than the base earns its own (lower) rate; D13: cardholder-dependent caps/rates (credit-limit caps, tiers, paid memberships) are deferred to Phase 2 and never guessed. | Lead |
+| 2026-11-06 | D14: examples depending on facts a purchase can't tell us (gift card, international, birthday) are kept but not engine-checked; such rules are info-only until Phase 2; overrides must never drop exclusions. | Lead |
+| 2026-11-06 | D10: cards switch to the v2 engine only when re-imported by the v2 loader (DB defaults alone never switch a card), so existing cards keep today's behaviour until re-import. | Lead |
 
 ## Changelog
 
+- **2026-11-06:** WP6a merged (21 HDFC/SBI cards with issuer-verified examples and 15 correction files).
+- **2026-11-06:** WP1 merged (schema v2, feeds, seeder; backward-compatibility test now in CI).
 - **2026-11-06:** WP5 merged into `card-rewards/phase1` after one fix round.
 - **2026-11-06:** All agents paused by the 5-hour usage limit, then resumed. WP1 finished (review pending). WP5 finished, in fix round 1 (Titan parent links, bare "indigo" alias, contract D6). Contract changes D1–D6 recorded in plan §4 C8.
 - **2026-11-05:** Feature spec approved with the card-wide change. Phase 1 plan,

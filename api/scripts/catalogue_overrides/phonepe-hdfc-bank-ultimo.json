@@ -1,0 +1,21 @@
+{
+  "source_slug": "phonepe-hdfc-bank-ultimo",
+  "changes": [
+    {
+      "path": "reward_rules[id=phonepe_categories_10pct].conditions.mcc",
+      "value": [
+        4111,
+        4112,
+        4511,
+        4722,
+        4784,
+        4814,
+        4899,
+        4900
+      ],
+      "reason": "Issuer MCC list excludes 5262 and 7999.",
+      "source_url": "https://www.hdfc.bank.in/content/dam/hdfcbankpws/in/en/personal-banking/discover-products/cards/credit-cards/phonepe-hdfc-bank-ultimo-credit-card/phonepe-hdfc-bank-ultimo-cc-reward-points-tncs.pdf",
+      "checked_on": "2026-11-05"
+    }
+  ]
+}

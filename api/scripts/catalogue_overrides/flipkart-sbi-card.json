@@ -1,0 +1,12 @@
+{
+  "source_slug": "flipkart-sbi-card",
+  "changes": [
+    {
+      "path": "accrual_engine.cashback_rounding",
+      "value": "rupee_floor",
+      "reason": "Cashback is rounded down to a whole rupee per transaction (D11).",
+      "source_url": "https://www.sbicard.com/sbi-card-en/assets/docs/pdf/ekit-tncs/Flipkart-SBI-CreditCard-TandC-Booklet.pdf",
+      "checked_on": "2026-11-05"
+    }
+  ]
+}
