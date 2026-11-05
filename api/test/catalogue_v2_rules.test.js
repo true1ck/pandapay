@@ -1243,6 +1243,7 @@ test('D8b "up to" reads only the rule\'s own rate text: not its id, a cap, a sta
   assert.equal(role('travel_4x', 'Up to 6X overall acceleration; dining earn represented at 4X.'), 'earn', 'overall');
   assert.equal(role('smartbuy_10x', 'Up to 10X Reward Points on dining via SmartBuy.'), 'info');
   assert.equal(role('air_30', 'Up to 30 Reward Points per Rs 100 spent on dining.'), 'info');
+  assert.equal(role('half_pct', 'Dining spends earn up to 0.5% cashback.'), 'info', 'a decimal point is not a clause break');
 });
 
 test('D16/D18e underscored negations ("non_iocl_fuel", "fuel_non_iocl", not_phonepe) become exceptions, never ignored', () => {

@@ -139,7 +139,7 @@ function idNegation(src, index) {
 const UP_TO_RATE = /up[\s_-]*to[\s_-]*\d+(?:\.\d+)?\s*(?:x\b|%|(?:bonus\s+|reward\s+)?points?\b|rp\b|miles\b)/gi;
 function statesUpToRate(reason) {
   const text = String(reason || '').replace(/\([^)]*\)/g, ' ');
-  for (const clause of text.split(/[.;]|\bwhile\b|\bbut\b|\bwhereas\b/i)) {
+  for (const clause of text.split(/;|\.(?!\d)|\bwhile\b|\bbut\b|\bwhereas\b/i)) {
     UP_TO_RATE.lastIndex = 0;
     let m;
     while ((m = UP_TO_RATE.exec(clause))) {
