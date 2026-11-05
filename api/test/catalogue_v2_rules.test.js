@@ -1026,6 +1026,22 @@ test('D19d a cap targets every emitted row of its source rule (v2 MCC row and v1
   assert.equal(cap.min_engine_version, 2, 'a target is v2-only (D3)');
 });
 
+test('D19b card-level excluded categories hold only exact categories; narrow ones become v1-only + MCC rules', () => {
+  const r = run(card({ rules: [
+    rule({ id: 'base', category_id: 'all_retail', evaluation_type: 'standard_accrual', conditions: { excluded_categories: ['gaming', 'fuel', 'railways'] }, action: { cashback_percent: 1 } }),
+    rule({ id: 'movies-10x', category_id: 'movies', action: { cashback_percent: 10 } }),
+  ] }));
+  assert.deepEqual(r.card.excluded_category_slugs, ['fuel']);
+  const gaming = r.rewardRules.filter((x) => x.source_category_token === 'gaming');
+  assert.deepEqual(gaming.map((x) => [x.rule_role, x.category_slug, x.mcc_include.join(), x.min_engine_version, x.max_engine_version]),
+    [['exclusion', 'entertainment', '', 1, 1], ['exclusion', null, '5816', 2, null]]);
+  const rail = r.rewardRules.filter((x) => x.source_category_token === 'railways');
+  assert.deepEqual(rail.map((x) => [x.category_slug, x.mcc_include.join(), x.max_engine_version]), [['travel', '', 1], [null, '4112', null]]);
+  // v2 view: the movies bonus (MCC 7832) is not covered by any category-only exclusion.
+  const v2CategoryExclusions = r.rewardRules.filter((x) => x.rule_role === 'exclusion' && x.max_engine_version !== 1 && x.category_slug);
+  assert.ok(!v2CategoryExclusions.some((x) => x.category_slug === 'entertainment'));
+});
+
 // ── C8 D13: terms that depend on the cardholder; override conventions ───
 
 test('D13a a cap sized by the credit limit keeps its kind with a null amount and is flagged', () => {

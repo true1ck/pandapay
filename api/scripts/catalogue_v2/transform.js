@@ -12,7 +12,7 @@
 
 const { asNumber, isNA, uniq } = require('./util');
 const { buildDirectoryIndex } = require('./directory');
-const { mapCategorySlugs } = require('./category_tokens');
+const { NARROW_TOKEN_MCC, mapCategorySlugs, resolveCategoryToken } = require('./category_tokens');
 const { transformRewardRules } = require('./rules');
 const { transformCaps } = require('./caps');
 const { transformMilestones } = require('./milestones');
@@ -174,16 +174,95 @@ function redemptionRows(record) {
   return { rows, skipped };
 }
 
+// Base/all-retail exclusions are card-level: a rule-level exclusion on the
+// catch-all rule would just fall through to the same base rate.
+// D19b: the card-level list holds only exact-category exclusions (v2 can't
+// ignore it). A narrow token there ("gaming" -> entertainment, "railways" ->
+// travel) becomes exclusion rules instead, D18b-style: a v1-only broad row
+// plus a v2 row on the token's MCCs. A narrow token with no MCC table stays
+// in the card-level list (excluding more is the safe side).
 function cardExcludedCategories(record) {
-  // Base/all-retail exclusions are card-level: a rule-level exclusion on the
-  // catch-all rule would just fall through to the same base rate.
   const out = new Set();
+  const narrow = new Map(); // token -> { slug, mccs, source }
   for (const rule of record?.reward_rules || []) {
     if (rule?.category_id !== 'all_retail' && rule?.category_id !== 'excluded_spend') continue;
     const list = rule?.conditions?.excluded_categories;
-    for (const slug of (Array.isArray(list) ? list : []).flatMap(mapCategorySlugs)) out.add(slug);
+    for (const item of Array.isArray(list) ? list : []) {
+      if (typeof item !== 'string') continue;
+      const key = item.trim().toLowerCase().replace(/[^a-z0-9]+/g, '_').replace(/^_|_$/g, '');
+      const t = resolveCategoryToken(key, {});
+      const parts = ['category', 'composite'].includes(t.kind) ? t.parts.filter((p) => p.categorySlug) : [];
+      if (!parts.length) continue;
+      for (const p of parts) {
+        const tokens = p.narrowTokens?.length ? p.narrowTokens : [p.token].filter(Boolean);
+        const mccs = p.broad
+          ? NARROW_TOKEN_MCC[key] || (tokens.length && tokens.every((tk) => NARROW_TOKEN_MCC[tk]) ? uniq(tokens.flatMap((tk) => NARROW_TOKEN_MCC[tk])).sort() : null)
+          : null;
+        if (p.broad && mccs) narrow.set(`${key}:${p.categorySlug}`, { token: key, slug: p.categorySlug, mccs, source: rule.id ?? null });
+        else out.add(p.categorySlug);
+      }
+    }
   }
-  return [...out].sort();
+  // A narrow token whose broad category is also excluded outright needs no rows.
+  const narrowRows = [...narrow.values()].filter((n) => !out.has(n.slug));
+  return { slugs: [...out].sort(), narrow: narrowRows };
+}
+
+function cardLevelNarrowExclusionRows(narrow, baseUnit) {
+  const unit = baseUnit && baseUnit.startsWith('points') ? baseUnit : 'cashback_percent';
+  const rows = [];
+  for (const n of narrow) {
+    const common = {
+      source_local_id: n.source === null ? null : String(n.source),
+      source_category_token: n.token,
+      evaluation_type: 'exclusion',
+      merchant_pattern: null,
+      rail: null,
+      unit,
+      rate: 0,
+      min_txn_inr: null,
+      max_txn_inr: null,
+      priority: 0,
+      effective_from: null,
+      effective_to: null,
+      excluded_category_slugs: [],
+      rule_role: 'exclusion',
+      merchant_slugs: [],
+      platform_slugs: [],
+      mcc_exclude: [],
+      except_merchant_slugs: [],
+      except_platform_slugs: [],
+      block_inr: null,
+      display_note: `No rewards on ${n.token.replace(/_/g, ' ')}`,
+      currency: null,
+      cap_refs: [],
+      info_reasons: [],
+      narrow_on_merchant: null,
+    };
+    rows.push({
+      ...common,
+      key: `card-excluded:${n.token}`,
+      part: 'v1',
+      category_slug: n.slug,
+      mcc_include: [],
+      min_engine_version: 1,
+      max_engine_version: 1,
+      flags: ['card_level_narrow_exclusion', 'broad_exclusion_v1_only'],
+      v2_reasons: [],
+    });
+    rows.push({
+      ...common,
+      key: `card-excluded:${n.token}#mcc`,
+      part: 'mcc',
+      category_slug: null,
+      mcc_include: n.mccs,
+      min_engine_version: 2,
+      max_engine_version: null,
+      flags: ['card_level_narrow_exclusion'],
+      v2_reasons: ['mcc'],
+    });
+  }
+  return rows;
 }
 
 /**
@@ -282,6 +361,12 @@ function transformCardRecordV2(rawRecord, opts = {}) {
     extraFlags.push({ code: 'synthesized_base_rule', source_local_id: null, detail: `block ₹${economics.unusualBlock}` });
   }
 
+  const cardExclusions = cardExcludedCategories(record);
+  rewardRules.push(...cardLevelNarrowExclusionRows(cardExclusions.narrow, economics.baseUnit));
+  if (cardExclusions.narrow.length) {
+    extraFlags.push({ code: 'card_level_narrow_exclusion', source_local_id: null, detail: cardExclusions.narrow.map((n) => n.token).join(', ') });
+  }
+
   const capResult = transformCaps(record, rewardRules, ctx);
   const milestoneResult = transformMilestones(record);
   const benefitResult = transformBenefits(record);
@@ -321,7 +406,7 @@ function transformCardRecordV2(rawRecord, opts = {}) {
     base_reward_rate: economics.baseRate,
     point_value_inr: economics.pointValueInr,
     point_value_basis: economics.pointValueBasis,
-    excluded_category_slugs: cardExcludedCategories(record),
+    excluded_category_slugs: cardExclusions.slugs,
     accrual_block_inr: economics.baseBlockInr,
     accrual_rounding: accrualRounding,
     cashback_rounding: cashbackRounding(
