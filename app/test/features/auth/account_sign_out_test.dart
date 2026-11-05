@@ -114,11 +114,33 @@ void main() {
   );
 
   group('warning copy', () {
-    SignOutReport r(int u, int p, int v) => SignOutReport(
+    SignOutReport r(int u, int p, int v, [int m = 0]) => SignOutReport(
       unsynced: u,
       phoneOnlyReceipts: p,
       phoneOnlyReviewItems: v,
+      phoneOnlyMessages: m,
     );
+
+    test('stored original messages alone trigger the warning', () {
+      final report = r(0, 0, 0, 1204);
+      expect(report.losesSomething, isTrue);
+      expect(
+        signOutWarningMessage(report),
+        '1204 original messages are stored only on this phone. '
+        'Signing out deletes them from this phone. You can import your SMS '
+        'history again from Messages afterwards.',
+      );
+    });
+
+    test('original messages are listed with the other phone-only items', () {
+      expect(
+        signOutWarningMessage(r(2, 1, 0, 1)),
+        "2 changes haven't reached PandaPay yet, and 1 receipt and 1 "
+        'original message are stored only on this phone. '
+        'Signing out deletes them from this phone. You can import your SMS '
+        'history again from Messages afterwards.',
+      );
+    });
 
     test('names every count that is not zero', () {
       expect(

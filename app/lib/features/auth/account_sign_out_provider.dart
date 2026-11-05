@@ -28,10 +28,12 @@ class PhoneOnlyCounts {
     required this.smsOutbox,
     required this.receipts,
     required this.reviewItems,
+    this.messages = 0,
   });
   final int smsOutbox;
   final int receipts;
   final int reviewItems;
+  final int messages;
 }
 
 PhoneOnlyCounts readPhoneOnlyCounts(Database db, String namespace) {
@@ -51,6 +53,7 @@ PhoneOnlyCounts readPhoneOnlyCounts(Database db, String namespace) {
     reviewItems: count('v2_review_items', "namespace=? AND status='open'", [
       namespace,
     ]),
+    messages: count('sms_captured_messages', 'namespace=?', [namespace]),
   );
 }
 
@@ -158,6 +161,7 @@ final accountSignOutProvider = Provider<AccountSignOut>((ref) {
       unsynced: queued + counts.smsOutbox,
       phoneOnlyReceipts: counts.receipts,
       phoneOnlyReviewItems: counts.reviewItems,
+      phoneOnlyMessages: counts.messages,
     );
   }
 

@@ -10,6 +10,7 @@ class SignOutReport {
     required this.unsynced,
     required this.phoneOnlyReceipts,
     required this.phoneOnlyReviewItems,
+    this.phoneOnlyMessages = 0,
   });
 
   /// Changes queued for the server (edits, quick adds, SMS facts, corrections).
@@ -21,8 +22,13 @@ class SignOutReport {
   /// Messages waiting for review that only exist on this phone.
   final int phoneOnlyReviewItems;
 
+  /// Original SMS stored on this phone. They are never sent to the server, so
+  /// signing out deletes them for good; the history can be imported again.
+  final int phoneOnlyMessages;
+
   bool get losesSomething =>
-      unsynced + phoneOnlyReceipts + phoneOnlyReviewItems > 0;
+      unsynced + phoneOnlyReceipts + phoneOnlyReviewItems + phoneOnlyMessages >
+      0;
 }
 
 /// Plain-language body of the "Sign out of PandaPay?" dialog. Clauses with a
@@ -36,8 +42,13 @@ String signOutWarningMessage(SignOutReport report) {
       '${report.phoneOnlyReceipts} ${plural(report.phoneOnlyReceipts, 'receipt', 'receipts')}',
     if (report.phoneOnlyReviewItems > 0)
       '${report.phoneOnlyReviewItems} ${plural(report.phoneOnlyReviewItems, 'message to review', 'messages to review')}',
+    if (report.phoneOnlyMessages > 0)
+      '${report.phoneOnlyMessages} ${plural(report.phoneOnlyMessages, 'original message', 'original messages')}',
   ];
-  final phoneOnlyTotal = report.phoneOnlyReceipts + report.phoneOnlyReviewItems;
+  final phoneOnlyTotal =
+      report.phoneOnlyReceipts +
+      report.phoneOnlyReviewItems +
+      report.phoneOnlyMessages;
 
   final unsynced = report.unsynced > 0
       ? '${report.unsynced} ${plural(report.unsynced, "change hasn't", "changes haven't")} reached PandaPay yet'
@@ -48,7 +59,10 @@ String signOutWarningMessage(SignOutReport report) {
 
   final sentence = [?unsynced, ?stored].join(', and ');
   final total = report.unsynced + phoneOnlyTotal;
-  return '$sentence. Signing out deletes ${total == 1 ? 'it' : 'them'} from this phone.';
+  final reimport = report.phoneOnlyMessages > 0
+      ? ' You can import your SMS history again from Messages afterwards.'
+      : '';
+  return '$sentence. Signing out deletes ${total == 1 ? 'it' : 'them'} from this phone.$reimport';
 }
 
 /// Result of [AccountSignOut.run]. The session is always reset; the wipe is
