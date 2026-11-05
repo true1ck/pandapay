@@ -8,6 +8,7 @@ import 'package:package_info_plus/package_info_plus.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 
 import 'env.dart';
+import 'obfuscated_trace.dart';
 
 /// Privacy-safe crash and error reports, sent to GlitchTip (or Sentry) in the
 /// Sentry envelope format. Off unless the build passes
@@ -15,7 +16,10 @@ import 'env.dart';
 ///
 /// A report says WHAT broke and WHERE in our code, never with what data:
 /// the error's class name, code locations (file:line:function), the app
-/// version, the platform and which handler caught it. The error message is
+/// version, the platform and which handler caught it. Obfuscated release
+/// builds print no file names, so their reports carry the build id and the
+/// per-frame instruction offsets instead (see [ObfuscatedTrace] and
+/// docs/release/symbolication.md). The error message is
 /// never sent, because messages can contain SMS text, amounts, merchant
 /// names or account numbers (a FormatException quotes its input). No user
 /// id, device id, screen content or network data is included.
@@ -87,7 +91,13 @@ class CrashReporter {
     try {
       final now = _clock();
       final frames = parseFrames(stack);
-      final fingerprint = fingerprintFor(error, frames, source);
+      final obfuscated = obfuscatedTraceOf(stack);
+      final fingerprint = fingerprintFor(
+        error,
+        frames,
+        source,
+        buildId: obfuscated?.buildId,
+      );
       if (!_admit(fingerprint.join('|'), now)) return;
       unawaited(
         _last = _guard(() async {
@@ -101,6 +111,7 @@ class CrashReporter {
             platform: defaultTargetPlatform.name.toLowerCase(),
             now: now,
             eventId: _eventId(),
+            obfuscated: obfuscated,
           );
           await _enqueue(event, now);
           await _flush();
@@ -224,11 +235,37 @@ class CrashReporter {
   // ------------------------------------------------------------- pure parts
 
   /// Code locations only. Paths outside packages are cut to the file name.
+  /// A trace from an obfuscated build has no file names; its frames become
+  /// instruction offsets ([ObfuscatedTrace]), which the build's `.symbols`
+  /// file turns back into file:line.
   static List<Map<String, Object?>> parseFrames(StackTrace? stack) {
     if (stack == null) return const [];
+    final text = stack.toString();
+    final symbolic = _symbolicFrames(text);
+    if (symbolic.isNotEmpty) return symbolic;
+    final obfuscated = ObfuscatedTrace.parse(text);
+    if (obfuscated == null) return const [];
+    return [
+      for (final frame in obfuscated.frames.reversed)
+        {
+          if (frame.location != null) 'function': frame.location,
+          if (frame.instructionAddress != null)
+            'instruction_addr': frame.instructionAddress,
+        },
+    ]; // Oldest first, like the symbolic frames.
+  }
+
+  /// The obfuscated-build trace in [stack], or null for a normal trace.
+  static ObfuscatedTrace? obfuscatedTraceOf(StackTrace? stack) {
+    if (stack == null) return null;
+    final text = stack.toString();
+    return _symbolicFrames(text).isEmpty ? ObfuscatedTrace.parse(text) : null;
+  }
+
+  static List<Map<String, Object?>> _symbolicFrames(String text) {
     final pattern = RegExp(r'^#\d+\s+(.+?) \((.+?):(\d+)(?::(\d+))?\)$');
     final frames = <Map<String, Object?>>[];
-    for (final line in stack.toString().split('\n')) {
+    for (final line in text.split('\n')) {
       final m = pattern.firstMatch(line.trim());
       if (m == null) continue;
       var file = m.group(2)!;
@@ -257,17 +294,25 @@ class CrashReporter {
     return frames.isEmpty ? null : frames.last;
   }
 
+  /// `file:line` for a symbolic frame, the instruction offset otherwise.
+  static String _where(Map<String, Object?> frame) => frame['filename'] != null
+      ? '${frame['filename']}:${frame['lineno']}'
+      : '${frame['function'] ?? frame['instruction_addr']}';
+
   static List<String> fingerprintFor(
     Object error,
     List<Map<String, Object?>> frames,
-    String source,
-  ) {
+    String source, {
+    String? buildId,
+  }) {
     final top = _topAppFrame(frames);
     return [
       'app',
       errorType(error),
       source,
-      top == null ? '-' : '${top['filename']}:${top['lineno']}',
+      top == null ? '-' : _where(top),
+      // Offsets only mean something within one build.
+      ?buildId,
     ];
   }
 
@@ -281,11 +326,13 @@ class CrashReporter {
     required String platform,
     required DateTime now,
     required String eventId,
+    ObfuscatedTrace? obfuscated,
   }) {
     final top = _topAppFrame(frames);
     final where = top == null
         ? source
-        : '${(top['filename'] as String).replaceFirst(_appPackage, '')}:${top['lineno']}';
+        : _where(top).replaceFirst(_appPackage, '');
+    final buildId = obfuscated?.buildId;
     return {
       'event_id': eventId,
       'timestamp': now.toUtc().millisecondsSinceEpoch / 1000,
@@ -295,10 +342,13 @@ class CrashReporter {
       'release': release,
       'environment': environment,
       'fingerprint': fingerprint,
-      'tags': {'source': source, 'platform': platform},
+      'tags': {'source': source, 'platform': platform, 'build_id': ?buildId},
       'contexts': {
         'os': {'name': platform},
       },
+      // Offsets and build id only, ready for `flutter symbolize -i`.
+      if (obfuscated != null)
+        'extra': {'obfuscated_trace': obfuscated.toSymbolizeInput()},
       'exception': {
         'values': [
           {

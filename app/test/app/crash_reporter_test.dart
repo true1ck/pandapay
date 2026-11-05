@@ -4,6 +4,7 @@ import 'package:flutter_test/flutter_test.dart';
 import 'package:http/http.dart' as http;
 import 'package:http/testing.dart';
 import 'package:pandapay/app/crash_reporter.dart';
+import 'package:pandapay/app/obfuscated_trace.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 
 const _dsn = 'https://0123456789abcdef0123456789abcdef@errors.example.test/7';
@@ -14,6 +15,23 @@ final _stack = StackTrace.fromString('''
 #2      StatelessElement.build (package:flutter/src/widgets/framework.dart:5799:49)
 #3      main (file:///Users/someone/private/path/main.dart:3:1)
 #4      <asynchronous suspension>
+''');
+
+// The shape a release build made with `--obfuscate --split-debug-info`
+// prints: a header, then one `abs`/`virt` line per frame. Synthetic values.
+final _obfuscatedStack = StackTrace.fromString('''
+*** *** *** *** *** *** *** *** *** *** *** *** *** *** *** ***
+pid: 4242, tid: 4243, name 1.ui
+os: android arch: arm64 comp: yes sim: no
+build_id: '0f1e2d3c4b5a69788796a5b4c3d2e1f0'
+isolate_dso_base: 7b3c400000, vm_dso_base: 7b3c400000
+isolate_instructions: 7b3c410000, vm_instructions: 7b3c404000
+    #00 abs 0000007b3c5a1234 virt 00000000001a1234 _kDartIsolateSnapshotInstructions+0x191234
+    #01 abs 0000007b3c5a0f10 virt 00000000001a0f10 _kDartIsolateSnapshotInstructions+0x190f10
+<asynchronous suspension>
+    #02 abs 0000007b3c40a100 virt 000000000000a100 _kDartVmSnapshotInstructions+0x6100
+    #03 abs 0000007b3c500000 virt 0000000000100000 /data/app/~~Zx9q==/com.pandapath.pandapay-Ab1/lib/arm64/libapp.so
+    #04 abs 0000007b3c5b0000 _kDartIsolateSnapshotInstructions+0x1a0000
 ''');
 
 CrashReporter _reporter(
@@ -138,6 +156,125 @@ void main() {
       expect(frames.where((f) => f['in_app'] == true), hasLength(2));
     },
   );
+
+  test(
+    'an obfuscated release trace sends the build id and frame offsets only',
+    () async {
+      final requests = <http.Request>[];
+      final reporter = _reporter(
+        MockClient((request) async {
+          requests.add(request);
+          return http.Response('{}', 200);
+        }),
+      );
+      final error = FormatException(
+        'Rs 5,000 debited from A/c XX1234 at SWIGGY',
+        'sender 9876543210',
+      );
+
+      reporter.report(error, _obfuscatedStack, source: 'flutter');
+      await reporter.drain();
+
+      expect(requests, hasLength(1));
+      final body = requests.single.body;
+      for (final secret in [
+        '9876543210',
+        'debited',
+        'XX1234',
+        'SWIGGY',
+        '5,000',
+        '4242', // pid
+        '4243', // tid
+        '1.ui', // thread name
+        '7b3c400000', // load base
+        '7b3c410000', // instructions start
+        '7b3c5a1234', // absolute address
+        '/data/app',
+        'com.pandapath',
+        'libapp.so',
+      ]) {
+        expect(body.contains(secret), isFalse, reason: secret);
+      }
+
+      final event = _lines(body)[2];
+      expect(
+        (event['tags'] as Map)['build_id'],
+        '0f1e2d3c4b5a69788796a5b4c3d2e1f0',
+      );
+      final exception = (event['exception'] as Map)['values'][0] as Map;
+      expect(exception['type'], 'FormatException');
+      expect(exception['value'], '_kDartIsolateSnapshotInstructions+0x191234');
+      final frames = ((exception['stacktrace'] as Map)['frames'] as List)
+          .cast<Map>();
+      expect(frames, hasLength(5));
+      expect(frames.last, {
+        'function': '_kDartIsolateSnapshotInstructions+0x191234',
+        'instruction_addr': '0x1a1234',
+      }, reason: 'newest frame last, offsets only');
+      expect(frames[1], {'instruction_addr': '0x100000'});
+      expect(frames.first, {
+        'function': '_kDartIsolateSnapshotInstructions+0x1a0000',
+      });
+
+      // Ready for `flutter symbolize -i`: header, os/arch, build id and the
+      // relative offsets; absolute addresses are zeroed.
+      expect((event['extra'] as Map)['obfuscated_trace'], '''
+*** *** *** *** *** *** *** *** *** *** *** *** *** *** *** ***
+os: android arch: arm64 comp: yes sim: no
+build_id: '0f1e2d3c4b5a69788796a5b4c3d2e1f0'
+    #00 abs 0000000000000000 virt 00000000001a1234 _kDartIsolateSnapshotInstructions+0x191234
+    #01 abs 0000000000000000 virt 00000000001a0f10 _kDartIsolateSnapshotInstructions+0x190f10
+    #02 abs 0000000000000000 virt 000000000000a100 _kDartVmSnapshotInstructions+0x6100
+    #03 abs 0000000000000000 virt 0000000000100000 <unknown>
+    #04 abs 0000000000000000 _kDartIsolateSnapshotInstructions+0x1a0000
+''');
+      expect(
+        event['fingerprint'],
+        contains('0f1e2d3c4b5a69788796a5b4c3d2e1f0'),
+        reason: 'offsets only mean something within one build',
+      );
+    },
+  );
+
+  test('obfuscated frames keep only hex offsets and known symbols', () {
+    final trace = ObfuscatedTrace.parse('''
+*** *** *** *** *** *** *** *** *** *** *** *** *** *** *** ***
+pid: 1, tid: 1, name io.flutter.1.ui
+os: ios arch: arm64 comp: no sim: no
+build_id: 'abcdef0123456789'
+    #00 abs 0000000104c1a2b3 _kDartIsolateSnapshotInstructions+0x4c1a2b3 card 4111111111111111
+    #01 abs 0000000104c1a2b3 virt zzzz _kDartIsolateSnapshotInstructions+0x10
+    #02 abs 0000000104c1a2b3 SWIGGY+0x10
+    #03 abs 0000000104c1a2b3 _kDartIsolateSnapshotInstructions+0x20
+''')!;
+    expect(trace.buildId, 'abcdef0123456789');
+    expect(trace.os, 'ios');
+    expect(trace.arch, 'arm64');
+    expect(trace.frames, hasLength(1), reason: 'only the clean frame line');
+    expect(
+      trace.frames.single.location,
+      '_kDartIsolateSnapshotInstructions+0x20',
+    );
+    expect(trace.toSymbolizeInput(), isNot(contains('4111')));
+    expect(trace.toSymbolizeInput(), isNot(contains('SWIGGY')));
+  });
+
+  test('no header or frames means no obfuscated trace', () {
+    expect(ObfuscatedTrace.parse(_stack.toString()), isNull);
+    expect(ObfuscatedTrace.parse(''), isNull);
+    expect(
+      ObfuscatedTrace.parse(
+        '    #00 abs 0000007b3c5a1234 _kDartIsolateSnapshotInstructions+0x1',
+      ),
+      isNull,
+      reason: 'frames without the header are not trusted',
+    );
+    expect(
+      CrashReporter.parseFrames(_stack).last['filename'],
+      'package:pandapay/data/import_models.dart',
+      reason: 'the unobfuscated format is unchanged',
+    );
+  });
 
   test('repeats are sent once per session and bursts are capped', () async {
     var posts = 0;
