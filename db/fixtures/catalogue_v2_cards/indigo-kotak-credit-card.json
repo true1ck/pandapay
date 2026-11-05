@@ -4,8 +4,8 @@
   "inputs": {
     "transform_version": "7",
     "source_record_sha256": "b3c006725cad44a9c6110152007164ab7c6efbf62765530fd068b7083f2e0f95",
-    "override_sha256": "8d51329cc1ff4a8b8a08e521522a3aad34466172d29f6cf54d01ed7aa708c4e0",
-    "directory_sha256": "3d9f9f535481544d4b19262838290f77d8270eb3b4aec73c48608f10c39cedf2",
+    "override_sha256": "543582bd9d72c66ecff835fa5f57466fac16ebb1d073cecb11d170fbdb853ad2",
+    "directory_sha256": "b1094d54b77e848d22f7a9a64f3ae6d1ef43ca3eb2fc8e40cd43ed1994664694",
     "verified": true
   },
   "blocking_flags": [],
@@ -25,9 +25,9 @@
     "points_expiry_months": 0,
     "model_status": "verified",
     "model_coverage": {
-      "rules_total": 14,
+      "rules_total": 15,
       "rules_modelled": 14,
-      "rules_info": 0,
+      "rules_info": 1,
       "caps_total": 0,
       "caps_enforced": 0,
       "flags": [
@@ -75,6 +75,21 @@
           "code": "broad_exclusion_v1_only",
           "source_local_id": "telecom_mcc_exclusion",
           "detail": null
+        },
+        {
+          "code": "info_rule",
+          "source_local_id": "indigo_group_booking_exclusion",
+          "detail": "override_rule_role"
+        },
+        {
+          "code": "depends_on_txn_attribute",
+          "source_local_id": "indigo_group_booking_exclusion",
+          "detail": null
+        },
+        {
+          "code": "exclusion_scope_broadened",
+          "source_local_id": "indigo_group_booking_exclusion",
+          "detail": null
         }
       ],
       "overrides_applied": [
@@ -97,16 +112,16 @@
         {
           "path": "reward_rules[id=indigo_flight_booking_accelerator].action.points_per_block",
           "op": "set",
-          "value_sha256": "e629fa6598d73276",
-          "reason": "WP7: D13b: T&C Table B gives 15 / 17 / 19 BluChips per Rs100 for Blu 3 / Blu 2 / Blu 1; the entry tier (Blu 3) is 15.",
+          "value_sha256": "4e07408562bedb8b",
+          "reason": "WP7: D24a: T&C 2.3 Table B splits the 15/17/19 BluChips per Rs100 into IndiGo base 8 + tier bonus 0/2/4 + channel bonus 4 (IndiGo's own programme, any member) and \"IndiGo BluChips when the transaction is done via IndiGo Kotak Credit Card\": 3 per Rs100 at every tier. Only the card's 3 counts.",
           "source_url": "https://images.kotak.bank.in/bank/mailers/2025/files/Kotak%20IndiGo%20Credit%20Card%20TnC.pdf",
           "checked_on": "2026-11-05"
         },
         {
           "path": "reward_rules[id=indigo_flight_booking_accelerator].action.reason",
           "op": "set",
-          "value_sha256": "0a64d844abb439c4",
-          "reason": "WP7: Entry-tier rate (D13b); the old \"Up to 19\" wording tripped the multi-rate check.",
+          "value_sha256": "fb061e157f62d2cc",
+          "reason": "WP7: D24a card-issued rate; the tier bonus belongs to IndiGo's programme, so the card rate does not depend on the member tier (D13b no longer applies to this rule).",
           "source_url": "https://images.kotak.bank.in/bank/mailers/2025/files/Kotak%20IndiGo%20Credit%20Card%20TnC.pdf",
           "checked_on": "2026-11-05"
         },
@@ -114,7 +129,15 @@
           "path": "reward_rules[id=indigo_flight_booking_accelerator].conditions",
           "op": "set",
           "value_sha256": "affc851ee25ce030",
-          "reason": "WP7: D13b entry-tier earn rule. Website/app-only and no third-party bookings are carried by merchant IndiGo on rail online; group/corporate/SME/agent bookings cannot be told apart in the context and are rare on a personal card (accepted, noted in the WP7 report).",
+          "reason": "WP7: T&C 2.1: only bookings on the IndiGo website/app earn (third-party sites do not); merchant IndiGo on rail online carries it. Group/corporate/SME/agent bookings are a separate info exclusion (indigo_group_booking_exclusion).",
+          "source_url": "https://images.kotak.bank.in/bank/mailers/2025/files/Kotak%20IndiGo%20Credit%20Card%20TnC.pdf",
+          "checked_on": "2026-11-05"
+        },
+        {
+          "path": "reward_rules",
+          "op": "append",
+          "value_sha256": "2695d6b490ee0d4b",
+          "reason": "WP7: T&C 4.3: \"No IndiGo BluChips will be earned on group, corporate, SME and agent bookings done through IndiGo Website/App\". The booking type is not in the context, so this is info (rule_role, D13d) with depends_on_txn_attribute (D14b); as a plain exclusion the loader would broaden it to every IndiGo booking.",
           "source_url": "https://images.kotak.bank.in/bank/mailers/2025/files/Kotak%20IndiGo%20Credit%20Card%20TnC.pdf",
           "checked_on": "2026-11-05"
         }
@@ -201,7 +224,7 @@
         "merchant_pattern": "goindigo",
         "rail": "online",
         "unit": "points_per_100",
-        "rate": 15,
+        "rate": 3,
         "min_txn_inr": null,
         "max_txn_inr": null,
         "priority": 10,
@@ -230,7 +253,7 @@
         "min_engine_version": 1,
         "max_engine_version": null,
         "source_local_id": "indigo_flight_booking_accelerator",
-        "display_note": "15 IndiGo BluChips per Rs100 (entry tier Blu 3) on IndiGo flights booked on the IndiGo website or app."
+        "display_note": "3 IndiGo BluChips per Rs100 from the card on IndiGo flights booked on the IndiGo website or app (IndiGo's own base, tier and channel BluChips are not card rewards)."
       },
       {
         "id": "indigo-kotak-credit-card:rule:rent_exclusion#1",
@@ -1239,6 +1262,47 @@
         "max_engine_version": null,
         "source_local_id": "entertainment_accelerator",
         "display_note": "Earn 2 IndiGo BluChips per Rs100 on Entertainment spends."
+      },
+      {
+        "id": "indigo-kotak-credit-card:rule:indigo_group_booking_exclusion",
+        "category_id": "cat-travel",
+        "category_slug": "travel",
+        "merchant_pattern": "goindigo",
+        "rail": "online",
+        "unit": "points_per_100",
+        "rate": 0,
+        "min_txn_inr": null,
+        "max_txn_inr": null,
+        "priority": 5,
+        "conditions": {
+          "source_local_id": "indigo_group_booking_exclusion",
+          "part": null,
+          "info_reasons": [
+            "override_rule_role"
+          ],
+          "flags": [
+            "depends_on_txn_attribute",
+            "exclusion_scope_broadened"
+          ]
+        },
+        "notes": null,
+        "effective_from": "2025-07-10",
+        "effective_to": null,
+        "excluded_categories": [],
+        "rule_role": "info",
+        "merchant_slugs": [
+          "indigo"
+        ],
+        "platform_slugs": [],
+        "mcc_include": [],
+        "mcc_exclude": [],
+        "except_merchant_slugs": [],
+        "except_platform_slugs": [],
+        "block_inr": null,
+        "min_engine_version": 2,
+        "max_engine_version": null,
+        "source_local_id": "indigo_group_booking_exclusion",
+        "display_note": "No IndiGo BluChips on group, corporate, SME and agent bookings done through the IndiGo website/app."
       }
     ],
     "cap_rules": [],

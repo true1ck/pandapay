@@ -18,6 +18,11 @@
       "url": "https://www.kotak.bank.in/en/personal-banking/cards/credit-cards/indigo-credit-card.html",
       "doc": "IndiGo Kotak Credit Card page",
       "quote": "Earn unlimited 2 IndiGo BluChips per Rs 100 spent on all Dining & Entertainment spends"
+    },
+    {
+      "url": "https://images.kotak.bank.in/bank/mailers/2025/files/Kotak%20IndiGo%20Credit%20Card%20TnC.pdf",
+      "doc": "IndiGo Kotak Credit Card T&C 2.3, Table B",
+      "quote": "IndiGo BluChips when the transaction is done via IndiGo Kotak Credit Card: 3 IndiGo BluChips / Rs100 spent"
     }
   ],
   "examples": [
@@ -104,7 +109,7 @@
     },
     {
       "id": "004",
-      "title": "Rs 10,000 flight booked on the IndiGo website (entry tier Blu 3)",
+      "title": "Rs 10,000 flight booked on the IndiGo website",
       "ctx": {
         "amount": 10000,
         "occurred": "2026-11-10T10:00:00+05:30",
@@ -122,12 +127,12 @@
       },
       "expect": {
         "currency": "points",
-        "amount": 1500,
+        "amount": 300,
         "value_inr": null,
         "excluded": false,
         "cap_deltas_by_source_id": {}
       },
-      "why": "Table B for the IndiGo Kotak Credit Card: 8 base + 3 card + 4 website/app = 15 BluChips per Rs 100 at tier Blu 3 (17 at Blu 2, 19 at Blu 1): 100 x 15 = 1,500."
+      "why": "Table B: of the 15 BluChips per Rs100 (Blu 3), 8 base and 4 channel are IndiGo's own programme for any member; the card adds 3 per Rs100 at every tier: 100 x 3 = 300 (D24a)."
     },
     {
       "id": "005",
@@ -273,6 +278,13 @@
       "issuer_says": "Current T&C silent.",
       "proposed_fix": "none",
       "override_file": null
+    },
+    {
+      "item": "WP7 r1: example 004 (D24a)",
+      "cardpipeline_says": "Example expected 1,500 (15 per Rs100, entry tier).",
+      "issuer_says": "T&C 2.3 Table B: 8 base + 4 channel (+ tier bonus) come from IndiGo's programme; \"via IndiGo Kotak Credit Card\" adds 3 per Rs100. Contract D24a counts only card-issued rewards, so 300. T&C 4.3 group/corporate/SME/agent bookings earn nothing (info exclusion; not in the context).",
+      "proposed_fix": "override",
+      "override_file": "api/scripts/catalogue_overrides/indigo-kotak-credit-card.json"
     }
   ]
 }
