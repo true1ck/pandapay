@@ -1,0 +1,33 @@
+{
+  "source_slug": "phonepe-sbi-select-black",
+  "changes": [
+    {
+      "path": "cap_rules[id=phonepe-other-monthly].metric",
+      "value": "total_reward_points",
+      "reason": "SBI limits total RPs per spend type per calendar month.",
+      "source_url": "https://www.sbicard.com/sbi-card-en/assets/media/images/personal/credit-cards/rewards/phonepe/tnc/RP-tnc.pdf",
+      "checked_on": "2026-11-05"
+    },
+    {
+      "path": "cap_rules[id=phonepe-insurance-monthly].metric",
+      "value": "total_reward_points",
+      "reason": "SBI limits total RPs per spend type per calendar month.",
+      "source_url": "https://www.sbicard.com/sbi-card-en/assets/media/images/personal/credit-cards/rewards/phonepe/tnc/RP-tnc.pdf",
+      "checked_on": "2026-11-05"
+    },
+    {
+      "path": "cap_rules[id=online-monthly].metric",
+      "value": "total_reward_points",
+      "reason": "SBI limits total RPs per spend type per calendar month.",
+      "source_url": "https://www.sbicard.com/sbi-card-en/assets/media/images/personal/credit-cards/rewards/phonepe/tnc/RP-tnc.pdf",
+      "checked_on": "2026-11-05"
+    },
+    {
+      "path": "cap_rules[id=phonepe-insurance-monthly].parent_cap_id",
+      "value": null,
+      "reason": "Insurance (500) is a separate limit from non-insurance PhonePe spends (1,500).",
+      "source_url": "https://www.sbicard.com/sbi-card-en/assets/media/images/personal/credit-cards/rewards/phonepe/tnc/RP-tnc.pdf",
+      "checked_on": "2026-11-05"
+    }
+  ]
+}

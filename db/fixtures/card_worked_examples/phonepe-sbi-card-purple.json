@@ -1,0 +1,359 @@
+{
+  "source_slug": "phonepe-sbi-card-purple",
+  "cardpipeline_id": "state-bank-of-india-phonepe-sbi-purple-credit-card",
+  "card_name": "PhonePe SBI PURPLE Credit Card",
+  "verified_on": "2026-11-05",
+  "sources": [
+    {
+      "url": "https://www.sbicard.com/sbi-card-en/assets/media/images/personal/credit-cards/rewards/phonepe/tnc/PhonePe-SBI-Card-PURPLE-Reward-Program-TnC.pdf",
+      "doc": "PhonePe SBI PURPLE Credit Card Reward Program T&C (Oct 2026)",
+      "quote": "PhonePe Spends 3 RP/100 (Max 750 / Calendar Month - Non Insurance"
+    },
+    {
+      "url": "https://www.sbicard.com/sbi-card-en/assets/media/images/personal/credit-cards/rewards/phonepe/tnc/PhonePe-SBI-Card-PURPLE-Reward-Program-TnC.pdf",
+      "doc": "PhonePe SBI PURPLE Credit Card Reward Program T&C (Oct 2026)",
+      "quote": "Scan and Pay or Online UPI transactions outside PhonePe would not accrue any reward point"
+    },
+    {
+      "url": "https://www.sbicard.com/sbi-card-en/assets/docs/pdf/ekit-tncs/PhonePe-Purple-pdf-27Apr2026.pdf",
+      "doc": "PhonePe SBI PURPLE Credit Card revision notice, effective 1 Jul 2026",
+      "quote": "Utilities (non-PhonePe App spends) 4900, 4814, 4899"
+    }
+  ],
+  "examples": [
+    {
+      "id": "001",
+      "title": "Rs 5,000 electricity bill in the PhonePe app",
+      "ctx": {
+        "amount": 5000,
+        "occurred": "2026-11-05T10:00:00+05:30",
+        "category_slug": "bills",
+        "mcc": 4900,
+        "merchant_name": "Electricity bill",
+        "merchant_vpa": null,
+        "merchant_slug": null,
+        "platform": "phonepe_app",
+        "rail": "online"
+      },
+      "state_before": {
+        "caps_by_source_id": {}
+      },
+      "expect": {
+        "currency": "points",
+        "amount": 150,
+        "value_inr": null,
+        "excluded": false,
+        "cap_deltas_by_source_id": {
+          "phonepe_other_monthly": 150
+        }
+      },
+      "why": "3 RP per Rs100 on PhonePe app bill payments: 50 blocks = 150 RP. Cap 750 RP/month (non-insurance)."
+    },
+    {
+      "id": "002",
+      "title": "Rs 20,000 insurance premium in the PhonePe app",
+      "ctx": {
+        "amount": 20000,
+        "occurred": "2026-11-05T10:00:00+05:30",
+        "category_slug": "insurance",
+        "mcc": 6300,
+        "merchant_name": "Insurance premium",
+        "merchant_vpa": null,
+        "merchant_slug": null,
+        "platform": "phonepe_app",
+        "rail": "online"
+      },
+      "state_before": {
+        "caps_by_source_id": {}
+      },
+      "expect": {
+        "currency": "points",
+        "amount": 250,
+        "value_inr": null,
+        "excluded": false,
+        "cap_deltas_by_source_id": {
+          "phonepe_insurance_monthly": 250
+        }
+      },
+      "why": "Would be 600 RP but insurance spends in the app are capped at 250 RP/month (separate from the 750 cap)."
+    },
+    {
+      "id": "003",
+      "title": "Rs 4,000 on Amazon (online)",
+      "ctx": {
+        "amount": 4000,
+        "occurred": "2026-11-05T10:00:00+05:30",
+        "category_slug": "online",
+        "mcc": 5311,
+        "merchant_name": "Amazon",
+        "merchant_vpa": null,
+        "merchant_slug": "amazon",
+        "platform": null,
+        "rail": "online"
+      },
+      "state_before": {
+        "caps_by_source_id": {}
+      },
+      "expect": {
+        "currency": "points",
+        "amount": 80,
+        "value_inr": null,
+        "excluded": false,
+        "cap_deltas_by_source_id": {
+          "online_monthly": 80
+        }
+      },
+      "why": "2 RP per Rs100 on eligible online spends: 40 blocks = 80 RP. Cap 750/month."
+    },
+    {
+      "id": "004",
+      "title": "Rs 3,000 at a clothes shop (offline)",
+      "ctx": {
+        "amount": 3000,
+        "occurred": "2026-11-05T10:00:00+05:30",
+        "category_slug": "other",
+        "mcc": 5651,
+        "merchant_name": "Clothes shop",
+        "merchant_vpa": null,
+        "merchant_slug": null,
+        "platform": null,
+        "rail": "swipe"
+      },
+      "state_before": {
+        "caps_by_source_id": {}
+      },
+      "expect": {
+        "currency": "points",
+        "amount": 30,
+        "value_inr": null,
+        "excluded": false,
+        "cap_deltas_by_source_id": {
+          "other_monthly": 30
+        }
+      },
+      "why": "Other spends 1 RP per Rs100 = 30. Cap 1000/month."
+    },
+    {
+      "id": "005",
+      "title": "Rs 5,000 PhonePe recharge with 650 of 750 cap used",
+      "ctx": {
+        "amount": 5000,
+        "occurred": "2026-11-05T10:00:00+05:30",
+        "category_slug": "bills",
+        "mcc": 4814,
+        "merchant_name": "Mobile recharge",
+        "merchant_vpa": null,
+        "merchant_slug": null,
+        "platform": "phonepe_app",
+        "rail": "online"
+      },
+      "state_before": {
+        "caps_by_source_id": {
+          "phonepe_other_monthly": 650
+        }
+      },
+      "expect": {
+        "currency": "points",
+        "amount": 100,
+        "value_inr": null,
+        "excluded": false,
+        "cap_deltas_by_source_id": {
+          "phonepe_other_monthly": 100
+        }
+      },
+      "why": "Would be 150 RP; only 100 remain in the monthly cap."
+    },
+    {
+      "id": "006",
+      "title": "Rs 5,000 other spend after cap used",
+      "ctx": {
+        "amount": 5000,
+        "occurred": "2026-11-05T10:00:00+05:30",
+        "category_slug": "other",
+        "mcc": 5712,
+        "merchant_name": "Furniture store",
+        "merchant_vpa": null,
+        "merchant_slug": null,
+        "platform": null,
+        "rail": "swipe"
+      },
+      "state_before": {
+        "caps_by_source_id": {
+          "other_monthly": 1000
+        }
+      },
+      "expect": {
+        "currency": "points",
+        "amount": 0,
+        "value_inr": null,
+        "excluded": false,
+        "cap_deltas_by_source_id": {}
+      },
+      "why": "Monthly limit on other spends (1000 RP) cannot be exceeded; nothing more."
+    },
+    {
+      "id": "007",
+      "title": "Rs 2,000 fuel",
+      "ctx": {
+        "amount": 2000,
+        "occurred": "2026-11-05T10:00:00+05:30",
+        "category_slug": "fuel",
+        "mcc": 5541,
+        "merchant_name": "Petrol pump",
+        "merchant_vpa": null,
+        "merchant_slug": null,
+        "platform": null,
+        "rail": "swipe"
+      },
+      "state_before": {
+        "caps_by_source_id": {}
+      },
+      "expect": {
+        "currency": "points",
+        "amount": 0,
+        "value_inr": null,
+        "excluded": true,
+        "cap_deltas_by_source_id": {}
+      },
+      "why": "Fuel excluded."
+    },
+    {
+      "id": "011",
+      "title": "Rs 99 online purchase, below the Rs100 minimum",
+      "ctx": {
+        "amount": 99,
+        "occurred": "2026-11-05T10:00:00+05:30",
+        "category_slug": "online",
+        "mcc": 5311,
+        "merchant_name": "Amazon",
+        "merchant_vpa": null,
+        "merchant_slug": "amazon",
+        "platform": null,
+        "rail": "online"
+      },
+      "state_before": {
+        "caps_by_source_id": {}
+      },
+      "expect": {
+        "currency": "points",
+        "amount": 0,
+        "value_inr": null,
+        "excluded": false,
+        "cap_deltas_by_source_id": {}
+      },
+      "why": "Reward program T&C: eligible for Reward Points on a minimum transaction size of Rs100."
+    },
+    {
+      "id": "008",
+      "title": "Rs 3,000 electricity bill outside the PhonePe app",
+      "ctx": {
+        "amount": 3000,
+        "occurred": "2026-11-05T10:00:00+05:30",
+        "category_slug": "bills",
+        "mcc": 4900,
+        "merchant_name": "Electricity bill",
+        "merchant_vpa": null,
+        "merchant_slug": null,
+        "platform": null,
+        "rail": "online"
+      },
+      "state_before": {
+        "caps_by_source_id": {}
+      },
+      "expect": {
+        "currency": "points",
+        "amount": 0,
+        "value_inr": null,
+        "excluded": true,
+        "cap_deltas_by_source_id": {}
+      },
+      "why": "From 1 Jul 2026 utilities outside the PhonePe app earn nothing."
+    },
+    {
+      "id": "009",
+      "title": "Rs 1,000 UPI QR payment via another UPI app",
+      "ctx": {
+        "amount": 1000,
+        "occurred": "2026-11-05T10:00:00+05:30",
+        "category_slug": "other",
+        "mcc": 5411,
+        "merchant_name": "Local shop",
+        "merchant_vpa": null,
+        "merchant_slug": null,
+        "platform": null,
+        "rail": "upi_qr"
+      },
+      "state_before": {
+        "caps_by_source_id": {}
+      },
+      "expect": {
+        "currency": "points",
+        "amount": 0,
+        "value_inr": null,
+        "excluded": true,
+        "cap_deltas_by_source_id": {}
+      },
+      "why": "From 1 Jul 2026 Scan & Pay or online UPI outside PhonePe earns nothing."
+    },
+    {
+      "id": "010",
+      "title": "Rs 10,000 jewellery",
+      "ctx": {
+        "amount": 10000,
+        "occurred": "2026-11-05T10:00:00+05:30",
+        "category_slug": "other",
+        "mcc": 5944,
+        "merchant_name": "Jeweller",
+        "merchant_vpa": null,
+        "merchant_slug": null,
+        "platform": null,
+        "rail": "swipe"
+      },
+      "state_before": {
+        "caps_by_source_id": {}
+      },
+      "expect": {
+        "currency": "points",
+        "amount": 0,
+        "value_inr": null,
+        "excluded": true,
+        "cap_deltas_by_source_id": {}
+      },
+      "why": "Jewellery excluded from 1 Jul 2026."
+    }
+  ],
+  "research_notes": [
+    {
+      "item": "caps (metric bonus_reward_points)",
+      "cardpipeline_says": "Bonus caps with downgrade to base.",
+      "issuer_says": "\"Max N RPs\" per calendar month by spend type: the total RPs from that spend type are limited.",
+      "proposed_fix": "override",
+      "override_file": "api/scripts/catalogue_overrides/phonepe-sbi-card-purple.json"
+    },
+    {
+      "item": "insurance cap parent",
+      "cardpipeline_says": "Insurance cap is a child of the PhonePe cap.",
+      "issuer_says": "Insurance (max 250) and non-insurance (max 750) are listed as separate limits, not nested.",
+      "proposed_fix": "override",
+      "override_file": "api/scripts/catalogue_overrides/phonepe-sbi-card-purple.json"
+    },
+    {
+      "item": "other-spends cap (other_monthly)",
+      "cardpipeline_says": "total_reward_points 1000.",
+      "issuer_says": "\"Other spends 1 RP/100 (Max 1000 / calendar month)\": a total cap. Matches, no override needed.",
+      "proposed_fix": "none"
+    },
+    {
+      "item": "spill-over after the online cap",
+      "cardpipeline_says": "-",
+      "issuer_says": "Silent on whether capped online spend then earns 1 RP/100. No example.",
+      "proposed_fix": "none"
+    },
+    {
+      "item": "fractional blocks",
+      "cardpipeline_says": "Block Rs100 floor.",
+      "issuer_says": "Rates are per Rs100 with Rs100 minimum transaction; rounding of partial blocks not stated, so none used.",
+      "proposed_fix": "none"
+    }
+  ]
+}

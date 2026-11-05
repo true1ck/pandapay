@@ -1,0 +1,321 @@
+{
+  "source_slug": "tata-neu-infinity-sbi-credit-card",
+  "cardpipeline_id": "state-bank-of-india-tata-neu-infinity-sbi-credit-card",
+  "card_name": "Tata Neu Infinity SBI Credit Card",
+  "verified_on": "2026-11-05",
+  "sources": [
+    {
+      "url": "https://www.sbicard.com/sbi-card-en/assets/docs/pdf/ekit-tncs/Tata-Neu-Infinity-Booklet.pdf",
+      "doc": "Tata Neu Infinity SBI Credit Card T&C booklet (Jul 2026)",
+      "quote": "NeuCoins will be calculated and posted on nearest lower round integer"
+    },
+    {
+      "url": "https://www.sbicard.com/sbi-card-en/assets/docs/pdf/ekit-tncs/Tata-Neu-Infinity-Booklet.pdf",
+      "doc": "Tata Neu Infinity SBI Credit Card T&C booklet (Jul 2026)",
+      "quote": "Maximum Capping per month on NeuCoins ... Grocery, Insurance, Utility, Telecom and cable"
+    },
+    {
+      "url": "https://www.sbicard.com/sbi-card-en/assets/docs/pdf/ekit-tncs/Tata-Neu-Infinity-Booklet.pdf",
+      "doc": "Tata Neu Infinity SBI Credit Card T&C booklet (Jul 2026)",
+      "quote": "1 Reward Point = 1 NeuCoin = INR 1 savings"
+    }
+  ],
+  "examples": [
+    {
+      "id": "001",
+      "title": "Rs 250 at an electronics shop",
+      "ctx": {
+        "amount": 250,
+        "occurred": "2026-11-05T10:00:00+05:30",
+        "category_slug": "other",
+        "mcc": 5732,
+        "merchant_name": "Electronics store",
+        "merchant_vpa": null,
+        "merchant_slug": null,
+        "platform": null,
+        "rail": "swipe"
+      },
+      "state_before": {
+        "caps_by_source_id": {}
+      },
+      "expect": {
+        "currency": "points",
+        "amount": 3,
+        "value_inr": 3,
+        "excluded": false,
+        "cap_deltas_by_source_id": {}
+      },
+      "why": "Issuer example style: 1.5% of 250 = 3.75, rounded down to 3 (fractions are not accrued)."
+    },
+    {
+      "id": "002",
+      "title": "Rs 2,999 at Croma (partner Tata brand)",
+      "ctx": {
+        "amount": 2999,
+        "occurred": "2026-11-05T10:00:00+05:30",
+        "category_slug": "online",
+        "mcc": 5732,
+        "merchant_name": "Croma",
+        "merchant_vpa": null,
+        "merchant_slug": "croma",
+        "platform": null,
+        "rail": "online"
+      },
+      "state_before": {
+        "caps_by_source_id": {}
+      },
+      "expect": {
+        "currency": "points",
+        "amount": 149,
+        "value_inr": 149,
+        "excluded": false,
+        "cap_deltas_by_source_id": {}
+      },
+      "why": "5% of 2,999 = 149.95, rounded down to 149."
+    },
+    {
+      "id": "003",
+      "title": "Rs 10,000 at Croma",
+      "ctx": {
+        "amount": 10000,
+        "occurred": "2026-11-05T10:00:00+05:30",
+        "category_slug": "online",
+        "mcc": 5732,
+        "merchant_name": "Croma",
+        "merchant_vpa": null,
+        "merchant_slug": "croma",
+        "platform": null,
+        "rail": "online"
+      },
+      "state_before": {
+        "caps_by_source_id": {}
+      },
+      "expect": {
+        "currency": "points",
+        "amount": 500,
+        "value_inr": 500,
+        "excluded": false,
+        "cap_deltas_by_source_id": {}
+      },
+      "why": "5% of 10,000 = 500 NeuCoins."
+    },
+    {
+      "id": "004",
+      "title": "Rs 10,000 grocery with 1950 of 2000 monthly cap used",
+      "ctx": {
+        "amount": 10000,
+        "occurred": "2026-11-05T10:00:00+05:30",
+        "category_slug": "groceries",
+        "mcc": 5411,
+        "merchant_name": "Supermarket",
+        "merchant_vpa": null,
+        "merchant_slug": "dmart",
+        "platform": null,
+        "rail": "swipe"
+      },
+      "state_before": {
+        "caps_by_source_id": {
+          "cap-grocery-monthly-2000": 1950
+        }
+      },
+      "expect": {
+        "currency": "points",
+        "amount": 50,
+        "value_inr": 50,
+        "excluded": false,
+        "cap_deltas_by_source_id": {
+          "cap-grocery-monthly-2000": 50
+        }
+      },
+      "why": "Would be 150 but grocery NeuCoins are capped at 2000 per month; 50 remain."
+    },
+    {
+      "id": "005",
+      "title": "Rs 5,000 grocery after cap used",
+      "ctx": {
+        "amount": 5000,
+        "occurred": "2026-11-05T10:00:00+05:30",
+        "category_slug": "groceries",
+        "mcc": 5411,
+        "merchant_name": "Supermarket",
+        "merchant_vpa": null,
+        "merchant_slug": "dmart",
+        "platform": null,
+        "rail": "swipe"
+      },
+      "state_before": {
+        "caps_by_source_id": {
+          "cap-grocery-monthly-2000": 2000
+        }
+      },
+      "expect": {
+        "currency": "points",
+        "amount": 0,
+        "value_inr": 0,
+        "excluded": false,
+        "cap_deltas_by_source_id": {}
+      },
+      "why": "Grocery cap of 2000 NeuCoins per month is used."
+    },
+    {
+      "id": "006",
+      "title": "Rs 20,000 insurance premium",
+      "ctx": {
+        "amount": 20000,
+        "occurred": "2026-11-05T10:00:00+05:30",
+        "category_slug": "insurance",
+        "mcc": 6300,
+        "merchant_name": "Insurance premium",
+        "merchant_vpa": null,
+        "merchant_slug": null,
+        "platform": null,
+        "rail": "online"
+      },
+      "state_before": {
+        "caps_by_source_id": {}
+      },
+      "expect": {
+        "currency": "points",
+        "amount": 300,
+        "value_inr": 300,
+        "excluded": false,
+        "cap_deltas_by_source_id": {
+          "cap-insurance-monthly-2000": 300
+        }
+      },
+      "why": "Insurance earns the base rate, capped at 2,000 NeuCoins per month: 300."
+    },
+    {
+      "id": "007",
+      "title": "Rs 2,000 fuel",
+      "ctx": {
+        "amount": 2000,
+        "occurred": "2026-11-05T10:00:00+05:30",
+        "category_slug": "fuel",
+        "mcc": 5541,
+        "merchant_name": "Petrol pump",
+        "merchant_vpa": null,
+        "merchant_slug": null,
+        "platform": null,
+        "rail": "swipe"
+      },
+      "state_before": {
+        "caps_by_source_id": {}
+      },
+      "expect": {
+        "currency": "points",
+        "amount": 0,
+        "value_inr": 0,
+        "excluded": true,
+        "cap_deltas_by_source_id": {}
+      },
+      "why": "Fuel excluded."
+    },
+    {
+      "id": "008",
+      "title": "Rs 20,000 rent",
+      "ctx": {
+        "amount": 20000,
+        "occurred": "2026-11-05T10:00:00+05:30",
+        "category_slug": "rent",
+        "mcc": 6513,
+        "merchant_name": "Rent payment",
+        "merchant_vpa": null,
+        "merchant_slug": null,
+        "platform": null,
+        "rail": "online"
+      },
+      "state_before": {
+        "caps_by_source_id": {}
+      },
+      "expect": {
+        "currency": "points",
+        "amount": 0,
+        "value_inr": 0,
+        "excluded": true,
+        "cap_deltas_by_source_id": {}
+      },
+      "why": "Rent excluded."
+    },
+    {
+      "id": "009",
+      "title": "Rs 15,000 school fees",
+      "ctx": {
+        "amount": 15000,
+        "occurred": "2026-11-05T10:00:00+05:30",
+        "category_slug": "education",
+        "mcc": 8211,
+        "merchant_name": "School",
+        "merchant_vpa": null,
+        "merchant_slug": null,
+        "platform": null,
+        "rail": "online"
+      },
+      "state_before": {
+        "caps_by_source_id": {}
+      },
+      "expect": {
+        "currency": "points",
+        "amount": 0,
+        "value_inr": 0,
+        "excluded": true,
+        "cap_deltas_by_source_id": {}
+      },
+      "why": "Education MCCs excluded."
+    },
+    {
+      "id": "010",
+      "title": "Rs 3,000 wallet load",
+      "ctx": {
+        "amount": 3000,
+        "occurred": "2026-11-05T10:00:00+05:30",
+        "category_slug": "wallet",
+        "mcc": 6540,
+        "merchant_name": "Wallet top up",
+        "merchant_vpa": null,
+        "merchant_slug": null,
+        "platform": null,
+        "rail": "online"
+      },
+      "state_before": {
+        "caps_by_source_id": {}
+      },
+      "expect": {
+        "currency": "points",
+        "amount": 0,
+        "value_inr": 0,
+        "excluded": true,
+        "cap_deltas_by_source_id": {}
+      },
+      "why": "Wallet loads excluded."
+    }
+  ],
+  "research_notes": [
+    {
+      "item": "rounding",
+      "cardpipeline_says": "Block Rs100, floor.",
+      "issuer_says": "Rate applied to the exact amount, then rounded down to a whole NeuCoin (3.75 becomes 3). Not the same as Rs100 blocks.",
+      "proposed_fix": "override",
+      "override_file": "api/scripts/catalogue_overrides/tata-neu-infinity-sbi-credit-card.json"
+    },
+    {
+      "item": "category caps",
+      "cardpipeline_says": "bonus_reward_points.",
+      "issuer_says": "Caps limit the NeuCoins earned in the category per month; nothing above.",
+      "proposed_fix": "override",
+      "override_file": "api/scripts/catalogue_overrides/tata-neu-infinity-sbi-credit-card.json"
+    },
+    {
+      "item": "UPI (RuPay variant only)",
+      "cardpipeline_says": "UPI rule and 500 cap.",
+      "issuer_says": "UPI earn only on the RuPay variant; no example because variant is not in ctx.",
+      "proposed_fix": "none"
+    },
+    {
+      "item": "select-category extra 5%",
+      "cardpipeline_says": "Extra 5% rules on grocery/insurance/utility/telecom through the Tata Neu app.",
+      "issuer_says": "\"Upto 5% on select category spends on Tata Neu App/Website\", categories not listed in the booklet, so no example.",
+      "proposed_fix": "importer"
+    }
+  ]
+}

@@ -1,0 +1,28 @@
+{
+  "source_slug": "hdfc-phonepe-uno",
+  "changes": [
+    {
+      "path": "reward_rules[id=phonepe_categories_2pct].conditions.mcc_list",
+      "value": [
+        4111,
+        4112,
+        4511,
+        4722,
+        4784,
+        4814,
+        4899,
+        4900
+      ],
+      "reason": "Issuer MCC list excludes 5262 and 7999.",
+      "source_url": "https://www.hdfc.bank.in/content/dam/hdfcbankpws/in/en/personal-banking/discover-products/cards/credit-cards/phonepe-hdfc-bank-uno-credit-card-/phonepe-hdfc-bank-uno-cc-reward-points-tncs.pdf",
+      "checked_on": "2026-11-05"
+    },
+    {
+      "path": "accrual_engine.base_points_per_block",
+      "value": 0,
+      "reason": "T&C list no base earning on other spends.",
+      "source_url": "https://www.hdfc.bank.in/content/dam/hdfcbankpws/in/en/personal-banking/discover-products/cards/credit-cards/phonepe-hdfc-bank-uno-credit-card-/phonepe-hdfc-bank-uno-cc-reward-points-tncs.pdf",
+      "checked_on": "2026-11-05"
+    }
+  ]
+}
