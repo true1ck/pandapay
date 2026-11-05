@@ -55,7 +55,6 @@ class PrivateJobsTest(unittest.TestCase):
         self.assertIn('SMS_RULES_KEY_ID', body)
         self.assertNotIn('GEMINI_', body)
 
-    @unittest.expectedFailure  # Task 6b.3 removes the old GEMINI_* settings from the public compose.
     def test_public_compose_never_holds_the_signing_or_ai_keys(self):
         for key in ('SMS_RULES_SIGNING_KEY', 'GEMINI_'):
             self.assertNotIn(key, PUBLIC)

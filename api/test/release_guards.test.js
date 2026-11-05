@@ -56,6 +56,25 @@ test('compose files and env examples carry no account recovery settings', () => 
   assert.deepEqual(hits, []);
 });
 
+// Decision D9: the old per-message Gemini worker stays deleted. GEMINI_API_KEY
+// lives only on the private admin host (deploy/admin/compose.private.yml).
+test('old per-message AI worker settings are gone, and the public deploy sends no Gemini key', () => {
+  const read = (file) => fs.readFileSync(path.join(repo, file), 'utf8');
+  const stale = /\b(AI_WORKER_[A-Z_]+|AI_PROVIDER_TIMEOUT_MS|GEMINI_FALLBACK_[A-Z_]+|GEMINI_API_KEYS|GEMINI_MODEL|GEMINI_REQUESTS_PER_[A-Z]+|GEMINI_TOKENS_PER_MINUTE)\b/;
+  for (const file of ['.env.prod.example', 'api/example.env', 'docker-compose.yml', 'docker-compose.prod.yml',
+    'docker-compose.staging.yml', 'deploy/deploy.sh', '.github/workflows/deploy-prod.yml',
+    '.github/workflows/deploy-pushed-branch.yml', 'deploy/tests/test_deploy_security_order.py']) {
+    assert.doesNotMatch(read(file), stale, file);
+  }
+  for (const file of ['docker-compose.prod.yml', 'docker-compose.staging.yml', 'deploy/deploy.sh',
+    '.github/workflows/deploy-prod.yml', '.github/workflows/deploy-pushed-branch.yml',
+    'deploy/tests/test_deploy_security_order.py']) {
+    assert.doesNotMatch(read(file), /GEMINI_API_KEY/, file);
+  }
+  // The private overlay is the one place that passes the key, to the AI worker only.
+  assert.match(read('deploy/admin/compose.private.yml'), /GEMINI_API_KEY: '\$\{GEMINI_API_KEY:\?\}'/);
+});
+
 test('a migration drops the account_recovery schema, so a database cannot keep the escrow tables', () => {
   const dir = path.join(repo, 'db', 'supabase', 'migrations');
   const dropping = fs.readdirSync(dir).filter((n) => n.endsWith('.sql'))

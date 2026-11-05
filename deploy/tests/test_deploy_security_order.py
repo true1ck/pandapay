@@ -151,7 +151,6 @@ class DeploySecurityOrderTest(unittest.TestCase):
                 for key in keys
             ))
             with env_file.open("a") as output:
-                output.write("AI_WORKER_TOKEN=\nGEMINI_API_KEY=\n")
                 output.write(settings.pop("HOST_BACKUP_CONFIG", ""))
             if settings.pop("OMIT_DESTINATIONS", "0") == "1":
                 env_file.write_text("".join(line for line in env_file.read_text().splitlines(True)
