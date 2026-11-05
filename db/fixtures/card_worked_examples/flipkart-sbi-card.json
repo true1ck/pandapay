@@ -302,7 +302,8 @@
       "item": "rounding",
       "cardpipeline_says": "floor, cashback percent paid as computed.",
       "issuer_says": "Cashback rounded down to a whole rupee per transaction.",
-      "proposed_fix": "engine"
+      "proposed_fix": "override",
+      "override_file": "api/scripts/catalogue_overrides/flipkart-sbi-card.json"
     },
     {
       "item": "caps *_qtr_4000",
