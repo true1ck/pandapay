@@ -298,6 +298,60 @@
         "cap_deltas_by_source_id": {}
       },
       "why": "T&C Note 1: jewelry purchases earn no reward points."
+    },
+    {
+      "state_before": {
+        "caps_by_source_id": {}
+      },
+      "id": "011",
+      "title": "Rs 10,000 jewellery by UPI QR",
+      "ctx": {
+        "amount": 10000,
+        "occurred": "2026-11-10T10:00:00+05:30",
+        "category_id": null,
+        "category_slug": "other",
+        "mcc": "5944",
+        "merchant_name": "Jewellery store",
+        "merchant_vpa": null,
+        "merchant_slug": null,
+        "platform": null,
+        "rail": "upi_qr"
+      },
+      "expect": {
+        "currency": "points",
+        "amount": 0,
+        "value_inr": null,
+        "excluded": true,
+        "cap_deltas_by_source_id": {}
+      },
+      "why": "T&C Note 1: jewelry purchases earn no points, also on UPI Scan & Pay."
+    },
+    {
+      "state_before": {
+        "caps_by_source_id": {}
+      },
+      "id": "012",
+      "title": "Rs 10,000 investment (MCC 6211) by UPI QR",
+      "ctx": {
+        "amount": 10000,
+        "occurred": "2026-11-10T10:00:00+05:30",
+        "category_id": null,
+        "category_slug": "other",
+        "mcc": "6211",
+        "merchant_name": "Stock broker",
+        "merchant_vpa": null,
+        "merchant_slug": null,
+        "platform": null,
+        "rail": "upi_qr"
+      },
+      "expect": {
+        "currency": "points",
+        "amount": 0,
+        "value_inr": null,
+        "excluded": true,
+        "cap_deltas_by_source_id": {}
+      },
+      "why": "T&C Note 1: investments earn no points."
     }
   ],
   "research_notes": [
@@ -320,6 +374,12 @@
       "issuer_says": "T&C Note 1 excludes jewelry purchases. Overridden to an MCC exclusion (5944, 5094); example 010 added.",
       "proposed_fix": "override",
       "override_file": "api/scripts/catalogue_overrides/phonepe-hdfc-bank-ultimo.json"
+    },
+    {
+      "item": "WP7 r2: examples 011-012",
+      "cardpipeline_says": "Jewellery was tested on swipe only.",
+      "issuer_says": "Note 1 excludes jewelry purchases and investments; both are now proven on the UPI rail.",
+      "proposed_fix": "none"
     }
   ]
 }
