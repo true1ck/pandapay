@@ -267,7 +267,9 @@ function transformCaps(record, rules, ctx) {
     if (isSpendOrCount) {
       if (POST_LIMIT[postAction]) postCapBehavior = POST_LIMIT[postAction];
       else if (postAction && postAction !== 'null' && postAction !== 'n/a') flags.push('unknown_post_limit');
-      const stated = statedPostRate(c.post_limit_behavior, targets, ctx.card);
+      // D27b: a stated rate applies only when the action maps to base_rate
+      // or is unknown; an explicit zero wins.
+      const stated = postCapBehavior === 'zero' ? null : statedPostRate(c.post_limit_behavior, targets, ctx.card);
       if (stated?.flag) flags.push(stated.flag);
       else if (stated) {
         postCapBehavior = 'custom_rate';

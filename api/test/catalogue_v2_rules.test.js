@@ -1235,6 +1235,22 @@ test('a spend cap whose post-limit action states a rate gets custom_rate, unless
   }));
   const oc = cash.capRules[0];
   assert.deepEqual([oc.post_cap_behavior, oc.post_cap_unit, oc.post_cap_rate], ['custom_rate', 'cashback_percent', 1]);
+  // the v1 projection: a single v1-visible target keeps the cap v1, carrying the stated rate
+  assert.deepEqual([cap('dining_cap').min_engine_version, cap('dining_cap').measure], [1, 'spend_amount']);
+
+  // D27b: an explicit zero action wins over a stated rate
+  const zero = run(pointsCard([rule({ id: 'dining_10', category_id: 'dining', action: { points_per_block: 10, cap_reference: 'z' } })],
+    { caps: [spendCap('z', { action: 'zero_accrual', points_per_block: 4 })] })).capRules[0];
+  assert.deepEqual([zero.post_cap_behavior, zero.post_cap_unit, zero.post_cap_rate], ['zero', null, 0]);
+  // … an unknown action takes the stated rate
+  const unknown = run(pointsCard([rule({ id: 'dining_10', category_id: 'dining', action: { points_per_block: 10, cap_reference: 'u' } })],
+    { caps: [spendCap('u', { action: 'reduced_rate', points_per_block: 4 })] })).capRules[0];
+  assert.deepEqual([unknown.post_cap_behavior, unknown.post_cap_rate], ['custom_rate', 4]);
+
+  // a count cap with a stated post-limit rate
+  const count = run(pointsCard([rule({ id: 'dining_10', category_id: 'dining', action: { points_per_block: 10, cap_reference: 'n' } })],
+    { caps: [{ id: 'n', category_id: 'dining', metric: 'txn_count', limit_value: 5, period: 'calendar_month', post_limit_behavior: { action: 'downgrade_to_base_rate', points_per_block: 2 } }] })).capRules[0];
+  assert.deepEqual([count.cap_kind, count.post_cap_behavior, count.post_cap_unit, count.post_cap_rate, count.measure], ['txn_count', 'custom_rate', 'points_per_100', 2, 'txn_count']);
 });
 
 test('D8b "up to" reads only the rule\'s own rate text: not its id, a cap, a stacked total or an aside', () => {
