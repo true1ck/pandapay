@@ -5,6 +5,7 @@
 
 const { asNumber, firstDefined, isNA, uniq } = require('./util');
 const { resolveCategoryToken } = require('./category_tokens');
+const { valuePerRupee } = require('./rules');
 
 const PERIOD = {
   statement_cycle: { period: 'statement_cycle' },
@@ -51,6 +52,55 @@ const BENEFIT_CATEGORY = new Set(['lounge', 'airport_lounge', 'golf', 'concierge
 const CARD_AGE_TIER = /((first|initial|after|post)[_-]?\d+[_-]?(m|mo|mon|months?)(?![a-z])|card[_-]?age|months?[_-]?(from|after)[_-]?(issu|open|activation))/;
 const INTRO_TIER = /(first|initial)[_-]?\d+[_-]?(m|mo|mon|months?)(?![a-z])/;
 const LATER_TIER = /(after|post)[_-]?\d+[_-]?(m|mo|mon|months?)(?![a-z])/;
+
+const currencyOf = (unit) => (unit === 'cashback_percent' ? 'cashback' : /^(points|miles)_/.test(String(unit)) ? 'points' : null);
+
+// A post-limit action that states its own rate ("35 pts per ₹200 above the
+// cap", "1% after the cap"): custom_rate in post_cap_unit / post_cap_rate.
+// Conservative: only when that rate is no higher than every capped rule's own
+// (in-cap) rate; a higher one is flagged for review instead, and a rate that
+// can't be compared is left as the mapped action.
+function statedPostRate(post, targets, card, allowAbove = false) {
+  const ppb = asNumber(post?.points_per_block);
+  const cb = asNumber(post?.cashback_percent);
+  if (!(ppb > 0) && !(cb > 0)) return null;
+  const earning = targets.filter((r) => r.rule_role !== 'info' && r.rule_role !== 'exclusion');
+  if (!earning.length) return { flag: 'post_limit_rate_not_compared' };
+  let unit;
+  let block = null;
+  let rate;
+  if (ppb > 0) {
+    rate = ppb;
+    const pointUnits = uniq(earning.filter((r) => currencyOf(r.unit) === 'points').map((r) => `${r.unit}|${r.block_inr ?? ''}`));
+    if (pointUnits.length === 1) {
+      const [u, b] = pointUnits[0].split('|');
+      unit = b ? null : u; // an unusual block: the engine uses the rule's unit and block (D12b)
+      block = b ? Number(b) : null;
+    } else if (!pointUnits.length && currencyOf(card.baseUnit) === 'points') {
+      unit = card.baseUnit; // a cashback rule that falls back to the card's points
+    } else {
+      return { flag: 'post_limit_rate_not_compared' };
+    }
+  } else {
+    rate = cb;
+    unit = 'cashback_percent';
+  }
+  const valueUnit = unit || earning[0].unit;
+  for (const r of earning) {
+    const same = currencyOf(valueUnit) === currencyOf(r.unit);
+    const pv = same ? 1 : card.pointValueInr;
+    if (!same && !(pv > 0)) return { flag: 'post_limit_rate_not_compared' };
+    const postValue = valuePerRupee(valueUnit, rate, pv, block);
+    const inCap = valuePerRupee(r.unit, r.rate, pv, r.block_inr);
+    if (postValue === null || inCap === null) return { flag: 'post_limit_rate_not_compared' };
+    if (postValue > inCap + 1e-12) {
+      // D26a: only an override citing the issuer may allow it.
+      if (!allowAbove) return { flag: 'post_limit_rate_above_cap_rate' };
+      return { unit, rate, allowedAbove: true };
+    }
+  }
+  return { unit, rate };
+}
 
 function humanize(id) {
   return String(id || 'cap')
@@ -171,12 +221,15 @@ function transformCaps(record, rules, ctx) {
     const capAmount = asNumber(firstDefined(c.limit_value, c.limit_value_inr, c.cap_limit));
     // D13(a): an amount that depends on the cardholder (a share of the credit
     // limit, a tier) is kept with a null amount; engines skip it.
+    // An override may set cap_depends_on_user explicitly: the flag is kept,
+    // with or without an amount.
+    const explicitUserDependent = c.cap_depends_on_user === true;
     const userDependent = capAmount === null && (
-      c.depends_on_user === true ||
+      c.depends_on_user === true || explicitUserDependent ||
       USER_DEPENDENT.test(`${sourceId} ${categoryToken} ${[c.limit_value, c.limit_value_inr, c.cap_limit].filter((v) => typeof v === 'string').join(' ')}`.toLowerCase())
     );
-    if (userDependent) flags.push('cap_depends_on_user');
-    else if (capAmount === null || capAmount <= 0) return skip('missing_cap_value');
+    if (userDependent || explicitUserDependent) flags.push('cap_depends_on_user');
+    if (!userDependent && (capAmount === null || capAmount <= 0)) return skip('missing_cap_value');
 
     if (ageTiered.has(sourceId)) {
       // The steady-state sibling: the same family without a tier marker, or
@@ -213,9 +266,22 @@ function transformCaps(record, rules, ctx) {
     const isSpendOrCount = capKind === 'eligible_spend' || capKind === 'txn_count';
     const postAction = String(c.post_limit_behavior?.action ?? c.post_limit_behavior ?? '').toLowerCase();
     let postCapBehavior = null;
+    let postCapUnit = null;
+    let statedPost = null;
     if (isSpendOrCount) {
       if (POST_LIMIT[postAction]) postCapBehavior = POST_LIMIT[postAction];
       else if (postAction && postAction !== 'null' && postAction !== 'n/a') flags.push('unknown_post_limit');
+      // D27b: a stated rate applies only when the action maps to base_rate
+      // or is unknown; an explicit zero wins.
+      const stated = postCapBehavior === 'zero' ? null
+        : statedPostRate(c.post_limit_behavior, targets, ctx.card, c.allow_post_limit_above_cap_rate === true);
+      if (stated?.flag) flags.push(stated.flag);
+      else if (stated) {
+        if (stated.allowedAbove) flags.push('post_limit_above_cap_rate_allowed');
+        postCapBehavior = 'custom_rate';
+        postCapUnit = stated.unit;
+        statedPost = stated.rate;
+      }
     } else if (isTotal && POST_LIMIT[postAction] === 'base_rate') {
       // "Total points capped, then base rate" contradicts itself; kept as a
       // total cap (stricter) and flagged for review.
@@ -267,7 +333,7 @@ function transformCaps(record, rules, ctx) {
     } else {
       measure = capKind === 'eligible_spend' ? 'spend_amount' : 'txn_count';
       capValue = capAmount;
-      postCapRate = postCapBehavior === 'zero' ? 0 : null;
+      postCapRate = postCapBehavior === 'zero' ? 0 : postCapBehavior === 'custom_rate' ? statedPost : null;
     }
     const rewardRuleKey = targetKeys.length === 1 ? targetKeys[0] : null;
 
@@ -289,7 +355,7 @@ function transformCaps(record, rules, ctx) {
       measure,
       period: periodSpec.period,
       cap_value: capValue,
-      post_cap_unit: null,
+      post_cap_unit: postCapUnit,
       post_cap_rate: postCapRate,
       resets_on_day: Number.isInteger(c.reset_day) && c.reset_day >= 1 && c.reset_day <= 31 ? c.reset_day : null,
       cap_kind: capKind,

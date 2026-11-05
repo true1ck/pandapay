@@ -189,7 +189,10 @@ function hideCarvedAcceleratorsFromV1(rules, card, index) {
       const e = earnPerRupee(r);
       return r.currency === card.baseCurrency && e !== null && e <= card.baseEarnPerRupee + 1e-9;
     });
-    if (atOrBelowBase) carveOuts.push(...earning.filter((r) => r.max_engine_version !== 1));
+    // D27a: an above-base carve-out kept against an accelerator counts too;
+    // it hides only accelerators that pay more than it (below).
+    const keptAboveBase = earning.every((r) => r.flags.includes('carve_out_above_base') && r.currency === card.baseCurrency);
+    if (atOrBelowBase || keptAboveBase) carveOuts.push(...earning.filter((r) => r.max_engine_version !== 1));
   }
   if (!carveOuts.length) return [];
 
@@ -230,7 +233,10 @@ function hideCarvedAcceleratorsFromV1(rules, card, index) {
       above = v !== null && card.baseValue != null && v > card.baseValue + 1e-9;
     }
     if (!above) continue;
-    const by = uniq(carveOuts.filter((c) => overlaps(a, c)).map((c) => c.source_local_id));
+    const ae = a.currency === card.baseCurrency ? earnPerRupee(a) : null;
+    const paysMore = (c) => !c.flags.includes('carve_out_above_base') ||
+      (ae !== null && earnPerRupee(c) !== null && ae > earnPerRupee(c) + 1e-9);
+    const by = uniq(carveOuts.filter((c) => overlaps(a, c) && paysMore(c)).map((c) => c.source_local_id));
     if (!by.length) continue;
     a.min_engine_version = 2;
     a.v2_reasons = uniq([...(a.v2_reasons || []), 'carve_out_not_v1_visible']);

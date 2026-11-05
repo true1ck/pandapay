@@ -999,6 +999,9 @@ test('D19a full-exclusion phrasings are never bonus_only', () => {
     'Offline UPI transactions under INR 2,000 at small merchants are not eligible for reward points, voucher benefits, milestone benefits or other product benefits unless stated otherwise.',
     // D20c: the "5X" is in the non-excluding clause.
     'Fast-food restaurant MCC 5814 is excluded; dining MCC 5812 remains eligible for 5X.',
+    // core / zero earning stated in another clause of the text still counts (full text)
+    'Wallet loads are excluded from accelerated rewards. Base reward points are also not earned on them.',
+    'Rent is excluded from the accelerated programme. Effectively no reward points accrue on rent.',
   ];
   for (const text of full) assert.equal(classifyExclusionText(text), 'full', text);
   const bonus = [
@@ -1173,6 +1176,206 @@ test('D21b a carve-out at or below base that v1 cannot express hides the acceler
   assert.ok(r.card.model_coverage.flags.some((f) => f.code === 'hidden_from_v1_carve_out'));
 });
 
+test('D24b a UPI-rail earn rule above base is v2-only; at base, or on the online rail, it stays v1-visible', () => {
+  const r = run(pointsCard([
+    rule({ id: 'upi_6x', category_id: 'upi', priority: 10, action: { points_per_block: 6 } }),
+    rule({ id: 'upi_base', category_id: 'upi', priority: 11, evaluation_type: 'standard_accrual', action: { points_per_block: 2 } }),
+    rule({ id: 'upi_reduced', category_id: 'upi', priority: 12, evaluation_type: 'standard_accrual', action: { points_per_block: 1 } }),
+    rule({ id: 'online_5x', category_id: 'online', priority: 13, action: { points_per_block: 10 } }),
+  ]));
+  const v = (id) => only(r, id).map((x) => [x.rail, x.min_engine_version]);
+  assert.deepEqual(v('upi_6x'), [['upi_qr', 2]]);
+  assert.ok(only(r, 'upi_6x')[0].v2_reasons.includes('upi_rail_above_base'));
+  assert.deepEqual(v('upi_base'), [['upi_qr', 1]]);
+  assert.deepEqual(v('upi_reduced'), [['upi_qr', 1]]);
+  assert.deepEqual(only(r, 'online_5x').map((x) => x.min_engine_version), [1]);
+  // D27c: when "above base" can't be decided (points on a 1% cashback card with no ₹ point value), v2-only
+  const nv = run(card({ rules: [
+    rule({ id: 'upi_pts', category_id: 'upi', action: { points_per_block: 5, cashback_percent: null } }),
+  ], cp: { point_value_inr_baseline: null } }));
+  assert.deepEqual(only(nv, 'upi_pts').map((x) => [x.rail, x.unit, x.min_engine_version]), [['upi_qr', 'points_per_100', 2]]);
+  assert.ok(only(nv, 'upi_pts')[0].v2_reasons.includes('upi_rail_above_base'));
+});
+
+test('an EMI exclusion on the EMI category and the EMI rail excludes either (alternatives, not AND)', () => {
+  const r = run(pointsCard([
+    // HDFC Millennia shape
+    rule({ id: 'emi_zero', category_id: 'excluded_spend', evaluation_type: 'exclusion', channel_type: 'emi',
+      conditions: { category: 'EMI transactions' }, action: { points_per_block: 0, reason: 'EMI transactions do not earn reward points.' } }),
+    // SBI shape
+    rule({ id: 'merchant_emi', category_id: 'emi', evaluation_type: 'exclusion', rail: 'emi',
+      conditions: { transaction_type: 'merchant_emi' }, action: { points_per_block: 0, reason: 'Merchant EMI does not earn reward points.' } }),
+    // SBI Flexipay: a non-purchase channel, pinned by the EMI category / rail
+    rule({ id: 'flexipay', category_id: 'emi', evaluation_type: 'exclusion', rail: 'emi', channel_type: 'flexipay',
+      conditions: { transaction_type: 'flexipay' }, action: { points_per_block: 0, reason: 'Flexipay transactions do not earn reward points.' } }),
+  ]));
+  for (const id of ['emi_zero', 'merchant_emi', 'flexipay']) {
+    const rows = only(r, id).map((x) => [x.rule_role, x.category_slug, x.rail, x.min_engine_version]).sort((a, b) => a[3] - b[3]);
+    assert.deepEqual(rows, [['exclusion', 'emi', null, 1], ['exclusion', null, 'emi', 2]], id);
+    assert.ok(only(r, id)[0].flags.includes('emi_alternatives'));
+  }
+});
+
+test('a spend cap whose post-limit action states a rate gets custom_rate, unless that rate is above the in-cap rate', () => {
+  const spendCap = (id, post) => ({ id, category_id: 'all_retail', metric: 'eligible_spend_amount', limit_value_inr: 150000, period: 'calendar_month', post_limit_behavior: post, parent_cap_id: null });
+  const r = run(pointsCard([
+    rule({ id: 'dining_10', category_id: 'dining', action: { points_per_block: 10, cap_reference: 'dining_cap' } }),
+    rule({ id: 'travel_6', category_id: 'travel', priority: 11, action: { points_per_block: 6, cap_reference: 'travel_cap' } }),
+    rule({ id: 'grocery_6', category_id: 'grocery', priority: 12, action: { points_per_block: 6, cap_reference: 'grocery_cap' } }),
+  ], {
+    caps: [
+      spendCap('dining_cap', { action: 'downgrade_to_base_rate', points_per_block: 4 }),
+      spendCap('travel_cap', { action: 'downgrade_to_base_rate', points_per_block: 35 }),
+      spendCap('grocery_cap', { action: 'zero_accrual', points_per_block: 0 }),
+    ],
+  }));
+  const cap = (id) => r.capRules.find((c) => c.key === id);
+  assert.deepEqual([cap('dining_cap').post_cap_behavior, cap('dining_cap').post_cap_unit, cap('dining_cap').post_cap_rate], ['custom_rate', 'points_per_100', 4]);
+  assert.equal(cap('travel_cap').post_cap_behavior, 'base_rate', 'above the in-cap rate: not emitted');
+  assert.ok(cap('travel_cap').flags.includes('post_limit_rate_above_cap_rate'));
+  assert.deepEqual([cap('grocery_cap').post_cap_behavior, cap('grocery_cap').post_cap_rate], ['zero', 0]);
+
+  const cash = run(card({
+    rules: [rule({ id: 'online_5', category_id: 'online', action: { cashback_percent: 5, cap_reference: 'online_cap' } })],
+    caps: [{ id: 'online_cap', category_id: 'online', metric: 'eligible_spend_amount', limit_value_inr: 10000, period: 'calendar_month', post_limit_behavior: { action: 'downgrade_to_base_rate', cashback_percent: 1 } }],
+  }));
+  const oc = cash.capRules[0];
+  assert.deepEqual([oc.post_cap_behavior, oc.post_cap_unit, oc.post_cap_rate], ['custom_rate', 'cashback_percent', 1]);
+  // the v1 projection: a single v1-visible target keeps the cap v1, carrying the stated rate
+  assert.deepEqual([cap('dining_cap').min_engine_version, cap('dining_cap').measure], [1, 'spend_amount']);
+
+  // D27b: an explicit zero action wins over a stated rate
+  const zero = run(pointsCard([rule({ id: 'dining_10', category_id: 'dining', action: { points_per_block: 10, cap_reference: 'z' } })],
+    { caps: [spendCap('z', { action: 'zero_accrual', points_per_block: 4 })] })).capRules[0];
+  assert.deepEqual([zero.post_cap_behavior, zero.post_cap_unit, zero.post_cap_rate], ['zero', null, 0]);
+  // … an unknown action takes the stated rate
+  const unknown = run(pointsCard([rule({ id: 'dining_10', category_id: 'dining', action: { points_per_block: 10, cap_reference: 'u' } })],
+    { caps: [spendCap('u', { action: 'reduced_rate', points_per_block: 4 })] })).capRules[0];
+  assert.deepEqual([unknown.post_cap_behavior, unknown.post_cap_rate], ['custom_rate', 4]);
+
+  // a count cap with a stated post-limit rate
+  const count = run(pointsCard([rule({ id: 'dining_10', category_id: 'dining', action: { points_per_block: 10, cap_reference: 'n' } })],
+    { caps: [{ id: 'n', category_id: 'dining', metric: 'txn_count', limit_value: 5, period: 'calendar_month', post_limit_behavior: { action: 'downgrade_to_base_rate', points_per_block: 2 } }] })).capRules[0];
+  assert.deepEqual([count.cap_kind, count.post_cap_behavior, count.post_cap_unit, count.post_cap_rate, count.measure], ['txn_count', 'custom_rate', 'points_per_100', 2, 'txn_count']);
+});
+
+test('D26a a post-limit rate above the in-cap rate is emitted only by a cited override flag', () => {
+  // Magnus shape: 12 pts / ₹200 up to ₹1.5 lakh a month, then 35 above it.
+  const record = card({
+    accrual: { base_points_per_block: 12, base_cashback_percent: null, base_block_inr: 200 },
+    rules: [rule({ id: 'base_12', category_id: 'all_retail', evaluation_type: 'standard_accrual', action: { points_per_block: 12, cap_reference: 'base_150k' } })],
+    caps: [{ id: 'base_150k', category_id: 'all_retail', metric: 'eligible_spend_amount', limit_value_inr: 150000, period: 'calendar_month',
+      post_limit_behavior: { action: 'downgrade_to_base_rate', points_per_block: 35 }, parent_cap_id: null }],
+  });
+  const plain = run(record).capRules[0];
+  assert.equal(plain.post_cap_behavior, 'base_rate');
+  assert.ok(plain.flags.includes('post_limit_rate_above_cap_rate'));
+
+  const allow = (extra) => ({ source_slug: 'test-card', changes: [{ path: 'cap_rules[id=base_150k].allow_post_limit_above_cap_rate', value: true, ...extra }] });
+  const cited = run(record, { overrides: allow({ citation: 'Issuer MITC: 35 EDGE points per Rs 200 above Rs 1.5 lakh a month.' }) });
+  const c = cited.capRules[0];
+  assert.deepEqual([c.post_cap_behavior, c.post_cap_unit, c.post_cap_rate], ['custom_rate', 'points_per_200', 35]);
+  assert.ok(c.flags.includes('post_limit_above_cap_rate_allowed'));
+  assert.ok(!c.flags.includes('post_limit_rate_above_cap_rate'));
+  assert.equal(cited.card.model_coverage.overrides_applied[0].citation, 'Issuer MITC: 35 EDGE points per Rs 200 above Rs 1.5 lakh a month.');
+
+  for (const extra of [{}, { citation: '   ' }]) {
+    const rejected = run(record, { overrides: allow(extra) });
+    const errs = rejected.card.model_coverage.flags.filter((f) => f.code === 'override_not_applied');
+    assert.ok(errs.some((f) => /test-card/.test(f.detail) && /base_150k/.test(f.detail) && /citation/.test(f.detail)), JSON.stringify(errs));
+    assert.equal(rejected.capRules[0].post_cap_behavior, 'base_rate');
+    assert.ok(rejected.capRules[0].flags.includes('post_limit_rate_above_cap_rate'));
+  }
+});
+
+test('D8b "up to" reads only the rule\'s own rate text: not its id, a cap, a stacked total or an aside', () => {
+  const role = (id, reason) => run(pointsCard([rule({ id, category_id: 'dining', action: { points_per_block: 10, reason } })])).rewardRules[0].rule_role;
+  assert.equal(role('smartbuy_up_to_10x', '10X Reward Points on dining.'), 'earn', 'id only');
+  assert.equal(role('essentials_3x', '3X Reward Points on dining up to 300 Reward Points per calendar month; after the cap, base.'), 'earn', 'a cap');
+  assert.equal(role('upi_extra', 'Additional 1% on dining, making total eligible earn up to 1.5%.'), 'earn', 'stacked total');
+  assert.equal(role('fuel_30x', '30X rewards on dining (plus up to 1.5% via partner coins).'), 'earn', 'an aside');
+  assert.equal(role('travel_4x', 'Up to 6X overall acceleration; dining earn represented at 4X.'), 'earn', 'overall');
+  assert.equal(role('smartbuy_10x', 'Up to 10X Reward Points on dining via SmartBuy.'), 'info');
+  assert.equal(role('air_30', 'Up to 30 Reward Points per Rs 100 spent on dining.'), 'info');
+  assert.equal(role('half_pct', 'Dining spends earn up to 0.5% cashback.'), 'info', 'a decimal point is not a clause break');
+  // D27d: the cap / period skip is only for amounts (points), never for a % or X rate
+  assert.equal(role('pct_capped', 'Up to 5% cashback, capped at Rs 500 per month.'), 'info');
+  assert.equal(role('x_month', 'Earn up to 5X in a month on dining'), 'info');
+  assert.equal(role('pts_month', '5X on dining, up to 500 Reward Points in a month.'), 'earn');
+});
+
+test('D16/D18e underscored negations ("non_iocl_fuel", "fuel_non_iocl", not_phonepe) become exceptions, never ignored', () => {
+  const dir = { ...DIRECTORY, merchants: [...DIRECTORY.merchants, { slug: 'indianoil', name: 'IndianOil', aliases: ['indianoil', 'indian oil', 'iocl'] }] };
+  const r = transformCardRecordV2(pointsCard([
+    // an exclusion whose id and text say "non-IOCL": the brand is its exception
+    rule({ id: 'exclusion_non_iocl_fuel', category_id: 'fuel', evaluation_type: 'exclusion',
+      conditions: { notes: 'Fuel purchases at non-IOCL outlets do not earn points.' }, action: { points_per_block: 0, reason: 'No points.' } }),
+    // the negation in the category token itself
+    rule({ id: 'x_token', category_id: 'fuel_non_iocl', evaluation_type: 'exclusion', action: { points_per_block: 0, reason: 'No points.' } }),
+    // an exclusion's own list: "non_iocl_fuel" is fuel, except at IOCL
+    rule({ id: 'x_list', category_id: 'excluded_spend', evaluation_type: 'exclusion', conditions: { excluded_categories: ['non_iocl_fuel', 'insurance'] }, action: { points_per_block: 0, reason: 'No points.' } }),
+    // an earning rule's excluded list: the whole category leaves the rule (conservative)
+    rule({ id: 'base_list', category_id: 'all_retail', evaluation_type: 'standard_accrual', conditions: { excluded_categories: ['non_iocl_fuel', 'insurance'] }, action: { points_per_block: 2 } }),
+  ]), { directory: dir });
+  const ex = (id) => only(r, id).filter((x) => x.max_engine_version !== 1);
+  for (const id of ['exclusion_non_iocl_fuel', 'x_token', 'x_list']) assert.ok(ex(id).length > 0, `${id} has v2 rows`);
+  assert.ok(ex('exclusion_non_iocl_fuel').every((x) => x.rule_role === 'exclusion' && x.category_slug === 'fuel' && x.except_merchant_slugs.join() === 'indianoil'));
+  assert.ok(ex('x_token').every((x) => x.rule_role === 'exclusion' && x.category_slug === 'fuel' && x.except_merchant_slugs.join() === 'indianoil'));
+  const list = ex('x_list');
+  assert.ok(list.some((x) => x.category_slug === 'fuel' && x.except_merchant_slugs.join() === 'indianoil'));
+  assert.ok(list.some((x) => x.category_slug === 'insurance' && !x.except_merchant_slugs.length));
+  // axis-samsung-signature: negations inside a `categories` list
+  const sam = transformCardRecordV2(pointsCard([
+    rule({ id: 'x_cats', category_id: 'excluded_spend', evaluation_type: 'exclusion',
+      conditions: { categories: ['insurance', 'non_samsung_emi', 'post_facto_non_samsung_emi'] }, action: { points_per_block: 0, reason: 'No points.' } }),
+  ]), { directory: { ...dir, merchants: [...dir.merchants, { slug: 'samsung', name: 'Samsung', aliases: ['samsung'] }] } });
+  const cats = only(sam, 'x_cats').filter((x) => x.max_engine_version !== 1);
+  assert.ok(cats.some((x) => x.category_slug === 'insurance' && !x.except_merchant_slugs.length));
+  assert.ok(cats.some((x) => x.category_slug === 'emi' && x.except_merchant_slugs.join() === 'samsung'), JSON.stringify(cats.map((x) => [x.category_slug, x.except_merchant_slugs])));
+  assert.ok(!only(sam, 'x_cats')[0].flags.includes('partial_category_list'));
+  const base = only(r, 'base_list')[0];
+  assert.deepEqual(base.excluded_category_slugs.slice().sort(), ['fuel', 'insurance']);
+  assert.ok(base.flags.includes('negated_exclusion_broadened'));
+  assert.ok(!base.flags.includes('unmapped_excluded_category'));
+});
+
+test('an exclusion keeps the merchants it resolves and flags the alternatives it cannot', () => {
+  const r = run(pointsCard([
+    rule({ id: 'x_list', category_id: 'excluded_spend', evaluation_type: 'exclusion', conditions: { merchant: ['Amazon', 'Zqxmart Stores'] }, action: { points_per_block: 0, reason: 'No points.' } }),
+    rule({ id: 'x_text', category_id: 'excluded_spend', evaluation_type: 'exclusion', conditions: { merchant: 'Amazon, Flipkart and Zqxmart Stores' }, action: { points_per_block: 0, reason: 'No points.' } }),
+  ]));
+  const list = only(r, 'x_list');
+  assert.ok(list.every((x) => x.rule_role === 'exclusion' && x.merchant_slugs.join() === 'amazon'));
+  assert.ok(list[0].flags.includes('unresolved_merchant_alternative'));
+  const text = only(r, 'x_text');
+  assert.ok(text.every((x) => x.rule_role === 'exclusion' && x.merchant_slugs.join() === 'amazon,flipkart'));
+  assert.ok(text[0].flags.includes('unresolved_merchant_alternative'));
+  const src = r.coverage.perSource.find((s) => s.source_local_id === 'x_list');
+  assert.ok(src.needs_directory.some((n) => /zqxmart/i.test(n)));
+});
+
+test('H2 a swipe/online rail on an exclusion already pinned by category or MCCs is dropped (an unknown rail must not escape it)', () => {
+  const r = run(pointsCard([
+    rule({ id: 'fuel_pos', category_id: 'fuel', evaluation_type: 'exclusion', rail: 'pos_terminal', conditions: { mcc_list: [5541, 5542] }, action: { points_per_block: 0, reason: 'No points on fuel.' } }),
+    rule({ id: 'wallet_online', category_id: 'wallet', evaluation_type: 'exclusion', rail: 'online', conditions: { mcc_list: [6540] }, action: { points_per_block: 0, reason: 'No points on wallet loads.' } }),
+    rule({ id: 'atm_only', category_id: 'excluded_spend', evaluation_type: 'exclusion', rail: 'atm', action: { points_per_block: 0, reason: 'No points on cash.' } }),
+    rule({ id: 'online_accel', category_id: 'online', rail: 'online', action: { points_per_block: 10 } }),
+    // category-only: the category pins it, the rail goes
+    rule({ id: 'fuel_pos_cat', category_id: 'fuel', evaluation_type: 'exclusion', rail: 'pos_terminal', action: { points_per_block: 0, reason: 'No points on fuel.' } }),
+    // nothing but the rail (empty MCC list): the rail is its whole scope and stays
+    rule({ id: 'online_only', category_id: 'excluded_spend', evaluation_type: 'exclusion', rail: 'online', conditions: { mcc_list: [] }, action: { points_per_block: 0, reason: 'No points online.' } }),
+  ]));
+  assert.ok(only(r, 'fuel_pos_cat').every((x) => x.rule_role === 'exclusion' && x.category_slug === 'fuel' && x.rail === null));
+  assert.ok(only(r, 'online_only').length > 0);
+  assert.ok(only(r, 'online_only').every((x) => x.rail === 'online' && !x.flags.includes('exclusion_rail_dropped')));
+  for (const id of ['fuel_pos', 'wallet_online']) {
+    assert.ok(only(r, id).every((x) => x.rule_role === 'exclusion' && x.rail === null), id);
+    assert.ok(only(r, id)[0].flags.includes('exclusion_rail_dropped'));
+  }
+  assert.ok(only(r, 'atm_only').every((x) => x.rail === 'atm'));
+  assert.ok(only(r, 'online_accel').every((x) => x.rail === 'online'), 'earning rules keep their rail');
+});
+
 test('rows that would break a database identity index are deduplicated: first kept, the rest reported', () => {
   // bobcard-select: four empty lifestyle benefits; bobcard-corporate: two empty insurance rows.
   const emptyBenefit = { benefit_id: null, category_id: null, network_program: null, sponsor: null, label: null,
@@ -1258,6 +1461,59 @@ test('D20d MCCs of one or two digits are dropped and flagged; an exclusion left 
 
 // ── C8 D13: terms that depend on the cardholder; override conventions ───
 
+test('D27a an above-base "exclusion" carves out of an overlapping accelerator at its stated rate; otherwise info', () => {
+  const r = run(pointsCard([
+    rule({ id: 'accel', category_id: 'dining', priority: 10, action: { points_per_block: 20 } }),
+    // above base (2), at or below the overlapping dining accelerator (20): a carve-out at 5
+    rule({ id: 'odd_carve', category_id: 'dining', evaluation_type: 'exclusion', priority: 50, conditions: { merchant: 'Amazon' },
+      action: { points_per_block: 5, reason: 'The 10X accelerator does not apply here; spends earn 5 points per Rs 100.' } }),
+    // at base: a carve-out as before
+    rule({ id: 'base_carve', category_id: 'dining', evaluation_type: 'exclusion', priority: 51, conditions: { merchant: 'Flipkart' },
+      action: { points_per_block: 2, reason: 'The 10X accelerator does not apply here; spends earn the base rate.' } }),
+    // above the overlapping accelerator's own rate: info
+    rule({ id: 'too_high', category_id: 'dining', evaluation_type: 'exclusion', priority: 52, conditions: { merchant: 'Myntra' },
+      action: { points_per_block: 30, reason: 'The accelerator does not apply here; spends earn 30 points per Rs 100.' } }),
+    // above base with no accelerator in its scope (travel): a lone bonus, info
+    rule({ id: 'lone', category_id: 'travel', evaluation_type: 'exclusion', priority: 53,
+      action: { points_per_block: 5, reason: 'Accelerated points do not apply to travel; travel earns 5 points per Rs 100.' } }),
+  ]));
+  const odd = only(r, 'odd_carve');
+  assert.ok(odd.every((x) => x.rule_role === 'earn' && x.rate === 5 && x.priority < 10), JSON.stringify(odd.map((x) => [x.rule_role, x.rate, x.priority])));
+  assert.ok(odd[0].flags.includes('exclusion_with_stated_rate'));
+  assert.ok(!odd[0].flags.includes('exclusion_rate_above_base'));
+  assert.ok(only(r, 'base_carve').every((x) => x.rule_role === 'earn' && x.rate === 2));
+  for (const id of ['too_high', 'lone']) {
+    const rows = only(r, id);
+    assert.ok(rows.every((x) => x.rule_role === 'info' && x.flags.includes('exclusion_rate_above_base')), id);
+    assert.ok(rows.every((x) => x.max_engine_version !== 1), 'no v1-only row survives as info');
+  }
+  // D21b with a kept above-base carve-out that v1 can't show (two merchants):
+  // the accelerator paying more than it is hidden from v1.
+  const multi = run(pointsCard([
+    rule({ id: 'accel', category_id: 'dining', priority: 10, action: { points_per_block: 20 } }),
+    rule({ id: 'multi_carve', category_id: 'dining', evaluation_type: 'exclusion', priority: 50, conditions: { merchant: ['Amazon', 'Myntra'] },
+      action: { points_per_block: 5, reason: 'The accelerator does not apply here; spends earn 5 points per Rs 100.' } }),
+  ]));
+  assert.ok(only(multi, 'multi_carve').every((x) => x.rule_role === 'earn' && x.min_engine_version === 2));
+  assert.deepEqual(only(multi, 'accel').map((x) => [x.min_engine_version, x.flags.includes('hidden_from_v1_carve_out')]), [[2, true]]);
+});
+
+test('D20d an earning rule whose MCC list is all malformed is info, never category-only', () => {
+  const r = run(pointsCard([
+    rule({ id: 'dining_bad_mcc', category_id: 'dining', conditions: { mcc_list: [58, 12] }, action: { points_per_block: 10 } }),
+    rule({ id: 'dining_mixed', category_id: 'dining', priority: 11, conditions: { mcc_list: [58, 5812] }, action: { points_per_block: 10 } }),
+    // a lower rate: the whole category is the conservative side (D18c)
+    rule({ id: 'utility_bad_mcc', category_id: 'utility', priority: 12, evaluation_type: 'standard_accrual', conditions: { mcc_list: [49] }, action: { points_per_block: 1 } }),
+  ]));
+  const [bad] = only(r, 'dining_bad_mcc');
+  assert.equal(bad.rule_role, 'info');
+  assert.ok(bad.info_reasons.includes('malformed_mcc_list'));
+  assert.ok(only(r, 'dining_mixed').every((x) => x.rule_role === 'earn' && x.mcc_include.join() === '5812'));
+  const util = only(r, 'utility_bad_mcc');
+  assert.ok(util.some((x) => x.rule_role === 'earn' && x.category_slug === 'bills' && x.min_engine_version === 1));
+  assert.ok(util[0].flags.includes('malformed_mcc_list_broadened'));
+});
+
 test('D13a a cap sized by the credit limit keeps its kind with a null amount and is flagged', () => {
   const r = run(capCard([{ ...capBase, id: 'intl_2x_credit_limit', metric: 'eligible_spend_amount', limit_value: null, limit_value_inr: null }]));
   const [cap] = r.capRules;
@@ -1273,6 +1529,46 @@ test('D13b a rule gated on a paid membership becomes info with depends_on_user_a
   const [row] = only(r, 'neon');
   assert.equal(row.rule_role, 'info');
   assert.ok(row.flags.includes('depends_on_user_attribute'));
+});
+
+test('D13 an override can set a deferral flag explicitly on a rule or a cap, and it is kept', () => {
+  const record = card({
+    rules: [
+      rule({ id: 'neon', rail: 'upi_qr', conditions: { kiwi_neon_membership: true }, action: { cashback_percent: 2, cap_reference: 'limit_cap' } }),
+      rule({ id: 'intl', category_id: 'travel', priority: 11, action: { cashback_percent: 3 } }),
+    ],
+    caps: [{ id: 'limit_cap', category_id: 'all_retail', metric: 'eligible_spend_amount', limit_value_inr: 50000, period: 'statement_cycle', post_limit_behavior: { action: 'zero_accrual' }, parent_cap_id: null }],
+  });
+  const overrides = {
+    source_slug: 'test-card',
+    changes: [
+      // restating the rule drops the membership key the flag came from …
+      { path: 'reward_rules[id=neon].conditions', value: {} },
+      // … so the override keeps the deferral explicitly
+      { path: 'reward_rules[id=neon].depends_on_user_attribute', value: true },
+      { path: 'reward_rules[id=intl].depends_on_txn_attribute', value: true },
+      { path: 'cap_rules[id=limit_cap].cap_depends_on_user', value: true },
+    ],
+  };
+  const r = run(record, { overrides, verifiedSlugs: new Set(['test-card']) });
+  const [neon] = only(r, 'neon');
+  assert.equal(neon.rule_role, 'info');
+  assert.ok(neon.flags.includes('depends_on_user_attribute'));
+  const [intl] = only(r, 'intl');
+  assert.equal(intl.rule_role, 'info');
+  assert.ok(intl.flags.includes('depends_on_txn_attribute'));
+  const cap = r.capRules.find((c) => c.key === 'limit_cap');
+  assert.ok(cap.flags.includes('cap_depends_on_user'));
+  // deferrals don't block verified (the real field: coverage.verifiedBlockedBy)
+  assert.ok(Array.isArray(r.coverage.verifiedBlockedBy));
+  assert.deepEqual(r.coverage.verifiedBlockedBy, []);
+  assert.equal(r.card.model_status, 'verified');
+  // control: the same rule made info without a deferral does block
+  const blocked = run(record, { verifiedSlugs: new Set(['test-card']), overrides: { source_slug: 'test-card', changes: [
+    { path: 'reward_rules[id=intl].rule_role', value: 'info' },
+  ] } });
+  assert.equal(blocked.card.model_status, 'partial');
+  assert.ok(blocked.coverage.verifiedBlockedBy.includes('info_rule'));
 });
 
 test('D13d overrides may replace whole arrays, set nulls and set rule_role; statement_cycle_quarter maps to quarter', () => {
