@@ -28,8 +28,16 @@
             "platform": null,
             "rail": "emi"
           },
-          "state_before": { "caps_by_source_id": {} },
-          "expect": { "currency": "points", "amount": 0, "value_inr": null, "excluded": true, "cap_deltas_by_source_id": {} },
+          "state_before": {
+            "caps_by_source_id": {}
+          },
+          "expect": {
+            "currency": "points",
+            "amount": 0,
+            "value_inr": null,
+            "excluded": true,
+            "cap_deltas_by_source_id": {}
+          },
           "why": "Record: \"No BluChips are awarded on transactions converted to EMI.\" The record's emi_exclusion is already a rail-EMI exclusion on all spend (C8 D29a), so an EMI purchase in any category earns nothing."
         },
         {
@@ -47,8 +55,16 @@
             "platform": null,
             "rail": "online"
           },
-          "state_before": { "caps_by_source_id": {} },
-          "expect": { "currency": "points", "amount": 25, "value_inr": null, "excluded": false, "cap_deltas_by_source_id": {} },
+          "state_before": {
+            "caps_by_source_id": {}
+          },
+          "expect": {
+            "currency": "points",
+            "amount": 25,
+            "value_inr": null,
+            "excluded": false,
+            "cap_deltas_by_source_id": {}
+          },
           "why": "Record: \"Government services with MCC 9000-9999 earn 0.5 BluChips per Rs100\" (the WP7 government_reduced override): 50 x 0.5 = 25, not the base 3."
         },
         {
@@ -66,9 +82,82 @@
             "platform": null,
             "rail": "swipe"
           },
-          "state_before": { "caps_by_source_id": {} },
-          "expect": { "currency": "points", "amount": 150, "value_inr": null, "excluded": false, "cap_deltas_by_source_id": {} },
+          "state_before": {
+            "caps_by_source_id": {}
+          },
+          "expect": {
+            "currency": "points",
+            "amount": 150,
+            "value_inr": null,
+            "excluded": false,
+            "cap_deltas_by_source_id": {}
+          },
           "why": "Record base: 3 BluChips per Rs100 on other spends: 50 x 3 = 150."
+        }
+      ]
+    },
+    "pnb-patanjali-rupay-select": {
+      "sources": [
+        {
+          "url": "https://creditcard.pnb.bank.in/types11.html",
+          "doc": "PNB Patanjali RuPay Select card features (the record's source_url), read 2026-11-06",
+          "quote": "Reward Points : 2 pt on Rs 150"
+        }
+      ],
+      "examples": [
+        {
+          "id": "P01",
+          "title": "Rs 1,500 retail spend",
+          "ctx": {
+            "amount": 1500,
+            "occurred": "2026-11-10T10:00:00+05:30",
+            "category_id": null,
+            "category_slug": "other",
+            "mcc": "5651",
+            "merchant_name": "Apparel store",
+            "merchant_vpa": null,
+            "merchant_slug": null,
+            "platform": null,
+            "rail": "swipe"
+          },
+          "state_before": {
+            "caps_by_source_id": {}
+          },
+          "expect": {
+            "currency": "points",
+            "amount": 20,
+            "value_inr": null,
+            "excluded": false,
+            "cap_deltas_by_source_id": {}
+          },
+          "why": "Issuer page: \"Reward Points : 2 pt on Rs 150\" and \"Reward Multiplier : NA\": 10 blocks x 2 = 20 (the record's 2X rule, 4 per Rs150, is info; C8 D33e)."
+        },
+        {
+          "id": "P02",
+          "title": "Rs 149 retail spend",
+          "ctx": {
+            "amount": 149,
+            "occurred": "2026-11-10T10:00:00+05:30",
+            "category_id": null,
+            "category_slug": "other",
+            "mcc": "5651",
+            "merchant_name": "Apparel store",
+            "merchant_vpa": null,
+            "merchant_slug": null,
+            "platform": null,
+            "rail": "swipe"
+          },
+          "state_before": {
+            "caps_by_source_id": {}
+          },
+          "expect": {
+            "currency": "points",
+            "amount": 0,
+            "value_inr": null,
+            "excluded": false,
+            "cap_deltas_by_source_id": {}
+          },
+          "why": "Below one Rs150 block nothing accrues (floor rounding)."
         }
       ]
     }
