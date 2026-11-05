@@ -2587,6 +2587,8 @@ final transactionAttachmentsRepositoryProvider =
     FutureProvider<TransactionAttachmentsRepository>((ref) async {
       return TransactionAttachmentsRepository(
         await ref.watch(appDatabaseProvider.future),
+        namespace: ref.watch(cacheNamespaceProvider),
+        installId: () => ref.read(localDeviceIdProvider.future),
       );
     });
 

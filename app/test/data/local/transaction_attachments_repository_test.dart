@@ -1,0 +1,251 @@
+import 'dart:io';
+import 'dart:typed_data';
+
+import 'package:flutter_test/flutter_test.dart';
+import 'package:pandapay/data/local/app_database.dart';
+import 'package:pandapay/data/local/transaction_attachments_repository.dart';
+import 'package:pandapay/data/portable_backup/private_temporary_workspace.dart';
+import 'package:pandapay/data/secure_storage/encrypted_receipt_file.dart';
+import 'package:pandapay/data/secure_storage/local_database_key_custody.dart';
+import 'package:pandapay/data/secure_storage/local_key_provisioning_lease.dart';
+
+void main() {
+  late Directory root;
+  late AppDatabase database;
+  late _MemoryStore keys;
+  late List<PrivateTemporaryWorkspace> workspaces;
+
+  TransactionAttachmentsRepository make({
+    String namespace = 'user:11111111-2222-3333-4444-555555555555',
+    String installId = 'install-A',
+    _MemoryStore? store,
+  }) => TransactionAttachmentsRepository(
+    database,
+    namespace: namespace,
+    installId: () async => installId,
+    receiptsDirectory: () async => Directory('${root.path}/receipts'),
+    workspace: () async {
+      final workspace = await PrivateTemporaryWorkspace.create(
+        Directory('${root.path}/tmp'),
+      );
+      workspaces.add(workspace);
+      return workspace;
+    },
+    keyStore: store ?? keys,
+    lease: _InlineLease(),
+  );
+
+  List<File> filesUnder(Directory directory) => directory.existsSync()
+      ? directory
+            .listSync(recursive: true)
+            .whereType<File>()
+            .where((f) => !f.path.contains('pandapay-private-v1-'))
+            .toList()
+      : [];
+
+  setUp(() async {
+    root = await Directory.systemTemp.createTemp('receipts');
+    database = openInMemoryForTesting();
+    keys = _MemoryStore();
+    workspaces = [];
+  });
+  tearDown(() async {
+    database.close();
+    await root.delete(recursive: true);
+  });
+
+  test(
+    'receipt bytes are stored as PPRC ciphertext and read back intact',
+    () async {
+      final repository = make();
+      final plain = Uint8List.fromList(
+        List<int>.generate(4096, (i) => 65 + i % 26),
+      );
+      final attachment = await repository.addFromBytes(
+        transactionId: 'tx-1',
+        bytes: plain,
+        fileName: 'Synthetic Receipt.png',
+        mimeType: 'image/png',
+      );
+
+      final stored = File(attachment.localPath).readAsBytesSync();
+      expect(
+        stored.take(4).toList(),
+        EncryptedReceiptFileCodec.magic,
+        reason: 'the stored file starts with the PPRC header',
+      );
+      expect(String.fromCharCodes(stored), isNot(contains('ABCDEFGHIJKLMNOP')));
+      expect(attachment.localPath, startsWith('${root.path}/receipts/'));
+
+      final viewed = await repository.decryptForViewing(attachment);
+      expect(viewed.file.readAsBytesSync(), plain);
+      await viewed.release();
+      expect(viewed.file.existsSync(), isFalse);
+    },
+  );
+
+  test('tiny receipts and file copies are encrypted too', () async {
+    final repository = make();
+    final tiny = await repository.addFromBytes(
+      transactionId: 'tx-1',
+      bytes: [1, 2, 3],
+      fileName: 'a.bin',
+    );
+    final viewed = await repository.decryptForViewing(tiny);
+    expect(viewed.file.readAsBytesSync(), [1, 2, 3]);
+    await viewed.release();
+
+    final source = File('${root.path}/picked.jpg')
+      ..writeAsBytesSync(List<int>.filled(512, 7));
+    final copied = await repository.addFromPath(
+      transactionId: 'tx-1',
+      sourcePath: source.path,
+      fileName: 'picked.jpg',
+      mimeType: 'image/jpeg',
+    );
+    expect(
+      File(copied.localPath).readAsBytesSync().take(4),
+      EncryptedReceiptFileCodec.magic,
+    );
+    expect(
+      source.existsSync(),
+      isTrue,
+      reason: 'the picked source is never touched',
+    );
+    final again = await repository.decryptForViewing(copied);
+    expect(again.file.readAsBytesSync(), List<int>.filled(512, 7));
+    await again.release();
+  });
+
+  test('no plaintext copy is left behind after adding from bytes', () async {
+    final repository = make();
+    await repository.addFromBytes(
+      transactionId: 'tx-1',
+      bytes: List<int>.filled(64, 9),
+      fileName: 'a.bin',
+    );
+    for (final workspace in workspaces) {
+      expect(workspace.directory.existsSync(), isFalse);
+    }
+    final all = filesUnder(root).where((f) => !f.path.contains('/receipts/'));
+    expect(all, isEmpty);
+  });
+
+  test('another account namespace cannot read the file', () async {
+    final attachment = await make().addFromBytes(
+      transactionId: 'tx-1',
+      bytes: [1, 2, 3],
+      fileName: 'a.bin',
+    );
+    await expectLater(
+      make(
+        namespace: 'user:99999999-aaaa-bbbb-cccc-dddddddddddd',
+      ).decryptForViewing(attachment),
+      throwsA(isA<ReceiptUnavailable>()),
+    );
+  });
+
+  test(
+    'a lost key leaves existing receipts unreadable, never silently re-keyed',
+    () async {
+      final repository = make();
+      final attachment = await repository.addFromBytes(
+        transactionId: 'tx-1',
+        bytes: [1, 2, 3],
+        fileName: 'a.bin',
+      );
+      keys.values.clear();
+      await expectLater(
+        repository.decryptForViewing(attachment),
+        throwsA(isA<ReceiptUnavailable>()),
+      );
+      await expectLater(
+        repository.addFromBytes(
+          transactionId: 'tx-1',
+          bytes: [4],
+          fileName: 'b.bin',
+        ),
+        throwsA(isA<ReceiptUnavailable>()),
+      );
+    },
+  );
+
+  test('a locked key store fails the add and leaves no file or row', () async {
+    keys.locked = true;
+    final repository = make();
+    await expectLater(
+      repository.addFromBytes(
+        transactionId: 'tx-1',
+        bytes: [1],
+        fileName: 'a.bin',
+      ),
+      throwsA(isA<ReceiptUnavailable>()),
+    );
+    expect(filesUnder(Directory('${root.path}/receipts')), isEmpty);
+    expect(await repository.list('tx-1'), isEmpty);
+  });
+
+  test('a session-style namespace still gets its own key', () async {
+    final repository = make(namespace: 'session:${'a' * 64}');
+    final attachment = await repository.addFromBytes(
+      transactionId: 'tx-1',
+      bytes: [1, 2, 3],
+      fileName: 'a.bin',
+    );
+    final viewed = await repository.decryptForViewing(attachment);
+    expect(viewed.file.readAsBytesSync(), [1, 2, 3]);
+    await viewed.release();
+  });
+
+  test('delete removes the encrypted file and the row', () async {
+    final repository = make();
+    final attachment = await repository.addFromBytes(
+      transactionId: 'tx-1',
+      bytes: [1, 2, 3],
+      fileName: 'a.bin',
+    );
+    expect(await repository.list('tx-1'), hasLength(1));
+    await repository.delete(attachment);
+    expect(File(attachment.localPath).existsSync(), isFalse);
+    expect(await repository.list('tx-1'), isEmpty);
+  });
+}
+
+final class _InlineLease implements LocalKeyProvisioningLease {
+  @override
+  Future<T> runExclusive<T>(Future<T> Function() operation) => operation();
+}
+
+final class _MemoryStore implements SecureKeyValueStore {
+  final values = <String, String>{};
+  bool locked = false;
+  void _check() {
+    if (locked) throw const SecureKeyStoreUnavailable();
+  }
+
+  @override
+  Future<String?> read(String key) async {
+    _check();
+    return values[key];
+  }
+
+  @override
+  Future<void> write(String key, String value) async {
+    _check();
+    values[key] = value;
+  }
+
+  @override
+  Future<bool> writeIfAbsent(String key, String value) async {
+    _check();
+    if (values.containsKey(key)) return false;
+    values[key] = value;
+    return true;
+  }
+
+  @override
+  Future<void> delete(String key) async {
+    _check();
+    values.remove(key);
+  }
+}

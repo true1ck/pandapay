@@ -4,7 +4,6 @@ import '../sms_v2/ui/why_sheet.dart';
 import 'package:flutter/material.dart';
 import 'dart:async';
 import 'dart:convert';
-import 'dart:io';
 
 import 'package:file_picker/file_picker.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
@@ -12,7 +11,6 @@ import 'package:go_router/go_router.dart';
 import 'package:image_picker/image_picker.dart';
 import 'package:pandapay_domain/pandapay_domain.dart';
 import 'package:share_plus/share_plus.dart';
-import 'package:url_launcher/url_launcher.dart';
 
 import '../../app/design/app_theme.dart';
 import '../../app/design/widgets.dart';
@@ -1100,28 +1098,46 @@ class _DetailBodyState extends ConsumerState<_DetailBody> {
   }
 
   Future<void> _openAttachment(TransactionAttachment attachment) async {
-    if (_isImageAttachment(attachment)) {
-      await showDialog<void>(
-        context: context,
-        builder: (context) => Dialog(
-          child: InteractiveViewer(
-            child: Image.file(File(attachment.localPath), fit: BoxFit.contain),
+    final repository = await ref.read(
+      transactionAttachmentsRepositoryProvider.future,
+    );
+    final DecryptedAttachment decrypted;
+    try {
+      decrypted = await repository.decryptForViewing(attachment);
+    } on ReceiptUnavailable {
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(
+          content: Text(
+            'This receipt cannot be opened right now. Unlock your phone and try again.',
           ),
         ),
       );
       return;
     }
-    final opened = await launchUrl(
-      Uri.file(attachment.localPath),
-      mode: LaunchMode.externalApplication,
-    );
-    if (opened) return;
-    await SharePlus.instance.share(
-      ShareParams(
-        files: [XFile(attachment.localPath, mimeType: attachment.mimeType)],
-        text: attachment.fileName,
-      ),
-    );
+    // The decrypted copy lives only while the viewer or share sheet is open.
+    try {
+      if (!mounted) return;
+      if (_isImageAttachment(attachment)) {
+        await showDialog<void>(
+          context: context,
+          builder: (context) => Dialog(
+            child: InteractiveViewer(
+              child: Image.file(decrypted.file, fit: BoxFit.contain),
+            ),
+          ),
+        );
+        return;
+      }
+      await SharePlus.instance.share(
+        ShareParams(
+          files: [XFile(decrypted.file.path, mimeType: attachment.mimeType)],
+          text: attachment.fileName,
+        ),
+      );
+    } finally {
+      await decrypted.release();
+    }
   }
 
   Future<void> _deleteAttachment(TransactionAttachment attachment) async {
