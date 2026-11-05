@@ -147,8 +147,8 @@ async function pollConnection(connection, deps) {
  * app password must not stop everyone else's mail being read.
  */
 async function runPollCycle(deps) {
-  const { pool, workerPool, withUserClient, encryptionKey } = deps;
-  if (!encryptionKey) {
+  const { pool, workerPool, withUserClient, imapKeys } = deps;
+  if (!(imapKeys instanceof Map) || imapKeys.size === 0) {
     return { skipped: 'no_encryption_key' };
   }
   if (!workerPool) return { skipped: 'no_worker_database' };
@@ -184,7 +184,7 @@ async function runPollCycle(deps) {
       // A private capability enumerates at most 100 active connections. Its
       // durable keyset cursor survives process/lock-owner changes. Imports and
       // status updates still use ordinary per-user RLS connections.
-      const connections = await readImapWorkerBatch(client, encryptionKey);
+      const connections = await readImapWorkerBatch(client, imapKeys);
 
       const results = [];
       let deferredCount = 0;

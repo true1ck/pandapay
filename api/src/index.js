@@ -40,10 +40,8 @@ const {
   redactSmsShape,
   senderMatches,
   parseTransactionDate,
-  parseSmsTransactionTimestamp,
   isBankAccountMessage,
 } = require('./sms_parser');
-const { parseSubscriptionMandate } = require('./subscription_parser');
 const importResolvers = require('./import_resolvers');
 const { createSyncTransactionApplier } = require('./sync_transaction_state');
 const applyTransactionSync = createSyncTransactionApplier({
@@ -54,19 +52,19 @@ const applyTransactionSync = createSyncTransactionApplier({
 });
 const centralProjection = require('./central_financial_projection');
 const { registerBillsProjectionRoutes } = require('./bills_projection_route');
-const smsFactsRoute = require('./sms_facts_route');
-const smsLearningFeedbackRoute = require('./sms_learning_feedback_route');
 const smsRuleBundleRoute = require('./sms_rule_bundle');
-const smsLearning = require('./sms_learning');
 const { testImapLogin } = require('./imap_test');
+const {
+  saveImapConnection, openStoredImapPassword, deleteImapConnection, bankSenderPatterns, requireBankSenders,
+} = require('./imap_connections_store');
+const { normalizeSenderFilter } = require('./imap_credentials');
+const { markInboundEmailConverted } = require('./inbound_email_retention');
 const { hasImapControlChars, isValidImapHost } = require('./imap_network');
 const { extractLocalPart, scanPolicyKeywords } = require('./email_ingest');
 const { discoverCardsAcrossMessages } = require('./card_discovery');
 const nearbyGoogle = require('./nearby_google');
 const { registerRuleFamilyRoutes, validateField } = require('./admin_rule_families');
 const { registerAdminReferralOperationsRoutes } = require('./admin_referral_operations');
-const aiQueueRoute = require('./ai_queue_route');
-const aiProviderQuotaRoute = require('./ai_provider_quota_route');
 const rewardMath = require('./reward_math');
 const { registerSplitRoutes } = require('./transaction_splits');
 const transactionTags = require('./transaction_tags');
@@ -129,191 +127,6 @@ const nearbyDiscovery = createNearbyDiscovery();
 // fallback fits within the mobile client's foreground request deadline.
 const nearbyGoogleFallback = createNearbyDiscovery({ timeoutMs: 2500 });
 
-function uniqueSmsPatternIssuerId(patterns, sender) {
-  const issuerIds = new Set(
-    (patterns || [])
-      .filter((pattern) => senderMatches(pattern.sender_pattern, sender))
-      .map((pattern) => pattern.issuer_id)
-      .filter(Boolean),
-  );
-  return issuerIds.size === 1 ? [...issuerIds][0] : null;
-}
-
-/**
- * Store an explicit mandate signal without turning the mandate-creation SMS
- * into a spend. The raw body is used only during this request to resolve the
- * category/card and is never written to the subscription row.
- */
-async function persistSubscriptionMandate(client, userId, { parsed, body, occurred, patternIssuerId }) {
-  if (!parsed?.ok || !parsed.fields?.merchant) return null;
-  const fields = parsed.fields;
-  const merchantKey = merchantSeriesKey(fields.merchant);
-  if (!merchantKey) return null;
-
-  if (parsed.lifecycle === 'cancelled') {
-    const result = await client.query(
-      `UPDATE recurring_series
-          SET typical_amount_inr = CASE
-                WHEN detection_source = 'mandate' THEN 0
-                ELSE typical_amount_inr
-              END,
-              next_expected_on = CASE
-                WHEN detection_source = 'mandate' THEN NULL
-                ELSE next_expected_on
-              END,
-              is_active = CASE
-                WHEN detection_source = 'mandate' THEN false
-                ELSE is_active
-              END,
-              dismissed_at = CASE
-                WHEN detection_source = 'mandate' THEN COALESCE(dismissed_at, now())
-                ELSE dismissed_at
-              END,
-              lifecycle_status = CASE
-                WHEN detection_source = 'mandate' THEN 'cancelled'
-                ELSE lifecycle_status
-              END,
-              autopay_status = 'cancelled',
-              mandate_reference = COALESCE($3, mandate_reference),
-              mandate_cancelled_at = now(),
-              cadence_confirmed = CASE
-                WHEN detection_source = 'mandate' THEN false
-                ELSE cadence_confirmed
-              END,
-              updated_at = now()
-        WHERE profile_id = $1
-          AND merchant_key = $2
-          AND ($3::text IS NULL OR mandate_reference = $3 OR mandate_reference IS NULL)
-        RETURNING id, detection_source`,
-      [userId, merchantKey, fields.reference || null]
-    );
-    return result.rows[0] || null;
-  }
-
-  const card = await importResolvers.resolveUserCardForImport(client, userId, {
-    last4: fields.last4,
-    patternIssuerId,
-    instrument: fields.instrument || 'credit_card',
-  });
-  const classification = importResolvers.resolveCategoryAssignmentForImport
-    ? await importResolvers.resolveCategoryAssignmentForImport(client, userId, {
-      merchantName: fields.merchant,
-      vpa: fields.vpa || extractVpa(body),
-      mcc: extractMcc(body),
-      messageText: body,
-    })
-    : {
-      categoryId: await importResolvers.resolveCategoryForImport(client, userId, {
-        merchantName: fields.merchant,
-        vpa: fields.vpa || extractVpa(body),
-        mcc: extractMcc(body),
-        messageText: body,
-      }),
-      userCategoryId: null,
-    };
-  const categoryId = classification.categoryId;
-  const userCategoryId = classification.userCategoryId;
-
-  /*
-   * The subscription row carries both IDs for the same reason transactions
-   * do: category_id is the built-in reporting/reward parent, while the
-   * private ID is the user's own classification. Older databases can run
-   * the API before this migration is applied, so deployment order still
-   * matters; the migration is intentionally small and additive.
-   */
-
-  const seenOn = new Date(occurred).toISOString().slice(0, 10);
-  // `amountInr` in the mandate parser is the authorization ceiling. It is
-  // not a posted payment and cannot be used as a subscription price. The
-  // legacy recurring_series table has no authorization-limit column, so the
-  // typed facts projection remains the source of that ceiling and mandate
-  // rows use the table's zero-valued amount only as a compatibility sentinel.
-  const cadenceDays = fields.cadenceDays || 30;
-  const typicalAmount = 0;
-  const cadenceConfirmed = false;
-  // A mandate activation does not prove that a renewal is due. Keep this
-  // null even when the SMS names a cadence; the cadence is authorization
-  // metadata until a posted payment or explicit service fact exists.
-  const nextExpected = null;
-  const result = await client.query(
-    `INSERT INTO recurring_series
-       (profile_id, merchant_key, display_name, category_id, user_category_id, user_card_id,
-        payment_method, typical_amount_inr, cadence_days, occurrence_count,
-        first_seen_on, last_seen_on, next_expected_on, detection_source,
-        lifecycle_status, autopay_status, mandate_reference, mandate_started_on,
-        cadence_confirmed)
-     VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, 1, $10, $10, $11, 'mandate',
-             'active', 'active', $12, $10, $13)
-     ON CONFLICT (profile_id, merchant_key) DO UPDATE SET
-       display_name = COALESCE(EXCLUDED.display_name, recurring_series.display_name),
-       category_id = COALESCE(recurring_series.category_id, EXCLUDED.category_id),
-       user_category_id = COALESCE(EXCLUDED.user_category_id, recurring_series.user_category_id),
-       user_card_id = COALESCE(recurring_series.user_card_id, EXCLUDED.user_card_id),
-       payment_method = COALESCE(EXCLUDED.payment_method, recurring_series.payment_method),
-       typical_amount_inr = CASE
-         WHEN recurring_series.detection_source = 'mandate' THEN 0
-         ELSE recurring_series.typical_amount_inr
-       END,
-       cadence_days = CASE
-         WHEN recurring_series.detection_source = 'mandate' THEN EXCLUDED.cadence_days
-         ELSE recurring_series.cadence_days
-       END,
-       last_seen_on = CASE
-         WHEN recurring_series.detection_source = 'mandate' THEN EXCLUDED.last_seen_on
-         ELSE recurring_series.last_seen_on
-       END,
-       next_expected_on = CASE
-         WHEN recurring_series.detection_source = 'mandate' THEN NULL
-         ELSE recurring_series.next_expected_on
-       END,
-       detection_source = recurring_series.detection_source,
-       lifecycle_status = CASE
-         WHEN recurring_series.detection_source = 'mandate' THEN 'active'
-         ELSE recurring_series.lifecycle_status
-       END,
-       autopay_status = CASE
-         WHEN recurring_series.detection_source = 'mandate' THEN 'active'
-         ELSE recurring_series.autopay_status
-       END,
-       mandate_reference = COALESCE(EXCLUDED.mandate_reference, recurring_series.mandate_reference),
-       mandate_started_on = COALESCE(recurring_series.mandate_started_on, EXCLUDED.mandate_started_on),
-       mandate_cancelled_at = CASE
-         WHEN recurring_series.detection_source = 'mandate' THEN NULL
-         ELSE recurring_series.mandate_cancelled_at
-       END,
-       cadence_confirmed = CASE
-         WHEN recurring_series.detection_source = 'mandate' THEN false
-         ELSE recurring_series.cadence_confirmed
-       END,
-       is_active = CASE
-         WHEN recurring_series.detection_source = 'mandate' THEN true
-         ELSE recurring_series.is_active
-       END,
-       dismissed_at = CASE
-         WHEN recurring_series.detection_source = 'mandate' THEN NULL
-         ELSE recurring_series.dismissed_at
-       END,
-       updated_at = now()
-     RETURNING id, detection_source`,
-    [
-      userId,
-      merchantKey,
-      fields.merchant,
-      categoryId,
-      userCategoryId,
-      card?.userCardId || null,
-      fields.instrument || null,
-      typicalAmount,
-      cadenceDays,
-      seenOn,
-      nextExpected,
-      fields.reference || null,
-      cadenceConfirmed,
-    ],
-  );
-  return result.rows[0] || null;
-}
-
 const app = express();
 app.use(require('./public_admin_boundary').denyPublicAdmin);
 let shuttingDown = false;
@@ -331,8 +144,6 @@ app.use(rejectMalformedClientIp);
 app.use(...createCorsPolicy());
 // SMS pipeline v2 (WP-08): registered ahead of the global 100 KiB JSON parser because facts:batch reads its own, larger body. Routes answer 404 unless the sms_pipeline_v2_enabled flag is on.
 require('./sms_v2').registerSmsV2(app, { requireAuth, requireAdmin, withUserClient, loadUserCardForState, applyTransactionState, reverseTransactionState });
-// WP-17: 426 Upgrade Required on the legacy SMS routes after the configured cutoff (off unless LEGACY_SMS_CUTOFF_DATE is set).
-app.use(require('./legacy_version_gate').createLegacyVersionGate({ cutoffAt: config.legacySmsCutoffAt, firstV2Version: config.smsV2FirstAppVersion, blockMissingVersion: config.legacySmsBlockMissingVersion }));
 // LANE-D-1: clients that do not send `X-Sms-Pipeline: v2` (every shipped app) get `transfer` instead of `refund` in JSON answers.
 app.use(require('./legacy_entry_kind').legacyEntryKindFilter);
 app.use(jsonBodyParser);
@@ -4898,22 +4709,6 @@ app.post('/transactions', requireAuth, async (req, res) => {
   }
 });
 
-/**
- * Typed SMS facts and unresolved-message AI jobs share the existing source
- * identity and downstream specialists. AI results remain reviewable unless
- * a verified fact is safely materialized.
- */
-smsFactsRoute.registerSmsFactsRoutes(app, {
-  requireAuth,
-  requireAdmin,
-  withUserClient,
-  persistSubscriptionMandate,
-});
-smsLearningFeedbackRoute.registerSmsLearningFeedbackRoute(app, {
-  requireAuth,
-  requireAdmin,
-  withUserClient,
-});
 registerBillsProjectionRoutes(app, { requireAuth, withUserClient });
 // Original-currency evidence stays outside the INR ledger until confirmation.
 require('./foreign_payments_route').registerForeignPaymentRoutes(app, {
@@ -4929,518 +4724,6 @@ smsRuleBundleRoute.registerSmsRuleBundleRoutes(app, {
   requireAdmin,
   withUserClient,
 });
-aiQueueRoute.registerAiQueueRoutes(app, {
-  requireAuth,
-  requireAdmin,
-  withUserClient,
-  persistSubscriptionMandate,
-});
-aiProviderQuotaRoute.registerProviderQuotaRoute(app, {
-  requireWorkerAuth: aiQueueRoute.requireWorkerAuth,
-  withUserClient,
-});
-
-/**
- * POST /transactions/from-sms — UA-5.3 auto-import. Takes a raw SMS
- * sender+body, finds active `parser_patterns` for channel='sms' whose
- * sender_pattern matches, parses via sms_parser.js, and on success calls
- * the SAME insertTransactionAndUpdateState() helper POST /transactions
- * uses (source='sms' instead of 'manual') — no duplicated cap/milestone/
- * points/fee-waiver logic. On parse failure, per parser_failures' evident
- * intent (its `redacted_shape_has_no_digits` CHECK — the table is designed
- * to hold NO raw SMS content, only a redacted shape for admin triage), we
- * insert a parser_failures row built from sms_parser.redactSmsShape()
- * rather than storing the raw body, and return 200 with parsed:false
- * rather than an error — a failed auto-parse is an expected, logged
- * outcome for this route, not a server error.
- */
-app.post('/transactions/from-sms', requireAuth, async (req, res) => {
-  const { sender, body, userCardId, occurredAt, categoryId, rail, appVersion, backfill } = req.body || {};
-  if (!body || typeof body !== 'string' || !body.trim()) {
-    return res.status(400).json({ error: 'body is required' });
-  }
-  // `userCardId` is now OPTIONAL. It used to be required, with the honest
-  // explanation that the parser extracts amount/merchant/last4/date but not
-  // which card the SMS is about — true, but the consequence was that no
-  // transaction was ever captured without a human tapping a card for it,
-  // one message at a time. src/import_resolvers.js now resolves it from
-  // last4 or from the issuer behind the matched pattern. If it cannot be
-  // sure, the spend is still recorded cardlessly so the user never has to
-  // classify each SMS manually. A caller that DOES know the card still wins:
-  // an explicit id is never second-guessed.
-  if (userCardId !== undefined && userCardId !== null && typeof userCardId !== 'string') {
-    return res.status(400).json({ error: 'userCardId must be a string when given' });
-  }
-  const occurred = occurredAt ? new Date(occurredAt) : new Date();
-  if (Number.isNaN(occurred.getTime())) {
-    return res.status(400).json({ error: 'occurredAt is not a valid date' });
-  }
-
-  try {
-    const result = await withUserClient(req.userId, async (client) => {
-      const patterns = await client.query(
-        `SELECT id, issuer_id, sender_pattern, regex, field_map
-           FROM parser_patterns
-          WHERE channel = 'sms' AND is_active = true
-          ORDER BY version DESC`
-      );
-
-      const parsed = parseSmsAgainstPatterns(patterns.rows, {
-  sender,
-  body,
-  ownUserName: await profileDisplayName(client, req.userId),
-});
-      const patternRow = patterns.rows.find((p) => p.id === parsed.patternId);
-      const statementDaySync = await importResolvers.syncStatementDayFromSms(client, req.userId, {
-        body,
-        patternIssuerId: patternRow ? patternRow.issuer_id : uniqueSmsPatternIssuerId(patterns.rows, sender),
-        observedAt: occurred,
-        explicitUserCardId: userCardId,
-      });
-      const dueDaySync = await importResolvers.syncDueDayFromSms(client, req.userId, {
-        body,
-        observedAt: occurred,
-        patternIssuerId: patternRow ? patternRow.issuer_id : uniqueSmsPatternIssuerId(patterns.rows, sender),
-        explicitUserCardId: userCardId,
-      });
-      if (!parsed.ok) {
-        // Limit alerts are not spend transactions, but an explicit credit
-        // limit can still safely complete a card that has no limit yet.
-        const limitSync = await importResolvers.syncCreditLimitFromSms(client, req.userId, {
-          body,
-          patternIssuerId: uniqueSmsPatternIssuerId(patterns.rows, sender),
-        });
-        const mandate = parseSubscriptionMandate({ sender, body });
-        const mandateRow = mandate.ok
-          ? await persistSubscriptionMandate(client, req.userId, {
-              parsed: mandate,
-              body,
-              occurred,
-              patternIssuerId: uniqueSmsPatternIssuerId(patterns.rows, sender),
-            })
-          : null;
-        // Through the RPC, not a direct INSERT. `parser_failures` is
-        // admin-only under RLS (0011), so the direct insert that used to be
-        // here raised "new row violates row-level security policy" for every
-        // real user — aborting this transaction and turning the documented
-        // `200 { parsed: false }` into a 500 for anyone whose bank SMS didn't
-        // match a pattern. See migration 0033's header; the RPC is SECURITY
-        // DEFINER and also aggregates repeats into `occurrences` instead of
-        // inserting a near-duplicate row per message.
-        const failure = await client.query(
-          `SELECT pandapay.record_parser_failure('sms', $1, $2, $3) AS id`,
-          [sender || null, redactSmsShape(body), appVersion || null]
-        );
-        return {
-          status: 200,
-          parsed: false,
-          reason: parsed.reason,
-          creditLimitDetected: Boolean(limitSync),
-          creditLimitUpdated: Boolean(limitSync?.updated),
-          dueDateDetected: Boolean(dueDaySync),
-          dueDayUpdated: Boolean(dueDaySync?.updated),
-          statementDateDetected: Boolean(statementDaySync),
-          statementDayUpdated: Boolean(statementDaySync?.updated),
-          subscriptionMandateDetected: Boolean(mandateRow),
-          subscriptionMandateId: mandateRow?.id || null,
-          parserFailure: { id: failure.rows[0].id },
-        };
-      }
-
-      // Bump the winning pattern's telemetry in the same transaction as the
-      // insert it enabled — success_count/failure_count are evidently meant
-      // to track a pattern's live hit rate, not just exist unused.
-      if (parsed.patternId) {
-        await client.query(
-          `UPDATE parser_patterns SET success_count = success_count + 1, updated_at = now() WHERE id = $1`,
-          [parsed.patternId]
-        );
-      }
-
-      // The SMS's own date beats the request's, which beats now(). Banks
-      // text about a swipe that already happened, sometimes hours later and
-      // occasionally the next morning; filing it under the moment the
-      // device happened to forward it puts spend in the wrong week and, at
-      // a month boundary, the wrong month.
-      const parsedTimestamp = parseSmsTransactionTimestamp(parsed.fields.date, body, occurred);
-      const parsedDate = parsedTimestamp.date;
-      // The request timestamp is the SMS-received time and is used for the
-      // accounting date only when the bank's own date cannot be parsed. The
-      // idempotency key deliberately does not use either timestamp: Android
-      // can expose one message through broadcast and inbox with different
-      // receive times.
-      const effectiveOccurred = parsedDate || occurred;
-      // Sender + body are available even when the caller has no provider
-      // timestamp, so replay protection should not disappear in that case.
-      const sourceKey = importSourceKey(req.userId, sender, body);
-
-      await importResolvers.syncCreditLimitFromSms(client, req.userId, {
-        body,
-        patternIssuerId: patternRow ? patternRow.issuer_id : uniqueSmsPatternIssuerId(patterns.rows, sender),
-      });
-
-      const inserted = await importParsedMessage(client, req.userId, {
-        parsed,
-        patternIssuerId: patternRow ? patternRow.issuer_id : null,
-        sender,
-        rawText: body,
-        source: 'sms',
-        occurred: effectiveOccurred,
-        sourceKey,
-        backfill: backfill === true,
-        observedAt: occurred,
-        explicitUserCardId: userCardId,
-        explicitCategoryId: categoryId || null,
-        rail,
-        observationMetadata: {
-          transport: 'sms',
-          ...(parsedTimestamp.precise ? { transactionTimePrecise: true } : {}),
-          ...(parsed.fields.last4 ? { cardLast4: parsed.fields.last4 } : {}),
-          ...(patternRow?.issuer_id ? { patternIssuerId: patternRow.issuer_id } : {}),
-        },
-      });
-
-      if (inserted.needsReview) {
-        // Parsed fine, but we can't say which card it belongs to. Filed for
-        // the user to confirm rather than rejected — the old 400 threw away
-        // a perfectly good transaction because one field was unknown.
-        return {
-          status: 200,
-          ...inserted,
-          patternId: parsed.patternId,
-          dueDateDetected: Boolean(dueDaySync),
-          dueDayUpdated: Boolean(dueDaySync?.updated),
-          statementDateDetected: Boolean(statementDaySync),
-          statementDayUpdated: Boolean(statementDaySync?.updated),
-        };
-      }
-
-      if (inserted.status === 200 && inserted.duplicate) {
-        // Already imported. Reported as its own outcome rather than folded
-        // into `parsed: true`, so the client can tell the user "42 already
-        // imported, skipped" instead of counting them again.
-        return {
-          status: 200,
-          parsed: true,
-          duplicate: true,
-          transaction: inserted.transaction,
-          patternId: parsed.patternId,
-          dueDateDetected: Boolean(dueDaySync),
-          dueDayUpdated: Boolean(dueDaySync?.updated),
-          statementDateDetected: Boolean(statementDaySync),
-          statementDayUpdated: Boolean(statementDaySync?.updated),
-        };
-      }
-      if (inserted.status !== 201) return inserted;
-      return {
-        status: 201,
-        parsed: true,
-        patternId: parsed.patternId,
-        dueDateDetected: Boolean(dueDaySync),
-        dueDayUpdated: Boolean(dueDaySync?.updated),
-        statementDateDetected: Boolean(statementDaySync),
-        statementDayUpdated: Boolean(statementDaySync?.updated),
-        ...inserted,
-      };
-    });
-
-    if (result.status !== 201 && result.status !== 200) {
-      return res.status(result.status).json({ error: result.error });
-    }
-    res.status(result.status).json(result);
-  } catch (err) {
-    console.error('POST /transactions/from-sms error', safeErrorCode(err));
-    res.status(500).json({ error: 'internal_error' });
-  }
-});
-
-/** Largest batch accepted by POST /transactions/from-sms/batch. */
-const SMS_BATCH_LIMIT = 200;
-
-/**
- * POST /transactions/from-sms/batch — smsextractionimple.md Task S-1a.
- *
- * The backup-file import used to make one HTTP round trip per message, in a
- * sequential loop, behind a static "Importing…" label. A five-thousand
- * message export was five thousand requests: slow enough that users kill
- * the app mid-import, and enough redundant TLS/auth/pattern-load work to
- * matter on the server too. Same per-message semantics as the single route
- * — this is a transport change, not a behaviour change.
- *
- * Deliberately NOT one big database transaction. A partial import is a
- * perfectly good outcome here (the messages that parsed are real
- * transactions the user wants kept), and `source_key` makes resuming safe:
- * re-sending a batch that half-succeeded skips what already landed. Rolling
- * the whole thing back on one bad message would throw away good data to
- * preserve a consistency property nobody needs.
- *
- * Patterns are loaded ONCE for the whole batch rather than per message,
- * which is most of the speedup.
- */
-app.post('/transactions/from-sms/batch', requireAuth, async (req, res) => {
-  const { messages, backfill, appVersion } = req.body || {};
-  if (!Array.isArray(messages) || messages.length === 0) {
-    return res.status(400).json({ error: 'messages must be a non-empty array' });
-  }
-  if (messages.length > SMS_BATCH_LIMIT) {
-    return res.status(400).json({ error: `messages may not exceed ${SMS_BATCH_LIMIT} per request` });
-  }
-
-  try {
-    const payload = await withUserClient(req.userId, async (client) => {
-      const patterns = await client.query(
-        `SELECT id, issuer_id, sender_pattern, regex, field_map
-           FROM parser_patterns
-          WHERE channel = 'sms' AND is_active = true
-          ORDER BY version DESC`
-      );
-
-      const results = [];
-      let dueDatesUpdated = 0;
-      let statementDaysUpdated = 0;
-
-      // Spend uploads are intentionally current-month-first, but billing
-      // detection should prefer printed statement dates. A printed
-      // generation or period-end date is self-dated and wins outright;
-      // arrival-date fallbacks rank by the same previous-cycle preference as
-      // before. use the current month only when no history is present.
-      const now = new Date();
-      const nowParts = new Intl.DateTimeFormat('en-CA', {
-        timeZone: 'Asia/Kolkata', year: 'numeric', month: '2-digit', day: '2-digit',
-      }).formatToParts(now);
-      const nowYear = Number(nowParts.find((part) => part.type === 'year')?.value);
-      const nowMonth = Number(nowParts.find((part) => part.type === 'month')?.value);
-      const nowMonthIndex = nowYear * 12 + nowMonth - 1;
-      const statementCandidates = [];
-      for (let i = 0; i < messages.length; i += 1) {
-        const message = messages[i] || {};
-        if (!message.body || typeof message.body !== 'string') continue;
-        const occurred = message.occurredAt ? new Date(message.occurredAt) : null;
-        if (!occurred || Number.isNaN(occurred.getTime())) continue;
-        const detected = importResolvers.extractStatementDate(message.body, occurred);
-        if (!detected) continue;
-        const parts = new Intl.DateTimeFormat('en-CA', {
-          timeZone: 'Asia/Kolkata', year: 'numeric', month: '2-digit', day: '2-digit',
-        }).formatToParts(occurred);
-        const year = detected.explicit
-          ? detected.date.getFullYear()
-          : Number(parts.find((part) => part.type === 'year')?.value);
-        const month = detected.explicit
-          ? detected.date.getMonth() + 1
-          : Number(parts.find((part) => part.type === 'month')?.value);
-        const distance = nowMonthIndex - (year * 12 + month - 1);
-        if (detected.explicit ? distance >= 0 : (distance === 1 || distance === 2)) {
-          statementCandidates.push({ index: i, distance, explicit: detected.explicit, receivedAt: occurred.getTime() });
-        }
-      }
-      statementCandidates.sort((a, b) => {
-        const rank = (candidate) => candidate.explicit ? 0
-          : candidate.distance === 1 ? 1
-            : candidate.distance === 2 ? 2
-              : 3;
-        return rank(a) - rank(b)
-          || Number(b.explicit) - Number(a.explicit)
-          || a.receivedAt - b.receivedAt
-          || a.index - b.index;
-      });
-      for (const candidate of statementCandidates) {
-        const message = messages[candidate.index];
-        const occurred = new Date(message.occurredAt);
-        const synced = await importResolvers.syncStatementDayFromSms(client, req.userId, {
-          body: message.body,
-          patternIssuerId: uniqueSmsPatternIssuerId(patterns.rows, message.sender),
-          observedAt: occurred,
-          explicitUserCardId: message.userCardId,
-        });
-        if (synced?.updated) statementDaysUpdated += 1;
-      }
-
-      for (let i = 0; i < messages.length; i += 1) {
-        const { sender, body, userCardId, occurredAt, categoryId, rail } = messages[i] || {};
-        // userCardId is no longer required per message — see
-        // [importParsedMessage]. A message whose card can't be resolved is
-        // filed for review rather than rejected, which is what makes a
-        // multi-thousand-message backfill possible without a tap per
-        // message.
-        if (!body || typeof body !== 'string' || !body.trim()) {
-          results.push({ index: i, outcome: 'invalid', reason: 'body is required' });
-          continue;
-        }
-        const occurred = occurredAt ? new Date(occurredAt) : null;
-        if (!occurred || Number.isNaN(occurred.getTime())) {
-          // No usable original timestamp means no reliable accounting date.
-          // Reject rather than silently dating the message `now()` — that
-          // default is the D2 bug this task exists to remove.
-          results.push({ index: i, outcome: 'invalid', reason: 'occurredAt is required for a batch import' });
-          continue;
-        }
-
-        const statementDateDetected = Boolean(
-          importResolvers.extractStatementDate(body, occurred),
-        );
-        const parsed = parseSmsAgainstPatterns(patterns.rows, {
-  sender,
-  body,
-  ownUserName: await profileDisplayName(client, req.userId),
-});
-        const patternRow = patterns.rows.find((p) => p.id === parsed.patternId);
-        const dueDaySync = await importResolvers.syncDueDayFromSms(client, req.userId, {
-          body,
-          observedAt: occurred,
-          patternIssuerId: patternRow ? patternRow.issuer_id : uniqueSmsPatternIssuerId(patterns.rows, sender),
-          explicitUserCardId: userCardId,
-        });
-        if (dueDaySync?.updated) dueDatesUpdated += 1;
-        if (!parsed.ok) {
-          await importResolvers.syncCreditLimitFromSms(client, req.userId, {
-            body,
-            patternIssuerId: uniqueSmsPatternIssuerId(patterns.rows, sender),
-          });
-          const mandate = parseSubscriptionMandate({ sender, body });
-          const mandateRow = mandate.ok
-            ? await persistSubscriptionMandate(client, req.userId, {
-                parsed: mandate,
-                body,
-                occurred,
-                patternIssuerId: uniqueSmsPatternIssuerId(patterns.rows, sender),
-              })
-            : null;
-          await client.query(
-            `SELECT pandapay.record_parser_failure('sms', $1, $2, $3) AS id`,
-            [sender || null, redactSmsShape(body), appVersion || null]
-          );
-          results.push({
-            index: i,
-            outcome: 'unparsed',
-            reason: parsed.reason,
-            dueDateDetected: Boolean(dueDaySync),
-            dueDayUpdated: Boolean(dueDaySync?.updated),
-            statementDateDetected,
-            statementDayUpdated: false,
-            subscriptionMandateDetected: Boolean(mandateRow),
-            subscriptionMandateId: mandateRow?.id || null,
-          });
-          continue;
-        }
-
-        if (parsed.patternId) {
-          await client.query(
-            `UPDATE parser_patterns SET success_count = success_count + 1, updated_at = now() WHERE id = $1`,
-            [parsed.patternId]
-          );
-        }
-
-        await importResolvers.syncCreditLimitFromSms(client, req.userId, {
-          body,
-          patternIssuerId: patternRow ? patternRow.issuer_id : uniqueSmsPatternIssuerId(patterns.rows, sender),
-        });
-        // The bank's transaction date is the accounting date. Using the
-        // received time here moves backfilled purchases into the wrong
-        // week/month whenever a message arrives later than the purchase.
-        const parsedTimestamp = parseSmsTransactionTimestamp(parsed.fields.date, body, occurred);
-        const effectiveOccurred = parsedTimestamp.date || occurred;
-        const inserted = await importParsedMessage(client, req.userId, {
-          parsed,
-          patternIssuerId: patternRow ? patternRow.issuer_id : null,
-          sender,
-          rawText: body,
-          source: 'sms',
-          occurred: effectiveOccurred,
-          observedAt: occurred,
-          sourceKey: importSourceKey(req.userId, sender, body),
-          backfill: backfill === true,
-          explicitUserCardId: userCardId,
-          explicitCategoryId: categoryId || null,
-          rail,
-          observationMetadata: {
-            transport: 'sms',
-            ...(parsedTimestamp.precise ? { transactionTimePrecise: true } : {}),
-            ...(parsed.fields.last4 ? { cardLast4: parsed.fields.last4 } : {}),
-            ...(patternRow?.issuer_id ? { patternIssuerId: patternRow.issuer_id } : {}),
-          },
-        });
-
-        if (inserted.needsReview) {
-          results.push({
-            index: i,
-            outcome: 'needs_review',
-            needsReviewItemId: inserted.needsReviewItemId,
-            dueDateDetected: Boolean(dueDaySync),
-            dueDayUpdated: Boolean(dueDaySync?.updated),
-            statementDateDetected,
-            statementDayUpdated: false,
-          });
-        } else if (inserted.status === 200 && inserted.duplicate) {
-          results.push({
-            index: i,
-            outcome: 'duplicate',
-            transactionId: inserted.transaction?.id,
-            transaction: inserted.transaction,
-            dueDateDetected: Boolean(dueDaySync),
-            dueDayUpdated: Boolean(dueDaySync?.updated),
-            statementDateDetected,
-            statementDayUpdated: false,
-          });
-        } else if (inserted.status === 201) {
-          results.push({
-            index: i,
-            outcome: 'imported',
-            transactionId: inserted.transaction.id,
-            dueDateDetected: Boolean(dueDaySync),
-            dueDayUpdated: Boolean(dueDaySync?.updated),
-            statementDateDetected,
-            statementDayUpdated: false,
-          });
-        } else {
-          results.push({
-            index: i,
-            outcome: 'error',
-            reason: inserted.error,
-            dueDateDetected: Boolean(dueDaySync),
-            dueDayUpdated: Boolean(dueDaySync?.updated),
-          });
-        }
-      }
-
-      return {
-        results,
-        summary: {
-          imported: results.filter((r) => r.outcome === 'imported').length,
-          duplicate: results.filter((r) => r.outcome === 'duplicate').length,
-          needsReview: results.filter((r) => r.outcome === 'needs_review').length,
-          unparsed: results.filter((r) => r.outcome === 'unparsed').length,
-          invalid: results.filter((r) => r.outcome === 'invalid').length,
-          error: results.filter((r) => r.outcome === 'error').length,
-          dueDatesUpdated,
-          statementDaysUpdated,
-        },
-      };
-    });
-
-    res.status(200).json(payload);
-  } catch (err) {
-    console.error('POST /transactions/from-sms/batch error', safeErrorCode(err));
-    res.status(500).json({ error: 'internal_error' });
-  }
-});
-
-/**
- * POST /transactions/reconcile-sms — repair safe legacy SMS replays and
- * classify rows imported before merchant-category resolution was enabled.
- * This is intentionally idempotent and user-scoped; it never inserts a
- * transaction and it never merges two live purchases without a backfill row.
- */
-app.post('/transactions/reconcile-sms', requireAuth, async (req, res) => {
-  try {
-    const result = await withUserClient(req.userId, (client) =>
-      repairSmsHistory(client, req.userId, { reviewCrossSource: true }));
-    res.json({ ...result, reconciliationVersion: 3 });
-  } catch (err) {
-    console.error('POST /transactions/reconcile-sms error', safeErrorCode(err));
-    res.status(500).json({ error: 'internal_error' });
-  }
-});
-
 /**
  * A device that retained the original SMS can correct a confirmed legacy
  * AutoPay card-bill row. Only structured fields cross the wire; the raw SMS
@@ -5487,37 +4770,6 @@ app.post('/transactions/autopay-bill-correction', requireAuth, async (req, res) 
   } catch (error) {
     console.error('POST /transactions/autopay-bill-correction error', error);
     return res.status(500).json({ error: 'internal_error' });
-  }
-});
-
-/**
- * GET /transactions/sms-import-state — the small amount of server state the
- * Android inbox reconciler needs to detect a server-side data reset. The
- * client keeps its last successful inbox checkpoint locally; comparing this
- * count lets it recover with a full inbox scan when the account's imported
- * SMS observations were deleted, without rescanning the entire inbox on
- * every normal launch.
- */
-app.get('/transactions/sms-import-state', requireAuth, async (req, res) => {
-  try {
-    const result = await withUserClient(req.userId, (client) =>
-      client.query(
-        `SELECT COUNT(*)::int AS sms_observation_count,
-                MAX(o.observed_at) AS latest_sms_observed_at
-           FROM transaction_observations o
-          WHERE o.profile_id = $1
-            AND o.source IN ('sms', 'sms_bulk')`,
-        [req.userId],
-      ),
-    );
-    const row = result.rows[0] ?? {};
-    res.json({
-      smsObservationCount: Number(row.sms_observation_count ?? 0),
-      latestSmsObservedAt: row.latest_sms_observed_at ?? null,
-    });
-  } catch (err) {
-    console.error('GET /transactions/sms-import-state error', safeErrorCode(err));
-    res.status(500).json({ error: 'internal_error' });
   }
 });
 
@@ -8690,7 +7942,6 @@ app.post('/profile/contributions-opt-in', requireAuth, async (req, res) => {
         `UPDATE profiles SET contributions_opt_in = $2 WHERE id = $1 RETURNING contributions_opt_in`,
         [req.userId, optIn]
       );
-      if (!optIn) await smsLearning.deleteLearningExamplesForUser(client, req.userId);
       return updated;
     });
     res.json({ profile: result.rows[0] || null });
@@ -8720,6 +7971,7 @@ const CONSENT_PURPOSES = [
   'aggregate_insights',
   'partner_sharing',
   'sms_shared_learning',
+  'email_import',
 ];
 
 /**
@@ -8802,13 +8054,8 @@ app.post('/consents', requireAuth, async (req, res) => {
          RETURNING purpose, granted, granted_at, policy_version, source_screen`,
         [req.userId, purpose, policyVersion, granted, sourceScreen || null]
       );
-      if (purpose === 'sms_shared_learning' && !granted) {
-        await smsLearning.deleteLearningExamplesForUser(client, req.userId);
-        await client.query(
-          'DELETE FROM public.sms_ai_learning_proposals WHERE profile_id = $1',
-          [req.userId],
-        );
-      }
+      // Revoking sms_shared_learning purges the v2 template data in the database
+      // (trigger sms_v2_revoke_template_consent), inside this transaction.
       return inserted;
     });
     res.status(201).json({ consent: result.rows[0] });
@@ -9571,10 +8818,8 @@ app.post('/inbound-emails/webhook', async (req, res) => {
             },
           });
           if ((imported.status === 200 || imported.status === 201) && imported.transaction) {
-            await client.query(`UPDATE inbound_emails SET produced_txn_id = $1 WHERE id = $2`, [
-              imported.transaction.id,
-              row.inbound_email_id,
-            ]);
+            // Link the transaction and drop the email text in one statement.
+            await markInboundEmailConverted(client, row.inbound_email_id, imported.transaction.id);
             await client.query(`UPDATE transactions SET raw_source_ref = $1 WHERE id = $2`, [
               row.inbound_email_id,
               imported.transaction.id,
@@ -9744,10 +8989,7 @@ app.post('/inbound-emails/:id/create-transaction', requireAuth, async (req, res)
       }
       if (inserted.status !== 200 && inserted.status !== 201) return inserted;
 
-      await client.query(
-        `UPDATE inbound_emails SET produced_txn_id = $1 WHERE id = $2`,
-        [inserted.transaction.id, email.id]
-      );
+      await markInboundEmailConverted(client, email.id, inserted.transaction.id);
       await client.query(`UPDATE transactions SET raw_source_ref = $1 WHERE id = $2`, [email.id, inserted.transaction.id]);
 
       return { ...inserted, status: inserted.status };
@@ -9961,20 +9203,14 @@ app.get('/export', requireAuth, async (req, res) => {
 });
 
 /**
- * POST /imap-connections — Task F7. `imap_connections` is a genuinely new
- * table this pass added (0018_imap_connections.sql — no migration modeled
- * IMAP credentials before). The app password is encrypted at rest via
- * pgcrypto's `pgp_sym_encrypt` (extension already enabled,
- * 0001_extensions_and_enums.sql) keyed off `IMAP_ENCRYPTION_KEY`, an env
- * var never committed/logged — NOT plaintext, per this project's
- * payments-app security stance. This is still a stopgap: a single static
- * symmetric key in an env var is weaker than real envelope
- * encryption/KMS-managed key rotation, flagged explicitly as a follow-up
- * (see the migration's own comment and this chunk's PROGRESS.md entry) —
- * do not treat this as the final answer for credential-at-rest storage.
+ * POST /imap-connections — Task F7. The mailbox app password is sealed in this
+ * process with AES-256-GCM (imap_credentials.js): the key never reaches
+ * PostgreSQL, and each sealed value is bound to the profile, the connection id
+ * and the key id. A bank-sender filter is required, and every address in it
+ * must match a sender the email parser already knows, so polling never reads
+ * the rest of the mailbox. The password is never logged or returned.
  * Both connectors restrict TLS destinations to public IP addresses; this
  * policy reports private destinations without rewriting saved settings.
- * The password itself is never logged anywhere in this route.
  */
 app.post('/imap-connections', requireAuth, async (req, res) => {
   const { email, appPassword, imapHost, imapPort, senderFilter } = req.body || {};
@@ -10000,36 +9236,55 @@ app.post('/imap-connections', requireAuth, async (req, res) => {
   if (parsedImapPort != null && (!Number.isInteger(parsedImapPort) || parsedImapPort < 1 || parsedImapPort > 65535)) {
     return res.status(400).json({ error: 'imapPort is invalid' });
   }
-  const encryptionKey = config.imapEncryptionKey;
-  if (!encryptionKey) {
+  let senders;
+  try {
+    senders = normalizeSenderFilter(senderFilter);
+  } catch (_) {
+    return res.status(400).json({ error: 'sender_filter_required' });
+  }
+  const key = config.imapKeyring?.current;
+  if (!key) {
     // Fail loudly rather than silently falling back to plaintext storage.
     console.error('POST /imap-connections: IMAP_ENCRYPTION_KEY is not set');
     return res.status(500).json({ error: 'internal_error' });
   }
   try {
-    const result = await withUserClient(req.userId, (client) =>
-      client.query(
-        `INSERT INTO imap_connections (profile_id, email, app_password_encrypted, imap_host, imap_port, sender_filter)
-         VALUES ($1, $2, pgp_sym_encrypt($3, $4), $5, $6, $7)
-         ON CONFLICT (profile_id, email) DO UPDATE
-           SET app_password_encrypted = EXCLUDED.app_password_encrypted,
-               imap_host = EXCLUDED.imap_host,
-               imap_port = EXCLUDED.imap_port,
-               sender_filter = EXCLUDED.sender_filter,
-               is_active = true
-         RETURNING id, profile_id, email, imap_host, imap_port, sender_filter, is_active, verified_at, last_poll_at, last_poll_status, created_at`,
-        [req.userId, email, appPassword, encryptionKey, imapHost, imapPort ?? 993, senderFilter ?? null]
-      )
-    );
-    // Never echo app_password_encrypted (or the plaintext) back to the client.
-    res.status(201).json({ imapConnection: result.rows[0] });
+    const saved = await withUserClient(req.userId, async (client) => {
+      requireBankSenders(senders, await bankSenderPatterns(client));
+      return saveImapConnection(client, {
+        profileId: req.userId, email, appPassword, imapHost, imapPort: parsedImapPort, senderFilter: senders.join(','),
+      }, key);
+    });
+    // The sealed password is never selected or echoed back to the client.
+    res.status(201).json({ imapConnection: saved });
   } catch (err) {
+    if (err?.message === 'sender_filter_not_bank') {
+      return res.status(400).json({ error: 'sender_filter_not_bank' });
+    }
     console.error('POST /imap-connections error', safeErrorCode(err));
     res.status(500).json({ error: 'internal_error' });
   }
 });
 
-/** GET /imap-connections/me — never selects app_password_encrypted. */
+/**
+ * GET /imap-connections/bank-senders — the default sender list the connect
+ * screen pre-fills: full bank addresses the email parser already uses. The
+ * user can remove entries but the server rejects anything outside this set.
+ */
+app.get('/imap-connections/bank-senders', requireAuth, async (req, res) => {
+  try {
+    const patterns = await withUserClient(req.userId, (client) => bankSenderPatterns(client));
+    const senders = patterns.filter((p) => {
+      try { normalizeSenderFilter(p); return true; } catch (_) { return false; }
+    }).sort();
+    res.json({ senders });
+  } catch (err) {
+    console.error('GET /imap-connections/bank-senders error', safeErrorCode(err));
+    res.status(500).json({ error: 'internal_error' });
+  }
+});
+
+/** GET /imap-connections/me — never selects the sealed password. */
 app.get('/imap-connections/me', requireAuth, async (req, res) => {
   try {
     const result = await withUserClient(req.userId, (client) =>
@@ -10047,33 +9302,21 @@ app.get('/imap-connections/me', requireAuth, async (req, res) => {
 });
 
 /**
- * POST /imap-connections/:id/test — a real IMAP handshake (see
- * ./imap_test.js). Decrypts the stored app password server-side via
- * pgp_sym_decrypt, opens a TLS socket to imap_host:imap_port, and attempts
- * a LOGIN. The decrypted password lives only in this request's memory —
- * never logged, never echoed back to the client, and the query that
- * decrypts it is scoped to this user's own row (RLS + explicit
- * profile_id match). On success marks `verified_at`; on failure leaves it
- * untouched and returns a fixed user-facing reason for expected IMAP
- * failures. Server response text and socket exception details are never
- * returned.
- *
- * Falls back to a format-only check when IMAP_ENCRYPTION_KEY isn't set,
- * so local/dev environments without the key configured don't hard-fail —
- * but production must have it set for this to mean anything.
+ * POST /imap-connections/:id/test — a real IMAP handshake (see ./imap_test.js).
+ * Opens the sealed password in memory, opens a TLS socket to
+ * imap_host:imap_port and attempts a LOGIN. The password is never logged or
+ * echoed back, and the lookup is scoped to this user's own row (RLS plus an
+ * explicit profile_id match). On success marks `verified_at`; on failure
+ * leaves it untouched and returns a fixed user-facing reason for expected
+ * IMAP failures. Server response text and socket exception details are
+ * never returned.
  */
 app.post('/imap-connections/:id/test', requireAuth, async (req, res) => {
   try {
-    const encryptionKey = config.imapEncryptionKey;
+    const keyring = config.imapKeyring;
     const result = await withUserClient(req.userId, async (client) => {
-      const existing = await client.query(
-        encryptionKey
-          ? `SELECT id, email, imap_host, imap_port, pgp_sym_decrypt(app_password_encrypted, $3) AS app_password
-               FROM imap_connections WHERE id = $1 AND profile_id = $2`
-          : `SELECT id, email, imap_host, imap_port FROM imap_connections WHERE id = $1 AND profile_id = $2`,
-        encryptionKey ? [req.params.id, req.userId, encryptionKey] : [req.params.id, req.userId]
-      );
-      const conn = existing.rows[0];
+      const conn = await openStoredImapPassword(
+        client, { connectionId: req.params.id, profileId: req.userId }, keyring?.byId ?? new Map());
       if (!conn) return null;
 
       const hostLooksValid = isValidImapHost(conn.imap_host);
@@ -10086,8 +9329,8 @@ app.post('/imap-connections/:id/test', requireAuth, async (req, res) => {
       if (!formatOk) {
         return { ok: false, connection: safeConn, reason: 'One or more fields look malformed.' };
       }
-      if (!encryptionKey || !conn.app_password) {
-        return { ok: false, connection: safeConn, reason: 'IMAP_ENCRYPTION_KEY not configured on this server — cannot decrypt the stored password to test it.' };
+      if (!keyring || !conn.app_password) {
+        return { ok: false, connection: safeConn, reason: 'The stored password could not be opened. Disconnect and connect the mailbox again.' };
       }
 
       const loginResult = await testImapLogin({
@@ -10112,6 +9355,25 @@ app.post('/imap-connections/:id/test', requireAuth, async (req, res) => {
     res.json(result);
   } catch (err) {
     console.error('POST /imap-connections/:id/test error', safeErrorCode(err));
+    res.status(500).json({ error: 'internal_error' });
+  }
+});
+
+/**
+ * DELETE /imap-connections/:id — disconnect. The row is deleted, and the
+ * sealed password goes with it. Account deletion cascades the same way.
+ */
+app.delete('/imap-connections/:id', requireAuth, async (req, res) => {
+  if (!/^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(req.params.id)) {
+    return res.status(404).json({ error: 'not_found' });
+  }
+  try {
+    const deleted = await withUserClient(req.userId, (client) =>
+      deleteImapConnection(client, { connectionId: req.params.id, profileId: req.userId }));
+    if (!deleted) return res.status(404).json({ error: 'not_found' });
+    res.status(204).end();
+  } catch (err) {
+    console.error('DELETE /imap-connections/:id error', safeErrorCode(err));
     res.status(500).json({ error: 'internal_error' });
   }
 });
@@ -10170,7 +9432,7 @@ const stopImapPoller = startImapPoller(
     pool,
     workerPool: imapWorkerPool,
     withUserClient,
-    encryptionKey: config.imapEncryptionKey,
+    imapKeys: config.imapKeyring?.byId ?? null,
     parseSmsAgainstPatterns,
     importParsedMessage,
     importSourceKey,

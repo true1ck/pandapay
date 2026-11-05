@@ -6,7 +6,6 @@ const test = require('node:test');
 const assert = require('node:assert/strict');
 
 const smsFacts = require('../src/sms_facts');
-const { SPEND_CATEGORIES, UNIVERSAL_RESPONSE_SCHEMA, buildGeminiPrompt } = require('../src/gemini_worker');
 const { BUILTIN_CATEGORY_RULES } = require('../src/merchant_category');
 
 const repoRoot = path.join(__dirname, '..', '..');
@@ -51,16 +50,6 @@ test('taxonomy v1 fixture matches the API and mobile fact contracts exactly', ()
   );
   assert.deepEqual(new Set(canonical).size, canonical.length);
   assert.ok(canonical.every((slug) => /^[a-z][a-z0-9_]*$/.test(slug)));
-});
-test('AI schema and prompt are coupled to the API fact vocabulary', () => {
-  assert.strictEqual(SPEND_CATEGORIES, smsFacts.SPEND_CATEGORIES);
-  assert.deepEqual(
-    UNIVERSAL_RESPONSE_SCHEMA.properties.facts.items.properties.payload.properties.category.enum,
-    canonical,
-  );
-  const prompt = buildGeminiPrompt({ payload: { body: 'synthetic taxonomy fixture' } });
-  assert.match(prompt, new RegExp(`Allowed category values for spend facts: ${canonical.join(', ')}\\.`));
-  assert.doesNotMatch(prompt, /sports_fitness|sports|fitness/);
 });
 test('downloaded/shared SMS rules use the same vocabulary and reject proposal-only slugs', () => {
   const bundleSource = read('app/lib/data/local/sms_rule_bundle.dart');

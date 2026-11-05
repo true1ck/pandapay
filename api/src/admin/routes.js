@@ -3,9 +3,6 @@
 const { registerInlineAdminRoutes } = require('./inline_routes');
 const { registerRuleFamilyRoutes } = require('../admin_rule_families');
 const { registerAdminReferralOperationsRoutes } = require('../admin_referral_operations');
-const aiQueueRoute = require('../ai_queue_route');
-const smsLearning = require('../sms_learning');
-const smsLearningFeedbackRoute = require('../sms_learning_feedback_route');
 const smsRuleBundle = require('../sms_rule_bundle');
 const { registerPrivateRulesAdminRoutes } = require('../sms_v2/rules_admin_route');
 const { registerSystemStatusRoutes } = require('./system_status');
@@ -144,9 +141,6 @@ registerRuleFamilyRoutes(api.legacyApp, adminRouteDeps, {
 });
 
 
-  aiQueueRoute.registerAiQueueRoutes(legacyApp, legacyDependencies);
-  smsLearning.registerSmsLearningAdminRoutes(legacyApp, legacyDependencies);
-  smsLearningFeedbackRoute.registerSmsLearningFeedbackRoute(legacyApp, legacyDependencies);
   smsRuleBundle.registerSmsRuleBundleRoutes(legacyApp, legacyDependencies);
 
   api.route('GET', '/admin/reference/categories', async (_req, res, ctx) => {
@@ -157,8 +151,6 @@ registerRuleFamilyRoutes(api.legacyApp, adminRouteDeps, {
       return res.status(500).json({ error: 'internal_error' });
     }
   });
-  api.route('POST', '/admin/sms-learning/cycle', async (_req, res) =>
-    res.status(409).json({ error: 'autonomous_cycle_is_worker_only' }));
   registerSystemStatusRoutes(api);
 }
 

@@ -453,7 +453,7 @@ fi
   echo 'FATAL: migration baseline mount must be a real directory' >&2; exit 1;
 }
 echo "==> Building target images before the maintenance window"
-"${TARGET_COMPOSE[@]}" build api auth rewards-worker backup db-migrate gemini-worker sms-learning-worker
+"${TARGET_COMPOSE[@]}" build api auth rewards-worker backup db-migrate
 
 echo "==> Read-only product migration and auth contact preflight before downtime"
 timeout --kill-after=10s --foreground 240s "${TARGET_COMPOSE[@]}" run --rm --no-deps \
@@ -461,7 +461,7 @@ timeout --kill-after=10s --foreground 240s "${TARGET_COMPOSE[@]}" run --rm --no-
 timeout --kill-after=10s --foreground 120s "${TARGET_COMPOSE[@]}" run --rm --no-deps \
   --entrypoint node db-migrate /workspace/auth/scripts/auditContactUniqueness.js --require-unique
 
-WRITE_SERVICES=(auth api rewards-worker gemini-worker sms-learning-worker)
+WRITE_SERVICES=(auth api rewards-worker)
 echo "==> Checking the running Compose service inventory against this release"
 active_services="$(timeout --kill-after=10s --foreground 20s docker ps \
   --filter label=com.docker.compose.project=pandapay-prod \
@@ -476,7 +476,7 @@ while read -r container_id live_project live_service extra; do
     exit 1
   fi
   case "$live_service" in
-    auth|api|rewards-worker|gemini-worker|sms-learning-worker|backup|db-migrate|maps-scraper) ;;
+    auth|api|rewards-worker|backup|db-migrate|maps-scraper) ;;
     *)
       echo 'FATAL: an unreviewed production service is running; reconcile the deployed release and all writers before downtime.' >&2
       exit 1

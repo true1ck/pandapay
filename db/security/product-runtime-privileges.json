@@ -300,7 +300,7 @@
       "role": "imap_worker_runtime",
       "relations": [],
       "routines": [
-        "imap_worker.next_connections(text,integer)",
+        "imap_worker.next_connections(integer)",
         "imap_worker.defer_connections(uuid)"
       ]
     },
@@ -308,7 +308,7 @@
       "role": "pandapay_imap_worker",
       "relations": [],
       "routines": [
-        "imap_worker.next_connections(text,integer)",
+        "imap_worker.next_connections(integer)",
         "imap_worker.defer_connections(uuid)"
       ]
     },
@@ -492,7 +492,7 @@
     },
     {
       "role": "imap_worker_runtime",
-      "identity": "imap_worker.next_connections(text,integer)"
+      "identity": "imap_worker.next_connections(integer)"
     },
     {
       "role": "imap_worker_runtime",

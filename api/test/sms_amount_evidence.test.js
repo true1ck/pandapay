@@ -3,7 +3,6 @@ const assert = require('node:assert/strict');
 const cases = require('../../app/test/fixtures/sms_amount_roles.json');
 const {paymentAmounts, paymentReviewReason, permitsPaymentAmount} = require('../src/sms_amount_evidence');
 const {parseSmsAgainstPatterns,parseConservativeBankSpend,parseSms} = require('../src/sms_parser');
-const {amountInPostedTransaction} = require('../src/ai_fact_evidence');
 for(const row of cases) test(`monetary roles: ${row.id}`,()=>{
   assert.equal(!!paymentReviewReason(row.body),row.review);
   const amounts=paymentAmounts(row.body);
@@ -13,7 +12,6 @@ for(const row of cases) test(`monetary roles: ${row.id}`,()=>{
     assert.equal(parseSmsAgainstPatterns([],sms).ok,false);
     assert.equal(parseConservativeBankSpend(sms).ok,false);
     assert.equal(parseSms({regex:'.*INR ([\\d,.]+)',field_map:{amount:1}},sms).ok,false);
-    assert.equal(amountInPostedTransaction(row.body,286388.46),false);
   } else if (row.paymentInr != null) {
     assert.equal(parseSmsAgainstPatterns([], sms).fields?.amountInr, row.paymentInr);
   }
@@ -23,8 +21,6 @@ test('configured rules cannot select a limit over an evidenced charge',()=>{
  const result=parseSms({regex:'Avl Limit: INR ([\\d,.]+)',field_map:{amount:1}},sms);
  assert.equal(result.ok,false);
  assert.equal(permitsPaymentAmount(sms.body,100000),false);
- assert.equal(amountInPostedTransaction(sms.body,100000),false);
- assert.equal(amountInPostedTransaction(sms.body,500),true);
 });
 
 test('limit-change notices are rejected without a payment verb', () => {
@@ -39,7 +35,6 @@ test('limit-change notices are rejected without a payment verb', () => {
   assert.equal(parseSmsAgainstPatterns([], sms).ok, false);
   assert.equal(parseConservativeBankSpend(sms).ok, false);
   assert.equal(parseSms({ regex: 'to INR ([\\d,.]+)', field_map: { amount: 1 } }, sms).ok, false);
-  assert.equal(amountInPostedTransaction(sms.body, 150000), false);
 });
 
 test('a following bare balance label is not an expense amount', () => {

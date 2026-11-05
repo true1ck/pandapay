@@ -4,8 +4,8 @@
 # different topology that happens to also run the app. Meant to run on its
 # own VM/Postgres, entirely separate from prod's.
 #
-# Migration sequencing: stop auth, API, rewards-worker and optional
-# gemini-worker before the final paired backup and `db-migrate`. Keep them
+# Migration sequencing: stop auth, API and rewards-worker
+# before the final paired backup and `db-migrate`. Keep them
 # stopped until migrations finish, then start only the reviewed target images.
 # The previous auth binary cannot enforce OTP purpose binding. See
 # deploy/DEPLOY.md for the production sequence; staging must follow the same
@@ -129,6 +129,8 @@ services:
       ACCOUNT_RECOVERY_WRAPPING_KEY_ID: "${ACCOUNT_RECOVERY_WRAPPING_KEY_ID:-}"
       ACCOUNT_RECOVERY_WRAPPING_READ_KEYS_JSON: "${ACCOUNT_RECOVERY_WRAPPING_READ_KEYS_JSON:-}"
       IMAP_ENCRYPTION_KEY: "${IMAP_ENCRYPTION_KEY:?}"
+      IMAP_ENCRYPTION_KEY_ID: "${IMAP_ENCRYPTION_KEY_ID:-k1}"
+      IMAP_ENCRYPTION_PREVIOUS_KEYS: "${IMAP_ENCRYPTION_PREVIOUS_KEYS:-}"
       GOOGLE_PLACES_API_KEY: "${GOOGLE_PLACES_API_KEY:-}"
       NOTIFICATION_SERVICE_URL: "${NOTIFICATION_SERVICE_URL:?}"
       NOTIFICATION_SERVICE_API_KEY: "${NOTIFICATION_SERVICE_API_KEY:?}"
@@ -137,7 +139,6 @@ services:
       - "127.0.0.1:4000:4000"
 
   rewards-worker:
-    # SMS learning has its own worker and DB identity; see sms-learning-worker.
     build:
       context: ./api
     command: ["node", "src/rewards_worker.js"]
@@ -187,25 +188,8 @@ services:
       INBOUND_EMAIL_WEBHOOK_SECRET: "${INBOUND_EMAIL_WEBHOOK_SECRET:?}"
       PARTNER_WEBHOOK_SECRET: "${PARTNER_WEBHOOK_SECRET:?}"
       IMAP_ENCRYPTION_KEY: "${IMAP_ENCRYPTION_KEY:?}"
-
-  sms-learning-worker:
-    profiles: ["sms-learning"]
-    build:
-      context: ./api
-    command: ["node", "src/sms_learning_worker_runner.js"]
-    restart: unless-stopped
-    logging: *default-logging
-    depends_on:
-      api:
-        condition: service_started
-    environment:
-      NODE_ENV: production
-      SMS_LEARNING_DATABASE_URL: "${SMS_LEARNING_DATABASE_URL:-}"
-      SMS_LEARNING_HMAC_KEY: "${SMS_LEARNING_HMAC_KEY:-}"
-      SMS_LEARNING_WORKER_ROLE: "${SMS_LEARNING_WORKER_ROLE:-sms_learning_worker}"
-      SMS_AUTONOMOUS_WORKER_INTERVAL_MS: "${SMS_AUTONOMOUS_WORKER_INTERVAL_MS:-300000}"
-      DB_SSL: "${DB_SSL:-true}"
-      DB_SSL_CA: "${DB_SSL_CA:-}"
+      IMAP_ENCRYPTION_KEY_ID: "${IMAP_ENCRYPTION_KEY_ID:-k1}"
+      IMAP_ENCRYPTION_PREVIOUS_KEYS: "${IMAP_ENCRYPTION_PREVIOUS_KEYS:-}"
 
   auth:
     build:

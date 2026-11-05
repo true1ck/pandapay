@@ -32,9 +32,9 @@ const REQUIRED_ENV = ['JWT_ACCESS_SECRET'];
 // routes have an explicit, intentional fallback for that (imap_test.js's
 // format-only check when IMAP_ENCRYPTION_KEY is absent, for example) — but
 // an unset webhook secret in production means the webhook route effectively
-// has no auth, and an unset encryption key means IMAP passwords never get
-// tested for real. Both are silent-until-someone-hits-the-endpoint failures
-// without this check.
+// has no auth, and an unset encryption key means IMAP passwords can never be
+// stored or tested. When set it must be 32 bytes, base64 (loadImapKeyring).
+// Both are silent-until-someone-hits-the-endpoint failures without this check.
 if (isProduction) {
   REQUIRED_ENV.push(
     'INBOUND_EMAIL_WEBHOOK_SECRET',
@@ -100,20 +100,10 @@ if (!jwtKeys[jwtActiveKeyId]) {
   throw new Error(`JWT_ACTIVE_KEY_ID ${jwtActiveKeyId} is not present in JWT_KEYS_JSON`);
 }
 
-// WP-17 legacy SMS route cutoff. Unset (the default) leaves the 426 upgrade gate off.
-const legacyVersionGate = require('./legacy_version_gate');
-const legacySmsCutoffAt = legacyVersionGate.parseCutoff(process.env.LEGACY_SMS_CUTOFF_DATE);
-const smsV2FirstAppVersion = legacyVersionGate.parseFirstVersion(process.env.SMS_V2_FIRST_APP_VERSION);
-if (legacySmsCutoffAt && !smsV2FirstAppVersion) {
-  throw new Error('SMS_V2_FIRST_APP_VERSION is required when LEGACY_SMS_CUTOFF_DATE is set');
-}
+const { loadImapKeyring } = require('./imap_credentials');
 
 module.exports = {
   ...securityFeatures,
-  legacySmsCutoffAt,
-  smsV2FirstAppVersion,
-  // Builds before v2 send no X-App-Version; after the cutoff they count as old unless this is "false".
-  legacySmsBlockMissingVersion: process.env.LEGACY_SMS_BLOCK_MISSING_VERSION !== 'false',
   isProduction,
   port: Number(process.env.PORT) || 4000,
   // Prefer the product database when both service URLs live in a shared
@@ -145,7 +135,8 @@ module.exports = {
   inboundEmailWebhookSecret: process.env.INBOUND_EMAIL_WEBHOOK_SECRET || null,
   partnerWebhookSecret: process.env.PARTNER_WEBHOOK_SECRET || null,
   partnerWebhookDatabaseUrl: process.env.PARTNER_WEBHOOK_DATABASE_URL || null,
-  imapEncryptionKey: process.env.IMAP_ENCRYPTION_KEY || null,
+  // AES-256-GCM keyring for stored mailbox passwords (see imap_credentials.js).
+  imapKeyring: loadImapKeyring(process.env),
   imapPollDatabaseUrl: process.env.IMAP_POLL_DATABASE_URL || null,
   accountLifecycleEnabled: ['true','1'].includes(process.env.ACCOUNT_LIFECYCLE_ENABLED),
   // Schema-first rollout: typed sync requires financial-state acceptance.

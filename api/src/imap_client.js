@@ -252,6 +252,14 @@ function parseFetchResponse(text) {
   return messages;
 }
 
+/** `FROM a` for one sender; nested `OR` pairs for several (IMAP OR takes two keys). */
+function fromCriteria(senders) {
+  const [first, ...rest] = senders;
+  return rest.length === 0
+    ? `FROM ${quoted(first)}`
+    : `OR FROM ${quoted(first)} ${fromCriteria(rest)}`;
+}
+
 /**
  * Fetches recent messages from one mailbox.
  *
@@ -259,7 +267,7 @@ function parseFetchResponse(text) {
  * last one — without it, every poll would re-read the whole inbox, which is
  * both slow and a good way to get rate-limited by the provider.
  *
- * [senderFilter], when set, is applied server-side via `FROM`, so bank mail
+ * [senderFilter] (required; comma-separated addresses) is applied server-side via `FROM`, so bank mail
  * is the only thing that ever crosses the wire. That is a privacy property,
  * not just an optimisation: the poller should never pull a user's personal
  * correspondence into this process at all.
@@ -268,6 +276,9 @@ async function fetchRecentMessages({ host, port, email, password, since, senderF
   if ([email, password, senderFilter].some(hasImapControlChars)) {
     return { ok: false, reason: 'invalid_imap_argument' };
   }
+  // Never read a whole mailbox: at least one sender address is required.
+  const senders = String(senderFilter || '').split(',').map((s) => s.trim()).filter(Boolean);
+  if (senders.length === 0) return { ok: false, reason: 'sender_filter_required' };
   return runImapSession({
     host,
     port,
@@ -282,7 +293,7 @@ async function fetchRecentMessages({ host, port, email, password, since, senderF
       await send('EXAMINE INBOX');
 
       const criteria = [`SINCE ${imapDate(since)}`];
-      if (senderFilter) criteria.push(`FROM ${quoted(senderFilter)}`);
+      criteria.push(fromCriteria(senders));
       const searchResult = await send(`UID SEARCH ${criteria.join(' ')}`);
 
       const line = searchResult.split('\r\n').find((l) => l.startsWith('* SEARCH'));
@@ -314,6 +325,7 @@ module.exports = {
   fetchRecentMessages,
   parseFetchResponse,
   quoted,
+  fromCriteria,
   imapDate,
   MAX_MESSAGES_PER_POLL,
 };

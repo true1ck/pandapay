@@ -5,7 +5,6 @@
  * Verifies public production endpoints for PandaPay:
  * - Base API health & database readiness (/health, /ready)
  * - Auth service health & database readiness (/health, /ready)
- * - Gemini AI worker subsystem status & route readiness (/ai/jobs/lease, /ai/provider/reserve, /ai/jobs)
  * - Operational feature flags and system status (/app-status, /categories, /legal/)
  *
  * Usage:
@@ -135,37 +134,6 @@ async function runAudit() {
       method: 'GET',
       expectedStatus: [200],
       validator: (data) => (data?.ok === true && data?.database === 'ready') || 'Expected database ready',
-    },
-
-    // 3. Gemini AI Worker Subsystem Readiness
-    {
-      name: 'Gemini AI Worker Lease Gate (/ai/jobs/lease)',
-      category: 'Gemini AI Worker',
-      url: `${API_BASE}/ai/jobs/lease`,
-      method: 'POST',
-      // HTTP 401 proves worker auth is enabled; HTTP 503 means worker routes disabled
-      expectedStatus: [401],
-      validator: (data) => data?.error === 'worker token required' || 'Expected worker token required',
-    },
-    {
-      name: 'Gemini Provider Quota Route (/ai/provider/reserve)',
-      category: 'Gemini AI Worker',
-      url: `${API_BASE}/ai/provider/reserve`,
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: { estimatedTokens: 100 },
-      expectedStatus: [401],
-      validator: (data) => data?.error === 'worker token required' || 'Expected worker token required',
-    },
-    {
-      name: 'Gemini AI Client Job Ingestion Gate (/ai/jobs)',
-      category: 'Gemini AI Worker',
-      url: `${API_BASE}/ai/jobs`,
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: { sourceKey: '0000000000000000000000000000000000000000000000000000000000000000', sender: 'TEST', body: 'Test SMS' },
-      expectedStatus: [401],
-      validator: (data) => data?.error === 'session_invalid' || 'Expected session_invalid auth gate',
     },
 
     // 4. Feature Flags & Operational Configuration

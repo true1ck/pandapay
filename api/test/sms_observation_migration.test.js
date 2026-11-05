@@ -5,7 +5,6 @@ const express = require('express');
 
 const smsFacts = require('../src/sms_facts');
 const migration = require('../src/sms_observation_migration');
-const { registerAiQueueRoutes } = require('../src/ai_queue_route');
 
 test('extractFactsFromObservation extracts posted movement with correct amountRole and merchant', () => {
   const obs = {
@@ -408,77 +407,4 @@ test('Rollback safety: turning off feature flag preserves stored facts and user 
     overrides: overridesMap,
   });
   assert.equal(restored.facts[0].payload.merchant, 'Chai Point Special');
-});
-
-test('admin dry-run and rollout routes enforce auth and return expected reports', async () => {
-  const app = express();
-  app.use(express.json());
-
-  const mockDbClient = {
-    query: async (sql) => {
-      if (sql.includes('feature_flags')) {
-        return {
-          rows: [
-            { key: 'sms_facts_pipeline_enabled', is_enabled: true, rollout_percent: 100 },
-            { key: 'sms_family_balance_enabled', is_enabled: true, rollout_percent: 100 },
-          ],
-        };
-      }
-      return { rows: [] };
-    },
-  };
-
-  const requireAdmin = (req, res, next) => {
-    if (req.headers['x-admin'] !== 'true') return res.status(403).json({ error: 'forbidden' });
-    next();
-  };
-
-  registerAiQueueRoutes(app, {
-    requireAuth: (req, res, next) => next(),
-    requireAdmin,
-    withUserClient: async (uid, fn) => fn(mockDbClient),
-  });
-
-  const server = app.listen(0);
-  const port = server.address().port;
-
-  try {
-    // 1. Unauthenticated dry-run rejected
-    const unauth = await fetch(`http://localhost:${port}/admin/sms-ai/dry-run`, {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ observations: [] }),
-    });
-    assert.equal(unauth.status, 403);
-
-    // 2. Admin dry-run accepted
-    const dryRunRes = await fetch(`http://localhost:${port}/admin/sms-ai/dry-run`, {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json', 'x-admin': 'true' },
-      body: JSON.stringify({
-        observations: [
-          {
-            sourceKey: '7'.repeat(64),
-            occurredAt: '2026-10-15T10:00:00.000Z',
-            parsed: { amountInr: 200, merchant: 'Tea Stall', entryKind: 'spend' },
-          },
-        ],
-      }),
-    });
-    assert.equal(dryRunRes.status, 200);
-    const dryRunJson = await dryRunRes.json();
-    assert.equal(dryRunJson.report.totalObservations, 1);
-    assert.equal(dryRunJson.report.totalNewSpendInr, 200);
-
-    // 3. Admin rollout query accepted
-    const rolloutRes = await fetch(`http://localhost:${port}/admin/sms-ai/rollout`, {
-      headers: { 'x-admin': 'true' },
-    });
-    assert.equal(rolloutRes.status, 200);
-    const rolloutJson = await rolloutRes.json();
-    assert.equal(rolloutJson.rollout.masterEnabled, true);
-    assert.equal(rolloutJson.rollout.balanceFamilyEnabled, true);
-  } finally {
-    server.close();
-  }
 });

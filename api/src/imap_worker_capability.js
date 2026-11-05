@@ -1,5 +1,7 @@
 'use strict';
 
+const { openPassword } = require('./imap_credentials');
+
 const MAX_BATCH_SIZE = 100;
 
 function validateBatchSize(batchSize) {
@@ -9,24 +11,38 @@ function validateBatchSize(batchSize) {
   return batchSize;
 }
 
-async function readImapWorkerBatch(client, encryptionKey, { batchSize = MAX_BATCH_SIZE } = {}) {
+/**
+ * One bounded batch of active connections. PostgreSQL returns only the sealed
+ * credential; it is opened here, in the API process, with the keyring. A row
+ * that cannot be opened (unknown key id, wrong binding, corruption) comes back
+ * with credential_error=true and app_password=null so it never starves a batch.
+ */
+async function readImapWorkerBatch(client, keysById, { batchSize = MAX_BATCH_SIZE } = {}) {
   validateBatchSize(batchSize);
-  if (typeof encryptionKey !== 'string' || Buffer.byteLength(encryptionKey, 'utf8') < 1 ||
-      Buffer.byteLength(encryptionKey, 'utf8') > 4096 || encryptionKey.includes('\0')) {
-    throw new Error('imap_worker_encryption_key_invalid');
+  if (!(keysById instanceof Map) || keysById.size < 1) {
+    throw new Error('imap_worker_keyring_invalid');
   }
-  // The key only travels as a bound parameter. Never stringify args/results,
-  // log this query's parameters, or put decrypted credentials in status data.
   const result = await client.query(
     `SELECT id, profile_id, email, imap_host, imap_port, sender_filter,
-            last_poll_at, app_password, credential_error
-       FROM imap_worker.next_connections($1::text, $2::integer)`,
-    [encryptionKey, batchSize],
+            last_poll_at, app_password_ciphertext, app_password_key_id
+       FROM imap_worker.next_connections($1::integer)`,
+    [batchSize],
   );
   if (!Array.isArray(result.rows) || result.rows.length > batchSize) {
     throw new Error('imap_worker_batch_result_invalid');
   }
-  return result.rows;
+  return result.rows.map((row) => {
+    const { app_password_ciphertext: ciphertext, app_password_key_id: keyId, ...connection } = row;
+    let password = null;
+    let credentialError = false;
+    try {
+      password = openPassword({ keyId, ciphertext },
+        { profileId: row.profile_id, connectionId: row.id }, keysById);
+    } catch (_) {
+      credentialError = true;
+    }
+    return { ...connection, app_password: password, credential_error: credentialError };
+  });
 }
 
 async function deferImapWorkerBatch(client, lastAttemptedId) {

@@ -69,7 +69,6 @@ test('status reports jobs the role may read, marks overdue/failed/unavailable, a
   const log = [];
   const withAdminClient = fakeDb({
     backup_runs: { last_run_at: new Date(NOW - 30 * HOUR), last_status: 'success', last_success_at: new Date(NOW - 30 * HOUR) },
-    sms_learning_worker_runs: { last_run_at: new Date(NOW - 5 * 60_000), last_status: 'failed', last_success_at: null },
     anonymization_audit_runs: {},
   }, { failTables: ['scrape_runs'], log });
 
@@ -81,7 +80,7 @@ test('status reports jobs the role may read, marks overdue/failed/unavailable, a
   assert.equal(body.database.ok, true);
   assert.equal(body.database.version, 'PostgreSQL 18.4');
   const jobs = Object.fromEntries(body.jobs.map(j => [j.key, j.state]));
-  assert.deepEqual(jobs, { backup: 'overdue', sms_learning: 'failed', privacy_audit: 'never', scraper: 'unavailable' });
+  assert.deepEqual(jobs, { backup: 'overdue', privacy_audit: 'never', scraper: 'unavailable' });
   assert.ok(log.includes('ROLLBACK TO SAVEPOINT system_status_job'), 'failed job query is isolated');
 
   assert.deepEqual(body.checks.map(c => [c.key, c.ok, c.error || null]), [['api', true, null], ['auth', false, 'timeout']]);
