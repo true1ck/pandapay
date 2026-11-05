@@ -4,8 +4,8 @@
   "inputs": {
     "transform_version": "7",
     "source_record_sha256": "e3b2de500ac15bd04ff08f437aae49ef6aada3c5292590b4dd0f845d85de70ef",
-    "override_sha256": "ca25ac81f1945a457c0ec31b10e37c6a93f447702793a69c43a05f03cd7fd9ff",
-    "directory_sha256": "3d9f9f535481544d4b19262838290f77d8270eb3b4aec73c48608f10c39cedf2",
+    "override_sha256": "73b06f3b7dfb4ee3cda0636f7e82fd8f80d7edd243cf05a992525311105839d6",
+    "directory_sha256": "b1094d54b77e848d22f7a9a64f3ae6d1ef43ca3eb2fc8e40cd43ed1994664694",
     "verified": false
   },
   "blocking_flags": [
@@ -33,8 +33,8 @@
     "points_expiry_months": 24,
     "model_status": "partial",
     "model_coverage": {
-      "rules_total": 15,
-      "rules_modelled": 9,
+      "rules_total": 16,
+      "rules_modelled": 10,
       "rules_info": 6,
       "caps_total": 5,
       "caps_enforced": 3,
@@ -263,6 +263,14 @@
           "op": "set",
           "value_sha256": "78a645a5fc68d56c",
           "reason": "WP7: Uber moves to millennia-uber-mcc4121 (MCC 4121 only), so Uber Eats never earns 5% here.",
+          "source_url": "https://www.hdfc.bank.in/content/dam/hdfcbankpws/in/en/personal-banking/discover-products/cards/credit-cards/millennia-credit-card/pdf/millennia-tnc-20th-jul26.pdf",
+          "checked_on": "2026-11-05"
+        },
+        {
+          "path": "reward_rules",
+          "op": "append",
+          "value_sha256": "d54789ba83bd44a2",
+          "reason": "WP7: Millennia T&C: EMI spends earn no CashPoints (record exclusion millennia-emi-zero; EMI is in the card's excluded categories). The record's EMI exclusion is emitted as category emi AND rail emi, so an EMI purchase in another category was not excluded (D24e: data fix while WP2 changes the loader). Rail-EMI exclusion on all spend, as on flipkart-sbi-card.",
           "source_url": "https://www.hdfc.bank.in/content/dam/hdfcbankpws/in/en/personal-banking/discover-products/cards/credit-cards/millennia-credit-card/pdf/millennia-tnc-20th-jul26.pdf",
           "checked_on": "2026-11-05"
         }
@@ -1301,6 +1309,40 @@
         "max_engine_version": null,
         "source_local_id": "millennia-education-third-party-zero",
         "display_note": "Education payments made through third-party aggregator apps do not earn CashPoints. Direct school/college website and POS payments remain eligible for reward accrual."
+      },
+      {
+        "id": "hdfc-millennia:rule:wp7_emi_rail_exclusion",
+        "category_id": null,
+        "category_slug": null,
+        "merchant_pattern": null,
+        "rail": "emi",
+        "unit": "points_per_100",
+        "rate": 0,
+        "min_txn_inr": null,
+        "max_txn_inr": null,
+        "priority": 0,
+        "conditions": {
+          "source_local_id": "wp7_emi_rail_exclusion",
+          "part": null,
+          "info_reasons": [],
+          "flags": []
+        },
+        "notes": null,
+        "effective_from": "2021-11-01",
+        "effective_to": null,
+        "excluded_categories": [],
+        "rule_role": "exclusion",
+        "merchant_slugs": [],
+        "platform_slugs": [],
+        "mcc_include": [],
+        "mcc_exclude": [],
+        "except_merchant_slugs": [],
+        "except_platform_slugs": [],
+        "block_inr": null,
+        "min_engine_version": 2,
+        "max_engine_version": null,
+        "source_local_id": "wp7_emi_rail_exclusion",
+        "display_note": "EMI transactions earn no rewards."
       },
       {
         "id": "hdfc-millennia:rule:millennia-other-spends-1pct#min-amount",
