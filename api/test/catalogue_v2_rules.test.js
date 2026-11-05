@@ -980,6 +980,39 @@ test('D18j verified is blocked only by the listed flags', () => {
   assert.equal(blocked.card.model_status, 'partial', 'dangling_cap_reference blocks');
 });
 
+// ── C8 D19 (WP2 round-2 re-review) ──────────────────────────────────────
+
+test('D19a full-exclusion phrasings are never bonus_only', () => {
+  const { classifyExclusionText } = require('../scripts/catalogue_v2/rules');
+  const full = [
+    'Insurance transactions are excluded from core and accelerated Reward Points.',
+    'Fuel transactions are excluded from Reward Points and milestone benefits.',
+    'These spends do not qualify for core or accelerated EDGE Reward Points.',
+    'Loan-on-Card transactions are not eligible for Reward Points and do not count toward the 10X milestone.',
+    'Rent payments are excluded from Reward Points.',
+    'Wallet loads are not eligible for reward points.',
+    'Government spends earn 0 Reward Points.',
+    'B2B spends are excluded from rewards/milestone calculations.',
+    'Offline UPI transactions under INR 2,000 at small merchants are not eligible for reward points, voucher benefits, milestone benefits or other product benefits unless stated otherwise.',
+  ];
+  for (const text of full) assert.equal(classifyExclusionText(text), 'full', text);
+  const bonus = [
+    'Transactions in excluded categories do not qualify for accelerated 5% CashBack.',
+    'Rent payments are excluded from PVR INOX ticket milestone calculations.',
+    'EMI transactions do not qualify for the applicable milestone and fee-waiver spend calculations.',
+    'Education transactions are excluded from White Pass milestone spend effective 1 April 2026.',
+    'UPI transactions through FIRST Digital do not form part of the 10X rewards programme or its threshold.',
+  ];
+  for (const text of bonus) assert.equal(classifyExclusionText(text), 'bonus_only', text);
+  const r = run(card({ rules: [
+    rule({ id: 'insurance_excl', category_id: 'insurance', evaluation_type: 'exclusion', action: { cashback_percent: 0, reason: full[0] } }),
+    rule({ id: 'acc_excl', category_id: 'rent', evaluation_type: 'exclusion', action: { cashback_percent: 0, reason: bonus[0] } }),
+  ] }));
+  assert.equal(only(r, 'insurance_excl')[0].rule_role, 'exclusion');
+  assert.ok(!only(r, 'insurance_excl')[0].flags.includes('bonus_only_exclusion'));
+  assert.equal(only(r, 'acc_excl')[0].rule_role, 'info');
+});
+
 // ── C8 D13: terms that depend on the cardholder; override conventions ───
 
 test('D13a a cap sized by the credit limit keeps its kind with a null amount and is flagged', () => {

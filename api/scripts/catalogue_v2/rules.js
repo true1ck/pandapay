@@ -621,16 +621,13 @@ function transformRule(src, idx, ctx) {
   const exceptMerchants = uniq([...cond.exceptMerchantSlugs, ...(isExclusion && !negatedScope ? [] : cond.listedExcludedMerchants)]).sort();
   const exceptPlatforms = uniq([...cond.exceptPlatformSlugs, ...(isExclusion && !negatedScope ? [] : cond.listedExcludedPlatforms)]).sort();
 
-  // D18e: an exclusion that only takes away an accelerated/bonus rate (or
-  // only counts against a milestone) is not a full exclusion.
+  // D18e / D19a: an exclusion that only takes away an accelerated/bonus rate
+  // (or only counts against a milestone) is not a full exclusion. Only when
+  // EVERY excluded benefit is so qualified; any core/base or plain
+  // "reward points" mention makes it a full exclusion.
   if (isExclusion) {
-    const text = `${src?.action?.reason || ''} ${src?.conditions?.description || ''} ${src?.id || ''}`.replace(/[_-]+/g, ' ');
-    const fullExclusion = /\b(no|not earn|do not earn|does not earn|don't earn|doesn't earn|zero)\s+(\w+\s+){0,2}(reward|points?|cashback|miles|neucoins)\b/i.test(text);
-    const bonusOnly =
-      /(not|n't)\s+(qualify|count|eligible|apply)[^.]{0,40}\b(accelerated|bonus|additional|extra|milestone|\d+(\.\d+)?\s*%|\d+\s*x)\b/i.test(text) ||
-      /excluded from [^.]{0,60}\b(milestone|accelerat\w*|bonus|ticket)\b/i.test(text) ||
-      /\b(milestone|accelerated|bonus)\b[^.]{0,30}\bexclusions?\b|\bfrom (the )?(ticket )?milestone\b/i.test(text);
-    if (bonusOnly && !fullExclusion) {
+    const text = `${src?.action?.reason || ''} ${src?.conditions?.description || ''}`;
+    if (classifyExclusionText(text) === 'bonus_only') {
       info.push('bonus_only_exclusion');
       flags.push('bonus_only_exclusion');
     }
@@ -915,6 +912,28 @@ function transformRule(src, idx, ctx) {
   };
 }
 
+const REWARD_WORD = /\b(reward points?|points?|cash ?back|miles|neucoins|rewards?|rps?|value ?back|benefits?)\b/g;
+const BONUS_QUALIFIER = /\b(accelerated|accelerator|bonus|additional|extra|incremental|special|milestone|\d+\s*x|\d+(\.\d+)?\s*%|\d+\s*percent)\b[^.,;]{0,25}$/;
+const CORE_MENTION = /\b(core|base|standard|regular|normal|default)\b[^.]{0,25}\b(reward|points?|rps?|cash ?back|miles|rewards?|earn\w*)\b/;
+const ZERO_EARN = /\b(earns?|earning|accrue\w*)\s+(0|zero|no|nothing)\b|\bzero\s+(reward|points?|cash ?back)\b|\bno\s+(\w+\s+){0,2}(reward|points?|cash ?back|miles|neucoins|rps?)\b/;
+
+// D19a: 'bonus_only' when the text excludes only accelerated / bonus /
+// milestone benefits; 'full' when it also excludes core or plain rewards;
+// null when it names no qualified benefit at all.
+function classifyExclusionText(raw) {
+  const t = String(raw || '').toLowerCase().replace(/[_]+/g, ' ');
+  if (!t.trim()) return null;
+  if (CORE_MENTION.test(t) || ZERO_EARN.test(t)) return 'full';
+  let m;
+  REWARD_WORD.lastIndex = 0;
+  while ((m = REWARD_WORD.exec(t))) {
+    const before = t.slice(Math.max(0, m.index - 40), m.index);
+    // "milestone benefits", "accelerated 5% cashback": qualified.
+    if (!BONUS_QUALIFIER.test(before) && !/\b(milestone|ticket|voucher|accelerated)\s*$/.test(before)) return 'full';
+  }
+  return /\b(accelerated|accelerator|bonus|additional|extra|incremental|milestone|ticket|\d+\s*x)\b/.test(t) ? 'bonus_only' : null;
+}
+
 function dedupeParts(parts) {
   const seen = new Map();
   const out = [];
@@ -1073,6 +1092,7 @@ function addMinimumAmountExclusion(rows, perSource) {
 }
 
 module.exports = {
+  classifyExclusionText,
   distinctiveAlias,
   transformRewardRules,
   transformRule,
