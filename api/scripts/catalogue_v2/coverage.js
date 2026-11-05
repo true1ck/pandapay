@@ -261,6 +261,9 @@ function aggregateReport(cards, meta = {}) {
     }
   }
   report.previous_generated_at = meta.previous?.generated_at || null;
+  // A previous report without classification data can't be compared:
+  // that is "no comparable report", never "0 changed".
+  report.previous_comparable = Boolean(previous && typeof previous === 'object');
 
   // Arrays of [key, count], most frequent first (an object would reorder
   // numeric-looking keys).
@@ -323,9 +326,13 @@ function renderMarkdown(report) {
   out.push('');
   out.push('## Classification changes since the previous run');
   out.push('');
-  out.push(report.previous_generated_at
-    ? `Compared with the report generated ${report.previous_generated_at}: ${report.classification_changes.length} source rule(s) changed.`
-    : 'No previous report to compare with.');
+  if (report.previous_comparable) {
+    out.push(`Compared with the report generated ${report.previous_generated_at || '(unknown time)'}: ${report.classification_changes.length} source rule(s) changed.`);
+  } else if (report.previous_generated_at) {
+    out.push(`No comparable previous report: the report generated ${report.previous_generated_at} has no classification data.`);
+  } else {
+    out.push('No previous report to compare with.');
+  }
   if (report.classification_changes.length) {
     out.push('');
     out.push(table(report.classification_changes.map((c) => [c.slug, c.source, c.before ?? '—', c.after ?? '—']), ['Card', 'Source rule', 'Before', 'After']));

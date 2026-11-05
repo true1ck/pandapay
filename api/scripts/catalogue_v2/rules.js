@@ -21,9 +21,10 @@ const {
   MCC_CATEGORY,
   ISSUER_PORTAL,
   NARROW_TOKEN_MCC,
+  mapCategorySlugs,
   resolveCategoryToken,
 } = require('./category_tokens');
-const { isWildcard, mapRuleConditions, rewardRuleHasUnsupportedTrigger } = require('./conditions');
+const { isWildcard, mapRuleConditions, negatedBrand, rewardRuleHasUnsupportedTrigger } = require('./conditions');
 
 const SOURCE_RAIL = {
   upi_qr: { rail: 'upi_qr' },
@@ -38,6 +39,7 @@ const SOURCE_RAIL = {
 
 const V1_POINT_BLOCKS = { 100: 'points_per_100', 150: 'points_per_150', 200: 'points_per_200' };
 const DATE = /^\d{4}-\d{2}-\d{2}$/;
+const EXPLICIT_DEFERRALS = ['depends_on_user_attribute', 'depends_on_txn_attribute'];
 const USER_ATTRIBUTE_KEY = /(membership|tier|prime|neon|selected|selection|plan$|pack|variant|relationship|customer_segment|salary|premier|eligible_card|card_side|opt_in|enrol)/i;
 const ROLES = new Set(['base', 'earn', 'exclusion', 'info']);
 const BRANDISH_BRAND = /(paytm|amazon|flipkart|smartbuy|phonepe|swiggy|zomato|tata|neu|reliance|samsung|apple|kiwi|myntra|irctc|indigo|uber|\bola\b|lic|hpcl|bpcl|indianoil|iocl|jio|airtel|marriott|taj|vistara|air_india|makemytrip|yatra|cleartrip|bookmyshow|pvr|landmark|shoppers|lifestyle)/;
@@ -115,6 +117,69 @@ function mergeSlugs(current, incoming) {
   if ([...inc].every((s) => cur.has(s))) return { slugs: incoming };
   if ([...cur].every((s) => inc.has(s))) return { slugs: current };
   return { conflict: true, slugs: current };
+}
+
+// A "non_<brand>" in the rule id counts only when the rule's own text says
+// the same ("fuel at non-IOCL outlets").
+function idNegation(src, index) {
+  const neg = negatedBrand(isNA(src?.id) ? '' : String(src.id), index);
+  if (!neg) return null;
+  const slug = neg.merchant || neg.platform;
+  const entry = neg.merchant ? index.merchants.get(slug) : index.platforms.get(slug);
+  const names = uniq([slug.replace(/_/g, ' '), entry?.name, ...(entry?.aliases || [])].filter(Boolean).map((n) => normalizeText(n)).filter(Boolean));
+  const text = normalizeText(`${src?.action?.reason || ''} ${JSON.stringify(src?.conditions || {})} ${src?.channel_type || ''}`);
+  const says = names.some((n) => new RegExp(`\\b(non|not at|not via|not|other than|excluding|except)\\s+${n.replace(/ /g, '\\s+')}\\b`).test(text));
+  return says ? neg : null;
+}
+
+// D8(b): "up to 10X" folds several rates into one. Read only the rule's own
+// rate text (its action reason), never its id. Within it, an "up to" that
+// is a cap on an amount ("up to 300 points per month"; D27d: never a % or X
+// rate), a stacked total ("total earn up to 1.5%", "up to 6X overall") or an
+// aside in brackets is not this rule's rate.
+const UP_TO_RATE = /up[\s_-]*to[\s_-]*\d+(?:\.\d+)?\s*(?:x\b|%|(?:bonus\s+|reward\s+)?points?\b|rp\b|miles\b)/gi;
+function statesUpToRate(reason) {
+  const text = String(reason || '').replace(/\([^)]*\)/g, ' ');
+  for (const clause of text.split(/;|\.(?!\d)|\bwhile\b|\bbut\b|\bwhereas\b/i)) {
+    UP_TO_RATE.lastIndex = 0;
+    let m;
+    while ((m = UP_TO_RATE.exec(clause))) {
+      const before = clause.slice(Math.max(0, m.index - 40), m.index);
+      const after = clause.slice(m.index + m[0].length, m.index + m[0].length + 40);
+      if (/\b(total|combined|overall|together|aggregate|in all)\b[^.]*$/i.test(before)) continue;
+      if (/^\s*(overall|in total|combined)\b/i.test(after)) continue;
+      // D27d: a cap or period reads as an amount limit only for an amount
+      // ("up to 300 RP a month"); "up to 5%" / "up to 5X" stays a rate.
+      const isAmount = !/(x\b|%)\s*$/i.test(m[0]);
+      if (isAmount && (/^\s*(per|a|each|every|in a)\s+(calendar\s+|statement\s+|billing\s+)?(month|cycle|quarter|year|statement|day|week)\b/i.test(after) ||
+          /^\s*(per|a|each|every)\s+(calendar|statement|billing)\b/i.test(after) || /^[^.]{0,15}\bcap/i.test(after))) continue;
+      return true;
+    }
+  }
+  return false;
+}
+
+// The rule against the card's base: 'above', 'not_above', or null when it
+// can't be decided (no rate, no base, or different currencies with no ₹
+// value per point). In the card's own currency when it can be (works
+// without a ₹ point value), else by ₹ value.
+function compareToBase(ur, card) {
+  if (ur.rate === null || ur.rate === undefined || ur.unit === null) return null;
+  if (ur.currency && ur.currency === card.baseCurrency) {
+    if (card.baseEarnPerRupee == null) return null;
+    const e = valuePerRupee(ur.unit, ur.rate, 1, ur.blockInr);
+    if (e === null) return null;
+    return e > card.baseEarnPerRupee + 1e-12 ? 'above' : 'not_above';
+  }
+  const pointsInvolved = ur.currency === 'points' || card.baseCurrency === 'points';
+  if (pointsInvolved && !(card.pointValueInr > 0)) return null;
+  const v = valuePerRupee(ur.unit, ur.rate, card.pointValueInr, ur.blockInr);
+  if (v === null || card.baseValue == null) return null;
+  return v > card.baseValue + 1e-12 ? 'above' : 'not_above';
+}
+
+function aboveBase(ur, card) {
+  return compareToBase(ur, card) === 'above';
 }
 
 // A merchant and a platform that share a name or alias are one brand in both
@@ -246,8 +311,12 @@ function transformRule(src, idx, ctx) {
   const isReduced = !isExclusion && ur.rate !== null && ur.currency && ur.currency === ctx.card.baseCurrency &&
     ruleEarn !== null && ctx.card.baseEarnPerRupee != null && ruleEarn < ctx.card.baseEarnPerRupee - 1e-12;
 
+  // D27a: an "exclusion" stating a rate above base is a carve-out only if an
+  // accelerator overlaps its scope at a rate at least as high; that is
+  // decided once every rule is mapped (resolveAboveBaseCarveOuts).
+  if (isCarveOut && aboveBase(ur, ctx.card)) flags.push('carve_out_above_base');
   if (!isExclusion && rewardRuleHasUnsupportedTrigger(src)) info.push('unsupported_trigger');
-  if (!isExclusion && /up[\s_-]*to[\s_-]*\d+(?:\.\d+)?\s*(?:x\b|%|(?:bonus\s+|reward\s+)?points?\b|rp\b|miles\b)/i.test(`${src?.id || ''} ${src?.action?.reason || ''}`)) {
+  if (!isExclusion && statesUpToRate(src?.action?.reason)) {
     // D8(b): "up to 10X" is several rates folded into one.
     info.push('up_to_rate');
   }
@@ -257,6 +326,14 @@ function transformRule(src, idx, ctx) {
   // `earn` onto a rule we couldn't restrict would widen it).
   const forcedRole = ROLES.has(String(src?.rule_role || '')) ? String(src.rule_role) : null;
   if (forcedRole === 'info') info.push('override_rule_role');
+  // D13 / D14: an override may mark the rule as a deferral explicitly (when
+  // its restatement drops the key the flag came from). Kept: info + flag.
+  for (const f of EXPLICIT_DEFERRALS) {
+    if (src?.[f] === true || src?.conditions?.[f] === true) {
+      info.push(f);
+      flags.push(f);
+    }
+  }
 
   // 1. Start from the token's parts.
   let parts;
@@ -294,6 +371,24 @@ function transformRule(src, idx, ctx) {
     if (token.kind === 'platform') {
       for (const p of parts) for (const s of p.platformSlugs || []) if (!ctx.index.platforms.has(s)) needsDirectory.push(`platform:${s}`);
     }
+  }
+  // D16 / D18e: an underscored negation in the rule's own token
+  // ("fuel_non_iocl") or, when its text says the same, its id
+  // ("exclusion_non_iocl_fuel": "fuel at non-IOCL outlets") is "not X": the
+  // brand is an exception, the words around it the category.
+  const ownNegation = negatedBrand(rawToken, ctx.index) || idNegation(src, ctx.index);
+  if (ownNegation) {
+    const unresolvedToken = token.kind === 'unknown' || (token.kind === 'composite' && token.unmapped.length);
+    const negParts = ownNegation.catTokens.flatMap((t) => resolveCategoryToken(categoryKey(t), ctx).parts.filter((p) => p.categorySlug));
+    if (unresolvedToken && negParts.length) {
+      parts = negParts.map((p) => ({ ...p }));
+      tokenNeedsConditions = null;
+      const i = unmappedTokens.indexOf(rawToken);
+      if (i >= 0) unmappedTokens.splice(i, 1);
+      const j = flags.indexOf('composite_partial');
+      if (j >= 0) flags.splice(j, 1);
+    }
+    flags.push('exception_from_negated_token');
   }
   const tokenHasCategory = parts.some((p) => p.categorySlug);
   const tokenHasBrand = parts.some((p) => p.merchantSlugs?.length || p.platformSlugs?.length);
@@ -392,6 +487,16 @@ function transformRule(src, idx, ctx) {
     const listParts = [];
     const listUnmapped = [];
     for (const item of cond.categoryList) {
+      // D16/D18e: "non_samsung_emi" in the list is that category except
+      // the brand (axis-samsung-signature).
+      const neg = negatedBrand(item, ctx.index);
+      if (neg && neg.catTokens.length) {
+        for (const cat of uniq(neg.catTokens.flatMap((t) => mapCategorySlugs(t)))) {
+          listParts.push({ categorySlug: cat, partExceptMerchants: neg.merchant ? [neg.merchant] : [], partExceptPlatforms: neg.platform ? [neg.platform] : [] });
+        }
+        flags.push('exception_from_negated_token');
+        continue;
+      }
       const t = resolveCategoryToken(categoryKey(item), ctx);
       if (['category', 'merchant', 'platform'].includes(t.kind) || t.kind === 'composite') {
         listParts.push(...t.parts);
@@ -417,6 +522,10 @@ function transformRule(src, idx, ctx) {
       for (const p of parts) {
         for (const lp of listParts) {
           const merged = andPart(p, lp);
+          if (merged && (lp.partExceptMerchants || lp.partExceptPlatforms)) {
+            merged.partExceptMerchants = uniq([...(merged.partExceptMerchants || []), ...(lp.partExceptMerchants || [])]);
+            merged.partExceptPlatforms = uniq([...(merged.partExceptPlatforms || []), ...(lp.partExceptPlatforms || [])]);
+          }
           if (merged) crossed.push(merged);
         }
       }
@@ -515,6 +624,12 @@ function transformRule(src, idx, ctx) {
     const text = String(prose.text);
     if (prose.partial) {
       flags.push('partial_merchant_list');
+      if (scopeLists) {
+        // An exclusion keeps the alternatives it resolved; the ones it
+        // couldn't are reported (they are not excluded until resolved).
+        flags.push('unresolved_merchant_alternative');
+        for (const u of prose.unresolved || [text]) needsDirectory.push(String(u).slice(0, 60));
+      }
       continue;
     }
     if (anyPlatform && /(participating|partner|select|eligible|brands|merchants|\d+\s*\+|leading|catalogue)/i.test(text)) {
@@ -553,7 +668,27 @@ function transformRule(src, idx, ctx) {
   if (anyPlatform && railSet.length && railSet.every((r) => r === 'online')) railSet = [];
   if (railSet.length > 1) info.push('rail_conflict');
   if (isExclusion && rails.some((r) => r.inexact)) info.push('inexact_rail_on_exclusion');
+  // H2: a swipe/online rail on an exclusion already pinned by a category,
+  // MCCs or a brand only describes the channel ("fuel at POS terminals").
+  // v2 never matches an unknown rail, so keeping it would let fuel or wallet
+  // spend with no rail (most SMS) escape the exclusion: the rail is dropped
+  // (the exclusion only covers more).
+  if (isExclusion && railSet.length === 1 && ['swipe', 'online'].includes(railSet[0]) &&
+      (cond.mccInclude.length || parts.every((p) => p.categorySlug || p.mccInclude?.length || p.merchantSlugs?.length || p.platformSlugs?.length))) {
+    railSet = [];
+    flags.push('exclusion_rail_dropped');
+  }
   if (railSet.length === 1) parts = parts.map((p) => andPart(p, { rail: railSet[0] }) || { ...p, conflict: true });
+  // The EMI category and the EMI rail name the same thing. On an exclusion,
+  // carve-out or reduced rate either one identifies it (as D21a for
+  // merchant/app lists): AND-ing them would miss EMI spend whose category or
+  // rail is unknown. One row on the category, one on the rail.
+  if (lowerOrNone && parts.some((p) => p.categorySlug === 'emi' && p.rail === 'emi')) {
+    parts = dedupeParts(parts.flatMap((p) => (p.categorySlug === 'emi' && p.rail === 'emi'
+      ? [{ ...p, rail: null }, { ...p, categorySlug: null, broad: false, narrowTokens: [] }]
+      : [p])));
+    flags.push('emi_alternatives');
+  }
 
   // 8b. Merchants named under other keys ("location": "HPCL petrol pump").
   for (const mention of cond.mentions || []) {
@@ -614,6 +749,13 @@ function transformRule(src, idx, ctx) {
     flags.push('min_amount_exclusion');
   }
   if (cond.mccInclude.length) parts = parts.map((p) => andPart(p, { mccInclude: cond.mccInclude }) || { ...p, conflict: true });
+  // D20d: every listed MCC was malformed. An exclusion falls back to its
+  // category; so does a lower rate (broad is its conservative side, D18c);
+  // any other earning rule would widen to the whole category: info.
+  if (cond.malformedInclude && !cond.mccInclude.length && !isExclusion) {
+    if (isCarveOut || isReduced) flags.push('malformed_mcc_list_broadened');
+    else info.push('malformed_mcc_list');
+  }
   if (cond.mccExclude.length) parts = parts.map((p) => andPart(p, { mccExclude: cond.mccExclude }) || p);
 
   // Transaction types and non-purchase channels (cash withdrawal, merchant
@@ -635,7 +777,7 @@ function transformRule(src, idx, ctx) {
   }
   if (cond.channelNonPurchase) pendingNonPurchase.push('non_purchase_channel');
   if (pendingNonPurchase.length) {
-    const pinnedNonPurchase = parts.every((p) => p.mccInclude?.length || ['atm', 'emi'].includes(p.rail));
+    const pinnedNonPurchase = parts.every((p) => p.mccInclude?.length || ['atm', 'emi'].includes(p.rail) || p.categorySlug === 'emi');
     if (isExclusion && pinnedNonPurchase) flags.push('exclusion_scope_broadened');
     else info.push(...pendingNonPurchase);
   }
@@ -663,7 +805,21 @@ function transformRule(src, idx, ctx) {
   const listedCats = scopeLists ? cond.excludedCategorySlugs : [];
   const listedMerchants = scopeLists && !negatedScope ? cond.listedExcludedMerchants : [];
   const listedPlatforms = scopeLists && !negatedScope ? cond.listedExcludedPlatforms : [];
-  if (listedCats.length || listedMerchants.length || listedPlatforms.length) {
+  // D16 / D18e: "non_iocl_fuel" in a list is that category except the brand.
+  const negatedListed = (cond.negatedExcluded || []).flatMap((n) => n.catTokens.flatMap((t) => mapCategorySlugs(t))
+    .map((c) => ({ categorySlug: c, merchant: n.merchant, platform: n.platform })));
+  const listedNegated = scopeLists ? negatedListed : [];
+  if (!scopeLists && negatedListed.length) {
+    if (isReduced) {
+      flags.push('unmapped_excluded_category'); // a lower rate: excluding more would raise it
+    } else {
+      // An earning rule can't say "fuel, except at IOCL": it leaves the
+      // whole category (only ever less reward).
+      cond.excludedCategorySlugs = uniq([...cond.excludedCategorySlugs, ...negatedListed.map((n) => n.categorySlug)]);
+      flags.push('negated_exclusion_broadened');
+    }
+  }
+  if (listedCats.length || listedMerchants.length || listedPlatforms.length || listedNegated.length) {
     const expanded = [];
     for (const p of parts) {
       const extras = [
@@ -677,14 +833,26 @@ function transformRule(src, idx, ctx) {
         const merged = andPart(base, extra);
         if (merged) expanded.push(merged);
       }
+      for (const n of listedNegated) {
+        const merged = andPart(base, { categorySlug: n.categorySlug });
+        if (merged) {
+          expanded.push({
+            ...merged,
+            partExceptMerchants: n.merchant ? [n.merchant] : [],
+            partExceptPlatforms: n.platform ? [n.platform] : [],
+          });
+        }
+      }
     }
     parts = dedupeParts(expanded);
     flags.push('exclusion_list_expanded');
     if (cond.unmappedExcluded.length) flags.push('partial_category_list');
   }
   const ruleExcludedCategories = scopeLists ? [] : cond.excludedCategorySlugs;
-  const exceptMerchants = uniq([...cond.exceptMerchantSlugs, ...(scopeLists && !negatedScope ? [] : cond.listedExcludedMerchants)]).sort();
-  const exceptPlatforms = uniq([...cond.exceptPlatformSlugs, ...(scopeLists && !negatedScope ? [] : cond.listedExcludedPlatforms)]).sort();
+  const exceptMerchants = uniq([...cond.exceptMerchantSlugs, ...(ownNegation?.merchant ? [ownNegation.merchant] : []),
+    ...(scopeLists && !negatedScope ? [] : cond.listedExcludedMerchants)]).sort();
+  const exceptPlatforms = uniq([...cond.exceptPlatformSlugs, ...(ownNegation?.platform ? [ownNegation.platform] : []),
+    ...(scopeLists && !negatedScope ? [] : cond.listedExcludedPlatforms)]).sort();
 
   // D18e / D19a: an exclusion that only takes away an accelerated/bonus rate
   // (or only counts against a milestone) is not a full exclusion. Only when
@@ -831,8 +999,10 @@ function transformRule(src, idx, ctx) {
     const platformSlugs = uniq(p.platformSlugs || []).sort();
     const mccInclude = uniq(p.mccInclude || []).sort();
     const mccExclude = uniq(p.mccExclude || []).sort();
+    const rowExceptMerchants = uniq([...exceptMerchants, ...(p.partExceptMerchants || [])]).sort();
+    const rowExceptPlatforms = uniq([...exceptPlatforms, ...(p.partExceptPlatforms || [])]).sort();
     const restricted = hasRestriction({ ...p, minTxn, maxTxn }) ||
-      exceptMerchants.length > 0 || exceptPlatforms.length > 0;
+      rowExceptMerchants.length > 0 || rowExceptPlatforms.length > 0;
     const rowInfo = [...info];
     if (isExclusion && !isInfo && !p.categorySlug && !merchantSlugs.length && !platformSlugs.length &&
         !mccInclude.length && !p.rail && maxTxn === null) {
@@ -841,8 +1011,8 @@ function transformRule(src, idx, ctx) {
     }
     if (isCarveOut && !restricted) rowInfo.push('unrestricted_carve_out'); // nothing to scope the stated rate to
     // D18h: "PayTM spends except via PayTM" can never apply.
-    const selfContradictory = platformSlugs.some((x) => exceptPlatforms.includes(x)) ||
-      merchantSlugs.some((x) => exceptMerchants.includes(x));
+    const selfContradictory = platformSlugs.some((x) => rowExceptPlatforms.includes(x)) ||
+      merchantSlugs.some((x) => rowExceptMerchants.includes(x));
     if (selfContradictory) rowInfo.push('self_contradictory_rule');
     const rowIsInfo = rowInfo.length > 0;
     let role;
@@ -871,7 +1041,7 @@ function transformRule(src, idx, ctx) {
     // D16c: an earn rule with exceptions is v2-only; an exclusion with
     // exceptions stays v1 (v1 ignores them and excludes more, which is safe);
     // an exclusion bounded by max_txn_inr would exclude everything in v1.
-    if ((exceptMerchants.length || exceptPlatforms.length) && role !== 'exclusion') v2Reasons.push('except_lists');
+    if ((rowExceptMerchants.length || rowExceptPlatforms.length) && role !== 'exclusion') v2Reasons.push('except_lists');
     if (role === 'exclusion' && maxTxn !== null) v2Reasons.push('exclusion_max_txn');
     if (role === 'exclusion' && !p.categorySlug && !merchantSlugs.length && !platformSlugs.length && !mccInclude.length && p.rail) {
       // v1 treats an unknown rail as a match, so a rail-only exclusion would
@@ -879,6 +1049,10 @@ function transformRule(src, idx, ctx) {
       v2Reasons.push('rail_only_exclusion');
     }
     if (ur.unit === null) v2Reasons.push('no_unit');
+    // D24b: v1 matches an unknown rail, and most SMS spends have none, so a
+    // UPI-rail rule above base would pay the UPI rate on almost everything.
+    // D27c: when it can't be decided, it counts as above base.
+    if (['earn', 'base'].includes(role) && p.rail === 'upi_qr' && compareToBase(ur, ctx.card) !== 'not_above') v2Reasons.push('upi_rail_above_base');
     const minEngineVersion = v2Reasons.length ? 2 : 1;
 
     return {
@@ -903,8 +1077,8 @@ function transformRule(src, idx, ctx) {
       platform_slugs: platformSlugs,
       mcc_include: mccInclude,
       mcc_exclude: mccExclude,
-      except_merchant_slugs: exceptMerchants,
-      except_platform_slugs: exceptPlatforms,
+      except_merchant_slugs: rowExceptMerchants,
+      except_platform_slugs: rowExceptPlatforms,
       block_inr: ur.blockInr,
       min_engine_version: minEngineVersion,
       // D18a: v1-only projection rows (v2 engines ignore them).
@@ -1031,9 +1205,12 @@ function classifyExclusionText(raw) {
   const all = String(raw || '').toLowerCase().replace(/[_]+/g, ' ');
   if (!all.trim()) return null;
   const clauses = all.split(/[.;]|,\s*(?:while|whereas|but)\b|\bwhile\b|\bbut\b|\bwhereas\b/).map((c) => c.trim()).filter(Boolean);
+  // Core/base or zero earning anywhere in the text makes it full (the
+  // conservative side); only the qualifier scan is limited to the excluding
+  // clause(s) ("... remains eligible for 5X" elsewhere doesn't count).
+  if (CORE_MENTION.test(all) || ZERO_EARN.test(all)) return 'full';
   const excluding = clauses.filter((c) => EXCLUDING_CLAUSE.test(c));
   const t = (excluding.length ? excluding : clauses).join('. ');
-  if (CORE_MENTION.test(t) || ZERO_EARN.test(t)) return 'full';
   let m;
   REWARD_WORD.lastIndex = 0;
   while ((m = REWARD_WORD.exec(t))) {
@@ -1048,7 +1225,8 @@ function dedupeParts(parts) {
   const seen = new Map();
   const out = [];
   for (const p of parts) {
-    const sig = JSON.stringify([p.categorySlug, p.merchantSlugs, p.platformSlugs, p.mccInclude, p.mccExclude, p.rail, p.maxEngine || null]);
+    const sig = JSON.stringify([p.categorySlug, p.merchantSlugs, p.platformSlugs, p.mccInclude, p.mccExclude, p.rail, p.maxEngine || null,
+      p.partExceptMerchants || [], p.partExceptPlatforms || []]);
     const prior = seen.get(sig);
     if (prior) {
       // Same row twice: it is narrow only if every source of it was narrow
@@ -1126,7 +1304,86 @@ function transformRewardRules(record, ctxIn) {
   });
   addMinimumAmountExclusion(rows, perSource);
   markBookingTypeSplits(rows, perSource);
+  resolveAboveBaseCarveOuts(rows, perSource, ctx);
   return { rows, perSource };
+}
+
+// Could one transaction match both rows? Conservative: anything that can't
+// be told apart overlaps.
+function scopesOverlap(a, b, index) {
+  if (a.rail && b.rail && a.rail !== b.rail) return false;
+  if (a.category_slug && b.category_slug && a.category_slug !== b.category_slug) return false;
+  for (const [x, y] of [[a, b], [b, a]]) {
+    if (x.category_slug && !y.category_slug && y.mcc_include.length) {
+      const cats = y.mcc_include.map((m) => MCC_CATEGORY[m]);
+      if (cats.every(Boolean) && !cats.includes(x.category_slug)) return false;
+    }
+  }
+  if (a.mcc_include.length && b.mcc_include.length && !a.mcc_include.some((m) => b.mcc_include.includes(m))) return false;
+  const chain = (slug) => {
+    const out = [];
+    for (let cur = slug, seen = new Set(); cur && !seen.has(cur); cur = index?.merchants?.get(cur)?.parent_slug || null) {
+      seen.add(cur);
+      out.push(cur);
+    }
+    return out;
+  };
+  if (a.merchant_slugs.length && b.merchant_slugs.length &&
+      !a.merchant_slugs.some((m) => chain(m).some((x) => b.merchant_slugs.includes(x))) &&
+      !b.merchant_slugs.some((m) => chain(m).some((x) => a.merchant_slugs.includes(x)))) return false;
+  if (a.platform_slugs.length && b.platform_slugs.length && !a.platform_slugs.some((p) => b.platform_slugs.includes(p))) return false;
+  return true;
+}
+
+// The row's earn per rupee in the card's currency (comparable without a ₹
+// point value), else its ₹ value; null when it can't be compared.
+function comparableEarn(r, card) {
+  if (r.currency && r.currency === card.baseCurrency) return { cur: 'own', v: valuePerRupee(r.unit, r.rate, 1, r.block_inr) };
+  if (!(card.pointValueInr > 0) && r.currency === 'points') return null;
+  return { cur: 'inr', v: valuePerRupee(r.unit, r.rate, card.pointValueInr, r.block_inr) };
+}
+
+// D27a: an above-base carve-out is kept (an earn rule at its stated rate,
+// ahead of the accelerator) only when an accelerator overlaps its scope at a
+// rate at least as high. Otherwise nothing would be carved out of, and a lone
+// above-base rate is a bonus, not a carve-out: info, exclusion_rate_above_base.
+function resolveAboveBaseCarveOuts(rows, perSource, ctx) {
+  const card = ctx.card;
+  const accelerators = rows.filter((r) => r.rule_role === 'earn' && r.max_engine_version !== 1 &&
+    !r.flags.includes('exclusion_with_stated_rate') &&
+    aboveBase({ unit: r.unit, rate: r.rate, blockInr: r.block_inr, currency: r.currency }, card));
+  const sources = uniq(rows.filter((r) => r.flags.includes('carve_out_above_base')).map((r) => r.source_local_id));
+  for (const sourceId of sources) {
+    const own = rows.filter((r) => r.source_local_id === sourceId);
+    const carve = own.filter((r) => ['earn', 'base'].includes(r.rule_role) && r.max_engine_version !== 1);
+    const kept = carve.length > 0 && carve.every((c) => {
+      const ce = comparableEarn(c, card);
+      return accelerators.some((a) => {
+        if (!scopesOverlap(a, c, ctx.index)) return false;
+        const ae = comparableEarn(a, card);
+        return ce && ae && ce.cur === ae.cur && ce.v !== null && ae.v !== null && ce.v <= ae.v + 1e-12;
+      });
+    });
+    if (kept) continue;
+    for (const r of own) {
+      if (r.max_engine_version === 1) {
+        rows.splice(rows.indexOf(r), 1); // a v1-only row can't be info
+        continue;
+      }
+      r.rule_role = 'info';
+      r.min_engine_version = 2;
+      r.v2_reasons = uniq([...(r.v2_reasons || []), 'info']);
+      r.info_reasons = uniq([...r.info_reasons, 'exclusion_rate_above_base']);
+      r.flags = uniq([...r.flags, 'exclusion_rate_above_base']);
+    }
+    const src = perSource.find((p) => p.source_local_id === sourceId);
+    if (src) {
+      src.keys = src.keys.filter((k) => rows.some((r) => r.key === k));
+      src.roles = uniq(rows.filter((r) => src.keys.includes(r.key)).map((r) => r.rule_role));
+      src.info_reasons = uniq([...src.info_reasons, 'exclusion_rate_above_base']);
+      src.flags = uniq([...src.flags, 'exclusion_rate_above_base']);
+    }
+  }
 }
 
 // D18i: a narrow token on a merchant rule adds no MCCs (an aggregator such

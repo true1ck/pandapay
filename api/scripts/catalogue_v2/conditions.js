@@ -241,6 +241,7 @@ function emptyMapping() {
     block: null,
     excludedCategorySlugs: [],
     unmappedExcluded: [],
+    negatedExcluded: [],
     restatedCategories: [],
     categoryList: null,
     alternatives: null,
@@ -274,6 +275,7 @@ function flattenMccValue(value) {
 function addMccs(m, key, value, target) {
   const { mccs, invalid, malformed } = normalizeMccList(flattenMccValue(value));
   if (malformed.length) m.flags.push('malformed_mcc');
+  if (malformed.length && target === 'mccInclude') m.malformedInclude = true;
   if (invalid.length) {
     m.flags.push('unreadable_mcc');
     block(m, key, invalid);
@@ -310,7 +312,8 @@ function mapNameValueInner(m, key, value, index, { allowRail }) {
     m.exceptPlatformSlugs.push(...sub.exceptPlatformSlugs);
     if (sub.merchantProse.length) {
       const resolvedAny = sub.merchantSlugs.length || sub.platformSlugs.length;
-      m.merchantProse.push({ key, text: sub.merchantProse.map((p) => p.text).join(', '), partial: Boolean(resolvedAny) });
+      m.merchantProse.push({ key, text: sub.merchantProse.map((p) => p.text).join(', '), partial: Boolean(resolvedAny),
+        unresolved: sub.merchantProse.flatMap((p) => p.unresolved || [p.text]) });
     }
     return;
   }
@@ -396,7 +399,7 @@ function mapNameValueInner(m, key, value, index, { allowRail }) {
           block(m, key, raw);
           continue;
         }
-        m.merchantProse.push({ key, text: raw, partial: true });
+        m.merchantProse.push({ key, text: raw, partial: true, unresolved: leftover });
         continue;
       }
     }
@@ -412,6 +415,33 @@ function mapCategoryListValue(m, key, value) {
   m.categoryListKey = key;
 }
 
+// D16 / D18e: an underscored negation naming a directory brand —
+// "non_iocl_fuel", "fuel_non_iocl", "not_phonepe" — read like "not X":
+// { merchant | platform, catTokens } (the category words around it, if any).
+// Strict: the brand must resolve and any leftover words must be a category.
+function negatedBrand(raw, index) {
+  if (!index || typeof raw !== 'string') return null;
+  const key = raw.trim().toLowerCase().replace(/[\s\-/.]+/g, '_');
+  const m = key.match(/^(.*?)(?:^|_)(?:non|not)_([a-z0-9_]+)$/);
+  if (!m) return null;
+  const before = m[1].replace(/_+$/, '');
+  const words = m[2].split('_').filter(Boolean);
+  let best = null;
+  for (let n = words.length; n >= 1; n -= 1) {
+    const hit = resolveName(words.slice(0, n).join(' '), index);
+    if (!hit) continue;
+    const rest = words.slice(n).join('_');
+    if (rest && !mapCategorySlugs(rest).length) continue;
+    if (!best || (rest && !best.rest)) best = { hit, rest };
+    if (rest) break;
+  }
+  if (!best) return null;
+  const catTokens = [];
+  if (before && mapCategorySlugs(before).length) catTokens.push(before);
+  if (best.rest) catTokens.push(best.rest);
+  return { merchant: best.hit.merchant || null, platform: best.hit.platform || null, catTokens };
+}
+
 // Source exclusion lists. On an earning rule they narrow it (excluded
 // categories; excluded merchants/apps become except lists, D16). On an
 // exclusion rule they are the exclusion's own scope (D17d) — the caller
@@ -423,6 +453,11 @@ function mapExcludedCategories(m, value, index) {
     const slugs = mapCategorySlugs(item);
     if (slugs.length) {
       m.excludedCategorySlugs.push(...slugs);
+      continue;
+    }
+    const neg = negatedBrand(item, index);
+    if (neg && neg.catTokens.length) {
+      m.negatedExcluded.push(neg);
       continue;
     }
     const hit = index ? resolveName(item, index) : null;
@@ -479,6 +514,8 @@ function mapOne(m, key, value, ctx) {
   if (value === null || value === undefined || value === 'N/A' || value === '') return;
 
   if (DESCRIPTIVE_KEYS.has(lower) || (DESCRIPTIVE_SUFFIX.test(lower) && typeof value !== 'object')) return;
+  // Explicit D13/D14 deferral markers (read by the rule transform).
+  if (lower === 'depends_on_user_attribute' || lower === 'depends_on_txn_attribute') return;
   if (EXCLUSION_FLAG.test(lower) && typeof value === 'boolean') return;
   // D18e: an explicit "other than X" / "except X" / "excluding X" naming a
   // brand is an exception, whatever the key (checked before any key-specific handling).
@@ -701,6 +738,7 @@ module.exports = {
   RAIL_WORDS,
   isWildcard,
   mapRuleConditions,
+  negatedBrand,
   resolveName,
   rewardRuleHasUnsupportedTrigger,
 };
