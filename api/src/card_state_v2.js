@@ -42,9 +42,6 @@ const {
 const RECORD_VERSION = 1;
 const RECORD_SECTIONS = ['caps', 'milestones', 'fee_waivers'];
 const LEDGER_REASON = 'points earned on transaction';
-// The cashback part of a spend on a card that earns points AND cashback. Kept
-// apart so the points total (GET /user-cards total_points_earned) stays points.
-const LEDGER_CASHBACK_REASON = 'cashback earned on transaction';
 const DIRECTORY_TTL_MS = 5 * 60 * 1000;
 const MAX_PERIODS_PER_CAP = 5000;
 const PAISE_EPS = 1e-6;
@@ -164,8 +161,7 @@ function capNativeAmount(cap, kind, card) {
 /**
  * The figure expected_points carries, as v1 did: points when the spend earns
  * points, else ₹ of cashback (a cashback card). The cashback of a spend that
- * earns both is not lost: it is kept in expected_cashback_inr and its own
- * ledger row (see earnedSplit).
+ * earns both is kept in expected_cashback_inr only (see earnedSplit).
  */
 function nativeAmount(result) {
   if (result.points != null) return result.points;
@@ -183,16 +179,13 @@ function earnedSplit(result) {
 
 /**
  * Ledger rows for one spend: the expected_points figure under the v1 reason,
- * plus — on a spend that earns points AND cashback — the cashback under its
- * own reason, so a points total never adds rupees.
+ * exactly as v1 writes it (₹ on a cashback-only card). The cashback of a
+ * spend that also earns points gets NO ledger row (WP8 review ruling): every
+ * reader of points_ledger, installed apps included, sums all rows as points;
+ * that cashback lives in transactions.expected_cashback_inr only.
  */
 function ledgerRows(outcome) {
-  const rows = [];
-  if (outcome.native > 0) rows.push({ reason: LEDGER_REASON, delta: outcome.native });
-  if (outcome.points != null && outcome.cashback != null && outcome.cashback > 0) {
-    rows.push({ reason: LEDGER_CASHBACK_REASON, delta: outcome.cashback });
-  }
-  return rows;
+  return outcome.native > 0 ? [{ reason: LEDGER_REASON, delta: outcome.native }] : [];
 }
 
 /** C3.1 context from a stored transaction row (or the same fields from a write path). */
@@ -1132,11 +1125,11 @@ async function applyCardRebuild(client, userId, v2, plan) {
         WHERE id = $1 AND profile_id = $2`,
       [u.id, userId, u.native, u.value, u.cashback],
     );
-    // The estimated earn rows follow the transaction; confirmed rows are left alone.
+    // The estimated earn row follows the transaction; confirmed rows are left alone.
     await client.query(
       `DELETE FROM points_ledger
-        WHERE transaction_id = $1 AND profile_id = $2 AND reason = ANY($3::text[]) AND state = 'estimated'`,
-      [u.id, userId, [LEDGER_REASON, LEDGER_CASHBACK_REASON]],
+        WHERE transaction_id = $1 AND profile_id = $2 AND reason = $3 AND state = 'estimated'`,
+      [u.id, userId, LEDGER_REASON],
     );
     for (const row of ledgerRows(u)) {
       await client.query(

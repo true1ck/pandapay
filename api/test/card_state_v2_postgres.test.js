@@ -520,6 +520,93 @@ test('v1-shaped card: today\'s path, v1 measure, no kind, no record', { skip }, 
   });
 });
 
+/** index.js's real GET .../points-ledger and POST .../points-adjustment handlers, on `client`. */
+function ledgerRoutes(client) {
+  const source = fs.readFileSync(path.join(__dirname, '../src/index.js'), 'utf8');
+  const start = source.indexOf("app.get('/user-cards/:id/points-ledger'");
+  const end = source.indexOf('/**\n * POST /transactions — UA-3+', start);
+  assert.ok(start >= 0 && end > start);
+  const routes = {};
+  const app = {
+    get: (route, ...handlers) => { routes[`GET ${route}`] = handlers.at(-1); },
+    post: (route, ...handlers) => { routes[`POST ${route}`] = handlers.at(-1); },
+  };
+  new Function('app', 'requireAuth', 'withUserClient', 'safeErrorCode', source.slice(start, end))(
+    app, null, (_userId, fn) => fn(client), (e) => String(e && e.code),
+  );
+  const call = async (key, req) => {
+    const res = { code: 200, body: null, status(c) { this.code = c; return this; }, json(b) { this.body = b; return this; } };
+    await routes[key](req, res);
+    return res;
+  };
+  return {
+    ledger: (userId, cardId) => call('GET /user-cards/:id/points-ledger', { userId, params: { id: cardId } }),
+    adjust: (userId, cardId, newBalance) => call('POST /user-cards/:id/points-adjustment', {
+      userId, params: { id: cardId }, body: { newBalance },
+    }),
+  };
+}
+
+test('points+cashback card: cashback never enters the points ledger (record, edit, rebuild); ledger routes total points only', { skip }, async () => {
+  cardStateV2.clearDirectoryCache();
+  await withRollback(async (client) => {
+    const fns = extractIndexFunctions();
+    const { today, monthStart, prevMonthStart } = await dates(client);
+    const ids = await seedSyntheticCard(client, { openedOn: prevMonthStart });
+    await client.query(
+      `INSERT INTO reward_rules (card_product_id, category_id, unit, rate, rule_role, min_engine_version, display_note)
+       VALUES ($1, $2, 'cashback_percent', 5, 'earn', 2, '5% cashback on other')`,
+      [ids.product, ids.cats.other],
+    );
+    await asUser(client, ids.profileId);
+    const { txnId: cashbackTxn } = await recordSpend(client, fns, ids, { amount: 1000, day: monthStart, category: 'other' });
+    const { txnId: pointsTxn } = await recordSpend(client, fns, ids, { amount: 1000, day: addDays(monthStart, 1), category: 'dining' });
+    let [cb, pts] = await expectedOf(client, [cashbackTxn, pointsTxn]);
+    assert.deepEqual([cb.points, cb.cashback, cb.value], [0, 50, 50]);
+    assert.deepEqual([pts.points, pts.cashback, pts.value], [50, null, 12.5]);
+
+    const routes = ledgerRoutes(client);
+    const ledgerTotal = async () => {
+      const res = await routes.ledger(ids.profileId, ids.userCardId);
+      assert.equal(res.code, 200);
+      return res.body.pointsLedger.reduce((s, r) => s + Number(r.delta_points), 0);
+    };
+    assert.equal(await ledgerTotal(), 50, 'record: points only');
+
+    // Edit the cashback spend (PATCH's reverse → update → apply): still no ledger row.
+    const old = (await client.query(`SELECT * FROM transactions WHERE id = $1`, [cashbackTxn])).rows[0];
+    const card = await fns.loadUserCardForState(client, ids.profileId, ids.userCardId);
+    await fns.reverseTransactionState(client, ids.profileId, card, old);
+    await client.query(`UPDATE transactions SET amount_inr = 2000 WHERE id = $1`, [cashbackTxn]);
+    await fns.applyTransactionState(client, ids.profileId, card, {
+      txnId: cashbackTxn, userCardId: ids.userCardId, amount: 2000, occurred: old.occurred_at,
+      categoryId: old.category_id, sign: 1, merchantName: null, rail: 'unknown',
+    });
+    [cb] = await expectedOf(client, [cashbackTxn]);
+    assert.deepEqual([cb.points, cb.cashback], [0, 100]);
+    assert.equal(await ledgerTotal(), 50, 'edit: points only');
+
+    // Rebuild (recompute) rewrites expected values but adds no cashback row.
+    await client.query(`UPDATE transactions SET expected_cashback_inr = NULL WHERE id = $1`, [cashbackTxn]);
+    await recompute(client, { nested: true, apply: true, asOf: today, userCardId: ids.userCardId, log: quietLog });
+    [cb] = await expectedOf(client, [cashbackTxn]);
+    assert.equal(cb.cashback, 100);
+    assert.equal(await ledgerTotal(), 50, 'rebuild: points only');
+
+    // A manual correction to 80 points adds 30, not 30 minus the cashback.
+    const adjusted = await routes.adjust(ids.profileId, ids.userCardId, 80);
+    assert.equal(adjusted.code, 201);
+    assert.equal(Number(adjusted.body.pointsLedgerEntry.delta_points), 30);
+    assert.equal(await ledgerTotal(), 80);
+
+    // Reversing the cashback spend zeroes its cashback field.
+    await ignoreSpend(client, fns, ids, cashbackTxn);
+    [cb] = await expectedOf(client, [cashbackTxn]);
+    assert.deepEqual([cb.points, cb.cashback, cb.value], [0, 0, 0]);
+    assert.equal(await ledgerTotal(), 80);
+  });
+});
+
 // ---------------------------------------------------------------------------
 // C8 D23d: an edit and a rebuild in two connections. This one commits (two
 // sessions can't share a transaction), so it seeds unique ids and deletes

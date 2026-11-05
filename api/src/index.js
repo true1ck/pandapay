@@ -2128,11 +2128,8 @@ app.get('/user-cards', requireAuth, async (req, res) => {
           card.cap_states = await cardStateV2.currentCapStates(client, card.id);
           card.milestone_states = await cardStateV2.currentMilestoneStates(client, card.id);
 
-          // The cashback part of a v2 spend that also earns points has its
-          // own ledger reason and is not a point (WP8).
           const pointsTotal = await client.query(
-            `SELECT COALESCE(SUM(delta_points), 0) AS total_points FROM points_ledger
-              WHERE user_card_id = $1 AND reason <> 'cashback earned on transaction'`,
+            `SELECT COALESCE(SUM(delta_points), 0) AS total_points FROM points_ledger WHERE user_card_id = $1`,
             [card.id]
           );
           card.total_points_earned = Number(pointsTotal.rows[0].total_points) + Number(card.points_balance || 0);

@@ -225,7 +225,7 @@ test('C8 D23f: lifetime caps rebuild from the card floor, not 1970', () => {
   assert.deepEqual([lifetime.period_start, lifetime.consumed], ['1970-01-01', 200]);
 });
 
-test('a spend that earns points and cashback keeps both: expected_points, the cashback field and two ledger rows', () => {
+test('a points+cashback card: cashback goes to expected_cashback_inr only, never the points ledger', () => {
   const rules = [...F.RULES, {
     ...F.RULES[0], id: '00000000-0000-4000-8000-0000000000a9', category_id: F.CATEGORY.other,
     unit: 'cashback_percent', rate: '5.0000', display_note: '5% cashback on other',
@@ -234,13 +234,13 @@ test('a spend that earns points and cashback keeps both: expected_points, the ca
   const out = cardStateV2.computeTransactionV2(v2, directory, cardStateV2.transactionContext(
     txn('2026-11-10', 1000, { category_id: F.CATEGORY.other })), () => 0);
   assert.deepEqual([out.native, out.points, out.cashback, out.value], [0, 0, 50, 50]);
-  assert.deepEqual(cardStateV2.ledgerRows(out), [{ reason: 'cashback earned on transaction', delta: 50 }]);
+  assert.deepEqual(cardStateV2.ledgerRows(out), []);
   const pointsCard = cardStateV2.computeTransactionV2(v2, directory, cardStateV2.transactionContext(dining('2026-11-10', 1000)), () => 0);
   assert.deepEqual([pointsCard.native, pointsCard.points, pointsCard.cashback], [50, 50, null]);
   assert.deepEqual(cardStateV2.ledgerRows({ native: 120, points: 120, cashback: 30 }), [
     { reason: 'points earned on transaction', delta: 120 },
-    { reason: 'cashback earned on transaction', delta: 30 },
   ]);
+  // A cashback-only card keeps v1's behaviour: ₹ under the points reason.
   assert.deepEqual(cardStateV2.ledgerRows({ native: 49.5, points: null, cashback: 49.5 }), [
     { reason: 'points earned on transaction', delta: 49.5 },
   ]);
