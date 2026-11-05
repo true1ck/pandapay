@@ -425,6 +425,68 @@ async function validateDraftSafely(rule, template, model, otherLayouts = []) {
   });
 }
 
+// Reserves a minute of provider capacity and writes the attempt row, in the
+// caller's transaction. Returns "capacity" when the minute is full, else null.
+// Layout drafts and shop suggestions share this, so they share one budget.
+async function reserveCapacity(client, { prompt, config, templateHash, attempt, jobId }) {
+  const estimate = Buffer.byteLength(prompt, "utf8") + config.maxOutputTokens;
+  await client.query(
+    "SELECT pg_advisory_xact_lock(hashtext('sms_v2_ai_capacity'))",
+  );
+  const minute = (
+    await client.query("SELECT date_trunc('minute',clock_timestamp()) AS minute")
+  ).rows[0].minute;
+  await client.query(
+    "INSERT INTO sms_v2_ai_capacity(minute) VALUES($1) ON CONFLICT DO NOTHING",
+    [minute],
+  );
+  const used = (
+    await client.query(
+      "SELECT requests,reserved_tokens FROM sms_v2_ai_capacity WHERE minute=$1 FOR UPDATE",
+      [minute],
+    )
+  ).rows[0];
+  if (used.requests + 1 > config.rpm || Number(used.reserved_tokens) + estimate > config.tpm)
+    return "capacity";
+  await client.query(
+    "UPDATE sms_v2_ai_capacity SET requests=requests+1,reserved_tokens=reserved_tokens+$2 WHERE minute=$1",
+    [minute, estimate],
+  );
+  await client.query(
+    "INSERT INTO sms_v2_template_attempts(template_hash,attempt,model,capacity_minute,reserved_tokens,job_id) VALUES($1,$2,$3,$4,$5,$6)",
+    [templateHash, attempt, config.model, minute, estimate, jobId],
+  );
+  return null;
+}
+
+// Month-to-date provider spend in USD (UTC month), across layouts and shops.
+async function monthSpendUsd(client) {
+  return Number(
+    (
+      await client.query(
+        "SELECT coalesce(sum(cost_usd),0) AS spent FROM sms_v2_template_attempts WHERE started_at >= date_trunc('month', clock_timestamp() AT TIME ZONE 'utc') AT TIME ZONE 'utc'",
+      )
+    ).rows[0].spent,
+  );
+}
+
+// Records what a finished attempt used, and tops up the reservation if needed.
+async function recordUsage(client, { jobId, attempt, usage }) {
+  const attemptRow = (
+    await client.query(
+      `UPDATE sms_v2_template_attempts SET input_tokens=$3,output_tokens=$4,total_tokens=$5,latency_ms=$6,cost_usd=$7,outcome=$8,prompt_version=$9
+        WHERE job_id=$1 AND attempt=$2 RETURNING capacity_minute,reserved_tokens`,
+      [jobId, attempt, usage.inputTokens, usage.outputTokens, usage.totalTokens, usage.latencyMs, usage.costUsd, usage.outcome, usage.promptVersion ?? null],
+    )
+  ).rows[0];
+  if (attemptRow && usage.totalTokens > attemptRow.reserved_tokens) {
+    await client.query(
+      "UPDATE sms_v2_ai_capacity SET reserved_tokens=reserved_tokens+$2 WHERE minute=$1",
+      [attemptRow.capacity_minute, usage.totalTokens - attemptRow.reserved_tokens],
+    );
+  }
+}
+
 function createPgWorkerStore({ withAdminClient, adminId }) {
   const tx = (operation) =>
     withAdminClient(adminId, "learning.publish", operation);
@@ -435,17 +497,9 @@ function createPgWorkerStore({ withAdminClient, adminId }) {
     settings() {
       return tx((client) => readSettings(client, { force: true }));
     },
-    // Month-to-date provider spend in USD (UTC month).
+    // Month-to-date provider spend in USD (UTC month), layouts and shops together.
     monthSpend() {
-      return tx(async (client) =>
-        Number(
-          (
-            await client.query(
-              "SELECT coalesce(sum(cost_usd),0) AS spent FROM sms_v2_template_attempts WHERE started_at >= date_trunc('month', clock_timestamp() AT TIME ZONE 'utc') AT TIME ZONE 'utc'",
-            )
-          ).rows[0].spent,
-        ),
-      );
+      return tx((client) => monthSpendUsd(client));
     },
     async claim() {
       return tx(async (client) => {
@@ -554,78 +608,19 @@ function createPgWorkerStore({ withAdminClient, adminId }) {
           )
         ).rows[0];
         if (!row) return "consent_or_lease_lost";
-        const estimate =
-          Buffer.byteLength(prompt, "utf8") + config.maxOutputTokens;
-        await client.query(
-          "SELECT pg_advisory_xact_lock(hashtext('sms_v2_ai_capacity'))",
-        );
-        const minute = (
-          await client.query(
-            "SELECT date_trunc('minute',clock_timestamp()) AS minute",
-          )
-        ).rows[0].minute;
-        await client.query(
-          "INSERT INTO sms_v2_ai_capacity(minute) VALUES($1) ON CONFLICT DO NOTHING",
-          [minute],
-        );
-        const used = (
-          await client.query(
-            "SELECT requests,reserved_tokens FROM sms_v2_ai_capacity WHERE minute=$1 FOR UPDATE",
-            [minute],
-          )
-        ).rows[0];
-        if (
-          used.requests + 1 > config.rpm ||
-          Number(used.reserved_tokens) + estimate > config.tpm
-        )
-          return "capacity";
-        await client.query(
-          "UPDATE sms_v2_ai_capacity SET requests=requests+1,reserved_tokens=reserved_tokens+$2 WHERE minute=$1",
-          [minute, estimate],
-        );
-        await client.query(
-          "INSERT INTO sms_v2_template_attempts(template_hash,attempt,model,capacity_minute,reserved_tokens,job_id) VALUES($1,$2,$3,$4,$5,$6)",
-          [
-            template.template_hash,
-            attempt,
-            config.model,
-            minute,
-            estimate,
-            template.lease_id,
-          ],
-        );
-        return null;
+        return reserveCapacity(client, {
+          prompt,
+          config,
+          templateHash: template.template_hash,
+          attempt,
+          jobId: template.lease_id,
+        });
       });
     },
     recordAttempt(template, attempt, usage) {
-      return tx(async (client) => {
-        const attemptRow = (
-          await client.query(
-            `UPDATE sms_v2_template_attempts SET input_tokens=$3,output_tokens=$4,total_tokens=$5,latency_ms=$6,cost_usd=$7,outcome=$8,prompt_version=$9
-          WHERE job_id=$1 AND attempt=$2 RETURNING capacity_minute,reserved_tokens`,
-            [
-              template.lease_id,
-              attempt,
-              usage.inputTokens,
-              usage.outputTokens,
-              usage.totalTokens,
-              usage.latencyMs,
-              usage.costUsd,
-              usage.outcome,
-              usage.promptVersion ?? null,
-            ],
-          )
-        ).rows[0];
-        if (attemptRow && usage.totalTokens > attemptRow.reserved_tokens) {
-          await client.query(
-            "UPDATE sms_v2_ai_capacity SET reserved_tokens=reserved_tokens+$2 WHERE minute=$1",
-            [
-              attemptRow.capacity_minute,
-              usage.totalTokens - attemptRow.reserved_tokens,
-            ],
-          );
-        }
-      });
+      return tx((client) =>
+        recordUsage(client, { jobId: template.lease_id, attempt, usage }),
+      );
     },
     finish(template, { rule = null, code = null, model, requeue = false, covered = null }) {
       return tx(async (client) => {
@@ -829,6 +824,9 @@ function createGeminiTemplateProvider({
 }
 
 module.exports = {
+  reserveCapacity,
+  monthSpendUsd,
+  recordUsage,
   PROMPT_VERSION,
   coveredBy,
   rankSimilarRules,

@@ -172,6 +172,15 @@ class _SmsLearningTabState extends State<SmsLearningTab> {
     if (mounted) _reload();
   }
 
+  /// The AI's suggestion opens the same category draft as picking by hand;
+  /// nothing is published without the admin going through the golden check.
+  Future<void> _useSuggestion(Map row) async {
+    final category = (row['suggestion'] as Map)['category'] as String;
+    await _drafted('uncategorised', row, '', 'Opened the category draft from the AI suggestion');
+    widget.onCreateCategoryRule(row['merchantKey'] as String, category);
+    if (mounted) _reload();
+  }
+
   Future<void> _pickCategory(Map row) async {
     final category = await showDialog<String>(
       context: context,
@@ -260,6 +269,7 @@ class _SmsLearningTabState extends State<SmsLearningTab> {
                 _OtherRow(
                   row: row,
                   onPick: () => _pickCategory(row),
+                  onUseSuggestion: () => _useSuggestion(row),
                   onDismiss: () => _dismiss('uncategorised', row, ''),
                 ),
             ],
@@ -469,10 +479,28 @@ class _NameRow extends StatelessWidget {
   );
 }
 
+/// "AI suggests Groceries (brand known)" for a ready suggestion, else null.
+String? suggestionLine(Map row) {
+  final suggestion = row['suggestion'];
+  if (suggestion is! Map || suggestion['category'] == null) return null;
+  final why = switch (suggestion['why']) {
+    'brand_known' => 'brand known',
+    'name_describes_goods' => 'name describes goods',
+    final Object other => '$other',
+    null => 'no reason given',
+  };
+  return 'AI suggests ${categoryName(suggestion['category'])} ($why)';
+}
+
 class _OtherRow extends StatelessWidget {
-  const _OtherRow({required this.row, required this.onPick, required this.onDismiss});
+  const _OtherRow({
+    required this.row,
+    required this.onPick,
+    required this.onUseSuggestion,
+    required this.onDismiss,
+  });
   final Map row;
-  final VoidCallback onPick, onDismiss;
+  final VoidCallback onPick, onUseSuggestion, onDismiss;
   @override
   Widget build(BuildContext context) => Card(
     key: Key('other-${row['merchantKey']}'),
@@ -481,8 +509,14 @@ class _OtherRow extends StatelessWidget {
         Expanded(child: Text('${row['merchantKey']} · ${row['users']} people')),
         _StatusChip('${row['status']}', decision: row['decision'] as String?),
       ]),
-      subtitle: Text('Senders ${(row['senders'] as List? ?? const []).join(', ')}'),
+      subtitle: Text([
+        'Senders ${(row['senders'] as List? ?? const []).join(', ')}',
+        ?suggestionLine(row),
+      ].join('\n')),
+      isThreeLine: suggestionLine(row) != null,
       trailing: Wrap(spacing: 4, children: [
+        if (suggestionLine(row) != null)
+          TextButton(key: Key('use-${row['merchantKey']}'), onPressed: onUseSuggestion, child: const Text('Use suggestion')),
         TextButton(key: Key('pick-${row['merchantKey']}'), onPressed: onPick, child: const Text('Pick category')),
         TextButton(key: Key('dismiss-other-${row['merchantKey']}'), onPressed: onDismiss, child: const Text('Dismiss')),
       ]),

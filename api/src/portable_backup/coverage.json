@@ -733,6 +733,10 @@
       "disposition": "platform_ops",
       "reason": "Reviewed shop-name (merchant alias) revisions and signed bundle publication are platform administration state preserved by full PostgreSQL recovery, outside a customer portable archive."
     },
+    "sms_v2_merchant_suggestions": {
+      "disposition": "platform_ops",
+      "reason": "AI category suggestions for shop keys hold no person data (a shop key and a category) and are platform administration state preserved by full PostgreSQL recovery."
+    },
     "sms_v2_settings": {
       "disposition": "platform_ops",
       "reason": "Admin-set learning and AI settings are platform administration state preserved by full PostgreSQL recovery, outside a customer portable archive."

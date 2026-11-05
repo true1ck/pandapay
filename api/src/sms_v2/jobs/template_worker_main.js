@@ -18,6 +18,19 @@ const {
   createGeminiTemplateProvider,
   runTemplateWorkerOnce,
 } = require("../template_worker");
+const {
+  createPgSuggestionStore,
+  runSuggestionOnce,
+} = require("../merchant_suggestions");
+
+// One pass of the worker: a layout first; when none is waiting, a shop left in
+// "Other" (only if the admin switched shop suggestions on).
+async function runWorkerCycle({ layoutStore, suggestionStore, provider, config }) {
+  const layout = await runTemplateWorkerOnce({ store: layoutStore, provider, config });
+  if (layout.status !== "idle" || !suggestionStore) return layout;
+  const shop = await runSuggestionOnce({ store: suggestionStore, provider, config });
+  return shop.status === "disabled" ? layout : { ...shop, job: "shop" };
+}
 
 async function main() {
   const adminId = process.env.SMS_V2_JOB_ADMIN_ID;
@@ -25,7 +38,9 @@ async function main() {
   const config = workerConfig();
   const provider = createGeminiTemplateProvider();
   const { pool } = await openRuleAdminStore();
-  const store = createPgWorkerStore({ ...createAdminDbHelpers(pool), adminId });
+  const helpers = createAdminDbHelpers(pool);
+  const store = createPgWorkerStore({ ...helpers, adminId });
+  const suggestionStore = createPgSuggestionStore({ ...helpers, adminId });
   let stopped = false;
   const stop = () => {
     stopped = true;
@@ -34,7 +49,7 @@ async function main() {
   process.once("SIGTERM", stop);
   try {
     do {
-      const result = await runTemplateWorkerOnce({ store, provider, config });
+      const result = await runWorkerCycle({ layoutStore: store, suggestionStore, provider, config });
       // Metadata only. Templates, prompts and provider responses are private.
       console.log(
         JSON.stringify({
@@ -69,4 +84,4 @@ if (require.main === module) {
   });
 }
 
-module.exports = { main };
+module.exports = { main, runWorkerCycle };

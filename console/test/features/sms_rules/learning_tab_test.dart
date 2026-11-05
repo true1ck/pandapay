@@ -192,4 +192,27 @@ void main() {
     expect(find.byKey(const Key('summary-cards')), findsOneWidget);
     expect(find.byKey(const Key('category-SWIGGY')), findsOneWidget);
   });
+
+  testWidgets('a ready AI suggestion is shown with its reason and opens the same draft', (tester) async {
+    final admin = FakeAdmin()
+      ..learningOther = [
+        {
+          'merchantKey': 'BLINKIT', 'users': 9, 'testerUsers': 1, 'senders': ['ICICIB'], 'status': 'new', 'decision': null,
+          'suggestion': {'category': 'groceries', 'confidence': 0.9, 'why': 'brand_known'},
+        },
+        {'merchantKey': 'ZEPTO', 'users': 4, 'senders': ['HDFCBK'], 'status': 'new', 'decision': null, 'suggestion': null},
+      ];
+    final opened = <(String, String)>[];
+    await pumpLearning(tester, admin, onRule: (key, category) => opened.add((key, category)));
+    expect(find.textContaining('AI suggests Groceries (brand known)'), findsOneWidget);
+    expect(find.byKey(const Key('use-ZEPTO')), findsNothing, reason: 'no suggestion, no button');
+    await tester.tap(find.byKey(const Key('use-BLINKIT')));
+    await tester.pumpAndSettle();
+    expect(opened, [('BLINKIT', 'groceries')]);
+    final post = admin.requests.lastWhere((r) => r.$2 == '/admin/sms/v2/learning/decisions');
+    expect(post.$3?['decision'], 'drafted');
+    expect(post.$3?['kind'], 'uncategorised');
+    expect(suggestionLine({'suggestion': {'category': 'fuel', 'why': 'name_describes_goods'}}), 'AI suggests Fuel (name describes goods)');
+    expect(suggestionLine({'suggestion': null}), isNull);
+  });
 }

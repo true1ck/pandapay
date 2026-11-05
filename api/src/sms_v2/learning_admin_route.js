@@ -88,7 +88,9 @@ WITH v AS (
 )
 SELECT v.merchant_key, v.value, v.users, v.tester_users, v.times, v.last_at, v.senders,
        (SELECT d.decision FROM sms_v2_learning_decisions d
-         WHERE d.kind = 'uncategorised' AND d.merchant_key = v.merchant_key AND d.value = '') AS decision
+         WHERE d.kind = 'uncategorised' AND d.merchant_key = v.merchant_key AND d.value = '') AS decision,
+       (SELECT jsonb_build_object('category', m.category, 'confidence', m.confidence, 'why', m.why)
+          FROM sms_v2_merchant_suggestions m WHERE m.merchant_key = v.merchant_key AND m.status = 'ready') AS suggestion
   FROM v
  WHERE v.users >= $1 AND ${NOT_DISMISSED('uncategorised', 'v.users')}
  ORDER BY v.users DESC, v.last_at DESC
@@ -136,7 +138,7 @@ async function uncategorisedCandidates(client, { k, days, parts }) {
   const rows = (await client.query(UNCATEGORISED_SQL, [k, days, parts.taxonomyVersion])).rows;
   return rows.map((row) => {
     const covered = parts.categoryRules.some((rule) => cleanKey(rule.merchantKey) === row.merchant_key);
-    return { ...rowBase(row), status: covered ? 'covered' : 'new' };
+    return { ...rowBase(row), status: covered ? 'covered' : 'new', suggestion: row.suggestion || null };
   });
 }
 
