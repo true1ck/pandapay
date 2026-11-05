@@ -17,7 +17,7 @@
  *   node api/scripts/recompute_card_state.js                 # dry run: prints diffs, writes nothing
  *   node api/scripts/recompute_card_state.js --apply
  *   Options:
- *     --as-of YYYY-MM-DD      the "current" day (default: the database's CURRENT_DATE)
+ *     --as-of YYYY-MM-DD      the "current" day (default: today in India, Asia/Kolkata)
  *     --since YYYY-MM-DD      also replay from this day (wider rebuild)
  *     --card-slug <slug>      only user cards of this card product
  *     --user-card <uuid>      only this user card
@@ -93,7 +93,8 @@ async function recompute(client, opts = {}) {
     ? { begin: 'SAVEPOINT recompute_card', commit: 'RELEASE SAVEPOINT recompute_card', rollback: 'ROLLBACK TO SAVEPOINT recompute_card' }
     : { begin: 'BEGIN', commit: 'COMMIT', rollback: 'ROLLBACK' };
   let asOfDay = opts.asOf;
-  if (!asOfDay) asOfDay = (await client.query(`SELECT CURRENT_DATE::text AS today`)).rows[0].today;
+  // v2 windows are India calendar days (C8 D23c).
+  if (!asOfDay) asOfDay = (await client.query(`SELECT (now() AT TIME ZONE 'Asia/Kolkata')::date::text AS today`)).rows[0].today;
   const asOf = new Date(`${asOfDay}T12:00:00.000Z`);
 
   const candidates = await client.query(
@@ -119,7 +120,7 @@ async function recompute(client, opts = {}) {
       // when the connection role is subject to them.
       await client.query(`SELECT set_config('app.user_id', $1, true)`, [row.profile_id]);
       await client.query(`SELECT pg_advisory_xact_lock(hashtextextended($1::text, 0))`, [`transaction-ingest:${row.profile_id}`]);
-      const v2 = await cardStateV2.loadV2Card(client, row.id);
+      const v2 = await cardStateV2.loadV2Card(client, row.id, { profileId: row.profile_id });
       if (!v2) {
         await client.query(tx.rollback);
         if (opts.nested) await client.query(tx.commit);

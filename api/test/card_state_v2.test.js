@@ -354,6 +354,17 @@ test('records keep entries for periods the replay did not rebuild', () => {
   assert.deepEqual(record.fee_waivers, withForeign.card_state_v2.fee_waivers);
 });
 
+test('C8 D23d: edit, ignore/delete and restore take the ingest lock before the row lock', () => {
+  const source = require('node:fs').readFileSync(require('node:path').join(__dirname, '../src/index.js'), 'utf8');
+  for (const route of ["app.patch('/transactions/:id', ", "app.post('/transactions/:id/ignore'", "app.post('/transactions/:id/restore'"]) {
+    const start = source.indexOf(route);
+    assert.ok(start >= 0, route);
+    const lock = source.indexOf('`transaction-ingest:${req.userId}`', start);
+    const rowLock = source.indexOf('FOR UPDATE', start);
+    assert.ok(lock > start && rowLock > lock, `${route}: ingest lock first`);
+  }
+});
+
 test('recompute_card_state: dry run by default; options are validated', () => {
   const { parseArgs } = require('../scripts/recompute_card_state');
   assert.equal(parseArgs([]).apply, false);

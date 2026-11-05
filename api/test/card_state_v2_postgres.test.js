@@ -20,6 +20,7 @@ const assert = require('node:assert/strict');
 const fs = require('node:fs');
 const path = require('node:path');
 const vm = require('node:vm');
+const crypto = require('node:crypto');
 
 const rewardMath = require('../src/reward_math');
 const rewardV2 = require('../src/reward_math_v2');
@@ -78,11 +79,14 @@ async function asOwner(client) {
   await client.query('RESET ROLE');
 }
 
+/** Today, this month and last month in India calendar days (v2 windows are IST, C8 D23c). */
 async function dates(client) {
   const r = await client.query(
-    `SELECT CURRENT_DATE::text AS today,
-            date_trunc('month', CURRENT_DATE)::date::text AS month_start,
-            (date_trunc('month', CURRENT_DATE) - interval '1 month')::date::text AS prev_month_start`,
+    `WITH d AS (SELECT (now() AT TIME ZONE 'Asia/Kolkata')::date AS today)
+     SELECT today::text AS today,
+            date_trunc('month', today)::date::text AS month_start,
+            (date_trunc('month', today) - interval '1 month')::date::text AS prev_month_start
+       FROM d`,
   );
   return { today: r.rows[0].today, monthStart: r.rows[0].month_start, prevMonthStart: r.rows[0].prev_month_start };
 }
@@ -94,27 +98,38 @@ async function categoryIds(client) {
 
 const FIXTURE_CATEGORY_SLUG = { [F.CATEGORY.dining]: 'dining', [F.CATEGORY.rent]: 'rent', [F.CATEGORY.wallet]: 'wallet' };
 
-/** The synthetic fixture card as real catalogue rows (published), one profile, one user card. */
-async function seedSyntheticCard(client, { openedOn, statementDay = null }) {
+/**
+ * The synthetic fixture card as real catalogue rows (published), one profile,
+ * one user card. `unique` gives every row a fresh id and slug (for tests that
+ * commit); `ids.id(fixtureId)` maps a fixture id to the row's id.
+ */
+async function seedSyntheticCard(client, { openedOn, statementDay = null, unique = false }) {
   const cats = await categoryIds(client);
   const realCategory = (id) => (id == null ? null : cats[FIXTURE_CATEGORY_SLUG[id]]);
+  const remap = new Map();
+  const id = (fixtureId) => {
+    if (fixtureId == null || !unique) return fixtureId;
+    if (!remap.has(fixtureId)) remap.set(fixtureId, crypto.randomUUID());
+    return remap.get(fixtureId);
+  };
+  const suffix = unique ? `-${crypto.randomUUID().slice(0, 8)}` : '';
   const issuer = (await client.query(
-    `INSERT INTO issuers (slug, name) VALUES ('wp8-synthetic-bank', 'WP8 Synthetic Bank') RETURNING id`,
+    `INSERT INTO issuers (slug, name) VALUES ($1, 'WP8 Synthetic Bank') RETURNING id`, [`wp8-synthetic-bank${suffix}`],
   )).rows[0].id;
   const product = (await client.query(
     `INSERT INTO card_products (issuer_id, slug, name, network, status, verified_at, base_reward_unit,
                                 base_reward_rate, point_value_inr, accrual_rounding, accrual_block_inr)
-     VALUES ($1, 'wp8-synthetic-card', 'WP8 Synthetic Card', 'visa', 'published', now(), 'points_per_100',
+     VALUES ($1, $2, 'WP8 Synthetic Card', 'visa', 'published', now(), 'points_per_100',
              1, 0.25, 'floor', 100) RETURNING id`,
-    [issuer],
+    [issuer, `wp8-synthetic-card${suffix}`],
   )).rows[0].id;
   for (const r of F.RULES) {
     await client.query(
       `INSERT INTO reward_rules (id, card_product_id, category_id, unit, rate, priority, rule_role,
-                                 merchant_slugs, min_engine_version, display_note)
-       VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10)`,
-      [r.id, product, realCategory(r.category_id), r.unit, r.rate, r.priority, r.rule_role,
-        r.merchant_slugs, r.min_engine_version, r.display_note],
+                                 merchant_slugs, min_engine_version, display_note, max_txn_inr)
+       VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11)`,
+      [id(r.id), product, realCategory(r.category_id), r.unit, r.rate, r.priority, r.rule_role,
+        r.merchant_slugs, r.min_engine_version, r.display_note, r.max_txn_inr],
     );
   }
   for (const c of F.CAPS) {
@@ -123,11 +138,11 @@ async function seedSyntheticCard(client, { openedOn, statementDay = null }) {
                               cap_kind, cap_amount, scope, parent_cap_id, post_cap_behavior, anchor,
                               min_engine_version)
        VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14)`,
-      [c.id, product, c.label, c.measure, c.period, c.cap_value, c.post_cap_rate, c.cap_kind, c.cap_amount,
-        c.scope, c.parent_cap_id, c.post_cap_behavior, c.anchor, c.min_engine_version],
+      [id(c.id), product, c.label, c.measure, c.period, c.cap_value, c.post_cap_rate, c.cap_kind, c.cap_amount,
+        c.scope, id(c.parent_cap_id), c.post_cap_behavior, c.anchor, c.min_engine_version],
     );
     for (const target of c.targets) {
-      await client.query(`INSERT INTO cap_rule_targets (cap_rule_id, reward_rule_id) VALUES ($1, $2)`, [c.id, target]);
+      await client.query(`INSERT INTO cap_rule_targets (cap_rule_id, reward_rule_id) VALUES ($1, $2)`, [id(c.id), id(target)]);
     }
   }
   for (const m of F.MILESTONES) {
@@ -135,7 +150,7 @@ async function seedSyntheticCard(client, { openedOn, statementDay = null }) {
       `INSERT INTO milestone_rules (id, card_product_id, label, period, anchor, threshold_spend_inr,
                                     reward_description, reward_value_inr, window_days, excluded_category_ids)
        VALUES ($1, $2, $3, $4, $5, $6, $3, 500, $7, $8)`,
-      [m.id, product, m.label, m.period, m.anchor, m.threshold_spend_inr, m.window_days,
+      [id(m.id), product, m.label, m.period, m.anchor, m.threshold_spend_inr, m.window_days,
         m.excluded_category_ids.map(realCategory)],
     );
   }
@@ -149,7 +164,7 @@ async function seedSyntheticCard(client, { openedOn, statementDay = null }) {
     `INSERT INTO user_cards (profile_id, card_product_id, opened_on, statement_day) VALUES ($1, $2, $3, $4) RETURNING id`,
     [profileId, product, openedOn, statementDay],
   )).rows[0].id;
-  return { cats, product, feeWaiver, profileId, userCardId };
+  return { cats, issuer, product, feeWaiver, profileId, userCardId, id };
 }
 
 /** A real catalogue card, published for this transaction only, with one user card. */
@@ -209,7 +224,8 @@ const consumedById = (rows) => Object.fromEntries(rows.map((r) => [r.cap_rule_id
 
 async function expectedOf(client, txnIds) {
   const r = await client.query(
-    `SELECT id, expected_points::float8 AS points, expected_value_inr::float8 AS value, card_state_v2
+    `SELECT id, expected_points::float8 AS points, expected_value_inr::float8 AS value,
+            expected_cashback_inr::float8 AS cashback, card_state_v2
        FROM transactions WHERE id = ANY($1::uuid[])`,
     [txnIds],
   );
@@ -314,19 +330,26 @@ test('v2 card: record → reverse → recompute keeps native cap, milestone and 
     const ledger = await client.query(
       `SELECT delta_points::float8 AS points FROM points_ledger WHERE user_card_id = $1 ORDER BY occurred_at`, [ids.userCardId]);
     assert.deepEqual(ledger.rows.map((r) => r.points), [100, 2100, 300]);
+    // C8 D22a: the excluded ₹500 wallet load makes no milestone or fee-waiver progress.
     let milestones = await milestoneRows(client, ids.userCardId);
     const welcome = milestones.find((m) => m.milestone_rule_id === F.MILESTONE.welcome);
     assert.deepEqual([welcome.qualified, welcome.period_start, welcome.period_end, welcome.approximate_window],
-      [64500, prevMonthStart, addDays(prevMonthStart, 89), false]);
-    assert.equal(milestones.find((m) => m.milestone_rule_id === F.MILESTONE.annual).qualified, 64500);
+      [64000, prevMonthStart, addDays(prevMonthStart, 89), false]);
+    assert.equal(milestones.find((m) => m.milestone_rule_id === F.MILESTONE.annual).qualified, 64000);
+    let feeWaiver = await client.query(`SELECT qualified_spend::float8 AS q FROM fee_waiver_states WHERE user_card_id = $1`, [ids.userCardId]);
+    assert.deepEqual(feeWaiver.rows.map((r) => r.q), [64000]);
 
-    // GET /user-cards mapping: native consumed plus kind, amount, window and the approximate flag.
+    // GET /user-cards mapping (C8 D22c): `consumed` in the v1 measure (points
+    // × ₹0.25), consumed_native in points, plus kind, amount, window and flag.
     const wallet = await cardStateV2.currentCapStates(client, ids.userCardId);
     const parentState = wallet.find((r) => r.cap_rule_id === F.CAP.parent);
     assert.deepEqual(
-      [Number(parentState.consumed), parentState.cap_kind, Number(parentState.cap_amount), parentState.period_start, parentState.period_end, parentState.approximate_window],
-      [2500, 'total_points', 2500, monthStart, rows.find((r) => r.cap_rule_id === F.CAP.parent).period_end, false],
+      [Number(parentState.consumed), Number(parentState.consumed_native), parentState.cap_kind, Number(parentState.cap_amount),
+        parentState.period_start, parentState.period_end, parentState.approximate_window],
+      [625, 2500, 'total_points', 2500, monthStart, rows.find((r) => r.cap_rule_id === F.CAP.parent).period_end, false],
     );
+    const spendState = wallet.find((r) => r.cap_rule_id === F.CAP.spend);
+    assert.deepEqual([Number(spendState.consumed), Number(spendState.consumed_native)], [20000, 20000]);
     assert.ok('cap_value_snapshot' in parentState, 'existing keys stay');
     const walletMilestones = await cardStateV2.currentMilestoneStates(client, ids.userCardId);
     assert.ok(walletMilestones.every((m) => 'period_end' in m && 'approximate_window' in m && 'period_start' in m));
@@ -345,9 +368,9 @@ test('v2 card: record → reverse → recompute keeps native cap, milestone and 
     assert.deepEqual([expected[1].points, expected[1].value, expected[1].card_state_v2], [0, 0, null]);
     assert.equal((await client.query(`SELECT count(*)::int AS n FROM points_ledger WHERE transaction_id = $1`, [txnIds[1]])).rows[0].n, 0);
     milestones = await milestoneRows(client, ids.userCardId);
-    assert.equal(milestones.find((m) => m.milestone_rule_id === F.MILESTONE.welcome).qualified, 34500);
-    const feeWaiver = await client.query(`SELECT qualified_spend::float8 AS q FROM fee_waiver_states WHERE user_card_id = $1`, [ids.userCardId]);
-    assert.deepEqual(feeWaiver.rows.map((r) => r.q), [34500]);
+    assert.equal(milestones.find((m) => m.milestone_rule_id === F.MILESTONE.welcome).qualified, 34000);
+    feeWaiver = await client.query(`SELECT qualified_spend::float8 AS q FROM fee_waiver_states WHERE user_card_id = $1`, [ids.userCardId]);
+    assert.deepEqual(feeWaiver.rows.map((r) => r.q), [34000]);
 
     // Recompute, dry run: the later spends would now earn more; nothing is written.
     const lines = [];
@@ -488,10 +511,88 @@ test('v1-shaped card: today\'s path, v1 measure, no kind, no record', { skip }, 
     assert.equal(v1.valueInr, 60);
     assert.deepEqual(expected.map((t) => [t.value, t.card_state_v2]), [[100, null], [v1.valueInr, null]]);
     const wallet = await cardStateV2.currentCapStates(client, userCardId);
-    assert.deepEqual([wallet[0].cap_kind, wallet[0].cap_amount, wallet[0].approximate_window], [null, null, false]);
+    assert.deepEqual(
+      [Number(wallet[0].consumed), wallet[0].consumed_native, wallet[0].cap_kind, wallet[0].cap_amount, wallet[0].approximate_window],
+      [150, null, null, null, false],
+    );
     await fns.reconcileCurrentCapStates(client, profileId);
     assert.deepEqual(await capRows(client, userCardId), rows);
   });
+});
+
+// ---------------------------------------------------------------------------
+// C8 D23d: an edit and a rebuild in two connections. This one commits (two
+// sessions can't share a transaction), so it seeds unique ids and deletes
+// everything it created in `finally`.
+
+const INGEST_LOCK_SQL = `SELECT pg_advisory_xact_lock(hashtextextended($1::text, 0))`;
+
+async function connect() {
+  const { Client } = require('pg');
+  const client = new Client({ connectionString: connectionString(), ssl: false });
+  await client.connect();
+  return client;
+}
+
+test('C8 D23d: an edit holding the ingest lock and a concurrent reconcile lose no increment', { skip }, async () => {
+  cardStateV2.clearDirectoryCache();
+  const fns = extractIndexFunctions();
+  const owner = await connect();
+  const editor = await connect();
+  const rebuilder = await connect();
+  let ids = null;
+  try {
+    const { monthStart, prevMonthStart } = await dates(owner);
+    await owner.query('BEGIN');
+    ids = await seedSyntheticCard(owner, { openedOn: prevMonthStart, unique: true });
+    await asUser(owner, ids.profileId);
+    const { txnId } = await recordSpend(owner, fns, ids, { amount: 2000, day: monthStart, category: 'dining' });
+    await owner.query('COMMIT');
+    const cap = (fixtureId) => ids.id(fixtureId);
+
+    // Editor: PATCH /transactions/:id's order — ingest lock, row lock, reverse, update, apply — then waits.
+    await editor.query('BEGIN');
+    await asUser(editor, ids.profileId);
+    await editor.query(INGEST_LOCK_SQL, [`transaction-ingest:${ids.profileId}`]);
+    const old = (await editor.query(
+      `SELECT * FROM transactions WHERE id = $1 AND profile_id = $2 FOR UPDATE`, [txnId, ids.profileId])).rows[0];
+    const card = await fns.loadUserCardForState(editor, ids.profileId, ids.userCardId);
+    await fns.reverseTransactionState(editor, ids.profileId, card, old);
+    await editor.query(`UPDATE transactions SET amount_inr = 4000 WHERE id = $1`, [txnId]);
+    await fns.applyTransactionState(editor, ids.profileId, card, {
+      txnId, userCardId: ids.userCardId, amount: 4000, occurred: old.occurred_at, categoryId: old.category_id,
+      sign: 1, merchantName: null, rail: 'unknown',
+    });
+
+    // Rebuilder: GET /user-cards' reconcile, started while the edit is open.
+    await rebuilder.query('BEGIN');
+    await asUser(rebuilder, ids.profileId);
+    let rebuilt = false;
+    const rebuild = fns.reconcileCurrentCapStates(rebuilder, ids.profileId).then(() => { rebuilt = true; });
+    await new Promise((resolve) => setTimeout(resolve, 400));
+    assert.equal(rebuilt, false, 'the rebuild waits for the edit');
+    await editor.query('COMMIT');
+    await rebuild;
+    await rebuilder.query('COMMIT');
+
+    // The rebuild replayed the committed edit: nothing lost, nothing doubled.
+    const rows = await capRows(owner, ids.userCardId);
+    assert.deepEqual(consumedById(rows), {
+      [cap(F.CAP.parent)]: 200, [cap(F.CAP.bonus)]: 160, [cap(F.CAP.cardYear)]: 200,
+    });
+    const [txn] = await expectedOf(owner, [txnId]);
+    assert.deepEqual([txn.points, txn.card_state_v2.caps.length], [200, 3]);
+  } finally {
+    await editor.query('ROLLBACK').catch(() => {});
+    await rebuilder.query('ROLLBACK').catch(() => {});
+    await owner.query('ROLLBACK').catch(() => {});
+    if (ids) {
+      await owner.query('DELETE FROM profiles WHERE id = $1', [ids.profileId]);
+      await owner.query('DELETE FROM card_products WHERE id = $1', [ids.product]);
+      await owner.query('DELETE FROM issuers WHERE id = $1', [ids.issuer]);
+    }
+    await Promise.all([owner.end(), editor.end(), rebuilder.end()]);
+  }
 });
 
 // ---------------------------------------------------------------------------
@@ -534,7 +635,7 @@ test('real card (Swiggy HDFC): cashback caps in ₹, statement cycle without a s
     ], 1, async ({ rows, expected }) => {
       assert.ok(rows.length > 0 && rows.every((r) => r.cap_kind === 'total_cashback'), 'cashback caps in ₹');
       assert.ok(rows.every((r) => r.approximate_window === true), 'statement cycle with no statement day');
-      assert.equal(expected[0].value, 1200); // 10% on Swiggy
+      assert.deepEqual([expected[0].value, expected[0].cashback], [1200, 1200]); // 10% on Swiggy, in the cashback field too
       assert.deepEqual([expected[3].value, expected[4].value], [0, 0]); // below ₹100, rent
     });
     if (!ran) t.skip('swiggy-hdfc-bank-credit-card is not in this database');
