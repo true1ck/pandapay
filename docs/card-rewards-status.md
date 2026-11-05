@@ -36,9 +36,9 @@ Status values: `not started` · `running` · `done (branch ready)` · `merged` �
 | WP5 | Merchant and platform directory data | 1 | `card-rewards/wp5-directory` | **merged** | 2026-11-06 | 164 merchants (9 true sub-brand parents, `group` tags per D6), 61 platforms; review + 1 fix round clean; IHCL brands kept under `taj` (ruling in ledger) |
 | WP6a | Worked examples: HDFC, SBI Card | 1 | `card-rewards/wp6a-examples-hdfc-sbi` | **merged** | 2026-11-06 | 21/21 cards, 15 override files; review + 1 fix round clean; Swiggy exact-half rounding parked |
 | WP6b | Worked examples: ICICI, Axis, Amex, IDFC, others | 1 | `card-rewards/wp6b-examples-others` | **merged** | 2026-11-06 | 23/25 cards (Amazon Pay ICICI, AU Zenith+ skipped), 13 override files; 2 fix rounds, verified with the real loader; 18-card loader mismatches carried to WP7 |
-| WP7 | Integration: worked examples through both engines | 2 | — | not started | | Needs wave 1 merged; inputs include WP6b's 18-card mismatch list (ledger) and D16 except-list modelling |
-| WP8 | Server recording v2 + recompute script | 2 | — | not started | | Needs WP1, WP4 |
-| WP9 | App: v2 feed, tolerant parse, cap bars, alerts | 2 | — | not started | | Needs WP1, WP3 |
+| WP7 | Integration: worked examples through both engines | 2 | `card-rewards/wp7-integration` | running | 2026-11-06 | 44 cards' bank examples through both engines; triage; marks Verified cards |
+| WP8 | Server recording v2 + recompute script | 2 | `card-rewards/wp8-server-state` | running | 2026-11-06 | Native-unit cap states (gate for WP9), milestone windows, recompute after publish |
+| WP9 | App: v2 feed, tolerant parse, cap bars, alerts | 2 | — | not started | | Starts after WP8 merges |
 | — | Checkpoint A (after wave 1) | — | — | **passed** | 2026-11-06 | API 1695/0 fail; Dart 477/0; real DB import 376/376; old feed parsed by the released app parser with 0 errors; JS = Dart on 11,914 real-data purchases (0 mismatches) |
 | — | Checkpoint B (after wave 2) | — | — | not started | | |
 | — | Rollout (owner) | 3 | — | not started | | See plan §9 |
