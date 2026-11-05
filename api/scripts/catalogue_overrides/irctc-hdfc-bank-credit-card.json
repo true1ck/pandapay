@@ -48,6 +48,30 @@
       "reason": "WP7: T&C: \"The accrual of the 5% Cashback on IRCTC Train Ticket booking made via HDFC Bank SmartBuy is capped maximum at INR 1000 per month and INR 12000 Annually\" - the cashback rule only; category inference also tied it to the 5X points rule.",
       "source_url": "https://www.hdfc.bank.in/content/dam/hdfcbankpws/in/en/personal-banking/discover-products/cards/credit-cards/irctc-credit-card/irctc-tnc-09-10-25.pdf",
       "checked_on": "2026-11-05"
+    },
+    {
+      "path": "cap_rules",
+      "op": "append",
+      "value": {
+        "id": "wp7_fair_usage_statement_cycle",
+        "category_id": "all_retail",
+        "metric": "total_reward_points",
+        "mcc_target_list": [],
+        "period": "statement_cycle",
+        "limit_value": 25000,
+        "limit_value_inr": null,
+        "post_limit_behavior": {
+          "action": "zero_accrual",
+          "points_per_block": 0
+        },
+        "parent_cap_id": null,
+        "reset_day": null,
+        "effective_from": "2023-10-01",
+        "effective_to": null
+      },
+      "reason": "WP7: HDFC MITC fair usage policy: \"The maximum reward points that can be earned in a statement cycle for ... IOCL, IRCTC* ... is 25,000.\" Card-wide total cap.",
+      "source_url": "https://www.hdfc.bank.in/content/dam/hdfcbankpws/in/en/personal-banking/discover-products/cards/credit-cards/personal-mitc/mitc-in-english.pdf",
+      "checked_on": "2026-11-05"
     }
   ]
 }
