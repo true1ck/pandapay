@@ -59,6 +59,7 @@ const {
   saveImapConnection, openStoredImapPassword, deleteImapConnection, bankSenderPatterns, requireBankSenders,
 } = require('./imap_connections_store');
 const { normalizeSenderFilter } = require('./imap_credentials');
+const { requireEmailImportConsent, isEmailImportConsentRequired } = require('./email_import_consent');
 const { markInboundEmailConverted } = require('./inbound_email_retention');
 const { hasImapControlChars, isValidImapHost } = require('./imap_network');
 const { extractLocalPart, scanPolicyKeywords } = require('./email_ingest');
@@ -8653,10 +8654,15 @@ app.get('/changelog', async (req, res) => {
  * can do for itself. Until that's configured in a given environment,
  * `first_email_at`/`email_count` stay at their defaults, which is still
  * an honestly-reported "waiting" status, not a fake one.
+ *
+ * Forwarded email is read on the server, so the address is only issued (or
+ * handed back) while the user holds a current `email_import` consent;
+ * otherwise 403 `email_import_consent_required`.
  */
 app.post('/forwarding-addresses', requireAuth, async (req, res) => {
   try {
     const result = await withUserClient(req.userId, async (client) => {
+      await requireEmailImportConsent(client, req.userId, config.productTermsVersion);
       const existing = await client.query(
         `SELECT * FROM forwarding_addresses WHERE profile_id = $1 AND is_active LIMIT 1`,
         [req.userId]
@@ -8682,6 +8688,9 @@ app.post('/forwarding-addresses', requireAuth, async (req, res) => {
     });
     res.status(201).json({ forwardingAddress: result });
   } catch (err) {
+    if (isEmailImportConsentRequired(err)) {
+      return res.status(403).json({ error: 'email_import_consent_required' });
+    }
     console.error('POST /forwarding-addresses error', safeErrorCode(err));
     res.status(500).json({ error: 'internal_error' });
   }
@@ -9224,6 +9233,8 @@ app.get('/export', requireAuth, async (req, res) => {
  * the rest of the mailbox. The password is never logged or returned.
  * Both connectors restrict TLS destinations to public IP addresses; this
  * policy reports private destinations without rewriting saved settings.
+ * Nothing is stored unless the user holds a current `email_import` consent
+ * (403 `email_import_consent_required`), checked in the same transaction.
  */
 app.post('/imap-connections', requireAuth, async (req, res) => {
   const { email, appPassword, imapHost, imapPort, senderFilter } = req.body || {};
@@ -9263,6 +9274,7 @@ app.post('/imap-connections', requireAuth, async (req, res) => {
   }
   try {
     const saved = await withUserClient(req.userId, async (client) => {
+      await requireEmailImportConsent(client, req.userId, config.productTermsVersion);
       requireBankSenders(senders, await bankSenderPatterns(client));
       return saveImapConnection(client, {
         profileId: req.userId, email, appPassword, imapHost, imapPort: parsedImapPort, senderFilter: senders.join(','),
@@ -9271,6 +9283,9 @@ app.post('/imap-connections', requireAuth, async (req, res) => {
     // The sealed password is never selected or echoed back to the client.
     res.status(201).json({ imapConnection: saved });
   } catch (err) {
+    if (isEmailImportConsentRequired(err)) {
+      return res.status(403).json({ error: 'email_import_consent_required' });
+    }
     if (err?.message === 'sender_filter_not_bank') {
       return res.status(400).json({ error: 'sender_filter_not_bank' });
     }
