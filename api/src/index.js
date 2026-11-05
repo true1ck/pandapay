@@ -8,6 +8,7 @@ const { createCorsPolicy } = require('./cors_policy');
 const { jsonBodyParser, jsonBodyErrorHandler } = require('./request_limits');
 const { validateSyncRegistration, validateSyncPushRequest, validateSyncPushChange, validateSyncPullQuery, validateSyncAck, validateSyncConflictId, syncRejectionDetail } = require('./sync_request_validation');
 const { createLoungeUsagePostHandler } = require('./lounge_usage_route');
+const { createCatalogueHandler } = require('./catalogue_route');
 const config = require('./config');
 const { withUserClient, pool, partnerWebhookPool, imapWorkerPool,accountLifecyclePool,lifecycleJournalRuntime,sharedFeedbackPool,notificationOutboxPool } = require('./db');
 const { createPartnerConversionPostHandler } = require('./partner_conversion_route');
@@ -503,17 +504,7 @@ app.post('/profile', requireVerifiedSession, async (req, res) => {
  * restricts direct catalogue-table reads to published cards or admins.
  * Verify both view filters and non-owner RLS on each deployment target.
  */
-app.get('/catalogue', async (req, res) => {
-  try {
-    const result = await withUserClient(req.user || null, (client) =>
-      client.query('SELECT * FROM v_card_catalogue_export ORDER BY name')
-    );
-    res.json({ cards: result.rows });
-  } catch (err) {
-    console.error('GET /catalogue error', safeErrorCode(err));
-    res.status(500).json({ error: 'internal_error' });
-  }
-});
+app.get('/catalogue', createCatalogueHandler({ withUserClient }));
 
 /**
  * AD-0.3.2: every admin route checks the authoritative member session and
