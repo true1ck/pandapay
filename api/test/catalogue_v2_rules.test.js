@@ -1173,6 +1173,21 @@ test('D21b a carve-out at or below base that v1 cannot express hides the acceler
   assert.ok(r.card.model_coverage.flags.some((f) => f.code === 'hidden_from_v1_carve_out'));
 });
 
+test('D24b a UPI-rail earn rule above base is v2-only; at base, or on the online rail, it stays v1-visible', () => {
+  const r = run(pointsCard([
+    rule({ id: 'upi_6x', category_id: 'upi', priority: 10, action: { points_per_block: 6 } }),
+    rule({ id: 'upi_base', category_id: 'upi', priority: 11, evaluation_type: 'standard_accrual', action: { points_per_block: 2 } }),
+    rule({ id: 'upi_reduced', category_id: 'upi', priority: 12, evaluation_type: 'standard_accrual', action: { points_per_block: 1 } }),
+    rule({ id: 'online_5x', category_id: 'online', priority: 13, action: { points_per_block: 10 } }),
+  ]));
+  const v = (id) => only(r, id).map((x) => [x.rail, x.min_engine_version]);
+  assert.deepEqual(v('upi_6x'), [['upi_qr', 2]]);
+  assert.ok(only(r, 'upi_6x')[0].v2_reasons.includes('upi_rail_above_base'));
+  assert.deepEqual(v('upi_base'), [['upi_qr', 1]]);
+  assert.deepEqual(v('upi_reduced'), [['upi_qr', 1]]);
+  assert.deepEqual(only(r, 'online_5x').map((x) => x.min_engine_version), [1]);
+});
+
 test('rows that would break a database identity index are deduplicated: first kept, the rest reported', () => {
   // bobcard-select: four empty lifestyle benefits; bobcard-corporate: two empty insurance rows.
   const emptyBenefit = { benefit_id: null, category_id: null, network_program: null, sponsor: null, label: null,
