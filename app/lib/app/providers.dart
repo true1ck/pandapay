@@ -56,6 +56,7 @@ import '../data/local/sync_queue.dart';
 import '../data/local/duplicate_resolution_outbox.dart';
 import '../data/local/transaction_outbox_repository.dart';
 import '../data/local/transaction_attachments_repository.dart';
+import '../data/secure_storage/install_guard.dart';
 import '../data/local_user_cards_repository.dart';
 import '../data/transaction_page_refresh.dart';
 import '../data/merchant_category_rules_repository.dart';
@@ -160,9 +161,11 @@ final authenticatedHttpClientProvider = Provider<AuthenticatedHttpClient>((
   return client;
 });
 
-final tokenStoreProvider = FutureProvider<TokenStore>(
-  (ref) => TokenStore.load(),
-);
+final tokenStoreProvider = FutureProvider<TokenStore>((ref) async {
+  // A reinstall can leave tokens in the iOS Keychain; clear them first.
+  await InstallGuard.ensure();
+  return TokenStore.load();
+});
 
 /// A non-sensitive local hint used only to avoid holding the native splash
 /// while Android Keystore restores the real credentials. It is deliberately
@@ -2587,6 +2590,8 @@ final transactionAttachmentsRepositoryProvider =
     FutureProvider<TransactionAttachmentsRepository>((ref) async {
       return TransactionAttachmentsRepository(
         await ref.watch(appDatabaseProvider.future),
+        namespace: ref.watch(cacheNamespaceProvider),
+        installId: () => ref.read(localDeviceIdProvider.future),
       );
     });
 
@@ -4285,7 +4290,10 @@ final responseCacheProvider = FutureProvider<ResponseCache>((ref) async {
   // read isolate.
   final worker = database.filePath == null
       ? null
-      : FinancialReadWorker(database.filePath!);
+      : FinancialReadWorker(
+          database.filePath!,
+          keyHex: database.keyHexForWorker,
+        );
   final cache = ResponseCache(database, financialReadWorker: worker);
   final store = cache.financialStore;
   ref.onDispose(store.dispose);

@@ -1,9 +1,12 @@
 import 'dart:io';
 
 import 'package:path/path.dart' as p;
-import 'package:path_provider/path_provider.dart';
 import 'package:sqlite3/sqlite3.dart';
 import '../../features/shared_expenses/storage/shared_schema.dart';
+import '../device_identity.dart';
+import '../secure_storage/install_guard.dart';
+import 'database_key.dart';
+import 'storage_paths.dart';
 
 /// UA-0.3 offline cache (GAP_ANALYSIS.md §2) — plain sqlite3, not drift.
 /// drift_dev's build_runner codegen was tried first and dropped: every
@@ -307,8 +310,11 @@ class AppDatabase {
   static final Set<String> _recoveryPaths = {};
   final Database db;
   final String? filePath;
+  final String? _keyHex;
 
-  AppDatabase._(this.db, {this.filePath}) {
+  // A private name cannot be a named initializing formal.
+  // ignore: prefer_initializing_formals
+  AppDatabase._(this.db, {this.filePath, String? keyHex}) : _keyHex = keyHex {
     // SMS delivery opens another connection in a background isolate. Let
     // SQLite serialize commits rather than losing a message to SQLITE_BUSY.
     db.execute('PRAGMA busy_timeout = 3000');
@@ -369,10 +375,10 @@ class AppDatabase {
         final escaped = table.replaceAll('"', '""');
         final columns = db.select('PRAGMA table_info("$escaped")');
         if (!columns.any((column) => column['name'] == 'namespace')) continue;
-        db.execute(
-          'DELETE FROM "$escaped" WHERE namespace IN (?, ?)',
-          [namespace, 'legacy'],
-        );
+        db.execute('DELETE FROM "$escaped" WHERE namespace IN (?, ?)', [
+          namespace,
+          'legacy',
+        ]);
       }
       db.execute('DELETE FROM transaction_attachments');
       db.execute('COMMIT');
@@ -535,24 +541,61 @@ class AppDatabase {
   /// flutter_test's "!timersPending" invariant on teardown. Tests that
   /// want to exercise the real cache use AppDatabase.forTesting()/
   /// openInMemoryForTesting() directly, bypassing this check entirely.
+  ///
+  /// The file is an SQLCipher database under Application Support/PandaPay,
+  /// keyed by the install key held in the Keychain/Keystore. Throws
+  /// [DatabaseKeyUnavailable] when the key store is temporarily locked (a
+  /// background SMS wake before the first unlock): callers must exit without
+  /// processing, because the native spool keeps the message.
   static Future<AppDatabase> open() async {
     if (Platform.environment['FLUTTER_TEST'] == 'true') {
       return AppDatabase._(sqlite3.openInMemory());
     }
-    final dir = await getApplicationDocumentsDirectory();
-    final dbPath = p.join(dir.path, 'pandapay.sqlite');
-    return openFile(dbPath);
+    ensureSqlCipherLoaded();
+    await InstallGuard.ensure();
+    final paths = await StoragePaths.resolve();
+    final installId = await DeviceIdentity().localDeviceId();
+    final keyHex = await DatabaseKeyLoader(
+      installId: installId,
+    ).loadHexOrReset(databasePath: paths.databasePath, wipeStorage: paths.wipe);
+    return openFile(paths.databasePath, keyHex: keyHex);
   }
 
   /// Worker isolates open their own connection; a native database handle
-  /// must never be shared across isolates.
-  static AppDatabase openFile(String path) {
+  /// must never be shared across isolates. The key travels with the path in
+  /// the isolate arguments and never touches disk.
+  static AppDatabase openFile(String path, {required String keyHex}) {
+    final absolute = p.normalize(File(path).absolute.path);
+    if (_recoveryPaths.contains(absolute)) {
+      throw StateError('Account recovery has exclusive local storage access');
+    }
+    ensureSqlCipherLoaded();
+    final db = sqlite3.open(absolute);
+    try {
+      applyCipherKey(db, keyHex);
+    } catch (_) {
+      db.dispose();
+      rethrow;
+    }
+    return AppDatabase._(db, filePath: absolute, keyHex: keyHex);
+  }
+
+  /// Host tests run against the system SQLite, which has no SQLCipher. This
+  /// opens a plain file and refuses to run outside `flutter test`.
+  static AppDatabase openUnencryptedFileForTesting(String path) {
+    if (Platform.environment['FLUTTER_TEST'] != 'true') {
+      throw StateError('Unencrypted databases exist only in tests');
+    }
     final absolute = p.normalize(File(path).absolute.path);
     if (_recoveryPaths.contains(absolute)) {
       throw StateError('Account recovery has exclusive local storage access');
     }
     return AppDatabase._(sqlite3.open(absolute), filePath: absolute);
   }
+
+  /// The key a worker isolate needs to open its own connection to [filePath].
+  /// Null only for in-memory and test databases. Never log or persist it.
+  String? get keyHexForWorker => _keyHex;
 
   /// A real SQLite write fence, including independent/background connections.
   /// Recovery owns a separate connection and BEGIN IMMEDIATE; every ordinary
@@ -585,6 +628,7 @@ class AppDatabase {
         connection.db.execute('PRAGMA query_only=ON');
       }
       recovery = sqlite3.open(location);
+      if (_keyHex != null) applyCipherKey(recovery, _keyHex);
       recovery.execute('PRAGMA busy_timeout=0');
       recovery.execute('PRAGMA foreign_keys=ON');
       // Refuse if a prior writer has not drained; do not kill or roll it back.

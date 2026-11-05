@@ -25,6 +25,8 @@
 		6A170530A000000000000006 /* IncomingSmsIntent.swift in Sources */ = {isa = PBXBuildFile; fileRef = 6A170530A000000000000005 /* IncomingSmsIntent.swift */; };
 		6A170530A000000000000008 /* SmsShortcutLaunch.swift in Sources */ = {isa = PBXBuildFile; fileRef = 6A170530A000000000000007 /* SmsShortcutLaunch.swift */; };
 		6A170531A000000000000002 /* SmsSenderInput.swift in Sources */ = {isa = PBXBuildFile; fileRef = 6A170531A000000000000001 /* SmsSenderInput.swift */; };
+		6A170570A000000000000002 /* StorageBackupBridge.swift in Sources */ = {isa = PBXBuildFile; fileRef = 6A170570A000000000000001 /* StorageBackupBridge.swift */; };
+		6A170570A000000000000004 /* SpoolCipher.swift in Sources */ = {isa = PBXBuildFile; fileRef = 6A170570A000000000000003 /* SpoolCipher.swift */; };
 		6E800C26F10256C81A1A209F /* BestCardWidget.swift in Sources */ = {isa = PBXBuildFile; fileRef = C9046B45EB7B834E51B7638A /* BestCardWidget.swift */; };
 		74858FAF1ED2DC5600515810 /* AppDelegate.swift in Sources */ = {isa = PBXBuildFile; fileRef = 74858FAE1ED2DC5600515810 /* AppDelegate.swift */; };
 		7884E8682EC3CC0700C636F2 /* SceneDelegate.swift in Sources */ = {isa = PBXBuildFile; fileRef = 7884E8672EC3CC0400C636F2 /* SceneDelegate.swift */; };
@@ -95,6 +97,8 @@
 		3B3967151E833CAA004F5970 /* AppFrameworkInfo.plist */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = text.plist.xml; name = AppFrameworkInfo.plist; path = Flutter/AppFrameworkInfo.plist; sourceTree = "<group>"; };
 		46F2A18BDB57FE2D033E60BC /* Pods-Runner.release.xcconfig */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = text.xcconfig; name = "Pods-Runner.release.xcconfig"; path = "Target Support Files/Pods-Runner/Pods-Runner.release.xcconfig"; sourceTree = "<group>"; };
 		6A170510A000000000000001 /* PrototypeBankMessageIntent.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = PrototypeBankMessageIntent.swift; sourceTree = "<group>"; };
+		6A170570A000000000000003 /* SpoolCipher.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SpoolCipher.swift; sourceTree = "<group>"; };
+		6A170570A000000000000001 /* StorageBackupBridge.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = StorageBackupBridge.swift; sourceTree = "<group>"; };
 		6A170530A000000000000001 /* SmsSecurityPolicy.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SmsSecurityPolicy.swift; sourceTree = "<group>"; };
 		6A170530A000000000000003 /* IncomingSmsSpool.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = IncomingSmsSpool.swift; sourceTree = "<group>"; };
 		6A170530A000000000000005 /* IncomingSmsIntent.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = IncomingSmsIntent.swift; sourceTree = "<group>"; };
@@ -258,6 +262,8 @@
 				6A170560A000000000000001 /* SmsImportBackgroundHost.swift */,
 				6A170530A000000000000003 /* IncomingSmsSpool.swift */,
 				6A170530A000000000000001 /* SmsSecurityPolicy.swift */,
+				6A170570A000000000000001 /* StorageBackupBridge.swift */,
+				6A170570A000000000000003 /* SpoolCipher.swift */,
 				6A170510A000000000000001 /* PrototypeBankMessageIntent.swift */,
 				7884E8672EC3CC0400C636F2 /* SceneDelegate.swift */,
 				74858FAD1ED2DC5600515810 /* Runner-Bridging-Header.h */,
@@ -567,6 +573,8 @@
 				6A170560A000000000000002 /* SmsImportBackgroundHost.swift in Sources */,
 				6A170530A000000000000004 /* IncomingSmsSpool.swift in Sources */,
 				6A170530A000000000000002 /* SmsSecurityPolicy.swift in Sources */,
+				6A170570A000000000000002 /* StorageBackupBridge.swift in Sources */,
+				6A170570A000000000000004 /* SpoolCipher.swift in Sources */,
 				6A170510A000000000000002 /* PrototypeBankMessageIntent.swift in Sources */,
 				1498D2341E8E89220040F4C2 /* GeneratedPluginRegistrant.m in Sources */,
 				7884E8682EC3CC0700C636F2 /* SceneDelegate.swift in Sources */,

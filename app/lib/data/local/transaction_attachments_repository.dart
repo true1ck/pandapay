@@ -1,10 +1,20 @@
-import '../portable_backup/account_recovery_operation_gate.dart';
+import 'dart:convert';
 import 'dart:io';
 
+import 'package:crypto/crypto.dart';
+import 'package:cryptography/cryptography.dart';
 import 'package:path/path.dart' as p;
-import 'package:path_provider/path_provider.dart';
 
+import '../portable_backup/account_recovery_operation_gate.dart';
+import '../portable_backup/app_private_temporary_storage.dart';
+import '../portable_backup/private_temporary_workspace.dart';
+import '../secure_storage/encrypted_receipt_file.dart';
+import '../secure_storage/flutter_secure_key_value_store.dart';
+import '../secure_storage/local_database_key_custody.dart';
+import '../secure_storage/local_key_provisioning_lease.dart';
+import '../secure_storage/local_receipt_key_custody.dart';
 import 'app_database.dart';
+import 'storage_paths.dart';
 
 /// A receipt, bill, warranty, or other proof attached to one transaction.
 ///
@@ -30,10 +40,116 @@ class TransactionAttachment {
   });
 }
 
+/// A receipt could not be encrypted or read: the phone is locked, the key is
+/// gone, or the file belongs to another account. Nothing is stored or shown.
+final class ReceiptUnavailable implements Exception {
+  const ReceiptUnavailable([this.status]);
+  final LocalKeyStatus? status;
+  @override
+  String toString() => 'Receipt unavailable';
+}
+
+/// A decrypted copy in a private temporary workspace. Call [release] as soon
+/// as the viewer or share sheet closes; a startup sweep also removes strays.
+final class DecryptedAttachment {
+  DecryptedAttachment._(this.file, this._workspace);
+  final File file;
+  final PrivateTemporaryWorkspace _workspace;
+  Future<void> release() async {
+    await _workspace.cleanup();
+  }
+}
+
+/// Receipt files are AES-256-GCM encrypted (`PPRC` format) under
+/// `Application Support/PandaPay/receipts/ACCOUNT/TRANSACTION/`, with a
+/// per-account key kept in the Keychain/Keystore. A decrypted copy exists only
+/// while a viewer is open.
 class TransactionAttachmentsRepository {
   final AppDatabase _database;
+  final String namespace;
+  final Future<String> Function() installId;
+  final Future<Directory> Function() _receiptsDirectory;
+  final Future<PrivateTemporaryWorkspace> Function() _workspace;
+  final EncryptedReceiptFileStore _store;
+  final LocalReceiptKeyCustody _custody;
 
-  TransactionAttachmentsRepository(this._database);
+  TransactionAttachmentsRepository(
+    this._database, {
+    required this.namespace,
+    required this.installId,
+    Future<Directory> Function()? receiptsDirectory,
+    Future<PrivateTemporaryWorkspace> Function()? workspace,
+    EncryptedReceiptFileStore? store,
+    SecureKeyValueStore? keyStore,
+    LocalKeyProvisioningLease? lease,
+  }) : _receiptsDirectory =
+           receiptsDirectory ??
+           (() async => (await StoragePaths.resolve()).receiptsDir),
+       _workspace = workspace ?? AppPrivateTemporaryStorage.create,
+       _store = store ?? EncryptedReceiptFileStore(),
+       _custody = LocalReceiptKeyCustody(
+         keyStore ?? FlutterSecureKeyValueStore(),
+         lease: lease,
+       );
+
+  /// The key-slot namespace. Only `user:` and `guest:` ids are accepted by the
+  /// receipt key custody; any other session label maps to a hashed guest slot.
+  late final String _keyNamespace = _normalizeNamespace(namespace);
+
+  static String _normalizeNamespace(String value) {
+    if (RegExp(r'^(user|guest):[A-Za-z0-9_-]{1,128}$').hasMatch(value)) {
+      return value;
+    }
+    return 'guest:${sha256.convert(utf8.encode(value)).toString().substring(0, 40)}';
+  }
+
+  Future<Directory> _transactionDirectory(String transactionId) async {
+    final root = await _receiptsDirectory();
+    final account = sha256
+        .convert(utf8.encode(_keyNamespace))
+        .toString()
+        .substring(0, 32);
+    final safeTransaction = transactionId.replaceAll(
+      RegExp(r'[^A-Za-z0-9_-]'),
+      '_',
+    );
+    return Directory(p.join(root.path, account, safeTransaction));
+  }
+
+  Future<bool> _accountHasReceipts() async {
+    final root = await _receiptsDirectory();
+    final account = Directory(
+      p.join(
+        root.path,
+        sha256.convert(utf8.encode(_keyNamespace)).toString().substring(0, 32),
+      ),
+    );
+    if (!await account.exists()) return false;
+    return account.list(recursive: true).any((entry) => entry is File);
+  }
+
+  Future<T> _withKey<T>({
+    required bool receiptsExist,
+    required Future<T> Function(SecretKey key, int version) use,
+  }) async {
+    final LocalReceiptKeyResult result;
+    try {
+      result = await _custody.openKey(
+        installId: await installId(),
+        accountNamespace: _keyNamespace,
+        encryptedReceiptsExist: receiptsExist,
+      );
+    } on Object {
+      throw const ReceiptUnavailable();
+    }
+    final handle = result.handle;
+    if (handle == null) throw ReceiptUnavailable(result.status);
+    try {
+      return await handle.withSecretKey((key) => use(key, handle.version));
+    } finally {
+      handle.dispose();
+    }
+  }
 
   Future<List<TransactionAttachment>> list(String transactionId) async {
     final rows = _database.db.select(
@@ -61,14 +177,12 @@ class TransactionAttachmentsRepository {
     required String sourcePath,
     required String fileName,
     String? mimeType,
-  }) async {
-    return _add(
-      transactionId: transactionId,
-      fileName: fileName,
-      mimeType: mimeType,
-      copy: (destination) => File(sourcePath).copy(destination),
-    );
-  }
+  }) => _add(
+    transactionId: transactionId,
+    fileName: fileName,
+    mimeType: mimeType,
+    source: File(sourcePath),
+  );
 
   Future<TransactionAttachment> addFromBytes({
     required String transactionId,
@@ -76,35 +190,48 @@ class TransactionAttachmentsRepository {
     required String fileName,
     String? mimeType,
   }) async {
-    return _add(
-      transactionId: transactionId,
-      fileName: fileName,
-      mimeType: mimeType,
-      copy: (destination) async {
-        final file = File(destination);
-        await file.writeAsBytes(bytes, flush: true);
-        return file;
-      },
-    );
+    // The encryptor reads from a file, so stage the bytes in a private
+    // temporary workspace and delete it whatever happens.
+    final workspace = await _workspace();
+    try {
+      final staged = workspace.file('incoming.bin');
+      await staged.writeAsBytes(bytes, flush: true);
+      return await _add(
+        transactionId: transactionId,
+        fileName: fileName,
+        mimeType: mimeType,
+        source: staged,
+      );
+    } finally {
+      await workspace.cleanup();
+    }
   }
 
   Future<TransactionAttachment> _add({
     required String transactionId,
     required String fileName,
     required String? mimeType,
-    required Future<File> Function(String destination) copy,
+    required File source,
   }) => AccountRecoveryOperationGate.process.run(() async {
-    final root = await getApplicationDocumentsDirectory();
-    final directory = Directory(
-      p.join(root.path, 'transaction_attachments', transactionId),
-    );
-    await directory.create(recursive: true);
-
+    final directory = await _transactionDirectory(transactionId);
     final id = DateTime.now().microsecondsSinceEpoch.toString();
-    final safeName = _safeFileName(fileName);
-    final storedName = '${id}_$safeName';
-    final destination = p.join(directory.path, storedName);
-    await copy(destination);
+    final destination = File(p.join(directory.path, '$id.pprc'));
+    final existing = await _accountHasReceipts();
+    // The key comes first: a locked or lost key stores nothing at all.
+    await _withKey(
+      receiptsExist: existing,
+      use: (key, version) async {
+        await directory.create(recursive: true);
+        await _store.copyEncrypted(
+          source: source,
+          destination: destination,
+          key: key,
+          accountNamespace: _keyNamespace,
+          attachmentId: id,
+          keyVersion: version,
+        );
+      },
+    );
 
     try {
       _database.db.execute(
@@ -114,15 +241,15 @@ class TransactionAttachmentsRepository {
         [
           id,
           transactionId,
-          fileName,
-          destination,
+          _safeFileName(fileName),
+          destination.path,
           mimeType,
           DateTime.now().millisecondsSinceEpoch,
         ],
       );
     } catch (_) {
       try {
-        await File(destination).delete();
+        await destination.delete();
       } catch (_) {
         // The database write is the source of truth for the attachment list;
         // a failed cleanup should not hide the original database error.
@@ -133,22 +260,56 @@ class TransactionAttachmentsRepository {
     return TransactionAttachment(
       id: id,
       transactionId: transactionId,
-      fileName: fileName,
-      localPath: destination,
+      fileName: _safeFileName(fileName),
+      localPath: destination.path,
       mimeType: mimeType,
       createdAt: DateTime.now(),
     );
   });
 
+  /// Decrypts into a private temporary workspace for viewing or sharing.
+  /// Throws [ReceiptUnavailable] when the key is locked or lost, or the file
+  /// is not this account's. The caller must [DecryptedAttachment.release].
+  Future<DecryptedAttachment> decryptForViewing(
+    TransactionAttachment attachment,
+  ) async {
+    final workspace = await _workspace();
+    try {
+      final extension = p.extension(attachment.fileName);
+      final name =
+          'receipt-${attachment.id}'
+          '${RegExp(r'^\.[A-Za-z0-9]{1,8}$').hasMatch(extension) ? extension : ''}';
+      final file = await _withKey(
+        receiptsExist: true,
+        use: (key, version) => _store.decryptToPrivateWorkspace(
+          encryptedFile: File(attachment.localPath),
+          workspace: workspace,
+          filename: name,
+          key: key,
+          accountNamespace: _keyNamespace,
+          attachmentId: attachment.id,
+          keyVersion: version,
+        ),
+      );
+      return DecryptedAttachment._(file, workspace);
+    } on ReceiptUnavailable {
+      await workspace.cleanup();
+      rethrow;
+    } on Object {
+      await workspace.cleanup();
+      throw const ReceiptUnavailable();
+    }
+  }
+
   Future<void> delete(TransactionAttachment attachment) =>
       AccountRecoveryOperationGate.process.run(() async {
-    _database.db.execute(
-      'DELETE FROM transaction_attachments WHERE id = ?',
-      [attachment.id],
-    );
-    final file = File(attachment.localPath);
-    if (await file.exists()) await file.delete();
-  });
+        _database.db.execute(
+          'DELETE FROM transaction_attachments WHERE id = ?',
+          [attachment.id],
+        );
+        final file = File(attachment.localPath);
+        if (await file.exists()) await file.delete();
+      });
 
   static String _safeFileName(String value) {
     final base = p.basename(value).trim();

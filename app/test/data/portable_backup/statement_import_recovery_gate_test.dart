@@ -10,7 +10,7 @@ const namespace = 'user:$account';
 void main() {
   test('pending encrypted import blocks portable completion and account capture/restore without changing data', () async {
     final root = await Directory.systemTemp.createTemp('import-recovery-guard-');
-    final database = AppDatabase.openFile('${root.path}/fixture.sqlite');
+    final database = AppDatabase.openUnencryptedFileForTesting('${root.path}/fixture.sqlite');
     final attachments = Directory('${root.path}/receipts');
     try {
       database.db.execute('CREATE TABLE statement_import_batches(namespace TEXT,ciphertext BLOB)');

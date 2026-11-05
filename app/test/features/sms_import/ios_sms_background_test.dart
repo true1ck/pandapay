@@ -1,6 +1,8 @@
 import 'package:flutter_test/flutter_test.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import 'package:pandapay/data/local/app_database.dart';
+import 'package:pandapay/data/local/database_key.dart';
+import 'package:pandapay/data/secure_storage/local_database_key_custody.dart';
 import 'package:pandapay/features/sms_import/ios_sms_background.dart';
 import 'package:pandapay/features/sms_import/ios_sms_intake_service.dart';
 
@@ -87,6 +89,22 @@ void main() {
       expect(await drain.run(), {'success': false});
       expect(bridge.outcomes, hasLength(50));
       expect(bridge.rows, hasLength(65));
+    },
+  );
+
+  test(
+    'a locked key store (no unlock since boot) exits and leaves the spool intact',
+    () async {
+      final bridge = _Bridge(3);
+      final drain = IosSmsBackgroundDrain(
+        service: bridge,
+        openDatabase: () async =>
+            throw const DatabaseKeyUnavailable(LocalKeyStatus.unavailable),
+        readNamespace: () async => 'user:a',
+      );
+      expect(await drain.run(), {'success': false});
+      expect(bridge.rows, hasLength(3));
+      expect(bridge.calls, isNot(contains('acknowledge')));
     },
   );
 

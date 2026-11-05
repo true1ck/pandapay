@@ -1,3 +1,5 @@
+import 'dart:io';
+
 import 'package:flutter/services.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:pandapay/features/home_widget/home_widget_service.dart';
@@ -210,5 +212,88 @@ void main() {
 
   test('detects an installed PandaPay widget', () async {
     expect(await service().isWidgetInstalled(), isTrue);
+  });
+
+  group('clearAll', () {
+    late Directory temp;
+    late Map<String, Object?> stored;
+
+    setUp(() async {
+      temp = await Directory.systemTemp.createTemp('widget');
+      stored = {};
+      TestDefaultBinaryMessengerBinding.instance.defaultBinaryMessenger
+          .setMockMethodCallHandler(channel, (call) async {
+            calls.add(call);
+            if (call.method == 'getWidgetData') {
+              return stored[call.arguments['id']];
+            }
+            return true;
+          });
+    });
+    tearDown(() => temp.delete(recursive: true));
+
+    test(
+      'every data key is cleared, rendered files deleted, widgets refreshed',
+      () async {
+        final chart = File('${temp.path}/chart.png')..writeAsBytesSync([1]);
+        final card = File('${temp.path}/card.png')..writeAsBytesSync([1]);
+        final unrelated = File('${temp.path}/keep.txt')..writeAsStringSync('x');
+        stored[HomeWidgetService.spendChartPathKey] = chart.path;
+        stored[HomeWidgetService.cardArtPathKey] = card.path;
+        stored[HomeWidgetService.cardNameKey] = unrelated.path;
+
+        await service().clearAll();
+
+        final cleared = <String, Object?>{
+          for (final call in calls.where((c) => c.method == 'saveWidgetData'))
+            call.arguments['id'] as String: call.arguments['data'],
+        };
+        for (final key in HomeWidgetService.allDataKeys) {
+          expect(
+            cleared.containsKey(key),
+            isTrue,
+            reason: '$key was not cleared',
+          );
+          expect(cleared[key], isNull, reason: '$key was saved with data');
+        }
+        expect(chart.existsSync(), isFalse);
+        expect(card.existsSync(), isFalse);
+        expect(
+          unrelated.existsSync(),
+          isTrue,
+          reason: 'only rendered png paths are ever deleted',
+        );
+        final lastSave = calls.lastIndexWhere(
+          (c) => c.method == 'saveWidgetData',
+        );
+        final firstUpdate = calls.indexWhere((c) => c.method == 'updateWidget');
+        expect(firstUpdate, greaterThan(lastSave));
+        expect(calls.where((c) => c.method == 'updateWidget'), hasLength(3));
+      },
+    );
+
+    test('allDataKeys lists every *Key constant of the service', () {
+      final source = File(
+        'lib/features/home_widget/home_widget_service.dart',
+      ).readAsStringSync();
+      final declared = RegExp(
+        r"static const String (\w+Key) =\s*'([^']+)'",
+      ).allMatches(source).map((m) => m.group(2)!).toSet();
+      expect(declared, isNotEmpty);
+      expect(HomeWidgetService.allDataKeys.toSet(), declared);
+    });
+
+    test('a failing widget refresh does not stop the wipe', () async {
+      TestDefaultBinaryMessengerBinding.instance.defaultBinaryMessenger
+          .setMockMethodCallHandler(channel, (call) async {
+            calls.add(call);
+            if (call.method == 'updateWidget') {
+              throw PlatformException(code: 'x');
+            }
+            return null;
+          });
+      await service().clearAll();
+      expect(calls.where((c) => c.method == 'saveWidgetData'), isNotEmpty);
+    });
   });
 }

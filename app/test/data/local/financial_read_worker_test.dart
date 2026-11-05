@@ -28,7 +28,7 @@ void main() {
 
   setUp(() async {
     directory = await Directory.systemTemp.createTemp('pandapay-read-worker-');
-    database = AppDatabase.openFile('${directory.path}/financial.sqlite');
+    database = AppDatabase.openUnencryptedFileForTesting('${directory.path}/financial.sqlite');
     store = FinancialStore(database);
     gate = AccountRecoveryOperationGate();
     worker = FinancialReadWorker(database.filePath!, recoveryGate: gate);

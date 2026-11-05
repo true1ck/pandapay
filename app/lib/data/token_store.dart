@@ -5,6 +5,7 @@ import 'package:shared_preferences/shared_preferences.dart';
 import 'package:uuid/uuid.dart';
 import '../features/sms_import/ios_sms_intake_service.dart';
 import '../app/startup_timing.dart';
+import 'secure_storage/secure_storage_options.dart';
 
 /// UA-3. Access/refresh tokens let this device keep its session across app
 /// restarts. The server keeps a rolling 90-day inactivity limit for an
@@ -34,7 +35,9 @@ class TokenStore {
 
   static Future<TokenStore> load() async {
     markStartup('token load start');
-    const secureStorage = FlutterSecureStorage();
+    // Readable after the first unlock so background SMS work can refresh the
+    // session while the phone is locked; never synced or restored elsewhere.
+    const secureStorage = pandaPaySecureStorage;
     // Restore the session in one native platform call.  The Android plugin
     // runs each method on its secure-storage worker and two sequential
     // `read` calls pay the platform/keystore boundary twice before the

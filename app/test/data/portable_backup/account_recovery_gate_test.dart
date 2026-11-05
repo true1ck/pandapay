@@ -75,7 +75,7 @@ void main() {
         'recovery-native-fence-',
       );
       final location = '${root.path}/main.sqlite';
-      final database = AppDatabase.openFile(location);
+      final database = AppDatabase.openUnencryptedFileForTesting(location);
       final other = sqlite3.open(location);
       other.execute('PRAGMA busy_timeout=0');
       AppDatabaseRecoveryLease? expired;
@@ -95,7 +95,7 @@ void main() {
               ),
               throwsA(isA<SqliteException>()),
             );
-            expect(() => AppDatabase.openFile(location), throwsStateError);
+            expect(() => AppDatabase.openUnencryptedFileForTesting(location), throwsStateError);
             lease.database.execute(
               "INSERT INTO profile_name_cache VALUES('user:test','restored')",
             );

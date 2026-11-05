@@ -7,6 +7,37 @@ func require(_ condition: Bool, _ message: String) {
 func fails(_ block: () throws -> Void) {
   do { try block(); fatalError("Expected rejection") } catch {}
 }
+/// A keychain stand-in so the spool tests do not depend on a login keychain.
+final class MemoryKeyStore: SpoolKeyStore {
+  var key: Data?
+  var locked = false
+  var reads = 0
+  func read() throws -> Data? { if locked { throw IncomingSmsError.keyUnavailable }; reads += 1; return key }
+  func add(_ value: Data) throws -> Bool { if locked { throw IncomingSmsError.keyUnavailable }; if key != nil { return false }; key = value; return true }
+  func delete() { key = nil }
+}
+func rawRun(_ directory: URL, _ sql: String) {
+  var db: OpaquePointer?
+  guard sqlite3_open(directory.appendingPathComponent("handoff.sqlite").path, &db) == SQLITE_OK else { fatalError("raw open") }
+  defer { sqlite3_close(db) }
+  guard sqlite3_exec(db, sql, nil, nil, nil) == SQLITE_OK else { fatalError("raw exec: \(sql)") }
+}
+func rawColumns(_ directory: URL) -> [(body: String?, sender: String?)] {
+  var db: OpaquePointer?
+  guard sqlite3_open_v2(directory.appendingPathComponent("handoff.sqlite").path, &db, SQLITE_OPEN_READONLY, nil) == SQLITE_OK else { fatalError("raw open") }
+  defer { sqlite3_close(db) }
+  var statement: OpaquePointer?
+  guard sqlite3_prepare_v2(db, "SELECT body,sender FROM captures ORDER BY captured_at,id", -1, &statement, nil) == SQLITE_OK else { fatalError("raw prepare") }
+  defer { sqlite3_finalize(statement) }
+  var rows: [(body: String?, sender: String?)] = []
+  while sqlite3_step(statement) == SQLITE_ROW {
+    func text(_ i: Int32) -> String? { sqlite3_column_text(statement, i).map { String(cString: $0) } }
+    rows.append((text(0), text(1)))
+  }
+  return rows
+}
+let memoryKeys = MemoryKeyStore()
+SpoolCipher.keyStore = memoryKeys
 if CommandLine.arguments.count == 3 && CommandLine.arguments[1] == "--cold-read" {
   let cold = IncomingSmsSpool(directory: URL(fileURLWithPath: CommandLine.arguments[2]))
   print(try cold.snapshot()["pending"] as! Int)
@@ -23,6 +54,15 @@ fails { _ = try spool.capture(body: body, sender: sender, receivedAt: receive, p
 let owner = try spool.configure(namespace: "user:synthetic-a", enabled: true, parserVersion: 22)
 let generation = owner["generation"] as! String
 require(try spool.capture(body: body, sender: sender, receivedAt: receive, provenance: "original") == "saved_for_processing", "save")
+do {
+  let raw = rawColumns(root)
+  require(raw.count == 1, "one saved capture")
+  require(raw[0].body!.hasPrefix("v1:") && !raw[0].body!.contains("SYNTHETIC CAFE"), "the stored body is sealed, not text")
+  require(raw[0].sender!.hasPrefix("v1:") && !raw[0].sender!.contains("ICICIB"), "the stored sender is sealed, not text")
+  let file = try Data(contentsOf: root.appendingPathComponent("handoff.sqlite"))
+  require(file.range(of: Data("SYNTHETIC CAFE".utf8)) == nil && file.range(of: Data("ICICIB".utf8)) == nil, "no message text anywhere in the spool file")
+  require(memoryKeys.key?.count == 32, "a 256-bit key was created on first capture")
+}
 require(try spool.snapshot()["last_live_at"] as? String == "2026-10-30T10:00:00.000Z", "a live capture records when the automation last fired")
 let restarted = IncomingSmsSpool(directory: root, maxPending: 2, now: { time })
 var rows = try restarted.pending(generation: generation)
@@ -514,4 +554,79 @@ do {
   try store.acknowledge(generation: g, outcomes: rows.map { ["id": $0["id"]!, "sourceKey": String(repeating: "c", count: 64), "parserVersion": 26, "outcome": "captured"] })
   require(try store.importProgress()["state"] as? String == "complete", "pausing after delivery cannot leave a fully processed job stuck")
   print("PASS: paused delivery completes after its final local acknowledgement")
+}
+
+// SMS text encryption in the spool (key handshake, reset, failure modes).
+do {
+  let keys = MemoryKeyStore(); SpoolCipher.keyStore = keys
+  defer { SpoolCipher.keyStore = memoryKeys }
+  let dir = root.appendingPathComponent("sealed-text")
+  let store = IncomingSmsSpool(directory: dir, now: { time })
+  let g1 = try store.configure(namespace: "user:synthetic-seal", enabled: true, parserVersion: 22)["generation"] as! String
+  require(keys.key == nil, "no key exists before there is something to protect")
+
+  // (a)+(b) sealed at rest, original text on handoff, empty sender stays empty.
+  let first = "INR 11 spent at SYNTHETIC SHOP ONE"
+  require(try store.capture(body: first, sender: "VM-SYNTH", receivedAt: receive, provenance: "original") == "saved_for_processing", "sealed save")
+  let second = "INR 12 spent at SYNTHETIC SHOP TWO"
+  require(try store.capture(body: second, sender: nil, receivedAt: receive.addingTimeInterval(1), provenance: "original") == "saved_without_sender", "save without sender")
+  let raw = rawColumns(dir)
+  require(raw.allSatisfy { $0.body!.hasPrefix("v1:") }, "every stored body is sealed")
+  require(raw[1].sender == "", "an empty sender stays empty")
+  var handed = try store.pending(generation: g1)
+  require(handed.count == 2 && handed[0]["body"] as? String == first && handed[0]["sender"] as? String == "VM-SYNTH", "handoff returns the original text")
+  require(handed[0]["bodyCharacters"] as? Int == first.utf16.count && handed[0]["senderEvidence"] as? String == "text", "counts come from the plaintext")
+  require(handed[1]["senderEvidence"] as? String == "missing", "missing sender evidence")
+  let sealedA = try SpoolCipher.seal(first), sealedB = try SpoolCipher.seal(first)
+  require(sealedA != sealedB, "a fresh nonce per message")
+  require(try SpoolCipher.open(sealedA) == first, "round trip")
+  var tampered = Array(sealedA); tampered[tampered.count - 4] = tampered[tampered.count - 4] == "A" ? "B" : "A"
+  fails { _ = try SpoolCipher.open(String(tampered)) }
+  fails { _ = try SpoolCipher.open("v1:not base64!") }
+  fails { _ = try SpoolCipher.open("plain text") }
+  require(try SpoolCipher.openStored("plain text") == "plain text", "text from a build before encryption is still readable")
+
+  // Duplicate fingerprints still hash the plaintext, so a replay is recognised.
+  require(try store.capture(body: first, sender: "VM-SYNTH", receivedAt: receive, provenance: "original") == "already_saved", "replay detected through the plaintext fingerprint")
+  require(try store.pending(generation: g1).count == 2, "no second copy")
+
+  // Acknowledging removes the sealed text and keeps working.
+  try store.acknowledge(generation: g1, outcomes: [["id": handed[0]["id"]!, "sourceKey": String(repeating: "d", count: 64), "parserVersion": 22, "outcome": "captured"]])
+  require(rawColumns(dir).first!.body == nil, "acknowledged text is erased")
+
+  // A locked phone (no first unlock yet): capture fails cleanly, reading fails
+  // without losing or retiring anything.
+  keys.locked = true
+  fails { _ = try store.capture(body: "INR 13 spent at SYNTHETIC SHOP THREE", sender: "VM-SYNTH", receivedAt: receive.addingTimeInterval(2), provenance: "original") }
+  do { _ = try store.pending(generation: g1); fatalError("a locked key must fail the read") } catch IncomingSmsError.keyUnavailable {}
+  keys.locked = false
+  require(try store.pending(generation: g1).count == 1, "the locked read left the queue intact and the failed capture stored nothing")
+
+  // (c) reset destroys the key; the next capture creates a new one and works.
+  let oldKey = keys.key
+  require(oldKey != nil, "key present before reset")
+  _ = try store.configure(namespace: "user:synthetic-seal", reset: true)
+  require(keys.key == nil, "reset destroys the key")
+  let g2 = try store.configure(namespace: "user:synthetic-seal", enabled: true, parserVersion: 22)["generation"] as! String
+  require(try store.capture(body: "INR 14 spent at SYNTHETIC SHOP FOUR", sender: "VM-SYNTH", receivedAt: receive, provenance: "original") == "saved_for_processing", "capture after reset")
+  require(keys.key != nil && keys.key != oldKey, "a new key was created")
+  handed = try store.pending(generation: g2)
+  require(handed.count == 1 && handed[0]["body"] as? String == "INR 14 spent at SYNTHETIC SHOP FOUR", "readable with the new key")
+
+  // A key that is gone for good retires its rows instead of blocking the queue.
+  keys.key = nil
+  require(try store.pending(generation: g2).isEmpty, "unreadable rows are retired, not thrown")
+  require(try store.snapshot()["pending"] as? Int == 0, "nothing stays stuck pending")
+  _ = try store.capture(body: "INR 15 spent at SYNTHETIC SHOP FIVE", sender: "VM-SYNTH", receivedAt: receive.addingTimeInterval(3), provenance: "original")
+  require(try store.pending(generation: g2).first?["body"] as? String == "INR 15 spent at SYNTHETIC SHOP FIVE", "capture continues with a fresh key")
+
+  // Legacy plaintext rows are still handed over.
+  rawRun(dir, "INSERT INTO captures(id,generation,body,sender,received_at,captured_at,date_provenance,state) VALUES('legacy','\(g2)','INR 16 old plain row','VM-OLD','2026-10-30T09:00:00.000Z','2026-10-30T09:00:01.000Z','original','pending')")
+  require(try store.pending(generation: g2).contains { $0["body"] as? String == "INR 16 old plain row" }, "plaintext rows from older builds are processed")
+
+  // Security-exclusion acknowledgement validates against the decrypted text.
+  require(try store.capture(body: "INR 17 spent at SYNTHETIC SHOP SIX", sender: "VM-SYNTH", receivedAt: receive.addingTimeInterval(4), provenance: "original") == "saved_for_processing", "financial save")
+  let financial = try store.pending(generation: g2).first { ($0["body"] as? String ?? "").contains("SHOP SIX") }!
+  fails { try store.acknowledge(generation: g2, outcomes: [["id": financial["id"]!, "outcome": "excluded_security", "parserVersion": 22]]) }
+  print("PASS: spool text is sealed at rest, key handshake, reset and failure modes")
 }

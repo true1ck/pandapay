@@ -113,4 +113,19 @@ final class FlutterSecureKeyValueStore implements SecureKeyValueStore {
       _unavailable(error);
     }
   });
+
+  /// Deletes every item this adapter owns (the install database key and every
+  /// per-account receipt key share the prefix). Used when the account is wiped
+  /// from the phone; other Keychain items are untouched.
+  Future<void> deleteAllOwned() => _serialized(() async {
+    try {
+      final all = await _storage.readAll(aOptions: _android, iOptions: _ios);
+      for (final key in all.keys) {
+        if (!key.startsWith(_prefix)) continue;
+        await _storage.delete(key: key, aOptions: _android, iOptions: _ios);
+      }
+    } on Object catch (error) {
+      _unavailable(error);
+    }
+  });
 }

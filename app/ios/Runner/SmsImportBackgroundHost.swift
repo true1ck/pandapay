@@ -145,6 +145,7 @@ enum SmsImportBackgroundHost {
     let created = FlutterEngine(name: "pandapay-sms-background", project: nil, allowHeadlessExecution: true)
     engine = created
     GeneratedPluginRegistrant.register(with: created)
+    StorageBackupBridge.register(messenger: created.binaryMessenger)
     let bridge = FlutterMethodChannel(name: "pandapay/ios_sms_background", binaryMessenger: created.binaryMessenger)
     backgroundChannel = bridge
     bridge.setMethodCallHandler { call, result in
