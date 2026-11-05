@@ -8,6 +8,16 @@ class SceneDelegate: FlutterSceneDelegate {
     // A URL callback/Flutter resume may be observed before UIKit reports an
     // active scene. Recheck committed continuation once activation finishes.
     IncomingSmsBridge.notifyReady()
+    // Bring back the import's Lock Screen progress if it was swiped away.
+    SmsImportLiveActivityHost.ensure()
+#endif
+  }
+
+  override func sceneWillResignActive(_ scene: UIScene) {
+    super.sceneWillResignActive(scene)
+#if !PANDAPAY_DEVICE_IMPORT_PROBE
+    // Leaving the app mid-import: make sure the progress is on the Lock Screen.
+    SmsImportLiveActivityHost.ensure()
 #endif
   }
 

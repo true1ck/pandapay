@@ -1,5 +1,6 @@
 #if !PANDAPAY_DEVICE_IMPORT_PROBE
 import Foundation
+import UIKit
 #if canImport(ActivityKit)
 import ActivityKit
 #endif
@@ -14,23 +15,46 @@ enum SmsImportLiveActivityHost {
   /// view asks the person to open PandaPay.
   private static let staleAfter: TimeInterval = 10 * 60
 
-  static func start() {
+  /// Starts the Lock Screen progress for a range the app just launched.
+  static func start() { ensure() }
+
+  /// Makes sure an import in progress has a visible Live Activity, the way
+  /// delivery and upload apps do: if the person swiped it away, or it ended,
+  /// a new one is created the next time PandaPay is in the foreground; an
+  /// existing one is updated with the latest counts. iOS only allows creating
+  /// one while the app is in the foreground, so call this from foreground
+  /// moments (launching a range, becoming active, about to leave).
+  static func ensure() {
     #if canImport(ActivityKit)
     guard #available(iOS 16.2, *) else { return }
     queue.async {
-      guard let state = currentState(), state.status == "importing" else { return }
+      guard let state = currentState(), liveStatuses.contains(state.status) else { return }
       Task { @MainActor in
         guard ActivityAuthorizationInfo().areActivitiesEnabled else { return }
         let content = ActivityContent(state: state, staleDate: Date().addingTimeInterval(staleAfter))
-        if let existing = Activity<SmsImportActivityAttributes>.activities.first {
+        if let existing = visibleActivities().first {
           await existing.update(content)
-        } else {
+        } else if !SmsImportBackgroundHost.continuedTaskRunning {
+          // iOS shows its own progress while the continued task runs.
           _ = try? Activity.request(attributes: SmsImportActivityAttributes(), content: content)
         }
       }
     }
     #endif
   }
+
+  private static let liveStatuses: Set<String> = ["importing", "processing", "paused"]
+
+  #if canImport(ActivityKit)
+  /// Activities the person can still see. A dismissed or ended one is never
+  /// shown again, so updating it would change nothing on screen.
+  @available(iOS 16.2, *)
+  private static func visibleActivities() -> [Activity<SmsImportActivityAttributes>] {
+    Activity<SmsImportActivityAttributes>.activities.filter {
+      $0.activityState == .active || $0.activityState == .stale
+    }
+  }
+  #endif
 
   static func refresh() {
     #if canImport(ActivityKit)
@@ -39,12 +63,19 @@ enum SmsImportLiveActivityHost {
       let state = currentState()
       Task {
         for activity in Activity<SmsImportActivityAttributes>.activities {
-          if let state, ["importing", "processing", "paused"].contains(state.status) {
+          if let state, liveStatuses.contains(state.status) {
             await activity.update(ActivityContent(state: state, staleDate: Date().addingTimeInterval(staleAfter)))
           } else {
             let final = state ?? .init(status: "complete", done: 0, total: 0, range: "")
             await activity.end(ActivityContent(state: final, staleDate: nil),
                                dismissalPolicy: .after(Date().addingTimeInterval(15 * 60)))
+          }
+        }
+        // Still importing but nothing on screen (swiped away, or this is a
+        // new run): recreate it while PandaPay is in the foreground.
+        if let state, liveStatuses.contains(state.status) {
+          await MainActor.run {
+            if UIApplication.shared.applicationState == .active { ensure() }
           }
         }
       }
