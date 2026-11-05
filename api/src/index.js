@@ -2119,16 +2119,20 @@ app.get('/user-cards', requireAuth, async (req, res) => {
         await reconcileCurrentCapStates(client, req.userId);
 
         for (const card of cards.rows) {
-          // card-rewards v2 (WP8, C8 D15f): each cap row also carries
-          // cap_kind (null = a v1 row in v1 measure; otherwise `consumed`
-          // is native: points / ₹ / count), cap_amount, period_start /
-          // period_end ('YYYY-MM-DD') and approximate_window. Milestone rows
-          // add period_start and approximate_window. Existing keys unchanged.
+          // card-rewards v2 (WP8, C8 D22c): `consumed` keeps its v1 meaning
+          // for installed apps (points kinds: native × point_value_inr, ₹).
+          // Each cap row adds consumed_native (null on a v1 row), cap_kind
+          // (null = v1 row), cap_amount (native), period_start / period_end
+          // ('YYYY-MM-DD') and approximate_window. Milestone rows add
+          // period_start and approximate_window. Existing keys unchanged.
           card.cap_states = await cardStateV2.currentCapStates(client, card.id);
           card.milestone_states = await cardStateV2.currentMilestoneStates(client, card.id);
 
+          // The cashback part of a v2 spend that also earns points has its
+          // own ledger reason and is not a point (WP8).
           const pointsTotal = await client.query(
-            `SELECT COALESCE(SUM(delta_points), 0) AS total_points FROM points_ledger WHERE user_card_id = $1`,
+            `SELECT COALESCE(SUM(delta_points), 0) AS total_points FROM points_ledger
+              WHERE user_card_id = $1 AND reason <> 'cashback earned on transaction'`,
             [card.id]
           );
           card.total_points_earned = Number(pointsTotal.rows[0].total_points) + Number(card.points_balance || 0);
@@ -4264,7 +4268,7 @@ async function reconcileCurrentCapStates(client, userId) {
     // card-rewards v2 (WP8): a v2-shaped card rebuilds its current cap
     // periods in native units from the same ledger (src/card_state_v2.js);
     // replaying it through v1 would overwrite them in v1 measure.
-    const v2Rebuilt = await cardStateV2.reconcileIfV2(client, userId, card.id, asOf);
+    const v2Rebuilt = await cardStateV2.reconcileIfV2(client, userId, card.id);
     if (v2Rebuilt) {
       rebuiltCaps += v2Rebuilt.rebuiltCaps;
       continue;
@@ -6266,6 +6270,12 @@ app.patch('/transactions/:id', requireAuth, async (req, res) => {
 
   try {
     const result = await withUserClient(req.userId, async (client) => {
+      // card-rewards (WP8, C8 D23d): the user's ingest lock BEFORE the row
+      // lock, the order inserts and the cap rebuild (reconcile) use, so a
+      // rebuild can't interleave with this reverse/re-apply.
+      await client.query(`SELECT pg_advisory_xact_lock(hashtextextended($1::text, 0))`, [
+        `transaction-ingest:${req.userId}`,
+      ]);
       // FOR UPDATE: this row is about to be reversed-then-reapplied: two
       // concurrent edits interleaving their reverse/apply halves would
       // corrupt the bucketed cap/milestone totals in a way that's very
@@ -7040,6 +7050,10 @@ app.post('/transactions/:id/ignore', requireAuth, async (req, res) => {
   }
   try {
     const result = await withUserClient(req.userId, async (client) => {
+      // card-rewards (WP8, C8 D23d): ingest lock before the row lock.
+      await client.query(`SELECT pg_advisory_xact_lock(hashtextextended($1::text, 0))`, [
+        `transaction-ingest:${req.userId}`,
+      ]);
       const existing = await client.query(
         `SELECT id, user_card_id, amount_inr, occurred_at, category_id, rail, merchant_name,
                 status, note, instrument, entry_kind, state_applied, is_backfill
@@ -7089,6 +7103,10 @@ app.post('/transactions/:id/ignore', requireAuth, async (req, res) => {
 app.post('/transactions/:id/restore', requireAuth, async (req, res) => {
   try {
     const result = await withUserClient(req.userId, async (client) => {
+      // card-rewards (WP8, C8 D23d): ingest lock before the row lock.
+      await client.query(`SELECT pg_advisory_xact_lock(hashtextextended($1::text, 0))`, [
+        `transaction-ingest:${req.userId}`,
+      ]);
       const existing = await client.query(
         `SELECT id, user_card_id, amount_inr, occurred_at, category_id, rail,
                 merchant_name, status, note, instrument, entry_kind,
