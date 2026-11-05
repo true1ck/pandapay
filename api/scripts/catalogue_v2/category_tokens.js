@@ -36,6 +36,10 @@ const CATEGORY_MAP = {
   supermarket_and_convenience: exact('groceries'),
   supermarket_retail: exact('groceries'),
   fuel: exact('fuel'),
+  fuel_station: exact('fuel'),
+  fuel_stations: exact('fuel'),
+  petrol_pump: exact('fuel'),
+  petrol_pumps: exact('fuel'),
   dining: exact('dining'),
   restaurant: exact('dining'),
   restaurants: exact('dining'),
@@ -85,6 +89,9 @@ const CATEGORY_MAP = {
   travel_hotels: broad('travel'),
   travel_hotel: broad('travel'),
   hotels: broad('travel'),
+  hotel: broad('travel'),
+  flight: broad('travel'),
+  airline: broad('travel'),
   travel_flights_hotels: broad('travel'),
   travel_flights_and_hotels: broad('travel'),
   railways: broad('travel'),
@@ -237,6 +244,8 @@ const ISSUER_PORTAL = {
   amex: 'amex_reward_multiplier',
   'american-express-india': 'amex_reward_multiplier',
   'american-express': 'amex_reward_multiplier',
+  bobcard: 'bobcard_smartdeal',
+  'bank-of-baroda': 'bobcard_smartdeal',
 };
 
 const RAIL_TOKEN_MAP = {
@@ -256,13 +265,23 @@ function isNoCategoryToken(token) {
 }
 
 // Not purchases the engine scores. Rules on these become `info`.
+// D14b: restricted to something a transaction context can't carry
+// (international/foreign-currency spend, a birthday window). Always `info`,
+// flagged depends_on_txn_attribute; never unrestricted.
+const TXN_ATTRIBUTE_TOKENS = new Set([
+  'international', 'international_spend', 'international_spends', 'international_retail',
+  'international_transaction', 'international_transactions', 'overseas_spend', 'overseas',
+  'foreign_currency', 'foreign_currency_spend', 'travel_international', 'international_ecommerce',
+  'birthday_spend', 'birthday', 'weekend', 'weekend_spend', 'duty_free',
+]);
+
 const NON_PURCHASE_TOKENS = new Set([
   'cash_advance', 'cash_withdrawal', 'cash', 'cash_transaction', 'cash_transactions',
   'atm_withdrawal', 'balance_transfer', 'encash', 'fees_and_charges', 'fees', 'fees_charges',
   'card_fees', 'financial_charges', 'fees_interest', 'interest', 'disputed_transactions',
   'disputed_spend', 'repayment', 'repayments', 'loan_on_card', 'credit_card_payment',
   'quasi_cash', 'money_transfer', 'fund_transfer', 'cashback_transaction', 'cross_sell',
-  'birthday_spend', 'welcome_benefit', 'spend_milestone', 'doctors_day', 'flexipay',
+  'welcome_benefit', 'spend_milestone', 'doctors_day', 'flexipay',
 ]);
 
 // Composite parsing vocabulary. Nouns that exist but have no app category
@@ -270,12 +289,12 @@ const NON_PURCHASE_TOKENS = new Set([
 // their neighbours; qualifier words ("domestic", "select", "partner") narrow a
 // neighbouring piece in a way we can't express, so they taint it.
 const UNMAPPED_NOUNS = new Set([
-  'departmental', 'departmental_store', 'departmental_stores', 'department_store',
+  'departmental', 'departmental_store', 'duty_free', 'departmental_stores', 'department_store',
   'department_stores', 'international', 'jewellery', 'jewelry', 'apparel', 'apparels',
   'fashion', 'electronics', 'shopping', 'toll', 'tolls', 'fastag', 'duty_free',
   'beauty_wellness', 'personal_care', 'pet_stores', 'sports', 'books', 'advertising',
   'software_saas', 'auto', 'essentials', 'gold', 'silver', 'overseas', 'gift_vouchers',
-  'gift_cards', 'hotel', 'wellness', 'lifestyle', 'home_decor', 'durables',
+  'gift_cards', 'wellness', 'lifestyle', 'home_decor', 'durables',
   'consumer_durables', 'irctc_air', 'cabs', 'bakery', 'alcohol', 'subscription',
   'subscriptions', 'ott',
 ]);
@@ -350,6 +369,7 @@ function resolveCategoryToken(token, ctx = {}) {
   if (UNRESTRICTED_TOKENS.has(t)) return { kind: 'unrestricted', parts: [{}], unmapped: [], flags };
   if (isNoCategoryToken(t)) return { kind: 'none', parts: [{}], unmapped: [], flags };
   if (NON_PURCHASE_TOKENS.has(t)) return { kind: 'non_purchase', parts: [], unmapped: [t], flags };
+  if (TXN_ATTRIBUTE_TOKENS.has(t)) return { kind: 'txn_attribute', parts: [], unmapped: [t], flags: ['depends_on_txn_attribute'] };
 
   const direct = pieceFor(t, ctx);
   if (direct && direct.kind !== 'unmapped_noun') {
@@ -403,6 +423,7 @@ function resolveCategoryToken(token, ctx = {}) {
       if (part.broad) flags.push('broad_category');
       parts.push(part);
     });
+    if (unmapped.some((u) => TXN_ATTRIBUTE_TOKENS.has(u))) flags.push('depends_on_txn_attribute');
     if (parts.length >= 1 && (parts.length + unmapped.length) >= 2) {
       return { kind: 'composite', parts, unmapped, flags: [...new Set(flags)] };
     }
@@ -427,6 +448,7 @@ module.exports = {
   MERCHANT_TOKEN_MAP,
   NON_PURCHASE_TOKENS,
   PLATFORM_TOKEN_MAP,
+  TXN_ATTRIBUTE_TOKENS,
   RAIL_TOKEN_MAP,
   UNRESTRICTED_TOKENS,
   isNoCategoryToken,

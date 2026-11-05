@@ -35,7 +35,7 @@ const SOURCE_RAIL = {
 
 const V1_POINT_BLOCKS = { 100: 'points_per_100', 150: 'points_per_150', 200: 'points_per_200' };
 const DATE = /^\d{4}-\d{2}-\d{2}$/;
-const USER_ATTRIBUTE_KEY = /(membership|tier|prime|neon|selected_plan|plan$|pack|variant|relationship|customer_segment|salary|premier)/i;
+const USER_ATTRIBUTE_KEY = /(membership|tier|prime|neon|selected|selection|plan$|pack|variant|relationship|customer_segment|salary|premier|eligible_card|card_side|opt_in|enrol)/i;
 const ROLES = new Set(['base', 'earn', 'exclusion', 'info']);
 const BRANDISH = /(paytm|amazon|flipkart|smartbuy|phonepe|swiggy|zomato|tata|reliance|samsung|apple|kiwi|myntra|irctc|indigo|uber|ola|lic|hpcl|bpcl|indianoil|iocl|jio|airtel|partner|select|preferred|exclusive|promoted|accelerated|brand)/;
 
@@ -77,7 +77,7 @@ function sourceRail(src, ctx) {
   if (SOURCE_RAIL[key]) return SOURCE_RAIL[key];
   if (key === 'smartbuy_or_equivalent_portal') {
     const portal = ISSUER_PORTAL[ctx.issuerSlug];
-    return portal ? { platform: portal } : { blocked: raw };
+    return portal ? { platform: portal, portal: true } : { blocked: raw, portal: true };
   }
   return { blocked: raw };
 }
@@ -182,8 +182,7 @@ function transformRule(src, idx, ctx) {
   if (!isExclusion && ur.rate === null) info.push('missing_rate');
 
   if (!isExclusion && rewardRuleHasUnsupportedTrigger(src)) info.push('unsupported_trigger');
-  if (!isExclusion && /up[\s_-]*to\b/i.test(`${src?.id || ''} ${src?.action?.reason || ''}`) &&
-      /\d+\s*x\b|\bx\d|multiplier|%/i.test(`${src?.id || ''} ${src?.action?.reason || ''}`)) {
+  if (!isExclusion && /up[\s_-]*to[\s_-]*\d+(?:\.\d+)?\s*(?:x\b|%|(?:bonus\s+|reward\s+)?points?\b|rp\b|miles\b)/i.test(`${src?.id || ''} ${src?.action?.reason || ''}`)) {
     // D8(b): "up to 10X" is several rates folded into one.
     info.push('up_to_rate');
   }
@@ -198,6 +197,10 @@ function transformRule(src, idx, ctx) {
   let parts;
   if (token.kind === 'non_purchase') {
     info.push('non_purchase_category');
+    unmappedTokens.push(rawToken);
+    parts = [{}];
+  } else if (token.kind === 'txn_attribute') {
+    info.push('depends_on_txn_attribute');
     unmappedTokens.push(rawToken);
     parts = [{}];
   } else if (token.kind === 'unknown') {
@@ -422,8 +425,11 @@ function transformRule(src, idx, ctx) {
   const sr = sourceRail(src, ctx);
   const rails = [];
   if (sr.rail) rails.push({ rail: sr.rail });
-  if (sr.platform) parts = parts.map((p) => andPart(p, { platformSlugs: [sr.platform] }) || { ...p, conflict: true });
-  if (sr.blocked) info.push(`rail:${sr.blocked}`);
+  const namedPlatform = parts.some((p) => p.platformSlugs?.length);
+  if (sr.platform && !namedPlatform) parts = parts.map((p) => andPart(p, { platformSlugs: [sr.platform] }) || { ...p, conflict: true });
+  // "smartbuy_or_equivalent_portal" means "the issuer's portal"; fine when
+  // the rule (or the issuer) names one.
+  if (sr.blocked && !(sr.portal && namedPlatform)) info.push(`rail:${sr.blocked}`);
   rails.push(...cond.rails);
   const anyPlatform = parts.some((p) => p.platformSlugs?.length);
   let railSet = uniq(rails.map((r) => r.rail));

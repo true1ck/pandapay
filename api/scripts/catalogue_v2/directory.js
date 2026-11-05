@@ -20,6 +20,8 @@ const GENERIC_WORDS = new Set([
   'platform', 'portal', 'official', 'com', 'co', 'in', 'india', 'store', 'stores',
   'outlet', 'outlets', 'the', 'and', 'or', 'via', 'through', 'using', 'on', 'at',
   'brand', 'transactions', 'transaction', 'payments', 'payment', 'spends', 'spend',
+  'eligible', 'participating', 'authorised', 'authorized', 'petrol', 'pump', 'pumps',
+  'station', 'stations', 'fuel', 'pos', 'android', 'ios', 'websites',
 ]);
 
 function loadDirectory(file = DEFAULT_DIRECTORY_PATH) {
@@ -110,7 +112,19 @@ function resolveMerchantText(text, index) {
 
 function resolvePlatformText(text, index) {
   if (!index || typeof text !== 'string') return null;
-  return lookup(index.platformKeys, text);
+  const exact = lookup(index.platformKeys, text);
+  if (exact) return exact;
+  // A portal named inside a longer phrase ("BOBCARD SmartDeal logged-in
+  // mobile app or portal"). Platforms only: a platform restriction narrows a
+  // rule; a merchant found inside prose would not be safe the same way.
+  const n = ` ${normalizeText(text)} `;
+  let best = null;
+  for (const [key, slugs] of index.platformKeys) {
+    if (key.length < 5 || slugs.size !== 1) continue;
+    if (!n.includes(` ${key} `)) continue;
+    if (!best || key.length > best.key.length) best = { key, slug: [...slugs][0] };
+  }
+  return best ? best.slug : null;
 }
 
 // Splits a source string naming several merchants ("Amazon, Flipkart and

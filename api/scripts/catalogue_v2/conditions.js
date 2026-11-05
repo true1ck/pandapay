@@ -27,7 +27,7 @@ const MAX_TXN_KEYS = [
 ];
 const BLOCK_KEYS = [
   'spend_block_inr', 'accrual_block_inr', 'minimum_block_inr', 'base_spend_block_inr',
-  'block_inr', 'reward_block_inr', 'transaction_amount_accrual_unit_inr',
+  'block_inr', 'reward_block_inr', 'transaction_amount_accrual_unit_inr', 'transaction_amount_block_inr',
 ];
 const MCC_INCLUDE_KEYS = new Set([
   'mcc', 'mcc_list', 'mcc_in', 'mccs', 'merchant_category_codes', 'merchant_category_code',
@@ -41,6 +41,8 @@ const MERCHANT_KEYS = new Set([
   'merchant_pattern', 'merchant', 'merchants', 'merchant_names', 'merchant_name', 'eligible_merchants',
   'merchant_platform', 'merchant_list', 'merchant_brands', 'brands', 'partner_merchants',
   'merchant_or_platform', 'merchant_patterns', 'eligible_brands', 'partner_brands',
+  'merchant_domain', 'merchant_platforms', 'merchant_partner_list', 'partner_list',
+  'merchant_eligibility', 'eligible_merchant', 'eligible_partner_brands', 'merchant_group',
 ]);
 const PLATFORM_KEYS = new Set([
   'platform', 'platforms', 'app', 'apps', 'portal', 'program', 'programme', 'booking_channel',
@@ -70,6 +72,7 @@ const DESCRIPTIVE_KEYS = new Set([
   'period', 'merchant_mapping', 'retail_only', 'purpose', 'qualifying', 'eligible',
   'effective_date', 'eligible_services', 'eligible_purchase', 'eligible_transaction',
   'transaction_amount_basis', 'rounding', 'rounding_mode', 'accrual_rounding',
+  'merchant_identifier', 'merchant_id_basis', 'points_basis', 'reward_basis_note',
 ]);
 const DESCRIPTIVE_SUFFIX = /_(definition|description|note|notes|text|explanation|basis|rationale|identification|examples|source)$/;
 // Boolean flags that only restate that a rule is an exclusion.
@@ -121,11 +124,24 @@ const RAIL_WORDS = {
   'rupay upi': { rail: 'upi_qr' },
   'rupay credit card upi': { rail: 'upi_qr' },
   'upi scan pay': { rail: 'upi_qr' },
+  'online merchant': { rail: 'online' },
+  'online merchants': { rail: 'online' },
+  'online transaction flag': { rail: 'online' },
+  'online ecom': { rail: 'online' },
+  'eligible online spends': { rail: 'online' },
+  'online purchases': { rail: 'online' },
+  'e commerce transactions': { rail: 'online' },
+  'in person': { rail: 'swipe', inexact: true },
+  'offline pos contactless': { rail: 'swipe', inexact: true },
+  'pos and contactless': { rail: 'swipe', inexact: true },
   contactless: { rail: 'contactless' },
   emi: { rail: 'emi' },
   atm: { rail: 'atm' },
 };
 
+// D14b: things a transaction context can't carry.
+const TXN_ATTRIBUTE_VALUE = /^(international|international transactions?|international spends?|international transaction flag|foreign currency|foreign currency transactions?|overseas|overseas spends?|domestic|domestic transactions?|domestic spends?|cross border|dcc)$/;
+const TXN_ATTRIBUTE_KEY = /^(birthday_window|date_window|transaction_day|day_of_week|weekday|travel_dates|booking_type|booking_types|transaction_date|transaction_region|geography|transaction_scope|transaction_currency|currency|international_transaction|international_transaction_flag|ticket_class|classes|passenger)$/;
 const NEGATION = /^(not|non|outside|except|excluding|other than)\b/;
 
 // Lifecycle / accumulated-state triggers (moved here from the v1 importer so
@@ -195,7 +211,10 @@ function resolveName(text, index) {
   if (merchant) return { merchant };
   const platform = resolvePlatformText(text, index);
   if (!platform) return null;
-  if (index.platforms.get(platform)?.kind === 'merchant_app') return null;
+  if (index.platforms.get(platform)?.kind === 'merchant_app') {
+    const own = platform.replace(/_(app|portal|website)$/, '');
+    if (index.merchants.has(own)) return null;
+  }
   return { platform };
 }
 
@@ -224,10 +243,24 @@ function emptyMapping() {
 
 function block(m, key, detail) {
   m.blockers.push({ key, detail: detail === undefined ? null : String(JSON.stringify(detail)).slice(0, 160) });
+  if (TXN_ATTRIBUTE_KEY.test(String(key).replace(/^clause:/, ''))) m.flags.push('depends_on_txn_attribute');
+}
+
+function flattenMccValue(value) {
+  if (value && typeof value === 'object' && !Array.isArray(value)) {
+    if (Array.isArray(value.in)) return value.in;
+    // {"dining": [5812], "movies": [7832]}: one list per sub-category.
+    return Object.values(value).flatMap((v) => (Array.isArray(v) ? v : [v]));
+  }
+  // [[3000, 3350], [3501, 3853]]: pairs are ranges.
+  if (Array.isArray(value)) {
+    return value.flatMap((v) => (Array.isArray(v) && v.length === 2 ? [`${v[0]}-${v[1]}`] : [v]));
+  }
+  return value;
 }
 
 function addMccs(m, key, value, target) {
-  const { mccs, invalid } = normalizeMccList(value);
+  const { mccs, invalid } = normalizeMccList(flattenMccValue(value));
   if (invalid.length) {
     m.flags.push('unreadable_mcc');
     block(m, key, invalid);
@@ -245,9 +278,16 @@ function mapNameValue(m, key, value, index, { allowRail }) {
     }
     const n = normalizeText(raw);
     if (!n) continue;
-    if (NEGATION.test(n) || /^not_/.test(raw.trim().toLowerCase())) {
+    if (NEGATION.test(n) || /\b(outside|except|excluding|other than)\b/.test(n) || /^not_/.test(raw.trim().toLowerCase())) {
       block(m, key, raw);
       m.flags.push('negated_condition');
+      continue;
+    }
+    if (/\bmccs?\b|merchant category|^mcc \d/.test(n)) continue;
+    if (/^(website|app|apps|web|mobile app|mobile application|website or app|website and app|website app|online website|websites and apps)$/.test(n)) continue; // "MCC-scoped": the rule's own MCC/category says it
+    if (TXN_ATTRIBUTE_VALUE.test(n)) {
+      block(m, key, raw);
+      m.flags.push('depends_on_txn_attribute');
       continue;
     }
     if (allowRail && RAIL_WORDS[n]) {
@@ -266,7 +306,7 @@ function mapNameValue(m, key, value, index, { allowRail }) {
       continue;
     }
     // Then a list of names ("Amazon, Flipkart and Myntra").
-    const pieces = splitNames(raw);
+    const pieces = splitNames(raw.replace(/_/g, ' '));
     if (pieces.length > 1) {
       const hits = pieces.map((piece) => resolveName(piece, index));
       const resolved = hits.filter(Boolean);
@@ -371,6 +411,7 @@ function mapOne(m, key, value, ctx) {
     return;
   }
   if (lower === 'transaction_amount_inr' && value && typeof value === 'object') {
+    if ('operator' in value) return mapClause(m, { field: 'transaction_amount', ...value }, ctx);
     const min = asNumber(value.min ?? value.minimum ?? value.gte ?? value['>=']);
     const max = asNumber(value.max ?? value.maximum ?? value.lte ?? value['<=']);
     if (min === null && max === null) return block(m, k, value);
@@ -435,7 +476,8 @@ function mapOne(m, key, value, ctx) {
     });
     return;
   }
-  if (typeof value === 'boolean' && value === false) return;
+  if (value === false || value === 0 || (Array.isArray(value) && !value.length)) return;
+  if (/^including_/.test(lower) && value === true) return; // widens the scope; ignoring it narrows
   block(m, k, value);
 }
 
