@@ -1,0 +1,33 @@
+{
+  "source_slug": "cashback-sbi-card",
+  "changes": [
+    {
+      "path": "cap_rules[id=cap_online_cashback_cycle].metric",
+      "value": "total_reward_points",
+      "reason": "Caps limit cashback earned per statement cycle (Rs2,000 per bucket).",
+      "source_url": "https://www.sbicard.com/sbi-card-en/assets/docs/pdf/cashback-revised.pdf",
+      "checked_on": "2026-11-05"
+    },
+    {
+      "path": "cap_rules[id=cap_offline_cashback_cycle].metric",
+      "value": "total_reward_points",
+      "reason": "Caps limit cashback earned per statement cycle (Rs2,000 per bucket).",
+      "source_url": "https://www.sbicard.com/sbi-card-en/assets/docs/pdf/cashback-revised.pdf",
+      "checked_on": "2026-11-05"
+    },
+    {
+      "path": "cap_rules[id=cap_online_cashback_cycle].limit_value",
+      "value": 2000,
+      "reason": "Rs2,000 cashback cap per bucket.",
+      "source_url": "https://www.sbicard.com/sbi-card-en/assets/docs/pdf/cashback-revised.pdf",
+      "checked_on": "2026-11-05"
+    },
+    {
+      "path": "cap_rules[id=cap_offline_cashback_cycle].limit_value",
+      "value": 2000,
+      "reason": "Rs2,000 cashback cap per bucket.",
+      "source_url": "https://www.sbicard.com/sbi-card-en/assets/docs/pdf/cashback-revised.pdf",
+      "checked_on": "2026-11-05"
+    }
+  ]
+}
