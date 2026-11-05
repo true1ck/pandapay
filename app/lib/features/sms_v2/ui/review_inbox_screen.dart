@@ -13,6 +13,7 @@ import '../providers/data_providers.dart';
 import 'correction_form.dart';
 import 'review_controller.dart';
 import 'screen_parts.dart';
+import 'sharing_offer_card.dart';
 
 /// The receipt question (Lane X): a bill-payment receipt with no matching debit.
 bool isReceiptQuestion(LocalReviewItem item) =>
@@ -295,8 +296,12 @@ class _ReviewInboxScreenState extends ConsumerState<ReviewInboxScreen> {
             loading: () => const SmsLoading(),
             error: (_, _) =>
                 SmsError(onRetry: () => ref.invalidate(reviewItemsProvider)),
-            data: (items) =>
-                ReviewInboxList(items: items, busy: _saving, onAction: _act),
+            data: (items) => ReviewInboxList(
+              items: items,
+              busy: _saving,
+              onAction: _act,
+              header: SharingOfferCard(openItems: items.length),
+            ),
           ),
     ),
   );
@@ -308,10 +313,14 @@ class ReviewInboxList extends StatelessWidget {
     required this.items,
     required this.onAction,
     this.busy = false,
+    this.header,
   });
   final List<LocalReviewItem> items;
   final bool busy;
   final void Function(List<LocalReviewItem>, String) onAction;
+
+  /// Shown under the privacy note (the sharing offer).
+  final Widget? header;
   @override
   Widget build(BuildContext context) {
     if (items.isEmpty) {
@@ -348,6 +357,7 @@ class ReviewInboxList extends StatelessWidget {
         const BambooNote(
           'Your message text stays on this phone. A format choice applies to every message in that group.',
         ),
+        ?header,
         if (busy)
           const Padding(
             padding: EdgeInsets.only(top: AppSpace.md),

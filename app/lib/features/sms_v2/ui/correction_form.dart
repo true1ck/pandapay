@@ -1,8 +1,11 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+import '../../../app/design/app_theme.dart';
 import '../../../app/design/bamboo_components.dart';
 import 'package:pandapay_domain/sms_v2.dart';
 import 'package:pandapay_domain/sms_v2_category.dart';
+import '../../../app/providers.dart' as app;
+import '../../consent/template_sharing_disclosure.dart';
 import '../pipeline/trace.dart';
 import '../providers/data_providers.dart';
 
@@ -265,6 +268,7 @@ class _CorrectionFormState extends ConsumerState<CorrectionForm> {
               'Choose a match in the review inbox to change linked messages.',
               icon: Icons.info_outline,
             ),
+          _SharingStatusLine(kind: _kind),
         ],
       ),
     );
@@ -274,4 +278,41 @@ class _CorrectionFormState extends ConsumerState<CorrectionForm> {
 String _sentence(String wire) {
   final text = wire.replaceAll('_', ' ');
   return text.isEmpty ? text : text[0].toUpperCase() + text.substring(1);
+}
+
+/// Says plainly whether this fix leaves the phone. A personal preference never
+/// does, whatever the sharing setting.
+class _SharingStatusLine extends ConsumerWidget {
+  const _SharingStatusLine({required this.kind});
+  final CorrectionKind kind;
+
+  @override
+  Widget build(BuildContext context, WidgetRef ref) {
+    final style = BambooFonts.ui(12.5, color: BambooInk.ink500, height: 1.4);
+    final consent = ref.watch(app.smsSharedLearningConsentProvider);
+    if (consent.isLoading && !consent.hasValue) return const SizedBox.shrink();
+    final local = Text('This fix stays on your phone.', style: style);
+    if (kind == CorrectionKind.preferenceOnly) return local;
+    if (consent.valueOrNull != null) {
+      return Text(
+        'This fix helps everyone. It\'s shared without amounts, names or numbers.',
+        style: style,
+      );
+    }
+    return Row(
+      children: [
+        Expanded(child: local),
+        TextButton(
+          onPressed: () async {
+            await TemplateSharingDisclosure.show(
+              context,
+              sourceScreen: 'correction_form',
+            );
+            ref.invalidate(app.smsSharedLearningConsentProvider);
+          },
+          child: const Text('Share fixes'),
+        ),
+      ],
+    );
+  }
 }
