@@ -9,6 +9,8 @@ import 'package:flutter/semantics.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:pandapay_domain/pandapay_domain.dart';
 import 'package:shared_preferences/shared_preferences.dart';
+import 'features/shared_expenses/data/pending_split_invite.dart';
+import 'features/shared_expenses/data/shared_invitations.dart';
 
 import 'app/design/app_theme.dart';
 import 'app/env.dart';
@@ -230,7 +232,11 @@ class _PandaPayAppState extends ConsumerState<PandaPayApp> {
       final code = await _installReferrerChannel.invokeMethod<String>(
         'readInvitationCode',
       );
-      if (code != null && mounted) {
+      if (code != null && code.startsWith('split:')) {
+        // Split-group invite carried through the Play install referrer.
+        await PendingSplitInviteStore().capture(code.substring(6));
+        _resumePendingSplitJoin();
+      } else if (code != null && mounted) {
         final pendingStore = await ref.read(
           pendingInvitationStoreProvider.future,
         );
@@ -244,9 +250,48 @@ class _PandaPayAppState extends ConsumerState<PandaPayApp> {
     }
   }
 
+  bool _resumingSplitJoin = false;
+
+  /// Opens the Join screen for a remembered split invite once the user is
+  /// signed in and past onboarding. Never joins by itself.
+  Future<void> _resumePendingSplitJoin() async {
+    if (_resumingSplitJoin) return;
+    _resumingSplitJoin = true;
+    try {
+      final token = await PendingSplitInviteStore().read();
+      if (token == null) return;
+      for (var attempt = 0; attempt < 150 && mounted; attempt += 1) {
+        final signedIn = ref.read(cacheNamespaceProvider).startsWith('user:');
+        final onboarding = ref.read(onboardingCompleteProvider);
+        if (signedIn &&
+            !onboarding.isLoading &&
+            onboarding.valueOrNull != false) {
+          if (!mounted) return;
+          ref.read(goRouterProvider).go('/split/join/$token');
+          return;
+        }
+        await Future<void>.delayed(const Duration(milliseconds: 400));
+      }
+    } finally {
+      _resumingSplitJoin = false;
+    }
+  }
+
   Future<void> _openAssistantUri(String raw) async {
     final uri = Uri.tryParse(raw);
     if (!mounted || uri == null) {
+      return;
+    }
+    final splitToken = sharedInviteTokenFromUri(uri);
+    if (splitToken != null) {
+      // Remember the invite first: a signed-out or brand-new user is sent through
+      // sign-in/onboarding, and the Join screen resumes once they are in.
+      await PendingSplitInviteStore().capture(splitToken);
+      try {
+        await ref.read(sessionInitProvider.future);
+      } catch (_) {}
+      if (!mounted) return;
+      _resumePendingSplitJoin();
       return;
     }
     final invitationCode = invitationCodeFromUri(uri);

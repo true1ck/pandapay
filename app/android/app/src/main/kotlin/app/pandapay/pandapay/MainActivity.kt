@@ -328,6 +328,15 @@ class MainActivity : FlutterFragmentActivity() {
     private fun invitationCodeFromReferrer(raw: String): String? {
         val candidates = listOf(raw, Uri.decode(raw)).distinct()
         for (candidate in candidates) {
+            // Split-group invite: https://pandapay.app/split/join/<token> sends
+            // the token through the Play referrer as split_join=<token>.
+            val splitToken = (if (candidate.startsWith("http://", true) ||
+                candidate.startsWith("https://", true)
+            ) Uri.parse(candidate) else Uri.parse("https://play.google.com/?$candidate"))
+                .getQueryParameter("split_join")
+            if (splitToken != null && Regex("^[A-Za-z0-9_-]{43}$").matches(splitToken)) {
+                return "split:$splitToken"
+            }
             val query = if (candidate.startsWith("http://", true) ||
                 candidate.startsWith("https://", true)
             ) {

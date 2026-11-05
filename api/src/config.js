@@ -116,6 +116,8 @@ module.exports = {
   jwtAudience,
   authInternalBaseUrl: (process.env.AUTH_INTERNAL_BASE_URL || '').replace(/\/$/, '') || null,
   authInternalServiceSecret: process.env.AUTH_INTERNAL_SERVICE_SECRET || null,
+  sharedExpenseInviteSecret: process.env.SHARED_EXPENSE_INVITE_SECRET || null,
+  androidPackageId: process.env.ANDROID_PACKAGE_ID || 'app.pandapay.pandapay',
   referralIdentityHmacKey: process.env.REFERRAL_IDENTITY_HMAC_KEY || null,
   referralIdentityHmacKeyVersion: process.env.REFERRAL_IDENTITY_HMAC_KEY_VERSION || 'v1',
   referralPreviewSecret: process.env.REFERRAL_PREVIEW_SECRET || null,

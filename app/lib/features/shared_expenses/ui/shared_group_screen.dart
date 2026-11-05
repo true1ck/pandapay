@@ -16,6 +16,8 @@ class SharedGroupScreen extends StatelessWidget {
   final VoidCallback? onMembers;
   final ValueChanged<String>? onOpenExpense;
   final ValueChanged<String>? onOpenBalance;
+  final VoidCallback? onSettleUp;
+  final VoidCallback? onViewSettlements;
   final ValueChanged<SharedGroupTab>? onRetry;
   final ValueChanged<SharedGroupTab>? onLoadMore;
   final ValueChanged<SharedGroupTab>? onPreviousPage;
@@ -28,6 +30,8 @@ class SharedGroupScreen extends StatelessWidget {
     this.onMembers,
     this.onOpenExpense,
     this.onOpenBalance,
+    this.onSettleUp,
+    this.onViewSettlements,
     this.onRetry,
     this.onLoadMore,
     this.onPreviousPage,
@@ -41,7 +45,7 @@ class SharedGroupScreen extends StatelessWidget {
       ),
     if (data.summary case final summary?)
       SharedSummaryCard(summary: summary, hideAmounts: data.hideAmounts),
-    if (incomplete) const SharedNotice('Some results are still syncing'),
+    if (incomplete) const SharedNotice(sharedCatchingUpCopy),
   ];
 
   Widget _expenses() => SharedPageBody(
@@ -66,7 +70,9 @@ class SharedGroupScreen extends StatelessWidget {
           : () => onOpenExpense!(data.expenses.items[index].id),
     ),
     emptyTitle: 'No expenses yet',
-    emptyMessage: 'Add the first shared expense for this group.',
+    emptyMessage: data.direct
+        ? 'Add the first expense you share with ${data.title}.'
+        : 'Add the first shared expense for this group.',
     hasMore: data.expenses.hasMore,
     loadingMore: data.expenses.loadingMore,
     onRetry: onRetry == null ? null : () => onRetry!(SharedGroupTab.expenses),
@@ -87,6 +93,24 @@ class SharedGroupScreen extends StatelessWidget {
           onTap: () => onPreviousPage!(SharedGroupTab.balances),
         ),
       ..._header(incomplete: data.balances.incomplete),
+      if (onSettleUp != null)
+        Padding(
+          padding: const EdgeInsets.symmetric(vertical: AppSpace.xs),
+          child: SharedAction(
+            label: 'Settle up',
+            icon: Icons.payments_outlined,
+            onTap: onSettleUp!,
+          ),
+        ),
+      if (onViewSettlements != null)
+        Padding(
+          padding: const EdgeInsets.symmetric(vertical: AppSpace.xs),
+          child: SharedAction(
+            label: 'Payment history',
+            icon: Icons.receipt_long_outlined,
+            onTap: onViewSettlements!,
+          ),
+        ),
     ],
     itemCount: data.balances.items.length,
     itemBuilder: (_, index) => SharedContextTile(
@@ -151,7 +175,7 @@ class SharedGroupScreen extends StatelessWidget {
               'Payments settle balances; they are separate from expense totals.',
             ),
             if (totals.incomplete)
-              const SharedNotice('Totals snapshot incomplete'),
+              const SharedNotice('Some totals may be missing'),
           ],
         ),
       );
@@ -171,13 +195,13 @@ class SharedGroupScreen extends StatelessWidget {
     actions: [
       if (onMembers != null)
         IconButton(
-          tooltip: 'Group members',
+          tooltip: data.direct ? 'Invite or view person' : 'Group members',
           onPressed: onMembers,
           icon: const Icon(Icons.people_outline_rounded),
         ),
       if (onSettings != null)
         IconButton(
-          tooltip: 'Group settings',
+          tooltip: data.direct ? 'Friend settings' : 'Group settings',
           onPressed: onSettings,
           icon: const Icon(Icons.settings_outlined),
         ),
@@ -224,7 +248,12 @@ class SharedExpenseTile extends StatelessWidget {
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.stretch,
               children: [
-                Text(row.title, style: BambooFonts.heading(15)),
+                Text(
+                  row.title,
+                  maxLines: 2,
+                  overflow: TextOverflow.ellipsis,
+                  style: BambooFonts.heading(15),
+                ),
                 Text(
                   '${row.payerLabel} ${row.paidBy}',
                   style: BambooFonts.ui(12, color: BambooInk.ink700),

@@ -1,5 +1,4 @@
 import 'package:flutter/material.dart';
-import 'dart:typed_data';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:http/http.dart' as http;
@@ -9,6 +8,8 @@ import 'package:pandapay/app/providers.dart';
 import 'package:pandapay/data/authenticated_http_client.dart';
 import 'package:pandapay/data/local/app_database.dart';
 import 'package:pandapay/data/local/response_cache.dart';
+import 'package:pandapay/data/user_cards_repository.dart';
+import 'package:pandapay_domain/pandapay_domain.dart';
 import 'package:pandapay/features/quickadd/quick_add_screen.dart';
 import 'package:pandapay/features/shared_expenses/composer/shared_editor.dart';
 import 'package:pandapay/features/shared_expenses/data/shared_http_transport.dart';
@@ -40,6 +41,24 @@ class Runtime extends SharedExpensesRuntime {
       SharedEditorMember(friend, 'Rahul'),
     ],
   );
+  @override
+  Future<Map<String, Object?>> contexts({String? after}) async => {
+    'items': [
+      {
+        'contextId': group,
+        'kind': 'group',
+        'name': 'test',
+        'membershipState': 'active',
+      },
+      {
+        'contextId': friend,
+        'kind': 'direct',
+        'name': 'test',
+        'membershipState': 'active',
+      },
+    ],
+    'hasMore': false,
+  };
   @override
   Future<void> flushEditor() async {
     if (failFlush) throw StateError('offline');
@@ -81,7 +100,7 @@ void main() {
     WidgetTester tester, {
     double width = 430,
     double scale = 1,
-    String? draft,
+    TransactionEntry? source,
   }) async {
     tester.view.physicalSize = Size(width, 1000);
     tester.view.devicePixelRatio = 1;
@@ -90,6 +109,8 @@ void main() {
     await tester.pumpWidget(
       ProviderScope(
         overrides: [
+          if (source != null)
+            cacheNamespaceProvider.overrideWithValue('user:$account'),
           sharedExpensesEnabledProvider.overrideWithValue(true),
           sharedExpensesRuntimeProvider.overrideWith((ref) async => runtime),
           userCardsProvider.overrideWith((ref) async => const []),
@@ -115,7 +136,8 @@ void main() {
                       autofocus: false,
                       sharedExpense: true,
                       sharedContextId: group,
-                      sharedDraftId: draft,
+                      sharedSourceEntry: source,
+                      sharedSourceAccountId: source == null ? null : account,
                     ),
                   ),
                 ),
@@ -130,97 +152,162 @@ void main() {
     await tester.pumpAndSettle();
   }
 
+  Future<void> fillFriendPaid(WidgetTester tester) async {
+    await tester.enterText(
+      find.byKey(const ValueKey('quick-add-amount-field')),
+      '900',
+    );
+    final payer = find.widgetWithText(
+      DropdownButtonFormField<String>,
+      'Paid by',
+    );
+    await tester.ensureVisible(payer);
+    await tester.tap(payer);
+    await tester.pumpAndSettle();
+    await tester.tap(find.text('Rahul').last);
+    await tester.pumpAndSettle();
+    final merchant = find.byKey(const ValueKey('quick-add-merchant-field'));
+    await tester.ensureVisible(merchant);
+    await tester.enterText(merchant, 'Dinner');
+    await tester.pumpAndSettle();
+  }
+
   testWidgets(
-    'friend-paid entry uses the existing amount/merchant form and saves one shared command',
+    'chooser separates friends from groups, even with the same name, and offers both creations',
     (tester) async {
       await launch(tester);
-      expect(
-        find.byKey(const ValueKey('quick-add-amount-field')),
-        findsOneWidget,
-      );
+      await tester.tap(find.text('Flatmates'));
+      await tester.pumpAndSettle();
+      expect(find.text('FRIENDS'), findsOneWidget);
+      expect(find.text('GROUPS'), findsOneWidget);
+      expect(find.text('Friend · just the two of you'), findsOneWidget);
+      expect(find.text('Group'), findsOneWidget);
+      expect(find.text('Add friend'), findsOneWidget);
+      expect(find.text('Create group'), findsOneWidget);
+    },
+  );
+  testWidgets(
+    'unfinished sharing never autosaves or resumes when the form is reopened',
+    (tester) async {
+      await launch(tester);
+      expect(find.text('Save draft'), findsNothing);
       await tester.enterText(
         find.byKey(const ValueKey('quick-add-amount-field')),
-        '900',
+        '900.',
       );
-      await tester.ensureVisible(
-        find.widgetWithText(DropdownButtonFormField<String>, 'Paid by'),
-      );
-      await tester.tap(
-        find.widgetWithText(DropdownButtonFormField<String>, 'Paid by'),
-      );
+      await tester.pump(const Duration(milliseconds: 400));
+      for (final state in [
+        AppLifecycleState.inactive,
+        AppLifecycleState.hidden,
+        AppLifecycleState.paused,
+      ]) {
+        tester.binding.handleAppLifecycleStateChanged(state);
+      }
       await tester.pumpAndSettle();
-      await tester.tap(find.text('Rahul').last);
+      expect(
+        db.db.select('SELECT count(*) n FROM shared_editor_drafts').single['n'],
+        0,
+      );
+      for (final state in [
+        AppLifecycleState.hidden,
+        AppLifecycleState.inactive,
+        AppLifecycleState.resumed,
+      ]) {
+        tester.binding.handleAppLifecycleStateChanged(state);
+      }
+      await tester.pageBack();
       await tester.pumpAndSettle();
+      await tester.tap(find.text('Open'));
+      await tester.pumpAndSettle();
+      expect(
+        tester
+            .widget<TextField>(
+              find.byKey(const ValueKey('quick-add-amount-field')),
+            )
+            .controller!
+            .text,
+        isEmpty,
+      );
+      expect(runtime.store.pendingCount, 0);
+    },
+  );
+  testWidgets(
+    'existing purchase keeps exact paise and closes without a draft or duplicate transaction',
+    (tester) async {
+      final source = TransactionEntry(
+        id: group,
+        amount: const Money.fromPaise(90001),
+        occurredAt: DateTime(2026, 11, 4),
+        merchantName: 'Existing dinner',
+        note: 'Original note',
+        source: 'manual',
+        status: 'active',
+      );
+      await launch(tester, source: source);
+      final amount = tester.widget<TextField>(
+        find.byKey(const ValueKey('quick-add-amount-field')),
+      );
+      expect(amount.controller!.text, '900.01');
+      expect(amount.readOnly, isTrue);
+      expect(find.text('Charged on your original payment'), findsOneWidget);
+      final submit = tester.widget<FilledButton>(
+        find.widgetWithText(FilledButton, 'Submit shared expense'),
+      );
+      expect(submit.onPressed, isNull);
+      await tester.pageBack();
+      await tester.pumpAndSettle();
+      expect(
+        db.db.select('SELECT count(*) n FROM shared_editor_drafts').single['n'],
+        0,
+      );
+      expect(
+        db.db
+            .select('SELECT count(*) n FROM transaction_outbox_entries')
+            .single['n'],
+        0,
+      );
+      expect(runtime.store.pendingCount, 0);
+    },
+  );
+  testWidgets(
+    'friend paid submits one exact proposal without a bank transaction or saved form',
+    (tester) async {
+      await launch(tester);
+      await fillFriendPaid(tester);
       expect(find.text('Paid with'), findsNothing);
-      final merchant = find.byKey(const ValueKey('quick-add-merchant-field'));
-      await tester.ensureVisible(merchant);
-      await tester.enterText(merchant, 'Dinner');
-      await tester.pumpAndSettle();
       expect(find.text('Your share'), findsOneWidget);
-      expect(find.text('Submit shared expense'), findsOneWidget);
       await tester.tap(find.text('Submit shared expense'));
       await tester.pumpAndSettle();
       expect(find.text('Open'), findsOneWidget);
       expect(runtime.store.pendingCount, 1);
       expect(
         db.db
-            .select('SELECT COUNT(*) n FROM transaction_outbox_entries')
+            .select('SELECT count(*) n FROM transaction_outbox_entries')
             .single['n'],
         0,
       );
-      expect(runtime.store.editorDrafts(), isEmpty);
-      expect(tester.takeException(), isNull);
-    },
-  );
-  testWidgets('Back keeps incomplete amount input in a resumable draft', (
-    tester,
-  ) async {
-    await launch(tester);
-    await tester.enterText(
-      find.byKey(const ValueKey('quick-add-amount-field')),
-      '900.',
-    );
-    await tester.pageBack();
-    await tester.pumpAndSettle();
-    expect(find.text('Open'), findsOneWidget);
-    final saved = runtime.store.editorDrafts().single;
-    expect(saved.value['billText'], '900.');
-    expect(runtime.store.pendingCount, 0);
-  });
-  testWidgets(
-    'sharing controls fit 320dp and 2x text without hiding the amount',
-    (tester) async {
-      await launch(tester, width: 320, scale: 2);
-      await tester.enterText(
-        find.byKey(const ValueKey('quick-add-amount-field')),
-        '100',
+      expect(
+        db.db.select('SELECT count(*) n FROM shared_editor_drafts').single['n'],
+        0,
       );
-      await tester.pumpAndSettle();
-      expect(tester.takeException(), isNull);
-      await tester.ensureVisible(find.text('Shared with · 2/50'));
-      await tester.pumpAndSettle();
       expect(tester.takeException(), isNull);
     },
   );
   testWidgets(
-    'a failed submit resumes the same sealed operation instead of claiming a new draft',
+    'retrying a submitted expense keeps its sealed operation and cannot create another',
     (tester) async {
-      final editor = SharedEditor(store: runtime.store, accountId: account);
-      editor.selectContext(group, 'Flatmates', const [
-        SharedEditorMember(me, 'You'),
-        SharedEditorMember(friend, 'Rahul'),
-      ], me);
-      editor.choosePayer(friend);
-      editor.setBill('900');
-      editor.setTitle('Dinner');
-      await editor.persist();
-      final id = editor.id;
-      editor.dispose();
       runtime.failFlush = true;
-      await launch(tester, draft: id);
+      await launch(tester);
+      await fillFriendPaid(tester);
       await tester.tap(find.text('Submit shared expense'));
       await tester.pumpAndSettle();
       expect(runtime.store.pendingCount, 1);
+      final id = runtime.store
+          .readPendingOperations()
+          .items
+          .single
+          .command
+          .operationId;
       expect(find.text('Check submission'), findsOneWidget);
       expect(
         tester
@@ -230,65 +317,32 @@ void main() {
             .readOnly,
         isTrue,
       );
-      expect(
-        tester
-            .widget<TextField>(
-              find.byKey(const ValueKey('quick-add-merchant-field')),
-            )
-            .readOnly,
-        isTrue,
-      );
       runtime.failFlush = false;
       await tester.tap(find.text('Check submission'));
       await tester.pumpAndSettle();
       expect(find.text('Open'), findsOneWidget);
       expect(runtime.store.pendingCount, 1);
-      expect(runtime.store.editorDrafts(), isEmpty);
-    },
-  );
-  testWidgets(
-    'draft recovery retains the note and private receipt reference after Back',
-    (tester) async {
-      final editor = SharedEditor(store: runtime.store, accountId: account);
-      editor.selectContext(group, 'Flatmates', const [
-        SharedEditorMember(me, 'You'),
-        SharedEditorMember(friend, 'Rahul'),
-      ], me);
-      editor.choosePayer(friend);
-      editor.setBill('900');
-      editor.setTitle('Dinner');
-      await editor.persist();
-      final receipt = await runtime.store.saveEditorReceipt(
-        editor.id,
-        name: 'Bill.jpg',
-        bytes: Uint8List.fromList([1, 2, 3, 4]),
-      );
-      editor.setPrivateFields({
-        'note': 'Dinner receipt',
-        'receiptHash': receipt.hash,
-        'receiptName': 'Bill.jpg',
-        'tagIds': <String>[],
-      });
-      await editor.persist();
-      final id = editor.id;
-      editor.dispose();
-      await launch(tester, draft: id);
-      await tester.pageBack();
-      await tester.pumpAndSettle();
-      final saved = runtime.store.editorDraft(id)!;
-      expect(saved.value['title'], 'Dinner');
-      expect(saved.value['billText'], '900');
-      expect((saved.value['privateFields'] as Map)['note'], 'Dinner receipt');
       expect(
-        (saved.value['privateFields'] as Map)['receiptHash'],
-        receipt.hash,
+        runtime.store.readPendingOperations().items.single.command.operationId,
+        id,
       );
-      expect(runtime.store.editorReceipt(id, receipt.hash)!.bytes, [
-        1,
-        2,
-        3,
-        4,
-      ]);
+      expect(
+        db.db.select('SELECT count(*) n FROM shared_editor_drafts').single['n'],
+        0,
+      );
     },
   );
+  testWidgets('sharing fits 320dp and 2x text without obscuring the amount', (
+    tester,
+  ) async {
+    await launch(tester, width: 320, scale: 2);
+    await tester.enterText(
+      find.byKey(const ValueKey('quick-add-amount-field')),
+      '100',
+    );
+    await tester.pumpAndSettle();
+    await tester.ensureVisible(find.text('Shared with \u00b7 2/50'));
+    await tester.pumpAndSettle();
+    expect(tester.takeException(), isNull);
+  });
 }

@@ -6,6 +6,8 @@ import 'package:http/http.dart' as http;
 import '../../../data/api_exception.dart';
 import '../../../data/authenticated_http_client.dart';
 import 'shared_commands.dart';
+import 'shared_directory.dart';
+import 'shared_invitations.dart';
 import 'shared_transport.dart';
 import 'package:pandapay_domain/shared_expenses.dart';
 
@@ -298,6 +300,213 @@ final class SharedExpensesHttpTransport implements SharedExpensesTransport {
     } on TypeError {
       throw const SharedTransportException(code: 'invalid_response');
     }
+  }
+
+  /// Creates (or idempotently re-reads) the one outstanding invite link for an
+  /// unclaimed member. The optional phone number is only sent so the server can
+  /// bind the link to that verified number; it is never stored in clear text.
+  Future<SharedInviteLink> createInvitation({
+    required String invitationId,
+    required String contextId,
+    required String memberId,
+    String? phoneNumber,
+  }) async {
+    for (final id in [invitationId, contextId, memberId]) {
+      if (!sharedUuid(id)) throw ArgumentError('Invalid identifier');
+    }
+    final value = (await _request(
+      'POST',
+      '/shared-expenses/invitations',
+      body: jsonEncode({
+        'invitationId': invitationId,
+        'contextId': contextId,
+        'memberId': memberId,
+        if (phoneNumber != null && phoneNumber.isNotEmpty)
+          'phoneNumber': phoneNumber,
+      }),
+    ))!;
+    final url = value['joinUrl'];
+    final token = url is String
+        ? sharedInviteTokenFromUri(Uri.tryParse(url))
+        : null;
+    if (token == null || value['invitationId'] != invitationId) {
+      throw const SharedTransportException(code: 'invalid_response');
+    }
+    return SharedInviteLink(
+      invitationId: invitationId,
+      token: token,
+      url: sharedInviteUrl(token),
+    );
+  }
+
+  Future<SharedInvitePreview> previewInvitation(String token) async {
+    final value = (await _request(
+      'POST',
+      '/shared-expenses/invitations/preview',
+      body: jsonEncode({'token': token}),
+    ))!;
+    return SharedInvitePreview.fromJson(value);
+  }
+
+  Future<String> claimInvitation({
+    required String token,
+    required String operationId,
+  }) async {
+    if (!sharedUuid(operationId)) throw ArgumentError('Invalid operation ID');
+    final value = (await _request(
+      'POST',
+      '/shared-expenses/invitations/claim',
+      body: jsonEncode({'token': token, 'operationId': operationId}),
+    ))!;
+    final status = value['status'];
+    if (status is! String || status.length > 32) {
+      throw const SharedTransportException(code: 'invalid_response');
+    }
+    return status;
+  }
+
+  /// One picked number. The server rate-limits this and never reveals whether
+  /// a person who opted out of discovery is registered.
+  Future<SharedPhoneLookup> lookupPhone(String phoneNumber) async {
+    final value = (await _request(
+      'POST',
+      '/shared-expenses/directory/lookup',
+      body: jsonEncode({'phoneNumber': phoneNumber}),
+    ))!;
+    return SharedPhoneLookup.fromJson(value);
+  }
+
+  Future<List<SharedInboxInvite>> fetchInviteInbox() async {
+    final value = (await _request(
+      'GET',
+      '/shared-expenses/invitations/inbox',
+    ))!;
+    final items = value['items'];
+    if (items is! List || items.length > 50) {
+      throw const SharedTransportException(code: 'invalid_response');
+    }
+    return [
+      for (final item in items)
+        SharedInboxInvite.fromJson(
+          item is Map
+              ? Map<String, Object?>.from(item)
+              : throw const SharedTransportException(code: 'invalid_response'),
+        ),
+    ];
+  }
+
+  /// Joins (accept) or declines an inbox invitation. Returns the new status.
+  Future<String> respondToInboxInvite({
+    required String invitationId,
+    required String operationId,
+    required bool accept,
+  }) async {
+    if (!sharedUuid(invitationId) || !sharedUuid(operationId)) {
+      throw ArgumentError('Invalid identifier');
+    }
+    final value = (await _request(
+      'POST',
+      '/shared-expenses/invitations/${accept ? 'accept' : 'decline'}',
+      body: jsonEncode({
+        'invitationId': invitationId,
+        'operationId': operationId,
+      }),
+    ))!;
+    final status = value['status'];
+    if (status is! String || status.length > 32) {
+      throw const SharedTransportException(code: 'invalid_response');
+    }
+    return status;
+  }
+
+  /// Whether other PandaPay users may find this account by phone number.
+  Future<({bool phoneVerified, bool discoverable})> fetchDiscoverable() async {
+    final value = (await _request('GET', '/shared-expenses/directory'))!;
+    if (value['phoneVerified'] is! bool || value['discoverable'] is! bool) {
+      throw const SharedTransportException(code: 'invalid_response');
+    }
+    return (
+      phoneVerified: value['phoneVerified'] as bool,
+      discoverable: value['discoverable'] as bool,
+    );
+  }
+
+  Future<bool> setDiscoverable(bool discoverable) async {
+    final value = (await _request(
+      'POST',
+      '/shared-expenses/directory',
+      body: jsonEncode({'discoverable': discoverable}),
+    ))!;
+    if (value['discoverable'] is! bool) {
+      throw const SharedTransportException(code: 'invalid_response');
+    }
+    return value['discoverable'] as bool;
+  }
+
+  Future<List<SharedOwnerInvitation>> fetchContextInvitations(
+    String contextId,
+  ) async {
+    if (!sharedUuid(contextId)) throw ArgumentError('Invalid identifier');
+    final value = (await _request(
+      'GET',
+      '/shared-expenses/contexts/$contextId/invitations',
+    ))!;
+    final items = value['items'];
+    if (items is! List || items.length > 50) {
+      throw const SharedTransportException(code: 'invalid_response');
+    }
+    return [
+      for (final item in items)
+        SharedOwnerInvitation.fromJson(
+          item is Map
+              ? Map<String, Object?>.from(item)
+              : throw const SharedTransportException(code: 'invalid_response'),
+        ),
+    ];
+  }
+
+  Future<List<SharedJoinRequest>> fetchJoinRequests() async {
+    final value = (await _request(
+      'GET',
+      '/shared-expenses/invitations/requests',
+    ))!;
+    final items = value['items'];
+    if (items is! List || items.length > 50) {
+      throw const SharedTransportException(code: 'invalid_response');
+    }
+    return [
+      for (final item in items)
+        SharedJoinRequest.fromJson(
+          item is Map
+              ? Map<String, Object?>.from(item)
+              : throw const SharedTransportException(code: 'invalid_response'),
+        ),
+    ];
+  }
+
+  /// Owner approves or declines someone who joined through a shared link.
+  Future<String> respondToJoinRequest({
+    required String invitationId,
+    required String operationId,
+    required bool approve,
+  }) async {
+    if (!sharedUuid(invitationId) || !sharedUuid(operationId)) {
+      throw ArgumentError('Invalid identifier');
+    }
+    final value = (await _request(
+      'POST',
+      '/shared-expenses/invitations/respond',
+      body: jsonEncode({
+        'invitationId': invitationId,
+        'operationId': operationId,
+        'approve': approve,
+      }),
+    ))!;
+    final status = value['status'];
+    if (status is! String || status.length > 32) {
+      throw const SharedTransportException(code: 'invalid_response');
+    }
+    return status;
   }
 
   Future<Map<String, Object?>> fetchCapabilities() async {

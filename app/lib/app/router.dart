@@ -4,6 +4,7 @@ import '../features/sms_v2/ui/found_instruments_screen.dart';
 import '../features/sms_v2/ui/review_inbox_screen.dart';
 import '../features/sms_v2/ui/ledger_screens.dart';
 import '../features/shared_expenses/runtime/shared_providers.dart';
+import '../features/shared_expenses/runtime/shared_join_route.dart';
 import '../features/shared_expenses/runtime/shared_routes.dart';
 import 'dart:async';
 import 'dart:developer' as developer;
@@ -180,6 +181,7 @@ abstract final class AppRoute {
   static const paymentsGroup = '/insights/payments';
   static const splits = '/insights/splits';
   static const splitContext = '/insights/splits/:contextId';
+  static const splitJoin = '/split/join/:token';
   static const myContributions = '/insights/my-contributions';
 
   /// Group F (Data Import & Sync) — implementation-plan-group-e-f-g.md §3.
@@ -837,7 +839,6 @@ final goRouterProvider = Provider<GoRouter>((ref) {
             initialCategoryName: request?.category,
             sharedExpense: state.uri.queryParameters['shared'] == 'true',
             sharedContextId: state.uri.queryParameters['contextId'],
-            sharedDraftId: state.uri.queryParameters['draftId'],
           );
         },
       ),
@@ -910,12 +911,13 @@ final goRouterProvider = Provider<GoRouter>((ref) {
           onOpenContext: (id) => context.push('${AppRoute.splits}/$id'),
           onAddExpense: () =>
               context.push('${AppRoute.assistantAddSpend}?shared=true'),
-          onResumeDraft: (id) => context.push(
-            Uri(
-              path: AppRoute.assistantAddSpend,
-              queryParameters: {'shared': 'true', 'draftId': id},
-            ).toString(),
-          ),
+        ),
+      ),
+      GoRoute(
+        path: AppRoute.splitJoin,
+        builder: (context, state) => SharedJoinRoute(
+          token: state.pathParameters['token']!,
+          onDone: () => context.go(AppRoute.splits),
         ),
       ),
       GoRoute(
@@ -1181,6 +1183,42 @@ class _AppShellState extends ConsumerState<_AppShell> {
     }
   }
 
+  Future<void> _sharedQuickActions() async {
+    final choice = await showModalBottomSheet<String>(
+      context: context,
+      backgroundColor: BambooInk.paper,
+      builder: (sheet) => SafeArea(
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            Padding(
+              padding: const EdgeInsets.all(16),
+              child: Text('Quick actions', style: BambooFonts.heading(18)),
+            ),
+            for (final option in const [
+              (Icons.add_rounded, 'Add transaction', 'add'),
+              (Icons.people_outline_rounded, 'Shared expense', 'shared'),
+              (Icons.groups_outlined, 'Open Splits', 'splits'),
+            ])
+              ListTile(
+                leading: Icon(option.$1, color: BambooInk.ink900),
+                title: Text(option.$2, style: BambooFonts.ui(15)),
+                onTap: () => Navigator.pop(sheet, option.$3),
+              ),
+          ],
+        ),
+      ),
+    );
+    if (!mounted || choice == null) return;
+    context.push(
+      choice == 'splits'
+          ? AppRoute.splits
+          : choice == 'shared'
+          ? '${AppRoute.assistantAddSpend}?shared=true'
+          : AppRoute.assistantAddSpend,
+    );
+  }
+
   Future<void> _showTutorialPage(TutorialPage page) async {
     final revision = ++_tutorialNavigationRevision;
     FocusManager.instance.primaryFocus?.unfocus();
@@ -1347,6 +1385,10 @@ class _AppShellState extends ConsumerState<_AppShell> {
                     context.go(path);
                   },
                   onScan: _scanning ? null : _scanToPay,
+                  onQuickActions:
+                      ref.watch(sharedExpensesEnabledProvider) && !_scanning
+                      ? _sharedQuickActions
+                      : null,
                 ),
               ),
             ),
@@ -1407,6 +1449,7 @@ class _FloatingNavBar extends StatelessWidget {
   final Key? scanKey;
   final ValueChanged<String> onSelect;
   final VoidCallback? onScan;
+  final VoidCallback? onQuickActions;
 
   const _FloatingNavBar({
     super.key,
@@ -1416,6 +1459,7 @@ class _FloatingNavBar extends StatelessWidget {
     required this.scanKey,
     required this.onSelect,
     required this.onScan,
+    this.onQuickActions,
   });
 
   @override
@@ -1446,36 +1490,44 @@ class _FloatingNavBar extends StatelessWidget {
               SizedBox(
                 width: 60,
                 child: Center(
-                  child: GestureDetector(
-                    key: scanKey,
-                    onTap: onScan,
-                    child: Container(
-                      width: 54,
-                      height: 54,
-                      decoration: BoxDecoration(
-                        color: BambooInk.lime,
-                        borderRadius: BorderRadius.circular(19),
-                        boxShadow: [
-                          BoxShadow(
-                            color: Colors.black.withValues(alpha: 0.22),
-                            blurRadius: 16,
-                            offset: const Offset(0, 6),
-                          ),
-                        ],
-                      ),
-                      child: scanning
-                          ? const Padding(
-                              padding: EdgeInsets.all(15),
-                              child: CircularProgressIndicator(
-                                strokeWidth: 2,
-                                color: BambooInk.slate,
-                              ),
-                            )
-                          : const Icon(
-                              Icons.qr_code_scanner_rounded,
-                              color: BambooInk.slate,
-                              size: 24,
+                  child: Semantics(
+                    button: true,
+                    label: 'Scan & pay',
+                    hint: onQuickActions == null
+                        ? null
+                        : 'Long press for quick actions',
+                    child: GestureDetector(
+                      key: scanKey,
+                      onTap: onScan,
+                      onLongPress: onQuickActions,
+                      child: Container(
+                        width: 54,
+                        height: 54,
+                        decoration: BoxDecoration(
+                          color: BambooInk.lime,
+                          borderRadius: BorderRadius.circular(19),
+                          boxShadow: [
+                            BoxShadow(
+                              color: Colors.black.withValues(alpha: 0.22),
+                              blurRadius: 16,
+                              offset: const Offset(0, 6),
                             ),
+                          ],
+                        ),
+                        child: scanning
+                            ? const Padding(
+                                padding: EdgeInsets.all(15),
+                                child: CircularProgressIndicator(
+                                  strokeWidth: 2,
+                                  color: BambooInk.slate,
+                                ),
+                              )
+                            : const Icon(
+                                Icons.qr_code_scanner_rounded,
+                                color: BambooInk.slate,
+                                size: 24,
+                              ),
+                      ),
                     ),
                   ),
                 ),

@@ -2,7 +2,7 @@ import 'package:sqlite3/sqlite3.dart';
 
 /// Additive module on the existing AppDatabase connection, not a second pool.
 abstract final class SharedExpensesSchema {
-  static const version = 4;
+  static const version = 7;
   static const tableNames = [
     'shared_commands',
     'shared_command_dependencies',
@@ -100,11 +100,43 @@ CREATE TABLE shared_editor_receipts (
 UPDATE shared_schema_version SET version=4 WHERE module='shared_expenses';
 ''');
       }
+      if (installed < 7) {
+        // No new form drafts are persisted. Keep legacy submitted metadata and
+        // receipt storage so prior queues and backups remain compatible.
+        db.execute('DROP INDEX IF EXISTS shared_editor_source_event');
+        db.execute('DROP INDEX IF EXISTS shared_editor_source_transaction');
+        db.execute('DROP INDEX IF EXISTS shared_editor_resume');
+        db.execute('DROP INDEX IF EXISTS shared_editor_context_resume');
+        db.execute(
+          "UPDATE shared_schema_version SET version=7 WHERE module='shared_expenses'",
+        );
+      }
       db.execute('RELEASE shared_schema_ensure');
       return true;
     } catch (_) {
       db.execute('ROLLBACK TO shared_schema_ensure');
       db.execute('RELEASE shared_schema_ensure');
+      rethrow;
+    }
+  }
+
+  static void discardUnsubmittedEditors(Database db, String namespace) {
+    db.execute('SAVEPOINT shared_discard_forms');
+    try {
+      db.execute(
+        '''DELETE FROM shared_editor_receipts WHERE namespace=?
+ AND draft_id IN (SELECT draft_id FROM shared_editor_drafts WHERE namespace=? AND operation_id IS NULL)
+ AND NOT EXISTS (SELECT 1 FROM shared_commands c WHERE c.namespace=shared_editor_receipts.namespace AND c.operation_id=shared_editor_receipts.draft_id)''',
+        [namespace, namespace],
+      );
+      db.execute(
+        'DELETE FROM shared_editor_drafts WHERE namespace=? AND operation_id IS NULL',
+        [namespace],
+      );
+      db.execute('RELEASE shared_discard_forms');
+    } catch (_) {
+      db.execute('ROLLBACK TO shared_discard_forms');
+      db.execute('RELEASE shared_discard_forms');
       rethrow;
     }
   }

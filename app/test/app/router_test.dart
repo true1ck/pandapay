@@ -1,6 +1,8 @@
 import 'package:flutter/material.dart';
 import 'package:go_router/go_router.dart';
 import 'package:pandapay/features/shared_expenses/runtime/shared_providers.dart';
+import 'package:pandapay/features/shared_expenses/runtime/shared_routes.dart';
+import 'package:pandapay/features/quickadd/quick_add_screen.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:pandapay/app/design/app_theme.dart';
@@ -39,7 +41,11 @@ class _EmptyCategoryRepository implements CategoryRepository {
   Future<List<SpendCategory>> fetchCategories() async => const [];
 }
 
-Future<void> _pumpApp(WidgetTester tester, {TutorialKeys? tutorialKeys}) async {
+Future<void> _pumpApp(
+  WidgetTester tester, {
+  TutorialKeys? tutorialKeys,
+  bool shared = false,
+}) async {
   SharedPreferences.setMockInitialValues({
     'pandapay_app.onboarding_complete_v1': true,
     'pandapay_app.tutorial_seen_v1': true,
@@ -47,6 +53,7 @@ Future<void> _pumpApp(WidgetTester tester, {TutorialKeys? tutorialKeys}) async {
   await tester.pumpWidget(
     ProviderScope(
       overrides: [
+        sharedExpensesEnabledProvider.overrideWithValue(shared),
         catalogueRepositoryProvider.overrideWithValue(
           _EmptyCatalogueRepository(),
         ),
@@ -96,6 +103,50 @@ Future<void> _pumpApp(WidgetTester tester, {TutorialKeys? tutorialKeys}) async {
 }
 
 void main() {
+  testWidgets(
+    'holding the existing scan action opens shared quick actions without replacing navigation',
+    (tester) async {
+      final keys = TutorialKeys();
+      await _pumpApp(tester, shared: true, tutorialKeys: keys);
+      await tester.longPress(find.byKey(keys.scanFab));
+      await tester.pumpAndSettle();
+      expect(find.text('Shared expense'), findsOneWidget);
+      expect(find.text('Open Splits'), findsOneWidget);
+      await tester.tap(find.text('Shared expense'));
+      await tester.pumpAndSettle();
+      final scope = ProviderScope.containerOf(
+        tester.element(find.byType(MaterialApp)),
+      );
+      expect(
+        tester
+            .widget<QuickAddScreen>(find.byType(QuickAddScreen))
+            .sharedExpense,
+        isTrue,
+      );
+      expect(scope.read(goRouterProvider).canPop(), isTrue);
+    },
+  );
+  testWidgets(
+    'You shortcut opens the same Splits route and keeps the card split planner separate',
+    (tester) async {
+      await _pumpApp(tester, shared: true);
+      final scope = ProviderScope.containerOf(
+        tester.element(find.byType(MaterialApp)),
+      );
+      scope.read(goRouterProvider).go(AppRoute.account);
+      await tester.pumpAndSettle();
+      expect(find.text('Multi-Card Split Planner'), findsOneWidget);
+      final action = find.text('Splits');
+      await tester.ensureVisible(action);
+      await tester.pumpAndSettle();
+      await tester.tap(action);
+      await tester.pumpAndSettle();
+      expect(find.byType(SharedExpensesRoute), findsOneWidget);
+      scope.read(goRouterProvider).pop();
+      await tester.pumpAndSettle();
+      expect(find.byType(AccountScreen), findsOneWidget);
+    },
+  );
   testWidgets(
     'initial route renders Home inside the shell with Home highlighted',
     (tester) async {
@@ -151,37 +202,58 @@ void main() {
     },
   );
 
-  testWidgets('legacy subscription links open the Payments subscription tab', (tester) async {
+  testWidgets('legacy subscription links open the Payments subscription tab', (
+    tester,
+  ) async {
     await _pumpApp(tester);
-    final context=tester.element(find.byType(HomeScreen));
+    final context = tester.element(find.byType(HomeScreen));
     GoRouter.of(context).go('${AppRoute.subscriptions}?from=notification');
     await tester.pumpAndSettle();
-    expect(find.text('Payments'),findsOneWidget);
-    expect(find.text('Subscriptions'),findsOneWidget);
-    expect(find.byType(TabBar),findsOneWidget);
-    expect(find.byType(AppBar),findsOneWidget);
-    final router=GoRouter.of(tester.element(find.byType(TabBar)));
-    expect(router.routeInformationProvider.value.uri.path,AppRoute.paymentsGroup);
-    expect(router.routeInformationProvider.value.uri.queryParameters['tab'],'subscriptions');
-    expect(router.routeInformationProvider.value.uri.queryParameters['from'],'notification');
-    expect(find.byKey(const ValueKey('appShellNavBar')),findsNothing);
+    expect(find.text('Payments'), findsOneWidget);
+    expect(find.text('Subscriptions'), findsOneWidget);
+    expect(find.byType(TabBar), findsOneWidget);
+    expect(find.byType(AppBar), findsOneWidget);
+    final router = GoRouter.of(tester.element(find.byType(TabBar)));
+    expect(
+      router.routeInformationProvider.value.uri.path,
+      AppRoute.paymentsGroup,
+    );
+    expect(
+      router.routeInformationProvider.value.uri.queryParameters['tab'],
+      'subscriptions',
+    );
+    expect(
+      router.routeInformationProvider.value.uri.queryParameters['from'],
+      'notification',
+    );
+    expect(find.byKey(const ValueKey('appShellNavBar')), findsNothing);
   });
 
-  testWidgets('split rollout stays gated and never replaces Insights or existing data pages',(tester) async {
-    await _pumpApp(tester);
-    final scope=ProviderScope.containerOf(tester.element(find.byType(MaterialApp)));
-    expect(scope.read(sharedExpensesEnabledProvider),isFalse);
-    scope.read(goRouterProvider).go(AppRoute.splits);
-    await tester.pumpAndSettle();
-    expect(find.text('Splits'),findsOneWidget);
-    expect(find.textContaining('Existing transactions and private splits are still available'),findsOneWidget);
-    expect(find.byKey(const ValueKey('appShellNavBar')),findsNothing);
-    scope.read(goRouterProvider).go(AppRoute.insights);
-    await tester.pumpAndSettle();
-    expect(find.byType(InsightsHubScreen),findsOneWidget);
-    expect(find.byKey(const ValueKey('appShellNavBar')),findsOneWidget);
-    expect(find.text('Splits'),findsNothing);
-  });
+  testWidgets(
+    'split rollout stays gated and never replaces Insights or existing data pages',
+    (tester) async {
+      await _pumpApp(tester);
+      final scope = ProviderScope.containerOf(
+        tester.element(find.byType(MaterialApp)),
+      );
+      expect(scope.read(sharedExpensesEnabledProvider), isFalse);
+      scope.read(goRouterProvider).go(AppRoute.splits);
+      await tester.pumpAndSettle();
+      expect(find.text('Splits'), findsOneWidget);
+      expect(
+        find.textContaining(
+          'Existing transactions and private splits are still available',
+        ),
+        findsOneWidget,
+      );
+      expect(find.byKey(const ValueKey('appShellNavBar')), findsNothing);
+      scope.read(goRouterProvider).go(AppRoute.insights);
+      await tester.pumpAndSettle();
+      expect(find.byType(InsightsHubScreen), findsOneWidget);
+      expect(find.byKey(const ValueKey('appShellNavBar')), findsOneWidget);
+      expect(find.text('Splits'), findsNothing);
+    },
+  );
 
   testWidgets('the scan FAB is present on every tab (not just Home)', (
     tester,

@@ -19,7 +19,6 @@ import 'package:pandapay/features/shared_expenses/data/shared_http_transport.dar
 import 'package:pandapay/features/shared_expenses/runtime/shared_runtime.dart';
 import 'package:pandapay/features/shared_expenses/storage/shared_store.dart';
 import '../storage/shared_store_test.dart' as fixtures;
-import 'package:pandapay/features/shared_expenses/composer/shared_editor.dart';
 
 class _VisibleRuntime extends SharedExpensesRuntime {
   final bool paging;
@@ -195,46 +194,34 @@ void main() {
     client.close();
     db.close();
   });
-  testWidgets(
-    'hub reopens a saved editor without creating a transaction or another command',
-    (tester) async {
-      final old = runtime;
-      runtime = _VisibleRuntime(runtime);
-      old.dispose();
-      final editor = SharedEditor(
-        store: runtime.store,
-        accountId: fixtures.accountA.substring(5),
-      );
-      editor.setTitle('Unfinished dinner');
-      editor.setBill('100.');
-      await editor.persist();
-      editor.dispose();
-      String? resumed;
-      await tester.pumpWidget(
-        ProviderScope(
-          overrides: [
-            sharedExpensesRuntimeProvider.overrideWith((ref) async => runtime),
-          ],
-          child: MaterialApp(
-            home: SharedExpensesRoute(
-              onOpenContext: (_) {},
-              onAddExpense: () {},
-              onResumeDraft: (id) => resumed = id,
-            ),
+  testWidgets('hub has no draft navigation and retains the add action', (
+    tester,
+  ) async {
+    final old = runtime;
+    runtime = _VisibleRuntime(runtime);
+    old.dispose();
+    var added = false;
+    await tester.pumpWidget(
+      ProviderScope(
+        overrides: [
+          sharedExpensesRuntimeProvider.overrideWith((ref) async => runtime),
+        ],
+        child: MaterialApp(
+          home: SharedExpensesRoute(
+            onOpenContext: (_) {},
+            onAddExpense: () {
+              added = true;
+            },
           ),
         ),
-      );
-      await tester.pumpAndSettle();
-      await tester.tap(find.text('Drafts & submissions'));
-      await tester.pumpAndSettle();
-      expect(find.text('Unfinished dinner'), findsOneWidget);
-      expect(find.textContaining('Saved draft'), findsOneWidget);
-      await tester.tap(find.text('Unfinished dinner'));
-      await tester.pumpAndSettle();
-      expect(resumed, editor.id);
-      expect(runtime.store.pendingCount, 0);
-    },
-  );
+      ),
+    );
+    await tester.pumpAndSettle();
+    expect(find.text('Drafts & submissions'), findsNothing);
+    await tester.tap(find.byTooltip('Add expense'));
+    expect(added, isTrue);
+    expect(runtime.store.pendingCount, 0);
+  });
   testWidgets(
     'hub pages preserve search and selected tab with independent previous cursors',
     (tester) async {
@@ -443,4 +430,11 @@ void main() {
       expect(runtime.store.pendingCount, 0);
     },
   );
+  test('missing operation never claims the submission was saved', () {
+    expect(
+      runtime.operationStatus(fixtures.op1),
+      'No saved submission · try again',
+    );
+    expect(runtime.store.pendingCount, 0);
+  });
 }

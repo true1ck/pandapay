@@ -48,6 +48,16 @@ class SharedEditorFields extends StatelessWidget {
           crossAxisAlignment: CrossAxisAlignment.stretch,
           children: [
             Text('Sharing', style: BambooFonts.heading(17)),
+            if (editor.lockedOwnPaid != null) ...[
+              SharedMoneyLine(
+                'Charged on your original payment',
+                editor.lockedOwnPaid!,
+                confidence: Confidence.confirmed,
+              ),
+              const SharedNotice(
+                'The original payment is retained. This form does not create another bank transaction.',
+              ),
+            ],
             SharedTextAction(
               label: editor.contextName.isEmpty
                   ? 'Choose group or friend'
@@ -82,10 +92,10 @@ class SharedEditorFields extends StatelessWidget {
               ),
               if (editor.hasUnavailableMembers) ...[
                 const SharedNotice(
-                  'A selected person is no longer in this group. Review their share and payer amounts before submitting.',
+                  'A selected person is no longer in this split. Review their share and payer amounts before submitting.',
                 ),
                 SharedTextAction(
-                  label: 'Remove unavailable people from this draft',
+                  label: 'Remove unavailable people from this expense',
                   onTap: editor.removeUnavailableMembers,
                 ),
               ],
@@ -293,11 +303,7 @@ class SharedEditorFields extends StatelessWidget {
                   ),
               if (calculation.blockers.isNotEmpty)
                 const SharedNotice(
-                  'Linking your own bank payment is not available yet. Your draft is kept; no shared debt or duplicate payment is created.',
-                ),
-              if (editor.persistenceError != null)
-                const SharedNotice(
-                  'Draft could not be saved. Keep this form open and resolve the conflicting edit before submitting.',
+                  'Linking your own bank payment is not available yet. No shared debt or duplicate payment is created.',
                 ),
               if (editor.sealed)
                 const SharedNotice(

@@ -5,6 +5,7 @@ import 'package:pandapay/app/design/app_theme.dart';
 import 'package:pandapay/app/design/widgets.dart';
 import 'package:pandapay/features/shared_expenses/ui/shared_expenses_screen.dart';
 import 'package:pandapay/features/shared_expenses/ui/shared_group_screen.dart';
+import 'package:pandapay/features/shared_expenses/ui/shared_components.dart';
 import 'package:pandapay/features/shared_expenses/ui/shared_presentation.dart';
 import 'package:pandapay_domain/pandapay_domain.dart';
 import 'package:shared_preferences/shared_preferences.dart';
@@ -355,7 +356,7 @@ void main() {
         ),
       );
       expect(find.text('Offline · showing saved splits'), findsOneWidget);
-      expect(find.text('Some results are still syncing'), findsOneWidget);
+      expect(find.text(sharedCatchingUpCopy), findsOneWidget);
       expect(find.text('Rahul'), findsOneWidget);
       expect(find.text('Settled!'), findsNothing);
     },

@@ -1,7 +1,8 @@
-import 'dart:async';
 import 'dart:convert';
 import 'package:flutter/foundation.dart';
 import 'package:uuid/uuid.dart';
+import 'package:pandapay_domain/pandapay_domain.dart';
+import 'package:pandapay_domain/shared_expenses.dart';
 import '../data/shared_commands.dart';
 import '../storage/shared_store.dart';
 import 'shared_draft.dart';
@@ -9,11 +10,21 @@ export 'shared_draft.dart' show SharedSplitMode;
 
 class SharedEditorMember {
   final String id, name;
-  const SharedEditorMember(this.id, this.name);
+  final String state, role;
+  final String? profileId;
+  const SharedEditorMember(
+    this.id,
+    this.name, {
+    this.state = 'active',
+    this.role = 'member',
+    this.profileId,
+  });
+  bool get canSettle => state == 'active' && profileId != null;
 }
 
 /// Authenticated form state, embedded in Quick Add. No bank transaction writer.
-/// Stable revision/operation identities are sealed atomically with the outbox.
+/// Unsubmitted input stays in memory. Submit atomically seals the outbox and
+/// optional receipt; retries preserve the same revision and operation identity.
 class SharedEditor extends ChangeNotifier {
   final SharedExpensesStore store;
   final String accountId;
@@ -31,11 +42,10 @@ class SharedEditor extends ChangeNotifier {
       contextVerified = false,
       _disposed = false,
       _sealing = false;
-  int _version = 0;
   Map<String, Object?> privateFields = const {};
-  Object? persistenceError;
-  Timer? _debounce;
-  Future<void> _writes = Future.value();
+  SharedExpenseSourceReference? linkedSource;
+  Money? lockedOwnPaid;
+  SharedSubmissionReceipt? receipt;
   Future<SharedCommand>? _seal;
   SharedCommand? _sealed;
   bool get sealed => _sealed != null;
@@ -48,7 +58,6 @@ class SharedEditor extends ChangeNotifier {
       !_sealing &&
       !sealed &&
       contextVerified &&
-      persistenceError == null &&
       title.trim().isNotEmpty &&
       title.trim().length <= 200 &&
       !RegExp(r'[\x00-\x1f\x7f]').hasMatch(title) &&
@@ -56,88 +65,45 @@ class SharedEditor extends ChangeNotifier {
   SharedEditor({
     required this.store,
     required this.accountId,
-    String? draftId,
+    String? expenseId,
   }) {
     if (store.namespace != 'user:$accountId') {
-      throw const FormatException('Wrong draft account');
+      throw const FormatException('Wrong expense account');
     }
-    id = draftId ?? const Uuid().v4();
-    if (!sharedUuid(id)) throw const FormatException('Invalid draft identity');
+    id = expenseId ?? const Uuid().v4();
+    if (!sharedUuid(id))
+      throw const FormatException('Invalid expense identity');
+    revisionId = const Uuid().v4();
+    operationId = const Uuid().v4();
     occurredOn = _day(DateTime.now());
-    final old = store.editorDraft(id);
-    if (draftId != null && old == null) {
-      throw const FormatException('Draft is unavailable');
-    }
-    if (old == null) {
-      revisionId = const Uuid().v4();
-      operationId = const Uuid().v4();
-    } else {
-      final data = old.value;
-      if (data['schemaVersion'] != 1 ||
-          !sharedUuid(data['revisionId']) ||
-          !sharedUuid(data['operationId'])) {
-        throw const FormatException('Incompatible draft');
-      }
-      revisionId = data['revisionId'] as String;
-      operationId = data['operationId'] as String;
-      _version = old.version;
-      contextId = old.contextId;
-      contextName = data['contextName'] as String;
-      billText = data['billText'] as String;
-      sharedText = data['sharedText'] as String;
-      title = data['title'] as String;
-      occurredOn = data['occurredOn'] as String;
-      ownMemberId = data['ownMemberId'] as String?;
-      singlePayer = data['singlePayer'] as String?;
-      partial = data['partial'] as bool;
-      multiplePayers = data['multiplePayers'] as bool;
-      mode = SharedSplitMode.values.byName(data['mode'] as String);
-      members = [
-        for (final raw in data['members'] as List)
-          SharedEditorMember(
-            (raw as Map)['id'] as String,
-            raw['name'] as String,
-          ),
-      ];
-      participants.addAll((data['participants'] as List).cast<String>());
-      splitInputs.addAll(Map<String, String>.from(data['splitInputs'] as Map));
-      for (final entry in (data['payers'] as Map).entries) {
-        final input = entry.value as Map;
-        payerInputs[entry.key as String] = SharedPayerInput(
-          fullText: input['fullText'] as String,
-          sharedText: input['sharedText'] as String,
-        );
-      }
-      privateFields = Map.unmodifiable(
-        Map<String, Object?>.from(data['privateFields'] as Map),
-      );
-      if (old.operationId != null) {
-        _sealed = store.operation(old.operationId!)?.command;
-        if (_sealed == null) {
-          throw const FormatException('Missing submitted draft');
-        }
-      }
-    }
   }
   static String _day(DateTime date) =>
       '${date.year.toString().padLeft(4, '0')}-${date.month.toString().padLeft(2, '0')}-${date.day.toString().padLeft(2, '0')}';
   void _changed() {
-    if (_disposed) return;
-    notifyListeners();
-    _debounce?.cancel();
-    if (!sealed && !_sealing) {
-      _debounce = Timer(const Duration(milliseconds: 250), () {
-        unawaited(
-          persist().catchError((Object e) {
-            persistenceError = e;
-            if (!_disposed) notifyListeners();
-          }),
-        );
-      });
-    }
+    if (!_disposed) notifyListeners();
+  }
+
+  void setReceipt(SharedSubmissionReceipt value) {
+    if (!_editable) return;
+    receipt = value;
+    _changed();
   }
 
   bool get _editable => !sealed && !_sealing && !_disposed;
+  void attachSourceIntent(SharedExpenseSourceReference source, Money paid) {
+    if (!_editable) return;
+    if (source.ownerAccountId != accountId ||
+        paid.paise <= 0 ||
+        linkedSource != null &&
+            sharedCanonicalJson(linkedSource!.toJson()) !=
+                sharedCanonicalJson(source.toJson())) {
+      throw const FormatException('Invalid source intent');
+    }
+    linkedSource = source;
+    lockedOwnPaid = paid;
+    _changed();
+  }
+
   void selectContext(
     String context,
     String name,
@@ -308,9 +274,9 @@ class SharedEditor extends ChangeNotifier {
         ? Map<String, SharedPayerInput>.of(payerInputs)
         : {
             ?singlePayer: SharedPayerInput(
-                fullText: billText,
-                sharedText: partial ? sharedText : billText,
-              ),
+              fullText: billText,
+              sharedText: partial ? sharedText : billText,
+            ),
           };
     final own = paid[ownMemberId];
     return SharedExpenseDraft(
@@ -323,66 +289,19 @@ class SharedEditor extends ChangeNotifier {
       participants: participants.toList(),
       mode: mode,
       splitInputs: splitInputs,
-      entryKind: own == null
+      source: linkedSource,
+      lockedOwnPaid: lockedOwnPaid,
+      entryKind: linkedSource != null
+          ? SharedEntryKind.existingOwnPayment
+          : own == null
           ? SharedEntryKind.someoneElsePaid
           : SharedEntryKind.newOwnPayment,
     ).evaluate();
   }
 
-  Map<String, Object?> _json() => {
-    'schemaVersion': 1,
-    'revisionId': revisionId,
-    'operationId': operationId,
-    'contextName': contextName,
-    'billText': billText,
-    'title': title,
-    'sharedText': sharedText,
-    'occurredOn': occurredOn,
-    'ownMemberId': ownMemberId,
-    'singlePayer': singlePayer,
-    'partial': partial,
-    'multiplePayers': multiplePayers,
-    'mode': mode.name,
-    'members': [
-      for (final m in members) {'id': m.id, 'name': m.name},
-    ],
-    'participants': [
-      ...members.where((m) => participants.contains(m.id)).map((m) => m.id),
-      ...(participants.where((id) => !members.any((m) => m.id == id)).toList()
-        ..sort()),
-    ],
-    'splitInputs': Map.of(splitInputs),
-    'payers': {
-      for (final e in payerInputs.entries)
-        e.key: {'fullText': e.value.fullText, 'sharedText': e.value.sharedText},
-    },
-    'privateFields': privateFields,
-  };
-  Future<void> persist() {
-    _debounce?.cancel();
-    if (sealed) return Future.value();
-    final value = _json(), scope = contextId;
-    final next = _writes.then((_) async {
-      if (persistenceError != null) throw persistenceError!;
-      final saved = await store.saveEditorDraft(
-        id,
-        contextId: scope,
-        expectedVersion: _version,
-        value: value,
-        updatedAt: DateTime.now().millisecondsSinceEpoch,
-      );
-      _version = saved.version;
-    });
-    _writes = next.catchError((Object e) {
-      persistenceError = e;
-    });
-    return next;
-  }
-
   Future<SharedCommand> seal() {
     if (_sealed != null) return Future.value(_sealed);
     if (_seal != null) return _seal!;
-    if (persistenceError != null) return Future.error(persistenceError!);
     if (!canSubmit) {
       return Future.error(
         StateError(
@@ -391,9 +310,7 @@ class SharedEditor extends ChangeNotifier {
       );
     }
     _sealing = true;
-    _debounce?.cancel();
     final future = () async {
-      await persist();
       final preview = evaluation.preview!;
       final command = SharedCommand(
         operationId: operationId,
@@ -411,10 +328,9 @@ class SharedEditor extends ChangeNotifier {
           'void': false,
         },
       );
-      await store.sealEditorDraft(
-        id,
-        expectedVersion: _version,
-        command: command,
+      await store.enqueueExpenseSubmission(
+        command,
+        receipt: receipt,
         provisional: {
           'title': title.trim(),
           'bill': preview.billMetadata,
@@ -436,7 +352,6 @@ class SharedEditor extends ChangeNotifier {
 
   @override
   void dispose() {
-    _debounce?.cancel();
     _disposed = true;
     super.dispose();
   }

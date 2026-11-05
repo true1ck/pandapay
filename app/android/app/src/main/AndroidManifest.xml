@@ -3,6 +3,8 @@
     <!-- UA-4 (Chunk 30, extended): camera/QR card scanning (mobile_scanner,
          camera + google_mlkit_text_recognition). -->
     <uses-permission android:name="android.permission.CAMERA"/>
+    <!-- Requested only when the user taps Pick from contacts in a split group. -->
+    <uses-permission android:name="android.permission.READ_CONTACTS"/>
     <uses-feature android:name="android.hardware.camera" android:required="false"/>
     <uses-feature android:name="android.hardware.camera.autofocus" android:required="false"/>
     <!-- The `camera` plugin (specifically camera_android_camerax) declares
@@ -112,6 +114,22 @@
                 <category android:name="android.intent.category.DEFAULT" />
                 <category android:name="android.intent.category.BROWSABLE" />
                 <data android:scheme="pandapay" android:host="i" />
+            </intent-filter>
+            <!-- Split-group join links. Opening one only previews the group. -->
+            <intent-filter android:autoVerify="true">
+                <action android:name="android.intent.action.VIEW" />
+                <category android:name="android.intent.category.DEFAULT" />
+                <category android:name="android.intent.category.BROWSABLE" />
+                <data
+                    android:scheme="https"
+                    android:host="pandapay.app"
+                    android:pathPrefix="/split/join/" />
+            </intent-filter>
+            <intent-filter>
+                <action android:name="android.intent.action.VIEW" />
+                <category android:name="android.intent.category.DEFAULT" />
+                <category android:name="android.intent.category.BROWSABLE" />
+                <data android:scheme="pandapay" android:host="split" />
             </intent-filter>
             <meta-data
                 android:name="android.app.shortcuts"

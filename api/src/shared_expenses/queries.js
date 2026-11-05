@@ -58,7 +58,7 @@ async function listContexts(client,actorId,query={}) {
   const request=pageRequest({...(query.limit===undefined?{}:{limit:query.limit}),...(query.after===undefined?{}:{after:query.after})});
   const scope=scopeFor(actorId,kind!==null||filter!==''?`contexts:${kind??'all'}:${require('node:crypto').createHash('sha256').update(filter).digest('hex')}`:'contexts');
   const [beforeDate,beforeId]=dateCursor(request,scope);
-  const {rows}=await client.query(`SELECT c.context_id,c.kind,c.name,c.currency,c.state,c.committed_sequence::text,c.created_at,
+  const {rows}=await client.query(`SELECT c.context_id,c.kind,shared_expenses._context_label(c.kind,c.name,c.created_by,$1::uuid) AS name,c.currency,c.state,c.committed_sequence::text,c.created_at,
       to_char(c.created_at AT TIME ZONE 'UTC','YYYY-MM-DD"T"HH24:MI:SS.US"Z"') AS created_at_key,me.state AS membership_state,me.member_id,
       coalesce(t.expense_count,0)::text expense_count,b.owed_minor,b.owing_minor,
       EXISTS(SELECT FROM shared_expenses.expenses p WHERE p.context_id=c.context_id AND p.accepted_revision_id IS NULL) AS has_unaccepted_expenses
@@ -68,14 +68,14 @@ async function listContexts(client,actorId,query={}) {
       coalesce(sum(greatest(CASE WHEN p.low_member_id=me.member_id THEN -p.balance_minor::numeric ELSE p.balance_minor::numeric END,0)),0)::text owing_minor
       FROM shared_expenses.pair_balances p WHERE p.context_id=c.context_id AND (p.low_member_id=me.member_id OR p.high_member_id=me.member_id)) b ON me.state='active'
     WHERE me.profile_id=$1::uuid AND me.state IN ('active','invited')
-      AND ($5::text IS NULL OR c.kind=$5::text) AND ($6::text='' OR position(lower($6::text) in lower(c.name))>0)
+      AND ($5::text IS NULL OR c.kind=$5::text) AND ($6::text='' OR position(lower($6::text) in lower(shared_expenses._context_label(c.kind,c.name,c.created_by,$1::uuid)))>0)
       AND ($2::timestamptz IS NULL OR (c.created_at,c.context_id)<($2::timestamptz,$3::uuid))
     ORDER BY c.created_at DESC,c.context_id DESC LIMIT $4::int`,[actorId,beforeDate,beforeId,request.limit+1,kind,filter]);
   return page(scope,request,rows,row=>[row.created_at_key??timestamp(row.created_at),row.context_id],row=>({contextId:row.context_id,kind:row.kind,name:row.name,currency:row.currency,state:row.state,membershipState:row.membership_state,committedSequence:row.committed_sequence,createdAt:row.created_at_key??timestamp(row.created_at),memberId:row.member_id??null,expenseCount:row.expense_count??'0',hasUnacceptedExpenses:row.has_unaccepted_expenses===true,owedMinor:row.owed_minor??null,owingMinor:row.owing_minor??null}));
 }
 async function readContext(client,actorId,contextId) {
   scopeFor(actorId,'context',contextId);
-  const {rows}=await client.query(`SELECT c.context_id,c.kind,c.name,c.currency,c.state,c.committed_sequence::text,c.created_at,me.state AS membership_state
+  const {rows}=await client.query(`SELECT c.context_id,c.kind,shared_expenses._context_label(c.kind,c.name,c.created_by,$1::uuid) AS name,c.currency,c.state,c.committed_sequence::text,c.created_at,me.state AS membership_state
     FROM shared_expenses.members me JOIN shared_expenses.contexts c ON c.context_id=me.context_id
     WHERE me.profile_id=$1::uuid AND c.context_id=$2::uuid AND me.state IN ('active','invited')`,[actorId,contextId]);
   const row=rows[0];if(!row)v.fail('CONTEXT_NOT_FOUND','contextId');
@@ -103,10 +103,10 @@ async function listContextExpenses(client,actorId,contextId,query={}) {
         ELSE NULL END AS pending_revision
     FROM shared_expenses.expenses e LEFT JOIN shared_expenses.expense_revisions r
       ON r.context_id=e.context_id AND r.expense_id=e.expense_id AND r.revision_id=e.accepted_revision_id
-    LEFT JOIN shared_expenses.revision_members own ON own.context_id=e.context_id AND own.revision_id=e.accepted_revision_id AND own.approver_profile_id=$4::uuid
+    LEFT JOIN shared_expenses.revision_members own ON own.context_id=e.context_id AND own.revision_id=e.accepted_revision_id AND shared_expenses._review_profile(own.context_id,own.member_id,own.approver_profile_id)=$4::uuid
     LEFT JOIN LATERAL(SELECT revision_id,title,occurred_on,total_minor,bill,is_void FROM shared_expenses.expense_revisions
       WHERE context_id=e.context_id AND expense_id=e.expense_id ORDER BY created_at DESC,revision_id DESC LIMIT 1) latest ON true
-    LEFT JOIN shared_expenses.revision_members pending_own ON pending_own.context_id=e.context_id AND pending_own.revision_id=latest.revision_id AND pending_own.approver_profile_id=$4::uuid
+    LEFT JOIN shared_expenses.revision_members pending_own ON pending_own.context_id=e.context_id AND pending_own.revision_id=latest.revision_id AND shared_expenses._review_profile(pending_own.context_id,pending_own.member_id,pending_own.approver_profile_id)=$4::uuid
     WHERE e.context_id=$1::uuid AND ($2::uuid IS NULL OR e.expense_id>$2::uuid)
     ORDER BY e.expense_id LIMIT $3::int`,[contextId,after,request.limit+1,actorId]);
   return page(scope,request,rows,row=>[row.expense_id],row=>({contextId,expenseId:row.expense_id,createdBy:row.created_by,acceptedRevisionId:row.accepted_revision_id,headVersion:row.head_version,title:row.title??null,occurredOn:row.occurred_on??null,currency:row.currency??'INR',totalMinor:row.total_minor??null,void:row.is_void??false,revisionHash:row.revision_hash??null,projectionVersion:row.projection_version??null,yourPaidMinor:row.your_paid_minor??'0',yourShareMinor:row.your_share_minor??'0',bill:row.bill??null,pendingRevision:row.pending_revision??null}));
@@ -171,13 +171,13 @@ async function listExpenseRevisions(client,actorId,contextId,expenseId,query={})
         WHEN r.expected_head_revision_id IS DISTINCT FROM e.accepted_revision_id THEN 'superseded'
         WHEN EXISTS(SELECT FROM shared_expenses.revision_approvals d WHERE d.context_id=r.context_id AND d.revision_id=r.revision_id AND d.decision='reject') THEN 'rejected'
         WHEN EXISTS(SELECT FROM shared_expenses.revision_members m WHERE m.context_id=r.context_id AND m.revision_id=r.revision_id AND m.approval_required
-          AND (m.approver_profile_id IS NULL OR NOT EXISTS(SELECT FROM shared_expenses.revision_approvals d WHERE d.context_id=m.context_id AND d.revision_id=m.revision_id AND d.member_id=m.member_id AND d.actor_profile_id=m.approver_profile_id AND d.revision_hash=r.revision_hash AND d.decision='approve'))) THEN 'awaiting_approval'
+          AND (shared_expenses._review_profile(m.context_id,m.member_id,m.approver_profile_id) IS NULL OR NOT EXISTS(SELECT FROM shared_expenses.revision_approvals d WHERE d.context_id=m.context_id AND d.revision_id=m.revision_id AND d.member_id=m.member_id AND d.actor_profile_id=shared_expenses._review_profile(m.context_id,m.member_id,m.approver_profile_id) AND d.revision_hash=r.revision_hash AND d.decision='approve'))) THEN 'awaiting_approval'
         ELSE 'awaiting_acceptance' END AS review_state,
-      EXISTS(SELECT FROM shared_expenses.revision_members m WHERE m.context_id=r.context_id AND m.revision_id=r.revision_id AND m.approver_profile_id=$6::uuid AND m.approval_required) AS actor_required,
+      EXISTS(SELECT FROM shared_expenses.revision_members m WHERE m.context_id=r.context_id AND m.revision_id=r.revision_id AND shared_expenses._review_profile(m.context_id,m.member_id,m.approver_profile_id)=$6::uuid AND m.approval_required) AS actor_required,
       (SELECT d.decision FROM shared_expenses.revision_approvals d WHERE d.context_id=r.context_id AND d.revision_id=r.revision_id AND d.actor_profile_id=$6::uuid LIMIT 1) AS your_decision,
       coalesce(own.paid_minor,0)::text your_paid_minor,coalesce(own.share_minor,0)::text your_share_minor,own.member_id AS own_member_id
     FROM shared_expenses.expense_revisions r JOIN shared_expenses.expenses e ON e.context_id=r.context_id AND e.expense_id=r.expense_id
-    LEFT JOIN shared_expenses.revision_members own ON own.context_id=r.context_id AND own.revision_id=r.revision_id AND own.approver_profile_id=$6::uuid
+    LEFT JOIN shared_expenses.revision_members own ON own.context_id=r.context_id AND own.revision_id=r.revision_id AND shared_expenses._review_profile(own.context_id,own.member_id,own.approver_profile_id)=$6::uuid
     WHERE r.context_id=$1::uuid AND r.expense_id=$2::uuid
       AND ($3::timestamptz IS NULL OR (r.created_at,r.revision_id)<($3::timestamptz,$4::uuid))
     ORDER BY r.created_at DESC,r.revision_id DESC LIMIT $5::int`,[contextId,expenseId,beforeDate,beforeId,request.limit+1,actorId]);
@@ -186,10 +186,12 @@ async function listExpenseRevisions(client,actorId,contextId,expenseId,query={})
 async function listSettlementReports(client,actorId,contextId,query={}) {
   const request=pageRequest(query),scope=scopeFor(actorId,'settlements',contextId),after=cursorUuid(request,scope);
   await authorizeContext(client,contextId);
-  const {rows}=await client.query(`SELECT settlement_id,reporter_profile_id,payer_member_id,receiver_member_id,amount_minor::text,currency,method,paid_on::text,created_at
-    FROM shared_expenses.settlement_reports WHERE context_id=$1::uuid AND ($2::uuid IS NULL OR settlement_id>$2::uuid)
-    ORDER BY settlement_id LIMIT $3::int`,[contextId,after,request.limit+1]);
-  return page(scope,request,rows,row=>[row.settlement_id],row=>({contextId,settlementId:row.settlement_id,reporterProfileId:row.reporter_profile_id,payerMemberId:row.payer_member_id,receiverMemberId:row.receiver_member_id,amountMinor:row.amount_minor,currency:row.currency,method:row.method,paidOn:row.paid_on,createdAt:timestamp(row.created_at)}));
+  const {rows}=await client.query(`SELECT r.settlement_id,r.reporter_profile_id,r.payer_member_id,r.receiver_member_id,r.amount_minor::text,r.currency,r.method,r.paid_on::text,r.created_at,coalesce(e.kind,'pending') AS status
+    FROM shared_expenses.settlement_reports r
+    LEFT JOIN LATERAL(SELECT kind FROM shared_expenses.settlement_events e WHERE e.context_id=r.context_id AND e.settlement_id=r.settlement_id ORDER BY e.created_at DESC,e.event_id DESC LIMIT 1) e ON true
+    WHERE r.context_id=$1::uuid AND ($2::uuid IS NULL OR r.settlement_id>$2::uuid)
+    ORDER BY r.settlement_id LIMIT $3::int`,[contextId,after,request.limit+1]);
+  return page(scope,request,rows,row=>[row.settlement_id],row=>({contextId,settlementId:row.settlement_id,reporterProfileId:row.reporter_profile_id,payerMemberId:row.payer_member_id,receiverMemberId:row.receiver_member_id,amountMinor:row.amount_minor,currency:row.currency,method:row.method,paidOn:row.paid_on,createdAt:timestamp(row.created_at),status:row.status}));
 }
 
 // Each branch has a native UUID keyset and its own LIMIT, before JSON shaping.
@@ -204,7 +206,7 @@ const PROJECTION_FEED_SQL=`WITH selected_events AS MATERIALIZED (
   ORDER BY pe.sequence LIMIT 10
 ), visible AS MATERIALIZED (
   SELECT p.profile_sequence,p.context_id,p.context_sequence,p.event_id,p.kind,p.origin_id,p.actor_profile_id,p.event_payload,p.event_created_at,
-    c.context_id IS NOT NULL AS readable,c.kind AS context_kind,c.name,c.currency,c.state,c.created_at AS context_created_at,
+    c.context_id IS NOT NULL AS readable,c.kind AS context_kind,shared_expenses._context_label(c.kind,c.name,c.created_by,$1::uuid) AS name,c.currency,c.state,c.created_at AS context_created_at,
     coalesce(c.committed_sequence,p.context_sequence)::text AS revision,me.state AS membership_state,me.member_id AS own_member_id,
     me.state='active' AND (p.kind='context.created' OR (p.kind='membership.responded' AND p.origin_id=me.member_id AND p.event_payload->>'accepted'='true')) AS full_grant
   FROM selected_events p LEFT JOIN shared_expenses.contexts c ON c.context_id=p.context_id
@@ -345,11 +347,11 @@ async function listPersonalActivity(client,actorId,query={}) {
   const scope=scopeFor(actorId,`personal_activity:${require('node:crypto').createHash('sha256').update(filter).digest('hex')}`);
   let before=null;
   if(request.after){const keys=decodeCursor(request.after,scope);if(keys.length!==1)v.fail('INVALID_CURSOR','after');before=sequence(keys[0],'after');}
-  const {rows}=await client.query(`SELECT pe.sequence::text,c.context_id,c.name,ce.kind,ce.origin_id,ce.created_at
+  const {rows}=await client.query(`SELECT pe.sequence::text,c.context_id,shared_expenses._context_label(c.kind,c.name,c.created_by,$1::uuid) AS name,ce.kind,ce.origin_id,ce.created_at
     FROM shared_expenses.profile_events pe JOIN shared_expenses.contexts c ON c.context_id=pe.context_id
     JOIN shared_expenses.context_events ce ON ce.context_id=pe.context_id AND ce.sequence=pe.context_sequence
     WHERE pe.profile_id=$1::uuid AND ($2::bigint IS NULL OR pe.sequence<$2::bigint)
-      AND ($4::text='' OR position(lower($4::text) in lower(c.name||' '||ce.kind))>0)
+      AND ($4::text='' OR position(lower($4::text) in lower(shared_expenses._context_label(c.kind,c.name,c.created_by,$1::uuid)||' '||ce.kind))>0)
     ORDER BY pe.sequence DESC LIMIT $3::int`,[actorId,before,request.limit+1,filter]);
   return page(scope,request,rows,row=>[row.sequence],row=>({contextId:row.context_id,sequence:row.sequence,contextName:row.name,kind:row.kind,originId:row.origin_id,createdAt:timestamp(row.created_at)}));
 }

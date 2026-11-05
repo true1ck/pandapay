@@ -5,7 +5,9 @@ import 'package:pandapay_domain/shared_expenses.dart';
 import 'package:uuid/uuid.dart';
 import '../../../data/local/response_cache.dart';
 import '../data/shared_commands.dart';
+import '../data/shared_directory.dart';
 import '../data/shared_http_transport.dart';
+import '../data/shared_invitations.dart';
 import '../data/shared_transport.dart';
 import '../storage/shared_store.dart';
 import '../sync/shared_sync.dart';
@@ -17,6 +19,24 @@ class SharedRuntimeUnavailable implements Exception {
   const SharedRuntimeUnavailable();
   @override
   String toString() => 'Shared expenses are not available for this account yet';
+}
+
+class SharedRoster {
+  final String name, ownMemberId;
+  final bool direct, canInvite;
+
+  /// Sharing a join link for an existing unclaimed person only needs the
+  /// owner role; adding another person to a two-person friend split does not.
+  final bool canShareLink;
+  final List<SharedEditorMember> members;
+  SharedRoster({
+    required this.name,
+    required this.ownMemberId,
+    required this.members,
+    required this.direct,
+    required this.canInvite,
+    bool? canShareLink,
+  }) : canShareLink = canShareLink ?? canInvite;
 }
 
 /// Account-generation owner. Source truth remains on the authenticated server;
@@ -156,6 +176,174 @@ class SharedExpensesRuntime extends ChangeNotifier {
     return command.operationId;
   }
 
+  Future<String> createDirectFriend(String name) async =>
+      (await _enqueueFriend(name)).contextId;
+
+  Future<({String contextId, String memberId})> _enqueueFriend(
+    String name,
+  ) async {
+    _current();
+    if (!proposalsEnabled ||
+        name.trim().isEmpty ||
+        name.length > 120 ||
+        RegExp(r'[\x00-\x1f\x7f]').hasMatch(name)) {
+      throw const SharedRuntimeUnavailable();
+    }
+    final id = const Uuid().v4(), memberId = const Uuid().v4();
+    final context = SharedCommand(
+      operationId: const Uuid().v4(),
+      kind: 'context.create',
+      payload: {'contextId': id, 'contextKind': 'direct', 'name': name.trim()},
+    );
+    final member = SharedCommand(
+      operationId: const Uuid().v4(),
+      kind: 'member.invite',
+      payload: {
+        'contextId': id,
+        'memberId': memberId,
+        'displayName': name.trim(),
+      },
+    );
+    await store.enqueueFriendSetup(context, member);
+    await refresh();
+    return (contextId: id, memberId: memberId);
+  }
+
+  /// Checks one picked number. Online only; never queued. A failure means
+  /// "could not check", which the UI treats as not found so adding still works.
+  Future<SharedPhoneLookup> lookupPhone(String phone) async {
+    _current();
+    if (!proposalsEnabled) throw const SharedRuntimeUnavailable();
+    final cleaned = sharedCleanPhone(phone);
+    if (cleaned == null) return SharedPhoneLookup.none;
+    final result = await remote.lookupPhone(cleaned);
+    _current();
+    return result;
+  }
+
+  /// Saves the friend on this phone first (so nothing is lost offline), then,
+  /// when a number was given, creates a phone-bound invitation. A person who is
+  /// already on PandaPay sees it in their in-app inbox; anyone else gets the
+  /// returned link to share. A failed invite step never loses the friend.
+  Future<SharedFriendAdded> addFriend({
+    required String name,
+    String? phone,
+  }) async {
+    final cleaned = phone == null || phone.trim().isEmpty
+        ? null
+        : sharedCleanPhone(phone);
+    if (phone != null && phone.trim().isNotEmpty && cleaned == null) {
+      throw const SharedTransportException(code: 'invalid_phone');
+    }
+    final ids = await _enqueueFriend(name);
+    if (cleaned == null) {
+      return SharedFriendAdded(
+        contextId: ids.contextId,
+        memberId: ids.memberId,
+      );
+    }
+    try {
+      final link = await inviteLink(
+        contextId: ids.contextId,
+        memberId: ids.memberId,
+        phoneNumber: cleaned,
+      );
+      return SharedFriendAdded(
+        contextId: ids.contextId,
+        memberId: ids.memberId,
+        link: link,
+        phone: cleaned,
+      );
+    } catch (error) {
+      return SharedFriendAdded(
+        contextId: ids.contextId,
+        memberId: ids.memberId,
+        phone: cleaned,
+        inviteIssue: sharedInviteIssueMessage(error),
+      );
+    }
+  }
+
+  Future<List<SharedInboxInvite>> inviteInbox() async {
+    _current();
+    if (!proposalsEnabled) return const [];
+    final items = await remote.fetchInviteInbox();
+    _current();
+    return items;
+  }
+
+  /// Joins (accept) or declines an inbox invite. Accepting refreshes local data
+  /// so the new split appears; it accepts no expense and posts no money.
+  Future<String> respondToInboxInvite(
+    SharedInboxInvite invite, {
+    required bool accept,
+  }) async {
+    _current();
+    if (!proposalsEnabled) throw const SharedRuntimeUnavailable();
+    final status = await remote.respondToInboxInvite(
+      invitationId: invite.invitationId,
+      operationId: const Uuid().v4(),
+      accept: accept,
+    );
+    _current();
+    if (accept) await refresh();
+    return status;
+  }
+
+  Future<List<SharedJoinRequest>> joinRequests() async {
+    _current();
+    if (!proposalsEnabled) return const [];
+    final items = await remote.fetchJoinRequests();
+    _current();
+    return items;
+  }
+
+  /// Owner-only. Quietly empty when the list cannot be read, so the roster
+  /// still works without invitation details.
+  Future<Map<String, SharedOwnerInvitation>> ownerInvitations(
+    String contextId,
+  ) async {
+    _current();
+    if (!proposalsEnabled || store.isContextRevoked(contextId)) return const {};
+    try {
+      final items = await remote.fetchContextInvitations(contextId);
+      _current();
+      return SharedOwnerInvitation.latestByMember(items);
+    } on SharedTransportException {
+      return const {};
+    }
+  }
+
+  /// Approve (joins them) or decline a link-join request. Never accepts an
+  /// expense or posts money.
+  Future<String> respondToJoinRequest(
+    String invitationId, {
+    required bool approve,
+  }) async {
+    _current();
+    if (!proposalsEnabled) throw const SharedRuntimeUnavailable();
+    final status = await remote.respondToJoinRequest(
+      invitationId: invitationId,
+      operationId: const Uuid().v4(),
+      approve: approve,
+    );
+    _current();
+    await refresh();
+    return status;
+  }
+
+  Future<({bool phoneVerified, bool discoverable})> discoverability() async {
+    _current();
+    return remote.fetchDiscoverable();
+  }
+
+  Future<bool> setDiscoverable(bool value) async {
+    _current();
+    final result = await remote.setDiscoverable(value);
+    _current();
+    return result;
+  }
+
   Future<Map<String, Object?>> _query(
     String key,
     Future<Map<String, Object?>> Function() fetch, {
@@ -224,6 +412,62 @@ class SharedExpensesRuntime extends ChangeNotifier {
 
   Future<({String name, String ownMemberId, List<SharedEditorMember> members})>
   editorContext(String id) async {
+    final roster = await contextRoster(id);
+    return (
+      name: roster.name,
+      ownMemberId: roster.ownMemberId,
+      members: List<SharedEditorMember>.unmodifiable(
+        roster.members.where(
+          (m) => m.state == 'active' || m.state == 'invited',
+        ),
+      ),
+    );
+  }
+
+  /// Online-only: an invite link is a server-issued secret, never queued or
+  /// stored locally. Requires the proposals capability, like member creation.
+  Future<SharedInviteLink> inviteLink({
+    required String contextId,
+    required String memberId,
+    String? phoneNumber,
+  }) async {
+    _current();
+    if (!proposalsEnabled || store.isContextRevoked(contextId)) {
+      throw const SharedRuntimeUnavailable();
+    }
+    final link = await remote.createInvitation(
+      invitationId: const Uuid().v4(),
+      contextId: contextId,
+      memberId: memberId,
+      phoneNumber: phoneNumber,
+    );
+    _current();
+    return link;
+  }
+
+  Future<SharedInvitePreview> previewInvite(String token) async {
+    _current();
+    if (!proposalsEnabled) throw const SharedRuntimeUnavailable();
+    final preview = await remote.previewInvitation(token);
+    _current();
+    return preview;
+  }
+
+  /// Returns `joined` (phone-bound link) or `awaiting_owner` (the group owner
+  /// must approve). Joining never accepts any expense or debt.
+  Future<String> claimInvite(String token, String operationId) async {
+    _current();
+    if (!proposalsEnabled) throw const SharedRuntimeUnavailable();
+    final status = await remote.claimInvitation(
+      token: token,
+      operationId: operationId,
+    );
+    _current();
+    await refresh();
+    return status;
+  }
+
+  Future<SharedRoster> contextRoster(String id) async {
     final before = await context(id);
     final roster = <SharedEditorMember>[];
     String? after, own;
@@ -231,7 +475,6 @@ class SharedExpensesRuntime extends ChangeNotifier {
       final result = await members(id, after: after);
       for (final raw in result['items'] as List) {
         final row = raw as Map;
-        if (!['active', 'invited'].contains(row['state'])) continue;
         if (row['profileId'] == accountId && row['state'] == 'active') {
           own = row['memberId'] as String;
         }
@@ -240,7 +483,13 @@ class SharedExpensesRuntime extends ChangeNotifier {
             row['memberId'] as String,
             row['profileId'] == accountId
                 ? 'You'
-                : row['displayName'] as String? ?? 'Member',
+                : row['displayName'] as String? ??
+                      (before['kind'] == 'direct' && row['role'] == 'owner'
+                          ? before['name'] as String? ?? 'Member'
+                          : 'Member'),
+            state: row['state'] as String,
+            role: row['role'] as String? ?? 'member',
+            profileId: row['profileId'] as String?,
           ),
         );
       }
@@ -262,10 +511,17 @@ class SharedExpensesRuntime extends ChangeNotifier {
       throw const SharedRuntimeUnavailable();
     }
     _current();
-    return (
+    final ownMember = roster.firstWhere((m) => m.id == own);
+    return SharedRoster(
       name: current['name'] as String,
       ownMemberId: own,
       members: List<SharedEditorMember>.unmodifiable(roster),
+      direct: current['kind'] == 'direct',
+      canInvite:
+          proposalsEnabled &&
+          ownMember.role == 'owner' &&
+          (current['kind'] != 'direct' || roster.length < 2),
+      canShareLink: proposalsEnabled && ownMember.role == 'owner',
     );
   }
 
@@ -307,6 +563,105 @@ class SharedExpensesRuntime extends ChangeNotifier {
     await store.enqueue(command);
     await flushEditor();
     return command.operationId;
+  }
+
+  String settlementResponseId(String contextId, String settlementId) =>
+      const Uuid().v5(
+        Namespace.url.value,
+        'pandapay:settlement-response:v1:$accountId:$contextId:$settlementId',
+      );
+
+  Future<String> respondToSettlement(
+    String contextId,
+    String settlementId,
+    String decision,
+  ) async {
+    _current();
+    if (!settlementsEnabled || !{'confirm', 'reject'}.contains(decision)) {
+      throw const SharedRuntimeUnavailable();
+    }
+    final command = SharedCommand(
+      operationId: settlementResponseId(contextId, settlementId),
+      kind: 'settlement.respond',
+      payload: {
+        'contextId': contextId,
+        'settlementId': settlementId,
+        'decision': decision,
+      },
+    );
+    await store.enqueue(command);
+    await flushEditor();
+    return command.operationId;
+  }
+
+  Future<String> reportSettlement({
+    required String contextId,
+    required String settlementId,
+    required String payerMemberId,
+    required String receiverMemberId,
+    required String amountMinor,
+    required String method,
+    required String paidOn,
+    String? reference,
+  }) async {
+    _current();
+    if (!settlementsEnabled) {
+      throw const SharedRuntimeUnavailable();
+    }
+    final command = SharedCommand(
+      operationId: settlementReportId(contextId, settlementId),
+      kind: 'settlement.report',
+      payload: {
+        'contextId': contextId,
+        'settlementId': settlementId,
+        'payerMemberId': payerMemberId,
+        'receiverMemberId': receiverMemberId,
+        'amountMinor': amountMinor,
+        'currency': 'INR',
+        'method': method,
+        'paidOn': paidOn,
+        if (reference != null && reference.isNotEmpty) 'reference': reference,
+      },
+    );
+    await store.enqueue(command);
+    await flushEditor();
+    return command.operationId;
+  }
+
+  Future<Map<String, Object?>> settlements(String id, {String? after}) =>
+      _query(
+        'context:$id:settlements:${after ?? 'first'}',
+        () => remote.fetchSettlements(id, after: after, limit: 50),
+        contextId: id,
+      );
+
+  String settlementReportId(String contextId, String settlementId) =>
+      const Uuid().v5(
+        Namespace.url.value,
+        'pandapay:settlement-report:v1:$accountId:$contextId:$settlementId',
+      );
+
+  String operationStatus(String id) {
+    _current();
+    final queued = store.operation(id), result = store.receipt(id)?.result;
+    if (result is Map) {
+      return switch (result['status']) {
+        'confirmed' => 'Payment confirmed by receiver',
+        'rejected' => 'Payment report rejected',
+        'invited' => 'Person added. Tap Invite to send them a link.',
+        'awaiting_receiver_confirmation' =>
+          'Reported. Waiting for the receiver to confirm.',
+        _ => 'Submitted. Refresh to see the latest.',
+      };
+    }
+    return switch (queued?.state) {
+      null => 'No saved submission · try again',
+      SharedCommandState.conflict || SharedCommandState.rejected =>
+        'Not accepted. Open the item to review it.',
+      SharedCommandState.awaitingAuth =>
+        'Saved on this device. Sign in to sync.',
+      _ => 'Saved on this device · waiting to sync',
+    };
   }
 
   Future<Map<String, Object?>> context(String id) => _query(
@@ -440,6 +795,7 @@ class SharedExpensesRuntime extends ChangeNotifier {
     }
     return SharedGroupPresentation(
       id: id,
+      direct: details['kind'] == 'direct',
       title: details['name'] as String,
       expenses: SharedPage(
         items: expenseRows,

@@ -10,14 +10,18 @@ void main() {
   late Directory folder;
   late AppDatabase db;
   late SharedExpensesStore store;
-  const value = {'billText': '100.', 'title': 'Dinner', 'payers': <Object?>[]};
   SharedCommand command() => SharedCommand(
     operationId: f.op2,
     kind: 'expense.propose',
     payload: {'contextId': f.contextId, 'expenseId': f.op1},
   );
+  SharedSubmissionReceipt attachment() => SharedSubmissionReceipt(
+    name: 'Bill.jpg',
+    mimeType: 'image/jpeg',
+    bytes: Uint8List.fromList([1, 2, 3, 4]),
+  );
   setUp(() {
-    folder = Directory.systemTemp.createTempSync('split-editor-');
+    folder = Directory.systemTemp.createTempSync('split-submit-');
     db = AppDatabase.openFile('${folder.path}/data.sqlite');
     store = SharedExpensesStore(db, namespace: f.accountA);
   });
@@ -26,178 +30,193 @@ void main() {
     folder.deleteSync(recursive: true);
   });
   test(
-    'unfinished editor survives process restart and is account scoped',
+    'submission and private attachment survive restart with identical financial bytes',
     () async {
-      final first = await store.saveEditorDraft(
-        f.op1,
-        contextId: f.contextId,
-        expectedVersion: 0,
-        value: value,
+      final receipt = attachment();
+      await store.enqueueExpenseSubmission(
+        command(),
+        provisional: {'title': 'Dinner'},
+        receipt: receipt,
       );
-      expect(first.version, 1);
       db.close();
       db = AppDatabase.openFile('${folder.path}/data.sqlite');
       store = SharedExpensesStore(db, namespace: f.accountA);
-      expect(store.editorDraft(f.op1)!.value, value);
-      expect(
-        SharedExpensesStore(db, namespace: f.accountB).editorDraft(f.op1),
-        isNull,
-      );
-    },
-  );
-  test(
-    'concurrent editors must resolve version conflict without overwriting input',
-    () async {
-      await store.saveEditorDraft(
-        f.op1,
-        contextId: f.contextId,
-        expectedVersion: 0,
-        value: value,
-      );
-      await store.saveEditorDraft(
-        f.op1,
-        contextId: f.contextId,
-        expectedVersion: 1,
-        value: {...value, 'billText': '200'},
-      );
-      await expectLater(
-        store.saveEditorDraft(
-          f.op1,
-          contextId: f.contextId,
-          expectedVersion: 1,
-          value: value,
-        ),
-        throwsA(isA<SharedLocalException>()),
-      );
-      expect(store.editorDraft(f.op1)!.value['billText'], '200');
-    },
-  );
-  test(
-    'sealing atomically retains input, command identity and provisional preview',
-    () async {
-      await store.saveEditorDraft(
-        f.op1,
-        contextId: f.contextId,
-        expectedVersion: 0,
-        value: value,
-      );
-      await store.sealEditorDraft(
-        f.op1,
-        expectedVersion: 1,
-        command: command(),
-        provisional: {'title': 'Dinner'},
-      );
-      expect(store.editorDraft(f.op1)!.operationId, f.op2);
       expect(
         store.operation(f.op2)!.command.canonicalJson,
         command().canonicalJson,
       );
       expect(store.provisional(f.op2), {'title': 'Dinner'});
-      await store.sealEditorDraft(
-        f.op1,
-        expectedVersion: 1,
-        command: command(),
-        provisional: {'title': 'Dinner'},
-      );
-      expect(store.pendingCount, 1);
-      await expectLater(
-        store.saveEditorDraft(
-          f.op1,
-          contextId: f.contextId,
-          expectedVersion: 2,
-          value: value,
-        ),
-        throwsA(isA<SharedLocalException>()),
-      );
-    },
-  );
-  test(
-    'failed dependency cannot leave an editor sealed without its command',
-    () async {
-      await store.saveEditorDraft(
-        f.op1,
-        contextId: f.contextId,
-        expectedVersion: 0,
-        value: value,
-      );
-      await expectLater(
-        store.sealEditorDraft(
-          f.op1,
-          expectedVersion: 1,
-          command: command(),
-          dependsOn: [f.contextId],
-        ),
-        throwsA(isA<SharedLocalException>()),
-      );
-      expect(store.editorDraft(f.op1)!.operationId, isNull);
-      expect(store.pendingCount, 0);
-    },
-  );
-  test(
-    'revocation fences editor reads and submission; other authored drafts remain',
-    () async {
-      await store.saveEditorDraft(
-        f.op1,
-        contextId: f.contextId,
-        expectedVersion: 0,
-        value: value,
-      );
-      await store.revokeContext(f.contextId);
-      expect(store.editorDraft(f.op1), isNull);
-      await expectLater(
-        store.saveEditorDraft(
-          f.op1,
-          contextId: null,
-          expectedVersion: 0,
-          value: value,
-        ),
-        throwsA(isA<SharedLocalException>()),
-      );
-      await expectLater(
-        store.sealEditorDraft(f.op1, expectedVersion: 1, command: command()),
-        throwsA(isA<SharedLocalException>()),
-      );
-    },
-  );
-  test(
-    'private receipt bytes survive restart and never cross the account boundary',
-    () async {
-      await store.saveEditorDraft(
-        f.op1,
-        contextId: f.contextId,
-        expectedVersion: 0,
-        value: value,
-      );
-      final receipt = await store.saveEditorReceipt(
-        f.op1,
-        name: 'Bill.jpg',
-        mimeType: 'image/jpeg',
-        bytes: Uint8List.fromList([1, 2, 3, 4]),
-      );
-      db.close();
-      db = AppDatabase.openFile('${folder.path}/data.sqlite');
-      store = SharedExpensesStore(db, namespace: f.accountA);
-      expect(store.editorReceipt(f.op1, receipt.hash)!.bytes, [1, 2, 3, 4]);
+      expect(store.submissionReceipt(f.op2, receipt.hash)!.bytes, [1, 2, 3, 4]);
       expect(
         SharedExpensesStore(
           db,
           namespace: f.accountB,
-        ).editorReceipt(f.op1, receipt.hash),
+        ).submissionReceipt(f.op2, receipt.hash),
         isNull,
       );
-      await store.saveEditorReceipt(
-        f.op1,
-        name: 'Same.jpg',
-        bytes: Uint8List.fromList([1, 2, 3, 4]),
+      await store.enqueueExpenseSubmission(
+        command(),
+        provisional: {'title': 'Dinner'},
+        receipt: receipt,
       );
+      expect(store.pendingCount, 1);
       expect(
         db.db
             .select('SELECT count(*) n FROM shared_editor_receipts')
             .single['n'],
         1,
       );
-      await store.revokeContext(f.contextId);
-      expect(store.editorReceipt(f.op1, receipt.hash), isNull);
+      expect(
+        db.db.select('SELECT count(*) n FROM shared_editor_drafts').single['n'],
+        0,
+      );
     },
   );
+  test(
+    'receipt storage failure rolls back the entire submission instead of leaving partial work',
+    () async {
+      db.db.execute(
+        "CREATE TRIGGER reject_receipt BEFORE INSERT ON shared_editor_receipts BEGIN SELECT RAISE(ABORT,'test receipt failure'); END",
+      );
+      await expectLater(
+        store.enqueueExpenseSubmission(
+          command(),
+          provisional: {'title': 'Dinner'},
+          receipt: attachment(),
+        ),
+        throwsA(anything),
+      );
+      expect(store.pendingCount, 0);
+      expect(store.provisional(f.op2), isNull);
+      db.db.execute('DROP TRIGGER reject_receipt');
+      await store.enqueueExpenseSubmission(
+        command(),
+        provisional: {'title': 'Dinner'},
+        receipt: attachment(),
+      );
+      expect(store.pendingCount, 1);
+    },
+  );
+  test(
+    'revocation prevents receipt reads and new submission while retaining immutable history',
+    () async {
+      final receipt = attachment();
+      await store.enqueueExpenseSubmission(
+        command(),
+        provisional: {'title': 'Dinner'},
+        receipt: receipt,
+      );
+      await store.revokeContext(f.contextId);
+      expect(store.submissionReceipt(f.op2, receipt.hash), isNull);
+      await expectLater(
+        store.enqueueExpenseSubmission(
+          command(),
+          provisional: {'title': 'Dinner'},
+          receipt: receipt,
+        ),
+        throwsA(isA<SharedLocalException>()),
+      );
+      expect(
+        store.operation(f.op2)!.command.requestHash,
+        command().requestHash,
+      );
+    },
+  );
+  test(
+    'legacy unfinished input is removed without changing submitted work or another account',
+    () async {
+      await store.enqueueExpenseSubmission(
+        command(),
+        provisional: {'title': 'Dinner'},
+        receipt: attachment(),
+      );
+      for (final ns in [f.accountA, f.accountB]) {
+        db.db.execute(
+          'INSERT INTO shared_editor_drafts VALUES(?,?,?,?,?,?,?)',
+          [ns, f.op1, f.contextId, '{}', 1, null, 0],
+        );
+      }
+      db.db.execute('INSERT INTO shared_editor_receipts VALUES(?,?,?,?,?,?)', [
+        f.accountA,
+        f.op1,
+        'old',
+        'Unsubmitted.jpg',
+        null,
+        Uint8List.fromList([9]),
+      ]);
+      final before = store.operation(f.op2)!.command.requestHash;
+      store = SharedExpensesStore(db, namespace: f.accountA);
+      expect(
+        db.db.select(
+          'SELECT count(*) n FROM shared_editor_drafts WHERE namespace=?',
+          [f.accountA],
+        ).single['n'],
+        0,
+      );
+      expect(
+        db.db.select(
+          'SELECT count(*) n FROM shared_editor_drafts WHERE namespace=?',
+          [f.accountB],
+        ).single['n'],
+        1,
+      );
+      expect(store.operation(f.op2)!.command.requestHash, before);
+      expect(store.submissionReceipt(f.op2, attachment().hash)!.bytes, [
+        1,
+        2,
+        3,
+        4,
+      ]);
+      expect(
+        db.db
+            .select('SELECT count(*) n FROM transaction_outbox_entries')
+            .single['n'],
+        0,
+      );
+    },
+  );
+  test('friend setup persists two dependent commands atomically', () async {
+    final context = SharedCommand(
+      operationId: f.op1,
+      kind: 'context.create',
+      payload: {
+        'contextId': f.contextId,
+        'contextKind': 'direct',
+        'name': 'Friend',
+      },
+    );
+    final member = SharedCommand(
+      operationId: f.op2,
+      kind: 'member.invite',
+      payload: {
+        'contextId': f.contextId,
+        'memberId': f.op1,
+        'displayName': 'Friend',
+      },
+    );
+    await store.enqueueFriendSetup(context, member);
+    await store.enqueueFriendSetup(context, member);
+    expect(store.pendingCount, 2);
+    expect(
+      db.db
+          .select('SELECT depends_on FROM shared_command_dependencies')
+          .single['depends_on'],
+      f.op1,
+    );
+    final changed = SharedCommand(
+      operationId: f.op2,
+      kind: 'member.invite',
+      payload: {'contextId': f.contextId, 'displayName': 'Different'},
+    );
+    final newContext = SharedCommand(
+      operationId: '66666666-6666-4666-8666-666666666666',
+      kind: 'context.create',
+      payload: {'contextId': f.contextId},
+    );
+    await expectLater(
+      store.enqueueFriendSetup(newContext, changed),
+      throwsA(isA<SharedLocalException>()),
+    );
+    expect(store.pendingCount, 2);
+  });
 }

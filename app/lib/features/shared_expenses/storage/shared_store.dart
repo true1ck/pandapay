@@ -62,29 +62,30 @@ final class SharedStoredPage {
   const SharedStoredPage(this.items, this.nextId);
 }
 
-final class SharedEditorRecord {
-  final String id;
-  final String? contextId, operationId;
-  final int version;
-  final Map<String, Object?> value;
-  SharedEditorRecord(Map<String, Object?> row)
-    : id = row['draft_id'] as String,
-      contextId = row['context_id'] as String?,
-      operationId = row['operation_id'] as String?,
-      version = row['version'] as int,
-      value = Map.unmodifiable(
-        Map<String, Object?>.from(
-          jsonDecode(row['value_json'] as String) as Map,
-        ),
-      );
-}
-
-final class SharedEditorReceipt {
+/// Private attachment retained only as part of a submitted expense.
+final class SharedSubmissionReceipt {
   final String hash, name;
   final String? mimeType;
   final Uint8List bytes;
-  SharedEditorReceipt(this.hash, this.name, this.mimeType, Uint8List bytes)
-    : bytes = Uint8List.fromList(bytes).asUnmodifiableView();
+  SharedSubmissionReceipt({
+    required this.name,
+    this.mimeType,
+    required Uint8List bytes,
+  }) : bytes = Uint8List.fromList(bytes).asUnmodifiableView(),
+       hash = sha256.convert(bytes).toString() {
+    if (bytes.isEmpty ||
+        bytes.length > 8388608 ||
+        name.trim().isEmpty ||
+        name.length > 256 ||
+        RegExp(r'[\x00-\x1f\x7f]').hasMatch(name) ||
+        mimeType != null &&
+            (mimeType!.length > 128 ||
+                !RegExp(
+                  r'^[a-zA-Z0-9.+-]+/[a-zA-Z0-9.+-]+$',
+                ).hasMatch(mimeType!))) {
+      throw const SharedLocalException('invalid_receipt');
+    }
+  }
 }
 
 /// Durable account-bound storage. Immutable wire payloads are distinct from
@@ -111,6 +112,9 @@ class SharedExpensesStore {
     }
     if (this.recoveryGate.isRecovering) throw const AccountRecoveryBusy();
     SharedExpensesSchema.ensure(database.db);
+    // Old backups may contain abandoned forms. Remove only unsubmitted input;
+    // immutable commands, receipts and original bank transactions stay intact.
+    SharedExpensesSchema.discardUnsubmittedEditors(database.db, namespace);
   }
   static bool _alwaysCurrent() => true;
   Future<T> _write<T>(T Function() action) => recoveryGate.run(() async {
@@ -286,195 +290,83 @@ class SharedExpensesStore {
     }
   }
 
-  SharedEditorRecord? editorDraft(String id) {
-    if (!isCurrent()) throw const SharedLocalException('account_changed');
-    final rows = database.db.select(
-      'SELECT * FROM shared_editor_drafts WHERE namespace=? AND draft_id=?',
-      [namespace, id],
-    );
-    if (rows.isEmpty) return null;
-    final record = SharedEditorRecord(rows.single);
-    return record.contextId != null && isContextRevoked(record.contextId!)
-        ? null
-        : record;
-  }
-
-  List<SharedEditorRecord> editorDrafts({
-    String after = '',
-    int limit = 50,
-    bool includeSubmitted = false,
-  }) {
-    if (!isCurrent()) throw const SharedLocalException('account_changed');
-    if (limit < 1 || limit > 100 || after.isNotEmpty && !sharedUuid(after)) {
-      throw const SharedLocalException('invalid_page');
+  Future<void> enqueueFriendSetup(
+    SharedCommand context,
+    SharedCommand member,
+  ) => _write(() {
+    if (context.kind != 'context.create' ||
+        member.kind != 'member.invite' ||
+        context.contextId != member.contextId) {
+      throw const SharedLocalException('invalid_friend_setup');
     }
-    return [
-      for (final row in database.db.select(
-        '''
-SELECT d.* FROM shared_editor_drafts d WHERE d.namespace=? AND d.draft_id>?
- ${includeSubmitted ? '' : 'AND d.operation_id IS NULL'} AND NOT EXISTS(SELECT 1 FROM shared_sync_state s
- WHERE s.namespace=d.namespace AND s.key='revoked:'||d.context_id)
- ORDER BY d.draft_id LIMIT ?''',
-        [namespace, after, limit],
-      ))
-        SharedEditorRecord(row),
-    ];
-  }
-
-  Future<SharedEditorRecord> saveEditorDraft(
-    String id, {
-    required String? contextId,
-    required int expectedVersion,
-    required Map<String, Object?> value,
-    int updatedAt = 0,
-  }) => _write(() {
-    if (!sharedUuid(id) ||
-        contextId != null && !sharedUuid(contextId) ||
-        expectedVersion < 0 ||
-        expectedVersion >= 9007199254740991 ||
-        updatedAt < 0) {
-      throw const SharedLocalException('invalid_editor');
-    }
-    if (contextId != null && isContextRevoked(contextId)) {
-      throw const SharedLocalException('context_revoked');
-    }
-    final retained = database.db.select(
-      'SELECT * FROM shared_editor_drafts WHERE namespace=? AND draft_id=?',
-      [namespace, id],
-    );
-    final before = retained.isEmpty
-        ? null
-        : SharedEditorRecord(retained.single);
-    if (before?.contextId != null && isContextRevoked(before!.contextId!)) {
-      throw const SharedLocalException('context_revoked');
-    }
-    if (before?.operationId != null) {
-      throw const SharedLocalException('editor_sealed');
-    }
-    if ((before?.version ?? 0) != expectedVersion) {
-      throw const SharedLocalException('editor_conflict');
-    }
-    final encoded = sharedCanonicalJson(value);
-    database.db.execute(
-      '''
-INSERT INTO shared_editor_drafts(namespace,draft_id,context_id,value_json,version,updated_at)
- VALUES(?,?,?,?,?,?) ON CONFLICT(namespace,draft_id) DO UPDATE SET
- context_id=excluded.context_id,value_json=excluded.value_json,
- version=excluded.version,updated_at=excluded.updated_at''',
-      [namespace, id, contextId, encoded, expectedVersion + 1, updatedAt],
-    );
-    return editorDraft(id)!;
+    _enqueue(context);
+    _enqueue(member, dependsOn: [context.operationId]);
   });
 
-  Future<void> sealEditorDraft(
-    String id, {
-    required int expectedVersion,
-    required SharedCommand command,
-    Map<String, Object?>? provisional,
-    List<String> dependsOn = const [],
-    List<String> sourceDependencies = const [],
+  /// Submit once: command, private preview and optional receipt commit together.
+  /// The legacy receipt table/column names are retained for backup compatibility.
+  Future<void> enqueueExpenseSubmission(
+    SharedCommand command, {
+    required Map<String, Object?> provisional,
+    SharedSubmissionReceipt? receipt,
     int createdAt = 0,
   }) => _write(() {
-    final before = editorDraft(id);
-    if (before == null ||
-        before.contextId != command.contextId ||
-        command.kind != 'expense.propose' ||
+    if (command.kind != 'expense.propose' ||
         isContextRevoked(command.contextId)) {
-      throw const SharedLocalException('invalid_editor');
+      throw const SharedLocalException('invalid_submission');
     }
-    if (before.operationId != null) {
-      if (before.operationId == command.operationId &&
-          operation(command.operationId)?.command.canonicalJson ==
-              command.canonicalJson) {
-        return;
+    final existing = operation(command.operationId);
+    _enqueue(command, provisional: provisional, createdAt: createdAt);
+    if (existing != null) {
+      if (receipt != null &&
+          submissionReceipt(command.operationId, receipt.hash) == null) {
+        throw const SharedLocalException('submission_reuse');
       }
-      throw const SharedLocalException('editor_sealed');
+      return;
     }
-    if (before.version != expectedVersion) {
-      throw const SharedLocalException('editor_conflict');
+    if (receipt == null) return;
+    final usage = database.db.select(
+      'SELECT count(*) n,coalesce(sum(length(bytes)),0) size FROM shared_editor_receipts WHERE namespace=?',
+      [namespace],
+    ).single;
+    if ((usage['n'] as int) >= 256 ||
+        (usage['size'] as int) + receipt.bytes.length > 134217728) {
+      throw const SharedLocalException('receipt_storage_limit');
     }
-    _enqueue(
-      command,
-      dependsOn: dependsOn,
-      sourceDependencies: sourceDependencies,
-      provisional: provisional,
-      createdAt: createdAt,
-    );
-    database.db.execute(
-      '''UPDATE shared_editor_drafts SET operation_id=?,version=version+1
- WHERE namespace=? AND draft_id=?''',
-      [command.operationId, namespace, id],
-    );
+    database.db
+        .execute('INSERT INTO shared_editor_receipts VALUES(?,?,?,?,?,?)', [
+          namespace,
+          command.operationId,
+          receipt.hash,
+          receipt.name,
+          receipt.mimeType,
+          receipt.bytes,
+        ]);
   });
 
-  SharedEditorReceipt? editorReceipt(String draftId, String hash) {
-    if (editorDraft(draftId) == null) return null;
+  SharedSubmissionReceipt? submissionReceipt(String operationId, String hash) {
+    if (!isCurrent()) throw const SharedLocalException('account_changed');
+    final queued = operation(operationId);
+    if (queued == null || isContextRevoked(queued.command.contextId))
+      return null;
     final rows = database.db.select(
       'SELECT name,mime_type,bytes FROM shared_editor_receipts WHERE namespace=? AND draft_id=? AND hash=?',
-      [namespace, draftId, hash],
+      [namespace, operationId, hash],
     );
     if (rows.isEmpty) return null;
-    final row = rows.single, bytes = row['bytes'] as Uint8List;
-    if (sha256.convert(bytes).toString() != hash) {
-      throw const SharedLocalException('receipt_corrupt');
-    }
-    return SharedEditorReceipt(
-      hash,
-      row['name'] as String,
-      row['mime_type'] as String?,
-      bytes,
+    final row = rows.single;
+    final receipt = SharedSubmissionReceipt(
+      name: row['name'] as String,
+      mimeType: row['mime_type'] as String?,
+      bytes: row['bytes'] as Uint8List,
     );
-  }
-
-  /// Receipts stay private and content-addressed. Replacing a selection cannot
-  /// overwrite bytes referenced by an older editor; backups carry these bytes.
-  Future<SharedEditorReceipt> saveEditorReceipt(
-    String draftId, {
-    required String name,
-    required Uint8List bytes,
-    String? mimeType,
-  }) {
-    if (bytes.isEmpty || bytes.length > 8388608) {
-      return Future.error(const SharedLocalException('invalid_receipt'));
-    }
-    final frozen = Uint8List.fromList(bytes);
-    final hash = sha256.convert(frozen).toString();
-    return _write(() {
-      final draft = editorDraft(draftId);
-      if (draft == null ||
-          draft.operationId != null ||
-          name.trim().isEmpty ||
-          name.length > 256 ||
-          RegExp(r'[\x00-\x1f\x7f]').hasMatch(name) ||
-          frozen.isEmpty ||
-          frozen.length > 8388608 ||
-          mimeType != null &&
-              (mimeType.length > 128 ||
-                  !RegExp(
-                    r'^[a-zA-Z0-9.+-]+/[a-zA-Z0-9.+-]+$',
-                  ).hasMatch(mimeType))) {
-        throw const SharedLocalException('invalid_receipt');
-      }
-      final old = editorReceipt(draftId, hash);
-      if (old != null) return old;
-      final usage = database.db.select(
-        'SELECT count(*) n,coalesce(sum(length(bytes)),0) size FROM shared_editor_receipts WHERE namespace=?',
-        [namespace],
-      ).single;
-      if ((usage['n'] as int) >= 256 ||
-          (usage['size'] as int) + frozen.length > 134217728) {
-        throw const SharedLocalException('receipt_storage_limit');
-      }
-      database.db.execute(
-        'INSERT INTO shared_editor_receipts VALUES(?,?,?,?,?,?)',
-        [namespace, draftId, hash, name, mimeType, frozen],
-      );
-      return SharedEditorReceipt(hash, name, mimeType, frozen);
-    });
+    if (receipt.hash != hash)
+      throw const SharedLocalException('receipt_corrupt');
+    return receipt;
   }
 
   /// Resolves only a durable scheduling dependency. It never changes the source
-  /// identity, payload, hash or operation ID; finalizing a different draft needs
+  /// identity, payload, hash or operation ID; submitting a different expense needs
   /// a new explicit command and operation ID.
   Future<void> resolveSourceDependency(String key) => _write(
     () => database.db.execute(

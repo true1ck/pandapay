@@ -191,6 +191,9 @@ class SharedGroupPresentation {
   final SharedLoadState totalsState;
   final bool offline;
   final bool hideAmounts;
+
+  /// A private one-to-one split with a friend rather than a named group.
+  final bool direct;
   const SharedGroupPresentation({
     required this.id,
     required this.title,
@@ -201,5 +204,6 @@ class SharedGroupPresentation {
     this.totalsState = SharedLoadState.ready,
     this.offline = false,
     this.hideAmounts = false,
+    this.direct = false,
   });
 }

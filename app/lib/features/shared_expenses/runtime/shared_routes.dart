@@ -7,22 +7,26 @@ import '../../../app/design/widgets.dart';
 import '../ui/shared_expenses_screen.dart';
 import '../ui/shared_group_screen.dart';
 import '../ui/shared_presentation.dart';
+import '../../../app/providers.dart' show upiPaymentServiceProvider;
 import 'shared_providers.dart';
 import 'shared_runtime.dart';
-import '../storage/shared_store.dart';
 import 'shared_expense_review.dart';
+import '../ui/shared_settle_sheet.dart';
+import '../ui/shared_members_sheet.dart';
+import '../ui/shared_name_sheet.dart';
+import '../ui/shared_add_friend_sheet.dart';
+import '../ui/shared_invite_inbox.dart';
+import '../ui/shared_settlements_sheet.dart';
 
 /// Production-backed screen adapter. App router supplies destinations; this
 /// layer never adds an app dock, invents balances or writes bank transactions.
 class SharedExpensesRoute extends ConsumerStatefulWidget {
   final ValueChanged<String> onOpenContext;
   final VoidCallback onAddExpense;
-  final ValueChanged<String>? onResumeDraft;
   const SharedExpensesRoute({
     super.key,
     required this.onOpenContext,
     required this.onAddExpense,
-    this.onResumeDraft,
   });
   @override
   ConsumerState<SharedExpensesRoute> createState() =>
@@ -37,6 +41,7 @@ class _SharedExpensesRouteState extends ConsumerState<SharedExpensesRoute> {
   };
   final _searches = <SharedHubTab, String>{};
   Timer? _searchDebounce;
+  bool _creatingFriend = false;
   @override
   void dispose() {
     _searchDebounce?.cancel();
@@ -61,46 +66,38 @@ class _SharedExpensesRouteState extends ConsumerState<SharedExpensesRoute> {
   }
 
   Future<void> _create(SharedExpensesRuntime runtime) async {
-    var draftName = '';
-    final name = await showDialog<String>(
-      context: context,
-      builder: (context) => AlertDialog(
-        title: Text('Create group', style: BambooFonts.heading(20)),
-        content: TextField(
-          onChanged: (value) => draftName = value,
-          maxLength: 120,
-          autofocus: true,
-          decoration: const InputDecoration(labelText: 'Group name'),
-        ),
-        actions: [
-          TextButton(
-            onPressed: () => Navigator.pop(context),
-            child: const Text('Cancel'),
-          ),
-          TextButton(
-            onPressed: () {
-              final value = draftName.trim();
-              if (value.isNotEmpty) Navigator.pop(context, value);
-            },
-            child: const Text('Create'),
-          ),
-        ],
-      ),
+    final name = await SharedNameSheet.show(
+      context,
+      title: 'Create group',
+      label: 'Group name',
+      hint: 'You can add people to the group afterwards.',
+      action: 'Create group',
     );
     if (name == null || !mounted) return;
     try {
+      final id = const Uuid().v4();
       await runtime.submit('context.create', {
-        'contextId': const Uuid().v4(),
+        'contextId': id,
         'contextKind': 'group',
         'name': name,
       });
       _reload();
+      // A group is only useful with people in it: go straight to adding them.
+      if (mounted && runtime.isCurrent()) {
+        await SharedMembersSheet.show(
+          context,
+          runtime: runtime,
+          contextId: id,
+          groupName: name,
+        );
+        if (mounted) _reload();
+      }
     } catch (_) {
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
           const SnackBar(
             content: Text(
-              'Group could not be confirmed. Check pending work before trying again.',
+              'Could not save the group yet. Try again in a moment.',
             ),
           ),
         );
@@ -108,121 +105,15 @@ class _SharedExpensesRouteState extends ConsumerState<SharedExpensesRoute> {
     }
   }
 
-  Future<void> _drafts(SharedExpensesRuntime runtime) async {
-    final history = <String>[''];
-    final selected = await showModalBottomSheet<String>(
-      context: context,
-      backgroundColor: BambooInk.paper,
-      isScrollControlled: true,
-      builder: (sheet) => StatefulBuilder(
-        builder: (sheet, update) {
-          if (!runtime.isCurrent()) return const SizedBox.shrink();
-          final rows = runtime.store.editorDrafts(
-            after: history.last,
-            includeSubmitted: true,
-          );
-          return SafeArea(
-            child: SizedBox(
-              height: MediaQuery.sizeOf(sheet).height * .7,
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.stretch,
-                children: [
-                  Padding(
-                    padding: const EdgeInsets.all(16),
-                    child: Text(
-                      'Drafts & submissions',
-                      style: BambooFonts.heading(18),
-                    ),
-                  ),
-                  Expanded(
-                    child: ListView(
-                      children: [
-                        for (final row in rows)
-                          ListTile(
-                            leading: Icon(
-                              row.operationId == null
-                                  ? Icons.edit_outlined
-                                  : Icons.schedule_rounded,
-                            ),
-                            title: Text(
-                              (row.value['title'] as String?)
-                                          ?.trim()
-                                          .isNotEmpty ==
-                                      true
-                                  ? row.value['title'] as String
-                                  : 'Untitled expense',
-                              style: BambooFonts.ui(15),
-                            ),
-                            subtitle: Text(
-                              '${row.value['contextName'] ?? 'Choose a group'} · ${_draftStatus(runtime, row)}',
-                              style: BambooFonts.ui(12),
-                            ),
-                            onTap:
-                                row.operationId == null &&
-                                    widget.onResumeDraft != null
-                                ? () => Navigator.pop(sheet, row.id)
-                                : null,
-                          ),
-                        if (rows.isEmpty)
-                          const Padding(
-                            padding: EdgeInsets.all(16),
-                            child: Text('No drafts or submissions yet.'),
-                          ),
-                        if (history.length > 1)
-                          TextButton(
-                            onPressed: () => update(() => history.removeLast()),
-                            child: const Text('Previous page'),
-                          ),
-                        if (rows.length == 50)
-                          TextButton(
-                            onPressed: () =>
-                                update(() => history.add(rows.last.id)),
-                            child: const Text('Next page'),
-                          ),
-                      ],
-                    ),
-                  ),
-                  TextButton.icon(
-                    onPressed: () async {
-                      await runtime.flushEditor();
-                      if (sheet.mounted) update(() {});
-                    },
-                    icon: const Icon(Icons.sync_rounded),
-                    label: const Text('Sync now'),
-                  ),
-                ],
-              ),
-            ),
-          );
-        },
-      ),
-    );
-    if (selected != null && mounted && runtime.isCurrent()) {
-      widget.onResumeDraft?.call(selected);
+  Future<void> _createFriend(SharedExpensesRuntime runtime) async {
+    if (_creatingFriend) return;
+    _creatingFriend = true;
+    try {
+      final id = await runAddFriendFlow(context, runtime);
+      if (id != null && mounted) _reload();
+    } finally {
+      _creatingFriend = false;
     }
-  }
-
-  String _draftStatus(SharedExpensesRuntime runtime, SharedEditorRecord row) {
-    if (row.operationId == null) return 'Saved draft';
-    final operation = runtime.store.operation(row.operationId!),
-        receipt = runtime.store.receipt(row.operationId!);
-    final result = receipt?.result;
-    if (result is Map) {
-      return switch (result['status']) {
-        'accepted' => 'Accepted',
-        'awaiting_approval' => 'Awaiting review',
-        'awaiting_activation' => 'Recorded · balances not active yet',
-        'awaiting_source_authorization' => 'Payment link needs review',
-        _ => 'Submitted',
-      };
-    }
-    return switch (operation?.state) {
-      SharedCommandState.conflict => 'Conflicting edit · needs review',
-      SharedCommandState.rejected => 'Not accepted · needs review',
-      SharedCommandState.awaitingAuth => 'Sign in to sync',
-      SharedCommandState.sending => 'Syncing',
-      _ => 'Saved locally · waiting to sync',
-    };
   }
 
   @override
@@ -268,13 +159,16 @@ class _SharedExpensesRouteState extends ConsumerState<SharedExpensesRoute> {
             return SharedExpensesScreen(
               key: ValueKey(runtime.store.namespace),
               data: snapshot.data!,
+              header: SharedInviteInbox(runtime: runtime, onJoined: _reload),
               onOpenFriend: widget.onOpenContext,
               onOpenGroup: widget.onOpenContext,
               onOpenActivity: widget.onOpenContext,
               onAddExpense: widget.onAddExpense,
-              onOpenDrafts: () => unawaited(_drafts(runtime)),
               onCreateGroup: runtime.proposalsEnabled
                   ? () => _create(runtime)
+                  : null,
+              onAddFriend: runtime.proposalsEnabled
+                  ? () => _createFriend(runtime)
                   : null,
               onRetry: (_) => _reload(),
               onLoadMore: (tab) {
@@ -329,6 +223,37 @@ class SharedContextRoute extends ConsumerStatefulWidget {
 }
 
 class _SharedContextRouteState extends ConsumerState<SharedContextRoute> {
+  /// Payments need two people who have actually joined. If the other person is
+  /// still only invited, say so instead of opening a sheet that cannot work.
+  Future<void> _settleIfPossible(
+    SharedExpensesRuntime runtime,
+    VoidCallback open,
+  ) async {
+    try {
+      final roster = await runtime.contextRoster(widget.contextId);
+      if (roster.members.where((m) => m.canSettle).length < 2) {
+        final waiting = roster.members
+            .where((m) => m.state == 'invited' && m.profileId == null)
+            .firstOrNull;
+        if (mounted) {
+          ScaffoldMessenger.of(context).showSnackBar(
+            SnackBar(
+              content: Text(
+                waiting != null
+                    ? 'Waiting for ${waiting.name} to join. You can record payments once they have joined.'
+                    : 'Add someone to this split before recording a payment.',
+              ),
+            ),
+          );
+        }
+        return;
+      }
+    } catch (_) {
+      // Fall through: the settle sheet shows its own recoverable error.
+    }
+    if (mounted) open();
+  }
+
   Future<SharedGroupPresentation>? _view;
   SharedExpensesRuntime? _runtime;
   final _history = {
@@ -404,6 +329,62 @@ class _SharedContextRouteState extends ConsumerState<SharedContextRoute> {
                 key: ValueKey('${runtime.store.namespace}:${widget.contextId}'),
                 data: snapshot.data!,
                 onAddExpense: widget.onAddExpense,
+                onMembers: () => unawaited(
+                  SharedMembersSheet.show(
+                    context,
+                    runtime: runtime,
+                    contextId: widget.contextId,
+                    groupName: snapshot.data!.title,
+                  ),
+                ),
+                onOpenBalance: !runtime.settlementsEnabled
+                    ? null
+                    : (memberId) {
+                        final row = snapshot.data!.balances.items.firstWhere(
+                          (row) => row.id == memberId,
+                        );
+                        // Opposite obligations can coexist. Prefill one gross
+                        // direction rather than offsetting debts or choosing
+                        // the same member on both sides of the payment.
+                        final paying = !row.balance.youOwe.isZero;
+                        return unawaited(
+                          _settleIfPossible(
+                            runtime,
+                            () => SharedSettleSheet.show(
+                              context,
+                              runtime: runtime,
+                              contextId: widget.contextId,
+                              upi: ref.read(upiPaymentServiceProvider),
+                              initialPayerId: paying ? null : memberId,
+                              initialReceiverId: paying ? memberId : null,
+                              initialAmount: paying
+                                  ? row.balance.youOwe
+                                  : row.balance.owedToYou,
+                            ),
+                          ),
+                        );
+                      },
+                onSettleUp: !runtime.settlementsEnabled
+                    ? null
+                    : () => unawaited(
+                        _settleIfPossible(
+                          runtime,
+                          () => SharedSettleSheet.show(
+                            context,
+                            runtime: runtime,
+                            contextId: widget.contextId,
+                            upi: ref.read(upiPaymentServiceProvider),
+                          ),
+                        ),
+                      ),
+                onViewSettlements: () => unawaited(
+                  SharedSettlementsSheet.show(
+                    context,
+                    runtime: runtime,
+                    contextId: widget.contextId,
+                    groupName: snapshot.data!.title,
+                  ),
+                ),
                 onRetry: (_) => _reload(),
                 onLoadMore: (tab) {
                   final view = snapshot.data!;

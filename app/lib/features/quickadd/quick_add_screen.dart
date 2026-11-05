@@ -10,6 +10,8 @@ import 'package:flutter/widget_previews.dart';
 import 'package:image_picker/image_picker.dart';
 import 'package:pandapay_domain/pandapay_domain.dart';
 import 'package:shared_preferences/shared_preferences.dart';
+import '../shared_expenses/ui/shared_name_sheet.dart';
+import '../shared_expenses/ui/shared_add_friend_sheet.dart';
 import 'package:uuid/uuid.dart';
 
 import '../../app/design/app_theme.dart';
@@ -32,8 +34,10 @@ import '../insights/spending_visuals.dart'
 import '../../main.dart' show MoneyText;
 import '../shared_expenses/composer/shared_editor.dart';
 import '../shared_expenses/composer/shared_editor_fields.dart';
+import '../shared_expenses/composer/shared_source_seed.dart';
 import '../shared_expenses/runtime/shared_providers.dart';
 import '../shared_expenses/runtime/shared_runtime.dart';
+import '../shared_expenses/ui/shared_members_sheet.dart';
 import '../shared_expenses/storage/shared_store.dart';
 
 const _lastUsedCardKey = 'pandapay_app.quick_add_last_used_card_v1';
@@ -191,7 +195,10 @@ class QuickAddScreen extends ConsumerStatefulWidget {
   final bool autofocus;
   final Key? manualEntryKey;
   final bool sharedExpense;
-  final String? sharedContextId, sharedDraftId;
+  final String? sharedContextId;
+  final TransactionEntry? sharedSourceEntry;
+  final String? sharedSourceAccountId;
+  final String? sharedSourceNote;
 
   const QuickAddScreen({
     super.key,
@@ -204,19 +211,19 @@ class QuickAddScreen extends ConsumerStatefulWidget {
     this.manualEntryKey,
     this.sharedExpense = false,
     this.sharedContextId,
-    this.sharedDraftId,
+    this.sharedSourceEntry,
+    this.sharedSourceAccountId,
+    this.sharedSourceNote,
   });
 
   @override
   ConsumerState<QuickAddScreen> createState() => _QuickAddScreenState();
 }
 
-class _QuickAddScreenState extends ConsumerState<QuickAddScreen>
-    with WidgetsBindingObserver {
+class _QuickAddScreenState extends ConsumerState<QuickAddScreen> {
   SharedEditor? _sharedEditor;
   SharedExpensesRuntime? _sharedRuntime;
   bool _sharing = false, _sharingLoading = false, _allowSharedPop = false;
-  bool _restoringSharedInput = false;
   String? _sharingError;
   final _amountController = TextEditingController();
   final _merchantController = TextEditingController();
@@ -266,7 +273,6 @@ class _QuickAddScreenState extends ConsumerState<QuickAddScreen>
   @override
   void initState() {
     super.initState();
-    WidgetsBinding.instance.addObserver(this);
     if (widget.initialAmount != null && !widget.initialAmount!.isZero) {
       _amountController.text = widget.initialAmount!.rupees.toStringAsFixed(0);
     }
@@ -275,10 +281,24 @@ class _QuickAddScreenState extends ConsumerState<QuickAddScreen>
     }
     _selectedCategoryId = widget.initialCategoryId;
     _selectedUserCardId = widget.initialUserCardId;
+    if (widget.sharedSourceEntry case final source?) {
+      final paise = source.amount.paise;
+      _amountController.text =
+          '${paise ~/ 100}.${(paise % 100).toString().padLeft(2, '0')}';
+      _merchantController.text = source.merchantName ?? '';
+      _selectedCategoryId = source.categoryId;
+      _selectedTagIds = source.tags.map((tag) => tag.id).toSet();
+      _noteController.text = widget.sharedSourceNote ?? source.note ?? '';
+      _date = source.occurredAt;
+      _instrument = source.instrument;
+      _selectedUserCardId = source.userCardId;
+    }
     // Only fall back to the remembered card when Home didn't already hand
     // us a winning one — _loadLastUsedCard's own membership check still
     // protects against a stale cross-user id either way.
-    if (widget.initialUserCardId == null) _loadLastUsedCard();
+    if (widget.initialUserCardId == null && widget.sharedSourceEntry == null) {
+      _loadLastUsedCard();
+    }
     if (widget.initialCategoryId == null &&
         widget.initialCategoryName != null) {
       _resolveInitialCategory(widget.initialCategoryName!);
@@ -317,7 +337,6 @@ class _QuickAddScreenState extends ConsumerState<QuickAddScreen>
 
   @override
   void dispose() {
-    WidgetsBinding.instance.removeObserver(this);
     _amountController.removeListener(_updateSharedInput);
     _merchantController.removeListener(_updateSharedInput);
     _sharedEditor?.removeListener(_sharedChanged);
@@ -336,29 +355,7 @@ class _QuickAddScreenState extends ConsumerState<QuickAddScreen>
     if (mounted) setState(() {});
   }
 
-  @override
-  void didChangeAppLifecycleState(AppLifecycleState state) {
-    if (state == AppLifecycleState.inactive ||
-        state == AppLifecycleState.paused) {
-      _sharedPrivateFields();
-      final editor = _sharedEditor;
-      if (editor != null) {
-        unawaited(
-          editor.persist().catchError((Object _) {
-            if (mounted) {
-              setState(
-                () => _sharingError =
-                    'Draft could not be saved. Keep this form open and try again.',
-              );
-            }
-          }),
-        );
-      }
-    }
-  }
-
   void _updateSharedInput() {
-    if (_restoringSharedInput) return;
     final editor = _sharedEditor;
     if (editor == null || editor.sealed) return;
     if (editor.billText != _amountController.text) {
@@ -370,6 +367,7 @@ class _QuickAddScreenState extends ConsumerState<QuickAddScreen>
   }
 
   Future<void> _startSharing() async {
+    if (_sharingLoading || _sharedEditor != null) return;
     setState(() {
       _sharingLoading = true;
       _sharingError = null;
@@ -377,56 +375,26 @@ class _QuickAddScreenState extends ConsumerState<QuickAddScreen>
     try {
       final runtime = await ref.read(sharedExpensesRuntimeProvider.future);
       if (!mounted || !runtime.isCurrent()) return;
+      final sourceEntry = widget.sharedSourceEntry;
+      if (sourceEntry != null &&
+          widget.sharedSourceAccountId != runtime.accountId) {
+        throw const FormatException('Source account changed');
+      }
+      final seed = sourceEntry == null
+          ? null
+          : SharedSourceSeed.fromTransaction(runtime.accountId, sourceEntry);
       final editor = SharedEditor(
         store: runtime.store,
         accountId: runtime.accountId,
-        draftId: widget.sharedDraftId,
+        expenseId: seed?.expenseId,
       );
       _sharedRuntime = runtime;
       _sharedEditor = editor;
-      if (widget.sharedDraftId != null) {
-        _restoringSharedInput = true;
-        try {
-          _amountController.text = editor.billText;
-          _merchantController.text = editor.title;
-          _selectedCategoryId = editor.privateFields['categoryId'] as String?;
-          _selectedTagIds =
-              (editor.privateFields['tagIds'] as List?)
-                  ?.cast<String>()
-                  .toSet() ??
-              {};
-          _date = DateTime.tryParse(editor.occurredOn);
-          final receiptPath = editor.privateFields['receiptPath'] as String?;
-          final receiptHash = editor.privateFields['receiptHash'] as String?;
-          if (receiptHash != null) {
-            final saved = runtime.store.editorReceipt(editor.id, receiptHash);
-            _receipt = _PendingReceipt(
-              name:
-                  saved?.name ??
-                  editor.privateFields['receiptName'] as String? ??
-                  'Saved receipt',
-              bytes: saved?.bytes,
-              mimeType: saved?.mimeType,
-              sharedHash: receiptHash,
-            );
-          }
-          if (receiptPath != null) {
-            _receipt = _PendingReceipt(
-              name:
-                  editor.privateFields['receiptName'] as String? ??
-                  'Saved receipt',
-              path: receiptPath,
-              mimeType: editor.privateFields['receiptMimeType'] as String?,
-            );
-          }
-          _noteController.text = editor.privateFields['note'] as String? ?? '';
-        } finally {
-          _restoringSharedInput = false;
-        }
-      } else {
-        _updateSharedInput();
-        _sharedPrivateFields();
+      if (seed != null) {
+        editor.attachSourceIntent(seed.reference, sourceEntry!.amount);
       }
+      _updateSharedInput();
+      _sharedPrivateFields();
       editor.addListener(_sharedChanged);
       final contextId = editor.contextId ?? widget.sharedContextId;
       if (contextId != null) await _loadSharedContext(contextId);
@@ -453,11 +421,56 @@ class _QuickAddScreenState extends ConsumerState<QuickAddScreen>
     } catch (_) {
       if (mounted) {
         _sharingError =
-            'Group members changed or are unavailable. Refresh before submitting.';
+            'People in this split changed or are unavailable. Refresh before submitting.';
       }
     } finally {
       if (mounted) setState(() => _sharingLoading = false);
     }
+  }
+
+  /// Friends (private one-to-one splits) and groups are different things, so
+  /// they are listed under their own headings with distinct icons.
+  List<Widget> _contextSection(BuildContext sheet, List rows, bool direct) {
+    final items = [
+      for (final raw in rows)
+        if ((raw as Map)['membershipState'] == 'active' &&
+            (raw['kind'] == 'direct') == direct)
+          raw,
+    ];
+    if (items.isEmpty) return const [];
+    return [
+      Padding(
+        padding: const EdgeInsets.fromLTRB(16, 8, 16, 0),
+        child: Text(
+          direct ? 'FRIENDS' : 'GROUPS',
+          style: BambooFonts.ui(
+            12,
+            weight: FontWeight.w700,
+            color: BambooInk.ink500,
+          ),
+        ),
+      ),
+      for (final raw in items)
+        ListTile(
+          leading: CircleAvatar(
+            backgroundColor: BambooInk.lime.withValues(alpha: .35),
+            foregroundColor: BambooInk.slate,
+            child: direct
+                ? Text(
+                    (raw['name'] as String).trim().isEmpty
+                        ? '?'
+                        : (raw['name'] as String).trim()[0].toUpperCase(),
+                  )
+                : const Icon(Icons.groups_2_outlined, size: 20),
+          ),
+          title: Text(raw['name'] as String, style: BambooFonts.ui(15)),
+          subtitle: Text(
+            direct ? 'Friend · just the two of you' : 'Group',
+            style: BambooFonts.ui(12, color: BambooInk.ink500),
+          ),
+          onTap: () => Navigator.pop(sheet, raw['contextId'] as String),
+        ),
+    ];
   }
 
   Future<void> _chooseSharedContext() async {
@@ -506,26 +519,13 @@ class _QuickAddScreenState extends ConsumerState<QuickAddScreen>
                       final page = snapshot.data!, rows = page['items'] as List;
                       return ListView(
                         children: [
-                          for (final raw in rows)
-                            if ((raw as Map)['membershipState'] == 'active')
-                              ListTile(
-                                leading: const Icon(
-                                  Icons.people_outline_rounded,
-                                ),
-                                title: Text(
-                                  raw['name'] as String,
-                                  style: BambooFonts.ui(15),
-                                ),
-                                onTap: () => Navigator.pop(
-                                  sheet,
-                                  raw['contextId'] as String,
-                                ),
-                              ),
+                          for (final direct in const [true, false])
+                            ..._contextSection(sheet, rows, direct),
                           if (rows.isEmpty)
                             const Padding(
                               padding: EdgeInsets.all(16),
                               child: Text(
-                                'Create a group to share this expense.',
+                                'Add a friend or create a group to share this expense.',
                               ),
                             ),
                           if (history.length > 1)
@@ -549,10 +549,23 @@ class _QuickAddScreenState extends ConsumerState<QuickAddScreen>
                     },
                   ),
                 ),
-                TextButton.icon(
-                  onPressed: () => Navigator.pop(sheet, 'create'),
-                  icon: const Icon(Icons.group_add_outlined),
-                  label: const Text('Create group'),
+                Padding(
+                  padding: const EdgeInsets.fromLTRB(8, 0, 8, 8),
+                  child: Wrap(
+                    alignment: WrapAlignment.spaceEvenly,
+                    children: [
+                      TextButton.icon(
+                        onPressed: () => Navigator.pop(sheet, 'friend'),
+                        icon: const Icon(Icons.person_add_alt_1_outlined),
+                        label: const Text('Add friend'),
+                      ),
+                      TextButton.icon(
+                        onPressed: () => Navigator.pop(sheet, 'create'),
+                        icon: const Icon(Icons.group_add_outlined),
+                        label: const Text('Create group'),
+                      ),
+                    ],
+                  ),
                 ),
               ],
             ),
@@ -561,7 +574,22 @@ class _QuickAddScreenState extends ConsumerState<QuickAddScreen>
       ),
     );
     if (!mounted || !runtime.isCurrent() || selected == null) return;
-    if (selected == 'create') {
+    if (selected == 'friend') {
+      try {
+        setState(() => _sharingLoading = true);
+        final id = await runAddFriendFlow(context, runtime);
+        if (id != null && mounted) await _loadSharedContext(id);
+      } catch (_) {
+        if (mounted) {
+          setState(
+            () => _sharingError =
+                'Could not save the friend yet. Try again in a moment.',
+          );
+        }
+      } finally {
+        if (mounted) setState(() => _sharingLoading = false);
+      }
+    } else if (selected == 'create') {
       final name = await _sharedNameDialog('Create group', 'Group name');
       if (name == null || !mounted) return;
       try {
@@ -572,12 +600,20 @@ class _QuickAddScreenState extends ConsumerState<QuickAddScreen>
           'contextKind': 'group',
           'name': name,
         });
+        if (mounted && runtime.isCurrent()) {
+          await SharedMembersSheet.show(
+            context,
+            runtime: runtime,
+            contextId: id,
+            groupName: name,
+          );
+        }
         if (mounted) await _loadSharedContext(id);
       } catch (_) {
         if (mounted) {
           setState(
             () => _sharingError =
-                'Group could not be confirmed. Check pending work before creating it again.',
+                'Could not save the group yet. Try again in a moment.',
           );
         }
       } finally {
@@ -588,71 +624,32 @@ class _QuickAddScreenState extends ConsumerState<QuickAddScreen>
     }
   }
 
-  Future<String?> _sharedNameDialog(String title, String label) async {
-    var name = '';
-    return showDialog<String>(
-      context: context,
-      builder: (dialog) => AlertDialog(
-        title: Text(title, style: BambooFonts.heading(18)),
-        content: TextField(
-          autofocus: true,
-          maxLength: 120,
-          style: BambooFonts.ui(14),
-          decoration: InputDecoration(labelText: label),
-          onChanged: (value) => name = value,
-          textInputAction: TextInputAction.done,
-          onSubmitted: (value) {
-            if (value.trim().isNotEmpty) Navigator.pop(dialog, value.trim());
-          },
-        ),
-        actions: [
-          TextButton(
-            onPressed: () => Navigator.pop(dialog),
-            child: const Text('Cancel'),
-          ),
-          TextButton(
-            onPressed: () {
-              if (name.trim().isNotEmpty) Navigator.pop(dialog, name.trim());
-            },
-            child: const Text('Add'),
-          ),
-        ],
-      ),
-    );
-  }
+  Future<String?> _sharedNameDialog(String title, String label) =>
+      SharedNameSheet.show(
+        context,
+        title: title,
+        label: label,
+        hint: label == 'Friend name'
+            ? 'Just the two of you. You can invite them to PandaPay afterwards.'
+            : 'You can add people to the group afterwards.',
+        action: title == 'Add friend' ? 'Add friend' : 'Create group',
+      );
 
   Future<void> _addSharedMember() async {
-    if (_sharingLoading) return;
-    final editor = _sharedEditor!, runtime = _sharedRuntime!;
-    final name = await _sharedNameDialog('Add person', 'Name');
-    if (name == null ||
-        !mounted ||
-        !runtime.isCurrent() ||
-        editor.contextId == null) {
-      return;
-    }
-    try {
-      setState(() => _sharingLoading = true);
-      await runtime.submit('member.invite', {
-        'contextId': editor.contextId,
-        'memberId': const Uuid().v4(),
-        'displayName': name,
-      });
-      if (mounted) await _loadSharedContext(editor.contextId!);
-    } catch (_) {
-      if (mounted) {
-        setState(
-          () => _sharingError =
-              'Person could not be confirmed. Check pending work before adding again.',
-        );
-      }
-    } finally {
-      if (mounted) setState(() => _sharingLoading = false);
+    final editor = _sharedEditor, runtime = _sharedRuntime;
+    if (_sharingLoading || editor?.contextId == null || runtime == null) return;
+    await SharedMembersSheet.show(
+      context,
+      runtime: runtime,
+      contextId: editor!.contextId!,
+      groupName: editor.contextName,
+    );
+    if (mounted && runtime.isCurrent() && _sharedEditor == editor) {
+      await _loadSharedContext(editor.contextId!);
     }
   }
 
   void _sharedPrivateFields() {
-    if (_restoringSharedInput) return;
     final editor = _sharedEditor;
     if (editor == null || editor.sealed) return;
     editor.setDate(_date ?? DateTime.now());
@@ -677,22 +674,9 @@ class _QuickAddScreenState extends ConsumerState<QuickAddScreen>
   }
 
   Future<void> _leaveShared() async {
-    if (_saving) return;
-    try {
-      _sharedPrivateFields();
-      await _sharedEditor?.persist();
-      if (mounted) {
-        setState(() => _allowSharedPop = true);
-        Navigator.of(context).pop();
-      }
-    } catch (_) {
-      if (mounted) {
-        setState(
-          () => _sharingError =
-              'Draft could not be saved. Keep this form open to avoid losing changes.',
-        );
-      }
-    }
+    if (_saving || !mounted) return;
+    setState(() => _allowSharedPop = true);
+    Navigator.of(context).pop();
   }
 
   Future<void> _saveShared() async {
@@ -703,21 +687,11 @@ class _QuickAddScreenState extends ConsumerState<QuickAddScreen>
     setState(() => _saving = true);
     try {
       _sharedPrivateFields();
-      if (!editor.sealed && (!editor.canSubmit || !runtime.proposalsEnabled)) {
-        await editor.persist();
-        if (mounted) {
-          final messenger = ScaffoldMessenger.of(context);
-          setState(() => _allowSharedPop = true);
-          Navigator.pop(context);
-          messenger.showSnackBar(
-            const SnackBar(
-              content: Text('Shared expense draft saved on this device'),
-            ),
-          );
-        }
-        return;
-      }
+      if (!editor.sealed && !editor.canSubmit) return;
       if (!runtime.proposalsEnabled) throw const SharedRuntimeUnavailable();
+      if (!editor.sealed && _receipt != null && editor.receipt == null) {
+        await _keepSharedReceipt(_receipt!);
+      }
       final command = await editor.seal();
       await runtime.flushEditor();
       final queued = runtime.store.operation(command.operationId),
@@ -740,8 +714,9 @@ class _QuickAddScreenState extends ConsumerState<QuickAddScreen>
     } catch (_) {
       if (mounted) {
         setState(
-          () => _sharingError =
-              'Expense was not submitted. Your draft is kept; check its status before trying again.',
+          () => _sharingError = editor.sealed
+              ? 'Submission saved on this device. Check its status before trying again.'
+              : 'Expense could not be submitted. Keep this form open and try again.',
         );
       }
     } finally {
@@ -1000,24 +975,21 @@ class _QuickAddScreenState extends ConsumerState<QuickAddScreen>
       return;
     }
     if (!mounted || !runtime.isCurrent() || _sharedEditor != editor) return;
-    await editor.persist();
-    final saved = await runtime.store.saveEditorReceipt(
-      editor.id,
+    final receiptValue = SharedSubmissionReceipt(
       name: receipt.name,
       mimeType: receipt.mimeType,
       bytes: bytes,
     );
-    if (!mounted || !runtime.isCurrent() || _sharedEditor != editor) return;
+    editor.setReceipt(receiptValue);
     setState(
       () => _receipt = _PendingReceipt(
-        name: saved.name,
-        bytes: saved.bytes,
-        mimeType: saved.mimeType,
-        sharedHash: saved.hash,
+        name: receiptValue.name,
+        bytes: receiptValue.bytes,
+        mimeType: receiptValue.mimeType,
+        sharedHash: receiptValue.hash,
       ),
     );
     _sharedPrivateFields();
-    await editor.persist();
   }
 
   Future<void> _saveReceipt(String transactionId) async {
@@ -1130,7 +1102,9 @@ class _QuickAddScreenState extends ConsumerState<QuickAddScreen>
           !_pickingReceipt &&
           !_scanningReceipt &&
           _sharedRuntime?.isCurrent() == true &&
-          _sharedEditor!.persistenceError == null;
+          (_sharedEditor!.sealed ||
+              _sharedEditor!.canSubmit &&
+                  _sharedRuntime?.proposalsEnabled == true);
     }
     final amount = double.tryParse(_amountController.text);
     if (amount == null || amount <= 0) return false;
@@ -1513,6 +1487,17 @@ class _QuickAddScreenState extends ConsumerState<QuickAddScreen>
         : ref.watch(quickAddRecommendationsProvider(recommendationQuery));
 
     final sharingAvailable = ref.watch(sharedExpensesEnabledProvider);
+    if (widget.sharedSourceEntry != null &&
+        ref.watch(cacheNamespaceProvider) !=
+            'user:${widget.sharedSourceAccountId}') {
+      return const Scaffold(
+        body: SafeArea(
+          child: Center(
+            child: Text('Account changed. Reopen the payment from Activity.'),
+          ),
+        ),
+      );
+    }
     if (_sharing && sharingAvailable) ref.watch(sharedExpensesRuntimeProvider);
     if (_sharing && _sharedRuntime != null && !_sharedRuntime!.isCurrent()) {
       return const Scaffold(
@@ -1647,8 +1632,10 @@ class _QuickAddScreenState extends ConsumerState<QuickAddScreen>
                                       CrossAxisAlignment.stretch,
                                   children: [
                                     if (!_sharing ||
-                                        _sharedEditor?.someoneElsePaid !=
-                                            true) ...[
+                                        (_sharedEditor?.someoneElsePaid !=
+                                                true &&
+                                            _sharedEditor?.linkedSource ==
+                                                null)) ...[
                                       _buildPaymentMethods(userCards),
                                       const _FormDivider(),
                                     ],
@@ -2135,7 +2122,10 @@ class _QuickAddScreenState extends ConsumerState<QuickAddScreen>
                   width: width,
                   child: TextField(
                     key: const ValueKey('quick-add-amount-field'),
-                    readOnly: _sharedEditor?.sealed == true,
+                    readOnly:
+                        _sharedEditor?.sealed == true ||
+                        _sharedEditor?.linkedSource != null &&
+                            _sharedEditor?.multiplePayers == false,
                     controller: _amountController,
                     autofocus: widget.autofocus,
                     onTapOutside: (_) =>
@@ -2847,10 +2837,7 @@ class _QuickAddScreenState extends ConsumerState<QuickAddScreen>
                             : _sharing
                             ? (_sharedEditor?.sealed == true
                                   ? 'Check submission'
-                                  : _sharedEditor?.canSubmit == true &&
-                                        _sharedRuntime?.proposalsEnabled == true
-                                  ? 'Submit shared expense'
-                                  : 'Save draft')
+                                  : 'Submit shared expense')
                             : switch (_entryKind) {
                                 TxnEntryKind.spend => 'Save expense',
                                 TxnEntryKind.income => 'Save income',

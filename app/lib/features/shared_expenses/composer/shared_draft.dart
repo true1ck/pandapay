@@ -111,7 +111,7 @@ class SharedExpenseDraft {
         !memberOrder.every(sharedUuid) ||
         !order.contains(ownMemberId) ||
         !sharedUuid(ownAccountId)) {
-      errors['members'] = 'Refresh the group members before continuing.';
+      errors['members'] = 'Refresh the people in this split before continuing.';
     }
     if (participants.isEmpty ||
         participants.length > 50 ||

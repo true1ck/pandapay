@@ -38,7 +38,7 @@ test('real PostgreSQL: forced RLS, source eligibility, replay and fail-closed wr
     DO $$ BEGIN IF NOT EXISTS (SELECT FROM pg_roles WHERE rolname='app_user') THEN CREATE ROLE app_user NOLOGIN NOSUPERUSER NOBYPASSRLS; END IF; END $$;
     CREATE SCHEMA pandapay;
     CREATE FUNCTION pandapay.uid() RETURNS uuid LANGUAGE sql STABLE AS $$ SELECT nullif(current_setting('app.user_id',true),'')::uuid $$;
-    CREATE TABLE public.profiles(id uuid PRIMARY KEY);
+    CREATE TABLE public.profiles(id uuid PRIMARY KEY,display_name text);
     ALTER TABLE public.profiles ENABLE ROW LEVEL SECURITY;
     ALTER TABLE public.profiles FORCE ROW LEVEL SECURITY;
     CREATE POLICY profiles_owner ON public.profiles FOR ALL USING(id=pandapay.uid()) WITH CHECK(id=pandapay.uid());
@@ -56,6 +56,9 @@ test('real PostgreSQL: forced RLS, source eligibility, replay and fail-closed wr
   await db.query(fs.readFileSync(path.resolve(__dirname,'../supabase/migrations/20261112213000_shared_expense_totals.sql'),'utf8'));
   await db.query(fs.readFileSync(path.resolve(__dirname,'../supabase/migrations/20261112220000_shared_expense_bill_metadata.sql'),'utf8'));
   await db.query(fs.readFileSync(path.resolve(__dirname,'../supabase/migrations/20261112230000_shared_expense_review_indexes.sql'),'utf8'));
+  await db.query(fs.readFileSync(path.resolve(__dirname,'../supabase/migrations/20261113000000_shared_expense_invitations.sql'),'utf8'));
+  await db.query(fs.readFileSync(path.resolve(__dirname,'../supabase/migrations/20261114000000_shared_expense_phone_directory.sql'),'utf8'));
+  await db.query(fs.readFileSync(path.resolve(__dirname,'../supabase/migrations/20261114010000_shared_expense_context_label.sql'),'utf8'));
   // Replay the pre-existing role setup's broad grants. A new isolated schema
   // must retain its ACL even when public and pandapay grants are restored.
   await db.query('GRANT USAGE ON SCHEMA public,pandapay TO app_user; GRANT SELECT,INSERT,UPDATE,DELETE ON ALL TABLES IN SCHEMA public TO app_user; GRANT EXECUTE ON ALL FUNCTIONS IN SCHEMA pandapay TO app_user');
@@ -97,6 +100,145 @@ test('real PostgreSQL: forced RLS, source eligibility, replay and fail-closed wr
   const c='10000000-0000-0000-0000-000000000003';
   const ma=result.rows[0].v.memberId, mb='50000000-0000-0000-0000-000000000002', mc='50000000-0000-0000-0000-000000000003';
   await db.query('INSERT INTO public.profiles VALUES($1)',[c]);
+  await t.test('verified phone claims retain old member identity and require a separate financial approval',async()=>{
+    const group=crypto.randomUUID(), member=crypto.randomUUID(), invitation=crypto.randomUUID(), expense=crypto.randomUUID(), revision=crypto.randomUUID();
+    const own=(await actor(a,()=>db.query("SELECT shared_expenses.create_context($1,'direct','Claim fixture',$2,$3) AS v",[group,crypto.randomUUID(),'1'.repeat(64)]))).rows[0].v.memberId;
+    await actor(a,()=>db.query('SELECT shared_expenses.invite_member($1,$2,$3)',[{contextId:group,memberId:member,displayName:'Unregistered friend'},crypto.randomUUID(),'2'.repeat(64)]));
+    const proposal={contextId:group,expenseId:expense,revisionId:revision,expectedHeadRevisionId:null,title:'Historical dinner',occurredOn:'2026-11-05',snapshot:{currency:'INR',totalMinor:'10000',memberOrder:[own,member],contributions:[{memberId:own,amountMinor:'10000'}],shares:[{memberId:own,amountMinor:'5000'},{memberId:member,amountMinor:'5000'}]},sources:[],void:false};
+    await actor(a,()=>db.query('SELECT shared_expenses.submit_proposal($1,$2,$3)',[proposal,crypto.randomUUID(),'3'.repeat(64)]));
+    const before=(await db.query('SELECT approver_profile_id,paid_minor,share_minor FROM shared_expenses.revision_members WHERE context_id=$1 AND member_id=$2',[group,member])).rows;
+    const payload={invitationId:invitation,contextId:group,memberId:member,targetPhoneHash:'4'.repeat(64),tokenHash:'5'.repeat(64)};
+    await actor(a,()=>db.query('SELECT shared_expenses.create_invitation($1,$2)',[payload,'6'.repeat(64)]));
+    await assert.rejects(actor(c,()=>db.query('SELECT shared_expenses.claim_invitation($1,$2,$3,$4,$5)',['5'.repeat(64),'0'.repeat(64),'0000',crypto.randomUUID(),'7'.repeat(64)])),/invitation_phone_mismatch/);
+    const operation=crypto.randomUUID(),claim=()=>actor(b,()=>db.query('SELECT shared_expenses.claim_invitation($1,$2,$3,$4,$5) AS v',['5'.repeat(64),'4'.repeat(64),'3210',operation,'8'.repeat(64)]));
+    assert.equal((await claim()).rows[0].v.status,'joined');
+    assert.equal((await claim()).rows[0].v.status,'joined');
+    assert.deepEqual((await db.query('SELECT approver_profile_id,paid_minor,share_minor FROM shared_expenses.revision_members WHERE context_id=$1 AND member_id=$2',[group,member])).rows,before);
+    assert.equal((await db.query('SELECT count(*)::int n FROM shared_expenses.journal_entries WHERE context_id=$1',[group])).rows[0].n,0);
+    const {listExpenseRevisions}=requireApi('./src/shared_expenses/queries');
+    const read=await actor(b,()=>listExpenseRevisions(db,b,group,expense));
+    assert.equal(read.items[0].yourShareMinor,'5000');assert.equal(read.items[0].canRespond,true);
+    await db.query('UPDATE shared_expenses.settings SET accepted_writes_enabled=true');
+    const approved=await actor(b,()=>db.query('SELECT shared_expenses.respond_expense($1,$2,$3) AS v',[{contextId:group,expenseId:expense,revisionId:revision,decision:'approve'},crypto.randomUUID(),'9'.repeat(64)]));
+    assert.equal(approved.rows[0].v.status,'accepted');
+    await db.query('UPDATE shared_expenses.settings SET accepted_writes_enabled=false');
+    assert.equal((await actor(b,()=>db.query('SELECT share_minor::text share FROM shared_expenses.private_cost_facts WHERE context_id=$1',[group]))).rows[0].share,'5000');
+    await assert.rejects(actor(c,()=>db.query('SELECT * FROM shared_expenses.invitations')),/permission denied/);
+  });
+  await t.test('forwarded links need owner approval and are revocable without posting money',async()=>{
+    const group=crypto.randomUUID(), member=crypto.randomUUID(), id=crypto.randomUUID();
+    await actor(a,()=>db.query("SELECT shared_expenses.create_context($1,'direct','Unbound fixture',$2,$3)",[group,crypto.randomUUID(),'a'.repeat(64)]));
+    await actor(a,()=>db.query('SELECT shared_expenses.invite_member($1,$2,$3)',[{contextId:group,memberId:member,displayName:'Friend'},crypto.randomUUID(),'b'.repeat(64)]));
+    await actor(a,()=>db.query('SELECT shared_expenses.create_invitation($1,$2)',[{invitationId:id,contextId:group,memberId:member,targetPhoneHash:null,tokenHash:'c'.repeat(64)},'d'.repeat(64)]));
+    const claim=await actor(b,()=>db.query('SELECT shared_expenses.claim_invitation($1,$2,$3,$4,$5) AS v',['c'.repeat(64),null,null,crypto.randomUUID(),'e'.repeat(64)]));
+    assert.equal(claim.rows[0].v.status,'awaiting_owner');
+    const reqs=(r)=>r.rows[0].v.items;
+    assert.equal(reqs(await actor(a,()=>db.query('SELECT shared_expenses.list_join_requests() AS v'))).some(i=>i.invitationId===id),true,'owner sees the request');
+    assert.equal(reqs(await actor(b,()=>db.query('SELECT shared_expenses.list_join_requests() AS v'))).length,0,'the requester is not an owner');
+    assert.equal(reqs(await actor(c,()=>db.query('SELECT shared_expenses.list_join_requests() AS v'))).length,0);
+    assert.equal((await db.query('SELECT profile_id FROM shared_expenses.members WHERE context_id=$1 AND member_id=$2',[group,member])).rows[0].profile_id,null);
+    await assert.rejects(actor(c,()=>db.query('SELECT shared_expenses.respond_invitation($1,true,$2,$3)',[id,crypto.randomUUID(),'f'.repeat(64)])),/context_not_authorized/);
+    assert.equal((await actor(a,()=>db.query('SELECT shared_expenses.respond_invitation($1,true,$2,$3) AS v',[id,crypto.randomUUID(),'f'.repeat(64)]))).rows[0].v.status,'joined');
+    assert.equal((await db.query('SELECT count(*)::int n FROM shared_expenses.journal_entries WHERE context_id=$1',[group])).rows[0].n,0);
+  });
+  await t.test('phone directory: hashed lookup, opt-out, self, rate limit and no direct table access',async()=>{
+    const H=(ch)=>ch.repeat(64);
+    await db.query("UPDATE public.profiles SET display_name='Rahul Kumar Sharma' WHERE id=$1",[b]);
+    for(const [who,h] of [[a,H('a')],[b,H('b')],[c,H('c')]]) assert.equal((await actor(who,()=>db.query('SELECT shared_expenses.register_phone($1,NULL) AS v',[h]))).rows[0].v.registered,true);
+    const look=(who,h)=>actor(who,()=>db.query('SELECT shared_expenses.lookup_phone($1) AS v',[h])).then(r=>r.rows[0].v);
+    const found=await look(a,H('b'));
+    assert.equal(found.found,true);assert.equal(found.displayName,'Rahul Kumar Sharma');
+    assert.equal((await look(a,H('9'))).found,false);
+    assert.deepEqual(await look(a,H('a')),{found:false,self:true});
+    // Opting out is indistinguishable from not being registered.
+    await actor(b,()=>db.query('SELECT shared_expenses.register_phone($1,false)',[H('b')]));
+    assert.deepEqual(await look(a,H('b')),{found:false,self:false});
+    assert.deepEqual(await look(a,H('9')),{found:false,self:false});
+    assert.equal((await actor(b,()=>db.query('SELECT shared_expenses.directory_status() AS v'))).rows[0].v.discoverable,false);
+    // Re-registering without a choice keeps the opt-out.
+    await actor(b,()=>db.query('SELECT shared_expenses.register_phone($1,NULL)',[H('b')]));
+    assert.equal((await look(a,H('b'))).found,false);
+    await actor(b,()=>db.query('SELECT shared_expenses.register_phone($1,true)',[H('b')]));
+    assert.equal((await look(a,H('b'))).found,true);
+    // The newest verifier of a number owns the entry.
+    await actor(c,()=>db.query('SELECT shared_expenses.register_phone($1,NULL)',[H('b')]));
+    assert.equal((await db.query('SELECT count(*)::int n FROM shared_expenses.phone_directory WHERE phone_hash=$1',[H('b')])).rows[0].n,1);
+    await actor(b,()=>db.query('SELECT shared_expenses.register_phone($1,NULL)',[H('b')]));
+    await actor(c,()=>db.query('SELECT shared_expenses.register_phone($1,NULL)',[H('c')]));
+    await assert.rejects(actor(a,()=>db.query('SELECT shared_expenses.lookup_phone($1)',['not-a-hash'])),/invalid_phone/);
+    await assert.rejects(actor(c,()=>db.query('SELECT * FROM shared_expenses.phone_directory')),/permission denied/);
+    await assert.rejects(actor(c,()=>db.query('SELECT * FROM shared_expenses.phone_lookups')),/permission denied/);
+    for(let n=0;n<25;n++) await look(c,crypto.randomBytes(32).toString('hex'));
+    await assert.rejects(look(c,crypto.randomBytes(32).toString('hex')),/lookup_rate_limited/);
+    await db.query("DELETE FROM shared_expenses.phone_lookups WHERE profile_id=$1",[c]);
+  });
+  await t.test('phone-bound invitations reach the verified phone by inbox, with accept, decline and guards',async()=>{
+    const H=(ch)=>ch.repeat(64), ctxId=crypto.randomUUID(), member=crypto.randomUUID(), inv=crypto.randomUUID();
+    await actor(a,()=>db.query("SELECT shared_expenses.create_context($1,'direct','Rahul',$2,$3)",[ctxId,crypto.randomUUID(),H('1')]));
+    await actor(a,()=>db.query('SELECT shared_expenses.invite_member($1,$2,$3)',[{contextId:ctxId,memberId:member,displayName:'Rahul'},crypto.randomUUID(),H('2')]));
+    const create=(who,payload,hash=H('3'))=>actor(who,()=>db.query('SELECT shared_expenses.create_invitation($1,$2)',[payload,hash]));
+    const mk=(extra)=>({invitationId:crypto.randomUUID(),contextId:ctxId,memberId:member,targetPhoneHash:H('b'),tokenHash:crypto.randomBytes(32).toString('hex'),...extra});
+    await assert.rejects(create(a,mk({targetPhoneHash:H('a')})),/invitation_self/);
+    await create(a,mk({invitationId:inv}),H('4'));
+    const inbox=(who,h)=>actor(who,()=>db.query('SELECT shared_expenses.list_my_invitations($1) AS v',[h])).then(r=>r.rows[0].v.items);
+    // A fresh link for someone already invited by phone keeps the phone binding.
+    const relink=crypto.randomUUID();
+    await create(a,{invitationId:relink,contextId:ctxId,memberId:member,targetPhoneHash:null,tokenHash:crypto.randomBytes(32).toString('hex')},H('e'));
+    assert.equal((await db.query('SELECT target_phone_hash FROM shared_expenses.invitations WHERE invitation_id=$1',[relink])).rows[0].target_phone_hash,H('b'));
+    await db.query("UPDATE shared_expenses.invitations SET state='rejected' WHERE invitation_id=$1",[relink]);
+    await db.query("UPDATE shared_expenses.invitations SET state='open' WHERE invitation_id=$1",[inv]);
+    const mine=await inbox(b,H('b'));
+    assert.equal(mine.length,1);assert.equal(mine[0].invitationId,inv);assert.equal(mine[0].contextKind,'direct');
+    assert.equal((await inbox(c,H('c'))).length,0,'another number sees nothing');
+    assert.equal((await inbox(b,null)).length,0);
+    const accept=(who,h,op)=>actor(who,()=>db.query('SELECT shared_expenses.claim_invitation_by_id($1,$2,$3,$4,$5) AS v',[inv,h,'3210',op,H('5')]));
+    await assert.rejects(accept(c,H('c'),crypto.randomUUID()),/invitation_unavailable/);
+    await assert.rejects(accept(a,H('b'),crypto.randomUUID()),/invitation_unavailable/,'the inviter cannot claim their own invitation');
+    const op=crypto.randomUUID();
+    assert.equal((await accept(b,H('b'),op)).rows[0].v.status,'joined');
+    assert.equal((await accept(b,H('b'),op)).rows[0].v.status,'joined','replay');
+    assert.equal((await db.query('SELECT profile_id FROM shared_expenses.members WHERE context_id=$1 AND member_id=$2',[ctxId,member])).rows[0].profile_id,b);
+    assert.equal((await inbox(b,H('b'))).length,0);
+    assert.equal((await db.query('SELECT count(*)::int n FROM shared_expenses.journal_entries WHERE context_id=$1',[ctxId])).rows[0].n,0,'joining posts no money');
+    const {listContexts,readContext}=requireApi('./src/shared_expenses/queries');
+    await db.query("UPDATE public.profiles SET display_name='Asha Verma Rao' WHERE id=$1",[a]);
+    await actor(a,()=>db.query('SELECT shared_expenses.register_phone($1,NULL)',[H('a')]));
+    const own=await actor(a,()=>listContexts(db,a,{kind:'direct'}));
+    assert.ok(own.items.some(i=>i.contextId===ctxId&&i.name==='Rahul'),'creator keeps the name they typed');
+    const seen=await actor(b,()=>listContexts(db,b,{kind:'direct'}));
+    assert.equal(seen.items.find(i=>i.contextId===ctxId).name,'Asha Verma Rao','the friend sees the creator, not their own name');
+    assert.equal((await actor(b,()=>readContext(db,b,ctxId))).name,'Asha Verma Rao');
+    assert.ok((await actor(b,()=>listContexts(db,b,{kind:'direct',q:'asha'}))).items.some(i=>i.contextId===ctxId),'search uses the shown name');
+    assert.equal((await actor(b,()=>listContexts(db,b,{kind:'direct',q:'rahul'}))).items.filter(i=>i.contextId===ctxId).length,0,'the creator-typed name is not searchable by the friend');
+    const existing=await actor(c,()=>db.query('SELECT shared_expenses.lookup_phone($1) AS v',[H('b')]));
+    assert.equal(existing.rows[0].v.found,true);
+    const g=crypto.randomUUID(), gm1=crypto.randomUUID(), gm2=crypto.randomUUID(), gi=crypto.randomUUID();
+    await actor(a,()=>db.query("SELECT shared_expenses.create_context($1,'group','Flat',$2,$3)",[g,crypto.randomUUID(),H('1')]));
+    for(const m of [gm1,gm2]) await actor(a,()=>db.query('SELECT shared_expenses.invite_member($1,$2,$3)',[{contextId:g,memberId:m,displayName:'Rahul'},crypto.randomUUID(),H('9')]));
+    await create(a,{invitationId:gi,contextId:g,memberId:gm1,targetPhoneHash:H('b'),tokenHash:crypto.randomBytes(32).toString('hex')},H('5'));
+    await actor(b,()=>db.query('SELECT shared_expenses.claim_invitation_by_id($1,$2,$3,$4,$5)',[gi,H('b'),'3210',crypto.randomUUID(),H('6')]));
+    await assert.rejects(create(a,{invitationId:crypto.randomUUID(),contextId:g,memberId:gm2,targetPhoneHash:H('b'),tokenHash:crypto.randomBytes(32).toString('hex')},H('7')),/invitation_already_member/,'a person already in the context cannot be invited again by number');
+    // Decline: no money, owner sees a decline, re-inviting is paused for a week.
+    const ctx2=crypto.randomUUID(), m2=crypto.randomUUID(), i2=crypto.randomUUID(), m3=crypto.randomUUID();
+    await actor(a,()=>db.query("SELECT shared_expenses.create_context($1,'group','Trip',$2,$3)",[ctx2,crypto.randomUUID(),H('6')]));
+    for(const [m,n] of [[m2,'Dev'],[m3,'Dev again']]) await actor(a,()=>db.query('SELECT shared_expenses.invite_member($1,$2,$3)',[{contextId:ctx2,memberId:m,displayName:n},crypto.randomUUID(),H('7')]));
+    const tok=()=>crypto.randomBytes(32).toString('hex');
+    await actor(a,()=>db.query('SELECT shared_expenses.create_invitation($1,$2)',[{invitationId:i2,contextId:ctx2,memberId:m2,targetPhoneHash:H('d'),tokenHash:tok()},H('8')]));
+    await assert.rejects(actor(a,()=>db.query('SELECT shared_expenses.create_invitation($1,$2)',[{invitationId:crypto.randomUUID(),contextId:ctx2,memberId:m3,targetPhoneHash:H('d'),tokenHash:tok()},H('9')])),/invitation_duplicate/);
+    const dec=(who,h)=>actor(who,()=>db.query('SELECT shared_expenses.decline_invitation($1,$2,$3,$4) AS v',[i2,h,crypto.randomUUID(),H('a')]));
+    await assert.rejects(dec(c,H('c')),/invitation_unavailable/);
+    assert.equal((await dec(c,H('d'))).rows[0].v.status,'declined');
+    await assert.rejects(dec(c,H('d')),/invitation_unavailable/);
+    assert.equal((await actor(a,()=>db.query('SELECT shared_expenses.list_invitations($1,NULL) AS v',[ctx2]))).rows[0].v.items.find(i=>i.invitationId===i2).status,'declined');
+    await assert.rejects(actor(a,()=>db.query('SELECT shared_expenses.create_invitation($1,$2)',[{invitationId:crypto.randomUUID(),contextId:ctx2,memberId:m2,targetPhoneHash:H('d'),tokenHash:tok()},H('b')])),/invitation_declined_recently/);
+    // Expired invitations vanish from the inbox and cannot be accepted.
+    const i3=crypto.randomUUID();
+    await actor(a,()=>db.query('SELECT shared_expenses.create_invitation($1,$2)',[{invitationId:i3,contextId:ctx2,memberId:m3,targetPhoneHash:H('e'),tokenHash:tok()},H('c')]));
+    await db.query("UPDATE shared_expenses.invitations SET expires_at=clock_timestamp()-interval '1 minute' WHERE invitation_id=$1",[i3]);
+    assert.equal((await inbox(c,H('e'))).length,0);
+    await assert.rejects(actor(c,()=>db.query('SELECT shared_expenses.claim_invitation_by_id($1,$2,$3,$4,$5)',[i3,H('e'),'3210',crypto.randomUUID(),H('d')])),/invitation_unavailable/);
+    assert.equal((await actor(a,()=>db.query('SELECT shared_expenses.list_invitations($1,NULL) AS v',[ctx2]))).rows[0].v.items.find(i=>i.invitationId===i3).status,'expired');
+  });
   await t.test('owner invitations create pending membership without consenting to financial debt',async()=>{
     const invitedCtx=crypto.randomUUID(), invited=crypto.randomUUID();
     await actor(a,()=>db.query('SELECT shared_expenses.create_context($1,\'direct\',\'Synthetic friend\',$2,$3)',[invitedCtx,crypto.randomUUID(),'c'.repeat(64)]));
@@ -156,12 +298,19 @@ test('real PostgreSQL: forced RLS, source eligibility, replay and fail-closed wr
   await t.test('partial payments post only after receiver confirmation, once, without changing private costs',async()=>{
     const sid=crypto.randomUUID(), report={contextId:ctx,settlementId:sid,payerMemberId:mb,receiverMemberId:ma,amountMinor:'30000',currency:'INR',method:'upi',paidOn:'2026-11-04'};
     assert.equal((await command(b,'report_settlement',report)).status,'awaiting_receiver_confirmation');
+    const queries=requireApi('./src/shared_expenses/queries');
+    const pending=await actor(a,()=>queries.listSettlementReports(db,a,ctx,{}));
+    assert.equal(pending.items.find(row=>row.settlementId===sid).status,'pending');
+    assert.equal((await actor(c,()=>queries.listSettlementReports(db,c,ctx,{}))).items.some(row=>row.settlementId===sid),false,'unrelated group member must not read payment reports');
     assert.equal((await balances())[mb],'-40000');
     await assert.rejects(command(b,'respond_settlement',{contextId:ctx,settlementId:sid,decision:'confirm'}),/receiver_confirmation_required/);
     const response={contextId:ctx,settlementId:sid,decision:'confirm'}, operation=crypto.randomUUID();
     const confirmed=await command(a,'respond_settlement',response,operation);
     assert.deepEqual(await command(a,'respond_settlement',response,operation),confirmed);
     assert.equal((await balances())[mb],'-10000');
+    const paid=await actor(a,()=>queries.listSettlementReports(db,a,ctx,{}));
+    assert.equal(paid.items.filter(row=>row.settlementId===sid).length,1);
+    assert.equal(paid.items.find(row=>row.settlementId===sid).status,'confirmed');
     const allocation=(await db.query('SELECT kind,amount_minor::text FROM shared_expenses.settlement_allocations WHERE event_id=$1',[confirmed.eventId])).rows;
     assert.deepEqual(allocation,[{kind:'pair_balance',amount_minor:'30000'}]);
     assert.equal((await db.query('SELECT share_minor::text FROM shared_expenses.private_cost_facts WHERE profile_id=$1 AND expense_id=$2',[b,exp])).rows[0].share_minor,'40000');

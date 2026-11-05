@@ -117,13 +117,19 @@ void main() {
       final target = AppDatabase.openFile('${directory.path}/target.sqlite');
       try {
         final store = SharedExpensesStore(owner, namespace: namespace);
-        await store.enqueue(command(), provisional: {'title': 'Draft'});
-        await store.saveEditorDraft(
-          operation,
-          contextId: contextId,
-          expectedVersion: 0,
-          value: {'billText': '100.', 'title': 'Unsaved dinner'},
-        );
+        await store.enqueue(command(), provisional: {'title': 'Dinner'});
+        // Compatibility fixture from a backup made before unfinished forms
+        // were removed. Restoring it must not resurrect a draft feature.
+        owner.db
+            .execute('INSERT INTO shared_editor_drafts VALUES(?,?,?,?,?,?,?)', [
+              namespace,
+              operation,
+              contextId,
+              '{"billText":"100.","title":"Unsaved dinner"}',
+              1,
+              null,
+              0,
+            ]);
         await SharedExpensesStore(
           owner,
           namespace: otherNamespace,
@@ -172,11 +178,14 @@ void main() {
           command().requestHash,
         );
         expect(restored.operation(operation)!.state, SharedCommandState.retry);
-        expect(restored.provisional(operation), {'title': 'Draft'});
-        expect(restored.editorDraft(operation)!.value, {
-          'billText': '100.',
-          'title': 'Unsaved dinner',
-        });
+        expect(restored.provisional(operation), {'title': 'Dinner'});
+        expect(
+          target.db.select(
+            'SELECT * FROM shared_editor_drafts WHERE namespace=?',
+            [namespace],
+          ),
+          isEmpty,
+        );
         expect(
           target.db.select('SELECT * FROM shared_commands WHERE namespace=?', [
             otherNamespace,
@@ -209,16 +218,19 @@ void main() {
         final target = AppDatabase.openFile('${directory.path}/target.sqlite');
         try {
           final store = SharedExpensesStore(owner, namespace: namespace);
-          await store.saveEditorDraft(
-            operation,
-            contextId: contextId,
-            expectedVersion: 0,
-            value: {'title': 'Dinner'},
-          );
-          final receipt = await store.saveEditorReceipt(
-            operation,
+          final receipt = SharedSubmissionReceipt(
             name: 'Bill.jpg',
             bytes: Uint8List.fromList([1, 2, 3, 4]),
+          );
+          final expense = SharedCommand(
+            operationId: operation,
+            kind: 'expense.propose',
+            payload: {'contextId': contextId, 'expenseId': contextId},
+          );
+          await store.enqueueExpenseSubmission(
+            expense,
+            provisional: {'title': 'Dinner'},
+            receipt: receipt,
           );
           final archive = await owner.withRecoveryDatabase(
             (lease) => AccountRecoveryLocalSnapshot.capture(
@@ -243,7 +255,7 @@ void main() {
           final restored = SharedExpensesStore(
             target,
             namespace: namespace,
-          ).editorReceipt(operation, receipt.hash);
+          ).submissionReceipt(operation, receipt.hash);
           expect(restored?.bytes, include ? [1, 2, 3, 4] : isNull);
           expect(
             target.db

@@ -1,8 +1,11 @@
 import 'package:flutter_test/flutter_test.dart';
+import 'dart:typed_data';
 import 'package:pandapay/data/local/app_database.dart';
 import 'package:pandapay/features/shared_expenses/composer/shared_editor.dart';
 import 'package:pandapay/features/shared_expenses/storage/shared_store.dart';
 import 'package:sqlite3/sqlite3.dart';
+import 'package:pandapay_domain/pandapay_domain.dart';
+import 'package:pandapay_domain/shared_expenses.dart';
 
 const account = '11111111-1111-4111-8111-111111111111';
 const me = '22222222-2222-4222-8222-222222222222';
@@ -31,33 +34,79 @@ void main() {
     editor.choosePayer(friend);
   }
 
+  test('unsubmitted input and private classification never persist', () async {
+    setup();
+    editor.setBill('900.');
+    editor.setPrivateFields({
+      'categoryId': 'dining',
+      'tagIds': ['trip'],
+    });
+    await Future<void>.delayed(const Duration(milliseconds: 350));
+    expect(
+      db.db.select('SELECT count(*) n FROM shared_editor_drafts').single['n'],
+      0,
+    );
+    expect(store.pendingCount, 0);
+    final fresh = SharedEditor(store: store, accountId: account);
+    expect(fresh.billText, isEmpty);
+    expect(fresh.privateFields, isEmpty);
+    fresh.dispose();
+  });
   test(
-    'someone else paid generates only a shared proposal and no own source or payment',
+    'a selected receipt is private memory until the same submission commits',
+    () async {
+      setup();
+      final receipt = SharedSubmissionReceipt(
+        name: 'Bill.jpg',
+        bytes: Uint8List.fromList([1, 2, 3, 4]),
+      );
+      editor.setReceipt(receipt);
+      editor.setPrivateFields({'note': 'Dinner', 'receiptHash': receipt.hash});
+      expect(
+        db.db
+            .select('SELECT count(*) n FROM shared_editor_receipts')
+            .single['n'],
+        0,
+      );
+      final command = await editor.seal();
+      expect(
+        store.submissionReceipt(command.operationId, receipt.hash)!.bytes,
+        [1, 2, 3, 4],
+      );
+      expect(
+        (store.provisional(command.operationId)!['privateFields']
+            as Map)['note'],
+        'Dinner',
+      );
+      expect(
+        db.db.select('SELECT count(*) n FROM shared_editor_drafts').single['n'],
+        0,
+      );
+    },
+  );
+  test(
+    'someone else paid creates one exact shared proposal without an own bank row',
     () async {
       setup();
       expect(editor.evaluation.preview!.yourFullPaid.paise, 0);
       expect(editor.evaluation.preview!.yourShare.paise, 45000);
       final command = await editor.seal();
-      expect(command.kind, 'expense.propose');
-      expect((command.toJson()['payload'] as Map)['sources'], isEmpty);
-      expect(store.pendingCount, 1);
-      expect(
-        ((command.toJson()['payload'] as Map)['bill'] as Map)['totalMinor'],
-        '90000',
-      );
-      expect(
-        ((command.toJson()['payload'] as Map)['snapshot']
-            as Map)['contributions'],
-        [
-          {'memberId': friend, 'amountMinor': '90000'},
-        ],
-      );
+      final payload = command.toJson()['payload'] as Map;
+      expect(payload['sources'], isEmpty);
+      expect((payload['bill'] as Map)['totalMinor'], '90000');
+      expect((payload['snapshot'] as Map)['contributions'], [
+        {'memberId': friend, 'amountMinor': '90000'},
+      ]);
       expect((await editor.seal()).canonicalJson, command.canonicalJson);
       expect(store.pendingCount, 1);
+      expect(
+        db.db.select('SELECT count(*) n FROM shared_editor_drafts').single['n'],
+        0,
+      );
     },
   );
   test(
-    'new own bank payment cannot silently become an unlinked cash split',
+    'own bank payment stays blocked until funding admission is implemented',
     () async {
       setup();
       editor.choosePayer(me);
@@ -66,46 +115,16 @@ void main() {
       expect(store.pendingCount, 0);
     },
   );
+  test('concurrent submit taps seal one immutable operation', () async {
+    setup();
+    final result = await Future.wait([editor.seal(), editor.seal()]);
+    expect(result[0].canonicalJson, result[1].canonicalJson);
+    editor.setTitle('Late edit');
+    expect(editor.title, 'Dinner');
+    expect(store.pendingCount, 1);
+  });
   test(
-    'unfinished input and private classification restore exactly without a command',
-    () async {
-      setup();
-      editor.setBill('900.');
-      editor.setPrivateFields({
-        'categoryId': 'dining',
-        'tagIds': ['trip'],
-      });
-      await editor.persist();
-      final restored = SharedEditor(
-        store: store,
-        accountId: account,
-        draftId: editor.id,
-      );
-      expect(restored.billText, '900.');
-      expect(restored.title, 'Dinner');
-      expect(restored.privateFields['tagIds'], ['trip']);
-      expect(restored.evaluation.isValid, isFalse);
-      expect(store.pendingCount, 0);
-      restored.dispose();
-    },
-  );
-  test(
-    'rapid edits serialize latest state and keep stable revision identity',
-    () async {
-      setup();
-      final revision = editor.revisionId;
-      editor.setBill('100');
-      final first = editor.persist();
-      editor.setBill('200');
-      final second = editor.persist();
-      await first;
-      await second;
-      expect(store.editorDraft(editor.id)!.value['billText'], '200');
-      expect(editor.revisionId, revision);
-    },
-  );
-  test(
-    'participant mode updates use live exact validation and preserve payer separately',
+    'exact amounts and partial sharing validate without silently changing participants',
     () {
       setup();
       editor.setMode(SharedSplitMode.exact);
@@ -113,66 +132,41 @@ void main() {
       editor.setSplit(friend, '600');
       expect(editor.evaluation.preview!.yourShare.paise, 30000);
       editor.setSplit(friend, '599.99');
-      expect(editor.evaluation.isValid, isFalse);
+      expect(editor.canSubmit, isFalse);
       editor.setSplit(friend, '600');
       editor.setShared('600');
-      expect(editor.evaluation.isValid, isFalse);
+      expect(editor.canSubmit, isFalse);
     },
   );
   test(
-    'a stale editor cannot overwrite or seal another window changes',
-    () async {
-      setup();
-      await editor.persist();
-      final other = SharedEditor(
-        store: store,
-        accountId: account,
-        draftId: editor.id,
-      );
-      other.setTitle('Different');
-      await other.persist();
-      editor.setTitle('Old change');
-      await expectLater(editor.persist(), throwsA(isA<SharedLocalException>()));
-      await expectLater(editor.seal(), throwsA(isA<SharedLocalException>()));
-      expect(store.pendingCount, 0);
-      other.dispose();
-    },
-  );
-  test(
-    'member removal cannot silently drop a selected share on restart',
-    () async {
+    'removed participants stay explicit until the user corrects the form',
+    () {
       setup();
       editor.selectContext(group, 'Flatmates', const [
         SharedEditorMember(me, 'You'),
       ], me);
       expect(editor.canSubmit, isFalse);
-      await editor.persist();
-      final restored = SharedEditor(
-        store: store,
-        accountId: account,
-        draftId: editor.id,
-      );
-      expect(restored.participants, contains(friend));
-      expect(restored.singlePayer, friend);
-      restored.dispose();
+      expect(editor.participants, contains(friend));
+      expect(editor.singlePayer, friend);
     },
   );
   test(
-    'unchanged private fields do not schedule another database version',
-    () async {
+    'changing payer cannot detach the original payment or invent funding',
+    () {
       setup();
-      editor.setPrivateFields({
-        'note': 'Keep receipt',
-        'tagIds': ['trip'],
+      editor.choosePayer(me);
+      final source = SharedExpenseSourceReference.parse({
+        'kind': 'legacy_transaction',
+        'ownerAccountId': account,
+        'canonicalTransactionId': group,
+        'sourceVersion': 'pending',
       });
-      await editor.persist();
-      final version = store.editorDraft(editor.id)!.version;
-      editor.setPrivateFields({
-        'tagIds': ['trip'],
-        'note': 'Keep receipt',
-      });
-      await Future<void>.delayed(const Duration(milliseconds: 350));
-      expect(store.editorDraft(editor.id)!.version, version);
+      editor.attachSourceIntent(source, const Money.fromPaise(90000));
+      editor.choosePayer(friend);
+      expect(editor.linkedSource!.toJson(), source.toJson());
+      expect(editor.lockedOwnPaid!.paise, 90000);
+      expect(editor.evaluation.isValid, isFalse);
+      expect(store.pendingCount, 0);
     },
   );
 }

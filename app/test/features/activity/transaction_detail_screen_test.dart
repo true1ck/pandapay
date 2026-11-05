@@ -11,6 +11,7 @@ import 'package:pandapay/data/transaction_tags_repository.dart';
 import 'package:pandapay/data/user_cards_repository.dart';
 import 'package:pandapay/data/local/split_repository.dart';
 import 'package:pandapay/features/activity/transaction_detail_screen.dart';
+import 'package:pandapay/features/shared_expenses/runtime/shared_providers.dart';
 import 'package:pandapay_domain/pandapay_domain.dart';
 
 class _FakeUserCardsRepository implements UserCardsRepository {
@@ -121,6 +122,7 @@ Future<void> _pump(
   TransactionEntry? initialEntry,
   TransactionTagsRepository? tagsRepository,
   String transactionId = 't1',
+  bool shared = false,
 }) async {
   final router = GoRouter(
     initialLocation: '/activity/$transactionId',
@@ -141,6 +143,11 @@ Future<void> _pump(
   await tester.pumpWidget(
     ProviderScope(
       overrides: [
+        sharedExpensesEnabledProvider.overrideWithValue(shared),
+        if (shared)
+          cacheNamespaceProvider.overrideWithValue(
+            'user:11111111-1111-4111-8111-111111111111',
+          ),
         userCardsRepositoryProvider.overrideWithValue(repo),
         if (tagsRepository != null)
           transactionTagsProvider.overrideWith((ref) => tagsRepository),
@@ -152,18 +159,61 @@ Future<void> _pump(
 }
 
 void main() {
-  testWidgets('local SMS detail shows the saved card and UPI before server sync', (tester) async {
-    final entry = TransactionEntry(id: 'local-sms:fixture',
-      amount: Money.fromRupees(42.5), occurredAt: DateTime(2026, 11, 1),
-      merchantName: 'TESTTECHNOLOGIES', cardDisplayName: 'My SBI PhonePe RuPay card',
-      cardLast4: '4242', userCardId: 'saved-rupay', paymentMethod: 'upi',
-      source: 'sms', status: 'active');
-    await _pump(tester, repo: _FakeUserCardsRepository(entry),
-      initialEntry: entry, transactionId: entry.id);
-    expect(find.text('My SBI PhonePe RuPay card'), findsOneWidget);
-    expect(find.text('UPI'), findsOneWidget);
-    expect(tester.takeException(), isNull);
-  });
+  testWidgets(
+    'shared rollout retains private split editing through one contextual action',
+    (tester) async {
+      final entry = TransactionEntry(
+        id: '22222222-2222-4222-8222-222222222222',
+        amount: Money.fromRupees(900),
+        occurredAt: DateTime(2026, 11, 4),
+        merchantName: 'Dinner',
+        source: 'manual',
+        status: 'active',
+      );
+      await _pump(
+        tester,
+        repo: _FakeUserCardsRepository(entry),
+        transactionId: entry.id,
+        shared: true,
+      );
+      final action = find.text('Split options');
+      await tester.ensureVisible(action);
+      await tester.pumpAndSettle();
+      await tester.tap(action);
+      await tester.pumpAndSettle();
+      expect(find.text('Private allocations'), findsOneWidget);
+      expect(find.text('Share with people'), findsOneWidget);
+      await tester.tap(find.text('Private allocations'));
+      await tester.pumpAndSettle();
+      expect(find.text('Save split'), findsOneWidget);
+    },
+  );
+  testWidgets(
+    'local SMS detail shows the saved card and UPI before server sync',
+    (tester) async {
+      final entry = TransactionEntry(
+        id: 'local-sms:fixture',
+        amount: Money.fromRupees(42.5),
+        occurredAt: DateTime(2026, 11, 1),
+        merchantName: 'TESTTECHNOLOGIES',
+        cardDisplayName: 'My SBI PhonePe RuPay card',
+        cardLast4: '4242',
+        userCardId: 'saved-rupay',
+        paymentMethod: 'upi',
+        source: 'sms',
+        status: 'active',
+      );
+      await _pump(
+        tester,
+        repo: _FakeUserCardsRepository(entry),
+        initialEntry: entry,
+        transactionId: entry.id,
+      );
+      expect(find.text('My SBI PhonePe RuPay card'), findsOneWidget);
+      expect(find.text('UPI'), findsOneWidget);
+      expect(tester.takeException(), isNull);
+    },
+  );
 
   testWidgets(
     'UPI credit-card spend shows the matched card without guessing QR',
@@ -190,14 +240,22 @@ void main() {
           cardDisplayName: 'My SBI PhonePe RuPay card',
           cardLast4: '4242',
           userCardId: 'saved-rupay',
-        sourceKey: 'exact-sms-fixture',
+          sourceKey: 'exact-sms-fixture',
           instrument: TxnInstrument.creditCard,
           source: 'sms',
           status: 'active',
         ),
       );
-    final local = TransactionEntry.fromJson({...repo.entry.toJson(), 'payment_method': 'upi'});
-    await _pump(tester, repo: repo, initialEntry: local, tagsRepository: tags);
+      final local = TransactionEntry.fromJson({
+        ...repo.entry.toJson(),
+        'payment_method': 'upi',
+      });
+      await _pump(
+        tester,
+        repo: repo,
+        initialEntry: local,
+        tagsRepository: tags,
+      );
       expect(find.text('My SBI PhonePe RuPay card'), findsOneWidget);
       expect(find.text('UPI'), findsOneWidget);
       expect(find.text('UPI QR'), findsNothing);
