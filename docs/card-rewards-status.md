@@ -36,8 +36,8 @@ Status values: `not started` · `running` · `done (branch ready)` · `merged` �
 | WP5 | Merchant and platform directory data | 1 | `card-rewards/wp5-directory` | **merged** | 2026-11-06 | 164 merchants (9 true sub-brand parents, `group` tags per D6), 61 platforms; review + 1 fix round clean; IHCL brands kept under `taj` (ruling in ledger) |
 | WP6a | Worked examples: HDFC, SBI Card | 1 | `card-rewards/wp6a-examples-hdfc-sbi` | **merged** | 2026-11-06 | 21/21 cards, 15 override files; review + 1 fix round clean; Swiggy exact-half rounding parked |
 | WP6b | Worked examples: ICICI, Axis, Amex, IDFC, others | 1 | `card-rewards/wp6b-examples-others` | **merged** | 2026-11-06 | 23/25 cards (Amazon Pay ICICI, AU Zenith+ skipped), 13 override files; 2 fix rounds, verified with the real loader; 18-card loader mismatches carried to WP7 |
-| WP7 | Integration: worked examples through both engines | 2 | `card-rewards/wp7-integration` | running | 2026-11-06 | 44 cards' bank examples through both engines; triage; marks Verified cards |
-| WP8 | Server recording v2 + recompute script | 2 | `card-rewards/wp8-server-state` | running | 2026-11-06 | Native-unit cap states (gate for WP9), milestone windows, recompute after publish |
+| WP7 | Integration: worked examples through both engines | 2 | `card-rewards/wp7-integration` | done (in review) | 2026-11-06 | 374/397 bank examples pass in both engines (14 known failures routed, 9 not checkable); JS = Dart on all 388; 19 cards Verified; 31 override corrections |
+| WP8 | Server recording v2 + recompute script | 2 | `card-rewards/wp8-server-state` | needs rework (fix round 1) | 2026-11-06 | Review: core sound and money-exact; applying D22 + fixing statement-cycle dates (days 1, 29–31), an edit/recalc race, IST periods, one broken DB test — D23 |
 | WP9 | App: v2 feed, tolerant parse, cap bars, alerts | 2 | — | not started | | Starts after WP8 merges |
 | — | Checkpoint A (after wave 1) | — | — | **passed** | 2026-11-06 | API 1695/0 fail; Dart 477/0; real DB import 376/376; old feed parsed by the released app parser with 0 errors; JS = Dart on 11,914 real-data purchases (0 mismatches) |
 | — | Checkpoint B (after wave 2) | — | — | not started | | |
@@ -54,7 +54,7 @@ Status values: `not started` · `running` · `done (branch ready)` · `merged` �
 | Milestones on the wrong anchor | 292 / 292 (60 non-annual) | 0 / 308 — WP2 dry run |
 | Spend-gated lounges structured | 0 / 124 | 115 cards (195 unlock rows) — WP2 dry run |
 | Co-brand cards with a merchant rule | 8 / 74 (WP2 count 5 / 102) | 53 / 102 — WP2 dry run |
-| Cards Verified | 0 | 0 (set by WP7) |
+| Cards Verified | 0 | 19 (WP7, pending review); 15 more pass all examples but blocked by loader flags |
 
 ## Decisions log
 
@@ -74,6 +74,8 @@ Status values: `not started` · `running` · `done (branch ready)` · `merged` �
 | 2026-11-06 | D17: the loader never widens a narrow bonus (pharmacy, movies, hotels, flights) to a whole category — it uses MCC codes or keeps it information-only; exclusions never lose their old-app row; fee/surcharge/redemption limits are never attached to earning rules. | Lead |
 | 2026-11-06 | D18: some rows exist only for the old feed (broad exclusions, broad reduced rates); the new engines ignore them and use the precise version, so old apps stay cautious and the new app stays accurate. | Lead |
 | 2026-11-06 | D19: an exclusion counts as "bonus-only" only if every benefit it removes is a bonus/accelerated rate; an explicit MCC list is the exclusion's real scope; caps follow their source rule; a capped bonus without its cap is hidden from old apps. | Lead |
+| 2026-11-06 | D22: milestone progress counts only spends that earn (never over-states); welcome offers start from the card's issue date; old app installs keep the old meaning of limit progress; rule order made deterministic. | Lead |
+| 2026-11-06 | D23: limit periods follow Indian time and correct statement dates (incl. 1st and 29th–31st); edits and recalculations can't overlap. | Lead |
 | 2026-11-06 | D10: cards switch to the v2 engine only when re-imported by the v2 loader (DB defaults alone never switch a card), so existing cards keep today's behaviour until re-import. | Lead |
 
 ## Changelog
