@@ -281,7 +281,6 @@ void main() {
 
     group('upload', () {
       var consent = false;
-      var consentCalls = 0;
       final posts = <Map<String, Object?>>[];
       var status = 202;
 
@@ -290,10 +289,7 @@ void main() {
         queue: outbox(),
         baseUri: Uri.parse('https://api.invalid'),
         headers: () async => {},
-        hasConsent: () async {
-          consentCalls++;
-          return consent;
-        },
+        hasConsent: () async => consent,
         accountIsCurrent: () => true,
         taxonomyVersion: () => 1,
         clock: () => _now,
@@ -306,7 +302,6 @@ void main() {
 
       setUp(() {
         consent = false;
-        consentCalls = 0;
         posts.clear();
         status = 202;
       });
