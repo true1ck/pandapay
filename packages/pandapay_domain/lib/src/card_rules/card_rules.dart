@@ -130,6 +130,11 @@ enum PeriodAnchor { cardAnniversary, calendarYear, fiscalYear, statementCycle }
 /// issuers pay ₹7,500 × 1.5 pts/₹100 as 113 points, not 75 blocks × 1.5.
 enum AccrualRounding { floor, round, none, pointsHalfUp, pointsFloor }
 
+/// v2 `card_products.cashback_rounding` (plan C8/D11): how each cashback
+/// accrual piece is rounded before caps. Null on the card means [paise].
+/// `accrual_rounding` governs points only.
+enum CashbackRounding { paise, rupeeFloor, rupeeHalfUp }
+
 /// v2 `card_products.model_status`: how faithfully the catalogue models
 /// this card's earning (plan §1 item 6).
 enum ModelStatus { verified, partial, basic }
@@ -656,6 +661,9 @@ class CardProduct {
   /// Per-transaction rounding of points blocks. Non-null marks the card as
   /// v2-shaped (C3.2).
   final AccrualRounding? accrualRounding;
+
+  /// Per-piece cashback rounding (D11). Non-null marks the card v2-shaped.
+  final CashbackRounding? cashbackRounding;
   final int? pointsExpiryMonths;
 
   /// Null when the feed doesn't say (the v1 feed).
@@ -698,6 +706,7 @@ class CardProduct {
     this.hasApplyUrl = false,
     this.accrualBlockInr,
     this.accrualRounding,
+    this.cashbackRounding,
     this.pointsExpiryMonths,
     this.modelStatus,
     this.modelCoverage = const {},
@@ -707,8 +716,8 @@ class CardProduct {
     this.wireV2Shaped = false,
   });
 
-  /// C3.2 as amended by plan C8/D10: v2-shaped iff the card has
-  /// `accrual_rounding`, any cap has a `cap_kind`, or any rule carries a
+  /// C3.2 as amended by plan C8/D10/D11: v2-shaped iff the card has
+  /// `accrual_rounding` or `cashback_rounding`, any cap has a `cap_kind`, or any rule carries a
   /// non-default v2 value ([RewardRule.marksV2]). It must not key on
   /// DB-defaulted columns: after the v2 migration every row has
   /// `rule_role = 'earn'` and empty arrays, and such a card must keep
@@ -716,6 +725,7 @@ class CardProduct {
   bool get isV2Shaped =>
       wireV2Shaped ||
       accrualRounding != null ||
+      cashbackRounding != null ||
       rewardRules.any((r) => r.marksV2) ||
       capRules.any((c) => c.capKind != null);
 

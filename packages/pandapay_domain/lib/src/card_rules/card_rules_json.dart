@@ -677,6 +677,15 @@ extension CardProductJson on CardProduct {
       ),
       fallback: AccrualRounding.floor,
     );
+    // D11: an unknown cashback rounding is treated as null (paise).
+    final cashbackRounding = cardField(
+      'cashback_rounding',
+      () => _v2EnumOrNull(
+        CashbackRounding.values,
+        json['cashback_rounding'],
+        'cashback_rounding',
+      ),
+    );
     final coverageRaw = json['model_coverage'];
     final modelCoverage = coverageRaw is Map<String, dynamic>
         ? coverageRaw
@@ -733,6 +742,7 @@ extension CardProductJson on CardProduct {
         () => _v2IntOrNull(json['accrual_block_inr'], 'accrual_block_inr'),
       ),
       accrualRounding: accrualRounding,
+      cashbackRounding: cashbackRounding,
       pointsExpiryMonths: cardField(
         'points_expiry_months',
         () =>
@@ -784,6 +794,8 @@ extension CardProductJson on CardProduct {
     if (accrualBlockInr != null) 'accrual_block_inr': accrualBlockInr,
     if (accrualRounding != null)
       'accrual_rounding': _v2EnumToJson(accrualRounding!),
+    if (cashbackRounding != null)
+      'cashback_rounding': _v2EnumToJson(cashbackRounding!),
     if (pointsExpiryMonths != null) 'points_expiry_months': pointsExpiryMonths,
     if (modelStatus != null) 'model_status': _v2EnumToJson(modelStatus!),
     if (modelCoverage.isNotEmpty) 'model_coverage': modelCoverage,

@@ -189,6 +189,24 @@ void main() {
       expect(card.accrualRounding, AccrualRounding.round);
     });
 
+    test('D11: cashback_rounding marks the card v2', () {
+      final card = CardProductJson.fromJson(
+        _card(extra: {'cashback_rounding': 'rupee_floor'}),
+      );
+      expect(card.isV2Shaped, isTrue);
+      expect(card.cashbackRounding, CashbackRounding.rupeeFloor);
+      expect(card.parseWarnings, isEmpty);
+    });
+
+    test('D11: an unknown cashback_rounding reads as null with a warning', () {
+      final card = CardProductJson.fromJson(
+        _card(extra: {'cashback_rounding': 'nearest_ten'}),
+      );
+      expect(card.cashbackRounding, isNull);
+      expect(card.isV2Shaped, isFalse);
+      expect(card.parseWarnings.single, contains('cashback_rounding'));
+    });
+
     test('null v2 values do not mark a card v2', () {
       final card = CardProductJson.fromJson(
         _card(
@@ -477,6 +495,7 @@ void main() {
         extra: {
           'accrual_block_inr': 150,
           'accrual_rounding': 'none',
+          'cashback_rounding': 'rupee_half_up',
           'points_expiry_months': 24,
           'model_status': 'partial',
           'model_coverage': {
@@ -538,6 +557,7 @@ void main() {
       expect(second.isV2Shaped, isTrue);
       expect(second.accrualBlockInr, 150);
       expect(second.accrualRounding, AccrualRounding.none);
+      expect(second.cashbackRounding, CashbackRounding.rupeeHalfUp);
       expect(second.pointsExpiryMonths, 24);
       expect(second.modelStatus, ModelStatus.partial);
       expect(second.modelCoverage['rules_total'], 4);

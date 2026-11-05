@@ -156,8 +156,9 @@ class _Decimal {
   const _Decimal(this.numerator, this.denominator);
 
   factory _Decimal.of(double value) {
-    if (value.isNaN || value.isInfinite)
+    if (value.isNaN || value.isInfinite) {
       return _Decimal(BigInt.zero, BigInt.one);
+    }
     var text = value.abs().toString();
     var exponent = 0;
     final e = text.indexOf(RegExp('[eE]'));
@@ -210,27 +211,32 @@ int? _unitBlock(RewardUnit unit) => switch (unit) {
   _ => null,
 };
 
-/// C3.5 accrual of [rate] in [unit] on [spendPaise], in the unit's currency
-/// (points, or ₹ cashback kept to paise).
+/// C3.5 accrual of [rate] in [unit] on [spendPaise], in the unit's currency:
+/// points under [rounding] (accrual_rounding, points only), or ₹ cashback
+/// under [cashbackRounding] (D11: paise, or whole rupees floored/half-up).
 double _accrue(
   RewardUnit unit,
   double rate,
   int spendPaise,
-  AccrualRounding rounding, {
+  AccrualRounding rounding,
+  CashbackRounding cashbackRounding, {
   int? blockInr,
 }) {
-  if (spendPaise <= 0 || rate == 0) return 0;
+  if (spendPaise <= 0 || rate <= 0) return 0;
   final r = _Decimal.of(rate);
   final paise = BigInt.from(spendPaise);
   switch (unit) {
     case RewardUnit.cashbackPercent:
     case RewardUnit.discountPercent:
-      // cashback = spend × rate / 100, kept to paise (half-up).
-      final cashbackPaise = _halfUpDiv(
-        paise * r.numerator,
-        BigInt.from(100) * r.denominator,
-      );
-      return cashbackPaise.toInt() / 100;
+      // Exact cashback in paise is paise × rate / 100 = n / d.
+      final n = paise * r.numerator;
+      final d = BigInt.from(100) * r.denominator;
+      final rupeeDen = d * BigInt.from(100);
+      return switch (cashbackRounding) {
+        CashbackRounding.paise => _halfUpDiv(n, d).toInt() / 100,
+        CashbackRounding.rupeeFloor => _floorDiv(n, rupeeDen).toDouble(),
+        CashbackRounding.rupeeHalfUp => _halfUpDiv(n, rupeeDen).toDouble(),
+      };
     case RewardUnit.flatPoints:
       return rate;
     case RewardUnit.pointsPer100:
@@ -610,12 +616,14 @@ RewardEvaluation computeRewardV2(
   final ruleCurrency = rewardCurrencyOf(ruleUnit);
   final isBaseRole = rule == null || rule.effectiveRole == RuleRole.base;
   final rounding = card.accrualRounding ?? AccrualRounding.floor;
+  final cashbackRounding = card.cashbackRounding ?? CashbackRounding.paise;
   final ratePerRupee = rule == null
       ? _ratePerRupee(ruleUnit, ruleRate, pointValue)
       : rateOf(rule);
 
-  double baseAccrual(int paise) =>
-      hasBase ? _accrue(baseUnit, baseRate, paise, rounding) : 0;
+  double baseAccrual(int paise) => hasBase
+      ? _accrue(baseUnit, baseRate, paise, rounding, cashbackRounding)
+      : 0;
 
   // C3.5 eligible spend: up to max_txn_inr; the excess earns the base rate.
   final amountPaise = context.amount.paise;
@@ -705,6 +713,7 @@ RewardEvaluation computeRewardV2(
     ruleRate,
     rulePaise,
     rounding,
+    cashbackRounding,
     blockInr: rule?.blockInr,
   );
   if (isBaseRole) {
@@ -735,7 +744,7 @@ RewardEvaluation computeRewardV2(
         final rate = overflowCap.cap.postCapRate ?? 0;
         addPiece(
           rewardCurrencyOf(unit),
-          _accrue(unit, rate, overflowPaise, rounding),
+          _accrue(unit, rate, overflowPaise, rounding, cashbackRounding),
         );
     }
   }
