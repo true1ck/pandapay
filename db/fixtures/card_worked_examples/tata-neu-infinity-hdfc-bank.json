@@ -18,6 +18,16 @@
       "url": "https://www.hdfc.bank.in/content/dam/hdfcbankpws/in/en/personal-banking/discover-products/cards/credit-cards/personal-mitc/mitc-in-english.pdf",
       "doc": "HDFC Bank credit card MITC v4.18, Oct 2026",
       "quote": "Reward Points earned on Grocery transactions will be capped per month"
+    },
+    {
+      "url": "https://www.hdfc.bank.in/content/dam/hdfcbankpws/in/en/personal-banking/discover-products/cards/credit-cards/personal-mitc/mitc-in-english.pdf",
+      "doc": "HDFC Bank credit card MITC v4.18, Oct 2026 (Fair Usage Policy)",
+      "quote": "The maximum reward points that can be earned in a statement cycle for Tata Neu Infinity* is 50,000"
+    },
+    {
+      "url": "https://www.hdfc.bank.in/content/dam/hdfcbankpws/in/en/personal-banking/discover-products/cards/credit-cards/tata-neu-infinity-credit-card/pdf/tata_neu_infinity_card_tnc.pdf",
+      "doc": "T&C Annex 1 - Tata Brand Merchants and Fair Usage Policy",
+      "quote": "Electronics Croma 6,00,000 18,00,000"
     }
   ],
   "examples": [
@@ -43,7 +53,9 @@
         "amount": 7,
         "value_inr": 7,
         "excluded": false,
-        "cap_deltas_by_source_id": {}
+        "cap_deltas_by_source_id": {
+          "wp7_fair_usage_statement_cycle": 7
+        }
       },
       "why": "Issuer worked example: 1.5% of 499, rounded to nearest whole NeuCoin = 7. 1 NeuCoin = Rs1."
     },
@@ -69,7 +81,9 @@
         "amount": 44,
         "value_inr": 44,
         "excluded": false,
-        "cap_deltas_by_source_id": {}
+        "cap_deltas_by_source_id": {
+          "wp7_fair_usage_statement_cycle": 44
+        }
       },
       "why": "Issuer worked example: 1.5% of 2,949 = 44.235, nearest whole NeuCoin = 44. Computed on the exact amount, not Rs100 blocks."
     },
@@ -95,7 +109,9 @@
         "amount": 113,
         "value_inr": 113,
         "excluded": false,
-        "cap_deltas_by_source_id": {}
+        "cap_deltas_by_source_id": {
+          "wp7_fair_usage_statement_cycle": 113
+        }
       },
       "why": "Issuer worked example: 1.5% of 7,500 = 112.5, posted as 113. Half rounds up."
     },
@@ -121,7 +137,13 @@
         "amount": 1056,
         "value_inr": 1056,
         "excluded": false,
-        "cap_deltas_by_source_id": {}
+        "cap_deltas_by_source_id": {
+          "wp7_fair_usage_statement_cycle": 1056,
+          "tata_partner_croma_wp7_monthly": 21100,
+          "tata_partner_croma_wp7_annual": 21100
+        },
+        "tolerance_points": 1,
+        "tolerance_note": "Issuer example 1: base 1.5% = 316.5 -> 317 and additional 3.5% = 738.5 -> 739, rounded separately = 1,056; engines round the 5% accrual once (1,055). C8 D25a."
       },
       "why": "Issuer worked example: base 317 + additional 739, each rounded separately."
     },
@@ -173,7 +195,9 @@
         "amount": 74,
         "value_inr": 74,
         "excluded": false,
-        "cap_deltas_by_source_id": {}
+        "cap_deltas_by_source_id": {
+          "wp7_fair_usage_statement_cycle": 74
+        }
       },
       "why": "Issuer worked example: merchant EMI earns only the base 1.5%, no partner uplift: 74."
     },
@@ -202,7 +226,8 @@
         "value_inr": 50,
         "excluded": false,
         "cap_deltas_by_source_id": {
-          "grocery_monthly_2000": 50
+          "grocery_monthly_2000": 50,
+          "wp7_fair_usage_statement_cycle": 50
         }
       },
       "why": "1.5% would be 150 but only 50 NeuCoins remain in the 2000/month grocery cap."
@@ -258,7 +283,8 @@
         "value_inr": 300,
         "excluded": false,
         "cap_deltas_by_source_id": {
-          "insurance_monthly_2000": 300
+          "insurance_monthly_2000": 300,
+          "wp7_fair_usage_statement_cycle": 300
         }
       },
       "why": "Insurance earns the base rate, capped at 2,000 NeuCoins per month: 300."
