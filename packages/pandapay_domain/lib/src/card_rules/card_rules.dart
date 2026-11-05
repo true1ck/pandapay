@@ -286,9 +286,9 @@ class RewardRule {
     this.displayNote,
   });
 
-  /// D18a: whether the v2 engine must ignore this row (v1-only).
-  bool get isV1Only =>
-      maxEngineVersion != null && maxEngineVersion! < kRewardEngineVersion;
+  /// D18a: whether the v2 engine must ignore this row — exactly
+  /// `max_engine_version = 1`, as in the JS engine.
+  bool get isV1Only => maxEngineVersion == 1;
 
   /// The role the v2 engine uses: a v1 row on a v2 card is an earning rule.
   RuleRole get effectiveRole => role ?? RuleRole.earn;
