@@ -1,0 +1,19 @@
+{
+  "source_slug": "irctc-sbi-card-premier",
+  "changes": [
+    {
+      "path": "reward_rules[id=irctc_air_and_ecatering_accelerator].action.points_per_block",
+      "value": 5,
+      "reason": "T&C: 5 reward points per Rs125 on air and e-catering.",
+      "source_url": "https://www.sbicard.com/sbi-card-en/assets/docs/pdf/ekit-tncs/IRCTCPremiertnc.pdf",
+      "checked_on": "2026-11-05"
+    },
+    {
+      "path": "cap_rules[id=air_ticket_reward_cap_statement_cycle].metric",
+      "value": "total_reward_points",
+      "reason": "Cap is on total air-ticket earning per cycle.",
+      "source_url": "https://www.sbicard.com/sbi-card-en/assets/docs/pdf/ekit-tncs/IRCTCPremiertnc.pdf",
+      "checked_on": "2026-11-05"
+    }
+  ]
+}

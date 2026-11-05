@@ -34,7 +34,7 @@ Status values: `not started` · `running` · `done (branch ready)` · `merged` �
 | WP3 | Dart engine v2 + tolerant parsing | 1 | `card-rewards/wp3-dart-engine` | running | 2026-11-05 | |
 | WP4 | JS engine v2 + merchant resolver | 1 | `card-rewards/wp4-js-engine` | needs rework (fix round 1) | 2026-11-06 | Review approved; applying D10–D12 and pinning D9/D12 rulings as shared scenarios |
 | WP5 | Merchant and platform directory data | 1 | `card-rewards/wp5-directory` | **merged** | 2026-11-06 | 164 merchants (9 true sub-brand parents, `group` tags per D6), 61 platforms; review + 1 fix round clean; IHCL brands kept under `taj` (ruling in ledger) |
-| WP6a | Worked examples: HDFC, SBI Card | 1 | `card-rewards/wp6a-examples-hdfc-sbi` | needs rework (fix round 1) | 2026-11-06 | 21/21 cards; review approved; fixing Swiggy ₹249 note, quote length, D11 rounding overrides |
+| WP6a | Worked examples: HDFC, SBI Card | 1 | `card-rewards/wp6a-examples-hdfc-sbi` | **merged** | 2026-11-06 | 21/21 cards, 15 override files; review + 1 fix round clean; Swiggy exact-half rounding parked |
 | WP6b | Worked examples: ICICI, Axis, Amex, IDFC, others | 1 | `card-rewards/wp6b-examples-others` | done (in review) | 2026-11-06 | 23/25 cards (Amazon Pay ICICI, AU Zenith+ skipped: issuer pages unreachable); 14 override files; per-user caps → D13 |
 | WP7 | Integration: worked examples through both engines | 2 | — | not started | | Needs wave 1 merged |
 | WP8 | Server recording v2 + recompute script | 2 | — | not started | | Needs WP1, WP4 |
@@ -72,6 +72,7 @@ Status values: `not started` · `running` · `done (branch ready)` · `merged` �
 
 ## Changelog
 
+- **2026-11-06:** WP6a merged (21 HDFC/SBI cards with issuer-verified examples and 15 correction files).
 - **2026-11-06:** WP1 merged (schema v2, feeds, seeder; backward-compatibility test now in CI).
 - **2026-11-06:** WP5 merged into `card-rewards/phase1` after one fix round.
 - **2026-11-06:** All agents paused by the 5-hour usage limit, then resumed. WP1 finished (review pending). WP5 finished, in fix round 1 (Titan parent links, bare "indigo" alias, contract D6). Contract changes D1–D6 recorded in plan §4 C8.
