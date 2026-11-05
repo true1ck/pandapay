@@ -4,8 +4,11 @@ import 'package:http/http.dart' as http;
 import 'package:shared_preferences/shared_preferences.dart';
 
 import 'api_exception.dart';
+import 'consent_policy.dart';
 
-const appProductTermsVersion = '2026-08-07';
+/// The terms version recorded at activation. The API compares it with its
+/// `PRODUCT_TERMS_VERSION`, which must be the same date.
+const appProductTermsVersion = consentPolicyVersion;
 
 /// The public admission policy used to decide whether an invitation is
 /// required. Unknown values intentionally fail closed in the activation UI.

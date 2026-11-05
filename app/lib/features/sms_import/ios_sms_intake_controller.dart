@@ -551,6 +551,7 @@ class IosSmsIntakeController extends ChangeNotifier {
     required this.namespace,
     required this.capture,
     required this.requestUpload,
+    this.smsReadingConsent,
     DateTime Function()? now,
     IosImportSessionStore? sessionStore,
   }) : now = now ?? DateTime.now,
@@ -711,6 +712,21 @@ class IosSmsIntakeController extends ChangeNotifier {
     }
   }
 
+  /// Whether the signed-in account has agreed to PandaPay reading its bank
+  /// SMS (the `sms_reading` consent). Null means no check is wired in, which
+  /// only tests do; the app always passes one. A failed check counts as "no".
+  final Future<bool> Function()? smsReadingConsent;
+
+  Future<bool> _hasSmsReadingConsent() async {
+    final check = smsReadingConsent;
+    if (check == null) return true;
+    try {
+      return await check();
+    } catch (_) {
+      return false;
+    }
+  }
+
   Future<void> refresh() {
     if (!service.supported || _disposed || !namespace().startsWith('user:')) {
       return Future.value();
@@ -750,6 +766,11 @@ class IosSmsIntakeController extends ChangeNotifier {
               _check(expected, revision);
               _publish(IosSmsIntakeState(snapshot: snapshot));
               if (!state.enabled) return;
+              // Shared messages wait in the phone's spool until this account
+              // has agreed to PandaPay reading them; nothing is acknowledged
+              // or dropped meanwhile.
+              if (!await _hasSmsReadingConsent()) return;
+              _check(expected, revision);
               final generation = state.generation!;
               var drained = false;
               var nextProgress = now().add(const Duration(seconds: 2));
@@ -898,6 +919,10 @@ class IosSmsIntakeController extends ChangeNotifier {
     _clearErrors();
     final expected = namespace(), revision = _revision;
     _check(expected, revision);
+    if (enabled && !await _hasSmsReadingConsent()) {
+      throw StateError('Agree to SMS reading first.');
+    }
+    _check(expected, revision);
     final snapshot = await service.configure(expected, enabled: enabled);
     _check(expected, revision);
     _publish(IosSmsIntakeState(snapshot: snapshot));
@@ -925,6 +950,11 @@ class IosSmsIntakeController extends ChangeNotifier {
     String? replacingJobId,
   }) => _serialize(() async {
     final expected = namespace(), revision = _revision;
+    _check(expected, revision);
+    // Never start a history import for an account that has not agreed.
+    if (!await _hasSmsReadingConsent()) {
+      throw StateError('Agree to SMS reading first.');
+    }
     _check(expected, revision);
     if (!state.enabled) throw StateError('Enable SMS Shortcuts first.');
     final currentJobId = state.activeJob?['id'];
@@ -974,6 +1004,8 @@ class IosSmsIntakeController extends ChangeNotifier {
     final expected = namespace(), revision = _revision;
     _check(expected, revision);
     if (!state.enabled || state.activeJob == null) return;
+    if (!await _hasSmsReadingConsent()) return;
+    _check(expected, revision);
     // A retry of local processing must never replace an acquisition attempt.
     if (!canResumeImport) return;
     _clearErrors();

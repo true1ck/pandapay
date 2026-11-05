@@ -1889,10 +1889,8 @@ class _SmsEvidenceSection extends ConsumerWidget {
             const SizedBox(height: AppSpace.sm),
             Text(
               captured != null
-                  ? 'This message is stored locally for cross-checking and is not uploaded as transaction evidence.'
-                  : sms == null
-                  ? 'This transaction is marked as SMS sourced, but the original evidence is not available on this device. Attach a screenshot in “Receipts & proof” to keep it with this payment.'
-                  : 'Raw SMS text stays on this device and is not uploaded as transaction evidence. Attach a screenshot in “Receipts & proof” if you want to keep the original message with this payment.',
+                  ? 'The original SMS stays on this phone and is never sent to PandaPay.'
+                  : 'The original SMS isn\'t on this phone. The details above came from it when it was first read.',
               style: BambooFonts.ui(11.5, color: BambooInk.ink500),
             ),
           ],

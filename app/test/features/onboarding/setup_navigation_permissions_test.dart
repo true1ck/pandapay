@@ -1,3 +1,5 @@
+import 'dart:convert';
+
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
@@ -5,8 +7,12 @@ import 'package:flutter_test/flutter_test.dart';
 import 'package:geolocator/geolocator.dart';
 import 'package:pandapay/app/providers.dart';
 import 'package:pandapay/app/router.dart';
+import 'package:http/http.dart' as http;
+import 'package:http/testing.dart';
+import 'package:pandapay/data/consents_api.dart';
 import 'package:pandapay/data/user_cards_repository.dart';
 import 'package:pandapay/features/auth/login_screen.dart';
+import 'package:pandapay/features/consent/sms_reading_consent.dart';
 import 'package:pandapay/features/auth/product_activation_screen.dart';
 import 'package:pandapay/features/onboarding/add_first_card_screen.dart';
 import 'package:pandapay/features/onboarding/all_set_screen.dart';
@@ -65,6 +71,8 @@ Future<ProviderContainer> _pump(
   Object? extra,
   bool activated = true,
   UserCardsRepository? cardRepository,
+  bool smsConsent = true,
+  http.Client? consentClient,
 }) async {
   tester.view.physicalSize = const Size(430, 932);
   tester.view.devicePixelRatio = 1;
@@ -73,6 +81,19 @@ Future<ProviderContainer> _pump(
     overrides: [
       sessionInitProvider.overrideWith((ref) async {}),
       sessionKeepAliveProvider.overrideWith((ref) {}),
+      smsReadingConsentProvider.overrideWith((ref) async => smsConsent),
+      if (!smsConsent)
+        profileProvider.overrideWith(
+          (ref) async => {'email': 'asha.rao@example.com'},
+        ),
+      if (consentClient != null)
+        consentsApiProvider.overrideWithValue(
+          ConsentsApi(
+            apiBaseUrl: 'https://api.test',
+            accessToken: 'test-token',
+            client: consentClient,
+          ),
+        ),
       accessTokenProvider.overrideWith((ref) => 'test-token'),
       activationVerifiedNamespaceProvider.overrideWith(
         (ref) => activated ? ref.watch(cacheNamespaceProvider) : null,
@@ -118,6 +139,14 @@ Future<ProviderContainer> _pump(
   );
   await tester.pumpAndSettle();
   return container;
+}
+
+/// A spinner on screen while the disclosure is open never lets pumpAndSettle
+/// finish; pump a fixed amount of time instead.
+Future<void> _settle(WidgetTester tester) async {
+  for (var i = 0; i < 10; i++) {
+    await tester.pump(const Duration(milliseconds: 100));
+  }
 }
 
 void main() {
@@ -407,4 +436,110 @@ void main() {
       expect(container.read(accessTokenProvider), 'test-token');
     },
   );
+
+  testWidgets('the SMS step does not claim message text is sent to the server', (
+    tester,
+  ) async {
+    await _pump(tester);
+    expect(find.textContaining('SMS text is sent'), findsNothing);
+    expect(
+      find.textContaining(
+        'Only the transaction details (amount, merchant, date, card or account '
+        'ending, and type) are sent to your account. The message text stays on '
+        'this phone.',
+      ),
+      findsOneWidget,
+    );
+  }, variant: TargetPlatformVariant.only(TargetPlatform.android));
+
+  group('SMS disclosure comes before any SMS access', () {
+    const disclosureTitle = 'PandaPay reads your bank SMS on this phone';
+
+    testWidgets(
+      'Android: no permission prompt until the disclosure is agreed',
+      (tester) async {
+        final posted = <Map<String, Object?>>[];
+        final client = MockClient((request) async {
+          if (request.method == 'POST' && request.url.path == '/consents') {
+            posted.add(jsonDecode(request.body) as Map<String, Object?>);
+            return http.Response('{}', 201);
+          }
+          return http.Response('{"consents": []}', 200);
+        });
+        await _pump(tester, smsConsent: false, consentClient: client);
+
+        await tester.tap(find.text('Allow SMS & find my spends'));
+        await _settle(tester);
+        expect(find.text(disclosureTitle), findsOneWidget);
+        expect(requests, isEmpty, reason: 'the OS prompt comes after it');
+
+        await tester.tap(find.byType(Checkbox));
+        await _settle(tester);
+        await tester.tap(find.text('Continue'));
+        await _settle(tester);
+        expect(posted.single['purpose'], 'sms_reading');
+        expect(posted.single['sourceScreen'], 'onboarding_permissions');
+        expect(requests, contains(Permission.sms.value));
+      },
+      variant: TargetPlatformVariant.only(TargetPlatform.android),
+    );
+
+    testWidgets(
+      'Android: Not now never reaches the permission prompt',
+      (tester) async {
+        await _pump(tester, smsConsent: false);
+
+        await tester.tap(find.text('Allow SMS & find my spends'));
+        await _settle(tester);
+        expect(find.text(disclosureTitle), findsOneWidget);
+        await tester.tap(find.text('Not now'));
+        await _settle(tester);
+
+        expect(requests, isEmpty);
+        expect(find.text('I’ll add spends myself'), findsOneWidget);
+        expect(find.text(disclosureTitle), findsNothing);
+      },
+      variant: TargetPlatformVariant.only(TargetPlatform.android),
+    );
+
+    testWidgets(
+      'Android: an existing OS grant does not skip the disclosure',
+      (tester) async {
+        statuses[Permission.sms.value] = PermissionStatus.granted.index;
+        await _pump(tester, smsConsent: false);
+
+        await tester.tap(find.text('Find my spends'));
+        await _settle(tester);
+        expect(find.text(disclosureTitle), findsOneWidget);
+        await tester.tap(find.text('Not now'));
+        await _settle(tester);
+        expect(find.text('Find my spends'), findsOneWidget);
+      },
+      variant: TargetPlatformVariant.only(TargetPlatform.android),
+    );
+
+    testWidgets(
+      'iPhone: the Shortcut setup is not shown until the disclosure is agreed',
+      (tester) async {
+        await _pump(tester, smsConsent: false);
+
+        await tester.tap(find.text('Set up SMS Shortcuts'));
+        await _settle(tester);
+        expect(find.text(disclosureTitle), findsOneWidget);
+        expect(
+          find.textContaining('through the Shortcut.'),
+          findsOneWidget,
+          reason: 'the iPhone wording replaces the first bullet',
+        );
+        expect(find.text('Your spending, up to date.'), findsNothing);
+
+        await tester.tap(find.text('Not now'));
+        await _settle(tester);
+        expect(find.text('Your spending, up to date.'), findsNothing);
+        expect(find.text('1 of 2'), findsOneWidget);
+      },
+      variant: TargetPlatformVariant.only(TargetPlatform.iOS),
+    );
+  });
+
 }

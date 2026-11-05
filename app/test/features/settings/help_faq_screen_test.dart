@@ -46,4 +46,48 @@ void main() {
     expect(find.text("No results for 'zzzznomatch' — try a different word."), findsOneWidget);
     expect(find.text('What does setup actually involve?'), findsNothing);
   });
+
+  testWidgets('the tracking answer describes SMS reading as it works now', (
+    tester,
+  ) async {
+    await _pump(tester);
+    await tester.tap(
+      find.text('What are the different ways PandaPay can track my spending?'),
+    );
+    await tester.pumpAndSettle();
+
+    expect(find.textContaining('on-device in real time'), findsNothing);
+    expect(find.textContaining("iOS doesn't allow apps to read SMS"), findsNothing);
+    expect(
+      find.textContaining('Shortcut', skipOffstage: false),
+      findsOneWidget,
+      reason: 'iPhone uses a Shortcut to share messages',
+    );
+    expect(
+      find.textContaining('read on this phone', skipOffstage: false),
+      findsOneWidget,
+    );
+  });
+
+  testWidgets('the privacy answer does not overclaim what stays on the phone', (
+    tester,
+  ) async {
+    await _pump(tester);
+    await tester.tap(find.text('What does PandaPay know about where I shop?'));
+    await tester.pumpAndSettle();
+
+    expect(find.textContaining('statement PDFs', skipOffstage: false), findsNothing);
+    expect(find.textContaining('50 metres', skipOffstage: false), findsNothing);
+    expect(
+      find.textContaining(
+        'The text of your bank SMS stays on this phone and is never sent',
+        skipOffstage: false,
+      ),
+      findsOneWidget,
+    );
+    expect(
+      find.textContaining('roughly 11 metres', skipOffstage: false),
+      findsOneWidget,
+    );
+  });
 }

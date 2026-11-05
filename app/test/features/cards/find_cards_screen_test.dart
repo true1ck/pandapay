@@ -47,6 +47,32 @@ class _FakeLocalUserCardsRepository implements LocalUserCardsRepository {
   dynamic noSuchMethod(Invocation invocation) => super.noSuchMethod(invocation);
 }
 
+/// A signed-in user's repository that records what card discovery sends.
+class _RecordingUserCardsRepository implements UserCardsRepository {
+  _RecordingUserCardsRepository({this.result, this.fail = false});
+
+  final CardDiscoveryResult? result;
+  final bool fail;
+  int requests = 0;
+
+  // The real method takes no messages, so there is nothing to record: a call
+  // that tried to pass SMS text would not compile.
+  @override
+  Future<CardDiscoveryResult> discoverCards() async {
+    requests++;
+    if (fail) throw StateError('server unavailable');
+    return result ??
+        const CardDiscoveryResult(
+          suggestions: [],
+          emailsScanned: 0,
+          smsScanned: 0,
+        );
+  }
+
+  @override
+  dynamic noSuchMethod(Invocation invocation) => super.noSuchMethod(invocation);
+}
+
 void main() {
   const catalogue = [
     CardProduct(
@@ -248,4 +274,85 @@ void main() {
     expect(find.text('Import SMS backup file'), findsNothing);
     expect(find.text('Set up email forwarding'), findsOneWidget);
   });
+
+  group('card discovery never uploads SMS text', () {
+    const smsBody =
+        'Rs. 500 spent on your HDFC Millennia card ending 4567 at Amazon';
+
+    Future<_RecordingUserCardsRepository> pumpSignedIn(
+      WidgetTester tester, {
+      CardDiscoveryResult? serverResult,
+      bool serverFails = false,
+    }) async {
+      final repo = _RecordingUserCardsRepository(
+        result: serverResult,
+        fail: serverFails,
+      );
+      await tester.pumpWidget(
+        ProviderScope(
+          overrides: [
+            catalogueRepositoryProvider.overrideWithValue(
+              _FakeCatalogueRepository(catalogue),
+            ),
+            localUserCardsRepositoryProvider.overrideWith(
+              (ref) async => _FakeLocalUserCardsRepository(),
+            ),
+            userCardsProvider.overrideWith((ref) async => const []),
+            userCardsRepositoryProvider.overrideWithValue(repo),
+          ],
+          child: const MaterialApp(
+            home: FindCardsScreen(smsBodies: [smsBody]),
+          ),
+        ),
+      );
+      await tester.pumpAndSettle();
+      return repo;
+    }
+
+    testWidgets('SMS is matched on the phone; the server is only asked about email', (
+      tester,
+    ) async {
+      final repo = await pumpSignedIn(tester);
+
+      expect(repo.requests, 1, reason: 'forwarded email is still asked');
+      expect(find.text('HDFC Millennia'), findsOneWidget);
+      expect(find.text('Yes, I have HDFC Millennia'), findsOneWidget);
+    });
+
+    testWidgets('a server failure still shows the cards found from SMS', (
+      tester,
+    ) async {
+      final repo = await pumpSignedIn(tester, serverFails: true);
+
+      expect(repo.requests, 1);
+      expect(find.text('HDFC Millennia'), findsOneWidget);
+    });
+
+    testWidgets('cards found in forwarded email are added to the SMS ones', (
+      tester,
+    ) async {
+      await pumpSignedIn(
+        tester,
+        serverResult: const CardDiscoveryResult(
+          suggestions: [
+            DiscoveredCard(
+              cardProductId: 'hdfc_millennia',
+              name: 'HDFC Millennia',
+              score: 0.9,
+              evidence: ['Statement email'],
+              last4: ['4567'],
+              messageCount: 2,
+              sources: ['email'],
+            ),
+          ],
+          emailsScanned: 2,
+          smsScanned: 0,
+        ),
+      );
+
+      // One suggestion for the card, not one per source.
+      expect(find.text('HDFC Millennia'), findsOneWidget);
+    });
+  });
+
 }

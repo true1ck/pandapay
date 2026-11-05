@@ -13,6 +13,7 @@ import '../../data/card_discovery_engine.dart';
 import '../../data/card_discovery_filter.dart';
 import '../../data/user_cards_repository.dart'
     show CardDiscoveryResult, DiscoveredCard;
+import '../consent/sms_access_disclosure.dart';
 import '../import/email_forwarding_screen.dart';
 import '../import/statement_pdf_import_screen.dart';
 import '../sms_import/sms_listener_service.dart';
@@ -77,8 +78,15 @@ class _FindCardsScreenState extends ConsumerState<FindCardsScreen> {
           : List<String>.from(widget.smsBodies);
       if (bodies.isEmpty && _isAndroid) {
         const smsService = SmsListenerService();
-        var hasPerm = await smsService.hasPermissions();
-        if (!hasPerm) {
+        // The SMS disclosure comes before the permission request and before
+        // any message is read. Without agreement the scan continues without SMS.
+        final agreed = await ensureSmsReadingConsent(
+          context,
+          ref,
+          sourceScreen: 'find_cards',
+        );
+        var hasPerm = agreed && await smsService.hasPermissions();
+        if (agreed && !hasPerm) {
           hasPerm = await smsService.requestPermissions();
         }
         if (hasPerm) {
@@ -88,7 +96,7 @@ class _FindCardsScreenState extends ConsumerState<FindCardsScreen> {
           if (readBodies.isNotEmpty) {
             bodies = readBodies;
           }
-        } else {
+        } else if (agreed) {
           _smsPermanentlyDenied = await smsService.isPermanentlyDenied();
         }
       }
@@ -99,10 +107,18 @@ class _FindCardsScreenState extends ConsumerState<FindCardsScreen> {
         final subset = bodies.length > 500
             ? bodies.sublist(bodies.length - 500)
             : bodies;
+        // SMS text never leaves the phone: messages are matched here, and the
+        // server is only asked about forwarded bank email.
+        final smsResult = subset.isEmpty
+            ? null
+            : await _discoverLocally(subset);
         try {
-          final result = await repo
-              .discoverCards(smsBodies: subset)
+          final emailResult = await repo
+              .discoverCards()
               .timeout(const Duration(seconds: 20));
+          final result = smsResult == null
+              ? emailResult
+              : _mergeDiscovery(smsResult, emailResult);
           // The server can identify an SMS-only card only as a generic
           // issuer/suffix placeholder. Reconcile against the current wallet
           // before rendering so a card already owned under a named product
@@ -131,10 +147,9 @@ class _FindCardsScreenState extends ConsumerState<FindCardsScreen> {
         } catch (_) {
           // The SMS scan is local-first. A slow/cold API must not turn a
           // device-side card discovery into a blank or crashing screen.
-          if (bodies.isEmpty) rethrow;
-          final localResult = await _discoverLocally(bodies);
+          if (smsResult == null) rethrow;
           if (mounted && generation == _scanGeneration) {
-            setState(() => _result = localResult);
+            setState(() => _result = smsResult);
           }
         }
       } else {
@@ -177,6 +192,41 @@ class _FindCardsScreenState extends ConsumerState<FindCardsScreen> {
     }
   }
 
+  /// One suggestion per card: where a card was found on the phone (SMS) and
+  /// in forwarded email, the evidence, sources and numbers are combined.
+  static CardDiscoveryResult _mergeDiscovery(
+    CardDiscoveryResult sms,
+    CardDiscoveryResult email,
+  ) {
+    final merged = <String, DiscoveredCard>{
+      for (final card in sms.suggestions) card.cardProductId: card,
+    };
+    for (final card in email.suggestions) {
+      final existing = merged[card.cardProductId];
+      merged[card.cardProductId] = existing == null
+          ? card
+          : DiscoveredCard(
+              cardProductId: existing.cardProductId,
+              name: existing.name,
+              score: existing.score > card.score ? existing.score : card.score,
+              evidence: {...existing.evidence, ...card.evidence}.toList(),
+              last4: {...existing.last4, ...card.last4}.toList(),
+              messageCount: existing.messageCount + card.messageCount,
+              sources: {...existing.sources, ...card.sources}.toList(),
+              isPlaceholder: existing.isPlaceholder && card.isPlaceholder,
+              issuerName: existing.issuerName ?? card.issuerName,
+              cardType: existing.cardType ?? card.cardType,
+              creditLimit: existing.creditLimit ?? card.creditLimit,
+              isAlreadyOwned: existing.isAlreadyOwned || card.isAlreadyOwned,
+            );
+    }
+    return CardDiscoveryResult(
+      suggestions: merged.values.toList(),
+      emailsScanned: email.emailsScanned,
+      smsScanned: sms.smsScanned,
+    );
+  }
+
   Future<CardDiscoveryResult> _discoverLocally(List<String> bodies) async {
     final catalogue = await ref.read(catalogueProvider.future);
     final localRepo = await ref.read(localUserCardsRepositoryProvider.future);
@@ -205,6 +255,23 @@ class _FindCardsScreenState extends ConsumerState<FindCardsScreen> {
     });
     try {
       const smsService = SmsListenerService();
+      final agreed = await ensureSmsReadingConsent(
+        context,
+        ref,
+        sourceScreen: 'find_cards',
+      );
+      if (!agreed) {
+        if (mounted) {
+          ScaffoldMessenger.of(context).showSnackBar(
+            const SnackBar(
+              content: Text(
+                'SMS reading is off. You can pick cards from the catalogue.',
+              ),
+            ),
+          );
+        }
+        return;
+      }
       var hasPerm = await smsService.hasPermissions();
       if (!hasPerm) {
         hasPerm = await smsService.requestPermissions();
@@ -1009,7 +1076,7 @@ class _DiscoveryEmptyState extends StatelessWidget {
           const SizedBox(height: AppSpace.sm),
           Text(
             readNothing
-                ? 'Detect cards instantly on-device from your bank emails or SMS, or select them directly from the catalogue.'
+                ? 'Detect cards from your bank SMS on this phone or from forwarded bank emails, or select them directly from the catalogue.'
                 : 'We scanned $scannedSummary and could not match any card in our catalogue. Add your cards directly instead.',
             style: BambooFonts.ui(13.5, color: BambooInk.ink500, height: 1.5),
             textAlign: TextAlign.center,

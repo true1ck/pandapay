@@ -6,7 +6,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import '../../app/design/app_theme.dart';
 import '../../app/design/widgets.dart';
 import '../../app/providers.dart';
-import 'sms_consent_screen.dart';
+import '../consent/sms_access_disclosure.dart';
 import 'sms_listener_service.dart';
 
 /// UA-5.3 (Chunk 31): permission-request UI + the screen that wires the
@@ -67,14 +67,15 @@ class _SmsImportScreenState extends ConsumerState<SmsImportScreen> {
     setState(() => _permissionGranted = granted);
   }
 
-  /// F4: an explicit consent/declaration step now runs before the OS
-  /// permission dialog (previously this went straight to
-  /// `requestPermissions()`) — see sms_consent_screen.dart's doc-comment.
+  /// The standalone SMS disclosure runs immediately before the OS permission
+  /// dialog, every time this account has not yet agreed.
   Future<void> _requestPermission() async {
-    final consented = await Navigator.of(
+    final consented = await ensureSmsReadingConsent(
       context,
-    ).push<bool>(MaterialPageRoute(builder: (_) => const SmsConsentScreen()));
-    if (consented != true || !mounted) return;
+      ref,
+      sourceScreen: 'sms_import',
+    );
+    if (!consented || !mounted) return;
 
     setState(() => _requesting = true);
     try {
@@ -96,6 +97,16 @@ class _SmsImportScreenState extends ConsumerState<SmsImportScreen> {
 
   Future<void> _startListening() async {
     if (_syncingInbox) return;
+    // Reading the existing inbox needs this account's agreement, even when the
+    // phone's SMS permission was already granted for another account.
+    if (!await ensureSmsReadingConsent(
+          context,
+          ref,
+          sourceScreen: 'sms_import',
+        ) ||
+        !mounted) {
+      return;
+    }
     setState(() {
       _syncingInbox = true;
       _error = null;

@@ -11,6 +11,29 @@ import 'package:pandapay_domain/pandapay_domain.dart';
 /// (previously computed server-side for cap/milestone period math but never
 /// returned to a client) — Billing Cycle Float needs both.
 void main() {
+  test('card discovery sends no SMS text to the server', () async {
+    late http.Request sent;
+    final repository = UserCardsRepository(
+      apiBaseUrl: 'https://api.test',
+      accessToken: 'session-token',
+      client: MockClient((request) async {
+        sent = request;
+        return http.Response(
+          jsonEncode({
+            'suggestions': <Object?>[],
+            'scanned': {'emails': 0, 'sms': 0},
+          }),
+          200,
+        );
+      }),
+    );
+
+    await repository.discoverCards();
+
+    expect(sent.url.path, '/card-discovery');
+    expect(jsonDecode(sent.body), isEmpty);
+    expect(sent.body, isNot(contains('smsBodies')));
+  });
   group('TransactionEntry category labels', () {
     test('does not invent an Other subcategory when none was supplied', () {
       final transaction = TransactionEntry.fromJson({

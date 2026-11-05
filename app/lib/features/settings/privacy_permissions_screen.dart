@@ -9,27 +9,21 @@ import '../../app/design/widgets.dart';
 import '../../app/device_permissions.dart';
 import '../../app/providers.dart';
 import '../../data/api_exception.dart';
+import '../../data/consent_policy.dart';
 import '../../data/consents_api.dart';
 import '../../app/env.dart';
+import '../consent/sms_access_disclosure.dart';
+import '../consent/sms_reading_consent.dart';
+import '../consent/template_sharing_disclosure.dart';
 import '../import/gmail_connect_service.dart';
 
 /// H4 Privacy & Permissions (docs/superpowers/plans/2026-08-07-group-h-settings-and-group-a-completion.md).
 /// Reached via `Navigator.of(context).push(MaterialPageRoute(builder: (_) =>
 /// const PrivacyPermissionsScreen()))` — a plain pushed screen, not a
 /// registered go_router route, same pattern as ToolsHubScreen's children.
-final _consentsApiProvider = Provider<ConsentsApi?>((ref) {
-  final token = ref.watch(accessTokenProvider);
-  if (token == null) return null;
-  return ConsentsApi(
-    apiBaseUrl: Env.apiBaseUrl,
-    accessToken: token,
-    client: ref.read(authenticatedHttpClientProvider),
-  );
-});
-
 final _consentHistoryProvider = FutureProvider.autoDispose<List<ConsentRecord>>(
   (ref) async {
-    final api = ref.watch(_consentsApiProvider);
+    final api = ref.watch(consentsApiProvider);
     if (api == null) return const [];
     return api.fetchHistory();
   },
@@ -153,14 +147,16 @@ class _PrivacyPermissionsScreenState
             const _DataHandlingSection(
               title: 'Stays on this phone',
               bullets: [
-                'Transaction amounts and exact timestamps are never uploaded.',
-                'Your device\'s raw location is only used locally to match nearby merchants.',
+                'The text of your bank SMS and the messages waiting for your review.',
+                'Receipts and files you attach.',
+                'Your location is sent only when you search for nearby merchants or turn on location alerts.',
               ],
             ),
             const SizedBox(height: AppSpace.md),
             const _DataHandlingSection(
               title: 'Uploaded to sync your account',
               bullets: [
+                'Transaction details read from your SMS: amount, merchant, date, card or account ending, and type. The message text is not sent.',
                 'Your cards, wallet, and profile settings sync so you can restore them on a new device.',
                 'Auth exists for your own benefit (sync, backup) — never to attach identity to shared data.',
               ],
@@ -171,7 +167,7 @@ class _PrivacyPermissionsScreenState
               bullets: [
                 'Merchant records carry no user identity, ever — the row is about the shop, not the shopper.',
                 'No amounts and no individual timestamps are included in shared records.',
-                'Coordinates are grid-snapped (~50m) before upload — we store "a shop exists near here," never "a person was here."',
+                'Coordinates are rounded to about 11 metres before upload — we store "a shop exists near here," never "a person was here."',
               ],
             ),
             const SizedBox(height: AppSpace.xl),
@@ -532,34 +528,39 @@ class _ContributionToggle extends ConsumerWidget {
         border: Border.all(color: BambooInk.hairlineOnPaper),
       ),
       padding: const EdgeInsets.all(AppSpace.lg),
-      child: SwitchListTile(
-        contentPadding: EdgeInsets.zero,
-        title: Text(
-          'Share what you see',
-          style: BambooFonts.heading(14.5, color: BambooInk.ink900),
-        ),
-        subtitle: Text(
-          'Anonymously log a merchant name/MCC/rough location (never an amount, exact time, or '
-          'your identity) to help other users\' recommendations.',
-          style: BambooFonts.ui(12.5, color: BambooInk.ink500),
-        ),
-        activeTrackColor: BambooInk.jade,
-        activeThumbColor: BambooInk.lime,
-        value: optedIn,
-        onChanged: (v) async {
-          final repo = ref.read(userCardsRepositoryProvider);
-          if (repo == null) return;
-          try {
-            await repo.setContributionsOptIn(v);
-            ref.invalidate(profileProvider);
-          } catch (e) {
-            if (context.mounted) {
-              ScaffoldMessenger.of(context).showSnackBar(
-                SnackBar(content: Text(userFacingErrorMessage(e))),
-              );
+      // A transparent Material under the tinted box keeps the switch's ink
+      // splash visible.
+      child: Material(
+        type: MaterialType.transparency,
+        child: SwitchListTile(
+          contentPadding: EdgeInsets.zero,
+          title: Text(
+            'Share what you see',
+            style: BambooFonts.heading(14.5, color: BambooInk.ink900),
+          ),
+          subtitle: Text(
+            'Anonymously log a merchant name/MCC/rough location (never an amount, exact time, or '
+            'your identity) to help other users\' recommendations.',
+            style: BambooFonts.ui(12.5, color: BambooInk.ink500),
+          ),
+          activeTrackColor: BambooInk.jade,
+          activeThumbColor: BambooInk.lime,
+          value: optedIn,
+          onChanged: (v) async {
+            final repo = ref.read(userCardsRepositoryProvider);
+            if (repo == null) return;
+            try {
+              await repo.setContributionsOptIn(v);
+              ref.invalidate(profileProvider);
+            } catch (e) {
+              if (context.mounted) {
+                ScaffoldMessenger.of(context).showSnackBar(
+                  SnackBar(content: Text(userFacingErrorMessage(e))),
+                );
+              }
             }
-          }
-        },
+          },
+        ),
       ),
     );
   }
@@ -578,7 +579,7 @@ class _ContributionToggle extends ConsumerWidget {
 /// reviewed.
 final _latestConsentsProvider =
     FutureProvider.autoDispose<Map<String, ConsentRecord>>((ref) async {
-      final api = ref.watch(_consentsApiProvider);
+      final api = ref.watch(consentsApiProvider);
       if (api == null) return const {};
       final latest = await api.fetchLatest();
       return {for (final c in latest) c.purpose: c};
@@ -587,15 +588,38 @@ final _latestConsentsProvider =
 class _PurposeConsents extends ConsumerWidget {
   const _PurposeConsents();
 
-  static const _policyVersion = 'draft-0';
-
   @override
   Widget build(BuildContext context, WidgetRef ref) {
     final consents = ref.watch(_latestConsentsProvider);
 
     Future<void> set(String purpose, bool granted) async {
-      final api = ref.read(_consentsApiProvider);
+      final api = ref.read(consentsApiProvider);
       if (api == null) return;
+      if (purpose == smsReadingConsentPurpose && granted) {
+        // Turning SMS reading on is the same standalone disclosure as
+        // everywhere else; it records the consent itself when agreed.
+        await SmsAccessDisclosure.show(
+          context,
+          sourceScreen: 'privacy_permissions',
+          accountLabel: maskedAccountLabel(
+            ref.read(profileProvider).valueOrNull,
+          ),
+        );
+        ref.invalidate(_latestConsentsProvider);
+        ref.invalidate(_consentHistoryProvider);
+        return;
+      }
+      if (purpose == smsSharedLearningPurpose && granted) {
+        // Sharing redacted templates (processed by Google Gemini) is off
+        // until someone chooses "Turn on" in its own disclosure.
+        await TemplateSharingDisclosure.show(
+          context,
+          sourceScreen: 'privacy_permissions',
+        );
+        ref.invalidate(_latestConsentsProvider);
+        ref.invalidate(_consentHistoryProvider);
+        return;
+      }
       try {
         await api.submit(
           purpose: purpose,
@@ -603,13 +627,21 @@ class _PurposeConsents extends ConsumerWidget {
           // Every consent row records the policy version it was given
           // against, which is what makes a later policy change detectable as
           // "this person agreed to something older" rather than silently
-          // inheriting agreement. 'draft-0' is honest about what they'd be
-          // agreeing to right now — see the class doc comment.
+          // inheriting agreement. All purposes share one policy version;
+          // SMS shared learning keeps its own because the database matches it.
           policyVersion: purpose == smsSharedLearningPurpose
               ? smsSharedLearningPolicyVersion
-              : _policyVersion,
+              : consentPolicyVersion,
           sourceScreen: 'privacy_permissions',
         );
+        if (purpose == smsReadingConsentPurpose) {
+          // Withdrawn: stop reading on this phone for this account.
+          await SmsReadingConsentMirror.set(
+            ref.read(cacheNamespaceProvider),
+            false,
+          );
+          ref.invalidate(smsReadingConsentProvider);
+        }
         ref.invalidate(_latestConsentsProvider);
         if (purpose == smsSharedLearningPurpose) {
           ref.invalidate(smsSharedLearningConsentProvider);
@@ -631,86 +663,105 @@ class _PurposeConsents extends ConsumerWidget {
         border: Border.all(color: BambooInk.hairlineOnPaper),
       ),
       padding: const EdgeInsets.all(AppSpace.lg),
-      child: consents.when(
-        loading: () => const SkeletonRow(),
-        error: (e, _) => ErrorState(
-          message: userFacingErrorMessage(e),
-          onRetry: () => ref.invalidate(_latestConsentsProvider),
-        ),
-        data: (granted) => Column(
-          children: [
-            SwitchListTile(
-              contentPadding: EdgeInsets.zero,
-              title: Text(
-                'Aggregated insights',
-                style: BambooFonts.heading(14.5, color: BambooInk.ink900),
+      child: Material(
+        type: MaterialType.transparency,
+        child: consents.when(
+          loading: () => const SkeletonRow(),
+          error: (e, _) => ErrorState(
+            message: userFacingErrorMessage(e),
+            onRetry: () => ref.invalidate(_latestConsentsProvider),
+          ),
+          data: (granted) => Column(
+            children: [
+              SwitchListTile(
+                contentPadding: EdgeInsets.zero,
+                title: Text(
+                  'Read my bank SMS',
+                  style: BambooFonts.heading(14.5, color: BambooInk.ink900),
+                ),
+                subtitle: Text(
+                  'PandaPay reads bank, card and wallet messages on this phone and sends only '
+                  'the transaction details to your account. Turning this off stops reading; '
+                  'transactions already recorded stay.',
+                  style: BambooFonts.ui(12.5, color: BambooInk.ink500),
+                ),
+                activeTrackColor: BambooInk.jade,
+                value:
+                    granted[smsReadingConsentPurpose]?.granted == true &&
+                    granted[smsReadingConsentPurpose]?.revokedAt == null &&
+                    granted[smsReadingConsentPurpose]?.policyVersion ==
+                        consentPolicyVersion,
+                onChanged: (v) => set(smsReadingConsentPurpose, v),
               ),
-              subtitle: Text(
-                'Allow your data to contribute to combined, non-identifying statistics we may '
-                'publish or license — things like average reward rates by category. Never your '
-                'individual transactions.',
-                style: BambooFonts.ui(12.5, color: BambooInk.ink500),
+              const Divider(
+                height: AppSpace.lg,
+                color: BambooInk.hairlineOnPaper,
               ),
-              activeTrackColor: BambooInk.jade,
-              value: granted['aggregate_insights']?.granted ?? false,
-              onChanged: (v) => set('aggregate_insights', v),
-            ),
-            const Divider(
-              height: AppSpace.lg,
-              color: BambooInk.hairlineOnPaper,
-            ),
-            SwitchListTile(
-              contentPadding: EdgeInsets.zero,
-              title: Text(
-                'Sharing with partners',
-                style: BambooFonts.heading(14.5, color: BambooInk.ink900),
+              SwitchListTile(
+                contentPadding: EdgeInsets.zero,
+                title: Text(
+                  'Aggregated insights',
+                  style: BambooFonts.heading(14.5, color: BambooInk.ink900),
+                ),
+                subtitle: Text(
+                  'Allow your data to contribute to combined, non-identifying statistics we may '
+                  'publish or license — things like average reward rates by category. Never your '
+                  'individual transactions.',
+                  style: BambooFonts.ui(12.5, color: BambooInk.ink500),
+                ),
+                activeTrackColor: BambooInk.jade,
+                value: granted['aggregate_insights']?.granted ?? false,
+                onChanged: (v) => set('aggregate_insights', v),
               ),
-              subtitle: Text(
-                'Allow your data to be shared with a named commercial partner. Off unless you '
-                'turn it on, and you can turn it off again at any time.',
-                style: BambooFonts.ui(12.5, color: BambooInk.ink500),
+              const Divider(
+                height: AppSpace.lg,
+                color: BambooInk.hairlineOnPaper,
               ),
-              activeTrackColor: BambooInk.jade,
-              value: granted['partner_sharing']?.granted ?? false,
-              onChanged: (v) => set('partner_sharing', v),
-            ),
-            const Divider(
-              height: AppSpace.lg,
-              color: BambooInk.hairlineOnPaper,
-            ),
-            SwitchListTile(
-              contentPadding: EdgeInsets.zero,
-              title: Text(
-                'Improve shared SMS decisions',
-                style: BambooFonts.heading(14.5, color: BambooInk.ink900),
+              SwitchListTile(
+                contentPadding: EdgeInsets.zero,
+                title: Text(
+                  'Sharing with partners',
+                  style: BambooFonts.heading(14.5, color: BambooInk.ink900),
+                ),
+                subtitle: Text(
+                  'Allow your data to be shared with a named commercial partner. Off unless you '
+                  'turn it on, and you can turn it off again at any time.',
+                  style: BambooFonts.ui(12.5, color: BambooInk.ink500),
+                ),
+                activeTrackColor: BambooInk.jade,
+                value: granted['partner_sharing']?.granted ?? false,
+                onChanged: (v) => set('partner_sharing', v),
               ),
-              subtitle: Text(
-                'If enabled, future AI auto-resolved SMS decisions and your confirmations, edits, dismissals, and reversals may contribute generalized message patterns and decision fields to admin-reviewed shared rules. An AI decision is labeled as unconfirmed until a person reviews it. The full SMS, account/card identifiers, and exact transaction references are removed on this device. This choice is separate from merchant contributions and can be turned off any time.',
-                style: BambooFonts.ui(12.5, color: BambooInk.ink500),
+              const Divider(
+                height: AppSpace.lg,
+                color: BambooInk.hairlineOnPaper,
               ),
-              activeTrackColor: BambooInk.jade,
-              value:
-                  granted[smsSharedLearningPurpose]?.granted == true &&
-                  granted[smsSharedLearningPurpose]?.policyVersion ==
-                      smsSharedLearningPolicyVersion,
-              onChanged: (v) => set(smsSharedLearningPurpose, v),
-            ),
-            Align(
-              alignment: Alignment.centerLeft,
-              child: Text(
-                'The SMS learning policy needs review before collection is enabled in a production release.',
-                style: BambooFonts.ui(11.5, color: BambooInk.ink500),
+              SwitchListTile(
+                contentPadding: EdgeInsets.zero,
+                title: Text(
+                  TemplateSharingCopy.title,
+                  style: BambooFonts.heading(14.5, color: BambooInk.ink900),
+                ),
+                subtitle: Text(
+                  TemplateSharingCopy.body,
+                  style: BambooFonts.ui(12.5, color: BambooInk.ink500),
+                ),
+                activeTrackColor: BambooInk.jade,
+                value:
+                    granted[smsSharedLearningPurpose]?.granted == true &&
+                    granted[smsSharedLearningPurpose]?.policyVersion ==
+                        smsSharedLearningPolicyVersion,
+                onChanged: (v) => set(smsSharedLearningPurpose, v),
               ),
-            ),
-            const SizedBox(height: AppSpace.sm),
-            Align(
-              alignment: Alignment.centerLeft,
-              child: Text(
-                'Aggregate insights and partner sharing remain separate purposes.',
-                style: BambooFonts.ui(11.5, color: BambooInk.ink500),
+              Align(
+                alignment: Alignment.centerLeft,
+                child: Text(
+                  'Aggregate insights and partner sharing remain separate purposes.',
+                  style: BambooFonts.ui(11.5, color: BambooInk.ink500),
+                ),
               ),
-            ),
-          ],
+            ],
+          ),
         ),
       ),
     );

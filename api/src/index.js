@@ -7556,30 +7556,27 @@ app.post('/recurring/:id/dismiss', requireAuth, async (req, res) => {
 });
 
 /**
- * POST /card-discovery — "find my cards", from forwarded bank email and/or
- * SMS bodies the device passes up.
+ * POST /card-discovery — "find my cards", from forwarded bank email.
  *
- * Design 30 offers "Find them in my SMS" as the fastest way to add cards.
- * Email is the other half of the same idea and is in some ways the better
- * one: it works on iOS, where no app may read SMS at all, and the user has
- * already opted into it by setting up a forwarding address.
- *
- * Two sources, one matcher (src/card_discovery.js), so the same card is
- * recognised identically in an SMS alert and a statement email.
+ * Cards in bank SMS are matched on the phone (the app has the same matcher);
+ * SMS text never reaches this server, so a request that carries any is
+ * refused. Email works on iOS, where no app may read SMS at all, and the user
+ * has already opted into it by setting up a forwarding address.
  *
  * This returns SUGGESTIONS ONLY and adds nothing. Every candidate carries
  * the text that produced it so the user can see why it was suggested and
  * reject a wrong one — silently adding a card someone doesn't own would
  * then rank against a card they can't pay with.
- *
- * SMS bodies (`smsBodies`) are accepted in the request and used in memory
- * for this response only. They are never written to the database, matching
- * the on-device-only promise SmsConsentScreen makes to the user.
  */
 app.post('/card-discovery', requireAuth, async (req, res) => {
   const { smsBodies } = req.body || {};
   if (smsBodies !== undefined && !Array.isArray(smsBodies)) {
     return res.status(400).json({ error: 'smsBodies must be an array of strings' });
+  }
+  // No SMS body leaves the phone. An empty list is harmless; anything else is
+  // refused before any data is read.
+  if (Array.isArray(smsBodies) && smsBodies.length > 0) {
+    return res.status(400).json({ error: 'sms_text_not_accepted' });
   }
   try {
     const payload = await withUserClient(req.userId, async (client) => {
@@ -7599,11 +7596,6 @@ app.post('/card-discovery', requireAuth, async (req, res) => {
         [req.userId]
       );
 
-      const smsMessages = (smsBodies || [])
-        .filter((b) => typeof b === 'string' && b.trim())
-        .slice(0, 500)
-        .map((body) => ({ body }));
-
       const owned = await client.query(
         `SELECT card_product_id
            FROM user_cards
@@ -7613,16 +7605,12 @@ app.post('/card-discovery', requireAuth, async (req, res) => {
       const ownedIds = new Set(owned.rows.map((r) => r.card_product_id));
 
       const fromEmail = discoverCardsAcrossMessages(emails.rows, catalogue.rows);
-      const fromSms = discoverCardsAcrossMessages(smsMessages, catalogue.rows, true);
 
       // Tag each suggestion with where it came from, so the UI can say
       // "found in your email" vs "found in your SMS" rather than an
       // unexplained list.
       const merged = new Map();
-      for (const [source, hits] of [
-        ['email', fromEmail],
-        ['sms', fromSms],
-      ]) {
+      for (const [source, hits] of [['email', fromEmail]]) {
         for (const hit of hits) {
           const existing = merged.get(hit.cardProductId);
           if (existing) {
@@ -7664,7 +7652,7 @@ app.post('/card-discovery', requireAuth, async (req, res) => {
 
       return {
         suggestions: [...merged.values()].sort((a, b) => b.score - a.score),
-        scanned: { emails: emails.rowCount, sms: smsMessages.length },
+        scanned: { emails: emails.rowCount, sms: 0 },
       };
     });
     res.json(payload);
@@ -7996,6 +7984,7 @@ const CONSENT_PURPOSES = [
   'partner_sharing',
   'sms_shared_learning',
   'email_import',
+  'sms_reading',
 ];
 
 /**

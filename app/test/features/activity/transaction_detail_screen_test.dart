@@ -7,6 +7,9 @@ import 'package:http/testing.dart';
 import 'package:pandapay/app/providers.dart';
 import 'package:pandapay/data/api_exception.dart';
 import 'package:pandapay/data/local/app_database.dart';
+import 'package:pandapay/data/local/response_cache.dart';
+import 'package:pandapay/data/local/sms_intake_repository.dart';
+import 'package:pandapay/features/sms_import/sms_background_queue.dart';
 import 'package:pandapay/data/transaction_tags_repository.dart';
 import 'package:pandapay/data/user_cards_repository.dart';
 import 'package:pandapay/data/local/split_repository.dart';
@@ -123,6 +126,7 @@ Future<void> _pump(
   TransactionTagsRepository? tagsRepository,
   String transactionId = 't1',
   bool shared = false,
+  List<Override> extraOverrides = const [],
 }) async {
   final router = GoRouter(
     initialLocation: '/activity/$transactionId',
@@ -149,6 +153,7 @@ Future<void> _pump(
             'user:11111111-1111-4111-8111-111111111111',
           ),
         userCardsRepositoryProvider.overrideWithValue(repo),
+        ...extraOverrides,
         if (tagsRepository != null)
           transactionTagsProvider.overrideWith((ref) => tagsRepository),
       ],
@@ -159,6 +164,78 @@ Future<void> _pump(
 }
 
 void main() {
+
+  group('SMS evidence privacy notes', () {
+    const present = 'The original SMS stays on this phone and is never sent to PandaPay.';
+    const missing =
+        'The original SMS isn\'t on this phone. The details above came from it when it was first read.';
+
+    Future<void> pumpEvidence(
+      WidgetTester tester, {
+      required bool messageOnPhone,
+    }) async {
+      final database = openInMemoryForTesting();
+      addTearDown(database.close);
+      const namespace = 'user:11111111-1111-4111-8111-111111111111';
+      final sms = QueuedSms(
+        sender: 'TESTBK',
+        body: 'Rs 42.50 spent on card ending 4242 at TESTSHOP',
+        receivedAt: DateTime(2026, 11, 1, 10),
+      );
+      final key = smsSourceKey(namespace, sms.sender, sms.body);
+      if (messageOnPhone) SmsIntakeRepository(database).remember(namespace, sms);
+      final entry = TransactionEntry(
+        id: 't1',
+        amount: Money.fromRupees(42.5),
+        occurredAt: DateTime(2026, 11, 1),
+        merchantName: 'TESTSHOP',
+        source: 'sms',
+        status: 'active',
+        observations: [
+          TransactionObservation(
+            source: 'sms',
+            sourceKey: key,
+            observedAt: DateTime(2026, 11, 1, 10),
+          ),
+        ],
+      );
+      await _pump(
+        tester,
+        repo: _FakeUserCardsRepository(entry),
+        extraOverrides: [
+          cacheNamespaceProvider.overrideWithValue(namespace),
+          responseCacheProvider.overrideWith((ref) async => ResponseCache(database)),
+        ],
+      );
+      final tile = find.text('SMS evidence');
+      await tester.ensureVisible(tile);
+      await tester.pumpAndSettle();
+      await tester.tap(tile);
+      await tester.pumpAndSettle();
+    }
+
+    testWidgets('message present: it stays on the phone and is never sent', (
+      tester,
+    ) async {
+      await pumpEvidence(tester, messageOnPhone: true);
+      expect(find.text(present), findsOneWidget);
+      expect(find.text(missing), findsNothing);
+      expect(find.textContaining('Original SMS captured on this device'), findsOneWidget);
+      expect(find.textContaining('screenshot'), findsNothing);
+      expect(find.textContaining('not uploaded as transaction evidence'), findsNothing);
+    });
+
+    testWidgets('message missing: says so, with no screenshot advice', (
+      tester,
+    ) async {
+      await pumpEvidence(tester, messageOnPhone: false);
+      expect(find.text(missing), findsOneWidget);
+      expect(find.text(present), findsNothing);
+      expect(find.textContaining('screenshot'), findsNothing);
+      expect(find.textContaining('Attach a screenshot'), findsNothing);
+    });
+  });
+
   testWidgets(
     'shared rollout retains private split editing through one contextual action',
     (tester) async {

@@ -6,6 +6,7 @@ import 'package:permission_handler/permission_handler.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import 'package:telephony/telephony.dart';
 
+import '../consent/sms_reading_consent.dart';
 import 'sms_background_queue.dart';
 import 'sms_text_hint.dart';
 import '../../data/local/app_database.dart';
@@ -54,6 +55,10 @@ Future<void> smsBackgroundHandler(SmsMessage message) async {
     final messageTimestamp = message.date ?? message.dateSent;
     await prefs.reload();
     final namespace = prefs.getString(smsCaptureNamespaceKey) ?? 'signed-out';
+    // Consent is per account: until this account has agreed to SMS reading
+    // (the app mirrors that agreement into preferences), the message is not
+    // written anywhere.
+    if (!await SmsReadingConsentMirror.isGranted(namespace)) return;
     final queued = QueuedSms(
       sender: sender,
       body: body,

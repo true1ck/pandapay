@@ -161,7 +161,7 @@ class _TrackingSetupScreenState extends ConsumerState<TrackingSetupScreen> {
   }
 
   /// Pushes the real channel screen (F2/F3/F4 — [SmsImportScreen] already
-  /// runs its own [SmsConsentScreen] declaration step before requesting the
+  /// runs the standalone SMS disclosure before requesting the
   /// OS permission, so A10 doesn't duplicate that consent flow itself, it
   /// just launches straight into the real screen same as Email/Manual).
   /// Returning from a channel keeps the user on the choice page. Only the
