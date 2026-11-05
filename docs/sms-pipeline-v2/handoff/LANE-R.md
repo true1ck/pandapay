@@ -29,7 +29,7 @@ Tests in `metrics_route.test.js` (7 new); `client_metrics.test.js` go-test fixtu
 
 ## 4. Test lists
 
-`tests/admin_console_security/full_schema.test.js` now also runs `20261112210000_sms_v2_release_metrics_test.sql`, `20261113100000_sms_v2_client_metrics_test.sql`, `metrics_pg.test.js` and `client_metrics_pg.test.js`. Ran it against a scratch socket-only Postgres 18 (`/tmp/pandapay-admin-pg.laneR1`, dropped afterwards): pass. The cluster needed `LC_ALL=en_US.UTF-8` to start on this Mac.
+`tests/admin_console_security/full_schema.test.js` now also runs `20261112215000_sms_v2_release_metrics_test.sql`, `20261113100000_sms_v2_client_metrics_test.sql`, `metrics_pg.test.js` and `client_metrics_pg.test.js`. Ran it against a scratch socket-only Postgres 18 (`/tmp/pandapay-admin-pg.laneR1`, dropped afterwards): pass. The cluster needed `LC_ALL=en_US.UTF-8` to start on this Mac.
 
 ## 5. Derived copies
 

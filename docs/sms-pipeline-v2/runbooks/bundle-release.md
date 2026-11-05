@@ -9,7 +9,7 @@ Later rule changes do not use this script. They go through the Rules page (draft
 - The release gates in `test-and-release.md` pass and the checklist's "Before release" items are done.
 - `SMS_RULES_SIGNING_KEY` (Ed25519 private PEM) and `SMS_RULES_KEY_ID` are in your shell environment from the secret store. Generating and rotating the key is in `signing-keys.md`. The public key must already ship in the app one release ahead.
 - `ADMIN_API_DATABASE_URL` is the private `admin_api_runtime` login, and you know an active owner's `admin_users.id` (needs `learning.publish`).
-- The v2 migrations are applied, including `20261112210000_sms_v2_release_metrics.sql` (the metrics page needs it).
+- The v2 migrations are applied, including `20261112215000_sms_v2_release_metrics.sql` (the metrics page needs it).
 - `dart` is on the path (the tools CLI is Dart).
 
 ## 1. Dry run (the default)
