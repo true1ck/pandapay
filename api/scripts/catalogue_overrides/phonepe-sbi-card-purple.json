@@ -1,0 +1,40 @@
+{
+  "source_slug": "phonepe-sbi-card-purple",
+  "changes": [
+    {
+      "path": "cap_rules[id=phonepe_other_monthly].metric",
+      "value": "total_reward_points",
+      "reason": "SBI limits total RPs per spend type per calendar month.",
+      "source_url": "https://www.sbicard.com/sbi-card-en/assets/media/images/personal/credit-cards/rewards/phonepe/tnc/PhonePe-SBI-Card-PURPLE-Reward-Program-TnC.pdf",
+      "checked_on": "2026-11-05"
+    },
+    {
+      "path": "cap_rules[id=phonepe_insurance_monthly].metric",
+      "value": "total_reward_points",
+      "reason": "SBI limits total RPs per spend type per calendar month.",
+      "source_url": "https://www.sbicard.com/sbi-card-en/assets/media/images/personal/credit-cards/rewards/phonepe/tnc/PhonePe-SBI-Card-PURPLE-Reward-Program-TnC.pdf",
+      "checked_on": "2026-11-05"
+    },
+    {
+      "path": "cap_rules[id=online_monthly].metric",
+      "value": "total_reward_points",
+      "reason": "SBI limits total RPs per spend type per calendar month.",
+      "source_url": "https://www.sbicard.com/sbi-card-en/assets/media/images/personal/credit-cards/rewards/phonepe/tnc/PhonePe-SBI-Card-PURPLE-Reward-Program-TnC.pdf",
+      "checked_on": "2026-11-05"
+    },
+    {
+      "path": "cap_rules[id=phonepe_insurance_monthly].parent_cap_id",
+      "value": null,
+      "reason": "Insurance (250) is a separate limit from non-insurance PhonePe spends (750).",
+      "source_url": "https://www.sbicard.com/sbi-card-en/assets/media/images/personal/credit-cards/rewards/phonepe/tnc/PhonePe-SBI-Card-PURPLE-Reward-Program-TnC.pdf",
+      "checked_on": "2026-11-05"
+    },
+    {
+      "path": "accrual_engine.base_cashback_percent",
+      "value": null,
+      "reason": "Card pays reward points; the field holds the string N/A in the source.",
+      "source_url": "https://www.sbicard.com/sbi-card-en/assets/media/images/personal/credit-cards/rewards/phonepe/tnc/PhonePe-SBI-Card-PURPLE-Reward-Program-TnC.pdf",
+      "checked_on": "2026-11-05"
+    }
+  ]
+}
