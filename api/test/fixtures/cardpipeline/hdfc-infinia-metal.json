@@ -1,0 +1,860 @@
+{
+  "id": "hdfc-bank-infinia-metal-edition",
+  "card_name": "Infinia Metal Edition",
+  "issuer": "HDFC Bank",
+  "source_slug": "hdfc-infinia-metal",
+  "run_id": "20260829-135037-fact-check",
+  "ok": true,
+  "final": {
+    "$schema": "https://json-schema.org/draft/2020-12/schema",
+    "schema_version": "5.0.0",
+    "_notes": "Universal card-extraction template. Every card (credit, debit, prepaid; any issuer) fills this same shape. Use null for 'not yet verified / unknown', use the string \"N/A\" for 'this field genuinely does not apply to this card' (e.g. cash_advance on a debit card, invite_only fields on an open-application card), and use [] for 'verified — this card has none of these'. Never delete a key because it doesn't apply — mark it N/A so downstream ingestion can tell 'not applicable' apart from 'not scraped yet'.",
+    "card_product": {
+      "slug": "hdfc-infinia-metal",
+      "name": "Infinia Metal Edition",
+      "issuer_slug": "hdfc",
+      "network": "visa",
+      "network_tier": "visa_infinite",
+      "card_tier": "super_premium",
+      "card_type": "credit",
+      "bin_ranges": [],
+      "joining_fee_inr": 12500,
+      "annual_fee_inr": 12500,
+      "fee_gst_applicable": true,
+      "gst_rate_percent": 18,
+      "is_upi_linkable": false,
+      "application_mode": "invite_only",
+      "form_factors": [
+        "physical_metal",
+        "nfc_contactless"
+      ],
+      "tokenization_support": [],
+      "contactless_pin_free_limit_inr": 5000,
+      "point_value_inr_baseline": 1,
+      "point_value_baseline_basis": "Best-value published redemption for Infinia: 1 Reward Point = ₹1 for Apple products/Tanishq vouchers and flights/hotel bookings via SmartBuy.",
+      "point_expiry_months": 36,
+      "confirmed_flat_base_outside_smartbuy_or_equivalent_portal": true,
+      "display_assets": {
+        "art_asset_key": null,
+        "card_image_url": null,
+        "logo_url": null,
+        "primary_color_hex": null,
+        "secondary_color_hex": null
+      },
+      "status": "verified",
+      "data_source_tier": "issuer_mitc_plus_manual_audit",
+      "source_url": "https://www.hdfc.bank.in/credit-cards/infinia-credit-card",
+      "verified_at": "2026-08-26T01:12:00+05:30"
+    },
+    "eligibility_engine": {
+      "evaluation_mode": "guideline_only",
+      "notes": "Invitation-only. No exact public salary, ITR or CIBIL underwriting threshold is published. Effective 1 April 2026, continued Infinia programme access is aligned to ₹18 lakh financial-year spend across primary + add-on cards or ₹50 lakh Relationship Value; this is a retention criterion, not an application underwriting rule.",
+      "rules": [],
+      "community_benchmarks": {
+        "min_net_monthly_salary_inr": null,
+        "min_annual_itr_inr": null,
+        "min_existing_issuer_credit_limit_inr": null,
+        "min_cibil_score": null,
+        "is_contractually_enforceable": false
+      },
+      "required_documents": [],
+      "processing_time_days": null
+    },
+    "accrual_engine": {
+      "base_block_inr": 150,
+      "rounding_mode": "floor",
+      "base_points_per_block": 5,
+      "base_cashback_percent": null,
+      "effective_base_return_percent": 3.3333333333,
+      "cycle_accrual_ceiling_points": 200000,
+      "capping_period_basis": "statement_cycle",
+      "reversal_policy": {
+        "mode": "proportional_deduction",
+        "negative_balance_allowed": false,
+        "negative_balance_settlement": "N/A"
+      }
+    },
+    "reward_rules": [
+      {
+        "id": "base-retail-5rp-150",
+        "category_id": "all_retail",
+        "priority": 100,
+        "evaluation_type": "standard_accrual",
+        "rail": "any",
+        "channel_type": "all",
+        "conditions": {},
+        "action": {
+          "multiplier": 1,
+          "points_per_block": 5,
+          "cashback_percent": null,
+          "cap_reference": null,
+          "reason": "5 Reward Points per ₹150 on eligible retail spend."
+        },
+        "effective_from": "2026-08-18",
+        "effective_to": null
+      },
+      {
+        "id": "smartbuy-up-to-10x",
+        "category_id": "smartbuy",
+        "priority": 20,
+        "evaluation_type": "accelerator",
+        "rail": "smartbuy_or_equivalent_portal",
+        "channel_type": "all",
+        "conditions": {
+          "portal": "HDFC SmartBuy",
+          "eligible_categories": [
+            "travel",
+            "shopping"
+          ]
+        },
+        "action": {
+          "multiplier": 10,
+          "points_per_block": 50,
+          "cashback_percent": null,
+          "cap_reference": "smartbuy-accelerated-rp",
+          "reason": "Up to 10X Reward Points on eligible SmartBuy travel and shopping spends."
+        },
+        "effective_from": "2026-08-18",
+        "effective_to": null
+      },
+      {
+        "id": "fuel-exclusion",
+        "category_id": "fuel",
+        "priority": 1,
+        "evaluation_type": "exclusion",
+        "rail": "any",
+        "channel_type": "all",
+        "conditions": {},
+        "action": {
+          "multiplier": 0,
+          "points_per_block": 0,
+          "cashback_percent": null,
+          "cap_reference": null,
+          "reason": "No Reward Points on fuel transactions."
+        },
+        "effective_from": "2026-08-18",
+        "effective_to": null
+      },
+      {
+        "id": "rent-exclusion",
+        "category_id": "rent",
+        "priority": 1,
+        "evaluation_type": "exclusion",
+        "rail": "any",
+        "channel_type": "all",
+        "conditions": {},
+        "action": {
+          "multiplier": 0,
+          "points_per_block": 0,
+          "cashback_percent": null,
+          "cap_reference": null,
+          "reason": "Rent payments do not earn Reward Points."
+        },
+        "effective_from": "2026-08-18",
+        "effective_to": null
+      },
+      {
+        "id": "government-exclusion",
+        "category_id": "government",
+        "priority": 1,
+        "evaluation_type": "exclusion",
+        "rail": "any",
+        "channel_type": "all",
+        "conditions": {},
+        "action": {
+          "multiplier": 0,
+          "points_per_block": 0,
+          "cashback_percent": null,
+          "cap_reference": null,
+          "reason": "Government-related transactions do not earn Reward Points for consumer cards."
+        },
+        "effective_from": "2026-08-18",
+        "effective_to": null
+      },
+      {
+        "id": "wallet-exclusion",
+        "category_id": "wallet_load",
+        "priority": 1,
+        "evaluation_type": "exclusion",
+        "rail": "any",
+        "channel_type": "all",
+        "conditions": {},
+        "action": {
+          "multiplier": 0,
+          "points_per_block": 0,
+          "cashback_percent": null,
+          "cap_reference": null,
+          "reason": "Wallet loading transactions do not accrue Reward Points."
+        },
+        "effective_from": "2026-08-18",
+        "effective_to": null
+      },
+      {
+        "id": "emi-exclusion",
+        "category_id": "emi",
+        "priority": 1,
+        "evaluation_type": "exclusion",
+        "rail": "emi",
+        "channel_type": "all",
+        "conditions": {},
+        "action": {
+          "multiplier": 0,
+          "points_per_block": 0,
+          "cashback_percent": null,
+          "cap_reference": null,
+          "reason": "EasyEMI and retail transactions converted to SmartEMI do not retain Reward Points; accrued points are reversed."
+        },
+        "effective_from": "2026-08-18",
+        "effective_to": null
+      },
+      {
+        "id": "education-aggregator-exclusion",
+        "category_id": "education",
+        "priority": 2,
+        "evaluation_type": "exclusion",
+        "rail": "online",
+        "channel_type": "third_party_aggregator",
+        "conditions": {
+          "aggregators": [
+            "CRED",
+            "Cheq",
+            "MobiKwik"
+          ]
+        },
+        "action": {
+          "multiplier": 0,
+          "points_per_block": 0,
+          "cashback_percent": null,
+          "cap_reference": null,
+          "reason": "Education payments via third-party apps do not earn Reward Points; accrued points are reversed."
+        },
+        "effective_from": "2024-09-01",
+        "effective_to": null
+      },
+      {
+        "id": "education-direct-standard",
+        "category_id": "education",
+        "priority": 10,
+        "evaluation_type": "standard_accrual",
+        "rail": "online",
+        "channel_type": "direct_school_college",
+        "conditions": {
+          "mcc_list": [
+            8211,
+            8220,
+            8241,
+            8244,
+            8249,
+            8299
+          ]
+        },
+        "action": {
+          "multiplier": 1,
+          "points_per_block": 5,
+          "cashback_percent": null,
+          "cap_reference": null,
+          "reason": "Direct college/school website or POS education payments earn standard Reward Points."
+        },
+        "effective_from": "2024-09-01",
+        "effective_to": null
+      }
+    ],
+    "cap_rules": [
+      {
+        "id": "statement-cycle-rp-cap",
+        "category_id": "all_retail",
+        "metric": "total_reward_points",
+        "mcc_target_list": [],
+        "period": "statement_cycle",
+        "limit_value": 200000,
+        "limit_value_inr": null,
+        "post_limit_behavior": {
+          "action": "zero_accrual",
+          "points_per_block": 0
+        },
+        "parent_cap_id": null,
+        "reset_day": null,
+        "effective_from": "2023-10-01",
+        "effective_to": null
+      },
+      {
+        "id": "insurance-rp-monthly-cap",
+        "category_id": "insurance",
+        "metric": "bonus_reward_points",
+        "mcc_target_list": [],
+        "period": "calendar_month",
+        "limit_value": 10000,
+        "limit_value_inr": null,
+        "post_limit_behavior": {
+          "action": "downgrade_to_base_rate",
+          "points_per_block": 5
+        },
+        "parent_cap_id": null,
+        "reset_day": 1,
+        "effective_from": "2025-07-01",
+        "effective_to": null
+      },
+      {
+        "id": "grocery-rp-monthly-cap",
+        "category_id": "grocery",
+        "metric": "bonus_reward_points",
+        "mcc_target_list": [],
+        "period": "calendar_month",
+        "limit_value": 2000,
+        "limit_value_inr": null,
+        "post_limit_behavior": {
+          "action": "downgrade_to_base_rate",
+          "points_per_block": 5
+        },
+        "parent_cap_id": null,
+        "reset_day": 1,
+        "effective_from": "2023-01-01",
+        "effective_to": null
+      },
+      {
+        "id": "utility-rp-monthly-cap",
+        "category_id": "utility",
+        "metric": "bonus_reward_points",
+        "mcc_target_list": [],
+        "period": "calendar_month",
+        "limit_value": 2000,
+        "limit_value_inr": null,
+        "post_limit_behavior": {
+          "action": "downgrade_to_base_rate",
+          "points_per_block": 5
+        },
+        "parent_cap_id": null,
+        "reset_day": 1,
+        "effective_from": "2024-09-01",
+        "effective_to": null
+      },
+      {
+        "id": "telecom-rp-monthly-cap",
+        "category_id": "telecom",
+        "metric": "bonus_reward_points",
+        "mcc_target_list": [],
+        "period": "calendar_month",
+        "limit_value": 2000,
+        "limit_value_inr": null,
+        "post_limit_behavior": {
+          "action": "downgrade_to_base_rate",
+          "points_per_block": 5
+        },
+        "parent_cap_id": null,
+        "reset_day": 1,
+        "effective_from": "2024-09-01",
+        "effective_to": null
+      },
+      {
+        "id": "smartbuy-accelerated-rp",
+        "category_id": "smartbuy",
+        "metric": "bonus_reward_points",
+        "mcc_target_list": [],
+        "period": "calendar_month",
+        "limit_value": 15000,
+        "limit_value_inr": null,
+        "post_limit_behavior": {
+          "action": "downgrade_to_base_rate",
+          "points_per_block": 5
+        },
+        "parent_cap_id": null,
+        "reset_day": 1,
+        "effective_from": "2026-01-16",
+        "effective_to": null
+      },
+      {
+        "id": "smartbuy-brand-voucher-rp-subcap",
+        "category_id": "gift_vouchers",
+        "metric": "bonus_reward_points",
+        "mcc_target_list": [],
+        "period": "calendar_month",
+        "limit_value": 3000,
+        "limit_value_inr": null,
+        "post_limit_behavior": {
+          "action": "downgrade_to_base_rate",
+          "points_per_block": 5
+        },
+        "parent_cap_id": "smartbuy-accelerated-rp",
+        "reset_day": 1,
+        "effective_from": "2026-07-01",
+        "effective_to": null
+      },
+      {
+        "id": "tanishq-redemption-quarterly",
+        "category_id": "gift_vouchers",
+        "metric": "total_reward_points",
+        "mcc_target_list": [],
+        "period": "quarter",
+        "limit_value": 50000,
+        "limit_value_inr": null,
+        "post_limit_behavior": {
+          "action": "zero_accrual",
+          "points_per_block": null
+        },
+        "parent_cap_id": null,
+        "reset_day": null,
+        "effective_from": "2024-10-01",
+        "effective_to": null
+      },
+      {
+        "id": "apple-redemption-quarterly",
+        "category_id": "apple_products",
+        "metric": "txn_count",
+        "mcc_target_list": [],
+        "period": "quarter",
+        "limit_value": 1,
+        "limit_value_inr": null,
+        "post_limit_behavior": {
+          "action": "zero_accrual",
+          "points_per_block": null
+        },
+        "parent_cap_id": null,
+        "reset_day": null,
+        "effective_from": "2024-10-01",
+        "effective_to": null
+      },
+      {
+        "id": "flight-hotel-redemption-monthly",
+        "category_id": "travel_flights",
+        "metric": "total_reward_points",
+        "mcc_target_list": [],
+        "period": "calendar_month",
+        "limit_value": 150000,
+        "limit_value_inr": null,
+        "post_limit_behavior": {
+          "action": "zero_accrual",
+          "points_per_block": null
+        },
+        "parent_cap_id": null,
+        "reset_day": 1,
+        "effective_from": "2023-01-01",
+        "effective_to": null
+      },
+      {
+        "id": "statement-credit-redemption-monthly",
+        "category_id": "statement_credit",
+        "metric": "total_reward_points",
+        "mcc_target_list": [],
+        "period": "calendar_month",
+        "limit_value": 50000,
+        "limit_value_inr": null,
+        "post_limit_behavior": {
+          "action": "zero_accrual",
+          "points_per_block": null
+        },
+        "parent_cap_id": null,
+        "reset_day": 1,
+        "effective_from": "2023-02-01",
+        "effective_to": null
+      }
+    ],
+    "brand_specific_voucher_caps": [],
+    "fees_and_surcharges": {
+      "apr": {
+        "monthly_interest_rate_percent": 1.99,
+        "annual_interest_rate_percent": 23.88
+      },
+      "forex_markup": {
+        "markup_percent": 2,
+        "gst_applicable": true
+      },
+      "dynamic_currency_conversion_dcc": {
+        "fee_percent": 1.75,
+        "gst_applicable": true,
+        "trigger_condition": "Effective 15 May 2026 on transactions carried out in Indian currency at an international location or at merchants in India registered overseas."
+      },
+      "fuel_surcharge": {
+        "category_id": "fuel",
+        "surcharge_percent": 1,
+        "waiver_percent": 1,
+        "min_txn_inr": 400,
+        "max_txn_inr": 100000,
+        "monthly_waiver_cap_inr": 1000
+      },
+      "cash_advance": {
+        "atm_transaction_fee_percent": null,
+        "atm_transaction_fee_min_inr": null,
+        "interest_applicable_from_day_one": true,
+        "daily_interest_percent": null,
+        "max_limit_percent": null
+      },
+      "category_surcharges": [
+        {
+          "category_id": "rent",
+          "mcc_list": [],
+          "fee_percent": 1,
+          "gst_applicable": true,
+          "trigger_condition": "Rent payment transactions; fee capped at ₹4,999 per transaction.",
+          "threshold_spend_inr": null,
+          "effective_from": "2025-07-01",
+          "effective_to": null
+        },
+        {
+          "category_id": "utility",
+          "mcc_list": [],
+          "fee_percent": 1,
+          "gst_applicable": true,
+          "trigger_condition": "Consumer-card utility spend exceeding ₹50,000 in a calendar month; fee applies to total utility spend in the month and is capped at ₹4,999 per month.",
+          "threshold_spend_inr": 50000,
+          "effective_from": "2026-04-01",
+          "effective_to": null
+        },
+        {
+          "category_id": "education",
+          "mcc_list": [],
+          "fee_percent": 1,
+          "gst_applicable": true,
+          "trigger_condition": "Education transactions through third-party applications such as CRED, Cheq, MobiKwik; capped at ₹4,999 per transaction. Direct school/college website or POS payments are not charged.",
+          "threshold_spend_inr": null,
+          "effective_from": "2026-04-01",
+          "effective_to": null
+        },
+        {
+          "category_id": "fuel",
+          "mcc_list": [],
+          "fee_percent": 1,
+          "gst_applicable": true,
+          "trigger_condition": "Fuel transaction exceeding ₹15,000 for consumer cards; fee applies to total transaction amount and is capped at ₹4,999 per transaction.",
+          "threshold_spend_inr": 15000,
+          "effective_from": "2026-04-01",
+          "effective_to": null
+        },
+        {
+          "category_id": "railway",
+          "mcc_list": [],
+          "fee_percent": 1,
+          "gst_applicable": true,
+          "trigger_condition": "Railway ticket purchases.",
+          "threshold_spend_inr": null,
+          "effective_from": "2026-08-18",
+          "effective_to": null
+        }
+      ],
+      "emi_charges": {
+        "merchant_instant_emi_processing_fee_inr": 299,
+        "post_purchase_emi_processing_fee_inr": 849,
+        "foreclosure_charge_percent": 3,
+        "gst_applicable": true
+      },
+      "banking_penalties": {
+        "overlimit_charge": {
+          "fee_percent": null,
+          "min_fee_inr": null,
+          "gst_applicable": true
+        },
+        "auto_debit_bounce_charge_inr": null,
+        "cheque_bounce_charge_inr": null
+      },
+      "reward_redemption_fee": {
+        "fee_inr": 0,
+        "gst_applicable": false,
+        "exempted_channels": [],
+        "notes": "No ₹99 reward redemption fee applies to Infinia/ Infinia Metal; cashback redemption charge is also excluded for Infinia Metal."
+      }
+    },
+    "statement_and_late_fees": {
+      "grace_period_days": 50,
+      "grace_period_void_on_revolving_balance": true,
+      "minimum_amount_due_mad": {
+        "calculation_mode": "max",
+        "components": [
+          "5% of total outstanding",
+          "₹200"
+        ]
+      },
+      "late_payment_slabs": []
+    },
+    "fee_waiver_and_milestones": {
+      "annual_fee_waiver": {
+        "threshold_spend_inr": 1000000,
+        "period": "card_anniversary_year",
+        "evaluation_condition": "Spend ₹10 lakh or more in the preceding 12 months before renewal date.",
+        "excluded_category_ids": [],
+        "excluded_mcc_list": [],
+        "waives_fee_inr": 12500
+      },
+      "welcome_and_renewal_gift": {
+        "trigger": "Fee realization and card activation; renewal fee realization and card activation",
+        "benefit_points": 12500,
+        "effective_value_inr": 12500,
+        "condition": "Welcome benefit and renewal benefit of 12,500 Reward Points."
+      },
+      "spend_milestones": []
+    },
+    "lifestyle_and_network_benefits": [
+      {
+        "benefit_id": "domestic-lounge-unlimited",
+        "category_id": "lounge",
+        "network_program": "visa_infinite",
+        "sponsor": "HDFC Bank",
+        "label": "Unlimited complimentary domestic airport lounge access in India for primary and add-on cardholders.",
+        "evaluation_engine": {
+          "conditions": {},
+          "benefit_calculation": {
+            "quota": "unlimited"
+          },
+          "perks": [
+            "₹2 validation debit is later reversed."
+          ]
+        },
+        "quota_count": null,
+        "quota_period": "N/A",
+        "value_estimate_inr": null,
+        "effective_from": "2026-08-18",
+        "effective_to": null
+      },
+      {
+        "benefit_id": "priority-pass-unlimited",
+        "category_id": "lounge",
+        "network_program": "priority_pass",
+        "sponsor": "HDFC Bank",
+        "label": "Complimentary Priority Pass membership with unlimited international lounge access for primary and add-on cardholders.",
+        "evaluation_engine": {
+          "conditions": {},
+          "benefit_calculation": {
+            "quota": "unlimited"
+          },
+          "perks": [
+            "Priority Pass is not transferable."
+          ]
+        },
+        "quota_count": null,
+        "quota_period": "N/A",
+        "value_estimate_inr": null,
+        "effective_from": "2026-08-18",
+        "effective_to": null
+      },
+      {
+        "benefit_id": "golf-unlimited",
+        "category_id": "golf",
+        "network_program": "hdfc-infinia-golf",
+        "sponsor": "HDFC Bank",
+        "label": "Unlimited complimentary golf lessons and games at leading courses across India and select courses worldwide; 100% green fee waiver at select golf courses worldwide.",
+        "evaluation_engine": {
+          "conditions": {},
+          "benefit_calculation": {
+            "quota": "unlimited"
+          },
+          "perks": [
+            "24x7 Golf Concierge Assistance"
+          ]
+        },
+        "quota_count": null,
+        "quota_period": "N/A",
+        "value_estimate_inr": null,
+        "effective_from": "2026-08-18",
+        "effective_to": null
+      },
+      {
+        "benefit_id": "global-concierge",
+        "category_id": "concierge",
+        "network_program": "hdfc-global-personal-concierge",
+        "sponsor": "HDFC Bank",
+        "label": "24x7 Global Personal Concierge for customized bookings and assistance.",
+        "evaluation_engine": {
+          "conditions": {},
+          "benefit_calculation": "N/A",
+          "perks": [
+            "Golf booking",
+            "Itinerary planning and reservation assistance",
+            "Private dining assistance",
+            "International gift delivery",
+            "Event planning and referrals",
+            "Airport VIP meet-and-greet service"
+          ]
+        },
+        "quota_count": null,
+        "quota_period": "N/A",
+        "value_estimate_inr": null,
+        "effective_from": "2026-08-18",
+        "effective_to": null
+      },
+      {
+        "benefit_id": "club-marriott",
+        "category_id": "dining",
+        "network_program": "club_marriott",
+        "sponsor": "Marriott",
+        "label": "Complimentary Club Marriott membership for first year.",
+        "evaluation_engine": {
+          "conditions": {
+            "duration": "first year"
+          },
+          "benefit_calculation": "N/A",
+          "perks": [
+            "Up to 25% off food and beverage at participating restaurants",
+            "Up to 20% off Best Available Rate on rooms at participating Marriott hotels in India and Asia Pacific",
+            "20% off spa services at select participating Marriott-managed spas in India"
+          ]
+        },
+        "quota_count": null,
+        "quota_period": "N/A",
+        "value_estimate_inr": null,
+        "effective_from": "2026-08-18",
+        "effective_to": null
+      },
+      {
+        "benefit_id": "itc-stay-3-for-2",
+        "category_id": "dining",
+        "network_program": "itc-hotels",
+        "sponsor": "ITC Hotels",
+        "label": "Book a stay for 3 nights and pay for 2 at participating ITC hotels.",
+        "evaluation_engine": {
+          "conditions": {},
+          "benefit_calculation": "N/A",
+          "perks": []
+        },
+        "quota_count": null,
+        "quota_period": "N/A",
+        "value_estimate_inr": null,
+        "effective_from": "2026-08-18",
+        "effective_to": null
+      },
+      {
+        "benefit_id": "itc-buffet-1-plus-1",
+        "category_id": "dining",
+        "network_program": "itc-hotels",
+        "sponsor": "ITC Hotels",
+        "label": "1+1 complimentary buffet at participating ITC hotels.",
+        "evaluation_engine": {
+          "conditions": {},
+          "benefit_calculation": "N/A",
+          "perks": []
+        },
+        "quota_count": null,
+        "quota_period": "N/A",
+        "value_estimate_inr": null,
+        "effective_from": "2026-08-18",
+        "effective_to": null
+      }
+    ],
+    "insurance_and_protection": [],
+    "addon_card_rules": {
+      "max_addon_cards": null,
+      "fee_per_card_inr": 0,
+      "separate_priority_pass": true,
+      "lounge_quota_shared": false,
+      "reward_points_pooled": true,
+      "min_age_years": 18
+    },
+    "redemption_matrix": {
+      "direct_options": [
+        {
+          "channel": "SmartBuy",
+          "redemption_type": "flight_hotel_booking",
+          "inr_value_per_point": 1,
+          "max_bill_percentage_payable_via_points": 70,
+          "min_points_per_txn": null,
+          "cycle_points_burn_cap": 150000,
+          "redemption_fee_inr": 0,
+          "effective_from": "2026-08-18",
+          "effective_to": null
+        },
+        {
+          "channel": "SmartBuy",
+          "redemption_type": "other",
+          "inr_value_per_point": 1,
+          "max_bill_percentage_payable_via_points": 70,
+          "min_points_per_txn": null,
+          "cycle_points_burn_cap": 50000,
+          "redemption_fee_inr": 0,
+          "effective_from": "2026-08-18",
+          "effective_to": null
+        },
+        {
+          "channel": "SmartBuy",
+          "redemption_type": "other",
+          "inr_value_per_point": 0.5,
+          "max_bill_percentage_payable_via_points": null,
+          "min_points_per_txn": null,
+          "cycle_points_burn_cap": null,
+          "redemption_fee_inr": 0,
+          "effective_from": "2026-08-18",
+          "effective_to": null
+        },
+        {
+          "channel": "Netbanking",
+          "redemption_type": "statement_credit",
+          "inr_value_per_point": 0.3,
+          "max_bill_percentage_payable_via_points": null,
+          "min_points_per_txn": null,
+          "cycle_points_burn_cap": 50000,
+          "redemption_fee_inr": 0,
+          "effective_from": "2026-08-18",
+          "effective_to": null
+        }
+      ],
+      "partner_transfers": []
+    },
+    "dynamic_promotions_registry": [],
+    "additional_data": {
+      "_notes": "Source-supported data that cannot be represented faithfully by an existing universal schema field. Schema basis: universal_card_schema_fixed_v2",
+      "items": [
+        {
+          "key": "infinia_retention_criterion",
+          "description": "Effective 1 April 2026, continued access to the Infinia programme is aligned to either ₹18 lakh financial-year spend across primary + add-on cards or ₹50 lakh Relationship Value, defined as combined average monthly balances in Savings, Current, Fixed and Recurring Deposit Accounts. Financial year is 1 April to 31 March; failure may result in an alternate card offer or closure with at least 30 days prior notice.",
+          "source": "HDFC Bank MITC Version 4.6, August 2026"
+        },
+        {
+          "key": "concierge_contact",
+          "description": "Infinia concierge toll-free 1800 118 887; landline 022 42320226; email Infinia.support@smartbuyoffers.co. Other HDFC assistance: 18001600 / 18002600; outside India +91 2261606160; infinia.services@hdfc.bank.in.",
+          "source": "HDFC Bank Infinia product page"
+        },
+        {
+          "key": "cash_advance_exception",
+          "description": "The standard 2.5% or ₹500 minimum cash-advance transaction fee is explicitly excluded for Infinia and Infinia Metal. Cash advances still attract the 1.99% monthly finance charge from the withdrawal date until full payment.",
+          "source": "HDFC Bank MITC Version 4.6, August 2026"
+        },
+        {
+          "key": "overlimit_exception",
+          "description": "Standard 2.5% overlimit fee subject to ₹550 minimum is excluded for Infinia and Infinia Metal.",
+          "source": "HDFC Bank MITC Version 4.6, August 2026"
+        },
+        {
+          "key": "late_payment_exception",
+          "description": "Standard late-payment charges are excluded for Infinia and Infinia Metal.",
+          "source": "HDFC Bank MITC Version 4.6, August 2026"
+        },
+        {
+          "key": "smartbuy_brand_voucher_change",
+          "description": "From 1 July 2026, accelerated SmartBuy brand-voucher earning is separately capped at 3,000 Reward Points per calendar month. Current secondary research reports the overall SmartBuy accelerated pool as 15,000 Reward Points per month.",
+          "source": "2026 secondary research; detailed sub-cap should be rechecked against the live SmartBuy terms."
+        },
+        {
+          "key": "payment_return",
+          "description": "Payment Return Charge is 2% of payment amount subject to minimum ₹450, capped at ₹4,999 for Infinia and Infinia Metal.",
+          "source": "HDFC Bank MITC Version 4.6, August 2026"
+        },
+        {
+          "key": "card_reissue",
+          "description": "Reissue of lost, stolen or damaged metal card is ₹3,500.",
+          "source": "HDFC Bank MITC Version 4.6, August 2026"
+        },
+        {
+          "key": "cash_processing",
+          "description": "Cash processing fee is ₹100 for card payments made by depositing in HDFC Bank branches or ATMs.",
+          "source": "HDFC Bank MITC Version 4.6, August 2026"
+        },
+        {
+          "key": "balance_transfer",
+          "description": "Balance transfer processing charge is 1% of BT amount or ₹250, whichever is higher.",
+          "source": "HDFC Bank MITC Version 4.6, August 2026"
+        },
+        {
+          "key": "point_inactivity",
+          "description": "If the credit card is not used for more than 365 days, accrued Reward Points/CashPoints are nullified.",
+          "source": "HDFC Bank MITC Version 4.6, August 2026"
+        },
+        {
+          "key": "instant_discount_reward_reversal",
+          "description": "Reward Points earned on transactions having an HDFC Bank instant discount or cashback are invalidated and debited within 120 days of posting.",
+          "source": "HDFC Bank MITC Version 4.6, August 2026"
+        },
+        {
+          "key": "reward_redemption_total_cap",
+          "description": "Maximum Reward Points redemption is 2,00,000 points per statement cycle; this overall redemption ceiling is separate from the 1,50,000 calendar-month flight/hotel/airmiles cap.",
+          "source": "HDFC Bank Infinia product page"
+        }
+      ]
+    }
+  }
+}

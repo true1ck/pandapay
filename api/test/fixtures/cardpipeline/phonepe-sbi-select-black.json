@@ -1,0 +1,1081 @@
+{
+  "id": "state-bank-of-india-phonepe-sbi-select-black-credit-card",
+  "card_name": "PhonePe SBI SELECT BLACK Credit Card",
+  "issuer": "State Bank of India",
+  "source_slug": "phonepe-sbi-select-black",
+  "run_id": "20260829-222858-fact-check",
+  "ok": true,
+  "final": {
+    "$schema": "https://json-schema.org/draft/2020-12/schema",
+    "schema_version": "5.0.0",
+    "_notes": "Universal card-extraction template verified for PhonePe SBI Card SELECT BLACK and reconciled against the latest available SBI Card product page and July 2026 reward-program revision.",
+    "card_product": {
+      "slug": "phonepe-sbi-select-black",
+      "name": "PhonePe SBI Card SELECT BLACK",
+      "issuer_slug": "sbi-card",
+      "network": "Visa / RuPay",
+      "network_tier": "Signature / Select",
+      "card_tier": "premium",
+      "card_type": "credit",
+      "bin_ranges": [],
+      "joining_fee_inr": 1499,
+      "annual_fee_inr": 1499,
+      "fee_gst_applicable": true,
+      "gst_rate_percent": 18,
+      "is_upi_linkable": true,
+      "application_mode": "open",
+      "form_factors": [
+        "physical_plastic",
+        "nfc_contactless",
+        "virtual"
+      ],
+      "tokenization_support": [
+        "phonepe",
+        "google_pay",
+        "sbi_card_pay",
+        "samsung_pay"
+      ],
+      "contactless_pin_free_limit_inr": 5000,
+      "point_value_inr_baseline": 1,
+      "point_value_baseline_basis": "SBI Card states 1 Reward Point = Re. 1; Reward Points may be redeemed against Rewards Catalogue vouchers or as credit against statement outstanding, with no redemption fee.",
+      "point_expiry_months": 24,
+      "confirmed_flat_base_outside_smartbuy_or_equivalent_portal": false,
+      "display_assets": {
+        "art_asset_key": null,
+        "card_image_url": null,
+        "logo_url": null,
+        "primary_color_hex": null,
+        "secondary_color_hex": null
+      },
+      "status": "verified",
+      "data_source_tier": "issuer_mitc_plus_manual_audit",
+      "source_url": "https://www.sbicard.com/en/personal/credit-cards/phonepe-sbi-card-select-black.html\n",
+      "verified_at": "2026-08-24T21:55:00+05:30"
+    },
+    "eligibility_engine": {
+      "evaluation_mode": "guideline_only",
+      "notes": "Issuer does not publish exact salary, ITR, or CIBIL thresholds for this card; approval and credit limits are subject to internal SBICPSL criteria.",
+      "rules": [],
+      "community_benchmarks": {
+        "min_net_monthly_salary_inr": null,
+        "min_annual_itr_inr": null,
+        "min_existing_issuer_credit_limit_inr": null,
+        "min_cibil_score": 750,
+        "is_contractually_enforceable": false
+      },
+      "required_documents": [
+        "identity_proof",
+        "address_proof",
+        "income_proof",
+        "pan_card"
+      ],
+      "processing_time_days": 7
+    },
+    "accrual_engine": {
+      "base_block_inr": 100,
+      "rounding_mode": "floor",
+      "base_points_per_block": 1,
+      "base_cashback_percent": null,
+      "effective_base_return_percent": 1,
+      "cycle_accrual_ceiling_points": null,
+      "capping_period_basis": "calendar_month",
+      "reversal_policy": {
+        "mode": "proportional_deduction",
+        "negative_balance_allowed": true,
+        "negative_balance_settlement": "adjusted_against_future_accruals"
+      }
+    },
+    "reward_rules": [
+      {
+        "id": "phonepe-10x",
+        "category_id": "phonepe",
+        "priority": 10,
+        "evaluation_type": "accelerator",
+        "rail": "any",
+        "channel_type": "all",
+        "conditions": {
+          "app": "PhonePe",
+          "eligible_categories": [
+            "recharges",
+            "utilities",
+            "bill_payments",
+            "insurance",
+            "travel"
+          ],
+          "cap_non_insurance": "phonepe-other-monthly",
+          "cap_insurance": "phonepe-insurance-monthly"
+        },
+        "action": {
+          "multiplier": 10,
+          "points_per_block": 10,
+          "cashback_percent": null,
+          "cap_reference": "phonepe-other-monthly",
+          "reason": "10 Reward Points per Rs.100 on eligible PhonePe spends in select categories including recharges, utilities, bill payments, insurance and travel."
+        },
+        "effective_from": "2025-07-22",
+        "effective_to": null
+      },
+      {
+        "id": "online-5x",
+        "category_id": "all_retail",
+        "priority": 20,
+        "evaluation_type": "accelerator",
+        "rail": "online",
+        "channel_type": "all",
+        "conditions": {},
+        "action": {
+          "multiplier": 5,
+          "points_per_block": 5,
+          "cashback_percent": null,
+          "cap_reference": "online-monthly",
+          "reason": "5 Reward Points per Rs.100 on eligible online spends."
+        },
+        "effective_from": "2025-07-22",
+        "effective_to": null
+      },
+      {
+        "id": "base-1x",
+        "category_id": "all_retail",
+        "priority": 30,
+        "evaluation_type": "standard_accrual",
+        "rail": "any",
+        "channel_type": "all",
+        "conditions": {},
+        "action": {
+          "multiplier": 1,
+          "points_per_block": 1,
+          "cashback_percent": null,
+          "cap_reference": "other-monthly",
+          "reason": "1 Reward Point per Rs.100 on other eligible spends."
+        },
+        "effective_from": "2025-07-22",
+        "effective_to": null
+      },
+      {
+        "id": "phonepe-scanpay-1x",
+        "category_id": "all_retail",
+        "priority": 31,
+        "evaluation_type": "standard_accrual",
+        "rail": "upi_qr",
+        "channel_type": "all",
+        "conditions": {
+          "app": "PhonePe"
+        },
+        "action": {
+          "multiplier": 1,
+          "points_per_block": 1,
+          "cashback_percent": null,
+          "cap_reference": "other-monthly",
+          "reason": "All Scan & Pay transactions made via the PhonePe App accrue 1% value back."
+        },
+        "effective_from": "2025-07-22",
+        "effective_to": null
+      },
+      {
+        "id": "utilities-outside-phonepe-base",
+        "category_id": "utility",
+        "priority": 32,
+        "evaluation_type": "standard_accrual",
+        "rail": "any",
+        "channel_type": "all",
+        "conditions": {
+          "mcc": [
+            4900,
+            4814,
+            4899
+          ],
+          "app": "not_PhonePe"
+        },
+        "action": {
+          "multiplier": 1,
+          "points_per_block": 1,
+          "cashback_percent": null,
+          "cap_reference": "other-monthly",
+          "reason": "Utility payments outside the PhonePe app earn only base Reward Points at 1 Reward Point per Rs.100; they do not earn accelerated PhonePe Reward Points."
+        },
+        "effective_from": "2026-07-01",
+        "effective_to": null
+      },
+      {
+        "id": "insurance-outside-phonepe-base",
+        "category_id": "insurance",
+        "priority": 33,
+        "evaluation_type": "standard_accrual",
+        "rail": "any",
+        "channel_type": "all",
+        "conditions": {
+          "mcc": [
+            5960,
+            6300,
+            6380
+          ],
+          "app": "not_PhonePe"
+        },
+        "action": {
+          "multiplier": 1,
+          "points_per_block": 1,
+          "cashback_percent": null,
+          "cap_reference": "other-monthly",
+          "reason": "Insurance payments outside the PhonePe app earn only base Reward Points at 1 Reward Point per Rs.100; they do not earn accelerated PhonePe Reward Points."
+        },
+        "effective_from": "2026-07-01",
+        "effective_to": null
+      },
+      {
+        "id": "fuel-exclusion",
+        "category_id": "fuel",
+        "priority": 1,
+        "evaluation_type": "exclusion",
+        "rail": "any",
+        "channel_type": "all",
+        "conditions": {
+          "mcc": [
+            5172,
+            5541,
+            5542,
+            5983
+          ]
+        },
+        "action": {
+          "multiplier": 0,
+          "points_per_block": 0,
+          "cashback_percent": null,
+          "cap_reference": null,
+          "reason": "No Reward Points on petrol pump/service station purchases."
+        },
+        "effective_from": "2025-07-22",
+        "effective_to": null
+      },
+      {
+        "id": "wallet-exclusion",
+        "category_id": "wallet_load",
+        "priority": 2,
+        "evaluation_type": "exclusion",
+        "rail": "any",
+        "channel_type": "all",
+        "conditions": {
+          "mcc": [
+            6540,
+            6541
+          ]
+        },
+        "action": {
+          "multiplier": 0,
+          "points_per_block": 0,
+          "cashback_percent": null,
+          "cap_reference": null,
+          "reason": "No Reward Points on e-wallet loading."
+        },
+        "effective_from": "2025-07-22",
+        "effective_to": null
+      },
+      {
+        "id": "rent-exclusion",
+        "category_id": "rent",
+        "priority": 3,
+        "evaluation_type": "exclusion",
+        "rail": "any",
+        "channel_type": "all",
+        "conditions": {
+          "mcc": [
+            6513
+          ]
+        },
+        "action": {
+          "multiplier": 0,
+          "points_per_block": 0,
+          "cashback_percent": null,
+          "cap_reference": null,
+          "reason": "No Reward Points on rent/property management payments."
+        },
+        "effective_from": "2025-07-22",
+        "effective_to": null
+      },
+      {
+        "id": "education-exclusion",
+        "category_id": "education",
+        "priority": 4,
+        "evaluation_type": "exclusion",
+        "rail": "any",
+        "channel_type": "all",
+        "conditions": {
+          "mcc": [
+            8211,
+            8241,
+            8244,
+            8249,
+            8299,
+            8220
+          ]
+        },
+        "action": {
+          "multiplier": 0,
+          "points_per_block": 0,
+          "cashback_percent": null,
+          "cap_reference": null,
+          "reason": "No Reward Points on school and educational services."
+        },
+        "effective_from": "2025-07-22",
+        "effective_to": null
+      },
+      {
+        "id": "government-exclusion",
+        "category_id": "government",
+        "priority": 5,
+        "evaluation_type": "exclusion",
+        "rail": "any",
+        "channel_type": "all",
+        "conditions": {
+          "mcc": [
+            9311,
+            9399
+          ]
+        },
+        "action": {
+          "multiplier": 0,
+          "points_per_block": 0,
+          "cashback_percent": null,
+          "cap_reference": null,
+          "reason": "No Reward Points on governmental spends."
+        },
+        "effective_from": "2025-07-22",
+        "effective_to": null
+      },
+      {
+        "id": "gaming-exclusion",
+        "category_id": "digital_gaming",
+        "priority": 6,
+        "evaluation_type": "exclusion",
+        "rail": "any",
+        "channel_type": "all",
+        "conditions": {
+          "mcc": [
+            5816,
+            7993,
+            7994
+          ]
+        },
+        "action": {
+          "multiplier": 0,
+          "points_per_block": 0,
+          "cashback_percent": null,
+          "cap_reference": null,
+          "reason": "No Reward Points on digital gaming platforms/merchants."
+        },
+        "effective_from": "2025-07-22",
+        "effective_to": null
+      },
+      {
+        "id": "jewellery-exclusion",
+        "category_id": "jewellery",
+        "priority": 7,
+        "evaluation_type": "exclusion",
+        "rail": "any",
+        "channel_type": "all",
+        "conditions": {
+          "mcc": [
+            5094,
+            5944
+          ]
+        },
+        "action": {
+          "multiplier": 0,
+          "points_per_block": 0,
+          "cashback_percent": null,
+          "cap_reference": null,
+          "reason": "No Reward Points on jewellery."
+        },
+        "effective_from": "2026-07-01",
+        "effective_to": null
+      },
+      {
+        "id": "gifts-exclusion",
+        "category_id": "gift_vouchers",
+        "priority": 8,
+        "evaluation_type": "exclusion",
+        "rail": "any",
+        "channel_type": "all",
+        "conditions": {
+          "mcc": [
+            5947
+          ]
+        },
+        "action": {
+          "multiplier": 0,
+          "points_per_block": 0,
+          "cashback_percent": null,
+          "cap_reference": null,
+          "reason": "No Reward Points on gifts and souvenirs."
+        },
+        "effective_from": "2026-07-01",
+        "effective_to": null
+      },
+      {
+        "id": "tolls-exclusion",
+        "category_id": "tolls_bridges",
+        "priority": 9,
+        "evaluation_type": "exclusion",
+        "rail": "any",
+        "channel_type": "all",
+        "conditions": {
+          "mcc": [
+            4784
+          ]
+        },
+        "action": {
+          "multiplier": 0,
+          "points_per_block": 0,
+          "cashback_percent": null,
+          "cap_reference": null,
+          "reason": "No Reward Points on tolls and bridges."
+        },
+        "effective_from": "2026-07-01",
+        "effective_to": null
+      },
+      {
+        "id": "upi-outside-phonepe",
+        "category_id": "all_retail",
+        "priority": 12,
+        "evaluation_type": "exclusion",
+        "rail": "upi_qr",
+        "channel_type": "all",
+        "conditions": {
+          "app": "not_PhonePe"
+        },
+        "action": {
+          "multiplier": 0,
+          "points_per_block": 0,
+          "cashback_percent": null,
+          "cap_reference": null,
+          "reason": "Scan & Pay or online UPI transactions outside PhonePe do not accrue Reward Points from 1 July 2026."
+        },
+        "effective_from": "2026-07-01",
+        "effective_to": null
+      },
+      {
+        "id": "cash-advance-exclusion",
+        "category_id": "cash_advance",
+        "priority": 20,
+        "evaluation_type": "exclusion",
+        "rail": "atm",
+        "channel_type": "all",
+        "conditions": {},
+        "action": {
+          "multiplier": 0,
+          "points_per_block": 0,
+          "cashback_percent": null,
+          "cap_reference": null,
+          "reason": "No Reward Points on ATM withdrawals/cash advances."
+        },
+        "effective_from": "2025-07-22",
+        "effective_to": null
+      },
+      {
+        "id": "balance-transfer-exclusion",
+        "category_id": "excluded_spend",
+        "priority": 21,
+        "evaluation_type": "exclusion",
+        "rail": "any",
+        "channel_type": "all",
+        "conditions": {},
+        "action": {
+          "multiplier": 0,
+          "points_per_block": 0,
+          "cashback_percent": null,
+          "cap_reference": null,
+          "reason": "No Reward Points on Balance Transfer transactions."
+        },
+        "effective_from": "2025-07-22",
+        "effective_to": null
+      },
+      {
+        "id": "flexipay-exclusion",
+        "category_id": "emi",
+        "priority": 22,
+        "evaluation_type": "exclusion",
+        "rail": "emi",
+        "channel_type": "all",
+        "conditions": {},
+        "action": {
+          "multiplier": 0,
+          "points_per_block": 0,
+          "cashback_percent": null,
+          "cap_reference": null,
+          "reason": "No Reward Points on Flexipay transactions."
+        },
+        "effective_from": "2025-07-22",
+        "effective_to": null
+      },
+      {
+        "id": "merchant-emi-exclusion",
+        "category_id": "emi",
+        "priority": 23,
+        "evaluation_type": "exclusion",
+        "rail": "emi",
+        "channel_type": "all",
+        "conditions": {},
+        "action": {
+          "multiplier": 0,
+          "points_per_block": 0,
+          "cashback_percent": null,
+          "cap_reference": null,
+          "reason": "No Reward Points on Merchant EMI transactions."
+        },
+        "effective_from": "2025-07-22",
+        "effective_to": null
+      },
+      {
+        "id": "encash-exclusion",
+        "category_id": "excluded_spend",
+        "priority": 24,
+        "evaluation_type": "exclusion",
+        "rail": "any",
+        "channel_type": "all",
+        "conditions": {},
+        "action": {
+          "multiplier": 0,
+          "points_per_block": 0,
+          "cashback_percent": null,
+          "cap_reference": null,
+          "reason": "No Reward Points on Encash transactions."
+        },
+        "effective_from": "2025-07-22",
+        "effective_to": null
+      },
+      {
+        "id": "financial-charges-exclusion",
+        "category_id": "excluded_spend",
+        "priority": 25,
+        "evaluation_type": "exclusion",
+        "rail": "any",
+        "channel_type": "all",
+        "conditions": {},
+        "action": {
+          "multiplier": 0,
+          "points_per_block": 0,
+          "cashback_percent": null,
+          "cap_reference": null,
+          "reason": "No Reward Points on financial charges, late fees, dishonoured cheque charges, service fees and transaction charges."
+        },
+        "effective_from": "2025-07-22",
+        "effective_to": null
+      },
+      {
+        "id": "disputed-exclusion",
+        "category_id": "excluded_spend",
+        "priority": 26,
+        "evaluation_type": "exclusion",
+        "rail": "any",
+        "channel_type": "all",
+        "conditions": {},
+        "action": {
+          "multiplier": 0,
+          "points_per_block": 0,
+          "cashback_percent": null,
+          "cap_reference": null,
+          "reason": "No Reward Points on disputed transactions."
+        },
+        "effective_from": "2025-07-22",
+        "effective_to": null
+      }
+    ],
+    "cap_rules": [
+      {
+        "id": "phonepe-other-monthly",
+        "category_id": "phonepe",
+        "metric": "bonus_reward_points",
+        "mcc_target_list": [],
+        "period": "calendar_month",
+        "limit_value": 1500,
+        "limit_value_inr": null,
+        "post_limit_behavior": {
+          "action": "zero_accrual",
+          "points_per_block": 0
+        },
+        "parent_cap_id": null,
+        "reset_day": null,
+        "effective_from": "2026-07-01",
+        "effective_to": null
+      },
+      {
+        "id": "phonepe-insurance-monthly",
+        "category_id": "insurance",
+        "metric": "bonus_reward_points",
+        "mcc_target_list": [
+          5960,
+          6300,
+          6380
+        ],
+        "period": "calendar_month",
+        "limit_value": 500,
+        "limit_value_inr": null,
+        "post_limit_behavior": {
+          "action": "zero_accrual",
+          "points_per_block": 0
+        },
+        "parent_cap_id": "phonepe-other-monthly",
+        "reset_day": null,
+        "effective_from": "2026-07-01",
+        "effective_to": null
+      },
+      {
+        "id": "online-monthly",
+        "category_id": "all_retail",
+        "metric": "bonus_reward_points",
+        "mcc_target_list": [],
+        "period": "calendar_month",
+        "limit_value": 1000,
+        "limit_value_inr": null,
+        "post_limit_behavior": {
+          "action": "zero_accrual",
+          "points_per_block": 0
+        },
+        "parent_cap_id": null,
+        "reset_day": null,
+        "effective_from": "2026-07-01",
+        "effective_to": null
+      },
+      {
+        "id": "other-monthly",
+        "category_id": "all_retail",
+        "metric": "total_reward_points",
+        "mcc_target_list": [],
+        "period": "calendar_month",
+        "limit_value": 2000,
+        "limit_value_inr": null,
+        "post_limit_behavior": {
+          "action": "zero_accrual",
+          "points_per_block": 0
+        },
+        "parent_cap_id": null,
+        "reset_day": null,
+        "effective_from": "2026-07-01",
+        "effective_to": null
+      }
+    ],
+    "brand_specific_voucher_caps": [],
+    "fees_and_surcharges": {
+      "apr": {
+        "monthly_interest_rate_percent": 3.75,
+        "annual_interest_rate_percent": 45
+      },
+      "forex_markup": {
+        "markup_percent": 3.5,
+        "gst_applicable": true
+      },
+      "dynamic_currency_conversion_dcc": {
+        "fee_percent": null,
+        "gst_applicable": null,
+        "trigger_condition": null
+      },
+      "fuel_surcharge": {
+        "category_id": "fuel",
+        "surcharge_percent": 1,
+        "waiver_percent": 1,
+        "min_txn_inr": 500,
+        "max_txn_inr": 4000,
+        "monthly_waiver_cap_inr": 250
+      },
+      "cash_advance": {
+        "atm_transaction_fee_percent": 2.5,
+        "atm_transaction_fee_min_inr": 500,
+        "interest_applicable_from_day_one": true,
+        "daily_interest_percent": 0.123,
+        "max_limit_percent": 80
+      },
+      "category_surcharges": [
+        {
+          "category_id": "utility",
+          "mcc_list": [
+            4900
+          ],
+          "fee_percent": 1,
+          "gst_applicable": true,
+          "trigger_condition": "Sum of all Utility Payments exceeds Rs.50,000 in a billing cycle; fee is 1% of the total utility payments for that billing cycle.",
+          "threshold_spend_inr": 50000,
+          "effective_from": "2024-12-01",
+          "effective_to": null
+        },
+        {
+          "category_id": "education",
+          "mcc_list": [
+            8211,
+            8241,
+            8244,
+            8249,
+            8299,
+            8220
+          ],
+          "fee_percent": 1,
+          "gst_applicable": true,
+          "trigger_condition": "Education payments made through third-party apps; direct payments to colleges/schools through their websites or POS machines do not attract this fee.",
+          "threshold_spend_inr": 0,
+          "effective_from": "2025-11-01",
+          "effective_to": null
+        },
+        {
+          "category_id": "wallet_load",
+          "mcc_list": [
+            6540,
+            6541
+          ],
+          "fee_percent": 1,
+          "gst_applicable": true,
+          "trigger_condition": "Every wallet-load transaction exceeding Rs.1,000.",
+          "threshold_spend_inr": 1000,
+          "effective_from": "2025-11-01",
+          "effective_to": null
+        },
+        {
+          "category_id": "rent",
+          "mcc_list": [
+            6513
+          ],
+          "fee_percent": null,
+          "gst_applicable": true,
+          "trigger_condition": "Flat processing fee on every rent transaction.",
+          "threshold_spend_inr": 0,
+          "effective_from": "2025-07-22",
+          "effective_to": null
+        }
+      ],
+      "emi_charges": {
+        "merchant_instant_emi_processing_fee_inr": 199,
+        "post_purchase_emi_processing_fee_inr": 199,
+        "foreclosure_charge_percent": 3,
+        "gst_applicable": true
+      },
+      "banking_penalties": {
+        "overlimit_charge": {
+          "fee_percent": 2.5,
+          "min_fee_inr": 600,
+          "gst_applicable": true
+        },
+        "auto_debit_bounce_charge_inr": 500,
+        "cheque_bounce_charge_inr": 500
+      },
+      "reward_redemption_fee": {
+        "fee_inr": 0,
+        "gst_applicable": false,
+        "exempted_channels": [
+          "statement_credit",
+          "rewards_catalogue"
+        ],
+        "notes": "PhonePe SBI Card SELECT BLACK reward-program terms state no fee is charged on redemption."
+      }
+    },
+    "statement_and_late_fees": {
+      "grace_period_days": 50,
+      "grace_period_void_on_revolving_balance": true,
+      "minimum_amount_due_mad": {
+        "calculation_mode": "max",
+        "components": [
+          "100% of GST",
+          "100% of EMI amount",
+          "100% of Fees/Charges",
+          "100% of finance charges",
+          "Overlimit Amount (if any)",
+          "2% of remaining balance outstanding"
+        ]
+      },
+      "late_payment_slabs": [
+        {
+          "min_balance_inr": 0,
+          "max_balance_inr": 100,
+          "fee_inr": 0
+        },
+        {
+          "min_balance_inr": 100.01,
+          "max_balance_inr": 500,
+          "fee_inr": 100
+        },
+        {
+          "min_balance_inr": 500.01,
+          "max_balance_inr": 1000,
+          "fee_inr": 500
+        },
+        {
+          "min_balance_inr": 1000.01,
+          "max_balance_inr": 10000,
+          "fee_inr": 750
+        },
+        {
+          "min_balance_inr": 10000.01,
+          "max_balance_inr": 25000,
+          "fee_inr": 950
+        },
+        {
+          "min_balance_inr": 25000.01,
+          "max_balance_inr": 50000,
+          "fee_inr": 1100
+        },
+        {
+          "min_balance_inr": 50000.01,
+          "max_balance_inr": null,
+          "fee_inr": 1300
+        }
+      ]
+    },
+    "fee_waiver_and_milestones": {
+      "annual_fee_waiver": {
+        "threshold_spend_inr": 300000,
+        "period": "card_anniversary_year",
+        "evaluation_condition": "Annual/renewal fee is reversed when annual retail spends reach Rs.3 lakh in the preceding membership year.",
+        "excluded_category_ids": [
+          "rent",
+          "wallet_load",
+          "cash_advance"
+        ],
+        "excluded_mcc_list": [
+          6513,
+          6540,
+          6541
+        ],
+        "waives_fee_inr": 1499
+      },
+      "welcome_and_renewal_gift": {
+        "trigger": "Payment of the Annual Membership Fee for the eligible year",
+        "benefit_points": null,
+        "effective_value_inr": 1500,
+        "condition": "One-time PhonePe e-Gift Voucher worth Rs.1,500; voucher code sent within 45 days from payment of Membership Fee; account must be in good standing."
+      },
+      "spend_milestones": [
+        {
+          "id": "yatra-500k",
+          "label": "Yatra e-Voucher",
+          "threshold_spend_inr": 500000,
+          "reward_value_inr": 5000,
+          "period": "card_anniversary_year",
+          "is_repeatable": true,
+          "effective_from": "2025-07-22",
+          "effective_to": null
+        }
+      ]
+    },
+    "lifestyle_and_network_benefits": [
+      {
+        "benefit_id": "domestic-lounge-4",
+        "category_id": "lounge",
+        "network_program": "domestic_airport_lounge_program",
+        "sponsor": "SBI Card",
+        "label": "4 complimentary domestic airport lounge visits per year, maximum 1 per quarter",
+        "evaluation_engine": {
+          "conditions": {
+            "max_visits_per_quarter": 1
+          },
+          "benefit_calculation": {
+            "complimentary_visits_per_year": 4
+          },
+          "perks": [
+            "domestic airport lounge access"
+          ]
+        },
+        "quota_count": 4,
+        "quota_period": "annual",
+        "value_estimate_inr": 4000,
+        "effective_from": "2025-07-22",
+        "effective_to": null
+      },
+      {
+        "benefit_id": "priority-pass-membership",
+        "category_id": "lounge",
+        "network_program": "priority_pass",
+        "sponsor": "Priority Pass / SBI Card",
+        "label": "Complimentary Priority Pass membership for 24 months for the primary cardholder; lounge visits are chargeable",
+        "evaluation_engine": {
+          "conditions": {
+            "primary_cardholder_only": true,
+            "membership_validity_months": 24,
+            "guest_visits_chargeable": true
+          },
+          "benefit_calculation": {
+            "membership_fee": "complimentary",
+            "visit_charge_usd": 27
+          },
+          "perks": [
+            "Priority Pass membership"
+          ]
+        },
+        "quota_count": null,
+        "quota_period": null,
+        "value_estimate_inr": 8000,
+        "effective_from": "2025-07-22",
+        "effective_to": null
+      }
+    ],
+    "insurance_and_protection": [
+      {
+        "cover_type": "lost_card_liability",
+        "coverage_inr": null,
+        "coverage_usd": null,
+        "claim_condition": null,
+        "effective_from": null,
+        "effective_to": null
+      },
+      {
+        "cover_type": "fraud_liability_cover",
+        "coverage_inr": null,
+        "coverage_usd": null,
+        "claim_condition": null,
+        "effective_from": null,
+        "effective_to": null
+      }
+    ],
+    "addon_card_rules": {
+      "max_addon_cards": 3,
+      "fee_per_card_inr": 0,
+      "separate_priority_pass": false,
+      "lounge_quota_shared": true,
+      "reward_points_pooled": true,
+      "min_age_years": 18
+    },
+    "redemption_matrix": {
+      "direct_options": [
+        {
+          "channel": "SBI Card Rewards Portal",
+          "redemption_type": "statement_credit",
+          "inr_value_per_point": 1,
+          "max_bill_percentage_payable_via_points": 100,
+          "min_points_per_txn": 500,
+          "cycle_points_burn_cap": null,
+          "redemption_fee_inr": 0,
+          "effective_from": "2025-07-22",
+          "effective_to": null
+        },
+        {
+          "channel": "SBI Card Rewards Catalogue",
+          "redemption_type": "partner_catalogue",
+          "inr_value_per_point": 1,
+          "max_bill_percentage_payable_via_points": null,
+          "min_points_per_txn": 500,
+          "cycle_points_burn_cap": null,
+          "redemption_fee_inr": 0,
+          "effective_from": "2025-07-22",
+          "effective_to": null
+        }
+      ],
+      "partner_transfers": []
+    },
+    "dynamic_promotions_registry": [],
+    "additional_data": {
+      "_notes": "Source-supported data that cannot be represented faithfully by any existing universal schema field. Do not duplicate data already represented elsewhere. Do not use this section for unknown values, assumptions, or inferred data.",
+      "items": [
+        {
+          "label": "Network variants",
+          "value": "The card is available on both Visa and RuPay. Visa variant is issued as Visa Signature; RuPay variant as RuPay Select. RuPay can be linked to UPI; Visa variant can be tokenised on PhonePe."
+        },
+        {
+          "label": "Contactless",
+          "value": "Contactless transactions are allowed up to Rs.5,000 per single transaction without PIN; transactions above Rs.5,000 require PIN."
+        },
+        {
+          "label": "Priority Pass visit charges",
+          "value": "USD 27 plus applicable taxes per visit; guest charges are USD 27 plus applicable taxes per visit. The card-specific Priority Pass terms state membership is complimentary for 24 months and for the primary cardholder only."
+        },
+        {
+          "label": "Reward minimum transaction",
+          "value": "Reward Points are earned on transactions of minimum Rs.100."
+        },
+        {
+          "label": "Reward accrual timing",
+          "value": "Reward Points accrue on posting/settlement date, and the applicable reward cap/structure is determined at transaction posting."
+        },
+        {
+          "label": "Reward forfeiture",
+          "value": "Points are immediately forfeited in specified events including dues unpaid for more than 90 days, settlement, fraud, regulatory non-compliance or death; balance is forfeited after 13 consecutive months without a card transaction; specified points are forfeited after two consecutive missed payments; on voluntary closure, unused points are forfeited 30 days after closure."
+        },
+        {
+          "label": "PhonePe accelerated-category identification",
+          "value": "Accelerated PhonePe categories are identified using PhonePe MID/TID/VPA on a best-effort basis."
+        },
+        {
+          "label": "UPI restriction effective 2026-07-01",
+          "value": "Scan and Pay or online UPI transactions outside PhonePe do not accrue Reward Points from 1 July 2026."
+        },
+        {
+          "label": "Balance transfer",
+          "value": "Balance Transfer is available; transferred amount must be at least Rs.5,000 and up to 75% of available credit limit, with applicable processing fee. Indicative processing time in the card booklet is 2-3 working days."
+        },
+        {
+          "label": "Flexipay",
+          "value": "Flexipay is available; eligible purchases can be converted within 30 days of purchase. Separate plan-specific interest and processing charges apply."
+        },
+        {
+          "label": "Merchant EMI",
+          "value": "Merchant EMI is available at participating merchants/websites; a one-time processing fee may be charged with the first EMI and interest applies according to the selected plan. Merchant EMI transactions do not earn Reward Points."
+        },
+        {
+          "label": "Application channel",
+          "value": "The co-branded card application is integrated into the PhonePe app; SBI Card also states that credit-card applications may be made through its website/ILA and other channels."
+        },
+        {
+          "label": "Worldwide acceptance",
+          "value": "Card booklet states acceptance at over 29 million outlets globally, including 325,000 outlets in India."
+        },
+        {
+          "label": "Utility fee MCC basis",
+          "value": "Utility payments are identified under MCC 4900 on a best-effort basis; network partners define MCCs and may change them."
+        },
+        {
+          "label": "Education payment fee distinction",
+          "value": "From 1 November 2025, 1% fee applies to education payments through third-party apps; direct payments to colleges/schools via their websites or POS machines do not attract this fee."
+        },
+        {
+          "label": "Rent fee",
+          "value": "Processing fee of Rs.199 applies to all rent payment transactions and is not reversed on transaction reversal/cancellation/refund."
+        },
+        {
+          "label": "Reward redemption",
+          "value": "Reward Points can be redeemed against SBI Card Rewards Catalogue vouchers or as credit against statement outstanding; no redemption fee is charged on this card."
+        },
+        {
+          "label": "Welcome voucher mechanics",
+          "value": "The Rs.1,500 PhonePe e-Gift Voucher is one-time and tied to payment of the Rs.1,499 annual membership fee; eligible-year definition follows the card membership year, and the voucher is valid for 12 months from addition to Gift Card Balance."
+        },
+        {
+          "label": "Yatra voucher mechanics",
+          "value": "The Rs.5,000 Yatra voucher is issued within 30 days of reaching Rs.5 lakh annual spend, is valid for one transaction, covers domestic/international flights, domestic hotels and domestic holidays on Yatra, and is valid for 4 months from issue."
+        },
+        {
+          "label": "July 2026 reward-cap revision",
+          "value": "Effective 1 July 2026, the Reward Points structure is capped at 1,500 monthly PhonePe non-insurance Reward Points, 500 monthly PhonePe insurance Reward Points, 1,000 monthly online Reward Points and 2,000 monthly Reward Points on other spends."
+        },
+        {
+          "label": "Current utility and insurance reward treatment",
+          "value": "Utility MCCs 4900, 4814 and 4899 and insurance MCCs 5960, 6300 and 6380 outside the PhonePe app do not receive accelerated PhonePe rewards; they accrue only base Reward Points at 1 Reward Point per Rs.100, subject to the applicable overall monthly cap."
+        },
+        {
+          "label": "Current reward exclusion additions",
+          "value": "Effective 1 July 2026, additional Reward Point exclusions include tolls and bridges (MCC 4784), gifts and souvenirs (MCC 5947), jewellery (MCCs 5094 and 5944), educational institutions (MCC 8220), utilities outside PhonePe (MCCs 4900, 4814 and 4899), insurance outside PhonePe (MCCs 5960, 6300 and 6380), and Scan & Pay/online UPI outside PhonePe."
+        },
+        {
+          "key": "verified_network_research",
+          "description": "Targeted official-source research retained because the generic card product cannot safely be reduced to one network.",
+          "value": {
+            "finding_status": "conflict",
+            "product_status": "active",
+            "candidates": [
+              {
+                "network": "visa",
+                "network_tier": "visa_signature",
+                "label": "Visa Signature variant",
+                "source_url": "https://www.sbicard.com/sbi-card-en/assets/docs/pdf/ekit-tncs/PhonePe-select-ekit.pdf",
+                "evidence": "SBI\n Card's official PhonePe SELECT BLACK e-kit shows a Visa Signature version of the card."
+              },
+              {
+                "network": "rupay",
+                "network_tier": "rupay_select",
+                "label": "RuPay Select variant",
+                "source_url": "https://www.sbicard.com/sbi-card-en/assets/docs/pdf/ekit-tncs/PhonePe-select-ekit.pdf",
+                "evidence": "SBI\n Card's official PhonePe SELECT BLACK e-kit shows a RuPay Select version of the card."
+              }
+            ],
+            "source_url": "https://www.sbicard.com/sbi-card-en/assets/docs/pdf/ekit-tncs/PhonePe-select-ekit.pdf",
+            "evidence": "The\n official SBI Card e-kit establishes that PhonePe SBI Card SELECT BLACK is issued in both Visa and RuPay variants, with Visa Signature and RuPay Select branding respectively.",
+            "provider": "chatgpt"
+          }
+        }
+      ]
+    }
+  }
+}

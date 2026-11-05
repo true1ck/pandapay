@@ -1,0 +1,1066 @@
+{
+  "id": "hdfc-bank-swiggy-hdfc-bank-credit-card",
+  "card_name": "Swiggy HDFC Bank Credit Card",
+  "issuer": "HDFC Bank",
+  "source_slug": "swiggy-hdfc-bank-credit-card",
+  "run_id": "20260829-135037-fact-check",
+  "ok": true,
+  "final": {
+    "$schema": "https://json-schema.org/draft/2020-12/schema",
+    "schema_version": "5.0.0",
+    "_notes": "Universal card-extraction template. Every card (credit, debit, prepaid; any issuer) fills this same shape. Use null for 'not yet verified / unknown', use the string \"N/A\" for 'this field genuinely does not apply to this card' (e.g. cash_advance on a debit card, invite_only fields on an open-application card), and use [] for 'verified — this card has none of these'. Never delete a key because it doesn't apply — mark it N/A so downstream ingestion can tell 'not applicable' apart from 'not scraped yet'.",
+    "card_product": {
+      "slug": "swiggy-hdfc-bank-credit-card",
+      "name": "Swiggy\n HDFC Bank Credit Card",
+      "issuer_slug": "hdfc",
+      "network": "mastercard",
+      "network_tier": "mastercard_world",
+      "card_tier": "mid",
+      "card_type": "credit",
+      "bin_ranges": [],
+      "joining_fee_inr": 500,
+      "annual_fee_inr": 500,
+      "fee_gst_applicable": true,
+      "gst_rate_percent": 18,
+      "is_upi_linkable": false,
+      "application_mode": "open",
+      "form_factors": [
+        "physical_plastic",
+        "nfc_contactless"
+      ],
+      "tokenization_support": [
+        "google_pay",
+        "samsung_wallet",
+        "cred_pay"
+      ],
+      "contactless_pin_free_limit_inr": 5000,
+      "point_value_inr_baseline": null,
+      "point_value_baseline_basis": "N/A",
+      "point_expiry_months": null,
+      "confirmed_flat_base_outside_smartbuy_or_equivalent_portal": true,
+      "display_assets": {
+        "art_asset_key": null,
+        "card_image_url": "https://www.hdfcbank.com/content/dam/hdfcbankpws/in/en/personal-banking/discover-products/cards/credit-cards/swiggy-hdfc-bank-credit-card/swiggy-hdfc-bank-credit-card.png",
+        "logo_url": null,
+        "primary_color_hex": "#FC8019",
+        "secondary_color_hex": "#1C1C24"
+      },
+      "status": "verified",
+      "data_source_tier": "issuer_mitc_plus_manual_audit",
+      "source_url": "https://www.hdfcbank.com/personal/pay/cards/credit-cards/swiggy-hdfc-bank-credit-card",
+      "verified_at": "2026-08-26T01:39:00+05:30"
+    },
+    "eligibility_engine": {
+      "evaluation_mode": "guideline_only",
+      "notes": "Standard\n HDFC retail co-branded underwriting applies. Published or observed eligibility guidance should not be treated as a guaranteed approval rule; final approval, credit limit and eligibility are subject to HDFC Bank underwriting and internal policy.",
+      "rules": [
+        {
+          "parameter": "employment_type",
+          "operator": "in",
+          "threshold_value": null,
+          "allowed_values": [
+            "salaried",
+            "self_employed"
+          ]
+        },
+        {
+          "parameter": "age_years",
+          "operator": ">=",
+          "threshold_value": 21,
+          "allowed_values": []
+        },
+        {
+          "parameter": "age_years",
+          "operator": "<=",
+          "threshold_value": 60,
+          "allowed_values": []
+        },
+        {
+          "parameter": "net_monthly_salary_inr",
+          "operator": ">=",
+          "threshold_value": 25000,
+          "allowed_values": []
+        },
+        {
+          "parameter": "age_years_self_employed",
+          "operator": "<=",
+          "threshold_value": 65,
+          "allowed_values": []
+        },
+        {
+          "parameter": "annual_itr_inr",
+          "operator": ">=",
+          "threshold_value": 600000,
+          "allowed_values": []
+        }
+      ],
+      "community_benchmarks": {
+        "min_net_monthly_salary_inr": 25000,
+        "min_annual_itr_inr": 600000,
+        "min_existing_issuer_credit_limit_inr": null,
+        "min_cibil_score": 720,
+        "is_contractually_enforceable": false
+      },
+      "required_documents": [
+        "identity_proof",
+        "address_proof",
+        "income_proof_salary_slip_or_itr"
+      ],
+      "processing_time_days": 7
+    },
+    "accrual_engine": {
+      "base_block_inr": null,
+      "rounding_mode": "round",
+      "base_points_per_block": null,
+      "base_cashback_percent": 1,
+      "effective_base_return_percent": 1,
+      "cycle_accrual_ceiling_points": null,
+      "capping_period_basis": "statement_cycle",
+      "reversal_policy": {
+        "mode": "proportional_deduction",
+        "negative_balance_allowed": false,
+        "negative_balance_settlement": "Cashback attributable to subsequent reversals, refunds, or EMI conversions is adjusted or debited in the subsequent billing cycle; cashback is calculated after applicable returns and refunds."
+      }
+    },
+    "reward_rules": [
+      {
+        "id": "swiggy_10pct",
+        "category_id": "swiggy_app",
+        "priority": 1,
+        "evaluation_type": "accelerator",
+        "rail": "any",
+        "channel_type": "swiggy_app",
+        "conditions": {
+          "minimum_transaction_inr": 249,
+          "eligible_services": [
+            "food_ordering",
+            "instamart",
+            "genie",
+            "dineout"
+          ],
+          "merchant_identification": "Eligible Swiggy transactions are identified using Merchant IDs and Terminal IDs supplied by the co-brand partner."
+        },
+        "action": {
+          "multiplier": null,
+          "points_per_block": null,
+          "cashback_percent": 10,
+          "cap_reference": "swiggy_cashback_cap",
+          "reason": "10% cashback on eligible Swiggy app transactions."
+        },
+        "effective_from": "2026-04-21",
+        "effective_to": null
+      },
+      {
+        "id": "online_5pct",
+        "category_id": "online_shopping",
+        "priority": 2,
+        "evaluation_type": "accelerator",
+        "rail": "online",
+        "channel_type": "eligible_online_mcc",
+        "conditions": {
+          "minimum_transaction_inr": 100,
+          "eligible_categories": [
+            "apparels",
+            "department_stores",
+            "electronics",
+            "entertainment",
+            "home_decor",
+            "pharmacies",
+            "personal_care",
+            "local_cabs",
+            "pet_stores_and_supplies",
+            "discount_stores",
+            "grocery"
+          ],
+          "merchant_restriction": "Only selected merchants mapped to the specified MCCs qualify."
+        },
+        "action": {
+          "multiplier": null,
+          "points_per_block": null,
+          "cashback_percent": 5,
+          "cap_reference": "online_5pct_cashback_cap",
+          "reason": "5% cashback on eligible online transactions across specified partner merchants and MCCs."
+        },
+        "effective_from": "2025-05-10",
+        "effective_to": null
+      },
+      {
+        "id": "other_1pct",
+        "category_id": "all_retail",
+        "priority": 3,
+        "evaluation_type": "standard_accrual",
+        "rail": "any",
+        "channel_type": "all",
+        "conditions": {
+          "minimum_transaction_inr": 100,
+          "excluded_categories": [
+            "fuel",
+            "rent",
+            "government",
+            "gift_cards",
+            "emi",
+            "wallet",
+            "jewellery",
+            "prepaid_card",
+            "smartpay",
+            "smartbuy_or_equivalent_portal",
+            "cash_advance",
+            "travellers_cheques",
+            "foreign_currency_purchase",
+            "interest_and_penalties",
+            "insurance",
+            "education",
+            "utilities"
+          ]
+        },
+        "action": {
+          "multiplier": null,
+          "points_per_block": null,
+          "cashback_percent": 1,
+          "cap_reference": "other_1pct_cashback_cap",
+          "reason": "1% cashback on other eligible retail and offline spending."
+        },
+        "effective_from": "2026-05-22",
+        "effective_to": null
+      },
+      {
+        "id": "swiggy_wallet_exclusion",
+        "category_id": "wallet",
+        "priority": 10,
+        "evaluation_type": "exclusion",
+        "rail": "any",
+        "channel_type": "swiggy_wallet",
+        "conditions": {
+          "merchant_pattern": "Swiggy Money Wallet"
+        },
+        "action": {
+          "multiplier": 0,
+          "points_per_block": null,
+          "cashback_percent": 0,
+          "cap_reference": null,
+          "reason": "Swiggy Money Wallet loads do not earn cashback."
+        },
+        "effective_from": "2026-05-22",
+        "effective_to": null
+      },
+      {
+        "id": "rent_exclusion",
+        "category_id": "rent",
+        "priority": 11,
+        "evaluation_type": "exclusion",
+        "rail": "any",
+        "channel_type": "all",
+        "conditions": {
+          "mcc_list": [
+            6513
+          ]
+        },
+        "action": {
+          "multiplier": 0,
+          "points_per_block": null,
+          "cashback_percent": 0,
+          "cap_reference": null,
+          "reason": "Rental payments do not earn cashback."
+        },
+        "effective_from": "2026-05-22",
+        "effective_to": null
+      },
+      {
+        "id": "fuel_exclusion",
+        "category_id": "fuel",
+        "priority": 12,
+        "evaluation_type": "exclusion",
+        "rail": "any",
+        "channel_type": "all",
+        "conditions": {
+          "mcc_list": [
+            5172,
+            5541,
+            5542,
+            5983
+          ]
+        },
+        "action": {
+          "multiplier": 0,
+          "points_per_block": null,
+          "cashback_percent": 0,
+          "cap_reference": null,
+          "reason": "Fuel transactions do not earn cashback."
+        },
+        "effective_from": "2026-05-22",
+        "effective_to": null
+      },
+      {
+        "id": "jewellery_exclusion",
+        "category_id": "jewellery",
+        "priority": 13,
+        "evaluation_type": "exclusion",
+        "rail": "any",
+        "channel_type": "all",
+        "conditions": {
+          "mcc_list": [
+            5094,
+            5944
+          ]
+        },
+        "action": {
+          "multiplier": 0,
+          "points_per_block": null,
+          "cashback_percent": 0,
+          "cap_reference": null,
+          "reason": "Jewellery transactions do not earn cashback."
+        },
+        "effective_from": "2026-05-22",
+        "effective_to": null
+      },
+      {
+        "id": "government_exclusion",
+        "category_id": "government",
+        "priority": 14,
+        "evaluation_type": "exclusion",
+        "rail": "any",
+        "channel_type": "all",
+        "conditions": {
+          "mcc_list": [
+            9211,
+            9222,
+            9223,
+            9311,
+            9399,
+            9402,
+            9405,
+            9950
+          ]
+        },
+        "action": {
+          "multiplier": 0,
+          "points_per_block": null,
+          "cashback_percent": 0,
+          "cap_reference": null,
+          "reason": "Government-related transactions do not earn cashback."
+        },
+        "effective_from": "2026-05-22",
+        "effective_to": null
+      },
+      {
+        "id": "gift_card_exclusion",
+        "category_id": "gift_vouchers",
+        "priority": 15,
+        "evaluation_type": "exclusion",
+        "rail": "any",
+        "channel_type": "all",
+        "conditions": {
+          "mcc_list": [
+            5947
+          ]
+        },
+        "action": {
+          "multiplier": 0,
+          "points_per_block": null,
+          "cashback_percent": 0,
+          "cap_reference": null,
+          "reason": "Gift-card transactions do not earn cashback."
+        },
+        "effective_from": "2026-05-22",
+        "effective_to": null
+      },
+      {
+        "id": "emi_exclusion",
+        "category_id": "emi",
+        "priority": 16,
+        "evaluation_type": "exclusion",
+        "rail": "emi",
+        "channel_type": "all",
+        "conditions": {
+          "scope": "all_emi_types"
+        },
+        "action": {
+          "multiplier": 0,
+          "points_per_block": null,
+          "cashback_percent": 0,
+          "cap_reference": null,
+          "reason": "No cashback on EMI transactions; cashback already credited is reversed upon transaction conversion to EMI."
+        },
+        "effective_from": "2026-05-22",
+        "effective_to": null
+      },
+      {
+        "id": "wallet_exclusion",
+        "category_id": "wallet",
+        "priority": 17,
+        "evaluation_type": "exclusion",
+        "rail": "any",
+        "channel_type": "all",
+        "conditions": {
+          "mcc_list": [
+            6540
+          ]
+        },
+        "action": {
+          "multiplier": 0,
+          "points_per_block": null,
+          "cashback_percent": 0,
+          "cap_reference": null,
+          "reason": "Wallet loading transactions do not earn cashback."
+        },
+        "effective_from": "2026-05-22",
+        "effective_to": null
+      },
+      {
+        "id": "insurance_exclusion",
+        "category_id": "insurance",
+        "priority": 18,
+        "evaluation_type": "exclusion",
+        "rail": "any",
+        "channel_type": "all",
+        "conditions": {
+          "mcc_list": [
+            5960,
+            6300
+          ]
+        },
+        "action": {
+          "multiplier": 0,
+          "points_per_block": null,
+          "cashback_percent": 0,
+          "cap_reference": null,
+          "reason": "Insurance premium payments are excluded from cashback accrual."
+        },
+        "effective_from": "2026-05-22",
+        "effective_to": null
+      },
+      {
+        "id": "education_exclusion",
+        "category_id": "education",
+        "priority": 19,
+        "evaluation_type": "exclusion",
+        "rail": "any",
+        "channel_type": "all",
+        "conditions": {
+          "mcc_list": [
+            8211,
+            8220,
+            8241,
+            8244,
+            8249,
+            8299
+          ]
+        },
+        "action": {
+          "multiplier": 0,
+          "points_per_block": null,
+          "cashback_percent": 0,
+          "cap_reference": null,
+          "reason": "Education payments are excluded from cashback accrual."
+        },
+        "effective_from": "2026-05-22",
+        "effective_to": null
+      },
+      {
+        "id": "swiggy_liquor_exclusion",
+        "category_id": "excluded_spend",
+        "priority": 20,
+        "evaluation_type": "exclusion",
+        "rail": "any",
+        "channel_type": "swiggy_app",
+        "conditions": {
+          "merchant_pattern": "Swiggy Liquor"
+        },
+        "action": {
+          "multiplier": 0,
+          "points_per_block": null,
+          "cashback_percent": 0,
+          "cap_reference": null,
+          "reason": "Swiggy Liquor transactions do not qualify for 10% cashback."
+        },
+        "effective_from": "2026-05-22",
+        "effective_to": null
+      },
+      {
+        "id": "swiggy_minis_exclusion",
+        "category_id": "excluded_spend",
+        "priority": 21,
+        "evaluation_type": "exclusion",
+        "rail": "any",
+        "channel_type": "swiggy_app",
+        "conditions": {
+          "merchant_pattern": "Swiggy Minis"
+        },
+        "action": {
+          "multiplier": 0,
+          "points_per_block": null,
+          "cashback_percent": 0,
+          "cap_reference": null,
+          "reason": "Swiggy Minis transactions do not qualify for 10% cashback."
+        },
+        "effective_from": "2026-05-22",
+        "effective_to": null
+      },
+      {
+        "id": "smartpay_exclusion",
+        "category_id": "excluded_spend",
+        "priority": 22,
+        "evaluation_type": "exclusion",
+        "rail": "any",
+        "channel_type": "smartpay",
+        "conditions": {},
+        "action": {
+          "multiplier": 0,
+          "points_per_block": null,
+          "cashback_percent": 0,
+          "cap_reference": null,
+          "reason": "SmartPay utility or recurring billing transactions do not earn cashback."
+        },
+        "effective_from": "2026-05-22",
+        "effective_to": null
+      },
+      {
+        "id": "smartbuy_exclusion",
+        "category_id": "excluded_spend",
+        "priority": 23,
+        "evaluation_type": "exclusion",
+        "rail": "smartbuy_or_equivalent_portal",
+        "channel_type": "smartbuy",
+        "conditions": {},
+        "action": {
+          "multiplier": 0,
+          "points_per_block": null,
+          "cashback_percent": 0,
+          "cap_reference": null,
+          "reason": "Transactions made via the SmartBuy portal do not earn cashback."
+        },
+        "effective_from": "2026-05-22",
+        "effective_to": null
+      }
+    ],
+    "cap_rules": [
+      {
+        "id": "swiggy_cashback_cap",
+        "category_id": "swiggy_app",
+        "metric": "eligible_spend_amount",
+        "mcc_target_list": [],
+        "period": "statement_cycle",
+        "limit_value": null,
+        "limit_value_inr": 1500,
+        "post_limit_behavior": {
+          "action": "zero_accrual",
+          "points_per_block": null
+        },
+        "parent_cap_id": null,
+        "reset_day": null,
+        "effective_from": "2026-05-22",
+        "effective_to": null
+      },
+      {
+        "id": "online_5pct_cashback_cap",
+        "category_id": "online_shopping",
+        "metric": "eligible_spend_amount",
+        "mcc_target_list": [
+          5137,
+          5139,
+          5611,
+          5621,
+          5631,
+          5641,
+          5651,
+          5655,
+          5661,
+          5691,
+          5697,
+          5699,
+          5948,
+          5200,
+          5300,
+          5311,
+          5331,
+          5949,
+          5973,
+          1731,
+          5045,
+          5046,
+          5065,
+          5099,
+          5722,
+          5732,
+          5734,
+          5946,
+          7372,
+          7622,
+          7623,
+          7629,
+          7631,
+          4411,
+          4899,
+          5193,
+          5992,
+          7032,
+          7033,
+          7333,
+          7832,
+          7911,
+          7922,
+          7929,
+          7933,
+          7991,
+          7996,
+          7997,
+          5198,
+          5211,
+          5231,
+          5251,
+          5712,
+          5713,
+          5714,
+          5718,
+          5719,
+          5950,
+          7641,
+          5122,
+          5912,
+          5975,
+          8042,
+          8043,
+          5977,
+          7230,
+          7297,
+          7298,
+          3351,
+          3359,
+          3387,
+          3389,
+          3390,
+          3393,
+          3395,
+          4121,
+          5192,
+          5733,
+          5735,
+          5941,
+          5942,
+          5945,
+          5995,
+          7829,
+          7941,
+          5399,
+          5411
+        ],
+        "period": "statement_cycle",
+        "limit_value": null,
+        "limit_value_inr": 1500,
+        "post_limit_behavior": {
+          "action": "zero_accrual",
+          "points_per_block": null
+        },
+        "parent_cap_id": null,
+        "reset_day": null,
+        "effective_from": "2026-05-22",
+        "effective_to": null
+      },
+      {
+        "id": "other_1pct_cashback_cap",
+        "category_id": "all_retail",
+        "metric": "eligible_spend_amount",
+        "mcc_target_list": [],
+        "period": "statement_cycle",
+        "limit_value": null,
+        "limit_value_inr": 500,
+        "post_limit_behavior": {
+          "action": "zero_accrual",
+          "points_per_block": null
+        },
+        "parent_cap_id": null,
+        "reset_day": null,
+        "effective_from": "2026-05-22",
+        "effective_to": null
+      }
+    ],
+    "brand_specific_voucher_caps": [],
+    "fees_and_surcharges": {
+      "apr": {
+        "monthly_interest_rate_percent": 3.75,
+        "annual_interest_rate_percent": 45
+      },
+      "forex_markup": {
+        "markup_percent": 3.5,
+        "gst_applicable": true
+      },
+      "dynamic_currency_conversion_dcc": {
+        "fee_percent": 1,
+        "gst_applicable": true,
+        "trigger_condition": "Dynamic currency conversion markup applies when an international transaction is processed in Indian currency, including transactions at merchants located in India but registered overseas."
+      },
+      "fuel_surcharge": {
+        "category_id": "fuel",
+        "surcharge_percent": 1,
+        "waiver_percent": 0,
+        "min_txn_inr": null,
+        "max_txn_inr": null,
+        "monthly_waiver_cap_inr": null
+      },
+      "cash_advance": {
+        "atm_transaction_fee_percent": 2.5,
+        "atm_transaction_fee_min_inr": 500,
+        "interest_applicable_from_day_one": true,
+        "daily_interest_percent": null,
+        "max_limit_percent": 40
+      },
+      "category_surcharges": [
+        {
+          "category_id": "rent",
+          "mcc_list": [
+            6513
+          ],
+          "fee_percent": 1,
+          "gst_applicable": true,
+          "trigger_condition": "Applicable to rental transactions on third-party platforms or payment aggregators; fee capped at ₹4,999 per transaction under the revised surcharge structure.",
+          "threshold_spend_inr": 0,
+          "effective_from": "2025-07-01",
+          "effective_to": null
+        },
+        {
+          "category_id": "wallet",
+          "mcc_list": [
+            6540
+          ],
+          "fee_percent": 1,
+          "gst_applicable": true,
+          "trigger_condition": "Third-party prepaid wallet loading transactions aggregating above ₹10,000 in a calendar month; fee applies to the incremental wallet load amount and is capped at ₹4,999 per month.",
+          "threshold_spend_inr": 10000,
+          "effective_from": "2025-07-01",
+          "effective_to": null
+        },
+        {
+          "category_id": "utility",
+          "mcc_list": [
+            4900
+          ],
+          "fee_percent": 1,
+          "gst_applicable": true,
+          "trigger_condition": "Utility spend aggregating above ₹50,000 per calendar month; 1% fee applies on incremental utility spend, capped at ₹4,999 per month. Insurance MCCs are exempt.",
+          "threshold_spend_inr": 50000,
+          "effective_from": "2025-07-01",
+          "effective_to": null
+        },
+        {
+          "category_id": "online_skill_based_gaming",
+          "mcc_list": [
+            5816,
+            7995
+          ],
+          "fee_percent": 1,
+          "gst_applicable": true,
+          "trigger_condition": "Online gaming and lottery spend exceeding ₹10,000 per calendar month; 1% fee applies on incremental amount, capped at ₹4,999 per month.",
+          "threshold_spend_inr": 10000,
+          "effective_from": "2025-07-01",
+          "effective_to": null
+        },
+        {
+          "category_id": "education_third_party",
+          "mcc_list": [
+            8211,
+            8220,
+            8241,
+            8244,
+            8249,
+            8299
+          ],
+          "fee_percent": 1,
+          "gst_applicable": true,
+          "trigger_condition": "1% fee on education payments executed via third-party apps, capped at ₹4,999 per transaction. Direct payments to college or school POS machines or websites remain fee-free.",
+          "threshold_spend_inr": 0,
+          "effective_from": "2025-07-01",
+          "effective_to": null
+        }
+      ],
+      "emi_charges": {
+        "merchant_instant_emi_processing_fee_inr": 299,
+        "post_purchase_emi_processing_fee_inr": 999,
+        "foreclosure_charge_percent": 3,
+        "gst_applicable": true
+      },
+      "banking_penalties": {
+        "overlimit_charge": {
+          "fee_percent": 2.5,
+          "min_fee_inr": 550,
+          "gst_applicable": true
+        },
+        "auto_debit_bounce_charge_inr": 450,
+        "cheque_bounce_charge_inr": 450
+      },
+      "reward_redemption_fee": {
+        "fee_inr": 0,
+        "gst_applicable": false,
+        "exempted_channels": [
+          "automatic_statement_credit"
+        ],
+        "notes": "Cashback on the Swiggy HDFC Bank Card is automatically credited to the primary card statement in the following statement cycle. No redemption fee is levied."
+      }
+    },
+    "statement_and_late_fees": {
+      "grace_period_days": 50,
+      "grace_period_void_on_revolving_balance": true,
+      "minimum_amount_due_mad": {
+        "calculation_mode": "max",
+        "components": [
+          "5% of applicable retail balance/cash advance balance and finance charges",
+          "100% of fees and charges",
+          "100% of loan EMI billed under cards",
+          "100% of levies and taxes",
+          "Overlimit amount, if applicable"
+        ]
+      },
+      "late_payment_slabs": [
+        {
+          "min_balance_inr": 0,
+          "max_balance_inr": 100,
+          "fee_inr": 0
+        },
+        {
+          "min_balance_inr": 101,
+          "max_balance_inr": 500,
+          "fee_inr": 100
+        },
+        {
+          "min_balance_inr": 501,
+          "max_balance_inr": 1000,
+          "fee_inr": 500
+        },
+        {
+          "min_balance_inr": 1001,
+          "max_balance_inr": 5000,
+          "fee_inr": 600
+        },
+        {
+          "min_balance_inr": 5001,
+          "max_balance_inr": 10000,
+          "fee_inr": 750
+        },
+        {
+          "min_balance_inr": 10001,
+          "max_balance_inr": 25000,
+          "fee_inr": 900
+        },
+        {
+          "min_balance_inr": 25001,
+          "max_balance_inr": 50000,
+          "fee_inr": 1100
+        },
+        {
+          "min_balance_inr": 50001,
+          "max_balance_inr": null,
+          "fee_inr": 1300
+        }
+      ]
+    },
+    "fee_waiver_and_milestones": {
+      "annual_fee_waiver": {
+        "threshold_spend_inr": 200000,
+        "period": "card_anniversary_year",
+        "evaluation_condition": "Renewal-year fee is waived upon achieving annual eligible retail spends of ₹2,00,000 or more during the preceding anniversary year. Rent, wallet loads, cash advance, balance transfer and cash on call are excluded.",
+        "excluded_category_ids": [
+          "cash_on_call",
+          "balance_transfer",
+          "cash_withdrawal",
+          "rent",
+          "wallet_load"
+        ],
+        "excluded_mcc_list": [
+          6513,
+          6540
+        ],
+        "waives_fee_inr": 500
+      },
+      "welcome_and_renewal_gift": {
+        "trigger": "Card activation and payment of joining fee",
+        "benefit_points": null,
+        "effective_value_inr": 1199,
+        "condition": "Complimentary 3-month Swiggy One membership upon card activation within 37 days of issuance."
+      },
+      "spend_milestones": []
+    },
+    "lifestyle_and_network_benefits": [
+      {
+        "benefit_id": "mastercard_golf",
+        "category_id": "golf",
+        "network_program": "mastercard_world",
+        "sponsor": "Mastercard",
+        "label": "Mastercard Golf Programme",
+        "evaluation_engine": {
+          "conditions": {
+            "booking_window_days_in_advance": 4
+          },
+          "benefit_calculation": {
+            "complimentary_green_fee_rounds_per_calendar_year": 4,
+            "free_lessons_per_year": 12,
+            "discount_after_complimentary_quota_percent": 50
+          },
+          "perks": [
+            "Worldwide participating golf course access",
+            "12 complimentary golf lessons per calendar year",
+            "4 complimentary green-fee rounds per calendar year",
+            "50% discounted green fees beyond complimentary quota"
+          ]
+        },
+        "quota_count": 4,
+        "quota_period": "annual",
+        "value_estimate_inr": 6000,
+        "effective_from": "2026-05-22",
+        "effective_to": null
+      },
+      {
+        "benefit_id": "contactless",
+        "category_id": "other",
+        "network_program": "mastercard_world",
+        "sponsor": "HDFC Bank",
+        "label": "Contactless Payments",
+        "evaluation_engine": {
+          "conditions": {
+            "pin_free_transaction_limit_inr": 5000
+          },
+          "benefit_calculation": null,
+          "perks": [
+            "NFC contactless payments up to ₹5,000 without PIN"
+          ]
+        },
+        "quota_count": null,
+        "quota_period": "N/A",
+        "value_estimate_inr": null,
+        "effective_from": "2026-05-22",
+        "effective_to": null
+      },
+      {
+        "benefit_id": "zero_lost_card_liability",
+        "category_id": "other",
+        "network_program": "mastercard_world",
+        "sponsor": "HDFC Bank",
+        "label": "Zero Lost-Card Liability",
+        "evaluation_engine": {
+          "conditions": {
+            "report_loss_immediately": true
+          },
+          "benefit_calculation": null,
+          "perks": [
+            "Zero liability on fraudulent transactions after prompt loss reporting"
+          ]
+        },
+        "quota_count": null,
+        "quota_period": "N/A",
+        "value_estimate_inr": null,
+        "effective_from": "2026-05-22",
+        "effective_to": null
+      }
+    ],
+    "insurance_and_protection": [],
+    "addon_card_rules": {
+      "max_addon_cards": 3,
+      "fee_per_card_inr": 0,
+      "separate_priority_pass": false,
+      "lounge_quota_shared": false,
+      "reward_points_pooled": false,
+      "min_age_years": 18
+    },
+    "redemption_matrix": {
+      "direct_options": [
+        {
+          "channel": "card_statement",
+          "redemption_type": "cashback",
+          "inr_value_per_point": null,
+          "max_bill_percentage_payable_via_points": null,
+          "min_points_per_txn": null,
+          "cycle_points_burn_cap": null,
+          "redemption_fee_inr": 0,
+          "effective_from": "2024-06-21",
+          "effective_to": null
+        }
+      ],
+      "partner_transfers": []
+    },
+    "dynamic_promotions_registry": [
+      {
+        "promo_id": "cleartrip_hotel_promo",
+        "category_id": "travel_hotels",
+        "network_program": "N/A",
+        "sponsor": "Cleartrip",
+        "platform": "Cleartrip",
+        "offer_type": "instant_discount",
+        "discount_percent": 20,
+        "max_discount_inr": null,
+        "fnb_discount_inr": null,
+        "min_tickets": null,
+        "quota_controlled": false,
+        "is_permanent_card_feature": false,
+        "valid_from": "2026-04-17",
+        "valid_to": null
+      },
+      {
+        "promo_id": "cleartrip_flight_promo",
+        "category_id": "travel_flights",
+        "network_program": "N/A",
+        "sponsor": "Cleartrip",
+        "platform": "Cleartrip",
+        "offer_type": "instant_discount",
+        "discount_percent": 6.35,
+        "max_discount_inr": null,
+        "fnb_discount_inr": null,
+        "min_tickets": null,
+        "quota_controlled": false,
+        "is_permanent_card_feature": false,
+        "valid_from": "2026-04-17",
+        "valid_to": null
+      },
+      {
+        "promo_id": "swiggy_birthday_week",
+        "category_id": "dining",
+        "network_program": "N/A",
+        "sponsor": "Swiggy",
+        "platform": "Swiggy Dineout",
+        "offer_type": "birthday_discount",
+        "discount_percent": 10,
+        "max_discount_inr": 500,
+        "fnb_discount_inr": 500,
+        "min_tickets": null,
+        "quota_controlled": true,
+        "is_permanent_card_feature": false,
+        "valid_from": "2024-10-21",
+        "valid_to": null
+      }
+    ],
+    "additional_data": {
+      "_notes": "Source-supported data that cannot be represented faithfully by the universal schema. Primary reference: HDFC Bank Swiggy Credit Card MITC and Product Schedule.",
+      "items": [
+        {
+          "key": "minimum_transaction_thresholds",
+          "description": "From 21 April 2026, eligible 10% Swiggy cashback requires a minimum transaction of ₹249. Eligible 5% online partner and 1% other retail cashback transactions require a minimum transaction of ₹100."
+        },
+        {
+          "key": "cashback_capping_structure",
+          "description": "The card features statement-cycle cashback caps of ₹1,500 for the 10% Swiggy category, ₹1,500 for the 5% online shopping category, and ₹500 for the 1% all-other-retail category. Total maximum cashback earning potential is ₹3,500 per statement cycle."
+        },
+        {
+          "key": "cashback_rounding",
+          "description": "Cashback is rounded to the nearest integer for each individual transaction; e.g. ₹15.30 becomes ₹15 and ₹15.60 becomes ₹16."
+        },
+        {
+          "key": "cashback_posting_and_redemption",
+          "description": "Cashback accrues on settled eligible transactions and is automatically posted directly as a statement credit in the subsequent billing statement."
+        },
+        {
+          "key": "cashback_reversal",
+          "description": "Merchant cancellations, refunds, reversals and EMI conversions result in proportional cashback clawback in the subsequent statement cycle."
+        },
+        {
+          "key": "online_5pct_mcc_categories",
+          "description": "5% online shopping categories include Apparels, Department Stores, Electronics, Entertainment, Home Decor, Medical Stores and Pharmacies, Personal Care, Local Cabs, Pet Stores and Supplies, and Discount Stores. Grocery MCC 5411 on Amazon and Flipkart is also eligible subject to the stated merchant and MCC conditions."
+        },
+        {
+          "key": "lounge_access",
+          "description": "No complimentary airport or domestic lounge access is bundled with the Swiggy HDFC Bank Credit Card."
+        },
+        {
+          "key": "fuel_surcharge_waiver",
+          "description": "This co-branded card does not provide a fuel surcharge waiver."
+        }
+      ]
+    }
+  }
+}

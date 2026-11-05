@@ -1,0 +1,789 @@
+{
+  "id": "punjab-national-bank-pnb-kiwi-credit-card",
+  "card_name": "PNB Kiwi Credit Card",
+  "issuer": "Punjab National Bank",
+  "source_slug": "pnb-kiwi-credit-card",
+  "run_id": "20260829-133422-fact-check",
+  "ok": true,
+  "final": {
+    "$schema": "https://json-schema.org/draft/2020-12/schema",
+    "schema_version": "5.0.0",
+    "_notes": "Universal card-extraction template. Every card (credit, debit, prepaid; any issuer) fills this same shape. Use null for 'not yet verified / unknown', use the string \"N/A\" for 'this field genuinely does not apply to this card' (e.g. cash_advance on a debit card, invite_only fields on an open-application card), and use [] for 'verified — this card has none of these'. Never delete a key because it doesn't apply — mark it N/A so downstream ingestion can tell 'not applicable' apart from 'not scraped yet'.",
+    "card_product": {
+      "slug": "pnb-kiwi-credit-card",
+      "name": "PNB Kiwi Credit Card",
+      "issuer_slug": "pnb",
+      "network": "rupay",
+      "network_tier": "rupay_select",
+      "card_tier": "N/A",
+      "card_type": "credit",
+      "bin_ranges": [],
+      "joining_fee_inr": 500,
+      "annual_fee_inr": 750,
+      "fee_gst_applicable": true,
+      "gst_rate_percent": 18,
+      "is_upi_linkable": true,
+      "application_mode": "open",
+      "form_factors": [
+        "virtual_card",
+        "physical_plastic"
+      ],
+      "tokenization_support": [],
+      "contactless_pin_free_limit_inr": 5000,
+      "point_value_inr_baseline": 0.25,
+      "point_value_baseline_basis": "1 Kiwi = ₹0.25; Kiwis are the reward units issued by Kiwi and are redeemable to the savings account linked to the goaxb UPI ID.",
+      "point_expiry_months": null,
+      "confirmed_flat_base_outside_smartbuy_or_equivalent_portal": false,
+      "display_assets": {
+        "art_asset_key": null,
+        "card_image_url": null,
+        "logo_url": null,
+        "primary_color_hex": null,
+        "secondary_color_hex": null
+      },
+      "status": "verified",
+      "data_source_tier": "issuer_mitc_plus_manual_audit",
+      "source_url": "https://creditcard.pnb.bank.in/types18.html\n",
+      "verified_at": "2026-08-25T03:37:00+05:30"
+    },
+    "eligibility_engine": {
+      "evaluation_mode": "all_pass",
+      "notes": "PNB publishes gross annual income of ₹2,50,000 and above for the PNB Kiwi co-branded RuPay Select card. No contractually enforceable CIBIL-score, salary, ITR or employment-type threshold was identified in the reviewed product source.",
+      "rules": [
+        {
+          "parameter": "gross_annual_income_inr",
+          "operator": ">=",
+          "threshold_value": 250000,
+          "allowed_values": []
+        }
+      ],
+      "community_benchmarks": {
+        "min_net_monthly_salary_inr": null,
+        "min_annual_itr_inr": 250000,
+        "min_existing_issuer_credit_limit_inr": null,
+        "min_cibil_score": 720,
+        "is_contractually_enforceable": false
+      },
+      "required_documents": [],
+      "processing_time_days": 1
+    },
+    "accrual_engine": {
+      "base_block_inr": 100,
+      "rounding_mode": "floor",
+      "base_points_per_block": 2,
+      "base_cashback_percent": 0.5,
+      "effective_base_return_percent": 0.5,
+      "cycle_accrual_ceiling_points": null,
+      "capping_period_basis": "calendar_month",
+      "reversal_policy": {
+        "mode": "full_reversal",
+        "negative_balance_allowed": true,
+        "negative_balance_settlement": "adjusted_against_future_accruals"
+      }
+    },
+    "reward_rules": [
+      {
+        "id": "online-base-kiwi",
+        "category_id": "all_retail",
+        "priority": 100,
+        "evaluation_type": "standard_accrual",
+        "rail": "online",
+        "channel_type": "all",
+        "conditions": {
+          "transaction_channel": "online",
+          "transaction_amount_rounding": "multiples of ₹100; amounts below the next ₹100 multiple do not earn on the remainder"
+        },
+        "action": {
+          "multiplier": 1,
+          "points_per_block": 2,
+          "cashback_percent": null,
+          "cap_reference": "monthly-kiwi-cap",
+          "reason": "0.5% effective cashback as 2 Kiwis per ₹100 on eligible online transactions for cards issued via the Kiwi App since 4 July 2024 for customers not subscribed to Kiwi Neon."
+        },
+        "effective_from": "2025-06-01",
+        "effective_to": null
+      },
+      {
+        "id": "upi-scan-pay-kiwi",
+        "category_id": "all_retail",
+        "priority": 90,
+        "evaluation_type": "accelerator",
+        "rail": "upi_qr",
+        "channel_type": "scan_and_pay",
+        "conditions": {
+          "transaction_channel": "UPI merchant Scan & Pay via Kiwi App",
+          "transaction_amount_rounding": "multiples of ₹100"
+        },
+        "action": {
+          "multiplier": 3,
+          "points_per_block": 6,
+          "cashback_percent": null,
+          "cap_reference": "monthly-kiwi-cap",
+          "reason": "1.5% effective cashback as 6 Kiwis per ₹100 on eligible Scan & Pay transactions for cards issued via the Kiwi App since 4 July 2024 for customers not subscribed to Kiwi Neon."
+        },
+        "effective_from": "2025-06-01",
+        "effective_to": null
+      },
+      {
+        "id": "exclude-agricultural-services",
+        "category_id": "excluded_spend_agricultural_services",
+        "priority": 1,
+        "evaluation_type": "exclusion",
+        "rail": "any",
+        "channel_type": "all",
+        "conditions": {
+          "mcc": [
+            763,
+            820,
+            821,
+            822,
+            823,
+            824,
+            825
+          ]
+        },
+        "action": {
+          "multiplier": 0,
+          "points_per_block": 0,
+          "cashback_percent": null,
+          "cap_reference": null,
+          "reason": "Agricultural Services and Cooperatives are excluded from Kiwi rewards."
+        },
+        "effective_from": "2025-06-01",
+        "effective_to": null
+      },
+      {
+        "id": "exclude-horticultural-veterinary",
+        "category_id": "excluded_spend_horticultural_veterinary",
+        "priority": 2,
+        "evaluation_type": "exclusion",
+        "rail": "any",
+        "channel_type": "all",
+        "conditions": {
+          "mcc": [
+            742,
+            743,
+            744,
+            780
+          ]
+        },
+        "action": {
+          "multiplier": 0,
+          "points_per_block": 0,
+          "cashback_percent": null,
+          "cap_reference": null,
+          "reason": "Horticultural, landscaping and veterinary services are excluded from Kiwi rewards."
+        },
+        "effective_from": "2025-06-01",
+        "effective_to": null
+      },
+      {
+        "id": "exclude-business-services",
+        "category_id": "excluded_spend_business_services",
+        "priority": 3,
+        "evaluation_type": "exclusion",
+        "rail": "any",
+        "channel_type": "all",
+        "conditions": {
+          "mcc": [
+            7512,
+            7523,
+            7531,
+            7535,
+            7538,
+            7631
+          ]
+        },
+        "action": {
+          "multiplier": 0,
+          "points_per_block": 0,
+          "cashback_percent": null,
+          "cap_reference": null,
+          "reason": "Specified auto rental, repair, paint, jewellery and watch repair services are excluded."
+        },
+        "effective_from": "2025-06-01",
+        "effective_to": null
+      },
+      {
+        "id": "exclude-government-services",
+        "category_id": "government",
+        "priority": 4,
+        "evaluation_type": "exclusion",
+        "rail": "any",
+        "channel_type": "all",
+        "conditions": {
+          "mcc": [
+            9211,
+            9222,
+            9223,
+            9311,
+            9399,
+            9400,
+            9402,
+            9405,
+            9700,
+            9701,
+            9702,
+            9751,
+            9754,
+            9950
+          ]
+        },
+        "action": {
+          "multiplier": 0,
+          "points_per_block": 0,
+          "cashback_percent": null,
+          "cap_reference": null,
+          "reason": "Government services including tax payments, court costs, postal services and fines are excluded."
+        },
+        "effective_from": "2025-06-01",
+        "effective_to": null
+      },
+      {
+        "id": "exclude-marketing-advertising",
+        "category_id": "marketing_advertising",
+        "priority": 5,
+        "evaluation_type": "exclusion",
+        "rail": "any",
+        "channel_type": "all",
+        "conditions": {
+          "mcc": [
+            5960,
+            5962,
+            5964,
+            5965,
+            5967,
+            5968,
+            5969,
+            7311
+          ]
+        },
+        "action": {
+          "multiplier": 0,
+          "points_per_block": 0,
+          "cashback_percent": null,
+          "cap_reference": null,
+          "reason": "Direct marketing and advertising are excluded."
+        },
+        "effective_from": "2025-06-01",
+        "effective_to": null
+      },
+      {
+        "id": "exclude-professional-services-education",
+        "category_id": "education",
+        "priority": 6,
+        "evaluation_type": "exclusion",
+        "rail": "any",
+        "channel_type": "all",
+        "conditions": {
+          "mcc": [
+            8111,
+            8931,
+            8220,
+            8241,
+            8299,
+            8675,
+            8211,
+            8249,
+            8244
+          ]
+        },
+        "action": {
+          "multiplier": 0,
+          "points_per_block": 0,
+          "cashback_percent": null,
+          "cap_reference": null,
+          "reason": "Legal, accounting and educational-institution MCCs are excluded from Kiwi rewards."
+        },
+        "effective_from": "2025-06-01",
+        "effective_to": null
+      },
+      {
+        "id": "exclude-retail-services-fuel",
+        "category_id": "fuel",
+        "priority": 7,
+        "evaluation_type": "exclusion",
+        "rail": "any",
+        "channel_type": "all",
+        "conditions": {
+          "mcc": [
+            5094,
+            5172,
+            5451,
+            5511,
+            5521,
+            5531,
+            5532,
+            5533,
+            5541,
+            5542,
+            5599
+          ]
+        },
+        "action": {
+          "multiplier": 0,
+          "points_per_block": 0,
+          "cashback_percent": null,
+          "cap_reference": null,
+          "reason": "Auto dealers, fuel stations, jewellery and petroleum MCCs are excluded."
+        },
+        "effective_from": "2025-06-01",
+        "effective_to": null
+      },
+      {
+        "id": "exclude-transportation-tolls",
+        "category_id": "tolls",
+        "priority": 8,
+        "evaluation_type": "exclusion",
+        "rail": "any",
+        "channel_type": "all",
+        "conditions": {
+          "mcc": [
+            4784,
+            4789
+          ]
+        },
+        "action": {
+          "multiplier": 0,
+          "points_per_block": 0,
+          "cashback_percent": null,
+          "cap_reference": null,
+          "reason": "Bridge fees, tolls and miscellaneous transportation services are excluded."
+        },
+        "effective_from": "2025-06-01",
+        "effective_to": null
+      },
+      {
+        "id": "exclude-utilities",
+        "category_id": "utility",
+        "priority": 9,
+        "evaluation_type": "exclusion",
+        "rail": "any",
+        "channel_type": "all",
+        "conditions": {
+          "mcc": [
+            4812,
+            4813,
+            4814,
+            4816,
+            4821,
+            4829,
+            4899,
+            4900
+          ]
+        },
+        "action": {
+          "multiplier": 0,
+          "points_per_block": 0,
+          "cashback_percent": null,
+          "cap_reference": null,
+          "reason": "Cable, telecom, electricity, wire-transfer and water-utility MCCs are excluded."
+        },
+        "effective_from": "2025-06-01",
+        "effective_to": null
+      },
+      {
+        "id": "exclude-miscellaneous-financial-insurance-real-estate",
+        "category_id": "excluded_spend_miscellaneous",
+        "priority": 10,
+        "evaluation_type": "exclusion",
+        "rail": "any",
+        "channel_type": "all",
+        "conditions": {
+          "mcc": [
+            5944,
+            5947,
+            5960,
+            5983,
+            6011,
+            6012,
+            6051,
+            6300,
+            6381,
+            6399,
+            6513,
+            6529,
+            6540
+          ]
+        },
+        "action": {
+          "multiplier": 0,
+          "points_per_block": 0,
+          "cashback_percent": null,
+          "cap_reference": null,
+          "reason": "Jewellery stores, fuel dealers, financial institutions, insurance, real estate and gift-card MCCs are excluded."
+        },
+        "effective_from": "2025-06-01",
+        "effective_to": null
+      }
+    ],
+    "cap_rules": [
+      {
+        "id": "monthly-kiwi-cap",
+        "category_id": "all_retail",
+        "metric": "total_reward_points",
+        "mcc_target_list": [],
+        "period": "calendar_month",
+        "limit_value": null,
+        "limit_value_inr": null,
+        "post_limit_behavior": {
+          "action": "zero_accrual",
+          "points_per_block": 0
+        },
+        "parent_cap_id": null,
+        "reset_day": 1,
+        "effective_from": "2025-06-01",
+        "effective_to": null
+      }
+    ],
+    "brand_specific_voucher_caps": [],
+    "fees_and_surcharges": {
+      "apr": {
+        "monthly_interest_rate_percent": 2.95,
+        "annual_interest_rate_percent": 35.89
+      },
+      "forex_markup": {
+        "markup_percent": 3.5,
+        "gst_applicable": true
+      },
+      "dynamic_currency_conversion_dcc": {
+        "fee_percent": 1,
+        "gst_applicable": true,
+        "trigger_condition": "Cross-border transactions initiated in INR at overseas merchants"
+      },
+      "fuel_surcharge": {
+        "category_id": "fuel",
+        "surcharge_percent": 1,
+        "waiver_percent": 100,
+        "min_txn_inr": 500,
+        "max_txn_inr": 4000,
+        "monthly_waiver_cap_inr": 0
+      },
+      "cash_advance": {
+        "atm_transaction_fee_percent": 2,
+        "atm_transaction_fee_min_inr": 150,
+        "interest_applicable_from_day_one": true,
+        "daily_interest_percent": 0.0983,
+        "max_limit_percent": 20
+      },
+      "category_surcharges": [],
+      "emi_charges": {
+        "merchant_instant_emi_processing_fee_inr": 199,
+        "post_purchase_emi_processing_fee_inr": 199,
+        "foreclosure_charge_percent": 3,
+        "gst_applicable": true
+      },
+      "banking_penalties": {
+        "overlimit_charge": {
+          "fee_percent": 2.5,
+          "min_fee_inr": 500,
+          "gst_applicable": true
+        },
+        "auto_debit_bounce_charge_inr": 200,
+        "cheque_bounce_charge_inr": 200
+      },
+      "reward_redemption_fee": {
+        "fee_inr": 0,
+        "gst_applicable": false,
+        "exempted_channels": [
+          "Kiwi App"
+        ],
+        "notes": "No redemption fee was identified for redemption of Kiwis to the linked goaxb UPI account. Current Kiwi Neon terms require at least 500 Kiwis for redemption and redemption in multiples of 500 Kiwis."
+      }
+    },
+    "statement_and_late_fees": {
+      "grace_period_days": 20,
+      "grace_period_void_on_revolving_balance": true,
+      "minimum_amount_due_mad": {
+        "calculation_mode": "fixed_percent",
+        "components": [
+          "5% of outstanding amount or ₹100, whichever is higher",
+          "EMI/BT dues during the statement period are added to the Minimum Amount Due",
+          "Over-limit and past-due amounts are additionally adjusted into the Minimum Amount Due"
+        ]
+      },
+      "late_payment_slabs": [
+        {
+          "min_balance_inr": 0,
+          "max_balance_inr": 1000,
+          "fee_inr": 0
+        },
+        {
+          "min_balance_inr": 1001,
+          "max_balance_inr": 5000,
+          "fee_inr": 500
+        },
+        {
+          "min_balance_inr": 5001,
+          "max_balance_inr": 10000,
+          "fee_inr": 600
+        },
+        {
+          "min_balance_inr": 10001,
+          "max_balance_inr": null,
+          "fee_inr": 750
+        }
+      ]
+    },
+    "fee_waiver_and_milestones": {
+      "annual_fee_waiver": {
+        "threshold_spend_inr": 150000,
+        "period": "calendar_year",
+        "evaluation_condition": "PNB's Kiwi product page states that the ₹750 annual fee is waived on spends of ₹1.50 lakh in the previous year. PNB's current MITC states that fee waivers are calculated on a calendar-year basis; cash withdrawals, reversals and fees/charges are excluded from the waiver threshold.",
+        "excluded_category_ids": [
+          "cash_advance",
+          "fees_and_charges"
+        ],
+        "excluded_mcc_list": [],
+        "waives_fee_inr": 750
+      },
+      "welcome_and_renewal_gift": {
+        "trigger": "N/A",
+        "benefit_points": 800,
+        "effective_value_inr": 200,
+        "condition": "No permanent PNB-issued welcome or renewal gift was identified on the current PNB Kiwi product page."
+      },
+      "spend_milestones": []
+    },
+    "lifestyle_and_network_benefits": [
+      {
+        "benefit_id": "kiwi-neon-lounge",
+        "category_id": "lounge",
+        "network_program": "kiwi_neon",
+        "sponsor": "Gokiwi Technologies Private Limited",
+        "label": "Airport lounge access through optional Kiwi Neon membership",
+        "evaluation_engine": {
+          "conditions": {
+            "membership_required": true,
+            "membership_fee_inr": 999,
+            "membership_fee_gst_applicable": true,
+            "eligible_spend_milestones_inr": [
+              50000,
+              100000,
+              150000
+            ],
+            "membership_spend_basis": "yearly spends on Kiwi App from date of Kiwi Neon subscription",
+            "pass_unlock": "one lounge pass at each qualifying milestone",
+            "guest_access": false
+          },
+          "benefit_calculation": {
+            "passes_per_year": 3,
+            "stay_duration_hours_max": 2,
+            "pass_validity_months": 6
+          },
+          "perks": [
+            "Each pass admits one customer.",
+            "Pass is unlocked in the Kiwi App after the relevant milestone.",
+            "Airport lounge programme is delivered through third-party lounge partners."
+          ]
+        },
+        "quota_count": 3,
+        "quota_period": "annual",
+        "value_estimate_inr": null,
+        "effective_from": "2025-02-01",
+        "effective_to": null
+      },
+      {
+        "benefit_id": "kiwi-neon-milestone-cashback",
+        "category_id": "other",
+        "network_program": "kiwi_neon",
+        "sponsor": "Gokiwi Technologies Private Limited",
+        "label": "Optional Kiwi Neon annual-spend milestone cashback",
+        "evaluation_engine": {
+          "conditions": {
+            "membership_required": true,
+            "milestones": [
+              {
+                "threshold_spend_inr": 50000,
+                "cashback_percent": 3
+              },
+              {
+                "threshold_spend_inr": 100000,
+                "cashback_percent": 4
+              },
+              {
+                "threshold_spend_inr": 150000,
+                "cashback_percent": 5
+              }
+            ],
+            "eligible_spend_definition": "Total Kiwi spends minus exclusion-category spends and refunds.",
+            "milestone_rewards_excluded_from_monthly_cap": true
+          },
+          "benefit_calculation": {
+            "membership_fee_inr": 999,
+            "membership_fee_gst_applicable": true
+          },
+          "perks": [
+            "Milestone cashback is provided as Kiwis.",
+            "Milestone cashback is credited after the subsequent month according to the Kiwi Neon terms."
+          ]
+        },
+        "quota_count": null,
+        "quota_period": "annual",
+        "value_estimate_inr": null,
+        "effective_from": "2025-02-01",
+        "effective_to": null
+      }
+    ],
+    "insurance_and_protection": [],
+    "addon_card_rules": {
+      "max_addon_cards": 2,
+      "fee_per_card_inr": 0,
+      "separate_priority_pass": false,
+      "lounge_quota_shared": true,
+      "reward_points_pooled": true,
+      "min_age_years": 18
+    },
+    "redemption_matrix": {
+      "direct_options": [
+        {
+          "channel": "Kiwi App / goaxb UPI-linked account",
+          "redemption_type": "cashback",
+          "inr_value_per_point": 0.25,
+          "max_bill_percentage_payable_via_points": null,
+          "min_points_per_txn": 500,
+          "cycle_points_burn_cap": null,
+          "redemption_fee_inr": 0,
+          "effective_from": "2025-06-01",
+          "effective_to": null
+        }
+      ],
+      "partner_transfers": []
+    },
+    "dynamic_promotions_registry": [
+      {
+        "promo_id": "kiwi-kickstart-2-0-august-2026",
+        "category_id": "all_retail",
+        "network_program": "kiwi_promos",
+        "sponsor": "Gokiwi Technologies Pvt Ltd",
+        "platform": "Kiwi App",
+        "offer_type": "100% cashback on first eligible transaction, capped at ₹200 / 800 Kiwis",
+        "discount_percent": 100,
+        "max_discount_inr": 200,
+        "fnb_discount_inr": null,
+        "min_tickets": 1,
+        "quota_controlled": true,
+        "is_permanent_card_feature": false,
+        "valid_from": "2026-08-06",
+        "valid_to": "2026-08-31"
+      },
+      {
+        "promo_id": "reward-boost-august-2026",
+        "category_id": "all_retail",
+        "network_program": "kiwi_promos",
+        "sponsor": "Gokiwi Technologies Pvt Ltd",
+        "platform": "Kiwi App",
+        "offer_type": "₹50 cashback on each of four qualifying transactions of ₹100+, one per calendar day",
+        "discount_percent": null,
+        "max_discount_inr": 200,
+        "fnb_discount_inr": null,
+        "min_tickets": 4,
+        "quota_controlled": true,
+        "is_permanent_card_feature": false,
+        "valid_from": "2026-08-07",
+        "valid_to": "2026-08-31"
+      },
+      {
+        "promo_id": "cashback-treat-august-2026",
+        "category_id": "all_retail",
+        "network_program": "kiwi_promos",
+        "sponsor": "Gokiwi Technologies Pvt Ltd",
+        "platform": "Kiwi App",
+        "offer_type": "₹10 cashback on each of up to four qualifying transactions of ₹199+, one per calendar day",
+        "discount_percent": null,
+        "max_discount_inr": 40,
+        "fnb_discount_inr": null,
+        "min_tickets": 4,
+        "quota_controlled": true,
+        "is_permanent_card_feature": false,
+        "valid_from": "2026-08-07",
+        "valid_to": "2026-08-31"
+      },
+      {
+        "promo_id": "cashback-carnival-august-2026",
+        "category_id": "all_retail",
+        "network_program": "kiwi_promos",
+        "sponsor": "Gokiwi Technologies Pvt Ltd",
+        "platform": "Kiwi App",
+        "offer_type": "₹75 first qualifying transaction plus ₹50 each on second and third qualifying transactions of ₹199+, one per calendar day",
+        "discount_percent": null,
+        "max_discount_inr": 175,
+        "fnb_discount_inr": null,
+        "min_tickets": 3,
+        "quota_controlled": true,
+        "is_permanent_card_feature": false,
+        "valid_from": "2026-08-07",
+        "valid_to": "2026-08-31"
+      }
+    ],
+    "additional_data": {
+      "_notes": "Source-supported data that cannot be represented faithfully by an existing universal schema field. Do not duplicate data already represented elsewhere.",
+      "items": [
+        {
+          "label": "physical_vs_virtual_fee_schedule",
+          "description": "PNB's current Kiwi product page and MITC specify ₹0 joining fee for the virtual card and ₹500 joining fee for the physical card. Annual fee is ₹750 for both virtual and physical cards, waived subject to the published spend condition."
+        },
+        {
+          "label": "kiwi_reward_currency",
+          "description": "Kiwis are the reward units issued by Kiwi. Each Kiwi is currently worth ₹0.25, equivalent to 4 Kiwis per ₹1, and Kiwis can be redeemed into the savings account linked to the goaxb UPI ID."
+        },
+        {
+          "label": "reward_rounding",
+          "description": "From 1 June 2025, Kiwi awards Kiwis only on transaction amounts in multiples of ₹100. For cards issued via the Kiwi App since 4 July 2024 and users without Kiwi Neon, online transactions earn 2 Kiwis per ₹100 and Scan & Pay earns 6 Kiwis per ₹100."
+        },
+        {
+          "label": "kiwi_neon_optional_program",
+          "description": "Kiwi Neon is an optional annual membership programme for eligible cards issued through the Kiwi App since 4 July 2024. The published membership fee is ₹999 plus applicable taxes per year. Neon provides 2% Scan & Pay cashback, 0.5% online cashback, annual-spend milestone cashback of 3%, 4% and 5%, and one lounge pass at each ₹50,000, ₹1,00,000 and ₹1,50,000 eligible-spend milestone."
+        },
+        {
+          "label": "monthly_reward_cap_formula",
+          "description": "Kiwi terms specify a monthly reward ceiling of 1% of the customer's assigned credit limit. The schema cannot represent this dynamic formula as a numeric limit_value. Kiwi terms also state that milestone rewards under Kiwi Neon are excluded from the 1% monthly cap."
+        },
+        {
+          "label": "regular_reward_downgrade_cap",
+          "description": "Kiwi Neon terms state that if a customer is downgraded to the regular Kiwi Rewards programme for suspected non-compliant or unfair usage, the monthly rewards cap becomes the lower of 1% of the assigned credit limit or ₹500."
+        },
+        {
+          "label": "cash_advance_location_specific_minimums",
+          "description": "PNB MITC specifies cash withdrawal charges of 2% or ₹150 minimum at domestic PNB ATMs for RuPay Select, 2% or ₹200 minimum at other domestic ATMs, and 2% or ₹300 minimum overseas."
+        },
+        {
+          "label": "cash_withdrawal_limit",
+          "description": "PNB states that the cash withdrawal limit is 20% of the credit-card limit for all variants/types, with a single-transaction limit of 50% of the available cash limit."
+        },
+        {
+          "label": "contactless_limit",
+          "description": "PNB states that contactless transactions without dipping, swiping or PIN entry have a maximum single-transaction limit of ₹5,000."
+        },
+        {
+          "label": "fuel_surcharge_waiver",
+          "description": "PNB's current fuel-surcharge privilege page lists RuPay Select transactions from ₹500 to ₹4,000 as eligible for the fuel-surcharge waiver. The Kiwi rewards programme separately excludes fuel-related MCCs from earning Kiwis."
+        },
+        {
+          "label": "emi_charges",
+          "description": "PNB's current MITC states Insta EMI processing fee as 2% of transaction amount or ₹100, whichever is higher; Easy Pay EMI retail-purchase processing fee as 2% or ₹200, whichever is higher; and EMI prepayment/foreclosure charge as 3% of outstanding amount. No fixed ₹199 EMI processing fee is supported by the current MITC reviewed."
+        },
+        {
+          "label": "add_on_cards",
+          "description": "PNB states that up to two add-on credit cards may be issued for parents, spouse, son(s) or unmarried daughter(s) above 18 years. The PNB Kiwi product page states add-on joining and annual fees are nil."
+        },
+        {
+          "label": "insurance_reconciliation",
+          "description": "Generic RuPay Select/PBN credit-card pages advertise insurance and other RuPay Select benefits, but no Kiwi-specific insurance coverage amount was identified in the current PNB Kiwi product page or Kiwi-specific terms. Therefore insurance_and_protection is [] rather than inheriting generic RuPay Select coverage."
+        },
+        {
+          "label": "lounge_reconciliation",
+          "description": "The PNB Kiwi product page does not independently publish complimentary lounge visits. Kiwi's current Neon terms explicitly provide lounge passes only through the optional Neon milestone programme, one pass at each ₹50,000, ₹1,00,000 and ₹1,50,000 eligible-spend milestone. Generic RuPay Select lounge benefits were not assumed for the Kiwi card."
+        },
+        {
+          "label": "reward_reversal",
+          "description": "Kiwi terms state that Kiwis associated with refunded transactions are removed/reversed from the customer's reward balance."
+        },
+        {
+          "label": "current_primary_sources",
+          "description": "PNB product page: https://creditcard.pnb.bank.in/types18.html\n ; PNB MITC: https://pnbcard.in/PDF/MITC.PDF\n ; Kiwi Rewards Policy: https://gokiwi.in/rewards-policy-v2/\n ; Kiwi Neon terms: https://www.gokiwi.in/neon/neon2/\n"
+        }
+      ]
+    }
+  }
+}
