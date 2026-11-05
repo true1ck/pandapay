@@ -35,8 +35,8 @@ Status values: `not started` · `running` · `done (branch ready)` · `merged` �
 | WP4 | JS engine v2 + merchant resolver | 1 | `card-rewards/wp4-js-engine` | **merged** | 2026-11-06 | Review approved + 1 fix round (D10–D12); 47 JS scenarios pin every ruling; 200/200 targeted tests on merged branch; Dart engine already agrees on 117/118 (K15 harness fix pending in WP3) |
 | WP5 | Merchant and platform directory data | 1 | `card-rewards/wp5-directory` | **merged** | 2026-11-06 | 164 merchants (9 true sub-brand parents, `group` tags per D6), 61 platforms; review + 1 fix round clean; IHCL brands kept under `taj` (ruling in ledger) |
 | WP6a | Worked examples: HDFC, SBI Card | 1 | `card-rewards/wp6a-examples-hdfc-sbi` | **merged** | 2026-11-06 | 21/21 cards, 15 override files; review + 1 fix round clean; Swiggy exact-half rounding parked |
-| WP6b | Worked examples: ICICI, Axis, Amex, IDFC, others | 1 | `card-rewards/wp6b-examples-others` | needs rework (fix round 1) | 2026-11-06 | 23/25 cards; ACE/Flipkart Axis/HSBC Live+ verified; fixing IDFC Wealth override (lost exclusions, priorities, unmapped tokens), D11 rounding paths, D14 marks |
-| WP7 | Integration: worked examples through both engines | 2 | — | not started | | Needs wave 1 merged |
+| WP6b | Worked examples: ICICI, Axis, Amex, IDFC, others | 1 | `card-rewards/wp6b-examples-others` | fix round 2 in re-review | 2026-11-06 | 23/25 cards; Kiwi/IDFC Select/MMT fixed and checked with the real loader; remaining 18-card loader mismatches handed to WP7 after D16 |
+| WP7 | Integration: worked examples through both engines | 2 | — | not started | | Needs wave 1 merged; inputs include WP6b's 18-card mismatch list (ledger) and D16 except-list modelling |
 | WP8 | Server recording v2 + recompute script | 2 | — | not started | | Needs WP1, WP4 |
 | WP9 | App: v2 feed, tolerant parse, cap bars, alerts | 2 | — | not started | | Needs WP1, WP3 |
 | — | Checkpoint A (after wave 1) | — | — | not started | | |
@@ -70,6 +70,7 @@ Status values: `not started` · `running` · `done (branch ready)` · `merged` �
 | 2026-11-06 | D12: a category paying less than the base earns its own (lower) rate; D13: cardholder-dependent caps/rates (credit-limit caps, tiers, paid memberships) are deferred to Phase 2 and never guessed. | Lead |
 | 2026-11-06 | D14: examples depending on facts a purchase can't tell us (gift card, international, birthday) are kept but not engine-checked; such rules are info-only until Phase 2; overrides must never drop exclusions. | Lead |
 | 2026-11-06 | D15: engines never silently drop limits or exclusions they can't read; they skip visibly and lower confidence. The app must not use cap headroom for points caps until server state is in native units (WP8). | Lead |
+| 2026-11-06 | D16: exclusions with exceptions ("no rewards on fuel except at IndianOil", "utilities only via Google Pay") and minimum amounts ("nothing below ₹100") are modelled; an unknown merchant or app never proves an exception. | Lead |
 | 2026-11-06 | D10: cards switch to the v2 engine only when re-imported by the v2 loader (DB defaults alone never switch a card), so existing cards keep today's behaviour until re-import. | Lead |
 
 ## Changelog
