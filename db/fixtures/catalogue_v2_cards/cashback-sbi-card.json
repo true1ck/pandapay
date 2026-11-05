@@ -4,7 +4,7 @@
   "inputs": {
     "transform_version": "7",
     "source_record_sha256": "bcb72cd3bc9b63cfe461bf1feffb8b7d71a66dbfe6e1df48a2b10e576585c7b9",
-    "override_sha256": "d08f1865a463a56ddb79d5405fb952a68d5944c4a08547948df8acdadf5ca811",
+    "override_sha256": "f676b2bc6ec7bc625e9389c07d6f50813830489819833f775d3c4a3ca525cc47",
     "directory_sha256": "b1094d54b77e848d22f7a9a64f3ae6d1ef43ca3eb2fc8e40cd43ed1994664694",
     "verified": true
   },
@@ -25,8 +25,8 @@
     "points_expiry_months": null,
     "model_status": "verified",
     "model_coverage": {
-      "rules_total": 17,
-      "rules_modelled": 16,
+      "rules_total": 18,
+      "rules_modelled": 17,
       "rules_info": 1,
       "caps_total": 3,
       "caps_enforced": 2,
@@ -154,6 +154,14 @@
           "value_sha256": "4540a2abedf85712",
           "reason": "WP7: T&C booklet: \"Card Cashback is not applicable on transactions less than Rs100\" (D16b exclusion with max_txn_inr); the record had no minimum.",
           "source_url": "https://www.sbicard.com/sbi-card-en/assets/docs/pdf/ekit-tncs/cashback-tnc-ekit.pdf",
+          "checked_on": "2026-11-05"
+        },
+        {
+          "path": "reward_rules",
+          "op": "append",
+          "value_sha256": "03c9e55f05ccad8f",
+          "reason": "WP7: D28c: Revision notice: \"Cashback not applicable on Merchant EMI & Flexipay EMI\". The record's EMI row needs category emi AND rail emi, so an EMI purchase in another category earned. Rail-EMI exclusion on all spend.",
+          "source_url": "https://www.sbicard.com/sbi-card-en/assets/docs/pdf/cashback-revised.pdf",
           "checked_on": "2026-11-05"
         }
       ]
@@ -1415,6 +1423,40 @@
         "max_engine_version": null,
         "source_local_id": "below_minimum_exclusion",
         "display_note": "Card Cashback is not applicable on transactions less than Rs100."
+      },
+      {
+        "id": "cashback-sbi-card:rule:wp7_emi_rail_exclusion",
+        "category_id": null,
+        "category_slug": null,
+        "merchant_pattern": null,
+        "rail": "emi",
+        "unit": "cashback_percent",
+        "rate": 0,
+        "min_txn_inr": null,
+        "max_txn_inr": null,
+        "priority": 0,
+        "conditions": {
+          "source_local_id": "wp7_emi_rail_exclusion",
+          "part": null,
+          "info_reasons": [],
+          "flags": []
+        },
+        "notes": null,
+        "effective_from": "2026-04-01",
+        "effective_to": null,
+        "excluded_categories": [],
+        "rule_role": "exclusion",
+        "merchant_slugs": [],
+        "platform_slugs": [],
+        "mcc_include": [],
+        "mcc_exclude": [],
+        "except_merchant_slugs": [],
+        "except_platform_slugs": [],
+        "block_inr": null,
+        "min_engine_version": 2,
+        "max_engine_version": null,
+        "source_local_id": "wp7_emi_rail_exclusion",
+        "display_note": "EMI transactions earn no rewards."
       }
     ],
     "cap_rules": [
