@@ -941,10 +941,10 @@
       ],
       "vpa_prefixes": [],
       "mcc": [
-        "5311",
-        "5411"
+        "5411",
+        "5311"
       ],
-      "notes": "B2B; co-brand card is business-only. MCCs 5311/5411 added by WP7 (card terms name these wholesale merchants under departmental/grocery MCCs) so a filled-in MCC lets wholesale carve-outs apply.",
+      "notes": "B2B; co-brand card is business-only. MCCs 5411/5311 added by WP7 (BoM/Central Bank SBI and BPCL OCTANE carve-outs name these wholesale merchants under both 5311 and 5411, identically). 5411 is listed first (D24f): cash-and-carry wholesale is grocery-led and the directory category is groceries.",
       "group": "flipkart"
     },
     {
@@ -974,10 +974,10 @@
       ],
       "vpa_prefixes": [],
       "mcc": [
-        "5311",
-        "5411"
+        "5411",
+        "5311"
       ],
-      "notes": "Walmart HDFC card; \"best price\" alone not aliased. MCCs 5311/5411 added by WP7 (card terms name these wholesale merchants under departmental/grocery MCCs) so a filled-in MCC lets wholesale carve-outs apply."
+      "notes": "Walmart HDFC card; \"best price\" alone not aliased. MCCs 5411/5311 added by WP7 (BoM/Central Bank SBI and BPCL OCTANE carve-outs name these wholesale merchants under both 5311 and 5411, identically). 5411 is listed first (D24f): cash-and-carry wholesale is grocery-led and the directory category is groceries."
     },
     {
       "slug": "metro_cash_carry",
@@ -992,10 +992,10 @@
       ],
       "vpa_prefixes": [],
       "mcc": [
-        "5311",
-        "5411"
+        "5411",
+        "5311"
       ],
-      "notes": "MCCs 5311/5411 added by WP7 (card terms name these wholesale merchants under departmental/grocery MCCs) so a filled-in MCC lets wholesale carve-outs apply."
+      "notes": "MCCs 5411/5311 added by WP7 (BoM/Central Bank SBI and BPCL OCTANE carve-outs name these wholesale merchants under both 5311 and 5411, identically). 5411 is listed first (D24f): cash-and-carry wholesale is grocery-led and the directory category is groceries."
     },
     {
       "slug": "reliance_retail",
