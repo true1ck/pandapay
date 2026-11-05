@@ -117,6 +117,31 @@ function mergeSlugs(current, incoming) {
   return { conflict: true, slugs: current };
 }
 
+// A merchant and a platform that share a name or alias are one brand in both
+// directory tables (Bills2Pay the merchant and the portal).
+function sameBrand(index, merchantSlug, platformSlug) {
+  const m = index?.merchants?.get(merchantSlug);
+  const p = index?.platforms?.get(platformSlug);
+  if (!m || !p) return false;
+  const names = (e) => [e.name, ...(e.aliases || [])].map((a) => normalizeText(String(a || ''))).filter(Boolean);
+  const own = new Set(names(m));
+  return names(p).some((a) => own.has(a));
+}
+
+// The condition names, as merchants only (or platforms only), the same brands
+// the rule's token already names as platforms (or merchants).
+function sameBrandRestatement(parts, cond, index) {
+  const ms = cond.merchantSlugs || [];
+  const ps = cond.platformSlugs || [];
+  if ((ms.length > 0) === (ps.length > 0)) return false;
+  return parts.length > 0 && parts.every((p) => {
+    const pm = p.merchantSlugs || [];
+    const pp = p.platformSlugs || [];
+    if (ms.length) return pp.length > 0 && !pm.length && ms.every((m) => pp.some((x) => sameBrand(index, m, x)));
+    return pm.length > 0 && !pp.length && ps.every((x) => pm.some((m) => sameBrand(index, m, x)));
+  });
+}
+
 // AND-combines a restriction into a part. Returns null on a conflict the
 // row can't express (two different categories, disjoint merchant sets).
 function andPart(part, extra) {
@@ -434,7 +459,33 @@ function transformRule(src, idx, ctx) {
   }
 
   // 7. Merchants / platforms named in conditions.
-  if (cond.merchantSlugs.length || cond.platformSlugs.length) {
+  //  H2: one list naming merchants and apps ("CRED, Cheq, MobiKwik") is a set
+  //  of alternatives. On an exclusion, a carve-out or a reduced rate, AND-ing
+  //  them (merchant CRED *via* app Cheq) would almost never match, i.e.
+  //  widen: one part for the merchants and one for the apps. An earn rule
+  //  keeps the narrower AND reading.
+  const lowerOrNone = isExclusion || isCarveOut || isReduced;
+  if (lowerOrNone && cond.channelAlternatives && parts.every((p) => !p.group)) {
+    const next = [];
+    for (const p of parts) {
+      const rm = mergeSlugs(p.merchantSlugs, cond.merchantSlugs);
+      if (!rm.conflict && !p.platformSlugs?.length) next.push({ ...p, merchantSlugs: rm.slugs });
+      const rp = mergeSlugs(p.platformSlugs, cond.platformSlugs);
+      if (!rp.conflict && !p.merchantSlugs?.length) next.push({ ...p, platformSlugs: rp.slugs });
+    }
+    parts = next.length ? dedupeParts(next) : parts.map((p) => ({ ...p, conflict: true }));
+    flags.push('channel_list_alternatives');
+  } else if (lowerOrNone && sameBrandRestatement(parts, cond, ctx.index)) {
+    // The token names a brand's portal and the condition names the same
+    // brand as a merchant (or the other way round): either identifies it.
+    const next = [];
+    for (const p of parts) {
+      next.push(p);
+      next.push({ ...p, merchantSlugs: cond.merchantSlugs.length ? cond.merchantSlugs : [], platformSlugs: cond.platformSlugs.length ? cond.platformSlugs : [] });
+    }
+    parts = dedupeParts(next);
+    flags.push('channel_list_alternatives');
+  } else if (cond.merchantSlugs.length || cond.platformSlugs.length) {
     parts = parts.map((p) => {
       let out = p;
       if (cond.merchantSlugs.length) {
@@ -743,6 +794,12 @@ function transformRule(src, idx, ctx) {
         if (EXCLUSION_MCC_ROW_KEEPS_CATEGORY) split.push({ ...p });
         // D20a: and an MCC-only v2 row, so a known MCC in the list excludes
         // whatever category the transaction is labelled with.
+        split.push({ ...p, categorySlug: null, broad: false });
+        flags.push('mcc_scoped_exclusion');
+      } else if (p.categorySlug && p.mccInclude?.length) {
+        // D20a with a merchant / app: the same MCC-only partner, keeping the
+        // channel. (v1 gets the category row added below.)
+        split.push(p);
         split.push({ ...p, categorySlug: null, broad: false });
         flags.push('mcc_scoped_exclusion');
       } else {

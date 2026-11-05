@@ -1141,6 +1141,38 @@ test('D20a/D20b a reduced-rate rule or carve-out with an explicit MCC list also 
   assert.deepEqual(shape('accel_mcc'), [['earn', 'dining', '5812', 2, null, 10]]);
 });
 
+test('H2 an exclusion whose one name list holds merchants and apps excludes at any of them (never merchant AND app)', () => {
+  const r = run(pointsCard([
+    rule({ id: 'edu_apps', category_id: 'education', evaluation_type: 'exclusion', conditions: { mcc: [8211], platforms: ['Amazon', 'PhonePe', 'Kiwi App'] },
+      action: { points_per_block: 0, reason: 'Education payments through these apps do not earn reward points.' } }),
+    // an earn rule keeps the AND reading (narrower): Myntra via SmartBuy
+    rule({ id: 'smartbuy_myntra', category_id: 'smartbuy', evaluation_type: 'accelerator', conditions: { merchant_categories: ['Myntra'] }, action: { points_per_block: 10 } }),
+  ]));
+  const rows = only(r, 'edu_apps').filter((x) => x.max_engine_version !== 1);
+  assert.ok(rows.every((x) => x.rule_role === 'exclusion'));
+  assert.ok(rows.every((x) => !(x.merchant_slugs.length && x.platform_slugs.length)), 'no row needs a merchant AND an app');
+  assert.ok(rows.some((x) => x.merchant_slugs.join() === 'amazon' && !x.platform_slugs.length));
+  assert.ok(rows.some((x) => x.platform_slugs.join() === 'kiwi_app,phonepe_app' && !x.merchant_slugs.length));
+  // D20a: a known listed MCC excludes under any category label, per channel too
+  assert.ok(rows.some((x) => x.category_slug === null && x.mcc_include.join() === '8211' && x.merchant_slugs.join() === 'amazon'));
+  assert.ok(rows.some((x) => x.category_slug === null && x.mcc_include.join() === '8211' && x.platform_slugs.join() === 'kiwi_app,phonepe_app'));
+  assert.ok(only(r, 'edu_apps').some((x) => x.max_engine_version === 1 && x.category_slug === 'education'), 'v1 keeps the category row');
+  const sb = only(r, 'smartbuy_myntra');
+  assert.ok(sb.some((x) => x.merchant_slugs.join() === 'myntra' && x.platform_slugs.join() === 'hdfc_smartbuy'));
+
+  // The same brand as a merchant (condition) and as a portal (token): either identifies it.
+  const dir = { ...DIRECTORY,
+    merchants: [...DIRECTORY.merchants, { slug: 'bills2pay', name: 'Bills2Pay', aliases: ['bills2pay'] }],
+    platforms: [...DIRECTORY.platforms, { slug: 'bills2pay_portal', name: 'Bank Bills2Pay', kind: 'bank_portal', aliases: ['bills2pay', 'bank bills2pay'] }] };
+  const r2 = transformCardRecordV2(pointsCard([
+    rule({ id: 'exclude_bills2pay', category_id: 'bills2pay', evaluation_type: 'exclusion', conditions: { merchant_pattern: 'Bills2Pay' }, action: { points_per_block: 0, reason: 'Bills2Pay payments do not earn reward points.' } }),
+  ]), { directory: dir });
+  const bp = only(r2, 'exclude_bills2pay');
+  assert.ok(bp.every((x) => x.rule_role === 'exclusion' && !(x.merchant_slugs.length && x.platform_slugs.length)), JSON.stringify(bp.map((x) => [x.merchant_slugs, x.platform_slugs])));
+  assert.ok(bp.some((x) => x.merchant_slugs.join() === 'bills2pay'));
+  assert.ok(bp.some((x) => x.platform_slugs.join() === 'bills2pay_portal'));
+});
+
 test('D20d MCCs of one or two digits are dropped and flagged; an exclusion left without MCCs keeps its category', () => {
   assert.deepEqual(normalizeMccList([32, 2541, 4001, 5541, 742, '66']), { mccs: ['0742', '2541', '4001', '5541'], invalid: [], malformed: [32, '66'] });
   const r = run(card({ rules: [

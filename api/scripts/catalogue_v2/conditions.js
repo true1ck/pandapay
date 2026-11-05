@@ -249,6 +249,7 @@ function emptyMapping() {
     blockers: [],
     flags: [],
     effectiveFrom: null,
+    channelSources: [],
   };
 }
 
@@ -280,7 +281,22 @@ function addMccs(m, key, value, target) {
   m[target].push(...mccs);
 }
 
-function mapNameValue(m, key, value, index, { allowRail }) {
+// Records which merchants / platforms each condition value contributed: one
+// value (a list, or one name) that yields both is a set of alternatives
+// ("CRED, Cheq, MobiKwik"), not "merchant AND app".
+function mapNameValue(m, key, value, index, opts) {
+  const mb = m.merchantSlugs.length;
+  const pb = m.platformSlugs.length;
+  mapNameValueInner(m, key, value, index, opts);
+  const merchants = m.merchantSlugs.slice(mb);
+  const platforms = m.platformSlugs.slice(pb);
+  if (merchants.length || platforms.length) {
+    if (!m.channelSources) m.channelSources = [];
+    m.channelSources.push({ key, merchants, platforms });
+  }
+}
+
+function mapNameValueInner(m, key, value, index, { allowRail }) {
   // A list of names: resolve each; unresolved names make it a partial list.
   if (Array.isArray(value) && value.length > 1 && value.every((v) => typeof v === 'string')) {
     const sub = { ...emptyMapping(), merchantSlugs: [], platformSlugs: [], merchantProse: [], rails: [], blockers: [], flags: [] };
@@ -665,6 +681,10 @@ function mapRuleConditions(rule, ctx) {
   m.mccExclude = uniq(m.mccExclude).sort();
   m.merchantSlugs = uniq(m.merchantSlugs).sort();
   m.platformSlugs = uniq(m.platformSlugs).sort();
+  // Every value that named a merchant or platform named both kinds: the
+  // names are alternatives to each other.
+  m.channelAlternatives = m.merchantSlugs.length > 0 && m.platformSlugs.length > 0 &&
+    m.channelSources.every((s) => s.merchants.length > 0 && s.platforms.length > 0);
   m.excludedCategorySlugs = uniq(m.excludedCategorySlugs).sort();
   m.exceptMerchantSlugs = uniq(m.exceptMerchantSlugs).sort();
   m.listedExcludedMerchants = uniq(m.listedExcludedMerchants).sort();
