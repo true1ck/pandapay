@@ -30,7 +30,7 @@ Status values: `not started` · `running` · `done (branch ready)` · `merged` �
 |---|---|---|---|---|---|---|
 | WP0 | Docs, contracts, scenario seed, directory skeleton | 0 | `card-rewards/phase1` | merged | 2026-11-05 | Lead |
 | WP1 | Schema v2, v1/v2 feeds, directory seeding | 1 | `card-rewards/wp1-schema` | **merged** | 2026-11-06 | Review + 5 follow-ups (D1, D2, D7, D11, D16, D17l, D18a); DB test passes fresh + incremental; in CI |
-| WP2 | Loader v2 (pure transform), coverage, audit script | 1 | `card-rewards/wp2-loader` | needs rework (fix round 4 of 5) | 2026-11-06 | Round 3 verified (41 exclusions restored, all 23 bonuses earn); fixing MCC-exclusion gap, one fast-food misread, stated-rate exclusions → reduced-rate rules — D20 |
+| WP2 | Loader v2 (pure transform), coverage, audit script | 1 | `card-rewards/wp2-loader` | **merged** (checkpoint fix pending) | 2026-11-06 | 4 fix rounds; final review clean; fixing 2 duplicate-benefit rows found by the first real DB import |
 | WP3 | Dart engine v2 + tolerant parsing | 1 | `card-rewards/wp3-dart-engine` | **merged** | 2026-11-06 | 477/477 tests; all 127 shared scenarios agree with JS (incl. D15, D16, D18) |
 | WP4 | JS engine v2 + merchant resolver | 1 | `card-rewards/wp4-js-engine` | **merged** | 2026-11-06 | 272/272 targeted tests on merged branch; passes all 127 shared scenarios incl. Dart's own |
 | WP5 | Merchant and platform directory data | 1 | `card-rewards/wp5-directory` | **merged** | 2026-11-06 | 164 merchants (9 true sub-brand parents, `group` tags per D6), 61 platforms; review + 1 fix round clean; IHCL brands kept under `taj` (ruling in ledger) |
@@ -39,7 +39,7 @@ Status values: `not started` · `running` · `done (branch ready)` · `merged` �
 | WP7 | Integration: worked examples through both engines | 2 | — | not started | | Needs wave 1 merged; inputs include WP6b's 18-card mismatch list (ledger) and D16 except-list modelling |
 | WP8 | Server recording v2 + recompute script | 2 | — | not started | | Needs WP1, WP4 |
 | WP9 | App: v2 feed, tolerant parse, cap bars, alerts | 2 | — | not started | | Needs WP1, WP3 |
-| — | Checkpoint A (after wave 1) | — | — | not started | | |
+| — | Checkpoint A (after wave 1) | — | — | in progress | 2026-11-06 | API 1695/0 fail; Dart 477/0; loader 376/376; DB test pass; first real import 365/376 → 2 fixes in flight (WP1 index size, WP2 duplicate benefits) |
 | — | Checkpoint B (after wave 2) | — | — | not started | | |
 | — | Rollout (owner) | 3 | — | not started | | See plan §9 |
 
@@ -54,7 +54,7 @@ Status values: `not started` · `running` · `done (branch ready)` · `merged` �
 | Milestones on the wrong anchor | 292 / 292 (60 non-annual) | 0 / 308 — WP2 dry run |
 | Spend-gated lounges structured | 0 / 124 | 115 cards (195 unlock rows) — WP2 dry run |
 | Co-brand cards with a merchant rule | 8 / 74 (WP2 count 5 / 102) | 53 / 102 — WP2 dry run |
-| Cards Verified | 0 | |
+| Cards Verified | 0 | 0 (set by WP7) |
 
 ## Decisions log
 
@@ -78,6 +78,7 @@ Status values: `not started` · `running` · `done (branch ready)` · `merged` �
 
 ## Changelog
 
+- **2026-11-06:** WP2 merged — all of wave 1 is in. Checkpoint A started: all tests green; the first real database import loaded 365 of 376 cards and found 2 issues (index size on 9 cards, duplicate benefits on 2), now being fixed.
 - **2026-11-06:** WP3 merged (phone reward engine v2; same answers as the server on all shared scenarios).
 - **2026-11-06:** WP6b merged (23 more cards with issuer-verified examples). WP4 follow-ups (D15, D16) merged.
 - **2026-11-06:** WP4 merged (server reward engine v2).
