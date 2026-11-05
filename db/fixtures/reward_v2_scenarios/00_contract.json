@@ -4,7 +4,9 @@
     "Both engines must load every *.json in this directory and assert: points, cashback_inr, value_inr (2 dp), rule_id, excluded, cap_deltas (exact keys and values; zero deltas omitted).",
     "Cards use the v2 wire shape (plan C2). The top-level 'directory' replaces db/fixtures/merchant_directory.json for this file.",
     "For an excluded result, rule_id is the matching exclusion rule (null for a card-level category exclusion).",
-    "Rounding modes (contract D7): floor | round (per block), none (fractional), points_half_up | points_floor (exact amount x rate / block, then rounded to whole points)."
+    "Rounding modes (contract D7): floor | round (per block), none (fractional), points_half_up | points_floor (exact amount x rate / block, then rounded to whole points).",
+    "Optional per-scenario \"assert\": list of expect keys to compare (others ignored). Used for v1-shaped cards, whose v1 path doesn't produce every v2 field (D10).",
+    "cashback_rounding (D11): null|'paise' = keep paise; 'rupee_floor' / 'rupee_half_up' = whole rupees per accrual piece."
   ],
   "directory": {
     "merchants": [
@@ -257,7 +259,8 @@
             "min_engine_version": 2,
             "source_local_id": "a-cap-total"
           }
-        ]
+        ],
+        "cashback_rounding": null
       },
       "ctx": {
         "amount": 2000,
@@ -495,7 +498,8 @@
             "min_engine_version": 2,
             "source_local_id": "a-cap-total"
           }
-        ]
+        ],
+        "cashback_rounding": null
       },
       "ctx": {
         "amount": 2000,
@@ -735,7 +739,8 @@
             "min_engine_version": 2,
             "source_local_id": "a-cap-total"
           }
-        ]
+        ],
+        "cashback_rounding": null
       },
       "ctx": {
         "amount": 2000,
@@ -974,7 +979,8 @@
             "min_engine_version": 2,
             "source_local_id": "a-cap-total"
           }
-        ]
+        ],
+        "cashback_rounding": null
       },
       "ctx": {
         "amount": 199,
@@ -1212,7 +1218,8 @@
             "min_engine_version": 2,
             "source_local_id": "a-cap-total"
           }
-        ]
+        ],
+        "cashback_rounding": null
       },
       "ctx": {
         "amount": 2000,
@@ -1452,7 +1459,8 @@
             "min_engine_version": 2,
             "source_local_id": "a-cap-total"
           }
-        ]
+        ],
+        "cashback_rounding": null
       },
       "ctx": {
         "amount": 1000,
@@ -1687,7 +1695,8 @@
             "min_engine_version": 2,
             "source_local_id": "a-cap-total"
           }
-        ]
+        ],
+        "cashback_rounding": null
       },
       "ctx": {
         "amount": 2000,
@@ -1926,7 +1935,8 @@
             "min_engine_version": 1,
             "source_local_id": "b-cap-other"
           }
-        ]
+        ],
+        "cashback_rounding": null
       },
       "ctx": {
         "amount": 1000,
@@ -2165,7 +2175,8 @@
             "min_engine_version": 1,
             "source_local_id": "b-cap-other"
           }
-        ]
+        ],
+        "cashback_rounding": null
       },
       "ctx": {
         "amount": 200,
@@ -2404,7 +2415,8 @@
             "min_engine_version": 1,
             "source_local_id": "b-cap-other"
           }
-        ]
+        ],
+        "cashback_rounding": null
       },
       "ctx": {
         "amount": 1000,
@@ -2645,7 +2657,8 @@
             "min_engine_version": 1,
             "source_local_id": "b-cap-other"
           }
-        ]
+        ],
+        "cashback_rounding": null
       },
       "ctx": {
         "amount": 1000,
@@ -2884,7 +2897,8 @@
             "min_engine_version": 1,
             "source_local_id": "b-cap-other"
           }
-        ]
+        ],
+        "cashback_rounding": null
       },
       "ctx": {
         "amount": 5000,
@@ -3121,7 +3135,8 @@
             "min_engine_version": 1,
             "source_local_id": "b-cap-other"
           }
-        ]
+        ],
+        "cashback_rounding": null
       },
       "ctx": {
         "amount": 500,
@@ -3360,7 +3375,8 @@
             "min_engine_version": 1,
             "source_local_id": "b-cap-other"
           }
-        ]
+        ],
+        "cashback_rounding": null
       },
       "ctx": {
         "amount": 1000,
@@ -3499,7 +3515,8 @@
             "min_engine_version": 1,
             "source_local_id": "c-cap-grocery"
           }
-        ]
+        ],
+        "cashback_rounding": null
       },
       "ctx": {
         "amount": 4000,
@@ -3640,7 +3657,8 @@
             "min_engine_version": 1,
             "source_local_id": "c-cap-grocery"
           }
-        ]
+        ],
+        "cashback_rounding": null
       },
       "ctx": {
         "amount": 4000,
@@ -3781,7 +3799,8 @@
             "min_engine_version": 1,
             "source_local_id": "c-cap-grocery"
           }
-        ]
+        ],
+        "cashback_rounding": null
       },
       "ctx": {
         "amount": 333,
@@ -3870,7 +3889,8 @@
             "display_note": "1.5 pts/₹100, rounded to whole points"
           }
         ],
-        "cap_rules": []
+        "cap_rules": [],
+        "cashback_rounding": null
       },
       "ctx": {
         "amount": 7500,
@@ -3957,7 +3977,8 @@
             "display_note": "1.5 pts/₹100, rounded to whole points"
           }
         ],
-        "cap_rules": []
+        "cap_rules": [],
+        "cashback_rounding": null
       },
       "ctx": {
         "amount": 7499,
@@ -4044,7 +4065,8 @@
             "display_note": "1.5 pts/₹100, rounded to whole points"
           }
         ],
-        "cap_rules": []
+        "cap_rules": [],
+        "cashback_rounding": null
       },
       "ctx": {
         "amount": 199,
@@ -4064,6 +4086,452 @@
         "cashback_inr": null,
         "value_inr": 2.0,
         "rule_id": "t-base",
+        "excluded": false,
+        "cap_deltas": {}
+      }
+    },
+    {
+      "name": "L1 legacy-shaped card keeps v1 semantics",
+      "why": "Only DB defaults (rule_role 'earn', empty arrays, no cap_kind, no accrual_rounding): v1 path, where an unknown rail still matches a rail rule (D10).",
+      "card": {
+        "id": "contract-legacy-shaped-card",
+        "slug": "contract-legacy-shaped-card",
+        "name": "Contract Legacy-Shaped Card (DB defaults only)",
+        "network": "visa",
+        "card_type": "credit",
+        "data_version": 1,
+        "verified_at": "2026-11-05T00:00:00Z",
+        "annual_fee_inr": 0,
+        "joining_fee_inr": 0,
+        "is_upi_linkable": false,
+        "art_asset": null,
+        "art_primary_color": null,
+        "point_value_inr": 0,
+        "issuer_slug": "contract-bank",
+        "issuer_name": "Contract Bank",
+        "base_reward_unit": "cashback_percent",
+        "base_reward_rate": 1,
+        "has_apply_url": false,
+        "excluded_categories": [],
+        "network_variants": [],
+        "forex": null,
+        "fuel": null,
+        "milestone_rules": [],
+        "fee_waiver_rules": [],
+        "benefits": [],
+        "unlock_rules": [],
+        "redemption_options": [],
+        "accrual_block_inr": null,
+        "accrual_rounding": null,
+        "points_expiry_months": null,
+        "model_status": "verified",
+        "model_coverage": {},
+        "reward_rules": [
+          {
+            "id": "l-online",
+            "category_id": null,
+            "merchant_pattern": null,
+            "rail": "online",
+            "unit": "cashback_percent",
+            "rate": 5,
+            "min_txn_inr": null,
+            "max_txn_inr": null,
+            "priority": 20,
+            "conditions": {},
+            "notes": null,
+            "effective_from": null,
+            "effective_to": null,
+            "excluded_categories": [],
+            "rule_role": "earn",
+            "merchant_slugs": [],
+            "platform_slugs": [],
+            "mcc_include": [],
+            "mcc_exclude": [],
+            "block_inr": null,
+            "min_engine_version": 1,
+            "source_local_id": null,
+            "display_note": null
+          }
+        ],
+        "cap_rules": [],
+        "cashback_rounding": null
+      },
+      "ctx": {
+        "amount": 1000,
+        "category_id": null,
+        "category_slug": null,
+        "mcc": null,
+        "merchant_name": "Some store",
+        "merchant_vpa": null,
+        "merchant_slug": null,
+        "platform": null,
+        "rail": "unknown",
+        "occurred": "2026-11-10T10:00:00+05:30"
+      },
+      "cap_consumed_before": {},
+      "assert": [
+        "value_inr",
+        "rule_id",
+        "excluded"
+      ],
+      "expect": {
+        "points": null,
+        "cashback_inr": 50.0,
+        "value_inr": 50.0,
+        "rule_id": "l-online",
+        "excluded": false,
+        "cap_deltas": {}
+      }
+    },
+    {
+      "name": "C4 cashback floored to whole rupee",
+      "why": "5% of 2,999 = 149.95; issuer pays whole rupees rounded down (D11) -> 149.",
+      "card": {
+        "id": "contract-cashback-rupee-floor-card",
+        "slug": "contract-cashback-rupee-floor-card",
+        "name": "Contract Cashback Card (rupee floor)",
+        "network": "visa",
+        "card_type": "credit",
+        "data_version": 1,
+        "verified_at": "2026-11-05T00:00:00Z",
+        "annual_fee_inr": 0,
+        "joining_fee_inr": 0,
+        "is_upi_linkable": false,
+        "art_asset": null,
+        "art_primary_color": null,
+        "point_value_inr": 0,
+        "issuer_slug": "contract-bank",
+        "issuer_name": "Contract Bank",
+        "base_reward_unit": "cashback_percent",
+        "base_reward_rate": 1,
+        "has_apply_url": false,
+        "excluded_categories": [],
+        "network_variants": [],
+        "forex": null,
+        "fuel": null,
+        "milestone_rules": [],
+        "fee_waiver_rules": [],
+        "benefits": [],
+        "unlock_rules": [],
+        "redemption_options": [],
+        "accrual_block_inr": null,
+        "accrual_rounding": null,
+        "points_expiry_months": null,
+        "model_status": "verified",
+        "model_coverage": {},
+        "reward_rules": [
+          {
+            "id": "b-excl-rent",
+            "category_id": "cat-rent",
+            "merchant_pattern": null,
+            "rail": null,
+            "unit": "cashback_percent",
+            "rate": 0,
+            "min_txn_inr": null,
+            "max_txn_inr": null,
+            "priority": 1,
+            "conditions": {},
+            "notes": null,
+            "effective_from": null,
+            "effective_to": null,
+            "excluded_categories": [],
+            "rule_role": "exclusion",
+            "merchant_slugs": [],
+            "platform_slugs": [],
+            "mcc_include": [],
+            "mcc_exclude": [],
+            "block_inr": null,
+            "min_engine_version": 1,
+            "source_local_id": "b-excl-rent",
+            "display_note": "No cashback on rent"
+          },
+          {
+            "id": "b-swiggy",
+            "category_id": null,
+            "merchant_pattern": "swiggy",
+            "rail": null,
+            "unit": "cashback_percent",
+            "rate": 10,
+            "min_txn_inr": 249,
+            "max_txn_inr": null,
+            "priority": 10,
+            "conditions": {},
+            "notes": null,
+            "effective_from": null,
+            "effective_to": null,
+            "excluded_categories": [],
+            "rule_role": "earn",
+            "merchant_slugs": [
+              "swiggy"
+            ],
+            "platform_slugs": [],
+            "mcc_include": [],
+            "mcc_exclude": [],
+            "block_inr": null,
+            "min_engine_version": 1,
+            "source_local_id": "b-swiggy",
+            "display_note": "10% on Swiggy (min ₹249)"
+          },
+          {
+            "id": "b-online",
+            "category_id": null,
+            "merchant_pattern": null,
+            "rail": "online",
+            "unit": "cashback_percent",
+            "rate": 5,
+            "min_txn_inr": null,
+            "max_txn_inr": null,
+            "priority": 20,
+            "conditions": {},
+            "notes": null,
+            "effective_from": null,
+            "effective_to": null,
+            "excluded_categories": [],
+            "rule_role": "earn",
+            "merchant_slugs": [],
+            "platform_slugs": [],
+            "mcc_include": [],
+            "mcc_exclude": [],
+            "block_inr": null,
+            "min_engine_version": 1,
+            "source_local_id": "b-online",
+            "display_note": "5% online"
+          },
+          {
+            "id": "b-base",
+            "category_id": null,
+            "merchant_pattern": null,
+            "rail": null,
+            "unit": "cashback_percent",
+            "rate": 1,
+            "min_txn_inr": null,
+            "max_txn_inr": null,
+            "priority": 30,
+            "conditions": {},
+            "notes": null,
+            "effective_from": null,
+            "effective_to": null,
+            "excluded_categories": [],
+            "rule_role": "base",
+            "merchant_slugs": [],
+            "platform_slugs": [],
+            "mcc_include": [],
+            "mcc_exclude": [],
+            "block_inr": null,
+            "min_engine_version": 1,
+            "source_local_id": "b-base",
+            "display_note": "1% elsewhere"
+          }
+        ],
+        "cap_rules": [
+          {
+            "id": "b-cap-swiggy",
+            "reward_rule_id": "b-swiggy",
+            "category_id": null,
+            "benefit_kind": null,
+            "label": "Swiggy cashback / cycle",
+            "measure": "reward_value",
+            "period": "statement_cycle",
+            "cap_value": 1500,
+            "post_cap_unit": null,
+            "post_cap_rate": 0,
+            "resets_on_day": null,
+            "cap_kind": "total_cashback",
+            "cap_amount": 1500,
+            "scope": "targets",
+            "targets": [
+              "b-swiggy"
+            ],
+            "parent_cap_id": null,
+            "post_cap_behavior": null,
+            "anchor": null,
+            "min_engine_version": 1,
+            "source_local_id": "b-cap-swiggy"
+          },
+          {
+            "id": "b-cap-online",
+            "reward_rule_id": "b-online",
+            "category_id": null,
+            "benefit_kind": null,
+            "label": "Online cashback / cycle",
+            "measure": "reward_value",
+            "period": "statement_cycle",
+            "cap_value": 1500,
+            "post_cap_unit": null,
+            "post_cap_rate": 0,
+            "resets_on_day": null,
+            "cap_kind": "total_cashback",
+            "cap_amount": 1500,
+            "scope": "targets",
+            "targets": [
+              "b-online"
+            ],
+            "parent_cap_id": null,
+            "post_cap_behavior": null,
+            "anchor": null,
+            "min_engine_version": 1,
+            "source_local_id": "b-cap-online"
+          },
+          {
+            "id": "b-cap-other",
+            "reward_rule_id": "b-base",
+            "category_id": null,
+            "benefit_kind": null,
+            "label": "Other cashback / cycle",
+            "measure": "reward_value",
+            "period": "statement_cycle",
+            "cap_value": 500,
+            "post_cap_unit": null,
+            "post_cap_rate": 0,
+            "resets_on_day": null,
+            "cap_kind": "total_cashback",
+            "cap_amount": 500,
+            "scope": "targets",
+            "targets": [
+              "b-base"
+            ],
+            "parent_cap_id": null,
+            "post_cap_behavior": null,
+            "anchor": null,
+            "min_engine_version": 1,
+            "source_local_id": "b-cap-other"
+          }
+        ],
+        "cashback_rounding": "rupee_floor"
+      },
+      "ctx": {
+        "amount": 2999,
+        "category_id": null,
+        "category_slug": null,
+        "mcc": null,
+        "merchant_name": "Some online shop",
+        "merchant_vpa": null,
+        "merchant_slug": null,
+        "platform": null,
+        "rail": "online",
+        "occurred": "2026-11-10T10:00:00+05:30"
+      },
+      "cap_consumed_before": {},
+      "expect": {
+        "points": null,
+        "cashback_inr": 149.0,
+        "value_inr": 149.0,
+        "rule_id": "b-online",
+        "excluded": false,
+        "cap_deltas": {
+          "b-cap-online": 149.0
+        }
+      }
+    },
+    {
+      "name": "D12 rule paying less than base earns its own rate",
+      "why": "Utilities earn 1 pt/₹100 on a 2 pt/₹100 card: 10 points, not the base 20 (D12a).",
+      "card": {
+        "id": "contract-sub-base-rule-card",
+        "slug": "contract-sub-base-rule-card",
+        "name": "Contract Sub-Base Rule Card",
+        "network": "visa",
+        "card_type": "credit",
+        "data_version": 1,
+        "verified_at": "2026-11-05T00:00:00Z",
+        "annual_fee_inr": 0,
+        "joining_fee_inr": 0,
+        "is_upi_linkable": false,
+        "art_asset": null,
+        "art_primary_color": null,
+        "point_value_inr": 0.25,
+        "issuer_slug": "contract-bank",
+        "issuer_name": "Contract Bank",
+        "base_reward_unit": "points_per_100",
+        "base_reward_rate": 2,
+        "has_apply_url": false,
+        "excluded_categories": [],
+        "network_variants": [],
+        "forex": null,
+        "fuel": null,
+        "milestone_rules": [],
+        "fee_waiver_rules": [],
+        "benefits": [],
+        "unlock_rules": [],
+        "redemption_options": [],
+        "accrual_block_inr": 100,
+        "accrual_rounding": "floor",
+        "points_expiry_months": null,
+        "model_status": "verified",
+        "model_coverage": {},
+        "reward_rules": [
+          {
+            "id": "low",
+            "category_id": "cat-bills",
+            "merchant_pattern": null,
+            "rail": null,
+            "unit": "points_per_100",
+            "rate": 1,
+            "min_txn_inr": null,
+            "max_txn_inr": null,
+            "priority": 10,
+            "conditions": {},
+            "notes": null,
+            "effective_from": null,
+            "effective_to": null,
+            "excluded_categories": [],
+            "rule_role": "earn",
+            "merchant_slugs": [],
+            "platform_slugs": [],
+            "mcc_include": [],
+            "mcc_exclude": [],
+            "block_inr": null,
+            "min_engine_version": 1,
+            "source_local_id": "low",
+            "display_note": "1 pt/₹100 on utilities"
+          },
+          {
+            "id": "s-base",
+            "category_id": null,
+            "merchant_pattern": null,
+            "rail": null,
+            "unit": "points_per_100",
+            "rate": 2,
+            "min_txn_inr": null,
+            "max_txn_inr": null,
+            "priority": 30,
+            "conditions": {},
+            "notes": null,
+            "effective_from": null,
+            "effective_to": null,
+            "excluded_categories": [],
+            "rule_role": "base",
+            "merchant_slugs": [],
+            "platform_slugs": [],
+            "mcc_include": [],
+            "mcc_exclude": [],
+            "block_inr": null,
+            "min_engine_version": 1,
+            "source_local_id": "s-base",
+            "display_note": "2 pts/₹100 elsewhere"
+          }
+        ],
+        "cap_rules": [],
+        "cashback_rounding": null
+      },
+      "ctx": {
+        "amount": 1000,
+        "category_id": "cat-bills",
+        "category_slug": "bills",
+        "mcc": null,
+        "merchant_name": "Electricity board",
+        "merchant_vpa": null,
+        "merchant_slug": null,
+        "platform": null,
+        "rail": "online",
+        "occurred": "2026-11-10T10:00:00+05:30"
+      },
+      "cap_consumed_before": {},
+      "expect": {
+        "points": 10,
+        "cashback_inr": null,
+        "value_inr": 2.5,
+        "rule_id": "low",
         "excluded": false,
         "cap_deltas": {}
       }

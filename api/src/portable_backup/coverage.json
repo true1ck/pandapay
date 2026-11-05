@@ -225,6 +225,18 @@
     "redemption_options": {
       "disposition": "global_catalog"
     },
+    "benefit_unlock_rules": {
+      "disposition": "global_catalog"
+    },
+    "cap_rule_targets": {
+      "disposition": "global_catalog"
+    },
+    "merchant_brands": {
+      "disposition": "global_catalog"
+    },
+    "payment_platforms": {
+      "disposition": "global_catalog"
+    },
     "referral_program": {
       "disposition": "global_catalog"
     },
