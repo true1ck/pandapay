@@ -281,3 +281,107 @@ test("Gemini adapter sends JSON mode and bounds the configured output", async ()
   assert.equal(request.options.headers["x-goog-api-key"], "test-key");
   assert.equal(result.inputTokens, 12);
 });
+
+// ---- learning loop B1: prompt versions, temperature and covered layouts
+
+const { PROMPT_VERSION, coveredBy } = require("../../src/sms_v2/template_worker");
+
+test("each attempt records the prompt version, which is also in the prompt", async () => {
+  assert.match(PROMPT_VERSION, /^tpl-\d{4}-\d{2}-\d{2}$/);
+  assert.equal(JSON.parse(buildPrompt(template)).promptVersion, PROMPT_VERSION);
+  const attempts = [];
+  let leased = false;
+  const store = {
+    claim: async () => (leased ? null : ((leased = true), template)),
+    examples: async () => [],
+    beginAttempt: async () => null,
+    recordAttempt: async (_t, _a, usage) => attempts.push(usage),
+    finish: async () => {},
+  };
+  const provider = { generate: async () => ({ rule: rule(), inputTokens: 10, outputTokens: 10, totalTokens: 20 }) };
+  assert.equal((await runTemplateWorkerOnce({ store, provider, config })).status, "ready");
+  assert.deepEqual(attempts.map((usage) => usage.promptVersion), [PROMPT_VERSION]);
+});
+
+test("the temperature from the settings reaches the provider call and Gemini's generationConfig", async () => {
+  let seen;
+  let leased = false;
+  const store = {
+    settings: async () => ({ ...require("../../src/sms_v2/settings").mergeSettings([]), ai_temperature: 0.3 }),
+    monthSpend: async () => 0,
+    claim: async () => (leased ? null : ((leased = true), template)),
+    examples: async () => [],
+    beginAttempt: async () => null,
+    recordAttempt: async () => {},
+    finish: async () => {},
+  };
+  const provider = {
+    generate: async (input) => {
+      seen = input;
+      return { rule: rule(), inputTokens: 1, outputTokens: 1, totalTokens: 2 };
+    },
+  };
+  await runTemplateWorkerOnce({ store, provider, config });
+  assert.equal(seen.temperature, 0.3);
+
+  let body;
+  const gemini = createGeminiTemplateProvider({
+    apiKey: "test-key",
+    fetchImpl: async (_url, options) => {
+      body = JSON.parse(options.body);
+      return new Response(JSON.stringify({
+        candidates: [{ finishReason: "STOP", content: { parts: [{ text: "{}" }] } }],
+        usageMetadata: { promptTokenCount: 1, candidatesTokenCount: 1, totalTokenCount: 2 },
+      }));
+    },
+  });
+  await gemini.generate({ prompt: "synthetic only", model: "test-model", maxOutputTokens: 512, temperature: 0.3 });
+  assert.equal(body.generationConfig.temperature, 0.3);
+  await gemini.generate({ prompt: "synthetic only", model: "test-model", maxOutputTokens: 512 });
+  assert.equal("temperature" in body.generationConfig, false, "no temperature unless one is set");
+});
+
+test("a layout an active rule already reads ends covered and the provider is never called", async () => {
+  const active = { ...rule(), id: "TESTBK-PAID", version: 3, status: "active" };
+  delete active.match.templateHash;
+  assert.equal(coveredBy(template, [active]), "TESTBK-PAID@3");
+  assert.equal(coveredBy(template, [{ ...active, senders: ["OTHERBK"] }]), null, "another sender's rule");
+  assert.equal(coveredBy(template, [{ ...active, match: { ...active.match, pattern: "^Never matches$" } }]), null);
+  assert.equal(coveredBy(template, [{ ...active, match: { ...active.match, rejectAny: ["paid"] } }]), null, "rejectAny words");
+  assert.equal(coveredBy(template, [{ ...active, match: { ...active.match, requireAll: ["absent"] } }]), null, "requireAll words");
+  assert.equal(coveredBy(template, [{ ...active, match: { pattern: "(" } }]), null, "a broken rule covers nothing");
+
+  let finished;
+  let calls = 0;
+  let leased = false;
+  const store = {
+    claim: async () => (leased ? null : ((leased = true), template)),
+    activeRules: async () => [active],
+    examples: async () => assert.fail("no prompt is built for a covered layout"),
+    beginAttempt: async () => assert.fail("no capacity is reserved for a covered layout"),
+    recordAttempt: async () => assert.fail("no attempt is recorded"),
+    finish: async (_t, out) => { finished = out; },
+  };
+  const provider = { generate: async () => { calls++; return { rule: rule() }; } };
+  const result = await runTemplateWorkerOnce({ store, provider, config });
+  assert.deepEqual(result, { status: "covered", templateHash: template.template_hash, covered: "TESTBK-PAID@3" });
+  assert.equal(finished.covered, "TESTBK-PAID@3");
+  assert.equal(calls, 0);
+});
+
+test("a layout no active rule reads still goes to the provider", async () => {
+  let calls = 0;
+  let leased = false;
+  const store = {
+    claim: async () => (leased ? null : ((leased = true), template)),
+    activeRules: async () => [],
+    examples: async () => [],
+    beginAttempt: async () => null,
+    recordAttempt: async () => {},
+    finish: async () => {},
+  };
+  const provider = { generate: async () => { calls++; return { rule: rule() }; } };
+  assert.equal((await runTemplateWorkerOnce({ store, provider, config })).status, "ready");
+  assert.equal(calls, 1);
+});
+

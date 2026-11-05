@@ -32,6 +32,10 @@ const attrValidators = Object.fromEntries(
   ]),
 );
 
+// Recorded on every attempt and inside the prompt. Change it with any change to
+// the prompt text or its rules, and run the --eval dry run first.
+const PROMPT_VERSION = "tpl-2026-11-16";
+
 function positiveInteger(env, key, fallback) {
   const value = Number(env[key] === undefined ? fallback : env[key]);
   if (!Number.isSafeInteger(value) || value < 1)
@@ -186,7 +190,35 @@ function buildPrompt(template, rules = [], repairErrors = []) {
     redactedBody: template.redacted_body,
     existingRules: examples,
     repairErrors: repairErrors.slice(0, 12),
+    promptVersion: PROMPT_VERSION,
   });
+}
+
+// Whether a rule's pattern reads [text], with its requireAll / rejectAny words.
+function ruleMatches(rule, text) {
+  const folded = text.toLowerCase();
+  if (
+    rule.match.requireAll?.some((word) => !folded.includes(word.toLowerCase())) ||
+    rule.match.rejectAny?.some((word) => folded.includes(word.toLowerCase()))
+  )
+    return null;
+  return new RegExp(rule.match.pattern, rule.match.flags).exec(text);
+}
+
+// "<ruleId>@<version>" of the first active rule for the sender that already
+// reads this layout (tested on its synthetic fill), or null. The AI is not
+// asked about a layout the rules cover.
+function coveredBy(template, rules) {
+  const sample = fillSynthetic(template.redacted_body);
+  for (const rule of rules) {
+    if (!rule?.match?.pattern || !rule.senders?.includes(template.sender_brand)) continue;
+    try {
+      if (ruleMatches(rule, sample)) return `${rule.id}@${rule.version}`;
+    } catch {
+      // A rule that cannot run is not a cover.
+    }
+  }
+  return null;
 }
 
 function captureReferences(rule) {
@@ -396,6 +428,17 @@ function createPgWorkerStore({ withAdminClient, adminId }) {
         return { ...row, lease_id: leaseId };
       });
     },
+    // Every active rule for the sender (not just the five prompt examples).
+    activeRules(template) {
+      return tx(async (client) =>
+        (
+          await client.query(
+            "SELECT body FROM sms_v2_rules WHERE status='active' AND $1=ANY(senders) ORDER BY rule_id,version DESC LIMIT 200",
+            [template.sender_brand],
+          )
+        ).rows.map((row) => row.body),
+      );
+    },
     examples(template) {
       return tx(async (client) =>
         (
@@ -462,7 +505,7 @@ function createPgWorkerStore({ withAdminClient, adminId }) {
       return tx(async (client) => {
         const attemptRow = (
           await client.query(
-            `UPDATE sms_v2_template_attempts SET input_tokens=$3,output_tokens=$4,total_tokens=$5,latency_ms=$6,cost_usd=$7,outcome=$8
+            `UPDATE sms_v2_template_attempts SET input_tokens=$3,output_tokens=$4,total_tokens=$5,latency_ms=$6,cost_usd=$7,outcome=$8,prompt_version=$9
           WHERE job_id=$1 AND attempt=$2 RETURNING capacity_minute,reserved_tokens`,
             [
               template.lease_id,
@@ -473,6 +516,7 @@ function createPgWorkerStore({ withAdminClient, adminId }) {
               usage.latencyMs,
               usage.costUsd,
               usage.outcome,
+              usage.promptVersion ?? null,
             ],
           )
         ).rows[0];
@@ -487,22 +531,23 @@ function createPgWorkerStore({ withAdminClient, adminId }) {
         }
       });
     },
-    finish(template, { rule = null, code = null, model, requeue = false }) {
+    finish(template, { rule = null, code = null, model, requeue = false, covered = null }) {
       return tx(async (client) => {
         await client.query(
           "SELECT pg_advisory_xact_lock(hashtext('sms_v2_template_results'))",
         );
         await client.query(
-          `UPDATE sms_v2_unknown_templates SET ai_status=$3,ai_draft=$4::jsonb,failure_code=$5,ai_model=$6,
+          `UPDATE sms_v2_unknown_templates SET ai_status=$3,ai_draft=$4::jsonb,failure_code=$5,ai_model=$6,covered_by=$7,
           lease_id=NULL,lease_expires_at=NULL,result_revision=nextval('sms_v2_template_revision')
           WHERE template_hash=$1 AND lease_id=$2 AND ai_status='working'`,
           [
             template.template_hash,
             template.lease_id,
-            requeue ? "queued" : rule ? "ready" : "failed",
+            covered ? "covered" : requeue ? "queued" : rule ? "ready" : "failed",
             rule ? JSON.stringify(rule) : null,
             code,
             model,
+            covered,
           ],
         );
       });
@@ -531,6 +576,14 @@ async function runTemplateWorkerOnce({
   if (!template) return { status: "idle" };
   let errors = [];
   try {
+    // A layout the active rules already read is not worth a provider call.
+    if (typeof store.activeRules === "function") {
+      const covered = coveredBy(template, await store.activeRules(template));
+      if (covered) {
+        await store.finish(template, { model: config.model, covered });
+        return { status: "covered", templateHash: template.template_hash, covered };
+      }
+    }
     const examples = await store.examples(template);
     for (let attempt = 1; attempt <= 2; attempt++) {
       const prompt = buildPrompt(template, examples, errors);
@@ -556,6 +609,7 @@ async function runTemplateWorkerOnce({
           prompt,
           model: config.model,
           maxOutputTokens: config.maxOutputTokens,
+          temperature: config.temperature,
         });
         rule =
           typeof response.rule === "string"
@@ -582,6 +636,7 @@ async function runTemplateWorkerOnce({
         outputTokens: billedOutputTokens,
         totalTokens,
         latencyMs: Math.max(0, clock() - started),
+        promptVersion: PROMPT_VERSION,
         outcome: errors.length ? "rejected" : "valid",
         costUsd:
           config.inputPrice === null ||
@@ -617,7 +672,7 @@ function createGeminiTemplateProvider({
 } = {}) {
   if (!apiKey) throw new Error("GEMINI_API_KEY_required");
   return {
-    async generate({ prompt, model, maxOutputTokens }) {
+    async generate({ prompt, model, maxOutputTokens, temperature }) {
       const response = await fetchImpl(
         `https://generativelanguage.googleapis.com/v1beta/models/${encodeURIComponent(model)}:generateContent`,
         {
@@ -633,6 +688,7 @@ function createGeminiTemplateProvider({
             generationConfig: {
               responseMimeType: "application/json",
               maxOutputTokens,
+              ...(Number.isFinite(temperature) ? { temperature } : {}),
             },
           }),
         },
@@ -666,6 +722,8 @@ function createGeminiTemplateProvider({
 }
 
 module.exports = {
+  PROMPT_VERSION,
+  coveredBy,
   SMS_PLACEHOLDERS,
   SMS_DOMAIN_RULES,
   workerConfig,
