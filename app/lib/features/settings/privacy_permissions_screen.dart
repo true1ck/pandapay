@@ -11,7 +11,6 @@ import '../../app/providers.dart';
 import '../../data/api_exception.dart';
 import '../../data/consent_policy.dart';
 import '../../data/consents_api.dart';
-import '../../app/env.dart';
 import '../consent/sms_access_disclosure.dart';
 import '../consent/sms_reading_consent.dart';
 import '../consent/template_sharing_disclosure.dart';

@@ -19,11 +19,13 @@ void main() {
     String namespace = 'user:11111111-2222-3333-4444-555555555555',
     String installId = 'install-A',
     _MemoryStore? store,
+    String? receiptsPath,
   }) => TransactionAttachmentsRepository(
     database,
     namespace: namespace,
     installId: () async => installId,
-    receiptsDirectory: () async => Directory('${root.path}/receipts'),
+    receiptsDirectory: () async =>
+        Directory(receiptsPath ?? '${root.path}/receipts'),
     workspace: () async {
       final workspace = await PrivateTemporaryWorkspace.create(
         Directory('${root.path}/tmp'),
@@ -52,6 +54,32 @@ void main() {
   tearDown(() async {
     database.close();
     await root.delete(recursive: true);
+  });
+
+  test('receipts still open after the app container path changes', () async {
+    // iOS may move an app's data container on update; stored paths must not
+    // depend on where the container was when the receipt was saved.
+    final before = '${root.path}/containerA/receipts';
+    final after = '${root.path}/containerB/receipts';
+    final plain = Uint8List.fromList(List<int>.generate(512, (i) => i % 251));
+    final saved = await make(receiptsPath: before).addFromBytes(
+      transactionId: 'tx-move',
+      bytes: plain,
+      fileName: 'move.png',
+      mimeType: 'image/png',
+    );
+    expect(saved.localPath, startsWith(before));
+
+    Directory('${root.path}/containerB').createSync(recursive: true);
+    Directory(before).renameSync(after);
+
+    final moved = make(receiptsPath: after);
+    final listed = await moved.list('tx-move');
+    expect(listed, hasLength(1));
+    expect(listed.single.localPath, startsWith(after));
+    final viewed = await moved.decryptForViewing(listed.single);
+    expect(viewed.file.readAsBytesSync(), plain);
+    await viewed.release();
   });
 
   test(

@@ -106,6 +106,28 @@ class TransactionAttachmentsRepository implements PortableReceiptVault {
     return 'guest:${sha256.convert(utf8.encode(value)).toString().substring(0, 40)}';
   }
 
+  /// The form stored in the database: relative to the receipts folder, so a
+  /// receipt keeps working when iOS moves the app's data container.
+  Future<String> _storedPath(File file) async {
+    final root = (await _receiptsDirectory()).path;
+    return p.isWithin(root, file.path)
+        ? p.relative(file.path, from: root)
+        : file.path;
+  }
+
+  /// Turns a stored path back into a file path for this launch. Older rows hold
+  /// an absolute path from a previous container; when it no longer exists, the
+  /// part under `receipts/` is re-rooted in the current receipts folder.
+  Future<String> resolvePath(String stored) async {
+    final root = (await _receiptsDirectory()).path;
+    if (!p.isAbsolute(stored)) return p.join(root, stored);
+    if (File(stored).existsSync()) return stored;
+    final parts = p.split(stored);
+    final index = parts.lastIndexOf('receipts');
+    if (index < 0 || index == parts.length - 1) return stored;
+    return p.joinAll([root, ...parts.sublist(index + 1)]);
+  }
+
   Future<Directory> _transactionDirectory(String transactionId) async {
     final root = await _receiptsDirectory();
     final account = sha256
@@ -166,7 +188,7 @@ class TransactionAttachmentsRepository implements PortableReceiptVault {
           id: row['id'] as String,
           transactionId: row['transaction_id'] as String,
           fileName: row['file_name'] as String,
-          localPath: row['local_path'] as String,
+          localPath: await resolvePath(row['local_path'] as String),
           mimeType: row['mime_type'] as String?,
           createdAt: DateTime.fromMillisecondsSinceEpoch(
             row['created_at'] as int,
@@ -245,7 +267,7 @@ class TransactionAttachmentsRepository implements PortableReceiptVault {
           id,
           transactionId,
           _safeFileName(fileName),
-          destination.path,
+          await _storedPath(destination),
           mimeType,
           DateTime.now().millisecondsSinceEpoch,
         ],
@@ -308,11 +330,12 @@ class TransactionAttachmentsRepository implements PortableReceiptVault {
   /// only reads, and a backup or restore already runs as the recovery side.
   @override
   Future<Uint8List> readPlaintext(PortableAttachmentSource source) async {
+    final path = await resolvePath(source.localPath);
     try {
       return await _withKey(
         receiptsExist: true,
         use: (key, version) => _store.decryptBytes(
-          encryptedFile: File(source.localPath),
+          encryptedFile: File(path),
           key: key,
           accountNamespace: _keyNamespace,
           attachmentId: source.id,
@@ -349,8 +372,9 @@ class TransactionAttachmentsRepository implements PortableReceiptVault {
         // An interrupted restore can leave a file that no row points to; a
         // retry replaces it. A file with a row is never replaced.
         final referenced = _database.db.select(
-          'SELECT 1 FROM transaction_attachments WHERE id = ? OR local_path = ?',
-          [attachmentId, destination.path],
+          'SELECT 1 FROM transaction_attachments '
+          'WHERE id = ? OR local_path = ? OR local_path = ?',
+          [attachmentId, destination.path, await _storedPath(destination)],
         );
         if (referenced.isEmpty &&
             await FileSystemEntity.type(destination.path, followLinks: false) ==

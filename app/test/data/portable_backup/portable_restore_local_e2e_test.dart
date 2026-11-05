@@ -357,7 +357,7 @@ void main() {
       ).listPortableAttachments();
       expect(sources, hasLength(2));
       // Corrupt the second stored file: the first decrypts, the second fails.
-      final second = File(sources.last.localPath);
+      final second = File(await receipts.resolvePath(sources.last.localPath));
       final bytes = second.readAsBytesSync();
       bytes[bytes.length - 1] ^= 0xff;
       second.writeAsBytesSync(bytes);
