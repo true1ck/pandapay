@@ -137,10 +137,28 @@ function periodBounds(period, occurredAt, opts = {}) {
 // windows byte-for-byte. v2-shaped cards (reward_math_v2.isV2Card) use
 // windowBoundsV2, which adds cap anchors, the C3.7 anchor-date fallback,
 // welcome windows (`window_days`) and an `approximate` flag readers can show.
+// C8 D23: v2 windows are measured in India calendar dates (Asia/Kolkata,
+// UTC+05:30, no daylight saving), and statement cycles use their own
+// gap-free bounds (statementCycleBoundsV2).
 // ---------------------------------------------------------------------------
 
 const KNOWN_ANCHORS = new Set(['card_anniversary', 'calendar_year', 'fiscal_year', 'statement_cycle']);
 const DATE_ONLY = /^\d{4}-\d{2}-\d{2}$/;
+const IST_OFFSET_MS = (5 * 60 + 30) * 60 * 1000;
+
+/**
+ * The instant moved forward by the IST offset, so its UTC fields read as the
+ * India wall clock. A bare 'YYYY-MM-DD' (UTC midnight) keeps its day.
+ */
+function istShift(value) {
+  const d = value instanceof Date ? value : new Date(value);
+  return new Date(d.getTime() + IST_OFFSET_MS);
+}
+
+/** The India calendar day of an instant, 'YYYY-MM-DD' (C8 D23c). */
+function istDay(value) {
+  return toDateOnly(istShift(value));
+}
 
 /**
  * Calendar day of a date-ish value as 'YYYY-MM-DD', or null. A 'YYYY-MM-DD'
@@ -165,15 +183,59 @@ function cardAnchorDate({ anniversaryOn, openedOn, createdAt } = {}) {
   if (anniversary) return { date: anniversary, approximate: false, source: 'anniversary_on' };
   const opened = calendarDay(openedOn);
   if (opened) return { date: opened, approximate: false, source: 'opened_on' };
-  const created = calendarDay(createdAt);
-  if (created) return { date: created, approximate: true, source: 'created_at' };
-  return { date: null, approximate: true, source: null };
+  return createdAnchor(createdAt);
+}
+
+/** created_at is an instant: its India calendar day, always approximate. */
+function createdAnchor(createdAt) {
+  if (createdAt == null || createdAt === '') return { date: null, approximate: true, source: null };
+  const d = createdAt instanceof Date ? createdAt : new Date(createdAt);
+  if (Number.isNaN(d.getTime())) return { date: null, approximate: true, source: null };
+  return { date: istDay(d), approximate: true, source: 'created_at' };
+}
+
+/**
+ * C8 D22b: welcome milestones (`window_days`) count from the card's issue
+ * date — `opened_on ?? anniversary_on`, else the day it was added
+ * (approximate).
+ */
+function cardIssueAnchorDate({ anniversaryOn, openedOn, createdAt } = {}) {
+  const opened = calendarDay(openedOn);
+  if (opened) return { date: opened, approximate: false, source: 'opened_on' };
+  const anniversary = calendarDay(anniversaryOn);
+  if (anniversary) return { date: anniversary, approximate: false, source: 'anniversary_on' };
+  return createdAnchor(createdAt);
 }
 
 function addDays(dateOnly, days) {
   const d = new Date(`${dateOnly}T00:00:00.000Z`);
   d.setUTCDate(d.getUTCDate() + days);
   return toDateOnly(d);
+}
+
+/** The statement date in a month (`monthIndex0` may run past 0..11): the day clamped to the month. */
+function statementDateIn(year, monthIndex0, statementDay) {
+  const y = year + Math.floor(monthIndex0 / 12);
+  const m = ((monthIndex0 % 12) + 12) % 12;
+  return toDateOnly(new Date(Date.UTC(y, m, Math.min(statementDay, lastDayOfMonth(y, m)))));
+}
+
+/**
+ * C8 D23b: the statement cycle containing `ref` (a Date whose UTC fields are
+ * the calendar day). Each month's statement date is the statement day clamped
+ * to the month's length; a cycle runs from the day after the previous
+ * statement date to the next statement date, inclusive. Consecutive cycles
+ * tile the calendar with no gap or overlap for every day 1–31.
+ */
+function statementCycleBoundsV2(ref, statementDay) {
+  const y = ref.getUTCFullYear();
+  const m = ref.getUTCMonth();
+  const day = toDateOnly(ref);
+  const thisMonth = statementDateIn(y, m, statementDay);
+  const endMonth = day <= thisMonth ? m : m + 1;
+  const end = statementDateIn(y, endMonth, statementDay);
+  const previous = statementDateIn(y, endMonth - 1, statementDay);
+  return { start: addDays(previous, 1), end };
 }
 
 /**
@@ -188,13 +250,18 @@ function addDays(dateOnly, days) {
  * - `annual` + `card_anniversary` runs anniversary to anniversary from
  *   `anchorDate` (`approximate` follows `anchorApproximate`); with no anchor
  *   date it falls back to the calendar year, approximate.
- * - `statement_cycle` without a statement day is the calendar month, approximate.
- * - Everything else is exactly periodBounds.
+ * - `statement_cycle` uses statementCycleBoundsV2; without a statement day it
+ *   is the calendar month, approximate.
+ * - Everything else is periodBounds' calendar maths.
+ * - Every date is the India calendar day of `occurredAt` (C8 D23c).
  */
 function windowBoundsV2(period, occurredAt, opts = {}) {
-  const { statementDay, anchorDate = null, anchorApproximate = false, windowDays = null } = opts;
+  const { anchorDate = null, anchorApproximate = false, windowDays = null } = opts;
   const anchor = KNOWN_ANCHORS.has(opts.anchor) ? opts.anchor : null;
-  const ref = occurredAt instanceof Date ? occurredAt : new Date(occurredAt);
+  const statementDay = Number.isInteger(Number(opts.statementDay)) && Number(opts.statementDay) >= 1
+    ? Math.min(Number(opts.statementDay), 31)
+    : null;
+  const ref = istShift(occurredAt);
 
   if (windowDays != null) {
     const days = Number(windowDays);
@@ -211,9 +278,13 @@ function windowBoundsV2(period, occurredAt, opts = {}) {
     return { ...anniversaryYearBounds(ref, calendarDay(anchorDate)), approximate: Boolean(anchorApproximate) };
   }
 
-  const bounds = periodBounds(period, ref, { statementDay, anchor });
-  const usesStatementCycle = period === 'statement_cycle' || (period === 'annual' && anchor === 'statement_cycle');
-  return { ...bounds, approximate: usesStatementCycle && !statementDay };
+  // periodBounds reads `annual` + `statement_cycle` as one statement cycle; v2 keeps that reading.
+  if (period === 'statement_cycle' || (period === 'annual' && anchor === 'statement_cycle')) {
+    if (!statementDay) return { ...calendarMonthBounds(ref), approximate: true };
+    return { ...statementCycleBoundsV2(ref, statementDay), approximate: false };
+  }
+
+  return { ...periodBounds(period, ref, { anchor }), approximate: false };
 }
 
 /**
@@ -275,7 +346,10 @@ module.exports = {
   effectiveRatePerRupee,
   effectivePointsPerRupee,
   cardAnchorDate,
+  cardIssueAnchorDate,
   windowBoundsV2,
+  statementCycleBoundsV2,
   calendarDay,
+  istDay,
   addDays,
 };
