@@ -4,7 +4,7 @@
   "inputs": {
     "transform_version": "7",
     "source_record_sha256": "b72c8ef6ba52f5b3cbc30dbe02280e16cfb00ba7efcb82f7fbc4ad385edcdcaf",
-    "override_sha256": "ab7bfed1eb461a24250f9f3475c561e46b0a1b95c81fb1bbc05e9a8c11595859",
+    "override_sha256": "8be492fbb0928d8e5299111b3c31cfd7da4663d59f6d19942c541d30b5d58a8d",
     "directory_sha256": "b1094d54b77e848d22f7a9a64f3ae6d1ef43ca3eb2fc8e40cd43ed1994664694",
     "verified": false
   },
@@ -31,8 +31,8 @@
     "points_expiry_months": 36,
     "model_status": "partial",
     "model_coverage": {
-      "rules_total": 12,
-      "rules_modelled": 8,
+      "rules_total": 13,
+      "rules_modelled": 9,
       "rules_info": 4,
       "caps_total": 4,
       "caps_enforced": 4,
@@ -95,6 +95,14 @@
           "value_sha256": "44136fa355b3678a",
           "reason": "WP7: The condition restated the grocery/departmental category; the rule earns the domestic rate and carries the Rs40,000 grocery cap (MITC capped-MCC table). Rule was info, so the cap never applied.",
           "source_url": "https://www.icicibank.com/managed-assets/docs/personal/cards/mitc_cc.pdf",
+          "checked_on": "2026-11-05"
+        },
+        {
+          "path": "reward_rules",
+          "op": "append",
+          "value_sha256": "32c62aed87e7ff47",
+          "reason": "WP7: D25d: ICICI MITC: \"No reward points will be provided for transactions falling under the E-Wallet Reload category\" (Third Party Wallets - 6540) and \"... the Cash and Rent categories\". The card excluded these by category only; MCC rows catch them in any category.",
+          "source_url": "https://www.icici.bank.in/managed-assets/docs/personal/cards/mitc_cc.pdf",
           "checked_on": "2026-11-05"
         }
       ]
@@ -615,6 +623,43 @@
         "max_engine_version": null,
         "source_local_id": "government_utility_rate",
         "display_note": "Government-related payments classified as utility transactions earn 1 Reward Point per ₹100."
+      },
+      {
+        "id": "icici-sapphiro:rule:wp7_wallet_rent_mcc_exclusion",
+        "category_id": null,
+        "category_slug": null,
+        "merchant_pattern": null,
+        "rail": null,
+        "unit": "points_per_100",
+        "rate": 0,
+        "min_txn_inr": null,
+        "max_txn_inr": null,
+        "priority": 1,
+        "conditions": {
+          "source_local_id": "wp7_wallet_rent_mcc_exclusion",
+          "part": null,
+          "info_reasons": [],
+          "flags": []
+        },
+        "notes": null,
+        "effective_from": "2024-11-15",
+        "effective_to": null,
+        "excluded_categories": [],
+        "rule_role": "exclusion",
+        "merchant_slugs": [],
+        "platform_slugs": [],
+        "mcc_include": [
+          "6513",
+          "6540"
+        ],
+        "mcc_exclude": [],
+        "except_merchant_slugs": [],
+        "except_platform_slugs": [],
+        "block_inr": null,
+        "min_engine_version": 2,
+        "max_engine_version": null,
+        "source_local_id": "wp7_wallet_rent_mcc_exclusion",
+        "display_note": "Wallet reloads and rent earn no reward points."
       }
     ],
     "cap_rules": [
