@@ -270,7 +270,32 @@ transaction and roll back when you only need to read them.
 - **Done when:** Postgres-backed tests (own container) cover record → reverse → recompute on a v2 card with bonus, total, eligible-spend and parent caps; v1 cards unchanged (existing tests pass); `cd api && npm test` green.
 
 ### WP9 — App: v2 feed, cap bars, alerts · branch `card-rewards/wp9-app-caps` (after WP8)
-- As plan §5 WP9 row, plus: fill `ctx.mcc` from the merchant directory when the SMS lacks it (D19c); never use server cap headroom for points-kind caps unless it is in native units (D15f — WP8 provides them); per-card tolerant parsing so one bad card never drops the catalogue.
+- **Owns:** `app/lib/data/catalogue_repository.dart`; the catalogue/cache section of `app/lib/app/providers.dart` (`catalogueProvider`, a new `merchantDirectoryProvider`, `recommendationEngineProvider`, the `CardSnapshot` builder near `capRemaining`, and the `RecommendationContext` builders that know a merchant name); the cap-state parsing in `app/lib/data/user_cards_repository.dart` (`cap_states` → `UserCard`); the other `CardSnapshot` sites (`features/insights/caps_screen.dart`, `features/calculator/big_purchase_calculator_screen.dart`, `features/scan/scan_result_screen.dart`, `features/onboarding/all_set_screen.dart`); `features/cards/my_cards_screen.dart`; the caps area of `features/cards/card_detail_screen.dart`; the cap section of `features/notifications/notification_triggers.dart`; new widgets under `app/lib/features/cards/widgets/`; their tests and goldens. **Must not edit** `packages/pandapay_domain` (report needed changes) or any API/DB file. Keep `providers.dart` edits small and local: the owner has unrelated uncommitted work in that file on master, so a large diff there means a painful merge.
+- **Feed (C2):** `GET /catalogue?schema=2` returns `{schema: 2, cards, merchants, platforms}`. Fallback order: v2 live, then v1 live (`/catalogue`, for an older server), then cache, then bundled asset. Keep today's cache-first order; changing the refresh policy is out of scope. Cache under a **new versioned key** (e.g. `catalogue.v2`) holding the v2 body losslessly. Either store the raw response or prove `CardProduct.toJson` round-trips every v2 field with a test. Read the old `catalogue` key only as a v1 last resort.
+- **Tolerant parse (D15):** parse per card at every site (live, cache, bundle). A card that throws is skipped and counted, never the whole list; log only the card id and error type. The directory uses `MerchantDirectory.fromJson` (already tolerant; surface `parseWarnings` the same way).
+- **Directory into the engine:** `recommendationEngineProvider` passes `merchantDirectory` (empty directory on v1 fallback). Every `RecommendationContext` built from a merchant name resolves it via the directory and sets `merchantSlug`. When the context has no MCC, it sets `mcc` to the resolved merchant's **first** listed MCC (D19c, D24f). Never guess a platform (C3.1).
+- **Cap state, native units (D15f, D22c):** `GET /user-cards` `cap_states` rows carry `cap_rule_id`, `consumed` (v1 measure: unchanged for old installs), and for v2 rows `consumed_native`, `cap_kind`, `cap_amount`, `period_start`, `period_end` (`YYYY-MM-DD`) and `approximate_window`. `consumed_native` and `cap_kind` are null on v1 rows. Parse these into `UserCard`, keeping `capConsumed` as-is for v1 cards.
+  - For **v2-shaped cards** (`product.isV2Shaped`), every `CardSnapshot` site sets `capConsumed` from `consumed_native` and leaves `capRemaining` **empty** for those caps. The engine's `v2CapConsumed` fallback (`capValue − capRemaining`) would otherwise mix the v1 ₹ measure with native points.
+  - **Lead's ruling:** on a v2 card, a cap row with null `consumed_native` (written before the owner's recompute) is treated as **unknown, not empty**. Feed `consumed = cap_amount` so the engine promises no capped bonus, and show the bar as "updating". Never derive native units from the v1 `consumed`.
+  - No row for a cap means nothing consumed this period.
+- **Cap bars (B1):** show bars on the My Cards tile (the fullest cap), card detail (all caps) and the caps screen, in native units, e.g. "1,240 / 1,500 pts · resets 1 Dec · then 1 pt/₹100".
+  - **Units by `cap_kind`:** points kinds → "pts"; ₹-cashback kinds → "₹"; spend kinds → "₹ spent"; count kinds → "uses".
+  - **Reset date:** `period_end + 1 day`, with "approx." when `approximate_window`.
+  - **"then …" clause:** comes from the cap's `post_cap_behavior` (base rate / nothing / custom rate). Omit it when unsure rather than guess.
+  - **v1 cards** keep today's display.
+- **Alerts:** keep the existing 80% / 100% triggers and their dedupe and budget. For v2 caps:
+  - compute the ratio as `consumed_native / cap_amount`;
+  - bucket by the server's `period_start`;
+  - add the next-best **owned** card for that cap's category (the recommender with the capped card excluded), as "Use {card} for {category} instead". Omit it when none earns more than base.
+- **Model status:** card detail shows a "Partial" or "Basic" label from `modelStatus`, with a one-line explanation sheet ("Some earning rules for this card are estimated"). Verified cards get no warning label.
+- **Tests:**
+  - repository tests for v2 → v1 → cache → bundle, per-card skip and the cache key;
+  - snapshot-builder tests proving v2 cards never use the v1 measure (including the null `consumed_native` case);
+  - a context-builder test for the merchant slug and first-MCC fill;
+  - notification tests for native ratio and next-best;
+  - widget tests plus one Alchemist golden per new widget (follow `test/flutter_test_config.dart`).
+  - Run `flutter analyze` on the app and `flutter test` once at the end. Generate goldens only for your new tests.
+- **Done when:** all of the above, analyze clean, app tests green, `dart test` in the domain package still green (untouched).
 
 ## 5. Merging (lead)
 
