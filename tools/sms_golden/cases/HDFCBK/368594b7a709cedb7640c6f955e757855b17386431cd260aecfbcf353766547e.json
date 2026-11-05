@@ -1,0 +1,34 @@
+{
+  "id": "foreign:foreign_refund_only",
+  "templateHash": "368594b7a709cedb7640c6f955e757855b17386431cd260aecfbcf353766547e",
+  "weight": 1,
+  "source": "synthetic",
+  "messages": [
+    {
+      "sender": "VM-HDFCBK-S",
+      "body": "Refund of USD 20.00 credited to your HDFC Bank Card x1234 from SAMPLE AI on 2026-11-02.",
+      "observedAt": "2026-11-03T10:00:00.000Z"
+    }
+  ],
+  "expect": {
+    "facts": [
+      {
+        "factType": "movement",
+        "attrs": {
+          "direction": "credit",
+          "purpose": "refund",
+          "rail": "card"
+        },
+        "amounts": [
+          {
+            "role": "posted",
+            "minor": 2000,
+            "unit": "USD"
+          }
+        ]
+      }
+    ]
+  },
+  "note": "Foreign refund, no INR.",
+  "origin": "foreign-v2"
+}

@@ -1,0 +1,38 @@
+{
+  "id": "foreign:foreign_inr_paren_amount_first",
+  "templateHash": "c23d7bbd3b1b1c7828f449f21704ed70c053e8a0fc77d8e6a600f7c09b7ab918",
+  "weight": 1,
+  "source": "synthetic",
+  "messages": [
+    {
+      "sender": "VM-SBICRD-S",
+      "body": "Rs.1,750.00 spent on your SBI Credit Card ending 1234 at SAMPLE AI on 01/11/26 (USD 20.00)",
+      "observedAt": "2026-11-03T10:00:00.000Z"
+    }
+  ],
+  "expect": {
+    "facts": [
+      {
+        "factType": "movement",
+        "attrs": {
+          "direction": "debit",
+          "purpose": "purchase",
+          "rail": "card"
+        },
+        "amounts": [
+          {
+            "role": "posted",
+            "minor": 175000,
+            "unit": "INR",
+            "original": {
+              "minor": 2000,
+              "currency": "USD"
+            }
+          }
+        ]
+      }
+    ]
+  },
+  "note": "Brackets after the date.",
+  "origin": "foreign-v2"
+}

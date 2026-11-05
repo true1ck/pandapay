@@ -810,5 +810,14 @@
     "pattern": "^(?![\\s\\S]*?(?:\\b(?:has\\s+been|was|is|are|were)\\s+(?:successfully\\s+)?(?:debited|credited|charged|deducted|withdrawn|transferred|paid|refunded|reversed|blocked|released)\\b|\\b(?:debited|credited|deducted|withdrawn|charged|spent|paid|sent|received|transferred|refunded)\\s*(?:by|with|for|of|from|to|on|at|towards|using|via)?\\s*(?:rs\\.?|inr|₹)\\s*\\d|(?:rs\\.?|inr|₹)\\s*[\\d,]+(?:\\.\\d+)?\\s*(?:has\\s+been\\s+|is\\s+|was\\s+|were\\s+)?(?:debited|credited|spent|paid|received|withdrawn|transferred|deducted|charged|refunded|blocked|reversed|sent)\\b|\\b(?:avl|avail|available)\\.?\\s*(?:lmt|limit|bal(?:ance)?|credit)\\b|\\b(?:total\\s+amount\\s+due|minimum\\s+(?:amount\\s+)?due|amount\\s+payable|payment\\s+due|due\\s+(?:date|on|by)|due\\s+for\\s+payment|statement\\s+(?:for|dated|generated))\\b|\\b(?:upi\\s*ref|utr|rrn|ref(?:erence)?\\s*(?:no|number|id))\\.?\\s*[:.-]?\\s*\\w*\\d{5,}|\\bpayment\\s+of\\s*(?:rs\\.?|inr|₹)|\\b(?:received|processed)\\s+your\\s+payment\\b|\\b(?:cashback|rewards?|refund|points?)\\b[^\\n]{0,50}\\b(?:has\\s+been\\s+|was\\s+|is\\s+)?(?:credited|added|received|reversed|redeemed|earned)\\b|\\b(?:earned|credited|awarded|redeemed|accrued)\\s+[\\d,]*\\s*(?:[a-z0-9+&' -]{0,40}?\\s)?(?:cashback|rewards?|points?|coins?)\\b|\\b(?:mandate|autopay|auto[- ]?debit|standing\\s+instruction|e-?nach|asba|lien|funds?\\s+blocked|amount\\s+blocked)\\b|\\b(?:recharge|payment|transaction|purchase|settlement|payout)\\b[^\\n]{0,45}\\b(?:successful|completed|processed)\\b))[\\s\\S]*?\\bclaim\\b[^\\n]{0,60}?\\b(?:neu\\s*coins?|reward\\s+points?|points|coins|cashback)\\b[^\\n]{0,60}?\\b(?:earned|accrued|pending)\\b",
     "flags": "i",
     "reason": "promotion"
+  },
+  {
+    "id": "IGN-FX-ZERO-AMOUNT",
+    "senders": [
+      "*"
+    ],
+    "pattern": "\\b(?:spent|charged|debited|txn|trxn|transaction|purchase|payment)\\b[^\\n]{0,30}?(?:\\b(?:usd|eur|gbp|aed|sgd|aud|cad|jpy|chf|cny|hkd|nzd|sar|thb|myr|idr|krw|zar|sek|nok|dkk|qar|kwd|omr|bhd|twd|php|vnd|lkr|npr|egp|czk|huf|pln|ils|mxn|brl|kes|mur|mvr|bwp|jod|rub|sek)(?![a-z])|us\\$|\\$|€|£)\\s*0+(?:\\.0+)?(?![\\d.,])",
+    "flags": "i",
+    "reason": "service"
   }
 ]

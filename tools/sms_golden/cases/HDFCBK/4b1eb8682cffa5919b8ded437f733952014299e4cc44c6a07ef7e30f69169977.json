@@ -1,0 +1,38 @@
+{
+  "id": "foreign:foreign_refund_inr_original",
+  "templateHash": "4b1eb8682cffa5919b8ded437f733952014299e4cc44c6a07ef7e30f69169977",
+  "weight": 1,
+  "source": "synthetic",
+  "messages": [
+    {
+      "sender": "VM-HDFCBK-S",
+      "body": "Refund of INR 1750.00 (USD 20.00) credited to your HDFC Bank Credit Card x1234 from SAMPLE AI on 2026-11-02.",
+      "observedAt": "2026-11-03T10:00:00.000Z"
+    }
+  ],
+  "expect": {
+    "facts": [
+      {
+        "factType": "movement",
+        "attrs": {
+          "direction": "credit",
+          "purpose": "refund",
+          "rail": "card"
+        },
+        "amounts": [
+          {
+            "role": "posted",
+            "minor": 175000,
+            "unit": "INR",
+            "original": {
+              "minor": 2000,
+              "currency": "USD"
+            }
+          }
+        ]
+      }
+    ]
+  },
+  "note": "Refund with INR credited.",
+  "origin": "foreign-v2"
+}
