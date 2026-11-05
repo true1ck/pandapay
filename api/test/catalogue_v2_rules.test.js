@@ -1242,6 +1242,31 @@ test('D8b "up to" reads only the rule\'s own rate text: not its id, a cap, a sta
   assert.equal(role('air_30', 'Up to 30 Reward Points per Rs 100 spent on dining.'), 'info');
 });
 
+test('D16/D18e underscored negations ("non_iocl_fuel", "fuel_non_iocl", not_phonepe) become exceptions, never ignored', () => {
+  const dir = { ...DIRECTORY, merchants: [...DIRECTORY.merchants, { slug: 'indianoil', name: 'IndianOil', aliases: ['indianoil', 'indian oil', 'iocl'] }] };
+  const r = transformCardRecordV2(pointsCard([
+    // an exclusion whose id and text say "non-IOCL": the brand is its exception
+    rule({ id: 'exclusion_non_iocl_fuel', category_id: 'fuel', evaluation_type: 'exclusion',
+      conditions: { notes: 'Fuel purchases at non-IOCL outlets do not earn points.' }, action: { points_per_block: 0, reason: 'No points.' } }),
+    // the negation in the category token itself
+    rule({ id: 'x_token', category_id: 'fuel_non_iocl', evaluation_type: 'exclusion', action: { points_per_block: 0, reason: 'No points.' } }),
+    // an exclusion's own list: "non_iocl_fuel" is fuel, except at IOCL
+    rule({ id: 'x_list', category_id: 'excluded_spend', evaluation_type: 'exclusion', conditions: { excluded_categories: ['non_iocl_fuel', 'insurance'] }, action: { points_per_block: 0, reason: 'No points.' } }),
+    // an earning rule's excluded list: the whole category leaves the rule (conservative)
+    rule({ id: 'base_list', category_id: 'all_retail', evaluation_type: 'standard_accrual', conditions: { excluded_categories: ['non_iocl_fuel', 'insurance'] }, action: { points_per_block: 2 } }),
+  ]), { directory: dir });
+  const ex = (id) => only(r, id).filter((x) => x.max_engine_version !== 1);
+  assert.ok(ex('exclusion_non_iocl_fuel').every((x) => x.rule_role === 'exclusion' && x.category_slug === 'fuel' && x.except_merchant_slugs.join() === 'indianoil'));
+  assert.ok(ex('x_token').every((x) => x.rule_role === 'exclusion' && x.category_slug === 'fuel' && x.except_merchant_slugs.join() === 'indianoil'));
+  const list = ex('x_list');
+  assert.ok(list.some((x) => x.category_slug === 'fuel' && x.except_merchant_slugs.join() === 'indianoil'));
+  assert.ok(list.some((x) => x.category_slug === 'insurance' && !x.except_merchant_slugs.length));
+  const base = only(r, 'base_list')[0];
+  assert.deepEqual(base.excluded_category_slugs.slice().sort(), ['fuel', 'insurance']);
+  assert.ok(base.flags.includes('negated_exclusion_broadened'));
+  assert.ok(!base.flags.includes('unmapped_excluded_category'));
+});
+
 test('rows that would break a database identity index are deduplicated: first kept, the rest reported', () => {
   // bobcard-select: four empty lifestyle benefits; bobcard-corporate: two empty insurance rows.
   const emptyBenefit = { benefit_id: null, category_id: null, network_program: null, sponsor: null, label: null,

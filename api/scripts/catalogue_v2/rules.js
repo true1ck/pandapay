@@ -21,9 +21,10 @@ const {
   MCC_CATEGORY,
   ISSUER_PORTAL,
   NARROW_TOKEN_MCC,
+  mapCategorySlugs,
   resolveCategoryToken,
 } = require('./category_tokens');
-const { isWildcard, mapRuleConditions, rewardRuleHasUnsupportedTrigger } = require('./conditions');
+const { isWildcard, mapRuleConditions, negatedBrand, rewardRuleHasUnsupportedTrigger } = require('./conditions');
 
 const SOURCE_RAIL = {
   upi_qr: { rail: 'upi_qr' },
@@ -115,6 +116,19 @@ function mergeSlugs(current, incoming) {
   if ([...inc].every((s) => cur.has(s))) return { slugs: incoming };
   if ([...cur].every((s) => inc.has(s))) return { slugs: current };
   return { conflict: true, slugs: current };
+}
+
+// A "non_<brand>" in the rule id counts only when the rule's own text says
+// the same ("fuel at non-IOCL outlets").
+function idNegation(src, index) {
+  const neg = negatedBrand(isNA(src?.id) ? '' : String(src.id), index);
+  if (!neg) return null;
+  const slug = neg.merchant || neg.platform;
+  const entry = neg.merchant ? index.merchants.get(slug) : index.platforms.get(slug);
+  const names = uniq([slug.replace(/_/g, ' '), entry?.name, ...(entry?.aliases || [])].filter(Boolean).map((n) => normalizeText(n)).filter(Boolean));
+  const text = normalizeText(`${src?.action?.reason || ''} ${JSON.stringify(src?.conditions || {})} ${src?.channel_type || ''}`);
+  const says = names.some((n) => new RegExp(`\\b(non|not at|not via|not|other than|excluding|except)\\s+${n.replace(/ /g, '\\s+')}\\b`).test(text));
+  return says ? neg : null;
 }
 
 // D8(b): "up to 10X" folds several rates into one. Read only the rule's own
@@ -329,6 +343,24 @@ function transformRule(src, idx, ctx) {
     if (token.kind === 'platform') {
       for (const p of parts) for (const s of p.platformSlugs || []) if (!ctx.index.platforms.has(s)) needsDirectory.push(`platform:${s}`);
     }
+  }
+  // D16 / D18e: an underscored negation in the rule's own token
+  // ("fuel_non_iocl") or, when its text says the same, its id
+  // ("exclusion_non_iocl_fuel": "fuel at non-IOCL outlets") is "not X": the
+  // brand is an exception, the words around it the category.
+  const ownNegation = negatedBrand(rawToken, ctx.index) || idNegation(src, ctx.index);
+  if (ownNegation) {
+    const unresolvedToken = token.kind === 'unknown' || (token.kind === 'composite' && token.unmapped.length);
+    const negParts = ownNegation.catTokens.flatMap((t) => resolveCategoryToken(categoryKey(t), ctx).parts.filter((p) => p.categorySlug));
+    if (unresolvedToken && negParts.length) {
+      parts = negParts.map((p) => ({ ...p }));
+      tokenNeedsConditions = null;
+      const i = unmappedTokens.indexOf(rawToken);
+      if (i >= 0) unmappedTokens.splice(i, 1);
+      const j = flags.indexOf('composite_partial');
+      if (j >= 0) flags.splice(j, 1);
+    }
+    flags.push('exception_from_negated_token');
   }
   const tokenHasCategory = parts.some((p) => p.categorySlug);
   const tokenHasBrand = parts.some((p) => p.merchantSlugs?.length || p.platformSlugs?.length);
@@ -708,7 +740,21 @@ function transformRule(src, idx, ctx) {
   const listedCats = scopeLists ? cond.excludedCategorySlugs : [];
   const listedMerchants = scopeLists && !negatedScope ? cond.listedExcludedMerchants : [];
   const listedPlatforms = scopeLists && !negatedScope ? cond.listedExcludedPlatforms : [];
-  if (listedCats.length || listedMerchants.length || listedPlatforms.length) {
+  // D16 / D18e: "non_iocl_fuel" in a list is that category except the brand.
+  const negatedListed = (cond.negatedExcluded || []).flatMap((n) => n.catTokens.flatMap((t) => mapCategorySlugs(t))
+    .map((c) => ({ categorySlug: c, merchant: n.merchant, platform: n.platform })));
+  const listedNegated = scopeLists ? negatedListed : [];
+  if (!scopeLists && negatedListed.length) {
+    if (isReduced) {
+      flags.push('unmapped_excluded_category'); // a lower rate: excluding more would raise it
+    } else {
+      // An earning rule can't say "fuel, except at IOCL": it leaves the
+      // whole category (only ever less reward).
+      cond.excludedCategorySlugs = uniq([...cond.excludedCategorySlugs, ...negatedListed.map((n) => n.categorySlug)]);
+      flags.push('negated_exclusion_broadened');
+    }
+  }
+  if (listedCats.length || listedMerchants.length || listedPlatforms.length || listedNegated.length) {
     const expanded = [];
     for (const p of parts) {
       const extras = [
@@ -722,14 +768,26 @@ function transformRule(src, idx, ctx) {
         const merged = andPart(base, extra);
         if (merged) expanded.push(merged);
       }
+      for (const n of listedNegated) {
+        const merged = andPart(base, { categorySlug: n.categorySlug });
+        if (merged) {
+          expanded.push({
+            ...merged,
+            partExceptMerchants: n.merchant ? [n.merchant] : [],
+            partExceptPlatforms: n.platform ? [n.platform] : [],
+          });
+        }
+      }
     }
     parts = dedupeParts(expanded);
     flags.push('exclusion_list_expanded');
     if (cond.unmappedExcluded.length) flags.push('partial_category_list');
   }
   const ruleExcludedCategories = scopeLists ? [] : cond.excludedCategorySlugs;
-  const exceptMerchants = uniq([...cond.exceptMerchantSlugs, ...(scopeLists && !negatedScope ? [] : cond.listedExcludedMerchants)]).sort();
-  const exceptPlatforms = uniq([...cond.exceptPlatformSlugs, ...(scopeLists && !negatedScope ? [] : cond.listedExcludedPlatforms)]).sort();
+  const exceptMerchants = uniq([...cond.exceptMerchantSlugs, ...(ownNegation?.merchant ? [ownNegation.merchant] : []),
+    ...(scopeLists && !negatedScope ? [] : cond.listedExcludedMerchants)]).sort();
+  const exceptPlatforms = uniq([...cond.exceptPlatformSlugs, ...(ownNegation?.platform ? [ownNegation.platform] : []),
+    ...(scopeLists && !negatedScope ? [] : cond.listedExcludedPlatforms)]).sort();
 
   // D18e / D19a: an exclusion that only takes away an accelerated/bonus rate
   // (or only counts against a milestone) is not a full exclusion. Only when
@@ -876,8 +934,10 @@ function transformRule(src, idx, ctx) {
     const platformSlugs = uniq(p.platformSlugs || []).sort();
     const mccInclude = uniq(p.mccInclude || []).sort();
     const mccExclude = uniq(p.mccExclude || []).sort();
+    const rowExceptMerchants = uniq([...exceptMerchants, ...(p.partExceptMerchants || [])]).sort();
+    const rowExceptPlatforms = uniq([...exceptPlatforms, ...(p.partExceptPlatforms || [])]).sort();
     const restricted = hasRestriction({ ...p, minTxn, maxTxn }) ||
-      exceptMerchants.length > 0 || exceptPlatforms.length > 0;
+      rowExceptMerchants.length > 0 || rowExceptPlatforms.length > 0;
     const rowInfo = [...info];
     if (isExclusion && !isInfo && !p.categorySlug && !merchantSlugs.length && !platformSlugs.length &&
         !mccInclude.length && !p.rail && maxTxn === null) {
@@ -886,8 +946,8 @@ function transformRule(src, idx, ctx) {
     }
     if (isCarveOut && !restricted) rowInfo.push('unrestricted_carve_out'); // nothing to scope the stated rate to
     // D18h: "PayTM spends except via PayTM" can never apply.
-    const selfContradictory = platformSlugs.some((x) => exceptPlatforms.includes(x)) ||
-      merchantSlugs.some((x) => exceptMerchants.includes(x));
+    const selfContradictory = platformSlugs.some((x) => rowExceptPlatforms.includes(x)) ||
+      merchantSlugs.some((x) => rowExceptMerchants.includes(x));
     if (selfContradictory) rowInfo.push('self_contradictory_rule');
     const rowIsInfo = rowInfo.length > 0;
     let role;
@@ -916,7 +976,7 @@ function transformRule(src, idx, ctx) {
     // D16c: an earn rule with exceptions is v2-only; an exclusion with
     // exceptions stays v1 (v1 ignores them and excludes more, which is safe);
     // an exclusion bounded by max_txn_inr would exclude everything in v1.
-    if ((exceptMerchants.length || exceptPlatforms.length) && role !== 'exclusion') v2Reasons.push('except_lists');
+    if ((rowExceptMerchants.length || rowExceptPlatforms.length) && role !== 'exclusion') v2Reasons.push('except_lists');
     if (role === 'exclusion' && maxTxn !== null) v2Reasons.push('exclusion_max_txn');
     if (role === 'exclusion' && !p.categorySlug && !merchantSlugs.length && !platformSlugs.length && !mccInclude.length && p.rail) {
       // v1 treats an unknown rail as a match, so a rail-only exclusion would
@@ -951,8 +1011,8 @@ function transformRule(src, idx, ctx) {
       platform_slugs: platformSlugs,
       mcc_include: mccInclude,
       mcc_exclude: mccExclude,
-      except_merchant_slugs: exceptMerchants,
-      except_platform_slugs: exceptPlatforms,
+      except_merchant_slugs: rowExceptMerchants,
+      except_platform_slugs: rowExceptPlatforms,
       block_inr: ur.blockInr,
       min_engine_version: minEngineVersion,
       // D18a: v1-only projection rows (v2 engines ignore them).
@@ -1096,7 +1156,8 @@ function dedupeParts(parts) {
   const seen = new Map();
   const out = [];
   for (const p of parts) {
-    const sig = JSON.stringify([p.categorySlug, p.merchantSlugs, p.platformSlugs, p.mccInclude, p.mccExclude, p.rail, p.maxEngine || null]);
+    const sig = JSON.stringify([p.categorySlug, p.merchantSlugs, p.platformSlugs, p.mccInclude, p.mccExclude, p.rail, p.maxEngine || null,
+      p.partExceptMerchants || [], p.partExceptPlatforms || []]);
     const prior = seen.get(sig);
     if (prior) {
       // Same row twice: it is narrow only if every source of it was narrow
