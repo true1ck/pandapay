@@ -147,6 +147,31 @@
       "reason": "WP7: Rename last: the old id (\"up-to-10x\") still tripped the loader's multi-rate \"up to\" check after the row became the single 10X hotels rate.",
       "source_url": "https://offers.smartbuy.hdfc.bank.in/v2/accelerated-earn-rules",
       "checked_on": "2026-11-05"
+    },
+    {
+      "path": "reward_rules",
+      "op": "append",
+      "value": {
+        "id": "wp7_emi_rail_exclusion",
+        "category_id": "all_retail",
+        "priority": 0,
+        "evaluation_type": "exclusion",
+        "rail": "emi",
+        "channel_type": "all",
+        "conditions": {},
+        "action": {
+          "multiplier": 0,
+          "points_per_block": 0,
+          "cashback_percent": null,
+          "cap_reference": null,
+          "reason": "EMI transactions earn no rewards."
+        },
+        "effective_from": "2026-01-16",
+        "effective_to": null
+      },
+      "reason": "WP7: D28c: Rewards Points Program T&C item 3: \"EasyEMI and e-wallet loading transactions will not accrue reward points\". The record's EMI row needs category emi AND rail emi, so an EMI purchase in another category earned. Rail-EMI exclusion on all spend.",
+      "source_url": "https://www.hdfc.bank.in/content/dam/hdfcbankpws/in/en/personal-banking/discover-products/cards/credit-cards/infinia-credit-card/rewards-points-program-terms-and-conditions.pdf",
+      "checked_on": "2026-11-05"
     }
   ]
 }
