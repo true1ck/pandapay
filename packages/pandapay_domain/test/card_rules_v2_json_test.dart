@@ -198,12 +198,12 @@ void main() {
       expect(card.parseWarnings, isEmpty);
     });
 
-    test('D11: an unknown cashback_rounding reads as null with a warning', () {
+    test('D15b: an unknown cashback_rounding marks v2 and floors to rupees', () {
       final card = CardProductJson.fromJson(
         _card(extra: {'cashback_rounding': 'nearest_ten'}),
       );
-      expect(card.cashbackRounding, isNull);
-      expect(card.isV2Shaped, isFalse);
+      expect(card.cashbackRounding, CashbackRounding.rupeeFloor);
+      expect(card.isV2Shaped, isTrue);
       expect(card.parseWarnings.single, contains('cashback_rounding'));
     });
 
@@ -288,9 +288,14 @@ void main() {
           ],
         ),
       );
-      expect(card.rewardRules.map((r) => r.id), ['b']);
-      expect(card.rewardRules.single.mccInclude, ['5411']);
-      expect(card.parseWarnings, hasLength(1));
+      // D15e: a non-string MCC is never coerced (it could lose a leading
+      // zero); the rule is unparseable and skipped visibly (D15d).
+      expect(card.rewardRules, isEmpty);
+      expect(card.parseWarnings, hasLength(2));
+      expect(card.skippedRules, {
+        'a': 'unsupported_platform_slugs',
+        'b': 'unsupported_mcc_include',
+      });
     });
 
     test('a rule needing a newer engine is skipped', () {

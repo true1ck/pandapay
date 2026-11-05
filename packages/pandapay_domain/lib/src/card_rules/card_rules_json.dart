@@ -126,17 +126,21 @@ T? _v2EnumOrNull<T extends Enum>(List<T> values, Object? raw, String field) =>
 
 String _v2EnumToJson(Enum value) => _snakeFromCamel(value.name);
 
-/// A text[] column. Null/absent is the empty default. Elements are taken
-/// as strings (an MCC sent as a JSON number still reads as its digits).
-List<String> _v2StringList(Object? raw, String field) {
+/// A text[] column. Null/absent is the empty default. Non-string elements
+/// are read as their text, except where [strict] (plan C8/D15e: MCC lists,
+/// where coercing a number could drop a leading zero) makes them an
+/// unparseable value.
+List<String> _v2StringList(Object? raw, String field, {bool strict = false}) {
   if (raw == null) return const [];
   if (raw is! List) throw CatalogueV2FieldException(field, raw);
   return [
     for (final e in raw)
-      if (e == null)
+      if (e is String)
+        e
+      else if (e == null || strict)
         throw CatalogueV2FieldException(field, raw)
       else
-        e is String ? e : e.toString(),
+        e.toString(),
   ];
 }
 
@@ -207,8 +211,16 @@ extension RewardRuleJson on RewardRule {
       role: _v2EnumOrNull(RuleRole.values, json['rule_role'], 'rule_role'),
       merchantSlugs: _v2StringList(json['merchant_slugs'], 'merchant_slugs'),
       platformSlugs: _v2StringList(json['platform_slugs'], 'platform_slugs'),
-      mccInclude: _v2StringList(json['mcc_include'], 'mcc_include'),
-      mccExclude: _v2StringList(json['mcc_exclude'], 'mcc_exclude'),
+      mccInclude: _v2StringList(
+        json['mcc_include'],
+        'mcc_include',
+        strict: true,
+      ),
+      mccExclude: _v2StringList(
+        json['mcc_exclude'],
+        'mcc_exclude',
+        strict: true,
+      ),
       blockInr: _v2IntOrNull(json['block_inr'], 'block_inr'),
       minEngineVersion: _v2EngineVersion(json['min_engine_version']),
       sourceLocalId: _v2StringOrNull(
@@ -623,6 +635,8 @@ extension CardProductJson on CardProduct {
   static CardProduct fromJson(Map<String, dynamic> json) {
     final warnings = <String>[];
     final skippedCaps = <String, String>{};
+    final skippedRules = <String, String>{};
+    var skippedExclusion = false;
     var wireV2 = false;
     void markV2() => wireV2 = true;
 
@@ -633,6 +647,11 @@ extension CardProductJson on CardProduct {
       warnings,
       isV2Marker: _rawRuleMarksV2,
       onV2Marker: markV2,
+      onSkipped: (row, e) {
+        final id = row['id'];
+        if (id is String) skippedRules[id] = 'unsupported_${e.field}';
+        if (row['rule_role'] == 'exclusion') skippedExclusion = true;
+      },
     );
     final capRules = _parseRowsTolerantly(
       json['cap_rules'],
@@ -687,7 +706,8 @@ extension CardProductJson on CardProduct {
       ),
       fallback: AccrualRounding.floor,
     );
-    // D11: an unknown cashback rounding is treated as null (paise).
+    // D15b: an unknown cashback rounding still marks the card v2 and falls
+    // back to rupee_floor, the mode that never over-states cashback.
     final cashbackRounding = cardField(
       'cashback_rounding',
       () => _v2EnumOrNull(
@@ -695,7 +715,16 @@ extension CardProductJson on CardProduct {
         json['cashback_rounding'],
         'cashback_rounding',
       ),
+      fallback: CashbackRounding.rupeeFloor,
     );
+    // The C3.2/D10/D11 switch, computed here so de-duplication (D15a) can
+    // follow it. Mirrors CardProduct.isV2Shaped.
+    final v2Shaped =
+        wireV2 ||
+        accrualRounding != null ||
+        cashbackRounding != null ||
+        rewardRules.any((r) => r.marksV2) ||
+        capRules.any((c) => c.capKind != null);
     final coverageRaw = json['model_coverage'];
     final modelCoverage = coverageRaw is Map<String, dynamic>
         ? coverageRaw
@@ -718,9 +747,14 @@ extension CardProductJson on CardProduct {
       baseRewardRate: _numOrNull(json['base_reward_rate']),
       excludedCategoryIds: ((json['excluded_categories'] as List?) ?? const [])
           .cast<String>(),
-      rewardRules: uniqueRewardRules(rewardRules),
-      capRules: uniqueCapRules(capRules),
-      milestoneRules: uniqueMilestoneRules(milestoneRules),
+      // D15a: v2-shaped cards are not de-duplicated at parse time — the
+      // database identity indexes already guarantee uniqueness, and merging
+      // rows could orphan a cap's targets or parent. v1 cards keep it.
+      rewardRules: v2Shaped ? rewardRules : uniqueRewardRules(rewardRules),
+      capRules: v2Shaped ? capRules : uniqueCapRules(capRules),
+      milestoneRules: v2Shaped
+          ? milestoneRules
+          : uniqueMilestoneRules(milestoneRules),
       forexRule: json['forex'] != null
           ? ForexRuleJson.fromJson(json['forex'] as Map<String, dynamic>)
           : null,
@@ -771,6 +805,8 @@ extension CardProductJson on CardProduct {
       redemptionOptions: redemptionOptions,
       parseWarnings: List.unmodifiable(warnings),
       skippedCaps: Map.unmodifiable(skippedCaps),
+      skippedRules: Map.unmodifiable(skippedRules),
+      skippedExclusionRule: skippedExclusion,
       wireV2Shaped: wireV2,
     );
   }

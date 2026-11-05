@@ -681,6 +681,15 @@ class CardProduct {
   /// a dropped cap is never silent. Never serialized.
   final Map<String, String> skippedCaps;
 
+  /// Reward rule id → why the parser dropped it. The v2 engine reports each
+  /// as `rule_skipped:<id>:<reason>` (plan C8/D15d). Never serialized.
+  final Map<String, String> skippedRules;
+
+  /// Whether a dropped rule was an exclusion (raw `rule_role = 'exclusion'`).
+  /// The v2 engine then adds the assumption `exclusion_unparsed`, because
+  /// the estimate may pay on spend the card actually excludes (D15d).
+  final bool skippedExclusionRule;
+
   /// Set by the JSON parser when the wire card carried a v2 marker (C3.2)
   /// on a row that was then skipped, so the card still takes the v2 path.
   final bool wireV2Shaped;
@@ -719,6 +728,8 @@ class CardProduct {
     this.redemptionOptions = const [],
     this.parseWarnings = const [],
     this.skippedCaps = const {},
+    this.skippedRules = const {},
+    this.skippedExclusionRule = false,
     this.wireV2Shaped = false,
   });
 
@@ -769,10 +780,16 @@ String _catalogueMoneyKey(Money value) => value.paise.toString();
 String _catalogueDateKey(DateTime? value) => value?.toIso8601String() ?? '';
 
 /// Plan C8/D1: the v2 identity fields, appended to an identity key only
-/// when at least one of them is set. A v1-shaped row therefore keeps
-/// exactly the key it had before v2 existed, while two v2 rows that differ
-/// only in a v2 field (merchant slugs, platform, cap kind/amount, ...) never
-/// collapse into one. `source_local_id` is deliberately not identity.
+/// when at least one of them is set, so two v2 rows that differ only in a
+/// v2 field (merchant slugs, platform, cap kind/amount, ...) never collapse
+/// into one. `source_local_id` is deliberately not identity.
+///
+/// A row with every v2 field unset (an old cache blob, a hand-built rule)
+/// keeps exactly its pre-v2 key. Rows from the v1 feed after the v2
+/// migration carry `rule_role = 'earn'` (a DB default), so their keys DO
+/// gain a v2 part — the same part for every such row, so which rows de-dup
+/// together is unchanged. Keys are only compared in memory; the app never
+/// persists them. (v2-shaped cards are not de-duplicated at all — D15a.)
 String _v2IdentitySuffix(List<String> parts) =>
     parts.every((p) => p.isEmpty) ? '' : '|v2|${parts.join('|')}';
 
