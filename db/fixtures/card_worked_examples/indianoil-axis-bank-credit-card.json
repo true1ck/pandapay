@@ -282,6 +282,33 @@
         "cap_deltas_by_source_id": {}
       },
       "why": "Utilities are in the excluded MCC list and earn no base points."
+    },
+    {
+      "state_before": {
+        "caps_by_source_id": {}
+      },
+      "id": "010",
+      "title": "Rs 10,000 electronics purchase on EMI",
+      "ctx": {
+        "amount": 10000,
+        "occurred": "2026-11-10T10:00:00+05:30",
+        "category_id": null,
+        "category_slug": "other",
+        "mcc": "5732",
+        "merchant_name": "Electronics store",
+        "merchant_vpa": null,
+        "merchant_slug": null,
+        "platform": null,
+        "rail": "emi"
+      },
+      "expect": {
+        "currency": "points",
+        "amount": 0,
+        "value_inr": null,
+        "excluded": true,
+        "cap_deltas_by_source_id": {}
+      },
+      "why": "T&C 5.4.2: \"EMI-related transactions ... shall not earn base points\" - whatever the merchant category."
     }
   ],
   "research_notes": [
@@ -312,6 +339,13 @@
       "issuer_says": "Fuel elsewhere earns nothing (excluded from base).",
       "proposed_fix": "none",
       "override_file": null
+    },
+    {
+      "item": "WP7 r3: example 010 (EMI)",
+      "cardpipeline_says": "EMI excluded only for the emi category on the EMI rail.",
+      "issuer_says": "T&C 5.4.2 excludes EMI-related transactions from base points; a rail-EMI exclusion covers EMI in any category (C8 D28c).",
+      "proposed_fix": "override",
+      "override_file": "api/scripts/catalogue_overrides/indianoil-axis-bank-credit-card.json"
     }
   ]
 }
