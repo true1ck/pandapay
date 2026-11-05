@@ -220,6 +220,26 @@ begin
   insert into milestone_rules (card_product_id, label, threshold_spend_inr, reward_description, reward_value_inr, reward_points)
     values (v_card, 'M', 1, 'd', 0, 2);
 
+  -- D16: except lists
+  insert into reward_rules (card_product_id, unit, rate, notes, rule_role, except_merchant_slugs, except_platform_slugs)
+    values (v_card, 'points_per_100', 2, 'except', 'earn', array['m_a'], array['p_a']);
+  insert into reward_rules (card_product_id, unit, rate, notes, rule_role, except_merchant_slugs, except_platform_slugs)
+    values (v_card, 'points_per_100', 2, 'except', 'earn', array['m_b'], array['p_a']);
+  begin
+    insert into reward_rules (card_product_id, unit, rate, notes, rule_role, except_merchant_slugs, except_platform_slugs)
+      values (v_card, 'points_per_100', 2, 'except', 'earn', array['m_b'], array['p_a']);
+    raise exception 'identical except-list rules must still collide';
+  exception when unique_violation then null; end;
+  select to_jsonb(x) into v2 from v_card_catalogue_export_v2 x where x.id = v_card;
+  if not exists (select 1 from jsonb_array_elements(v2->'reward_rules') r
+                  where r->'except_merchant_slugs' = '["m_a"]'::jsonb
+                    and r->'except_platform_slugs' = '["p_a"]'::jsonb) then
+    raise exception 'v2 view must return except_merchant_slugs / except_platform_slugs';
+  end if;
+  if (select except_merchant_slugs from reward_rules where id = v_rule1) <> '{}' then
+    raise exception 'except list default must be empty';
+  end if;
+
   -- D7: extra rounding modes
   update card_products set accrual_rounding = 'points_half_up' where id = v_card;
   update card_products set accrual_rounding = 'points_floor' where id = v_card;
