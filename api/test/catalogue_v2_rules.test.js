@@ -1119,6 +1119,28 @@ test('D20b an "exclusion" stating a positive rate is a reduced-rate earn rule ah
   assert.equal(only(r, 'no_rate')[0].rule_role, 'info', 'no stated rate: bonus_only_exclusion as before');
 });
 
+test('D20a/D20b a reduced-rate rule or carve-out with an explicit MCC list also gets a v2 MCC-only row', () => {
+  const r = run(pointsCard([
+    rule({ id: 'accel', category_id: 'dining', priority: 10, action: { points_per_block: 10 } }),
+    rule({ id: 'reduced_insurance', category_id: 'insurance', evaluation_type: 'standard_accrual', conditions: { mcc: [5960, 6300] }, action: { points_per_block: 1 } }),
+    rule({ id: 'utility_carve_out', category_id: 'utility', evaluation_type: 'exclusion', priority: 40, conditions: { mcc: [4900] },
+      action: { points_per_block: 1, reason: 'Accelerated points do not accrue on utilities; eligible spend earns the base 1 RP per Rs 100.' } }),
+    rule({ id: 'accel_mcc', category_id: 'dining', priority: 20, conditions: { mcc: [5812] }, action: { points_per_block: 10 } }),
+  ]));
+  const shape = (id) => only(r, id).map((x) => [x.rule_role, x.category_slug, x.mcc_include.join(), x.min_engine_version, x.max_engine_version, x.rate]).sort((a, b) => String(a).localeCompare(String(b)));
+  // a known MCC in the list gets the reduced rate whatever the category label
+  assert.deepEqual(shape('reduced_insurance'), [
+    ['earn', 'insurance', '', 1, 1, 1],
+    ['earn', 'insurance', '5960,6300', 2, null, 1],
+    ['earn', null, '5960,6300', 2, null, 1],
+  ].sort((a, b) => String(a).localeCompare(String(b))));
+  const carve = only(r, 'utility_carve_out');
+  assert.ok(carve.some((x) => x.category_slug === null && x.mcc_include.join() === '4900' && x.min_engine_version === 2 && x.max_engine_version === null));
+  assert.ok(carve.every((x) => x.rule_role === 'earn' && x.rate === 1 && x.priority < 10));
+  // an above-base accelerator is unchanged: the category still narrows it
+  assert.deepEqual(shape('accel_mcc'), [['earn', 'dining', '5812', 2, null, 10]]);
+});
+
 test('D20d MCCs of one or two digits are dropped and flagged; an exclusion left without MCCs keeps its category', () => {
   assert.deepEqual(normalizeMccList([32, 2541, 4001, 5541, 742, '66']), { mccs: ['0742', '2541', '4001', '5541'], invalid: [], malformed: [32, '66'] });
   const r = run(card({ rules: [

@@ -667,6 +667,15 @@ function transformRule(src, idx, ctx) {
     for (const p of parts) {
       if (!p.broad || !p.categorySlug) {
         kept.push(p);
+        // D20a/D20b: for a reduced rate (or a carve-out at a stated rate) an
+        // explicit MCC list is its scope whenever the MCC is known, as for an
+        // exclusion: an MCC-only v2 row so a listed MCC under another
+        // category label still gets the lower rate. (The category + MCC row
+        // stays for an unknown MCC; above-base rules stay narrowed.)
+        if ((isReduced || isCarveOut) && p.categorySlug && p.mccInclude?.length &&
+            !p.merchantSlugs?.length && !p.platformSlugs?.length) {
+          kept.push({ ...p, categorySlug: null, broad: false, mccScopedReduced: true });
+        }
         continue;
       }
       const tokens = p.narrowTokens?.length ? p.narrowTokens : [p.token].filter(Boolean);
@@ -690,6 +699,7 @@ function transformRule(src, idx, ctx) {
     if (kept.some((p) => p.narrowedByMcc)) flags.push('narrow_token_to_mcc');
     if (kept.some((p) => p.narrowOnMerchant)) flags.push('narrow_token_on_merchant');
     if (kept.some((p) => p.v1Projection)) flags.push('reduced_rate_v1_projection');
+    if (kept.some((p) => p.mccScopedReduced)) flags.push('mcc_scoped_reduced_rate');
     if (dropped && kept.length) flags.push('composite_partial');
     if (dropped && !kept.length) info.push('narrow_category_without_mcc');
     if (kept.length) parts = dedupeParts(kept);
