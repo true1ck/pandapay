@@ -39,9 +39,11 @@ begin
      (table_name = 'milestone_states' and column_name = 'approximate_window' and data_type = 'boolean'
         and is_nullable = 'NO' and column_default = 'false') or
      (table_name = 'transactions' and column_name = 'card_state_v2' and data_type = 'jsonb'
-        and is_nullable = 'YES' and column_default is null));
-  if v_count <> 5 then
-    raise exception 'card_state_v2 columns missing or wrongly typed (found % of 5)', v_count;
+        and is_nullable = 'YES' and column_default is null) or
+     (table_name = 'transactions' and column_name = 'expected_cashback_inr' and data_type = 'numeric'
+        and numeric_precision = 12 and numeric_scale = 2 and is_nullable = 'YES' and column_default is null));
+  if v_count <> 6 then
+    raise exception 'card_state_v2 columns missing or wrongly typed (found % of 6)', v_count;
   end if;
 
   -- Seed: a card, its cap and milestone, two profiles, one user card, one spend.
@@ -78,8 +80,9 @@ begin
   if (select approximate_window from milestone_states where milestone_rule_id = v_ms) then
     raise exception 'milestone_states.approximate_window must default to false';
   end if;
-  if (select card_state_v2 from transactions where id = v_txn) is not null then
-    raise exception 'transactions.card_state_v2 must default to null';
+  if (select card_state_v2 from transactions where id = v_txn) is not null
+     or (select expected_cashback_inr from transactions where id = v_txn) is not null then
+    raise exception 'transactions.card_state_v2 / expected_cashback_inr must default to null';
   end if;
 
   -- 3. Only the C1 cap kinds are accepted.

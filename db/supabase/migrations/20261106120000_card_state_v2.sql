@@ -21,6 +21,10 @@
 --   milestone and fee-waiver row (rule id, period, delta). Reversal subtracts
 --   exactly these entries, so an edit or ignore mirrors the original apply
 --   even when several caps and parent caps moved.
+-- transactions.expected_cashback_inr
+--   The ₹ cashback part of a v2 spend's expected reward (null when it earns
+--   none). expected_points keeps its single v1 figure, so on a card that
+--   earns points AND cashback the cashback is kept here instead of dropped.
 
 alter table cap_states
   add column if not exists cap_kind           text,
@@ -37,4 +41,5 @@ alter table milestone_states
   add column if not exists approximate_window boolean not null default false;
 
 alter table transactions
-  add column if not exists card_state_v2 jsonb;
+  add column if not exists card_state_v2         jsonb,
+  add column if not exists expected_cashback_inr numeric(12,2);
