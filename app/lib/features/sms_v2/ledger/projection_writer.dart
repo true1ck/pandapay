@@ -41,9 +41,14 @@ TransactionEntry? transactionForEvent(
       ? row.from as v2.ExternalEndpoint
       : null;
   final printed = fact.counterparty?.name;
-  final merchant =
-      fact.purpose == v2.MovementPurpose.walletTopup &&
-          event.type == v2.EventType.purchase
+  // A card bill is a payment to the user's own card, however it was paid
+  // (bank transfer, CHEQ, CRED, BBPS), so it is labelled as one.
+  final merchant = event.type == v2.EventType.cardBillPayment
+      ? 'Credit card payment'
+      : event.type == v2.EventType.ownTransfer && printed == null
+      ? 'Transfer between your accounts'
+      : fact.purpose == v2.MovementPurpose.walletTopup &&
+            event.type == v2.EventType.purchase
       ? external?.counterpartyKey
       : printed ?? external?.counterpartyKey;
   final mask = instrument?.maskDigits;

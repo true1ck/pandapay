@@ -15,8 +15,9 @@ String _instrumentKey(v2.Fact f) => [
 String _name(v2.Fact f) => f is v2.MandateFact
     ? f.merchantName ?? f.counterparty?.name ?? 'Unknown service'
     : f.counterparty?.name ?? f.counterparty?.vpa ?? 'Unknown service';
-String _seriesKey(v2.Fact f) =>
-    '${normalizeMerchantText(_name(f))}|${_instrumentKey(f)}';
+/// One subscription per service. A cancellation or failure notice often omits
+/// the card or account, so the instrument must not split a service's history.
+String _seriesKey(v2.Fact f) => normalizeMerchantText(_name(f));
 Map<String, v2.Fact> _facts(Iterable<v2.Fact> facts) => {
   for (final f in facts) f.factId: f,
 };
@@ -385,8 +386,41 @@ class MoneyInItem {
   final DateTime occurredAt;
 }
 
+const _unknownPayer = 'Unknown payer';
+const _indiaOffset = Duration(hours: 5, minutes: 30);
+
+/// Who paid: the money fact's counterparty, else the counterparty of another
+/// leg (a refund names its merchant on the original purchase). Null when the
+/// messages never named anyone.
+String? _payerName(v2.Event e, Map<String, v2.Fact> byId, v2.Fact money) {
+  String? named(v2.Fact f) {
+    final c = f.counterparty;
+    if (c == null || c.kind == v2.CounterpartyKind.own) return null;
+    final n = c.name ?? c.vpa;
+    return n == null || n.trim().isEmpty ? null : n;
+  }
+
+  final direct = named(money);
+  if (direct != null) return direct;
+  for (final leg in e.legs) {
+    final fact = byId[leg.factId];
+    final n = fact == null ? null : named(fact);
+    if (n != null) return n;
+  }
+  return null;
+}
+
+/// True when [a] and [b] (Indian wall time) are in consecutive months and the
+/// pay days are within seven days of each other, wrapping at month end.
+bool _paidAroundSameDay(DateTime a, DateTime b) {
+  if (b.year * 12 + b.month - (a.year * 12 + a.month) != 1) return false;
+  final gap = (a.day - b.day).abs();
+  return gap <= 7 || 30 - gap <= 7;
+}
+
 /// All incoming money except own transfers and investment withdrawals. Salary
-/// requires a confirmed payer or a repeated consecutive-month pattern.
+/// requires a confirmed payer or a repeated consecutive-month pattern from a
+/// payer the messages actually named.
 List<MoneyInItem> moneyIn(
   Iterable<v2.Fact> facts,
   Iterable<v2.Event> events,
@@ -406,20 +440,17 @@ List<MoneyInItem> moneyIn(
   final payerDates = <String, List<DateTime>>{};
   for (final e in all.where((e) => e.type == v2.EventType.income)) {
     final f = moneyFactForEvent(e, byId);
-    if (f == null) continue;
+    final payer = f == null ? null : _payerName(e, byId, f);
+    if (payer == null) continue;
     payerDates
-        .putIfAbsent(normalizeMerchantText(_name(f)), () => [])
-        .add(e.occurredAt);
+        .putIfAbsent(normalizeMerchantText(payer), () => [])
+        .add(e.occurredAt.toUtc().add(_indiaOffset));
   }
   final salary = {...confirmedSalaryPayers.map(normalizeMerchantText)};
   for (final p in payerDates.entries) {
     final dates = p.value..sort();
     for (var i = 1; i < dates.length; i++) {
-      final a = dates[i - 1], b = dates[i];
-      if (b.year * 12 + b.month - (a.year * 12 + a.month) == 1 &&
-          (a.day - b.day).abs() <= 7) {
-        salary.add(p.key);
-      }
+      if (_paidAroundSameDay(dates[i - 1], dates[i])) salary.add(p.key);
     }
   }
   return [
@@ -427,25 +458,26 @@ List<MoneyInItem> moneyIn(
       (e) => !e.occurredAt.isBefore(from) && e.occurredAt.isBefore(to),
     ))
       if (moneyFactForEvent(e, byId) case final f?)
-        MoneyInItem(
-          eventId: e.eventId,
-          kind: e.type == v2.EventType.refund
-              ? 'refund'
-              : e.type == v2.EventType.dividend
-              ? 'dividend'
-              : e.type == v2.EventType.cashback
-              ? 'cashback'
-              : e.type == v2.EventType.p2pIn
-              ? 'person'
-              : f is v2.MovementFact &&
-                        f.purpose == v2.MovementPurpose.salary ||
-                    salary.contains(normalizeMerchantText(_name(f)))
-              ? 'salary'
-              : 'other',
-          payer: _name(f),
-          amountMinor: e.amountMinor,
-          occurredAt: e.occurredAt,
-        ),
+        if (_payerName(e, byId, f) case final payer)
+          MoneyInItem(
+            eventId: e.eventId,
+            kind: e.type == v2.EventType.refund
+                ? 'refund'
+                : e.type == v2.EventType.dividend
+                ? 'dividend'
+                : e.type == v2.EventType.cashback
+                ? 'cashback'
+                : e.type == v2.EventType.p2pIn
+                ? 'person'
+                : f.purpose == v2.MovementPurpose.salary ||
+                      (payer != null &&
+                          salary.contains(normalizeMerchantText(payer)))
+                ? 'salary'
+                : 'other',
+            payer: payer ?? _unknownPayer,
+            amountMinor: e.amountMinor,
+            occurredAt: e.occurredAt,
+          ),
   ];
 }
 
@@ -463,12 +495,35 @@ class InvestmentSummary {
   int get netInvestedMinor => putInMinor - takenOutMinor;
 }
 
+const ipoPlatformLabel = 'IPO allotments';
+const bankDividendsLabel = 'Dividends paid to bank';
+
+/// Investments are their own area, never spending. Rows are per platform: a
+/// broker the user has an account with, or one of two honest buckets for money
+/// that has no platform (IPO allotments, dividends paid straight to the bank).
 List<InvestmentSummary> investmentsSummary(
   Iterable<v2.Fact> facts,
   Iterable<v2.Event> events,
   Iterable<v2.Instrument> instruments,
 ) {
   final byId = _facts(facts);
+  final brokers = {
+    for (final i in instruments.where(
+      (i) => i.kind == v2.InstrumentKind.broker,
+    ))
+      normalizeMerchantText(i.issuerSlug): i,
+  };
+  String? brokerFor(String name) {
+    final key = normalizeMerchantText(name);
+    if (key.length < 3) return null;
+    for (final slug in brokers.keys) {
+      if (slug.isNotEmpty && (key.contains(slug) || slug.contains(key))) {
+        return slug;
+      }
+    }
+    return null;
+  }
+
   final groups = <String, List<int>>{};
   for (final e in events.where(
     (e) =>
@@ -483,7 +538,17 @@ List<InvestmentSummary> investmentsSummary(
     if (transactionKindForEvent(e) == null) continue;
     final f = moneyFactForEvent(e, byId);
     if (f == null) continue;
-    final key = normalizeMerchantText(_name(f));
+    final named = _payerName(e, byId, f);
+    final key = e.type == v2.EventType.ipoApplication
+        ? ipoPlatformLabel
+        : named == null
+        ? (e.type == v2.EventType.dividend
+              ? bankDividendsLabel
+              : 'Unknown platform')
+        : brokerFor(named) ??
+              (e.type == v2.EventType.dividend
+                  ? bankDividendsLabel
+                  : normalizeMerchantText(named));
     final g = groups.putIfAbsent(key, () => [0, 0, 0]);
     g[e.type == v2.EventType.investmentWithdrawal
             ? 1
@@ -493,12 +558,11 @@ List<InvestmentSummary> investmentsSummary(
         e.amountMinor;
   }
   final balances = <String, int>{};
-  for (final i in instruments.where(
-    (i) => i.kind == v2.InstrumentKind.broker,
-  )) {
-    final key = normalizeMerchantText(i.issuerSlug);
-    groups.putIfAbsent(key, () => [0, 0, 0]);
-    if (i.availableMinor != null) balances[key] = i.availableMinor!;
+  for (final entry in brokers.entries) {
+    groups.putIfAbsent(entry.key, () => [0, 0, 0]);
+    if (entry.value.availableMinor != null) {
+      balances[entry.key] = entry.value.availableMinor!;
+    }
   }
   return [
     for (final g in groups.entries)
@@ -522,9 +586,14 @@ class IpoApplication {
     this.releasedMinor = 0,
     this.accountMask,
     this.platform,
+    this.appliedAt,
+    this.updatedAt,
   });
   final String eventId, company, status;
   final int blockedMinor, investedMinor, releasedMinor;
+
+  /// When the money was blocked, and when the application last changed.
+  final DateTime? appliedAt, updatedAt;
   int get remainingHoldMinor {
     final remaining = blockedMinor - investedMinor - releasedMinor;
     return remaining > 0 ? remaining : 0;
@@ -552,10 +621,21 @@ List<IpoApplication> ipoApplications(
     final money = moneyFactForEvent(e, byId);
     final blocked = hold == null ? 0 : _amount(hold, v2.AmountRole.held) ?? 0;
     final invested = money == null ? 0 : e.amountMinor;
+    final company = hold?.issueName ?? money?.counterparty?.name ?? 'IPO';
+    // The debit names the issuer, which is the company and not a platform.
+    final partyName = money?.counterparty?.name;
+    final issuerKey = normalizeMerchantText(company);
+    final partyKey = partyName == null ? '' : normalizeMerchantText(partyName);
+    final platform =
+        partyKey.isEmpty ||
+            issuerKey.contains(partyKey) ||
+            partyKey.contains(issuerKey)
+        ? null
+        : partyName;
     result.add(
       IpoApplication(
         eventId: e.eventId,
-        company: hold?.issueName ?? money?.counterparty?.name ?? 'IPO',
+        company: company,
         status: e.status == v2.EventStatus.ambiguous
             ? 'review'
             : invested > 0
@@ -567,10 +647,17 @@ List<IpoApplication> ipoApplications(
         investedMinor: invested,
         releasedMinor: released,
         accountMask: (money ?? hold)?.instrument?.maskDigits,
-        platform: money?.counterparty?.name,
+        platform: platform,
+        appliedAt: hold?.effectiveAt,
+        updatedAt: e.occurredAt,
       ),
     );
   }
+  result.sort(
+    (a, b) => (b.appliedAt ?? b.updatedAt ?? DateTime.utc(1900)).compareTo(
+      a.appliedAt ?? a.updatedAt ?? DateTime.utc(1900),
+    ),
+  );
   return result;
 }
 
