@@ -706,6 +706,13 @@ function transformRule(src, idx, ctx) {
     flags.push('min_amount_exclusion');
   }
   if (cond.mccInclude.length) parts = parts.map((p) => andPart(p, { mccInclude: cond.mccInclude }) || { ...p, conflict: true });
+  // D20d: every listed MCC was malformed. An exclusion falls back to its
+  // category; so does a lower rate (broad is its conservative side, D18c);
+  // any other earning rule would widen to the whole category: info.
+  if (cond.malformedInclude && !cond.mccInclude.length && !isExclusion) {
+    if (isCarveOut || isReduced) flags.push('malformed_mcc_list_broadened');
+    else info.push('malformed_mcc_list');
+  }
   if (cond.mccExclude.length) parts = parts.map((p) => andPart(p, { mccExclude: cond.mccExclude }) || p);
 
   // Transaction types and non-purchase channels (cash withdrawal, merchant

@@ -1370,6 +1370,22 @@ test('D20d MCCs of one or two digits are dropped and flagged; an exclusion left 
 
 // ── C8 D13: terms that depend on the cardholder; override conventions ───
 
+test('D20d an earning rule whose MCC list is all malformed is info, never category-only', () => {
+  const r = run(pointsCard([
+    rule({ id: 'dining_bad_mcc', category_id: 'dining', conditions: { mcc_list: [58, 12] }, action: { points_per_block: 10 } }),
+    rule({ id: 'dining_mixed', category_id: 'dining', priority: 11, conditions: { mcc_list: [58, 5812] }, action: { points_per_block: 10 } }),
+    // a lower rate: the whole category is the conservative side (D18c)
+    rule({ id: 'utility_bad_mcc', category_id: 'utility', priority: 12, evaluation_type: 'standard_accrual', conditions: { mcc_list: [49] }, action: { points_per_block: 1 } }),
+  ]));
+  const [bad] = only(r, 'dining_bad_mcc');
+  assert.equal(bad.rule_role, 'info');
+  assert.ok(bad.info_reasons.includes('malformed_mcc_list'));
+  assert.ok(only(r, 'dining_mixed').every((x) => x.rule_role === 'earn' && x.mcc_include.join() === '5812'));
+  const util = only(r, 'utility_bad_mcc');
+  assert.ok(util.some((x) => x.rule_role === 'earn' && x.category_slug === 'bills' && x.min_engine_version === 1));
+  assert.ok(util[0].flags.includes('malformed_mcc_list_broadened'));
+});
+
 test('D13a a cap sized by the credit limit keeps its kind with a null amount and is flagged', () => {
   const r = run(capCard([{ ...capBase, id: 'intl_2x_credit_limit', metric: 'eligible_spend_amount', limit_value: null, limit_value_inr: null }]));
   const [cap] = r.capRules;
