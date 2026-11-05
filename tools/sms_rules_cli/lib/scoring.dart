@@ -117,6 +117,11 @@ String reading(Fact fact, {String? ruleFamily}) => switch (fact) {
           f.direction == Direction.debit &&
           f.purpose == MovementPurpose.unknown =>
     'payment_request',
+  // A refund that has been started but has not paid out yet.
+  AttemptFact f
+      when f.purpose == MovementPurpose.refund &&
+          f.status == AttemptStatus.pending =>
+    'refund_initiated',
   AttemptFact f =>
     f.status == AttemptStatus.scheduled ? 'upcoming_charge' : 'failed_attempt',
   BillDueFact _ => ruleFamily == 'card_statement' ? 'statement' : 'bill_due',

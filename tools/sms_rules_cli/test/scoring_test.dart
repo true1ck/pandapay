@@ -162,6 +162,29 @@ void main() {
       expect(reading(attempt(direction: Direction.credit)), 'failed_attempt');
     });
 
+    test('a pending refund reads as refund_initiated, not a failed attempt', () {
+      expect(
+        reading(
+          attempt(
+            status: AttemptStatus.pending,
+            direction: Direction.credit,
+            purpose: MovementPurpose.refund,
+          ),
+        ),
+        'refund_initiated',
+      );
+      expect(
+        reading(
+          attempt(
+            status: AttemptStatus.failed,
+            direction: Direction.credit,
+            purpose: MovementPurpose.refund,
+          ),
+        ),
+        'failed_attempt',
+      );
+    });
+
     test('an ignored notice may read as not_financial', () {
       expect(readingsAgree('not_financial', 'service_notice'), isTrue);
       expect(readingsAgree('not_financial', 'promo'), isTrue);
