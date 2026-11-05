@@ -198,6 +198,10 @@ async function main() {
     await product.query(`INSERT INTO feature_flags(key,is_enabled,rollout_percent)
       VALUES('sms_pipeline_v2_enabled',true,100)
       ON CONFLICT(key) DO UPDATE SET is_enabled=true,rollout_percent=100`);
+    // Scratch database only: the Splits (shared expenses) backend ships with
+    // every switch off. Turn on reads and proposals so a test build that
+    // enables PANDAPAY_SHARED_EXPENSES_ENABLED can use it.
+    await product.query('UPDATE shared_expenses.settings SET reads_enabled=true, proposals_enabled=true');
     const pair = generateKeyPairSync('ed25519');
     const keyId = 'local-rig';
     const publicKey = pair.publicKey.export({ type: 'spki', format: 'der' }).subarray(-32).toString('base64');
