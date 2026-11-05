@@ -2556,16 +2556,14 @@ class UserCardsRepository {
     }
   }
 
-  /// "Find my cards" over forwarded bank email and, on Android, SMS bodies
-  /// the device reads locally. [smsBodies] are sent for this request only
-  /// and never stored server-side — see POST /card-discovery.
-  Future<CardDiscoveryResult> discoverCards({
-    List<String> smsBodies = const [],
-  }) async {
+  /// "Find my cards" over forwarded bank email. Cards in bank SMS are matched
+  /// on the phone and merged by the caller: SMS text is never sent to the
+  /// server, so this request carries no messages at all.
+  Future<CardDiscoveryResult> discoverCards() async {
     final response = await _client.post(
       Uri.parse('$apiBaseUrl/card-discovery'),
       headers: _headers,
-      body: jsonEncode({'smsBodies': smsBodies}),
+      body: jsonEncode(const <String, Object?>{}),
     );
     if (response.statusCode != 200) {
       throw ApiException(

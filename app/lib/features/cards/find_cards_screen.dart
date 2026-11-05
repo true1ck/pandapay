@@ -107,10 +107,18 @@ class _FindCardsScreenState extends ConsumerState<FindCardsScreen> {
         final subset = bodies.length > 500
             ? bodies.sublist(bodies.length - 500)
             : bodies;
+        // SMS text never leaves the phone: messages are matched here, and the
+        // server is only asked about forwarded bank email.
+        final smsResult = subset.isEmpty
+            ? null
+            : await _discoverLocally(subset);
         try {
-          final result = await repo
-              .discoverCards(smsBodies: subset)
+          final emailResult = await repo
+              .discoverCards()
               .timeout(const Duration(seconds: 20));
+          final result = smsResult == null
+              ? emailResult
+              : _mergeDiscovery(smsResult, emailResult);
           // The server can identify an SMS-only card only as a generic
           // issuer/suffix placeholder. Reconcile against the current wallet
           // before rendering so a card already owned under a named product
@@ -139,10 +147,9 @@ class _FindCardsScreenState extends ConsumerState<FindCardsScreen> {
         } catch (_) {
           // The SMS scan is local-first. A slow/cold API must not turn a
           // device-side card discovery into a blank or crashing screen.
-          if (bodies.isEmpty) rethrow;
-          final localResult = await _discoverLocally(bodies);
+          if (smsResult == null) rethrow;
           if (mounted && generation == _scanGeneration) {
-            setState(() => _result = localResult);
+            setState(() => _result = smsResult);
           }
         }
       } else {
@@ -183,6 +190,41 @@ class _FindCardsScreenState extends ConsumerState<FindCardsScreen> {
         setState(() => _scanning = false);
       }
     }
+  }
+
+  /// One suggestion per card: where a card was found on the phone (SMS) and
+  /// in forwarded email, the evidence, sources and numbers are combined.
+  static CardDiscoveryResult _mergeDiscovery(
+    CardDiscoveryResult sms,
+    CardDiscoveryResult email,
+  ) {
+    final merged = <String, DiscoveredCard>{
+      for (final card in sms.suggestions) card.cardProductId: card,
+    };
+    for (final card in email.suggestions) {
+      final existing = merged[card.cardProductId];
+      merged[card.cardProductId] = existing == null
+          ? card
+          : DiscoveredCard(
+              cardProductId: existing.cardProductId,
+              name: existing.name,
+              score: existing.score > card.score ? existing.score : card.score,
+              evidence: {...existing.evidence, ...card.evidence}.toList(),
+              last4: {...existing.last4, ...card.last4}.toList(),
+              messageCount: existing.messageCount + card.messageCount,
+              sources: {...existing.sources, ...card.sources}.toList(),
+              isPlaceholder: existing.isPlaceholder && card.isPlaceholder,
+              issuerName: existing.issuerName ?? card.issuerName,
+              cardType: existing.cardType ?? card.cardType,
+              creditLimit: existing.creditLimit ?? card.creditLimit,
+              isAlreadyOwned: existing.isAlreadyOwned || card.isAlreadyOwned,
+            );
+    }
+    return CardDiscoveryResult(
+      suggestions: merged.values.toList(),
+      emailsScanned: email.emailsScanned,
+      smsScanned: sms.smsScanned,
+    );
   }
 
   Future<CardDiscoveryResult> _discoverLocally(List<String> bodies) async {
