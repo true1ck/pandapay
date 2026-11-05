@@ -19,7 +19,7 @@ Severity: HIGH = an authenticated caller or a modified phone can cause material 
 | LO-08 | MEDIUM | API4 | `rule-stats` accepts unbounded version strings, rule ids, rows, counters | Fixed |
 | LO-09 | MEDIUM | M10 keys | Rule signing key lives in the public API process and signs per request | Fixed (Lane U) |
 | LO-10 | MEDIUM | M3 / API2 | App Check tokens are bearer tokens not bound to account or device id; monitor mode admits unattested scripts | Binding fixed; limited-use replay protection built, off by default; monitor admission unchanged (Lane U) |
-| LO-11 | MEDIUM | M9 | Raw SMS bodies and facts sit in plaintext SQLite in the backup-eligible iOS Documents directory | Open |
+| LO-11 | MEDIUM | M9 | Raw SMS bodies and facts sit in plaintext SQLite in the backup-eligible iOS Documents directory | Fixed (fresh-start Phase 3: `d4c9e42`, `a451693`, `ab0753e`, `984f9e4`) |
 | LO-12 | LOW | M5 | No certificate pinning | Open |
 | LO-13 | LOW | M10 | Leaked rule key can only be revoked by an app release | Mitigated: release-free runbook (Lane U); removal from the app still needs a release |
 | LO-14 | LOW | M4 | Signed-bundle patterns are not re-linted on the phone; stacked polynomial quantifiers and the lack of a match timeout remain | Open |
@@ -27,7 +27,7 @@ Severity: HIGH = an authenticated caller or a modified phone can cause material 
 | LO-16 | INFO | API5 | Legacy version gate trusts the `X-App-Version` header | Accepted |
 | LO-17 | INFO | API4 | `legacy_entry_kind` recurses without a depth bound (own-data DoS only) | Accepted |
 
-No open HIGH finding.
+No open HIGH finding. LO-11 was the only open MEDIUM finding without a fix and is now Fixed.
 
 ## Fixed findings
 
@@ -77,6 +77,8 @@ Evidence (before): the contract allows any `appVersion` string, any `ruleId`, an
 
 ## Open findings
 
+(LO-09, LO-10, LO-11 and LO-15 below are kept for their history; see the summary table for current status.)
+
 ### LO-09 MEDIUM: signing key in the public API process (fixed, Lane U)
 
 Before: `bundleForServing` re-signed the stored bundle on each request, so `SMS_RULES_SIGNING_KEY` sat in the public API. Now minting stores the signed copy in `sms_v2_bundles.served_body` (migration `20261114100000`, read through `pandapay.sms_v2_latest_served_bundle`). The hourly job `run_sms_v2_rule_jobs.js` re-signs it before the 7-day expiry (default when less than 72 hours remain) and when the key id changes. `rules_route.js` and `index.js` no longer load a signer; the route serves the stored copy only if it is signed, matches the row's version and is unexpired, otherwise `503 bundle_unavailable` (fail closed, no re-signing, no older bundle). The public process logs an error at start-up in production if the key is in its environment. The job refuses to sign a body whose content hash differs from the mint-time hash. Tests: `api/test/sms_v2/lane_u_signing.test.js`. Runbooks: `signing-keys.md`, `bundle-release.md`.
@@ -85,9 +87,18 @@ Before: `bundleForServing` re-signed the stored bundle on each request, so `SMS_
 
 Before: the verifier checked signature, issuer, audience, expiry and app id, but a token was not tied to a profile or `X-Sms-Device-Id`. Now the first (profile, installation digest) to present a token owns it (`sms_v2_attestation_bindings`, migration `20261114110000`, durable `db` mode in production, per-process `memory` elsewhere). Another profile or installation presenting it is unattested: half limits and no shared learning in monitor mode, `403` in enforce. The rate counters were already keyed by profile and installation digest, so the same pair now governs both the budget and the token. Limited-use replay protection (Firebase `verifyAppCheckToken`, `alreadyConsumed`) is implemented behind `SMS_V2_APPCHECK_REPLAY_PROTECTION=on`, default off, needs `google-auth-library` and credentials, and needs the app to send `getLimitedUseToken()` tokens (`DeviceAttestation.limitedUseHeaders()` is added; the sync client is not wired to it yet, so the switch stays off). Monitor mode still admits callers without a token at half limits, by design. The client-metrics receipt rows belong to another lane and were not touched. Tests: `api/test/sms_v2/lane_u_attestation.test.js`, `app/test/features/sms_v2/sync/attestation_test.dart`.
 
-### LO-11 MEDIUM: plaintext SMS store on the phone
+### LO-11 MEDIUM: plaintext SMS store on the phone (Fixed, fresh-start Phase 3)
 
-`app/lib/data/local/app_database.dart:538` opens `pandapay.sqlite` in the Documents directory with no encryption, and `sms_intake_repository.dart` keeps raw bodies in `sms_captured_messages` (kept for re-interpretation) next to the v2 fact payloads. Android has `allowBackup="false"`. On iOS the file is covered by the default data-protection class but is eligible for device backups; only the native spool (`IncomingSmsSpool.swift:91`) sets `isExcludedFromBackup`. Recommended: exclude the database from backup (small native call) and decide on SQLCipher. Not done here because it touches app-wide storage and the native SMS code that this lane must not change.
+Before: `app/lib/data/local/app_database.dart:538` opened `pandapay.sqlite` in the Documents directory with no encryption, and `sms_intake_repository.dart` kept raw bodies in `sms_captured_messages` (kept for re-interpretation) next to the v2 fact payloads. Android had `allowBackup="false"`. On iOS the file was covered by the default data-protection class but eligible for device backups; only the native spool (`IncomingSmsSpool.swift:91`) set `isExcludedFromBackup`.
+
+Fix, in the fresh-start Phase 3 commits (merged as `6870ca9`):
+
+- `d4c9e42 feat(storage): encrypt the local database with SQLCipher`. `sqlite3_flutter_libs` is replaced by `sqlcipher_flutter_libs`; the install key from `LocalDatabaseKeyCustody` keys the database, the read-worker isolate and the recovery connection. A lost or mismatched key resets the unreadable file, and a locked key store exits without touching the spool. Tests: `database_key_test.dart`, `encrypted_database_host_test.dart`, `integration_test/encrypted_database_test.dart`.
+- `a451693 feat(security): encrypt receipt files at rest` (files start with the `PPRC` marker).
+- `ab0753e feat(security): encrypt SMS text in the iOS spool` (spool bodies start with `v1:`), plus `2b61951` so the spool imports SQLCipher and the iOS app builds.
+- `984f9e4 feat(storage): one backup-excluded root for account files`, which closes the backup-eligibility half.
+
+Remaining proof is the on-device check in plan Task 7.3 (database header is not `SQLite format 3`, receipts start with `PPRC`, spool bodies start with `v1:`, backup-exclude attribute present). That needs a release build on a phone and was not run here.
 
 ### LO-12 LOW: no certificate pinning
 
@@ -134,3 +145,37 @@ The engine enforces 2,000 characters through the bundle schema and the new alter
 5. A test run without rig defines has no local trust and no controls.
 
 Because `kReleaseMode` is a compile-time constant, a release build also tree-shakes the rig branch. The defines are never required by CI release builds, and `PANDAPAY_ENV` must be exactly `dev`.
+
+## Re-check, November 2026 (fresh-start Phase 6 and Task 7.1)
+
+Run from `fresh/phase6-hardening` (on `sms-v2/integration` at `2b61951`). The `owasp-mobile-security-checker` scanners wrote to a scratch copy of `app/` (they write their JSON next to the project, so nothing was added to the repository). Unlike the first pass, which saw "0 files", this run scanned the whole app tree (438 Dart files).
+
+| Scanner | Result | Disposition |
+|---|---|---|
+| M1 hardcoded secrets | 0 findings in 444 files | Clean |
+| M2 dependencies (`check_dependencies.py`) | Did not run: needs PyYAML, which is not installed (no global installs were made) | Replaced by the checks below |
+| M5 network | 4 HIGH, 2 MEDIUM | No new finding, see below |
+| M9 storage | 5 MEDIUM | No new finding, see below |
+
+**M2 replacement checks (all done, no fix needed for the app):**
+
+- `osv-scanner` is not installed. The 229 hosted packages in `app/pubspec.lock` were queried against the OSV.dev batch API (ecosystem `Pub`), the same database osv-scanner uses: 0 known vulnerabilities.
+- `cd api && npm audit --omit=dev`: 0 vulnerabilities (also 0 including dev dependencies).
+- `cd auth && npm audit --omit=dev`: 1 HIGH before (`follow-redirects` 1.16.1, GHSA-mrwp-f3q8-3g9p, reached through `twilio` and `axios`), 0 after. Fixed by `npm audit fix`, which moved `follow-redirects` to 1.16.2 in `auth/package-lock.json` only. `auth` tests: 377 pass.
+- `dart pub outdated` shows many newer majors (go_router 14 to 18, Riverpod 2 to 3, firebase 4 to 5, flutter_local_notifications 18 to 22, others). None is tied to a known vulnerability, and the plan forbids major bumps of Riverpod and go_router, so none were taken. `sqlcipher_flutter_libs` 0.6.8 is the version in use; its latest published release is `0.7.0+eol`, i.e. the package is end of life upstream. Plan a replacement as a post-release item (check upstream's recommended successor first); there is no advisory against 0.6.8.
+
+**M5 network findings (no change in risk):**
+
+- `lib/app/env.dart:60,66,80`: the `http://10.0.2.2` strings are the dev-only defaults. `Env.assertReleaseConfigured` throws at start-up in a release build that still points at them, and LO-06 removed cleartext from the release network config. False positive for release.
+- `lib/data/card_discovery_engine.dart:153`: `'http://'` is a spam marker in a keyword list, not a request. False positive.
+- No certificate pinning (2 MEDIUM from the scanner): this is LO-12, still Open and still LOW in our rating, because the production domain is fixed late in the cutover.
+
+**M9 storage findings (no change in risk):**
+
+- `portable_attachments.dart:73`, `portable_http_repository.dart:104`, `canonical_ndjson.dart:86` write the user's own backup export to a staging folder, and `private_temporary_workspace.dart:32` writes a marker file. These are user-started exports into a private, marked temporary workspace that is cleaned up and swept by age; the final archive is the user's to share. Not a storage regression.
+- `features/scan/card_scanner.dart:138` writes resized card photos for OCR into the same private workspace and calls `workspace.cleanup()` in its `finally`. Not a storage regression.
+- The earlier SMS database finding (LO-11) is no longer detectable by this scanner's patterns because the store is now encrypted; the scanner's remaining hits are file-write heuristics only.
+
+**Result:** no new HIGH or CRITICAL finding. One HIGH dependency advisory (auth, `follow-redirects`) was found and fixed. No open HIGH finding.
+
+**M7 note (manual):** release builds are now obfuscated (`--obfuscate --split-debug-info`), see `docs/release/symbolication.md`. That file also records a gap: in-app error reports from an obfuscated build carry no code locations.
