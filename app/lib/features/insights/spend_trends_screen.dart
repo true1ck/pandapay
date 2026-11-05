@@ -303,7 +303,8 @@ class _SpendTrendsScreenState extends ConsumerState<SpendTrendsScreen> {
                     query: query,
                     report: data,
                     transactions: transactions.valueOrNull ?? const [],
-                    transactionDetailsLoading: transactions.isLoading,
+                    transactionDetailsLoading:
+                        transactions.isLoading && !transactions.hasValue,
                     initialCategory: widget.initialCategory,
                     initialTagIds: widget.initialTagIds,
                     initialSelection: _savedFilters,

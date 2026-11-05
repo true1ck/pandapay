@@ -4,6 +4,7 @@ import '../features/sms_v2/providers/runtime_provider.dart';
 import '../features/consent/sms_reading_consent.dart';
 import '../features/sms_v2/ledger/providers.dart';
 import '../features/sms_v2/ledger/adapters.dart' as sms_v2_adapters;
+import '../features/sync/invalidation_coalescer.dart';
 import 'package:pandapay_domain/sms_v2_ledger.dart' as sms_v2_ledger;
 import 'dart:async';
 import 'dart:convert';
@@ -4298,6 +4299,16 @@ final financialStoreRevisionProvider = StreamProvider.family<int, String>((
   var live = false;
   var missed = false;
   var disposed = false;
+  // A single change (an edit, one new SMS) refreshes at once. A burst, such
+  // as a history import writing batch after batch, refreshes every screen at
+  // most once per window and once more when it ends, so pages stay still
+  // instead of redrawing for every batch.
+  final coalescer = InvalidationCoalescer(
+    window: financialRefreshWindow,
+    onFlush: (_) {
+      if (!disposed && !controller.isClosed) controller.add(++version);
+    },
+  );
 
   Future<void> start() async {
     final cache = await cacheFuture;
@@ -4315,7 +4326,7 @@ final financialStoreRevisionProvider = StreamProvider.family<int, String>((
         missed = true;
         return;
       }
-      controller.add(++version);
+      coalescer.add(const {'changed'});
     });
     live = true;
     if (missed) controller.add(++version);
@@ -4328,11 +4339,16 @@ final financialStoreRevisionProvider = StreamProvider.family<int, String>((
   };
   ref.onDispose(() {
     disposed = true;
+    coalescer.dispose();
     subscription?.cancel();
     controller.close();
   });
   return controller.stream;
 });
+
+/// How often screens may refresh while local data keeps changing (for
+/// example during a history import). Progress itself is shown live elsewhere.
+const financialRefreshWindow = Duration(seconds: 15);
 
 void Function() _financialChanges(Ref ref, String entity) {
   var ready = false;

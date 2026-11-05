@@ -8,7 +8,11 @@ void main() {
   test('the first change is applied immediately', () {
     fakeAsync((async) {
       final flushed = <Set<String>>[];
-      final c = InvalidationCoalescer(window: window, onFlush: flushed.add);
+      final c = InvalidationCoalescer(
+        window: window,
+        onFlush: flushed.add,
+        now: () => DateTime(2026).add(async.elapsed),
+      );
       c.add({'transactions'});
       expect(flushed, [
         {'transactions'},
@@ -20,7 +24,11 @@ void main() {
   test('a burst inside the window becomes one refresh with every entity', () {
     fakeAsync((async) {
       final flushed = <Set<String>>[];
-      final c = InvalidationCoalescer(window: window, onFlush: flushed.add);
+      final c = InvalidationCoalescer(
+        window: window,
+        onFlush: flushed.add,
+        now: () => DateTime(2026).add(async.elapsed),
+      );
       c.add({'transactions'});
       for (var i = 0; i < 20; i++) {
         async.elapse(const Duration(milliseconds: 100));
@@ -54,7 +62,11 @@ void main() {
   test('after a quiet window the next change is immediate again', () {
     fakeAsync((async) {
       final flushed = <Set<String>>[];
-      final c = InvalidationCoalescer(window: window, onFlush: flushed.add);
+      final c = InvalidationCoalescer(
+        window: window,
+        onFlush: flushed.add,
+        now: () => DateTime(2026).add(async.elapsed),
+      );
       c.add({'a'});
       async.elapse(window * 2);
       c.add({'b'});
@@ -66,10 +78,31 @@ void main() {
     });
   });
 
+  test('a single change leaves no timer behind', () {
+    fakeAsync((async) {
+      final flushed = <Set<String>>[];
+      final c = InvalidationCoalescer(
+        window: window,
+        onFlush: flushed.add,
+        now: () => DateTime(2026).add(async.elapsed),
+      );
+      c.add({'a'});
+      expect(flushed, [
+        {'a'},
+      ]);
+      expect(async.pendingTimers, isEmpty);
+      c.dispose();
+    });
+  });
+
   test('dispose cancels a pending refresh', () {
     fakeAsync((async) {
       final flushed = <Set<String>>[];
-      final c = InvalidationCoalescer(window: window, onFlush: flushed.add);
+      final c = InvalidationCoalescer(
+        window: window,
+        onFlush: flushed.add,
+        now: () => DateTime(2026).add(async.elapsed),
+      );
       c.add({'a'});
       c.add({'b'});
       c.dispose();
