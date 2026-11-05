@@ -1,0 +1,12 @@
+{
+  "source_slug": "icici-emeralde-credit-card",
+  "changes": [
+    {
+      "path": "cap_rules[id=transport_spend_cap].period",
+      "value": "statement_cycle",
+      "reason": "MITC says reward points accrued per statement cycle are capped on transportation.",
+      "source_url": "https://www.icicibank.com/managed-assets/docs/personal/cards/mitc_cc.pdf",
+      "checked_on": "2026-11-05"
+    }
+  ]
+}

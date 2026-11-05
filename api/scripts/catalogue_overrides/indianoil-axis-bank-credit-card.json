@@ -1,0 +1,12 @@
+{
+  "source_slug": "indianoil-axis-bank-credit-card",
+  "changes": [
+    {
+      "path": "cap_rules[id=iocl-fuel-monthly-points-cap].metric",
+      "value": "total_reward_points",
+      "reason": "1,000 points is the whole fuel earning (20 per Rs 100 on Rs 5,000); fuel beyond it earns nothing, so it is a total cap, not bonus-only.",
+      "source_url": "https://www.axis.bank.in/docs/default-source/default-document-library/terms-and-conditions-for-iocl-credit-card.pdf?sfvrsn=9ab59582_5",
+      "checked_on": "2026-11-05"
+    }
+  ]
+}

@@ -1,0 +1,40 @@
+{
+  "source_slug": "icici-hpcl-super-saver-credit-card",
+  "changes": [
+    {
+      "path": "accrual_engine.rounding_mode",
+      "value": "points_half_up",
+      "reason": "Points rounded to nearest integer per transaction.",
+      "source_url": "https://www.icici.bank.in/managed-assets/docs/terms-condition/hpcl-super-saver-credit-card-tnc.pdf",
+      "checked_on": "2026-11-05"
+    },
+    {
+      "path": "cap_rules[id=fuel_cashback_monthly_cap].metric",
+      "value": "total_reward_points",
+      "reason": "Cap is Rs 200 of cashback per month.",
+      "source_url": "https://www.icici.bank.in/managed-assets/docs/terms-condition/hpcl-super-saver-credit-card-tnc.pdf",
+      "checked_on": "2026-11-05"
+    },
+    {
+      "path": "cap_rules[id=fuel_cashback_monthly_cap].limit_value",
+      "value": 200,
+      "reason": "Native unit: Rs 200 cashback.",
+      "source_url": "https://www.icici.bank.in/managed-assets/docs/terms-condition/hpcl-super-saver-credit-card-tnc.pdf",
+      "checked_on": "2026-11-05"
+    },
+    {
+      "path": "cap_rules[id=fuel_cashback_monthly_cap].period",
+      "value": "calendar_month",
+      "reason": "T&C say per month.",
+      "source_url": "https://www.icici.bank.in/managed-assets/docs/terms-condition/hpcl-super-saver-credit-card-tnc.pdf",
+      "checked_on": "2026-11-05"
+    },
+    {
+      "path": "cap_rules[id=daily_essentials_reward_cap].metric",
+      "value": "total_reward_points",
+      "reason": "The 400-point cap is on the whole accelerated benefit.",
+      "source_url": "https://www.icici.bank.in/managed-assets/docs/terms-condition/hpcl-super-saver-credit-card-tnc.pdf",
+      "checked_on": "2026-11-05"
+    }
+  ]
+}

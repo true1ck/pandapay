@@ -1,0 +1,319 @@
+{
+  "source_slug": "idfc-first-wealth",
+  "changes": [
+    {
+      "path": "accrual_engine.base_block_inr",
+      "value": 200,
+      "reason": "1X = 1 reward point per Rs 200 spent.",
+      "source_url": "https://www.idfcfirst.bank.in/content/idfcfirstbank/en/credit-card/wealth.html",
+      "checked_on": "2026-11-05"
+    },
+    {
+      "path": "reward_rules",
+      "value": [
+        {
+          "id": "fuel_exclusion",
+          "category_id": "fuel",
+          "priority": 5,
+          "evaluation_type": "exclusion",
+          "rail": "any",
+          "channel_type": "all",
+          "conditions": {
+            "mcc": [
+              5172,
+              5541,
+              5542,
+              5983
+            ]
+          },
+          "action": {
+            "multiplier": 0,
+            "points_per_block": 0,
+            "cashback_percent": null,
+            "cap_reference": null,
+            "reason": "Fuel transactions do not earn Reward Points."
+          },
+          "effective_from": "2026-06-18",
+          "effective_to": null
+        },
+        {
+          "id": "emi_exclusion",
+          "category_id": "emi",
+          "priority": 5,
+          "evaluation_type": "exclusion",
+          "rail": "emi",
+          "channel_type": "all",
+          "conditions": {},
+          "action": {
+            "multiplier": 0,
+            "points_per_block": 0,
+            "cashback_percent": null,
+            "cap_reference": null,
+            "reason": "EMI transactions/conversions do not earn Reward Points."
+          },
+          "effective_from": "2026-06-18",
+          "effective_to": null
+        },
+        {
+          "id": "cash_withdrawal_exclusion",
+          "category_id": "all_retail",
+          "priority": 5,
+          "evaluation_type": "exclusion",
+          "rail": "atm",
+          "channel_type": "all",
+          "conditions": {},
+          "action": {
+            "multiplier": 0,
+            "points_per_block": 0,
+            "cashback_percent": null,
+            "cap_reference": null,
+            "reason": "ATM cash withdrawals do not earn Reward Points."
+          },
+          "effective_from": "2026-06-18",
+          "effective_to": null
+        },
+        {
+          "id": "fee_charge_exclusion",
+          "category_id": "fees_and_charges",
+          "priority": 5,
+          "evaluation_type": "exclusion",
+          "rail": "any",
+          "channel_type": "all",
+          "conditions": {},
+          "action": {
+            "multiplier": 0,
+            "points_per_block": 0,
+            "cashback_percent": null,
+            "cap_reference": null,
+            "reason": "Fees, charges and related GST do not earn Reward Points."
+          },
+          "effective_from": "2026-06-18",
+          "effective_to": null
+        },
+        {
+          "id": "wealth_utility_1x",
+          "category_id": "utility",
+          "priority": 5,
+          "evaluation_type": "standard_accrual",
+          "rail": "any",
+          "channel_type": "all",
+          "conditions": {
+            "mcc_list": [
+              4814,
+              4816,
+              4899,
+              4900
+            ]
+          },
+          "action": {
+            "multiplier": 1,
+            "points_per_block": 1,
+            "cashback_percent": null,
+            "cap_reference": null,
+            "reason": "Utility payments earn 1X and are excluded from the 10X threshold calculation."
+          },
+          "effective_from": "2026-06-18",
+          "effective_to": null
+        },
+        {
+          "id": "wealth_insurance_1x",
+          "category_id": "insurance",
+          "priority": 6,
+          "evaluation_type": "standard_accrual",
+          "rail": "any",
+          "channel_type": "all",
+          "conditions": {
+            "mcc_list": [
+              5960,
+              6300
+            ]
+          },
+          "action": {
+            "multiplier": 1,
+            "points_per_block": 1,
+            "cashback_percent": null,
+            "cap_reference": null,
+            "reason": "Insurance premium payments earn 1X and are excluded from the 10X threshold calculation."
+          },
+          "effective_from": "2026-06-18",
+          "effective_to": null
+        },
+        {
+          "id": "wealth_railway_1x",
+          "category_id": "railway",
+          "priority": 7,
+          "evaluation_type": "standard_accrual",
+          "rail": "any",
+          "channel_type": "all",
+          "conditions": {
+            "mcc_list": [
+              4112
+            ]
+          },
+          "action": {
+            "multiplier": 1,
+            "points_per_block": 1,
+            "cashback_percent": null,
+            "cap_reference": null,
+            "reason": "Passenger railway spends earn 1X Reward Points."
+          },
+          "effective_from": "2026-06-18",
+          "effective_to": null
+        },
+        {
+          "id": "wealth_fastag_1x",
+          "category_id": "all_retail",
+          "priority": 8,
+          "evaluation_type": "standard_accrual",
+          "rail": "any",
+          "channel_type": "all",
+          "conditions": {
+            "mcc_list": [
+              4784
+            ]
+          },
+          "action": {
+            "multiplier": 1,
+            "points_per_block": 1,
+            "cashback_percent": null,
+            "cap_reference": null,
+            "reason": "FASTag/toll MCC 4784 transactions earn 1X Reward Points."
+          },
+          "effective_from": "2026-06-18",
+          "effective_to": null
+        },
+        {
+          "id": "wealth_dining_10x",
+          "category_id": "dining",
+          "priority": 10,
+          "evaluation_type": "accelerator",
+          "rail": "any",
+          "channel_type": "all",
+          "conditions": {
+            "category": "dining"
+          },
+          "action": {
+            "multiplier": 10,
+            "points_per_block": 10,
+            "cashback_percent": null,
+            "cap_reference": null,
+            "reason": "10X Reward Points on Dining purchases."
+          },
+          "effective_from": "2026-06-19",
+          "effective_to": null
+        },
+        {
+          "id": "wealth_travel_10x",
+          "category_id": "travel",
+          "priority": 11,
+          "evaluation_type": "accelerator",
+          "rail": "any",
+          "channel_type": "all",
+          "conditions": {
+            "category": "travel"
+          },
+          "action": {
+            "multiplier": 10,
+            "points_per_block": 10,
+            "cashback_percent": null,
+            "cap_reference": null,
+            "reason": "10X Reward Points on Travel purchases."
+          },
+          "effective_from": "2026-06-19",
+          "effective_to": null
+        },
+        {
+          "id": "wealth_international_10x",
+          "category_id": "international_spend",
+          "priority": 12,
+          "evaluation_type": "accelerator",
+          "rail": "any",
+          "channel_type": "all",
+          "conditions": {
+            "transaction_currency": "non-INR"
+          },
+          "action": {
+            "multiplier": 10,
+            "points_per_block": 10,
+            "cashback_percent": null,
+            "cap_reference": null,
+            "reason": "10X Reward Points on International purchases."
+          },
+          "effective_from": "2026-06-19",
+          "effective_to": null,
+          "rule_role": "info"
+        },
+        {
+          "id": "wealth_birthday_10x",
+          "category_id": "birthday_spend",
+          "priority": 13,
+          "evaluation_type": "accelerator",
+          "rail": "any",
+          "channel_type": "all",
+          "conditions": {
+            "event": "cardholder_birthday"
+          },
+          "action": {
+            "multiplier": 10,
+            "points_per_block": 10,
+            "cashback_percent": null,
+            "cap_reference": null,
+            "reason": "10X Reward Points on eligible spends done on the cardholder's birthday."
+          },
+          "effective_from": "2026-06-19",
+          "effective_to": null,
+          "rule_role": "info"
+        },
+        {
+          "id": "wealth_base_3x",
+          "category_id": "all_retail",
+          "priority": 100,
+          "evaluation_type": "standard_accrual",
+          "rail": "any",
+          "channel_type": "all",
+          "conditions": {
+            "points_basis": "1X = 1 Reward Point per Rs 200 spent"
+          },
+          "action": {
+            "multiplier": 3,
+            "points_per_block": 3,
+            "cashback_percent": null,
+            "cap_reference": null,
+            "reason": "3X Reward Points on all eligible spend categories."
+          },
+          "effective_from": "2026-06-18",
+          "effective_to": null
+        }
+      ],
+      "reason": "Replaces the 3X-then-10X-above-Rs-20,000 model with the issuer structure. Restates the four source exclusions (fuel, EMI, cash withdrawal, fees and charges). 1X rules (utility, insurance, railway MCC 4112, FASTag MCC 4784) have lower priority numbers than 10X travel so they win. International and birthday 10X are info (not expressible in Phase 1). The in-app hotel/flight bonus rules are not in the Wealth source and are not added (booking-channel dependent; see research note).",
+      "source_url": "https://www.idfcfirst.bank.in/content/idfcfirstbank/en/credit-card/wealth.html",
+      "checked_on": "2026-11-05"
+    },
+    {
+      "path": "cap_rules",
+      "value": [
+        {
+          "id": "wealth_credit_limit_cycle",
+          "category_id": "all_retail",
+          "metric": "eligible_spend_amount",
+          "mcc_target_list": [],
+          "period": "statement_cycle",
+          "limit_value": null,
+          "limit_value_inr": null,
+          "post_limit_behavior": {
+            "action": "zero_accrual",
+            "points_per_block": 0
+          },
+          "parent_cap_id": null,
+          "reset_day": null,
+          "effective_from": "2026-06-18",
+          "effective_to": null,
+          "depends_on_user": true
+        }
+      ],
+      "reason": "Issuer: reward points are earned only on spends up to the credit limit per billing cycle. Amount depends on the user, so cap_amount stays null (D13a, flag cap_depends_on_user). No Rs 20,000 threshold exists.",
+      "source_url": "https://www.idfcfirst.bank.in/content/idfcfirstbank/en/credit-card/wealth.html",
+      "checked_on": "2026-11-05"
+    }
+  ]
+}
