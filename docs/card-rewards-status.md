@@ -36,7 +36,7 @@ Status values: `not started` · `running` · `done (branch ready)` · `merged` �
 | WP5 | Merchant and platform directory data | 1 | `card-rewards/wp5-directory` | **merged** | 2026-11-06 | 164 merchants (9 true sub-brand parents, `group` tags per D6), 61 platforms; review + 1 fix round clean; IHCL brands kept under `taj` (ruling in ledger) |
 | WP6a | Worked examples: HDFC, SBI Card | 1 | `card-rewards/wp6a-examples-hdfc-sbi` | **merged** | 2026-11-06 | 21/21 cards, 15 override files; review + 1 fix round clean; Swiggy exact-half rounding parked |
 | WP6b | Worked examples: ICICI, Axis, Amex, IDFC, others | 1 | `card-rewards/wp6b-examples-others` | **merged** | 2026-11-06 | 23/25 cards (Amazon Pay ICICI, AU Zenith+ skipped), 13 override files; 2 fix rounds, verified with the real loader; 18-card loader mismatches carried to WP7 |
-| WP7 | Integration: worked examples through both engines | 2 | `card-rewards/wp7-integration` | running | 2026-11-06 | 44 cards' bank examples through both engines; triage; marks Verified cards |
+| WP7 | Integration: worked examples through both engines | 2 | `card-rewards/wp7-integration` | done (in review) | 2026-11-06 | 374/397 bank examples pass in both engines (14 known failures routed, 9 not checkable); JS = Dart on all 388; 19 cards Verified; 31 override corrections |
 | WP8 | Server recording v2 + recompute script | 2 | `card-rewards/wp8-server-state` | done (in review) | 2026-11-06 | Native-unit cap states, exact undo, recompute script; 1725 API tests + 6 real-DB tests; D22 follow-ups (old installs keep ₹ meaning of 'consumed') |
 | WP9 | App: v2 feed, tolerant parse, cap bars, alerts | 2 | — | not started | | Starts after WP8 merges |
 | — | Checkpoint A (after wave 1) | — | — | **passed** | 2026-11-06 | API 1695/0 fail; Dart 477/0; real DB import 376/376; old feed parsed by the released app parser with 0 errors; JS = Dart on 11,914 real-data purchases (0 mismatches) |
@@ -54,7 +54,7 @@ Status values: `not started` · `running` · `done (branch ready)` · `merged` �
 | Milestones on the wrong anchor | 292 / 292 (60 non-annual) | 0 / 308 — WP2 dry run |
 | Spend-gated lounges structured | 0 / 124 | 115 cards (195 unlock rows) — WP2 dry run |
 | Co-brand cards with a merchant rule | 8 / 74 (WP2 count 5 / 102) | 53 / 102 — WP2 dry run |
-| Cards Verified | 0 | 0 (set by WP7) |
+| Cards Verified | 0 | 19 (WP7, pending review); 15 more pass all examples but blocked by loader flags |
 
 ## Decisions log
 
