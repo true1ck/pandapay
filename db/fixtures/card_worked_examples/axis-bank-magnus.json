@@ -290,6 +290,13 @@
       "issuer_says": "Revision effective 20 Jun 2025: exclusions are identified by spend category, not the 4-digit MCC. MCC lists remain a close proxy.",
       "proposed_fix": "none",
       "override_file": null
+    },
+    {
+      "item": "user-dependent cap (D13a)",
+      "cardpipeline_says": "accelerated_spend_cap limit null",
+      "issuer_says": "Ceiling = assigned credit limit + Rs 1.5 lakh per calendar month. Keep the cap kind with a null amount (flag cap_depends_on_user); engines skip it.",
+      "proposed_fix": "none",
+      "override_file": null
     }
   ]
 }

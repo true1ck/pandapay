@@ -122,7 +122,9 @@
         "excluded": false,
         "cap_deltas_by_source_id": {}
       },
-      "why": "10X on international purchases: 50 blocks x 10 = 500."
+      "why": "10X on international purchases: 50 blocks x 10 = 500.",
+      "engine_checkable": false,
+      "not_checkable_reason": "Needs an is_international / foreign-currency flag (D14a)."
     },
     {
       "id": "005",
@@ -295,6 +297,20 @@
       "issuer_says": "No Rs 20,000 per-cycle threshold exists on the issuer page; 3X applies to all eligible spends. The stray condition would turn the base rule into an info rule.",
       "proposed_fix": "override",
       "override_file": "api/scripts/catalogue_overrides/idfc-first-select.json"
+    },
+    {
+      "item": "1X rules lose to 10X travel",
+      "cardpipeline_says": "1x_railway priority 22 vs 10x_travel priority 11 (railway token also maps to travel)",
+      "issuer_says": "Issuer: railway spends and FASTag earn 1X, not 10X.",
+      "proposed_fix": "override",
+      "override_file": "api/scripts/catalogue_overrides/idfc-first-select.json"
+    },
+    {
+      "item": "user-dependent terms (D13)",
+      "cardpipeline_says": "n/a",
+      "issuer_says": "Points are earned only up to the credit limit per cycle (cap_depends_on_user, no cap row in this record: not enforceable, flagged); international and birthday 10X are info.",
+      "proposed_fix": "none",
+      "override_file": null
     }
   ]
 }

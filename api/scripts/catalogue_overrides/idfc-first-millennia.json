@@ -1,0 +1,56 @@
+{
+  "source_slug": "idfc-first-millennia",
+  "changes": [
+    {
+      "path": "reward_rules[id=utility-1x].priority",
+      "value": 5,
+      "reason": "1X rule must win over 10X travel (priority 11).",
+      "source_url": "https://www.idfcfirst.bank.in/content/idfcfirstbank/en/credit-card/millennia.html",
+      "checked_on": "2026-11-05"
+    },
+    {
+      "path": "reward_rules[id=insurance-1x].priority",
+      "value": 6,
+      "reason": "1X rule must win over 10X travel (priority 11).",
+      "source_url": "https://www.idfcfirst.bank.in/content/idfcfirstbank/en/credit-card/millennia.html",
+      "checked_on": "2026-11-05"
+    },
+    {
+      "path": "reward_rules[id=railway-1x].priority",
+      "value": 7,
+      "reason": "1X rule must win over 10X travel (priority 11).",
+      "source_url": "https://www.idfcfirst.bank.in/content/idfcfirstbank/en/credit-card/millennia.html",
+      "checked_on": "2026-11-05"
+    },
+    {
+      "path": "reward_rules[id=fastag-1x].priority",
+      "value": 8,
+      "reason": "1X rule must win over 10X travel (priority 11).",
+      "source_url": "https://www.idfcfirst.bank.in/content/idfcfirstbank/en/credit-card/millennia.html",
+      "checked_on": "2026-11-05"
+    },
+    {
+      "path": "reward_rules[id=international-10x].rule_role",
+      "value": "info",
+      "reason": "Depends on a foreign-currency flag / the cardholder birthday; not expressible in Phase 1 (D14b, D13b).",
+      "source_url": "https://www.idfcfirst.bank.in/content/idfcfirstbank/en/credit-card/millennia.html",
+      "checked_on": "2026-11-05"
+    },
+    {
+      "path": "reward_rules[id=birthday-10x].rule_role",
+      "value": "info",
+      "reason": "Depends on a foreign-currency flag / the cardholder birthday; not expressible in Phase 1 (D14b, D13b).",
+      "source_url": "https://www.idfcfirst.bank.in/content/idfcfirstbank/en/credit-card/millennia.html",
+      "checked_on": "2026-11-05"
+    },
+    {
+      "path": "reward_rules[id=standard-eligible-3x].conditions",
+      "value": {
+        "points_basis": "1X = 1 Reward Point per Rs 200 spent"
+      },
+      "reason": "Free-text restriction on the base 3X rule would turn it into an info rule; the issuer applies 3X to all other eligible spends.",
+      "source_url": "https://www.idfcfirst.bank.in/content/idfcfirstbank/en/credit-card/millennia.html",
+      "checked_on": "2026-11-05"
+    }
+  ]
+}

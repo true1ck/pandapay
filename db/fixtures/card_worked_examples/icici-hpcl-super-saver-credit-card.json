@@ -384,6 +384,13 @@
       "issuer_says": "The Super Saver T&C PDF was last updated 22 Jun 2021; MITC (reward caps) is the 2026 document.",
       "proposed_fix": "none",
       "override_file": null
+    },
+    {
+      "item": "cashback rounding (D11)",
+      "cardpipeline_says": "n/a",
+      "issuer_says": "The T&C state rounding only for reward points (nearest integer). The 4% fuel cashback has no stated rounding, so cashback_rounding is left unset (paise); accrual_rounding = points_half_up applies to the points side.",
+      "proposed_fix": "none",
+      "override_file": null
     }
   ]
 }

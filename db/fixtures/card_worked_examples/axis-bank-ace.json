@@ -283,23 +283,16 @@
     },
     {
       "item": "rounding",
-      "cardpipeline_says": "accrual rounding_mode round, base_cashback 1.5",
-      "issuer_says": "Cashback is rounded to the nearest rupee for each individual transaction (17.25 -> 17, 18.75 -> 19). Correct accrual_rounding: points_half_up (applies to the final per-transaction amount, whole rupees).",
+      "cardpipeline_says": "accrual_engine.rounding_mode (points rounding field) used for a cashback card",
+      "issuer_says": "Cashback is rounded to the nearest rupee per transaction (17.25 -> 17, 18.75 -> 19). (D11: cashback_rounding = rupee_half_up; rounding_mode governs points only.)",
       "proposed_fix": "override",
       "override_file": "api/scripts/catalogue_overrides/axis-bank-ace.json"
     },
     {
       "item": "post-cap behaviour for 5%/4% categories",
       "cardpipeline_says": "downgrade_to_base_rate",
-      "issuer_says": "T&C do not say what Swiggy/Zomato/Ola/GPay spend above the cap earns; only that 1.5% on other eligible spends is unlimited. Not modelled in examples.",
+      "issuer_says": "T&C worked example: Rs 650 of 5%/4% cashback becomes Rs 500 (\"the cashback credited for these categories will be Rs. 500\"). Example 005 models the partly used cap. What Swiggy/Zomato/Ola/GPay spend over the cap earns beyond that is not stated, so no post-cap example.",
       "proposed_fix": "none",
-      "override_file": null
-    },
-    {
-      "item": "Google Pay platform slug",
-      "cardpipeline_says": "platform: Google Pay",
-      "issuer_says": "Rule is Google Pay only (Android per CardPipeline).",
-      "proposed_fix": "importer: needs a google_pay platform slug in merchant_directory.json (WP5); platform inference is a caller job",
       "override_file": null
     }
   ]

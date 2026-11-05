@@ -73,7 +73,9 @@
         "excluded": false,
         "cap_deltas_by_source_id": {}
       },
-      "why": "3X Membership Rewards on all overseas spends (any currency other than INR): 100 x 3 = 300. Context carries no currency field; caller marks it via merchant/rail."
+      "why": "3X Membership Rewards on all overseas spends (any currency other than INR): 100 x 3 = 300. Context carries no currency field; caller marks it via merchant/rail.",
+      "engine_checkable": false,
+      "not_checkable_reason": "Needs an is_international / foreign-currency flag (D14a)."
     },
     {
       "id": "003",

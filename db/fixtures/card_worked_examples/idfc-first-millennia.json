@@ -122,7 +122,9 @@
         "excluded": false,
         "cap_deltas_by_source_id": {}
       },
-      "why": "10X on international purchases: 50 blocks x 10 = 500."
+      "why": "10X on international purchases: 50 blocks x 10 = 500.",
+      "engine_checkable": false,
+      "not_checkable_reason": "Needs an is_international / foreign-currency flag (D14a)."
     },
     {
       "id": "005",
@@ -286,6 +288,20 @@
       "item": "bonus travel via IDFC app",
       "cardpipeline_says": "not modelled",
       "issuer_says": "Wealth/Select/Millennia: extra 20% (hotels) / 10% (flights) bonus points on bookings made through the FIRST Rewards Gallery in the app; separate programme.",
+      "proposed_fix": "none",
+      "override_file": null
+    },
+    {
+      "item": "1X rules lose to 10X travel",
+      "cardpipeline_says": "railway-1x priority 22 vs travel-10x priority 11",
+      "issuer_says": "Issuer: railway spends and FASTag earn 1X.",
+      "proposed_fix": "override",
+      "override_file": "api/scripts/catalogue_overrides/idfc-first-millennia.json"
+    },
+    {
+      "item": "user-dependent terms (D13)",
+      "cardpipeline_says": "cap reward-credit-limit-cycle with no amount",
+      "issuer_says": "Issuer: points only up to the credit limit per cycle. The cap keeps its kind with a null amount (cap_depends_on_user); international and birthday 10X are info.",
       "proposed_fix": "none",
       "override_file": null
     }

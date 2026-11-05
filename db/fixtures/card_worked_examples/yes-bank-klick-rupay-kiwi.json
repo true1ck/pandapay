@@ -237,9 +237,9 @@
     {
       "item": "monthly cap",
       "cardpipeline_says": "cap_rules empty / monthly-kiwi-cap not numeric",
-      "issuer_says": "Issuer: maximum monthly cap on Kiwis is 1% of the total credit limit on the card (a per-user number; reduced to the lower of 1% of limit or INR 500 only as a corrective action). No static cap exists; no cap-boundary or post-cap example is possible.",
-      "proposed_fix": "engine: per-user cap from the credit limit",
-      "override_file": null
+      "issuer_says": "Issuer: maximum monthly cap on Kiwis is 1% of the total credit limit on the card (a per-user number; reduced to the lower of 1% of limit or INR 500 only as a corrective action). No static cap exists; no cap-boundary or post-cap example is possible. Override restores the cap with a null amount (flag cap_depends_on_user).",
+      "proposed_fix": "override",
+      "override_file": "api/scripts/catalogue_overrides/yes-bank-klick-rupay-kiwi.json"
     },
     {
       "item": "rewards in whole Kiwis",

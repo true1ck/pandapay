@@ -23,8 +23,8 @@
       "checked_on": "2026-11-05"
     },
     {
-      "path": "accrual_engine.rounding_mode",
-      "value": "points_floor",
+      "path": "accrual_engine.cashback_rounding",
+      "value": "rupee_floor",
       "reason": "Cashback is rounded down per transaction (15.6 -> 15).",
       "source_url": "https://www.axis.bank.in/docs/default-source/default-document-library/credit-cards/terms-and-conditions-for-cashback-for-airtel-axis-bank-credit-card.pdf",
       "checked_on": "2026-11-05"

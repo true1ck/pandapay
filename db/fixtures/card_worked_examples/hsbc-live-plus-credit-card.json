@@ -15,9 +15,9 @@
       "quote": "Shopping spends on Amazon, Flipkart & Myntra merchants continue to earn 1.5% cashback"
     },
     {
-      "url": "https://www.hsbc.bank.in/credit-cards/products/live-plus/",
-      "doc": "HSBC Live+ page worked example",
-      "quote": "The 10% tier totals INR41,500 and earns INR4,150, capped at INR1,200"
+      "url": "https://www.hsbc.co.in/content/dam/hsbc/in/documents/credit-cards/live-plus-credit-card-services-guide.pdf",
+      "doc": "Live+ services guide",
+      "quote": "1.5% unlimited cashback* on most other spends"
     }
   ],
   "examples": [
@@ -192,60 +192,6 @@
         "cap_deltas_by_source_id": {}
       },
       "why": "The page example table shows 0% cashback on fuel."
-    },
-    {
-      "id": "007",
-      "title": "Rs 20,000 rent payment",
-      "ctx": {
-        "amount": 20000,
-        "occurred": "2026-11-10T10:00:00+05:30",
-        "category_id": null,
-        "category_slug": "rent",
-        "mcc": "6513",
-        "merchant_name": "Rent payment",
-        "merchant_vpa": null,
-        "merchant_slug": null,
-        "platform": null,
-        "rail": "online"
-      },
-      "state_before": {
-        "caps_by_source_id": {}
-      },
-      "expect": {
-        "currency": "cashback_inr",
-        "amount": 0,
-        "value_inr": null,
-        "excluded": true,
-        "cap_deltas_by_source_id": {}
-      },
-      "why": "Rent and property payments are in the excluded categories."
-    },
-    {
-      "id": "008",
-      "title": "Rs 10,000 insurance premium",
-      "ctx": {
-        "amount": 10000,
-        "occurred": "2026-11-10T10:00:00+05:30",
-        "category_id": null,
-        "category_slug": "insurance",
-        "mcc": "6300",
-        "merchant_name": "Insurer",
-        "merchant_vpa": null,
-        "merchant_slug": null,
-        "platform": null,
-        "rail": "online"
-      },
-      "state_before": {
-        "caps_by_source_id": {}
-      },
-      "expect": {
-        "currency": "cashback_inr",
-        "amount": 0,
-        "value_inr": null,
-        "excluded": true,
-        "cap_deltas_by_source_id": {}
-      },
-      "why": "Insurance is in the excluded categories."
     }
   ],
   "research_notes": [
@@ -274,6 +220,13 @@
       "item": "rounding",
       "cardpipeline_says": "rounding_mode N/A",
       "issuer_says": "Not stated.",
+      "proposed_fix": "none",
+      "override_file": null
+    },
+    {
+      "item": "rent and insurance examples dropped",
+      "cardpipeline_says": "rent/insurance MCC exclusions in the source",
+      "issuer_says": "The HSBC pages retrieved say only that the 1.5% tier has exclusions without listing them; no issuer text found for rent and insurance, so no examples are written for them.",
       "proposed_fix": "none",
       "override_file": null
     }

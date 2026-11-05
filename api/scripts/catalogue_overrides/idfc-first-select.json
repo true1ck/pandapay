@@ -9,6 +9,48 @@
       "reason": "Removes the invented statement-cycle spend threshold; issuer applies 3X to all eligible spends.",
       "source_url": "https://www.idfcfirst.bank.in/content/idfcfirstbank/en/credit-card/select.html",
       "checked_on": "2026-11-05"
+    },
+    {
+      "path": "reward_rules[id=1x_utility].priority",
+      "value": 5,
+      "reason": "1X rule must win over 10X travel (priority 11).",
+      "source_url": "https://www.idfcfirst.bank.in/content/idfcfirstbank/en/credit-card/select.html",
+      "checked_on": "2026-11-05"
+    },
+    {
+      "path": "reward_rules[id=1x_insurance].priority",
+      "value": 6,
+      "reason": "1X rule must win over 10X travel (priority 11).",
+      "source_url": "https://www.idfcfirst.bank.in/content/idfcfirstbank/en/credit-card/select.html",
+      "checked_on": "2026-11-05"
+    },
+    {
+      "path": "reward_rules[id=1x_railway].priority",
+      "value": 7,
+      "reason": "1X rule must win over 10X travel (priority 11).",
+      "source_url": "https://www.idfcfirst.bank.in/content/idfcfirstbank/en/credit-card/select.html",
+      "checked_on": "2026-11-05"
+    },
+    {
+      "path": "reward_rules[id=1x_fastag].priority",
+      "value": 8,
+      "reason": "1X rule must win over 10X travel (priority 11).",
+      "source_url": "https://www.idfcfirst.bank.in/content/idfcfirstbank/en/credit-card/select.html",
+      "checked_on": "2026-11-05"
+    },
+    {
+      "path": "reward_rules[id=10x_international].rule_role",
+      "value": "info",
+      "reason": "Depends on a foreign-currency flag / the cardholder birthday; not expressible in Phase 1 (D14b, D13b).",
+      "source_url": "https://www.idfcfirst.bank.in/content/idfcfirstbank/en/credit-card/select.html",
+      "checked_on": "2026-11-05"
+    },
+    {
+      "path": "reward_rules[id=10x_birthday].rule_role",
+      "value": "info",
+      "reason": "Depends on a foreign-currency flag / the cardholder birthday; not expressible in Phase 1 (D14b, D13b).",
+      "source_url": "https://www.idfcfirst.bank.in/content/idfcfirstbank/en/credit-card/select.html",
+      "checked_on": "2026-11-05"
     }
   ]
 }

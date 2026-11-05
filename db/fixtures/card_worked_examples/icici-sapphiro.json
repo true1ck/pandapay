@@ -73,7 +73,9 @@
         "excluded": false,
         "cap_deltas_by_source_id": {}
       },
-      "why": "4 reward points per Rs 100 on international spends: 100 x 4 = 400."
+      "why": "4 reward points per Rs 100 on international spends: 100 x 4 = 400.",
+      "engine_checkable": false,
+      "not_checkable_reason": "Needs an is_international / foreign-currency flag (D14a)."
     },
     {
       "id": "003",

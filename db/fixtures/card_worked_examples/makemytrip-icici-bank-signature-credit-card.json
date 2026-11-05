@@ -127,7 +127,9 @@
         "excluded": false,
         "cap_deltas_by_source_id": {}
       },
-      "why": "1.5 My Cash per Rs 200 on international spends outside MakeMyTrip: 40 x 1.5 = 60."
+      "why": "1.5 My Cash per Rs 200 on international spends outside MakeMyTrip: 40 x 1.5 = 60.",
+      "engine_checkable": false,
+      "not_checkable_reason": "Needs an international flag or the booking type (flight vs hotel) on a single merchant with no MCC; C3.1 context cannot carry it (D14a, D13c)."
     },
     {
       "id": "005",
@@ -154,7 +156,9 @@
         "excluded": false,
         "cap_deltas_by_source_id": {}
       },
-      "why": "2 My Cash per Rs 200 on flights booked on MakeMyTrip: 100 x 2 = 200. The rule depends on booking type, which a merchant name alone does not give."
+      "why": "2 My Cash per Rs 200 on flights booked on MakeMyTrip: 100 x 2 = 200. The rule depends on booking type, which a merchant name alone does not give.",
+      "engine_checkable": false,
+      "not_checkable_reason": "Needs an international flag or the booking type (flight vs hotel) on a single merchant with no MCC; C3.1 context cannot carry it (D14a, D13c)."
     },
     {
       "id": "006",
@@ -181,7 +185,9 @@
         "excluded": false,
         "cap_deltas_by_source_id": {}
       },
-      "why": "4 My Cash per Rs 200 on hotel and holiday bookings: 100 x 4 = 400."
+      "why": "4 My Cash per Rs 200 on hotel and holiday bookings: 100 x 4 = 400.",
+      "engine_checkable": false,
+      "not_checkable_reason": "Needs an international flag or the booking type (flight vs hotel) on a single merchant with no MCC; C3.1 context cannot carry it (D14a, D13c)."
     },
     {
       "id": "007",
@@ -336,16 +342,16 @@
     {
       "item": "rounding",
       "cardpipeline_says": "rounding_mode round on block 200, 1.25 points per block",
-      "issuer_says": "T&C: My Cash for each qualifying spend transaction is rounded off to the nearest integer at posting (final points, not per block).",
+      "issuer_says": "T&C: My Cash for each qualifying spend transaction is rounded off to the nearest integer at posting (final points, not per block). My Cash is modelled as a points unit (base_points_per_block 1.25), so accrual_rounding = points_half_up is correct; cashback_rounding is not used.",
       "proposed_fix": "override",
       "override_file": "api/scripts/catalogue_overrides/makemytrip-icici-bank-signature-credit-card.json"
     },
     {
       "item": "MakeMyTrip flights vs hotels",
       "cardpipeline_says": "two rules on platform MakeMyTrip by booking_type",
-      "issuer_says": "Rates are per booking type (flights 2, hotels/holidays 4 My Cash per Rs 200). Merchant-only context cannot distinguish them; keep as separate rules and do not collapse to an up-to rate. Trains/buses/cabs rates are not stated in this T&C.",
-      "proposed_fix": "importer",
-      "override_file": null
+      "issuer_says": "Rates are per booking type (flights 2, hotels/holidays 4 My Cash per Rs 200). Merchant-only context cannot distinguish them; keep as separate rules and do not collapse to an up-to rate. Trains/buses/cabs rates are not stated in this T&C. The two MakeMyTrip booking-type rules are set to info (flag depends_on_txn_attribute).",
+      "proposed_fix": "override",
+      "override_file": "api/scripts/catalogue_overrides/makemytrip-icici-bank-signature-credit-card.json"
     },
     {
       "item": "newer MakeMyTrip card terms",
@@ -360,6 +366,20 @@
       "issuer_says": "MITC says e-wallet reload earns nothing for ICICI cards (Amazon Pay excepted). Utility and grocery caps in the general MITC table do not list this card.",
       "proposed_fix": "none",
       "override_file": null
+    },
+    {
+      "item": "insurance cap targets",
+      "cardpipeline_says": "cap_rules empty",
+      "issuer_says": "The cap override has no target rules in the source; the whole-array reward_rules override adds an insurance rule (mmt-insurance-base) that carries cap_reference so the cap is not card-wide.",
+      "proposed_fix": "override",
+      "override_file": "api/scripts/catalogue_overrides/makemytrip-icici-bank-signature-credit-card.json"
+    },
+    {
+      "item": "international 1.5 and base domestic rule",
+      "cardpipeline_says": "international-retail and base-domestic-retail carry geography/platform restrictions",
+      "issuer_says": "Issuer: 1.5 My Cash per Rs 200 international, 1.25 domestic outside MakeMyTrip. International is info (no international flag in context); the base domestic rule is kept unrestricted so it is not lost.",
+      "proposed_fix": "override",
+      "override_file": "api/scripts/catalogue_overrides/makemytrip-icici-bank-signature-credit-card.json"
     }
   ]
 }

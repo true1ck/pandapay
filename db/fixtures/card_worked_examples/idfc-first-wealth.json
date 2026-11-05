@@ -18,6 +18,11 @@
       "url": "https://www.idfcfirst.bank.in/content/idfcfirstbank/en/credit-card/wealth.html",
       "doc": "FIRST Wealth page",
       "quote": "Earn 10X rewards starting form your very first transaction, with no minimum spends required"
+    },
+    {
+      "url": "https://www.idfcfirst.bank.in/content/idfcfirstbank/en/credit-card/wealth.html",
+      "doc": "FIRST Wealth FAQ",
+      "quote": "No reward point on EMI, Cash Withdrawal, Fuel, Fee and Charges."
     }
   ],
   "examples": [
@@ -127,7 +132,9 @@
         "excluded": false,
         "cap_deltas_by_source_id": {}
       },
-      "why": "10X on international purchases: 50 blocks x 10 = 500."
+      "why": "10X on international purchases: 50 blocks x 10 = 500.",
+      "engine_checkable": false,
+      "not_checkable_reason": "Needs an is_international / foreign-currency flag, which the C3.1 context does not carry (D14a)."
     },
     {
       "id": "005",
@@ -236,34 +243,67 @@
         "cap_deltas_by_source_id": {}
       },
       "why": "The reward programme is not applicable on EMI transactions."
+    },
+    {
+      "id": "009",
+      "title": "Rs 3,000 fuel",
+      "ctx": {
+        "amount": 3000,
+        "occurred": "2026-11-10T10:00:00+05:30",
+        "category_id": null,
+        "category_slug": "fuel",
+        "mcc": "5541",
+        "merchant_name": "Fuel station",
+        "merchant_vpa": null,
+        "merchant_slug": null,
+        "platform": null,
+        "rail": "swipe"
+      },
+      "state_before": {
+        "caps_by_source_id": {}
+      },
+      "expect": {
+        "currency": "points",
+        "amount": 0,
+        "value_inr": null,
+        "excluded": true,
+        "cap_deltas_by_source_id": {}
+      },
+      "why": "Wealth FAQ: no reward point on EMI, cash withdrawal, fuel, fee and charges."
+    },
+    {
+      "id": "010",
+      "title": "Rs 4,000 flight booked with the airline (MCC 4511)",
+      "ctx": {
+        "amount": 4000,
+        "occurred": "2026-11-10T10:00:00+05:30",
+        "category_id": null,
+        "category_slug": "travel",
+        "mcc": "4511",
+        "merchant_name": "Airline direct",
+        "merchant_vpa": null,
+        "merchant_slug": null,
+        "platform": null,
+        "rail": "online"
+      },
+      "state_before": {
+        "caps_by_source_id": {}
+      },
+      "expect": {
+        "currency": "points",
+        "amount": 200,
+        "value_inr": 50.0,
+        "excluded": false,
+        "cap_deltas_by_source_id": {}
+      },
+      "why": "10X on travel from the first eligible transaction: 20 blocks x 10 = 200."
     }
   ],
   "research_notes": [
     {
-      "item": "spend beyond the credit limit",
-      "cardpipeline_says": "cap reference reward-credit-limit-cycle (no numeric limit)",
-      "issuer_says": "Points are earned only on spends up to the cardholder credit limit per billing cycle. The limit is per user, so no static cap exists and no cap-boundary example is possible.",
-      "proposed_fix": "engine: per-user cap from the credit limit",
-      "override_file": null
-    },
-    {
       "item": "rounding",
       "cardpipeline_says": "rounding_mode floor",
       "issuer_says": "The issuer pages state 1X = 1 point per Rs 200 but not how a partial block is treated; examples use whole blocks.",
-      "proposed_fix": "none",
-      "override_file": null
-    },
-    {
-      "item": "birthday 10X",
-      "cardpipeline_says": "birthday rule modelled",
-      "issuer_says": "Needs the cardholder birthday (user attribute); not exemplified.",
-      "proposed_fix": "engine: user attribute",
-      "override_file": null
-    },
-    {
-      "item": "bonus travel via IDFC app",
-      "cardpipeline_says": "not modelled",
-      "issuer_says": "Wealth/Select/Millennia: extra 20% (hotels) / 10% (flights) bonus points on bookings made through the FIRST Rewards Gallery in the app; separate programme.",
       "proposed_fix": "none",
       "override_file": null
     },
@@ -275,11 +315,39 @@
       "override_file": "api/scripts/catalogue_overrides/idfc-first-wealth.json"
     },
     {
-      "item": "fuel / EMI / cash on Wealth",
-      "cardpipeline_says": "not examined",
-      "issuer_says": "The Wealth page excerpt retrieved does not state the fuel, EMI and cash exclusions that Select and Millennia state; no fuel example written for Wealth.",
+      "item": "fuel / EMI / cash / fees on Wealth",
+      "cardpipeline_says": "fuel_exclusion, emi_exclusion, cash_withdrawal_exclusion, fee_charge_exclusion",
+      "issuer_says": "Wealth FAQ states: no reward point on EMI, cash withdrawal, fuel, fee and charges. Override restates all four.",
+      "proposed_fix": "override",
+      "override_file": "api/scripts/catalogue_overrides/idfc-first-wealth.json"
+    },
+    {
+      "item": "railway and FASTag 1X vs 10X travel",
+      "cardpipeline_says": "railway_1x / fastag_1x priority 20 (Select copy: 22/23) behind 10X travel priority 11",
+      "issuer_says": "Issuer: 1X on insurance, utilities, railway spends and FASTag recharge. The override gives these priorities 5-8 and MCCs (rail 4112, toll 4784) so they beat 10X travel.",
+      "proposed_fix": "override",
+      "override_file": "api/scripts/catalogue_overrides/idfc-first-wealth.json"
+    },
+    {
+      "item": "international and birthday 10X",
+      "cardpipeline_says": "international_spend / birthday_spend accelerators",
+      "issuer_says": "Needs a foreign-currency flag / the cardholder birthday. Set to info (flag depends_on_txn_attribute / depends_on_user_attribute); never ranked in Phase 1.",
+      "proposed_fix": "override",
+      "override_file": "api/scripts/catalogue_overrides/idfc-first-wealth.json"
+    },
+    {
+      "item": "in-app hotel/flight bonus",
+      "cardpipeline_says": "not in the Wealth source",
+      "issuer_says": "Issuer page: 20% bonus points on hotel and 10% on flight bookings through the IDFC FIRST mobile app, up to 8000 bonus (monthly per the Select terms). It needs a booking-channel flag, so the rules are not added; no cap is restored and no cap_reference points at it.",
       "proposed_fix": "none",
       "override_file": null
+    },
+    {
+      "item": "limit-based cap",
+      "cardpipeline_says": "cap_rules empty",
+      "issuer_says": "Points are earned only on spends up to the credit limit per billing cycle. Per-user amount: cap kept with a null amount (flag cap_depends_on_user, D13a).",
+      "proposed_fix": "override",
+      "override_file": "api/scripts/catalogue_overrides/idfc-first-wealth.json"
     }
   ]
 }
