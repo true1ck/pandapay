@@ -6,7 +6,11 @@ import 'package:pandapay_domain/sms_v2.dart';
 
 /// The baseline link rules (03d), read from the repo.
 List<LinkRule> baselineLinkRules() => [
-  for (final j in jsonDecode(File('../../rules/sms/v2/link_rules.json').readAsStringSync()) as List)
+  for (final j
+      in jsonDecode(
+            File('../../rules/sms/v2/link_rules.json').readAsStringSync(),
+          )
+          as List)
     LinkRule.fromJson((j as Map).cast<String, Object?>()),
 ];
 
@@ -31,13 +35,19 @@ const testTopups = [
     id: 'CPP-PAYTM-TOPUP',
     vpaPattern: r'^add-?money@',
     purpose: MovementPurpose.walletTopup,
-    targetInstrument: TargetInstrument(kind: InstrumentKind.wallet, issuerSlug: 'paytm'),
+    targetInstrument: TargetInstrument(
+      kind: InstrumentKind.wallet,
+      issuerSlug: 'paytm',
+    ),
   ),
   CounterpartyPurpose(
     id: 'CPP-AMAZONPAY-TOPUP',
     vpaPattern: r'^amazonpay@',
     purpose: MovementPurpose.walletTopup,
-    targetInstrument: TargetInstrument(kind: InstrumentKind.wallet, issuerSlug: 'amazonpay'),
+    targetInstrument: TargetInstrument(
+      kind: InstrumentKind.wallet,
+      issuerSlug: 'amazonpay',
+    ),
   ),
 ];
 
@@ -109,7 +119,8 @@ final paytmWallet = instrument(
 );
 
 final allInstruments = {
-  for (final i in [hdfcAcct, hdfcSaving, hdfcCard, iciciCard, paytmWallet]) i.instrumentId: i,
+  for (final i in [hdfcAcct, hdfcSaving, hdfcCard, iciciCard, paytmWallet])
+    i.instrumentId: i,
 };
 
 InstrumentMention on(Instrument i) => InstrumentMention(
@@ -161,12 +172,12 @@ Map<String, Object?> _envelope(
   };
 }
 
-Map<String, Object?> party({String? name, String? vpa, String? kind, String? mask}) => {
-  'name': name,
-  'vpa': vpa,
-  'kind': kind,
-  'accountMask': mask,
-};
+Map<String, Object?> party({
+  String? name,
+  String? vpa,
+  String? kind,
+  String? mask,
+}) => {'name': name, 'vpa': vpa, 'kind': kind, 'accountMask': mask};
 
 MovementFact move(
   String direction,
@@ -275,7 +286,11 @@ HoldFact hold(
             at: at,
             instrument: inst == null ? null : on(inst),
             amounts: [
-              {'role': phase == 'released' ? 'released' : 'held', 'minor': minor, 'unit': 'INR'},
+              {
+                'role': phase == 'released' ? 'released' : 'held',
+                'minor': minor,
+                'unit': 'INR',
+              },
             ],
             attrs: {'phase': phase, 'purpose': purpose, 'issueName': ?issue},
             sourceKey: sourceKey,
@@ -300,7 +315,8 @@ MandateFact mandate(
             at: at,
             instrument: inst == null ? null : on(inst),
             amounts: [
-              if (ceiling != null) {'role': 'ceiling', 'minor': ceiling, 'unit': 'INR'},
+              if (ceiling != null)
+                {'role': 'ceiling', 'minor': ceiling, 'unit': 'INR'},
             ],
             references: references,
             attrs: {
@@ -314,17 +330,18 @@ MandateFact mandate(
         )
         as MandateFact;
 
-Fact reward(int points, {required String at, Instrument? inst}) => Fact.fromJson(
-  _envelope(
-    'reward',
-    at: at,
-    instrument: inst == null ? null : on(inst),
-    amounts: [
-      {'role': 'points_earned', 'minor': points, 'unit': 'POINTS'},
-    ],
-    attrs: const {},
-  ),
-);
+Fact reward(int points, {required String at, Instrument? inst}) =>
+    Fact.fromJson(
+      _envelope(
+        'reward',
+        at: at,
+        instrument: inst == null ? null : on(inst),
+        amounts: [
+          {'role': 'points_earned', 'minor': points, 'unit': 'POINTS'},
+        ],
+        attrs: const {},
+      ),
+    );
 
 // ------------------------------------------------------------------ running
 
@@ -353,7 +370,8 @@ String shape(Event e) {
   return '${e.type.wire}[${roles.join(',')}]';
 }
 
-List<String> shapes(LinkResult r) => [for (final e in eventsOf(r)) shape(e)]..sort();
+List<String> shapes(LinkResult r) =>
+    [for (final e in eventsOf(r)) shape(e)]..sort();
 
 /// Simulates the store: an event upserted by id, newest wins.
 class MemoryEvents {
@@ -372,15 +390,24 @@ class MemoryEvents {
 }
 
 /// A fact counted as money in more than one event, or a receipt counted at all.
-List<String> doubleCounted(Iterable<Event> events, Map<String, Fact> factsById) {
-  const money = {LegRole.debitLeg, LegRole.creditLeg, LegRole.charge, LegRole.reversal};
+List<String> doubleCounted(
+  Iterable<Event> events,
+  Map<String, Fact> factsById,
+) {
+  const money = {
+    LegRole.debitLeg,
+    LegRole.creditLeg,
+    LegRole.charge,
+    LegRole.reversal,
+  };
   final seen = <String, int>{};
   final out = <String>[];
   for (final e in events) {
     for (final l in e.legs) {
       if (!money.contains(l.role)) continue;
       final f = factsById[l.factId];
-      if (f is MovementFact && f.evidenceOnly == true) out.add('receipt ${l.factId} counted');
+      if (f is MovementFact && f.evidenceOnly == true)
+        out.add('receipt ${l.factId} counted');
       seen.update(l.factId, (v) => v + 1, ifAbsent: () => 1);
     }
   }

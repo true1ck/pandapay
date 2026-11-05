@@ -1,0 +1,38 @@
+{
+  "id": "laneq:card_used_for_purchase_hsbc",
+  "templateHash": "69a08f4b1d450f004f8819a9c9aaaea748b41363264af52bf0a3729bb3b758d7",
+  "weight": 1,
+  "source": "synthetic",
+  "messages": [
+    {
+      "sender": "VM-HSBCIN-S",
+      "body": "Your HSBC Credit Card ending 4321 has been used for a purchase of INR 3,499.50 at SAMPLE MART on 02 Nov 2026.",
+      "observedAt": "2026-11-20T09:00:00.000Z"
+    }
+  ],
+  "expect": {
+    "facts": [
+      {
+        "factType": "movement",
+        "attrs": {
+          "direction": "debit",
+          "purpose": "purchase",
+          "rail": "card"
+        },
+        "amounts": [
+          {
+            "role": "posted",
+            "minor": 349950
+          }
+        ],
+        "instrument": {
+          "kind": "credit_card",
+          "issuerSlug": "hsbc",
+          "maskDigits": "4321"
+        }
+      }
+    ]
+  },
+  "note": "Wording guess for a foreign bank alert.",
+  "origin": "lane-q"
+}

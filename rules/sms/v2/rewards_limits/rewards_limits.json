@@ -8,7 +8,7 @@
     ],
     "priority": 290,
     "match": {
-      "pattern": "^(?:(?=[\\s\\S]*?(?:ending(?:\\s+(?:with|in))?|\\bx{1,4}|\\*{2,})[\\s:-]*(?<mask>\\d{4,5})\\b)|)[\\s\\S]*?(?:(?:credit|card|total|spend)\\s+limit|limit\\s+(?:on|of|for)\\s+(?:your\\s+)?[^\\n]{0,40}?\\bcard\\b)[^\\n]{0,100}?\\b(?:has\\s+been\\s+|have\\s+been\\s+|is\\s+(?:now\\s+)?|was\\s+|are\\s+)?(?:enhanced|increased|upgraded|raised|extended)(?:\\s+from\\s+(?:rs\\.?|inr|₹)\\s*(?<prev>[\\d,]+(?:\\.\\d{1,2})?))?\\s+(?:up\\s*)?(?:to)\\s*(?:rs\\.?|inr|₹)\\s*(?<lim>[\\d,]+(?:\\.\\d{1,2})?)",
+      "pattern": "^(?:(?=[\\s\\S]*?(?:ending(?:\\s+(?:with|in))?|(?:\\b|(?<=\\d))x{1,12}|\\*{2,})[\\s:-]*(?<mask>\\d{4,5})\\b)|)[\\s\\S]*?(?:(?:credit|card|total|spend)\\s+limit|limit\\s+(?:on|of|for)\\s+(?:your\\s+)?[^\\n]{0,40}?\\bcard\\b)[^\\n]{0,100}?\\b(?:has\\s+been\\s+|have\\s+been\\s+|is\\s+(?:now\\s+)?|was\\s+|are\\s+)?(?:enhanced|increased|upgraded|raised|extended)(?:\\s+from\\s+(?:rs\\.?|inr|₹)\\s*(?<prev>[\\d,]+(?:\\.\\d{1,2})?))?\\s+(?:up\\s*)?(?:to)\\s*(?:rs\\.?|inr|₹)\\s*(?<lim>[\\d,]+(?:\\.\\d{1,2})?)",
       "flags": "i",
       "rejectAny": [
         "eligible for",
@@ -100,7 +100,7 @@
     ],
     "priority": 290,
     "match": {
-      "pattern": "^(?:(?=[\\s\\S]*?(?:ending(?:\\s+(?:with|in))?|\\bx{1,4}|\\*{2,})[\\s:-]*(?<mask>\\d{4,5})\\b)|)[\\s\\S]*?(?:(?:credit|card|total|spend)\\s+limit|limit\\s+(?:on|of|for)\\s+(?:your\\s+)?[^\\n]{0,40}?\\bcard\\b)[^\\n]{0,100}?\\b(?:has\\s+been\\s+|have\\s+been\\s+|is\\s+(?:now\\s+)?|was\\s+|are\\s+)?(?:reduced|decreased|lowered|revised\\s+down(?:ward)?|cut)(?:\\s+from\\s+(?:rs\\.?|inr|₹)\\s*(?<prev>[\\d,]+(?:\\.\\d{1,2})?))?\\s+(?:up\\s*)?(?:to)\\s*(?:rs\\.?|inr|₹)\\s*(?<lim>[\\d,]+(?:\\.\\d{1,2})?)",
+      "pattern": "^(?:(?=[\\s\\S]*?(?:ending(?:\\s+(?:with|in))?|(?:\\b|(?<=\\d))x{1,12}|\\*{2,})[\\s:-]*(?<mask>\\d{4,5})\\b)|)[\\s\\S]*?(?:(?:credit|card|total|spend)\\s+limit|limit\\s+(?:on|of|for)\\s+(?:your\\s+)?[^\\n]{0,40}?\\bcard\\b)[^\\n]{0,100}?\\b(?:has\\s+been\\s+|have\\s+been\\s+|is\\s+(?:now\\s+)?|was\\s+|are\\s+)?(?:reduced|decreased|lowered|revised\\s+down(?:ward)?|cut)(?:\\s+from\\s+(?:rs\\.?|inr|₹)\\s*(?<prev>[\\d,]+(?:\\.\\d{1,2})?))?\\s+(?:up\\s*)?(?:to)\\s*(?:rs\\.?|inr|₹)\\s*(?<lim>[\\d,]+(?:\\.\\d{1,2})?)",
       "flags": "i",
       "rejectAny": [
         "eligible for",
@@ -180,7 +180,7 @@
     ],
     "priority": 286,
     "match": {
-      "pattern": "^(?:(?=[\\s\\S]*?(?:ending(?:\\s+(?:with|in))?|\\bx{1,4}|\\*{2,})[\\s:-]*(?<mask>\\d{4,5})\\b)|)[\\s\\S]*?(?:(?:credit|card|total|spend)\\s+limit|limit\\s+(?:on|of|for)\\s+(?:your\\s+)?[^\\n]{0,40}?\\bcard\\b)[^\\n]{0,100}?\\b(?:has\\s+been\\s+|have\\s+been\\s+|is\\s+(?:now\\s+)?|was\\s+|are\\s+)?(?:updated|revised|changed|modified|set|fixed)(?:\\s+from\\s+(?:rs\\.?|inr|₹)\\s*(?<prev>[\\d,]+(?:\\.\\d{1,2})?))?\\s+(?:up\\s*)?(?:to|at)\\s*(?:rs\\.?|inr|₹)\\s*(?<lim>[\\d,]+(?:\\.\\d{1,2})?)",
+      "pattern": "^(?:(?=[\\s\\S]*?(?:ending(?:\\s+(?:with|in))?|(?:\\b|(?<=\\d))x{1,12}|\\*{2,})[\\s:-]*(?<mask>\\d{4,5})\\b)|)[\\s\\S]*?(?:(?:credit|card|total|spend)\\s+limit|limit\\s+(?:on|of|for)\\s+(?:your\\s+)?[^\\n]{0,40}?\\bcard\\b)[^\\n]{0,100}?\\b(?:has\\s+been\\s+|have\\s+been\\s+|is\\s+(?:now\\s+)?|was\\s+|are\\s+)?(?:updated|revised|changed|modified|set|fixed)(?:\\s+from\\s+(?:rs\\.?|inr|₹)\\s*(?<prev>[\\d,]+(?:\\.\\d{1,2})?))?\\s+(?:up\\s*)?(?:to|at)\\s*(?:rs\\.?|inr|₹)\\s*(?<lim>[\\d,]+(?:\\.\\d{1,2})?)",
       "flags": "i",
       "rejectAny": [
         "eligible for",
@@ -260,7 +260,7 @@
     ],
     "priority": 289,
     "match": {
-      "pattern": "^(?:(?=[\\s\\S]*?(?:ending(?:\\s+(?:with|in))?|\\bx{1,4}|\\*{2,})[\\s:-]*(?<mask>\\d{4,5})\\b)|)[\\s\\S]*?\\b(?:enhanced|increased|upgraded|raised)\\s+(?:the\\s+|your\\s+)?(?:credit|spend|card|total)\\s+limit\\b[^\\n]{0,80}?(?:\\bfrom\\s+(?:rs\\.?|inr|₹)\\s*(?<prev>[\\d,]+(?:\\.\\d{1,2})?)\\s+)?\\bto\\s*(?:rs\\.?|inr|₹)\\s*(?<lim>[\\d,]+(?:\\.\\d{1,2})?)",
+      "pattern": "^(?:(?=[\\s\\S]*?(?:ending(?:\\s+(?:with|in))?|(?:\\b|(?<=\\d))x{1,12}|\\*{2,})[\\s:-]*(?<mask>\\d{4,5})\\b)|)[\\s\\S]*?\\b(?:enhanced|increased|upgraded|raised)\\s+(?:the\\s+|your\\s+)?(?:credit|spend|card|total)\\s+limit\\b[^\\n]{0,80}?(?:\\bfrom\\s+(?:rs\\.?|inr|₹)\\s*(?<prev>[\\d,]+(?:\\.\\d{1,2})?)\\s+)?\\bto\\s*(?:rs\\.?|inr|₹)\\s*(?<lim>[\\d,]+(?:\\.\\d{1,2})?)",
       "flags": "i",
       "rejectAny": [
         "eligible for",
@@ -333,7 +333,7 @@
     ],
     "priority": 289,
     "match": {
-      "pattern": "^(?:(?=[\\s\\S]*?(?:ending(?:\\s+(?:with|in))?|\\bx{1,4}|\\*{2,})[\\s:-]*(?<mask>\\d{4,5})\\b)|)[\\s\\S]*?\\b(?:reduced|decreased|lowered)\\s+(?:the\\s+|your\\s+)?(?:credit|spend|card|total)\\s+limit\\b[^\\n]{0,80}?(?:\\bfrom\\s+(?:rs\\.?|inr|₹)\\s*(?<prev>[\\d,]+(?:\\.\\d{1,2})?)\\s+)?\\bto\\s*(?:rs\\.?|inr|₹)\\s*(?<lim>[\\d,]+(?:\\.\\d{1,2})?)",
+      "pattern": "^(?:(?=[\\s\\S]*?(?:ending(?:\\s+(?:with|in))?|(?:\\b|(?<=\\d))x{1,12}|\\*{2,})[\\s:-]*(?<mask>\\d{4,5})\\b)|)[\\s\\S]*?\\b(?:reduced|decreased|lowered)\\s+(?:the\\s+|your\\s+)?(?:credit|spend|card|total)\\s+limit\\b[^\\n]{0,80}?(?:\\bfrom\\s+(?:rs\\.?|inr|₹)\\s*(?<prev>[\\d,]+(?:\\.\\d{1,2})?)\\s+)?\\bto\\s*(?:rs\\.?|inr|₹)\\s*(?<lim>[\\d,]+(?:\\.\\d{1,2})?)",
       "flags": "i",
       "rejectAny": [
         "eligible for",
@@ -406,7 +406,7 @@
     ],
     "priority": 289,
     "match": {
-      "pattern": "^(?:(?=[\\s\\S]*?(?:ending(?:\\s+(?:with|in))?|\\bx{1,4}|\\*{2,})[\\s:-]*(?<mask>\\d{4,5})\\b)|)[\\s\\S]*?\\b(?:changed|revised|modified|updated)\\s+(?:the\\s+|your\\s+)?(?:credit|spend|card|total)\\s+limit\\b[^\\n]{0,80}?(?:\\bfrom\\s+(?:rs\\.?|inr|₹)\\s*(?<prev>[\\d,]+(?:\\.\\d{1,2})?)\\s+)?\\bto\\s*(?:rs\\.?|inr|₹)\\s*(?<lim>[\\d,]+(?:\\.\\d{1,2})?)",
+      "pattern": "^(?:(?=[\\s\\S]*?(?:ending(?:\\s+(?:with|in))?|(?:\\b|(?<=\\d))x{1,12}|\\*{2,})[\\s:-]*(?<mask>\\d{4,5})\\b)|)[\\s\\S]*?\\b(?:changed|revised|modified|updated)\\s+(?:the\\s+|your\\s+)?(?:credit|spend|card|total)\\s+limit\\b[^\\n]{0,80}?(?:\\bfrom\\s+(?:rs\\.?|inr|₹)\\s*(?<prev>[\\d,]+(?:\\.\\d{1,2})?)\\s+)?\\bto\\s*(?:rs\\.?|inr|₹)\\s*(?<lim>[\\d,]+(?:\\.\\d{1,2})?)",
       "flags": "i",
       "rejectAny": [
         "eligible for",
@@ -479,7 +479,7 @@
     ],
     "priority": 288,
     "match": {
-      "pattern": "^(?:(?=[\\s\\S]*?(?:ending(?:\\s+(?:with|in))?|\\bx{1,4}|\\*{2,})[\\s:-]*(?<mask>\\d{4,5})\\b)|)[\\s\\S]*?\\b(?:credit|card|total)\\s+limit\\b[\\s\\S]{0,100}?\\b(?:enhanced|increased|upgraded|raised)\\b[\\s\\S]{0,100}?\\b(?:new|revised|updated)\\s+(?:credit\\s+|card\\s+)?limit\\s+(?:is|of|:|-)\\s*(?:rs\\.?|inr|₹)\\s*(?<lim>[\\d,]+(?:\\.\\d{1,2})?)",
+      "pattern": "^(?:(?=[\\s\\S]*?(?:ending(?:\\s+(?:with|in))?|(?:\\b|(?<=\\d))x{1,12}|\\*{2,})[\\s:-]*(?<mask>\\d{4,5})\\b)|)[\\s\\S]*?\\b(?:credit|card|total)\\s+limit\\b[\\s\\S]{0,100}?\\b(?:enhanced|increased|upgraded|raised)\\b[\\s\\S]{0,100}?\\b(?:new|revised|updated)\\s+(?:credit\\s+|card\\s+)?limit\\s+(?:is|of|:|-)\\s*(?:rs\\.?|inr|₹)\\s*(?<lim>[\\d,]+(?:\\.\\d{1,2})?)",
       "flags": "i",
       "rejectAny": [
         "eligible for",
@@ -549,7 +549,7 @@
     ],
     "priority": 285,
     "match": {
-      "pattern": "^(?:(?=[\\s\\S]*?(?:ending(?:\\s+(?:with|in))?|\\bx{1,4}|\\*{2,})[\\s:-]*(?<mask>\\d{4,5})\\b)|)[\\s\\S]*?\\b(?:sanctioned|assigned|approved|allotted|activated|issued|set)\\b[^\\n]{0,80}?\\b(?:credit\\s+|card\\s+|total\\s+)limit\\s+(?:of|:|is)?\\s*(?:rs\\.?|inr|₹)\\s*(?<lim>[\\d,]+(?:\\.\\d{1,2})?)",
+      "pattern": "^(?:(?=[\\s\\S]*?(?:ending(?:\\s+(?:with|in))?|(?:\\b|(?<=\\d))x{1,12}|\\*{2,})[\\s:-]*(?<mask>\\d{4,5})\\b)|)[\\s\\S]*?\\b(?:sanctioned|assigned|approved|allotted|activated|issued|set)\\b[^\\n]{0,80}?\\b(?:credit\\s+|card\\s+|total\\s+)limit\\s+(?:of|:|is)?\\s*(?:rs\\.?|inr|₹)\\s*(?<lim>[\\d,]+(?:\\.\\d{1,2})?)",
       "flags": "i",
       "rejectAny": [
         "eligible for",
@@ -629,7 +629,7 @@
     ],
     "priority": 275,
     "match": {
-      "pattern": "^(?:(?=[\\s\\S]*?(?:ending(?:\\s+(?:with|in))?|\\bx{1,4}|\\*{2,})[\\s:-]*(?<mask>\\d{4,5})\\b)|)[\\s\\S]*?\\b(?:credit|card|total)\\s+limit(?:\\s+(?:of|is)|\\s*[:-])\\s*(?:rs\\.?|inr|₹)\\s*(?<lim>[\\d,]+(?:\\.\\d{1,2})?)",
+      "pattern": "^(?:(?=[\\s\\S]*?(?:ending(?:\\s+(?:with|in))?|(?:\\b|(?<=\\d))x{1,12}|\\*{2,})[\\s:-]*(?<mask>\\d{4,5})\\b)|)[\\s\\S]*?\\b(?:credit|card|total)\\s+limit(?:\\s+(?:of|is)|\\s*[:-])\\s*(?:rs\\.?|inr|₹)\\s*(?<lim>[\\d,]+(?:\\.\\d{1,2})?)",
       "flags": "i",
       "rejectAny": [
         "available",
@@ -992,7 +992,7 @@
     ],
     "priority": 289,
     "match": {
-      "pattern": "^(?:(?=[\\s\\S]*?(?:ending(?:\\s+(?:with|in))?|\\bx{1,4}|\\*{2,})[\\s:-]*(?<mask>\\d{4,5})\\b)|)(?:(?=[\\s\\S]*?\\bexpir(?:es?|ing|y|ed)\\b\\W{0,12}(?:on|by|from)?\\W{0,3}(?<exp>\\d{1,2}[-/ ](?:\\d{1,2}|[a-z]{3,9})[-/ ]\\d{2,4})\\b)|)[\\s\\S]*?\\b(?<pts>[\\d,]+)\\s+(?:[a-z0-9+&' -]{0,60}?\\s)?(?:reward\\s+|bonus\\s+|loyalty\\s+|membership\\s+reward\\s+|neu\\s*)?\\w{0,15}(?:points?|coins?)\\b\\s+(?:have\\s+been\\s+|has\\s+been\\s+|were\\s+|was\\s+)?(?:credited|earned|awarded|added|accrued)\\b(?:[^\\n]{0,60}?\\bworth\\s+(?:rs\\.?|inr|₹)\\s*(?<cash>[\\d,]+(?:\\.\\d{1,2})?))?",
+      "pattern": "^(?:(?=[\\s\\S]*?(?:ending(?:\\s+(?:with|in))?|\\bx{1,4}|\\*{2,})[\\s:-]*(?<mask>\\d{4,5})\\b)|)(?:(?=[\\s\\S]*?\\bexpir(?:es?|ing|y|ed)\\b\\W{0,12}(?:on|by|from)?\\W{0,3}(?<exp>\\d{1,2}[-/ ](?:\\d{1,2}|[a-z]{3,9})[-/ ]\\d{2,4})\\b)|)[\\s\\S]*?(?<![\\d/.\\-])\\b(?<pts>\\d+(?:,\\d{2,3})*)\\s+(?:[a-z0-9+&' -]{0,60}?\\s)?(?:reward\\s+|bonus\\s+|loyalty\\s+|membership\\s+reward\\s+|neu\\s*)?\\w{0,15}(?:points?|coins?)\\b\\s+(?:have\\s+been\\s+|has\\s+been\\s+|were\\s+|was\\s+)?(?:credited|earned|awarded|added|accrued)\\b(?:[^\\n]{0,60}?\\bworth\\s+(?:rs\\.?|inr|₹)\\s*(?<cash>[\\d,]+(?:\\.\\d{1,2})?))?",
       "flags": "i",
       "requireAll": [
         "card"
@@ -1060,7 +1060,7 @@
     ],
     "priority": 269,
     "match": {
-      "pattern": "^(?:(?=[\\s\\S]*?\\bexpir(?:es?|ing|y|ed)\\b\\W{0,12}(?:on|by|from)?\\W{0,3}(?<exp>\\d{1,2}[-/ ](?:\\d{1,2}|[a-z]{3,9})[-/ ]\\d{2,4})\\b)|)[\\s\\S]*?\\b(?<pts>[\\d,]+)\\s+(?:[a-z0-9+&' -]{0,60}?\\s)?(?:reward\\s+|bonus\\s+|loyalty\\s+|membership\\s+reward\\s+|neu\\s*)?\\w{0,15}(?:points?|coins?)\\b\\s+(?:have\\s+been\\s+|has\\s+been\\s+|were\\s+|was\\s+)?(?:credited|earned|awarded|added|accrued)\\b(?:[^\\n]{0,60}?\\bworth\\s+(?:rs\\.?|inr|₹)\\s*(?<cash>[\\d,]+(?:\\.\\d{1,2})?))?",
+      "pattern": "^(?:(?=[\\s\\S]*?\\bexpir(?:es?|ing|y|ed)\\b\\W{0,12}(?:on|by|from)?\\W{0,3}(?<exp>\\d{1,2}[-/ ](?:\\d{1,2}|[a-z]{3,9})[-/ ]\\d{2,4})\\b)|)[\\s\\S]*?(?<![\\d/.\\-])\\b(?<pts>\\d+(?:,\\d{2,3})*)\\s+(?:[a-z0-9+&' -]{0,60}?\\s)?(?:reward\\s+|bonus\\s+|loyalty\\s+|membership\\s+reward\\s+|neu\\s*)?\\w{0,15}(?:points?|coins?)\\b\\s+(?:have\\s+been\\s+|has\\s+been\\s+|were\\s+|was\\s+)?(?:credited|earned|awarded|added|accrued)\\b(?:[^\\n]{0,60}?\\bworth\\s+(?:rs\\.?|inr|₹)\\s*(?<cash>[\\d,]+(?:\\.\\d{1,2})?))?",
       "flags": "i",
       "rejectAny": [
         "debited",
@@ -1121,7 +1121,7 @@
     ],
     "priority": 290,
     "match": {
-      "pattern": "^(?:(?=[\\s\\S]*?(?:ending(?:\\s+(?:with|in))?|\\bx{1,4}|\\*{2,})[\\s:-]*(?<mask>\\d{4,5})\\b)|)[\\s\\S]*?\\b(?<pts>[\\d,]+)\\s+(?:[a-z0-9+&' -]{0,60}?\\s)?(?:reward\\s+|bonus\\s+|loyalty\\s+|membership\\s+reward\\s+|neu\\s*)?\\w{0,15}(?:points?|coins?)\\b\\s+(?:have\\s+been\\s+|has\\s+been\\s+|were\\s+|was\\s+)?(?:redeemed|used|utili[sz]ed|debited|deducted|encashed)\\b(?:[^\\n]{0,80}?\\b(?:for|worth|of|=|against)\\s*(?:rs\\.?|inr|₹)\\s*(?<cash>[\\d,]+(?:\\.\\d{1,2})?))?",
+      "pattern": "^(?:(?=[\\s\\S]*?(?:ending(?:\\s+(?:with|in))?|\\bx{1,4}|\\*{2,})[\\s:-]*(?<mask>\\d{4,5})\\b)|)[\\s\\S]*?(?<![\\d/.\\-])\\b(?<pts>\\d+(?:,\\d{2,3})*)\\s+(?:[a-z0-9+&' -]{0,60}?\\s)?(?:reward\\s+|bonus\\s+|loyalty\\s+|membership\\s+reward\\s+|neu\\s*)?\\w{0,15}(?:points?|coins?)\\b\\s+(?:have\\s+been\\s+|has\\s+been\\s+|were\\s+|was\\s+)?(?:redeemed|used|utili[sz]ed|debited|deducted|encashed)\\b(?:[^\\n]{0,80}?\\b(?:for|worth|of|=|against)\\s*(?:rs\\.?|inr|₹)\\s*(?<cash>[\\d,]+(?:\\.\\d{1,2})?))?",
       "flags": "i",
       "requireAll": [
         "card"
@@ -1247,7 +1247,7 @@
     ],
     "priority": 270,
     "match": {
-      "pattern": "^[\\s\\S]*?\\b(?<pts>[\\d,]+)\\s+(?:[a-z0-9+&' -]{0,60}?\\s)?(?:reward\\s+|bonus\\s+|loyalty\\s+|membership\\s+reward\\s+|neu\\s*)?\\w{0,15}(?:points?|coins?)\\b\\s+(?:have\\s+been\\s+|has\\s+been\\s+|were\\s+|was\\s+)?(?:redeemed|used|utili[sz]ed|debited|deducted|encashed)\\b(?:[^\\n]{0,80}?\\b(?:for|worth|of|=|against)\\s*(?:rs\\.?|inr|₹)\\s*(?<cash>[\\d,]+(?:\\.\\d{1,2})?))?",
+      "pattern": "^[\\s\\S]*?(?<![\\d/.\\-])\\b(?<pts>\\d+(?:,\\d{2,3})*)\\s+(?:[a-z0-9+&' -]{0,60}?\\s)?(?:reward\\s+|bonus\\s+|loyalty\\s+|membership\\s+reward\\s+|neu\\s*)?\\w{0,15}(?:points?|coins?)\\b\\s+(?:have\\s+been\\s+|has\\s+been\\s+|were\\s+|was\\s+)?(?:redeemed|used|utili[sz]ed|debited|deducted|encashed)\\b(?:[^\\n]{0,80}?\\b(?:for|worth|of|=|against)\\s*(?:rs\\.?|inr|₹)\\s*(?<cash>[\\d,]+(?:\\.\\d{1,2})?))?",
       "flags": "i",
       "rejectAny": [
         "can be redeemed",

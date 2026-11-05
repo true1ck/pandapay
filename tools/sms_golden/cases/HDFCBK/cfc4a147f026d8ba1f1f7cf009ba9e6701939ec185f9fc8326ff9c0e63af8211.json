@@ -1,0 +1,52 @@
+{
+  "id": "laneq:sip_bank_debit_hdfc",
+  "templateHash": "cfc4a147f026d8ba1f1f7cf009ba9e6701939ec185f9fc8326ff9c0e63af8211",
+  "weight": 1,
+  "source": "synthetic",
+  "messages": [
+    {
+      "sender": "VM-HDFCBK-S",
+      "body": "Rs.2000.00 debited from your HDFC Bank A/c XX1234 on 01-11-26 towards SIP in SAMPLE FUND (ACH/NACH). Avl bal Rs.12,000.00",
+      "observedAt": "2026-11-20T09:00:00.000Z"
+    }
+  ],
+  "expect": {
+    "facts": [
+      {
+        "factType": "movement",
+        "attrs": {
+          "direction": "debit",
+          "purpose": "investment",
+          "rail": "unknown"
+        },
+        "amounts": [
+          {
+            "role": "posted",
+            "minor": 200000
+          }
+        ],
+        "instrument": {
+          "kind": "bank_account",
+          "issuerSlug": "hdfc",
+          "maskDigits": "1234"
+        }
+      },
+      {
+        "factType": "balance_snapshot",
+        "amounts": [
+          {
+            "role": "available_balance",
+            "minor": 1200000
+          }
+        ],
+        "instrument": {
+          "kind": "bank_account",
+          "issuerSlug": "hdfc",
+          "maskDigits": "1234"
+        }
+      }
+    ]
+  },
+  "note": "Bank side of a SIP; purpose investment.",
+  "origin": "lane-q"
+}

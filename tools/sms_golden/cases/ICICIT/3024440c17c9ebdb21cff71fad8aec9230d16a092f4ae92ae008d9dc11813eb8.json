@@ -1,0 +1,32 @@
+{
+  "id": "lanet:limit_change_mask_after_digits",
+  "templateHash": "3024440c17c9ebdb21cff71fad8aec9230d16a092f4ae92ae008d9dc11813eb8",
+  "weight": 1,
+  "source": "synthetic",
+  "messages": [
+    {
+      "sender": "VM-ICICIT-S",
+      "body": "Dear Customer, The credit limit for your Example Bank Credit Card 4315X9008 has been changed from INR 70000 to INR 520000 on 2025-12-21.",
+      "observedAt": "2026-12-01T09:00:00.000Z"
+    }
+  ],
+  "expect": {
+    "facts": [
+      {
+        "factType": "limit_change",
+        "amounts": [
+          {
+            "role": "credit_limit",
+            "minor": 52000000
+          }
+        ],
+        "instrument": {
+          "kind": "credit_card",
+          "maskDigits": "9008"
+        }
+      }
+    ]
+  },
+  "note": "Card mask printed as digits, X, digits.",
+  "origin": "lane-t"
+}

@@ -61,7 +61,7 @@ async function newCard(profileId) {
   return card;
 }
 
-const ingest = (profileId, body, opts = {}) => withUserClient(profileId, (client) => storage.ingestBatch(client, profileId, body, { backfill: opts.backfill === true, deps, hooks }));
+const ingest = (profileId, body, opts = {}) => withUserClient(profileId, (client) => storage.ingestBatch(client, profileId, body, { backfill: opts.backfill === true, categoryOnly: opts.categoryOnly === true, deps, hooks }));
 const byId = (results) => new Map(results.map((r) => [`${r.kind}:${r.id}`, r]));
 const statusOf = (results, kind, id) => { const r = byId(results).get(`${kind}:${id}`); return r ? r.status : undefined; };
 const errorsOf = (results, kind, id) => (byId(results).get(`${kind}:${id}`) || {}).errors;
@@ -113,6 +113,46 @@ test('a full batch is accepted once and is a set of duplicates the second time',
   assert.equal(facts[0].payload.senderBrand, 'HDFCBK');
   const inst = (await pool.query('SELECT instrument_id FROM sms_v2_facts WHERE profile_id = $1', [p])).rows[0].instrument_id;
   assert.equal(inst, s.inst.instrumentId, 'the fact is linked to the instrument matching its mention');
+});
+
+test('history category refresh preserves user choices and cannot change money or card state', { skip }, async () => {
+  const profile = await newProfile();
+  const cardId = await newCard(profile);
+  const spend = cardSpend({ userCardId: cardId });
+  await ingest(profile, spend.body);
+  const before = (await txnsFor(profile))[0];
+  const previousCalls = { apply: calls.apply.length, reverse: calls.reverse.length };
+  const category = { ...spend.l, category: 'groceries', categorySource: 'shared' };
+  await ingest(profile, h.batch({ ledger: [category] }), { categoryOnly: true, backfill: true });
+  const after = (await txnsFor(profile))[0];
+  assert.equal(after.state_applied, before.state_applied);
+  assert.equal(calls.apply.length, previousCalls.apply);
+  assert.equal(calls.reverse.length, previousCalls.reverse);
+  assert.equal(after.amount, before.amount);
+  const customId = crypto.randomUUID();
+  await pool.query("INSERT INTO user_categories(id,profile_id,name,slug) VALUES($1,$2,'Test choice','test-choice')", [customId, profile]);
+  await pool.query('UPDATE transactions SET category_id=NULL,user_category_id=$1 WHERE profile_id=$2 AND event_id=$3', [customId, profile, spend.e.eventId]);
+  await ingest(profile, h.batch({ ledger: [{ ...category, category: 'dining' }] }), { categoryOnly: true });
+  assert.equal((await txnsFor(profile))[0].category_id, null);
+  assert.equal((await pool.query('SELECT user_category_id FROM transactions WHERE profile_id=$1 AND event_id=$2', [profile, spend.e.eventId])).rows[0].user_category_id, customId);
+  await pool.query('UPDATE transactions SET user_category_id=NULL WHERE profile_id=$1 AND event_id=$2', [profile, spend.e.eventId]);
+  const chosen = { ...category, category: 'fuel', categorySource: 'user' };
+  await ingest(profile, h.batch({ ledger: [chosen] }));
+  await ingest(profile, h.batch({ ledger: [{ ...category, amountMinor: 100 }] }), { categoryOnly: true, backfill: true });
+  const saved = (await pool.query('SELECT category_slug, category_source, amount_minor FROM sms_v2_ledger_entries WHERE profile_id=$1 AND entry_id=$2', [profile, category.entryId])).rows[0];
+  assert.equal(saved.category_slug, 'fuel');
+  assert.equal(saved.category_source, 'user');
+  assert.equal(Number(saved.amount_minor), spend.l.amountMinor);
+  await ingest(profile, h.batch({ ledger: [category] }));
+  const protectedRow = (await pool.query('SELECT category_slug, category_source FROM sms_v2_ledger_entries WHERE profile_id=$1 AND entry_id=$2', [profile, category.entryId])).rows[0];
+  assert.equal(protectedRow.category_slug, 'fuel');
+  assert.equal(protectedRow.category_source, 'user');
+  await pool.query("UPDATE transactions SET status='ignored' WHERE profile_id=$1 AND event_id=$2", [profile, spend.e.eventId]);
+  await ingest(profile, h.batch({ ledger: [{ ...chosen, category: 'groceries' }] }), { categoryOnly: true });
+  assert.equal((await txnsFor(profile))[0].status, 'ignored');
+  const unseen = { ...chosen, entryId: h.sha('unseen-category') };
+  const missing = await ingest(profile, h.batch({ ledger: [unseen] }), { categoryOnly: true });
+  assert.equal(statusOf(missing.results, 'ledger', unseen.entryId), 'rejected');
 });
 
 test('a fact repeated inside one request, and the contract fixture, are handled', { skip }, async () => {
@@ -606,9 +646,23 @@ test('POST /sms/v2/facts:batch and GET /sms/v2/sync over HTTP with the real wiri
     const synced = await sync.json();
     assert.deepEqual(contracts.validateResponse('sync', synced), { ok: true, errors: [] });
     assert.equal(synced.events.length, 1);
-    assert.equal(synced.latestBundleVersion, 0, 'no rule bundle published in this database');
+    assert.ok(Number.isInteger(synced.latestBundleVersion) && synced.latestBundleVersion >= 0,
+      'the scratch database may already contain a published development bundle');
     const again = await (await fetch(`${base}/sms/v2/sync?cursor=${encodeURIComponent(synced.cursor)}`, { headers: { 'x-user': a } })).json();
     assert.equal(again.events.length + again.instruments.length + again.ledger.length, 0);
+    const refresh = await fetch(`${base}/sms/v2/categories:batch`, {
+      method: 'POST', headers: { 'content-type': 'application/json', 'content-encoding': 'gzip', 'x-user': a },
+      body: zlib.gzipSync(Buffer.from(JSON.stringify(h.batch({ ledger: [{ ...s.l, category: 'groceries', categorySource: 'shared' }] })))),
+    });
+    assert.equal(refresh.status, 200);
+    const refreshed = await refresh.json();
+    assert.deepEqual(contracts.validateResponse('facts_batch', refreshed), { ok: true, errors: [] });
+    assert.equal(refreshed.results[0].status, 'accepted');
+    const categoryPage = await (await fetch(`${base}/sms/v2/sync?cursor=${encodeURIComponent(synced.cursor)}`, { headers: { 'x-user': a } })).json();
+    assert.equal(categoryPage.ledger.length, 1);
+    assert.equal(categoryPage.ledger[0].category, 'groceries');
+    assert.equal((await txnsFor(a)).length, 1);
+    assert.equal((await txnsFor(a))[0].amount, s.l.amountMinor / 100);
     const other = await (await fetch(`${base}/sms/v2/sync`, { headers: { 'x-user': b } })).json();
     assert.equal(other.events.length, 0);
 

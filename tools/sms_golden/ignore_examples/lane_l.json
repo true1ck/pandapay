@@ -1,0 +1,792 @@
+[
+  {
+    "rule": "IGN-UPI-COLLECT-REQUEST",
+    "positive": [
+      {
+        "sender": "VM-EXAMPL-S",
+        "body": "EXAMPLE STORE has sent a collect request of Rs 120. Approve or decline it in your UPI app."
+      }
+    ],
+    "negative": [
+      {
+        "sender": "VM-EXAMPL-S",
+        "body": "You have received a UPI-Mandate collect request from EXAMPLE MEDIA for Rs.250.00. Login into the Example Pay application to authorize."
+      }
+    ]
+  },
+  {
+    "rule": "IGN-OTP-NUMBER-FIRST",
+    "positive": [
+      {
+        "sender": "VM-EXAMPL-S",
+        "body": "482913 is your Example OTP. Please do not share this code with anyone."
+      },
+      {
+        "sender": "VM-ICICIO-T",
+        "body": "482913 is One-Time Password for USD 12.00 transaction towards EXAMPLE STORE using ICICI Bank Credit Card XX1234. OTPs are SECRET. DO NOT disclose"
+      },
+      {
+        "sender": "VM-EXAMPL-S",
+        "body": "<#> 482913 is your Example account verification code. Ref ABC"
+      }
+    ],
+    "negative": [
+      {
+        "sender": "VM-EXAMPL-S",
+        "body": "USD 12.00 spent on your card XX1234 at EXAMPLE STORE. 482913 is your Example OTP."
+      },
+      {
+        "sender": "VM-EXAMPL-S",
+        "body": "Your OTP request could not be completed. Please try again later."
+      }
+    ]
+  },
+  {
+    "rule": "IGN-OTP-DELIVERY-HANDOVER",
+    "positive": [
+      {
+        "sender": "VM-EXAMPL-S",
+        "body": "Share pin 482913 to complete delivery of your order with AWB: 000123. Share with agent ONLY when he is at your location."
+      },
+      {
+        "sender": "VM-EXAMPL-S",
+        "body": "Your order(1234) is ready for pickup. Please use 4829 valid for 48 hours only during pick up. Share the OTP at counter to collect your order."
+      }
+    ],
+    "negative": [
+      {
+        "sender": "VM-EXAMPL-S",
+        "body": "Your order was delivered. Rs 250 refunded to your wallet. Share your feedback with the agent."
+      }
+    ]
+  },
+  {
+    "rule": "IGN-NOTICE-DO-NOT-SHARE-ADVICE",
+    "positive": [
+      {
+        "sender": "VM-EXAMPL-S",
+        "body": "Dear Cardmember, stay safe from fraud! Never share Credit Card/Debit Card details such as number, CVV, expiry date, or OTP with anyone, including bank staff."
+      },
+      {
+        "sender": "VM-EXAMPL-S",
+        "body": "To avoid loss of your bank account, DO NOT click/share details on suspicious links. For help call the customer care number."
+      }
+    ],
+    "negative": [
+      {
+        "sender": "VM-EXAMPL-S",
+        "body": "Rs 500.00 debited from your card XX1234 at EXAMPLE STORE. Never share OTP with anyone."
+      },
+      {
+        "sender": "VM-EXAMPL-S",
+        "body": "Your OTP is valid for 10 minutes. You can share feedback in the app."
+      }
+    ]
+  },
+  {
+    "rule": "IGN-FEEDBACK-SURVEY-REQUEST",
+    "positive": [
+      {
+        "sender": "VM-EXAMPL-S",
+        "body": "We hope you enjoyed your meal. Please click https://example.invalid/f to share your experience with us."
+      },
+      {
+        "sender": "VM-EXAMPL-S",
+        "body": "Your feedback is important to us. Please spare 20 seconds to share your valuable feedback on the service - https://example.invalid/s"
+      }
+    ],
+    "negative": [
+      {
+        "sender": "VM-EXAMPL-S",
+        "body": "Payment of Rs 250.00 received for your order. Share your feedback at https://example.invalid/f"
+      }
+    ]
+  },
+  {
+    "rule": "IGN-ORDER-STATUS-UPDATE",
+    "positive": [
+      {
+        "sender": "VM-COWRKS-S",
+        "body": "Your order 123456 is accepted by EXAMPLE CAFE -Example"
+      },
+      {
+        "sender": "VM-SLKCLB-S",
+        "body": "Oh no! Your order 123456 on Example has been cancelled. Please get in touch with our support team if you need any help"
+      },
+      {
+        "sender": "VM-BLUDRT-S",
+        "body": "Example Express will deliver your shipment TODAY. Track here: https://example.invalid/t"
+      }
+    ],
+    "negative": [
+      {
+        "sender": "VM-SLKCLB-S",
+        "body": "Your order 123456 is confirmed. Rs 499 paid via UPI."
+      },
+      {
+        "sender": "VM-COWRKS-S",
+        "body": "Your order 123456 was cancelled and the amount was refunded to your account."
+      }
+    ]
+  },
+  {
+    "rule": "IGN-APPOINTMENT-NOTICE",
+    "positive": [
+      {
+        "sender": "VM-IPRCTO-S",
+        "body": "BOOKING FAILED for appointment ID :123456 at Example Clinic. Please retry the booking again. - Example"
+      },
+      {
+        "sender": "VM-IPRCTO-S",
+        "body": "Dear user, your appointment is confirmed to 10:00 AM (IST) on 05-11-26. For more details, visit the app."
+      }
+    ],
+    "negative": [
+      {
+        "sender": "VM-IPRCTO-S",
+        "body": "REFUND PROCESSED! Refund of INR 750 for your CANCELLED Appointment with Appointment ID 123456 is successful."
+      }
+    ]
+  },
+  {
+    "rule": "IGN-TRAVEL-STATUS-NOTICE",
+    "positive": [
+      {
+        "sender": "VM-YURBUS-S",
+        "body": "Track the live location of your bus at https://example.invalid/b Driver contact is in the app. Team Example."
+      },
+      {
+        "sender": "VM-IRSMSA-S",
+        "body": "Train 12345 is running late by 00:20 hrs at Example Junction. Check exact status at https://example.invalid/s"
+      }
+    ],
+    "negative": [
+      {
+        "sender": "VM-YURBUS-S",
+        "body": "Your bus ticket PNR ABC123 is booked. Fare Rs 450.00 was paid. Seat 12."
+      }
+    ]
+  },
+  {
+    "rule": "IGN-TELECOM-DATA-USAGE-ALERT",
+    "positive": [
+      {
+        "sender": "VM-JIOPAY-S",
+        "body": "डेटा वापर अलर्ट! आपण दररोजच्या डेटापैकी 90% वापर केला आहे! Jio नंबर: 90000XXXXX डेटा कोटा: 2GB"
+      },
+      {
+        "sender": "VM-JIOINF-S",
+        "body": "Daily data quota alert: you have used 90% of your daily data. Check the app for details."
+      }
+    ],
+    "negative": [
+      {
+        "sender": "VM-JIOPAY-S",
+        "body": "Rs 299 debited from your wallet for a data pack. Daily data quota alert."
+      }
+    ]
+  },
+  {
+    "rule": "IGN-TELECOM-PLAN-EXPIRY-REMINDER",
+    "positive": [
+      {
+        "sender": "VM-JIOINF-S",
+        "body": "Plan for your Jio number expires tomorrow. Recharge Immediately."
+      },
+      {
+        "sender": "VM-AIRTEL-S",
+        "body": "Airtel Alert: Pack expiring soon. Recharge today to continue your services, click https://example.invalid/r Please ignore if already done."
+      }
+    ],
+    "negative": [
+      {
+        "sender": "VM-AIRTEL-S",
+        "body": "Your plan has been successfully recharged with Rs 299. Plan expires on 05-12-26."
+      }
+    ]
+  },
+  {
+    "rule": "IGN-TELECOM-PROMO-FREE-OFFER",
+    "positive": [
+      {
+        "sender": "VM-AIRTEL-S",
+        "body": "Claim your free caller tune now on the Airtel Thanks App at no extra cost. https://example.invalid/c"
+      },
+      {
+        "sender": "VM-AIRMCA-S",
+        "body": "2 missed call(s) received on 05-11-26 while your Airtel number was not reachable. Get details ONLY on Airtel Thanks App https://example.invalid/m"
+      },
+      {
+        "sender": "VM-JIOFIB-S",
+        "body": "Amazon Prime Lite 1 Year Now in your Jio plan! Activate on the app. https://example.invalid/p"
+      }
+    ],
+    "negative": [
+      {
+        "sender": "VM-AIRTEL-S",
+        "body": "Your recharge of Rs 199 is successful. Claim your free caller tune on the Airtel Thanks App."
+      }
+    ]
+  },
+  {
+    "rule": "IGN-SOCIAL-MATRIMONIAL-NOTICE",
+    "positive": [
+      {
+        "sender": "VM-SHAADI-S",
+        "body": "Hi, based on your preferences, you now have 8 New Matches. Visit https://example.invalid/m now to connect! - Team Example"
+      },
+      {
+        "sender": "VM-SANGAM-S",
+        "body": "Hi, A (26y, City) viewed your profile and seems interested. Find out more: https://example.invalid/p"
+      }
+    ],
+    "negative": [
+      {
+        "sender": "VM-SHAADI-S",
+        "body": "Your membership payment of Rs 4999.00 is successful. Share your profile now."
+      }
+    ]
+  },
+  {
+    "rule": "IGN-GOVT-AWARENESS-NOTICE",
+    "positive": [
+      {
+        "sender": "VM-ISATHI-S",
+        "body": "Want to check how many SIMs are registered in your name? Download Sanchar Saathi: https://example.invalid/s - Department of Telecommunications"
+      },
+      {
+        "sender": "VM-RBISAY-S",
+        "body": "Lost money in a fraudulent scheme? File your complaint at https://example.invalid/c. - Example Regulator"
+      }
+    ],
+    "negative": [
+      {
+        "sender": "VM-ISATHI-S",
+        "body": "Rs 50 debited from your account for SIM verification."
+      }
+    ]
+  },
+  {
+    "rule": "IGN-DEMAT-EVOTING-NOTICE",
+    "positive": [
+      {
+        "sender": "VM-CDSLEV-S",
+        "body": "Dear Investor, e-Voting for EXAMPLE LIMITED begins from 01-01-2027 09:00 and ends at 05-01-2027 17:00.-Example"
+      },
+      {
+        "sender": "VM-CDSLTX-S",
+        "body": "Example: Signature updated in your demat account *1234 on 01/01/2027. Contact your DP for more information."
+      }
+    ],
+    "negative": [
+      {
+        "sender": "VM-CDSLTX-S",
+        "body": "Example: Debit in a/c *1234 for 1-EXAMPLE LIMITED - EQ on 16DEC"
+      }
+    ]
+  },
+  {
+    "rule": "IGN-ASTROLOGY-APP-PROMO",
+    "positive": [
+      {
+        "sender": "VM-ASTCHT-S",
+        "body": "You've been selected to Spin the Wheel for exclusive rewards! Login to your Example account now: https://example.invalid/w Valid for today."
+      },
+      {
+        "sender": "VM-ASTCHT-S",
+        "body": "Your Example service is active. Chat with astrologers and get a bonus of up to Rs 600 on your next recharge."
+      }
+    ],
+    "negative": [
+      {
+        "sender": "VM-ASTCHT-S",
+        "body": "Your Example recharge of Rs 500 was successful. Chat with astrologers now."
+      }
+    ]
+  },
+  {
+    "rule": "IGN-BROADBAND-ACCOUNT-NOTICE",
+    "positive": [
+      {
+        "sender": "VM-BIGVEN-S",
+        "body": "Dear Customer, Your account will be expired on 07/06/2027. Please renew the same to avoid disconnection. Customer Care : 1800000000."
+      },
+      {
+        "sender": "VM-BIGVEN-S",
+        "body": "Dear Customer, due to a technical issue your internet service has been disturbed. Our technical team is working to restore the services."
+      }
+    ],
+    "negative": [
+      {
+        "sender": "VM-BIGVEN-S",
+        "body": "Your account has been renewed. Payment of Rs 600 received successfully."
+      }
+    ]
+  },
+  {
+    "rule": "IGN-CREDIT-REPORT-NOTICE",
+    "positive": [
+      {
+        "sender": "VM-CIBILP-S",
+        "body": "Your Example Report has changed. To know more, subscribe now: https://example.invalid/r -Example"
+      },
+      {
+        "sender": "VM-CIBILA-S",
+        "body": "Your Example & Report was accessed by EXAMPLE BANK on 05-11-26. Know More? Visit https://example.invalid/k"
+      }
+    ],
+    "negative": [
+      {
+        "sender": "VM-CIBILP-S",
+        "body": "Payment of Rs 499 received for your Example Report subscription."
+      }
+    ]
+  },
+  {
+    "rule": "IGN-CONSENT-DATA-SHARING-NOTICE",
+    "positive": [
+      {
+        "sender": "VM-FINVUU-S",
+        "body": "You have consented to share account data with Example Money. If not done by you, use https://example.invalid/r to revoke the consent - Example"
+      },
+      {
+        "sender": "VM-SBIBNK-S",
+        "body": "Alert!!-Dear Customer, you have given consent to share your SBI account details. If not, please visit the branch and revoke the consent. -SBI"
+      }
+    ],
+    "negative": [
+      {
+        "sender": "VM-SBIBNK-S",
+        "body": "Rs 100 debited from your account. You can give consent to share your account details in the app."
+      }
+    ]
+  },
+  {
+    "rule": "IGN-UPI-REGISTRATION-NOTICE",
+    "positive": [
+      {
+        "sender": "VM-PHONPE-S",
+        "body": "You have initiated registration of UPI payments on ExampleApp. If this is not done by you, please report it at https://example.invalid/r"
+      },
+      {
+        "sender": "VM-HDFCBK-S",
+        "body": "Update: We received a request to link your Example Bank Credit Card 1234 to UPI. Not you? Call 1800000000."
+      },
+      {
+        "sender": "VM-HDFCBK-S",
+        "body": "UPI Registration Initiated! By Example Bank App for your Bank A/c. You will receive your UPI address shortly. -Example Bank"
+      }
+    ],
+    "negative": [
+      {
+        "sender": "VM-PHONPE-S",
+        "body": "Paid Rs 100 to EXAMPLE STORE using UPI. UPI Ref 123456789012."
+      }
+    ]
+  },
+  {
+    "rule": "IGN-APP-LOGIN-SETTING-NOTICE",
+    "positive": [
+      {
+        "sender": "VM-HDFCBK-S",
+        "body": "Please note that your attempt to set 4 digit Login PIN via Example Bank mobile app has failed on 13-10-2026 15:29:18. Not you? Call 1800000000"
+      },
+      {
+        "sender": "VM-HDFCBK-S",
+        "body": "Alert! Biometric ID login enabled for Example Bank App on 5th Nov. Not you? Call 1800000000."
+      }
+    ],
+    "negative": [
+      {
+        "sender": "VM-HDFCBK-S",
+        "body": "Rs 100 debited from a/c XX1234. Your login PIN was set successfully."
+      }
+    ]
+  },
+  {
+    "rule": "IGN-CARD-USAGE-SETTING-CONFIRMATION",
+    "positive": [
+      {
+        "sender": "VM-FEDSCP-S",
+        "body": "Hi! You've enabled domestic ECOM transactions on your Example Visa credit card ending with 1234 on 2026-01-10 22:55:43. -Example Bank"
+      },
+      {
+        "sender": "VM-ICICIT-S",
+        "body": "We have applied Usage restrictions on Example Bank Credit Card XX1234. Log in to the app to manage Card Usage."
+      },
+      {
+        "sender": "VM-SBICRD-S",
+        "body": "Dear Cardholder, your request to activate Domestic Online Usage on your Example Credit Card ending 1234 has been accepted and category limit has been set equal to your card limit."
+      }
+    ],
+    "negative": [
+      {
+        "sender": "VM-FEDSCP-S",
+        "body": "Rs 100 spent on your Example Visa credit card ending 1234 at EXAMPLE STORE. International usage enabled."
+      }
+    ]
+  },
+  {
+    "rule": "IGN-CARD-FEE-CHARGES-UPDATE-NOTICE",
+    "positive": [
+      {
+        "sender": "VM-ICICIT-S",
+        "body": "Important update regarding changes to the features and charges of your Example Bank Credit Card XX1234. Visit https://example.invalid/d for details."
+      },
+      {
+        "sender": "VM-ICICIT-S",
+        "body": "Fee for Example Bank Debit Card XX1234 is updated on our website. For details, visit https://example.invalid/f"
+      }
+    ],
+    "negative": [
+      {
+        "sender": "VM-ICICIT-S",
+        "body": "Update: annual fee of Rs 500.00 on your Example Bank Credit Card XX1234 is due."
+      }
+    ]
+  },
+  {
+    "rule": "IGN-CARD-MIN-DUE-RECALCULATED",
+    "positive": [
+      {
+        "sender": "VM-ICICIT-S",
+        "body": "Minimum Amount Due calculation for Example Bank Credit Card XX1234 is updated. Visit https://example.invalid/m for details."
+      }
+    ],
+    "negative": [
+      {
+        "sender": "VM-ICICIT-S",
+        "body": "Minimum Amount Due on your Example Bank Credit Card XX1234 is Rs 500.00, due by 05-12-26."
+      }
+    ]
+  },
+  {
+    "rule": "IGN-CARD-NONPAYMENT-DECLINE-WARNING",
+    "positive": [
+      {
+        "sender": "VM-HDFCBK-S",
+        "body": "Example Bank Cardmember, transactions may get declined due to non-receipt of payment for 01/JAN/2027 statement on card 1234. Ignore if payment already initiated"
+      }
+    ],
+    "negative": [
+      {
+        "sender": "VM-HDFCBK-S",
+        "body": "Payment of Rs 500.00 received. Transactions may get declined if payment is not made."
+      }
+    ]
+  },
+  {
+    "rule": "IGN-CARD-LOAN-EMI-PROMO",
+    "positive": [
+      {
+        "sender": "VM-HDFCBN-S",
+        "body": "Dear Customer, based on your Example Bank Credit Card usage, a loan facility has been enabled. Check details: https://example.invalid/l T&C"
+      },
+      {
+        "sender": "VM-YESBNK-S",
+        "body": "URGENT! An update related to outstanding to EMI conversion on your Example Credit Card xx1234 is now available. Review: https://example.invalid/e -Example"
+      },
+      {
+        "sender": "VM-YESBNK-S",
+        "body": "Access Loan of INR 50,000.00 on your Example Credit Card 1234 by providing consent here: https://example.invalid/c"
+      }
+    ],
+    "negative": [
+      {
+        "sender": "VM-YESBNK-S",
+        "body": "Your Example Credit Card XX1234 EMI of Rs 1,500.00 was debited. Convert more spends into EMI in the app."
+      }
+    ]
+  },
+  {
+    "rule": "IGN-BANK-SERVICE-DOWNTIME-NOTICE",
+    "positive": [
+      {
+        "sender": "VM-YESBNK-S",
+        "body": "Due to a system upgrade, our digital banking services will be unavailable on 5th Nov from 01:00 AM to 03:00 AM. Click https://example.invalid/d - Example Bank"
+      },
+      {
+        "sender": "VM-SBIBNK-S",
+        "body": "Dear Customer, For your convenience, Example Bank branches will remain open on Sunday, 8 Nov. Please visit any branch for your banking needs."
+      }
+    ],
+    "negative": [
+      {
+        "sender": "VM-YESBNK-S",
+        "body": "Rs 100 debited from your account during the scheduled maintenance window."
+      }
+    ]
+  },
+  {
+    "rule": "IGN-ACCOUNT-LOCK-NOTICE",
+    "positive": [
+      {
+        "sender": "VM-KOTAKN-S",
+        "body": "Due to multiple login attempts your Example Bank account has been locked. To unlock, please login with Mobile and password."
+      }
+    ],
+    "negative": [
+      {
+        "sender": "VM-KOTAKN-S",
+        "body": "Rs 100 debited. Multiple login attempts detected; your account has been locked."
+      }
+    ]
+  },
+  {
+    "rule": "IGN-CARD-PIN-ACTIVATION-NOTICE",
+    "positive": [
+      {
+        "sender": "VM-SBICRD-S",
+        "body": "Dear Example Credit Cardholder, e-pin for Example Card ending 1234 has been sent to your registered e-mail ID."
+      },
+      {
+        "sender": "VM-SBICRD-S",
+        "body": "Dear Customer, you need to activate your new Example Credit Card 1234 before 01-12-2026 to avoid card closure. Activate now: https://example.invalid/a"
+      },
+      {
+        "sender": "VM-SSFBNK-S",
+        "body": "PIN has been successfully generated for your Example Credit Card 1234. Do not share PIN with anyone."
+      }
+    ],
+    "negative": [
+      {
+        "sender": "VM-SBICRD-S",
+        "body": "Rs 100 spent on your new Example Credit Card 1234. PIN has been successfully set."
+      }
+    ]
+  },
+  {
+    "rule": "IGN-CARD-APPLICATION-STATUS-NOTICE",
+    "positive": [
+      {
+        "sender": "VM-SBICRD-S",
+        "body": "Dear Applicant, thank you for applying for Example Credit Card. Your Application No. 123456 is being processed with tentative credit limit ranging between Rs. 1000 and Rs. 5000."
+      }
+    ],
+    "negative": [
+      {
+        "sender": "VM-SBICRD-S",
+        "body": "Thank you for applying. Rs 500 debited as joining fee on your Example Credit Card 1234."
+      }
+    ]
+  },
+  {
+    "rule": "IGN-SPAM-WHATSAPP-JOB-OFFER",
+    "positive": [
+      {
+        "sender": "VM-EXAMPL-S",
+        "body": "Hi Dear, Salary payment of Rs.30000 for working at home. Contact api.whatsapp.com/send?phone=910000000000 Team Example"
+      },
+      {
+        "sender": "VM-EXAMPL-T",
+        "body": "There is no restriction on working location, salary Rs 30000. Contact at api.whatsapp.com/send?phone=910000000000"
+      }
+    ],
+    "negative": [
+      {
+        "sender": "VM-EXAMPL-S",
+        "body": "Rs 30000 credited to your account as salary. Contact support on api.whatsapp.com/send?phone=910000000000"
+      }
+    ]
+  },
+  {
+    "rule": "IGN-GOVT-EXAM-NOTICE",
+    "positive": [
+      {
+        "sender": "VM-SSCBLR-S",
+        "body": "Please refer to the Important Notice uploaded on 21.09.2026 at example.gov.in for the examination. -Example Commission"
+      },
+      {
+        "sender": "VM-SSCSMS-G",
+        "body": "Your Example Registration number is 1000000000 and password is 000000. Registration is partial and should be completed within 14 days."
+      }
+    ],
+    "negative": [
+      {
+        "sender": "VM-SSCBLR-S",
+        "body": "Exam fee Rs 100 debited from your account."
+      }
+    ]
+  },
+  {
+    "rule": "IGN-TRAVEL-BOOKING-INCOMPLETE",
+    "positive": [
+      {
+        "sender": "VM-MMTRIP-S",
+        "body": "Your Example train booking (NR0000000000) is pending. Please complete your booking by entering your IRCTC password at this link : https://example.invalid/t"
+      }
+    ],
+    "negative": [
+      {
+        "sender": "VM-MMTRIP-S",
+        "body": "Your Example train booking is pending. Rs 450 debited. Please complete your booking."
+      }
+    ]
+  },
+  {
+    "rule": "IGN-TELECOM-PROMO-HANDLE-OFFER",
+    "positive": [
+      {
+        "sender": "VM-650025-P",
+        "body": "Never run out of data during important moments. Get 2GB + 1GB rollover on the Example pack at just Rs 99. Recharge now https://example.invalid/r"
+      },
+      {
+        "sender": "VM-650022-P",
+        "body": "Start every call with your favourite tune. Choose your FREE Hellotune on the Airtel Thanks app. https://example.invalid/h"
+      }
+    ],
+    "negative": [
+      {
+        "sender": "VM-650025-P",
+        "body": "Recharge of Rs 99 was successful on your Airtel number. Plan valid till 05-12-26."
+      }
+    ]
+  },
+  {
+    "rule": "IGN-EDUCATION-ADMISSION-PROMO",
+    "positive": [
+      {
+        "sender": "VM-PREUNI-S",
+        "body": "Avail Merit Scholarship upto 100% at Example University. Apply https://example.invalid/a or Call 1800000000."
+      },
+      {
+        "sender": "VM-STMRUN-S",
+        "body": "Applications 2027 session open for B.Tech at Example University. Apply https://example.invalid/b"
+      }
+    ],
+    "negative": [
+      {
+        "sender": "VM-PREUNI-S",
+        "body": "Admission fee Rs 5000 debited from your account for Example University."
+      }
+    ]
+  },
+  {
+    "rule": "IGN-TELECOM-JIO-SERVICE-PROMO",
+    "positive": [
+      {
+        "sender": "VM-JIOSVC-S",
+        "body": "JioTunes service has been deactivated on your Jio Number 90000XXXXX. To set free JioTune, log in to the MyJio app."
+      },
+      {
+        "sender": "VM-JIONET-S",
+        "body": "Congratulations! Your 2-month Example Mobile subscription is now active on Jio number 90000XXXXX."
+      }
+    ],
+    "negative": [
+      {
+        "sender": "VM-JIOSVC-S",
+        "body": "Rs 99 debited for your JioTunes subscription renewal."
+      }
+    ]
+  },
+  {
+    "rule": "IGN-HOME-SERVICE-PROMO",
+    "positive": [
+      {
+        "sender": "VM-NBHOME-S",
+        "body": "Home service in 15 mins on the Example App. No calls, no wait. Cleaning, AC service, plumbing and more. https://example.invalid/h"
+      }
+    ],
+    "negative": [
+      {
+        "sender": "VM-NBHOME-S",
+        "body": "Payment of Rs 289 received for AC servicing."
+      }
+    ]
+  },
+  {
+    "rule": "IGN-DEALERSHIP-SERVICE-NOTICE",
+    "positive": [
+      {
+        "sender": "VM-TVSMTR-S",
+        "body": "Thanks for doing service in our showroom. Please click the link to get your invoice copy https://example.invalid/i . Team Example"
+      },
+      {
+        "sender": "VM-TVSMOT-S",
+        "body": "Dear Customer, we have started working on your vehicle. Click the link https://example.invalid/p to see the photos. Job card No-123 T&C."
+      }
+    ],
+    "negative": [
+      {
+        "sender": "VM-TVSMTR-S",
+        "body": "Your vehicle is ready for delivery after service. Bill amount is Rs 4500."
+      }
+    ]
+  },
+  {
+    "rule": "IGN-CARD-LIMIT-CHANGE-OFFER",
+    "positive": [
+      {
+        "sender": "VM-ICICIT-S",
+        "body": "Manage spends effectively by increasing the limit on Example Bank Credit Card XX1234 from Rs 100000.00 to Rs120000. SMS CRLIM 1234 to 5676766 to raise the limit"
+      }
+    ],
+    "negative": [
+      {
+        "sender": "VM-ICICIT-S",
+        "body": "Your credit limit has been increased by Rs 20000 and Rs 5000 was debited as a fee."
+      }
+    ]
+  },
+  {
+    "rule": "IGN-RENTAL-LATE-FEE-WARNING",
+    "positive": [
+      {
+        "sender": "VM-RNTMJO-S",
+        "body": "Hi, please note that 10% of your Example invoice amount will be added to your invoice as late payment charges on the 11th of this month. Please click here to clear your dues: https://example.invalid/d"
+      }
+    ],
+    "negative": [
+      {
+        "sender": "VM-RNTMJO-S",
+        "body": "Hi, we have received a payment of Rs 6000 against your rental payment. Late payment charges will be added if unpaid."
+      }
+    ]
+  },
+  {
+    "rule": "IGN-ACCOUNT-RECOVERY-REQUEST-NOTICE",
+    "positive": [
+      {
+        "sender": "VM-IRCTCI-S",
+        "body": "A request has been received to recover your account registered with Example. If not done by you, please raise query at https://example.invalid/q -Example"
+      }
+    ],
+    "negative": [
+      {
+        "sender": "VM-IRCTCI-S",
+        "body": "A request has been received to book a ticket. Rs 450 debited from your account."
+      }
+    ]
+  },
+  {
+    "rule": "IGN-CARD-EXPIRY-REPLACEMENT-NOTICE",
+    "positive": [
+      {
+        "sender": "VM-HDFCBK-S",
+        "body": "Alert! Example Bank Debit Card XX1234 expires on 30-Jun. Renew by 15-Jun via online banking. Update address: https://example.invalid/a"
+      }
+    ],
+    "negative": [
+      {
+        "sender": "VM-HDFCBK-S",
+        "body": "Rs 100 debited from Debit Card XX1234 which expires on 30-Jun."
+      }
+    ]
+  },
+  {
+    "rule": "IGN-OTP-NOT-DELIVERED-NOTICE",
+    "positive": [
+      {
+        "sender": "VM-COINDC-S",
+        "body": "Dear user, OTP couldn't be delivered as you already have an Example account. Please login instead of creating an account."
+      }
+    ],
+    "negative": [
+      {
+        "sender": "VM-COINDC-S",
+        "body": "Rs 100 debited. OTP couldn't be delivered to your registered number."
+      }
+    ]
+  }
+]

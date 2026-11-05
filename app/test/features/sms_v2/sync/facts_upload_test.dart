@@ -131,6 +131,38 @@ void main() {
       expect(queue.due(now).every((item) => item.attempts == 1), isTrue);
     },
   );
+  test(
+    'category refresh uses its restricted endpoint and never mixes normal changes',
+    () async {
+      final old = queue.due(now).firstWhere((entry) => entry.kind == 'ledger');
+      queue.enqueue(
+        'ledger',
+        old.json['entryId'] as String,
+        old.json,
+        backfill: true,
+        categoryOnly: true,
+      );
+      final paths = <String>[];
+      final upload = uploader(
+        MockClient((request) async {
+          paths.add(request.url.path);
+          final body = decode(request);
+          if (request.url.path == '/sms/v2/categories:batch') {
+            expect(body['items'], isEmpty);
+            expect(body['events'], isEmpty);
+            expect(body['instruments'], isEmpty);
+            expect(body['ledger'], hasLength(1));
+            expect(request.url.queryParameters['backfill'], 'true');
+            expect(request.body.contains('_categoryOnly'), isFalse);
+          }
+          return http.Response(jsonEncode({'results': accepted(body)}), 200);
+        }),
+      );
+      await upload.drain();
+      expect(paths, ['/sms/v2/facts:batch', '/sms/v2/categories:batch']);
+      expect(queue.due(now), isEmpty);
+    },
+  );
 
   test(
     'concurrent triggers share one request and keep an in-flight update',

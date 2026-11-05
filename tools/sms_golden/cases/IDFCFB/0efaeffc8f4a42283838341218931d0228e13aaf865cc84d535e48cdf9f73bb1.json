@@ -1,0 +1,52 @@
+{
+  "id": "laneq:card_used_for_credit_idfc",
+  "templateHash": "0efaeffc8f4a42283838341218931d0228e13aaf865cc84d535e48cdf9f73bb1",
+  "weight": 1,
+  "source": "synthetic",
+  "messages": [
+    {
+      "sender": "VM-IDFCFB-S",
+      "body": "Your IDFC FIRST Bank Credit Card ending 1234 has been used for INR 1,250.00 at ACME STORE on 01-NOV-26. Available limit INR 50,000.00",
+      "observedAt": "2026-11-20T09:00:00.000Z"
+    }
+  ],
+  "expect": {
+    "facts": [
+      {
+        "factType": "movement",
+        "attrs": {
+          "direction": "debit",
+          "purpose": "purchase",
+          "rail": "card"
+        },
+        "amounts": [
+          {
+            "role": "posted",
+            "minor": 125000
+          }
+        ],
+        "instrument": {
+          "kind": "credit_card",
+          "issuerSlug": "idfc",
+          "maskDigits": "1234"
+        }
+      },
+      {
+        "factType": "balance_snapshot",
+        "amounts": [
+          {
+            "role": "available_credit",
+            "minor": 5000000
+          }
+        ],
+        "instrument": {
+          "kind": "credit_card",
+          "issuerSlug": "idfc",
+          "maskDigits": "1234"
+        }
+      }
+    ]
+  },
+  "note": "Wording guess: \"has been used for\". Before this lane only the available-limit snapshot was captured and the spend was lost.",
+  "origin": "lane-q"
+}

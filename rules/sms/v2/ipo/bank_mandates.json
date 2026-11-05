@@ -1,0 +1,474 @@
+[
+  {
+    "id": "IPO-ICICI-MANDATE-RAISED-FOR-APPROVAL",
+    "version": 1,
+    "family": "ipo_notice",
+    "senders": [
+      "*"
+    ],
+    "priority": 840,
+    "match": {
+      "pattern": "the\\s+mandate\\s+of\\s+(?:rs\\.?|inr|₹)\\s*(?<amt>(?=[\\d,]*\\d[\\d,]*\\d[\\d,]*\\d[\\d,]*\\d[\\d,]*\\d)[\\d,]+(?:\\.\\d{1,2})?)\\s+is\\s+raised\\s+by\\s+(?<issue>[a-z0-9&.' ()-]+?)\\s+on\\s+(?<date>\\d{2}-[a-z]{3}-\\d{2,4})\\s+for\\s+your\\s+approval",
+      "flags": "i"
+    },
+    "emit": [
+      {
+        "factType": "info",
+        "attrs": {
+          "category": "service",
+          "amountMinor": {
+            "from": "amt"
+          }
+        }
+      }
+    ],
+    "confidence": 0.93,
+    "examples": [
+      {
+        "sender": "AX-ICICIT-S",
+        "body": "Dear Customer, the mandate of INR 15000.00 is raised by SAMPLE WORKS LI on 10-Aug-26 for your approval, through RRN 600100200300-ICICI Bank.",
+        "expectFactTypes": [
+          "info"
+        ]
+      },
+      {
+        "sender": "AX-ICICIT-S",
+        "body": "Dear Customer, the mandate of INR 649.00 is raised by SAMPLE STREAM on 10-Aug-26 for your approval, through RRN 600100200300-ICICI Bank.",
+        "expectFactTypes": []
+      }
+    ],
+    "status": "active",
+    "createdBy": "lane-h",
+    "updatedAt": "2026-11-05T00:00:00Z"
+  },
+  {
+    "id": "IPO-ICICI-MANDATE-APPROVED",
+    "version": 1,
+    "family": "ipo_mandate",
+    "senders": [
+      "*"
+    ],
+    "priority": 840,
+    "match": {
+      "pattern": "you\\s+have\\s+approved\\s+the\\s+mandate\\s+of\\s+(?:rs\\.?|inr|₹)\\s*(?<amt>(?=[\\d,]*\\d[\\d,]*\\d[\\d,]*\\d[\\d,]*\\d[\\d,]*\\d)[\\d,]+(?:\\.\\d{1,2})?)\\s+raised\\s+by\\s+(?<issue>[a-z0-9&.' ()-]+?)\\s+on\\s+(?<date>\\d{2}-[a-z]{3}-\\d{2,4})\\s*,\\s*through\\s+rrn\\s*(?<ref_upiRef>\\d{6,})",
+      "flags": "i"
+    },
+    "emit": [
+      {
+        "factType": "mandate",
+        "attrs": {
+          "phase": "created",
+          "merchantName": {
+            "from": "issue",
+            "transforms": [
+              "upperTrim"
+            ]
+          },
+          "mandatePurpose": "ipo",
+          "oneTime": true
+        },
+        "amounts": [
+          {
+            "role": "ceiling",
+            "from": "amt",
+            "unit": "INR"
+          }
+        ],
+        "occurredAt": {
+          "from": "date"
+        }
+      }
+    ],
+    "confidence": 0.93,
+    "examples": [
+      {
+        "sender": "AX-ICICIT-S",
+        "body": "Dear Customer, you have approved the mandate of INR 15000.00 raised by SAMPLE WORKS LI on 10-Aug-26, through RRN 600100200300-ICICI Bank.",
+        "expectFactTypes": [
+          "mandate"
+        ]
+      },
+      {
+        "sender": "AX-ICICIT-S",
+        "body": "Dear Customer, you have approved the mandate of INR 649.00 raised by SAMPLE STREAM on 10-Aug-26, through RRN 600100200300-ICICI Bank.",
+        "expectFactTypes": []
+      }
+    ],
+    "status": "active",
+    "createdBy": "lane-h",
+    "updatedAt": "2026-11-05T00:00:00Z"
+  },
+  {
+    "id": "IPO-ICICI-ONETIME-AUTOPAY-CREATED",
+    "version": 1,
+    "family": "ipo_hold",
+    "senders": [
+      "*"
+    ],
+    "priority": 840,
+    "match": {
+      "pattern": "your\\s+autopay\\s+mandate\\s+with\\s+onetime\\s+is\\s+successfully\\s+created\\s+towards\\s+(?<issue>[a-z0-9&.' ()-]+?)\\s+from\\s+(?<date>\\d{2}-[a-z]{3}-\\d{2,4})\\s+to\\s+\\d{2}-[a-z]{3}-\\d{2,4}\\s+for\\s+(?:rs\\.?|inr|₹)\\s*(?<amt>(?=[\\d,]*\\d[\\d,]*\\d[\\d,]*\\d[\\d,]*\\d[\\d,]*\\d)[\\d,]+(?:\\.\\d{1,2})?)\\s*,\\s*rrn\\s*(?<ref_upiRef>\\d{6,})",
+      "flags": "i"
+    },
+    "emit": [
+      {
+        "factType": "hold",
+        "attrs": {
+          "phase": "placed",
+          "purpose": "ipo_asba",
+          "issueName": {
+            "from": "issue",
+            "transforms": [
+              "upperTrim"
+            ]
+          }
+        },
+        "amounts": [
+          {
+            "role": "held",
+            "from": "amt",
+            "unit": "INR"
+          }
+        ],
+        "instrument": {
+          "kind": "bank_account"
+        },
+        "occurredAt": {
+          "from": "date"
+        }
+      },
+      {
+        "factType": "mandate",
+        "attrs": {
+          "phase": "created",
+          "merchantName": {
+            "from": "issue",
+            "transforms": [
+              "upperTrim"
+            ]
+          },
+          "mandatePurpose": "ipo",
+          "oneTime": true
+        },
+        "amounts": [
+          {
+            "role": "ceiling",
+            "from": "amt",
+            "unit": "INR"
+          }
+        ],
+        "instrument": {
+          "sameAs": 0
+        },
+        "occurredAt": {
+          "from": "date"
+        }
+      }
+    ],
+    "confidence": 0.92,
+    "examples": [
+      {
+        "sender": "AX-ICICIT-S",
+        "body": "Your AutoPay mandate with ONETIME is successfully created towards SAMPLE WORKS LI from 10-Aug-26 to 25-Aug-26 for Rs 15000.00, RRN 600100200300-ICICI Bank.",
+        "expectFactTypes": [
+          "hold",
+          "mandate"
+        ]
+      },
+      {
+        "sender": "AX-ICICIT-S",
+        "body": "Your AutoPay mandate with ONETIME is successfully created towards SAMPLE STREAM from 10-Aug-26 to 25-Aug-26 for Rs 299.00, RRN 600100200300-ICICI Bank.",
+        "expectFactTypes": []
+      }
+    ],
+    "status": "active",
+    "createdBy": "lane-h",
+    "updatedAt": "2026-11-05T00:00:00Z"
+  },
+  {
+    "id": "IPO-ICICI-MANDATE-REDEEMED",
+    "version": 1,
+    "family": "ipo_hold",
+    "senders": [
+      "*"
+    ],
+    "priority": 840,
+    "match": {
+      "pattern": "the\\s+mandate\\s+of\\s+(?:rs\\.?|inr|₹)\\s*(?<amt>(?=[\\d,]*\\d[\\d,]*\\d[\\d,]*\\d[\\d,]*\\d[\\d,]*\\d)[\\d,]+(?:\\.\\d{1,2})?)\\s+raised\\s+by\\s+(?<issue>[a-z0-9&.' ()-]+?)\\s+on\\s+(?<date>\\d{2}-[a-z]{3}-\\d{2,4})\\s+and\\s+is\\s+successfully\\s+redeemed\\s+through\\s+rrn\\s*(?<ref_upiRef>\\d{6,})",
+      "flags": "i"
+    },
+    "emit": [
+      {
+        "factType": "hold",
+        "attrs": {
+          "phase": "converted",
+          "purpose": "ipo_asba",
+          "issueName": {
+            "from": "issue",
+            "transforms": [
+              "upperTrim"
+            ]
+          }
+        },
+        "amounts": [
+          {
+            "role": "held",
+            "from": "amt",
+            "unit": "INR"
+          }
+        ],
+        "instrument": {
+          "kind": "bank_account"
+        },
+        "occurredAt": {
+          "from": "date"
+        }
+      }
+    ],
+    "confidence": 0.9,
+    "examples": [
+      {
+        "sender": "AX-ICICIT-S",
+        "body": "Dear Customer, the mandate of INR 15000.00 raised by SAMPLE WORKS LI on 10-Aug-26 and is successfully redeemed through RRN 600100200300 -ICICI Bank.",
+        "expectFactTypes": [
+          "hold"
+        ]
+      },
+      {
+        "sender": "AX-ICICIT-S",
+        "body": "Dear Customer, the mandate of INR 15000.00 raised by SAMPLE WORKS LI on 10-Aug-26 and is revoked through RRN 600100200300-ICICI Bank.",
+        "expectFactTypes": []
+      }
+    ],
+    "status": "active",
+    "createdBy": "lane-h",
+    "updatedAt": "2026-11-05T00:00:00Z"
+  },
+  {
+    "id": "IPO-ICICI-UNBLOCK-AGAINST-ISSUER",
+    "version": 1,
+    "family": "ipo_hold",
+    "senders": [
+      "*"
+    ],
+    "priority": 840,
+    "match": {
+      "pattern": "account\\s+no\\.?\\s*[x*]*(?<mask>\\d{2,6})\\s+has\\s+been\\s+unblocked\\s+by\\s+an\\s+amount\\s+of\\s+(?:rs\\.?|inr|₹)\\s*(?<amt>\\d[\\d,]*(?:\\.\\d{1,2})?)\\s*,?\\s+against\\s+(?:the\\s+)?(?<issue>[a-z0-9&.' ()-]+?)\\s+on\\s+(?<date>\\d{2}-(?:\\d{2}|[a-z]{3})-\\d{2,4})",
+      "flags": "i",
+      "rejectAny": [
+        "one-time mandate"
+      ]
+    },
+    "emit": [
+      {
+        "factType": "hold",
+        "attrs": {
+          "phase": "released",
+          "purpose": "ipo_asba",
+          "issueName": {
+            "from": "issue",
+            "transforms": [
+              "upperTrim"
+            ]
+          }
+        },
+        "amounts": [
+          {
+            "role": "released",
+            "from": "amt",
+            "unit": "INR"
+          }
+        ],
+        "instrument": {
+          "kind": "bank_account",
+          "maskFrom": "mask"
+        },
+        "occurredAt": {
+          "from": "date"
+        }
+      }
+    ],
+    "confidence": 0.93,
+    "examples": [
+      {
+        "sender": "AX-ICICIT-S",
+        "body": "Your ICICI Bank account no XXXXXXXXX123 has been unblocked by an amount of INR 15000.00, against the SAMPLE WORKS LTD on 15-08-2026.",
+        "expectFactTypes": [
+          "hold"
+        ]
+      },
+      {
+        "sender": "AX-ICICIT-S",
+        "body": "Dear Customer, your account has been unblocked by an amount of INR 15000.00, against the UPI one-time mandate-ICICI Bank.",
+        "expectFactTypes": []
+      }
+    ],
+    "status": "active",
+    "createdBy": "lane-h",
+    "updatedAt": "2026-11-05T00:00:00Z"
+  },
+  {
+    "id": "IPO-SBI-MANDATE-BLOCKED",
+    "version": 1,
+    "family": "ipo_hold",
+    "senders": [
+      "*"
+    ],
+    "priority": 840,
+    "match": {
+      "pattern": "upi[- ]mandate\\s+successfully\\s+created\\s+towards\\s+(?<issue>[a-z0-9&.' ()-]+?)\\s+for\\s+(?:rs\\.?|inr|₹)\\s*(?<amt>\\d[\\d,]*(?:\\.\\d{1,2})?)\\.\\s*funds\\s+blocked\\s+fr(?:o)?m\\s+a/c\\s*[x*]*(?<mask>\\d{2,6})(?:\\.(?<ref_umrn>[a-z0-9]+@[a-z0-9]+))?",
+      "flags": "i"
+    },
+    "emit": [
+      {
+        "factType": "hold",
+        "attrs": {
+          "phase": "placed",
+          "purpose": "ipo_asba",
+          "issueName": {
+            "from": "issue",
+            "transforms": [
+              "upperTrim"
+            ]
+          }
+        },
+        "amounts": [
+          {
+            "role": "held",
+            "from": "amt",
+            "unit": "INR"
+          }
+        ],
+        "instrument": {
+          "kind": "bank_account",
+          "maskFrom": "mask"
+        }
+      },
+      {
+        "factType": "mandate",
+        "attrs": {
+          "phase": "created",
+          "merchantName": {
+            "from": "issue",
+            "transforms": [
+              "upperTrim"
+            ]
+          },
+          "mandatePurpose": "ipo",
+          "oneTime": true
+        },
+        "amounts": [
+          {
+            "role": "ceiling",
+            "from": "amt",
+            "unit": "INR"
+          }
+        ],
+        "instrument": {
+          "sameAs": 0
+        }
+      }
+    ],
+    "confidence": 0.95,
+    "examples": [
+      {
+        "sender": "VM-SBIUPI-S",
+        "body": "UPI-Mandate successfully created towards SAMPLE WORKS LIMITED for Rs15000.00. Funds blocked frm A/cXXXXXX1234.abcdef0123456789abcdef0123456789@oksbi -SBI",
+        "expectFactTypes": [
+          "hold",
+          "mandate"
+        ]
+      },
+      {
+        "sender": "VM-SBIUPI-S",
+        "body": "UPI-Mandate successfully created towards SAMPLE STREAM for Rs199.00 -SBI",
+        "expectFactTypes": []
+      }
+    ],
+    "status": "active",
+    "createdBy": "lane-h",
+    "updatedAt": "2026-11-05T00:00:00Z"
+  },
+  {
+    "id": "IPO-SBI-MANDATE-REVOKED-UNBLOCKED",
+    "version": 1,
+    "family": "ipo_hold",
+    "senders": [
+      "*"
+    ],
+    "priority": 840,
+    "match": {
+      "pattern": "upi[- ]mandate\\s+successfully\\s+revoked\\s+towards\\s+(?<issue>[a-z0-9&.' ()-]+?)\\s+for\\s+(?:rs\\.?|inr|₹)\\s*(?<amt>\\d[\\d,]*(?:\\.\\d{1,2})?)\\.\\s*funds\\s+unblocked\\s+fr(?:o)?m\\s+a/c\\s*[x*]*(?<mask>\\d{2,6})(?:\\.(?<ref_umrn>[a-z0-9]+@[a-z0-9]+))?",
+      "flags": "i"
+    },
+    "emit": [
+      {
+        "factType": "mandate",
+        "attrs": {
+          "phase": "revoked",
+          "merchantName": {
+            "from": "issue",
+            "transforms": [
+              "upperTrim"
+            ]
+          },
+          "mandatePurpose": "ipo",
+          "oneTime": true
+        },
+        "amounts": [
+          {
+            "role": "ceiling",
+            "from": "amt",
+            "unit": "INR"
+          }
+        ],
+        "instrument": {
+          "kind": "bank_account",
+          "maskFrom": "mask"
+        }
+      },
+      {
+        "factType": "hold",
+        "attrs": {
+          "phase": "released",
+          "purpose": "ipo_asba",
+          "issueName": {
+            "from": "issue",
+            "transforms": [
+              "upperTrim"
+            ]
+          }
+        },
+        "amounts": [
+          {
+            "role": "released",
+            "from": "amt",
+            "unit": "INR"
+          }
+        ],
+        "instrument": {
+          "sameAs": 0
+        }
+      }
+    ],
+    "confidence": 0.95,
+    "examples": [
+      {
+        "sender": "VM-SBIUPI-S",
+        "body": "UPI-Mandate successfully Revoked towards SAMPLE WORKS LIMITED for Rs15000.00. Funds unblocked frm A/cXXXXXX1234.abcdef0123456789abcdef0123456789@oksbi -SBI",
+        "expectFactTypes": [
+          "mandate",
+          "hold"
+        ]
+      },
+      {
+        "sender": "VM-SBIUPI-S",
+        "body": "UPI-Mandate successfully Revoked by SAMPLE STREAM for Rs199.00 -SBI",
+        "expectFactTypes": []
+      }
+    ],
+    "status": "active",
+    "createdBy": "lane-h",
+    "updatedAt": "2026-11-05T00:00:00Z"
+  }
+]

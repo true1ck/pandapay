@@ -15,6 +15,7 @@ import 'package:pandapay/features/sms_v2/storage/sync_state_store.dart';
 import 'package:pandapay/features/sms_v2/sync/sync_pull.dart';
 import 'package:pandapay_domain/sms_v2.dart';
 import 'package:sqlite3/sqlite3.dart';
+import '../support/rules.dart';
 
 void main() {
   late AppDatabase database;
@@ -99,12 +100,155 @@ void main() {
   );
 
   test(
+    'a category-only sync does not replace an existing custom display category',
+    () async {
+      final client = MockClient((_) async => response());
+      await puller(client: client).pull();
+      final row = financial.entities('target', 'transactions').single;
+      database.db.execute(
+        "UPDATE financial_entities SET payload=? WHERE namespace='target' AND entity='transactions' AND id=?",
+        [
+          jsonEncode({
+            ...row,
+            'category_id': null,
+            'user_category_id': '10000000-0000-4000-8000-000000000001',
+            'category_name': 'My category',
+          }),
+          row['id'],
+        ],
+      );
+      body['facts'] = [];
+      body['events'] = [];
+      body['instruments'] = [];
+      final entry = (body['ledger'] as List).single as Map;
+      entry['category'] = 'groceries';
+      entry['categorySource'] = 'shared';
+      body['updatedAt'] = {
+        'events': {},
+        'instruments': {},
+        'ledger': {entry['entryId']: '2026-11-02T00:00:00Z'},
+      };
+      body['cursor'] = 'category-update';
+      await puller(client: client).pull();
+      final after = financial.entities('target', 'transactions').single;
+      expect(after['user_category_id'], '10000000-0000-4000-8000-000000000001');
+      expect(after['category_id'], isNull);
+      expect(after['category_name'], 'My category');
+    },
+  );
+
+  test(
+    'a category pulled on a purchase refreshes linked refund context',
+    () async {
+      bundle = testRuleBundle();
+      final pipeline = SmsV2Pipeline(
+        financial: financial,
+        namespace: 'refund-source',
+        bundle: bundle,
+        appVersion: '2',
+      );
+      final scenario =
+          jsonDecode(
+                File(
+                  '../tools/sms_golden/scenarios/refund_after_purchase.json',
+                ).readAsStringSync(),
+              )
+              as Map;
+      pipeline.processBatch([
+        for (final (index, raw) in (scenario['messages'] as List).indexed)
+          SmsMessage(
+            sourceKey: '${index + 10}'.padLeft(64, '0'),
+            sender: raw['sender'] as String,
+            body: raw['body'] as String,
+            observedAt: DateTime.parse(raw['observedAt'] as String),
+          ),
+      ], backfill: true);
+      final queued = OutboxStore(
+        database.db,
+        namespace: 'refund-source',
+      ).due(DateTime.utc(2027));
+      List<Map<String, Object?>> kind(String name) => [
+        for (final record in queued)
+          if (record.kind == name) record.json,
+      ];
+      body['facts'] = [
+        for (final source in kind('source')) ...source['facts'] as List,
+      ];
+      body['events'] = kind('event');
+      body['instruments'] = kind('instrument');
+      body['ledger'] = kind('ledger');
+      body['updatedAt'] = {
+        for (final name in ['events', 'instruments', 'ledger'])
+          name: {
+            for (final row in body[name] as List)
+              row[name == 'events'
+                      ? 'eventId'
+                      : name == 'instruments'
+                      ? 'instrumentId'
+                      : 'entryId']:
+                  '2026-11-04T00:00:00Z',
+          },
+      };
+      final sentFeatures = <String?>[];
+      final client = MockClient((request) async {
+        sentFeatures.add(request.headers['X-Sms-Contract-Features']);
+        return response();
+      });
+      await puller(client: client).pull();
+      expect(sentFeatures, everyElement('refund-category'));
+      final ledger = LedgerStore(database.db, namespace: 'target');
+      final refund = EventStore(database.db, namespace: 'target')
+          .listSince(DateTime.utc(2026))
+          .singleWhere((event) => event.type == EventType.refund);
+      expect(ledger.categoryDecisions()[refund.eventId]!.slug, 'dining');
+      // CCR-003: the pulled refund row itself carries the category.
+      expect(ledger.forEvent(refund.eventId).single.category, 'dining');
+      final purchase = (body['ledger'] as List)
+          .cast<Map<String, Object?>>()
+          .singleWhere((row) => row['isSpend'] == true);
+      body['ledger'] = [
+        {...purchase, 'category': 'groceries', 'categorySource': 'shared'},
+      ];
+      body['facts'] = [];
+      body['instruments'] = [];
+      body['events'] = [];
+      body['cursor'] = 'category-page';
+      body['updatedAt'] = {
+        'events': {},
+        'instruments': {},
+        'ledger': {purchase['entryId']: '2026-11-05T00:00:00Z'},
+      };
+      await puller(client: client).pull();
+      expect(ledger.categoryDecisions()[refund.eventId]!.slug, 'groceries');
+      expect(ledger.forEvent(refund.eventId).single.category, 'groceries');
+      // An inherited user decision is still derived context. The next user
+      // correction of the purchase must reach the refund too.
+      for (final (day, category) in [(6, 'fuel'), (7, 'groceries')]) {
+        body['ledger'] = [
+          {...purchase, 'category': category, 'categorySource': 'user'},
+        ];
+        body['cursor'] = 'user-category-$day';
+        body['updatedAt'] = {
+          'events': {},
+          'instruments': {},
+          'ledger': {
+            purchase['entryId']: DateTime.utc(2026, 11, day).toIso8601String(),
+          },
+        };
+        await puller(client: client).pull();
+        expect(ledger.categoryDecisions()[refund.eventId]!.slug, category);
+      }
+    },
+  );
+
+  test(
     'a second device reconstructs display once and resumes its persisted cursor',
     () async {
       var calls = 0;
       final client = MockClient((request) async {
-        if (calls++ == 1)
+        if (calls++ == 1) {
           expect(request.url.queryParameters['cursor'], 'page-1');
+        }
         return response();
       });
       await puller(client: client).pull();

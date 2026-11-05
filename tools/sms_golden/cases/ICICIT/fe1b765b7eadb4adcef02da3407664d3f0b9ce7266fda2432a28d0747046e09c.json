@@ -1,0 +1,33 @@
+{
+  "id": "lanew:mandate_revoked_non_ipo",
+  "templateHash": "fe1b765b7eadb4adcef02da3407664d3f0b9ce7266fda2432a28d0747046e09c",
+  "weight": 1,
+  "source": "synthetic",
+  "messages": [
+    {
+      "sender": "AX-ICICIT-S",
+      "body": "Dear Customer, the mandate of INR 649.00 raised by SAMPLE STREAM on 10-Aug-26 and is revoked through RRN 600100200300-ICICI Bank.",
+      "observedAt": "2026-11-20T09:00:00.000Z"
+    }
+  ],
+  "expect": {
+    "facts": [
+      {
+        "factType": "mandate",
+        "attrs": {
+          "phase": "revoked",
+          "mandatePurpose": "subscription",
+          "oneTime": false
+        },
+        "amounts": [
+          {
+            "role": "ceiling",
+            "minor": 64900
+          }
+        ]
+      }
+    ]
+  },
+  "note": "Revocation of a small raised mandate.",
+  "origin": "lane-w"
+}

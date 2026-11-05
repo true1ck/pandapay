@@ -1,0 +1,599 @@
+[
+  {
+    "id": "GENZ-UPIAPP-PAID-RECEIPT",
+    "version": 1,
+    "family": "upi_spend",
+    "senders": [
+      "PHONPE",
+      "GPAY",
+      "PAYTM",
+      "AMAZON"
+    ],
+    "priority": 560,
+    "match": {
+      "pattern": "^(?:you\\s+)?(?:have\\s+)?(?:paid|sent)\\s+(?:\\b(?:rs\\.?|inr)|₹)\\s*:?\\s*(?<amt>\\d[\\d,]*(?:\\.\\d{1,2})?)\\s+(?:to|at)\\s+(?<merchant>[^\\n]+?)(?=\\s*(?:\\.|,|;|\\n|$)|\\s+(?:using|via|through|with|from|on|upi|ref|reference|txn|utr|order|id|ending|bal|balance)\\b)(?=[\\s\\S]*\\bupi\\b)",
+      "flags": "i",
+      "rejectAny": [
+        "failed",
+        "declined",
+        "unsuccessful",
+        "could not",
+        "will be",
+        "would be",
+        "pending",
+        "refund",
+        "revers",
+        "cashback",
+        "cash back",
+        "offer",
+        "otp",
+        "request",
+        "collect"
+      ]
+    },
+    "emit": [
+      {
+        "factType": "movement",
+        "attrs": {
+          "direction": "debit",
+          "purpose": "purchase",
+          "rail": "upi",
+          "evidenceOnly": true
+        },
+        "amounts": [
+          {
+            "role": "posted",
+            "from": "amt",
+            "unit": "INR"
+          }
+        ],
+        "counterparty": {
+          "nameFrom": "merchant",
+          "kind": "merchant",
+          "transforms": [
+            "sanitizeNarration"
+          ]
+        }
+      }
+    ],
+    "confidence": 0.85,
+    "examples": [
+      {
+        "sender": "VM-PHONPE-S",
+        "body": "Paid Rs.250 to ACME STORE. UPI Ref 432112345678. Debited from your bank account.",
+        "expectFactTypes": [
+          "movement"
+        ]
+      },
+      {
+        "sender": "VM-PHONPE-S",
+        "body": "Payment of Rs.250 to ACME STORE failed. UPI Ref 432112345678.",
+        "expectFactTypes": []
+      }
+    ],
+    "status": "active",
+    "createdBy": "baseline",
+    "updatedAt": "2026-11-05T00:00:00Z"
+  },
+  {
+    "id": "GENZ-UPIAPP-RECEIVED-RECEIPT",
+    "version": 1,
+    "family": "upi_credit",
+    "senders": [
+      "PHONPE",
+      "GPAY",
+      "PAYTM",
+      "AMAZON"
+    ],
+    "priority": 560,
+    "match": {
+      "pattern": "^(?:you\\s+)?(?:have\\s+)?received\\s+(?:\\b(?:rs\\.?|inr)|₹)\\s*:?\\s*(?<amt>\\d[\\d,]*(?:\\.\\d{1,2})?)\\s+from\\s+(?<merchant>[^\\n]+?)(?=\\s*(?:\\.|,|;|\\n|$)|\\s+(?:using|via|through|with|on|upi|ref|reference|txn|utr|in|to)\\b)(?=[\\s\\S]*\\bupi\\b)",
+      "flags": "i",
+      "rejectAny": [
+        "failed",
+        "declined",
+        "unsuccessful",
+        "could not",
+        "will be",
+        "would be",
+        "pending",
+        "refund",
+        "revers",
+        "cashback",
+        "cash back",
+        "offer",
+        "otp",
+        "request",
+        "collect"
+      ]
+    },
+    "emit": [
+      {
+        "factType": "movement",
+        "attrs": {
+          "direction": "credit",
+          "purpose": "unknown",
+          "rail": "upi",
+          "evidenceOnly": true
+        },
+        "amounts": [
+          {
+            "role": "posted",
+            "from": "amt",
+            "unit": "INR"
+          }
+        ],
+        "counterparty": {
+          "nameFrom": "merchant",
+          "kind": "person",
+          "transforms": [
+            "sanitizeNarration"
+          ]
+        }
+      }
+    ],
+    "confidence": 0.82,
+    "examples": [
+      {
+        "sender": "VM-GPAY-S",
+        "body": "You received Rs.250 from SAMPLE PERSON via Google Pay. UPI Ref 432112345678.",
+        "expectFactTypes": [
+          "movement"
+        ]
+      },
+      {
+        "sender": "VM-GPAY-S",
+        "body": "Rs.250 request received from SAMPLE PERSON via Google Pay. UPI collect, approve within 24 hours.",
+        "expectFactTypes": []
+      }
+    ],
+    "status": "active",
+    "createdBy": "baseline",
+    "updatedAt": "2026-11-05T00:00:00Z"
+  },
+  {
+    "id": "GENZ-UPIAPP-OTHER-PAID-PAYFIRST",
+    "version": 1,
+    "family": "upi_spend",
+    "senders": [
+      "*"
+    ],
+    "priority": 130,
+    "match": {
+      "pattern": "^(?=[\\s\\S]*\\b(?:using|via|through|on|with)\\s+(?:bhim|jio\\s*finance|jiofinance|super\\.?\\s*money|navi|slice|ola\\s*money|mobikwik|freecharge|airtel\\s*thanks|airtel\\s*payments?\\s*bank|whatsapp\\s*pay|cred\\s*upi|kiwi|fampay|jupiter|fi\\s*money|groww\\s*upi)\\b)(?:you\\s+)?(?:have\\s+)?(?:paid|sent)\\s+(?:\\b(?:rs\\.?|inr)|₹)\\s*:?\\s*(?<amt>\\d[\\d,]*(?:\\.\\d{1,2})?)\\s+(?:to|at)\\s+(?<merchant>[^\\n]+?)(?=\\s*(?:\\.|,|;|\\n|$)|\\s+(?:using|via|through|with|from|on|upi|ref|reference|txn|utr|order|id|ending|bal|balance)\\b)",
+      "flags": "i",
+      "rejectAny": [
+        "failed",
+        "declined",
+        "unsuccessful",
+        "could not",
+        "will be",
+        "would be",
+        "pending",
+        "refund",
+        "revers",
+        "cashback",
+        "cash back",
+        "offer",
+        "otp",
+        "request",
+        "collect"
+      ]
+    },
+    "emit": [
+      {
+        "factType": "movement",
+        "attrs": {
+          "direction": "debit",
+          "purpose": "purchase",
+          "rail": "upi",
+          "evidenceOnly": true
+        },
+        "amounts": [
+          {
+            "role": "posted",
+            "from": "amt",
+            "unit": "INR"
+          }
+        ],
+        "counterparty": {
+          "nameFrom": "merchant",
+          "kind": "merchant",
+          "transforms": [
+            "sanitizeNarration"
+          ]
+        }
+      }
+    ],
+    "confidence": 0.75,
+    "examples": [
+      {
+        "sender": "VM-GENAPP-S",
+        "body": "Paid Rs.250 to ACME STORE using BHIM UPI on 01-11-2026. Ref 432112345678",
+        "expectFactTypes": [
+          "movement"
+        ]
+      },
+      {
+        "sender": "VM-GENAPP-S",
+        "body": "Payment of Rs.250 to ACME STORE using BHIM UPI failed. Ref 432112345678",
+        "expectFactTypes": []
+      }
+    ],
+    "status": "active",
+    "createdBy": "baseline",
+    "updatedAt": "2026-11-05T00:00:00Z"
+  },
+  {
+    "id": "GENZ-UPIAPP-OTHER-PAID-AMTFIRST",
+    "version": 1,
+    "family": "upi_spend",
+    "senders": [
+      "*"
+    ],
+    "priority": 130,
+    "match": {
+      "pattern": "^(?=[\\s\\S]*\\b(?:using|via|through|on|with)\\s+(?:bhim|jio\\s*finance|jiofinance|super\\.?\\s*money|navi|slice|ola\\s*money|mobikwik|freecharge|airtel\\s*thanks|airtel\\s*payments?\\s*bank|whatsapp\\s*pay|cred\\s*upi|kiwi|fampay|jupiter|fi\\s*money|groww\\s*upi)\\b)(?:\\b(?:rs\\.?|inr)|₹)\\s*:?\\s*(?<amt>\\d[\\d,]*(?:\\.\\d{1,2})?)\\s+(?:has\\s+been\\s+|was\\s+)?(?:paid|sent)\\s+(?:to|at)\\s+(?<merchant>[^\\n]+?)(?=\\s*(?:\\.|,|;|\\n|$)|\\s+(?:using|via|through|with|from|on|upi|ref|reference|txn|utr|order|id|ending|bal|balance)\\b)",
+      "flags": "i",
+      "rejectAny": [
+        "failed",
+        "declined",
+        "unsuccessful",
+        "could not",
+        "will be",
+        "would be",
+        "pending",
+        "refund",
+        "revers",
+        "cashback",
+        "cash back",
+        "offer",
+        "otp",
+        "request",
+        "collect"
+      ]
+    },
+    "emit": [
+      {
+        "factType": "movement",
+        "attrs": {
+          "direction": "debit",
+          "purpose": "purchase",
+          "rail": "upi",
+          "evidenceOnly": true
+        },
+        "amounts": [
+          {
+            "role": "posted",
+            "from": "amt",
+            "unit": "INR"
+          }
+        ],
+        "counterparty": {
+          "nameFrom": "merchant",
+          "kind": "merchant",
+          "transforms": [
+            "sanitizeNarration"
+          ]
+        }
+      }
+    ],
+    "confidence": 0.75,
+    "examples": [
+      {
+        "sender": "VM-GENAPP-S",
+        "body": "Rs.250 paid to ACME STORE using BHIM UPI on 01-11-2026. Ref 432112345678",
+        "expectFactTypes": [
+          "movement"
+        ]
+      },
+      {
+        "sender": "VM-GENAPP-S",
+        "body": "Rs.250 payment to ACME STORE using BHIM UPI failed. Ref 432112345678",
+        "expectFactTypes": []
+      }
+    ],
+    "status": "active",
+    "createdBy": "baseline",
+    "updatedAt": "2026-11-05T00:00:00Z"
+  },
+  {
+    "id": "GENZ-GATEWAY-PAYMENT-SUCCESS",
+    "version": 1,
+    "family": "bill_receipt",
+    "senders": [
+      "*"
+    ],
+    "priority": 128,
+    "match": {
+      "pattern": "^(?=[\\s\\S]*\\b(?:razorpay|payu|payumoney|cashfree|ccavenue|billdesk|juspay|instamojo|easebuzz|pinelabs|pine\\s+labs|paytm\\s+payment\\s+gateway|stripe|phonepe\\s+pg)\\b)[\\s\\S]*?\\bpayment\\s+of\\s+(?:\\b(?:rs\\.?|inr)|₹)\\s*:?\\s*(?<amt>\\d[\\d,]*(?:\\.\\d{1,2})?)\\s+(?:to|for|at)\\s+(?<merchant>[^\\n]+?)\\s+(?:was|is|has\\s+been)\\s+(?:successful|successfully\\s+(?:completed|processed|received)|received)\\b",
+      "flags": "i",
+      "rejectAny": [
+        "failed",
+        "declined",
+        "unsuccessful",
+        "could not",
+        "will be",
+        "would be",
+        "pending",
+        "refund",
+        "revers",
+        "cashback",
+        "cash back",
+        "offer",
+        "otp",
+        "request",
+        "collect",
+        "not successful"
+      ]
+    },
+    "emit": [
+      {
+        "factType": "movement",
+        "attrs": {
+          "direction": "debit",
+          "purpose": "purchase",
+          "rail": "unknown",
+          "evidenceOnly": true
+        },
+        "amounts": [
+          {
+            "role": "posted",
+            "from": "amt",
+            "unit": "INR"
+          }
+        ],
+        "counterparty": {
+          "nameFrom": "merchant",
+          "kind": "merchant",
+          "transforms": [
+            "sanitizeNarration"
+          ]
+        }
+      }
+    ],
+    "confidence": 0.75,
+    "examples": [
+      {
+        "sender": "VM-GENGAT-S",
+        "body": "Payment of Rs.250.00 to ACME STORE was successful. Payment ID pay_ABC123. Powered by Razorpay",
+        "expectFactTypes": [
+          "movement"
+        ]
+      },
+      {
+        "sender": "VM-GENGAT-S",
+        "body": "Payment of Rs.250.00 to ACME STORE was not successful. Payment ID pay_ABC123. Powered by Razorpay",
+        "expectFactTypes": []
+      }
+    ],
+    "status": "active",
+    "createdBy": "baseline",
+    "updatedAt": "2026-11-05T00:00:00Z"
+  },
+  {
+    "id": "GENZ-WALLET-PAID-TO-FROM",
+    "version": 1,
+    "family": "wallet_spend",
+    "senders": [
+      "*"
+    ],
+    "priority": 205,
+    "match": {
+      "pattern": "^(?:\\b(?:rs\\.?|inr)|₹)\\s*:?\\s*(?<amt>\\d[\\d,]*(?:\\.\\d{1,2})?)\\s+(?:has\\s+been\\s+|was\\s+)?(?:paid|sent|spent)\\s+(?:to|at)\\s+(?<merchant>[^\\n]+?)\\s+(?:using|from|via|through|with)\\s+(?:your\\s+)?(?<prov>(?:paytm|phonepe|mobikwik|freecharge))\\s+(?:wallet|balance)\\b",
+      "flags": "i",
+      "rejectAny": [
+        "failed",
+        "declined",
+        "unsuccessful",
+        "could not",
+        "will be",
+        "would be",
+        "pending",
+        "refund",
+        "revers",
+        "cashback",
+        "cash back",
+        "offer",
+        "otp",
+        "request",
+        "collect"
+      ]
+    },
+    "emit": [
+      {
+        "factType": "movement",
+        "attrs": {
+          "direction": "debit",
+          "purpose": "purchase",
+          "rail": "wallet"
+        },
+        "amounts": [
+          {
+            "role": "posted",
+            "from": "amt",
+            "unit": "INR"
+          }
+        ],
+        "instrument": {
+          "kind": "wallet",
+          "issuerSlugFrom": "prov"
+        },
+        "counterparty": {
+          "nameFrom": "merchant",
+          "kind": "merchant",
+          "transforms": [
+            "sanitizeNarration"
+          ]
+        }
+      }
+    ],
+    "confidence": 0.85,
+    "examples": [
+      {
+        "sender": "VM-FRCHRG-S",
+        "body": "Rs.250 paid to ACME STORE from your Freecharge wallet. Balance Rs.400.",
+        "expectFactTypes": [
+          "movement"
+        ]
+      },
+      {
+        "sender": "VM-FRCHRG-S",
+        "body": "Rs.250 will be paid to ACME STORE from your Freecharge wallet once confirmed.",
+        "expectFactTypes": []
+      }
+    ],
+    "status": "active",
+    "createdBy": "baseline",
+    "updatedAt": "2026-11-05T00:00:00Z"
+  },
+  {
+    "id": "GENZ-CRED-CARDBILL-PAID",
+    "version": 1,
+    "family": "bill_pay_receipt",
+    "senders": [
+      "CREDCL"
+    ],
+    "priority": 700,
+    "match": {
+      "pattern": "^(?:you\\s+)?(?:have\\s+)?paid\\s+(?:\\b(?:rs\\.?|inr)|₹)\\s*:?\\s*(?<amt>\\d[\\d,]*(?:\\.\\d{1,2})?)\\s+(?:towards|for|to)\\s+(?:your\\s+)?(?<biller>[a-z][a-z0-9&.' -]{0,40}?)\\s+credit\\s+card(?:\\s+(?:ending|ends)(?:\\s+(?:with|in))?)?\\s*[:\\-]?\\s*[x*•.]*\\s?(?:\\d{2,18})?\\s*(?:using|via|through|on)\\s+cred\\b",
+      "flags": "i",
+      "rejectAny": [
+        "failed",
+        "declined",
+        "unsuccessful",
+        "could not",
+        "will be",
+        "would be",
+        "pending",
+        "refund",
+        "revers",
+        "cashback",
+        "cash back",
+        "offer",
+        "otp",
+        "request",
+        "collect"
+      ]
+    },
+    "emit": [
+      {
+        "factType": "movement",
+        "attrs": {
+          "direction": "debit",
+          "purpose": "card_payment",
+          "rail": "unknown",
+          "evidenceOnly": true
+        },
+        "amounts": [
+          {
+            "role": "posted",
+            "from": "amt",
+            "unit": "INR"
+          }
+        ],
+        "counterparty": {
+          "nameFrom": "biller",
+          "kind": "merchant",
+          "transforms": [
+            "sanitizeNarration"
+          ]
+        }
+      }
+    ],
+    "confidence": 0.82,
+    "examples": [
+      {
+        "sender": "VM-CREDCL-S",
+        "body": "You paid Rs.12,345.00 towards your Sample Bank credit card ending 1234 using CRED. Thank you.",
+        "expectFactTypes": [
+          "movement"
+        ]
+      },
+      {
+        "sender": "VM-CREDCL-S",
+        "body": "Your payment of Rs.12,345.00 towards your Sample Bank credit card ending 1234 using CRED failed.",
+        "expectFactTypes": []
+      }
+    ],
+    "status": "active",
+    "createdBy": "baseline",
+    "updatedAt": "2026-11-05T00:00:00Z"
+  },
+  {
+    "id": "GENZ-UPIAPP-AMTFIRST-RECEIPT",
+    "version": 1,
+    "family": "upi_spend",
+    "senders": [
+      "PHONPE",
+      "GPAY",
+      "PAYTM",
+      "AMAZON"
+    ],
+    "priority": 559,
+    "match": {
+      "pattern": "^(?:\\b(?:rs\\.?|inr)|₹)\\s*:?\\s*(?<amt>\\d[\\d,]*(?:\\.\\d{1,2})?)\\s+(?:has\\s+been\\s+|was\\s+)?(?:paid|sent)\\s+(?:to|at)\\s+(?<merchant>[^\\n]+?)(?=\\s*(?:\\.|,|;|\\n|$)|\\s+(?:using|via|through|with|from|on|upi|ref|reference|txn|utr|order|id|ending|bal|balance)\\b)(?=[\\s\\S]*\\bupi\\b)",
+      "flags": "i",
+      "rejectAny": [
+        "failed",
+        "declined",
+        "unsuccessful",
+        "could not",
+        "will be",
+        "would be",
+        "pending",
+        "refund",
+        "revers",
+        "cashback",
+        "cash back",
+        "offer",
+        "otp",
+        "request",
+        "collect"
+      ]
+    },
+    "emit": [
+      {
+        "factType": "movement",
+        "attrs": {
+          "direction": "debit",
+          "purpose": "purchase",
+          "rail": "upi",
+          "evidenceOnly": true
+        },
+        "amounts": [
+          {
+            "role": "posted",
+            "from": "amt",
+            "unit": "INR"
+          }
+        ],
+        "counterparty": {
+          "nameFrom": "merchant",
+          "kind": "merchant",
+          "transforms": [
+            "sanitizeNarration"
+          ]
+        }
+      }
+    ],
+    "confidence": 0.85,
+    "examples": [
+      {
+        "sender": "VM-AMAZON-S",
+        "body": "Rs.250.00 paid to ACME STORE using Amazon Pay UPI. UPI Ref 432112345678.",
+        "expectFactTypes": [
+          "movement"
+        ]
+      },
+      {
+        "sender": "VM-AMAZON-S",
+        "body": "Rs.250.00 payment to ACME STORE using Amazon Pay UPI failed. UPI Ref 432112345678.",
+        "expectFactTypes": []
+      }
+    ],
+    "status": "active",
+    "createdBy": "baseline",
+    "updatedAt": "2026-11-05T00:00:00Z"
+  }
+]

@@ -5,7 +5,10 @@ import 'transforms.dart';
 
 /// The engine's own version. A phone refuses a bundle whose `minEngineVersion`
 /// is newer.
-const String smsEngineVersion = '2.0.0';
+///
+/// 2.1.0: `info` facts may carry `amountMinor` (CCR-002). A 2.0.x engine drops
+/// those facts as invalid, so `rules/sms/v2/meta.json` requires 2.1.0.
+const String smsEngineVersion = '2.1.0';
 
 /// Why a bundle cannot be used.
 class BundleRefusedException implements Exception {
@@ -40,10 +43,115 @@ RegExp _compileRegex(String pattern, String flags) => RegExp(
       dotAll: flags.contains('s'),
     );
 
+bool _isAsciiAlnum(String c) {
+  final u = c.codeUnitAt(0);
+  return (u >= 48 && u <= 57) || (u >= 65 && u <= 90) || (u >= 97 && u <= 122);
+}
+
+/// Lowercase literal runs that every match of [pattern] must contain, at most
+/// three, longest first. Used to skip a regex that cannot match before running
+/// it. It is conservative: anything it cannot read (top-level alternation, a
+/// named back-reference, a unicode escape) yields no literals, a literal
+/// followed by `?`, `*` or `{` is dropped, and groups and classes are skipped.
+List<String> requiredLiterals(String pattern) {
+  final runs = <String>[];
+  final run = StringBuffer();
+  void flush() {
+    if (run.length >= 3) runs.add(run.toString());
+    run.clear();
+  }
+
+  final n = pattern.length;
+  var i = 0;
+  // Adds [ch] unless a following quantifier makes it optional.
+  void literal(String ch) {
+    final u = ch.codeUnitAt(0);
+    if (u < 32 || u > 126) {
+      flush();
+      return;
+    }
+    final q = i < n ? pattern[i] : '';
+    if (q == '?' || q == '*' || q == '{') {
+      flush();
+    } else if (q == '+') {
+      run.write(ch.toLowerCase());
+      flush();
+    } else {
+      run.write(ch.toLowerCase());
+    }
+  }
+
+  while (i < n) {
+    final c = pattern[i];
+    switch (c) {
+      case '|':
+        return const [];
+      case '\\':
+        if (i + 1 >= n) return const [];
+        final e = pattern[i + 1];
+        i += 2;
+        if ('kpPuxc'.contains(e)) return const [];
+        if (_isAsciiAlnum(e)) {
+          flush();
+        } else {
+          literal(e);
+        }
+      case '[':
+        flush();
+        var j = i + 1;
+        while (j < n && pattern[j] != ']') {
+          j += pattern[j] == '\\' ? 2 : 1;
+        }
+        if (j >= n) return const [];
+        i = j + 1;
+      case '(':
+        flush();
+        var depth = 0;
+        var j = i;
+        while (j < n) {
+          final d = pattern[j];
+          if (d == '\\') {
+            j += 2;
+            continue;
+          }
+          if (d == '[') {
+            j++;
+            while (j < n && pattern[j] != ']') {
+              j += pattern[j] == '\\' ? 2 : 1;
+            }
+            j++;
+            continue;
+          }
+          if (d == '(') depth++;
+          if (d == ')' && --depth == 0) break;
+          j++;
+        }
+        if (j >= n) return const [];
+        i = j + 1;
+      case ')':
+        return const [];
+      case '{':
+        flush();
+        final close = pattern.indexOf('}', i);
+        i = close < 0 ? i + 1 : close + 1;
+      case '^' || r'$' || '.' || '?' || '*' || '+' || '}' || ']':
+        flush();
+        i++;
+      default:
+        i++;
+        literal(c);
+    }
+  }
+  flush();
+  runs.sort((a, b) => b.length.compareTo(a.length));
+  return [...runs.toSet().take(3)];
+}
+
 /// A rule with its regex built once.
 class CompiledRule {
   CompiledRule(this.rule, this.regex)
-      : requireAll = [for (final s in rule.match.requireAll ?? const <String>[]) s.toLowerCase()],
+      : literals = requiredLiterals(rule.match.pattern),
+        requireAll = [for (final s in rule.match.requireAll ?? const <String>[]) s.toLowerCase()],
         rejectAny = [for (final s in rule.match.rejectAny ?? const <String>[]) s.toLowerCase()];
 
   final Rule rule;
@@ -51,11 +159,18 @@ class CompiledRule {
   final List<String> requireAll;
   final List<String> rejectAny;
 
+  /// Substrings (lowercase) that any match of [regex] contains.
+  final List<String> literals;
+
   String? get templateHash => rule.match.templateHash;
 
-  /// Whether [match]'s text passes `requireAll` and `rejectAny`. Both are
-  /// case-insensitive substring checks on the whole body.
+  /// Whether the body can match: the regex's own required literals, then
+  /// `requireAll` and `rejectAny`, all case-insensitive substring checks on
+  /// the whole body. It is cheap, so the engine runs it before the regex.
   bool passes(String lowerBody) {
+    for (final s in literals) {
+      if (!lowerBody.contains(s)) return false;
+    }
     for (final s in requireAll) {
       if (!lowerBody.contains(s)) return false;
     }

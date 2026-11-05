@@ -4,8 +4,10 @@ import 'package:intl/intl.dart';
 String smsMoney(int? minor) => minor == null
     ? 'unknown'
     : NumberFormat.currency(locale: 'en_IN', symbol: '₹').format(minor / 100);
-String smsDate(DateTime date) =>
-    DateFormat('d MMM yyyy').format(date.toLocal());
+/// SMS dates are Indian calendar days, whatever the phone's time zone says.
+String smsDate(DateTime date) => DateFormat(
+  'd MMM yyyy',
+).format(date.toUtc().add(const Duration(hours: 5, minutes: 30)));
 
 class SmsLoading extends StatelessWidget {
   const SmsLoading({super.key});

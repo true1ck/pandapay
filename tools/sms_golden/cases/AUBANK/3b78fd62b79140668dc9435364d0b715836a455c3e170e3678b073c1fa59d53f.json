@@ -1,0 +1,40 @@
+{
+  "id": "laneq:statement_au",
+  "templateHash": "3b78fd62b79140668dc9435364d0b715836a455c3e170e3678b073c1fa59d53f",
+  "weight": 1,
+  "source": "synthetic",
+  "messages": [
+    {
+      "sender": "VM-AUBANK-S",
+      "body": "Your AU Credit Card ending 2233 statement: Total Amount Due INR 8,200.00, Min Due INR 410.00, Due 20 Nov 2026.",
+      "observedAt": "2026-11-20T09:00:00.000Z"
+    }
+  ],
+  "expect": {
+    "facts": [
+      {
+        "factType": "bill_due",
+        "attrs": {
+          "dueDate": "2026-11-20"
+        },
+        "amounts": [
+          {
+            "role": "due_total",
+            "minor": 820000
+          },
+          {
+            "role": "due_minimum",
+            "minor": 41000
+          }
+        ],
+        "instrument": {
+          "kind": "credit_card",
+          "issuerSlug": "au",
+          "maskDigits": "2233"
+        }
+      }
+    ]
+  },
+  "note": "Wording guess.",
+  "origin": "lane-q"
+}

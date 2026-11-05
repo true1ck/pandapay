@@ -104,13 +104,43 @@ final class LedgerEntry extends JsonValue {
   final LedgerUnit unit;
   final DateTime occurredAt;
 
-  /// Set only when [to] is external and the event is a spend type.
+  /// Set when [to] is external and the event is a spend type. CCR-003: also set
+  /// on a refund entry (see [isRefundShaped]) to the category of the purchase
+  /// it reverses; null for a refund written by an older build.
   final String? category;
   final CategorySource? categorySource;
   final bool countsAsTransaction;
   final bool isSpend;
   final bool isIncome;
   final bool isInvestment;
+
+  /// An external-to-own entry with no spend, income or investment flag. Only
+  /// refunds project this shape, and only such entries may carry a category
+  /// while [to] is not external (CCR-003).
+  bool get isRefundShaped =>
+      from is ExternalEndpoint &&
+      to is! ExternalEndpoint &&
+      countsAsTransaction &&
+      !isSpend &&
+      !isIncome &&
+      !isInvestment;
+
+  /// A copy of this entry with a different category. Money fields are kept.
+  LedgerEntry withCategory(String? category, CategorySource? source) => LedgerEntry(
+        entryId: entryId,
+        eventId: eventId,
+        from: from,
+        to: to,
+        amountMinor: amountMinor,
+        unit: unit,
+        occurredAt: occurredAt,
+        category: category,
+        categorySource: source,
+        countsAsTransaction: countsAsTransaction,
+        isSpend: isSpend,
+        isIncome: isIncome,
+        isInvestment: isInvestment,
+      );
 
   @override
   Json toJson() => {

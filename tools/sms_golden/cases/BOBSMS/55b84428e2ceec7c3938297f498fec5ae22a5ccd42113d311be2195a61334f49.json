@@ -1,0 +1,52 @@
+{
+  "id": "laneq:acct_cr_neft_bob",
+  "templateHash": "55b84428e2ceec7c3938297f498fec5ae22a5ccd42113d311be2195a61334f49",
+  "weight": 1,
+  "source": "synthetic",
+  "messages": [
+    {
+      "sender": "VM-BOBSMS-S",
+      "body": "Rs.50000.00 Cr. to A/c XXXX1234 by NEFT SAMPLE LTD. Ref:ABCD123456. AvlBal:Rs62000(01-11-2026) -Bank of Baroda",
+      "observedAt": "2026-11-20T09:00:00.000Z"
+    }
+  ],
+  "expect": {
+    "facts": [
+      {
+        "factType": "movement",
+        "attrs": {
+          "direction": "credit",
+          "purpose": "unknown",
+          "rail": "neft"
+        },
+        "amounts": [
+          {
+            "role": "posted",
+            "minor": 5000000
+          }
+        ],
+        "instrument": {
+          "kind": "bank_account",
+          "issuerSlug": "bob",
+          "maskDigits": "1234"
+        }
+      },
+      {
+        "factType": "balance_snapshot",
+        "amounts": [
+          {
+            "role": "available_balance",
+            "minor": 6200000
+          }
+        ],
+        "instrument": {
+          "kind": "bank_account",
+          "issuerSlug": "bob",
+          "maskDigits": "1234"
+        }
+      }
+    ]
+  },
+  "note": "Dr./Cr. abbreviation style. Before this lane only the balance was captured.",
+  "origin": "lane-q"
+}

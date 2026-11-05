@@ -1,0 +1,40 @@
+{
+  "id": "lanew:payer_rtgs_by_payer",
+  "templateHash": "ede25a5ec03cb0a4149c0bfbe5e3ef6f20070c41ea0bbef54453935289a1bfa4",
+  "weight": 1,
+  "source": "synthetic",
+  "messages": [
+    {
+      "sender": "VM-UCOBNK-S",
+      "body": "Rs.250000.00 credited to A/c XX1234 on 05-10-26 through RTGS UTR SBIN12345678901 by ACME INDUSTRIES LTD.",
+      "observedAt": "2026-11-20T09:00:00.000Z"
+    }
+  ],
+  "expect": {
+    "facts": [
+      {
+        "factType": "movement",
+        "attrs": {
+          "direction": "credit",
+          "purpose": "p2p",
+          "rail": "rtgs"
+        },
+        "amounts": [
+          {
+            "role": "posted",
+            "minor": 25000000
+          }
+        ],
+        "instrument": {
+          "kind": "bank_account",
+          "maskDigits": "1234"
+        },
+        "counterparty": {
+          "name": "ACME INDUSTRIES"
+        }
+      }
+    ]
+  },
+  "note": "RTGS credit that names the payer after \"by\".",
+  "origin": "lane-w"
+}

@@ -1,0 +1,37 @@
+{
+  "id": "lanej:reversal_upi_credit_card",
+  "templateHash": "a7aaa9c6aa9cb39e78d48d21f251da80d44431e29e551061d57701ab6baea79f",
+  "weight": 1,
+  "source": "synthetic",
+  "messages": [
+    {
+      "sender": "VM-SBICRD-S",
+      "body": "Rs.236.25 has been credited to your credit card ending with 1234 as reversal of UPI trxn. dated 18-08-26 at EXAMPLE MERCHANT (UPI Ref No. 116956643601) - Example Bank",
+      "observedAt": "2026-12-01T09:00:00.000Z"
+    }
+  ],
+  "expect": {
+    "facts": [
+      {
+        "factType": "movement",
+        "attrs": {
+          "direction": "credit",
+          "purpose": "reversal",
+          "rail": "upi"
+        },
+        "amounts": [
+          {
+            "role": "posted",
+            "minor": 23625
+          }
+        ],
+        "instrument": {
+          "kind": "credit_card",
+          "maskDigits": "1234"
+        }
+      }
+    ]
+  },
+  "note": "UPI reversal to a credit card.",
+  "origin": "lane-j"
+}

@@ -330,6 +330,10 @@ app.use(rejectMalformedClientIp);
 app.use(...createCorsPolicy());
 // SMS pipeline v2 (WP-08): registered ahead of the global 100 KiB JSON parser because facts:batch reads its own, larger body. Routes answer 404 unless the sms_pipeline_v2_enabled flag is on.
 require('./sms_v2').registerSmsV2(app, { requireAuth, requireAdmin, withUserClient, loadUserCardForState, applyTransactionState, reverseTransactionState });
+// WP-17: 426 Upgrade Required on the legacy SMS routes after the configured cutoff (off unless LEGACY_SMS_CUTOFF_DATE is set).
+app.use(require('./legacy_version_gate').createLegacyVersionGate({ cutoffAt: config.legacySmsCutoffAt, firstV2Version: config.smsV2FirstAppVersion, blockMissingVersion: config.legacySmsBlockMissingVersion }));
+// LANE-D-1: clients that do not send `X-Sms-Pipeline: v2` (every shipped app) get `transfer` instead of `refund` in JSON answers.
+app.use(require('./legacy_entry_kind').legacyEntryKindFilter);
 app.use(jsonBodyParser);
 app.use(jsonBodyErrorHandler);
 
@@ -3247,6 +3251,18 @@ async function insertTransactionAndUpdateState(client, userId, {
     );
     if (!existing.rows[0]) throw new Error('source_key conflict without an existing transaction');
     const old = existing.rows[0];
+    // LANE-D-2: a row owned by the v2 pipeline (pipeline_version 2) or hidden
+    // by it (superseded) is returned untouched. A legacy replay must not
+    // reclassify it, record an observation or move card state.
+    if (old.pipeline_version === 2 || old.status === 'superseded') {
+      const { id, amount_inr, occurred_at, instrument, entry_kind, source, status, reward_state, source_account_last4, state_applied, is_backfill } = old;
+      return {
+        status: 200,
+        duplicate: true,
+        duplicateKind: 'exact_retry',
+        transaction: { id, amount_inr, occurred_at, instrument, entry_kind, source, status, reward_state, source_account_last4, state_applied, is_backfill },
+      };
+    }
     const lockResult = await client.query(
       `SELECT COALESCE(bool_or(metadata->>'classificationLocked' = 'true'), false) AS locked
          FROM transaction_observations

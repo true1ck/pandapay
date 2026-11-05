@@ -1,0 +1,31 @@
+{
+  "id": "laneq:electricity_due_tata_power",
+  "templateHash": "37cdc0393fa4746338f1b226e32ec257be1913a14ba5e603cc10f29ea94ec901",
+  "weight": 1,
+  "source": "synthetic",
+  "messages": [
+    {
+      "sender": "TATAPW",
+      "body": "Your Tata Power electricity bill of Rs.2,340.00 for consumer no 12345678 is due on 18-11-2026.",
+      "observedAt": "2026-11-20T09:00:00.000Z"
+    }
+  ],
+  "expect": {
+    "facts": [
+      {
+        "factType": "bill_due",
+        "attrs": {
+          "dueDate": "2026-11-18"
+        },
+        "amounts": [
+          {
+            "role": "due_total",
+            "minor": 234000
+          }
+        ]
+      }
+    ]
+  },
+  "note": "Wording guess.",
+  "origin": "lane-q"
+}

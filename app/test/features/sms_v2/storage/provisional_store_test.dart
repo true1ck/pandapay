@@ -74,6 +74,51 @@ void main() {
     },
   );
 
+  test('an unsigned private rule with a backtracking pattern never reaches the engine', () {
+    final db = sqlite3.openInMemory();
+    addTearDown(db.dispose);
+    SmsV2Schema.ensure(db);
+    final json =
+        (jsonDecode(
+                  File('../contracts/sms/v2/fixtures/valid/bundle/full.json').readAsStringSync(),
+                )
+                as Map)
+            .cast<String, Object?>();
+    final bundle = RuleBundle.fromJson(json);
+    final rule = bundle.rules.firstWhere((r) => r.status == RuleStatus.provisional);
+    final shared = RuleBundle.fromJson({
+      ...json,
+      'rules': [
+        for (final item in bundle.rules)
+          if (item.status != RuleStatus.provisional) item.toJson(),
+      ],
+    });
+    final state = SyncStateStore(db, namespace: 'a');
+    TemplateOriginStore(state).remember(
+      remoteHash: rule.match.templateHash!,
+      localHash: 'a' * 64,
+      senderBrand: rule.senders.single,
+    );
+    Map<String, Object?> withPattern(String pattern) => {
+      ...rule.toJson(),
+      'match': {...rule.match.toJson(), 'pattern': pattern},
+    };
+    void deliver(Map<String, Object?> ruleJson) => state.put(
+      'ai:${rule.match.templateHash}',
+      jsonEncode({
+        'templateHash': rule.match.templateHash,
+        'status': 'ready',
+        'rule': ruleJson,
+      }),
+    );
+    deliver(withPattern(r'^(a|aa)+$'));
+    expect(ProvisionalStore(state).overlay(shared).bundle, shared);
+    deliver(withPattern('x' * 2001));
+    expect(ProvisionalStore(state).overlay(shared).bundle, shared);
+    deliver(withPattern(r'^(?:rs\.?|inr)\s*(?<amt>[\d,]+)'));
+    expect(ProvisionalStore(state).overlay(shared).bundle.rules, hasLength(shared.rules.length + 1));
+  });
+
   test(
     'origin mappings bound each remote format and reject malformed state',
     () {

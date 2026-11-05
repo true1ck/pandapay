@@ -1,0 +1,240 @@
+[
+  {
+    "id": "SUB-MND-UPI-COLLECT-PENDING-01",
+    "version": 1,
+    "family": "payment_request",
+    "senders": [
+      "*"
+    ],
+    "priority": 720,
+    "match": {
+      "pattern": "^(?<m>[^\\r\\n]{1,80}?)\\s+has\\s+requested\\s+(?:rs\\.?|inr|₹)\\s*(?<amt>[\\d,]+(?:\\.\\d{1,2})?)\\s+(?:from|frm)\\s+(?:you|u)\\s+on\\s+[a-z ]{2,20}?\\s+app\\.?\\s+once\\s+approved,?\\s+money\\s+will\\s+be\\s+debited",
+      "flags": "i",
+      "rejectAny": [
+        "was debited",
+        "has been debited"
+      ]
+    },
+    "emit": [
+      {
+        "factType": "attempt",
+        "attrs": {
+          "status": "pending",
+          "direction": "debit",
+          "purpose": "unknown"
+        },
+        "amounts": [
+          {
+            "role": "scheduled",
+            "from": "amt",
+            "unit": "INR"
+          }
+        ],
+        "counterparty": {
+          "kind": "merchant",
+          "nameFrom": "m",
+          "transforms": [
+            "sanitizeNarration"
+          ]
+        }
+      }
+    ],
+    "confidence": 0.95,
+    "examples": [
+      {
+        "sender": "VM-EXAMPL-S",
+        "body": "EXAMPLE STORES has requested Rs120 frm u on Example Pay app. Once approved, money will be debited frm ur a/c -Example Bank",
+        "expectFactTypes": [
+          "attempt"
+        ]
+      },
+      {
+        "sender": "VM-EXAMPL-S",
+        "body": "EXAMPLE STORES has requested Rs120 frm u on Example Pay app. Money was debited frm ur a/c -Example Bank",
+        "expectFactTypes": []
+      }
+    ],
+    "status": "active",
+    "createdBy": "baseline",
+    "updatedAt": "2026-11-05T00:00:00Z"
+  },
+  {
+    "id": "SUB-MND-UPI-CREATED-02",
+    "version": 1,
+    "family": "mandate_created",
+    "senders": [
+      "*"
+    ],
+    "priority": 650,
+    "match": {
+      "pattern": "upi-?\\s*mandate\\s+for\\s+(?:rs\\.?|inr|₹)\\s*(?<cap>[\\d,]+(?:\\.\\d{1,2})?)\\s+is\\s+(?:successfully\\s+)?(?:created|registered|set\\s+up)\\s+towards\\s+(?<m>[a-z0-9&.' _*-]+?)\\s+from\\s+(?:a/c|acct?\\.?|account)\\s*(?:no\\.?\\s*)?:?\\s*(?:ending\\s*(?:with\\s*|in\\s*)?)?(?:[x*•.]+\\s*)?(?<mask>\\d{2,16})\\b(?:[\\s\\S]{0,40}?umn\\s*:?\\s*(?<ref_umrn>[a-z0-9@._-]+))?",
+      "flags": "i",
+      "rejectAny": [
+        "could not",
+        "failed",
+        "unsuccessful"
+      ]
+    },
+    "emit": [
+      {
+        "factType": "mandate",
+        "attrs": {
+          "phase": "created",
+          "merchantName": {
+            "from": "m",
+            "transforms": [
+              "sanitizeNarration"
+            ]
+          }
+        },
+        "amounts": [
+          {
+            "role": "ceiling",
+            "from": "cap",
+            "unit": "INR"
+          }
+        ],
+        "instrument": {
+          "kind": "bank_account",
+          "maskFrom": "mask"
+        }
+      }
+    ],
+    "confidence": 0.95,
+    "examples": [
+      {
+        "sender": "VM-EXAMPL-S",
+        "body": "Your UPI-Mandate for Rs.250.00 is successfully created towards EXAMPLE MEDIA from A/c No: XXXXXX1234. UMN:abc123@example. If not you, kindly report. -Example Bank",
+        "expectFactTypes": [
+          "mandate"
+        ]
+      },
+      {
+        "sender": "VM-EXAMPL-S",
+        "body": "Your UPI-Mandate for Rs.250.00 could not be created towards EXAMPLE MEDIA from A/c No: XXXXXX1234.",
+        "expectFactTypes": []
+      }
+    ],
+    "status": "active",
+    "createdBy": "baseline",
+    "updatedAt": "2026-11-05T00:00:00Z"
+  },
+  {
+    "id": "SUB-MND-UPI-REVOKED-06",
+    "version": 1,
+    "family": "mandate_revoked",
+    "senders": [
+      "*"
+    ],
+    "priority": 650,
+    "match": {
+      "pattern": "upi-?\\s*mandate\\s+is\\s+(?:successfully\\s+)?(?:cancelled|canceled|revoked|deleted)\\s+towards\\s+(?<m>[a-z0-9&.' _*-]+?)\\s+for\\s+(?:(?:rs\\.?|inr|₹)\\s*)?(?<cap>[\\d,]+(?:\\.\\d{1,2})?)\\s+from\\s+(?:a/c|acct?\\.?|account)\\s*(?:no\\.?\\s*)?:?\\s*(?:ending\\s*(?:with\\s*|in\\s*)?)?(?:[x*•.]+\\s*)?(?<mask>\\d{2,16})\\b(?:[\\s\\S]{0,40}?umn\\s*:?\\s*(?<ref_umrn>[a-z0-9@._-]+))?",
+      "flags": "i",
+      "rejectAny": [
+        "could not",
+        "failed",
+        "unsuccessful"
+      ]
+    },
+    "emit": [
+      {
+        "factType": "mandate",
+        "attrs": {
+          "phase": "revoked",
+          "merchantName": {
+            "from": "m",
+            "transforms": [
+              "sanitizeNarration"
+            ]
+          }
+        },
+        "amounts": [
+          {
+            "role": "ceiling",
+            "from": "cap",
+            "unit": "INR"
+          }
+        ],
+        "instrument": {
+          "kind": "bank_account",
+          "maskFrom": "mask"
+        }
+      }
+    ],
+    "confidence": 0.95,
+    "examples": [
+      {
+        "sender": "VM-EXAMPL-S",
+        "body": "Your UPI-Mandate is successfully cancelled towards EXAMPLE MEDIA for 250.00 from A/c No.XXXXXX1234. UMN:abc123@example -Example Bank",
+        "expectFactTypes": [
+          "mandate"
+        ]
+      },
+      {
+        "sender": "VM-EXAMPL-S",
+        "body": "Your UPI-Mandate could not be cancelled towards EXAMPLE MEDIA for 250.00 from A/c No.XXXXXX1234.",
+        "expectFactTypes": []
+      }
+    ],
+    "status": "active",
+    "createdBy": "baseline",
+    "updatedAt": "2026-11-05T00:00:00Z"
+  },
+  {
+    "id": "SUB-MND-UPI-REVOKED-07",
+    "version": 1,
+    "family": "mandate_revoked",
+    "senders": [
+      "*"
+    ],
+    "priority": 650,
+    "match": {
+      "pattern": "upi-?\\s*mandate\\s+successfully\\s+(?:revoked|cancelled|canceled|deleted)\\s+by\\s+(?<m>[a-z0-9&.' _*-]+?)\\s+for\\s+(?:rs\\.?|inr|₹)\\s*(?<cap>[\\d,]+(?:\\.\\d{1,2})?)",
+      "flags": "i",
+      "rejectAny": [
+        "could not",
+        "failed",
+        "unsuccessful"
+      ]
+    },
+    "emit": [
+      {
+        "factType": "mandate",
+        "attrs": {
+          "phase": "revoked",
+          "merchantName": {
+            "from": "m",
+            "transforms": [
+              "sanitizeNarration"
+            ]
+          }
+        },
+        "amounts": [
+          {
+            "role": "ceiling",
+            "from": "cap",
+            "unit": "INR"
+          }
+        ]
+      }
+    ],
+    "confidence": 0.95,
+    "examples": [
+      {
+        "sender": "VM-EXAMPL-S",
+        "body": "UPI-Mandate successfully Revoked  by EXAMPLE MEDIA for Rs250.00 -Example Bank",
+        "expectFactTypes": [
+          "mandate"
+        ]
+      },
+      {
+        "sender": "VM-EXAMPL-S",
+        "body": "UPI-Mandate could not be Revoked  by EXAMPLE MEDIA for Rs250.00 -Example Bank",
+        "expectFactTypes": []
+      }
+    ],
+    "status": "active",
+    "createdBy": "baseline",
+    "updatedAt": "2026-11-05T00:00:00Z"
+  }
+]

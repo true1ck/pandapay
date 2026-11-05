@@ -18,6 +18,7 @@ const { safeErrorCode } = require('../safeErrorCode');
 const MAX_BODY_BYTES = 1024 * 1024;
 const MAX_INFLATED_BYTES = 8 * 1024 * 1024;
 const MAX_ITEMS = 500;
+const LISTS = ['items', 'instruments', 'events', 'ledger'];
 const ROUTE = '/sms/v2/facts\\:batch'; // Express 5: the colon must be escaped
 
 const denied = (v) => v === false || (v && typeof v === 'object' && v.ok === false);
@@ -49,7 +50,7 @@ function readBody(req) {
   }
 }
 
-function createFactsHandler({ withUserClient, hooks, deps }) {
+function createFactsHandler({ withUserClient, hooks, deps, categoryOnly = false }) {
   return async function factsHandler(req, res) {
     try {
       if (denied(await hooks.security.verifyAttestation(req))) return fail(res, 403, 'attestation_required');
@@ -57,14 +58,33 @@ function createFactsHandler({ withUserClient, hooks, deps }) {
       console.error('sms_v2 attestation hook failed', safeErrorCode(err));
       return fail(res, 503, 'security_unavailable');
     }
+    // A request that fails before contract validation has already cost an
+    // inflate and a parse, so it spends one admission unit like any other.
+    const chargeRejected = async () => {
+      try {
+        return denied(await hooks.security.checkRate(req, 'facts:batch', 1)) ? 'limited' : null;
+      } catch (err) {
+        console.error('sms_v2 rate hook failed', safeErrorCode(err));
+        return 'unavailable';
+      }
+    };
+    const refuse = async (status, error, detail) => {
+      const outcome = await chargeRejected();
+      if (outcome === 'limited') return fail(res, 429, 'rate_limited');
+      if (outcome === 'unavailable') return fail(res, 503, 'security_unavailable');
+      return fail(res, status, error, detail);
+    };
     const parsed = readBody(req);
-    if (parsed.error) return fail(res, parsed.status, parsed.error);
+    if (parsed.error) return refuse(parsed.status, parsed.error);
     const { body } = parsed;
-    if (Array.isArray(body.items) && body.items.length > MAX_ITEMS) {
-      return fail(res, 413, 'request.facts_batch.items_too_many', `A batch holds at most ${MAX_ITEMS} items.`);
+    // Every list is capped, and the daily budget is charged for the largest
+    // one, so a body of events or ledger rows cannot skip the item limit.
+    const sizes = LISTS.map((key) => (Array.isArray(body[key]) ? body[key].length : 0));
+    if (Math.max(...sizes) > MAX_ITEMS) {
+      return refuse(413, 'request.facts_batch.items_too_many', `A batch holds at most ${MAX_ITEMS} items, instruments, events and ledger entries each.`);
     }
     try {
-      const units = Array.isArray(body.items) ? Math.max(1, body.items.length) : 1;
+      const units = Math.max(1, ...sizes);
       if (denied(await hooks.security.checkRate(req, 'facts:batch', units))) return fail(res, 429, 'rate_limited');
     } catch (err) {
       console.error('sms_v2 rate hook failed', safeErrorCode(err));
@@ -74,9 +94,12 @@ function createFactsHandler({ withUserClient, hooks, deps }) {
     if (!check.ok) {
       return fail(res, 400, check.errors[0].code, `${check.errors.length} validation error(s)`, { errors: check.errors.slice(0, 50) });
     }
-    const backfill = String(req.query.backfill || '').toLowerCase() === 'true';
+    if (categoryOnly && (body.items.length || body.instruments.length || body.events.length)) {
+      return fail(res, 400, 'invalid_request', 'A category refresh contains ledger entries only.');
+    }
+    const backfill = categoryOnly || String(req.query.backfill || '').toLowerCase() === 'true';
     try {
-      const out = await withUserClient(req.userId, (client) => storage.ingestBatch(client, req.userId, body, { backfill, deps, hooks }));
+      const out = await withUserClient(req.userId, (client) => storage.ingestBatch(client, req.userId, body, { backfill, categoryOnly, deps, hooks }));
       return res.status(200).json({ results: out.results, serverTime: new Date().toISOString() });
     } catch (err) {
       console.error('sms_v2 facts:batch failed', safeErrorCode(err));
@@ -111,6 +134,8 @@ function readRawBody(req, res, next) {
 
 function registerFactsRoute(app, { requireSmsV2, requireMember, withUserClient, hooks, deps }) {
   app.post(ROUTE, requireSmsV2, requireMember, readRawBody, createFactsHandler({ withUserClient, hooks, deps }));
+  app.post('/sms/v2/categories\\:batch', requireSmsV2, requireMember, readRawBody,
+    createFactsHandler({ withUserClient, hooks, deps, categoryOnly: true }));
 }
 
 module.exports = { registerFactsRoute, createFactsHandler, readBody, MAX_BODY_BYTES, MAX_INFLATED_BYTES, MAX_ITEMS, ROUTE };

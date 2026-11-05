@@ -1,0 +1,37 @@
+{
+  "id": "lanej:moneyin_refund_narration_is_not_income",
+  "templateHash": "9e76250589e5cb4b3aea95aa713b94703a9cb51d8c289ee18c0e865d395e4378",
+  "weight": 1,
+  "source": "synthetic",
+  "messages": [
+    {
+      "sender": "VM-KOTAKB-S",
+      "body": "INR 640.00 credited to A/c no. XX1234 on 01-11-26 through IMPS/P2A/123456789012/EXAMPLE STORE/REFUND ORDER 42. Avl bal INR 10000.00.",
+      "observedAt": "2026-12-01T09:00:00.000Z"
+    }
+  ],
+  "expect": {
+    "facts": [
+      {
+        "factType": "movement",
+        "attrs": {
+          "direction": "credit",
+          "purpose": "refund",
+          "rail": "unknown"
+        },
+        "amounts": [
+          {
+            "role": "posted",
+            "minor": 64000
+          }
+        ],
+        "instrument": {
+          "kind": "bank_account",
+          "maskDigits": "1234"
+        }
+      }
+    ]
+  },
+  "note": "A refund narration on a transfer is a refund, not income.",
+  "origin": "lane-j"
+}

@@ -124,7 +124,12 @@ function eventSemantics(e, base) {
 
 function ledgerSemantics(l, base) {
   const errs = [];
-  if (l.category !== null && !Object.prototype.hasOwnProperty.call(l.to, 'external')) errs.push({ code: 'ledger.category_requires_external_to', path: `${base}/category` });
+  const has = (o, k) => Object.prototype.hasOwnProperty.call(o, k);
+  // CCR-003: a refund entry (external to own, no spend/income/investment flag)
+  // may carry the category of the purchase it reverses.
+  const refundShaped = has(l.from, 'external') && !has(l.to, 'external') && l.countsAsTransaction === true
+    && l.isSpend === false && l.isIncome === false && l.isInvestment === false;
+  if (l.category !== null && !has(l.to, 'external') && !refundShaped) errs.push({ code: 'ledger.category_requires_external_to', path: `${base}/category` });
   if ((l.category === null) !== (l.categorySource === null)) errs.push({ code: 'ledger.category_source_mismatch', path: `${base}/categorySource` });
   return errs;
 }

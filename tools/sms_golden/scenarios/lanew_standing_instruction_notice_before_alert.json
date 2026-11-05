@@ -1,0 +1,43 @@
+{
+  "id": "lanew_standing_instruction_notice_before_alert",
+  "description": "Same standing instruction, with the issuer's notice arriving before its spend alert: still one subscription charge, counted once.",
+  "knownInstruments": [
+    {
+      "kind": "credit_card",
+      "issuerSlug": "icici",
+      "maskDigits": "9012"
+    }
+  ],
+  "messages": [
+    {
+      "sender": "AX-ICICIT-S",
+      "body": "Dear Customer, your standing instruction (SI) of Rs 119.00 for SPOTIFY SI on ICICI Bank Card XX9012 has been processed",
+      "observedAt": "2026-11-12T08:00:00Z"
+    },
+    {
+      "sender": "AX-ICICIT-S",
+      "body": "INR 119.00 spent using ICICI Bank Card XX9012 on 12-Nov-26 on SPOTIFY SI. Avl Limit: INR 99,881.00. If not you, call 18002662.",
+      "observedAt": "2026-11-12T08:00:20Z"
+    }
+  ],
+  "expect": {
+    "events": [
+      {
+        "type": "subscription_charge",
+        "legRoles": [
+          "charge",
+          "original",
+          "duplicate_notice"
+        ]
+      }
+    ],
+    "totals": {
+      "from": "2026-10-31T18:30:00Z",
+      "to": "2026-11-30T18:30:00Z",
+      "spendMinor": 11900,
+      "incomeMinor": 0,
+      "investmentMinor": 0,
+      "transactionCount": 1
+    }
+  }
+}

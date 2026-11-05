@@ -1,0 +1,37 @@
+{
+  "id": "lanej:salary_rtgs_payroll",
+  "templateHash": "2bfebd400fa90a6f71f3cf82ea4a4b1bf487fdac4c6e8cc1e81e6ecd948c0c41",
+  "weight": 1,
+  "source": "synthetic",
+  "messages": [
+    {
+      "sender": "VM-AXISBK-S",
+      "body": "INR 85000.00 credited to A/c no. XX1234 on 01-11-26 at 09:30:10 through RTGS/ACME TECHNOLOGIES PVT LTD/PAYROLL OCT. Avl bal INR 100000.00.",
+      "observedAt": "2026-12-01T09:00:00.000Z"
+    }
+  ],
+  "expect": {
+    "facts": [
+      {
+        "factType": "movement",
+        "attrs": {
+          "direction": "credit",
+          "purpose": "salary",
+          "rail": "rtgs"
+        },
+        "amounts": [
+          {
+            "role": "posted",
+            "minor": 8500000
+          }
+        ],
+        "instrument": {
+          "kind": "bank_account",
+          "maskDigits": "1234"
+        }
+      }
+    ]
+  },
+  "note": "Salary by RTGS, narration says payroll.",
+  "origin": "lane-j"
+}

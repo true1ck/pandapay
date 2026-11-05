@@ -1,0 +1,34 @@
+{
+  "id": "laneq:recharge_success_airtel",
+  "templateHash": "5e34612b30bfc161401538378c5a65edaf9b24540551de349f850ebd56ec0e6d",
+  "weight": 1,
+  "source": "synthetic",
+  "messages": [
+    {
+      "sender": "AIRTEL",
+      "body": "Recharge successful! Rs.299.00 credited to 98XXXXX123. Validity 28 days. Thank you for choosing Airtel.",
+      "observedAt": "2026-11-20T09:00:00.000Z"
+    }
+  ],
+  "expect": {
+    "facts": [
+      {
+        "factType": "movement",
+        "attrs": {
+          "direction": "debit",
+          "purpose": "bill_payment",
+          "rail": "unknown",
+          "evidenceOnly": true
+        },
+        "amounts": [
+          {
+            "role": "posted",
+            "minor": 29900
+          }
+        ]
+      }
+    ]
+  },
+  "note": "Before this lane the generic last-resort rule read \"Rs credited\" as an income credit.",
+  "origin": "lane-q"
+}

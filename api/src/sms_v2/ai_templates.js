@@ -198,18 +198,8 @@ function registerPrivateTemplateRoutes(api) {
       return res.json(result);
     },
   );
-  register("GET", "/admin/sms/v2/metrics", async (_req, res, ctx) => {
-    const result = await ctx.withAdminClient((client) =>
-      client.query(
-        `SELECT (started_at AT TIME ZONE 'utc')::date AS day,model,count(*)::int AS calls,
-        sum(input_tokens)::bigint AS input_tokens,sum(output_tokens)::bigint AS output_tokens,
-        sum(total_tokens)::bigint AS total_tokens,sum(cost_usd) AS cost_usd,
-        count(*) FILTER(WHERE cost_usd IS NULL)::int AS calls_without_price
-       FROM sms_v2_template_attempts WHERE started_at >= now()-interval '30 days' GROUP BY 1,2 ORDER BY 1 DESC,2`,
-      ),
-    );
-    return res.json({ ai: result.rows });
-  });
+  // Lane C: the release go/no-go payload (still carries the `ai` rows).
+  register("GET", "/admin/sms/v2/metrics", require("./metrics_route").metricsHandler);
 }
 
 module.exports = {

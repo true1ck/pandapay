@@ -1,0 +1,245 @@
+[
+  {
+    "id": "SUB-ATT-DECLINED-CONTACTLESS-01",
+    "version": 1,
+    "family": "attempt_declined",
+    "senders": [
+      "*"
+    ],
+    "priority": 700,
+    "match": {
+      "pattern": "(?:rs\\.?|inr|₹)\\s*(?<amt>[\\d,]+(?:\\.\\d{1,2})?)\\s+(?:txn|transaction)\\s+declined[\\s\\S]{0,100}?credit\\s+card\\s+(?:no\\.?\\s*)?(?:ending\\s*(?:with\\s*|in\\s*)?)?(?:[x*•.]+\\s*)?(?<mask>\\d{2,6})\\b",
+      "flags": "i",
+      "rejectAny": [
+        "approved",
+        "successful"
+      ]
+    },
+    "emit": [
+      {
+        "factType": "attempt",
+        "attrs": {
+          "status": "declined",
+          "direction": "debit",
+          "purpose": "purchase"
+        },
+        "amounts": [
+          {
+            "role": "posted",
+            "from": "amt",
+            "unit": "INR"
+          }
+        ],
+        "instrument": {
+          "kind": "credit_card",
+          "maskFrom": "mask"
+        }
+      }
+    ],
+    "confidence": 0.95,
+    "examples": [
+      {
+        "sender": "VM-EXAMPL-S",
+        "body": "INR 2.00 txn declined at merchant outlet contactless domestic txn for Example Bank Credit Card XX1234 disabled. Enable it in the app.",
+        "expectFactTypes": [
+          "attempt"
+        ]
+      },
+      {
+        "sender": "VM-EXAMPL-S",
+        "body": "INR 2.00 txn approved at merchant outlet for Example Bank Credit Card XX1234.",
+        "expectFactTypes": []
+      }
+    ],
+    "status": "active",
+    "createdBy": "baseline",
+    "updatedAt": "2026-11-05T00:00:00Z"
+  },
+  {
+    "id": "SUB-ATT-DECLINED-TXN-INR-01",
+    "version": 1,
+    "family": "attempt_declined",
+    "senders": [
+      "*"
+    ],
+    "priority": 650,
+    "match": {
+      "pattern": "(?:transaction|txn)\\s+of\\s+(?:rs\\.?|inr|₹)\\s*(?<amt>[\\d,]+(?:\\.\\d{1,2})?)\\s+(?:at\\s+(?<m>[a-z0-9&.' _*-]+?)\\s+)?(?:with|on|using|through)\\s+(?:your\\s+)?(?:[a-z]{1,15}\\s+)?(?:[a-z]{1,15}\\s+)?(?:[a-z]{1,15}\\s+)?credit\\s+card\\s+(?:no\\.?\\s*)?(?:ending\\s*(?:with\\s*|in\\s*)?)?(?:[x*•.]+\\s*)?(?<mask>\\d{2,6})\\b[\\s\\S]{0,30}?(?:has\\s+been\\s+|is\\s+|was\\s+)?declined",
+      "flags": "i",
+      "rejectAny": [
+        "successful",
+        "approved"
+      ]
+    },
+    "emit": [
+      {
+        "factType": "attempt",
+        "attrs": {
+          "status": "declined",
+          "direction": "debit",
+          "purpose": "purchase"
+        },
+        "amounts": [
+          {
+            "role": "posted",
+            "from": "amt",
+            "unit": "INR"
+          }
+        ],
+        "counterparty": {
+          "kind": "merchant",
+          "nameFrom": "m",
+          "transforms": [
+            "sanitizeNarration"
+          ]
+        },
+        "instrument": {
+          "kind": "credit_card",
+          "maskFrom": "mask"
+        }
+      }
+    ],
+    "confidence": 0.95,
+    "examples": [
+      {
+        "sender": "VM-EXAMPL-S",
+        "body": "Dear Cardmember, your transaction of INR 100.00 at EXAMPLE STORE with Example Bank Credit Card ending 1234 has been declined due to incorrect CVV.",
+        "expectFactTypes": [
+          "attempt"
+        ]
+      },
+      {
+        "sender": "VM-EXAMPL-S",
+        "body": "Dear Cardmember, your transaction of INR 100.00 at EXAMPLE STORE with Example Bank Credit Card ending 1234 was successful.",
+        "expectFactTypes": []
+      }
+    ],
+    "status": "active",
+    "createdBy": "baseline",
+    "updatedAt": "2026-11-05T00:00:00Z"
+  },
+  {
+    "id": "SUB-ATT-DECLINED-TXN-NOMASK-USD-01",
+    "version": 1,
+    "family": "attempt_declined",
+    "senders": [
+      "*"
+    ],
+    "priority": 650,
+    "match": {
+      "pattern": "(?:transaction|txn)\\s+of\\s+(?:usd|\\$)\\s*(?<amt>[\\d,]+(?:\\.\\d{1,2})?)\\s+at\\s+(?<m>[a-z0-9&.' _*-]+?)\\s+is\\s+declined\\s+as[\\s\\S]{0,120}?credit\\s+card",
+      "flags": "i",
+      "rejectAny": [
+        "successful"
+      ]
+    },
+    "emit": [
+      {
+        "factType": "attempt",
+        "attrs": {
+          "status": "declined",
+          "direction": "debit",
+          "purpose": "purchase"
+        },
+        "amounts": [
+          {
+            "role": "posted",
+            "from": "amt",
+            "unit": "USD"
+          }
+        ],
+        "counterparty": {
+          "kind": "merchant",
+          "nameFrom": "m",
+          "transforms": [
+            "sanitizeNarration"
+          ]
+        },
+        "instrument": {
+          "kind": "credit_card"
+        }
+      }
+    ],
+    "confidence": 0.95,
+    "examples": [
+      {
+        "sender": "VM-EXAMPL-S",
+        "body": "Hi! Your txn of $1.00 at Example Shop is declined as you've disabled the international facility on your Example Visa credit card. To enable, log in to the app.",
+        "expectFactTypes": [
+          "attempt"
+        ]
+      },
+      {
+        "sender": "VM-EXAMPL-S",
+        "body": "Hi! Your txn of $1.00 at Example Shop is successful on your Example Visa credit card.",
+        "expectFactTypes": []
+      }
+    ],
+    "status": "active",
+    "createdBy": "baseline",
+    "updatedAt": "2026-11-05T00:00:00Z"
+  },
+  {
+    "id": "SUB-ATT-DECLINED-TXN-USD-01",
+    "version": 1,
+    "family": "attempt_declined",
+    "senders": [
+      "*"
+    ],
+    "priority": 650,
+    "match": {
+      "pattern": "(?:transaction|txn)\\s+of\\s+(?:usd|\\$)\\s*(?<amt>[\\d,]+(?:\\.\\d{1,2})?)\\s+(?:at\\s+(?<m>[a-z0-9&.' _*-]+?)\\s+)?(?:with|on|using|through)\\s+(?:your\\s+)?(?:[a-z]{1,15}\\s+)?(?:[a-z]{1,15}\\s+)?(?:[a-z]{1,15}\\s+)?credit\\s+card\\s+(?:no\\.?\\s*)?(?:ending\\s*(?:with\\s*|in\\s*)?)?(?:[x*•.]+\\s*)?(?<mask>\\d{2,6})\\b[\\s\\S]{0,30}?(?:has\\s+been\\s+|is\\s+|was\\s+)?declined",
+      "flags": "i",
+      "rejectAny": [
+        "successful",
+        "approved"
+      ]
+    },
+    "emit": [
+      {
+        "factType": "attempt",
+        "attrs": {
+          "status": "declined",
+          "direction": "debit",
+          "purpose": "purchase"
+        },
+        "amounts": [
+          {
+            "role": "posted",
+            "from": "amt",
+            "unit": "USD"
+          }
+        ],
+        "counterparty": {
+          "kind": "merchant",
+          "nameFrom": "m",
+          "transforms": [
+            "sanitizeNarration"
+          ]
+        },
+        "instrument": {
+          "kind": "credit_card",
+          "maskFrom": "mask"
+        }
+      }
+    ],
+    "confidence": 0.95,
+    "examples": [
+      {
+        "sender": "VM-EXAMPL-S",
+        "body": "Dear Cardmember, your transaction of USD 100.00 at EXAMPLE STORE with Example Bank Credit Card ending 1234 has been declined due to incorrect CVV.",
+        "expectFactTypes": [
+          "attempt"
+        ]
+      },
+      {
+        "sender": "VM-EXAMPL-S",
+        "body": "Dear Cardmember, your transaction of USD 100.00 at EXAMPLE STORE with Example Bank Credit Card ending 1234 was successful.",
+        "expectFactTypes": []
+      }
+    ],
+    "status": "active",
+    "createdBy": "baseline",
+    "updatedAt": "2026-11-05T00:00:00Z"
+  }
+]

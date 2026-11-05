@@ -2568,15 +2568,24 @@
   },
   {
     "id": "GEN-REFUND-PENDING",
-    "version": 1,
+    "version": 2,
     "family": "attempt_account",
     "senders": [
       "*"
     ],
     "priority": 322,
     "match": {
-      "pattern": "\\brefund\\b[^\\n]{0,20}?(?:\\b(?:rs\\.?|inr)|₹)\\s*:?\\s*(?<amt>\\d[\\d,]*(?:\\.\\d{1,2})?)[^\\n]{0,40}?\\b(?:initiated|pending|in\\s+process|processing|under\\s+process)\\b(?:[^\\n]{0,40}?\\b(?:to|in|into)\\s+(?:(?:your|the)\\s+)?(?:[a-z][a-z .&'-]{0,30}?\\s)?\\b(?:a/?c(?:ct)?\\.?|account|acc\\.?)(?:\\s*(?:no|number|num)\\.?)?(?:\\s+(?:ending|ends)(?:\\s+(?:with|in))?)?\\s*[:\\-]?\\s*[x*•.]*\\s?(?<mask>\\d{2,18}))?(?=[\\s\\S]*?\\b(?:on|dated|date)\\s+(?<date>\\d{4}-\\d{2}-\\d{2}(?:[: ]\\d{2}:\\d{2}(?::\\d{2})?)?|\\d{1,2}[-/]\\d{1,2}[-/]\\d{2,4}(?:,?\\s*\\d{2}:\\d{2}(?::\\d{2})?)?|\\d{1,2}[-/ ]?[a-z]{3}[-/ ,]*\\d{2,4}(?:,?\\s*\\d{2}:\\d{2}(?::\\d{2})?)?)|)",
-      "flags": "i"
+      "pattern": "\\brefund\\b[^\\n]{0,20}?(?:\\b(?:rs\\.?|inr)|₹)\\s*:?\\s*(?<amt>\\d[\\d,]*(?:\\.\\d{1,2})?)(?:(?!\\b(?:has\\s{1,3}been|was)\\s{1,3}(?:credited|refunded|processed)\\b)[^\\n]){0,120}?\\b(?:initiated|pending|in\\s+process|processing|under\\s+process)\\b(?:[^\\n]{0,40}?\\b(?:to|in|into)\\s+(?:(?:your|the)\\s+)?(?:[a-z][a-z .&'-]{0,30}?\\s)?\\b(?:a/?c(?:ct)?\\.?|account|acc\\.?)(?:\\s*(?:no|number|num)\\.?)?(?:\\s+(?:ending|ends)(?:\\s+(?:with|in))?)?\\s*[:\\-]?\\s*[x*•.]*\\s?(?<mask>\\d{2,18}))?(?=[\\s\\S]*?\\b(?:on|dated|date)\\s+(?<date>\\d{4}-\\d{2}-\\d{2}(?:[: ]\\d{2}:\\d{2}(?::\\d{2})?)?|\\d{1,2}[-/]\\d{1,2}[-/]\\d{2,4}(?:,?\\s*\\d{2}:\\d{2}(?::\\d{2})?)?|\\d{1,2}[-/ ]?[a-z]{3}[-/ ,]*\\d{2,4}(?:,?\\s*\\d{2}:\\d{2}(?::\\d{2})?)?)|)",
+      "flags": "i",
+      "rejectAny": [
+        "initiated within",
+        "will be initiated",
+        "shall be initiated",
+        "as per",
+        "policy",
+        "terms and conditions",
+        "t&c"
+      ]
     },
     "emit": [
       {
@@ -2692,6 +2701,18 @@
       {
         "sender": "VM-UCOBNK-S",
         "body": "Refund of INR 500 credited to your bank account XX1234.",
+        "expectFactTypes": []
+      },
+      {
+        "sender": "VM-UCOBNK-S",
+        "body": "Refund of Rs 250 for your order ORD1234567 placed at EXAMPLE STORE on 01-11-26 is initiated to account XX1234.",
+        "expectFactTypes": [
+          "attempt"
+        ]
+      },
+      {
+        "sender": "VM-UCOBNK-S",
+        "body": "As per our policy, a refund of Rs 500 is initiated within 7 working days of cancellation.",
         "expectFactTypes": []
       }
     ],
@@ -3987,14 +4008,14 @@
   },
   {
     "id": "GEN-REFUND-ACCT-OF-B",
-    "version": 1,
+    "version": 2,
     "family": "refund",
     "senders": [
       "*"
     ],
     "priority": 301,
     "match": {
-      "pattern": "\\brefund\\s+of\\s+(?:\\b(?:rs\\.?|inr)|₹)\\s*:?\\s*(?<amt>\\d[\\d,]*(?:\\.\\d{1,2})?)(?:\\s+(?:from|for|at|against)\\s+(?<merchant>[^\\n]+?)(?=\\s+(?:has\\s+been\\s+|was\\s+|is\\s+)?(?:credited|processed|received|reversed|refunded)\\b))?\\s+(?:has\\s+been\\s+|was\\s+|is\\s+)?(?:credited|processed|received|reversed|settled)\\s+(?:back\\s+)?(?:to|in|into|on)\\s+(?:(?:your|the)\\s+)?(?:[a-z][a-z .&'-]{0,30}?\\s)?\\b(?:a/?c(?:ct)?\\.?|account|acc\\.?)(?:\\s*(?:no|number|num)\\.?)?(?:\\s+(?:ending|ends)(?:\\s+(?:with|in))?)?\\s*[:\\-]?\\s*[x*•.]*\\s?(?<mask>\\d{2,18})(?=[\\s\\S]*?\\b(?:on|dated|date)\\s+(?<date>\\d{4}-\\d{2}-\\d{2}(?:[: ]\\d{2}:\\d{2}(?::\\d{2})?)?|\\d{1,2}[-/]\\d{1,2}[-/]\\d{2,4}(?:,?\\s*\\d{2}:\\d{2}(?::\\d{2})?)?|\\d{1,2}[-/ ]?[a-z]{3}[-/ ,]*\\d{2,4}(?:,?\\s*\\d{2}:\\d{2}(?::\\d{2})?)?)|)[\\s\\S]*?\\b(?:avl|avail(?:able)?|total\\s+avail(?:able)?|clear|current|new|closing|updated|remaining)?\\.?\\s*bal(?:ance)?\\.?\\s*(?:is|of)?\\s*[:\\-]?\\s*(?:\\b(?:rs\\.?|inr)|₹)\\s*:?\\s*(?<bal>\\d[\\d,]*(?:\\.\\d{1,2})?)",
+      "pattern": "\\brefund\\s+of\\s+(?:\\b(?:rs\\.?|inr)|₹)\\s*:?\\s*(?<amt>\\d[\\d,]*(?:\\.\\d{1,2})?)(?:\\s+(?:from|for|at|against)\\s+(?:your\\s+)?(?<merchant>[^\\n]+?)(?=\\s+(?:has\\s+been\\s+|was\\s+|is\\s+)?(?:credited|processed|received|reversed|refunded)\\b))?\\s+(?:has\\s+been\\s+|was\\s+|is\\s+)?(?:credited|processed|received|reversed|settled)\\s+(?:back\\s+)?(?:to|in|into|on)\\s+(?:(?:your|the)\\s+)?(?:[a-z][a-z .&'-]{0,30}?\\s)?\\b(?:a/?c(?:ct)?\\.?|account|acc\\.?)(?:\\s*(?:no|number|num)\\.?)?(?:\\s+(?:ending|ends)(?:\\s+(?:with|in))?)?\\s*[:\\-]?\\s*[x*•.]*\\s?(?<mask>\\d{2,18})(?=[\\s\\S]*?\\b(?:on|dated|date)\\s+(?<date>\\d{4}-\\d{2}-\\d{2}(?:[: ]\\d{2}:\\d{2}(?::\\d{2})?)?|\\d{1,2}[-/]\\d{1,2}[-/]\\d{2,4}(?:,?\\s*\\d{2}:\\d{2}(?::\\d{2})?)?|\\d{1,2}[-/ ]?[a-z]{3}[-/ ,]*\\d{2,4}(?:,?\\s*\\d{2}:\\d{2}(?::\\d{2})?)?)|)[\\s\\S]*?\\b(?:avl|avail(?:able)?|total\\s+avail(?:able)?|clear|current|new|closing|updated|remaining)?\\.?\\s*bal(?:ance)?\\.?\\s*(?:is|of)?\\s*[:\\-]?\\s*(?:\\b(?:rs\\.?|inr)|₹)\\s*:?\\s*(?<bal>\\d[\\d,]*(?:\\.\\d{1,2})?)",
       "flags": "i"
     },
     "emit": [
@@ -4089,6 +4110,13 @@
         "instrument": {
           "kind": "bank_account",
           "maskFrom": "mask"
+        },
+        "counterparty": {
+          "kind": "merchant",
+          "nameFrom": "merchant",
+          "transforms": [
+            "sanitizeNarration"
+          ]
         }
       },
       {
@@ -4129,18 +4157,18 @@
     ],
     "status": "active",
     "createdBy": "baseline",
-    "updatedAt": "2026-11-20T00:00:00Z"
+    "updatedAt": "2026-11-05T00:00:00Z"
   },
   {
     "id": "GEN-REVERSAL-ACCT-OF-B",
-    "version": 1,
+    "version": 2,
     "family": "reversal",
     "senders": [
       "*"
     ],
     "priority": 301,
     "match": {
-      "pattern": "\\breversal\\s+of\\s+(?:\\b(?:rs\\.?|inr)|₹)\\s*:?\\s*(?<amt>\\d[\\d,]*(?:\\.\\d{1,2})?)(?:\\s+(?:from|for|at|against)\\s+(?<merchant>[^\\n]+?)(?=\\s+(?:has\\s+been\\s+|was\\s+|is\\s+)?(?:credited|processed|received|reversed|refunded)\\b))?\\s+(?:has\\s+been\\s+|was\\s+|is\\s+)?(?:credited|processed|received|reversed|settled)\\s+(?:back\\s+)?(?:to|in|into|on)\\s+(?:(?:your|the)\\s+)?(?:[a-z][a-z .&'-]{0,30}?\\s)?\\b(?:a/?c(?:ct)?\\.?|account|acc\\.?)(?:\\s*(?:no|number|num)\\.?)?(?:\\s+(?:ending|ends)(?:\\s+(?:with|in))?)?\\s*[:\\-]?\\s*[x*•.]*\\s?(?<mask>\\d{2,18})(?=[\\s\\S]*?\\b(?:on|dated|date)\\s+(?<date>\\d{4}-\\d{2}-\\d{2}(?:[: ]\\d{2}:\\d{2}(?::\\d{2})?)?|\\d{1,2}[-/]\\d{1,2}[-/]\\d{2,4}(?:,?\\s*\\d{2}:\\d{2}(?::\\d{2})?)?|\\d{1,2}[-/ ]?[a-z]{3}[-/ ,]*\\d{2,4}(?:,?\\s*\\d{2}:\\d{2}(?::\\d{2})?)?)|)[\\s\\S]*?\\b(?:avl|avail(?:able)?|total\\s+avail(?:able)?|clear|current|new|closing|updated|remaining)?\\.?\\s*bal(?:ance)?\\.?\\s*(?:is|of)?\\s*[:\\-]?\\s*(?:\\b(?:rs\\.?|inr)|₹)\\s*:?\\s*(?<bal>\\d[\\d,]*(?:\\.\\d{1,2})?)",
+      "pattern": "\\breversal\\s+of\\s+(?:\\b(?:rs\\.?|inr)|₹)\\s*:?\\s*(?<amt>\\d[\\d,]*(?:\\.\\d{1,2})?)(?:\\s+(?:from|for|at|against)\\s+(?:your\\s+)?(?<merchant>[^\\n]+?)(?=\\s+(?:has\\s+been\\s+|was\\s+|is\\s+)?(?:credited|processed|received|reversed|refunded)\\b))?\\s+(?:has\\s+been\\s+|was\\s+|is\\s+)?(?:credited|processed|received|reversed|settled)\\s+(?:back\\s+)?(?:to|in|into|on)\\s+(?:(?:your|the)\\s+)?(?:[a-z][a-z .&'-]{0,30}?\\s)?\\b(?:a/?c(?:ct)?\\.?|account|acc\\.?)(?:\\s*(?:no|number|num)\\.?)?(?:\\s+(?:ending|ends)(?:\\s+(?:with|in))?)?\\s*[:\\-]?\\s*[x*•.]*\\s?(?<mask>\\d{2,18})(?=[\\s\\S]*?\\b(?:on|dated|date)\\s+(?<date>\\d{4}-\\d{2}-\\d{2}(?:[: ]\\d{2}:\\d{2}(?::\\d{2})?)?|\\d{1,2}[-/]\\d{1,2}[-/]\\d{2,4}(?:,?\\s*\\d{2}:\\d{2}(?::\\d{2})?)?|\\d{1,2}[-/ ]?[a-z]{3}[-/ ,]*\\d{2,4}(?:,?\\s*\\d{2}:\\d{2}(?::\\d{2})?)?)|)[\\s\\S]*?\\b(?:avl|avail(?:able)?|total\\s+avail(?:able)?|clear|current|new|closing|updated|remaining)?\\.?\\s*bal(?:ance)?\\.?\\s*(?:is|of)?\\s*[:\\-]?\\s*(?:\\b(?:rs\\.?|inr)|₹)\\s*:?\\s*(?<bal>\\d[\\d,]*(?:\\.\\d{1,2})?)",
       "flags": "i"
     },
     "emit": [
@@ -4235,6 +4263,13 @@
         "instrument": {
           "kind": "bank_account",
           "maskFrom": "mask"
+        },
+        "counterparty": {
+          "kind": "merchant",
+          "nameFrom": "merchant",
+          "transforms": [
+            "sanitizeNarration"
+          ]
         }
       },
       {
@@ -4275,7 +4310,7 @@
     ],
     "status": "active",
     "createdBy": "baseline",
-    "updatedAt": "2026-11-20T00:00:00Z"
+    "updatedAt": "2026-11-05T00:00:00Z"
   },
   {
     "id": "GEN-CARD-ATM-FROM-NONE",
@@ -4677,14 +4712,14 @@
   },
   {
     "id": "GEN-REFUND-CARD-OF-CR",
-    "version": 1,
+    "version": 2,
     "family": "refund",
     "senders": [
       "*"
     ],
     "priority": 299,
     "match": {
-      "pattern": "\\brefund\\s+of\\s+(?:\\b(?:rs\\.?|inr)|₹)\\s*:?\\s*(?<amt>\\d[\\d,]*(?:\\.\\d{1,2})?)(?:\\s+(?:from|for|at|against)\\s+(?<merchant>[^\\n]+?)(?=\\s+(?:has\\s+been\\s+|was\\s+|is\\s+)?(?:credited|processed|received|reversed|refunded)\\b))?\\s+(?:has\\s+been\\s+|was\\s+|is\\s+)?(?:credited|processed|received|reversed|settled)\\s+(?:back\\s+)?(?:to|in|into|on)\\s+(?:your\\s+)?(?:(?:your|the)\\s+)?(?:[a-z][a-z0-9+&.'/ -]{0,40}?\\s)?credit\\s+card(?:\\s*(?:no|number)\\.?)?(?:\\s+(?:ending|ends)(?:\\s+(?:with|in))?)?\\s*[:\\-]?\\s*[x*•.]*\\s?(?<mask>\\d{2,18})(?=[\\s\\S]*?\\b(?:on|dated|date)\\s+(?<date>\\d{4}-\\d{2}-\\d{2}(?:[: ]\\d{2}:\\d{2}(?::\\d{2})?)?|\\d{1,2}[-/]\\d{1,2}[-/]\\d{2,4}(?:,?\\s*\\d{2}:\\d{2}(?::\\d{2})?)?|\\d{1,2}[-/ ]?[a-z]{3}[-/ ,]*\\d{2,4}(?:,?\\s*\\d{2}:\\d{2}(?::\\d{2})?)?)|)",
+      "pattern": "\\brefund\\s+of\\s+(?:\\b(?:rs\\.?|inr)|₹)\\s*:?\\s*(?<amt>\\d[\\d,]*(?:\\.\\d{1,2})?)(?:\\s+(?:from|for|at|against)\\s+(?:your\\s+)?(?<merchant>[^\\n]+?)(?=\\s+(?:has\\s+been\\s+|was\\s+|is\\s+)?(?:credited|processed|received|reversed|refunded)\\b))?\\s+(?:has\\s+been\\s+|was\\s+|is\\s+)?(?:credited|processed|received|reversed|settled)\\s+(?:back\\s+)?(?:to|in|into|on)\\s+(?:your\\s+)?(?:(?:your|the)\\s+)?(?:[a-z][a-z0-9+&.'/ -]{0,40}?\\s)?credit\\s+card(?:\\s*(?:no|number)\\.?)?(?:\\s+(?:ending|ends)(?:\\s+(?:with|in))?)?\\s*[:\\-]?\\s*[x*•.]*\\s?(?<mask>\\d{2,18})(?=[\\s\\S]*?\\b(?:on|dated|date)\\s+(?<date>\\d{4}-\\d{2}-\\d{2}(?:[: ]\\d{2}:\\d{2}(?::\\d{2})?)?|\\d{1,2}[-/]\\d{1,2}[-/]\\d{2,4}(?:,?\\s*\\d{2}:\\d{2}(?::\\d{2})?)?|\\d{1,2}[-/ ]?[a-z]{3}[-/ ,]*\\d{2,4}(?:,?\\s*\\d{2}:\\d{2}(?::\\d{2})?)?)|)",
       "flags": "i"
     },
     "emit": [
@@ -4779,6 +4814,13 @@
         "instrument": {
           "maskFrom": "mask",
           "kind": "credit_card"
+        },
+        "counterparty": {
+          "kind": "merchant",
+          "nameFrom": "merchant",
+          "transforms": [
+            "sanitizeNarration"
+          ]
         }
       }
     ],
@@ -4799,7 +4841,7 @@
     ],
     "status": "active",
     "createdBy": "baseline",
-    "updatedAt": "2026-11-20T00:00:00Z"
+    "updatedAt": "2026-11-05T00:00:00Z"
   },
   {
     "id": "GEN-REVERSAL-ACCT-VERB-B",
@@ -4949,14 +4991,14 @@
   },
   {
     "id": "GEN-REVERSAL-CARD-OF-CR",
-    "version": 1,
+    "version": 2,
     "family": "reversal",
     "senders": [
       "*"
     ],
     "priority": 299,
     "match": {
-      "pattern": "\\breversal\\s+of\\s+(?:\\b(?:rs\\.?|inr)|₹)\\s*:?\\s*(?<amt>\\d[\\d,]*(?:\\.\\d{1,2})?)(?:\\s+(?:from|for|at|against)\\s+(?<merchant>[^\\n]+?)(?=\\s+(?:has\\s+been\\s+|was\\s+|is\\s+)?(?:credited|processed|received|reversed|refunded)\\b))?\\s+(?:has\\s+been\\s+|was\\s+|is\\s+)?(?:credited|processed|received|reversed|settled)\\s+(?:back\\s+)?(?:to|in|into|on)\\s+(?:your\\s+)?(?:(?:your|the)\\s+)?(?:[a-z][a-z0-9+&.'/ -]{0,40}?\\s)?credit\\s+card(?:\\s*(?:no|number)\\.?)?(?:\\s+(?:ending|ends)(?:\\s+(?:with|in))?)?\\s*[:\\-]?\\s*[x*•.]*\\s?(?<mask>\\d{2,18})(?=[\\s\\S]*?\\b(?:on|dated|date)\\s+(?<date>\\d{4}-\\d{2}-\\d{2}(?:[: ]\\d{2}:\\d{2}(?::\\d{2})?)?|\\d{1,2}[-/]\\d{1,2}[-/]\\d{2,4}(?:,?\\s*\\d{2}:\\d{2}(?::\\d{2})?)?|\\d{1,2}[-/ ]?[a-z]{3}[-/ ,]*\\d{2,4}(?:,?\\s*\\d{2}:\\d{2}(?::\\d{2})?)?)|)",
+      "pattern": "\\breversal\\s+of\\s+(?:\\b(?:rs\\.?|inr)|₹)\\s*:?\\s*(?<amt>\\d[\\d,]*(?:\\.\\d{1,2})?)(?:\\s+(?:from|for|at|against)\\s+(?:your\\s+)?(?<merchant>[^\\n]+?)(?=\\s+(?:has\\s+been\\s+|was\\s+|is\\s+)?(?:credited|processed|received|reversed|refunded)\\b))?\\s+(?:has\\s+been\\s+|was\\s+|is\\s+)?(?:credited|processed|received|reversed|settled)\\s+(?:back\\s+)?(?:to|in|into|on)\\s+(?:your\\s+)?(?:(?:your|the)\\s+)?(?:[a-z][a-z0-9+&.'/ -]{0,40}?\\s)?credit\\s+card(?:\\s*(?:no|number)\\.?)?(?:\\s+(?:ending|ends)(?:\\s+(?:with|in))?)?\\s*[:\\-]?\\s*[x*•.]*\\s?(?<mask>\\d{2,18})(?=[\\s\\S]*?\\b(?:on|dated|date)\\s+(?<date>\\d{4}-\\d{2}-\\d{2}(?:[: ]\\d{2}:\\d{2}(?::\\d{2})?)?|\\d{1,2}[-/]\\d{1,2}[-/]\\d{2,4}(?:,?\\s*\\d{2}:\\d{2}(?::\\d{2})?)?|\\d{1,2}[-/ ]?[a-z]{3}[-/ ,]*\\d{2,4}(?:,?\\s*\\d{2}:\\d{2}(?::\\d{2})?)?)|)",
       "flags": "i"
     },
     "emit": [
@@ -5051,6 +5093,13 @@
         "instrument": {
           "maskFrom": "mask",
           "kind": "credit_card"
+        },
+        "counterparty": {
+          "kind": "merchant",
+          "nameFrom": "merchant",
+          "transforms": [
+            "sanitizeNarration"
+          ]
         }
       }
     ],
@@ -5071,7 +5120,7 @@
     ],
     "status": "active",
     "createdBy": "baseline",
-    "updatedAt": "2026-11-20T00:00:00Z"
+    "updatedAt": "2026-11-05T00:00:00Z"
   },
   {
     "id": "GEN-CARD-ATM-CASH-NONE",
@@ -5201,14 +5250,14 @@
   },
   {
     "id": "GEN-ACCT-SALARY-NEFT-C1-B",
-    "version": 1,
+    "version": 2,
     "family": "salary",
     "senders": [
       "*"
     ],
     "priority": 297,
     "match": {
-      "pattern": "(?:\\b(?:rs\\.?|inr)|₹)\\s*:?\\s*(?<amt>\\d[\\d,]*(?:\\.\\d{1,2})?)\\s+(?:has\\s+been\\s+|is\\s+|was\\s+)?(?:credited|deposited|received)\\s+(?:to|in|into|on)\\s+(?:(?:your|the)\\s+)?(?:[a-z][a-z .&'-]{0,30}?\\s)?\\b(?:a/?c(?:ct)?\\.?|account|acc\\.?)(?:\\s*(?:no|number|num)\\.?)?(?:\\s+(?:ending|ends)(?:\\s+(?:with|in))?)?\\s*[:\\-]?\\s*[x*•.]*\\s?(?<mask>\\d{2,18})(?=[\\s\\S]*?\\b(?:on|dated|date)\\s+(?<date>\\d{4}-\\d{2}-\\d{2}(?:[: ]\\d{2}:\\d{2}(?::\\d{2})?)?|\\d{1,2}[-/]\\d{1,2}[-/]\\d{2,4}(?:,?\\s*\\d{2}:\\d{2}(?::\\d{2})?)?|\\d{1,2}[-/ ]?[a-z]{3}[-/ ,]*\\d{2,4}(?:,?\\s*\\d{2}:\\d{2}(?::\\d{2})?)?)|)[^\\n]{0,150}?\\b(?:salary|payroll|wages|sal)\\b[\\s\\S]*?\\b(?:avl|avail(?:able)?|total\\s+avail(?:able)?|clear|current|new|closing|updated|remaining)?\\.?\\s*bal(?:ance)?\\.?\\s*(?:is|of)?\\s*[:\\-]?\\s*(?:\\b(?:rs\\.?|inr)|₹)\\s*:?\\s*(?<bal>\\d[\\d,]*(?:\\.\\d{1,2})?)",
+      "pattern": "(?:\\b(?:rs\\.?|inr)|₹)\\s*:?\\s*(?<amt>\\d[\\d,]*(?:\\.\\d{1,2})?)\\s+(?:has\\s+been\\s+|is\\s+|was\\s+)?(?:credited|deposited|received)\\s+(?:to|in|into|on)\\s+(?:(?:your|the)\\s+)?(?:[a-z][a-z .&'-]{0,30}?\\s)?\\b(?:a/?c(?:ct)?\\.?|account|acc\\.?)(?:\\s*(?:no|number|num)\\.?)?(?:\\s+(?:ending|ends)(?:\\s+(?:with|in))?)?\\s*[:\\-]?\\s*[x*•.]*\\s?(?<mask>\\d{2,18})(?=[\\s\\S]*?\\b(?:on|dated|date)\\s+(?<date>\\d{4}-\\d{2}-\\d{2}(?:[: ]\\d{2}:\\d{2}(?::\\d{2})?)?|\\d{1,2}[-/]\\d{1,2}[-/]\\d{2,4}(?:,?\\s*\\d{2}:\\d{2}(?::\\d{2})?)?|\\d{1,2}[-/ ]?[a-z]{3}[-/ ,]*\\d{2,4}(?:,?\\s*\\d{2}:\\d{2}(?::\\d{2})?)?)|)(?:[^\\n]{0,150}?\\bneft\\b[\\s\\-/:]*(?:cr\\b[\\s\\-/:]*)?(?:(?:[a-z]{4}0[a-z0-9]{6}|[a-z]{4}[a-z0-9]?\\d{9,16})[\\s\\-/:]*)?(?<payer>[a-z][a-z0-9 .&']{2,60}?)[\\s\\-/:]+(?:salary|payroll|wages|sal)\\b|[^\\n]{0,150}?\\b(?:salary|payroll|wages|sal)\\b)[\\s\\S]*?\\b(?:avl|avail(?:able)?|total\\s+avail(?:able)?|clear|current|new|closing|updated|remaining)?\\.?\\s*bal(?:ance)?\\.?\\s*(?:is|of)?\\s*[:\\-]?\\s*(?:\\b(?:rs\\.?|inr)|₹)\\s*:?\\s*(?<bal>\\d[\\d,]*(?:\\.\\d{1,2})?)",
       "flags": "i",
       "requireAll": [
         "neft"
@@ -5306,6 +5355,12 @@
         "instrument": {
           "kind": "bank_account",
           "maskFrom": "mask"
+        },
+        "counterparty": {
+          "nameFrom": "payer",
+          "transforms": [
+            "sanitizeNarration"
+          ]
         }
       },
       {
@@ -5751,14 +5806,14 @@
   },
   {
     "id": "GEN-ACCT-SALARY-NEFT-C2-B",
-    "version": 1,
+    "version": 2,
     "family": "salary",
     "senders": [
       "*"
     ],
     "priority": 296,
     "match": {
-      "pattern": "(?:(?:your|the)\\s+)?(?:[a-z][a-z .&'-]{0,30}?\\s)?\\b(?:a/?c(?:ct)?\\.?|account|acc\\.?)(?:\\s*(?:no|number|num)\\.?)?(?:\\s+(?:ending|ends)(?:\\s+(?:with|in))?)?\\s*[:\\-]?\\s*[x*•.]*\\s?(?<mask>\\d{2,18})\\s+(?:has\\s+been\\s+|is\\s+|was\\s+)?(?:credited|received)\\s+(?:with|by|for|of)?\\s*(?:\\b(?:rs\\.?|inr)|₹)\\s*:?\\s*(?<amt>\\d[\\d,]*(?:\\.\\d{1,2})?)(?=[\\s\\S]*?\\b(?:on|dated|date)\\s+(?<date>\\d{4}-\\d{2}-\\d{2}(?:[: ]\\d{2}:\\d{2}(?::\\d{2})?)?|\\d{1,2}[-/]\\d{1,2}[-/]\\d{2,4}(?:,?\\s*\\d{2}:\\d{2}(?::\\d{2})?)?|\\d{1,2}[-/ ]?[a-z]{3}[-/ ,]*\\d{2,4}(?:,?\\s*\\d{2}:\\d{2}(?::\\d{2})?)?)|)[^\\n]{0,150}?\\b(?:salary|payroll|wages|sal)\\b[\\s\\S]*?\\b(?:avl|avail(?:able)?|total\\s+avail(?:able)?|clear|current|new|closing|updated|remaining)?\\.?\\s*bal(?:ance)?\\.?\\s*(?:is|of)?\\s*[:\\-]?\\s*(?:\\b(?:rs\\.?|inr)|₹)\\s*:?\\s*(?<bal>\\d[\\d,]*(?:\\.\\d{1,2})?)",
+      "pattern": "(?:(?:your|the)\\s+)?(?:[a-z][a-z .&'-]{0,30}?\\s)?\\b(?:a/?c(?:ct)?\\.?|account|acc\\.?)(?:\\s*(?:no|number|num)\\.?)?(?:\\s+(?:ending|ends)(?:\\s+(?:with|in))?)?\\s*[:\\-]?\\s*[x*•.]*\\s?(?<mask>\\d{2,18})\\s+(?:has\\s+been\\s+|is\\s+|was\\s+)?(?:credited|received)\\s+(?:with|by|for|of)?\\s*(?:\\b(?:rs\\.?|inr)|₹)\\s*:?\\s*(?<amt>\\d[\\d,]*(?:\\.\\d{1,2})?)(?=[\\s\\S]*?\\b(?:on|dated|date)\\s+(?<date>\\d{4}-\\d{2}-\\d{2}(?:[: ]\\d{2}:\\d{2}(?::\\d{2})?)?|\\d{1,2}[-/]\\d{1,2}[-/]\\d{2,4}(?:,?\\s*\\d{2}:\\d{2}(?::\\d{2})?)?|\\d{1,2}[-/ ]?[a-z]{3}[-/ ,]*\\d{2,4}(?:,?\\s*\\d{2}:\\d{2}(?::\\d{2})?)?)|)(?:[^\\n]{0,150}?\\bneft\\b[\\s\\-/:]*(?:cr\\b[\\s\\-/:]*)?(?:(?:[a-z]{4}0[a-z0-9]{6}|[a-z]{4}[a-z0-9]?\\d{9,16})[\\s\\-/:]*)?(?<payer>[a-z][a-z0-9 .&']{2,60}?)[\\s\\-/:]+(?:salary|payroll|wages|sal)\\b|[^\\n]{0,150}?\\b(?:salary|payroll|wages|sal)\\b)[\\s\\S]*?\\b(?:avl|avail(?:able)?|total\\s+avail(?:able)?|clear|current|new|closing|updated|remaining)?\\.?\\s*bal(?:ance)?\\.?\\s*(?:is|of)?\\s*[:\\-]?\\s*(?:\\b(?:rs\\.?|inr)|₹)\\s*:?\\s*(?<bal>\\d[\\d,]*(?:\\.\\d{1,2})?)",
       "flags": "i",
       "requireAll": [
         "neft"
@@ -5856,6 +5911,12 @@
         "instrument": {
           "kind": "bank_account",
           "maskFrom": "mask"
+        },
+        "counterparty": {
+          "nameFrom": "payer",
+          "transforms": [
+            "sanitizeNarration"
+          ]
         }
       },
       {
@@ -5900,14 +5961,14 @@
   },
   {
     "id": "GEN-REFUND-ACCT-OF",
-    "version": 1,
+    "version": 2,
     "family": "refund",
     "senders": [
       "*"
     ],
     "priority": 296,
     "match": {
-      "pattern": "\\brefund\\s+of\\s+(?:\\b(?:rs\\.?|inr)|₹)\\s*:?\\s*(?<amt>\\d[\\d,]*(?:\\.\\d{1,2})?)(?:\\s+(?:from|for|at|against)\\s+(?<merchant>[^\\n]+?)(?=\\s+(?:has\\s+been\\s+|was\\s+|is\\s+)?(?:credited|processed|received|reversed|refunded)\\b))?\\s+(?:has\\s+been\\s+|was\\s+|is\\s+)?(?:credited|processed|received|reversed|settled)\\s+(?:back\\s+)?(?:to|in|into|on)\\s+(?:(?:your|the)\\s+)?(?:[a-z][a-z .&'-]{0,30}?\\s)?\\b(?:a/?c(?:ct)?\\.?|account|acc\\.?)(?:\\s*(?:no|number|num)\\.?)?(?:\\s+(?:ending|ends)(?:\\s+(?:with|in))?)?\\s*[:\\-]?\\s*[x*•.]*\\s?(?<mask>\\d{2,18})(?=[\\s\\S]*?\\b(?:on|dated|date)\\s+(?<date>\\d{4}-\\d{2}-\\d{2}(?:[: ]\\d{2}:\\d{2}(?::\\d{2})?)?|\\d{1,2}[-/]\\d{1,2}[-/]\\d{2,4}(?:,?\\s*\\d{2}:\\d{2}(?::\\d{2})?)?|\\d{1,2}[-/ ]?[a-z]{3}[-/ ,]*\\d{2,4}(?:,?\\s*\\d{2}:\\d{2}(?::\\d{2})?)?)|)",
+      "pattern": "\\brefund\\s+of\\s+(?:\\b(?:rs\\.?|inr)|₹)\\s*:?\\s*(?<amt>\\d[\\d,]*(?:\\.\\d{1,2})?)(?:\\s+(?:from|for|at|against)\\s+(?:your\\s+)?(?<merchant>[^\\n]+?)(?=\\s+(?:has\\s+been\\s+|was\\s+|is\\s+)?(?:credited|processed|received|reversed|refunded)\\b))?\\s+(?:has\\s+been\\s+|was\\s+|is\\s+)?(?:credited|processed|received|reversed|settled)\\s+(?:back\\s+)?(?:to|in|into|on)\\s+(?:(?:your|the)\\s+)?(?:[a-z][a-z .&'-]{0,30}?\\s)?\\b(?:a/?c(?:ct)?\\.?|account|acc\\.?)(?:\\s*(?:no|number|num)\\.?)?(?:\\s+(?:ending|ends)(?:\\s+(?:with|in))?)?\\s*[:\\-]?\\s*[x*•.]*\\s?(?<mask>\\d{2,18})(?=[\\s\\S]*?\\b(?:on|dated|date)\\s+(?<date>\\d{4}-\\d{2}-\\d{2}(?:[: ]\\d{2}:\\d{2}(?::\\d{2})?)?|\\d{1,2}[-/]\\d{1,2}[-/]\\d{2,4}(?:,?\\s*\\d{2}:\\d{2}(?::\\d{2})?)?|\\d{1,2}[-/ ]?[a-z]{3}[-/ ,]*\\d{2,4}(?:,?\\s*\\d{2}:\\d{2}(?::\\d{2})?)?)|)",
       "flags": "i"
     },
     "emit": [
@@ -6002,6 +6063,13 @@
         "instrument": {
           "kind": "bank_account",
           "maskFrom": "mask"
+        },
+        "counterparty": {
+          "kind": "merchant",
+          "nameFrom": "merchant",
+          "transforms": [
+            "sanitizeNarration"
+          ]
         }
       }
     ],
@@ -6022,18 +6090,18 @@
     ],
     "status": "active",
     "createdBy": "baseline",
-    "updatedAt": "2026-11-20T00:00:00Z"
+    "updatedAt": "2026-11-05T00:00:00Z"
   },
   {
     "id": "GEN-REFUND-CARD-OF-NONE",
-    "version": 1,
+    "version": 2,
     "family": "refund",
     "senders": [
       "*"
     ],
     "priority": 296,
     "match": {
-      "pattern": "\\brefund\\s+of\\s+(?:\\b(?:rs\\.?|inr)|₹)\\s*:?\\s*(?<amt>\\d[\\d,]*(?:\\.\\d{1,2})?)(?:\\s+(?:from|for|at|against)\\s+(?<merchant>[^\\n]+?)(?=\\s+(?:has\\s+been\\s+|was\\s+|is\\s+)?(?:credited|processed|received|reversed|refunded)\\b))?\\s+(?:has\\s+been\\s+|was\\s+|is\\s+)?(?:credited|processed|received|reversed|settled)\\s+(?:back\\s+)?(?:to|in|into|on)\\s+(?:your\\s+)?(?:(?:your|the)\\s+)?(?:[a-z][a-z0-9+&.'/ -]{0,40}?\\s)?(?:(?:credit|debit|prepaid|forex)\\s+)?card(?:\\s*(?:no|number)\\.?)?(?:\\s+(?:ending|ends)(?:\\s+(?:with|in))?)?\\s*[:\\-]?\\s*[x*•.]*\\s?(?<mask>\\d{2,18})(?=[\\s\\S]*?\\b(?:on|dated|date)\\s+(?<date>\\d{4}-\\d{2}-\\d{2}(?:[: ]\\d{2}:\\d{2}(?::\\d{2})?)?|\\d{1,2}[-/]\\d{1,2}[-/]\\d{2,4}(?:,?\\s*\\d{2}:\\d{2}(?::\\d{2})?)?|\\d{1,2}[-/ ]?[a-z]{3}[-/ ,]*\\d{2,4}(?:,?\\s*\\d{2}:\\d{2}(?::\\d{2})?)?)|)",
+      "pattern": "\\brefund\\s+of\\s+(?:\\b(?:rs\\.?|inr)|₹)\\s*:?\\s*(?<amt>\\d[\\d,]*(?:\\.\\d{1,2})?)(?:\\s+(?:from|for|at|against)\\s+(?:your\\s+)?(?<merchant>[^\\n]+?)(?=\\s+(?:has\\s+been\\s+|was\\s+|is\\s+)?(?:credited|processed|received|reversed|refunded)\\b))?\\s+(?:has\\s+been\\s+|was\\s+|is\\s+)?(?:credited|processed|received|reversed|settled)\\s+(?:back\\s+)?(?:to|in|into|on)\\s+(?:your\\s+)?(?:(?:your|the)\\s+)?(?:[a-z][a-z0-9+&.'/ -]{0,40}?\\s)?(?:(?:credit|debit|prepaid|forex)\\s+)?card(?:\\s*(?:no|number)\\.?)?(?:\\s+(?:ending|ends)(?:\\s+(?:with|in))?)?\\s*[:\\-]?\\s*[x*•.]*\\s?(?<mask>\\d{2,18})(?=[\\s\\S]*?\\b(?:on|dated|date)\\s+(?<date>\\d{4}-\\d{2}-\\d{2}(?:[: ]\\d{2}:\\d{2}(?::\\d{2})?)?|\\d{1,2}[-/]\\d{1,2}[-/]\\d{2,4}(?:,?\\s*\\d{2}:\\d{2}(?::\\d{2})?)?|\\d{1,2}[-/ ]?[a-z]{3}[-/ ,]*\\d{2,4}(?:,?\\s*\\d{2}:\\d{2}(?::\\d{2})?)?)|)",
       "flags": "i"
     },
     "emit": [
@@ -6127,6 +6195,13 @@
         },
         "instrument": {
           "maskFrom": "mask"
+        },
+        "counterparty": {
+          "kind": "merchant",
+          "nameFrom": "merchant",
+          "transforms": [
+            "sanitizeNarration"
+          ]
         }
       }
     ],
@@ -6147,18 +6222,18 @@
     ],
     "status": "active",
     "createdBy": "baseline",
-    "updatedAt": "2026-11-20T00:00:00Z"
+    "updatedAt": "2026-11-05T00:00:00Z"
   },
   {
     "id": "GEN-REVERSAL-ACCT-OF",
-    "version": 1,
+    "version": 2,
     "family": "reversal",
     "senders": [
       "*"
     ],
     "priority": 296,
     "match": {
-      "pattern": "\\breversal\\s+of\\s+(?:\\b(?:rs\\.?|inr)|₹)\\s*:?\\s*(?<amt>\\d[\\d,]*(?:\\.\\d{1,2})?)(?:\\s+(?:from|for|at|against)\\s+(?<merchant>[^\\n]+?)(?=\\s+(?:has\\s+been\\s+|was\\s+|is\\s+)?(?:credited|processed|received|reversed|refunded)\\b))?\\s+(?:has\\s+been\\s+|was\\s+|is\\s+)?(?:credited|processed|received|reversed|settled)\\s+(?:back\\s+)?(?:to|in|into|on)\\s+(?:(?:your|the)\\s+)?(?:[a-z][a-z .&'-]{0,30}?\\s)?\\b(?:a/?c(?:ct)?\\.?|account|acc\\.?)(?:\\s*(?:no|number|num)\\.?)?(?:\\s+(?:ending|ends)(?:\\s+(?:with|in))?)?\\s*[:\\-]?\\s*[x*•.]*\\s?(?<mask>\\d{2,18})(?=[\\s\\S]*?\\b(?:on|dated|date)\\s+(?<date>\\d{4}-\\d{2}-\\d{2}(?:[: ]\\d{2}:\\d{2}(?::\\d{2})?)?|\\d{1,2}[-/]\\d{1,2}[-/]\\d{2,4}(?:,?\\s*\\d{2}:\\d{2}(?::\\d{2})?)?|\\d{1,2}[-/ ]?[a-z]{3}[-/ ,]*\\d{2,4}(?:,?\\s*\\d{2}:\\d{2}(?::\\d{2})?)?)|)",
+      "pattern": "\\breversal\\s+of\\s+(?:\\b(?:rs\\.?|inr)|₹)\\s*:?\\s*(?<amt>\\d[\\d,]*(?:\\.\\d{1,2})?)(?:\\s+(?:from|for|at|against)\\s+(?:your\\s+)?(?<merchant>[^\\n]+?)(?=\\s+(?:has\\s+been\\s+|was\\s+|is\\s+)?(?:credited|processed|received|reversed|refunded)\\b))?\\s+(?:has\\s+been\\s+|was\\s+|is\\s+)?(?:credited|processed|received|reversed|settled)\\s+(?:back\\s+)?(?:to|in|into|on)\\s+(?:(?:your|the)\\s+)?(?:[a-z][a-z .&'-]{0,30}?\\s)?\\b(?:a/?c(?:ct)?\\.?|account|acc\\.?)(?:\\s*(?:no|number|num)\\.?)?(?:\\s+(?:ending|ends)(?:\\s+(?:with|in))?)?\\s*[:\\-]?\\s*[x*•.]*\\s?(?<mask>\\d{2,18})(?=[\\s\\S]*?\\b(?:on|dated|date)\\s+(?<date>\\d{4}-\\d{2}-\\d{2}(?:[: ]\\d{2}:\\d{2}(?::\\d{2})?)?|\\d{1,2}[-/]\\d{1,2}[-/]\\d{2,4}(?:,?\\s*\\d{2}:\\d{2}(?::\\d{2})?)?|\\d{1,2}[-/ ]?[a-z]{3}[-/ ,]*\\d{2,4}(?:,?\\s*\\d{2}:\\d{2}(?::\\d{2})?)?)|)",
       "flags": "i"
     },
     "emit": [
@@ -6253,6 +6328,13 @@
         "instrument": {
           "kind": "bank_account",
           "maskFrom": "mask"
+        },
+        "counterparty": {
+          "kind": "merchant",
+          "nameFrom": "merchant",
+          "transforms": [
+            "sanitizeNarration"
+          ]
         }
       }
     ],
@@ -6273,18 +6355,18 @@
     ],
     "status": "active",
     "createdBy": "baseline",
-    "updatedAt": "2026-11-20T00:00:00Z"
+    "updatedAt": "2026-11-05T00:00:00Z"
   },
   {
     "id": "GEN-REVERSAL-CARD-OF-NONE",
-    "version": 1,
+    "version": 2,
     "family": "reversal",
     "senders": [
       "*"
     ],
     "priority": 296,
     "match": {
-      "pattern": "\\breversal\\s+of\\s+(?:\\b(?:rs\\.?|inr)|₹)\\s*:?\\s*(?<amt>\\d[\\d,]*(?:\\.\\d{1,2})?)(?:\\s+(?:from|for|at|against)\\s+(?<merchant>[^\\n]+?)(?=\\s+(?:has\\s+been\\s+|was\\s+|is\\s+)?(?:credited|processed|received|reversed|refunded)\\b))?\\s+(?:has\\s+been\\s+|was\\s+|is\\s+)?(?:credited|processed|received|reversed|settled)\\s+(?:back\\s+)?(?:to|in|into|on)\\s+(?:your\\s+)?(?:(?:your|the)\\s+)?(?:[a-z][a-z0-9+&.'/ -]{0,40}?\\s)?(?:(?:credit|debit|prepaid|forex)\\s+)?card(?:\\s*(?:no|number)\\.?)?(?:\\s+(?:ending|ends)(?:\\s+(?:with|in))?)?\\s*[:\\-]?\\s*[x*•.]*\\s?(?<mask>\\d{2,18})(?=[\\s\\S]*?\\b(?:on|dated|date)\\s+(?<date>\\d{4}-\\d{2}-\\d{2}(?:[: ]\\d{2}:\\d{2}(?::\\d{2})?)?|\\d{1,2}[-/]\\d{1,2}[-/]\\d{2,4}(?:,?\\s*\\d{2}:\\d{2}(?::\\d{2})?)?|\\d{1,2}[-/ ]?[a-z]{3}[-/ ,]*\\d{2,4}(?:,?\\s*\\d{2}:\\d{2}(?::\\d{2})?)?)|)",
+      "pattern": "\\breversal\\s+of\\s+(?:\\b(?:rs\\.?|inr)|₹)\\s*:?\\s*(?<amt>\\d[\\d,]*(?:\\.\\d{1,2})?)(?:\\s+(?:from|for|at|against)\\s+(?:your\\s+)?(?<merchant>[^\\n]+?)(?=\\s+(?:has\\s+been\\s+|was\\s+|is\\s+)?(?:credited|processed|received|reversed|refunded)\\b))?\\s+(?:has\\s+been\\s+|was\\s+|is\\s+)?(?:credited|processed|received|reversed|settled)\\s+(?:back\\s+)?(?:to|in|into|on)\\s+(?:your\\s+)?(?:(?:your|the)\\s+)?(?:[a-z][a-z0-9+&.'/ -]{0,40}?\\s)?(?:(?:credit|debit|prepaid|forex)\\s+)?card(?:\\s*(?:no|number)\\.?)?(?:\\s+(?:ending|ends)(?:\\s+(?:with|in))?)?\\s*[:\\-]?\\s*[x*•.]*\\s?(?<mask>\\d{2,18})(?=[\\s\\S]*?\\b(?:on|dated|date)\\s+(?<date>\\d{4}-\\d{2}-\\d{2}(?:[: ]\\d{2}:\\d{2}(?::\\d{2})?)?|\\d{1,2}[-/]\\d{1,2}[-/]\\d{2,4}(?:,?\\s*\\d{2}:\\d{2}(?::\\d{2})?)?|\\d{1,2}[-/ ]?[a-z]{3}[-/ ,]*\\d{2,4}(?:,?\\s*\\d{2}:\\d{2}(?::\\d{2})?)?)|)",
       "flags": "i"
     },
     "emit": [
@@ -6378,6 +6460,13 @@
         },
         "instrument": {
           "maskFrom": "mask"
+        },
+        "counterparty": {
+          "kind": "merchant",
+          "nameFrom": "merchant",
+          "transforms": [
+            "sanitizeNarration"
+          ]
         }
       }
     ],
@@ -6398,7 +6487,7 @@
     ],
     "status": "active",
     "createdBy": "baseline",
-    "updatedAt": "2026-11-20T00:00:00Z"
+    "updatedAt": "2026-11-05T00:00:00Z"
   },
   {
     "id": "GEN-ACCT-CARDBILL-D1-B",
@@ -6552,14 +6641,14 @@
   },
   {
     "id": "GEN-ACCT-SALARY-C1-B",
-    "version": 1,
+    "version": 2,
     "family": "salary",
     "senders": [
       "*"
     ],
     "priority": 295,
     "match": {
-      "pattern": "(?:\\b(?:rs\\.?|inr)|₹)\\s*:?\\s*(?<amt>\\d[\\d,]*(?:\\.\\d{1,2})?)\\s+(?:has\\s+been\\s+|is\\s+|was\\s+)?(?:credited|deposited|received)\\s+(?:to|in|into|on)\\s+(?:(?:your|the)\\s+)?(?:[a-z][a-z .&'-]{0,30}?\\s)?\\b(?:a/?c(?:ct)?\\.?|account|acc\\.?)(?:\\s*(?:no|number|num)\\.?)?(?:\\s+(?:ending|ends)(?:\\s+(?:with|in))?)?\\s*[:\\-]?\\s*[x*•.]*\\s?(?<mask>\\d{2,18})(?=[\\s\\S]*?\\b(?:on|dated|date)\\s+(?<date>\\d{4}-\\d{2}-\\d{2}(?:[: ]\\d{2}:\\d{2}(?::\\d{2})?)?|\\d{1,2}[-/]\\d{1,2}[-/]\\d{2,4}(?:,?\\s*\\d{2}:\\d{2}(?::\\d{2})?)?|\\d{1,2}[-/ ]?[a-z]{3}[-/ ,]*\\d{2,4}(?:,?\\s*\\d{2}:\\d{2}(?::\\d{2})?)?)|)[^\\n]{0,150}?\\b(?:salary|payroll|wages)\\b[\\s\\S]*?\\b(?:avl|avail(?:able)?|total\\s+avail(?:able)?|clear|current|new|closing|updated|remaining)?\\.?\\s*bal(?:ance)?\\.?\\s*(?:is|of)?\\s*[:\\-]?\\s*(?:\\b(?:rs\\.?|inr)|₹)\\s*:?\\s*(?<bal>\\d[\\d,]*(?:\\.\\d{1,2})?)",
+      "pattern": "(?:\\b(?:rs\\.?|inr)|₹)\\s*:?\\s*(?<amt>\\d[\\d,]*(?:\\.\\d{1,2})?)\\s+(?:has\\s+been\\s+|is\\s+|was\\s+)?(?:credited|deposited|received)\\s+(?:to|in|into|on)\\s+(?:(?:your|the)\\s+)?(?:[a-z][a-z .&'-]{0,30}?\\s)?\\b(?:a/?c(?:ct)?\\.?|account|acc\\.?)(?:\\s*(?:no|number|num)\\.?)?(?:\\s+(?:ending|ends)(?:\\s+(?:with|in))?)?\\s*[:\\-]?\\s*[x*•.]*\\s?(?<mask>\\d{2,18})(?=[\\s\\S]*?\\b(?:on|dated|date)\\s+(?<date>\\d{4}-\\d{2}-\\d{2}(?:[: ]\\d{2}:\\d{2}(?::\\d{2})?)?|\\d{1,2}[-/]\\d{1,2}[-/]\\d{2,4}(?:,?\\s*\\d{2}:\\d{2}(?::\\d{2})?)?|\\d{1,2}[-/ ]?[a-z]{3}[-/ ,]*\\d{2,4}(?:,?\\s*\\d{2}:\\d{2}(?::\\d{2})?)?)|)[^\\n]{0,150}?\\b(?:salary|payroll|wages)\\b(?:\\s+(?:from|by|of)\\s+(?<payer>[a-z][a-z0-9 .&']{2,60}?)(?=\\s*(?:[.,;]|\\s-|\\bref\\b|\\butr\\b|\\bavl\\b|\\bavail|\\bbal\\b|$)))?[\\s\\S]*?\\b(?:avl|avail(?:able)?|total\\s+avail(?:able)?|clear|current|new|closing|updated|remaining)?\\.?\\s*bal(?:ance)?\\.?\\s*(?:is|of)?\\s*[:\\-]?\\s*(?:\\b(?:rs\\.?|inr)|₹)\\s*:?\\s*(?<bal>\\d[\\d,]*(?:\\.\\d{1,2})?)",
       "flags": "i"
     },
     "emit": [
@@ -6654,6 +6743,12 @@
         "instrument": {
           "kind": "bank_account",
           "maskFrom": "mask"
+        },
+        "counterparty": {
+          "nameFrom": "payer",
+          "transforms": [
+            "sanitizeNarration"
+          ]
         }
       },
       {
@@ -7260,14 +7355,14 @@
   },
   {
     "id": "GEN-ACCT-SALARY-C2-B",
-    "version": 1,
+    "version": 2,
     "family": "salary",
     "senders": [
       "*"
     ],
     "priority": 294,
     "match": {
-      "pattern": "(?:(?:your|the)\\s+)?(?:[a-z][a-z .&'-]{0,30}?\\s)?\\b(?:a/?c(?:ct)?\\.?|account|acc\\.?)(?:\\s*(?:no|number|num)\\.?)?(?:\\s+(?:ending|ends)(?:\\s+(?:with|in))?)?\\s*[:\\-]?\\s*[x*•.]*\\s?(?<mask>\\d{2,18})\\s+(?:has\\s+been\\s+|is\\s+|was\\s+)?(?:credited|received)\\s+(?:with|by|for|of)?\\s*(?:\\b(?:rs\\.?|inr)|₹)\\s*:?\\s*(?<amt>\\d[\\d,]*(?:\\.\\d{1,2})?)(?=[\\s\\S]*?\\b(?:on|dated|date)\\s+(?<date>\\d{4}-\\d{2}-\\d{2}(?:[: ]\\d{2}:\\d{2}(?::\\d{2})?)?|\\d{1,2}[-/]\\d{1,2}[-/]\\d{2,4}(?:,?\\s*\\d{2}:\\d{2}(?::\\d{2})?)?|\\d{1,2}[-/ ]?[a-z]{3}[-/ ,]*\\d{2,4}(?:,?\\s*\\d{2}:\\d{2}(?::\\d{2})?)?)|)[^\\n]{0,150}?\\b(?:salary|payroll|wages)\\b[\\s\\S]*?\\b(?:avl|avail(?:able)?|total\\s+avail(?:able)?|clear|current|new|closing|updated|remaining)?\\.?\\s*bal(?:ance)?\\.?\\s*(?:is|of)?\\s*[:\\-]?\\s*(?:\\b(?:rs\\.?|inr)|₹)\\s*:?\\s*(?<bal>\\d[\\d,]*(?:\\.\\d{1,2})?)",
+      "pattern": "(?:(?:your|the)\\s+)?(?:[a-z][a-z .&'-]{0,30}?\\s)?\\b(?:a/?c(?:ct)?\\.?|account|acc\\.?)(?:\\s*(?:no|number|num)\\.?)?(?:\\s+(?:ending|ends)(?:\\s+(?:with|in))?)?\\s*[:\\-]?\\s*[x*•.]*\\s?(?<mask>\\d{2,18})\\s+(?:has\\s+been\\s+|is\\s+|was\\s+)?(?:credited|received)\\s+(?:with|by|for|of)?\\s*(?:\\b(?:rs\\.?|inr)|₹)\\s*:?\\s*(?<amt>\\d[\\d,]*(?:\\.\\d{1,2})?)(?=[\\s\\S]*?\\b(?:on|dated|date)\\s+(?<date>\\d{4}-\\d{2}-\\d{2}(?:[: ]\\d{2}:\\d{2}(?::\\d{2})?)?|\\d{1,2}[-/]\\d{1,2}[-/]\\d{2,4}(?:,?\\s*\\d{2}:\\d{2}(?::\\d{2})?)?|\\d{1,2}[-/ ]?[a-z]{3}[-/ ,]*\\d{2,4}(?:,?\\s*\\d{2}:\\d{2}(?::\\d{2})?)?)|)[^\\n]{0,150}?\\b(?:salary|payroll|wages)\\b(?:\\s+(?:from|by|of)\\s+(?<payer>[a-z][a-z0-9 .&']{2,60}?)(?=\\s*(?:[.,;]|\\s-|\\bref\\b|\\butr\\b|\\bavl\\b|\\bavail|\\bbal\\b|$)))?[\\s\\S]*?\\b(?:avl|avail(?:able)?|total\\s+avail(?:able)?|clear|current|new|closing|updated|remaining)?\\.?\\s*bal(?:ance)?\\.?\\s*(?:is|of)?\\s*[:\\-]?\\s*(?:\\b(?:rs\\.?|inr)|₹)\\s*:?\\s*(?<bal>\\d[\\d,]*(?:\\.\\d{1,2})?)",
       "flags": "i"
     },
     "emit": [
@@ -7362,6 +7457,12 @@
         "instrument": {
           "kind": "bank_account",
           "maskFrom": "mask"
+        },
+        "counterparty": {
+          "nameFrom": "payer",
+          "transforms": [
+            "sanitizeNarration"
+          ]
         }
       },
       {
@@ -8744,14 +8845,14 @@
   },
   {
     "id": "GEN-ACCT-SALARY-NEFT-C1",
-    "version": 1,
+    "version": 2,
     "family": "salary",
     "senders": [
       "*"
     ],
     "priority": 292,
     "match": {
-      "pattern": "(?:\\b(?:rs\\.?|inr)|₹)\\s*:?\\s*(?<amt>\\d[\\d,]*(?:\\.\\d{1,2})?)\\s+(?:has\\s+been\\s+|is\\s+|was\\s+)?(?:credited|deposited|received)\\s+(?:to|in|into|on)\\s+(?:(?:your|the)\\s+)?(?:[a-z][a-z .&'-]{0,30}?\\s)?\\b(?:a/?c(?:ct)?\\.?|account|acc\\.?)(?:\\s*(?:no|number|num)\\.?)?(?:\\s+(?:ending|ends)(?:\\s+(?:with|in))?)?\\s*[:\\-]?\\s*[x*•.]*\\s?(?<mask>\\d{2,18})(?=[\\s\\S]*?\\b(?:on|dated|date)\\s+(?<date>\\d{4}-\\d{2}-\\d{2}(?:[: ]\\d{2}:\\d{2}(?::\\d{2})?)?|\\d{1,2}[-/]\\d{1,2}[-/]\\d{2,4}(?:,?\\s*\\d{2}:\\d{2}(?::\\d{2})?)?|\\d{1,2}[-/ ]?[a-z]{3}[-/ ,]*\\d{2,4}(?:,?\\s*\\d{2}:\\d{2}(?::\\d{2})?)?)|)[^\\n]{0,150}?\\b(?:salary|payroll|wages|sal)\\b",
+      "pattern": "(?:\\b(?:rs\\.?|inr)|₹)\\s*:?\\s*(?<amt>\\d[\\d,]*(?:\\.\\d{1,2})?)\\s+(?:has\\s+been\\s+|is\\s+|was\\s+)?(?:credited|deposited|received)\\s+(?:to|in|into|on)\\s+(?:(?:your|the)\\s+)?(?:[a-z][a-z .&'-]{0,30}?\\s)?\\b(?:a/?c(?:ct)?\\.?|account|acc\\.?)(?:\\s*(?:no|number|num)\\.?)?(?:\\s+(?:ending|ends)(?:\\s+(?:with|in))?)?\\s*[:\\-]?\\s*[x*•.]*\\s?(?<mask>\\d{2,18})(?=[\\s\\S]*?\\b(?:on|dated|date)\\s+(?<date>\\d{4}-\\d{2}-\\d{2}(?:[: ]\\d{2}:\\d{2}(?::\\d{2})?)?|\\d{1,2}[-/]\\d{1,2}[-/]\\d{2,4}(?:,?\\s*\\d{2}:\\d{2}(?::\\d{2})?)?|\\d{1,2}[-/ ]?[a-z]{3}[-/ ,]*\\d{2,4}(?:,?\\s*\\d{2}:\\d{2}(?::\\d{2})?)?)|)(?:[^\\n]{0,150}?\\bneft\\b[\\s\\-/:]*(?:cr\\b[\\s\\-/:]*)?(?:(?:[a-z]{4}0[a-z0-9]{6}|[a-z]{4}[a-z0-9]?\\d{9,16})[\\s\\-/:]*)?(?<payer>[a-z][a-z0-9 .&']{2,60}?)[\\s\\-/:]+(?:salary|payroll|wages|sal)\\b|[^\\n]{0,150}?\\b(?:salary|payroll|wages|sal)\\b)",
       "flags": "i",
       "requireAll": [
         "neft"
@@ -8849,6 +8950,12 @@
         "instrument": {
           "kind": "bank_account",
           "maskFrom": "mask"
+        },
+        "counterparty": {
+          "nameFrom": "payer",
+          "transforms": [
+            "sanitizeNarration"
+          ]
         }
       }
     ],
@@ -9568,14 +9675,14 @@
   },
   {
     "id": "GEN-ACCT-SALARY-NEFT-C2",
-    "version": 1,
+    "version": 2,
     "family": "salary",
     "senders": [
       "*"
     ],
     "priority": 291,
     "match": {
-      "pattern": "(?:(?:your|the)\\s+)?(?:[a-z][a-z .&'-]{0,30}?\\s)?\\b(?:a/?c(?:ct)?\\.?|account|acc\\.?)(?:\\s*(?:no|number|num)\\.?)?(?:\\s+(?:ending|ends)(?:\\s+(?:with|in))?)?\\s*[:\\-]?\\s*[x*•.]*\\s?(?<mask>\\d{2,18})\\s+(?:has\\s+been\\s+|is\\s+|was\\s+)?(?:credited|received)\\s+(?:with|by|for|of)?\\s*(?:\\b(?:rs\\.?|inr)|₹)\\s*:?\\s*(?<amt>\\d[\\d,]*(?:\\.\\d{1,2})?)(?=[\\s\\S]*?\\b(?:on|dated|date)\\s+(?<date>\\d{4}-\\d{2}-\\d{2}(?:[: ]\\d{2}:\\d{2}(?::\\d{2})?)?|\\d{1,2}[-/]\\d{1,2}[-/]\\d{2,4}(?:,?\\s*\\d{2}:\\d{2}(?::\\d{2})?)?|\\d{1,2}[-/ ]?[a-z]{3}[-/ ,]*\\d{2,4}(?:,?\\s*\\d{2}:\\d{2}(?::\\d{2})?)?)|)[^\\n]{0,150}?\\b(?:salary|payroll|wages|sal)\\b",
+      "pattern": "(?:(?:your|the)\\s+)?(?:[a-z][a-z .&'-]{0,30}?\\s)?\\b(?:a/?c(?:ct)?\\.?|account|acc\\.?)(?:\\s*(?:no|number|num)\\.?)?(?:\\s+(?:ending|ends)(?:\\s+(?:with|in))?)?\\s*[:\\-]?\\s*[x*•.]*\\s?(?<mask>\\d{2,18})\\s+(?:has\\s+been\\s+|is\\s+|was\\s+)?(?:credited|received)\\s+(?:with|by|for|of)?\\s*(?:\\b(?:rs\\.?|inr)|₹)\\s*:?\\s*(?<amt>\\d[\\d,]*(?:\\.\\d{1,2})?)(?=[\\s\\S]*?\\b(?:on|dated|date)\\s+(?<date>\\d{4}-\\d{2}-\\d{2}(?:[: ]\\d{2}:\\d{2}(?::\\d{2})?)?|\\d{1,2}[-/]\\d{1,2}[-/]\\d{2,4}(?:,?\\s*\\d{2}:\\d{2}(?::\\d{2})?)?|\\d{1,2}[-/ ]?[a-z]{3}[-/ ,]*\\d{2,4}(?:,?\\s*\\d{2}:\\d{2}(?::\\d{2})?)?)|)(?:[^\\n]{0,150}?\\bneft\\b[\\s\\-/:]*(?:cr\\b[\\s\\-/:]*)?(?:(?:[a-z]{4}0[a-z0-9]{6}|[a-z]{4}[a-z0-9]?\\d{9,16})[\\s\\-/:]*)?(?<payer>[a-z][a-z0-9 .&']{2,60}?)[\\s\\-/:]+(?:salary|payroll|wages|sal)\\b|[^\\n]{0,150}?\\b(?:salary|payroll|wages|sal)\\b)",
       "flags": "i",
       "requireAll": [
         "neft"
@@ -9673,6 +9780,12 @@
         "instrument": {
           "kind": "bank_account",
           "maskFrom": "mask"
+        },
+        "counterparty": {
+          "nameFrom": "payer",
+          "transforms": [
+            "sanitizeNarration"
+          ]
         }
       }
     ],
@@ -9980,14 +10093,14 @@
   },
   {
     "id": "GEN-ACCT-SALARY-C1",
-    "version": 1,
+    "version": 2,
     "family": "salary",
     "senders": [
       "*"
     ],
     "priority": 290,
     "match": {
-      "pattern": "(?:\\b(?:rs\\.?|inr)|₹)\\s*:?\\s*(?<amt>\\d[\\d,]*(?:\\.\\d{1,2})?)\\s+(?:has\\s+been\\s+|is\\s+|was\\s+)?(?:credited|deposited|received)\\s+(?:to|in|into|on)\\s+(?:(?:your|the)\\s+)?(?:[a-z][a-z .&'-]{0,30}?\\s)?\\b(?:a/?c(?:ct)?\\.?|account|acc\\.?)(?:\\s*(?:no|number|num)\\.?)?(?:\\s+(?:ending|ends)(?:\\s+(?:with|in))?)?\\s*[:\\-]?\\s*[x*•.]*\\s?(?<mask>\\d{2,18})(?=[\\s\\S]*?\\b(?:on|dated|date)\\s+(?<date>\\d{4}-\\d{2}-\\d{2}(?:[: ]\\d{2}:\\d{2}(?::\\d{2})?)?|\\d{1,2}[-/]\\d{1,2}[-/]\\d{2,4}(?:,?\\s*\\d{2}:\\d{2}(?::\\d{2})?)?|\\d{1,2}[-/ ]?[a-z]{3}[-/ ,]*\\d{2,4}(?:,?\\s*\\d{2}:\\d{2}(?::\\d{2})?)?)|)[^\\n]{0,150}?\\b(?:salary|payroll|wages)\\b",
+      "pattern": "(?:\\b(?:rs\\.?|inr)|₹)\\s*:?\\s*(?<amt>\\d[\\d,]*(?:\\.\\d{1,2})?)\\s+(?:has\\s+been\\s+|is\\s+|was\\s+)?(?:credited|deposited|received)\\s+(?:to|in|into|on)\\s+(?:(?:your|the)\\s+)?(?:[a-z][a-z .&'-]{0,30}?\\s)?\\b(?:a/?c(?:ct)?\\.?|account|acc\\.?)(?:\\s*(?:no|number|num)\\.?)?(?:\\s+(?:ending|ends)(?:\\s+(?:with|in))?)?\\s*[:\\-]?\\s*[x*•.]*\\s?(?<mask>\\d{2,18})(?=[\\s\\S]*?\\b(?:on|dated|date)\\s+(?<date>\\d{4}-\\d{2}-\\d{2}(?:[: ]\\d{2}:\\d{2}(?::\\d{2})?)?|\\d{1,2}[-/]\\d{1,2}[-/]\\d{2,4}(?:,?\\s*\\d{2}:\\d{2}(?::\\d{2})?)?|\\d{1,2}[-/ ]?[a-z]{3}[-/ ,]*\\d{2,4}(?:,?\\s*\\d{2}:\\d{2}(?::\\d{2})?)?)|)[^\\n]{0,150}?\\b(?:salary|payroll|wages)\\b(?:\\s+(?:from|by|of)\\s+(?<payer>[a-z][a-z0-9 .&']{2,60}?)(?=\\s*(?:[.,;]|\\s-|\\bref\\b|\\butr\\b|\\bavl\\b|\\bavail|\\bbal\\b|$)))?",
       "flags": "i"
     },
     "emit": [
@@ -10082,6 +10195,12 @@
         "instrument": {
           "kind": "bank_account",
           "maskFrom": "mask"
+        },
+        "counterparty": {
+          "nameFrom": "payer",
+          "transforms": [
+            "sanitizeNarration"
+          ]
         }
       }
     ],
@@ -10765,14 +10884,14 @@
   },
   {
     "id": "GEN-ACCT-SALARY-C2",
-    "version": 1,
+    "version": 2,
     "family": "salary",
     "senders": [
       "*"
     ],
     "priority": 289,
     "match": {
-      "pattern": "(?:(?:your|the)\\s+)?(?:[a-z][a-z .&'-]{0,30}?\\s)?\\b(?:a/?c(?:ct)?\\.?|account|acc\\.?)(?:\\s*(?:no|number|num)\\.?)?(?:\\s+(?:ending|ends)(?:\\s+(?:with|in))?)?\\s*[:\\-]?\\s*[x*•.]*\\s?(?<mask>\\d{2,18})\\s+(?:has\\s+been\\s+|is\\s+|was\\s+)?(?:credited|received)\\s+(?:with|by|for|of)?\\s*(?:\\b(?:rs\\.?|inr)|₹)\\s*:?\\s*(?<amt>\\d[\\d,]*(?:\\.\\d{1,2})?)(?=[\\s\\S]*?\\b(?:on|dated|date)\\s+(?<date>\\d{4}-\\d{2}-\\d{2}(?:[: ]\\d{2}:\\d{2}(?::\\d{2})?)?|\\d{1,2}[-/]\\d{1,2}[-/]\\d{2,4}(?:,?\\s*\\d{2}:\\d{2}(?::\\d{2})?)?|\\d{1,2}[-/ ]?[a-z]{3}[-/ ,]*\\d{2,4}(?:,?\\s*\\d{2}:\\d{2}(?::\\d{2})?)?)|)[^\\n]{0,150}?\\b(?:salary|payroll|wages)\\b",
+      "pattern": "(?:(?:your|the)\\s+)?(?:[a-z][a-z .&'-]{0,30}?\\s)?\\b(?:a/?c(?:ct)?\\.?|account|acc\\.?)(?:\\s*(?:no|number|num)\\.?)?(?:\\s+(?:ending|ends)(?:\\s+(?:with|in))?)?\\s*[:\\-]?\\s*[x*•.]*\\s?(?<mask>\\d{2,18})\\s+(?:has\\s+been\\s+|is\\s+|was\\s+)?(?:credited|received)\\s+(?:with|by|for|of)?\\s*(?:\\b(?:rs\\.?|inr)|₹)\\s*:?\\s*(?<amt>\\d[\\d,]*(?:\\.\\d{1,2})?)(?=[\\s\\S]*?\\b(?:on|dated|date)\\s+(?<date>\\d{4}-\\d{2}-\\d{2}(?:[: ]\\d{2}:\\d{2}(?::\\d{2})?)?|\\d{1,2}[-/]\\d{1,2}[-/]\\d{2,4}(?:,?\\s*\\d{2}:\\d{2}(?::\\d{2})?)?|\\d{1,2}[-/ ]?[a-z]{3}[-/ ,]*\\d{2,4}(?:,?\\s*\\d{2}:\\d{2}(?::\\d{2})?)?)|)[^\\n]{0,150}?\\b(?:salary|payroll|wages)\\b(?:\\s+(?:from|by|of)\\s+(?<payer>[a-z][a-z0-9 .&']{2,60}?)(?=\\s*(?:[.,;]|\\s-|\\bref\\b|\\butr\\b|\\bavl\\b|\\bavail|\\bbal\\b|$)))?",
       "flags": "i"
     },
     "emit": [
@@ -10867,6 +10986,12 @@
         "instrument": {
           "kind": "bank_account",
           "maskFrom": "mask"
+        },
+        "counterparty": {
+          "nameFrom": "payer",
+          "transforms": [
+            "sanitizeNarration"
+          ]
         }
       }
     ],
@@ -16131,14 +16256,14 @@
   },
   {
     "id": "GEN-ACCT-RAIL-IMPS-C1-B",
-    "version": 1,
+    "version": 2,
     "family": "imps_credit",
     "senders": [
       "*"
     ],
     "priority": 271,
     "match": {
-      "pattern": "(?:\\b(?:rs\\.?|inr)|₹)\\s*:?\\s*(?<amt>\\d[\\d,]*(?:\\.\\d{1,2})?)\\s+(?:has\\s+been\\s+|is\\s+|was\\s+)?(?:credited|deposited|received)\\s+(?:to|in|into|on)\\s+(?:(?:your|the)\\s+)?(?:[a-z][a-z .&'-]{0,30}?\\s)?\\b(?:a/?c(?:ct)?\\.?|account|acc\\.?)(?:\\s*(?:no|number|num)\\.?)?(?:\\s+(?:ending|ends)(?:\\s+(?:with|in))?)?\\s*[:\\-]?\\s*[x*•.]*\\s?(?<mask>\\d{2,18})(?=[\\s\\S]*?\\b(?:on|dated|date)\\s+(?<date>\\d{4}-\\d{2}-\\d{2}(?:[: ]\\d{2}:\\d{2}(?::\\d{2})?)?|\\d{1,2}[-/]\\d{1,2}[-/]\\d{2,4}(?:,?\\s*\\d{2}:\\d{2}(?::\\d{2})?)?|\\d{1,2}[-/ ]?[a-z]{3}[-/ ,]*\\d{2,4}(?:,?\\s*\\d{2}:\\d{2}(?::\\d{2})?)?)|)(?=[\\s\\S]*?\\b(?:ref(?:erence)?|rrn|utr)\\s*(?:no\\.?|number)?\\s*[:.\\-]?\\s*(?<ref_impsRef>\\d{9,14})|)[\\s\\S]*?\\b(?:avl|avail(?:able)?|total\\s+avail(?:able)?|clear|current|new|closing|updated|remaining)?\\.?\\s*bal(?:ance)?\\.?\\s*(?:is|of)?\\s*[:\\-]?\\s*(?:\\b(?:rs\\.?|inr)|₹)\\s*:?\\s*(?<bal>\\d[\\d,]*(?:\\.\\d{1,2})?)",
+      "pattern": "(?:\\b(?:rs\\.?|inr)|₹)\\s*:?\\s*(?<amt>\\d[\\d,]*(?:\\.\\d{1,2})?)(?=[\\s\\S]*?(?:\\b(?:imps|neft|rtgs)\\b[\\s/:\\-]*(?:(?:p2a|p2p|p2m|cr)\\b[\\s/:\\-]*)?(?:[a-z0-9]{0,24}\\d[a-z0-9]{0,24}[\\s/:\\-]{1,3}){1,3}|\\bby\\s+(?!a/?c\\b|upi\\b|imps\\b|neft\\b|rtgs\\b|rs\\b|inr\\b|mobile\\b|cash\\b|cheque\\b|chq\\b|clearing\\b|transfer\\b|vpa\\b|your\\b|the\\b|self\\b))(?<payer>[a-z][a-z0-9 .&']{2,45}?)(?=\\s*[/,;(\\-]|\\s*\\.(?:\\s|$)|\\s*$|\\s+(?:ref|utr|info|avl|avail|bal|on|dated|if|call|txn|upi|not|via|using)\\b)|)\\s+(?:has\\s+been\\s+|is\\s+|was\\s+)?(?:credited|deposited|received)\\s+(?:to|in|into|on)\\s+(?:(?:your|the)\\s+)?(?:[a-z][a-z .&'-]{0,30}?\\s)?\\b(?:a/?c(?:ct)?\\.?|account|acc\\.?)(?:\\s*(?:no|number|num)\\.?)?(?:\\s+(?:ending|ends)(?:\\s+(?:with|in))?)?\\s*[:\\-]?\\s*[x*•.]*\\s?(?<mask>\\d{2,18})(?=[\\s\\S]*?\\b(?:on|dated|date)\\s+(?<date>\\d{4}-\\d{2}-\\d{2}(?:[: ]\\d{2}:\\d{2}(?::\\d{2})?)?|\\d{1,2}[-/]\\d{1,2}[-/]\\d{2,4}(?:,?\\s*\\d{2}:\\d{2}(?::\\d{2})?)?|\\d{1,2}[-/ ]?[a-z]{3}[-/ ,]*\\d{2,4}(?:,?\\s*\\d{2}:\\d{2}(?::\\d{2})?)?)|)(?=[\\s\\S]*?\\b(?:ref(?:erence)?|rrn|utr)\\s*(?:no\\.?|number)?\\s*[:.\\-]?\\s*(?<ref_impsRef>\\d{9,14})|)[\\s\\S]*?\\b(?:avl|avail(?:able)?|total\\s+avail(?:able)?|clear|current|new|closing|updated|remaining)?\\.?\\s*bal(?:ance)?\\.?\\s*(?:is|of)?\\s*[:\\-]?\\s*(?:\\b(?:rs\\.?|inr)|₹)\\s*:?\\s*(?<bal>\\d[\\d,]*(?:\\.\\d{1,2})?)",
       "flags": "i",
       "requireAll": [
         "imps"
@@ -16236,6 +16361,12 @@
         "instrument": {
           "kind": "bank_account",
           "maskFrom": "mask"
+        },
+        "counterparty": {
+          "nameFrom": "payer",
+          "transforms": [
+            "sanitizeNarration"
+          ]
         }
       },
       {
@@ -16276,7 +16407,7 @@
     ],
     "status": "active",
     "createdBy": "baseline",
-    "updatedAt": "2026-11-20T00:00:00Z"
+    "updatedAt": "2026-11-05T00:00:00Z"
   },
   {
     "id": "GEN-ACCT-RAIL-IMPS-D1-B",
@@ -16451,14 +16582,14 @@
   },
   {
     "id": "GEN-ACCT-RAIL-NEFT-C1-B",
-    "version": 1,
+    "version": 2,
     "family": "neft_credit",
     "senders": [
       "*"
     ],
     "priority": 271,
     "match": {
-      "pattern": "(?:\\b(?:rs\\.?|inr)|₹)\\s*:?\\s*(?<amt>\\d[\\d,]*(?:\\.\\d{1,2})?)\\s+(?:has\\s+been\\s+|is\\s+|was\\s+)?(?:credited|deposited|received)\\s+(?:to|in|into|on)\\s+(?:(?:your|the)\\s+)?(?:[a-z][a-z .&'-]{0,30}?\\s)?\\b(?:a/?c(?:ct)?\\.?|account|acc\\.?)(?:\\s*(?:no|number|num)\\.?)?(?:\\s+(?:ending|ends)(?:\\s+(?:with|in))?)?\\s*[:\\-]?\\s*[x*•.]*\\s?(?<mask>\\d{2,18})(?=[\\s\\S]*?\\b(?:on|dated|date)\\s+(?<date>\\d{4}-\\d{2}-\\d{2}(?:[: ]\\d{2}:\\d{2}(?::\\d{2})?)?|\\d{1,2}[-/]\\d{1,2}[-/]\\d{2,4}(?:,?\\s*\\d{2}:\\d{2}(?::\\d{2})?)?|\\d{1,2}[-/ ]?[a-z]{3}[-/ ,]*\\d{2,4}(?:,?\\s*\\d{2}:\\d{2}(?::\\d{2})?)?)|)(?=[\\s\\S]*?\\b(?:utr|ref(?:erence)?)\\s*(?:no\\.?|number)?\\s*[:.\\-]?\\s*(?<ref_neftUtr>(?=[a-z]*\\d)[a-z0-9]{8,24})|)[\\s\\S]*?\\b(?:avl|avail(?:able)?|total\\s+avail(?:able)?|clear|current|new|closing|updated|remaining)?\\.?\\s*bal(?:ance)?\\.?\\s*(?:is|of)?\\s*[:\\-]?\\s*(?:\\b(?:rs\\.?|inr)|₹)\\s*:?\\s*(?<bal>\\d[\\d,]*(?:\\.\\d{1,2})?)",
+      "pattern": "(?:\\b(?:rs\\.?|inr)|₹)\\s*:?\\s*(?<amt>\\d[\\d,]*(?:\\.\\d{1,2})?)(?=[\\s\\S]*?(?:\\b(?:imps|neft|rtgs)\\b[\\s/:\\-]*(?:(?:p2a|p2p|p2m|cr)\\b[\\s/:\\-]*)?(?:[a-z0-9]{0,24}\\d[a-z0-9]{0,24}[\\s/:\\-]{1,3}){1,3}|\\bby\\s+(?!a/?c\\b|upi\\b|imps\\b|neft\\b|rtgs\\b|rs\\b|inr\\b|mobile\\b|cash\\b|cheque\\b|chq\\b|clearing\\b|transfer\\b|vpa\\b|your\\b|the\\b|self\\b))(?<payer>[a-z][a-z0-9 .&']{2,45}?)(?=\\s*[/,;(\\-]|\\s*\\.(?:\\s|$)|\\s*$|\\s+(?:ref|utr|info|avl|avail|bal|on|dated|if|call|txn|upi|not|via|using)\\b)|)\\s+(?:has\\s+been\\s+|is\\s+|was\\s+)?(?:credited|deposited|received)\\s+(?:to|in|into|on)\\s+(?:(?:your|the)\\s+)?(?:[a-z][a-z .&'-]{0,30}?\\s)?\\b(?:a/?c(?:ct)?\\.?|account|acc\\.?)(?:\\s*(?:no|number|num)\\.?)?(?:\\s+(?:ending|ends)(?:\\s+(?:with|in))?)?\\s*[:\\-]?\\s*[x*•.]*\\s?(?<mask>\\d{2,18})(?=[\\s\\S]*?\\b(?:on|dated|date)\\s+(?<date>\\d{4}-\\d{2}-\\d{2}(?:[: ]\\d{2}:\\d{2}(?::\\d{2})?)?|\\d{1,2}[-/]\\d{1,2}[-/]\\d{2,4}(?:,?\\s*\\d{2}:\\d{2}(?::\\d{2})?)?|\\d{1,2}[-/ ]?[a-z]{3}[-/ ,]*\\d{2,4}(?:,?\\s*\\d{2}:\\d{2}(?::\\d{2})?)?)|)(?=[\\s\\S]*?\\b(?:utr|ref(?:erence)?)\\s*(?:no\\.?|number)?\\s*[:.\\-]?\\s*(?<ref_neftUtr>(?=[a-z]*\\d)[a-z0-9]{8,24})|)[\\s\\S]*?\\b(?:avl|avail(?:able)?|total\\s+avail(?:able)?|clear|current|new|closing|updated|remaining)?\\.?\\s*bal(?:ance)?\\.?\\s*(?:is|of)?\\s*[:\\-]?\\s*(?:\\b(?:rs\\.?|inr)|₹)\\s*:?\\s*(?<bal>\\d[\\d,]*(?:\\.\\d{1,2})?)",
       "flags": "i",
       "requireAll": [
         "neft"
@@ -16556,6 +16687,12 @@
         "instrument": {
           "kind": "bank_account",
           "maskFrom": "mask"
+        },
+        "counterparty": {
+          "nameFrom": "payer",
+          "transforms": [
+            "sanitizeNarration"
+          ]
         }
       },
       {
@@ -16596,7 +16733,7 @@
     ],
     "status": "active",
     "createdBy": "baseline",
-    "updatedAt": "2026-11-20T00:00:00Z"
+    "updatedAt": "2026-11-05T00:00:00Z"
   },
   {
     "id": "GEN-ACCT-RAIL-NEFT-D1-B",
@@ -16771,14 +16908,14 @@
   },
   {
     "id": "GEN-ACCT-RAIL-RTGS-C1-B",
-    "version": 1,
+    "version": 2,
     "family": "rtgs_credit",
     "senders": [
       "*"
     ],
     "priority": 271,
     "match": {
-      "pattern": "(?:\\b(?:rs\\.?|inr)|₹)\\s*:?\\s*(?<amt>\\d[\\d,]*(?:\\.\\d{1,2})?)\\s+(?:has\\s+been\\s+|is\\s+|was\\s+)?(?:credited|deposited|received)\\s+(?:to|in|into|on)\\s+(?:(?:your|the)\\s+)?(?:[a-z][a-z .&'-]{0,30}?\\s)?\\b(?:a/?c(?:ct)?\\.?|account|acc\\.?)(?:\\s*(?:no|number|num)\\.?)?(?:\\s+(?:ending|ends)(?:\\s+(?:with|in))?)?\\s*[:\\-]?\\s*[x*•.]*\\s?(?<mask>\\d{2,18})(?=[\\s\\S]*?\\b(?:on|dated|date)\\s+(?<date>\\d{4}-\\d{2}-\\d{2}(?:[: ]\\d{2}:\\d{2}(?::\\d{2})?)?|\\d{1,2}[-/]\\d{1,2}[-/]\\d{2,4}(?:,?\\s*\\d{2}:\\d{2}(?::\\d{2})?)?|\\d{1,2}[-/ ]?[a-z]{3}[-/ ,]*\\d{2,4}(?:,?\\s*\\d{2}:\\d{2}(?::\\d{2})?)?)|)(?=[\\s\\S]*?\\b(?:utr|ref(?:erence)?)\\s*(?:no\\.?|number)?\\s*[:.\\-]?\\s*(?<ref_rtgsUtr>(?=[a-z]*\\d)[a-z0-9]{8,24})|)[\\s\\S]*?\\b(?:avl|avail(?:able)?|total\\s+avail(?:able)?|clear|current|new|closing|updated|remaining)?\\.?\\s*bal(?:ance)?\\.?\\s*(?:is|of)?\\s*[:\\-]?\\s*(?:\\b(?:rs\\.?|inr)|₹)\\s*:?\\s*(?<bal>\\d[\\d,]*(?:\\.\\d{1,2})?)",
+      "pattern": "(?:\\b(?:rs\\.?|inr)|₹)\\s*:?\\s*(?<amt>\\d[\\d,]*(?:\\.\\d{1,2})?)(?=[\\s\\S]*?(?:\\b(?:imps|neft|rtgs)\\b[\\s/:\\-]*(?:(?:p2a|p2p|p2m|cr)\\b[\\s/:\\-]*)?(?:[a-z0-9]{0,24}\\d[a-z0-9]{0,24}[\\s/:\\-]{1,3}){1,3}|\\bby\\s+(?!a/?c\\b|upi\\b|imps\\b|neft\\b|rtgs\\b|rs\\b|inr\\b|mobile\\b|cash\\b|cheque\\b|chq\\b|clearing\\b|transfer\\b|vpa\\b|your\\b|the\\b|self\\b))(?<payer>[a-z][a-z0-9 .&']{2,45}?)(?=\\s*[/,;(\\-]|\\s*\\.(?:\\s|$)|\\s*$|\\s+(?:ref|utr|info|avl|avail|bal|on|dated|if|call|txn|upi|not|via|using)\\b)|)\\s+(?:has\\s+been\\s+|is\\s+|was\\s+)?(?:credited|deposited|received)\\s+(?:to|in|into|on)\\s+(?:(?:your|the)\\s+)?(?:[a-z][a-z .&'-]{0,30}?\\s)?\\b(?:a/?c(?:ct)?\\.?|account|acc\\.?)(?:\\s*(?:no|number|num)\\.?)?(?:\\s+(?:ending|ends)(?:\\s+(?:with|in))?)?\\s*[:\\-]?\\s*[x*•.]*\\s?(?<mask>\\d{2,18})(?=[\\s\\S]*?\\b(?:on|dated|date)\\s+(?<date>\\d{4}-\\d{2}-\\d{2}(?:[: ]\\d{2}:\\d{2}(?::\\d{2})?)?|\\d{1,2}[-/]\\d{1,2}[-/]\\d{2,4}(?:,?\\s*\\d{2}:\\d{2}(?::\\d{2})?)?|\\d{1,2}[-/ ]?[a-z]{3}[-/ ,]*\\d{2,4}(?:,?\\s*\\d{2}:\\d{2}(?::\\d{2})?)?)|)(?=[\\s\\S]*?\\b(?:utr|ref(?:erence)?)\\s*(?:no\\.?|number)?\\s*[:.\\-]?\\s*(?<ref_rtgsUtr>(?=[a-z]*\\d)[a-z0-9]{8,24})|)[\\s\\S]*?\\b(?:avl|avail(?:able)?|total\\s+avail(?:able)?|clear|current|new|closing|updated|remaining)?\\.?\\s*bal(?:ance)?\\.?\\s*(?:is|of)?\\s*[:\\-]?\\s*(?:\\b(?:rs\\.?|inr)|₹)\\s*:?\\s*(?<bal>\\d[\\d,]*(?:\\.\\d{1,2})?)",
       "flags": "i",
       "requireAll": [
         "rtgs"
@@ -16876,6 +17013,12 @@
         "instrument": {
           "kind": "bank_account",
           "maskFrom": "mask"
+        },
+        "counterparty": {
+          "nameFrom": "payer",
+          "transforms": [
+            "sanitizeNarration"
+          ]
         }
       },
       {
@@ -16916,7 +17059,7 @@
     ],
     "status": "active",
     "createdBy": "baseline",
-    "updatedAt": "2026-11-20T00:00:00Z"
+    "updatedAt": "2026-11-05T00:00:00Z"
   },
   {
     "id": "GEN-ACCT-RAIL-RTGS-D1-B",
@@ -17091,14 +17234,14 @@
   },
   {
     "id": "GEN-ACCT-RAIL-IMPS-C2-B",
-    "version": 1,
+    "version": 2,
     "family": "imps_credit",
     "senders": [
       "*"
     ],
     "priority": 270,
     "match": {
-      "pattern": "(?:(?:your|the)\\s+)?(?:[a-z][a-z .&'-]{0,30}?\\s)?\\b(?:a/?c(?:ct)?\\.?|account|acc\\.?)(?:\\s*(?:no|number|num)\\.?)?(?:\\s+(?:ending|ends)(?:\\s+(?:with|in))?)?\\s*[:\\-]?\\s*[x*•.]*\\s?(?<mask>\\d{2,18})\\s+(?:has\\s+been\\s+|is\\s+|was\\s+)?(?:credited|received)\\s+(?:with|by|for|of)?\\s*(?:\\b(?:rs\\.?|inr)|₹)\\s*:?\\s*(?<amt>\\d[\\d,]*(?:\\.\\d{1,2})?)(?=[\\s\\S]*?\\b(?:on|dated|date)\\s+(?<date>\\d{4}-\\d{2}-\\d{2}(?:[: ]\\d{2}:\\d{2}(?::\\d{2})?)?|\\d{1,2}[-/]\\d{1,2}[-/]\\d{2,4}(?:,?\\s*\\d{2}:\\d{2}(?::\\d{2})?)?|\\d{1,2}[-/ ]?[a-z]{3}[-/ ,]*\\d{2,4}(?:,?\\s*\\d{2}:\\d{2}(?::\\d{2})?)?)|)(?=[\\s\\S]*?\\b(?:ref(?:erence)?|rrn|utr)\\s*(?:no\\.?|number)?\\s*[:.\\-]?\\s*(?<ref_impsRef>\\d{9,14})|)[\\s\\S]*?\\b(?:avl|avail(?:able)?|total\\s+avail(?:able)?|clear|current|new|closing|updated|remaining)?\\.?\\s*bal(?:ance)?\\.?\\s*(?:is|of)?\\s*[:\\-]?\\s*(?:\\b(?:rs\\.?|inr)|₹)\\s*:?\\s*(?<bal>\\d[\\d,]*(?:\\.\\d{1,2})?)",
+      "pattern": "(?:(?:your|the)\\s+)?(?:[a-z][a-z .&'-]{0,30}?\\s)?\\b(?:a/?c(?:ct)?\\.?|account|acc\\.?)(?:\\s*(?:no|number|num)\\.?)?(?:\\s+(?:ending|ends)(?:\\s+(?:with|in))?)?\\s*[:\\-]?\\s*[x*•.]*\\s?(?<mask>\\d{2,18})\\s+(?:has\\s+been\\s+|is\\s+|was\\s+)?(?:credited|received)\\s+(?:with|by|for|of)?\\s*(?:\\b(?:rs\\.?|inr)|₹)\\s*:?\\s*(?<amt>\\d[\\d,]*(?:\\.\\d{1,2})?)(?=[\\s\\S]*?(?:\\b(?:imps|neft|rtgs)\\b[\\s/:\\-]*(?:(?:p2a|p2p|p2m|cr)\\b[\\s/:\\-]*)?(?:[a-z0-9]{0,24}\\d[a-z0-9]{0,24}[\\s/:\\-]{1,3}){1,3}|\\bby\\s+(?!a/?c\\b|upi\\b|imps\\b|neft\\b|rtgs\\b|rs\\b|inr\\b|mobile\\b|cash\\b|cheque\\b|chq\\b|clearing\\b|transfer\\b|vpa\\b|your\\b|the\\b|self\\b))(?<payer>[a-z][a-z0-9 .&']{2,45}?)(?=\\s*[/,;(\\-]|\\s*\\.(?:\\s|$)|\\s*$|\\s+(?:ref|utr|info|avl|avail|bal|on|dated|if|call|txn|upi|not|via|using)\\b)|)(?=[\\s\\S]*?\\b(?:on|dated|date)\\s+(?<date>\\d{4}-\\d{2}-\\d{2}(?:[: ]\\d{2}:\\d{2}(?::\\d{2})?)?|\\d{1,2}[-/]\\d{1,2}[-/]\\d{2,4}(?:,?\\s*\\d{2}:\\d{2}(?::\\d{2})?)?|\\d{1,2}[-/ ]?[a-z]{3}[-/ ,]*\\d{2,4}(?:,?\\s*\\d{2}:\\d{2}(?::\\d{2})?)?)|)(?=[\\s\\S]*?\\b(?:ref(?:erence)?|rrn|utr)\\s*(?:no\\.?|number)?\\s*[:.\\-]?\\s*(?<ref_impsRef>\\d{9,14})|)[\\s\\S]*?\\b(?:avl|avail(?:able)?|total\\s+avail(?:able)?|clear|current|new|closing|updated|remaining)?\\.?\\s*bal(?:ance)?\\.?\\s*(?:is|of)?\\s*[:\\-]?\\s*(?:\\b(?:rs\\.?|inr)|₹)\\s*:?\\s*(?<bal>\\d[\\d,]*(?:\\.\\d{1,2})?)",
       "flags": "i",
       "requireAll": [
         "imps"
@@ -17196,6 +17339,12 @@
         "instrument": {
           "kind": "bank_account",
           "maskFrom": "mask"
+        },
+        "counterparty": {
+          "nameFrom": "payer",
+          "transforms": [
+            "sanitizeNarration"
+          ]
         }
       },
       {
@@ -17236,7 +17385,7 @@
     ],
     "status": "active",
     "createdBy": "baseline",
-    "updatedAt": "2026-11-20T00:00:00Z"
+    "updatedAt": "2026-11-05T00:00:00Z"
   },
   {
     "id": "GEN-ACCT-RAIL-IMPS-D2-B",
@@ -17411,14 +17560,14 @@
   },
   {
     "id": "GEN-ACCT-RAIL-NEFT-C2-B",
-    "version": 1,
+    "version": 2,
     "family": "neft_credit",
     "senders": [
       "*"
     ],
     "priority": 270,
     "match": {
-      "pattern": "(?:(?:your|the)\\s+)?(?:[a-z][a-z .&'-]{0,30}?\\s)?\\b(?:a/?c(?:ct)?\\.?|account|acc\\.?)(?:\\s*(?:no|number|num)\\.?)?(?:\\s+(?:ending|ends)(?:\\s+(?:with|in))?)?\\s*[:\\-]?\\s*[x*•.]*\\s?(?<mask>\\d{2,18})\\s+(?:has\\s+been\\s+|is\\s+|was\\s+)?(?:credited|received)\\s+(?:with|by|for|of)?\\s*(?:\\b(?:rs\\.?|inr)|₹)\\s*:?\\s*(?<amt>\\d[\\d,]*(?:\\.\\d{1,2})?)(?=[\\s\\S]*?\\b(?:on|dated|date)\\s+(?<date>\\d{4}-\\d{2}-\\d{2}(?:[: ]\\d{2}:\\d{2}(?::\\d{2})?)?|\\d{1,2}[-/]\\d{1,2}[-/]\\d{2,4}(?:,?\\s*\\d{2}:\\d{2}(?::\\d{2})?)?|\\d{1,2}[-/ ]?[a-z]{3}[-/ ,]*\\d{2,4}(?:,?\\s*\\d{2}:\\d{2}(?::\\d{2})?)?)|)(?=[\\s\\S]*?\\b(?:utr|ref(?:erence)?)\\s*(?:no\\.?|number)?\\s*[:.\\-]?\\s*(?<ref_neftUtr>(?=[a-z]*\\d)[a-z0-9]{8,24})|)[\\s\\S]*?\\b(?:avl|avail(?:able)?|total\\s+avail(?:able)?|clear|current|new|closing|updated|remaining)?\\.?\\s*bal(?:ance)?\\.?\\s*(?:is|of)?\\s*[:\\-]?\\s*(?:\\b(?:rs\\.?|inr)|₹)\\s*:?\\s*(?<bal>\\d[\\d,]*(?:\\.\\d{1,2})?)",
+      "pattern": "(?:(?:your|the)\\s+)?(?:[a-z][a-z .&'-]{0,30}?\\s)?\\b(?:a/?c(?:ct)?\\.?|account|acc\\.?)(?:\\s*(?:no|number|num)\\.?)?(?:\\s+(?:ending|ends)(?:\\s+(?:with|in))?)?\\s*[:\\-]?\\s*[x*•.]*\\s?(?<mask>\\d{2,18})\\s+(?:has\\s+been\\s+|is\\s+|was\\s+)?(?:credited|received)\\s+(?:with|by|for|of)?\\s*(?:\\b(?:rs\\.?|inr)|₹)\\s*:?\\s*(?<amt>\\d[\\d,]*(?:\\.\\d{1,2})?)(?=[\\s\\S]*?(?:\\b(?:imps|neft|rtgs)\\b[\\s/:\\-]*(?:(?:p2a|p2p|p2m|cr)\\b[\\s/:\\-]*)?(?:[a-z0-9]{0,24}\\d[a-z0-9]{0,24}[\\s/:\\-]{1,3}){1,3}|\\bby\\s+(?!a/?c\\b|upi\\b|imps\\b|neft\\b|rtgs\\b|rs\\b|inr\\b|mobile\\b|cash\\b|cheque\\b|chq\\b|clearing\\b|transfer\\b|vpa\\b|your\\b|the\\b|self\\b))(?<payer>[a-z][a-z0-9 .&']{2,45}?)(?=\\s*[/,;(\\-]|\\s*\\.(?:\\s|$)|\\s*$|\\s+(?:ref|utr|info|avl|avail|bal|on|dated|if|call|txn|upi|not|via|using)\\b)|)(?=[\\s\\S]*?\\b(?:on|dated|date)\\s+(?<date>\\d{4}-\\d{2}-\\d{2}(?:[: ]\\d{2}:\\d{2}(?::\\d{2})?)?|\\d{1,2}[-/]\\d{1,2}[-/]\\d{2,4}(?:,?\\s*\\d{2}:\\d{2}(?::\\d{2})?)?|\\d{1,2}[-/ ]?[a-z]{3}[-/ ,]*\\d{2,4}(?:,?\\s*\\d{2}:\\d{2}(?::\\d{2})?)?)|)(?=[\\s\\S]*?\\b(?:utr|ref(?:erence)?)\\s*(?:no\\.?|number)?\\s*[:.\\-]?\\s*(?<ref_neftUtr>(?=[a-z]*\\d)[a-z0-9]{8,24})|)[\\s\\S]*?\\b(?:avl|avail(?:able)?|total\\s+avail(?:able)?|clear|current|new|closing|updated|remaining)?\\.?\\s*bal(?:ance)?\\.?\\s*(?:is|of)?\\s*[:\\-]?\\s*(?:\\b(?:rs\\.?|inr)|₹)\\s*:?\\s*(?<bal>\\d[\\d,]*(?:\\.\\d{1,2})?)",
       "flags": "i",
       "requireAll": [
         "neft"
@@ -17516,6 +17665,12 @@
         "instrument": {
           "kind": "bank_account",
           "maskFrom": "mask"
+        },
+        "counterparty": {
+          "nameFrom": "payer",
+          "transforms": [
+            "sanitizeNarration"
+          ]
         }
       },
       {
@@ -17556,7 +17711,7 @@
     ],
     "status": "active",
     "createdBy": "baseline",
-    "updatedAt": "2026-11-20T00:00:00Z"
+    "updatedAt": "2026-11-05T00:00:00Z"
   },
   {
     "id": "GEN-ACCT-RAIL-NEFT-D2-B",
@@ -17731,14 +17886,14 @@
   },
   {
     "id": "GEN-ACCT-RAIL-RTGS-C2-B",
-    "version": 1,
+    "version": 2,
     "family": "rtgs_credit",
     "senders": [
       "*"
     ],
     "priority": 270,
     "match": {
-      "pattern": "(?:(?:your|the)\\s+)?(?:[a-z][a-z .&'-]{0,30}?\\s)?\\b(?:a/?c(?:ct)?\\.?|account|acc\\.?)(?:\\s*(?:no|number|num)\\.?)?(?:\\s+(?:ending|ends)(?:\\s+(?:with|in))?)?\\s*[:\\-]?\\s*[x*•.]*\\s?(?<mask>\\d{2,18})\\s+(?:has\\s+been\\s+|is\\s+|was\\s+)?(?:credited|received)\\s+(?:with|by|for|of)?\\s*(?:\\b(?:rs\\.?|inr)|₹)\\s*:?\\s*(?<amt>\\d[\\d,]*(?:\\.\\d{1,2})?)(?=[\\s\\S]*?\\b(?:on|dated|date)\\s+(?<date>\\d{4}-\\d{2}-\\d{2}(?:[: ]\\d{2}:\\d{2}(?::\\d{2})?)?|\\d{1,2}[-/]\\d{1,2}[-/]\\d{2,4}(?:,?\\s*\\d{2}:\\d{2}(?::\\d{2})?)?|\\d{1,2}[-/ ]?[a-z]{3}[-/ ,]*\\d{2,4}(?:,?\\s*\\d{2}:\\d{2}(?::\\d{2})?)?)|)(?=[\\s\\S]*?\\b(?:utr|ref(?:erence)?)\\s*(?:no\\.?|number)?\\s*[:.\\-]?\\s*(?<ref_rtgsUtr>(?=[a-z]*\\d)[a-z0-9]{8,24})|)[\\s\\S]*?\\b(?:avl|avail(?:able)?|total\\s+avail(?:able)?|clear|current|new|closing|updated|remaining)?\\.?\\s*bal(?:ance)?\\.?\\s*(?:is|of)?\\s*[:\\-]?\\s*(?:\\b(?:rs\\.?|inr)|₹)\\s*:?\\s*(?<bal>\\d[\\d,]*(?:\\.\\d{1,2})?)",
+      "pattern": "(?:(?:your|the)\\s+)?(?:[a-z][a-z .&'-]{0,30}?\\s)?\\b(?:a/?c(?:ct)?\\.?|account|acc\\.?)(?:\\s*(?:no|number|num)\\.?)?(?:\\s+(?:ending|ends)(?:\\s+(?:with|in))?)?\\s*[:\\-]?\\s*[x*•.]*\\s?(?<mask>\\d{2,18})\\s+(?:has\\s+been\\s+|is\\s+|was\\s+)?(?:credited|received)\\s+(?:with|by|for|of)?\\s*(?:\\b(?:rs\\.?|inr)|₹)\\s*:?\\s*(?<amt>\\d[\\d,]*(?:\\.\\d{1,2})?)(?=[\\s\\S]*?(?:\\b(?:imps|neft|rtgs)\\b[\\s/:\\-]*(?:(?:p2a|p2p|p2m|cr)\\b[\\s/:\\-]*)?(?:[a-z0-9]{0,24}\\d[a-z0-9]{0,24}[\\s/:\\-]{1,3}){1,3}|\\bby\\s+(?!a/?c\\b|upi\\b|imps\\b|neft\\b|rtgs\\b|rs\\b|inr\\b|mobile\\b|cash\\b|cheque\\b|chq\\b|clearing\\b|transfer\\b|vpa\\b|your\\b|the\\b|self\\b))(?<payer>[a-z][a-z0-9 .&']{2,45}?)(?=\\s*[/,;(\\-]|\\s*\\.(?:\\s|$)|\\s*$|\\s+(?:ref|utr|info|avl|avail|bal|on|dated|if|call|txn|upi|not|via|using)\\b)|)(?=[\\s\\S]*?\\b(?:on|dated|date)\\s+(?<date>\\d{4}-\\d{2}-\\d{2}(?:[: ]\\d{2}:\\d{2}(?::\\d{2})?)?|\\d{1,2}[-/]\\d{1,2}[-/]\\d{2,4}(?:,?\\s*\\d{2}:\\d{2}(?::\\d{2})?)?|\\d{1,2}[-/ ]?[a-z]{3}[-/ ,]*\\d{2,4}(?:,?\\s*\\d{2}:\\d{2}(?::\\d{2})?)?)|)(?=[\\s\\S]*?\\b(?:utr|ref(?:erence)?)\\s*(?:no\\.?|number)?\\s*[:.\\-]?\\s*(?<ref_rtgsUtr>(?=[a-z]*\\d)[a-z0-9]{8,24})|)[\\s\\S]*?\\b(?:avl|avail(?:able)?|total\\s+avail(?:able)?|clear|current|new|closing|updated|remaining)?\\.?\\s*bal(?:ance)?\\.?\\s*(?:is|of)?\\s*[:\\-]?\\s*(?:\\b(?:rs\\.?|inr)|₹)\\s*:?\\s*(?<bal>\\d[\\d,]*(?:\\.\\d{1,2})?)",
       "flags": "i",
       "requireAll": [
         "rtgs"
@@ -17836,6 +17991,12 @@
         "instrument": {
           "kind": "bank_account",
           "maskFrom": "mask"
+        },
+        "counterparty": {
+          "nameFrom": "payer",
+          "transforms": [
+            "sanitizeNarration"
+          ]
         }
       },
       {
@@ -17876,7 +18037,7 @@
     ],
     "status": "active",
     "createdBy": "baseline",
-    "updatedAt": "2026-11-20T00:00:00Z"
+    "updatedAt": "2026-11-05T00:00:00Z"
   },
   {
     "id": "GEN-ACCT-RAIL-RTGS-D2-B",
@@ -18826,14 +18987,14 @@
   },
   {
     "id": "GEN-ACCT-RAIL-IMPS-C1",
-    "version": 1,
+    "version": 2,
     "family": "imps_credit",
     "senders": [
       "*"
     ],
     "priority": 266,
     "match": {
-      "pattern": "(?:\\b(?:rs\\.?|inr)|₹)\\s*:?\\s*(?<amt>\\d[\\d,]*(?:\\.\\d{1,2})?)\\s+(?:has\\s+been\\s+|is\\s+|was\\s+)?(?:credited|deposited|received)\\s+(?:to|in|into|on)\\s+(?:(?:your|the)\\s+)?(?:[a-z][a-z .&'-]{0,30}?\\s)?\\b(?:a/?c(?:ct)?\\.?|account|acc\\.?)(?:\\s*(?:no|number|num)\\.?)?(?:\\s+(?:ending|ends)(?:\\s+(?:with|in))?)?\\s*[:\\-]?\\s*[x*•.]*\\s?(?<mask>\\d{2,18})(?=[\\s\\S]*?\\b(?:on|dated|date)\\s+(?<date>\\d{4}-\\d{2}-\\d{2}(?:[: ]\\d{2}:\\d{2}(?::\\d{2})?)?|\\d{1,2}[-/]\\d{1,2}[-/]\\d{2,4}(?:,?\\s*\\d{2}:\\d{2}(?::\\d{2})?)?|\\d{1,2}[-/ ]?[a-z]{3}[-/ ,]*\\d{2,4}(?:,?\\s*\\d{2}:\\d{2}(?::\\d{2})?)?)|)(?=[\\s\\S]*?\\b(?:ref(?:erence)?|rrn|utr)\\s*(?:no\\.?|number)?\\s*[:.\\-]?\\s*(?<ref_impsRef>\\d{9,14})|)",
+      "pattern": "(?:\\b(?:rs\\.?|inr)|₹)\\s*:?\\s*(?<amt>\\d[\\d,]*(?:\\.\\d{1,2})?)(?=[\\s\\S]*?(?:\\b(?:imps|neft|rtgs)\\b[\\s/:\\-]*(?:(?:p2a|p2p|p2m|cr)\\b[\\s/:\\-]*)?(?:[a-z0-9]{0,24}\\d[a-z0-9]{0,24}[\\s/:\\-]{1,3}){1,3}|\\bby\\s+(?!a/?c\\b|upi\\b|imps\\b|neft\\b|rtgs\\b|rs\\b|inr\\b|mobile\\b|cash\\b|cheque\\b|chq\\b|clearing\\b|transfer\\b|vpa\\b|your\\b|the\\b|self\\b))(?<payer>[a-z][a-z0-9 .&']{2,45}?)(?=\\s*[/,;(\\-]|\\s*\\.(?:\\s|$)|\\s*$|\\s+(?:ref|utr|info|avl|avail|bal|on|dated|if|call|txn|upi|not|via|using)\\b)|)\\s+(?:has\\s+been\\s+|is\\s+|was\\s+)?(?:credited|deposited|received)\\s+(?:to|in|into|on)\\s+(?:(?:your|the)\\s+)?(?:[a-z][a-z .&'-]{0,30}?\\s)?\\b(?:a/?c(?:ct)?\\.?|account|acc\\.?)(?:\\s*(?:no|number|num)\\.?)?(?:\\s+(?:ending|ends)(?:\\s+(?:with|in))?)?\\s*[:\\-]?\\s*[x*•.]*\\s?(?<mask>\\d{2,18})(?=[\\s\\S]*?\\b(?:on|dated|date)\\s+(?<date>\\d{4}-\\d{2}-\\d{2}(?:[: ]\\d{2}:\\d{2}(?::\\d{2})?)?|\\d{1,2}[-/]\\d{1,2}[-/]\\d{2,4}(?:,?\\s*\\d{2}:\\d{2}(?::\\d{2})?)?|\\d{1,2}[-/ ]?[a-z]{3}[-/ ,]*\\d{2,4}(?:,?\\s*\\d{2}:\\d{2}(?::\\d{2})?)?)|)(?=[\\s\\S]*?\\b(?:ref(?:erence)?|rrn|utr)\\s*(?:no\\.?|number)?\\s*[:.\\-]?\\s*(?<ref_impsRef>\\d{9,14})|)",
       "flags": "i",
       "requireAll": [
         "imps"
@@ -18931,6 +19092,12 @@
         "instrument": {
           "kind": "bank_account",
           "maskFrom": "mask"
+        },
+        "counterparty": {
+          "nameFrom": "payer",
+          "transforms": [
+            "sanitizeNarration"
+          ]
         }
       }
     ],
@@ -18947,11 +19114,23 @@
         "sender": "VM-UCOBNK-S",
         "body": "Rs.499.00 could not be credited to A/c XX1234 on 22-10-26 by IMPS Ref 123456789012",
         "expectFactTypes": []
+      },
+      {
+        "sender": "VM-UCOBNK-S",
+        "body": "INR 60000.00 credited to A/c no. XX1234 on 01-10-26 through IMPS/P2A/432100000001/GLOBEX LTD/OCT",
+        "expectFactTypes": [
+          "movement"
+        ]
+      },
+      {
+        "sender": "VM-UCOBNK-S",
+        "body": "INR 60000.00 could not be credited to A/c no. XX1234 on 01-10-26 through IMPS/P2A/432100000001/GLOBEX LTD/OCT",
+        "expectFactTypes": []
       }
     ],
     "status": "active",
     "createdBy": "baseline",
-    "updatedAt": "2026-11-20T00:00:00Z"
+    "updatedAt": "2026-11-05T00:00:00Z"
   },
   {
     "id": "GEN-ACCT-RAIL-IMPS-D1",
@@ -19106,14 +19285,14 @@
   },
   {
     "id": "GEN-ACCT-RAIL-NEFT-C1",
-    "version": 1,
+    "version": 2,
     "family": "neft_credit",
     "senders": [
       "*"
     ],
     "priority": 266,
     "match": {
-      "pattern": "(?:\\b(?:rs\\.?|inr)|₹)\\s*:?\\s*(?<amt>\\d[\\d,]*(?:\\.\\d{1,2})?)\\s+(?:has\\s+been\\s+|is\\s+|was\\s+)?(?:credited|deposited|received)\\s+(?:to|in|into|on)\\s+(?:(?:your|the)\\s+)?(?:[a-z][a-z .&'-]{0,30}?\\s)?\\b(?:a/?c(?:ct)?\\.?|account|acc\\.?)(?:\\s*(?:no|number|num)\\.?)?(?:\\s+(?:ending|ends)(?:\\s+(?:with|in))?)?\\s*[:\\-]?\\s*[x*•.]*\\s?(?<mask>\\d{2,18})(?=[\\s\\S]*?\\b(?:on|dated|date)\\s+(?<date>\\d{4}-\\d{2}-\\d{2}(?:[: ]\\d{2}:\\d{2}(?::\\d{2})?)?|\\d{1,2}[-/]\\d{1,2}[-/]\\d{2,4}(?:,?\\s*\\d{2}:\\d{2}(?::\\d{2})?)?|\\d{1,2}[-/ ]?[a-z]{3}[-/ ,]*\\d{2,4}(?:,?\\s*\\d{2}:\\d{2}(?::\\d{2})?)?)|)(?=[\\s\\S]*?\\b(?:utr|ref(?:erence)?)\\s*(?:no\\.?|number)?\\s*[:.\\-]?\\s*(?<ref_neftUtr>(?=[a-z]*\\d)[a-z0-9]{8,24})|)",
+      "pattern": "(?:\\b(?:rs\\.?|inr)|₹)\\s*:?\\s*(?<amt>\\d[\\d,]*(?:\\.\\d{1,2})?)(?=[\\s\\S]*?(?:\\b(?:imps|neft|rtgs)\\b[\\s/:\\-]*(?:(?:p2a|p2p|p2m|cr)\\b[\\s/:\\-]*)?(?:[a-z0-9]{0,24}\\d[a-z0-9]{0,24}[\\s/:\\-]{1,3}){1,3}|\\bby\\s+(?!a/?c\\b|upi\\b|imps\\b|neft\\b|rtgs\\b|rs\\b|inr\\b|mobile\\b|cash\\b|cheque\\b|chq\\b|clearing\\b|transfer\\b|vpa\\b|your\\b|the\\b|self\\b))(?<payer>[a-z][a-z0-9 .&']{2,45}?)(?=\\s*[/,;(\\-]|\\s*\\.(?:\\s|$)|\\s*$|\\s+(?:ref|utr|info|avl|avail|bal|on|dated|if|call|txn|upi|not|via|using)\\b)|)\\s+(?:has\\s+been\\s+|is\\s+|was\\s+)?(?:credited|deposited|received)\\s+(?:to|in|into|on)\\s+(?:(?:your|the)\\s+)?(?:[a-z][a-z .&'-]{0,30}?\\s)?\\b(?:a/?c(?:ct)?\\.?|account|acc\\.?)(?:\\s*(?:no|number|num)\\.?)?(?:\\s+(?:ending|ends)(?:\\s+(?:with|in))?)?\\s*[:\\-]?\\s*[x*•.]*\\s?(?<mask>\\d{2,18})(?=[\\s\\S]*?\\b(?:on|dated|date)\\s+(?<date>\\d{4}-\\d{2}-\\d{2}(?:[: ]\\d{2}:\\d{2}(?::\\d{2})?)?|\\d{1,2}[-/]\\d{1,2}[-/]\\d{2,4}(?:,?\\s*\\d{2}:\\d{2}(?::\\d{2})?)?|\\d{1,2}[-/ ]?[a-z]{3}[-/ ,]*\\d{2,4}(?:,?\\s*\\d{2}:\\d{2}(?::\\d{2})?)?)|)(?=[\\s\\S]*?\\b(?:utr|ref(?:erence)?)\\s*(?:no\\.?|number)?\\s*[:.\\-]?\\s*(?<ref_neftUtr>(?=[a-z]*\\d)[a-z0-9]{8,24})|)",
       "flags": "i",
       "requireAll": [
         "neft"
@@ -19211,6 +19390,12 @@
         "instrument": {
           "kind": "bank_account",
           "maskFrom": "mask"
+        },
+        "counterparty": {
+          "nameFrom": "payer",
+          "transforms": [
+            "sanitizeNarration"
+          ]
         }
       }
     ],
@@ -19227,11 +19412,18 @@
         "sender": "VM-UCOBNK-S",
         "body": "Rs.499.00 could not be credited to A/c XX1234 on 22-10-26 by NEFT Ref 123456789012",
         "expectFactTypes": []
+      },
+      {
+        "sender": "VM-UCOBNK-S",
+        "body": "Dear Customer, INR 25000.00 credited to your A/c No XX1234 on 12/10/2026 through NEFT with UTR HDFCH12345678901 by ACME SOLUTIONS LLP, INFO: BATCHID:1",
+        "expectFactTypes": [
+          "movement"
+        ]
       }
     ],
     "status": "active",
     "createdBy": "baseline",
-    "updatedAt": "2026-11-20T00:00:00Z"
+    "updatedAt": "2026-11-05T00:00:00Z"
   },
   {
     "id": "GEN-ACCT-RAIL-NEFT-D1",
@@ -19386,14 +19578,14 @@
   },
   {
     "id": "GEN-ACCT-RAIL-RTGS-C1",
-    "version": 1,
+    "version": 2,
     "family": "rtgs_credit",
     "senders": [
       "*"
     ],
     "priority": 266,
     "match": {
-      "pattern": "(?:\\b(?:rs\\.?|inr)|₹)\\s*:?\\s*(?<amt>\\d[\\d,]*(?:\\.\\d{1,2})?)\\s+(?:has\\s+been\\s+|is\\s+|was\\s+)?(?:credited|deposited|received)\\s+(?:to|in|into|on)\\s+(?:(?:your|the)\\s+)?(?:[a-z][a-z .&'-]{0,30}?\\s)?\\b(?:a/?c(?:ct)?\\.?|account|acc\\.?)(?:\\s*(?:no|number|num)\\.?)?(?:\\s+(?:ending|ends)(?:\\s+(?:with|in))?)?\\s*[:\\-]?\\s*[x*•.]*\\s?(?<mask>\\d{2,18})(?=[\\s\\S]*?\\b(?:on|dated|date)\\s+(?<date>\\d{4}-\\d{2}-\\d{2}(?:[: ]\\d{2}:\\d{2}(?::\\d{2})?)?|\\d{1,2}[-/]\\d{1,2}[-/]\\d{2,4}(?:,?\\s*\\d{2}:\\d{2}(?::\\d{2})?)?|\\d{1,2}[-/ ]?[a-z]{3}[-/ ,]*\\d{2,4}(?:,?\\s*\\d{2}:\\d{2}(?::\\d{2})?)?)|)(?=[\\s\\S]*?\\b(?:utr|ref(?:erence)?)\\s*(?:no\\.?|number)?\\s*[:.\\-]?\\s*(?<ref_rtgsUtr>(?=[a-z]*\\d)[a-z0-9]{8,24})|)",
+      "pattern": "(?:\\b(?:rs\\.?|inr)|₹)\\s*:?\\s*(?<amt>\\d[\\d,]*(?:\\.\\d{1,2})?)(?=[\\s\\S]*?(?:\\b(?:imps|neft|rtgs)\\b[\\s/:\\-]*(?:(?:p2a|p2p|p2m|cr)\\b[\\s/:\\-]*)?(?:[a-z0-9]{0,24}\\d[a-z0-9]{0,24}[\\s/:\\-]{1,3}){1,3}|\\bby\\s+(?!a/?c\\b|upi\\b|imps\\b|neft\\b|rtgs\\b|rs\\b|inr\\b|mobile\\b|cash\\b|cheque\\b|chq\\b|clearing\\b|transfer\\b|vpa\\b|your\\b|the\\b|self\\b))(?<payer>[a-z][a-z0-9 .&']{2,45}?)(?=\\s*[/,;(\\-]|\\s*\\.(?:\\s|$)|\\s*$|\\s+(?:ref|utr|info|avl|avail|bal|on|dated|if|call|txn|upi|not|via|using)\\b)|)\\s+(?:has\\s+been\\s+|is\\s+|was\\s+)?(?:credited|deposited|received)\\s+(?:to|in|into|on)\\s+(?:(?:your|the)\\s+)?(?:[a-z][a-z .&'-]{0,30}?\\s)?\\b(?:a/?c(?:ct)?\\.?|account|acc\\.?)(?:\\s*(?:no|number|num)\\.?)?(?:\\s+(?:ending|ends)(?:\\s+(?:with|in))?)?\\s*[:\\-]?\\s*[x*•.]*\\s?(?<mask>\\d{2,18})(?=[\\s\\S]*?\\b(?:on|dated|date)\\s+(?<date>\\d{4}-\\d{2}-\\d{2}(?:[: ]\\d{2}:\\d{2}(?::\\d{2})?)?|\\d{1,2}[-/]\\d{1,2}[-/]\\d{2,4}(?:,?\\s*\\d{2}:\\d{2}(?::\\d{2})?)?|\\d{1,2}[-/ ]?[a-z]{3}[-/ ,]*\\d{2,4}(?:,?\\s*\\d{2}:\\d{2}(?::\\d{2})?)?)|)(?=[\\s\\S]*?\\b(?:utr|ref(?:erence)?)\\s*(?:no\\.?|number)?\\s*[:.\\-]?\\s*(?<ref_rtgsUtr>(?=[a-z]*\\d)[a-z0-9]{8,24})|)",
       "flags": "i",
       "requireAll": [
         "rtgs"
@@ -19491,6 +19683,12 @@
         "instrument": {
           "kind": "bank_account",
           "maskFrom": "mask"
+        },
+        "counterparty": {
+          "nameFrom": "payer",
+          "transforms": [
+            "sanitizeNarration"
+          ]
         }
       }
     ],
@@ -19511,7 +19709,7 @@
     ],
     "status": "active",
     "createdBy": "baseline",
-    "updatedAt": "2026-11-20T00:00:00Z"
+    "updatedAt": "2026-11-05T00:00:00Z"
   },
   {
     "id": "GEN-ACCT-RAIL-RTGS-D1",
@@ -20008,14 +20206,14 @@
   },
   {
     "id": "GEN-ACCT-RAIL-IMPS-C2",
-    "version": 1,
+    "version": 2,
     "family": "imps_credit",
     "senders": [
       "*"
     ],
     "priority": 265,
     "match": {
-      "pattern": "(?:(?:your|the)\\s+)?(?:[a-z][a-z .&'-]{0,30}?\\s)?\\b(?:a/?c(?:ct)?\\.?|account|acc\\.?)(?:\\s*(?:no|number|num)\\.?)?(?:\\s+(?:ending|ends)(?:\\s+(?:with|in))?)?\\s*[:\\-]?\\s*[x*•.]*\\s?(?<mask>\\d{2,18})\\s+(?:has\\s+been\\s+|is\\s+|was\\s+)?(?:credited|received)\\s+(?:with|by|for|of)?\\s*(?:\\b(?:rs\\.?|inr)|₹)\\s*:?\\s*(?<amt>\\d[\\d,]*(?:\\.\\d{1,2})?)(?=[\\s\\S]*?\\b(?:on|dated|date)\\s+(?<date>\\d{4}-\\d{2}-\\d{2}(?:[: ]\\d{2}:\\d{2}(?::\\d{2})?)?|\\d{1,2}[-/]\\d{1,2}[-/]\\d{2,4}(?:,?\\s*\\d{2}:\\d{2}(?::\\d{2})?)?|\\d{1,2}[-/ ]?[a-z]{3}[-/ ,]*\\d{2,4}(?:,?\\s*\\d{2}:\\d{2}(?::\\d{2})?)?)|)(?=[\\s\\S]*?\\b(?:ref(?:erence)?|rrn|utr)\\s*(?:no\\.?|number)?\\s*[:.\\-]?\\s*(?<ref_impsRef>\\d{9,14})|)",
+      "pattern": "(?:(?:your|the)\\s+)?(?:[a-z][a-z .&'-]{0,30}?\\s)?\\b(?:a/?c(?:ct)?\\.?|account|acc\\.?)(?:\\s*(?:no|number|num)\\.?)?(?:\\s+(?:ending|ends)(?:\\s+(?:with|in))?)?\\s*[:\\-]?\\s*[x*•.]*\\s?(?<mask>\\d{2,18})\\s+(?:has\\s+been\\s+|is\\s+|was\\s+)?(?:credited|received)\\s+(?:with|by|for|of)?\\s*(?:\\b(?:rs\\.?|inr)|₹)\\s*:?\\s*(?<amt>\\d[\\d,]*(?:\\.\\d{1,2})?)(?=[\\s\\S]*?(?:\\b(?:imps|neft|rtgs)\\b[\\s/:\\-]*(?:(?:p2a|p2p|p2m|cr)\\b[\\s/:\\-]*)?(?:[a-z0-9]{0,24}\\d[a-z0-9]{0,24}[\\s/:\\-]{1,3}){1,3}|\\bby\\s+(?!a/?c\\b|upi\\b|imps\\b|neft\\b|rtgs\\b|rs\\b|inr\\b|mobile\\b|cash\\b|cheque\\b|chq\\b|clearing\\b|transfer\\b|vpa\\b|your\\b|the\\b|self\\b))(?<payer>[a-z][a-z0-9 .&']{2,45}?)(?=\\s*[/,;(\\-]|\\s*\\.(?:\\s|$)|\\s*$|\\s+(?:ref|utr|info|avl|avail|bal|on|dated|if|call|txn|upi|not|via|using)\\b)|)(?=[\\s\\S]*?\\b(?:on|dated|date)\\s+(?<date>\\d{4}-\\d{2}-\\d{2}(?:[: ]\\d{2}:\\d{2}(?::\\d{2})?)?|\\d{1,2}[-/]\\d{1,2}[-/]\\d{2,4}(?:,?\\s*\\d{2}:\\d{2}(?::\\d{2})?)?|\\d{1,2}[-/ ]?[a-z]{3}[-/ ,]*\\d{2,4}(?:,?\\s*\\d{2}:\\d{2}(?::\\d{2})?)?)|)(?=[\\s\\S]*?\\b(?:ref(?:erence)?|rrn|utr)\\s*(?:no\\.?|number)?\\s*[:.\\-]?\\s*(?<ref_impsRef>\\d{9,14})|)",
       "flags": "i",
       "requireAll": [
         "imps"
@@ -20113,6 +20311,12 @@
         "instrument": {
           "kind": "bank_account",
           "maskFrom": "mask"
+        },
+        "counterparty": {
+          "nameFrom": "payer",
+          "transforms": [
+            "sanitizeNarration"
+          ]
         }
       }
     ],
@@ -20133,7 +20337,7 @@
     ],
     "status": "active",
     "createdBy": "baseline",
-    "updatedAt": "2026-11-20T00:00:00Z"
+    "updatedAt": "2026-11-05T00:00:00Z"
   },
   {
     "id": "GEN-ACCT-RAIL-IMPS-D2",
@@ -20288,14 +20492,14 @@
   },
   {
     "id": "GEN-ACCT-RAIL-NEFT-C2",
-    "version": 1,
+    "version": 2,
     "family": "neft_credit",
     "senders": [
       "*"
     ],
     "priority": 265,
     "match": {
-      "pattern": "(?:(?:your|the)\\s+)?(?:[a-z][a-z .&'-]{0,30}?\\s)?\\b(?:a/?c(?:ct)?\\.?|account|acc\\.?)(?:\\s*(?:no|number|num)\\.?)?(?:\\s+(?:ending|ends)(?:\\s+(?:with|in))?)?\\s*[:\\-]?\\s*[x*•.]*\\s?(?<mask>\\d{2,18})\\s+(?:has\\s+been\\s+|is\\s+|was\\s+)?(?:credited|received)\\s+(?:with|by|for|of)?\\s*(?:\\b(?:rs\\.?|inr)|₹)\\s*:?\\s*(?<amt>\\d[\\d,]*(?:\\.\\d{1,2})?)(?=[\\s\\S]*?\\b(?:on|dated|date)\\s+(?<date>\\d{4}-\\d{2}-\\d{2}(?:[: ]\\d{2}:\\d{2}(?::\\d{2})?)?|\\d{1,2}[-/]\\d{1,2}[-/]\\d{2,4}(?:,?\\s*\\d{2}:\\d{2}(?::\\d{2})?)?|\\d{1,2}[-/ ]?[a-z]{3}[-/ ,]*\\d{2,4}(?:,?\\s*\\d{2}:\\d{2}(?::\\d{2})?)?)|)(?=[\\s\\S]*?\\b(?:utr|ref(?:erence)?)\\s*(?:no\\.?|number)?\\s*[:.\\-]?\\s*(?<ref_neftUtr>(?=[a-z]*\\d)[a-z0-9]{8,24})|)",
+      "pattern": "(?:(?:your|the)\\s+)?(?:[a-z][a-z .&'-]{0,30}?\\s)?\\b(?:a/?c(?:ct)?\\.?|account|acc\\.?)(?:\\s*(?:no|number|num)\\.?)?(?:\\s+(?:ending|ends)(?:\\s+(?:with|in))?)?\\s*[:\\-]?\\s*[x*•.]*\\s?(?<mask>\\d{2,18})\\s+(?:has\\s+been\\s+|is\\s+|was\\s+)?(?:credited|received)\\s+(?:with|by|for|of)?\\s*(?:\\b(?:rs\\.?|inr)|₹)\\s*:?\\s*(?<amt>\\d[\\d,]*(?:\\.\\d{1,2})?)(?=[\\s\\S]*?(?:\\b(?:imps|neft|rtgs)\\b[\\s/:\\-]*(?:(?:p2a|p2p|p2m|cr)\\b[\\s/:\\-]*)?(?:[a-z0-9]{0,24}\\d[a-z0-9]{0,24}[\\s/:\\-]{1,3}){1,3}|\\bby\\s+(?!a/?c\\b|upi\\b|imps\\b|neft\\b|rtgs\\b|rs\\b|inr\\b|mobile\\b|cash\\b|cheque\\b|chq\\b|clearing\\b|transfer\\b|vpa\\b|your\\b|the\\b|self\\b))(?<payer>[a-z][a-z0-9 .&']{2,45}?)(?=\\s*[/,;(\\-]|\\s*\\.(?:\\s|$)|\\s*$|\\s+(?:ref|utr|info|avl|avail|bal|on|dated|if|call|txn|upi|not|via|using)\\b)|)(?=[\\s\\S]*?\\b(?:on|dated|date)\\s+(?<date>\\d{4}-\\d{2}-\\d{2}(?:[: ]\\d{2}:\\d{2}(?::\\d{2})?)?|\\d{1,2}[-/]\\d{1,2}[-/]\\d{2,4}(?:,?\\s*\\d{2}:\\d{2}(?::\\d{2})?)?|\\d{1,2}[-/ ]?[a-z]{3}[-/ ,]*\\d{2,4}(?:,?\\s*\\d{2}:\\d{2}(?::\\d{2})?)?)|)(?=[\\s\\S]*?\\b(?:utr|ref(?:erence)?)\\s*(?:no\\.?|number)?\\s*[:.\\-]?\\s*(?<ref_neftUtr>(?=[a-z]*\\d)[a-z0-9]{8,24})|)",
       "flags": "i",
       "requireAll": [
         "neft"
@@ -20393,6 +20597,12 @@
         "instrument": {
           "kind": "bank_account",
           "maskFrom": "mask"
+        },
+        "counterparty": {
+          "nameFrom": "payer",
+          "transforms": [
+            "sanitizeNarration"
+          ]
         }
       }
     ],
@@ -20413,7 +20623,7 @@
     ],
     "status": "active",
     "createdBy": "baseline",
-    "updatedAt": "2026-11-20T00:00:00Z"
+    "updatedAt": "2026-11-05T00:00:00Z"
   },
   {
     "id": "GEN-ACCT-RAIL-NEFT-D2",
@@ -20568,14 +20778,14 @@
   },
   {
     "id": "GEN-ACCT-RAIL-RTGS-C2",
-    "version": 1,
+    "version": 2,
     "family": "rtgs_credit",
     "senders": [
       "*"
     ],
     "priority": 265,
     "match": {
-      "pattern": "(?:(?:your|the)\\s+)?(?:[a-z][a-z .&'-]{0,30}?\\s)?\\b(?:a/?c(?:ct)?\\.?|account|acc\\.?)(?:\\s*(?:no|number|num)\\.?)?(?:\\s+(?:ending|ends)(?:\\s+(?:with|in))?)?\\s*[:\\-]?\\s*[x*•.]*\\s?(?<mask>\\d{2,18})\\s+(?:has\\s+been\\s+|is\\s+|was\\s+)?(?:credited|received)\\s+(?:with|by|for|of)?\\s*(?:\\b(?:rs\\.?|inr)|₹)\\s*:?\\s*(?<amt>\\d[\\d,]*(?:\\.\\d{1,2})?)(?=[\\s\\S]*?\\b(?:on|dated|date)\\s+(?<date>\\d{4}-\\d{2}-\\d{2}(?:[: ]\\d{2}:\\d{2}(?::\\d{2})?)?|\\d{1,2}[-/]\\d{1,2}[-/]\\d{2,4}(?:,?\\s*\\d{2}:\\d{2}(?::\\d{2})?)?|\\d{1,2}[-/ ]?[a-z]{3}[-/ ,]*\\d{2,4}(?:,?\\s*\\d{2}:\\d{2}(?::\\d{2})?)?)|)(?=[\\s\\S]*?\\b(?:utr|ref(?:erence)?)\\s*(?:no\\.?|number)?\\s*[:.\\-]?\\s*(?<ref_rtgsUtr>(?=[a-z]*\\d)[a-z0-9]{8,24})|)",
+      "pattern": "(?:(?:your|the)\\s+)?(?:[a-z][a-z .&'-]{0,30}?\\s)?\\b(?:a/?c(?:ct)?\\.?|account|acc\\.?)(?:\\s*(?:no|number|num)\\.?)?(?:\\s+(?:ending|ends)(?:\\s+(?:with|in))?)?\\s*[:\\-]?\\s*[x*•.]*\\s?(?<mask>\\d{2,18})\\s+(?:has\\s+been\\s+|is\\s+|was\\s+)?(?:credited|received)\\s+(?:with|by|for|of)?\\s*(?:\\b(?:rs\\.?|inr)|₹)\\s*:?\\s*(?<amt>\\d[\\d,]*(?:\\.\\d{1,2})?)(?=[\\s\\S]*?(?:\\b(?:imps|neft|rtgs)\\b[\\s/:\\-]*(?:(?:p2a|p2p|p2m|cr)\\b[\\s/:\\-]*)?(?:[a-z0-9]{0,24}\\d[a-z0-9]{0,24}[\\s/:\\-]{1,3}){1,3}|\\bby\\s+(?!a/?c\\b|upi\\b|imps\\b|neft\\b|rtgs\\b|rs\\b|inr\\b|mobile\\b|cash\\b|cheque\\b|chq\\b|clearing\\b|transfer\\b|vpa\\b|your\\b|the\\b|self\\b))(?<payer>[a-z][a-z0-9 .&']{2,45}?)(?=\\s*[/,;(\\-]|\\s*\\.(?:\\s|$)|\\s*$|\\s+(?:ref|utr|info|avl|avail|bal|on|dated|if|call|txn|upi|not|via|using)\\b)|)(?=[\\s\\S]*?\\b(?:on|dated|date)\\s+(?<date>\\d{4}-\\d{2}-\\d{2}(?:[: ]\\d{2}:\\d{2}(?::\\d{2})?)?|\\d{1,2}[-/]\\d{1,2}[-/]\\d{2,4}(?:,?\\s*\\d{2}:\\d{2}(?::\\d{2})?)?|\\d{1,2}[-/ ]?[a-z]{3}[-/ ,]*\\d{2,4}(?:,?\\s*\\d{2}:\\d{2}(?::\\d{2})?)?)|)(?=[\\s\\S]*?\\b(?:utr|ref(?:erence)?)\\s*(?:no\\.?|number)?\\s*[:.\\-]?\\s*(?<ref_rtgsUtr>(?=[a-z]*\\d)[a-z0-9]{8,24})|)",
       "flags": "i",
       "requireAll": [
         "rtgs"
@@ -20673,6 +20883,12 @@
         "instrument": {
           "kind": "bank_account",
           "maskFrom": "mask"
+        },
+        "counterparty": {
+          "nameFrom": "payer",
+          "transforms": [
+            "sanitizeNarration"
+          ]
         }
       }
     ],
@@ -20693,7 +20909,7 @@
     ],
     "status": "active",
     "createdBy": "baseline",
-    "updatedAt": "2026-11-20T00:00:00Z"
+    "updatedAt": "2026-11-05T00:00:00Z"
   },
   {
     "id": "GEN-ACCT-RAIL-RTGS-D2",
@@ -24442,14 +24658,14 @@
   },
   {
     "id": "GEN-ACCT-RECEIVED-UPI-B",
-    "version": 2,
+    "version": 3,
     "family": "upi_credit",
     "senders": [
       "*"
     ],
     "priority": 259,
     "match": {
-      "pattern": "^(?![\\s\\S]*\\b(?:umrn|ipo|asba|folio|groww)\\b)[\\s\\S]*?(?:\\breceived\\s+(?:\\b(?:rs\\.?|inr)|₹)\\s*:?\\s*(?<amt>\\d[\\d,]*(?:\\.\\d{1,2})?)\\s+(?:in|into|to|on)\\s+your\\s+(?:(?:your|the)\\s+)?(?:[a-z][a-z .&'-]{0,30}?\\s)?\\b(?:a/?c(?:ct)?\\.?|account|acc\\.?)(?:\\s*(?:no|number|num)\\.?)?(?:\\s+(?:ending|ends)(?:\\s+(?:with|in))?)?\\s*[:\\-]?\\s*[x*•.]*\\s?(?<mask>\\d{2,18})(?=[\\s\\S]*?\\b(?:on|dated|date)\\s+(?<date>\\d{4}-\\d{2}-\\d{2}(?:[: ]\\d{2}:\\d{2}(?::\\d{2})?)?|\\d{1,2}[-/]\\d{1,2}[-/]\\d{2,4}(?:,?\\s*\\d{2}:\\d{2}(?::\\d{2})?)?|\\d{1,2}[-/ ]?[a-z]{3}[-/ ,]*\\d{2,4}(?:,?\\s*\\d{2}:\\d{2}(?::\\d{2})?)?)|)[^\\n]{0,80}?\\bupi\\b(?=[\\s\\S]*?(?:upi(?:\\s*ref(?:erence)?)?|ref(?:erence)?|rrn)\\s*(?:no\\.?|number|id)?\\s*[:.\\-/]?\\s*(?<ref_upiRef>\\d{9,18})|)[\\s\\S]*?\\b(?:avl|avail(?:able)?|total\\s+avail(?:able)?|clear|current|new|closing|updated|remaining)?\\.?\\s*bal(?:ance)?\\.?\\s*(?:is|of)?\\s*[:\\-]?\\s*(?:\\b(?:rs\\.?|inr)|₹)\\s*:?\\s*(?<bal>\\d[\\d,]*(?:\\.\\d{1,2})?))",
+      "pattern": "^(?![\\s\\S]*\\b(?:umrn|ipo|asba|folio|groww)\\b)[\\s\\S]*?(?:\\breceived\\s+(?:\\b(?:rs\\.?|inr)|₹)\\s*:?\\s*(?<amt>\\d[\\d,]*(?:\\.\\d{1,2})?)(?=[\\s\\S]*?\\bfrom\\s+(?!a/?c\\b|vpa\\b|upi\\b|your\\b|the\\b|bank\\b)(?<payer>[a-z][a-z0-9 .&']{2,45}?)(?=\\s*[(,;/]|\\s*\\.(?:\\s|$)|\\s*$|\\s+(?:ref|utr|upi|on|via|using|vpa|avl|bal)\\b)|)\\s+(?:in|into|to|on)\\s+your\\s+(?:(?:your|the)\\s+)?(?:[a-z][a-z .&'-]{0,30}?\\s)?\\b(?:a/?c(?:ct)?\\.?|account|acc\\.?)(?:\\s*(?:no|number|num)\\.?)?(?:\\s+(?:ending|ends)(?:\\s+(?:with|in))?)?\\s*[:\\-]?\\s*[x*•.]*\\s?(?<mask>\\d{2,18})(?=[\\s\\S]*?\\b(?:on|dated|date)\\s+(?<date>\\d{4}-\\d{2}-\\d{2}(?:[: ]\\d{2}:\\d{2}(?::\\d{2})?)?|\\d{1,2}[-/]\\d{1,2}[-/]\\d{2,4}(?:,?\\s*\\d{2}:\\d{2}(?::\\d{2})?)?|\\d{1,2}[-/ ]?[a-z]{3}[-/ ,]*\\d{2,4}(?:,?\\s*\\d{2}:\\d{2}(?::\\d{2})?)?)|)[^\\n]{0,80}?\\bupi\\b(?=[\\s\\S]*?(?:upi(?:\\s*ref(?:erence)?)?|ref(?:erence)?|rrn)\\s*(?:no\\.?|number|id)?\\s*[:.\\-/]?\\s*(?<ref_upiRef>\\d{9,18})|)[\\s\\S]*?\\b(?:avl|avail(?:able)?|total\\s+avail(?:able)?|clear|current|new|closing|updated|remaining)?\\.?\\s*bal(?:ance)?\\.?\\s*(?:is|of)?\\s*[:\\-]?\\s*(?:\\b(?:rs\\.?|inr)|₹)\\s*:?\\s*(?<bal>\\d[\\d,]*(?:\\.\\d{1,2})?))",
       "flags": "i",
       "rejectAny": [
         "mandate",
@@ -24566,6 +24782,13 @@
         "instrument": {
           "kind": "bank_account",
           "maskFrom": "mask"
+        },
+        "counterparty": {
+          "kind": "person",
+          "nameFrom": "payer",
+          "transforms": [
+            "sanitizeNarration"
+          ]
         }
       },
       {
@@ -24606,7 +24829,7 @@
     ],
     "status": "active",
     "createdBy": "baseline",
-    "updatedAt": "2026-11-20T00:00:00Z"
+    "updatedAt": "2026-11-05T00:00:00Z"
   },
   {
     "id": "GEN-ACCT-UPI-REFNAME-D1",
@@ -25931,14 +26154,14 @@
   },
   {
     "id": "GEN-ACCT-UPI-PLAIN-C1-B",
-    "version": 2,
+    "version": 3,
     "family": "upi_credit",
     "senders": [
       "*"
     ],
     "priority": 257,
     "match": {
-      "pattern": "^(?![\\s\\S]*\\b(?:umrn|ipo|asba|folio|groww)\\b)[\\s\\S]*?(?:(?:\\b(?:rs\\.?|inr)|₹)\\s*:?\\s*(?<amt>\\d[\\d,]*(?:\\.\\d{1,2})?)\\s+(?:has\\s+been\\s+|is\\s+|was\\s+)?(?:credited|deposited|received)\\s+(?:to|in|into|on)\\s+(?:(?:your|the)\\s+)?(?:[a-z][a-z .&'-]{0,30}?\\s)?\\b(?:a/?c(?:ct)?\\.?|account|acc\\.?)(?:\\s*(?:no|number|num)\\.?)?(?:\\s+(?:ending|ends)(?:\\s+(?:with|in))?)?\\s*[:\\-]?\\s*[x*•.]*\\s?(?<mask>\\d{2,18})(?=[\\s\\S]*?\\b(?:on|dated|date)\\s+(?<date>\\d{4}-\\d{2}-\\d{2}(?:[: ]\\d{2}:\\d{2}(?::\\d{2})?)?|\\d{1,2}[-/]\\d{1,2}[-/]\\d{2,4}(?:,?\\s*\\d{2}:\\d{2}(?::\\d{2})?)?|\\d{1,2}[-/ ]?[a-z]{3}[-/ ,]*\\d{2,4}(?:,?\\s*\\d{2}:\\d{2}(?::\\d{2})?)?)|)[^\\n]{0,100}?\\bupi\\b(?=[\\s\\S]*?(?:upi(?:\\s*ref(?:erence)?)?|ref(?:erence)?|rrn)\\s*(?:no\\.?|number|id)?\\s*[:.\\-/]?\\s*(?<ref_upiRef>\\d{9,18})|)[\\s\\S]*?\\b(?:avl|avail(?:able)?|total\\s+avail(?:able)?|clear|current|new|closing|updated|remaining)?\\.?\\s*bal(?:ance)?\\.?\\s*(?:is|of)?\\s*[:\\-]?\\s*(?:\\b(?:rs\\.?|inr)|₹)\\s*:?\\s*(?<bal>\\d[\\d,]*(?:\\.\\d{1,2})?))",
+      "pattern": "^(?![\\s\\S]*\\b(?:umrn|ipo|asba|folio|groww)\\b)[\\s\\S]*?(?:(?:\\b(?:rs\\.?|inr)|₹)\\s*:?\\s*(?<amt>\\d[\\d,]*(?:\\.\\d{1,2})?)(?=[\\s\\S]*?\\bfrom\\s+(?!a/?c\\b|vpa\\b|upi\\b|your\\b|the\\b|bank\\b)(?<payer>[a-z][a-z0-9 .&']{2,45}?)(?=\\s*[(,;/]|\\s*\\.(?:\\s|$)|\\s*$|\\s+(?:ref|utr|upi|on|via|using|vpa|avl|bal)\\b)|)\\s+(?:has\\s+been\\s+|is\\s+|was\\s+)?(?:credited|deposited|received)\\s+(?:to|in|into|on)\\s+(?:(?:your|the)\\s+)?(?:[a-z][a-z .&'-]{0,30}?\\s)?\\b(?:a/?c(?:ct)?\\.?|account|acc\\.?)(?:\\s*(?:no|number|num)\\.?)?(?:\\s+(?:ending|ends)(?:\\s+(?:with|in))?)?\\s*[:\\-]?\\s*[x*•.]*\\s?(?<mask>\\d{2,18})(?=[\\s\\S]*?\\b(?:on|dated|date)\\s+(?<date>\\d{4}-\\d{2}-\\d{2}(?:[: ]\\d{2}:\\d{2}(?::\\d{2})?)?|\\d{1,2}[-/]\\d{1,2}[-/]\\d{2,4}(?:,?\\s*\\d{2}:\\d{2}(?::\\d{2})?)?|\\d{1,2}[-/ ]?[a-z]{3}[-/ ,]*\\d{2,4}(?:,?\\s*\\d{2}:\\d{2}(?::\\d{2})?)?)|)[^\\n]{0,100}?\\bupi\\b(?=[\\s\\S]*?(?:upi(?:\\s*ref(?:erence)?)?|ref(?:erence)?|rrn)\\s*(?:no\\.?|number|id)?\\s*[:.\\-/]?\\s*(?<ref_upiRef>\\d{9,18})|)[\\s\\S]*?\\b(?:avl|avail(?:able)?|total\\s+avail(?:able)?|clear|current|new|closing|updated|remaining)?\\.?\\s*bal(?:ance)?\\.?\\s*(?:is|of)?\\s*[:\\-]?\\s*(?:\\b(?:rs\\.?|inr)|₹)\\s*:?\\s*(?<bal>\\d[\\d,]*(?:\\.\\d{1,2})?))",
       "flags": "i",
       "rejectAny": [
         "mandate",
@@ -26055,6 +26278,13 @@
         "instrument": {
           "kind": "bank_account",
           "maskFrom": "mask"
+        },
+        "counterparty": {
+          "kind": "person",
+          "nameFrom": "payer",
+          "transforms": [
+            "sanitizeNarration"
+          ]
         }
       },
       {
@@ -26095,7 +26325,7 @@
     ],
     "status": "active",
     "createdBy": "baseline",
-    "updatedAt": "2026-11-20T00:00:00Z"
+    "updatedAt": "2026-11-05T00:00:00Z"
   },
   {
     "id": "GEN-ACCT-UPI-PLAIN-D1-B",
@@ -26994,14 +27224,14 @@
   },
   {
     "id": "GEN-ACCT-UPI-PLAIN-C2-B",
-    "version": 2,
+    "version": 3,
     "family": "upi_credit",
     "senders": [
       "*"
     ],
     "priority": 256,
     "match": {
-      "pattern": "^(?![\\s\\S]*\\b(?:umrn|ipo|asba|folio|groww)\\b)[\\s\\S]*?(?:(?:(?:your|the)\\s+)?(?:[a-z][a-z .&'-]{0,30}?\\s)?\\b(?:a/?c(?:ct)?\\.?|account|acc\\.?)(?:\\s*(?:no|number|num)\\.?)?(?:\\s+(?:ending|ends)(?:\\s+(?:with|in))?)?\\s*[:\\-]?\\s*[x*•.]*\\s?(?<mask>\\d{2,18})\\s+(?:has\\s+been\\s+|is\\s+|was\\s+)?(?:credited|received)\\s+(?:with|by|for|of)?\\s*(?:\\b(?:rs\\.?|inr)|₹)\\s*:?\\s*(?<amt>\\d[\\d,]*(?:\\.\\d{1,2})?)(?=[\\s\\S]*?\\b(?:on|dated|date)\\s+(?<date>\\d{4}-\\d{2}-\\d{2}(?:[: ]\\d{2}:\\d{2}(?::\\d{2})?)?|\\d{1,2}[-/]\\d{1,2}[-/]\\d{2,4}(?:,?\\s*\\d{2}:\\d{2}(?::\\d{2})?)?|\\d{1,2}[-/ ]?[a-z]{3}[-/ ,]*\\d{2,4}(?:,?\\s*\\d{2}:\\d{2}(?::\\d{2})?)?)|)[^\\n]{0,100}?\\bupi\\b(?=[\\s\\S]*?(?:upi(?:\\s*ref(?:erence)?)?|ref(?:erence)?|rrn)\\s*(?:no\\.?|number|id)?\\s*[:.\\-/]?\\s*(?<ref_upiRef>\\d{9,18})|)[\\s\\S]*?\\b(?:avl|avail(?:able)?|total\\s+avail(?:able)?|clear|current|new|closing|updated|remaining)?\\.?\\s*bal(?:ance)?\\.?\\s*(?:is|of)?\\s*[:\\-]?\\s*(?:\\b(?:rs\\.?|inr)|₹)\\s*:?\\s*(?<bal>\\d[\\d,]*(?:\\.\\d{1,2})?))",
+      "pattern": "^(?![\\s\\S]*\\b(?:umrn|ipo|asba|folio|groww)\\b)[\\s\\S]*?(?:(?:(?:your|the)\\s+)?(?:[a-z][a-z .&'-]{0,30}?\\s)?\\b(?:a/?c(?:ct)?\\.?|account|acc\\.?)(?:\\s*(?:no|number|num)\\.?)?(?:\\s+(?:ending|ends)(?:\\s+(?:with|in))?)?\\s*[:\\-]?\\s*[x*•.]*\\s?(?<mask>\\d{2,18})\\s+(?:has\\s+been\\s+|is\\s+|was\\s+)?(?:credited|received)\\s+(?:with|by|for|of)?\\s*(?:\\b(?:rs\\.?|inr)|₹)\\s*:?\\s*(?<amt>\\d[\\d,]*(?:\\.\\d{1,2})?)(?=[\\s\\S]*?\\bfrom\\s+(?!a/?c\\b|vpa\\b|upi\\b|your\\b|the\\b|bank\\b)(?<payer>[a-z][a-z0-9 .&']{2,45}?)(?=\\s*[(,;/]|\\s*\\.(?:\\s|$)|\\s*$|\\s+(?:ref|utr|upi|on|via|using|vpa|avl|bal)\\b)|)(?=[\\s\\S]*?\\b(?:on|dated|date)\\s+(?<date>\\d{4}-\\d{2}-\\d{2}(?:[: ]\\d{2}:\\d{2}(?::\\d{2})?)?|\\d{1,2}[-/]\\d{1,2}[-/]\\d{2,4}(?:,?\\s*\\d{2}:\\d{2}(?::\\d{2})?)?|\\d{1,2}[-/ ]?[a-z]{3}[-/ ,]*\\d{2,4}(?:,?\\s*\\d{2}:\\d{2}(?::\\d{2})?)?)|)[^\\n]{0,100}?\\bupi\\b(?=[\\s\\S]*?(?:upi(?:\\s*ref(?:erence)?)?|ref(?:erence)?|rrn)\\s*(?:no\\.?|number|id)?\\s*[:.\\-/]?\\s*(?<ref_upiRef>\\d{9,18})|)[\\s\\S]*?\\b(?:avl|avail(?:able)?|total\\s+avail(?:able)?|clear|current|new|closing|updated|remaining)?\\.?\\s*bal(?:ance)?\\.?\\s*(?:is|of)?\\s*[:\\-]?\\s*(?:\\b(?:rs\\.?|inr)|₹)\\s*:?\\s*(?<bal>\\d[\\d,]*(?:\\.\\d{1,2})?))",
       "flags": "i",
       "rejectAny": [
         "mandate",
@@ -27118,6 +27348,13 @@
         "instrument": {
           "kind": "bank_account",
           "maskFrom": "mask"
+        },
+        "counterparty": {
+          "kind": "person",
+          "nameFrom": "payer",
+          "transforms": [
+            "sanitizeNarration"
+          ]
         }
       },
       {
@@ -27158,7 +27395,7 @@
     ],
     "status": "active",
     "createdBy": "baseline",
-    "updatedAt": "2026-11-20T00:00:00Z"
+    "updatedAt": "2026-11-05T00:00:00Z"
   },
   {
     "id": "GEN-ACCT-UPI-PLAIN-D2-B",
@@ -28181,14 +28418,14 @@
   },
   {
     "id": "GEN-ACCT-RECEIVED-UPI",
-    "version": 2,
+    "version": 3,
     "family": "upi_credit",
     "senders": [
       "*"
     ],
     "priority": 254,
     "match": {
-      "pattern": "^(?![\\s\\S]*\\b(?:umrn|ipo|asba|folio|groww)\\b)[\\s\\S]*?(?:\\breceived\\s+(?:\\b(?:rs\\.?|inr)|₹)\\s*:?\\s*(?<amt>\\d[\\d,]*(?:\\.\\d{1,2})?)\\s+(?:in|into|to|on)\\s+your\\s+(?:(?:your|the)\\s+)?(?:[a-z][a-z .&'-]{0,30}?\\s)?\\b(?:a/?c(?:ct)?\\.?|account|acc\\.?)(?:\\s*(?:no|number|num)\\.?)?(?:\\s+(?:ending|ends)(?:\\s+(?:with|in))?)?\\s*[:\\-]?\\s*[x*•.]*\\s?(?<mask>\\d{2,18})(?=[\\s\\S]*?\\b(?:on|dated|date)\\s+(?<date>\\d{4}-\\d{2}-\\d{2}(?:[: ]\\d{2}:\\d{2}(?::\\d{2})?)?|\\d{1,2}[-/]\\d{1,2}[-/]\\d{2,4}(?:,?\\s*\\d{2}:\\d{2}(?::\\d{2})?)?|\\d{1,2}[-/ ]?[a-z]{3}[-/ ,]*\\d{2,4}(?:,?\\s*\\d{2}:\\d{2}(?::\\d{2})?)?)|)[^\\n]{0,80}?\\bupi\\b(?=[\\s\\S]*?(?:upi(?:\\s*ref(?:erence)?)?|ref(?:erence)?|rrn)\\s*(?:no\\.?|number|id)?\\s*[:.\\-/]?\\s*(?<ref_upiRef>\\d{9,18})|))",
+      "pattern": "^(?![\\s\\S]*\\b(?:umrn|ipo|asba|folio|groww)\\b)[\\s\\S]*?(?:\\breceived\\s+(?:\\b(?:rs\\.?|inr)|₹)\\s*:?\\s*(?<amt>\\d[\\d,]*(?:\\.\\d{1,2})?)(?=[\\s\\S]*?\\bfrom\\s+(?!a/?c\\b|vpa\\b|upi\\b|your\\b|the\\b|bank\\b)(?<payer>[a-z][a-z0-9 .&']{2,45}?)(?=\\s*[(,;/]|\\s*\\.(?:\\s|$)|\\s*$|\\s+(?:ref|utr|upi|on|via|using|vpa|avl|bal)\\b)|)\\s+(?:in|into|to|on)\\s+your\\s+(?:(?:your|the)\\s+)?(?:[a-z][a-z .&'-]{0,30}?\\s)?\\b(?:a/?c(?:ct)?\\.?|account|acc\\.?)(?:\\s*(?:no|number|num)\\.?)?(?:\\s+(?:ending|ends)(?:\\s+(?:with|in))?)?\\s*[:\\-]?\\s*[x*•.]*\\s?(?<mask>\\d{2,18})(?=[\\s\\S]*?\\b(?:on|dated|date)\\s+(?<date>\\d{4}-\\d{2}-\\d{2}(?:[: ]\\d{2}:\\d{2}(?::\\d{2})?)?|\\d{1,2}[-/]\\d{1,2}[-/]\\d{2,4}(?:,?\\s*\\d{2}:\\d{2}(?::\\d{2})?)?|\\d{1,2}[-/ ]?[a-z]{3}[-/ ,]*\\d{2,4}(?:,?\\s*\\d{2}:\\d{2}(?::\\d{2})?)?)|)[^\\n]{0,80}?\\bupi\\b(?=[\\s\\S]*?(?:upi(?:\\s*ref(?:erence)?)?|ref(?:erence)?|rrn)\\s*(?:no\\.?|number|id)?\\s*[:.\\-/]?\\s*(?<ref_upiRef>\\d{9,18})|))",
       "flags": "i",
       "rejectAny": [
         "mandate",
@@ -28305,6 +28542,13 @@
         "instrument": {
           "kind": "bank_account",
           "maskFrom": "mask"
+        },
+        "counterparty": {
+          "kind": "person",
+          "nameFrom": "payer",
+          "transforms": [
+            "sanitizeNarration"
+          ]
         }
       }
     ],
@@ -28325,7 +28569,7 @@
     ],
     "status": "active",
     "createdBy": "baseline",
-    "updatedAt": "2026-11-20T00:00:00Z"
+    "updatedAt": "2026-11-05T00:00:00Z"
   },
   {
     "id": "GEN-CARD-SPENTFIRST-NONE",
@@ -29019,14 +29263,14 @@
   },
   {
     "id": "GEN-ACCT-UPI-PLAIN-C1",
-    "version": 2,
+    "version": 3,
     "family": "upi_credit",
     "senders": [
       "*"
     ],
     "priority": 252,
     "match": {
-      "pattern": "^(?![\\s\\S]*\\b(?:umrn|ipo|asba|folio|groww)\\b)[\\s\\S]*?(?:(?:\\b(?:rs\\.?|inr)|₹)\\s*:?\\s*(?<amt>\\d[\\d,]*(?:\\.\\d{1,2})?)\\s+(?:has\\s+been\\s+|is\\s+|was\\s+)?(?:credited|deposited|received)\\s+(?:to|in|into|on)\\s+(?:(?:your|the)\\s+)?(?:[a-z][a-z .&'-]{0,30}?\\s)?\\b(?:a/?c(?:ct)?\\.?|account|acc\\.?)(?:\\s*(?:no|number|num)\\.?)?(?:\\s+(?:ending|ends)(?:\\s+(?:with|in))?)?\\s*[:\\-]?\\s*[x*•.]*\\s?(?<mask>\\d{2,18})(?=[\\s\\S]*?\\b(?:on|dated|date)\\s+(?<date>\\d{4}-\\d{2}-\\d{2}(?:[: ]\\d{2}:\\d{2}(?::\\d{2})?)?|\\d{1,2}[-/]\\d{1,2}[-/]\\d{2,4}(?:,?\\s*\\d{2}:\\d{2}(?::\\d{2})?)?|\\d{1,2}[-/ ]?[a-z]{3}[-/ ,]*\\d{2,4}(?:,?\\s*\\d{2}:\\d{2}(?::\\d{2})?)?)|)[^\\n]{0,100}?\\bupi\\b(?=[\\s\\S]*?(?:upi(?:\\s*ref(?:erence)?)?|ref(?:erence)?|rrn)\\s*(?:no\\.?|number|id)?\\s*[:.\\-/]?\\s*(?<ref_upiRef>\\d{9,18})|))",
+      "pattern": "^(?![\\s\\S]*\\b(?:umrn|ipo|asba|folio|groww)\\b)[\\s\\S]*?(?:(?:\\b(?:rs\\.?|inr)|₹)\\s*:?\\s*(?<amt>\\d[\\d,]*(?:\\.\\d{1,2})?)(?=[\\s\\S]*?\\bfrom\\s+(?!a/?c\\b|vpa\\b|upi\\b|your\\b|the\\b|bank\\b)(?<payer>[a-z][a-z0-9 .&']{2,45}?)(?=\\s*[(,;/]|\\s*\\.(?:\\s|$)|\\s*$|\\s+(?:ref|utr|upi|on|via|using|vpa|avl|bal)\\b)|)\\s+(?:has\\s+been\\s+|is\\s+|was\\s+)?(?:credited|deposited|received)\\s+(?:to|in|into|on)\\s+(?:(?:your|the)\\s+)?(?:[a-z][a-z .&'-]{0,30}?\\s)?\\b(?:a/?c(?:ct)?\\.?|account|acc\\.?)(?:\\s*(?:no|number|num)\\.?)?(?:\\s+(?:ending|ends)(?:\\s+(?:with|in))?)?\\s*[:\\-]?\\s*[x*•.]*\\s?(?<mask>\\d{2,18})(?=[\\s\\S]*?\\b(?:on|dated|date)\\s+(?<date>\\d{4}-\\d{2}-\\d{2}(?:[: ]\\d{2}:\\d{2}(?::\\d{2})?)?|\\d{1,2}[-/]\\d{1,2}[-/]\\d{2,4}(?:,?\\s*\\d{2}:\\d{2}(?::\\d{2})?)?|\\d{1,2}[-/ ]?[a-z]{3}[-/ ,]*\\d{2,4}(?:,?\\s*\\d{2}:\\d{2}(?::\\d{2})?)?)|)[^\\n]{0,100}?\\bupi\\b(?=[\\s\\S]*?(?:upi(?:\\s*ref(?:erence)?)?|ref(?:erence)?|rrn)\\s*(?:no\\.?|number|id)?\\s*[:.\\-/]?\\s*(?<ref_upiRef>\\d{9,18})|))",
       "flags": "i",
       "rejectAny": [
         "mandate",
@@ -29143,6 +29387,13 @@
         "instrument": {
           "kind": "bank_account",
           "maskFrom": "mask"
+        },
+        "counterparty": {
+          "kind": "person",
+          "nameFrom": "payer",
+          "transforms": [
+            "sanitizeNarration"
+          ]
         }
       }
     ],
@@ -29159,11 +29410,18 @@
         "sender": "VM-UCOBNK-S",
         "body": "Rs.499.00 could not be credited to A/c XX1234 on 22-10-26 via UPI Ref 432112345678",
         "expectFactTypes": []
+      },
+      {
+        "sender": "VM-UCOBNK-S",
+        "body": "Rs.2,500.00 credited to A/c XX1234 on 12-10-26 by UPI Ref 432100000002 from RAVI KUMAR (ravi@okhdfc)",
+        "expectFactTypes": [
+          "movement"
+        ]
       }
     ],
     "status": "active",
     "createdBy": "baseline",
-    "updatedAt": "2026-11-20T00:00:00Z"
+    "updatedAt": "2026-11-05T00:00:00Z"
   },
   {
     "id": "GEN-ACCT-UPI-PLAIN-D1",
@@ -29597,14 +29855,14 @@
   },
   {
     "id": "GEN-ACCT-UPI-PLAIN-C2",
-    "version": 2,
+    "version": 3,
     "family": "upi_credit",
     "senders": [
       "*"
     ],
     "priority": 251,
     "match": {
-      "pattern": "^(?![\\s\\S]*\\b(?:umrn|ipo|asba|folio|groww)\\b)[\\s\\S]*?(?:(?:(?:your|the)\\s+)?(?:[a-z][a-z .&'-]{0,30}?\\s)?\\b(?:a/?c(?:ct)?\\.?|account|acc\\.?)(?:\\s*(?:no|number|num)\\.?)?(?:\\s+(?:ending|ends)(?:\\s+(?:with|in))?)?\\s*[:\\-]?\\s*[x*•.]*\\s?(?<mask>\\d{2,18})\\s+(?:has\\s+been\\s+|is\\s+|was\\s+)?(?:credited|received)\\s+(?:with|by|for|of)?\\s*(?:\\b(?:rs\\.?|inr)|₹)\\s*:?\\s*(?<amt>\\d[\\d,]*(?:\\.\\d{1,2})?)(?=[\\s\\S]*?\\b(?:on|dated|date)\\s+(?<date>\\d{4}-\\d{2}-\\d{2}(?:[: ]\\d{2}:\\d{2}(?::\\d{2})?)?|\\d{1,2}[-/]\\d{1,2}[-/]\\d{2,4}(?:,?\\s*\\d{2}:\\d{2}(?::\\d{2})?)?|\\d{1,2}[-/ ]?[a-z]{3}[-/ ,]*\\d{2,4}(?:,?\\s*\\d{2}:\\d{2}(?::\\d{2})?)?)|)[^\\n]{0,100}?\\bupi\\b(?=[\\s\\S]*?(?:upi(?:\\s*ref(?:erence)?)?|ref(?:erence)?|rrn)\\s*(?:no\\.?|number|id)?\\s*[:.\\-/]?\\s*(?<ref_upiRef>\\d{9,18})|))",
+      "pattern": "^(?![\\s\\S]*\\b(?:umrn|ipo|asba|folio|groww)\\b)[\\s\\S]*?(?:(?:(?:your|the)\\s+)?(?:[a-z][a-z .&'-]{0,30}?\\s)?\\b(?:a/?c(?:ct)?\\.?|account|acc\\.?)(?:\\s*(?:no|number|num)\\.?)?(?:\\s+(?:ending|ends)(?:\\s+(?:with|in))?)?\\s*[:\\-]?\\s*[x*•.]*\\s?(?<mask>\\d{2,18})\\s+(?:has\\s+been\\s+|is\\s+|was\\s+)?(?:credited|received)\\s+(?:with|by|for|of)?\\s*(?:\\b(?:rs\\.?|inr)|₹)\\s*:?\\s*(?<amt>\\d[\\d,]*(?:\\.\\d{1,2})?)(?=[\\s\\S]*?\\bfrom\\s+(?!a/?c\\b|vpa\\b|upi\\b|your\\b|the\\b|bank\\b)(?<payer>[a-z][a-z0-9 .&']{2,45}?)(?=\\s*[(,;/]|\\s*\\.(?:\\s|$)|\\s*$|\\s+(?:ref|utr|upi|on|via|using|vpa|avl|bal)\\b)|)(?=[\\s\\S]*?\\b(?:on|dated|date)\\s+(?<date>\\d{4}-\\d{2}-\\d{2}(?:[: ]\\d{2}:\\d{2}(?::\\d{2})?)?|\\d{1,2}[-/]\\d{1,2}[-/]\\d{2,4}(?:,?\\s*\\d{2}:\\d{2}(?::\\d{2})?)?|\\d{1,2}[-/ ]?[a-z]{3}[-/ ,]*\\d{2,4}(?:,?\\s*\\d{2}:\\d{2}(?::\\d{2})?)?)|)[^\\n]{0,100}?\\bupi\\b(?=[\\s\\S]*?(?:upi(?:\\s*ref(?:erence)?)?|ref(?:erence)?|rrn)\\s*(?:no\\.?|number|id)?\\s*[:.\\-/]?\\s*(?<ref_upiRef>\\d{9,18})|))",
       "flags": "i",
       "rejectAny": [
         "mandate",
@@ -29721,6 +29979,13 @@
         "instrument": {
           "kind": "bank_account",
           "maskFrom": "mask"
+        },
+        "counterparty": {
+          "kind": "person",
+          "nameFrom": "payer",
+          "transforms": [
+            "sanitizeNarration"
+          ]
         }
       }
     ],
@@ -29741,7 +30006,7 @@
     ],
     "status": "active",
     "createdBy": "baseline",
-    "updatedAt": "2026-11-20T00:00:00Z"
+    "updatedAt": "2026-11-05T00:00:00Z"
   },
   {
     "id": "GEN-ACCT-UPI-PLAIN-D2",
@@ -35312,15 +35577,22 @@
   },
   {
     "id": "GEN-REFUND-NOMASK",
-    "version": 1,
+    "version": 3,
     "family": "refund",
     "senders": [
       "*"
     ],
     "priority": 120,
     "match": {
-      "pattern": "\\brefund\\s+of\\s+(?:\\b(?:rs\\.?|inr)|₹)\\s*:?\\s*(?<amt>\\d[\\d,]*(?:\\.\\d{1,2})?)(?:\\s+(?:from|for|at|against)\\s+(?<merchant>[^\\n]+?)(?=\\s+(?:has\\s+been\\s+|was\\s+|is\\s+)?(?:credited|processed|received|reversed|refunded)\\b))?\\s+(?:has\\s+been\\s+|was\\s+|is\\s+)?(?:credited|processed|received)\\b(?=[\\s\\S]*?\\b(?:on|dated|date)\\s+(?<date>\\d{4}-\\d{2}-\\d{2}(?:[: ]\\d{2}:\\d{2}(?::\\d{2})?)?|\\d{1,2}[-/]\\d{1,2}[-/]\\d{2,4}(?:,?\\s*\\d{2}:\\d{2}(?::\\d{2})?)?|\\d{1,2}[-/ ]?[a-z]{3}[-/ ,]*\\d{2,4}(?:,?\\s*\\d{2}:\\d{2}(?::\\d{2})?)?)|)",
-      "flags": "i"
+      "pattern": "\\brefund\\s+of\\s+(?:\\b(?:rs\\.?|inr)|₹)\\s*:?\\s*(?<amt>\\d[\\d,]*(?:\\.\\d{1,2})?)(?:\\s+(?:from|for|at|against)\\s+(?:your\\s+)?(?<merchant>[^\\n]+?)(?=\\s+(?:has\\s+been\\s+|was\\s+|is\\s+)?(?:credited|processed|received|reversed|refunded)\\b))?\\s+(?:has\\s+been\\s+|was\\s+|is\\s+)?(?:credited|processed|received)\\b(?=[\\s\\S]*?\\b(?:on|dated|date)\\s+(?<date>\\d{4}-\\d{2}-\\d{2}(?:[: ]\\d{2}:\\d{2}(?::\\d{2})?)?|\\d{1,2}[-/]\\d{1,2}[-/]\\d{2,4}(?:,?\\s*\\d{2}:\\d{2}(?::\\d{2})?)?|\\d{1,2}[-/ ]?[a-z]{3}[-/ ,]*\\d{2,4}(?:,?\\s*\\d{2}:\\d{2}(?::\\d{2})?)?)|)",
+      "flags": "i",
+      "rejectAny": [
+        "initiated",
+        "will be credited",
+        "will be refunded",
+        "to be credited",
+        "yet to be"
+      ]
     },
     "emit": [
       {
@@ -35410,6 +35682,13 @@
             "yyyy-MM-dd HH:mm:ss",
             "yyyy-MM-dd HH:mm"
           ]
+        },
+        "counterparty": {
+          "kind": "merchant",
+          "nameFrom": "merchant",
+          "transforms": [
+            "sanitizeNarration"
+          ]
         }
       }
     ],
@@ -35426,11 +35705,23 @@
         "sender": "VM-UCOBNK-S",
         "body": "Refund of INR 799 is pending for your account.",
         "expectFactTypes": []
+      },
+      {
+        "sender": "VM-UCOBNK-S",
+        "body": "Refund of Rs 250 for your order at EXAMPLE STORE has been initiated and will be credited by 01-11-26.",
+        "expectFactTypes": []
+      },
+      {
+        "sender": "VM-UCOBNK-S",
+        "body": "Refund of Rs 250 from EXAMPLE STORE has been credited to your account on 01-11-26.",
+        "expectFactTypes": [
+          "movement"
+        ]
       }
     ],
     "status": "active",
     "createdBy": "baseline",
-    "updatedAt": "2026-11-20T00:00:00Z"
+    "updatedAt": "2026-11-05T00:00:00Z"
   },
   {
     "id": "GEN-CARD-CREDIT-LAST",
@@ -36269,14 +36560,14 @@
   },
   {
     "id": "GEN-ACCT-LAST-D1",
-    "version": 1,
+    "version": 2,
     "family": "acct_debit",
     "senders": [
       "*"
     ],
     "priority": 60,
     "match": {
-      "pattern": "(?:\\b(?:rs\\.?|inr)|₹)\\s*:?\\s*(?<amt>\\d[\\d,]*(?:\\.\\d{1,2})?)\\s+(?:has\\s+been\\s+|is\\s+|was\\s+)?(?:debited|withdrawn|deducted)\\s+(?:from|in)\\s+(?:(?:your|the)\\s+)?(?:[a-z][a-z .&'-]{0,30}?\\s)?\\b(?:a/?c(?:ct)?\\.?|account|acc\\.?)(?:\\s*(?:no|number|num)\\.?)?(?:\\s+(?:ending|ends)(?:\\s+(?:with|in))?)?\\s*[:\\-]?\\s*[x*•.]*\\s?(?<mask>\\d{2,18})(?=[\\s\\S]*?\\b(?:on|dated|date)\\s+(?<date>\\d{4}-\\d{2}-\\d{2}(?:[: ]\\d{2}:\\d{2}(?::\\d{2})?)?|\\d{1,2}[-/]\\d{1,2}[-/]\\d{2,4}(?:,?\\s*\\d{2}:\\d{2}(?::\\d{2})?)?|\\d{1,2}[-/ ]?[a-z]{3}[-/ ,]*\\d{2,4}(?:,?\\s*\\d{2}:\\d{2}(?::\\d{2})?)?)|)",
+      "pattern": "(?:\\b(?:rs\\.?|inr)|₹)\\s*:?\\s*(?<amt>\\d[\\d,]*(?:\\.\\d{1,2})?)\\s+(?:has\\s+been\\s+|is\\s+|was\\s+)?(?:debited|withdrawn|deducted)\\s+(?:from|in)\\s+(?:(?:your|the)\\s+)?(?:[a-z][a-z .&'-]{0,30}?\\s)?\\b(?:a/?c(?:ct)?\\.?|account|acc\\.?)(?:\\s*(?:no|number|num)\\.?)?(?:\\s+(?:ending|ends)(?:\\s+(?:with|in))?)?\\s*[:\\-]?\\s*[x*•.]*\\s?(?<mask>\\d{2,18})(?![^\\n]{0,120}?\\b(?:failed|unsuccessful)\\b)(?=[\\s\\S]*?\\b(?:on|dated|date)\\s+(?<date>\\d{4}-\\d{2}-\\d{2}(?:[: ]\\d{2}:\\d{2}(?::\\d{2})?)?|\\d{1,2}[-/]\\d{1,2}[-/]\\d{2,4}(?:,?\\s*\\d{2}:\\d{2}(?::\\d{2})?)?|\\d{1,2}[-/ ]?[a-z]{3}[-/ ,]*\\d{2,4}(?:,?\\s*\\d{2}:\\d{2}(?::\\d{2})?)?)|)",
       "flags": "i"
     },
     "emit": [
@@ -36386,6 +36677,11 @@
       {
         "sender": "VM-UCOBNK-S",
         "body": "Rs.499.00 could not be debited from A/c XX1234 on 22-10-26. If not you, call 18002586161",
+        "expectFactTypes": []
+      },
+      {
+        "sender": "VM-UCOBNK-S",
+        "body": "Rs.499.00 debited from A/c XX1234 on 22-10-26 towards SIP in EXAMPLE FUND failed. Retry.",
         "expectFactTypes": []
       }
     ],

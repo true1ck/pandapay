@@ -65,6 +65,53 @@ void main() {
     },
   );
 
+  test(
+    'limited-use headers fetch a fresh single-use token each time and never cache it',
+    () async {
+      var fetched = 0;
+      final client = DeviceAttestation(
+        deviceId: device,
+        now: () => start,
+        fetchToken: (_) async => token(start.add(const Duration(hours: 1))),
+        fetchLimitedUseToken: () async {
+          fetched++;
+          return '${token(start.add(const Duration(minutes: 5)))}#$fetched';
+        },
+      );
+      final first = await client.limitedUseHeaders();
+      final second = await client.limitedUseHeaders();
+      expect(fetched, 2);
+      expect(first['X-Sms-Device-Id'], device);
+      expect(
+        first['X-Device-Attestation'],
+        isNot(second['X-Device-Attestation']),
+      );
+      // The shared cached token is untouched and still comes from fetchToken.
+      expect(
+        (await client.headers())['X-Device-Attestation'],
+        isNot(contains('#')),
+      );
+    },
+  );
+
+  test(
+    'limited-use headers fall back to the device id when unavailable',
+    () async {
+      final unavailable = DeviceAttestation(
+        deviceId: device,
+        fetchLimitedUseToken: () async => throw StateError('unconfigured'),
+      );
+      expect(await unavailable.limitedUseHeaders(), {
+        'X-Sms-Device-Id': device,
+      });
+      final malformed = DeviceAttestation(
+        deviceId: device,
+        fetchLimitedUseToken: () async => 'not-a-token-' * 1000,
+      );
+      expect(await malformed.limitedUseHeaders(), {'X-Sms-Device-Id': device});
+    },
+  );
+
   test('invalid installation IDs are rejected before a request', () {
     expect(() => DeviceAttestation(deviceId: ''), throwsArgumentError);
   });

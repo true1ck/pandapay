@@ -1,0 +1,460 @@
+[
+  {
+    "id": "SUB-BIL-DUE-ON-01",
+    "version": 1,
+    "family": "bill_due",
+    "senders": [
+      "*"
+    ],
+    "priority": 650,
+    "match": {
+      "pattern": "bill\\s+dated\\s+(?<sdate>\\d{2}[-/ ](?:\\d{2}|(?:jan|feb|mar|apr|may|jun|jul|aug|sep|oct|nov|dec))[-/ ]\\d{2,4}|\\d{2}(?:jan|feb|mar|apr|may|jun|jul|aug|sep|oct|nov|dec)\\d{2,4})\\s+for\\s+(?:your\\s+)?(?<biller>[a-z][a-z0-9&. ]{1,30}?)\\s+connection[\\s\\S]{0,80}?is\\s+due\\s+for\\s+payment\\s+on\\s+(?<due>\\d{2}[-/ ](?:\\d{2}|(?:jan|feb|mar|apr|may|jun|jul|aug|sep|oct|nov|dec))[-/ ]\\d{2,4}|\\d{2}(?:jan|feb|mar|apr|may|jun|jul|aug|sep|oct|nov|dec)\\d{2,4})[\\s\\S]{0,40}?total\\s+amount\\s+payable\\s*:?\\s*(?:rs\\.?|inr|₹)\\s*(?<amt>[\\d,]+(?:\\.\\d{1,2})?)",
+      "flags": "i",
+      "rejectAny": [
+        "was paid",
+        "has been paid"
+      ]
+    },
+    "emit": [
+      {
+        "factType": "bill_due",
+        "attrs": {
+          "dueDate": {
+            "from": "due"
+          },
+          "statementDate": {
+            "from": "sdate"
+          },
+          "billerName": {
+            "from": "biller",
+            "transforms": [
+              "upperTrim"
+            ]
+          }
+        },
+        "amounts": [
+          {
+            "role": "due_total",
+            "from": "amt",
+            "unit": "INR"
+          }
+        ]
+      }
+    ],
+    "confidence": 0.95,
+    "examples": [
+      {
+        "sender": "VM-EXAMPL-S",
+        "body": "Your bill dated 26-06-2026 for ExampleNet connection having number 000000 is due for payment on 02-07-2026 . Total amount payable: Rs. 500.00 . Overdue charges will be applicable in case of delay.",
+        "expectFactTypes": [
+          "bill_due"
+        ]
+      },
+      {
+        "sender": "VM-EXAMPL-S",
+        "body": "Your bill dated 26-06-2026 for ExampleNet connection having number 000000 was paid on 02-07-2026 . Total amount payable: Rs. 0 .",
+        "expectFactTypes": []
+      }
+    ],
+    "status": "active",
+    "createdBy": "baseline",
+    "updatedAt": "2026-11-05T00:00:00Z"
+  },
+  {
+    "id": "SUB-BIL-EBILL-01",
+    "version": 1,
+    "family": "bill_due",
+    "senders": [
+      "*"
+    ],
+    "priority": 650,
+    "match": {
+      "pattern": "ebill\\s+for\\s+your\\s+(?<biller>[a-z][a-z0-9&. ]{1,30}?)\\s+(?:connection|account|number)[\\s\\S]{0,260}?total\\s+amount\\s+payable\\s*:?\\s*(?:rs\\.?|inr|₹)\\s*(?<amt>[\\d,]+(?:\\.\\d{1,2})?)[\\s\\S]{0,40}?payment\\s+due\\s+date\\s*:?\\s*(?<due>\\d{2}[-/ ](?:\\d{2}|(?:jan|feb|mar|apr|may|jun|jul|aug|sep|oct|nov|dec))[-/ ]\\d{2,4}|\\d{2}(?:jan|feb|mar|apr|may|jun|jul|aug|sep|oct|nov|dec)\\d{2,4})",
+      "flags": "i",
+      "rejectAny": [
+        "already received"
+      ]
+    },
+    "emit": [
+      {
+        "factType": "bill_due",
+        "attrs": {
+          "dueDate": {
+            "from": "due"
+          },
+          "billerName": {
+            "from": "biller",
+            "transforms": [
+              "upperTrim"
+            ]
+          }
+        },
+        "amounts": [
+          {
+            "role": "due_total",
+            "from": "amt",
+            "unit": "INR"
+          }
+        ]
+      }
+    ],
+    "confidence": 0.95,
+    "examples": [
+      {
+        "sender": "VM-EXAMPL-S",
+        "body": "Dear Customer, The 26 Jun 2026 ebill for your ExampleNet connection with Number 000000 has been sent to the registered email. Bill Summary : Bill period : 26 May 2026 to 25 Jun 2026 Total Amount payable : Rs. 500.00 Payment due date: 02 Jul 2026 To view your bill, click the link.",
+        "expectFactTypes": [
+          "bill_due"
+        ]
+      },
+      {
+        "sender": "VM-EXAMPL-S",
+        "body": "Dear Customer, The 26 Jun 2026 ebill for your ExampleNet connection with Number 000000 has been sent to the registered email. Bill Summary : Total Amount payable : Rs. 500.00 Payment already received.",
+        "expectFactTypes": []
+      }
+    ],
+    "status": "active",
+    "createdBy": "baseline",
+    "updatedAt": "2026-11-05T00:00:00Z"
+  },
+  {
+    "id": "SUB-BIL-INVOICE-GENERATED-01",
+    "version": 1,
+    "family": "bill_due",
+    "senders": [
+      "*"
+    ],
+    "priority": 650,
+    "match": {
+      "pattern": "invoice\\s+for\\s+[a-z]{3,9}\\s*'?\\d{2,4}\\s+is\\s+generated\\.\\s*total\\s+due\\s*:\\s*(?:rs\\.?|inr|₹)\\s*(?<amt>[\\d,]+(?:\\.\\d{1,2})?)[\\s\\S]{0,60}?(?:please\\s+)?pay\\s+by\\s+(?<due>\\d{2}[-/ ](?:\\d{2}|(?:jan|feb|mar|apr|may|jun|jul|aug|sep|oct|nov|dec))[-/ ]\\d{2,4}|\\d{2}(?:jan|feb|mar|apr|may|jun|jul|aug|sep|oct|nov|dec)\\d{2,4})",
+      "flags": "i",
+      "rejectAny": [
+        "already paid",
+        "total due: ₹0 "
+      ]
+    },
+    "emit": [
+      {
+        "factType": "bill_due",
+        "attrs": {
+          "dueDate": {
+            "from": "due"
+          }
+        },
+        "amounts": [
+          {
+            "role": "due_total",
+            "from": "amt",
+            "unit": "INR"
+          }
+        ]
+      }
+    ],
+    "confidence": 0.95,
+    "examples": [
+      {
+        "sender": "VM-EXAMPL-S",
+        "body": "Dear customer, your Example invoice for Jan '26 is generated. Total due: ₹700 (incl. previous dues). Please pay by 10-Feb-2026 to avoid late fees. Ignore if paid.",
+        "expectFactTypes": [
+          "bill_due"
+        ]
+      },
+      {
+        "sender": "VM-EXAMPL-S",
+        "body": "Dear customer, your Example invoice for Jan '26 is generated. Total due: ₹0 (nil). Nothing to pay.",
+        "expectFactTypes": []
+      }
+    ],
+    "status": "active",
+    "createdBy": "baseline",
+    "updatedAt": "2026-11-05T00:00:00Z"
+  },
+  {
+    "id": "SUB-BIL-OVERDUE-01",
+    "version": 1,
+    "family": "bill_overdue",
+    "senders": [
+      "*"
+    ],
+    "priority": 650,
+    "match": {
+      "pattern": "bill\\s+dated\\s+(?<sdate>\\d{2}[-/ ](?:\\d{2}|(?:jan|feb|mar|apr|may|jun|jul|aug|sep|oct|nov|dec))[-/ ]\\d{2,4}|\\d{2}(?:jan|feb|mar|apr|may|jun|jul|aug|sep|oct|nov|dec)\\d{2,4})\\s+for\\s+your\\s+(?<biller>[a-z][a-z0-9&. ]{1,30}?)\\s+(?:connection|account|number)[\\s\\S]{0,100}?is\\s+overdue\\s+since\\s+(?<due>\\d{2}[-/ ](?:\\d{2}|(?:jan|feb|mar|apr|may|jun|jul|aug|sep|oct|nov|dec))[-/ ]\\d{2,4}|\\d{2}(?:jan|feb|mar|apr|may|jun|jul|aug|sep|oct|nov|dec)\\d{2,4})[\\s\\S]{0,60}?total\\s+amount\\s+payable\\s+is\\s+(?:rs\\.?|inr|₹)\\s*(?<amt>[\\d,]+(?:\\.\\d{1,2})?)",
+      "flags": "i",
+      "rejectAny": [
+        "already paid. thank",
+        "payment received"
+      ]
+    },
+    "emit": [
+      {
+        "factType": "bill_due",
+        "attrs": {
+          "dueDate": {
+            "from": "due"
+          },
+          "statementDate": {
+            "from": "sdate"
+          },
+          "billerName": {
+            "from": "biller",
+            "transforms": [
+              "upperTrim"
+            ]
+          }
+        },
+        "amounts": [
+          {
+            "role": "due_total",
+            "from": "amt",
+            "unit": "INR"
+          }
+        ]
+      }
+    ],
+    "confidence": 0.95,
+    "examples": [
+      {
+        "sender": "VM-EXAMPL-S",
+        "body": "Dear Customer, Bill dated 26-Sep-26 for your ExampleNet connection with Number 000000 is overdue since 02-Oct-26. Total amount payable is Rs. 500.00. Please pay immediately to avoid disruption. Please ignore, if already paid.",
+        "expectFactTypes": [
+          "bill_due"
+        ]
+      },
+      {
+        "sender": "VM-EXAMPL-S",
+        "body": "Dear Customer, Bill dated 26-Sep-26 for your ExampleNet connection with Number 000000 is paid. Total amount payable is Rs. 0.",
+        "expectFactTypes": []
+      }
+    ],
+    "status": "active",
+    "createdBy": "baseline",
+    "updatedAt": "2026-11-05T00:00:00Z"
+  },
+  {
+    "id": "SUB-BIL-PENDING-PAY-BY-01",
+    "version": 1,
+    "family": "bill_due",
+    "senders": [
+      "*"
+    ],
+    "priority": 650,
+    "match": {
+      "pattern": "rs\\.?\\s*(?<amt>[\\d,]+(?:\\.\\d{1,2})?)\\s*\\(including\\s+any\\s+pending\\s+dues\\)\\s+for\\s+[a-z]{3,9}\\s*'?\\d{2,4}\\s+is\\s+still\\s+pending\\.\\s*pay\\s+by\\s+(?<due>\\d{2}[-/ ](?:\\d{2}|(?:jan|feb|mar|apr|may|jun|jul|aug|sep|oct|nov|dec))[-/ ]\\d{2,4}|\\d{2}(?:jan|feb|mar|apr|may|jun|jul|aug|sep|oct|nov|dec)\\d{2,4})",
+      "flags": "i",
+      "rejectAny": [
+        "has been paid"
+      ]
+    },
+    "emit": [
+      {
+        "factType": "bill_due",
+        "attrs": {
+          "dueDate": {
+            "from": "due"
+          }
+        },
+        "amounts": [
+          {
+            "role": "due_total",
+            "from": "amt",
+            "unit": "INR"
+          }
+        ]
+      }
+    ],
+    "confidence": 0.95,
+    "examples": [
+      {
+        "sender": "VM-EXAMPL-S",
+        "body": "Dear Customer, Rs. 700 (including any pending dues) for Oct '25 is still pending. Pay by 10-Nov-2025 to avoid a late fee. Pay Now: https://example.invalid/p",
+        "expectFactTypes": [
+          "bill_due"
+        ]
+      },
+      {
+        "sender": "VM-EXAMPL-S",
+        "body": "Dear Customer, Rs. 700 (including any pending dues) for Oct '25 has been paid. Thank you.",
+        "expectFactTypes": []
+      }
+    ],
+    "status": "active",
+    "createdBy": "baseline",
+    "updatedAt": "2026-11-05T00:00:00Z"
+  },
+  {
+    "id": "SUB-BIL-RECEIPT-RECEIVED-01",
+    "version": 1,
+    "family": "bill_receipt",
+    "senders": [
+      "*"
+    ],
+    "priority": 650,
+    "match": {
+      "pattern": "payment\\s+of\\s+(?:rs\\.?|inr|₹)\\s*(?<amt>[\\d,]+(?:\\.\\d{1,2})?)\\s+for\\s+your\\s+(?<biller>[a-z][a-z0-9&. ]{1,30}?)\\s+(?:connection|account|number|bill)[\\s\\S]{0,120}?(?:has|have)\\s+been\\s+received(?:\\s+on\\s+(?<date>\\d{2}[-/ ](?:\\d{2}|(?:jan|feb|mar|apr|may|jun|jul|aug|sep|oct|nov|dec))[-/ ]\\d{2,4}|\\d{2}(?:jan|feb|mar|apr|may|jun|jul|aug|sep|oct|nov|dec)\\d{2,4}))?",
+      "flags": "i",
+      "rejectAny": [
+        "failed",
+        "not been received",
+        "unsuccessful"
+      ]
+    },
+    "emit": [
+      {
+        "factType": "movement",
+        "attrs": {
+          "direction": "debit",
+          "purpose": "bill_payment",
+          "rail": "unknown",
+          "evidenceOnly": true
+        },
+        "amounts": [
+          {
+            "role": "posted",
+            "from": "amt",
+            "unit": "INR"
+          }
+        ],
+        "counterparty": {
+          "kind": "merchant",
+          "nameFrom": "biller",
+          "transforms": [
+            "upperTrim"
+          ]
+        },
+        "occurredAt": {
+          "from": "date",
+          "formats": [
+            "dd-MMM-yy",
+            "dd-MM-yyyy",
+            "dd-MMM-yyyy"
+          ]
+        }
+      }
+    ],
+    "confidence": 0.95,
+    "examples": [
+      {
+        "sender": "VM-EXAMPL-S",
+        "body": "Dear Customer, Payment of Rs. 500.00 for your ExampleNet connection with Number 000000 through UPI Payments has been received on 03-Jul-26. Thank You!",
+        "expectFactTypes": [
+          "movement"
+        ]
+      },
+      {
+        "sender": "VM-EXAMPL-S",
+        "body": "Dear Customer, Payment of Rs. 500.00 for your ExampleNet connection with Number 000000 has failed. Please retry.",
+        "expectFactTypes": []
+      }
+    ],
+    "status": "active",
+    "createdBy": "baseline",
+    "updatedAt": "2026-11-05T00:00:00Z"
+  },
+  {
+    "id": "SUB-RCH-PLAN-SUCCESS-01",
+    "version": 1,
+    "family": "bill_receipt",
+    "senders": [
+      "*"
+    ],
+    "priority": 650,
+    "match": {
+      "pattern": "recharge\\s+successful\\s*!?\\s*plan\\s+name\\s*:\\s*(?<amt>[\\d,]+(?:\\.\\d{1,2})?)\\s+[a-z ]{2,12}number",
+      "flags": "i",
+      "rejectAny": [
+        "failed"
+      ]
+    },
+    "emit": [
+      {
+        "factType": "movement",
+        "attrs": {
+          "direction": "debit",
+          "purpose": "bill_payment",
+          "rail": "unknown",
+          "evidenceOnly": true
+        },
+        "amounts": [
+          {
+            "role": "posted",
+            "from": "amt",
+            "unit": "INR"
+          }
+        ]
+      }
+    ],
+    "confidence": 0.95,
+    "examples": [
+      {
+        "sender": "VM-EXAMPL-S",
+        "body": "Recharge Successful !\nPlan Name : 200.00\nExample Number : 0000000000\nEntitlement : \nBenefits: Unlimited data. Validity - 28 Days\nTransaction ID : EX0000",
+        "expectFactTypes": [
+          "movement"
+        ]
+      },
+      {
+        "sender": "VM-EXAMPL-S",
+        "body": "Recharge Failed !\nPlan Name : 200.00\nExample Number : 0000000000\nPlease retry.",
+        "expectFactTypes": []
+      }
+    ],
+    "status": "active",
+    "createdBy": "baseline",
+    "updatedAt": "2026-11-05T00:00:00Z"
+  },
+  {
+    "id": "SUB-RCH-SUCCESS-01",
+    "version": 1,
+    "family": "bill_receipt",
+    "senders": [
+      "*"
+    ],
+    "priority": 650,
+    "match": {
+      "pattern": "recharge\\s+of\\s+(?:rs\\.?|inr|₹)\\s*(?<amt>[\\d,]+(?:\\.\\d{1,2})?)\\s+is\\s+success(?:ful)?\\b(?:\\s+for\\s+your\\s+(?<biller>[a-z][a-z0-9 ]{1,20}?)\\s+(?:mobile|number|dth|broadband|account))?",
+      "flags": "i",
+      "rejectAny": [
+        "unsuccessful",
+        "not successful",
+        "failed",
+        "pending"
+      ]
+    },
+    "emit": [
+      {
+        "factType": "movement",
+        "attrs": {
+          "direction": "debit",
+          "purpose": "bill_payment",
+          "rail": "unknown",
+          "evidenceOnly": true
+        },
+        "amounts": [
+          {
+            "role": "posted",
+            "from": "amt",
+            "unit": "INR"
+          }
+        ]
+      }
+    ],
+    "confidence": 0.95,
+    "examples": [
+      {
+        "sender": "VM-EXAMPL-S",
+        "body": "Recharge of INR 200.00 is successful for your ExampleTel Mobile on 23-02-2026 10:35, Transaction ID 000000. Check your balance on the app.",
+        "expectFactTypes": [
+          "movement"
+        ]
+      },
+      {
+        "sender": "VM-EXAMPL-S",
+        "body": "Recharge of INR 200.00 is pending for your ExampleTel Mobile. We will update you shortly.",
+        "expectFactTypes": []
+      }
+    ],
+    "status": "active",
+    "createdBy": "baseline",
+    "updatedAt": "2026-11-05T00:00:00Z"
+  }
+]

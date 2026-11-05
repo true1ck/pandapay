@@ -1,0 +1,34 @@
+{
+  "id": "laneq:travel_booking_irctc",
+  "templateHash": "024804213ecdac5c04e1cc5d1738db52c0d56963d8cba1d7eeae01c70c7fe49c",
+  "weight": 1,
+  "source": "synthetic",
+  "messages": [
+    {
+      "sender": "VM-IRCTCI-S",
+      "body": "Booking confirmed. PNR 1234567890 for train 12345 on 05-11-2026. Fare Rs.1,250.00. Wish you a happy journey. IRCTC",
+      "observedAt": "2026-11-20T09:00:00.000Z"
+    }
+  ],
+  "expect": {
+    "facts": [
+      {
+        "factType": "movement",
+        "attrs": {
+          "direction": "debit",
+          "purpose": "purchase",
+          "rail": "unknown",
+          "evidenceOnly": true
+        },
+        "amounts": [
+          {
+            "role": "posted",
+            "minor": 125000
+          }
+        ]
+      }
+    ]
+  },
+  "note": "Travel receipt, evidence only: links to the bank or card debit.",
+  "origin": "lane-q"
+}

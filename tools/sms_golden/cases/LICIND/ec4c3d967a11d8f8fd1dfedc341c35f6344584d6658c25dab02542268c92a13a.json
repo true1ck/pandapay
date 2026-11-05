@@ -1,0 +1,34 @@
+{
+  "id": "laneq:insurance_paid_lic",
+  "templateHash": "ec4c3d967a11d8f8fd1dfedc341c35f6344584d6658c25dab02542268c92a13a",
+  "weight": 1,
+  "source": "synthetic",
+  "messages": [
+    {
+      "sender": "LICIND",
+      "body": "Premium of Rs.12,500.00 received for your policy no 123456789 on 01-11-2026. Thank you for your payment.",
+      "observedAt": "2026-11-20T09:00:00.000Z"
+    }
+  ],
+  "expect": {
+    "facts": [
+      {
+        "factType": "movement",
+        "attrs": {
+          "direction": "debit",
+          "purpose": "bill_payment",
+          "rail": "unknown",
+          "evidenceOnly": true
+        },
+        "amounts": [
+          {
+            "role": "posted",
+            "minor": 1250000
+          }
+        ]
+      }
+    ]
+  },
+  "note": "Insurer receipt, evidence only.",
+  "origin": "lane-q"
+}

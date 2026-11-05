@@ -1,0 +1,39 @@
+{
+  "id": "lanew:payer_dividend_company",
+  "templateHash": "9556749ec09f6ef7b6a953dd4d16a9fbef7f6d73a4a45630eb909482a6ca3c41",
+  "weight": 1,
+  "source": "synthetic",
+  "messages": [
+    {
+      "sender": "VM-HDFCBK-S",
+      "body": "Dividend of Rs.1,200.00 credited to your A/c XX1234 on 15-11-26 from ACME INDUSTRIES LTD. Avl Bal Rs.41,200.00 -HDFC Bank",
+      "observedAt": "2026-11-20T09:00:00.000Z"
+    }
+  ],
+  "expect": {
+    "facts": [
+      {
+        "factType": "movement",
+        "attrs": {
+          "direction": "credit",
+          "purpose": "dividend"
+        },
+        "amounts": [
+          {
+            "role": "posted",
+            "minor": 120000
+          }
+        ],
+        "instrument": {
+          "kind": "bank_account",
+          "maskDigits": "1234"
+        },
+        "counterparty": {
+          "name": "ACME INDUSTRIES"
+        }
+      }
+    ]
+  },
+  "note": "Bank dividend credit that names the company.",
+  "origin": "lane-w"
+}

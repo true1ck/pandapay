@@ -1,0 +1,80 @@
+[
+  {
+    "id": "HDFC-CARD-REFUND-ALERT",
+    "version": 2,
+    "family": "card_refund",
+    "senders": [
+      "HDFCBK",
+      "HDFCBN",
+      "HDFCCB",
+      "HDFCCC"
+    ],
+    "priority": 785,
+    "match": {
+      "pattern": "^alert!\\s*(?:rs\\.?|inr|₹)\\s*(?<amt>\\d[\\d,]*(?:\\.\\d{1,2})?)\\s+refunded\\s+(?:by\\s+)?(?<merchant>[^\\r\\n]{1,120}?)\\s+on\\s+(?<date>\\d{2}/(?:\\d{2}|[a-z]{3})/\\d{2,4})\\s*&\\s*[^.\\r\\n]{0,36}?\\bhdfc bank credit card\\s+(?<mask>\\d{4})\\b",
+      "flags": "i",
+      "rejectAny": [
+        "initiated",
+        "will be",
+        "not refunded",
+        "failed"
+      ]
+    },
+    "emit": [
+      {
+        "factType": "movement",
+        "attrs": {
+          "direction": "credit",
+          "purpose": "refund",
+          "rail": "card"
+        },
+        "amounts": [
+          {
+            "role": "posted",
+            "unit": "INR",
+            "from": "amt"
+          }
+        ],
+        "instrument": {
+          "kind": "credit_card",
+          "issuerSlug": "hdfc",
+          "maskFrom": "mask"
+        },
+        "occurredAt": {
+          "formats": [
+            "dd/MM/yy",
+            "dd/MM/yyyy",
+            "dd/MMM/yyyy",
+            "dd/MMM/yy"
+          ],
+          "from": "date"
+        },
+        "counterparty": {
+          "kind": "merchant",
+          "nameFrom": "merchant",
+          "transforms": [
+            "sanitizeNarration"
+          ]
+        }
+      }
+    ],
+    "confidence": 0.96,
+    "examples": [
+      {
+        "sender": "VM-HDFCBK-S",
+        "body": "Alert! Rs.125.50 refunded by EXAMPLE STORE on 01/Nov/2026 & credited to HDFC Bank Credit Card 9876. Check balance on the app.",
+        "expectFactTypes": [
+          "movement"
+        ]
+      },
+      {
+        "sender": "VM-HDFCBK-S",
+        "body": "Alert! Rs.125.50 refund initiated by EXAMPLE STORE on 01/Nov/2026 & credited to HDFC Bank Credit Card 9876. Check balance on the app.",
+        "expectFactTypes": []
+      }
+    ],
+    "status": "active",
+    "createdBy": "baseline",
+    "updatedAt": "2026-11-05T00:00:00Z"
+  }
+]

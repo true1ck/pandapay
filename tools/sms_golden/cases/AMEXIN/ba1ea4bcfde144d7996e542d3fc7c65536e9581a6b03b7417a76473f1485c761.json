@@ -1,0 +1,40 @@
+{
+  "id": "laneq:statement_amex_new_balance",
+  "templateHash": "ba1ea4bcfde144d7996e542d3fc7c65536e9581a6b03b7417a76473f1485c761",
+  "weight": 1,
+  "source": "synthetic",
+  "messages": [
+    {
+      "sender": "VM-AMEXIN-S",
+      "body": "Your American Express Card ending 11005 statement: New Balance INR 12,345.00, Minimum Payment Due INR 617.00, Payment Due Date 20 Nov 2026.",
+      "observedAt": "2026-11-20T09:00:00.000Z"
+    }
+  ],
+  "expect": {
+    "facts": [
+      {
+        "factType": "bill_due",
+        "attrs": {
+          "dueDate": "2026-11-20"
+        },
+        "amounts": [
+          {
+            "role": "due_total",
+            "minor": 1234500
+          },
+          {
+            "role": "due_minimum",
+            "minor": 61700
+          }
+        ],
+        "instrument": {
+          "kind": "credit_card",
+          "issuerSlug": "amex",
+          "maskDigits": "11005"
+        }
+      }
+    ]
+  },
+  "note": "Five-digit Amex mask, \"New Balance\" as the total.",
+  "origin": "lane-q"
+}

@@ -1,0 +1,40 @@
+{
+  "id": "lanew:payer_imps_narration",
+  "templateHash": "ee99b624b72b3ef8f13191fc39dfb1b587898df9ec2a2ed4d33c95860c3abaa4",
+  "weight": 1,
+  "source": "synthetic",
+  "messages": [
+    {
+      "sender": "VM-HDFCBK-S",
+      "body": "INR 60000.00 credited to A/c no. XX1234 on 01-10-26 through IMPS/P2A/432100000001/GLOBEX LTD/OCT",
+      "observedAt": "2026-11-20T09:00:00.000Z"
+    }
+  ],
+  "expect": {
+    "facts": [
+      {
+        "factType": "movement",
+        "attrs": {
+          "direction": "credit",
+          "purpose": "p2p",
+          "rail": "imps"
+        },
+        "amounts": [
+          {
+            "role": "posted",
+            "minor": 6000000
+          }
+        ],
+        "instrument": {
+          "kind": "bank_account",
+          "maskDigits": "1234"
+        },
+        "counterparty": {
+          "name": "GLOBEX"
+        }
+      }
+    ]
+  },
+  "note": "IMPS credit that prints the payer after the reference.",
+  "origin": "lane-w"
+}

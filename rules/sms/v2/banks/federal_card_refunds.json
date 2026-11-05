@@ -1,0 +1,172 @@
+[
+  {
+    "id": "FED-CARD-CREDIT-RECEIVED",
+    "version": 2,
+    "family": "card_refund",
+    "senders": [
+      "FEDSMS"
+    ],
+    "priority": 770,
+    "match": {
+      "pattern": "^(?:hi!\\s*)?(?:(?:you have|you've) received (?:a )?refund|refund received)\\s+of\\s+(?:rs\\.?|inr|₹)\\s*(?<amt>\\d[\\d,]*(?:\\.\\d{1,2})?)(?![\\d.,])(?:\\s+from\\s+(?<merchant>[^.\\r\\n]{1,65}))?\\s+on\\s+your\\s+(?:[a-z][a-z0-9 -]{0,32}\\s+)?federal(?:\\s+(?:bank|[a-z]{2,15}))?\\s+credit\\s+card\\b",
+      "flags": "i"
+    },
+    "emit": [
+      {
+        "factType": "movement",
+        "attrs": {
+          "direction": "credit",
+          "purpose": "refund",
+          "rail": "card"
+        },
+        "amounts": [
+          {
+            "role": "posted",
+            "unit": "INR",
+            "from": "amt"
+          }
+        ],
+        "instrument": {
+          "kind": "credit_card",
+          "issuerSlug": "federal"
+        },
+        "counterparty": {
+          "kind": "merchant",
+          "nameFrom": "merchant",
+          "transforms": [
+            "sanitizeNarration"
+          ]
+        }
+      }
+    ],
+    "confidence": 0.96,
+    "examples": [
+      {
+        "sender": "VM-FEDSCP-S",
+        "body": "Hi! You have received a refund of Rs.120 from EXAMPLE STORE on your Federal Bank credit card. - Federal Bank",
+        "expectFactTypes": [
+          "movement"
+        ]
+      },
+      {
+        "sender": "VM-FEDSCP-S",
+        "body": "Hi! You will receive a refund of Rs.120 from EXAMPLE STORE on your Federal Bank credit card. - Federal Bank",
+        "expectFactTypes": []
+      }
+    ],
+    "status": "active",
+    "createdBy": "baseline",
+    "updatedAt": "2026-11-05T00:00:00Z"
+  },
+  {
+    "id": "FED-CARD-CREDIT-CARD-FIRST",
+    "version": 2,
+    "family": "card_refund",
+    "senders": [
+      "FEDSMS"
+    ],
+    "priority": 770,
+    "match": {
+      "pattern": "^refund received\\s+of\\s+(?:rs\\.?|inr|₹)\\s*(?<amt>\\d[\\d,]*(?:\\.\\d{1,2})?)(?![\\d.,])\\s+on\\s+your\\s+(?:[a-z][a-z0-9 -]{0,32}\\s+)?federal(?:\\s+(?:bank|[a-z]{2,15}))?\\s+credit\\s+card\\b\\s+from\\s+(?<merchant>[^.\\r\\n]{1,65})",
+      "flags": "i"
+    },
+    "emit": [
+      {
+        "factType": "movement",
+        "attrs": {
+          "direction": "credit",
+          "purpose": "refund",
+          "rail": "card"
+        },
+        "amounts": [
+          {
+            "role": "posted",
+            "unit": "INR",
+            "from": "amt"
+          }
+        ],
+        "instrument": {
+          "kind": "credit_card",
+          "issuerSlug": "federal"
+        },
+        "counterparty": {
+          "kind": "merchant",
+          "nameFrom": "merchant",
+          "transforms": [
+            "sanitizeNarration"
+          ]
+        }
+      }
+    ],
+    "confidence": 0.96,
+    "examples": [
+      {
+        "sender": "VM-FEDSCP-S",
+        "body": "Refund received of INR 1,200.25 on your Federal Bank credit card from EXAMPLE STORE. - Federal Bank",
+        "expectFactTypes": [
+          "movement"
+        ]
+      },
+      {
+        "sender": "VM-FEDSCP-S",
+        "body": "Refund initiated of INR 1,200.25 on your Federal Bank credit card from EXAMPLE STORE. - Federal Bank",
+        "expectFactTypes": []
+      }
+    ],
+    "status": "active",
+    "createdBy": "baseline",
+    "updatedAt": "2026-11-05T00:00:00Z"
+  },
+  {
+    "id": "FED-CARD-CREDIT-REVERSED",
+    "version": 1,
+    "family": "card_refund",
+    "senders": [
+      "FEDSMS"
+    ],
+    "priority": 770,
+    "match": {
+      "pattern": "^(?:hi!\\s*)?your\\s+(?:payment|transaction|txn)\\s+for\\s+(?:rs\\.?|inr|₹)\\s*(?<amt>\\d[\\d,]*(?:\\.\\d{1,2})?)(?![\\d.,])[^.\\r\\n]{0,95}?\\s+on\\s+your\\s+(?:[a-z][a-z0-9 -]{0,32}\\s+)?federal(?:\\s+(?:bank|[a-z]{2,15}))?\\s+credit\\s+card\\b\\s+has been reversed\\b",
+      "flags": "i"
+    },
+    "emit": [
+      {
+        "factType": "movement",
+        "attrs": {
+          "direction": "credit",
+          "purpose": "reversal",
+          "rail": "card"
+        },
+        "amounts": [
+          {
+            "role": "posted",
+            "unit": "INR",
+            "from": "amt"
+          }
+        ],
+        "instrument": {
+          "kind": "credit_card",
+          "issuerSlug": "federal"
+        }
+      }
+    ],
+    "confidence": 0.96,
+    "examples": [
+      {
+        "sender": "VM-FEDSCP-S",
+        "body": "Hi! Your transaction for Rs.120 made at EXAMPLE STORE on your Federal Bank credit card has been reversed. - Federal Bank",
+        "expectFactTypes": [
+          "movement"
+        ]
+      },
+      {
+        "sender": "VM-FEDSCP-S",
+        "body": "Hi! Your transaction for Rs.120 made at EXAMPLE STORE on your Federal Bank credit card will be reversed. - Federal Bank",
+        "expectFactTypes": []
+      }
+    ],
+    "status": "active",
+    "createdBy": "baseline",
+    "updatedAt": "2026-11-04T00:00:00Z"
+  }
+]

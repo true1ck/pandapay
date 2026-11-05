@@ -1,0 +1,40 @@
+{
+  "id": "lanew:payer_refund_card_merchant",
+  "templateHash": "3304b36b0f3e198fda2cedb0a2590d4de727b7788bb60efd86986e1f41628638",
+  "weight": 1,
+  "source": "synthetic",
+  "messages": [
+    {
+      "sender": "VM-HDFCBK-S",
+      "body": "Refund of Rs.499.00 from SWIGGY credited to your HDFC Bank Credit Card XX5678 on 12-10-26",
+      "observedAt": "2026-11-20T09:00:00.000Z"
+    }
+  ],
+  "expect": {
+    "facts": [
+      {
+        "factType": "movement",
+        "attrs": {
+          "direction": "credit",
+          "purpose": "refund",
+          "rail": "card"
+        },
+        "amounts": [
+          {
+            "role": "posted",
+            "minor": 49900
+          }
+        ],
+        "instrument": {
+          "kind": "credit_card",
+          "maskDigits": "5678"
+        },
+        "counterparty": {
+          "name": "SWIGGY"
+        }
+      }
+    ]
+  },
+  "note": "Card refund that names the merchant.",
+  "origin": "lane-w"
+}

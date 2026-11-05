@@ -1,0 +1,197 @@
+[
+  {
+    "id": "IPO-REG-UNBLOCK-INFORMED",
+    "version": 1,
+    "family": "ipo_hold",
+    "senders": [
+      "*"
+    ],
+    "priority": 840,
+    "match": {
+      "pattern": "informed\\s+(?:your\\s+)?(?:bank|bnk\\.?)\\s+to\\s+unbl(?:oc)?k\\s+(?:rs\\.?|inr|₹)\\s*(?<amt>\\d[\\d,]*(?:\\.\\d{1,2})?)\\s+for\\s+(?<issue>[a-z0-9&.' ()-]+?)\\s+ipo\\s+ap{1,2}l\\s*no\\.?\\s*(?<ref_asbaRef>[a-z0-9]+?)(?=\\s|[.,;]|due\\b|$)[\\s\\S]{0,6}?due\\s+to\\s+non[- ]?allot",
+      "flags": "i"
+    },
+    "emit": [
+      {
+        "factType": "hold",
+        "attrs": {
+          "phase": "released",
+          "purpose": "ipo_asba",
+          "issueName": {
+            "from": "issue",
+            "transforms": [
+              "upperTrim"
+            ]
+          }
+        },
+        "amounts": [
+          {
+            "role": "released",
+            "from": "amt",
+            "unit": "INR"
+          }
+        ]
+      }
+    ],
+    "confidence": 0.95,
+    "examples": [
+      {
+        "sender": "VM-KFINCR-S",
+        "body": "Informed your Bank to unblock Rs. 15000.00 for SAMPLEWORK IPO appl no. UPSAMPLE00012345 due to non-allotment - KFintech",
+        "expectFactTypes": [
+          "hold"
+        ]
+      },
+      {
+        "sender": "VM-MUFGIN-S",
+        "body": "Informed your Bnk. to unblk Rs. 15000.00 for SAMPLEWORK IPO applno UPSAMPLE00012345 due to non-allotment. Pls contact your bank if req. MUFGIN",
+        "expectFactTypes": [
+          "hold"
+        ]
+      },
+      {
+        "sender": "VM-KFINCR-S",
+        "body": "Informed your Bank to unblock Rs. 15000.00 for SAMPLEWORK IPO appl no. UPSAMPLE00012345 for refund of excess amount - KFintech",
+        "expectFactTypes": []
+      }
+    ],
+    "status": "active",
+    "createdBy": "lane-h",
+    "updatedAt": "2026-11-05T00:00:00Z"
+  },
+  {
+    "id": "IPO-REG-UNBLOCK-INSTRUCTED",
+    "version": 1,
+    "family": "ipo_hold",
+    "senders": [
+      "*"
+    ],
+    "priority": 840,
+    "match": {
+      "pattern": "your\\s+(?:bank|bnk\\.?)\\s+is\\s+instructed\\s+to\\s+unbl(?:oc)?k\\s+(?:rs\\.?|inr|₹)\\s*(?<amt>\\d[\\d,]*(?:\\.\\d{1,2})?)\\s+for\\s+(?<issue>[a-z0-9&.' ()-]+?)\\s+ipo\\s+ap{1,2}l\\s*no\\.?\\s*(?<ref_asbaRef>[a-z0-9]+?)(?=\\s|[.,;]|due\\b|$)[\\s\\S]{0,6}?due\\s+to\\s+non[- ]?allot",
+      "flags": "i"
+    },
+    "emit": [
+      {
+        "factType": "hold",
+        "attrs": {
+          "phase": "released",
+          "purpose": "ipo_asba",
+          "issueName": {
+            "from": "issue",
+            "transforms": [
+              "upperTrim"
+            ]
+          }
+        },
+        "amounts": [
+          {
+            "role": "released",
+            "from": "amt",
+            "unit": "INR"
+          }
+        ]
+      }
+    ],
+    "confidence": 0.93,
+    "examples": [
+      {
+        "sender": "VM-KFINCR-S",
+        "body": "Your bank is instructed to unblock Rs. 15000.00 for SAMPLEWORK IPO applno. UPSAMPLE00012345 due to non-allotment. Please contact your bank or ignore if already unblocked.",
+        "expectFactTypes": [
+          "hold"
+        ]
+      },
+      {
+        "sender": "VM-KFINCR-S",
+        "body": "Your bank is instructed to unblock Rs. 15000.00 for SAMPLEWORK IPO applno. UPSAMPLE00012345 due to partial allotment.",
+        "expectFactTypes": []
+      }
+    ],
+    "status": "active",
+    "createdBy": "lane-h",
+    "updatedAt": "2026-11-05T00:00:00Z"
+  },
+  {
+    "id": "IPO-REG-PARTIAL-ALLOTMENT",
+    "version": 2,
+    "family": "ipo_partial_allotment",
+    "senders": [
+      "*"
+    ],
+    "priority": 850,
+    "match": {
+      "pattern": "your\\s+(?:bank|bnk\\.?)\\s+is\\s+instructed\\s+to\\s+debit\\s+(?:rs\\.?|inr|₹)\\s*(?<amt>\\d[\\d,]*(?:\\.\\d{1,2})?)\\s+towards\\s+partial[- ]?allot(?:ment|ted)\\s*(?:&|and)\\s*unbl(?:oc)?k\\s+(?:rs\\.?|inr|₹)\\s*(?<rel>\\d[\\d,]*(?:\\.\\d{1,2})?)\\s+for\\s+(?<issue>[a-z0-9&.' ()-]+?)\\s+ipo\\s+ap{1,2}l\\s*no\\.?\\s*(?<ref_asbaRef>[a-z0-9]+)",
+      "flags": "i"
+    },
+    "emit": [
+      {
+        "factType": "movement",
+        "attrs": {
+          "direction": "debit",
+          "purpose": "investment",
+          "rail": "unknown"
+        },
+        "amounts": [
+          {
+            "role": "posted",
+            "from": "amt",
+            "unit": "INR"
+          }
+        ],
+        "instrument": {
+          "kind": "bank_account"
+        },
+        "counterparty": {
+          "kind": "merchant",
+          "nameFrom": "issue",
+          "transforms": [
+            "sanitizeNarration"
+          ]
+        }
+      },
+      {
+        "factType": "hold",
+        "attrs": {
+          "phase": "released",
+          "purpose": "ipo_asba",
+          "issueName": {
+            "from": "issue",
+            "transforms": [
+              "upperTrim"
+            ]
+          }
+        },
+        "amounts": [
+          {
+            "role": "released",
+            "from": "rel",
+            "unit": "INR"
+          }
+        ],
+        "instrument": {
+          "sameAs": 0
+        }
+      }
+    ],
+    "confidence": 0.93,
+    "examples": [
+      {
+        "sender": "VM-KFINCR-S",
+        "body": "Your bank is instructed to Debit Rs. 1500.00 towards partial-allotment & unblock Rs. 13500.00 for SAMPLEWORK IPO applno. UPSAMPLE00012345. Please contact your bank or ignore if already unblocked.",
+        "expectFactTypes": [
+          "movement",
+          "hold"
+        ]
+      },
+      {
+        "sender": "VM-KFINCR-S",
+        "body": "Your bank is instructed to unblock Rs. 15000.00 for SAMPLEWORK IPO applno. UPSAMPLE00012345 due to non-allotment.",
+        "expectFactTypes": []
+      }
+    ],
+    "status": "active",
+    "createdBy": "lane-h",
+    "updatedAt": "2026-11-05T00:00:00Z"
+  }
+]

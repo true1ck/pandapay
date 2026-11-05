@@ -1,0 +1,37 @@
+{
+  "id": "lanej:moneyin_credit_from_person_imps",
+  "templateHash": "666897582efba33a39b1c4c5552858027cb277721ae7521359c9634b3bd0b87a",
+  "weight": 1,
+  "source": "synthetic",
+  "messages": [
+    {
+      "sender": "VM-SBIINB-S",
+      "body": "Rs 500.00 credited to A/c XX1234 on 03-11-26 by IMPS from EXAMPLE PERSON. Ref 123456789012.",
+      "observedAt": "2026-12-01T09:00:00.000Z"
+    }
+  ],
+  "expect": {
+    "facts": [
+      {
+        "factType": "movement",
+        "attrs": {
+          "direction": "credit",
+          "purpose": "p2p",
+          "rail": "imps"
+        },
+        "amounts": [
+          {
+            "role": "posted",
+            "minor": 50000
+          }
+        ],
+        "instrument": {
+          "kind": "bank_account",
+          "maskDigits": "1234"
+        }
+      }
+    ]
+  },
+  "note": "Credit from a person by IMPS.",
+  "origin": "lane-j"
+}

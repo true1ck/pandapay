@@ -1,0 +1,38 @@
+{
+  "id": "laneq:card_payment_received_bobcard",
+  "templateHash": "120f53b05dfe90655e8a34e4655b3859aee41120cdc04a6a9910904d5f4dcd82",
+  "weight": 1,
+  "source": "synthetic",
+  "messages": [
+    {
+      "sender": "VM-BOBCRD-S",
+      "body": "Payment of Rs. 8,000.00 received on your BOBCARD ending 4455 on 01-11-2026. Thank you.",
+      "observedAt": "2026-11-20T09:00:00.000Z"
+    }
+  ],
+  "expect": {
+    "facts": [
+      {
+        "factType": "movement",
+        "attrs": {
+          "direction": "credit",
+          "purpose": "card_payment",
+          "rail": "unknown"
+        },
+        "amounts": [
+          {
+            "role": "posted",
+            "minor": 800000
+          }
+        ],
+        "instrument": {
+          "kind": "credit_card",
+          "issuerSlug": "bob",
+          "maskDigits": "4455"
+        }
+      }
+    ]
+  },
+  "note": "One-word card brand.",
+  "origin": "lane-q"
+}

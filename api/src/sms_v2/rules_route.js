@@ -8,18 +8,24 @@
 //     deps.requireMember  authenticates the caller and sets req.userId (falls back to deps.requireAuth)
 //     deps.withUserClient RLS session helper from db.js (or deps.store for a custom store)
 //     deps.hooks.security optional {verifyAttestation(req), checkEntitlement(req)}; default allow
-//     deps.signer         optional; defaults to signerFromEnv() (throws in production without a key)
+//   The public process holds no signing key. It serves the pre-signed bundle stored by the
+//   maintenance job and answers 503 when that copy is missing or expired (LO-09).
 //   Returns {latestBundleVersion(profileId)} for the WP-08 sync hook.
 
 const zlib = require('node:zlib');
-const { signerFromEnv } = require('./signer');
-const { cohortFor, bundleForServing } = require('./bundle_builder');
+const { cohortFor } = require('./bundle_builder');
 const { createPgStore } = require('./rules_store');
 const { createStatsHandler } = require('./rule_stats');
 
+// A stored copy is served only if it carries a signature, is the row's version and is unexpired.
+function servable(signed, version, at) {
+  return !!signed && typeof signed === 'object' && !!signed.signature && signed.bundleVersion === version &&
+    Date.parse(signed.expiresAt) > at.getTime();
+}
+
 const denied = (v) => v === false || (v && typeof v === 'object' && v.ok === false);
 
-function createRulesHandler({ store, getSigner, security, now = () => new Date() }) {
+function createRulesHandler({ store, security, now = () => new Date() }) {
   return async function rulesHandler(req, res) {
     const raw = req.query.since;
     const since = raw === undefined || raw === '' ? 0 : Number(raw);
@@ -32,8 +38,6 @@ function createRulesHandler({ store, getSigner, security, now = () => new Date()
       console.error('sms_v2 rules security hook failed', err && err.code);
       return res.status(503).json({ error: 'security_unavailable' });
     }
-    const signer = getSigner();
-    if (!signer) return res.status(503).json({ error: 'signing_unavailable' });
     let row;
     try {
       row = await store.tx(req.userId, async (s) => {
@@ -46,7 +50,11 @@ function createRulesHandler({ store, getSigner, security, now = () => new Date()
     }
     if (!row) return res.status(404).json({ error: 'no_bundle' });
     if (row.bundleVersion <= since) return res.status(304).end();
-    const signed = bundleForServing(row, signer, now());
+    const signed = row.body;
+    if (!servable(signed, row.bundleVersion, now())) {
+      console.error('sms_v2 rules: no valid pre-signed bundle; run the rule maintenance job', row.bundleVersion);
+      return res.status(503).json({ error: 'bundle_unavailable' });
+    }
     const etag = `"v${row.bundleVersion}-${signed.expiresAt}"`;
     if (req.headers['if-none-match'] === etag) return res.status(304).end();
     const gz = zlib.gzipSync(Buffer.from(JSON.stringify(signed), 'utf8'));
@@ -58,8 +66,6 @@ function createRulesHandler({ store, getSigner, security, now = () => new Date()
 
 function registerRules(app, deps) {
   const store = deps.store || createPgStore({ withUserClient: deps.withUserClient });
-  const signer = deps.signer !== undefined ? deps.signer : signerFromEnv(); // throws in production without a key
-  const getSigner = () => signer;
   const requireMember = deps.requireMember || deps.requireAuth;
   const security = {
     verifyAttestation: async () => true,
@@ -69,7 +75,7 @@ function registerRules(app, deps) {
   };
   const now = deps.now || (() => new Date());
 
-  app.get('/sms/v2/rules', deps.requireSmsV2, requireMember, createRulesHandler({ store, getSigner, security, now }));
+  app.get('/sms/v2/rules', deps.requireSmsV2, requireMember, createRulesHandler({ store, security, now }));
   app.post('/sms/v2/rule-stats\\:batch', deps.requireSmsV2, requireMember, createStatsHandler({ store, security }));
 
   return {

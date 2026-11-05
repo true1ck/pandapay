@@ -11,6 +11,24 @@ import 'screen_parts.dart';
 
 enum SmsLedgerScreen { investments, ipos, moneyIn, subscriptions }
 
+const _moneyInSections = [
+  ('salary', 'Salary'),
+  ('dividend', 'Dividends'),
+  ('refund', 'Refunds'),
+  ('cashback', 'Cashback'),
+  ('person', 'From people'),
+  ('other', 'Other money in'),
+];
+
+String _ipoStatus(String status) => switch (status) {
+  'blocked' => 'Applied, amount blocked',
+  'allotted' => 'Allotted',
+  'partially_allotted' => 'Partly allotted, rest released',
+  'released' => 'Not allotted, amount released',
+  'review' => 'Needs your review',
+  _ => status.replaceAll('_', ' '),
+};
+
 class SmsLedgerScreenView extends ConsumerWidget {
   const SmsLedgerScreenView({super.key, required this.screen});
   final SmsLedgerScreen screen;
@@ -86,7 +104,10 @@ class LedgerReportList extends StatelessWidget {
                 leading: const Icon(Icons.lock_clock_outlined),
                 title: Text(item.company),
                 subtitle: Text(
-                  '${item.status.replaceAll('_', ' ')}\nBlocked ${smsMoney(item.blockedMinor)} • Invested ${smsMoney(item.investedMinor)}\n${item.platform ?? 'Platform unknown'} • Account ••${item.accountMask ?? 'unknown'}',
+                  '${_ipoStatus(item.status)}\n'
+                  'Blocked ${smsMoney(item.blockedMinor)} • Invested ${smsMoney(item.investedMinor)} • Released ${smsMoney(item.releasedMinor)}\n'
+                  '${item.platform ?? 'Platform unknown'} • Account ••${item.accountMask ?? 'unknown'}'
+                  '${item.appliedAt == null ? '' : '\nApplied ${smsDate(item.appliedAt!)}'}',
                 ),
                 isThreeLine: true,
               ),
@@ -94,22 +115,60 @@ class LedgerReportList extends StatelessWidget {
           );
         }
       case SmsLedgerScreen.moneyIn:
-        for (final item in moneyIn(
+        final items = moneyIn(
           model.facts,
           events,
           DateTime.utc(1900),
           DateTime.utc(2200),
-        )..sort((a, b) => b.occurredAt.compareTo(a.occurredAt))) {
+        )..sort((a, b) => b.occurredAt.compareTo(a.occurredAt));
+        int sum(Iterable<MoneyInItem> rows) =>
+            rows.fold(0, (total, row) => total + row.amountMinor);
+        if (items.isNotEmpty) {
+          final income = items.where((i) => i.kind != 'refund');
           children.add(
             Card(
               child: ListTile(
-                leading: const Icon(Icons.south_west),
-                title: Text(item.payer),
-                subtitle: Text('${item.kind} • ${smsDate(item.occurredAt)}'),
-                trailing: Text(smsMoney(item.amountMinor)),
+                title: const Text('Total money in'),
+                subtitle: const Text(
+                  'Refunds reduce your spending, so they are not counted here. '
+                  'Transfers between your own accounts are left out.',
+                ),
+                trailing: Text(smsMoney(sum(income))),
               ),
             ),
           );
+        }
+        for (final (kind, title) in _moneyInSections) {
+          final rows = items.where((i) => i.kind == kind).toList();
+          if (rows.isEmpty) continue;
+          children.add(
+            Padding(
+              padding: const EdgeInsets.fromLTRB(4, 16, 4, 4),
+              child: Row(
+                children: [
+                  Expanded(
+                    child: Text(
+                      title,
+                      style: Theme.of(context).textTheme.titleLarge,
+                    ),
+                  ),
+                  Text(smsMoney(sum(rows))),
+                ],
+              ),
+            ),
+          );
+          for (final item in rows) {
+            children.add(
+              Card(
+                child: ListTile(
+                  leading: const Icon(Icons.south_west),
+                  title: Text(item.payer),
+                  subtitle: Text(smsDate(item.occurredAt)),
+                  trailing: Text(smsMoney(item.amountMinor)),
+                ),
+              ),
+            );
+          }
         }
       case SmsLedgerScreen.subscriptions:
         final subscriptions = subscriptionsFromLedger(

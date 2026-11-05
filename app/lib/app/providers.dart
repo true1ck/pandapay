@@ -15,6 +15,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_local_notifications/flutter_local_notifications.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:http/http.dart' as http;
 import 'package:package_info_plus/package_info_plus.dart';
 import 'package:pandapay_domain/pandapay_domain.dart';
 import 'package:shared_preferences/shared_preferences.dart';
@@ -27,6 +28,7 @@ import '../data/app_status_repository.dart';
 import '../data/api_exception.dart';
 import '../data/auth_api.dart';
 import '../data/product_access_api.dart';
+import '../data/api_request_headers_client.dart';
 import '../data/authenticated_http_client.dart';
 import '../data/card_bill_ledger.dart';
 import '../data/card_feedback_repository.dart';
@@ -106,6 +108,7 @@ import '../features/sms_import/sms_text_hint.dart';
 import '../features/settings/settings_sync.dart';
 import '../features/sync/sync_engine.dart';
 import 'env.dart';
+import 'local_sms_rig_http_client.dart';
 
 /// api/'s and auth/'s base URLs, fixed at compile time by `--dart-define`
 /// (plan Phase 0.3). These were plain hardcoded `localhost` consts until
@@ -159,9 +162,15 @@ bool _isExplicitAiRefusal(Object error) {
   return false;
 }
 
-final authApiProvider = Provider<AuthApi>(
-  (ref) => AuthApi(authBaseUrl: _authBaseUrl, versionedOtpEnabled: Env.versionedOtpEnabled),
-);
+final authApiProvider = Provider<AuthApi>((ref) {
+  final client = localSmsRigHttpClient();
+  if (client != null) ref.onDispose(client.close);
+  return AuthApi(
+    authBaseUrl: _authBaseUrl,
+    client: client,
+    versionedOtpEnabled: Env.versionedOtpEnabled,
+  );
+});
 
 /// Owns the short post-authentication idle window used to serialize
 /// non-critical maintenance. This prevents sync, outbox, notification and
@@ -182,6 +191,11 @@ final authenticatedHttpClientProvider = Provider<AuthenticatedHttpClient>((
 ) {
   final refreshCoordinator = ref.read(sessionRefreshCoordinatorProvider);
   final client = AuthenticatedHttpClient(
+    inner: ApiRequestHeadersClient(
+      inner: localSmsRigHttpClient() ?? http.Client(),
+      apiBaseUrl: Uri.parse(_apiBaseUrl),
+      pipelineV2Enabled: () => ref.read(smsPipelineV2EnabledProvider),
+    ),
     refreshAccessToken: () async {
       return refreshCoordinator.refresh();
     },

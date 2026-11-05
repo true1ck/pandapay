@@ -1,0 +1,18 @@
+{
+  "id": "laneq:utility_offer_stays_ignored",
+  "templateHash": "1541b4d5c7476c38e2fe989560d554bfd999985270f9837b2a6318f7256307ae",
+  "weight": 1,
+  "source": "synthetic",
+  "messages": [
+    {
+      "sender": "BESCOM",
+      "body": "Pay your electricity bill online and get 5% cashback. Offer valid till 30 Nov.",
+      "observedAt": "2026-11-20T09:00:00.000Z"
+    }
+  ],
+  "expect": {
+    "ignore": true
+  },
+  "note": "Promotion guard.",
+  "origin": "lane-q"
+}

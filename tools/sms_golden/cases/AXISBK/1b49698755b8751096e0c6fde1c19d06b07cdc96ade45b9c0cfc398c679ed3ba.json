@@ -1,0 +1,36 @@
+{
+  "id": "lanet:axis_emi_debit",
+  "templateHash": "1b49698755b8751096e0c6fde1c19d06b07cdc96ade45b9c0cfc398c679ed3ba",
+  "weight": 1,
+  "source": "synthetic",
+  "messages": [
+    {
+      "sender": "AX-AXISBK-S",
+      "body": "INR 4500.00 debited\nA/c no. XX567890\n01-11-26, 12:30:11\nEMI/LOAN1234\nNot you? SMS BLOCKUPI Cust ID to 919951860002\nAxis Bank",
+      "observedAt": "2026-12-01T09:00:00.000Z"
+    }
+  ],
+  "expect": {
+    "facts": [
+      {
+        "factType": "movement",
+        "attrs": {
+          "direction": "debit",
+          "purpose": "emi"
+        },
+        "amounts": [
+          {
+            "role": "posted",
+            "minor": 450000
+          }
+        ],
+        "instrument": {
+          "kind": "bank_account",
+          "maskDigits": "567890"
+        }
+      }
+    ]
+  },
+  "note": "Axis EMI debit.",
+  "origin": "lane-t"
+}

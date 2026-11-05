@@ -1,0 +1,33 @@
+{
+  "id": "lanew:mandate_sbi_created_ipo_amount",
+  "templateHash": "63d7e7fae004bd96778f4af57d6641408679d16d7b737492025d8d9593d515cd",
+  "weight": 1,
+  "source": "synthetic",
+  "messages": [
+    {
+      "sender": "VM-SBIUPI-S",
+      "body": "UPI-Mandate successfully created towards SAMPLE WORKS L for Rs15000.00 -SBI",
+      "observedAt": "2026-11-20T09:00:00.000Z"
+    }
+  ],
+  "expect": {
+    "facts": [
+      {
+        "factType": "mandate",
+        "attrs": {
+          "phase": "created",
+          "mandatePurpose": "ipo",
+          "oneTime": true
+        },
+        "amounts": [
+          {
+            "role": "ceiling",
+            "minor": 1500000
+          }
+        ]
+      }
+    ]
+  },
+  "note": "A UPI mandate created for an IPO-sized amount is a one-time IPO mandate.",
+  "origin": "lane-w"
+}

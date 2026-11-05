@@ -292,6 +292,20 @@ void main() {
       expect(o.reason, 'bundle_refused');
     });
 
+    test('the shipped engine reads the current minor; an older engine refuses it', () {
+      expect(compareSemver(smsEngineVersion, '2.1.0'), greaterThanOrEqualTo(0));
+      final b = _bundle([_rule(id: 'R', pattern: '^$_amt')], minEngine: '2.1.0');
+      expect(() => CompiledBundle.compile(b), returnsNormally);
+      expect(
+        () => CompiledBundle.compile(b, engineVersion: '2.0.0'),
+        throwsA(isA<BundleRefusedException>().having((e) => e.code, 'code', 'engine_too_old')),
+      );
+      final old = RuleEngine(engineVersion: '2.0.0');
+      final o = old.interpretDetailed(_msg('VM-HDFCBK-S', 'Rs.5.00'), b, appVersion: '1');
+      expect(o.result.outcome, InterpretOutcome.unknown);
+      expect(o.reason, 'bundle_refused');
+    });
+
     test('an engine at the minimum version accepts the bundle', () {
       final b = _bundle([_rule(id: 'R', pattern: '^$_amt')], minEngine: '2.0.0');
       expect(() => CompiledBundle.compile(b, engineVersion: '2.0.0'), returnsNormally);
@@ -502,6 +516,40 @@ void main() {
       j['rules'] = [r];
       final codes2 = lintBundle(RuleBundle.fromJson(j)).map((i) => i.code).toSet();
       expect(codes2, contains('lint.sender.unknown'));
+    });
+
+    test('an alias in a rule or ignore rule senders is an error naming the brand', () {
+      final j = _fixture();
+      j['rules'] = [
+        _rule(
+          id: 'ALIAS-RULE',
+          senders: ['HDFCCC'],
+          pattern: '^$_amt',
+          examples: [
+            {'sender': 'VM-HDFCCC-S', 'body': 'Rs.5.00', 'expectFactTypes': ['movement']},
+            {'sender': 'VM-HDFCCC-S', 'body': 'zzz', 'expectFactTypes': <String>[]},
+          ],
+        ),
+        _rule(
+          id: 'BRAND-RULE',
+          senders: ['HDFCBK', '*'],
+          priority: 10,
+          pattern: '^never (?<amt>[\\d,.]+)',
+          examples: [
+            {'sender': 'VM-HDFCBK-S', 'body': 'never 5', 'expectFactTypes': ['movement']},
+            {'sender': 'VM-HDFCBK-S', 'body': 'zzz', 'expectFactTypes': <String>[]},
+          ],
+        ),
+      ];
+      j['ignoreRules'] = [
+        {'id': 'IGN-ALIAS', 'senders': ['HDFCCC'], 'pattern': 'promo', 'flags': 'i', 'reason': 'promotion'},
+        {'id': 'IGN-BRAND', 'senders': ['HDFCBK', 'PAYTM'], 'pattern': 'promo', 'flags': 'i', 'reason': 'promotion'},
+      ];
+      final issues = lintBundle(RuleBundle.fromJson(j)).where((i) => i.code == 'lint.sender.alias').toList();
+      expect(issues.map((i) => i.ruleId).toSet(), {'ALIAS-RULE', 'IGN-ALIAS'});
+      expect(issues.every((i) => i.message.contains('HDFCBK')), isTrue);
+      // An alias is known to the registry, so it is not also reported as unknown.
+      expect(lintBundle(RuleBundle.fromJson(j)).where((i) => i.code == 'lint.sender.unknown'), isEmpty);
     });
 
     test('example mismatch is reported by runRuleExamples', () {

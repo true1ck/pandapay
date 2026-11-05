@@ -91,6 +91,141 @@ void main() {
     accountIsCurrent: current ?? () => true,
   );
   test(
+    'a bounded request leaves interrupted sources outside its period pending',
+    () async {
+      seed();
+      await expectLater(
+        replay().run(chunkSize: 1, onChunk: (_) => throw StateError('pause')),
+        throwsStateError,
+      );
+      final pending = database.db
+          .select(
+            'SELECT source_key FROM sms_v2_migration_sources WHERE namespace=? AND done=0',
+            [ns],
+          )
+          .map((r) => r['source_key'])
+          .toSet();
+      expect(pending, isNotEmpty);
+      final before = database.db.select(
+        'SELECT before_json FROM sms_v2_migration_state WHERE namespace=?',
+        [ns],
+      ).single['before_json'];
+      final report = await replay().run(
+        includeNewSources: true,
+        from: DateTime.utc(2027),
+        to: DateTime.utc(2027, 2),
+      );
+      expect(report.complete, isFalse);
+      expect(report.retainedBodies, 0);
+      expect(report.legacyWithoutBody, 0);
+      expect(
+        database.db
+            .select(
+              'SELECT source_key FROM sms_v2_migration_sources WHERE namespace=? AND done=0',
+              [ns],
+            )
+            .map((r) => r['source_key'])
+            .toSet(),
+        pending,
+      );
+      expect(
+        database.db.select(
+          'SELECT before_json FROM sms_v2_migration_state WHERE namespace=?',
+          [ns],
+        ).single['before_json'],
+        before,
+      );
+      expect((await replay().run()).complete, isTrue);
+    },
+  );
+  test(
+    'synced explicit categories survive without an unsent edit marker',
+    () async {
+      seed();
+      const chosen = '10000000-0000-4000-8000-000000000001';
+      final row = financial
+          .entities(ns, 'transactions')
+          .singleWhere((row) => row['id'] == 'old-4');
+      database.db.execute(
+        "UPDATE financial_entities SET payload=? WHERE namespace=? AND entity='transactions' AND id=?",
+        [
+          jsonEncode({...row, 'user_category_id': chosen}),
+          ns,
+          'old-4',
+        ],
+      );
+      await LegacyReplay(
+        financial: financial,
+        namespace: ns,
+        bundle: bundle,
+        appVersion: '2.0.0',
+        categoryIdBySlug: const {'fuel': chosen},
+      ).run();
+      expect(
+        LedgerStore(database.db, namespace: ns).categoryDecisions().values.any(
+          (decision) =>
+              decision.source == CategorySource.user && decision.slug == 'fuel',
+        ),
+        isTrue,
+      );
+    },
+  );
+  test(
+    'explicit history check includes retained SMS arriving after completion',
+    () async {
+      seed();
+      await replay().run();
+      final message = QueuedSms(
+        sender: 'VM-HDFCBK-S',
+        body:
+            'Sent Rs.777.00 From HDFC Bank A/C **1797 to SWIGGY UPI on 10-11-26. Avl Bal Rs.12,345.67',
+        receivedAt: DateTime.utc(2026, 11, 10),
+      );
+      final source = smsSourceKey(ns, message.sender, message.body);
+      SmsIntakeRepository(database).remember(ns, message);
+      financial.saveTransactions(ns, [
+        TransactionEntry(
+          id: 'late-legacy',
+          sourceKey: source,
+          source: 'sms',
+          status: 'active',
+          amount: Money.fromPaise(88800),
+          occurredAt: message.receivedAt,
+        ),
+      ]);
+      expect((await replay().run()).retainedBodies, 5);
+      final report = await replay().run(
+        includeNewSources: true,
+        from: DateTime.utc(2026, 11),
+        to: DateTime.utc(2026, 12),
+      );
+      expect(report.retainedBodies, 6);
+      expect(
+        financial
+            .entities(ns, 'transactions')
+            .where(
+              (row) => row['source_key'] == source && row['status'] == 'active',
+            )
+            .single['pipeline_version'],
+        2,
+      );
+      expect((await replay().run(includeNewSources: true)).retainedBodies, 6);
+      final repeated = await replay().run(
+        includeNewSources: true,
+        from: DateTime.utc(2026, 11),
+        to: DateTime.utc(2026, 12),
+      );
+      expect(repeated.data['beforeByMonth'], repeated.data['afterByMonth']);
+      final outside = await replay().run(
+        includeNewSources: true,
+        from: DateTime.utc(2027),
+        to: DateTime.utc(2027, 2),
+      );
+      expect(outside.retainedBodies, 0);
+      expect(outside.legacyWithoutBody, 0);
+    },
+  );
+  test(
     'fixture replay retains originals/manual/no-body rows, removes holds and merges bills',
     () async {
       seed();

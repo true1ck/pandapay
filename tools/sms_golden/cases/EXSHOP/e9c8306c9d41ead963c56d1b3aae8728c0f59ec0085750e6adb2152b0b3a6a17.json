@@ -1,0 +1,33 @@
+{
+  "id": "lanej:refund_amount_first_processed",
+  "templateHash": "e9c8306c9d41ead963c56d1b3aae8728c0f59ec0085750e6adb2152b0b3a6a17",
+  "weight": 1,
+  "source": "synthetic",
+  "messages": [
+    {
+      "sender": "VM-EXSHOP-S",
+      "body": "Rs 400 refund for your order ES12345 has been processed to your original payment mode.",
+      "observedAt": "2026-12-01T09:00:00.000Z"
+    }
+  ],
+  "expect": {
+    "facts": [
+      {
+        "factType": "attempt",
+        "attrs": {
+          "status": "pending",
+          "direction": "credit",
+          "purpose": "refund"
+        },
+        "amounts": [
+          {
+            "role": "posted",
+            "minor": 40000
+          }
+        ]
+      }
+    ]
+  },
+  "note": "Amount-first wording.",
+  "origin": "lane-j"
+}

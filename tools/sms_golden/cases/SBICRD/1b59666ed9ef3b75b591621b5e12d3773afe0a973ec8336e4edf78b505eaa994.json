@@ -1,0 +1,36 @@
+{
+  "id": "laneq:due_reminder_card_first_sbi",
+  "templateHash": "1b59666ed9ef3b75b591621b5e12d3773afe0a973ec8336e4edf78b505eaa994",
+  "weight": 1,
+  "source": "synthetic",
+  "messages": [
+    {
+      "sender": "VM-SBICRD-S",
+      "body": "Reminder! Your SBI Card ending 1234 payment of Rs.12,345.00 is due on 20/11/26. Pay now to avoid late fee.",
+      "observedAt": "2026-11-20T09:00:00.000Z"
+    }
+  ],
+  "expect": {
+    "facts": [
+      {
+        "factType": "bill_due",
+        "attrs": {
+          "dueDate": "2026-11-20"
+        },
+        "amounts": [
+          {
+            "role": "due_total",
+            "minor": 1234500
+          }
+        ],
+        "instrument": {
+          "kind": "credit_card",
+          "issuerSlug": "sbi",
+          "maskDigits": "1234"
+        }
+      }
+    ]
+  },
+  "note": "Wording guess.",
+  "origin": "lane-q"
+}

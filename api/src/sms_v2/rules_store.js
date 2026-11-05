@@ -14,6 +14,7 @@ const cohortRow = (r) => ({ ruleId: r.rule_id, version: r.version, cohort: r.coh
 const bundleRow = (r) => ({
   bundleVersion: r.bundle_version, manifest: r.manifest, sha256: r.sha256, signature: r.signature, keyId: r.key_id,
   cohort: r.cohort, goldenReport: r.golden_report, status: r.status, publishedBy: r.published_by, createdAt: r.created_at, body: r.body,
+  servedBody: r.served_body || null,
 });
 
 class PgTx {
@@ -83,11 +84,17 @@ class PgTx {
   async setBundleStatus(version, status) { await this.c.query('UPDATE sms_v2_bundles SET status = $2 WHERE bundle_version = $1', [version, status]); }
   async insertBundle(b) {
     await this.c.query(
-      `INSERT INTO sms_v2_bundles (bundle_version, manifest, sha256, signature, key_id, cohort, golden_report, status, published_by, created_at, body)
-       VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11)`,
+      `INSERT INTO sms_v2_bundles (bundle_version, manifest, sha256, signature, key_id, cohort, golden_report, status, published_by, created_at, body, served_body, served_expires_at)
+       VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13)`,
       [b.bundleVersion, JSON.stringify(b.manifest), b.sha256, b.signature, b.keyId, b.cohort,
-        b.goldenReport ? JSON.stringify(b.goldenReport) : null, b.status, b.publishedBy, b.createdAt, JSON.stringify(b.body)],
+        b.goldenReport ? JSON.stringify(b.goldenReport) : null, b.status, b.publishedBy, b.createdAt, JSON.stringify(b.body),
+        b.servedBody ? JSON.stringify(b.servedBody) : null, b.servedBody ? b.servedBody.expiresAt : null],
     );
+  }
+  // Maintenance job only: replace the pre-signed copy the public API serves (LO-09).
+  async setServedBundle(version, signed) {
+    await this.c.query('UPDATE sms_v2_bundles SET served_body = $2, served_expires_at = $3 WHERE bundle_version = $1',
+      [version, JSON.stringify(signed), signed.expiresAt]);
   }
   async listBundles(limit = 100) {
     return (await this.c.query('SELECT * FROM sms_v2_bundles ORDER BY bundle_version DESC LIMIT $1', [limit])).rows.map(bundleRow);
@@ -100,7 +107,8 @@ class PgTx {
   }
   async isTester() { return (await this.c.query('SELECT pandapay.sms_v2_is_tester() AS t')).rows[0].t === true; }
   async phoneBundle(cohort) {
-    const r = await this.c.query('SELECT * FROM pandapay.sms_v2_latest_bundle($1)', [cohort]);
+    // The pre-signed copy (`body` is null until the maintenance job has signed it).
+    const r = await this.c.query('SELECT * FROM pandapay.sms_v2_latest_served_bundle($1)', [cohort]);
     return r.rows[0] ? { bundleVersion: r.rows[0].bundle_version, body: r.rows[0].body, sha256: r.rows[0].sha256 } : null;
   }
   async recordRuleStats(_profileId, day, appVersion, stats) {
@@ -188,12 +196,13 @@ class MemoryStore {
       },
       async setBundleStatus(v, status) { st().bundles.find((b) => b.bundleVersion === v).status = status; },
       async insertBundle(b) { st().bundles.push(structuredClone(b)); },
+      async setServedBundle(v, signed) { st().bundles.find((b) => b.bundleVersion === v).servedBody = structuredClone(signed); },
       async listBundles(limit = 100) { return structuredClone([...st().bundles].sort((a, b) => b.bundleVersion - a.bundleVersion).slice(0, limit)); },
       async audit(a) { st().audit.push(structuredClone({ ...a, at: new Date().toISOString() })); },
       async isTester(profileId) { return st().testers.has(profileId); },
       async phoneBundle(cohort) {
         const b = await this.latestBundle(cohort);
-        return b ? { bundleVersion: b.bundleVersion, body: b.body, sha256: b.sha256 } : null;
+        return b ? { bundleVersion: b.bundleVersion, body: b.servedBody || null, sha256: b.sha256 } : null;
       },
       async recordRuleStats(profileId, day, appVersion, stats) {
         const keep = utcDay(new Date(Date.parse(`${self.today()}T00:00:00Z`) - 2 * 86400000));

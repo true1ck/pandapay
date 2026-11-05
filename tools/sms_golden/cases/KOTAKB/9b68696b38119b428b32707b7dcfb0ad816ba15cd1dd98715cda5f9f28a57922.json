@@ -1,0 +1,37 @@
+{
+  "id": "lanej:reversal_upi_failed_payment",
+  "templateHash": "9b68696b38119b428b32707b7dcfb0ad816ba15cd1dd98715cda5f9f28a57922",
+  "weight": 1,
+  "source": "synthetic",
+  "messages": [
+    {
+      "sender": "VM-KOTAKB-S",
+      "body": "UPI reversal: Rs.200.00 credited to A/c XX1234 on 03-11-26 against failed UPI transaction Ref No 123456789012.",
+      "observedAt": "2026-12-01T09:00:00.000Z"
+    }
+  ],
+  "expect": {
+    "facts": [
+      {
+        "factType": "movement",
+        "attrs": {
+          "direction": "credit",
+          "purpose": "reversal",
+          "rail": "upi"
+        },
+        "amounts": [
+          {
+            "role": "posted",
+            "minor": 20000
+          }
+        ],
+        "instrument": {
+          "kind": "bank_account",
+          "maskDigits": "1234"
+        }
+      }
+    ]
+  },
+  "note": "Failed UPI payment returned.",
+  "origin": "lane-j"
+}

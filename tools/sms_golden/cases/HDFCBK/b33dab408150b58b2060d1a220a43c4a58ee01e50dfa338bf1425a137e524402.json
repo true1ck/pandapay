@@ -1,0 +1,36 @@
+{
+  "id": "lanet:debit_failed_attempt",
+  "templateHash": "b33dab408150b58b2060d1a220a43c4a58ee01e50dfa338bf1425a137e524402",
+  "weight": 1,
+  "source": "synthetic",
+  "messages": [
+    {
+      "sender": "VM-HDFCBK-S",
+      "body": "Rs.499.00 debited from A/c XX1234 on 22-10-26 towards SIP in EXAMPLE FUND failed. Retry.",
+      "observedAt": "2026-12-01T09:00:00.000Z"
+    }
+  ],
+  "expect": {
+    "facts": [
+      {
+        "factType": "attempt",
+        "attrs": {
+          "status": "failed",
+          "direction": "debit"
+        },
+        "amounts": [
+          {
+            "role": "posted",
+            "minor": 49900
+          }
+        ],
+        "instrument": {
+          "kind": "bank_account",
+          "maskDigits": "1234"
+        }
+      }
+    ]
+  },
+  "note": "A debit that failed is a failed attempt, not a movement.",
+  "origin": "lane-t"
+}

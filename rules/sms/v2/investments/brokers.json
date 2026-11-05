@@ -74,7 +74,7 @@
   },
   {
     "id": "INV-BROKER-PAYOUT-DONE-01",
-    "version": 1,
+    "version": 2,
     "family": "broker_account",
     "senders": [
       "ZERODH",
@@ -94,7 +94,7 @@
     ],
     "priority": 600,
     "match": {
-      "pattern": "(?:settlement\\s+payout|payout|withdrawal)\\s+(?:request\\s+)?of\\s+(?:rs\\.?|inr|₹)\\s*(?<amt>[\\d,]+(?:\\.\\d{1,2})?)\\s+(?:has been\\s+|is\\s+|was\\s+)?(?:credited|completed|settled|successful)(?:[\\s\\S]*?(?:a/c|acct?\\.?|account)\\s*(?:no\\.?\\s*)?(?:ending\\s*(?:with\\s*|in\\s*)?)?(?:[x*•.]+\\s*)?(?<mask>\\d{2,16})\\b)?",
+      "pattern": "(?:^\\s*(?!dear\\b|hi\\b|hello\\b)(?<broker>[a-z][a-z0-9 .&]{1,30}?)\\s*:\\s*[\\s\\S]*?)?(?:settlement\\s+payout|payout|withdrawal)\\s+(?:request\\s+)?of\\s+(?:rs\\.?|inr|₹)\\s*(?<amt>[\\d,]+(?:\\.\\d{1,2})?)\\s+(?:has been\\s+|is\\s+|was\\s+)?(?:credited|completed|settled|successful)(?:[\\s\\S]*?(?:a/c|acct?\\.?|account)\\s*(?:no\\.?\\s*)?(?:ending\\s*(?:with\\s*|in\\s*)?)?(?:[x*•.]+\\s*)?(?<mask>\\d{2,16})\\b)?",
       "flags": "i",
       "rejectAny": [
         "failed",
@@ -108,8 +108,7 @@
         "attrs": {
           "direction": "credit",
           "purpose": "investment",
-          "rail": "unknown",
-          "evidenceOnly": true
+          "rail": "unknown"
         },
         "amounts": [
           {
@@ -118,12 +117,12 @@
             "unit": "INR"
           }
         ],
-        "instrument": {
-          "kind": "broker"
-        },
         "counterparty": {
-          "kind": "bank",
-          "accountMaskFrom": "mask"
+          "kind": "merchant",
+          "nameFrom": "broker",
+          "transforms": [
+            "sanitizeNarration"
+          ]
         }
       }
     ],
@@ -138,13 +137,20 @@
       },
       {
         "sender": "VM-UPSTOX-S",
+        "body": "Your withdrawal of Rs 8,000.00 has been credited to your bank A/c XX1234.",
+        "expectFactTypes": [
+          "movement"
+        ]
+      },
+      {
+        "sender": "VM-UPSTOX-S",
         "body": "Upstox: Your withdrawal of Rs 8,000.00 has failed and will be reversed to your trading account.",
         "expectFactTypes": []
       }
     ],
     "status": "active",
     "createdBy": "baseline",
-    "updatedAt": "2026-11-20T00:00:00Z"
+    "updatedAt": "2026-11-05T00:00:00Z"
   },
   {
     "id": "INV-BROKER-PAYOUT-INIT-01",
@@ -845,14 +851,14 @@
   },
   {
     "id": "INV-BROKER-WITHDRAW-CREDIT-02",
-    "version": 2,
+    "version": 3,
     "family": "broker_withdraw",
     "senders": [
       "*"
     ],
     "priority": 840,
     "match": {
-      "pattern": "^(?![\\s\\S]*\\b(?:idcw)\\b)[\\s\\S]*?(?:(?:rs\\.?|inr|₹)\\s*(?<amt>[\\d,]+(?:\\.\\d{1,2})?)\\s+(?:has been\\s+|is\\s+|was\\s+)?(?:credited|deposited|received)(?:[\\s\\S]{0,60}?(?:a/c|acct?\\.?|account)\\s*(?:no\\.?\\s*)?(?:ending\\s*(?:with\\s*|in\\s*)?)?(?:[x*•.]+\\s*)?(?<mask>\\d{2,16})\\b)?[\\s\\S]{0,200}?(?<broker>(?:zerodha|groww|upstox|rksv|kotak\\s*sec\\w*|kotak\\s+neo|indmoney|ind\\s*money|angel\\s*(?:one|broking)|dhan\\b|univest|paytm\\s+money|hdfc\\s*sec\\w*|icici\\s*sec\\w*|icici\\s+direct|5\\s*paisa|motilal\\s+oswal|sharekhan|nu\\s*investors|iccl|indian\\s+clearing|nse\\s+clearing|bse\\s*star|coin\\s+by\\s+zerodha|smallcase|et\\s+money|kuvera|mutual\\s+fund|\\bmf\\b|cams\\b|kfin\\w*)[a-z0-9 .&]*?)(?=\\s*(?:[.,;()]|[\\r\\n]|\\s(?:ref|refno|on|upi|via|umrn|avl|utr|if|call|sms)\\b|-\\s*[a-z]|$)))",
+      "pattern": "^(?![\\s\\S]*\\b(?:idcw)\\b)(?![\\s\\S]*\\b(?:trading|demat)\\s+(?:a/?c|acct?\\.?|account)\\b)[\\s\\S]*?(?:(?:rs\\.?|inr|₹)\\s*(?<amt>[\\d,]+(?:\\.\\d{1,2})?)\\s+(?:has been\\s+|is\\s+|was\\s+)?(?:credited|deposited|received)(?:[\\s\\S]{0,60}?(?:a/c|acct?\\.?|account)\\s*(?:no\\.?\\s*)?(?:ending\\s*(?:with\\s*|in\\s*)?)?(?:[x*•.]+\\s*)?(?<mask>\\d{2,16})\\b)?[\\s\\S]{0,200}?(?<broker>(?:zerodha|groww|upstox|rksv|kotak\\s*sec\\w*|kotak\\s+neo|indmoney|ind\\s*money|angel\\s*(?:one|broking)|dhan\\b|univest|paytm\\s+money|hdfc\\s*sec\\w*|icici\\s*sec\\w*|icici\\s+direct|5\\s*paisa|motilal\\s+oswal|sharekhan|nu\\s*investors|iccl|indian\\s+clearing|nse\\s+clearing|bse\\s*star|coin\\s+by\\s+zerodha|smallcase|et\\s+money|kuvera|mutual\\s+fund|\\bmf\\b|cams\\b|kfin\\w*)[a-z0-9 .&]*?)(?=\\s*(?:[.,;()]|[\\r\\n]|\\s(?:ref|refno|on|upi|via|umrn|avl|utr|if|call|sms)\\b|-\\s*[a-z]|$)))",
       "flags": "i",
       "rejectAny": [
         "dividend",
@@ -910,6 +916,11 @@
       {
         "sender": "VM-HDFCBK-S",
         "body": "Rs.12,000.00 credited to your A/c XX1234 on 12-11-26 by NEFT from ACME TECHNOLOGIES LTD. UTR N123456789012.",
+        "expectFactTypes": []
+      },
+      {
+        "sender": "VM-HDFCBK-S",
+        "body": "Rs.12,000.00 credited to your ICICI Direct trading account on 12-11-26.",
         "expectFactTypes": []
       }
     ],

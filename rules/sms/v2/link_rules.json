@@ -316,5 +316,77 @@
     },
     "singleLeg": "complete",
     "priority": 60
+  },
+  {
+    "id": "LINK-DUP-INVEST-DEBIT",
+    "eventType": "investment",
+    "legs": [
+      {
+        "role": "debit_leg",
+        "match": {
+          "factType": "movement",
+          "direction": "debit",
+          "purpose": [
+            "investment"
+          ],
+          "evidenceOnly": false
+        }
+      },
+      {
+        "role": "duplicate_notice",
+        "match": {
+          "factType": "movement",
+          "direction": "debit",
+          "purpose": [
+            "investment"
+          ],
+          "evidenceOnly": false
+        }
+      }
+    ],
+    "join": {
+      "amountRole": "posted",
+      "amountTolerancePct": 0,
+      "windowHours": 24,
+      "reference": "prefer"
+    },
+    "singleLeg": "complete",
+    "priority": 55
+  },
+  {
+    "id": "LINK-DUP-INVEST-CREDIT",
+    "eventType": "investment_withdrawal",
+    "legs": [
+      {
+        "role": "credit_leg",
+        "match": {
+          "factType": "movement",
+          "direction": "credit",
+          "purpose": [
+            "investment"
+          ],
+          "evidenceOnly": false
+        }
+      },
+      {
+        "role": "duplicate_notice",
+        "match": {
+          "factType": "movement",
+          "direction": "credit",
+          "purpose": [
+            "investment"
+          ],
+          "evidenceOnly": false
+        }
+      }
+    ],
+    "join": {
+      "amountRole": "posted",
+      "amountTolerancePct": 0,
+      "windowHours": 24,
+      "reference": "prefer"
+    },
+    "singleLeg": "complete",
+    "priority": 55
   }
 ]
