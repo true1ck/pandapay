@@ -10,8 +10,6 @@ import '../../app/device_permissions.dart';
 import '../../app/providers.dart';
 import '../../data/api_exception.dart';
 import '../../data/consents_api.dart';
-import '../../data/local/sms_dismissal_outbox.dart';
-import '../../data/local/sms_feedback_outbox.dart';
 import '../../app/env.dart';
 import '../import/gmail_connect_service.dart';
 
@@ -612,18 +610,6 @@ class _PurposeConsents extends ConsumerWidget {
               : _policyVersion,
           sourceScreen: 'privacy_permissions',
         );
-        if (purpose == smsSharedLearningPurpose && !granted) {
-          final cache = await ref.read(responseCacheProvider.future);
-          final namespace = ref.read(cacheNamespaceProvider);
-          SmsFeedbackOutbox(
-            cache.financialStore.database,
-            namespace: namespace,
-          ).clear();
-          SmsDismissalOutbox(cache.financialStore.database, namespace).clear();
-          await ref
-              .read(userCardsRepositoryProvider)
-              ?.clearSmsLearningFeedbackQueues();
-        }
         ref.invalidate(_latestConsentsProvider);
         if (purpose == smsSharedLearningPurpose) {
           ref.invalidate(smsSharedLearningConsentProvider);

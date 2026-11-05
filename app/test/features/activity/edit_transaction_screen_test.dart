@@ -8,10 +8,8 @@ import 'package:go_router/go_router.dart';
 import 'package:pandapay/app/providers.dart';
 import 'package:pandapay/data/api_exception.dart';
 import 'package:pandapay/data/auth_api.dart';
-import 'package:pandapay/data/consents_api.dart';
 import 'package:pandapay/data/local/app_database.dart';
 import 'package:pandapay/data/local/response_cache.dart';
-import 'package:pandapay/data/local/sms_feedback_outbox.dart';
 import 'package:pandapay/data/local/sms_intake_repository.dart';
 import 'package:pandapay/data/token_store.dart';
 import 'package:pandapay/data/user_cards_repository.dart';
@@ -336,7 +334,7 @@ void main() {
     expect(repo.lastEditArgs?['merchantName'], 'New Merchant');
   });
 
-  testWidgets('queues SMS correction after a successful auth-refresh retry', (
+  testWidgets('retries an SMS edit once after a successful auth refresh', (
     tester,
   ) async {
     final database = openInMemoryForTesting();
@@ -362,7 +360,6 @@ void main() {
       status: 'active',
     );
     final repo = _FakeUserCardsRepository(entry)..failFirstEditWithAuth = true;
-    final consentCompleter = Completer<ConsentRecord?>();
 
     await _pump(
       tester,
@@ -375,9 +372,6 @@ void main() {
         cacheNamespaceProvider.overrideWithValue(namespace),
         responseCacheProvider.overrideWith((ref) async => cache),
         isOnlineProvider.overrideWith((ref) => Stream.value(true)),
-        smsSharedLearningConsentProvider.overrideWith(
-          (ref) => consentCompleter.future,
-        ),
       ],
     );
 
@@ -386,28 +380,12 @@ void main() {
       'Correct Store',
     );
     await tester.tap(find.text('Save'));
-    await tester.pump();
-    expect(repo.editCalls, 2);
-    expect(SmsFeedbackOutbox(database, namespace: namespace).count(), 0);
-    consentCompleter.complete(
-      ConsentRecord(
-        purpose: smsSharedLearningPurpose,
-        granted: true,
-        grantedAt: DateTime.utc(2026, 10, 1),
-        policyVersion: smsSharedLearningPolicyVersion,
-      ),
-    );
     await tester.pumpAndSettle();
-    await tester.pump();
 
     expect(repo.editCalls, 2);
-    expect(
-      SmsFeedbackOutbox(database, namespace: namespace).pending(),
-      hasLength(1),
-    );
   });
 
-  testWidgets('normal SMS edit captures feedback before leaving the editor', (
+  testWidgets('a normal SMS edit saves and leaves the editor', (
     tester,
   ) async {
     final database = openInMemoryForTesting();
@@ -432,7 +410,6 @@ void main() {
       status: 'active',
     );
     final repo = _FakeUserCardsRepository(entry);
-    final consentCompleter = Completer<ConsentRecord?>();
     await _pump(
       tester,
       repo: repo,
@@ -444,33 +421,17 @@ void main() {
           (ref) async => ResponseCache(database),
         ),
         isOnlineProvider.overrideWith((ref) => Stream.value(false)),
-        smsSharedLearningConsentProvider.overrideWith(
-          (ref) => consentCompleter.future,
-        ),
       ],
     );
     await tester.enterText(find.widgetWithText(TextField, 'Amount (₹)'), '555');
     await tester.tap(find.text('Save'));
     await tester.pump();
     expect(repo.editCalls, 1);
-    expect(find.byType(EditTransactionScreen), findsOneWidget);
-    consentCompleter.complete(
-      ConsentRecord(
-        purpose: smsSharedLearningPurpose,
-        granted: true,
-        grantedAt: DateTime.utc(2026, 10, 1),
-        policyVersion: smsSharedLearningPolicyVersion,
-      ),
-    );
     await tester.pumpAndSettle();
 
     expect(repo.editCalls, 1);
     expect(repo.lastEditArgs?['amountInr'], 555.0);
     expect(find.byType(EditTransactionScreen), findsNothing);
-    expect(
-      SmsFeedbackOutbox(database, namespace: namespace).pending(),
-      hasLength(1),
-    );
   });
 
   testWidgets('income transactions keep their kind editable without a card', (

@@ -12,7 +12,6 @@ import '../../data/api_exception.dart';
 import '../../data/user_cards_repository.dart';
 import '../../data/api_exception.dart' show userFacingErrorMessage;
 import '../../main.dart' show MoneyText;
-import 'sms_learning_capture.dart' show queueSmsLearningEvent;
 import 'transaction_detail_screen.dart' show transactionDetailProvider;
 
 class DeletedTransactionsScreen extends ConsumerStatefulWidget {
@@ -62,11 +61,6 @@ class _DeletedTransactionsScreenState
       ref.invalidate(transactionsProvider);
       ref.invalidate(utilizationTransactionsProvider);
       ref.invalidate(homeSummaryProvider);
-      // Undoing a wrong-transaction report here must withdraw the same
-      // learning claim the detail screen's restore does.
-      if (entry.note?.contains('[ignored: wrong_transaction]') == true) {
-        unawaited(_recordSmsDisputeWithdrawal(entry));
-      }
       if (!mounted) return;
       setState(() => _entries?.removeWhere((item) => item.id == entry.id));
       if (edit) {
@@ -83,25 +77,6 @@ class _DeletedTransactionsScreenState
         ).showSnackBar(SnackBar(content: Text(userFacingErrorMessage(error))));
       }
     }
-  }
-
-  Future<void> _recordSmsDisputeWithdrawal(TransactionEntry entry) async {
-    if (entry.source != 'sms' && entry.source != 'sms_bulk') return;
-    await queueSmsLearningEvent(
-      ref: ref,
-      sourceKey: entry.sourceKey ?? '',
-      action: 'moved_to_review',
-      resolvedKind: 'transaction',
-      occurredAtIso: entry.occurredAt.toUtc().toIso8601String(),
-      originalDecision: {
-        'kind': 'dismissed',
-        'origin': 'manual',
-        'fields': const {},
-      },
-      correctedFields: const {},
-      correctionKind: 'false_dismissal',
-      reason: 'wrong_transaction_report_withdrawn',
-    );
   }
 
   @override

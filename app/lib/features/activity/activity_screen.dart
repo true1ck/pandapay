@@ -24,7 +24,7 @@ import '../auth/login_screen.dart';
 import 'activity_projection.dart';
 import 'foreign_payments_screen.dart';
 import 'deleted_transactions_screen.dart';
-import 'sms_learning_capture.dart';
+import 'local_category_learning.dart';
 
 /// D1 Transaction List (ui-spec Group D, implementation-plan-group-c-d.md)
 /// — extends the original flat list (UA-3+/Chunk 18) with date grouping,
@@ -371,7 +371,7 @@ class _ActivityScreenState extends ConsumerState<ActivityScreen> {
       await Future.wait(
         ids.map((id) => repo.editTransaction(id, categoryId: chosen)),
       );
-      unawaited(_recordSmsBulkCategoryFeedback(visible, chosen));
+      unawaited(_teachLocalCategoryRules(visible, chosen));
       if (mounted) {
         setState(() {
           _selectedIds.clear();
@@ -399,12 +399,10 @@ class _ActivityScreenState extends ConsumerState<ActivityScreen> {
     }
   }
 
-  /// Queues one consented category correction per SMS-backed transaction in a
+  /// Teaches the on-device merchant rule for each SMS-backed transaction in a
   /// bulk reassign, after every local edit has committed. Entries already in
-  /// the chosen category produce no evidence; a private custom category stays
-  /// local entirely. Bulk card reassignment queues nothing: a device-local
-  /// card id is not shareable evidence and the instrument does not change.
-  Future<void> _recordSmsBulkCategoryFeedback(
+  /// the chosen category teach nothing. Local only: nothing is uploaded.
+  Future<void> _teachLocalCategoryRules(
     List<TransactionEntry> visible,
     String chosenCategoryId,
   ) async {
@@ -419,16 +417,21 @@ class _ActivityScreenState extends ConsumerState<ActivityScreen> {
 
     final correctedSlug = slugFor(chosenCategoryId);
     if (correctedSlug == null) return;
-    for (final entry in visible) {
-      if (!selectedIds.contains(entry.id)) continue;
-      if (entry.categoryId == chosenCategoryId) continue;
-      await queueSmsTransactionCorrection(
-        ref: ref,
-        original: entry,
-        action: 'edited',
-        correctedFields: {'categorySlug': correctedSlug},
-        correctionKind: 'misclassified_category',
-      );
+    try {
+      final cache = await ref.read(responseCacheProvider.future);
+      final namespace = ref.read(cacheNamespaceProvider);
+      for (final entry in visible) {
+        if (!selectedIds.contains(entry.id)) continue;
+        if (entry.categoryId == chosenCategoryId) continue;
+        recordLocalCategoryCorrection(
+          database: cache.financialStore.database,
+          namespace: namespace,
+          original: entry,
+          categorySlug: correctedSlug,
+        );
+      }
+    } catch (_) {
+      // Local rules are a convenience; the category edit already committed.
     }
   }
 

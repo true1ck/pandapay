@@ -15,8 +15,6 @@ import '../../app/providers.dart';
 import '../../data/api_exception.dart';
 import '../../data/catalogue_repository.dart'
     show categoryIdForServer, userCategoryIdForServer;
-import '../../data/local/sync_queue.dart';
-import '../../data/local/sms_feedback_outbox.dart';
 import '../../data/merchant_category_rules_repository.dart';
 import '../../data/user_cards_repository.dart';
 import '../../data/self_transfer.dart';
@@ -25,7 +23,6 @@ import '../../data/local/self_transfer_rules.dart';
 import '../../data/local/sms_intake_repository.dart';
 import 'category_bulk_review_sheet.dart';
 import 'merchant_future_rule_sheet.dart';
-import 'sms_learning_capture.dart';
 
 /// D3 Edit Transaction (ui-spec Group D). All fields editable, explicit
 /// save/cancel; recomputes caps/milestones on save — that recompute is
@@ -161,8 +158,6 @@ class _EditTransactionScreenState extends ConsumerState<EditTransactionScreen> {
       if (financialChanged) {
         await _submitEdit(amount);
         await _rememberSelfTransfer();
-        if (_selfTransfer == null && _clearedSelfTransfer == null)
-          await _recordSmsEditFeedbackSafely(amount);
       }
       ref.invalidate(userCardsProvider);
       ref.invalidate(myCardsProvider);
@@ -213,7 +208,7 @@ class _EditTransactionScreenState extends ConsumerState<EditTransactionScreen> {
           _selfTransfer == null &&
           _clearedSelfTransfer == null) {
         final queue = await ref.read(syncQueueProvider.future);
-        final clientSeq = queue.enqueueUpdate(
+        queue.enqueueUpdate(
           entity: 'transactions',
           entityId: widget.transactionId,
           fields: {
@@ -230,13 +225,6 @@ class _EditTransactionScreenState extends ConsumerState<EditTransactionScreen> {
             'rail': _railWireValue(_rail),
           },
         );
-        if (financialChanged) {
-          try {
-            await _queueSmsEditFeedbackAfterSync(queue, clientSeq, amount);
-          } catch (_) {
-            // Learning capture cannot undo a durable offline financial edit.
-          }
-        }
         ref.invalidate(pendingSyncCountProvider);
         if (mounted) {
           ScaffoldMessenger.of(context).showSnackBar(
@@ -256,10 +244,6 @@ class _EditTransactionScreenState extends ConsumerState<EditTransactionScreen> {
           if (refreshed != null && refreshed.isNotEmpty) {
             await _submitEdit(amount);
             await _rememberSelfTransfer();
-            if (financialChanged) {
-              if (_selfTransfer == null)
-                await _recordSmsEditFeedbackSafely(amount);
-            }
             ref.invalidate(userCardsProvider);
             ref.invalidate(myCardsProvider);
             ref.invalidate(transactionsProvider);
@@ -485,137 +469,6 @@ class _EditTransactionScreenState extends ConsumerState<EditTransactionScreen> {
               },
       ),
     );
-  }
-
-  /// Queues one typed correction when an SMS-backed transaction is edited from
-  /// Activity. Runs after the PATCH has committed, so a failed or offline save
-  /// never produces evidence, and never blocks or fails the user's edit.
-  Future<void> _recordSmsEditFeedback(double amount) async {
-    if (_originalEntry?.pipelineVersion == 2) return;
-    final original = _originalEntry;
-    if (original == null) return;
-    final categories = ref.read(categoriesProvider).valueOrNull ?? const [];
-    String? slugFor(String? id) {
-      for (final category in categories) {
-        if (category.id == id) return category.slug;
-      }
-      return null;
-    }
-
-    final merchant = _merchantController.text.trim();
-    await queueSmsTransactionCorrection(
-      ref: ref,
-      original: original,
-      action: 'edited',
-      correctedFields: {
-        'amountInr': amount,
-        if (_occurredAt != null)
-          'occurredAt': _occurredAt!.toUtc().toIso8601String(),
-        if (merchant.isNotEmpty) 'merchant': merchant,
-        // A private custom category stays local: it is sent only when it maps
-        // to a canonical spend slug, so it can never enter shared learning.
-        if (slugFor(_categoryId) != null) 'categorySlug': slugFor(_categoryId),
-        if (_instrument != null) 'instrument': _instrument!.wireValue,
-        'entryKind': _entryKind.wireValue,
-      },
-      correctionKind: _smsEditCorrectionKind(original, amount),
-    );
-  }
-
-  Future<void> _recordSmsEditFeedbackSafely(double amount) async {
-    try {
-      await _recordSmsEditFeedback(amount);
-    } catch (_) {
-      // The financial edit has committed; learning capture is best effort.
-    }
-  }
-
-  Future<void> _queueSmsEditFeedbackAfterSync(
-    SyncQueue queue,
-    int clientSeq,
-    double amount,
-  ) async {
-    final original = _originalEntry;
-    if (original == null ||
-        (original.source != 'sms' && original.source != 'sms_bulk')) {
-      return;
-    }
-    final sourceKey = original.sourceKey ?? '';
-    if (!RegExp(r'^[0-9a-f]{64}$').hasMatch(sourceKey)) return;
-    final cache = await ref.read(responseCacheProvider.future);
-    final feedbackOutbox = SmsFeedbackOutbox(
-      cache.financialStore.database,
-      namespace: ref.read(cacheNamespaceProvider),
-    );
-    const factIndex = 0;
-    if (feedbackOutbox.hasMultiplePersistedFacts(sourceKey)) return;
-    // Persist this metadata before the edit screen closes or sync can run.
-    // Sync checks the current grant and its timestamp before upload.
-    final categories = ref.read(categoriesProvider).valueOrNull ?? const [];
-    String? slugFor(String? id) {
-      for (final category in categories) {
-        if (category.id == id) return category.slug;
-      }
-      return null;
-    }
-
-    final merchant = _merchantController.text.trim();
-    final originalFields = <String, dynamic>{
-      'amountInr': original.amount.rupees,
-      'occurredAt': original.occurredAt.toUtc().toIso8601String(),
-      if ((original.merchantName ?? '').trim().isNotEmpty)
-        'merchant': original.merchantName!.trim(),
-      if (slugFor(original.categoryId) != null)
-        'categorySlug': slugFor(original.categoryId),
-      if (original.instrumentKnown) 'instrument': original.instrument.wireValue,
-      'entryKind': original.entryKind.wireValue,
-    };
-    final correctedFields = <String, dynamic>{
-      'amountInr': amount,
-      if (_occurredAt != null)
-        'occurredAt': _occurredAt!.toUtc().toIso8601String(),
-      if (merchant.isNotEmpty) 'merchant': merchant,
-      if (slugFor(_categoryId) != null) 'categorySlug': slugFor(_categoryId),
-      if (_instrument != null) 'instrument': _instrument!.wireValue,
-      'entryKind': _entryKind.wireValue,
-    };
-    const origin = 'parser';
-    final feedback = <String, dynamic>{
-      'sourceKey': sourceKey,
-      'action': 'edited',
-      'resolvedKind': 'transaction',
-      'occurredAt': original.occurredAt.toUtc().toIso8601String(),
-      'originalDecision': {
-        'kind': 'posted_movement',
-        'origin': origin,
-        'fields': originalFields,
-      },
-      'correctedFields': correctedFields,
-      'correctionKind': _smsEditCorrectionKind(original, amount),
-      'decisionOrigin': origin,
-      'factIndex': factIndex,
-    };
-    feedback['capturedAt'] = DateTime.now().toUtc().toIso8601String();
-    queue.enqueueSmsLearningAfterSync(clientSeq: clientSeq, payload: feedback);
-  }
-
-  String _smsEditCorrectionKind(TransactionEntry original, double amount) {
-    if (original.categoryId != _categoryId) return 'misclassified_category';
-    if (original.entryKind != _entryKind) return 'misclassified_kind';
-    if (original.amount != Money.fromRupees(amount)) return 'wrong_amount';
-    if ((original.merchantName ?? '') != _merchantController.text.trim()) {
-      return 'wrong_merchant';
-    }
-    if (original.occurredAt != _occurredAt) return 'wrong_date';
-    if (original.instrumentKnown &&
-        _instrument != null &&
-        original.instrument != _instrument) {
-      return 'wrong_instrument';
-    }
-    if (original.userCardId != _userCardId || original.rail != _rail) {
-      return 'wrong_account';
-    }
-    return 'cosmetic';
   }
 
   String _categoryLabel(String? id) {
