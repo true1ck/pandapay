@@ -1,0 +1,41 @@
+{
+  "id": "foreign:fee_account_with_reference",
+  "templateHash": "bff2305f6cfa873b4b6aca4bfef18e2c4bd0b737f36ab11c207f5ce3b348c115",
+  "weight": 1,
+  "source": "synthetic",
+  "messages": [
+    {
+      "sender": "VM-ICICIB-S",
+      "body": "Rs 52.50 debited from A/c XX1234 on 01-11-26 towards cross currency markup charges for POS txn ref 612345678901.",
+      "observedAt": "2026-11-03T10:00:00.000Z"
+    }
+  ],
+  "expect": {
+    "facts": [
+      {
+        "factType": "movement",
+        "attrs": {
+          "direction": "debit",
+          "purpose": "fee",
+          "rail": "unknown"
+        },
+        "amounts": [
+          {
+            "role": "posted",
+            "minor": 5250,
+            "unit": "INR"
+          }
+        ],
+        "instrument": {
+          "maskDigits": "1234",
+          "kind": "bank_account"
+        },
+        "references": {
+          "txnId": "612345678901"
+        }
+      }
+    ]
+  },
+  "note": "Account markup fee with the transaction reference.",
+  "origin": "foreign-v2-more"
+}

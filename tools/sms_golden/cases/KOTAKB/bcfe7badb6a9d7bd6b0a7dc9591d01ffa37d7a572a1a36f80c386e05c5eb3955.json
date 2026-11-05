@@ -1,0 +1,38 @@
+{
+  "id": "foreign:forex_card_amount_first",
+  "templateHash": "bcfe7badb6a9d7bd6b0a7dc9591d01ffa37d7a572a1a36f80c386e05c5eb3955",
+  "weight": 1,
+  "source": "synthetic",
+  "messages": [
+    {
+      "sender": "VM-KOTAKB-S",
+      "body": "EUR 50.00 spent on your Forex Card XX1234 at SAMPLE CAFE on 01-11-26. Avl Bal EUR 450.00",
+      "observedAt": "2026-11-03T10:00:00.000Z"
+    }
+  ],
+  "expect": {
+    "facts": [
+      {
+        "factType": "movement",
+        "attrs": {
+          "direction": "debit",
+          "purpose": "purchase",
+          "rail": "card"
+        },
+        "amounts": [
+          {
+            "role": "posted",
+            "minor": 5000,
+            "unit": "EUR"
+          }
+        ],
+        "instrument": {
+          "maskDigits": "1234",
+          "kind": "prepaid_card"
+        }
+      }
+    ]
+  },
+  "note": "Amount-first forex card spend.",
+  "origin": "foreign-v2-more"
+}

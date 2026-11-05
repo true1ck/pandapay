@@ -1,0 +1,38 @@
+{
+  "id": "foreign:account_debited_with",
+  "templateHash": "a7871b52a3edb7e8b606d4db34c3e01cadbd78b41a43e6ece044a5e03169b86b",
+  "weight": 1,
+  "source": "synthetic",
+  "messages": [
+    {
+      "sender": "VM-ICICIB-S",
+      "body": "Your A/c XX1234 is debited with EUR 50.00 on 01-11-26 for SAMPLE.",
+      "observedAt": "2026-11-03T10:00:00.000Z"
+    }
+  ],
+  "expect": {
+    "facts": [
+      {
+        "factType": "movement",
+        "attrs": {
+          "direction": "debit",
+          "purpose": "purchase",
+          "rail": "unknown"
+        },
+        "amounts": [
+          {
+            "role": "posted",
+            "minor": 5000,
+            "unit": "EUR"
+          }
+        ],
+        "instrument": {
+          "maskDigits": "1234",
+          "kind": "bank_account"
+        }
+      }
+    ]
+  },
+  "note": "Account debited with a foreign amount.",
+  "origin": "foreign-v2-more"
+}

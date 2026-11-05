@@ -819,5 +819,14 @@
     "pattern": "\\b(?:spent|charged|debited|txn|trxn|transaction|purchase|payment)\\b[^\\n]{0,30}?(?:\\b(?:usd|eur|gbp|aed|sgd|aud|cad|jpy|chf|cny|hkd|nzd|sar|thb|myr|idr|krw|zar|sek|nok|dkk|qar|kwd|omr|bhd|twd|php|vnd|lkr|npr|egp|czk|huf|pln|ils|mxn|brl|kes|mur|mvr|bwp|jod|rub|sek)(?![a-z])|us\\$|\\$|€|£)\\s*0+(?:\\.0+)?(?![\\d.,])",
     "flags": "i",
     "reason": "service"
+  },
+  {
+    "id": "IGN-CARD-EMI-CONVERTED-FX",
+    "senders": [
+      "*"
+    ],
+    "pattern": "^(?![\\s\\S]*?(?:\\b(?:has\\s+been|have\\s+been|was|is|are|were)\\s+(?:successfully\\s+)?(?:debited|credited|charged|deducted|withdrawn|refunded|reversed|levied)\\b|\\b(?:debited|credited|deducted|charged|levied|spent|paid)\\s*(?:by|with|for|of|from|to|on|at|towards)?\\s*(?:rs\\.?|inr|₹|\\b(?:usd|eur|gbp|aed|sgd|aud|cad|jpy|chf|cny|hkd|nzd|sar|thb|myr|idr|krw|zar|sek|nok|dkk|qar|kwd|omr|bhd|twd|php|vnd|lkr|npr|egp|czk|huf|pln|ils|mxn|brl|kes|mur|mvr|bwp|jod|rub)(?![a-z])|us\\$|\\$|€|£)\\s*\\d|(?:rs\\.?|inr|₹)\\s*[\\d,]+(?:\\.\\d+)?\\s*(?:has\\s+been\\s+|is\\s+|was\\s+)?(?:debited|credited|spent|charged|deducted|levied)\\b))(?=[\\s\\S]*?(?:\\b(?:usd|eur|gbp|aed|sgd|aud|cad|jpy|chf|cny|hkd|nzd|sar|thb|myr|idr|krw|zar|sek|nok|dkk|qar|kwd|omr|bhd|twd|php|vnd|lkr|npr|egp|czk|huf|pln|ils|mxn|brl|kes|mur|mvr|bwp|jod|rub)(?![a-z])|us\\$|\\$|€|£)\\s*\\d)[\\s\\S]*?(?:\\b(?:has\\s+been|have\\s+been|is|are|was|were|got)\\s+(?:successfully\\s+)?(?:converted|booked)\\s+(?:in)?to\\s+(?:an?\\s+)?(?:\\d+\\s+(?:monthly\\s+)?)?(?:smart\\s+|flexi\\s*pay\\s+|easy\\s+)?emis?\\b|\\bemi\\s+(?:conversion|booking)\\b[^\\n]{0,40}?\\b(?:is\\s+|has\\s+been\\s+|was\\s+)?(?:successful(?:ly)?|done|processed|completed|confirmed|approved)\\b|\\bsuccessfully\\s+converted\\b[^\\n]{0,80}?\\b(?:in)?to\\s+(?:an?\\s+)?(?:\\d+\\s+)?emis?\\b)",
+    "flags": "i",
+    "reason": "service"
   }
 ]

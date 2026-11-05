@@ -1,0 +1,41 @@
+{
+  "id": "foreign:forex_card_debited_with",
+  "templateHash": "561b8a7d1adc1163a4fd9c18d9d9d1ef0ca7d1154a7723be7b62411835396ad3",
+  "weight": 1,
+  "source": "synthetic",
+  "messages": [
+    {
+      "sender": "VM-AXISBK-S",
+      "body": "Your Forex Card XX4321 has been debited with EUR 50.00 at SAMPLE CAFE on 01-11-26. Available balance EUR 450.00.",
+      "observedAt": "2026-11-03T10:00:00.000Z"
+    }
+  ],
+  "expect": {
+    "facts": [
+      {
+        "factType": "movement",
+        "attrs": {
+          "direction": "debit",
+          "purpose": "purchase",
+          "rail": "card"
+        },
+        "amounts": [
+          {
+            "role": "posted",
+            "minor": 5000,
+            "unit": "EUR"
+          }
+        ],
+        "instrument": {
+          "maskDigits": "4321",
+          "kind": "prepaid_card"
+        },
+        "counterparty": {
+          "name": "SAMPLE CAFE"
+        }
+      }
+    ]
+  },
+  "note": "Forex card spend; the foreign balance is not an INR balance.",
+  "origin": "foreign-v2-more"
+}

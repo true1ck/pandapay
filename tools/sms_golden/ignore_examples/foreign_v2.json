@@ -23,6 +23,45 @@
     ]
   },
   {
+    "rule": "IGN-CARD-EMI-CONVERTED-FX",
+    "positive": [
+      {
+        "sender": "VM-EXAMPL-S",
+        "body": "Your transaction of USD 500.00 at SAMPLE STORE on Credit Card XX1234 has been converted to EMI of Rs 7,350.00 for 6 months."
+      },
+      {
+        "sender": "VM-EXAMPL-S",
+        "body": "Dear Customer, txn of Rs 43,500.00 (USD 500.00) on your Credit Card XX1234 at SAMPLE STORE is converted into 6 EMIs of Rs 7,350.00."
+      },
+      {
+        "sender": "VM-EXAMPL-S",
+        "body": "EMI conversion successful for transaction of USD 500.00 on Card XX1234. Monthly EMI Rs 7,350.00 for 6 months."
+      },
+      {
+        "sender": "VM-EXAMPL-S",
+        "body": "Your foreign currency transaction of EUR 420.00 on Credit Card XX1234 has been successfully converted into 12 EMIs."
+      }
+    ],
+    "negative": [
+      {
+        "sender": "VM-EXAMPL-S",
+        "body": "Spent USD 500.00 on Credit Card XX1234 at SAMPLE STORE on 01-11-26. To convert this txn to EMI call us."
+      },
+      {
+        "sender": "VM-EXAMPL-S",
+        "body": "Your transaction of Rs 50,000.00 at SAMPLE STORE on Credit Card XX1234 has been converted to EMI of Rs 4,350.00 for 12 months."
+      },
+      {
+        "sender": "VM-EXAMPL-S",
+        "body": "EMI conversion successful for transaction of USD 500.00 on Card XX1234. Processing fee of Rs 199.00 has been charged to your card."
+      },
+      {
+        "sender": "VM-EXAMPL-S",
+        "body": "Convert your transaction of USD 500.00 on Credit Card XX1234 to EMI at 13% p.a. Reply EMI to 56767."
+      }
+    ]
+  },
+  {
     "rule": "IGN-EMI-AND-CARD-OFFER",
     "positive": [
       {
