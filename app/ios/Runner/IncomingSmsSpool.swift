@@ -6,7 +6,7 @@ import CryptoKit
 /// SQLite transactions arbitrate cold App Intent invocations and Flutter drains.
 /// Nothing in this store uploads content or decides whether an SMS is financial.
 enum IncomingSmsError: Error, LocalizedError {
-  case storage, inactive, stale, invalid, full
+  case storage, inactive, stale, invalid, full, cipher, keyUnavailable
   var errorDescription: String? {
     switch self {
     case .storage: return "Message storage is unavailable. Retry from PandaPay."
@@ -14,6 +14,8 @@ enum IncomingSmsError: Error, LocalizedError {
     case .stale: return "This import is no longer current. Continue from PandaPay."
     case .invalid: return "The message import request is incomplete. Check its Shortcut mappings."
     case .full: return "Message processing is pending. Open PandaPay before importing more."
+    case .cipher: return "A saved message could not be read."
+    case .keyUnavailable: return "Saved messages are locked. Unlock your phone and try again."
     }
   }
 }
@@ -36,6 +38,9 @@ final class IncomingSmsSpool {
   private let now: () -> Date
   private let receiverBuild: String?
   private let transient = unsafeBitCast(-1, to: sqlite3_destructor_type.self)
+  /// Set by `purge`; the key is destroyed right after the emptying transaction
+  /// commits, still under `lock`, so a rollback never strands readable rows.
+  private var destroyKeyAfterCommit = false
 
   init(directory: URL? = nil, maxPending: Int = 10_000, now: @escaping () -> Date = Date.init,
        receiverBuild: String? = Bundle.main.object(forInfoDictionaryKey: "CFBundleVersion") as? String) {
@@ -135,8 +140,13 @@ final class IncomingSmsSpool {
       try execute(db, "PRAGMA user_version=2")
       let value = try operation(db)
       try execute(db, "COMMIT")
+      if destroyKeyAfterCommit {
+        destroyKeyAfterCommit = false
+        SpoolCipher.destroyKey()
+      }
       return value
     } catch {
+      destroyKeyAfterCommit = false
       try? execute(db, "ROLLBACK")
       throw error
     }
@@ -150,6 +160,7 @@ final class IncomingSmsSpool {
 
   private func purge(_ db: OpaquePointer) throws {
     for table in ["receipts", "windows", "jobs", "captures", "settings", "owner"] { try execute(db, "DELETE FROM \(table)") }
+    destroyKeyAfterCommit = true
   }
 
   /// Account switches revoke all issued attempts. Enable requires explicit UI consent.
@@ -366,27 +377,46 @@ final class IncomingSmsSpool {
         // A transport ledger must not permanently suppress a shared parser upgrade.
         if previous["state"] as? String == "committed", (previous["parser_version"] as? Int ?? 0) < currentVersion {
           try requireCapacity(db, body: body)
-          try execute(db, "UPDATE captures SET state='pending',body=?,sender=?,received_at=?,date_provenance=?,captured_at=? WHERE id=?", [body, sender, original, provenance, stamp(now()), previous["id"]])
+          try execute(db, "UPDATE captures SET state='pending',body=?,sender=?,received_at=?,date_provenance=?,captured_at=? WHERE id=?", [try SpoolCipher.seal(body), try sealedSender(sender), original, provenance, stamp(now()), previous["id"]])
         }
         return try receipt("already_saved", capture: previous["id"] as? String)
       }
       try requireCapacity(db, body: body)
       let id = UUID().uuidString
       try execute(db, "INSERT INTO captures(id,generation,occurrence,body,sender,received_at,captured_at,date_provenance,state) VALUES(?,?,?,?,?,?,?,?,'pending')",
-                  [id, generation, fingerprint, body, sender, original, stamp(now()), provenance])
+                  [id, generation, fingerprint, try SpoolCipher.seal(body), try sealedSender(sender), original, stamp(now()), provenance])
       return try receipt(sender.isEmpty ? "saved_without_sender" : "saved_for_processing", capture: id)
     }
+  }
+
+  /// Sender text is sealed when present; an empty sender carries no content.
+  private func sealedSender(_ sender: String) throws -> String {
+    sender.isEmpty ? "" : try SpoolCipher.seal(sender)
   }
 
   func pending(generation: String, limit: Int = 50) throws -> [[String: Any]] {
     try transaction { db in
       let account = try owner(db, generation: generation)
-      return try query(db, "SELECT id,body,sender,received_at AS receivedAt,captured_at AS capturedAt,date_provenance AS dateProvenance FROM captures WHERE generation=? AND state='pending' ORDER BY captured_at,id LIMIT ?", [generation, min(50, max(1, limit))]).map { row in
-        var value = row; value["namespace"] = account["namespace"]; value["generation"] = generation
-        value["senderEvidence"] = (row["sender"] as? String ?? "").isEmpty ? "missing" : "text"
-        value["bodyCharacters"] = (row["body"] as! String).utf16.count
-        return value
+      var result: [[String: Any]] = []
+      for row in try query(db, "SELECT id,body,sender,received_at AS receivedAt,captured_at AS capturedAt,date_provenance AS dateProvenance FROM captures WHERE generation=? AND state='pending' ORDER BY captured_at,id LIMIT ?", [generation, min(50, max(1, limit))]) {
+        var value = row
+        do {
+          let body = try SpoolCipher.openStored(row["body"] as? String ?? "")
+          let sender = try SpoolCipher.openStored(row["sender"] as? String ?? "")
+          value["body"] = body; value["sender"] = sender
+          value["bodyCharacters"] = body.utf16.count
+          value["senderEvidence"] = sender.isEmpty ? "missing" : "text"
+        } catch IncomingSmsError.cipher {
+          // The key for this row is gone for good (corrupt text or a key that
+          // was destroyed). Retire it so it cannot block the queue; a locked
+          // key (`keyUnavailable`) is thrown instead and retried later.
+          try execute(db, "UPDATE captures SET state='committed',body=NULL,sender=NULL,occurrence=NULL,outcome='ignored',source_key=NULL,parser_version=0 WHERE id=?", [row["id"]])
+          continue
+        }
+        value["namespace"] = account["namespace"]; value["generation"] = generation
+        result.append(value)
       }
+      return result
     }
   }
 
@@ -400,7 +430,8 @@ final class IncomingSmsSpool {
           // Validate against the original saved input: an arbitrary caller
           // cannot discard a financial message using a security receipt.
           if let capture = try query(db, "SELECT body FROM captures WHERE id=? AND generation=? AND state='pending'", [id, generation]).first {
-            guard let body = capture["body"] as? String, SmsSecurityPolicy.sensitive(body) else { throw IncomingSmsError.invalid }
+            guard let stored = capture["body"] as? String, let body = try? SpoolCipher.openStored(stored),
+                  SmsSecurityPolicy.sensitive(body) else { throw IncomingSmsError.invalid }
             try execute(db, "UPDATE receipts SET outcome='excluded_security',binding=NULL WHERE capture_id=?", [id])
             try execute(db, "UPDATE captures SET state='committed',body=NULL,sender=NULL,occurrence=NULL,outcome='ignored',source_key=NULL,parser_version=? WHERE id=? AND generation=?", [version, id, generation])
           }
