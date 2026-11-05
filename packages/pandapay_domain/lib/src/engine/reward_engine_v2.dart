@@ -15,8 +15,8 @@ import 'engine.dart';
 enum RewardCurrency { points, cashback }
 
 RewardCurrency rewardCurrencyOf(RewardUnit unit) => switch (unit) {
-  RewardUnit.cashbackPercent || RewardUnit.discountPercent =>
-    RewardCurrency.cashback,
+  RewardUnit.cashbackPercent ||
+  RewardUnit.discountPercent => RewardCurrency.cashback,
   _ => RewardCurrency.points,
 };
 
@@ -100,6 +100,12 @@ class RewardEvaluation {
   final Money overflowSpend;
   final Money overMaxSpend;
 
+  /// 2 for the plan C3 path. 1 when [RecommendationEngine.evaluateRewardV2]
+  /// handed a v1-shaped card (C3.2/D10) to the original engine: then only
+  /// [valueInr], [ruleId] and [excluded] are meaningful, [capDeltas] is
+  /// empty, and [points]/[cashbackInr] are derived from the value.
+  final int engineVersion;
+
   const RewardEvaluation({
     required this.excluded,
     this.ruleId,
@@ -117,6 +123,7 @@ class RewardEvaluation {
     this.ruleSpend = const Money.zero(),
     this.overflowSpend = const Money.zero(),
     this.overMaxSpend = const Money.zero(),
+    this.engineVersion = 2,
   });
 
   Money get value => Money.fromRupees(valueInr);
@@ -149,7 +156,8 @@ class _Decimal {
   const _Decimal(this.numerator, this.denominator);
 
   factory _Decimal.of(double value) {
-    if (value.isNaN || value.isInfinite) return _Decimal(BigInt.zero, BigInt.one);
+    if (value.isNaN || value.isInfinite)
+      return _Decimal(BigInt.zero, BigInt.one);
     var text = value.abs().toString();
     var exponent = 0;
     final e = text.indexOf(RegExp('[eE]'));
@@ -257,12 +265,12 @@ double _accrue(
 }
 
 /// The rule's nominal earn rate as a fraction of spend — the C3.4 tie-break
-/// and the breakdown's headline rate. A flat bonus is spread over [amount].
+/// and the breakdown's headline rate. A flat bonus has no per-rupee rate
+/// and reads as 0, as in the JS engine (and [RewardUnit]).
 double _ratePerRupee(
   RewardUnit unit,
   double rate,
-  double pointValueInr,
-  Money amount, {
+  double pointValueInr, {
   int? blockInr,
 }) {
   switch (unit) {
@@ -270,7 +278,7 @@ double _ratePerRupee(
     case RewardUnit.discountPercent:
       return rate / 100;
     case RewardUnit.flatPoints:
-      return amount.paise <= 0 ? 0 : rate * pointValueInr / amount.rupees;
+      return 0;
     case RewardUnit.pointsPer100:
     case RewardUnit.pointsPer150:
     case RewardUnit.pointsPer200:
@@ -568,13 +576,8 @@ RewardEvaluation computeRewardV2(
   }
 
   // C3.4.2 lowest priority; tie → highest ₹-per-₹ rate; tie → catalogue order.
-  double rateOf(RewardRule r) => _ratePerRupee(
-    r.unit,
-    r.rate,
-    pointValue,
-    context.amount,
-    blockInr: r.blockInr,
-  );
+  double rateOf(RewardRule r) =>
+      _ratePerRupee(r.unit, r.rate, pointValue, blockInr: r.blockInr);
   final earning =
       applicable
           .where(
@@ -608,7 +611,7 @@ RewardEvaluation computeRewardV2(
   final isBaseRole = rule == null || rule.effectiveRole == RuleRole.base;
   final rounding = card.accrualRounding ?? AccrualRounding.floor;
   final ratePerRupee = rule == null
-      ? _ratePerRupee(ruleUnit, ruleRate, pointValue, context.amount)
+      ? _ratePerRupee(ruleUnit, ruleRate, pointValue)
       : rateOf(rule);
 
   double baseAccrual(int paise) =>
@@ -688,8 +691,15 @@ RewardEvaluation computeRewardV2(
   // Step 3: accrue on the rule's spend, and on the overflow.
   final base = _Ledger();
   final bonus = _Ledger();
-  final overflow = _Ledger();
-  final extra = _Ledger();
+  // Cap overflow and spend above max_txn_inr, each accrued and rounded on
+  // its own (D9.5). Both count toward total caps, not eligible-spend caps.
+  final pieces = _Ledger();
+  final involved = <RewardCurrency>{ruleCurrency, ?baseCurrency};
+  void addPiece(RewardCurrency currency, double amount) {
+    pieces.add(currency, amount);
+    if (amount > 0) involved.add(currency);
+  }
+
   final ruleAccrual = _accrue(
     ruleUnit,
     ruleRate,
@@ -717,20 +727,20 @@ RewardEvaluation computeRewardV2(
   if (overflowPaise > 0 && overflowCap != null) {
     switch (overflowCap.behavior) {
       case PostCapBehavior.baseRate:
-        if (hasBase) overflow.add(baseCurrency!, baseAccrual(overflowPaise));
+        if (hasBase) addPiece(baseCurrency!, baseAccrual(overflowPaise));
       case PostCapBehavior.zero:
         break;
       case PostCapBehavior.customRate:
         final unit = overflowCap.cap.postCapUnit ?? ruleUnit;
         final rate = overflowCap.cap.postCapRate ?? 0;
-        overflow.add(
+        addPiece(
           rewardCurrencyOf(unit),
           _accrue(unit, rate, overflowPaise, rounding),
         );
     }
   }
   if (overMaxPaise > 0 && hasBase) {
-    extra.add(baseCurrency!, baseAccrual(overMaxPaise));
+    addPiece(baseCurrency!, baseAccrual(overMaxPaise));
   }
 
   // Steps 4–7, per currency.
@@ -751,7 +761,7 @@ RewardEvaluation computeRewardV2(
         if (c.remaining <= allowedBonus) c.limiting = true;
       }
     }
-    final earned = base[currency] + allowedBonus + overflow[currency];
+    final earned = base[currency] + allowedBonus + pieces[currency];
 
     var allowedTotal = earned;
     for (final c in totalCaps) {
@@ -770,9 +780,7 @@ RewardEvaluation computeRewardV2(
     for (final c in totalCaps) {
       c.delta = allowedTotal;
     }
-    // The excess above max_txn_inr earns the base rate outside the caps
-    // (C3.5 "v1 behaviour").
-    finalEarned[currency] = allowedTotal + extra[currency];
+    finalEarned[currency] = allowedTotal;
   }
   for (final c in applied) {
     if (c.kind == CapKind.eligibleSpend) c.delta = rulePaise / 100;
@@ -785,13 +793,12 @@ RewardEvaluation computeRewardV2(
     if (d != 0) capDeltas[c.cap.id] = d;
   }
 
-  final cardCurrency = baseCurrency ?? ruleCurrency;
-  bool quotes(RewardCurrency c) =>
-      cardCurrency == c || ruleCurrency == c || finalEarned[c] != 0;
-  final points = quotes(RewardCurrency.points)
+  // D9.7: a currency is reported when the card's base or the chosen rule
+  // is in it, or a positive overflow/over-max accrual was.
+  final points = involved.contains(RewardCurrency.points)
       ? _round2(finalEarned.points)
       : null;
-  final cashback = quotes(RewardCurrency.cashback)
+  final cashback = involved.contains(RewardCurrency.cashback)
       ? _round2(finalEarned.cashback)
       : null;
   final valueInr = _round2(

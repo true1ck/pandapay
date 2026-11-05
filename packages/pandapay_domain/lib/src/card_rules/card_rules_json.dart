@@ -467,6 +467,23 @@ extension RedemptionOptionJson on RedemptionOption {
   };
 }
 
+/// [RewardRule.marksV2] (plan C8/D10) on a raw wire row that could not be
+/// parsed. Any `rule_role` other than the DB default `earn` counts —
+/// including an unrecognised one, which can only come from a v2 catalogue.
+bool _rawRuleMarksV2(Map<String, dynamic> json) {
+  bool nonEmpty(Object? v) => v is List ? v.isNotEmpty : v != null;
+  final role = json['rule_role'];
+  final engine = json['min_engine_version'];
+  return (role != null && role != 'earn') ||
+      nonEmpty(json['merchant_slugs']) ||
+      nonEmpty(json['platform_slugs']) ||
+      nonEmpty(json['mcc_include']) ||
+      nonEmpty(json['mcc_exclude']) ||
+      json['block_inr'] != null ||
+      (engine is num && engine >= 2) ||
+      (engine is String && (num.tryParse(engine) ?? 1) >= 2);
+}
+
 /// Parses each row with [parse]; a row whose v2 fields are unsupported is
 /// skipped and described in [warnings]. Any other error propagates (v1
 /// fields stay strict). [onV2Marker] is told when a skipped row carried a
@@ -608,7 +625,7 @@ extension CardProductJson on CardProduct {
       'reward_rule',
       RewardRuleJson.fromJson,
       warnings,
-      isV2Marker: (r) => r['rule_role'] != null,
+      isV2Marker: _rawRuleMarksV2,
       onV2Marker: markV2,
     );
     final capRules = _parseRowsTolerantly(

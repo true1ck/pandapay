@@ -270,6 +270,18 @@ class RewardRule {
   /// The role the v2 engine uses: a v1 row on a v2 card is an earning rule.
   RuleRole get effectiveRole => role ?? RuleRole.earn;
 
+  /// Plan C8/D10: whether this rule makes its card v2-shaped — a role other
+  /// than the DB default `earn`, any non-empty slug/MCC list, a `block_inr`,
+  /// or `min_engine_version` 2. `rule_role = 'earn'` alone does not.
+  bool get marksV2 =>
+      (role != null && role != RuleRole.earn) ||
+      merchantSlugs.isNotEmpty ||
+      platformSlugs.isNotEmpty ||
+      mccInclude.isNotEmpty ||
+      mccExclude.isNotEmpty ||
+      blockInr != null ||
+      minEngineVersion >= 2;
+
   /// Whether any v2-only field differs from its v1 default.
   bool get hasV2Fields =>
       role != null ||
@@ -695,13 +707,16 @@ class CardProduct {
     this.wireV2Shaped = false,
   });
 
-  /// C3.2: a card is v2-shaped if any rule carries `rule_role`, any cap
-  /// carries a `cap_kind`, or the card has `accrual_rounding`. v1-shaped
-  /// cards take the engine's original path unchanged.
+  /// C3.2 as amended by plan C8/D10: v2-shaped iff the card has
+  /// `accrual_rounding`, any cap has a `cap_kind`, or any rule carries a
+  /// non-default v2 value ([RewardRule.marksV2]). It must not key on
+  /// DB-defaulted columns: after the v2 migration every row has
+  /// `rule_role = 'earn'` and empty arrays, and such a card must keep
+  /// today's v1 answers. v1-shaped cards take the engine's original path.
   bool get isV2Shaped =>
       wireV2Shaped ||
       accrualRounding != null ||
-      rewardRules.any((r) => r.role != null) ||
+      rewardRules.any((r) => r.marksV2) ||
       capRules.any((c) => c.capKind != null);
 
   /// The card's everything-else earn rate as a fraction of spend, or 0 when

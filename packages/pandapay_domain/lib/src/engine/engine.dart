@@ -315,20 +315,77 @@ class RecommendationEngine {
     this.merchantDirectory,
   });
 
-  /// Plan C3 for one card and one transaction, in native units. Works on
-  /// any card; [rank] uses it for v2-shaped cards (C3.2). Consumption in
-  /// [capConsumedBefore] is per cap id, in the cap's native unit.
+  /// What one transaction earns on [card], in native units — the Dart twin
+  /// of `computeTransactionRewardV2` in api/src/reward_math_v2.js.
+  ///
+  /// v2-shaped cards (C3.2/D10) go through plan C3 ([computeRewardV2]);
+  /// consumption in [capConsumedBefore] is per cap id in the cap's native
+  /// unit. v1-shaped cards keep today's answer: they are handed to the
+  /// original engine, and the result has `engineVersion == 1` (value, rule
+  /// id and exclusion only; [capConsumedBefore] is then read in each cap's
+  /// v1 measure, as `capRemaining` always was).
   static RewardEvaluation evaluateRewardV2(
     CardProduct card,
     RecommendationContext context, {
     Map<String, double> capConsumedBefore = const {},
     MerchantDirectory? directory,
-  }) => computeRewardV2(
-    card,
-    context,
-    capConsumedBefore: capConsumedBefore,
-    directory: directory,
-  );
+  }) {
+    if (card.isV2Shaped) {
+      return computeRewardV2(
+        card,
+        context,
+        capConsumedBefore: capConsumedBefore,
+        directory: directory,
+      );
+    }
+    return _evaluateRewardV1(card, context, capConsumedBefore);
+  }
+
+  static RewardEvaluation _evaluateRewardV1(
+    CardProduct card,
+    RecommendationContext context,
+    Map<String, double> capConsumedBefore,
+  ) {
+    final snapshot = CardSnapshot(
+      product: card,
+      capRemaining: {
+        for (final cap in uniqueCapRules(card.capRules))
+          if (capConsumedBefore.containsKey(cap.id))
+            cap.id:
+                cap.capValue - Money.fromRupees(capConsumedBefore[cap.id]!),
+      },
+    );
+    final rec = const RecommendationEngine()._evaluate(context, snapshot);
+    // The rule the v1 path matched — the same expression _evaluate uses.
+    String? ruleId;
+    if (!rec.isExcluded) {
+      final matching = card.excludesCategory(context.categoryId)
+          ? <RewardRule>[]
+          : (uniqueRewardRules(card.rewardRules)
+                  .where((r) => ruleApplies(r, context))
+                  .toList()
+              ..sort((a, b) => a.priority.compareTo(b.priority)));
+      ruleId = matching.firstOrNull?.id;
+    }
+    final unit = card.baseRewardUnit ?? card.rewardRules.firstOrNull?.unit;
+    final currency = unit == null ? null : rewardCurrencyOf(unit);
+    final value = rec.expectedValue.rupees;
+    return RewardEvaluation(
+      excluded: rec.isExcluded,
+      ruleId: ruleId,
+      rule: card.rewardRules.where((r) => r.id == ruleId).firstOrNull,
+      currency: currency,
+      points: currency == RewardCurrency.points && card.pointValueInr > 0
+          ? value / card.pointValueInr
+          : null,
+      cashbackInr: currency == RewardCurrency.cashback ? value : null,
+      valueInr: value,
+      reasons: rec.isExcluded ? [rec.exclusionReason!] : rec.reasonLines,
+      assumptions: const ['v1_path'],
+      ratePerRupee: rec.effectiveRatePerRupee ?? 0,
+      engineVersion: 1,
+    );
+  }
 
   /// C3.3 applicability (the v2 counterpart of [ruleApplies]).
   /// [merchantLineage] is the resolved merchant slug plus its ancestors.

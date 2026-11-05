@@ -109,16 +109,66 @@ void main() {
   });
 
   group('C3.2 v2 switch', () {
-    test('rule_role present marks the card v2', () {
+    test('D10: DB-defaulted v2 columns alone keep a card v1-shaped', () {
       final card = CardProductJson.fromJson(
         _card(
           rules: [
-            _rule('r1', {'rule_role': 'earn'}),
+            _rule('r1', {
+              'rule_role': 'earn',
+              'merchant_slugs': [],
+              'platform_slugs': [],
+              'mcc_include': [],
+              'mcc_exclude': [],
+              'block_inr': null,
+              'min_engine_version': 1,
+              'source_local_id': 'x',
+              'display_note': 'note',
+            }),
           ],
+          caps: [
+            _cap('c1', {
+              'cap_kind': null,
+              'scope': 'targets',
+              'targets': [],
+              'min_engine_version': 1,
+            }),
+          ],
+          extra: {'accrual_rounding': null, 'model_status': 'basic'},
         ),
       );
-      expect(card.isV2Shaped, isTrue);
+      expect(card.isV2Shaped, isFalse);
     });
+
+    for (final entry in <String, Map<String, dynamic>>{
+      'rule_role base': {'rule_role': 'base'},
+      'rule_role exclusion': {'rule_role': 'exclusion'},
+      'rule_role info': {'rule_role': 'info'},
+      'merchant_slugs': {
+        'merchant_slugs': ['swiggy'],
+      },
+      'platform_slugs': {
+        'platform_slugs': ['phonepe_app'],
+      },
+      'mcc_include': {
+        'mcc_include': ['5411'],
+      },
+      'mcc_exclude': {
+        'mcc_exclude': ['5411'],
+      },
+      'block_inr': {'block_inr': 150},
+      'min_engine_version 2': {'min_engine_version': 2},
+    }.entries) {
+      test('D10: ${entry.key} marks the card v2', () {
+        final card = CardProductJson.fromJson(
+          _card(
+            rules: [
+              _rule('r1', {'rule_role': 'earn', ...entry.value}),
+            ],
+          ),
+        );
+        expect(card.isV2Shaped, isTrue);
+      });
+    }
 
     test('a non-null cap_kind marks the card v2', () {
       final card = CardProductJson.fromJson(
@@ -154,23 +204,31 @@ void main() {
       expect(card.isV2Shaped, isFalse);
     });
 
-    test('every contract scenario card parses cleanly and is v2', () {
-      final fixture =
-          jsonDecode(
-                File(
-                  '../../db/fixtures/reward_v2_scenarios/00_contract.json',
-                ).readAsStringSync(),
-              )
-              as Map<String, dynamic>;
-      for (final s
-          in (fixture['scenarios'] as List).cast<Map<String, dynamic>>()) {
-        final card = CardProductJson.fromJson(
-          s['card'] as Map<String, dynamic>,
-        );
-        expect(card.parseWarnings, isEmpty, reason: s['name'] as String);
-        expect(card.isV2Shaped, isTrue, reason: s['name'] as String);
-      }
-    });
+    test(
+      'every contract scenario card parses cleanly; v2 unless it pins v1',
+      () {
+        final fixture =
+            jsonDecode(
+                  File(
+                    '../../db/fixtures/reward_v2_scenarios/00_contract.json',
+                  ).readAsStringSync(),
+                )
+                as Map<String, dynamic>;
+        for (final s
+            in (fixture['scenarios'] as List).cast<Map<String, dynamic>>()) {
+          final card = CardProductJson.fromJson(
+            s['card'] as Map<String, dynamic>,
+          );
+          expect(card.parseWarnings, isEmpty, reason: s['name'] as String);
+          // Scenarios with an "assert" list pin the v1 path (D10, e.g. L1).
+          expect(
+            card.isV2Shaped,
+            s['assert'] == null,
+            reason: s['name'] as String,
+          );
+        }
+      },
+    );
   });
 
   group('tolerant v2 parsing', () {
