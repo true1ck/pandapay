@@ -92,7 +92,8 @@ function transformCaps(record, rules, ctx) {
     };
     if (!sourceId) return skip('cap_missing_id');
     const categoryToken = isNA(c.category_id) ? '' : String(c.category_id).toLowerCase();
-    const capText = [sourceId, categoryToken, c.label, c.description].filter((v) => typeof v === 'string').join(' ').toLowerCase();
+    // D18g: id and label only (a description may mention fees in passing).
+    const capText = [sourceId, c.label].filter((v) => typeof v === 'string').join(' ').toLowerCase();
     if (NON_EARNING_CAP.test(capText)) return skip('non_earning_cap_skipped');
     const metric = String(firstDefined(c.metric, c.cap_type) || '').toLowerCase();
     if (/^waiver_amount/.test(metric)) return skip('fuel_waiver_cap_skipped');
@@ -167,16 +168,12 @@ function transformCaps(record, rules, ctx) {
         if (!sameFamily) return false;
         return !ageTiered.has(oid) || (isIntro && LATER_TIER.test(oid.toLowerCase()));
       });
-      flagsOut.push({
-        code: 'tier_by_card_age',
-        source_local_id: sourceId,
-        detail: steady ? 'introductory tier skipped' : LATER_TIER.test(sourceId.toLowerCase()) ? 'steady-state tier kept' : 'only tier present',
-      });
       if (steady) {
+        flagsOut.push({ code: 'tier_by_card_age', source_local_id: sourceId, detail: 'introductory tier skipped' });
         skipped.push({ source_local_id: sourceId, reason: 'tier_by_card_age' });
         return;
       }
-      flags.push('tier_by_card_age');
+      flags.push('tier_by_card_age'); // reported once, with the cap's other flags
     }
 
     const periodKey = String(firstDefined(c.period, c.capping_period) || '').toLowerCase();

@@ -15,6 +15,10 @@ const INFORMATIONAL_FLAGS = new Set([
 ]);
 
 const DEFERRALS = new Set(['cap_depends_on_user', 'depends_on_user_attribute', 'depends_on_txn_attribute']);
+const BLOCKING_FLAGS = new Set([
+  'orphan_cap', 'missing_cap_value', 'suspect_cap_unit', 'unrestricted_accelerator', 'post_limit_conflict',
+  'dangling_cap_reference', 'override_removed_exclusion', 'self_contradictory_rule',
+]);
 
 function buildCoverage({
   rewardRules, perSource, capResult, milestoneResult, benefitResult, extraFlags,
@@ -53,10 +57,13 @@ function buildCoverage({
   // basic:    nothing beyond the base rate — and nothing we failed to model.
   // partial:  everything else: an info rule, an unenforced cap or an
   //           unresolved flag, or bonus rules not yet verified.
-  // D17j: listed as verified AND nothing left but D13/D14 deferrals.
+  // D18j: listed as verified AND no blocking flag. Blocking: an info earning
+  // rule that isn't a D13/D14 deferral, plus the codes in BLOCKING_FLAGS.
+  // Everything else is informational.
   const deferredRules = new Set(uniqueFlags.filter((f) => DEFERRALS.has(f.code)).map((f) => f.source_local_id));
-  const blockingFlags = uniqueFlags.filter((f) => !INFORMATIONAL_FLAGS.has(f.code) && !DEFERRALS.has(f.code) &&
-    !(f.code === 'info_rule' && deferredRules.has(f.source_local_id)));
+  const earningSources = new Set(perSource.filter((p) => String(p.evaluation_type) !== 'exclusion').map((p) => p.source_local_id));
+  const blockingFlags = uniqueFlags.filter((f) => BLOCKING_FLAGS.has(f.code) ||
+    (f.code === 'info_rule' && earningSources.has(f.source_local_id) && !deferredRules.has(f.source_local_id)));
   let modelStatus;
   if (verified && blockingFlags.length === 0) modelStatus = 'verified';
   else if (!hasEarn && rulesInfo === 0 && !hasUnenforcedCap) modelStatus = 'basic';
