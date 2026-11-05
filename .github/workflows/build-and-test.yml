@@ -115,6 +115,50 @@ jobs:
           find src -name '*.js' -print0 | xargs -0 -n1 node --check
           echo "auth/: all source files parse"
 
+  # `npm test` skips every suite that needs a real database (their URL
+  # variables are unset there, by design). This job gives them one: a
+  # throwaway PostgreSQL service, the product migrations and role setup applied
+  # by db/scripts/product_migrate.js, then the API and SMS v2 *_pg suites
+  # (email import included), db/tests/*.sql, and the *_postgres.js fixtures no
+  # other job runs. scripts/test_postgres_suites.sh lists them; it fails if a
+  # node suite skips anything. The private-admin and remaining-security
+  # fixtures stay in the security-recovery job.
+  postgres-suites:
+    name: PostgreSQL-backed suites
+    runs-on: ubuntu-latest
+    services:
+      postgres:
+        image: postgres:17
+        env:
+          POSTGRES_PASSWORD: ci_only_pg_suites
+          # The delivery fixture logs in as roles it creates without a
+          # password; this server exists only for this job.
+          POSTGRES_HOST_AUTH_METHOD: trust
+        ports:
+          - 5549:5432
+        options: >-
+          --health-cmd "pg_isready -U postgres"
+          --health-interval 5s --health-timeout 5s --health-retries 10
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+
+      # psql runs the role setup and SQL tests; initdb/pg_ctl are for the
+      # fixtures that start their own short-lived cluster.
+      - name: Install PostgreSQL tools and dependencies
+        run: |
+          sudo apt-get update -qq
+          sudo apt-get install -y postgresql postgresql-contrib
+          ls -d /usr/lib/postgresql/*/bin | sort -V | tail -n 1 >> "$GITHUB_PATH"
+          npm ci --prefix api
+          npm ci --omit=dev --prefix auth
+
+      - name: PostgreSQL suites
+        env:
+          PG_SUITES_ADMIN_URL: postgresql://postgres:ci_only_pg_suites@127.0.0.1:5549
+        run: bash scripts/test_postgres_suites.sh
 
   flutter:
     name: App, console and domain (Flutter)

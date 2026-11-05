@@ -8,6 +8,7 @@ const {
   saveImapConnection, openStoredImapPassword, deleteImapConnection, bankSenderPatterns, requireBankSenders,
 } = require('../src/imap_connections_store');
 const { readImapWorkerBatch } = require('../src/imap_worker_capability');
+const { hasCurrentEmailImportConsent } = require('../src/email_import_consent');
 
 // Needs a scratch PostgreSQL with every migration and db/setup_app_role.sql applied.
 const url = process.env.EMAIL_IMPORT_TEST_DATABASE_URL;
@@ -126,6 +127,39 @@ test('bank sender patterns come from active email parser patterns only', { skip 
     assert.ok(!patterns.includes(`sms-only-${marker}`));
   } finally {
     await pool.query('DELETE FROM parser_patterns WHERE sender_pattern ILIKE $1', [`%${marker.split('@')[1]}%`]);
+    await pool.end();
+  }
+});
+
+test('email_import consent is read as the user, latest row wins, and a same-instant withdrawal wins', { skip }, async () => {
+  const { Pool } = require('pg');
+  const pool = new Pool({ connectionString: url });
+  const [owner, other] = [crypto.randomUUID(), crypto.randomUUID()];
+  const policy = '2026-11-15';
+  const record = (profile, granted, version, at) => pool.query(
+    `INSERT INTO user_consents(profile_id, purpose, policy_version, granted, granted_at, source_screen)
+     VALUES($1,'email_import',$2,$3,$4,'synthetic-test')`, [profile, version, granted, at]);
+  const current = (profile) => withUser(pool, profile, (client) => hasCurrentEmailImportConsent(client, profile, policy));
+  try {
+    await pool.query('INSERT INTO profiles(id) VALUES($1),($2)', [owner, other]);
+    assert.equal(await current(owner), false);
+
+    await record(owner, true, '2026-01-01', '2026-11-01T00:00:00Z');
+    assert.equal(await current(owner), false, 'an older policy version is not current');
+
+    await record(owner, true, policy, '2026-11-02T00:00:00Z');
+    assert.equal(await current(owner), true);
+    // Row-level security: another user never sees the owner's grant.
+    assert.equal(await withUser(pool, other, (client) => hasCurrentEmailImportConsent(client, owner, policy)), false);
+
+    await record(owner, false, policy, '2026-11-03T00:00:00Z');
+    assert.equal(await current(owner), false, 'a later withdrawal ends it');
+
+    await record(owner, true, policy, '2026-11-04T00:00:00Z');
+    await record(owner, false, policy, '2026-11-04T00:00:00Z');
+    assert.equal(await current(owner), false, 'a withdrawal recorded in the same instant wins');
+  } finally {
+    await pool.query('DELETE FROM profiles WHERE id=ANY($1::uuid[])', [[owner, other]]);
     await pool.end();
   }
 });

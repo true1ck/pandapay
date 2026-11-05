@@ -65,3 +65,27 @@ test('a migration drops the account_recovery schema, so a database cannot keep t
   for (const n of created) assert.ok(dropping[0] > n, `${dropping[0]} must sort after ${n}`);
   assert.ok(!/\bcascade\b/i.test(fs.readFileSync(path.join(dir, dropping[0]), 'utf8').replace(/--[^\n]*/g, '')), 'no CASCADE');
 });
+
+// Fresh start: the legacy SMS route cutoff and its 426 version gate are gone,
+// so nothing may read their settings again.
+test('server, database setup, deploy scripts and env examples carry no legacy SMS cutoff settings', () => {
+  const removed = /\b(LEGACY_SMS_CUTOFF_DATE|LEGACY_SMS_BLOCK_MISSING_VERSION|SMS_V2_FIRST_APP_VERSION|LEGACY_SMS_[A-Z_]+)\b/;
+  const candidates = ['api/example.env', 'db/setup_app_role.sql', 'docker-compose.yml', 'docker-compose.staging.yml',
+    'docker-compose.prod.yml', '.env.staging.example', '.env.prod.example'];
+  for (const root of ['api/src', 'api/scripts', 'auth/src', 'db/scripts', 'deploy', 'scripts', '.github/workflows']) {
+    const dir = path.join(repo, root);
+    if (!fs.existsSync(dir)) continue;
+    for (const name of fs.readdirSync(dir, { recursive: true })) {
+      const rel = path.join(root, name);
+      if (!/node_modules/.test(rel) && fs.statSync(path.join(repo, rel)).isFile()) candidates.push(rel);
+    }
+  }
+  const hits = [];
+  for (const rel of candidates) {
+    const file = path.join(repo, rel);
+    if (!fs.existsSync(file)) continue;
+    const match = fs.readFileSync(file, 'utf8').match(removed);
+    if (match) hits.push(`${rel}: ${match[0]}`);
+  }
+  assert.deepEqual(hits, []);
+});

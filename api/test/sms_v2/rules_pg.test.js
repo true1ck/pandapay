@@ -49,15 +49,18 @@ test('PgStore: import, publish, serve, pause, stats and jobs on a real database'
   const full = JSON.parse(fs.readFileSync(path.resolve(__dirname, '../../../contracts/sms/v2/fixtures/valid/bundle/full.json'), 'utf8'));
   const admin = crypto.randomUUID();
   const profile = crypto.randomUUID();
+  // Auto-pause needs reports from AUTO_PAUSE_MIN_DEVICES distinct phones.
+  const { AUTO_PAUSE_MIN_DEVICES } = require('../../src/sms_v2/rule_stats');
+  const reporters = [profile, ...Array.from({ length: AUTO_PAUSE_MIN_DEVICES - 1 }, () => crypto.randomUUID())];
   const clean = async () => {
     for (const t of ['sms_v2_rule_stats_profile_daily', 'sms_v2_rule_stats_daily', 'sms_v2_rule_cohorts', 'sms_v2_bundles', 'sms_v2_bundle_parts', 'sms_v2_rules']) await pool.query(`DELETE FROM ${t}`);
     await pool.query('DELETE FROM admin_audit_log WHERE admin_id = $1', [admin]);
     await pool.query('DELETE FROM admin_users WHERE id = $1', [admin]);
-    await pool.query('DELETE FROM profiles WHERE id = $1', [profile]);
+    await pool.query('DELETE FROM profiles WHERE id = ANY($1::uuid[])', [reporters]);
   };
   await clean();
   const priorFlag = (await pool.query("SELECT is_enabled, rollout_percent FROM feature_flags WHERE key='sms_pipeline_v2_enabled'")).rows[0];
-  await pool.query('INSERT INTO profiles(id) VALUES ($1)', [profile]);
+  for (const id of reporters) await pool.query('INSERT INTO profiles(id) VALUES ($1)', [id]);
   await pool.query("INSERT INTO admin_users(id, email, role, is_active) VALUES ($1, $2, 'owner', true)", [admin, `${admin}@example.invalid`]);
   const now = new Date('2026-11-20T10:00:00Z');
   try {
@@ -123,7 +126,10 @@ test('PgStore: import, publish, serve, pause, stats and jobs on a real database'
     // stats through the security-definer function, then the job
     const realNow = new Date();
     const day = realNow.toISOString().slice(0, 10);
-    await userStore.tx(profile, (s) => s.recordRuleStats(profile, day, '1.0.0', [{ ruleId: 'HDFC-CARD-SPEND-03', ruleVersion: 2, hits: 60, toReview: 0, corrected: 30 }]));
+    const hits = Math.ceil(60 / reporters.length);
+    for (const id of reporters) {
+      await userStore.tx(id, (s) => s.recordRuleStats(id, day, '1.0.0', [{ ruleId: 'HDFC-CARD-SPEND-03', ruleVersion: 2, hits, toReview: 0, corrected: Math.ceil(hits / 2) }]));
+    }
     const out = await runRuleJobs({ store: adminStore, signer, adminId: admin, now: realNow });
     assert.deepEqual(out.paused.map((p) => p.version), [2]);
     const rb = await adminStore.tx(admin, (s) => rollbackRule(s, 'HDFC-CARD-SPEND-03', { toVersion: 1, reason: 't' }, { signer, adminId: admin, now }));
