@@ -574,6 +574,49 @@ test('C7.10 model_coverage shape and model_status', () => {
   assert.equal(verified.card.model_status, 'verified');
 });
 
+// ── C8 D14: transaction attributes; override safety checks ──────────────
+
+test('D14b international / birthday rules are info with depends_on_txn_attribute, never unrestricted', () => {
+  const r = run(card({
+    rules: [
+      rule({ id: 'intl', category_id: 'international_spend', action: { points_per_block: 4 } }),
+      rule({ id: 'scope', category_id: 'all_retail', conditions: { transaction_scope: 'international_transactions' } }),
+      rule({ id: 'bday', category_id: 'all_retail', conditions: { birthday_window: 'birthday ±1 day' } }),
+      rule({ id: 'dmi', category_id: 'dining_movies_international' }),
+    ],
+  }));
+  for (const id of ['intl', 'scope', 'bday']) {
+    const [row] = only(r, id);
+    assert.equal(row.rule_role, 'info', id);
+    assert.ok(row.flags.includes('depends_on_txn_attribute'), id);
+  }
+  // The international part of a composite is left out (and flagged); the rest is modelled.
+  assert.deepEqual(only(r, 'dmi').map((x) => x.category_slug).sort(), ['dining', 'entertainment']);
+  assert.ok(only(r, 'dmi')[0].flags.includes('depends_on_txn_attribute'));
+});
+
+test('D14c a whole-array override that drops an exclusion, and dangling cap references, are reported', () => {
+  const record = card({
+    rules: [
+      rule({ id: 'earn', category_id: 'dining', action: { cashback_percent: 5, cap_reference: 'c' } }),
+      rule({ id: 'no-fuel', category_id: 'fuel', evaluation_type: 'exclusion', action: { cashback_percent: 0 } }),
+    ],
+    caps: [{ ...capBase, metric: 'total_reward_points' }],
+  });
+  const r = run(record, {
+    overrides: {
+      changes: [
+        { path: 'reward_rules', value: [rule({ id: 'earn', category_id: 'dining', action: { cashback_percent: 5, cap_reference: 'gone' } })] },
+      ],
+    },
+  });
+  const flags = r.card.model_coverage.flags;
+  assert.ok(flags.some((f) => f.code === 'override_removed_exclusion' && f.source_local_id === 'no-fuel'));
+  assert.ok(flags.some((f) => f.code === 'dangling_cap_reference' && f.detail === 'gone'));
+  const untouched = run(record);
+  assert.ok(!untouched.card.model_coverage.flags.some((f) => f.code === 'override_removed_exclusion'));
+});
+
 // ── C8 D13: terms that depend on the cardholder; override conventions ───
 
 test('D13a a cap sized by the credit limit keeps its kind with a null amount and is flagged', () => {

@@ -208,10 +208,29 @@ function transformCardRecordV2(rawRecord, opts = {}) {
   };
 
   const { rows: rewardRules, perSource } = transformRewardRules(record, ctx);
+  const extraFlags = [];
+
+  // D14(c): a whole-array override that drops a source exclusion, and rule
+  // cap references that point at no cap (in the source or after overrides).
+  const replacedRules = (opts.overrides?.changes || []).some((c) => c?.path === 'reward_rules' && (c.op || 'set') === 'set');
+  if (replacedRules) {
+    const kept = new Set((record?.reward_rules || []).map((r) => String(r?.id)));
+    for (const r of rawRecord?.reward_rules || []) {
+      if (String(r?.evaluation_type) === 'exclusion' && !kept.has(String(r?.id))) {
+        extraFlags.push({ code: 'override_removed_exclusion', source_local_id: isNA(r?.id) ? null : String(r.id), detail: r?.category_id || null });
+      }
+    }
+  }
+  const capIds = new Set((record?.cap_rules || []).map((c) => String(c?.id ?? c?.cap_id)));
+  for (const r of record?.reward_rules || []) {
+    const ref = r?.action?.cap_reference;
+    if (!isNA(ref) && !capIds.has(String(ref))) {
+      extraFlags.push({ code: 'dangling_cap_reference', source_local_id: isNA(r?.id) ? null : String(r.id), detail: String(ref) });
+    }
+  }
 
   // D9(4): when the card's block isn't its unit's block (₹125, ₹50, ₹500),
   // the engines need an explicit base rule that carries block_inr.
-  const extraFlags = [];
   if (economics.unusualBlock && !rewardRules.some((r) => r.rule_role === 'base' && r.block_inr === economics.unusualBlock)) {
     rewardRules.push({
       key: 'base-block',

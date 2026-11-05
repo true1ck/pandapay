@@ -37,6 +37,7 @@ const V1_POINT_BLOCKS = { 100: 'points_per_100', 150: 'points_per_150', 200: 'po
 const DATE = /^\d{4}-\d{2}-\d{2}$/;
 const USER_ATTRIBUTE_KEY = /(membership|tier|prime|neon|selected|selection|plan$|pack|variant|relationship|customer_segment|salary|premier|eligible_card|card_side|opt_in|enrol)/i;
 const ROLES = new Set(['base', 'earn', 'exclusion', 'info']);
+const BRANDISH_BRAND = /(paytm|amazon|flipkart|smartbuy|phonepe|swiggy|zomato|tata|neu|reliance|samsung|apple|kiwi|myntra|irctc|indigo|uber|\bola\b|lic|hpcl|bpcl|indianoil|iocl|jio|airtel|marriott|taj|vistara|air_india|makemytrip|yatra|cleartrip|bookmyshow|pvr|landmark|shoppers|lifestyle)/;
 const BRANDISH = /(paytm|amazon|flipkart|smartbuy|phonepe|swiggy|zomato|tata|reliance|samsung|apple|kiwi|myntra|irctc|indigo|uber|ola|lic|hpcl|bpcl|indianoil|iocl|jio|airtel|partner|select|preferred|exclusive|promoted|accelerated|brand)/;
 
 function categoryKey(s) {
@@ -195,6 +196,7 @@ function transformRule(src, idx, ctx) {
 
   // 1. Start from the token's parts.
   let parts;
+  let tokenNeedsConditions = null;
   if (token.kind === 'non_purchase') {
     info.push('non_purchase_category');
     unmappedTokens.push(rawToken);
@@ -204,15 +206,14 @@ function transformRule(src, idx, ctx) {
     unmappedTokens.push(rawToken);
     parts = [{}];
   } else if (token.kind === 'unknown') {
-    if (cond.mccInclude.length && !BRANDISH.test(rawToken)) {
-      // The rule names its own MCCs; the token is just a label for them.
-      flags.push('token_replaced_by_mcc');
-      parts = [{}];
-    } else {
-      info.push('unmapped_category_token');
-      unmappedTokens.push(rawToken);
-      parts = [{}];
-    }
+    // A label such as "select_online_merchants" or "preferred_partners": the
+    // rule is usable only if its conditions carry the actual restriction (an
+    // MCC list, a merchant list, a category list). A label naming a brand
+    // ("paytm_select_spends") additionally needs that brand in the
+    // conditions. Checked after the conditions are mapped (step 12).
+    tokenNeedsConditions = BRANDISH_BRAND.test(rawToken) ? 'brand' : 'any';
+    unmappedTokens.push(rawToken);
+    parts = [{}];
   } else {
     parts = token.parts.map((p) => ({ ...p }));
     if (token.kind === 'composite' && token.unmapped.length) {
@@ -467,6 +468,13 @@ function transformRule(src, idx, ctx) {
   if (cond.mccExclude.length) parts = parts.map((p) => andPart(p, { mccExclude: cond.mccExclude }) || p);
   if (cond.unmappedExcluded.length) flags.push('unmapped_excluded_category');
 
+  if (tokenNeedsConditions) {
+    const restrictedBy = (p) => (tokenNeedsConditions === 'brand'
+      ? p.merchantSlugs?.length || p.platformSlugs?.length
+      : p.categorySlug || p.merchantSlugs?.length || p.platformSlugs?.length || p.mccInclude?.length);
+    if (parts.every(restrictedBy)) flags.push('token_replaced_by_conditions');
+    else info.push('unmapped_category_token');
+  }
   if (parts.some((p) => p.conflict)) info.push('restriction_conflict');
   for (const p of parts) {
     if (p.categorySlug && !APP_CATEGORIES.has(p.categorySlug)) info.push(`invalid_category:${p.categorySlug}`);

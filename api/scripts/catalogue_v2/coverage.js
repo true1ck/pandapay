@@ -8,7 +8,7 @@ const { uniq } = require('./util');
 // Flags that describe a choice we made, not a gap. They're reported but
 // don't hold a card at `partial` on their own.
 const INFORMATIONAL_FLAGS = new Set([
-  'synthesized_base_rule', 'token_replaced_by_mcc', 'merchant_prose_restates',
+  'synthesized_base_rule', 'token_replaced_by_conditions', 'merchant_prose_restates',
   'channel_type_restates_brand', 'cap_target_inferred_by_category', 'non_earning_cap_skipped',
   'fuel_waiver_cap_skipped',
 ]);
@@ -152,7 +152,7 @@ function aggregateReport(cards, meta = {}) {
     }
     for (const src of t.coverage.perSource) {
       for (const tok of src.unmapped_tokens) inc(report.unmapped_tokens, tok);
-      for (const reason of src.info_reasons) inc(report.info_reasons, reason.replace(/:.*$/, ''));
+      for (const reason of src.info_reasons) inc(report.info_reasons, reason);
       for (const n of src.needs_directory) inc(report.needs_directory_entry, n);
       if (String(src.evaluation_type).toLowerCase() === 'accelerator') {
         report.accelerators.total += 1;
@@ -219,10 +219,12 @@ function aggregateReport(cards, meta = {}) {
     });
   }
   report.accelerators.before_unmapped_cards = beforeUnmappedCards;
-  report.unmapped_tokens = Object.fromEntries(sortedEntries(report.unmapped_tokens));
-  report.info_reasons = Object.fromEntries(sortedEntries(report.info_reasons));
-  report.flags = Object.fromEntries(sortedEntries(report.flags));
-  report.needs_directory_entry = Object.fromEntries(sortedEntries(report.needs_directory_entry));
+  // Arrays of [key, count], most frequent first (an object would reorder
+  // numeric-looking keys).
+  report.unmapped_tokens = sortedEntries(report.unmapped_tokens);
+  report.info_reasons = sortedEntries(report.info_reasons);
+  report.flags = sortedEntries(report.flags);
+  report.needs_directory_entry = sortedEntries(report.needs_directory_entry);
   return report;
 }
 
@@ -264,19 +266,19 @@ function renderMarkdown(report) {
   out.push('');
   out.push('## Unmapped category tokens (by frequency)');
   out.push('');
-  out.push(table(sortedEntries(report.unmapped_tokens, 80), ['Token', 'Rules']));
+  out.push(table(report.unmapped_tokens.slice(0, 80), ['Token', 'Rules']));
   out.push('');
   out.push('## Why rules became `info`');
   out.push('');
-  out.push(table(sortedEntries(report.info_reasons, 60), ['Reason', 'Rules']));
+  out.push(table(report.info_reasons.slice(0, 60), ['Reason', 'Rules']));
   out.push('');
   out.push('## Flags');
   out.push('');
-  out.push(table(sortedEntries(report.flags, 80), ['Flag', 'Count']));
+  out.push(table(report.flags.slice(0, 80), ['Flag', 'Count']));
   out.push('');
   out.push('## Needs directory entry');
   out.push('');
-  out.push(table(sortedEntries(report.needs_directory_entry, 80), ['Slug or text', 'Rules']));
+  out.push(table(report.needs_directory_entry.slice(0, 80), ['Slug or text', 'Rules']));
   out.push('');
   out.push('## Unrestricted accelerators (review)');
   out.push('');

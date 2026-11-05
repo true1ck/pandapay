@@ -43,6 +43,7 @@ const MERCHANT_KEYS = new Set([
   'merchant_or_platform', 'merchant_patterns', 'eligible_brands', 'partner_brands',
   'merchant_domain', 'merchant_platforms', 'merchant_partner_list', 'partner_list',
   'merchant_eligibility', 'eligible_merchant', 'eligible_partner_brands', 'merchant_group',
+  'merchant_groups', 'merchant_brand', 'preferred_merchants', 'partner_merchant_list',
 ]);
 const PLATFORM_KEYS = new Set([
   'platform', 'platforms', 'app', 'apps', 'portal', 'program', 'programme', 'booking_channel',
