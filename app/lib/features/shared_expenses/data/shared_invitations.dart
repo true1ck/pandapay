@@ -59,7 +59,12 @@ String sharedInviteMessage({
 final class SharedInvitePreview {
   final String contextName, memberName, status;
   final bool phoneBound;
+
+  /// `group_link` for a group's shared link, otherwise `invitation`.
+  final String kind;
+  bool get isGroupLink => kind == 'group_link';
   const SharedInvitePreview({
+    this.kind = 'invitation',
     required this.contextName,
     required this.memberName,
     required this.status,
@@ -77,7 +82,12 @@ final class SharedInvitePreview {
     if (value['phoneBound'] is! bool) {
       throw const SharedTransportException(code: 'invalid_response');
     }
+    final kind = value['kind'];
+    if (kind != null && kind != 'group_link' && kind != 'invitation') {
+      throw const SharedTransportException(code: 'invalid_response');
+    }
     return SharedInvitePreview(
+      kind: kind as String? ?? 'invitation',
       contextName: text('contextName'),
       memberName: text('memberName'),
       status: text('status'),

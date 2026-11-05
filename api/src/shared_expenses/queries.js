@@ -84,7 +84,7 @@ async function readContext(client,actorId,contextId) {
 async function listContextMembers(client,actorId,contextId,query={}) {
   const request=pageRequest(query),scope=scopeFor(actorId,'members',contextId),after=cursorUuid(request,scope);
   await authorizeContext(client,contextId);
-  const {rows}=await client.query(`SELECT m.member_id,m.profile_id,m.role,m.state,m.display_name,b.balance_minor::text
+  const {rows}=await client.query(`SELECT m.member_id,m.profile_id,m.role,m.state,shared_expenses._member_label(m.display_name,m.profile_id) AS display_name,b.balance_minor::text
     FROM shared_expenses.members m LEFT JOIN shared_expenses.member_balances b ON b.context_id=m.context_id AND b.member_id=m.member_id AND b.currency='INR'
     WHERE m.context_id=$1::uuid AND ($2::uuid IS NULL OR m.member_id>$2::uuid)
     ORDER BY m.member_id LIMIT $3::int`,[contextId,after,request.limit+1]);
@@ -217,7 +217,7 @@ const PROJECTION_FEED_SQL=`WITH selected_events AS MATERIALIZED (
   FROM visible p WHERE p.readable AND (p.profile_sequence>$2::bigint OR $5::int<0 OR ($5::int=0 AND p.context_id>$6::uuid))
   UNION ALL
   SELECT p.profile_sequence,'10_member:'||m.member_id::text,'members',m.member_id::text,p.context_id,p.revision,
-    jsonb_build_object('contextId',p.context_id,'memberId',m.member_id,'profileId',m.profile_id,'role',m.role,'state',m.state,'displayName',m.display_name),false,NULL::text
+    jsonb_build_object('contextId',p.context_id,'memberId',m.member_id,'profileId',m.profile_id,'role',m.role,'state',m.state,'displayName',shared_expenses._member_label(m.display_name,m.profile_id)),false,NULL::text
   FROM visible p CROSS JOIN LATERAL (
     SELECT member_id,profile_id,role,state,display_name FROM shared_expenses.members
     WHERE context_id=p.context_id AND (p.full_grant OR member_id=p.origin_id)

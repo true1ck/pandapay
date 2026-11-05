@@ -465,6 +465,57 @@ final class SharedExpensesHttpTransport implements SharedExpensesTransport {
     ];
   }
 
+  /// Owner-only: creates (or, with a new [linkId], replaces) the group's
+  /// shared join link. The previous link stops working immediately.
+  Future<SharedInviteLink> createGroupLink({
+    required String contextId,
+    required String linkId,
+  }) async {
+    if (!sharedUuid(contextId) || !sharedUuid(linkId)) {
+      throw ArgumentError('Invalid identifier');
+    }
+    final value = (await _request(
+      'POST',
+      '/shared-expenses/groups/link',
+      body: jsonEncode({'contextId': contextId, 'linkId': linkId}),
+    ))!;
+    final url = value['joinUrl'];
+    final token = url is String
+        ? sharedInviteTokenFromUri(Uri.tryParse(url))
+        : null;
+    if (token == null) {
+      throw const SharedTransportException(code: 'invalid_response');
+    }
+    return SharedInviteLink(
+      invitationId: linkId,
+      token: token,
+      url: sharedInviteUrl(token),
+    );
+  }
+
+  Future<SharedGroupLinkStatus> fetchGroupLinkStatus(String contextId) async {
+    if (!sharedUuid(contextId)) throw ArgumentError('Invalid identifier');
+    final value = (await _request(
+      'GET',
+      '/shared-expenses/groups/$contextId/link',
+    ))!;
+    return SharedGroupLinkStatus.fromJson(value);
+  }
+
+  Future<void> revokeGroupLink({
+    required String contextId,
+    required String operationId,
+  }) async {
+    if (!sharedUuid(contextId) || !sharedUuid(operationId)) {
+      throw ArgumentError('Invalid identifier');
+    }
+    await _request(
+      'POST',
+      '/shared-expenses/groups/link/revoke',
+      body: jsonEncode({'contextId': contextId, 'operationId': operationId}),
+    );
+  }
+
   Future<List<SharedJoinRequest>> fetchJoinRequests() async {
     final value = (await _request(
       'GET',

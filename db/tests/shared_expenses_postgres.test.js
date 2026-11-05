@@ -59,6 +59,7 @@ test('real PostgreSQL: forced RLS, source eligibility, replay and fail-closed wr
   await db.query(fs.readFileSync(path.resolve(__dirname,'../supabase/migrations/20261113000000_shared_expense_invitations.sql'),'utf8'));
   await db.query(fs.readFileSync(path.resolve(__dirname,'../supabase/migrations/20261114000000_shared_expense_phone_directory.sql'),'utf8'));
   await db.query(fs.readFileSync(path.resolve(__dirname,'../supabase/migrations/20261114010000_shared_expense_context_label.sql'),'utf8'));
+  await db.query(fs.readFileSync(path.resolve(__dirname,'../supabase/migrations/20261114020000_shared_expense_group_links.sql'),'utf8'));
   // Replay the pre-existing role setup's broad grants. A new isolated schema
   // must retain its ACL even when public and pandapay grants are restored.
   await db.query('GRANT USAGE ON SCHEMA public,pandapay TO app_user; GRANT SELECT,INSERT,UPDATE,DELETE ON ALL TABLES IN SCHEMA public TO app_user; GRANT EXECUTE ON ALL FUNCTIONS IN SCHEMA pandapay TO app_user');
@@ -231,6 +232,7 @@ test('real PostgreSQL: forced RLS, source eligibility, replay and fail-closed wr
     await assert.rejects(dec(c,H('d')),/invitation_unavailable/);
     assert.equal((await actor(a,()=>db.query('SELECT shared_expenses.list_invitations($1,NULL) AS v',[ctx2]))).rows[0].v.items.find(i=>i.invitationId===i2).status,'declined');
     await assert.rejects(actor(a,()=>db.query('SELECT shared_expenses.create_invitation($1,$2)',[{invitationId:crypto.randomUUID(),contextId:ctx2,memberId:m2,targetPhoneHash:H('d'),tokenHash:tok()},H('b')])),/invitation_declined_recently/);
+    await assert.rejects(actor(a,()=>db.query('SELECT shared_expenses.create_invitation($1,$2)',[{invitationId:crypto.randomUUID(),contextId:ctx2,memberId:m2,targetPhoneHash:null,tokenHash:tok()},H('c')])),/invitation_declined_recently/,'a phone-less link cannot bypass the decline pause');
     // Expired invitations vanish from the inbox and cannot be accepted.
     const i3=crypto.randomUUID();
     await actor(a,()=>db.query('SELECT shared_expenses.create_invitation($1,$2)',[{invitationId:i3,contextId:ctx2,memberId:m3,targetPhoneHash:H('e'),tokenHash:tok()},H('c')]));
@@ -238,6 +240,74 @@ test('real PostgreSQL: forced RLS, source eligibility, replay and fail-closed wr
     assert.equal((await inbox(c,H('e'))).length,0);
     await assert.rejects(actor(c,()=>db.query('SELECT shared_expenses.claim_invitation_by_id($1,$2,$3,$4,$5)',[i3,H('e'),'3210',crypto.randomUUID(),H('d')])),/invitation_unavailable/);
     assert.equal((await actor(a,()=>db.query('SELECT shared_expenses.list_invitations($1,NULL) AS v',[ctx2]))).rows[0].v.items.find(i=>i.invitationId===i3).status,'expired');
+  });
+  await t.test('group link: owner-controlled requests, approval, decline, revoke and limits',async()=>{
+    const H=(ch)=>ch.repeat(64), g=crypto.randomUUID(), direct=crypto.randomUUID(), tok=()=>crypto.randomBytes(32).toString('hex');
+    await actor(a,()=>db.query("SELECT shared_expenses.create_context($1,'group','Link trip',$2,$3)",[g,crypto.randomUUID(),H('1')]));
+    await actor(a,()=>db.query("SELECT shared_expenses.create_context($1,'direct','Just us',$2,$3)",[direct,crypto.randomUUID(),H('2')]));
+    const link=(who,ctxId,token,op=crypto.randomUUID())=>actor(who,()=>db.query('SELECT shared_expenses.create_group_link($1,$2,$3,$4) AS v',[ctxId,token,op,H('3')]));
+    const t1=tok();
+    await assert.rejects(link(b,g,t1),/context_not_authorized/);
+    await assert.rejects(link(a,direct,tok()),/context_not_active/,'direct splits have no group link');
+    const op=crypto.randomUUID();
+    assert.equal((await link(a,g,t1,op)).rows[0].v.active,true);
+    assert.equal((await link(a,g,t1,op)).rows[0].v.active,true,'replay');
+    const preview=(who,token)=>actor(who,()=>db.query('SELECT shared_expenses.preview_invitation($1) AS v',[token])).then(r=>r.rows[0].v);
+    const p=await preview(b,t1);
+    assert.equal(p.kind,'group_link');assert.equal(p.contextName,'Link trip');
+    await assert.rejects(preview(b,tok()),/invitation_unavailable/);
+    const claim=(who,token,o=crypto.randomUUID())=>actor(who,()=>db.query('SELECT shared_expenses.claim_invitation($1,$2,$3,$4,$5) AS v',[token,null,null,o,H('4')])).then(r=>r.rows[0].v);
+    // Opening the link creates a request only.
+    const cop=crypto.randomUUID();
+    const first=await claim(b,t1,cop);
+    assert.equal(first.status,'awaiting_owner');
+    assert.equal((await claim(b,t1,cop)).status,'awaiting_owner','replay');
+    assert.equal((await claim(b,t1)).status,'awaiting_owner','a second tap does not create a second request');
+    assert.equal((await db.query("SELECT count(*)::int n FROM shared_expenses.members WHERE context_id=$1",[g])).rows[0].n,2,'owner plus one pending person');
+    assert.equal((await db.query('SELECT profile_id FROM shared_expenses.members WHERE member_id=$1',[first.memberId])).rows[0].profile_id,null,'no access before approval');
+    assert.equal((await actor(b,()=>db.query('SELECT * FROM shared_expenses.contexts WHERE context_id=$1',[g]))).rowCount,0,'pending requester cannot read the group');
+    assert.equal((await db.query('SELECT count(*)::int n FROM shared_expenses.journal_entries WHERE context_id=$1',[g])).rows[0].n,0);
+    const requests=await actor(a,()=>db.query('SELECT shared_expenses.list_join_requests() AS v'));
+    const mine=requests.rows[0].v.items.find(i=>i.contextId===g);
+    assert.ok(mine,'owner sees the request');
+    assert.equal(mine.claimantName,'Rahul Kumar Sharma','owner sees who actually opened the link, not only the typed name');
+    assert.equal((await actor(a,()=>db.query('SELECT shared_expenses._member_label(NULL,$1) AS v',[a]))).rows[0].v,'Asha Verma Rao','an unnamed owner is labelled by their PandaPay name');
+    assert.equal(requests.rows[0].v.items.filter(i=>i.contextId===g).length,1);
+    await assert.rejects(actor(c,()=>db.query('SELECT shared_expenses.respond_invitation($1,true,$2,$3)',[mine.invitationId,crypto.randomUUID(),H('5')])),/context_not_authorized/);
+    assert.equal((await actor(a,()=>db.query('SELECT shared_expenses.respond_invitation($1,true,$2,$3) AS v',[mine.invitationId,crypto.randomUUID(),H('6')]))).rows[0].v.status,'joined');
+    assert.equal((await db.query('SELECT state,profile_id FROM shared_expenses.members WHERE member_id=$1',[first.memberId])).rows[0].profile_id,b);
+    // Already a member: opening the link again just says so.
+    assert.equal((await claim(b,t1)).status,'joined');
+    // The owner opening their own link is also a no-op.
+    assert.equal((await claim(a,t1)).status,'joined');
+    // Decline hides the person and pauses new requests for a week.
+    const d=await claim(c,t1);
+    const dreq=(await actor(a,()=>db.query('SELECT shared_expenses.list_join_requests() AS v'))).rows[0].v.items.find(i=>i.contextId===g);
+    assert.equal((await actor(a,()=>db.query('SELECT shared_expenses.respond_invitation($1,false,$2,$3) AS v',[dreq.invitationId,crypto.randomUUID(),H('7')]))).rows[0].v.status,'rejected');
+    assert.equal((await db.query('SELECT state FROM shared_expenses.members WHERE member_id=$1',[d.memberId])).rows[0].state,'declined');
+    await assert.rejects(claim(c,t1),/join_declined_recently/);
+    // Replacing or revoking the link kills the old token without touching requests.
+    const t2=tok();
+    await link(a,g,t2);
+    await assert.rejects(preview(c,t1),/invitation_unavailable/,'old link is dead after a reset');
+    assert.equal((await preview(c,t2)).kind,'group_link');
+    await actor(a,()=>db.query('SELECT shared_expenses.revoke_group_link($1,$2,$3)',[g,crypto.randomUUID(),H('8')]));
+    await assert.rejects(claim(c,t2),/invitation_unavailable/);
+    assert.equal((await actor(a,()=>db.query('SELECT shared_expenses.group_link_status($1) AS v',[g]))).rows[0].v.active,false);
+    await assert.rejects(actor(b,()=>db.query('SELECT shared_expenses.group_link_status($1)',[g])),/context_not_authorized/,'only the owner sees link status');
+    // Expiry.
+    const t3=tok();
+    await link(a,g,t3);
+    await db.query("UPDATE shared_expenses.group_links SET expires_at=clock_timestamp()-interval '1 minute' WHERE context_id=$1",[g]);
+    await assert.rejects(preview(c,t3),/invitation_unavailable/);
+    assert.equal((await actor(a,()=>db.query('SELECT shared_expenses.group_link_status($1) AS v',[g]))).rows[0].v.expired,true);
+    // Pending-request cap.
+    await link(a,g,t3);
+    await db.query("UPDATE shared_expenses.group_links SET expires_at=clock_timestamp()+interval '1 day' WHERE context_id=$1",[g]);
+    await db.query("DELETE FROM shared_expenses.invitations WHERE claimed_profile_id=$1 AND via_group_link",[c]);
+    await db.query("INSERT INTO shared_expenses.members(context_id,member_id,role,state,display_name) SELECT $1,gen_random_uuid(),'member','invited','x' FROM generate_series(1,20)",[g]);
+    await db.query("INSERT INTO shared_expenses.invitations(invitation_id,context_id,member_id,issuer_profile_id,token_hash,claimed_profile_id,state,via_group_link) SELECT gen_random_uuid(),$1,m.member_id,$2,encode(sha256(convert_to(m.member_id::text,'UTF8')),'hex'),$2,'awaiting_owner',true FROM shared_expenses.members m WHERE m.context_id=$1 AND m.display_name='x'",[g,a]);
+    await assert.rejects(claim(c,t3),/join_requests_full/);
   });
   await t.test('owner invitations create pending membership without consenting to financial debt',async()=>{
     const invitedCtx=crypto.randomUUID(), invited=crypto.randomUUID();

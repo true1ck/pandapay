@@ -1,5 +1,6 @@
 import 'package:flutter_test/flutter_test.dart';
 import 'package:pandapay/features/shared_expenses/data/shared_directory.dart';
+import 'package:pandapay/features/shared_expenses/data/shared_invitations.dart';
 import 'package:pandapay/features/shared_expenses/data/shared_transport.dart';
 
 void main() {
@@ -115,6 +116,59 @@ void main() {
       'phone_not_verified',
       'invitation_unavailable',
       'invitation_phone_mismatch',
+    ]) {
+      expect(
+        sharedInviteIssueMessage(SharedTransportException(code: code)),
+        isNot(contains('_')),
+        reason: code,
+      );
+    }
+  });
+
+  test('group link status and previews are validated', () {
+    final status = SharedGroupLinkStatus.fromJson({
+      'active': true,
+      'expired': false,
+      'expiresAt': '2026-12-01T00:00:00Z',
+    });
+    expect(status.active, isTrue);
+    expect(status.expiresAt, isNotNull);
+    expect(
+      () => SharedGroupLinkStatus.fromJson({'active': 'yes'}),
+      throwsA(isA<SharedTransportException>()),
+    );
+    final preview = SharedInvitePreview.fromJson({
+      'kind': 'group_link',
+      'contextName': 'Goa',
+      'memberName': 'You',
+      'status': 'open',
+      'phoneBound': false,
+    });
+    expect(preview.isGroupLink, isTrue);
+    expect(
+      SharedInvitePreview.fromJson({
+        'contextName': 'Goa',
+        'memberName': 'Rahul',
+        'status': 'open',
+        'phoneBound': true,
+      }).isGroupLink,
+      isFalse,
+    );
+    expect(
+      () => SharedInvitePreview.fromJson({
+        'kind': 'other',
+        'contextName': 'Goa',
+        'memberName': 'Rahul',
+        'status': 'open',
+        'phoneBound': true,
+      }),
+      throwsA(isA<SharedTransportException>()),
+    );
+    for (final code in [
+      'join_declined_recently',
+      'join_requests_full',
+      'membership_conflict',
+      'context_member_limit',
     ]) {
       expect(
         sharedInviteIssueMessage(SharedTransportException(code: code)),

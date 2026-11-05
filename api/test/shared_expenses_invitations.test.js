@@ -112,3 +112,15 @@ test('lookup, inbox and decision routes use only the verified phone and never re
   const own = await call('POST /shared-expenses/directory/lookup', { userId: actor, body: { phoneNumber: '+919999999999', extra: 1 }, verifiedSession: verified }).catch((e) => e);
   assert.ok(own instanceof Error || own.code, 'unexpected body fields are refused');
 });
+
+test('group links are per-group, per-generation secrets and only a hash reaches the database', () => {
+  const { groupLinkCredentials } = require('../src/shared_expenses/invitations');
+  const ctx = '33333333-3333-4333-8333-333333333333', gen = '44444444-4444-4444-8444-444444444444';
+  const one = groupLinkCredentials(secret, actor, ctx, gen);
+  assert.equal(groupLinkCredentials(secret, actor, ctx, gen).token, one.token);
+  assert.match(one.token, /^[A-Za-z0-9_-]{43}$/);
+  assert.match(one.tokenHash, /^[a-f0-9]{64}$/);
+  assert.notEqual(groupLinkCredentials(secret, actor, ctx, id).token, one.token, 'a reset makes a different link');
+  assert.notEqual(groupLinkCredentials(secret, id, ctx, gen).token, one.token);
+  assert.notEqual(one.token, inviteCredentials(secret, actor, gen).token, 'invite and group links never collide');
+});

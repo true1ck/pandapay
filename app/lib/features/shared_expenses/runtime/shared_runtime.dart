@@ -290,6 +290,42 @@ class SharedExpensesRuntime extends ChangeNotifier {
     return status;
   }
 
+  Future<SharedGroupLinkStatus> groupLinkStatus(String contextId) async {
+    _current();
+    if (!proposalsEnabled || store.isContextRevoked(contextId)) {
+      throw const SharedRuntimeUnavailable();
+    }
+    final status = await remote.fetchGroupLinkStatus(contextId);
+    _current();
+    return status;
+  }
+
+  /// A new link each time: creating replaces the old one.
+  Future<SharedInviteLink> createGroupLink(String contextId) async {
+    _current();
+    if (!proposalsEnabled || store.isContextRevoked(contextId)) {
+      throw const SharedRuntimeUnavailable();
+    }
+    final link = await remote.createGroupLink(
+      contextId: contextId,
+      linkId: const Uuid().v4(),
+    );
+    _current();
+    return link;
+  }
+
+  Future<void> revokeGroupLink(String contextId) async {
+    _current();
+    if (!proposalsEnabled || store.isContextRevoked(contextId)) {
+      throw const SharedRuntimeUnavailable();
+    }
+    await remote.revokeGroupLink(
+      contextId: contextId,
+      operationId: const Uuid().v4(),
+    );
+    _current();
+  }
+
   Future<List<SharedJoinRequest>> joinRequests() async {
     _current();
     if (!proposalsEnabled) return const [];
@@ -471,10 +507,12 @@ class SharedExpensesRuntime extends ChangeNotifier {
     final before = await context(id);
     final roster = <SharedEditorMember>[];
     String? after, own;
-    for (var page = 0; page < 2; page++) {
+    for (var page = 0; page < 4; page++) {
       final result = await members(id, after: after);
       for (final raw in result['items'] as List) {
         final row = raw as Map;
+        // A declined join request stays on the server for history only.
+        if (row['state'] == 'declined') continue;
         if (row['profileId'] == accountId && row['state'] == 'active') {
           own = row['memberId'] as String;
         }
@@ -703,7 +741,7 @@ class SharedExpensesRuntime extends ChangeNotifier {
     final before = await context(contextId);
     final names = <String, String>{};
     String? cursor;
-    for (var page = 0; page < 2; page++) {
+    for (var page = 0; page < 4; page++) {
       final roster = await members(contextId, after: cursor);
       for (final raw in roster['items'] as List) {
         final member = raw as Map;

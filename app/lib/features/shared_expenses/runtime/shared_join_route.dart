@@ -5,6 +5,7 @@ import '../../../app/design/app_theme.dart';
 import '../ui/shared_components.dart';
 import '../../../app/design/widgets.dart';
 import '../data/pending_split_invite.dart';
+import '../data/shared_directory.dart';
 import '../data/shared_invitations.dart';
 import '../data/shared_transport.dart';
 import 'shared_providers.dart';
@@ -54,6 +55,14 @@ class _SharedJoinRouteState extends ConsumerState<SharedJoinRoute> {
               'This invite was made for a different mobile number. Ask the sender to invite your verified number.',
             SharedTransportException(code: 'invitation_unavailable') =>
               'This invite has expired or was replaced. Ask the sender for a new link.',
+            SharedTransportException(code: 'phone_not_verified') =>
+              sharedInviteIssueMessage(error),
+            SharedTransportException(:final code?)
+                when code.startsWith('join_') ||
+                    code == 'membership_conflict' ||
+                    code == 'context_member_limit' ||
+                    code == 'invitation_rate_limited' =>
+              sharedInviteIssueMessage(error),
             _ =>
               'Could not join right now. Check your connection and try again.',
           },
@@ -88,6 +97,23 @@ class _SharedJoinRouteState extends ConsumerState<SharedJoinRoute> {
               future: _preview,
               builder: (context, snapshot) {
                 if (snapshot.hasError) {
+                  final error = snapshot.error;
+                  final offline =
+                      error is SharedTransportException &&
+                      (error.code == 'network_unavailable' ||
+                          error.code == 'account_changed' ||
+                          (error.statusCode != null &&
+                              error.statusCode! >= 500));
+                  if (offline) {
+                    // Keep the saved invite: nothing is wrong with the link.
+                    return _message(
+                      'Could not load this invite. Check your connection and try again.',
+                      action: (
+                        'Try again',
+                        () => setState(() => _preview = _load(value)),
+                      ),
+                    );
+                  }
                   // A dead invite must not linger and reopen on every launch.
                   PendingSplitInviteStore().clear();
                   return _message(
@@ -120,9 +146,14 @@ class _SharedJoinRouteState extends ConsumerState<SharedJoinRoute> {
                       ),
                       const SizedBox(height: 12),
                       Text(
-                        'You were added as "${preview.memberName}". '
-                        'Joining does not accept any expense or debt — you can '
-                        'review each one before it counts.',
+                        preview.isGroupLink
+                            ? 'You are asking to join this group. Joining '
+                                  'does not accept any expense or debt — you '
+                                  'can review each one before it counts.'
+                            : 'You were added as "${preview.memberName}". '
+                                  'Joining does not accept any expense or '
+                                  'debt — you can review each one before it '
+                                  'counts.',
                         style: BambooFonts.ui(14, color: BambooInk.ink700),
                       ),
                       if (!preview.phoneBound) ...[

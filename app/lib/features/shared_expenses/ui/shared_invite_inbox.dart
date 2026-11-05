@@ -151,7 +151,7 @@ class _InboxState extends State<SharedInviteInbox> with WidgetsBindingObserver {
                   ),
                   const SizedBox(height: 4),
                   Text(
-                    'They opened the link you shared. Approving only adds them; they cannot approve expenses for anyone else.',
+                    '${request.whoOpened}. Only approve if you recognise them. Approving only adds them; they cannot approve expenses for anyone else.',
                     style: BambooFonts.ui(12, color: BambooInk.ink700),
                   ),
                   Row(

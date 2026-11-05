@@ -24,6 +24,11 @@ function inviteCredentials(secret,actor,id) {
   const token=crypto.createHmac('sha256',key(secret)).update(`pandapay:split-invite:v1:${actor}:${id}`).digest('base64url');
   return {token,tokenHash:crypto.createHash('sha256').update(token).digest('hex')};
 }
+function groupLinkCredentials(secret,actor,ctx,linkId) {
+  uuid(actor,'actorId');uuid(ctx,'contextId');uuid(linkId,'linkId');
+  const token=crypto.createHmac('sha256',key(secret)).update(`pandapay:group-link:v1:${actor}:${ctx}:${linkId}`).digest('base64url');
+  return {token,tokenHash:crypto.createHash('sha256').update(token).digest('hex')};
+}
 function tokenHash(token) {if(!TOKEN.test(token))fail('INVALID_INPUT','token');return crypto.createHash('sha256').update(token).digest('hex');}
 /** First name and last initial only: enough to recognise a person, not to profile them. */
 function maskName(name) {
@@ -102,7 +107,14 @@ function registerInvitationRoutes(app,{protect,withUserClient,sendError,secret,a
     const b=req.body;record(b,['token','operationId']);uuid(b.operationId,'operationId');
     const hash=tokenHash(b.token),phone=verifiedPhoneHash(secret,req.verifiedSession?.verifiedContacts);
     const last4=phone?normalizePhone(req.verifiedSession.verifiedContacts.phone.value).slice(-4):null;
-    const result=await withUserClient(req.userId,async client=>(await client.query('SELECT shared_expenses.claim_invitation($1::text,$2::text,$3::text,$4::uuid,$5::text) AS result',[hash,phone,last4,b.operationId,requestHash({tokenHash:hash,accept:true})])).rows[0].result);
+    let result;
+    try {
+      result=await withUserClient(req.userId,async client=>(await client.query('SELECT shared_expenses.claim_invitation($1::text,$2::text,$3::text,$4::uuid,$5::text) AS result',[hash,phone,last4,b.operationId,requestHash({tokenHash:hash,accept:true})])).rows[0].result);
+    }catch(error){
+      // A number-bound invite needs a verified number; say that instead of "wrong number".
+      if(error?.message==='invitation_phone_mismatch'&&!phone)return res.status(409).json({error:'phone_not_verified'});
+      throw error;
+    }
     res.json(result);
   });
   route('/shared-expenses/invitations/respond',async(req,res)=>{
@@ -143,6 +155,25 @@ function registerInvitationRoutes(app,{protect,withUserClient,sendError,secret,a
     const result=await withUserClient(req.userId,async client=>(await client.query('SELECT shared_expenses.list_my_invitations($1::text) AS result',[phone])).rows[0].result);
     res.json({phoneVerified:true,items:(result.items||[]).map(i=>({...i,inviterName:maskName(i.inviterName)}))});
   }));
+  route('/shared-expenses/groups/link',async(req,res)=>{
+    const b=req.body;record(b,['contextId','linkId']);uuid(b.contextId,'contextId');uuid(b.linkId,'linkId');
+    const creds=groupLinkCredentials(secret,req.userId,b.contextId,b.linkId);
+    const rh=requestHash({contextId:b.contextId,linkId:b.linkId,action:'create'});
+    const result=await withUserClient(req.userId,async client=>(await client.query('SELECT shared_expenses.create_group_link($1::uuid,$2::text,$3::uuid,$4::text) AS result',[b.contextId,creds.tokenHash,b.linkId,rh])).rows[0].result);
+    res.json({...result,joinUrl:`https://pandapay.app/split/join/${creds.token}`});
+  });
+  route('/shared-expenses/groups/link/revoke',async(req,res)=>{
+    const b=req.body;record(b,['contextId','operationId']);uuid(b.contextId,'contextId');uuid(b.operationId,'operationId');
+    const rh=requestHash({contextId:b.contextId,action:'revoke'});
+    const result=await withUserClient(req.userId,async client=>(await client.query('SELECT shared_expenses.revoke_group_link($1::uuid,$2::uuid,$3::text) AS result',[b.contextId,b.operationId,rh])).rows[0].result);
+    res.json(result);
+  });
+  app.get('/shared-expenses/groups/:contextId/link',...protect(async(req,res)=>{
+    key(secret);uuid(req.params.contextId,'contextId');
+    if(Object.keys(req.query).length)fail('INVALID_INPUT','query');
+    const result=await withUserClient(req.userId,async client=>(await client.query('SELECT shared_expenses.group_link_status($1::uuid) AS result',[req.params.contextId])).rows[0].result);
+    res.json(result);
+  }));
   app.get('/shared-expenses/invitations/requests',...protect(async(req,res)=>{
     key(secret);
     if(Object.keys(req.query).length)fail('INVALID_INPUT','query');
@@ -170,4 +201,4 @@ function registerInvitationRoutes(app,{protect,withUserClient,sendError,secret,a
     res.json(result);
   }));
 }
-module.exports={normalizePhone,inviteCredentials,verifiedPhoneHash,registerInvitationRoutes,createDirectoryToucher,maskName};
+module.exports={normalizePhone,inviteCredentials,groupLinkCredentials,verifiedPhoneHash,registerInvitationRoutes,createDirectoryToucher,maskName};

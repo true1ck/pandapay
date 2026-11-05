@@ -1,6 +1,9 @@
 import 'shared_invitations.dart';
 import 'shared_transport.dart';
 
+String? _suffix(Object? v) =>
+    v is String && RegExp(r'^[0-9]{4}$').hasMatch(v) ? v : null;
+
 /// Turns a typed or contact-picker phone value into the form the server
 /// accepts, or null when it cannot be a mobile number. The server re-validates;
 /// this only avoids pointless lookups and removes common contact formatting
@@ -109,12 +112,14 @@ final class SharedInboxInvite {
 /// Someone who joined through the owner's shared link and awaits approval.
 final class SharedJoinRequest {
   final String invitationId, contextId, contextName;
-  final String? memberName;
+  final String? memberName, claimantName, phoneSuffix;
   const SharedJoinRequest({
     required this.invitationId,
     required this.contextId,
     required this.contextName,
     this.memberName,
+    this.claimantName,
+    this.phoneSuffix,
   });
   factory SharedJoinRequest.fromJson(Map<String, Object?> value) {
     final id = value['invitationId'], ctx = value['contextId'];
@@ -134,11 +139,47 @@ final class SharedJoinRequest {
       contextId: ctx,
       contextName: name,
       memberName: member as String?,
+      claimantName: value['claimantName'] as String?,
+      phoneSuffix: _suffix(value['verifiedPhoneSuffix']),
     );
   }
+
+  /// Who actually opened the link: PandaPay name and verified number ending.
+  /// The owner's typed name is only a label; this is the real identity check.
+  String get whoOpened {
+    final name = (claimantName == null || claimantName!.isEmpty)
+        ? 'A PandaPay user'
+        : claimantName!;
+    return phoneSuffix == null
+        ? '$name opened the link (no verified number)'
+        : '$name opened the link (number ending $phoneSuffix)';
+  }
+
   String get headline =>
       '${(memberName == null || memberName!.isEmpty) ? 'Someone' : memberName!} '
       'wants to join "$contextName"';
+}
+
+/// Owner's view of a group's shared link.
+final class SharedGroupLinkStatus {
+  final bool active, expired;
+  final DateTime? expiresAt;
+  const SharedGroupLinkStatus({
+    required this.active,
+    required this.expired,
+    this.expiresAt,
+  });
+  factory SharedGroupLinkStatus.fromJson(Map<String, Object?> value) {
+    final active = value['active'], expired = value['expired'];
+    if (active is! bool || (expired != null && expired is! bool)) {
+      throw const SharedTransportException(code: 'invalid_response');
+    }
+    return SharedGroupLinkStatus(
+      active: active,
+      expired: expired == true,
+      expiresAt: DateTime.tryParse(value['expiresAt'] as String? ?? ''),
+    );
+  }
 }
 
 /// Plain-language reason for a failed add/invite step. Never a raw code.
@@ -155,6 +196,13 @@ String sharedInviteIssueMessage(Object error) {
       'Too many tries for now. Please wait a while and try again.',
     'invitation_phone_mismatch' =>
       'This invite was sent to a different mobile number than the one on your account.',
+    'join_declined_recently' =>
+      'The owner declined your request recently. Ask them to add you directly.',
+    'join_requests_full' =>
+      'This group has too many waiting requests. Ask the owner to review them.',
+    'membership_conflict' =>
+      'You cannot join with this link. Ask the owner to add you directly.',
+    'context_member_limit' => 'This split is full.',
     'phone_not_verified' =>
       'Verify your mobile number in your profile to use phone invites.',
     'invitation_unavailable' =>
@@ -188,7 +236,10 @@ final class SharedOwnerInvitation {
   final String invitationId, memberId, status;
   final bool phoneBound;
   final DateTime? createdAt;
+  final String? claimantName, phoneSuffix;
   const SharedOwnerInvitation({
+    this.claimantName,
+    this.phoneSuffix,
     required this.invitationId,
     required this.memberId,
     required this.status,
@@ -220,6 +271,8 @@ final class SharedOwnerInvitation {
       memberId: member,
       status: status,
       phoneBound: bound,
+      claimantName: value['claimantName'] as String?,
+      phoneSuffix: _suffix(value['verifiedPhoneSuffix']),
       createdAt: DateTime.tryParse(value['createdAt'] as String? ?? ''),
     );
   }

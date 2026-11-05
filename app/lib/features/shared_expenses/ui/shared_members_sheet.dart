@@ -55,6 +55,8 @@ class _SharedMembersSheetState extends State<SharedMembersSheet> {
   bool _adding = false;
   SharedPhoneLookup _lookup = SharedPhoneLookup.none;
   Map<String, SharedOwnerInvitation> _inv = const {};
+  SharedGroupLinkStatus? _groupLink;
+  SharedInviteLink? _groupLinkNow;
   final _nameField = TextEditingController();
   final _phoneField = TextEditingController();
   bool get _authorized =>
@@ -65,6 +67,128 @@ class _SharedMembersSheetState extends State<SharedMembersSheet> {
     super.initState();
     _roster = widget.runtime.contextRoster(widget.contextId);
     _loadInvitations();
+    _loadGroupLink();
+  }
+
+  Future<void> _loadGroupLink() async {
+    try {
+      final status = await widget.runtime.groupLinkStatus(widget.contextId);
+      if (mounted) setState(() => _groupLink = status);
+    } catch (_) {
+      if (mounted) setState(() => _groupLink = null);
+    }
+  }
+
+  /// One link per group. Creating a new one replaces the old, so a link is only
+  /// re-shared in the session that made it.
+  Future<void> _shareGroupLink({bool reuse = false}) async {
+    if (_busy || !_authorized || !widget.runtime.proposalsEnabled) return;
+    setState(() => _busy = true);
+    try {
+      final link = reuse && _groupLinkNow != null
+          ? _groupLinkNow!
+          : await widget.runtime.createGroupLink(widget.contextId);
+      if (!mounted || !_authorized) return;
+      setState(() => _groupLinkNow = link);
+      await _loadGroupLink();
+      await SharePlus.instance.share(
+        ShareParams(
+          subject: 'Join ${widget.groupName} on PandaPay',
+          text:
+              'Join "${widget.groupName}" on PandaPay to keep shared expenses '
+              'in one place. Open the link and ask to join; the group owner '
+              'approves each person: ${link.url}',
+        ),
+      );
+    } catch (error) {
+      if (mounted) {
+        setState(() => _notice = sharedInviteIssueMessage(error));
+      }
+    } finally {
+      if (mounted) setState(() => _busy = false);
+    }
+  }
+
+  Future<void> _turnOffGroupLink() async {
+    if (_busy || !_authorized) return;
+    setState(() => _busy = true);
+    try {
+      await widget.runtime.revokeGroupLink(widget.contextId);
+      if (!mounted) return;
+      setState(() {
+        _groupLinkNow = null;
+        _notice =
+            'The group link is off. People who already asked stay in the list.';
+      });
+      await _loadGroupLink();
+    } catch (error) {
+      if (mounted) setState(() => _notice = sharedInviteIssueMessage(error));
+    } finally {
+      if (mounted) setState(() => _busy = false);
+    }
+  }
+
+  Widget _groupLinkCard() {
+    final link = _groupLink;
+    final active = link?.active == true;
+    final until = link?.expiresAt;
+    final dateText = until == null
+        ? ''
+        : ' until ${until.toLocal().day}/${until.toLocal().month}/${until.toLocal().year}';
+    return Container(
+      margin: const EdgeInsets.only(bottom: 12),
+      padding: const EdgeInsets.all(12),
+      decoration: BoxDecoration(
+        color: Colors.white,
+        borderRadius: BorderRadius.circular(14),
+        border: Border.all(color: BambooInk.ink300),
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Text(
+            'Group link',
+            style: BambooFonts.ui(14, weight: FontWeight.w600),
+          ),
+          const SizedBox(height: 4),
+          Text(
+            active
+                ? 'Anyone with the link can ask to join$dateText. You approve each person.'
+                : link?.expired == true
+                ? 'The last link expired. Create a new one to invite people.'
+                : 'Share one link with the whole group. You approve each person who asks to join.',
+            style: BambooFonts.ui(12, color: BambooInk.ink700),
+          ),
+          Wrap(
+            alignment: WrapAlignment.end,
+            children: [
+              if (active)
+                TextButton(
+                  onPressed: _busy ? null : _turnOffGroupLink,
+                  child: Text('Turn off', style: BambooFonts.ui(13)),
+                ),
+              TextButton.icon(
+                onPressed: _busy ? null : () => _shareGroupLink(reuse: active),
+                icon: const Icon(Icons.share_outlined, size: 18),
+                label: Text(
+                  !active
+                      ? 'Create link'
+                      : _groupLinkNow != null
+                      ? 'Share link'
+                      : 'New link',
+                  style: BambooFonts.ui(13, weight: FontWeight.w700),
+                ),
+              ),
+            ],
+          ),
+          if (active && _groupLinkNow == null)
+            Text(
+              'A new link replaces the old one, so earlier copies stop working.',
+              style: BambooFonts.ui(11.5, color: BambooInk.ink700),
+            ),
+        ],
+      ),
+    );
   }
 
   Future<void> _loadInvitations() async {
@@ -103,7 +227,9 @@ class _SharedMembersSheetState extends State<SharedMembersSheet> {
     return switch (inv?.status) {
       'open' when inv!.phoneBound => 'Invite sent · waiting for them to join',
       'open' => 'Link shared · waiting for them to join',
-      'awaiting_owner' => 'Wants to join',
+      'awaiting_owner' =>
+        '${inv!.claimantName ?? 'A PandaPay user'} wants to join'
+            '${inv.phoneSuffix == null ? '' : ' · number ending ${inv.phoneSuffix}'}',
       'declined' => 'Declined the invite',
       'expired' => 'Invite expired',
       'rejected' => 'Not invited right now',
@@ -418,6 +544,10 @@ class _SharedMembersSheetState extends State<SharedMembersSheet> {
                                   'Adding a name records an unverified person. Tap Invite to share a join link; joining never accepts any expense or debt.',
                                 ),
                                 if (_notice != null) SharedNotice(_notice!),
+                                if (!roster.direct &&
+                                    roster.canShareLink &&
+                                    widget.runtime.proposalsEnabled)
+                                  _groupLinkCard(),
                                 for (final member in roster.members)
                                   ListTile(
                                     title: Text(
