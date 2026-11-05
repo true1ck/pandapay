@@ -17,7 +17,7 @@ function labelIdentitySql(alias = 't') {
   return SQL_TEMPLATE.replace('%s', `"${alias}"."label"`);
 }
 const RULE_KEYS = Object.freeze({
-  cap_rules: Object.freeze(['card_product_id','reward_rule_id','category_id','benefit_kind','label','measure','period','cap_value','post_cap_unit','post_cap_rate','resets_on_day']),
+  cap_rules: Object.freeze(['card_product_id','reward_rule_id','category_id','benefit_kind','label','measure','period','cap_value','post_cap_unit','post_cap_rate','resets_on_day','cap_kind','cap_amount','scope','parent_cap_id','post_cap_behavior','anchor','min_engine_version']),
   card_benefits: Object.freeze(['card_product_id','kind','label','description','quota_count','quota_period','network_program','value_estimate_inr','conditions']),
 });
 module.exports={FORMAT,normalizeCatalogueLabel,labelIdentitySql,RULE_KEYS,SQL_TEMPLATE};

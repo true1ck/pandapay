@@ -20,7 +20,8 @@ alter table card_products
 
 alter table card_products
   add constraint card_accrual_rounding_known
-    check (accrual_rounding is null or accrual_rounding in ('floor','round','none')),
+    check (accrual_rounding is null or accrual_rounding in
+      ('floor','round','none','points_half_up','points_floor')),
   add constraint card_model_status_known
     check (model_status in ('verified','partial','basic'));
 
@@ -113,6 +114,47 @@ alter table milestone_rules
   add constraint milestone_reward_kind_known
     check (reward_kind is null or reward_kind in
       ('points','voucher','cashback','fee_waiver','benefit','other'));
+
+-- ── Identity indexes (C8 D1) ────────────────────────────────────────────────
+-- Recreated with the v2 columns so two v2 rules/caps that differ only in v2
+-- fields do not collide. The new keys only widen identity, so existing rows
+-- cannot violate them. source_local_id is deliberately not part of identity.
+drop index if exists uq_reward_rules_semantic_identity;
+create unique index uq_reward_rules_semantic_identity
+  on reward_rules (
+    card_product_id, category_id, merchant_pattern, rail, unit, rate,
+    min_txn_inr, max_txn_inr, priority, conditions, notes,
+    effective_from, effective_to, excluded_categories,
+    rule_role, merchant_slugs, platform_slugs, mcc_include, mcc_exclude,
+    block_inr, min_engine_version
+  ) nulls not distinct;
+
+drop index if exists uq_cap_rules_semantic_identity;
+create unique index uq_cap_rules_semantic_identity
+  on cap_rules (
+    card_product_id, reward_rule_id, category_id, benefit_kind, label, measure,
+    period, cap_value, post_cap_unit, post_cap_rate, resets_on_day,
+    cap_kind, cap_amount, scope, parent_cap_id, post_cap_behavior, anchor,
+    min_engine_version
+  ) nulls not distinct;
+
+drop index if exists uq_cap_rules_label_identity_v1;
+create unique index uq_cap_rules_label_identity_v1
+  on cap_rules (
+    card_product_id, reward_rule_id, category_id, benefit_kind,
+    (pg_catalog.translate(pg_catalog.btrim(pg_catalog.regexp_replace(label, E'[\011-\015 ]+', ' ', 'g')), 'ABCDEFGHIJKLMNOPQRSTUVWXYZ', 'abcdefghijklmnopqrstuvwxyz')) collate "C",
+    measure, period, cap_value, post_cap_unit, post_cap_rate, resets_on_day,
+    cap_kind, cap_amount, scope, parent_cap_id, post_cap_behavior, anchor,
+    min_engine_version
+  ) nulls not distinct;
+
+drop index if exists uq_milestone_rules_semantic_identity;
+create unique index uq_milestone_rules_semantic_identity
+  on milestone_rules (
+    card_product_id, label, period, threshold_spend_inr, reward_description,
+    reward_value_inr, is_repeatable, max_repeats, anchor,
+    reward_points, reward_kind, window_days, excluded_category_ids
+  ) nulls not distinct;
 
 -- ── benefit_unlock_rules (spend-gated benefits as structured data) ───────────
 create table benefit_unlock_rules (
@@ -239,7 +281,15 @@ select
                and r.min_engine_version = 1 and r.rule_role <> 'info'), '[]'::jsonb) as reward_rules,
   coalesce((select jsonb_agg(to_jsonb(k) - 'card_product_id') from cap_rules k
              where k.card_product_id = c.id
-               and k.min_engine_version = 1), '[]'::jsonb) as cap_rules,
+               and k.min_engine_version = 1
+               and not exists (select 1 from reward_rules rr
+                                where rr.id = k.reward_rule_id
+                                  and (rr.min_engine_version <> 1 or rr.rule_role = 'info'))
+               and not exists (select 1 from cap_rule_targets t
+                                join reward_rules rr on rr.id = t.reward_rule_id
+                               where t.cap_rule_id = k.id
+                                 and (rr.min_engine_version <> 1 or rr.rule_role = 'info'))
+          ), '[]'::jsonb) as cap_rules,
   coalesce((select jsonb_agg(to_jsonb(m) - 'card_product_id') from milestone_rules m
              where m.card_product_id = c.id), '[]'::jsonb) as milestone_rules,
   coalesce((select jsonb_agg(to_jsonb(f) - 'card_product_id') from fee_waiver_rules f
