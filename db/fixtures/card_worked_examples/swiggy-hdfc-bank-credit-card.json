@@ -1,0 +1,294 @@
+{
+  "source_slug": "swiggy-hdfc-bank-credit-card",
+  "cardpipeline_id": "hdfc-bank-swiggy-hdfc-bank-credit-card",
+  "card_name": "Swiggy HDFC Bank Credit Card",
+  "verified_on": "2026-11-05",
+  "sources": [
+    {
+      "url": "https://www.hdfc.bank.in/content/dam/hdfcbankpws/in/en/personal-banking/discover-products/cards/credit-cards/swiggy-hdfc-bank-credit-card/pdf/terms-and-conditions-swiggy-hdfc-bank-credit-card-18092026.pdf",
+      "doc": "Swiggy HDFC Bank Credit Card T&C, published 18 Sep 2026",
+      "quote": "10% cashback ... Rs.1500 per billing cycle (Swiggy App: Food Delivery, Instamart and Dineout)"
+    },
+    {
+      "url": "https://www.hdfc.bank.in/content/dam/hdfcbankpws/in/en/personal-banking/discover-products/cards/credit-cards/swiggy-hdfc-bank-credit-card/pdf/terms-and-conditions-swiggy-hdfc-bank-credit-card-18092026.pdf",
+      "doc": "Swiggy HDFC Bank Credit Card T&C, published 18 Sep 2026",
+      "quote": "Spends on online shopping 5% cashback, Rs.1500 per billing cycle; other categories 1%, Rs.500 per billing cycle"
+    },
+    {
+      "url": "https://www.hdfc.bank.in/content/dam/hdfcbankpws/in/en/personal-banking/discover-products/cards/credit-cards/swiggy-hdfc-bank-credit-card/pdf/terms-and-conditions-swiggy-hdfc-bank-credit-card-18092026.pdf",
+      "doc": "Swiggy HDFC Bank Credit Card T&C, published 18 Sep 2026",
+      "quote": "Cashback will not be accrued ... Smartbuy portal ... EMI (all type)"
+    }
+  ],
+  "examples": [
+    {
+      "id": "001",
+      "title": "Rs 600 Swiggy food order in app",
+      "ctx": {
+        "amount": 600,
+        "occurred": "2026-11-05T10:00:00+05:30",
+        "category_slug": "dining",
+        "mcc": 5814,
+        "merchant_name": "Swiggy",
+        "merchant_vpa": null,
+        "merchant_slug": "swiggy",
+        "platform": "swiggy_app",
+        "rail": "online"
+      },
+      "state_before": {
+        "caps_by_source_id": {}
+      },
+      "expect": {
+        "currency": "cashback",
+        "amount": 60,
+        "value_inr": 60,
+        "excluded": false,
+        "cap_deltas_by_source_id": {
+          "swiggy_cashback_cap": 60
+        }
+      },
+      "why": "10% on Swiggy app food = Rs60. The cap is Rs1,500 of cashback per billing cycle."
+    },
+    {
+      "id": "002",
+      "title": "Rs 1,000 Instamart order",
+      "ctx": {
+        "amount": 1000,
+        "occurred": "2026-11-05T10:00:00+05:30",
+        "category_slug": "groceries",
+        "mcc": 5411,
+        "merchant_name": "Swiggy Instamart",
+        "merchant_vpa": null,
+        "merchant_slug": "instamart",
+        "platform": "swiggy_app",
+        "rail": "online"
+      },
+      "state_before": {
+        "caps_by_source_id": {}
+      },
+      "expect": {
+        "currency": "cashback",
+        "amount": 100,
+        "value_inr": 100,
+        "excluded": false,
+        "cap_deltas_by_source_id": {
+          "swiggy_cashback_cap": 100
+        }
+      },
+      "why": "Instamart is part of the 10% Swiggy app category: Rs100."
+    },
+    {
+      "id": "003",
+      "title": "Rs 1,000 Swiggy order with Rs1,450 of cap used",
+      "ctx": {
+        "amount": 1000,
+        "occurred": "2026-11-05T10:00:00+05:30",
+        "category_slug": "dining",
+        "mcc": 5814,
+        "merchant_name": "Swiggy",
+        "merchant_vpa": null,
+        "merchant_slug": "swiggy",
+        "platform": "swiggy_app",
+        "rail": "online"
+      },
+      "state_before": {
+        "caps_by_source_id": {
+          "swiggy_cashback_cap": 1450
+        }
+      },
+      "expect": {
+        "currency": "cashback",
+        "amount": 50,
+        "value_inr": 50,
+        "excluded": false,
+        "cap_deltas_by_source_id": {
+          "swiggy_cashback_cap": 50
+        }
+      },
+      "why": "Rs100 would be earned but only Rs50 remains in the Rs1,500 cashback cap. Assumes no spill-over to the 1% category (issuer silent)."
+    },
+    {
+      "id": "004",
+      "title": "Rs 2,000 online apparel (MCC 5651)",
+      "ctx": {
+        "amount": 2000,
+        "occurred": "2026-11-05T10:00:00+05:30",
+        "category_slug": "online",
+        "mcc": 5651,
+        "merchant_name": "Myntra",
+        "merchant_vpa": null,
+        "merchant_slug": "myntra",
+        "platform": null,
+        "rail": "online"
+      },
+      "state_before": {
+        "caps_by_source_id": {}
+      },
+      "expect": {
+        "currency": "cashback",
+        "amount": 100,
+        "value_inr": 100,
+        "excluded": false,
+        "cap_deltas_by_source_id": {
+          "online_5pct_cashback_cap": 100
+        }
+      },
+      "why": "5% on eligible online MCCs: Rs100. Only select merchants mapped to the MCC qualify."
+    },
+    {
+      "id": "005",
+      "title": "Rs 3,000 offline restaurant",
+      "ctx": {
+        "amount": 3000,
+        "occurred": "2026-11-05T10:00:00+05:30",
+        "category_slug": "dining",
+        "mcc": 5812,
+        "merchant_name": "Local restaurant",
+        "merchant_vpa": null,
+        "merchant_slug": null,
+        "platform": null,
+        "rail": "swipe"
+      },
+      "state_before": {
+        "caps_by_source_id": {}
+      },
+      "expect": {
+        "currency": "cashback",
+        "amount": 30,
+        "value_inr": 30,
+        "excluded": false,
+        "cap_deltas_by_source_id": {
+          "other_1pct_cashback_cap": 30
+        }
+      },
+      "why": "Not Swiggy and not online: 1% = Rs30."
+    },
+    {
+      "id": "006",
+      "title": "Rs 5,000 other spend after 1% cap used",
+      "ctx": {
+        "amount": 5000,
+        "occurred": "2026-11-05T10:00:00+05:30",
+        "category_slug": "shopping",
+        "mcc": 5712,
+        "merchant_name": "Furniture store",
+        "merchant_vpa": null,
+        "merchant_slug": null,
+        "platform": null,
+        "rail": "swipe"
+      },
+      "state_before": {
+        "caps_by_source_id": {
+          "other_1pct_cashback_cap": 500
+        }
+      },
+      "expect": {
+        "currency": "cashback",
+        "amount": 0,
+        "value_inr": 0,
+        "excluded": false,
+        "cap_deltas_by_source_id": {}
+      },
+      "why": "1% category cap of Rs500 per cycle is used; nothing more."
+    },
+    {
+      "id": "007",
+      "title": "Rs 3,000 fuel",
+      "ctx": {
+        "amount": 3000,
+        "occurred": "2026-11-05T10:00:00+05:30",
+        "category_slug": "fuel",
+        "mcc": 5541,
+        "merchant_name": "Petrol pump",
+        "merchant_vpa": null,
+        "merchant_slug": null,
+        "platform": null,
+        "rail": "swipe"
+      },
+      "state_before": {
+        "caps_by_source_id": {}
+      },
+      "expect": {
+        "currency": "cashback",
+        "amount": 0,
+        "value_inr": 0,
+        "excluded": true,
+        "cap_deltas_by_source_id": {}
+      },
+      "why": "Fuel excluded."
+    },
+    {
+      "id": "008",
+      "title": "Rs 5,000 flight booked via SmartBuy",
+      "ctx": {
+        "amount": 5000,
+        "occurred": "2026-11-05T10:00:00+05:30",
+        "category_slug": "travel",
+        "mcc": 4511,
+        "merchant_name": "Flight booking",
+        "merchant_vpa": null,
+        "merchant_slug": null,
+        "platform": "hdfc_smartbuy",
+        "rail": "online"
+      },
+      "state_before": {
+        "caps_by_source_id": {}
+      },
+      "expect": {
+        "currency": "cashback",
+        "amount": 0,
+        "value_inr": 0,
+        "excluded": true,
+        "cap_deltas_by_source_id": {}
+      },
+      "why": "Issuer lists the SmartBuy portal as an exclusion."
+    },
+    {
+      "id": "009",
+      "title": "Rs 8,000 EMI",
+      "ctx": {
+        "amount": 8000,
+        "occurred": "2026-11-05T10:00:00+05:30",
+        "category_slug": "shopping",
+        "mcc": 5732,
+        "merchant_name": "Electronics store",
+        "merchant_vpa": null,
+        "merchant_slug": null,
+        "platform": null,
+        "rail": "emi"
+      },
+      "state_before": {
+        "caps_by_source_id": {}
+      },
+      "expect": {
+        "currency": "cashback",
+        "amount": 0,
+        "value_inr": 0,
+        "excluded": true,
+        "cap_deltas_by_source_id": {}
+      },
+      "why": "All EMI types excluded."
+    }
+  ],
+  "research_notes": [
+    {
+      "item": "caps swiggy_cashback_cap, online_5pct_cashback_cap, other_1pct_cashback_cap",
+      "cardpipeline_says": "eligible_spend_amount caps of Rs1,500 / 1,500 / 500 of spend.",
+      "issuer_says": "Caps are on cashback: Rs1,500 / Rs1,500 / Rs500 per billing cycle. A spend cap of Rs1,500 would stop the 10% category after Rs150 of cashback instead of Rs1,500.",
+      "proposed_fix": "override",
+      "override_file": "api/scripts/catalogue_overrides/swiggy-hdfc-bank-credit-card.json"
+    },
+    {
+      "item": "10% minimum transaction",
+      "cardpipeline_says": "Rs249 minimum on Swiggy 10%.",
+      "issuer_says": "Product page says no cashback below Rs100; T&C excerpt read does not state Rs249.",
+      "proposed_fix": "none"
+    },
+    {
+      "item": "cap overflow behaviour",
+      "cardpipeline_says": "zero_accrual.",
+      "issuer_says": "Silent on whether spend above the 10% cap earns 1%. No example written.",
+      "proposed_fix": "none"
+    }
+  ]
+}
