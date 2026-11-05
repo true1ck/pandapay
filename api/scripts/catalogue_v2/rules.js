@@ -134,8 +134,9 @@ function idNegation(src, index) {
 
 // D8(b): "up to 10X" folds several rates into one. Read only the rule's own
 // rate text (its action reason), never its id. Within it, an "up to" that
-// is a cap ("up to 300 points per month"), a stacked total ("total earn up
-// to 1.5%", "up to 6X overall") or an aside in brackets is not this rule's rate.
+// is a cap on an amount ("up to 300 points per month"; D27d: never a % or X
+// rate), a stacked total ("total earn up to 1.5%", "up to 6X overall") or an
+// aside in brackets is not this rule's rate.
 const UP_TO_RATE = /up[\s_-]*to[\s_-]*\d+(?:\.\d+)?\s*(?:x\b|%|(?:bonus\s+|reward\s+)?points?\b|rp\b|miles\b)/gi;
 function statesUpToRate(reason) {
   const text = String(reason || '').replace(/\([^)]*\)/g, ' ');
@@ -147,8 +148,11 @@ function statesUpToRate(reason) {
       const after = clause.slice(m.index + m[0].length, m.index + m[0].length + 40);
       if (/\b(total|combined|overall|together|aggregate|in all)\b[^.]*$/i.test(before)) continue;
       if (/^\s*(overall|in total|combined)\b/i.test(after)) continue;
-      if (/^\s*(per|a|each|every|in a)\s+(calendar\s+|statement\s+|billing\s+)?(month|cycle|quarter|year|statement|day|week)\b/i.test(after) ||
-          /^\s*(per|a|each|every)\s+(calendar|statement|billing)\b/i.test(after) || /^[^.]{0,15}\bcap/i.test(after)) continue;
+      // D27d: a cap or period reads as an amount limit only for an amount
+      // ("up to 300 RP a month"); "up to 5%" / "up to 5X" stays a rate.
+      const isAmount = !/(x\b|%)\s*$/i.test(m[0]);
+      if (isAmount && (/^\s*(per|a|each|every|in a)\s+(calendar\s+|statement\s+|billing\s+)?(month|cycle|quarter|year|statement|day|week)\b/i.test(after) ||
+          /^\s*(per|a|each|every)\s+(calendar|statement|billing)\b/i.test(after) || /^[^.]{0,15}\bcap/i.test(after))) continue;
       return true;
     }
   }

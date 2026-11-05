@@ -1269,6 +1269,10 @@ test('D8b "up to" reads only the rule\'s own rate text: not its id, a cap, a sta
   assert.equal(role('smartbuy_10x', 'Up to 10X Reward Points on dining via SmartBuy.'), 'info');
   assert.equal(role('air_30', 'Up to 30 Reward Points per Rs 100 spent on dining.'), 'info');
   assert.equal(role('half_pct', 'Dining spends earn up to 0.5% cashback.'), 'info', 'a decimal point is not a clause break');
+  // D27d: the cap / period skip is only for amounts (points), never for a % or X rate
+  assert.equal(role('pct_capped', 'Up to 5% cashback, capped at Rs 500 per month.'), 'info');
+  assert.equal(role('x_month', 'Earn up to 5X in a month on dining'), 'info');
+  assert.equal(role('pts_month', '5X on dining, up to 500 Reward Points in a month.'), 'earn');
 });
 
 test('D16/D18e underscored negations ("non_iocl_fuel", "fuel_non_iocl", not_phonepe) become exceptions, never ignored', () => {
