@@ -71,6 +71,8 @@ function parseDirectory(doc) {
     if (m.parent_slug !== null && !bySlug.has(m.parent_slug)) {
       throw new Error(`merchant ${m.slug}: parent_slug ${m.parent_slug} is not in the file`);
     }
+  }
+  for (const m of merchants) {
     const chain = new Set([m.slug]);
     for (let p = m.parent_slug; p !== null; p = bySlug.get(p).parent_slug) {
       if (chain.has(p)) throw new Error(`merchant ${m.slug}: parent cycle`);

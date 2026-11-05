@@ -135,3 +135,25 @@ test('the committed fixture parses', () => {
   const dir = seed.parseDirectory(doc);
   assert.ok(dir.merchants.length > 0 && dir.platforms.length > 0);
 });
+
+test('a merchant with a "group" key parses and group is not passed to the upsert', async () => {
+  const dir = JSON.parse(JSON.stringify(DIR));
+  dir.merchants[1].group = 'zomato';
+  const parsed = seed.parseDirectory(dir);
+  assert.ok(parsed.merchants.every((m) => !('group' in m)));
+  const calls = [];
+  const c = fakeClient();
+  const q = c.query.bind(c);
+  c.query = async (sql, params) => { calls.push(params); return q(sql, params); };
+  await runWith(c, ['--apply'], dir);
+  assert.ok(calls.filter(Boolean).every((p) => !p.includes('zomato')));
+});
+
+test('a missing grandparent gives the "not in the file" error, not a TypeError', () => {
+  const dir = JSON.parse(JSON.stringify(DIR));
+  dir.merchants = [
+    { slug: 'a', name: 'A', parent_slug: 'b' },
+    { slug: 'b', name: 'B', parent_slug: 'ghost' },
+  ];
+  assert.throws(() => seed.parseDirectory(dir), /ghost is not in the file/);
+});

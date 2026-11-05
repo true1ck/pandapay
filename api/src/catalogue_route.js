@@ -1,5 +1,7 @@
 'use strict';
 
+const { safeErrorCode } = require('./safeErrorCode');
+
 // GET /catalogue serves the v1 feed by default (exact shape installed apps
 // parse; plan H1) and the v2 feed when ?schema=2 (plan C2).
 
@@ -15,10 +17,6 @@ const V2_PLATFORMS_SQL =
 function wantsV2(req) {
   const schema = req && req.query ? req.query.schema : undefined;
   return schema === '2';
-}
-
-function safeCode(err) {
-  return err && typeof err.code === 'string' ? err.code : 'unknown';
 }
 
 function createCatalogueHandler({ withUserClient, logger = console }) {
@@ -37,7 +35,7 @@ function createCatalogueHandler({ withUserClient, logger = console }) {
       const result = await withUserClient(user, (client) => client.query(V1_SQL));
       return res.json({ cards: result.rows });
     } catch (err) {
-      logger.error('GET /catalogue error', safeCode(err));
+      logger.error('GET /catalogue error', safeErrorCode(err));
       return res.status(500).json({ error: 'internal_error' });
     }
   };
