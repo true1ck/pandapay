@@ -154,6 +154,9 @@ CatalogueFeed parseCatalogueBody(
 abstract class CatalogueCacheStore {
   Future<String?> get(String key);
   Future<void> put(String key, String rawJson);
+
+  /// Removes [key] (a no-op when absent).
+  Future<void> clear(String key);
 }
 
 class ResponseCacheCatalogueStore implements CatalogueCacheStore {
@@ -165,6 +168,9 @@ class ResponseCacheCatalogueStore implements CatalogueCacheStore {
 
   @override
   Future<void> put(String key, String rawJson) => _cache.put(key, rawJson);
+
+  @override
+  Future<void> clear(String key) => _cache.clear(key);
 }
 
 class _Live {
@@ -294,6 +300,14 @@ class CatalogueLoader {
           catalogueV1CacheKey,
           jsonEncode({'cards': live.feed.cards.map((c) => c.toJson()).toList()}),
         );
+        // The v1 feed is what the server serves now. A v2 body cached
+        // earlier is stale, and cache-first would keep serving it for ever:
+        // drop it (a failed clear never fails the write above).
+        try {
+          await store.clear(catalogueV2CacheKey);
+        } catch (error) {
+          _log('catalogue: stale v2 cache not cleared (${error.runtimeType})');
+        }
       }
       return true;
     } catch (error) {

@@ -22,6 +22,20 @@ class _MapStore implements CatalogueCacheStore {
   Future<void> put(String key, String rawJson) async {
     values[key] = rawJson;
   }
+
+  @override
+  Future<void> clear(String key) async {
+    values.remove(key);
+  }
+}
+
+/// A store whose clear always fails: a stale-key cleanup must never fail the
+/// write.
+class _ClearFailsStore extends _MapStore {
+  _ClearFailsStore([super.initial]);
+
+  @override
+  Future<void> clear(String key) async => throw StateError('clear failed');
 }
 
 /// Scriptable repository: v1 and v2 each return cards, throw, or hang.
@@ -360,14 +374,16 @@ void main() {
       expect(identical(feed.directory, MerchantDirectory.empty), isTrue);
     });
 
-    test('a live v1 success leaves the v2 key untouched', () async {
+    test('a live v1 success writes only the old key and never puts a v1 body '
+        'under the v2 key (an unreadable v2 entry is cleared)', () async {
       final store = _MapStore({
         catalogueV2CacheKey: 'sentinel-not-json',
       });
       final repo = _FakeRepo()
         ..onV1 = () async => [parseCard(v1CardJson('old'))];
       await _loader(repo, cache: store).load();
-      expect(store.values[catalogueV2CacheKey], 'sentinel-not-json');
+      expect(store.values.containsKey(catalogueV2CacheKey), isFalse);
+      expect(store.values.containsKey(catalogueV1CacheKey), isTrue);
     });
   });
 
@@ -493,6 +509,50 @@ void main() {
         ..onV1 = () async => [parseCard(v1CardJson('old'))];
       expect(await _loader(repo, cache: store).refreshCache(), isTrue);
       expect(store.values.keys, [catalogueV1CacheKey]);
+    });
+
+    test('a v1 fallback drops a stale v2 body so cache-first stops serving it',
+        () async {
+      // An earlier refresh cached v2; the server now only answers v1.
+      final store = _MapStore({
+        catalogueV2CacheKey: jsonEncode(v2Body([v2CardJson('stale-v2')])),
+      });
+      final repo = _FakeRepo()
+        ..onV1 = () async => [parseCard(v1CardJson('fresh-v1'))];
+      expect(await _loader(repo, cache: store).refreshCache(), isTrue);
+      expect(store.values.containsKey(catalogueV2CacheKey), isFalse);
+      expect(store.values.containsKey(catalogueV1CacheKey), isTrue);
+
+      // The next load no longer serves the stale v2 cards.
+      final feed = await _loader(repo, cache: store).load();
+      expect(feed.cards.map((c) => c.id), ['fresh-v1']);
+      expect(feed.origin, CatalogueOrigin.liveV1);
+    });
+
+    test('a failure to clear the stale v2 key does not fail the refresh',
+        () async {
+      final store = _ClearFailsStore({
+        catalogueV2CacheKey: jsonEncode(v2Body([v2CardJson('stale-v2')])),
+      });
+      final repo = _FakeRepo()
+        ..onV1 = () async => [parseCard(v1CardJson('fresh-v1'))];
+      expect(await _loader(repo, cache: store).refreshCache(), isTrue);
+      expect(store.values.containsKey(catalogueV1CacheKey), isTrue);
+    });
+
+    test('a v2 success keeps writing the v2 key and leaves the v1 key alone',
+        () async {
+      final store = _MapStore({
+        catalogueV1CacheKey: jsonEncode(v1Body([v1CardJson('old')])),
+      });
+      final repo = _FakeRepo()
+        ..onV2 = () async => _v2Fetch(v2Body([v2CardJson('a')]));
+      await _loader(repo, cache: store).refreshCache();
+      expect(store.values.containsKey(catalogueV2CacheKey), isTrue);
+      expect(
+        jsonDecode(store.values[catalogueV1CacheKey]!)['cards'],
+        hasLength(1),
+      );
     });
 
     test('writes nothing when both feeds fail', () async {
