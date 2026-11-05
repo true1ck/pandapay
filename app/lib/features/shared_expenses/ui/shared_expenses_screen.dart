@@ -378,13 +378,20 @@ class _SharedExpensesScreenState extends State<SharedExpensesScreen>
           borderRadius: BorderRadius.circular(24),
           borderSide: BorderSide.none,
         ),
-        suffixIcon: IconButton(
-          tooltip: 'Clear search',
-          icon: const Icon(Icons.close_rounded, size: 20),
-          onPressed: () {
-            _clearSearch();
-            _searchFocus.requestFocus();
-          },
+        suffixIcon: ValueListenableBuilder<TextEditingValue>(
+          valueListenable: _search[_selected]!,
+          builder: (context, value, _) => IconButton(
+            tooltip: value.text.isEmpty ? 'Close search' : 'Clear search',
+            icon: const Icon(Icons.close_rounded, size: 20),
+            onPressed: () {
+              if (value.text.isEmpty) {
+                _closeSearch();
+              } else {
+                _clearSearch();
+                _searchFocus.requestFocus();
+              }
+            },
+          ),
         ),
       ),
     ),

@@ -321,6 +321,12 @@ void main() {
     await tester.pumpAndSettle();
     expect(searches, ['friends:Rah', 'friends:']);
     expect(find.byType(TextField), findsOneWidget);
+    await tester.tap(find.byTooltip('Close search'));
+    await tester.pumpAndSettle();
+    expect(find.byType(TextField), findsNothing);
+    expect(find.byTooltip('Search splits'), findsOneWidget);
+    await tester.tap(find.byTooltip('Search splits'));
+    await tester.pumpAndSettle();
     await tester.enterText(find.byType(TextField), 'Again');
     await tester.tap(find.byType(BackButton));
     await tester.pumpAndSettle();
@@ -333,6 +339,25 @@ void main() {
     await tester.pumpAndSettle();
     expect(find.byType(TextField), findsNothing);
     expect(find.text('Splits'), findsOneWidget);
+    for (final tab in ['Groups', 'Activity']) {
+      await tester.tap(find.text(tab));
+      await tester.pumpAndSettle();
+      await tester.tap(find.byTooltip('Search splits'));
+      await tester.pumpAndSettle();
+      await tester.enterText(find.byType(TextField), 'query');
+      await tester.pump();
+      await tester.tap(find.byTooltip('Clear search'));
+      await tester.pumpAndSettle();
+      expect(find.byType(TextField), findsOneWidget);
+      expect(
+        (tester.widget<TextField>(find.byType(TextField))).controller!.text,
+        isEmpty,
+      );
+      await tester.tap(find.byTooltip('Close search'));
+      await tester.pumpAndSettle();
+      expect(find.byType(TextField), findsNothing);
+      expect(find.byTooltip('Search splits'), findsOneWidget);
+    }
   });
 
   testWidgets('filter applies to the selected tab without hiding active debt', (
