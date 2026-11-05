@@ -76,7 +76,14 @@
     {
       "path": "reward_rules[id=flipkart_cashback_5].conditions.excluded_subcategory",
       "op": "remove",
-      "reason": "WP7: Flipkart Health+ is now its own directory merchant (flipkart_health, no parent), so a Flipkart Health spend never resolves to flipkart; the free-text sub-category made the 5% Flipkart rule info.",
+      "reason": "WP7: The free-text sub-category made the 5% Flipkart rule info; Flipkart Health is restated as an except list below.",
+      "source_url": "https://www.axis.bank.in/docs/default-source/default-document-library/cashback-tncs---final.pdf?sfvrsn=b55a0e1a_5",
+      "checked_on": "2026-11-05"
+    },
+    {
+      "path": "reward_rules[id=flipkart_cashback_5].conditions.not_merchant",
+      "value": "Flipkart Health",
+      "reason": "WP7: Flipkart Health is excluded from the 5% (record excluded_subcategory). except_merchant_slugs [flipkart_health] (D16a) makes the rule v2-only (D16c), so the v1 substring \"flipkart\" no longer pays 5% at \"FLIPKART HEALTH PLUS\"; in v2 flipkart_health (own directory merchant) never matches flipkart anyway.",
       "source_url": "https://www.axis.bank.in/docs/default-source/default-document-library/cashback-tncs---final.pdf?sfvrsn=b55a0e1a_5",
       "checked_on": "2026-11-05"
     }

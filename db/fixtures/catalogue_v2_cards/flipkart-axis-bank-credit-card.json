@@ -4,8 +4,8 @@
   "inputs": {
     "transform_version": "7",
     "source_record_sha256": "564570fd404b4889badf1b8fba4492626a835a456feff11ee352bde310923908",
-    "override_sha256": "7cc9b688db5ecd3d5a7c9c442571423688fa9a6085eb7a63baa4251e7d9c711f",
-    "directory_sha256": "3d9f9f535481544d4b19262838290f77d8270eb3b4aec73c48608f10c39cedf2",
+    "override_sha256": "d41f493d5dc6d3da1fc37748eec2d5cf6c4c8a91af5b3fe1c51553e07b064395",
+    "directory_sha256": "b1094d54b77e848d22f7a9a64f3ae6d1ef43ca3eb2fc8e40cd43ed1994664694",
     "verified": false
   },
   "blocking_flags": [
@@ -179,7 +179,15 @@
           "path": "reward_rules[id=flipkart_cashback_5].conditions.excluded_subcategory",
           "op": "remove",
           "value_sha256": "74234e98afe7498f",
-          "reason": "WP7: Flipkart Health+ is now its own directory merchant (flipkart_health, no parent), so a Flipkart Health spend never resolves to flipkart; the free-text sub-category made the 5% Flipkart rule info.",
+          "reason": "WP7: The free-text sub-category made the 5% Flipkart rule info; Flipkart Health is restated as an except list below.",
+          "source_url": "https://www.axis.bank.in/docs/default-source/default-document-library/cashback-tncs---final.pdf?sfvrsn=b55a0e1a_5",
+          "checked_on": "2026-11-05"
+        },
+        {
+          "path": "reward_rules[id=flipkart_cashback_5].conditions.not_merchant",
+          "op": "set",
+          "value_sha256": "08c8a4614e8c6b1c",
+          "reason": "WP7: Flipkart Health is excluded from the 5% (record excluded_subcategory). except_merchant_slugs [flipkart_health] (D16a) makes the rule v2-only (D16c), so the v1 substring \"flipkart\" no longer pays 5% at \"FLIPKART HEALTH PLUS\"; in v2 flipkart_health (own directory merchant) never matches flipkart anyway.",
           "source_url": "https://www.axis.bank.in/docs/default-source/default-document-library/cashback-tncs---final.pdf?sfvrsn=b55a0e1a_5",
           "checked_on": "2026-11-05"
         }
@@ -250,10 +258,12 @@
         "platform_slugs": [],
         "mcc_include": [],
         "mcc_exclude": [],
-        "except_merchant_slugs": [],
+        "except_merchant_slugs": [
+          "flipkart_health"
+        ],
         "except_platform_slugs": [],
         "block_inr": null,
-        "min_engine_version": 1,
+        "min_engine_version": 2,
         "max_engine_version": null,
         "source_local_id": "flipkart_cashback_5",
         "display_note": "5% cashback on Flipkart spends, capped at ₹4,000 per statement quarter."
@@ -1472,7 +1482,7 @@
         "parent_cap_id": null,
         "post_cap_behavior": null,
         "anchor": null,
-        "min_engine_version": 1,
+        "min_engine_version": 2,
         "source_local_id": "flipkart-quarterly-4000"
       },
       {
