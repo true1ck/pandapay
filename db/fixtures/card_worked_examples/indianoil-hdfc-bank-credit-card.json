@@ -1,0 +1,269 @@
+{
+  "source_slug": "indianoil-hdfc-bank-credit-card",
+  "cardpipeline_id": "hdfc-bank-indianoil-hdfc-bank-credit-card",
+  "card_name": "IndianOil HDFC Bank Credit Card",
+  "verified_on": "2026-11-05",
+  "sources": [
+    {
+      "url": "https://www.hdfc.bank.in/content/dam/hdfcbankpws/in/en/personal-banking/discover-products/cards/credit-cards/indian-oil-hdfc-bank-credit-card/T-and-C-Indian-Oil-Credit-Card.pdf",
+      "doc": "IndianOil HDFC T&C (Dec 2025)",
+      "quote": "1 Fuel Point for every ₹150 spent on other categories; minimum transaction of INR 150"
+    },
+    {
+      "url": "https://www.hdfc.bank.in/content/dam/hdfcbankpws/in/en/personal-banking/discover-products/cards/credit-cards/indian-oil-hdfc-bank-credit-card/T-and-C-Indian-Oil-Credit-Card.pdf",
+      "doc": "IndianOil HDFC T&C (Dec 2025)",
+      "quote": "Max 100 Fuel Points per month on each category (groceries, bill payments)"
+    },
+    {
+      "url": "https://www.hdfc.bank.in/content/dam/hdfcbankpws/in/en/personal-banking/discover-products/cards/credit-cards/indian-oil-hdfc-bank-credit-card/T-and-C-Indian-Oil-Credit-Card.pdf",
+      "doc": "IndianOil HDFC T&C (Dec 2025)",
+      "quote": "Reward Points will not be accrued for ... Wallet, Rent, Government, Insurance, EMI"
+    }
+  ],
+  "examples": [
+    {
+      "id": "001",
+      "title": "Rs 2,000 at an IndianOil pump (card swipe)",
+      "ctx": {
+        "amount": 2000,
+        "occurred": "2026-11-05T10:00:00+05:30",
+        "category_slug": "fuel",
+        "mcc": 5541,
+        "merchant_name": "IndianOil outlet",
+        "merchant_vpa": null,
+        "merchant_slug": "indianoil",
+        "platform": null,
+        "rail": "swipe"
+      },
+      "state_before": {
+        "caps_by_source_id": {}
+      },
+      "expect": {
+        "currency": "points",
+        "amount": 100,
+        "value_inr": null,
+        "excluded": false,
+        "cap_deltas_by_source_id": {
+          "fuel_first_6m": 100
+        }
+      },
+      "why": "5% of spend as Fuel Points = 100 FP, within 250/month (first 6 months) or 150/month (after)."
+    },
+    {
+      "id": "002",
+      "title": "Rs 1,000 grocery (MCC 5411)",
+      "ctx": {
+        "amount": 1000,
+        "occurred": "2026-11-05T10:00:00+05:30",
+        "category_slug": "groceries",
+        "mcc": 5411,
+        "merchant_name": "Supermarket",
+        "merchant_vpa": null,
+        "merchant_slug": null,
+        "platform": null,
+        "rail": "swipe"
+      },
+      "state_before": {
+        "caps_by_source_id": {}
+      },
+      "expect": {
+        "currency": "points",
+        "amount": 50,
+        "value_inr": null,
+        "excluded": false,
+        "cap_deltas_by_source_id": {
+          "grocery_monthly_cap": 50
+        }
+      },
+      "why": "5% = 50 FP; grocery cap 100 FP per month."
+    },
+    {
+      "id": "003",
+      "title": "Rs 1,000 grocery with 80 of 100 FP cap used",
+      "ctx": {
+        "amount": 1000,
+        "occurred": "2026-11-05T10:00:00+05:30",
+        "category_slug": "groceries",
+        "mcc": 5411,
+        "merchant_name": "Supermarket",
+        "merchant_vpa": null,
+        "merchant_slug": null,
+        "platform": null,
+        "rail": "swipe"
+      },
+      "state_before": {
+        "caps_by_source_id": {
+          "grocery_monthly_cap": 80
+        }
+      },
+      "expect": {
+        "currency": "points",
+        "amount": 20,
+        "value_inr": null,
+        "excluded": false,
+        "cap_deltas_by_source_id": {
+          "grocery_monthly_cap": 20
+        }
+      },
+      "why": "Would be 50 FP; 20 left in the cap."
+    },
+    {
+      "id": "004",
+      "title": "Rs 1,500 electricity bill (MCC 4900)",
+      "ctx": {
+        "amount": 1500,
+        "occurred": "2026-11-05T10:00:00+05:30",
+        "category_slug": "bills",
+        "mcc": 4900,
+        "merchant_name": "Electricity bill",
+        "merchant_vpa": null,
+        "merchant_slug": null,
+        "platform": null,
+        "rail": "online"
+      },
+      "state_before": {
+        "caps_by_source_id": {}
+      },
+      "expect": {
+        "currency": "points",
+        "amount": 75,
+        "value_inr": null,
+        "excluded": false,
+        "cap_deltas_by_source_id": {
+          "utility_monthly_cap": 75
+        }
+      },
+      "why": "5% = 75 FP; bill payment cap 100 FP per month."
+    },
+    {
+      "id": "005",
+      "title": "Rs 3,000 at a clothes shop",
+      "ctx": {
+        "amount": 3000,
+        "occurred": "2026-11-05T10:00:00+05:30",
+        "category_slug": "shopping",
+        "mcc": 5651,
+        "merchant_name": "Clothes shop",
+        "merchant_vpa": null,
+        "merchant_slug": null,
+        "platform": null,
+        "rail": "swipe"
+      },
+      "state_before": {
+        "caps_by_source_id": {}
+      },
+      "expect": {
+        "currency": "points",
+        "amount": 20,
+        "value_inr": null,
+        "excluded": false,
+        "cap_deltas_by_source_id": {}
+      },
+      "why": "1 FP per Rs150: 20 FP. Rounding of partial blocks is not stated in the T&C, so amounts are exact multiples."
+    },
+    {
+      "id": "006",
+      "title": "Rs 3,000 wallet load",
+      "ctx": {
+        "amount": 3000,
+        "occurred": "2026-11-05T10:00:00+05:30",
+        "category_slug": "wallet",
+        "mcc": 6540,
+        "merchant_name": "Wallet top up",
+        "merchant_vpa": null,
+        "merchant_slug": null,
+        "platform": null,
+        "rail": "online"
+      },
+      "state_before": {
+        "caps_by_source_id": {}
+      },
+      "expect": {
+        "currency": "points",
+        "amount": 0,
+        "value_inr": null,
+        "excluded": true,
+        "cap_deltas_by_source_id": {}
+      },
+      "why": "Wallet loads are excluded."
+    },
+    {
+      "id": "007",
+      "title": "Rs 15,000 rent",
+      "ctx": {
+        "amount": 15000,
+        "occurred": "2026-11-05T10:00:00+05:30",
+        "category_slug": "rent",
+        "mcc": 6513,
+        "merchant_name": "Rent payment",
+        "merchant_vpa": null,
+        "merchant_slug": null,
+        "platform": null,
+        "rail": "online"
+      },
+      "state_before": {
+        "caps_by_source_id": {}
+      },
+      "expect": {
+        "currency": "points",
+        "amount": 0,
+        "value_inr": null,
+        "excluded": true,
+        "cap_deltas_by_source_id": {}
+      },
+      "why": "Rent is excluded."
+    },
+    {
+      "id": "008",
+      "title": "Rs 5,000 insurance premium",
+      "ctx": {
+        "amount": 5000,
+        "occurred": "2026-11-05T10:00:00+05:30",
+        "category_slug": "insurance",
+        "mcc": 6300,
+        "merchant_name": "Insurance premium",
+        "merchant_vpa": null,
+        "merchant_slug": null,
+        "platform": null,
+        "rail": "online"
+      },
+      "state_before": {
+        "caps_by_source_id": {}
+      },
+      "expect": {
+        "currency": "points",
+        "amount": 0,
+        "value_inr": null,
+        "excluded": true,
+        "cap_deltas_by_source_id": {}
+      },
+      "why": "Insurance is on the issuer exclusion list."
+    }
+  ],
+  "research_notes": [
+    {
+      "item": "insurance exclusion",
+      "cardpipeline_says": "No insurance exclusion rule.",
+      "issuer_says": "Insurance does not accrue Fuel Points (T&C 2.1 item 11).",
+      "proposed_fix": "importer"
+    },
+    {
+      "item": "supermarkets, bakeries, liquor, vending exclusions",
+      "cardpipeline_says": "Not modelled.",
+      "issuer_says": "Excluded categories per T&C 2.1.",
+      "proposed_fix": "importer"
+    },
+    {
+      "item": "fuel cap tier",
+      "cardpipeline_says": "fuel_first_6m 250 and fuel_post_6m 150 both attached.",
+      "issuer_says": "250 in first 6 months from issuance, 150 after; needs card age, which ctx lacks. No cap-boundary example for fuel.",
+      "proposed_fix": "engine"
+    },
+    {
+      "item": "post-cap grocery",
+      "cardpipeline_says": "zero_accrual.",
+      "issuer_says": "Silent on whether capped grocery spend falls back to 1 FP/Rs150; no post-cap example.",
+      "proposed_fix": "none"
+    }
+  ]
+}
