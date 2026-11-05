@@ -141,7 +141,7 @@
       "ctx": {
         "amount": 3000,
         "occurred": "2026-11-05T10:00:00+05:30",
-        "category_slug": "shopping",
+        "category_slug": "other",
         "mcc": 5651,
         "merchant_name": "Clothes shop",
         "merchant_vpa": null,

@@ -27,7 +27,7 @@
       "ctx": {
         "amount": 499,
         "occurred": "2026-11-05T10:00:00+05:30",
-        "category_slug": "shopping",
+        "category_slug": "other",
         "mcc": 5732,
         "merchant_name": "Electronics store",
         "merchant_vpa": null,
@@ -53,7 +53,7 @@
       "ctx": {
         "amount": 2949,
         "occurred": "2026-11-05T10:00:00+05:30",
-        "category_slug": "shopping",
+        "category_slug": "other",
         "mcc": 5651,
         "merchant_name": "Apparel store",
         "merchant_vpa": null,
