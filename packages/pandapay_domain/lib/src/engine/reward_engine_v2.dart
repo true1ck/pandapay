@@ -369,11 +369,18 @@ bool rewardRuleAppliesV2(
   }
 
   // 6. Platform: callers supply it; the engine never infers it. Unknown ⇒ no.
+  final platform = context.platform;
   if (rule.platformSlugs.isNotEmpty) {
-    final platform = context.platform;
     if (platform == null || !rule.platformSlugs.contains(platform)) {
       return false;
     }
+  }
+
+  // D16a exceptions: only a KNOWN merchant (or ancestor) / platform that is
+  // listed takes the rule off; an unknown one never proves an exception.
+  if (rule.exceptMerchantSlugs.any(merchantLineage.contains)) return false;
+  if (platform != null && rule.exceptPlatformSlugs.contains(platform)) {
+    return false;
   }
 
   // 7. MCC include. An unknown MCC is stood in for by a matching category
@@ -399,6 +406,15 @@ bool rewardRuleAppliesV2(
   // 10. Transaction floor.
   final minTxn = rule.minTxn;
   if (minTxn != null && context.amount < minTxn) return false;
+
+  // D16b: on an exclusion, max_txn_inr is a threshold — the exclusion
+  // applies only below it ("no rewards on spends under ₹100").
+  final maxTxn = rule.maxTxn;
+  if (rule.effectiveRole == RuleRole.exclusion &&
+      maxTxn != null &&
+      !(context.amount < maxTxn)) {
+    return false;
+  }
 
   return true;
 }

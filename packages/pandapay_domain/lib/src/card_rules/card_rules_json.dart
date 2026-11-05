@@ -107,8 +107,18 @@ class CatalogueV2FieldException extends FormatException {
   final String field;
   final Object? value;
 
-  CatalogueV2FieldException(this.field, this.value, [String? detail])
-    : super(detail ?? 'Unsupported value for v2 field $field: $value');
+  /// Machine-readable reason, as the JS engine names it: `unknown_<field>`
+  /// for an unrecognised enum value, `unparseable_<field>` for a value of
+  /// the wrong shape, `unsupported_min_engine_version` for a newer rule.
+  final String code;
+
+  CatalogueV2FieldException(
+    this.field,
+    this.value, [
+    String? detail,
+    String? code,
+  ]) : code = code ?? 'unparseable_$field',
+       super(detail ?? 'Unsupported value for v2 field $field: $value');
 }
 
 T _v2Enum<T extends Enum>(List<T> values, Object? raw, String field) {
@@ -118,7 +128,7 @@ T _v2Enum<T extends Enum>(List<T> values, Object? raw, String field) {
       if (v.name == name) return v;
     }
   }
-  throw CatalogueV2FieldException(field, raw);
+  throw CatalogueV2FieldException(field, raw, null, 'unknown_$field');
 }
 
 T? _v2EnumOrNull<T extends Enum>(List<T> values, Object? raw, String field) =>
@@ -175,6 +185,7 @@ int _v2EngineVersion(Object? raw) {
       'min_engine_version',
       raw,
       'Needs reward engine v$version; this build supports v$kRewardEngineVersion',
+      'unsupported_min_engine_version',
     );
   }
   return version;
@@ -209,8 +220,18 @@ extension RewardRuleJson on RewardRule {
       effectiveTo: _dateOrNull(json['effective_to']),
       priority: (json['priority'] as num?)?.toInt() ?? 100,
       role: _v2EnumOrNull(RuleRole.values, json['rule_role'], 'rule_role'),
-      merchantSlugs: _v2StringList(json['merchant_slugs'], 'merchant_slugs'),
-      platformSlugs: _v2StringList(json['platform_slugs'], 'platform_slugs'),
+      // D15e/D15g: every v2 list on a rule must be a list of strings, as in
+      // the JS engine; anything else makes the rule unparseable (skipped).
+      merchantSlugs: _v2StringList(
+        json['merchant_slugs'],
+        'merchant_slugs',
+        strict: true,
+      ),
+      platformSlugs: _v2StringList(
+        json['platform_slugs'],
+        'platform_slugs',
+        strict: true,
+      ),
       mccInclude: _v2StringList(
         json['mcc_include'],
         'mcc_include',
@@ -219,6 +240,16 @@ extension RewardRuleJson on RewardRule {
       mccExclude: _v2StringList(
         json['mcc_exclude'],
         'mcc_exclude',
+        strict: true,
+      ),
+      exceptMerchantSlugs: _v2StringList(
+        json['except_merchant_slugs'],
+        'except_merchant_slugs',
+        strict: true,
+      ),
+      exceptPlatformSlugs: _v2StringList(
+        json['except_platform_slugs'],
+        'except_platform_slugs',
         strict: true,
       ),
       blockInr: _v2IntOrNull(json['block_inr'], 'block_inr'),
@@ -251,6 +282,10 @@ extension RewardRuleJson on RewardRule {
     if (platformSlugs.isNotEmpty) 'platform_slugs': platformSlugs,
     if (mccInclude.isNotEmpty) 'mcc_include': mccInclude,
     if (mccExclude.isNotEmpty) 'mcc_exclude': mccExclude,
+    if (exceptMerchantSlugs.isNotEmpty)
+      'except_merchant_slugs': exceptMerchantSlugs,
+    if (exceptPlatformSlugs.isNotEmpty)
+      'except_platform_slugs': exceptPlatformSlugs,
     if (blockInr != null) 'block_inr': blockInr,
     if (minEngineVersion != 1) 'min_engine_version': minEngineVersion,
     if (sourceLocalId != null) 'source_local_id': sourceLocalId,
@@ -481,9 +516,11 @@ extension RedemptionOptionJson on RedemptionOption {
   };
 }
 
-/// [RewardRule.marksV2] (plan C8/D10) on a raw wire row that could not be
-/// parsed. Any `rule_role` other than the DB default `earn` counts —
-/// including an unrecognised one, which can only come from a v2 catalogue.
+/// [RewardRule.marksV2] (plan C8/D10/D16c) on a raw wire row that could not
+/// be parsed. Per D15g, any `rule_role` other than the DB default `earn`
+/// counts — including an unrecognised one — and so does any non-null,
+/// non-array value in a v2 list field, so the v2 path reports the skipped
+/// rule instead of the v1 path silently losing it.
 bool _rawRuleMarksV2(Map<String, dynamic> json) {
   bool nonEmpty(Object? v) => v is List ? v.isNotEmpty : v != null;
   final role = json['rule_role'];
@@ -493,6 +530,9 @@ bool _rawRuleMarksV2(Map<String, dynamic> json) {
       nonEmpty(json['platform_slugs']) ||
       nonEmpty(json['mcc_include']) ||
       nonEmpty(json['mcc_exclude']) ||
+      nonEmpty(json['except_merchant_slugs']) ||
+      nonEmpty(json['except_platform_slugs']) ||
+      (role == 'exclusion' && json['max_txn_inr'] != null) ||
       json['block_inr'] != null ||
       (engine is num && engine >= 2) ||
       (engine is String && (num.tryParse(engine) ?? 1) >= 2);
@@ -649,7 +689,7 @@ extension CardProductJson on CardProduct {
       onV2Marker: markV2,
       onSkipped: (row, e) {
         final id = row['id'];
-        if (id is String) skippedRules[id] = 'unsupported_${e.field}';
+        if (id is String) skippedRules[id] = e.code;
         if (row['rule_role'] == 'exclusion') skippedExclusion = true;
       },
     );
@@ -662,7 +702,7 @@ extension CardProductJson on CardProduct {
       onV2Marker: markV2,
       onSkipped: (row, e) {
         final id = row['id'];
-        if (id is String) skippedCaps[id] = 'unsupported_${e.field}';
+        if (id is String) skippedCaps[id] = e.code;
       },
     );
     final milestoneRules = _parseRowsTolerantly(

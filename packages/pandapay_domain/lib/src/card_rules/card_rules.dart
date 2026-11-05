@@ -236,6 +236,12 @@ class RewardRule {
   final List<String> mccInclude;
   final List<String> mccExclude;
 
+  /// Plan C8/D16a exceptions: the rule does not apply when the resolved
+  /// merchant (or an ancestor) / the context platform is KNOWN and listed
+  /// here. An unknown merchant or platform never proves an exception.
+  final List<String> exceptMerchantSlugs;
+  final List<String> exceptPlatformSlugs;
+
   /// Overrides the unit's block size: [rate] points per [blockInr] rupees.
   final int? blockInr;
 
@@ -266,6 +272,8 @@ class RewardRule {
     this.platformSlugs = const [],
     this.mccInclude = const [],
     this.mccExclude = const [],
+    this.exceptMerchantSlugs = const [],
+    this.exceptPlatformSlugs = const [],
     this.blockInr,
     this.minEngineVersion = 1,
     this.sourceLocalId,
@@ -275,15 +283,19 @@ class RewardRule {
   /// The role the v2 engine uses: a v1 row on a v2 card is an earning rule.
   RuleRole get effectiveRole => role ?? RuleRole.earn;
 
-  /// Plan C8/D10: whether this rule makes its card v2-shaped — a role other
-  /// than the DB default `earn`, any non-empty slug/MCC list, a `block_inr`,
-  /// or `min_engine_version` 2. `rule_role = 'earn'` alone does not.
+  /// Plan C8/D10/D16c: whether this rule makes its card v2-shaped — a role
+  /// other than the DB default `earn`, any non-empty slug/MCC/exception
+  /// list, an exclusion with a `max_txn_inr` threshold, a `block_inr`, or
+  /// `min_engine_version` 2. `rule_role = 'earn'` alone does not.
   bool get marksV2 =>
       (role != null && role != RuleRole.earn) ||
       merchantSlugs.isNotEmpty ||
       platformSlugs.isNotEmpty ||
       mccInclude.isNotEmpty ||
       mccExclude.isNotEmpty ||
+      exceptMerchantSlugs.isNotEmpty ||
+      exceptPlatformSlugs.isNotEmpty ||
+      (role == RuleRole.exclusion && maxTxn != null) ||
       blockInr != null ||
       minEngineVersion >= 2;
 
@@ -294,6 +306,8 @@ class RewardRule {
       platformSlugs.isNotEmpty ||
       mccInclude.isNotEmpty ||
       mccExclude.isNotEmpty ||
+      exceptMerchantSlugs.isNotEmpty ||
+      exceptPlatformSlugs.isNotEmpty ||
       blockInr != null ||
       minEngineVersion != 1 ||
       sourceLocalId != null ||
@@ -852,6 +866,12 @@ String rewardRuleIdentityKey(RewardRule rule) =>
       _catalogueListKey(rule.mccExclude),
       rule.blockInr?.toString() ?? '',
       rule.minEngineVersion == 1 ? '' : rule.minEngineVersion.toString(),
+      // D16: appended only when set, so pre-D16 v2 keys are unchanged.
+      if (rule.exceptMerchantSlugs.isNotEmpty ||
+          rule.exceptPlatformSlugs.isNotEmpty) ...[
+        _catalogueListKey(rule.exceptMerchantSlugs),
+        _catalogueListKey(rule.exceptPlatformSlugs),
+      ],
     ]);
 
 List<RewardRule> uniqueRewardRules(Iterable<RewardRule> rules) {

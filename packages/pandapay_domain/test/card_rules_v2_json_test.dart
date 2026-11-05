@@ -198,14 +198,17 @@ void main() {
       expect(card.parseWarnings, isEmpty);
     });
 
-    test('D15b: an unknown cashback_rounding marks v2 and floors to rupees', () {
-      final card = CardProductJson.fromJson(
-        _card(extra: {'cashback_rounding': 'nearest_ten'}),
-      );
-      expect(card.cashbackRounding, CashbackRounding.rupeeFloor);
-      expect(card.isV2Shaped, isTrue);
-      expect(card.parseWarnings.single, contains('cashback_rounding'));
-    });
+    test(
+      'D15b: an unknown cashback_rounding marks v2 and floors to rupees',
+      () {
+        final card = CardProductJson.fromJson(
+          _card(extra: {'cashback_rounding': 'nearest_ten'}),
+        );
+        expect(card.cashbackRounding, CashbackRounding.rupeeFloor);
+        expect(card.isV2Shaped, isTrue);
+        expect(card.parseWarnings.single, contains('cashback_rounding'));
+      },
+    );
 
     test('null v2 values do not mark a card v2', () {
       final card = CardProductJson.fromJson(
@@ -293,8 +296,8 @@ void main() {
       expect(card.rewardRules, isEmpty);
       expect(card.parseWarnings, hasLength(2));
       expect(card.skippedRules, {
-        'a': 'unsupported_platform_slugs',
-        'b': 'unsupported_mcc_include',
+        'a': 'unparseable_platform_slugs',
+        'b': 'unparseable_mcc_include',
       });
     });
 
@@ -332,7 +335,7 @@ void main() {
         expect(card.capRules.map((c) => c.id), ['good']);
         expect(card.parseWarnings.single, contains(entry.key));
         // D12d: the engine reports it as cap_skipped:<id>:<reason>.
-        expect(card.skippedCaps, {'bad': 'unsupported_${entry.key}'});
+        expect(card.skippedCaps, {'bad': 'unknown_${entry.key}'});
       });
     }
 
@@ -472,6 +475,217 @@ void main() {
       expect(card.pointsExpiryMonths, isNull);
       expect(card.modelCoverage, isEmpty);
       expect(card.parseWarnings, hasLength(4));
+    });
+  });
+
+  group('D15/D16 parsing rulings', () {
+    test('D15a: a v2 card keeps semantically identical rules', () {
+      Map<String, dynamic> twin(String id) => _rule(id, {
+        'rule_role': 'earn',
+        'platform_slugs': ['phonepe_app'],
+        'source_local_id': id,
+      });
+      final v2 = CardProductJson.fromJson(
+        _card(rules: [twin('r1'), twin('r2')]),
+      );
+      expect(v2.isV2Shaped, isTrue);
+      expect(v2.rewardRules.map((r) => r.id), ['r1', 'r2']);
+    });
+
+    test('D15a: a v2 card keeps identical caps and milestones', () {
+      final v2 = CardProductJson.fromJson(
+        _card(
+          caps: [
+            _cap('k1', {
+              'label': 'Same cap',
+              'cap_kind': 'bonus_points',
+              'cap_amount': 100,
+            }),
+            _cap('k2', {
+              'label': 'Same cap',
+              'cap_kind': 'bonus_points',
+              'cap_amount': 100,
+            }),
+          ],
+          extra: {
+            'milestone_rules': [
+              for (final id in ['m1', 'm2'])
+                {
+                  'id': id,
+                  'label': 'Spend 1L',
+                  'threshold_spend_inr': 100000,
+                  'reward_value_inr': 1000,
+                },
+            ],
+          },
+        ),
+      );
+      expect(v2.capRules.map((c) => c.id), ['k1', 'k2']);
+      expect(v2.milestoneRules.map((m) => m.id), ['m1', 'm2']);
+    });
+
+    test('D15a: a v1 card is still de-duplicated', () {
+      final v1 = CardProductJson.fromJson(
+        _card(
+          rules: [
+            _rule('r1', {'rule_role': 'earn'}),
+            _rule('r2', {'rule_role': 'earn'}),
+          ],
+          caps: [
+            _cap('k1', {'label': 'Same cap'}),
+            _cap('k2', {'label': 'Same cap'}),
+          ],
+        ),
+      );
+      expect(v1.isV2Shaped, isFalse);
+      expect(v1.rewardRules.map((r) => r.id), ['r1']);
+      expect(v1.capRules.map((c) => c.id), ['k1']);
+    });
+
+    test('D15g: an unknown rule_role marks v2 and is skipped visibly', () {
+      final card = CardProductJson.fromJson(
+        _card(
+          rules: [
+            _rule('ok', {'rule_role': 'earn'}),
+            _rule('odd', {'rule_role': 'promo'}),
+          ],
+        ),
+      );
+      expect(card.isV2Shaped, isTrue);
+      expect(card.rewardRules.map((r) => r.id), ['ok']);
+      expect(card.skippedRules, {'odd': 'unknown_rule_role'});
+      expect(card.skippedExclusionRule, isFalse);
+    });
+
+    for (final field in [
+      'merchant_slugs',
+      'platform_slugs',
+      'mcc_include',
+      'mcc_exclude',
+      'except_merchant_slugs',
+      'except_platform_slugs',
+    ]) {
+      test('D15g: a non-array $field marks v2 and is skipped visibly', () {
+        final card = CardProductJson.fromJson(
+          _card(
+            rules: [
+              _rule('ok', {'rule_role': 'earn'}),
+              _rule('odd', {'rule_role': 'earn', field: 'swiggy'}),
+            ],
+          ),
+        );
+        expect(card.isV2Shaped, isTrue);
+        expect(card.rewardRules.map((r) => r.id), ['ok']);
+        expect(card.skippedRules, {'odd': 'unparseable_$field'});
+      });
+
+      test('D15e: a non-string element in $field skips the rule', () {
+        final card = CardProductJson.fromJson(
+          _card(
+            rules: [
+              _rule('odd', {
+                'rule_role': 'earn',
+                field: ['ok', 42],
+              }),
+            ],
+          ),
+        );
+        expect(card.rewardRules, isEmpty);
+        expect(card.skippedRules, {'odd': 'unparseable_$field'});
+      });
+    }
+
+    test('D15d: a skipped exclusion is flagged', () {
+      final card = CardProductJson.fromJson(
+        _card(
+          rules: [
+            _rule('excl', {
+              'rule_role': 'exclusion',
+              'rate': 0,
+              'mcc_include': [6011],
+            }),
+          ],
+        ),
+      );
+      expect(card.skippedRules, {'excl': 'unparseable_mcc_include'});
+      expect(card.skippedExclusionRule, isTrue);
+      expect(card.isV2Shaped, isTrue);
+    });
+
+    test('D16: except lists parse, round-trip and mark v2', () {
+      final card = CardProductJson.fromJson(
+        _card(
+          rules: [
+            _rule('fuel-excl', {
+              'rule_role': 'exclusion',
+              'rate': 0,
+              'category_id': 'cat-fuel',
+              'except_merchant_slugs': ['indianoil'],
+              'except_platform_slugs': ['google_pay'],
+            }),
+          ],
+        ),
+      );
+      final rule = card.rewardRules.single;
+      expect(rule.exceptMerchantSlugs, ['indianoil']);
+      expect(rule.exceptPlatformSlugs, ['google_pay']);
+      expect(rule.marksV2, isTrue);
+      final again = CardProductJson.fromJson(
+        jsonDecode(jsonEncode(card.toJson())) as Map<String, dynamic>,
+      );
+      expect(again.rewardRules.single.exceptMerchantSlugs, ['indianoil']);
+      expect(again.rewardRules.single.exceptPlatformSlugs, ['google_pay']);
+    });
+
+    test('D16c: except lists alone mark an earn-only card v2', () {
+      final card = CardProductJson.fromJson(
+        _card(
+          rules: [
+            _rule('r', {
+              'rule_role': 'earn',
+              'except_platform_slugs': ['amazon_pay'],
+            }),
+          ],
+        ),
+      );
+      expect(card.isV2Shaped, isTrue);
+    });
+
+    test('D16c: an exclusion with max_txn_inr marks v2; an earn rule not', () {
+      const exclusion = RewardRule(
+        id: 'small',
+        unit: RewardUnit.pointsPer100,
+        rate: 0,
+        role: RuleRole.exclusion,
+        maxTxn: Money.fromPaise(10000),
+      );
+      const earn = RewardRule(
+        id: 'capped',
+        unit: RewardUnit.pointsPer100,
+        rate: 5,
+        role: RuleRole.earn,
+        maxTxn: Money.fromPaise(10000),
+      );
+      expect(exclusion.marksV2, isTrue);
+      expect(earn.marksV2, isFalse);
+    });
+
+    test('D16: except lists are identity, so such rules never merge', () {
+      const a = RewardRule(
+        id: 'a',
+        unit: RewardUnit.pointsPer100,
+        rate: 0,
+        role: RuleRole.exclusion,
+        exceptMerchantSlugs: ['indianoil'],
+      );
+      const b = RewardRule(
+        id: 'b',
+        unit: RewardUnit.pointsPer100,
+        rate: 0,
+        role: RuleRole.exclusion,
+        exceptMerchantSlugs: ['bpcl'],
+      );
+      expect(rewardRuleIdentityKey(a), isNot(rewardRuleIdentityKey(b)));
     });
   });
 
