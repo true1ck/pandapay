@@ -32,10 +32,10 @@ Status values: `not started` · `running` · `done (branch ready)` · `merged` �
 | WP1 | Schema v2, v1/v2 feeds, directory seeding | 1 | `card-rewards/wp1-schema` | **merged** | 2026-11-06 | Review approved + 1 fix round (D1, D2, D7, CI step); 1393 api tests; DB test fresh + incremental; seeder loads 164/61 |
 | WP2 | Loader v2 (pure transform), coverage, audit script | 1 | `card-rewards/wp2-loader` | running | 2026-11-05 | |
 | WP3 | Dart engine v2 + tolerant parsing | 1 | `card-rewards/wp3-dart-engine` | running | 2026-11-05 | |
-| WP4 | JS engine v2 + merchant resolver | 1 | `card-rewards/wp4-js-engine` | done (in review) | 2026-11-06 | 117/117 engine tests (20 contract + 32 JS scenarios); judgement calls ratified as D9; D10 switch fix pending |
+| WP4 | JS engine v2 + merchant resolver | 1 | `card-rewards/wp4-js-engine` | needs rework (fix round 1) | 2026-11-06 | Review approved; applying D10–D12 and pinning D9/D12 rulings as shared scenarios |
 | WP5 | Merchant and platform directory data | 1 | `card-rewards/wp5-directory` | **merged** | 2026-11-06 | 164 merchants (9 true sub-brand parents, `group` tags per D6), 61 platforms; review + 1 fix round clean; IHCL brands kept under `taj` (ruling in ledger) |
-| WP6a | Worked examples: HDFC, SBI Card | 1 | `card-rewards/wp6a-examples-hdfc-sbi` | done (in review) | 2026-11-06 | 21/21 cards, 14 override files; found cap-type, rounding (→D7, D11), unit (→D8) and exclusion errors in research data |
-| WP6b | Worked examples: ICICI, Axis, Amex, IDFC, others | 1 | `card-rewards/wp6b-examples-others` | running | 2026-11-05 | |
+| WP6a | Worked examples: HDFC, SBI Card | 1 | `card-rewards/wp6a-examples-hdfc-sbi` | needs rework (fix round 1) | 2026-11-06 | 21/21 cards; review approved; fixing Swiggy ₹249 note, quote length, D11 rounding overrides |
+| WP6b | Worked examples: ICICI, Axis, Amex, IDFC, others | 1 | `card-rewards/wp6b-examples-others` | done (in review) | 2026-11-06 | 23/25 cards (Amazon Pay ICICI, AU Zenith+ skipped: issuer pages unreachable); 14 override files; per-user caps → D13 |
 | WP7 | Integration: worked examples through both engines | 2 | — | not started | | Needs wave 1 merged |
 | WP8 | Server recording v2 + recompute script | 2 | — | not started | | Needs WP1, WP4 |
 | WP9 | App: v2 feed, tolerant parse, cap bars, alerts | 2 | — | not started | | Needs WP1, WP3 |
@@ -67,6 +67,7 @@ Status values: `not started` · `running` · `done (branch ready)` · `merged` �
 | 2026-11-05 | Unknown rail/platform does not satisfy a restriction on v2 cards. | Lead (plan C3.3) |
 | 2026-11-05/06 | Contract changes D1–D8 (identity indexes, v1 cap filter, cap engine version, issuer slugs, coverage.json, parent vs group, rounding modes, loader/data rules) — plan §4 C8. | Lead |
 | 2026-11-06 | IHCL hotel brands stay under `taj` (taj = IHCL). | Lead (ledger ruling) |
+| 2026-11-06 | D12: a category paying less than the base earns its own (lower) rate; D13: cardholder-dependent caps/rates (credit-limit caps, tiers, paid memberships) are deferred to Phase 2 and never guessed. | Lead |
 | 2026-11-06 | D10: cards switch to the v2 engine only when re-imported by the v2 loader (DB defaults alone never switch a card), so existing cards keep today's behaviour until re-import. | Lead |
 
 ## Changelog
