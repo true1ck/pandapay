@@ -4,7 +4,7 @@
   "inputs": {
     "transform_version": "7",
     "source_record_sha256": "0a3a7af1ba043e95d953f16558c23e774f9e4a448de7a1aad99086d9c9e4be20",
-    "override_sha256": "928356530fa82106a23ee8cc0963f2810358a9e6899f3e1904457955b24fd055",
+    "override_sha256": "2c5f9e4b74409572ef8bb823c83ac07a29bf2d7ffe7fea77f621c6b7770289c3",
     "directory_sha256": "b1094d54b77e848d22f7a9a64f3ae6d1ef43ca3eb2fc8e40cd43ed1994664694",
     "verified": false
   },
@@ -26,8 +26,8 @@
     "model_status": "partial",
     "model_coverage": {
       "rules_total": 18,
-      "rules_modelled": 14,
-      "rules_info": 4,
+      "rules_modelled": 15,
+      "rules_info": 3,
       "caps_total": 4,
       "caps_enforced": 3,
       "flags": [
@@ -49,12 +49,22 @@
         {
           "code": "info_rule",
           "source_local_id": "excluded_gift_cards",
+          "detail": "condition:transaction_scope"
+        },
+        {
+          "code": "info_rule",
+          "source_local_id": "excluded_gift_cards",
           "detail": "condition:channel_type"
         },
         {
           "code": "info_rule",
           "source_local_id": "excluded_gift_cards",
           "detail": "unmapped_category_token"
+        },
+        {
+          "code": "depends_on_txn_attribute",
+          "source_local_id": "excluded_gift_cards",
+          "detail": null
         },
         {
           "code": "exclusion_scope_broadened",
@@ -69,12 +79,27 @@
         {
           "code": "info_rule",
           "source_local_id": "excluded_card_bill_payment",
+          "detail": "condition:transaction_scope"
+        },
+        {
+          "code": "info_rule",
+          "source_local_id": "excluded_card_bill_payment",
           "detail": "condition:channel_type"
+        },
+        {
+          "code": "depends_on_txn_attribute",
+          "source_local_id": "excluded_card_bill_payment",
+          "detail": null
         },
         {
           "code": "info_rule",
           "source_local_id": "excluded_charges",
           "detail": "unmapped_condition_category:category"
+        },
+        {
+          "code": "info_rule",
+          "source_local_id": "excluded_charges",
+          "detail": "condition:transaction_scope"
         },
         {
           "code": "info_rule",
@@ -82,19 +107,14 @@
           "detail": "non_purchase_channel"
         },
         {
-          "code": "exclusion_scope_broadened",
-          "source_local_id": "excluded_education",
+          "code": "depends_on_txn_attribute",
+          "source_local_id": "excluded_charges",
           "detail": null
         },
         {
-          "code": "info_rule",
-          "source_local_id": "excluded_investments",
-          "detail": "unmapped_condition_category:category"
-        },
-        {
-          "code": "info_rule",
-          "source_local_id": "excluded_investments",
-          "detail": "condition:channel_type"
+          "code": "exclusion_scope_broadened",
+          "source_local_id": "excluded_education",
+          "detail": null
         },
         {
           "code": "non_earning_cap_skipped",
@@ -236,6 +256,54 @@
           "op": "append",
           "value_sha256": "6fa189901ab2fe42",
           "reason": "WP7: T&C Note 1: \"No reward points will be given for EMI transactions, fuel, wallet load, gift cards, cash advances, credit card bill payments, charges, government payments, rental transactions, education fees, insurance, investments, jewelry purchases\". The record's EMI exclusion is emitted as category emi AND rail emi, so an EMI purchase in another category was not excluded (D24e: data fix while WP2 changes the loader). Rail-EMI exclusion on all spend, as on flipkart-sbi-card.",
+          "source_url": "https://www.hdfc.bank.in/content/dam/hdfcbankpws/in/en/personal-banking/discover-products/cards/credit-cards/phonepe-hdfc-bank-uno-credit-card-/phonepe-hdfc-bank-uno-cc-reward-points-tncs.pdf",
+          "checked_on": "2026-11-05"
+        },
+        {
+          "path": "reward_rules[id=excluded_investments].category_id",
+          "op": "set",
+          "value_sha256": "1e08efd699e66ddd",
+          "reason": "WP7: T&C Note 1: no reward points on \"... gift cards, cash advances, credit card bill payments, charges, ... investments ...\". Investments restated by MCC 6211 (securities brokers/dealers).",
+          "source_url": "https://www.hdfc.bank.in/content/dam/hdfcbankpws/in/en/personal-banking/discover-products/cards/credit-cards/phonepe-hdfc-bank-uno-credit-card-/phonepe-hdfc-bank-uno-cc-reward-points-tncs.pdf",
+          "checked_on": "2026-11-05"
+        },
+        {
+          "path": "reward_rules[id=excluded_investments].channel_type",
+          "op": "set",
+          "value_sha256": "5cf7504d9781301d",
+          "reason": "WP7: The channel restated the investment purchase.",
+          "source_url": "https://www.hdfc.bank.in/content/dam/hdfcbankpws/in/en/personal-banking/discover-products/cards/credit-cards/phonepe-hdfc-bank-uno-credit-card-/phonepe-hdfc-bank-uno-cc-reward-points-tncs.pdf",
+          "checked_on": "2026-11-05"
+        },
+        {
+          "path": "reward_rules[id=excluded_investments].conditions",
+          "op": "set",
+          "value_sha256": "4f09bc3218b8f5a7",
+          "reason": "WP7: T&C Note 1: no reward points on \"... gift cards, cash advances, credit card bill payments, charges, ... investments ...\". D25d: an MCC list can carry investments.",
+          "source_url": "https://www.hdfc.bank.in/content/dam/hdfcbankpws/in/en/personal-banking/discover-products/cards/credit-cards/phonepe-hdfc-bank-uno-credit-card-/phonepe-hdfc-bank-uno-cc-reward-points-tncs.pdf",
+          "checked_on": "2026-11-05"
+        },
+        {
+          "path": "reward_rules[id=excluded_gift_cards].conditions.transaction_scope",
+          "op": "set",
+          "value_sha256": "dc46f751a2a73073",
+          "reason": "WP7: T&C Note 1: no reward points on \"... gift cards, cash advances, credit card bill payments, charges, ... investments ...\". Gift cards are bought at ordinary merchants. Not expressible by MCC or category, so it stays info (D25d), flagged depends_on_txn_attribute (D14b).",
+          "source_url": "https://www.hdfc.bank.in/content/dam/hdfcbankpws/in/en/personal-banking/discover-products/cards/credit-cards/phonepe-hdfc-bank-uno-credit-card-/phonepe-hdfc-bank-uno-cc-reward-points-tncs.pdf",
+          "checked_on": "2026-11-05"
+        },
+        {
+          "path": "reward_rules[id=excluded_card_bill_payment].conditions.transaction_scope",
+          "op": "set",
+          "value_sha256": "4fed8e70666cd9f0",
+          "reason": "WP7: T&C Note 1: no reward points on \"... gift cards, cash advances, credit card bill payments, charges, ... investments ...\". Card bill payments go through bill-pay apps under varied MCCs. Not expressible by MCC or category, so it stays info (D25d), flagged depends_on_txn_attribute (D14b).",
+          "source_url": "https://www.hdfc.bank.in/content/dam/hdfcbankpws/in/en/personal-banking/discover-products/cards/credit-cards/phonepe-hdfc-bank-uno-credit-card-/phonepe-hdfc-bank-uno-cc-reward-points-tncs.pdf",
+          "checked_on": "2026-11-05"
+        },
+        {
+          "path": "reward_rules[id=excluded_charges].conditions.transaction_scope",
+          "op": "set",
+          "value_sha256": "2a261bf77b5c75ba",
+          "reason": "WP7: T&C Note 1: no reward points on \"... gift cards, cash advances, credit card bill payments, charges, ... investments ...\". Fees and charges are not purchases. Not expressible by MCC or category, so it stays info (D25d), flagged depends_on_txn_attribute (D14b).",
           "source_url": "https://www.hdfc.bank.in/content/dam/hdfcbankpws/in/en/personal-banking/discover-products/cards/credit-cards/phonepe-hdfc-bank-uno-credit-card-/phonepe-hdfc-bank-uno-cc-reward-points-tncs.pdf",
           "checked_on": "2026-11-05"
         }
@@ -498,10 +566,13 @@
           "part": null,
           "info_reasons": [
             "unmapped_condition_category:category",
+            "condition:transaction_scope",
             "condition:channel_type",
             "unmapped_category_token"
           ],
-          "flags": []
+          "flags": [
+            "depends_on_txn_attribute"
+          ]
         },
         "notes": null,
         "effective_from": "2025-06-10",
@@ -572,9 +643,12 @@
           "part": null,
           "info_reasons": [
             "unmapped_condition_category:category",
+            "condition:transaction_scope",
             "condition:channel_type"
           ],
-          "flags": []
+          "flags": [
+            "depends_on_txn_attribute"
+          ]
         },
         "notes": null,
         "effective_from": "2025-06-10",
@@ -609,9 +683,12 @@
           "part": null,
           "info_reasons": [
             "unmapped_condition_category:category",
+            "condition:transaction_scope",
             "non_purchase_channel"
           ],
-          "flags": []
+          "flags": [
+            "depends_on_txn_attribute"
+          ]
         },
         "notes": null,
         "effective_from": "2025-06-10",
@@ -782,20 +859,19 @@
         "conditions": {
           "source_local_id": "excluded_investments",
           "part": null,
-          "info_reasons": [
-            "unmapped_condition_category:category",
-            "condition:channel_type"
-          ],
+          "info_reasons": [],
           "flags": []
         },
         "notes": null,
         "effective_from": "2025-06-10",
         "effective_to": null,
         "excluded_categories": [],
-        "rule_role": "info",
+        "rule_role": "exclusion",
         "merchant_slugs": [],
         "platform_slugs": [],
-        "mcc_include": [],
+        "mcc_include": [
+          "6211"
+        ],
         "mcc_exclude": [],
         "except_merchant_slugs": [],
         "except_platform_slugs": [],
