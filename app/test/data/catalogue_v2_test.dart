@@ -374,16 +374,18 @@ void main() {
       expect(identical(feed.directory, MerchantDirectory.empty), isTrue);
     });
 
-    test('a live v1 success writes only the old key and never puts a v1 body '
-        'under the v2 key (an unreadable v2 entry is cleared)', () async {
+    test('a live v1 success writes the old key and never puts a v1 body under '
+        'the v2 key', () async {
       final store = _MapStore({
         catalogueV2CacheKey: 'sentinel-not-json',
       });
       final repo = _FakeRepo()
         ..onV1 = () async => [parseCard(v1CardJson('old'))];
       await _loader(repo, cache: store).load();
-      expect(store.values.containsKey(catalogueV2CacheKey), isFalse);
       expect(store.values.containsKey(catalogueV1CacheKey), isTrue);
+      // The v2 key is not rewritten with v1 content (and, after a transient
+      // v2 failure, not cleared either: see the refresh tests).
+      expect(store.values[catalogueV2CacheKey], 'sentinel-not-json');
     });
   });
 
@@ -511,13 +513,14 @@ void main() {
       expect(store.values.keys, [catalogueV1CacheKey]);
     });
 
-    test('a v1 fallback drops a stale v2 body so cache-first stops serving it',
-        () async {
+    test('an OLDER SERVER (schema mismatch) drops the stale v2 body so '
+        'cache-first stops serving it', () async {
       // An earlier refresh cached v2; the server now only answers v1.
       final store = _MapStore({
         catalogueV2CacheKey: jsonEncode(v2Body([v2CardJson('stale-v2')])),
       });
       final repo = _FakeRepo()
+        ..onV2 = (() async => throw const CatalogueSchemaMismatch())
         ..onV1 = () async => [parseCard(v1CardJson('fresh-v1'))];
       expect(await _loader(repo, cache: store).refreshCache(), isTrue);
       expect(store.values.containsKey(catalogueV2CacheKey), isFalse);
@@ -529,12 +532,81 @@ void main() {
       expect(feed.origin, CatalogueOrigin.liveV1);
     });
 
+    group('a TRANSIENT v2 failure keeps the good v2 cache (D32a)', () {
+      final good = jsonEncode(v2Body([v2CardJson('good-v2')]));
+
+      Future<_MapStore> refreshAfter(
+        Future<CatalogueV2Fetch> Function() onV2,
+      ) async {
+        final store = _MapStore({catalogueV2CacheKey: good});
+        final repo = _FakeRepo()
+          ..onV2 = onV2
+          ..onV1 = () async => [parseCard(v1CardJson('fresh-v1'))];
+        await _loader(repo, cache: store).refreshCache();
+        return store;
+      }
+
+      test('a 5xx', () async {
+        final store = await refreshAfter(
+          () async => throw ApiException('GET /catalogue?schema=2 failed: 503'),
+        );
+        expect(store.values[catalogueV2CacheKey], good);
+      });
+
+      test('a 429', () async {
+        final store = await refreshAfter(
+          () async => throw ApiException('GET /catalogue?schema=2 failed: 429'),
+        );
+        expect(store.values[catalogueV2CacheKey], good);
+      });
+
+      test('a transport error (ClientException)', () async {
+        final store = await refreshAfter(
+          () async => throw http.ClientException('connection reset'),
+        );
+        expect(store.values[catalogueV2CacheKey], good);
+      });
+
+      test('a v2 body none of whose cards parse', () async {
+        final store = await refreshAfter(
+          () async => _v2Fetch(v2Body([badCardJson('a'), badCardJson('b')])),
+        );
+        expect(store.values[catalogueV2CacheKey], good);
+      });
+
+      test('a v2 timeout (and no v1 attempt, so nothing is written)', () async {
+        final store = _MapStore({catalogueV2CacheKey: good});
+        final repo = _FakeRepo()
+          ..onV2 = (() => Completer<CatalogueV2Fetch>().future)
+          ..onV1 = () async => [parseCard(v1CardJson('fresh-v1'))];
+        final written = await _loader(
+          repo,
+          cache: store,
+          timeout: const Duration(milliseconds: 20),
+        ).refreshCache();
+        expect(written, isFalse);
+        expect(store.values, {catalogueV2CacheKey: good});
+      });
+
+      test('and the next start still serves that v2 cache', () async {
+        final store = await refreshAfter(
+          () async => throw ApiException('GET /catalogue?schema=2 failed: 503'),
+        );
+        // The v1 fallback was written beside it, not over it.
+        expect(store.values.containsKey(catalogueV1CacheKey), isTrue);
+        final feed = await _loader(_FakeRepo(), cache: store).load();
+        expect(feed.origin, CatalogueOrigin.cacheV2);
+        expect(feed.cards.single.id, 'good-v2');
+      });
+    });
+
     test('a failure to clear the stale v2 key does not fail the refresh',
         () async {
       final store = _ClearFailsStore({
         catalogueV2CacheKey: jsonEncode(v2Body([v2CardJson('stale-v2')])),
       });
       final repo = _FakeRepo()
+        ..onV2 = (() async => throw const CatalogueSchemaMismatch())
         ..onV1 = () async => [parseCard(v1CardJson('fresh-v1'))];
       expect(await _loader(repo, cache: store).refreshCache(), isTrue);
       expect(store.values.containsKey(catalogueV1CacheKey), isTrue);

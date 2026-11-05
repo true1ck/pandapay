@@ -111,7 +111,13 @@ CatalogueFeed parseCatalogueBody(
   final skipped = <String>[];
   for (final raw in rawCards) {
     try {
-      cards.add(CardProductJson.fromJson(raw as Map<String, dynamic>));
+      // D32a: a schema-1 body is parsed in v1 mode. Its rows are
+      // `to_jsonb(row)` and carry the v2 columns, which the released parser
+      // ignored; reading them would turn a v1-served card v2-shaped without
+      // the precise v2 rows, and over-state.
+      cards.add(
+        CardProductJson.fromJson(raw as Map<String, dynamic>, v1Mode: schema < 2),
+      );
     } catch (error) {
       final id = raw is Map && raw['id'] is String
           ? raw['id'] as String
@@ -178,7 +184,13 @@ class _Live {
 
   /// Set for a v2 response: the raw body to cache losslessly.
   final String? rawV2Body;
-  const _Live(this.feed, this.rawV2Body);
+
+  /// True only when the server answered `?schema=2` with something that is
+  /// not v2 (an older server, [CatalogueSchemaMismatch]): the cached v2 body
+  /// is then stale and is dropped. A transient v2 failure (5xx, 429, a
+  /// transport error, a body with no readable card) never clears it (D32a).
+  final bool olderServer;
+  const _Live(this.feed, this.rawV2Body, {this.olderServer = false});
 }
 
 /// The catalogue load, in this order (plan C2, WP9):
@@ -254,6 +266,7 @@ class CatalogueLoader {
   Future<_Live?> _fetchLive() async {
     final source = v2Source;
     var skipV1 = false;
+    var olderServer = false;
     if (source != null) {
       try {
         final fetched = await source.fetchV2().timeout(timeout);
@@ -264,6 +277,9 @@ class CatalogueLoader {
         // A hung network will not answer the v1 request either: go to the
         // cache rather than doubling the wait.
         skipV1 = true;
+      } on CatalogueSchemaMismatch {
+        olderServer = true;
+        _log('catalogue: v2 fetch failed (CatalogueSchemaMismatch)');
       } catch (error) {
         _log('catalogue: v2 fetch failed (${error.runtimeType})');
       }
@@ -280,6 +296,7 @@ class CatalogueLoader {
             schema: 1,
           ),
           null,
+          olderServer: olderServer,
         );
       }
     } catch (error) {
@@ -300,13 +317,23 @@ class CatalogueLoader {
           catalogueV1CacheKey,
           jsonEncode({'cards': live.feed.cards.map((c) => c.toJson()).toList()}),
         );
-        // The v1 feed is what the server serves now. A v2 body cached
-        // earlier is stale, and cache-first would keep serving it for ever:
-        // drop it (a failed clear never fails the write above).
-        try {
-          await store.clear(catalogueV2CacheKey);
-        } catch (error) {
-          _log('catalogue: stale v2 cache not cleared (${error.runtimeType})');
+        // The cards were parsed in v1 mode, so this is the v1 body without
+        // v2 keys: an offline start reads the same v1-shaped card.
+        //
+        // An OLDER SERVER (it answered ?schema=2 with a v1 body) no longer
+        // serves v2, so a v2 body cached earlier is stale and cache-first
+        // would keep serving it for ever: drop it. A transient v2 failure
+        // (5xx, 429, a transport error, no readable card) says nothing about
+        // the server: the good v2 cache stays (D32a). A failed clear never
+        // fails the write above.
+        if (live.olderServer) {
+          try {
+            await store.clear(catalogueV2CacheKey);
+          } catch (error) {
+            _log(
+              'catalogue: stale v2 cache not cleared (${error.runtimeType})',
+            );
+          }
         }
       }
       return true;

@@ -671,6 +671,78 @@ extension CardBenefitJson on CardBenefit {
   };
 }
 
+const _v2CardKeys = {
+  'accrual_block_inr',
+  'accrual_rounding',
+  'cashback_rounding',
+  'points_expiry_months',
+  'model_status',
+  'model_coverage',
+  'unlock_rules',
+  'redemption_options',
+};
+
+const _v2RuleKeys = {
+  'rule_role',
+  'merchant_slugs',
+  'platform_slugs',
+  'mcc_include',
+  'mcc_exclude',
+  'except_merchant_slugs',
+  'except_platform_slugs',
+  'block_inr',
+  'min_engine_version',
+  'max_engine_version',
+  'source_local_id',
+  'display_note',
+};
+
+const _v2CapKeys = {
+  'cap_kind',
+  'cap_amount',
+  'scope',
+  'targets',
+  'parent_cap_id',
+  'post_cap_behavior',
+  'anchor',
+  'min_engine_version',
+  'source_local_id',
+};
+
+// `window_days` stays: see [CardProductJson.fromJson].
+const _v2MilestoneKeys = {
+  'reward_points',
+  'reward_kind',
+  'excluded_category_ids',
+  'source_local_id',
+};
+
+Object? _withoutKeys(Object? rows, Set<String> keys) => rows is List
+    ? [
+        for (final row in rows)
+          row is Map<String, dynamic>
+              ? {
+                  for (final e in row.entries)
+                    if (!keys.contains(e.key)) e.key: e.value,
+                }
+              : row,
+      ]
+    : rows;
+
+/// [json] as the released (v1-only) parser read it: every v2 key dropped from
+/// the card, its rules, caps and milestones. A row that is not a map is left
+/// for the strict v1 parse to reject, as before.
+Map<String, dynamic> _withoutV2Keys(Map<String, dynamic> json) => {
+  for (final e in json.entries)
+    if (!_v2CardKeys.contains(e.key))
+      e.key: switch (e.key) {
+        'reward_rules' => _withoutKeys(e.value, _v2RuleKeys),
+        'cap_rules' => _withoutKeys(e.value, _v2CapKeys),
+        'milestone_rules' => _withoutKeys(e.value, _v2MilestoneKeys),
+        _ => e.value,
+      },
+};
+
 extension CardProductJson on CardProduct {
   /// Parses one card from either feed (plan C2).
   ///
@@ -679,7 +751,20 @@ extension CardProductJson on CardProduct {
   /// redemption option that doesn't parse is skipped, and an unsupported
   /// card-level v2 value falls back to its default — each recorded in
   /// [CardProduct.parseWarnings]. A v2 problem never fails the card.
-  static CardProduct fromJson(Map<String, dynamic> json) {
+  ///
+  /// [v1Mode] (plan C8/D32a) is for a **schema-1 body** (the v1 feed, a v1
+  /// cache, an old bundled asset). The v1 feed's rule and cap rows are
+  /// `to_jsonb(row)`, so they carry the v2 columns (`rule_role`,
+  /// `max_engine_version`, `cap_kind`, ...) although the v1 feed does not hold
+  /// the precise v2 rows they belong with. The released parser ignored those
+  /// keys; v1 mode does too, so the card stays v1-shaped and is evaluated
+  /// exactly as installed apps do. Only `window_days` is kept on a milestone:
+  /// the engine skips a windowed milestone (D32b), which can only under-state.
+  static CardProduct fromJson(
+    Map<String, dynamic> json, {
+    bool v1Mode = false,
+  }) {
+    if (v1Mode) json = _withoutV2Keys(json);
     final warnings = <String>[];
     final skippedCaps = <String, String>{};
     final skippedRules = <String, String>{};
