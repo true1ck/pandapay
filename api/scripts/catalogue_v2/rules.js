@@ -938,12 +938,19 @@ const BONUS_QUALIFIER = /\b(accelerated|accelerator|bonus|additional|extra|incre
 const CORE_MENTION = /\b(core|base|standard|regular|normal|default)\b[^.]{0,25}\b(reward|points?|rps?|cash ?back|miles|rewards?|earn\w*)\b/;
 const ZERO_EARN = /\b(earns?|earning|accrue\w*)\s+(0|zero|no|nothing)\b|\bzero\s+(reward|points?|cash ?back)\b|\bno\s+(\w+\s+){0,2}(reward|points?|cash ?back|miles|neucoins|rps?)\b/;
 
-// D19a: 'bonus_only' when the text excludes only accelerated / bonus /
-// milestone benefits; 'full' when it also excludes core or plain rewards;
-// null when it names no qualified benefit at all.
+const EXCLUDING_CLAUSE = /\b(exclud\w*|not eligible|ineligible|not (qualify|count|accrue|earn|apply|available|applicable)|do(es)? not|don't|doesn't|won't|no longer|zero|earn 0|not form part)\b/;
+
+// D19a / D20c: classify an exclusion's text by its excluding clause(s) only
+// ("... remains eligible for 5X" elsewhere in the sentence doesn't count).
+//  'bonus_only' — every excluded benefit is accelerated / bonus / milestone;
+//  'full'       — core/base or plain rewards excluded, or the excluding
+//                 clause names no reward or qualifier at all.
 function classifyExclusionText(raw) {
-  const t = String(raw || '').toLowerCase().replace(/[_]+/g, ' ');
-  if (!t.trim()) return null;
+  const all = String(raw || '').toLowerCase().replace(/[_]+/g, ' ');
+  if (!all.trim()) return null;
+  const clauses = all.split(/[.;]|,\s*(?:while|whereas|but)\b|\bwhile\b|\bbut\b|\bwhereas\b/).map((c) => c.trim()).filter(Boolean);
+  const excluding = clauses.filter((c) => EXCLUDING_CLAUSE.test(c));
+  const t = (excluding.length ? excluding : clauses).join('. ');
   if (CORE_MENTION.test(t) || ZERO_EARN.test(t)) return 'full';
   let m;
   REWARD_WORD.lastIndex = 0;
@@ -952,7 +959,7 @@ function classifyExclusionText(raw) {
     // "milestone benefits", "accelerated 5% cashback": qualified.
     if (!BONUS_QUALIFIER.test(before) && !/\b(milestone|ticket|voucher|accelerated)\s*$/.test(before)) return 'full';
   }
-  return /\b(accelerated|accelerator|bonus|additional|extra|incremental|milestone|ticket|\d+\s*x)\b/.test(t) ? 'bonus_only' : null;
+  return /\b(accelerated|accelerator|bonus|additional|extra|incremental|milestone|ticket|\d+\s*x)\b/.test(t) ? 'bonus_only' : 'full';
 }
 
 function dedupeParts(parts) {

@@ -997,6 +997,8 @@ test('D19a full-exclusion phrasings are never bonus_only', () => {
     'Government spends earn 0 Reward Points.',
     'B2B spends are excluded from rewards/milestone calculations.',
     'Offline UPI transactions under INR 2,000 at small merchants are not eligible for reward points, voucher benefits, milestone benefits or other product benefits unless stated otherwise.',
+    // D20c: the "5X" is in the non-excluding clause.
+    'Fast-food restaurant MCC 5814 is excluded; dining MCC 5812 remains eligible for 5X.',
   ];
   for (const text of full) assert.equal(classifyExclusionText(text), 'full', text);
   const bonus = [
