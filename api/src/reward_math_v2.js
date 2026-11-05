@@ -20,8 +20,10 @@ const { loadDirectory, resolveMerchant, ancestors } = require('./merchant_direct
  *     per transaction (targets, card-wide, and every parent), bonus-only vs
  *     total, and an explicit post-cap behaviour.
  *
- * v1-shaped cards (C3.2: no rule_role, no cap_kind, no accrual_rounding) are
- * handed to reward_math.js untouched, so their answers stay byte-identical.
+ * v1-shaped cards (C3.2 as amended by C8 D10/D11 — see isV2Card) are handed
+ * to reward_math.js untouched, so their answers stay byte-identical.
+ *
+ * Rulings in C8 D9 and D12 refine C3; comments below cite them by number.
  *
  * Money is plain JavaScript numbers in RUPEES (pg `numeric` may arrive as a
  * string; every read goes through `num`). Cashback is kept to paise; points
@@ -177,7 +179,7 @@ function resolveContext(ctx, directory) {
  * Roles: base/earn/exclusion can apply; `info` and unknown roles never do.
  * Deciding what an applicable exclusion *means* is pickRuleV2's job.
  *
- * Judgement call beyond C3.3 (never widen, plan H2): a rule with no
+ * C8 D9(2) (never widen, plan H2): a rule with no
  * `merchant_slugs` but a legacy `merchant_pattern` keeps v1's substring
  * restriction rather than becoming unrestricted. When `merchant_slugs` is
  * set, `merchant_pattern` is only its v1 projection and is ignored.
