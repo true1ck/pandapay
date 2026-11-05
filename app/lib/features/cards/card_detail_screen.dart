@@ -2106,7 +2106,7 @@ class _CapsTab extends ConsumerWidget {
                       product: product,
                       cap: cap,
                       owned: userCard,
-                      now: DateTime.now(),
+                      now: ref.watch(clockProvider).now(),
                     )
                   : null;
               if (progress != null) {

@@ -452,6 +452,7 @@ class _MyCardTileState extends ConsumerState<_MyCardTile> {
                   card: card,
                   product: product,
                   categories: categories,
+                  now: ref.watch(clockProvider).now(),
                 ),
                 if (utilization != null) ...[
                   const SizedBox(height: AppSpace.sm),
@@ -667,10 +668,14 @@ class _NearestCapBar extends StatelessWidget {
   final CardProduct product;
   final List<SpendCategory> categories;
 
+  /// The app clock (clockProvider), so the bar and the engine agree on today.
+  final DateTime now;
+
   const _NearestCapBar({
     required this.card,
     required this.product,
     required this.categories,
+    required this.now,
   });
 
   @override
@@ -680,7 +685,7 @@ class _NearestCapBar extends StatelessWidget {
     // while a cap's native figure is unknown. v1 cards keep today's bar.
     if (product.isV2Shaped) {
       final fullest = fullestCapProgress(
-        capProgressesFor(product: product, owned: card, now: DateTime.now()),
+        capProgressesFor(product: product, owned: card, now: now),
       );
       if (fullest != null) {
         final categoryName = categories

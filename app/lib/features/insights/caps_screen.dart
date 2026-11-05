@@ -67,7 +67,7 @@ class CapsScreen extends ConsumerWidget {
 
         // WP9: v2-shaped cards list every cap by id and rank by the native
         // ratio (an unknown cap sorts as full); v1 cards are unchanged.
-        final now = DateTime.now();
+        final now = ref.watch(clockProvider).now();
         final rows = <(UserCard, CardProduct, CapRule)>[
           for (final (userCard, product) in owned)
             for (final cap in product.isV2Shaped
@@ -177,6 +177,7 @@ class CapsScreen extends ConsumerWidget {
                         categoryName: categoryName(cap.categoryId),
                         categories: categories,
                         allOwned: owned,
+                        now: now,
                       ),
                   ],
                   if (group.fuels.isNotEmpty) ...[
@@ -200,6 +201,9 @@ class _CapTile extends StatelessWidget {
   final String categoryName;
   final List<SpendCategory> categories;
   final List<(UserCard, CardProduct)> allOwned;
+
+  /// The app clock (clockProvider): bars, suggestions and the engine agree.
+  final DateTime now;
   const _CapTile({
     required this.userCard,
     required this.product,
@@ -207,6 +211,7 @@ class _CapTile extends StatelessWidget {
     required this.categoryName,
     required this.categories,
     required this.allOwned,
+    required this.now,
   });
 
   @override
@@ -214,7 +219,6 @@ class _CapTile extends StatelessWidget {
     // WP9 (B1): v2-shaped cards show the cap in its native unit, with the
     // next-best owned card once the cap is nearly used. A cap that cannot be
     // stated natively falls back to the v1 tile below.
-    final now = DateTime.now();
     final progress = product.isV2Shaped
         ? capProgressFor(
             product: product,
@@ -375,6 +379,7 @@ class _CapTile extends StatelessWidget {
               currentCard: userCard,
               cap: cap,
               allOwned: allOwned,
+              now: now,
             ),
           ],
         ],
@@ -402,10 +407,12 @@ class _SwitchToSuggestion extends StatelessWidget {
   final UserCard currentCard;
   final CapRule cap;
   final List<(UserCard, CardProduct)> allOwned;
+  final DateTime now;
   const _SwitchToSuggestion({
     required this.currentCard,
     required this.cap,
     required this.allOwned,
+    required this.now,
   });
 
   @override
@@ -415,7 +422,6 @@ class _SwitchToSuggestion extends StatelessWidget {
     if (others.isEmpty) return const SizedBox.shrink();
 
     const engine = RecommendationEngine();
-    final now = DateTime.now();
     // WP9: the other cards carry their own cap state (a card whose bonus is
     // already used up must not be named), built in one place.
     final snapshots = [

@@ -181,7 +181,7 @@ class NotificationTriggerRunner {
     final owned = ref.read(ownedCardsWithProductProvider).valueOrNull;
     if (owned == null) return;
     final gate = ref.read(notificationGateProvider);
-    final now = DateTime.now();
+    final now = ref.read(clockProvider).now();
     final categories =
         ref.read(categoriesProvider).valueOrNull ?? const <SpendCategory>[];
     for (final (userCard, product) in owned) {

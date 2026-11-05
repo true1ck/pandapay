@@ -237,12 +237,14 @@ class _BigPurchaseCalculatorScreenState
               ?.where((c) => c.id == effectiveCategoryId)
               .firstOrNull
               ?.slug;
+    // One clock (clockProvider) for the context and the cap state.
+    final now = ref.watch(clockProvider).now();
     final context = RecommendationContext(
       amount: _amount,
       categoryId: effectiveCategoryId,
       categorySlug: categorySlug,
       rail: TxnRail.swipe,
-      now: DateTime.now(),
+      now: now,
     );
     // Same B8 wiring as rankedRecommendationsProvider (app/providers.dart):
     // this screen only carries category context (no merchant/vpa), so an
@@ -261,7 +263,7 @@ class _BigPurchaseCalculatorScreenState
       return buildCardSnapshot(
         c,
         owned: uc,
-        now: context.now ?? DateTime.now(),
+        now: now,
         forcedOverrideCardId: overrideProductId,
       );
     }).toList();

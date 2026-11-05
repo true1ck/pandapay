@@ -216,7 +216,7 @@ class _TryItNowPreview extends ConsumerWidget {
         .firstOrNull
         ?.id;
     final engine = ref.watch(recommendationEngineProvider);
-    final now = DateTime.now();
+    final now = ref.watch(clockProvider).now();
     // WP9: every CardSnapshot is built in one place (v1 measure for v1
     // cards, native units for v2-shaped cards).
     final snapshots = [

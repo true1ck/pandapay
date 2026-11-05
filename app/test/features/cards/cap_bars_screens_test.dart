@@ -187,6 +187,72 @@ void main() {
     });
   });
 
+  group('one clock (clockProvider) for the bars and the engine', () {
+    // A row for fixed November 2026; only the injected clock decides whether
+    // it is still current, whatever day the test runs on.
+    UserCard fixedRow() => parseUserCard(
+      userCardJson(
+        'ua',
+        'a',
+        capStates: [
+          capStateRowJson(
+            'a-cap',
+            consumed: 0,
+            consumedNative: 1240,
+            capKind: 'bonus_points',
+            capAmount: 1500,
+            periodStart: '2026-11-01',
+            periodEnd: '2026-11-30',
+          ),
+        ],
+      ),
+    );
+
+    List<Override> withClock(DateTime now) => [
+      ..._overrides([_v2()], [fixedRow()]),
+      clockProvider.overrideWithValue(TestClock(now)),
+    ];
+
+    testWidgets('caps screen: inside the period the bar has its figure',
+        (tester) async {
+      await _pump(
+        tester,
+        const Scaffold(body: CapsScreen()),
+        withClock(DateTime(2026, 11, 15)),
+      );
+      expect(find.textContaining('1,240 / 1,500 pts'), findsOneWidget);
+    });
+
+    testWidgets('caps screen: after the period ends the bar is "Updating…"',
+        (tester) async {
+      await _pump(
+        tester,
+        const Scaffold(body: CapsScreen()),
+        withClock(DateTime(2026, 12, 10)),
+      );
+      expect(find.text('Updating…'), findsOneWidget);
+      expect(find.textContaining('1,240'), findsNothing);
+    });
+
+    testWidgets('my cards tile: the injected clock decides', (tester) async {
+      await _pump(
+        tester,
+        const Scaffold(body: MyCardsScreen()),
+        withClock(DateTime(2026, 12, 10)),
+      );
+      expect(find.text('Updating…'), findsOneWidget);
+    });
+
+    testWidgets('card detail: the injected clock decides', (tester) async {
+      await _pump(
+        tester,
+        const CardDetailScreen(userCardId: 'ua', initialTabIndex: 2),
+        withClock(DateTime(2026, 12, 10)),
+      );
+      expect(find.text('Updating…'), findsOneWidget);
+    });
+  });
+
   group('my cards tile', () {
     testWidgets('shows the fullest cap as a native-unit bar', (tester) async {
       final json = v2CardJson('a', name: 'Rewards Card', categoryId: 'cat-dining');

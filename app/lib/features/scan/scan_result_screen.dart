@@ -298,7 +298,7 @@ class _ScanResultScreenState extends ConsumerState<ScanResultScreen> {
     // merchant — a scanned UPI QR carries the payee name — so it is the
     // path where merchant-restricted rules ("10% at Amazon only") can
     // actually be honoured rather than falling through to the base rate.
-    final now = DateTime.now();
+    final now = ref.watch(clockProvider).now();
     final selectedCategorySlug = categoryList
         .where((c) => c.id == selectedCategoryForRanking)
         .firstOrNull
