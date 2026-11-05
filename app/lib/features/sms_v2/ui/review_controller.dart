@@ -228,12 +228,29 @@ class ReviewController {
   }
 }
 
+/// Loads the sharing opt-in even when no screen is watching it. Reading an
+/// autoDispose provider nobody listens to returns "loading", not the value,
+/// which silently turned every fix into a local-only fix.
+Future<bool> readSharingConsent(WidgetRef ref) async {
+  final keepAlive = ref.listenManual(
+    app.smsSharedLearningConsentProvider,
+    (_, _) {},
+  );
+  try {
+    return await ref.read(app.smsSharedLearningConsentProvider.future) != null;
+  } catch (_) {
+    return false; // Offline or failed: share nothing.
+  } finally {
+    keepAlive.close();
+  }
+}
+
 Future<ReviewController> smsReviewController(WidgetRef ref) async {
   final namespace = ref.read(app.cacheNamespaceProvider);
   final runtime = await ref.read(smsV2RuntimeProvider.future);
   final bundle = await runtime?.activeBundle();
   final cache = await ref.read(app.responseCacheProvider.future);
-  final consent = ref.read(app.smsSharedLearningConsentProvider).valueOrNull;
+  final hasConsent = await readSharingConsent(ref);
   if (namespace != ref.read(app.cacheNamespaceProvider)) {
     throw StateError('Account changed');
   }
@@ -242,7 +259,7 @@ Future<ReviewController> smsReviewController(WidgetRef ref) async {
     financial: cache.financialStore,
     namespace: namespace,
     bundle: bundle,
-    hasConsent: consent != null,
+    hasConsent: hasConsent,
   );
 }
 
