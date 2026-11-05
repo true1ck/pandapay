@@ -16,6 +16,7 @@ import '../storage/outbox_store.dart';
 import '../storage/schema.dart';
 import '../storage/stats_store.dart';
 import '../storage/sync_state_store.dart';
+import 'receipt_review.dart';
 import 'trace.dart';
 
 /// The local part of WP-14. The caller supplies a verified bundle and a
@@ -342,6 +343,8 @@ class SmsV2Pipeline {
       for (final event in [...result.created, ...result.updated])
         _events.upsert(event),
     ];
+    // A funding debit that joined a receipt answers the receipt question.
+    ReceiptReviews.resolveJoined(_db, namespace, affected);
     if (affected.isEmpty) {
       return {
         for (final message in messages)

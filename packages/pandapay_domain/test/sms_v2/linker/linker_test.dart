@@ -836,17 +836,45 @@ void main() {
     test(
       'a receipt with no payment in 3 days becomes a review item, not an event',
       () {
-        final r = linkAll([receipt]);
+        // 12 Nov 2026: the same calendar month as the receipt (Lane X).
+        final now = DateTime.utc(2026, 11, 12);
+        final linker = testLinker(now: now);
+        final r = linker.link(
+          incoming: [receipt],
+          context: RuleLinkContext(
+            recentFacts: const [],
+            openEvents: const [],
+            instrumentsById: allInstruments,
+          ),
+          rules: baselineLinkRules(),
+        );
         expect(eventsOf(r), isEmpty);
-        final item = r.ambiguous.single;
+        final asked = linker.reviewReceipts(
+          now: now,
+          context: RuleLinkContext(
+            recentFacts: [receipt],
+            openEvents: const [],
+            instrumentsById: allInstruments,
+          ),
+          rules: baselineLinkRules(),
+        );
+        final item = asked.ambiguous.single;
         expect(item.kind, ReviewKind.event);
         expect(item.payload['reason'], 'receipt_without_payment');
         expect(
           item.payload['message'],
-          'We saw a receipt from ACT Fibernet for Rs 899.00 but no payment. Add it?',
+          'Did you pay this bill? We found a receipt for a payment of ₹899 on '
+          '7 Nov 2026 through ACT Fibernet, but no matching debit in your '
+          'messages. Was this paid from one of your accounts?',
         );
       },
     );
+
+    test('a receipt from an earlier month is skipped silently', () {
+      final r = linkAll([receipt]); // testNow is June 2027
+      expect(eventsOf(r), isEmpty);
+      expect(r.ambiguous, isEmpty);
+    });
 
     test('inside the window the receipt waits quietly', () {
       final r = testLinker(now: DateTime.utc(2026, 11, 8)).link(

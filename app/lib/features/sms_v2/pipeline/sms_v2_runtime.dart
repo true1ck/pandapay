@@ -31,6 +31,7 @@ import '../telemetry/client_metrics.dart';
 import '../sync/corrections_sync.dart';
 import '../sync/facts_upload.dart';
 import '../sync/sync_pull.dart';
+import 'receipt_review.dart';
 import 'sms_v2_pipeline.dart';
 
 /// One foreground account owner. Capture is available offline, and the
@@ -347,6 +348,21 @@ class SmsV2Runtime {
         }
       }
       await capture(pending.map((entry) => entry.message).toList());
+    }
+    if (accountIsCurrent()) {
+      // Every captured message is processed: now ask about receipts that never
+      // got a funding debit (current month only; older ones are skipped).
+      try {
+        ReceiptReviews(
+          financial: financial,
+          namespace: namespace,
+          bundle: await activeBundle(),
+          clock: clock,
+          categoryIdBySlug: categoryIdBySlug,
+        ).sweep();
+      } catch (_) {
+        // The next sync pass retries; a failed question never blocks sync.
+      }
     }
     await _applyCardState();
     await _upload.drain();
