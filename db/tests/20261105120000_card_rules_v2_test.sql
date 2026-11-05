@@ -16,6 +16,7 @@ declare
   v_rule1  uuid; v_rule2 uuid; v_rule3 uuid;
   v_cap1   uuid; v_cap2 uuid; v_cap3 uuid; v_cap4 uuid; v_dr uuid; v_dcap uuid;
   v_before bigint; v_after bigint;
+  v_ord uuid := gen_random_uuid();
   v1 jsonb; v2 jsonb; big_conditions jsonb; big_mcc text[];
 begin
   insert into issuers (id, slug, name) values (v_issuer, 'wp1-test-bank', 'WP1 Test Bank');
@@ -292,6 +293,39 @@ begin
       values (v_card, 'lounge_domestic', ' BIG ', repeat('d', 5000), big_conditions);
     raise exception 'duplicate large benefit must be rejected';
   exception when unique_violation then null; end;
+
+  -- D22(d): deterministic catalogue order (priority, source_local_id nulls last, id)
+  insert into card_products (id, issuer_id, slug, name, network, status, verified_at)
+    values (v_ord, v_issuer, 'wp1-order-card', 'WP1 Order Card', 'visa', 'published', now());
+  insert into reward_rules (id, card_product_id, unit, rate, priority, source_local_id, notes) values
+    ('00000000-0000-4000-8000-0000000000c3', v_ord, 'points_per_100', 1, 200, 'a', 'n3'),
+    ('00000000-0000-4000-8000-0000000000c2', v_ord, 'points_per_100', 1, 100, 'z', 'n2'),
+    ('00000000-0000-4000-8000-0000000000c1', v_ord, 'points_per_100', 1, 100, 'b', 'n1');
+  insert into reward_rules (id, card_product_id, unit, rate, priority, source_local_id, notes) values
+    ('00000000-0000-4000-8000-0000000000c0', v_ord, 'points_per_100', 1, 100, null, 'null sid');
+  insert into cap_rules (id, card_product_id, label, measure, period, cap_value, source_local_id) values
+    ('00000000-0000-4000-8000-0000000000d3', v_ord, 'c3', 'spend_amount', 'calendar_month', 1, 'm'),
+    ('00000000-0000-4000-8000-0000000000d2', v_ord, 'c2', 'spend_amount', 'calendar_month', 2, 'a'),
+    ('00000000-0000-4000-8000-0000000000d1', v_ord, 'c1', 'spend_amount', 'calendar_month', 3, null);
+  select to_jsonb(x) into v2 from v_card_catalogue_export_v2 x where x.id = v_ord;
+  if (select array_agg(r->>'id' order by o) from jsonb_array_elements(v2->'reward_rules') with ordinality t(r, o))
+     is distinct from array['00000000-0000-4000-8000-0000000000c1','00000000-0000-4000-8000-0000000000c2',
+                            '00000000-0000-4000-8000-0000000000c0','00000000-0000-4000-8000-0000000000c3'] then
+    raise exception 'v2 reward_rules not in catalogue order: %', (select array_agg(r->>'source_local_id') from jsonb_array_elements(v2->'reward_rules') r);
+  end if;
+  if (select array_agg(r->>'id' order by o) from jsonb_array_elements(v2->'cap_rules') with ordinality t(r, o))
+     is distinct from array['00000000-0000-4000-8000-0000000000d2','00000000-0000-4000-8000-0000000000d3',
+                            '00000000-0000-4000-8000-0000000000d1'] then
+    raise exception 'v2 cap_rules not in catalogue order';
+  end if;
+  insert into cap_rule_targets values
+    ('00000000-0000-4000-8000-0000000000d2', '00000000-0000-4000-8000-0000000000c3'),
+    ('00000000-0000-4000-8000-0000000000d2', '00000000-0000-4000-8000-0000000000c1');
+  select to_jsonb(x) into v2 from v_card_catalogue_export_v2 x where x.id = v_ord;
+  if v2->'cap_rules'->0->'targets' <> '["00000000-0000-4000-8000-0000000000c1","00000000-0000-4000-8000-0000000000c3"]'::jsonb then
+    raise exception 'cap targets not ordered by reward_rule_id';
+  end if;
+  delete from card_products where id = v_ord;
 
   -- D7: extra rounding modes
   update card_products set accrual_rounding = 'points_half_up' where id = v_card;
