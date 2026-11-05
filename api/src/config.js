@@ -131,7 +131,7 @@ module.exports = {
   rewardWorkerBatchSize: Math.min(20, Math.max(1, Number(process.env.REWARD_WORKER_BATCH_SIZE) || 5)),
   rewardWorkerLeaseSeconds: Math.min(900, Math.max(15, Number(process.env.REWARD_WORKER_LEASE_SECONDS) || 90)),
   rewardWorkerEnabled: process.env.REWARD_WORKER_ENABLED === 'true',
-  productTermsVersion: process.env.PRODUCT_TERMS_VERSION || '2026-08-07',
+  productTermsVersion: process.env.PRODUCT_TERMS_VERSION || '2026-11-15',
   inboundEmailWebhookSecret: process.env.INBOUND_EMAIL_WEBHOOK_SECRET || null,
   partnerWebhookSecret: process.env.PARTNER_WEBHOOK_SECRET || null,
   partnerWebhookDatabaseUrl: process.env.PARTNER_WEBHOOK_DATABASE_URL || null,

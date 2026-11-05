@@ -10,6 +10,7 @@ import 'package:shared_preferences/shared_preferences.dart';
 
 import 'package:pandapay/app/providers.dart';
 import 'package:pandapay/data/auth_api.dart';
+import 'package:pandapay/data/consent_policy.dart';
 import 'package:pandapay/data/consents_api.dart';
 import 'package:pandapay/features/auth/login_screen.dart';
 import 'package:pandapay/data/product_access_api.dart';
@@ -155,11 +156,126 @@ void main() {
     await tester.ensureVisible(find.byType(CheckboxListTile).at(0));
     await tester.tap(find.byType(CheckboxListTile).at(0)); // required Terms
     await tester.pump();
+    // Terms alone is not enough: the age confirmation is required too.
+    expect(tester.widget<FilledButton>(submit).onPressed, isNull);
+    await tester.ensureVisible(find.byType(CheckboxListTile).at(1));
+    await tester.tap(find.byType(CheckboxListTile).at(1)); // required 18+
+    await tester.pump();
     expect(tester.widget<FilledButton>(submit).onPressed, isNotNull);
 
     await tester.tap(submit);
     await tester.pumpAndSettle();
     expect(otpRequested, isTrue);
+  });
+
+  testWidgets('sign-up asks for "I am 18 or older." and requires it', (
+    tester,
+  ) async {
+    var otpRequested = false;
+    final authApi = AuthApi(
+      authBaseUrl: 'http://auth.test',
+      client: MockClient((req) async {
+        otpRequested = true;
+        return http.Response('{}', 200);
+      }),
+    );
+    await tester.pumpWidget(
+      wrap(overrides: [authApiProvider.overrideWithValue(authApi)]),
+    );
+    await tester.enterText(find.byType(TextField).at(0), 'newuser@example.com');
+    await tester.enterText(find.byType(TextField).at(1), '9876543210');
+    await tester.pump();
+
+    expect(find.text('I am 18 or older.'), findsOneWidget);
+    expect(
+      find.descendant(
+        of: find.byType(CheckboxListTile).at(1),
+        matching: find.text('I am 18 or older.'),
+      ),
+      findsOneWidget,
+      reason: 'directly under the Terms box, before the optional choices',
+    );
+    // Nothing optional is pre-ticked, and the age box starts unticked.
+    for (var i = 0; i < 4; i++) {
+      expect(
+        tester.widget<CheckboxListTile>(find.byType(CheckboxListTile).at(i)).value,
+        isFalse,
+      );
+    }
+
+    final submit = find.widgetWithText(FilledButton, 'Send verification code');
+    await tester.ensureVisible(find.byType(CheckboxListTile).at(0));
+    await tester.tap(find.byType(CheckboxListTile).at(0)); // Terms only
+    await tester.pump();
+    expect(tester.widget<FilledButton>(submit).onPressed, isNull);
+    await tester.ensureVisible(submit);
+    await tester.tap(submit, warnIfMissed: false);
+    await tester.pumpAndSettle();
+    expect(otpRequested, isFalse);
+
+    await tester.ensureVisible(find.byType(CheckboxListTile).at(1));
+    await tester.tap(find.byType(CheckboxListTile).at(1)); // 18+
+    await tester.pump();
+    expect(tester.widget<FilledButton>(submit).onPressed, isNotNull);
+    await tester.tap(submit);
+    await tester.pumpAndSettle();
+    expect(otpRequested, isTrue);
+  });
+
+  testWidgets('unticking "I am 18 or older." disables sign-up again', (
+    tester,
+  ) async {
+    await tester.pumpWidget(
+      wrap(
+        overrides: [
+          authApiProvider.overrideWithValue(
+            AuthApi(
+              authBaseUrl: 'http://auth.test',
+              client: MockClient((_) async => http.Response('{}', 200)),
+            ),
+          ),
+        ],
+      ),
+    );
+    await tester.enterText(find.byType(TextField).at(0), 'newuser@example.com');
+    await tester.enterText(find.byType(TextField).at(1), '9876543210');
+    await tester.pump();
+    final submit = find.widgetWithText(FilledButton, 'Send verification code');
+    for (final i in [0, 1]) {
+      await tester.ensureVisible(find.byType(CheckboxListTile).at(i));
+      await tester.tap(find.byType(CheckboxListTile).at(i));
+      await tester.pump();
+    }
+    expect(tester.widget<FilledButton>(submit).onPressed, isNotNull);
+    await tester.tap(find.byType(CheckboxListTile).at(1));
+    await tester.pump();
+    expect(tester.widget<FilledButton>(submit).onPressed, isNull);
+  });
+
+  testWidgets('signing in does not ask for the age confirmation', (
+    tester,
+  ) async {
+    await tester.pumpWidget(
+      wrap(
+        mode: AuthMode.logIn,
+        overrides: [
+          authApiProvider.overrideWithValue(
+            AuthApi(
+              authBaseUrl: 'http://auth.test',
+              client: MockClient((_) async => http.Response('{}', 200)),
+            ),
+          ),
+        ],
+      ),
+    );
+    expect(find.text('I am 18 or older.'), findsNothing);
+    expect(find.byType(CheckboxListTile), findsNothing);
+  });
+
+  test('the terms version every consent screen records is the one shared policy date', () {
+    expect(consentPolicyVersion, '2026-11-15');
+    expect(appProductTermsVersion, consentPolicyVersion);
+    expect(currentPolicyVersion, consentPolicyVersion);
   });
 
   testWidgets(
@@ -250,6 +366,8 @@ void main() {
       await tester.enterText(find.byType(TextField).at(1), '9876543210');
       await tester.ensureVisible(find.byType(CheckboxListTile).at(0));
       await tester.tap(find.byType(CheckboxListTile).at(0)); // required Terms
+      await tester.ensureVisible(find.byType(CheckboxListTile).at(1));
+      await tester.tap(find.byType(CheckboxListTile).at(1)); // required 18+
       await tester.pump();
       await tester.ensureVisible(find.text('Send verification code'));
       await tester.tap(find.text('Send verification code'));

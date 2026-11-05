@@ -12,55 +12,94 @@
   h2 { font-size: 1.05rem; margin-top: 2em; }
   a { color: #2f6f3e; }
   ul { padding-left: 1.2em; }
+  mark { background: #fff3b0; }
 </style>
 </head>
 <body>
 <h1>PandaPay — Privacy Policy</h1>
-<p class="updated">Last updated: 26 October 2026</p>
+<p class="updated">Last updated: 15 November 2026 (version 2026-11-15)</p>
 
-<p>This Privacy Policy describes what data PandaPay collects, why, and what you can do about it. We are committed to collecting only what the app actually needs to function.</p>
-
-<h2>1. Account data</h2>
-<p>If you create an account, we retain the account identifiers needed for email or phone sign-in and supported Google sign-in. We do not sell this data. Account data is stored on our servers with access controls, and traffic between the app and our servers uses HTTPS/TLS.</p>
-
-<h2>2. Card and transaction data</h2>
-<p>We do not ask you to save your full card number, PIN or CVV. Card or account last-four digits may be stored to match the cards and transactions you choose to add. Your card products and transactions are scoped to your account and used to estimate rewards and track spending, balances and caps.</p>
-
-<h2>3. How you can add transactions</h2>
-<p>You can add transactions manually or import statement and backup files you choose. On supported Android devices, enabling SMS import and granting permission lets the app read existing and incoming messages for financial parsing; unrelated personal messages are not intended for upload. Depending on the feature you use, financial message content or derived records can be sent to our backend for processing. If enabled and configured, server-assisted AI processing can send redacted financial message content to the configured AI provider. Optional shared-learning contributions use a separate opt-in. You can also forward transaction emails or connect IMAP for automatic import. Receipt images and unsynced records may exist only on your phone. If encrypted account recovery is available and you enable it, the app can upload encrypted recovery copies, including receipts when you select them, and update them automatically while connectivity and app activity permit. Recovery uses your existing account verification and adds no separate password. Work created after the last successful copy remains at risk if the phone is lost before another copy completes.</p>
-
-<h2>4. Location</h2>
-<p>If you grant location access, your precise location may be sent to the PandaPay API for nearby searches or enabled background alerts. The API can forward search coordinates to Google Places or OpenStreetMap-based providers, depending on the configured route. This feature is optional. Stored merchant location coordinates are rounded to roughly 11 metres; that rounding does not describe the precision sent for a nearby search.</p>
-
-<h2>5. Crowdsourced contributions</h2>
-<p>Contributions (e.g. confirming a merchant accepts a card, or correcting a category) are stored without your name, email, account ID, or any other identifying field — enforced by an automated check that runs before every release and blocks deployment if it finds an identifying column. Merchant coordinates are rounded to ~11m, amounts are excluded entirely, and timestamps are stored to the day only, never the minute. Internally, contributions are linked across a single calendar month using a one-way hash that is rotated and discarded at the end of each month, so contributions from different months cannot be linked to each other or back to you.</p>
-
-<h2>6. Notifications</h2>
-<p>If you enable notifications, we store a device push token tied to your account to deliver reward alerts, due-date reminders, and cap warnings. It is deleted when you delete your account.</p>
-
-<h2>7. Product analytics</h2>
-<p>We collect basic in-app usage events (e.g. which screens are opened, whether an action succeeded) from a fixed, limited list of event types — never free-text input, transaction amounts, or card details. This stays on our own servers; it is not shared with third-party analytics companies.</p>
-
-<h2>8. Card issuer "Apply" links</h2>
-<p>Tapping "Apply" for a card sends you to the issuer's own site via a link containing a random reference code, not your personal information. We record that the click happened (to measure which recommendations are useful); the issuer does not receive your name, email, or any other account data from us.</p>
-
-<h2>9. Data access choices</h2>
-<p>We do not read your contacts or call log. Access to selected receipt images, statement files and backups is used for the import or recovery actions you choose. You can control optional Android SMS access through device permissions and the import settings described above.</p>
-
-<h2>10. Retention and deletion</h2>
-<p>Your data is retained while your account is active. Requesting deletion from Settings starts a 30-day grace period (cancelable any time in that window, in case of accidental or unauthorized requests) after which your profile, cards, and transactions are permanently deleted from our live database. Encrypted backups are retained separately for disaster recovery and age out on their own schedule, so a small delay beyond the 30 days can occur before every backup copy is gone.</p>
-
-<h2>11. Your rights</h2>
-<p>You can export your data (transactions and cards, as JSON or CSV) or request deletion at any time from Settings. If you are in India, these rights are provided consistent with the Digital Personal Data Protection Act, 2023.</p>
-
-<h2>12. Children</h2>
-<p>PandaPay is not directed at, and should not be used by, anyone under 18.</p>
-
-<h2>13. Changes to this policy</h2>
-<p>We may update this policy as the app changes. Material changes will be reflected here with an updated "Last updated" date.</p>
-
-<h2>14. Contact</h2>
-<p>Questions, data requests, or complaints: <a href="mailto:panda.paths123@gmail.com">panda.paths123@gmail.com</a>.</p>
+<h2>1. Who we are</h2>
+<p>PandaPay helps you track spending and choose the right card. This policy explains what we collect, why, and the choices you have. It is written to be read, not skimmed past.</p>
+<p>PandaPay is run by <mark>[OWNER TO FILL: legal entity name and registered address]</mark>. Our grievance officer under the Digital Personal Data Protection Act, 2023 is <mark>[OWNER TO FILL: grievance officer name]</mark>, at <mark>[OWNER TO FILL: grievance officer email]</mark>. We reply to every request and complaint within 30 days. For general questions you can also write to panda.paths123@gmail.com.</p>
+<h2>2. Data we collect</h2>
+<ul>
+  <li>Your account: the email address and phone number you sign up with, and your Google account details if you use Google sign-in.</li>
+  <li>Transaction details from your bank SMS: the amount, merchant, date, card or account ending, and type of transaction (for example a purchase, refund or bill). We do not collect the message itself.</li>
+  <li>Details you enter: cards, transactions, notes, budgets, and the name and phone number of anyone you add to a shared expense.</li>
+  <li>Statements and files you choose to import.</li>
+  <li>Bank emails, only if you turn on email import (see 5a).</li>
+  <li>Device and push identifiers: a notification token, an install ID, the app version and your phone type, so we can deliver the notifications you turn on.</li>
+  <li>Your location, only if you allow it, to find nearby merchants and send location alerts you turn on.</li>
+  <li>Privacy-safe error reports: the type of error, where in our code it happened, the app version and your phone type. Never message text, amounts, names or account numbers.</li>
+  <li>Basic in-app usage events (for example which screens are opened) from a short fixed list. Never free-text input, amounts or card details.</li>
+</ul>
+<p>We do not read your contacts or call log. If you pick a contact to add to a shared expense, only that person's name and number are used.</p>
+<h2>3. What stays on your phone</h2>
+<ul>
+  <li>The text of your bank SMS. It is read on your phone and is never sent to us. Personal messages and one-time passwords are skipped.</li>
+  <li>Messages waiting for your review.</li>
+  <li>Receipts and files you attach.</li>
+</ul>
+<p>We protect this data on your phone. The app's database is encrypted, with a key kept in the iPhone Keychain or Android Keystore. Receipt files are encrypted. On iPhone, messages you share through the Shortcut are encrypted while they wait. All of it is kept in storage that is left out of phone backups. Signing out removes this data and its keys from the phone.</p>
+<h2>4. Why we use your data</h2>
+<ul>
+  <li>Email address and phone number: to sign you in and keep your account secure.</li>
+  <li>Transaction details: to show your spending, bills, card rewards and caps on any phone you sign in to.</li>
+  <li>Cards and details you enter: to estimate rewards and suggest the best card.</li>
+  <li>Statements and files: only to import them the way you asked.</li>
+  <li>Notification token and device identifiers: to deliver the notifications you turn on.</li>
+  <li>Location: to find nearby merchants and send the location alerts you turn on. Nearby searches send coordinates to the PandaPay API, which can pass them to Google Places or OpenStreetMap-based providers. Stored merchant coordinates are rounded to about 11 metres.</li>
+  <li>Error reports: to find and fix crashes.</li>
+  <li>Usage events: to see which features work.</li>
+  <li>Card "Apply" links: tapping Apply sends you to the issuer's own site with a random reference code, not your personal details. We record that the click happened so we can see which recommendations are useful.</li>
+</ul>
+<p>We do not sell your account data. Three things are optional and off unless you turn them on in Settings, Privacy &amp; Permissions: sharing anonymous merchant information ("Help improve PandaPay"), allowing combined, non-identifying statistics, and sharing with a named partner. Merchant information is stored without your name, email or account ID, with amounts left out and times kept to the day.</p>
+<h2>5. Optional: sharing redacted message templates</h2>
+<p>This is off unless you turn it on ("Help PandaPay read new bank messages"). When PandaPay can't read a message, it can send a copy with every amount, name, number and date removed, so a rule can be added for everyone. These copies may be processed by Google Gemini, a service of Google, to suggest the rule. Nothing is sent unless you turn this on. You can turn it off at any time in Settings, Privacy &amp; Permissions. Turning it off stops new copies and removes the ones we still hold.</p>
+<h2>5a. Optional: email import</h2>
+<p>This is off unless you connect a mailbox or forward bank emails, and it has its own consent screen.</p>
+<ul>
+  <li>Only emails from bank and card senders are read. Other emails are not opened.</li>
+  <li>The email text is sent to PandaPay to read the transaction and is deleted once it has been read. Emails we could not read are kept for up to 30 days so you can review them, then deleted.</li>
+  <li>Your mailbox app password is stored encrypted and used only to read these emails. Disconnecting deletes it.</li>
+  <li>To stop, disconnect the mailbox or stop forwarding in Import &amp; Sync. You can also contact the grievance officer.</li>
+</ul>
+<h2>6. Service providers</h2>
+<p>We use a few providers to run PandaPay. Each gets only what it needs for its job.</p>
+<ul>
+  <li>Hosting and storage of your account data: <mark>[OWNER TO FILL: hosting provider and region]</mark>.</li>
+  <li>Push notifications: Novu and Google Firebase Cloud Messaging.</li>
+  <li>Error reports: GlitchTip (<mark>[OWNER TO FILL: where error reports are hosted]</mark>).</li>
+  <li>Google Gemini: only if you turn on template sharing (section 5).</li>
+  <li>Google Places or OpenStreetMap-based providers: for nearby merchant searches (section 4).</li>
+  <li>Google: only if you use Google sign-in.</li>
+</ul>
+<h2>7. Security</h2>
+<ul>
+  <li>Everything between the app and our servers uses encrypted connections (HTTPS/TLS).</li>
+  <li>Our database backups are encrypted.</li>
+  <li>Access to account data on our servers is restricted.</li>
+  <li>Mailbox app passwords are encrypted with AES-256-GCM before they are stored.</li>
+  <li>On your phone, the database, receipts and shared-message queue are encrypted and left out of phone backups (section 3).</li>
+</ul>
+<h2>8. How long we keep data</h2>
+<p>We keep your data while your account exists. If you ask us to delete your account, you have 30 days to change your mind. After that your data is deleted from our live systems, and encrypted backups that still hold it expire within 30 days. Parsed emails are deleted as described in section 5a.</p>
+<h2>9. Your rights and how to use them</h2>
+<ul>
+  <li>Access: export your transactions and cards as JSON or CSV from Settings.</li>
+  <li>Correction: edit your details and transactions in the app, or ask the grievance officer.</li>
+  <li>Deletion: delete your account from Settings.</li>
+  <li>Withdrawing consent: turn off SMS reading, template sharing or other optional settings in Settings, Privacy &amp; Permissions, or disconnect email import. Withdrawing does not affect what we did before you withdrew.</li>
+  <li>Complaints: write to the grievance officer (section 1). If we have not resolved it, you can complain to the Data Protection Board of India.</li>
+</ul>
+<p>If you are in India, we provide these rights consistent with the Digital Personal Data Protection Act, 2023.</p>
+<h2>10. If something goes wrong</h2>
+<p>If a personal data breach affects you, we will tell you and the authorities as the law requires, without undue delay, and say what happened and what you can do.</p>
+<h2>11. Age</h2>
+<p>PandaPay is only for people aged 18 or over. You confirm this when you sign up. We do not knowingly collect data from anyone under 18, and we will delete it if we learn we have.</p>
+<h2>12. Changes to this policy</h2>
+<p>We may update this policy as PandaPay changes. We will change the date at the top, and where the change affects a consent you gave, we will ask you again.</p>
 
 <p><a href="/legal/terms.html">Terms of Service →</a></p>
 </body>

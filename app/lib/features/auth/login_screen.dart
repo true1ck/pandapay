@@ -12,6 +12,7 @@ import '../../app/providers.dart';
 import '../../app/router.dart' show AppRoute;
 import '../../data/auth_api.dart';
 import '../../data/phone_number_hint.dart';
+import '../../data/consent_policy.dart';
 import '../../data/product_access_api.dart';
 import '../settings/feedback_support_screen.dart';
 import '../settings/legal_screen.dart';
@@ -19,10 +20,11 @@ import 'account_recovery_screen.dart';
 import 'auth_feedback.dart';
 
 /// A4: DPDP §8.2 — purpose-specific, unbundled consent, never a single
-/// bundled "I agree to everything" checkbox. Bumped by hand whenever the
-/// Terms/Privacy copy actually changes; every consent row this screen
-/// writes is tagged with whichever version was current at sign-up time.
-const currentPolicyVersion = appProductTermsVersion;
+/// bundled "I agree to everything" checkbox. Every consent row this screen
+/// writes is tagged with the one shared policy version
+/// ([consentPolicyVersion], the published policy date), which changes in one
+/// place whenever the Terms/Privacy copy actually changes.
+const currentPolicyVersion = consentPolicyVersion;
 
 /// Whether this screen is creating a new account or signing an existing one in.
 ///
@@ -99,9 +101,13 @@ class _LoginScreenState extends ConsumerState<LoginScreen> {
   bool get _canResend =>
       _codeTimeLeft == null || _codeExpired || _resendUnlocked;
 
-  /// A4's three purpose-specific checkboxes — sign-up only. [_acceptedTerms]
-  /// is required (gates submit); the other two default OFF and are optional.
+  /// A4's purpose-specific checkboxes — sign-up only. [_acceptedTerms] and
+  /// [_confirmedAdult] are required (they gate submit); the other two default
+  /// OFF and are optional. PandaPay is for people aged 18 or over (DPDP needs
+  /// verifiable parental consent below that), so the age box is its own
+  /// required tick, never folded into the Terms.
   bool _acceptedTerms = false;
+  bool _confirmedAdult = false;
   bool _optInCrowdsource = false;
   bool _optInMarketing = false;
 
@@ -210,6 +216,9 @@ class _LoginScreenState extends ConsumerState<LoginScreen> {
       if (!_acceptedTerms) {
         return 'You need to accept the Terms & Privacy Policy to continue.';
       }
+      if (!_confirmedAdult) {
+        return 'Confirm that you are 18 or older to continue.';
+      }
     }
     return null;
   }
@@ -223,7 +232,7 @@ class _LoginScreenState extends ConsumerState<LoginScreen> {
     if (identifier.isEmpty || !identifier.contains('@')) return false;
     final digits = _phoneController.text.replaceAll(RegExp(r'[^0-9]'), '');
     if (digits.length < 10) return false;
-    if (_isSignUp && !_acceptedTerms) return false;
+    if (_isSignUp && (!_acceptedTerms || !_confirmedAdult)) return false;
     return true;
   }
 
@@ -581,10 +590,13 @@ class _LoginScreenState extends ConsumerState<LoginScreen> {
                             canSubmit: () => _canSubmit,
                             onRequestPhoneHint: _requestPhoneNumberHint,
                             acceptedTerms: _acceptedTerms,
+                            confirmedAdult: _confirmedAdult,
                             optInCrowdsource: _optInCrowdsource,
                             optInMarketing: _optInMarketing,
                             onAcceptedTermsChanged: (v) =>
                                 setState(() => _acceptedTerms = v),
+                            onConfirmedAdultChanged: (v) =>
+                                setState(() => _confirmedAdult = v),
                             onOptInCrowdsourceChanged: (v) =>
                                 setState(() => _optInCrowdsource = v),
                             onOptInMarketingChanged: (v) =>
@@ -754,9 +766,11 @@ class _IdentifierStep extends StatelessWidget {
   /// A4 — sign-up only. See _LoginScreenState's own fields for what each
   /// means; this widget just renders/reports them, LoginScreen owns state.
   final bool acceptedTerms;
+  final bool confirmedAdult;
   final bool optInCrowdsource;
   final bool optInMarketing;
   final ValueChanged<bool> onAcceptedTermsChanged;
+  final ValueChanged<bool> onConfirmedAdultChanged;
   final ValueChanged<bool> onOptInCrowdsourceChanged;
   final ValueChanged<bool> onOptInMarketingChanged;
 
@@ -771,9 +785,11 @@ class _IdentifierStep extends StatelessWidget {
     required this.canSubmit,
     required this.onRequestPhoneHint,
     required this.acceptedTerms,
+    required this.confirmedAdult,
     required this.optInCrowdsource,
     required this.optInMarketing,
     required this.onAcceptedTermsChanged,
+    required this.onConfirmedAdultChanged,
     required this.onOptInCrowdsourceChanged,
     required this.onOptInMarketingChanged,
   });
@@ -855,6 +871,12 @@ class _IdentifierStep extends StatelessWidget {
                   onChanged: onAcceptedTermsChanged,
                   label: 'I agree to the Terms & Privacy Policy',
                   subtitle: 'Required to create an account.',
+                ),
+                _ConsentCheckbox(
+                  value: confirmedAdult,
+                  onChanged: onConfirmedAdultChanged,
+                  label: 'I am 18 or older.',
+                  subtitle: 'Required. PandaPay is only for adults.',
                 ),
                 _ConsentCheckbox(
                   value: optInCrowdsource,
