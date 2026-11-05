@@ -1,0 +1,281 @@
+{
+  "source_slug": "hsbc-live-plus-credit-card",
+  "cardpipeline_id": "hsbc-live-credit-card",
+  "card_name": "HSBC Live+ Credit Card",
+  "verified_on": "2026-11-05",
+  "sources": [
+    {
+      "url": "https://www.hsbc.bank.in/credit-cards/products/live-plus/",
+      "doc": "HSBC Live+ page",
+      "quote": "10% cashback, up to INR1,200 a month, on all dining, food delivery, grocery, shopping and utility spends"
+    },
+    {
+      "url": "https://www.hsbc.co.in/content/dam/hsbc/in/documents/credit-cards/live-plus-credit-card-services-guide.pdf",
+      "doc": "Live+ services guide",
+      "quote": "Shopping spends on Amazon, Flipkart & Myntra merchants continue to earn 1.5% cashback"
+    },
+    {
+      "url": "https://www.hsbc.bank.in/credit-cards/products/live-plus/",
+      "doc": "HSBC Live+ page worked example",
+      "quote": "The 10% tier totals INR41,500 and earns INR4,150, capped at INR1,200"
+    }
+  ],
+  "examples": [
+    {
+      "id": "001",
+      "title": "Rs 2,000 restaurant bill",
+      "ctx": {
+        "amount": 2000,
+        "occurred": "2026-11-10T10:00:00+05:30",
+        "category_id": null,
+        "category_slug": "dining",
+        "mcc": "5812",
+        "merchant_name": "Restaurant",
+        "merchant_vpa": null,
+        "merchant_slug": null,
+        "platform": null,
+        "rail": "swipe"
+      },
+      "state_before": {
+        "caps_by_source_id": {}
+      },
+      "expect": {
+        "currency": "cashback_inr",
+        "amount": 200,
+        "value_inr": null,
+        "excluded": false,
+        "cap_deltas_by_source_id": {
+          "liveplus-accelerated-cap": 200
+        }
+      },
+      "why": "10% cashback on dining: 2000 x 10% = 200, counts towards the Rs 1,200 per month cap on the 10% tier."
+    },
+    {
+      "id": "002",
+      "title": "Rs 5,000 grocery spend",
+      "ctx": {
+        "amount": 5000,
+        "occurred": "2026-11-10T10:00:00+05:30",
+        "category_id": null,
+        "category_slug": "groceries",
+        "mcc": "5411",
+        "merchant_name": "Supermarket",
+        "merchant_vpa": null,
+        "merchant_slug": null,
+        "platform": null,
+        "rail": "swipe"
+      },
+      "state_before": {
+        "caps_by_source_id": {}
+      },
+      "expect": {
+        "currency": "cashback_inr",
+        "amount": 500,
+        "value_inr": null,
+        "excluded": false,
+        "cap_deltas_by_source_id": {
+          "liveplus-accelerated-cap": 500
+        }
+      },
+      "why": "10% on grocery: 500, counts to the Rs 1,200 per month limit."
+    },
+    {
+      "id": "003",
+      "title": "Rs 10,000 other spend (hotel)",
+      "ctx": {
+        "amount": 10000,
+        "occurred": "2026-11-10T10:00:00+05:30",
+        "category_id": null,
+        "category_slug": "other",
+        "mcc": "7011",
+        "merchant_name": "Hotel",
+        "merchant_vpa": null,
+        "merchant_slug": null,
+        "platform": null,
+        "rail": "swipe"
+      },
+      "state_before": {
+        "caps_by_source_id": {}
+      },
+      "expect": {
+        "currency": "cashback_inr",
+        "amount": 150,
+        "value_inr": null,
+        "excluded": false,
+        "cap_deltas_by_source_id": {}
+      },
+      "why": "1.5% unlimited on most other spends: 10,000 x 1.5% = 150."
+    },
+    {
+      "id": "004",
+      "title": "Rs 2,000 dining with Rs 1,100 of the 10% cap already earned",
+      "ctx": {
+        "amount": 2000,
+        "occurred": "2026-11-10T10:00:00+05:30",
+        "category_id": null,
+        "category_slug": "dining",
+        "mcc": "5812",
+        "merchant_name": "Restaurant",
+        "merchant_vpa": null,
+        "merchant_slug": null,
+        "platform": null,
+        "rail": "swipe"
+      },
+      "state_before": {
+        "caps_by_source_id": {
+          "liveplus-accelerated-cap": 1100
+        }
+      },
+      "expect": {
+        "currency": "cashback_inr",
+        "amount": 100,
+        "value_inr": null,
+        "excluded": false,
+        "cap_deltas_by_source_id": {
+          "liveplus-accelerated-cap": 100
+        }
+      },
+      "why": "10% would be 200 but only Rs 100 of the Rs 1,200 monthly cap remains."
+    },
+    {
+      "id": "005",
+      "title": "Rs 2,000 dining after the Rs 1,200 monthly cap is used",
+      "ctx": {
+        "amount": 2000,
+        "occurred": "2026-11-10T10:00:00+05:30",
+        "category_id": null,
+        "category_slug": "dining",
+        "mcc": "5812",
+        "merchant_name": "Restaurant",
+        "merchant_vpa": null,
+        "merchant_slug": null,
+        "platform": null,
+        "rail": "swipe"
+      },
+      "state_before": {
+        "caps_by_source_id": {
+          "liveplus-accelerated-cap": 1200
+        }
+      },
+      "expect": {
+        "currency": "cashback_inr",
+        "amount": 0,
+        "value_inr": null,
+        "excluded": false,
+        "cap_deltas_by_source_id": {}
+      },
+      "why": "HSBC worked example: 10% tier Rs 41,500 earns 4,150 capped at 1,200 and the total is 1,200 + 345 (1.5% tier) = 1,545, so spend over the cap earns nothing extra."
+    },
+    {
+      "id": "006",
+      "title": "Rs 3,000 fuel",
+      "ctx": {
+        "amount": 3000,
+        "occurred": "2026-11-10T10:00:00+05:30",
+        "category_id": null,
+        "category_slug": "fuel",
+        "mcc": "5541",
+        "merchant_name": "Fuel station",
+        "merchant_vpa": null,
+        "merchant_slug": null,
+        "platform": null,
+        "rail": "swipe"
+      },
+      "state_before": {
+        "caps_by_source_id": {}
+      },
+      "expect": {
+        "currency": "cashback_inr",
+        "amount": 0,
+        "value_inr": null,
+        "excluded": true,
+        "cap_deltas_by_source_id": {}
+      },
+      "why": "The page example table shows 0% cashback on fuel."
+    },
+    {
+      "id": "007",
+      "title": "Rs 20,000 rent payment",
+      "ctx": {
+        "amount": 20000,
+        "occurred": "2026-11-10T10:00:00+05:30",
+        "category_id": null,
+        "category_slug": "rent",
+        "mcc": "6513",
+        "merchant_name": "Rent payment",
+        "merchant_vpa": null,
+        "merchant_slug": null,
+        "platform": null,
+        "rail": "online"
+      },
+      "state_before": {
+        "caps_by_source_id": {}
+      },
+      "expect": {
+        "currency": "cashback_inr",
+        "amount": 0,
+        "value_inr": null,
+        "excluded": true,
+        "cap_deltas_by_source_id": {}
+      },
+      "why": "Rent and property payments are in the excluded categories."
+    },
+    {
+      "id": "008",
+      "title": "Rs 10,000 insurance premium",
+      "ctx": {
+        "amount": 10000,
+        "occurred": "2026-11-10T10:00:00+05:30",
+        "category_id": null,
+        "category_slug": "insurance",
+        "mcc": "6300",
+        "merchant_name": "Insurer",
+        "merchant_vpa": null,
+        "merchant_slug": null,
+        "platform": null,
+        "rail": "online"
+      },
+      "state_before": {
+        "caps_by_source_id": {}
+      },
+      "expect": {
+        "currency": "cashback_inr",
+        "amount": 0,
+        "value_inr": null,
+        "excluded": true,
+        "cap_deltas_by_source_id": {}
+      },
+      "why": "Insurance is in the excluded categories."
+    }
+  ],
+  "research_notes": [
+    {
+      "item": "10% cap",
+      "cardpipeline_says": "liveplus-accelerated-cap: eligible_spend Rs 10,000 per statement cycle, then base 1.5%",
+      "issuer_says": "Issuer: 10% cashback up to INR 1,200 a month (cashback, not spend). Spend above the cap earns nothing extra per the HSBC worked example.",
+      "proposed_fix": "override",
+      "override_file": "api/scripts/catalogue_overrides/hsbc-live-plus-credit-card.json"
+    },
+    {
+      "item": "10% categories",
+      "cardpipeline_says": "MCC list of dining, food and grocery only",
+      "issuer_says": "Issuer page and guide say 10% applies to dining, food delivery, grocery, shopping and utility spends; \"shopping\" is not defined, with Amazon, Flipkart and Myntra excluded from the 10%. CardPipeline omits shopping and utility, which under-states the card; left unmodelled (never widen).",
+      "proposed_fix": "none",
+      "override_file": null
+    },
+    {
+      "item": "international",
+      "cardpipeline_says": "base 1.5% on all",
+      "issuer_says": "Guide: 1.5% cashback will no longer be earned on international spends (forex markup 1.99%, lounge changes from 1 Sep 2026).",
+      "proposed_fix": "importer: international exclusion needs a currency/geography field",
+      "override_file": null
+    },
+    {
+      "item": "rounding",
+      "cardpipeline_says": "rounding_mode N/A",
+      "issuer_says": "Not stated.",
+      "proposed_fix": "none",
+      "override_file": null
+    }
+  ]
+}
