@@ -1,0 +1,975 @@
+{
+  "generated_by": "api/scripts/catalogue_v2/snapshot_examples.js",
+  "source_slug": "phonepe-hdfc-bank-ultimo",
+  "inputs": {
+    "transform_version": "7",
+    "source_record_sha256": "47c8726d4469931a2d489c3e07278a9e69e665eb0946398eed2b6679be43705d",
+    "override_sha256": "0806cb63abb7b53a6f52c125b24344bc60fd45ea8f9383a3cd18c20ffa343f3a",
+    "directory_sha256": "c2fded34df886aef08595eebb7629a4dd140c98af750f3c891d6c291b4874b53",
+    "verified": false
+  },
+  "blocking_flags": [
+    "info_rule",
+    "post_limit_conflict",
+    "orphan_cap"
+  ],
+  "card": {
+    "id": "phonepe-hdfc-bank-ultimo:card",
+    "slug": "phonepe-hdfc-bank-ultimo",
+    "name": "PhonePe\n HDFC Bank Ultimo Credit Card",
+    "network": "rupay",
+    "issuer_slug": "hdfc",
+    "base_reward_unit": "points_per_100",
+    "base_reward_rate": 0,
+    "point_value_inr": 1,
+    "excluded_categories": [],
+    "accrual_block_inr": 100,
+    "accrual_rounding": "floor",
+    "cashback_rounding": null,
+    "points_expiry_months": 24,
+    "model_status": "partial",
+    "model_coverage": {
+      "rules_total": 16,
+      "rules_modelled": 10,
+      "rules_info": 6,
+      "caps_total": 4,
+      "caps_enforced": 2,
+      "flags": [
+        {
+          "code": "info_rule",
+          "source_local_id": "exclude_gift_cards",
+          "detail": "unmapped_condition_category:category"
+        },
+        {
+          "code": "info_rule",
+          "source_local_id": "exclude_gift_cards",
+          "detail": "unmapped_category_token"
+        },
+        {
+          "code": "exclusion_scope_broadened",
+          "source_local_id": "exclude_cash_advance",
+          "detail": null
+        },
+        {
+          "code": "info_rule",
+          "source_local_id": "exclude_cc_bill_payment",
+          "detail": "unmapped_condition_category:category"
+        },
+        {
+          "code": "info_rule",
+          "source_local_id": "exclude_fees",
+          "detail": "unmapped_condition_category:category"
+        },
+        {
+          "code": "exclusion_scope_broadened",
+          "source_local_id": "exclude_education",
+          "detail": null
+        },
+        {
+          "code": "info_rule",
+          "source_local_id": "exclude_investments",
+          "detail": "unmapped_condition_category:category"
+        },
+        {
+          "code": "info_rule",
+          "source_local_id": "exclude_investments",
+          "detail": "unmapped_category_token"
+        },
+        {
+          "code": "info_rule",
+          "source_local_id": "exclude_jewellery",
+          "detail": "unmapped_condition_category:category"
+        },
+        {
+          "code": "info_rule",
+          "source_local_id": "exclude_jewellery",
+          "detail": "unmapped_category_token"
+        },
+        {
+          "code": "partial_category_list",
+          "source_local_id": "phonepe_categories_10pct",
+          "detail": null
+        },
+        {
+          "code": "token_replaced_by_conditions",
+          "source_local_id": "phonepe_categories_10pct",
+          "detail": null
+        },
+        {
+          "code": "narrow_token_to_mcc",
+          "source_local_id": "phonepe_categories_10pct",
+          "detail": null
+        },
+        {
+          "code": "token_replaced_by_conditions",
+          "source_local_id": "online_brands_5pct",
+          "detail": null
+        },
+        {
+          "code": "info_rule",
+          "source_local_id": "scan_pay_1pct",
+          "detail": "condition:merchant_payment"
+        },
+        {
+          "code": "info_rule",
+          "source_local_id": "scan_pay_1pct",
+          "detail": "transaction_type"
+        },
+        {
+          "code": "post_limit_conflict",
+          "source_local_id": "phonepe_categories_monthly_cap",
+          "detail": null
+        },
+        {
+          "code": "post_limit_conflict",
+          "source_local_id": "online_brands_monthly_cap",
+          "detail": null
+        },
+        {
+          "code": "post_limit_conflict",
+          "source_local_id": "upi_scan_pay_monthly_cap",
+          "detail": null
+        },
+        {
+          "code": "cap_targets_info_only",
+          "source_local_id": "upi_scan_pay_monthly_cap",
+          "detail": null
+        },
+        {
+          "code": "orphan_cap",
+          "source_local_id": "overall_monthly_reward_cap",
+          "detail": null
+        }
+      ],
+      "overrides_applied": [
+        {
+          "path": "reward_rules[id=phonepe_categories_10pct].conditions.mcc",
+          "op": "set",
+          "value_sha256": "da7b0d0d2595a8bf",
+          "reason": "Issuer MCC list excludes 5262 and 7999.",
+          "source_url": "https://www.hdfc.bank.in/content/dam/hdfcbankpws/in/en/personal-banking/discover-products/cards/credit-cards/phonepe-hdfc-bank-ultimo-credit-card/phonepe-hdfc-bank-ultimo-cc-reward-points-tncs.pdf",
+          "checked_on": "2026-11-05"
+        }
+      ]
+    },
+    "reward_rules": [
+      {
+        "id": "phonepe-hdfc-bank-ultimo:rule:exclude_emi",
+        "category_id": "cat-emi",
+        "category_slug": "emi",
+        "merchant_pattern": null,
+        "rail": "emi",
+        "unit": "points_per_100",
+        "rate": 0,
+        "min_txn_inr": null,
+        "max_txn_inr": null,
+        "priority": 1,
+        "conditions": {
+          "source_local_id": "exclude_emi",
+          "part": null,
+          "info_reasons": [],
+          "flags": []
+        },
+        "notes": null,
+        "effective_from": "2025-06-10",
+        "effective_to": null,
+        "excluded_categories": [],
+        "rule_role": "exclusion",
+        "merchant_slugs": [],
+        "platform_slugs": [],
+        "mcc_include": [],
+        "mcc_exclude": [],
+        "except_merchant_slugs": [],
+        "except_platform_slugs": [],
+        "block_inr": null,
+        "min_engine_version": 1,
+        "max_engine_version": null,
+        "source_local_id": "exclude_emi",
+        "display_note": "No Reward Points on EMI transactions."
+      },
+      {
+        "id": "phonepe-hdfc-bank-ultimo:rule:exclude_fuel",
+        "category_id": "cat-fuel",
+        "category_slug": "fuel",
+        "merchant_pattern": null,
+        "rail": null,
+        "unit": "points_per_100",
+        "rate": 0,
+        "min_txn_inr": null,
+        "max_txn_inr": null,
+        "priority": 1,
+        "conditions": {
+          "source_local_id": "exclude_fuel",
+          "part": null,
+          "info_reasons": [],
+          "flags": []
+        },
+        "notes": null,
+        "effective_from": "2025-06-10",
+        "effective_to": null,
+        "excluded_categories": [],
+        "rule_role": "exclusion",
+        "merchant_slugs": [],
+        "platform_slugs": [],
+        "mcc_include": [],
+        "mcc_exclude": [],
+        "except_merchant_slugs": [],
+        "except_platform_slugs": [],
+        "block_inr": null,
+        "min_engine_version": 1,
+        "max_engine_version": null,
+        "source_local_id": "exclude_fuel",
+        "display_note": "No Reward Points on fuel transactions."
+      },
+      {
+        "id": "phonepe-hdfc-bank-ultimo:rule:exclude_wallet",
+        "category_id": "cat-wallet",
+        "category_slug": "wallet",
+        "merchant_pattern": null,
+        "rail": null,
+        "unit": "points_per_100",
+        "rate": 0,
+        "min_txn_inr": null,
+        "max_txn_inr": null,
+        "priority": 1,
+        "conditions": {
+          "source_local_id": "exclude_wallet",
+          "part": null,
+          "info_reasons": [],
+          "flags": []
+        },
+        "notes": null,
+        "effective_from": "2025-06-10",
+        "effective_to": null,
+        "excluded_categories": [],
+        "rule_role": "exclusion",
+        "merchant_slugs": [],
+        "platform_slugs": [],
+        "mcc_include": [],
+        "mcc_exclude": [],
+        "except_merchant_slugs": [],
+        "except_platform_slugs": [],
+        "block_inr": null,
+        "min_engine_version": 1,
+        "max_engine_version": null,
+        "source_local_id": "exclude_wallet",
+        "display_note": "No Reward Points on wallet loads."
+      },
+      {
+        "id": "phonepe-hdfc-bank-ultimo:rule:exclude_gift_cards",
+        "category_id": null,
+        "category_slug": null,
+        "merchant_pattern": null,
+        "rail": null,
+        "unit": "points_per_100",
+        "rate": 0,
+        "min_txn_inr": null,
+        "max_txn_inr": null,
+        "priority": 1,
+        "conditions": {
+          "source_local_id": "exclude_gift_cards",
+          "part": null,
+          "info_reasons": [
+            "unmapped_condition_category:category",
+            "unmapped_category_token"
+          ],
+          "flags": []
+        },
+        "notes": null,
+        "effective_from": "2025-06-10",
+        "effective_to": null,
+        "excluded_categories": [],
+        "rule_role": "info",
+        "merchant_slugs": [],
+        "platform_slugs": [],
+        "mcc_include": [],
+        "mcc_exclude": [],
+        "except_merchant_slugs": [],
+        "except_platform_slugs": [],
+        "block_inr": null,
+        "min_engine_version": 2,
+        "max_engine_version": null,
+        "source_local_id": "exclude_gift_cards",
+        "display_note": "No Reward Points on gift card transactions."
+      },
+      {
+        "id": "phonepe-hdfc-bank-ultimo:rule:exclude_cash_advance",
+        "category_id": null,
+        "category_slug": null,
+        "merchant_pattern": null,
+        "rail": "atm",
+        "unit": "points_per_100",
+        "rate": 0,
+        "min_txn_inr": null,
+        "max_txn_inr": null,
+        "priority": 1,
+        "conditions": {
+          "source_local_id": "exclude_cash_advance",
+          "part": null,
+          "info_reasons": [],
+          "flags": [
+            "exclusion_scope_broadened"
+          ]
+        },
+        "notes": null,
+        "effective_from": "2025-06-10",
+        "effective_to": null,
+        "excluded_categories": [],
+        "rule_role": "exclusion",
+        "merchant_slugs": [],
+        "platform_slugs": [],
+        "mcc_include": [],
+        "mcc_exclude": [],
+        "except_merchant_slugs": [],
+        "except_platform_slugs": [],
+        "block_inr": null,
+        "min_engine_version": 2,
+        "max_engine_version": null,
+        "source_local_id": "exclude_cash_advance",
+        "display_note": "No Reward Points on cash advances."
+      },
+      {
+        "id": "phonepe-hdfc-bank-ultimo:rule:exclude_cc_bill_payment",
+        "category_id": null,
+        "category_slug": null,
+        "merchant_pattern": null,
+        "rail": null,
+        "unit": "points_per_100",
+        "rate": 0,
+        "min_txn_inr": null,
+        "max_txn_inr": null,
+        "priority": 1,
+        "conditions": {
+          "source_local_id": "exclude_cc_bill_payment",
+          "part": null,
+          "info_reasons": [
+            "unmapped_condition_category:category"
+          ],
+          "flags": []
+        },
+        "notes": null,
+        "effective_from": "2025-06-10",
+        "effective_to": null,
+        "excluded_categories": [],
+        "rule_role": "info",
+        "merchant_slugs": [],
+        "platform_slugs": [],
+        "mcc_include": [],
+        "mcc_exclude": [],
+        "except_merchant_slugs": [],
+        "except_platform_slugs": [],
+        "block_inr": null,
+        "min_engine_version": 2,
+        "max_engine_version": null,
+        "source_local_id": "exclude_cc_bill_payment",
+        "display_note": "No Reward Points on credit card bill payments."
+      },
+      {
+        "id": "phonepe-hdfc-bank-ultimo:rule:exclude_fees",
+        "category_id": null,
+        "category_slug": null,
+        "merchant_pattern": null,
+        "rail": null,
+        "unit": "points_per_100",
+        "rate": 0,
+        "min_txn_inr": null,
+        "max_txn_inr": null,
+        "priority": 1,
+        "conditions": {
+          "source_local_id": "exclude_fees",
+          "part": null,
+          "info_reasons": [
+            "unmapped_condition_category:category"
+          ],
+          "flags": []
+        },
+        "notes": null,
+        "effective_from": "2025-06-10",
+        "effective_to": null,
+        "excluded_categories": [],
+        "rule_role": "info",
+        "merchant_slugs": [],
+        "platform_slugs": [],
+        "mcc_include": [],
+        "mcc_exclude": [],
+        "except_merchant_slugs": [],
+        "except_platform_slugs": [],
+        "block_inr": null,
+        "min_engine_version": 2,
+        "max_engine_version": null,
+        "source_local_id": "exclude_fees",
+        "display_note": "No Reward Points on card fees and charges."
+      },
+      {
+        "id": "phonepe-hdfc-bank-ultimo:rule:exclude_government",
+        "category_id": "cat-government",
+        "category_slug": "government",
+        "merchant_pattern": null,
+        "rail": null,
+        "unit": "points_per_100",
+        "rate": 0,
+        "min_txn_inr": null,
+        "max_txn_inr": null,
+        "priority": 1,
+        "conditions": {
+          "source_local_id": "exclude_government",
+          "part": null,
+          "info_reasons": [],
+          "flags": []
+        },
+        "notes": null,
+        "effective_from": "2025-06-10",
+        "effective_to": null,
+        "excluded_categories": [],
+        "rule_role": "exclusion",
+        "merchant_slugs": [],
+        "platform_slugs": [],
+        "mcc_include": [],
+        "mcc_exclude": [],
+        "except_merchant_slugs": [],
+        "except_platform_slugs": [],
+        "block_inr": null,
+        "min_engine_version": 1,
+        "max_engine_version": null,
+        "source_local_id": "exclude_government",
+        "display_note": "No Reward Points on government payments."
+      },
+      {
+        "id": "phonepe-hdfc-bank-ultimo:rule:exclude_rent",
+        "category_id": "cat-rent",
+        "category_slug": "rent",
+        "merchant_pattern": null,
+        "rail": null,
+        "unit": "points_per_100",
+        "rate": 0,
+        "min_txn_inr": null,
+        "max_txn_inr": null,
+        "priority": 1,
+        "conditions": {
+          "source_local_id": "exclude_rent",
+          "part": null,
+          "info_reasons": [],
+          "flags": []
+        },
+        "notes": null,
+        "effective_from": "2025-06-10",
+        "effective_to": null,
+        "excluded_categories": [],
+        "rule_role": "exclusion",
+        "merchant_slugs": [],
+        "platform_slugs": [],
+        "mcc_include": [],
+        "mcc_exclude": [],
+        "except_merchant_slugs": [],
+        "except_platform_slugs": [],
+        "block_inr": null,
+        "min_engine_version": 1,
+        "max_engine_version": null,
+        "source_local_id": "exclude_rent",
+        "display_note": "No Reward Points on rental transactions."
+      },
+      {
+        "id": "phonepe-hdfc-bank-ultimo:rule:exclude_education",
+        "category_id": "cat-education",
+        "category_slug": "education",
+        "merchant_pattern": null,
+        "rail": null,
+        "unit": "points_per_100",
+        "rate": 0,
+        "min_txn_inr": null,
+        "max_txn_inr": null,
+        "priority": 1,
+        "conditions": {
+          "source_local_id": "exclude_education",
+          "part": null,
+          "info_reasons": [],
+          "flags": [
+            "exclusion_scope_broadened"
+          ]
+        },
+        "notes": null,
+        "effective_from": "2025-06-10",
+        "effective_to": null,
+        "excluded_categories": [],
+        "rule_role": "exclusion",
+        "merchant_slugs": [],
+        "platform_slugs": [],
+        "mcc_include": [],
+        "mcc_exclude": [],
+        "except_merchant_slugs": [],
+        "except_platform_slugs": [],
+        "block_inr": null,
+        "min_engine_version": 1,
+        "max_engine_version": null,
+        "source_local_id": "exclude_education",
+        "display_note": "No Reward Points on education fees."
+      },
+      {
+        "id": "phonepe-hdfc-bank-ultimo:rule:exclude_insurance",
+        "category_id": "cat-insurance",
+        "category_slug": "insurance",
+        "merchant_pattern": null,
+        "rail": null,
+        "unit": "points_per_100",
+        "rate": 0,
+        "min_txn_inr": null,
+        "max_txn_inr": null,
+        "priority": 1,
+        "conditions": {
+          "source_local_id": "exclude_insurance",
+          "part": null,
+          "info_reasons": [],
+          "flags": []
+        },
+        "notes": null,
+        "effective_from": "2025-06-10",
+        "effective_to": null,
+        "excluded_categories": [],
+        "rule_role": "exclusion",
+        "merchant_slugs": [],
+        "platform_slugs": [],
+        "mcc_include": [],
+        "mcc_exclude": [],
+        "except_merchant_slugs": [],
+        "except_platform_slugs": [],
+        "block_inr": null,
+        "min_engine_version": 1,
+        "max_engine_version": null,
+        "source_local_id": "exclude_insurance",
+        "display_note": "No Reward Points on insurance transactions."
+      },
+      {
+        "id": "phonepe-hdfc-bank-ultimo:rule:exclude_investments",
+        "category_id": null,
+        "category_slug": null,
+        "merchant_pattern": null,
+        "rail": null,
+        "unit": "points_per_100",
+        "rate": 0,
+        "min_txn_inr": null,
+        "max_txn_inr": null,
+        "priority": 1,
+        "conditions": {
+          "source_local_id": "exclude_investments",
+          "part": null,
+          "info_reasons": [
+            "unmapped_condition_category:category",
+            "unmapped_category_token"
+          ],
+          "flags": []
+        },
+        "notes": null,
+        "effective_from": "2025-06-10",
+        "effective_to": null,
+        "excluded_categories": [],
+        "rule_role": "info",
+        "merchant_slugs": [],
+        "platform_slugs": [],
+        "mcc_include": [],
+        "mcc_exclude": [],
+        "except_merchant_slugs": [],
+        "except_platform_slugs": [],
+        "block_inr": null,
+        "min_engine_version": 2,
+        "max_engine_version": null,
+        "source_local_id": "exclude_investments",
+        "display_note": "No Reward Points on investment transactions."
+      },
+      {
+        "id": "phonepe-hdfc-bank-ultimo:rule:exclude_jewellery",
+        "category_id": null,
+        "category_slug": null,
+        "merchant_pattern": null,
+        "rail": null,
+        "unit": "points_per_100",
+        "rate": 0,
+        "min_txn_inr": null,
+        "max_txn_inr": null,
+        "priority": 1,
+        "conditions": {
+          "source_local_id": "exclude_jewellery",
+          "part": null,
+          "info_reasons": [
+            "unmapped_condition_category:category",
+            "unmapped_category_token"
+          ],
+          "flags": []
+        },
+        "notes": null,
+        "effective_from": "2025-06-10",
+        "effective_to": null,
+        "excluded_categories": [],
+        "rule_role": "info",
+        "merchant_slugs": [],
+        "platform_slugs": [],
+        "mcc_include": [],
+        "mcc_exclude": [],
+        "except_merchant_slugs": [],
+        "except_platform_slugs": [],
+        "block_inr": null,
+        "min_engine_version": 2,
+        "max_engine_version": null,
+        "source_local_id": "exclude_jewellery",
+        "display_note": "No Reward Points on jewellery purchases."
+      },
+      {
+        "id": "phonepe-hdfc-bank-ultimo:rule:phonepe_categories_10pct",
+        "category_id": null,
+        "category_slug": null,
+        "merchant_pattern": null,
+        "rail": null,
+        "unit": "points_per_100",
+        "rate": 10,
+        "min_txn_inr": null,
+        "max_txn_inr": null,
+        "priority": 2,
+        "conditions": {
+          "source_local_id": "phonepe_categories_10pct",
+          "part": null,
+          "info_reasons": [],
+          "flags": [
+            "partial_category_list",
+            "token_replaced_by_conditions",
+            "narrow_token_to_mcc"
+          ]
+        },
+        "notes": null,
+        "effective_from": "2026-08-01",
+        "effective_to": null,
+        "excluded_categories": [],
+        "rule_role": "earn",
+        "merchant_slugs": [],
+        "platform_slugs": [
+          "phonepe_app"
+        ],
+        "mcc_include": [
+          "4111",
+          "4112",
+          "4511",
+          "4722",
+          "4784",
+          "4814",
+          "4899",
+          "4900"
+        ],
+        "mcc_exclude": [],
+        "except_merchant_slugs": [],
+        "except_platform_slugs": [],
+        "block_inr": null,
+        "min_engine_version": 2,
+        "max_engine_version": null,
+        "source_local_id": "phonepe_categories_10pct",
+        "display_note": "10 Reward Points per ₹100 on eligible PhonePe categories. The formerly listed Pincode reward was time-limited and is not treated as a current permanent benefit."
+      },
+      {
+        "id": "phonepe-hdfc-bank-ultimo:rule:online_brands_5pct",
+        "category_id": null,
+        "category_slug": null,
+        "merchant_pattern": null,
+        "rail": "online",
+        "unit": "points_per_100",
+        "rate": 5,
+        "min_txn_inr": null,
+        "max_txn_inr": null,
+        "priority": 3,
+        "conditions": {
+          "source_local_id": "online_brands_5pct",
+          "part": null,
+          "info_reasons": [],
+          "flags": [
+            "token_replaced_by_conditions"
+          ]
+        },
+        "notes": null,
+        "effective_from": "2025-06-10",
+        "effective_to": null,
+        "excluded_categories": [],
+        "rule_role": "earn",
+        "merchant_slugs": [
+          "ajio",
+          "amazon",
+          "flipkart",
+          "myntra",
+          "swiggy",
+          "uber",
+          "zomato"
+        ],
+        "platform_slugs": [],
+        "mcc_include": [
+          "4121",
+          "4214",
+          "5137",
+          "5262",
+          "5311",
+          "5399",
+          "5691",
+          "5699",
+          "5732",
+          "5811",
+          "5812",
+          "5814"
+        ],
+        "mcc_exclude": [],
+        "except_merchant_slugs": [],
+        "except_platform_slugs": [],
+        "block_inr": null,
+        "min_engine_version": 2,
+        "max_engine_version": null,
+        "source_local_id": "online_brands_5pct",
+        "display_note": "5 Reward Points per ₹100 on eligible listed online brands and MCCs."
+      },
+      {
+        "id": "phonepe-hdfc-bank-ultimo:rule:scan_pay_1pct",
+        "category_id": null,
+        "category_slug": null,
+        "merchant_pattern": null,
+        "rail": "upi_qr",
+        "unit": "points_per_100",
+        "rate": 1,
+        "min_txn_inr": null,
+        "max_txn_inr": null,
+        "priority": 4,
+        "conditions": {
+          "source_local_id": "scan_pay_1pct",
+          "part": null,
+          "info_reasons": [
+            "condition:merchant_payment",
+            "transaction_type"
+          ],
+          "flags": []
+        },
+        "notes": null,
+        "effective_from": "2025-06-10",
+        "effective_to": null,
+        "excluded_categories": [],
+        "rule_role": "info",
+        "merchant_slugs": [],
+        "platform_slugs": [],
+        "mcc_include": [],
+        "mcc_exclude": [],
+        "except_merchant_slugs": [],
+        "except_platform_slugs": [],
+        "block_inr": null,
+        "min_engine_version": 2,
+        "max_engine_version": null,
+        "source_local_id": "scan_pay_1pct",
+        "display_note": "1 Reward Point per ₹100 on eligible RuPay Credit Card on UPI Scan & Pay spends."
+      }
+    ],
+    "cap_rules": [
+      {
+        "id": "phonepe-hdfc-bank-ultimo:cap:phonepe_categories_monthly_cap",
+        "reward_rule_id": "phonepe-hdfc-bank-ultimo:rule:phonepe_categories_10pct",
+        "category_id": null,
+        "category_slug": null,
+        "benefit_kind": null,
+        "label": "Phonepe categories monthly cap",
+        "measure": "reward_value",
+        "period": "calendar_month",
+        "cap_value": 1000,
+        "post_cap_unit": null,
+        "post_cap_rate": null,
+        "resets_on_day": 1,
+        "cap_kind": "bonus_points",
+        "cap_amount": 1000,
+        "scope": "targets",
+        "targets": [
+          "phonepe-hdfc-bank-ultimo:rule:phonepe_categories_10pct"
+        ],
+        "parent_cap_id": null,
+        "post_cap_behavior": null,
+        "anchor": null,
+        "min_engine_version": 2,
+        "source_local_id": "phonepe_categories_monthly_cap"
+      },
+      {
+        "id": "phonepe-hdfc-bank-ultimo:cap:online_brands_monthly_cap",
+        "reward_rule_id": "phonepe-hdfc-bank-ultimo:rule:online_brands_5pct",
+        "category_id": null,
+        "category_slug": null,
+        "benefit_kind": null,
+        "label": "Online brands monthly cap",
+        "measure": "reward_value",
+        "period": "calendar_month",
+        "cap_value": 500,
+        "post_cap_unit": null,
+        "post_cap_rate": null,
+        "resets_on_day": 1,
+        "cap_kind": "bonus_points",
+        "cap_amount": 500,
+        "scope": "targets",
+        "targets": [
+          "phonepe-hdfc-bank-ultimo:rule:online_brands_5pct"
+        ],
+        "parent_cap_id": null,
+        "post_cap_behavior": null,
+        "anchor": null,
+        "min_engine_version": 2,
+        "source_local_id": "online_brands_monthly_cap"
+      },
+      {
+        "id": "phonepe-hdfc-bank-ultimo:cap:upi_scan_pay_monthly_cap",
+        "reward_rule_id": "phonepe-hdfc-bank-ultimo:rule:scan_pay_1pct",
+        "category_id": null,
+        "category_slug": null,
+        "benefit_kind": null,
+        "label": "Upi scan pay monthly cap",
+        "measure": "reward_value",
+        "period": "calendar_month",
+        "cap_value": 500,
+        "post_cap_unit": null,
+        "post_cap_rate": null,
+        "resets_on_day": 1,
+        "cap_kind": "bonus_points",
+        "cap_amount": 500,
+        "scope": "targets",
+        "targets": [
+          "phonepe-hdfc-bank-ultimo:rule:scan_pay_1pct"
+        ],
+        "parent_cap_id": null,
+        "post_cap_behavior": null,
+        "anchor": null,
+        "min_engine_version": 2,
+        "source_local_id": "upi_scan_pay_monthly_cap"
+      },
+      {
+        "id": "phonepe-hdfc-bank-ultimo:cap:overall_monthly_reward_cap",
+        "reward_rule_id": null,
+        "category_id": null,
+        "category_slug": null,
+        "benefit_kind": null,
+        "label": "Overall monthly reward cap",
+        "measure": "reward_value",
+        "period": "calendar_month",
+        "cap_value": 2000,
+        "post_cap_unit": null,
+        "post_cap_rate": 0,
+        "resets_on_day": 1,
+        "cap_kind": "total_points",
+        "cap_amount": 2000,
+        "scope": "targets",
+        "targets": [],
+        "parent_cap_id": null,
+        "post_cap_behavior": null,
+        "anchor": null,
+        "min_engine_version": 1,
+        "source_local_id": "overall_monthly_reward_cap"
+      }
+    ],
+    "milestone_rules": [],
+    "fee_waiver_rules": [
+      {
+        "id": "phonepe-hdfc-bank-ultimo:waiver:1",
+        "threshold_spend_inr": 200000,
+        "period": "annual",
+        "waives_fee_inr": 999,
+        "excluded_category_slugs": [
+          "emi"
+        ],
+        "notes": "Annual renewal fee is waived upon ₹2,00,000 eligible spend in the previous year. Cash advances, credit-card fees or charges, all EMI spends, and other categories excluded under Bank internal policies do not count.",
+        "excluded_categories": [
+          "cat-emi"
+        ]
+      }
+    ],
+    "benefits": [
+      {
+        "id": "phonepe-hdfc-bank-ultimo:benefit:domestic_lounge_access",
+        "key": "domestic_lounge_access",
+        "source_local_id": "domestic_lounge_access",
+        "kind": "lounge_domestic",
+        "label": "8 complimentary domestic airport lounge visits per year, 2 per calendar quarter, subject to ₹75,000 spend in the relevant calendar quarter",
+        "description": "Sponsor: HDFC Bank",
+        "quota_count": 2,
+        "quota_period": "quarter",
+        "network_program": "rupay",
+        "value_estimate_inr": null,
+        "conditions": {
+          "source_category_id": "lounge",
+          "evaluation_engine": {
+            "conditions": {
+              "spend_threshold_inr": 75000,
+              "period": "calendar_quarter",
+              "calendar_quarters": [
+                "Jan-Mar",
+                "Apr-Jun",
+                "Jul-Sep",
+                "Oct-Dec"
+              ],
+              "excluded_spend": [
+                "cash advances",
+                "credit card fees or charges",
+                "all EMI spends"
+              ]
+            },
+            "benefit_calculation": {
+              "quota": 2,
+              "quota_period": "quarter",
+              "annual_quota": 8
+            },
+            "perks": [
+              "Domestic airport lounge access via lounge voucher",
+              "Voucher must be validated at the participating lounge"
+            ]
+          }
+        }
+      },
+      {
+        "id": "phonepe-hdfc-bank-ultimo:benefit:insurance:other",
+        "key": "insurance:other",
+        "source_local_id": null,
+        "kind": "other",
+        "label": "Other",
+        "description": "Zero Cost Card Liability is available for fraudulent transactions when reported immediately to HDFC Bank's 24-hour Call Centre; no monetary coverage limit is published.",
+        "quota_count": null,
+        "quota_period": null,
+        "network_program": null,
+        "value_estimate_inr": null,
+        "conditions": {
+          "coverage_usd": null
+        }
+      }
+    ],
+    "unlock_rules": [
+      {
+        "id": "phonepe-hdfc-bank-ultimo:unlock:domestic_lounge_access@1",
+        "card_benefit_id": "phonepe-hdfc-bank-ultimo:benefit:domestic_lounge_access",
+        "kind": "lounge_domestic",
+        "label": "8 complimentary domestic airport lounge visits per year, 2 per calendar quarter, subject to ₹75,000 spend in the relevant calendar quarter",
+        "spend_threshold_inr": 75000,
+        "spend_window": "current_calendar_quarter",
+        "window_days": null,
+        "unlocks_quota": 2,
+        "unlocks_period": "quarter",
+        "tier_label": null,
+        "excluded_category_ids": [],
+        "notes": null,
+        "source_local_id": "domestic_lounge_access"
+      }
+    ],
+    "redemption_options": [
+      {
+        "program_name": "HDFC Bank NetBanking",
+        "method": "statement_credit",
+        "value_per_point_inr": 1,
+        "min_points": 500,
+        "notes": "Redemption fee: ₹0"
+      },
+      {
+        "program_name": "HDFC SmartBuy",
+        "method": "flight_hotel_booking",
+        "value_per_point_inr": 0.3,
+        "min_points": null,
+        "notes": "Redemption fee: ₹99"
+      },
+      {
+        "program_name": "HDFC SmartBuy",
+        "method": "partner_catalogue",
+        "value_per_point_inr": 0.3,
+        "min_points": null,
+        "notes": "Redemption fee: ₹99"
+      }
+    ],
+    "is_upi_linkable": true
+  }
+}

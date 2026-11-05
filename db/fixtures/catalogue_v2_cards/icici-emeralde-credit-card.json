@@ -1,0 +1,1230 @@
+{
+  "generated_by": "api/scripts/catalogue_v2/snapshot_examples.js",
+  "source_slug": "icici-emeralde-credit-card",
+  "inputs": {
+    "transform_version": "7",
+    "source_record_sha256": "53e6e2eb10f4aec6230e9b75a0460d695a1da46374b912cc0a467ffa0bbc1bff",
+    "override_sha256": "890d10b6c5919d2871082f4ac19c208ff48b4f74eaf5af3f66292aab718b3dee",
+    "directory_sha256": "c2fded34df886aef08595eebb7629a4dd140c98af750f3c891d6c291b4874b53",
+    "verified": false
+  },
+  "blocking_flags": [
+    "info_rule"
+  ],
+  "card": {
+    "id": "icici-emeralde-credit-card:card",
+    "slug": "icici-emeralde-credit-card",
+    "name": "Emeralde Credit Card",
+    "network": "unknown",
+    "issuer_slug": "icici-bank",
+    "base_reward_unit": "points_per_100",
+    "base_reward_rate": 4,
+    "point_value_inr": 0.25,
+    "excluded_categories": [],
+    "accrual_block_inr": 100,
+    "accrual_rounding": "floor",
+    "cashback_rounding": null,
+    "points_expiry_months": 36,
+    "model_status": "partial",
+    "model_coverage": {
+      "rules_total": 12,
+      "rules_modelled": 10,
+      "rules_info": 2,
+      "caps_total": 4,
+      "caps_enforced": 4,
+      "flags": [
+        {
+          "code": "mcc_scoped_exclusion",
+          "source_local_id": "fuel_zero_reward",
+          "detail": null
+        },
+        {
+          "code": "mcc_scoped_exclusion",
+          "source_local_id": "rent_zero_reward",
+          "detail": null
+        },
+        {
+          "code": "mcc_scoped_exclusion",
+          "source_local_id": "wallet_zero_reward",
+          "detail": null
+        },
+        {
+          "code": "exclusion_scope_broadened",
+          "source_local_id": "cash_advance_zero_reward",
+          "detail": null
+        },
+        {
+          "code": "info_rule",
+          "source_local_id": "education_direct_standard",
+          "detail": "condition:channel_type"
+        },
+        {
+          "code": "exclusion_scope_broadened",
+          "source_local_id": "education_third_party_zero_reward",
+          "detail": null
+        },
+        {
+          "code": "info_rule",
+          "source_local_id": "fee_interest_zero_reward",
+          "detail": "unrestricted_exclusion"
+        },
+        {
+          "code": "broad_category",
+          "source_local_id": "transport_spend_cap",
+          "detail": null
+        },
+        {
+          "code": "unparsed_unlock",
+          "source_local_id": "unlimited_domestic_lounge",
+          "detail": "mentions spend, no threshold read"
+        }
+      ],
+      "overrides_applied": [
+        {
+          "path": "cap_rules[id=transport_spend_cap].period",
+          "op": "set",
+          "value_sha256": "1aa52872906045f3",
+          "reason": "MITC says reward points accrued per statement cycle are capped on transportation.",
+          "source_url": "https://www.icicibank.com/managed-assets/docs/personal/cards/mitc_cc.pdf",
+          "checked_on": "2026-11-05"
+        }
+      ]
+    },
+    "reward_rules": [
+      {
+        "id": "icici-emeralde-credit-card:rule:retail_standard_4rp_100",
+        "category_id": null,
+        "category_slug": null,
+        "merchant_pattern": null,
+        "rail": null,
+        "unit": "points_per_100",
+        "rate": 4,
+        "min_txn_inr": null,
+        "max_txn_inr": null,
+        "priority": 100,
+        "conditions": {
+          "source_local_id": "retail_standard_4rp_100",
+          "part": null,
+          "info_reasons": [],
+          "flags": []
+        },
+        "notes": null,
+        "effective_from": "2024-11-15",
+        "effective_to": null,
+        "excluded_categories": [],
+        "rule_role": "base",
+        "merchant_slugs": [],
+        "platform_slugs": [],
+        "mcc_include": [],
+        "mcc_exclude": [],
+        "except_merchant_slugs": [],
+        "except_platform_slugs": [],
+        "block_inr": null,
+        "min_engine_version": 1,
+        "max_engine_version": null,
+        "source_local_id": "retail_standard_4rp_100",
+        "display_note": "4 ICICI Bank Reward Points per ₹100"
+      },
+      {
+        "id": "icici-emeralde-credit-card:rule:utility_1rp_100",
+        "category_id": "cat-bills",
+        "category_slug": "bills",
+        "merchant_pattern": null,
+        "rail": null,
+        "unit": "points_per_100",
+        "rate": 1,
+        "min_txn_inr": null,
+        "max_txn_inr": null,
+        "priority": 20,
+        "conditions": {
+          "source_local_id": "utility_1rp_100",
+          "part": null,
+          "info_reasons": [],
+          "flags": []
+        },
+        "notes": null,
+        "effective_from": "2024-11-15",
+        "effective_to": null,
+        "excluded_categories": [],
+        "rule_role": "earn",
+        "merchant_slugs": [],
+        "platform_slugs": [],
+        "mcc_include": [],
+        "mcc_exclude": [],
+        "except_merchant_slugs": [],
+        "except_platform_slugs": [],
+        "block_inr": null,
+        "min_engine_version": 1,
+        "max_engine_version": null,
+        "source_local_id": "utility_1rp_100",
+        "display_note": "1 Reward Point per ₹100"
+      },
+      {
+        "id": "icici-emeralde-credit-card:rule:insurance_1rp_100",
+        "category_id": "cat-insurance",
+        "category_slug": "insurance",
+        "merchant_pattern": null,
+        "rail": null,
+        "unit": "points_per_100",
+        "rate": 1,
+        "min_txn_inr": null,
+        "max_txn_inr": null,
+        "priority": 20,
+        "conditions": {
+          "source_local_id": "insurance_1rp_100",
+          "part": null,
+          "info_reasons": [],
+          "flags": []
+        },
+        "notes": null,
+        "effective_from": "2024-11-15",
+        "effective_to": null,
+        "excluded_categories": [],
+        "rule_role": "earn",
+        "merchant_slugs": [],
+        "platform_slugs": [],
+        "mcc_include": [],
+        "mcc_exclude": [],
+        "except_merchant_slugs": [],
+        "except_platform_slugs": [],
+        "block_inr": null,
+        "min_engine_version": 1,
+        "max_engine_version": null,
+        "source_local_id": "insurance_1rp_100",
+        "display_note": "1 Reward Point per ₹100"
+      },
+      {
+        "id": "icici-emeralde-credit-card:rule:fuel_zero_reward#1",
+        "category_id": "cat-fuel",
+        "category_slug": "fuel",
+        "merchant_pattern": null,
+        "rail": null,
+        "unit": "points_per_100",
+        "rate": 0,
+        "min_txn_inr": null,
+        "max_txn_inr": null,
+        "priority": 1,
+        "conditions": {
+          "source_local_id": "fuel_zero_reward",
+          "part": 1,
+          "info_reasons": [],
+          "flags": [
+            "mcc_scoped_exclusion"
+          ]
+        },
+        "notes": null,
+        "effective_from": "2026-01-15",
+        "effective_to": null,
+        "excluded_categories": [],
+        "rule_role": "exclusion",
+        "merchant_slugs": [],
+        "platform_slugs": [],
+        "mcc_include": [],
+        "mcc_exclude": [],
+        "except_merchant_slugs": [],
+        "except_platform_slugs": [],
+        "block_inr": null,
+        "min_engine_version": 1,
+        "max_engine_version": 1,
+        "source_local_id": "fuel_zero_reward",
+        "display_note": "Fuel transactions do not earn Reward Points."
+      },
+      {
+        "id": "icici-emeralde-credit-card:rule:fuel_zero_reward#2",
+        "category_id": "cat-fuel",
+        "category_slug": "fuel",
+        "merchant_pattern": null,
+        "rail": null,
+        "unit": "points_per_100",
+        "rate": 0,
+        "min_txn_inr": null,
+        "max_txn_inr": null,
+        "priority": 1,
+        "conditions": {
+          "source_local_id": "fuel_zero_reward",
+          "part": 2,
+          "info_reasons": [],
+          "flags": [
+            "mcc_scoped_exclusion"
+          ]
+        },
+        "notes": null,
+        "effective_from": "2026-01-15",
+        "effective_to": null,
+        "excluded_categories": [],
+        "rule_role": "exclusion",
+        "merchant_slugs": [],
+        "platform_slugs": [],
+        "mcc_include": [
+          "1361",
+          "3851",
+          "5172",
+          "5541",
+          "5542",
+          "5555",
+          "5983",
+          "9752"
+        ],
+        "mcc_exclude": [],
+        "except_merchant_slugs": [],
+        "except_platform_slugs": [],
+        "block_inr": null,
+        "min_engine_version": 2,
+        "max_engine_version": null,
+        "source_local_id": "fuel_zero_reward",
+        "display_note": "Fuel transactions do not earn Reward Points."
+      },
+      {
+        "id": "icici-emeralde-credit-card:rule:fuel_zero_reward#3",
+        "category_id": null,
+        "category_slug": null,
+        "merchant_pattern": null,
+        "rail": null,
+        "unit": "points_per_100",
+        "rate": 0,
+        "min_txn_inr": null,
+        "max_txn_inr": null,
+        "priority": 1,
+        "conditions": {
+          "source_local_id": "fuel_zero_reward",
+          "part": 3,
+          "info_reasons": [],
+          "flags": [
+            "mcc_scoped_exclusion"
+          ]
+        },
+        "notes": null,
+        "effective_from": "2026-01-15",
+        "effective_to": null,
+        "excluded_categories": [],
+        "rule_role": "exclusion",
+        "merchant_slugs": [],
+        "platform_slugs": [],
+        "mcc_include": [
+          "1361",
+          "3851",
+          "5172",
+          "5541",
+          "5542",
+          "5555",
+          "5983",
+          "9752"
+        ],
+        "mcc_exclude": [],
+        "except_merchant_slugs": [],
+        "except_platform_slugs": [],
+        "block_inr": null,
+        "min_engine_version": 2,
+        "max_engine_version": null,
+        "source_local_id": "fuel_zero_reward",
+        "display_note": "Fuel transactions do not earn Reward Points."
+      },
+      {
+        "id": "icici-emeralde-credit-card:rule:rent_zero_reward#1",
+        "category_id": "cat-rent",
+        "category_slug": "rent",
+        "merchant_pattern": null,
+        "rail": null,
+        "unit": "points_per_100",
+        "rate": 0,
+        "min_txn_inr": null,
+        "max_txn_inr": null,
+        "priority": 1,
+        "conditions": {
+          "source_local_id": "rent_zero_reward",
+          "part": 1,
+          "info_reasons": [],
+          "flags": [
+            "mcc_scoped_exclusion"
+          ]
+        },
+        "notes": null,
+        "effective_from": "2024-02-05",
+        "effective_to": null,
+        "excluded_categories": [],
+        "rule_role": "exclusion",
+        "merchant_slugs": [],
+        "platform_slugs": [],
+        "mcc_include": [],
+        "mcc_exclude": [],
+        "except_merchant_slugs": [],
+        "except_platform_slugs": [],
+        "block_inr": null,
+        "min_engine_version": 1,
+        "max_engine_version": 1,
+        "source_local_id": "rent_zero_reward",
+        "display_note": "Rent-payment transactions do not earn Reward Points."
+      },
+      {
+        "id": "icici-emeralde-credit-card:rule:rent_zero_reward#2",
+        "category_id": "cat-rent",
+        "category_slug": "rent",
+        "merchant_pattern": null,
+        "rail": null,
+        "unit": "points_per_100",
+        "rate": 0,
+        "min_txn_inr": null,
+        "max_txn_inr": null,
+        "priority": 1,
+        "conditions": {
+          "source_local_id": "rent_zero_reward",
+          "part": 2,
+          "info_reasons": [],
+          "flags": [
+            "mcc_scoped_exclusion"
+          ]
+        },
+        "notes": null,
+        "effective_from": "2024-02-05",
+        "effective_to": null,
+        "excluded_categories": [],
+        "rule_role": "exclusion",
+        "merchant_slugs": [],
+        "platform_slugs": [],
+        "mcc_include": [
+          "6513",
+          "7349"
+        ],
+        "mcc_exclude": [],
+        "except_merchant_slugs": [],
+        "except_platform_slugs": [],
+        "block_inr": null,
+        "min_engine_version": 2,
+        "max_engine_version": null,
+        "source_local_id": "rent_zero_reward",
+        "display_note": "Rent-payment transactions do not earn Reward Points."
+      },
+      {
+        "id": "icici-emeralde-credit-card:rule:rent_zero_reward#3",
+        "category_id": null,
+        "category_slug": null,
+        "merchant_pattern": null,
+        "rail": null,
+        "unit": "points_per_100",
+        "rate": 0,
+        "min_txn_inr": null,
+        "max_txn_inr": null,
+        "priority": 1,
+        "conditions": {
+          "source_local_id": "rent_zero_reward",
+          "part": 3,
+          "info_reasons": [],
+          "flags": [
+            "mcc_scoped_exclusion"
+          ]
+        },
+        "notes": null,
+        "effective_from": "2024-02-05",
+        "effective_to": null,
+        "excluded_categories": [],
+        "rule_role": "exclusion",
+        "merchant_slugs": [],
+        "platform_slugs": [],
+        "mcc_include": [
+          "6513",
+          "7349"
+        ],
+        "mcc_exclude": [],
+        "except_merchant_slugs": [],
+        "except_platform_slugs": [],
+        "block_inr": null,
+        "min_engine_version": 2,
+        "max_engine_version": null,
+        "source_local_id": "rent_zero_reward",
+        "display_note": "Rent-payment transactions do not earn Reward Points."
+      },
+      {
+        "id": "icici-emeralde-credit-card:rule:wallet_zero_reward#1",
+        "category_id": "cat-wallet",
+        "category_slug": "wallet",
+        "merchant_pattern": null,
+        "rail": null,
+        "unit": "points_per_100",
+        "rate": 0,
+        "min_txn_inr": null,
+        "max_txn_inr": null,
+        "priority": 1,
+        "conditions": {
+          "source_local_id": "wallet_zero_reward",
+          "part": 1,
+          "info_reasons": [],
+          "flags": [
+            "mcc_scoped_exclusion"
+          ]
+        },
+        "notes": null,
+        "effective_from": "2024-02-05",
+        "effective_to": null,
+        "excluded_categories": [],
+        "rule_role": "exclusion",
+        "merchant_slugs": [],
+        "platform_slugs": [],
+        "mcc_include": [],
+        "mcc_exclude": [],
+        "except_merchant_slugs": [],
+        "except_platform_slugs": [],
+        "block_inr": null,
+        "min_engine_version": 1,
+        "max_engine_version": 1,
+        "source_local_id": "wallet_zero_reward",
+        "display_note": "Wallet loading transactions do not earn Reward Points."
+      },
+      {
+        "id": "icici-emeralde-credit-card:rule:wallet_zero_reward#2",
+        "category_id": "cat-wallet",
+        "category_slug": "wallet",
+        "merchant_pattern": null,
+        "rail": null,
+        "unit": "points_per_100",
+        "rate": 0,
+        "min_txn_inr": null,
+        "max_txn_inr": null,
+        "priority": 1,
+        "conditions": {
+          "source_local_id": "wallet_zero_reward",
+          "part": 2,
+          "info_reasons": [],
+          "flags": [
+            "mcc_scoped_exclusion"
+          ]
+        },
+        "notes": null,
+        "effective_from": "2024-02-05",
+        "effective_to": null,
+        "excluded_categories": [],
+        "rule_role": "exclusion",
+        "merchant_slugs": [],
+        "platform_slugs": [],
+        "mcc_include": [
+          "6540"
+        ],
+        "mcc_exclude": [],
+        "except_merchant_slugs": [],
+        "except_platform_slugs": [],
+        "block_inr": null,
+        "min_engine_version": 2,
+        "max_engine_version": null,
+        "source_local_id": "wallet_zero_reward",
+        "display_note": "Wallet loading transactions do not earn Reward Points."
+      },
+      {
+        "id": "icici-emeralde-credit-card:rule:wallet_zero_reward#3",
+        "category_id": null,
+        "category_slug": null,
+        "merchant_pattern": null,
+        "rail": null,
+        "unit": "points_per_100",
+        "rate": 0,
+        "min_txn_inr": null,
+        "max_txn_inr": null,
+        "priority": 1,
+        "conditions": {
+          "source_local_id": "wallet_zero_reward",
+          "part": 3,
+          "info_reasons": [],
+          "flags": [
+            "mcc_scoped_exclusion"
+          ]
+        },
+        "notes": null,
+        "effective_from": "2024-02-05",
+        "effective_to": null,
+        "excluded_categories": [],
+        "rule_role": "exclusion",
+        "merchant_slugs": [],
+        "platform_slugs": [],
+        "mcc_include": [
+          "6540"
+        ],
+        "mcc_exclude": [],
+        "except_merchant_slugs": [],
+        "except_platform_slugs": [],
+        "block_inr": null,
+        "min_engine_version": 2,
+        "max_engine_version": null,
+        "source_local_id": "wallet_zero_reward",
+        "display_note": "Wallet loading transactions do not earn Reward Points."
+      },
+      {
+        "id": "icici-emeralde-credit-card:rule:cash_advance_zero_reward",
+        "category_id": null,
+        "category_slug": null,
+        "merchant_pattern": null,
+        "rail": "atm",
+        "unit": "points_per_100",
+        "rate": 0,
+        "min_txn_inr": null,
+        "max_txn_inr": null,
+        "priority": 1,
+        "conditions": {
+          "source_local_id": "cash_advance_zero_reward",
+          "part": null,
+          "info_reasons": [],
+          "flags": [
+            "exclusion_scope_broadened"
+          ]
+        },
+        "notes": null,
+        "effective_from": "2024-02-05",
+        "effective_to": null,
+        "excluded_categories": [],
+        "rule_role": "exclusion",
+        "merchant_slugs": [],
+        "platform_slugs": [],
+        "mcc_include": [],
+        "mcc_exclude": [],
+        "except_merchant_slugs": [],
+        "except_platform_slugs": [],
+        "block_inr": null,
+        "min_engine_version": 2,
+        "max_engine_version": null,
+        "source_local_id": "cash_advance_zero_reward",
+        "display_note": "Cash withdrawals do not earn Reward Points."
+      },
+      {
+        "id": "icici-emeralde-credit-card:rule:emi_zero_reward",
+        "category_id": "cat-emi",
+        "category_slug": "emi",
+        "merchant_pattern": null,
+        "rail": "emi",
+        "unit": "points_per_100",
+        "rate": 0,
+        "min_txn_inr": null,
+        "max_txn_inr": null,
+        "priority": 1,
+        "conditions": {
+          "source_local_id": "emi_zero_reward",
+          "part": null,
+          "info_reasons": [],
+          "flags": []
+        },
+        "notes": null,
+        "effective_from": "2026-01-15",
+        "effective_to": null,
+        "excluded_categories": [],
+        "rule_role": "exclusion",
+        "merchant_slugs": [],
+        "platform_slugs": [],
+        "mcc_include": [],
+        "mcc_exclude": [],
+        "except_merchant_slugs": [],
+        "except_platform_slugs": [],
+        "block_inr": null,
+        "min_engine_version": 1,
+        "max_engine_version": null,
+        "source_local_id": "emi_zero_reward",
+        "display_note": "EMI transactions and transactions converted into EMI do not earn Reward Points."
+      },
+      {
+        "id": "icici-emeralde-credit-card:rule:education_direct_standard",
+        "category_id": "cat-education",
+        "category_slug": "education",
+        "merchant_pattern": null,
+        "rail": null,
+        "unit": "points_per_100",
+        "rate": 4,
+        "min_txn_inr": null,
+        "max_txn_inr": null,
+        "priority": 50,
+        "conditions": {
+          "source_local_id": "education_direct_standard",
+          "part": null,
+          "info_reasons": [
+            "condition:channel_type"
+          ],
+          "flags": []
+        },
+        "notes": null,
+        "effective_from": "2024-11-15",
+        "effective_to": null,
+        "excluded_categories": [],
+        "rule_role": "info",
+        "merchant_slugs": [],
+        "platform_slugs": [],
+        "mcc_include": [],
+        "mcc_exclude": [],
+        "except_merchant_slugs": [],
+        "except_platform_slugs": [],
+        "block_inr": null,
+        "min_engine_version": 2,
+        "max_engine_version": null,
+        "source_local_id": "education_direct_standard",
+        "display_note": "Standard reward rate retained where the direct education transaction is otherwise eligible."
+      },
+      {
+        "id": "icici-emeralde-credit-card:rule:education_third_party_zero_reward",
+        "category_id": "cat-education",
+        "category_slug": "education",
+        "merchant_pattern": null,
+        "rail": "online",
+        "unit": "points_per_100",
+        "rate": 0,
+        "min_txn_inr": null,
+        "max_txn_inr": null,
+        "priority": 1,
+        "conditions": {
+          "source_local_id": "education_third_party_zero_reward",
+          "part": null,
+          "info_reasons": [],
+          "flags": [
+            "exclusion_scope_broadened"
+          ]
+        },
+        "notes": null,
+        "effective_from": "2024-11-15",
+        "effective_to": null,
+        "excluded_categories": [],
+        "rule_role": "exclusion",
+        "merchant_slugs": [],
+        "platform_slugs": [],
+        "mcc_include": [],
+        "mcc_exclude": [],
+        "except_merchant_slugs": [],
+        "except_platform_slugs": [],
+        "block_inr": null,
+        "min_engine_version": 1,
+        "max_engine_version": null,
+        "source_local_id": "education_third_party_zero_reward",
+        "display_note": "Third-party education-app payments are treated as excluded from rewards."
+      },
+      {
+        "id": "icici-emeralde-credit-card:rule:government_zero_reward",
+        "category_id": "cat-government",
+        "category_slug": "government",
+        "merchant_pattern": null,
+        "rail": null,
+        "unit": "points_per_100",
+        "rate": 0,
+        "min_txn_inr": null,
+        "max_txn_inr": null,
+        "priority": 1,
+        "conditions": {
+          "source_local_id": "government_zero_reward",
+          "part": null,
+          "info_reasons": [],
+          "flags": []
+        },
+        "notes": null,
+        "effective_from": "2024-11-15",
+        "effective_to": null,
+        "excluded_categories": [],
+        "rule_role": "exclusion",
+        "merchant_slugs": [],
+        "platform_slugs": [],
+        "mcc_include": [],
+        "mcc_exclude": [],
+        "except_merchant_slugs": [],
+        "except_platform_slugs": [],
+        "block_inr": null,
+        "min_engine_version": 1,
+        "max_engine_version": null,
+        "source_local_id": "government_zero_reward",
+        "display_note": "Government payments are excluded."
+      },
+      {
+        "id": "icici-emeralde-credit-card:rule:fee_interest_zero_reward",
+        "category_id": null,
+        "category_slug": null,
+        "merchant_pattern": null,
+        "rail": null,
+        "unit": "points_per_100",
+        "rate": 0,
+        "min_txn_inr": null,
+        "max_txn_inr": null,
+        "priority": 1,
+        "conditions": {
+          "source_local_id": "fee_interest_zero_reward",
+          "part": null,
+          "info_reasons": [
+            "unrestricted_exclusion"
+          ],
+          "flags": []
+        },
+        "notes": null,
+        "effective_from": "2024-11-15",
+        "effective_to": null,
+        "excluded_categories": [],
+        "rule_role": "info",
+        "merchant_slugs": [],
+        "platform_slugs": [],
+        "mcc_include": [],
+        "mcc_exclude": [],
+        "except_merchant_slugs": [],
+        "except_platform_slugs": [],
+        "block_inr": null,
+        "min_engine_version": 2,
+        "max_engine_version": null,
+        "source_local_id": "fee_interest_zero_reward",
+        "display_note": "Non-purchase charges and reversals do not earn Reward Points."
+      }
+    ],
+    "cap_rules": [
+      {
+        "id": "icici-emeralde-credit-card:cap:utility_spend_cap",
+        "reward_rule_id": "icici-emeralde-credit-card:rule:utility_1rp_100",
+        "category_id": null,
+        "category_slug": null,
+        "benefit_kind": null,
+        "label": "Utility spend cap",
+        "measure": "spend_amount",
+        "period": "statement_cycle",
+        "cap_value": 80000,
+        "post_cap_unit": null,
+        "post_cap_rate": 0,
+        "resets_on_day": null,
+        "cap_kind": "eligible_spend",
+        "cap_amount": 80000,
+        "scope": "targets",
+        "targets": [
+          "icici-emeralde-credit-card:rule:utility_1rp_100"
+        ],
+        "parent_cap_id": null,
+        "post_cap_behavior": "zero",
+        "anchor": null,
+        "min_engine_version": 1,
+        "source_local_id": "utility_spend_cap"
+      },
+      {
+        "id": "icici-emeralde-credit-card:cap:insurance_spend_cap",
+        "reward_rule_id": "icici-emeralde-credit-card:rule:insurance_1rp_100",
+        "category_id": null,
+        "category_slug": null,
+        "benefit_kind": null,
+        "label": "Insurance spend cap",
+        "measure": "spend_amount",
+        "period": "statement_cycle",
+        "cap_value": 80000,
+        "post_cap_unit": null,
+        "post_cap_rate": 0,
+        "resets_on_day": null,
+        "cap_kind": "eligible_spend",
+        "cap_amount": 80000,
+        "scope": "targets",
+        "targets": [
+          "icici-emeralde-credit-card:rule:insurance_1rp_100"
+        ],
+        "parent_cap_id": null,
+        "post_cap_behavior": "zero",
+        "anchor": null,
+        "min_engine_version": 1,
+        "source_local_id": "insurance_spend_cap"
+      },
+      {
+        "id": "icici-emeralde-credit-card:cap:grocery_departmental_spend_cap",
+        "reward_rule_id": null,
+        "category_id": "cat-groceries",
+        "category_slug": "groceries",
+        "benefit_kind": null,
+        "label": "Grocery departmental spend cap",
+        "measure": "spend_amount",
+        "period": "statement_cycle",
+        "cap_value": 40000,
+        "post_cap_unit": null,
+        "post_cap_rate": 0,
+        "resets_on_day": null,
+        "cap_kind": "eligible_spend",
+        "cap_amount": 40000,
+        "scope": "targets",
+        "targets": [],
+        "parent_cap_id": null,
+        "post_cap_behavior": "zero",
+        "anchor": null,
+        "min_engine_version": 1,
+        "source_local_id": "grocery_departmental_spend_cap"
+      },
+      {
+        "id": "icici-emeralde-credit-card:cap:transport_spend_cap",
+        "reward_rule_id": null,
+        "category_id": "cat-travel",
+        "category_slug": "travel",
+        "benefit_kind": null,
+        "label": "Transport spend cap",
+        "measure": "spend_amount",
+        "period": "statement_cycle",
+        "cap_value": 20000,
+        "post_cap_unit": null,
+        "post_cap_rate": 0,
+        "resets_on_day": 1,
+        "cap_kind": "eligible_spend",
+        "cap_amount": 20000,
+        "scope": "targets",
+        "targets": [],
+        "parent_cap_id": null,
+        "post_cap_behavior": "zero",
+        "anchor": null,
+        "min_engine_version": 1,
+        "source_local_id": "transport_spend_cap"
+      }
+    ],
+    "milestone_rules": [],
+    "fee_waiver_rules": [
+      {
+        "id": "icici-emeralde-credit-card:waiver:1",
+        "threshold_spend_inr": 1000000,
+        "period": "annual",
+        "waives_fee_inr": 12000,
+        "excluded_category_slugs": [
+          "rent",
+          "government",
+          "education",
+          "emi"
+        ],
+        "notes": "Spend over ₹10 lakh to have the Annual Fee waived for the next year. Rent, government payment, education payment, fees, interest, EMI and other excluded transactions are not included in applicable spend calculations.",
+        "excluded_categories": [
+          "cat-rent",
+          "cat-government",
+          "cat-education",
+          "cat-emi"
+        ]
+      }
+    ],
+    "benefits": [
+      {
+        "id": "icici-emeralde-credit-card:benefit:unlimited_domestic_lounge",
+        "key": "unlimited_domestic_lounge",
+        "source_local_id": "unlimited_domestic_lounge",
+        "kind": "lounge_domestic",
+        "label": "Unlimited complimentary domestic airport lounge access for the primary cardholder",
+        "description": "Sponsor: ICICI Bank",
+        "quota_count": null,
+        "quota_period": null,
+        "network_program": "icici_domestic_airport_lounge",
+        "value_estimate_inr": null,
+        "conditions": {
+          "source_category_id": "lounge",
+          "evaluation_engine": {
+            "conditions": {
+              "cardholder": "primary",
+              "spend_threshold": "N/A",
+              "note": "Emeralde Credit Card is excluded from the general ₹75,000 previous-quarter domestic lounge spend requirement."
+            },
+            "benefit_calculation": {
+              "quota": "unlimited"
+            },
+            "perks": [
+              "domestic airport lounge access"
+            ]
+          }
+        }
+      },
+      {
+        "id": "icici-emeralde-credit-card:benefit:unlimited_international_lounge",
+        "key": "unlimited_international_lounge",
+        "source_local_id": "unlimited_international_lounge",
+        "kind": "lounge_international",
+        "label": "Unlimited complimentary international airport lounge access for the primary cardholder",
+        "description": "Sponsor: ICICI Bank",
+        "quota_count": null,
+        "quota_period": null,
+        "network_program": "priority_pass",
+        "value_estimate_inr": null,
+        "conditions": {
+          "source_category_id": "lounge",
+          "evaluation_engine": {
+            "conditions": {
+              "cardholder": "primary",
+              "membership": "Priority Pass",
+              "guest_access": "Chargeable unless otherwise stated by the lounge programme."
+            },
+            "benefit_calculation": {
+              "quota": "unlimited"
+            },
+            "perks": [
+              "international airport lounge access"
+            ]
+          }
+        }
+      },
+      {
+        "id": "icici-emeralde-credit-card:benefit:unlimited_airport_spa",
+        "key": "unlimited_airport_spa",
+        "source_local_id": "unlimited_airport_spa",
+        "kind": "other",
+        "label": "Unlimited complimentary spa access at participating airports in India",
+        "description": "Sponsor: ICICI Bank",
+        "quota_count": null,
+        "quota_period": null,
+        "network_program": "icici_airport_spa",
+        "value_estimate_inr": null,
+        "conditions": {
+          "source_category_id": "other",
+          "evaluation_engine": {
+            "conditions": {
+              "location": "participating airports in India",
+              "cardholder": "primary"
+            },
+            "benefit_calculation": {
+              "quota": "unlimited"
+            },
+            "perks": [
+              "complimentary airport spa access"
+            ]
+          }
+        }
+      },
+      {
+        "id": "icici-emeralde-credit-card:benefit:golf_rounds",
+        "key": "golf_rounds",
+        "source_local_id": "golf_rounds",
+        "kind": "golf",
+        "label": "Up to 4 complimentary golf rounds every month based on eligible spends",
+        "description": "Sponsor: ICICI Bank",
+        "quota_count": 4,
+        "quota_period": "calendar_month",
+        "network_program": "icici_golf",
+        "value_estimate_inr": null,
+        "conditions": {
+          "source_category_id": "golf",
+          "evaluation_engine": {
+            "conditions": {
+              "spend_basis": "eligible spends on the Card",
+              "unlock_rule": "Up to 4 complimentary golf rounds every month based on eligible card spends"
+            },
+            "benefit_calculation": {
+              "maximum_rounds_per_month": 4
+            },
+            "perks": [
+              "complimentary golf rounds"
+            ]
+          }
+        }
+      },
+      {
+        "id": "icici-emeralde-credit-card:benefit:bookmyshow_bogo",
+        "key": "bookmyshow_bogo",
+        "source_local_id": "bookmyshow_bogo",
+        "kind": "movie",
+        "label": "Buy one ticket and get up to ₹750 off on the second ticket through BookMyShow",
+        "description": "Sponsor: ICICI Bank",
+        "quota_count": 4,
+        "quota_period": "calendar_month",
+        "network_program": "bookmyshow",
+        "value_estimate_inr": 750,
+        "conditions": {
+          "source_category_id": "movie",
+          "evaluation_engine": {
+            "conditions": {
+              "preceding_spend_quarter_inr": 25000,
+              "unlock_period": "following_calendar_quarter",
+              "offer_frequency": "up to 4 times per month",
+              "add_on_card_condition": "Add-on/Plus card members must individually spend ₹25,000 in the preceding spend quarter to qualify for the subsequent calendar quarter.",
+              "dual_network_rule": "Customers with Mastercard & Amex or Visa & RuPay dual-network cards can avail one movie offer per month per variant."
+            },
+            "benefit_calculation": {
+              "maximum_discount_inr": 750
+            },
+            "perks": [
+              "complimentary movie/event ticket offer"
+            ]
+          }
+        }
+      },
+      {
+        "id": "icici-emeralde-credit-card:benefit:travel_cancellation",
+        "key": "travel_cancellation",
+        "source_local_id": "travel_cancellation",
+        "kind": "other",
+        "label": "No cancellation charges on eligible domestic flight and hotel bookings, up to ₹12,000",
+        "description": "Sponsor: ICICI Bank",
+        "quota_count": 2,
+        "quota_period": "annual",
+        "network_program": "icici_travel_benefit",
+        "value_estimate_inr": 12000,
+        "conditions": {
+          "source_category_id": "other",
+          "evaluation_engine": {
+            "conditions": {
+              "maximum_refund_inr": 12000,
+              "frequency": "twice every year"
+            },
+            "benefit_calculation": {
+              "maximum_value_inr": 12000
+            },
+            "perks": [
+              "domestic flight booking cancellation benefit",
+              "hotel booking cancellation benefit"
+            ]
+          }
+        }
+      },
+      {
+        "id": "icici-emeralde-credit-card:benefit:movie_ticket_cancellation",
+        "key": "movie_ticket_cancellation",
+        "source_local_id": "movie_ticket_cancellation",
+        "kind": "movie",
+        "label": "No cancellation charges on eligible movie ticket bookings",
+        "description": "Sponsor: ICICI Bank",
+        "quota_count": null,
+        "quota_period": null,
+        "network_program": "icici_movie_travel_benefit",
+        "value_estimate_inr": null,
+        "conditions": {
+          "source_category_id": "movie",
+          "evaluation_engine": {
+            "conditions": {
+              "scope": "eligible movie ticket bookings"
+            },
+            "benefit_calculation": {
+              "maximum_value_inr": "N/A"
+            },
+            "perks": [
+              "movie ticket cancellation benefit"
+            ]
+          }
+        }
+      },
+      {
+        "id": "icici-emeralde-credit-card:benefit:concierge",
+        "key": "concierge",
+        "source_local_id": "concierge",
+        "kind": "concierge",
+        "label": "24x7 concierge service",
+        "description": "Sponsor: ICICI Bank",
+        "quota_count": null,
+        "quota_period": null,
+        "network_program": "icici_i_assist",
+        "value_estimate_inr": null,
+        "conditions": {
+          "source_category_id": "concierge",
+          "evaluation_engine": {
+            "conditions": {
+              "availability": "24x7"
+            },
+            "benefit_calculation": {
+              "quota": "unlimited"
+            },
+            "perks": [
+              "lifestyle assistance",
+              "travel assistance",
+              "restaurant reservations",
+              "hotel and flight bookings",
+              "car rentals",
+              "movie ticket delivery",
+              "emergency auto assistance",
+              "medical concierge support"
+            ]
+          }
+        }
+      },
+      {
+        "id": "icici-emeralde-credit-card:benefit:fuel_surcharge_waiver",
+        "key": "fuel_surcharge_waiver",
+        "source_local_id": "fuel_surcharge_waiver",
+        "kind": "fuel_surcharge",
+        "label": "1% fuel surcharge waiver on eligible fuel transactions",
+        "description": "Sponsor: ICICI Bank",
+        "quota_count": null,
+        "quota_period": null,
+        "network_program": "icici_fuel_surcharge_waiver",
+        "value_estimate_inr": null,
+        "conditions": {
+          "source_category_id": "fuel",
+          "evaluation_engine": {
+            "conditions": {
+              "transaction_min_inr": 400,
+              "transaction_max_inr": 4000,
+              "scope": "all fuel stations in India"
+            },
+            "benefit_calculation": {
+              "waiver_percent": 1
+            },
+            "perks": [
+              "fuel surcharge waiver"
+            ]
+          }
+        }
+      },
+      {
+        "id": "icici-emeralde-credit-card:benefit:tata_cliq_birthday_amex",
+        "key": "tata_cliq_birthday_amex",
+        "source_local_id": "tata_cliq_birthday_amex",
+        "kind": "other",
+        "label": "₹5,000 TATA CLiQ birthday shopping voucher",
+        "description": "Sponsor: ICICI Bank",
+        "quota_count": 1,
+        "quota_period": "annual",
+        "network_program": "american_express",
+        "value_estimate_inr": 5000,
+        "conditions": {
+          "source_category_id": "other",
+          "evaluation_engine": {
+            "conditions": {
+              "network_variant": "American Express",
+              "frequency": "annual birthday benefit"
+            },
+            "benefit_calculation": {
+              "voucher_value_inr": 5000
+            },
+            "perks": [
+              "TATA CLiQ shopping voucher"
+            ]
+          }
+        }
+      },
+      {
+        "id": "icici-emeralde-credit-card:benefit:insurance:air_accidental_death",
+        "key": "insurance:air_accidental_death",
+        "source_local_id": null,
+        "kind": "insurance_travel",
+        "label": "Air Accidental Death",
+        "description": "Primary cardholder receives air accident insurance cover up to ₹3 crore. The card must have been used at least once in the preceding 60 days; coverage applies to international travel when the ticket is purchased using the credit card. Supplemental cardholders are not eligible for this insurance.",
+        "quota_count": null,
+        "quota_period": null,
+        "network_program": null,
+        "value_estimate_inr": 30000000,
+        "conditions": {
+          "coverage_usd": null
+        }
+      },
+      {
+        "id": "icici-emeralde-credit-card:benefit:insurance:other",
+        "key": "insurance:other",
+        "source_local_id": null,
+        "kind": "other",
+        "label": "Other",
+        "description": "Fraud protection benefits include Counterfeit Card Liability and Account Takeover Cover, subject to applicable terms and conditions.",
+        "quota_count": null,
+        "quota_period": null,
+        "network_program": null,
+        "value_estimate_inr": null,
+        "conditions": {
+          "coverage_usd": null
+        }
+      }
+    ],
+    "unlock_rules": [
+      {
+        "id": "icici-emeralde-credit-card:unlock:bookmyshow_bogo@1",
+        "card_benefit_id": "icici-emeralde-credit-card:benefit:bookmyshow_bogo",
+        "kind": "other",
+        "label": "Buy one ticket and get up to ₹750 off on the second ticket through BookMyShow",
+        "spend_threshold_inr": 25000,
+        "spend_window": "previous_calendar_quarter",
+        "window_days": null,
+        "unlocks_quota": 4,
+        "unlocks_period": "calendar_month",
+        "tier_label": null,
+        "excluded_category_ids": [],
+        "notes": null,
+        "source_local_id": "bookmyshow_bogo"
+      }
+    ],
+    "redemption_options": [
+      {
+        "program_name": "ICICI Bank Rewards",
+        "method": "partner_catalogue",
+        "value_per_point_inr": 0.25,
+        "min_points": null,
+        "notes": "Redemption fee: ₹99"
+      },
+      {
+        "program_name": "ICICI Bank Rewards",
+        "method": "statement_credit",
+        "value_per_point_inr": 1,
+        "min_points": null,
+        "notes": "Redemption fee: ₹99"
+      }
+    ],
+    "is_upi_linkable": false
+  }
+}

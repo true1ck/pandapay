@@ -1,0 +1,1193 @@
+{
+  "generated_by": "api/scripts/catalogue_v2/snapshot_examples.js",
+  "source_slug": "sbi-aurum",
+  "inputs": {
+    "transform_version": "7",
+    "source_record_sha256": "d07020b6b063671b7763f1ad9a69c81efb1fd3fe8727b2328b505dcfcfe7d9f8",
+    "override_sha256": null,
+    "directory_sha256": "c2fded34df886aef08595eebb7629a4dd140c98af750f3c891d6c291b4874b53",
+    "verified": false
+  },
+  "blocking_flags": [],
+  "card": {
+    "id": "sbi-aurum:card",
+    "slug": "sbi-aurum",
+    "name": "AURUM SBI Card",
+    "network": "visa",
+    "issuer_slug": "sbi",
+    "base_reward_unit": "points_per_100",
+    "base_reward_rate": 4,
+    "point_value_inr": 0.25,
+    "excluded_categories": [],
+    "accrual_block_inr": 100,
+    "accrual_rounding": "floor",
+    "cashback_rounding": null,
+    "points_expiry_months": 0,
+    "model_status": "partial",
+    "model_coverage": {
+      "rules_total": 14,
+      "rules_modelled": 9,
+      "rules_info": 5,
+      "caps_total": 0,
+      "caps_enforced": 0,
+      "flags": [
+        {
+          "code": "mcc_scoped_exclusion",
+          "source_local_id": "aurum-wallet-exclusion",
+          "detail": null
+        },
+        {
+          "code": "mcc_scoped_exclusion",
+          "source_local_id": "aurum-rent-exclusion",
+          "detail": null
+        },
+        {
+          "code": "broad_exclusion_v1_only",
+          "source_local_id": "aurum-gaming-exclusion",
+          "detail": null
+        },
+        {
+          "code": "info_rule",
+          "source_local_id": "aurum-balance-transfer-exclusion",
+          "detail": "unrestricted_exclusion"
+        },
+        {
+          "code": "exclusion_scope_broadened",
+          "source_local_id": "aurum-cash-advance-exclusion",
+          "detail": null
+        },
+        {
+          "code": "info_rule",
+          "source_local_id": "aurum-financial-charge-exclusion",
+          "detail": "unrestricted_exclusion"
+        },
+        {
+          "code": "info_rule",
+          "source_local_id": "aurum-easymoney-exclusion",
+          "detail": "unrestricted_exclusion"
+        },
+        {
+          "code": "info_rule",
+          "source_local_id": "aurum-encash-exclusion",
+          "detail": "unrestricted_exclusion"
+        },
+        {
+          "code": "info_rule",
+          "source_local_id": "aurum-dial-a-draft-exclusion",
+          "detail": "unrestricted_exclusion"
+        }
+      ],
+      "overrides_applied": []
+    },
+    "reward_rules": [
+      {
+        "id": "sbi-aurum:rule:aurum-standard-non-fuel",
+        "category_id": null,
+        "category_slug": null,
+        "merchant_pattern": null,
+        "rail": null,
+        "unit": "points_per_100",
+        "rate": 4,
+        "min_txn_inr": null,
+        "max_txn_inr": null,
+        "priority": 100,
+        "conditions": {
+          "source_local_id": "aurum-standard-non-fuel",
+          "part": null,
+          "info_reasons": [],
+          "flags": []
+        },
+        "notes": null,
+        "effective_from": "2021-02-03",
+        "effective_to": null,
+        "excluded_categories": [],
+        "rule_role": "base",
+        "merchant_slugs": [],
+        "platform_slugs": [],
+        "mcc_include": [],
+        "mcc_exclude": [],
+        "except_merchant_slugs": [],
+        "except_platform_slugs": [],
+        "block_inr": null,
+        "min_engine_version": 1,
+        "max_engine_version": null,
+        "source_local_id": "aurum-standard-non-fuel",
+        "display_note": "4 AURUM Reward Points per ₹100 spent."
+      },
+      {
+        "id": "sbi-aurum:rule:aurum-fuel-exclusion",
+        "category_id": "cat-fuel",
+        "category_slug": "fuel",
+        "merchant_pattern": null,
+        "rail": null,
+        "unit": "points_per_100",
+        "rate": 0,
+        "min_txn_inr": null,
+        "max_txn_inr": null,
+        "priority": 1,
+        "conditions": {
+          "source_local_id": "aurum-fuel-exclusion",
+          "part": null,
+          "info_reasons": [],
+          "flags": []
+        },
+        "notes": null,
+        "effective_from": "2021-02-03",
+        "effective_to": null,
+        "excluded_categories": [],
+        "rule_role": "exclusion",
+        "merchant_slugs": [],
+        "platform_slugs": [],
+        "mcc_include": [],
+        "mcc_exclude": [],
+        "except_merchant_slugs": [],
+        "except_platform_slugs": [],
+        "block_inr": null,
+        "min_engine_version": 1,
+        "max_engine_version": null,
+        "source_local_id": "aurum-fuel-exclusion",
+        "display_note": "Fuel purchases do not earn AURUM Reward Points."
+      },
+      {
+        "id": "sbi-aurum:rule:aurum-wallet-exclusion#1",
+        "category_id": "cat-wallet",
+        "category_slug": "wallet",
+        "merchant_pattern": null,
+        "rail": null,
+        "unit": "points_per_100",
+        "rate": 0,
+        "min_txn_inr": null,
+        "max_txn_inr": null,
+        "priority": 2,
+        "conditions": {
+          "source_local_id": "aurum-wallet-exclusion",
+          "part": 1,
+          "info_reasons": [],
+          "flags": [
+            "mcc_scoped_exclusion"
+          ]
+        },
+        "notes": null,
+        "effective_from": "2020-07-01",
+        "effective_to": null,
+        "excluded_categories": [],
+        "rule_role": "exclusion",
+        "merchant_slugs": [],
+        "platform_slugs": [],
+        "mcc_include": [],
+        "mcc_exclude": [],
+        "except_merchant_slugs": [],
+        "except_platform_slugs": [],
+        "block_inr": null,
+        "min_engine_version": 1,
+        "max_engine_version": 1,
+        "source_local_id": "aurum-wallet-exclusion",
+        "display_note": "e-Wallet loading transactions identified under MCC 6540/6541 do not earn Reward Points."
+      },
+      {
+        "id": "sbi-aurum:rule:aurum-wallet-exclusion#2",
+        "category_id": "cat-wallet",
+        "category_slug": "wallet",
+        "merchant_pattern": null,
+        "rail": null,
+        "unit": "points_per_100",
+        "rate": 0,
+        "min_txn_inr": null,
+        "max_txn_inr": null,
+        "priority": 2,
+        "conditions": {
+          "source_local_id": "aurum-wallet-exclusion",
+          "part": 2,
+          "info_reasons": [],
+          "flags": [
+            "mcc_scoped_exclusion"
+          ]
+        },
+        "notes": null,
+        "effective_from": "2020-07-01",
+        "effective_to": null,
+        "excluded_categories": [],
+        "rule_role": "exclusion",
+        "merchant_slugs": [],
+        "platform_slugs": [],
+        "mcc_include": [
+          "6540",
+          "6541"
+        ],
+        "mcc_exclude": [],
+        "except_merchant_slugs": [],
+        "except_platform_slugs": [],
+        "block_inr": null,
+        "min_engine_version": 2,
+        "max_engine_version": null,
+        "source_local_id": "aurum-wallet-exclusion",
+        "display_note": "e-Wallet loading transactions identified under MCC 6540/6541 do not earn Reward Points."
+      },
+      {
+        "id": "sbi-aurum:rule:aurum-wallet-exclusion#3",
+        "category_id": null,
+        "category_slug": null,
+        "merchant_pattern": null,
+        "rail": null,
+        "unit": "points_per_100",
+        "rate": 0,
+        "min_txn_inr": null,
+        "max_txn_inr": null,
+        "priority": 2,
+        "conditions": {
+          "source_local_id": "aurum-wallet-exclusion",
+          "part": 3,
+          "info_reasons": [],
+          "flags": [
+            "mcc_scoped_exclusion"
+          ]
+        },
+        "notes": null,
+        "effective_from": "2020-07-01",
+        "effective_to": null,
+        "excluded_categories": [],
+        "rule_role": "exclusion",
+        "merchant_slugs": [],
+        "platform_slugs": [],
+        "mcc_include": [
+          "6540",
+          "6541"
+        ],
+        "mcc_exclude": [],
+        "except_merchant_slugs": [],
+        "except_platform_slugs": [],
+        "block_inr": null,
+        "min_engine_version": 2,
+        "max_engine_version": null,
+        "source_local_id": "aurum-wallet-exclusion",
+        "display_note": "e-Wallet loading transactions identified under MCC 6540/6541 do not earn Reward Points."
+      },
+      {
+        "id": "sbi-aurum:rule:aurum-rent-exclusion#1",
+        "category_id": "cat-rent",
+        "category_slug": "rent",
+        "merchant_pattern": null,
+        "rail": null,
+        "unit": "points_per_100",
+        "rate": 0,
+        "min_txn_inr": null,
+        "max_txn_inr": null,
+        "priority": 3,
+        "conditions": {
+          "source_local_id": "aurum-rent-exclusion",
+          "part": 1,
+          "info_reasons": [],
+          "flags": [
+            "mcc_scoped_exclusion"
+          ]
+        },
+        "notes": null,
+        "effective_from": "2024-04-01",
+        "effective_to": null,
+        "excluded_categories": [],
+        "rule_role": "exclusion",
+        "merchant_slugs": [],
+        "platform_slugs": [],
+        "mcc_include": [],
+        "mcc_exclude": [],
+        "except_merchant_slugs": [],
+        "except_platform_slugs": [],
+        "block_inr": null,
+        "min_engine_version": 1,
+        "max_engine_version": 1,
+        "source_local_id": "aurum-rent-exclusion",
+        "display_note": "Reward accrual on AURUM rent-payment transactions is discontinued effective 1 Apr 2024; MCC 6513 identifies rent transactions on a best-effort basis."
+      },
+      {
+        "id": "sbi-aurum:rule:aurum-rent-exclusion#2",
+        "category_id": "cat-rent",
+        "category_slug": "rent",
+        "merchant_pattern": null,
+        "rail": null,
+        "unit": "points_per_100",
+        "rate": 0,
+        "min_txn_inr": null,
+        "max_txn_inr": null,
+        "priority": 3,
+        "conditions": {
+          "source_local_id": "aurum-rent-exclusion",
+          "part": 2,
+          "info_reasons": [],
+          "flags": [
+            "mcc_scoped_exclusion"
+          ]
+        },
+        "notes": null,
+        "effective_from": "2024-04-01",
+        "effective_to": null,
+        "excluded_categories": [],
+        "rule_role": "exclusion",
+        "merchant_slugs": [],
+        "platform_slugs": [],
+        "mcc_include": [
+          "6513"
+        ],
+        "mcc_exclude": [],
+        "except_merchant_slugs": [],
+        "except_platform_slugs": [],
+        "block_inr": null,
+        "min_engine_version": 2,
+        "max_engine_version": null,
+        "source_local_id": "aurum-rent-exclusion",
+        "display_note": "Reward accrual on AURUM rent-payment transactions is discontinued effective 1 Apr 2024; MCC 6513 identifies rent transactions on a best-effort basis."
+      },
+      {
+        "id": "sbi-aurum:rule:aurum-rent-exclusion#3",
+        "category_id": null,
+        "category_slug": null,
+        "merchant_pattern": null,
+        "rail": null,
+        "unit": "points_per_100",
+        "rate": 0,
+        "min_txn_inr": null,
+        "max_txn_inr": null,
+        "priority": 3,
+        "conditions": {
+          "source_local_id": "aurum-rent-exclusion",
+          "part": 3,
+          "info_reasons": [],
+          "flags": [
+            "mcc_scoped_exclusion"
+          ]
+        },
+        "notes": null,
+        "effective_from": "2024-04-01",
+        "effective_to": null,
+        "excluded_categories": [],
+        "rule_role": "exclusion",
+        "merchant_slugs": [],
+        "platform_slugs": [],
+        "mcc_include": [
+          "6513"
+        ],
+        "mcc_exclude": [],
+        "except_merchant_slugs": [],
+        "except_platform_slugs": [],
+        "block_inr": null,
+        "min_engine_version": 2,
+        "max_engine_version": null,
+        "source_local_id": "aurum-rent-exclusion",
+        "display_note": "Reward accrual on AURUM rent-payment transactions is discontinued effective 1 Apr 2024; MCC 6513 identifies rent transactions on a best-effort basis."
+      },
+      {
+        "id": "sbi-aurum:rule:aurum-gaming-exclusion#1",
+        "category_id": "cat-entertainment",
+        "category_slug": "entertainment",
+        "merchant_pattern": null,
+        "rail": null,
+        "unit": "points_per_100",
+        "rate": 0,
+        "min_txn_inr": null,
+        "max_txn_inr": null,
+        "priority": 4,
+        "conditions": {
+          "source_local_id": "aurum-gaming-exclusion",
+          "part": 1,
+          "info_reasons": [],
+          "flags": [
+            "broad_exclusion_v1_only",
+            "broad_category"
+          ]
+        },
+        "notes": null,
+        "effective_from": "2024-12-01",
+        "effective_to": null,
+        "excluded_categories": [],
+        "rule_role": "exclusion",
+        "merchant_slugs": [],
+        "platform_slugs": [],
+        "mcc_include": [],
+        "mcc_exclude": [],
+        "except_merchant_slugs": [],
+        "except_platform_slugs": [],
+        "block_inr": null,
+        "min_engine_version": 1,
+        "max_engine_version": 1,
+        "source_local_id": "aurum-gaming-exclusion",
+        "display_note": "Reward accrual on Digital Gaming Platforms/Merchants discontinued effective 1 Dec 2024."
+      },
+      {
+        "id": "sbi-aurum:rule:aurum-gaming-exclusion#2",
+        "category_id": null,
+        "category_slug": null,
+        "merchant_pattern": null,
+        "rail": null,
+        "unit": "points_per_100",
+        "rate": 0,
+        "min_txn_inr": null,
+        "max_txn_inr": null,
+        "priority": 4,
+        "conditions": {
+          "source_local_id": "aurum-gaming-exclusion",
+          "part": 2,
+          "info_reasons": [],
+          "flags": [
+            "broad_exclusion_v1_only"
+          ]
+        },
+        "notes": null,
+        "effective_from": "2024-12-01",
+        "effective_to": null,
+        "excluded_categories": [],
+        "rule_role": "exclusion",
+        "merchant_slugs": [],
+        "platform_slugs": [],
+        "mcc_include": [
+          "5816",
+          "7993",
+          "7994"
+        ],
+        "mcc_exclude": [],
+        "except_merchant_slugs": [],
+        "except_platform_slugs": [],
+        "block_inr": null,
+        "min_engine_version": 2,
+        "max_engine_version": null,
+        "source_local_id": "aurum-gaming-exclusion",
+        "display_note": "Reward accrual on Digital Gaming Platforms/Merchants discontinued effective 1 Dec 2024."
+      },
+      {
+        "id": "sbi-aurum:rule:aurum-excluded-mccs",
+        "category_id": null,
+        "category_slug": null,
+        "merchant_pattern": null,
+        "rail": null,
+        "unit": "points_per_100",
+        "rate": 0,
+        "min_txn_inr": null,
+        "max_txn_inr": null,
+        "priority": 5,
+        "conditions": {
+          "source_local_id": "aurum-excluded-mccs",
+          "part": null,
+          "info_reasons": [],
+          "flags": []
+        },
+        "notes": null,
+        "effective_from": "2021-02-03",
+        "effective_to": null,
+        "excluded_categories": [],
+        "rule_role": "exclusion",
+        "merchant_slugs": [],
+        "platform_slugs": [],
+        "mcc_include": [
+          "5172",
+          "5541",
+          "5542",
+          "5983",
+          "6540",
+          "6541"
+        ],
+        "mcc_exclude": [],
+        "except_merchant_slugs": [],
+        "except_platform_slugs": [],
+        "block_inr": null,
+        "min_engine_version": 2,
+        "max_engine_version": null,
+        "source_local_id": "aurum-excluded-mccs",
+        "display_note": "Transactions identified under these MCCs do not earn Reward Points; MCC identification is performed on a best-effort basis by network partners."
+      },
+      {
+        "id": "sbi-aurum:rule:aurum-balance-transfer-exclusion",
+        "category_id": null,
+        "category_slug": null,
+        "merchant_pattern": null,
+        "rail": null,
+        "unit": "points_per_100",
+        "rate": 0,
+        "min_txn_inr": null,
+        "max_txn_inr": null,
+        "priority": 6,
+        "conditions": {
+          "source_local_id": "aurum-balance-transfer-exclusion",
+          "part": null,
+          "info_reasons": [
+            "unrestricted_exclusion"
+          ],
+          "flags": []
+        },
+        "notes": null,
+        "effective_from": "2021-02-03",
+        "effective_to": null,
+        "excluded_categories": [],
+        "rule_role": "info",
+        "merchant_slugs": [],
+        "platform_slugs": [],
+        "mcc_include": [],
+        "mcc_exclude": [],
+        "except_merchant_slugs": [],
+        "except_platform_slugs": [],
+        "block_inr": null,
+        "min_engine_version": 2,
+        "max_engine_version": null,
+        "source_local_id": "aurum-balance-transfer-exclusion",
+        "display_note": "Balance transfers and balance transfers on EMI are excluded from Reward Point accrual."
+      },
+      {
+        "id": "sbi-aurum:rule:aurum-cash-advance-exclusion",
+        "category_id": null,
+        "category_slug": null,
+        "merchant_pattern": null,
+        "rail": "atm",
+        "unit": "points_per_100",
+        "rate": 0,
+        "min_txn_inr": null,
+        "max_txn_inr": null,
+        "priority": 7,
+        "conditions": {
+          "source_local_id": "aurum-cash-advance-exclusion",
+          "part": null,
+          "info_reasons": [],
+          "flags": [
+            "exclusion_scope_broadened"
+          ]
+        },
+        "notes": null,
+        "effective_from": "2021-02-03",
+        "effective_to": null,
+        "excluded_categories": [],
+        "rule_role": "exclusion",
+        "merchant_slugs": [],
+        "platform_slugs": [],
+        "mcc_include": [],
+        "mcc_exclude": [],
+        "except_merchant_slugs": [],
+        "except_platform_slugs": [],
+        "block_inr": null,
+        "min_engine_version": 2,
+        "max_engine_version": null,
+        "source_local_id": "aurum-cash-advance-exclusion",
+        "display_note": "Cash advances and ATM withdrawals do not earn Reward Points."
+      },
+      {
+        "id": "sbi-aurum:rule:aurum-financial-charge-exclusion",
+        "category_id": null,
+        "category_slug": null,
+        "merchant_pattern": null,
+        "rail": null,
+        "unit": "points_per_100",
+        "rate": 0,
+        "min_txn_inr": null,
+        "max_txn_inr": null,
+        "priority": 8,
+        "conditions": {
+          "source_local_id": "aurum-financial-charge-exclusion",
+          "part": null,
+          "info_reasons": [
+            "unrestricted_exclusion"
+          ],
+          "flags": []
+        },
+        "notes": null,
+        "effective_from": "2021-02-03",
+        "effective_to": null,
+        "excluded_categories": [],
+        "rule_role": "info",
+        "merchant_slugs": [],
+        "platform_slugs": [],
+        "mcc_include": [],
+        "mcc_exclude": [],
+        "except_merchant_slugs": [],
+        "except_platform_slugs": [],
+        "block_inr": null,
+        "min_engine_version": 2,
+        "max_engine_version": null,
+        "source_local_id": "aurum-financial-charge-exclusion",
+        "display_note": "Financial charges do not earn Reward Points."
+      },
+      {
+        "id": "sbi-aurum:rule:aurum-easymoney-exclusion",
+        "category_id": null,
+        "category_slug": null,
+        "merchant_pattern": null,
+        "rail": null,
+        "unit": "points_per_100",
+        "rate": 0,
+        "min_txn_inr": null,
+        "max_txn_inr": null,
+        "priority": 9,
+        "conditions": {
+          "source_local_id": "aurum-easymoney-exclusion",
+          "part": null,
+          "info_reasons": [
+            "unrestricted_exclusion"
+          ],
+          "flags": []
+        },
+        "notes": null,
+        "effective_from": "2021-02-03",
+        "effective_to": null,
+        "excluded_categories": [],
+        "rule_role": "info",
+        "merchant_slugs": [],
+        "platform_slugs": [],
+        "mcc_include": [],
+        "mcc_exclude": [],
+        "except_merchant_slugs": [],
+        "except_platform_slugs": [],
+        "block_inr": null,
+        "min_engine_version": 2,
+        "max_engine_version": null,
+        "source_local_id": "aurum-easymoney-exclusion",
+        "display_note": "Easymoney transactions do not earn Reward Points."
+      },
+      {
+        "id": "sbi-aurum:rule:aurum-encash-exclusion",
+        "category_id": null,
+        "category_slug": null,
+        "merchant_pattern": null,
+        "rail": null,
+        "unit": "points_per_100",
+        "rate": 0,
+        "min_txn_inr": null,
+        "max_txn_inr": null,
+        "priority": 10,
+        "conditions": {
+          "source_local_id": "aurum-encash-exclusion",
+          "part": null,
+          "info_reasons": [
+            "unrestricted_exclusion"
+          ],
+          "flags": []
+        },
+        "notes": null,
+        "effective_from": "2021-02-03",
+        "effective_to": null,
+        "excluded_categories": [],
+        "rule_role": "info",
+        "merchant_slugs": [],
+        "platform_slugs": [],
+        "mcc_include": [],
+        "mcc_exclude": [],
+        "except_merchant_slugs": [],
+        "except_platform_slugs": [],
+        "block_inr": null,
+        "min_engine_version": 2,
+        "max_engine_version": null,
+        "source_local_id": "aurum-encash-exclusion",
+        "display_note": "Encash transactions do not earn Reward Points."
+      },
+      {
+        "id": "sbi-aurum:rule:aurum-dial-a-draft-exclusion",
+        "category_id": null,
+        "category_slug": null,
+        "merchant_pattern": null,
+        "rail": null,
+        "unit": "points_per_100",
+        "rate": 0,
+        "min_txn_inr": null,
+        "max_txn_inr": null,
+        "priority": 11,
+        "conditions": {
+          "source_local_id": "aurum-dial-a-draft-exclusion",
+          "part": null,
+          "info_reasons": [
+            "unrestricted_exclusion"
+          ],
+          "flags": []
+        },
+        "notes": null,
+        "effective_from": "2021-02-03",
+        "effective_to": null,
+        "excluded_categories": [],
+        "rule_role": "info",
+        "merchant_slugs": [],
+        "platform_slugs": [],
+        "mcc_include": [],
+        "mcc_exclude": [],
+        "except_merchant_slugs": [],
+        "except_platform_slugs": [],
+        "block_inr": null,
+        "min_engine_version": 2,
+        "max_engine_version": null,
+        "source_local_id": "aurum-dial-a-draft-exclusion",
+        "display_note": "Dial a Draft transactions do not earn Reward Points."
+      },
+      {
+        "id": "sbi-aurum:rule:aurum-merchant-emi-exclusion",
+        "category_id": "cat-emi",
+        "category_slug": "emi",
+        "merchant_pattern": null,
+        "rail": "emi",
+        "unit": "points_per_100",
+        "rate": 0,
+        "min_txn_inr": null,
+        "max_txn_inr": null,
+        "priority": 12,
+        "conditions": {
+          "source_local_id": "aurum-merchant-emi-exclusion",
+          "part": null,
+          "info_reasons": [],
+          "flags": []
+        },
+        "notes": null,
+        "effective_from": "2020-11-20",
+        "effective_to": null,
+        "excluded_categories": [],
+        "rule_role": "exclusion",
+        "merchant_slugs": [],
+        "platform_slugs": [],
+        "mcc_include": [],
+        "mcc_exclude": [],
+        "except_merchant_slugs": [],
+        "except_platform_slugs": [],
+        "block_inr": null,
+        "min_engine_version": 1,
+        "max_engine_version": null,
+        "source_local_id": "aurum-merchant-emi-exclusion",
+        "display_note": "Merchant EMI transactions do not earn Reward Points; points already awarded are reversed."
+      },
+      {
+        "id": "sbi-aurum:rule:aurum-flexipay-exclusion",
+        "category_id": "cat-emi",
+        "category_slug": "emi",
+        "merchant_pattern": null,
+        "rail": "emi",
+        "unit": "points_per_100",
+        "rate": 0,
+        "min_txn_inr": null,
+        "max_txn_inr": null,
+        "priority": 13,
+        "conditions": {
+          "source_local_id": "aurum-flexipay-exclusion",
+          "part": null,
+          "info_reasons": [],
+          "flags": []
+        },
+        "notes": null,
+        "effective_from": "2020-11-20",
+        "effective_to": null,
+        "excluded_categories": [],
+        "rule_role": "exclusion",
+        "merchant_slugs": [],
+        "platform_slugs": [],
+        "mcc_include": [],
+        "mcc_exclude": [],
+        "except_merchant_slugs": [],
+        "except_platform_slugs": [],
+        "block_inr": null,
+        "min_engine_version": 1,
+        "max_engine_version": null,
+        "source_local_id": "aurum-flexipay-exclusion",
+        "display_note": "Flexipay transactions do not earn Reward Points; points already awarded are reversed."
+      }
+    ],
+    "cap_rules": [],
+    "milestone_rules": [
+      {
+        "id": "sbi-aurum:milestone:aurum-annual-5l",
+        "label": "₹5,000 Tata CLiQ Luxury voucher on annual spend of ₹5 lakh",
+        "period": "annual",
+        "threshold_spend_inr": 500000,
+        "reward_description": "₹5,000 Tata CLiQ Luxury voucher on annual spend of ₹5 lakh",
+        "reward_value_inr": 5000,
+        "is_repeatable": false,
+        "max_repeats": null,
+        "anchor": "card_anniversary",
+        "reward_points": null,
+        "reward_kind": "voucher",
+        "excluded_category_ids": [],
+        "window_days": null,
+        "source_local_id": "aurum-annual-5l"
+      },
+      {
+        "id": "sbi-aurum:milestone:aurum-annual-10l",
+        "label": "₹10,000 Taj Experiences e-Gift voucher on annual spend of ₹10 lakh",
+        "period": "annual",
+        "threshold_spend_inr": 1000000,
+        "reward_description": "₹10,000 Taj Experiences e-Gift voucher on annual spend of ₹10 lakh",
+        "reward_value_inr": 10000,
+        "is_repeatable": false,
+        "max_repeats": null,
+        "anchor": "card_anniversary",
+        "reward_points": null,
+        "reward_kind": "voucher",
+        "excluded_category_ids": [],
+        "window_days": null,
+        "source_local_id": "aurum-annual-10l"
+      },
+      {
+        "id": "sbi-aurum:milestone:aurum-annual-12l",
+        "label": "Annual fee reversal on spend of ₹12 lakh",
+        "period": "annual",
+        "threshold_spend_inr": 1200000,
+        "reward_description": "Annual fee reversal on spend of ₹12 lakh",
+        "reward_value_inr": 9999,
+        "is_repeatable": false,
+        "max_repeats": null,
+        "anchor": "card_anniversary",
+        "reward_points": null,
+        "reward_kind": "fee_waiver",
+        "excluded_category_ids": [],
+        "window_days": null,
+        "source_local_id": "aurum-annual-12l"
+      },
+      {
+        "id": "sbi-aurum:milestone:aurum-annual-20l",
+        "label": "₹20,000 Apple Premium Reseller Gift Card on annual spend of ₹20 lakh",
+        "period": "annual",
+        "threshold_spend_inr": 2000000,
+        "reward_description": "₹20,000 Apple Premium Reseller Gift Card on annual spend of ₹20 lakh",
+        "reward_value_inr": 20000,
+        "is_repeatable": false,
+        "max_repeats": null,
+        "anchor": "card_anniversary",
+        "reward_points": null,
+        "reward_kind": "voucher",
+        "excluded_category_ids": [],
+        "window_days": null,
+        "source_local_id": "aurum-annual-20l"
+      }
+    ],
+    "fee_waiver_rules": [
+      {
+        "id": "sbi-aurum:waiver:1",
+        "threshold_spend_inr": 1200000,
+        "period": "annual",
+        "waives_fee_inr": 9999,
+        "excluded_category_slugs": [
+          "fuel",
+          "wallet",
+          "rent"
+        ],
+        "notes": "Renewal fee of ₹9,999 is waived when annual spends reach ₹12 lakh in the preceding card membership year.",
+        "excluded_categories": [
+          "cat-fuel",
+          "cat-wallet",
+          "cat-rent"
+        ]
+      }
+    ],
+    "benefits": [
+      {
+        "id": "sbi-aurum:benefit:aurum-dreamfolks-international-lounge",
+        "key": "aurum-dreamfolks-international-lounge",
+        "source_local_id": "aurum-dreamfolks-international-lounge",
+        "kind": "lounge_international",
+        "label": "Unlimited complimentary access to 1,000+ international airport lounges through complimentary DreamFolks membership, plus 1 complimentary guest visit per quarter.",
+        "description": "Sponsor: SBI Card",
+        "quota_count": null,
+        "quota_period": "quarter",
+        "network_program": "dreamfolks",
+        "value_estimate_inr": null,
+        "conditions": {
+          "source_category_id": "lounge",
+          "evaluation_engine": {
+            "conditions": {
+              "guest_quota": "1 complimentary guest visit per quarter"
+            },
+            "benefit_calculation": {
+              "primary_cardholder": "Unlimited complimentary international lounge access",
+              "guest": "1 complimentary guest visit per quarter"
+            },
+            "perks": [
+              "Complimentary DreamFolks membership",
+              "1,000+ international airport lounges"
+            ]
+          }
+        }
+      },
+      {
+        "id": "sbi-aurum:benefit:aurum-domestic-lounge",
+        "key": "aurum-domestic-lounge",
+        "source_local_id": "aurum-domestic-lounge",
+        "kind": "lounge_domestic",
+        "label": "4 complimentary domestic airport lounge visits per quarter. Applicable to add-on cardholders as well.",
+        "description": "Sponsor: SBI Card",
+        "quota_count": 4,
+        "quota_period": "quarter",
+        "network_program": "visa_infinite",
+        "value_estimate_inr": null,
+        "conditions": {
+          "source_category_id": "lounge",
+          "evaluation_engine": {
+            "conditions": {
+              "frequency": "quarterly",
+              "add_on_cardholders_eligible": true
+            },
+            "benefit_calculation": {
+              "complimentary_visits": 4
+            },
+            "perks": [
+              "Domestic airport lounge access"
+            ]
+          }
+        }
+      },
+      {
+        "id": "sbi-aurum:benefit:aurum-airport-spa",
+        "key": "aurum-airport-spa",
+        "source_local_id": "aurum-airport-spa",
+        "kind": "other",
+        "label": "1 complimentary spa access per calendar quarter at select domestic airport terminals via DreamFolks.",
+        "description": "Sponsor: SBI Card",
+        "quota_count": 1,
+        "quota_period": "quarter",
+        "network_program": "dreamfolks",
+        "value_estimate_inr": null,
+        "conditions": {
+          "source_category_id": "other",
+          "evaluation_engine": {
+            "conditions": {
+              "location": "select Indian airports"
+            },
+            "benefit_calculation": {
+              "complimentary_visits": 1
+            },
+            "perks": [
+              "Airport spa access"
+            ]
+          }
+        }
+      },
+      {
+        "id": "sbi-aurum:benefit:aurum-golf-rounds",
+        "key": "aurum-golf-rounds",
+        "source_local_id": "aurum-golf-rounds",
+        "kind": "golf",
+        "label": "16 complimentary golf rounds per calendar year, maximum 4 per calendar quarter.",
+        "description": "Sponsor: SBI Card",
+        "quota_count": 16,
+        "quota_period": "annual",
+        "network_program": "aurum_golf",
+        "value_estimate_inr": null,
+        "conditions": {
+          "source_category_id": "golf",
+          "evaluation_engine": {
+            "conditions": {
+              "annual_quota": 16,
+              "quarterly_cap": 4
+            },
+            "benefit_calculation": {
+              "rounds_per_quarter": 4
+            },
+            "perks": [
+              "Complimentary green fee access"
+            ]
+          }
+        }
+      },
+      {
+        "id": "sbi-aurum:benefit:aurum-golf-lessons",
+        "key": "aurum-golf-lessons",
+        "source_local_id": "aurum-golf-lessons",
+        "kind": "golf",
+        "label": "12 complimentary golf lessons per calendar year.",
+        "description": "Sponsor: SBI Card",
+        "quota_count": 12,
+        "quota_period": "annual",
+        "network_program": "aurum_golf",
+        "value_estimate_inr": null,
+        "conditions": {
+          "source_category_id": "golf",
+          "evaluation_engine": {
+            "conditions": {
+              "annual_quota": 12
+            },
+            "benefit_calculation": {
+              "lessons_per_year": 12
+            },
+            "perks": [
+              "Golf lessons"
+            ]
+          }
+        }
+      },
+      {
+        "id": "sbi-aurum:benefit:aurum-bookmyshow",
+        "key": "aurum-bookmyshow",
+        "source_local_id": "aurum-bookmyshow",
+        "kind": "movie",
+        "label": "4 movie tickets worth up to ₹1,000 every month on BookMyShow; maximum 2 tickets per booking, maximum ₹500 discount per booking and ₹250 per ticket, with a minimum 24-hour gap between bookings.",
+        "description": "Sponsor: SBI Card",
+        "quota_count": 4,
+        "quota_period": "calendar_month",
+        "network_program": "bookmyshow",
+        "value_estimate_inr": 1000,
+        "conditions": {
+          "source_category_id": "movie",
+          "evaluation_engine": {
+            "conditions": {
+              "tickets_per_booking": 2,
+              "minimum_hours_between_bookings": 24
+            },
+            "benefit_calculation": {
+              "monthly_value_inr": 1000,
+              "maximum_discount_per_booking_inr": 500,
+              "maximum_discount_per_ticket_inr": 250
+            },
+            "perks": [
+              "4 movie tickets per month",
+              "Convenience fee charged as applicable"
+            ]
+          }
+        }
+      },
+      {
+        "id": "sbi-aurum:benefit:aurum-concierge",
+        "key": "aurum-concierge",
+        "source_local_id": "aurum-concierge",
+        "kind": "concierge",
+        "label": "24x7 AURUM dedicated concierge service for travel, dining and lifestyle reservations.",
+        "description": "Sponsor: SBI Card",
+        "quota_count": null,
+        "quota_period": null,
+        "network_program": "aurum_concierge",
+        "value_estimate_inr": null,
+        "conditions": {
+          "source_category_id": "concierge",
+          "evaluation_engine": {
+            "conditions": {},
+            "benefit_calculation": {},
+            "perks": [
+              "Hotel reservation assistance",
+              "Flight booking assistance",
+              "Dedicated phone and email concierge"
+            ]
+          }
+        }
+      },
+      {
+        "id": "sbi-aurum:benefit:aurum-club-marriott",
+        "key": "aurum-club-marriott",
+        "source_local_id": "aurum-club-marriott",
+        "kind": "dining_program",
+        "label": "Complimentary 1-year Club Marriott membership for Asia Pacific dining and stay discounts.",
+        "description": "Sponsor: Club Marriott",
+        "quota_count": 1,
+        "quota_period": "annual",
+        "network_program": "club_marriott",
+        "value_estimate_inr": 10000,
+        "conditions": {
+          "source_category_id": "dining",
+          "evaluation_engine": {
+            "conditions": {},
+            "benefit_calculation": {},
+            "perks": [
+              "Up to 25% discount on dining",
+              "Up to 20% discount on rooms across Asia Pacific"
+            ]
+          }
+        }
+      },
+      {
+        "id": "sbi-aurum:benefit:aurum-wsj-mint",
+        "key": "aurum-wsj-mint",
+        "source_local_id": "aurum-wsj-mint",
+        "kind": "other",
+        "label": "Complimentary 1-year digital subscriptions to The Wall Street Journal and Mint.",
+        "description": "Sponsor: The Wall Street Journal and Mint",
+        "quota_count": 1,
+        "quota_period": "annual",
+        "network_program": "digital_subscription",
+        "value_estimate_inr": 12000,
+        "conditions": {
+          "source_category_id": "other",
+          "evaluation_engine": {
+            "conditions": {},
+            "benefit_calculation": {},
+            "perks": [
+              "1-year Wall Street Journal digital subscription",
+              "1-year Mint digital subscription"
+            ]
+          }
+        }
+      },
+      {
+        "id": "sbi-aurum:benefit:aurum-flight-cancellation",
+        "key": "aurum-flight-cancellation",
+        "source_local_id": "aurum-flight-cancellation",
+        "kind": "insurance_purchase",
+        "label": "Flight cancellation cover offering up to 2 ticket cancellation reimbursements per year, up to ₹3,500 each.",
+        "description": "Sponsor: SBI Card",
+        "quota_count": 2,
+        "quota_period": "annual",
+        "network_program": "aurum_cover",
+        "value_estimate_inr": 7000,
+        "conditions": {
+          "source_category_id": "insurance_related_perk",
+          "evaluation_engine": {
+            "conditions": {
+              "max_claims_per_year": 2,
+              "max_claim_per_ticket_inr": 3500
+            },
+            "benefit_calculation": {
+              "reimbursement_per_incident_inr": 3500
+            },
+            "perks": [
+              "Refundable and non-refundable tickets covered across all airlines"
+            ]
+          }
+        }
+      },
+      {
+        "id": "sbi-aurum:benefit:insurance:air_accidental_death",
+        "key": "insurance:air_accidental_death",
+        "source_local_id": null,
+        "kind": "insurance_travel",
+        "label": "Air Accidental Death",
+        "description": "Air accidental death coverage of ₹3.50 Crore associated with AURUM cardholder ticket booking.",
+        "quota_count": null,
+        "quota_period": null,
+        "network_program": null,
+        "value_estimate_inr": 35000000,
+        "conditions": {
+          "coverage_usd": null
+        }
+      },
+      {
+        "id": "sbi-aurum:benefit:insurance:baggage_loss_delay",
+        "key": "insurance:baggage_loss_delay",
+        "source_local_id": null,
+        "kind": "insurance_travel",
+        "label": "Baggage Loss Delay",
+        "description": "Travel insurance coverage of ₹1 lakh for flight delay and loss of checked baggage during travel.",
+        "quota_count": null,
+        "quota_period": null,
+        "network_program": null,
+        "value_estimate_inr": 100000,
+        "conditions": {
+          "coverage_usd": null
+        }
+      },
+      {
+        "id": "sbi-aurum:benefit:insurance:fraud_liability",
+        "key": "insurance:fraud_liability",
+        "source_local_id": null,
+        "kind": "other",
+        "label": "Fraud Liability",
+        "description": "Lost Card and Fraud Liability Protection coverage up to ₹10 lakh from 48 hours prior to reporting loss.",
+        "quota_count": null,
+        "quota_period": null,
+        "network_program": null,
+        "value_estimate_inr": 1000000,
+        "conditions": {
+          "coverage_usd": null
+        }
+      }
+    ],
+    "unlock_rules": [],
+    "redemption_options": [
+      {
+        "program_name": "AURUM Rewards Portal",
+        "method": "partner_catalogue",
+        "value_per_point_inr": 0.25,
+        "min_points": 1000,
+        "notes": "Redemption fee: ₹0"
+      },
+      {
+        "program_name": "AURUM Rewards Portal",
+        "method": "flight_hotel_booking",
+        "value_per_point_inr": 0.25,
+        "min_points": 1000,
+        "notes": "Redemption fee: ₹0"
+      }
+    ],
+    "is_upi_linkable": false
+  }
+}

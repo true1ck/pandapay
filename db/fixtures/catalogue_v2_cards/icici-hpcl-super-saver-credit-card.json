@@ -1,0 +1,1182 @@
+{
+  "generated_by": "api/scripts/catalogue_v2/snapshot_examples.js",
+  "source_slug": "icici-hpcl-super-saver-credit-card",
+  "inputs": {
+    "transform_version": "7",
+    "source_record_sha256": "8494b6efa37aeed3f1e604e248e6bf471c6af8cf39deb3a621abd9700012053a",
+    "override_sha256": "ea1e847e170a91d3effa8a03ffd4064fa003ff022680ba6fea70dd9208a19abd",
+    "directory_sha256": "c2fded34df886aef08595eebb7629a4dd140c98af750f3c891d6c291b4874b53",
+    "verified": false
+  },
+  "blocking_flags": [
+    "post_limit_conflict"
+  ],
+  "card": {
+    "id": "icici-hpcl-super-saver-credit-card:card",
+    "slug": "icici-hpcl-super-saver-credit-card",
+    "name": "ICICI Bank HPCL Super Saver Credit Card",
+    "network": "rupay",
+    "issuer_slug": "icici-bank",
+    "base_reward_unit": "points_per_100",
+    "base_reward_rate": 2,
+    "point_value_inr": 0.25,
+    "excluded_categories": [],
+    "accrual_block_inr": 100,
+    "accrual_rounding": "points_half_up",
+    "cashback_rounding": null,
+    "points_expiry_months": 36,
+    "model_status": "partial",
+    "model_coverage": {
+      "rules_total": 12,
+      "rules_modelled": 12,
+      "rules_info": 0,
+      "caps_total": 4,
+      "caps_enforced": 4,
+      "flags": [
+        {
+          "code": "partial_category_list",
+          "source_local_id": "daily_essentials_accelerator",
+          "detail": null
+        },
+        {
+          "code": "unmapped_excluded_category",
+          "source_local_id": "retail_base_earn",
+          "detail": null
+        },
+        {
+          "code": "mcc_scoped_exclusion",
+          "source_local_id": "rent_exclusion",
+          "detail": null
+        },
+        {
+          "code": "mcc_scoped_exclusion",
+          "source_local_id": "wallet_load_exclusion",
+          "detail": null
+        },
+        {
+          "code": "exclusion_scope_broadened",
+          "source_local_id": "cash_advance_exclusion",
+          "detail": null
+        },
+        {
+          "code": "narrow_token_to_mcc",
+          "source_local_id": "transport_reward_cap",
+          "detail": null
+        },
+        {
+          "code": "post_limit_conflict",
+          "source_local_id": "daily_essentials_reward_cap",
+          "detail": null
+        }
+      ],
+      "overrides_applied": [
+        {
+          "path": "accrual_engine.rounding_mode",
+          "op": "set",
+          "value_sha256": "7eb8bc431ee35297",
+          "reason": "Points rounded to nearest integer per transaction.",
+          "source_url": "https://www.icici.bank.in/managed-assets/docs/terms-condition/hpcl-super-saver-credit-card-tnc.pdf",
+          "checked_on": "2026-11-05"
+        },
+        {
+          "path": "cap_rules[id=fuel_cashback_monthly_cap].metric",
+          "op": "set",
+          "value_sha256": "7af78ba28cf9ccb3",
+          "reason": "Cap is Rs 200 of cashback per month.",
+          "source_url": "https://www.icici.bank.in/managed-assets/docs/terms-condition/hpcl-super-saver-credit-card-tnc.pdf",
+          "checked_on": "2026-11-05"
+        },
+        {
+          "path": "cap_rules[id=fuel_cashback_monthly_cap].limit_value",
+          "op": "set",
+          "value_sha256": "27badc983df1780b",
+          "reason": "Native unit: Rs 200 cashback.",
+          "source_url": "https://www.icici.bank.in/managed-assets/docs/terms-condition/hpcl-super-saver-credit-card-tnc.pdf",
+          "checked_on": "2026-11-05"
+        },
+        {
+          "path": "cap_rules[id=fuel_cashback_monthly_cap].period",
+          "op": "set",
+          "value_sha256": "90d558c7c6a21aa1",
+          "reason": "T&C say per month.",
+          "source_url": "https://www.icici.bank.in/managed-assets/docs/terms-condition/hpcl-super-saver-credit-card-tnc.pdf",
+          "checked_on": "2026-11-05"
+        },
+        {
+          "path": "cap_rules[id=daily_essentials_reward_cap].metric",
+          "op": "set",
+          "value_sha256": "7af78ba28cf9ccb3",
+          "reason": "The 400-point cap is on the whole accelerated benefit.",
+          "source_url": "https://www.icici.bank.in/managed-assets/docs/terms-condition/hpcl-super-saver-credit-card-tnc.pdf",
+          "checked_on": "2026-11-05"
+        }
+      ]
+    },
+    "reward_rules": [
+      {
+        "id": "icici-hpcl-super-saver-credit-card:rule:fuel_hpcl_cashback",
+        "category_id": "cat-fuel",
+        "category_slug": "fuel",
+        "merchant_pattern": null,
+        "rail": null,
+        "unit": "cashback_percent",
+        "rate": 4,
+        "min_txn_inr": null,
+        "max_txn_inr": null,
+        "priority": 1,
+        "conditions": {
+          "source_local_id": "fuel_hpcl_cashback",
+          "part": null,
+          "info_reasons": [],
+          "flags": []
+        },
+        "notes": null,
+        "effective_from": "2026-01-01",
+        "effective_to": null,
+        "excluded_categories": [],
+        "rule_role": "earn",
+        "merchant_slugs": [
+          "hp_pay",
+          "hpcl"
+        ],
+        "platform_slugs": [],
+        "mcc_include": [],
+        "mcc_exclude": [],
+        "except_merchant_slugs": [],
+        "except_platform_slugs": [],
+        "block_inr": null,
+        "min_engine_version": 2,
+        "max_engine_version": null,
+        "source_local_id": "fuel_hpcl_cashback",
+        "display_note": "4% cashback on eligible HPCL fuel purchases, capped at ₹200 per statement cycle, corresponding to a maximum ₹5,000 eligible fuel spend for the cashback component."
+      },
+      {
+        "id": "icici-hpcl-super-saver-credit-card:rule:fuel_hpcl_surcharge_waiver",
+        "category_id": "cat-fuel",
+        "category_slug": "fuel",
+        "merchant_pattern": null,
+        "rail": null,
+        "unit": "cashback_percent",
+        "rate": 1,
+        "min_txn_inr": 400,
+        "max_txn_inr": 4000,
+        "priority": 2,
+        "conditions": {
+          "source_local_id": "fuel_hpcl_surcharge_waiver",
+          "part": null,
+          "info_reasons": [],
+          "flags": []
+        },
+        "notes": null,
+        "effective_from": "2026-01-01",
+        "effective_to": null,
+        "excluded_categories": [],
+        "rule_role": "earn",
+        "merchant_slugs": [
+          "hp_pay",
+          "hpcl"
+        ],
+        "platform_slugs": [],
+        "mcc_include": [],
+        "mcc_exclude": [],
+        "except_merchant_slugs": [],
+        "except_platform_slugs": [],
+        "block_inr": null,
+        "min_engine_version": 2,
+        "max_engine_version": null,
+        "source_local_id": "fuel_hpcl_surcharge_waiver",
+        "display_note": "1% fuel surcharge waiver on eligible HPCL fuel transactions between ₹400 and ₹4,000."
+      },
+      {
+        "id": "icici-hpcl-super-saver-credit-card:rule:fuel_hp_pay_additional_reward",
+        "category_id": "cat-fuel",
+        "category_slug": "fuel",
+        "merchant_pattern": null,
+        "rail": "online",
+        "unit": "points_per_100",
+        "rate": 6,
+        "min_txn_inr": null,
+        "max_txn_inr": null,
+        "priority": 3,
+        "conditions": {
+          "source_local_id": "fuel_hp_pay_additional_reward",
+          "part": null,
+          "info_reasons": [],
+          "flags": []
+        },
+        "notes": null,
+        "effective_from": "2026-01-01",
+        "effective_to": null,
+        "excluded_categories": [],
+        "rule_role": "earn",
+        "merchant_slugs": [
+          "hp_pay",
+          "hpcl"
+        ],
+        "platform_slugs": [],
+        "mcc_include": [],
+        "mcc_exclude": [],
+        "except_merchant_slugs": [],
+        "except_platform_slugs": [],
+        "block_inr": null,
+        "min_engine_version": 2,
+        "max_engine_version": null,
+        "source_local_id": "fuel_hp_pay_additional_reward",
+        "display_note": "Additional 1.5% value as 6 ICICI Bank Reward Points per ₹100 on eligible HPCL fuel purchases through HP Pay."
+      },
+      {
+        "id": "icici-hpcl-super-saver-credit-card:rule:daily_essentials_accelerator#1",
+        "category_id": "cat-bills",
+        "category_slug": "bills",
+        "merchant_pattern": null,
+        "rail": null,
+        "unit": "points_per_100",
+        "rate": 20,
+        "min_txn_inr": null,
+        "max_txn_inr": null,
+        "priority": 4,
+        "conditions": {
+          "source_local_id": "daily_essentials_accelerator",
+          "part": 1,
+          "info_reasons": [],
+          "flags": [
+            "partial_category_list"
+          ]
+        },
+        "notes": null,
+        "effective_from": "2026-01-01",
+        "effective_to": null,
+        "excluded_categories": [],
+        "rule_role": "earn",
+        "merchant_slugs": [],
+        "platform_slugs": [],
+        "mcc_include": [
+          "4814",
+          "4900",
+          "5311",
+          "5411",
+          "9222",
+          "9311",
+          "9399"
+        ],
+        "mcc_exclude": [],
+        "except_merchant_slugs": [],
+        "except_platform_slugs": [],
+        "block_inr": null,
+        "min_engine_version": 2,
+        "max_engine_version": null,
+        "source_local_id": "daily_essentials_accelerator",
+        "display_note": "20 ICICI Bank Reward Points per ₹100 on eligible utility, grocery, telecom, government, tax and departmental-store transactions, subject to a shared 400-point cap per statement cycle."
+      },
+      {
+        "id": "icici-hpcl-super-saver-credit-card:rule:daily_essentials_accelerator#2",
+        "category_id": "cat-groceries",
+        "category_slug": "groceries",
+        "merchant_pattern": null,
+        "rail": null,
+        "unit": "points_per_100",
+        "rate": 20,
+        "min_txn_inr": null,
+        "max_txn_inr": null,
+        "priority": 4,
+        "conditions": {
+          "source_local_id": "daily_essentials_accelerator",
+          "part": 2,
+          "info_reasons": [],
+          "flags": [
+            "partial_category_list"
+          ]
+        },
+        "notes": null,
+        "effective_from": "2026-01-01",
+        "effective_to": null,
+        "excluded_categories": [],
+        "rule_role": "earn",
+        "merchant_slugs": [],
+        "platform_slugs": [],
+        "mcc_include": [
+          "4814",
+          "4900",
+          "5311",
+          "5411",
+          "9222",
+          "9311",
+          "9399"
+        ],
+        "mcc_exclude": [],
+        "except_merchant_slugs": [],
+        "except_platform_slugs": [],
+        "block_inr": null,
+        "min_engine_version": 2,
+        "max_engine_version": null,
+        "source_local_id": "daily_essentials_accelerator",
+        "display_note": "20 ICICI Bank Reward Points per ₹100 on eligible utility, grocery, telecom, government, tax and departmental-store transactions, subject to a shared 400-point cap per statement cycle."
+      },
+      {
+        "id": "icici-hpcl-super-saver-credit-card:rule:daily_essentials_accelerator#3",
+        "category_id": "cat-government",
+        "category_slug": "government",
+        "merchant_pattern": null,
+        "rail": null,
+        "unit": "points_per_100",
+        "rate": 20,
+        "min_txn_inr": null,
+        "max_txn_inr": null,
+        "priority": 4,
+        "conditions": {
+          "source_local_id": "daily_essentials_accelerator",
+          "part": 3,
+          "info_reasons": [],
+          "flags": [
+            "partial_category_list"
+          ]
+        },
+        "notes": null,
+        "effective_from": "2026-01-01",
+        "effective_to": null,
+        "excluded_categories": [],
+        "rule_role": "earn",
+        "merchant_slugs": [],
+        "platform_slugs": [],
+        "mcc_include": [
+          "4814",
+          "4900",
+          "5311",
+          "5411",
+          "9222",
+          "9311",
+          "9399"
+        ],
+        "mcc_exclude": [],
+        "except_merchant_slugs": [],
+        "except_platform_slugs": [],
+        "block_inr": null,
+        "min_engine_version": 2,
+        "max_engine_version": null,
+        "source_local_id": "daily_essentials_accelerator",
+        "display_note": "20 ICICI Bank Reward Points per ₹100 on eligible utility, grocery, telecom, government, tax and departmental-store transactions, subject to a shared 400-point cap per statement cycle."
+      },
+      {
+        "id": "icici-hpcl-super-saver-credit-card:rule:retail_base_earn",
+        "category_id": null,
+        "category_slug": null,
+        "merchant_pattern": null,
+        "rail": null,
+        "unit": "points_per_100",
+        "rate": 2,
+        "min_txn_inr": null,
+        "max_txn_inr": null,
+        "priority": 10,
+        "conditions": {
+          "source_local_id": "retail_base_earn",
+          "part": null,
+          "info_reasons": [],
+          "flags": [
+            "unmapped_excluded_category"
+          ]
+        },
+        "notes": null,
+        "effective_from": "2026-01-01",
+        "effective_to": null,
+        "excluded_categories": [
+          "cat-bills",
+          "cat-emi",
+          "cat-fuel",
+          "cat-government",
+          "cat-groceries",
+          "cat-rent",
+          "cat-wallet"
+        ],
+        "rule_role": "base",
+        "merchant_slugs": [],
+        "platform_slugs": [],
+        "mcc_include": [],
+        "mcc_exclude": [],
+        "except_merchant_slugs": [],
+        "except_platform_slugs": [],
+        "block_inr": null,
+        "min_engine_version": 1,
+        "max_engine_version": null,
+        "source_local_id": "retail_base_earn",
+        "display_note": "2 ICICI Bank Reward Points per ₹100 spent on other eligible retail transactions."
+      },
+      {
+        "id": "icici-hpcl-super-saver-credit-card:rule:fuel_reward_points_exclusion",
+        "category_id": "cat-fuel",
+        "category_slug": "fuel",
+        "merchant_pattern": null,
+        "rail": null,
+        "unit": "points_per_100",
+        "rate": 0,
+        "min_txn_inr": null,
+        "max_txn_inr": null,
+        "priority": 0,
+        "conditions": {
+          "source_local_id": "fuel_reward_points_exclusion",
+          "part": null,
+          "info_reasons": [],
+          "flags": []
+        },
+        "notes": null,
+        "effective_from": "2026-01-01",
+        "effective_to": null,
+        "excluded_categories": [],
+        "rule_role": "exclusion",
+        "merchant_slugs": [],
+        "platform_slugs": [],
+        "mcc_include": [],
+        "mcc_exclude": [],
+        "except_merchant_slugs": [],
+        "except_platform_slugs": [],
+        "block_inr": null,
+        "min_engine_version": 1,
+        "max_engine_version": null,
+        "source_local_id": "fuel_reward_points_exclusion",
+        "display_note": "Standard Reward Point accrual is excluded on fuel transactions."
+      },
+      {
+        "id": "icici-hpcl-super-saver-credit-card:rule:rent_exclusion#1",
+        "category_id": "cat-rent",
+        "category_slug": "rent",
+        "merchant_pattern": null,
+        "rail": null,
+        "unit": "points_per_100",
+        "rate": 0,
+        "min_txn_inr": null,
+        "max_txn_inr": null,
+        "priority": 0,
+        "conditions": {
+          "source_local_id": "rent_exclusion",
+          "part": 1,
+          "info_reasons": [],
+          "flags": [
+            "mcc_scoped_exclusion"
+          ]
+        },
+        "notes": null,
+        "effective_from": "2026-01-01",
+        "effective_to": null,
+        "excluded_categories": [],
+        "rule_role": "exclusion",
+        "merchant_slugs": [],
+        "platform_slugs": [],
+        "mcc_include": [],
+        "mcc_exclude": [],
+        "except_merchant_slugs": [],
+        "except_platform_slugs": [],
+        "block_inr": null,
+        "min_engine_version": 1,
+        "max_engine_version": 1,
+        "source_local_id": "rent_exclusion",
+        "display_note": "Rent and property-management transactions do not earn Reward Points."
+      },
+      {
+        "id": "icici-hpcl-super-saver-credit-card:rule:rent_exclusion#2",
+        "category_id": "cat-rent",
+        "category_slug": "rent",
+        "merchant_pattern": null,
+        "rail": null,
+        "unit": "points_per_100",
+        "rate": 0,
+        "min_txn_inr": null,
+        "max_txn_inr": null,
+        "priority": 0,
+        "conditions": {
+          "source_local_id": "rent_exclusion",
+          "part": 2,
+          "info_reasons": [],
+          "flags": [
+            "mcc_scoped_exclusion"
+          ]
+        },
+        "notes": null,
+        "effective_from": "2026-01-01",
+        "effective_to": null,
+        "excluded_categories": [],
+        "rule_role": "exclusion",
+        "merchant_slugs": [],
+        "platform_slugs": [],
+        "mcc_include": [
+          "6513"
+        ],
+        "mcc_exclude": [],
+        "except_merchant_slugs": [],
+        "except_platform_slugs": [],
+        "block_inr": null,
+        "min_engine_version": 2,
+        "max_engine_version": null,
+        "source_local_id": "rent_exclusion",
+        "display_note": "Rent and property-management transactions do not earn Reward Points."
+      },
+      {
+        "id": "icici-hpcl-super-saver-credit-card:rule:rent_exclusion#3",
+        "category_id": null,
+        "category_slug": null,
+        "merchant_pattern": null,
+        "rail": null,
+        "unit": "points_per_100",
+        "rate": 0,
+        "min_txn_inr": null,
+        "max_txn_inr": null,
+        "priority": 0,
+        "conditions": {
+          "source_local_id": "rent_exclusion",
+          "part": 3,
+          "info_reasons": [],
+          "flags": [
+            "mcc_scoped_exclusion"
+          ]
+        },
+        "notes": null,
+        "effective_from": "2026-01-01",
+        "effective_to": null,
+        "excluded_categories": [],
+        "rule_role": "exclusion",
+        "merchant_slugs": [],
+        "platform_slugs": [],
+        "mcc_include": [
+          "6513"
+        ],
+        "mcc_exclude": [],
+        "except_merchant_slugs": [],
+        "except_platform_slugs": [],
+        "block_inr": null,
+        "min_engine_version": 2,
+        "max_engine_version": null,
+        "source_local_id": "rent_exclusion",
+        "display_note": "Rent and property-management transactions do not earn Reward Points."
+      },
+      {
+        "id": "icici-hpcl-super-saver-credit-card:rule:wallet_load_exclusion#1",
+        "category_id": "cat-wallet",
+        "category_slug": "wallet",
+        "merchant_pattern": null,
+        "rail": "online",
+        "unit": "points_per_100",
+        "rate": 0,
+        "min_txn_inr": null,
+        "max_txn_inr": null,
+        "priority": 0,
+        "conditions": {
+          "source_local_id": "wallet_load_exclusion",
+          "part": 1,
+          "info_reasons": [],
+          "flags": [
+            "mcc_scoped_exclusion"
+          ]
+        },
+        "notes": null,
+        "effective_from": "2026-01-15",
+        "effective_to": null,
+        "excluded_categories": [],
+        "rule_role": "exclusion",
+        "merchant_slugs": [],
+        "platform_slugs": [],
+        "mcc_include": [],
+        "mcc_exclude": [],
+        "except_merchant_slugs": [],
+        "except_platform_slugs": [],
+        "block_inr": null,
+        "min_engine_version": 1,
+        "max_engine_version": 1,
+        "source_local_id": "wallet_load_exclusion",
+        "display_note": "Third-party wallet loading transactions do not earn Reward Points."
+      },
+      {
+        "id": "icici-hpcl-super-saver-credit-card:rule:wallet_load_exclusion#2",
+        "category_id": "cat-wallet",
+        "category_slug": "wallet",
+        "merchant_pattern": null,
+        "rail": "online",
+        "unit": "points_per_100",
+        "rate": 0,
+        "min_txn_inr": null,
+        "max_txn_inr": null,
+        "priority": 0,
+        "conditions": {
+          "source_local_id": "wallet_load_exclusion",
+          "part": 2,
+          "info_reasons": [],
+          "flags": [
+            "mcc_scoped_exclusion"
+          ]
+        },
+        "notes": null,
+        "effective_from": "2026-01-15",
+        "effective_to": null,
+        "excluded_categories": [],
+        "rule_role": "exclusion",
+        "merchant_slugs": [],
+        "platform_slugs": [],
+        "mcc_include": [
+          "6540"
+        ],
+        "mcc_exclude": [],
+        "except_merchant_slugs": [],
+        "except_platform_slugs": [],
+        "block_inr": null,
+        "min_engine_version": 2,
+        "max_engine_version": null,
+        "source_local_id": "wallet_load_exclusion",
+        "display_note": "Third-party wallet loading transactions do not earn Reward Points."
+      },
+      {
+        "id": "icici-hpcl-super-saver-credit-card:rule:wallet_load_exclusion#3",
+        "category_id": null,
+        "category_slug": null,
+        "merchant_pattern": null,
+        "rail": "online",
+        "unit": "points_per_100",
+        "rate": 0,
+        "min_txn_inr": null,
+        "max_txn_inr": null,
+        "priority": 0,
+        "conditions": {
+          "source_local_id": "wallet_load_exclusion",
+          "part": 3,
+          "info_reasons": [],
+          "flags": [
+            "mcc_scoped_exclusion"
+          ]
+        },
+        "notes": null,
+        "effective_from": "2026-01-15",
+        "effective_to": null,
+        "excluded_categories": [],
+        "rule_role": "exclusion",
+        "merchant_slugs": [],
+        "platform_slugs": [],
+        "mcc_include": [
+          "6540"
+        ],
+        "mcc_exclude": [],
+        "except_merchant_slugs": [],
+        "except_platform_slugs": [],
+        "block_inr": null,
+        "min_engine_version": 2,
+        "max_engine_version": null,
+        "source_local_id": "wallet_load_exclusion",
+        "display_note": "Third-party wallet loading transactions do not earn Reward Points."
+      },
+      {
+        "id": "icici-hpcl-super-saver-credit-card:rule:cash_advance_exclusion",
+        "category_id": null,
+        "category_slug": null,
+        "merchant_pattern": null,
+        "rail": "atm",
+        "unit": "points_per_100",
+        "rate": 0,
+        "min_txn_inr": null,
+        "max_txn_inr": null,
+        "priority": 0,
+        "conditions": {
+          "source_local_id": "cash_advance_exclusion",
+          "part": null,
+          "info_reasons": [],
+          "flags": [
+            "exclusion_scope_broadened"
+          ]
+        },
+        "notes": null,
+        "effective_from": "2026-01-01",
+        "effective_to": null,
+        "excluded_categories": [],
+        "rule_role": "exclusion",
+        "merchant_slugs": [],
+        "platform_slugs": [],
+        "mcc_include": [
+          "6010",
+          "6011"
+        ],
+        "mcc_exclude": [],
+        "except_merchant_slugs": [],
+        "except_platform_slugs": [],
+        "block_inr": null,
+        "min_engine_version": 2,
+        "max_engine_version": null,
+        "source_local_id": "cash_advance_exclusion",
+        "display_note": "Cash withdrawals and cash advances do not earn Reward Points."
+      },
+      {
+        "id": "icici-hpcl-super-saver-credit-card:rule:emi_exclusion",
+        "category_id": null,
+        "category_slug": null,
+        "merchant_pattern": null,
+        "rail": "emi",
+        "unit": "points_per_100",
+        "rate": 0,
+        "min_txn_inr": null,
+        "max_txn_inr": null,
+        "priority": 0,
+        "conditions": {
+          "source_local_id": "emi_exclusion",
+          "part": null,
+          "info_reasons": [],
+          "flags": []
+        },
+        "notes": null,
+        "effective_from": "2026-01-01",
+        "effective_to": null,
+        "excluded_categories": [],
+        "rule_role": "exclusion",
+        "merchant_slugs": [],
+        "platform_slugs": [],
+        "mcc_include": [],
+        "mcc_exclude": [],
+        "except_merchant_slugs": [],
+        "except_platform_slugs": [],
+        "block_inr": null,
+        "min_engine_version": 2,
+        "max_engine_version": null,
+        "source_local_id": "emi_exclusion",
+        "display_note": "EMI transactions and post-purchase EMI conversions do not earn Reward Points."
+      },
+      {
+        "id": "icici-hpcl-super-saver-credit-card:rule:insurance_reward_cap",
+        "category_id": "cat-insurance",
+        "category_slug": "insurance",
+        "merchant_pattern": null,
+        "rail": null,
+        "unit": "points_per_100",
+        "rate": 2,
+        "min_txn_inr": null,
+        "max_txn_inr": null,
+        "priority": 5,
+        "conditions": {
+          "source_local_id": "insurance_reward_cap",
+          "part": null,
+          "info_reasons": [],
+          "flags": []
+        },
+        "notes": null,
+        "effective_from": "2026-02-01",
+        "effective_to": null,
+        "excluded_categories": [],
+        "rule_role": "earn",
+        "merchant_slugs": [],
+        "platform_slugs": [],
+        "mcc_include": [
+          "5960",
+          "6300",
+          "6381",
+          "6399"
+        ],
+        "mcc_exclude": [],
+        "except_merchant_slugs": [],
+        "except_platform_slugs": [],
+        "block_inr": null,
+        "min_engine_version": 2,
+        "max_engine_version": null,
+        "source_local_id": "insurance_reward_cap",
+        "display_note": "Reward Points accrue on eligible insurance transactions at the base rate up to ₹40,000 per statement cycle."
+      },
+      {
+        "id": "icici-hpcl-super-saver-credit-card:rule:transport_reward_cap",
+        "category_id": null,
+        "category_slug": null,
+        "merchant_pattern": null,
+        "rail": null,
+        "unit": "points_per_100",
+        "rate": 2,
+        "min_txn_inr": null,
+        "max_txn_inr": null,
+        "priority": 6,
+        "conditions": {
+          "source_local_id": "transport_reward_cap",
+          "part": null,
+          "info_reasons": [],
+          "flags": [
+            "narrow_token_to_mcc"
+          ]
+        },
+        "notes": null,
+        "effective_from": "2026-02-01",
+        "effective_to": null,
+        "excluded_categories": [],
+        "rule_role": "earn",
+        "merchant_slugs": [],
+        "platform_slugs": [],
+        "mcc_include": [
+          "4111",
+          "4112",
+          "4131",
+          "4784"
+        ],
+        "mcc_exclude": [],
+        "except_merchant_slugs": [],
+        "except_platform_slugs": [],
+        "block_inr": null,
+        "min_engine_version": 2,
+        "max_engine_version": null,
+        "source_local_id": "transport_reward_cap",
+        "display_note": "Reward Points accrue on eligible railway, bus, transit and toll MCCs up to ₹10,000 per calendar month."
+      }
+    ],
+    "cap_rules": [
+      {
+        "id": "icici-hpcl-super-saver-credit-card:cap:fuel_cashback_monthly_cap",
+        "reward_rule_id": "icici-hpcl-super-saver-credit-card:rule:fuel_hpcl_cashback",
+        "category_id": null,
+        "category_slug": null,
+        "benefit_kind": null,
+        "label": "Fuel cashback monthly cap",
+        "measure": "reward_value",
+        "period": "calendar_month",
+        "cap_value": 200,
+        "post_cap_unit": null,
+        "post_cap_rate": 0,
+        "resets_on_day": null,
+        "cap_kind": "total_cashback",
+        "cap_amount": 200,
+        "scope": "targets",
+        "targets": [
+          "icici-hpcl-super-saver-credit-card:rule:fuel_hpcl_cashback"
+        ],
+        "parent_cap_id": null,
+        "post_cap_behavior": null,
+        "anchor": null,
+        "min_engine_version": 2,
+        "source_local_id": "fuel_cashback_monthly_cap"
+      },
+      {
+        "id": "icici-hpcl-super-saver-credit-card:cap:daily_essentials_reward_cap",
+        "reward_rule_id": null,
+        "category_id": null,
+        "category_slug": null,
+        "benefit_kind": null,
+        "label": "Daily essentials reward cap",
+        "measure": "reward_value",
+        "period": "statement_cycle",
+        "cap_value": 100,
+        "post_cap_unit": null,
+        "post_cap_rate": 0,
+        "resets_on_day": null,
+        "cap_kind": "total_points",
+        "cap_amount": 400,
+        "scope": "targets",
+        "targets": [
+          "icici-hpcl-super-saver-credit-card:rule:daily_essentials_accelerator#1",
+          "icici-hpcl-super-saver-credit-card:rule:daily_essentials_accelerator#2",
+          "icici-hpcl-super-saver-credit-card:rule:daily_essentials_accelerator#3"
+        ],
+        "parent_cap_id": null,
+        "post_cap_behavior": null,
+        "anchor": null,
+        "min_engine_version": 2,
+        "source_local_id": "daily_essentials_reward_cap"
+      },
+      {
+        "id": "icici-hpcl-super-saver-credit-card:cap:insurance_reward_spend_cap",
+        "reward_rule_id": "icici-hpcl-super-saver-credit-card:rule:insurance_reward_cap",
+        "category_id": null,
+        "category_slug": null,
+        "benefit_kind": null,
+        "label": "Insurance reward spend cap",
+        "measure": "spend_amount",
+        "period": "statement_cycle",
+        "cap_value": 40000,
+        "post_cap_unit": null,
+        "post_cap_rate": 0,
+        "resets_on_day": null,
+        "cap_kind": "eligible_spend",
+        "cap_amount": 40000,
+        "scope": "targets",
+        "targets": [
+          "icici-hpcl-super-saver-credit-card:rule:insurance_reward_cap"
+        ],
+        "parent_cap_id": null,
+        "post_cap_behavior": "zero",
+        "anchor": null,
+        "min_engine_version": 2,
+        "source_local_id": "insurance_reward_spend_cap"
+      },
+      {
+        "id": "icici-hpcl-super-saver-credit-card:cap:transport_reward_spend_cap",
+        "reward_rule_id": "icici-hpcl-super-saver-credit-card:rule:transport_reward_cap",
+        "category_id": null,
+        "category_slug": null,
+        "benefit_kind": null,
+        "label": "Transport reward spend cap",
+        "measure": "spend_amount",
+        "period": "calendar_month",
+        "cap_value": 10000,
+        "post_cap_unit": null,
+        "post_cap_rate": 0,
+        "resets_on_day": 1,
+        "cap_kind": "eligible_spend",
+        "cap_amount": 10000,
+        "scope": "targets",
+        "targets": [
+          "icici-hpcl-super-saver-credit-card:rule:transport_reward_cap"
+        ],
+        "parent_cap_id": null,
+        "post_cap_behavior": "zero",
+        "anchor": null,
+        "min_engine_version": 2,
+        "source_local_id": "transport_reward_spend_cap"
+      }
+    ],
+    "milestone_rules": [],
+    "fee_waiver_rules": [
+      {
+        "id": "icici-hpcl-super-saver-credit-card:waiver:1",
+        "threshold_spend_inr": 150000,
+        "period": "annual",
+        "waives_fee_inr": 500,
+        "excluded_category_slugs": [
+          "rent",
+          "wallet",
+          "emi",
+          "government"
+        ],
+        "notes": "Annual renewal fee of ₹500 is waived on eligible spends of ₹1,50,000 or more in the preceding anniversary year.",
+        "excluded_categories": [
+          "cat-rent",
+          "cat-wallet",
+          "cat-emi",
+          "cat-government"
+        ]
+      }
+    ],
+    "benefits": [
+      {
+        "id": "icici-hpcl-super-saver-credit-card:benefit:domestic_airport_lounge",
+        "key": "domestic_airport_lounge",
+        "source_local_id": "domestic_airport_lounge",
+        "kind": "lounge_domestic",
+        "label": "1 complimentary domestic airport lounge visit per calendar quarter",
+        "description": "Sponsor: ICICI Bank",
+        "quota_count": 1,
+        "quota_period": "quarter",
+        "network_program": "ICICI Bank Domestic Airport Lounge Program",
+        "value_estimate_inr": 800,
+        "conditions": {
+          "source_category_id": "lounge",
+          "evaluation_engine": {
+            "conditions": {
+              "preceding_period": "calendar_quarter",
+              "minimum_spend_inr": 75000,
+              "eligibility_period": "following_calendar_quarter",
+              "cardholder_scope": "primary_cardholder_only"
+            },
+            "benefit_calculation": {
+              "visits": 1,
+              "period": "quarter"
+            },
+            "perks": [
+              "Complimentary access to participating domestic airport lounges across India",
+              "Requires minimum ₹75,000 spend in the preceding calendar quarter"
+            ]
+          }
+        }
+      },
+      {
+        "id": "icici-hpcl-super-saver-credit-card:benefit:bookmyshow_movie_offer",
+        "key": "bookmyshow_movie_offer",
+        "source_local_id": "bookmyshow_movie_offer",
+        "kind": "movie",
+        "label": "25% discount up to ₹100 on BookMyShow movie tickets",
+        "description": "Sponsor: ICICI Bank",
+        "quota_count": 2,
+        "quota_period": "calendar_month",
+        "network_program": "BookMyShow",
+        "value_estimate_inr": 200,
+        "conditions": {
+          "source_category_id": "movie",
+          "evaluation_engine": {
+            "conditions": {
+              "preceding_spend_quarter_min_inr": 25000,
+              "eligibility_period": "following_calendar_quarter"
+            },
+            "benefit_calculation": {
+              "discount_percent": 25,
+              "maximum_discount_inr": 100
+            },
+            "perks": [
+              "25% discount up to ₹100 on purchase of minimum 2 tickets",
+              "Available up to 2 times per calendar month subject to applicable offer terms",
+              "Requires ₹25,000 qualifying spend in the previous calendar quarter from April 1, 2026"
+            ]
+          }
+        }
+      },
+      {
+        "id": "icici-hpcl-super-saver-credit-card:benefit:inox_movie_offer",
+        "key": "inox_movie_offer",
+        "source_local_id": "inox_movie_offer",
+        "kind": "movie",
+        "label": "25% discount up to ₹100 on INOX movie tickets",
+        "description": "Sponsor: ICICI Bank",
+        "quota_count": 2,
+        "quota_period": "calendar_month",
+        "network_program": "INOX",
+        "value_estimate_inr": 200,
+        "conditions": {
+          "source_category_id": "movie",
+          "evaluation_engine": {
+            "conditions": {
+              "preceding_spend_quarter_min_inr": 25000,
+              "eligibility_period": "following_calendar_quarter"
+            },
+            "benefit_calculation": {
+              "discount_percent": 25,
+              "maximum_discount_inr": 100
+            },
+            "perks": [
+              "25% discount up to ₹100 on minimum purchase of 2 tickets on INOX website/app",
+              "Available up to 2 times per calendar month subject to applicable offer terms",
+              "Requires ₹25,000 qualifying spend in the previous calendar quarter"
+            ]
+          }
+        }
+      },
+      {
+        "id": "icici-hpcl-super-saver-credit-card:benefit:roadside_assistance",
+        "key": "roadside_assistance",
+        "source_local_id": "roadside_assistance",
+        "kind": "roadside_assistance",
+        "label": "Complimentary 24x7 roadside assistance service",
+        "description": "Sponsor: ICICI Bank",
+        "quota_count": null,
+        "quota_period": null,
+        "network_program": "ICICI Bank Roadside Assistance",
+        "value_estimate_inr": 1000,
+        "conditions": {
+          "source_category_id": "other",
+          "evaluation_engine": {
+            "conditions": null,
+            "benefit_calculation": null,
+            "perks": [
+              "Flat tire support, jump start, emergency fuel delivery and minor breakdown assistance across India"
+            ]
+          }
+        }
+      },
+      {
+        "id": "icici-hpcl-super-saver-credit-card:benefit:culinary_treats",
+        "key": "culinary_treats",
+        "source_local_id": "culinary_treats",
+        "kind": "dining_program",
+        "label": "Dining discounts at participating partner restaurants",
+        "description": "Sponsor: ICICI Bank",
+        "quota_count": null,
+        "quota_period": null,
+        "network_program": "Culinary Treats",
+        "value_estimate_inr": null,
+        "conditions": {
+          "source_category_id": "dining",
+          "evaluation_engine": {
+            "conditions": null,
+            "benefit_calculation": null,
+            "perks": [
+              "Dining discounts through the ICICI Bank Culinary Treats Programme at participating restaurants"
+            ]
+          }
+        }
+      },
+      {
+        "id": "icici-hpcl-super-saver-credit-card:benefit:rupay_concierge",
+        "key": "rupay_concierge",
+        "source_local_id": "rupay_concierge",
+        "kind": "concierge",
+        "label": "24x7 concierge assistance on RuPay Platinum variant",
+        "description": "Sponsor: NPCI / ICICI Bank",
+        "quota_count": null,
+        "quota_period": null,
+        "network_program": "RuPay Platinum Concierge",
+        "value_estimate_inr": null,
+        "conditions": {
+          "source_category_id": "concierge",
+          "evaluation_engine": {
+            "conditions": {
+              "variant": "RuPay"
+            },
+            "benefit_calculation": null,
+            "perks": [
+              "24x7 concierge assistance for travel, dining, reservations and related services"
+            ]
+          }
+        }
+      },
+      {
+        "id": "icici-hpcl-super-saver-credit-card:benefit:insurance:accidental_death",
+        "key": "insurance:accidental_death",
+        "source_local_id": null,
+        "kind": "other",
+        "label": "Accidental Death",
+        "description": "Personal Accident Insurance cover up to ₹2 lakh is provided on the RuPay variant, subject to applicable NPCI/ICICI Bank insurance terms and qualifying card usage requirements.",
+        "quota_count": null,
+        "quota_period": null,
+        "network_program": null,
+        "value_estimate_inr": 200000,
+        "conditions": {
+          "coverage_usd": null
+        }
+      }
+    ],
+    "unlock_rules": [
+      {
+        "id": "icici-hpcl-super-saver-credit-card:unlock:domestic_airport_lounge@1",
+        "card_benefit_id": "icici-hpcl-super-saver-credit-card:benefit:domestic_airport_lounge",
+        "kind": "lounge_domestic",
+        "label": "1 complimentary domestic airport lounge visit per calendar quarter",
+        "spend_threshold_inr": 75000,
+        "spend_window": "previous_calendar_quarter",
+        "window_days": null,
+        "unlocks_quota": 1,
+        "unlocks_period": "quarter",
+        "tier_label": null,
+        "excluded_category_ids": [],
+        "notes": null,
+        "source_local_id": "domestic_airport_lounge"
+      },
+      {
+        "id": "icici-hpcl-super-saver-credit-card:unlock:bookmyshow_movie_offer@1",
+        "card_benefit_id": "icici-hpcl-super-saver-credit-card:benefit:bookmyshow_movie_offer",
+        "kind": "other",
+        "label": "25% discount up to ₹100 on BookMyShow movie tickets",
+        "spend_threshold_inr": 25000,
+        "spend_window": "previous_calendar_quarter",
+        "window_days": null,
+        "unlocks_quota": 2,
+        "unlocks_period": "calendar_month",
+        "tier_label": null,
+        "excluded_category_ids": [],
+        "notes": null,
+        "source_local_id": "bookmyshow_movie_offer"
+      },
+      {
+        "id": "icici-hpcl-super-saver-credit-card:unlock:inox_movie_offer@1",
+        "card_benefit_id": "icici-hpcl-super-saver-credit-card:benefit:inox_movie_offer",
+        "kind": "other",
+        "label": "25% discount up to ₹100 on INOX movie tickets",
+        "spend_threshold_inr": 25000,
+        "spend_window": "previous_calendar_quarter",
+        "window_days": null,
+        "unlocks_quota": 2,
+        "unlocks_period": "calendar_month",
+        "tier_label": null,
+        "excluded_category_ids": [],
+        "notes": null,
+        "source_local_id": "inox_movie_offer"
+      }
+    ],
+    "redemption_options": [
+      {
+        "program_name": "ICICI Bank Rewards portal / Net Banking / iMobile",
+        "method": "partner_catalogue",
+        "value_per_point_inr": 0.25,
+        "min_points": 500,
+        "notes": "Redemption fee: ₹99"
+      },
+      {
+        "program_name": "ICICI Bank Customer Care / iMobile",
+        "method": "statement_credit",
+        "value_per_point_inr": 0.25,
+        "min_points": 1000,
+        "notes": "Redemption fee: ₹99"
+      }
+    ],
+    "is_upi_linkable": true
+  }
+}

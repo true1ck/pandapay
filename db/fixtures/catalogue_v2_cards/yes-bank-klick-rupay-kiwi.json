@@ -1,0 +1,1620 @@
+{
+  "generated_by": "api/scripts/catalogue_v2/snapshot_examples.js",
+  "source_slug": "yes-bank-klick-rupay-kiwi",
+  "inputs": {
+    "transform_version": "7",
+    "source_record_sha256": "105e856f3af083062cdf9c2d1b6624881b5ffc278a901dc1de27fe4c68151650",
+    "override_sha256": "71b0f320551c7516565925e9ed566beb85d683060a70adbc667ae2e7bae6fabb",
+    "directory_sha256": "c2fded34df886aef08595eebb7629a4dd140c98af750f3c891d6c291b4874b53",
+    "verified": false
+  },
+  "blocking_flags": [],
+  "card": {
+    "id": "yes-bank-klick-rupay-kiwi:card",
+    "slug": "yes-bank-klick-rupay-kiwi",
+    "name": "Klick RuPay Credit Card",
+    "network": "rupay",
+    "issuer_slug": "yes-bank",
+    "base_reward_unit": "points_per_100",
+    "base_reward_rate": 2,
+    "point_value_inr": 0.25,
+    "excluded_categories": [],
+    "accrual_block_inr": 100,
+    "accrual_rounding": "floor",
+    "cashback_rounding": null,
+    "points_expiry_months": null,
+    "model_status": "partial",
+    "model_coverage": {
+      "rules_total": 17,
+      "rules_modelled": 12,
+      "rules_info": 5,
+      "caps_total": 1,
+      "caps_enforced": 0,
+      "flags": [
+        {
+          "code": "info_rule",
+          "source_local_id": "kiwi_neon_scan_pay",
+          "detail": "override_rule_role"
+        },
+        {
+          "code": "info_rule",
+          "source_local_id": "kiwi_neon_scan_pay",
+          "detail": "condition:issued_via_kiwi"
+        },
+        {
+          "code": "info_rule",
+          "source_local_id": "kiwi_neon_scan_pay",
+          "detail": "condition:kiwi_neon_membership"
+        },
+        {
+          "code": "info_rule",
+          "source_local_id": "kiwi_neon_scan_pay",
+          "detail": "condition:merchant_payment_only"
+        },
+        {
+          "code": "depends_on_user_attribute",
+          "source_local_id": "kiwi_neon_scan_pay",
+          "detail": null
+        },
+        {
+          "code": "info_rule",
+          "source_local_id": "kiwi_neon_online",
+          "detail": "override_rule_role"
+        },
+        {
+          "code": "info_rule",
+          "source_local_id": "kiwi_neon_online",
+          "detail": "channel_type"
+        },
+        {
+          "code": "info_rule",
+          "source_local_id": "kiwi_neon_online",
+          "detail": "condition:issued_via_kiwi"
+        },
+        {
+          "code": "info_rule",
+          "source_local_id": "kiwi_neon_online",
+          "detail": "condition:kiwi_neon_membership"
+        },
+        {
+          "code": "depends_on_user_attribute",
+          "source_local_id": "kiwi_neon_online",
+          "detail": null
+        },
+        {
+          "code": "info_rule",
+          "source_local_id": "kiwi_neon_milestone_1",
+          "detail": "unsupported_trigger"
+        },
+        {
+          "code": "info_rule",
+          "source_local_id": "kiwi_neon_milestone_1",
+          "detail": "condition:kiwi_neon_membership"
+        },
+        {
+          "code": "info_rule",
+          "source_local_id": "kiwi_neon_milestone_1",
+          "detail": "condition:eligible_annual_spend_threshold_inr"
+        },
+        {
+          "code": "info_rule",
+          "source_local_id": "kiwi_neon_milestone_1",
+          "detail": "condition:channel_type"
+        },
+        {
+          "code": "depends_on_user_attribute",
+          "source_local_id": "kiwi_neon_milestone_1",
+          "detail": null
+        },
+        {
+          "code": "info_rule",
+          "source_local_id": "kiwi_neon_milestone_2",
+          "detail": "unsupported_trigger"
+        },
+        {
+          "code": "info_rule",
+          "source_local_id": "kiwi_neon_milestone_2",
+          "detail": "condition:kiwi_neon_membership"
+        },
+        {
+          "code": "info_rule",
+          "source_local_id": "kiwi_neon_milestone_2",
+          "detail": "condition:eligible_annual_spend_threshold_inr"
+        },
+        {
+          "code": "info_rule",
+          "source_local_id": "kiwi_neon_milestone_2",
+          "detail": "condition:channel_type"
+        },
+        {
+          "code": "depends_on_user_attribute",
+          "source_local_id": "kiwi_neon_milestone_2",
+          "detail": null
+        },
+        {
+          "code": "info_rule",
+          "source_local_id": "kiwi_neon_milestone_3",
+          "detail": "unsupported_trigger"
+        },
+        {
+          "code": "info_rule",
+          "source_local_id": "kiwi_neon_milestone_3",
+          "detail": "condition:kiwi_neon_membership"
+        },
+        {
+          "code": "info_rule",
+          "source_local_id": "kiwi_neon_milestone_3",
+          "detail": "condition:eligible_annual_spend_threshold_inr"
+        },
+        {
+          "code": "info_rule",
+          "source_local_id": "kiwi_neon_milestone_3",
+          "detail": "condition:channel_type"
+        },
+        {
+          "code": "depends_on_user_attribute",
+          "source_local_id": "kiwi_neon_milestone_3",
+          "detail": null
+        },
+        {
+          "code": "mcc_scoped_exclusion",
+          "source_local_id": "kiwi_excluded_government",
+          "detail": null
+        },
+        {
+          "code": "mcc_scoped_exclusion",
+          "source_local_id": "kiwi_excluded_professional_education",
+          "detail": null
+        },
+        {
+          "code": "mcc_scoped_exclusion",
+          "source_local_id": "kiwi_excluded_retail_fuel",
+          "detail": null
+        },
+        {
+          "code": "mcc_scoped_exclusion",
+          "source_local_id": "kiwi_excluded_utilities",
+          "detail": null
+        },
+        {
+          "code": "cap_depends_on_user",
+          "source_local_id": "monthly-kiwi-cap",
+          "detail": null
+        },
+        {
+          "code": "unlock_window_from_quota_period",
+          "source_local_id": "kiwi_neon_lounge_1",
+          "detail": null
+        },
+        {
+          "code": "unlock_window_from_quota_period",
+          "source_local_id": "kiwi_neon_lounge_2",
+          "detail": null
+        },
+        {
+          "code": "unlock_window_from_quota_period",
+          "source_local_id": "kiwi_neon_lounge_3",
+          "detail": null
+        }
+      ],
+      "overrides_applied": [
+        {
+          "path": "reward_rules[id=kiwi_regular_online].action.cashback_percent",
+          "op": "set",
+          "value_sha256": "74234e98afe7498f",
+          "reason": "Issuer pays whole Kiwis, not a percentage.",
+          "source_url": "https://gokiwi.in/rewards-policy-v2/",
+          "checked_on": "2026-11-05"
+        },
+        {
+          "path": "reward_rules[id=kiwi_regular_online].action.points_per_block",
+          "op": "set",
+          "value_sha256": "d4735e3a265e16ee",
+          "reason": "2 Kiwis per Rs 100 online.",
+          "source_url": "https://gokiwi.in/rewards-policy-v2/",
+          "checked_on": "2026-11-05"
+        },
+        {
+          "path": "reward_rules[id=kiwi_regular_scan_pay].action.cashback_percent",
+          "op": "set",
+          "value_sha256": "74234e98afe7498f",
+          "reason": "Issuer pays whole Kiwis, not a percentage.",
+          "source_url": "https://gokiwi.in/rewards-policy-v2/",
+          "checked_on": "2026-11-05"
+        },
+        {
+          "path": "reward_rules[id=kiwi_regular_scan_pay].action.points_per_block",
+          "op": "set",
+          "value_sha256": "e7f6c011776e8db7",
+          "reason": "6 Kiwis per Rs 100 on Scan & Pay.",
+          "source_url": "https://gokiwi.in/rewards-policy-v2/",
+          "checked_on": "2026-11-05"
+        },
+        {
+          "path": "accrual_engine.base_points_per_block",
+          "op": "set",
+          "value_sha256": "d4735e3a265e16ee",
+          "reason": "Base is 2 Kiwis per Rs 100.",
+          "source_url": "https://gokiwi.in/rewards-policy-v2/",
+          "checked_on": "2026-11-05"
+        },
+        {
+          "path": "accrual_engine.base_cashback_percent",
+          "op": "set",
+          "value_sha256": "74234e98afe7498f",
+          "reason": "Kiwis are points worth Rs 0.25.",
+          "source_url": "https://gokiwi.in/rewards-policy-v2/",
+          "checked_on": "2026-11-05"
+        },
+        {
+          "path": "card_product.point_value_inr_baseline",
+          "op": "set",
+          "value_sha256": "a30a043314fa8929",
+          "reason": "Each Kiwi is worth Rs 0.25.",
+          "source_url": "https://gokiwi.in/rewards-policy-v2/",
+          "checked_on": "2026-11-05"
+        },
+        {
+          "path": "reward_rules[id=kiwi_neon_scan_pay].rule_role",
+          "op": "set",
+          "value_sha256": "3e3e8e84e722887a",
+          "reason": "Needs a paid Kiwi Neon membership (user attribute); not verified.",
+          "source_url": "https://gokiwi.in/rewards-policy-v2/",
+          "checked_on": "2026-11-05"
+        },
+        {
+          "path": "reward_rules[id=kiwi_neon_online].rule_role",
+          "op": "set",
+          "value_sha256": "3e3e8e84e722887a",
+          "reason": "Needs a paid Kiwi Neon membership.",
+          "source_url": "https://gokiwi.in/rewards-policy-v2/",
+          "checked_on": "2026-11-05"
+        },
+        {
+          "path": "cap_rules",
+          "op": "set",
+          "value_sha256": "649b2edd338099e4",
+          "reason": "Issuer: monthly cap on Kiwis is 1% of the total credit limit on the card. Per-user amount, so the cap keeps its kind with a null amount (D13a, flag cap_depends_on_user). Also removes a dangling cap_reference monthly-kiwi-cap. depends_on_user: true so the loader keeps the cap with a null amount.",
+          "source_url": "https://gokiwi.in/rewards-policy-v2/",
+          "checked_on": "2026-11-05"
+        },
+        {
+          "path": "reward_rules[id=kiwi_regular_online].conditions",
+          "op": "set",
+          "value_sha256": "44136fa355b3678a",
+          "reason": "issued_via_kiwi / not-Neon / accrual-unit keys are the default Kiwi regular terms (entry-tier rate stated by the issuer, D13b) and must not turn the rule into info.",
+          "source_url": "https://gokiwi.in/rewards-policy-v2/",
+          "checked_on": "2026-11-05"
+        },
+        {
+          "path": "reward_rules[id=kiwi_regular_scan_pay].conditions",
+          "op": "set",
+          "value_sha256": "44136fa355b3678a",
+          "reason": "issued_via_kiwi / not-Neon / accrual-unit keys are the default Kiwi regular terms (entry-tier rate stated by the issuer, D13b) and must not turn the rule into info.",
+          "source_url": "https://gokiwi.in/rewards-policy-v2/",
+          "checked_on": "2026-11-05"
+        },
+        {
+          "path": "reward_rules[id=kiwi_excluded_transportation].category_id",
+          "op": "set",
+          "value_sha256": "1e08efd699e66ddd",
+          "reason": "Issuer excludes only toll MCCs 4784 and 4789; the transportation token maps to all travel, which over-excludes.",
+          "source_url": "https://gokiwi.in/rewards-policy-v2/",
+          "checked_on": "2026-11-05"
+        },
+        {
+          "path": "reward_rules[id=kiwi_regular_online].channel_type",
+          "op": "set",
+          "value_sha256": "5cf7504d9781301d",
+          "reason": "channel_type \"kiwi_online\" is prose for online spend (the rail already restricts it); it would turn the rule into info.",
+          "source_url": "https://gokiwi.in/rewards-policy-v2/",
+          "checked_on": "2026-11-05"
+        }
+      ]
+    },
+    "reward_rules": [
+      {
+        "id": "yes-bank-klick-rupay-kiwi:rule:kiwi_regular_online",
+        "category_id": null,
+        "category_slug": null,
+        "merchant_pattern": null,
+        "rail": "online",
+        "unit": "points_per_100",
+        "rate": 2,
+        "min_txn_inr": null,
+        "max_txn_inr": null,
+        "priority": 20,
+        "conditions": {
+          "source_local_id": "kiwi_regular_online",
+          "part": null,
+          "info_reasons": [],
+          "flags": []
+        },
+        "notes": null,
+        "effective_from": "2025-06-01",
+        "effective_to": null,
+        "excluded_categories": [],
+        "rule_role": "earn",
+        "merchant_slugs": [],
+        "platform_slugs": [],
+        "mcc_include": [],
+        "mcc_exclude": [],
+        "except_merchant_slugs": [],
+        "except_platform_slugs": [],
+        "block_inr": null,
+        "min_engine_version": 1,
+        "max_engine_version": null,
+        "source_local_id": "kiwi_regular_online",
+        "display_note": "Regular Kiwi rewards provide 0.5% cashback on online transactions."
+      },
+      {
+        "id": "yes-bank-klick-rupay-kiwi:rule:kiwi_regular_scan_pay",
+        "category_id": null,
+        "category_slug": null,
+        "merchant_pattern": null,
+        "rail": "upi_qr",
+        "unit": "points_per_100",
+        "rate": 6,
+        "min_txn_inr": null,
+        "max_txn_inr": null,
+        "priority": 10,
+        "conditions": {
+          "source_local_id": "kiwi_regular_scan_pay",
+          "part": null,
+          "info_reasons": [],
+          "flags": []
+        },
+        "notes": null,
+        "effective_from": "2025-06-01",
+        "effective_to": null,
+        "excluded_categories": [],
+        "rule_role": "earn",
+        "merchant_slugs": [],
+        "platform_slugs": [],
+        "mcc_include": [],
+        "mcc_exclude": [],
+        "except_merchant_slugs": [],
+        "except_platform_slugs": [],
+        "block_inr": null,
+        "min_engine_version": 1,
+        "max_engine_version": null,
+        "source_local_id": "kiwi_regular_scan_pay",
+        "display_note": "Current Kiwi rewards policy provides 1.5% cashback on eligible Scan & Pay transactions for cards issued via Kiwi since 4 July 2024 when the customer is not subscribed to Kiwi Neon."
+      },
+      {
+        "id": "yes-bank-klick-rupay-kiwi:rule:kiwi_neon_scan_pay",
+        "category_id": null,
+        "category_slug": null,
+        "merchant_pattern": null,
+        "rail": "upi_qr",
+        "unit": "cashback_percent",
+        "rate": 2,
+        "min_txn_inr": null,
+        "max_txn_inr": null,
+        "priority": 5,
+        "conditions": {
+          "source_local_id": "kiwi_neon_scan_pay",
+          "part": null,
+          "info_reasons": [
+            "override_rule_role",
+            "condition:issued_via_kiwi",
+            "condition:kiwi_neon_membership",
+            "condition:merchant_payment_only"
+          ],
+          "flags": [
+            "depends_on_user_attribute"
+          ]
+        },
+        "notes": null,
+        "effective_from": "2025-02-01",
+        "effective_to": null,
+        "excluded_categories": [],
+        "rule_role": "info",
+        "merchant_slugs": [],
+        "platform_slugs": [],
+        "mcc_include": [],
+        "mcc_exclude": [],
+        "except_merchant_slugs": [],
+        "except_platform_slugs": [],
+        "block_inr": null,
+        "min_engine_version": 2,
+        "max_engine_version": null,
+        "source_local_id": "kiwi_neon_scan_pay",
+        "display_note": "Kiwi Neon provides 2% cashback on eligible Scan & Pay transactions."
+      },
+      {
+        "id": "yes-bank-klick-rupay-kiwi:rule:kiwi_neon_online",
+        "category_id": null,
+        "category_slug": null,
+        "merchant_pattern": null,
+        "rail": "online",
+        "unit": "cashback_percent",
+        "rate": 0.5,
+        "min_txn_inr": null,
+        "max_txn_inr": null,
+        "priority": 20,
+        "conditions": {
+          "source_local_id": "kiwi_neon_online",
+          "part": null,
+          "info_reasons": [
+            "override_rule_role",
+            "channel_type",
+            "condition:issued_via_kiwi",
+            "condition:kiwi_neon_membership"
+          ],
+          "flags": [
+            "depends_on_user_attribute"
+          ]
+        },
+        "notes": null,
+        "effective_from": "2025-02-01",
+        "effective_to": null,
+        "excluded_categories": [],
+        "rule_role": "info",
+        "merchant_slugs": [],
+        "platform_slugs": [],
+        "mcc_include": [],
+        "mcc_exclude": [],
+        "except_merchant_slugs": [],
+        "except_platform_slugs": [],
+        "block_inr": null,
+        "min_engine_version": 2,
+        "max_engine_version": null,
+        "source_local_id": "kiwi_neon_online",
+        "display_note": "Kiwi Neon provides 0.5% cashback on eligible online transactions."
+      },
+      {
+        "id": "yes-bank-klick-rupay-kiwi:rule:kiwi_neon_milestone_1",
+        "category_id": null,
+        "category_slug": null,
+        "merchant_pattern": null,
+        "rail": null,
+        "unit": "cashback_percent",
+        "rate": 3,
+        "min_txn_inr": null,
+        "max_txn_inr": null,
+        "priority": 4,
+        "conditions": {
+          "source_local_id": "kiwi_neon_milestone_1",
+          "part": null,
+          "info_reasons": [
+            "unsupported_trigger",
+            "condition:kiwi_neon_membership",
+            "condition:eligible_annual_spend_threshold_inr",
+            "condition:channel_type"
+          ],
+          "flags": [
+            "depends_on_user_attribute"
+          ]
+        },
+        "notes": null,
+        "effective_from": "2025-02-01",
+        "effective_to": null,
+        "excluded_categories": [],
+        "rule_role": "info",
+        "merchant_slugs": [],
+        "platform_slugs": [],
+        "mcc_include": [],
+        "mcc_exclude": [],
+        "except_merchant_slugs": [],
+        "except_platform_slugs": [],
+        "block_inr": null,
+        "min_engine_version": 2,
+        "max_engine_version": null,
+        "source_local_id": "kiwi_neon_milestone_1",
+        "display_note": "3% milestone cashback on ₹50,000 eligible annual spend, inclusive of cashback already earned under Kiwi Neon; one airport lounge access is also unlocked."
+      },
+      {
+        "id": "yes-bank-klick-rupay-kiwi:rule:kiwi_neon_milestone_2",
+        "category_id": null,
+        "category_slug": null,
+        "merchant_pattern": null,
+        "rail": null,
+        "unit": "cashback_percent",
+        "rate": 4,
+        "min_txn_inr": null,
+        "max_txn_inr": null,
+        "priority": 3,
+        "conditions": {
+          "source_local_id": "kiwi_neon_milestone_2",
+          "part": null,
+          "info_reasons": [
+            "unsupported_trigger",
+            "condition:kiwi_neon_membership",
+            "condition:eligible_annual_spend_threshold_inr",
+            "condition:channel_type"
+          ],
+          "flags": [
+            "depends_on_user_attribute"
+          ]
+        },
+        "notes": null,
+        "effective_from": "2025-02-01",
+        "effective_to": null,
+        "excluded_categories": [],
+        "rule_role": "info",
+        "merchant_slugs": [],
+        "platform_slugs": [],
+        "mcc_include": [],
+        "mcc_exclude": [],
+        "except_merchant_slugs": [],
+        "except_platform_slugs": [],
+        "block_inr": null,
+        "min_engine_version": 2,
+        "max_engine_version": null,
+        "source_local_id": "kiwi_neon_milestone_2",
+        "display_note": "4% milestone cashback on ₹1,00,000 eligible annual spend, inclusive of cashback already earned under Kiwi Neon; one airport lounge access is also unlocked."
+      },
+      {
+        "id": "yes-bank-klick-rupay-kiwi:rule:kiwi_neon_milestone_3",
+        "category_id": null,
+        "category_slug": null,
+        "merchant_pattern": null,
+        "rail": null,
+        "unit": "cashback_percent",
+        "rate": 5,
+        "min_txn_inr": null,
+        "max_txn_inr": null,
+        "priority": 2,
+        "conditions": {
+          "source_local_id": "kiwi_neon_milestone_3",
+          "part": null,
+          "info_reasons": [
+            "unsupported_trigger",
+            "condition:kiwi_neon_membership",
+            "condition:eligible_annual_spend_threshold_inr",
+            "condition:channel_type"
+          ],
+          "flags": [
+            "depends_on_user_attribute"
+          ]
+        },
+        "notes": null,
+        "effective_from": "2025-02-01",
+        "effective_to": null,
+        "excluded_categories": [],
+        "rule_role": "info",
+        "merchant_slugs": [],
+        "platform_slugs": [],
+        "mcc_include": [],
+        "mcc_exclude": [],
+        "except_merchant_slugs": [],
+        "except_platform_slugs": [],
+        "block_inr": null,
+        "min_engine_version": 2,
+        "max_engine_version": null,
+        "source_local_id": "kiwi_neon_milestone_3",
+        "display_note": "5% milestone cashback on ₹1,50,000 eligible annual spend, inclusive of cashback already earned under Kiwi Neon; one airport lounge access is also unlocked."
+      },
+      {
+        "id": "yes-bank-klick-rupay-kiwi:rule:kiwi_excluded_agricultural",
+        "category_id": null,
+        "category_slug": null,
+        "merchant_pattern": null,
+        "rail": null,
+        "unit": "points_per_100",
+        "rate": 0,
+        "min_txn_inr": null,
+        "max_txn_inr": null,
+        "priority": 1,
+        "conditions": {
+          "source_local_id": "kiwi_excluded_agricultural",
+          "part": null,
+          "info_reasons": [],
+          "flags": []
+        },
+        "notes": null,
+        "effective_from": "2025-06-01",
+        "effective_to": null,
+        "excluded_categories": [],
+        "rule_role": "exclusion",
+        "merchant_slugs": [],
+        "platform_slugs": [],
+        "mcc_include": [
+          "0763",
+          "0820",
+          "0821",
+          "0822",
+          "0823",
+          "0824",
+          "0825"
+        ],
+        "mcc_exclude": [],
+        "except_merchant_slugs": [],
+        "except_platform_slugs": [],
+        "block_inr": null,
+        "min_engine_version": 2,
+        "max_engine_version": null,
+        "source_local_id": "kiwi_excluded_agricultural",
+        "display_note": "Agricultural Services and Cooperatives are excluded from Kiwi rewards."
+      },
+      {
+        "id": "yes-bank-klick-rupay-kiwi:rule:kiwi_excluded_horticultural_vet",
+        "category_id": null,
+        "category_slug": null,
+        "merchant_pattern": null,
+        "rail": null,
+        "unit": "points_per_100",
+        "rate": 0,
+        "min_txn_inr": null,
+        "max_txn_inr": null,
+        "priority": 1,
+        "conditions": {
+          "source_local_id": "kiwi_excluded_horticultural_vet",
+          "part": null,
+          "info_reasons": [],
+          "flags": []
+        },
+        "notes": null,
+        "effective_from": "2025-06-01",
+        "effective_to": null,
+        "excluded_categories": [],
+        "rule_role": "exclusion",
+        "merchant_slugs": [],
+        "platform_slugs": [],
+        "mcc_include": [
+          "0742",
+          "0743",
+          "0744",
+          "0780"
+        ],
+        "mcc_exclude": [],
+        "except_merchant_slugs": [],
+        "except_platform_slugs": [],
+        "block_inr": null,
+        "min_engine_version": 2,
+        "max_engine_version": null,
+        "source_local_id": "kiwi_excluded_horticultural_vet",
+        "display_note": "Horticultural, Landscaping and Veterinary Services are excluded."
+      },
+      {
+        "id": "yes-bank-klick-rupay-kiwi:rule:kiwi_excluded_business_services",
+        "category_id": null,
+        "category_slug": null,
+        "merchant_pattern": null,
+        "rail": null,
+        "unit": "points_per_100",
+        "rate": 0,
+        "min_txn_inr": null,
+        "max_txn_inr": null,
+        "priority": 1,
+        "conditions": {
+          "source_local_id": "kiwi_excluded_business_services",
+          "part": null,
+          "info_reasons": [],
+          "flags": []
+        },
+        "notes": null,
+        "effective_from": "2025-06-01",
+        "effective_to": null,
+        "excluded_categories": [],
+        "rule_role": "exclusion",
+        "merchant_slugs": [],
+        "platform_slugs": [],
+        "mcc_include": [
+          "7512",
+          "7523",
+          "7531",
+          "7535",
+          "7538",
+          "7631"
+        ],
+        "mcc_exclude": [],
+        "except_merchant_slugs": [],
+        "except_platform_slugs": [],
+        "block_inr": null,
+        "min_engine_version": 2,
+        "max_engine_version": null,
+        "source_local_id": "kiwi_excluded_business_services",
+        "display_note": "Auto Rentals, Repairs, Paint Shops, Jewelry and Watch Repair Shops are excluded."
+      },
+      {
+        "id": "yes-bank-klick-rupay-kiwi:rule:kiwi_excluded_government#1",
+        "category_id": "cat-government",
+        "category_slug": "government",
+        "merchant_pattern": null,
+        "rail": null,
+        "unit": "points_per_100",
+        "rate": 0,
+        "min_txn_inr": null,
+        "max_txn_inr": null,
+        "priority": 1,
+        "conditions": {
+          "source_local_id": "kiwi_excluded_government",
+          "part": 1,
+          "info_reasons": [],
+          "flags": [
+            "mcc_scoped_exclusion"
+          ]
+        },
+        "notes": null,
+        "effective_from": "2025-06-01",
+        "effective_to": null,
+        "excluded_categories": [],
+        "rule_role": "exclusion",
+        "merchant_slugs": [],
+        "platform_slugs": [],
+        "mcc_include": [],
+        "mcc_exclude": [],
+        "except_merchant_slugs": [],
+        "except_platform_slugs": [],
+        "block_inr": null,
+        "min_engine_version": 1,
+        "max_engine_version": 1,
+        "source_local_id": "kiwi_excluded_government",
+        "display_note": "Tax Payments, Court Costs, Postal Services and Fines are excluded."
+      },
+      {
+        "id": "yes-bank-klick-rupay-kiwi:rule:kiwi_excluded_government#2",
+        "category_id": "cat-government",
+        "category_slug": "government",
+        "merchant_pattern": null,
+        "rail": null,
+        "unit": "points_per_100",
+        "rate": 0,
+        "min_txn_inr": null,
+        "max_txn_inr": null,
+        "priority": 1,
+        "conditions": {
+          "source_local_id": "kiwi_excluded_government",
+          "part": 2,
+          "info_reasons": [],
+          "flags": [
+            "mcc_scoped_exclusion"
+          ]
+        },
+        "notes": null,
+        "effective_from": "2025-06-01",
+        "effective_to": null,
+        "excluded_categories": [],
+        "rule_role": "exclusion",
+        "merchant_slugs": [],
+        "platform_slugs": [],
+        "mcc_include": [
+          "9211",
+          "9222",
+          "9223",
+          "9311",
+          "9399",
+          "9400",
+          "9402",
+          "9405",
+          "9700",
+          "9701",
+          "9702",
+          "9751",
+          "9754",
+          "9950"
+        ],
+        "mcc_exclude": [],
+        "except_merchant_slugs": [],
+        "except_platform_slugs": [],
+        "block_inr": null,
+        "min_engine_version": 2,
+        "max_engine_version": null,
+        "source_local_id": "kiwi_excluded_government",
+        "display_note": "Tax Payments, Court Costs, Postal Services and Fines are excluded."
+      },
+      {
+        "id": "yes-bank-klick-rupay-kiwi:rule:kiwi_excluded_government#3",
+        "category_id": null,
+        "category_slug": null,
+        "merchant_pattern": null,
+        "rail": null,
+        "unit": "points_per_100",
+        "rate": 0,
+        "min_txn_inr": null,
+        "max_txn_inr": null,
+        "priority": 1,
+        "conditions": {
+          "source_local_id": "kiwi_excluded_government",
+          "part": 3,
+          "info_reasons": [],
+          "flags": [
+            "mcc_scoped_exclusion"
+          ]
+        },
+        "notes": null,
+        "effective_from": "2025-06-01",
+        "effective_to": null,
+        "excluded_categories": [],
+        "rule_role": "exclusion",
+        "merchant_slugs": [],
+        "platform_slugs": [],
+        "mcc_include": [
+          "9211",
+          "9222",
+          "9223",
+          "9311",
+          "9399",
+          "9400",
+          "9402",
+          "9405",
+          "9700",
+          "9701",
+          "9702",
+          "9751",
+          "9754",
+          "9950"
+        ],
+        "mcc_exclude": [],
+        "except_merchant_slugs": [],
+        "except_platform_slugs": [],
+        "block_inr": null,
+        "min_engine_version": 2,
+        "max_engine_version": null,
+        "source_local_id": "kiwi_excluded_government",
+        "display_note": "Tax Payments, Court Costs, Postal Services and Fines are excluded."
+      },
+      {
+        "id": "yes-bank-klick-rupay-kiwi:rule:kiwi_excluded_marketing",
+        "category_id": null,
+        "category_slug": null,
+        "merchant_pattern": null,
+        "rail": null,
+        "unit": "points_per_100",
+        "rate": 0,
+        "min_txn_inr": null,
+        "max_txn_inr": null,
+        "priority": 1,
+        "conditions": {
+          "source_local_id": "kiwi_excluded_marketing",
+          "part": null,
+          "info_reasons": [],
+          "flags": []
+        },
+        "notes": null,
+        "effective_from": "2025-06-01",
+        "effective_to": null,
+        "excluded_categories": [],
+        "rule_role": "exclusion",
+        "merchant_slugs": [],
+        "platform_slugs": [],
+        "mcc_include": [
+          "5960",
+          "5962",
+          "5964",
+          "5965",
+          "5967",
+          "5968",
+          "5969",
+          "7311"
+        ],
+        "mcc_exclude": [],
+        "except_merchant_slugs": [],
+        "except_platform_slugs": [],
+        "block_inr": null,
+        "min_engine_version": 2,
+        "max_engine_version": null,
+        "source_local_id": "kiwi_excluded_marketing",
+        "display_note": "Direct Marketing and Advertising are excluded."
+      },
+      {
+        "id": "yes-bank-klick-rupay-kiwi:rule:kiwi_excluded_professional_education#1",
+        "category_id": "cat-education",
+        "category_slug": "education",
+        "merchant_pattern": null,
+        "rail": null,
+        "unit": "points_per_100",
+        "rate": 0,
+        "min_txn_inr": null,
+        "max_txn_inr": null,
+        "priority": 1,
+        "conditions": {
+          "source_local_id": "kiwi_excluded_professional_education",
+          "part": 1,
+          "info_reasons": [],
+          "flags": [
+            "mcc_scoped_exclusion"
+          ]
+        },
+        "notes": null,
+        "effective_from": "2025-06-01",
+        "effective_to": null,
+        "excluded_categories": [],
+        "rule_role": "exclusion",
+        "merchant_slugs": [],
+        "platform_slugs": [],
+        "mcc_include": [],
+        "mcc_exclude": [],
+        "except_merchant_slugs": [],
+        "except_platform_slugs": [],
+        "block_inr": null,
+        "min_engine_version": 1,
+        "max_engine_version": 1,
+        "source_local_id": "kiwi_excluded_professional_education",
+        "display_note": "Legal, Accounting and Educational Institution MCCs are excluded."
+      },
+      {
+        "id": "yes-bank-klick-rupay-kiwi:rule:kiwi_excluded_professional_education#2",
+        "category_id": "cat-education",
+        "category_slug": "education",
+        "merchant_pattern": null,
+        "rail": null,
+        "unit": "points_per_100",
+        "rate": 0,
+        "min_txn_inr": null,
+        "max_txn_inr": null,
+        "priority": 1,
+        "conditions": {
+          "source_local_id": "kiwi_excluded_professional_education",
+          "part": 2,
+          "info_reasons": [],
+          "flags": [
+            "mcc_scoped_exclusion"
+          ]
+        },
+        "notes": null,
+        "effective_from": "2025-06-01",
+        "effective_to": null,
+        "excluded_categories": [],
+        "rule_role": "exclusion",
+        "merchant_slugs": [],
+        "platform_slugs": [],
+        "mcc_include": [
+          "8111",
+          "8211",
+          "8220",
+          "8241",
+          "8244",
+          "8249",
+          "8299",
+          "8675",
+          "8931"
+        ],
+        "mcc_exclude": [],
+        "except_merchant_slugs": [],
+        "except_platform_slugs": [],
+        "block_inr": null,
+        "min_engine_version": 2,
+        "max_engine_version": null,
+        "source_local_id": "kiwi_excluded_professional_education",
+        "display_note": "Legal, Accounting and Educational Institution MCCs are excluded."
+      },
+      {
+        "id": "yes-bank-klick-rupay-kiwi:rule:kiwi_excluded_professional_education#3",
+        "category_id": null,
+        "category_slug": null,
+        "merchant_pattern": null,
+        "rail": null,
+        "unit": "points_per_100",
+        "rate": 0,
+        "min_txn_inr": null,
+        "max_txn_inr": null,
+        "priority": 1,
+        "conditions": {
+          "source_local_id": "kiwi_excluded_professional_education",
+          "part": 3,
+          "info_reasons": [],
+          "flags": [
+            "mcc_scoped_exclusion"
+          ]
+        },
+        "notes": null,
+        "effective_from": "2025-06-01",
+        "effective_to": null,
+        "excluded_categories": [],
+        "rule_role": "exclusion",
+        "merchant_slugs": [],
+        "platform_slugs": [],
+        "mcc_include": [
+          "8111",
+          "8211",
+          "8220",
+          "8241",
+          "8244",
+          "8249",
+          "8299",
+          "8675",
+          "8931"
+        ],
+        "mcc_exclude": [],
+        "except_merchant_slugs": [],
+        "except_platform_slugs": [],
+        "block_inr": null,
+        "min_engine_version": 2,
+        "max_engine_version": null,
+        "source_local_id": "kiwi_excluded_professional_education",
+        "display_note": "Legal, Accounting and Educational Institution MCCs are excluded."
+      },
+      {
+        "id": "yes-bank-klick-rupay-kiwi:rule:kiwi_excluded_retail_fuel#1",
+        "category_id": "cat-fuel",
+        "category_slug": "fuel",
+        "merchant_pattern": null,
+        "rail": null,
+        "unit": "points_per_100",
+        "rate": 0,
+        "min_txn_inr": null,
+        "max_txn_inr": null,
+        "priority": 1,
+        "conditions": {
+          "source_local_id": "kiwi_excluded_retail_fuel",
+          "part": 1,
+          "info_reasons": [],
+          "flags": [
+            "mcc_scoped_exclusion"
+          ]
+        },
+        "notes": null,
+        "effective_from": "2025-06-01",
+        "effective_to": null,
+        "excluded_categories": [],
+        "rule_role": "exclusion",
+        "merchant_slugs": [],
+        "platform_slugs": [],
+        "mcc_include": [],
+        "mcc_exclude": [],
+        "except_merchant_slugs": [],
+        "except_platform_slugs": [],
+        "block_inr": null,
+        "min_engine_version": 1,
+        "max_engine_version": 1,
+        "source_local_id": "kiwi_excluded_retail_fuel",
+        "display_note": "Auto Dealers, Fuel Stations, Jewelry and Petroleum MCCs are excluded."
+      },
+      {
+        "id": "yes-bank-klick-rupay-kiwi:rule:kiwi_excluded_retail_fuel#2",
+        "category_id": "cat-fuel",
+        "category_slug": "fuel",
+        "merchant_pattern": null,
+        "rail": null,
+        "unit": "points_per_100",
+        "rate": 0,
+        "min_txn_inr": null,
+        "max_txn_inr": null,
+        "priority": 1,
+        "conditions": {
+          "source_local_id": "kiwi_excluded_retail_fuel",
+          "part": 2,
+          "info_reasons": [],
+          "flags": [
+            "mcc_scoped_exclusion"
+          ]
+        },
+        "notes": null,
+        "effective_from": "2025-06-01",
+        "effective_to": null,
+        "excluded_categories": [],
+        "rule_role": "exclusion",
+        "merchant_slugs": [],
+        "platform_slugs": [],
+        "mcc_include": [
+          "5094",
+          "5172",
+          "5451",
+          "5511",
+          "5521",
+          "5531",
+          "5532",
+          "5533",
+          "5541",
+          "5542",
+          "5599"
+        ],
+        "mcc_exclude": [],
+        "except_merchant_slugs": [],
+        "except_platform_slugs": [],
+        "block_inr": null,
+        "min_engine_version": 2,
+        "max_engine_version": null,
+        "source_local_id": "kiwi_excluded_retail_fuel",
+        "display_note": "Auto Dealers, Fuel Stations, Jewelry and Petroleum MCCs are excluded."
+      },
+      {
+        "id": "yes-bank-klick-rupay-kiwi:rule:kiwi_excluded_retail_fuel#3",
+        "category_id": null,
+        "category_slug": null,
+        "merchant_pattern": null,
+        "rail": null,
+        "unit": "points_per_100",
+        "rate": 0,
+        "min_txn_inr": null,
+        "max_txn_inr": null,
+        "priority": 1,
+        "conditions": {
+          "source_local_id": "kiwi_excluded_retail_fuel",
+          "part": 3,
+          "info_reasons": [],
+          "flags": [
+            "mcc_scoped_exclusion"
+          ]
+        },
+        "notes": null,
+        "effective_from": "2025-06-01",
+        "effective_to": null,
+        "excluded_categories": [],
+        "rule_role": "exclusion",
+        "merchant_slugs": [],
+        "platform_slugs": [],
+        "mcc_include": [
+          "5094",
+          "5172",
+          "5451",
+          "5511",
+          "5521",
+          "5531",
+          "5532",
+          "5533",
+          "5541",
+          "5542",
+          "5599"
+        ],
+        "mcc_exclude": [],
+        "except_merchant_slugs": [],
+        "except_platform_slugs": [],
+        "block_inr": null,
+        "min_engine_version": 2,
+        "max_engine_version": null,
+        "source_local_id": "kiwi_excluded_retail_fuel",
+        "display_note": "Auto Dealers, Fuel Stations, Jewelry and Petroleum MCCs are excluded."
+      },
+      {
+        "id": "yes-bank-klick-rupay-kiwi:rule:kiwi_excluded_transportation",
+        "category_id": null,
+        "category_slug": null,
+        "merchant_pattern": null,
+        "rail": null,
+        "unit": "points_per_100",
+        "rate": 0,
+        "min_txn_inr": null,
+        "max_txn_inr": null,
+        "priority": 1,
+        "conditions": {
+          "source_local_id": "kiwi_excluded_transportation",
+          "part": null,
+          "info_reasons": [],
+          "flags": []
+        },
+        "notes": null,
+        "effective_from": "2025-06-01",
+        "effective_to": null,
+        "excluded_categories": [],
+        "rule_role": "exclusion",
+        "merchant_slugs": [],
+        "platform_slugs": [],
+        "mcc_include": [
+          "4784",
+          "4789"
+        ],
+        "mcc_exclude": [],
+        "except_merchant_slugs": [],
+        "except_platform_slugs": [],
+        "block_inr": null,
+        "min_engine_version": 2,
+        "max_engine_version": null,
+        "source_local_id": "kiwi_excluded_transportation",
+        "display_note": "Bridge Fees, Tolls and Miscellaneous Transportation Services are excluded."
+      },
+      {
+        "id": "yes-bank-klick-rupay-kiwi:rule:kiwi_excluded_utilities#1",
+        "category_id": "cat-bills",
+        "category_slug": "bills",
+        "merchant_pattern": null,
+        "rail": null,
+        "unit": "points_per_100",
+        "rate": 0,
+        "min_txn_inr": null,
+        "max_txn_inr": null,
+        "priority": 1,
+        "conditions": {
+          "source_local_id": "kiwi_excluded_utilities",
+          "part": 1,
+          "info_reasons": [],
+          "flags": [
+            "mcc_scoped_exclusion"
+          ]
+        },
+        "notes": null,
+        "effective_from": "2025-06-01",
+        "effective_to": null,
+        "excluded_categories": [],
+        "rule_role": "exclusion",
+        "merchant_slugs": [],
+        "platform_slugs": [],
+        "mcc_include": [],
+        "mcc_exclude": [],
+        "except_merchant_slugs": [],
+        "except_platform_slugs": [],
+        "block_inr": null,
+        "min_engine_version": 1,
+        "max_engine_version": 1,
+        "source_local_id": "kiwi_excluded_utilities",
+        "display_note": "Cable, Telecom, Electricity and Water Utility MCCs are excluded."
+      },
+      {
+        "id": "yes-bank-klick-rupay-kiwi:rule:kiwi_excluded_utilities#2",
+        "category_id": "cat-bills",
+        "category_slug": "bills",
+        "merchant_pattern": null,
+        "rail": null,
+        "unit": "points_per_100",
+        "rate": 0,
+        "min_txn_inr": null,
+        "max_txn_inr": null,
+        "priority": 1,
+        "conditions": {
+          "source_local_id": "kiwi_excluded_utilities",
+          "part": 2,
+          "info_reasons": [],
+          "flags": [
+            "mcc_scoped_exclusion"
+          ]
+        },
+        "notes": null,
+        "effective_from": "2025-06-01",
+        "effective_to": null,
+        "excluded_categories": [],
+        "rule_role": "exclusion",
+        "merchant_slugs": [],
+        "platform_slugs": [],
+        "mcc_include": [
+          "4812",
+          "4813",
+          "4814",
+          "4816",
+          "4821",
+          "4829",
+          "4899",
+          "4900"
+        ],
+        "mcc_exclude": [],
+        "except_merchant_slugs": [],
+        "except_platform_slugs": [],
+        "block_inr": null,
+        "min_engine_version": 2,
+        "max_engine_version": null,
+        "source_local_id": "kiwi_excluded_utilities",
+        "display_note": "Cable, Telecom, Electricity and Water Utility MCCs are excluded."
+      },
+      {
+        "id": "yes-bank-klick-rupay-kiwi:rule:kiwi_excluded_utilities#3",
+        "category_id": null,
+        "category_slug": null,
+        "merchant_pattern": null,
+        "rail": null,
+        "unit": "points_per_100",
+        "rate": 0,
+        "min_txn_inr": null,
+        "max_txn_inr": null,
+        "priority": 1,
+        "conditions": {
+          "source_local_id": "kiwi_excluded_utilities",
+          "part": 3,
+          "info_reasons": [],
+          "flags": [
+            "mcc_scoped_exclusion"
+          ]
+        },
+        "notes": null,
+        "effective_from": "2025-06-01",
+        "effective_to": null,
+        "excluded_categories": [],
+        "rule_role": "exclusion",
+        "merchant_slugs": [],
+        "platform_slugs": [],
+        "mcc_include": [
+          "4812",
+          "4813",
+          "4814",
+          "4816",
+          "4821",
+          "4829",
+          "4899",
+          "4900"
+        ],
+        "mcc_exclude": [],
+        "except_merchant_slugs": [],
+        "except_platform_slugs": [],
+        "block_inr": null,
+        "min_engine_version": 2,
+        "max_engine_version": null,
+        "source_local_id": "kiwi_excluded_utilities",
+        "display_note": "Cable, Telecom, Electricity and Water Utility MCCs are excluded."
+      },
+      {
+        "id": "yes-bank-klick-rupay-kiwi:rule:kiwi_excluded_miscellaneous",
+        "category_id": null,
+        "category_slug": null,
+        "merchant_pattern": null,
+        "rail": null,
+        "unit": "points_per_100",
+        "rate": 0,
+        "min_txn_inr": null,
+        "max_txn_inr": null,
+        "priority": 1,
+        "conditions": {
+          "source_local_id": "kiwi_excluded_miscellaneous",
+          "part": null,
+          "info_reasons": [],
+          "flags": []
+        },
+        "notes": null,
+        "effective_from": "2025-06-01",
+        "effective_to": null,
+        "excluded_categories": [],
+        "rule_role": "exclusion",
+        "merchant_slugs": [],
+        "platform_slugs": [],
+        "mcc_include": [
+          "5944",
+          "5947",
+          "5960",
+          "5983",
+          "6011",
+          "6012",
+          "6051",
+          "6300",
+          "6381",
+          "6399",
+          "6513",
+          "6529",
+          "6540"
+        ],
+        "mcc_exclude": [],
+        "except_merchant_slugs": [],
+        "except_platform_slugs": [],
+        "block_inr": null,
+        "min_engine_version": 2,
+        "max_engine_version": null,
+        "source_local_id": "kiwi_excluded_miscellaneous",
+        "display_note": "Jewelry Stores, Fuel Dealers, Financial Institutions, Insurance, Real Estate and Gift Card categories are excluded."
+      }
+    ],
+    "cap_rules": [
+      {
+        "id": "yes-bank-klick-rupay-kiwi:cap:monthly-kiwi-cap",
+        "reward_rule_id": null,
+        "category_id": null,
+        "category_slug": null,
+        "benefit_kind": null,
+        "label": "Monthly kiwi cap",
+        "measure": "reward_value",
+        "period": "calendar_month",
+        "cap_value": 0,
+        "post_cap_unit": null,
+        "post_cap_rate": null,
+        "resets_on_day": 1,
+        "cap_kind": "total_points",
+        "cap_amount": null,
+        "scope": "card",
+        "targets": [],
+        "parent_cap_id": null,
+        "post_cap_behavior": null,
+        "anchor": null,
+        "min_engine_version": 2,
+        "source_local_id": "monthly-kiwi-cap"
+      }
+    ],
+    "milestone_rules": [
+      {
+        "id": "yes-bank-klick-rupay-kiwi:milestone:kiwi_neon_50000",
+        "label": "Kiwi Neon Milestone 1",
+        "period": "annual",
+        "threshold_spend_inr": 50000,
+        "reward_description": "Kiwi Neon Milestone 1",
+        "reward_value_inr": 1500,
+        "is_repeatable": false,
+        "max_repeats": null,
+        "anchor": "card_anniversary",
+        "reward_points": null,
+        "reward_kind": null,
+        "excluded_category_ids": [],
+        "window_days": null,
+        "source_local_id": "kiwi_neon_50000"
+      },
+      {
+        "id": "yes-bank-klick-rupay-kiwi:milestone:kiwi_neon_100000",
+        "label": "Kiwi Neon Milestone 2",
+        "period": "annual",
+        "threshold_spend_inr": 100000,
+        "reward_description": "Kiwi Neon Milestone 2",
+        "reward_value_inr": 4000,
+        "is_repeatable": false,
+        "max_repeats": null,
+        "anchor": "card_anniversary",
+        "reward_points": null,
+        "reward_kind": null,
+        "excluded_category_ids": [],
+        "window_days": null,
+        "source_local_id": "kiwi_neon_100000"
+      },
+      {
+        "id": "yes-bank-klick-rupay-kiwi:milestone:kiwi_neon_150000",
+        "label": "Kiwi Neon Milestone 3",
+        "period": "annual",
+        "threshold_spend_inr": 150000,
+        "reward_description": "Kiwi Neon Milestone 3",
+        "reward_value_inr": 7500,
+        "is_repeatable": false,
+        "max_repeats": null,
+        "anchor": "card_anniversary",
+        "reward_points": null,
+        "reward_kind": null,
+        "excluded_category_ids": [],
+        "window_days": null,
+        "source_local_id": "kiwi_neon_150000"
+      }
+    ],
+    "fee_waiver_rules": [],
+    "benefits": [
+      {
+        "id": "yes-bank-klick-rupay-kiwi:benefit:kiwi_neon_lounge_1",
+        "key": "kiwi_neon_lounge_1",
+        "source_local_id": "kiwi_neon_lounge_1",
+        "kind": "lounge_domestic",
+        "label": "Airport lounge access unlocked at Kiwi Neon Milestone 1",
+        "description": "Sponsor: Gokiwi",
+        "quota_count": 1,
+        "quota_period": "annual",
+        "network_program": "kiwi_neon",
+        "value_estimate_inr": null,
+        "conditions": {
+          "source_category_id": "lounge",
+          "evaluation_engine": {
+            "conditions": {
+              "membership_required": "Kiwi Neon",
+              "eligible_spend_threshold_inr": 50000,
+              "spend_basis": "Eligible Kiwi spend from Neon enrollment date",
+              "unlock_method": "Lounge pass unlocked in Kiwi app after milestone achievement"
+            },
+            "benefit_calculation": {
+              "visits": 1,
+              "guest_access": false,
+              "validity_months_from_issue": 6,
+              "maximum_stay_hours": 2
+            },
+            "perks": [
+              "One lounge pass for one customer",
+              "Boarding pass must be scanned through the Kiwi app",
+              "Pass is delivered through a third-party lounge programme"
+            ]
+          }
+        }
+      },
+      {
+        "id": "yes-bank-klick-rupay-kiwi:benefit:kiwi_neon_lounge_2",
+        "key": "kiwi_neon_lounge_2",
+        "source_local_id": "kiwi_neon_lounge_2",
+        "kind": "lounge_domestic",
+        "label": "Airport lounge access unlocked at Kiwi Neon Milestone 2",
+        "description": "Sponsor: Gokiwi",
+        "quota_count": 1,
+        "quota_period": "annual",
+        "network_program": "kiwi_neon",
+        "value_estimate_inr": null,
+        "conditions": {
+          "source_category_id": "lounge",
+          "evaluation_engine": {
+            "conditions": {
+              "membership_required": "Kiwi Neon",
+              "eligible_spend_threshold_inr": 100000,
+              "spend_basis": "Eligible Kiwi spend from Neon enrollment date",
+              "unlock_method": "Lounge pass unlocked in Kiwi app after milestone achievement"
+            },
+            "benefit_calculation": {
+              "visits": 1,
+              "guest_access": false,
+              "validity_months_from_issue": 6,
+              "maximum_stay_hours": 2
+            },
+            "perks": [
+              "One lounge pass for one customer",
+              "Boarding pass must be scanned through the Kiwi app"
+            ]
+          }
+        }
+      },
+      {
+        "id": "yes-bank-klick-rupay-kiwi:benefit:kiwi_neon_lounge_3",
+        "key": "kiwi_neon_lounge_3",
+        "source_local_id": "kiwi_neon_lounge_3",
+        "kind": "lounge_domestic",
+        "label": "Airport lounge access unlocked at Kiwi Neon Milestone 3",
+        "description": "Sponsor: Gokiwi",
+        "quota_count": 1,
+        "quota_period": "annual",
+        "network_program": "kiwi_neon",
+        "value_estimate_inr": null,
+        "conditions": {
+          "source_category_id": "lounge",
+          "evaluation_engine": {
+            "conditions": {
+              "membership_required": "Kiwi Neon",
+              "eligible_spend_threshold_inr": 150000,
+              "spend_basis": "Eligible Kiwi spend from Neon enrollment date",
+              "unlock_method": "Lounge pass unlocked in Kiwi app after milestone achievement"
+            },
+            "benefit_calculation": {
+              "visits": 1,
+              "guest_access": false,
+              "validity_months_from_issue": 6,
+              "maximum_stay_hours": 2
+            },
+            "perks": [
+              "One lounge pass for one customer",
+              "Boarding pass must be scanned through the Kiwi app"
+            ]
+          }
+        }
+      },
+      {
+        "id": "yes-bank-klick-rupay-kiwi:benefit:fuel_surcharge_waiver",
+        "key": "fuel_surcharge_waiver",
+        "source_local_id": "fuel_surcharge_waiver",
+        "kind": "fuel_surcharge",
+        "label": "1% fuel surcharge waiver",
+        "description": "Sponsor: YES Bank",
+        "quota_count": null,
+        "quota_period": "statement_cycle",
+        "network_program": null,
+        "value_estimate_inr": 250,
+        "conditions": {
+          "source_category_id": "other",
+          "evaluation_engine": {
+            "conditions": {
+              "transaction_minimum_inr": 500,
+              "transaction_maximum_inr": 3000,
+              "statement_cycle_cap_inr": 250
+            },
+            "benefit_calculation": {
+              "waiver_percent": 1
+            },
+            "perks": [
+              "GST charged on the fuel surcharge is not reversed."
+            ]
+          }
+        }
+      }
+    ],
+    "unlock_rules": [
+      {
+        "id": "yes-bank-klick-rupay-kiwi:unlock:kiwi_neon_lounge_1@1",
+        "card_benefit_id": "yes-bank-klick-rupay-kiwi:benefit:kiwi_neon_lounge_1",
+        "kind": "lounge_domestic",
+        "label": "Airport lounge access unlocked at Kiwi Neon Milestone 1",
+        "spend_threshold_inr": 50000,
+        "spend_window": "card_year",
+        "window_days": null,
+        "unlocks_quota": 1,
+        "unlocks_period": "annual",
+        "tier_label": null,
+        "excluded_category_ids": [],
+        "notes": "window approximated from quota_period",
+        "source_local_id": "kiwi_neon_lounge_1"
+      },
+      {
+        "id": "yes-bank-klick-rupay-kiwi:unlock:kiwi_neon_lounge_2@1",
+        "card_benefit_id": "yes-bank-klick-rupay-kiwi:benefit:kiwi_neon_lounge_2",
+        "kind": "lounge_domestic",
+        "label": "Airport lounge access unlocked at Kiwi Neon Milestone 2",
+        "spend_threshold_inr": 100000,
+        "spend_window": "card_year",
+        "window_days": null,
+        "unlocks_quota": 1,
+        "unlocks_period": "annual",
+        "tier_label": null,
+        "excluded_category_ids": [],
+        "notes": "window approximated from quota_period",
+        "source_local_id": "kiwi_neon_lounge_2"
+      },
+      {
+        "id": "yes-bank-klick-rupay-kiwi:unlock:kiwi_neon_lounge_3@1",
+        "card_benefit_id": "yes-bank-klick-rupay-kiwi:benefit:kiwi_neon_lounge_3",
+        "kind": "lounge_domestic",
+        "label": "Airport lounge access unlocked at Kiwi Neon Milestone 3",
+        "spend_threshold_inr": 150000,
+        "spend_window": "card_year",
+        "window_days": null,
+        "unlocks_quota": 1,
+        "unlocks_period": "annual",
+        "tier_label": null,
+        "excluded_category_ids": [],
+        "notes": "window approximated from quota_period",
+        "source_local_id": "kiwi_neon_lounge_3"
+      }
+    ],
+    "redemption_options": [],
+    "is_upi_linkable": true
+  }
+}

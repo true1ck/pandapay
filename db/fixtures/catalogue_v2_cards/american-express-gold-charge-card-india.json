@@ -1,0 +1,528 @@
+{
+  "generated_by": "api/scripts/catalogue_v2/snapshot_examples.js",
+  "source_slug": "american-express-gold-charge-card-india",
+  "inputs": {
+    "transform_version": "7",
+    "source_record_sha256": "7257b808c842f4e5735f518bbc51cdaceb28a432838c5ab42ea3b572b99d24d5",
+    "override_sha256": null,
+    "directory_sha256": "c2fded34df886aef08595eebb7629a4dd140c98af750f3c891d6c291b4874b53",
+    "verified": false
+  },
+  "blocking_flags": [
+    "info_rule",
+    "post_limit_conflict"
+  ],
+  "card": {
+    "id": "american-express-gold-charge-card-india:card",
+    "slug": "american-express-gold-charge-card-india",
+    "name": "American Express Gold Card",
+    "network": "amex",
+    "issuer_slug": "american-express-india",
+    "base_reward_unit": "points_per_100",
+    "base_reward_rate": 2,
+    "point_value_inr": 0.25,
+    "excluded_categories": [],
+    "accrual_block_inr": 50,
+    "accrual_rounding": "floor",
+    "cashback_rounding": null,
+    "points_expiry_months": 0,
+    "model_status": "partial",
+    "model_coverage": {
+      "rules_total": 8,
+      "rules_modelled": 4,
+      "rules_info": 4,
+      "caps_total": 2,
+      "caps_enforced": 0,
+      "flags": [
+        {
+          "code": "exclusion_scope_broadened",
+          "source_local_id": "cash_transaction_exclusion",
+          "detail": null
+        },
+        {
+          "code": "info_rule",
+          "source_local_id": "utility_base_earn",
+          "detail": "condition:utility_types"
+        },
+        {
+          "code": "info_rule",
+          "source_local_id": "monthly_six_transaction_bonus",
+          "detail": "unsupported_trigger"
+        },
+        {
+          "code": "info_rule",
+          "source_local_id": "monthly_six_transaction_bonus",
+          "detail": "condition:transaction_count"
+        },
+        {
+          "code": "info_rule",
+          "source_local_id": "rewards_multiplier_5x",
+          "detail": "up_to_rate"
+        },
+        {
+          "code": "info_rule",
+          "source_local_id": "rewards_multiplier_5x",
+          "detail": "condition:valid_transaction_required"
+        },
+        {
+          "code": "info_rule",
+          "source_local_id": "cash_advance_and_fee_exclusion",
+          "detail": "condition:excluded_items"
+        },
+        {
+          "code": "cap_targets_info_only",
+          "source_local_id": "utility_monthly_points_cap",
+          "detail": null
+        },
+        {
+          "code": "post_limit_conflict",
+          "source_local_id": "reward_multiplier_monthly_cap",
+          "detail": null
+        },
+        {
+          "code": "cap_targets_info_only",
+          "source_local_id": "reward_multiplier_monthly_cap",
+          "detail": null
+        }
+      ],
+      "overrides_applied": []
+    },
+    "reward_rules": [
+      {
+        "id": "american-express-gold-charge-card-india:rule:base_earn_eligible_spend",
+        "category_id": null,
+        "category_slug": null,
+        "merchant_pattern": null,
+        "rail": null,
+        "unit": "points_per_100",
+        "rate": 1,
+        "min_txn_inr": null,
+        "max_txn_inr": null,
+        "priority": 100,
+        "conditions": {
+          "source_local_id": "base_earn_eligible_spend",
+          "part": null,
+          "info_reasons": [],
+          "flags": []
+        },
+        "notes": null,
+        "effective_from": "2026-03-31",
+        "effective_to": null,
+        "excluded_categories": [],
+        "rule_role": "base",
+        "merchant_slugs": [],
+        "platform_slugs": [],
+        "mcc_include": [],
+        "mcc_exclude": [],
+        "except_merchant_slugs": [],
+        "except_platform_slugs": [],
+        "block_inr": 50,
+        "min_engine_version": 2,
+        "max_engine_version": null,
+        "source_local_id": "base_earn_eligible_spend",
+        "display_note": "1 Membership Rewards point per ₹50 on eligible spending."
+      },
+      {
+        "id": "american-express-gold-charge-card-india:rule:insurance_exclusion",
+        "category_id": "cat-insurance",
+        "category_slug": "insurance",
+        "merchant_pattern": null,
+        "rail": null,
+        "unit": "points_per_100",
+        "rate": 0,
+        "min_txn_inr": null,
+        "max_txn_inr": null,
+        "priority": 1,
+        "conditions": {
+          "source_local_id": "insurance_exclusion",
+          "part": null,
+          "info_reasons": [],
+          "flags": []
+        },
+        "notes": null,
+        "effective_from": "2014-10-20",
+        "effective_to": null,
+        "excluded_categories": [],
+        "rule_role": "exclusion",
+        "merchant_slugs": [],
+        "platform_slugs": [],
+        "mcc_include": [],
+        "mcc_exclude": [],
+        "except_merchant_slugs": [],
+        "except_platform_slugs": [],
+        "block_inr": null,
+        "min_engine_version": 1,
+        "max_engine_version": null,
+        "source_local_id": "insurance_exclusion",
+        "display_note": "No Membership Rewards points on insurance transactions."
+      },
+      {
+        "id": "american-express-gold-charge-card-india:rule:cash_transaction_exclusion",
+        "category_id": null,
+        "category_slug": null,
+        "merchant_pattern": null,
+        "rail": "atm",
+        "unit": "points_per_100",
+        "rate": 0,
+        "min_txn_inr": null,
+        "max_txn_inr": null,
+        "priority": 2,
+        "conditions": {
+          "source_local_id": "cash_transaction_exclusion",
+          "part": null,
+          "info_reasons": [],
+          "flags": [
+            "exclusion_scope_broadened"
+          ]
+        },
+        "notes": null,
+        "effective_from": "2026-03-31",
+        "effective_to": null,
+        "excluded_categories": [],
+        "rule_role": "exclusion",
+        "merchant_slugs": [],
+        "platform_slugs": [],
+        "mcc_include": [],
+        "mcc_exclude": [],
+        "except_merchant_slugs": [],
+        "except_platform_slugs": [],
+        "block_inr": null,
+        "min_engine_version": 2,
+        "max_engine_version": null,
+        "source_local_id": "cash_transaction_exclusion",
+        "display_note": "No Membership Rewards points on cash withdrawals or cash transactions."
+      },
+      {
+        "id": "american-express-gold-charge-card-india:rule:fuel_exclusion",
+        "category_id": "cat-fuel",
+        "category_slug": "fuel",
+        "merchant_pattern": null,
+        "rail": "swipe",
+        "unit": "points_per_100",
+        "rate": 0,
+        "min_txn_inr": null,
+        "max_txn_inr": null,
+        "priority": 3,
+        "conditions": {
+          "source_local_id": "fuel_exclusion",
+          "part": null,
+          "info_reasons": [],
+          "flags": []
+        },
+        "notes": null,
+        "effective_from": "2025-06-12",
+        "effective_to": null,
+        "excluded_categories": [],
+        "rule_role": "exclusion",
+        "merchant_slugs": [],
+        "platform_slugs": [],
+        "mcc_include": [],
+        "mcc_exclude": [],
+        "except_merchant_slugs": [],
+        "except_platform_slugs": [],
+        "block_inr": null,
+        "min_engine_version": 1,
+        "max_engine_version": null,
+        "source_local_id": "fuel_exclusion",
+        "display_note": "Effective 12 June 2025, fuel payments do not earn Membership Rewards points."
+      },
+      {
+        "id": "american-express-gold-charge-card-india:rule:utility_base_earn",
+        "category_id": "cat-bills",
+        "category_slug": "bills",
+        "merchant_pattern": null,
+        "rail": null,
+        "unit": "points_per_100",
+        "rate": 1,
+        "min_txn_inr": null,
+        "max_txn_inr": null,
+        "priority": 10,
+        "conditions": {
+          "source_local_id": "utility_base_earn",
+          "part": null,
+          "info_reasons": [
+            "condition:utility_types"
+          ],
+          "flags": []
+        },
+        "notes": null,
+        "effective_from": "2021-07-01",
+        "effective_to": null,
+        "excluded_categories": [],
+        "rule_role": "info",
+        "merchant_slugs": [],
+        "platform_slugs": [],
+        "mcc_include": [],
+        "mcc_exclude": [],
+        "except_merchant_slugs": [],
+        "except_platform_slugs": [],
+        "block_inr": 50,
+        "min_engine_version": 2,
+        "max_engine_version": null,
+        "source_local_id": "utility_base_earn",
+        "display_note": "1 Membership Rewards point per ₹50 on electricity, water and gas payments, capped at 10,000 points per calendar month."
+      },
+      {
+        "id": "american-express-gold-charge-card-india:rule:monthly_six_transaction_bonus",
+        "category_id": null,
+        "category_slug": null,
+        "merchant_pattern": null,
+        "rail": null,
+        "unit": "points_per_100",
+        "rate": 1000,
+        "min_txn_inr": 1000,
+        "max_txn_inr": null,
+        "priority": 20,
+        "conditions": {
+          "source_local_id": "monthly_six_transaction_bonus",
+          "part": null,
+          "info_reasons": [
+            "unsupported_trigger",
+            "condition:transaction_count"
+          ],
+          "flags": []
+        },
+        "notes": null,
+        "effective_from": "2026-03-31",
+        "effective_to": null,
+        "excluded_categories": [],
+        "rule_role": "info",
+        "merchant_slugs": [],
+        "platform_slugs": [],
+        "mcc_include": [],
+        "mcc_exclude": [],
+        "except_merchant_slugs": [],
+        "except_platform_slugs": [],
+        "block_inr": 50,
+        "min_engine_version": 2,
+        "max_engine_version": null,
+        "source_local_id": "monthly_six_transaction_bonus",
+        "display_note": "Earn 1,000 bonus Membership Rewards points after six transactions of ₹1,000 or more in a calendar month."
+      },
+      {
+        "id": "american-express-gold-charge-card-india:rule:rewards_multiplier_5x",
+        "category_id": null,
+        "category_slug": null,
+        "merchant_pattern": null,
+        "rail": null,
+        "unit": "points_per_100",
+        "rate": 5,
+        "min_txn_inr": null,
+        "max_txn_inr": null,
+        "priority": 30,
+        "conditions": {
+          "source_local_id": "rewards_multiplier_5x",
+          "part": null,
+          "info_reasons": [
+            "up_to_rate",
+            "condition:valid_transaction_required"
+          ],
+          "flags": []
+        },
+        "notes": null,
+        "effective_from": "2026-03-31",
+        "effective_to": null,
+        "excluded_categories": [],
+        "rule_role": "info",
+        "merchant_slugs": [],
+        "platform_slugs": [
+          "amex_reward_multiplier"
+        ],
+        "mcc_include": [],
+        "mcc_exclude": [],
+        "except_merchant_slugs": [],
+        "except_platform_slugs": [],
+        "block_inr": 50,
+        "min_engine_version": 2,
+        "max_engine_version": null,
+        "source_local_id": "rewards_multiplier_5x",
+        "display_note": "Earn up to 5X Membership Rewards points on eligible Reward Multiplier transactions."
+      },
+      {
+        "id": "american-express-gold-charge-card-india:rule:cash_advance_and_fee_exclusion",
+        "category_id": null,
+        "category_slug": null,
+        "merchant_pattern": null,
+        "rail": null,
+        "unit": "points_per_100",
+        "rate": 0,
+        "min_txn_inr": null,
+        "max_txn_inr": null,
+        "priority": 4,
+        "conditions": {
+          "source_local_id": "cash_advance_and_fee_exclusion",
+          "part": null,
+          "info_reasons": [
+            "condition:excluded_items"
+          ],
+          "flags": []
+        },
+        "notes": null,
+        "effective_from": "2026-03-31",
+        "effective_to": null,
+        "excluded_categories": [],
+        "rule_role": "info",
+        "merchant_slugs": [],
+        "platform_slugs": [],
+        "mcc_include": [],
+        "mcc_exclude": [],
+        "except_merchant_slugs": [],
+        "except_platform_slugs": [],
+        "block_inr": null,
+        "min_engine_version": 2,
+        "max_engine_version": null,
+        "source_local_id": "cash_advance_and_fee_exclusion",
+        "display_note": "These transactions or charges are not eligible for Membership Rewards accrual."
+      }
+    ],
+    "cap_rules": [
+      {
+        "id": "american-express-gold-charge-card-india:cap:utility_monthly_points_cap",
+        "reward_rule_id": "american-express-gold-charge-card-india:rule:utility_base_earn",
+        "category_id": null,
+        "category_slug": null,
+        "benefit_kind": null,
+        "label": "Utility monthly points cap",
+        "measure": "reward_value",
+        "period": "calendar_month",
+        "cap_value": 2500,
+        "post_cap_unit": null,
+        "post_cap_rate": 0,
+        "resets_on_day": 1,
+        "cap_kind": "total_points",
+        "cap_amount": 10000,
+        "scope": "targets",
+        "targets": [
+          "american-express-gold-charge-card-india:rule:utility_base_earn"
+        ],
+        "parent_cap_id": null,
+        "post_cap_behavior": null,
+        "anchor": null,
+        "min_engine_version": 2,
+        "source_local_id": "utility_monthly_points_cap"
+      },
+      {
+        "id": "american-express-gold-charge-card-india:cap:reward_multiplier_monthly_cap",
+        "reward_rule_id": "american-express-gold-charge-card-india:rule:rewards_multiplier_5x",
+        "category_id": null,
+        "category_slug": null,
+        "benefit_kind": null,
+        "label": "Reward multiplier monthly cap",
+        "measure": "reward_value",
+        "period": "calendar_month",
+        "cap_value": 6250,
+        "post_cap_unit": null,
+        "post_cap_rate": 0,
+        "resets_on_day": 1,
+        "cap_kind": "total_points",
+        "cap_amount": 25000,
+        "scope": "targets",
+        "targets": [
+          "american-express-gold-charge-card-india:rule:rewards_multiplier_5x"
+        ],
+        "parent_cap_id": null,
+        "post_cap_behavior": null,
+        "anchor": null,
+        "min_engine_version": 2,
+        "source_local_id": "reward_multiplier_monthly_cap"
+      }
+    ],
+    "milestone_rules": [
+      {
+        "id": "american-express-gold-charge-card-india:milestone:monthly_milestone_6x1000",
+        "label": "1,000 bonus Membership Rewards points on six ₹1,000+ transactions",
+        "period": "calendar_month",
+        "threshold_spend_inr": 6000,
+        "reward_description": "1,000 bonus Membership Rewards points on six ₹1,000+ transactions",
+        "reward_value_inr": 250,
+        "is_repeatable": true,
+        "max_repeats": null,
+        "anchor": "calendar_year",
+        "reward_points": 1000,
+        "reward_kind": "points",
+        "excluded_category_ids": [],
+        "window_days": null,
+        "source_local_id": "monthly_milestone_6x1000"
+      }
+    ],
+    "fee_waiver_rules": [],
+    "benefits": [
+      {
+        "id": "american-express-gold-charge-card-india:benefit:select_dining_discount",
+        "key": "select_dining_discount",
+        "source_local_id": "select_dining_discount",
+        "kind": "dining_program",
+        "label": "Up to 20% off at select restaurant partners",
+        "description": "Sponsor: American Express",
+        "quota_count": null,
+        "quota_period": null,
+        "network_program": "american_express_dining",
+        "value_estimate_inr": null,
+        "conditions": {
+          "source_category_id": "dining",
+          "evaluation_engine": {
+            "conditions": {
+              "eligible_merchants": "Select restaurant partners"
+            },
+            "benefit_calculation": {
+              "discount_percent": 20
+            },
+            "perks": [
+              "Dining discounts at select partner restaurants"
+            ]
+          }
+        }
+      },
+      {
+        "id": "american-express-gold-charge-card-india:benefit:card_related_assistance",
+        "key": "card_related_assistance",
+        "source_local_id": "card_related_assistance",
+        "kind": "other",
+        "label": "24x7 Card Related Assistance",
+        "description": "Sponsor: American Express",
+        "quota_count": null,
+        "quota_period": null,
+        "network_program": "american_express_services",
+        "value_estimate_inr": null,
+        "conditions": {
+          "source_category_id": "other",
+          "evaluation_engine": {
+            "conditions": "N/A",
+            "benefit_calculation": "N/A",
+            "perks": [
+              "24x7 card-related assistance",
+              "Dispute resolution",
+              "Emergency card replacement",
+              "Zero lost-card liability subject to applicable reporting conditions"
+            ]
+          }
+        }
+      }
+    ],
+    "unlock_rules": [],
+    "redemption_options": [
+      {
+        "program_name": "Gold Collection 24 Karat",
+        "method": "partner_catalogue",
+        "value_per_point_inr": 0.5833333333,
+        "min_points": 24000,
+        "notes": "Redemption fee: ₹0"
+      },
+      {
+        "program_name": "Gold Collection 18 Karat",
+        "method": "partner_catalogue",
+        "value_per_point_inr": 0.5,
+        "min_points": 18000,
+        "notes": "Redemption fee: ₹0"
+      },
+      {
+        "program_name": "Membership Rewards statement credit",
+        "method": "statement_credit",
+        "value_per_point_inr": 0.25,
+        "min_points": 1000,
+        "notes": "Redemption fee: ₹0"
+      }
+    ],
+    "is_upi_linkable": false
+  }
+}

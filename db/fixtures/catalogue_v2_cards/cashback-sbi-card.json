@@ -1,0 +1,1551 @@
+{
+  "generated_by": "api/scripts/catalogue_v2/snapshot_examples.js",
+  "source_slug": "cashback-sbi-card",
+  "inputs": {
+    "transform_version": "7",
+    "source_record_sha256": "bcb72cd3bc9b63cfe461bf1feffb8b7d71a66dbfe6e1df48a2b10e576585c7b9",
+    "override_sha256": "aee654c36761dfedae2cca7da8848523039d13d3735bfce811b56f896a84813f",
+    "directory_sha256": "c2fded34df886aef08595eebb7629a4dd140c98af750f3c891d6c291b4874b53",
+    "verified": false
+  },
+  "blocking_flags": [],
+  "card": {
+    "id": "cashback-sbi-card:card",
+    "slug": "cashback-sbi-card",
+    "name": "CASHBACK SBI Card",
+    "network": "visa",
+    "issuer_slug": "sbi-card",
+    "base_reward_unit": "cashback_percent",
+    "base_reward_rate": 1,
+    "point_value_inr": null,
+    "excluded_categories": [],
+    "accrual_block_inr": null,
+    "accrual_rounding": "none",
+    "cashback_rounding": "rupee_floor",
+    "points_expiry_months": null,
+    "model_status": "partial",
+    "model_coverage": {
+      "rules_total": 16,
+      "rules_modelled": 15,
+      "rules_info": 1,
+      "caps_total": 3,
+      "caps_enforced": 2,
+      "flags": [
+        {
+          "code": "mcc_scoped_exclusion",
+          "source_local_id": "exclude_utilities",
+          "detail": null
+        },
+        {
+          "code": "mcc_scoped_exclusion",
+          "source_local_id": "exclude_insurance",
+          "detail": null
+        },
+        {
+          "code": "mcc_scoped_exclusion",
+          "source_local_id": "exclude_fuel",
+          "detail": null
+        },
+        {
+          "code": "mcc_scoped_exclusion",
+          "source_local_id": "exclude_rent",
+          "detail": null
+        },
+        {
+          "code": "mcc_scoped_exclusion",
+          "source_local_id": "exclude_wallet",
+          "detail": null
+        },
+        {
+          "code": "mcc_scoped_exclusion",
+          "source_local_id": "exclude_education",
+          "detail": null
+        },
+        {
+          "code": "token_replaced_by_conditions",
+          "source_local_id": "exclude_jewellery",
+          "detail": null
+        },
+        {
+          "code": "broad_exclusion_v1_only",
+          "source_local_id": "exclude_railways",
+          "detail": null
+        },
+        {
+          "code": "broad_exclusion_v1_only",
+          "source_local_id": "exclude_digital_gaming",
+          "detail": null
+        },
+        {
+          "code": "token_replaced_by_conditions",
+          "source_local_id": "exclude_tolls",
+          "detail": null
+        },
+        {
+          "code": "mcc_scoped_exclusion",
+          "source_local_id": "exclude_government",
+          "detail": null
+        },
+        {
+          "code": "info_rule",
+          "source_local_id": "education_direct_payment",
+          "detail": "unresolved_merchant:channel"
+        },
+        {
+          "code": "exclusion_scope_broadened",
+          "source_local_id": "education_direct_payment",
+          "detail": null
+        },
+        {
+          "code": "cap_missing_id",
+          "source_local_id": null,
+          "detail": null
+        }
+      ],
+      "overrides_applied": [
+        {
+          "path": "cap_rules[id=cap_online_cashback_cycle].metric",
+          "op": "set",
+          "value_sha256": "7af78ba28cf9ccb3",
+          "reason": "Caps limit cashback earned per statement cycle (Rs2,000 per bucket).",
+          "source_url": "https://www.sbicard.com/sbi-card-en/assets/docs/pdf/cashback-revised.pdf",
+          "checked_on": "2026-11-05"
+        },
+        {
+          "path": "cap_rules[id=cap_offline_cashback_cycle].metric",
+          "op": "set",
+          "value_sha256": "7af78ba28cf9ccb3",
+          "reason": "Caps limit cashback earned per statement cycle (Rs2,000 per bucket).",
+          "source_url": "https://www.sbicard.com/sbi-card-en/assets/docs/pdf/cashback-revised.pdf",
+          "checked_on": "2026-11-05"
+        },
+        {
+          "path": "cap_rules[id=cap_online_cashback_cycle].limit_value",
+          "op": "set",
+          "value_sha256": "81a83544cf93c245",
+          "reason": "Rs2,000 cashback cap per bucket.",
+          "source_url": "https://www.sbicard.com/sbi-card-en/assets/docs/pdf/cashback-revised.pdf",
+          "checked_on": "2026-11-05"
+        },
+        {
+          "path": "cap_rules[id=cap_offline_cashback_cycle].limit_value",
+          "op": "set",
+          "value_sha256": "81a83544cf93c245",
+          "reason": "Rs2,000 cashback cap per bucket.",
+          "source_url": "https://www.sbicard.com/sbi-card-en/assets/docs/pdf/cashback-revised.pdf",
+          "checked_on": "2026-11-05"
+        },
+        {
+          "path": "accrual_engine.cashback_rounding",
+          "op": "set",
+          "value_sha256": "657bf85a75fa70bf",
+          "reason": "Cashback is rounded down to a whole rupee per transaction (D11).",
+          "source_url": "https://www.sbicard.com/sbi-card-en/assets/docs/pdf/ekit-tncs/cashback-tnc-ekit.pdf",
+          "checked_on": "2026-11-05"
+        }
+      ]
+    },
+    "reward_rules": [
+      {
+        "id": "cashback-sbi-card:rule:standard_offline_cashback",
+        "category_id": null,
+        "category_slug": null,
+        "merchant_pattern": null,
+        "rail": "swipe",
+        "unit": "cashback_percent",
+        "rate": 1,
+        "min_txn_inr": null,
+        "max_txn_inr": null,
+        "priority": 100,
+        "conditions": {
+          "source_local_id": "standard_offline_cashback",
+          "part": null,
+          "info_reasons": [],
+          "flags": []
+        },
+        "notes": null,
+        "effective_from": "2026-04-01",
+        "effective_to": null,
+        "excluded_categories": [],
+        "rule_role": "earn",
+        "merchant_slugs": [],
+        "platform_slugs": [],
+        "mcc_include": [],
+        "mcc_exclude": [],
+        "except_merchant_slugs": [],
+        "except_platform_slugs": [],
+        "block_inr": null,
+        "min_engine_version": 1,
+        "max_engine_version": null,
+        "source_local_id": "standard_offline_cashback",
+        "display_note": "1% cashback on eligible offline/POS retail transactions."
+      },
+      {
+        "id": "cashback-sbi-card:rule:online_cashback",
+        "category_id": null,
+        "category_slug": null,
+        "merchant_pattern": null,
+        "rail": "online",
+        "unit": "cashback_percent",
+        "rate": 5,
+        "min_txn_inr": null,
+        "max_txn_inr": null,
+        "priority": 90,
+        "conditions": {
+          "source_local_id": "online_cashback",
+          "part": null,
+          "info_reasons": [],
+          "flags": []
+        },
+        "notes": null,
+        "effective_from": "2026-04-01",
+        "effective_to": null,
+        "excluded_categories": [],
+        "rule_role": "earn",
+        "merchant_slugs": [],
+        "platform_slugs": [],
+        "mcc_include": [],
+        "mcc_exclude": [],
+        "except_merchant_slugs": [],
+        "except_platform_slugs": [],
+        "block_inr": null,
+        "min_engine_version": 1,
+        "max_engine_version": null,
+        "source_local_id": "online_cashback",
+        "display_note": "5% cashback on eligible online retail transactions across merchant platforms."
+      },
+      {
+        "id": "cashback-sbi-card:rule:exclude_utilities#1",
+        "category_id": "cat-bills",
+        "category_slug": "bills",
+        "merchant_pattern": null,
+        "rail": null,
+        "unit": "cashback_percent",
+        "rate": 0,
+        "min_txn_inr": null,
+        "max_txn_inr": null,
+        "priority": 1,
+        "conditions": {
+          "source_local_id": "exclude_utilities",
+          "part": 1,
+          "info_reasons": [],
+          "flags": [
+            "mcc_scoped_exclusion"
+          ]
+        },
+        "notes": null,
+        "effective_from": "2026-04-01",
+        "effective_to": null,
+        "excluded_categories": [],
+        "rule_role": "exclusion",
+        "merchant_slugs": [],
+        "platform_slugs": [],
+        "mcc_include": [],
+        "mcc_exclude": [],
+        "except_merchant_slugs": [],
+        "except_platform_slugs": [],
+        "block_inr": null,
+        "min_engine_version": 1,
+        "max_engine_version": 1,
+        "source_local_id": "exclude_utilities",
+        "display_note": "Cashback is not applicable on utility spends."
+      },
+      {
+        "id": "cashback-sbi-card:rule:exclude_utilities#2",
+        "category_id": "cat-bills",
+        "category_slug": "bills",
+        "merchant_pattern": null,
+        "rail": null,
+        "unit": "cashback_percent",
+        "rate": 0,
+        "min_txn_inr": null,
+        "max_txn_inr": null,
+        "priority": 1,
+        "conditions": {
+          "source_local_id": "exclude_utilities",
+          "part": 2,
+          "info_reasons": [],
+          "flags": [
+            "mcc_scoped_exclusion"
+          ]
+        },
+        "notes": null,
+        "effective_from": "2026-04-01",
+        "effective_to": null,
+        "excluded_categories": [],
+        "rule_role": "exclusion",
+        "merchant_slugs": [],
+        "platform_slugs": [],
+        "mcc_include": [
+          "4900"
+        ],
+        "mcc_exclude": [],
+        "except_merchant_slugs": [],
+        "except_platform_slugs": [],
+        "block_inr": null,
+        "min_engine_version": 2,
+        "max_engine_version": null,
+        "source_local_id": "exclude_utilities",
+        "display_note": "Cashback is not applicable on utility spends."
+      },
+      {
+        "id": "cashback-sbi-card:rule:exclude_utilities#3",
+        "category_id": null,
+        "category_slug": null,
+        "merchant_pattern": null,
+        "rail": null,
+        "unit": "cashback_percent",
+        "rate": 0,
+        "min_txn_inr": null,
+        "max_txn_inr": null,
+        "priority": 1,
+        "conditions": {
+          "source_local_id": "exclude_utilities",
+          "part": 3,
+          "info_reasons": [],
+          "flags": [
+            "mcc_scoped_exclusion"
+          ]
+        },
+        "notes": null,
+        "effective_from": "2026-04-01",
+        "effective_to": null,
+        "excluded_categories": [],
+        "rule_role": "exclusion",
+        "merchant_slugs": [],
+        "platform_slugs": [],
+        "mcc_include": [
+          "4900"
+        ],
+        "mcc_exclude": [],
+        "except_merchant_slugs": [],
+        "except_platform_slugs": [],
+        "block_inr": null,
+        "min_engine_version": 2,
+        "max_engine_version": null,
+        "source_local_id": "exclude_utilities",
+        "display_note": "Cashback is not applicable on utility spends."
+      },
+      {
+        "id": "cashback-sbi-card:rule:exclude_insurance#1",
+        "category_id": "cat-insurance",
+        "category_slug": "insurance",
+        "merchant_pattern": null,
+        "rail": null,
+        "unit": "cashback_percent",
+        "rate": 0,
+        "min_txn_inr": null,
+        "max_txn_inr": null,
+        "priority": 2,
+        "conditions": {
+          "source_local_id": "exclude_insurance",
+          "part": 1,
+          "info_reasons": [],
+          "flags": [
+            "mcc_scoped_exclusion"
+          ]
+        },
+        "notes": null,
+        "effective_from": "2026-04-01",
+        "effective_to": null,
+        "excluded_categories": [],
+        "rule_role": "exclusion",
+        "merchant_slugs": [],
+        "platform_slugs": [],
+        "mcc_include": [],
+        "mcc_exclude": [],
+        "except_merchant_slugs": [],
+        "except_platform_slugs": [],
+        "block_inr": null,
+        "min_engine_version": 1,
+        "max_engine_version": 1,
+        "source_local_id": "exclude_insurance",
+        "display_note": "Cashback is not applicable on insurance spends."
+      },
+      {
+        "id": "cashback-sbi-card:rule:exclude_insurance#2",
+        "category_id": "cat-insurance",
+        "category_slug": "insurance",
+        "merchant_pattern": null,
+        "rail": null,
+        "unit": "cashback_percent",
+        "rate": 0,
+        "min_txn_inr": null,
+        "max_txn_inr": null,
+        "priority": 2,
+        "conditions": {
+          "source_local_id": "exclude_insurance",
+          "part": 2,
+          "info_reasons": [],
+          "flags": [
+            "mcc_scoped_exclusion"
+          ]
+        },
+        "notes": null,
+        "effective_from": "2026-04-01",
+        "effective_to": null,
+        "excluded_categories": [],
+        "rule_role": "exclusion",
+        "merchant_slugs": [],
+        "platform_slugs": [],
+        "mcc_include": [
+          "5960",
+          "6300",
+          "6381"
+        ],
+        "mcc_exclude": [],
+        "except_merchant_slugs": [],
+        "except_platform_slugs": [],
+        "block_inr": null,
+        "min_engine_version": 2,
+        "max_engine_version": null,
+        "source_local_id": "exclude_insurance",
+        "display_note": "Cashback is not applicable on insurance spends."
+      },
+      {
+        "id": "cashback-sbi-card:rule:exclude_insurance#3",
+        "category_id": null,
+        "category_slug": null,
+        "merchant_pattern": null,
+        "rail": null,
+        "unit": "cashback_percent",
+        "rate": 0,
+        "min_txn_inr": null,
+        "max_txn_inr": null,
+        "priority": 2,
+        "conditions": {
+          "source_local_id": "exclude_insurance",
+          "part": 3,
+          "info_reasons": [],
+          "flags": [
+            "mcc_scoped_exclusion"
+          ]
+        },
+        "notes": null,
+        "effective_from": "2026-04-01",
+        "effective_to": null,
+        "excluded_categories": [],
+        "rule_role": "exclusion",
+        "merchant_slugs": [],
+        "platform_slugs": [],
+        "mcc_include": [
+          "5960",
+          "6300",
+          "6381"
+        ],
+        "mcc_exclude": [],
+        "except_merchant_slugs": [],
+        "except_platform_slugs": [],
+        "block_inr": null,
+        "min_engine_version": 2,
+        "max_engine_version": null,
+        "source_local_id": "exclude_insurance",
+        "display_note": "Cashback is not applicable on insurance spends."
+      },
+      {
+        "id": "cashback-sbi-card:rule:exclude_fuel#1",
+        "category_id": "cat-fuel",
+        "category_slug": "fuel",
+        "merchant_pattern": null,
+        "rail": null,
+        "unit": "cashback_percent",
+        "rate": 0,
+        "min_txn_inr": null,
+        "max_txn_inr": null,
+        "priority": 3,
+        "conditions": {
+          "source_local_id": "exclude_fuel",
+          "part": 1,
+          "info_reasons": [],
+          "flags": [
+            "mcc_scoped_exclusion"
+          ]
+        },
+        "notes": null,
+        "effective_from": "2026-04-01",
+        "effective_to": null,
+        "excluded_categories": [],
+        "rule_role": "exclusion",
+        "merchant_slugs": [],
+        "platform_slugs": [],
+        "mcc_include": [],
+        "mcc_exclude": [],
+        "except_merchant_slugs": [],
+        "except_platform_slugs": [],
+        "block_inr": null,
+        "min_engine_version": 1,
+        "max_engine_version": 1,
+        "source_local_id": "exclude_fuel",
+        "display_note": "Cashback is not applicable on fuel spends."
+      },
+      {
+        "id": "cashback-sbi-card:rule:exclude_fuel#2",
+        "category_id": "cat-fuel",
+        "category_slug": "fuel",
+        "merchant_pattern": null,
+        "rail": null,
+        "unit": "cashback_percent",
+        "rate": 0,
+        "min_txn_inr": null,
+        "max_txn_inr": null,
+        "priority": 3,
+        "conditions": {
+          "source_local_id": "exclude_fuel",
+          "part": 2,
+          "info_reasons": [],
+          "flags": [
+            "mcc_scoped_exclusion"
+          ]
+        },
+        "notes": null,
+        "effective_from": "2026-04-01",
+        "effective_to": null,
+        "excluded_categories": [],
+        "rule_role": "exclusion",
+        "merchant_slugs": [],
+        "platform_slugs": [],
+        "mcc_include": [
+          "5172",
+          "5541",
+          "5542",
+          "5983"
+        ],
+        "mcc_exclude": [],
+        "except_merchant_slugs": [],
+        "except_platform_slugs": [],
+        "block_inr": null,
+        "min_engine_version": 2,
+        "max_engine_version": null,
+        "source_local_id": "exclude_fuel",
+        "display_note": "Cashback is not applicable on fuel spends."
+      },
+      {
+        "id": "cashback-sbi-card:rule:exclude_fuel#3",
+        "category_id": null,
+        "category_slug": null,
+        "merchant_pattern": null,
+        "rail": null,
+        "unit": "cashback_percent",
+        "rate": 0,
+        "min_txn_inr": null,
+        "max_txn_inr": null,
+        "priority": 3,
+        "conditions": {
+          "source_local_id": "exclude_fuel",
+          "part": 3,
+          "info_reasons": [],
+          "flags": [
+            "mcc_scoped_exclusion"
+          ]
+        },
+        "notes": null,
+        "effective_from": "2026-04-01",
+        "effective_to": null,
+        "excluded_categories": [],
+        "rule_role": "exclusion",
+        "merchant_slugs": [],
+        "platform_slugs": [],
+        "mcc_include": [
+          "5172",
+          "5541",
+          "5542",
+          "5983"
+        ],
+        "mcc_exclude": [],
+        "except_merchant_slugs": [],
+        "except_platform_slugs": [],
+        "block_inr": null,
+        "min_engine_version": 2,
+        "max_engine_version": null,
+        "source_local_id": "exclude_fuel",
+        "display_note": "Cashback is not applicable on fuel spends."
+      },
+      {
+        "id": "cashback-sbi-card:rule:exclude_rent#1",
+        "category_id": "cat-rent",
+        "category_slug": "rent",
+        "merchant_pattern": null,
+        "rail": null,
+        "unit": "cashback_percent",
+        "rate": 0,
+        "min_txn_inr": null,
+        "max_txn_inr": null,
+        "priority": 4,
+        "conditions": {
+          "source_local_id": "exclude_rent",
+          "part": 1,
+          "info_reasons": [],
+          "flags": [
+            "mcc_scoped_exclusion"
+          ]
+        },
+        "notes": null,
+        "effective_from": "2026-04-01",
+        "effective_to": null,
+        "excluded_categories": [],
+        "rule_role": "exclusion",
+        "merchant_slugs": [],
+        "platform_slugs": [],
+        "mcc_include": [],
+        "mcc_exclude": [],
+        "except_merchant_slugs": [],
+        "except_platform_slugs": [],
+        "block_inr": null,
+        "min_engine_version": 1,
+        "max_engine_version": 1,
+        "source_local_id": "exclude_rent",
+        "display_note": "Rent transactions are excluded from cashback."
+      },
+      {
+        "id": "cashback-sbi-card:rule:exclude_rent#2",
+        "category_id": "cat-rent",
+        "category_slug": "rent",
+        "merchant_pattern": null,
+        "rail": null,
+        "unit": "cashback_percent",
+        "rate": 0,
+        "min_txn_inr": null,
+        "max_txn_inr": null,
+        "priority": 4,
+        "conditions": {
+          "source_local_id": "exclude_rent",
+          "part": 2,
+          "info_reasons": [],
+          "flags": [
+            "mcc_scoped_exclusion"
+          ]
+        },
+        "notes": null,
+        "effective_from": "2026-04-01",
+        "effective_to": null,
+        "excluded_categories": [],
+        "rule_role": "exclusion",
+        "merchant_slugs": [],
+        "platform_slugs": [],
+        "mcc_include": [
+          "6513"
+        ],
+        "mcc_exclude": [],
+        "except_merchant_slugs": [],
+        "except_platform_slugs": [],
+        "block_inr": null,
+        "min_engine_version": 2,
+        "max_engine_version": null,
+        "source_local_id": "exclude_rent",
+        "display_note": "Rent transactions are excluded from cashback."
+      },
+      {
+        "id": "cashback-sbi-card:rule:exclude_rent#3",
+        "category_id": null,
+        "category_slug": null,
+        "merchant_pattern": null,
+        "rail": null,
+        "unit": "cashback_percent",
+        "rate": 0,
+        "min_txn_inr": null,
+        "max_txn_inr": null,
+        "priority": 4,
+        "conditions": {
+          "source_local_id": "exclude_rent",
+          "part": 3,
+          "info_reasons": [],
+          "flags": [
+            "mcc_scoped_exclusion"
+          ]
+        },
+        "notes": null,
+        "effective_from": "2026-04-01",
+        "effective_to": null,
+        "excluded_categories": [],
+        "rule_role": "exclusion",
+        "merchant_slugs": [],
+        "platform_slugs": [],
+        "mcc_include": [
+          "6513"
+        ],
+        "mcc_exclude": [],
+        "except_merchant_slugs": [],
+        "except_platform_slugs": [],
+        "block_inr": null,
+        "min_engine_version": 2,
+        "max_engine_version": null,
+        "source_local_id": "exclude_rent",
+        "display_note": "Rent transactions are excluded from cashback."
+      },
+      {
+        "id": "cashback-sbi-card:rule:exclude_wallet#1",
+        "category_id": "cat-wallet",
+        "category_slug": "wallet",
+        "merchant_pattern": null,
+        "rail": null,
+        "unit": "cashback_percent",
+        "rate": 0,
+        "min_txn_inr": null,
+        "max_txn_inr": null,
+        "priority": 5,
+        "conditions": {
+          "source_local_id": "exclude_wallet",
+          "part": 1,
+          "info_reasons": [],
+          "flags": [
+            "mcc_scoped_exclusion"
+          ]
+        },
+        "notes": null,
+        "effective_from": "2026-04-01",
+        "effective_to": null,
+        "excluded_categories": [],
+        "rule_role": "exclusion",
+        "merchant_slugs": [],
+        "platform_slugs": [],
+        "mcc_include": [],
+        "mcc_exclude": [],
+        "except_merchant_slugs": [],
+        "except_platform_slugs": [],
+        "block_inr": null,
+        "min_engine_version": 1,
+        "max_engine_version": 1,
+        "source_local_id": "exclude_wallet",
+        "display_note": "Wallet loading transactions are excluded from cashback."
+      },
+      {
+        "id": "cashback-sbi-card:rule:exclude_wallet#2",
+        "category_id": "cat-wallet",
+        "category_slug": "wallet",
+        "merchant_pattern": null,
+        "rail": null,
+        "unit": "cashback_percent",
+        "rate": 0,
+        "min_txn_inr": null,
+        "max_txn_inr": null,
+        "priority": 5,
+        "conditions": {
+          "source_local_id": "exclude_wallet",
+          "part": 2,
+          "info_reasons": [],
+          "flags": [
+            "mcc_scoped_exclusion"
+          ]
+        },
+        "notes": null,
+        "effective_from": "2026-04-01",
+        "effective_to": null,
+        "excluded_categories": [],
+        "rule_role": "exclusion",
+        "merchant_slugs": [],
+        "platform_slugs": [],
+        "mcc_include": [
+          "6540",
+          "6541"
+        ],
+        "mcc_exclude": [],
+        "except_merchant_slugs": [],
+        "except_platform_slugs": [],
+        "block_inr": null,
+        "min_engine_version": 2,
+        "max_engine_version": null,
+        "source_local_id": "exclude_wallet",
+        "display_note": "Wallet loading transactions are excluded from cashback."
+      },
+      {
+        "id": "cashback-sbi-card:rule:exclude_wallet#3",
+        "category_id": null,
+        "category_slug": null,
+        "merchant_pattern": null,
+        "rail": null,
+        "unit": "cashback_percent",
+        "rate": 0,
+        "min_txn_inr": null,
+        "max_txn_inr": null,
+        "priority": 5,
+        "conditions": {
+          "source_local_id": "exclude_wallet",
+          "part": 3,
+          "info_reasons": [],
+          "flags": [
+            "mcc_scoped_exclusion"
+          ]
+        },
+        "notes": null,
+        "effective_from": "2026-04-01",
+        "effective_to": null,
+        "excluded_categories": [],
+        "rule_role": "exclusion",
+        "merchant_slugs": [],
+        "platform_slugs": [],
+        "mcc_include": [
+          "6540",
+          "6541"
+        ],
+        "mcc_exclude": [],
+        "except_merchant_slugs": [],
+        "except_platform_slugs": [],
+        "block_inr": null,
+        "min_engine_version": 2,
+        "max_engine_version": null,
+        "source_local_id": "exclude_wallet",
+        "display_note": "Wallet loading transactions are excluded from cashback."
+      },
+      {
+        "id": "cashback-sbi-card:rule:exclude_education#1",
+        "category_id": "cat-education",
+        "category_slug": "education",
+        "merchant_pattern": null,
+        "rail": null,
+        "unit": "cashback_percent",
+        "rate": 0,
+        "min_txn_inr": null,
+        "max_txn_inr": null,
+        "priority": 6,
+        "conditions": {
+          "source_local_id": "exclude_education",
+          "part": 1,
+          "info_reasons": [],
+          "flags": [
+            "mcc_scoped_exclusion"
+          ]
+        },
+        "notes": null,
+        "effective_from": "2026-04-01",
+        "effective_to": null,
+        "excluded_categories": [],
+        "rule_role": "exclusion",
+        "merchant_slugs": [],
+        "platform_slugs": [],
+        "mcc_include": [],
+        "mcc_exclude": [],
+        "except_merchant_slugs": [],
+        "except_platform_slugs": [],
+        "block_inr": null,
+        "min_engine_version": 1,
+        "max_engine_version": 1,
+        "source_local_id": "exclude_education",
+        "display_note": "School and educational services are excluded from cashback."
+      },
+      {
+        "id": "cashback-sbi-card:rule:exclude_education#2",
+        "category_id": "cat-education",
+        "category_slug": "education",
+        "merchant_pattern": null,
+        "rail": null,
+        "unit": "cashback_percent",
+        "rate": 0,
+        "min_txn_inr": null,
+        "max_txn_inr": null,
+        "priority": 6,
+        "conditions": {
+          "source_local_id": "exclude_education",
+          "part": 2,
+          "info_reasons": [],
+          "flags": [
+            "mcc_scoped_exclusion"
+          ]
+        },
+        "notes": null,
+        "effective_from": "2026-04-01",
+        "effective_to": null,
+        "excluded_categories": [],
+        "rule_role": "exclusion",
+        "merchant_slugs": [],
+        "platform_slugs": [],
+        "mcc_include": [
+          "8211",
+          "8220",
+          "8241",
+          "8244",
+          "8249",
+          "8299"
+        ],
+        "mcc_exclude": [],
+        "except_merchant_slugs": [],
+        "except_platform_slugs": [],
+        "block_inr": null,
+        "min_engine_version": 2,
+        "max_engine_version": null,
+        "source_local_id": "exclude_education",
+        "display_note": "School and educational services are excluded from cashback."
+      },
+      {
+        "id": "cashback-sbi-card:rule:exclude_education#3",
+        "category_id": null,
+        "category_slug": null,
+        "merchant_pattern": null,
+        "rail": null,
+        "unit": "cashback_percent",
+        "rate": 0,
+        "min_txn_inr": null,
+        "max_txn_inr": null,
+        "priority": 6,
+        "conditions": {
+          "source_local_id": "exclude_education",
+          "part": 3,
+          "info_reasons": [],
+          "flags": [
+            "mcc_scoped_exclusion"
+          ]
+        },
+        "notes": null,
+        "effective_from": "2026-04-01",
+        "effective_to": null,
+        "excluded_categories": [],
+        "rule_role": "exclusion",
+        "merchant_slugs": [],
+        "platform_slugs": [],
+        "mcc_include": [
+          "8211",
+          "8220",
+          "8241",
+          "8244",
+          "8249",
+          "8299"
+        ],
+        "mcc_exclude": [],
+        "except_merchant_slugs": [],
+        "except_platform_slugs": [],
+        "block_inr": null,
+        "min_engine_version": 2,
+        "max_engine_version": null,
+        "source_local_id": "exclude_education",
+        "display_note": "School and educational services are excluded from cashback."
+      },
+      {
+        "id": "cashback-sbi-card:rule:exclude_jewellery",
+        "category_id": null,
+        "category_slug": null,
+        "merchant_pattern": null,
+        "rail": null,
+        "unit": "cashback_percent",
+        "rate": 0,
+        "min_txn_inr": null,
+        "max_txn_inr": null,
+        "priority": 7,
+        "conditions": {
+          "source_local_id": "exclude_jewellery",
+          "part": null,
+          "info_reasons": [],
+          "flags": [
+            "token_replaced_by_conditions"
+          ]
+        },
+        "notes": null,
+        "effective_from": "2026-04-01",
+        "effective_to": null,
+        "excluded_categories": [],
+        "rule_role": "exclusion",
+        "merchant_slugs": [],
+        "platform_slugs": [],
+        "mcc_include": [
+          "5094",
+          "5944"
+        ],
+        "mcc_exclude": [],
+        "except_merchant_slugs": [],
+        "except_platform_slugs": [],
+        "block_inr": null,
+        "min_engine_version": 2,
+        "max_engine_version": null,
+        "source_local_id": "exclude_jewellery",
+        "display_note": "Jewellery spends are excluded from cashback."
+      },
+      {
+        "id": "cashback-sbi-card:rule:exclude_railways#1",
+        "category_id": "cat-travel",
+        "category_slug": "travel",
+        "merchant_pattern": null,
+        "rail": null,
+        "unit": "cashback_percent",
+        "rate": 0,
+        "min_txn_inr": null,
+        "max_txn_inr": null,
+        "priority": 8,
+        "conditions": {
+          "source_local_id": "exclude_railways",
+          "part": 1,
+          "info_reasons": [],
+          "flags": [
+            "broad_exclusion_v1_only",
+            "broad_category"
+          ]
+        },
+        "notes": null,
+        "effective_from": "2026-04-01",
+        "effective_to": null,
+        "excluded_categories": [],
+        "rule_role": "exclusion",
+        "merchant_slugs": [],
+        "platform_slugs": [],
+        "mcc_include": [],
+        "mcc_exclude": [],
+        "except_merchant_slugs": [],
+        "except_platform_slugs": [],
+        "block_inr": null,
+        "min_engine_version": 1,
+        "max_engine_version": 1,
+        "source_local_id": "exclude_railways",
+        "display_note": "Railway spends are excluded from cashback."
+      },
+      {
+        "id": "cashback-sbi-card:rule:exclude_railways#2",
+        "category_id": null,
+        "category_slug": null,
+        "merchant_pattern": null,
+        "rail": null,
+        "unit": "cashback_percent",
+        "rate": 0,
+        "min_txn_inr": null,
+        "max_txn_inr": null,
+        "priority": 8,
+        "conditions": {
+          "source_local_id": "exclude_railways",
+          "part": 2,
+          "info_reasons": [],
+          "flags": [
+            "broad_exclusion_v1_only"
+          ]
+        },
+        "notes": null,
+        "effective_from": "2026-04-01",
+        "effective_to": null,
+        "excluded_categories": [],
+        "rule_role": "exclusion",
+        "merchant_slugs": [],
+        "platform_slugs": [],
+        "mcc_include": [
+          "4011",
+          "4112"
+        ],
+        "mcc_exclude": [],
+        "except_merchant_slugs": [],
+        "except_platform_slugs": [],
+        "block_inr": null,
+        "min_engine_version": 2,
+        "max_engine_version": null,
+        "source_local_id": "exclude_railways",
+        "display_note": "Railway spends are excluded from cashback."
+      },
+      {
+        "id": "cashback-sbi-card:rule:exclude_merchant_emi",
+        "category_id": "cat-emi",
+        "category_slug": "emi",
+        "merchant_pattern": null,
+        "rail": "emi",
+        "unit": "cashback_percent",
+        "rate": 0,
+        "min_txn_inr": null,
+        "max_txn_inr": null,
+        "priority": 9,
+        "conditions": {
+          "source_local_id": "exclude_merchant_emi",
+          "part": null,
+          "info_reasons": [],
+          "flags": []
+        },
+        "notes": null,
+        "effective_from": "2026-04-01",
+        "effective_to": null,
+        "excluded_categories": [],
+        "rule_role": "exclusion",
+        "merchant_slugs": [],
+        "platform_slugs": [],
+        "mcc_include": [],
+        "mcc_exclude": [],
+        "except_merchant_slugs": [],
+        "except_platform_slugs": [],
+        "block_inr": null,
+        "min_engine_version": 1,
+        "max_engine_version": null,
+        "source_local_id": "exclude_merchant_emi",
+        "display_note": "Cashback is not applicable on Merchant EMI transactions."
+      },
+      {
+        "id": "cashback-sbi-card:rule:exclude_flexipay_emi",
+        "category_id": "cat-emi",
+        "category_slug": "emi",
+        "merchant_pattern": null,
+        "rail": "emi",
+        "unit": "cashback_percent",
+        "rate": 0,
+        "min_txn_inr": null,
+        "max_txn_inr": null,
+        "priority": 10,
+        "conditions": {
+          "source_local_id": "exclude_flexipay_emi",
+          "part": null,
+          "info_reasons": [],
+          "flags": []
+        },
+        "notes": null,
+        "effective_from": "2026-04-01",
+        "effective_to": null,
+        "excluded_categories": [],
+        "rule_role": "exclusion",
+        "merchant_slugs": [],
+        "platform_slugs": [],
+        "mcc_include": [],
+        "mcc_exclude": [],
+        "except_merchant_slugs": [],
+        "except_platform_slugs": [],
+        "block_inr": null,
+        "min_engine_version": 1,
+        "max_engine_version": null,
+        "source_local_id": "exclude_flexipay_emi",
+        "display_note": "Cashback is not applicable on Flexipay EMI transactions."
+      },
+      {
+        "id": "cashback-sbi-card:rule:exclude_digital_gaming#1",
+        "category_id": "cat-entertainment",
+        "category_slug": "entertainment",
+        "merchant_pattern": null,
+        "rail": null,
+        "unit": "cashback_percent",
+        "rate": 0,
+        "min_txn_inr": null,
+        "max_txn_inr": null,
+        "priority": 11,
+        "conditions": {
+          "source_local_id": "exclude_digital_gaming",
+          "part": 1,
+          "info_reasons": [],
+          "flags": [
+            "broad_exclusion_v1_only",
+            "broad_category"
+          ]
+        },
+        "notes": null,
+        "effective_from": "2026-04-01",
+        "effective_to": null,
+        "excluded_categories": [],
+        "rule_role": "exclusion",
+        "merchant_slugs": [],
+        "platform_slugs": [],
+        "mcc_include": [],
+        "mcc_exclude": [],
+        "except_merchant_slugs": [],
+        "except_platform_slugs": [],
+        "block_inr": null,
+        "min_engine_version": 1,
+        "max_engine_version": 1,
+        "source_local_id": "exclude_digital_gaming",
+        "display_note": "Effective 1 April 2026, digital gaming platforms/merchants are excluded."
+      },
+      {
+        "id": "cashback-sbi-card:rule:exclude_digital_gaming#2",
+        "category_id": null,
+        "category_slug": null,
+        "merchant_pattern": null,
+        "rail": null,
+        "unit": "cashback_percent",
+        "rate": 0,
+        "min_txn_inr": null,
+        "max_txn_inr": null,
+        "priority": 11,
+        "conditions": {
+          "source_local_id": "exclude_digital_gaming",
+          "part": 2,
+          "info_reasons": [],
+          "flags": [
+            "broad_exclusion_v1_only"
+          ]
+        },
+        "notes": null,
+        "effective_from": "2026-04-01",
+        "effective_to": null,
+        "excluded_categories": [],
+        "rule_role": "exclusion",
+        "merchant_slugs": [],
+        "platform_slugs": [],
+        "mcc_include": [
+          "5816",
+          "7993",
+          "7994"
+        ],
+        "mcc_exclude": [],
+        "except_merchant_slugs": [],
+        "except_platform_slugs": [],
+        "block_inr": null,
+        "min_engine_version": 2,
+        "max_engine_version": null,
+        "source_local_id": "exclude_digital_gaming",
+        "display_note": "Effective 1 April 2026, digital gaming platforms/merchants are excluded."
+      },
+      {
+        "id": "cashback-sbi-card:rule:exclude_tolls",
+        "category_id": null,
+        "category_slug": null,
+        "merchant_pattern": null,
+        "rail": null,
+        "unit": "cashback_percent",
+        "rate": 0,
+        "min_txn_inr": null,
+        "max_txn_inr": null,
+        "priority": 12,
+        "conditions": {
+          "source_local_id": "exclude_tolls",
+          "part": null,
+          "info_reasons": [],
+          "flags": [
+            "token_replaced_by_conditions"
+          ]
+        },
+        "notes": null,
+        "effective_from": "2026-04-01",
+        "effective_to": null,
+        "excluded_categories": [],
+        "rule_role": "exclusion",
+        "merchant_slugs": [],
+        "platform_slugs": [],
+        "mcc_include": [
+          "4784"
+        ],
+        "mcc_exclude": [],
+        "except_merchant_slugs": [],
+        "except_platform_slugs": [],
+        "block_inr": null,
+        "min_engine_version": 2,
+        "max_engine_version": null,
+        "source_local_id": "exclude_tolls",
+        "display_note": "Effective 1 April 2026, toll transactions are excluded."
+      },
+      {
+        "id": "cashback-sbi-card:rule:exclude_government#1",
+        "category_id": "cat-government",
+        "category_slug": "government",
+        "merchant_pattern": null,
+        "rail": null,
+        "unit": "cashback_percent",
+        "rate": 0,
+        "min_txn_inr": null,
+        "max_txn_inr": null,
+        "priority": 13,
+        "conditions": {
+          "source_local_id": "exclude_government",
+          "part": 1,
+          "info_reasons": [],
+          "flags": [
+            "mcc_scoped_exclusion"
+          ]
+        },
+        "notes": null,
+        "effective_from": "2026-04-01",
+        "effective_to": null,
+        "excluded_categories": [],
+        "rule_role": "exclusion",
+        "merchant_slugs": [],
+        "platform_slugs": [],
+        "mcc_include": [],
+        "mcc_exclude": [],
+        "except_merchant_slugs": [],
+        "except_platform_slugs": [],
+        "block_inr": null,
+        "min_engine_version": 1,
+        "max_engine_version": 1,
+        "source_local_id": "exclude_government",
+        "display_note": "Effective 1 April 2026, government-related transactions are excluded."
+      },
+      {
+        "id": "cashback-sbi-card:rule:exclude_government#2",
+        "category_id": "cat-government",
+        "category_slug": "government",
+        "merchant_pattern": null,
+        "rail": null,
+        "unit": "cashback_percent",
+        "rate": 0,
+        "min_txn_inr": null,
+        "max_txn_inr": null,
+        "priority": 13,
+        "conditions": {
+          "source_local_id": "exclude_government",
+          "part": 2,
+          "info_reasons": [],
+          "flags": [
+            "mcc_scoped_exclusion"
+          ]
+        },
+        "notes": null,
+        "effective_from": "2026-04-01",
+        "effective_to": null,
+        "excluded_categories": [],
+        "rule_role": "exclusion",
+        "merchant_slugs": [],
+        "platform_slugs": [],
+        "mcc_include": [
+          "9222",
+          "9311",
+          "9402"
+        ],
+        "mcc_exclude": [],
+        "except_merchant_slugs": [],
+        "except_platform_slugs": [],
+        "block_inr": null,
+        "min_engine_version": 2,
+        "max_engine_version": null,
+        "source_local_id": "exclude_government",
+        "display_note": "Effective 1 April 2026, government-related transactions are excluded."
+      },
+      {
+        "id": "cashback-sbi-card:rule:exclude_government#3",
+        "category_id": null,
+        "category_slug": null,
+        "merchant_pattern": null,
+        "rail": null,
+        "unit": "cashback_percent",
+        "rate": 0,
+        "min_txn_inr": null,
+        "max_txn_inr": null,
+        "priority": 13,
+        "conditions": {
+          "source_local_id": "exclude_government",
+          "part": 3,
+          "info_reasons": [],
+          "flags": [
+            "mcc_scoped_exclusion"
+          ]
+        },
+        "notes": null,
+        "effective_from": "2026-04-01",
+        "effective_to": null,
+        "excluded_categories": [],
+        "rule_role": "exclusion",
+        "merchant_slugs": [],
+        "platform_slugs": [],
+        "mcc_include": [
+          "9222",
+          "9311",
+          "9402"
+        ],
+        "mcc_exclude": [],
+        "except_merchant_slugs": [],
+        "except_platform_slugs": [],
+        "block_inr": null,
+        "min_engine_version": 2,
+        "max_engine_version": null,
+        "source_local_id": "exclude_government",
+        "display_note": "Effective 1 April 2026, government-related transactions are excluded."
+      },
+      {
+        "id": "cashback-sbi-card:rule:education_direct_payment",
+        "category_id": "cat-education",
+        "category_slug": "education",
+        "merchant_pattern": null,
+        "rail": "online",
+        "unit": "cashback_percent",
+        "rate": 0,
+        "min_txn_inr": null,
+        "max_txn_inr": null,
+        "priority": 14,
+        "conditions": {
+          "source_local_id": "education_direct_payment",
+          "part": null,
+          "info_reasons": [
+            "unresolved_merchant:channel"
+          ],
+          "flags": [
+            "exclusion_scope_broadened"
+          ]
+        },
+        "notes": null,
+        "effective_from": "2025-11-01",
+        "effective_to": null,
+        "excluded_categories": [],
+        "rule_role": "info",
+        "merchant_slugs": [],
+        "platform_slugs": [],
+        "mcc_include": [
+          "8211",
+          "8220",
+          "8241",
+          "8244",
+          "8249",
+          "8299"
+        ],
+        "mcc_exclude": [],
+        "except_merchant_slugs": [],
+        "except_platform_slugs": [],
+        "block_inr": null,
+        "min_engine_version": 2,
+        "max_engine_version": null,
+        "source_local_id": "education_direct_payment",
+        "display_note": "Education payments through third-party apps attract the applicable education-payment fee and are excluded from cashback; direct payments to schools/colleges through their websites or POS machines do not attract the education-payment fee, but the card cashback exclusion for school and educational ser"
+      }
+    ],
+    "cap_rules": [
+      {
+        "id": "cashback-sbi-card:cap:cap_online_cashback_cycle",
+        "reward_rule_id": "cashback-sbi-card:rule:online_cashback",
+        "category_id": null,
+        "category_slug": null,
+        "benefit_kind": null,
+        "label": "Cap online cashback cycle",
+        "measure": "reward_value",
+        "period": "statement_cycle",
+        "cap_value": 2000,
+        "post_cap_unit": null,
+        "post_cap_rate": 0,
+        "resets_on_day": null,
+        "cap_kind": "total_cashback",
+        "cap_amount": 2000,
+        "scope": "targets",
+        "targets": [
+          "cashback-sbi-card:rule:online_cashback"
+        ],
+        "parent_cap_id": null,
+        "post_cap_behavior": null,
+        "anchor": null,
+        "min_engine_version": 1,
+        "source_local_id": "cap_online_cashback_cycle"
+      },
+      {
+        "id": "cashback-sbi-card:cap:cap_offline_cashback_cycle",
+        "reward_rule_id": "cashback-sbi-card:rule:standard_offline_cashback",
+        "category_id": null,
+        "category_slug": null,
+        "benefit_kind": null,
+        "label": "Cap offline cashback cycle",
+        "measure": "reward_value",
+        "period": "statement_cycle",
+        "cap_value": 2000,
+        "post_cap_unit": null,
+        "post_cap_rate": 0,
+        "resets_on_day": null,
+        "cap_kind": "total_cashback",
+        "cap_amount": 2000,
+        "scope": "targets",
+        "targets": [
+          "cashback-sbi-card:rule:standard_offline_cashback"
+        ],
+        "parent_cap_id": null,
+        "post_cap_behavior": null,
+        "anchor": null,
+        "min_engine_version": 1,
+        "source_local_id": "cap_offline_cashback_cycle"
+      }
+    ],
+    "milestone_rules": [],
+    "fee_waiver_rules": [
+      {
+        "id": "cashback-sbi-card:waiver:1",
+        "threshold_spend_inr": 200000,
+        "period": "annual",
+        "waives_fee_inr": 999,
+        "excluded_category_slugs": [
+          "rent",
+          "wallet"
+        ],
+        "notes": "Renewal fee is reversed when annual spends in the preceding card anniversary year reach ₹2,00,000 or more.",
+        "excluded_categories": [
+          "cat-rent",
+          "cat-wallet"
+        ]
+      }
+    ],
+    "benefits": [
+      {
+        "id": "cashback-sbi-card:benefit:fuel_surcharge_waiver",
+        "key": "fuel_surcharge_waiver",
+        "source_local_id": "fuel_surcharge_waiver",
+        "kind": "fuel_surcharge",
+        "label": "1% fuel surcharge waiver",
+        "description": "Sponsor: SBI Card",
+        "quota_count": null,
+        "quota_period": "statement_cycle",
+        "network_program": null,
+        "value_estimate_inr": 100,
+        "conditions": {
+          "source_category_id": "fuel",
+          "evaluation_engine": {
+            "conditions": {
+              "transaction_amount_min_inr": 500,
+              "transaction_amount_max_inr": 3000,
+              "merchant_scope": "all petrol pumps in India",
+              "statement_cycle_cap_inr": 100
+            },
+            "benefit_calculation": {
+              "waiver_percent": 1,
+              "maximum_waiver_inr_per_statement_cycle": 100
+            },
+            "perks": [
+              "1% fuel surcharge waiver on transactions between ₹500 and ₹3,000"
+            ]
+          }
+        }
+      },
+      {
+        "id": "cashback-sbi-card:benefit:automatic_cashback_credit",
+        "key": "automatic_cashback_credit",
+        "source_local_id": "automatic_cashback_credit",
+        "kind": "other",
+        "label": "Automatic cashback statement credit",
+        "description": "Sponsor: SBI Card",
+        "quota_count": null,
+        "quota_period": null,
+        "network_program": null,
+        "value_estimate_inr": null,
+        "conditions": {
+          "source_category_id": "rewards",
+          "evaluation_engine": {
+            "conditions": {
+              "eligible_card_account": "valid and in good standing"
+            },
+            "benefit_calculation": {
+              "credit_timing": "within two working days of statement generation"
+            },
+            "perks": [
+              "Cashback is automatically credited to the SBI Card account",
+              "Cashback does not expire while the account remains active and in good standing"
+            ]
+          }
+        }
+      },
+      {
+        "id": "cashback-sbi-card:benefit:visa_global_assistance",
+        "key": "visa_global_assistance",
+        "source_local_id": "visa_global_assistance",
+        "kind": "other",
+        "label": "Visa Global Customer Assistance Services (GCAS)",
+        "description": "Sponsor: Visa",
+        "quota_count": null,
+        "quota_period": null,
+        "network_program": "visa_signature",
+        "value_estimate_inr": null,
+        "conditions": {
+          "source_category_id": "travel_assistance",
+          "evaluation_engine": {
+            "conditions": {
+              "scope": "emergency assistance for lost or stolen card while travelling internationally"
+            },
+            "benefit_calculation": "N/A",
+            "perks": [
+              "24x7 emergency card replacement and emergency cash disbursement assistance abroad"
+            ]
+          }
+        }
+      },
+      {
+        "id": "cashback-sbi-card:benefit:insurance:fraud_liability",
+        "key": "insurance:fraud_liability",
+        "source_local_id": null,
+        "kind": "other",
+        "label": "Fraud Liability",
+        "description": null,
+        "quota_count": null,
+        "quota_period": null,
+        "network_program": null,
+        "value_estimate_inr": null,
+        "conditions": {
+          "coverage_usd": null
+        }
+      }
+    ],
+    "unlock_rules": [],
+    "redemption_options": [
+      {
+        "program_name": "automatic_statement_credit",
+        "method": "statement_credit",
+        "value_per_point_inr": 1,
+        "min_points": null,
+        "notes": "Redemption fee: ₹0"
+      }
+    ],
+    "is_upi_linkable": false
+  }
+}

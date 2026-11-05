@@ -1,0 +1,1667 @@
+{
+  "generated_by": "api/scripts/catalogue_v2/snapshot_examples.js",
+  "source_slug": "hsbc-live-plus-credit-card",
+  "inputs": {
+    "transform_version": "7",
+    "source_record_sha256": "63486c4c919114ab70b9480f1b6ec8f46db2901f131b4163c399eca1335e874a",
+    "override_sha256": "f3b720e48198cd8726591097a12ac4649214bdb76540df12ade44c1f6f76ee53",
+    "directory_sha256": "c2fded34df886aef08595eebb7629a4dd140c98af750f3c891d6c291b4874b53",
+    "verified": false
+  },
+  "blocking_flags": [],
+  "card": {
+    "id": "hsbc-live-plus-credit-card:card",
+    "slug": "hsbc-live-plus-credit-card",
+    "name": "Live+ Credit Card",
+    "network": "visa",
+    "issuer_slug": "hsbc",
+    "base_reward_unit": "cashback_percent",
+    "base_reward_rate": 1.5,
+    "point_value_inr": null,
+    "excluded_categories": [],
+    "accrual_block_inr": null,
+    "accrual_rounding": "none",
+    "cashback_rounding": null,
+    "points_expiry_months": null,
+    "model_status": "partial",
+    "model_coverage": {
+      "rules_total": 19,
+      "rules_modelled": 19,
+      "rules_info": 0,
+      "caps_total": 1,
+      "caps_enforced": 1,
+      "flags": [
+        {
+          "code": "unmapped_excluded_category",
+          "source_local_id": "liveplus-base-eligible",
+          "detail": null
+        },
+        {
+          "code": "mcc_scoped_exclusion",
+          "source_local_id": "liveplus-exclude-fuel",
+          "detail": null
+        },
+        {
+          "code": "mcc_scoped_exclusion",
+          "source_local_id": "liveplus-exclude-wallet",
+          "detail": null
+        },
+        {
+          "code": "mcc_scoped_exclusion",
+          "source_local_id": "liveplus-exclude-rent-property",
+          "detail": null
+        },
+        {
+          "code": "token_replaced_by_conditions",
+          "source_local_id": "liveplus-exclude-b2b",
+          "detail": null
+        },
+        {
+          "code": "mcc_scoped_exclusion",
+          "source_local_id": "liveplus-exclude-education-government",
+          "detail": null
+        },
+        {
+          "code": "mcc_scoped_exclusion",
+          "source_local_id": "liveplus-exclude-insurance",
+          "detail": null
+        },
+        {
+          "code": "token_replaced_by_conditions",
+          "source_local_id": "liveplus-exclude-jewellery",
+          "detail": null
+        },
+        {
+          "code": "broad_exclusion_v1_only",
+          "source_local_id": "liveplus-exclude-gambling",
+          "detail": null
+        },
+        {
+          "code": "token_replaced_by_conditions",
+          "source_local_id": "liveplus-exclude-tolls",
+          "detail": null
+        },
+        {
+          "code": "token_replaced_by_conditions",
+          "source_local_id": "liveplus-exclude-charity",
+          "detail": null
+        },
+        {
+          "code": "exclusion_scope_broadened",
+          "source_local_id": "liveplus-exclude-money-transfer",
+          "detail": null
+        },
+        {
+          "code": "token_replaced_by_conditions",
+          "source_local_id": "liveplus-exclude-wholesale",
+          "detail": null
+        },
+        {
+          "code": "broad_exclusion_v1_only",
+          "source_local_id": "liveplus-exclude-hospital",
+          "detail": null
+        },
+        {
+          "code": "broad_exclusion_v1_only",
+          "source_local_id": "liveplus-exclude-local-transport",
+          "detail": null
+        },
+        {
+          "code": "rounding_assumed",
+          "source_local_id": null,
+          "detail": "none"
+        }
+      ],
+      "overrides_applied": [
+        {
+          "path": "cap_rules[id=liveplus-accelerated-cap].metric",
+          "op": "set",
+          "value_sha256": "7af78ba28cf9ccb3",
+          "reason": "Issuer cap is Rs 1,200 of cashback on the 10% tier.",
+          "source_url": "https://www.hsbc.bank.in/credit-cards/products/live-plus/",
+          "checked_on": "2026-11-05"
+        },
+        {
+          "path": "cap_rules[id=liveplus-accelerated-cap].limit_value",
+          "op": "set",
+          "value_sha256": "15197cf7214b58e6",
+          "reason": "Native cashback amount.",
+          "source_url": "https://www.hsbc.bank.in/credit-cards/products/live-plus/",
+          "checked_on": "2026-11-05"
+        },
+        {
+          "path": "cap_rules[id=liveplus-accelerated-cap].limit_value_inr",
+          "op": "set",
+          "value_sha256": "15197cf7214b58e6",
+          "reason": "Was 10000 of spend.",
+          "source_url": "https://www.hsbc.bank.in/credit-cards/products/live-plus/",
+          "checked_on": "2026-11-05"
+        },
+        {
+          "path": "cap_rules[id=liveplus-accelerated-cap].period",
+          "op": "set",
+          "value_sha256": "90d558c7c6a21aa1",
+          "reason": "Issuer says \"a month\".",
+          "source_url": "https://www.hsbc.bank.in/credit-cards/products/live-plus/",
+          "checked_on": "2026-11-05"
+        },
+        {
+          "path": "cap_rules[id=liveplus-accelerated-cap].post_limit_behavior.action",
+          "op": "set",
+          "value_sha256": "b1b0e5d61df2ff9a",
+          "reason": "Worked example shows no further cashback on the capped tier.",
+          "source_url": "https://www.hsbc.bank.in/credit-cards/products/live-plus/",
+          "checked_on": "2026-11-05"
+        }
+      ]
+    },
+    "reward_rules": [
+      {
+        "id": "hsbc-live-plus-credit-card:rule:liveplus-10pct-dining-food-grocery#1",
+        "category_id": "cat-dining",
+        "category_slug": "dining",
+        "merchant_pattern": null,
+        "rail": null,
+        "unit": "cashback_percent",
+        "rate": 10,
+        "min_txn_inr": null,
+        "max_txn_inr": null,
+        "priority": 10,
+        "conditions": {
+          "source_local_id": "liveplus-10pct-dining-food-grocery",
+          "part": 1,
+          "info_reasons": [],
+          "flags": []
+        },
+        "notes": null,
+        "effective_from": "2024-07-01",
+        "effective_to": null,
+        "excluded_categories": [],
+        "rule_role": "earn",
+        "merchant_slugs": [],
+        "platform_slugs": [],
+        "mcc_include": [
+          "5411",
+          "5422",
+          "5441",
+          "5451",
+          "5462",
+          "5499",
+          "5811",
+          "5812",
+          "5813",
+          "5814",
+          "5921"
+        ],
+        "mcc_exclude": [],
+        "except_merchant_slugs": [],
+        "except_platform_slugs": [],
+        "block_inr": null,
+        "min_engine_version": 2,
+        "max_engine_version": null,
+        "source_local_id": "liveplus-10pct-dining-food-grocery",
+        "display_note": "10% accelerated cashback on Dining, Food Delivery and Grocery spends"
+      },
+      {
+        "id": "hsbc-live-plus-credit-card:rule:liveplus-10pct-dining-food-grocery#2",
+        "category_id": "cat-groceries",
+        "category_slug": "groceries",
+        "merchant_pattern": null,
+        "rail": null,
+        "unit": "cashback_percent",
+        "rate": 10,
+        "min_txn_inr": null,
+        "max_txn_inr": null,
+        "priority": 10,
+        "conditions": {
+          "source_local_id": "liveplus-10pct-dining-food-grocery",
+          "part": 2,
+          "info_reasons": [],
+          "flags": []
+        },
+        "notes": null,
+        "effective_from": "2024-07-01",
+        "effective_to": null,
+        "excluded_categories": [],
+        "rule_role": "earn",
+        "merchant_slugs": [],
+        "platform_slugs": [],
+        "mcc_include": [
+          "5411",
+          "5422",
+          "5441",
+          "5451",
+          "5462",
+          "5499",
+          "5811",
+          "5812",
+          "5813",
+          "5814",
+          "5921"
+        ],
+        "mcc_exclude": [],
+        "except_merchant_slugs": [],
+        "except_platform_slugs": [],
+        "block_inr": null,
+        "min_engine_version": 2,
+        "max_engine_version": null,
+        "source_local_id": "liveplus-10pct-dining-food-grocery",
+        "display_note": "10% accelerated cashback on Dining, Food Delivery and Grocery spends"
+      },
+      {
+        "id": "hsbc-live-plus-credit-card:rule:liveplus-base-eligible",
+        "category_id": null,
+        "category_slug": null,
+        "merchant_pattern": null,
+        "rail": null,
+        "unit": "cashback_percent",
+        "rate": 1.5,
+        "min_txn_inr": null,
+        "max_txn_inr": null,
+        "priority": 50,
+        "conditions": {
+          "source_local_id": "liveplus-base-eligible",
+          "part": null,
+          "info_reasons": [],
+          "flags": [
+            "unmapped_excluded_category"
+          ]
+        },
+        "notes": null,
+        "effective_from": "2024-07-01",
+        "effective_to": null,
+        "excluded_categories": [
+          "cat-education",
+          "cat-fuel",
+          "cat-government",
+          "cat-health",
+          "cat-insurance",
+          "cat-rent",
+          "cat-travel",
+          "cat-wallet"
+        ],
+        "rule_role": "base",
+        "merchant_slugs": [],
+        "platform_slugs": [],
+        "mcc_include": [],
+        "mcc_exclude": [],
+        "except_merchant_slugs": [],
+        "except_platform_slugs": [],
+        "block_inr": null,
+        "min_engine_version": 1,
+        "max_engine_version": null,
+        "source_local_id": "liveplus-base-eligible",
+        "display_note": "Unlimited 1.5% cashback on all other eligible spends"
+      },
+      {
+        "id": "hsbc-live-plus-credit-card:rule:liveplus-exclude-fuel#1",
+        "category_id": "cat-fuel",
+        "category_slug": "fuel",
+        "merchant_pattern": null,
+        "rail": null,
+        "unit": "cashback_percent",
+        "rate": 0,
+        "min_txn_inr": null,
+        "max_txn_inr": null,
+        "priority": 1,
+        "conditions": {
+          "source_local_id": "liveplus-exclude-fuel",
+          "part": 1,
+          "info_reasons": [],
+          "flags": [
+            "mcc_scoped_exclusion"
+          ]
+        },
+        "notes": null,
+        "effective_from": "2024-07-01",
+        "effective_to": null,
+        "excluded_categories": [],
+        "rule_role": "exclusion",
+        "merchant_slugs": [],
+        "platform_slugs": [],
+        "mcc_include": [],
+        "mcc_exclude": [],
+        "except_merchant_slugs": [],
+        "except_platform_slugs": [],
+        "block_inr": null,
+        "min_engine_version": 1,
+        "max_engine_version": 1,
+        "source_local_id": "liveplus-exclude-fuel",
+        "display_note": "No cashback on fuel transactions"
+      },
+      {
+        "id": "hsbc-live-plus-credit-card:rule:liveplus-exclude-fuel#2",
+        "category_id": "cat-fuel",
+        "category_slug": "fuel",
+        "merchant_pattern": null,
+        "rail": null,
+        "unit": "cashback_percent",
+        "rate": 0,
+        "min_txn_inr": null,
+        "max_txn_inr": null,
+        "priority": 1,
+        "conditions": {
+          "source_local_id": "liveplus-exclude-fuel",
+          "part": 2,
+          "info_reasons": [],
+          "flags": [
+            "mcc_scoped_exclusion"
+          ]
+        },
+        "notes": null,
+        "effective_from": "2024-07-01",
+        "effective_to": null,
+        "excluded_categories": [],
+        "rule_role": "exclusion",
+        "merchant_slugs": [],
+        "platform_slugs": [],
+        "mcc_include": [
+          "5172",
+          "5541",
+          "5542",
+          "5552",
+          "5983"
+        ],
+        "mcc_exclude": [],
+        "except_merchant_slugs": [],
+        "except_platform_slugs": [],
+        "block_inr": null,
+        "min_engine_version": 2,
+        "max_engine_version": null,
+        "source_local_id": "liveplus-exclude-fuel",
+        "display_note": "No cashback on fuel transactions"
+      },
+      {
+        "id": "hsbc-live-plus-credit-card:rule:liveplus-exclude-fuel#3",
+        "category_id": null,
+        "category_slug": null,
+        "merchant_pattern": null,
+        "rail": null,
+        "unit": "cashback_percent",
+        "rate": 0,
+        "min_txn_inr": null,
+        "max_txn_inr": null,
+        "priority": 1,
+        "conditions": {
+          "source_local_id": "liveplus-exclude-fuel",
+          "part": 3,
+          "info_reasons": [],
+          "flags": [
+            "mcc_scoped_exclusion"
+          ]
+        },
+        "notes": null,
+        "effective_from": "2024-07-01",
+        "effective_to": null,
+        "excluded_categories": [],
+        "rule_role": "exclusion",
+        "merchant_slugs": [],
+        "platform_slugs": [],
+        "mcc_include": [
+          "5172",
+          "5541",
+          "5542",
+          "5552",
+          "5983"
+        ],
+        "mcc_exclude": [],
+        "except_merchant_slugs": [],
+        "except_platform_slugs": [],
+        "block_inr": null,
+        "min_engine_version": 2,
+        "max_engine_version": null,
+        "source_local_id": "liveplus-exclude-fuel",
+        "display_note": "No cashback on fuel transactions"
+      },
+      {
+        "id": "hsbc-live-plus-credit-card:rule:liveplus-exclude-wallet#1",
+        "category_id": "cat-wallet",
+        "category_slug": "wallet",
+        "merchant_pattern": null,
+        "rail": null,
+        "unit": "cashback_percent",
+        "rate": 0,
+        "min_txn_inr": null,
+        "max_txn_inr": null,
+        "priority": 1,
+        "conditions": {
+          "source_local_id": "liveplus-exclude-wallet",
+          "part": 1,
+          "info_reasons": [],
+          "flags": [
+            "mcc_scoped_exclusion"
+          ]
+        },
+        "notes": null,
+        "effective_from": "2024-07-01",
+        "effective_to": null,
+        "excluded_categories": [],
+        "rule_role": "exclusion",
+        "merchant_slugs": [],
+        "platform_slugs": [],
+        "mcc_include": [],
+        "mcc_exclude": [],
+        "except_merchant_slugs": [],
+        "except_platform_slugs": [],
+        "block_inr": null,
+        "min_engine_version": 1,
+        "max_engine_version": 1,
+        "source_local_id": "liveplus-exclude-wallet",
+        "display_note": "No cashback on e-wallet loads"
+      },
+      {
+        "id": "hsbc-live-plus-credit-card:rule:liveplus-exclude-wallet#2",
+        "category_id": "cat-wallet",
+        "category_slug": "wallet",
+        "merchant_pattern": null,
+        "rail": null,
+        "unit": "cashback_percent",
+        "rate": 0,
+        "min_txn_inr": null,
+        "max_txn_inr": null,
+        "priority": 1,
+        "conditions": {
+          "source_local_id": "liveplus-exclude-wallet",
+          "part": 2,
+          "info_reasons": [],
+          "flags": [
+            "mcc_scoped_exclusion"
+          ]
+        },
+        "notes": null,
+        "effective_from": "2024-07-01",
+        "effective_to": null,
+        "excluded_categories": [],
+        "rule_role": "exclusion",
+        "merchant_slugs": [],
+        "platform_slugs": [],
+        "mcc_include": [
+          "6540"
+        ],
+        "mcc_exclude": [],
+        "except_merchant_slugs": [],
+        "except_platform_slugs": [],
+        "block_inr": null,
+        "min_engine_version": 2,
+        "max_engine_version": null,
+        "source_local_id": "liveplus-exclude-wallet",
+        "display_note": "No cashback on e-wallet loads"
+      },
+      {
+        "id": "hsbc-live-plus-credit-card:rule:liveplus-exclude-wallet#3",
+        "category_id": null,
+        "category_slug": null,
+        "merchant_pattern": null,
+        "rail": null,
+        "unit": "cashback_percent",
+        "rate": 0,
+        "min_txn_inr": null,
+        "max_txn_inr": null,
+        "priority": 1,
+        "conditions": {
+          "source_local_id": "liveplus-exclude-wallet",
+          "part": 3,
+          "info_reasons": [],
+          "flags": [
+            "mcc_scoped_exclusion"
+          ]
+        },
+        "notes": null,
+        "effective_from": "2024-07-01",
+        "effective_to": null,
+        "excluded_categories": [],
+        "rule_role": "exclusion",
+        "merchant_slugs": [],
+        "platform_slugs": [],
+        "mcc_include": [
+          "6540"
+        ],
+        "mcc_exclude": [],
+        "except_merchant_slugs": [],
+        "except_platform_slugs": [],
+        "block_inr": null,
+        "min_engine_version": 2,
+        "max_engine_version": null,
+        "source_local_id": "liveplus-exclude-wallet",
+        "display_note": "No cashback on e-wallet loads"
+      },
+      {
+        "id": "hsbc-live-plus-credit-card:rule:liveplus-exclude-rent-property#1",
+        "category_id": "cat-rent",
+        "category_slug": "rent",
+        "merchant_pattern": null,
+        "rail": null,
+        "unit": "cashback_percent",
+        "rate": 0,
+        "min_txn_inr": null,
+        "max_txn_inr": null,
+        "priority": 1,
+        "conditions": {
+          "source_local_id": "liveplus-exclude-rent-property",
+          "part": 1,
+          "info_reasons": [],
+          "flags": [
+            "mcc_scoped_exclusion"
+          ]
+        },
+        "notes": null,
+        "effective_from": "2024-07-01",
+        "effective_to": null,
+        "excluded_categories": [],
+        "rule_role": "exclusion",
+        "merchant_slugs": [],
+        "platform_slugs": [],
+        "mcc_include": [],
+        "mcc_exclude": [],
+        "except_merchant_slugs": [],
+        "except_platform_slugs": [],
+        "block_inr": null,
+        "min_engine_version": 1,
+        "max_engine_version": 1,
+        "source_local_id": "liveplus-exclude-rent-property",
+        "display_note": "No cashback on property management fees, rental commissions or rental payments"
+      },
+      {
+        "id": "hsbc-live-plus-credit-card:rule:liveplus-exclude-rent-property#2",
+        "category_id": "cat-rent",
+        "category_slug": "rent",
+        "merchant_pattern": null,
+        "rail": null,
+        "unit": "cashback_percent",
+        "rate": 0,
+        "min_txn_inr": null,
+        "max_txn_inr": null,
+        "priority": 1,
+        "conditions": {
+          "source_local_id": "liveplus-exclude-rent-property",
+          "part": 2,
+          "info_reasons": [],
+          "flags": [
+            "mcc_scoped_exclusion"
+          ]
+        },
+        "notes": null,
+        "effective_from": "2024-07-01",
+        "effective_to": null,
+        "excluded_categories": [],
+        "rule_role": "exclusion",
+        "merchant_slugs": [],
+        "platform_slugs": [],
+        "mcc_include": [
+          "6513",
+          "7012",
+          "7349"
+        ],
+        "mcc_exclude": [],
+        "except_merchant_slugs": [],
+        "except_platform_slugs": [],
+        "block_inr": null,
+        "min_engine_version": 2,
+        "max_engine_version": null,
+        "source_local_id": "liveplus-exclude-rent-property",
+        "display_note": "No cashback on property management fees, rental commissions or rental payments"
+      },
+      {
+        "id": "hsbc-live-plus-credit-card:rule:liveplus-exclude-rent-property#3",
+        "category_id": null,
+        "category_slug": null,
+        "merchant_pattern": null,
+        "rail": null,
+        "unit": "cashback_percent",
+        "rate": 0,
+        "min_txn_inr": null,
+        "max_txn_inr": null,
+        "priority": 1,
+        "conditions": {
+          "source_local_id": "liveplus-exclude-rent-property",
+          "part": 3,
+          "info_reasons": [],
+          "flags": [
+            "mcc_scoped_exclusion"
+          ]
+        },
+        "notes": null,
+        "effective_from": "2024-07-01",
+        "effective_to": null,
+        "excluded_categories": [],
+        "rule_role": "exclusion",
+        "merchant_slugs": [],
+        "platform_slugs": [],
+        "mcc_include": [
+          "6513",
+          "7012",
+          "7349"
+        ],
+        "mcc_exclude": [],
+        "except_merchant_slugs": [],
+        "except_platform_slugs": [],
+        "block_inr": null,
+        "min_engine_version": 2,
+        "max_engine_version": null,
+        "source_local_id": "liveplus-exclude-rent-property",
+        "display_note": "No cashback on property management fees, rental commissions or rental payments"
+      },
+      {
+        "id": "hsbc-live-plus-credit-card:rule:liveplus-exclude-b2b",
+        "category_id": null,
+        "category_slug": null,
+        "merchant_pattern": null,
+        "rail": null,
+        "unit": "cashback_percent",
+        "rate": 0,
+        "min_txn_inr": null,
+        "max_txn_inr": null,
+        "priority": 1,
+        "conditions": {
+          "source_local_id": "liveplus-exclude-b2b",
+          "part": null,
+          "info_reasons": [],
+          "flags": [
+            "token_replaced_by_conditions"
+          ]
+        },
+        "notes": null,
+        "effective_from": "2024-07-01",
+        "effective_to": null,
+        "excluded_categories": [],
+        "rule_role": "exclusion",
+        "merchant_slugs": [],
+        "platform_slugs": [],
+        "mcc_include": [
+          "2741",
+          "2791",
+          "2842",
+          "5013",
+          "5021",
+          "5039",
+          "5044",
+          "5045",
+          "5046",
+          "5047",
+          "5051",
+          "5065",
+          "5072",
+          "5074",
+          "5085",
+          "5099",
+          "5111",
+          "5122",
+          "5131",
+          "5137",
+          "5139",
+          "5169",
+          "5192",
+          "5193",
+          "5198",
+          "5199",
+          "7311",
+          "7333",
+          "7361",
+          "7372",
+          "7375",
+          "7379",
+          "7395",
+          "7399",
+          "7829",
+          "8734"
+        ],
+        "mcc_exclude": [],
+        "except_merchant_slugs": [],
+        "except_platform_slugs": [],
+        "block_inr": null,
+        "min_engine_version": 2,
+        "max_engine_version": null,
+        "source_local_id": "liveplus-exclude-b2b",
+        "display_note": "No cashback on specified B2B transactions"
+      },
+      {
+        "id": "hsbc-live-plus-credit-card:rule:liveplus-exclude-education-government#1",
+        "category_id": "cat-education",
+        "category_slug": "education",
+        "merchant_pattern": null,
+        "rail": null,
+        "unit": "cashback_percent",
+        "rate": 0,
+        "min_txn_inr": null,
+        "max_txn_inr": null,
+        "priority": 1,
+        "conditions": {
+          "source_local_id": "liveplus-exclude-education-government",
+          "part": 1,
+          "info_reasons": [],
+          "flags": [
+            "mcc_scoped_exclusion"
+          ]
+        },
+        "notes": null,
+        "effective_from": "2024-07-01",
+        "effective_to": null,
+        "excluded_categories": [],
+        "rule_role": "exclusion",
+        "merchant_slugs": [],
+        "platform_slugs": [],
+        "mcc_include": [],
+        "mcc_exclude": [],
+        "except_merchant_slugs": [],
+        "except_platform_slugs": [],
+        "block_inr": null,
+        "min_engine_version": 1,
+        "max_engine_version": 1,
+        "source_local_id": "liveplus-exclude-education-government",
+        "display_note": "No cashback on specified education and government transactions"
+      },
+      {
+        "id": "hsbc-live-plus-credit-card:rule:liveplus-exclude-education-government#2",
+        "category_id": "cat-education",
+        "category_slug": "education",
+        "merchant_pattern": null,
+        "rail": null,
+        "unit": "cashback_percent",
+        "rate": 0,
+        "min_txn_inr": null,
+        "max_txn_inr": null,
+        "priority": 1,
+        "conditions": {
+          "source_local_id": "liveplus-exclude-education-government",
+          "part": 2,
+          "info_reasons": [],
+          "flags": [
+            "mcc_scoped_exclusion"
+          ]
+        },
+        "notes": null,
+        "effective_from": "2024-07-01",
+        "effective_to": null,
+        "excluded_categories": [],
+        "rule_role": "exclusion",
+        "merchant_slugs": [],
+        "platform_slugs": [],
+        "mcc_include": [
+          "8211",
+          "8220",
+          "8241",
+          "8244",
+          "8249",
+          "8299",
+          "8351",
+          "9211",
+          "9222",
+          "9223",
+          "9311",
+          "9399",
+          "9402",
+          "9405",
+          "9950"
+        ],
+        "mcc_exclude": [],
+        "except_merchant_slugs": [],
+        "except_platform_slugs": [],
+        "block_inr": null,
+        "min_engine_version": 2,
+        "max_engine_version": null,
+        "source_local_id": "liveplus-exclude-education-government",
+        "display_note": "No cashback on specified education and government transactions"
+      },
+      {
+        "id": "hsbc-live-plus-credit-card:rule:liveplus-exclude-education-government#3",
+        "category_id": null,
+        "category_slug": null,
+        "merchant_pattern": null,
+        "rail": null,
+        "unit": "cashback_percent",
+        "rate": 0,
+        "min_txn_inr": null,
+        "max_txn_inr": null,
+        "priority": 1,
+        "conditions": {
+          "source_local_id": "liveplus-exclude-education-government",
+          "part": 3,
+          "info_reasons": [],
+          "flags": [
+            "mcc_scoped_exclusion"
+          ]
+        },
+        "notes": null,
+        "effective_from": "2024-07-01",
+        "effective_to": null,
+        "excluded_categories": [],
+        "rule_role": "exclusion",
+        "merchant_slugs": [],
+        "platform_slugs": [],
+        "mcc_include": [
+          "8211",
+          "8220",
+          "8241",
+          "8244",
+          "8249",
+          "8299",
+          "8351",
+          "9211",
+          "9222",
+          "9223",
+          "9311",
+          "9399",
+          "9402",
+          "9405",
+          "9950"
+        ],
+        "mcc_exclude": [],
+        "except_merchant_slugs": [],
+        "except_platform_slugs": [],
+        "block_inr": null,
+        "min_engine_version": 2,
+        "max_engine_version": null,
+        "source_local_id": "liveplus-exclude-education-government",
+        "display_note": "No cashback on specified education and government transactions"
+      },
+      {
+        "id": "hsbc-live-plus-credit-card:rule:liveplus-exclude-insurance#1",
+        "category_id": "cat-insurance",
+        "category_slug": "insurance",
+        "merchant_pattern": null,
+        "rail": null,
+        "unit": "cashback_percent",
+        "rate": 0,
+        "min_txn_inr": null,
+        "max_txn_inr": null,
+        "priority": 1,
+        "conditions": {
+          "source_local_id": "liveplus-exclude-insurance",
+          "part": 1,
+          "info_reasons": [],
+          "flags": [
+            "mcc_scoped_exclusion"
+          ]
+        },
+        "notes": null,
+        "effective_from": "2024-07-01",
+        "effective_to": null,
+        "excluded_categories": [],
+        "rule_role": "exclusion",
+        "merchant_slugs": [],
+        "platform_slugs": [],
+        "mcc_include": [],
+        "mcc_exclude": [],
+        "except_merchant_slugs": [],
+        "except_platform_slugs": [],
+        "block_inr": null,
+        "min_engine_version": 1,
+        "max_engine_version": 1,
+        "source_local_id": "liveplus-exclude-insurance",
+        "display_note": "No cashback on insurance transactions"
+      },
+      {
+        "id": "hsbc-live-plus-credit-card:rule:liveplus-exclude-insurance#2",
+        "category_id": "cat-insurance",
+        "category_slug": "insurance",
+        "merchant_pattern": null,
+        "rail": null,
+        "unit": "cashback_percent",
+        "rate": 0,
+        "min_txn_inr": null,
+        "max_txn_inr": null,
+        "priority": 1,
+        "conditions": {
+          "source_local_id": "liveplus-exclude-insurance",
+          "part": 2,
+          "info_reasons": [],
+          "flags": [
+            "mcc_scoped_exclusion"
+          ]
+        },
+        "notes": null,
+        "effective_from": "2024-07-01",
+        "effective_to": null,
+        "excluded_categories": [],
+        "rule_role": "exclusion",
+        "merchant_slugs": [],
+        "platform_slugs": [],
+        "mcc_include": [
+          "5960",
+          "6300"
+        ],
+        "mcc_exclude": [],
+        "except_merchant_slugs": [],
+        "except_platform_slugs": [],
+        "block_inr": null,
+        "min_engine_version": 2,
+        "max_engine_version": null,
+        "source_local_id": "liveplus-exclude-insurance",
+        "display_note": "No cashback on insurance transactions"
+      },
+      {
+        "id": "hsbc-live-plus-credit-card:rule:liveplus-exclude-insurance#3",
+        "category_id": null,
+        "category_slug": null,
+        "merchant_pattern": null,
+        "rail": null,
+        "unit": "cashback_percent",
+        "rate": 0,
+        "min_txn_inr": null,
+        "max_txn_inr": null,
+        "priority": 1,
+        "conditions": {
+          "source_local_id": "liveplus-exclude-insurance",
+          "part": 3,
+          "info_reasons": [],
+          "flags": [
+            "mcc_scoped_exclusion"
+          ]
+        },
+        "notes": null,
+        "effective_from": "2024-07-01",
+        "effective_to": null,
+        "excluded_categories": [],
+        "rule_role": "exclusion",
+        "merchant_slugs": [],
+        "platform_slugs": [],
+        "mcc_include": [
+          "5960",
+          "6300"
+        ],
+        "mcc_exclude": [],
+        "except_merchant_slugs": [],
+        "except_platform_slugs": [],
+        "block_inr": null,
+        "min_engine_version": 2,
+        "max_engine_version": null,
+        "source_local_id": "liveplus-exclude-insurance",
+        "display_note": "No cashback on insurance transactions"
+      },
+      {
+        "id": "hsbc-live-plus-credit-card:rule:liveplus-exclude-jewellery",
+        "category_id": null,
+        "category_slug": null,
+        "merchant_pattern": null,
+        "rail": null,
+        "unit": "cashback_percent",
+        "rate": 0,
+        "min_txn_inr": null,
+        "max_txn_inr": null,
+        "priority": 1,
+        "conditions": {
+          "source_local_id": "liveplus-exclude-jewellery",
+          "part": null,
+          "info_reasons": [],
+          "flags": [
+            "token_replaced_by_conditions"
+          ]
+        },
+        "notes": null,
+        "effective_from": "2024-07-01",
+        "effective_to": null,
+        "excluded_categories": [],
+        "rule_role": "exclusion",
+        "merchant_slugs": [],
+        "platform_slugs": [],
+        "mcc_include": [
+          "5094",
+          "5932",
+          "5937",
+          "5944"
+        ],
+        "mcc_exclude": [],
+        "except_merchant_slugs": [],
+        "except_platform_slugs": [],
+        "block_inr": null,
+        "min_engine_version": 2,
+        "max_engine_version": null,
+        "source_local_id": "liveplus-exclude-jewellery",
+        "display_note": "No cashback on jewellery and antique items"
+      },
+      {
+        "id": "hsbc-live-plus-credit-card:rule:liveplus-exclude-gambling#1",
+        "category_id": "cat-entertainment",
+        "category_slug": "entertainment",
+        "merchant_pattern": null,
+        "rail": null,
+        "unit": "cashback_percent",
+        "rate": 0,
+        "min_txn_inr": null,
+        "max_txn_inr": null,
+        "priority": 1,
+        "conditions": {
+          "source_local_id": "liveplus-exclude-gambling",
+          "part": 1,
+          "info_reasons": [],
+          "flags": [
+            "broad_exclusion_v1_only",
+            "broad_category"
+          ]
+        },
+        "notes": null,
+        "effective_from": "2024-07-01",
+        "effective_to": null,
+        "excluded_categories": [],
+        "rule_role": "exclusion",
+        "merchant_slugs": [],
+        "platform_slugs": [],
+        "mcc_include": [],
+        "mcc_exclude": [],
+        "except_merchant_slugs": [],
+        "except_platform_slugs": [],
+        "block_inr": null,
+        "min_engine_version": 1,
+        "max_engine_version": 1,
+        "source_local_id": "liveplus-exclude-gambling",
+        "display_note": "No cashback on gambling"
+      },
+      {
+        "id": "hsbc-live-plus-credit-card:rule:liveplus-exclude-gambling#2",
+        "category_id": null,
+        "category_slug": null,
+        "merchant_pattern": null,
+        "rail": null,
+        "unit": "cashback_percent",
+        "rate": 0,
+        "min_txn_inr": null,
+        "max_txn_inr": null,
+        "priority": 1,
+        "conditions": {
+          "source_local_id": "liveplus-exclude-gambling",
+          "part": 2,
+          "info_reasons": [],
+          "flags": [
+            "broad_exclusion_v1_only"
+          ]
+        },
+        "notes": null,
+        "effective_from": "2024-07-01",
+        "effective_to": null,
+        "excluded_categories": [],
+        "rule_role": "exclusion",
+        "merchant_slugs": [],
+        "platform_slugs": [],
+        "mcc_include": [
+          "7995"
+        ],
+        "mcc_exclude": [],
+        "except_merchant_slugs": [],
+        "except_platform_slugs": [],
+        "block_inr": null,
+        "min_engine_version": 2,
+        "max_engine_version": null,
+        "source_local_id": "liveplus-exclude-gambling",
+        "display_note": "No cashback on gambling"
+      },
+      {
+        "id": "hsbc-live-plus-credit-card:rule:liveplus-exclude-tolls",
+        "category_id": null,
+        "category_slug": null,
+        "merchant_pattern": null,
+        "rail": null,
+        "unit": "cashback_percent",
+        "rate": 0,
+        "min_txn_inr": null,
+        "max_txn_inr": null,
+        "priority": 1,
+        "conditions": {
+          "source_local_id": "liveplus-exclude-tolls",
+          "part": null,
+          "info_reasons": [],
+          "flags": [
+            "token_replaced_by_conditions"
+          ]
+        },
+        "notes": null,
+        "effective_from": "2024-07-01",
+        "effective_to": null,
+        "excluded_categories": [],
+        "rule_role": "exclusion",
+        "merchant_slugs": [],
+        "platform_slugs": [],
+        "mcc_include": [
+          "4784"
+        ],
+        "mcc_exclude": [],
+        "except_merchant_slugs": [],
+        "except_platform_slugs": [],
+        "block_inr": null,
+        "min_engine_version": 2,
+        "max_engine_version": null,
+        "source_local_id": "liveplus-exclude-tolls",
+        "display_note": "No cashback on tolls and bridge fees"
+      },
+      {
+        "id": "hsbc-live-plus-credit-card:rule:liveplus-exclude-financial",
+        "category_id": null,
+        "category_slug": null,
+        "merchant_pattern": null,
+        "rail": null,
+        "unit": "cashback_percent",
+        "rate": 0,
+        "min_txn_inr": null,
+        "max_txn_inr": null,
+        "priority": 1,
+        "conditions": {
+          "source_local_id": "liveplus-exclude-financial",
+          "part": null,
+          "info_reasons": [],
+          "flags": []
+        },
+        "notes": null,
+        "effective_from": "2024-07-01",
+        "effective_to": null,
+        "excluded_categories": [],
+        "rule_role": "exclusion",
+        "merchant_slugs": [],
+        "platform_slugs": [],
+        "mcc_include": [
+          "6010",
+          "6011",
+          "6012",
+          "6051"
+        ],
+        "mcc_exclude": [],
+        "except_merchant_slugs": [],
+        "except_platform_slugs": [],
+        "block_inr": null,
+        "min_engine_version": 2,
+        "max_engine_version": null,
+        "source_local_id": "liveplus-exclude-financial",
+        "display_note": "No cashback on cash withdrawals, credit repayments, foreign currency, liquid and cryptocurrency assets"
+      },
+      {
+        "id": "hsbc-live-plus-credit-card:rule:liveplus-exclude-security-broker",
+        "category_id": null,
+        "category_slug": null,
+        "merchant_pattern": null,
+        "rail": null,
+        "unit": "cashback_percent",
+        "rate": 0,
+        "min_txn_inr": null,
+        "max_txn_inr": null,
+        "priority": 1,
+        "conditions": {
+          "source_local_id": "liveplus-exclude-security-broker",
+          "part": null,
+          "info_reasons": [],
+          "flags": []
+        },
+        "notes": null,
+        "effective_from": "2024-07-01",
+        "effective_to": null,
+        "excluded_categories": [],
+        "rule_role": "exclusion",
+        "merchant_slugs": [],
+        "platform_slugs": [],
+        "mcc_include": [
+          "6211"
+        ],
+        "mcc_exclude": [],
+        "except_merchant_slugs": [],
+        "except_platform_slugs": [],
+        "block_inr": null,
+        "min_engine_version": 2,
+        "max_engine_version": null,
+        "source_local_id": "liveplus-exclude-security-broker",
+        "display_note": "No cashback on security broker services"
+      },
+      {
+        "id": "hsbc-live-plus-credit-card:rule:liveplus-exclude-collection",
+        "category_id": null,
+        "category_slug": null,
+        "merchant_pattern": null,
+        "rail": null,
+        "unit": "cashback_percent",
+        "rate": 0,
+        "min_txn_inr": null,
+        "max_txn_inr": null,
+        "priority": 1,
+        "conditions": {
+          "source_local_id": "liveplus-exclude-collection",
+          "part": null,
+          "info_reasons": [],
+          "flags": []
+        },
+        "notes": null,
+        "effective_from": "2024-07-01",
+        "effective_to": null,
+        "excluded_categories": [],
+        "rule_role": "exclusion",
+        "merchant_slugs": [],
+        "platform_slugs": [],
+        "mcc_include": [
+          "7322"
+        ],
+        "mcc_exclude": [],
+        "except_merchant_slugs": [],
+        "except_platform_slugs": [],
+        "block_inr": null,
+        "min_engine_version": 2,
+        "max_engine_version": null,
+        "source_local_id": "liveplus-exclude-collection",
+        "display_note": "No cashback on collection agencies"
+      },
+      {
+        "id": "hsbc-live-plus-credit-card:rule:liveplus-exclude-charity",
+        "category_id": null,
+        "category_slug": null,
+        "merchant_pattern": null,
+        "rail": null,
+        "unit": "cashback_percent",
+        "rate": 0,
+        "min_txn_inr": null,
+        "max_txn_inr": null,
+        "priority": 1,
+        "conditions": {
+          "source_local_id": "liveplus-exclude-charity",
+          "part": null,
+          "info_reasons": [],
+          "flags": [
+            "token_replaced_by_conditions"
+          ]
+        },
+        "notes": null,
+        "effective_from": "2024-07-01",
+        "effective_to": null,
+        "excluded_categories": [],
+        "rule_role": "exclusion",
+        "merchant_slugs": [],
+        "platform_slugs": [],
+        "mcc_include": [
+          "8398",
+          "8641"
+        ],
+        "mcc_exclude": [],
+        "except_merchant_slugs": [],
+        "except_platform_slugs": [],
+        "block_inr": null,
+        "min_engine_version": 2,
+        "max_engine_version": null,
+        "source_local_id": "liveplus-exclude-charity",
+        "display_note": "No cashback on charity"
+      },
+      {
+        "id": "hsbc-live-plus-credit-card:rule:liveplus-exclude-money-transfer",
+        "category_id": null,
+        "category_slug": null,
+        "merchant_pattern": null,
+        "rail": null,
+        "unit": "cashback_percent",
+        "rate": 0,
+        "min_txn_inr": null,
+        "max_txn_inr": null,
+        "priority": 1,
+        "conditions": {
+          "source_local_id": "liveplus-exclude-money-transfer",
+          "part": null,
+          "info_reasons": [],
+          "flags": [
+            "exclusion_scope_broadened"
+          ]
+        },
+        "notes": null,
+        "effective_from": "2024-07-01",
+        "effective_to": null,
+        "excluded_categories": [],
+        "rule_role": "exclusion",
+        "merchant_slugs": [],
+        "platform_slugs": [],
+        "mcc_include": [
+          "4829"
+        ],
+        "mcc_exclude": [],
+        "except_merchant_slugs": [],
+        "except_platform_slugs": [],
+        "block_inr": null,
+        "min_engine_version": 2,
+        "max_engine_version": null,
+        "source_local_id": "liveplus-exclude-money-transfer",
+        "display_note": "No cashback on money transfers"
+      },
+      {
+        "id": "hsbc-live-plus-credit-card:rule:liveplus-exclude-wholesale",
+        "category_id": null,
+        "category_slug": null,
+        "merchant_pattern": null,
+        "rail": null,
+        "unit": "cashback_percent",
+        "rate": 0,
+        "min_txn_inr": null,
+        "max_txn_inr": null,
+        "priority": 1,
+        "conditions": {
+          "source_local_id": "liveplus-exclude-wholesale",
+          "part": null,
+          "info_reasons": [],
+          "flags": [
+            "token_replaced_by_conditions"
+          ]
+        },
+        "notes": null,
+        "effective_from": "2024-07-01",
+        "effective_to": null,
+        "excluded_categories": [],
+        "rule_role": "exclusion",
+        "merchant_slugs": [],
+        "platform_slugs": [],
+        "mcc_include": [
+          "5300"
+        ],
+        "mcc_exclude": [],
+        "except_merchant_slugs": [],
+        "except_platform_slugs": [],
+        "block_inr": null,
+        "min_engine_version": 2,
+        "max_engine_version": null,
+        "source_local_id": "liveplus-exclude-wholesale",
+        "display_note": "No cashback on wholesale clubs"
+      },
+      {
+        "id": "hsbc-live-plus-credit-card:rule:liveplus-exclude-hospital#1",
+        "category_id": "cat-health",
+        "category_slug": "health",
+        "merchant_pattern": null,
+        "rail": null,
+        "unit": "cashback_percent",
+        "rate": 0,
+        "min_txn_inr": null,
+        "max_txn_inr": null,
+        "priority": 1,
+        "conditions": {
+          "source_local_id": "liveplus-exclude-hospital",
+          "part": 1,
+          "info_reasons": [],
+          "flags": [
+            "broad_exclusion_v1_only",
+            "broad_category"
+          ]
+        },
+        "notes": null,
+        "effective_from": "2024-07-01",
+        "effective_to": null,
+        "excluded_categories": [],
+        "rule_role": "exclusion",
+        "merchant_slugs": [],
+        "platform_slugs": [],
+        "mcc_include": [],
+        "mcc_exclude": [],
+        "except_merchant_slugs": [],
+        "except_platform_slugs": [],
+        "block_inr": null,
+        "min_engine_version": 1,
+        "max_engine_version": 1,
+        "source_local_id": "liveplus-exclude-hospital",
+        "display_note": "No cashback on hospital spends"
+      },
+      {
+        "id": "hsbc-live-plus-credit-card:rule:liveplus-exclude-hospital#2",
+        "category_id": null,
+        "category_slug": null,
+        "merchant_pattern": null,
+        "rail": null,
+        "unit": "cashback_percent",
+        "rate": 0,
+        "min_txn_inr": null,
+        "max_txn_inr": null,
+        "priority": 1,
+        "conditions": {
+          "source_local_id": "liveplus-exclude-hospital",
+          "part": 2,
+          "info_reasons": [],
+          "flags": [
+            "broad_exclusion_v1_only"
+          ]
+        },
+        "notes": null,
+        "effective_from": "2024-07-01",
+        "effective_to": null,
+        "excluded_categories": [],
+        "rule_role": "exclusion",
+        "merchant_slugs": [],
+        "platform_slugs": [],
+        "mcc_include": [
+          "8062"
+        ],
+        "mcc_exclude": [],
+        "except_merchant_slugs": [],
+        "except_platform_slugs": [],
+        "block_inr": null,
+        "min_engine_version": 2,
+        "max_engine_version": null,
+        "source_local_id": "liveplus-exclude-hospital",
+        "display_note": "No cashback on hospital spends"
+      },
+      {
+        "id": "hsbc-live-plus-credit-card:rule:liveplus-exclude-local-transport#1",
+        "category_id": "cat-travel",
+        "category_slug": "travel",
+        "merchant_pattern": null,
+        "rail": null,
+        "unit": "cashback_percent",
+        "rate": 0,
+        "min_txn_inr": null,
+        "max_txn_inr": null,
+        "priority": 1,
+        "conditions": {
+          "source_local_id": "liveplus-exclude-local-transport",
+          "part": 1,
+          "info_reasons": [],
+          "flags": [
+            "broad_exclusion_v1_only",
+            "broad_category"
+          ]
+        },
+        "notes": null,
+        "effective_from": "2024-07-01",
+        "effective_to": null,
+        "excluded_categories": [],
+        "rule_role": "exclusion",
+        "merchant_slugs": [],
+        "platform_slugs": [],
+        "mcc_include": [],
+        "mcc_exclude": [],
+        "except_merchant_slugs": [],
+        "except_platform_slugs": [],
+        "block_inr": null,
+        "min_engine_version": 1,
+        "max_engine_version": 1,
+        "source_local_id": "liveplus-exclude-local-transport",
+        "display_note": "No cashback on local commuter transport"
+      },
+      {
+        "id": "hsbc-live-plus-credit-card:rule:liveplus-exclude-local-transport#2",
+        "category_id": null,
+        "category_slug": null,
+        "merchant_pattern": null,
+        "rail": null,
+        "unit": "cashback_percent",
+        "rate": 0,
+        "min_txn_inr": null,
+        "max_txn_inr": null,
+        "priority": 1,
+        "conditions": {
+          "source_local_id": "liveplus-exclude-local-transport",
+          "part": 2,
+          "info_reasons": [],
+          "flags": [
+            "broad_exclusion_v1_only"
+          ]
+        },
+        "notes": null,
+        "effective_from": "2024-07-01",
+        "effective_to": null,
+        "excluded_categories": [],
+        "rule_role": "exclusion",
+        "merchant_slugs": [],
+        "platform_slugs": [],
+        "mcc_include": [
+          "4111"
+        ],
+        "mcc_exclude": [],
+        "except_merchant_slugs": [],
+        "except_platform_slugs": [],
+        "block_inr": null,
+        "min_engine_version": 2,
+        "max_engine_version": null,
+        "source_local_id": "liveplus-exclude-local-transport",
+        "display_note": "No cashback on local commuter transport"
+      }
+    ],
+    "cap_rules": [
+      {
+        "id": "hsbc-live-plus-credit-card:cap:liveplus-accelerated-cap",
+        "reward_rule_id": null,
+        "category_id": null,
+        "category_slug": null,
+        "benefit_kind": null,
+        "label": "Liveplus accelerated cap",
+        "measure": "reward_value",
+        "period": "calendar_month",
+        "cap_value": 1200,
+        "post_cap_unit": null,
+        "post_cap_rate": 0,
+        "resets_on_day": null,
+        "cap_kind": "total_cashback",
+        "cap_amount": 1200,
+        "scope": "targets",
+        "targets": [
+          "hsbc-live-plus-credit-card:rule:liveplus-10pct-dining-food-grocery#1",
+          "hsbc-live-plus-credit-card:rule:liveplus-10pct-dining-food-grocery#2"
+        ],
+        "parent_cap_id": null,
+        "post_cap_behavior": null,
+        "anchor": null,
+        "min_engine_version": 2,
+        "source_local_id": "liveplus-accelerated-cap"
+      }
+    ],
+    "milestone_rules": [],
+    "fee_waiver_rules": [
+      {
+        "id": "hsbc-live-plus-credit-card:waiver:1",
+        "threshold_spend_inr": 200000,
+        "period": "annual",
+        "waives_fee_inr": 999,
+        "excluded_category_slugs": [
+          "fuel",
+          "wallet",
+          "rent"
+        ],
+        "notes": "Annual membership fee waived if annual spend exceeds INR200,000 in the relevant membership year.",
+        "excluded_categories": [
+          "cat-fuel",
+          "cat-wallet",
+          "cat-rent"
+        ]
+      }
+    ],
+    "benefits": [
+      {
+        "id": "hsbc-live-plus-credit-card:benefit:liveplus-domestic-lounge",
+        "key": "liveplus-domestic-lounge",
+        "source_local_id": "liveplus-domestic-lounge",
+        "kind": "lounge_domestic",
+        "label": "4 complimentary domestic airport lounge visits per calendar year, 1 per calendar quarter",
+        "description": "Sponsor: Visa/HSBC",
+        "quota_count": 4,
+        "quota_period": "annual",
+        "network_program": "visa_platinum",
+        "value_estimate_inr": 3200,
+        "conditions": {
+          "source_category_id": "lounge",
+          "evaluation_engine": {
+            "conditions": {
+              "frequency": "1 visit per calendar quarter"
+            },
+            "benefit_calculation": {
+              "visits_per_year": 4
+            },
+            "perks": [
+              "Complimentary domestic airport lounge access across participating lounges in India"
+            ]
+          }
+        }
+      },
+      {
+        "id": "hsbc-live-plus-credit-card:benefit:liveplus-dining-program",
+        "key": "liveplus-dining-program",
+        "source_local_id": "liveplus-dining-program",
+        "kind": "dining_program",
+        "label": "Up to 15% discount at over 1,000 curated partner restaurants across major Indian cities",
+        "description": "Sponsor: HSBC",
+        "quota_count": null,
+        "quota_period": null,
+        "network_program": "live_plus_dining",
+        "value_estimate_inr": null,
+        "conditions": {
+          "source_category_id": "dining",
+          "evaluation_engine": {
+            "conditions": null,
+            "benefit_calculation": "N/A",
+            "perks": [
+              "Curated restaurants",
+              "Exclusive dining privileges"
+            ]
+          }
+        }
+      },
+      {
+        "id": "hsbc-live-plus-credit-card:benefit:liveplus-visa-offers",
+        "key": "liveplus-visa-offers",
+        "source_local_id": "liveplus-visa-offers",
+        "kind": "other",
+        "label": "Visa Platinum merchant discounts and curated travel and lifestyle offers",
+        "description": "Sponsor: Visa",
+        "quota_count": null,
+        "quota_period": null,
+        "network_program": "visa_platinum",
+        "value_estimate_inr": null,
+        "conditions": {
+          "source_category_id": "other",
+          "evaluation_engine": {
+            "conditions": null,
+            "benefit_calculation": "N/A",
+            "perks": [
+              "Visa Platinum merchant offers",
+              "Travel offers",
+              "Lifestyle offers"
+            ]
+          }
+        }
+      },
+      {
+        "id": "hsbc-live-plus-credit-card:benefit:insurance:other",
+        "key": "insurance:other",
+        "source_local_id": null,
+        "kind": "other",
+        "label": "Other",
+        "description": "Zero lost-card liability for eligible misuse after the card is reported lost to HSBC through its 24x7 phone banking facility, subject to applicable terms.",
+        "quota_count": null,
+        "quota_period": null,
+        "network_program": null,
+        "value_estimate_inr": 300000,
+        "conditions": {
+          "coverage_usd": null
+        }
+      },
+      {
+        "id": "hsbc-live-plus-credit-card:benefit:insurance:other~2",
+        "key": "insurance:other~2",
+        "source_local_id": null,
+        "kind": "other",
+        "label": "Other",
+        "description": "Protection against eligible fraudulent, counterfeit or skimming transactions, subject to immediate reporting and applicable terms.",
+        "quota_count": null,
+        "quota_period": null,
+        "network_program": null,
+        "value_estimate_inr": 300000,
+        "conditions": {
+          "coverage_usd": null
+        }
+      }
+    ],
+    "unlock_rules": [],
+    "redemption_options": [
+      {
+        "program_name": "automatic statement credit",
+        "method": "statement_credit",
+        "value_per_point_inr": 1,
+        "min_points": null,
+        "notes": "Redemption fee: ₹0"
+      }
+    ],
+    "is_upi_linkable": false
+  }
+}

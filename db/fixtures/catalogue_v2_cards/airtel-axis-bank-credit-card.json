@@ -1,0 +1,969 @@
+{
+  "generated_by": "api/scripts/catalogue_v2/snapshot_examples.js",
+  "source_slug": "airtel-axis-bank-credit-card",
+  "inputs": {
+    "transform_version": "7",
+    "source_record_sha256": "cc76514cd56bbf83040199957bfc05c3a5fbefc2539e9a89379d73480f8de1a3",
+    "override_sha256": "3292a07cbb449a925305d6f2dd45c82210d3df6fb6f8477ee498d4044b55691d",
+    "directory_sha256": "c2fded34df886aef08595eebb7629a4dd140c98af750f3c891d6c291b4874b53",
+    "verified": false
+  },
+  "blocking_flags": [
+    "info_rule"
+  ],
+  "card": {
+    "id": "airtel-axis-bank-credit-card:card",
+    "slug": "airtel-axis-bank-credit-card",
+    "name": "Airtel Axis Bank Credit Card",
+    "network": "mastercard",
+    "issuer_slug": "axis-bank",
+    "base_reward_unit": "cashback_percent",
+    "base_reward_rate": 1,
+    "point_value_inr": null,
+    "excluded_categories": [
+      "cat-education",
+      "cat-emi",
+      "cat-fuel",
+      "cat-government",
+      "cat-insurance",
+      "cat-rent",
+      "cat-wallet"
+    ],
+    "accrual_block_inr": null,
+    "accrual_rounding": "floor",
+    "cashback_rounding": "rupee_floor",
+    "points_expiry_months": null,
+    "model_status": "partial",
+    "model_coverage": {
+      "rules_total": 10,
+      "rules_modelled": 7,
+      "rules_info": 3,
+      "caps_total": 0,
+      "caps_enforced": 0,
+      "flags": [
+        {
+          "code": "info_rule",
+          "source_local_id": "airtel_telecom_25pct",
+          "detail": "override_rule_role"
+        },
+        {
+          "code": "narrow_token_to_mcc",
+          "source_local_id": "airtel_telecom_25pct",
+          "detail": null
+        },
+        {
+          "code": "info_rule",
+          "source_local_id": "airtel_utility_10pct",
+          "detail": "override_rule_role"
+        },
+        {
+          "code": "info_rule",
+          "source_local_id": "preferred_partner_value_back_10pct",
+          "detail": "override_rule_role"
+        },
+        {
+          "code": "info_rule",
+          "source_local_id": "preferred_partner_value_back_10pct",
+          "detail": "condition:minimum_order_value_applies_to"
+        },
+        {
+          "code": "info_rule",
+          "source_local_id": "preferred_partner_value_back_10pct",
+          "detail": "condition:excluded_transactions"
+        },
+        {
+          "code": "partial_merchant_list",
+          "source_local_id": "preferred_partner_value_back_10pct",
+          "detail": null
+        },
+        {
+          "code": "unmapped_excluded_category",
+          "source_local_id": "base_cashback_1pct",
+          "detail": null
+        },
+        {
+          "code": "mcc_scoped_exclusion",
+          "source_local_id": "fuel_zero_cashback",
+          "detail": null
+        },
+        {
+          "code": "mcc_scoped_exclusion",
+          "source_local_id": "rent_zero_cashback",
+          "detail": null
+        },
+        {
+          "code": "mcc_scoped_exclusion",
+          "source_local_id": "insurance_zero_cashback",
+          "detail": null
+        },
+        {
+          "code": "mcc_scoped_exclusion",
+          "source_local_id": "education_zero_cashback",
+          "detail": null
+        },
+        {
+          "code": "mcc_scoped_exclusion",
+          "source_local_id": "government_zero_cashback",
+          "detail": null
+        }
+      ],
+      "overrides_applied": [
+        {
+          "path": "reward_rules[id=preferred_partner_value_back_10pct].rule_role",
+          "op": "set",
+          "value_sha256": "3e3e8e84e722887a",
+          "reason": "It is a 10% value back credited to partner wallets (Rs 200 per partner per month), not Axis cashback; must not be ranked as card cashback.",
+          "source_url": "https://www.axis.bank.in/docs/default-source/default-document-library/terms-and-conditions-for-airtel-cbcc-cvp.pdf?sfvrsn=9deed8c1_5",
+          "checked_on": "2026-11-05"
+        },
+        {
+          "path": "reward_rules[id=airtel_telecom_25pct].rule_role",
+          "op": "set",
+          "value_sha256": "3e3e8e84e722887a",
+          "reason": "Cap is twice the base cashback earned in the statement month (dynamic); cannot be enforced as a static cap yet.",
+          "source_url": "https://www.axis.bank.in/docs/default-source/default-document-library/terms-and-conditions-for-airtel-cbcc-cvp.pdf?sfvrsn=9deed8c1_5",
+          "checked_on": "2026-11-05"
+        },
+        {
+          "path": "reward_rules[id=airtel_utility_10pct].rule_role",
+          "op": "set",
+          "value_sha256": "3e3e8e84e722887a",
+          "reason": "Cap is the base cashback earned in the statement month (dynamic); cannot be enforced as a static cap yet.",
+          "source_url": "https://www.axis.bank.in/docs/default-source/default-document-library/terms-and-conditions-for-airtel-cbcc-cvp.pdf?sfvrsn=9deed8c1_5",
+          "checked_on": "2026-11-05"
+        },
+        {
+          "path": "accrual_engine.cashback_rounding",
+          "op": "set",
+          "value_sha256": "657bf85a75fa70bf",
+          "reason": "Cashback is rounded down per transaction (15.6 -> 15).",
+          "source_url": "https://www.axis.bank.in/docs/default-source/default-document-library/credit-cards/terms-and-conditions-for-cashback-for-airtel-axis-bank-credit-card.pdf",
+          "checked_on": "2026-11-05"
+        }
+      ]
+    },
+    "reward_rules": [
+      {
+        "id": "airtel-axis-bank-credit-card:rule:airtel_telecom_25pct",
+        "category_id": null,
+        "category_slug": null,
+        "merchant_pattern": null,
+        "rail": null,
+        "unit": "cashback_percent",
+        "rate": 25,
+        "min_txn_inr": null,
+        "max_txn_inr": null,
+        "priority": 10,
+        "conditions": {
+          "source_local_id": "airtel_telecom_25pct",
+          "part": null,
+          "info_reasons": [
+            "override_rule_role"
+          ],
+          "flags": [
+            "narrow_token_to_mcc"
+          ]
+        },
+        "notes": null,
+        "effective_from": "2026-04-12",
+        "effective_to": null,
+        "excluded_categories": [],
+        "rule_role": "info",
+        "merchant_slugs": [],
+        "platform_slugs": [
+          "airtel_thanks_app"
+        ],
+        "mcc_include": [
+          "4812",
+          "4814"
+        ],
+        "mcc_exclude": [],
+        "except_merchant_slugs": [],
+        "except_platform_slugs": [],
+        "block_inr": null,
+        "min_engine_version": 2,
+        "max_engine_version": null,
+        "source_local_id": "airtel_telecom_25pct",
+        "display_note": "25% cashback capped at twice the base cashback earned during the same statement month."
+      },
+      {
+        "id": "airtel-axis-bank-credit-card:rule:airtel_utility_10pct",
+        "category_id": "cat-bills",
+        "category_slug": "bills",
+        "merchant_pattern": null,
+        "rail": null,
+        "unit": "cashback_percent",
+        "rate": 10,
+        "min_txn_inr": null,
+        "max_txn_inr": null,
+        "priority": 20,
+        "conditions": {
+          "source_local_id": "airtel_utility_10pct",
+          "part": null,
+          "info_reasons": [
+            "override_rule_role"
+          ],
+          "flags": []
+        },
+        "notes": null,
+        "effective_from": "2026-04-12",
+        "effective_to": null,
+        "excluded_categories": [],
+        "rule_role": "info",
+        "merchant_slugs": [],
+        "platform_slugs": [
+          "airtel_thanks_app"
+        ],
+        "mcc_include": [],
+        "mcc_exclude": [],
+        "except_merchant_slugs": [],
+        "except_platform_slugs": [],
+        "block_inr": null,
+        "min_engine_version": 2,
+        "max_engine_version": null,
+        "source_local_id": "airtel_utility_10pct",
+        "display_note": "10% cashback capped at the base cashback earned during the same statement month."
+      },
+      {
+        "id": "airtel-axis-bank-credit-card:rule:preferred_partner_value_back_10pct",
+        "category_id": null,
+        "category_slug": null,
+        "merchant_pattern": null,
+        "rail": "online",
+        "unit": "cashback_percent",
+        "rate": 10,
+        "min_txn_inr": 499,
+        "max_txn_inr": null,
+        "priority": 30,
+        "conditions": {
+          "source_local_id": "preferred_partner_value_back_10pct",
+          "part": null,
+          "info_reasons": [
+            "override_rule_role",
+            "condition:minimum_order_value_applies_to",
+            "condition:excluded_transactions"
+          ],
+          "flags": [
+            "partial_merchant_list"
+          ]
+        },
+        "notes": null,
+        "effective_from": "2026-04-12",
+        "effective_to": null,
+        "excluded_categories": [],
+        "rule_role": "info",
+        "merchant_slugs": [
+          "blinkit",
+          "zomato"
+        ],
+        "platform_slugs": [],
+        "mcc_include": [],
+        "mcc_exclude": [],
+        "except_merchant_slugs": [],
+        "except_platform_slugs": [],
+        "block_inr": null,
+        "min_engine_version": 2,
+        "max_engine_version": null,
+        "source_local_id": "preferred_partner_value_back_10pct",
+        "display_note": "10% value back credited to the respective partner wallet, with maximum ₹200 per partner per month for the primary card. No Axis Bank cashback applies."
+      },
+      {
+        "id": "airtel-axis-bank-credit-card:rule:base_cashback_1pct",
+        "category_id": null,
+        "category_slug": null,
+        "merchant_pattern": null,
+        "rail": null,
+        "unit": "cashback_percent",
+        "rate": 1,
+        "min_txn_inr": null,
+        "max_txn_inr": null,
+        "priority": 100,
+        "conditions": {
+          "source_local_id": "base_cashback_1pct",
+          "part": null,
+          "info_reasons": [],
+          "flags": [
+            "unmapped_excluded_category"
+          ]
+        },
+        "notes": null,
+        "effective_from": "2026-04-12",
+        "effective_to": null,
+        "excluded_categories": [
+          "cat-education",
+          "cat-emi",
+          "cat-fuel",
+          "cat-government",
+          "cat-insurance",
+          "cat-rent",
+          "cat-wallet"
+        ],
+        "rule_role": "base",
+        "merchant_slugs": [],
+        "platform_slugs": [],
+        "mcc_include": [],
+        "mcc_exclude": [],
+        "except_merchant_slugs": [],
+        "except_platform_slugs": [],
+        "block_inr": null,
+        "min_engine_version": 1,
+        "max_engine_version": null,
+        "source_local_id": "base_cashback_1pct",
+        "display_note": "1% cashback on eligible other spends; cashback is not applicable on specified merchant and transaction categories."
+      },
+      {
+        "id": "airtel-axis-bank-credit-card:rule:fuel_zero_cashback#1",
+        "category_id": "cat-fuel",
+        "category_slug": "fuel",
+        "merchant_pattern": null,
+        "rail": null,
+        "unit": "cashback_percent",
+        "rate": 0,
+        "min_txn_inr": null,
+        "max_txn_inr": null,
+        "priority": 1,
+        "conditions": {
+          "source_local_id": "fuel_zero_cashback",
+          "part": 1,
+          "info_reasons": [],
+          "flags": [
+            "mcc_scoped_exclusion"
+          ]
+        },
+        "notes": null,
+        "effective_from": "2024-12-20",
+        "effective_to": null,
+        "excluded_categories": [],
+        "rule_role": "exclusion",
+        "merchant_slugs": [],
+        "platform_slugs": [],
+        "mcc_include": [],
+        "mcc_exclude": [],
+        "except_merchant_slugs": [],
+        "except_platform_slugs": [],
+        "block_inr": null,
+        "min_engine_version": 1,
+        "max_engine_version": 1,
+        "source_local_id": "fuel_zero_cashback",
+        "display_note": "No cashback is earned on fuel transactions."
+      },
+      {
+        "id": "airtel-axis-bank-credit-card:rule:fuel_zero_cashback#2",
+        "category_id": "cat-fuel",
+        "category_slug": "fuel",
+        "merchant_pattern": null,
+        "rail": null,
+        "unit": "cashback_percent",
+        "rate": 0,
+        "min_txn_inr": null,
+        "max_txn_inr": null,
+        "priority": 1,
+        "conditions": {
+          "source_local_id": "fuel_zero_cashback",
+          "part": 2,
+          "info_reasons": [],
+          "flags": [
+            "mcc_scoped_exclusion"
+          ]
+        },
+        "notes": null,
+        "effective_from": "2024-12-20",
+        "effective_to": null,
+        "excluded_categories": [],
+        "rule_role": "exclusion",
+        "merchant_slugs": [],
+        "platform_slugs": [],
+        "mcc_include": [
+          "5172",
+          "5541",
+          "5542",
+          "5983"
+        ],
+        "mcc_exclude": [],
+        "except_merchant_slugs": [],
+        "except_platform_slugs": [],
+        "block_inr": null,
+        "min_engine_version": 2,
+        "max_engine_version": null,
+        "source_local_id": "fuel_zero_cashback",
+        "display_note": "No cashback is earned on fuel transactions."
+      },
+      {
+        "id": "airtel-axis-bank-credit-card:rule:fuel_zero_cashback#3",
+        "category_id": null,
+        "category_slug": null,
+        "merchant_pattern": null,
+        "rail": null,
+        "unit": "cashback_percent",
+        "rate": 0,
+        "min_txn_inr": null,
+        "max_txn_inr": null,
+        "priority": 1,
+        "conditions": {
+          "source_local_id": "fuel_zero_cashback",
+          "part": 3,
+          "info_reasons": [],
+          "flags": [
+            "mcc_scoped_exclusion"
+          ]
+        },
+        "notes": null,
+        "effective_from": "2024-12-20",
+        "effective_to": null,
+        "excluded_categories": [],
+        "rule_role": "exclusion",
+        "merchant_slugs": [],
+        "platform_slugs": [],
+        "mcc_include": [
+          "5172",
+          "5541",
+          "5542",
+          "5983"
+        ],
+        "mcc_exclude": [],
+        "except_merchant_slugs": [],
+        "except_platform_slugs": [],
+        "block_inr": null,
+        "min_engine_version": 2,
+        "max_engine_version": null,
+        "source_local_id": "fuel_zero_cashback",
+        "display_note": "No cashback is earned on fuel transactions."
+      },
+      {
+        "id": "airtel-axis-bank-credit-card:rule:wallet_zero_cashback",
+        "category_id": null,
+        "category_slug": null,
+        "merchant_pattern": null,
+        "rail": null,
+        "unit": "cashback_percent",
+        "rate": 0,
+        "min_txn_inr": null,
+        "max_txn_inr": null,
+        "priority": 2,
+        "conditions": {
+          "source_local_id": "wallet_zero_cashback",
+          "part": null,
+          "info_reasons": [],
+          "flags": []
+        },
+        "notes": null,
+        "effective_from": "2024-12-20",
+        "effective_to": null,
+        "excluded_categories": [],
+        "rule_role": "exclusion",
+        "merchant_slugs": [],
+        "platform_slugs": [],
+        "mcc_include": [
+          "6540"
+        ],
+        "mcc_exclude": [],
+        "except_merchant_slugs": [],
+        "except_platform_slugs": [],
+        "block_inr": null,
+        "min_engine_version": 2,
+        "max_engine_version": null,
+        "source_local_id": "wallet_zero_cashback",
+        "display_note": "Wallet loads do not earn cashback."
+      },
+      {
+        "id": "airtel-axis-bank-credit-card:rule:rent_zero_cashback#1",
+        "category_id": "cat-rent",
+        "category_slug": "rent",
+        "merchant_pattern": null,
+        "rail": null,
+        "unit": "cashback_percent",
+        "rate": 0,
+        "min_txn_inr": null,
+        "max_txn_inr": null,
+        "priority": 3,
+        "conditions": {
+          "source_local_id": "rent_zero_cashback",
+          "part": 1,
+          "info_reasons": [],
+          "flags": [
+            "mcc_scoped_exclusion"
+          ]
+        },
+        "notes": null,
+        "effective_from": "2026-04-12",
+        "effective_to": null,
+        "excluded_categories": [],
+        "rule_role": "exclusion",
+        "merchant_slugs": [],
+        "platform_slugs": [],
+        "mcc_include": [],
+        "mcc_exclude": [],
+        "except_merchant_slugs": [],
+        "except_platform_slugs": [],
+        "block_inr": null,
+        "min_engine_version": 1,
+        "max_engine_version": 1,
+        "source_local_id": "rent_zero_cashback",
+        "display_note": "Rental transactions do not earn cashback."
+      },
+      {
+        "id": "airtel-axis-bank-credit-card:rule:rent_zero_cashback#2",
+        "category_id": "cat-rent",
+        "category_slug": "rent",
+        "merchant_pattern": null,
+        "rail": null,
+        "unit": "cashback_percent",
+        "rate": 0,
+        "min_txn_inr": null,
+        "max_txn_inr": null,
+        "priority": 3,
+        "conditions": {
+          "source_local_id": "rent_zero_cashback",
+          "part": 2,
+          "info_reasons": [],
+          "flags": [
+            "mcc_scoped_exclusion"
+          ]
+        },
+        "notes": null,
+        "effective_from": "2026-04-12",
+        "effective_to": null,
+        "excluded_categories": [],
+        "rule_role": "exclusion",
+        "merchant_slugs": [],
+        "platform_slugs": [],
+        "mcc_include": [
+          "6513"
+        ],
+        "mcc_exclude": [],
+        "except_merchant_slugs": [],
+        "except_platform_slugs": [],
+        "block_inr": null,
+        "min_engine_version": 2,
+        "max_engine_version": null,
+        "source_local_id": "rent_zero_cashback",
+        "display_note": "Rental transactions do not earn cashback."
+      },
+      {
+        "id": "airtel-axis-bank-credit-card:rule:rent_zero_cashback#3",
+        "category_id": null,
+        "category_slug": null,
+        "merchant_pattern": null,
+        "rail": null,
+        "unit": "cashback_percent",
+        "rate": 0,
+        "min_txn_inr": null,
+        "max_txn_inr": null,
+        "priority": 3,
+        "conditions": {
+          "source_local_id": "rent_zero_cashback",
+          "part": 3,
+          "info_reasons": [],
+          "flags": [
+            "mcc_scoped_exclusion"
+          ]
+        },
+        "notes": null,
+        "effective_from": "2026-04-12",
+        "effective_to": null,
+        "excluded_categories": [],
+        "rule_role": "exclusion",
+        "merchant_slugs": [],
+        "platform_slugs": [],
+        "mcc_include": [
+          "6513"
+        ],
+        "mcc_exclude": [],
+        "except_merchant_slugs": [],
+        "except_platform_slugs": [],
+        "block_inr": null,
+        "min_engine_version": 2,
+        "max_engine_version": null,
+        "source_local_id": "rent_zero_cashback",
+        "display_note": "Rental transactions do not earn cashback."
+      },
+      {
+        "id": "airtel-axis-bank-credit-card:rule:insurance_zero_cashback#1",
+        "category_id": "cat-insurance",
+        "category_slug": "insurance",
+        "merchant_pattern": null,
+        "rail": null,
+        "unit": "cashback_percent",
+        "rate": 0,
+        "min_txn_inr": null,
+        "max_txn_inr": null,
+        "priority": 4,
+        "conditions": {
+          "source_local_id": "insurance_zero_cashback",
+          "part": 1,
+          "info_reasons": [],
+          "flags": [
+            "mcc_scoped_exclusion"
+          ]
+        },
+        "notes": null,
+        "effective_from": "2026-04-12",
+        "effective_to": null,
+        "excluded_categories": [],
+        "rule_role": "exclusion",
+        "merchant_slugs": [],
+        "platform_slugs": [],
+        "mcc_include": [],
+        "mcc_exclude": [],
+        "except_merchant_slugs": [],
+        "except_platform_slugs": [],
+        "block_inr": null,
+        "min_engine_version": 1,
+        "max_engine_version": 1,
+        "source_local_id": "insurance_zero_cashback",
+        "display_note": "Insurance services are excluded from cashback."
+      },
+      {
+        "id": "airtel-axis-bank-credit-card:rule:insurance_zero_cashback#2",
+        "category_id": "cat-insurance",
+        "category_slug": "insurance",
+        "merchant_pattern": null,
+        "rail": null,
+        "unit": "cashback_percent",
+        "rate": 0,
+        "min_txn_inr": null,
+        "max_txn_inr": null,
+        "priority": 4,
+        "conditions": {
+          "source_local_id": "insurance_zero_cashback",
+          "part": 2,
+          "info_reasons": [],
+          "flags": [
+            "mcc_scoped_exclusion"
+          ]
+        },
+        "notes": null,
+        "effective_from": "2026-04-12",
+        "effective_to": null,
+        "excluded_categories": [],
+        "rule_role": "exclusion",
+        "merchant_slugs": [],
+        "platform_slugs": [],
+        "mcc_include": [
+          "5960",
+          "6300",
+          "6381"
+        ],
+        "mcc_exclude": [],
+        "except_merchant_slugs": [],
+        "except_platform_slugs": [],
+        "block_inr": null,
+        "min_engine_version": 2,
+        "max_engine_version": null,
+        "source_local_id": "insurance_zero_cashback",
+        "display_note": "Insurance services are excluded from cashback."
+      },
+      {
+        "id": "airtel-axis-bank-credit-card:rule:insurance_zero_cashback#3",
+        "category_id": null,
+        "category_slug": null,
+        "merchant_pattern": null,
+        "rail": null,
+        "unit": "cashback_percent",
+        "rate": 0,
+        "min_txn_inr": null,
+        "max_txn_inr": null,
+        "priority": 4,
+        "conditions": {
+          "source_local_id": "insurance_zero_cashback",
+          "part": 3,
+          "info_reasons": [],
+          "flags": [
+            "mcc_scoped_exclusion"
+          ]
+        },
+        "notes": null,
+        "effective_from": "2026-04-12",
+        "effective_to": null,
+        "excluded_categories": [],
+        "rule_role": "exclusion",
+        "merchant_slugs": [],
+        "platform_slugs": [],
+        "mcc_include": [
+          "5960",
+          "6300",
+          "6381"
+        ],
+        "mcc_exclude": [],
+        "except_merchant_slugs": [],
+        "except_platform_slugs": [],
+        "block_inr": null,
+        "min_engine_version": 2,
+        "max_engine_version": null,
+        "source_local_id": "insurance_zero_cashback",
+        "display_note": "Insurance services are excluded from cashback."
+      },
+      {
+        "id": "airtel-axis-bank-credit-card:rule:education_zero_cashback#1",
+        "category_id": "cat-education",
+        "category_slug": "education",
+        "merchant_pattern": null,
+        "rail": null,
+        "unit": "cashback_percent",
+        "rate": 0,
+        "min_txn_inr": null,
+        "max_txn_inr": null,
+        "priority": 5,
+        "conditions": {
+          "source_local_id": "education_zero_cashback",
+          "part": 1,
+          "info_reasons": [],
+          "flags": [
+            "mcc_scoped_exclusion"
+          ]
+        },
+        "notes": null,
+        "effective_from": "2026-04-12",
+        "effective_to": null,
+        "excluded_categories": [],
+        "rule_role": "exclusion",
+        "merchant_slugs": [],
+        "platform_slugs": [],
+        "mcc_include": [],
+        "mcc_exclude": [],
+        "except_merchant_slugs": [],
+        "except_platform_slugs": [],
+        "block_inr": null,
+        "min_engine_version": 1,
+        "max_engine_version": 1,
+        "source_local_id": "education_zero_cashback",
+        "display_note": "Education payments do not earn cashback. Education payments made through third-party apps additionally attract a 1% transaction fee."
+      },
+      {
+        "id": "airtel-axis-bank-credit-card:rule:education_zero_cashback#2",
+        "category_id": "cat-education",
+        "category_slug": "education",
+        "merchant_pattern": null,
+        "rail": null,
+        "unit": "cashback_percent",
+        "rate": 0,
+        "min_txn_inr": null,
+        "max_txn_inr": null,
+        "priority": 5,
+        "conditions": {
+          "source_local_id": "education_zero_cashback",
+          "part": 2,
+          "info_reasons": [],
+          "flags": [
+            "mcc_scoped_exclusion"
+          ]
+        },
+        "notes": null,
+        "effective_from": "2026-04-12",
+        "effective_to": null,
+        "excluded_categories": [],
+        "rule_role": "exclusion",
+        "merchant_slugs": [],
+        "platform_slugs": [],
+        "mcc_include": [
+          "8211",
+          "8220",
+          "8241",
+          "8244",
+          "8249",
+          "8299"
+        ],
+        "mcc_exclude": [],
+        "except_merchant_slugs": [],
+        "except_platform_slugs": [],
+        "block_inr": null,
+        "min_engine_version": 2,
+        "max_engine_version": null,
+        "source_local_id": "education_zero_cashback",
+        "display_note": "Education payments do not earn cashback. Education payments made through third-party apps additionally attract a 1% transaction fee."
+      },
+      {
+        "id": "airtel-axis-bank-credit-card:rule:education_zero_cashback#3",
+        "category_id": null,
+        "category_slug": null,
+        "merchant_pattern": null,
+        "rail": null,
+        "unit": "cashback_percent",
+        "rate": 0,
+        "min_txn_inr": null,
+        "max_txn_inr": null,
+        "priority": 5,
+        "conditions": {
+          "source_local_id": "education_zero_cashback",
+          "part": 3,
+          "info_reasons": [],
+          "flags": [
+            "mcc_scoped_exclusion"
+          ]
+        },
+        "notes": null,
+        "effective_from": "2026-04-12",
+        "effective_to": null,
+        "excluded_categories": [],
+        "rule_role": "exclusion",
+        "merchant_slugs": [],
+        "platform_slugs": [],
+        "mcc_include": [
+          "8211",
+          "8220",
+          "8241",
+          "8244",
+          "8249",
+          "8299"
+        ],
+        "mcc_exclude": [],
+        "except_merchant_slugs": [],
+        "except_platform_slugs": [],
+        "block_inr": null,
+        "min_engine_version": 2,
+        "max_engine_version": null,
+        "source_local_id": "education_zero_cashback",
+        "display_note": "Education payments do not earn cashback. Education payments made through third-party apps additionally attract a 1% transaction fee."
+      },
+      {
+        "id": "airtel-axis-bank-credit-card:rule:government_zero_cashback#1",
+        "category_id": "cat-government",
+        "category_slug": "government",
+        "merchant_pattern": null,
+        "rail": null,
+        "unit": "cashback_percent",
+        "rate": 0,
+        "min_txn_inr": null,
+        "max_txn_inr": null,
+        "priority": 6,
+        "conditions": {
+          "source_local_id": "government_zero_cashback",
+          "part": 1,
+          "info_reasons": [],
+          "flags": [
+            "mcc_scoped_exclusion"
+          ]
+        },
+        "notes": null,
+        "effective_from": "2026-04-12",
+        "effective_to": null,
+        "excluded_categories": [],
+        "rule_role": "exclusion",
+        "merchant_slugs": [],
+        "platform_slugs": [],
+        "mcc_include": [],
+        "mcc_exclude": [],
+        "except_merchant_slugs": [],
+        "except_platform_slugs": [],
+        "block_inr": null,
+        "min_engine_version": 1,
+        "max_engine_version": 1,
+        "source_local_id": "government_zero_cashback",
+        "display_note": "Government-service transactions are excluded from cashback."
+      },
+      {
+        "id": "airtel-axis-bank-credit-card:rule:government_zero_cashback#2",
+        "category_id": "cat-government",
+        "category_slug": "government",
+        "merchant_pattern": null,
+        "rail": null,
+        "unit": "cashback_percent",
+        "rate": 0,
+        "min_txn_inr": null,
+        "max_txn_inr": null,
+        "priority": 6,
+        "conditions": {
+          "source_local_id": "government_zero_cashback",
+          "part": 2,
+          "info_reasons": [],
+          "flags": [
+            "mcc_scoped_exclusion"
+          ]
+        },
+        "notes": null,
+        "effective_from": "2026-04-12",
+        "effective_to": null,
+        "excluded_categories": [],
+        "rule_role": "exclusion",
+        "merchant_slugs": [],
+        "platform_slugs": [],
+        "mcc_include": [
+          "9222",
+          "9311",
+          "9399",
+          "9402"
+        ],
+        "mcc_exclude": [],
+        "except_merchant_slugs": [],
+        "except_platform_slugs": [],
+        "block_inr": null,
+        "min_engine_version": 2,
+        "max_engine_version": null,
+        "source_local_id": "government_zero_cashback",
+        "display_note": "Government-service transactions are excluded from cashback."
+      },
+      {
+        "id": "airtel-axis-bank-credit-card:rule:government_zero_cashback#3",
+        "category_id": null,
+        "category_slug": null,
+        "merchant_pattern": null,
+        "rail": null,
+        "unit": "cashback_percent",
+        "rate": 0,
+        "min_txn_inr": null,
+        "max_txn_inr": null,
+        "priority": 6,
+        "conditions": {
+          "source_local_id": "government_zero_cashback",
+          "part": 3,
+          "info_reasons": [],
+          "flags": [
+            "mcc_scoped_exclusion"
+          ]
+        },
+        "notes": null,
+        "effective_from": "2026-04-12",
+        "effective_to": null,
+        "excluded_categories": [],
+        "rule_role": "exclusion",
+        "merchant_slugs": [],
+        "platform_slugs": [],
+        "mcc_include": [
+          "9222",
+          "9311",
+          "9399",
+          "9402"
+        ],
+        "mcc_exclude": [],
+        "except_merchant_slugs": [],
+        "except_platform_slugs": [],
+        "block_inr": null,
+        "min_engine_version": 2,
+        "max_engine_version": null,
+        "source_local_id": "government_zero_cashback",
+        "display_note": "Government-service transactions are excluded from cashback."
+      }
+    ],
+    "cap_rules": [],
+    "milestone_rules": [],
+    "fee_waiver_rules": [
+      {
+        "id": "airtel-axis-bank-credit-card:waiver:1",
+        "threshold_spend_inr": 200000,
+        "period": "annual",
+        "waives_fee_inr": 500,
+        "excluded_category_slugs": [
+          "rent",
+          "wallet"
+        ],
+        "notes": "Annual fee from the second year onward is waived when annual spends exceed ₹2,00,000. Rent transactions (MCC 6513) and wallet-load transactions (MCC 6540) are excluded from spends counted toward the annual-fee waiver.",
+        "excluded_categories": [
+          "cat-rent",
+          "cat-wallet"
+        ]
+      }
+    ],
+    "benefits": [],
+    "unlock_rules": [],
+    "redemption_options": [
+      {
+        "program_name": "credit_card_statement",
+        "method": "statement_credit",
+        "value_per_point_inr": 1,
+        "min_points": null,
+        "notes": "Redemption fee: ₹0"
+      }
+    ],
+    "is_upi_linkable": false
+  }
+}

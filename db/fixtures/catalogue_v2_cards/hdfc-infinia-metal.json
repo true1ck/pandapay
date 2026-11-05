@@ -1,0 +1,869 @@
+{
+  "generated_by": "api/scripts/catalogue_v2/snapshot_examples.js",
+  "source_slug": "hdfc-infinia-metal",
+  "inputs": {
+    "transform_version": "7",
+    "source_record_sha256": "97c23f78c6b9fa2384f24ccfcafaf50229fd53df7a571ab7304d4bcf0de898e2",
+    "override_sha256": "a3800545ab2c1c7608b517e4e75ae17cda6fc8f059c70ea2854c89ac8d2ff08d",
+    "directory_sha256": "c2fded34df886aef08595eebb7629a4dd140c98af750f3c891d6c291b4874b53",
+    "verified": false
+  },
+  "blocking_flags": [
+    "info_rule",
+    "orphan_cap"
+  ],
+  "card": {
+    "id": "hdfc-infinia-metal:card",
+    "slug": "hdfc-infinia-metal",
+    "name": "Infinia Metal Edition",
+    "network": "visa",
+    "issuer_slug": "hdfc",
+    "base_reward_unit": "points_per_150",
+    "base_reward_rate": 5,
+    "point_value_inr": 1,
+    "excluded_categories": [],
+    "accrual_block_inr": 150,
+    "accrual_rounding": "floor",
+    "cashback_rounding": null,
+    "points_expiry_months": 36,
+    "model_status": "partial",
+    "model_coverage": {
+      "rules_total": 9,
+      "rules_modelled": 6,
+      "rules_info": 3,
+      "caps_total": 11,
+      "caps_enforced": 5,
+      "flags": [
+        {
+          "code": "info_rule",
+          "source_local_id": "smartbuy-up-to-10x",
+          "detail": "up_to_rate"
+        },
+        {
+          "code": "partial_category_list",
+          "source_local_id": "smartbuy-up-to-10x",
+          "detail": null
+        },
+        {
+          "code": "info_rule",
+          "source_local_id": "education-aggregator-exclusion",
+          "detail": "condition:aggregators"
+        },
+        {
+          "code": "exclusion_scope_broadened",
+          "source_local_id": "education-aggregator-exclusion",
+          "detail": null
+        },
+        {
+          "code": "info_rule",
+          "source_local_id": "education-direct-standard",
+          "detail": "condition:channel_type"
+        },
+        {
+          "code": "broad_category",
+          "source_local_id": "telecom-rp-monthly-cap",
+          "detail": null
+        },
+        {
+          "code": "cap_targets_info_only",
+          "source_local_id": "smartbuy-accelerated-rp",
+          "detail": null
+        },
+        {
+          "code": "orphan_cap",
+          "source_local_id": "smartbuy-brand-voucher-rp-subcap",
+          "detail": null
+        },
+        {
+          "code": "non_earning_cap_skipped",
+          "source_local_id": "tanishq-redemption-quarterly",
+          "detail": null
+        },
+        {
+          "code": "non_earning_cap_skipped",
+          "source_local_id": "apple-redemption-quarterly",
+          "detail": null
+        },
+        {
+          "code": "non_earning_cap_skipped",
+          "source_local_id": "flight-hotel-redemption-monthly",
+          "detail": null
+        },
+        {
+          "code": "non_earning_cap_skipped",
+          "source_local_id": "statement-credit-redemption-monthly",
+          "detail": null
+        }
+      ],
+      "overrides_applied": [
+        {
+          "path": "cap_rules[id=insurance-rp-monthly-cap].metric",
+          "op": "set",
+          "value_sha256": "7af78ba28cf9ccb3",
+          "reason": "Issuer caps total RP in this category per month, not only bonus RP.",
+          "source_url": "https://www.hdfc.bank.in/content/dam/hdfcbankpws/in/en/personal-banking/discover-products/cards/credit-cards/personal-mitc/mitc-in-english.pdf",
+          "checked_on": "2026-11-05"
+        },
+        {
+          "path": "cap_rules[id=grocery-rp-monthly-cap].metric",
+          "op": "set",
+          "value_sha256": "7af78ba28cf9ccb3",
+          "reason": "Issuer caps total RP in this category per month, not only bonus RP.",
+          "source_url": "https://www.hdfc.bank.in/content/dam/hdfcbankpws/in/en/personal-banking/discover-products/cards/credit-cards/personal-mitc/mitc-in-english.pdf",
+          "checked_on": "2026-11-05"
+        },
+        {
+          "path": "cap_rules[id=utility-rp-monthly-cap].metric",
+          "op": "set",
+          "value_sha256": "7af78ba28cf9ccb3",
+          "reason": "Issuer caps total RP in this category per month, not only bonus RP.",
+          "source_url": "https://www.hdfc.bank.in/content/dam/hdfcbankpws/in/en/personal-banking/discover-products/cards/credit-cards/personal-mitc/mitc-in-english.pdf",
+          "checked_on": "2026-11-05"
+        },
+        {
+          "path": "cap_rules[id=telecom-rp-monthly-cap].metric",
+          "op": "set",
+          "value_sha256": "7af78ba28cf9ccb3",
+          "reason": "Issuer caps total RP in this category per month, not only bonus RP.",
+          "source_url": "https://www.hdfc.bank.in/content/dam/hdfcbankpws/in/en/personal-banking/discover-products/cards/credit-cards/personal-mitc/mitc-in-english.pdf",
+          "checked_on": "2026-11-05"
+        },
+        {
+          "path": "cap_rules[id=insurance-rp-monthly-cap].post_limit_behavior.action",
+          "op": "set",
+          "value_sha256": "b1b0e5d61df2ff9a",
+          "reason": "Points above the cap are not earned at all.",
+          "source_url": "https://www.hdfc.bank.in/content/dam/hdfcbankpws/in/en/personal-banking/discover-products/cards/credit-cards/personal-mitc/mitc-in-english.pdf",
+          "checked_on": "2026-11-05"
+        },
+        {
+          "path": "cap_rules[id=grocery-rp-monthly-cap].post_limit_behavior.action",
+          "op": "set",
+          "value_sha256": "b1b0e5d61df2ff9a",
+          "reason": "Points above the cap are not earned at all.",
+          "source_url": "https://www.hdfc.bank.in/content/dam/hdfcbankpws/in/en/personal-banking/discover-products/cards/credit-cards/personal-mitc/mitc-in-english.pdf",
+          "checked_on": "2026-11-05"
+        },
+        {
+          "path": "cap_rules[id=utility-rp-monthly-cap].post_limit_behavior.action",
+          "op": "set",
+          "value_sha256": "b1b0e5d61df2ff9a",
+          "reason": "Points above the cap are not earned at all.",
+          "source_url": "https://www.hdfc.bank.in/content/dam/hdfcbankpws/in/en/personal-banking/discover-products/cards/credit-cards/personal-mitc/mitc-in-english.pdf",
+          "checked_on": "2026-11-05"
+        },
+        {
+          "path": "cap_rules[id=telecom-rp-monthly-cap].post_limit_behavior.action",
+          "op": "set",
+          "value_sha256": "b1b0e5d61df2ff9a",
+          "reason": "Points above the cap are not earned at all.",
+          "source_url": "https://www.hdfc.bank.in/content/dam/hdfcbankpws/in/en/personal-banking/discover-products/cards/credit-cards/personal-mitc/mitc-in-english.pdf",
+          "checked_on": "2026-11-05"
+        }
+      ]
+    },
+    "reward_rules": [
+      {
+        "id": "hdfc-infinia-metal:rule:base-retail-5rp-150",
+        "category_id": null,
+        "category_slug": null,
+        "merchant_pattern": null,
+        "rail": null,
+        "unit": "points_per_150",
+        "rate": 5,
+        "min_txn_inr": null,
+        "max_txn_inr": null,
+        "priority": 100,
+        "conditions": {
+          "source_local_id": "base-retail-5rp-150",
+          "part": null,
+          "info_reasons": [],
+          "flags": []
+        },
+        "notes": null,
+        "effective_from": "2026-08-18",
+        "effective_to": null,
+        "excluded_categories": [],
+        "rule_role": "base",
+        "merchant_slugs": [],
+        "platform_slugs": [],
+        "mcc_include": [],
+        "mcc_exclude": [],
+        "except_merchant_slugs": [],
+        "except_platform_slugs": [],
+        "block_inr": null,
+        "min_engine_version": 1,
+        "max_engine_version": null,
+        "source_local_id": "base-retail-5rp-150",
+        "display_note": "5 Reward Points per ₹150 on eligible retail spend."
+      },
+      {
+        "id": "hdfc-infinia-metal:rule:smartbuy-up-to-10x",
+        "category_id": "cat-travel",
+        "category_slug": "travel",
+        "merchant_pattern": null,
+        "rail": null,
+        "unit": "points_per_150",
+        "rate": 50,
+        "min_txn_inr": null,
+        "max_txn_inr": null,
+        "priority": 20,
+        "conditions": {
+          "source_local_id": "smartbuy-up-to-10x",
+          "part": null,
+          "info_reasons": [
+            "up_to_rate"
+          ],
+          "flags": [
+            "partial_category_list"
+          ]
+        },
+        "notes": null,
+        "effective_from": "2026-08-18",
+        "effective_to": null,
+        "excluded_categories": [],
+        "rule_role": "info",
+        "merchant_slugs": [],
+        "platform_slugs": [
+          "hdfc_smartbuy"
+        ],
+        "mcc_include": [],
+        "mcc_exclude": [],
+        "except_merchant_slugs": [],
+        "except_platform_slugs": [],
+        "block_inr": null,
+        "min_engine_version": 2,
+        "max_engine_version": null,
+        "source_local_id": "smartbuy-up-to-10x",
+        "display_note": "Up to 10X Reward Points on eligible SmartBuy travel and shopping spends."
+      },
+      {
+        "id": "hdfc-infinia-metal:rule:fuel-exclusion",
+        "category_id": "cat-fuel",
+        "category_slug": "fuel",
+        "merchant_pattern": null,
+        "rail": null,
+        "unit": "points_per_150",
+        "rate": 0,
+        "min_txn_inr": null,
+        "max_txn_inr": null,
+        "priority": 1,
+        "conditions": {
+          "source_local_id": "fuel-exclusion",
+          "part": null,
+          "info_reasons": [],
+          "flags": []
+        },
+        "notes": null,
+        "effective_from": "2026-08-18",
+        "effective_to": null,
+        "excluded_categories": [],
+        "rule_role": "exclusion",
+        "merchant_slugs": [],
+        "platform_slugs": [],
+        "mcc_include": [],
+        "mcc_exclude": [],
+        "except_merchant_slugs": [],
+        "except_platform_slugs": [],
+        "block_inr": null,
+        "min_engine_version": 1,
+        "max_engine_version": null,
+        "source_local_id": "fuel-exclusion",
+        "display_note": "No Reward Points on fuel transactions."
+      },
+      {
+        "id": "hdfc-infinia-metal:rule:rent-exclusion",
+        "category_id": "cat-rent",
+        "category_slug": "rent",
+        "merchant_pattern": null,
+        "rail": null,
+        "unit": "points_per_150",
+        "rate": 0,
+        "min_txn_inr": null,
+        "max_txn_inr": null,
+        "priority": 1,
+        "conditions": {
+          "source_local_id": "rent-exclusion",
+          "part": null,
+          "info_reasons": [],
+          "flags": []
+        },
+        "notes": null,
+        "effective_from": "2026-08-18",
+        "effective_to": null,
+        "excluded_categories": [],
+        "rule_role": "exclusion",
+        "merchant_slugs": [],
+        "platform_slugs": [],
+        "mcc_include": [],
+        "mcc_exclude": [],
+        "except_merchant_slugs": [],
+        "except_platform_slugs": [],
+        "block_inr": null,
+        "min_engine_version": 1,
+        "max_engine_version": null,
+        "source_local_id": "rent-exclusion",
+        "display_note": "Rent payments do not earn Reward Points."
+      },
+      {
+        "id": "hdfc-infinia-metal:rule:government-exclusion",
+        "category_id": "cat-government",
+        "category_slug": "government",
+        "merchant_pattern": null,
+        "rail": null,
+        "unit": "points_per_150",
+        "rate": 0,
+        "min_txn_inr": null,
+        "max_txn_inr": null,
+        "priority": 1,
+        "conditions": {
+          "source_local_id": "government-exclusion",
+          "part": null,
+          "info_reasons": [],
+          "flags": []
+        },
+        "notes": null,
+        "effective_from": "2026-08-18",
+        "effective_to": null,
+        "excluded_categories": [],
+        "rule_role": "exclusion",
+        "merchant_slugs": [],
+        "platform_slugs": [],
+        "mcc_include": [],
+        "mcc_exclude": [],
+        "except_merchant_slugs": [],
+        "except_platform_slugs": [],
+        "block_inr": null,
+        "min_engine_version": 1,
+        "max_engine_version": null,
+        "source_local_id": "government-exclusion",
+        "display_note": "Government-related transactions do not earn Reward Points for consumer cards."
+      },
+      {
+        "id": "hdfc-infinia-metal:rule:wallet-exclusion",
+        "category_id": "cat-wallet",
+        "category_slug": "wallet",
+        "merchant_pattern": null,
+        "rail": null,
+        "unit": "points_per_150",
+        "rate": 0,
+        "min_txn_inr": null,
+        "max_txn_inr": null,
+        "priority": 1,
+        "conditions": {
+          "source_local_id": "wallet-exclusion",
+          "part": null,
+          "info_reasons": [],
+          "flags": []
+        },
+        "notes": null,
+        "effective_from": "2026-08-18",
+        "effective_to": null,
+        "excluded_categories": [],
+        "rule_role": "exclusion",
+        "merchant_slugs": [],
+        "platform_slugs": [],
+        "mcc_include": [],
+        "mcc_exclude": [],
+        "except_merchant_slugs": [],
+        "except_platform_slugs": [],
+        "block_inr": null,
+        "min_engine_version": 1,
+        "max_engine_version": null,
+        "source_local_id": "wallet-exclusion",
+        "display_note": "Wallet loading transactions do not accrue Reward Points."
+      },
+      {
+        "id": "hdfc-infinia-metal:rule:emi-exclusion",
+        "category_id": "cat-emi",
+        "category_slug": "emi",
+        "merchant_pattern": null,
+        "rail": "emi",
+        "unit": "points_per_150",
+        "rate": 0,
+        "min_txn_inr": null,
+        "max_txn_inr": null,
+        "priority": 1,
+        "conditions": {
+          "source_local_id": "emi-exclusion",
+          "part": null,
+          "info_reasons": [],
+          "flags": []
+        },
+        "notes": null,
+        "effective_from": "2026-08-18",
+        "effective_to": null,
+        "excluded_categories": [],
+        "rule_role": "exclusion",
+        "merchant_slugs": [],
+        "platform_slugs": [],
+        "mcc_include": [],
+        "mcc_exclude": [],
+        "except_merchant_slugs": [],
+        "except_platform_slugs": [],
+        "block_inr": null,
+        "min_engine_version": 1,
+        "max_engine_version": null,
+        "source_local_id": "emi-exclusion",
+        "display_note": "EasyEMI and retail transactions converted to SmartEMI do not retain Reward Points; accrued points are reversed."
+      },
+      {
+        "id": "hdfc-infinia-metal:rule:education-aggregator-exclusion",
+        "category_id": "cat-education",
+        "category_slug": "education",
+        "merchant_pattern": null,
+        "rail": "online",
+        "unit": "points_per_150",
+        "rate": 0,
+        "min_txn_inr": null,
+        "max_txn_inr": null,
+        "priority": 2,
+        "conditions": {
+          "source_local_id": "education-aggregator-exclusion",
+          "part": null,
+          "info_reasons": [
+            "condition:aggregators"
+          ],
+          "flags": [
+            "exclusion_scope_broadened"
+          ]
+        },
+        "notes": null,
+        "effective_from": "2024-09-01",
+        "effective_to": null,
+        "excluded_categories": [],
+        "rule_role": "info",
+        "merchant_slugs": [],
+        "platform_slugs": [],
+        "mcc_include": [],
+        "mcc_exclude": [],
+        "except_merchant_slugs": [],
+        "except_platform_slugs": [],
+        "block_inr": null,
+        "min_engine_version": 2,
+        "max_engine_version": null,
+        "source_local_id": "education-aggregator-exclusion",
+        "display_note": "Education payments via third-party apps do not earn Reward Points; accrued points are reversed."
+      },
+      {
+        "id": "hdfc-infinia-metal:rule:education-direct-standard",
+        "category_id": "cat-education",
+        "category_slug": "education",
+        "merchant_pattern": null,
+        "rail": "online",
+        "unit": "points_per_150",
+        "rate": 5,
+        "min_txn_inr": null,
+        "max_txn_inr": null,
+        "priority": 10,
+        "conditions": {
+          "source_local_id": "education-direct-standard",
+          "part": null,
+          "info_reasons": [
+            "condition:channel_type"
+          ],
+          "flags": []
+        },
+        "notes": null,
+        "effective_from": "2024-09-01",
+        "effective_to": null,
+        "excluded_categories": [],
+        "rule_role": "info",
+        "merchant_slugs": [],
+        "platform_slugs": [],
+        "mcc_include": [
+          "8211",
+          "8220",
+          "8241",
+          "8244",
+          "8249",
+          "8299"
+        ],
+        "mcc_exclude": [],
+        "except_merchant_slugs": [],
+        "except_platform_slugs": [],
+        "block_inr": null,
+        "min_engine_version": 2,
+        "max_engine_version": null,
+        "source_local_id": "education-direct-standard",
+        "display_note": "Direct college/school website or POS education payments earn standard Reward Points."
+      }
+    ],
+    "cap_rules": [
+      {
+        "id": "hdfc-infinia-metal:cap:statement-cycle-rp-cap",
+        "reward_rule_id": null,
+        "category_id": null,
+        "category_slug": null,
+        "benefit_kind": null,
+        "label": "Statement cycle rp cap",
+        "measure": "reward_value",
+        "period": "statement_cycle",
+        "cap_value": 200000,
+        "post_cap_unit": null,
+        "post_cap_rate": 0,
+        "resets_on_day": null,
+        "cap_kind": "total_points",
+        "cap_amount": 200000,
+        "scope": "card",
+        "targets": [],
+        "parent_cap_id": null,
+        "post_cap_behavior": null,
+        "anchor": null,
+        "min_engine_version": 1,
+        "source_local_id": "statement-cycle-rp-cap"
+      },
+      {
+        "id": "hdfc-infinia-metal:cap:insurance-rp-monthly-cap",
+        "reward_rule_id": null,
+        "category_id": "cat-insurance",
+        "category_slug": "insurance",
+        "benefit_kind": null,
+        "label": "Insurance rp monthly cap",
+        "measure": "reward_value",
+        "period": "calendar_month",
+        "cap_value": 10000,
+        "post_cap_unit": null,
+        "post_cap_rate": 0,
+        "resets_on_day": 1,
+        "cap_kind": "total_points",
+        "cap_amount": 10000,
+        "scope": "targets",
+        "targets": [],
+        "parent_cap_id": null,
+        "post_cap_behavior": null,
+        "anchor": null,
+        "min_engine_version": 1,
+        "source_local_id": "insurance-rp-monthly-cap"
+      },
+      {
+        "id": "hdfc-infinia-metal:cap:grocery-rp-monthly-cap",
+        "reward_rule_id": null,
+        "category_id": "cat-groceries",
+        "category_slug": "groceries",
+        "benefit_kind": null,
+        "label": "Grocery rp monthly cap",
+        "measure": "reward_value",
+        "period": "calendar_month",
+        "cap_value": 2000,
+        "post_cap_unit": null,
+        "post_cap_rate": 0,
+        "resets_on_day": 1,
+        "cap_kind": "total_points",
+        "cap_amount": 2000,
+        "scope": "targets",
+        "targets": [],
+        "parent_cap_id": null,
+        "post_cap_behavior": null,
+        "anchor": null,
+        "min_engine_version": 1,
+        "source_local_id": "grocery-rp-monthly-cap"
+      },
+      {
+        "id": "hdfc-infinia-metal:cap:utility-rp-monthly-cap",
+        "reward_rule_id": null,
+        "category_id": "cat-bills",
+        "category_slug": "bills",
+        "benefit_kind": null,
+        "label": "Utility rp monthly cap",
+        "measure": "reward_value",
+        "period": "calendar_month",
+        "cap_value": 2000,
+        "post_cap_unit": null,
+        "post_cap_rate": 0,
+        "resets_on_day": 1,
+        "cap_kind": "total_points",
+        "cap_amount": 2000,
+        "scope": "targets",
+        "targets": [],
+        "parent_cap_id": null,
+        "post_cap_behavior": null,
+        "anchor": null,
+        "min_engine_version": 1,
+        "source_local_id": "utility-rp-monthly-cap"
+      },
+      {
+        "id": "hdfc-infinia-metal:cap:telecom-rp-monthly-cap",
+        "reward_rule_id": null,
+        "category_id": "cat-bills",
+        "category_slug": "bills",
+        "benefit_kind": null,
+        "label": "Telecom rp monthly cap",
+        "measure": "reward_value",
+        "period": "calendar_month",
+        "cap_value": 2000,
+        "post_cap_unit": null,
+        "post_cap_rate": 0,
+        "resets_on_day": 1,
+        "cap_kind": "total_points",
+        "cap_amount": 2000,
+        "scope": "targets",
+        "targets": [],
+        "parent_cap_id": null,
+        "post_cap_behavior": null,
+        "anchor": null,
+        "min_engine_version": 1,
+        "source_local_id": "telecom-rp-monthly-cap"
+      },
+      {
+        "id": "hdfc-infinia-metal:cap:smartbuy-accelerated-rp",
+        "reward_rule_id": "hdfc-infinia-metal:rule:smartbuy-up-to-10x",
+        "category_id": null,
+        "category_slug": null,
+        "benefit_kind": null,
+        "label": "Smartbuy accelerated rp",
+        "measure": "reward_value",
+        "period": "calendar_month",
+        "cap_value": 15000,
+        "post_cap_unit": null,
+        "post_cap_rate": null,
+        "resets_on_day": 1,
+        "cap_kind": "bonus_points",
+        "cap_amount": 15000,
+        "scope": "targets",
+        "targets": [
+          "hdfc-infinia-metal:rule:smartbuy-up-to-10x"
+        ],
+        "parent_cap_id": null,
+        "post_cap_behavior": null,
+        "anchor": null,
+        "min_engine_version": 2,
+        "source_local_id": "smartbuy-accelerated-rp"
+      },
+      {
+        "id": "hdfc-infinia-metal:cap:smartbuy-brand-voucher-rp-subcap",
+        "reward_rule_id": null,
+        "category_id": null,
+        "category_slug": null,
+        "benefit_kind": null,
+        "label": "Smartbuy brand voucher rp subcap",
+        "measure": "reward_value",
+        "period": "calendar_month",
+        "cap_value": 3000,
+        "post_cap_unit": null,
+        "post_cap_rate": null,
+        "resets_on_day": 1,
+        "cap_kind": "bonus_points",
+        "cap_amount": 3000,
+        "scope": "targets",
+        "targets": [],
+        "parent_cap_id": "hdfc-infinia-metal:cap:smartbuy-accelerated-rp",
+        "post_cap_behavior": null,
+        "anchor": null,
+        "min_engine_version": 1,
+        "source_local_id": "smartbuy-brand-voucher-rp-subcap"
+      }
+    ],
+    "milestone_rules": [],
+    "fee_waiver_rules": [
+      {
+        "id": "hdfc-infinia-metal:waiver:1",
+        "threshold_spend_inr": 1000000,
+        "period": "annual",
+        "waives_fee_inr": 12500,
+        "excluded_category_slugs": [],
+        "notes": "Spend ₹10 lakh or more in the preceding 12 months before renewal date.",
+        "excluded_categories": []
+      }
+    ],
+    "benefits": [
+      {
+        "id": "hdfc-infinia-metal:benefit:domestic-lounge-unlimited",
+        "key": "domestic-lounge-unlimited",
+        "source_local_id": "domestic-lounge-unlimited",
+        "kind": "lounge_domestic",
+        "label": "Unlimited complimentary domestic airport lounge access in India for primary and add-on cardholders.",
+        "description": "Sponsor: HDFC Bank",
+        "quota_count": null,
+        "quota_period": null,
+        "network_program": "visa_infinite",
+        "value_estimate_inr": null,
+        "conditions": {
+          "source_category_id": "lounge",
+          "evaluation_engine": {
+            "conditions": {},
+            "benefit_calculation": {
+              "quota": "unlimited"
+            },
+            "perks": [
+              "₹2 validation debit is later reversed."
+            ]
+          }
+        }
+      },
+      {
+        "id": "hdfc-infinia-metal:benefit:priority-pass-unlimited",
+        "key": "priority-pass-unlimited",
+        "source_local_id": "priority-pass-unlimited",
+        "kind": "lounge_international",
+        "label": "Complimentary Priority Pass membership with unlimited international lounge access for primary and add-on cardholders.",
+        "description": "Sponsor: HDFC Bank",
+        "quota_count": null,
+        "quota_period": null,
+        "network_program": "priority_pass",
+        "value_estimate_inr": null,
+        "conditions": {
+          "source_category_id": "lounge",
+          "evaluation_engine": {
+            "conditions": {},
+            "benefit_calculation": {
+              "quota": "unlimited"
+            },
+            "perks": [
+              "Priority Pass is not transferable."
+            ]
+          }
+        }
+      },
+      {
+        "id": "hdfc-infinia-metal:benefit:golf-unlimited",
+        "key": "golf-unlimited",
+        "source_local_id": "golf-unlimited",
+        "kind": "golf",
+        "label": "Unlimited complimentary golf lessons and games at leading courses across India and select courses worldwide; 100% green fee waiver at select golf courses worldwide.",
+        "description": "Sponsor: HDFC Bank",
+        "quota_count": null,
+        "quota_period": null,
+        "network_program": "hdfc-infinia-golf",
+        "value_estimate_inr": null,
+        "conditions": {
+          "source_category_id": "golf",
+          "evaluation_engine": {
+            "conditions": {},
+            "benefit_calculation": {
+              "quota": "unlimited"
+            },
+            "perks": [
+              "24x7 Golf Concierge Assistance"
+            ]
+          }
+        }
+      },
+      {
+        "id": "hdfc-infinia-metal:benefit:global-concierge",
+        "key": "global-concierge",
+        "source_local_id": "global-concierge",
+        "kind": "concierge",
+        "label": "24x7 Global Personal Concierge for customized bookings and assistance.",
+        "description": "Sponsor: HDFC Bank",
+        "quota_count": null,
+        "quota_period": null,
+        "network_program": "hdfc-global-personal-concierge",
+        "value_estimate_inr": null,
+        "conditions": {
+          "source_category_id": "concierge",
+          "evaluation_engine": {
+            "conditions": {},
+            "benefit_calculation": "N/A",
+            "perks": [
+              "Golf booking",
+              "Itinerary planning and reservation assistance",
+              "Private dining assistance",
+              "International gift delivery",
+              "Event planning and referrals",
+              "Airport VIP meet-and-greet service"
+            ]
+          }
+        }
+      },
+      {
+        "id": "hdfc-infinia-metal:benefit:club-marriott",
+        "key": "club-marriott",
+        "source_local_id": "club-marriott",
+        "kind": "dining_program",
+        "label": "Complimentary Club Marriott membership for first year.",
+        "description": "Sponsor: Marriott",
+        "quota_count": null,
+        "quota_period": null,
+        "network_program": "club_marriott",
+        "value_estimate_inr": null,
+        "conditions": {
+          "source_category_id": "dining",
+          "evaluation_engine": {
+            "conditions": {
+              "duration": "first year"
+            },
+            "benefit_calculation": "N/A",
+            "perks": [
+              "Up to 25% off food and beverage at participating restaurants",
+              "Up to 20% off Best Available Rate on rooms at participating Marriott hotels in India and Asia Pacific",
+              "20% off spa services at select participating Marriott-managed spas in India"
+            ]
+          }
+        }
+      },
+      {
+        "id": "hdfc-infinia-metal:benefit:itc-stay-3-for-2",
+        "key": "itc-stay-3-for-2",
+        "source_local_id": "itc-stay-3-for-2",
+        "kind": "dining_program",
+        "label": "Book a stay for 3 nights and pay for 2 at participating ITC hotels.",
+        "description": "Sponsor: ITC Hotels",
+        "quota_count": null,
+        "quota_period": null,
+        "network_program": "itc-hotels",
+        "value_estimate_inr": null,
+        "conditions": {
+          "source_category_id": "dining",
+          "evaluation_engine": {
+            "conditions": {},
+            "benefit_calculation": "N/A",
+            "perks": []
+          }
+        }
+      },
+      {
+        "id": "hdfc-infinia-metal:benefit:itc-buffet-1-plus-1",
+        "key": "itc-buffet-1-plus-1",
+        "source_local_id": "itc-buffet-1-plus-1",
+        "kind": "dining_program",
+        "label": "1+1 complimentary buffet at participating ITC hotels.",
+        "description": "Sponsor: ITC Hotels",
+        "quota_count": null,
+        "quota_period": null,
+        "network_program": "itc-hotels",
+        "value_estimate_inr": null,
+        "conditions": {
+          "source_category_id": "dining",
+          "evaluation_engine": {
+            "conditions": {},
+            "benefit_calculation": "N/A",
+            "perks": []
+          }
+        }
+      }
+    ],
+    "unlock_rules": [],
+    "redemption_options": [
+      {
+        "program_name": "SmartBuy",
+        "method": "flight_hotel_booking",
+        "value_per_point_inr": 1,
+        "min_points": null,
+        "notes": "Redemption fee: ₹0"
+      },
+      {
+        "program_name": "SmartBuy",
+        "method": "other",
+        "value_per_point_inr": 1,
+        "min_points": null,
+        "notes": "Redemption fee: ₹0"
+      },
+      {
+        "program_name": "SmartBuy",
+        "method": "other",
+        "value_per_point_inr": 0.5,
+        "min_points": null,
+        "notes": "Redemption fee: ₹0"
+      },
+      {
+        "program_name": "Netbanking",
+        "method": "statement_credit",
+        "value_per_point_inr": 0.3,
+        "min_points": null,
+        "notes": "Redemption fee: ₹0"
+      }
+    ],
+    "is_upi_linkable": false
+  }
+}

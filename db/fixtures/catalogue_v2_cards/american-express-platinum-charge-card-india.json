@@ -1,0 +1,985 @@
+{
+  "generated_by": "api/scripts/catalogue_v2/snapshot_examples.js",
+  "source_slug": "american-express-platinum-charge-card-india",
+  "inputs": {
+    "transform_version": "7",
+    "source_record_sha256": "020b50efb744714ece417fda47ba7e482e177debf2f0ff73aabdc9b8801ed8d5",
+    "override_sha256": "6d530455a1b0041a61e58c142315eba882b712308accb2487d648f6317a94af0",
+    "directory_sha256": "c2fded34df886aef08595eebb7629a4dd140c98af750f3c891d6c291b4874b53",
+    "verified": false
+  },
+  "blocking_flags": [
+    "info_rule",
+    "post_limit_conflict"
+  ],
+  "card": {
+    "id": "american-express-platinum-charge-card-india:card",
+    "slug": "american-express-platinum-charge-card-india",
+    "name": "American Express Platinum Card",
+    "network": "amex",
+    "issuer_slug": "american-express-india",
+    "base_reward_unit": "points_per_100",
+    "base_reward_rate": 2.5,
+    "point_value_inr": 0.25,
+    "excluded_categories": [],
+    "accrual_block_inr": 40,
+    "accrual_rounding": "floor",
+    "cashback_rounding": null,
+    "points_expiry_months": 0,
+    "model_status": "partial",
+    "model_coverage": {
+      "rules_total": 9,
+      "rules_modelled": 4,
+      "rules_info": 5,
+      "caps_total": 1,
+      "caps_enforced": 1,
+      "flags": [
+        {
+          "code": "info_rule",
+          "source_local_id": "base_all_eligible_spend",
+          "detail": "condition:clause:eligible_spend"
+        },
+        {
+          "code": "unmapped_excluded_category",
+          "source_local_id": "base_all_eligible_spend",
+          "detail": null
+        },
+        {
+          "code": "info_rule",
+          "source_local_id": "utility_zero_rewards",
+          "detail": "condition:subcategories"
+        },
+        {
+          "code": "exclusion_scope_broadened",
+          "source_local_id": "cash_withdrawal_zero_rewards",
+          "detail": null
+        },
+        {
+          "code": "info_rule",
+          "source_local_id": "overseas_spend_3x",
+          "detail": "condition:transaction_currency"
+        },
+        {
+          "code": "info_rule",
+          "source_local_id": "overseas_spend_3x",
+          "detail": "condition:channel_type"
+        },
+        {
+          "code": "depends_on_txn_attribute",
+          "source_local_id": "overseas_spend_3x",
+          "detail": null
+        },
+        {
+          "code": "info_rule",
+          "source_local_id": "reward_multiplier_up_to_20x",
+          "detail": "up_to_rate"
+        },
+        {
+          "code": "info_rule",
+          "source_local_id": "reward_multiplier_up_to_20x",
+          "detail": "condition:participating_brands"
+        },
+        {
+          "code": "channel_type_restates_brand",
+          "source_local_id": "reward_multiplier_up_to_20x",
+          "detail": null
+        },
+        {
+          "code": "info_rule",
+          "source_local_id": "shopwise_up_to_5x",
+          "detail": "up_to_rate"
+        },
+        {
+          "code": "info_rule",
+          "source_local_id": "shopwise_up_to_5x",
+          "detail": "unresolved_merchant:program"
+        },
+        {
+          "code": "info_rule",
+          "source_local_id": "shopwise_up_to_5x",
+          "detail": "condition:participating_brands"
+        },
+        {
+          "code": "channel_type_restates_brand",
+          "source_local_id": "shopwise_up_to_5x",
+          "detail": null
+        },
+        {
+          "code": "token_replaced_by_conditions",
+          "source_local_id": "shopwise_up_to_5x",
+          "detail": null
+        },
+        {
+          "code": "post_limit_conflict",
+          "source_local_id": "fuel_bonus_points_monthly_cap",
+          "detail": null
+        },
+        {
+          "code": "synthesized_base_rule",
+          "source_local_id": null,
+          "detail": "block ₹40"
+        }
+      ],
+      "overrides_applied": [
+        {
+          "path": "cap_rules[id=fuel_bonus_points_monthly_cap].metric",
+          "op": "set",
+          "value_sha256": "7af78ba28cf9ccb3",
+          "reason": "Issuer caps the fuel earning at 5,000 points per month in total, not only the bonus part.",
+          "source_url": "https://www.americanexpress.com/content/dam/amex/en-in/benefits/rewards/membership-rewards/membership-rewards-terms.pdf",
+          "checked_on": "2026-11-05"
+        }
+      ]
+    },
+    "reward_rules": [
+      {
+        "id": "american-express-platinum-charge-card-india:rule:base_all_eligible_spend",
+        "category_id": null,
+        "category_slug": null,
+        "merchant_pattern": null,
+        "rail": null,
+        "unit": "points_per_100",
+        "rate": 1,
+        "min_txn_inr": null,
+        "max_txn_inr": null,
+        "priority": 100,
+        "conditions": {
+          "source_local_id": "base_all_eligible_spend",
+          "part": null,
+          "info_reasons": [
+            "condition:clause:eligible_spend"
+          ],
+          "flags": [
+            "unmapped_excluded_category"
+          ]
+        },
+        "notes": null,
+        "effective_from": "2025-06-12",
+        "effective_to": null,
+        "excluded_categories": [
+          "cat-bills",
+          "cat-emi",
+          "cat-fuel",
+          "cat-insurance"
+        ],
+        "rule_role": "info",
+        "merchant_slugs": [],
+        "platform_slugs": [],
+        "mcc_include": [],
+        "mcc_exclude": [],
+        "except_merchant_slugs": [],
+        "except_platform_slugs": [],
+        "block_inr": 40,
+        "min_engine_version": 2,
+        "max_engine_version": null,
+        "source_local_id": "base_all_eligible_spend",
+        "display_note": "1 Membership Rewards Point for every ₹40 spent on eligible purchases."
+      },
+      {
+        "id": "american-express-platinum-charge-card-india:rule:fuel_rewards",
+        "category_id": "cat-fuel",
+        "category_slug": "fuel",
+        "merchant_pattern": null,
+        "rail": null,
+        "unit": "points_per_100",
+        "rate": 2,
+        "min_txn_inr": null,
+        "max_txn_inr": null,
+        "priority": 10,
+        "conditions": {
+          "source_local_id": "fuel_rewards",
+          "part": null,
+          "info_reasons": [],
+          "flags": []
+        },
+        "notes": null,
+        "effective_from": "2021-06-01",
+        "effective_to": null,
+        "excluded_categories": [],
+        "rule_role": "earn",
+        "merchant_slugs": [],
+        "platform_slugs": [],
+        "mcc_include": [],
+        "mcc_exclude": [],
+        "except_merchant_slugs": [],
+        "except_platform_slugs": [],
+        "block_inr": 40,
+        "min_engine_version": 2,
+        "max_engine_version": null,
+        "source_local_id": "fuel_rewards",
+        "display_note": "5 Membership Rewards Points per ₹100 of fuel spend, consisting of 1 standard point plus 4 bonus points; bonus points are capped at 5,000 per calendar month."
+      },
+      {
+        "id": "american-express-platinum-charge-card-india:rule:insurance_zero_rewards",
+        "category_id": "cat-insurance",
+        "category_slug": "insurance",
+        "merchant_pattern": null,
+        "rail": null,
+        "unit": "points_per_100",
+        "rate": 0,
+        "min_txn_inr": null,
+        "max_txn_inr": null,
+        "priority": 1,
+        "conditions": {
+          "source_local_id": "insurance_zero_rewards",
+          "part": null,
+          "info_reasons": [],
+          "flags": []
+        },
+        "notes": null,
+        "effective_from": "2015-03-01",
+        "effective_to": null,
+        "excluded_categories": [],
+        "rule_role": "exclusion",
+        "merchant_slugs": [],
+        "platform_slugs": [],
+        "mcc_include": [],
+        "mcc_exclude": [],
+        "except_merchant_slugs": [],
+        "except_platform_slugs": [],
+        "block_inr": null,
+        "min_engine_version": 1,
+        "max_engine_version": null,
+        "source_local_id": "insurance_zero_rewards",
+        "display_note": "No Membership Rewards Points on insurance spends."
+      },
+      {
+        "id": "american-express-platinum-charge-card-india:rule:utility_zero_rewards",
+        "category_id": "cat-bills",
+        "category_slug": "bills",
+        "merchant_pattern": null,
+        "rail": null,
+        "unit": "points_per_100",
+        "rate": 0,
+        "min_txn_inr": null,
+        "max_txn_inr": null,
+        "priority": 1,
+        "conditions": {
+          "source_local_id": "utility_zero_rewards",
+          "part": null,
+          "info_reasons": [
+            "condition:subcategories"
+          ],
+          "flags": []
+        },
+        "notes": null,
+        "effective_from": "2015-03-01",
+        "effective_to": null,
+        "excluded_categories": [],
+        "rule_role": "info",
+        "merchant_slugs": [],
+        "platform_slugs": [],
+        "mcc_include": [],
+        "mcc_exclude": [],
+        "except_merchant_slugs": [],
+        "except_platform_slugs": [],
+        "block_inr": null,
+        "min_engine_version": 2,
+        "max_engine_version": null,
+        "source_local_id": "utility_zero_rewards",
+        "display_note": "No Membership Rewards Points on electricity, water and gas utility payments."
+      },
+      {
+        "id": "american-express-platinum-charge-card-india:rule:cash_withdrawal_zero_rewards",
+        "category_id": null,
+        "category_slug": null,
+        "merchant_pattern": null,
+        "rail": "atm",
+        "unit": "points_per_100",
+        "rate": 0,
+        "min_txn_inr": null,
+        "max_txn_inr": null,
+        "priority": 1,
+        "conditions": {
+          "source_local_id": "cash_withdrawal_zero_rewards",
+          "part": null,
+          "info_reasons": [],
+          "flags": [
+            "exclusion_scope_broadened"
+          ]
+        },
+        "notes": null,
+        "effective_from": "2025-06-12",
+        "effective_to": null,
+        "excluded_categories": [],
+        "rule_role": "exclusion",
+        "merchant_slugs": [],
+        "platform_slugs": [],
+        "mcc_include": [],
+        "mcc_exclude": [],
+        "except_merchant_slugs": [],
+        "except_platform_slugs": [],
+        "block_inr": null,
+        "min_engine_version": 2,
+        "max_engine_version": null,
+        "source_local_id": "cash_withdrawal_zero_rewards",
+        "display_note": "No Membership Rewards Points on cash withdrawals."
+      },
+      {
+        "id": "american-express-platinum-charge-card-india:rule:emi_zero_rewards",
+        "category_id": "cat-emi",
+        "category_slug": "emi",
+        "merchant_pattern": null,
+        "rail": "emi",
+        "unit": "points_per_100",
+        "rate": 0,
+        "min_txn_inr": null,
+        "max_txn_inr": null,
+        "priority": 1,
+        "conditions": {
+          "source_local_id": "emi_zero_rewards",
+          "part": null,
+          "info_reasons": [],
+          "flags": []
+        },
+        "notes": null,
+        "effective_from": "2020-03-15",
+        "effective_to": null,
+        "excluded_categories": [],
+        "rule_role": "exclusion",
+        "merchant_slugs": [],
+        "platform_slugs": [],
+        "mcc_include": [],
+        "mcc_exclude": [],
+        "except_merchant_slugs": [],
+        "except_platform_slugs": [],
+        "block_inr": null,
+        "min_engine_version": 1,
+        "max_engine_version": null,
+        "source_local_id": "emi_zero_rewards",
+        "display_note": "The Platinum Charge Card is not eligible for the American Express EMI facility."
+      },
+      {
+        "id": "american-express-platinum-charge-card-india:rule:overseas_spend_3x",
+        "category_id": null,
+        "category_slug": null,
+        "merchant_pattern": null,
+        "rail": null,
+        "unit": "points_per_100",
+        "rate": 3,
+        "min_txn_inr": null,
+        "max_txn_inr": null,
+        "priority": 5,
+        "conditions": {
+          "source_local_id": "overseas_spend_3x",
+          "part": null,
+          "info_reasons": [
+            "condition:transaction_currency",
+            "condition:channel_type"
+          ],
+          "flags": [
+            "depends_on_txn_attribute"
+          ]
+        },
+        "notes": null,
+        "effective_from": null,
+        "effective_to": null,
+        "excluded_categories": [],
+        "rule_role": "info",
+        "merchant_slugs": [],
+        "platform_slugs": [],
+        "mcc_include": [],
+        "mcc_exclude": [],
+        "except_merchant_slugs": [],
+        "except_platform_slugs": [],
+        "block_inr": 40,
+        "min_engine_version": 2,
+        "max_engine_version": null,
+        "source_local_id": "overseas_spend_3x",
+        "display_note": "3X Membership Rewards Points on overseas spending."
+      },
+      {
+        "id": "american-express-platinum-charge-card-india:rule:reward_multiplier_up_to_20x",
+        "category_id": null,
+        "category_slug": null,
+        "merchant_pattern": null,
+        "rail": null,
+        "unit": "points_per_100",
+        "rate": 20,
+        "min_txn_inr": null,
+        "max_txn_inr": null,
+        "priority": 20,
+        "conditions": {
+          "source_local_id": "reward_multiplier_up_to_20x",
+          "part": null,
+          "info_reasons": [
+            "up_to_rate",
+            "condition:participating_brands"
+          ],
+          "flags": [
+            "channel_type_restates_brand"
+          ]
+        },
+        "notes": null,
+        "effective_from": null,
+        "effective_to": null,
+        "excluded_categories": [],
+        "rule_role": "info",
+        "merchant_slugs": [],
+        "platform_slugs": [
+          "amex_reward_multiplier"
+        ],
+        "mcc_include": [],
+        "mcc_exclude": [],
+        "except_merchant_slugs": [],
+        "except_platform_slugs": [],
+        "block_inr": 40,
+        "min_engine_version": 2,
+        "max_engine_version": null,
+        "source_local_id": "reward_multiplier_up_to_20x",
+        "display_note": "Up to 20X Membership Rewards Points on participating merchants through RewardXcelerator."
+      },
+      {
+        "id": "american-express-platinum-charge-card-india:rule:shopwise_up_to_5x",
+        "category_id": null,
+        "category_slug": null,
+        "merchant_pattern": null,
+        "rail": null,
+        "unit": "points_per_100",
+        "rate": 5,
+        "min_txn_inr": null,
+        "max_txn_inr": null,
+        "priority": 21,
+        "conditions": {
+          "source_local_id": "shopwise_up_to_5x",
+          "part": null,
+          "info_reasons": [
+            "up_to_rate",
+            "unresolved_merchant:program",
+            "condition:participating_brands"
+          ],
+          "flags": [
+            "channel_type_restates_brand",
+            "token_replaced_by_conditions"
+          ]
+        },
+        "notes": null,
+        "effective_from": null,
+        "effective_to": null,
+        "excluded_categories": [],
+        "rule_role": "info",
+        "merchant_slugs": [],
+        "platform_slugs": [
+          "amex_reward_multiplier"
+        ],
+        "mcc_include": [],
+        "mcc_exclude": [],
+        "except_merchant_slugs": [],
+        "except_platform_slugs": [],
+        "block_inr": 40,
+        "min_engine_version": 2,
+        "max_engine_version": null,
+        "source_local_id": "shopwise_up_to_5x",
+        "display_note": "Up to 5X rewards on participating Shopwise brands."
+      },
+      {
+        "id": "american-express-platinum-charge-card-india:rule:base-block",
+        "category_id": null,
+        "category_slug": null,
+        "merchant_pattern": null,
+        "rail": null,
+        "unit": "points_per_100",
+        "rate": 1,
+        "min_txn_inr": null,
+        "max_txn_inr": null,
+        "priority": 1000,
+        "conditions": {
+          "source_local_id": null,
+          "part": null,
+          "info_reasons": [],
+          "flags": [
+            "synthesized_base_rule"
+          ]
+        },
+        "notes": null,
+        "effective_from": null,
+        "effective_to": null,
+        "excluded_categories": [],
+        "rule_role": "base",
+        "merchant_slugs": [],
+        "platform_slugs": [],
+        "mcc_include": [],
+        "mcc_exclude": [],
+        "except_merchant_slugs": [],
+        "except_platform_slugs": [],
+        "block_inr": 40,
+        "min_engine_version": 2,
+        "max_engine_version": null,
+        "source_local_id": null,
+        "display_note": "1 pts per ₹40"
+      }
+    ],
+    "cap_rules": [
+      {
+        "id": "american-express-platinum-charge-card-india:cap:fuel_bonus_points_monthly_cap",
+        "reward_rule_id": "american-express-platinum-charge-card-india:rule:fuel_rewards",
+        "category_id": null,
+        "category_slug": null,
+        "benefit_kind": null,
+        "label": "Fuel bonus points monthly cap",
+        "measure": "reward_value",
+        "period": "calendar_month",
+        "cap_value": 1250,
+        "post_cap_unit": null,
+        "post_cap_rate": 0,
+        "resets_on_day": 1,
+        "cap_kind": "total_points",
+        "cap_amount": 5000,
+        "scope": "targets",
+        "targets": [
+          "american-express-platinum-charge-card-india:rule:fuel_rewards"
+        ],
+        "parent_cap_id": null,
+        "post_cap_behavior": null,
+        "anchor": null,
+        "min_engine_version": 2,
+        "source_local_id": "fuel_bonus_points_monthly_cap"
+      }
+    ],
+    "milestone_rules": [
+      {
+        "id": "american-express-platinum-charge-card-india:milestone:welcome_gift_50000_first_two_months",
+        "label": "Welcome gift - ₹50,000 spend within first 60 days",
+        "period": "lifetime",
+        "threshold_spend_inr": 50000,
+        "reward_description": "Welcome gift - ₹50,000 spend within first 60 days",
+        "reward_value_inr": 60000,
+        "is_repeatable": false,
+        "max_repeats": null,
+        "anchor": "card_anniversary",
+        "reward_points": null,
+        "reward_kind": null,
+        "excluded_category_ids": [],
+        "window_days": 60,
+        "source_local_id": "welcome_gift_50000_first_two_months"
+      },
+      {
+        "id": "american-express-platinum-charge-card-india:milestone:renewal_benefit_20_lakh",
+        "label": "Renewal benefit voucher",
+        "period": "annual",
+        "threshold_spend_inr": 2000000,
+        "reward_description": "Renewal benefit voucher",
+        "reward_value_inr": 35000,
+        "is_repeatable": true,
+        "max_repeats": null,
+        "anchor": "card_anniversary",
+        "reward_points": null,
+        "reward_kind": "voucher",
+        "excluded_category_ids": [],
+        "window_days": null,
+        "source_local_id": "renewal_benefit_20_lakh"
+      }
+    ],
+    "fee_waiver_rules": [],
+    "benefits": [
+      {
+        "id": "american-express-platinum-charge-card-india:benefit:global_lounge_collection",
+        "key": "global_lounge_collection",
+        "source_local_id": "global_lounge_collection",
+        "kind": "lounge_international",
+        "label": "Global Lounge Collection",
+        "description": "Sponsor: American Express",
+        "quota_count": null,
+        "quota_period": null,
+        "network_program": "global_lounge_collection",
+        "value_estimate_inr": null,
+        "conditions": {
+          "source_category_id": "lounge",
+          "evaluation_engine": {
+            "conditions": {
+              "card_required": "American Express Platinum Card",
+              "availability": "Subject to individual lounge rules, operating hours and space availability."
+            },
+            "benefit_calculation": {
+              "network_size": "1,550+ lounges across 140+ countries"
+            },
+            "perks": [
+              "The Centurion Lounge",
+              "Priority Pass lounges",
+              "Delta Sky Club when flying Delta",
+              "Escape Lounges",
+              "Domestic Partner Lounges in India"
+            ]
+          }
+        }
+      },
+      {
+        "id": "american-express-platinum-charge-card-india:benefit:centurion_lounge_access",
+        "key": "centurion_lounge_access",
+        "source_local_id": "centurion_lounge_access",
+        "kind": "lounge_domestic",
+        "label": "Centurion Lounge access",
+        "description": "Sponsor: American Express",
+        "quota_count": null,
+        "quota_period": null,
+        "network_program": "centurion_lounge",
+        "value_estimate_inr": null,
+        "conditions": {
+          "source_category_id": "lounge",
+          "evaluation_engine": {
+            "conditions": {
+              "valid_platinum_card": true,
+              "departure_requirement": "Basic Cardmember must arrive within 3 hours of departing flight and present valid Card, same-day departing boarding pass and government-issued ID."
+            },
+            "benefit_calculation": {
+              "quota": "unlimited"
+            },
+            "perks": [
+              "Complimentary access subject to Centurion Lounge guest and location rules.",
+              "Guest eligibility is subject to same-flight and location-specific conditions."
+            ]
+          }
+        }
+      },
+      {
+        "id": "american-express-platinum-charge-card-india:benefit:priority_pass_select",
+        "key": "priority_pass_select",
+        "source_local_id": "priority_pass_select",
+        "kind": "lounge_international",
+        "label": "Priority Pass Select membership",
+        "description": "Sponsor: American Express",
+        "quota_count": null,
+        "quota_period": null,
+        "network_program": "priority_pass",
+        "value_estimate_inr": null,
+        "conditions": {
+          "source_category_id": "lounge",
+          "evaluation_engine": {
+            "conditions": {
+              "enrollment_required": true,
+              "india_visits": "Chargeable at prevailing Priority Pass rate; published rate is US$35 per visit.",
+              "guest_visits": "Chargeable at prevailing guest rate unless otherwise specified by the applicable lounge.",
+              "international_access": "Subject to participating lounge rules."
+            },
+            "benefit_calculation": {
+              "quota": "unlimited membership access subject to Priority Pass terms"
+            },
+            "perks": [
+              "Priority Pass membership for Basic and Additional Platinum Cardmembers",
+              "Digital membership after activation"
+            ]
+          }
+        }
+      },
+      {
+        "id": "american-express-platinum-charge-card-india:benefit:premium_golf_access",
+        "key": "premium_golf_access",
+        "source_local_id": "premium_golf_access",
+        "kind": "golf",
+        "label": "Premium Golf Access",
+        "description": "Sponsor: American Express",
+        "quota_count": null,
+        "quota_period": null,
+        "network_program": "american_express_platinum_golf",
+        "value_estimate_inr": null,
+        "conditions": {
+          "source_category_id": "golf",
+          "evaluation_engine": {
+            "conditions": {
+              "card_required": true,
+              "booking": "American Express Experiences App",
+              "availability": "Subject to participating golf course availability."
+            },
+            "benefit_calculation": {
+              "domestic_courses": "30+",
+              "international_courses": "50+"
+            },
+            "perks": [
+              "Golf access for Basic and Supplementary Cardmembers",
+              "Complimentary golf lessons at participating courses",
+              "Complimentary Sunday luncheon at DLF Lifestyle Clubs"
+            ]
+          }
+        }
+      },
+      {
+        "id": "american-express-platinum-charge-card-india:benefit:platinum_concierge",
+        "key": "platinum_concierge",
+        "source_local_id": "platinum_concierge",
+        "kind": "concierge",
+        "label": "24x7 Platinum Concierge",
+        "description": "Sponsor: American Express",
+        "quota_count": null,
+        "quota_period": null,
+        "network_program": "platinum_concierge",
+        "value_estimate_inr": null,
+        "conditions": {
+          "source_category_id": "concierge",
+          "evaluation_engine": {
+            "conditions": {
+              "availability": "24x7"
+            },
+            "benefit_calculation": "N/A",
+            "perks": [
+              "Restaurant reservations",
+              "Travel assistance",
+              "Visa assistance",
+              "Event and experience assistance",
+              "Gift and delivery arrangements"
+            ]
+          }
+        }
+      },
+      {
+        "id": "american-express-platinum-charge-card-india:benefit:eazydiner_prime",
+        "key": "eazydiner_prime",
+        "source_local_id": "eazydiner_prime",
+        "kind": "dining_program",
+        "label": "Complimentary EazyDiner Prime membership",
+        "description": "Sponsor: EazyDiner",
+        "quota_count": null,
+        "quota_period": null,
+        "network_program": "eazydiner_prime",
+        "value_estimate_inr": 2950,
+        "conditions": {
+          "source_category_id": "dining",
+          "evaluation_engine": {
+            "conditions": {
+              "card_required": true,
+              "availability": "Participating restaurants in India."
+            },
+            "benefit_calculation": {
+              "discount": "25%-50%"
+            },
+            "perks": [
+              "Dining discounts at 2,000+ premium restaurants",
+              "2X Eazy Points on dining",
+              "24x7 VIP concierge",
+              "Complimentary membership"
+            ]
+          }
+        }
+      },
+      {
+        "id": "american-express-platinum-charge-card-india:benefit:fine_hotels_resorts",
+        "key": "fine_hotels_resorts",
+        "source_local_id": "fine_hotels_resorts",
+        "kind": "other",
+        "label": "Fine Hotels & Resorts",
+        "description": "Sponsor: American Express",
+        "quota_count": null,
+        "quota_period": null,
+        "network_program": "fine_hotels_resorts",
+        "value_estimate_inr": 44300,
+        "conditions": {
+          "source_category_id": "other",
+          "evaluation_engine": {
+            "conditions": {
+              "booking_channel": "Platinum Travel Service",
+              "property_count": "1,300+"
+            },
+            "benefit_calculation": {
+              "stated_average_value_inr": 44300
+            },
+            "perks": [
+              "Room upgrade when available",
+              "Daily breakfast for two",
+              "Guaranteed 4pm late checkout",
+              "WiFi or special amenity"
+            ]
+          }
+        }
+      },
+      {
+        "id": "american-express-platinum-charge-card-india:benefit:hotel_collection",
+        "key": "hotel_collection",
+        "source_local_id": "hotel_collection",
+        "kind": "other",
+        "label": "The Hotel Collection",
+        "description": "Sponsor: American Express",
+        "quota_count": null,
+        "quota_period": null,
+        "network_program": "hotel_collection",
+        "value_estimate_inr": 8500,
+        "conditions": {
+          "source_category_id": "other",
+          "evaluation_engine": {
+            "conditions": {
+              "minimum_stay_nights": 2,
+              "booking_channel": "Platinum Travel Service"
+            },
+            "benefit_calculation": {
+              "experience_credit_usd": 100
+            },
+            "perks": [
+              "US$100 experience credit",
+              "Room upgrade when available"
+            ]
+          }
+        }
+      },
+      {
+        "id": "american-express-platinum-charge-card-india:benefit:hotel_elite_statuses",
+        "key": "hotel_elite_statuses",
+        "source_local_id": "hotel_elite_statuses",
+        "kind": "other",
+        "label": "Hotel and travel elite-tier memberships",
+        "description": "Sponsor: American Express",
+        "quota_count": null,
+        "quota_period": null,
+        "network_program": "hotel_loyalty_programs",
+        "value_estimate_inr": null,
+        "conditions": {
+          "source_category_id": "other",
+          "evaluation_engine": {
+            "conditions": {
+              "enrollment_required": true
+            },
+            "benefit_calculation": "N/A",
+            "perks": [
+              "Taj Reimagined Epicure",
+              "Marriott Bonvoy Gold Elite",
+              "Hilton Honors Gold",
+              "Radisson Rewards Premium",
+              "Hertz Gold Plus Rewards",
+              "The Postcard Sunshine Club Platinum Tier",
+              "Accor Plus Traveller Membership",
+              "I Prefer Titanium"
+            ]
+          }
+        }
+      },
+      {
+        "id": "american-express-platinum-charge-card-india:benefit:domestic_lodging_program",
+        "key": "domestic_lodging_program",
+        "source_local_id": "domestic_lodging_program",
+        "kind": "other",
+        "label": "Domestic Lodging Program",
+        "description": "Sponsor: American Express",
+        "quota_count": null,
+        "quota_period": null,
+        "network_program": "american_express_domestic_lodging",
+        "value_estimate_inr": null,
+        "conditions": {
+          "source_category_id": "other",
+          "evaluation_engine": {
+            "conditions": {
+              "booking_channel": "Platinum Travel Service"
+            },
+            "benefit_calculation": "N/A",
+            "perks": [
+              "25% off at Taj, SeleQtions and Vivanta Hotels",
+              "50% off on suites at Oberoi Hotels and Resorts",
+              "Additional complimentary night at The LaLiT for qualifying two-or-more-night bookings"
+            ]
+          }
+        }
+      },
+      {
+        "id": "american-express-platinum-charge-card-india:benefit:platinum_experiences",
+        "key": "platinum_experiences",
+        "source_local_id": "platinum_experiences",
+        "kind": "other",
+        "label": "American Express Invites",
+        "description": "Sponsor: American Express",
+        "quota_count": null,
+        "quota_period": null,
+        "network_program": "american_express_invites",
+        "value_estimate_inr": null,
+        "conditions": {
+          "source_category_id": "other",
+          "evaluation_engine": {
+            "conditions": {
+              "invitation_or_pre_sale": true
+            },
+            "benefit_calculation": "N/A",
+            "perks": [
+              "VIP-only events",
+              "Pre-sale tickets",
+              "Preferred seating",
+              "Concerts",
+              "Fashion Weeks",
+              "Grammy Awards",
+              "Wimbledon"
+            ]
+          }
+        }
+      },
+      {
+        "id": "american-express-platinum-charge-card-india:benefit:insurance:air_accidental_death",
+        "key": "insurance:air_accidental_death",
+        "source_local_id": null,
+        "kind": "insurance_travel",
+        "label": "Air Accidental Death",
+        "description": "Air ticket must be purchased on the American Express Platinum Card.",
+        "quota_count": null,
+        "quota_period": null,
+        "network_program": null,
+        "value_estimate_inr": 50000000,
+        "conditions": {
+          "coverage_usd": null
+        }
+      },
+      {
+        "id": "american-express-platinum-charge-card-india:benefit:insurance:medical_emergency_overseas",
+        "key": "insurance:medical_emergency_overseas",
+        "source_local_id": null,
+        "kind": "other",
+        "label": "Medical Emergency Overseas",
+        "description": "Complimentary Overseas Medical Insurance for the Basic Cardmember for the first seven days of the trip. Published conditions include maximum one claim per year, maximum 5 trips per year, maximum 7 days per trip, minimum 24-hour hospitalization, exclusion of pre-existing injuries or illness, maximum age 60 and US$100 deductible per claim. Supplementary Cardmembers do not receive complimentary Overseas Medical Insurance.",
+        "quota_count": null,
+        "quota_period": null,
+        "network_program": null,
+        "value_estimate_inr": null,
+        "conditions": {
+          "coverage_usd": 50000
+        }
+      },
+      {
+        "id": "american-express-platinum-charge-card-india:benefit:insurance:baggage_loss_delay",
+        "key": "insurance:baggage_loss_delay",
+        "source_local_id": null,
+        "kind": "insurance_travel",
+        "label": "Baggage Loss Delay",
+        "description": "Covers eligible loss or delay of checked-in baggage on qualifying domestic and international flights subject to the applicable insurance terms and ticket-purchase conditions.",
+        "quota_count": null,
+        "quota_period": null,
+        "network_program": null,
+        "value_estimate_inr": 25000,
+        "conditions": {
+          "coverage_usd": null
+        }
+      },
+      {
+        "id": "american-express-platinum-charge-card-india:benefit:insurance:purchase_protection",
+        "key": "insurance:purchase_protection",
+        "source_local_id": null,
+        "kind": "insurance_purchase",
+        "label": "Purchase Protection",
+        "description": "Tangible goods purchased using the Card are protected against qualifying loss or damage within 90 days of purchase caused by fire, burglary or natural calamities. Breakdown of appliances and loss or damage to precious items such as gold, silver, antiques and securities are excluded.",
+        "quota_count": null,
+        "quota_period": null,
+        "network_program": null,
+        "value_estimate_inr": 500000,
+        "conditions": {
+          "coverage_usd": null
+        }
+      }
+    ],
+    "unlock_rules": [],
+    "redemption_options": [
+      {
+        "program_name": "pay_with_points",
+        "method": "statement_credit",
+        "value_per_point_inr": 0.25,
+        "min_points": 1000,
+        "notes": "Redemption fee: ₹0"
+      },
+      {
+        "program_name": "insta_voucher_taj_experiences",
+        "method": "partner_catalogue",
+        "value_per_point_inr": 0.5,
+        "min_points": 20000,
+        "notes": "Redemption fee: ₹0"
+      },
+      {
+        "program_name": "membership_rewards_catalogue",
+        "method": "partner_catalogue",
+        "value_per_point_inr": 0.35,
+        "min_points": 5000,
+        "notes": "Redemption fee: ₹0"
+      }
+    ],
+    "is_upi_linkable": false
+  }
+}

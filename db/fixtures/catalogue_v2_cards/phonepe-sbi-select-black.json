@@ -1,0 +1,1738 @@
+{
+  "generated_by": "api/scripts/catalogue_v2/snapshot_examples.js",
+  "source_slug": "phonepe-sbi-select-black",
+  "inputs": {
+    "transform_version": "7",
+    "source_record_sha256": "667d4701d4614008289fe18cfd043975dd9106ba5ba494db117e6433993923bb",
+    "override_sha256": "25fdd191e019db8c4acaae5ea5d7f94bc8bb5e1cde77c1b9f65fea9922e3a2c0",
+    "directory_sha256": "c2fded34df886aef08595eebb7629a4dd140c98af750f3c891d6c291b4874b53",
+    "verified": false
+  },
+  "blocking_flags": [],
+  "card": {
+    "id": "phonepe-sbi-select-black:card",
+    "slug": "phonepe-sbi-select-black",
+    "name": "PhonePe SBI Card SELECT BLACK",
+    "network": "unknown",
+    "issuer_slug": "sbi-card",
+    "base_reward_unit": "points_per_100",
+    "base_reward_rate": 1,
+    "point_value_inr": 1,
+    "excluded_categories": [],
+    "accrual_block_inr": 100,
+    "accrual_rounding": "floor",
+    "cashback_rounding": null,
+    "points_expiry_months": 24,
+    "model_status": "partial",
+    "model_coverage": {
+      "rules_total": 23,
+      "rules_modelled": 19,
+      "rules_info": 4,
+      "caps_total": 4,
+      "caps_enforced": 4,
+      "flags": [
+        {
+          "code": "mcc_scoped_exclusion",
+          "source_local_id": "fuel-exclusion",
+          "detail": null
+        },
+        {
+          "code": "mcc_scoped_exclusion",
+          "source_local_id": "wallet-exclusion",
+          "detail": null
+        },
+        {
+          "code": "mcc_scoped_exclusion",
+          "source_local_id": "rent-exclusion",
+          "detail": null
+        },
+        {
+          "code": "mcc_scoped_exclusion",
+          "source_local_id": "education-exclusion",
+          "detail": null
+        },
+        {
+          "code": "mcc_scoped_exclusion",
+          "source_local_id": "government-exclusion",
+          "detail": null
+        },
+        {
+          "code": "broad_exclusion_v1_only",
+          "source_local_id": "gaming-exclusion",
+          "detail": null
+        },
+        {
+          "code": "token_replaced_by_conditions",
+          "source_local_id": "jewellery-exclusion",
+          "detail": null
+        },
+        {
+          "code": "token_replaced_by_conditions",
+          "source_local_id": "gifts-exclusion",
+          "detail": null
+        },
+        {
+          "code": "token_replaced_by_conditions",
+          "source_local_id": "tolls-exclusion",
+          "detail": null
+        },
+        {
+          "code": "exclusion_scope_broadened",
+          "source_local_id": "cash-advance-exclusion",
+          "detail": null
+        },
+        {
+          "code": "info_rule",
+          "source_local_id": "balance-transfer-exclusion",
+          "detail": "unrestricted_exclusion"
+        },
+        {
+          "code": "info_rule",
+          "source_local_id": "encash-exclusion",
+          "detail": "unrestricted_exclusion"
+        },
+        {
+          "code": "info_rule",
+          "source_local_id": "financial-charges-exclusion",
+          "detail": "unrestricted_exclusion"
+        },
+        {
+          "code": "info_rule",
+          "source_local_id": "disputed-exclusion",
+          "detail": "unrestricted_exclusion"
+        }
+      ],
+      "overrides_applied": [
+        {
+          "path": "cap_rules[id=phonepe-other-monthly].metric",
+          "op": "set",
+          "value_sha256": "7af78ba28cf9ccb3",
+          "reason": "SBI limits total RPs per spend type per calendar month.",
+          "source_url": "https://www.sbicard.com/sbi-card-en/assets/media/images/personal/credit-cards/rewards/phonepe/tnc/RP-tnc.pdf",
+          "checked_on": "2026-11-05"
+        },
+        {
+          "path": "cap_rules[id=phonepe-insurance-monthly].metric",
+          "op": "set",
+          "value_sha256": "7af78ba28cf9ccb3",
+          "reason": "SBI limits total RPs per spend type per calendar month.",
+          "source_url": "https://www.sbicard.com/sbi-card-en/assets/media/images/personal/credit-cards/rewards/phonepe/tnc/RP-tnc.pdf",
+          "checked_on": "2026-11-05"
+        },
+        {
+          "path": "cap_rules[id=online-monthly].metric",
+          "op": "set",
+          "value_sha256": "7af78ba28cf9ccb3",
+          "reason": "SBI limits total RPs per spend type per calendar month.",
+          "source_url": "https://www.sbicard.com/sbi-card-en/assets/media/images/personal/credit-cards/rewards/phonepe/tnc/RP-tnc.pdf",
+          "checked_on": "2026-11-05"
+        },
+        {
+          "path": "cap_rules[id=phonepe-insurance-monthly].parent_cap_id",
+          "op": "set",
+          "value_sha256": "74234e98afe7498f",
+          "reason": "Insurance (500) is a separate limit from non-insurance PhonePe spends (1,500).",
+          "source_url": "https://www.sbicard.com/sbi-card-en/assets/media/images/personal/credit-cards/rewards/phonepe/tnc/RP-tnc.pdf",
+          "checked_on": "2026-11-05"
+        }
+      ]
+    },
+    "reward_rules": [
+      {
+        "id": "phonepe-sbi-select-black:rule:phonepe-10x#1",
+        "category_id": "cat-bills",
+        "category_slug": "bills",
+        "merchant_pattern": null,
+        "rail": null,
+        "unit": "points_per_100",
+        "rate": 10,
+        "min_txn_inr": null,
+        "max_txn_inr": null,
+        "priority": 10,
+        "conditions": {
+          "source_local_id": "phonepe-10x",
+          "part": 1,
+          "info_reasons": [],
+          "flags": []
+        },
+        "notes": null,
+        "effective_from": "2025-07-22",
+        "effective_to": null,
+        "excluded_categories": [],
+        "rule_role": "earn",
+        "merchant_slugs": [],
+        "platform_slugs": [
+          "phonepe_app"
+        ],
+        "mcc_include": [],
+        "mcc_exclude": [],
+        "except_merchant_slugs": [],
+        "except_platform_slugs": [],
+        "block_inr": null,
+        "min_engine_version": 2,
+        "max_engine_version": null,
+        "source_local_id": "phonepe-10x",
+        "display_note": "10 Reward Points per Rs.100 on eligible PhonePe spends in select categories including recharges, utilities, bill payments, insurance and travel."
+      },
+      {
+        "id": "phonepe-sbi-select-black:rule:phonepe-10x#2",
+        "category_id": "cat-insurance",
+        "category_slug": "insurance",
+        "merchant_pattern": null,
+        "rail": null,
+        "unit": "points_per_100",
+        "rate": 10,
+        "min_txn_inr": null,
+        "max_txn_inr": null,
+        "priority": 10,
+        "conditions": {
+          "source_local_id": "phonepe-10x",
+          "part": 2,
+          "info_reasons": [],
+          "flags": []
+        },
+        "notes": null,
+        "effective_from": "2025-07-22",
+        "effective_to": null,
+        "excluded_categories": [],
+        "rule_role": "earn",
+        "merchant_slugs": [],
+        "platform_slugs": [
+          "phonepe_app"
+        ],
+        "mcc_include": [],
+        "mcc_exclude": [],
+        "except_merchant_slugs": [],
+        "except_platform_slugs": [],
+        "block_inr": null,
+        "min_engine_version": 2,
+        "max_engine_version": null,
+        "source_local_id": "phonepe-10x",
+        "display_note": "10 Reward Points per Rs.100 on eligible PhonePe spends in select categories including recharges, utilities, bill payments, insurance and travel."
+      },
+      {
+        "id": "phonepe-sbi-select-black:rule:phonepe-10x#3",
+        "category_id": "cat-travel",
+        "category_slug": "travel",
+        "merchant_pattern": null,
+        "rail": null,
+        "unit": "points_per_100",
+        "rate": 10,
+        "min_txn_inr": null,
+        "max_txn_inr": null,
+        "priority": 10,
+        "conditions": {
+          "source_local_id": "phonepe-10x",
+          "part": 3,
+          "info_reasons": [],
+          "flags": []
+        },
+        "notes": null,
+        "effective_from": "2025-07-22",
+        "effective_to": null,
+        "excluded_categories": [],
+        "rule_role": "earn",
+        "merchant_slugs": [],
+        "platform_slugs": [
+          "phonepe_app"
+        ],
+        "mcc_include": [],
+        "mcc_exclude": [],
+        "except_merchant_slugs": [],
+        "except_platform_slugs": [],
+        "block_inr": null,
+        "min_engine_version": 2,
+        "max_engine_version": null,
+        "source_local_id": "phonepe-10x",
+        "display_note": "10 Reward Points per Rs.100 on eligible PhonePe spends in select categories including recharges, utilities, bill payments, insurance and travel."
+      },
+      {
+        "id": "phonepe-sbi-select-black:rule:online-5x",
+        "category_id": null,
+        "category_slug": null,
+        "merchant_pattern": null,
+        "rail": "online",
+        "unit": "points_per_100",
+        "rate": 5,
+        "min_txn_inr": null,
+        "max_txn_inr": null,
+        "priority": 20,
+        "conditions": {
+          "source_local_id": "online-5x",
+          "part": null,
+          "info_reasons": [],
+          "flags": []
+        },
+        "notes": null,
+        "effective_from": "2025-07-22",
+        "effective_to": null,
+        "excluded_categories": [],
+        "rule_role": "earn",
+        "merchant_slugs": [],
+        "platform_slugs": [],
+        "mcc_include": [],
+        "mcc_exclude": [],
+        "except_merchant_slugs": [],
+        "except_platform_slugs": [],
+        "block_inr": null,
+        "min_engine_version": 1,
+        "max_engine_version": null,
+        "source_local_id": "online-5x",
+        "display_note": "5 Reward Points per Rs.100 on eligible online spends."
+      },
+      {
+        "id": "phonepe-sbi-select-black:rule:base-1x",
+        "category_id": null,
+        "category_slug": null,
+        "merchant_pattern": null,
+        "rail": null,
+        "unit": "points_per_100",
+        "rate": 1,
+        "min_txn_inr": null,
+        "max_txn_inr": null,
+        "priority": 30,
+        "conditions": {
+          "source_local_id": "base-1x",
+          "part": null,
+          "info_reasons": [],
+          "flags": []
+        },
+        "notes": null,
+        "effective_from": "2025-07-22",
+        "effective_to": null,
+        "excluded_categories": [],
+        "rule_role": "base",
+        "merchant_slugs": [],
+        "platform_slugs": [],
+        "mcc_include": [],
+        "mcc_exclude": [],
+        "except_merchant_slugs": [],
+        "except_platform_slugs": [],
+        "block_inr": null,
+        "min_engine_version": 1,
+        "max_engine_version": null,
+        "source_local_id": "base-1x",
+        "display_note": "1 Reward Point per Rs.100 on other eligible spends."
+      },
+      {
+        "id": "phonepe-sbi-select-black:rule:phonepe-scanpay-1x",
+        "category_id": null,
+        "category_slug": null,
+        "merchant_pattern": null,
+        "rail": "upi_qr",
+        "unit": "points_per_100",
+        "rate": 1,
+        "min_txn_inr": null,
+        "max_txn_inr": null,
+        "priority": 31,
+        "conditions": {
+          "source_local_id": "phonepe-scanpay-1x",
+          "part": null,
+          "info_reasons": [],
+          "flags": []
+        },
+        "notes": null,
+        "effective_from": "2025-07-22",
+        "effective_to": null,
+        "excluded_categories": [],
+        "rule_role": "earn",
+        "merchant_slugs": [],
+        "platform_slugs": [
+          "phonepe_app"
+        ],
+        "mcc_include": [],
+        "mcc_exclude": [],
+        "except_merchant_slugs": [],
+        "except_platform_slugs": [],
+        "block_inr": null,
+        "min_engine_version": 2,
+        "max_engine_version": null,
+        "source_local_id": "phonepe-scanpay-1x",
+        "display_note": "All Scan & Pay transactions made via the PhonePe App accrue 1% value back."
+      },
+      {
+        "id": "phonepe-sbi-select-black:rule:utilities-outside-phonepe-base",
+        "category_id": "cat-bills",
+        "category_slug": "bills",
+        "merchant_pattern": null,
+        "rail": null,
+        "unit": "points_per_100",
+        "rate": 1,
+        "min_txn_inr": null,
+        "max_txn_inr": null,
+        "priority": 32,
+        "conditions": {
+          "source_local_id": "utilities-outside-phonepe-base",
+          "part": null,
+          "info_reasons": [],
+          "flags": []
+        },
+        "notes": null,
+        "effective_from": "2026-07-01",
+        "effective_to": null,
+        "excluded_categories": [],
+        "rule_role": "earn",
+        "merchant_slugs": [],
+        "platform_slugs": [],
+        "mcc_include": [
+          "4814",
+          "4899",
+          "4900"
+        ],
+        "mcc_exclude": [],
+        "except_merchant_slugs": [],
+        "except_platform_slugs": [
+          "phonepe_app"
+        ],
+        "block_inr": null,
+        "min_engine_version": 2,
+        "max_engine_version": null,
+        "source_local_id": "utilities-outside-phonepe-base",
+        "display_note": "Utility payments outside the PhonePe app earn only base Reward Points at 1 Reward Point per Rs.100; they do not earn accelerated PhonePe Reward Points."
+      },
+      {
+        "id": "phonepe-sbi-select-black:rule:insurance-outside-phonepe-base",
+        "category_id": "cat-insurance",
+        "category_slug": "insurance",
+        "merchant_pattern": null,
+        "rail": null,
+        "unit": "points_per_100",
+        "rate": 1,
+        "min_txn_inr": null,
+        "max_txn_inr": null,
+        "priority": 33,
+        "conditions": {
+          "source_local_id": "insurance-outside-phonepe-base",
+          "part": null,
+          "info_reasons": [],
+          "flags": []
+        },
+        "notes": null,
+        "effective_from": "2026-07-01",
+        "effective_to": null,
+        "excluded_categories": [],
+        "rule_role": "earn",
+        "merchant_slugs": [],
+        "platform_slugs": [],
+        "mcc_include": [
+          "5960",
+          "6300",
+          "6380"
+        ],
+        "mcc_exclude": [],
+        "except_merchant_slugs": [],
+        "except_platform_slugs": [
+          "phonepe_app"
+        ],
+        "block_inr": null,
+        "min_engine_version": 2,
+        "max_engine_version": null,
+        "source_local_id": "insurance-outside-phonepe-base",
+        "display_note": "Insurance payments outside the PhonePe app earn only base Reward Points at 1 Reward Point per Rs.100; they do not earn accelerated PhonePe Reward Points."
+      },
+      {
+        "id": "phonepe-sbi-select-black:rule:fuel-exclusion#1",
+        "category_id": "cat-fuel",
+        "category_slug": "fuel",
+        "merchant_pattern": null,
+        "rail": null,
+        "unit": "points_per_100",
+        "rate": 0,
+        "min_txn_inr": null,
+        "max_txn_inr": null,
+        "priority": 1,
+        "conditions": {
+          "source_local_id": "fuel-exclusion",
+          "part": 1,
+          "info_reasons": [],
+          "flags": [
+            "mcc_scoped_exclusion"
+          ]
+        },
+        "notes": null,
+        "effective_from": "2025-07-22",
+        "effective_to": null,
+        "excluded_categories": [],
+        "rule_role": "exclusion",
+        "merchant_slugs": [],
+        "platform_slugs": [],
+        "mcc_include": [],
+        "mcc_exclude": [],
+        "except_merchant_slugs": [],
+        "except_platform_slugs": [],
+        "block_inr": null,
+        "min_engine_version": 1,
+        "max_engine_version": 1,
+        "source_local_id": "fuel-exclusion",
+        "display_note": "No Reward Points on petrol pump/service station purchases."
+      },
+      {
+        "id": "phonepe-sbi-select-black:rule:fuel-exclusion#2",
+        "category_id": "cat-fuel",
+        "category_slug": "fuel",
+        "merchant_pattern": null,
+        "rail": null,
+        "unit": "points_per_100",
+        "rate": 0,
+        "min_txn_inr": null,
+        "max_txn_inr": null,
+        "priority": 1,
+        "conditions": {
+          "source_local_id": "fuel-exclusion",
+          "part": 2,
+          "info_reasons": [],
+          "flags": [
+            "mcc_scoped_exclusion"
+          ]
+        },
+        "notes": null,
+        "effective_from": "2025-07-22",
+        "effective_to": null,
+        "excluded_categories": [],
+        "rule_role": "exclusion",
+        "merchant_slugs": [],
+        "platform_slugs": [],
+        "mcc_include": [
+          "5172",
+          "5541",
+          "5542",
+          "5983"
+        ],
+        "mcc_exclude": [],
+        "except_merchant_slugs": [],
+        "except_platform_slugs": [],
+        "block_inr": null,
+        "min_engine_version": 2,
+        "max_engine_version": null,
+        "source_local_id": "fuel-exclusion",
+        "display_note": "No Reward Points on petrol pump/service station purchases."
+      },
+      {
+        "id": "phonepe-sbi-select-black:rule:fuel-exclusion#3",
+        "category_id": null,
+        "category_slug": null,
+        "merchant_pattern": null,
+        "rail": null,
+        "unit": "points_per_100",
+        "rate": 0,
+        "min_txn_inr": null,
+        "max_txn_inr": null,
+        "priority": 1,
+        "conditions": {
+          "source_local_id": "fuel-exclusion",
+          "part": 3,
+          "info_reasons": [],
+          "flags": [
+            "mcc_scoped_exclusion"
+          ]
+        },
+        "notes": null,
+        "effective_from": "2025-07-22",
+        "effective_to": null,
+        "excluded_categories": [],
+        "rule_role": "exclusion",
+        "merchant_slugs": [],
+        "platform_slugs": [],
+        "mcc_include": [
+          "5172",
+          "5541",
+          "5542",
+          "5983"
+        ],
+        "mcc_exclude": [],
+        "except_merchant_slugs": [],
+        "except_platform_slugs": [],
+        "block_inr": null,
+        "min_engine_version": 2,
+        "max_engine_version": null,
+        "source_local_id": "fuel-exclusion",
+        "display_note": "No Reward Points on petrol pump/service station purchases."
+      },
+      {
+        "id": "phonepe-sbi-select-black:rule:wallet-exclusion#1",
+        "category_id": "cat-wallet",
+        "category_slug": "wallet",
+        "merchant_pattern": null,
+        "rail": null,
+        "unit": "points_per_100",
+        "rate": 0,
+        "min_txn_inr": null,
+        "max_txn_inr": null,
+        "priority": 2,
+        "conditions": {
+          "source_local_id": "wallet-exclusion",
+          "part": 1,
+          "info_reasons": [],
+          "flags": [
+            "mcc_scoped_exclusion"
+          ]
+        },
+        "notes": null,
+        "effective_from": "2025-07-22",
+        "effective_to": null,
+        "excluded_categories": [],
+        "rule_role": "exclusion",
+        "merchant_slugs": [],
+        "platform_slugs": [],
+        "mcc_include": [],
+        "mcc_exclude": [],
+        "except_merchant_slugs": [],
+        "except_platform_slugs": [],
+        "block_inr": null,
+        "min_engine_version": 1,
+        "max_engine_version": 1,
+        "source_local_id": "wallet-exclusion",
+        "display_note": "No Reward Points on e-wallet loading."
+      },
+      {
+        "id": "phonepe-sbi-select-black:rule:wallet-exclusion#2",
+        "category_id": "cat-wallet",
+        "category_slug": "wallet",
+        "merchant_pattern": null,
+        "rail": null,
+        "unit": "points_per_100",
+        "rate": 0,
+        "min_txn_inr": null,
+        "max_txn_inr": null,
+        "priority": 2,
+        "conditions": {
+          "source_local_id": "wallet-exclusion",
+          "part": 2,
+          "info_reasons": [],
+          "flags": [
+            "mcc_scoped_exclusion"
+          ]
+        },
+        "notes": null,
+        "effective_from": "2025-07-22",
+        "effective_to": null,
+        "excluded_categories": [],
+        "rule_role": "exclusion",
+        "merchant_slugs": [],
+        "platform_slugs": [],
+        "mcc_include": [
+          "6540",
+          "6541"
+        ],
+        "mcc_exclude": [],
+        "except_merchant_slugs": [],
+        "except_platform_slugs": [],
+        "block_inr": null,
+        "min_engine_version": 2,
+        "max_engine_version": null,
+        "source_local_id": "wallet-exclusion",
+        "display_note": "No Reward Points on e-wallet loading."
+      },
+      {
+        "id": "phonepe-sbi-select-black:rule:wallet-exclusion#3",
+        "category_id": null,
+        "category_slug": null,
+        "merchant_pattern": null,
+        "rail": null,
+        "unit": "points_per_100",
+        "rate": 0,
+        "min_txn_inr": null,
+        "max_txn_inr": null,
+        "priority": 2,
+        "conditions": {
+          "source_local_id": "wallet-exclusion",
+          "part": 3,
+          "info_reasons": [],
+          "flags": [
+            "mcc_scoped_exclusion"
+          ]
+        },
+        "notes": null,
+        "effective_from": "2025-07-22",
+        "effective_to": null,
+        "excluded_categories": [],
+        "rule_role": "exclusion",
+        "merchant_slugs": [],
+        "platform_slugs": [],
+        "mcc_include": [
+          "6540",
+          "6541"
+        ],
+        "mcc_exclude": [],
+        "except_merchant_slugs": [],
+        "except_platform_slugs": [],
+        "block_inr": null,
+        "min_engine_version": 2,
+        "max_engine_version": null,
+        "source_local_id": "wallet-exclusion",
+        "display_note": "No Reward Points on e-wallet loading."
+      },
+      {
+        "id": "phonepe-sbi-select-black:rule:rent-exclusion#1",
+        "category_id": "cat-rent",
+        "category_slug": "rent",
+        "merchant_pattern": null,
+        "rail": null,
+        "unit": "points_per_100",
+        "rate": 0,
+        "min_txn_inr": null,
+        "max_txn_inr": null,
+        "priority": 3,
+        "conditions": {
+          "source_local_id": "rent-exclusion",
+          "part": 1,
+          "info_reasons": [],
+          "flags": [
+            "mcc_scoped_exclusion"
+          ]
+        },
+        "notes": null,
+        "effective_from": "2025-07-22",
+        "effective_to": null,
+        "excluded_categories": [],
+        "rule_role": "exclusion",
+        "merchant_slugs": [],
+        "platform_slugs": [],
+        "mcc_include": [],
+        "mcc_exclude": [],
+        "except_merchant_slugs": [],
+        "except_platform_slugs": [],
+        "block_inr": null,
+        "min_engine_version": 1,
+        "max_engine_version": 1,
+        "source_local_id": "rent-exclusion",
+        "display_note": "No Reward Points on rent/property management payments."
+      },
+      {
+        "id": "phonepe-sbi-select-black:rule:rent-exclusion#2",
+        "category_id": "cat-rent",
+        "category_slug": "rent",
+        "merchant_pattern": null,
+        "rail": null,
+        "unit": "points_per_100",
+        "rate": 0,
+        "min_txn_inr": null,
+        "max_txn_inr": null,
+        "priority": 3,
+        "conditions": {
+          "source_local_id": "rent-exclusion",
+          "part": 2,
+          "info_reasons": [],
+          "flags": [
+            "mcc_scoped_exclusion"
+          ]
+        },
+        "notes": null,
+        "effective_from": "2025-07-22",
+        "effective_to": null,
+        "excluded_categories": [],
+        "rule_role": "exclusion",
+        "merchant_slugs": [],
+        "platform_slugs": [],
+        "mcc_include": [
+          "6513"
+        ],
+        "mcc_exclude": [],
+        "except_merchant_slugs": [],
+        "except_platform_slugs": [],
+        "block_inr": null,
+        "min_engine_version": 2,
+        "max_engine_version": null,
+        "source_local_id": "rent-exclusion",
+        "display_note": "No Reward Points on rent/property management payments."
+      },
+      {
+        "id": "phonepe-sbi-select-black:rule:rent-exclusion#3",
+        "category_id": null,
+        "category_slug": null,
+        "merchant_pattern": null,
+        "rail": null,
+        "unit": "points_per_100",
+        "rate": 0,
+        "min_txn_inr": null,
+        "max_txn_inr": null,
+        "priority": 3,
+        "conditions": {
+          "source_local_id": "rent-exclusion",
+          "part": 3,
+          "info_reasons": [],
+          "flags": [
+            "mcc_scoped_exclusion"
+          ]
+        },
+        "notes": null,
+        "effective_from": "2025-07-22",
+        "effective_to": null,
+        "excluded_categories": [],
+        "rule_role": "exclusion",
+        "merchant_slugs": [],
+        "platform_slugs": [],
+        "mcc_include": [
+          "6513"
+        ],
+        "mcc_exclude": [],
+        "except_merchant_slugs": [],
+        "except_platform_slugs": [],
+        "block_inr": null,
+        "min_engine_version": 2,
+        "max_engine_version": null,
+        "source_local_id": "rent-exclusion",
+        "display_note": "No Reward Points on rent/property management payments."
+      },
+      {
+        "id": "phonepe-sbi-select-black:rule:education-exclusion#1",
+        "category_id": "cat-education",
+        "category_slug": "education",
+        "merchant_pattern": null,
+        "rail": null,
+        "unit": "points_per_100",
+        "rate": 0,
+        "min_txn_inr": null,
+        "max_txn_inr": null,
+        "priority": 4,
+        "conditions": {
+          "source_local_id": "education-exclusion",
+          "part": 1,
+          "info_reasons": [],
+          "flags": [
+            "mcc_scoped_exclusion"
+          ]
+        },
+        "notes": null,
+        "effective_from": "2025-07-22",
+        "effective_to": null,
+        "excluded_categories": [],
+        "rule_role": "exclusion",
+        "merchant_slugs": [],
+        "platform_slugs": [],
+        "mcc_include": [],
+        "mcc_exclude": [],
+        "except_merchant_slugs": [],
+        "except_platform_slugs": [],
+        "block_inr": null,
+        "min_engine_version": 1,
+        "max_engine_version": 1,
+        "source_local_id": "education-exclusion",
+        "display_note": "No Reward Points on school and educational services."
+      },
+      {
+        "id": "phonepe-sbi-select-black:rule:education-exclusion#2",
+        "category_id": "cat-education",
+        "category_slug": "education",
+        "merchant_pattern": null,
+        "rail": null,
+        "unit": "points_per_100",
+        "rate": 0,
+        "min_txn_inr": null,
+        "max_txn_inr": null,
+        "priority": 4,
+        "conditions": {
+          "source_local_id": "education-exclusion",
+          "part": 2,
+          "info_reasons": [],
+          "flags": [
+            "mcc_scoped_exclusion"
+          ]
+        },
+        "notes": null,
+        "effective_from": "2025-07-22",
+        "effective_to": null,
+        "excluded_categories": [],
+        "rule_role": "exclusion",
+        "merchant_slugs": [],
+        "platform_slugs": [],
+        "mcc_include": [
+          "8211",
+          "8220",
+          "8241",
+          "8244",
+          "8249",
+          "8299"
+        ],
+        "mcc_exclude": [],
+        "except_merchant_slugs": [],
+        "except_platform_slugs": [],
+        "block_inr": null,
+        "min_engine_version": 2,
+        "max_engine_version": null,
+        "source_local_id": "education-exclusion",
+        "display_note": "No Reward Points on school and educational services."
+      },
+      {
+        "id": "phonepe-sbi-select-black:rule:education-exclusion#3",
+        "category_id": null,
+        "category_slug": null,
+        "merchant_pattern": null,
+        "rail": null,
+        "unit": "points_per_100",
+        "rate": 0,
+        "min_txn_inr": null,
+        "max_txn_inr": null,
+        "priority": 4,
+        "conditions": {
+          "source_local_id": "education-exclusion",
+          "part": 3,
+          "info_reasons": [],
+          "flags": [
+            "mcc_scoped_exclusion"
+          ]
+        },
+        "notes": null,
+        "effective_from": "2025-07-22",
+        "effective_to": null,
+        "excluded_categories": [],
+        "rule_role": "exclusion",
+        "merchant_slugs": [],
+        "platform_slugs": [],
+        "mcc_include": [
+          "8211",
+          "8220",
+          "8241",
+          "8244",
+          "8249",
+          "8299"
+        ],
+        "mcc_exclude": [],
+        "except_merchant_slugs": [],
+        "except_platform_slugs": [],
+        "block_inr": null,
+        "min_engine_version": 2,
+        "max_engine_version": null,
+        "source_local_id": "education-exclusion",
+        "display_note": "No Reward Points on school and educational services."
+      },
+      {
+        "id": "phonepe-sbi-select-black:rule:government-exclusion#1",
+        "category_id": "cat-government",
+        "category_slug": "government",
+        "merchant_pattern": null,
+        "rail": null,
+        "unit": "points_per_100",
+        "rate": 0,
+        "min_txn_inr": null,
+        "max_txn_inr": null,
+        "priority": 5,
+        "conditions": {
+          "source_local_id": "government-exclusion",
+          "part": 1,
+          "info_reasons": [],
+          "flags": [
+            "mcc_scoped_exclusion"
+          ]
+        },
+        "notes": null,
+        "effective_from": "2025-07-22",
+        "effective_to": null,
+        "excluded_categories": [],
+        "rule_role": "exclusion",
+        "merchant_slugs": [],
+        "platform_slugs": [],
+        "mcc_include": [],
+        "mcc_exclude": [],
+        "except_merchant_slugs": [],
+        "except_platform_slugs": [],
+        "block_inr": null,
+        "min_engine_version": 1,
+        "max_engine_version": 1,
+        "source_local_id": "government-exclusion",
+        "display_note": "No Reward Points on governmental spends."
+      },
+      {
+        "id": "phonepe-sbi-select-black:rule:government-exclusion#2",
+        "category_id": "cat-government",
+        "category_slug": "government",
+        "merchant_pattern": null,
+        "rail": null,
+        "unit": "points_per_100",
+        "rate": 0,
+        "min_txn_inr": null,
+        "max_txn_inr": null,
+        "priority": 5,
+        "conditions": {
+          "source_local_id": "government-exclusion",
+          "part": 2,
+          "info_reasons": [],
+          "flags": [
+            "mcc_scoped_exclusion"
+          ]
+        },
+        "notes": null,
+        "effective_from": "2025-07-22",
+        "effective_to": null,
+        "excluded_categories": [],
+        "rule_role": "exclusion",
+        "merchant_slugs": [],
+        "platform_slugs": [],
+        "mcc_include": [
+          "9311",
+          "9399"
+        ],
+        "mcc_exclude": [],
+        "except_merchant_slugs": [],
+        "except_platform_slugs": [],
+        "block_inr": null,
+        "min_engine_version": 2,
+        "max_engine_version": null,
+        "source_local_id": "government-exclusion",
+        "display_note": "No Reward Points on governmental spends."
+      },
+      {
+        "id": "phonepe-sbi-select-black:rule:government-exclusion#3",
+        "category_id": null,
+        "category_slug": null,
+        "merchant_pattern": null,
+        "rail": null,
+        "unit": "points_per_100",
+        "rate": 0,
+        "min_txn_inr": null,
+        "max_txn_inr": null,
+        "priority": 5,
+        "conditions": {
+          "source_local_id": "government-exclusion",
+          "part": 3,
+          "info_reasons": [],
+          "flags": [
+            "mcc_scoped_exclusion"
+          ]
+        },
+        "notes": null,
+        "effective_from": "2025-07-22",
+        "effective_to": null,
+        "excluded_categories": [],
+        "rule_role": "exclusion",
+        "merchant_slugs": [],
+        "platform_slugs": [],
+        "mcc_include": [
+          "9311",
+          "9399"
+        ],
+        "mcc_exclude": [],
+        "except_merchant_slugs": [],
+        "except_platform_slugs": [],
+        "block_inr": null,
+        "min_engine_version": 2,
+        "max_engine_version": null,
+        "source_local_id": "government-exclusion",
+        "display_note": "No Reward Points on governmental spends."
+      },
+      {
+        "id": "phonepe-sbi-select-black:rule:gaming-exclusion#1",
+        "category_id": "cat-entertainment",
+        "category_slug": "entertainment",
+        "merchant_pattern": null,
+        "rail": null,
+        "unit": "points_per_100",
+        "rate": 0,
+        "min_txn_inr": null,
+        "max_txn_inr": null,
+        "priority": 6,
+        "conditions": {
+          "source_local_id": "gaming-exclusion",
+          "part": 1,
+          "info_reasons": [],
+          "flags": [
+            "broad_exclusion_v1_only",
+            "broad_category"
+          ]
+        },
+        "notes": null,
+        "effective_from": "2025-07-22",
+        "effective_to": null,
+        "excluded_categories": [],
+        "rule_role": "exclusion",
+        "merchant_slugs": [],
+        "platform_slugs": [],
+        "mcc_include": [],
+        "mcc_exclude": [],
+        "except_merchant_slugs": [],
+        "except_platform_slugs": [],
+        "block_inr": null,
+        "min_engine_version": 1,
+        "max_engine_version": 1,
+        "source_local_id": "gaming-exclusion",
+        "display_note": "No Reward Points on digital gaming platforms/merchants."
+      },
+      {
+        "id": "phonepe-sbi-select-black:rule:gaming-exclusion#2",
+        "category_id": null,
+        "category_slug": null,
+        "merchant_pattern": null,
+        "rail": null,
+        "unit": "points_per_100",
+        "rate": 0,
+        "min_txn_inr": null,
+        "max_txn_inr": null,
+        "priority": 6,
+        "conditions": {
+          "source_local_id": "gaming-exclusion",
+          "part": 2,
+          "info_reasons": [],
+          "flags": [
+            "broad_exclusion_v1_only"
+          ]
+        },
+        "notes": null,
+        "effective_from": "2025-07-22",
+        "effective_to": null,
+        "excluded_categories": [],
+        "rule_role": "exclusion",
+        "merchant_slugs": [],
+        "platform_slugs": [],
+        "mcc_include": [
+          "5816",
+          "7993",
+          "7994"
+        ],
+        "mcc_exclude": [],
+        "except_merchant_slugs": [],
+        "except_platform_slugs": [],
+        "block_inr": null,
+        "min_engine_version": 2,
+        "max_engine_version": null,
+        "source_local_id": "gaming-exclusion",
+        "display_note": "No Reward Points on digital gaming platforms/merchants."
+      },
+      {
+        "id": "phonepe-sbi-select-black:rule:jewellery-exclusion",
+        "category_id": null,
+        "category_slug": null,
+        "merchant_pattern": null,
+        "rail": null,
+        "unit": "points_per_100",
+        "rate": 0,
+        "min_txn_inr": null,
+        "max_txn_inr": null,
+        "priority": 7,
+        "conditions": {
+          "source_local_id": "jewellery-exclusion",
+          "part": null,
+          "info_reasons": [],
+          "flags": [
+            "token_replaced_by_conditions"
+          ]
+        },
+        "notes": null,
+        "effective_from": "2026-07-01",
+        "effective_to": null,
+        "excluded_categories": [],
+        "rule_role": "exclusion",
+        "merchant_slugs": [],
+        "platform_slugs": [],
+        "mcc_include": [
+          "5094",
+          "5944"
+        ],
+        "mcc_exclude": [],
+        "except_merchant_slugs": [],
+        "except_platform_slugs": [],
+        "block_inr": null,
+        "min_engine_version": 2,
+        "max_engine_version": null,
+        "source_local_id": "jewellery-exclusion",
+        "display_note": "No Reward Points on jewellery."
+      },
+      {
+        "id": "phonepe-sbi-select-black:rule:gifts-exclusion",
+        "category_id": null,
+        "category_slug": null,
+        "merchant_pattern": null,
+        "rail": null,
+        "unit": "points_per_100",
+        "rate": 0,
+        "min_txn_inr": null,
+        "max_txn_inr": null,
+        "priority": 8,
+        "conditions": {
+          "source_local_id": "gifts-exclusion",
+          "part": null,
+          "info_reasons": [],
+          "flags": [
+            "token_replaced_by_conditions"
+          ]
+        },
+        "notes": null,
+        "effective_from": "2026-07-01",
+        "effective_to": null,
+        "excluded_categories": [],
+        "rule_role": "exclusion",
+        "merchant_slugs": [],
+        "platform_slugs": [],
+        "mcc_include": [
+          "5947"
+        ],
+        "mcc_exclude": [],
+        "except_merchant_slugs": [],
+        "except_platform_slugs": [],
+        "block_inr": null,
+        "min_engine_version": 2,
+        "max_engine_version": null,
+        "source_local_id": "gifts-exclusion",
+        "display_note": "No Reward Points on gifts and souvenirs."
+      },
+      {
+        "id": "phonepe-sbi-select-black:rule:tolls-exclusion",
+        "category_id": null,
+        "category_slug": null,
+        "merchant_pattern": null,
+        "rail": null,
+        "unit": "points_per_100",
+        "rate": 0,
+        "min_txn_inr": null,
+        "max_txn_inr": null,
+        "priority": 9,
+        "conditions": {
+          "source_local_id": "tolls-exclusion",
+          "part": null,
+          "info_reasons": [],
+          "flags": [
+            "token_replaced_by_conditions"
+          ]
+        },
+        "notes": null,
+        "effective_from": "2026-07-01",
+        "effective_to": null,
+        "excluded_categories": [],
+        "rule_role": "exclusion",
+        "merchant_slugs": [],
+        "platform_slugs": [],
+        "mcc_include": [
+          "4784"
+        ],
+        "mcc_exclude": [],
+        "except_merchant_slugs": [],
+        "except_platform_slugs": [],
+        "block_inr": null,
+        "min_engine_version": 2,
+        "max_engine_version": null,
+        "source_local_id": "tolls-exclusion",
+        "display_note": "No Reward Points on tolls and bridges."
+      },
+      {
+        "id": "phonepe-sbi-select-black:rule:upi-outside-phonepe",
+        "category_id": null,
+        "category_slug": null,
+        "merchant_pattern": null,
+        "rail": "upi_qr",
+        "unit": "points_per_100",
+        "rate": 0,
+        "min_txn_inr": null,
+        "max_txn_inr": null,
+        "priority": 12,
+        "conditions": {
+          "source_local_id": "upi-outside-phonepe",
+          "part": null,
+          "info_reasons": [],
+          "flags": []
+        },
+        "notes": null,
+        "effective_from": "2026-07-01",
+        "effective_to": null,
+        "excluded_categories": [],
+        "rule_role": "exclusion",
+        "merchant_slugs": [],
+        "platform_slugs": [],
+        "mcc_include": [],
+        "mcc_exclude": [],
+        "except_merchant_slugs": [],
+        "except_platform_slugs": [
+          "phonepe_app"
+        ],
+        "block_inr": null,
+        "min_engine_version": 2,
+        "max_engine_version": null,
+        "source_local_id": "upi-outside-phonepe",
+        "display_note": "Scan & Pay or online UPI transactions outside PhonePe do not accrue Reward Points from 1 July 2026."
+      },
+      {
+        "id": "phonepe-sbi-select-black:rule:cash-advance-exclusion",
+        "category_id": null,
+        "category_slug": null,
+        "merchant_pattern": null,
+        "rail": "atm",
+        "unit": "points_per_100",
+        "rate": 0,
+        "min_txn_inr": null,
+        "max_txn_inr": null,
+        "priority": 20,
+        "conditions": {
+          "source_local_id": "cash-advance-exclusion",
+          "part": null,
+          "info_reasons": [],
+          "flags": [
+            "exclusion_scope_broadened"
+          ]
+        },
+        "notes": null,
+        "effective_from": "2025-07-22",
+        "effective_to": null,
+        "excluded_categories": [],
+        "rule_role": "exclusion",
+        "merchant_slugs": [],
+        "platform_slugs": [],
+        "mcc_include": [],
+        "mcc_exclude": [],
+        "except_merchant_slugs": [],
+        "except_platform_slugs": [],
+        "block_inr": null,
+        "min_engine_version": 2,
+        "max_engine_version": null,
+        "source_local_id": "cash-advance-exclusion",
+        "display_note": "No Reward Points on ATM withdrawals/cash advances."
+      },
+      {
+        "id": "phonepe-sbi-select-black:rule:balance-transfer-exclusion",
+        "category_id": null,
+        "category_slug": null,
+        "merchant_pattern": null,
+        "rail": null,
+        "unit": "points_per_100",
+        "rate": 0,
+        "min_txn_inr": null,
+        "max_txn_inr": null,
+        "priority": 21,
+        "conditions": {
+          "source_local_id": "balance-transfer-exclusion",
+          "part": null,
+          "info_reasons": [
+            "unrestricted_exclusion"
+          ],
+          "flags": []
+        },
+        "notes": null,
+        "effective_from": "2025-07-22",
+        "effective_to": null,
+        "excluded_categories": [],
+        "rule_role": "info",
+        "merchant_slugs": [],
+        "platform_slugs": [],
+        "mcc_include": [],
+        "mcc_exclude": [],
+        "except_merchant_slugs": [],
+        "except_platform_slugs": [],
+        "block_inr": null,
+        "min_engine_version": 2,
+        "max_engine_version": null,
+        "source_local_id": "balance-transfer-exclusion",
+        "display_note": "No Reward Points on Balance Transfer transactions."
+      },
+      {
+        "id": "phonepe-sbi-select-black:rule:flexipay-exclusion",
+        "category_id": "cat-emi",
+        "category_slug": "emi",
+        "merchant_pattern": null,
+        "rail": "emi",
+        "unit": "points_per_100",
+        "rate": 0,
+        "min_txn_inr": null,
+        "max_txn_inr": null,
+        "priority": 22,
+        "conditions": {
+          "source_local_id": "flexipay-exclusion",
+          "part": null,
+          "info_reasons": [],
+          "flags": []
+        },
+        "notes": null,
+        "effective_from": "2025-07-22",
+        "effective_to": null,
+        "excluded_categories": [],
+        "rule_role": "exclusion",
+        "merchant_slugs": [],
+        "platform_slugs": [],
+        "mcc_include": [],
+        "mcc_exclude": [],
+        "except_merchant_slugs": [],
+        "except_platform_slugs": [],
+        "block_inr": null,
+        "min_engine_version": 1,
+        "max_engine_version": null,
+        "source_local_id": "flexipay-exclusion",
+        "display_note": "No Reward Points on Flexipay transactions."
+      },
+      {
+        "id": "phonepe-sbi-select-black:rule:merchant-emi-exclusion",
+        "category_id": "cat-emi",
+        "category_slug": "emi",
+        "merchant_pattern": null,
+        "rail": "emi",
+        "unit": "points_per_100",
+        "rate": 0,
+        "min_txn_inr": null,
+        "max_txn_inr": null,
+        "priority": 23,
+        "conditions": {
+          "source_local_id": "merchant-emi-exclusion",
+          "part": null,
+          "info_reasons": [],
+          "flags": []
+        },
+        "notes": null,
+        "effective_from": "2025-07-22",
+        "effective_to": null,
+        "excluded_categories": [],
+        "rule_role": "exclusion",
+        "merchant_slugs": [],
+        "platform_slugs": [],
+        "mcc_include": [],
+        "mcc_exclude": [],
+        "except_merchant_slugs": [],
+        "except_platform_slugs": [],
+        "block_inr": null,
+        "min_engine_version": 1,
+        "max_engine_version": null,
+        "source_local_id": "merchant-emi-exclusion",
+        "display_note": "No Reward Points on Merchant EMI transactions."
+      },
+      {
+        "id": "phonepe-sbi-select-black:rule:encash-exclusion",
+        "category_id": null,
+        "category_slug": null,
+        "merchant_pattern": null,
+        "rail": null,
+        "unit": "points_per_100",
+        "rate": 0,
+        "min_txn_inr": null,
+        "max_txn_inr": null,
+        "priority": 24,
+        "conditions": {
+          "source_local_id": "encash-exclusion",
+          "part": null,
+          "info_reasons": [
+            "unrestricted_exclusion"
+          ],
+          "flags": []
+        },
+        "notes": null,
+        "effective_from": "2025-07-22",
+        "effective_to": null,
+        "excluded_categories": [],
+        "rule_role": "info",
+        "merchant_slugs": [],
+        "platform_slugs": [],
+        "mcc_include": [],
+        "mcc_exclude": [],
+        "except_merchant_slugs": [],
+        "except_platform_slugs": [],
+        "block_inr": null,
+        "min_engine_version": 2,
+        "max_engine_version": null,
+        "source_local_id": "encash-exclusion",
+        "display_note": "No Reward Points on Encash transactions."
+      },
+      {
+        "id": "phonepe-sbi-select-black:rule:financial-charges-exclusion",
+        "category_id": null,
+        "category_slug": null,
+        "merchant_pattern": null,
+        "rail": null,
+        "unit": "points_per_100",
+        "rate": 0,
+        "min_txn_inr": null,
+        "max_txn_inr": null,
+        "priority": 25,
+        "conditions": {
+          "source_local_id": "financial-charges-exclusion",
+          "part": null,
+          "info_reasons": [
+            "unrestricted_exclusion"
+          ],
+          "flags": []
+        },
+        "notes": null,
+        "effective_from": "2025-07-22",
+        "effective_to": null,
+        "excluded_categories": [],
+        "rule_role": "info",
+        "merchant_slugs": [],
+        "platform_slugs": [],
+        "mcc_include": [],
+        "mcc_exclude": [],
+        "except_merchant_slugs": [],
+        "except_platform_slugs": [],
+        "block_inr": null,
+        "min_engine_version": 2,
+        "max_engine_version": null,
+        "source_local_id": "financial-charges-exclusion",
+        "display_note": "No Reward Points on financial charges, late fees, dishonoured cheque charges, service fees and transaction charges."
+      },
+      {
+        "id": "phonepe-sbi-select-black:rule:disputed-exclusion",
+        "category_id": null,
+        "category_slug": null,
+        "merchant_pattern": null,
+        "rail": null,
+        "unit": "points_per_100",
+        "rate": 0,
+        "min_txn_inr": null,
+        "max_txn_inr": null,
+        "priority": 26,
+        "conditions": {
+          "source_local_id": "disputed-exclusion",
+          "part": null,
+          "info_reasons": [
+            "unrestricted_exclusion"
+          ],
+          "flags": []
+        },
+        "notes": null,
+        "effective_from": "2025-07-22",
+        "effective_to": null,
+        "excluded_categories": [],
+        "rule_role": "info",
+        "merchant_slugs": [],
+        "platform_slugs": [],
+        "mcc_include": [],
+        "mcc_exclude": [],
+        "except_merchant_slugs": [],
+        "except_platform_slugs": [],
+        "block_inr": null,
+        "min_engine_version": 2,
+        "max_engine_version": null,
+        "source_local_id": "disputed-exclusion",
+        "display_note": "No Reward Points on disputed transactions."
+      }
+    ],
+    "cap_rules": [
+      {
+        "id": "phonepe-sbi-select-black:cap:phonepe-other-monthly",
+        "reward_rule_id": null,
+        "category_id": null,
+        "category_slug": null,
+        "benefit_kind": null,
+        "label": "Phonepe other monthly",
+        "measure": "reward_value",
+        "period": "calendar_month",
+        "cap_value": 1500,
+        "post_cap_unit": null,
+        "post_cap_rate": 0,
+        "resets_on_day": null,
+        "cap_kind": "total_points",
+        "cap_amount": 1500,
+        "scope": "targets",
+        "targets": [
+          "phonepe-sbi-select-black:rule:phonepe-10x#1",
+          "phonepe-sbi-select-black:rule:phonepe-10x#2",
+          "phonepe-sbi-select-black:rule:phonepe-10x#3"
+        ],
+        "parent_cap_id": null,
+        "post_cap_behavior": null,
+        "anchor": null,
+        "min_engine_version": 2,
+        "source_local_id": "phonepe-other-monthly"
+      },
+      {
+        "id": "phonepe-sbi-select-black:cap:phonepe-insurance-monthly",
+        "reward_rule_id": "phonepe-sbi-select-black:rule:phonepe-10x#2",
+        "category_id": null,
+        "category_slug": null,
+        "benefit_kind": null,
+        "label": "Phonepe insurance monthly",
+        "measure": "reward_value",
+        "period": "calendar_month",
+        "cap_value": 500,
+        "post_cap_unit": null,
+        "post_cap_rate": 0,
+        "resets_on_day": null,
+        "cap_kind": "total_points",
+        "cap_amount": 500,
+        "scope": "targets",
+        "targets": [
+          "phonepe-sbi-select-black:rule:phonepe-10x#2"
+        ],
+        "parent_cap_id": null,
+        "post_cap_behavior": null,
+        "anchor": null,
+        "min_engine_version": 2,
+        "source_local_id": "phonepe-insurance-monthly"
+      },
+      {
+        "id": "phonepe-sbi-select-black:cap:online-monthly",
+        "reward_rule_id": "phonepe-sbi-select-black:rule:online-5x",
+        "category_id": null,
+        "category_slug": null,
+        "benefit_kind": null,
+        "label": "Online monthly",
+        "measure": "reward_value",
+        "period": "calendar_month",
+        "cap_value": 1000,
+        "post_cap_unit": null,
+        "post_cap_rate": 0,
+        "resets_on_day": null,
+        "cap_kind": "total_points",
+        "cap_amount": 1000,
+        "scope": "targets",
+        "targets": [
+          "phonepe-sbi-select-black:rule:online-5x"
+        ],
+        "parent_cap_id": null,
+        "post_cap_behavior": null,
+        "anchor": null,
+        "min_engine_version": 1,
+        "source_local_id": "online-monthly"
+      },
+      {
+        "id": "phonepe-sbi-select-black:cap:other-monthly",
+        "reward_rule_id": null,
+        "category_id": null,
+        "category_slug": null,
+        "benefit_kind": null,
+        "label": "Other monthly",
+        "measure": "reward_value",
+        "period": "calendar_month",
+        "cap_value": 2000,
+        "post_cap_unit": null,
+        "post_cap_rate": 0,
+        "resets_on_day": null,
+        "cap_kind": "total_points",
+        "cap_amount": 2000,
+        "scope": "targets",
+        "targets": [
+          "phonepe-sbi-select-black:rule:base-1x",
+          "phonepe-sbi-select-black:rule:phonepe-scanpay-1x",
+          "phonepe-sbi-select-black:rule:utilities-outside-phonepe-base",
+          "phonepe-sbi-select-black:rule:insurance-outside-phonepe-base"
+        ],
+        "parent_cap_id": null,
+        "post_cap_behavior": null,
+        "anchor": null,
+        "min_engine_version": 2,
+        "source_local_id": "other-monthly"
+      }
+    ],
+    "milestone_rules": [
+      {
+        "id": "phonepe-sbi-select-black:milestone:yatra-500k",
+        "label": "Yatra e-Voucher",
+        "period": "annual",
+        "threshold_spend_inr": 500000,
+        "reward_description": "Yatra e-Voucher",
+        "reward_value_inr": 5000,
+        "is_repeatable": true,
+        "max_repeats": null,
+        "anchor": "card_anniversary",
+        "reward_points": null,
+        "reward_kind": "voucher",
+        "excluded_category_ids": [],
+        "window_days": null,
+        "source_local_id": "yatra-500k"
+      }
+    ],
+    "fee_waiver_rules": [
+      {
+        "id": "phonepe-sbi-select-black:waiver:1",
+        "threshold_spend_inr": 300000,
+        "period": "annual",
+        "waives_fee_inr": 1499,
+        "excluded_category_slugs": [
+          "rent",
+          "wallet"
+        ],
+        "notes": "Annual/renewal fee is reversed when annual retail spends reach Rs.3 lakh in the preceding membership year.",
+        "excluded_categories": [
+          "cat-rent",
+          "cat-wallet"
+        ]
+      }
+    ],
+    "benefits": [
+      {
+        "id": "phonepe-sbi-select-black:benefit:domestic-lounge-4",
+        "key": "domestic-lounge-4",
+        "source_local_id": "domestic-lounge-4",
+        "kind": "lounge_domestic",
+        "label": "4 complimentary domestic airport lounge visits per year, maximum 1 per quarter",
+        "description": "Sponsor: SBI Card",
+        "quota_count": 4,
+        "quota_period": "annual",
+        "network_program": "domestic_airport_lounge_program",
+        "value_estimate_inr": 4000,
+        "conditions": {
+          "source_category_id": "lounge",
+          "evaluation_engine": {
+            "conditions": {
+              "max_visits_per_quarter": 1
+            },
+            "benefit_calculation": {
+              "complimentary_visits_per_year": 4
+            },
+            "perks": [
+              "domestic airport lounge access"
+            ]
+          }
+        }
+      },
+      {
+        "id": "phonepe-sbi-select-black:benefit:priority-pass-membership",
+        "key": "priority-pass-membership",
+        "source_local_id": "priority-pass-membership",
+        "kind": "lounge_international",
+        "label": "Complimentary Priority Pass membership for 24 months for the primary cardholder; lounge visits are chargeable",
+        "description": "Sponsor: Priority Pass / SBI Card",
+        "quota_count": null,
+        "quota_period": null,
+        "network_program": "priority_pass",
+        "value_estimate_inr": 8000,
+        "conditions": {
+          "source_category_id": "lounge",
+          "evaluation_engine": {
+            "conditions": {
+              "primary_cardholder_only": true,
+              "membership_validity_months": 24,
+              "guest_visits_chargeable": true
+            },
+            "benefit_calculation": {
+              "membership_fee": "complimentary",
+              "visit_charge_usd": 27
+            },
+            "perks": [
+              "Priority Pass membership"
+            ]
+          }
+        }
+      },
+      {
+        "id": "phonepe-sbi-select-black:benefit:insurance:lost_card_liability",
+        "key": "insurance:lost_card_liability",
+        "source_local_id": null,
+        "kind": "other",
+        "label": "Lost Card Liability",
+        "description": null,
+        "quota_count": null,
+        "quota_period": null,
+        "network_program": null,
+        "value_estimate_inr": null,
+        "conditions": {
+          "coverage_usd": null
+        }
+      },
+      {
+        "id": "phonepe-sbi-select-black:benefit:insurance:fraud_liability_cover",
+        "key": "insurance:fraud_liability_cover",
+        "source_local_id": null,
+        "kind": "other",
+        "label": "Fraud Liability Cover",
+        "description": null,
+        "quota_count": null,
+        "quota_period": null,
+        "network_program": null,
+        "value_estimate_inr": null,
+        "conditions": {
+          "coverage_usd": null
+        }
+      }
+    ],
+    "unlock_rules": [],
+    "redemption_options": [
+      {
+        "program_name": "SBI Card Rewards Portal",
+        "method": "statement_credit",
+        "value_per_point_inr": 1,
+        "min_points": 500,
+        "notes": "Redemption fee: ₹0"
+      },
+      {
+        "program_name": "SBI Card Rewards Catalogue",
+        "method": "partner_catalogue",
+        "value_per_point_inr": 1,
+        "min_points": 500,
+        "notes": "Redemption fee: ₹0"
+      }
+    ],
+    "is_upi_linkable": true
+  }
+}

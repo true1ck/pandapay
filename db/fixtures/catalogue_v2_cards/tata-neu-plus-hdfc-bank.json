@@ -1,0 +1,1216 @@
+{
+  "generated_by": "api/scripts/catalogue_v2/snapshot_examples.js",
+  "source_slug": "tata-neu-plus-hdfc-bank",
+  "inputs": {
+    "transform_version": "7",
+    "source_record_sha256": "657a9e89e7d34f8d89df45dcb26ec07ee33619ef2b1f7043b0f1f4710240916d",
+    "override_sha256": "691d6750f695c8b9dbd4ef8ae8e37193c1b19c7a37b28b074dda8746bbb3d13b",
+    "directory_sha256": "c2fded34df886aef08595eebb7629a4dd140c98af750f3c891d6c291b4874b53",
+    "verified": false
+  },
+  "blocking_flags": [
+    "info_rule",
+    "post_limit_conflict"
+  ],
+  "card": {
+    "id": "tata-neu-plus-hdfc-bank:card",
+    "slug": "tata-neu-plus-hdfc-bank",
+    "name": "Tata Neu Plus HDFC Bank Credit Card",
+    "network": "rupay",
+    "issuer_slug": "hdfc",
+    "base_reward_unit": "points_per_100",
+    "base_reward_rate": 1,
+    "point_value_inr": 1,
+    "excluded_categories": [],
+    "accrual_block_inr": 100,
+    "accrual_rounding": "points_half_up",
+    "cashback_rounding": null,
+    "points_expiry_months": 12,
+    "model_status": "partial",
+    "model_coverage": {
+      "rules_total": 17,
+      "rules_modelled": 4,
+      "rules_info": 13,
+      "caps_total": 5,
+      "caps_enforced": 4,
+      "flags": [
+        {
+          "code": "info_rule",
+          "source_local_id": "base_non_tata_non_upi",
+          "detail": "condition:not"
+        },
+        {
+          "code": "info_rule",
+          "source_local_id": "partner_tata_brand_non_emi",
+          "detail": "condition:partner_tata_brand"
+        },
+        {
+          "code": "info_rule",
+          "source_local_id": "merchant_emi",
+          "detail": "condition:merchant_emi"
+        },
+        {
+          "code": "info_rule",
+          "source_local_id": "neupass_selected_tata_neu",
+          "detail": "condition:tata_neu_app_or_website"
+        },
+        {
+          "code": "info_rule",
+          "source_local_id": "neupass_selected_tata_neu",
+          "detail": "condition:neupass_registered"
+        },
+        {
+          "code": "info_rule",
+          "source_local_id": "neupass_selected_tata_neu",
+          "detail": "condition:primary_cardholder_mobile_number_account"
+        },
+        {
+          "code": "info_rule",
+          "source_local_id": "neupass_selected_tata_neu",
+          "detail": "condition:selected_eligible_category"
+        },
+        {
+          "code": "depends_on_user_attribute",
+          "source_local_id": "neupass_selected_tata_neu",
+          "detail": null
+        },
+        {
+          "code": "info_rule",
+          "source_local_id": "upi_other_id",
+          "detail": "condition:upi_id"
+        },
+        {
+          "code": "info_rule",
+          "source_local_id": "upi_tata_neu_id",
+          "detail": "condition:upi_id"
+        },
+        {
+          "code": "info_rule",
+          "source_local_id": "cash_advance_exclusion",
+          "detail": "condition:cash_advance"
+        },
+        {
+          "code": "info_rule",
+          "source_local_id": "outstanding_balance_exclusion",
+          "detail": "condition:payment_of_outstanding_balance"
+        },
+        {
+          "code": "info_rule",
+          "source_local_id": "fees_charges_exclusion",
+          "detail": "condition:card_fees_or_other_charges"
+        },
+        {
+          "code": "info_rule",
+          "source_local_id": "smart_emi_exclusion",
+          "detail": "condition:smart_emi_or_dial_an_emi"
+        },
+        {
+          "code": "info_rule",
+          "source_local_id": "rental_exclusion",
+          "detail": "condition:rental_transaction"
+        },
+        {
+          "code": "info_rule",
+          "source_local_id": "government_exclusion",
+          "detail": "condition:government_transaction"
+        },
+        {
+          "code": "channel_list_alternatives",
+          "source_local_id": "education_third_party_exclusion",
+          "detail": null
+        },
+        {
+          "code": "partial_merchant_list",
+          "source_local_id": "education_third_party_exclusion",
+          "detail": null
+        },
+        {
+          "code": "channel_type_restates_brand",
+          "source_local_id": "education_third_party_exclusion",
+          "detail": null
+        },
+        {
+          "code": "info_rule",
+          "source_local_id": "education_direct_standard",
+          "detail": "condition:direct_college_or_school_website_or_pos"
+        },
+        {
+          "code": "info_rule",
+          "source_local_id": "education_direct_standard",
+          "detail": "condition:channel_type"
+        },
+        {
+          "code": "broad_exclusion_v1_only",
+          "source_local_id": "online_skill_based_gaming_exclusion",
+          "detail": null
+        },
+        {
+          "code": "post_limit_conflict",
+          "source_local_id": "upi_monthly_500",
+          "detail": null
+        },
+        {
+          "code": "cap_targets_info_only",
+          "source_local_id": "upi_monthly_500",
+          "detail": null
+        }
+      ],
+      "overrides_applied": [
+        {
+          "path": "cap_rules[id=grocery_monthly_1000].metric",
+          "op": "set",
+          "value_sha256": "7af78ba28cf9ccb3",
+          "reason": "Issuer caps total NeuCoins in the category per month.",
+          "source_url": "https://www.hdfc.bank.in/content/dam/hdfcbankpws/in/en/personal-banking/discover-products/cards/credit-cards/tata-neu-plus-hdfc-bank-credit-card/pdfs/tata_neu_plus_card_tnc.pdf",
+          "checked_on": "2026-11-05"
+        },
+        {
+          "path": "cap_rules[id=utility_monthly_2000].metric",
+          "op": "set",
+          "value_sha256": "7af78ba28cf9ccb3",
+          "reason": "Issuer caps total NeuCoins in the category per month.",
+          "source_url": "https://www.hdfc.bank.in/content/dam/hdfcbankpws/in/en/personal-banking/discover-products/cards/credit-cards/tata-neu-plus-hdfc-bank-credit-card/pdfs/tata_neu_plus_card_tnc.pdf",
+          "checked_on": "2026-11-05"
+        },
+        {
+          "path": "cap_rules[id=telecom_cable_monthly_2000].metric",
+          "op": "set",
+          "value_sha256": "7af78ba28cf9ccb3",
+          "reason": "Issuer caps total NeuCoins in the category per month.",
+          "source_url": "https://www.hdfc.bank.in/content/dam/hdfcbankpws/in/en/personal-banking/discover-products/cards/credit-cards/tata-neu-plus-hdfc-bank-credit-card/pdfs/tata_neu_plus_card_tnc.pdf",
+          "checked_on": "2026-11-05"
+        },
+        {
+          "path": "cap_rules[id=insurance_monthly_2000].metric",
+          "op": "set",
+          "value_sha256": "7af78ba28cf9ccb3",
+          "reason": "Issuer caps total NeuCoins in the category per month.",
+          "source_url": "https://www.hdfc.bank.in/content/dam/hdfcbankpws/in/en/personal-banking/discover-products/cards/credit-cards/tata-neu-plus-hdfc-bank-credit-card/pdfs/tata_neu_plus_card_tnc.pdf",
+          "checked_on": "2026-11-05"
+        },
+        {
+          "path": "cap_rules[id=grocery_monthly_1000].post_limit_behavior.action",
+          "op": "set",
+          "value_sha256": "b1b0e5d61df2ff9a",
+          "reason": "Nothing earned above the cap.",
+          "source_url": "https://www.hdfc.bank.in/content/dam/hdfcbankpws/in/en/personal-banking/discover-products/cards/credit-cards/tata-neu-plus-hdfc-bank-credit-card/pdfs/tata_neu_plus_card_tnc.pdf",
+          "checked_on": "2026-11-05"
+        },
+        {
+          "path": "cap_rules[id=utility_monthly_2000].post_limit_behavior.action",
+          "op": "set",
+          "value_sha256": "b1b0e5d61df2ff9a",
+          "reason": "Nothing earned above the cap.",
+          "source_url": "https://www.hdfc.bank.in/content/dam/hdfcbankpws/in/en/personal-banking/discover-products/cards/credit-cards/tata-neu-plus-hdfc-bank-credit-card/pdfs/tata_neu_plus_card_tnc.pdf",
+          "checked_on": "2026-11-05"
+        },
+        {
+          "path": "cap_rules[id=telecom_cable_monthly_2000].post_limit_behavior.action",
+          "op": "set",
+          "value_sha256": "b1b0e5d61df2ff9a",
+          "reason": "Nothing earned above the cap.",
+          "source_url": "https://www.hdfc.bank.in/content/dam/hdfcbankpws/in/en/personal-banking/discover-products/cards/credit-cards/tata-neu-plus-hdfc-bank-credit-card/pdfs/tata_neu_plus_card_tnc.pdf",
+          "checked_on": "2026-11-05"
+        },
+        {
+          "path": "cap_rules[id=insurance_monthly_2000].post_limit_behavior.action",
+          "op": "set",
+          "value_sha256": "b1b0e5d61df2ff9a",
+          "reason": "Nothing earned above the cap.",
+          "source_url": "https://www.hdfc.bank.in/content/dam/hdfcbankpws/in/en/personal-banking/discover-products/cards/credit-cards/tata-neu-plus-hdfc-bank-credit-card/pdfs/tata_neu_plus_card_tnc.pdf",
+          "checked_on": "2026-11-05"
+        },
+        {
+          "path": "accrual_engine.rounding_mode",
+          "op": "set",
+          "value_sha256": "7eb8bc431ee35297",
+          "reason": "Issuer rounds the final NeuCoins to nearest whole (half up) on the exact amount (D7).",
+          "source_url": "https://www.hdfc.bank.in/content/dam/hdfcbankpws/in/en/personal-banking/discover-products/cards/credit-cards/tata-neu-plus-hdfc-bank-credit-card/pdfs/tata_neu_plus_card_tnc.pdf",
+          "checked_on": "2026-11-05"
+        }
+      ]
+    },
+    "reward_rules": [
+      {
+        "id": "tata-neu-plus-hdfc-bank:rule:base_non_tata_non_upi",
+        "category_id": null,
+        "category_slug": null,
+        "merchant_pattern": null,
+        "rail": null,
+        "unit": "points_per_100",
+        "rate": 1,
+        "min_txn_inr": null,
+        "max_txn_inr": null,
+        "priority": 100,
+        "conditions": {
+          "source_local_id": "base_non_tata_non_upi",
+          "part": null,
+          "info_reasons": [
+            "condition:not"
+          ],
+          "flags": []
+        },
+        "notes": null,
+        "effective_from": "2023-01-01",
+        "effective_to": null,
+        "excluded_categories": [],
+        "rule_role": "info",
+        "merchant_slugs": [],
+        "platform_slugs": [],
+        "mcc_include": [],
+        "mcc_exclude": [],
+        "except_merchant_slugs": [],
+        "except_platform_slugs": [],
+        "block_inr": null,
+        "min_engine_version": 2,
+        "max_engine_version": null,
+        "source_local_id": "base_non_tata_non_upi",
+        "display_note": "1% base NeuCoins on eligible non-UPI non-EMI retail spends."
+      },
+      {
+        "id": "tata-neu-plus-hdfc-bank:rule:partner_tata_brand_non_emi",
+        "category_id": null,
+        "category_slug": null,
+        "merchant_pattern": null,
+        "rail": null,
+        "unit": "points_per_100",
+        "rate": 2,
+        "min_txn_inr": null,
+        "max_txn_inr": null,
+        "priority": 20,
+        "conditions": {
+          "source_local_id": "partner_tata_brand_non_emi",
+          "part": null,
+          "info_reasons": [
+            "condition:partner_tata_brand"
+          ],
+          "flags": []
+        },
+        "notes": null,
+        "effective_from": "2023-01-01",
+        "effective_to": null,
+        "excluded_categories": [],
+        "rule_role": "info",
+        "merchant_slugs": [],
+        "platform_slugs": [],
+        "mcc_include": [],
+        "mcc_exclude": [],
+        "except_merchant_slugs": [],
+        "except_platform_slugs": [],
+        "block_inr": null,
+        "min_engine_version": 2,
+        "max_engine_version": null,
+        "source_local_id": "partner_tata_brand_non_emi",
+        "display_note": "2% total NeuCoins: 1% base plus 1% additional on eligible partner Tata Brand non-EMI spends."
+      },
+      {
+        "id": "tata-neu-plus-hdfc-bank:rule:merchant_emi",
+        "category_id": "cat-emi",
+        "category_slug": "emi",
+        "merchant_pattern": null,
+        "rail": "emi",
+        "unit": "points_per_100",
+        "rate": 1,
+        "min_txn_inr": null,
+        "max_txn_inr": null,
+        "priority": 30,
+        "conditions": {
+          "source_local_id": "merchant_emi",
+          "part": null,
+          "info_reasons": [
+            "condition:merchant_emi"
+          ],
+          "flags": []
+        },
+        "notes": null,
+        "effective_from": "2023-01-01",
+        "effective_to": null,
+        "excluded_categories": [],
+        "rule_role": "info",
+        "merchant_slugs": [],
+        "platform_slugs": [],
+        "mcc_include": [],
+        "mcc_exclude": [],
+        "except_merchant_slugs": [],
+        "except_platform_slugs": [],
+        "block_inr": null,
+        "min_engine_version": 2,
+        "max_engine_version": null,
+        "source_local_id": "merchant_emi",
+        "display_note": "Merchant EMI spends earn 1% NeuCoins; only billed EMI principal is reward eligible, excluding interest, processing fees and GST."
+      },
+      {
+        "id": "tata-neu-plus-hdfc-bank:rule:neupass_selected_tata_neu",
+        "category_id": null,
+        "category_slug": null,
+        "merchant_pattern": "tataneu",
+        "rail": "online",
+        "unit": "points_per_100",
+        "rate": 5,
+        "min_txn_inr": null,
+        "max_txn_inr": null,
+        "priority": 10,
+        "conditions": {
+          "source_local_id": "neupass_selected_tata_neu",
+          "part": null,
+          "info_reasons": [
+            "condition:tata_neu_app_or_website",
+            "condition:neupass_registered",
+            "condition:primary_cardholder_mobile_number_account",
+            "condition:selected_eligible_category"
+          ],
+          "flags": [
+            "depends_on_user_attribute"
+          ]
+        },
+        "notes": null,
+        "effective_from": "2025-01-15",
+        "effective_to": null,
+        "excluded_categories": [],
+        "rule_role": "info",
+        "merchant_slugs": [
+          "tata_neu"
+        ],
+        "platform_slugs": [],
+        "mcc_include": [],
+        "mcc_exclude": [],
+        "except_merchant_slugs": [],
+        "except_platform_slugs": [],
+        "block_inr": null,
+        "min_engine_version": 2,
+        "max_engine_version": null,
+        "source_local_id": "neupass_selected_tata_neu",
+        "display_note": "Additional 5% NeuCoins through NeuPass on selected eligible Tata Neu App/Website categories, subject to exclusions and fair-use policy."
+      },
+      {
+        "id": "tata-neu-plus-hdfc-bank:rule:upi_other_id",
+        "category_id": null,
+        "category_slug": null,
+        "merchant_pattern": null,
+        "rail": "upi_qr",
+        "unit": "points_per_100",
+        "rate": 0.25,
+        "min_txn_inr": null,
+        "max_txn_inr": null,
+        "priority": 40,
+        "conditions": {
+          "source_local_id": "upi_other_id",
+          "part": null,
+          "info_reasons": [
+            "condition:upi_id"
+          ],
+          "flags": []
+        },
+        "notes": null,
+        "effective_from": "2024-08-01",
+        "effective_to": null,
+        "excluded_categories": [],
+        "rule_role": "info",
+        "merchant_slugs": [],
+        "platform_slugs": [],
+        "mcc_include": [],
+        "mcc_exclude": [],
+        "except_merchant_slugs": [],
+        "except_platform_slugs": [],
+        "block_inr": null,
+        "min_engine_version": 2,
+        "max_engine_version": null,
+        "source_local_id": "upi_other_id",
+        "display_note": "0.25% NeuCoins on eligible UPI transactions using any UPI ID."
+      },
+      {
+        "id": "tata-neu-plus-hdfc-bank:rule:upi_tata_neu_id",
+        "category_id": null,
+        "category_slug": null,
+        "merchant_pattern": null,
+        "rail": "upi_qr",
+        "unit": "points_per_100",
+        "rate": 1,
+        "min_txn_inr": null,
+        "max_txn_inr": null,
+        "priority": 35,
+        "conditions": {
+          "source_local_id": "upi_tata_neu_id",
+          "part": null,
+          "info_reasons": [
+            "condition:upi_id"
+          ],
+          "flags": []
+        },
+        "notes": null,
+        "effective_from": "2024-08-01",
+        "effective_to": null,
+        "excluded_categories": [],
+        "rule_role": "info",
+        "merchant_slugs": [],
+        "platform_slugs": [],
+        "mcc_include": [],
+        "mcc_exclude": [],
+        "except_merchant_slugs": [],
+        "except_platform_slugs": [],
+        "block_inr": null,
+        "min_engine_version": 2,
+        "max_engine_version": null,
+        "source_local_id": "upi_tata_neu_id",
+        "display_note": "Total eligible reward reaches 1%: 0.25% base plus additional 0.75% for Tata Neu UPI ID transactions."
+      },
+      {
+        "id": "tata-neu-plus-hdfc-bank:rule:fuel_exclusion",
+        "category_id": "cat-fuel",
+        "category_slug": "fuel",
+        "merchant_pattern": null,
+        "rail": null,
+        "unit": "points_per_100",
+        "rate": 0,
+        "min_txn_inr": null,
+        "max_txn_inr": null,
+        "priority": 1,
+        "conditions": {
+          "source_local_id": "fuel_exclusion",
+          "part": null,
+          "info_reasons": [],
+          "flags": []
+        },
+        "notes": null,
+        "effective_from": "2023-01-01",
+        "effective_to": null,
+        "excluded_categories": [],
+        "rule_role": "exclusion",
+        "merchant_slugs": [],
+        "platform_slugs": [],
+        "mcc_include": [],
+        "mcc_exclude": [],
+        "except_merchant_slugs": [],
+        "except_platform_slugs": [],
+        "block_inr": null,
+        "min_engine_version": 1,
+        "max_engine_version": null,
+        "source_local_id": "fuel_exclusion",
+        "display_note": "Fuel transactions do not earn NeuCoins."
+      },
+      {
+        "id": "tata-neu-plus-hdfc-bank:rule:wallet_exclusion_mcc_6540",
+        "category_id": null,
+        "category_slug": null,
+        "merchant_pattern": null,
+        "rail": null,
+        "unit": "points_per_100",
+        "rate": 0,
+        "min_txn_inr": null,
+        "max_txn_inr": null,
+        "priority": 1,
+        "conditions": {
+          "source_local_id": "wallet_exclusion_mcc_6540",
+          "part": null,
+          "info_reasons": [],
+          "flags": []
+        },
+        "notes": null,
+        "effective_from": "2023-01-01",
+        "effective_to": null,
+        "excluded_categories": [],
+        "rule_role": "exclusion",
+        "merchant_slugs": [],
+        "platform_slugs": [],
+        "mcc_include": [
+          "6540"
+        ],
+        "mcc_exclude": [],
+        "except_merchant_slugs": [],
+        "except_platform_slugs": [],
+        "block_inr": null,
+        "min_engine_version": 2,
+        "max_engine_version": null,
+        "source_local_id": "wallet_exclusion_mcc_6540",
+        "display_note": "Wallet loads, gift/prepaid card loads and voucher purchases coded under MCC 6540 do not earn NeuCoins."
+      },
+      {
+        "id": "tata-neu-plus-hdfc-bank:rule:cash_advance_exclusion",
+        "category_id": null,
+        "category_slug": null,
+        "merchant_pattern": null,
+        "rail": "atm",
+        "unit": "points_per_100",
+        "rate": 0,
+        "min_txn_inr": null,
+        "max_txn_inr": null,
+        "priority": 1,
+        "conditions": {
+          "source_local_id": "cash_advance_exclusion",
+          "part": null,
+          "info_reasons": [
+            "condition:cash_advance"
+          ],
+          "flags": []
+        },
+        "notes": null,
+        "effective_from": "2023-01-01",
+        "effective_to": null,
+        "excluded_categories": [],
+        "rule_role": "info",
+        "merchant_slugs": [],
+        "platform_slugs": [],
+        "mcc_include": [],
+        "mcc_exclude": [],
+        "except_merchant_slugs": [],
+        "except_platform_slugs": [],
+        "block_inr": null,
+        "min_engine_version": 2,
+        "max_engine_version": null,
+        "source_local_id": "cash_advance_exclusion",
+        "display_note": "Cash advances do not earn NeuCoins."
+      },
+      {
+        "id": "tata-neu-plus-hdfc-bank:rule:outstanding_balance_exclusion",
+        "category_id": null,
+        "category_slug": null,
+        "merchant_pattern": null,
+        "rail": null,
+        "unit": "points_per_100",
+        "rate": 0,
+        "min_txn_inr": null,
+        "max_txn_inr": null,
+        "priority": 1,
+        "conditions": {
+          "source_local_id": "outstanding_balance_exclusion",
+          "part": null,
+          "info_reasons": [
+            "condition:payment_of_outstanding_balance"
+          ],
+          "flags": []
+        },
+        "notes": null,
+        "effective_from": "2023-01-01",
+        "effective_to": null,
+        "excluded_categories": [],
+        "rule_role": "info",
+        "merchant_slugs": [],
+        "platform_slugs": [],
+        "mcc_include": [],
+        "mcc_exclude": [],
+        "except_merchant_slugs": [],
+        "except_platform_slugs": [],
+        "block_inr": null,
+        "min_engine_version": 2,
+        "max_engine_version": null,
+        "source_local_id": "outstanding_balance_exclusion",
+        "display_note": "Payments of outstanding balances do not earn NeuCoins."
+      },
+      {
+        "id": "tata-neu-plus-hdfc-bank:rule:fees_charges_exclusion",
+        "category_id": null,
+        "category_slug": null,
+        "merchant_pattern": null,
+        "rail": null,
+        "unit": "points_per_100",
+        "rate": 0,
+        "min_txn_inr": null,
+        "max_txn_inr": null,
+        "priority": 1,
+        "conditions": {
+          "source_local_id": "fees_charges_exclusion",
+          "part": null,
+          "info_reasons": [
+            "condition:card_fees_or_other_charges"
+          ],
+          "flags": []
+        },
+        "notes": null,
+        "effective_from": "2023-01-01",
+        "effective_to": null,
+        "excluded_categories": [],
+        "rule_role": "info",
+        "merchant_slugs": [],
+        "platform_slugs": [],
+        "mcc_include": [],
+        "mcc_exclude": [],
+        "except_merchant_slugs": [],
+        "except_platform_slugs": [],
+        "block_inr": null,
+        "min_engine_version": 2,
+        "max_engine_version": null,
+        "source_local_id": "fees_charges_exclusion",
+        "display_note": "Card fees and other charges do not earn NeuCoins."
+      },
+      {
+        "id": "tata-neu-plus-hdfc-bank:rule:smart_emi_exclusion",
+        "category_id": "cat-emi",
+        "category_slug": "emi",
+        "merchant_pattern": null,
+        "rail": "emi",
+        "unit": "points_per_100",
+        "rate": 0,
+        "min_txn_inr": null,
+        "max_txn_inr": null,
+        "priority": 1,
+        "conditions": {
+          "source_local_id": "smart_emi_exclusion",
+          "part": null,
+          "info_reasons": [
+            "condition:smart_emi_or_dial_an_emi"
+          ],
+          "flags": []
+        },
+        "notes": null,
+        "effective_from": "2023-01-01",
+        "effective_to": null,
+        "excluded_categories": [],
+        "rule_role": "info",
+        "merchant_slugs": [],
+        "platform_slugs": [],
+        "mcc_include": [],
+        "mcc_exclude": [],
+        "except_merchant_slugs": [],
+        "except_platform_slugs": [],
+        "block_inr": null,
+        "min_engine_version": 2,
+        "max_engine_version": null,
+        "source_local_id": "smart_emi_exclusion",
+        "display_note": "Smart EMI/Dial an EMI transactions do not earn NeuCoins."
+      },
+      {
+        "id": "tata-neu-plus-hdfc-bank:rule:rental_exclusion",
+        "category_id": null,
+        "category_slug": null,
+        "merchant_pattern": null,
+        "rail": null,
+        "unit": "points_per_100",
+        "rate": 0,
+        "min_txn_inr": null,
+        "max_txn_inr": null,
+        "priority": 1,
+        "conditions": {
+          "source_local_id": "rental_exclusion",
+          "part": null,
+          "info_reasons": [
+            "condition:rental_transaction"
+          ],
+          "flags": []
+        },
+        "notes": null,
+        "effective_from": "2023-01-01",
+        "effective_to": null,
+        "excluded_categories": [],
+        "rule_role": "info",
+        "merchant_slugs": [],
+        "platform_slugs": [],
+        "mcc_include": [],
+        "mcc_exclude": [],
+        "except_merchant_slugs": [],
+        "except_platform_slugs": [],
+        "block_inr": null,
+        "min_engine_version": 2,
+        "max_engine_version": null,
+        "source_local_id": "rental_exclusion",
+        "display_note": "Rental transactions do not earn NeuCoins."
+      },
+      {
+        "id": "tata-neu-plus-hdfc-bank:rule:government_exclusion",
+        "category_id": null,
+        "category_slug": null,
+        "merchant_pattern": null,
+        "rail": null,
+        "unit": "points_per_100",
+        "rate": 0,
+        "min_txn_inr": null,
+        "max_txn_inr": null,
+        "priority": 1,
+        "conditions": {
+          "source_local_id": "government_exclusion",
+          "part": null,
+          "info_reasons": [
+            "condition:government_transaction"
+          ],
+          "flags": []
+        },
+        "notes": null,
+        "effective_from": "2023-01-01",
+        "effective_to": null,
+        "excluded_categories": [],
+        "rule_role": "info",
+        "merchant_slugs": [],
+        "platform_slugs": [],
+        "mcc_include": [],
+        "mcc_exclude": [],
+        "except_merchant_slugs": [],
+        "except_platform_slugs": [],
+        "block_inr": null,
+        "min_engine_version": 2,
+        "max_engine_version": null,
+        "source_local_id": "government_exclusion",
+        "display_note": "Government-related transactions do not earn NeuCoins."
+      },
+      {
+        "id": "tata-neu-plus-hdfc-bank:rule:education_third_party_exclusion#1",
+        "category_id": "cat-education",
+        "category_slug": "education",
+        "merchant_pattern": null,
+        "rail": null,
+        "unit": "points_per_100",
+        "rate": 0,
+        "min_txn_inr": null,
+        "max_txn_inr": null,
+        "priority": 1,
+        "conditions": {
+          "source_local_id": "education_third_party_exclusion",
+          "part": 1,
+          "info_reasons": [],
+          "flags": [
+            "channel_list_alternatives",
+            "partial_merchant_list",
+            "channel_type_restates_brand"
+          ]
+        },
+        "notes": null,
+        "effective_from": "2024-09-01",
+        "effective_to": null,
+        "excluded_categories": [],
+        "rule_role": "exclusion",
+        "merchant_slugs": [
+          "cred_pay",
+          "mobikwik"
+        ],
+        "platform_slugs": [],
+        "mcc_include": [],
+        "mcc_exclude": [],
+        "except_merchant_slugs": [],
+        "except_platform_slugs": [],
+        "block_inr": null,
+        "min_engine_version": 2,
+        "max_engine_version": null,
+        "source_local_id": "education_third_party_exclusion",
+        "display_note": "Education payments through third-party apps do not earn NeuCoins."
+      },
+      {
+        "id": "tata-neu-plus-hdfc-bank:rule:education_third_party_exclusion#2",
+        "category_id": "cat-education",
+        "category_slug": "education",
+        "merchant_pattern": null,
+        "rail": null,
+        "unit": "points_per_100",
+        "rate": 0,
+        "min_txn_inr": null,
+        "max_txn_inr": null,
+        "priority": 1,
+        "conditions": {
+          "source_local_id": "education_third_party_exclusion",
+          "part": 2,
+          "info_reasons": [],
+          "flags": [
+            "channel_list_alternatives",
+            "partial_merchant_list",
+            "channel_type_restates_brand"
+          ]
+        },
+        "notes": null,
+        "effective_from": "2024-09-01",
+        "effective_to": null,
+        "excluded_categories": [],
+        "rule_role": "exclusion",
+        "merchant_slugs": [],
+        "platform_slugs": [
+          "cheq_app"
+        ],
+        "mcc_include": [],
+        "mcc_exclude": [],
+        "except_merchant_slugs": [],
+        "except_platform_slugs": [],
+        "block_inr": null,
+        "min_engine_version": 2,
+        "max_engine_version": null,
+        "source_local_id": "education_third_party_exclusion",
+        "display_note": "Education payments through third-party apps do not earn NeuCoins."
+      },
+      {
+        "id": "tata-neu-plus-hdfc-bank:rule:education_third_party_exclusion#v1",
+        "category_id": "cat-education",
+        "category_slug": "education",
+        "merchant_pattern": null,
+        "rail": null,
+        "unit": "points_per_100",
+        "rate": 0,
+        "min_txn_inr": null,
+        "max_txn_inr": null,
+        "priority": 1,
+        "conditions": {
+          "source_local_id": "education_third_party_exclusion",
+          "part": "v1",
+          "info_reasons": [],
+          "flags": [
+            "channel_list_alternatives",
+            "partial_merchant_list",
+            "channel_type_restates_brand",
+            "exclusion_v1_projection"
+          ]
+        },
+        "notes": null,
+        "effective_from": "2024-09-01",
+        "effective_to": null,
+        "excluded_categories": [],
+        "rule_role": "exclusion",
+        "merchant_slugs": [],
+        "platform_slugs": [],
+        "mcc_include": [],
+        "mcc_exclude": [],
+        "except_merchant_slugs": [],
+        "except_platform_slugs": [],
+        "block_inr": null,
+        "min_engine_version": 1,
+        "max_engine_version": 1,
+        "source_local_id": "education_third_party_exclusion",
+        "display_note": "Education payments through third-party apps do not earn NeuCoins."
+      },
+      {
+        "id": "tata-neu-plus-hdfc-bank:rule:education_direct_standard",
+        "category_id": "cat-education",
+        "category_slug": "education",
+        "merchant_pattern": null,
+        "rail": "swipe",
+        "unit": "points_per_100",
+        "rate": 1,
+        "min_txn_inr": null,
+        "max_txn_inr": null,
+        "priority": 20,
+        "conditions": {
+          "source_local_id": "education_direct_standard",
+          "part": null,
+          "info_reasons": [
+            "condition:direct_college_or_school_website_or_pos",
+            "condition:channel_type"
+          ],
+          "flags": []
+        },
+        "notes": null,
+        "effective_from": "2024-09-01",
+        "effective_to": null,
+        "excluded_categories": [],
+        "rule_role": "info",
+        "merchant_slugs": [],
+        "platform_slugs": [],
+        "mcc_include": [],
+        "mcc_exclude": [],
+        "except_merchant_slugs": [],
+        "except_platform_slugs": [],
+        "block_inr": null,
+        "min_engine_version": 2,
+        "max_engine_version": null,
+        "source_local_id": "education_direct_standard",
+        "display_note": "Direct education payments through college/school websites or POS machines earn NeuCoins."
+      },
+      {
+        "id": "tata-neu-plus-hdfc-bank:rule:online_skill_based_gaming_exclusion#1",
+        "category_id": "cat-entertainment",
+        "category_slug": "entertainment",
+        "merchant_pattern": null,
+        "rail": "online",
+        "unit": "points_per_100",
+        "rate": 0,
+        "min_txn_inr": null,
+        "max_txn_inr": null,
+        "priority": 1,
+        "conditions": {
+          "source_local_id": "online_skill_based_gaming_exclusion",
+          "part": 1,
+          "info_reasons": [],
+          "flags": [
+            "broad_exclusion_v1_only",
+            "broad_category"
+          ]
+        },
+        "notes": null,
+        "effective_from": "2025-07-01",
+        "effective_to": null,
+        "excluded_categories": [],
+        "rule_role": "exclusion",
+        "merchant_slugs": [],
+        "platform_slugs": [],
+        "mcc_include": [],
+        "mcc_exclude": [],
+        "except_merchant_slugs": [],
+        "except_platform_slugs": [],
+        "block_inr": null,
+        "min_engine_version": 1,
+        "max_engine_version": 1,
+        "source_local_id": "online_skill_based_gaming_exclusion",
+        "display_note": "Online skill-based gaming transactions under MCC 5816 do not earn NeuCoins."
+      },
+      {
+        "id": "tata-neu-plus-hdfc-bank:rule:online_skill_based_gaming_exclusion#2",
+        "category_id": null,
+        "category_slug": null,
+        "merchant_pattern": null,
+        "rail": "online",
+        "unit": "points_per_100",
+        "rate": 0,
+        "min_txn_inr": null,
+        "max_txn_inr": null,
+        "priority": 1,
+        "conditions": {
+          "source_local_id": "online_skill_based_gaming_exclusion",
+          "part": 2,
+          "info_reasons": [],
+          "flags": [
+            "broad_exclusion_v1_only"
+          ]
+        },
+        "notes": null,
+        "effective_from": "2025-07-01",
+        "effective_to": null,
+        "excluded_categories": [],
+        "rule_role": "exclusion",
+        "merchant_slugs": [],
+        "platform_slugs": [],
+        "mcc_include": [
+          "5816"
+        ],
+        "mcc_exclude": [],
+        "except_merchant_slugs": [],
+        "except_platform_slugs": [],
+        "block_inr": null,
+        "min_engine_version": 2,
+        "max_engine_version": null,
+        "source_local_id": "online_skill_based_gaming_exclusion",
+        "display_note": "Online skill-based gaming transactions under MCC 5816 do not earn NeuCoins."
+      }
+    ],
+    "cap_rules": [
+      {
+        "id": "tata-neu-plus-hdfc-bank:cap:grocery_monthly_1000",
+        "reward_rule_id": null,
+        "category_id": "cat-groceries",
+        "category_slug": "groceries",
+        "benefit_kind": null,
+        "label": "Grocery monthly 1000",
+        "measure": "reward_value",
+        "period": "calendar_month",
+        "cap_value": 1000,
+        "post_cap_unit": null,
+        "post_cap_rate": 0,
+        "resets_on_day": 1,
+        "cap_kind": "total_points",
+        "cap_amount": 1000,
+        "scope": "targets",
+        "targets": [],
+        "parent_cap_id": null,
+        "post_cap_behavior": null,
+        "anchor": null,
+        "min_engine_version": 1,
+        "source_local_id": "grocery_monthly_1000"
+      },
+      {
+        "id": "tata-neu-plus-hdfc-bank:cap:utility_monthly_2000",
+        "reward_rule_id": null,
+        "category_id": "cat-bills",
+        "category_slug": "bills",
+        "benefit_kind": null,
+        "label": "Utility monthly 2000",
+        "measure": "reward_value",
+        "period": "calendar_month",
+        "cap_value": 2000,
+        "post_cap_unit": null,
+        "post_cap_rate": 0,
+        "resets_on_day": 1,
+        "cap_kind": "total_points",
+        "cap_amount": 2000,
+        "scope": "targets",
+        "targets": [],
+        "parent_cap_id": null,
+        "post_cap_behavior": null,
+        "anchor": null,
+        "min_engine_version": 1,
+        "source_local_id": "utility_monthly_2000"
+      },
+      {
+        "id": "tata-neu-plus-hdfc-bank:cap:telecom_cable_monthly_2000",
+        "reward_rule_id": null,
+        "category_id": "cat-bills",
+        "category_slug": "bills",
+        "benefit_kind": null,
+        "label": "Telecom cable monthly 2000",
+        "measure": "reward_value",
+        "period": "calendar_month",
+        "cap_value": 2000,
+        "post_cap_unit": null,
+        "post_cap_rate": 0,
+        "resets_on_day": 1,
+        "cap_kind": "total_points",
+        "cap_amount": 2000,
+        "scope": "targets",
+        "targets": [],
+        "parent_cap_id": null,
+        "post_cap_behavior": null,
+        "anchor": null,
+        "min_engine_version": 1,
+        "source_local_id": "telecom_cable_monthly_2000"
+      },
+      {
+        "id": "tata-neu-plus-hdfc-bank:cap:insurance_monthly_2000",
+        "reward_rule_id": null,
+        "category_id": "cat-insurance",
+        "category_slug": "insurance",
+        "benefit_kind": null,
+        "label": "Insurance monthly 2000",
+        "measure": "reward_value",
+        "period": "calendar_month",
+        "cap_value": 2000,
+        "post_cap_unit": null,
+        "post_cap_rate": 0,
+        "resets_on_day": 1,
+        "cap_kind": "total_points",
+        "cap_amount": 2000,
+        "scope": "targets",
+        "targets": [],
+        "parent_cap_id": null,
+        "post_cap_behavior": null,
+        "anchor": null,
+        "min_engine_version": 1,
+        "source_local_id": "insurance_monthly_2000"
+      },
+      {
+        "id": "tata-neu-plus-hdfc-bank:cap:upi_monthly_500",
+        "reward_rule_id": null,
+        "category_id": null,
+        "category_slug": null,
+        "benefit_kind": null,
+        "label": "Upi monthly 500",
+        "measure": "reward_value",
+        "period": "calendar_month",
+        "cap_value": 500,
+        "post_cap_unit": null,
+        "post_cap_rate": null,
+        "resets_on_day": 1,
+        "cap_kind": "bonus_points",
+        "cap_amount": 500,
+        "scope": "targets",
+        "targets": [
+          "tata-neu-plus-hdfc-bank:rule:upi_other_id",
+          "tata-neu-plus-hdfc-bank:rule:upi_tata_neu_id"
+        ],
+        "parent_cap_id": null,
+        "post_cap_behavior": null,
+        "anchor": null,
+        "min_engine_version": 2,
+        "source_local_id": "upi_monthly_500"
+      }
+    ],
+    "milestone_rules": [],
+    "fee_waiver_rules": [
+      {
+        "id": "tata-neu-plus-hdfc-bank:waiver:1",
+        "threshold_spend_inr": 100000,
+        "period": "annual",
+        "waives_fee_inr": 499,
+        "excluded_category_slugs": [],
+        "notes": "Spend ₹1,00,000 or more in the year before the credit-card renewal date.",
+        "excluded_categories": []
+      }
+    ],
+    "benefits": [
+      {
+        "id": "tata-neu-plus-hdfc-bank:benefit:domestic_lounge_quarterly_voucher",
+        "key": "domestic_lounge_quarterly_voucher",
+        "source_local_id": "domestic_lounge_quarterly_voucher",
+        "kind": "lounge_domestic",
+        "label": "1 complimentary domestic lounge voucher per qualifying calendar quarter, up to 4 per calendar year",
+        "description": "Sponsor: HDFC Bank",
+        "quota_count": 1,
+        "quota_period": "quarter",
+        "network_program": "visa_or_rupay_domestic_lounge_program",
+        "value_estimate_inr": null,
+        "conditions": {
+          "source_category_id": "lounge",
+          "evaluation_engine": {
+            "conditions": {
+              "minimum_spend_inr": 50000,
+              "spend_period": "calendar_quarter",
+              "quarters": [
+                "Jan-Mar",
+                "Apr-Jun",
+                "Jul-Sep",
+                "Oct-Dec"
+              ],
+              "qualification_effective_from": "2025-06-10",
+              "net_spend_basis": true,
+              "posting_basis": "settlement_date",
+              "emi_treatment": "Only the monthly billed EMI principal amount is counted; the original transaction value is not counted.",
+              "reversal_treatment": "Reversals are deducted in the quarter in which they post.",
+              "voucher_claim_window_days": 120,
+              "voucher_usage_window_days": 180,
+              "direct_swipe_complimentary_access": false
+            },
+            "benefit_calculation": {
+              "voucher_count_per_qualifying_quarter": 1,
+              "maximum_per_calendar_year": 4
+            },
+            "perks": [
+              "Qualified customers are notified by SMS/email.",
+              "Voucher must be claimed through the designated claim portal within 120 days of qualification.",
+              "Claimed voucher is usable only at the eligible lounge list within 180 days of issuance.",
+              "For upgraded, lost or reissued cards, only spends on the new card count toward qualification.",
+              "Direct complimentary swipe/tap access was discontinued in favour of the milestone voucher mechanism."
+            ]
+          }
+        }
+      },
+      {
+        "id": "tata-neu-plus-hdfc-bank:benefit:zero_cost_card_liability",
+        "key": "zero_cost_card_liability",
+        "source_local_id": "zero_cost_card_liability",
+        "kind": "other",
+        "label": "Zero-cost card liability for reported fraudulent transactions",
+        "description": "Sponsor: HDFC Bank",
+        "quota_count": null,
+        "quota_period": null,
+        "network_program": null,
+        "value_estimate_inr": null,
+        "conditions": {
+          "source_category_id": "other",
+          "evaluation_engine": {
+            "conditions": {
+              "fraud_reported_immediately": true,
+              "reporting_channel": "HDFC Bank 24-hour call centre"
+            },
+            "benefit_calculation": "N/A",
+            "perks": [
+              "Fraudulent transactions reported immediately are covered under the bank's zero-cost card-liability feature."
+            ]
+          }
+        }
+      }
+    ],
+    "unlock_rules": [
+      {
+        "id": "tata-neu-plus-hdfc-bank:unlock:domestic_lounge_quarterly_voucher@1",
+        "card_benefit_id": "tata-neu-plus-hdfc-bank:benefit:domestic_lounge_quarterly_voucher",
+        "kind": "lounge_domestic",
+        "label": "1 complimentary domestic lounge voucher per qualifying calendar quarter, up to 4 per calendar year",
+        "spend_threshold_inr": 50000,
+        "spend_window": "current_calendar_quarter",
+        "window_days": null,
+        "unlocks_quota": 1,
+        "unlocks_period": "quarter",
+        "tier_label": null,
+        "excluded_category_ids": [],
+        "notes": null,
+        "source_local_id": "domestic_lounge_quarterly_voucher"
+      }
+    ],
+    "redemption_options": [
+      {
+        "program_name": "Tata Neu / Tata Pay",
+        "method": "other",
+        "value_per_point_inr": 1,
+        "min_points": 1,
+        "notes": "Redemption fee: ₹0"
+      },
+      {
+        "program_name": "Tata CliQ / Tata 1mg / Titan / Tanishq and eligible Tata partner brands",
+        "method": "other",
+        "value_per_point_inr": 1,
+        "min_points": 1,
+        "notes": "Redemption fee: ₹0"
+      }
+    ],
+    "is_upi_linkable": true
+  }
+}

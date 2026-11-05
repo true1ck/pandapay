@@ -1,0 +1,996 @@
+{
+  "generated_by": "api/scripts/catalogue_v2/snapshot_examples.js",
+  "source_slug": "indianoil-hdfc-bank-credit-card",
+  "inputs": {
+    "transform_version": "7",
+    "source_record_sha256": "a64fd46907a426c27c52910331888b7b4f2ca9d2a00243d36e8ffc9269316e45",
+    "override_sha256": null,
+    "directory_sha256": "c2fded34df886aef08595eebb7629a4dd140c98af750f3c891d6c291b4874b53",
+    "verified": false
+  },
+  "blocking_flags": [
+    "info_rule",
+    "post_limit_conflict",
+    "dangling_cap_reference"
+  ],
+  "card": {
+    "id": "indianoil-hdfc-bank-credit-card:card",
+    "slug": "indianoil-hdfc-bank-credit-card",
+    "name": "IndianOil HDFC Bank Credit Card",
+    "network": "rupay",
+    "issuer_slug": "hdfc",
+    "base_reward_unit": "points_per_150",
+    "base_reward_rate": 1,
+    "point_value_inr": 0.96,
+    "excluded_categories": [],
+    "accrual_block_inr": 150,
+    "accrual_rounding": "floor",
+    "cashback_rounding": null,
+    "points_expiry_months": 24,
+    "model_status": "partial",
+    "model_coverage": {
+      "rules_total": 11,
+      "rules_modelled": 10,
+      "rules_info": 1,
+      "caps_total": 6,
+      "caps_enforced": 2,
+      "flags": [
+        {
+          "code": "info_rule",
+          "source_local_id": "iocl_fuel_5pct",
+          "detail": "unresolved_merchant:merchant"
+        },
+        {
+          "code": "info_rule",
+          "source_local_id": "iocl_fuel_5pct",
+          "detail": "condition:tid_mid_required"
+        },
+        {
+          "code": "mcc_scoped_exclusion",
+          "source_local_id": "exclusion_rent",
+          "detail": null
+        },
+        {
+          "code": "mcc_scoped_exclusion",
+          "source_local_id": "exclusion_wallet_load",
+          "detail": null
+        },
+        {
+          "code": "mcc_scoped_exclusion",
+          "source_local_id": "exclusion_government_spends",
+          "detail": null
+        },
+        {
+          "code": "exclusion_scope_broadened",
+          "source_local_id": "exclusion_cash_advance",
+          "detail": null
+        },
+        {
+          "code": "token_replaced_by_conditions",
+          "source_local_id": "exclusion_financial_and_forex",
+          "detail": null
+        },
+        {
+          "code": "tier_by_card_age",
+          "source_local_id": "fuel_first_6m",
+          "detail": "introductory tier skipped"
+        },
+        {
+          "code": "cap_target_inferred_by_category",
+          "source_local_id": "fuel_post_6m",
+          "detail": null
+        },
+        {
+          "code": "tier_by_card_age",
+          "source_local_id": "fuel_post_6m",
+          "detail": null
+        },
+        {
+          "code": "post_limit_conflict",
+          "source_local_id": "fuel_post_6m",
+          "detail": null
+        },
+        {
+          "code": "cap_targets_info_only",
+          "source_local_id": "fuel_post_6m",
+          "detail": null
+        },
+        {
+          "code": "post_limit_conflict",
+          "source_local_id": "grocery_monthly_cap",
+          "detail": null
+        },
+        {
+          "code": "post_limit_conflict",
+          "source_local_id": "utility_monthly_cap",
+          "detail": null
+        },
+        {
+          "code": "non_earning_cap_skipped",
+          "source_local_id": "flight_hotel_redemption_cap",
+          "detail": null
+        },
+        {
+          "code": "non_earning_cap_skipped",
+          "source_local_id": "general_catalogue_cashback_redemption_cap",
+          "detail": null
+        },
+        {
+          "code": "dangling_cap_reference",
+          "source_local_id": "iocl_fuel_5pct",
+          "detail": "fuel_monthly_cap"
+        }
+      ],
+      "overrides_applied": []
+    },
+    "reward_rules": [
+      {
+        "id": "indianoil-hdfc-bank-credit-card:rule:iocl_fuel_5pct",
+        "category_id": "cat-fuel",
+        "category_slug": "fuel",
+        "merchant_pattern": null,
+        "rail": "swipe",
+        "unit": "points_per_150",
+        "rate": 7.5,
+        "min_txn_inr": 150,
+        "max_txn_inr": null,
+        "priority": 10,
+        "conditions": {
+          "source_local_id": "iocl_fuel_5pct",
+          "part": null,
+          "info_reasons": [
+            "unresolved_merchant:merchant",
+            "condition:tid_mid_required"
+          ],
+          "flags": []
+        },
+        "notes": null,
+        "effective_from": "2020-01-01",
+        "effective_to": null,
+        "excluded_categories": [],
+        "rule_role": "info",
+        "merchant_slugs": [],
+        "platform_slugs": [],
+        "mcc_include": [
+          "5541",
+          "5542"
+        ],
+        "mcc_exclude": [],
+        "except_merchant_slugs": [],
+        "except_platform_slugs": [],
+        "block_inr": null,
+        "min_engine_version": 2,
+        "max_engine_version": null,
+        "source_local_id": "iocl_fuel_5pct",
+        "display_note": "Earn 5% of your spends as Fuel Points at IndianOil fuel outlets (capped at 250 FP/month for 1st 6 months, 150 FP/month post 6 months)."
+      },
+      {
+        "id": "indianoil-hdfc-bank-credit-card:rule:grocery_5pct",
+        "category_id": "cat-groceries",
+        "category_slug": "groceries",
+        "merchant_pattern": null,
+        "rail": null,
+        "unit": "points_per_150",
+        "rate": 7.5,
+        "min_txn_inr": 150,
+        "max_txn_inr": null,
+        "priority": 10,
+        "conditions": {
+          "source_local_id": "grocery_5pct",
+          "part": null,
+          "info_reasons": [],
+          "flags": []
+        },
+        "notes": null,
+        "effective_from": "2020-01-01",
+        "effective_to": null,
+        "excluded_categories": [],
+        "rule_role": "earn",
+        "merchant_slugs": [],
+        "platform_slugs": [],
+        "mcc_include": [
+          "5411",
+          "5462",
+          "5499",
+          "5921"
+        ],
+        "mcc_exclude": [],
+        "except_merchant_slugs": [],
+        "except_platform_slugs": [],
+        "block_inr": null,
+        "min_engine_version": 2,
+        "max_engine_version": null,
+        "source_local_id": "grocery_5pct",
+        "display_note": "Earn 5% of your spends as Fuel Points on groceries (max 100 FP per calendar month)."
+      },
+      {
+        "id": "indianoil-hdfc-bank-credit-card:rule:utility_bill_5pct",
+        "category_id": "cat-bills",
+        "category_slug": "bills",
+        "merchant_pattern": null,
+        "rail": null,
+        "unit": "points_per_150",
+        "rate": 7.5,
+        "min_txn_inr": 150,
+        "max_txn_inr": null,
+        "priority": 10,
+        "conditions": {
+          "source_local_id": "utility_bill_5pct",
+          "part": null,
+          "info_reasons": [],
+          "flags": []
+        },
+        "notes": null,
+        "effective_from": "2020-01-01",
+        "effective_to": null,
+        "excluded_categories": [],
+        "rule_role": "earn",
+        "merchant_slugs": [],
+        "platform_slugs": [],
+        "mcc_include": [
+          "4812",
+          "4814",
+          "4900"
+        ],
+        "mcc_exclude": [],
+        "except_merchant_slugs": [],
+        "except_platform_slugs": [],
+        "block_inr": null,
+        "min_engine_version": 2,
+        "max_engine_version": null,
+        "source_local_id": "utility_bill_5pct",
+        "display_note": "Earn 5% of your spends as Fuel Points on bill payments and utility spends (max 100 FP per calendar month)."
+      },
+      {
+        "id": "indianoil-hdfc-bank-credit-card:rule:base_other_retail",
+        "category_id": null,
+        "category_slug": null,
+        "merchant_pattern": null,
+        "rail": null,
+        "unit": "points_per_150",
+        "rate": 1,
+        "min_txn_inr": 150,
+        "max_txn_inr": null,
+        "priority": 100,
+        "conditions": {
+          "source_local_id": "base_other_retail",
+          "part": null,
+          "info_reasons": [],
+          "flags": []
+        },
+        "notes": null,
+        "effective_from": "2020-01-01",
+        "effective_to": null,
+        "excluded_categories": [],
+        "rule_role": "earn",
+        "merchant_slugs": [],
+        "platform_slugs": [],
+        "mcc_include": [],
+        "mcc_exclude": [],
+        "except_merchant_slugs": [],
+        "except_platform_slugs": [],
+        "block_inr": null,
+        "min_engine_version": 1,
+        "max_engine_version": null,
+        "source_local_id": "base_other_retail",
+        "display_note": "1 Fuel Point per ₹150 on other retail eligible purchases, including UPI linked transactions."
+      },
+      {
+        "id": "indianoil-hdfc-bank-credit-card:rule:exclusion_non_iocl_fuel",
+        "category_id": "cat-fuel",
+        "category_slug": "fuel",
+        "merchant_pattern": null,
+        "rail": null,
+        "unit": "points_per_150",
+        "rate": 0,
+        "min_txn_inr": null,
+        "max_txn_inr": null,
+        "priority": 1,
+        "conditions": {
+          "source_local_id": "exclusion_non_iocl_fuel",
+          "part": null,
+          "info_reasons": [],
+          "flags": []
+        },
+        "notes": null,
+        "effective_from": "2020-01-01",
+        "effective_to": null,
+        "excluded_categories": [],
+        "rule_role": "exclusion",
+        "merchant_slugs": [],
+        "platform_slugs": [],
+        "mcc_include": [],
+        "mcc_exclude": [],
+        "except_merchant_slugs": [],
+        "except_platform_slugs": [],
+        "block_inr": null,
+        "min_engine_version": 1,
+        "max_engine_version": null,
+        "source_local_id": "exclusion_non_iocl_fuel",
+        "display_note": "Fuel spends outside authorised IOCL POS terminals earn 0 Fuel Points."
+      },
+      {
+        "id": "indianoil-hdfc-bank-credit-card:rule:exclusion_rent#1",
+        "category_id": "cat-rent",
+        "category_slug": "rent",
+        "merchant_pattern": null,
+        "rail": null,
+        "unit": "points_per_150",
+        "rate": 0,
+        "min_txn_inr": null,
+        "max_txn_inr": null,
+        "priority": 1,
+        "conditions": {
+          "source_local_id": "exclusion_rent",
+          "part": 1,
+          "info_reasons": [],
+          "flags": [
+            "mcc_scoped_exclusion"
+          ]
+        },
+        "notes": null,
+        "effective_from": "2023-01-01",
+        "effective_to": null,
+        "excluded_categories": [],
+        "rule_role": "exclusion",
+        "merchant_slugs": [],
+        "platform_slugs": [],
+        "mcc_include": [],
+        "mcc_exclude": [],
+        "except_merchant_slugs": [],
+        "except_platform_slugs": [],
+        "block_inr": null,
+        "min_engine_version": 1,
+        "max_engine_version": 1,
+        "source_local_id": "exclusion_rent",
+        "display_note": "Rent payments earn 0 Fuel Points."
+      },
+      {
+        "id": "indianoil-hdfc-bank-credit-card:rule:exclusion_rent#2",
+        "category_id": "cat-rent",
+        "category_slug": "rent",
+        "merchant_pattern": null,
+        "rail": null,
+        "unit": "points_per_150",
+        "rate": 0,
+        "min_txn_inr": null,
+        "max_txn_inr": null,
+        "priority": 1,
+        "conditions": {
+          "source_local_id": "exclusion_rent",
+          "part": 2,
+          "info_reasons": [],
+          "flags": [
+            "mcc_scoped_exclusion"
+          ]
+        },
+        "notes": null,
+        "effective_from": "2023-01-01",
+        "effective_to": null,
+        "excluded_categories": [],
+        "rule_role": "exclusion",
+        "merchant_slugs": [],
+        "platform_slugs": [],
+        "mcc_include": [
+          "6513"
+        ],
+        "mcc_exclude": [],
+        "except_merchant_slugs": [],
+        "except_platform_slugs": [],
+        "block_inr": null,
+        "min_engine_version": 2,
+        "max_engine_version": null,
+        "source_local_id": "exclusion_rent",
+        "display_note": "Rent payments earn 0 Fuel Points."
+      },
+      {
+        "id": "indianoil-hdfc-bank-credit-card:rule:exclusion_rent#3",
+        "category_id": null,
+        "category_slug": null,
+        "merchant_pattern": null,
+        "rail": null,
+        "unit": "points_per_150",
+        "rate": 0,
+        "min_txn_inr": null,
+        "max_txn_inr": null,
+        "priority": 1,
+        "conditions": {
+          "source_local_id": "exclusion_rent",
+          "part": 3,
+          "info_reasons": [],
+          "flags": [
+            "mcc_scoped_exclusion"
+          ]
+        },
+        "notes": null,
+        "effective_from": "2023-01-01",
+        "effective_to": null,
+        "excluded_categories": [],
+        "rule_role": "exclusion",
+        "merchant_slugs": [],
+        "platform_slugs": [],
+        "mcc_include": [
+          "6513"
+        ],
+        "mcc_exclude": [],
+        "except_merchant_slugs": [],
+        "except_platform_slugs": [],
+        "block_inr": null,
+        "min_engine_version": 2,
+        "max_engine_version": null,
+        "source_local_id": "exclusion_rent",
+        "display_note": "Rent payments earn 0 Fuel Points."
+      },
+      {
+        "id": "indianoil-hdfc-bank-credit-card:rule:exclusion_wallet_load#1",
+        "category_id": "cat-wallet",
+        "category_slug": "wallet",
+        "merchant_pattern": null,
+        "rail": null,
+        "unit": "points_per_150",
+        "rate": 0,
+        "min_txn_inr": null,
+        "max_txn_inr": null,
+        "priority": 1,
+        "conditions": {
+          "source_local_id": "exclusion_wallet_load",
+          "part": 1,
+          "info_reasons": [],
+          "flags": [
+            "mcc_scoped_exclusion"
+          ]
+        },
+        "notes": null,
+        "effective_from": "2020-01-01",
+        "effective_to": null,
+        "excluded_categories": [],
+        "rule_role": "exclusion",
+        "merchant_slugs": [],
+        "platform_slugs": [],
+        "mcc_include": [],
+        "mcc_exclude": [],
+        "except_merchant_slugs": [],
+        "except_platform_slugs": [],
+        "block_inr": null,
+        "min_engine_version": 1,
+        "max_engine_version": 1,
+        "source_local_id": "exclusion_wallet_load",
+        "display_note": "Prepaid card / wallet load transactions do not earn Fuel Points."
+      },
+      {
+        "id": "indianoil-hdfc-bank-credit-card:rule:exclusion_wallet_load#2",
+        "category_id": "cat-wallet",
+        "category_slug": "wallet",
+        "merchant_pattern": null,
+        "rail": null,
+        "unit": "points_per_150",
+        "rate": 0,
+        "min_txn_inr": null,
+        "max_txn_inr": null,
+        "priority": 1,
+        "conditions": {
+          "source_local_id": "exclusion_wallet_load",
+          "part": 2,
+          "info_reasons": [],
+          "flags": [
+            "mcc_scoped_exclusion"
+          ]
+        },
+        "notes": null,
+        "effective_from": "2020-01-01",
+        "effective_to": null,
+        "excluded_categories": [],
+        "rule_role": "exclusion",
+        "merchant_slugs": [],
+        "platform_slugs": [],
+        "mcc_include": [
+          "6540"
+        ],
+        "mcc_exclude": [],
+        "except_merchant_slugs": [],
+        "except_platform_slugs": [],
+        "block_inr": null,
+        "min_engine_version": 2,
+        "max_engine_version": null,
+        "source_local_id": "exclusion_wallet_load",
+        "display_note": "Prepaid card / wallet load transactions do not earn Fuel Points."
+      },
+      {
+        "id": "indianoil-hdfc-bank-credit-card:rule:exclusion_wallet_load#3",
+        "category_id": null,
+        "category_slug": null,
+        "merchant_pattern": null,
+        "rail": null,
+        "unit": "points_per_150",
+        "rate": 0,
+        "min_txn_inr": null,
+        "max_txn_inr": null,
+        "priority": 1,
+        "conditions": {
+          "source_local_id": "exclusion_wallet_load",
+          "part": 3,
+          "info_reasons": [],
+          "flags": [
+            "mcc_scoped_exclusion"
+          ]
+        },
+        "notes": null,
+        "effective_from": "2020-01-01",
+        "effective_to": null,
+        "excluded_categories": [],
+        "rule_role": "exclusion",
+        "merchant_slugs": [],
+        "platform_slugs": [],
+        "mcc_include": [
+          "6540"
+        ],
+        "mcc_exclude": [],
+        "except_merchant_slugs": [],
+        "except_platform_slugs": [],
+        "block_inr": null,
+        "min_engine_version": 2,
+        "max_engine_version": null,
+        "source_local_id": "exclusion_wallet_load",
+        "display_note": "Prepaid card / wallet load transactions do not earn Fuel Points."
+      },
+      {
+        "id": "indianoil-hdfc-bank-credit-card:rule:exclusion_government_spends#1",
+        "category_id": "cat-government",
+        "category_slug": "government",
+        "merchant_pattern": null,
+        "rail": null,
+        "unit": "points_per_150",
+        "rate": 0,
+        "min_txn_inr": null,
+        "max_txn_inr": null,
+        "priority": 1,
+        "conditions": {
+          "source_local_id": "exclusion_government_spends",
+          "part": 1,
+          "info_reasons": [],
+          "flags": [
+            "mcc_scoped_exclusion"
+          ]
+        },
+        "notes": null,
+        "effective_from": "2023-01-01",
+        "effective_to": null,
+        "excluded_categories": [],
+        "rule_role": "exclusion",
+        "merchant_slugs": [],
+        "platform_slugs": [],
+        "mcc_include": [],
+        "mcc_exclude": [],
+        "except_merchant_slugs": [],
+        "except_platform_slugs": [],
+        "block_inr": null,
+        "min_engine_version": 1,
+        "max_engine_version": 1,
+        "source_local_id": "exclusion_government_spends",
+        "display_note": "Government-related transactions earn 0 Fuel Points."
+      },
+      {
+        "id": "indianoil-hdfc-bank-credit-card:rule:exclusion_government_spends#2",
+        "category_id": "cat-government",
+        "category_slug": "government",
+        "merchant_pattern": null,
+        "rail": null,
+        "unit": "points_per_150",
+        "rate": 0,
+        "min_txn_inr": null,
+        "max_txn_inr": null,
+        "priority": 1,
+        "conditions": {
+          "source_local_id": "exclusion_government_spends",
+          "part": 2,
+          "info_reasons": [],
+          "flags": [
+            "mcc_scoped_exclusion"
+          ]
+        },
+        "notes": null,
+        "effective_from": "2023-01-01",
+        "effective_to": null,
+        "excluded_categories": [],
+        "rule_role": "exclusion",
+        "merchant_slugs": [],
+        "platform_slugs": [],
+        "mcc_include": [
+          "9211",
+          "9222",
+          "9311",
+          "9399",
+          "9402",
+          "9405"
+        ],
+        "mcc_exclude": [],
+        "except_merchant_slugs": [],
+        "except_platform_slugs": [],
+        "block_inr": null,
+        "min_engine_version": 2,
+        "max_engine_version": null,
+        "source_local_id": "exclusion_government_spends",
+        "display_note": "Government-related transactions earn 0 Fuel Points."
+      },
+      {
+        "id": "indianoil-hdfc-bank-credit-card:rule:exclusion_government_spends#3",
+        "category_id": null,
+        "category_slug": null,
+        "merchant_pattern": null,
+        "rail": null,
+        "unit": "points_per_150",
+        "rate": 0,
+        "min_txn_inr": null,
+        "max_txn_inr": null,
+        "priority": 1,
+        "conditions": {
+          "source_local_id": "exclusion_government_spends",
+          "part": 3,
+          "info_reasons": [],
+          "flags": [
+            "mcc_scoped_exclusion"
+          ]
+        },
+        "notes": null,
+        "effective_from": "2023-01-01",
+        "effective_to": null,
+        "excluded_categories": [],
+        "rule_role": "exclusion",
+        "merchant_slugs": [],
+        "platform_slugs": [],
+        "mcc_include": [
+          "9211",
+          "9222",
+          "9311",
+          "9399",
+          "9402",
+          "9405"
+        ],
+        "mcc_exclude": [],
+        "except_merchant_slugs": [],
+        "except_platform_slugs": [],
+        "block_inr": null,
+        "min_engine_version": 2,
+        "max_engine_version": null,
+        "source_local_id": "exclusion_government_spends",
+        "display_note": "Government-related transactions earn 0 Fuel Points."
+      },
+      {
+        "id": "indianoil-hdfc-bank-credit-card:rule:exclusion_emi_transactions",
+        "category_id": "cat-emi",
+        "category_slug": "emi",
+        "merchant_pattern": null,
+        "rail": null,
+        "unit": "points_per_150",
+        "rate": 0,
+        "min_txn_inr": null,
+        "max_txn_inr": null,
+        "priority": 1,
+        "conditions": {
+          "source_local_id": "exclusion_emi_transactions",
+          "part": null,
+          "info_reasons": [],
+          "flags": []
+        },
+        "notes": null,
+        "effective_from": "2020-01-01",
+        "effective_to": null,
+        "excluded_categories": [],
+        "rule_role": "exclusion",
+        "merchant_slugs": [],
+        "platform_slugs": [],
+        "mcc_include": [],
+        "mcc_exclude": [],
+        "except_merchant_slugs": [],
+        "except_platform_slugs": [],
+        "block_inr": null,
+        "min_engine_version": 1,
+        "max_engine_version": null,
+        "source_local_id": "exclusion_emi_transactions",
+        "display_note": "Merchant and post-purchase EMI transactions earn 0 Fuel Points."
+      },
+      {
+        "id": "indianoil-hdfc-bank-credit-card:rule:exclusion_cash_advance",
+        "category_id": null,
+        "category_slug": null,
+        "merchant_pattern": null,
+        "rail": null,
+        "unit": "points_per_150",
+        "rate": 0,
+        "min_txn_inr": null,
+        "max_txn_inr": null,
+        "priority": 1,
+        "conditions": {
+          "source_local_id": "exclusion_cash_advance",
+          "part": null,
+          "info_reasons": [],
+          "flags": [
+            "exclusion_scope_broadened"
+          ]
+        },
+        "notes": null,
+        "effective_from": "2020-01-01",
+        "effective_to": null,
+        "excluded_categories": [],
+        "rule_role": "exclusion",
+        "merchant_slugs": [],
+        "platform_slugs": [],
+        "mcc_include": [
+          "6010",
+          "6011"
+        ],
+        "mcc_exclude": [],
+        "except_merchant_slugs": [],
+        "except_platform_slugs": [],
+        "block_inr": null,
+        "min_engine_version": 2,
+        "max_engine_version": null,
+        "source_local_id": "exclusion_cash_advance",
+        "display_note": "Cash advance / ATM withdrawal earns 0 Fuel Points."
+      },
+      {
+        "id": "indianoil-hdfc-bank-credit-card:rule:exclusion_financial_and_forex",
+        "category_id": null,
+        "category_slug": null,
+        "merchant_pattern": null,
+        "rail": null,
+        "unit": "points_per_150",
+        "rate": 0,
+        "min_txn_inr": null,
+        "max_txn_inr": null,
+        "priority": 1,
+        "conditions": {
+          "source_local_id": "exclusion_financial_and_forex",
+          "part": null,
+          "info_reasons": [],
+          "flags": [
+            "token_replaced_by_conditions"
+          ]
+        },
+        "notes": null,
+        "effective_from": "2020-01-01",
+        "effective_to": null,
+        "excluded_categories": [],
+        "rule_role": "exclusion",
+        "merchant_slugs": [],
+        "platform_slugs": [],
+        "mcc_include": [
+          "6012",
+          "6051",
+          "6211"
+        ],
+        "mcc_exclude": [],
+        "except_merchant_slugs": [],
+        "except_platform_slugs": [],
+        "block_inr": null,
+        "min_engine_version": 2,
+        "max_engine_version": null,
+        "source_local_id": "exclusion_financial_and_forex",
+        "display_note": "Financial services, quasi-cash, and forex / travellers cheque purchases earn 0 Fuel Points."
+      },
+      {
+        "id": "indianoil-hdfc-bank-credit-card:rule:base_other_retail#min-amount",
+        "category_id": null,
+        "category_slug": null,
+        "merchant_pattern": null,
+        "rail": null,
+        "unit": "points_per_150",
+        "rate": 0,
+        "min_txn_inr": null,
+        "max_txn_inr": 150,
+        "priority": 0,
+        "conditions": {
+          "source_local_id": "base_other_retail",
+          "part": null,
+          "info_reasons": [],
+          "flags": [
+            "synthesized_min_amount_exclusion"
+          ]
+        },
+        "notes": null,
+        "effective_from": "2020-01-01",
+        "effective_to": null,
+        "excluded_categories": [],
+        "rule_role": "exclusion",
+        "merchant_slugs": [],
+        "platform_slugs": [],
+        "mcc_include": [],
+        "mcc_exclude": [],
+        "except_merchant_slugs": [],
+        "except_platform_slugs": [],
+        "block_inr": null,
+        "min_engine_version": 2,
+        "max_engine_version": null,
+        "source_local_id": "base_other_retail",
+        "display_note": "No rewards below ₹150"
+      }
+    ],
+    "cap_rules": [
+      {
+        "id": "indianoil-hdfc-bank-credit-card:cap:fuel_post_6m",
+        "reward_rule_id": "indianoil-hdfc-bank-credit-card:rule:iocl_fuel_5pct",
+        "category_id": null,
+        "category_slug": null,
+        "benefit_kind": null,
+        "label": "Fuel post 6m",
+        "measure": "reward_value",
+        "period": "calendar_month",
+        "cap_value": 144,
+        "post_cap_unit": null,
+        "post_cap_rate": null,
+        "resets_on_day": null,
+        "cap_kind": "bonus_points",
+        "cap_amount": 150,
+        "scope": "targets",
+        "targets": [
+          "indianoil-hdfc-bank-credit-card:rule:iocl_fuel_5pct"
+        ],
+        "parent_cap_id": null,
+        "post_cap_behavior": null,
+        "anchor": null,
+        "min_engine_version": 2,
+        "source_local_id": "fuel_post_6m"
+      },
+      {
+        "id": "indianoil-hdfc-bank-credit-card:cap:grocery_monthly_cap",
+        "reward_rule_id": "indianoil-hdfc-bank-credit-card:rule:grocery_5pct",
+        "category_id": null,
+        "category_slug": null,
+        "benefit_kind": null,
+        "label": "Grocery monthly cap",
+        "measure": "reward_value",
+        "period": "calendar_month",
+        "cap_value": 96,
+        "post_cap_unit": null,
+        "post_cap_rate": null,
+        "resets_on_day": null,
+        "cap_kind": "bonus_points",
+        "cap_amount": 100,
+        "scope": "targets",
+        "targets": [
+          "indianoil-hdfc-bank-credit-card:rule:grocery_5pct"
+        ],
+        "parent_cap_id": null,
+        "post_cap_behavior": null,
+        "anchor": null,
+        "min_engine_version": 2,
+        "source_local_id": "grocery_monthly_cap"
+      },
+      {
+        "id": "indianoil-hdfc-bank-credit-card:cap:utility_monthly_cap",
+        "reward_rule_id": "indianoil-hdfc-bank-credit-card:rule:utility_bill_5pct",
+        "category_id": null,
+        "category_slug": null,
+        "benefit_kind": null,
+        "label": "Utility monthly cap",
+        "measure": "reward_value",
+        "period": "calendar_month",
+        "cap_value": 96,
+        "post_cap_unit": null,
+        "post_cap_rate": null,
+        "resets_on_day": null,
+        "cap_kind": "bonus_points",
+        "cap_amount": 100,
+        "scope": "targets",
+        "targets": [
+          "indianoil-hdfc-bank-credit-card:rule:utility_bill_5pct"
+        ],
+        "parent_cap_id": null,
+        "post_cap_behavior": null,
+        "anchor": null,
+        "min_engine_version": 2,
+        "source_local_id": "utility_monthly_cap"
+      }
+    ],
+    "milestone_rules": [],
+    "fee_waiver_rules": [
+      {
+        "id": "indianoil-hdfc-bank-credit-card:waiver:1",
+        "threshold_spend_inr": 50000,
+        "period": "annual",
+        "waives_fee_inr": 500,
+        "excluded_category_slugs": [
+          "rent",
+          "wallet"
+        ],
+        "notes": "Spend ₹50,000 or more in an anniversary year to get waiver of the renewal membership fee (₹500) for the subsequent year.",
+        "excluded_categories": [
+          "cat-rent",
+          "cat-wallet"
+        ]
+      }
+    ],
+    "benefits": [
+      {
+        "id": "indianoil-hdfc-bank-credit-card:benefit:ixrp_membership",
+        "key": "ixrp_membership",
+        "source_local_id": "ixrp_membership",
+        "kind": "other",
+        "label": "Complimentary IndianOil XTRAREWARDS Program (IXRP) Membership",
+        "description": "Sponsor: Indian Oil Corporation Limited",
+        "quota_count": null,
+        "quota_period": null,
+        "network_program": "indianoil_xtrarewards",
+        "value_estimate_inr": null,
+        "conditions": {
+          "source_category_id": "other",
+          "evaluation_engine": {
+            "conditions": {
+              "automatic_registration": true
+            },
+            "benefit_calculation": {
+              "fuel_point_to_xrp": 3,
+              "xrp_value_inr": 0.32
+            },
+            "perks": [
+              "Convert Fuel Points to XRP at 1 FP = 3 XRP (₹0.96) for instant fuel redemption at over 30,000+ participating IndianOil petrol pumps."
+            ]
+          }
+        }
+      },
+      {
+        "id": "indianoil-hdfc-bank-credit-card:benefit:zero_liability_protection",
+        "key": "zero_liability_protection",
+        "source_local_id": "zero_liability_protection",
+        "kind": "insurance_purchase",
+        "label": "Zero Lost Card Liability",
+        "description": "Sponsor: HDFC Bank",
+        "quota_count": null,
+        "quota_period": null,
+        "network_program": null,
+        "value_estimate_inr": null,
+        "conditions": {
+          "source_category_id": "insurance",
+          "evaluation_engine": {
+            "conditions": {
+              "report_immediately_to_hdfc_24h_call_centre": true
+            },
+            "benefit_calculation": "N/A",
+            "perks": [
+              "Complete zero liability on fraudulent transactions carried out post reporting loss of card to the bank's 24-hour customer service center."
+            ]
+          }
+        }
+      }
+    ],
+    "unlock_rules": [],
+    "redemption_options": [
+      {
+        "program_name": "IndianOil XTRAREWARDS / IOCL petrol outlets",
+        "method": "other",
+        "value_per_point_inr": 0.96,
+        "min_points": 500,
+        "notes": "Redemption fee: ₹0"
+      },
+      {
+        "program_name": "NetBanking / statement credit",
+        "method": "statement_credit",
+        "value_per_point_inr": 0.2,
+        "min_points": 12500,
+        "notes": "Redemption fee: ₹50"
+      },
+      {
+        "program_name": "Reward Catalogue (Products / Vouchers)",
+        "method": "partner_catalogue",
+        "value_per_point_inr": 0.2,
+        "min_points": null,
+        "notes": "Redemption fee: ₹99"
+      },
+      {
+        "program_name": "Airmiles Transfer",
+        "method": "partner_catalogue",
+        "value_per_point_inr": 0.25,
+        "min_points": null,
+        "notes": "Redemption fee: ₹99"
+      },
+      {
+        "program_name": "SmartBuy Flight & Hotel Bookings",
+        "method": "flight_hotel_booking",
+        "value_per_point_inr": 0.2,
+        "min_points": null,
+        "notes": "Redemption fee: ₹99"
+      }
+    ],
+    "is_upi_linkable": true
+  }
+}

@@ -1,0 +1,1170 @@
+{
+  "generated_by": "api/scripts/catalogue_v2/snapshot_examples.js",
+  "source_slug": "makemytrip-icici-bank-signature-credit-card",
+  "inputs": {
+    "transform_version": "7",
+    "source_record_sha256": "c69ce06d261eed463061afd4a292bef3c56ddd0b5821cc8f44a0c64a2b93eb33",
+    "override_sha256": "6039e7930bb5d5f034c8c54bfc96b5ebd5c6a38008779bfd96565f966f1fad46",
+    "directory_sha256": "c2fded34df886aef08595eebb7629a4dd140c98af750f3c891d6c291b4874b53",
+    "verified": false
+  },
+  "blocking_flags": [],
+  "card": {
+    "id": "makemytrip-icici-bank-signature-credit-card:card",
+    "slug": "makemytrip-icici-bank-signature-credit-card",
+    "name": "MakeMyTrip ICICI Bank Signature Credit Card",
+    "network": "visa",
+    "issuer_slug": "icici-bank",
+    "base_reward_unit": "points_per_200",
+    "base_reward_rate": 1.25,
+    "point_value_inr": 1,
+    "excluded_categories": [],
+    "accrual_block_inr": 200,
+    "accrual_rounding": "points_half_up",
+    "cashback_rounding": null,
+    "points_expiry_months": 12,
+    "model_status": "partial",
+    "model_coverage": {
+      "rules_total": 11,
+      "rules_modelled": 7,
+      "rules_info": 4,
+      "caps_total": 1,
+      "caps_enforced": 1,
+      "flags": [
+        {
+          "code": "info_rule",
+          "source_local_id": "international-retail",
+          "detail": "override_rule_role"
+        },
+        {
+          "code": "info_rule",
+          "source_local_id": "international-retail",
+          "detail": "condition:geography"
+        },
+        {
+          "code": "info_rule",
+          "source_local_id": "international-retail",
+          "detail": "condition:channel_type"
+        },
+        {
+          "code": "depends_on_txn_attribute",
+          "source_local_id": "international-retail",
+          "detail": null
+        },
+        {
+          "code": "info_rule",
+          "source_local_id": "mmt-flight",
+          "detail": "override_rule_role"
+        },
+        {
+          "code": "info_rule",
+          "source_local_id": "mmt-flight",
+          "detail": "condition:booking_type"
+        },
+        {
+          "code": "depends_on_txn_attribute",
+          "source_local_id": "mmt-flight",
+          "detail": null
+        },
+        {
+          "code": "narrow_token_on_merchant",
+          "source_local_id": "mmt-flight",
+          "detail": null
+        },
+        {
+          "code": "info_rule",
+          "source_local_id": "mmt-hotel-holiday",
+          "detail": "override_rule_role"
+        },
+        {
+          "code": "info_rule",
+          "source_local_id": "mmt-hotel-holiday",
+          "detail": "condition:booking_type"
+        },
+        {
+          "code": "depends_on_txn_attribute",
+          "source_local_id": "mmt-hotel-holiday",
+          "detail": null
+        },
+        {
+          "code": "narrow_token_on_merchant",
+          "source_local_id": "mmt-hotel-holiday",
+          "detail": null
+        },
+        {
+          "code": "mcc_scoped_exclusion",
+          "source_local_id": "exclude-rent",
+          "detail": null
+        },
+        {
+          "code": "mcc_scoped_exclusion",
+          "source_local_id": "exclude-wallet-loading",
+          "detail": null
+        },
+        {
+          "code": "mcc_scoped_exclusion",
+          "source_local_id": "exclude-fuel",
+          "detail": null
+        },
+        {
+          "code": "info_rule",
+          "source_local_id": "exclude-fees-interest",
+          "detail": "transaction_type"
+        }
+      ],
+      "overrides_applied": [
+        {
+          "path": "accrual_engine.rounding_mode",
+          "op": "set",
+          "value_sha256": "7eb8bc431ee35297",
+          "reason": "My Cash rounded to nearest integer per transaction.",
+          "source_url": "https://www.icici.bank.in/terms-condition/tnc-for-signature-credit-card",
+          "checked_on": "2026-11-05"
+        },
+        {
+          "path": "cap_rules",
+          "op": "set",
+          "value_sha256": "7acc5e21cbc8960a",
+          "reason": "CardPipeline cap_rules is empty; MITC caps insurance points at 1,000 per anniversary year.",
+          "source_url": "https://www.icicibank.com/managed-assets/docs/personal/cards/mitc_cc.pdf",
+          "checked_on": "2026-11-05"
+        },
+        {
+          "path": "reward_rules",
+          "op": "set",
+          "value_sha256": "6ec1c8586c17dfc9",
+          "reason": "Restates every source rule (including all exclusions). Adds an insurance rule carrying the cap so the 1,000-point annual cap targets insurance only, not the whole card. Flight and hotel rates differ by booking type with no MCC, so those two rules are info (D13c/D14b). International 1.5 is info (needs an international flag). Base domestic rule keeps no platform restriction so it is not turned into an info rule. Exclusions rewritten to MCC/rail form (fuel 5172/5541/5542/5983, wallet 6540, EMI rail emi, cash advance rail atm); fees/interest stay info (not purchases).",
+          "source_url": "https://www.icicibank.com/managed-assets/docs/personal/cards/mitc_cc.pdf",
+          "checked_on": "2026-11-05"
+        }
+      ]
+    },
+    "reward_rules": [
+      {
+        "id": "makemytrip-icici-bank-signature-credit-card:rule:base-domestic-retail",
+        "category_id": null,
+        "category_slug": null,
+        "merchant_pattern": null,
+        "rail": null,
+        "unit": "points_per_200",
+        "rate": 1.25,
+        "min_txn_inr": null,
+        "max_txn_inr": null,
+        "priority": 100,
+        "conditions": {
+          "source_local_id": "base-domestic-retail",
+          "part": null,
+          "info_reasons": [],
+          "flags": []
+        },
+        "notes": null,
+        "effective_from": "2026-08-26",
+        "effective_to": null,
+        "excluded_categories": [],
+        "rule_role": "base",
+        "merchant_slugs": [],
+        "platform_slugs": [],
+        "mcc_include": [],
+        "mcc_exclude": [],
+        "except_merchant_slugs": [],
+        "except_platform_slugs": [],
+        "block_inr": null,
+        "min_engine_version": 1,
+        "max_engine_version": null,
+        "source_local_id": "base-domestic-retail",
+        "display_note": "Domestic spends outside MakeMyTrip earn 1.25 My Cash per ₹200."
+      },
+      {
+        "id": "makemytrip-icici-bank-signature-credit-card:rule:international-retail",
+        "category_id": null,
+        "category_slug": null,
+        "merchant_pattern": null,
+        "rail": null,
+        "unit": "points_per_200",
+        "rate": 1.5,
+        "min_txn_inr": null,
+        "max_txn_inr": null,
+        "priority": 90,
+        "conditions": {
+          "source_local_id": "international-retail",
+          "part": null,
+          "info_reasons": [
+            "override_rule_role",
+            "condition:geography",
+            "condition:channel_type"
+          ],
+          "flags": [
+            "depends_on_txn_attribute"
+          ]
+        },
+        "notes": null,
+        "effective_from": "2026-08-26",
+        "effective_to": null,
+        "excluded_categories": [],
+        "rule_role": "info",
+        "merchant_slugs": [],
+        "platform_slugs": [],
+        "mcc_include": [],
+        "mcc_exclude": [],
+        "except_merchant_slugs": [
+          "makemytrip"
+        ],
+        "except_platform_slugs": [],
+        "block_inr": null,
+        "min_engine_version": 2,
+        "max_engine_version": null,
+        "source_local_id": "international-retail",
+        "display_note": "International spends outside MakeMyTrip earn 1.5 My Cash per ₹200."
+      },
+      {
+        "id": "makemytrip-icici-bank-signature-credit-card:rule:mmt-flight",
+        "category_id": null,
+        "category_slug": null,
+        "merchant_pattern": "makemytrip",
+        "rail": null,
+        "unit": "points_per_200",
+        "rate": 2,
+        "min_txn_inr": null,
+        "max_txn_inr": null,
+        "priority": 10,
+        "conditions": {
+          "source_local_id": "mmt-flight",
+          "part": null,
+          "info_reasons": [
+            "override_rule_role",
+            "condition:booking_type"
+          ],
+          "flags": [
+            "depends_on_txn_attribute",
+            "narrow_token_on_merchant"
+          ]
+        },
+        "notes": null,
+        "effective_from": "2026-08-26",
+        "effective_to": null,
+        "excluded_categories": [],
+        "rule_role": "info",
+        "merchant_slugs": [
+          "makemytrip"
+        ],
+        "platform_slugs": [],
+        "mcc_include": [],
+        "mcc_exclude": [],
+        "except_merchant_slugs": [],
+        "except_platform_slugs": [],
+        "block_inr": null,
+        "min_engine_version": 2,
+        "max_engine_version": null,
+        "source_local_id": "mmt-flight",
+        "display_note": "Flight bookings on MakeMyTrip earn 2 My Cash per ₹200."
+      },
+      {
+        "id": "makemytrip-icici-bank-signature-credit-card:rule:mmt-hotel-holiday",
+        "category_id": null,
+        "category_slug": null,
+        "merchant_pattern": "makemytrip",
+        "rail": null,
+        "unit": "points_per_200",
+        "rate": 4,
+        "min_txn_inr": null,
+        "max_txn_inr": null,
+        "priority": 10,
+        "conditions": {
+          "source_local_id": "mmt-hotel-holiday",
+          "part": null,
+          "info_reasons": [
+            "override_rule_role",
+            "condition:booking_type"
+          ],
+          "flags": [
+            "depends_on_txn_attribute",
+            "narrow_token_on_merchant"
+          ]
+        },
+        "notes": null,
+        "effective_from": "2026-08-26",
+        "effective_to": null,
+        "excluded_categories": [],
+        "rule_role": "info",
+        "merchant_slugs": [
+          "makemytrip"
+        ],
+        "platform_slugs": [],
+        "mcc_include": [],
+        "mcc_exclude": [],
+        "except_merchant_slugs": [],
+        "except_platform_slugs": [],
+        "block_inr": null,
+        "min_engine_version": 2,
+        "max_engine_version": null,
+        "source_local_id": "mmt-hotel-holiday",
+        "display_note": "Hotel and holiday bookings on MakeMyTrip earn 4 My Cash per ₹200."
+      },
+      {
+        "id": "makemytrip-icici-bank-signature-credit-card:rule:exclude-rent#1",
+        "category_id": "cat-rent",
+        "category_slug": "rent",
+        "merchant_pattern": null,
+        "rail": null,
+        "unit": "points_per_200",
+        "rate": 0,
+        "min_txn_inr": null,
+        "max_txn_inr": null,
+        "priority": 1,
+        "conditions": {
+          "source_local_id": "exclude-rent",
+          "part": 1,
+          "info_reasons": [],
+          "flags": [
+            "mcc_scoped_exclusion"
+          ]
+        },
+        "notes": null,
+        "effective_from": "2024-02-05",
+        "effective_to": null,
+        "excluded_categories": [],
+        "rule_role": "exclusion",
+        "merchant_slugs": [],
+        "platform_slugs": [],
+        "mcc_include": [],
+        "mcc_exclude": [],
+        "except_merchant_slugs": [],
+        "except_platform_slugs": [],
+        "block_inr": null,
+        "min_engine_version": 1,
+        "max_engine_version": 1,
+        "source_local_id": "exclude-rent",
+        "display_note": "Rent payment transactions do not accrue reward points from 2024-02-05; ICICI identifies MCC 6513 and 7349 as rental payments."
+      },
+      {
+        "id": "makemytrip-icici-bank-signature-credit-card:rule:exclude-rent#2",
+        "category_id": "cat-rent",
+        "category_slug": "rent",
+        "merchant_pattern": null,
+        "rail": null,
+        "unit": "points_per_200",
+        "rate": 0,
+        "min_txn_inr": null,
+        "max_txn_inr": null,
+        "priority": 1,
+        "conditions": {
+          "source_local_id": "exclude-rent",
+          "part": 2,
+          "info_reasons": [],
+          "flags": [
+            "mcc_scoped_exclusion"
+          ]
+        },
+        "notes": null,
+        "effective_from": "2024-02-05",
+        "effective_to": null,
+        "excluded_categories": [],
+        "rule_role": "exclusion",
+        "merchant_slugs": [],
+        "platform_slugs": [],
+        "mcc_include": [
+          "6513",
+          "7349"
+        ],
+        "mcc_exclude": [],
+        "except_merchant_slugs": [],
+        "except_platform_slugs": [],
+        "block_inr": null,
+        "min_engine_version": 2,
+        "max_engine_version": null,
+        "source_local_id": "exclude-rent",
+        "display_note": "Rent payment transactions do not accrue reward points from 2024-02-05; ICICI identifies MCC 6513 and 7349 as rental payments."
+      },
+      {
+        "id": "makemytrip-icici-bank-signature-credit-card:rule:exclude-rent#3",
+        "category_id": null,
+        "category_slug": null,
+        "merchant_pattern": null,
+        "rail": null,
+        "unit": "points_per_200",
+        "rate": 0,
+        "min_txn_inr": null,
+        "max_txn_inr": null,
+        "priority": 1,
+        "conditions": {
+          "source_local_id": "exclude-rent",
+          "part": 3,
+          "info_reasons": [],
+          "flags": [
+            "mcc_scoped_exclusion"
+          ]
+        },
+        "notes": null,
+        "effective_from": "2024-02-05",
+        "effective_to": null,
+        "excluded_categories": [],
+        "rule_role": "exclusion",
+        "merchant_slugs": [],
+        "platform_slugs": [],
+        "mcc_include": [
+          "6513",
+          "7349"
+        ],
+        "mcc_exclude": [],
+        "except_merchant_slugs": [],
+        "except_platform_slugs": [],
+        "block_inr": null,
+        "min_engine_version": 2,
+        "max_engine_version": null,
+        "source_local_id": "exclude-rent",
+        "display_note": "Rent payment transactions do not accrue reward points from 2024-02-05; ICICI identifies MCC 6513 and 7349 as rental payments."
+      },
+      {
+        "id": "makemytrip-icici-bank-signature-credit-card:rule:exclude-wallet-loading#1",
+        "category_id": "cat-wallet",
+        "category_slug": "wallet",
+        "merchant_pattern": null,
+        "rail": null,
+        "unit": "points_per_200",
+        "rate": 0,
+        "min_txn_inr": null,
+        "max_txn_inr": null,
+        "priority": 1,
+        "conditions": {
+          "source_local_id": "exclude-wallet-loading",
+          "part": 1,
+          "info_reasons": [],
+          "flags": [
+            "mcc_scoped_exclusion"
+          ]
+        },
+        "notes": null,
+        "effective_from": "2024-02-05",
+        "effective_to": null,
+        "excluded_categories": [],
+        "rule_role": "exclusion",
+        "merchant_slugs": [],
+        "platform_slugs": [],
+        "mcc_include": [],
+        "mcc_exclude": [],
+        "except_merchant_slugs": [],
+        "except_platform_slugs": [],
+        "block_inr": null,
+        "min_engine_version": 1,
+        "max_engine_version": 1,
+        "source_local_id": "exclude-wallet-loading",
+        "display_note": "E-wallet loading transactions do not accrue reward points from 2024-02-05."
+      },
+      {
+        "id": "makemytrip-icici-bank-signature-credit-card:rule:exclude-wallet-loading#2",
+        "category_id": "cat-wallet",
+        "category_slug": "wallet",
+        "merchant_pattern": null,
+        "rail": null,
+        "unit": "points_per_200",
+        "rate": 0,
+        "min_txn_inr": null,
+        "max_txn_inr": null,
+        "priority": 1,
+        "conditions": {
+          "source_local_id": "exclude-wallet-loading",
+          "part": 2,
+          "info_reasons": [],
+          "flags": [
+            "mcc_scoped_exclusion"
+          ]
+        },
+        "notes": null,
+        "effective_from": "2024-02-05",
+        "effective_to": null,
+        "excluded_categories": [],
+        "rule_role": "exclusion",
+        "merchant_slugs": [],
+        "platform_slugs": [],
+        "mcc_include": [
+          "6540"
+        ],
+        "mcc_exclude": [],
+        "except_merchant_slugs": [],
+        "except_platform_slugs": [],
+        "block_inr": null,
+        "min_engine_version": 2,
+        "max_engine_version": null,
+        "source_local_id": "exclude-wallet-loading",
+        "display_note": "E-wallet loading transactions do not accrue reward points from 2024-02-05."
+      },
+      {
+        "id": "makemytrip-icici-bank-signature-credit-card:rule:exclude-wallet-loading#3",
+        "category_id": null,
+        "category_slug": null,
+        "merchant_pattern": null,
+        "rail": null,
+        "unit": "points_per_200",
+        "rate": 0,
+        "min_txn_inr": null,
+        "max_txn_inr": null,
+        "priority": 1,
+        "conditions": {
+          "source_local_id": "exclude-wallet-loading",
+          "part": 3,
+          "info_reasons": [],
+          "flags": [
+            "mcc_scoped_exclusion"
+          ]
+        },
+        "notes": null,
+        "effective_from": "2024-02-05",
+        "effective_to": null,
+        "excluded_categories": [],
+        "rule_role": "exclusion",
+        "merchant_slugs": [],
+        "platform_slugs": [],
+        "mcc_include": [
+          "6540"
+        ],
+        "mcc_exclude": [],
+        "except_merchant_slugs": [],
+        "except_platform_slugs": [],
+        "block_inr": null,
+        "min_engine_version": 2,
+        "max_engine_version": null,
+        "source_local_id": "exclude-wallet-loading",
+        "display_note": "E-wallet loading transactions do not accrue reward points from 2024-02-05."
+      },
+      {
+        "id": "makemytrip-icici-bank-signature-credit-card:rule:exclude-fuel#1",
+        "category_id": "cat-fuel",
+        "category_slug": "fuel",
+        "merchant_pattern": null,
+        "rail": null,
+        "unit": "points_per_200",
+        "rate": 0,
+        "min_txn_inr": null,
+        "max_txn_inr": null,
+        "priority": 1,
+        "conditions": {
+          "source_local_id": "exclude-fuel",
+          "part": 1,
+          "info_reasons": [],
+          "flags": [
+            "mcc_scoped_exclusion"
+          ]
+        },
+        "notes": null,
+        "effective_from": "2026-08-26",
+        "effective_to": null,
+        "excluded_categories": [],
+        "rule_role": "exclusion",
+        "merchant_slugs": [],
+        "platform_slugs": [],
+        "mcc_include": [],
+        "mcc_exclude": [],
+        "except_merchant_slugs": [],
+        "except_platform_slugs": [],
+        "block_inr": null,
+        "min_engine_version": 1,
+        "max_engine_version": 1,
+        "source_local_id": "exclude-fuel",
+        "display_note": "Fuel transactions on the MakeMyTrip ICICI Bank Credit Card do not qualify for My Cash."
+      },
+      {
+        "id": "makemytrip-icici-bank-signature-credit-card:rule:exclude-fuel#2",
+        "category_id": "cat-fuel",
+        "category_slug": "fuel",
+        "merchant_pattern": null,
+        "rail": null,
+        "unit": "points_per_200",
+        "rate": 0,
+        "min_txn_inr": null,
+        "max_txn_inr": null,
+        "priority": 1,
+        "conditions": {
+          "source_local_id": "exclude-fuel",
+          "part": 2,
+          "info_reasons": [],
+          "flags": [
+            "mcc_scoped_exclusion"
+          ]
+        },
+        "notes": null,
+        "effective_from": "2026-08-26",
+        "effective_to": null,
+        "excluded_categories": [],
+        "rule_role": "exclusion",
+        "merchant_slugs": [],
+        "platform_slugs": [],
+        "mcc_include": [
+          "5172",
+          "5541",
+          "5542",
+          "5983"
+        ],
+        "mcc_exclude": [],
+        "except_merchant_slugs": [],
+        "except_platform_slugs": [],
+        "block_inr": null,
+        "min_engine_version": 2,
+        "max_engine_version": null,
+        "source_local_id": "exclude-fuel",
+        "display_note": "Fuel transactions on the MakeMyTrip ICICI Bank Credit Card do not qualify for My Cash."
+      },
+      {
+        "id": "makemytrip-icici-bank-signature-credit-card:rule:exclude-fuel#3",
+        "category_id": null,
+        "category_slug": null,
+        "merchant_pattern": null,
+        "rail": null,
+        "unit": "points_per_200",
+        "rate": 0,
+        "min_txn_inr": null,
+        "max_txn_inr": null,
+        "priority": 1,
+        "conditions": {
+          "source_local_id": "exclude-fuel",
+          "part": 3,
+          "info_reasons": [],
+          "flags": [
+            "mcc_scoped_exclusion"
+          ]
+        },
+        "notes": null,
+        "effective_from": "2026-08-26",
+        "effective_to": null,
+        "excluded_categories": [],
+        "rule_role": "exclusion",
+        "merchant_slugs": [],
+        "platform_slugs": [],
+        "mcc_include": [
+          "5172",
+          "5541",
+          "5542",
+          "5983"
+        ],
+        "mcc_exclude": [],
+        "except_merchant_slugs": [],
+        "except_platform_slugs": [],
+        "block_inr": null,
+        "min_engine_version": 2,
+        "max_engine_version": null,
+        "source_local_id": "exclude-fuel",
+        "display_note": "Fuel transactions on the MakeMyTrip ICICI Bank Credit Card do not qualify for My Cash."
+      },
+      {
+        "id": "makemytrip-icici-bank-signature-credit-card:rule:exclude-cash-advance",
+        "category_id": null,
+        "category_slug": null,
+        "merchant_pattern": null,
+        "rail": "atm",
+        "unit": "points_per_200",
+        "rate": 0,
+        "min_txn_inr": null,
+        "max_txn_inr": null,
+        "priority": 1,
+        "conditions": {
+          "source_local_id": "exclude-cash-advance",
+          "part": null,
+          "info_reasons": [],
+          "flags": []
+        },
+        "notes": null,
+        "effective_from": "2026-08-26",
+        "effective_to": null,
+        "excluded_categories": [],
+        "rule_role": "exclusion",
+        "merchant_slugs": [],
+        "platform_slugs": [],
+        "mcc_include": [],
+        "mcc_exclude": [],
+        "except_merchant_slugs": [],
+        "except_platform_slugs": [],
+        "block_inr": null,
+        "min_engine_version": 2,
+        "max_engine_version": null,
+        "source_local_id": "exclude-cash-advance",
+        "display_note": "Cash advances do not qualify as reward-earning spend."
+      },
+      {
+        "id": "makemytrip-icici-bank-signature-credit-card:rule:exclude-fees-interest",
+        "category_id": null,
+        "category_slug": null,
+        "merchant_pattern": null,
+        "rail": null,
+        "unit": "points_per_200",
+        "rate": 0,
+        "min_txn_inr": null,
+        "max_txn_inr": null,
+        "priority": 1,
+        "conditions": {
+          "source_local_id": "exclude-fees-interest",
+          "part": null,
+          "info_reasons": [
+            "transaction_type"
+          ],
+          "flags": []
+        },
+        "notes": null,
+        "effective_from": "2026-08-26",
+        "effective_to": null,
+        "excluded_categories": [],
+        "rule_role": "info",
+        "merchant_slugs": [],
+        "platform_slugs": [],
+        "mcc_include": [],
+        "mcc_exclude": [],
+        "except_merchant_slugs": [],
+        "except_platform_slugs": [],
+        "block_inr": null,
+        "min_engine_version": 2,
+        "max_engine_version": null,
+        "source_local_id": "exclude-fees-interest",
+        "display_note": "Service charges, interest, late-payment charges, joining/renewal fees and other card fees do not qualify for My Cash."
+      },
+      {
+        "id": "makemytrip-icici-bank-signature-credit-card:rule:exclude-emi-bt-plcc",
+        "category_id": "cat-emi",
+        "category_slug": "emi",
+        "merchant_pattern": null,
+        "rail": "emi",
+        "unit": "points_per_200",
+        "rate": 0,
+        "min_txn_inr": null,
+        "max_txn_inr": null,
+        "priority": 1,
+        "conditions": {
+          "source_local_id": "exclude-emi-bt-plcc",
+          "part": null,
+          "info_reasons": [],
+          "flags": []
+        },
+        "notes": null,
+        "effective_from": "2026-08-26",
+        "effective_to": null,
+        "excluded_categories": [],
+        "rule_role": "exclusion",
+        "merchant_slugs": [],
+        "platform_slugs": [],
+        "mcc_include": [],
+        "mcc_exclude": [],
+        "except_merchant_slugs": [],
+        "except_platform_slugs": [],
+        "block_inr": null,
+        "min_engine_version": 1,
+        "max_engine_version": null,
+        "source_local_id": "exclude-emi-bt-plcc",
+        "display_note": "EMI transactions, balance transfers and Personal Loan on Credit Card expenditure are excluded from My Cash earnings."
+      },
+      {
+        "id": "makemytrip-icici-bank-signature-credit-card:rule:mmt-insurance-base",
+        "category_id": "cat-insurance",
+        "category_slug": "insurance",
+        "merchant_pattern": null,
+        "rail": null,
+        "unit": "points_per_200",
+        "rate": 1.25,
+        "min_txn_inr": null,
+        "max_txn_inr": null,
+        "priority": 5,
+        "conditions": {
+          "source_local_id": "mmt-insurance-base",
+          "part": null,
+          "info_reasons": [],
+          "flags": []
+        },
+        "notes": null,
+        "effective_from": "2024-11-15",
+        "effective_to": null,
+        "excluded_categories": [],
+        "rule_role": "earn",
+        "merchant_slugs": [],
+        "platform_slugs": [],
+        "mcc_include": [
+          "5960",
+          "6300",
+          "6381",
+          "6399"
+        ],
+        "mcc_exclude": [],
+        "except_merchant_slugs": [],
+        "except_platform_slugs": [],
+        "block_inr": null,
+        "min_engine_version": 2,
+        "max_engine_version": null,
+        "source_local_id": "mmt-insurance-base",
+        "display_note": "Insurance earns the base My Cash rate, capped at 1,000 points per anniversary year."
+      }
+    ],
+    "cap_rules": [
+      {
+        "id": "makemytrip-icici-bank-signature-credit-card:cap:mmt-insurance-annual-1000",
+        "reward_rule_id": "makemytrip-icici-bank-signature-credit-card:rule:mmt-insurance-base",
+        "category_id": null,
+        "category_slug": null,
+        "benefit_kind": null,
+        "label": "Mmt insurance annual 1000",
+        "measure": "reward_value",
+        "period": "annual",
+        "cap_value": 1000,
+        "post_cap_unit": null,
+        "post_cap_rate": 0,
+        "resets_on_day": null,
+        "cap_kind": "total_points",
+        "cap_amount": 1000,
+        "scope": "targets",
+        "targets": [
+          "makemytrip-icici-bank-signature-credit-card:rule:mmt-insurance-base"
+        ],
+        "parent_cap_id": null,
+        "post_cap_behavior": null,
+        "anchor": null,
+        "min_engine_version": 2,
+        "source_local_id": "mmt-insurance-annual-1000"
+      }
+    ],
+    "milestone_rules": [
+      {
+        "id": "makemytrip-icici-bank-signature-credit-card:milestone:anniversary-2-5l",
+        "label": "Anniversary-year spend ₹2.5 lakh",
+        "period": "annual",
+        "threshold_spend_inr": 250000,
+        "reward_description": "Anniversary-year spend ₹2.5 lakh",
+        "reward_value_inr": 1100,
+        "is_repeatable": true,
+        "max_repeats": null,
+        "anchor": "card_anniversary",
+        "reward_points": null,
+        "reward_kind": null,
+        "excluded_category_ids": [],
+        "window_days": null,
+        "source_local_id": "anniversary-2-5l"
+      },
+      {
+        "id": "makemytrip-icici-bank-signature-credit-card:milestone:anniversary-5l",
+        "label": "Anniversary-year spend ₹5 lakh",
+        "period": "annual",
+        "threshold_spend_inr": 500000,
+        "reward_description": "Anniversary-year spend ₹5 lakh",
+        "reward_value_inr": 4000,
+        "is_repeatable": true,
+        "max_repeats": null,
+        "anchor": "card_anniversary",
+        "reward_points": null,
+        "reward_kind": null,
+        "excluded_category_ids": [],
+        "window_days": null,
+        "source_local_id": "anniversary-5l"
+      }
+    ],
+    "fee_waiver_rules": [],
+    "benefits": [
+      {
+        "id": "makemytrip-icici-bank-signature-credit-card:benefit:mmtblack-exclusive",
+        "key": "mmtblack-exclusive",
+        "source_local_id": "mmtblack-exclusive",
+        "kind": "other",
+        "label": "MMTBLACK Exclusive membership",
+        "description": "Sponsor: MakeMyTrip",
+        "quota_count": null,
+        "quota_period": null,
+        "network_program": "MMTBLACK",
+        "value_estimate_inr": null,
+        "conditions": {
+          "source_category_id": "other",
+          "evaluation_engine": {
+            "conditions": {
+              "cardholder": "primary"
+            },
+            "benefit_calculation": "N/A",
+            "perks": [
+              "Signature card customers can register using the MMTBLACK Exclusive Code and are auto-enrolled into the MMTBLACK Exclusive programme.",
+              "MMTBLACK Exclusive tier requires ₹2 lakh or more MakeMyTrip spend in the preceding 12 months under the current MMTBLACK tier structure.",
+              "Exclusive-tier benefits include 10% or 15% additional discount on select participating hotels, MMTBLACK hotel privileges, ₹20,000 MakeMyTrip Holiday Voucher, premium customer care, partner benefits and MMTBLACK Fest access."
+            ]
+          }
+        }
+      },
+      {
+        "id": "makemytrip-icici-bank-signature-credit-card:benefit:domestic-airport-lounge",
+        "key": "domestic-airport-lounge",
+        "source_local_id": "domestic-airport-lounge",
+        "kind": "lounge_domestic",
+        "label": "8 complimentary domestic airport lounge accesses per year",
+        "description": "Sponsor: ICICI Bank",
+        "quota_count": 8,
+        "quota_period": "annual",
+        "network_program": "domestic_airport_lounge",
+        "value_estimate_inr": null,
+        "conditions": {
+          "source_category_id": "lounge",
+          "evaluation_engine": {
+            "conditions": {
+              "cardholder": "primary",
+              "spend_requirement": {
+                "amount_inr": 75000,
+                "period": "calendar_quarter",
+                "qualifying_period": "previous calendar quarter"
+              }
+            },
+            "benefit_calculation": {
+              "visits_per_year": 8,
+              "visits_per_quarter": 2
+            },
+            "perks": [
+              "Primary cardholder only.",
+              "Current Signature-card product material states that ₹75,000 spend in a calendar quarter unlocks the lounge benefit in the following calendar quarter."
+            ]
+          }
+        }
+      },
+      {
+        "id": "makemytrip-icici-bank-signature-credit-card:benefit:international-airport-lounge",
+        "key": "international-airport-lounge",
+        "source_local_id": "international-airport-lounge",
+        "kind": "lounge_international",
+        "label": "1 complimentary international airport lounge access annually for customers who applied on or after 2024-11-15",
+        "description": "Sponsor: ICICI Bank",
+        "quota_count": 1,
+        "quota_period": "annual",
+        "network_program": "priority_pass",
+        "value_estimate_inr": null,
+        "conditions": {
+          "source_category_id": "lounge",
+          "evaluation_engine": {
+            "conditions": {
+              "application_date": ">=2024-11-15",
+              "cardholder": "primary"
+            },
+            "benefit_calculation": {
+              "visits": 1
+            },
+            "perks": [
+              "Complimentary Priority Pass membership for the primary cardholder.",
+              "Access described by ICICI as 1,400+ lounges in 145+ countries."
+            ]
+          }
+        }
+      },
+      {
+        "id": "makemytrip-icici-bank-signature-credit-card:benefit:international-airport-lounge-legacy",
+        "key": "international-airport-lounge-legacy",
+        "source_local_id": "international-airport-lounge-legacy",
+        "kind": "lounge_international",
+        "label": "1 complimentary international airport lounge access annually for customers who applied before 2024-11-15",
+        "description": "Sponsor: ICICI Bank",
+        "quota_count": 1,
+        "quota_period": "annual",
+        "network_program": "dreamfolks",
+        "value_estimate_inr": null,
+        "conditions": {
+          "source_category_id": "lounge",
+          "evaluation_engine": {
+            "conditions": {
+              "application_date": "<2024-11-15",
+              "cardholder": "primary"
+            },
+            "benefit_calculation": {
+              "visits": 1
+            },
+            "perks": [
+              "DreamFolks membership.",
+              "Access described by ICICI as 650+ lounges in 100+ countries."
+            ]
+          }
+        }
+      },
+      {
+        "id": "makemytrip-icici-bank-signature-credit-card:benefit:railway-lounge",
+        "key": "railway-lounge",
+        "source_local_id": "railway-lounge",
+        "kind": "lounge_domestic",
+        "label": "1 complimentary railway lounge access per quarter",
+        "description": "Sponsor: ICICI Bank",
+        "quota_count": 1,
+        "quota_period": "quarter",
+        "network_program": "railway_lounge",
+        "value_estimate_inr": null,
+        "conditions": {
+          "source_category_id": "lounge",
+          "evaluation_engine": {
+            "conditions": {
+              "cardholder": "primary"
+            },
+            "benefit_calculation": {
+              "visits_per_quarter": 1
+            },
+            "perks": [
+              "Participating railway lounges in India.",
+              "Additional visits are charged by the lounge provider."
+            ]
+          }
+        }
+      },
+      {
+        "id": "makemytrip-icici-bank-signature-credit-card:benefit:bookmyshow-movie",
+        "key": "bookmyshow-movie",
+        "source_local_id": "bookmyshow-movie",
+        "kind": "movie",
+        "label": "25% off movie tickets up to ₹150 on minimum two tickets",
+        "description": "Sponsor: ICICI Bank",
+        "quota_count": 2,
+        "quota_period": "calendar_month",
+        "network_program": "bookmyshow",
+        "value_estimate_inr": null,
+        "conditions": {
+          "source_category_id": "movie",
+          "evaluation_engine": {
+            "conditions": {
+              "minimum_tickets": 2,
+              "frequency": "up to 2 times per month",
+              "preceding_spend_requirement_inr": 25000,
+              "preceding_spend_period": "spends quarter",
+              "benefit_period": "following calendar quarter"
+            },
+            "benefit_calculation": {
+              "discount_percent": 25,
+              "max_discount_inr": 150
+            },
+            "perks": [
+              "Additional bookings beyond the eligible benefit are charged at service-provider rates."
+            ]
+          }
+        }
+      },
+      {
+        "id": "makemytrip-icici-bank-signature-credit-card:benefit:fuel-waiver",
+        "key": "fuel-waiver",
+        "source_local_id": "fuel-waiver",
+        "kind": "fuel_surcharge",
+        "label": "1% fuel surcharge waiver at HPCL outlets",
+        "description": "Sponsor: ICICI Bank",
+        "quota_count": null,
+        "quota_period": null,
+        "network_program": "hpcl_icici_merchant_services",
+        "value_estimate_inr": null,
+        "conditions": {
+          "source_category_id": "other",
+          "evaluation_engine": {
+            "conditions": {
+              "transaction_amount_range_inr": [
+                400,
+                4000
+              ],
+              "merchant": "HPCL fuel outlet",
+              "processing": "ICICI Merchant Services POS/swap machine"
+            },
+            "benefit_calculation": {
+              "waiver_percent": 1
+            },
+            "perks": [
+              "Available to primary and supplementary cardholders."
+            ]
+          }
+        }
+      },
+      {
+        "id": "makemytrip-icici-bank-signature-credit-card:benefit:culinary-treats",
+        "key": "culinary-treats",
+        "source_local_id": "culinary-treats",
+        "kind": "dining_program",
+        "label": "Dining discounts under Culinary Treats Programme",
+        "description": "Sponsor: ICICI Bank",
+        "quota_count": null,
+        "quota_period": null,
+        "network_program": "culinary_treats",
+        "value_estimate_inr": null,
+        "conditions": {
+          "source_category_id": "dining",
+          "evaluation_engine": {
+            "conditions": {
+              "eligibility": "participating restaurants"
+            },
+            "benefit_calculation": "N/A",
+            "perks": []
+          }
+        }
+      },
+      {
+        "id": "makemytrip-icici-bank-signature-credit-card:benefit:spa-access",
+        "key": "spa-access",
+        "source_local_id": "spa-access",
+        "kind": "other",
+        "label": "1 spa access",
+        "description": "Sponsor: ICICI Bank",
+        "quota_count": 1,
+        "quota_period": "annual",
+        "network_program": "dreamfolks",
+        "value_estimate_inr": 750,
+        "conditions": {
+          "source_category_id": "other",
+          "evaluation_engine": {
+            "conditions": {
+              "cardholder": "primary"
+            },
+            "benefit_calculation": {
+              "visits": 1
+            },
+            "perks": []
+          }
+        }
+      },
+      {
+        "id": "makemytrip-icici-bank-signature-credit-card:benefit:insurance:other",
+        "key": "insurance:other",
+        "source_local_id": null,
+        "kind": "other",
+        "label": "Other",
+        "description": "The issuer states that the card provides Counterfeit Card Liability and Account Takeover Cover protections. Numeric coverage limits and detailed claim conditions were not published in the reviewed product material.",
+        "quota_count": null,
+        "quota_period": null,
+        "network_program": null,
+        "value_estimate_inr": null,
+        "conditions": {
+          "coverage_usd": null
+        }
+      }
+    ],
+    "unlock_rules": [
+      {
+        "id": "makemytrip-icici-bank-signature-credit-card:unlock:domestic-airport-lounge@1",
+        "card_benefit_id": "makemytrip-icici-bank-signature-credit-card:benefit:domestic-airport-lounge",
+        "kind": "lounge_domestic",
+        "label": "8 complimentary domestic airport lounge accesses per year",
+        "spend_threshold_inr": 75000,
+        "spend_window": "current_calendar_quarter",
+        "window_days": null,
+        "unlocks_quota": 8,
+        "unlocks_period": "annual",
+        "tier_label": null,
+        "excluded_category_ids": [],
+        "notes": null,
+        "source_local_id": "domestic-airport-lounge"
+      },
+      {
+        "id": "makemytrip-icici-bank-signature-credit-card:unlock:bookmyshow-movie@1",
+        "card_benefit_id": "makemytrip-icici-bank-signature-credit-card:benefit:bookmyshow-movie",
+        "kind": "other",
+        "label": "25% off movie tickets up to ₹150 on minimum two tickets",
+        "spend_threshold_inr": 25000,
+        "spend_window": "previous_calendar_month",
+        "window_days": null,
+        "unlocks_quota": 2,
+        "unlocks_period": "calendar_month",
+        "tier_label": null,
+        "excluded_category_ids": [],
+        "notes": null,
+        "source_local_id": "bookmyshow-movie"
+      }
+    ],
+    "redemption_options": [
+      {
+        "program_name": "MakeMyTrip website/mobile site/mobile app",
+        "method": "flight_hotel_booking",
+        "value_per_point_inr": 1,
+        "min_points": null,
+        "notes": null
+      },
+      {
+        "program_name": "MakeMyTrip partner voucher catalogue",
+        "method": "partner_catalogue",
+        "value_per_point_inr": 1,
+        "min_points": null,
+        "notes": null
+      }
+    ],
+    "is_upi_linkable": false
+  }
+}

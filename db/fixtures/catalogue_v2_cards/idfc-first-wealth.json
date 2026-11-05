@@ -1,0 +1,1092 @@
+{
+  "generated_by": "api/scripts/catalogue_v2/snapshot_examples.js",
+  "source_slug": "idfc-first-wealth",
+  "inputs": {
+    "transform_version": "7",
+    "source_record_sha256": "53efc7514284965a3d8602c03b63c9198927876324329c8b665d7cdd6190bd3a",
+    "override_sha256": "f258d12f739e6d8694d4a433a0cf8749ab8f8e878e01208ba72c71d3a9081165",
+    "directory_sha256": "c2fded34df886aef08595eebb7629a4dd140c98af750f3c891d6c291b4874b53",
+    "verified": false
+  },
+  "blocking_flags": [
+    "orphan_cap"
+  ],
+  "card": {
+    "id": "idfc-first-wealth:card",
+    "slug": "idfc-first-wealth",
+    "name": "FIRST Wealth",
+    "network": "visa",
+    "issuer_slug": "idfc-first-bank",
+    "base_reward_unit": "points_per_200",
+    "base_reward_rate": 1,
+    "point_value_inr": 0.25,
+    "excluded_categories": [],
+    "accrual_block_inr": 200,
+    "accrual_rounding": "floor",
+    "cashback_rounding": null,
+    "points_expiry_months": 0,
+    "model_status": "partial",
+    "model_coverage": {
+      "rules_total": 13,
+      "rules_modelled": 10,
+      "rules_info": 3,
+      "caps_total": 1,
+      "caps_enforced": 0,
+      "flags": [
+        {
+          "code": "mcc_scoped_exclusion",
+          "source_local_id": "fuel_exclusion",
+          "detail": null
+        },
+        {
+          "code": "info_rule",
+          "source_local_id": "fee_charge_exclusion",
+          "detail": "non_purchase_category"
+        },
+        {
+          "code": "narrow_token_to_mcc",
+          "source_local_id": "wealth_railway_1x",
+          "detail": null
+        },
+        {
+          "code": "info_rule",
+          "source_local_id": "wealth_international_10x",
+          "detail": "override_rule_role"
+        },
+        {
+          "code": "info_rule",
+          "source_local_id": "wealth_international_10x",
+          "detail": "depends_on_txn_attribute"
+        },
+        {
+          "code": "info_rule",
+          "source_local_id": "wealth_international_10x",
+          "detail": "condition:transaction_currency"
+        },
+        {
+          "code": "depends_on_txn_attribute",
+          "source_local_id": "wealth_international_10x",
+          "detail": null
+        },
+        {
+          "code": "info_rule",
+          "source_local_id": "wealth_birthday_10x",
+          "detail": "override_rule_role"
+        },
+        {
+          "code": "info_rule",
+          "source_local_id": "wealth_birthday_10x",
+          "detail": "depends_on_txn_attribute"
+        },
+        {
+          "code": "info_rule",
+          "source_local_id": "wealth_birthday_10x",
+          "detail": "condition:event"
+        },
+        {
+          "code": "depends_on_txn_attribute",
+          "source_local_id": "wealth_birthday_10x",
+          "detail": null
+        },
+        {
+          "code": "cap_depends_on_user",
+          "source_local_id": "wealth_credit_limit_cycle",
+          "detail": null
+        },
+        {
+          "code": "orphan_cap",
+          "source_local_id": "wealth_credit_limit_cycle",
+          "detail": null
+        }
+      ],
+      "overrides_applied": [
+        {
+          "path": "accrual_engine.base_block_inr",
+          "op": "set",
+          "value_sha256": "27badc983df1780b",
+          "reason": "1X = 1 reward point per Rs 200 spent.",
+          "source_url": "https://www.idfcfirst.bank.in/content/idfcfirstbank/en/credit-card/wealth.html",
+          "checked_on": "2026-11-05"
+        },
+        {
+          "path": "reward_rules",
+          "op": "set",
+          "value_sha256": "8c876f850351dcbc",
+          "reason": "Replaces the 3X-then-10X-above-Rs-20,000 model with the issuer structure. Restates the four source exclusions (fuel, EMI, cash withdrawal, fees and charges). 1X rules (utility, insurance, railway MCC 4112, FASTag MCC 4784) have lower priority numbers than 10X travel so they win. International and birthday 10X are info (not expressible in Phase 1). The in-app hotel/flight bonus rules are not in the Wealth source and are not added (booking-channel dependent; see research note).",
+          "source_url": "https://www.idfcfirst.bank.in/content/idfcfirstbank/en/credit-card/wealth.html",
+          "checked_on": "2026-11-05"
+        },
+        {
+          "path": "cap_rules",
+          "op": "set",
+          "value_sha256": "904afe1abf988419",
+          "reason": "Issuer: reward points are earned only on spends up to the credit limit per billing cycle. Amount depends on the user, so cap_amount stays null (D13a, flag cap_depends_on_user). No Rs 20,000 threshold exists.",
+          "source_url": "https://www.idfcfirst.bank.in/content/idfcfirstbank/en/credit-card/wealth.html",
+          "checked_on": "2026-11-05"
+        }
+      ]
+    },
+    "reward_rules": [
+      {
+        "id": "idfc-first-wealth:rule:fuel_exclusion#1",
+        "category_id": "cat-fuel",
+        "category_slug": "fuel",
+        "merchant_pattern": null,
+        "rail": null,
+        "unit": "points_per_200",
+        "rate": 0,
+        "min_txn_inr": null,
+        "max_txn_inr": null,
+        "priority": 5,
+        "conditions": {
+          "source_local_id": "fuel_exclusion",
+          "part": 1,
+          "info_reasons": [],
+          "flags": [
+            "mcc_scoped_exclusion"
+          ]
+        },
+        "notes": null,
+        "effective_from": "2026-06-18",
+        "effective_to": null,
+        "excluded_categories": [],
+        "rule_role": "exclusion",
+        "merchant_slugs": [],
+        "platform_slugs": [],
+        "mcc_include": [],
+        "mcc_exclude": [],
+        "except_merchant_slugs": [],
+        "except_platform_slugs": [],
+        "block_inr": null,
+        "min_engine_version": 1,
+        "max_engine_version": 1,
+        "source_local_id": "fuel_exclusion",
+        "display_note": "Fuel transactions do not earn Reward Points."
+      },
+      {
+        "id": "idfc-first-wealth:rule:fuel_exclusion#2",
+        "category_id": "cat-fuel",
+        "category_slug": "fuel",
+        "merchant_pattern": null,
+        "rail": null,
+        "unit": "points_per_200",
+        "rate": 0,
+        "min_txn_inr": null,
+        "max_txn_inr": null,
+        "priority": 5,
+        "conditions": {
+          "source_local_id": "fuel_exclusion",
+          "part": 2,
+          "info_reasons": [],
+          "flags": [
+            "mcc_scoped_exclusion"
+          ]
+        },
+        "notes": null,
+        "effective_from": "2026-06-18",
+        "effective_to": null,
+        "excluded_categories": [],
+        "rule_role": "exclusion",
+        "merchant_slugs": [],
+        "platform_slugs": [],
+        "mcc_include": [
+          "5172",
+          "5541",
+          "5542",
+          "5983"
+        ],
+        "mcc_exclude": [],
+        "except_merchant_slugs": [],
+        "except_platform_slugs": [],
+        "block_inr": null,
+        "min_engine_version": 2,
+        "max_engine_version": null,
+        "source_local_id": "fuel_exclusion",
+        "display_note": "Fuel transactions do not earn Reward Points."
+      },
+      {
+        "id": "idfc-first-wealth:rule:fuel_exclusion#3",
+        "category_id": null,
+        "category_slug": null,
+        "merchant_pattern": null,
+        "rail": null,
+        "unit": "points_per_200",
+        "rate": 0,
+        "min_txn_inr": null,
+        "max_txn_inr": null,
+        "priority": 5,
+        "conditions": {
+          "source_local_id": "fuel_exclusion",
+          "part": 3,
+          "info_reasons": [],
+          "flags": [
+            "mcc_scoped_exclusion"
+          ]
+        },
+        "notes": null,
+        "effective_from": "2026-06-18",
+        "effective_to": null,
+        "excluded_categories": [],
+        "rule_role": "exclusion",
+        "merchant_slugs": [],
+        "platform_slugs": [],
+        "mcc_include": [
+          "5172",
+          "5541",
+          "5542",
+          "5983"
+        ],
+        "mcc_exclude": [],
+        "except_merchant_slugs": [],
+        "except_platform_slugs": [],
+        "block_inr": null,
+        "min_engine_version": 2,
+        "max_engine_version": null,
+        "source_local_id": "fuel_exclusion",
+        "display_note": "Fuel transactions do not earn Reward Points."
+      },
+      {
+        "id": "idfc-first-wealth:rule:emi_exclusion",
+        "category_id": "cat-emi",
+        "category_slug": "emi",
+        "merchant_pattern": null,
+        "rail": "emi",
+        "unit": "points_per_200",
+        "rate": 0,
+        "min_txn_inr": null,
+        "max_txn_inr": null,
+        "priority": 5,
+        "conditions": {
+          "source_local_id": "emi_exclusion",
+          "part": null,
+          "info_reasons": [],
+          "flags": []
+        },
+        "notes": null,
+        "effective_from": "2026-06-18",
+        "effective_to": null,
+        "excluded_categories": [],
+        "rule_role": "exclusion",
+        "merchant_slugs": [],
+        "platform_slugs": [],
+        "mcc_include": [],
+        "mcc_exclude": [],
+        "except_merchant_slugs": [],
+        "except_platform_slugs": [],
+        "block_inr": null,
+        "min_engine_version": 1,
+        "max_engine_version": null,
+        "source_local_id": "emi_exclusion",
+        "display_note": "EMI transactions/conversions do not earn Reward Points."
+      },
+      {
+        "id": "idfc-first-wealth:rule:cash_withdrawal_exclusion",
+        "category_id": null,
+        "category_slug": null,
+        "merchant_pattern": null,
+        "rail": "atm",
+        "unit": "points_per_200",
+        "rate": 0,
+        "min_txn_inr": null,
+        "max_txn_inr": null,
+        "priority": 5,
+        "conditions": {
+          "source_local_id": "cash_withdrawal_exclusion",
+          "part": null,
+          "info_reasons": [],
+          "flags": []
+        },
+        "notes": null,
+        "effective_from": "2026-06-18",
+        "effective_to": null,
+        "excluded_categories": [],
+        "rule_role": "exclusion",
+        "merchant_slugs": [],
+        "platform_slugs": [],
+        "mcc_include": [],
+        "mcc_exclude": [],
+        "except_merchant_slugs": [],
+        "except_platform_slugs": [],
+        "block_inr": null,
+        "min_engine_version": 2,
+        "max_engine_version": null,
+        "source_local_id": "cash_withdrawal_exclusion",
+        "display_note": "ATM cash withdrawals do not earn Reward Points."
+      },
+      {
+        "id": "idfc-first-wealth:rule:fee_charge_exclusion",
+        "category_id": null,
+        "category_slug": null,
+        "merchant_pattern": null,
+        "rail": null,
+        "unit": "points_per_200",
+        "rate": 0,
+        "min_txn_inr": null,
+        "max_txn_inr": null,
+        "priority": 5,
+        "conditions": {
+          "source_local_id": "fee_charge_exclusion",
+          "part": null,
+          "info_reasons": [
+            "non_purchase_category"
+          ],
+          "flags": []
+        },
+        "notes": null,
+        "effective_from": "2026-06-18",
+        "effective_to": null,
+        "excluded_categories": [],
+        "rule_role": "info",
+        "merchant_slugs": [],
+        "platform_slugs": [],
+        "mcc_include": [],
+        "mcc_exclude": [],
+        "except_merchant_slugs": [],
+        "except_platform_slugs": [],
+        "block_inr": null,
+        "min_engine_version": 2,
+        "max_engine_version": null,
+        "source_local_id": "fee_charge_exclusion",
+        "display_note": "Fees, charges and related GST do not earn Reward Points."
+      },
+      {
+        "id": "idfc-first-wealth:rule:wealth_utility_1x",
+        "category_id": "cat-bills",
+        "category_slug": "bills",
+        "merchant_pattern": null,
+        "rail": null,
+        "unit": "points_per_200",
+        "rate": 1,
+        "min_txn_inr": null,
+        "max_txn_inr": null,
+        "priority": 5,
+        "conditions": {
+          "source_local_id": "wealth_utility_1x",
+          "part": null,
+          "info_reasons": [],
+          "flags": []
+        },
+        "notes": null,
+        "effective_from": "2026-06-18",
+        "effective_to": null,
+        "excluded_categories": [],
+        "rule_role": "earn",
+        "merchant_slugs": [],
+        "platform_slugs": [],
+        "mcc_include": [
+          "4814",
+          "4816",
+          "4899",
+          "4900"
+        ],
+        "mcc_exclude": [],
+        "except_merchant_slugs": [],
+        "except_platform_slugs": [],
+        "block_inr": null,
+        "min_engine_version": 2,
+        "max_engine_version": null,
+        "source_local_id": "wealth_utility_1x",
+        "display_note": "Utility payments earn 1X and are excluded from the 10X threshold calculation."
+      },
+      {
+        "id": "idfc-first-wealth:rule:wealth_insurance_1x",
+        "category_id": "cat-insurance",
+        "category_slug": "insurance",
+        "merchant_pattern": null,
+        "rail": null,
+        "unit": "points_per_200",
+        "rate": 1,
+        "min_txn_inr": null,
+        "max_txn_inr": null,
+        "priority": 6,
+        "conditions": {
+          "source_local_id": "wealth_insurance_1x",
+          "part": null,
+          "info_reasons": [],
+          "flags": []
+        },
+        "notes": null,
+        "effective_from": "2026-06-18",
+        "effective_to": null,
+        "excluded_categories": [],
+        "rule_role": "earn",
+        "merchant_slugs": [],
+        "platform_slugs": [],
+        "mcc_include": [
+          "5960",
+          "6300"
+        ],
+        "mcc_exclude": [],
+        "except_merchant_slugs": [],
+        "except_platform_slugs": [],
+        "block_inr": null,
+        "min_engine_version": 2,
+        "max_engine_version": null,
+        "source_local_id": "wealth_insurance_1x",
+        "display_note": "Insurance premium payments earn 1X and are excluded from the 10X threshold calculation."
+      },
+      {
+        "id": "idfc-first-wealth:rule:wealth_railway_1x",
+        "category_id": null,
+        "category_slug": null,
+        "merchant_pattern": null,
+        "rail": null,
+        "unit": "points_per_200",
+        "rate": 1,
+        "min_txn_inr": null,
+        "max_txn_inr": null,
+        "priority": 7,
+        "conditions": {
+          "source_local_id": "wealth_railway_1x",
+          "part": null,
+          "info_reasons": [],
+          "flags": [
+            "narrow_token_to_mcc"
+          ]
+        },
+        "notes": null,
+        "effective_from": "2026-06-18",
+        "effective_to": null,
+        "excluded_categories": [],
+        "rule_role": "earn",
+        "merchant_slugs": [],
+        "platform_slugs": [],
+        "mcc_include": [
+          "4112"
+        ],
+        "mcc_exclude": [],
+        "except_merchant_slugs": [],
+        "except_platform_slugs": [],
+        "block_inr": null,
+        "min_engine_version": 2,
+        "max_engine_version": null,
+        "source_local_id": "wealth_railway_1x",
+        "display_note": "Passenger railway spends earn 1X Reward Points."
+      },
+      {
+        "id": "idfc-first-wealth:rule:wealth_fastag_1x",
+        "category_id": null,
+        "category_slug": null,
+        "merchant_pattern": null,
+        "rail": null,
+        "unit": "points_per_200",
+        "rate": 1,
+        "min_txn_inr": null,
+        "max_txn_inr": null,
+        "priority": 8,
+        "conditions": {
+          "source_local_id": "wealth_fastag_1x",
+          "part": null,
+          "info_reasons": [],
+          "flags": []
+        },
+        "notes": null,
+        "effective_from": "2026-06-18",
+        "effective_to": null,
+        "excluded_categories": [],
+        "rule_role": "earn",
+        "merchant_slugs": [],
+        "platform_slugs": [],
+        "mcc_include": [
+          "4784"
+        ],
+        "mcc_exclude": [],
+        "except_merchant_slugs": [],
+        "except_platform_slugs": [],
+        "block_inr": null,
+        "min_engine_version": 2,
+        "max_engine_version": null,
+        "source_local_id": "wealth_fastag_1x",
+        "display_note": "FASTag/toll MCC 4784 transactions earn 1X Reward Points."
+      },
+      {
+        "id": "idfc-first-wealth:rule:wealth_dining_10x",
+        "category_id": "cat-dining",
+        "category_slug": "dining",
+        "merchant_pattern": null,
+        "rail": null,
+        "unit": "points_per_200",
+        "rate": 10,
+        "min_txn_inr": null,
+        "max_txn_inr": null,
+        "priority": 10,
+        "conditions": {
+          "source_local_id": "wealth_dining_10x",
+          "part": null,
+          "info_reasons": [],
+          "flags": []
+        },
+        "notes": null,
+        "effective_from": "2026-06-19",
+        "effective_to": null,
+        "excluded_categories": [],
+        "rule_role": "earn",
+        "merchant_slugs": [],
+        "platform_slugs": [],
+        "mcc_include": [],
+        "mcc_exclude": [],
+        "except_merchant_slugs": [],
+        "except_platform_slugs": [],
+        "block_inr": null,
+        "min_engine_version": 1,
+        "max_engine_version": null,
+        "source_local_id": "wealth_dining_10x",
+        "display_note": "10X Reward Points on Dining purchases."
+      },
+      {
+        "id": "idfc-first-wealth:rule:wealth_travel_10x",
+        "category_id": "cat-travel",
+        "category_slug": "travel",
+        "merchant_pattern": null,
+        "rail": null,
+        "unit": "points_per_200",
+        "rate": 10,
+        "min_txn_inr": null,
+        "max_txn_inr": null,
+        "priority": 11,
+        "conditions": {
+          "source_local_id": "wealth_travel_10x",
+          "part": null,
+          "info_reasons": [],
+          "flags": []
+        },
+        "notes": null,
+        "effective_from": "2026-06-19",
+        "effective_to": null,
+        "excluded_categories": [],
+        "rule_role": "earn",
+        "merchant_slugs": [],
+        "platform_slugs": [],
+        "mcc_include": [],
+        "mcc_exclude": [],
+        "except_merchant_slugs": [],
+        "except_platform_slugs": [],
+        "block_inr": null,
+        "min_engine_version": 1,
+        "max_engine_version": null,
+        "source_local_id": "wealth_travel_10x",
+        "display_note": "10X Reward Points on Travel purchases."
+      },
+      {
+        "id": "idfc-first-wealth:rule:wealth_international_10x",
+        "category_id": null,
+        "category_slug": null,
+        "merchant_pattern": null,
+        "rail": null,
+        "unit": "points_per_200",
+        "rate": 10,
+        "min_txn_inr": null,
+        "max_txn_inr": null,
+        "priority": 12,
+        "conditions": {
+          "source_local_id": "wealth_international_10x",
+          "part": null,
+          "info_reasons": [
+            "override_rule_role",
+            "depends_on_txn_attribute",
+            "condition:transaction_currency"
+          ],
+          "flags": [
+            "depends_on_txn_attribute"
+          ]
+        },
+        "notes": null,
+        "effective_from": "2026-06-19",
+        "effective_to": null,
+        "excluded_categories": [],
+        "rule_role": "info",
+        "merchant_slugs": [],
+        "platform_slugs": [],
+        "mcc_include": [],
+        "mcc_exclude": [],
+        "except_merchant_slugs": [],
+        "except_platform_slugs": [],
+        "block_inr": null,
+        "min_engine_version": 2,
+        "max_engine_version": null,
+        "source_local_id": "wealth_international_10x",
+        "display_note": "10X Reward Points on International purchases."
+      },
+      {
+        "id": "idfc-first-wealth:rule:wealth_birthday_10x",
+        "category_id": null,
+        "category_slug": null,
+        "merchant_pattern": null,
+        "rail": null,
+        "unit": "points_per_200",
+        "rate": 10,
+        "min_txn_inr": null,
+        "max_txn_inr": null,
+        "priority": 13,
+        "conditions": {
+          "source_local_id": "wealth_birthday_10x",
+          "part": null,
+          "info_reasons": [
+            "override_rule_role",
+            "depends_on_txn_attribute",
+            "condition:event"
+          ],
+          "flags": [
+            "depends_on_txn_attribute"
+          ]
+        },
+        "notes": null,
+        "effective_from": "2026-06-19",
+        "effective_to": null,
+        "excluded_categories": [],
+        "rule_role": "info",
+        "merchant_slugs": [],
+        "platform_slugs": [],
+        "mcc_include": [],
+        "mcc_exclude": [],
+        "except_merchant_slugs": [],
+        "except_platform_slugs": [],
+        "block_inr": null,
+        "min_engine_version": 2,
+        "max_engine_version": null,
+        "source_local_id": "wealth_birthday_10x",
+        "display_note": "10X Reward Points on eligible spends done on the cardholder's birthday."
+      },
+      {
+        "id": "idfc-first-wealth:rule:wealth_base_3x",
+        "category_id": null,
+        "category_slug": null,
+        "merchant_pattern": null,
+        "rail": null,
+        "unit": "points_per_200",
+        "rate": 3,
+        "min_txn_inr": null,
+        "max_txn_inr": null,
+        "priority": 100,
+        "conditions": {
+          "source_local_id": "wealth_base_3x",
+          "part": null,
+          "info_reasons": [],
+          "flags": []
+        },
+        "notes": null,
+        "effective_from": "2026-06-18",
+        "effective_to": null,
+        "excluded_categories": [],
+        "rule_role": "base",
+        "merchant_slugs": [],
+        "platform_slugs": [],
+        "mcc_include": [],
+        "mcc_exclude": [],
+        "except_merchant_slugs": [],
+        "except_platform_slugs": [],
+        "block_inr": null,
+        "min_engine_version": 1,
+        "max_engine_version": null,
+        "source_local_id": "wealth_base_3x",
+        "display_note": "3X Reward Points on all eligible spend categories."
+      }
+    ],
+    "cap_rules": [
+      {
+        "id": "idfc-first-wealth:cap:wealth_credit_limit_cycle",
+        "reward_rule_id": null,
+        "category_id": null,
+        "category_slug": null,
+        "benefit_kind": null,
+        "label": "Wealth credit limit cycle",
+        "measure": "spend_amount",
+        "period": "statement_cycle",
+        "cap_value": 0,
+        "post_cap_unit": null,
+        "post_cap_rate": null,
+        "resets_on_day": null,
+        "cap_kind": "eligible_spend",
+        "cap_amount": null,
+        "scope": "targets",
+        "targets": [],
+        "parent_cap_id": null,
+        "post_cap_behavior": "zero",
+        "anchor": null,
+        "min_engine_version": 2,
+        "source_local_id": "wealth_credit_limit_cycle"
+      }
+    ],
+    "milestone_rules": [],
+    "fee_waiver_rules": [],
+    "benefits": [
+      {
+        "id": "idfc-first-wealth:benefit:domestic_lounge",
+        "key": "domestic_lounge",
+        "source_local_id": "domestic_lounge",
+        "kind": "lounge_domestic",
+        "label": "2 complimentary domestic airport lounge and spa visits per quarter",
+        "description": "Sponsor: IDFC FIRST Bank",
+        "quota_count": 2,
+        "quota_period": "quarter",
+        "network_program": "visa_infinite",
+        "value_estimate_inr": 2000,
+        "conditions": {
+          "source_category_id": "lounge",
+          "evaluation_engine": {
+            "conditions": {
+              "spend_current_calendar_month_inr": 20000,
+              "unlock": "next calendar month",
+              "excluded_spend": [
+                "EMI amortization",
+                "fees",
+                "charges",
+                "GST"
+              ]
+            },
+            "benefit_calculation": {
+              "visits": 2
+            },
+            "perks": [
+              "Participating domestic airport lounges and spas"
+            ]
+          }
+        }
+      },
+      {
+        "id": "idfc-first-wealth:benefit:international_lounge",
+        "key": "international_lounge",
+        "source_local_id": "international_lounge",
+        "kind": "lounge_international",
+        "label": "2 complimentary international airport lounge visits per quarter",
+        "description": "Sponsor: IDFC FIRST Bank",
+        "quota_count": 2,
+        "quota_period": "quarter",
+        "network_program": "priority_pass",
+        "value_estimate_inr": 4000,
+        "conditions": {
+          "source_category_id": "lounge",
+          "evaluation_engine": {
+            "conditions": {
+              "spend_current_calendar_month_inr": 20000,
+              "unlock": "next calendar month"
+            },
+            "benefit_calculation": {
+              "visits": 2,
+              "access_method": "Priority Pass / applicable lounge access mechanism"
+            },
+            "perks": [
+              "Participating international lounges worldwide"
+            ]
+          }
+        }
+      },
+      {
+        "id": "idfc-first-wealth:benefit:railway_lounge",
+        "key": "railway_lounge",
+        "source_local_id": "railway_lounge",
+        "kind": "lounge_domestic",
+        "label": "4 complimentary railway lounge visits per quarter",
+        "description": "Sponsor: IDFC FIRST Bank",
+        "quota_count": 4,
+        "quota_period": "quarter",
+        "network_program": "dreamfolks",
+        "value_estimate_inr": 1200,
+        "conditions": {
+          "source_category_id": "lounge",
+          "evaluation_engine": {
+            "conditions": {
+              "spend_current_calendar_month_inr": 20000,
+              "unlock": "following calendar month",
+              "shared_between_primary_and_addon": true
+            },
+            "benefit_calculation": {
+              "visits": 4
+            },
+            "perks": [
+              "Participating railway lounges in India",
+              "Primary and add-on cardholders share the four-visit quota",
+              "One guest may accompany an eligible cardholder using the complimentary quota subject to lounge terms"
+            ]
+          }
+        }
+      },
+      {
+        "id": "idfc-first-wealth:benefit:golf",
+        "key": "golf",
+        "source_local_id": "golf",
+        "kind": "golf",
+        "label": "Up to 2 complimentary golf rounds or lessons every month based on monthly statement spend",
+        "description": "Sponsor: IDFC FIRST Bank",
+        "quota_count": 2,
+        "quota_period": "calendar_month",
+        "network_program": "idfc_first_golf_partner",
+        "value_estimate_inr": 3000,
+        "conditions": {
+          "source_category_id": "golf",
+          "evaluation_engine": {
+            "conditions": {
+              "monthly_statement_spend_inr": 20000,
+              "first_tier_visits": 1,
+              "monthly_statement_spend_second_tier_inr": 40000,
+              "second_tier_visits": 2,
+              "eligible_spend": "Fresh purchase transactions net of refunds/reversals; cash withdrawals, EMI, charges, fees, balance transfers, loans and FIRST Digital Card transactions are excluded",
+              "cardholder_scope": "Primary cardholder"
+            },
+            "benefit_calculation": {
+              "visits": 2
+            },
+            "perks": [
+              "Golf rounds or golf lessons through Golftripz",
+              "Each earned benefit is valid for 60 days from posting"
+            ]
+          }
+        }
+      },
+      {
+        "id": "idfc-first-wealth:benefit:movie_bogo",
+        "key": "movie_bogo",
+        "source_local_id": "movie_bogo",
+        "kind": "movie",
+        "label": "Buy-One-Get-One movie ticket offer up to ₹250 off on the second ticket, twice per calendar month",
+        "description": "Sponsor: IDFC FIRST Bank",
+        "quota_count": 2,
+        "quota_period": "calendar_month",
+        "network_program": "district",
+        "value_estimate_inr": 500,
+        "conditions": {
+          "source_category_id": "movie",
+          "evaluation_engine": {
+            "conditions": "N/A",
+            "benefit_calculation": {
+              "max_discount_inr": 250,
+              "visits": 2
+            },
+            "perks": [
+              "District by Zomato mobile app"
+            ]
+          }
+        }
+      },
+      {
+        "id": "idfc-first-wealth:benefit:roadside_assistance",
+        "key": "roadside_assistance",
+        "source_local_id": "roadside_assistance",
+        "kind": "roadside_assistance",
+        "label": "24/7 complimentary roadside assistance worth ₹1,399",
+        "description": "Sponsor: IDFC FIRST Bank",
+        "quota_count": null,
+        "quota_period": null,
+        "network_program": "idfc_first",
+        "value_estimate_inr": 1399,
+        "conditions": {
+          "source_category_id": "other",
+          "evaluation_engine": {
+            "conditions": "N/A",
+            "benefit_calculation": {
+              "value_inr": 1399
+            },
+            "perks": [
+              "Towing",
+              "Flat-tyre assistance",
+              "Battery jump-start",
+              "Key-lockout assistance",
+              "Fuel delivery assistance"
+            ]
+          }
+        }
+      },
+      {
+        "id": "idfc-first-wealth:benefit:visa_concierge",
+        "key": "visa_concierge",
+        "source_local_id": "visa_concierge",
+        "kind": "concierge",
+        "label": "Personalised Visa Infinite concierge service",
+        "description": "Sponsor: Visa",
+        "quota_count": null,
+        "quota_period": null,
+        "network_program": "visa_infinite",
+        "value_estimate_inr": null,
+        "conditions": {
+          "source_category_id": "concierge",
+          "evaluation_engine": {
+            "conditions": "N/A",
+            "benefit_calculation": "N/A",
+            "perks": [
+              "Travel assistance",
+              "Dining assistance",
+              "Hotel reservations",
+              "Flight and activity booking assistance"
+            ]
+          }
+        }
+      },
+      {
+        "id": "idfc-first-wealth:benefit:insurance:air_accidental_death",
+        "key": "insurance:air_accidental_death",
+        "source_local_id": null,
+        "kind": "insurance_travel",
+        "label": "Air Accidental Death",
+        "description": "Air accident cover of ₹1 crore, subject to the applicable policy terms and card-usage eligibility requirements.",
+        "quota_count": null,
+        "quota_period": null,
+        "network_program": null,
+        "value_estimate_inr": 10000000,
+        "conditions": {
+          "coverage_usd": null
+        }
+      },
+      {
+        "id": "idfc-first-wealth:benefit:insurance:other",
+        "key": "insurance:other",
+        "source_local_id": null,
+        "kind": "other",
+        "label": "Other",
+        "description": "Personal accident cover of ₹10 lakh, subject to applicable policy terms and required recent card transaction.",
+        "quota_count": null,
+        "quota_period": null,
+        "network_program": null,
+        "value_estimate_inr": 1000000,
+        "conditions": {
+          "coverage_usd": null
+        }
+      },
+      {
+        "id": "idfc-first-wealth:benefit:insurance:other~2",
+        "key": "insurance:other~2",
+        "source_local_id": null,
+        "kind": "other",
+        "label": "Other",
+        "description": "Lost-card liability cover of ₹50,000, subject to immediate reporting and applicable policy terms.",
+        "quota_count": null,
+        "quota_period": null,
+        "network_program": null,
+        "value_estimate_inr": 50000,
+        "conditions": {
+          "coverage_usd": null
+        }
+      },
+      {
+        "id": "idfc-first-wealth:benefit:insurance:baggage_loss_delay",
+        "key": "insurance:baggage_loss_delay",
+        "source_local_id": null,
+        "kind": "insurance_travel",
+        "label": "Baggage Loss Delay",
+        "description": "Travel protection comprising USD 500 for baggage loss, USD 100 for baggage delay, USD 300 for passport/document loss and USD 300 for flight delay.",
+        "quota_count": null,
+        "quota_period": null,
+        "network_program": null,
+        "value_estimate_inr": null,
+        "conditions": {
+          "coverage_usd": 1200
+        }
+      },
+      {
+        "id": "idfc-first-wealth:benefit:insurance:other~3",
+        "key": "insurance:other~3",
+        "source_local_id": null,
+        "kind": "other",
+        "label": "Other",
+        "description": "Trip-cancellation/Cancel For Any Reason protection up to ₹10,000 for eligible non-refundable flight or hotel expenses, with up to two claims during the policy period and sharing provisions for primary/add-on cardholders subject to policy terms.",
+        "quota_count": null,
+        "quota_period": null,
+        "network_program": null,
+        "value_estimate_inr": 10000,
+        "conditions": {
+          "coverage_usd": null
+        }
+      }
+    ],
+    "unlock_rules": [
+      {
+        "id": "idfc-first-wealth:unlock:domestic_lounge@1",
+        "card_benefit_id": "idfc-first-wealth:benefit:domestic_lounge",
+        "kind": "lounge_domestic",
+        "label": "2 complimentary domestic airport lounge and spa visits per quarter",
+        "spend_threshold_inr": 20000,
+        "spend_window": "previous_calendar_month",
+        "window_days": null,
+        "unlocks_quota": 2,
+        "unlocks_period": "quarter",
+        "tier_label": null,
+        "excluded_category_ids": [],
+        "notes": null,
+        "source_local_id": "domestic_lounge"
+      },
+      {
+        "id": "idfc-first-wealth:unlock:international_lounge@1",
+        "card_benefit_id": "idfc-first-wealth:benefit:international_lounge",
+        "kind": "lounge_international",
+        "label": "2 complimentary international airport lounge visits per quarter",
+        "spend_threshold_inr": 20000,
+        "spend_window": "previous_calendar_month",
+        "window_days": null,
+        "unlocks_quota": 2,
+        "unlocks_period": "quarter",
+        "tier_label": null,
+        "excluded_category_ids": [],
+        "notes": null,
+        "source_local_id": "international_lounge"
+      },
+      {
+        "id": "idfc-first-wealth:unlock:railway_lounge@1",
+        "card_benefit_id": "idfc-first-wealth:benefit:railway_lounge",
+        "kind": "lounge_railway",
+        "label": "4 complimentary railway lounge visits per quarter",
+        "spend_threshold_inr": 20000,
+        "spend_window": "previous_calendar_month",
+        "window_days": null,
+        "unlocks_quota": 4,
+        "unlocks_period": "quarter",
+        "tier_label": null,
+        "excluded_category_ids": [],
+        "notes": null,
+        "source_local_id": "railway_lounge"
+      },
+      {
+        "id": "idfc-first-wealth:unlock:golf@1",
+        "card_benefit_id": "idfc-first-wealth:benefit:golf",
+        "kind": "other",
+        "label": "Up to 2 complimentary golf rounds or lessons every month based on monthly statement spend (₹20,000)",
+        "spend_threshold_inr": 20000,
+        "spend_window": "calendar_month",
+        "window_days": null,
+        "unlocks_quota": 1,
+        "unlocks_period": "calendar_month",
+        "tier_label": null,
+        "excluded_category_ids": [],
+        "notes": null,
+        "source_local_id": "golf"
+      },
+      {
+        "id": "idfc-first-wealth:unlock:golf@2",
+        "card_benefit_id": "idfc-first-wealth:benefit:golf",
+        "kind": "other",
+        "label": "Up to 2 complimentary golf rounds or lessons every month based on monthly statement spend (₹40,000)",
+        "spend_threshold_inr": 40000,
+        "spend_window": "calendar_month",
+        "window_days": null,
+        "unlocks_quota": 1,
+        "unlocks_period": "calendar_month",
+        "tier_label": null,
+        "excluded_category_ids": [],
+        "notes": null,
+        "source_local_id": "golf"
+      }
+    ],
+    "redemption_options": [
+      {
+        "program_name": "FIRST Rewards Portal",
+        "method": "partner_catalogue",
+        "value_per_point_inr": 0.25,
+        "min_points": 1,
+        "notes": "Redemption fee: ₹99"
+      },
+      {
+        "program_name": "In-store Pay With Reward Points",
+        "method": "statement_credit",
+        "value_per_point_inr": 0.25,
+        "min_points": 1,
+        "notes": "Redemption fee: ₹99"
+      },
+      {
+        "program_name": "Online Pay With Reward Points",
+        "method": "statement_credit",
+        "value_per_point_inr": 0.25,
+        "min_points": 1,
+        "notes": "Redemption fee: ₹99"
+      }
+    ],
+    "is_upi_linkable": false
+  }
+}

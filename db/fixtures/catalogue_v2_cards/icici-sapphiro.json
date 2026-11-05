@@ -1,0 +1,1122 @@
+{
+  "generated_by": "api/scripts/catalogue_v2/snapshot_examples.js",
+  "source_slug": "icici-sapphiro",
+  "inputs": {
+    "transform_version": "7",
+    "source_record_sha256": "b72c8ef6ba52f5b3cbc30dbe02280e16cfb00ba7efcb82f7fbc4ad385edcdcaf",
+    "override_sha256": null,
+    "directory_sha256": "c2fded34df886aef08595eebb7629a4dd140c98af750f3c891d6c291b4874b53",
+    "verified": false
+  },
+  "blocking_flags": [
+    "info_rule"
+  ],
+  "card": {
+    "id": "icici-sapphiro:card",
+    "slug": "icici-sapphiro",
+    "name": "Sapphiro Credit Card",
+    "network": "unknown",
+    "issuer_slug": "icici-bank",
+    "base_reward_unit": "points_per_100",
+    "base_reward_rate": 2,
+    "point_value_inr": 0.25,
+    "excluded_categories": [
+      "cat-fuel",
+      "cat-rent",
+      "cat-wallet"
+    ],
+    "accrual_block_inr": 100,
+    "accrual_rounding": "floor",
+    "cashback_rounding": null,
+    "points_expiry_months": 36,
+    "model_status": "partial",
+    "model_coverage": {
+      "rules_total": 12,
+      "rules_modelled": 7,
+      "rules_info": 5,
+      "caps_total": 4,
+      "caps_enforced": 3,
+      "flags": [
+        {
+          "code": "unmapped_excluded_category",
+          "source_local_id": "domestic_standard",
+          "detail": null
+        },
+        {
+          "code": "info_rule",
+          "source_local_id": "international_standard",
+          "detail": "unmapped_condition_category:transaction_type"
+        },
+        {
+          "code": "unmapped_excluded_category",
+          "source_local_id": "international_standard",
+          "detail": null
+        },
+        {
+          "code": "info_rule",
+          "source_local_id": "grocery_standard",
+          "detail": "unmapped_condition_category:category"
+        },
+        {
+          "code": "narrow_token_to_mcc",
+          "source_local_id": "transport_standard_capped",
+          "detail": null
+        },
+        {
+          "code": "mcc_scoped_exclusion",
+          "source_local_id": "rent_exclusion",
+          "detail": null
+        },
+        {
+          "code": "info_rule",
+          "source_local_id": "wallet_exclusion",
+          "detail": "unmapped_condition_category:category"
+        },
+        {
+          "code": "exclusion_scope_broadened",
+          "source_local_id": "cash_advance_exclusion",
+          "detail": null
+        },
+        {
+          "code": "info_rule",
+          "source_local_id": "education_direct_standard",
+          "detail": "unresolved_merchant:payment_channel"
+        },
+        {
+          "code": "info_rule",
+          "source_local_id": "government_utility_rate",
+          "detail": "condition:payment_type"
+        },
+        {
+          "code": "info_rule",
+          "source_local_id": "government_utility_rate",
+          "detail": "condition:classification"
+        },
+        {
+          "code": "cap_targets_info_only",
+          "source_local_id": "grocery_reward_cap",
+          "detail": null
+        }
+      ],
+      "overrides_applied": []
+    },
+    "reward_rules": [
+      {
+        "id": "icici-sapphiro:rule:domestic_standard",
+        "category_id": null,
+        "category_slug": null,
+        "merchant_pattern": null,
+        "rail": null,
+        "unit": "points_per_100",
+        "rate": 2,
+        "min_txn_inr": null,
+        "max_txn_inr": null,
+        "priority": 100,
+        "conditions": {
+          "source_local_id": "domestic_standard",
+          "part": null,
+          "info_reasons": [],
+          "flags": [
+            "unmapped_excluded_category"
+          ]
+        },
+        "notes": null,
+        "effective_from": "2024-11-15",
+        "effective_to": null,
+        "excluded_categories": [
+          "cat-fuel",
+          "cat-rent",
+          "cat-wallet"
+        ],
+        "rule_role": "base",
+        "merchant_slugs": [],
+        "platform_slugs": [],
+        "mcc_include": [],
+        "mcc_exclude": [],
+        "except_merchant_slugs": [],
+        "except_platform_slugs": [],
+        "block_inr": null,
+        "min_engine_version": 1,
+        "max_engine_version": null,
+        "source_local_id": "domestic_standard",
+        "display_note": "2 ICICI Bank Reward Points per ₹100 on eligible domestic retail spends."
+      },
+      {
+        "id": "icici-sapphiro:rule:international_standard",
+        "category_id": null,
+        "category_slug": null,
+        "merchant_pattern": null,
+        "rail": null,
+        "unit": "points_per_100",
+        "rate": 4,
+        "min_txn_inr": null,
+        "max_txn_inr": null,
+        "priority": 90,
+        "conditions": {
+          "source_local_id": "international_standard",
+          "part": null,
+          "info_reasons": [
+            "unmapped_condition_category:transaction_type"
+          ],
+          "flags": [
+            "unmapped_excluded_category"
+          ]
+        },
+        "notes": null,
+        "effective_from": "2024-11-15",
+        "effective_to": null,
+        "excluded_categories": [
+          "cat-fuel",
+          "cat-rent",
+          "cat-wallet"
+        ],
+        "rule_role": "info",
+        "merchant_slugs": [],
+        "platform_slugs": [],
+        "mcc_include": [],
+        "mcc_exclude": [],
+        "except_merchant_slugs": [],
+        "except_platform_slugs": [],
+        "block_inr": null,
+        "min_engine_version": 2,
+        "max_engine_version": null,
+        "source_local_id": "international_standard",
+        "display_note": "4 ICICI Bank Reward Points per ₹100 on international spends."
+      },
+      {
+        "id": "icici-sapphiro:rule:utility_standard",
+        "category_id": "cat-bills",
+        "category_slug": "bills",
+        "merchant_pattern": null,
+        "rail": null,
+        "unit": "points_per_100",
+        "rate": 1,
+        "min_txn_inr": null,
+        "max_txn_inr": null,
+        "priority": 20,
+        "conditions": {
+          "source_local_id": "utility_standard",
+          "part": null,
+          "info_reasons": [],
+          "flags": []
+        },
+        "notes": null,
+        "effective_from": "2024-11-15",
+        "effective_to": null,
+        "excluded_categories": [],
+        "rule_role": "earn",
+        "merchant_slugs": [],
+        "platform_slugs": [],
+        "mcc_include": [],
+        "mcc_exclude": [],
+        "except_merchant_slugs": [],
+        "except_platform_slugs": [],
+        "block_inr": null,
+        "min_engine_version": 1,
+        "max_engine_version": null,
+        "source_local_id": "utility_standard",
+        "display_note": "1 Reward Point per ₹100 on utility spends."
+      },
+      {
+        "id": "icici-sapphiro:rule:insurance_standard",
+        "category_id": "cat-insurance",
+        "category_slug": "insurance",
+        "merchant_pattern": null,
+        "rail": null,
+        "unit": "points_per_100",
+        "rate": 1,
+        "min_txn_inr": null,
+        "max_txn_inr": null,
+        "priority": 21,
+        "conditions": {
+          "source_local_id": "insurance_standard",
+          "part": null,
+          "info_reasons": [],
+          "flags": []
+        },
+        "notes": null,
+        "effective_from": "2024-11-15",
+        "effective_to": null,
+        "excluded_categories": [],
+        "rule_role": "earn",
+        "merchant_slugs": [],
+        "platform_slugs": [],
+        "mcc_include": [],
+        "mcc_exclude": [],
+        "except_merchant_slugs": [],
+        "except_platform_slugs": [],
+        "block_inr": null,
+        "min_engine_version": 1,
+        "max_engine_version": null,
+        "source_local_id": "insurance_standard",
+        "display_note": "1 Reward Point per ₹100 on insurance spends."
+      },
+      {
+        "id": "icici-sapphiro:rule:grocery_standard",
+        "category_id": "cat-groceries",
+        "category_slug": "groceries",
+        "merchant_pattern": null,
+        "rail": null,
+        "unit": "points_per_100",
+        "rate": 2,
+        "min_txn_inr": null,
+        "max_txn_inr": null,
+        "priority": 30,
+        "conditions": {
+          "source_local_id": "grocery_standard",
+          "part": null,
+          "info_reasons": [
+            "unmapped_condition_category:category"
+          ],
+          "flags": []
+        },
+        "notes": null,
+        "effective_from": "2024-11-15",
+        "effective_to": null,
+        "excluded_categories": [],
+        "rule_role": "info",
+        "merchant_slugs": [],
+        "platform_slugs": [],
+        "mcc_include": [],
+        "mcc_exclude": [],
+        "except_merchant_slugs": [],
+        "except_platform_slugs": [],
+        "block_inr": null,
+        "min_engine_version": 2,
+        "max_engine_version": null,
+        "source_local_id": "grocery_standard",
+        "display_note": "Grocery and departmental-store spending earns 2 Reward Points per ₹100 up to ₹40,000 spend per statement cycle."
+      },
+      {
+        "id": "icici-sapphiro:rule:transport_standard_capped",
+        "category_id": null,
+        "category_slug": null,
+        "merchant_pattern": null,
+        "rail": null,
+        "unit": "points_per_100",
+        "rate": 2,
+        "min_txn_inr": null,
+        "max_txn_inr": null,
+        "priority": 31,
+        "conditions": {
+          "source_local_id": "transport_standard_capped",
+          "part": null,
+          "info_reasons": [],
+          "flags": [
+            "narrow_token_to_mcc"
+          ]
+        },
+        "notes": null,
+        "effective_from": "2026-02-01",
+        "effective_to": null,
+        "excluded_categories": [],
+        "rule_role": "earn",
+        "merchant_slugs": [],
+        "platform_slugs": [],
+        "mcc_include": [
+          "4111",
+          "4112",
+          "4131",
+          "4784"
+        ],
+        "mcc_exclude": [],
+        "except_merchant_slugs": [],
+        "except_platform_slugs": [],
+        "block_inr": null,
+        "min_engine_version": 2,
+        "max_engine_version": null,
+        "source_local_id": "transport_standard_capped",
+        "display_note": "Transportation MCCs earn 2 Reward Points per ₹100 up to ₹20,000 spend per statement cycle."
+      },
+      {
+        "id": "icici-sapphiro:rule:fuel_exclusion",
+        "category_id": "cat-fuel",
+        "category_slug": "fuel",
+        "merchant_pattern": null,
+        "rail": null,
+        "unit": "points_per_100",
+        "rate": 0,
+        "min_txn_inr": null,
+        "max_txn_inr": null,
+        "priority": 1,
+        "conditions": {
+          "source_local_id": "fuel_exclusion",
+          "part": null,
+          "info_reasons": [],
+          "flags": []
+        },
+        "notes": null,
+        "effective_from": "2024-11-15",
+        "effective_to": null,
+        "excluded_categories": [],
+        "rule_role": "exclusion",
+        "merchant_slugs": [],
+        "platform_slugs": [],
+        "mcc_include": [],
+        "mcc_exclude": [],
+        "except_merchant_slugs": [],
+        "except_platform_slugs": [],
+        "block_inr": null,
+        "min_engine_version": 1,
+        "max_engine_version": null,
+        "source_local_id": "fuel_exclusion",
+        "display_note": "No Reward Points on fuel transactions."
+      },
+      {
+        "id": "icici-sapphiro:rule:rent_exclusion#1",
+        "category_id": "cat-rent",
+        "category_slug": "rent",
+        "merchant_pattern": null,
+        "rail": null,
+        "unit": "points_per_100",
+        "rate": 0,
+        "min_txn_inr": null,
+        "max_txn_inr": null,
+        "priority": 2,
+        "conditions": {
+          "source_local_id": "rent_exclusion",
+          "part": 1,
+          "info_reasons": [],
+          "flags": [
+            "mcc_scoped_exclusion"
+          ]
+        },
+        "notes": null,
+        "effective_from": "2024-11-15",
+        "effective_to": null,
+        "excluded_categories": [],
+        "rule_role": "exclusion",
+        "merchant_slugs": [],
+        "platform_slugs": [],
+        "mcc_include": [],
+        "mcc_exclude": [],
+        "except_merchant_slugs": [],
+        "except_platform_slugs": [],
+        "block_inr": null,
+        "min_engine_version": 1,
+        "max_engine_version": 1,
+        "source_local_id": "rent_exclusion",
+        "display_note": "No Reward Points on MCC 6513 rent payments."
+      },
+      {
+        "id": "icici-sapphiro:rule:rent_exclusion#2",
+        "category_id": "cat-rent",
+        "category_slug": "rent",
+        "merchant_pattern": null,
+        "rail": null,
+        "unit": "points_per_100",
+        "rate": 0,
+        "min_txn_inr": null,
+        "max_txn_inr": null,
+        "priority": 2,
+        "conditions": {
+          "source_local_id": "rent_exclusion",
+          "part": 2,
+          "info_reasons": [],
+          "flags": [
+            "mcc_scoped_exclusion"
+          ]
+        },
+        "notes": null,
+        "effective_from": "2024-11-15",
+        "effective_to": null,
+        "excluded_categories": [],
+        "rule_role": "exclusion",
+        "merchant_slugs": [],
+        "platform_slugs": [],
+        "mcc_include": [
+          "6513"
+        ],
+        "mcc_exclude": [],
+        "except_merchant_slugs": [],
+        "except_platform_slugs": [],
+        "block_inr": null,
+        "min_engine_version": 2,
+        "max_engine_version": null,
+        "source_local_id": "rent_exclusion",
+        "display_note": "No Reward Points on MCC 6513 rent payments."
+      },
+      {
+        "id": "icici-sapphiro:rule:rent_exclusion#3",
+        "category_id": null,
+        "category_slug": null,
+        "merchant_pattern": null,
+        "rail": null,
+        "unit": "points_per_100",
+        "rate": 0,
+        "min_txn_inr": null,
+        "max_txn_inr": null,
+        "priority": 2,
+        "conditions": {
+          "source_local_id": "rent_exclusion",
+          "part": 3,
+          "info_reasons": [],
+          "flags": [
+            "mcc_scoped_exclusion"
+          ]
+        },
+        "notes": null,
+        "effective_from": "2024-11-15",
+        "effective_to": null,
+        "excluded_categories": [],
+        "rule_role": "exclusion",
+        "merchant_slugs": [],
+        "platform_slugs": [],
+        "mcc_include": [
+          "6513"
+        ],
+        "mcc_exclude": [],
+        "except_merchant_slugs": [],
+        "except_platform_slugs": [],
+        "block_inr": null,
+        "min_engine_version": 2,
+        "max_engine_version": null,
+        "source_local_id": "rent_exclusion",
+        "display_note": "No Reward Points on MCC 6513 rent payments."
+      },
+      {
+        "id": "icici-sapphiro:rule:wallet_exclusion",
+        "category_id": null,
+        "category_slug": null,
+        "merchant_pattern": null,
+        "rail": null,
+        "unit": "points_per_100",
+        "rate": 0,
+        "min_txn_inr": null,
+        "max_txn_inr": null,
+        "priority": 3,
+        "conditions": {
+          "source_local_id": "wallet_exclusion",
+          "part": null,
+          "info_reasons": [
+            "unmapped_condition_category:category"
+          ],
+          "flags": []
+        },
+        "notes": null,
+        "effective_from": "2026-01-15",
+        "effective_to": null,
+        "excluded_categories": [],
+        "rule_role": "info",
+        "merchant_slugs": [],
+        "platform_slugs": [],
+        "mcc_include": [],
+        "mcc_exclude": [],
+        "except_merchant_slugs": [],
+        "except_platform_slugs": [],
+        "block_inr": null,
+        "min_engine_version": 2,
+        "max_engine_version": null,
+        "source_local_id": "wallet_exclusion",
+        "display_note": "Third-party wallet loads do not earn Reward Points."
+      },
+      {
+        "id": "icici-sapphiro:rule:cash_advance_exclusion",
+        "category_id": null,
+        "category_slug": null,
+        "merchant_pattern": null,
+        "rail": "atm",
+        "unit": "points_per_100",
+        "rate": 0,
+        "min_txn_inr": null,
+        "max_txn_inr": null,
+        "priority": 4,
+        "conditions": {
+          "source_local_id": "cash_advance_exclusion",
+          "part": null,
+          "info_reasons": [],
+          "flags": [
+            "exclusion_scope_broadened"
+          ]
+        },
+        "notes": null,
+        "effective_from": "2024-11-15",
+        "effective_to": null,
+        "excluded_categories": [],
+        "rule_role": "exclusion",
+        "merchant_slugs": [],
+        "platform_slugs": [],
+        "mcc_include": [],
+        "mcc_exclude": [],
+        "except_merchant_slugs": [],
+        "except_platform_slugs": [],
+        "block_inr": null,
+        "min_engine_version": 2,
+        "max_engine_version": null,
+        "source_local_id": "cash_advance_exclusion",
+        "display_note": "Cash advances do not earn Reward Points."
+      },
+      {
+        "id": "icici-sapphiro:rule:education_direct_standard",
+        "category_id": "cat-education",
+        "category_slug": "education",
+        "merchant_pattern": null,
+        "rail": null,
+        "unit": "points_per_100",
+        "rate": 2,
+        "min_txn_inr": null,
+        "max_txn_inr": null,
+        "priority": 40,
+        "conditions": {
+          "source_local_id": "education_direct_standard",
+          "part": null,
+          "info_reasons": [
+            "unresolved_merchant:payment_channel"
+          ],
+          "flags": []
+        },
+        "notes": null,
+        "effective_from": "2024-11-15",
+        "effective_to": null,
+        "excluded_categories": [],
+        "rule_role": "info",
+        "merchant_slugs": [],
+        "platform_slugs": [],
+        "mcc_include": [],
+        "mcc_exclude": [],
+        "except_merchant_slugs": [],
+        "except_platform_slugs": [],
+        "block_inr": null,
+        "min_engine_version": 2,
+        "max_engine_version": null,
+        "source_local_id": "education_direct_standard",
+        "display_note": "Direct education payments earn 2 Reward Points per ₹100 but are excluded from milestone and annual-fee-waiver spend calculations."
+      },
+      {
+        "id": "icici-sapphiro:rule:government_utility_rate",
+        "category_id": "cat-bills",
+        "category_slug": "bills",
+        "merchant_pattern": null,
+        "rail": null,
+        "unit": "points_per_100",
+        "rate": 1,
+        "min_txn_inr": null,
+        "max_txn_inr": null,
+        "priority": 22,
+        "conditions": {
+          "source_local_id": "government_utility_rate",
+          "part": null,
+          "info_reasons": [
+            "condition:payment_type",
+            "condition:classification"
+          ],
+          "flags": []
+        },
+        "notes": null,
+        "effective_from": "2024-11-15",
+        "effective_to": null,
+        "excluded_categories": [],
+        "rule_role": "info",
+        "merchant_slugs": [],
+        "platform_slugs": [],
+        "mcc_include": [],
+        "mcc_exclude": [],
+        "except_merchant_slugs": [],
+        "except_platform_slugs": [],
+        "block_inr": null,
+        "min_engine_version": 2,
+        "max_engine_version": null,
+        "source_local_id": "government_utility_rate",
+        "display_note": "Government-related payments classified as utility transactions earn 1 Reward Point per ₹100."
+      }
+    ],
+    "cap_rules": [
+      {
+        "id": "icici-sapphiro:cap:utility_reward_cap",
+        "reward_rule_id": null,
+        "category_id": null,
+        "category_slug": null,
+        "benefit_kind": null,
+        "label": "Utility reward cap",
+        "measure": "spend_amount",
+        "period": "statement_cycle",
+        "cap_value": 80000,
+        "post_cap_unit": null,
+        "post_cap_rate": 0,
+        "resets_on_day": null,
+        "cap_kind": "eligible_spend",
+        "cap_amount": 80000,
+        "scope": "targets",
+        "targets": [
+          "icici-sapphiro:rule:utility_standard",
+          "icici-sapphiro:rule:government_utility_rate"
+        ],
+        "parent_cap_id": null,
+        "post_cap_behavior": "zero",
+        "anchor": null,
+        "min_engine_version": 2,
+        "source_local_id": "utility_reward_cap"
+      },
+      {
+        "id": "icici-sapphiro:cap:insurance_reward_cap",
+        "reward_rule_id": "icici-sapphiro:rule:insurance_standard",
+        "category_id": null,
+        "category_slug": null,
+        "benefit_kind": null,
+        "label": "Insurance reward cap",
+        "measure": "spend_amount",
+        "period": "statement_cycle",
+        "cap_value": 80000,
+        "post_cap_unit": null,
+        "post_cap_rate": 0,
+        "resets_on_day": null,
+        "cap_kind": "eligible_spend",
+        "cap_amount": 80000,
+        "scope": "targets",
+        "targets": [
+          "icici-sapphiro:rule:insurance_standard"
+        ],
+        "parent_cap_id": null,
+        "post_cap_behavior": "zero",
+        "anchor": null,
+        "min_engine_version": 1,
+        "source_local_id": "insurance_reward_cap"
+      },
+      {
+        "id": "icici-sapphiro:cap:grocery_reward_cap",
+        "reward_rule_id": "icici-sapphiro:rule:grocery_standard",
+        "category_id": null,
+        "category_slug": null,
+        "benefit_kind": null,
+        "label": "Grocery reward cap",
+        "measure": "spend_amount",
+        "period": "statement_cycle",
+        "cap_value": 40000,
+        "post_cap_unit": null,
+        "post_cap_rate": 0,
+        "resets_on_day": null,
+        "cap_kind": "eligible_spend",
+        "cap_amount": 40000,
+        "scope": "targets",
+        "targets": [
+          "icici-sapphiro:rule:grocery_standard"
+        ],
+        "parent_cap_id": null,
+        "post_cap_behavior": "zero",
+        "anchor": null,
+        "min_engine_version": 2,
+        "source_local_id": "grocery_reward_cap"
+      },
+      {
+        "id": "icici-sapphiro:cap:transport_reward_cap",
+        "reward_rule_id": "icici-sapphiro:rule:transport_standard_capped",
+        "category_id": null,
+        "category_slug": null,
+        "benefit_kind": null,
+        "label": "Transport reward cap",
+        "measure": "spend_amount",
+        "period": "statement_cycle",
+        "cap_value": 20000,
+        "post_cap_unit": null,
+        "post_cap_rate": 0,
+        "resets_on_day": null,
+        "cap_kind": "eligible_spend",
+        "cap_amount": 20000,
+        "scope": "targets",
+        "targets": [
+          "icici-sapphiro:rule:transport_standard_capped"
+        ],
+        "parent_cap_id": null,
+        "post_cap_behavior": "zero",
+        "anchor": null,
+        "min_engine_version": 2,
+        "source_local_id": "transport_reward_cap"
+      }
+    ],
+    "milestone_rules": [
+      {
+        "id": "icici-sapphiro:milestone:sapphiro_milestone_4l",
+        "label": "4,000 Reward Points on ₹4 lakh anniversary-year spend",
+        "period": "annual",
+        "threshold_spend_inr": 400000,
+        "reward_description": "4,000 Reward Points on ₹4 lakh anniversary-year spend",
+        "reward_value_inr": 1000,
+        "is_repeatable": false,
+        "max_repeats": null,
+        "anchor": "card_anniversary",
+        "reward_points": 4000,
+        "reward_kind": "points",
+        "excluded_category_ids": [],
+        "window_days": null,
+        "source_local_id": "sapphiro_milestone_4l"
+      },
+      {
+        "id": "icici-sapphiro:milestone:sapphiro_milestone_incremental",
+        "label": "2,000 additional Reward Points for every additional ₹1 lakh spend after ₹4 lakh",
+        "period": "annual",
+        "threshold_spend_inr": 100000,
+        "reward_description": "2,000 additional Reward Points for every additional ₹1 lakh spend after ₹4 lakh",
+        "reward_value_inr": 500,
+        "is_repeatable": true,
+        "max_repeats": null,
+        "anchor": "card_anniversary",
+        "reward_points": 2000,
+        "reward_kind": "points",
+        "excluded_category_ids": [],
+        "window_days": null,
+        "source_local_id": "sapphiro_milestone_incremental"
+      },
+      {
+        "id": "icici-sapphiro:milestone:sapphiro_milestone_annual_cap",
+        "label": "Maximum 20,000 milestone Reward Points in an anniversary year",
+        "period": "annual",
+        "threshold_spend_inr": 1200000,
+        "reward_description": "Maximum 20,000 milestone Reward Points in an anniversary year",
+        "reward_value_inr": 5000,
+        "is_repeatable": false,
+        "max_repeats": null,
+        "anchor": "card_anniversary",
+        "reward_points": 20000,
+        "reward_kind": "points",
+        "excluded_category_ids": [],
+        "window_days": null,
+        "source_local_id": "sapphiro_milestone_annual_cap"
+      }
+    ],
+    "fee_waiver_rules": [
+      {
+        "id": "icici-sapphiro:waiver:1",
+        "threshold_spend_inr": 600000,
+        "period": "annual",
+        "waives_fee_inr": 3500,
+        "excluded_category_slugs": [
+          "rent",
+          "government",
+          "education"
+        ],
+        "notes": "Spend ₹6 lakh or more in the anniversary year to have the renewal fee waived for the following year. Rent, government and education payments are excluded from the relevant spend calculation.",
+        "excluded_categories": [
+          "cat-rent",
+          "cat-government",
+          "cat-education"
+        ]
+      }
+    ],
+    "benefits": [
+      {
+        "id": "icici-sapphiro:benefit:international_lounge",
+        "key": "international_lounge",
+        "source_local_id": "international_lounge",
+        "kind": "lounge_international",
+        "label": "2 complimentary international airport lounge visits per year for the primary cardholder",
+        "description": "Sponsor: ICICI Bank",
+        "quota_count": 2,
+        "quota_period": "annual",
+        "network_program": "priority_pass",
+        "value_estimate_inr": 5400,
+        "conditions": {
+          "source_category_id": "lounge",
+          "evaluation_engine": {
+            "conditions": {
+              "cardholder": "primary",
+              "application_date": {
+                "on_or_after": "2024-11-15"
+              }
+            },
+            "benefit_calculation": {
+              "visits": 2,
+              "period": "annual"
+            },
+            "perks": [
+              "Priority Pass membership",
+              "Access to participating international lounges"
+            ]
+          }
+        }
+      },
+      {
+        "id": "icici-sapphiro:benefit:domestic_lounge",
+        "key": "domestic_lounge",
+        "source_local_id": "domestic_lounge",
+        "kind": "lounge_domestic",
+        "label": "4 complimentary domestic airport lounge visits per quarter after ₹75,000 spend in the preceding calendar quarter; dual-network variants receive 2 visits per quarter per individual network variant",
+        "description": "Sponsor: ICICI Bank",
+        "quota_count": 4,
+        "quota_period": "quarter",
+        "network_program": "domestic_lounge_program",
+        "value_estimate_inr": 3200,
+        "conditions": {
+          "source_category_id": "lounge",
+          "evaluation_engine": {
+            "conditions": {
+              "required_spend_inr": 75000,
+              "spend_period": "calendar_quarter",
+              "unlock_period": "following_calendar_quarter",
+              "cardholder": "primary"
+            },
+            "benefit_calculation": {
+              "visits": 4,
+              "period": "quarter"
+            },
+            "perks": [
+              "Domestic airport lounge access"
+            ]
+          }
+        }
+      },
+      {
+        "id": "icici-sapphiro:benefit:bookmyshow",
+        "key": "bookmyshow",
+        "source_local_id": "bookmyshow",
+        "kind": "movie",
+        "label": "Buy one movie/event ticket and get up to ₹500 off the second ticket, up to 2 times per month, subject to ₹25,000 preceding-spends-quarter eligibility; dual-network variants may receive one offer per month per variant",
+        "description": "Sponsor: ICICI Bank",
+        "quota_count": 2,
+        "quota_period": "calendar_month",
+        "network_program": "bookmyshow",
+        "value_estimate_inr": 1000,
+        "conditions": {
+          "source_category_id": "movie",
+          "evaluation_engine": {
+            "conditions": {
+              "required_spend_inr": 25000,
+              "spend_period": "preceding_spends_quarter",
+              "unlock_period": "following_calendar_quarter",
+              "minimum_tickets": 2
+            },
+            "benefit_calculation": {
+              "max_discount_inr": 500,
+              "frequency": "twice_per_month"
+            },
+            "perks": [
+              "BookMyShow movie and event ticket discounts"
+            ]
+          }
+        }
+      },
+      {
+        "id": "icici-sapphiro:benefit:golf",
+        "key": "golf",
+        "source_local_id": "golf",
+        "kind": "golf",
+        "label": "Complimentary golf round or lesson for every ₹50,000 retail spend in the previous calendar month, up to 4 rounds per month",
+        "description": "Sponsor: ICICI Bank",
+        "quota_count": 4,
+        "quota_period": "calendar_month",
+        "network_program": "golftripz",
+        "value_estimate_inr": 6000,
+        "conditions": {
+          "source_category_id": "golf",
+          "evaluation_engine": {
+            "conditions": {
+              "required_spend_inr": 50000,
+              "spend_period": "previous_calendar_month",
+              "eligible_spend": "retail_purchases"
+            },
+            "benefit_calculation": {
+              "rounds_per_threshold": 1,
+              "max_rounds": 4,
+              "period": "calendar_month"
+            },
+            "perks": [
+              "Complimentary golf round or lesson"
+            ]
+          }
+        }
+      },
+      {
+        "id": "icici-sapphiro:benefit:concierge",
+        "key": "concierge",
+        "source_local_id": "concierge",
+        "kind": "concierge",
+        "label": "24/7 concierge service",
+        "description": "Sponsor: ICICI Bank",
+        "quota_count": null,
+        "quota_period": null,
+        "network_program": "i-assist",
+        "value_estimate_inr": null,
+        "conditions": {
+          "source_category_id": "concierge",
+          "evaluation_engine": {
+            "conditions": "N/A",
+            "benefit_calculation": "N/A",
+            "perks": [
+              "Restaurant reservations",
+              "Flower and gift deliveries",
+              "Hotel and flight bookings",
+              "Car rentals",
+              "Movie ticket delivery",
+              "Emergency auto assistance",
+              "Medical concierge support"
+            ]
+          }
+        }
+      },
+      {
+        "id": "icici-sapphiro:benefit:fuel_surcharge_waiver",
+        "key": "fuel_surcharge_waiver",
+        "source_local_id": "fuel_surcharge_waiver",
+        "kind": "fuel_surcharge",
+        "label": "1% fuel surcharge waiver on eligible transactions between ₹400 and ₹4,000, subject to the applicable monthly waiver cap",
+        "description": "Sponsor: ICICI Bank",
+        "quota_count": null,
+        "quota_period": "calendar_month",
+        "network_program": null,
+        "value_estimate_inr": 250,
+        "conditions": {
+          "source_category_id": "other",
+          "evaluation_engine": {
+            "conditions": {
+              "min_transaction_inr": 400,
+              "max_transaction_inr": 4000,
+              "fuel_outlets": "all fuel pumps"
+            },
+            "benefit_calculation": {
+              "waiver_percent": 1,
+              "monthly_waiver_cap_inr": 250
+            },
+            "perks": [
+              "Fuel surcharge waiver"
+            ]
+          }
+        }
+      },
+      {
+        "id": "icici-sapphiro:benefit:dining",
+        "key": "dining",
+        "source_local_id": "dining",
+        "kind": "dining_program",
+        "label": "Dining discounts through ICICI Bank Culinary Treats programme",
+        "description": "Sponsor: ICICI Bank",
+        "quota_count": null,
+        "quota_period": null,
+        "network_program": "ICICI Culinary Treats",
+        "value_estimate_inr": null,
+        "conditions": {
+          "source_category_id": "dining",
+          "evaluation_engine": {
+            "conditions": "N/A",
+            "benefit_calculation": "N/A",
+            "perks": [
+              "Dining savings at participating restaurants"
+            ]
+          }
+        }
+      },
+      {
+        "id": "icici-sapphiro:benefit:insurance:air_accidental_death",
+        "key": "insurance:air_accidental_death",
+        "source_local_id": null,
+        "kind": "insurance_travel",
+        "label": "Air Accidental Death",
+        "description": "Air accident insurance cover for the primary cardholder, subject to ticket purchase on the card and applicable policy terms.",
+        "quota_count": null,
+        "quota_period": null,
+        "network_program": null,
+        "value_estimate_inr": 30000000,
+        "conditions": {
+          "coverage_usd": null
+        }
+      },
+      {
+        "id": "icici-sapphiro:benefit:insurance:credit_shield",
+        "key": "insurance:credit_shield",
+        "source_local_id": null,
+        "kind": "insurance_purchase",
+        "label": "Credit Shield",
+        "description": "Credit Shield cover on outstanding balance, subject to applicable policy terms.",
+        "quota_count": null,
+        "quota_period": null,
+        "network_program": null,
+        "value_estimate_inr": 50000,
+        "conditions": {
+          "coverage_usd": null
+        }
+      },
+      {
+        "id": "icici-sapphiro:benefit:insurance:other",
+        "key": "insurance:other",
+        "source_local_id": null,
+        "kind": "other",
+        "label": "Other",
+        "description": "Lost-card liability protection up to ₹50,000, subject to reporting the lost or stolen card to the bank and applicable terms.",
+        "quota_count": null,
+        "quota_period": null,
+        "network_program": null,
+        "value_estimate_inr": 50000,
+        "conditions": {
+          "coverage_usd": null
+        }
+      },
+      {
+        "id": "icici-sapphiro:benefit:insurance:other~2",
+        "key": "insurance:other~2",
+        "source_local_id": null,
+        "kind": "other",
+        "label": "Other",
+        "description": "Personal Accident Insurance Cover applicable to the RuPay variant.",
+        "quota_count": null,
+        "quota_period": null,
+        "network_program": null,
+        "value_estimate_inr": 200000,
+        "conditions": {
+          "coverage_usd": null
+        }
+      }
+    ],
+    "unlock_rules": [
+      {
+        "id": "icici-sapphiro:unlock:domestic_lounge@1",
+        "card_benefit_id": "icici-sapphiro:benefit:domestic_lounge",
+        "kind": "lounge_domestic",
+        "label": "4 complimentary domestic airport lounge visits per quarter after ₹75,000 spend in the preceding calendar quarter; dual-network variants receive 2 visits per quarter per individual network variant",
+        "spend_threshold_inr": 75000,
+        "spend_window": "previous_calendar_quarter",
+        "window_days": null,
+        "unlocks_quota": 4,
+        "unlocks_period": "quarter",
+        "tier_label": null,
+        "excluded_category_ids": [],
+        "notes": null,
+        "source_local_id": "domestic_lounge"
+      },
+      {
+        "id": "icici-sapphiro:unlock:bookmyshow@1",
+        "card_benefit_id": "icici-sapphiro:benefit:bookmyshow",
+        "kind": "other",
+        "label": "Buy one movie/event ticket and get up to ₹500 off the second ticket, up to 2 times per month, subject to ₹25,000 preceding-spends-quarter eligibility; dual-network variants may receive one offer per month per variant",
+        "spend_threshold_inr": 25000,
+        "spend_window": "previous_calendar_quarter",
+        "window_days": null,
+        "unlocks_quota": 2,
+        "unlocks_period": "calendar_month",
+        "tier_label": null,
+        "excluded_category_ids": [],
+        "notes": null,
+        "source_local_id": "bookmyshow"
+      },
+      {
+        "id": "icici-sapphiro:unlock:golf@1",
+        "card_benefit_id": "icici-sapphiro:benefit:golf",
+        "kind": "other",
+        "label": "Complimentary golf round or lesson for every ₹50,000 retail spend in the previous calendar month, up to 4 rounds per month",
+        "spend_threshold_inr": 50000,
+        "spend_window": "previous_calendar_month",
+        "window_days": null,
+        "unlocks_quota": 4,
+        "unlocks_period": "calendar_month",
+        "tier_label": null,
+        "excluded_category_ids": [],
+        "notes": null,
+        "source_local_id": "golf"
+      }
+    ],
+    "redemption_options": [
+      {
+        "program_name": "ICICI Bank Rewards",
+        "method": "statement_credit",
+        "value_per_point_inr": 0.25,
+        "min_points": 1000,
+        "notes": "Redemption fee: ₹99"
+      },
+      {
+        "program_name": "ICICI Bank Rewards",
+        "method": "partner_catalogue",
+        "value_per_point_inr": 0.25,
+        "min_points": null,
+        "notes": "Redemption fee: ₹99"
+      }
+    ],
+    "is_upi_linkable": true
+  }
+}

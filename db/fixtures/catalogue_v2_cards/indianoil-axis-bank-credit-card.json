@@ -1,0 +1,774 @@
+{
+  "generated_by": "api/scripts/catalogue_v2/snapshot_examples.js",
+  "source_slug": "indianoil-axis-bank-credit-card",
+  "inputs": {
+    "transform_version": "7",
+    "source_record_sha256": "b18e463e2a1652ebb1aef086acf2d90cf60142b3e4289de42f1c493f6508a86a",
+    "override_sha256": "05da659b0a73aa237ebe9df20d6dec27156808c4ee7796a35a3da4a08da26ba0",
+    "directory_sha256": "c2fded34df886aef08595eebb7629a4dd140c98af750f3c891d6c291b4874b53",
+    "verified": false
+  },
+  "blocking_flags": [],
+  "card": {
+    "id": "indianoil-axis-bank-credit-card:card",
+    "slug": "indianoil-axis-bank-credit-card",
+    "name": "IndianOil Axis Bank Credit Card",
+    "network": "rupay",
+    "issuer_slug": "axis-bank",
+    "base_reward_unit": "points_per_100",
+    "base_reward_rate": 1,
+    "point_value_inr": 0.2,
+    "excluded_categories": [],
+    "accrual_block_inr": 100,
+    "accrual_rounding": "floor",
+    "cashback_rounding": null,
+    "points_expiry_months": 36,
+    "model_status": "partial",
+    "model_coverage": {
+      "rules_total": 14,
+      "rules_modelled": 11,
+      "rules_info": 3,
+      "caps_total": 2,
+      "caps_enforced": 2,
+      "flags": [
+        {
+          "code": "info_rule",
+          "source_local_id": "gold-jewellery-exclusion",
+          "detail": "unmapped_condition_category:spend_category"
+        },
+        {
+          "code": "info_rule",
+          "source_local_id": "gold-jewellery-exclusion",
+          "detail": "unmapped_category_token"
+        },
+        {
+          "code": "exclusion_scope_broadened",
+          "source_local_id": "utility-exclusion",
+          "detail": null
+        },
+        {
+          "code": "info_rule",
+          "source_local_id": "financial-institutions-exclusion",
+          "detail": "unmapped_condition_category:spend_category"
+        },
+        {
+          "code": "info_rule",
+          "source_local_id": "financial-institutions-exclusion",
+          "detail": "unmapped_category_token"
+        },
+        {
+          "code": "exclusion_scope_broadened",
+          "source_local_id": "cash-advance-exclusion",
+          "detail": null
+        },
+        {
+          "code": "info_rule",
+          "source_local_id": "repayment-exclusion",
+          "detail": "non_purchase_category"
+        }
+      ],
+      "overrides_applied": [
+        {
+          "path": "cap_rules[id=iocl-fuel-monthly-points-cap].metric",
+          "op": "set",
+          "value_sha256": "7af78ba28cf9ccb3",
+          "reason": "1,000 points is the whole fuel earning (20 per Rs 100 on Rs 5,000); fuel beyond it earns nothing, so it is a total cap, not bonus-only.",
+          "source_url": "https://www.axis.bank.in/docs/default-source/default-document-library/terms-and-conditions-for-iocl-credit-card.pdf?sfvrsn=9ab59582_5",
+          "checked_on": "2026-11-05"
+        }
+      ]
+    },
+    "reward_rules": [
+      {
+        "id": "indianoil-axis-bank-credit-card:rule:base-earn",
+        "category_id": null,
+        "category_slug": null,
+        "merchant_pattern": null,
+        "rail": null,
+        "unit": "points_per_100",
+        "rate": 1,
+        "min_txn_inr": null,
+        "max_txn_inr": null,
+        "priority": 100,
+        "conditions": {
+          "source_local_id": "base-earn",
+          "part": null,
+          "info_reasons": [],
+          "flags": []
+        },
+        "notes": null,
+        "effective_from": "2024-04-20",
+        "effective_to": null,
+        "excluded_categories": [],
+        "rule_role": "base",
+        "merchant_slugs": [],
+        "platform_slugs": [],
+        "mcc_include": [],
+        "mcc_exclude": [],
+        "except_merchant_slugs": [],
+        "except_platform_slugs": [],
+        "block_inr": null,
+        "min_engine_version": 1,
+        "max_engine_version": null,
+        "source_local_id": "base-earn",
+        "display_note": "Earn 1 EDGE REWARD Point per ₹100 spent on eligible credit card transactions."
+      },
+      {
+        "id": "indianoil-axis-bank-credit-card:rule:iocl-fuel-accelerated",
+        "category_id": "cat-fuel",
+        "category_slug": "fuel",
+        "merchant_pattern": "iocl",
+        "rail": "swipe",
+        "unit": "points_per_100",
+        "rate": 20,
+        "min_txn_inr": 400,
+        "max_txn_inr": 4000,
+        "priority": 10,
+        "conditions": {
+          "source_local_id": "iocl-fuel-accelerated",
+          "part": null,
+          "info_reasons": [],
+          "flags": []
+        },
+        "notes": null,
+        "effective_from": "2024-04-20",
+        "effective_to": null,
+        "excluded_categories": [],
+        "rule_role": "earn",
+        "merchant_slugs": [
+          "indianoil"
+        ],
+        "platform_slugs": [],
+        "mcc_include": [],
+        "mcc_exclude": [],
+        "except_merchant_slugs": [],
+        "except_platform_slugs": [],
+        "block_inr": null,
+        "min_engine_version": 1,
+        "max_engine_version": null,
+        "source_local_id": "iocl-fuel-accelerated",
+        "display_note": "Earn 20 EDGE REWARD Points per ₹100 at IndianOil fuel outlets. Maximum eligible spend for accelerated rewards is ₹5,000 per calendar month."
+      },
+      {
+        "id": "indianoil-axis-bank-credit-card:rule:online-shopping-accelerated",
+        "category_id": "cat-online",
+        "category_slug": "online",
+        "merchant_pattern": null,
+        "rail": "online",
+        "unit": "points_per_100",
+        "rate": 5,
+        "min_txn_inr": 100,
+        "max_txn_inr": 5000,
+        "priority": 20,
+        "conditions": {
+          "source_local_id": "online-shopping-accelerated",
+          "part": null,
+          "info_reasons": [],
+          "flags": []
+        },
+        "notes": null,
+        "effective_from": "2024-04-20",
+        "effective_to": null,
+        "excluded_categories": [],
+        "rule_role": "earn",
+        "merchant_slugs": [],
+        "platform_slugs": [],
+        "mcc_include": [],
+        "mcc_exclude": [],
+        "except_merchant_slugs": [],
+        "except_platform_slugs": [],
+        "block_inr": null,
+        "min_engine_version": 1,
+        "max_engine_version": null,
+        "source_local_id": "online-shopping-accelerated",
+        "display_note": "Earn 5 EDGE REWARD Points per ₹100 on eligible online shopping transactions. Maximum eligible spend is ₹5,000 per calendar month."
+      },
+      {
+        "id": "indianoil-axis-bank-credit-card:rule:insurance-exclusion",
+        "category_id": "cat-insurance",
+        "category_slug": "insurance",
+        "merchant_pattern": null,
+        "rail": null,
+        "unit": "points_per_100",
+        "rate": 0,
+        "min_txn_inr": null,
+        "max_txn_inr": null,
+        "priority": 1,
+        "conditions": {
+          "source_local_id": "insurance-exclusion",
+          "part": null,
+          "info_reasons": [],
+          "flags": []
+        },
+        "notes": null,
+        "effective_from": "2025-06-20",
+        "effective_to": null,
+        "excluded_categories": [],
+        "rule_role": "exclusion",
+        "merchant_slugs": [],
+        "platform_slugs": [],
+        "mcc_include": [],
+        "mcc_exclude": [],
+        "except_merchant_slugs": [],
+        "except_platform_slugs": [],
+        "block_inr": null,
+        "min_engine_version": 1,
+        "max_engine_version": null,
+        "source_local_id": "insurance-exclusion",
+        "display_note": "Insurance transactions are excluded from EDGE REWARD earning."
+      },
+      {
+        "id": "indianoil-axis-bank-credit-card:rule:gold-jewellery-exclusion",
+        "category_id": null,
+        "category_slug": null,
+        "merchant_pattern": null,
+        "rail": null,
+        "unit": "points_per_100",
+        "rate": 0,
+        "min_txn_inr": null,
+        "max_txn_inr": null,
+        "priority": 2,
+        "conditions": {
+          "source_local_id": "gold-jewellery-exclusion",
+          "part": null,
+          "info_reasons": [
+            "unmapped_condition_category:spend_category",
+            "unmapped_category_token"
+          ],
+          "flags": []
+        },
+        "notes": null,
+        "effective_from": "2025-06-20",
+        "effective_to": null,
+        "excluded_categories": [],
+        "rule_role": "info",
+        "merchant_slugs": [],
+        "platform_slugs": [],
+        "mcc_include": [],
+        "mcc_exclude": [],
+        "except_merchant_slugs": [],
+        "except_platform_slugs": [],
+        "block_inr": null,
+        "min_engine_version": 2,
+        "max_engine_version": null,
+        "source_local_id": "gold-jewellery-exclusion",
+        "display_note": "Gold and Jewellery transactions are excluded from EDGE REWARD earning."
+      },
+      {
+        "id": "indianoil-axis-bank-credit-card:rule:wallet-exclusion",
+        "category_id": "cat-wallet",
+        "category_slug": "wallet",
+        "merchant_pattern": null,
+        "rail": null,
+        "unit": "points_per_100",
+        "rate": 0,
+        "min_txn_inr": null,
+        "max_txn_inr": null,
+        "priority": 3,
+        "conditions": {
+          "source_local_id": "wallet-exclusion",
+          "part": null,
+          "info_reasons": [],
+          "flags": []
+        },
+        "notes": null,
+        "effective_from": "2025-06-20",
+        "effective_to": null,
+        "excluded_categories": [],
+        "rule_role": "exclusion",
+        "merchant_slugs": [],
+        "platform_slugs": [],
+        "mcc_include": [],
+        "mcc_exclude": [],
+        "except_merchant_slugs": [],
+        "except_platform_slugs": [],
+        "block_inr": null,
+        "min_engine_version": 1,
+        "max_engine_version": null,
+        "source_local_id": "wallet-exclusion",
+        "display_note": "Wallet-load transactions are excluded from EDGE REWARD earning."
+      },
+      {
+        "id": "indianoil-axis-bank-credit-card:rule:rent-exclusion",
+        "category_id": "cat-rent",
+        "category_slug": "rent",
+        "merchant_pattern": null,
+        "rail": null,
+        "unit": "points_per_100",
+        "rate": 0,
+        "min_txn_inr": null,
+        "max_txn_inr": null,
+        "priority": 4,
+        "conditions": {
+          "source_local_id": "rent-exclusion",
+          "part": null,
+          "info_reasons": [],
+          "flags": []
+        },
+        "notes": null,
+        "effective_from": "2025-06-20",
+        "effective_to": null,
+        "excluded_categories": [],
+        "rule_role": "exclusion",
+        "merchant_slugs": [],
+        "platform_slugs": [],
+        "mcc_include": [],
+        "mcc_exclude": [],
+        "except_merchant_slugs": [],
+        "except_platform_slugs": [],
+        "block_inr": null,
+        "min_engine_version": 1,
+        "max_engine_version": null,
+        "source_local_id": "rent-exclusion",
+        "display_note": "Rent transactions are excluded from EDGE REWARD earning."
+      },
+      {
+        "id": "indianoil-axis-bank-credit-card:rule:utility-exclusion",
+        "category_id": "cat-bills",
+        "category_slug": "bills",
+        "merchant_pattern": null,
+        "rail": null,
+        "unit": "points_per_100",
+        "rate": 0,
+        "min_txn_inr": null,
+        "max_txn_inr": null,
+        "priority": 5,
+        "conditions": {
+          "source_local_id": "utility-exclusion",
+          "part": null,
+          "info_reasons": [],
+          "flags": [
+            "exclusion_scope_broadened"
+          ]
+        },
+        "notes": null,
+        "effective_from": "2025-06-20",
+        "effective_to": null,
+        "excluded_categories": [],
+        "rule_role": "exclusion",
+        "merchant_slugs": [],
+        "platform_slugs": [],
+        "mcc_include": [],
+        "mcc_exclude": [],
+        "except_merchant_slugs": [],
+        "except_platform_slugs": [],
+        "block_inr": null,
+        "min_engine_version": 1,
+        "max_engine_version": null,
+        "source_local_id": "utility-exclusion",
+        "display_note": "Utility and Telecom transactions are excluded from EDGE REWARD earning."
+      },
+      {
+        "id": "indianoil-axis-bank-credit-card:rule:government-exclusion",
+        "category_id": "cat-government",
+        "category_slug": "government",
+        "merchant_pattern": null,
+        "rail": null,
+        "unit": "points_per_100",
+        "rate": 0,
+        "min_txn_inr": null,
+        "max_txn_inr": null,
+        "priority": 6,
+        "conditions": {
+          "source_local_id": "government-exclusion",
+          "part": null,
+          "info_reasons": [],
+          "flags": []
+        },
+        "notes": null,
+        "effective_from": "2025-06-20",
+        "effective_to": null,
+        "excluded_categories": [],
+        "rule_role": "exclusion",
+        "merchant_slugs": [],
+        "platform_slugs": [],
+        "mcc_include": [],
+        "mcc_exclude": [],
+        "except_merchant_slugs": [],
+        "except_platform_slugs": [],
+        "block_inr": null,
+        "min_engine_version": 1,
+        "max_engine_version": null,
+        "source_local_id": "government-exclusion",
+        "display_note": "Government-services transactions are excluded from EDGE REWARD earning."
+      },
+      {
+        "id": "indianoil-axis-bank-credit-card:rule:education-exclusion",
+        "category_id": "cat-education",
+        "category_slug": "education",
+        "merchant_pattern": null,
+        "rail": null,
+        "unit": "points_per_100",
+        "rate": 0,
+        "min_txn_inr": null,
+        "max_txn_inr": null,
+        "priority": 7,
+        "conditions": {
+          "source_local_id": "education-exclusion",
+          "part": null,
+          "info_reasons": [],
+          "flags": []
+        },
+        "notes": null,
+        "effective_from": "2025-06-20",
+        "effective_to": null,
+        "excluded_categories": [],
+        "rule_role": "exclusion",
+        "merchant_slugs": [],
+        "platform_slugs": [],
+        "mcc_include": [],
+        "mcc_exclude": [],
+        "except_merchant_slugs": [],
+        "except_platform_slugs": [],
+        "block_inr": null,
+        "min_engine_version": 1,
+        "max_engine_version": null,
+        "source_local_id": "education-exclusion",
+        "display_note": "Education transactions are excluded from EDGE REWARD earning. Direct payments through education institutional websites or their POS machines do not incur the separate 1% education transaction fee, but remain excluded from EDGE REWARD earning."
+      },
+      {
+        "id": "indianoil-axis-bank-credit-card:rule:financial-institutions-exclusion",
+        "category_id": null,
+        "category_slug": null,
+        "merchant_pattern": null,
+        "rail": null,
+        "unit": "points_per_100",
+        "rate": 0,
+        "min_txn_inr": null,
+        "max_txn_inr": null,
+        "priority": 8,
+        "conditions": {
+          "source_local_id": "financial-institutions-exclusion",
+          "part": null,
+          "info_reasons": [
+            "unmapped_condition_category:spend_category",
+            "unmapped_category_token"
+          ],
+          "flags": []
+        },
+        "notes": null,
+        "effective_from": "2025-06-20",
+        "effective_to": null,
+        "excluded_categories": [],
+        "rule_role": "info",
+        "merchant_slugs": [],
+        "platform_slugs": [],
+        "mcc_include": [],
+        "mcc_exclude": [],
+        "except_merchant_slugs": [],
+        "except_platform_slugs": [],
+        "block_inr": null,
+        "min_engine_version": 2,
+        "max_engine_version": null,
+        "source_local_id": "financial-institutions-exclusion",
+        "display_note": "Financial Institution transactions are excluded from EDGE REWARD earning."
+      },
+      {
+        "id": "indianoil-axis-bank-credit-card:rule:cash-advance-exclusion",
+        "category_id": null,
+        "category_slug": null,
+        "merchant_pattern": null,
+        "rail": "atm",
+        "unit": "points_per_100",
+        "rate": 0,
+        "min_txn_inr": null,
+        "max_txn_inr": null,
+        "priority": 9,
+        "conditions": {
+          "source_local_id": "cash-advance-exclusion",
+          "part": null,
+          "info_reasons": [],
+          "flags": [
+            "exclusion_scope_broadened"
+          ]
+        },
+        "notes": null,
+        "effective_from": "2025-06-20",
+        "effective_to": null,
+        "excluded_categories": [],
+        "rule_role": "exclusion",
+        "merchant_slugs": [],
+        "platform_slugs": [],
+        "mcc_include": [],
+        "mcc_exclude": [],
+        "except_merchant_slugs": [],
+        "except_platform_slugs": [],
+        "block_inr": null,
+        "min_engine_version": 2,
+        "max_engine_version": null,
+        "source_local_id": "cash-advance-exclusion",
+        "display_note": "Cash advances are excluded from EDGE REWARD earning."
+      },
+      {
+        "id": "indianoil-axis-bank-credit-card:rule:repayment-exclusion",
+        "category_id": null,
+        "category_slug": null,
+        "merchant_pattern": null,
+        "rail": null,
+        "unit": "points_per_100",
+        "rate": 0,
+        "min_txn_inr": null,
+        "max_txn_inr": null,
+        "priority": 10,
+        "conditions": {
+          "source_local_id": "repayment-exclusion",
+          "part": null,
+          "info_reasons": [
+            "non_purchase_category"
+          ],
+          "flags": []
+        },
+        "notes": null,
+        "effective_from": "2025-06-20",
+        "effective_to": null,
+        "excluded_categories": [],
+        "rule_role": "info",
+        "merchant_slugs": [],
+        "platform_slugs": [],
+        "mcc_include": [],
+        "mcc_exclude": [],
+        "except_merchant_slugs": [],
+        "except_platform_slugs": [],
+        "block_inr": null,
+        "min_engine_version": 2,
+        "max_engine_version": null,
+        "source_local_id": "repayment-exclusion",
+        "display_note": "Repayment transactions are excluded from EDGE REWARD earning."
+      },
+      {
+        "id": "indianoil-axis-bank-credit-card:rule:emi-exclusion",
+        "category_id": "cat-emi",
+        "category_slug": "emi",
+        "merchant_pattern": null,
+        "rail": "emi",
+        "unit": "points_per_100",
+        "rate": 0,
+        "min_txn_inr": null,
+        "max_txn_inr": null,
+        "priority": 11,
+        "conditions": {
+          "source_local_id": "emi-exclusion",
+          "part": null,
+          "info_reasons": [],
+          "flags": []
+        },
+        "notes": null,
+        "effective_from": "2024-04-20",
+        "effective_to": null,
+        "excluded_categories": [],
+        "rule_role": "exclusion",
+        "merchant_slugs": [],
+        "platform_slugs": [],
+        "mcc_include": [],
+        "mcc_exclude": [],
+        "except_merchant_slugs": [],
+        "except_platform_slugs": [],
+        "block_inr": null,
+        "min_engine_version": 1,
+        "max_engine_version": null,
+        "source_local_id": "emi-exclusion",
+        "display_note": "EDGE REWARD Points are debited for credit card transactions converted to EMI and are not credited back for the original transaction when the EMI is cancelled."
+      }
+    ],
+    "cap_rules": [
+      {
+        "id": "indianoil-axis-bank-credit-card:cap:iocl-fuel-monthly-points-cap",
+        "reward_rule_id": "indianoil-axis-bank-credit-card:rule:iocl-fuel-accelerated",
+        "category_id": null,
+        "category_slug": null,
+        "benefit_kind": null,
+        "label": "Iocl fuel monthly points cap",
+        "measure": "reward_value",
+        "period": "calendar_month",
+        "cap_value": 200,
+        "post_cap_unit": null,
+        "post_cap_rate": 0,
+        "resets_on_day": 1,
+        "cap_kind": "total_points",
+        "cap_amount": 1000,
+        "scope": "targets",
+        "targets": [
+          "indianoil-axis-bank-credit-card:rule:iocl-fuel-accelerated"
+        ],
+        "parent_cap_id": null,
+        "post_cap_behavior": null,
+        "anchor": null,
+        "min_engine_version": 1,
+        "source_local_id": "iocl-fuel-monthly-points-cap"
+      },
+      {
+        "id": "indianoil-axis-bank-credit-card:cap:online-shopping-monthly-spend-cap",
+        "reward_rule_id": "indianoil-axis-bank-credit-card:rule:online-shopping-accelerated",
+        "category_id": null,
+        "category_slug": null,
+        "benefit_kind": null,
+        "label": "Online shopping monthly spend cap",
+        "measure": "spend_amount",
+        "period": "calendar_month",
+        "cap_value": 5000,
+        "post_cap_unit": null,
+        "post_cap_rate": null,
+        "resets_on_day": 1,
+        "cap_kind": "eligible_spend",
+        "cap_amount": 5000,
+        "scope": "targets",
+        "targets": [
+          "indianoil-axis-bank-credit-card:rule:online-shopping-accelerated"
+        ],
+        "parent_cap_id": null,
+        "post_cap_behavior": "base_rate",
+        "anchor": null,
+        "min_engine_version": 1,
+        "source_local_id": "online-shopping-monthly-spend-cap"
+      }
+    ],
+    "milestone_rules": [],
+    "fee_waiver_rules": [
+      {
+        "id": "indianoil-axis-bank-credit-card:waiver:1",
+        "threshold_spend_inr": 350000,
+        "period": "annual",
+        "waives_fee_inr": 500,
+        "excluded_category_slugs": [
+          "rent",
+          "wallet",
+          "insurance",
+          "emi"
+        ],
+        "notes": "Spend ₹3,50,000 or more in a card anniversary year. Rent and wallet-load transactions are excluded. All EMI transactions, cash withdrawals, fees, charges, GST, insurance spends, temporary credit and reversal of temporary credit for a disputed transaction are also excluded.",
+        "excluded_categories": [
+          "cat-rent",
+          "cat-wallet",
+          "cat-insurance",
+          "cat-emi"
+        ]
+      }
+    ],
+    "benefits": [
+      {
+        "id": "indianoil-axis-bank-credit-card:benefit:bookmyshow-movie-discount",
+        "key": "bookmyshow-movie-discount",
+        "source_local_id": "bookmyshow-movie-discount",
+        "kind": "movie",
+        "label": "BookMyShow movie ticket discount",
+        "description": "Sponsor: BookMyShow",
+        "quota_count": null,
+        "quota_period": null,
+        "network_program": null,
+        "value_estimate_inr": 100,
+        "conditions": {
+          "source_category_id": "movie",
+          "evaluation_engine": {
+            "conditions": {
+              "booking_channel": [
+                "BookMyShow app",
+                "BookMyShow website"
+              ]
+            },
+            "benefit_calculation": {
+              "maximum_discount_percent": 10,
+              "maximum_discount_inr": 100
+            },
+            "perks": [
+              "Instant discount of up to 10% on movie tickets booked through BookMyShow."
+            ]
+          }
+        }
+      },
+      {
+        "id": "indianoil-axis-bank-credit-card:benefit:eazydiner-dining",
+        "key": "eazydiner-dining",
+        "source_local_id": "eazydiner-dining",
+        "kind": "dining_program",
+        "label": "EazyDiner dining discount",
+        "description": "Sponsor: EazyDiner",
+        "quota_count": 1,
+        "quota_period": "calendar_month",
+        "network_program": "EazyDiner",
+        "value_estimate_inr": 500,
+        "conditions": {
+          "source_category_id": "dining",
+          "evaluation_engine": {
+            "conditions": {
+              "minimum_transaction_inr": 2500,
+              "frequency": "once per card per month"
+            },
+            "benefit_calculation": {
+              "maximum_discount_percent": 15,
+              "maximum_discount_inr": 500
+            },
+            "perks": [
+              "Up to 15% discount up to ₹500 per month on eligible dining via EazyDiner."
+            ]
+          }
+        }
+      },
+      {
+        "id": "indianoil-axis-bank-credit-card:benefit:axis-dining-delights",
+        "key": "axis-dining-delights",
+        "source_local_id": "axis-dining-delights",
+        "kind": "dining_program",
+        "label": "Axis Bank Dining Delights",
+        "description": "Sponsor: Axis Bank",
+        "quota_count": null,
+        "quota_period": null,
+        "network_program": "Axis Bank Dining Delights",
+        "value_estimate_inr": null,
+        "conditions": {
+          "source_category_id": "dining",
+          "evaluation_engine": {
+            "conditions": {},
+            "benefit_calculation": {},
+            "perks": [
+              "Access to participating restaurant offers under the Axis Bank Dining Delights Program."
+            ]
+          }
+        }
+      },
+      {
+        "id": "indianoil-axis-bank-credit-card:benefit:wednesday-delight",
+        "key": "wednesday-delight",
+        "source_local_id": "wednesday-delight",
+        "kind": "other",
+        "label": "Wednesday Delight offers",
+        "description": "Sponsor: Axis Bank",
+        "quota_count": null,
+        "quota_period": null,
+        "network_program": "Axis Bank Wednesday Delight",
+        "value_estimate_inr": null,
+        "conditions": {
+          "source_category_id": "other",
+          "evaluation_engine": {
+            "conditions": {
+              "day_of_week": "Wednesday"
+            },
+            "benefit_calculation": {},
+            "perks": [
+              "Up to 15% savings on flights and hotels via Goibibo and MakeMyTrip.",
+              "10% off on orders via Swiggy.",
+              "10% off up to ₹1,000 on Tira."
+            ]
+          }
+        }
+      }
+    ],
+    "unlock_rules": [],
+    "redemption_options": [
+      {
+        "program_name": "EDGE REWARDS platform",
+        "method": "partner_catalogue",
+        "value_per_point_inr": 0.2,
+        "min_points": 300,
+        "notes": "Redemption fee: ₹99"
+      },
+      {
+        "program_name": "EDGE REWARDS Pay by Rewards",
+        "method": "statement_credit",
+        "value_per_point_inr": 0.2,
+        "min_points": 10000,
+        "notes": "Redemption fee: ₹99"
+      }
+    ],
+    "is_upi_linkable": true
+  }
+}

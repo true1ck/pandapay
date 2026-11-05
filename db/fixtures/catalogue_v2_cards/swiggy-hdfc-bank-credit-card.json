@@ -1,0 +1,1546 @@
+{
+  "generated_by": "api/scripts/catalogue_v2/snapshot_examples.js",
+  "source_slug": "swiggy-hdfc-bank-credit-card",
+  "inputs": {
+    "transform_version": "7",
+    "source_record_sha256": "0f0ab8fafeeb5e5343353df94f7376dd03be6af9a34bc87e34bc01d886cf69fb",
+    "override_sha256": "e34aa331d4da2886c881751e62df74efb667fd66b6db4e5da65bc80cd319b922",
+    "directory_sha256": "c2fded34df886aef08595eebb7629a4dd140c98af750f3c891d6c291b4874b53",
+    "verified": false
+  },
+  "blocking_flags": [
+    "info_rule"
+  ],
+  "card": {
+    "id": "swiggy-hdfc-bank-credit-card:card",
+    "slug": "swiggy-hdfc-bank-credit-card",
+    "name": "Swiggy\n HDFC Bank Credit Card",
+    "network": "mastercard",
+    "issuer_slug": "hdfc",
+    "base_reward_unit": "cashback_percent",
+    "base_reward_rate": 1,
+    "point_value_inr": null,
+    "excluded_categories": [
+      "cat-bills",
+      "cat-education",
+      "cat-emi",
+      "cat-fuel",
+      "cat-government",
+      "cat-insurance",
+      "cat-rent",
+      "cat-wallet"
+    ],
+    "accrual_block_inr": null,
+    "accrual_rounding": "round",
+    "cashback_rounding": "rupee_half_up",
+    "points_expiry_months": null,
+    "model_status": "partial",
+    "model_coverage": {
+      "rules_total": 17,
+      "rules_modelled": 13,
+      "rules_info": 4,
+      "caps_total": 3,
+      "caps_enforced": 2,
+      "flags": [
+        {
+          "code": "info_rule",
+          "source_local_id": "online_5pct",
+          "detail": "category_list_conflict"
+        },
+        {
+          "code": "info_rule",
+          "source_local_id": "online_5pct",
+          "detail": "condition:merchant_restriction"
+        },
+        {
+          "code": "partial_category_list",
+          "source_local_id": "online_5pct",
+          "detail": null
+        },
+        {
+          "code": "unmapped_excluded_category",
+          "source_local_id": "other_1pct",
+          "detail": null
+        },
+        {
+          "code": "info_rule",
+          "source_local_id": "swiggy_wallet_exclusion",
+          "detail": "unresolved_merchant:merchant_pattern"
+        },
+        {
+          "code": "mcc_scoped_exclusion",
+          "source_local_id": "rent_exclusion",
+          "detail": null
+        },
+        {
+          "code": "mcc_scoped_exclusion",
+          "source_local_id": "fuel_exclusion",
+          "detail": null
+        },
+        {
+          "code": "token_replaced_by_conditions",
+          "source_local_id": "jewellery_exclusion",
+          "detail": null
+        },
+        {
+          "code": "mcc_scoped_exclusion",
+          "source_local_id": "government_exclusion",
+          "detail": null
+        },
+        {
+          "code": "token_replaced_by_conditions",
+          "source_local_id": "gift_card_exclusion",
+          "detail": null
+        },
+        {
+          "code": "mcc_scoped_exclusion",
+          "source_local_id": "wallet_exclusion",
+          "detail": null
+        },
+        {
+          "code": "mcc_scoped_exclusion",
+          "source_local_id": "insurance_exclusion",
+          "detail": null
+        },
+        {
+          "code": "mcc_scoped_exclusion",
+          "source_local_id": "education_exclusion",
+          "detail": null
+        },
+        {
+          "code": "info_rule",
+          "source_local_id": "swiggy_liquor_exclusion",
+          "detail": "unresolved_merchant:merchant_pattern"
+        },
+        {
+          "code": "info_rule",
+          "source_local_id": "swiggy_minis_exclusion",
+          "detail": "unresolved_merchant:merchant_pattern"
+        },
+        {
+          "code": "cap_targets_info_only",
+          "source_local_id": "online_5pct_cashback_cap",
+          "detail": null
+        }
+      ],
+      "overrides_applied": [
+        {
+          "path": "cap_rules[id=swiggy_cashback_cap].metric",
+          "op": "set",
+          "value_sha256": "7af78ba28cf9ccb3",
+          "reason": "Cap is on cashback earned, not on spend.",
+          "source_url": "https://www.hdfc.bank.in/content/dam/hdfcbankpws/in/en/personal-banking/discover-products/cards/credit-cards/swiggy-hdfc-bank-credit-card/pdf/terms-and-conditions-swiggy-hdfc-bank-credit-card-18092026.pdf",
+          "checked_on": "2026-11-05"
+        },
+        {
+          "path": "cap_rules[id=swiggy_cashback_cap].limit_value",
+          "op": "set",
+          "value_sha256": "9f69998560dcfd80",
+          "reason": "Rs1,500 cashback per billing cycle.",
+          "source_url": "https://www.hdfc.bank.in/content/dam/hdfcbankpws/in/en/personal-banking/discover-products/cards/credit-cards/swiggy-hdfc-bank-credit-card/pdf/terms-and-conditions-swiggy-hdfc-bank-credit-card-18092026.pdf",
+          "checked_on": "2026-11-05"
+        },
+        {
+          "path": "cap_rules[id=swiggy_cashback_cap].limit_value_inr",
+          "op": "set",
+          "value_sha256": "74234e98afe7498f",
+          "reason": "Remove spend-based value so cap_amount is the cashback figure.",
+          "source_url": "https://www.hdfc.bank.in/content/dam/hdfcbankpws/in/en/personal-banking/discover-products/cards/credit-cards/swiggy-hdfc-bank-credit-card/pdf/terms-and-conditions-swiggy-hdfc-bank-credit-card-18092026.pdf",
+          "checked_on": "2026-11-05"
+        },
+        {
+          "path": "cap_rules[id=online_5pct_cashback_cap].metric",
+          "op": "set",
+          "value_sha256": "7af78ba28cf9ccb3",
+          "reason": "Cap is on cashback earned, not on spend.",
+          "source_url": "https://www.hdfc.bank.in/content/dam/hdfcbankpws/in/en/personal-banking/discover-products/cards/credit-cards/swiggy-hdfc-bank-credit-card/pdf/terms-and-conditions-swiggy-hdfc-bank-credit-card-18092026.pdf",
+          "checked_on": "2026-11-05"
+        },
+        {
+          "path": "cap_rules[id=online_5pct_cashback_cap].limit_value",
+          "op": "set",
+          "value_sha256": "9f69998560dcfd80",
+          "reason": "Rs1,500 cashback per billing cycle.",
+          "source_url": "https://www.hdfc.bank.in/content/dam/hdfcbankpws/in/en/personal-banking/discover-products/cards/credit-cards/swiggy-hdfc-bank-credit-card/pdf/terms-and-conditions-swiggy-hdfc-bank-credit-card-18092026.pdf",
+          "checked_on": "2026-11-05"
+        },
+        {
+          "path": "cap_rules[id=online_5pct_cashback_cap].limit_value_inr",
+          "op": "set",
+          "value_sha256": "74234e98afe7498f",
+          "reason": "Remove spend-based value.",
+          "source_url": "https://www.hdfc.bank.in/content/dam/hdfcbankpws/in/en/personal-banking/discover-products/cards/credit-cards/swiggy-hdfc-bank-credit-card/pdf/terms-and-conditions-swiggy-hdfc-bank-credit-card-18092026.pdf",
+          "checked_on": "2026-11-05"
+        },
+        {
+          "path": "cap_rules[id=other_1pct_cashback_cap].metric",
+          "op": "set",
+          "value_sha256": "7af78ba28cf9ccb3",
+          "reason": "Cap is on cashback earned, not on spend.",
+          "source_url": "https://www.hdfc.bank.in/content/dam/hdfcbankpws/in/en/personal-banking/discover-products/cards/credit-cards/swiggy-hdfc-bank-credit-card/pdf/terms-and-conditions-swiggy-hdfc-bank-credit-card-18092026.pdf",
+          "checked_on": "2026-11-05"
+        },
+        {
+          "path": "cap_rules[id=other_1pct_cashback_cap].limit_value",
+          "op": "set",
+          "value_sha256": "0604cd3138feed20",
+          "reason": "Rs500 cashback per billing cycle.",
+          "source_url": "https://www.hdfc.bank.in/content/dam/hdfcbankpws/in/en/personal-banking/discover-products/cards/credit-cards/swiggy-hdfc-bank-credit-card/pdf/terms-and-conditions-swiggy-hdfc-bank-credit-card-18092026.pdf",
+          "checked_on": "2026-11-05"
+        },
+        {
+          "path": "cap_rules[id=other_1pct_cashback_cap].limit_value_inr",
+          "op": "set",
+          "value_sha256": "74234e98afe7498f",
+          "reason": "Remove spend-based value.",
+          "source_url": "https://www.hdfc.bank.in/content/dam/hdfcbankpws/in/en/personal-banking/discover-products/cards/credit-cards/swiggy-hdfc-bank-credit-card/pdf/terms-and-conditions-swiggy-hdfc-bank-credit-card-18092026.pdf",
+          "checked_on": "2026-11-05"
+        },
+        {
+          "path": "accrual_engine.cashback_rounding",
+          "op": "set",
+          "value_sha256": "e98088164cee2b8c",
+          "reason": "Cashback is rounded to the nearest whole rupee per transaction (15.3 to 15, 15.6 to 16) (D11).",
+          "source_url": "https://www.hdfc.bank.in/content/dam/hdfcbankpws/in/en/personal-banking/discover-products/cards/credit-cards/swiggy-hdfc-bank-credit-card/pdf/terms-and-conditions-swiggy-hdfc-bank-credit-card-18092026.pdf",
+          "checked_on": "2026-11-05"
+        }
+      ]
+    },
+    "reward_rules": [
+      {
+        "id": "swiggy-hdfc-bank-credit-card:rule:swiggy_10pct",
+        "category_id": null,
+        "category_slug": null,
+        "merchant_pattern": "swiggy",
+        "rail": null,
+        "unit": "cashback_percent",
+        "rate": 10,
+        "min_txn_inr": 249,
+        "max_txn_inr": null,
+        "priority": 1,
+        "conditions": {
+          "source_local_id": "swiggy_10pct",
+          "part": null,
+          "info_reasons": [],
+          "flags": []
+        },
+        "notes": null,
+        "effective_from": "2026-04-21",
+        "effective_to": null,
+        "excluded_categories": [],
+        "rule_role": "earn",
+        "merchant_slugs": [
+          "swiggy"
+        ],
+        "platform_slugs": [],
+        "mcc_include": [],
+        "mcc_exclude": [],
+        "except_merchant_slugs": [],
+        "except_platform_slugs": [],
+        "block_inr": null,
+        "min_engine_version": 1,
+        "max_engine_version": null,
+        "source_local_id": "swiggy_10pct",
+        "display_note": "10% cashback on eligible Swiggy app transactions."
+      },
+      {
+        "id": "swiggy-hdfc-bank-credit-card:rule:online_5pct",
+        "category_id": "cat-online",
+        "category_slug": "online",
+        "merchant_pattern": null,
+        "rail": "online",
+        "unit": "cashback_percent",
+        "rate": 5,
+        "min_txn_inr": 100,
+        "max_txn_inr": null,
+        "priority": 2,
+        "conditions": {
+          "source_local_id": "online_5pct",
+          "part": null,
+          "info_reasons": [
+            "category_list_conflict",
+            "condition:merchant_restriction"
+          ],
+          "flags": [
+            "partial_category_list"
+          ]
+        },
+        "notes": null,
+        "effective_from": "2025-05-10",
+        "effective_to": null,
+        "excluded_categories": [],
+        "rule_role": "info",
+        "merchant_slugs": [],
+        "platform_slugs": [],
+        "mcc_include": [],
+        "mcc_exclude": [],
+        "except_merchant_slugs": [],
+        "except_platform_slugs": [],
+        "block_inr": null,
+        "min_engine_version": 2,
+        "max_engine_version": null,
+        "source_local_id": "online_5pct",
+        "display_note": "5% cashback on eligible online transactions across specified partner merchants and MCCs."
+      },
+      {
+        "id": "swiggy-hdfc-bank-credit-card:rule:other_1pct",
+        "category_id": null,
+        "category_slug": null,
+        "merchant_pattern": null,
+        "rail": null,
+        "unit": "cashback_percent",
+        "rate": 1,
+        "min_txn_inr": 100,
+        "max_txn_inr": null,
+        "priority": 3,
+        "conditions": {
+          "source_local_id": "other_1pct",
+          "part": null,
+          "info_reasons": [],
+          "flags": [
+            "unmapped_excluded_category"
+          ]
+        },
+        "notes": null,
+        "effective_from": "2026-05-22",
+        "effective_to": null,
+        "excluded_categories": [
+          "cat-bills",
+          "cat-education",
+          "cat-emi",
+          "cat-fuel",
+          "cat-government",
+          "cat-insurance",
+          "cat-rent",
+          "cat-wallet"
+        ],
+        "rule_role": "earn",
+        "merchant_slugs": [],
+        "platform_slugs": [],
+        "mcc_include": [],
+        "mcc_exclude": [],
+        "except_merchant_slugs": [],
+        "except_platform_slugs": [],
+        "block_inr": null,
+        "min_engine_version": 1,
+        "max_engine_version": null,
+        "source_local_id": "other_1pct",
+        "display_note": "1% cashback on other eligible retail and offline spending."
+      },
+      {
+        "id": "swiggy-hdfc-bank-credit-card:rule:swiggy_wallet_exclusion",
+        "category_id": "cat-wallet",
+        "category_slug": "wallet",
+        "merchant_pattern": null,
+        "rail": null,
+        "unit": "cashback_percent",
+        "rate": 0,
+        "min_txn_inr": null,
+        "max_txn_inr": null,
+        "priority": 10,
+        "conditions": {
+          "source_local_id": "swiggy_wallet_exclusion",
+          "part": null,
+          "info_reasons": [
+            "unresolved_merchant:merchant_pattern"
+          ],
+          "flags": []
+        },
+        "notes": null,
+        "effective_from": "2026-05-22",
+        "effective_to": null,
+        "excluded_categories": [],
+        "rule_role": "info",
+        "merchant_slugs": [],
+        "platform_slugs": [],
+        "mcc_include": [],
+        "mcc_exclude": [],
+        "except_merchant_slugs": [],
+        "except_platform_slugs": [],
+        "block_inr": null,
+        "min_engine_version": 2,
+        "max_engine_version": null,
+        "source_local_id": "swiggy_wallet_exclusion",
+        "display_note": "Swiggy Money Wallet loads do not earn cashback."
+      },
+      {
+        "id": "swiggy-hdfc-bank-credit-card:rule:rent_exclusion#1",
+        "category_id": "cat-rent",
+        "category_slug": "rent",
+        "merchant_pattern": null,
+        "rail": null,
+        "unit": "cashback_percent",
+        "rate": 0,
+        "min_txn_inr": null,
+        "max_txn_inr": null,
+        "priority": 11,
+        "conditions": {
+          "source_local_id": "rent_exclusion",
+          "part": 1,
+          "info_reasons": [],
+          "flags": [
+            "mcc_scoped_exclusion"
+          ]
+        },
+        "notes": null,
+        "effective_from": "2026-05-22",
+        "effective_to": null,
+        "excluded_categories": [],
+        "rule_role": "exclusion",
+        "merchant_slugs": [],
+        "platform_slugs": [],
+        "mcc_include": [],
+        "mcc_exclude": [],
+        "except_merchant_slugs": [],
+        "except_platform_slugs": [],
+        "block_inr": null,
+        "min_engine_version": 1,
+        "max_engine_version": 1,
+        "source_local_id": "rent_exclusion",
+        "display_note": "Rental payments do not earn cashback."
+      },
+      {
+        "id": "swiggy-hdfc-bank-credit-card:rule:rent_exclusion#2",
+        "category_id": "cat-rent",
+        "category_slug": "rent",
+        "merchant_pattern": null,
+        "rail": null,
+        "unit": "cashback_percent",
+        "rate": 0,
+        "min_txn_inr": null,
+        "max_txn_inr": null,
+        "priority": 11,
+        "conditions": {
+          "source_local_id": "rent_exclusion",
+          "part": 2,
+          "info_reasons": [],
+          "flags": [
+            "mcc_scoped_exclusion"
+          ]
+        },
+        "notes": null,
+        "effective_from": "2026-05-22",
+        "effective_to": null,
+        "excluded_categories": [],
+        "rule_role": "exclusion",
+        "merchant_slugs": [],
+        "platform_slugs": [],
+        "mcc_include": [
+          "6513"
+        ],
+        "mcc_exclude": [],
+        "except_merchant_slugs": [],
+        "except_platform_slugs": [],
+        "block_inr": null,
+        "min_engine_version": 2,
+        "max_engine_version": null,
+        "source_local_id": "rent_exclusion",
+        "display_note": "Rental payments do not earn cashback."
+      },
+      {
+        "id": "swiggy-hdfc-bank-credit-card:rule:rent_exclusion#3",
+        "category_id": null,
+        "category_slug": null,
+        "merchant_pattern": null,
+        "rail": null,
+        "unit": "cashback_percent",
+        "rate": 0,
+        "min_txn_inr": null,
+        "max_txn_inr": null,
+        "priority": 11,
+        "conditions": {
+          "source_local_id": "rent_exclusion",
+          "part": 3,
+          "info_reasons": [],
+          "flags": [
+            "mcc_scoped_exclusion"
+          ]
+        },
+        "notes": null,
+        "effective_from": "2026-05-22",
+        "effective_to": null,
+        "excluded_categories": [],
+        "rule_role": "exclusion",
+        "merchant_slugs": [],
+        "platform_slugs": [],
+        "mcc_include": [
+          "6513"
+        ],
+        "mcc_exclude": [],
+        "except_merchant_slugs": [],
+        "except_platform_slugs": [],
+        "block_inr": null,
+        "min_engine_version": 2,
+        "max_engine_version": null,
+        "source_local_id": "rent_exclusion",
+        "display_note": "Rental payments do not earn cashback."
+      },
+      {
+        "id": "swiggy-hdfc-bank-credit-card:rule:fuel_exclusion#1",
+        "category_id": "cat-fuel",
+        "category_slug": "fuel",
+        "merchant_pattern": null,
+        "rail": null,
+        "unit": "cashback_percent",
+        "rate": 0,
+        "min_txn_inr": null,
+        "max_txn_inr": null,
+        "priority": 12,
+        "conditions": {
+          "source_local_id": "fuel_exclusion",
+          "part": 1,
+          "info_reasons": [],
+          "flags": [
+            "mcc_scoped_exclusion"
+          ]
+        },
+        "notes": null,
+        "effective_from": "2026-05-22",
+        "effective_to": null,
+        "excluded_categories": [],
+        "rule_role": "exclusion",
+        "merchant_slugs": [],
+        "platform_slugs": [],
+        "mcc_include": [],
+        "mcc_exclude": [],
+        "except_merchant_slugs": [],
+        "except_platform_slugs": [],
+        "block_inr": null,
+        "min_engine_version": 1,
+        "max_engine_version": 1,
+        "source_local_id": "fuel_exclusion",
+        "display_note": "Fuel transactions do not earn cashback."
+      },
+      {
+        "id": "swiggy-hdfc-bank-credit-card:rule:fuel_exclusion#2",
+        "category_id": "cat-fuel",
+        "category_slug": "fuel",
+        "merchant_pattern": null,
+        "rail": null,
+        "unit": "cashback_percent",
+        "rate": 0,
+        "min_txn_inr": null,
+        "max_txn_inr": null,
+        "priority": 12,
+        "conditions": {
+          "source_local_id": "fuel_exclusion",
+          "part": 2,
+          "info_reasons": [],
+          "flags": [
+            "mcc_scoped_exclusion"
+          ]
+        },
+        "notes": null,
+        "effective_from": "2026-05-22",
+        "effective_to": null,
+        "excluded_categories": [],
+        "rule_role": "exclusion",
+        "merchant_slugs": [],
+        "platform_slugs": [],
+        "mcc_include": [
+          "5172",
+          "5541",
+          "5542",
+          "5983"
+        ],
+        "mcc_exclude": [],
+        "except_merchant_slugs": [],
+        "except_platform_slugs": [],
+        "block_inr": null,
+        "min_engine_version": 2,
+        "max_engine_version": null,
+        "source_local_id": "fuel_exclusion",
+        "display_note": "Fuel transactions do not earn cashback."
+      },
+      {
+        "id": "swiggy-hdfc-bank-credit-card:rule:fuel_exclusion#3",
+        "category_id": null,
+        "category_slug": null,
+        "merchant_pattern": null,
+        "rail": null,
+        "unit": "cashback_percent",
+        "rate": 0,
+        "min_txn_inr": null,
+        "max_txn_inr": null,
+        "priority": 12,
+        "conditions": {
+          "source_local_id": "fuel_exclusion",
+          "part": 3,
+          "info_reasons": [],
+          "flags": [
+            "mcc_scoped_exclusion"
+          ]
+        },
+        "notes": null,
+        "effective_from": "2026-05-22",
+        "effective_to": null,
+        "excluded_categories": [],
+        "rule_role": "exclusion",
+        "merchant_slugs": [],
+        "platform_slugs": [],
+        "mcc_include": [
+          "5172",
+          "5541",
+          "5542",
+          "5983"
+        ],
+        "mcc_exclude": [],
+        "except_merchant_slugs": [],
+        "except_platform_slugs": [],
+        "block_inr": null,
+        "min_engine_version": 2,
+        "max_engine_version": null,
+        "source_local_id": "fuel_exclusion",
+        "display_note": "Fuel transactions do not earn cashback."
+      },
+      {
+        "id": "swiggy-hdfc-bank-credit-card:rule:jewellery_exclusion",
+        "category_id": null,
+        "category_slug": null,
+        "merchant_pattern": null,
+        "rail": null,
+        "unit": "cashback_percent",
+        "rate": 0,
+        "min_txn_inr": null,
+        "max_txn_inr": null,
+        "priority": 13,
+        "conditions": {
+          "source_local_id": "jewellery_exclusion",
+          "part": null,
+          "info_reasons": [],
+          "flags": [
+            "token_replaced_by_conditions"
+          ]
+        },
+        "notes": null,
+        "effective_from": "2026-05-22",
+        "effective_to": null,
+        "excluded_categories": [],
+        "rule_role": "exclusion",
+        "merchant_slugs": [],
+        "platform_slugs": [],
+        "mcc_include": [
+          "5094",
+          "5944"
+        ],
+        "mcc_exclude": [],
+        "except_merchant_slugs": [],
+        "except_platform_slugs": [],
+        "block_inr": null,
+        "min_engine_version": 2,
+        "max_engine_version": null,
+        "source_local_id": "jewellery_exclusion",
+        "display_note": "Jewellery transactions do not earn cashback."
+      },
+      {
+        "id": "swiggy-hdfc-bank-credit-card:rule:government_exclusion#1",
+        "category_id": "cat-government",
+        "category_slug": "government",
+        "merchant_pattern": null,
+        "rail": null,
+        "unit": "cashback_percent",
+        "rate": 0,
+        "min_txn_inr": null,
+        "max_txn_inr": null,
+        "priority": 14,
+        "conditions": {
+          "source_local_id": "government_exclusion",
+          "part": 1,
+          "info_reasons": [],
+          "flags": [
+            "mcc_scoped_exclusion"
+          ]
+        },
+        "notes": null,
+        "effective_from": "2026-05-22",
+        "effective_to": null,
+        "excluded_categories": [],
+        "rule_role": "exclusion",
+        "merchant_slugs": [],
+        "platform_slugs": [],
+        "mcc_include": [],
+        "mcc_exclude": [],
+        "except_merchant_slugs": [],
+        "except_platform_slugs": [],
+        "block_inr": null,
+        "min_engine_version": 1,
+        "max_engine_version": 1,
+        "source_local_id": "government_exclusion",
+        "display_note": "Government-related transactions do not earn cashback."
+      },
+      {
+        "id": "swiggy-hdfc-bank-credit-card:rule:government_exclusion#2",
+        "category_id": "cat-government",
+        "category_slug": "government",
+        "merchant_pattern": null,
+        "rail": null,
+        "unit": "cashback_percent",
+        "rate": 0,
+        "min_txn_inr": null,
+        "max_txn_inr": null,
+        "priority": 14,
+        "conditions": {
+          "source_local_id": "government_exclusion",
+          "part": 2,
+          "info_reasons": [],
+          "flags": [
+            "mcc_scoped_exclusion"
+          ]
+        },
+        "notes": null,
+        "effective_from": "2026-05-22",
+        "effective_to": null,
+        "excluded_categories": [],
+        "rule_role": "exclusion",
+        "merchant_slugs": [],
+        "platform_slugs": [],
+        "mcc_include": [
+          "9211",
+          "9222",
+          "9223",
+          "9311",
+          "9399",
+          "9402",
+          "9405",
+          "9950"
+        ],
+        "mcc_exclude": [],
+        "except_merchant_slugs": [],
+        "except_platform_slugs": [],
+        "block_inr": null,
+        "min_engine_version": 2,
+        "max_engine_version": null,
+        "source_local_id": "government_exclusion",
+        "display_note": "Government-related transactions do not earn cashback."
+      },
+      {
+        "id": "swiggy-hdfc-bank-credit-card:rule:government_exclusion#3",
+        "category_id": null,
+        "category_slug": null,
+        "merchant_pattern": null,
+        "rail": null,
+        "unit": "cashback_percent",
+        "rate": 0,
+        "min_txn_inr": null,
+        "max_txn_inr": null,
+        "priority": 14,
+        "conditions": {
+          "source_local_id": "government_exclusion",
+          "part": 3,
+          "info_reasons": [],
+          "flags": [
+            "mcc_scoped_exclusion"
+          ]
+        },
+        "notes": null,
+        "effective_from": "2026-05-22",
+        "effective_to": null,
+        "excluded_categories": [],
+        "rule_role": "exclusion",
+        "merchant_slugs": [],
+        "platform_slugs": [],
+        "mcc_include": [
+          "9211",
+          "9222",
+          "9223",
+          "9311",
+          "9399",
+          "9402",
+          "9405",
+          "9950"
+        ],
+        "mcc_exclude": [],
+        "except_merchant_slugs": [],
+        "except_platform_slugs": [],
+        "block_inr": null,
+        "min_engine_version": 2,
+        "max_engine_version": null,
+        "source_local_id": "government_exclusion",
+        "display_note": "Government-related transactions do not earn cashback."
+      },
+      {
+        "id": "swiggy-hdfc-bank-credit-card:rule:gift_card_exclusion",
+        "category_id": null,
+        "category_slug": null,
+        "merchant_pattern": null,
+        "rail": null,
+        "unit": "cashback_percent",
+        "rate": 0,
+        "min_txn_inr": null,
+        "max_txn_inr": null,
+        "priority": 15,
+        "conditions": {
+          "source_local_id": "gift_card_exclusion",
+          "part": null,
+          "info_reasons": [],
+          "flags": [
+            "token_replaced_by_conditions"
+          ]
+        },
+        "notes": null,
+        "effective_from": "2026-05-22",
+        "effective_to": null,
+        "excluded_categories": [],
+        "rule_role": "exclusion",
+        "merchant_slugs": [],
+        "platform_slugs": [],
+        "mcc_include": [
+          "5947"
+        ],
+        "mcc_exclude": [],
+        "except_merchant_slugs": [],
+        "except_platform_slugs": [],
+        "block_inr": null,
+        "min_engine_version": 2,
+        "max_engine_version": null,
+        "source_local_id": "gift_card_exclusion",
+        "display_note": "Gift-card transactions do not earn cashback."
+      },
+      {
+        "id": "swiggy-hdfc-bank-credit-card:rule:emi_exclusion",
+        "category_id": "cat-emi",
+        "category_slug": "emi",
+        "merchant_pattern": null,
+        "rail": "emi",
+        "unit": "cashback_percent",
+        "rate": 0,
+        "min_txn_inr": null,
+        "max_txn_inr": null,
+        "priority": 16,
+        "conditions": {
+          "source_local_id": "emi_exclusion",
+          "part": null,
+          "info_reasons": [],
+          "flags": []
+        },
+        "notes": null,
+        "effective_from": "2026-05-22",
+        "effective_to": null,
+        "excluded_categories": [],
+        "rule_role": "exclusion",
+        "merchant_slugs": [],
+        "platform_slugs": [],
+        "mcc_include": [],
+        "mcc_exclude": [],
+        "except_merchant_slugs": [],
+        "except_platform_slugs": [],
+        "block_inr": null,
+        "min_engine_version": 1,
+        "max_engine_version": null,
+        "source_local_id": "emi_exclusion",
+        "display_note": "No cashback on EMI transactions; cashback already credited is reversed upon transaction conversion to EMI."
+      },
+      {
+        "id": "swiggy-hdfc-bank-credit-card:rule:wallet_exclusion#1",
+        "category_id": "cat-wallet",
+        "category_slug": "wallet",
+        "merchant_pattern": null,
+        "rail": null,
+        "unit": "cashback_percent",
+        "rate": 0,
+        "min_txn_inr": null,
+        "max_txn_inr": null,
+        "priority": 17,
+        "conditions": {
+          "source_local_id": "wallet_exclusion",
+          "part": 1,
+          "info_reasons": [],
+          "flags": [
+            "mcc_scoped_exclusion"
+          ]
+        },
+        "notes": null,
+        "effective_from": "2026-05-22",
+        "effective_to": null,
+        "excluded_categories": [],
+        "rule_role": "exclusion",
+        "merchant_slugs": [],
+        "platform_slugs": [],
+        "mcc_include": [],
+        "mcc_exclude": [],
+        "except_merchant_slugs": [],
+        "except_platform_slugs": [],
+        "block_inr": null,
+        "min_engine_version": 1,
+        "max_engine_version": 1,
+        "source_local_id": "wallet_exclusion",
+        "display_note": "Wallet loading transactions do not earn cashback."
+      },
+      {
+        "id": "swiggy-hdfc-bank-credit-card:rule:wallet_exclusion#2",
+        "category_id": "cat-wallet",
+        "category_slug": "wallet",
+        "merchant_pattern": null,
+        "rail": null,
+        "unit": "cashback_percent",
+        "rate": 0,
+        "min_txn_inr": null,
+        "max_txn_inr": null,
+        "priority": 17,
+        "conditions": {
+          "source_local_id": "wallet_exclusion",
+          "part": 2,
+          "info_reasons": [],
+          "flags": [
+            "mcc_scoped_exclusion"
+          ]
+        },
+        "notes": null,
+        "effective_from": "2026-05-22",
+        "effective_to": null,
+        "excluded_categories": [],
+        "rule_role": "exclusion",
+        "merchant_slugs": [],
+        "platform_slugs": [],
+        "mcc_include": [
+          "6540"
+        ],
+        "mcc_exclude": [],
+        "except_merchant_slugs": [],
+        "except_platform_slugs": [],
+        "block_inr": null,
+        "min_engine_version": 2,
+        "max_engine_version": null,
+        "source_local_id": "wallet_exclusion",
+        "display_note": "Wallet loading transactions do not earn cashback."
+      },
+      {
+        "id": "swiggy-hdfc-bank-credit-card:rule:wallet_exclusion#3",
+        "category_id": null,
+        "category_slug": null,
+        "merchant_pattern": null,
+        "rail": null,
+        "unit": "cashback_percent",
+        "rate": 0,
+        "min_txn_inr": null,
+        "max_txn_inr": null,
+        "priority": 17,
+        "conditions": {
+          "source_local_id": "wallet_exclusion",
+          "part": 3,
+          "info_reasons": [],
+          "flags": [
+            "mcc_scoped_exclusion"
+          ]
+        },
+        "notes": null,
+        "effective_from": "2026-05-22",
+        "effective_to": null,
+        "excluded_categories": [],
+        "rule_role": "exclusion",
+        "merchant_slugs": [],
+        "platform_slugs": [],
+        "mcc_include": [
+          "6540"
+        ],
+        "mcc_exclude": [],
+        "except_merchant_slugs": [],
+        "except_platform_slugs": [],
+        "block_inr": null,
+        "min_engine_version": 2,
+        "max_engine_version": null,
+        "source_local_id": "wallet_exclusion",
+        "display_note": "Wallet loading transactions do not earn cashback."
+      },
+      {
+        "id": "swiggy-hdfc-bank-credit-card:rule:insurance_exclusion#1",
+        "category_id": "cat-insurance",
+        "category_slug": "insurance",
+        "merchant_pattern": null,
+        "rail": null,
+        "unit": "cashback_percent",
+        "rate": 0,
+        "min_txn_inr": null,
+        "max_txn_inr": null,
+        "priority": 18,
+        "conditions": {
+          "source_local_id": "insurance_exclusion",
+          "part": 1,
+          "info_reasons": [],
+          "flags": [
+            "mcc_scoped_exclusion"
+          ]
+        },
+        "notes": null,
+        "effective_from": "2026-05-22",
+        "effective_to": null,
+        "excluded_categories": [],
+        "rule_role": "exclusion",
+        "merchant_slugs": [],
+        "platform_slugs": [],
+        "mcc_include": [],
+        "mcc_exclude": [],
+        "except_merchant_slugs": [],
+        "except_platform_slugs": [],
+        "block_inr": null,
+        "min_engine_version": 1,
+        "max_engine_version": 1,
+        "source_local_id": "insurance_exclusion",
+        "display_note": "Insurance premium payments are excluded from cashback accrual."
+      },
+      {
+        "id": "swiggy-hdfc-bank-credit-card:rule:insurance_exclusion#2",
+        "category_id": "cat-insurance",
+        "category_slug": "insurance",
+        "merchant_pattern": null,
+        "rail": null,
+        "unit": "cashback_percent",
+        "rate": 0,
+        "min_txn_inr": null,
+        "max_txn_inr": null,
+        "priority": 18,
+        "conditions": {
+          "source_local_id": "insurance_exclusion",
+          "part": 2,
+          "info_reasons": [],
+          "flags": [
+            "mcc_scoped_exclusion"
+          ]
+        },
+        "notes": null,
+        "effective_from": "2026-05-22",
+        "effective_to": null,
+        "excluded_categories": [],
+        "rule_role": "exclusion",
+        "merchant_slugs": [],
+        "platform_slugs": [],
+        "mcc_include": [
+          "5960",
+          "6300"
+        ],
+        "mcc_exclude": [],
+        "except_merchant_slugs": [],
+        "except_platform_slugs": [],
+        "block_inr": null,
+        "min_engine_version": 2,
+        "max_engine_version": null,
+        "source_local_id": "insurance_exclusion",
+        "display_note": "Insurance premium payments are excluded from cashback accrual."
+      },
+      {
+        "id": "swiggy-hdfc-bank-credit-card:rule:insurance_exclusion#3",
+        "category_id": null,
+        "category_slug": null,
+        "merchant_pattern": null,
+        "rail": null,
+        "unit": "cashback_percent",
+        "rate": 0,
+        "min_txn_inr": null,
+        "max_txn_inr": null,
+        "priority": 18,
+        "conditions": {
+          "source_local_id": "insurance_exclusion",
+          "part": 3,
+          "info_reasons": [],
+          "flags": [
+            "mcc_scoped_exclusion"
+          ]
+        },
+        "notes": null,
+        "effective_from": "2026-05-22",
+        "effective_to": null,
+        "excluded_categories": [],
+        "rule_role": "exclusion",
+        "merchant_slugs": [],
+        "platform_slugs": [],
+        "mcc_include": [
+          "5960",
+          "6300"
+        ],
+        "mcc_exclude": [],
+        "except_merchant_slugs": [],
+        "except_platform_slugs": [],
+        "block_inr": null,
+        "min_engine_version": 2,
+        "max_engine_version": null,
+        "source_local_id": "insurance_exclusion",
+        "display_note": "Insurance premium payments are excluded from cashback accrual."
+      },
+      {
+        "id": "swiggy-hdfc-bank-credit-card:rule:education_exclusion#1",
+        "category_id": "cat-education",
+        "category_slug": "education",
+        "merchant_pattern": null,
+        "rail": null,
+        "unit": "cashback_percent",
+        "rate": 0,
+        "min_txn_inr": null,
+        "max_txn_inr": null,
+        "priority": 19,
+        "conditions": {
+          "source_local_id": "education_exclusion",
+          "part": 1,
+          "info_reasons": [],
+          "flags": [
+            "mcc_scoped_exclusion"
+          ]
+        },
+        "notes": null,
+        "effective_from": "2026-05-22",
+        "effective_to": null,
+        "excluded_categories": [],
+        "rule_role": "exclusion",
+        "merchant_slugs": [],
+        "platform_slugs": [],
+        "mcc_include": [],
+        "mcc_exclude": [],
+        "except_merchant_slugs": [],
+        "except_platform_slugs": [],
+        "block_inr": null,
+        "min_engine_version": 1,
+        "max_engine_version": 1,
+        "source_local_id": "education_exclusion",
+        "display_note": "Education payments are excluded from cashback accrual."
+      },
+      {
+        "id": "swiggy-hdfc-bank-credit-card:rule:education_exclusion#2",
+        "category_id": "cat-education",
+        "category_slug": "education",
+        "merchant_pattern": null,
+        "rail": null,
+        "unit": "cashback_percent",
+        "rate": 0,
+        "min_txn_inr": null,
+        "max_txn_inr": null,
+        "priority": 19,
+        "conditions": {
+          "source_local_id": "education_exclusion",
+          "part": 2,
+          "info_reasons": [],
+          "flags": [
+            "mcc_scoped_exclusion"
+          ]
+        },
+        "notes": null,
+        "effective_from": "2026-05-22",
+        "effective_to": null,
+        "excluded_categories": [],
+        "rule_role": "exclusion",
+        "merchant_slugs": [],
+        "platform_slugs": [],
+        "mcc_include": [
+          "8211",
+          "8220",
+          "8241",
+          "8244",
+          "8249",
+          "8299"
+        ],
+        "mcc_exclude": [],
+        "except_merchant_slugs": [],
+        "except_platform_slugs": [],
+        "block_inr": null,
+        "min_engine_version": 2,
+        "max_engine_version": null,
+        "source_local_id": "education_exclusion",
+        "display_note": "Education payments are excluded from cashback accrual."
+      },
+      {
+        "id": "swiggy-hdfc-bank-credit-card:rule:education_exclusion#3",
+        "category_id": null,
+        "category_slug": null,
+        "merchant_pattern": null,
+        "rail": null,
+        "unit": "cashback_percent",
+        "rate": 0,
+        "min_txn_inr": null,
+        "max_txn_inr": null,
+        "priority": 19,
+        "conditions": {
+          "source_local_id": "education_exclusion",
+          "part": 3,
+          "info_reasons": [],
+          "flags": [
+            "mcc_scoped_exclusion"
+          ]
+        },
+        "notes": null,
+        "effective_from": "2026-05-22",
+        "effective_to": null,
+        "excluded_categories": [],
+        "rule_role": "exclusion",
+        "merchant_slugs": [],
+        "platform_slugs": [],
+        "mcc_include": [
+          "8211",
+          "8220",
+          "8241",
+          "8244",
+          "8249",
+          "8299"
+        ],
+        "mcc_exclude": [],
+        "except_merchant_slugs": [],
+        "except_platform_slugs": [],
+        "block_inr": null,
+        "min_engine_version": 2,
+        "max_engine_version": null,
+        "source_local_id": "education_exclusion",
+        "display_note": "Education payments are excluded from cashback accrual."
+      },
+      {
+        "id": "swiggy-hdfc-bank-credit-card:rule:swiggy_liquor_exclusion",
+        "category_id": null,
+        "category_slug": null,
+        "merchant_pattern": "swiggy",
+        "rail": null,
+        "unit": "cashback_percent",
+        "rate": 0,
+        "min_txn_inr": null,
+        "max_txn_inr": null,
+        "priority": 20,
+        "conditions": {
+          "source_local_id": "swiggy_liquor_exclusion",
+          "part": null,
+          "info_reasons": [
+            "unresolved_merchant:merchant_pattern"
+          ],
+          "flags": []
+        },
+        "notes": null,
+        "effective_from": "2026-05-22",
+        "effective_to": null,
+        "excluded_categories": [],
+        "rule_role": "info",
+        "merchant_slugs": [
+          "swiggy"
+        ],
+        "platform_slugs": [],
+        "mcc_include": [],
+        "mcc_exclude": [],
+        "except_merchant_slugs": [],
+        "except_platform_slugs": [],
+        "block_inr": null,
+        "min_engine_version": 2,
+        "max_engine_version": null,
+        "source_local_id": "swiggy_liquor_exclusion",
+        "display_note": "Swiggy Liquor transactions do not qualify for 10% cashback."
+      },
+      {
+        "id": "swiggy-hdfc-bank-credit-card:rule:swiggy_minis_exclusion",
+        "category_id": null,
+        "category_slug": null,
+        "merchant_pattern": "swiggy",
+        "rail": null,
+        "unit": "cashback_percent",
+        "rate": 0,
+        "min_txn_inr": null,
+        "max_txn_inr": null,
+        "priority": 21,
+        "conditions": {
+          "source_local_id": "swiggy_minis_exclusion",
+          "part": null,
+          "info_reasons": [
+            "unresolved_merchant:merchant_pattern"
+          ],
+          "flags": []
+        },
+        "notes": null,
+        "effective_from": "2026-05-22",
+        "effective_to": null,
+        "excluded_categories": [],
+        "rule_role": "info",
+        "merchant_slugs": [
+          "swiggy"
+        ],
+        "platform_slugs": [],
+        "mcc_include": [],
+        "mcc_exclude": [],
+        "except_merchant_slugs": [],
+        "except_platform_slugs": [],
+        "block_inr": null,
+        "min_engine_version": 2,
+        "max_engine_version": null,
+        "source_local_id": "swiggy_minis_exclusion",
+        "display_note": "Swiggy Minis transactions do not qualify for 10% cashback."
+      },
+      {
+        "id": "swiggy-hdfc-bank-credit-card:rule:smartpay_exclusion",
+        "category_id": null,
+        "category_slug": null,
+        "merchant_pattern": null,
+        "rail": null,
+        "unit": "cashback_percent",
+        "rate": 0,
+        "min_txn_inr": null,
+        "max_txn_inr": null,
+        "priority": 22,
+        "conditions": {
+          "source_local_id": "smartpay_exclusion",
+          "part": null,
+          "info_reasons": [],
+          "flags": []
+        },
+        "notes": null,
+        "effective_from": "2026-05-22",
+        "effective_to": null,
+        "excluded_categories": [],
+        "rule_role": "exclusion",
+        "merchant_slugs": [],
+        "platform_slugs": [
+          "hdfc_smartpay"
+        ],
+        "mcc_include": [],
+        "mcc_exclude": [],
+        "except_merchant_slugs": [],
+        "except_platform_slugs": [],
+        "block_inr": null,
+        "min_engine_version": 2,
+        "max_engine_version": null,
+        "source_local_id": "smartpay_exclusion",
+        "display_note": "SmartPay utility or recurring billing transactions do not earn cashback."
+      },
+      {
+        "id": "swiggy-hdfc-bank-credit-card:rule:smartbuy_exclusion",
+        "category_id": null,
+        "category_slug": null,
+        "merchant_pattern": null,
+        "rail": null,
+        "unit": "cashback_percent",
+        "rate": 0,
+        "min_txn_inr": null,
+        "max_txn_inr": null,
+        "priority": 23,
+        "conditions": {
+          "source_local_id": "smartbuy_exclusion",
+          "part": null,
+          "info_reasons": [],
+          "flags": []
+        },
+        "notes": null,
+        "effective_from": "2026-05-22",
+        "effective_to": null,
+        "excluded_categories": [],
+        "rule_role": "exclusion",
+        "merchant_slugs": [],
+        "platform_slugs": [
+          "hdfc_smartbuy"
+        ],
+        "mcc_include": [],
+        "mcc_exclude": [],
+        "except_merchant_slugs": [],
+        "except_platform_slugs": [],
+        "block_inr": null,
+        "min_engine_version": 2,
+        "max_engine_version": null,
+        "source_local_id": "smartbuy_exclusion",
+        "display_note": "Transactions made via the SmartBuy portal do not earn cashback."
+      },
+      {
+        "id": "swiggy-hdfc-bank-credit-card:rule:other_1pct#min-amount",
+        "category_id": null,
+        "category_slug": null,
+        "merchant_pattern": null,
+        "rail": null,
+        "unit": "cashback_percent",
+        "rate": 0,
+        "min_txn_inr": null,
+        "max_txn_inr": 100,
+        "priority": 0,
+        "conditions": {
+          "source_local_id": "other_1pct",
+          "part": null,
+          "info_reasons": [],
+          "flags": [
+            "synthesized_min_amount_exclusion"
+          ]
+        },
+        "notes": null,
+        "effective_from": "2026-05-22",
+        "effective_to": null,
+        "excluded_categories": [],
+        "rule_role": "exclusion",
+        "merchant_slugs": [],
+        "platform_slugs": [],
+        "mcc_include": [],
+        "mcc_exclude": [],
+        "except_merchant_slugs": [],
+        "except_platform_slugs": [],
+        "block_inr": null,
+        "min_engine_version": 2,
+        "max_engine_version": null,
+        "source_local_id": "other_1pct",
+        "display_note": "No rewards below ₹100"
+      }
+    ],
+    "cap_rules": [
+      {
+        "id": "swiggy-hdfc-bank-credit-card:cap:swiggy_cashback_cap",
+        "reward_rule_id": "swiggy-hdfc-bank-credit-card:rule:swiggy_10pct",
+        "category_id": null,
+        "category_slug": null,
+        "benefit_kind": null,
+        "label": "Swiggy cashback cap",
+        "measure": "reward_value",
+        "period": "statement_cycle",
+        "cap_value": 1500,
+        "post_cap_unit": null,
+        "post_cap_rate": 0,
+        "resets_on_day": null,
+        "cap_kind": "total_cashback",
+        "cap_amount": 1500,
+        "scope": "targets",
+        "targets": [
+          "swiggy-hdfc-bank-credit-card:rule:swiggy_10pct"
+        ],
+        "parent_cap_id": null,
+        "post_cap_behavior": null,
+        "anchor": null,
+        "min_engine_version": 1,
+        "source_local_id": "swiggy_cashback_cap"
+      },
+      {
+        "id": "swiggy-hdfc-bank-credit-card:cap:online_5pct_cashback_cap",
+        "reward_rule_id": "swiggy-hdfc-bank-credit-card:rule:online_5pct",
+        "category_id": null,
+        "category_slug": null,
+        "benefit_kind": null,
+        "label": "Online 5pct cashback cap",
+        "measure": "reward_value",
+        "period": "statement_cycle",
+        "cap_value": 1500,
+        "post_cap_unit": null,
+        "post_cap_rate": 0,
+        "resets_on_day": null,
+        "cap_kind": "total_cashback",
+        "cap_amount": 1500,
+        "scope": "targets",
+        "targets": [
+          "swiggy-hdfc-bank-credit-card:rule:online_5pct"
+        ],
+        "parent_cap_id": null,
+        "post_cap_behavior": null,
+        "anchor": null,
+        "min_engine_version": 2,
+        "source_local_id": "online_5pct_cashback_cap"
+      },
+      {
+        "id": "swiggy-hdfc-bank-credit-card:cap:other_1pct_cashback_cap",
+        "reward_rule_id": "swiggy-hdfc-bank-credit-card:rule:other_1pct",
+        "category_id": null,
+        "category_slug": null,
+        "benefit_kind": null,
+        "label": "Other 1pct cashback cap",
+        "measure": "reward_value",
+        "period": "statement_cycle",
+        "cap_value": 500,
+        "post_cap_unit": null,
+        "post_cap_rate": 0,
+        "resets_on_day": null,
+        "cap_kind": "total_cashback",
+        "cap_amount": 500,
+        "scope": "targets",
+        "targets": [
+          "swiggy-hdfc-bank-credit-card:rule:other_1pct"
+        ],
+        "parent_cap_id": null,
+        "post_cap_behavior": null,
+        "anchor": null,
+        "min_engine_version": 1,
+        "source_local_id": "other_1pct_cashback_cap"
+      }
+    ],
+    "milestone_rules": [],
+    "fee_waiver_rules": [
+      {
+        "id": "swiggy-hdfc-bank-credit-card:waiver:1",
+        "threshold_spend_inr": 200000,
+        "period": "annual",
+        "waives_fee_inr": 500,
+        "excluded_category_slugs": [
+          "rent",
+          "wallet"
+        ],
+        "notes": "Renewal-year fee is waived upon achieving annual eligible retail spends of ₹2,00,000 or more during the preceding anniversary year. Rent, wallet loads, cash advance, balance transfer and cash on call are excluded.",
+        "excluded_categories": [
+          "cat-rent",
+          "cat-wallet"
+        ]
+      }
+    ],
+    "benefits": [
+      {
+        "id": "swiggy-hdfc-bank-credit-card:benefit:mastercard_golf",
+        "key": "mastercard_golf",
+        "source_local_id": "mastercard_golf",
+        "kind": "golf",
+        "label": "Mastercard Golf Programme",
+        "description": "Sponsor: Mastercard",
+        "quota_count": 4,
+        "quota_period": "annual",
+        "network_program": "mastercard_world",
+        "value_estimate_inr": 6000,
+        "conditions": {
+          "source_category_id": "golf",
+          "evaluation_engine": {
+            "conditions": {
+              "booking_window_days_in_advance": 4
+            },
+            "benefit_calculation": {
+              "complimentary_green_fee_rounds_per_calendar_year": 4,
+              "free_lessons_per_year": 12,
+              "discount_after_complimentary_quota_percent": 50
+            },
+            "perks": [
+              "Worldwide participating golf course access",
+              "12 complimentary golf lessons per calendar year",
+              "4 complimentary green-fee rounds per calendar year",
+              "50% discounted green fees beyond complimentary quota"
+            ]
+          }
+        }
+      },
+      {
+        "id": "swiggy-hdfc-bank-credit-card:benefit:contactless",
+        "key": "contactless",
+        "source_local_id": "contactless",
+        "kind": "other",
+        "label": "Contactless Payments",
+        "description": "Sponsor: HDFC Bank",
+        "quota_count": null,
+        "quota_period": null,
+        "network_program": "mastercard_world",
+        "value_estimate_inr": null,
+        "conditions": {
+          "source_category_id": "other",
+          "evaluation_engine": {
+            "conditions": {
+              "pin_free_transaction_limit_inr": 5000
+            },
+            "benefit_calculation": null,
+            "perks": [
+              "NFC contactless payments up to ₹5,000 without PIN"
+            ]
+          }
+        }
+      },
+      {
+        "id": "swiggy-hdfc-bank-credit-card:benefit:zero_lost_card_liability",
+        "key": "zero_lost_card_liability",
+        "source_local_id": "zero_lost_card_liability",
+        "kind": "other",
+        "label": "Zero Lost-Card Liability",
+        "description": "Sponsor: HDFC Bank",
+        "quota_count": null,
+        "quota_period": null,
+        "network_program": "mastercard_world",
+        "value_estimate_inr": null,
+        "conditions": {
+          "source_category_id": "other",
+          "evaluation_engine": {
+            "conditions": {
+              "report_loss_immediately": true
+            },
+            "benefit_calculation": null,
+            "perks": [
+              "Zero liability on fraudulent transactions after prompt loss reporting"
+            ]
+          }
+        }
+      }
+    ],
+    "unlock_rules": [],
+    "redemption_options": [],
+    "is_upi_linkable": false
+  }
+}
