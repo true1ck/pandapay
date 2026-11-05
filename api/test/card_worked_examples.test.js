@@ -172,7 +172,11 @@ test('D25a tolerance: the engine may be 1 point under, never over; tolerance abo
   assert.ok(!withinTolerance(1055, 1056, 0), 'no tolerance: exact only');
   assert.match(toleranceOf({ tolerance_points: 2, tolerance_note: 'x' }).error, /0 or 1/);
   assert.match(toleranceOf({ tolerance_points: 0.5, tolerance_note: 'x' }).error, /0 or 1/);
-  assert.deepStrictEqual(toleranceOf({ tolerance_points: 1.0, tolerance_note: 'x' }), { points: 1 }, 'an integral number is accepted (Dart accepts 1.0 too)');
+  // JS numbers cannot tell 1.0 from 1 (the Dart test covers the double 1.0);
+  // what JS can get wrong is a non-number or a negative value.
+  assert.match(toleranceOf({ tolerance_points: '1', tolerance_note: 'x' }).error, /0 or 1/, 'a string is rejected, not coerced');
+  assert.match(toleranceOf({ tolerance_points: true, tolerance_note: 'x' }).error, /0 or 1/, 'a boolean is rejected, not coerced');
+  assert.match(toleranceOf({ tolerance_points: -1, tolerance_note: 'x' }).error, /0 or 1/, 'a negative tolerance is rejected');
   assert.match(toleranceOf({ tolerance_points: 1 }).error, /tolerance_note/);
   // An example carrying tolerance 2 fails the harness even when the engine matches exactly.
   const card = snapshotFor('tata-neu-infinity-hdfc-bank').card;
