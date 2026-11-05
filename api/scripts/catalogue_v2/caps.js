@@ -40,8 +40,13 @@ const POST_LIMIT = {
 };
 
 const USER_DEPENDENT = /(credit[_\s-]?limit|of[_\s-]?limit|limit[_\s-]?based|tier|relationship|salary)/;
-const REDEMPTION_CAP = /(redemption|redeem|statement_credit|cash_redemption|cashback_redemption|travel_redemption|voucher_redemption|lounge)/;
-const CARD_AGE_TIER = /(first[_-]?\d+[_-]?months?|after[_-]?\d+[_-]?months?|card[_-]?age|months?[_-]?(from|after)[_-]?(issu|open|activation)|initial[_-]?\d+[_-]?months?)/;
+// Caps that limit something other than reward earning: redemptions, point
+// transfers, fee thresholds, surcharge waivers, transaction charges (D17g).
+const NON_EARNING_CAP = /(redemption|redeem|statement_credit|lounge|(?:^|[-_\s])(?:transfers?|fees?|surcharges?|waivers?|thresholds?|charges?)(?:[-_\s]|$))/;
+// D8d: "fuel_cap_first_6_months", "fuel_first_6m" / "fuel_post_6m".
+const CARD_AGE_TIER = /((first|initial|after|post)[_-]?\d+[_-]?(m|mo|mon|months?)(?![a-z])|card[_-]?age|months?[_-]?(from|after)[_-]?(issu|open|activation))/;
+const INTRO_TIER = /(first|initial)[_-]?\d+[_-]?(m|mo|mon|months?)(?![a-z])/;
+const LATER_TIER = /(after|post)[_-]?\d+[_-]?(m|mo|mon|months?)(?![a-z])/;
 
 function humanize(id) {
   return String(id || 'cap')
@@ -87,9 +92,8 @@ function transformCaps(record, rules, ctx) {
     };
     if (!sourceId) return skip('cap_missing_id');
     const categoryToken = isNA(c.category_id) ? '' : String(c.category_id).toLowerCase();
-    if (REDEMPTION_CAP.test(sourceId.toLowerCase()) || REDEMPTION_CAP.test(categoryToken)) {
-      return skip('non_earning_cap_skipped');
-    }
+    const capText = [sourceId, categoryToken, c.label, c.description].filter((v) => typeof v === 'string').join(' ').toLowerCase();
+    if (NON_EARNING_CAP.test(capText)) return skip('non_earning_cap_skipped');
     const metric = String(firstDefined(c.metric, c.cap_type) || '').toLowerCase();
     if (/^waiver_amount/.test(metric)) return skip('fuel_waiver_cap_skipped');
 
@@ -100,7 +104,9 @@ function transformCaps(record, rules, ctx) {
       targets.push(...(ruleBySource.get(String(t)) || []));
     }
     let inferred = false;
-    if (!targets.length && categoryToken && !['all_retail', 'other', 'other_retail'].includes(categoryToken)) {
+    // D17g: only earning metrics are linked by category token.
+    const earningMetric = ['bonus_reward_points', 'accelerated_reward_points', 'total_reward_points', 'eligible_spend_amount', 'txn_count'].includes(metric);
+    if (!targets.length && earningMetric && categoryToken && !['all_retail', 'other', 'other_retail'].includes(categoryToken)) {
       const sameToken = rules.filter(
         (r) => r.source_category_token && r.source_category_token.toLowerCase() === categoryToken &&
           r.evaluation_type !== 'exclusion'
@@ -150,13 +156,22 @@ function transformCaps(record, rules, ctx) {
     else if (capAmount === null || capAmount <= 0) return skip('missing_cap_value');
 
     if (ageTiered.has(sourceId)) {
+      // The steady-state sibling: the same family without a tier marker, or
+      // the "post/after N months" tier when this one is "first N months".
+      const isIntro = INTRO_TIER.test(sourceId.toLowerCase());
       const steady = sourceCaps.some((other) => {
         const oid = String(firstDefined(other?.id, other?.cap_id) || '');
-        return oid !== sourceId && !ageTiered.has(oid) &&
-          String(other?.category_id || '') === String(c.category_id || '') &&
+        if (oid === sourceId) return false;
+        const sameFamily = String(other?.category_id || '') === String(c.category_id || '') &&
           String(firstDefined(other?.metric, other?.cap_type) || '') === String(firstDefined(c.metric, c.cap_type) || '');
+        if (!sameFamily) return false;
+        return !ageTiered.has(oid) || (isIntro && LATER_TIER.test(oid.toLowerCase()));
       });
-      flagsOut.push({ code: 'tier_by_card_age', source_local_id: sourceId, detail: steady ? 'introductory tier skipped' : 'only tier present' });
+      flagsOut.push({
+        code: 'tier_by_card_age',
+        source_local_id: sourceId,
+        detail: steady ? 'introductory tier skipped' : LATER_TIER.test(sourceId.toLowerCase()) ? 'steady-state tier kept' : 'only tier present',
+      });
       if (steady) {
         skipped.push({ source_local_id: sourceId, reason: 'tier_by_card_age' });
         return;
@@ -185,6 +200,10 @@ function transformCaps(record, rules, ctx) {
     } else if (isTotal && POST_LIMIT[postAction] === 'base_rate') {
       // "Total points capped, then base rate" contradicts itself; kept as a
       // total cap (stricter) and flagged for review.
+      flags.push('post_limit_conflict');
+    } else if (isBonus && POST_LIMIT[postAction] === 'zero') {
+      // "Bonus capped, then nothing": a bonus cap never stops the base; the
+      // source may mean a total cap. Kept as a bonus cap, flagged for review.
       flags.push('post_limit_conflict');
     }
 
