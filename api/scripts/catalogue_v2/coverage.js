@@ -10,8 +10,11 @@ const { uniq } = require('./util');
 const INFORMATIONAL_FLAGS = new Set([
   'synthesized_base_rule', 'token_replaced_by_conditions', 'merchant_prose_restates',
   'channel_type_restates_brand', 'cap_target_inferred_by_category', 'non_earning_cap_skipped',
-  'fuel_waiver_cap_skipped',
+  'fuel_waiver_cap_skipped', 'group_replaced_by_condition_list', 'synthesized_min_amount_exclusion',
+  'narrow_token_to_mcc', 'exclusion_list_expanded',
 ]);
+
+const DEFERRALS = new Set(['cap_depends_on_user', 'depends_on_user_attribute', 'depends_on_txn_attribute']);
 
 function buildCoverage({
   rewardRules, perSource, capResult, milestoneResult, benefitResult, extraFlags,
@@ -50,8 +53,12 @@ function buildCoverage({
   // basic:    nothing beyond the base rate — and nothing we failed to model.
   // partial:  everything else: an info rule, an unenforced cap or an
   //           unresolved flag, or bonus rules not yet verified.
+  // D17j: listed as verified AND nothing left but D13/D14 deferrals.
+  const deferredRules = new Set(uniqueFlags.filter((f) => DEFERRALS.has(f.code)).map((f) => f.source_local_id));
+  const blockingFlags = uniqueFlags.filter((f) => !INFORMATIONAL_FLAGS.has(f.code) && !DEFERRALS.has(f.code) &&
+    !(f.code === 'info_rule' && deferredRules.has(f.source_local_id)));
   let modelStatus;
-  if (verified) modelStatus = 'verified';
+  if (verified && blockingFlags.length === 0) modelStatus = 'verified';
   else if (!hasEarn && rulesInfo === 0 && !hasUnenforcedCap) modelStatus = 'basic';
   else modelStatus = 'partial';
 
@@ -74,6 +81,8 @@ function buildCoverage({
       capsSkipped: capResult.skipped,
       milestoneAnchors: milestoneResult.anchors,
       unlockRules: benefitResult.unlockRules.length,
+      verifiedListed: verified,
+      verifiedBlockedBy: verified && blockingFlags.length ? uniq(blockingFlags.map((f) => f.code)) : [],
     },
   };
 }
@@ -216,6 +225,7 @@ function aggregateReport(cards, meta = {}) {
       caps_enforced: cov.caps_enforced,
       unlock_rules: t.unlockRules.length,
       flags: uniq(cov.flags.map((f) => f.code)).sort(),
+      verified_blocked_by: t.coverage.verifiedBlockedBy || [],
     });
   }
   report.accelerators.before_unmapped_cards = beforeUnmappedCards;
@@ -240,6 +250,11 @@ function renderMarkdown(report) {
   out.push('# Catalogue v2 coverage report');
   out.push('');
   out.push(`Generated ${report.generated_at} · transform version ${report.transform_version} · source ${report.source || 'n/a'}`);
+  out.push('');
+  out.push('Legend: `info` = shown, never ranked, hidden from v1 (plan H2). `v2-only` = min_engine_version 2. ' +
+    'Rounding: CardPipeline `nearest_integer` → `points_half_up` and `floor_to_nearest_paisa` → `none` (D7/D17k; C7.10\'s `round` is superseded). ' +
+    '`verified` needs the card in verified_cards.json and no flags other than D13/D14 deferrals (D17j). ' +
+    'Narrow category tokens on earning rules are MCC-only (D17a).');
   out.push('');
   out.push('## Headline');
   out.push('');

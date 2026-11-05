@@ -786,6 +786,73 @@ test('D17f an unknown or narrower sub-category on a category rule is never silen
   assert.equal(only(r, 'ex')[0].rule_role, 'exclusion', 'an exclusion may ignore it (excludes more)');
 });
 
+test('D17g caps for transfers, fees, surcharges, waivers, thresholds and charges are not earning caps; no inference for them', () => {
+  const r = run(capCard([
+    { ...capBase, id: 'miles_transfer_annual', category_id: 'travel', metric: 'total_reward_points', limit_value: 50000 },
+    { ...capBase, id: 'utility-fee-threshold', category_id: 'utility', metric: 'eligible_spend_amount', limit_value_inr: 25000 },
+    { ...capBase, id: 'fuel_surcharge_waiver_spend_cap', category_id: 'fuel', metric: 'eligible_spend_amount', limit_value_inr: 4000 },
+    { ...capBase, id: 'transaction-charge-waiver-monthly', category_id: 'travel_rail', metric: 'eligible_spend_amount', limit_value_inr: 1000 },
+    { ...capBase, id: 'dining_monthly', category_id: 'dining', metric: 'bonus_reward_points', limit_value: 1000 },
+  ], [
+    rule({ id: 'dine', category_id: 'dining', action: { points_per_block: 10 } }),
+    rule({ id: 'travel', category_id: 'travel', action: { points_per_block: 10 } }),
+  ]));
+  assert.deepEqual(r.capRules.map((c) => c.key), ['dining_monthly']);
+  assert.deepEqual(r.capRules[0].target_keys, ['dine'], 'an earning cap is still linked by token');
+  assert.equal(r.coverage.capsSkipped.filter((x) => x.reason === 'non_earning_cap_skipped').length, 4);
+});
+
+test('D8d "first 6m" / "post 6m" cap tiers keep the steady state; post_limit_conflict flags bonus caps that stop', () => {
+  const r = run(capCard([
+    { ...capBase, id: 'fuel_first_6m', metric: 'total_reward_points', limit_value: 250 },
+    { ...capBase, id: 'fuel_post_6m', metric: 'total_reward_points', limit_value: 150 },
+    { ...capBase, id: 'b', category_id: 'travel', metric: 'bonus_reward_points', limit_value: 100, post_limit_behavior: { action: 'zero_accrual' } },
+  ]));
+  assert.deepEqual(r.capRules.filter((c) => c.key.startsWith('fuel')).map((c) => [c.key, c.cap_amount]), [['fuel_post_6m', 150]]);
+  assert.ok(r.capRules.find((c) => c.key === 'fuel_post_6m').flags.includes('tier_by_card_age'));
+  assert.ok(r.capRules.find((c) => c.key === 'b').flags.includes('post_limit_conflict'));
+});
+
+test('D17i the override fingerprint covers values; D17h any override that unmakes an exclusion is reported', () => {
+  const record = card({
+    rules: [
+      rule({ id: 'earn', category_id: 'dining' }),
+      rule({ id: 'no-fuel', category_id: 'fuel', evaluation_type: 'exclusion', action: { cashback_percent: 0 } }),
+      rule({ id: 'no-rent', category_id: 'rent', evaluation_type: 'exclusion', action: { cashback_percent: 0 } }),
+    ],
+  });
+  const a = run(record, { overrides: { changes: [{ path: 'reward_rules[id=earn].action.cashback_percent', value: 6 }] } });
+  const b = run(record, { overrides: { changes: [{ path: 'reward_rules[id=earn].action.cashback_percent', value: 7 }] } });
+  assert.notEqual(a.card.model_coverage.overrides_applied[0].value_sha256, b.card.model_coverage.overrides_applied[0].value_sha256);
+  const removed = run(record, {
+    overrides: {
+      changes: [
+        { path: 'reward_rules[id=no-fuel]', op: 'remove' },
+        { path: 'reward_rules[id=no-rent].rule_role', value: 'info' },
+      ],
+    },
+  });
+  const flagged = removed.card.model_coverage.flags.filter((f) => f.code === 'override_removed_exclusion').map((f) => f.source_local_id);
+  assert.deepEqual(flagged.sort(), ['no-fuel', 'no-rent']);
+});
+
+test('D17j a listed card is verified only when nothing but D13/D14 deferrals remains', () => {
+  const verifiedSlugs = new Set(['test-card']);
+  const clean = run(card({ rules: [rule({ id: 'e', category_id: 'dining' })] }), { verifiedSlugs });
+  assert.equal(clean.card.model_status, 'verified');
+  const deferred = run(card({ rules: [rule({ id: 'e', category_id: 'dining' }), rule({ id: 'intl', category_id: 'international_spend' })] }), { verifiedSlugs });
+  assert.equal(deferred.card.model_status, 'verified', 'an international-only rule is a D14 deferral');
+  const unresolved = run(card({ rules: [rule({ id: 'e', category_id: 'dining' }), rule({ id: 'odd', category_id: 'mystery_token' })] }), { verifiedSlugs });
+  assert.equal(unresolved.card.model_status, 'partial');
+  assert.ok(unresolved.coverage.verifiedBlockedBy.includes('info_rule'));
+});
+
+test('unmapped excluded categories on earning rules map through the token map (e_wallet_loading -> wallet)', () => {
+  const r = run(card({ rules: [rule({ id: 'base', evaluation_type: 'standard_accrual', conditions: { excluded_categories: ['e_wallet_loading', 'rental_payments', 'education_government', 'cash_advance'] }, action: { cashback_percent: 1 } })] }));
+  assert.deepEqual(only(r, 'base')[0].excluded_category_slugs, ['education', 'government', 'rent', 'wallet']);
+  assert.ok(only(r, 'base')[0].flags.includes('unmapped_excluded_category'), 'non-purchase items stay flagged');
+});
+
 // ── C8 D13: terms that depend on the cardholder; override conventions ───
 
 test('D13a a cap sized by the credit limit keeps its kind with a null amount and is flagged', () => {

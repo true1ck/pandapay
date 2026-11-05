@@ -14,11 +14,16 @@
 // A change whose path doesn't resolve is reported and NOT applied; the rest of
 // the file still applies.
 
+const crypto = require('crypto');
 const fs = require('fs');
 const path = require('path');
 const { deepClone } = require('./util');
 
 const DEFAULT_OVERRIDES_DIR = path.resolve(__dirname, '../catalogue_overrides');
+
+function valueHash(value) {
+  return crypto.createHash('sha256').update(JSON.stringify(value === undefined ? null : value)).digest('hex').slice(0, 16);
+}
 
 function parsePath(p) {
   if (typeof p !== 'string' || !p.trim()) throw new Error('empty path');
@@ -101,6 +106,9 @@ function applyOverrides(record, overrideFile) {
         applied.push({
           path: change.path,
           op: change.op || 'set',
+          // D17i: the value is part of what was applied, so a value-only
+          // edit changes the card's override fingerprint and forces a rebuild.
+          value_sha256: valueHash(change.value),
           reason: change.reason || null,
           source_url: change.source_url || null,
           checked_on: change.checked_on || null,

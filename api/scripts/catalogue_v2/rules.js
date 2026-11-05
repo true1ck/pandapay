@@ -173,7 +173,8 @@ function transformRule(src, idx, ctx) {
   const rawToken = isNA(src?.category_id) ? '' : String(src.category_id);
 
   const token = resolveCategoryToken(categoryKey(rawToken), ctx);
-  flags.push(...token.flags);
+  // 'broad_category' is a per-row fact (set below), not a per-rule one.
+  flags.push(...token.flags.filter((f) => f !== 'broad_category'));
   const cond = mapRuleConditions(src, ctx);
   flags.push(...cond.flags);
 

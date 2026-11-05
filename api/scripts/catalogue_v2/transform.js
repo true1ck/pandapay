@@ -12,7 +12,7 @@
 
 const { asNumber, isNA, uniq } = require('./util');
 const { buildDirectoryIndex } = require('./directory');
-const { mapCategorySlug } = require('./category_tokens');
+const { mapCategorySlugs } = require('./category_tokens');
 const { transformRewardRules } = require('./rules');
 const { transformCaps } = require('./caps');
 const { transformMilestones } = require('./milestones');
@@ -135,7 +135,7 @@ function feeWaiverRow(record) {
     threshold_spend_inr: threshold,
     period: PERIOD_MAP[waiver.period] || 'statement_cycle',
     waives_fee_inr: waivesFee,
-    excluded_category_slugs: uniq(excluded.map(mapCategorySlug).filter(Boolean)),
+    excluded_category_slugs: uniq(excluded.flatMap(mapCategorySlugs)),
     notes: isNA(waiver.evaluation_condition) ? null : waiver.evaluation_condition,
   }];
 }
@@ -173,7 +173,7 @@ function cardExcludedCategories(record) {
   for (const rule of record?.reward_rules || []) {
     if (rule?.category_id !== 'all_retail' && rule?.category_id !== 'excluded_spend') continue;
     const list = rule?.conditions?.excluded_categories;
-    for (const slug of (Array.isArray(list) ? list : []).map(mapCategorySlug).filter(Boolean)) out.add(slug);
+    for (const slug of (Array.isArray(list) ? list : []).flatMap(mapCategorySlugs)) out.add(slug);
   }
   return [...out].sort();
 }
@@ -212,11 +212,15 @@ function transformCardRecordV2(rawRecord, opts = {}) {
 
   // D14(c): a whole-array override that drops a source exclusion, and rule
   // cap references that point at no cap (in the source or after overrides).
-  const replacedRules = (opts.overrides?.changes || []).some((c) => c?.path === 'reward_rules' && (c.op || 'set') === 'set');
-  if (replacedRules) {
-    const kept = new Set((record?.reward_rules || []).map((r) => String(r?.id)));
+  // D17h: any override (whole-array set, remove, null, role or
+  // evaluation-type change) that leaves a source exclusion no longer an
+  // exclusion is reported.
+  if (applied.length) {
+    const stillExcluding = new Set((record?.reward_rules || [])
+      .filter((r) => r && String(r.evaluation_type) === 'exclusion' && (r.rule_role === undefined || r.rule_role === null || r.rule_role === 'exclusion'))
+      .map((r) => String(r.id)));
     for (const r of rawRecord?.reward_rules || []) {
-      if (String(r?.evaluation_type) === 'exclusion' && !kept.has(String(r?.id))) {
+      if (String(r?.evaluation_type) === 'exclusion' && !stillExcluding.has(String(r?.id))) {
         extraFlags.push({ code: 'override_removed_exclusion', source_local_id: isNA(r?.id) ? null : String(r.id), detail: r?.category_id || null });
       }
     }
