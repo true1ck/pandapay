@@ -118,13 +118,26 @@ function transformCaps(record, rules, ctx) {
         flags.push('cap_target_inferred_by_category');
       }
     }
-    // A cap scoped to one category of a multi-part rule (PhonePe's insurance
-    // sub-cap) links only the parts in that category.
+    // D19d: a cap targets every emitted row of its source rule — v2 MCC rows
+    // and v1-only projections alike, whatever their category label. The one
+    // exception is a cap on one exact category of a rule split across
+    // several exact categories (PhonePe's insurance sub-cap on a
+    // recharges/insurance/travel rule): it links only that category's rows.
     const capCategory = resolveCategoryToken(categoryToken, ctx);
-    if (capCategory.kind === 'category' && targets.length) {
+    if (capCategory.kind === 'category' && !capCategory.parts[0].broad && targets.length) {
       const slug = capCategory.parts[0].categorySlug;
-      const inCategory = targets.filter((r) => r.category_slug === slug);
-      if (inCategory.length && inCategory.length < targets.length) targets = inCategory;
+      const bySource = new Map();
+      for (const r of targets) {
+        if (!bySource.has(r.source_local_id)) bySource.set(r.source_local_id, []);
+        bySource.get(r.source_local_id).push(r);
+      }
+      const kept = [];
+      for (const rows of bySource.values()) {
+        const split = uniq(rows.filter((r) => r.max_engine_version !== 1).map((r) => r.category_slug).filter(Boolean));
+        if (split.length >= 2 && split.includes(slug)) kept.push(...rows.filter((r) => r.category_slug === slug));
+        else kept.push(...rows);
+      }
+      targets = kept;
     }
     targets = uniq(targets);
     const targetKeys = targets.map((r) => r.key);

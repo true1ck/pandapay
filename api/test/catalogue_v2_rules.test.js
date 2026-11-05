@@ -1013,6 +1013,19 @@ test('D19a full-exclusion phrasings are never bonus_only', () => {
   assert.equal(only(r, 'acc_excl')[0].rule_role, 'info');
 });
 
+test('D19d a cap targets every emitted row of its source rule (v2 MCC row and v1-only projection)', () => {
+  const r = run(card({
+    accrual: { base_points_per_block: 2, base_cashback_percent: null },
+    rules: [rule({ id: 'transportation_accrual', category_id: 'transportation', evaluation_type: 'standard_accrual', action: { points_per_block: 1, cap_reference: 'transportation_reward_cap' } })],
+    caps: [{ ...capBase, id: 'transportation_reward_cap', category_id: 'transportation', metric: 'total_reward_points', limit_value: 500 }],
+  }));
+  const rows = only(r, 'transportation_accrual');
+  assert.equal(rows.length, 2, 'v2 MCC row + v1-only broad row (reduced rate)');
+  const cap = r.capRules[0];
+  assert.deepEqual(cap.target_keys.sort(), rows.map((x) => x.key).sort());
+  assert.equal(cap.min_engine_version, 2, 'a target is v2-only (D3)');
+});
+
 // ── C8 D13: terms that depend on the cardholder; override conventions ───
 
 test('D13a a cap sized by the credit limit keeps its kind with a null amount and is flagged', () => {
