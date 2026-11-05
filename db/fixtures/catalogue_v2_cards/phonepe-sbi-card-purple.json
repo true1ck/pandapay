@@ -4,7 +4,7 @@
   "inputs": {
     "transform_version": "7",
     "source_record_sha256": "124b9f6010b0c792aec763a7e7d8d91f990eb54a24339b6a51bdda88b6cf3a78",
-    "override_sha256": "40959ead744bca1e04afeed8fbe7d0274ba7800b86ae399d7e3b91cd93370a04",
+    "override_sha256": "ad31e3c7b156c8c2b0927ed677aac9f9225e833a49fee17e7c03d5e5049dad85",
     "directory_sha256": "b1094d54b77e848d22f7a9a64f3ae6d1ef43ca3eb2fc8e40cd43ed1994664694",
     "verified": true
   },
@@ -25,8 +25,8 @@
     "points_expiry_months": 24,
     "model_status": "verified",
     "model_coverage": {
-      "rules_total": 22,
-      "rules_modelled": 19,
+      "rules_total": 23,
+      "rules_modelled": 20,
       "rules_info": 3,
       "caps_total": 4,
       "caps_enforced": 4,
@@ -241,6 +241,14 @@
           "op": "set",
           "value_sha256": "74234e98afe7498f",
           "reason": "WP7: As phonepe_other_monthly.",
+          "source_url": "https://www.sbicard.com/sbi-card-en/assets/media/images/personal/credit-cards/rewards/phonepe/tnc/PhonePe-SBI-Card-PURPLE-Reward-Program-TnC.pdf",
+          "checked_on": "2026-11-05"
+        },
+        {
+          "path": "reward_rules",
+          "op": "append",
+          "value_sha256": "906f65db73df3af0",
+          "reason": "WP7: D28c: Reward Program T&C exclusions: \"Flexipay Transactions\" and \"Merchant EMI i.e. EMI's availed at the time of purchase at Merchant establishment or websites\". The record's EMI row needs category emi AND rail emi, so an EMI purchase in another category earned. Rail-EMI exclusion on all spend.",
           "source_url": "https://www.sbicard.com/sbi-card-en/assets/media/images/personal/credit-cards/rewards/phonepe/tnc/PhonePe-SBI-Card-PURPLE-Reward-Program-TnC.pdf",
           "checked_on": "2026-11-05"
         }
@@ -1665,6 +1673,40 @@
         "max_engine_version": null,
         "source_local_id": "financial_charges_excl",
         "display_note": "Financial charges do not earn Reward Points."
+      },
+      {
+        "id": "phonepe-sbi-card-purple:rule:wp7_emi_rail_exclusion",
+        "category_id": null,
+        "category_slug": null,
+        "merchant_pattern": null,
+        "rail": "emi",
+        "unit": "points_per_100",
+        "rate": 0,
+        "min_txn_inr": null,
+        "max_txn_inr": null,
+        "priority": 0,
+        "conditions": {
+          "source_local_id": "wp7_emi_rail_exclusion",
+          "part": null,
+          "info_reasons": [],
+          "flags": []
+        },
+        "notes": null,
+        "effective_from": "2025-07-22",
+        "effective_to": null,
+        "excluded_categories": [],
+        "rule_role": "exclusion",
+        "merchant_slugs": [],
+        "platform_slugs": [],
+        "mcc_include": [],
+        "mcc_exclude": [],
+        "except_merchant_slugs": [],
+        "except_platform_slugs": [],
+        "block_inr": null,
+        "min_engine_version": 2,
+        "max_engine_version": null,
+        "source_local_id": "wp7_emi_rail_exclusion",
+        "display_note": "EMI transactions earn no rewards."
       }
     ],
     "cap_rules": [
