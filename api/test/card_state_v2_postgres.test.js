@@ -471,6 +471,102 @@ test('v2 card: a cap row written in v1 units is rebuilt in native units before p
   });
 });
 
+/** index.js's real insertTransactionAndUpdateState, with only its observation/duplicate/tag helpers stubbed. */
+function insertFunction(fns) {
+  const source = fs.readFileSync(path.join(__dirname, '../src/index.js'), 'utf8');
+  const start = source.indexOf('async function insertTransactionAndUpdateState(client');
+  const end = source.indexOf('async function importParsedMessage(client', start);
+  assert.ok(start >= 0 && end > start);
+  return new Function(
+    'recordTransactionObservation', 'detectDuplicates', 'loadUserCardForState', 'applyTransactionState',
+    'reverseTransactionState', 'transactionTags',
+    `${source.slice(start, end)} return insertTransactionAndUpdateState;`,
+  )(
+    async () => {}, async () => ({ candidateId: null }), fns.loadUserCardForState, fns.applyTransactionState,
+    fns.reverseTransactionState, { mergeTransactionTags: async () => {} },
+  );
+}
+
+/** index.js's real POST /transactions/:id/ignore handler, on `client`. */
+function ignoreRoute(client, fns) {
+  const source = fs.readFileSync(path.join(__dirname, '../src/index.js'), 'utf8');
+  const start = source.indexOf("app.post('/transactions/:id/ignore'");
+  const end = source.indexOf('/**\n * POST /transactions/:id/restore', start);
+  assert.ok(start >= 0 && end > start);
+  let handler;
+  new Function('app', 'requireAuth', 'withUserClient', 'IGNORE_REASONS', 'loadUserCardForState',
+    'reverseTransactionState', 'safeErrorCode', source.slice(start, end))(
+    { post: (_route, ...handlers) => { handler = handlers.at(-1); } }, null, (_userId, fn) => fn(client),
+    ['refund', 'reversal', 'transfer', 'wrong_transaction'], fns.loadUserCardForState, fns.reverseTransactionState,
+    (e) => String(e && e.code),
+  );
+  return async (userId, txnId) => {
+    const res = { code: 200, body: null, status(c) { this.code = c; return this; }, json(b) { this.body = b; return this; } };
+    await handler({ userId, params: { id: txnId }, body: { reason: 'refund' } }, res);
+    return res;
+  };
+}
+
+test('C8 D33c: a card-state failure never fails ingest or ignore; nothing half-applied, rebuilt later', { skip }, async () => {
+  cardStateV2.clearDirectoryCache();
+  await withRollback(async (client) => {
+    const fns = extractIndexFunctions();
+    const { monthStart, prevMonthStart } = await dates(client);
+    const ids = await seedSyntheticCard(client, { openedOn: prevMonthStart });
+    await asUser(client, ids.profileId);
+    const { txnId: first } = await recordSpend(client, fns, ids, { amount: 2000, day: monthStart, category: 'dining' });
+    const rowsBefore = await capRows(client, ids.userCardId);
+    const milestonesBefore = await milestoneRows(client, ids.userCardId);
+
+    // Inject a SQL failure into every cap_states write (rolled back with the test).
+    await asOwner(client);
+    await client.query(`CREATE FUNCTION public.wp8_injected_failure() RETURNS trigger LANGUAGE plpgsql AS
+      $$ BEGIN RAISE EXCEPTION 'wp8 injected failure' USING ERRCODE = 'P0001'; END $$`);
+    await client.query(`CREATE TRIGGER wp8_injected_failure BEFORE INSERT OR UPDATE ON cap_states
+      FOR EACH ROW EXECUTE FUNCTION public.wp8_injected_failure()`);
+    await asUser(client, ids.profileId);
+    const warnings = [];
+    const warn = console.warn;
+    console.warn = (...args) => warnings.push(args.join(' '));
+    try {
+      // Ingest (the POST /transactions and /sms path): stored, 201, no card state, no partial writes.
+      const insert = insertFunction(fns);
+      const stored = await insert(client, ids.profileId, {
+        userCardId: ids.userCardId, amount: 1000, occurred: new Date(`${addDays(monthStart, 1)}T06:30:00Z`),
+        categoryId: ids.cats.dining, rail: 'unknown', merchantName: null, source: 'manual',
+      });
+      assert.equal(stored.status, 201);
+      const second = stored.transaction.id;
+      const [row] = (await client.query(`SELECT status, state_applied, card_state_v2 FROM transactions WHERE id = $1`, [second])).rows;
+      assert.deepEqual([row.status, row.card_state_v2], ['active', null]);
+      assert.deepEqual(await capRows(client, ids.userCardId), rowsBefore, 'no partial cap writes');
+      assert.deepEqual(await milestoneRows(client, ids.userCardId), milestonesBefore, 'no partial milestone writes');
+
+      // Ignore (a reversal): 200, never half-reversed; the record is cleared, expected values zeroed.
+      const res = await ignoreRoute(client, fns)(ids.profileId, first);
+      assert.equal(res.code, 200);
+      assert.equal(res.body.transaction.status, 'ignored');
+      assert.deepEqual(await capRows(client, ids.userCardId), rowsBefore, 'not half-reversed');
+      const [ignored] = await expectedOf(client, [first]);
+      assert.deepEqual([ignored.points, ignored.card_state_v2], [0, null]);
+      assert.equal((await client.query(`SELECT count(*)::int AS n FROM points_ledger WHERE transaction_id = $1`, [first])).rows[0].n, 0);
+      // Only a safe error code is logged, never row data.
+      assert.ok(warnings.length >= 2 && warnings.every((w) => w.includes('P0001') && !w.includes('2000')), warnings.join('\n'));
+    } finally {
+      console.warn = warn;
+    }
+
+    // Once writes work again, the wallet's reconcile rebuilds the caps from the ledger.
+    await asOwner(client);
+    await client.query(`DROP TRIGGER wp8_injected_failure ON cap_states`);
+    await asUser(client, ids.profileId);
+    await fns.reconcileCurrentCapStates(client, ids.profileId);
+    assert.deepEqual(consumedById(await capRows(client, ids.userCardId)), {
+      [F.CAP.parent]: 50, [F.CAP.bonus]: 40, [F.CAP.cardYear]: 50,
+    });
+  });
+});
+
 test('C8 D23c: the wallet\'s "current" v2 cap and milestone rows follow the India day across 18:30 UTC', { skip }, async () => {
   cardStateV2.clearDirectoryCache();
   await withRollback(async (client) => {

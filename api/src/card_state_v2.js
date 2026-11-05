@@ -35,6 +35,7 @@
 
 const rewardV2 = require('./reward_math_v2');
 const { loadDirectory } = require('./merchant_directory');
+const { safeErrorCode } = require('./safeErrorCode');
 const {
   periodBounds, cardAnchorDate, cardIssueAnchorDate, windowBoundsV2, calendarDay, istDay, addDays,
 } = require('./cycles');
@@ -664,20 +665,64 @@ async function reverseTransactionV2(client, userId, v2, args) {
   return { ...reversed, pointsLedgerEntry: null };
 }
 
+const HOOK_SAVEPOINT = 'card_state_v2';
+const DEFERRED_STATE = Object.freeze({ capStates: [], milestoneStates: [], pointsLedgerEntry: null, feeWaiverStates: [] });
+
 /**
  * index.js's applyTransactionState hook. Returns the state updates for a
  * v2-shaped card (sign +1 records, sign −1 reverses), or null so the v1
  * path runs unchanged. Callers that change an existing transaction hold the
  * user's `transaction-ingest:<user>` advisory lock first (C8 D23d), so a
  * rebuild never interleaves; this hook takes no lock of its own.
+ *
+ * C8 D33c: card-state recording never fails ingest. Everything runs inside
+ * SAVEPOINT card_state_v2 — every caller (insert, edit, ignore/restore,
+ * duplicate resolution, bulk apply, sync apply, repair) goes through here.
+ * On any error the work is rolled back to the savepoint (so nothing is ever
+ * half-applied or half-reversed), only safeErrorCode is logged, the
+ * transaction keeps card_state_v2 = NULL (a later reversal then subtracts
+ * nothing), and the next reconcile or recompute rebuilds the state. A failed
+ * reversal still does what v1's reversal does to the transaction itself:
+ * expected values to 0 and its ledger rows removed, so an ignored spend
+ * never keeps counting. A v1-shaped card leaves the savepoint before the v1
+ * path runs, which is unchanged.
  */
 async function applyIfV2(client, userId, userCard, args) {
   const userCardId = (args && args.userCardId) || (userCard && userCard.id);
-  const v2 = await loadV2Card(client, userCardId, { profileId: userId });
-  if (!v2) return null;
-  return args.sign < 0
-    ? reverseTransactionV2(client, userId, v2, args)
-    : applyTransactionV2(client, userId, v2, args);
+  await client.query(`SAVEPOINT ${HOOK_SAVEPOINT}`);
+  try {
+    const v2 = await loadV2Card(client, userCardId, { profileId: userId });
+    const result = !v2
+      ? null
+      : args.sign < 0
+        ? await reverseTransactionV2(client, userId, v2, args)
+        : await applyTransactionV2(client, userId, v2, args);
+    await client.query(`RELEASE SAVEPOINT ${HOOK_SAVEPOINT}`);
+    return result;
+  } catch (err) {
+    await client.query(`ROLLBACK TO SAVEPOINT ${HOOK_SAVEPOINT}`);
+    await client.query(`RELEASE SAVEPOINT ${HOOK_SAVEPOINT}`);
+    console.warn('card_state_v2 deferred to the next rebuild', safeErrorCode(err));
+    if (args && args.txnId) {
+      if (args.sign < 0) {
+        await client.query(
+          `UPDATE transactions
+              SET expected_value_inr = 0, expected_points = 0,
+                  expected_cashback_inr = CASE WHEN expected_cashback_inr IS NULL THEN NULL ELSE 0 END,
+                  card_state_v2 = NULL, updated_at = now()
+            WHERE id = $1 AND profile_id = $2`,
+          [args.txnId, userId],
+        );
+        await client.query(`DELETE FROM points_ledger WHERE transaction_id = $1 AND profile_id = $2`, [args.txnId, userId]);
+      } else {
+        await client.query(
+          `UPDATE transactions SET card_state_v2 = NULL, updated_at = now() WHERE id = $1 AND profile_id = $2`,
+          [args.txnId, userId],
+        );
+      }
+    }
+    return { ...DEFERRED_STATE };
+  }
 }
 
 // ---------------------------------------------------------------------------
