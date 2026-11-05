@@ -62,6 +62,7 @@ const CATEGORY_LIST_KEYS = new Set([
 ]);
 const EXCLUDED_CATEGORY_KEYS = new Set([
   'excluded_merchants', 'except_merchants', 'except_at', 'excluding', 'except', 'excluded_platforms',
+  'excluded_accelerated_merchants', 'excluded_wholesale_merchants', 'excluded_brands',
   'excluded_categories', 'exclude_categories', 'exclusions', 'excludes', 'exclude',
   'excluded_spend_categories', 'excluded_spends', 'merchant_exclusions', 'category_exclusions',
 ]);

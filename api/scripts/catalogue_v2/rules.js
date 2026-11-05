@@ -199,6 +199,7 @@ function transformRule(src, idx, ctx) {
   const statedRate = (asNumber(src?.action?.points_per_block) ?? 0) > 0 || (asNumber(src?.action?.cashback_percent) ?? 0) > 0;
   const isCarveOut = evaluationType === 'exclusion' && statedRate;
   const isExclusion = evaluationType === 'exclusion' && !isCarveOut;
+  const scopeLists = isExclusion || isCarveOut;
   const isAccelerator = evaluationType === 'accelerator';
   const rawToken = isNA(src?.category_id) ? '' : String(src.category_id);
 
@@ -214,9 +215,11 @@ function transformRule(src, idx, ctx) {
   flags.push(...ur.flags);
   if (!isExclusion && ur.rate === null) info.push('missing_rate');
   // D18c: a rule paying less than the card's base (same currency).
-  const ruleValue = valuePerRupee(ur.unit, ur.rate, ctx.card.pointValueInr, ur.blockInr);
+  // Compared in the card's own currency per rupee (points per ₹, or % ),
+  // so it works when the card has no ₹ value per point.
+  const ruleEarn = valuePerRupee(ur.unit, ur.rate, 1, ur.blockInr);
   const isReduced = !isExclusion && ur.rate !== null && ur.currency && ur.currency === ctx.card.baseCurrency &&
-    ruleValue !== null && ctx.card.baseValue != null && ruleValue < ctx.card.baseValue - 1e-9;
+    ruleEarn !== null && ctx.card.baseEarnPerRupee != null && ruleEarn < ctx.card.baseEarnPerRupee - 1e-12;
 
   if (!isExclusion && rewardRuleHasUnsupportedTrigger(src)) info.push('unsupported_trigger');
   if (!isExclusion && /up[\s_-]*to[\s_-]*\d+(?:\.\d+)?\s*(?:x\b|%|(?:bonus\s+|reward\s+)?points?\b|rp\b|miles\b)/i.test(`${src?.id || ''} ${src?.action?.reason || ''}`)) {
@@ -523,7 +526,8 @@ function transformRule(src, idx, ctx) {
 
   // 9. Blockers.
   for (const b of cond.blockers) {
-    if (b.key === 'channel_type' && (parts.some((p) => p.merchantSlugs?.length || p.platformSlugs?.length))) {
+    if (b.key === 'channel_type' && (parts.some((p) => p.merchantSlugs?.length || p.platformSlugs?.length) ||
+        (scopeLists && (cond.listedExcludedMerchants.length || cond.listedExcludedPlatforms.length)))) {
       // channel_type prose on an already brand-restricted rule is a restatement.
       flags.push('channel_type_restates_brand');
       continue;
@@ -604,7 +608,6 @@ function transformRule(src, idx, ctx) {
   // rule's other restrictions. Never exception lists.
   // D18e: "non-LIC insurance" with excluded_merchants ["LIC"] — a brand
   // listed against a "non-/other than/except" exclusion is its exception.
-  const scopeLists = isExclusion || isCarveOut;
   const negatedScope = scopeLists && /(^|[_\s-])non[_\s-]|other than|except|excluding/i.test(`${rawToken} ${src?.action?.reason || ''} ${src?.id || ''}`);
   const listedCats = scopeLists ? cond.excludedCategorySlugs : [];
   const listedMerchants = scopeLists && !negatedScope ? cond.listedExcludedMerchants : [];
@@ -950,7 +953,7 @@ const BONUS_QUALIFIER = /\b(accelerated|accelerator|bonus|additional|extra|incre
 const CORE_MENTION = /\b(core|base|standard|regular|normal|default)\b[^.]{0,25}\b(reward|points?|rps?|cash ?back|miles|rewards?|earn\w*)\b/;
 const ZERO_EARN = /\b(earns?|earning|accrue\w*)\s+(0|zero|no|nothing)\b|\bzero\s+(reward|points?|cash ?back)\b|\bno\s+(\w+\s+){0,2}(reward|points?|cash ?back|miles|neucoins|rps?)\b/;
 
-const EXCLUDING_CLAUSE = /\b(exclud\w*|not eligible|ineligible|not (qualify|count|accrue|earn|apply|available|applicable)|do(es)? not|don't|doesn't|won't|no longer|zero|earn 0|not form part)\b/;
+const EXCLUDING_CLAUSE = /\b(exclud\w*|not eligible|ineligible|not (qualify|count|accrue|earn|apply|available|applicable|receive)|do(es)? not|don't|doesn't|won't|no longer|zero|earn 0|not form part|discontinued|withdrawn|ceased|stopped|removed)\b/;
 
 // D19a / D20c: classify an exclusion's text by its excluding clause(s) only
 // ("... remains eligible for 5X" elsewhere in the sentence doesn't count).

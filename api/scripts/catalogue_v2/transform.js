@@ -321,6 +321,7 @@ function transformCardRecordV2(rawRecord, opts = {}) {
     cardNetwork: typeof cp.network === 'string' ? cp.network : null,
     card: {
       baseValue: baseValuePerRupee(economics),
+      baseEarnPerRupee: baseValuePerRupee({ ...economics, pointValueInr: 1 }),
       baseUnit: economics.baseUnit,
       baseBlockInr: economics.baseBlockInr,
       pointValueInr: economics.pointValueInr,
