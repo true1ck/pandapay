@@ -46,6 +46,7 @@ class _SharedExpensesScreenState extends State<SharedExpensesScreen>
     with SingleTickerProviderStateMixin {
   late final TabController _tabs;
   final _searchVisible = <SharedHubTab>{};
+  final _searchFocus = FocusNode();
   final _search = {
     for (final tab in SharedHubTab.values) tab: TextEditingController(),
   };
@@ -75,6 +76,7 @@ class _SharedExpensesScreenState extends State<SharedExpensesScreen>
   void dispose() {
     _tabs.removeListener(_tabChanged);
     _tabs.dispose();
+    _searchFocus.dispose();
     for (final controller in _search.values) {
       controller.dispose();
     }
@@ -170,40 +172,6 @@ class _SharedExpensesScreenState extends State<SharedExpensesScreen>
     ],
     if (incomplete && widget.data.pendingChanges == 0)
       const SharedNotice(sharedCatchingUpCopy),
-    if (_searchVisible.contains(tab))
-      Padding(
-        padding: const EdgeInsets.only(bottom: AppSpace.md),
-        child: TextField(
-          controller: _search[tab],
-          style: BambooFonts.ui(14),
-          textInputAction: TextInputAction.search,
-          onChanged: (value) => widget.onSearchChanged?.call(tab, value),
-          onSubmitted: (_) => FocusScope.of(context).unfocus(),
-          onTapOutside: (_) => FocusScope.of(context).unfocus(),
-          decoration: InputDecoration(
-            labelText: 'Search ${tab.name}',
-            labelStyle: BambooFonts.ui(13, color: BambooInk.ink700),
-            prefixIcon: const Icon(
-              Icons.search_rounded,
-              color: BambooInk.ink700,
-            ),
-            suffixIcon: IconButton(
-              tooltip: 'Clear search',
-              icon: const Icon(Icons.close_rounded),
-              onPressed: () {
-                _search[tab]!.clear();
-                widget.onSearchChanged?.call(tab, '');
-                FocusScope.of(context).unfocus();
-                setState(() => _searchVisible.remove(tab));
-              },
-            ),
-            border: OutlineInputBorder(
-              borderRadius: BorderRadius.circular(AppRadius.md),
-              borderSide: const BorderSide(color: BambooInk.hairlineOnPaper),
-            ),
-          ),
-        ),
-      ),
   ];
 
   Widget _contexts(
@@ -366,41 +334,101 @@ class _SharedExpensesScreenState extends State<SharedExpensesScreen>
     );
   }
 
-  @override
-  Widget build(BuildContext context) => SharedTabbedFrame(
-    title: 'Splits',
-    header: widget.header,
-    tabs: const ['Friends', 'Groups', 'Activity'],
-    initialIndex: widget.initialIndex,
-    controller: _tabs,
-    onAddExpense: widget.onAddExpense,
-    actions: [
-      IconButton(
-        tooltip: 'Search splits',
-        icon: const Icon(Icons.search_rounded),
-        onPressed: () => setState(() {
-          if (!_searchVisible.add(_selected)) {
-            _searchVisible.remove(_selected);
-            if (_search[_selected]!.text.isNotEmpty) {
-              _search[_selected]!.clear();
-              widget.onSearchChanged?.call(_selected, '');
-            }
-            FocusScope.of(context).unfocus();
-          }
-        }),
-      ),
-      if (_selected != SharedHubTab.activity)
-        IconButton(
-          tooltip: 'Filter splits',
-          icon: const Icon(Icons.filter_list_rounded),
-          onPressed: _filter,
+  bool get _searchOpen => _searchVisible.contains(_selected);
+
+  void _openSearch() {
+    setState(() => _searchVisible.add(_selected));
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      if (mounted && _searchOpen) _searchFocus.requestFocus();
+    });
+  }
+
+  void _clearSearch() {
+    _search[_selected]!.clear();
+    widget.onSearchChanged?.call(_selected, '');
+  }
+
+  void _closeSearch() {
+    if (_search[_selected]!.text.isNotEmpty) _clearSearch();
+    _searchFocus.unfocus();
+    setState(() => _searchVisible.remove(_selected));
+  }
+
+  Widget _searchField() => Semantics(
+    label: 'Search ${_selected.name}',
+    child: TextField(
+      key: ValueKey('split-search-${_selected.name}'),
+      controller: _search[_selected],
+      focusNode: _searchFocus,
+      style: BambooFonts.ui(14),
+      textInputAction: TextInputAction.search,
+      onChanged: (value) => widget.onSearchChanged?.call(_selected, value),
+      onSubmitted: (_) => _searchFocus.unfocus(),
+      onTapOutside: (_) => _searchFocus.unfocus(),
+      decoration: InputDecoration(
+        hintText: 'Search…',
+        isDense: true,
+        filled: true,
+        fillColor: BambooInk.paperCool,
+        contentPadding: const EdgeInsets.symmetric(
+          horizontal: 12,
+          vertical: 10,
         ),
-    ],
-    children: [
-      _contexts(SharedHubTab.friends, widget.data.friends, widget.onOpenFriend),
-      _contexts(SharedHubTab.groups, widget.data.groups, widget.onOpenGroup),
-      _activity(),
-    ],
+        border: OutlineInputBorder(
+          borderRadius: BorderRadius.circular(24),
+          borderSide: BorderSide.none,
+        ),
+        suffixIcon: IconButton(
+          tooltip: 'Clear search',
+          icon: const Icon(Icons.close_rounded, size: 20),
+          onPressed: () {
+            _clearSearch();
+            _searchFocus.requestFocus();
+          },
+        ),
+      ),
+    ),
+  );
+
+  @override
+  Widget build(BuildContext context) => PopScope(
+    canPop: !_searchOpen,
+    onPopInvokedWithResult: (didPop, _) {
+      if (!didPop && _searchOpen) _closeSearch();
+    },
+    child: SharedTabbedFrame(
+      title: 'Splits',
+      titleTrailing: _searchOpen ? _searchField() : null,
+      onBack: _searchOpen ? _closeSearch : null,
+      header: widget.header,
+      tabs: const ['Friends', 'Groups', 'Activity'],
+      initialIndex: widget.initialIndex,
+      controller: _tabs,
+      onAddExpense: widget.onAddExpense,
+      actions: [
+        if (!_searchOpen)
+          IconButton(
+            tooltip: 'Search splits',
+            icon: const Icon(Icons.search_rounded),
+            onPressed: _openSearch,
+          ),
+        if (_selected != SharedHubTab.activity)
+          IconButton(
+            tooltip: 'Filter splits',
+            icon: const Icon(Icons.filter_list_rounded),
+            onPressed: _filter,
+          ),
+      ],
+      children: [
+        _contexts(
+          SharedHubTab.friends,
+          widget.data.friends,
+          widget.onOpenFriend,
+        ),
+        _contexts(SharedHubTab.groups, widget.data.groups, widget.onOpenGroup),
+        _activity(),
+      ],
+    ),
   );
 }
 

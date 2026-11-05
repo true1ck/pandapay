@@ -17,9 +17,13 @@ class SharedTabbedFrame extends StatelessWidget {
   final TabController? controller;
   final VoidCallback? onAddExpense;
   final Widget? header;
+  final Widget? titleTrailing;
+  final VoidCallback? onBack;
   const SharedTabbedFrame({
     super.key,
     this.header,
+    this.titleTrailing,
+    this.onBack,
     required this.title,
     required this.tabs,
     required this.children,
@@ -28,6 +32,13 @@ class SharedTabbedFrame extends StatelessWidget {
     this.controller,
     this.onAddExpense,
   });
+
+  Widget _title() => Text(
+    title,
+    maxLines: 1,
+    overflow: TextOverflow.ellipsis,
+    style: BambooFonts.heading(17),
+  );
 
   @override
   Widget build(BuildContext context) => DefaultTabController(
@@ -38,12 +49,16 @@ class SharedTabbedFrame extends StatelessWidget {
       appBar: AppBar(
         backgroundColor: Colors.transparent,
         surfaceTintColor: Colors.transparent,
-        title: Text(
-          title,
-          maxLines: 1,
-          overflow: TextOverflow.ellipsis,
-          style: BambooFonts.heading(17),
-        ),
+        leading: onBack == null ? null : BackButton(onPressed: onBack),
+        title: titleTrailing == null
+            ? _title()
+            : Row(
+                children: [
+                  _title(),
+                  const SizedBox(width: AppSpace.sm),
+                  Expanded(child: titleTrailing!),
+                ],
+              ),
         actions: actions,
         bottom: TabBar(
           controller: controller,

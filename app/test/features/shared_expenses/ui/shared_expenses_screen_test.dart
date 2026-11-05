@@ -291,8 +291,22 @@ void main() {
       ),
     );
     expect(find.byType(TextField), findsNothing);
+    final summaryTop = tester.getTopLeft(find.text('Net balance')).dy;
     await tester.tap(find.byTooltip('Search splits'));
     await tester.pumpAndSettle();
+    expect(find.text('Splits'), findsOneWidget);
+    expect(
+      find.descendant(
+        of: find.byType(AppBar),
+        matching: find.byType(TextField),
+      ),
+      findsOneWidget,
+    );
+    expect(tester.getTopLeft(find.text('Net balance')).dy, summaryTop);
+    expect(
+      (tester.widget<TextField>(find.byType(TextField))).focusNode!.hasFocus,
+      isTrue,
+    );
     await tester.enterText(find.byType(TextField), 'Rah');
     await tester.tap(find.text('Groups'));
     await tester.pumpAndSettle();
@@ -306,6 +320,19 @@ void main() {
     await tester.tap(find.byTooltip('Clear search'));
     await tester.pumpAndSettle();
     expect(searches, ['friends:Rah', 'friends:']);
+    expect(find.byType(TextField), findsOneWidget);
+    await tester.enterText(find.byType(TextField), 'Again');
+    await tester.tap(find.byType(BackButton));
+    await tester.pumpAndSettle();
+    expect(find.byType(TextField), findsNothing);
+    expect(find.text('Splits'), findsOneWidget);
+    expect(searches.last, 'friends:');
+    await tester.tap(find.byTooltip('Search splits'));
+    await tester.pumpAndSettle();
+    await tester.binding.handlePopRoute();
+    await tester.pumpAndSettle();
+    expect(find.byType(TextField), findsNothing);
+    expect(find.text('Splits'), findsOneWidget);
   });
 
   testWidgets('filter applies to the selected tab without hiding active debt', (
@@ -342,6 +369,13 @@ void main() {
     );
     expect(tester.takeException(), isNull);
     expect(find.text('You owe'), findsWidgets);
+    await tester.tap(find.byTooltip('Search splits'));
+    await tester.pumpAndSettle();
+    expect(tester.takeException(), isNull);
+    expect(
+      tester.getTopLeft(find.byType(TextField)).dx,
+      greaterThan(tester.getTopRight(find.text('Splits')).dx),
+    );
   });
 
   testWidgets(
