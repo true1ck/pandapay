@@ -140,6 +140,10 @@ function aggregateReport(cards, meta = {}) {
     overrides_applied: [],
     override_errors: [],
     per_card: [],
+    // D20e: "<slug>|<source rule id>" -> its rows' roles and feeds, and the
+    // sources whose classification changed since the previous report.
+    classification: {},
+    classification_changes: [],
   };
   let beforeUnmappedCards = 0;
   for (const c of cards) {
@@ -165,6 +169,10 @@ function aggregateReport(cards, meta = {}) {
     if (c.legacy) {
       report.accelerators.before_unmapped_token += c.legacy.acceleratorsUnmapped;
       if (c.legacy.acceleratorsUnmapped > 0) beforeUnmappedCards += 1;
+    }
+    const rowByKey = new Map(t.rewardRules.map((r) => [r.key, r]));
+    for (const src of t.coverage.perSource) {
+      report.classification[`${c.sourceSlug}|${src.source_local_id}`] = classifySource(src, rowByKey);
     }
     for (const src of t.coverage.perSource) {
       for (const tok of src.unmapped_tokens) inc(report.unmapped_tokens, tok);
@@ -236,6 +244,24 @@ function aggregateReport(cards, meta = {}) {
     });
   }
   report.accelerators.before_unmapped_cards = beforeUnmappedCards;
+  const previous = meta.previous?.classification;
+  if (previous && typeof previous === 'object') {
+    for (const [k, after] of Object.entries(report.classification)) {
+      const before = previous[k];
+      if (before !== undefined && before !== after) {
+        const [slug, source] = k.split('|');
+        report.classification_changes.push({ slug, source, before, after });
+      }
+    }
+    for (const [k, before] of Object.entries(previous)) {
+      if (!(k in report.classification)) {
+        const [slug, source] = k.split('|');
+        report.classification_changes.push({ slug, source, before, after: null });
+      }
+    }
+  }
+  report.previous_generated_at = meta.previous?.generated_at || null;
+
   // Arrays of [key, count], most frequent first (an object would reorder
   // numeric-looking keys).
   report.unmapped_tokens = sortedEntries(report.unmapped_tokens);
@@ -243,6 +269,15 @@ function aggregateReport(cards, meta = {}) {
   report.flags = sortedEntries(report.flags);
   report.needs_directory_entry = sortedEntries(report.needs_directory_entry);
   return report;
+}
+
+// A source rule's classification: each row's role and feed visibility.
+function classifySource(src, rowByKey) {
+  const labels = src.keys.map((k) => rowByKey.get(k)).filter(Boolean).map((r) => {
+    const feed = r.min_engine_version === 1 ? (r.max_engine_version === 1 ? 'v1only' : 'v1+v2') : 'v2';
+    return `${r.rule_role}@${feed}${r.flags.includes('bonus_only_exclusion') ? '[bonus_only]' : ''}`;
+  });
+  return uniq(labels).sort().join(',') || 'none';
 }
 
 function table(rows, headers) {
@@ -285,6 +320,16 @@ function renderMarkdown(report) {
     ['Lounge benefits with structured unlocks', `${report.unlocks.lounge_with_unlocks} / ${report.unlocks.lounge_benefits}`],
     ['Overrides applied / not applied', `${report.overrides_applied.length} / ${report.override_errors.length}`],
   ], ['Metric', 'Value']));
+  out.push('');
+  out.push('## Classification changes since the previous run');
+  out.push('');
+  out.push(report.previous_generated_at
+    ? `Compared with the report generated ${report.previous_generated_at}: ${report.classification_changes.length} source rule(s) changed.`
+    : 'No previous report to compare with.');
+  if (report.classification_changes.length) {
+    out.push('');
+    out.push(table(report.classification_changes.map((c) => [c.slug, c.source, c.before ?? '—', c.after ?? '—']), ['Card', 'Source rule', 'Before', 'After']));
+  }
   out.push('');
   out.push('## Unmapped category tokens (by frequency)');
   out.push('');

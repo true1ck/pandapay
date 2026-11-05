@@ -2112,10 +2112,18 @@ function defaultV2Context(args = {}) {
 }
 
 function writeCoverageReport(cards, reportDir, meta) {
-  const report = aggregateReport(cards, { transformVersion: IMPORT_TRANSFORM_VERSION, ...meta });
   fs.mkdirSync(reportDir, { recursive: true });
   const jsonPath = path.join(reportDir, 'coverage-report.json');
   const mdPath = path.join(reportDir, 'coverage-report.md');
+  // D20e: compare with the previous report so classification changes
+  // (demotions included) are always listed.
+  let previous = null;
+  try {
+    previous = fs.existsSync(jsonPath) ? JSON.parse(fs.readFileSync(jsonPath, 'utf8')) : null;
+  } catch {
+    previous = null;
+  }
+  const report = aggregateReport(cards, { transformVersion: IMPORT_TRANSFORM_VERSION, ...meta, previous });
   fs.writeFileSync(jsonPath, JSON.stringify(report, null, 2));
   fs.writeFileSync(mdPath, renderMarkdown(report));
   return { report, jsonPath, mdPath };
@@ -2199,6 +2207,7 @@ function runTransformOnly(args) {
   console.log(`  after: ${a.after_modelled} modelled, ${a.after_info} info, ${a.after_dropped} dropped, ${a.after_unrestricted} unrestricted (flagged)`);
   console.log(`  caps: ${report.caps.written} written of ${report.caps.source_total}, ${report.caps.enforced} enforced, ${report.caps.orphan} orphan`);
   console.log(`  unlock rules: ${report.unlocks.rows} (${report.unlocks.lounge_with_unlocks} of ${report.unlocks.lounge_benefits} lounge benefits)`);
+  console.log(`  classification changes since the previous report: ${report.previous_generated_at ? report.classification_changes.length : 'n/a (no previous report)'}`);
   console.log(`\nWrote:\n  ${jsonPath}\n  ${mdPath}\n  ${previewPath}`);
   if (report.cards_failed.length) process.exitCode = 1;
   return report;

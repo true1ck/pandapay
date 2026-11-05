@@ -68,3 +68,17 @@ test('the loader preview of real records reads as a v2 feed with structured rule
   assert.equal(m.r9_rounding.with_rounding, m.r9_rounding.points_cards);
   assert.ok(m.r7_spend_gated_benefits.unlock_rules > 0);
 });
+
+test('D20e the coverage report lists classification changes against the previous report', () => {
+  const { aggregateReport } = require('../scripts/catalogue_v2/coverage');
+  const fixtures = path.join(__dirname, 'fixtures', 'cardpipeline');
+  const dir = loadDirectory();
+  const { final } = JSON.parse(fs.readFileSync(path.join(fixtures, 'swiggy-hdfc-bank-credit-card.json'), 'utf8'));
+  const cards = [{ sourceSlug: 'swiggy-hdfc-bank-credit-card', result: transformCardRecordV2(final, { directory: dir }) }];
+  const first = aggregateReport(cards, {});
+  assert.equal(first.classification['swiggy-hdfc-bank-credit-card|swiggy_10pct'], 'earn@v1+v2');
+  const previous = { generated_at: 'x', classification: { ...first.classification, 'swiggy-hdfc-bank-credit-card|swiggy_10pct': 'info@v2', 'gone|rule': 'earn@v2' } };
+  const second = aggregateReport(cards, { previous });
+  assert.deepEqual(second.classification_changes.find((c) => c.source === 'swiggy_10pct'), { slug: 'swiggy-hdfc-bank-credit-card', source: 'swiggy_10pct', before: 'info@v2', after: 'earn@v1+v2' });
+  assert.ok(second.classification_changes.some((c) => c.slug === 'gone' && c.after === null));
+});
