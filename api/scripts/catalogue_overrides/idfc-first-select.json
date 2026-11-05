@@ -51,6 +51,118 @@
       "reason": "Depends on a foreign-currency flag / the cardholder birthday; not expressible in Phase 1 (D14b, D13b).",
       "source_url": "https://www.idfcfirst.bank.in/content/idfcfirstbank/en/credit-card/select.html",
       "checked_on": "2026-11-05"
+    },
+    {
+      "path": "reward_rules[id=10x_dining].conditions.activation",
+      "value": null,
+      "reason": "The text \"From the first eligible transaction.\" means there is no minimum spend; it is not a restriction on the rule.",
+      "source_url": "https://www.idfcfirst.bank.in/content/idfcfirstbank/en/credit-card/select.html",
+      "checked_on": "2026-11-05"
+    },
+    {
+      "path": "reward_rules[id=10x_travel].conditions.activation",
+      "value": null,
+      "reason": "The text \"From the first eligible transaction.\" means there is no minimum spend; it is not a restriction on the rule.",
+      "source_url": "https://www.idfcfirst.bank.in/content/idfcfirstbank/en/credit-card/select.html",
+      "checked_on": "2026-11-05"
+    },
+    {
+      "path": "reward_rules[id=0x_cash_withdrawal].category_id",
+      "value": "all_retail",
+      "reason": "Token cash_withdrawal is not mapped by the loader; the rail (atm) already restricts the exclusion.",
+      "source_url": "https://www.idfcfirst.bank.in/content/idfcfirstbank/en/credit-card/select.html",
+      "checked_on": "2026-11-05"
+    },
+    {
+      "path": "reward_rules[id=20pct_hotel_bonus].rule_role",
+      "value": "info",
+      "reason": "The issuer pays a 20% (hotel) / 10% (flight) bonus on the normal points, not a flat 3 points per Rs 200, and only on bookings via the app Rewards Gallery. The rate is misread, so it must not be ranked.",
+      "source_url": "https://www.idfcfirst.bank.in/content/idfcfirstbank/en/credit-card/select.html",
+      "checked_on": "2026-11-05"
+    },
+    {
+      "path": "reward_rules[id=10pct_flight_bonus].rule_role",
+      "value": "info",
+      "reason": "The issuer pays a 20% (hotel) / 10% (flight) bonus on the normal points, not a flat 3 points per Rs 200, and only on bookings via the app Rewards Gallery. The rate is misread, so it must not be ranked.",
+      "source_url": "https://www.idfcfirst.bank.in/content/idfcfirstbank/en/credit-card/select.html",
+      "checked_on": "2026-11-05"
+    },
+    {
+      "path": "cap_rules",
+      "value": [
+        {
+          "id": "tripstacc_monthly_bonus_cap",
+          "category_id": "travel_bonus",
+          "metric": "bonus_reward_points",
+          "mcc_target_list": [],
+          "period": "calendar_month",
+          "limit_value": 8000,
+          "limit_value_inr": null,
+          "post_limit_behavior": {
+            "action": "zero_accrual",
+            "points_per_block": 0
+          },
+          "parent_cap_id": null,
+          "reset_day": 1,
+          "effective_from": "2026-06-19",
+          "effective_to": null
+        },
+        {
+          "id": "monthly_redeemable_reward_points_cap",
+          "category_id": "all_retail",
+          "metric": "total_reward_points",
+          "mcc_target_list": [],
+          "period": "calendar_month",
+          "limit_value": 100000,
+          "limit_value_inr": null,
+          "post_limit_behavior": {
+            "action": "zero_accrual",
+            "points_per_block": 0
+          },
+          "parent_cap_id": null,
+          "reset_day": 1,
+          "effective_from": "2026-06-19",
+          "effective_to": null
+        },
+        {
+          "id": "annual_redeemable_reward_points_cap",
+          "category_id": "all_retail",
+          "metric": "total_reward_points",
+          "mcc_target_list": [],
+          "period": "annual",
+          "limit_value": 200000,
+          "limit_value_inr": null,
+          "post_limit_behavior": {
+            "action": "zero_accrual",
+            "points_per_block": 0
+          },
+          "parent_cap_id": null,
+          "reset_day": 1,
+          "effective_from": "2026-06-19",
+          "effective_to": null
+        },
+        {
+          "id": "select_credit_limit_cycle",
+          "category_id": "all_retail",
+          "metric": "eligible_spend_amount",
+          "mcc_target_list": [],
+          "period": "statement_cycle",
+          "limit_value": null,
+          "limit_value_inr": null,
+          "post_limit_behavior": {
+            "action": "zero_accrual",
+            "points_per_block": 0
+          },
+          "parent_cap_id": null,
+          "reset_day": null,
+          "effective_from": "2026-06-18",
+          "effective_to": null,
+          "depends_on_user": true
+        }
+      ],
+      "reason": "Restates the three source caps and adds the issuer rule that reward points are earned only on spends up to the credit limit per billing cycle (same wording as Wealth and Millennia). Amount depends on the user: null with depends_on_user (D13a).",
+      "source_url": "https://www.idfcfirst.bank.in/content/idfcfirstbank/en/credit-card/select.html",
+      "checked_on": "2026-11-05"
     }
   ]
 }

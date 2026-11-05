@@ -306,11 +306,25 @@
       "override_file": "api/scripts/catalogue_overrides/idfc-first-select.json"
     },
     {
-      "item": "user-dependent terms (D13)",
-      "cardpipeline_says": "n/a",
-      "issuer_says": "Points are earned only up to the credit limit per cycle (cap_depends_on_user, no cap row in this record: not enforceable, flagged); international and birthday 10X are info.",
-      "proposed_fix": "none",
-      "override_file": null
+      "item": "free-text activation condition",
+      "cardpipeline_says": "10x_dining / 10x_travel conditions.activation = \"From the first eligible transaction.\"",
+      "issuer_says": "It means no minimum spend, not a restriction. Cleared by override so the rules stay earn rules.",
+      "proposed_fix": "override",
+      "override_file": "api/scripts/catalogue_overrides/idfc-first-select.json"
+    },
+    {
+      "item": "app hotel/flight bonus rules",
+      "cardpipeline_says": "20pct_hotel_bonus / 10pct_flight_bonus as earn rules paying 3 points per Rs 200",
+      "issuer_says": "Issuer: 20% / 10% bonus over normal points on bookings through the app Rewards Gallery (max 8000 bonus). The flat rate is wrong, so both are set to info.",
+      "proposed_fix": "override",
+      "override_file": "api/scripts/catalogue_overrides/idfc-first-select.json"
+    },
+    {
+      "item": "user-dependent cap (D13a)",
+      "cardpipeline_says": "no credit-limit cap in the record",
+      "issuer_says": "Select page: points are earned only on spends up to the credit limit per billing cycle. Override adds the cap with a null amount and depends_on_user.",
+      "proposed_fix": "override",
+      "override_file": "api/scripts/catalogue_overrides/idfc-first-select.json"
     }
   ]
 }
