@@ -1,0 +1,308 @@
+{
+  "source_slug": "hdfc-infinia-metal",
+  "cardpipeline_id": "hdfc-bank-infinia-metal-edition",
+  "card_name": "Infinia Metal Edition",
+  "verified_on": "2026-11-05",
+  "sources": [
+    {
+      "url": "https://www.hdfc.bank.in/credit-cards/infinia-credit-card",
+      "doc": "Infinia product page",
+      "quote": "Earn 5 Reward Points on every Rs.150 retail spends including Insurance, Utilities and Education"
+    },
+    {
+      "url": "https://www.hdfc.bank.in/content/dam/hdfcbankpws/in/en/personal-banking/discover-products/cards/credit-cards/personal-mitc/mitc-in-english.pdf",
+      "doc": "HDFC Bank credit card MITC v4.18, Oct 2026",
+      "quote": "residual amounts or transactions below ₹150 will not earn Reward Points"
+    },
+    {
+      "url": "https://www.hdfc.bank.in/content/dam/hdfcbankpws/in/en/personal-banking/discover-products/cards/credit-cards/personal-mitc/mitc-in-english.pdf",
+      "doc": "HDFC Bank credit card MITC v4.18, Oct 2026",
+      "quote": "maximum cap of 10,000 per Month for Infinia, Infinia (Metal Edition)"
+    },
+    {
+      "url": "https://www.hdfc.bank.in/content/dam/hdfcbankpws/in/en/personal-banking/discover-products/cards/credit-cards/infinia-credit-card/rewards-points-program-terms-and-conditions.pdf",
+      "doc": "Infinia Rewards Points Program T&C (Jul 2026)",
+      "quote": "3,000 voucher limit is part of Infinia 15,000 monthly accelerated-RP cap"
+    },
+    {
+      "url": "https://offers.smartbuy.hdfc.bank.in/v2/accelerated-earn-rules",
+      "doc": "SmartBuy accelerated earn rules (valid to 31 Mar 2027)",
+      "quote": "Infinia (Reward Points) 15,000"
+    }
+  ],
+  "examples": [
+    {
+      "id": "001",
+      "title": "Rs 30,000 apparel store swipe",
+      "ctx": {
+        "amount": 30000,
+        "occurred": "2026-11-05T10:00:00+05:30",
+        "category_slug": "shopping",
+        "mcc": 5651,
+        "merchant_name": "Fashion store",
+        "merchant_vpa": null,
+        "merchant_slug": null,
+        "platform": null,
+        "rail": "swipe"
+      },
+      "state_before": {
+        "caps_by_source_id": {}
+      },
+      "expect": {
+        "currency": "points",
+        "amount": 1000,
+        "value_inr": null,
+        "excluded": false,
+        "cap_deltas_by_source_id": {}
+      },
+      "why": "5 RP per Rs150 block: 200 blocks x 5 = 1,000."
+    },
+    {
+      "id": "002",
+      "title": "Rs 1,000 swipe, partial block dropped",
+      "ctx": {
+        "amount": 1000,
+        "occurred": "2026-11-05T10:00:00+05:30",
+        "category_slug": "shopping",
+        "mcc": 5311,
+        "merchant_name": "Department store",
+        "merchant_vpa": null,
+        "merchant_slug": null,
+        "platform": null,
+        "rail": "swipe"
+      },
+      "state_before": {
+        "caps_by_source_id": {}
+      },
+      "expect": {
+        "currency": "points",
+        "amount": 30,
+        "value_inr": null,
+        "excluded": false,
+        "cap_deltas_by_source_id": {}
+      },
+      "why": "Issuer: residual amounts below the Rs150 block earn nothing, per transaction. 6 blocks (Rs900) x 5 = 30; Rs100 residual earns 0."
+    },
+    {
+      "id": "003",
+      "title": "Rs 3,000 fuel",
+      "ctx": {
+        "amount": 3000,
+        "occurred": "2026-11-05T10:00:00+05:30",
+        "category_slug": "fuel",
+        "mcc": 5541,
+        "merchant_name": "Petrol pump",
+        "merchant_vpa": null,
+        "merchant_slug": null,
+        "platform": null,
+        "rail": "swipe"
+      },
+      "state_before": {
+        "caps_by_source_id": {}
+      },
+      "expect": {
+        "currency": "points",
+        "amount": 0,
+        "value_inr": null,
+        "excluded": true,
+        "cap_deltas_by_source_id": {}
+      },
+      "why": "No Reward Points on fuel."
+    },
+    {
+      "id": "004",
+      "title": "Rs 50,000 rent via app",
+      "ctx": {
+        "amount": 50000,
+        "occurred": "2026-11-05T10:00:00+05:30",
+        "category_slug": "rent",
+        "mcc": 6513,
+        "merchant_name": "Rent payment",
+        "merchant_vpa": null,
+        "merchant_slug": null,
+        "platform": null,
+        "rail": "online"
+      },
+      "state_before": {
+        "caps_by_source_id": {}
+      },
+      "expect": {
+        "currency": "points",
+        "amount": 0,
+        "value_inr": null,
+        "excluded": true,
+        "cap_deltas_by_source_id": {}
+      },
+      "why": "Rent never earns points (MITC, since 1 Jan 2023)."
+    },
+    {
+      "id": "005",
+      "title": "Rs 6,000 grocery within monthly cap",
+      "ctx": {
+        "amount": 6000,
+        "occurred": "2026-11-05T10:00:00+05:30",
+        "category_slug": "groceries",
+        "mcc": 5411,
+        "merchant_name": "Supermarket",
+        "merchant_vpa": null,
+        "merchant_slug": null,
+        "platform": null,
+        "rail": "swipe"
+      },
+      "state_before": {
+        "caps_by_source_id": {}
+      },
+      "expect": {
+        "currency": "points",
+        "amount": 200,
+        "value_inr": null,
+        "excluded": false,
+        "cap_deltas_by_source_id": {
+          "grocery-rp-monthly-cap": 200
+        }
+      },
+      "why": "40 blocks x 5 = 200 RP. Grocery RP are capped at 2,000 per calendar month; 200 counts toward it."
+    },
+    {
+      "id": "006",
+      "title": "Rs 15,000 grocery after cap used",
+      "ctx": {
+        "amount": 15000,
+        "occurred": "2026-11-05T10:00:00+05:30",
+        "category_slug": "groceries",
+        "mcc": 5411,
+        "merchant_name": "Supermarket",
+        "merchant_vpa": null,
+        "merchant_slug": null,
+        "platform": null,
+        "rail": "swipe"
+      },
+      "state_before": {
+        "caps_by_source_id": {
+          "grocery-rp-monthly-cap": 2000
+        }
+      },
+      "expect": {
+        "currency": "points",
+        "amount": 0,
+        "value_inr": null,
+        "excluded": false,
+        "cap_deltas_by_source_id": {}
+      },
+      "why": "Grocery cap of 2,000 RP per month is used up; issuer says points are capped, so nothing more is earned (not even base)."
+    },
+    {
+      "id": "007",
+      "title": "Rs 30,000 insurance premium, insurance cap nearly used",
+      "ctx": {
+        "amount": 30000,
+        "occurred": "2026-11-05T10:00:00+05:30",
+        "category_slug": "insurance",
+        "mcc": 6300,
+        "merchant_name": "Insurance premium",
+        "merchant_vpa": null,
+        "merchant_slug": null,
+        "platform": null,
+        "rail": "online"
+      },
+      "state_before": {
+        "caps_by_source_id": {
+          "insurance-rp-monthly-cap": 9990
+        }
+      },
+      "expect": {
+        "currency": "points",
+        "amount": 10,
+        "value_inr": null,
+        "excluded": false,
+        "cap_deltas_by_source_id": {
+          "insurance-rp-monthly-cap": 10
+        }
+      },
+      "why": "Insurance earns 5 RP/Rs150 (1,000 RP) but total insurance RP are capped at 10,000 per month from 1 Jul 2025. 9,990 used, so only 10 more."
+    },
+    {
+      "id": "008",
+      "title": "Rs 15,000 hotel via SmartBuy (10X)",
+      "ctx": {
+        "amount": 15000,
+        "occurred": "2026-11-05T10:00:00+05:30",
+        "category_slug": "travel",
+        "mcc": 7011,
+        "merchant_name": "Hotel booking",
+        "merchant_vpa": null,
+        "merchant_slug": null,
+        "platform": "hdfc_smartbuy",
+        "rail": "online"
+      },
+      "state_before": {
+        "caps_by_source_id": {}
+      },
+      "expect": {
+        "currency": "points",
+        "amount": 5000,
+        "value_inr": null,
+        "excluded": false,
+        "cap_deltas_by_source_id": {
+          "smartbuy-accelerated-rp": 4500
+        }
+      },
+      "why": "SmartBuy hotels 10X for Infinia = 50 RP per Rs150: 100 blocks = 5,000 total, of which 500 is base and 4,500 is accelerated. Accelerated points count toward the 15,000/month SmartBuy cap."
+    },
+    {
+      "id": "009",
+      "title": "Rs 30,000 flights via SmartBuy (5X)",
+      "ctx": {
+        "amount": 30000,
+        "occurred": "2026-11-05T10:00:00+05:30",
+        "category_slug": "travel",
+        "mcc": 4511,
+        "merchant_name": "Flight booking",
+        "merchant_vpa": null,
+        "merchant_slug": null,
+        "platform": "hdfc_smartbuy",
+        "rail": "online"
+      },
+      "state_before": {
+        "caps_by_source_id": {}
+      },
+      "expect": {
+        "currency": "points",
+        "amount": 5000,
+        "value_inr": null,
+        "excluded": false,
+        "cap_deltas_by_source_id": {
+          "smartbuy-accelerated-rp": 4000
+        }
+      },
+      "why": "SmartBuy flights are 5X, not 10X: 25 RP per Rs150, 200 blocks = 5,000 total (1,000 base + 4,000 accelerated)."
+    }
+  ],
+  "research_notes": [
+    {
+      "item": "caps insurance/grocery/utility/telecom (metric bonus_reward_points, post-limit downgrade_to_base_rate)",
+      "cardpipeline_says": "Bonus-only caps; spend beyond cap falls back to the base 5 RP/Rs150, so the cap has no effect.",
+      "issuer_says": "Total RP from these categories are capped per month (insurance 10,000; grocery, utility, telecom 2,000). Nothing is earned above the cap.",
+      "proposed_fix": "override",
+      "override_file": "api/scripts/catalogue_overrides/hdfc-infinia-metal.json"
+    },
+    {
+      "item": "rule smartbuy-up-to-10x (single rule, 10X, unrestricted by merchant)",
+      "cardpipeline_says": "All SmartBuy travel and shopping earns up to 10X.",
+      "issuer_says": "SmartBuy multiples differ by merchant: hotels, IGP, Jockey, PharmEasy 10X; flights, RedBus, Myntra, Nykaa 5X; trains 3X; instant vouchers 5X.",
+      "proposed_fix": "importer"
+    },
+    {
+      "item": "SmartBuy cap also has a per-day maximum",
+      "cardpipeline_says": "Monthly 15,000 only.",
+      "issuer_says": "SmartBuy page lists max 15,000 per day as well as per month for Infinia.",
+      "proposed_fix": "none"
+    },
+    {
+      "item": "insurance cap field names",
+      "cardpipeline_says": "insurance cap described as 10,000/month.",
+      "issuer_says": "Matches MITC (10,000/month from 1 Jul 2025 for Infinia).",
+      "proposed_fix": "none"
+    }
+  ]
+}
