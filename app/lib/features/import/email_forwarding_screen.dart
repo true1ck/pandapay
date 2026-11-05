@@ -7,6 +7,7 @@ import '../../app/design/widgets.dart';
 import '../../app/providers.dart';
 import '../../data/api_exception.dart';
 import '../../data/import_repository.dart';
+import '../consent/email_import_disclosure.dart';
 
 /// ui-spec.md F3 Email Forwarding Setup ⭐ highest-friction flow, rebuilt
 /// around a provider picker (Task F-8).
@@ -64,15 +65,20 @@ class EmailForwardingScreen extends ConsumerWidget {
                 title: 'Sign in to set up email statements',
               );
             }
-            if (addr == null) {
-              return _IntroView(
-                onIssue: () async {
-                  await repo.issueForwardingAddress();
-                  ref.invalidate(forwardingAddressProvider);
-                },
-              );
-            }
-            return _SetupView(address: addr);
+            // Email text is read server-side, so nothing past this point (the
+            // intro that issues an address, or the address itself) is shown
+            // until the user has agreed to the email import disclosure.
+            return EmailImportConsentGate(
+              sourceScreen: 'email_forwarding',
+              child: addr == null
+                  ? _IntroView(
+                      onIssue: () async {
+                        await repo.issueForwardingAddress();
+                        ref.invalidate(forwardingAddressProvider);
+                      },
+                    )
+                  : _SetupView(address: addr),
+            );
           },
         ),
       ),

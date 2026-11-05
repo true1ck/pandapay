@@ -5,6 +5,7 @@ import '../../app/design/app_theme.dart';
 import '../../app/design/widgets.dart';
 import '../../app/providers.dart';
 import '../../data/api_exception.dart';
+import '../consent/email_import_disclosure.dart';
 
 /// ui-spec.md F7 IMAP Connection (fallback) ⭐.
 ///
@@ -138,7 +139,11 @@ class _ImapConnectionScreenState extends ConsumerState<ImapConnectionScreen> {
         title: Text('IMAP connection', style: BambooFonts.heading(17, color: BambooInk.ink900)),
       ),
       body: AppBackground(
-        child: ListView(
+        // Nothing past the disclosure (including the connect form) is shown
+        // until the user has agreed to it.
+        child: EmailImportConsentGate(
+          sourceScreen: 'imap_connection',
+          child: ListView(
           padding: const EdgeInsets.all(AppSpace.lg),
           children: [
             Container(
@@ -318,6 +323,7 @@ class _ImapConnectionScreenState extends ConsumerState<ImapConnectionScreen> {
               style: BambooFonts.ui(12.5, color: BambooInk.ink500),
             ),
           ],
+        ),
         ),
       ),
     );
