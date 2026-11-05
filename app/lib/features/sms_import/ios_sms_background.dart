@@ -1,4 +1,3 @@
-import '../sms_v2/flag.dart';
 import 'dart:async';
 
 import 'package:flutter/services.dart';
@@ -86,7 +85,7 @@ class IosSmsBackgroundDrain {
         final rules = SmsRuleBundleStore(database);
         SmsImportStore(
           store,
-          deferToSmsV2: kSmsPipelineV2,
+          deferToSmsV2: true,
           downloadedRules: rules.loadActiveBundleSync(
             clientVersion: clientVersion,
           ),

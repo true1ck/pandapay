@@ -3,7 +3,6 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:pandapay/data/user_cards_repository.dart' show TxnEntryKind;
 import 'package:pandapay/features/sms_import/sms_background_queue.dart';
-import 'package:pandapay/features/sms_v2/flag.dart';
 import 'package:pandapay/features/sms_v2/ledger/adapters.dart';
 import 'package:pandapay/features/sms_v2/ledger/providers.dart';
 import 'package:pandapay/features/sms_v2/ledger/reports.dart';
@@ -46,7 +45,6 @@ void main() {
     await tester.pumpWidget(
       ProviderScope(
         overrides: [
-          smsPipelineV2EnabledProvider.overrideWithValue(true),
           smsV2LedgerReadModelProvider.overrideWith((_) async => model),
         ],
         child: MaterialApp(home: SmsLedgerScreenView(screen: screen)),

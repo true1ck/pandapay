@@ -109,7 +109,6 @@ class _SmsImportScreenState extends ConsumerState<SmsImportScreen> {
       if (!await _service.hasPermissions()) {
         throw StateError('SMS permission is no longer granted. Enable it in Android Settings and try again.');
       }
-      controller.setCardOverride(_selectedCardId);
       await controller.start();
       final summary = await controller.syncExistingInbox();
       if (!mounted) return;

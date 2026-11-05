@@ -19,7 +19,6 @@ Run the real app-client integration on the Mac while the loopback rig is running
 ```sh
 cd app
 SMS_V2_LOCAL_RIG=/tmp/pandapay-sms-rig.EXAMPLE flutter test --no-pub \
-  --dart-define=SMS_PIPELINE_V2=true \
   test/features/sms_v2/pipeline/local_rig_test.dart --reporter expanded
 ```
 

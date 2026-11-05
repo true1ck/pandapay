@@ -8,17 +8,15 @@ final _api = Uri.parse('https://api.example.test:8443');
 
 ApiRequestHeadersClient _client(
   http.Client inner, {
-  bool v2 = false,
   String? version = '1.4.0+57',
 }) => ApiRequestHeadersClient(
   inner: inner,
   apiBaseUrl: _api,
   appVersion: () async => version,
-  pipelineV2Enabled: () => v2,
 );
 
 void main() {
-  test('adds X-App-Version to every PandaPay API request and nothing else', () async {
+  test('adds only X-App-Version and X-Sms-Pipeline to PandaPay API requests', () async {
     http.BaseRequest? seen;
     final client = _client(MockClient((r) async {
       seen = r;
@@ -30,29 +28,26 @@ void main() {
       ..body = '{"a":1}';
     final before = Map.of(request.headers);
     await client.send(request);
-    final expected = {...before, 'X-App-Version': '1.4.0+57'};
+    final expected = {
+      ...before,
+      'X-App-Version': '1.4.0+57',
+      'X-Sms-Pipeline': 'v2',
+    };
     expect(seen!.headers, expected);
     expect((seen! as http.Request).body, '{"a":1}');
     expect(seen!.url.path, '/transactions');
     expect(seen!.method, 'POST');
   });
 
-  test('X-Sms-Pipeline: v2 only when the v2 pipeline is enabled', () async {
-    final seen = <Map<String, String>>[];
-    Future<void> run(bool v2) async {
-      final client = _client(MockClient((r) async {
-        seen.add(Map.of(r.headers));
-        return http.Response('{}', 200);
-      }), v2: v2);
-      await client.get(Uri.parse('https://api.example.test:8443/transactions'));
-    }
-
-    await run(false);
-    await run(true);
-    expect(seen[0].containsKey('X-Sms-Pipeline'), isFalse);
-    expect(seen[0]['X-App-Version'], '1.4.0+57');
-    expect(seen[1]['X-Sms-Pipeline'], 'v2');
-    expect(seen[1]['X-App-Version'], '1.4.0+57');
+  test('sends X-Sms-Pipeline: v2 with X-App-Version to the API origin', () async {
+    http.BaseRequest? seen;
+    final client = _client(MockClient((r) async {
+      seen = r;
+      return http.Response('{}', 200);
+    }));
+    await client.get(Uri.parse('https://api.example.test:8443/transactions'));
+    expect(seen!.headers['X-Sms-Pipeline'], 'v2');
+    expect(seen!.headers['X-App-Version'], '1.4.0+57');
   });
 
   test('requests to other hosts are untouched', () async {
@@ -60,7 +55,7 @@ void main() {
     final client = _client(MockClient((r) async {
       seen.add(Map.of(r.headers));
       return http.Response('{}', 200);
-    }), v2: true);
+    }));
     await client.get(Uri.parse('https://maps.example.test/place'));
     await client.get(Uri.parse('https://api.example.test/transactions')); // other port
     expect(seen, [<String, String>{}, <String, String>{}]);
@@ -86,7 +81,7 @@ void main() {
       inner: _client(MockClient((r) async {
         seen.add(Map.of(r.headers));
         return http.Response('{}', ++calls == 1 ? 401 : 200);
-      }), v2: true),
+      })),
     );
     final res = await auth.get(
       Uri.parse('https://api.example.test:8443/transactions'),

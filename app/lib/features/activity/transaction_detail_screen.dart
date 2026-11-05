@@ -1,6 +1,5 @@
 import '../sms_v2/ui/review_controller.dart';
 import '../sms_v2/ui/transaction_actions.dart';
-import '../sms_v2/flag.dart';
 import '../sms_v2/ui/why_sheet.dart';
 import 'package:flutter/material.dart';
 import 'dart:async';
@@ -670,8 +669,7 @@ class _DetailBodyState extends ConsumerState<_DetailBody> {
     });
 
     try {
-      if (ref.read(smsPipelineV2EnabledProvider) &&
-          widget.entry.pipelineVersion == 2) {
+      if (widget.entry.pipelineVersion == 2) {
         final namespace = ref.read(cacheNamespaceProvider);
         final controller = await smsReviewController(ref);
         if (!mounted || namespace != ref.read(cacheNamespaceProvider)) return;
@@ -790,8 +788,7 @@ class _DetailBodyState extends ConsumerState<_DetailBody> {
     });
 
     try {
-      if (ref.read(smsPipelineV2EnabledProvider) &&
-          widget.entry.pipelineVersion == 2) {
+      if (widget.entry.pipelineVersion == 2) {
         final namespace = ref.read(cacheNamespaceProvider);
         final controller = await smsReviewController(ref);
         if (!mounted || namespace != ref.read(cacheNamespaceProvider)) return;
@@ -1550,9 +1547,7 @@ class _DetailBodyState extends ConsumerState<_DetailBody> {
                     _SplitSummary(splits: _splits, total: widget.entry.amount),
                   ],
                   const SizedBox(height: AppSpace.sm),
-                  if (ref.watch(smsPipelineV2EnabledProvider) &&
-                      entry.pipelineVersion == 2 &&
-                      entry.sourceKey != null)
+                  if (entry.pipelineVersion == 2 && entry.sourceKey != null)
                     AccountTile(
                       icon: Icons.help_outline,
                       label: 'Why this?',

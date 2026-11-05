@@ -1,4 +1,3 @@
-import '../sms_v2/flag.dart';
 import '../sms_v2/ui/review_controller.dart';
 import '../sms_v2/ui/transaction_actions.dart';
 import '../sms_v2/providers/data_providers.dart';
@@ -182,8 +181,7 @@ class _EditTransactionScreenState extends ConsumerState<EditTransactionScreen> {
       // old app builds and lightweight repository fakes can keep compiling
       // while the typed data-layer methods roll out.
       if (categoryChanged &&
-          !(ref.read(smsPipelineV2EnabledProvider) &&
-              original.pipelineVersion == 2) &&
+          original.pipelineVersion != 2 &&
           ref.read(isOnlineProvider).valueOrNull != false) {
         final result = await _offerCategoryBulkReview(
           targetCategoryId: _categoryId,
@@ -212,8 +210,7 @@ class _EditTransactionScreenState extends ConsumerState<EditTransactionScreen> {
       // was saved.
       final offline = ref.read(isOnlineProvider).valueOrNull == false;
       if (offline &&
-          !(ref.read(smsPipelineV2EnabledProvider) &&
-              original?.pipelineVersion == 2) &&
+          original?.pipelineVersion != 2 &&
           _selfTransfer == null &&
           _clearedSelfTransfer == null) {
         final queue = await ref.read(syncQueueProvider.future);
@@ -294,8 +291,7 @@ class _EditTransactionScreenState extends ConsumerState<EditTransactionScreen> {
 
   Future<void> _submitEdit(double amount) async {
     final original = _originalEntry;
-    if (ref.read(smsPipelineV2EnabledProvider) &&
-        original?.pipelineVersion == 2) {
+    if (original?.pipelineVersion == 2) {
       final namespace = ref.read(cacheNamespaceProvider);
       final controller = await smsReviewController(ref);
       final instruments = await ref.read(instrumentsProvider.future);
@@ -496,9 +492,7 @@ class _EditTransactionScreenState extends ConsumerState<EditTransactionScreen> {
   /// Activity. Runs after the PATCH has committed, so a failed or offline save
   /// never produces evidence, and never blocks or fails the user's edit.
   Future<void> _recordSmsEditFeedback(double amount) async {
-    if (ref.read(smsPipelineV2EnabledProvider) &&
-        _originalEntry?.pipelineVersion == 2)
-      return;
+    if (_originalEntry?.pipelineVersion == 2) return;
     final original = _originalEntry;
     if (original == null) return;
     final categories = ref.read(categoriesProvider).valueOrNull ?? const [];
