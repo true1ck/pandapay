@@ -54,8 +54,15 @@ Future<void> testExecutable(FutureOr<void> Function() testMain) async {
   // global across every test declared in every file, same as this
   // function wrapping every file's main().
   setUp(fakeSecureStorage.clear);
+  // Only the platform-independent `ci/` goldens (Ahem font, colour blocks
+  // for text) are committed and compared. Alchemist 0.14 enables the
+  // per-platform variants for every host with no CI detection, so on a Linux
+  // runner it would look for `goldens/linux/*.png`, which nobody commits (they
+  // are machine-specific). Plan C8/D30b.
   return AlchemistConfig.runWithConfig(
-    config: const AlchemistConfig(),
+    config: const AlchemistConfig(
+      platformGoldensConfig: PlatformGoldensConfig(enabled: false),
+    ),
     run: testMain,
   );
 }
