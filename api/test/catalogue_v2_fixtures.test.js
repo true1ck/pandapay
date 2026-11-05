@@ -200,7 +200,8 @@ test('tiered-lounge card (Axis Atlas): tier unlock rows; travel alternatives bec
   assert.equal(rows(t, 'travel-above-monthly-cap')[0].rule_role, 'info', 'cumulative-spend trigger');
   const spendCap = cap(t, 'travel-accelerated-monthly-spend-cap');
   assert.equal(spendCap.cap_kind, 'eligible_spend');
-  assert.equal(spendCap.post_cap_behavior, 'base_rate');
+  // the source states the post-limit rate (2 pts/₹100, the base): custom_rate at that rate
+  assert.deepEqual([spendCap.post_cap_behavior, spendCap.post_cap_unit, spendCap.post_cap_rate], ['custom_rate', 'points_per_100', 2]);
   assert.equal(t.milestones.length, 3);
   assert.ok(t.milestones.every((m) => m.anchor === 'card_anniversary'));
 });

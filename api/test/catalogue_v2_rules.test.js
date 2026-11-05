@@ -1204,6 +1204,33 @@ test('an EMI exclusion on the EMI category and the EMI rail excludes either (alt
   }
 });
 
+test('a spend cap whose post-limit action states a rate gets custom_rate, unless that rate is above the in-cap rate', () => {
+  const spendCap = (id, post) => ({ id, category_id: 'all_retail', metric: 'eligible_spend_amount', limit_value_inr: 150000, period: 'calendar_month', post_limit_behavior: post, parent_cap_id: null });
+  const r = run(pointsCard([
+    rule({ id: 'dining_10', category_id: 'dining', action: { points_per_block: 10, cap_reference: 'dining_cap' } }),
+    rule({ id: 'travel_6', category_id: 'travel', priority: 11, action: { points_per_block: 6, cap_reference: 'travel_cap' } }),
+    rule({ id: 'grocery_6', category_id: 'grocery', priority: 12, action: { points_per_block: 6, cap_reference: 'grocery_cap' } }),
+  ], {
+    caps: [
+      spendCap('dining_cap', { action: 'downgrade_to_base_rate', points_per_block: 4 }),
+      spendCap('travel_cap', { action: 'downgrade_to_base_rate', points_per_block: 35 }),
+      spendCap('grocery_cap', { action: 'zero_accrual', points_per_block: 0 }),
+    ],
+  }));
+  const cap = (id) => r.capRules.find((c) => c.key === id);
+  assert.deepEqual([cap('dining_cap').post_cap_behavior, cap('dining_cap').post_cap_unit, cap('dining_cap').post_cap_rate], ['custom_rate', 'points_per_100', 4]);
+  assert.equal(cap('travel_cap').post_cap_behavior, 'base_rate', 'above the in-cap rate: not emitted');
+  assert.ok(cap('travel_cap').flags.includes('post_limit_rate_above_cap_rate'));
+  assert.deepEqual([cap('grocery_cap').post_cap_behavior, cap('grocery_cap').post_cap_rate], ['zero', 0]);
+
+  const cash = run(card({
+    rules: [rule({ id: 'online_5', category_id: 'online', action: { cashback_percent: 5, cap_reference: 'online_cap' } })],
+    caps: [{ id: 'online_cap', category_id: 'online', metric: 'eligible_spend_amount', limit_value_inr: 10000, period: 'calendar_month', post_limit_behavior: { action: 'downgrade_to_base_rate', cashback_percent: 1 } }],
+  }));
+  const oc = cash.capRules[0];
+  assert.deepEqual([oc.post_cap_behavior, oc.post_cap_unit, oc.post_cap_rate], ['custom_rate', 'cashback_percent', 1]);
+});
+
 test('rows that would break a database identity index are deduplicated: first kept, the rest reported', () => {
   // bobcard-select: four empty lifestyle benefits; bobcard-corporate: two empty insurance rows.
   const emptyBenefit = { benefit_id: null, category_id: null, network_program: null, sponsor: null, label: null,
