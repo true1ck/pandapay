@@ -28,6 +28,13 @@
       "reason": "Issuer caps total NeuCoins in the category per month.",
       "source_url": "https://www.hdfc.bank.in/content/dam/hdfcbankpws/in/en/personal-banking/discover-products/cards/credit-cards/tata-neu-infinity-credit-card/pdf/tata_neu_infinity_card_tnc.pdf",
       "checked_on": "2026-11-05"
+    },
+    {
+      "path": "accrual_engine.rounding_mode",
+      "value": "points_half_up",
+      "reason": "Issuer rounds the final NeuCoins to nearest whole (half up) on the exact amount (D7).",
+      "source_url": "https://www.hdfc.bank.in/content/dam/hdfcbankpws/in/en/personal-banking/discover-products/cards/credit-cards/tata-neu-infinity-credit-card/pdf/tata_neu_infinity_card_tnc.pdf",
+      "checked_on": "2026-11-05"
     }
   ]
 }
