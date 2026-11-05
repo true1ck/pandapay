@@ -1181,10 +1181,11 @@ const POINTS_KINDS = ['bonus_points', 'total_points'];
  *     (`cap_kind` null) so v2 clients can tell the two apart.
  *   - `cap_kind`, `cap_amount` (native), `period_start` / `period_end`
  *     ('YYYY-MM-DD') and `approximate_window`.
- * "Current" is the India calendar day for v2 rows (their windows are IST)
- * and the database date for v1 rows, as before.
+ * "Current" is the India calendar day of `now` for v2 rows (their windows
+ * are IST, C8 D23c) and the database's CURRENT_DATE for v1 rows, as before.
+ * Rows are the signed-in owner's only (C8 D23e; RLS does the same).
  */
-async function currentCapStates(client, userCardId) {
+async function currentCapStates(client, userCardId, { now = new Date() } = {}) {
   const result = await client.query(
     `SELECT cs.cap_rule_id,
             CASE WHEN cs.cap_kind = ANY($2::text[])
@@ -1198,23 +1199,31 @@ async function currentCapStates(client, userCardId) {
        JOIN user_cards uc ON uc.id = cs.user_card_id
        JOIN card_products cp ON cp.id = uc.card_product_id
       WHERE cs.user_card_id = $1
-        AND cs.period_start <= CASE WHEN cs.cap_kind IS NULL THEN CURRENT_DATE
-                                    ELSE (now() AT TIME ZONE 'Asia/Kolkata')::date END
-        AND cs.period_end >= CASE WHEN cs.cap_kind IS NULL THEN CURRENT_DATE
-                                  ELSE (now() AT TIME ZONE 'Asia/Kolkata')::date END`,
-    [userCardId, POINTS_KINDS],
+        AND cs.profile_id = pandapay.uid()
+        AND cs.period_start <= CASE WHEN cs.cap_kind IS NULL THEN CURRENT_DATE ELSE $3::date END
+        AND cs.period_end >= CASE WHEN cs.cap_kind IS NULL THEN CURRENT_DATE ELSE $3::date END`,
+    [userCardId, POINTS_KINDS, istDay(now)],
   );
   return result.rows;
 }
 
-/** Current-period milestone rows; `period_end` keeps its existing encoding, `period_start` is 'YYYY-MM-DD'. */
-async function currentMilestoneStates(client, userCardId) {
+/**
+ * Current-period milestone rows; `period_end` keeps its existing encoding,
+ * `period_start` is 'YYYY-MM-DD'. "Current" is the India day of `now` on a
+ * v2-shaped card (C8 D23c) and CURRENT_DATE on a v1 card, as before; `v2`
+ * may be passed when the caller already knows the card's shape.
+ */
+async function currentMilestoneStates(client, userCardId, { now = new Date(), v2 = null } = {}) {
+  const isV2 = v2 != null ? Boolean(v2) : Boolean(await loadV2Card(client, userCardId));
   const result = await client.query(
     `SELECT milestone_rule_id, qualified_spend, period_end,
             to_char(period_start, 'YYYY-MM-DD') AS period_start, approximate_window
        FROM milestone_states
-      WHERE user_card_id = $1 AND period_start <= CURRENT_DATE AND period_end >= CURRENT_DATE`,
-    [userCardId],
+      WHERE user_card_id = $1
+        AND profile_id = pandapay.uid()
+        AND period_start <= CASE WHEN $2::boolean THEN $3::date ELSE CURRENT_DATE END
+        AND period_end >= CASE WHEN $2::boolean THEN $3::date ELSE CURRENT_DATE END`,
+    [userCardId, isV2, istDay(now)],
   );
   return result.rows;
 }
