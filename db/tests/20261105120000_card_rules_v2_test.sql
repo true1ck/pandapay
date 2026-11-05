@@ -121,6 +121,11 @@ begin
     raise exception 'v1 rule/cap enum values changed';
   end if;
 
+  -- D17(l): windowed (welcome-type) milestones are hidden from v1
+  if jsonb_array_length(v1->'milestone_rules') <> 0 then
+    raise exception 'v1 view must hide milestones with window_days, got %', v1->'milestone_rules';
+  end if;
+
   -- ── v2 view ──
   select to_jsonb(x) into v2 from v_card_catalogue_export_v2 x where x.id = v_card;
   if jsonb_array_length(v2->'reward_rules') <> 3 then
