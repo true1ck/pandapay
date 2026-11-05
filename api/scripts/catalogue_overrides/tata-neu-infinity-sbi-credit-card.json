@@ -307,6 +307,118 @@
       "reason": "WP7: D25d: T&C 11.4(a) \"cash advances\"; the record had no cash-advance exclusion.",
       "source_url": "https://www.sbicard.com/sbi-card-en/assets/docs/pdf/ekit-tncs/Tata-Neu-Infinity-Booklet.pdf",
       "checked_on": "2026-11-05"
+    },
+    {
+      "path": "reward_rules",
+      "op": "append",
+      "value": {
+        "id": "wp7_outstanding_payment_info",
+        "rule_role": "info",
+        "category_id": "all_retail",
+        "priority": 3,
+        "evaluation_type": "exclusion",
+        "rail": "any",
+        "channel_type": "all",
+        "conditions": {
+          "transaction_scope": "payment of outstanding balance"
+        },
+        "action": {
+          "multiplier": 0,
+          "points_per_block": 0,
+          "cashback_percent": "N/A",
+          "cap_reference": null,
+          "reason": "Payment of outstanding balances earns no NeuCoins."
+        },
+        "effective_from": "2025-04-16",
+        "effective_to": null
+      },
+      "reason": "WP7: D25d: T&C 11.4(a)/(g) exclude it; not a purchase the context can tell apart, so info with depends_on_txn_attribute (D14b).",
+      "source_url": "https://www.sbicard.com/sbi-card-en/assets/docs/pdf/ekit-tncs/Tata-Neu-Infinity-Booklet.pdf",
+      "checked_on": "2026-11-05"
+    },
+    {
+      "path": "reward_rules",
+      "op": "append",
+      "value": {
+        "id": "wp7_fees_charges_info",
+        "rule_role": "info",
+        "category_id": "all_retail",
+        "priority": 3,
+        "evaluation_type": "exclusion",
+        "rail": "any",
+        "channel_type": "all",
+        "conditions": {
+          "transaction_scope": "card fees and other charges"
+        },
+        "action": {
+          "multiplier": 0,
+          "points_per_block": 0,
+          "cashback_percent": "N/A",
+          "cap_reference": null,
+          "reason": "Card fees and other charges earn no NeuCoins."
+        },
+        "effective_from": "2025-04-16",
+        "effective_to": null
+      },
+      "reason": "WP7: D25d: T&C 11.4(a)/(g) exclude it; not a purchase the context can tell apart, so info with depends_on_txn_attribute (D14b).",
+      "source_url": "https://www.sbicard.com/sbi-card-en/assets/docs/pdf/ekit-tncs/Tata-Neu-Infinity-Booklet.pdf",
+      "checked_on": "2026-11-05"
+    },
+    {
+      "path": "reward_rules",
+      "op": "append",
+      "value": {
+        "id": "wp7_balance_transfer_info",
+        "rule_role": "info",
+        "category_id": "all_retail",
+        "priority": 3,
+        "evaluation_type": "exclusion",
+        "rail": "any",
+        "channel_type": "all",
+        "conditions": {
+          "transaction_scope": "balance transfer"
+        },
+        "action": {
+          "multiplier": 0,
+          "points_per_block": 0,
+          "cashback_percent": "N/A",
+          "cap_reference": null,
+          "reason": "Balance transfers earn no NeuCoins."
+        },
+        "effective_from": "2025-04-16",
+        "effective_to": null
+      },
+      "reason": "WP7: D25d: T&C 11.4(a)/(g) exclude it; not a purchase the context can tell apart, so info with depends_on_txn_attribute (D14b).",
+      "source_url": "https://www.sbicard.com/sbi-card-en/assets/docs/pdf/ekit-tncs/Tata-Neu-Infinity-Booklet.pdf",
+      "checked_on": "2026-11-05"
+    },
+    {
+      "path": "reward_rules",
+      "op": "append",
+      "value": {
+        "id": "wp7_disputed_info",
+        "rule_role": "info",
+        "category_id": "all_retail",
+        "priority": 3,
+        "evaluation_type": "exclusion",
+        "rail": "any",
+        "channel_type": "all",
+        "conditions": {
+          "transaction_scope": "disputed transaction"
+        },
+        "action": {
+          "multiplier": 0,
+          "points_per_block": 0,
+          "cashback_percent": "N/A",
+          "cap_reference": null,
+          "reason": "Disputed transactions earn no NeuCoins."
+        },
+        "effective_from": "2025-04-16",
+        "effective_to": null
+      },
+      "reason": "WP7: D25d: T&C 11.4(a)/(g) exclude it; not a purchase the context can tell apart, so info with depends_on_txn_attribute (D14b).",
+      "source_url": "https://www.sbicard.com/sbi-card-en/assets/docs/pdf/ekit-tncs/Tata-Neu-Infinity-Booklet.pdf",
+      "checked_on": "2026-11-05"
     }
   ]
 }

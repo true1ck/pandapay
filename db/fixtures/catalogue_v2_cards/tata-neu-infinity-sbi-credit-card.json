@@ -4,7 +4,7 @@
   "inputs": {
     "transform_version": "7",
     "source_record_sha256": "e1ccabed32d2880c7a27f212d996fe69937c54e943112a7e999c45625212103d",
-    "override_sha256": "2ddcf08f8ad6c23e5634626ce05f5a04f03db761ccb60c90301a518e42e34a2b",
+    "override_sha256": "5036e849a3174871db49fa29dc786abc3c1ae3a764caa2dde1df84af4f41fbf6",
     "directory_sha256": "b1094d54b77e848d22f7a9a64f3ae6d1ef43ca3eb2fc8e40cd43ed1994664694",
     "verified": false
   },
@@ -27,9 +27,9 @@
     "points_expiry_months": 24,
     "model_status": "partial",
     "model_coverage": {
-      "rules_total": 21,
+      "rules_total": 25,
       "rules_modelled": 16,
-      "rules_info": 5,
+      "rules_info": 9,
       "caps_total": 5,
       "caps_enforced": 4,
       "flags": [
@@ -141,6 +141,66 @@
         {
           "code": "partial_merchant_list",
           "source_local_id": "tata-neu-partner-upi-wp7",
+          "detail": null
+        },
+        {
+          "code": "info_rule",
+          "source_local_id": "wp7_outstanding_payment_info",
+          "detail": "override_rule_role"
+        },
+        {
+          "code": "info_rule",
+          "source_local_id": "wp7_outstanding_payment_info",
+          "detail": "condition:transaction_scope"
+        },
+        {
+          "code": "depends_on_txn_attribute",
+          "source_local_id": "wp7_outstanding_payment_info",
+          "detail": null
+        },
+        {
+          "code": "info_rule",
+          "source_local_id": "wp7_fees_charges_info",
+          "detail": "override_rule_role"
+        },
+        {
+          "code": "info_rule",
+          "source_local_id": "wp7_fees_charges_info",
+          "detail": "condition:transaction_scope"
+        },
+        {
+          "code": "depends_on_txn_attribute",
+          "source_local_id": "wp7_fees_charges_info",
+          "detail": null
+        },
+        {
+          "code": "info_rule",
+          "source_local_id": "wp7_balance_transfer_info",
+          "detail": "override_rule_role"
+        },
+        {
+          "code": "info_rule",
+          "source_local_id": "wp7_balance_transfer_info",
+          "detail": "condition:transaction_scope"
+        },
+        {
+          "code": "depends_on_txn_attribute",
+          "source_local_id": "wp7_balance_transfer_info",
+          "detail": null
+        },
+        {
+          "code": "info_rule",
+          "source_local_id": "wp7_disputed_info",
+          "detail": "override_rule_role"
+        },
+        {
+          "code": "info_rule",
+          "source_local_id": "wp7_disputed_info",
+          "detail": "condition:transaction_scope"
+        },
+        {
+          "code": "depends_on_txn_attribute",
+          "source_local_id": "wp7_disputed_info",
           "detail": null
         },
         {
@@ -288,6 +348,38 @@
           "op": "append",
           "value_sha256": "6c753973db4cb603",
           "reason": "WP7: D25d: T&C 11.4(a) \"cash advances\"; the record had no cash-advance exclusion.",
+          "source_url": "https://www.sbicard.com/sbi-card-en/assets/docs/pdf/ekit-tncs/Tata-Neu-Infinity-Booklet.pdf",
+          "checked_on": "2026-11-05"
+        },
+        {
+          "path": "reward_rules",
+          "op": "append",
+          "value_sha256": "122a1fd23c60953f",
+          "reason": "WP7: D25d: T&C 11.4(a)/(g) exclude it; not a purchase the context can tell apart, so info with depends_on_txn_attribute (D14b).",
+          "source_url": "https://www.sbicard.com/sbi-card-en/assets/docs/pdf/ekit-tncs/Tata-Neu-Infinity-Booklet.pdf",
+          "checked_on": "2026-11-05"
+        },
+        {
+          "path": "reward_rules",
+          "op": "append",
+          "value_sha256": "6d8a87a571e2d79d",
+          "reason": "WP7: D25d: T&C 11.4(a)/(g) exclude it; not a purchase the context can tell apart, so info with depends_on_txn_attribute (D14b).",
+          "source_url": "https://www.sbicard.com/sbi-card-en/assets/docs/pdf/ekit-tncs/Tata-Neu-Infinity-Booklet.pdf",
+          "checked_on": "2026-11-05"
+        },
+        {
+          "path": "reward_rules",
+          "op": "append",
+          "value_sha256": "319077735cc26e32",
+          "reason": "WP7: D25d: T&C 11.4(a)/(g) exclude it; not a purchase the context can tell apart, so info with depends_on_txn_attribute (D14b).",
+          "source_url": "https://www.sbicard.com/sbi-card-en/assets/docs/pdf/ekit-tncs/Tata-Neu-Infinity-Booklet.pdf",
+          "checked_on": "2026-11-05"
+        },
+        {
+          "path": "reward_rules",
+          "op": "append",
+          "value_sha256": "72358a3110dbcd4f",
+          "reason": "WP7: D25d: T&C 11.4(a)/(g) exclude it; not a purchase the context can tell apart, so info with depends_on_txn_attribute (D14b).",
           "source_url": "https://www.sbicard.com/sbi-card-en/assets/docs/pdf/ekit-tncs/Tata-Neu-Infinity-Booklet.pdf",
           "checked_on": "2026-11-05"
         }
@@ -1495,6 +1587,162 @@
         "max_engine_version": null,
         "source_local_id": "wp7_cash_advance_exclusion",
         "display_note": "Cash advances earn no NeuCoins."
+      },
+      {
+        "id": "tata-neu-infinity-sbi-credit-card:rule:wp7_outstanding_payment_info",
+        "category_id": null,
+        "category_slug": null,
+        "merchant_pattern": null,
+        "rail": null,
+        "unit": "points_per_100",
+        "rate": 0,
+        "min_txn_inr": null,
+        "max_txn_inr": null,
+        "priority": 3,
+        "conditions": {
+          "source_local_id": "wp7_outstanding_payment_info",
+          "part": null,
+          "info_reasons": [
+            "override_rule_role",
+            "condition:transaction_scope"
+          ],
+          "flags": [
+            "depends_on_txn_attribute"
+          ]
+        },
+        "notes": null,
+        "effective_from": "2025-04-16",
+        "effective_to": null,
+        "excluded_categories": [],
+        "rule_role": "info",
+        "merchant_slugs": [],
+        "platform_slugs": [],
+        "mcc_include": [],
+        "mcc_exclude": [],
+        "except_merchant_slugs": [],
+        "except_platform_slugs": [],
+        "block_inr": null,
+        "min_engine_version": 2,
+        "max_engine_version": null,
+        "source_local_id": "wp7_outstanding_payment_info",
+        "display_note": "Payment of outstanding balances earns no NeuCoins."
+      },
+      {
+        "id": "tata-neu-infinity-sbi-credit-card:rule:wp7_fees_charges_info",
+        "category_id": null,
+        "category_slug": null,
+        "merchant_pattern": null,
+        "rail": null,
+        "unit": "points_per_100",
+        "rate": 0,
+        "min_txn_inr": null,
+        "max_txn_inr": null,
+        "priority": 3,
+        "conditions": {
+          "source_local_id": "wp7_fees_charges_info",
+          "part": null,
+          "info_reasons": [
+            "override_rule_role",
+            "condition:transaction_scope"
+          ],
+          "flags": [
+            "depends_on_txn_attribute"
+          ]
+        },
+        "notes": null,
+        "effective_from": "2025-04-16",
+        "effective_to": null,
+        "excluded_categories": [],
+        "rule_role": "info",
+        "merchant_slugs": [],
+        "platform_slugs": [],
+        "mcc_include": [],
+        "mcc_exclude": [],
+        "except_merchant_slugs": [],
+        "except_platform_slugs": [],
+        "block_inr": null,
+        "min_engine_version": 2,
+        "max_engine_version": null,
+        "source_local_id": "wp7_fees_charges_info",
+        "display_note": "Card fees and other charges earn no NeuCoins."
+      },
+      {
+        "id": "tata-neu-infinity-sbi-credit-card:rule:wp7_balance_transfer_info",
+        "category_id": null,
+        "category_slug": null,
+        "merchant_pattern": null,
+        "rail": null,
+        "unit": "points_per_100",
+        "rate": 0,
+        "min_txn_inr": null,
+        "max_txn_inr": null,
+        "priority": 3,
+        "conditions": {
+          "source_local_id": "wp7_balance_transfer_info",
+          "part": null,
+          "info_reasons": [
+            "override_rule_role",
+            "condition:transaction_scope"
+          ],
+          "flags": [
+            "depends_on_txn_attribute"
+          ]
+        },
+        "notes": null,
+        "effective_from": "2025-04-16",
+        "effective_to": null,
+        "excluded_categories": [],
+        "rule_role": "info",
+        "merchant_slugs": [],
+        "platform_slugs": [],
+        "mcc_include": [],
+        "mcc_exclude": [],
+        "except_merchant_slugs": [],
+        "except_platform_slugs": [],
+        "block_inr": null,
+        "min_engine_version": 2,
+        "max_engine_version": null,
+        "source_local_id": "wp7_balance_transfer_info",
+        "display_note": "Balance transfers earn no NeuCoins."
+      },
+      {
+        "id": "tata-neu-infinity-sbi-credit-card:rule:wp7_disputed_info",
+        "category_id": null,
+        "category_slug": null,
+        "merchant_pattern": null,
+        "rail": null,
+        "unit": "points_per_100",
+        "rate": 0,
+        "min_txn_inr": null,
+        "max_txn_inr": null,
+        "priority": 3,
+        "conditions": {
+          "source_local_id": "wp7_disputed_info",
+          "part": null,
+          "info_reasons": [
+            "override_rule_role",
+            "condition:transaction_scope"
+          ],
+          "flags": [
+            "depends_on_txn_attribute"
+          ]
+        },
+        "notes": null,
+        "effective_from": "2025-04-16",
+        "effective_to": null,
+        "excluded_categories": [],
+        "rule_role": "info",
+        "merchant_slugs": [],
+        "platform_slugs": [],
+        "mcc_include": [],
+        "mcc_exclude": [],
+        "except_merchant_slugs": [],
+        "except_platform_slugs": [],
+        "block_inr": null,
+        "min_engine_version": 2,
+        "max_engine_version": null,
+        "source_local_id": "wp7_disputed_info",
+        "display_note": "Disputed transactions earn no NeuCoins."
       }
     ],
     "cap_rules": [
