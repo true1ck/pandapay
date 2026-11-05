@@ -34,7 +34,7 @@ Status values: `not started` · `running` · `done (branch ready)` · `merged` �
 | WP3 | Dart engine v2 + tolerant parsing | 1 | `card-rewards/wp3-dart-engine` | running | 2026-11-05 | |
 | WP4 | JS engine v2 + merchant resolver | 1 | `card-rewards/wp4-js-engine` | done (in review) | 2026-11-06 | 117/117 engine tests (20 contract + 32 JS scenarios); judgement calls ratified as D9; D10 switch fix pending |
 | WP5 | Merchant and platform directory data | 1 | `card-rewards/wp5-directory` | **merged** | 2026-11-06 | 164 merchants (9 true sub-brand parents, `group` tags per D6), 61 platforms; review + 1 fix round clean; IHCL brands kept under `taj` (ruling in ledger) |
-| WP6a | Worked examples: HDFC, SBI Card | 1 | `card-rewards/wp6a-examples-hdfc-sbi` | running (9/21 cards done) | 2026-11-06 | Found CardPipeline errors (Infinia/Swiggy/Tata Neu caps, SmartBuy split, Tata Neu rounding, Millennia points, IndianOil exclusions) → contract D7/D8 |
+| WP6a | Worked examples: HDFC, SBI Card | 1 | `card-rewards/wp6a-examples-hdfc-sbi` | done (in review) | 2026-11-06 | 21/21 cards, 14 override files; found cap-type, rounding (→D7, D11), unit (→D8) and exclusion errors in research data |
 | WP6b | Worked examples: ICICI, Axis, Amex, IDFC, others | 1 | `card-rewards/wp6b-examples-others` | running | 2026-11-05 | |
 | WP7 | Integration: worked examples through both engines | 2 | — | not started | | Needs wave 1 merged |
 | WP8 | Server recording v2 + recompute script | 2 | — | not started | | Needs WP1, WP4 |
