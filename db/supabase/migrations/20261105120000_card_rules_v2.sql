@@ -36,6 +36,8 @@ alter table reward_rules
   add column if not exists platform_slugs     text[] not null default '{}',
   add column if not exists mcc_include        text[] not null default '{}',
   add column if not exists mcc_exclude        text[] not null default '{}',
+  add column if not exists except_merchant_slugs text[] not null default '{}',
+  add column if not exists except_platform_slugs text[] not null default '{}',
   add column if not exists block_inr          int,
   add column if not exists min_engine_version int not null default 1,
   add column if not exists source_local_id    text,
@@ -130,7 +132,7 @@ create unique index uq_reward_rules_semantic_identity
     min_txn_inr, max_txn_inr, priority, conditions, notes,
     effective_from, effective_to, excluded_categories,
     rule_role, merchant_slugs, platform_slugs, mcc_include, mcc_exclude,
-    block_inr, min_engine_version
+    block_inr, min_engine_version, except_merchant_slugs, except_platform_slugs
   ) nulls not distinct;
 
 drop index if exists uq_cap_rules_semantic_identity;
