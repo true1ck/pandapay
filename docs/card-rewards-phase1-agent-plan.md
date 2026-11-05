@@ -246,31 +246,31 @@ Final message (≤ 400 words):
   - IDFC FIRST: Millennia, Wealth, Select, Power+.
   - Others: PNB Kiwi, YES Klick (Kiwi), AU Zenith, HSBC Live+, IndiGo Kotak.
 
-## 4. Wave 2 — briefs (launch after Checkpoint A)
+## 4. Wave 2 — briefs (launched 2026-11-06 after Checkpoint A)
 
-- **WP7 — Integration** (`card-rewards/wp7-integration`):
-  - generate `db/fixtures/catalogue_v2_cards/<slug>.json` for every card with a
-    worked-example file, using WP2's transform over the local CardPipeline record
-    plus overrides;
-  - write the two worked-example harnesses (JS + Dart) mapping
-    `caps_by_source_id` → generated cap ids;
-  - run, then triage every failure as: research error → override; loader bug →
-    report to lead; engine bug → report to lead with a minimal scenario for
-    `30_integration.json`;
-  - mark passing cards in `verified_cards.json`;
-  - put before/after `audit_catalogue.js` numbers in the report.
-- **WP8 — Server recording v2** (`card-rewards/wp8-server-state`):
-  - plan §5 WP8 row;
-  - keep `index.js` edits inside `applyTransactionState` /
-    `reverseTransactionState` and the `GET /user-cards` cap mapping;
-  - put new logic in `api/src/card_state_v2.js`;
-  - Postgres-backed tests in your own throwaway container.
-- **WP9 — App** (`card-rewards/wp9-app-caps`):
-  - plan §5 WP9 row;
-  - load skills `flutter-riverpod-gorouter`, `flutter-tester`,
-    `alchemist-golden-testing`;
-  - run `flutter analyze` and the affected tests only;
-  - no device installs.
+Common brief (§2) applies. Checkpoint A recipe for a throwaway Postgres (agents run their own container, never production):
+`docker run --rm -d --name <you>-pg -e POSTGRES_PASSWORD=pg -e POSTGRES_DB=pandapay -p <port>:5432 postgres:17-alpine`; migrate with
+`node -e "require('./db/scripts/product_migrate.js').main()"` and env ADMIN_DATABASE_URL=postgres://postgres:pg@localhost:<port>/pandapay, DB_DIR=<repo>/db,
+APP_USER_PASSWORD, REWARD_WORKER_DB_PASSWORD (≥16 chars), PHONE_LOOKUP_HMAC_KEY (64 hex), DB_SSL=false, NODE_ENV=test, NODE_PATH=<repo>/api/node_modules;
+admin: `insert into admin_users(id,email,role) values (gen_random_uuid(),'x@local.test','owner')`; seed: `node api/scripts/seed_merchant_directory.js --apply`;
+import: `node api/scripts/collect_card_pipeline.js --pipeline /Users/chandresh_kerkar/Documents/PandaPath/CardPipeline --out api/scripts/.staging` then
+`node api/scripts/import_card_pipeline.js --input api/scripts/.staging/all-collected.json --admin-id <id>`. Views only show published cards: publish inside a
+transaction and roll back when you only need to read them.
+
+### WP7 — Integration and verification · branch `card-rewards/wp7-integration`
+- **Owns:** `api/scripts/catalogue_v2/snapshot_examples.js` (new); `db/fixtures/catalogue_v2_cards/*.json` (generated); `api/test/card_worked_examples.test.js`; `packages/pandapay_domain/test/card_worked_examples_test.dart`; `db/fixtures/reward_v2_scenarios/30_integration.json`; `api/scripts/catalogue_overrides/verified_cards.json`.
+- **May edit, with a cited reason per change in the report:** `api/scripts/catalogue_overrides/<slug>.json` (research corrections); `db/fixtures/merchant_directory.json` (data only — e.g. MCCs); `db/fixtures/card_worked_examples/*.json` (only to correct an example proven wrong against issuer text).
+- **Must not edit:** loader code (`api/scripts/catalogue_v2/**` except the new snapshot script), engines, migrations. Report loader/engine bugs with a minimal reproduction.
+- **Steps:** (1) snapshot generator: for every card with a worked-examples file, run the WP2 transform (CardPipeline record + overrides + directory) and write its v2 wire card (stable ids from `source_local_id`, e.g. `x#1`) plus the directory; (2) both harnesses: every example with `engine_checkable !== false` runs through JS and Dart; map `caps_by_source_id` to every emitted cap of that source (splits `#n`), compare currency, amount, value, excluded and cap deltas summed per source; (3) triage every failure into: example wrong / research data wrong (override) / directory data / loader bug (report) / engine bug (report + correct expected values in `30_integration.json`); (4) re-check the WP6b 18-card mismatch list and the deferred items in the ledger (IndiGo airline MCC so `indigo_flights_base` returns to v1; MCCs 5311/5411 on `metro_cash_carry`, `best_price`, `flipkart_wholesale`; idfc `government_reduced` mcc_range); (5) write `verified_cards.json` = cards whose engine-checkable examples all pass in both engines and that carry no D18(j) blocking flag; re-run `--transform-only` and report model_status counts; (6) before/after `audit_catalogue.js` numbers.
+- **Done when:** every engine-checkable example passes in both engines, or is listed as a known failure with category and routed fix (tests mark known failures explicitly — no silent skips); `cd api && npm test` and `dart test` green; Verified count reported.
+
+### WP8 — Server recording v2 · branch `card-rewards/wp8-server-state`
+- **Owns:** `api/src/card_state_v2.js` (new); the `applyTransactionState` / `reverseTransactionState` regions and the `GET /user-cards` cap/milestone mapping in `api/src/index.js`; `api/src/cycles.js`; `api/scripts/recompute_card_state.js` (new); a new migration `db/supabase/migrations/20261106120000_card_state_v2.sql` if columns are needed; tests (`api/test/card_state_v2*.test.js`, `db/tests/20261106120000_card_state_v2_test.sql`).
+- **Requirements:** v2-shaped cards (`isV2Card`) record through `reward_math_v2.computeTransactionRewardV2` with the directory loaded from `merchant_brands` / `payment_platforms` (cached). Every applicable cap (targets, card scope, parents) gets its own `cap_states` row per period, with `consumed` in **native units** (points / ₹ / count) and the cap kind recorded so readers know the unit (D15f). Period bounds per cap `period` + `anchor` (C3.7; card anniversary from `anniversary_on ?? opened_on ?? created_at`, flagged approximate). `expected_points` / `expected_value_inr` from the v2 result. Milestone windows per C3.7 (welcome milestones with `window_days`). The reverse path mirrors exactly. v1-shaped cards keep today's path byte-for-byte. `GET /user-cards` adds `cap_kind`, `cap_amount`, native `consumed`, period bounds and an `approximate_window` flag. `recompute_card_state.js` rebuilds current-period cap/milestone states and expected values for v2 cards after a catalogue publish — dry-run by default, prints diffs, idempotent.
+- **Done when:** Postgres-backed tests (own container) cover record → reverse → recompute on a v2 card with bonus, total, eligible-spend and parent caps; v1 cards unchanged (existing tests pass); `cd api && npm test` green.
+
+### WP9 — App: v2 feed, cap bars, alerts · branch `card-rewards/wp9-app-caps` (after WP8)
+- As plan §5 WP9 row, plus: fill `ctx.mcc` from the merchant directory when the SMS lacks it (D19c); never use server cap headroom for points-kind caps unless it is in native units (D15f — WP8 provides them); per-card tolerant parsing so one bad card never drops the catalogue.
 
 ## 5. Merging (lead)
 
