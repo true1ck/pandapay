@@ -122,8 +122,13 @@ enum PostCapBehavior { baseRate, zero, customRate }
 enum PeriodAnchor { cardAnniversary, calendarYear, fiscalYear, statementCycle }
 
 /// v2 `card_products.accrual_rounding`: how a transaction's spend is turned
-/// into whole points blocks. Null on a v2 card means [floor].
-enum AccrualRounding { floor, round, none }
+/// into points. Null on a v2 card means [floor].
+///
+/// [floor], [round] (half-up) and [none] (fractional) apply to the number
+/// of blocks (C3.5). [pointsHalfUp] and [pointsFloor] (plan C8/D7) round
+/// the whole-transaction product `eligible × rate / block` instead — some
+/// issuers pay ₹7,500 × 1.5 pts/₹100 as 113 points, not 75 blocks × 1.5.
+enum AccrualRounding { floor, round, none, pointsHalfUp, pointsFloor }
 
 /// v2 `card_products.model_status`: how faithfully the catalogue models
 /// this card's earning (plan §1 item 6).
