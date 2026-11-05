@@ -40,29 +40,74 @@ An obfuscated release trace looks like this:
 
 ```
 *** *** *** *** *** *** *** *** *** *** *** *** *** *** *** ***
-pid: 1234, tid: 1234, name: 1.ui
-build_id: '4f3a...'
-isolate_dso_base: 7b3c000000, vm_dso_base: 7b3c000000
-#00 abs 0000007b3c5a1234 virt 00000000005a1234 _kDartIsolateSnapshotInstructions+0x2c1f4
+pid: 4242, tid: 4243, name 1.ui
+os: android arch: arm64 comp: yes sim: no
+build_id: '0f1e2d3c4b5a69788796a5b4c3d2e1f0'
+isolate_dso_base: 7b3c400000, vm_dso_base: 7b3c400000
+isolate_instructions: 7b3c410000, vm_instructions: 7b3c404000
+    #00 abs 0000007b3c5a1234 virt 00000000001a1234 _kDartIsolateSnapshotInstructions+0x191234
 ```
 
-1. Find the `build_id` line and pick the release whose `.symbols` file has the same build id (`grep` the id in the files, or use the artifact for that build number).
-2. Save the trace to a text file and run:
+1. Pick the `.symbols` file. The build number tells you which build (CI artifact `app-debug-info-<commit sha>`, or the local folder named after the build number). The `arch:` value tells you which file: `arm64` means `app.android-arm64.symbols` on Android and `app.ios-arm64.symbols` on iOS.
+2. Check that the file belongs to this exact build: its build id must equal the trace's `build_id`.
 
    ```bash
-   flutter symbolize -i trace.txt -d app/build/debug-info/app.android-arm64.symbols
+   file app.android-arm64.symbols    # ELF: prints BuildID[md5/uuid]=0f1e2d3c...
+   dwarfdump --uuid app.ios-arm64.symbols   # Mach-O: prints UUID 0F1E2D3C-4B5A-...; same hex, upper case with dashes
    ```
 
-   Use the `.symbols` file for the phone's architecture (arm64 for almost every phone).
-3. The output is the normal Dart trace with file names and line numbers.
+   The id is binary inside the file, so `grep` does not find it. If no file matches, the trace cannot be read; a build from the same commit does not help.
+3. Save the trace to `trace.txt` and run:
+
+   ```bash
+   flutter symbolize -i trace.txt -d app.android-arm64.symbols
+   ```
+
+4. The output is the normal Dart trace with file names and line numbers. Lines it cannot resolve are printed unchanged, which usually means the wrong `.symbols` file.
 
 For native (C/C++ or NDK) frames from Play Console, use the `symbolize-android-stacktrace` skill. Android builds keep native debug symbols in `app/build/app/intermediates/merged_native_libs/` and in the AAB.
 
-## Known gap: in-app error reports lose code locations
+## In-app error reports (GlitchTip) from obfuscated builds
 
-`app/lib/app/crash_reporter.dart` (`parseFrames`) keeps only trace lines shaped like `#0 function (package:pandapay/file.dart:12:3)`. An obfuscated release trace has the `#00 abs ... virt ...` shape, so a release report sent to GlitchTip will contain the error class name and app version but no frames. Reports from obfuscated builds therefore cannot be symbolicated from GlitchTip alone.
+`app/lib/app/crash_reporter.dart` sends one report per error to the `pandapay-app` project. For an obfuscated build it reads the trace with `app/lib/app/obfuscated_trace.dart` and sends only:
 
-This is a change in `app/lib`, which this task did not touch. A follow-up should either (a) also send the raw `build_id` line and the `abs`/`virt` offset lines (no user data in them) so they can be symbolicated offline with the matching `.symbols` file, or (b) accept that release reports carry class and version only and rely on Play Console and App Store crash reports for locations. Until then, treat the symbol files as required for Play and App Store crash traces and optional for GlitchTip.
+| Field in the event | Example | What it is |
+|---|---|---|
+| `release` | `pandapay@1.0.16+105` | App version and build number: which build's symbol folder to use |
+| tag `build_id` | `0f1e2d3c4b5a69788796a5b4c3d2e1f0` | The build id, to check the `.symbols` file (step 2 above) |
+| exception `type` | `FormatException` (or an obfuscated class name) | Error class only, never the message |
+| exception `value` | `_kDartIsolateSnapshotInstructions+0x191234` | The newest frame's offset |
+| stack frames | `function` `_kDartIsolateSnapshotInstructions+0x191234`, `instruction_addr` `0x1a1234` | Per frame: offset into the Dart instructions and binary-relative address |
+| extra `obfuscated_trace` | the text below | The same frames as a trace `flutter symbolize` reads |
+
+Never sent: the error message, the process and thread ids, the thread name, absolute addresses and load bases (they show the phone's memory layout), library paths (they contain the install path), and any frame text that is not a hex offset or one of the two `_kDart...SnapshotInstructions` names. Absolute addresses are written as zeros in `obfuscated_trace`; `flutter symbolize` does not need them.
+
+`obfuscated_trace` looks like this:
+
+```
+*** *** *** *** *** *** *** *** *** *** *** *** *** *** *** ***
+os: android arch: arm64 comp: yes sim: no
+build_id: '0f1e2d3c4b5a69788796a5b4c3d2e1f0'
+    #00 abs 0000000000000000 virt 00000000001a1234 _kDartIsolateSnapshotInstructions+0x191234
+    #01 abs 0000000000000000 virt 0000000000100000 <unknown>
+```
+
+To read a GlitchTip report:
+
+1. Open GlitchTip (`http://<tailscale-ip>:8000`, see `deploy/monitoring/README.md`), project `pandapay-app`, and the issue. Note the `release` and the `build_id` tag.
+2. Get `obfuscated_trace` into a file with its line breaks. Either copy it from the event's additional data into `trace.txt`, or save the event's JSON as `event.json` and run:
+
+   ```bash
+   jq -r '(.extra // .context).obfuscated_trace' event.json > trace.txt
+   ```
+
+   If neither is available, write `trace.txt` by hand from the event: the header line, `build_id: '<build_id tag>'`, then one line per frame, newest first, in the form `    #00 abs 0000000000000000 <function>` (for example `    #00 abs 0000000000000000 _kDartIsolateSnapshotInstructions+0x191234`).
+3. Pick and check the `.symbols` file for that build number and `arch` (steps 1 and 2 of "Read a crash trace").
+4. Run `flutter symbolize -i trace.txt -d <that .symbols file>`.
+
+One build's offsets mean nothing in another build, so the report's fingerprint includes the build id: the same crash in two builds shows as two GlitchTip issues.
+
+Checked on 6 Nov 2026: a real trace from `dart compile exe` with `--obfuscate --dwarf-stack-traces`, passed through `ObfuscatedTrace` and back out as `obfuscated_trace`, gave the same `flutter symbolize` output (file:line for every frame) as the original trace. Not yet checked: a report from a real phone through GlitchTip, and which GlitchTip page shows `extra` best (step 2).
 
 ## Verify an obfuscated build
 

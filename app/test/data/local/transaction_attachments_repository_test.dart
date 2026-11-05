@@ -197,6 +197,74 @@ void main() {
     await viewed.release();
   });
 
+  test(
+    'backup restore refuses an attachment id that is not a plain name',
+    () async {
+      final plain = File('${root.path}/staged.bin')..writeAsBytesSync([1, 2]);
+      for (final id in ['../escape', 'a/b', '.hidden', '']) {
+        await expectLater(
+          make().storeEncrypted(
+            attachmentId: id,
+            transactionId: 'tx-1',
+            plaintext: plain,
+          ),
+          throwsFormatException,
+          reason: id,
+        );
+      }
+      expect(filesUnder(Directory('${root.path}/receipts')), isEmpty);
+    },
+  );
+
+  test(
+    'backup restore replaces a file an interrupted restore left without a row',
+    () async {
+      final repository = make();
+      final plain = File('${root.path}/staged.bin')
+        ..writeAsBytesSync([1, 2, 3]);
+      final first = await repository.storeEncrypted(
+        attachmentId: 'att-1',
+        transactionId: 'tx-1',
+        plaintext: plain,
+      );
+      // No row was written (the app stopped mid-restore); a retry succeeds.
+      plain.writeAsBytesSync([4, 5, 6]);
+      final again = await repository.storeEncrypted(
+        attachmentId: 'att-1',
+        transactionId: 'tx-1',
+        plaintext: plain,
+      );
+      expect(again, first);
+      final restored = TransactionAttachment(
+        id: 'att-1',
+        transactionId: 'tx-1',
+        fileName: 'a.bin',
+        localPath: again,
+        mimeType: null,
+        createdAt: DateTime(2026),
+      );
+      final viewed = await repository.decryptForViewing(restored);
+      expect(viewed.file.readAsBytesSync(), [4, 5, 6]);
+      await viewed.release();
+
+      // A file that a row points to is never replaced.
+      database.db.execute(
+        'INSERT INTO transaction_attachments '
+        '(id, transaction_id, file_name, local_path, mime_type, created_at) '
+        'VALUES (?, ?, ?, ?, ?, ?)',
+        ['att-1', 'tx-1', 'a.bin', again, null, 1],
+      );
+      await expectLater(
+        repository.storeEncrypted(
+          attachmentId: 'att-1',
+          transactionId: 'tx-1',
+          plaintext: plain,
+        ),
+        throwsA(isA<FileSystemException>()),
+      );
+    },
+  );
+
   test('delete removes the encrypted file and the row', () async {
     final repository = make();
     final attachment = await repository.addFromBytes(

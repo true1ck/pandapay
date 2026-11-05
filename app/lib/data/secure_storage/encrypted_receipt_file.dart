@@ -290,12 +290,10 @@ final class EncryptedReceiptFileStore {
     }
   }
 
-  /// Decrypts only into a named file in an already-created private workspace.
-  /// Callers own cleanup of the workspace after OCR/viewing completes.
-  Future<File> decryptToPrivateWorkspace({
+  /// Decrypts into memory. Only for the passphrase-encrypted portable backup,
+  /// which stages the bytes privately; the caller must clear them after use.
+  Future<Uint8List> decryptBytes({
     required File encryptedFile,
-    required PrivateTemporaryWorkspace workspace,
-    required String filename,
     required SecretKey key,
     required String accountNamespace,
     required String attachmentId,
@@ -308,12 +306,32 @@ final class EncryptedReceiptFileStore {
           EncryptedReceiptFileCodec.headerLength +
           EncryptedReceiptFileCodec.tagLength,
     );
-    final clear = await codec.decrypt(
+    return codec.decrypt(
       encrypted: encrypted,
       key: key,
       accountNamespace: accountNamespace,
       attachmentId: attachmentId,
       expectedKeyVersion: keyVersion,
+    );
+  }
+
+  /// Decrypts only into a named file in an already-created private workspace.
+  /// Callers own cleanup of the workspace after OCR/viewing completes.
+  Future<File> decryptToPrivateWorkspace({
+    required File encryptedFile,
+    required PrivateTemporaryWorkspace workspace,
+    required String filename,
+    required SecretKey key,
+    required String accountNamespace,
+    required String attachmentId,
+    required int keyVersion,
+  }) async {
+    final clear = await decryptBytes(
+      encryptedFile: encryptedFile,
+      key: key,
+      accountNamespace: accountNamespace,
+      attachmentId: attachmentId,
+      keyVersion: keyVersion,
     );
     File? output;
     var createdOutput = false;

@@ -56,18 +56,20 @@ class LocalPortableRestoreTargetInspector implements PortableRestoreTargetInspec
 /// [LocalPortableSnapshotSource] exported, so source -> restore -> source
 /// recapture must be byte-identical.
 ///
-/// ponytail: attachment files land in [attachmentsDirectory] named by
-/// metadata id and `local_path` is stored as that relative name; move to
-/// configurable sub-paths only if the attachment picker actually shows them.
+/// Attachments are encrypted into [receipts] (the current account's receipt
+/// store) and `local_path` is the encrypted file's path, as for a receipt
+/// added on this phone. Files written by a restore that then rolls back are
+/// deleted again.
 class LocalPortableRestoreWriter implements PortableLocalRestoreWriter {
   final AppDatabase appDb;
   final String namespace;
-  final Directory attachmentsDirectory;
+  final PortableReceiptVault receipts;
+  final List<File> _writtenReceipts = [];
 
-  const LocalPortableRestoreWriter({
+  LocalPortableRestoreWriter({
     required this.appDb,
     required this.namespace,
-    required this.attachmentsDirectory,
+    required this.receipts,
   });
 
   Database get _db => appDb.db;
@@ -277,9 +279,12 @@ class LocalPortableRestoreWriter implements PortableLocalRestoreWriter {
     required PortableBackupAttachment metadata,
     required File stagedFile,
   }) async {
-    await attachmentsDirectory.create(recursive: true);
-    final target = File('${attachmentsDirectory.path}${Platform.pathSeparator}${metadata.id}');
-    await stagedFile.copy(target.path);
+    final stored = await receipts.storeEncrypted(
+      attachmentId: metadata.id,
+      transactionId: metadata.transactionId,
+      plaintext: stagedFile,
+    );
+    _writtenReceipts.add(File(stored));
     _db.execute(
       'INSERT INTO transaction_attachments(id, transaction_id, file_name, local_path, mime_type, '
       'created_at) VALUES (?, ?, ?, ?, ?, ?) '
@@ -290,7 +295,7 @@ class LocalPortableRestoreWriter implements PortableLocalRestoreWriter {
         metadata.id,
         metadata.transactionId,
         metadata.fileName,
-        metadata.id,
+        stored,
         metadata.mimeType,
         DateTime.now().millisecondsSinceEpoch,
       ],
@@ -335,7 +340,10 @@ class LocalPortableRestoreWriter implements PortableLocalRestoreWriter {
       : (v is num ? v.toDouble() : double.parse(v as String));
 
   @override
-  Future<void> commit() async => _db.execute('COMMIT');
+  Future<void> commit() async {
+    _db.execute('COMMIT');
+    _writtenReceipts.clear();
+  }
 
   @override
   Future<void> rollback() async {
@@ -344,5 +352,8 @@ class LocalPortableRestoreWriter implements PortableLocalRestoreWriter {
     } on SqliteException {
       // No active transaction (e.g. double rollback after commit).
     }
+    final written = List.of(_writtenReceipts);
+    _writtenReceipts.clear();
+    await cleanup(written);
   }
 }

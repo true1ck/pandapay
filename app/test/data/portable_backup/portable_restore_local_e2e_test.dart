@@ -1,10 +1,16 @@
 import 'dart:convert';
 import 'dart:io';
+import 'dart:typed_data';
 
 import 'package:crypto/crypto.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:pandapay/data/local/app_database.dart';
+import 'package:pandapay/data/local/transaction_attachments_repository.dart';
 import 'package:pandapay/data/portable_backup/portable_backup.dart';
+import 'package:pandapay/data/portable_backup/private_temporary_workspace.dart';
+import 'package:pandapay/data/secure_storage/encrypted_receipt_file.dart';
+import 'package:pandapay/data/secure_storage/local_database_key_custody.dart';
+import 'package:pandapay/data/secure_storage/local_key_provisioning_lease.dart';
 import 'package:sqlite3/sqlite3.dart' as sqlite;
 
 const namespace = 'acct-E';
@@ -27,7 +33,7 @@ AppDatabase _db() {
   return db;
 }
 
-void _seed(AppDatabase db, String sourceLocalPath) {
+void _seed(AppDatabase db, {String? attachmentLocalPath}) {
   db.db.execute(
     'INSERT INTO financial_entities(namespace,entity,id,payload,observed_at,pending) '
     'VALUES (?, ?, ?, ?, ?, ?)',
@@ -64,6 +70,7 @@ void _seed(AppDatabase db, String sourceLocalPath) {
       jsonEncode({'card': 'card-1'}),
     ],
   );
+  if (attachmentLocalPath == null) return;
   db.db.execute(
     'INSERT INTO transaction_attachments(id, transaction_id, file_name, local_path, mime_type, '
     'created_at) VALUES (?, ?, ?, ?, ?, ?)',
@@ -71,35 +78,68 @@ void _seed(AppDatabase db, String sourceLocalPath) {
       'att-1',
       'txn-1',
       'receipt.png',
-      '$sourceLocalPath/att-1.png',
+      attachmentLocalPath,
       'image/png',
       1700000000000,
     ],
   );
 }
 
+/// The real per-account encrypted receipt store on one simulated phone.
+TransactionAttachmentsRepository _receipts(
+  AppDatabase db,
+  Directory phone, {
+  required String installId,
+  required _MemoryKeyStore keys,
+}) => TransactionAttachmentsRepository(
+  db,
+  namespace: namespace,
+  installId: () async => installId,
+  receiptsDirectory: () async => Directory('${phone.path}/receipts'),
+  workspace: () =>
+      PrivateTemporaryWorkspace.create(Directory('${phone.path}/tmp')),
+  keyStore: keys,
+  lease: _InlineLease(),
+);
+
+bool _isPprc(List<int> bytes) =>
+    bytes.length > EncryptedReceiptFileCodec.headerLength &&
+    _containsRun(bytes.sublist(0, 4), EncryptedReceiptFileCodec.magic);
+
+bool _containsRun(List<int> haystack, List<int> needle) {
+  for (var i = 0; i + needle.length <= haystack.length; i++) {
+    var match = true;
+    for (var j = 0; j < needle.length && match; j++) {
+      match = haystack[i + j] == needle[j];
+    }
+    if (match) return true;
+  }
+  return false;
+}
+
+/// Synthetic receipt bytes with a recognisable plaintext run.
+final _receipt = Uint8List.fromList(
+  List<int>.generate(4096, (i) => 65 + i % 26),
+);
+final _plainRun = utf8.encode('ABCDEFGHIJKLMNOPQRSTUVWXYZ');
+
 String _sha256(File file) => sha256.convert(file.readAsBytesSync()).toString();
 
 void main() {
   late Directory stagingA;
   late Directory stagingB;
-  late Directory attachmentsDir;
-  late Directory attachmentsSourceDir;
+  late Directory sourcePhone;
+  late Directory targetPhone;
 
   setUp(() async {
     stagingA = Directory.systemTemp.createTempSync('e2e-src-');
     stagingB = Directory.systemTemp.createTempSync('e2e-dst-');
-    attachmentsDir = Directory.systemTemp.createTempSync('e2e-att-');
-    attachmentsSourceDir = Directory.systemTemp.createTempSync('e2e-att-src-');
+    sourcePhone = Directory.systemTemp.createTempSync('e2e-phone-a-');
+    targetPhone = Directory.systemTemp.createTempSync('e2e-phone-b-');
   });
 
   tearDown(() async {
-    for (final dir in [
-      stagingA,
-      stagingB,
-      attachmentsDir,
-      attachmentsSourceDir,
-    ]) {
+    for (final dir in [stagingA, stagingB, sourcePhone, targetPhone]) {
       for (var attempt = 0; attempt < 5; attempt++) {
         try {
           if (await dir.exists()) await dir.delete(recursive: true);
@@ -115,9 +155,24 @@ void main() {
     'source -> archive -> stage -> finalize -> recapture is byte-identical',
     () async {
       final sourceDb = _db();
-      _seed(sourceDb, attachmentsSourceDir.path);
-      final sourceBytes = File('${attachmentsSourceDir.path}/att-1.png')
-        ..writeAsBytesSync(List<int>.generate(64, (i) => i));
+      _seed(sourceDb);
+      final sourceReceipts = _receipts(
+        sourceDb,
+        sourcePhone,
+        installId: 'install-A',
+        keys: _MemoryKeyStore(),
+      );
+      final stored = await sourceReceipts.addFromBytes(
+        transactionId: 'txn-1',
+        bytes: _receipt,
+        fileName: 'receipt.png',
+        mimeType: 'image/png',
+      );
+      expect(
+        _isPprc(File(stored.localPath).readAsBytesSync()),
+        isTrue,
+        reason: 'the phone keeps the receipt encrypted at rest',
+      );
 
       final source = LocalPortableSnapshotSource(
         appDb: sourceDb,
@@ -127,15 +182,21 @@ void main() {
         stagingDirectory: stagingA,
       );
       final attachments = await source.listPortableAttachments();
-      expect(attachments.single.id, 'att-1');
+      expect(attachments.single.id, stored.id);
 
       final collector = PortableAttachmentCollector();
       final collected = await collector.collect(
         sources: attachments,
         stagingDirectory: stagingA,
+        receipts: sourceReceipts,
       );
       final attachmentId = collected.single.metadata.id;
-      expect(collected.single.metadata.sha256, _sha256(sourceBytes));
+      expect(
+        collected.single.metadata.sha256,
+        sha256.convert(_receipt).toString(),
+        reason: 'the backup carries the readable receipt, not ciphertext',
+      );
+      expect(collected.single.metadata.byteLength, _receipt.length);
 
       final manifest = PortableBackupManifest(
         formatVersion: 1,
@@ -179,13 +240,25 @@ void main() {
         stagingDirectory: stagingA,
       );
       expect(await archive.exists(), isTrue);
+      expect(
+        _containsRun(await archive.readAsBytes(), _plainRun),
+        isFalse,
+        reason: 'the receipt is only readable inside the encrypted backup',
+      );
 
-      // Restore side: fresh target database.
+      // Restore side: a new phone (new install, empty key store), same
+      // account, fresh database.
       final targetDb = _db();
+      final targetReceipts = _receipts(
+        targetDb,
+        targetPhone,
+        installId: 'install-B',
+        keys: _MemoryKeyStore(),
+      );
       final writer = LocalPortableRestoreWriter(
         appDb: targetDb,
         namespace: namespace,
-        attachmentsDirectory: attachmentsDir,
+        receipts: targetReceipts,
       );
       final inspector = PortableRestoreInspector();
       final staged = await inspector.inspectAndStage(
@@ -195,6 +268,7 @@ void main() {
         expectedAccountBinding: namespace,
       );
       expect(staged.sectionFiles.containsKey('transactions'), isTrue);
+      expect(staged.attachmentFiles[attachmentId]!.readAsBytesSync(), _receipt);
 
       final finalizer = PortableLocalRestoreFinalizer(
         writer: writer,
@@ -231,24 +305,84 @@ void main() {
         );
       }
 
-      final sourceFile = File('${attachmentsSourceDir.path}/att-1.png');
-      final restoredAttachment = File('${attachmentsDir.path}/$attachmentId');
-      expect(await restoredAttachment.exists(), isTrue);
-      expect(
-        await restoredAttachment.readAsBytes(),
-        sourceFile.readAsBytesSync(),
-      );
+      // The receipt is re-encrypted for this phone's account key and opens
+      // through the normal viewer path.
+      final restored = (await targetReceipts.list('txn-1')).single;
+      expect(restored.id, attachmentId);
+      expect(restored.fileName, 'receipt.png');
+      expect(restored.mimeType, 'image/png');
+      expect(restored.localPath, startsWith('${targetPhone.path}/receipts/'));
+      final restoredBytes = File(restored.localPath).readAsBytesSync();
+      expect(_isPprc(restoredBytes), isTrue);
+      expect(_containsRun(restoredBytes, _plainRun), isFalse);
+      final viewed = await targetReceipts.decryptForViewing(restored);
+      expect(viewed.file.readAsBytesSync(), _receipt);
+      await viewed.release();
 
-      final restoredMeta = targetDb.db
-          .select(
-            'SELECT transaction_id, file_name, local_path FROM transaction_attachments',
-          )
-          .single;
-      expect(restoredMeta['transaction_id'], 'txn-1');
-      expect(restoredMeta['file_name'], 'receipt.png');
-      expect(restoredMeta['local_path'], attachmentId);
+      // Nothing readable is left on the new phone outside the store.
+      final leftovers = targetPhone
+          .listSync(recursive: true)
+          .whereType<File>()
+          .where((f) => !_isPprc(f.readAsBytesSync()))
+          .map((f) => f.path);
+      expect(leftovers, isEmpty);
     },
     timeout: const Timeout(Duration(minutes: 3)),
+  );
+
+  test(
+    'a receipt this account cannot decrypt stops the export, leaving nothing staged',
+    () async {
+      final sourceDb = _db();
+      final keys = _MemoryKeyStore();
+      final receipts = _receipts(
+        sourceDb,
+        sourcePhone,
+        installId: 'install-A',
+        keys: keys,
+      );
+      await receipts.addFromBytes(
+        transactionId: 'txn-1',
+        bytes: _receipt,
+        fileName: 'receipt.png',
+      );
+      await receipts.addFromBytes(
+        transactionId: 'txn-1',
+        bytes: _receipt,
+        fileName: 'second.png',
+      );
+      final sources = await LocalPortableSnapshotSource(
+        appDb: sourceDb,
+        namespace: namespace,
+      ).listPortableAttachments();
+      expect(sources, hasLength(2));
+      // Corrupt the second stored file: the first decrypts, the second fails.
+      final second = File(sources.last.localPath);
+      final bytes = second.readAsBytesSync();
+      bytes[bytes.length - 1] ^= 0xff;
+      second.writeAsBytesSync(bytes);
+
+      await expectLater(
+        PortableAttachmentCollector().collect(
+          sources: sources,
+          stagingDirectory: stagingA,
+          receipts: receipts,
+        ),
+        throwsA(isA<ReceiptUnavailable>()),
+      );
+      expect(stagingA.listSync(), isEmpty);
+
+      keys.values.clear(); // A lost key fails the same way.
+      await expectLater(
+        PortableAttachmentCollector().collect(
+          sources: sources.take(1),
+          stagingDirectory: stagingA,
+          receipts: receipts,
+        ),
+        throwsA(isA<ReceiptUnavailable>()),
+      );
+      expect(stagingA.listSync(), isEmpty);
+    },
   );
 
   test('populated target refuses staging', () async {
@@ -260,7 +394,7 @@ void main() {
     final state = await writer.inspectFreshNamespace();
     expect(state.isFresh, isTrue);
 
-    _seed(targetDb, '');
+    _seed(targetDb, attachmentLocalPath: 'receipts/att-1.pprc');
     final occupied = await writer.inspectFreshNamespace();
     expect(occupied.isFresh, isFalse);
     await expectLater(
@@ -268,4 +402,33 @@ void main() {
       throwsA(isA<PortablePopulatedTargetException>()),
     );
   });
+}
+
+final class _InlineLease implements LocalKeyProvisioningLease {
+  @override
+  Future<T> runExclusive<T>(Future<T> Function() operation) => operation();
+}
+
+final class _MemoryKeyStore implements SecureKeyValueStore {
+  final values = <String, String>{};
+
+  @override
+  Future<String?> read(String key) async => values[key];
+
+  @override
+  Future<void> write(String key, String value) async {
+    values[key] = value;
+  }
+
+  @override
+  Future<bool> writeIfAbsent(String key, String value) async {
+    if (values.containsKey(key)) return false;
+    values[key] = value;
+    return true;
+  }
+
+  @override
+  Future<void> delete(String key) async {
+    values.remove(key);
+  }
 }
