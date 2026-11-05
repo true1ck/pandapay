@@ -28,11 +28,6 @@
       "url": "https://www.hdfc.bank.in/content/dam/hdfcbankpws/in/en/personal-banking/discover-products/cards/credit-cards/irctc-credit-card/irctc-tnc-09-10-25.pdf",
       "doc": "IRCTC HDFC T&C (updated 29 May 2025)",
       "quote": "Reward Points on other spends is capped maximum at 1000 Reward Points per month and 12000 Reward Points Annually."
-    },
-    {
-      "url": "https://www.hdfc.bank.in/content/dam/hdfcbankpws/in/en/personal-banking/discover-products/cards/credit-cards/personal-mitc/mitc-in-english.pdf",
-      "doc": "HDFC Bank credit card MITC v4.18, Oct 2026 (Fair Usage Policy)",
-      "quote": "The maximum reward points that can be earned in a statement cycle for ... IOCL, IRCTC* ... is 25,000."
     }
   ],
   "examples": [
@@ -60,8 +55,7 @@
         "excluded": false,
         "cap_deltas_by_source_id": {
           "irctc-5x-monthly": 500,
-          "irctc-5x-annual": 500,
-          "wp7_fair_usage_statement_cycle": 500
+          "irctc-5x-annual": 500
         }
       },
       "why": "Issuer worked example: 100 base + 400 additional = 500 RP (5 per Rs100)."
@@ -90,8 +84,7 @@
         "excluded": false,
         "cap_deltas_by_source_id": {
           "irctc-5x-monthly": 500,
-          "irctc-5x-annual": 500,
-          "wp7_fair_usage_statement_cycle": 500
+          "irctc-5x-annual": 500
         }
       },
       "why": "Issuer worked example: 500 RP (100 base + 400 additional) plus Rs500 cashback (5%). Cashback is a second currency and not in the expected amount."
@@ -119,8 +112,7 @@
         "value_inr": null,
         "excluded": false,
         "cap_deltas_by_source_id": {
-          "grocery-monthly": 1,
-          "wp7_fair_usage_statement_cycle": 1
+          "grocery-monthly": 1
         }
       },
       "why": "Issuer example: Rs150 on grocery earns 1 point (multiples of Rs100)."
@@ -149,8 +141,7 @@
         "excluded": false,
         "cap_deltas_by_source_id": {
           "other-spends-monthly": 30,
-          "other-spends-annual": 30,
-          "wp7_fair_usage_statement_cycle": 30
+          "other-spends-annual": 30
         }
       },
       "why": "Issuer worked example: 1X = 30 points."
@@ -181,8 +172,7 @@
         "excluded": false,
         "cap_deltas_by_source_id": {
           "other-spends-monthly": 20,
-          "other-spends-annual": 20,
-          "wp7_fair_usage_statement_cycle": 20
+          "other-spends-annual": 20
         }
       },
       "why": "Would be 50 points; other-spends cap is 1,000 per month, so 20 remain."
@@ -327,9 +317,9 @@
       "override_file": "api/scripts/catalogue_overrides/irctc-hdfc-bank-credit-card.json"
     },
     {
-      "item": "WP7 r1: card-wide 25,000 RP cap in examples 001, 002, 003, 004, 005",
-      "cardpipeline_says": "No statement-cycle ceiling.",
-      "issuer_says": "MITC fair usage policy caps reward points per statement cycle at 25,000 for IOCL and IRCTC cards. Added by override (wp7_fair_usage_statement_cycle); every earning spend counts toward it. Amounts unchanged.",
+      "item": "WP7 r3: MITC 25,000 cap removed",
+      "cardpipeline_says": "Round 1 added the MITC 25,000 RP per cycle cap card-wide.",
+      "issuer_says": "MITC lists \"IRCTC*\" with MITC footnote: \"(*) applicable only on the spend categories that does not have an existing Fair Usage Policy\" (C8 D28b). Every IRCTC HDFC earning rule has its own limit (5X, grocery, UPI, insurance, utility, telecom, other spends), so the cap applies to none; the examples no longer list it.",
       "proposed_fix": "override",
       "override_file": "api/scripts/catalogue_overrides/irctc-hdfc-bank-credit-card.json"
     }
