@@ -1231,6 +1231,17 @@ test('a spend cap whose post-limit action states a rate gets custom_rate, unless
   assert.deepEqual([oc.post_cap_behavior, oc.post_cap_unit, oc.post_cap_rate], ['custom_rate', 'cashback_percent', 1]);
 });
 
+test('D8b "up to" reads only the rule\'s own rate text: not its id, a cap, a stacked total or an aside', () => {
+  const role = (id, reason) => run(pointsCard([rule({ id, category_id: 'dining', action: { points_per_block: 10, reason } })])).rewardRules[0].rule_role;
+  assert.equal(role('smartbuy_up_to_10x', '10X Reward Points on dining.'), 'earn', 'id only');
+  assert.equal(role('essentials_3x', '3X Reward Points on dining up to 300 Reward Points per calendar month; after the cap, base.'), 'earn', 'a cap');
+  assert.equal(role('upi_extra', 'Additional 1% on dining, making total eligible earn up to 1.5%.'), 'earn', 'stacked total');
+  assert.equal(role('fuel_30x', '30X rewards on dining (plus up to 1.5% via partner coins).'), 'earn', 'an aside');
+  assert.equal(role('travel_4x', 'Up to 6X overall acceleration; dining earn represented at 4X.'), 'earn', 'overall');
+  assert.equal(role('smartbuy_10x', 'Up to 10X Reward Points on dining via SmartBuy.'), 'info');
+  assert.equal(role('air_30', 'Up to 30 Reward Points per Rs 100 spent on dining.'), 'info');
+});
+
 test('rows that would break a database identity index are deduplicated: first kept, the rest reported', () => {
   // bobcard-select: four empty lifestyle benefits; bobcard-corporate: two empty insurance rows.
   const emptyBenefit = { benefit_id: null, category_id: null, network_program: null, sponsor: null, label: null,

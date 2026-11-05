@@ -117,6 +117,29 @@ function mergeSlugs(current, incoming) {
   return { conflict: true, slugs: current };
 }
 
+// D8(b): "up to 10X" folds several rates into one. Read only the rule's own
+// rate text (its action reason), never its id. Within it, an "up to" that
+// is a cap ("up to 300 points per month"), a stacked total ("total earn up
+// to 1.5%", "up to 6X overall") or an aside in brackets is not this rule's rate.
+const UP_TO_RATE = /up[\s_-]*to[\s_-]*\d+(?:\.\d+)?\s*(?:x\b|%|(?:bonus\s+|reward\s+)?points?\b|rp\b|miles\b)/gi;
+function statesUpToRate(reason) {
+  const text = String(reason || '').replace(/\([^)]*\)/g, ' ');
+  for (const clause of text.split(/[.;]|\bwhile\b|\bbut\b|\bwhereas\b/i)) {
+    UP_TO_RATE.lastIndex = 0;
+    let m;
+    while ((m = UP_TO_RATE.exec(clause))) {
+      const before = clause.slice(Math.max(0, m.index - 40), m.index);
+      const after = clause.slice(m.index + m[0].length, m.index + m[0].length + 40);
+      if (/\b(total|combined|overall|together|aggregate|in all)\b[^.]*$/i.test(before)) continue;
+      if (/^\s*(overall|in total|combined)\b/i.test(after)) continue;
+      if (/^\s*(per|a|each|every|in a)\s+(calendar\s+|statement\s+|billing\s+)?(month|cycle|quarter|year|statement|day|week)\b/i.test(after) ||
+          /^\s*(per|a|each|every)\s+(calendar|statement|billing)\b/i.test(after) || /^[^.]{0,15}\bcap/i.test(after)) continue;
+      return true;
+    }
+  }
+  return false;
+}
+
 // True when the rule earns more per rupee than the card's base: in the card's
 // own currency (works without a ₹ point value), else by ₹ value.
 function aboveBase(ur, card) {
@@ -259,7 +282,7 @@ function transformRule(src, idx, ctx) {
     ruleEarn !== null && ctx.card.baseEarnPerRupee != null && ruleEarn < ctx.card.baseEarnPerRupee - 1e-12;
 
   if (!isExclusion && rewardRuleHasUnsupportedTrigger(src)) info.push('unsupported_trigger');
-  if (!isExclusion && /up[\s_-]*to[\s_-]*\d+(?:\.\d+)?\s*(?:x\b|%|(?:bonus\s+|reward\s+)?points?\b|rp\b|miles\b)/i.test(`${src?.id || ''} ${src?.action?.reason || ''}`)) {
+  if (!isExclusion && statesUpToRate(src?.action?.reason)) {
     // D8(b): "up to 10X" is several rates folded into one.
     info.push('up_to_rate');
   }
