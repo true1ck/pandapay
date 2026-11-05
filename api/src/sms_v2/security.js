@@ -35,16 +35,28 @@ async function fetchAppCheckJwks() {
   return JSON.parse(Buffer.concat(chunks).toString('utf8'));
 }
 
+// LO-15: a token minted through a debug provider must not reach production. Firebase does not
+// document a stable claim for this, so the check is best effort: any provider-style claim that
+// names a debug provider, or a subject listed in SMS_V2_DEBUG_APP_IDS (debug builds registered
+// under their own Firebase app id, which is the dependable control; see signing-keys.md).
+function isDebugToken(claims, debugAppIds) {
+  const hints = [claims.provider, claims.attestation_provider, claims.firebase?.provider, claims.firebase?.app_check_provider];
+  return debugAppIds.has(claims.sub) || hints.some(value => typeof value === 'string' && /debug/i.test(value));
+}
+
 function createAppCheckVerifier({
   projectNumber,
   appIds = [],
   fetchJwks = fetchAppCheckJwks,
   now = () => Date.now(),
+  rejectDebug = false,
+  debugAppIds = [],
 } = {}) {
   let keys = new Map();
   let expiresAt = 0;
   let inFlight;
   const allowedApps = new Set(appIds);
+  const debugApps = new Set(debugAppIds);
   return async function verifyToken(token) {
     if (!/^[0-9]+$/.test(projectNumber || '') || typeof token !== 'string' || token.length > 8192) return null;
     const decoded = jwt.decode(token, { complete: true });
@@ -80,6 +92,7 @@ function createAppCheckVerifier({
           !Number.isSafeInteger(claims.exp) || !Number.isSafeInteger(claims.iat) ||
           claims.iat > Math.floor(now() / 1000) ||
           (allowedApps.size && !allowedApps.has(claims.sub))) return null;
+      if (rejectDebug && isDebugToken(claims, debugApps)) return null;
       return { appId: claims.sub, expiresAt: claims.exp * 1000 };
     } catch {
       return null;
@@ -102,6 +115,79 @@ function createPgRateStore({ withUserClient }) {
   });
 }
 
+// ---- LO-10: binding and limited-use tokens ----------------------------------------------
+
+const sha256 = value => crypto.createHash('sha256').update(value).digest('hex');
+const MAX_BINDINGS = 10000;
+
+// Remembers which (profile, installation digest) first presented a token. A token first seen
+// for one account is not verified for another. `db` mode also records the first sighting in
+// Postgres (sms_v2_attestation_bindings) so every API replica agrees; the process cache only
+// avoids repeat queries. Returns true when the token belongs to this profile and installation.
+function createAttestationBinder({ mode, withUserClient, now = () => Date.now() }) {
+  const seen = new Map();
+  const remember = (digest, entry) => {
+    seen.delete(digest);
+    seen.set(digest, entry);
+    for (const [key, value] of seen) {
+      if (seen.size <= MAX_BINDINGS && value.expiresAt > now()) break;
+      seen.delete(key);
+    }
+  };
+  return async function bind(profileId, tokenDigest, deviceDigest, expiresAt) {
+    if (typeof profileId !== 'string' || !profileId) return false;
+    const known = seen.get(tokenDigest);
+    if (known && known.expiresAt > now()) return known.profileId === profileId && known.deviceDigest === deviceDigest;
+    let bound = true;
+    if (mode === 'db') {
+      const result = await withUserClient(profileId, client =>
+        client.query('SELECT pandapay.sms_v2_bind_attestation($1, $2, $3::timestamptz) AS bound',
+          [tokenDigest, deviceDigest, new Date(expiresAt).toISOString()]));
+      if (typeof result.rows?.[0]?.bound !== 'boolean') throw new Error('sms_v2_binding_invalid_result');
+      bound = result.rows[0].bound;
+    }
+    // A conflict is not cached: the database knows the owner, this process may not.
+    if (bound) remember(tokenDigest, { profileId, deviceDigest, expiresAt });
+    return bound;
+  };
+}
+
+// Firebase App Check replay protection: verifyAppCheckToken consumes a limited-use token and
+// reports alreadyConsumed on a second presentation. Needs credentials, so it is off by default
+// (SMS_V2_APPCHECK_REPLAY_PROTECTION=on). Fails closed: any error counts as not fresh.
+function createLimitedUseConsumer({ projectNumber, getAccessToken, fetchImpl = fetch }) {
+  return async function consume(token) {
+    try {
+      const response = await fetchImpl(`https://firebaseappcheck.googleapis.com/v1/projects/${projectNumber}:verifyAppCheckToken`, {
+        method: 'POST',
+        headers: { 'content-type': 'application/json', authorization: `Bearer ${await getAccessToken()}` },
+        body: JSON.stringify({ appCheckToken: token }),
+        signal: AbortSignal.timeout(3000), redirect: 'error',
+      });
+      if (!response.ok) return false;
+      const body = await response.json();
+      return body?.alreadyConsumed !== true;
+    } catch {
+      return false;
+    }
+  };
+}
+
+function defaultAccessTokenProvider() {
+  let lib;
+  try { lib = require('google-auth-library'); } catch { return null; }
+  const auth = new lib.GoogleAuth({ scopes: ['https://www.googleapis.com/auth/cloud-platform'] });
+  return async () => auth.getAccessToken();
+}
+
+const DEFAULT_LIMITED_USE_ROUTES = 'unknown-templates,corrections,rule-stats';
+
+function deviceDigestOf(req) {
+  const rawDevice = req.headers?.['x-sms-device-id'];
+  const device = typeof rawDevice === 'string' && /^[A-Za-z0-9_-]{8,128}$/.test(rawDevice) ? rawDevice : 'missing';
+  return sha256(device);
+}
+
 function configuredLimit(env, spec) {
   const value = env[spec.env] === undefined ? spec.limit : Number(env[spec.env]);
   if (!Number.isSafeInteger(value) || value < 1 || value > 1000000) throw new Error('sms_v2_rate_config_invalid');
@@ -112,15 +198,44 @@ function createSecurity({
   env = process.env,
   withUserClient,
   consume = createPgRateStore({ withUserClient }),
+  fetchJwks,
+  now = () => Date.now(),
   verifyToken = createAppCheckVerifier({
+    now,
+    ...(fetchJwks ? { fetchJwks } : {}),
     projectNumber: env.SMS_V2_FIREBASE_PROJECT_NUMBER,
     appIds: (env.SMS_V2_FIREBASE_APP_IDS || '').split(',').map(s => s.trim()).filter(Boolean),
+    rejectDebug: env.NODE_ENV === 'production' && env.SMS_V2_ALLOW_DEBUG_APP_CHECK !== 'true',
+    debugAppIds: (env.SMS_V2_DEBUG_APP_IDS || '').split(',').map(s => s.trim()).filter(Boolean),
   }),
   hasEntitlement = async () => false,
   log = entry => console.info(JSON.stringify(entry)),
+  getAccessToken,
+  fetchImpl,
+  bindAttestation,
+  consumeLimitedUse,
 } = {}) {
   const mode = env.SMS_V2_ATTESTATION_MODE || 'monitor';
   if (!['monitor', 'enforce'].includes(mode)) throw new Error('sms_v2_attestation_mode_invalid');
+  // Token binding (LO-10). Production defaults to the durable `db` mode (needs migration
+  // 20261114110000); elsewhere the per-process `memory` mode. `off` disables it.
+  const bindingMode = env.SMS_V2_ATTESTATION_BINDING || (env.NODE_ENV === 'production' && withUserClient ? 'db' : 'memory');
+  if (!['off', 'memory', 'db'].includes(bindingMode) || (bindingMode === 'db' && typeof withUserClient !== 'function')) {
+    throw new Error('sms_v2_attestation_binding_invalid');
+  }
+  const bind = bindAttestation || createAttestationBinder({ mode: bindingMode, withUserClient, now });
+  // Limited-use token replay protection (LO-10), default off. Only meaningful once the app
+  // sends getLimitedUseToken() tokens on these routes; see signing-keys.md.
+  const replay = env.SMS_V2_APPCHECK_REPLAY_PROTECTION || 'off';
+  if (!['off', 'on'].includes(replay)) throw new Error('sms_v2_appcheck_replay_invalid');
+  const limitedUseRoutes = new Set((env.SMS_V2_APPCHECK_LIMITED_USE_ROUTES || DEFAULT_LIMITED_USE_ROUTES)
+    .split(',').map(s => s.trim()).filter(Boolean));
+  let consumeToken = consumeLimitedUse;
+  if (replay === 'on' && !consumeToken) {
+    const provider = getAccessToken || defaultAccessTokenProvider();
+    if (!provider || !/^[0-9]+$/.test(env.SMS_V2_FIREBASE_PROJECT_NUMBER || '')) throw new Error('sms_v2_appcheck_replay_unconfigured');
+    consumeToken = createLimitedUseConsumer({ projectNumber: env.SMS_V2_FIREBASE_PROJECT_NUMBER, getAccessToken: provider, fetchImpl });
+  }
   const limits = Object.fromEntries(Object.entries(ROUTES).map(([route, specs]) =>
     [route, specs.map(spec => ({ ...spec, limit: configuredLimit(env, spec) }))]));
   const results = new WeakMap();
@@ -128,29 +243,42 @@ function createSecurity({
     async verifyAttestation(req) {
       if (results.has(req)) return results.get(req);
       const raw = req.headers?.['x-device-attestation'];
-      const claims = typeof raw === 'string' && raw ? await verifyToken(raw) : null;
+      let claims = typeof raw === 'string' && raw ? await verifyToken(raw) : null;
+      let outcome = raw ? 'invalid' : 'missing';
+      if (claims && bindingMode !== 'off' &&
+          !await bind(req.userId, sha256(raw), deviceDigestOf(req), claims.expiresAt)) {
+        claims = null; // another account or installation presented this token first
+        outcome = 'bound_elsewhere';
+      }
+      security.setState(req, claims);
+      const allowed = !!claims || mode === 'monitor';
+      results.set(req, allowed);
+      if (!claims) log({ event: 'sms_v2_attestation', mode, outcome });
+      return allowed;
+    },
+    setState(req, claims) {
       const verified = !!claims;
       const state = Object.freeze({ verified, sharedLearningEligible: verified, appId: claims?.appId || null });
       Object.defineProperty(req, 'smsV2Security', { value: state, configurable: true });
-      const allowed = verified || mode === 'monitor';
-      results.set(req, allowed);
-      if (!verified) log({ event: 'sms_v2_attestation', mode, outcome: raw ? 'invalid' : 'missing' });
-      return allowed;
     },
     async checkRate(req, route, units = 1) {
       if (!await security.verifyAttestation(req)) return false;
       const specs = limits[route];
       if (!specs || !Number.isSafeInteger(units) || units < 1 || units > 20000) throw new Error('sms_v2_rate_request_invalid');
+      if (replay === 'on' && limitedUseRoutes.has(route) && req.smsV2Security.verified &&
+          !(await consumeToken(req.headers['x-device-attestation']))) {
+        // Already used, or Firebase could not confirm it: not verified for this request.
+        security.setState(req, null);
+        log({ event: 'sms_v2_attestation', mode, outcome: 'replayed' });
+        if (mode === 'enforce') return false;
+      }
       const multiplier = req.smsV2Security.verified ? 1 : 0.5;
       const checks = specs.map(spec => ({
         bucket: spec.bucket, seconds: spec.seconds,
         limit: Math.max(1, Math.floor(spec.limit * multiplier)),
         units: spec.items ? units : 1,
       }));
-      const rawDevice = req.headers?.['x-sms-device-id'];
-      const device = typeof rawDevice === 'string' && /^[A-Za-z0-9_-]{8,128}$/.test(rawDevice) ? rawDevice : 'missing';
-      const deviceDigest = crypto.createHash('sha256').update(device).digest('hex');
-      const result = await consume(req.userId, deviceDigest, checks);
+      const result = await consume(req.userId, deviceDigestOf(req), checks);
       if (!result.allowed) req.res?.set('Retry-After', String(result.retryAfterSeconds));
       return result.allowed;
     },
@@ -161,6 +289,16 @@ function createSecurity({
   return security;
 }
 
+// The public API process must not hold the rule signing key (LO-09). Production only; logs
+// loudly rather than refusing to boot so a deploy ordering mistake cannot take the API down.
+function assertNoSigningKeyInPublicProcess(env = process.env, log = (m) => console.error(m)) {
+  if (env.NODE_ENV === 'production' && env.SMS_RULES_SIGNING_KEY) {
+    log('SMS v2: SMS_RULES_SIGNING_KEY is set in the public API environment. Remove it; only the maintenance job and the private admin API sign.');
+    return false;
+  }
+  return true;
+}
+
 function installSecurity(hooks, deps) {
   hooks.security = {
     ...createSecurity({ withUserClient: deps.withUserClient, env: deps.securityEnv || process.env,
@@ -169,4 +307,4 @@ function installSecurity(hooks, deps) {
   };
 }
 
-module.exports = { createAppCheckVerifier, createSecurity, createPgRateStore, installSecurity };
+module.exports = { createAttestationBinder, createLimitedUseConsumer, isDebugToken, createAppCheckVerifier, createSecurity, createPgRateStore, installSecurity, assertNoSigningKeyInPublicProcess };

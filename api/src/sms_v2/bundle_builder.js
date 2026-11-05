@@ -159,6 +159,7 @@ async function mintBundles(s, opts) {
     const row = {
       bundleVersion: nextVersion, manifest, sha256: contentSha256(bundle), signature: signed.signature.value,
       keyId: signer.keyId, cohort, goldenReport: opts.goldenReportsByCohort?.[cohort] || goldenReport, status: 'active', publishedBy, createdAt: bundle.createdAt, body: bundle,
+      servedBody: signed, // pre-signed copy the public API serves as is (LO-09)
     };
     if (current) await s.setBundleStatus(current.bundleVersion, supersededStatus);
     await s.insertBundle(row);
@@ -168,17 +169,50 @@ async function mintBundles(s, opts) {
   return minted;
 }
 
-// Re-sign a stored bundle with a fresh expiry for serving (expiry is rounded to the hour
-// so repeated fetches share an ETag).
-function bundleForServing(row, signer, now = new Date()) {
+// Re-sign a stored bundle with a fresh expiry (expiry is rounded to the hour so repeated
+// fetches share an ETag). Only maintenance jobs call this: the public API holds no key and
+// serves `servedBody` as stored (LO-09).
+function resignBundle(row, signer, now = new Date()) {
   const hour = new Date(Math.floor(now.getTime() / 3600000) * 3600000);
   const bundle = { ...row.body, expiresAt: isoSeconds(new Date(hour.getTime() + BUNDLE_TTL_MS)) };
   return signBundle(bundle, signer);
 }
 
+const REFRESH_BEFORE_MS = 72 * 3600 * 1000;
+
+// Hourly job, inside a store transaction: re-sign the active bundle of each cohort when its
+// served copy is missing, signed by another key id, or within `refreshBeforeMs` of expiry.
+// The stored content must still match the hash recorded at mint time.
+async function refreshServedBundles(s, { signer, now = new Date(), refreshBeforeMs = REFRESH_BEFORE_MS }) {
+  if (!signer) {
+    const err = new Error('signing_unavailable');
+    err.code = 'signing_unavailable';
+    throw err;
+  }
+  const refreshed = [];
+  for (const cohort of MINT_ORDER) {
+    const row = await s.latestBundle(cohort);
+    if (!row) continue;
+    const served = row.servedBody;
+    const due = !served || !served.signature || served.signature.keyId !== signer.keyId ||
+      served.bundleVersion !== row.bundleVersion || !(Date.parse(served.expiresAt) - now.getTime() > refreshBeforeMs);
+    if (!due) continue;
+    if (contentSha256(row.body) !== row.sha256) {
+      const err = new Error('bundle_corrupt');
+      err.code = 'bundle_corrupt';
+      throw err;
+    }
+    const signed = resignBundle(row, signer, now);
+    assertValidBundle(signed);
+    await s.setServedBundle(row.bundleVersion, signed);
+    refreshed.push({ bundleVersion: row.bundleVersion, cohort, expiresAt: signed.expiresAt });
+  }
+  return refreshed;
+}
+
 module.exports = {
   COHORTS, COHORT_RANK, PART_KEYS, PARTS_KEY, BUNDLE_TTL_MS,
   bucketOf, cohortFor, visibleTo, ruleManifest, partsOf, partsHash, buildManifest,
-  assembleBundle, candidateBundle, contentSha256, assertValidBundle, mintBundles, bundleForServing, isoSeconds,
+  assembleBundle, candidateBundle, contentSha256, assertValidBundle, mintBundles, resignBundle, refreshServedBundles, REFRESH_BEFORE_MS, isoSeconds,
   canonicalBundleBytes,
 };

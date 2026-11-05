@@ -40,7 +40,6 @@ function registerSmsV2(app, deps) {
   const { registerFactsRoute } = require('./facts_route');
   const { registerSyncRoute } = require('./sync_route');
   const { registerRules } = require('./rules_route');
-  const { signerFromEnv } = require('./signer');
 
   const hooks = createHooks(deps.hooks);
   require('./security').installSecurity(hooks, deps);
@@ -62,24 +61,16 @@ function registerSmsV2(app, deps) {
   registerSyncRoute(app, shared);
   app.use(['/sms/v2', '/admin/sms/v2'], requireSmsV2, jsonBodyParser, jsonBodyErrorHandler);
 
-  // WP-09 rule service. A missing signing key must not stop the whole API from
-  // booting while the flag is off; rule serving then answers 503 signing_unavailable.
-  let signer = deps.signer;
-  if (signer === undefined) {
-    try {
-      signer = signerFromEnv();
-    } catch (err) {
-      console.error('sms_v2 rule signing key unavailable; rule routes will answer 503');
-      signer = null;
-    }
-  }
+  // WP-09 rule service. The public process serves pre-signed bundles only (LO-09); the
+  // rule signing key belongs to the maintenance job and the private admin API.
+  require('./security').assertNoSigningKeyInPublicProcess(deps.securityEnv || process.env);
   // Security hooks are looked up per call, so a later WP-13 replacement reaches the rule routes too.
   const lazySecurity = {
     verifyAttestation: (req) => hooks.security.verifyAttestation(req),
     checkEntitlement: (req) => hooks.security.checkEntitlement(req),
     checkRate: (req, route, units) => hooks.security.checkRate(req, route, units),
   };
-  const rules = registerRules(app, { ...deps, ...shared, hooks: { ...hooks, security: lazySecurity }, requireAdmin: deps.requireAdmin, signer });
+  const rules = registerRules(app, { ...deps, ...shared, hooks: { ...hooks, security: lazySecurity }, requireAdmin: deps.requireAdmin });
   hooks.latestBundleVersion = rules.latestBundleVersion;
 
   require('./corrections_route').registerCorrections(app, shared);
