@@ -255,6 +255,20 @@ test('records keep entries for periods the replay did not rebuild', () => {
   assert.deepEqual(record.fee_waivers, withForeign.card_state_v2.fee_waivers);
 });
 
+test('recompute_card_state: dry run by default; options are validated', () => {
+  const { parseArgs } = require('../scripts/recompute_card_state');
+  assert.equal(parseArgs([]).apply, false);
+  assert.equal(parseArgs(['--dry-run']).apply, false);
+  assert.deepEqual(
+    parseArgs(['--apply', '--as-of', '2026-11-20', '--since', '2026-10-01', '--card-slug', 'x', '--verbose']),
+    { apply: true, asOf: '2026-11-20', since: '2026-10-01', cardSlug: 'x', userCardId: null, verbose: true },
+  );
+  assert.throws(() => parseArgs(['--as-of', '20-11-2026']), /YYYY-MM-DD/);
+  assert.throws(() => parseArgs(['--user-card', 'nope']), /uuid/);
+  assert.throws(() => parseArgs(['--card-slug']), /needs a value/);
+  assert.throws(() => parseArgs(['--write']), /unknown argument/);
+});
+
 test('nativeAmount: points on a points card, rupees of cashback on a cashback card', () => {
   assert.equal(cardStateV2.nativeAmount({ points: 120, cashbackInr: null }), 120);
   assert.equal(cardStateV2.nativeAmount({ points: null, cashbackInr: 49.5 }), 49.5);
