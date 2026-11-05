@@ -225,6 +225,36 @@ test('C8 D23f: lifetime caps rebuild from the card floor, not 1970', () => {
   assert.deepEqual([lifetime.period_start, lifetime.consumed], ['1970-01-01', 200]);
 });
 
+test('C8 D33f (M1): a lifetime cap does not stretch the rebuild to 9999 for the card\'s other caps', () => {
+  const lifetimeId = '00000000-0000-4000-8000-0000000000c9';
+  const caps = [...F.CAPS, {
+    id: lifetimeId, reward_rule_id: null, category_id: null, label: 'lifetime',
+    measure: 'reward_value', period: 'lifetime', cap_value: '1000', cap_kind: 'total_points', cap_amount: '4000',
+    scope: 'card', parent_cap_id: null, post_cap_behavior: null, post_cap_rate: '0', anchor: null, targets: [],
+  }];
+  const v2 = cardStateV2.buildV2Card({ userCard: F.userCardRow(), rules: F.RULES, caps, milestones: F.MILESTONES });
+  const range = cardStateV2.rebuildRange(v2, { asOf: new Date('2026-11-20T12:00:00Z'), caps: true, floor: '2026-08-01' });
+  // The replay window ends with the longest non-lifetime period (the card year), not 9999-12-31.
+  assert.equal(range.caps.end, '2027-09-30');
+  const periods = cardStateV2.rebuildPeriods(v2, range);
+  // Each cap enumerates only up to its own current period: the monthly parent
+  // from the floor to November (4 periods), the card year twice, the lifetime cap once.
+  assert.deepEqual(periods.get(F.CAP.parent).map((w) => w.start), ['2026-08-01', '2026-09-01', '2026-10-01', '2026-11-01']);
+  assert.deepEqual(periods.get(F.CAP.cardYear).map((w) => w.start), ['2025-10-01', '2026-10-01']);
+  assert.deepEqual(periods.get(lifetimeId).map((w) => [w.start, w.end]), [['1970-01-01', '9999-12-31']]);
+  // The lifetime cap still counts from the card's start; a future-dated spend
+  // in a later month still gets its own monthly row.
+  const plan = cardStateV2.planReplay({
+    v2, directory, range,
+    transactions: [dining('2026-08-05', 2000), dining('2026-11-03', 2000), dining('2026-12-02', 2000)],
+  });
+  assert.equal(plan.capRows.find((r) => r.cap_rule_id === lifetimeId).consumed, 300);
+  assert.deepEqual(
+    plan.capRows.filter((r) => r.cap_rule_id === F.CAP.parent).map((r) => [r.period_start, r.consumed]),
+    [['2026-08-01', 100], ['2026-11-01', 100], ['2026-12-01', 100]],
+  );
+});
+
 test('a points+cashback card: cashback goes to expected_cashback_inr only, never the points ledger', () => {
   const rules = [...F.RULES, {
     ...F.RULES[0], id: '00000000-0000-4000-8000-0000000000a9', category_id: F.CATEGORY.other,

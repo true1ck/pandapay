@@ -722,7 +722,10 @@ function rebuildRange(v2, {
     for (const cap of v2.caps) {
       const w = capWindow(v2, cap, day);
       start = minDay(start, w.start);
-      end = maxDay(end, w.end);
+      // C8 D33f: a lifetime window ends 9999-12-31; it must not stretch the
+      // replay for the card's other caps. Later spends still count toward the
+      // lifetime row as seeds, through their records.
+      if (cap.period !== 'lifetime') end = maxDay(end, w.end);
     }
     if (expected) start = minDay(start, monthStart(day));
     if (since) start = minDay(start, calendarDay(since));
@@ -749,6 +752,21 @@ function rebuildRange(v2, {
     loadTo = loadTo == null ? w.end : maxDay(loadTo, w.end);
   }
   return { asOf: day, caps: capRange, milestones: milestoneWindows, loadFrom, loadTo };
+}
+
+/**
+ * The periods a rebuild enumerates, per cap: those intersecting the replay
+ * window, but never past the cap's own period containing `asOf` (C8 D33f).
+ * A later spend in the window still gets its row (planReplay adds it).
+ */
+function rebuildPeriods(v2, range) {
+  const out = new Map();
+  if (!range.caps) return out;
+  for (const cap of v2.caps) {
+    const own = capWindow(v2, cap, range.asOf).end;
+    out.set(cap.id, capPeriodsBetween(v2, cap, range.caps.start, minDay(range.caps.end, own)));
+  }
+  return out;
 }
 
 /** Every period of `cap` that intersects [start, end]. */
@@ -797,8 +815,9 @@ function planReplay({
   const caps = range.caps;
   const capRows = new Map(); // key -> row being rebuilt
   if (caps) {
+    const periods = rebuildPeriods(v2, range);
     for (const cap of v2.caps) {
-      for (const w of capPeriodsBetween(v2, cap, caps.start, caps.end)) {
+      for (const w of periods.get(cap.id)) {
         capRows.set(key(cap.id, w.start), {
           cap_rule_id: cap.id, period_start: w.start, period_end: w.end, consumed: 0,
           cap_kind: null, cap_amount: null, approximate_window: w.approximate,
@@ -1249,6 +1268,7 @@ module.exports = {
   computeTransactionV2,
   milestoneEntries,
   rebuildRange,
+  rebuildPeriods,
   planReplay,
   toRecord,
   nativeAmount,
