@@ -487,6 +487,16 @@ function transformRule(src, idx, ctx) {
     const listParts = [];
     const listUnmapped = [];
     for (const item of cond.categoryList) {
+      // D16/D18e: "non_samsung_emi" in the list is that category except
+      // the brand (axis-samsung-signature).
+      const neg = negatedBrand(item, ctx.index);
+      if (neg && neg.catTokens.length) {
+        for (const cat of uniq(neg.catTokens.flatMap((t) => mapCategorySlugs(t)))) {
+          listParts.push({ categorySlug: cat, partExceptMerchants: neg.merchant ? [neg.merchant] : [], partExceptPlatforms: neg.platform ? [neg.platform] : [] });
+        }
+        flags.push('exception_from_negated_token');
+        continue;
+      }
       const t = resolveCategoryToken(categoryKey(item), ctx);
       if (['category', 'merchant', 'platform'].includes(t.kind) || t.kind === 'composite') {
         listParts.push(...t.parts);
@@ -512,6 +522,10 @@ function transformRule(src, idx, ctx) {
       for (const p of parts) {
         for (const lp of listParts) {
           const merged = andPart(p, lp);
+          if (merged && (lp.partExceptMerchants || lp.partExceptPlatforms)) {
+            merged.partExceptMerchants = uniq([...(merged.partExceptMerchants || []), ...(lp.partExceptMerchants || [])]);
+            merged.partExceptPlatforms = uniq([...(merged.partExceptPlatforms || []), ...(lp.partExceptPlatforms || [])]);
+          }
           if (merged) crossed.push(merged);
         }
       }

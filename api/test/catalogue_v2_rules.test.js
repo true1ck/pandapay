@@ -1324,6 +1324,15 @@ test('D16/D18e underscored negations ("non_iocl_fuel", "fuel_non_iocl", not_phon
   const list = ex('x_list');
   assert.ok(list.some((x) => x.category_slug === 'fuel' && x.except_merchant_slugs.join() === 'indianoil'));
   assert.ok(list.some((x) => x.category_slug === 'insurance' && !x.except_merchant_slugs.length));
+  // axis-samsung-signature: negations inside a `categories` list
+  const sam = transformCardRecordV2(pointsCard([
+    rule({ id: 'x_cats', category_id: 'excluded_spend', evaluation_type: 'exclusion',
+      conditions: { categories: ['insurance', 'non_samsung_emi', 'post_facto_non_samsung_emi'] }, action: { points_per_block: 0, reason: 'No points.' } }),
+  ]), { directory: { ...dir, merchants: [...dir.merchants, { slug: 'samsung', name: 'Samsung', aliases: ['samsung'] }] } });
+  const cats = only(sam, 'x_cats').filter((x) => x.max_engine_version !== 1);
+  assert.ok(cats.some((x) => x.category_slug === 'insurance' && !x.except_merchant_slugs.length));
+  assert.ok(cats.some((x) => x.category_slug === 'emi' && x.except_merchant_slugs.join() === 'samsung'), JSON.stringify(cats.map((x) => [x.category_slug, x.except_merchant_slugs])));
+  assert.ok(!only(sam, 'x_cats')[0].flags.includes('partial_category_list'));
   const base = only(r, 'base_list')[0];
   assert.deepEqual(base.excluded_category_slugs.slice().sort(), ['fuel', 'insurance']);
   assert.ok(base.flags.includes('negated_exclusion_broadened'));
