@@ -28,6 +28,11 @@
       "url": "https://offers.smartbuy.hdfc.bank.in/v2/accelerated-earn-rules",
       "doc": "SmartBuy accelerated earn rules (valid to 31 Mar 2027)",
       "quote": "Infinia (Reward Points) 15,000"
+    },
+    {
+      "url": "https://www.hdfc.bank.in/content/dam/hdfcbankpws/in/en/personal-banking/discover-products/cards/credit-cards/personal-mitc/mitc-in-english.pdf",
+      "doc": "HDFC Bank credit card MITC v4.18, Oct 2026 (Fair Usage Policy)",
+      "quote": "The maximum reward points that can be earned in a statement cycle for Infinia/infinia Metal is 2,00,000."
     }
   ],
   "examples": [
@@ -53,7 +58,9 @@
         "amount": 1000,
         "value_inr": null,
         "excluded": false,
-        "cap_deltas_by_source_id": {}
+        "cap_deltas_by_source_id": {
+          "statement-cycle-rp-cap": 1000
+        }
       },
       "why": "5 RP per Rs150 block: 200 blocks x 5 = 1,000."
     },
@@ -79,7 +86,9 @@
         "amount": 30,
         "value_inr": null,
         "excluded": false,
-        "cap_deltas_by_source_id": {}
+        "cap_deltas_by_source_id": {
+          "statement-cycle-rp-cap": 30
+        }
       },
       "why": "Issuer: residual amounts below the Rs150 block earn nothing, per transaction. 6 blocks (Rs900) x 5 = 30; Rs100 residual earns 0."
     },
@@ -158,7 +167,8 @@
         "value_inr": null,
         "excluded": false,
         "cap_deltas_by_source_id": {
-          "grocery-rp-monthly-cap": 200
+          "grocery-rp-monthly-cap": 200,
+          "statement-cycle-rp-cap": 200
         }
       },
       "why": "40 blocks x 5 = 200 RP. Grocery RP are capped at 2,000 per calendar month; 200 counts toward it."
@@ -216,7 +226,8 @@
         "value_inr": null,
         "excluded": false,
         "cap_deltas_by_source_id": {
-          "insurance-rp-monthly-cap": 10
+          "insurance-rp-monthly-cap": 10,
+          "statement-cycle-rp-cap": 10
         }
       },
       "why": "Insurance earns 5 RP/Rs150 (1,000 RP) but total insurance RP are capped at 10,000 per month from 1 Jul 2025. 9,990 used, so only 10 more."
@@ -244,7 +255,8 @@
         "value_inr": null,
         "excluded": false,
         "cap_deltas_by_source_id": {
-          "smartbuy-accelerated-rp": 4500
+          "smartbuy-accelerated-rp": 4500,
+          "statement-cycle-rp-cap": 5000
         }
       },
       "why": "SmartBuy hotels 10X for Infinia = 50 RP per Rs150: 100 blocks = 5,000 total, of which 500 is base and 4,500 is accelerated. Accelerated points count toward the 15,000/month SmartBuy cap."
@@ -272,7 +284,8 @@
         "value_inr": null,
         "excluded": false,
         "cap_deltas_by_source_id": {
-          "smartbuy-accelerated-rp": 4000
+          "smartbuy-accelerated-rp": 4000,
+          "statement-cycle-rp-cap": 5000
         }
       },
       "why": "SmartBuy flights are 5X, not 10X: 25 RP per Rs150, 200 blocks = 5,000 total (1,000 base + 4,000 accelerated)."
@@ -302,6 +315,12 @@
       "item": "insurance cap field names",
       "cardpipeline_says": "insurance cap described as 10,000/month.",
       "issuer_says": "Matches MITC (10,000/month from 1 Jul 2025 for Infinia).",
+      "proposed_fix": "none"
+    },
+    {
+      "item": "WP7: card-wide cap statement-cycle-rp-cap in examples 001, 002, 005, 007, 008, 009",
+      "cardpipeline_says": "total_reward_points 2,00,000 per statement cycle, card-wide.",
+      "issuer_says": "Confirmed (HDFC Bank credit card MITC v4.18, Oct 2026 (Fair Usage Policy)). Every earning spend counts toward it, so each earning example now lists this cap's delta (= the points earned). Amounts unchanged.",
       "proposed_fix": "none"
     }
   ]

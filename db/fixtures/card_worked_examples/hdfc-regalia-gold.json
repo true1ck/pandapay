@@ -23,6 +23,11 @@
       "url": "https://www.hdfc.bank.in/content/dam/hdfcbankpws/in/en/personal-banking/discover-products/cards/credit-cards/personal-mitc/mitc-in-english.pdf",
       "doc": "HDFC Bank credit card MITC v4.18, Oct 2026",
       "quote": "residual amounts or transactions below ₹200 will not earn Reward Points"
+    },
+    {
+      "url": "https://www.hdfc.bank.in/content/dam/hdfcbankpws/in/en/personal-banking/discover-products/cards/credit-cards/regalia-gold-credit-card/pdfs/regalia-gold-credit-card-reward-points-t-and-cs.pdf",
+      "doc": "Regalia Gold Reward Points T&C (Aug 2026), item 16",
+      "quote": "The maximum reward points that can be earned in a statement cycle for Regalia Gold is 50,000."
     }
   ],
   "examples": [
@@ -48,7 +53,9 @@
         "amount": 250,
         "value_inr": null,
         "excluded": false,
-        "cap_deltas_by_source_id": {}
+        "cap_deltas_by_source_id": {
+          "statement_cycle_total_reward_points": 250
+        }
       },
       "why": "5 RP per Rs200: 50 blocks = 250."
     },
@@ -74,7 +81,9 @@
         "amount": 25,
         "value_inr": null,
         "excluded": false,
-        "cap_deltas_by_source_id": {}
+        "cap_deltas_by_source_id": {
+          "statement_cycle_total_reward_points": 25
+        }
       },
       "why": "5 full Rs200 blocks (Rs1,000) = 25 RP; the Rs150 residual earns nothing."
     },
@@ -101,7 +110,8 @@
         "value_inr": null,
         "excluded": false,
         "cap_deltas_by_source_id": {
-          "select_brand_5x_monthly_bonus": 400
+          "select_brand_5x_monthly_bonus": 400,
+          "statement_cycle_total_reward_points": 500
         }
       },
       "why": "5X on Myntra/Nykaa/Reliance Digital/Marks & Spencer: 25 RP per Rs200 = 500 total, 100 base + 400 incremental. The 5,000/month cap applies to the incremental part only. Reading of \"5X\" as five times base is an interpretation: the T&C calls the extra points \"incremental\"."
@@ -131,7 +141,8 @@
         "value_inr": null,
         "excluded": false,
         "cap_deltas_by_source_id": {
-          "select_brand_5x_monthly_bonus": 100
+          "select_brand_5x_monthly_bonus": 100,
+          "statement_cycle_total_reward_points": 200
         }
       },
       "why": "Only 100 incremental points remain; base 100 is never capped. 100 + 100 = 200."
@@ -160,7 +171,9 @@
         "amount": 50,
         "value_inr": null,
         "excluded": false,
-        "cap_deltas_by_source_id": {}
+        "cap_deltas_by_source_id": {
+          "statement_cycle_total_reward_points": 50
+        }
       },
       "why": "Issuer: base points on these brands continue with no capping. 10 blocks x 5 = 50."
     },
@@ -213,7 +226,8 @@
         "value_inr": null,
         "excluded": false,
         "cap_deltas_by_source_id": {
-          "grocery_reward_points_monthly": 125
+          "grocery_reward_points_monthly": 125,
+          "statement_cycle_total_reward_points": 125
         }
       },
       "why": "25 blocks x 5 = 125 RP; grocery capped at 2,000 RP per calendar month."
@@ -243,7 +257,8 @@
         "value_inr": null,
         "excluded": false,
         "cap_deltas_by_source_id": {
-          "insurance_reward_points_daily": 10
+          "insurance_reward_points_daily": 10,
+          "statement_cycle_total_reward_points": 10
         }
       },
       "why": "100 blocks would be 500 RP; insurance is capped at 2,000 RP per month so 10 remain."
@@ -292,6 +307,12 @@
       "item": "Statement-cycle ceiling 50,000 RP",
       "cardpipeline_says": "50,000 per statement cycle.",
       "issuer_says": "Confirmed on product page and T&C.",
+      "proposed_fix": "none"
+    },
+    {
+      "item": "WP7: card-wide cap statement_cycle_total_reward_points in examples 001, 002, 003, 004, 005, 007, 008",
+      "cardpipeline_says": "total_reward_points 50,000 per statement cycle, card-wide.",
+      "issuer_says": "Confirmed (Regalia Gold Reward Points T&C (Aug 2026), item 16). Every earning spend counts toward it, so each earning example now lists this cap's delta (= the points earned). Amounts unchanged.",
       "proposed_fix": "none"
     }
   ]

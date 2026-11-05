@@ -290,16 +290,16 @@
         "currency": "cashback",
         "amount": 0,
         "value_inr": 0,
-        "excluded": false,
+        "excluded": true,
         "cap_deltas_by_source_id": {}
       },
       "why": "Issuer worked example: a Swiggy transaction below Rs249 earns 0 cashback. The T&C do not say whether it falls to the 1% category, so the expectation is only the issuer stated 0."
     },
     {
       "id": "011",
-      "title": "Rs 153 Swiggy order, cashback rounds down",
+      "title": "Rs 253 Swiggy order, cashback rounds down",
       "ctx": {
-        "amount": 153,
+        "amount": 253,
         "occurred": "2026-11-05T10:00:00+05:30",
         "category_slug": "dining",
         "mcc": 5814,
@@ -314,20 +314,20 @@
       },
       "expect": {
         "currency": "cashback",
-        "amount": 15,
-        "value_inr": 15,
+        "amount": 25,
+        "value_inr": 25,
         "excluded": false,
         "cap_deltas_by_source_id": {
-          "swiggy_cashback_cap": 15
+          "swiggy_cashback_cap": 25
         }
       },
-      "why": "Issuer worked example: 10% of 153 = 15.3, Rs15 credited."
+      "why": "10% of 253 = 25.3, rounded to the nearest rupee = 25. (Amount is above the Rs249 minimum for the 10% category.)"
     },
     {
       "id": "012",
-      "title": "Rs 156 Swiggy order, cashback rounds up",
+      "title": "Rs 256 Swiggy order, cashback rounds up",
       "ctx": {
-        "amount": 156,
+        "amount": 256,
         "occurred": "2026-11-05T10:00:00+05:30",
         "category_slug": "dining",
         "mcc": 5814,
@@ -342,14 +342,14 @@
       },
       "expect": {
         "currency": "cashback",
-        "amount": 16,
-        "value_inr": 16,
+        "amount": 26,
+        "value_inr": 26,
         "excluded": false,
         "cap_deltas_by_source_id": {
-          "swiggy_cashback_cap": 16
+          "swiggy_cashback_cap": 26
         }
       },
-      "why": "Issuer worked example: 10% of 156 = 15.6, Rs16 credited. Issuer also shows 6.5 rounded down to 6 in a statement example, so exact-half behaviour is not asserted."
+      "why": "10% of 256 = 25.6, rounded to the nearest rupee = 26. (Amount is above the Rs249 minimum for the 10% category.)"
     },
     {
       "id": "013",
@@ -372,7 +372,7 @@
         "currency": "cashback",
         "amount": 0,
         "value_inr": 0,
-        "excluded": false,
+        "excluded": true,
         "cap_deltas_by_source_id": {}
       },
       "why": "T&C: 5% and 1% categories need a minimum transaction of Rs100."
@@ -397,6 +397,19 @@
       "cardpipeline_says": "zero_accrual.",
       "issuer_says": "Silent on whether spend above the 10% cap earns 1%. No example written.",
       "proposed_fix": "none"
+    },
+    {
+      "item": "WP7: examples 011 and 012 (rounding)",
+      "cardpipeline_says": "Rs153 / Rs156 Swiggy orders earning 10% (15 / 16).",
+      "issuer_says": "T&C 4.1 (this file's own note and example 010): from 21 Apr 2026 the 10% category needs at least Rs249, so Rs153/156 earn 0. The rounding examples now use Rs253/256 (25.3 -> 25, 25.6 -> 26).",
+      "proposed_fix": "none"
+    },
+    {
+      "item": "WP7: examples 010 and 013 (below minimum)",
+      "cardpipeline_says": "excluded: false with 0 cashback.",
+      "issuer_says": "No cashback below the minimum (Rs249 for 10%, Rs100 otherwise; issuer example: Rs150 Swiggy order earns 0). Contract C8 D16b models \"no reward below Rs X\" as an exclusion, so excluded is true. Amounts unchanged (0).",
+      "proposed_fix": "override",
+      "override_file": "api/scripts/catalogue_overrides/swiggy-hdfc-bank-credit-card.json"
     }
   ]
 }

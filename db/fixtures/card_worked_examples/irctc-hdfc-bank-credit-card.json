@@ -23,6 +23,11 @@
       "url": "https://www.hdfc.bank.in/content/dam/hdfcbankpws/in/en/personal-banking/discover-products/cards/credit-cards/irctc-credit-card/irctc-tnc-09-10-25.pdf",
       "doc": "IRCTC HDFC T&C (file dated 9 Oct 2025)",
       "quote": "5% Cashback ... capped maximum at INR 1000 per month and INR 12000 Annually"
+    },
+    {
+      "url": "https://www.hdfc.bank.in/content/dam/hdfcbankpws/in/en/personal-banking/discover-products/cards/credit-cards/irctc-credit-card/irctc-tnc-09-10-25.pdf",
+      "doc": "IRCTC HDFC T&C (updated 29 May 2025)",
+      "quote": "Reward Points on other spends is capped maximum at 1000 Reward Points per month and 12000 Reward Points Annually."
     }
   ],
   "examples": [
@@ -135,7 +140,8 @@
         "value_inr": null,
         "excluded": false,
         "cap_deltas_by_source_id": {
-          "other-spends-monthly": 30
+          "other-spends-monthly": 30,
+          "other-spends-annual": 30
         }
       },
       "why": "Issuer worked example: 1X = 30 points."
@@ -165,7 +171,8 @@
         "value_inr": null,
         "excluded": false,
         "cap_deltas_by_source_id": {
-          "other-spends-monthly": 20
+          "other-spends-monthly": 20,
+          "other-spends-annual": 20
         }
       },
       "why": "Would be 50 points; other-spends cap is 1,000 per month, so 20 remain."
@@ -301,6 +308,13 @@
       "cardpipeline_says": "EMI exclusion on other card rules.",
       "issuer_says": "Only EMI principal earns 1X (Rs2,000 principal = 20 points); interest earns nothing. No example because which cap it counts toward is unstated.",
       "proposed_fix": "none"
+    },
+    {
+      "item": "WP7: other-spends-annual in examples 004, 005",
+      "cardpipeline_says": "other-spends-annual total_reward_points 12,000 per year.",
+      "issuer_says": "T&C: other spends are capped at 1,000 RP per month and 12,000 RP annually, so an earning other spend counts toward both caps. Amounts unchanged.",
+      "proposed_fix": "override",
+      "override_file": "api/scripts/catalogue_overrides/irctc-hdfc-bank-credit-card.json"
     }
   ]
 }
