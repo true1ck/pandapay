@@ -60,7 +60,7 @@ const currencyOf = (unit) => (unit === 'cashback_percent' ? 'cashback' : /^(poin
 // Conservative: only when that rate is no higher than every capped rule's own
 // (in-cap) rate; a higher one is flagged for review instead, and a rate that
 // can't be compared is left as the mapped action.
-function statedPostRate(post, targets, card) {
+function statedPostRate(post, targets, card, allowAbove = false) {
   const ppb = asNumber(post?.points_per_block);
   const cb = asNumber(post?.cashback_percent);
   if (!(ppb > 0) && !(cb > 0)) return null;
@@ -93,7 +93,11 @@ function statedPostRate(post, targets, card) {
     const postValue = valuePerRupee(valueUnit, rate, pv, block);
     const inCap = valuePerRupee(r.unit, r.rate, pv, r.block_inr);
     if (postValue === null || inCap === null) return { flag: 'post_limit_rate_not_compared' };
-    if (postValue > inCap + 1e-12) return { flag: 'post_limit_rate_above_cap_rate' };
+    if (postValue > inCap + 1e-12) {
+      // D26a: only an override citing the issuer may allow it.
+      if (!allowAbove) return { flag: 'post_limit_rate_above_cap_rate' };
+      return { unit, rate, allowedAbove: true };
+    }
   }
   return { unit, rate };
 }
@@ -269,9 +273,11 @@ function transformCaps(record, rules, ctx) {
       else if (postAction && postAction !== 'null' && postAction !== 'n/a') flags.push('unknown_post_limit');
       // D27b: a stated rate applies only when the action maps to base_rate
       // or is unknown; an explicit zero wins.
-      const stated = postCapBehavior === 'zero' ? null : statedPostRate(c.post_limit_behavior, targets, ctx.card);
+      const stated = postCapBehavior === 'zero' ? null
+        : statedPostRate(c.post_limit_behavior, targets, ctx.card, c.allow_post_limit_above_cap_rate === true);
       if (stated?.flag) flags.push(stated.flag);
       else if (stated) {
+        if (stated.allowedAbove) flags.push('post_limit_above_cap_rate_allowed');
         postCapBehavior = 'custom_rate';
         postCapUnit = stated.unit;
         statedPost = stated.rate;

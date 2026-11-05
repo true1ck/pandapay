@@ -1259,6 +1259,35 @@ test('a spend cap whose post-limit action states a rate gets custom_rate, unless
   assert.deepEqual([count.cap_kind, count.post_cap_behavior, count.post_cap_unit, count.post_cap_rate, count.measure], ['txn_count', 'custom_rate', 'points_per_100', 2, 'txn_count']);
 });
 
+test('D26a a post-limit rate above the in-cap rate is emitted only by a cited override flag', () => {
+  // Magnus shape: 12 pts / ₹200 up to ₹1.5 lakh a month, then 35 above it.
+  const record = card({
+    accrual: { base_points_per_block: 12, base_cashback_percent: null, base_block_inr: 200 },
+    rules: [rule({ id: 'base_12', category_id: 'all_retail', evaluation_type: 'standard_accrual', action: { points_per_block: 12, cap_reference: 'base_150k' } })],
+    caps: [{ id: 'base_150k', category_id: 'all_retail', metric: 'eligible_spend_amount', limit_value_inr: 150000, period: 'calendar_month',
+      post_limit_behavior: { action: 'downgrade_to_base_rate', points_per_block: 35 }, parent_cap_id: null }],
+  });
+  const plain = run(record).capRules[0];
+  assert.equal(plain.post_cap_behavior, 'base_rate');
+  assert.ok(plain.flags.includes('post_limit_rate_above_cap_rate'));
+
+  const allow = (extra) => ({ source_slug: 'test-card', changes: [{ path: 'cap_rules[id=base_150k].allow_post_limit_above_cap_rate', value: true, ...extra }] });
+  const cited = run(record, { overrides: allow({ citation: 'Issuer MITC: 35 EDGE points per Rs 200 above Rs 1.5 lakh a month.' }) });
+  const c = cited.capRules[0];
+  assert.deepEqual([c.post_cap_behavior, c.post_cap_unit, c.post_cap_rate], ['custom_rate', 'points_per_200', 35]);
+  assert.ok(c.flags.includes('post_limit_above_cap_rate_allowed'));
+  assert.ok(!c.flags.includes('post_limit_rate_above_cap_rate'));
+  assert.equal(cited.card.model_coverage.overrides_applied[0].citation, 'Issuer MITC: 35 EDGE points per Rs 200 above Rs 1.5 lakh a month.');
+
+  for (const extra of [{}, { citation: '   ' }]) {
+    const rejected = run(record, { overrides: allow(extra) });
+    const errs = rejected.card.model_coverage.flags.filter((f) => f.code === 'override_not_applied');
+    assert.ok(errs.some((f) => /test-card/.test(f.detail) && /base_150k/.test(f.detail) && /citation/.test(f.detail)), JSON.stringify(errs));
+    assert.equal(rejected.capRules[0].post_cap_behavior, 'base_rate');
+    assert.ok(rejected.capRules[0].flags.includes('post_limit_rate_above_cap_rate'));
+  }
+});
+
 test('D8b "up to" reads only the rule\'s own rate text: not its id, a cap, a stacked total or an aside', () => {
   const role = (id, reason) => run(pointsCard([rule({ id, category_id: 'dining', action: { points_per_block: 10, reason } })])).rewardRules[0].rule_role;
   assert.equal(role('smartbuy_up_to_10x', '10X Reward Points on dining.'), 'earn', 'id only');
