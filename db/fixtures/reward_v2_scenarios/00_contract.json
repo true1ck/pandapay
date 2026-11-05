@@ -6,7 +6,8 @@
     "For an excluded result, rule_id is the matching exclusion rule (null for a card-level category exclusion).",
     "Rounding modes (contract D7): floor | round (per block), none (fractional), points_half_up | points_floor (exact amount x rate / block, then rounded to whole points).",
     "Optional per-scenario \"assert\": list of expect keys to compare (others ignored). Used for v1-shaped cards, whose v1 path doesn't produce every v2 field (D10).",
-    "cashback_rounding (D11): null|'paise' = keep paise; 'rupee_floor' / 'rupee_half_up' = whole rupees per accrual piece."
+    "cashback_rounding (D11): null|'paise' = keep paise; 'rupee_floor' / 'rupee_half_up' = whole rupees per accrual piece.",
+    "D16: rules may carry except_merchant_slugs / except_platform_slugs (an exception only takes effect when the merchant/platform is known and listed); an exclusion rule's max_txn_inr means the exclusion applies only when amount < max_txn_inr."
   ],
   "directory": {
     "merchants": [
@@ -33,6 +34,18 @@
         ],
         "vpa_prefixes": [],
         "mcc": []
+      },
+      {
+        "slug": "indianoil",
+        "name": "IndianOil",
+        "parent_slug": null,
+        "category_slug": "fuel",
+        "aliases": [
+          "indianoil",
+          "indian oil"
+        ],
+        "vpa_prefixes": [],
+        "mcc": []
       }
     ],
     "platforms": [
@@ -43,6 +56,16 @@
         "issuer_slug": null,
         "aliases": [
           "phonepe"
+        ]
+      },
+      {
+        "slug": "google_pay",
+        "name": "Google Pay",
+        "kind": "payment_app",
+        "issuer_slug": null,
+        "aliases": [
+          "google pay",
+          "gpay"
         ]
       }
     ]
@@ -108,7 +131,9 @@
             "block_inr": null,
             "min_engine_version": 1,
             "source_local_id": "a-excl-fuel",
-            "display_note": "No points on fuel"
+            "display_note": "No points on fuel",
+            "except_merchant_slugs": [],
+            "except_platform_slugs": []
           },
           {
             "id": "a-app-10x",
@@ -135,7 +160,9 @@
             "block_inr": null,
             "min_engine_version": 2,
             "source_local_id": "a-app-10x",
-            "display_note": "10 pts/₹100 in the PhonePe app"
+            "display_note": "10 pts/₹100 in the PhonePe app",
+            "except_merchant_slugs": [],
+            "except_platform_slugs": []
           },
           {
             "id": "a-online-5x",
@@ -160,7 +187,9 @@
             "block_inr": null,
             "min_engine_version": 1,
             "source_local_id": "a-online-5x",
-            "display_note": "5 pts/₹100 online"
+            "display_note": "5 pts/₹100 online",
+            "except_merchant_slugs": [],
+            "except_platform_slugs": []
           },
           {
             "id": "a-base",
@@ -185,7 +214,9 @@
             "block_inr": null,
             "min_engine_version": 1,
             "source_local_id": "a-base",
-            "display_note": "1 pt/₹100 elsewhere"
+            "display_note": "1 pt/₹100 elsewhere",
+            "except_merchant_slugs": [],
+            "except_platform_slugs": []
           }
         ],
         "cap_rules": [
@@ -347,7 +378,9 @@
             "block_inr": null,
             "min_engine_version": 1,
             "source_local_id": "a-excl-fuel",
-            "display_note": "No points on fuel"
+            "display_note": "No points on fuel",
+            "except_merchant_slugs": [],
+            "except_platform_slugs": []
           },
           {
             "id": "a-app-10x",
@@ -374,7 +407,9 @@
             "block_inr": null,
             "min_engine_version": 2,
             "source_local_id": "a-app-10x",
-            "display_note": "10 pts/₹100 in the PhonePe app"
+            "display_note": "10 pts/₹100 in the PhonePe app",
+            "except_merchant_slugs": [],
+            "except_platform_slugs": []
           },
           {
             "id": "a-online-5x",
@@ -399,7 +434,9 @@
             "block_inr": null,
             "min_engine_version": 1,
             "source_local_id": "a-online-5x",
-            "display_note": "5 pts/₹100 online"
+            "display_note": "5 pts/₹100 online",
+            "except_merchant_slugs": [],
+            "except_platform_slugs": []
           },
           {
             "id": "a-base",
@@ -424,7 +461,9 @@
             "block_inr": null,
             "min_engine_version": 1,
             "source_local_id": "a-base",
-            "display_note": "1 pt/₹100 elsewhere"
+            "display_note": "1 pt/₹100 elsewhere",
+            "except_merchant_slugs": [],
+            "except_platform_slugs": []
           }
         ],
         "cap_rules": [
@@ -588,7 +627,9 @@
             "block_inr": null,
             "min_engine_version": 1,
             "source_local_id": "a-excl-fuel",
-            "display_note": "No points on fuel"
+            "display_note": "No points on fuel",
+            "except_merchant_slugs": [],
+            "except_platform_slugs": []
           },
           {
             "id": "a-app-10x",
@@ -615,7 +656,9 @@
             "block_inr": null,
             "min_engine_version": 2,
             "source_local_id": "a-app-10x",
-            "display_note": "10 pts/₹100 in the PhonePe app"
+            "display_note": "10 pts/₹100 in the PhonePe app",
+            "except_merchant_slugs": [],
+            "except_platform_slugs": []
           },
           {
             "id": "a-online-5x",
@@ -640,7 +683,9 @@
             "block_inr": null,
             "min_engine_version": 1,
             "source_local_id": "a-online-5x",
-            "display_note": "5 pts/₹100 online"
+            "display_note": "5 pts/₹100 online",
+            "except_merchant_slugs": [],
+            "except_platform_slugs": []
           },
           {
             "id": "a-base",
@@ -665,7 +710,9 @@
             "block_inr": null,
             "min_engine_version": 1,
             "source_local_id": "a-base",
-            "display_note": "1 pt/₹100 elsewhere"
+            "display_note": "1 pt/₹100 elsewhere",
+            "except_merchant_slugs": [],
+            "except_platform_slugs": []
           }
         ],
         "cap_rules": [
@@ -828,7 +875,9 @@
             "block_inr": null,
             "min_engine_version": 1,
             "source_local_id": "a-excl-fuel",
-            "display_note": "No points on fuel"
+            "display_note": "No points on fuel",
+            "except_merchant_slugs": [],
+            "except_platform_slugs": []
           },
           {
             "id": "a-app-10x",
@@ -855,7 +904,9 @@
             "block_inr": null,
             "min_engine_version": 2,
             "source_local_id": "a-app-10x",
-            "display_note": "10 pts/₹100 in the PhonePe app"
+            "display_note": "10 pts/₹100 in the PhonePe app",
+            "except_merchant_slugs": [],
+            "except_platform_slugs": []
           },
           {
             "id": "a-online-5x",
@@ -880,7 +931,9 @@
             "block_inr": null,
             "min_engine_version": 1,
             "source_local_id": "a-online-5x",
-            "display_note": "5 pts/₹100 online"
+            "display_note": "5 pts/₹100 online",
+            "except_merchant_slugs": [],
+            "except_platform_slugs": []
           },
           {
             "id": "a-base",
@@ -905,7 +958,9 @@
             "block_inr": null,
             "min_engine_version": 1,
             "source_local_id": "a-base",
-            "display_note": "1 pt/₹100 elsewhere"
+            "display_note": "1 pt/₹100 elsewhere",
+            "except_merchant_slugs": [],
+            "except_platform_slugs": []
           }
         ],
         "cap_rules": [
@@ -1067,7 +1122,9 @@
             "block_inr": null,
             "min_engine_version": 1,
             "source_local_id": "a-excl-fuel",
-            "display_note": "No points on fuel"
+            "display_note": "No points on fuel",
+            "except_merchant_slugs": [],
+            "except_platform_slugs": []
           },
           {
             "id": "a-app-10x",
@@ -1094,7 +1151,9 @@
             "block_inr": null,
             "min_engine_version": 2,
             "source_local_id": "a-app-10x",
-            "display_note": "10 pts/₹100 in the PhonePe app"
+            "display_note": "10 pts/₹100 in the PhonePe app",
+            "except_merchant_slugs": [],
+            "except_platform_slugs": []
           },
           {
             "id": "a-online-5x",
@@ -1119,7 +1178,9 @@
             "block_inr": null,
             "min_engine_version": 1,
             "source_local_id": "a-online-5x",
-            "display_note": "5 pts/₹100 online"
+            "display_note": "5 pts/₹100 online",
+            "except_merchant_slugs": [],
+            "except_platform_slugs": []
           },
           {
             "id": "a-base",
@@ -1144,7 +1205,9 @@
             "block_inr": null,
             "min_engine_version": 1,
             "source_local_id": "a-base",
-            "display_note": "1 pt/₹100 elsewhere"
+            "display_note": "1 pt/₹100 elsewhere",
+            "except_merchant_slugs": [],
+            "except_platform_slugs": []
           }
         ],
         "cap_rules": [
@@ -1308,7 +1371,9 @@
             "block_inr": null,
             "min_engine_version": 1,
             "source_local_id": "a-excl-fuel",
-            "display_note": "No points on fuel"
+            "display_note": "No points on fuel",
+            "except_merchant_slugs": [],
+            "except_platform_slugs": []
           },
           {
             "id": "a-app-10x",
@@ -1335,7 +1400,9 @@
             "block_inr": null,
             "min_engine_version": 2,
             "source_local_id": "a-app-10x",
-            "display_note": "10 pts/₹100 in the PhonePe app"
+            "display_note": "10 pts/₹100 in the PhonePe app",
+            "except_merchant_slugs": [],
+            "except_platform_slugs": []
           },
           {
             "id": "a-online-5x",
@@ -1360,7 +1427,9 @@
             "block_inr": null,
             "min_engine_version": 1,
             "source_local_id": "a-online-5x",
-            "display_note": "5 pts/₹100 online"
+            "display_note": "5 pts/₹100 online",
+            "except_merchant_slugs": [],
+            "except_platform_slugs": []
           },
           {
             "id": "a-base",
@@ -1385,7 +1454,9 @@
             "block_inr": null,
             "min_engine_version": 1,
             "source_local_id": "a-base",
-            "display_note": "1 pt/₹100 elsewhere"
+            "display_note": "1 pt/₹100 elsewhere",
+            "except_merchant_slugs": [],
+            "except_platform_slugs": []
           }
         ],
         "cap_rules": [
@@ -1544,7 +1615,9 @@
             "block_inr": null,
             "min_engine_version": 1,
             "source_local_id": "a-excl-fuel",
-            "display_note": "No points on fuel"
+            "display_note": "No points on fuel",
+            "except_merchant_slugs": [],
+            "except_platform_slugs": []
           },
           {
             "id": "a-app-10x",
@@ -1571,7 +1644,9 @@
             "block_inr": null,
             "min_engine_version": 2,
             "source_local_id": "a-app-10x",
-            "display_note": "10 pts/₹100 in the PhonePe app"
+            "display_note": "10 pts/₹100 in the PhonePe app",
+            "except_merchant_slugs": [],
+            "except_platform_slugs": []
           },
           {
             "id": "a-online-5x",
@@ -1596,7 +1671,9 @@
             "block_inr": null,
             "min_engine_version": 1,
             "source_local_id": "a-online-5x",
-            "display_note": "5 pts/₹100 online"
+            "display_note": "5 pts/₹100 online",
+            "except_merchant_slugs": [],
+            "except_platform_slugs": []
           },
           {
             "id": "a-base",
@@ -1621,7 +1698,9 @@
             "block_inr": null,
             "min_engine_version": 1,
             "source_local_id": "a-base",
-            "display_note": "1 pt/₹100 elsewhere"
+            "display_note": "1 pt/₹100 elsewhere",
+            "except_merchant_slugs": [],
+            "except_platform_slugs": []
           }
         ],
         "cap_rules": [
@@ -1782,7 +1861,9 @@
             "block_inr": null,
             "min_engine_version": 1,
             "source_local_id": "b-excl-rent",
-            "display_note": "No cashback on rent"
+            "display_note": "No cashback on rent",
+            "except_merchant_slugs": [],
+            "except_platform_slugs": []
           },
           {
             "id": "b-swiggy",
@@ -1809,7 +1890,9 @@
             "block_inr": null,
             "min_engine_version": 1,
             "source_local_id": "b-swiggy",
-            "display_note": "10% on Swiggy (min ₹249)"
+            "display_note": "10% on Swiggy (min ₹249)",
+            "except_merchant_slugs": [],
+            "except_platform_slugs": []
           },
           {
             "id": "b-online",
@@ -1834,7 +1917,9 @@
             "block_inr": null,
             "min_engine_version": 1,
             "source_local_id": "b-online",
-            "display_note": "5% online"
+            "display_note": "5% online",
+            "except_merchant_slugs": [],
+            "except_platform_slugs": []
           },
           {
             "id": "b-base",
@@ -1859,7 +1944,9 @@
             "block_inr": null,
             "min_engine_version": 1,
             "source_local_id": "b-base",
-            "display_note": "1% elsewhere"
+            "display_note": "1% elsewhere",
+            "except_merchant_slugs": [],
+            "except_platform_slugs": []
           }
         ],
         "cap_rules": [
@@ -2022,7 +2109,9 @@
             "block_inr": null,
             "min_engine_version": 1,
             "source_local_id": "b-excl-rent",
-            "display_note": "No cashback on rent"
+            "display_note": "No cashback on rent",
+            "except_merchant_slugs": [],
+            "except_platform_slugs": []
           },
           {
             "id": "b-swiggy",
@@ -2049,7 +2138,9 @@
             "block_inr": null,
             "min_engine_version": 1,
             "source_local_id": "b-swiggy",
-            "display_note": "10% on Swiggy (min ₹249)"
+            "display_note": "10% on Swiggy (min ₹249)",
+            "except_merchant_slugs": [],
+            "except_platform_slugs": []
           },
           {
             "id": "b-online",
@@ -2074,7 +2165,9 @@
             "block_inr": null,
             "min_engine_version": 1,
             "source_local_id": "b-online",
-            "display_note": "5% online"
+            "display_note": "5% online",
+            "except_merchant_slugs": [],
+            "except_platform_slugs": []
           },
           {
             "id": "b-base",
@@ -2099,7 +2192,9 @@
             "block_inr": null,
             "min_engine_version": 1,
             "source_local_id": "b-base",
-            "display_note": "1% elsewhere"
+            "display_note": "1% elsewhere",
+            "except_merchant_slugs": [],
+            "except_platform_slugs": []
           }
         ],
         "cap_rules": [
@@ -2262,7 +2357,9 @@
             "block_inr": null,
             "min_engine_version": 1,
             "source_local_id": "b-excl-rent",
-            "display_note": "No cashback on rent"
+            "display_note": "No cashback on rent",
+            "except_merchant_slugs": [],
+            "except_platform_slugs": []
           },
           {
             "id": "b-swiggy",
@@ -2289,7 +2386,9 @@
             "block_inr": null,
             "min_engine_version": 1,
             "source_local_id": "b-swiggy",
-            "display_note": "10% on Swiggy (min ₹249)"
+            "display_note": "10% on Swiggy (min ₹249)",
+            "except_merchant_slugs": [],
+            "except_platform_slugs": []
           },
           {
             "id": "b-online",
@@ -2314,7 +2413,9 @@
             "block_inr": null,
             "min_engine_version": 1,
             "source_local_id": "b-online",
-            "display_note": "5% online"
+            "display_note": "5% online",
+            "except_merchant_slugs": [],
+            "except_platform_slugs": []
           },
           {
             "id": "b-base",
@@ -2339,7 +2440,9 @@
             "block_inr": null,
             "min_engine_version": 1,
             "source_local_id": "b-base",
-            "display_note": "1% elsewhere"
+            "display_note": "1% elsewhere",
+            "except_merchant_slugs": [],
+            "except_platform_slugs": []
           }
         ],
         "cap_rules": [
@@ -2504,7 +2607,9 @@
             "block_inr": null,
             "min_engine_version": 1,
             "source_local_id": "b-excl-rent",
-            "display_note": "No cashback on rent"
+            "display_note": "No cashback on rent",
+            "except_merchant_slugs": [],
+            "except_platform_slugs": []
           },
           {
             "id": "b-swiggy",
@@ -2531,7 +2636,9 @@
             "block_inr": null,
             "min_engine_version": 1,
             "source_local_id": "b-swiggy",
-            "display_note": "10% on Swiggy (min ₹249)"
+            "display_note": "10% on Swiggy (min ₹249)",
+            "except_merchant_slugs": [],
+            "except_platform_slugs": []
           },
           {
             "id": "b-online",
@@ -2556,7 +2663,9 @@
             "block_inr": null,
             "min_engine_version": 1,
             "source_local_id": "b-online",
-            "display_note": "5% online"
+            "display_note": "5% online",
+            "except_merchant_slugs": [],
+            "except_platform_slugs": []
           },
           {
             "id": "b-base",
@@ -2581,7 +2690,9 @@
             "block_inr": null,
             "min_engine_version": 1,
             "source_local_id": "b-base",
-            "display_note": "1% elsewhere"
+            "display_note": "1% elsewhere",
+            "except_merchant_slugs": [],
+            "except_platform_slugs": []
           }
         ],
         "cap_rules": [
@@ -2744,7 +2855,9 @@
             "block_inr": null,
             "min_engine_version": 1,
             "source_local_id": "b-excl-rent",
-            "display_note": "No cashback on rent"
+            "display_note": "No cashback on rent",
+            "except_merchant_slugs": [],
+            "except_platform_slugs": []
           },
           {
             "id": "b-swiggy",
@@ -2771,7 +2884,9 @@
             "block_inr": null,
             "min_engine_version": 1,
             "source_local_id": "b-swiggy",
-            "display_note": "10% on Swiggy (min ₹249)"
+            "display_note": "10% on Swiggy (min ₹249)",
+            "except_merchant_slugs": [],
+            "except_platform_slugs": []
           },
           {
             "id": "b-online",
@@ -2796,7 +2911,9 @@
             "block_inr": null,
             "min_engine_version": 1,
             "source_local_id": "b-online",
-            "display_note": "5% online"
+            "display_note": "5% online",
+            "except_merchant_slugs": [],
+            "except_platform_slugs": []
           },
           {
             "id": "b-base",
@@ -2821,7 +2938,9 @@
             "block_inr": null,
             "min_engine_version": 1,
             "source_local_id": "b-base",
-            "display_note": "1% elsewhere"
+            "display_note": "1% elsewhere",
+            "except_merchant_slugs": [],
+            "except_platform_slugs": []
           }
         ],
         "cap_rules": [
@@ -2982,7 +3101,9 @@
             "block_inr": null,
             "min_engine_version": 1,
             "source_local_id": "b-excl-rent",
-            "display_note": "No cashback on rent"
+            "display_note": "No cashback on rent",
+            "except_merchant_slugs": [],
+            "except_platform_slugs": []
           },
           {
             "id": "b-swiggy",
@@ -3009,7 +3130,9 @@
             "block_inr": null,
             "min_engine_version": 1,
             "source_local_id": "b-swiggy",
-            "display_note": "10% on Swiggy (min ₹249)"
+            "display_note": "10% on Swiggy (min ₹249)",
+            "except_merchant_slugs": [],
+            "except_platform_slugs": []
           },
           {
             "id": "b-online",
@@ -3034,7 +3157,9 @@
             "block_inr": null,
             "min_engine_version": 1,
             "source_local_id": "b-online",
-            "display_note": "5% online"
+            "display_note": "5% online",
+            "except_merchant_slugs": [],
+            "except_platform_slugs": []
           },
           {
             "id": "b-base",
@@ -3059,7 +3184,9 @@
             "block_inr": null,
             "min_engine_version": 1,
             "source_local_id": "b-base",
-            "display_note": "1% elsewhere"
+            "display_note": "1% elsewhere",
+            "except_merchant_slugs": [],
+            "except_platform_slugs": []
           }
         ],
         "cap_rules": [
@@ -3222,7 +3349,9 @@
             "block_inr": null,
             "min_engine_version": 1,
             "source_local_id": "b-excl-rent",
-            "display_note": "No cashback on rent"
+            "display_note": "No cashback on rent",
+            "except_merchant_slugs": [],
+            "except_platform_slugs": []
           },
           {
             "id": "b-swiggy",
@@ -3249,7 +3378,9 @@
             "block_inr": null,
             "min_engine_version": 1,
             "source_local_id": "b-swiggy",
-            "display_note": "10% on Swiggy (min ₹249)"
+            "display_note": "10% on Swiggy (min ₹249)",
+            "except_merchant_slugs": [],
+            "except_platform_slugs": []
           },
           {
             "id": "b-online",
@@ -3274,7 +3405,9 @@
             "block_inr": null,
             "min_engine_version": 1,
             "source_local_id": "b-online",
-            "display_note": "5% online"
+            "display_note": "5% online",
+            "except_merchant_slugs": [],
+            "except_platform_slugs": []
           },
           {
             "id": "b-base",
@@ -3299,7 +3432,9 @@
             "block_inr": null,
             "min_engine_version": 1,
             "source_local_id": "b-base",
-            "display_note": "1% elsewhere"
+            "display_note": "1% elsewhere",
+            "except_merchant_slugs": [],
+            "except_platform_slugs": []
           }
         ],
         "cap_rules": [
@@ -3462,7 +3597,9 @@
             "block_inr": null,
             "min_engine_version": 1,
             "source_local_id": "c-grocery",
-            "display_note": "5% on groceries"
+            "display_note": "5% on groceries",
+            "except_merchant_slugs": [],
+            "except_platform_slugs": []
           },
           {
             "id": "c-base",
@@ -3487,7 +3624,9 @@
             "block_inr": null,
             "min_engine_version": 1,
             "source_local_id": "c-base",
-            "display_note": "1% elsewhere"
+            "display_note": "1% elsewhere",
+            "except_merchant_slugs": [],
+            "except_platform_slugs": []
           }
         ],
         "cap_rules": [
@@ -3604,7 +3743,9 @@
             "block_inr": null,
             "min_engine_version": 1,
             "source_local_id": "c-grocery",
-            "display_note": "5% on groceries"
+            "display_note": "5% on groceries",
+            "except_merchant_slugs": [],
+            "except_platform_slugs": []
           },
           {
             "id": "c-base",
@@ -3629,7 +3770,9 @@
             "block_inr": null,
             "min_engine_version": 1,
             "source_local_id": "c-base",
-            "display_note": "1% elsewhere"
+            "display_note": "1% elsewhere",
+            "except_merchant_slugs": [],
+            "except_platform_slugs": []
           }
         ],
         "cap_rules": [
@@ -3746,7 +3889,9 @@
             "block_inr": null,
             "min_engine_version": 1,
             "source_local_id": "c-grocery",
-            "display_note": "5% on groceries"
+            "display_note": "5% on groceries",
+            "except_merchant_slugs": [],
+            "except_platform_slugs": []
           },
           {
             "id": "c-base",
@@ -3771,7 +3916,9 @@
             "block_inr": null,
             "min_engine_version": 1,
             "source_local_id": "c-base",
-            "display_note": "1% elsewhere"
+            "display_note": "1% elsewhere",
+            "except_merchant_slugs": [],
+            "except_platform_slugs": []
           }
         ],
         "cap_rules": [
@@ -3886,7 +4033,9 @@
             "block_inr": null,
             "min_engine_version": 1,
             "source_local_id": "t-base",
-            "display_note": "1.5 pts/₹100, rounded to whole points"
+            "display_note": "1.5 pts/₹100, rounded to whole points",
+            "except_merchant_slugs": [],
+            "except_platform_slugs": []
           }
         ],
         "cap_rules": [],
@@ -3974,7 +4123,9 @@
             "block_inr": null,
             "min_engine_version": 1,
             "source_local_id": "t-base",
-            "display_note": "1.5 pts/₹100, rounded to whole points"
+            "display_note": "1.5 pts/₹100, rounded to whole points",
+            "except_merchant_slugs": [],
+            "except_platform_slugs": []
           }
         ],
         "cap_rules": [],
@@ -4062,7 +4213,9 @@
             "block_inr": null,
             "min_engine_version": 1,
             "source_local_id": "t-base",
-            "display_note": "1.5 pts/₹100, rounded to whole points"
+            "display_note": "1.5 pts/₹100, rounded to whole points",
+            "except_merchant_slugs": [],
+            "except_platform_slugs": []
           }
         ],
         "cap_rules": [],
@@ -4150,7 +4303,9 @@
             "block_inr": null,
             "min_engine_version": 1,
             "source_local_id": null,
-            "display_note": null
+            "display_note": null,
+            "except_merchant_slugs": [],
+            "except_platform_slugs": []
           }
         ],
         "cap_rules": [],
@@ -4243,7 +4398,9 @@
             "block_inr": null,
             "min_engine_version": 1,
             "source_local_id": "b-excl-rent",
-            "display_note": "No cashback on rent"
+            "display_note": "No cashback on rent",
+            "except_merchant_slugs": [],
+            "except_platform_slugs": []
           },
           {
             "id": "b-swiggy",
@@ -4270,7 +4427,9 @@
             "block_inr": null,
             "min_engine_version": 1,
             "source_local_id": "b-swiggy",
-            "display_note": "10% on Swiggy (min ₹249)"
+            "display_note": "10% on Swiggy (min ₹249)",
+            "except_merchant_slugs": [],
+            "except_platform_slugs": []
           },
           {
             "id": "b-online",
@@ -4295,7 +4454,9 @@
             "block_inr": null,
             "min_engine_version": 1,
             "source_local_id": "b-online",
-            "display_note": "5% online"
+            "display_note": "5% online",
+            "except_merchant_slugs": [],
+            "except_platform_slugs": []
           },
           {
             "id": "b-base",
@@ -4320,7 +4481,9 @@
             "block_inr": null,
             "min_engine_version": 1,
             "source_local_id": "b-base",
-            "display_note": "1% elsewhere"
+            "display_note": "1% elsewhere",
+            "except_merchant_slugs": [],
+            "except_platform_slugs": []
           }
         ],
         "cap_rules": [
@@ -4483,7 +4646,9 @@
             "block_inr": null,
             "min_engine_version": 1,
             "source_local_id": "low",
-            "display_note": "1 pt/₹100 on utilities"
+            "display_note": "1 pt/₹100 on utilities",
+            "except_merchant_slugs": [],
+            "except_platform_slugs": []
           },
           {
             "id": "s-base",
@@ -4508,7 +4673,9 @@
             "block_inr": null,
             "min_engine_version": 1,
             "source_local_id": "s-base",
-            "display_note": "2 pts/₹100 elsewhere"
+            "display_note": "2 pts/₹100 elsewhere",
+            "except_merchant_slugs": [],
+            "except_platform_slugs": []
           }
         ],
         "cap_rules": [],
@@ -4532,6 +4699,1002 @@
         "cashback_inr": null,
         "value_inr": 2.5,
         "rule_id": "low",
+        "excluded": false,
+        "cap_deltas": {}
+      }
+    },
+    {
+      "name": "X1 exclusion exception: known excepted merchant earns",
+      "why": "Fuel is excluded except at IndianOil; 'INDIAN OIL' resolves, so the IndianOil 4% rule applies (D16a).",
+      "card": {
+        "id": "contract-except-merchant-card",
+        "slug": "contract-except-merchant-card",
+        "name": "Contract Fuel-Except-Merchant Card",
+        "network": "visa",
+        "card_type": "credit",
+        "data_version": 1,
+        "verified_at": "2026-11-05T00:00:00Z",
+        "annual_fee_inr": 0,
+        "joining_fee_inr": 0,
+        "is_upi_linkable": false,
+        "art_asset": null,
+        "art_primary_color": null,
+        "point_value_inr": 0,
+        "issuer_slug": "contract-bank",
+        "issuer_name": "Contract Bank",
+        "base_reward_unit": "cashback_percent",
+        "base_reward_rate": 1.5,
+        "has_apply_url": false,
+        "excluded_categories": [],
+        "network_variants": [],
+        "forex": null,
+        "fuel": null,
+        "milestone_rules": [],
+        "fee_waiver_rules": [],
+        "benefits": [],
+        "unlock_rules": [],
+        "redemption_options": [],
+        "accrual_block_inr": null,
+        "accrual_rounding": null,
+        "points_expiry_months": null,
+        "model_status": "verified",
+        "model_coverage": {},
+        "reward_rules": [
+          {
+            "id": "x-excl-fuel",
+            "category_id": "cat-fuel",
+            "merchant_pattern": null,
+            "rail": null,
+            "unit": "cashback_percent",
+            "rate": 0,
+            "min_txn_inr": null,
+            "max_txn_inr": null,
+            "priority": 1,
+            "conditions": {},
+            "notes": null,
+            "effective_from": null,
+            "effective_to": null,
+            "excluded_categories": [],
+            "rule_role": "exclusion",
+            "merchant_slugs": [],
+            "platform_slugs": [],
+            "mcc_include": [],
+            "mcc_exclude": [],
+            "block_inr": null,
+            "min_engine_version": 1,
+            "source_local_id": "x-excl-fuel",
+            "display_note": "No cashback on fuel except at IndianOil",
+            "except_merchant_slugs": [
+              "indianoil"
+            ],
+            "except_platform_slugs": []
+          },
+          {
+            "id": "x-iocl",
+            "category_id": "cat-fuel",
+            "merchant_pattern": null,
+            "rail": null,
+            "unit": "cashback_percent",
+            "rate": 4,
+            "min_txn_inr": null,
+            "max_txn_inr": null,
+            "priority": 10,
+            "conditions": {},
+            "notes": null,
+            "effective_from": null,
+            "effective_to": null,
+            "excluded_categories": [],
+            "rule_role": "earn",
+            "merchant_slugs": [
+              "indianoil"
+            ],
+            "platform_slugs": [],
+            "mcc_include": [],
+            "mcc_exclude": [],
+            "block_inr": null,
+            "min_engine_version": 1,
+            "source_local_id": "x-iocl",
+            "display_note": "4% at IndianOil",
+            "except_merchant_slugs": [],
+            "except_platform_slugs": []
+          },
+          {
+            "id": "x-base",
+            "category_id": null,
+            "merchant_pattern": null,
+            "rail": null,
+            "unit": "cashback_percent",
+            "rate": 1.5,
+            "min_txn_inr": null,
+            "max_txn_inr": null,
+            "priority": 30,
+            "conditions": {},
+            "notes": null,
+            "effective_from": null,
+            "effective_to": null,
+            "excluded_categories": [],
+            "rule_role": "base",
+            "merchant_slugs": [],
+            "platform_slugs": [],
+            "mcc_include": [],
+            "mcc_exclude": [],
+            "block_inr": null,
+            "min_engine_version": 1,
+            "source_local_id": "x-base",
+            "display_note": "1.5% elsewhere",
+            "except_merchant_slugs": [],
+            "except_platform_slugs": []
+          }
+        ],
+        "cap_rules": [],
+        "cashback_rounding": null
+      },
+      "ctx": {
+        "amount": 2000,
+        "category_id": "cat-fuel",
+        "category_slug": "fuel",
+        "mcc": null,
+        "merchant_name": "INDIAN OIL PETROL PUMP",
+        "merchant_vpa": null,
+        "merchant_slug": null,
+        "platform": null,
+        "rail": "swipe",
+        "occurred": "2026-11-10T10:00:00+05:30"
+      },
+      "cap_consumed_before": {},
+      "expect": {
+        "points": null,
+        "cashback_inr": 80.0,
+        "value_inr": 80.0,
+        "rule_id": "x-iocl",
+        "excluded": false,
+        "cap_deltas": {}
+      }
+    },
+    {
+      "name": "X2 exclusion exception: unknown merchant stays excluded",
+      "why": "An unknown fuel merchant can't prove the exception, so the exclusion applies (D16a).",
+      "card": {
+        "id": "contract-except-merchant-card",
+        "slug": "contract-except-merchant-card",
+        "name": "Contract Fuel-Except-Merchant Card",
+        "network": "visa",
+        "card_type": "credit",
+        "data_version": 1,
+        "verified_at": "2026-11-05T00:00:00Z",
+        "annual_fee_inr": 0,
+        "joining_fee_inr": 0,
+        "is_upi_linkable": false,
+        "art_asset": null,
+        "art_primary_color": null,
+        "point_value_inr": 0,
+        "issuer_slug": "contract-bank",
+        "issuer_name": "Contract Bank",
+        "base_reward_unit": "cashback_percent",
+        "base_reward_rate": 1.5,
+        "has_apply_url": false,
+        "excluded_categories": [],
+        "network_variants": [],
+        "forex": null,
+        "fuel": null,
+        "milestone_rules": [],
+        "fee_waiver_rules": [],
+        "benefits": [],
+        "unlock_rules": [],
+        "redemption_options": [],
+        "accrual_block_inr": null,
+        "accrual_rounding": null,
+        "points_expiry_months": null,
+        "model_status": "verified",
+        "model_coverage": {},
+        "reward_rules": [
+          {
+            "id": "x-excl-fuel",
+            "category_id": "cat-fuel",
+            "merchant_pattern": null,
+            "rail": null,
+            "unit": "cashback_percent",
+            "rate": 0,
+            "min_txn_inr": null,
+            "max_txn_inr": null,
+            "priority": 1,
+            "conditions": {},
+            "notes": null,
+            "effective_from": null,
+            "effective_to": null,
+            "excluded_categories": [],
+            "rule_role": "exclusion",
+            "merchant_slugs": [],
+            "platform_slugs": [],
+            "mcc_include": [],
+            "mcc_exclude": [],
+            "block_inr": null,
+            "min_engine_version": 1,
+            "source_local_id": "x-excl-fuel",
+            "display_note": "No cashback on fuel except at IndianOil",
+            "except_merchant_slugs": [
+              "indianoil"
+            ],
+            "except_platform_slugs": []
+          },
+          {
+            "id": "x-iocl",
+            "category_id": "cat-fuel",
+            "merchant_pattern": null,
+            "rail": null,
+            "unit": "cashback_percent",
+            "rate": 4,
+            "min_txn_inr": null,
+            "max_txn_inr": null,
+            "priority": 10,
+            "conditions": {},
+            "notes": null,
+            "effective_from": null,
+            "effective_to": null,
+            "excluded_categories": [],
+            "rule_role": "earn",
+            "merchant_slugs": [
+              "indianoil"
+            ],
+            "platform_slugs": [],
+            "mcc_include": [],
+            "mcc_exclude": [],
+            "block_inr": null,
+            "min_engine_version": 1,
+            "source_local_id": "x-iocl",
+            "display_note": "4% at IndianOil",
+            "except_merchant_slugs": [],
+            "except_platform_slugs": []
+          },
+          {
+            "id": "x-base",
+            "category_id": null,
+            "merchant_pattern": null,
+            "rail": null,
+            "unit": "cashback_percent",
+            "rate": 1.5,
+            "min_txn_inr": null,
+            "max_txn_inr": null,
+            "priority": 30,
+            "conditions": {},
+            "notes": null,
+            "effective_from": null,
+            "effective_to": null,
+            "excluded_categories": [],
+            "rule_role": "base",
+            "merchant_slugs": [],
+            "platform_slugs": [],
+            "mcc_include": [],
+            "mcc_exclude": [],
+            "block_inr": null,
+            "min_engine_version": 1,
+            "source_local_id": "x-base",
+            "display_note": "1.5% elsewhere",
+            "except_merchant_slugs": [],
+            "except_platform_slugs": []
+          }
+        ],
+        "cap_rules": [],
+        "cashback_rounding": null
+      },
+      "ctx": {
+        "amount": 2000,
+        "category_id": "cat-fuel",
+        "category_slug": "fuel",
+        "mcc": null,
+        "merchant_name": "HP PETROL PUMP",
+        "merchant_vpa": null,
+        "merchant_slug": null,
+        "platform": null,
+        "rail": "swipe",
+        "occurred": "2026-11-10T10:00:00+05:30"
+      },
+      "cap_consumed_before": {},
+      "expect": {
+        "points": null,
+        "cashback_inr": 0.0,
+        "value_inr": 0.0,
+        "rule_id": "x-excl-fuel",
+        "excluded": true,
+        "cap_deltas": {}
+      }
+    },
+    {
+      "name": "Y1 platform exception: bills via Google Pay earn",
+      "why": "Bills are excluded unless paid via Google Pay; platform google_pay -> 5% (D16a).",
+      "card": {
+        "id": "contract-except-platform-card",
+        "slug": "contract-except-platform-card",
+        "name": "Contract Bills-Except-Platform Card",
+        "network": "visa",
+        "card_type": "credit",
+        "data_version": 1,
+        "verified_at": "2026-11-05T00:00:00Z",
+        "annual_fee_inr": 0,
+        "joining_fee_inr": 0,
+        "is_upi_linkable": false,
+        "art_asset": null,
+        "art_primary_color": null,
+        "point_value_inr": 0,
+        "issuer_slug": "contract-bank",
+        "issuer_name": "Contract Bank",
+        "base_reward_unit": "cashback_percent",
+        "base_reward_rate": 1.5,
+        "has_apply_url": false,
+        "excluded_categories": [],
+        "network_variants": [],
+        "forex": null,
+        "fuel": null,
+        "milestone_rules": [],
+        "fee_waiver_rules": [],
+        "benefits": [],
+        "unlock_rules": [],
+        "redemption_options": [],
+        "accrual_block_inr": null,
+        "accrual_rounding": null,
+        "points_expiry_months": null,
+        "model_status": "verified",
+        "model_coverage": {},
+        "reward_rules": [
+          {
+            "id": "y-excl-bills",
+            "category_id": "cat-bills",
+            "merchant_pattern": null,
+            "rail": null,
+            "unit": "cashback_percent",
+            "rate": 0,
+            "min_txn_inr": null,
+            "max_txn_inr": null,
+            "priority": 1,
+            "conditions": {},
+            "notes": null,
+            "effective_from": null,
+            "effective_to": null,
+            "excluded_categories": [],
+            "rule_role": "exclusion",
+            "merchant_slugs": [],
+            "platform_slugs": [],
+            "mcc_include": [],
+            "mcc_exclude": [],
+            "block_inr": null,
+            "min_engine_version": 1,
+            "source_local_id": "y-excl-bills",
+            "display_note": "No cashback on bills unless paid via Google Pay",
+            "except_merchant_slugs": [],
+            "except_platform_slugs": [
+              "google_pay"
+            ]
+          },
+          {
+            "id": "y-min100",
+            "category_id": null,
+            "merchant_pattern": null,
+            "rail": null,
+            "unit": "cashback_percent",
+            "rate": 0,
+            "min_txn_inr": null,
+            "max_txn_inr": 100,
+            "priority": 2,
+            "conditions": {},
+            "notes": null,
+            "effective_from": null,
+            "effective_to": null,
+            "excluded_categories": [],
+            "rule_role": "exclusion",
+            "merchant_slugs": [],
+            "platform_slugs": [],
+            "mcc_include": [],
+            "mcc_exclude": [],
+            "block_inr": null,
+            "min_engine_version": 2,
+            "source_local_id": "y-min100",
+            "display_note": "No cashback below ₹100",
+            "except_merchant_slugs": [],
+            "except_platform_slugs": []
+          },
+          {
+            "id": "y-gpay",
+            "category_id": "cat-bills",
+            "merchant_pattern": null,
+            "rail": null,
+            "unit": "cashback_percent",
+            "rate": 5,
+            "min_txn_inr": null,
+            "max_txn_inr": null,
+            "priority": 10,
+            "conditions": {},
+            "notes": null,
+            "effective_from": null,
+            "effective_to": null,
+            "excluded_categories": [],
+            "rule_role": "earn",
+            "merchant_slugs": [],
+            "platform_slugs": [
+              "google_pay"
+            ],
+            "mcc_include": [],
+            "mcc_exclude": [],
+            "block_inr": null,
+            "min_engine_version": 2,
+            "source_local_id": "y-gpay",
+            "display_note": "5% on bills via Google Pay",
+            "except_merchant_slugs": [],
+            "except_platform_slugs": []
+          },
+          {
+            "id": "y-base",
+            "category_id": null,
+            "merchant_pattern": null,
+            "rail": null,
+            "unit": "cashback_percent",
+            "rate": 1.5,
+            "min_txn_inr": null,
+            "max_txn_inr": null,
+            "priority": 30,
+            "conditions": {},
+            "notes": null,
+            "effective_from": null,
+            "effective_to": null,
+            "excluded_categories": [],
+            "rule_role": "base",
+            "merchant_slugs": [],
+            "platform_slugs": [],
+            "mcc_include": [],
+            "mcc_exclude": [],
+            "block_inr": null,
+            "min_engine_version": 1,
+            "source_local_id": "y-base",
+            "display_note": "1.5% elsewhere",
+            "except_merchant_slugs": [],
+            "except_platform_slugs": []
+          }
+        ],
+        "cap_rules": [],
+        "cashback_rounding": null
+      },
+      "ctx": {
+        "amount": 1000,
+        "category_id": "cat-bills",
+        "category_slug": "bills",
+        "mcc": null,
+        "merchant_name": "Electricity board",
+        "merchant_vpa": null,
+        "merchant_slug": null,
+        "platform": "google_pay",
+        "rail": "unknown",
+        "occurred": "2026-11-10T10:00:00+05:30"
+      },
+      "cap_consumed_before": {},
+      "expect": {
+        "points": null,
+        "cashback_inr": 50.0,
+        "value_inr": 50.0,
+        "rule_id": "y-gpay",
+        "excluded": false,
+        "cap_deltas": {}
+      }
+    },
+    {
+      "name": "Y2 platform exception: unknown platform stays excluded",
+      "why": "Platform unknown, so the bills exclusion applies (D16a).",
+      "card": {
+        "id": "contract-except-platform-card",
+        "slug": "contract-except-platform-card",
+        "name": "Contract Bills-Except-Platform Card",
+        "network": "visa",
+        "card_type": "credit",
+        "data_version": 1,
+        "verified_at": "2026-11-05T00:00:00Z",
+        "annual_fee_inr": 0,
+        "joining_fee_inr": 0,
+        "is_upi_linkable": false,
+        "art_asset": null,
+        "art_primary_color": null,
+        "point_value_inr": 0,
+        "issuer_slug": "contract-bank",
+        "issuer_name": "Contract Bank",
+        "base_reward_unit": "cashback_percent",
+        "base_reward_rate": 1.5,
+        "has_apply_url": false,
+        "excluded_categories": [],
+        "network_variants": [],
+        "forex": null,
+        "fuel": null,
+        "milestone_rules": [],
+        "fee_waiver_rules": [],
+        "benefits": [],
+        "unlock_rules": [],
+        "redemption_options": [],
+        "accrual_block_inr": null,
+        "accrual_rounding": null,
+        "points_expiry_months": null,
+        "model_status": "verified",
+        "model_coverage": {},
+        "reward_rules": [
+          {
+            "id": "y-excl-bills",
+            "category_id": "cat-bills",
+            "merchant_pattern": null,
+            "rail": null,
+            "unit": "cashback_percent",
+            "rate": 0,
+            "min_txn_inr": null,
+            "max_txn_inr": null,
+            "priority": 1,
+            "conditions": {},
+            "notes": null,
+            "effective_from": null,
+            "effective_to": null,
+            "excluded_categories": [],
+            "rule_role": "exclusion",
+            "merchant_slugs": [],
+            "platform_slugs": [],
+            "mcc_include": [],
+            "mcc_exclude": [],
+            "block_inr": null,
+            "min_engine_version": 1,
+            "source_local_id": "y-excl-bills",
+            "display_note": "No cashback on bills unless paid via Google Pay",
+            "except_merchant_slugs": [],
+            "except_platform_slugs": [
+              "google_pay"
+            ]
+          },
+          {
+            "id": "y-min100",
+            "category_id": null,
+            "merchant_pattern": null,
+            "rail": null,
+            "unit": "cashback_percent",
+            "rate": 0,
+            "min_txn_inr": null,
+            "max_txn_inr": 100,
+            "priority": 2,
+            "conditions": {},
+            "notes": null,
+            "effective_from": null,
+            "effective_to": null,
+            "excluded_categories": [],
+            "rule_role": "exclusion",
+            "merchant_slugs": [],
+            "platform_slugs": [],
+            "mcc_include": [],
+            "mcc_exclude": [],
+            "block_inr": null,
+            "min_engine_version": 2,
+            "source_local_id": "y-min100",
+            "display_note": "No cashback below ₹100",
+            "except_merchant_slugs": [],
+            "except_platform_slugs": []
+          },
+          {
+            "id": "y-gpay",
+            "category_id": "cat-bills",
+            "merchant_pattern": null,
+            "rail": null,
+            "unit": "cashback_percent",
+            "rate": 5,
+            "min_txn_inr": null,
+            "max_txn_inr": null,
+            "priority": 10,
+            "conditions": {},
+            "notes": null,
+            "effective_from": null,
+            "effective_to": null,
+            "excluded_categories": [],
+            "rule_role": "earn",
+            "merchant_slugs": [],
+            "platform_slugs": [
+              "google_pay"
+            ],
+            "mcc_include": [],
+            "mcc_exclude": [],
+            "block_inr": null,
+            "min_engine_version": 2,
+            "source_local_id": "y-gpay",
+            "display_note": "5% on bills via Google Pay",
+            "except_merchant_slugs": [],
+            "except_platform_slugs": []
+          },
+          {
+            "id": "y-base",
+            "category_id": null,
+            "merchant_pattern": null,
+            "rail": null,
+            "unit": "cashback_percent",
+            "rate": 1.5,
+            "min_txn_inr": null,
+            "max_txn_inr": null,
+            "priority": 30,
+            "conditions": {},
+            "notes": null,
+            "effective_from": null,
+            "effective_to": null,
+            "excluded_categories": [],
+            "rule_role": "base",
+            "merchant_slugs": [],
+            "platform_slugs": [],
+            "mcc_include": [],
+            "mcc_exclude": [],
+            "block_inr": null,
+            "min_engine_version": 1,
+            "source_local_id": "y-base",
+            "display_note": "1.5% elsewhere",
+            "except_merchant_slugs": [],
+            "except_platform_slugs": []
+          }
+        ],
+        "cap_rules": [],
+        "cashback_rounding": null
+      },
+      "ctx": {
+        "amount": 1000,
+        "category_id": "cat-bills",
+        "category_slug": "bills",
+        "mcc": null,
+        "merchant_name": "Electricity board",
+        "merchant_vpa": null,
+        "merchant_slug": null,
+        "platform": null,
+        "rail": "unknown",
+        "occurred": "2026-11-10T10:00:00+05:30"
+      },
+      "cap_consumed_before": {},
+      "expect": {
+        "points": null,
+        "cashback_inr": 0.0,
+        "value_inr": 0.0,
+        "rule_id": "y-excl-bills",
+        "excluded": true,
+        "cap_deltas": {}
+      }
+    },
+    {
+      "name": "Y3 minimum amount exclusion",
+      "why": "Purchases below ₹100 earn nothing: an exclusion's max_txn_inr means 'applies when amount < max' (D16b).",
+      "card": {
+        "id": "contract-except-platform-card",
+        "slug": "contract-except-platform-card",
+        "name": "Contract Bills-Except-Platform Card",
+        "network": "visa",
+        "card_type": "credit",
+        "data_version": 1,
+        "verified_at": "2026-11-05T00:00:00Z",
+        "annual_fee_inr": 0,
+        "joining_fee_inr": 0,
+        "is_upi_linkable": false,
+        "art_asset": null,
+        "art_primary_color": null,
+        "point_value_inr": 0,
+        "issuer_slug": "contract-bank",
+        "issuer_name": "Contract Bank",
+        "base_reward_unit": "cashback_percent",
+        "base_reward_rate": 1.5,
+        "has_apply_url": false,
+        "excluded_categories": [],
+        "network_variants": [],
+        "forex": null,
+        "fuel": null,
+        "milestone_rules": [],
+        "fee_waiver_rules": [],
+        "benefits": [],
+        "unlock_rules": [],
+        "redemption_options": [],
+        "accrual_block_inr": null,
+        "accrual_rounding": null,
+        "points_expiry_months": null,
+        "model_status": "verified",
+        "model_coverage": {},
+        "reward_rules": [
+          {
+            "id": "y-excl-bills",
+            "category_id": "cat-bills",
+            "merchant_pattern": null,
+            "rail": null,
+            "unit": "cashback_percent",
+            "rate": 0,
+            "min_txn_inr": null,
+            "max_txn_inr": null,
+            "priority": 1,
+            "conditions": {},
+            "notes": null,
+            "effective_from": null,
+            "effective_to": null,
+            "excluded_categories": [],
+            "rule_role": "exclusion",
+            "merchant_slugs": [],
+            "platform_slugs": [],
+            "mcc_include": [],
+            "mcc_exclude": [],
+            "block_inr": null,
+            "min_engine_version": 1,
+            "source_local_id": "y-excl-bills",
+            "display_note": "No cashback on bills unless paid via Google Pay",
+            "except_merchant_slugs": [],
+            "except_platform_slugs": [
+              "google_pay"
+            ]
+          },
+          {
+            "id": "y-min100",
+            "category_id": null,
+            "merchant_pattern": null,
+            "rail": null,
+            "unit": "cashback_percent",
+            "rate": 0,
+            "min_txn_inr": null,
+            "max_txn_inr": 100,
+            "priority": 2,
+            "conditions": {},
+            "notes": null,
+            "effective_from": null,
+            "effective_to": null,
+            "excluded_categories": [],
+            "rule_role": "exclusion",
+            "merchant_slugs": [],
+            "platform_slugs": [],
+            "mcc_include": [],
+            "mcc_exclude": [],
+            "block_inr": null,
+            "min_engine_version": 2,
+            "source_local_id": "y-min100",
+            "display_note": "No cashback below ₹100",
+            "except_merchant_slugs": [],
+            "except_platform_slugs": []
+          },
+          {
+            "id": "y-gpay",
+            "category_id": "cat-bills",
+            "merchant_pattern": null,
+            "rail": null,
+            "unit": "cashback_percent",
+            "rate": 5,
+            "min_txn_inr": null,
+            "max_txn_inr": null,
+            "priority": 10,
+            "conditions": {},
+            "notes": null,
+            "effective_from": null,
+            "effective_to": null,
+            "excluded_categories": [],
+            "rule_role": "earn",
+            "merchant_slugs": [],
+            "platform_slugs": [
+              "google_pay"
+            ],
+            "mcc_include": [],
+            "mcc_exclude": [],
+            "block_inr": null,
+            "min_engine_version": 2,
+            "source_local_id": "y-gpay",
+            "display_note": "5% on bills via Google Pay",
+            "except_merchant_slugs": [],
+            "except_platform_slugs": []
+          },
+          {
+            "id": "y-base",
+            "category_id": null,
+            "merchant_pattern": null,
+            "rail": null,
+            "unit": "cashback_percent",
+            "rate": 1.5,
+            "min_txn_inr": null,
+            "max_txn_inr": null,
+            "priority": 30,
+            "conditions": {},
+            "notes": null,
+            "effective_from": null,
+            "effective_to": null,
+            "excluded_categories": [],
+            "rule_role": "base",
+            "merchant_slugs": [],
+            "platform_slugs": [],
+            "mcc_include": [],
+            "mcc_exclude": [],
+            "block_inr": null,
+            "min_engine_version": 1,
+            "source_local_id": "y-base",
+            "display_note": "1.5% elsewhere",
+            "except_merchant_slugs": [],
+            "except_platform_slugs": []
+          }
+        ],
+        "cap_rules": [],
+        "cashback_rounding": null
+      },
+      "ctx": {
+        "amount": 99,
+        "category_id": null,
+        "category_slug": null,
+        "mcc": null,
+        "merchant_name": "Some store",
+        "merchant_vpa": null,
+        "merchant_slug": null,
+        "platform": null,
+        "rail": "unknown",
+        "occurred": "2026-11-10T10:00:00+05:30"
+      },
+      "cap_consumed_before": {},
+      "expect": {
+        "points": null,
+        "cashback_inr": 0.0,
+        "value_inr": 0.0,
+        "rule_id": "y-min100",
+        "excluded": true,
+        "cap_deltas": {}
+      }
+    },
+    {
+      "name": "Y4 minimum amount exclusion not triggered at the threshold",
+      "why": "₹100 is not below ₹100, so the base 1.5% applies (D16b).",
+      "card": {
+        "id": "contract-except-platform-card",
+        "slug": "contract-except-platform-card",
+        "name": "Contract Bills-Except-Platform Card",
+        "network": "visa",
+        "card_type": "credit",
+        "data_version": 1,
+        "verified_at": "2026-11-05T00:00:00Z",
+        "annual_fee_inr": 0,
+        "joining_fee_inr": 0,
+        "is_upi_linkable": false,
+        "art_asset": null,
+        "art_primary_color": null,
+        "point_value_inr": 0,
+        "issuer_slug": "contract-bank",
+        "issuer_name": "Contract Bank",
+        "base_reward_unit": "cashback_percent",
+        "base_reward_rate": 1.5,
+        "has_apply_url": false,
+        "excluded_categories": [],
+        "network_variants": [],
+        "forex": null,
+        "fuel": null,
+        "milestone_rules": [],
+        "fee_waiver_rules": [],
+        "benefits": [],
+        "unlock_rules": [],
+        "redemption_options": [],
+        "accrual_block_inr": null,
+        "accrual_rounding": null,
+        "points_expiry_months": null,
+        "model_status": "verified",
+        "model_coverage": {},
+        "reward_rules": [
+          {
+            "id": "y-excl-bills",
+            "category_id": "cat-bills",
+            "merchant_pattern": null,
+            "rail": null,
+            "unit": "cashback_percent",
+            "rate": 0,
+            "min_txn_inr": null,
+            "max_txn_inr": null,
+            "priority": 1,
+            "conditions": {},
+            "notes": null,
+            "effective_from": null,
+            "effective_to": null,
+            "excluded_categories": [],
+            "rule_role": "exclusion",
+            "merchant_slugs": [],
+            "platform_slugs": [],
+            "mcc_include": [],
+            "mcc_exclude": [],
+            "block_inr": null,
+            "min_engine_version": 1,
+            "source_local_id": "y-excl-bills",
+            "display_note": "No cashback on bills unless paid via Google Pay",
+            "except_merchant_slugs": [],
+            "except_platform_slugs": [
+              "google_pay"
+            ]
+          },
+          {
+            "id": "y-min100",
+            "category_id": null,
+            "merchant_pattern": null,
+            "rail": null,
+            "unit": "cashback_percent",
+            "rate": 0,
+            "min_txn_inr": null,
+            "max_txn_inr": 100,
+            "priority": 2,
+            "conditions": {},
+            "notes": null,
+            "effective_from": null,
+            "effective_to": null,
+            "excluded_categories": [],
+            "rule_role": "exclusion",
+            "merchant_slugs": [],
+            "platform_slugs": [],
+            "mcc_include": [],
+            "mcc_exclude": [],
+            "block_inr": null,
+            "min_engine_version": 2,
+            "source_local_id": "y-min100",
+            "display_note": "No cashback below ₹100",
+            "except_merchant_slugs": [],
+            "except_platform_slugs": []
+          },
+          {
+            "id": "y-gpay",
+            "category_id": "cat-bills",
+            "merchant_pattern": null,
+            "rail": null,
+            "unit": "cashback_percent",
+            "rate": 5,
+            "min_txn_inr": null,
+            "max_txn_inr": null,
+            "priority": 10,
+            "conditions": {},
+            "notes": null,
+            "effective_from": null,
+            "effective_to": null,
+            "excluded_categories": [],
+            "rule_role": "earn",
+            "merchant_slugs": [],
+            "platform_slugs": [
+              "google_pay"
+            ],
+            "mcc_include": [],
+            "mcc_exclude": [],
+            "block_inr": null,
+            "min_engine_version": 2,
+            "source_local_id": "y-gpay",
+            "display_note": "5% on bills via Google Pay",
+            "except_merchant_slugs": [],
+            "except_platform_slugs": []
+          },
+          {
+            "id": "y-base",
+            "category_id": null,
+            "merchant_pattern": null,
+            "rail": null,
+            "unit": "cashback_percent",
+            "rate": 1.5,
+            "min_txn_inr": null,
+            "max_txn_inr": null,
+            "priority": 30,
+            "conditions": {},
+            "notes": null,
+            "effective_from": null,
+            "effective_to": null,
+            "excluded_categories": [],
+            "rule_role": "base",
+            "merchant_slugs": [],
+            "platform_slugs": [],
+            "mcc_include": [],
+            "mcc_exclude": [],
+            "block_inr": null,
+            "min_engine_version": 1,
+            "source_local_id": "y-base",
+            "display_note": "1.5% elsewhere",
+            "except_merchant_slugs": [],
+            "except_platform_slugs": []
+          }
+        ],
+        "cap_rules": [],
+        "cashback_rounding": null
+      },
+      "ctx": {
+        "amount": 100,
+        "category_id": null,
+        "category_slug": null,
+        "mcc": null,
+        "merchant_name": "Some store",
+        "merchant_vpa": null,
+        "merchant_slug": null,
+        "platform": null,
+        "rail": "unknown",
+        "occurred": "2026-11-10T10:00:00+05:30"
+      },
+      "cap_consumed_before": {},
+      "expect": {
+        "points": null,
+        "cashback_inr": 1.5,
+        "value_inr": 1.5,
+        "rule_id": "y-base",
         "excluded": false,
         "cap_deltas": {}
       }
