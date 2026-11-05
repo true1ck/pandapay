@@ -1,0 +1,68 @@
+{
+  "source_slug": "yes-bank-klick-rupay-kiwi",
+  "changes": [
+    {
+      "path": "reward_rules[id=kiwi_regular_online].action.cashback_percent",
+      "value": null,
+      "reason": "Issuer pays whole Kiwis, not a percentage.",
+      "source_url": "https://gokiwi.in/rewards-policy-v2/",
+      "checked_on": "2026-11-05"
+    },
+    {
+      "path": "reward_rules[id=kiwi_regular_online].action.points_per_block",
+      "value": 2,
+      "reason": "2 Kiwis per Rs 100 online.",
+      "source_url": "https://gokiwi.in/rewards-policy-v2/",
+      "checked_on": "2026-11-05"
+    },
+    {
+      "path": "reward_rules[id=kiwi_regular_scan_pay].action.cashback_percent",
+      "value": null,
+      "reason": "Issuer pays whole Kiwis, not a percentage.",
+      "source_url": "https://gokiwi.in/rewards-policy-v2/",
+      "checked_on": "2026-11-05"
+    },
+    {
+      "path": "reward_rules[id=kiwi_regular_scan_pay].action.points_per_block",
+      "value": 6,
+      "reason": "6 Kiwis per Rs 100 on Scan & Pay.",
+      "source_url": "https://gokiwi.in/rewards-policy-v2/",
+      "checked_on": "2026-11-05"
+    },
+    {
+      "path": "accrual_engine.base_points_per_block",
+      "value": 2,
+      "reason": "Base is 2 Kiwis per Rs 100.",
+      "source_url": "https://gokiwi.in/rewards-policy-v2/",
+      "checked_on": "2026-11-05"
+    },
+    {
+      "path": "accrual_engine.base_cashback_percent",
+      "value": null,
+      "reason": "Kiwis are points worth Rs 0.25.",
+      "source_url": "https://gokiwi.in/rewards-policy-v2/",
+      "checked_on": "2026-11-05"
+    },
+    {
+      "path": "card_product.point_value_inr_baseline",
+      "value": 0.25,
+      "reason": "Each Kiwi is worth Rs 0.25.",
+      "source_url": "https://gokiwi.in/rewards-policy-v2/",
+      "checked_on": "2026-11-05"
+    },
+    {
+      "path": "reward_rules[id=kiwi_neon_scan_pay].rule_role",
+      "value": "info",
+      "reason": "Needs a paid Kiwi Neon membership (user attribute); not verified.",
+      "source_url": "https://gokiwi.in/rewards-policy-v2/",
+      "checked_on": "2026-11-05"
+    },
+    {
+      "path": "reward_rules[id=kiwi_neon_online].rule_role",
+      "value": "info",
+      "reason": "Needs a paid Kiwi Neon membership.",
+      "source_url": "https://gokiwi.in/rewards-policy-v2/",
+      "checked_on": "2026-11-05"
+    }
+  ]
+}
