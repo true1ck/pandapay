@@ -25,7 +25,7 @@ const LOOP_TABLES = [
   'sms_v2_learning_signals', 'sms_v2_learning_decisions', 'sms_v2_user_limits', 'sms_v2_settings',
   'sms_v2_unknown_templates', 'sms_v2_template_attempts', 'sms_v2_ai_capacity',
   'sms_v2_alias_drafts', 'sms_v2_category_drafts', 'sms_v2_merchant_suggestions',
-  'sms_v2_rule_stats_profile_daily', 'sms_v2_rule_stats_daily', 'sms_v2_rule_cohorts', 'sms_v2_bundles', 'sms_v2_bundle_parts', 'sms_v2_rules',
+  'sms_v2_testers', 'sms_v2_rule_stats_profile_daily', 'sms_v2_rule_stats_daily', 'sms_v2_rule_cohorts', 'sms_v2_bundles', 'sms_v2_bundle_parts', 'sms_v2_rules',
 ];
 
 async function startLoopHarness({ profileCount = 4, registerAdmin, adminPaths } = {}) {
