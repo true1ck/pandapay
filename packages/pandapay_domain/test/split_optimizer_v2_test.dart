@@ -244,6 +244,183 @@ void main() {
     });
   });
 
+  group('v2 cap attached by reward_rule_id or category_id (no targets)', () {
+    // The shape in which the original defect occurred: the cap names its rule
+    // (`reward_rule_id`) or its category (`category_id`) and carries no
+    // `targets`, so the optimizer's own cap match found it, rebuilt the
+    // snapshot, and dropped `capConsumed`. The capped card must stop taking
+    // spend at its NATIVE headroom: 1,480 of 1,500 points used leaves 20, which
+    // is one ₹500 step.
+    CardProduct diningCard(String id, {required CapRule cap}) => CardProduct(
+      id: id,
+      name: id,
+      network: CardNetwork.visa,
+      isUpiLinkable: true,
+      pointValueInr: 0.25,
+      baseRewardUnit: RewardUnit.pointsPer100,
+      baseRewardRate: 1,
+      accrualRounding: AccrualRounding.floor,
+      rewardRules: [
+        RewardRule(
+          id: '$id-rule',
+          categoryId: 'cat-dining',
+          unit: RewardUnit.pointsPer100,
+          rate: 5,
+          priority: 10,
+        ),
+      ],
+      capRules: [cap],
+    );
+
+    RecommendationContext diningCtx() => RecommendationContext(
+      amount: total,
+      categoryId: 'cat-dining',
+      rail: TxnRail.swipe,
+    );
+
+    CapRule bonusCap({String? rewardRuleId, String? categoryId}) => CapRule(
+      id: 'dining-cap',
+      rewardRuleId: rewardRuleId,
+      categoryId: categoryId,
+      label: 'Dining bonus cap',
+      capValue: Money.fromRupees(375),
+      measure: CapMeasure.rewardValue,
+      period: CapPeriod.calendarMonth,
+      capKind: CapKind.bonusPoints,
+      capAmount: 1500,
+    );
+
+    List<SplitAllocation> split(CapRule cap) => optimizer.optimize(
+      total,
+      diningCtx(),
+      [
+        CardSnapshot(
+          product: diningCard('dining', cap: cap),
+          capConsumed: const {'dining-cap': 1480},
+        ),
+        CardSnapshot(product: _flatCard('flat')),
+      ],
+    );
+
+    test('matched by reward_rule_id: stops at its native headroom', () {
+      final result = split(bonusCap(rewardRuleId: 'dining-rule'));
+      expect(_allocated(result, 'dining'), Money.fromRupees(500));
+      expect(_allocated(result, 'flat'), Money.fromRupees(9500));
+    });
+
+    test('matched by category_id: stops at its native headroom', () {
+      final result = split(bonusCap(categoryId: 'cat-dining'));
+      expect(_allocated(result, 'dining'), Money.fromRupees(500));
+      expect(_allocated(result, 'flat'), Money.fromRupees(9500));
+    });
+  });
+
+  group('v2 card with mixed cap kinds on one rule', () {
+    // 5 pts/₹100 with three caps: a points bonus cap, an eligible-spend cap
+    // (₹ of spend that earns the rule's rate; base after) and a transaction
+    // count cap. Each accumulates in its OWN unit, and the count is taken once
+    // per split, not once per step.
+    CardProduct mixedCard({
+      required double bonusAmount,
+      required double spendAmount,
+      required double countAmount,
+    }) => _bonusCard(
+      'mixed',
+      caps: [
+        CapRule(
+          id: 'bonus-cap',
+          label: 'Bonus points',
+          capValue: Money.fromRupees(bonusAmount * 0.25),
+          measure: CapMeasure.rewardValue,
+          period: CapPeriod.calendarMonth,
+          capKind: CapKind.bonusPoints,
+          capAmount: bonusAmount,
+          targets: const ['mixed-rule'],
+        ),
+        CapRule(
+          id: 'spend-cap',
+          label: 'Eligible spend',
+          capValue: Money.fromRupees(spendAmount),
+          measure: CapMeasure.spendAmount,
+          period: CapPeriod.calendarMonth,
+          capKind: CapKind.eligibleSpend,
+          capAmount: spendAmount,
+          postCapBehavior: PostCapBehavior.baseRate,
+          targets: const ['mixed-rule'],
+        ),
+        CapRule(
+          id: 'count-cap',
+          label: 'Uses',
+          capValue: Money.fromRupees(countAmount),
+          measure: CapMeasure.txnCount,
+          period: CapPeriod.calendarMonth,
+          capKind: CapKind.txnCount,
+          capAmount: countAmount,
+          targets: const ['mixed-rule'],
+        ),
+      ],
+    );
+
+    List<SplitAllocation> split(
+      Map<String, double> consumed, {
+      double bonusAmount = 1500,
+      double spendAmount = 4000,
+      double countAmount = 2,
+    }) => optimizer.optimize(
+      total,
+      _ctx(total),
+      [
+        CardSnapshot(
+          product: mixedCard(
+            bonusAmount: bonusAmount,
+            spendAmount: spendAmount,
+            countAmount: countAmount,
+          ),
+          capConsumed: consumed,
+        ),
+        CardSnapshot(product: _flatCard('flat')),
+      ],
+    );
+
+    test('the eligible-spend cap (₹) binds: ₹1,000 of ₹4,000 used leaves '
+        '₹3,000, and the count cap is not counted per step', () {
+      // Bonus cap: 1,000 of 1,500 points used (500 left; ₹3,000 of this rule
+      // earns 120 bonus points, nowhere near it). Count: 1 of 2 used, so one
+      // use is left for the one eventual charge. Counted per step it would run
+      // out after the first ₹500 step.
+      final result = split({
+        'bonus-cap': 1000,
+        'spend-cap': 1000,
+        'count-cap': 1,
+      });
+      expect(_allocated(result, 'mixed'), Money.fromRupees(3000));
+      expect(_allocated(result, 'flat'), Money.fromRupees(7000));
+      // ₹3,000 at 5 pts/₹100 = 150 points (30 base + 120 bonus, inside the
+      // 500 left) at ₹0.25: the final value uses the card's own state.
+      final mixed = result.firstWhere((a) => a.card.id == 'mixed');
+      expect(mixed.expectedValue, Money.fromRupees(37.5));
+    });
+
+    test('the points bonus cap binds in points: 1,480 of 1,500 leaves one '
+        '₹500 step even though ₹ spend and uses have plenty', () {
+      final result = split({
+        'bonus-cap': 1480,
+        'spend-cap': 0,
+        'count-cap': 0,
+      });
+      expect(_allocated(result, 'mixed'), Money.fromRupees(500));
+      expect(_allocated(result, 'flat'), Money.fromRupees(9500));
+    });
+
+    test('nothing used: the card keeps every step the caps allow', () {
+      // ₹4,000 of spend headroom is the tightest: ₹4,000 to the card, the
+      // rest where the rate is better.
+      final result = split({});
+      expect(_allocated(result, 'mixed'), Money.fromRupees(4000));
+      expect(_allocated(result, 'flat'), Money.fromRupees(6000));
+    });
+  });
+
   group('v1 card: unchanged', () {
     test('a reward-value cap is still reduced in reward units via '
         'capRemaining (₹100 of headroom at 10% covers ₹1,000 of spend)', () {
