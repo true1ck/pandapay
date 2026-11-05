@@ -196,9 +196,15 @@ async function runPollCycle(deps) {
           }
           let outcome;
           try {
-            outcome = connection.credential_error || typeof connection.app_password !== 'string'
-              ? { ok: false, reason: 'credential_unavailable', imported: 0, skipped: 0, unparsed: 0 }
-              : await pollConnection(connection, deps);
+            // A withdrawn email_import consent stops reading this mailbox at
+            // once, even though the connection row still exists.
+            const consented = typeof deps.hasEmailImportConsent !== 'function'
+              || await deps.hasEmailImportConsent(connection.profile_id);
+            outcome = !consented
+              ? { ok: false, reason: 'consent_withdrawn', imported: 0, skipped: 0, unparsed: 0 }
+              : connection.credential_error || typeof connection.app_password !== 'string'
+                ? { ok: false, reason: 'credential_unavailable', imported: 0, skipped: 0, unparsed: 0 }
+                : await pollConnection(connection, deps);
           } catch (_) {
             outcome = { ok: false, reason: 'unexpected_error' };
           } finally {

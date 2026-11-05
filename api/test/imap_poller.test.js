@@ -474,3 +474,34 @@ test('a folded header is unfolded before matching', () => {
   const messages = parseFetchResponse(raw);
   assert.strictEqual(messages[0].subject, 'A very long transaction alert subject line');
 });
+
+test('a mailbox whose owner withdrew email_import consent is not polled', async () => {
+  const fake = pollCycleDeps({ connections: [CONNECTION] });
+  fake.deps.fetchMessages = async () => { throw new Error('must not contact provider'); };
+  const asked = [];
+  fake.deps.hasEmailImportConsent = async (profileId) => { asked.push(profileId); return false; };
+  const updates = [];
+  fake.deps.withUserClient = async (userId, work) => work({ query: async (sql, args) => { updates.push({ sql, args, userId }); return { rows: [] }; } });
+  const result = await runPollCycle(fake.deps);
+  assert.deepStrictEqual(asked, [CONNECTION.profile_id]);
+  assert.strictEqual(result.results[0].ok, false);
+  assert.strictEqual(result.results[0].reason, 'consent_withdrawn');
+  assert.ok(!updates.some(({ sql }) => sql.includes('last_poll_at =')));
+});
+
+test('a mailbox with current consent is polled as before', async () => {
+  const fake = pollCycleDeps({ connections: [CONNECTION] });
+  let fetched = 0;
+  fake.deps.fetchMessages = async () => { fetched++; return { ok: true, messages: [] }; };
+  fake.deps.hasEmailImportConsent = async () => true;
+  const result = await runPollCycle(fake.deps);
+  assert.strictEqual(fetched, 1);
+  assert.strictEqual(result.results[0].ok, true);
+});
+
+test('the server wires the consent check into the poller', () => {
+  const source = require('node:fs').readFileSync(require.resolve('../src/index.js'), 'utf8');
+  const start = source.indexOf('startImapPoller(');
+  assert.ok(start >= 0);
+  assert.match(source.slice(start, start + 1500), /hasEmailImportConsent/);
+});

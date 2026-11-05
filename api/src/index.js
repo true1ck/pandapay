@@ -59,7 +59,7 @@ const {
   saveImapConnection, openStoredImapPassword, deleteImapConnection, bankSenderPatterns, requireBankSenders,
 } = require('./imap_connections_store');
 const { normalizeSenderFilter } = require('./imap_credentials');
-const { requireEmailImportConsent, isEmailImportConsentRequired } = require('./email_import_consent');
+const { requireEmailImportConsent, isEmailImportConsentRequired, hasCurrentEmailImportConsent } = require('./email_import_consent');
 const { markInboundEmailConverted } = require('./inbound_email_retention');
 const { hasImapControlChars, isValidImapHost } = require('./imap_network');
 const { extractLocalPart, scanPolicyKeywords } = require('./email_ingest');
@@ -8699,14 +8699,18 @@ app.post('/forwarding-addresses', requireAuth, async (req, res) => {
 /** GET /forwarding-addresses/me — F3's status-polling read (null if never issued). */
 app.get('/forwarding-addresses/me', requireAuth, async (req, res) => {
   try {
-    const result = await withUserClient(req.userId, (client) =>
-      client.query(
+    const result = await withUserClient(req.userId, async (client) => {
+      await requireEmailImportConsent(client, req.userId, config.productTermsVersion);
+      return client.query(
         `SELECT * FROM forwarding_addresses WHERE profile_id = $1 AND is_active ORDER BY created_at DESC LIMIT 1`,
         [req.userId]
-      )
-    );
+      );
+    });
     res.json({ forwardingAddress: result.rows[0] || null });
   } catch (err) {
+    if (isEmailImportConsentRequired(err)) {
+      return res.status(403).json({ error: 'email_import_consent_required' });
+    }
     console.error('GET /forwarding-addresses/me error', safeErrorCode(err));
     res.status(500).json({ error: 'internal_error' });
   }
@@ -8790,6 +8794,18 @@ app.post('/inbound-emails/webhook', async (req, res) => {
       // address-enumeration oracle for an attacker probing local_parts.
       return res.status(202).json({ accepted: true });
     }
+
+    // The owner withdrew email_import consent: keep no email text and create
+    // no transaction. The response looks the same as any accepted message.
+    const consented = await withUserClient(row.user_id, async (client) => {
+      if (await hasCurrentEmailImportConsent(client, row.user_id, config.productTermsVersion)) return true;
+      await client.query(
+        `UPDATE inbound_emails SET body_text = NULL WHERE id = $1 AND profile_id = $2`,
+        [row.inbound_email_id, row.user_id]
+      );
+      return false;
+    });
+    if (!consented) return res.status(202).json({ accepted: true });
 
     // Turn the parsed mail into an actual transaction.
     const ownUserName = await profileDisplayName(pool, row.user_id);
@@ -9467,6 +9483,9 @@ const stopImapPoller = startImapPoller(
     emailSourceKey,
     parseTransactionDate,
     fetchMessages: fetchRecentMessages,
+    hasEmailImportConsent: (profileId) =>
+      withUserClient(profileId, (client) =>
+        hasCurrentEmailImportConsent(client, profileId, config.productTermsVersion)),
   },
   { intervalMinutes: Number(process.env.IMAP_POLL_INTERVAL_MINUTES) || 0 }
 );

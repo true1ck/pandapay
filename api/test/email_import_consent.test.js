@@ -87,7 +87,7 @@ function response() {
 }
 
 const deps = (latest, log, extra = {}) => ({
-  app: { post: (_path, _auth, fn) => { deps.handler = fn; } },
+  app: { post: (_path, _auth, fn) => { deps.handler = fn; }, get: (_path, _auth, fn) => { deps.handler = fn; } },
   requireAuth: () => {},
   withUserClient: async (_profile, fn) => fn(fakeClient(latest, log)),
   safeErrorCode: (error) => error?.code || 'unknown',
@@ -174,4 +174,37 @@ test('POST /forwarding-addresses issues an address once consent is current', asy
   assert.equal(res.code, 201);
   assert.equal(res.body.forwardingAddress.profile_id, PROFILE);
   assert.ok(log.some(({ sql }) => /INSERT INTO forwarding_addresses/.test(sql)));
+});
+
+
+async function getForwardingAddress(latest) {
+  const log = [];
+  const handler = load("app.get('/forwarding-addresses/me',", deps(latest, log));
+  const res = response();
+  await handler({ userId: PROFILE }, res);
+  return { res, log };
+}
+
+test('GET /forwarding-addresses/me refuses without email_import consent and reads nothing', async () => {
+  const { res, log } = await getForwardingAddress(null);
+  assert.equal(res.code, 403);
+  assert.deepEqual(res.body, { error: 'email_import_consent_required' });
+  assert.ok(!log.some(({ sql }) => /FROM forwarding_addresses/.test(sql)));
+});
+
+test('GET /forwarding-addresses/me answers once consent is current', async () => {
+  const { res, log } = await getForwardingAddress(grant());
+  assert.notEqual(res.code, 403);
+  assert.deepEqual(res.body, { forwardingAddress: null });
+  assert.ok(log.some(({ sql }) => /FROM forwarding_addresses/.test(sql)));
+});
+
+test('forwarded email for an owner without consent is not turned into a transaction', () => {
+  const route = routeSource("app.post('/inbound-emails/webhook',");
+  const ingest = route.indexOf('pandapay.ingest_inbound_email');
+  const check = route.indexOf('hasCurrentEmailImportConsent');
+  const create = route.indexOf('profileDisplayName');
+  assert.ok(ingest >= 0 && check > ingest, 'consent is checked after the owner is known');
+  assert.ok(create > check, 'and before any transaction is created');
+  assert.match(route.slice(check, create), /body_text = NULL/);
 });
