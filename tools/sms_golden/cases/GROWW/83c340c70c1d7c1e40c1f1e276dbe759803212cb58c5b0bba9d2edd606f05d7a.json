@@ -1,0 +1,34 @@
+{
+  "id": "laneq:sip_executed_groww",
+  "templateHash": "83c340c70c1d7c1e40c1f1e276dbe759803212cb58c5b0bba9d2edd606f05d7a",
+  "weight": 1,
+  "source": "synthetic",
+  "messages": [
+    {
+      "sender": "GROWW",
+      "body": "Your SIP of Rs.2,000.00 in Sample Equity Fund - Direct Growth has been processed on 01-11-2026. Thank you for investing.",
+      "observedAt": "2026-11-20T09:00:00.000Z"
+    }
+  ],
+  "expect": {
+    "facts": [
+      {
+        "factType": "movement",
+        "attrs": {
+          "direction": "debit",
+          "purpose": "investment",
+          "rail": "nach",
+          "evidenceOnly": true
+        },
+        "amounts": [
+          {
+            "role": "posted",
+            "minor": 200000
+          }
+        ]
+      }
+    ]
+  },
+  "note": "Wording guess. Evidence only: the bank mandate debit is counted.",
+  "origin": "lane-q"
+}

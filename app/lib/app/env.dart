@@ -72,6 +72,14 @@ class Env {
     defaultValue: 'http://10.0.2.2:3210',
   );
 
+  /// Where crash and error reports go (GlitchTip/Sentry DSN). Empty = off.
+  /// The key in it is public by design: it can only submit reports. See
+  /// app/lib/app/crash_reporter.dart for what a report contains.
+  static const String errorReportingDsn = String.fromEnvironment(
+    'PANDAPAY_ERROR_REPORTING_DSN',
+    defaultValue: '',
+  );
+
   /// Hosted legal pages (Terms, Privacy Policy).
   static const String legalBaseUrl = String.fromEnvironment(
     'PANDAPAY_LEGAL_BASE_URL',

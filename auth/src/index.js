@@ -14,7 +14,7 @@ const authMiddleware = require('./middleware/authMiddleware');
 const securityHeaders = require('./middleware/securityHeaders');
 // === SECURITY HARDENING: CORS VALIDATION ===
 const { validateCorsConfig, checkCorsAtRuntime } = require('./utils/corsValidator');
-const { requestLogger, errorHandler } = require('./observability');
+const { requestLogger, errorHandler, telemetry } = require('./observability');
 const { resolveTrustProxyHops, rejectMalformedClientIp } = require('./utils/proxyTrust');
 const { mountTestHarness } = require('./utils/testHarnessAccess');
 const { createReadinessHandler } = require('./services/authReadiness');
@@ -177,6 +177,7 @@ const PORT = process.env.PORT || 3000;
 const server = app.listen(PORT, () => {
   console.info('Auth service started');
 });
+telemetry.start();
 
 async function shutdown(signal) {
   if (shuttingDown) return;

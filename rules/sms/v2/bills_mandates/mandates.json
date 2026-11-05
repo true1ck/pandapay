@@ -997,7 +997,7 @@
   },
   {
     "id": "MND-EXEC-SI-01",
-    "version": 1,
+    "version": 2,
     "family": "mandate_exec",
     "senders": [
       "*"
@@ -1021,7 +1021,8 @@
           "rail": "card",
           "mandateRef": {
             "from": "ref_txnId"
-          }
+          },
+          "evidenceOnly": true
         },
         "amounts": [
           {
@@ -1040,6 +1041,23 @@
             "sanitizeNarration"
           ]
         }
+      },
+      {
+        "factType": "mandate",
+        "attrs": {
+          "phase": "created",
+          "merchantName": {
+            "from": "m",
+            "transforms": [
+              "sanitizeNarration"
+            ]
+          },
+          "mandatePurpose": "subscription",
+          "oneTime": false
+        },
+        "instrument": {
+          "maskFrom": "mask"
+        }
       }
     ],
     "confidence": 0.95,
@@ -1048,7 +1066,8 @@
         "sender": "AX-ICICIT-S",
         "body": "Dear Customer, your standing instruction (SI) of Rs 119.00 for SPOTIFY SI on ICICI Bank Card XX9012 has been processed successfully. SI Ref No: 12345678.",
         "expectFactTypes": [
-          "movement"
+          "movement",
+          "mandate"
         ]
       },
       {
@@ -1059,7 +1078,7 @@
     ],
     "status": "active",
     "createdBy": "baseline",
-    "updatedAt": "2026-11-20T00:00:00Z"
+    "updatedAt": "2026-11-05T00:00:00Z"
   },
   {
     "id": "MND-EXEC-UPI-01",

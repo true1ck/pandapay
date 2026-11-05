@@ -1,0 +1,31 @@
+{
+  "id": "laneq:insurance_due_hdfcergo",
+  "templateHash": "efb4a9a33435967cade1cf270d99b524fd0fb7d6b21b82d515e88efdc5d7917e",
+  "weight": 1,
+  "source": "synthetic",
+  "messages": [
+    {
+      "sender": "HDFCER",
+      "body": "Your health insurance policy 123456789 premium of Rs.9,500.00 is due on 15-11-2026. Renew now. HDFC ERGO",
+      "observedAt": "2026-11-20T09:00:00.000Z"
+    }
+  ],
+  "expect": {
+    "facts": [
+      {
+        "factType": "bill_due",
+        "attrs": {
+          "dueDate": "2026-11-15"
+        },
+        "amounts": [
+          {
+            "role": "due_total",
+            "minor": 950000
+          }
+        ]
+      }
+    ]
+  },
+  "note": "Wording guess.",
+  "origin": "lane-q"
+}

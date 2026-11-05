@@ -1,0 +1,46 @@
+# App VM: host metrics and a Prometheus agent that scrapes the API/auth
+# metrics ports inside the production Docker network and pushes everything
+# to the monitoring VM over Tailscale.
+#
+# Deliberately a separate Compose project: deploy.sh refuses to deploy while
+# an unreviewed container runs inside the pandapay-prod project. It joins the
+# production network from outside instead, and publishes no ports.
+#
+# Not included on purpose: cAdvisor (needs the Docker socket, which is root
+# on this host). Restarts are detected from the services' own metrics.
+#
+#   MONITORING_AGENT_CONFIG=/etc/pandapay/monitoring/agent.yml \
+#     docker compose -f deploy/monitoring/compose.app-agent.yml up -d
+
+name: pandapay-monitoring-agent
+
+services:
+  node-exporter:
+    image: prom/node-exporter:v1.12.1
+    restart: unless-stopped
+    command: [--path.rootfs=/host]
+    pid: host
+    read_only: true
+    volumes: ["/:/host:ro,rslave"]
+    networks: [prod]
+
+  metrics-agent:
+    image: prom/prometheus:v3.15.1
+    restart: unless-stopped
+    command:
+      - --agent
+      - --config.file=/etc/prometheus/agent.yml
+      - --storage.agent.path=/agent
+    volumes:
+      # Lives outside the repo: deploy.sh runs `git clean`, which would delete it.
+      - "${MONITORING_AGENT_CONFIG:?Set MONITORING_AGENT_CONFIG to the agent.yml path outside the repo}:/etc/prometheus/agent.yml:ro"
+      - agent-data:/agent
+    networks: [prod]
+
+networks:
+  prod:
+    external: true
+    name: pandapay-prod_default
+
+volumes:
+  agent-data:

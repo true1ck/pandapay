@@ -367,6 +367,12 @@
   },
   {
     "method": "GET",
+    "path": "/admin/system/status",
+    "permission": "operations.read",
+    "freshMfa": false
+  },
+  {
+    "method": "GET",
     "path": "/admin/anonymization-audit-runs",
     "permission": "admin.audit.read",
     "freshMfa": false

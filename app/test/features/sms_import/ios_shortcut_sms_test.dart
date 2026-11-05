@@ -1,5 +1,7 @@
 import 'package:flutter_test/flutter_test.dart';
 import 'package:pandapay/features/sms_import/ios_shortcut_sms.dart';
+import 'package:pandapay/features/sms_import/sms_text_hint.dart';
+import 'package:pandapay/features/sms_v2/pipeline/intake_gate.dart';
 
 void main() {
   Map<Object?, Object?> row() => {
@@ -33,6 +35,28 @@ void main() {
       },
     );
   }
+
+  test('live intake distinguishes a tagged bank handle from a contact', () {
+    final batch = IosShortcutSmsBatch.fromRows([
+      row()
+        ..addAll({'sender': 'ICICIB-S(smsft_fi)', 'senderEvidence': 'handle'}),
+      row()..addAll({'sender': '+91 90000 00000', 'senderEvidence': 'handle'}),
+      row()..remove('sender'),
+    ], allowSenderInference: false);
+    expect(batch.messages, hasLength(3));
+    expect(batch.missingSender, 1);
+    expect(batch.messages.last.sender, isEmpty);
+    final bank = batch.messages.first;
+    expect(
+      classifySmsV2Intake(bank.sender, bank.body).kind,
+      SmsTriageKind.financialCandidate,
+    );
+    final contact = batch.messages[1];
+    expect(
+      classifySmsV2Intake(contact.sender, contact.body).kind,
+      isNot(SmsTriageKind.financialCandidate),
+    );
+  });
 
   test('missing dates are withheld and missing sender can be inferred', () {
     final noSender = row()..['sender'] = '';

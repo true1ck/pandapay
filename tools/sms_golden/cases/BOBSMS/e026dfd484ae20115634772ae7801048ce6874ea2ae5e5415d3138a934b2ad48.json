@@ -1,0 +1,38 @@
+{
+  "id": "laneq:acct_dr_neft_bob",
+  "templateHash": "e026dfd484ae20115634772ae7801048ce6874ea2ae5e5415d3138a934b2ad48",
+  "weight": 1,
+  "source": "synthetic",
+  "messages": [
+    {
+      "sender": "VM-BOBSMS-S",
+      "body": "Rs.50000.00 Dr. from A/C XXXX1234 and Cr. to SAMPLE LTD via NEFT. Ref:ABCD123456 -Bank of Baroda",
+      "observedAt": "2026-11-20T09:00:00.000Z"
+    }
+  ],
+  "expect": {
+    "facts": [
+      {
+        "factType": "movement",
+        "attrs": {
+          "direction": "debit",
+          "purpose": "unknown",
+          "rail": "neft"
+        },
+        "amounts": [
+          {
+            "role": "posted",
+            "minor": 5000000
+          }
+        ],
+        "instrument": {
+          "kind": "bank_account",
+          "issuerSlug": "bob",
+          "maskDigits": "1234"
+        }
+      }
+    ]
+  },
+  "note": "Dr./Cr. abbreviation style.",
+  "origin": "lane-q"
+}

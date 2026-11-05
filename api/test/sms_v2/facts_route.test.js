@@ -71,6 +71,26 @@ async function harness({ flag = true, hooks } = {}) {
 
 const FACTS = '/sms/v2/facts:batch';
 
+test('category refresh rejects source, event or instrument mutations before database access', async () => {
+  const h1 = await harness();
+  try {
+    const body = h.batch({ items: [h.item([h.fact({})])] });
+    const result = await h1.post('/sms/v2/categories:batch', body);
+    assert.equal(result.status, 400);
+    assert.equal(h1.state.dbCalls, 0);
+  } finally { h1.close(); }
+});
+
+test('category refresh uses the SMS v2 flag and membership gate', async () => {
+  const disabled = await harness({ flag: false });
+  const enabled = await harness();
+  try {
+    assert.equal((await disabled.post('/sms/v2/categories:batch', h.batch())).status, 404);
+    assert.equal((await enabled.post('/sms/v2/categories:batch', h.batch(), { user: null })).status, 401);
+    assert.equal(enabled.state.dbCalls, 0);
+  } finally { disabled.close(); enabled.close(); }
+});
+
 test('every invalid facts_batch fixture is rejected with the code in its file name, before any database work', async () => {
   const h1 = await harness();
   try {

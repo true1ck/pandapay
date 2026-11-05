@@ -14,8 +14,12 @@ class OutboxRecord {
   final String payload;
   final int attempts;
   bool get backfill => (jsonDecode(payload) as Map)['_backfill'] == true;
+  bool get categoryOnly =>
+      (jsonDecode(payload) as Map)['_categoryOnly'] == true;
   Map<String, Object?> get json =>
-      (jsonDecode(payload) as Map).cast<String, Object?>()..remove('_backfill');
+      (jsonDecode(payload) as Map).cast<String, Object?>()
+        ..remove('_backfill')
+        ..remove('_categoryOnly');
 }
 
 /// A durable account queue. Acknowledgement compares the sent payload so an
@@ -30,6 +34,7 @@ class OutboxStore {
     String id,
     Map<String, Object?> payload, {
     bool backfill = false,
+    bool categoryOnly = false,
   }) {
     db.execute(
       '''
@@ -41,7 +46,11 @@ ON CONFLICT(namespace, id) DO UPDATE SET payload=excluded.payload,
         namespace,
         '$kind:$id',
         kind,
-        jsonEncode({...payload, if (backfill) '_backfill': true}),
+        jsonEncode({
+          ...payload,
+          if (backfill) '_backfill': true,
+          if (categoryOnly) '_categoryOnly': true,
+        }),
       ],
     );
   }

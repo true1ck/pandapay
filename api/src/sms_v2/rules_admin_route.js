@@ -23,50 +23,138 @@ class HttpError extends Error {
 
 // ---------- regex dialect lint ----------
 
-// Dialect: no backreferences, no nested quantifiers. The regex must also compile in JS.
+// Dialect: no backreferences, no nested quantifiers, and no ambiguous
+// alternation under an unbounded quantifier (`(a|aa)+` and `(\w|\d)+` backtrack
+// exponentially; `(x|y)*` with disjoint branches is fine). The regex must also
+// compile in JS. The Dart lint (packages/pandapay_domain engine/lint.dart) applies
+// the same rules; keep the two in step.
+
+const SAMPLE_CHARS = [...Array(128).keys()].map((code) => String.fromCharCode(code)).concat(['é', '₹', ' ']);
+
+// First token of an alternative: an escape, a class, `.` or a literal character.
+// null when the alternative may start with something else (a group, an optional
+// first token, an anchor), which is treated as overlapping.
+function firstToken(alt) {
+  if (!alt) return null;
+  let token;
+  const c = alt[0];
+  if (c === '\\') {
+    const kind = alt[1];
+    token = alt.slice(0, kind === 'x' ? 4 : kind === 'u' ? 6 : 2);
+  } else if (c === '[') {
+    let j = 1;
+    if (alt[j] === '^') j += 1;
+    if (alt[j] === ']') j += 1;
+    while (j < alt.length && alt[j] !== ']') j += alt[j] === '\\' ? 2 : 1;
+    if (j >= alt.length) return null;
+    token = alt.slice(0, j + 1);
+  } else if ('(*+?{|)^$'.includes(c)) {
+    return null;
+  } else {
+    token = [...alt][0];
+  }
+  const next = alt.slice(token.length, token.length + 2);
+  return /^[?*]/.test(next) || /^\{0/.test(next) ? null : token;
+}
+
+function tokensOverlap(a, b, flags) {
+  const reFlags = flags.replace(/[^is]/g, '');
+  let ra;
+  let rb;
+  try { ra = new RegExp(`^(?:${a})$`, reFlags); rb = new RegExp(`^(?:${b})$`, reFlags); } catch { return true; }
+  return SAMPLE_CHARS.some((ch) => ra.test(ch) && rb.test(ch));
+}
+
+// True when two branches of one group can both start matching at the same text.
+function altConflict(alts, flags) {
+  if (alts.length < 2) return false;
+  const literal = (x) => /^[^\\[\](){}.*+?|^$]*$/.test(x);
+  const fold = (x) => (flags.includes('i') ? x.toLowerCase() : x);
+  for (let i = 0; i < alts.length; i += 1) {
+    for (let j = i + 1; j < alts.length; j += 1) {
+      const x = alts[i];
+      const y = alts[j];
+      if (x === '' || y === '') return true;
+      if (literal(x) && literal(y)) {
+        if (fold(x).startsWith(fold(y)) || fold(y).startsWith(fold(x))) return true;
+        continue;
+      }
+      const tx = firstToken(x);
+      const ty = firstToken(y);
+      if (!tx || !ty || tokensOverlap(tx, ty, flags)) return true;
+    }
+  }
+  return false;
+}
+
 function lintPattern(pattern, flags = '') {
   const problems = [];
   try { new RegExp(pattern, flags); } catch (e) { return [`does not compile: ${e.message}`]; }
   if (/\\[1-9]/.test(pattern.replace(/\\\\/g, '')) || /\\k</.test(pattern)) problems.push('backreferences are not allowed');
-  const frames = [{ varQuant: false }];
+  const newFrame = (segStart, look = false) => ({ varQuant: false, ambiguous: false, alts: [], segStart, look });
+  const frames = [newFrame(0)];
   let inClass = false;
   const quantAt = (i) => {
     const c = pattern[i];
-    if (c === '*' || c === '+') return { len: 1, variable: true, repeat: true };
-    if (c === '?') return { len: 1, variable: false, repeat: false };
+    if (c === '*' || c === '+') return { len: 1, variable: true, repeat: true, unbounded: true };
+    if (c === '?') return { len: 1, variable: false, repeat: false, unbounded: false };
     if (c === '{') {
       const m = /^\{(\d+)(,(\d*))?\}/.exec(pattern.slice(i));
       if (!m) return null;
       const min = Number(m[1]);
       const open = m[2] !== undefined && m[3] === '';
       const max = m[2] === undefined ? min : (open ? Infinity : Number(m[3]));
-      return { len: m[0].length, variable: max > min, repeat: max > 1 };
+      return { len: m[0].length, variable: max > min, repeat: max > 1, unbounded: max === Infinity };
     }
     return null;
   };
   let lastAtomWasGroupWithVar = false;
+  let lastGroupAmbiguous = false;
   for (let i = 0; i < pattern.length; i += 1) {
     const c = pattern[i];
-    if (c === '\\') { i += 1; lastAtomWasGroupWithVar = false; continue; }
+    if (c === '\\') { i += 1; lastAtomWasGroupWithVar = false; lastGroupAmbiguous = false; continue; }
     if (inClass) { if (c === ']') inClass = false; continue; }
-    if (c === '[') { inClass = true; lastAtomWasGroupWithVar = false; continue; }
-    if (c === '(') { frames.push({ varQuant: false }); lastAtomWasGroupWithVar = false; continue; }
+    if (c === '[') { inClass = true; lastAtomWasGroupWithVar = false; lastGroupAmbiguous = false; continue; }
+    if (c === '(') {
+      const opener = /^\((?:\?(?:[:=!]|<[=!]|<[A-Za-z_]\w*>))?/.exec(pattern.slice(i))[0];
+      // Lookaround groups never repeat, so their alternation is not carried outward.
+      frames.push(newFrame(i + opener.length, /^\(\?(?:=|!|<=|<!)/.test(opener)));
+      i += opener.length - 1;
+      lastAtomWasGroupWithVar = false;
+      lastGroupAmbiguous = false;
+      continue;
+    }
+    if (c === '|') {
+      const top = frames[frames.length - 1];
+      top.alts.push(pattern.slice(top.segStart, i));
+      top.segStart = i + 1;
+      lastAtomWasGroupWithVar = false;
+      lastGroupAmbiguous = false;
+      continue;
+    }
     if (c === ')') {
-      const f = frames.pop() || { varQuant: false };
-      if (frames.length === 0) frames.push({ varQuant: false });
+      const f = frames.pop() || newFrame(0);
+      if (frames.length === 0) frames.push(newFrame(0));
+      f.alts.push(pattern.slice(f.segStart, i));
+      const ambiguous = !f.look && (f.ambiguous || altConflict(f.alts, flags));
       lastAtomWasGroupWithVar = f.varQuant;
+      lastGroupAmbiguous = ambiguous;
       if (f.varQuant) frames[frames.length - 1].varQuant = true;
+      if (ambiguous) frames[frames.length - 1].ambiguous = true;
       continue;
     }
     const q = quantAt(i);
     if (q) {
       if (lastAtomWasGroupWithVar && q.repeat) problems.push('nested quantifiers are not allowed');
+      if (lastGroupAmbiguous && q.unbounded) problems.push('ambiguous alternation under an unbounded quantifier is not allowed');
       if (q.variable) frames[frames.length - 1].varQuant = true;
       i += q.len - 1;
       lastAtomWasGroupWithVar = false;
+      lastGroupAmbiguous = false;
       continue;
     }
     lastAtomWasGroupWithVar = false;
+    lastGroupAmbiguous = false;
   }
   return [...new Set(problems)];
 }

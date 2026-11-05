@@ -1,0 +1,36 @@
+{
+  "id": "laneq:limit_revised_indusind",
+  "templateHash": "7ac1aa7fa82ef332cc9f3fd0a61dfee37eb8bebec83226e2b383c7df002d2d7d",
+  "weight": 1,
+  "source": "synthetic",
+  "messages": [
+    {
+      "sender": "VM-INDUSB-S",
+      "body": "Your IndusInd Bank Credit Card ending 1234 limit has been revised to Rs. 2,00,000.",
+      "observedAt": "2026-11-20T09:00:00.000Z"
+    }
+  ],
+  "expect": {
+    "facts": [
+      {
+        "factType": "limit_change",
+        "attrs": {
+          "reason": "assigned"
+        },
+        "amounts": [
+          {
+            "role": "credit_limit",
+            "minor": 20000000
+          }
+        ],
+        "instrument": {
+          "kind": "credit_card",
+          "issuerSlug": "indusind",
+          "maskDigits": "1234"
+        }
+      }
+    ]
+  },
+  "note": "Direction not printed, so the reason is assigned rather than a guessed increase.",
+  "origin": "lane-q"
+}

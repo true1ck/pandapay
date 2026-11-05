@@ -1,0 +1,94 @@
+# Alert rules. Thresholds follow the targets in
+# docs/admin-console-plan-2026-11-05.md section 8. Every alert says what is
+# wrong in plain words; severity "critical" pages, "warning" can wait.
+groups:
+  - name: pandapay-availability
+    rules:
+      - alert: AppMetricsMissing
+        expr: absent_over_time(up{job="api"}[10m])
+        labels: {severity: critical}
+        annotations:
+          summary: No metrics from the app server for 10 minutes
+          description: The app VM is down, Tailscale is broken, or the metrics agent stopped.
+      - alert: ServiceDown
+        expr: up{job=~"api|auth"} == 0
+        for: 3m
+        labels: {severity: critical}
+        annotations:
+          summary: "{{ $labels.job }} is not answering its metrics port"
+          description: The container may have crashed or be restarting.
+      - alert: ServiceRestarting
+        expr: resets(process_cpu_seconds_total{job=~"api|auth"}[30m]) > 2
+        labels: {severity: warning}
+        annotations:
+          summary: "{{ $labels.job }} restarted more than twice in 30 minutes"
+          description: Look for crash reports in GlitchTip for this service.
+
+  - name: pandapay-requests
+    rules:
+      - alert: HighServerErrorRate
+        expr: |
+          sum by (job) (rate(http_requests_total{status="5xx"}[5m]))
+            / clamp_min(sum by (job) (rate(http_requests_total[5m])), 0.001) > 0.02
+        for: 10m
+        labels: {severity: critical}
+        annotations:
+          summary: "{{ $labels.job }}: more than 2% of requests are failing"
+          description: Check GlitchTip for the failing routes.
+      - alert: SlowRequests
+        expr: |
+          histogram_quantile(0.95, sum by (job, le) (rate(http_request_duration_seconds_bucket[5m]))) > 1
+        for: 15m
+        labels: {severity: warning}
+        annotations:
+          summary: "{{ $labels.job }}: 1 in 20 requests takes over a second"
+          description: Open the Grafana overview to see which routes are slow.
+      - alert: EventLoopBlocked
+        expr: nodejs_eventloop_lag_p99_seconds > 0.5
+        for: 10m
+        labels: {severity: warning}
+        annotations:
+          summary: "{{ $labels.job }}: event loop delayed over 0.5 s"
+          description: A slow synchronous task is stalling every request on this service.
+      - alert: ErrorReportsNotDelivered
+        expr: increase(error_reports_total{outcome="failed"}[30m]) > 5
+        labels: {severity: warning}
+        annotations:
+          summary: "{{ $labels.job }} cannot deliver error reports to GlitchTip"
+          description: Check the DSN, GlitchTip and the public ingestion address.
+
+  - name: pandapay-host
+    rules:
+      - alert: DiskAlmostFull
+        expr: |
+          node_filesystem_avail_bytes{mountpoint="/",fstype!~"tmpfs|overlay"}
+            / node_filesystem_size_bytes{mountpoint="/",fstype!~"tmpfs|overlay"} < 0.10
+        for: 15m
+        labels: {severity: critical}
+        annotations:
+          summary: App VM disk is over 90% full
+          description: Backups, logs or Docker images may be filling the disk.
+      - alert: MemoryLow
+        expr: node_memory_MemAvailable_bytes / node_memory_MemTotal_bytes < 0.10
+        for: 15m
+        labels: {severity: warning}
+        annotations:
+          summary: App VM has less than 10% memory available
+          description: Services may be killed by the out-of-memory killer.
+      - alert: CpuSaturated
+        expr: 1 - avg(rate(node_cpu_seconds_total{mode="idle"}[5m])) > 0.9
+        for: 20m
+        labels: {severity: warning}
+        annotations:
+          summary: App VM CPU above 90% for 20 minutes
+          description: Requests will slow down; check which service is busy.
+
+  - name: pandapay-meta
+    rules:
+      # Always firing. Route it to an external heartbeat service so you learn
+      # when the monitoring VM itself stops (see README.md).
+      - alert: Watchdog
+        expr: vector(1)
+        labels: {severity: none}
+        annotations:
+          summary: Monitoring pipeline heartbeat

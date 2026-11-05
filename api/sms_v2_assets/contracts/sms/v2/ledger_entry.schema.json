@@ -156,6 +156,7 @@
       "$ref": "common.schema.json#/$defs/utcTime"
     },
     "category": {
+      "description": "Set when `to` is external. CCR-003: also allowed on a refund entry (external to own, not spend, income or investment), carrying the category of the purchase it reverses.",
       "type": [
         "string",
         "null"

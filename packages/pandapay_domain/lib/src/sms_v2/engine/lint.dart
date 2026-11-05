@@ -29,12 +29,91 @@ class _Group {
   final String kind; // capture, noncapture, lookahead, lookbehind, root
   bool hasUnbounded = false;
   bool hasVariable = false; // any quantifier that is not exactly-n, or an alternation
+  // Two branches of this group, or of a repeatable group inside, can start
+  // matching at the same text. Under an unbounded quantifier that backtracks
+  // exponentially, as in `(a|aa)+`.
+  bool ambiguous = false;
+  final List<String> alts = [];
+  int segStart = 0;
+}
+
+final List<String> _sampleChars = [
+  for (var code = 0; code < 128; code++) String.fromCharCode(code),
+  '\u00e9',
+  '\u20b9',
+  '\u00a0',
+];
+
+/// First token of an alternative: an escape, a class, `.` or a literal
+/// character. Null when the branch may start with something else (a group, an
+/// optional first token, an anchor), which counts as overlapping.
+String? _firstToken(String alt) {
+  if (alt.isEmpty) return null;
+  final String token;
+  final c = alt[0];
+  if (c == r'\') {
+    if (alt.length < 2) return null;
+    final end = alt[1] == 'x' ? 4 : (alt[1] == 'u' ? 6 : 2);
+    token = alt.substring(0, end > alt.length ? alt.length : end);
+  } else if (c == '[') {
+    var j = 1;
+    if (j < alt.length && alt[j] == '^') j++;
+    if (j < alt.length && alt[j] == ']') j++;
+    while (j < alt.length && alt[j] != ']') {
+      j += alt[j] == r'\' ? 2 : 1;
+    }
+    if (j >= alt.length) return null;
+    token = alt.substring(0, j + 1);
+  } else if ('(*+?{|)^\$'.contains(c)) {
+    return null;
+  } else {
+    token = String.fromCharCodes([alt.runes.first]);
+  }
+  final next = alt.substring(token.length, alt.length < token.length + 2 ? alt.length : token.length + 2);
+  if (next.startsWith('?') || next.startsWith('*') || next.startsWith('{0')) return null;
+  return token;
+}
+
+bool _tokensOverlap(String a, String b, String flags) {
+  final RegExp ra, rb;
+  try {
+    ra = RegExp('^(?:$a)\$', caseSensitive: !flags.contains('i'), dotAll: flags.contains('s'));
+    rb = RegExp('^(?:$b)\$', caseSensitive: !flags.contains('i'), dotAll: flags.contains('s'));
+  } on FormatException {
+    return true;
+  }
+  return _sampleChars.any((ch) => ra.hasMatch(ch) && rb.hasMatch(ch));
+}
+
+final RegExp _literalAlt = RegExp(r'^[^\\\[\](){}.*+?|^$]*$');
+
+/// True when two branches of one group can both start matching at the same text.
+bool _altConflict(List<String> alts, String flags) {
+  if (alts.length < 2) return false;
+  String fold(String x) => flags.contains('i') ? x.toLowerCase() : x;
+  for (var i = 0; i < alts.length; i++) {
+    for (var j = i + 1; j < alts.length; j++) {
+      final x = alts[i], y = alts[j];
+      if (x.isEmpty || y.isEmpty) return true;
+      if (_literalAlt.hasMatch(x) && _literalAlt.hasMatch(y)) {
+        if (fold(x).startsWith(fold(y)) || fold(y).startsWith(fold(x))) return true;
+        continue;
+      }
+      final tx = _firstToken(x), ty = _firstToken(y);
+      if (tx == null || ty == null || _tokensOverlap(tx, ty, flags)) return true;
+    }
+  }
+  return false;
 }
 
 /// Checks that [pattern] behaves the same in JavaScript and Dart: named groups
 /// and the flags `i`, `m`, `s` only; no backreferences, no variable-length
 /// lookbehind, no nested quantifiers such as `(a+)+`, no constructs only one
-/// of the two engines knows; at most 2,000 characters.
+/// of the two engines knows; no ambiguous alternation under an unbounded
+/// quantifier such as `(a|aa)+` or `(\w|\d)+`, which backtrack exponentially
+/// (`(x|y)*` with disjoint branches is fine); at most 2,000 characters. The
+/// server's `lintPattern` (api/src/sms_v2/rules_admin_route.js) applies the
+/// same rules.
 List<LintIssue> lintRegexDialect(String pattern, String flags, {String? ruleId}) {
   final out = <LintIssue>[];
   void add(String code, String message) => out.add(LintIssue(code, message, ruleId: ruleId));
@@ -110,7 +189,7 @@ List<LintIssue> lintRegexDialect(String pattern, String flags, {String? ruleId})
           skip = 2;
         }
       }
-      stack.add(_Group(kind));
+      stack.add(_Group(kind)..segStart = i + skip);
       i += skip;
       lastGroup = null;
       continue;
@@ -125,6 +204,10 @@ List<LintIssue> lintRegexDialect(String pattern, String flags, {String? ruleId})
       final parent = stack.last;
       parent.hasUnbounded = parent.hasUnbounded || g.hasUnbounded;
       parent.hasVariable = parent.hasVariable || g.hasVariable;
+      g.alts.add(pattern.substring(g.segStart, i));
+      // Lookaround groups never repeat, so their alternation stays inside.
+      g.ambiguous = !g.kind.startsWith('look') && (g.ambiguous || _altConflict(g.alts, flags));
+      if (g.ambiguous) parent.ambiguous = true;
       if (g.kind == 'lookbehind' && g.hasVariable) {
         add('lint.regex.lookbehind_variable', 'lookbehind must have a fixed length');
       }
@@ -134,6 +217,8 @@ List<LintIssue> lintRegexDialect(String pattern, String flags, {String? ruleId})
     }
     if (c == '|') {
       stack.last.hasVariable = true;
+      stack.last.alts.add(pattern.substring(stack.last.segStart, i));
+      stack.last.segStart = i + 1;
       i++;
       lastGroup = null;
       continue;
@@ -169,6 +254,9 @@ List<LintIssue> lintRegexDialect(String pattern, String flags, {String? ruleId})
       final variable = unbounded || qMin != qMax;
       if (lastGroup != null && lastGroup.hasUnbounded && (unbounded || qMax > 1)) {
         add('lint.regex.nested_quantifier', 'a quantified group contains an unbounded quantifier (nested quantifier such as (a+)+)');
+      }
+      if (lastGroup != null && lastGroup.ambiguous && unbounded) {
+        add('lint.regex.nested_quantifier', 'an unbounded quantifier follows a group whose alternatives can start with the same text (backtracks exponentially, as in (a|aa)+); use a character class or a bounded count');
       }
       final top = stack.last;
       if (unbounded) top.hasUnbounded = true;

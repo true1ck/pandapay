@@ -1,0 +1,54 @@
+[
+  {
+    "id": "BIL-CC-STMT-READY-NO-AMOUNT",
+    "version": 1,
+    "family": "card_statement_notice",
+    "senders": [
+      "*"
+    ],
+    "priority": 280,
+    "match": {
+      "pattern": "\\bcredit\\s+card\\s+statement\\b[^\\n]{0,40}?\\b(?:is|are)\\s+(?:here|ready|generated|available)\\b",
+      "flags": "i",
+      "rejectAny": [
+        "rs.",
+        "rs ",
+        "inr",
+        "₹",
+        "amount due",
+        "total due",
+        "minimum due",
+        "otp"
+      ]
+    },
+    "emit": [
+      {
+        "factType": "info",
+        "attrs": {
+          "category": "service"
+        },
+        "instrument": {
+          "kind": "credit_card"
+        }
+      }
+    ],
+    "confidence": 0.85,
+    "examples": [
+      {
+        "sender": "VM-EXAMPL-S",
+        "body": "Hi! Your Example Credit Card statement for AUGUST-2026 is here. Check your statement on the app and pay by 05-09-2026 - Example Bank",
+        "expectFactTypes": [
+          "info"
+        ]
+      },
+      {
+        "sender": "VM-EXAMPL-S",
+        "body": "Hi! Your Example Credit Card statement for AUGUST-2026 is here. Total amount due Rs 1,250.00, pay by 05-09-2026 - Example Bank",
+        "expectFactTypes": []
+      }
+    ],
+    "status": "active",
+    "createdBy": "lane-w",
+    "updatedAt": "2026-11-05T00:00:00Z"
+  }
+]

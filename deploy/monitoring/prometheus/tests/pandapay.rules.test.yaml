@@ -1,0 +1,39 @@
+# promtool test rules prometheus/tests/pandapay.rules.test.yaml
+# (kept outside rules/ so Prometheus never loads it as a rule file)
+rule_files: [../rules/pandapay.rules.yml]
+evaluation_interval: 1m
+tests:
+  - interval: 1m
+    input_series:
+      # api: 100 req/min, 5 of them failing (5%) -> alert
+      - series: 'http_requests_total{job="api",method="GET",route="/cards",status="2xx"}'
+        values: '0+95x30'
+      - series: 'http_requests_total{job="api",method="GET",route="/cards",status="5xx"}'
+        values: '0+5x30'
+      # auth: 100 req/min, 1 failing (1%) -> quiet
+      - series: 'http_requests_total{job="auth",method="POST",route="/otp",status="2xx"}'
+        values: '0+99x30'
+      - series: 'http_requests_total{job="auth",method="POST",route="/otp",status="5xx"}'
+        values: '0+1x30'
+      - series: 'up{job="api"}'
+        values: '1x30'
+      - series: 'up{job="auth"}'
+        values: '1x5 0x25'
+    alert_rule_test:
+      - eval_time: 20m
+        alertname: HighServerErrorRate
+        exp_alerts:
+          - exp_labels: {severity: critical, job: api}
+            exp_annotations:
+              summary: "api: more than 2% of requests are failing"
+              description: Check GlitchTip for the failing routes.
+      - eval_time: 20m
+        alertname: ServiceDown
+        exp_alerts:
+          - exp_labels: {severity: critical, job: auth}
+            exp_annotations:
+              summary: "auth is not answering its metrics port"
+              description: The container may have crashed or be restarting.
+      - eval_time: 20m
+        alertname: AppMetricsMissing
+        exp_alerts: []

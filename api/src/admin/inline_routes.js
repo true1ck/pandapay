@@ -491,19 +491,9 @@ app.post('/admin/error-reports/:id/approve', requireAdmin, async (req, res) => {
 
       const fieldMatch = /^reward_rules\.([0-9a-f-]{36})\.rate$/.exec(report.field_path);
       if (!fieldMatch) {
-        await client.query(`UPDATE data_error_reports SET state = 'resolved' WHERE id = $1`, [report.id]);
-        await client.query(
-          `INSERT INTO admin_audit_log (admin_id, action, entity, entity_id, before_value, after_value, reason)
-           VALUES ($1, 'resolve_error_report', 'data_error_reports', $2, $3, $4, $5)`,
-          [
-            req.userId,
-            report.id,
-            JSON.stringify({ shown: report.shown_value }),
-            JSON.stringify({ claimed: report.claimed_value }),
-            req.body?.reason || `Resolved data error report for field '${report.field_path}'`,
-          ]
-        );
-        return { ok: true, resolved: true };
+        // Only reward rates have a typed writer. Leave the report pending so
+        // "approve" never closes a report without changing the catalogue.
+        return { status: 422, error: 'field_not_auto_correctable' };
       }
       const ruleId = fieldMatch[1];
       const newRate = Number(report.claimed_value);
@@ -655,13 +645,17 @@ app.post('/admin/alerts/:id/decide', requireAdmin, async (req, res) => {
     return res.status(400).json({ error: `decision must be one of: ${validDecisions.join(', ')}` });
   }
   try {
+    // Parked alerts ("needs more evidence") stay decidable; parking twice is not.
+    const decidableStates = decision === 'needs_more_evidence'
+      ? ['open']
+      : ['open', 'needs_more_evidence'];
     const result = await withUserClient(req.userId, async (client) => {
       const updated = await client.query(
         `UPDATE policy_change_alerts
             SET state = $1, decided_by = $2, decided_at = now(), decision_note = $3
-          WHERE id = $4 AND state = 'open'
+          WHERE id = $4 AND state::text = ANY($5::text[])
           RETURNING id`,
-        [decision, req.userId, note || null, req.params.id]
+        [decision, req.userId, note || null, req.params.id, decidableStates]
       );
       if (updated.rows.length === 0) return null;
 
@@ -674,7 +668,7 @@ app.post('/admin/alerts/:id/decide', requireAdmin, async (req, res) => {
       return updated.rows[0];
     });
 
-    if (!result) return res.status(404).json({ error: 'alert not found or not open' });
+    if (!result) return res.status(404).json({ error: 'alert not found or already decided' });
     res.json({ ok: true });
   } catch (err) {
     console.error('POST /admin/alerts/:id/decide error', safeErrorCode(err));

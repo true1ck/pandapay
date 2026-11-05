@@ -57,6 +57,7 @@ add('GET', '/admin/scrape-runs', 'operations.read');
 add('GET', '/admin/source-pages/:id/snapshots', 'operations.read');
 add('GET', '/admin/sources/:id/pages', 'operations.read');
 add('GET', '/admin/data-quality-dashboard', 'operations.read');
+add('GET', '/admin/system/status', 'operations.read');
 add('GET', '/admin/anonymization-audit-runs', 'admin.audit.read');
 add('GET', '/admin/anonymization-audit-runs/latest', 'admin.audit.read');
 add('POST', '/admin/anonymization-audit-runs/run', 'admin.audit.run', true);

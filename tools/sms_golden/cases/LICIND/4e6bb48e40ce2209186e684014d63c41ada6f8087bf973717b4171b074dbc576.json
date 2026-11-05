@@ -1,0 +1,31 @@
+{
+  "id": "laneq:insurance_due_lic",
+  "templateHash": "4e6bb48e40ce2209186e684014d63c41ada6f8087bf973717b4171b074dbc576",
+  "weight": 1,
+  "source": "synthetic",
+  "messages": [
+    {
+      "sender": "LICIND",
+      "body": "Dear Policyholder, your LIC policy no 123456789 premium of Rs.12,500.00 is due on 15-11-2026. Pay online to avoid lapse.",
+      "observedAt": "2026-11-20T09:00:00.000Z"
+    }
+  ],
+  "expect": {
+    "facts": [
+      {
+        "factType": "bill_due",
+        "attrs": {
+          "dueDate": "2026-11-15"
+        },
+        "amounts": [
+          {
+            "role": "due_total",
+            "minor": 1250000
+          }
+        ]
+      }
+    ]
+  },
+  "note": "Wording guess.",
+  "origin": "lane-q"
+}

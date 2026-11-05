@@ -4,13 +4,20 @@
 // auto-pause decision.
 
 const { validateRequest } = require('./contracts');
-const { COHORT_RANK, mintBundles } = require('./bundle_builder');
+const { COHORT_RANK, mintBundles, refreshServedBundles } = require('./bundle_builder');
 const { utcDay } = require('./rules_store');
 
 const AUTO_PAUSE_MIN_HITS = 50;
 const AUTO_PAUSE_MIN_RATE = 0.01;
+// One account must not be able to pause a staged rule with its own counters.
+const AUTO_PAUSE_MIN_DEVICES = 3;
 const AUTO_PAUSE_REASON = 'auto_correction_rate';
 const AUTO_PAUSE_COHORTS = ['testers', 'pct5', 'pct25'];
+
+const SAFE_VERSION = /^[0-9A-Za-z.+_-]{1,40}$/;
+const SAFE_RULE_ID = /^[A-Za-z0-9][A-Za-z0-9_.:-]{0,127}$/;
+const MAX_STAT_ROWS = 500;
+const MAX_COUNTER = 1000000; // per device, per rule version, per day
 
 // POST /sms/v2/rule-stats:batch handler. Auth and the v2 flag are applied by the caller.
 function createStatsHandler({ store, security }) {
@@ -18,6 +25,11 @@ function createStatsHandler({ store, security }) {
     const check = validateRequest('rule_stats_batch', req.body);
     if (!check.ok) return res.status(400).json({ error: check.errors[0].code, detail: check.errors.map((e) => `${e.code}@${e.path}`).join(', ') });
     const { day, appVersion, stats } = req.body;
+    // The contract leaves these open; the shared tables must not grow from them.
+    if (!SAFE_VERSION.test(appVersion) || stats.length > MAX_STAT_ROWS ||
+        stats.some((x) => !SAFE_RULE_ID.test(x.ruleId) || [x.hits, x.toReview, x.corrected].some((n) => n > MAX_COUNTER))) {
+      return res.status(400).json({ error: 'request.rule_stats_batch.counter_invalid' });
+    }
     try {
       if (security) {
         const denied = value => value === false || value?.ok === false;
@@ -55,6 +67,7 @@ function evaluateAutoPause({ rules, cohorts, stats }) {
     if (widest >= COHORT_RANK.all) continue;
     const cur = byKey.get(k);
     if (!cur || cur.hits < AUTO_PAUSE_MIN_HITS) continue;
+    if (Number.isFinite(cur.devices) && cur.devices < AUTO_PAUSE_MIN_DEVICES) continue;
     const [ruleId, vs] = k.split('\u0000');
     const version = Number(vs);
     const prev = rules
@@ -79,7 +92,7 @@ async function pauseRuleVersion(s, { ruleId, version, reason, adminId, now }) {
 }
 
 // Hourly job body: roll up, evaluate, pause, re-mint. Returns what was paused.
-async function runRuleJobs({ store, signer, adminId, now = new Date() }) {
+async function runRuleJobs({ store, signer, adminId, now = new Date(), refreshBeforeMs }) {
   return store.tx(adminId, async (s) => {
     await s.lock();
     const rolled = await s.rollupRuleStats();
@@ -91,11 +104,13 @@ async function runRuleJobs({ store, signer, adminId, now = new Date() }) {
     }
     let minted = [];
     if (toPause.length) minted = await mintBundles(s, { signer, now, publishedBy: 'auto_pause' });
-    return { rolledUp: rolled, paused: toPause, minted: minted.map((m) => ({ bundleVersion: m.bundleVersion, cohort: m.cohort })) };
+    // The public API only serves pre-signed bundles, so this job also keeps their expiry fresh.
+    const refreshed = await refreshServedBundles(s, { signer, now, refreshBeforeMs });
+    return { rolledUp: rolled, paused: toPause, minted: minted.map((m) => ({ bundleVersion: m.bundleVersion, cohort: m.cohort })), refreshed };
   });
 }
 
 module.exports = {
-  AUTO_PAUSE_MIN_HITS, AUTO_PAUSE_MIN_RATE, AUTO_PAUSE_REASON, AUTO_PAUSE_COHORTS,
+  AUTO_PAUSE_MIN_HITS, AUTO_PAUSE_MIN_DEVICES, AUTO_PAUSE_MIN_RATE, AUTO_PAUSE_REASON, AUTO_PAUSE_COHORTS,
   createStatsHandler, evaluateAutoPause, pauseRuleVersion, runRuleJobs,
 };

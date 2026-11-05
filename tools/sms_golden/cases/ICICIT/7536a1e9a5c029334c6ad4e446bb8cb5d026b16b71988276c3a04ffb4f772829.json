@@ -1,0 +1,37 @@
+{
+  "id": "lanej:reversal_upi_account_credit_with_reference",
+  "templateHash": "7536a1e9a5c029334c6ad4e446bb8cb5d026b16b71988276c3a04ffb4f772829",
+  "weight": 1,
+  "source": "synthetic",
+  "messages": [
+    {
+      "sender": "VM-ICICIT-S",
+      "body": "Dear Customer, your Example Bank Account XXX1234 has been credited with Rs 2500.00 on 23-Oct-26 as reversal of transaction with UPI: 432100000901.",
+      "observedAt": "2026-12-01T09:00:00.000Z"
+    }
+  ],
+  "expect": {
+    "facts": [
+      {
+        "factType": "movement",
+        "attrs": {
+          "direction": "credit",
+          "purpose": "reversal",
+          "rail": "upi"
+        },
+        "amounts": [
+          {
+            "role": "posted",
+            "minor": 250000
+          }
+        ],
+        "instrument": {
+          "kind": "bank_account",
+          "maskDigits": "1234"
+        }
+      }
+    ]
+  },
+  "note": "UPI reversal credited to a bank account, carrying the original UPI reference.",
+  "origin": "lane-j"
+}

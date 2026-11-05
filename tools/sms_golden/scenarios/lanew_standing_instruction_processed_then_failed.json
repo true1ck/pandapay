@@ -1,0 +1,48 @@
+{
+  "id": "lanew_standing_instruction_processed_then_failed",
+  "description": "A processed card standing instruction, the issuer's own spend alert for it, and a later failed one: one subscription service, the charge counted once.",
+  "knownInstruments": [
+    {
+      "kind": "credit_card",
+      "issuerSlug": "icici",
+      "maskDigits": "9012"
+    }
+  ],
+  "messages": [
+    {
+      "sender": "VM-ICICIT-S",
+      "body": "Dear Customer, we have successfully processed the payment of INR 119.00 for SPOTIFY, as per the Standing Instruction XanVW9coOX, on 12/11/2026 for your ICICI Bank Credit Card 9012. To manage your Standing Instructions, visit www.icicibank.com",
+      "observedAt": "2026-11-12T08:00:00Z"
+    },
+    {
+      "sender": "AX-ICICIT-S",
+      "body": "INR 119.00 spent using ICICI Bank Card XX9012 on 12-Nov-26 on SPOTIFY. Avl Limit: INR 99,881.00. If not you, call 18002662.",
+      "observedAt": "2026-11-12T08:00:20Z"
+    },
+    {
+      "sender": "AX-ICICIT-S",
+      "body": "Dear Customer, payment of INR 119.00 for SPOTIFY for Standing Instructions XanVW9coOX on your ICICI Bank Credit Card 9012 could not be processed.",
+      "observedAt": "2026-12-12T08:00:20Z"
+    }
+  ],
+  "expect": {
+    "events": [
+      {
+        "type": "subscription_charge",
+        "legRoles": [
+          "charge",
+          "original",
+          "duplicate_notice"
+        ]
+      }
+    ],
+    "totals": {
+      "from": "2026-10-31T18:30:00Z",
+      "to": "2026-11-30T18:30:00Z",
+      "spendMinor": 11900,
+      "incomeMinor": 0,
+      "investmentMinor": 0,
+      "transactionCount": 1
+    }
+  }
+}

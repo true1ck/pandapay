@@ -1,0 +1,38 @@
+{
+  "id": "laneq:emi_bounced_hdfc",
+  "templateHash": "604e8c10793b16755ff9d308827818d2e04a9267e34b488a072a4cf1e674913d",
+  "weight": 1,
+  "source": "synthetic",
+  "messages": [
+    {
+      "sender": "VM-HDFCBK-S",
+      "body": "EMI of Rs.5,000.00 for loan a/c XX1234 could not be debited from A/c XX5678 due to insufficient funds on 05-11-2026. Penal charges apply.",
+      "observedAt": "2026-11-20T09:00:00.000Z"
+    }
+  ],
+  "expect": {
+    "facts": [
+      {
+        "factType": "attempt",
+        "attrs": {
+          "status": "failed",
+          "direction": "debit",
+          "purpose": "emi"
+        },
+        "amounts": [
+          {
+            "role": "posted",
+            "minor": 500000
+          }
+        ],
+        "instrument": {
+          "kind": "bank_account",
+          "issuerSlug": "hdfc",
+          "maskDigits": "5678"
+        }
+      }
+    ]
+  },
+  "note": "Failed attempt, never a movement.",
+  "origin": "lane-q"
+}

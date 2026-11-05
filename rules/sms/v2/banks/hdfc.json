@@ -2061,7 +2061,7 @@
     "examples": [
       {
         "sender": "VM-HDFCBK-S",
-        "body": "Credit Alert! Rs.500.00 credited to HDFC Bank A/c XX5552 on 30-10-26 from VPA alice@oksbi (UPI 630371662093) Avl Bal Rs.12,345.67",
+        "body": "Credit Alert! Rs.500.00 credited to HDFC Bank A/c XX5552 on 30-10-26 from VPA alice@oksbi (UPI 432100000901) Avl Bal Rs.12,345.67",
         "expectFactTypes": [
           "movement",
           "balance_snapshot"
@@ -2077,7 +2077,7 @@
       },
       {
         "sender": "VM-HDFCBK-S",
-        "body": "Credit Alert! Rs.500.00 will be credited to HDFC Bank A/c XX5552 on 30-10-26 from VPA alice@oksbi (UPI 630371662093)",
+        "body": "Credit Alert! Rs.500.00 will be credited to HDFC Bank A/c XX5552 on 30-10-26 from VPA alice@oksbi (UPI 432100000901)",
         "expectFactTypes": []
       }
     ],
@@ -3478,7 +3478,7 @@
     "examples": [
       {
         "sender": "VM-HDFCBK-S",
-        "body": "Credit Alert! Rs.500.00 credited to HDFC Bank A/c XX5552 on 30-10-26 from VPA alice@oksbi (UPI 630371662093)",
+        "body": "Credit Alert! Rs.500.00 credited to HDFC Bank A/c XX5552 on 30-10-26 from VPA alice@oksbi (UPI 432100000901)",
         "expectFactTypes": [
           "movement"
         ]
@@ -3492,7 +3492,7 @@
       },
       {
         "sender": "VM-HDFCBK-S",
-        "body": "Credit Alert! Rs.500.00 will be credited to HDFC Bank A/c XX5552 on 30-10-26 from VPA alice@oksbi (UPI 630371662093)",
+        "body": "Credit Alert! Rs.500.00 will be credited to HDFC Bank A/c XX5552 on 30-10-26 from VPA alice@oksbi (UPI 432100000901)",
         "expectFactTypes": []
       }
     ],

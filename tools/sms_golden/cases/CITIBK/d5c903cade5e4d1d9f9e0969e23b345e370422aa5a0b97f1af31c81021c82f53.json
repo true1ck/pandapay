@@ -1,0 +1,40 @@
+{
+  "id": "laneq:statement_citi",
+  "templateHash": "d5c903cade5e4d1d9f9e0969e23b345e370422aa5a0b97f1af31c81021c82f53",
+  "weight": 1,
+  "source": "synthetic",
+  "messages": [
+    {
+      "sender": "VM-CITIBK-S",
+      "body": "Your Citi Card ending 7788 statement: Total Amount Due INR 3,000.00, Minimum Amount Due INR 150.00, due 20-NOV-26.",
+      "observedAt": "2026-11-20T09:00:00.000Z"
+    }
+  ],
+  "expect": {
+    "facts": [
+      {
+        "factType": "bill_due",
+        "attrs": {
+          "dueDate": "2026-11-20"
+        },
+        "amounts": [
+          {
+            "role": "due_total",
+            "minor": 300000
+          },
+          {
+            "role": "due_minimum",
+            "minor": 15000
+          }
+        ],
+        "instrument": {
+          "kind": "credit_card",
+          "issuerSlug": "citi",
+          "maskDigits": "7788"
+        }
+      }
+    ]
+  },
+  "note": "Wording guess.",
+  "origin": "lane-q"
+}

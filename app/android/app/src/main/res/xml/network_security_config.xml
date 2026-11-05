@@ -1,19 +1,13 @@
 <?xml version="1.0" encoding="utf-8"?>
 <!--
-  OWASP M5 remediation: deny cleartext (HTTP) traffic by default so all
-  production API calls are forced over HTTPS. Cleartext is allowed only for
-  the local-dev hosts the app currently talks to (see
-  lib/app/providers.dart's _apiBaseUrl/_authBaseUrl, both http://localhost
-  today) and the Android emulator's host-loopback alias.
+  OWASP M5: every shipped build denies cleartext (HTTP) traffic and trusts only
+  the system certificate store. The development loopback hosts (localhost and
+  the emulator's 10.0.2.2) are allowed by src/debug/res/xml/network_security_config.xml,
+  which replaces this file in debug builds only.
 
-  When a real API domain replaces localhost, remove the domain-config below
-  and add a <pin-set> for that domain instead of just relying on the
-  base-config's cleartextTrafficPermitted="false".
+  When a real API domain is ready for certificate pinning, add a <pin-set> for
+  that domain here.
 -->
 <network-security-config>
     <base-config cleartextTrafficPermitted="false" />
-    <domain-config cleartextTrafficPermitted="true">
-        <domain includeSubdomains="true">localhost</domain>
-        <domain includeSubdomains="true">10.0.2.2</domain>
-    </domain-config>
 </network-security-config>

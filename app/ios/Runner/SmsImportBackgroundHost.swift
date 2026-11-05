@@ -137,6 +137,11 @@ enum SmsImportBackgroundHost {
     }
     let created = FlutterEngine(name: "pandapay-sms-background", project: nil, allowHeadlessExecution: true)
     engine = created
+    guard created.run(withEntrypoint: "iosSmsBackgroundMain") else {
+      running = false
+      complete(false)
+      return
+    }
 #if targetEnvironment(simulator)
     SimulatorPluginRegistrant.register(with: created)
 #else
@@ -177,9 +182,6 @@ enum SmsImportBackgroundHost {
           DispatchQueue.main.async { result(FlutterError(code: "sms_background", message: "Saved messages remain queued.", details: nil)) }
         }
       }
-    }
-    if !created.run(withEntrypoint: "iosSmsBackgroundMain") {
-      running = false; complete(false)
     }
   }
 

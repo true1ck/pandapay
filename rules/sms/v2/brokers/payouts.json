@@ -1,0 +1,254 @@
+[
+  {
+    "id": "BRK-PAYOUT-TRANSFER-OK-01",
+    "version": 1,
+    "family": "broker_withdraw",
+    "senders": [
+      "*"
+    ],
+    "priority": 720,
+    "match": {
+      "pattern": "(?:settlement|payout|withdrawal)\\s*:\\s*transfer\\s+successful\\s+from\\s+(?<broker>[a-z0-9 .&]+?)\\s+amount\\s*:\\s*(?:rs\\.?|inr|₹)\\s*(?<amt>[\\d,]+(?:\\.\\d{1,2})?)(?:[\\s\\S]{0,80}?utr\\s*(?:no\\.?)?\\s*:?\\s*(?<ref_txnId>[a-z0-9]+))?(?:[\\s\\S]{0,120}?bank\\s*:[^(\\n]*\\(\\s*[x*•]*\\s*(?<mask>\\d{2,6})\\s*\\))?",
+      "flags": "i",
+      "rejectAny": [
+        "failed",
+        "rejected",
+        "reversed",
+        "pending"
+      ]
+    },
+    "emit": [
+      {
+        "factType": "movement",
+        "attrs": {
+          "direction": "credit",
+          "purpose": "investment",
+          "rail": "unknown"
+        },
+        "amounts": [
+          {
+            "role": "posted",
+            "from": "amt",
+            "unit": "INR"
+          }
+        ],
+        "instrument": {
+          "kind": "bank_account",
+          "maskFrom": "mask"
+        },
+        "counterparty": {
+          "kind": "merchant",
+          "nameFrom": "broker",
+          "transforms": [
+            "sanitizeNarration"
+          ]
+        }
+      }
+    ],
+    "confidence": 0.93,
+    "examples": [
+      {
+        "sender": "AX-ACMEPY-S",
+        "body": "Monthly settlement: Transfer successful from Acme Invest  Amount: Rs. 12.5 Initiated on: 2026-11-05 UTR no.: CMS1234567890 Bank: EXAMPLE BANK (XXXX1234)",
+        "expectFactTypes": [
+          "movement"
+        ]
+      },
+      {
+        "sender": "AX-ACMEPY-S",
+        "body": "Monthly settlement: Transfer failed from Acme Invest  Amount: Rs. 12.5 Initiated on: 2026-11-05",
+        "expectFactTypes": []
+      }
+    ],
+    "status": "active",
+    "createdBy": "lane-i",
+    "updatedAt": "2026-11-05T00:00:00Z"
+  },
+  {
+    "id": "BRK-PAYOUT-PROCESSED-01",
+    "version": 1,
+    "family": "broker_withdraw",
+    "senders": [
+      "*"
+    ],
+    "priority": 640,
+    "match": {
+      "pattern": "(?:running\\s+a/c\\s+)?settlement\\s+payout\\s+(?:for|of)\\s+(?:rs\\.?|inr|₹)\\s*(?<amt>[\\d,]+(?:\\.\\d{1,2})?)\\s+is\\s+(?:processed|initiated)\\b",
+      "flags": "i",
+      "rejectAny": [
+        "failed",
+        "could not",
+        "rejected"
+      ]
+    },
+    "emit": [
+      {
+        "factType": "attempt",
+        "attrs": {
+          "status": "pending",
+          "direction": "credit",
+          "purpose": "investment"
+        },
+        "amounts": [
+          {
+            "role": "posted",
+            "from": "amt",
+            "unit": "INR"
+          }
+        ],
+        "instrument": {
+          "kind": "broker"
+        },
+        "counterparty": {
+          "kind": "bank"
+        }
+      }
+    ],
+    "confidence": 0.9,
+    "examples": [
+      {
+        "sender": "VM-ACMESC-S",
+        "body": "Your running A/c settlement payout for Rs. 250.40 is processed with reference ID:PY123456. Date of Transfer: 05-11-2026. You should receive the funds in your default linked bank a/c.",
+        "expectFactTypes": [
+          "attempt"
+        ]
+      },
+      {
+        "sender": "VM-ACMESC-S",
+        "body": "Your running A/c settlement payout for Rs. 250.40 could not be processed. Please retry.",
+        "expectFactTypes": []
+      }
+    ],
+    "status": "active",
+    "createdBy": "lane-i",
+    "updatedAt": "2026-11-05T00:00:00Z"
+  },
+  {
+    "id": "BRK-PAYOUT-WILL-SETTLE-01",
+    "version": 1,
+    "family": "broker_withdraw",
+    "senders": [
+      "*"
+    ],
+    "priority": 640,
+    "match": {
+      "pattern": "we\\s+will\\s+settle\\s+your\\s+account\\b[\\s\\S]{0,40}?credit\\s+(?:rs\\.?|inr|₹)\\s*(?<amt>[\\d,]+(?:\\.\\d{1,2})?)\\s+to\\s+your\\s+bank",
+      "flags": "i"
+    },
+    "emit": [
+      {
+        "factType": "attempt",
+        "attrs": {
+          "status": "pending",
+          "direction": "credit",
+          "purpose": "investment"
+        },
+        "amounts": [
+          {
+            "role": "posted",
+            "from": "amt",
+            "unit": "INR"
+          }
+        ],
+        "instrument": {
+          "kind": "broker"
+        },
+        "counterparty": {
+          "kind": "bank"
+        }
+      }
+    ],
+    "confidence": 0.88,
+    "examples": [
+      {
+        "sender": "VM-ACMESC-S",
+        "body": "As per a SEBI mandate, we will settle your account today & credit Rs. 75.10 to your bank. Check email for details. Team Acme",
+        "expectFactTypes": [
+          "attempt"
+        ]
+      },
+      {
+        "sender": "VM-ACMESC-S",
+        "body": "As per a SEBI mandate, we have settled your account and credited Rs. 75.10 to your bank. Team Acme",
+        "expectFactTypes": []
+      }
+    ],
+    "status": "active",
+    "createdBy": "lane-i",
+    "updatedAt": "2026-11-05T00:00:00Z"
+  },
+  {
+    "id": "BRK-PAYOUT-BANK-CREDITED-01",
+    "version": 2,
+    "family": "broker_withdraw",
+    "senders": [
+      "ZERODH",
+      "GROWW",
+      "UPSTOX",
+      "KOTAKN",
+      "INDMNY",
+      "ANGELO",
+      "DHANHQ",
+      "UNIVST",
+      "PAYTMM",
+      "HDFCSC",
+      "ICICID",
+      "FIVEPS",
+      "MOSLTD",
+      "SHRKHN"
+    ],
+    "priority": 640,
+    "match": {
+      "pattern": "(?:^\\s*(?!dear\\b|hi\\b|hello\\b)(?<broker>[a-z][a-z0-9 .&]{1,30}?)\\s*:\\s*[\\s\\S]*?)?(?:funds?|withdrawal|payout|settlement)(?:\\s+amount)?\\s+(?:of\\s+)?(?:rs\\.?|inr|₹)\\s*(?<amt>[\\d,]+(?:\\.\\d{1,2})?)\\s+(?:has been\\s+|have been\\s+|was\\s+|were\\s+)?(?:transferred|credited|settled|paid)\\s+to\\s+your\\s+(?:linked\\s+)?(?:bank\\s+)?(?:(?:a/c|acct?\\.?|account)\\s*(?:no\\.?\\s*)?(?:ending\\s*(?:with\\s*|in\\s*)?)?(?:[x*•.]+\\s*)?(?<mask>\\d{2,16})\\b)?[\\s\\S]{0,120}?(?:utr|ref(?:erence)?)\\s*(?:no\\.?|id)?\\s*[:#]?\\s*(?<ref_txnId>[a-z0-9]{6,})",
+      "flags": "i",
+      "rejectAny": [
+        "will be",
+        "failed",
+        "rejected",
+        "reversed"
+      ]
+    },
+    "emit": [
+      {
+        "factType": "movement",
+        "attrs": {
+          "direction": "credit",
+          "purpose": "investment",
+          "rail": "unknown"
+        },
+        "amounts": [
+          {
+            "role": "posted",
+            "from": "amt",
+            "unit": "INR"
+          }
+        ],
+        "counterparty": {
+          "kind": "merchant",
+          "nameFrom": "broker",
+          "transforms": [
+            "sanitizeNarration"
+          ]
+        }
+      }
+    ],
+    "confidence": 0.8,
+    "examples": [
+      {
+        "sender": "VM-UPSTOX-S",
+        "body": "Acme: Withdrawal of Rs 4,000.00 has been transferred to your bank a/c XX4321. UTR: ACME00112233.",
+        "expectFactTypes": [
+          "movement"
+        ]
+      },
+      {
+        "sender": "VM-UPSTOX-S",
+        "body": "Acme: Withdrawal of Rs 4,000.00 will be transferred to your bank a/c XX4321. UTR: ACME00112233.",
+        "expectFactTypes": []
+      }
+    ],
+    "status": "active",
+    "createdBy": "lane-i",
+    "updatedAt": "2026-11-05T00:00:00Z"
+  }
+]

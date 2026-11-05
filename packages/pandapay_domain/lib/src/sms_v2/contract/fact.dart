@@ -120,7 +120,9 @@ sealed class Fact extends JsonValue {
       case FactType.instrumentHint:
         return InstrumentHintFact(e, hint: InstrumentHintKind.fromWire(a['hint'] as String));
       case FactType.info:
-        return InfoFact(e, category: InfoCategory.fromWire(a['category'] as String));
+        return InfoFact(e,
+            category: InfoCategory.fromWire(a['category'] as String),
+            amountMinor: (a['amountMinor'] as num?)?.toInt());
     }
   }
 
@@ -368,14 +370,19 @@ final class InstrumentHintFact extends Fact {
 }
 
 /// Not financial. Never stored or uploaded; only counted.
+///
+/// [amountMinor] is an optional printed amount in paise (CCR-002), for example
+/// the blocked amount in an IPO application notice. It is informational only:
+/// it is not an `amounts` entry, so the linker, ledger and totals never see it.
 final class InfoFact extends Fact {
-  InfoFact(super.envelope, {required this.category});
+  InfoFact(super.envelope, {required this.category, this.amountMinor});
 
   final InfoCategory category;
+  final int? amountMinor;
 
   @override
   FactType get factType => FactType.info;
 
   @override
-  Json get attrsJson => {'category': category.wire};
+  Json get attrsJson => {'category': category.wire, if (amountMinor != null) 'amountMinor': amountMinor};
 }

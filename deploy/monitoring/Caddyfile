@@ -1,0 +1,19 @@
+# Public HTTPS for error-report ingestion only. Everything else, including
+# the GlitchTip login page and API, answers 404 here; the UI is reached over
+# Tailscale at http://PRIVATE_BIND_IP:8000.
+{$ERRORS_HOSTNAME} {
+	@ingest {
+		method POST
+		path_regexp ingest ^/api/[0-9]+/(envelope|store)/$
+	}
+	handle @ingest {
+		request_body {
+			max_size 1MB
+		}
+		reverse_proxy glitchtip:8000
+	}
+	handle {
+		respond 404
+	}
+	header -Server
+}

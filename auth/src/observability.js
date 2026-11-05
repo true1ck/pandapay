@@ -14,6 +14,11 @@
  */
 
 const crypto = require('crypto');
+const { createTelemetry } = require('./telemetry');
+
+// Error reports and metrics (see telemetry.js). Both are off until
+// ERROR_REPORTING_DSN / METRICS_PORT are configured.
+const telemetry = createTelemetry({ service: 'auth' });
 
 // Query values include contacts, locations and arbitrary provider tokens.
 // Drop the query entirely; a denylist cannot cover future or encoded keys.
@@ -52,6 +57,11 @@ function requestLogger(req, res, next) {
 
   res.on('finish', () => {
     const durationMs = Number(process.hrtime.bigint() - startedAt) / 1e6;
+    const route = requestPath(req);
+    telemetry.metrics.observeRequest(req.method, route, res.statusCode, durationMs / 1000);
+    if (res.statusCode >= 500 && !res.locals?.telemetryReported) {
+      telemetry.reporter.captureServerError({ method: req.method, route, status: res.statusCode });
+    }
     log(res.statusCode >= 500 ? 'error' : 'info', {
       msg: 'request',
       requestId,
@@ -82,8 +92,10 @@ function errorHandler(err, req, res, _next) {
     path: requestPath(req),
     error: 'request_failed',
   });
+  telemetry.reporter.captureException(err, { kind: 'unhandled_request', method: req.method, route: requestPath(req) });
+  if (res.locals) res.locals.telemetryReported = true;
   if (res.headersSent) return;
   res.status(500).json({ error: 'internal_error', requestId: req.requestId });
 }
 
-module.exports = { requestLogger, errorHandler, log, safeUrl, correlationId };
+module.exports = { requestLogger, errorHandler, log, safeUrl, correlationId, telemetry };

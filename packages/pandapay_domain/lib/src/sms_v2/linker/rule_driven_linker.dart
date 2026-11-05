@@ -43,7 +43,9 @@ enum LinkRuleKind {
 LinkRuleKind linkRuleKindOf(LinkRule rule) {
   for (final leg in rule.legs) {
     if (leg.role == LegRole.duplicateNotice) {
-      return leg.match.evidenceOnly == true ? LinkRuleKind.receipt : LinkRuleKind.duplicateNotice;
+      return leg.match.evidenceOnly == true
+          ? LinkRuleKind.receipt
+          : LinkRuleKind.duplicateNotice;
     }
   }
   return switch (rule.eventType) {
@@ -69,8 +71,8 @@ const Set<MovementPurpose> mandateChargePurposes = {
 /// The WP-05 event linker: joins the facts that describe one real-world thing
 /// into one [Event], driven by the bundle's link rules.
 ///
-/// - Facts are processed in a fixed order: `occurredAt ?? observedAt`, then
-///   `factId`. Only `movement`, `hold` and `mandate` facts take part.
+/// - Facts are processed in a fixed order: `observedAt` (receipt order, so a
+///   batch equals the same messages one at a time), then `factId`. Only `movement`, `hold` and `mandate` facts take part.
 /// - For each fact the link rules are tried by priority. A rule whose other
 ///   leg is found exactly once joins it; two or more give an `ambiguous` event
 ///   and a [ReviewItem]; none moves on to the next rule. A fact no rule joins
@@ -87,27 +89,35 @@ class RuleDrivenLinker implements EventLinker {
     DateTime Function()? clock,
   }) : partialWalletIssuers = {
          for (final s in senders)
-           if (s.walletSpendVisibility == WalletSpendVisibility.partial && s.issuerSlug != null)
+           if (s.walletSpendVisibility == WalletSpendVisibility.partial &&
+               s.issuerSlug != null)
              s.issuerSlug!,
        },
        _topups = [
          for (final c in counterpartyPurposes)
-           if (c.purpose == MovementPurpose.walletTopup && c.targetInstrument?.issuerSlug != null)
+           if (c.purpose == MovementPurpose.walletTopup &&
+               c.targetInstrument?.issuerSlug != null)
              _TopupTarget(
-               vpa: c.vpaPattern == null ? null : RegExp(c.vpaPattern!, caseSensitive: false),
-               name: c.namePattern == null ? null : RegExp(c.namePattern!, caseSensitive: false),
+               vpa: c.vpaPattern == null
+                   ? null
+                   : RegExp(c.vpaPattern!, caseSensitive: false),
+               name: c.namePattern == null
+                   ? null
+                   : RegExp(c.namePattern!, caseSensitive: false),
                issuerSlug: c.targetInstrument!.issuerSlug!,
              ),
        ],
        _clock = clock ?? (() => DateTime.now().toUtc());
 
   /// A linker that knows the bundle's wallets and top-up payees.
-  factory RuleDrivenLinker.fromBundle(RuleBundle bundle, {DateTime Function()? clock}) =>
-      RuleDrivenLinker(
-        senders: bundle.senders,
-        counterpartyPurposes: bundle.counterpartyPurposes,
-        clock: clock,
-      );
+  factory RuleDrivenLinker.fromBundle(
+    RuleBundle bundle, {
+    DateTime Function()? clock,
+  }) => RuleDrivenLinker(
+    senders: bundle.senders,
+    counterpartyPurposes: bundle.counterpartyPurposes,
+    clock: clock,
+  );
 
   /// Wallet issuers with `walletSpendVisibility: partial` (Amazon Pay): a
   /// top-up is a purchase at the wallet's merchant, and the wallet's own
@@ -193,24 +203,40 @@ class _Timeline {
         hi = mid;
       }
     }
-    for (var i = lo; i < _items.length && !_items[i].effectiveAt.isAfter(to); i++) {
+    for (
+      var i = lo;
+      i < _items.length && !_items[i].effectiveAt.isAfter(to);
+      i++
+    ) {
       yield _items[i];
     }
   }
 }
 
-const _moneyRoles = {LegRole.debitLeg, LegRole.creditLeg, LegRole.charge, LegRole.reversal};
+const _moneyRoles = {
+  LegRole.debitLeg,
+  LegRole.creditLeg,
+  LegRole.charge,
+  LegRole.reversal,
+};
 
 /// One link (or expire) call.
 class _Run {
-  _Run(this.linker, this.context, List<LinkRule> rules, this.now, List<Fact> incoming)
-    : rules = [...rules]
+  _Run(
+    this.linker,
+    this.context,
+    List<LinkRule> rules,
+    this.now,
+    List<Fact> incoming,
+  ) : rules = [...rules]
         ..sort((a, b) {
           final c = b.priority.compareTo(a.priority);
           return c != 0 ? c : a.id.compareTo(b.id);
         }),
       complete = context is RuleLinkContext,
-      idByFact = context is RuleLinkContext ? context.instrumentIdByFactId : const {} {
+      idByFact = context is RuleLinkContext
+          ? context.instrumentIdByFactId
+          : const {} {
     for (final r in this.rules) {
       kinds[r] = linkRuleKindOf(r);
     }
@@ -271,6 +297,10 @@ class _Run {
   /// Mandates by name keys ([_partyKeys]) and by reference (`R:<value>`).
   final mandatesByKey = <String, _Timeline>{};
 
+  /// Non-receipt debits by counterparty name key and by `R:<mandateRef>`, so a
+  /// mandate that arrives after its charges can find them.
+  final debitsByKey = <String, _Timeline>{};
+
   /// Purchase fact id to the refunds already linked to it.
   final refunded = <String, int>{};
   final reviews = <String, ReviewItem>{};
@@ -284,6 +314,16 @@ class _Run {
     return c != 0 ? c : a.factId.compareTo(b.factId);
   }
 
+  /// The order facts are linked in: the order messages are received, which is
+  /// the order live capture sees them in. A printed date (a day, or a day and
+  /// time) can put a later message before an earlier one, so ordering a batch
+  /// by it would link a history differently from the same messages one at a
+  /// time. Ties go by fact id.
+  static int _arrival(Fact a, Fact b) {
+    final c = a.observedAt.compareTo(b.observedAt);
+    return c != 0 ? c : a.factId.compareTo(b.factId);
+  }
+
   // --------------------------------------------------------------- public
 
   LinkResult link(List<Fact> incoming) {
@@ -291,7 +331,7 @@ class _Run {
     final sorted = [
       for (final f in incoming)
         if (seen.add(f.factId)) f,
-    ]..sort(_order);
+    ]..sort(_arrival);
     for (final f in sorted) {
       facts[f.factId] = f;
     }
@@ -327,7 +367,8 @@ class _Run {
               f.direction == Direction.debit &&
               !eventOfFact.containsKey(f.factId) &&
               !_isPartialWalletFact(f) &&
-              now.difference(_latest(f)) > _hours(receiptRule.join.windowHours)) {
+              now.difference(_latest(f)) >
+                  _hours(receiptRule.join.windowHours)) {
             _receiptReview(f);
           }
         }
@@ -342,7 +383,11 @@ class _Run {
     for (final id in changed) {
       (preexisting.contains(id) ? updated : created).add(events[id]!);
     }
-    return LinkResult(created: created, updated: updated, ambiguous: [...reviews.values]);
+    return LinkResult(
+      created: created,
+      updated: updated,
+      ambiguous: [...reviews.values],
+    );
   }
 
   // ------------------------------------------------------------ processing
@@ -356,6 +401,7 @@ class _Run {
       case MandateFact():
         if (_isIpoMandate(f)) pendingIpoMandates.add(f);
         _done(f);
+        _lateMandate(f);
         return;
       case MovementFact() || HoldFact():
         break;
@@ -364,18 +410,33 @@ class _Run {
         return;
     }
 
+    // 0. Legs that arrived before this one (see [_lateHold], [_lateOriginal]).
+    if (f is HoldFact && _lateHold(f)) {
+      _done(f);
+      return;
+    }
+    if (f is MovementFact) _lateOriginal(f);
+
     // 1. Pair rules, by priority: join the one other leg that is found.
     for (final rule in rules) {
       final kind = kinds[rule]!;
-      if (kind == LinkRuleKind.receipt || kind == LinkRuleKind.duplicateNotice) continue;
+      if (kind == LinkRuleKind.receipt || kind == LinkRuleKind.duplicateNotice)
+        continue;
       for (final leg in rule.legs) {
-        if (leg.role == LegRole.original) continue; // shared references never search
+        if (leg.role == LegRole.original)
+          continue; // shared references never search
         if (!_legMatches(rule, leg, f)) continue;
         final cands = _candidates(rule, leg, f);
         if (cands.isEmpty) continue;
         final narrowed = _narrow(rule, f, cands);
-        final eventId = narrowed.length == 1
-            ? _join(rule, leg.role, f, narrowed.single)
+        // Several mandates of one merchant (a notice with a reference and one
+        // without, or two references) are not an ambiguity about the money: the
+        // debit is a charge either way. `_mandateCandidates` lists the most
+        // recently active mandate first, so the debit joins that one and keeps
+        // its charge leg and its ledger row.
+        final eventId =
+            narrowed.length == 1 || kind == LinkRuleKind.mandateCharge
+            ? _join(rule, leg.role, f, narrowed.first)
             : _ambiguous(rule, leg.role, f, narrowed);
         _afterMoney(f, eventId);
         _done(f);
@@ -383,8 +444,9 @@ class _Run {
       }
     }
 
-    // 2. A second notice of a debit already seen (bank and UPI app).
-    if (f is MovementFact && f.direction == Direction.debit) {
+    // 2. A second notice of a payment already seen (bank and UPI app, a
+    //    registrar and the bank, a broker and the bank).
+    if (f is MovementFact) {
       for (final rule in rules) {
         if (kinds[rule] != LinkRuleKind.duplicateNotice) continue;
         final cands = _duplicateCandidates(rule, f);
@@ -393,7 +455,14 @@ class _Run {
         if (narrowed.length == 1) {
           _joinDuplicate(rule, f, narrowed.single);
         } else {
-          _ambiguous(rule, LegRole.debitLeg, f, narrowed);
+          _ambiguous(
+            rule,
+            f.direction == Direction.debit
+                ? LegRole.debitLeg
+                : LegRole.creditLeg,
+            f,
+            narrowed,
+          );
         }
         _done(f);
         return;
@@ -403,7 +472,8 @@ class _Run {
     // 3. The first rule that lets this leg stand alone.
     for (final rule in rules) {
       for (final leg in rule.legs) {
-        if (!_legMatches(rule, leg, f) || !_standsAlone(rule, leg.role, f)) continue;
+        if (!_legMatches(rule, leg, f) || !_standsAlone(rule, leg.role, f))
+          continue;
         final status = switch (rule.singleLeg) {
           SingleLeg.awaitingLeg => EventStatus.awaitingLeg,
           _ => EventStatus.complete,
@@ -446,8 +516,21 @@ class _Run {
       }
     }
     if (f is MandateFact) {
-      for (final k in {..._partyKeys(_party(f)), for (final r in f.references.values) 'R:$r'}) {
+      for (final k in {
+        ..._partyKeys(_party(f)),
+        for (final r in f.references.values) 'R:$r',
+      }) {
         mandatesByKey.putIfAbsent(k, _Timeline.new).add(f);
+      }
+    }
+    if (f is MovementFact &&
+        f.direction == Direction.debit &&
+        f.evidenceOnly != true) {
+      for (final k in {
+        ..._partyKeys(_party(f)),
+        if (f.mandateRef != null) 'R:${f.mandateRef}',
+      }) {
+        debitsByKey.putIfAbsent(k, _Timeline.new).add(f);
       }
     }
   }
@@ -510,7 +593,8 @@ class _Run {
       final ev = f is MovementFact && f.evidenceOnly == true;
       if (ev != m.evidenceOnly) return false;
     }
-    if (kinds[rule] == LinkRuleKind.mandateCharge && leg.role == LegRole.charge) {
+    if (kinds[rule] == LinkRuleKind.mandateCharge &&
+        leg.role == LegRole.charge) {
       if (f is! MovementFact || f.direction != Direction.debit) return false;
       if (!mandateChargePurposes.contains(f.purpose)) return false;
       if (f.mandateRef == null && _party(f) == null) return false;
@@ -522,7 +606,9 @@ class _Run {
     final kind = kinds[rule]!;
     if (kind == LinkRuleKind.mandateCharge) return _mandateCandidates(rule, f);
     final role = leg.role;
-    final placed = rule.legs.where((l) => l.role == LegRole.holdPlaced).toList();
+    final placed = rule.legs
+        .where((l) => l.role == LegRole.holdPlaced)
+        .toList();
     final List<LinkLeg> others;
     if (placed.isNotEmpty) {
       // Hold rules: every later leg relates to the placed hold.
@@ -543,7 +629,13 @@ class _Run {
   }
 
   /// The candidates among [pool] for the [other] leg of [rule].
-  List<_Cand> _scan(LinkRule rule, LegRole role, Fact f, LinkLeg other, Iterable<Fact> pool) {
+  List<_Cand> _scan(
+    LinkRule rule,
+    LegRole role,
+    Fact f,
+    LinkLeg other,
+    Iterable<Fact> pool,
+  ) {
     final byEvent = <String, _Cand>{};
     final loose = <_Cand>[];
     for (final g in pool) {
@@ -552,7 +644,8 @@ class _Run {
       if (!_legMatches(rule, other, g)) continue;
       if (!_within(f, g, rule.join.windowHours)) continue;
       if (!_amountOk(rule, role, f, other.role, g)) continue;
-      if (rule.join.reference == ReferenceMode.require && !_sharesRef(f, g)) continue;
+      if (rule.join.reference == ReferenceMode.require && !_sharesRef(f, g))
+        continue;
       if (!_pairOk(rule, role, f, other.role, g)) continue;
       if (other.role == LegRole.original) {
         loose.add(_Cand.fact(g, other.role));
@@ -577,7 +670,8 @@ class _Run {
     final kind = kinds[rule]!;
     final from = f.effectiveAt.subtract(_hours(rule.join.windowHours) + _slack);
     final to = f.effectiveAt.add(_slack);
-    Iterable<Fact> range(_Timeline? t) => t == null ? const [] : t.range(from, to);
+    Iterable<Fact> range(_Timeline? t) =>
+        t == null ? const [] : t.range(from, to);
     final i = _instId(f);
     final keys = _partyKeys(_party(f));
     final a = _principal(f);
@@ -616,13 +710,22 @@ class _Run {
   }
 
   bool _joinable(LinkRule rule, Event e, LegRole role) {
-    if (e.status == EventStatus.userConfirmed || e.status == EventStatus.ambiguous) return false;
-    if (role != LegRole.duplicateNotice && e.legs.any((l) => l.role == role)) return false;
+    if (e.status == EventStatus.userConfirmed ||
+        e.status == EventStatus.ambiguous)
+      return false;
+    if (role != LegRole.duplicateNotice && e.legs.any((l) => l.role == role))
+      return false;
     if (e.linkRuleId == rule.id) return true;
     return e.linkRuleId == null && e.legs.length == 1;
   }
 
-  bool _amountOk(LinkRule rule, LegRole role, Fact f, LegRole otherRole, Fact g) {
+  bool _amountOk(
+    LinkRule rule,
+    LegRole role,
+    Fact f,
+    LegRole otherRole,
+    Fact g,
+  ) {
     final a = _principal(f);
     final b = _principal(g);
     final tol = rule.join.amountTolerancePct ?? 0;
@@ -637,7 +740,8 @@ class _Run {
     return (a - b).abs() * 100 <= (a > b ? a : b) * tol;
   }
 
-  static bool _isReference(LegRole r) => r == LegRole.holdPlaced || r == LegRole.original;
+  static bool _isReference(LegRole r) =>
+      r == LegRole.holdPlaced || r == LegRole.original;
 
   bool _pairOk(LinkRule rule, LegRole role, Fact f, LegRole otherRole, Fact g) {
     final kind = kinds[rule]!;
@@ -654,8 +758,10 @@ class _Run {
       case LinkRuleKind.ownTransfer:
         final (d, c) = _debitCredit(role, f, g);
         if (_sameInstrument(d, c)) return false;
-        if (!_maskOk(d.counterparty?.accountMask, _inst(c)?.maskDigits)) return false;
-        if (!_maskOk(c.counterparty?.accountMask, _inst(d)?.maskDigits)) return false;
+        if (!_maskOk(d.counterparty?.accountMask, _inst(c)?.maskDigits))
+          return false;
+        if (!_maskOk(c.counterparty?.accountMask, _inst(d)?.maskDigits))
+          return false;
         return _isOwnDebit(d) || _isOwnCredit(c);
       case LinkRuleKind.refund:
         final refund = otherRole == LegRole.original ? f : g;
@@ -670,7 +776,8 @@ class _Run {
         }
         final cap = _principal(purchase);
         final amount = _principal(refund) ?? 0;
-        if (cap != null && (refunded[purchase.factId] ?? 0) + amount > cap) return false;
+        if (cap != null && (refunded[purchase.factId] ?? 0) + amount > cap)
+          return false;
         return true;
       case LinkRuleKind.ipo:
         final fi = _instId(f);
@@ -720,7 +827,7 @@ class _Run {
           : 'name:${_key(_party(g))}';
       groups.putIfAbsent(key, () => []).add(g);
     }
-    final out = <_Cand>[];
+    final out = <(DateTime, String, _Cand)>[];
     for (final group in groups.values) {
       group.sort(_order);
       final upTo = [
@@ -743,33 +850,67 @@ class _Run {
       }
       final posted = _principal(f);
       if (ceiling != null && posted != null && posted > ceiling) continue;
-      out.add(_Cand.fact(original, LegRole.original));
+      out.add((
+        upTo.last.effectiveAt,
+        upTo.last.factId,
+        _Cand.fact(original, LegRole.original),
+      ));
     }
-    return out;
+    // Most recently active mandate first (ties by fact id, so it is stable).
+    out.sort((a, b) {
+      final t = b.$1.compareTo(a.$1);
+      return t != 0 ? t : b.$2.compareTo(a.$2);
+    });
+    return [for (final c in out) c.$3];
   }
 
   List<_Cand> _duplicateCandidates(LinkRule rule, MovementFact f) {
     final a = _principal(f);
     if (a == null) return const [];
+    // The rule's own legs say which facts are notices and which are the money.
+    final noticeLeg = rule.legs
+        .where((l) => l.role == LegRole.duplicateNotice)
+        .firstOrNull;
+    final moneyLeg = rule.legs
+        .where((l) => l.role != LegRole.duplicateNotice)
+        .firstOrNull;
+    if (noticeLeg == null ||
+        moneyLeg == null ||
+        !_legMatches(rule, noticeLeg, f)) {
+      return const [];
+    }
     final byEvent = <String, _Cand>{};
     for (final g in byAmount[a] ?? const <Fact>[]) {
-      if (g is! MovementFact || g.factId == f.factId || g.sourceKey == f.sourceKey) continue;
+      if (g is! MovementFact ||
+          g.factId == f.factId ||
+          g.sourceKey == f.sourceKey)
+        continue;
       if (!processed.contains(g.factId)) continue;
-      if (g.direction != Direction.debit || g.evidenceOnly == true) continue;
+      if (!_legMatches(rule, moneyLeg, g)) continue;
       if (!_within(f, g, rule.join.windowHours)) continue;
       final eventId = eventOfFact[g.factId];
       if (eventId == null || byEvent.containsKey(eventId)) continue;
       final e = events[eventId]!;
-      if (e.status == EventStatus.userConfirmed || e.status == EventStatus.ambiguous) continue;
+      if (e.status == EventStatus.userConfirmed ||
+          e.status == EventStatus.ambiguous)
+        continue;
       final gRole = e.legs.firstWhere((l) => l.factId == g.factId).role;
-      if (gRole != LegRole.debitLeg && gRole != LegRole.charge) continue;
+      if (gRole != LegRole.debitLeg &&
+          gRole != LegRole.charge &&
+          gRole != LegRole.creditLeg) {
+        continue;
+      }
       final fi = _instId(f);
       final gi = _instId(g);
       if (fi != null && gi != null && fi != gi) continue;
       final shared = _sharesRef(f, g);
-      if (!shared && f.references.isNotEmpty && g.references.isNotEmpty) continue;
+      if (!shared && _conflictingRefs(f, g)) continue;
       // The same template on the same account twice is two real payments.
-      if (!shared && fi != null && fi == gi && f.provenance.ruleId == g.provenance.ruleId) continue;
+      if (!shared &&
+          fi != null &&
+          fi == gi &&
+          f.provenance.ruleId == g.provenance.ruleId)
+        continue;
       byEvent[eventId] = _Cand.event(eventId, g, gRole);
     }
     return [...byEvent.values];
@@ -792,7 +933,8 @@ class _Run {
       step((c) => _candFacts(c).any((g) => _sharesRef(f, g)));
     }
     final p = _party(f);
-    if (p != null) step((c) => _candFacts(c).any((g) => _sameParty(p, _party(g))));
+    if (p != null)
+      step((c) => _candFacts(c).any((g) => _sameParty(p, _party(g))));
     final a = _principal(f);
     if (a != null) step((c) => _principal(c.fact) == a);
     final i = _instId(f);
@@ -809,6 +951,244 @@ class _Run {
     }
   }
 
+  // ----------------------------------------------------------- late arrivals
+  //
+  // The linker is incremental: a call sees the facts of earlier calls only as
+  // stored events. When a fact that comes earlier in time arrives later than
+  // facts that depend on it (a release, an allotment debit, a refund, a
+  // charge), those facts already stand as events of their own. The three
+  // functions below let the earlier fact join them, so one batch, one message
+  // at a time and any arrival order end with the same legs. Money is never
+  // moved: a fact is a money leg of one event only.
+
+  /// A hold placed after its release, converted or allotment debit already
+  /// arrived. The hold joins the event of the dependents it matches (the
+  /// event that holds the debit, else the first); a dependent that carries no
+  /// money (a release) is added as a leg too. Returns whether it joined.
+  bool _lateHold(HoldFact f) {
+    if (f.phase != HoldPhase.placed) return false;
+    final rule = _firstOf(LinkRuleKind.ipo);
+    if (rule == null) return false;
+    final held = _principal(f);
+    final window = _hours(rule.join.windowHours);
+    final from = f.effectiveAt.subtract(_slack);
+    final to = f.effectiveAt.add(window + _slack);
+    final found = <(Fact, LegRole)>[];
+    for (final t in [byType[FactType.hold], byType[FactType.movement]]) {
+      if (t == null) continue;
+      for (final g in t.range(from, to)) {
+        if (g.factId == f.factId || g.sourceKey == f.sourceKey) continue;
+        if (!processed.contains(g.factId) || !_hasEvent(g)) continue;
+        for (final leg in rule.legs) {
+          if (leg.role == LegRole.holdPlaced || leg.role == LegRole.original)
+            continue;
+          if (!_legMatches(rule, leg, g)) continue;
+          if (!_within(f, g, rule.join.windowHours)) continue;
+          if (!_amountOk(rule, LegRole.holdPlaced, f, leg.role, g)) continue;
+          if (!_pairOk(rule, LegRole.holdPlaced, f, leg.role, g)) continue;
+          final e = events[eventOfFact[g.factId]!]!;
+          if (!_standsWithoutHold(e)) continue;
+          found.add((g, leg.role));
+          break;
+        }
+      }
+    }
+    if (found.isEmpty) return false;
+    found.sort((a, b) => _order(a.$1, b.$1));
+    // The event that holds the money (the allotment debit) takes the hold;
+    // a release alone is the base only when no debit is there. A second
+    // dependent keeps the event it already has: a fact is a leg of one event.
+    final chosen = [
+      for (final c in found)
+        if (held == null || (_principal(c.$1) ?? 0) <= held) c,
+    ];
+    if (chosen.isEmpty) return false;
+    // Another open hold the first dependent could belong to: the same
+    // ambiguity a batch reports, so leave the dependents as they are.
+    final first = chosen.first;
+    for (final h
+        in byType[FactType.hold]?.range(
+              first.$1.effectiveAt.subtract(window + _slack),
+              first.$1.effectiveAt.add(_slack),
+            ) ??
+            const <Fact>[]) {
+      if (h is! HoldFact || h.phase != HoldPhase.placed || h.factId == f.factId)
+        continue;
+      if (!processed.contains(h.factId) || eventOfFact[h.factId] == null)
+        continue;
+      if (h.sourceKey == f.sourceKey) continue;
+      final he = events[eventOfFact[h.factId]!]!;
+      if (he.status != EventStatus.awaitingLeg || he.legs.length != 1) continue;
+      if (_within(h, first.$1, rule.join.windowHours) &&
+          _amountOk(rule, LegRole.holdPlaced, h, first.$2, first.$1) &&
+          _pairOk(rule, LegRole.holdPlaced, h, first.$2, first.$1)) {
+        return false;
+      }
+    }
+    final base = chosen.firstWhere(
+      (c) => c.$2 == LegRole.debitLeg,
+      orElse: () => chosen.first,
+    );
+    final be = events[eventOfFact[base.$1.factId]!]!;
+    final legs = <EventLeg>[...be.legs];
+    legs.add(EventLeg(factId: f.factId, role: LegRole.holdPlaced));
+    _put(
+      _build(
+        be.eventId,
+        _typeFor(rule, legs),
+        _statusFor(rule, legs),
+        legs,
+        rule.id,
+        prior: be,
+      ),
+    );
+    return true;
+  }
+
+  /// An event a late hold may join: not settled by the user, no hold yet, and
+  /// made only of the dependent itself and its duplicate notices.
+  bool _standsWithoutHold(Event e) {
+    if (e.status == EventStatus.userConfirmed ||
+        e.status == EventStatus.ambiguous)
+      return false;
+    if (e.legs.any(
+      (l) => l.role == LegRole.holdPlaced || l.role == LegRole.original,
+    ))
+      return false;
+    final id = e.linkRuleId;
+    if (id != null) {
+      final r = _ruleById(id);
+      final k = r == null ? null : kinds[r];
+      if (k != LinkRuleKind.duplicateNotice && k != LinkRuleKind.receipt)
+        return false;
+    }
+    return e.legs.where((l) => l.role != LegRole.duplicateNotice).length == 1;
+  }
+
+  bool _hasEvent(Fact g) => eventOfFact.containsKey(g.factId);
+
+  /// A purchase that arrived after a refund of it: each refund that stands
+  /// alone and fits (same card, merchant, at most the purchase) takes the
+  /// purchase as its `original`. The purchase keeps its own event.
+  void _lateOriginal(MovementFact f) {
+    final rule = _firstOf(LinkRuleKind.refund);
+    if (rule == null ||
+        f.direction != Direction.debit ||
+        f.evidenceOnly == true)
+      return;
+    final leg = rule.legs.where((l) => l.role == LegRole.original).firstOrNull;
+    final reversal = rule.legs
+        .where((l) => l.role == LegRole.reversal)
+        .firstOrNull;
+    if (leg == null || reversal == null || !_legMatches(rule, leg, f)) return;
+    final i = _instId(f);
+    final amount = _principal(f);
+    if (i == null || amount == null) return;
+    final window = _hours(rule.join.windowHours);
+    final found = <Fact>[];
+    final seen = <String>{};
+    final pool = byType[FactType.movement]?.range(
+      f.effectiveAt.subtract(_slack),
+      f.effectiveAt.add(window + _slack),
+    );
+    for (final g in pool ?? const <Fact>[]) {
+      if (g.factId == f.factId ||
+          g.sourceKey == f.sourceKey ||
+          !seen.add(g.factId))
+        continue;
+      if (!processed.contains(g.factId) || !_hasEvent(g)) continue;
+      if (!_legMatches(rule, reversal, g)) continue;
+      if (!_within(f, g, rule.join.windowHours)) continue;
+      if (!_amountOk(rule, LegRole.original, f, LegRole.reversal, g)) continue;
+      final e = events[eventOfFact[g.factId]!]!;
+      if (!_joinable(rule, e, LegRole.original)) continue;
+      found.add(g);
+    }
+    found.sort(_order);
+    for (final g in found) {
+      // `_pairOk` reads the running refunded total, so each join counts.
+      if (!_pairOk(rule, LegRole.original, f, LegRole.reversal, g)) continue;
+      _join(
+        rule,
+        LegRole.original,
+        f,
+        _Cand.event(eventOfFact[g.factId]!, g, LegRole.reversal),
+      );
+    }
+  }
+
+  /// A mandate that arrived after its charges: each charge that stands alone
+  /// (or with duplicate notices) and whose best mandate is now known becomes
+  /// `subscription_charge [charge, original]`.
+  void _lateMandate(MandateFact m) {
+    final rule = _firstOf(LinkRuleKind.mandateCharge);
+    if (rule == null || _isIpoMandate(m)) return;
+    if (m.mandatePurpose == MandatePurpose.sip ||
+        m.mandatePurpose == MandatePurpose.loan)
+      return;
+    final leg = rule.legs.where((l) => l.role == LegRole.charge).firstOrNull;
+    if (leg == null) return;
+    final window = _hours(rule.join.windowHours);
+    final from = m.effectiveAt.subtract(_slack);
+    final to = m.effectiveAt.add(window + _slack);
+    final charges = <String, MovementFact>{};
+    for (final k in {
+      ..._partyKeys(_party(m)),
+      for (final r in m.references.values) 'R:$r',
+    }) {
+      for (final g in debitsByKey[k]?.range(from, to) ?? const <Fact>[]) {
+        if (g is! MovementFact || g.sourceKey == m.sourceKey) continue;
+        if (!processed.contains(g.factId) || !_hasEvent(g)) continue;
+        charges[g.factId] = g;
+      }
+    }
+    final ordered = charges.values.toList()..sort(_order);
+    for (final g in ordered) {
+      if (!_legMatches(rule, leg, g)) continue;
+      final e = events[eventOfFact[g.factId]!]!;
+      if (e.status == EventStatus.userConfirmed ||
+          e.status == EventStatus.ambiguous)
+        continue;
+      if (e.legs.any(
+        (l) => l.role == LegRole.original || l.role == LegRole.charge,
+      ))
+        continue;
+      if (e.type == EventType.subscriptionCharge && e.legs.length == 1) {
+        // already a charge with no mandate seen: it may take this one
+      } else if (e.linkRuleId != null &&
+          kinds[_ruleById(e.linkRuleId)] == null) {
+        continue;
+      }
+      final role = e.legs.firstWhere((l) => l.factId == g.factId).role;
+      if (role != LegRole.debitLeg) continue;
+      if (e.legs.any(
+        (l) => l.role != LegRole.debitLeg && l.role != LegRole.duplicateNotice,
+      )) {
+        continue;
+      }
+      final cands = _mandateCandidates(rule, g);
+      if (cands.isEmpty) continue;
+      final legs = <EventLeg>[
+        for (final l in e.legs)
+          if (l.factId == g.factId)
+            EventLeg(factId: g.factId, role: LegRole.charge)
+          else
+            l,
+        EventLeg(factId: cands.first.fact.factId, role: LegRole.original),
+      ];
+      _put(
+        _build(
+          e.eventId,
+          _typeFor(rule, legs),
+          EventStatus.complete,
+          legs,
+          rule.id,
+          prior: e,
+        ),
+      );
+    }
+  }
+
   // ----------------------------------------------------------------- joins
 
   String _join(LinkRule rule, LegRole role, Fact f, _Cand c) {
@@ -818,7 +1198,9 @@ class _Run {
       final legs = <EventLeg>[
         for (final l in e.legs)
           // A one-leg event made without a rule takes the role the rule gives it.
-          if (e.linkRuleId == null && e.legs.length == 1 && l.factId == c.fact.factId)
+          if (e.linkRuleId == null &&
+              e.legs.length == 1 &&
+              l.factId == c.fact.factId)
             EventLeg(factId: l.factId, role: c.role)
           else
             l,
@@ -862,7 +1244,10 @@ class _Run {
     final e = events[c.eventId]!;
     final g = c.fact;
     // Keep the notice that names the account as the money leg.
-    final swap = _instId(g) == null && _instId(f) != null;
+    // Otherwise the one that comes first in time, so arrival order cannot
+    // change which notice is the money.
+    final gi = _instId(g), fi = _instId(f);
+    final swap = (gi == null) != (fi == null) ? gi == null : _order(f, g) < 0;
     final legs = <EventLeg>[
       for (final l in e.legs)
         if (swap && l.factId == g.factId)
@@ -873,13 +1258,23 @@ class _Run {
     ];
     var type = e.type;
     if (type == EventType.unknown) type = _fallback(f)?.type ?? type;
-    _put(_build(e.eventId, type, e.status, legs, e.linkRuleId ?? rule.id, prior: e));
+    _put(
+      _build(
+        e.eventId,
+        type,
+        e.status,
+        legs,
+        e.linkRuleId ?? rule.id,
+        prior: e,
+      ),
+    );
   }
 
   String _ambiguous(LinkRule rule, LegRole role, Fact f, List<_Cand> cands) {
     final kind = kinds[rule]!;
     final legs = [EventLeg(factId: f.factId, role: role)];
-    final type = (kind == LinkRuleKind.receipt || kind == LinkRuleKind.duplicateNotice)
+    final type =
+        (kind == LinkRuleKind.receipt || kind == LinkRuleKind.duplicateNotice)
         ? (_fallback(f)?.type ?? EventType.unknown)
         : _typeFor(rule, legs);
     final e = _build(f.factId, type, EventStatus.ambiguous, legs, rule.id);
@@ -888,7 +1283,12 @@ class _Run {
     return e.eventId;
   }
 
-  void _ambiguousReview(LinkRule rule, Fact f, List<_Cand> cands, {String? eventId}) {
+  void _ambiguousReview(
+    LinkRule rule,
+    Fact f,
+    List<_Cand> cands, {
+    String? eventId,
+  }) {
     final id = 'link:ambiguous:${f.factId}';
     reviews[id] = ReviewItem(
       kind: ReviewKind.event,
@@ -900,7 +1300,11 @@ class _Run {
         'linkRuleId': rule.id,
         'candidates': [
           for (final c in cands)
-            {'eventId': c.eventId, 'factId': c.fact.factId, 'role': c.role.wire},
+            {
+              'eventId': c.eventId,
+              'factId': c.fact.factId,
+              'role': c.role.wire,
+            },
         ],
       },
     );
@@ -923,18 +1327,31 @@ class _Run {
   /// After a debit makes or joins an event, receipts already seen for it join
   /// as `duplicate_notice`.
   void _afterMoney(Fact f, String eventId) {
-    if (f is! MovementFact || f.direction != Direction.debit || f.evidenceOnly == true) return;
+    if (f is! MovementFact ||
+        f.direction != Direction.debit ||
+        f.evidenceOnly == true)
+      return;
     final rule = _firstOf(LinkRuleKind.receipt);
     final a = _principal(f);
     if (rule == null || a == null) return;
     final e = events[eventId]!;
-    if (e.status == EventStatus.userConfirmed || e.status == EventStatus.ambiguous) return;
-    final role = e.legs.where((l) => l.factId == f.factId).map((l) => l.role).firstOrNull;
+    if (e.status == EventStatus.userConfirmed ||
+        e.status == EventStatus.ambiguous)
+      return;
+    final role = e.legs
+        .where((l) => l.factId == f.factId)
+        .map((l) => l.role)
+        .firstOrNull;
     if (role != LegRole.debitLeg && role != LegRole.charge) return;
     final receipts = <_Cand>[];
     for (final r in byAmount[a] ?? const <Fact>[]) {
-      if (r is! MovementFact || r.evidenceOnly != true || r.direction != Direction.debit) continue;
-      if (eventOfFact.containsKey(r.factId) || ambiguousReceipts.contains(r.factId)) continue;
+      if (r is! MovementFact ||
+          r.evidenceOnly != true ||
+          r.direction != Direction.debit)
+        continue;
+      if (eventOfFact.containsKey(r.factId) ||
+          ambiguousReceipts.contains(r.factId))
+        continue;
       if (r.sourceKey == f.sourceKey || _isPartialWalletFact(r)) continue;
       if (!_within(f, r, rule.join.windowHours)) continue;
       receipts.add(_Cand.fact(r, LegRole.duplicateNotice));
@@ -950,26 +1367,44 @@ class _Run {
         });
     }
     final r = list.first.fact;
-    final legs = [...e.legs, EventLeg(factId: r.factId, role: LegRole.duplicateNotice)];
-    _put(_build(e.eventId, e.type, e.status, legs, e.linkRuleId ?? rule.id, prior: e));
+    final legs = [
+      ...e.legs,
+      EventLeg(factId: r.factId, role: LegRole.duplicateNotice),
+    ];
+    _put(
+      _build(
+        e.eventId,
+        e.type,
+        e.status,
+        legs,
+        e.linkRuleId ?? rule.id,
+        prior: e,
+      ),
+    );
   }
 
   /// A biller's or app's receipt: joins the debit it confirms, never makes an
   /// event of its own.
   void _processReceipt(MovementFact f) {
-    if (_isPartialWalletFact(f)) return; // wallet activity only: no event, no review
+    if (_isPartialWalletFact(f))
+      return; // wallet activity only: no event, no review
     final rule = _firstOf(LinkRuleKind.receipt);
     final a = _principal(f);
     if (rule == null || a == null) return;
     final byEvent = <String, _Cand>{};
     for (final g in byAmount[a] ?? const <Fact>[]) {
-      if (g is! MovementFact || g.direction != Direction.debit || g.evidenceOnly == true) continue;
+      if (g is! MovementFact ||
+          g.direction != Direction.debit ||
+          g.evidenceOnly == true)
+        continue;
       if (!processed.contains(g.factId) || g.sourceKey == f.sourceKey) continue;
       if (!_within(f, g, rule.join.windowHours)) continue;
       final eventId = eventOfFact[g.factId];
       if (eventId == null || byEvent.containsKey(eventId)) continue;
       final e = events[eventId]!;
-      if (e.status == EventStatus.userConfirmed || e.status == EventStatus.ambiguous) continue;
+      if (e.status == EventStatus.userConfirmed ||
+          e.status == EventStatus.ambiguous)
+        continue;
       final role = e.legs.firstWhere((l) => l.factId == g.factId).role;
       if (role != LegRole.debitLeg && role != LegRole.charge) continue;
       byEvent[eventId] = _Cand.event(eventId, g, role);
@@ -985,8 +1420,20 @@ class _Run {
       return;
     }
     final e = events[list.single.eventId]!;
-    final legs = [...e.legs, EventLeg(factId: f.factId, role: LegRole.duplicateNotice)];
-    _put(_build(e.eventId, e.type, e.status, legs, e.linkRuleId ?? rule.id, prior: e));
+    final legs = [
+      ...e.legs,
+      EventLeg(factId: f.factId, role: LegRole.duplicateNotice),
+    ];
+    _put(
+      _build(
+        e.eventId,
+        e.type,
+        e.status,
+        legs,
+        e.linkRuleId ?? rule.id,
+        prior: e,
+      ),
+    );
   }
 
   void _receiptReviews() {
@@ -1001,7 +1448,8 @@ class _Run {
 
   void _receiptReview(MovementFact f) {
     final id = 'link:receipt:${f.factId}';
-    final biller = f.counterparty?.name ?? f.instrument?.issuerSlug ?? 'a biller';
+    final biller =
+        f.counterparty?.name ?? f.instrument?.issuerSlug ?? 'a biller';
     final minor = _principal(f) ?? 0;
     reviews[id] = ReviewItem(
       kind: ReviewKind.event,
@@ -1011,7 +1459,8 @@ class _Run {
         'factId': f.factId,
         'biller': biller,
         'amountMinor': minor,
-        'message': 'We saw a receipt from $biller for ${_rupees(minor)} but no payment. Add it?',
+        'message':
+            'We saw a receipt from $biller for ${_rupees(minor)} but no payment. Add it?',
       },
     );
   }
@@ -1021,7 +1470,9 @@ class _Run {
     for (final m in pendingIpoMandates) {
       Event? target;
       for (final e in events.values) {
-        if (e.type != EventType.ipoApplication || e.status == EventStatus.userConfirmed) continue;
+        if (e.type != EventType.ipoApplication ||
+            e.status == EventStatus.userConfirmed)
+          continue;
         if (e.legs.any((l) => l.role == LegRole.original)) continue;
         final placedId = e.legs
             .where((l) => l.role == LegRole.holdPlaced)
@@ -1041,9 +1492,19 @@ class _Run {
         }
       }
       if (target == null) continue;
-      final legs = [...target.legs, EventLeg(factId: m.factId, role: LegRole.original)];
+      final legs = [
+        ...target.legs,
+        EventLeg(factId: m.factId, role: LegRole.original),
+      ];
       _put(
-        _build(target.eventId, target.type, target.status, legs, target.linkRuleId, prior: target),
+        _build(
+          target.eventId,
+          target.type,
+          target.status,
+          legs,
+          target.linkRuleId,
+          prior: target,
+        ),
       );
     }
   }
@@ -1073,14 +1534,18 @@ class _Run {
           debited += _principal(f) ?? 0;
           any = true;
         case LegRole.holdReleased:
-          released += f.amount(AmountRole.released)?.minor ?? _principal(f) ?? 0;
+          released +=
+              f.amount(AmountRole.released)?.minor ?? _principal(f) ?? 0;
           any = true;
         default:
           break;
       }
     }
-    if (held == null) return any ? EventStatus.complete : EventStatus.awaitingLeg;
-    return debited + released >= held ? EventStatus.complete : EventStatus.awaitingLeg;
+    if (held == null)
+      return any ? EventStatus.complete : EventStatus.awaitingLeg;
+    return debited + released >= held
+        ? EventStatus.complete
+        : EventStatus.awaitingLeg;
   }
 
   bool _standsAlone(LinkRule rule, LegRole role, Fact f) {
@@ -1101,7 +1566,9 @@ class _Run {
         return false; // the purpose typing below gives these their one-leg type
       case LinkRuleKind.generic:
         return role == rule.legs.first.role &&
-            (role == LegRole.debitLeg || role == LegRole.creditLeg || role == LegRole.holdPlaced);
+            (role == LegRole.debitLeg ||
+                role == LegRole.creditLeg ||
+                role == LegRole.holdPlaced);
     }
   }
 
@@ -1114,22 +1581,33 @@ class _Run {
       case MovementFact():
         final debit = f.direction == Direction.debit;
         final role = debit ? LegRole.debitLeg : LegRole.creditLeg;
-        if (debit && f.mandateRef != null && mandateChargePurposes.contains(f.purpose)) {
-          return (type: EventType.subscriptionCharge, role: LegRole.charge, status: done);
+        if (debit &&
+            f.mandateRef != null &&
+            mandateChargePurposes.contains(f.purpose)) {
+          return (
+            type: EventType.subscriptionCharge,
+            role: LegRole.charge,
+            status: done,
+          );
         }
         final type = switch (f.purpose) {
-          MovementPurpose.purchase => debit ? EventType.purchase : EventType.unknown,
+          MovementPurpose.purchase =>
+            debit ? EventType.purchase : EventType.unknown,
           MovementPurpose.p2p => debit ? EventType.p2pOut : EventType.p2pIn,
-          MovementPurpose.salary ||
-          MovementPurpose.interest => debit ? EventType.unknown : EventType.income,
-          MovementPurpose.refund ||
-          MovementPurpose.reversal => debit ? EventType.unknown : EventType.refund,
-          MovementPurpose.cashback => debit ? EventType.unknown : EventType.cashback,
-          MovementPurpose.atm => debit ? EventType.atmWithdrawal : EventType.unknown,
+          MovementPurpose.salary || MovementPurpose.interest =>
+            debit ? EventType.unknown : EventType.income,
+          MovementPurpose.refund || MovementPurpose.reversal =>
+            debit ? EventType.unknown : EventType.refund,
+          MovementPurpose.cashback =>
+            debit ? EventType.unknown : EventType.cashback,
+          MovementPurpose.atm =>
+            debit ? EventType.atmWithdrawal : EventType.unknown,
           MovementPurpose.fee => debit ? EventType.fee : EventType.refund,
           MovementPurpose.emi => debit ? EventType.emi : EventType.unknown,
-          MovementPurpose.billPayment => debit ? EventType.billPayment : EventType.refund,
-          MovementPurpose.tax => debit ? EventType.billPayment : EventType.income,
+          MovementPurpose.billPayment =>
+            debit ? EventType.billPayment : EventType.refund,
+          MovementPurpose.tax =>
+            debit ? EventType.billPayment : EventType.income,
           MovementPurpose.cardPayment => EventType.cardBillPayment,
           MovementPurpose.walletTopup =>
             _intoPartialWallet([EventLeg(factId: f.factId, role: role)])
@@ -1137,7 +1615,8 @@ class _Run {
                 : EventType.walletTopup,
           MovementPurpose.investment =>
             debit ? EventType.investment : EventType.investmentWithdrawal,
-          MovementPurpose.dividend => debit ? EventType.unknown : EventType.dividend,
+          MovementPurpose.dividend =>
+            debit ? EventType.unknown : EventType.dividend,
           MovementPurpose.transfer =>
             debit
                 ? (_isOwnDebit(f) ? EventType.ownTransfer : EventType.p2pOut)
@@ -1146,7 +1625,8 @@ class _Run {
         };
         return (type: type, role: role, status: done);
       case HoldFact():
-        if (f.purpose != HoldPurpose.ipoAsba && f.purpose != HoldPurpose.upiMandateBlock) {
+        if (f.purpose != HoldPurpose.ipoAsba &&
+            f.purpose != HoldPurpose.upiMandateBlock) {
           return null;
         }
         return switch (f.phase) {
@@ -1189,21 +1669,28 @@ class _Run {
         final f = facts[l.factId];
         if (f == null) continue;
         amount += _principal(f) ?? 0;
-        if (money == null || f.effectiveAt.isBefore(money.effectiveAt)) money = f;
+        if (money == null || f.effectiveAt.isBefore(money.effectiveAt))
+          money = f;
       }
     } else {
       for (final l in legs) {
         if (!_moneyRoles.contains(l.role)) continue;
         final f = facts[l.factId];
         if (f == null) continue;
-        if (money == null || f.effectiveAt.isBefore(money.effectiveAt)) money = f;
+        if (money == null || f.effectiveAt.isBefore(money.effectiveAt))
+          money = f;
       }
-      amount = (money == null ? null : _principal(money)) ?? prior?.amountMinor ?? 0;
+      amount =
+          (money == null ? null : _principal(money)) ?? prior?.amountMinor ?? 0;
     }
     final anchor = facts[eventId];
-    final at = money?.effectiveAt ?? prior?.occurredAt ?? anchor?.effectiveAt ?? now;
+    final at =
+        money?.effectiveAt ?? prior?.occurredAt ?? anchor?.effectiveAt ?? now;
     if (money == null && type != EventType.ipoApplication) {
-      amount = prior?.amountMinor ?? (anchor == null ? null : _principal(anchor)) ?? 0;
+      amount =
+          prior?.amountMinor ??
+          (anchor == null ? null : _principal(anchor)) ??
+          0;
     }
     var confidence = 1.0;
     var seenAny = false;
@@ -1251,7 +1738,8 @@ class _Run {
     if (m.maskDigits == null && m.kind == null) return null;
     Instrument? found;
     for (final i in context.instrumentsById.values) {
-      if (i.issuerSlug != m.issuerSlug || i.status == InstrumentStatus.rejected) continue;
+      if (i.issuerSlug != m.issuerSlug || i.status == InstrumentStatus.rejected)
+        continue;
       if (m.kind != null && i.kind != m.kind) continue;
       if (m.maskDigits != null && i.maskDigits != m.maskDigits) continue;
       if (found != null) return null; // not unique
@@ -1272,7 +1760,9 @@ class _Run {
   /// The destination named by [mask] is an own bank account (or the mask is
   /// not printed, or the account is not known).
   bool _maskOk(String? mask, String? instrumentMask) =>
-      mask == null || instrumentMask == null || _maskMatch(mask, instrumentMask);
+      mask == null ||
+      instrumentMask == null ||
+      _maskMatch(mask, instrumentMask);
 
   static bool _maskMatch(String a, String b) => a.endsWith(b) || b.endsWith(a);
 
@@ -1280,7 +1770,9 @@ class _Run {
     if (mask == null) return false;
     final self = _instId(f);
     for (final i in context.instrumentsById.values) {
-      if (i.kind != InstrumentKind.bankAccount || i.status == InstrumentStatus.rejected) continue;
+      if (i.kind != InstrumentKind.bankAccount ||
+          i.status == InstrumentStatus.rejected)
+        continue;
       if (i.instrumentId == self || i.maskDigits == null) continue;
       if (_maskMatch(mask, i.maskDigits!)) return true;
     }
@@ -1288,11 +1780,13 @@ class _Run {
   }
 
   bool _isOwnDebit(Fact d) =>
-      d.counterparty?.kind == CounterpartyKind.own || _ownMask(d.counterparty?.accountMask, d);
+      d.counterparty?.kind == CounterpartyKind.own ||
+      _ownMask(d.counterparty?.accountMask, d);
 
   bool _isOwnCredit(Fact c) => _isOwnDebit(c);
 
-  bool _isIpoMandate(MandateFact m) => m.oneTime == true || m.mandatePurpose == MandatePurpose.ipo;
+  bool _isIpoMandate(MandateFact m) =>
+      m.oneTime == true || m.mandatePurpose == MandatePurpose.ipo;
 
   String? _topupIssuer(Fact d) {
     final cp = d.counterparty;
@@ -1311,7 +1805,8 @@ class _Run {
     if (partial.isEmpty) return false;
     for (final l in legs) {
       final f = facts[l.factId];
-      if (f is! MovementFact || f.purpose != MovementPurpose.walletTopup) continue;
+      if (f is! MovementFact || f.purpose != MovementPurpose.walletTopup)
+        continue;
       final issuer = f.direction == Direction.debit
           ? _topupIssuer(f)
           : (_inst(f)?.issuerSlug ?? f.instrument?.issuerSlug);
@@ -1322,16 +1817,19 @@ class _Run {
 
   bool _isPartialWalletFact(Fact f) {
     final issuer = _inst(f)?.issuerSlug ?? f.instrument?.issuerSlug;
-    if (issuer == null || !linker.partialWalletIssuers.contains(issuer)) return false;
+    if (issuer == null || !linker.partialWalletIssuers.contains(issuer))
+      return false;
     final k = _instKind(f);
     return k == null || k == InstrumentKind.wallet;
   }
 
   static int? _principal(Fact f) => switch (f) {
     MovementFact() => f.amount(AmountRole.posted)?.minor,
-    HoldFact() => (f.amount(AmountRole.held) ?? f.amount(AmountRole.released))?.minor,
+    HoldFact() =>
+      (f.amount(AmountRole.held) ?? f.amount(AmountRole.released))?.minor,
     MandateFact() => f.amount(AmountRole.ceiling)?.minor,
-    AttemptFact() => (f.amount(AmountRole.posted) ?? f.amount(AmountRole.scheduled))?.minor,
+    AttemptFact() =>
+      (f.amount(AmountRole.posted) ?? f.amount(AmountRole.scheduled))?.minor,
     _ => null,
   };
 
@@ -1350,12 +1848,24 @@ class _Run {
   static Duration _hours(num h) =>
       Duration(microseconds: (h * Duration.microsecondsPerHour).round());
 
-  static bool _within(Fact a, Fact b, num hours) => _distance(a, b) <= _hours(hours);
+  static bool _within(Fact a, Fact b, num hours) =>
+      _distance(a, b) <= _hours(hours);
 
   static Set<String> _refs(Fact f) => {
     ...f.references.values,
     if (f is MovementFact && f.mandateRef != null) f.mandateRef!,
   };
+
+  /// Both carry the same kind of reference (two UTRs, two transaction ids)
+  /// and the values differ: two payments. References of different kinds (an
+  /// application number and a bank reference) say nothing.
+  static bool _conflictingRefs(Fact a, Fact b) {
+    for (final e in a.references.entries) {
+      final other = b.references[e.key];
+      if (other != null && other != e.value) return true;
+    }
+    return false;
+  }
 
   static bool _sharesRef(Fact a, Fact b) {
     final x = _refs(a);
@@ -1427,7 +1937,10 @@ class _Run {
     final cx = x.replaceAll(' ', '');
     final cy = y.replaceAll(' ', '');
     if (cx == cy) return true;
-    if (cx.length >= 5 && cy.length >= 5 && (cx.startsWith(cy) || cy.startsWith(cx))) return true;
+    if (cx.length >= 5 &&
+        cy.length >= 5 &&
+        (cx.startsWith(cy) || cy.startsWith(cx)))
+      return true;
     final fx = x.split(' ').first;
     final fy = y.split(' ').first;
     return fx.length >= 4 && fx == fy;

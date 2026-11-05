@@ -1,0 +1,37 @@
+{
+  "id": "lanej:salary_imps_amount_first",
+  "templateHash": "67f54c6dfc0ca5815524478f0e5653aa6d0d9a715563e21cf8d9bcc7e9c8c4f8",
+  "weight": 1,
+  "source": "synthetic",
+  "messages": [
+    {
+      "sender": "VM-HDFCBK-S",
+      "body": "INR 85000.00 credited to A/c no. XX1234 on 01-11-26 through IMPS/P2A/123456789012/ACME TECHNOLOGIES/SALARY NOV. Avl bal INR 100000.00.",
+      "observedAt": "2026-12-01T09:00:00.000Z"
+    }
+  ],
+  "expect": {
+    "facts": [
+      {
+        "factType": "movement",
+        "attrs": {
+          "direction": "credit",
+          "purpose": "salary",
+          "rail": "imps"
+        },
+        "amounts": [
+          {
+            "role": "posted",
+            "minor": 8500000
+          }
+        ],
+        "instrument": {
+          "kind": "bank_account",
+          "maskDigits": "1234"
+        }
+      }
+    ]
+  },
+  "note": "Salary by IMPS.",
+  "origin": "lane-j"
+}

@@ -1,0 +1,34 @@
+{
+  "id": "laneq:upiapp_received_gpay",
+  "templateHash": "b9667a1b5560eadc22b8fa2fbadff774a384423dab8f29342e1d7363b9bfe07f",
+  "weight": 1,
+  "source": "synthetic",
+  "messages": [
+    {
+      "sender": "GPAY",
+      "body": "You received Rs.250 from SAMPLE PERSON via Google Pay. UPI Ref 432112345678.",
+      "observedAt": "2026-11-20T09:00:00.000Z"
+    }
+  ],
+  "expect": {
+    "facts": [
+      {
+        "factType": "movement",
+        "attrs": {
+          "direction": "credit",
+          "purpose": "unknown",
+          "rail": "upi",
+          "evidenceOnly": true
+        },
+        "amounts": [
+          {
+            "role": "posted",
+            "minor": 25000
+          }
+        ]
+      }
+    ]
+  },
+  "note": "Evidence only.",
+  "origin": "lane-q"
+}

@@ -1,0 +1,183 @@
+[
+  {
+    "id": "BRK-MF-LUMPSUM-RECEIVED-01",
+    "version": 1,
+    "family": "mf_receipt",
+    "senders": [
+      "*"
+    ],
+    "priority": 690,
+    "match": {
+      "pattern": "(?:lump\\s*-?\\s*sum|one[\\s-]*time)\\s+(?:investment|purchase)\\s+of\\s+(?:rs\\.?|inr|₹)\\s*(?<amt>[\\d,]+(?:\\.\\d{1,2})?)\\s+(?:in|for|towards)\\s+(?<fund>[a-z0-9 .&()\\'-]+?)\\s+(?:has been\\s+|is\\s+|was\\s+)?(?:received|accepted|processed|successful|confirmed)\\b",
+      "flags": "i",
+      "rejectAny": [
+        "failed",
+        "rejected",
+        "unsuccessful",
+        "not been"
+      ]
+    },
+    "emit": [
+      {
+        "factType": "movement",
+        "attrs": {
+          "direction": "debit",
+          "purpose": "investment",
+          "rail": "unknown",
+          "evidenceOnly": true
+        },
+        "amounts": [
+          {
+            "role": "posted",
+            "from": "amt",
+            "unit": "INR"
+          }
+        ],
+        "counterparty": {
+          "kind": "merchant",
+          "nameFrom": "fund",
+          "transforms": [
+            "upperTrim"
+          ]
+        }
+      }
+    ],
+    "confidence": 0.88,
+    "examples": [
+      {
+        "sender": "VM-ACMEMF-S",
+        "body": "Your lumpsum investment of Rs 10,000.00 in Acme Flexi Cap Fund - Growth has been received. Units will be allotted at the applicable NAV.",
+        "expectFactTypes": [
+          "movement"
+        ]
+      },
+      {
+        "sender": "VM-ACMEMF-S",
+        "body": "Your lumpsum investment of Rs 10,000.00 in Acme Flexi Cap Fund - Growth has failed. Amount will be refunded.",
+        "expectFactTypes": []
+      }
+    ],
+    "status": "active",
+    "createdBy": "lane-i",
+    "updatedAt": "2026-11-05T00:00:00Z"
+  },
+  {
+    "id": "BRK-MF-SIP-INSTALMENT-01",
+    "version": 1,
+    "family": "mf_receipt",
+    "senders": [
+      "*"
+    ],
+    "priority": 690,
+    "match": {
+      "pattern": "(?:your\\s+)?sip\\s+instal?ment\\s+of\\s+(?:rs\\.?|inr|₹)\\s*(?<amt>[\\d,]+(?:\\.\\d{1,2})?)\\s+(?:in|for|towards)\\s+(?<fund>[a-z0-9 .&()\\'-]+?)\\s+(?:has been\\s+|is\\s+|was\\s+)?(?:debited|deducted|received|processed|successful|successfully\\s+(?:debited|processed|received))\\b",
+      "flags": "i",
+      "rejectAny": [
+        "failed",
+        "rejected",
+        "unsuccessful",
+        "insufficient",
+        "bounced"
+      ]
+    },
+    "emit": [
+      {
+        "factType": "movement",
+        "attrs": {
+          "direction": "debit",
+          "purpose": "investment",
+          "rail": "nach",
+          "evidenceOnly": true
+        },
+        "amounts": [
+          {
+            "role": "posted",
+            "from": "amt",
+            "unit": "INR"
+          }
+        ],
+        "counterparty": {
+          "kind": "merchant",
+          "nameFrom": "fund",
+          "transforms": [
+            "upperTrim"
+          ]
+        }
+      }
+    ],
+    "confidence": 0.88,
+    "examples": [
+      {
+        "sender": "VM-ACMEMF-S",
+        "body": "Your SIP instalment of Rs 2,500.00 for Acme Large Cap Fund - Direct Growth has been debited. Folio 123456/78.",
+        "expectFactTypes": [
+          "movement"
+        ]
+      },
+      {
+        "sender": "VM-ACMEMF-S",
+        "body": "Your SIP instalment of Rs 2,500.00 for Acme Large Cap Fund - Direct Growth has failed due to insufficient balance.",
+        "expectFactTypes": []
+      }
+    ],
+    "status": "active",
+    "createdBy": "lane-i",
+    "updatedAt": "2026-11-05T00:00:00Z"
+  },
+  {
+    "id": "BRK-MF-ALLOT-NAV-01",
+    "version": 1,
+    "family": "mf_receipt",
+    "senders": [
+      "*"
+    ],
+    "priority": 690,
+    "match": {
+      "pattern": "your\\s+investment\\s+of\\s+(?:rs\\.?|inr|₹)\\s*(?<amt>[\\d,]+(?:\\.\\d{1,2})?)\\s+in\\s+(?<fund>[a-z0-9 .&()\\'-]+?)\\s+has\\s+been\\s+allotted\\s+[\\d.]+\\s+units",
+      "flags": "i"
+    },
+    "emit": [
+      {
+        "factType": "movement",
+        "attrs": {
+          "direction": "debit",
+          "purpose": "investment",
+          "rail": "unknown",
+          "evidenceOnly": true
+        },
+        "amounts": [
+          {
+            "role": "posted",
+            "from": "amt",
+            "unit": "INR"
+          }
+        ],
+        "counterparty": {
+          "kind": "merchant",
+          "nameFrom": "fund",
+          "transforms": [
+            "upperTrim"
+          ]
+        }
+      }
+    ],
+    "confidence": 0.88,
+    "examples": [
+      {
+        "sender": "VM-ACMEMF-S",
+        "body": "Your investment of Rs 3,000.00 in Acme Debt Fund - Growth has been allotted 25.123 units at NAV Rs 119.41 for folio 123456/78.",
+        "expectFactTypes": [
+          "movement"
+        ]
+      },
+      {
+        "sender": "VM-ACMEMF-S",
+        "body": "Your investment of Rs 3,000.00 in Acme Debt Fund - Growth is pending allotment of units.",
+        "expectFactTypes": []
+      }
+    ],
+    "status": "active",
+    "createdBy": "lane-i",
+    "updatedAt": "2026-11-05T00:00:00Z"
+  }
+]

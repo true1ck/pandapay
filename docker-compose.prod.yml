@@ -91,6 +91,14 @@ services:
     logging: *default-logging
     environment:
       NODE_ENV: production
+      # Monitoring (deploy/monitoring/README.md). Off until set in .env:
+      # metrics listen only inside the Docker network (port never published),
+      # and error reports carry no message text or user data.
+      METRICS_PORT: "${API_METRICS_PORT:-}"
+      METRICS_HOST: "0.0.0.0"
+      ERROR_REPORTING_DSN: "${API_ERROR_REPORTING_DSN:-}"
+      PANDAPAY_GIT_SHA: "${PANDAPAY_GIT_SHA:-}"
+      PANDAPAY_ENVIRONMENT: "${PANDAPAY_ENVIRONMENT:-production}"
       TRUST_PROXY_HOPS: "1"
       DATABASE_URL: "${API_DATABASE_URL:?}"
       DB_SSL: "${DB_SSL:-true}"
@@ -277,6 +285,14 @@ services:
     logging: *default-logging
     environment:
       NODE_ENV: production
+      # Monitoring (deploy/monitoring/README.md). Off until set in .env:
+      # metrics listen only inside the Docker network (port never published),
+      # and error reports carry no message text or user data.
+      METRICS_PORT: "${AUTH_METRICS_PORT:-}"
+      METRICS_HOST: "0.0.0.0"
+      ERROR_REPORTING_DSN: "${AUTH_ERROR_REPORTING_DSN:-}"
+      PANDAPAY_GIT_SHA: "${PANDAPAY_GIT_SHA:-}"
+      PANDAPAY_ENVIRONMENT: "${PANDAPAY_ENVIRONMENT:-production}"
       TRUST_PROXY_HOPS: "1"
       ENABLE_ADMIN_DASHBOARD: "${ENABLE_ADMIN_DASHBOARD:-false}"
       DB_ACCESS_LOGGING_ENABLED: "${DB_ACCESS_LOGGING_ENABLED:-false}"

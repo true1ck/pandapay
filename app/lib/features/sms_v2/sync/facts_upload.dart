@@ -12,6 +12,7 @@ class UploadBatch {
   final Map<String, Object?> body;
   final List<int> gzipBytes;
   final bool backfill;
+  bool get categoryOnly => records.firstOrNull?.categoryOnly ?? false;
 }
 
 /// Bounded upload and acknowledgement. Source groups precede dependent
@@ -49,10 +50,13 @@ class FactsUpload {
       return rank == 0 ? position[a.id]!.compareTo(position[b.id]!) : rank;
     });
     final history = pending.firstOrNull?.backfill ?? false;
+    final categoryOnly = pending.firstOrNull?.categoryOnly ?? false;
     final counts = <String, int>{};
     final candidates = <OutboxRecord>[];
     for (final record in pending) {
-      if (record.backfill != history) continue;
+      if (record.backfill != history || record.categoryOnly != categoryOnly) {
+        continue;
+      }
       if (!const {
         'source',
         'instrument',
@@ -156,7 +160,11 @@ class FactsUpload {
         final response = await client
             .post(
               baseUri
-                  .resolve('/sms/v2/facts:batch')
+                  .resolve(
+                    batch.categoryOnly
+                        ? '/sms/v2/categories:batch'
+                        : '/sms/v2/facts:batch',
+                  )
                   .replace(
                     queryParameters: backfill || batch.backfill
                         ? {'backfill': 'true'}

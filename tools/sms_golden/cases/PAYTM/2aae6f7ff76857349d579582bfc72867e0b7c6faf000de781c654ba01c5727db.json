@@ -1,0 +1,18 @@
+{
+  "id": "laneq:wallet_offer_stays_ignored",
+  "templateHash": "2aae6f7ff76857349d579582bfc72867e0b7c6faf000de781c654ba01c5727db",
+  "weight": 1,
+  "source": "synthetic",
+  "messages": [
+    {
+      "sender": "PAYTM",
+      "body": "Add money to your Paytm Wallet and get cashback up to Rs.100. T&C apply.",
+      "observedAt": "2026-11-20T09:00:00.000Z"
+    }
+  ],
+  "expect": {
+    "ignore": true
+  },
+  "note": "Promotion guard.",
+  "origin": "lane-q"
+}

@@ -1,0 +1,455 @@
+[
+  {
+    "brand": "620020",
+    "issuerSlug": null,
+    "issuerKind": "other",
+    "aliases": []
+  },
+  {
+    "brand": "650001",
+    "issuerSlug": null,
+    "issuerKind": "other",
+    "aliases": []
+  },
+  {
+    "brand": "650002",
+    "issuerSlug": null,
+    "issuerKind": "other",
+    "aliases": []
+  },
+  {
+    "brand": "650003",
+    "issuerSlug": null,
+    "issuerKind": "other",
+    "aliases": []
+  },
+  {
+    "brand": "650022",
+    "issuerSlug": null,
+    "issuerKind": "other",
+    "aliases": []
+  },
+  {
+    "brand": "650024",
+    "issuerSlug": null,
+    "issuerKind": "other",
+    "aliases": []
+  },
+  {
+    "brand": "650025",
+    "issuerSlug": null,
+    "issuerKind": "other",
+    "aliases": []
+  },
+  {
+    "brand": "ABIBUS",
+    "issuerSlug": null,
+    "issuerKind": "other",
+    "aliases": []
+  },
+  {
+    "brand": "AIRDOT",
+    "issuerSlug": null,
+    "issuerKind": "other",
+    "aliases": []
+  },
+  {
+    "brand": "AIRMCA",
+    "issuerSlug": null,
+    "issuerKind": "other",
+    "aliases": []
+  },
+  {
+    "brand": "ARWGOV",
+    "issuerSlug": null,
+    "issuerKind": "other",
+    "aliases": []
+  },
+  {
+    "brand": "ARWINF",
+    "issuerSlug": null,
+    "issuerKind": "other",
+    "aliases": []
+  },
+  {
+    "brand": "ASTCHT",
+    "issuerSlug": null,
+    "issuerKind": "other",
+    "aliases": []
+  },
+  {
+    "brand": "BETRHF",
+    "issuerSlug": null,
+    "issuerKind": "other",
+    "aliases": []
+  },
+  {
+    "brand": "BHIM",
+    "issuerSlug": "bhim",
+    "issuerKind": "other",
+    "aliases": [
+      "BHIMAP"
+    ]
+  },
+  {
+    "brand": "BIGVEN",
+    "issuerSlug": null,
+    "issuerKind": "other",
+    "aliases": []
+  },
+  {
+    "brand": "BITLAA",
+    "issuerSlug": null,
+    "issuerKind": "other",
+    "aliases": []
+  },
+  {
+    "brand": "BLUDRT",
+    "issuerSlug": null,
+    "issuerKind": "other",
+    "aliases": []
+  },
+  {
+    "brand": "CDSLEV",
+    "issuerSlug": null,
+    "issuerKind": "other",
+    "aliases": []
+  },
+  {
+    "brand": "CDSLTX",
+    "issuerSlug": null,
+    "issuerKind": "other",
+    "aliases": []
+  },
+  {
+    "brand": "CIBILA",
+    "issuerSlug": null,
+    "issuerKind": "other",
+    "aliases": []
+  },
+  {
+    "brand": "CIBILP",
+    "issuerSlug": null,
+    "issuerKind": "other",
+    "aliases": []
+  },
+  {
+    "brand": "COINDC",
+    "issuerSlug": null,
+    "issuerKind": "other",
+    "aliases": []
+  },
+  {
+    "brand": "COWRKS",
+    "issuerSlug": null,
+    "issuerKind": "other",
+    "aliases": []
+  },
+  {
+    "brand": "DCTHLN",
+    "issuerSlug": null,
+    "issuerKind": "other",
+    "aliases": []
+  },
+  {
+    "brand": "DLHVRY",
+    "issuerSlug": null,
+    "issuerKind": "other",
+    "aliases": []
+  },
+  {
+    "brand": "DOMINO",
+    "issuerSlug": null,
+    "issuerKind": "other",
+    "aliases": []
+  },
+  {
+    "brand": "DOTMAH",
+    "issuerSlug": null,
+    "issuerKind": "other",
+    "aliases": []
+  },
+  {
+    "brand": "DSTRKT",
+    "issuerSlug": "district",
+    "issuerKind": "wallet",
+    "aliases": [
+      "DISTRI"
+    ],
+    "walletSpendVisibility": "sms"
+  },
+  {
+    "brand": "EKACRE",
+    "issuerSlug": null,
+    "issuerKind": "other",
+    "aliases": []
+  },
+  {
+    "brand": "EKARTL",
+    "issuerSlug": null,
+    "issuerKind": "other",
+    "aliases": []
+  },
+  {
+    "brand": "ELSRUN",
+    "issuerSlug": null,
+    "issuerKind": "other",
+    "aliases": []
+  },
+  {
+    "brand": "EPGRUP",
+    "issuerSlug": null,
+    "issuerKind": "other",
+    "aliases": []
+  },
+  {
+    "brand": "ESHRAM",
+    "issuerSlug": null,
+    "issuerKind": "other",
+    "aliases": []
+  },
+  {
+    "brand": "FINVUU",
+    "issuerSlug": null,
+    "issuerKind": "other",
+    "aliases": []
+  },
+  {
+    "brand": "INTERY",
+    "issuerSlug": null,
+    "issuerKind": "other",
+    "aliases": []
+  },
+  {
+    "brand": "IPRCTO",
+    "issuerSlug": null,
+    "issuerKind": "other",
+    "aliases": []
+  },
+  {
+    "brand": "IRCTCI",
+    "issuerSlug": null,
+    "issuerKind": "other",
+    "aliases": []
+  },
+  {
+    "brand": "IRSMSA",
+    "issuerSlug": null,
+    "issuerKind": "other",
+    "aliases": []
+  },
+  {
+    "brand": "ISATHI",
+    "issuerSlug": null,
+    "issuerKind": "other",
+    "aliases": []
+  },
+  {
+    "brand": "JAINUN",
+    "issuerSlug": null,
+    "issuerKind": "other",
+    "aliases": []
+  },
+  {
+    "brand": "JIOFIB",
+    "issuerSlug": null,
+    "issuerKind": "other",
+    "aliases": []
+  },
+  {
+    "brand": "JIOMRT",
+    "issuerSlug": null,
+    "issuerKind": "other",
+    "aliases": []
+  },
+  {
+    "brand": "JIONET",
+    "issuerSlug": null,
+    "issuerKind": "other",
+    "aliases": []
+  },
+  {
+    "brand": "JIOSVC",
+    "issuerSlug": null,
+    "issuerKind": "other",
+    "aliases": []
+  },
+  {
+    "brand": "JIOVOC",
+    "issuerSlug": null,
+    "issuerKind": "other",
+    "aliases": []
+  },
+  {
+    "brand": "LSMEAT",
+    "issuerSlug": null,
+    "issuerKind": "other",
+    "aliases": []
+  },
+  {
+    "brand": "MMTRIP",
+    "issuerSlug": null,
+    "issuerKind": "other",
+    "aliases": []
+  },
+  {
+    "brand": "NBHOME",
+    "issuerSlug": null,
+    "issuerKind": "other",
+    "aliases": []
+  },
+  {
+    "brand": "NSDLBP",
+    "issuerSlug": null,
+    "issuerKind": "other",
+    "aliases": []
+  },
+  {
+    "brand": "NSDLDP",
+    "issuerSlug": null,
+    "issuerKind": "other",
+    "aliases": []
+  },
+  {
+    "brand": "POPEYE",
+    "issuerSlug": null,
+    "issuerKind": "other",
+    "aliases": []
+  },
+  {
+    "brand": "PREUNI",
+    "issuerSlug": null,
+    "issuerKind": "other",
+    "aliases": []
+  },
+  {
+    "brand": "RBISAY",
+    "issuerSlug": null,
+    "issuerKind": "other",
+    "aliases": []
+  },
+  {
+    "brand": "RBOGDS",
+    "issuerSlug": null,
+    "issuerKind": "other",
+    "aliases": []
+  },
+  {
+    "brand": "REGINF",
+    "issuerSlug": null,
+    "issuerKind": "other",
+    "aliases": []
+  },
+  {
+    "brand": "RNTMJO",
+    "issuerSlug": null,
+    "issuerKind": "other",
+    "aliases": []
+  },
+  {
+    "brand": "SANGAM",
+    "issuerSlug": null,
+    "issuerKind": "other",
+    "aliases": []
+  },
+  {
+    "brand": "SELMOE",
+    "issuerSlug": null,
+    "issuerKind": "other",
+    "aliases": []
+  },
+  {
+    "brand": "SHAADI",
+    "issuerSlug": null,
+    "issuerKind": "other",
+    "aliases": []
+  },
+  {
+    "brand": "SHPRKT",
+    "issuerSlug": null,
+    "issuerKind": "other",
+    "aliases": []
+  },
+  {
+    "brand": "SLKCLB",
+    "issuerSlug": null,
+    "issuerKind": "other",
+    "aliases": []
+  },
+  {
+    "brand": "SSCBLR",
+    "issuerSlug": null,
+    "issuerKind": "other",
+    "aliases": []
+  },
+  {
+    "brand": "SSCSMS",
+    "issuerSlug": null,
+    "issuerKind": "other",
+    "aliases": []
+  },
+  {
+    "brand": "SSFBNK",
+    "issuerSlug": null,
+    "issuerKind": "bank",
+    "aliases": []
+  },
+  {
+    "brand": "STMRUN",
+    "issuerSlug": null,
+    "issuerKind": "other",
+    "aliases": []
+  },
+  {
+    "brand": "TRAIND",
+    "issuerSlug": null,
+    "issuerKind": "other",
+    "aliases": []
+  },
+  {
+    "brand": "TVSMOT",
+    "issuerSlug": null,
+    "issuerKind": "other",
+    "aliases": []
+  },
+  {
+    "brand": "TVSMTR",
+    "issuerSlug": null,
+    "issuerKind": "other",
+    "aliases": []
+  },
+  {
+    "brand": "VEROMM",
+    "issuerSlug": null,
+    "issuerKind": "other",
+    "aliases": []
+  },
+  {
+    "brand": "WSTSUP",
+    "issuerSlug": null,
+    "issuerKind": "other",
+    "aliases": []
+  },
+  {
+    "brand": "XPBEES",
+    "issuerSlug": null,
+    "issuerKind": "other",
+    "aliases": []
+  },
+  {
+    "brand": "YURBUS",
+    "issuerSlug": null,
+    "issuerKind": "other",
+    "aliases": []
+  },
+  {
+    "brand": "ZEPTON",
+    "issuerSlug": "zepto",
+    "issuerKind": "wallet",
+    "aliases": [
+      "ZEPTO",
+      "ZEPTOO"
+    ],
+    "walletSpendVisibility": "sms"
+  }
+]

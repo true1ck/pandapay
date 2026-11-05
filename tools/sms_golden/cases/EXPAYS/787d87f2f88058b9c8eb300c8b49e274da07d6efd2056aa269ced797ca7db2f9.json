@@ -1,0 +1,32 @@
+{
+  "id": "lanet:upi_mandate_collect_request",
+  "templateHash": "787d87f2f88058b9c8eb300c8b49e274da07d6efd2056aa269ced797ca7db2f9",
+  "weight": 1,
+  "source": "synthetic",
+  "messages": [
+    {
+      "sender": "VM-EXPAYS-S",
+      "body": "Dear Customer, You have received a UPI-Mandate collect request from EXAMPLE MEDIA for Rs.250.00. Login into the Example Pay application to authorize. -Example Bank",
+      "observedAt": "2026-12-01T09:00:00.000Z"
+    }
+  ],
+  "expect": {
+    "facts": [
+      {
+        "factType": "attempt",
+        "attrs": {
+          "status": "pending",
+          "direction": "debit"
+        },
+        "amounts": [
+          {
+            "role": "scheduled",
+            "minor": 25000
+          }
+        ]
+      }
+    ]
+  },
+  "note": "Biller collect request is a pending attempt.",
+  "origin": "lane-t"
+}

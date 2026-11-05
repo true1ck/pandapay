@@ -1,14 +1,14 @@
 [
   {
     "id": "INV-DIVIDEND-CREDIT-01",
-    "version": 1,
+    "version": 2,
     "family": "dividend",
     "senders": [
       "*"
     ],
     "priority": 380,
     "match": {
-      "pattern": "(?:dividend|idcw)[\\s\\S]{0,80}?(?:rs\\.?|inr|₹)\\s*(?<amt>[\\d,]+(?:\\.\\d{1,2})?)[\\s\\S]{0,120}?credit(?:ed)?(?:[\\s\\S]{0,60}?(?:a/c|acct?\\.?|account)\\s*(?:no\\.?\\s*)?(?:ending\\s*(?:with\\s*|in\\s*)?)?(?:[x*•.]+\\s*)?(?<mask>\\d{2,16})\\b)?",
+      "pattern": "(?:dividend|idcw)[\\s\\S]{0,80}?(?:rs\\.?|inr|₹)\\s*(?<amt>[\\d,]+(?:\\.\\d{1,2})?)(?=[\\s\\S]*?\\bfrom\\s+(?!your\\b|the\\b|a/?c\\b|account\\b|bank\\b)(?<payer>[a-z][a-z0-9 .&']{2,45}?)(?=\\s*[/,;(\\-]|\\s*\\.(?:\\s|$)|\\s*$|\\s+(?:ref|utr|info|avl|avail|bal|on|dated|if|call|txn|upi|not|via|using)\\b)|)[\\s\\S]{0,120}?credit(?:ed)?(?:[\\s\\S]{0,60}?(?:a/c|acct?\\.?|account)\\s*(?:no\\.?\\s*)?(?:ending\\s*(?:with\\s*|in\\s*)?)?(?:[x*•.]+\\s*)?(?<mask>\\d{2,16})\\b)?",
       "flags": "i",
       "rejectAny": [
         "will be credited",
@@ -36,6 +36,13 @@
         "instrument": {
           "kind": "bank_account",
           "maskFrom": "mask"
+        },
+        "counterparty": {
+          "kind": "merchant",
+          "nameFrom": "payer",
+          "transforms": [
+            "sanitizeNarration"
+          ]
         }
       }
     ],
@@ -52,22 +59,29 @@
         "sender": "VM-HDFCBK-S",
         "body": "Dividend of Rs 5 per share declared by INFOSYS LTD. Record date 20-Nov-26.",
         "expectFactTypes": []
+      },
+      {
+        "sender": "VM-HDFCBK-S",
+        "body": "Dividend of Rs.1,200.00 credited to your A/c XX1234 on 15-11-26 from ACME INDUSTRIES LTD. Avl Bal Rs.41,200.00 -HDFC Bank",
+        "expectFactTypes": [
+          "movement"
+        ]
       }
     ],
     "status": "active",
     "createdBy": "baseline",
-    "updatedAt": "2026-11-20T00:00:00Z"
+    "updatedAt": "2026-11-05T00:00:00Z"
   },
   {
     "id": "INV-DIVIDEND-CREDIT-02",
-    "version": 1,
+    "version": 2,
     "family": "dividend",
     "senders": [
       "*"
     ],
     "priority": 380,
     "match": {
-      "pattern": "credit(?:ed)?\\s+(?:by|of|with)\\s+(?:rs\\.?|inr|₹)\\s*(?<amt>[\\d,]+(?:\\.\\d{1,2})?)[\\s\\S]{0,160}?(?:dividend|idcw)",
+      "pattern": "credit(?:ed)?\\s+(?:by|of|with)\\s+(?:rs\\.?|inr|₹)\\s*(?<amt>[\\d,]+(?:\\.\\d{1,2})?)(?=[\\s\\S]*?\\bfrom\\s+(?!your\\b|the\\b|a/?c\\b|account\\b|bank\\b)(?<payer>[a-z][a-z0-9 .&']{2,45}?)(?=\\s*[/,;(\\-]|\\s*\\.(?:\\s|$)|\\s*$|\\s+(?:ref|utr|info|avl|avail|bal|on|dated|if|call|txn|upi|not|via|using)\\b)|)[\\s\\S]{0,160}?(?:dividend|idcw)",
       "flags": "i",
       "rejectAny": [
         "will be credited",
@@ -92,6 +106,13 @@
         ],
         "instrument": {
           "kind": "bank_account"
+        },
+        "counterparty": {
+          "kind": "merchant",
+          "nameFrom": "payer",
+          "transforms": [
+            "sanitizeNarration"
+          ]
         }
       }
     ],
@@ -112,6 +133,6 @@
     ],
     "status": "active",
     "createdBy": "baseline",
-    "updatedAt": "2026-11-20T00:00:00Z"
+    "updatedAt": "2026-11-05T00:00:00Z"
   }
 ]

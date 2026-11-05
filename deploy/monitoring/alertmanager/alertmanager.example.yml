@@ -1,0 +1,35 @@
+# Copy to alertmanager.yml in this folder, then:
+#   - put the Telegram bot token in alertmanager/secrets/telegram_bot_token (chmod 600)
+#   - replace chat_id with your alert group's id
+route:
+  receiver: telegram
+  group_by: [alertname, job]
+  group_wait: 30s
+  group_interval: 5m
+  repeat_interval: 4h
+  routes:
+    # The always-firing heartbeat never goes to people.
+    - matchers: ['alertname="Watchdog"']
+      receiver: blackhole
+      # To learn when this monitoring VM dies, send the heartbeat to an
+      # external dead-man service instead (e.g. a Healthchecks.io ping URL
+      # stored in secrets/heartbeat_url) and switch the receiver to heartbeat.
+      # receiver: heartbeat
+      # repeat_interval: 5m
+
+inhibit_rules:
+  # When the whole app server is silent, do not also page for each service.
+  - source_matchers: ['alertname="AppMetricsMissing"']
+    target_matchers: ['alertname=~"ServiceDown|HighServerErrorRate|SlowRequests"']
+
+receivers:
+  - name: telegram
+    telegram_configs:
+      - bot_token_file: /etc/alertmanager/secrets/telegram_bot_token
+        chat_id: -1000000000000
+        send_resolved: true
+  - name: blackhole
+  # - name: heartbeat
+  #   webhook_configs:
+  #     - url_file: /etc/alertmanager/secrets/heartbeat_url
+  #       send_resolved: false

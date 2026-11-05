@@ -67,6 +67,12 @@ services:
       ADMIN_CONTAINER_NETWORK: 'true'
       ADMIN_API_DATABASE_URL: '${ADMIN_API_DATABASE_URL:?}'
       ADMIN_INTROSPECTION_BASE_URL: http://admin-gateway:4321
+      # System status page: deployed commit/branch/time (set by the operator's
+      # deploy step) and the health endpoints to check. Not secrets.
+      PANDAPAY_GIT_SHA: '${PANDAPAY_GIT_SHA:-}'
+      PANDAPAY_GIT_REF: '${PANDAPAY_GIT_REF:-}'
+      PANDAPAY_DEPLOYED_AT: '${PANDAPAY_DEPLOYED_AT:-}'
+      ADMIN_HEALTH_PROBES: '${ADMIN_HEALTH_PROBES:-api=https://api.pandapath.site/ready,auth=https://auth.pandapath.site/ready}'
       ADMIN_INTROSPECTION_SERVICE_SECRET: '${ADMIN_INTROSPECTION_SERVICE_SECRET:?}'
       DB_SSL: 'true'
       DB_SSL_CA: '${DB_SSL_CA:-}'

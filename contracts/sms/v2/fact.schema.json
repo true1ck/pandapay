@@ -991,6 +991,11 @@
                 "other"
               ],
               "x-code": "fact.info.category_invalid"
+            },
+            "amountMinor": {
+              "type": "integer",
+              "minimum": 1,
+              "x-code": "fact.info.amountMinor_invalid"
             }
           },
           "additionalProperties": false,

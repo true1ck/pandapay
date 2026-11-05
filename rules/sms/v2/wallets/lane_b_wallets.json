@@ -1,0 +1,708 @@
+[
+  {
+    "id": "WAL-PLUXEE-SPEND-03",
+    "version": 1,
+    "family": "wallet_spend",
+    "senders": [
+      "PLUXEE"
+    ],
+    "priority": 650,
+    "match": {
+      "pattern": "^(?:rs\\.?|inr|₹)\\s*(?<amt>[\\d,]+(?:\\.\\d{1,2})?)\\s+(?:spent|debited|deducted|charged)\\s+(?:from|on|using|via)\\s+(?:your\\s+)?(?:pluxee|sodexo)\\s*(?:meal|gift|food)?\\s*(?:wallet|card)?\\s*,?\\s*(?:card\\s*(?:no\\.?|number|ending)?\\s*)?[x*]{1,6}\\s*(?<mask>\\d{4})\\b[^\\n]{0,40}?\\s+at\\s+(?<merchant>[^\\n.]+?)\\s*\\.\\s*(?:avl|available)\\s+bal(?:ance)?\\.?\\s*:?\\s*(?:rs\\.?|inr|₹)\\s*(?<bal>[\\d,]+(?:\\.\\d{1,2})?)",
+      "flags": "is",
+      "rejectAny": [
+        "failed",
+        "unsuccessful",
+        "declined",
+        "could not",
+        "unable to",
+        "will be",
+        "reversed"
+      ]
+    },
+    "emit": [
+      {
+        "factType": "movement",
+        "attrs": {
+          "direction": "debit",
+          "purpose": "purchase",
+          "rail": "wallet"
+        },
+        "amounts": [
+          {
+            "role": "posted",
+            "from": "amt",
+            "unit": "INR"
+          }
+        ],
+        "instrument": {
+          "kind": "wallet",
+          "issuerSlug": "pluxee",
+          "maskFrom": "mask"
+        },
+        "counterparty": {
+          "nameFrom": "merchant",
+          "kind": "merchant",
+          "transforms": [
+            "sanitizeNarration"
+          ]
+        }
+      },
+      {
+        "factType": "balance_snapshot",
+        "amounts": [
+          {
+            "role": "available_balance",
+            "from": "bal",
+            "unit": "INR"
+          }
+        ],
+        "instrument": {
+          "sameAs": 0
+        },
+        "attrs": {
+          "asOf": {
+            "sameAs": 0,
+            "field": "occurredAt"
+          }
+        }
+      }
+    ],
+    "confidence": 0.96,
+    "examples": [
+      {
+        "sender": "VM-PLUXEE-S",
+        "body": "Rs. 75.00 spent from Pluxee  Meal wallet, card no.xx1234 on 10-09-2026 12:39:24 at EXAMPLE CAFE . Avl bal Rs.425.00. Not you call 18000000000",
+        "expectFactTypes": [
+          "movement",
+          "balance_snapshot"
+        ]
+      },
+      {
+        "sender": "VM-PLUXEE-S",
+        "body": "Rs. 75.00 could not be spent from Pluxee  Meal wallet, card no.xx1234 on 10-09-2026 12:39:24 at EXAMPLE CAFE . Avl bal Rs.500.00.",
+        "expectFactTypes": []
+      }
+    ],
+    "status": "active",
+    "createdBy": "lane-b",
+    "updatedAt": "2026-11-05T00:00:00Z"
+  },
+  {
+    "id": "WAL-PLUXEE-FEE-03",
+    "version": 1,
+    "family": "wallet_fee",
+    "senders": [
+      "PLUXEE"
+    ],
+    "priority": 810,
+    "match": {
+      "pattern": "^(?:rs\\.?|inr|₹)\\s*(?<amt>[\\d,]+(?:\\.\\d{1,2})?)\\s+(?:deducted|debited|charged)\\s+from\\s+(?:your\\s+)?(?:pluxee|sodexo)\\s*(?:meal|gift|food)?\\s*(?:wallet|card)?(?:\\s*(?:card\\s*)?(?:no\\.?|number|ending)?\\s*[x*]{1,6}\\s*(?<mask>\\d{4}))?\\s+(?:as|towards|for)\\s+(?:an?\\s+|the\\s+)?(?:online\\s+|offline\\s+|transaction\\s+)?(?:convenience|service|processing|platform|handling)\\s+(?:fee|charges?)\\b",
+      "flags": "is",
+      "rejectAny": [
+        "will be",
+        "may be",
+        "failed",
+        "reversed",
+        "refund"
+      ]
+    },
+    "emit": [
+      {
+        "factType": "movement",
+        "attrs": {
+          "direction": "debit",
+          "purpose": "fee",
+          "rail": "wallet"
+        },
+        "amounts": [
+          {
+            "role": "posted",
+            "from": "amt",
+            "unit": "INR"
+          }
+        ],
+        "instrument": {
+          "kind": "wallet",
+          "issuerSlug": "pluxee",
+          "maskFrom": "mask"
+        }
+      }
+    ],
+    "confidence": 0.96,
+    "examples": [
+      {
+        "sender": "VM-PLUXEE-S",
+        "body": "Rs. 2.00 deducted from your Pluxee Card xxxx1234 towards ONLINE CONVENIENCE FEE. Pluxee",
+        "expectFactTypes": [
+          "movement"
+        ]
+      },
+      {
+        "sender": "VM-PLUXEE-S",
+        "body": "Rs. 2.00 will be deducted from your Pluxee Card xxxx1234 towards ONLINE CONVENIENCE FEE. Pluxee",
+        "expectFactTypes": []
+      }
+    ],
+    "status": "active",
+    "createdBy": "lane-b",
+    "updatedAt": "2026-11-05T00:00:00Z"
+  },
+  {
+    "id": "WAL-TINYMART-PAYMENT-03",
+    "version": 1,
+    "family": "wallet_spend",
+    "senders": [
+      "*"
+    ],
+    "priority": 620,
+    "match": {
+      "pattern": "^payment\\s+of\\s+(?:rs\\.?|inr|₹)\\s*(?<amt>[\\d,]+(?:\\.\\d{1,2})?)\\s+(?:was|has\\s+been|is)\\s+(?:done|made|completed|successful)\\s+(?:through|via|using|from|with)\\s+(?:your\\s+)?tiny\\s?mart(?:\\s{1,2}(?:store|account|wallet)){0,3}",
+      "flags": "is",
+      "rejectAny": [
+        "failed",
+        "unsuccessful",
+        "declined",
+        "could not",
+        "unable to",
+        "will be",
+        "reversed"
+      ]
+    },
+    "emit": [
+      {
+        "factType": "movement",
+        "attrs": {
+          "direction": "debit",
+          "purpose": "purchase",
+          "rail": "wallet"
+        },
+        "amounts": [
+          {
+            "role": "posted",
+            "from": "amt",
+            "unit": "INR"
+          }
+        ],
+        "instrument": {
+          "kind": "wallet",
+          "issuerSlug": "tinymart"
+        }
+      }
+    ],
+    "confidence": 0.93,
+    "examples": [
+      {
+        "sender": "VM-TNYMRT-S",
+        "body": "Payment of INR 40.0 was done through your TinyMart account. Kindly use https://example.invalid/wallet to view your balance, invoices, shop and more",
+        "expectFactTypes": [
+          "movement"
+        ]
+      },
+      {
+        "sender": "VM-TINYMT-S",
+        "body": "Payment of INR 40.0 failed through your TinyMart account. Please retry.",
+        "expectFactTypes": []
+      }
+    ],
+    "status": "active",
+    "createdBy": "lane-b",
+    "updatedAt": "2026-11-05T00:00:00Z"
+  },
+  {
+    "id": "WAL-ZOMATO-CREDIT-EXPIRY-01",
+    "version": 1,
+    "family": "wallet_cashback",
+    "senders": [
+      "ZOMATO"
+    ],
+    "priority": 480,
+    "match": {
+      "pattern": "^(?:rs\\.?|inr|₹)\\s*(?<amt>[\\d,]+(?:\\.\\d{1,2})?)\\s+(?:has\\s+been\\s+|was\\s+)?added\\s+to\\s+zomato\\s+money(?:\\s+balance|\\s+wallet|\\s+credits?)?\\s*\\((?:on\\s+)?mobile\\s+ending\\s+(?:with\\s+)?[x*]*\\d{2,4}\\)\\.?\\s*this\\s+balance\\s+expires\\s+on\\b",
+      "flags": "is",
+      "rejectAny": [
+        "will be",
+        "failed",
+        "reversed"
+      ]
+    },
+    "emit": [
+      {
+        "factType": "movement",
+        "attrs": {
+          "direction": "credit",
+          "purpose": "cashback",
+          "rail": "wallet"
+        },
+        "amounts": [
+          {
+            "role": "posted",
+            "from": "amt",
+            "unit": "INR"
+          }
+        ],
+        "instrument": {
+          "kind": "wallet",
+          "issuerSlug": "zomato_money"
+        }
+      }
+    ],
+    "confidence": 0.9,
+    "examples": [
+      {
+        "sender": "VM-ZOMATO-S",
+        "body": "Rs. 4.02 added to Zomato Money (on mobile ending with **1234). This balance expires on 13 Apr 2027.\nView balance: https://example.invalid/zm -ZOMATO",
+        "expectFactTypes": [
+          "movement"
+        ]
+      },
+      {
+        "sender": "VM-ZOMATO-S",
+        "body": "Rs. 4.02 will be added to Zomato Money (on mobile ending with **1234). This balance expires on 13 Apr 2027.",
+        "expectFactTypes": []
+      }
+    ],
+    "status": "active",
+    "createdBy": "lane-b",
+    "updatedAt": "2026-11-05T00:00:00Z"
+  },
+  {
+    "id": "WAL-PLUXEE-CREDIT-LOAD-01",
+    "version": 1,
+    "family": "wallet_load",
+    "senders": [
+      "PLUXEE"
+    ],
+    "priority": 590,
+    "match": {
+      "pattern": "^your\\s+(?:pluxee|sodexo)\\s+card\\s*(?:[x*]{1,6}\\s*(?<mask>\\d{4}))?\\s+has\\s+been\\s+(?:successfully\\s+)?credited\\s+with\\s+(?:rs\\.?|inr|₹)\\s*(?<amt>[\\d,]+(?:\\.\\d{1,2})?)\\s+towards\\s+(?:a\\s+|the\\s+)?(?:meal|gift|food|fuel)?\\s*(?:wallet|card|account)?",
+      "flags": "is",
+      "rejectAny": [
+        "will be",
+        "failed",
+        "reversal",
+        "refund"
+      ]
+    },
+    "emit": [
+      {
+        "factType": "movement",
+        "attrs": {
+          "direction": "credit",
+          "purpose": "wallet_topup",
+          "rail": "wallet"
+        },
+        "amounts": [
+          {
+            "role": "posted",
+            "from": "amt",
+            "unit": "INR"
+          }
+        ],
+        "instrument": {
+          "kind": "wallet",
+          "issuerSlug": "pluxee",
+          "maskFrom": "mask"
+        }
+      }
+    ],
+    "confidence": 0.9,
+    "examples": [
+      {
+        "sender": "VM-PLUXEE-S",
+        "body": "Your Pluxee Card has been successfully credited with Rs.1100 towards  Meal Wallet on Fri Sep 04 2026 14:35:28. Your current Meal Wallet balance is Rs.1100.00.",
+        "expectFactTypes": [
+          "movement"
+        ]
+      },
+      {
+        "sender": "VM-PLUXEE-S",
+        "body": "Your Pluxee Card will be credited with Rs.1100 towards Meal Wallet on the first of next month.",
+        "expectFactTypes": []
+      }
+    ],
+    "status": "active",
+    "createdBy": "lane-b",
+    "updatedAt": "2026-11-05T00:00:00Z"
+  },
+  {
+    "id": "WAL-PLUXEE-REVERSAL-02",
+    "version": 1,
+    "family": "wallet_refund",
+    "senders": [
+      "PLUXEE"
+    ],
+    "priority": 695,
+    "match": {
+      "pattern": "^your\\s+(?:pluxee|sodexo)\\s+card\\s*(?:[x*]{1,6}\\s*(?<mask>\\d{4}))?\\s+has\\s+been\\s+credited\\s+with\\s+(?:rs\\.?|inr|₹)\\s*(?<amt>[\\d,]+(?:\\.\\d{1,2})?).{0,60}?as\\s+a\\s+reversal\\b",
+      "flags": "is",
+      "rejectAny": [
+        "will be",
+        "failed"
+      ]
+    },
+    "emit": [
+      {
+        "factType": "movement",
+        "attrs": {
+          "direction": "credit",
+          "purpose": "reversal",
+          "rail": "wallet"
+        },
+        "amounts": [
+          {
+            "role": "posted",
+            "from": "amt",
+            "unit": "INR"
+          }
+        ],
+        "instrument": {
+          "kind": "wallet",
+          "issuerSlug": "pluxee",
+          "maskFrom": "mask"
+        }
+      }
+    ],
+    "confidence": 0.92,
+    "examples": [
+      {
+        "sender": "VM-PLUXEE-S",
+        "body": "Your Pluxee Card xx1234 has been credited with INR 90.00 on Mon Sep 07 2026 22:33:03as a reversal against a previous transaction on Sep 07,2026 12:34:19.",
+        "expectFactTypes": [
+          "movement"
+        ]
+      },
+      {
+        "sender": "VM-PLUXEE-S",
+        "body": "Your Pluxee Card xx1234 will be credited with INR 90.00 as a reversal against a previous transaction.",
+        "expectFactTypes": []
+      }
+    ],
+    "status": "active",
+    "createdBy": "lane-b",
+    "updatedAt": "2026-11-05T00:00:00Z"
+  },
+  {
+    "id": "WAL-ZEPTO-PAYMENT-SUCCESS-01",
+    "version": 1,
+    "family": "wallet_spend",
+    "senders": [
+      "*"
+    ],
+    "priority": 640,
+    "match": {
+      "pattern": "^(?:dear\\s+customer,?\\s*)?(?:your\\s+)?payment\\s+of\\s+(?:rs\\.?|inr|₹)\\s*(?<amt>[\\d,]+(?:\\.\\d{1,2})?)\\s+(?:using|from|via|with)\\s+(?:your\\s+)?zepto cash(?:\\s+balance)?\\s+(?:is\\s+)?(?:successful|successfully\\s+(?:completed|done|made))\\b",
+      "flags": "is",
+      "rejectAny": [
+        "failed",
+        "unsuccessful",
+        "declined",
+        "could not",
+        "unable to",
+        "will be",
+        "reversed"
+      ]
+    },
+    "emit": [
+      {
+        "factType": "movement",
+        "attrs": {
+          "direction": "debit",
+          "purpose": "purchase",
+          "rail": "wallet"
+        },
+        "amounts": [
+          {
+            "role": "posted",
+            "from": "amt",
+            "unit": "INR"
+          }
+        ],
+        "instrument": {
+          "kind": "wallet",
+          "issuerSlug": "zepto_cash"
+        }
+      }
+    ],
+    "confidence": 0.93,
+    "examples": [
+      {
+        "sender": "VM-ZEPTO-S",
+        "body": "Payment of Rs. 69.00 using Zepto Cash is successful. Updated Zepto Cash balance is Rs.0.00. For help contact support.",
+        "expectFactTypes": [
+          "movement"
+        ]
+      },
+      {
+        "sender": "VM-ZEPTO-S",
+        "body": "Payment of Rs. 69.00 using Zepto Cash failed. Updated Zepto Cash balance is Rs.69.00.",
+        "expectFactTypes": []
+      }
+    ],
+    "status": "active",
+    "createdBy": "lane-b",
+    "updatedAt": "2026-11-05T00:00:00Z"
+  },
+  {
+    "id": "WAL-DISTRICT-PAYMENT-SUCCESS-01",
+    "version": 1,
+    "family": "wallet_spend",
+    "senders": [
+      "*"
+    ],
+    "priority": 640,
+    "match": {
+      "pattern": "^(?:dear\\s+customer,?\\s*)?(?:your\\s+)?payment\\s+of\\s+(?:rs\\.?|inr|₹)\\s*(?<amt>[\\d,]+(?:\\.\\d{1,2})?)\\s+(?:using|from|via|with)\\s+(?:your\\s+)?district money(?:\\s+balance)?\\s+(?:is\\s+)?(?:successful|successfully\\s+(?:completed|done|made))\\b",
+      "flags": "is",
+      "rejectAny": [
+        "failed",
+        "unsuccessful",
+        "declined",
+        "could not",
+        "unable to",
+        "will be",
+        "reversed"
+      ]
+    },
+    "emit": [
+      {
+        "factType": "movement",
+        "attrs": {
+          "direction": "debit",
+          "purpose": "purchase",
+          "rail": "wallet"
+        },
+        "amounts": [
+          {
+            "role": "posted",
+            "from": "amt",
+            "unit": "INR"
+          }
+        ],
+        "instrument": {
+          "kind": "wallet",
+          "issuerSlug": "district_money"
+        }
+      }
+    ],
+    "confidence": 0.93,
+    "examples": [
+      {
+        "sender": "VM-DISTRI-S",
+        "body": "Payment of Rs. 69.00 using District Money is successful. Updated District Money balance is Rs.0.00. For help contact support.",
+        "expectFactTypes": [
+          "movement"
+        ]
+      },
+      {
+        "sender": "VM-DISTRI-S",
+        "body": "Payment of Rs. 69.00 using District Money failed. Updated District Money balance is Rs.69.00.",
+        "expectFactTypes": []
+      }
+    ],
+    "status": "active",
+    "createdBy": "lane-b",
+    "updatedAt": "2026-11-05T00:00:00Z"
+  },
+  {
+    "id": "WAL-ZEPTO-REFUND-WALLET-01",
+    "version": 1,
+    "family": "wallet_refund",
+    "senders": [
+      "*"
+    ],
+    "priority": 690,
+    "match": {
+      "pattern": "^(?:dear\\s+customer,?\\s*)?(?:rs\\.?|inr|₹)\\s*(?<amt>[\\d,]+(?:\\.\\d{1,2})?)\\s+has\\s+been\\s+refunded\\s+to\\s+your\\s+zepto\\s+cash\\b",
+      "flags": "is",
+      "rejectAny": [
+        "will be",
+        "failed"
+      ]
+    },
+    "emit": [
+      {
+        "factType": "movement",
+        "attrs": {
+          "direction": "credit",
+          "purpose": "refund",
+          "rail": "wallet"
+        },
+        "amounts": [
+          {
+            "role": "posted",
+            "from": "amt",
+            "unit": "INR"
+          }
+        ],
+        "instrument": {
+          "kind": "wallet",
+          "issuerSlug": "zepto_cash"
+        }
+      }
+    ],
+    "confidence": 0.93,
+    "examples": [
+      {
+        "sender": "VM-ZEPTON-S",
+        "body": "Dear Customer, Rs.69.00 has been refunded to your Zepto Cash. The updated balance is Rs.69.00 For help contact support.",
+        "expectFactTypes": [
+          "movement"
+        ]
+      },
+      {
+        "sender": "VM-ZEPTON-S",
+        "body": "Dear Customer, Rs.69.00 will be refunded to your Zepto Cash within 2 days.",
+        "expectFactTypes": []
+      }
+    ],
+    "status": "active",
+    "createdBy": "lane-b",
+    "updatedAt": "2026-11-05T00:00:00Z"
+  },
+  {
+    "id": "WAL-DISTRICT-LOAD-01",
+    "version": 1,
+    "family": "wallet_load",
+    "senders": [
+      "*"
+    ],
+    "priority": 590,
+    "match": {
+      "pattern": "^(?:rs\\.?|inr|₹)\\s*(?<amt>[\\d,]+(?:\\.\\d{1,2})?)\\s+added\\s+to\\s+your\\s+district\\s+money\\s+account(?:\\s+ending(?:\\s+with)?\\s+[x*]*\\d{2,4})?\\s+successfully\\b",
+      "flags": "is",
+      "rejectAny": [
+        "will be",
+        "failed"
+      ]
+    },
+    "emit": [
+      {
+        "factType": "movement",
+        "attrs": {
+          "direction": "credit",
+          "purpose": "wallet_topup",
+          "rail": "wallet"
+        },
+        "amounts": [
+          {
+            "role": "posted",
+            "from": "amt",
+            "unit": "INR"
+          }
+        ],
+        "instrument": {
+          "kind": "wallet",
+          "issuerSlug": "district_money"
+        }
+      }
+    ],
+    "confidence": 0.9,
+    "examples": [
+      {
+        "sender": "VM-DSTRKT-S",
+        "body": "Rs 1,176.90 added to your District Money account ending with 1234 successfully. Tap to view your balance : https://example.invalid/dm -DISTRICT",
+        "expectFactTypes": [
+          "movement"
+        ]
+      },
+      {
+        "sender": "VM-DSTRKT-S",
+        "body": "Rs 1,176.90 will be added to your District Money account ending with 1234 once the payment completes.",
+        "expectFactTypes": []
+      }
+    ],
+    "status": "active",
+    "createdBy": "lane-b",
+    "updatedAt": "2026-11-05T00:00:00Z"
+  },
+  {
+    "id": "WAL-AMAZONPAY-APAY-BALANCE-01",
+    "version": 1,
+    "family": "wallet_spend",
+    "senders": [
+      "*"
+    ],
+    "priority": 645,
+    "match": {
+      "pattern": "^payment\\s+of\\s+(?:rs\\.?|inr|₹)\\s*(?<amt>[\\d,]+(?:\\.\\d{1,2})?)\\s+using\\s+apay\\s+balance\\s+(?:is\\s+)?successful(?:ly)?\\s+at\\s+(?<merchant>[^\\n]+?)\\.?\\s+updated\\s+balance\\s*(?:is|:)?\\s*(?:rs\\.?|inr|₹)\\s*(?<bal>[\\d,]+(?:\\.\\d{1,2})?)",
+      "flags": "is",
+      "rejectAny": [
+        "failed",
+        "unsuccessful",
+        "declined",
+        "could not",
+        "unable to",
+        "will be",
+        "reversed"
+      ]
+    },
+    "emit": [
+      {
+        "factType": "movement",
+        "attrs": {
+          "direction": "debit",
+          "purpose": "purchase",
+          "rail": "wallet",
+          "evidenceOnly": true
+        },
+        "amounts": [
+          {
+            "role": "posted",
+            "from": "amt",
+            "unit": "INR"
+          }
+        ],
+        "instrument": {
+          "kind": "wallet",
+          "issuerSlug": "amazonpay"
+        },
+        "counterparty": {
+          "nameFrom": "merchant",
+          "kind": "merchant",
+          "transforms": [
+            "sanitizeNarration"
+          ]
+        }
+      },
+      {
+        "factType": "balance_snapshot",
+        "amounts": [
+          {
+            "role": "available_balance",
+            "from": "bal",
+            "unit": "INR"
+          }
+        ],
+        "instrument": {
+          "sameAs": 0
+        },
+        "attrs": {
+          "asOf": {
+            "sameAs": 0,
+            "field": "occurredAt"
+          }
+        }
+      }
+    ],
+    "confidence": 0.93,
+    "examples": [
+      {
+        "sender": "VM-JUSPAY-S",
+        "body": "Payment of Rs 99.00 using Apay Balance successful at EXAMPLE STORE. Updated Balance is Rs 400.00 - If not u? call 1800000000 - SMS via Juspay",
+        "expectFactTypes": [
+          "movement",
+          "balance_snapshot"
+        ]
+      },
+      {
+        "sender": "VM-JUSPAY-S",
+        "body": "Payment of Rs 99.00 using Apay Balance failed at EXAMPLE STORE. Updated Balance is Rs 499.00",
+        "expectFactTypes": []
+      }
+    ],
+    "status": "active",
+    "createdBy": "lane-b",
+    "updatedAt": "2026-11-05T00:00:00Z"
+  }
+]

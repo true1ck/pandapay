@@ -1,0 +1,40 @@
+{
+  "id": "lanet:salary_neft_payer",
+  "templateHash": "f8859e8e04ae62718242a495eefe00ce3a736856cf87ab6ca2f65a2a24d55e27",
+  "weight": 1,
+  "source": "synthetic",
+  "messages": [
+    {
+      "sender": "VM-HDFCBK-S",
+      "body": "Rs.49900.00 credited to A/c XX1234 on 01-11-26 by NEFT-ACME LTD-SALARY NOV",
+      "observedAt": "2026-12-01T09:00:00.000Z"
+    }
+  ],
+  "expect": {
+    "facts": [
+      {
+        "factType": "movement",
+        "attrs": {
+          "direction": "credit",
+          "purpose": "salary",
+          "rail": "neft"
+        },
+        "amounts": [
+          {
+            "role": "posted",
+            "minor": 4990000
+          }
+        ],
+        "instrument": {
+          "kind": "bank_account",
+          "maskDigits": "1234"
+        },
+        "counterparty": {
+          "name": "ACME"
+        }
+      }
+    ]
+  },
+  "note": "Generic NEFT salary credit now carries the payer.",
+  "origin": "lane-t"
+}

@@ -5,6 +5,7 @@ const { validateRequest } = require('./contracts');
 const { canonicalize } = require('./signer');
 const { createRequireSmsV2 } = require('./guard');
 
+const SHARED_CORRECTED_FIELDS = ['category', 'merchantKey'];
 const denied = value => value === false || value?.ok === false;
 const digest = value => crypto.createHash('sha256').update(value).digest('hex');
 const uuid = /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i;
@@ -65,8 +66,15 @@ async function submitCorrection(client, profileId, body, { sharedLearningEligibl
   );
   const shared = consent.rows[0]?.granted === true;
   const metadata = shared ? templateMetadata(body) : null;
-  const corrected = shared ? { ...body.corrected } : {};
-  delete corrected._template;
+  // Even with consent, only the reviewed categorical fields are kept. Free text
+  // from a modified client never reaches the admin review queue.
+  const corrected = {};
+  if (shared) {
+    for (const key of SHARED_CORRECTED_FIELDS) {
+      const value = body.corrected?.[key];
+      if (typeof value === 'string' && value.trim() && value.length <= 200) corrected[key] = value;
+    }
+  }
   const payload = { ...body, corrected, ...(metadata ? {} : { redactedTemplate: undefined }) };
   const requestHash = digest(canonicalize(payload));
   const row = await client.query(

@@ -1,0 +1,39 @@
+{
+  "id": "lanet:salary_unknown_rail_payer",
+  "templateHash": "5eff50a9150ca81ae7db24479b343d28134dbbd91ac3f01cf2eebce3e1d2115d",
+  "weight": 1,
+  "source": "synthetic",
+  "messages": [
+    {
+      "sender": "VM-HDFCBK-S",
+      "body": "Rs.49900.00 credited to A/c XX1234 on 30-Oct-26 as Salary from TECH CORP",
+      "observedAt": "2026-12-01T09:00:00.000Z"
+    }
+  ],
+  "expect": {
+    "facts": [
+      {
+        "factType": "movement",
+        "attrs": {
+          "direction": "credit",
+          "purpose": "salary"
+        },
+        "amounts": [
+          {
+            "role": "posted",
+            "minor": 4990000
+          }
+        ],
+        "instrument": {
+          "kind": "bank_account",
+          "maskDigits": "1234"
+        },
+        "counterparty": {
+          "name": "TECH"
+        }
+      }
+    ]
+  },
+  "note": "Generic salary credit with the payer after the word salary.",
+  "origin": "lane-t"
+}

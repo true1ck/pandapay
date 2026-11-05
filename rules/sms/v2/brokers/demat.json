@@ -1,0 +1,165 @@
+[
+  {
+    "id": "BRK-DEMAT-DEBIT-01",
+    "version": 1,
+    "family": "demat",
+    "senders": [
+      "*"
+    ],
+    "priority": 520,
+    "match": {
+      "pattern": "^\\s*(?:cdsl|nsdl)\\s*:\\s*debit\\s+in\\s+a/c\\s*[*x]*\\d{2,16}\\s+for\\s+\\d+[-\\s]",
+      "flags": "i"
+    },
+    "emit": [
+      {
+        "factType": "info",
+        "attrs": {
+          "category": "service"
+        }
+      }
+    ],
+    "confidence": 0.9,
+    "examples": [
+      {
+        "sender": "VM-CDSLTX-S",
+        "body": "CDSL: Debit in a/c *12345678 for 10-ACME LIMITED-EQ on 05NOV",
+        "expectFactTypes": [
+          "info"
+        ]
+      },
+      {
+        "sender": "VM-CDSLTX-S",
+        "body": "CDSL: Request to debit a/c *12345678 is pending authorisation",
+        "expectFactTypes": []
+      }
+    ],
+    "status": "active",
+    "createdBy": "lane-i",
+    "updatedAt": "2026-11-05T00:00:00Z"
+  },
+  {
+    "id": "BRK-DEMAT-CREDIT-01",
+    "version": 1,
+    "family": "demat",
+    "senders": [
+      "*"
+    ],
+    "priority": 520,
+    "match": {
+      "pattern": "^\\s*(?:cdsl|nsdl)\\s*:\\s*credit\\s+in\\s+a/c\\s*[*x]*\\d{2,16}\\s+for\\s+\\d+[-\\s]",
+      "flags": "i",
+      "rejectAny": [
+        "ipo",
+        "fpo"
+      ]
+    },
+    "emit": [
+      {
+        "factType": "info",
+        "attrs": {
+          "category": "service"
+        }
+      }
+    ],
+    "confidence": 0.9,
+    "examples": [
+      {
+        "sender": "VM-CDSLTX-S",
+        "body": "CDSL: Credit in a/c *12345678 for 10-ACME LIMITED-EQ on 05NOV",
+        "expectFactTypes": [
+          "info"
+        ]
+      },
+      {
+        "sender": "VM-CDSLTX-S",
+        "body": "CDSL: Credit in a/c *12345678 through IPO/FPO for 10-ACME LIMITED-EQ on 05NOV",
+        "expectFactTypes": []
+      }
+    ],
+    "status": "active",
+    "createdBy": "lane-i",
+    "updatedAt": "2026-11-05T00:00:00Z"
+  },
+  {
+    "id": "BRK-DEMAT-NSDL-DEBIT-01",
+    "version": 1,
+    "family": "demat",
+    "senders": [
+      "*"
+    ],
+    "priority": 520,
+    "match": {
+      "pattern": "\\d+\\s+[a-z0-9 .&-]+?\\s+(?:debited\\s+from\\s+your\\s+(?:nsdl\\s+)?a/c|has\\s+been\\s+blocked\\s+for\\s+debiting\\s+from\\s+your\\s+(?:nsdl\\s+)?a/c)\\s*[*x]*\\d{2,16}",
+      "flags": "i"
+    },
+    "emit": [
+      {
+        "factType": "info",
+        "attrs": {
+          "category": "service"
+        }
+      }
+    ],
+    "confidence": 0.88,
+    "examples": [
+      {
+        "sender": "VM-NSDLDP-S",
+        "body": "On 05/11/26, 140 ACME LIMITED Debited from your a/c xxxx1234 for Pay-in..NSDL",
+        "expectFactTypes": [
+          "info"
+        ]
+      },
+      {
+        "sender": "VM-NSDLDP-S",
+        "body": "On 05/11/26, 140 ACME LIMITED credited to your a/c xxxx1234 on request..NSDL",
+        "expectFactTypes": []
+      }
+    ],
+    "status": "active",
+    "createdBy": "lane-i",
+    "updatedAt": "2026-11-05T00:00:00Z"
+  },
+  {
+    "id": "BRK-DEMAT-NSDL-CREDIT-01",
+    "version": 1,
+    "family": "demat",
+    "senders": [
+      "*"
+    ],
+    "priority": 520,
+    "match": {
+      "pattern": "\\d+\\s+(?:sub-divided\\s+|bonus\\s+|split\\s+)?shares?\\s+of\\s+[a-z0-9 .&-]+?\\s+credited\\s+on\\s+\\d{2}/\\d{2}/\\d{2,4}\\s+to\\s+your\\s+demat\\s+a/c",
+      "flags": "i",
+      "rejectAny": [
+        "will be"
+      ]
+    },
+    "emit": [
+      {
+        "factType": "info",
+        "attrs": {
+          "category": "service"
+        }
+      }
+    ],
+    "confidence": 0.88,
+    "examples": [
+      {
+        "sender": "VM-NSDLDP-S",
+        "body": "5 sub-divided shares of ACME LIMITED credited on 05/11/26 to your demat a/c no xxxx1234.Check with your DP or on IDEAS website if subscribed-NSDL.",
+        "expectFactTypes": [
+          "info"
+        ]
+      },
+      {
+        "sender": "VM-NSDLDP-S",
+        "body": "5 shares of ACME LIMITED will be credited on 05/11/26 to your demat account.",
+        "expectFactTypes": []
+      }
+    ],
+    "status": "active",
+    "createdBy": "lane-i",
+    "updatedAt": "2026-11-05T00:00:00Z"
+  }
+]

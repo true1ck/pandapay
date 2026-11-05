@@ -74,6 +74,10 @@ class _ErrorReportTileState extends ConsumerState<_ErrorReportTile> {
     final r = widget.report;
     final isPending = r['state'] == 'pending';
     final isStale = r['is_stale'] == true;
+    // Mirrors the API: only reward_rules.<uuid>.rate has a typed writer.
+    final autoCorrectable = RegExp(
+      r'^reward_rules\.[0-9a-f-]{36}\.rate$',
+    ).hasMatch('${r['field_path']}');
     return Card(
       margin: const EdgeInsets.only(bottom: 8),
       child: Padding(
@@ -140,20 +144,44 @@ class _ErrorReportTileState extends ConsumerState<_ErrorReportTile> {
                 ),
               ),
             const SizedBox(height: 8),
+            if (isPending && !autoCorrectable)
+              const Padding(
+                padding: EdgeInsets.only(bottom: 8),
+                child: Text(
+                  'Only reward rates can be corrected automatically. Update this field in Catalogue, then close the report here.',
+                  style: TextStyle(fontSize: 12, color: AdminColors.warning),
+                ),
+              ),
             if (isPending)
-              Row(
+              Wrap(
+                spacing: 8,
+                runSpacing: 8,
                 children: [
-                  FilledButton(
-                    onPressed: _busy
-                        ? null
-                        : () => _act(
-                            () => ref
-                                .read(adminApiProvider)!
-                                .approveErrorReport(r['id'] as String),
-                          ),
-                    child: Text(_busy ? '...' : 'Approve'),
-                  ),
-                  const SizedBox(width: 8),
+                  if (autoCorrectable)
+                    FilledButton(
+                      onPressed: _busy
+                          ? null
+                          : () => _act(
+                              () => ref
+                                  .read(adminApiProvider)!
+                                  .approveErrorReport(r['id'] as String),
+                            ),
+                      child: Text(_busy ? '...' : 'Approve'),
+                    )
+                  else
+                    FilledButton(
+                      onPressed: _busy
+                          ? null
+                          : () => _act(
+                              () => ref
+                                  .read(adminApiProvider)!
+                                  .rejectErrorReport(
+                                    r['id'] as String,
+                                    reason: 'corrected_manually_in_catalogue',
+                                  ),
+                            ),
+                      child: const Text('Close as fixed in Catalogue'),
+                    ),
                   OutlinedButton(
                     onPressed: _busy
                         ? null

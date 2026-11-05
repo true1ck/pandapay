@@ -1,0 +1,34 @@
+{
+  "id": "laneq:cred_cardbill_paid",
+  "templateHash": "a3b8a1eafa25734a388f0699b77a1ab117fd56e6eecc8a7305b0c7ffd14512c6",
+  "weight": 1,
+  "source": "synthetic",
+  "messages": [
+    {
+      "sender": "CREDCL",
+      "body": "You paid Rs.12,345.00 towards your Sample Bank credit card ending 1234 using CRED. Thank you.",
+      "observedAt": "2026-11-20T09:00:00.000Z"
+    }
+  ],
+  "expect": {
+    "facts": [
+      {
+        "factType": "movement",
+        "attrs": {
+          "direction": "debit",
+          "purpose": "card_payment",
+          "rail": "unknown",
+          "evidenceOnly": true
+        },
+        "amounts": [
+          {
+            "role": "posted",
+            "minor": 1234500
+          }
+        ]
+      }
+    ]
+  },
+  "note": "Wording guess. Evidence only.",
+  "origin": "lane-q"
+}

@@ -25,7 +25,8 @@
       "BSEMKT",
       "BSEIPO",
       "BSEINF",
-      "BSESTR"
+      "BSESTR",
+      "BSELTD"
     ]
   },
   {
@@ -117,7 +118,9 @@
     "aliases": [
       "KFINTK",
       "KARVYM",
-      "KFINTECH"
+      "KFINTECH",
+      "KFINCR",
+      "KFINTH"
     ]
   },
   {
@@ -164,7 +167,10 @@
       "NSEMKT",
       "NSEINF",
       "NSEIPO",
-      "NSECLG"
+      "NSECLG",
+      "NSESMS",
+      "NSETRA",
+      "NSEWEL"
     ]
   },
   {
@@ -217,7 +223,8 @@
     "aliases": [
       "UPSTXS",
       "RKSVSE",
-      "UPSTOXS"
+      "UPSTOXS",
+      "UPSTX"
     ]
   },
   {

@@ -15,7 +15,8 @@ void main() {
   test('links 20,000 facts in under 5 seconds', () {
     final rnd = Random(7);
     final start = DateTime.utc(2026, 1, 1);
-    String at(int minutes) => start.add(Duration(minutes: minutes)).toIso8601String();
+    String at(int minutes) =>
+        start.add(Duration(minutes: minutes)).toIso8601String();
     final facts = <Fact>[];
     var t = 0;
     while (facts.length < 20000) {
@@ -33,7 +34,9 @@ void main() {
                 counterparty: party(kind: 'own', mask: '5678'),
               ),
             )
-            ..add(credit('card_payment', amount, at: at(t + 2), inst: hdfcCard));
+            ..add(
+              credit('card_payment', amount, at: at(t + 2), inst: hdfcCard),
+            );
         case 1:
           facts
             ..add(
@@ -45,7 +48,9 @@ void main() {
                 counterparty: party(name: 'SHOP${rnd.nextInt(50)}'),
               ),
             )
-            ..add(credit('refund', amount ~/ 2, at: at(t + 600), inst: hdfcCard));
+            ..add(
+              credit('refund', amount ~/ 2, at: at(t + 600), inst: hdfcCard),
+            );
         case 2:
           facts
             ..add(
@@ -69,10 +74,20 @@ void main() {
                 counterparty: party(vpa: 'add-money@paytm', kind: 'own'),
               ),
             )
-            ..add(credit('wallet_topup', amount, at: at(t + 1), inst: paytmWallet));
+            ..add(
+              credit('wallet_topup', amount, at: at(t + 1), inst: paytmWallet),
+            );
         case 4:
           facts
-            ..add(hold('placed', amount, at: at(t), inst: hdfcAcct, issue: 'ISSUE$t'))
+            ..add(
+              hold(
+                'placed',
+                amount,
+                at: at(t),
+                inst: hdfcAcct,
+                issue: 'ISSUE$t',
+              ),
+            )
             ..add(
               debit(
                 'investment',
@@ -84,7 +99,14 @@ void main() {
             );
         case 5:
           facts
-            ..add(mandate('created', at: at(t), merchant: 'SUB${rnd.nextInt(20)}', ceiling: 500000))
+            ..add(
+              mandate(
+                'created',
+                at: at(t),
+                merchant: 'SUB${rnd.nextInt(20)}',
+                ceiling: 500000,
+              ),
+            )
             ..add(
               debit(
                 'purchase',
@@ -137,6 +159,9 @@ void main() {
       'linked ${facts.length} facts into ${events.length} events in ${sw.elapsedMilliseconds} ms',
     );
     expect(sw.elapsed, lessThan(const Duration(seconds: 5)));
-    expect(doubleCounted(events, {for (final f in facts) f.factId: f}), isEmpty);
+    expect(
+      doubleCounted(events, {for (final f in facts) f.factId: f}),
+      isEmpty,
+    );
   });
 }

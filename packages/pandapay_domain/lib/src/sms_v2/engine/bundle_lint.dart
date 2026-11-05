@@ -4,6 +4,7 @@ import '../contract/rule_bundle.dart';
 import 'compiled_bundle.dart';
 import 'lint.dart';
 import 'rule_engine.dart';
+import 'sender.dart';
 
 /// A rule example the engine's output disagrees with.
 class ExampleFailure {
@@ -155,8 +156,21 @@ List<LintIssue> lintBundle(RuleBundle bundle) {
 
   void senders(String id, List<String> list) {
     for (final s in list) {
-      if (s != '*' && !known.contains(s.toUpperCase())) {
+      if (s == '*') continue;
+      if (!known.contains(s.toUpperCase())) {
         out.add(LintIssue('lint.sender.unknown', 'sender "$s" is not in senders.json', ruleId: id));
+        continue;
+      }
+      // The engine compares a rule's senders with the canonical brand only
+      // (`normalizeSenderBrand` resolves aliases first), so a rule scoped to an
+      // alias would never fire.
+      final canonical = resolveBrandAlias(s.toUpperCase(), bundle.senders);
+      if (canonical != s.toUpperCase()) {
+        out.add(LintIssue(
+          'lint.sender.alias',
+          'sender "$s" is an alias; the engine matches the canonical brand only, so use "$canonical"',
+          ruleId: id,
+        ));
       }
     }
   }

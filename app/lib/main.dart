@@ -7,6 +7,8 @@ import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter/semantics.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:http/http.dart' as http;
+import 'package:http/io_client.dart';
 import 'package:pandapay_domain/pandapay_domain.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 
@@ -17,6 +19,7 @@ import 'app/providers.dart';
 import 'app/assistant_action.dart';
 import 'app/router.dart';
 import 'app/startup_timing.dart';
+import 'data/api_request_headers_client.dart';
 import 'data/spend_reports_repository.dart';
 import 'data/product_access_api.dart';
 import 'features/settings/appearance_providers.dart';
@@ -31,6 +34,19 @@ void main() {
   if (kProfileMode) {
     developer.Timeline.instantSync('PandaPay startup: Dart main');
   }
+  // Every `http.Client()` the app creates (including repository defaults)
+  // adds X-App-Version, and X-Sms-Pipeline when v2 is on, for the PandaPay
+  // API origin only. Other origins and request contents are untouched.
+  http.runWithClient(
+    _start,
+    () => ApiRequestHeadersClient(
+      inner: IOClient(),
+      apiBaseUrl: Uri.parse(Env.apiBaseUrl),
+    ),
+  );
+}
+
+void _start() {
   runGuarded(() {
     // Keep binding initialization, plugin prewarming and runApp in the same
     // zone. Initializing the binding in the root zone and calling runApp from

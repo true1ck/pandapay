@@ -184,3 +184,66 @@ The final phone comparison matches 139/316 sure rows, 1/11 unsure and 140/327 ov
 Offline phone replays of the private corpus and the private sample were run through the real phone runtime. No reused money fact was found in multiple counted events. This invariant does not rule out distinct facts describing a duplicate real payment. No recognized card-bill or IPO event was marked as spending. The actual review share requires source-level attribution and an independently verified financial denominator. The per-kind amount comparison, all phone disagreements and the money subset are in the private evaluation directory. No private results are committed.
 
 The current development bundle imported 748 rules into fresh scratch Postgres and minted four signed cohorts. Repeat import inserted zero rules and minted zero bundles. The earlier signed-bundle verification used the 744-rule candidate. The WP-15/WP-16 and phone scenarios passed 39 focused tests with each flag value. Full API ran 1,414 passed, four skipped and zero failed. The Android XML smoke passed using the synthetic app fixture. The detailed WP-17 deletion and entry checklist is in WP-17.md.
+
+Final local checks on 6e8a6e7:
+
+- `flutter test --no-pub --concurrency=1 --reporter expanded`, with and without `--dart-define=SMS_PIPELINE_V2=true`, passed 2,913 tests with four skips in each isolated checkout.
+- `dart test --reporter expanded` in the CLI passed 41 tests. Static analysis of the scorer and its tests passed.
+- The 748-rule exported scratch bundle verified under the app's BundleVerifier. A changed bundle version invalidated its signature. The verified bundle interpreted a synthetic PhonePe request as a pending attempt.
+- Android: `flutter test integration_test/sms_v2_review_flow_test.dart --no-pub --flavor dev -d emulator-5554 --dart-define=SMS_PIPELINE_V2=true --dart-define-from-file=build/sms_v2_smoke_defines.json --reporter expanded` passed the XML-to-review and totals smoke.
+- iOS: `PANDAPAY_SIMULATOR=1 flutter drive --driver=test_driver/sms_v2_review_driver.dart --target=integration_test/sms_v2_review_flow_test.dart --no-pub -d 465049B3-1FCA-41CB-9F98-5B59686EBA72 --dart-define=SMS_PIPELINE_V2=true --dart-define-from-file=build/sms_v2_smoke_defines.json` passed two tests on iPhone 17 with iOS 26.5. The fixture feeds a filter-tagged sender through the Shortcut batch adapter. It does not exercise a real Shortcut automation.
+- The final replay attached open review rows to about a sixth of the distinct corpus sources. On the draft sample, 64 of 222 sure financial rows attached to an open review item (28.8%). The corpus denominator includes non-financial input. The sample is stratified and these raw rates are not population estimates.
+
+Owner spot-check files are local. The phone report lists every disagreement by zero-based index, with a money-only subset and 17 label adjudication candidates. Those candidates cover registrar instructions versus actual releases, application amounts that cannot be represented by InfoFact, and Kiwi receipts without a funding leg. The supplied labels are unchanged.
+
+### Refund follow-up
+
+Commits 67d8689 and b42c89f add posted Federal card refund/reversal variants and dated HDFC card refund alerts. Synthetic notices returned unknown before the changes. The new examples separate completed credits from initiated refunds and future reversals. Federal notices without a printed suffix do not invent one.
+
+From the CLI directory, build with output `"$p/refunds-v0.json"`, then run `dart run tool/check_pipeline.dart` and `node test/regex_parity.mjs`. The build passed 1,562 examples for 752 rules, the golden gate passed 115 cases and 15 scenarios, and parity passed 46,860 comparisons with zero mismatches. The offline phone harness replayed the full corpus and draft sample with the new bundle. Score with `dart run tool/score_private.dart "$p/refunds-v0.json" "$p/label-sample.drafted.jsonl" "$p/score-refunds-phone.json" "$p/sample-refunds-phone.json"`.
+
+All five targeted sure rows now agree with the drafts. The refund stratum rose from 10/32 to 15/32, and overall sure agreement from 139/316 to 144/316. The sure financial unknown or unprocessed count fell from 64 to 59 of 222. Full replay produced counted transactions and open review rows. No money fact was reused across counted events. The narrower invariant does not establish zero duplicate payments. The 752-rule build still needs the signed scratch import and candidate-level release verification. No production or physical-device changes were made.
+
+### Phase 1 isolated iPhone rig
+
+- T1: `node scripts/sms_v2_local_rig.js --check-only` passed on fresh scratch Postgres. It migrated both databases, imported 752 rules, minted four signed cohorts and started both real services. HTTPS OTP login, rules fetch, tamper rejection, facts upload and ledger read-back passed. The live rig also passed the app-client smoke using AuthApi and SmsV2Runtime over the rig CA.
+- T2: each rig generates an ephemeral Ed25519 key. Only Debug development builds accept the supplied test public key. The production anchors are unchanged. Dart BundleVerifier rejected a tampered server response in the app-client smoke.
+- T3: `python3 scripts/build_sms_v2_local_ios.py <rig> --simulator <uuid>` built and installed the distinct Debug app on a dedicated iPhone 17 simulator. This verified the recipe and installation. Interactive sign-in on the simulator and cable installation on the physical iPhone were not performed.
+- T4: tests exercised all five filter tags and the live gate with a tagged bank handle, a personal phone handle and missing sender evidence. The live adapter preserves missing identity instead of fabricating an issuer. The actual Shortcut automation remains a physical-device check.
+- T5: the runtime replays synthetic IPO, salary and subscription history into the five screens. The widget smoke exposed and now covers the Money in display honoring an explicit salary fact.
+
+From app, with a live default rig:
+
+```sh
+SMS_V2_LOCAL_RIG=/tmp/pandapay-sms-rig.EXAMPLE flutter test --no-pub --concurrency=1 --dart-define=SMS_PIPELINE_V2=true test/features/sms_v2/pipeline/local_rig_test.dart test/features/sms_import/ios_shortcut_sms_test.dart test/features/sms_v2/ui/history_screens_test.dart test/features/sms_v2/ledger/adapters_test.dart --reporter expanded
+```
+
+All 19 tests passed. The local runbook has the simulator and later physical-device instructions. No shared service or physical phone was changed.
+
+#### USB signing and install attempt
+
+Xcode Settings showed the signed-in Personal Team. The command-line build still reported `No Accounts` when requesting new profiles. Building Runner in Xcode with the wired iPhone selected created development provisioning profiles for the separate `app.pandapay.pandapay.smsv2rig` app and widget. The Debug build succeeded, and `codesign --verify --deep --strict` passed for the app bundle. The rig health endpoint also returned 200 with its test CA.
+
+Xcode Run reached the install step. iOS rejected the app because the phone already had three apps installed with a free developer profile. The existing apps stayed installed, and the temporary build settings were restored. The owner can free a development-app slot before the next USB attempt. Physical sign-in, sync and the Shortcut smoke remain unverified.
+
+The USB retry installed the distinct Debug app alongside the regular app. The test build omits the regular app's URL scheme, so saved Shortcut actions keep their existing app bindings. A later reinstall stalled while the prior Debug session was attached. Terminating that Debug process unblocked installation. The restarted build reported a resumed main isolate, a rasterized first frame, and a rendered `WelcomeScreen` through Flutter's on-device inspector.
+
+The Debug build now trusts the scratch CA only for the rig's configured private HTTPS origins. It rejects other origins and does not follow redirects. The host app-client test confirmed OTP, rule verification and fact sync through that transport. With `SMS_V2_LOCAL_RIG` set to the live scratch directory, `flutter test --no-pub --concurrency=1 --dart-define=SMS_PIPELINE_V2=true test/features/sms_v2/pipeline/local_rig_test.dart test/features/auth/signup_test.dart test/features/auth/versioned_otp_client_test.dart test/features/sms_import/ios_shortcut_sms_test.dart test/features/sms_v2/ui/history_screens_test.dart --reporter expanded` passed all 27 tests. The owner still needs to complete sign-in on the installed Debug app and verify physical-device sync and Shortcut delivery.
+
+The first certificate-scoped build failed on the phone during trust setup with `BAD_PKCS12_DATA`, before sending an auth request. Loading the original PEM bytes fixed the failure in the installed Flutter/Dart runtime. The rebuilt Debug app used the same transport to receive HTTP 200 from `/ready` and `/health` on the physical iPhone. The app-client integration test and targeted Dart analysis passed again. The temporary phone probe only made readiness requests and was kept outside the repository.
+
+#### Phase 1 physical-device follow-up
+
+The owner completed login on the local Debug app. Auth returned 200 for the email request and verification, and the API created the scratch profile with 201. Moving the app into the background exposed a native crash because the headless engine registered message handlers before `run`. The engine now starts before plugin and channel registration. The rebuilt device app launched, and the four Dart background-processing tests and both native intake/sender harnesses passed.
+
+The physical acceptance test remains unverified. The first run invalidated its runtime while catalogue/category providers loaded. Later runs failed at `GET /profile` with `No route to host` for the Mac's LAN address. The API remained healthy on the Mac. The owner requested manual phone instructions with diagnosis from logs. The normal Debug entry point is being restored after the acceptance attempt. Real-message replay and native Shortcut acceptance remain pending.
+
+### Explicit historical category checks
+
+The owner asked why previously synced/imported history did not visibly use newer SMS rules, and requested a deliberate refresh that does not repeat on each sync. Worktree `codex/sms-v2-history-recheck` started from `d8e6edd`; implementation commits are `04ad071`, `584574a` and `a4af434`.
+
+The Debug action previews a chosen period on a private memory copy, then requires an explicit apply. It checks newly retained legacy sources through the existing pipeline, and refreshes automatic categories from stored v2 events/facts. Durable small chunks preserve account boundaries, corrections, custom categories, notes, tags and deletions. Unsent original money records wait for sync. Category-only uploads use a restricted server endpoint and never reapply card reward state. A pulled purchase correction refreshes linked refunds, including a second user correction.
+
+Already-matched v2 facts remain immutable; this action does not reparse those messages or relink their events. A versioned replacement/retirement sync protocol is required for that broader migration. Its proposal, release controls and manual phone checklist are in `../history-recheck-plan.md`. No changes in this batch were installed on the iPhone or deployed to the running server. No owner messages were added to the repository. Accuracy targets and physical acceptance remain open.
+
+The reproducible commands, failure-first evidence, scope limits and final validation counts are recorded in `WP-16-history-recheck.md`.

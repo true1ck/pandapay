@@ -1,0 +1,33 @@
+{
+  "id": "lanej:refund_credited_not_initiated",
+  "templateHash": "5e6e97b0baba3dd7b0f33718d39a77807b837002a81dfa3bfcb85b578e85eb0a",
+  "weight": 1,
+  "source": "synthetic",
+  "messages": [
+    {
+      "sender": "VM-EXSHOP-S",
+      "body": "Your refund of Rs 250.00 has been credited to your original payment source on 03-11-26.",
+      "observedAt": "2026-12-01T09:00:00.000Z"
+    }
+  ],
+  "expect": {
+    "facts": [
+      {
+        "factType": "movement",
+        "attrs": {
+          "direction": "credit",
+          "purpose": "refund",
+          "rail": "unknown"
+        },
+        "amounts": [
+          {
+            "role": "posted",
+            "minor": 25000
+          }
+        ]
+      }
+    ]
+  },
+  "note": "Credited wording keeps the existing money-back reading.",
+  "origin": "lane-j"
+}

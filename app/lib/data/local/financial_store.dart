@@ -1383,7 +1383,9 @@ class FinancialStore {
         if (row.sourceKey != null) {
           _receipt(ns, row.sourceKey!, row.id);
           database.db.execute(
-            "DELETE FROM financial_entities WHERE namespace=? AND entity='transactions' AND source_key=? AND pending=1",
+            // Pinned: the planner otherwise walks every transaction of the
+            // account for each saved row, which made a history import quadratic.
+            "DELETE FROM financial_entities INDEXED BY financial_source_identity WHERE namespace=? AND entity='transactions' AND source_key=? AND pending=1",
             [ns, row.sourceKey],
           );
           changed = database.db.updatedRows > 0 || changed;

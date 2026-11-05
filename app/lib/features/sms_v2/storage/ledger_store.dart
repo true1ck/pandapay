@@ -4,6 +4,11 @@ import 'package:sqlite3/sqlite3.dart';
 
 /// Account-scoped ledger. Local category context is stripped from wire JSON,
 /// just as InstrumentStore strips local limit history.
+///
+/// Refund rows (external to own) persist their category in the wire `category`
+/// and `categorySource` fields (CCR-003), so it syncs. Rows written before that
+/// carry the decision as local `_categoryDecision` metadata, which is still
+/// read and is dropped the next time the row is written.
 class LedgerStore {
   LedgerStore(this.db, {required this.namespace});
   final Database db;
@@ -15,7 +20,14 @@ class LedgerStore {
     bool dirty = true,
     CategoryDecision? category,
   }) {
-    final rows = entries.toList();
+    // A refund row stores its category on the wire fields (CCR-003).
+    final rows = [
+      for (final e in entries)
+        if (e.isRefundShaped && category != null)
+          e.withCategory(category.slug, category.source)
+        else
+          e,
+    ];
     if (rows.any((e) => e.eventId != eventId)) {
       throw ArgumentError('event id mismatch');
     }
@@ -40,7 +52,7 @@ class LedgerStore {
       for (final row in rows) {
         final payload = jsonEncode({
           ...row.toJson(),
-          if (category != null)
+          if (category != null && !row.isRefundShaped)
             '_categoryDecision': {
               'slug': category.slug,
               'source': category.source.wire,
@@ -106,11 +118,23 @@ payload=excluded.payload,dirty=excluded.dirty WHERE v2_ledger.payload != exclude
     }
   }
 
-  Map<String, CategoryDecision> categoryDecisions() {
+  Map<String, CategoryDecision> categoryDecisions({Set<String>? eventIds}) {
     final result = <String, CategoryDecision>{};
-    for (final r in _rows()) {
+    for (final r in _rows(eventIds: eventIds)) {
       final j = jsonDecode(r['payload'] as String) as Map;
       final c = j['_categoryDecision'] as Map?;
+      if (c == null && j['category'] != null) {
+        // CCR-003: a refund row's wire category is its decision. Spend rows
+        // keep using local metadata, which also holds the rule id.
+        final e = _decode(r['payload'] as String);
+        if (e.isRefundShaped && e.categorySource != null) {
+          result[r['event_id'] as String] = CategoryDecision(
+            slug: e.category!,
+            source: e.categorySource!,
+            confidence: 1,
+          );
+        }
+      }
       if (c != null) {
         result[r['event_id'] as String] = CategoryDecision(
           slug: c['slug'] as String,
@@ -123,10 +147,24 @@ payload=excluded.payload,dirty=excluded.dirty WHERE v2_ledger.payload != exclude
     return Map.unmodifiable(result);
   }
 
-  ResultSet _rows({bool dirty = false}) => db.select(
-    'SELECT event_id,payload FROM v2_ledger WHERE namespace=?${dirty ? ' AND dirty=1' : ''} ORDER BY occurred_at,entry_id',
-    [namespace],
-  );
+  Iterable<Row> _rows({bool dirty = false, Set<String>? eventIds}) sync* {
+    final groups = eventIds == null
+        ? [<String>[]]
+        : [
+            for (var start = 0; start < eventIds.length; start += 400)
+              eventIds.skip(start).take(400).toList(),
+          ];
+    for (final ids in groups) {
+      final filter = eventIds == null
+          ? ''
+          : ' AND event_id IN (${List.filled(ids.length, '?').join(',')})';
+      yield* db.select(
+        'SELECT event_id,payload FROM v2_ledger WHERE namespace=?${dirty ? ' AND dirty=1' : ''}$filter ORDER BY occurred_at,entry_id',
+        [namespace, ...ids],
+      );
+    }
+  }
+
   LedgerEntry _decode(String payload) => LedgerEntry.fromJson(
     (jsonDecode(payload) as Map).cast<String, Object?>()
       ..remove('_categoryDecision'),

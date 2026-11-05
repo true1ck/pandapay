@@ -1,0 +1,37 @@
+{
+  "id": "lanej:moneyin_dividend_ach",
+  "templateHash": "2e5968db8edf9997bedf8455497e0eed76073b4959d62c7b772125db839c3a26",
+  "weight": 1,
+  "source": "synthetic",
+  "messages": [
+    {
+      "sender": "VM-HDFCBK-S",
+      "body": "Example Bank Acct XX1234 credited Rs. 640.00 on 15-Nov-26; ACH-CR-EXAMPLE CORP DIVIDEND. Avl Bal Rs 41,200.00.",
+      "observedAt": "2026-12-01T09:00:00.000Z"
+    }
+  ],
+  "expect": {
+    "facts": [
+      {
+        "factType": "movement",
+        "attrs": {
+          "direction": "credit",
+          "purpose": "dividend",
+          "rail": "nach"
+        },
+        "amounts": [
+          {
+            "role": "posted",
+            "minor": 64000
+          }
+        ],
+        "instrument": {
+          "kind": "bank_account",
+          "maskDigits": "1234"
+        }
+      }
+    ]
+  },
+  "note": "Dividend by ACH credit.",
+  "origin": "lane-j"
+}

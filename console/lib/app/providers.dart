@@ -254,6 +254,12 @@ final dataQualityDashboardProvider = FutureProvider<Map<String, dynamic>?>((
   return api.fetchDataQualityDashboard();
 });
 
+final systemStatusProvider = FutureProvider<Map<String, dynamic>>((ref) async {
+  final api = ref.watch(adminApiProvider);
+  if (api == null) return const {};
+  return api.fetchSystemStatus();
+});
+
 final smsAiSummaryProvider = FutureProvider<Map<String, dynamic>>((ref) async {
   final api = ref.watch(adminApiProvider);
   if (api == null) return const {};

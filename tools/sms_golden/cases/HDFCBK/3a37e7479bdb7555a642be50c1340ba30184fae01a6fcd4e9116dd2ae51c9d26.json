@@ -1,0 +1,36 @@
+{
+  "id": "lanej:reversal_card_txn_reversed",
+  "templateHash": "3a37e7479bdb7555a642be50c1340ba30184fae01a6fcd4e9116dd2ae51c9d26",
+  "weight": 1,
+  "source": "synthetic",
+  "messages": [
+    {
+      "sender": "VM-HDFCBK-S",
+      "body": "Hi! Your txn for Rs 90.99 at EXAMPLE MERCHANT on your Example Visa credit card has been reversed. Need help? Open the app.",
+      "observedAt": "2026-12-01T09:00:00.000Z"
+    }
+  ],
+  "expect": {
+    "facts": [
+      {
+        "factType": "movement",
+        "attrs": {
+          "direction": "credit",
+          "purpose": "reversal",
+          "rail": "card"
+        },
+        "amounts": [
+          {
+            "role": "posted",
+            "minor": 9099
+          }
+        ],
+        "instrument": {
+          "kind": "credit_card"
+        }
+      }
+    ]
+  },
+  "note": "A reversed card transaction.",
+  "origin": "lane-j"
+}

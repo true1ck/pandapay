@@ -1,0 +1,31 @@
+{
+  "id": "laneq:gas_due_mgl",
+  "templateHash": "19afe5d8613afc0bc6f92873d4da87ac89d228b376a88dc73bf79cebc678ed1a",
+  "weight": 1,
+  "source": "synthetic",
+  "messages": [
+    {
+      "sender": "MGLCNG",
+      "body": "Your MGL piped gas bill of Rs.650.00 for CA no 12345678 is due on 15-11-2026.",
+      "observedAt": "2026-11-20T09:00:00.000Z"
+    }
+  ],
+  "expect": {
+    "facts": [
+      {
+        "factType": "bill_due",
+        "attrs": {
+          "dueDate": "2026-11-15"
+        },
+        "amounts": [
+          {
+            "role": "due_total",
+            "minor": 65000
+          }
+        ]
+      }
+    ]
+  },
+  "note": "Wording guess.",
+  "origin": "lane-q"
+}

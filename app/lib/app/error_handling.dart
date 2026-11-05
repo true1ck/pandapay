@@ -3,6 +3,7 @@ import 'dart:async';
 import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 
+import 'crash_reporter.dart';
 import 'design/app_theme.dart';
 import 'design/widgets.dart';
 
@@ -51,6 +52,9 @@ void installGlobalErrorHandlers() {
     // closes" for the class of error this handler exists for.
     return true;
   };
+  // Sends reports left over from a previous run. A no-op unless the build
+  // set PANDAPAY_ERROR_REPORTING_DSN.
+  crashReporter.start();
 }
 
 /// Runs [body] inside `runZonedGuarded`, logging anything that escapes
@@ -90,6 +94,8 @@ class CrashLog {
       debugPrint('[CrashLog:$source] $error');
       if (stack != null) debugPrint(stack.toString());
     }
+    // Privacy-safe copy to GlitchTip (type and code location, no message).
+    crashReporter.report(error, stack, source: source);
   }
 }
 

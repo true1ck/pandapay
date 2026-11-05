@@ -24,6 +24,21 @@ function hookItems(out) {
   return { items: [], cursor: null };
 }
 
+// CCR-003: a refund ledger entry (external to own, no spend/income/investment
+// flag) may carry a category. A client built before that change rejects such an
+// entry, so only a client that sends `X-Sms-Contract-Features: refund-category`
+// receives it; every other client gets the pre-CCR-003 shape (category null).
+const has = (o, k) => !!o && Object.prototype.hasOwnProperty.call(o, k);
+const isRefundShaped = (l) => has(l.from, 'external') && !has(l.to, 'external') && l.countsAsTransaction === true
+  && l.isSpend === false && l.isIncome === false && l.isInvestment === false;
+const supportsRefundCategory = (req) => String(req.get ? req.get('x-sms-contract-features') || '' : '')
+  .split(',').map((x) => x.trim().toLowerCase()).includes('refund-category');
+function ledgerForClient(ledger, req) {
+  if (supportsRefundCategory(req)) return ledger;
+  return ledger.map((l) => (l.category !== null && l.category !== undefined && isRefundShaped(l)
+    ? { ...l, category: null, categorySource: null } : l));
+}
+
 function createSyncHandler({ withUserClient, hooks }) {
   return async function syncHandler(req, res) {
     try {
@@ -48,7 +63,7 @@ function createSyncHandler({ withUserClient, hooks }) {
         cursor: changes.cursor,
         instruments: changes.instruments,
         events: changes.events,
-        ledger: changes.ledger,
+        ledger: ledgerForClient(changes.ledger, req),
         facts: changes.facts,
         updatedAt: changes.updatedAt,
         aiResults: ai.items,
@@ -66,4 +81,4 @@ function registerSyncRoute(app, { requireSmsV2, requireMember, withUserClient, h
   app.get('/sms/v2/sync', requireSmsV2, requireMember, createSyncHandler({ withUserClient, hooks }));
 }
 
-module.exports = { registerSyncRoute, createSyncHandler };
+module.exports = { registerSyncRoute, createSyncHandler, ledgerForClient };

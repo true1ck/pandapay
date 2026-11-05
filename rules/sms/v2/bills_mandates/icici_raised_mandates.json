@@ -1,0 +1,254 @@
+[
+  {
+    "id": "MND-ICICI-RAISED-FOR-APPROVAL",
+    "version": 1,
+    "family": "mandate_created",
+    "senders": [
+      "*"
+    ],
+    "priority": 830,
+    "match": {
+      "pattern": "the\\s+mandate\\s+of\\s+(?:rs\\.?|inr|₹)\\s*(?<amt>(?:\\d,\\d{3}|\\d{1,4})(?:\\.\\d{1,2})?)(?![\\d,])\\s+is\\s+raised\\s+by\\s+(?<m>[a-z0-9&.' ()-]+?)\\s+on\\s+(?<date>\\d{2}-[a-z]{3}-\\d{2,4})\\s+for\\s+your\\s+approval",
+      "flags": "i",
+      "rejectAny": [
+        "ipo",
+        "onetime",
+        "one-time",
+        "one time",
+        "asba",
+        "allot",
+        "issue of"
+      ]
+    },
+    "emit": [
+      {
+        "factType": "mandate",
+        "attrs": {
+          "phase": "created",
+          "merchantName": {
+            "from": "m",
+            "transforms": [
+              "sanitizeNarration"
+            ]
+          },
+          "mandatePurpose": "subscription",
+          "oneTime": false
+        },
+        "amounts": [
+          {
+            "role": "ceiling",
+            "from": "amt",
+            "unit": "INR"
+          }
+        ],
+        "occurredAt": {
+          "from": "date"
+        }
+      }
+    ],
+    "confidence": 0.9,
+    "examples": [
+      {
+        "sender": "AX-ICICIT-S",
+        "body": "Dear Customer, the mandate of INR 649.00 is raised by SAMPLE STREAM on 10-Aug-26 for your approval, through RRN 600100200300-ICICI Bank.",
+        "expectFactTypes": [
+          "mandate"
+        ]
+      },
+      {
+        "sender": "AX-ICICIT-S",
+        "body": "Dear Customer, the mandate of INR 649.00 is raised by SAMPLE STREAM IPO on 10-Aug-26 for your approval, through RRN 600100200300-ICICI Bank.",
+        "expectFactTypes": []
+      }
+    ],
+    "status": "active",
+    "createdBy": "lane-w",
+    "updatedAt": "2026-11-05T00:00:00Z"
+  },
+  {
+    "id": "MND-ICICI-RAISED-APPROVED",
+    "version": 1,
+    "family": "mandate_created",
+    "senders": [
+      "*"
+    ],
+    "priority": 830,
+    "match": {
+      "pattern": "you\\s+have\\s+approved\\s+the\\s+mandate\\s+of\\s+(?:rs\\.?|inr|₹)\\s*(?<amt>(?:\\d,\\d{3}|\\d{1,4})(?:\\.\\d{1,2})?)(?![\\d,])\\s+raised\\s+by\\s+(?<m>[a-z0-9&.' ()-]+?)\\s+on\\s+(?<date>\\d{2}-[a-z]{3}-\\d{2,4})\\s*,\\s*through\\s+rrn\\s*(?<ref_upiRef>\\d{6,})",
+      "flags": "i",
+      "rejectAny": [
+        "ipo",
+        "onetime",
+        "one-time",
+        "one time",
+        "asba",
+        "allot",
+        "issue of"
+      ]
+    },
+    "emit": [
+      {
+        "factType": "mandate",
+        "attrs": {
+          "phase": "created",
+          "merchantName": {
+            "from": "m",
+            "transforms": [
+              "sanitizeNarration"
+            ]
+          },
+          "mandatePurpose": "subscription",
+          "oneTime": false
+        },
+        "amounts": [
+          {
+            "role": "ceiling",
+            "from": "amt",
+            "unit": "INR"
+          }
+        ],
+        "occurredAt": {
+          "from": "date"
+        }
+      }
+    ],
+    "confidence": 0.9,
+    "examples": [
+      {
+        "sender": "AX-ICICIT-S",
+        "body": "Dear Customer, you have approved the mandate of INR 649.00 raised by SAMPLE STREAM on 10-Aug-26, through RRN 600100200300-ICICI Bank.",
+        "expectFactTypes": [
+          "mandate"
+        ]
+      },
+      {
+        "sender": "AX-ICICIT-S",
+        "body": "Dear Customer, you have approved the mandate of INR 649.00 raised by SAMPLE STREAM on 10-Aug-26, through RRN 600100200300-ICICI Bank. ONETIME",
+        "expectFactTypes": []
+      }
+    ],
+    "status": "active",
+    "createdBy": "lane-w",
+    "updatedAt": "2026-11-05T00:00:00Z"
+  },
+  {
+    "id": "MND-ICICI-RAISED-REVOKED",
+    "version": 1,
+    "family": "mandate_revoked",
+    "senders": [
+      "*"
+    ],
+    "priority": 830,
+    "match": {
+      "pattern": "the\\s+mandate\\s+of\\s+(?:rs\\.?|inr|₹)\\s*(?<amt>(?:\\d,\\d{3}|\\d{1,4})(?:\\.\\d{1,2})?)(?![\\d,])\\s+raised\\s+by\\s+(?<m>[a-z0-9&.' ()-]+?)\\s+on\\s+(?<date>\\d{2}-[a-z]{3}-\\d{2,4})\\s+and\\s+is\\s+revoked",
+      "flags": "i",
+      "rejectAny": [
+        "ipo",
+        "onetime",
+        "one-time",
+        "one time",
+        "asba",
+        "allot",
+        "issue of"
+      ]
+    },
+    "emit": [
+      {
+        "factType": "mandate",
+        "attrs": {
+          "phase": "revoked",
+          "merchantName": {
+            "from": "m",
+            "transforms": [
+              "sanitizeNarration"
+            ]
+          },
+          "mandatePurpose": "subscription",
+          "oneTime": false
+        },
+        "amounts": [
+          {
+            "role": "ceiling",
+            "from": "amt",
+            "unit": "INR"
+          }
+        ],
+        "occurredAt": {
+          "from": "date"
+        }
+      }
+    ],
+    "confidence": 0.9,
+    "examples": [
+      {
+        "sender": "AX-ICICIT-S",
+        "body": "Dear Customer, the mandate of INR 649.00 raised by SAMPLE STREAM on 10-Aug-26 and is revoked through RRN 600100200300-ICICI Bank.",
+        "expectFactTypes": [
+          "mandate"
+        ]
+      },
+      {
+        "sender": "AX-ICICIT-S",
+        "body": "Dear Customer, the mandate of INR 649.00 raised by SAMPLE STREAM on 10-Aug-26 and is successfully redeemed through RRN 600100200300 -ICICI Bank.",
+        "expectFactTypes": []
+      }
+    ],
+    "status": "active",
+    "createdBy": "lane-w",
+    "updatedAt": "2026-11-05T00:00:00Z"
+  },
+  {
+    "id": "IPO-ICICI-MANDATE-REVOKED",
+    "version": 1,
+    "family": "ipo_mandate",
+    "senders": [
+      "*"
+    ],
+    "priority": 845,
+    "match": {
+      "pattern": "the\\s+mandate\\s+of\\s+(?:rs\\.?|inr|₹)\\s*(?<amt>(?=[\\d,]*\\d[\\d,]*\\d[\\d,]*\\d[\\d,]*\\d[\\d,]*\\d)[\\d,]+(?:\\.\\d{1,2})?)\\s+raised\\s+by\\s+(?<issue>[a-z0-9&.' ()-]+?)\\s+on\\s+(?<date>\\d{2}-[a-z]{3}-\\d{2,4})\\s+and\\s+is\\s+revoked",
+      "flags": "i"
+    },
+    "emit": [
+      {
+        "factType": "mandate",
+        "attrs": {
+          "phase": "revoked",
+          "merchantName": {
+            "from": "issue",
+            "transforms": [
+              "upperTrim"
+            ]
+          },
+          "mandatePurpose": "ipo",
+          "oneTime": true
+        },
+        "amounts": [
+          {
+            "role": "ceiling",
+            "from": "amt",
+            "unit": "INR"
+          }
+        ]
+      }
+    ],
+    "confidence": 0.9,
+    "examples": [
+      {
+        "sender": "AX-ICICIT-S",
+        "body": "Dear Customer, the mandate of INR 15000.00 raised by SAMPLE WORKS LI on 10-Aug-26 and is revoked through RRN 600100200300-ICICI Bank.",
+        "expectFactTypes": [
+          "mandate"
+        ]
+      },
+      {
+        "sender": "AX-ICICIT-S",
+        "body": "Dear Customer, the mandate of INR 15000.00 raised by SAMPLE WORKS LI on 10-Aug-26 and is awaiting action.",
+        "expectFactTypes": []
+      }
+    ],
+    "status": "active",
+    "createdBy": "lane-w",
+    "updatedAt": "2026-11-05T00:00:00Z"
+  }
+]

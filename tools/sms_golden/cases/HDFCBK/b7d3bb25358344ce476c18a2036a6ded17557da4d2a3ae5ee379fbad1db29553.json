@@ -1,0 +1,37 @@
+{
+  "id": "lanej:salary_upi_from_vpa",
+  "templateHash": "b7d3bb25358344ce476c18a2036a6ded17557da4d2a3ae5ee379fbad1db29553",
+  "weight": 1,
+  "source": "synthetic",
+  "messages": [
+    {
+      "sender": "VM-HDFCBK-S",
+      "body": "Received Rs. 85,000.00 in your Example Bank AC X1234 from acme.corp@okbank on 01-11-26 for SALARY NOV. UPI Ref: 123456789012.",
+      "observedAt": "2026-12-01T09:00:00.000Z"
+    }
+  ],
+  "expect": {
+    "facts": [
+      {
+        "factType": "movement",
+        "attrs": {
+          "direction": "credit",
+          "purpose": "salary",
+          "rail": "upi"
+        },
+        "amounts": [
+          {
+            "role": "posted",
+            "minor": 8500000
+          }
+        ],
+        "instrument": {
+          "kind": "bank_account",
+          "maskDigits": "1234"
+        }
+      }
+    ]
+  },
+  "note": "Salary by UPI from a company handle.",
+  "origin": "lane-j"
+}

@@ -1,0 +1,26 @@
+{
+  "contractVersion": "2.0",
+  "factId": "5a1c3e0f9b7d24680ace13579bdf02468ace13579bdf02468ace13579bdf0246",
+  "sourceKey": "sms:synthetic:0032",
+  "factType": "info",
+  "observedAt": "2026-11-01T07:00:20Z",
+  "occurredAt": "2026-11-01T07:00:11Z",
+  "instrument": null,
+  "counterparty": null,
+  "amounts": [],
+  "references": {},
+  "attrs": {
+    "category": "service",
+    "amountMinor": 1500000
+  },
+  "provenance": {
+    "engine": "rules",
+    "ruleId": "SYN-RULE-INFO",
+    "ruleVersion": 1,
+    "bundleVersion": 1,
+    "engineVersion": "2.0.0",
+    "appVersion": "1.0.0+1"
+  },
+  "evidence": [],
+  "confidence": 0.9
+}

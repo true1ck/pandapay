@@ -64,7 +64,8 @@
     "issuerSlug": "tinymart",
     "issuerKind": "wallet",
     "aliases": [
-      "TINYMART"
+      "TINYMART",
+      "TNYMRT"
     ],
     "walletSpendVisibility": "sms"
   },
@@ -72,7 +73,9 @@
     "brand": "JUSPAY",
     "issuerSlug": "juspay",
     "issuerKind": "gateway",
-    "aliases": []
+    "aliases": [
+      "QCAMZN"
+    ]
   },
   {
     "brand": "PINELB",

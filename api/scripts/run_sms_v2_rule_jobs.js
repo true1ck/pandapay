@@ -3,7 +3,11 @@
 /**
  * Hourly SMS v2 rule jobs: roll up profile-level stats, then auto-pause any
  * testers/pct5/pct25 version with >= 50 hits in 24 hours whose correction rate
- * is above max(1%, 2x the previous version's rate), then re-mint bundles.
+ * is above max(1%, 2x the previous version's rate), then re-mint bundles, then
+ * re-sign every active cohort bundle whose served copy expires within
+ * SMS_V2_BUNDLE_REFRESH_BEFORE_HOURS (default 72) or was signed by another key id.
+ * The public API serves only these pre-signed copies and holds no key (LO-09). A
+ * failure exits non-zero: alert on it, a bundle that is not refreshed expires in 7 days.
  *
  *   node api/scripts/run_sms_v2_rule_jobs.js --admin-id <admin_users.id>
  *
@@ -25,7 +29,12 @@ async function main() {
   const { runRuleJobs } = require('../src/sms_v2/rule_stats');
   const { store, pool } = await openRuleAdminStore();
   try {
-    const out = await runRuleJobs({ store, signer, adminId });
+    const hours = process.env.SMS_V2_BUNDLE_REFRESH_BEFORE_HOURS;
+    const refreshBeforeMs = hours === undefined ? undefined : Number(hours) * 3600 * 1000;
+    if (refreshBeforeMs !== undefined && !(refreshBeforeMs >= 3600 * 1000 && refreshBeforeMs <= 120 * 3600 * 1000)) {
+      console.error('SMS_V2_BUNDLE_REFRESH_BEFORE_HOURS must be between 1 and 120'); process.exit(2);
+    }
+    const out = await runRuleJobs({ store, signer, adminId, refreshBeforeMs });
     console.log(JSON.stringify(out));
   } finally { await pool.end(); }
 }

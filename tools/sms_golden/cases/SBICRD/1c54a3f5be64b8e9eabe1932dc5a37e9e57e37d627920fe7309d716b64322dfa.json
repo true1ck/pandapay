@@ -1,0 +1,38 @@
+{
+  "id": "laneq:atm_cash_credit_sbi",
+  "templateHash": "1c54a3f5be64b8e9eabe1932dc5a37e9e57e37d627920fe7309d716b64322dfa",
+  "weight": 1,
+  "source": "synthetic",
+  "messages": [
+    {
+      "sender": "VM-SBICRD-S",
+      "body": "Cash withdrawn at ATM using SBI Credit Card ending 1234 for Rs.5000.00 on 01/11/26. Cash advance fee applies.",
+      "observedAt": "2026-11-20T09:00:00.000Z"
+    }
+  ],
+  "expect": {
+    "facts": [
+      {
+        "factType": "movement",
+        "attrs": {
+          "direction": "debit",
+          "purpose": "atm",
+          "rail": "cash"
+        },
+        "amounts": [
+          {
+            "role": "posted",
+            "minor": 500000
+          }
+        ],
+        "instrument": {
+          "kind": "credit_card",
+          "issuerSlug": "sbi",
+          "maskDigits": "1234"
+        }
+      }
+    ]
+  },
+  "note": "Wording guess: amount after the card.",
+  "origin": "lane-q"
+}
