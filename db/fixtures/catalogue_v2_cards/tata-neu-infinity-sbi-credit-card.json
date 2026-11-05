@@ -4,8 +4,8 @@
   "inputs": {
     "transform_version": "7",
     "source_record_sha256": "e1ccabed32d2880c7a27f212d996fe69937c54e943112a7e999c45625212103d",
-    "override_sha256": "686680e82910479c782f0769bdc9211a9cd4f76066942c32530b3d70557a1fcd",
-    "directory_sha256": "3d9f9f535481544d4b19262838290f77d8270eb3b4aec73c48608f10c39cedf2",
+    "override_sha256": "3cd8605585acffea5277ac8e92013049e3fff045ca86412943214214613a43e5",
+    "directory_sha256": "b1094d54b77e848d22f7a9a64f3ae6d1ef43ca3eb2fc8e40cd43ed1994664694",
     "verified": false
   },
   "blocking_flags": [
@@ -27,17 +27,12 @@
     "points_expiry_months": 24,
     "model_status": "partial",
     "model_coverage": {
-      "rules_total": 16,
-      "rules_modelled": 10,
-      "rules_info": 6,
+      "rules_total": 18,
+      "rules_modelled": 13,
+      "rules_info": 5,
       "caps_total": 5,
-      "caps_enforced": 3,
+      "caps_enforced": 4,
       "flags": [
-        {
-          "code": "info_rule",
-          "source_local_id": "tata-neu-partner-5pct",
-          "detail": "condition:channel"
-        },
         {
           "code": "group_replaced_by_condition_list",
           "source_local_id": "tata-neu-partner-5pct",
@@ -144,8 +139,13 @@
           "detail": null
         },
         {
-          "code": "cap_targets_info_only",
-          "source_local_id": "cap-upi-monthly-500",
+          "code": "partial_merchant_list",
+          "source_local_id": "tata-neu-partner-emi-wp7",
+          "detail": null
+        },
+        {
+          "code": "partial_merchant_list",
+          "source_local_id": "tata-neu-partner-upi-wp7",
           "detail": null
         },
         {
@@ -211,15 +211,15 @@
         {
           "path": "reward_rules",
           "op": "append",
-          "value_sha256": "8b12d04281e02653",
-          "reason": "WP7: T&C booklet: \"Maximum Capping per month on NeuCoins ... Grocery, Insurance, Utility, Telecom and cable\" - the cap covers all NeuCoins in the category, but the record tied it only to the extra-5% Tata Neu app rule (info). Base-rate rule carrying the cap.",
+          "value_sha256": "3d4e016b3f2aaa42",
+          "reason": "WP7: T&C booklet: \"Maximum Capping per month on NeuCoins ... Grocery, Insurance, Utility, Telecom and cable\" - the cap covers all NeuCoins in the category, but the record tied it only to the extra-5% Tata Neu app rule (info). Base-rate rule carrying the cap; priority 15 (ahead of the 5% partner rule, as on the HDFC Infinity record) so a capped category never pays the partner rate uncapped (H2: may under-state at partner grocery brands).",
           "source_url": "https://www.sbicard.com/sbi-card-en/assets/docs/pdf/ekit-tncs/Tata-Neu-Infinity-Booklet.pdf",
           "checked_on": "2026-11-05"
         },
         {
           "path": "reward_rules",
           "op": "append",
-          "value_sha256": "1b27e14939d1fbc0",
+          "value_sha256": "dad461a4f2af8fc3",
           "reason": "WP7: Same as grocery-standard-capped (insurance cap).",
           "source_url": "https://www.sbicard.com/sbi-card-en/assets/docs/pdf/ekit-tncs/Tata-Neu-Infinity-Booklet.pdf",
           "checked_on": "2026-11-05"
@@ -227,8 +227,32 @@
         {
           "path": "reward_rules",
           "op": "append",
-          "value_sha256": "77071efaa5c74f92",
+          "value_sha256": "280376766bab82ce",
           "reason": "WP7: Same as grocery-standard-capped (utility cap).",
+          "source_url": "https://www.sbicard.com/sbi-card-en/assets/docs/pdf/ekit-tncs/Tata-Neu-Infinity-Booklet.pdf",
+          "checked_on": "2026-11-05"
+        },
+        {
+          "path": "reward_rules[id=tata-neu-partner-5pct].conditions.channel",
+          "op": "remove",
+          "value_sha256": "74234e98afe7498f",
+          "reason": "WP7: Restates the partner brands (Tata Neu app/website and partner Tata brands); made the 5% rule info.",
+          "source_url": "https://www.sbicard.com/sbi-card-en/assets/docs/pdf/ekit-tncs/Tata-Neu-Infinity-Booklet.pdf",
+          "checked_on": "2026-11-05"
+        },
+        {
+          "path": "reward_rules",
+          "op": "append",
+          "value_sha256": "184205164f15c3c9",
+          "reason": "WP7: The 5% is on \"non-EMI Tata Neu and partner Tata brand spends\" (record); non_emi maps only to the emi category, so EMI-rail partner spends need this base-rate carve-out (D24e).",
+          "source_url": "https://www.sbicard.com/sbi-card-en/assets/docs/pdf/ekit-tncs/Tata-Neu-Infinity-Booklet.pdf",
+          "checked_on": "2026-11-05"
+        },
+        {
+          "path": "reward_rules",
+          "op": "append",
+          "value_sha256": "e73fbaf52c061df9",
+          "reason": "WP7: UPI spends earn the UPI rate (record upi-rupay 1.5%; the Plus SBI record says UPI at partner brands earns the UPI rate). Carve-out so the 5% never applies on UPI (H2).",
           "source_url": "https://www.sbicard.com/sbi-card-en/assets/docs/pdf/ekit-tncs/Tata-Neu-Infinity-Booklet.pdf",
           "checked_on": "2026-11-05"
         }
@@ -283,9 +307,7 @@
         "conditions": {
           "source_local_id": "tata-neu-partner-5pct",
           "part": null,
-          "info_reasons": [
-            "condition:channel"
-          ],
+          "info_reasons": [],
           "flags": [
             "group_replaced_by_condition_list",
             "partial_merchant_list"
@@ -297,7 +319,7 @@
         "excluded_categories": [
           "cat-emi"
         ],
-        "rule_role": "info",
+        "rule_role": "earn",
         "merchant_slugs": [
           "air_india",
           "air_india_express",
@@ -306,8 +328,7 @@
           "taj",
           "tanishq",
           "tata_1mg",
-          "tata_cliq",
-          "tata_neu"
+          "tata_cliq"
         ],
         "platform_slugs": [],
         "mcc_include": [],
@@ -1153,7 +1174,7 @@
         "rate": 1.5,
         "min_txn_inr": null,
         "max_txn_inr": null,
-        "priority": 50,
+        "priority": 15,
         "conditions": {
           "source_local_id": "grocery-standard-capped",
           "part": null,
@@ -1187,7 +1208,7 @@
         "rate": 1.5,
         "min_txn_inr": null,
         "max_txn_inr": null,
-        "priority": 50,
+        "priority": 15,
         "conditions": {
           "source_local_id": "insurance-standard-capped",
           "part": null,
@@ -1221,7 +1242,7 @@
         "rate": 1.5,
         "min_txn_inr": null,
         "max_txn_inr": null,
-        "priority": 50,
+        "priority": 15,
         "conditions": {
           "source_local_id": "utility-standard-capped",
           "part": null,
@@ -1244,12 +1265,102 @@
         "max_engine_version": null,
         "source_local_id": "utility-standard-capped",
         "display_note": "Utilities earn the base 1.5% as NeuCoins, capped at 2,000 NeuCoins per month."
+      },
+      {
+        "id": "tata-neu-infinity-sbi-credit-card:rule:tata-neu-partner-emi-wp7",
+        "category_id": null,
+        "category_slug": null,
+        "merchant_pattern": null,
+        "rail": "emi",
+        "unit": "points_per_100",
+        "rate": 1.5,
+        "min_txn_inr": null,
+        "max_txn_inr": null,
+        "priority": 19,
+        "conditions": {
+          "source_local_id": "tata-neu-partner-emi-wp7",
+          "part": null,
+          "info_reasons": [],
+          "flags": [
+            "partial_merchant_list"
+          ]
+        },
+        "notes": null,
+        "effective_from": "2025-04-16",
+        "effective_to": null,
+        "excluded_categories": [],
+        "rule_role": "earn",
+        "merchant_slugs": [
+          "air_india",
+          "air_india_express",
+          "bigbasket",
+          "croma",
+          "taj",
+          "tanishq",
+          "tata_1mg",
+          "tata_cliq"
+        ],
+        "platform_slugs": [],
+        "mcc_include": [],
+        "mcc_exclude": [],
+        "except_merchant_slugs": [],
+        "except_platform_slugs": [],
+        "block_inr": null,
+        "min_engine_version": 2,
+        "max_engine_version": null,
+        "source_local_id": "tata-neu-partner-emi-wp7",
+        "display_note": "EMI spends at partner Tata brands earn the base 1.5%."
+      },
+      {
+        "id": "tata-neu-infinity-sbi-credit-card:rule:tata-neu-partner-upi-wp7",
+        "category_id": null,
+        "category_slug": null,
+        "merchant_pattern": null,
+        "rail": "upi_qr",
+        "unit": "points_per_100",
+        "rate": 1.5,
+        "min_txn_inr": null,
+        "max_txn_inr": null,
+        "priority": 18,
+        "conditions": {
+          "source_local_id": "tata-neu-partner-upi-wp7",
+          "part": null,
+          "info_reasons": [],
+          "flags": [
+            "partial_merchant_list"
+          ]
+        },
+        "notes": null,
+        "effective_from": "2025-04-16",
+        "effective_to": null,
+        "excluded_categories": [],
+        "rule_role": "earn",
+        "merchant_slugs": [
+          "air_india",
+          "air_india_express",
+          "bigbasket",
+          "croma",
+          "taj",
+          "tanishq",
+          "tata_1mg",
+          "tata_cliq"
+        ],
+        "platform_slugs": [],
+        "mcc_include": [],
+        "mcc_exclude": [],
+        "except_merchant_slugs": [],
+        "except_platform_slugs": [],
+        "block_inr": null,
+        "min_engine_version": 2,
+        "max_engine_version": null,
+        "source_local_id": "tata-neu-partner-upi-wp7",
+        "display_note": "UPI spends at partner Tata brands earn the UPI rate."
       }
     ],
     "cap_rules": [
       {
         "id": "tata-neu-infinity-sbi-credit-card:cap:cap-upi-monthly-500",
-        "reward_rule_id": "tata-neu-infinity-sbi-credit-card:rule:upi-rupay",
+        "reward_rule_id": null,
         "category_id": null,
         "category_slug": null,
         "benefit_kind": null,
@@ -1264,7 +1375,8 @@
         "cap_amount": 500,
         "scope": "targets",
         "targets": [
-          "tata-neu-infinity-sbi-credit-card:rule:upi-rupay"
+          "tata-neu-infinity-sbi-credit-card:rule:upi-rupay",
+          "tata-neu-infinity-sbi-credit-card:rule:tata-neu-partner-upi-wp7"
         ],
         "parent_cap_id": null,
         "post_cap_behavior": null,

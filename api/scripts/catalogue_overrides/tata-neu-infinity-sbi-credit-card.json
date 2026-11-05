@@ -49,7 +49,7 @@
       "value": {
         "id": "grocery-standard-capped",
         "category_id": "grocery",
-        "priority": 50,
+        "priority": 15,
         "evaluation_type": "standard_accrual",
         "rail": "any",
         "channel_type": "all",
@@ -64,7 +64,7 @@
         "effective_from": "2025-04-16",
         "effective_to": null
       },
-      "reason": "WP7: T&C booklet: \"Maximum Capping per month on NeuCoins ... Grocery, Insurance, Utility, Telecom and cable\" - the cap covers all NeuCoins in the category, but the record tied it only to the extra-5% Tata Neu app rule (info). Base-rate rule carrying the cap.",
+      "reason": "WP7: T&C booklet: \"Maximum Capping per month on NeuCoins ... Grocery, Insurance, Utility, Telecom and cable\" - the cap covers all NeuCoins in the category, but the record tied it only to the extra-5% Tata Neu app rule (info). Base-rate rule carrying the cap; priority 15 (ahead of the 5% partner rule, as on the HDFC Infinity record) so a capped category never pays the partner rate uncapped (H2: may under-state at partner grocery brands).",
       "source_url": "https://www.sbicard.com/sbi-card-en/assets/docs/pdf/ekit-tncs/Tata-Neu-Infinity-Booklet.pdf",
       "checked_on": "2026-11-05"
     },
@@ -74,7 +74,7 @@
       "value": {
         "id": "insurance-standard-capped",
         "category_id": "insurance",
-        "priority": 50,
+        "priority": 15,
         "evaluation_type": "standard_accrual",
         "rail": "any",
         "channel_type": "all",
@@ -99,7 +99,7 @@
       "value": {
         "id": "utility-standard-capped",
         "category_id": "utility",
-        "priority": 50,
+        "priority": 15,
         "evaluation_type": "standard_accrual",
         "rail": "any",
         "channel_type": "all",
@@ -115,6 +115,91 @@
         "effective_to": null
       },
       "reason": "WP7: Same as grocery-standard-capped (utility cap).",
+      "source_url": "https://www.sbicard.com/sbi-card-en/assets/docs/pdf/ekit-tncs/Tata-Neu-Infinity-Booklet.pdf",
+      "checked_on": "2026-11-05"
+    },
+    {
+      "path": "reward_rules[id=tata-neu-partner-5pct].conditions.channel",
+      "op": "remove",
+      "reason": "WP7: Restates the partner brands (Tata Neu app/website and partner Tata brands); made the 5% rule info.",
+      "source_url": "https://www.sbicard.com/sbi-card-en/assets/docs/pdf/ekit-tncs/Tata-Neu-Infinity-Booklet.pdf",
+      "checked_on": "2026-11-05"
+    },
+    {
+      "path": "reward_rules",
+      "op": "append",
+      "value": {
+        "id": "tata-neu-partner-emi-wp7",
+        "category_id": "all_retail",
+        "priority": 19,
+        "evaluation_type": "standard_accrual",
+        "rail": "emi",
+        "channel_type": "all",
+        "conditions": {
+          "brands": [
+            "Air India",
+            "Air India Express",
+            "BigBasket",
+            "Tata Cliq",
+            "Taj Hotels",
+            "Tata 1mg",
+            "Titan",
+            "Tanishq",
+            "Croma",
+            "Westside",
+            "Qmin"
+          ]
+        },
+        "action": {
+          "multiplier": 1,
+          "points_per_block": 1.5,
+          "cashback_percent": "N/A",
+          "cap_reference": null,
+          "reason": "EMI spends at partner Tata brands earn the base 1.5%."
+        },
+        "effective_from": "2025-04-16",
+        "effective_to": null
+      },
+      "reason": "WP7: The 5% is on \"non-EMI Tata Neu and partner Tata brand spends\" (record); non_emi maps only to the emi category, so EMI-rail partner spends need this base-rate carve-out (D24e).",
+      "source_url": "https://www.sbicard.com/sbi-card-en/assets/docs/pdf/ekit-tncs/Tata-Neu-Infinity-Booklet.pdf",
+      "checked_on": "2026-11-05"
+    },
+    {
+      "path": "reward_rules",
+      "op": "append",
+      "value": {
+        "id": "tata-neu-partner-upi-wp7",
+        "category_id": "all_retail",
+        "priority": 18,
+        "evaluation_type": "standard_accrual",
+        "rail": "upi_qr",
+        "channel_type": "all",
+        "conditions": {
+          "brands": [
+            "Air India",
+            "Air India Express",
+            "BigBasket",
+            "Tata Cliq",
+            "Taj Hotels",
+            "Tata 1mg",
+            "Titan",
+            "Tanishq",
+            "Croma",
+            "Westside",
+            "Qmin"
+          ]
+        },
+        "action": {
+          "multiplier": 1,
+          "points_per_block": 1.5,
+          "cashback_percent": "N/A",
+          "cap_reference": "cap-upi-monthly-500",
+          "reason": "UPI spends at partner Tata brands earn the UPI rate."
+        },
+        "effective_from": "2025-04-16",
+        "effective_to": null
+      },
+      "reason": "WP7: UPI spends earn the UPI rate (record upi-rupay 1.5%; the Plus SBI record says UPI at partner brands earns the UPI rate). Carve-out so the 5% never applies on UPI (H2).",
       "source_url": "https://www.sbicard.com/sbi-card-en/assets/docs/pdf/ekit-tncs/Tata-Neu-Infinity-Booklet.pdf",
       "checked_on": "2026-11-05"
     }
