@@ -178,7 +178,7 @@
   },
   {
     "id": "BOB-UPI-CREDIT-B",
-    "version": 2,
+    "version": 3,
     "family": "upi_credit",
     "senders": [
       "BOBSMS",
@@ -187,7 +187,7 @@
     ],
     "priority": 763,
     "match": {
-      "pattern": "^(?![\\s\\S]*\\b(?:umrn|ipo|asba|folio|groww)\\b)[\\s\\S]*?(?:(?:\\b(?:rs\\.?|inr)|₹)\\s*:?\\s*(?<amt>\\d[\\d,]*(?:\\.\\d{1,2})?)\\s+cr\\.?\\s+to\\s+a/?c\\s*[x*•.]*\\s?(?<mask>\\d{2,18})(?:\\s+on\\s+(?<date>\\d{4}-\\d{2}-\\d{2}(?:[: ]\\d{2}:\\d{2}(?::\\d{2})?)?|\\d{1,2}[-/]\\d{1,2}[-/]\\d{2,4}(?:,?\\s*\\d{2}:\\d{2}(?::\\d{2})?)?|\\d{1,2}[-/ ]?[a-z]{3}[-/ ,]*\\d{2,4}(?:,?\\s*\\d{2}:\\d{2}(?::\\d{2})?)?))?\\s+(?:and\\s+dr\\.?\\s+from|from|by)\\s+(?<payee>[^\\n]+?)\\.?\\s*ref\\s*:?\\s*(?<ref_upiRef>\\d{9,18})[\\s\\S]*?\\b(?:avl|avail(?:able)?|total\\s+avail(?:able)?|clear|current|new|closing|updated|remaining)?\\.?\\s*bal(?:ance)?\\.?\\s*(?:is|of)?\\s*[:\\-]?\\s*(?:\\b(?:rs\\.?|inr)|₹)\\s*:?\\s*(?<bal>\\d[\\d,]*(?:\\.\\d{1,2})?))",
+      "pattern": "^(?![\\s\\S]*\\b(?:umrn|ipo|asba|folio|groww|imps|neft|rtgs)\\b)[\\s\\S]*?(?:(?:\\b(?:rs\\.?|inr)|₹)\\s*:?\\s*(?<amt>\\d[\\d,]*(?:\\.\\d{1,2})?)\\s+cr\\.?\\s+to\\s+a/?c\\s*[x*•.]*\\s?(?<mask>\\d{2,18})(?:\\s+on\\s+(?<date>\\d{4}-\\d{2}-\\d{2}(?:[: ]\\d{2}:\\d{2}(?::\\d{2})?)?|\\d{1,2}[-/]\\d{1,2}[-/]\\d{2,4}(?:,?\\s*\\d{2}:\\d{2}(?::\\d{2})?)?|\\d{1,2}[-/ ]?[a-z]{3}[-/ ,]*\\d{2,4}(?:,?\\s*\\d{2}:\\d{2}(?::\\d{2})?)?))?\\s+(?:and\\s+dr\\.?\\s+from|from|by)\\s+(?<payee>[^\\n]+?)\\.?\\s*ref\\s*:?\\s*(?<ref_upiRef>\\d{9,18})[\\s\\S]*?\\b(?:avl|avail(?:able)?|total\\s+avail(?:able)?|clear|current|new|closing|updated|remaining)?\\.?\\s*bal(?:ance)?\\.?\\s*(?:is|of)?\\s*[:\\-]?\\s*(?:\\b(?:rs\\.?|inr)|₹)\\s*:?\\s*(?<bal>\\d[\\d,]*(?:\\.\\d{1,2})?))",
       "flags": "i",
       "rejectAny": [
         "mandate",
@@ -346,6 +346,11 @@
       {
         "sender": "VK-BOBSMS-S",
         "body": "Rs.5000.00 will be Cr. to A/C XXXXXX1234 and Dr. from rahul@okaxis. Ref:432112345679.",
+        "expectFactTypes": []
+      },
+      {
+        "sender": "VK-BOBSMS-S",
+        "body": "Rs.5000.00 Cr. to A/c XXXXXX1234 by IMPS from SAMPLE PERSON. Ref:432112345678 AvlBal:Rs.6234.56(2026:11:01 12:30:11)-BOB",
         "expectFactTypes": []
       }
     ],
@@ -512,7 +517,7 @@
   },
   {
     "id": "BOB-UPI-CREDIT",
-    "version": 2,
+    "version": 3,
     "family": "upi_credit",
     "senders": [
       "BOBSMS",
@@ -521,7 +526,7 @@
     ],
     "priority": 758,
     "match": {
-      "pattern": "^(?![\\s\\S]*\\b(?:umrn|ipo|asba|folio|groww)\\b)[\\s\\S]*?(?:(?:\\b(?:rs\\.?|inr)|₹)\\s*:?\\s*(?<amt>\\d[\\d,]*(?:\\.\\d{1,2})?)\\s+cr\\.?\\s+to\\s+a/?c\\s*[x*•.]*\\s?(?<mask>\\d{2,18})(?:\\s+on\\s+(?<date>\\d{4}-\\d{2}-\\d{2}(?:[: ]\\d{2}:\\d{2}(?::\\d{2})?)?|\\d{1,2}[-/]\\d{1,2}[-/]\\d{2,4}(?:,?\\s*\\d{2}:\\d{2}(?::\\d{2})?)?|\\d{1,2}[-/ ]?[a-z]{3}[-/ ,]*\\d{2,4}(?:,?\\s*\\d{2}:\\d{2}(?::\\d{2})?)?))?\\s+(?:and\\s+dr\\.?\\s+from|from|by)\\s+(?<payee>[^\\n]+?)\\.?\\s*ref\\s*:?\\s*(?<ref_upiRef>\\d{9,18}))",
+      "pattern": "^(?![\\s\\S]*\\b(?:umrn|ipo|asba|folio|groww|imps|neft|rtgs)\\b)[\\s\\S]*?(?:(?:\\b(?:rs\\.?|inr)|₹)\\s*:?\\s*(?<amt>\\d[\\d,]*(?:\\.\\d{1,2})?)\\s+cr\\.?\\s+to\\s+a/?c\\s*[x*•.]*\\s?(?<mask>\\d{2,18})(?:\\s+on\\s+(?<date>\\d{4}-\\d{2}-\\d{2}(?:[: ]\\d{2}:\\d{2}(?::\\d{2})?)?|\\d{1,2}[-/]\\d{1,2}[-/]\\d{2,4}(?:,?\\s*\\d{2}:\\d{2}(?::\\d{2})?)?|\\d{1,2}[-/ ]?[a-z]{3}[-/ ,]*\\d{2,4}(?:,?\\s*\\d{2}:\\d{2}(?::\\d{2})?)?))?\\s+(?:and\\s+dr\\.?\\s+from|from|by)\\s+(?<payee>[^\\n]+?)\\.?\\s*ref\\s*:?\\s*(?<ref_upiRef>\\d{9,18}))",
       "flags": "i",
       "rejectAny": [
         "mandate",
@@ -660,6 +665,11 @@
       {
         "sender": "VK-BOBSMS-S",
         "body": "Rs.5000.00 will be Cr. to A/C XXXXXX1234 and Dr. from rahul@okaxis. Ref:432112345679.",
+        "expectFactTypes": []
+      },
+      {
+        "sender": "VK-BOBSMS-S",
+        "body": "Rs.5000.00 Cr. to A/c XXXXXX1234 by IMPS from SAMPLE PERSON. Ref:432112345678.",
         "expectFactTypes": []
       }
     ],

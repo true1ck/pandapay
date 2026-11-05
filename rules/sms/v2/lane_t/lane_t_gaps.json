@@ -1,0 +1,255 @@
+[
+  {
+    "id": "LANE-T-ACCT-DEBIT-FAILED",
+    "version": 1,
+    "family": "attempt_account",
+    "senders": [
+      "*"
+    ],
+    "priority": 330,
+    "match": {
+      "pattern": "(?:\\b(?:rs\\.?|inr)|₹)\\s*:?\\s*(?<amt>\\d[\\d,]*(?:\\.\\d{1,2})?)\\s+(?:has\\s+been\\s+|is\\s+|was\\s+)?(?:debited|deducted|withdrawn)\\s+(?:from|in)\\s+(?:(?:your|the)\\s+)?(?:[a-z][a-z .&'-]{0,30}?\\s)?\\b(?:a/?c(?:ct)?\\.?|account|acc\\.?)(?:\\s*(?:no|number|num)\\.?)?(?:\\s+(?:ending|ends)(?:\\s+(?:with|in))?)?\\s*[:\\-]?\\s*[x*•.]*\\s?(?<mask>\\d{2,18})[^\\n]{0,120}?\\b(?:failed|unsuccessful)\\b\\s*[.!]?\\s*(?:$|retry|re-try|please|kindly|try|your|amount|if)",
+      "flags": "i",
+      "rejectAny": [
+        "if failed",
+        "in case",
+        "not failed",
+        "has not failed"
+      ]
+    },
+    "emit": [
+      {
+        "factType": "attempt",
+        "attrs": {
+          "status": "failed",
+          "direction": "debit",
+          "purpose": "unknown"
+        },
+        "amounts": [
+          {
+            "role": "posted",
+            "from": "amt",
+            "unit": "INR"
+          }
+        ],
+        "instrument": {
+          "kind": "bank_account",
+          "maskFrom": "mask"
+        }
+      }
+    ],
+    "confidence": 0.93,
+    "examples": [
+      {
+        "sender": "VM-EXBANK-S",
+        "body": "Rs.499.00 debited from A/c XX1234 on 22-10-26 towards SIP in EXAMPLE FUND failed. Retry.",
+        "expectFactTypes": [
+          "attempt"
+        ]
+      },
+      {
+        "sender": "VM-EXBANK-S",
+        "body": "Rs.499.00 debited from A/c XX1234 on 22-10-26 towards SIP in EXAMPLE FUND. If failed, call 18001234567.",
+        "expectFactTypes": []
+      }
+    ],
+    "status": "active",
+    "createdBy": "lane-t",
+    "updatedAt": "2026-11-05T00:00:00Z"
+  },
+  {
+    "id": "LANE-T-BROKER-TRADING-ACCOUNT-CREDITED",
+    "version": 1,
+    "family": "broker_notice",
+    "senders": [
+      "*"
+    ],
+    "priority": 845,
+    "match": {
+      "pattern": "^(?![\\s\\S]*\\b(?:debited|withdraw\\w*|payout|settle\\w*)\\b)[\\s\\S]*?(?:\\b(?:rs\\.?|inr)|₹)\\s*[\\d,]+(?:\\.\\d{1,2})?\\s+(?:has\\s+been\\s+|is\\s+|was\\s+)?(?:credited|added|deposited)\\s+(?:to|in|into)\\s+(?:your\\s+)?(?:[a-z0-9&. ]{0,40}?\\s)?(?:trading|demat)\\s+(?:a/?c|acct?\\.?|account)\\b",
+      "flags": "i",
+      "rejectAny": [
+        "refund",
+        "dividend",
+        "interest",
+        "will be credited",
+        "not credited"
+      ]
+    },
+    "emit": [
+      {
+        "factType": "info",
+        "attrs": {
+          "category": "service"
+        }
+      }
+    ],
+    "confidence": 0.93,
+    "examples": [
+      {
+        "sender": "VM-EXBROK-S",
+        "body": "Rs 5,000.00 credited to your Example Broker trading account on 01-Nov-26.",
+        "expectFactTypes": [
+          "info"
+        ]
+      },
+      {
+        "sender": "VM-EXBROK-S",
+        "body": "Rs 5,000.00 will be credited to your bank account on 01-Nov-26 after the withdrawal request.",
+        "expectFactTypes": []
+      }
+    ],
+    "status": "active",
+    "createdBy": "lane-t",
+    "updatedAt": "2026-11-05T00:00:00Z"
+  },
+  {
+    "id": "LANE-T-BSE-IPO-APPLICATION-SUBMITTED",
+    "version": 1,
+    "family": "ipo_notice",
+    "senders": [
+      "BSEIND"
+    ],
+    "priority": 425,
+    "match": {
+      "pattern": "^dear\\s+investor,?\\s*application\\s+no\\.?\\s*[:#]?\\s*[a-z0-9]+\\s+of\\s+[^\\r\\n]{1,80}?\\.?\\s*has\\s+been\\s+submitted\\s+on\\s+bse\\.?\\s*you\\s+will\\s+receive\\s+a\\s+upi[- ]mandate\\s+collect\\s+request\\s+for\\s+blocking\\s+of\\s+funds\\.?\\s*(?:bse\\s+team)?\\s*$",
+      "flags": "i"
+    },
+    "emit": [
+      {
+        "factType": "info",
+        "attrs": {
+          "category": "service"
+        }
+      }
+    ],
+    "confidence": 0.97,
+    "examples": [
+      {
+        "sender": "VM-BSELTD-S",
+        "body": "DEAR INVESTOR,APPLICATION NO.EXAMPLE12345 OF EXAMPLECO. HAS BEEN SUBMITTED ON BSE.YOU WILL RECEIVE A UPI-MANDATE COLLECT REQUEST FOR BLOCKING OF FUNDS.BSE TEAM",
+        "expectFactTypes": [
+          "info"
+        ]
+      },
+      {
+        "sender": "VM-BSELTD-S",
+        "body": "DEAR INVESTOR,APPLICATION NO.EXAMPLE12345 OF EXAMPLECO. HAS BEEN REJECTED ON BSE.BSE TEAM",
+        "expectFactTypes": []
+      }
+    ],
+    "status": "active",
+    "createdBy": "lane-t",
+    "updatedAt": "2026-11-05T00:00:00Z"
+  },
+  {
+    "id": "LANE-T-UPI-MANDATE-COLLECT-REQUEST",
+    "version": 1,
+    "family": "payment_request",
+    "senders": [
+      "*"
+    ],
+    "priority": 725,
+    "match": {
+      "pattern": "upi-?\\s*mandate\\s+collect\\s+request\\s+from\\s+(?<m>[a-z0-9&.' _*-]+?)\\s+for\\s+(?:rs\\.?|inr|₹)\\s*(?<amt>[\\d,]+(?:\\.\\d{1,2})?)",
+      "flags": "i",
+      "rejectAny": [
+        "declined",
+        "rejected",
+        "expired",
+        "revoked",
+        "cancelled",
+        "has been approved"
+      ]
+    },
+    "emit": [
+      {
+        "factType": "attempt",
+        "attrs": {
+          "status": "pending",
+          "direction": "debit",
+          "purpose": "unknown"
+        },
+        "amounts": [
+          {
+            "role": "scheduled",
+            "from": "amt",
+            "unit": "INR"
+          }
+        ],
+        "counterparty": {
+          "kind": "merchant",
+          "nameFrom": "m",
+          "transforms": [
+            "sanitizeNarration"
+          ]
+        }
+      }
+    ],
+    "confidence": 0.95,
+    "examples": [
+      {
+        "sender": "VM-EXPAYS-S",
+        "body": "Dear Customer, You have received a UPI-Mandate collect request from EXAMPLE MEDIA for Rs.250.00. Login into the Example Pay application to authorize. -Example Bank",
+        "expectFactTypes": [
+          "attempt"
+        ]
+      },
+      {
+        "sender": "VM-EXPAYS-S",
+        "body": "UPI-Mandate collect request from EXAMPLE MEDIA for Rs.250.00 was declined.",
+        "expectFactTypes": []
+      }
+    ],
+    "status": "active",
+    "createdBy": "lane-t",
+    "updatedAt": "2026-11-05T00:00:00Z"
+  },
+  {
+    "id": "LANE-T-REWARD-LOYALTY-POINTS-LABEL",
+    "version": 1,
+    "family": "rewards",
+    "senders": [
+      "*"
+    ],
+    "priority": 268,
+    "match": {
+      "pattern": "\\bpoints\\s+earned\\s*[:\\-]\\s*(?<pts>\\d+(?:,\\d{2,3})*)\\s*[.,;]?\\s*total\\s+points\\s*[:\\-]\\s*\\d",
+      "flags": "i",
+      "rejectAny": [
+        "expire"
+      ]
+    },
+    "emit": [
+      {
+        "factType": "reward",
+        "attrs": {},
+        "amounts": [
+          {
+            "role": "points_earned",
+            "from": "pts",
+            "unit": "POINTS"
+          }
+        ]
+      }
+    ],
+    "confidence": 0.93,
+    "examples": [
+      {
+        "sender": "VM-EXSHOP-S",
+        "body": "We hope your shopping experience at Example Store was delightful! Points Earned: 20 Total Points: 57. Would love to have you again!",
+        "expectFactTypes": [
+          "reward"
+        ]
+      },
+      {
+        "sender": "VM-EXSHOP-S",
+        "body": "Earn points on your next visit. Points Earned will show in your account.",
+        "expectFactTypes": []
+      }
+    ],
+    "status": "active",
+    "createdBy": "lane-t",
+    "updatedAt": "2026-11-05T00:00:00Z"
+  }
+]

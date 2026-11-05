@@ -1,0 +1,39 @@
+{
+  "id": "lanet:bob_imps_credit_not_upi",
+  "templateHash": "619cd6b5e76fcfedec1da53696f861d2336dc573450ddf7be0061beb59d59b4e",
+  "weight": 1,
+  "source": "synthetic",
+  "messages": [
+    {
+      "sender": "VK-BOBSMS-S",
+      "body": "Rs.5000.00 Cr. to A/c XXXXXX1234 by IMPS from SAMPLE PERSON. Ref:432112345678 AvlBal:Rs.6234.56(2026:11:01 12:30:11)-BOB",
+      "observedAt": "2026-12-01T09:00:00.000Z"
+    }
+  ],
+  "expect": {
+    "facts": [
+      {
+        "factType": "movement",
+        "attrs": {
+          "direction": "credit",
+          "rail": "imps"
+        },
+        "amounts": [
+          {
+            "role": "posted",
+            "minor": 500000
+          }
+        ],
+        "instrument": {
+          "kind": "bank_account",
+          "maskDigits": "1234"
+        }
+      },
+      {
+        "factType": "balance_snapshot"
+      }
+    ]
+  },
+  "note": "IMPS credit with a 12-digit reference is IMPS, not UPI.",
+  "origin": "lane-t"
+}
