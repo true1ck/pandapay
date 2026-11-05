@@ -16,7 +16,7 @@ declare
   v_rule1  uuid; v_rule2 uuid; v_rule3 uuid;
   v_cap1   uuid; v_cap2 uuid; v_cap3 uuid; v_cap4 uuid; v_dr uuid; v_dcap uuid;
   v_before bigint; v_after bigint;
-  v1 jsonb; v2 jsonb;
+  v1 jsonb; v2 jsonb; big_conditions jsonb; big_mcc text[];
 begin
   insert into issuers (id, slug, name) values (v_issuer, 'wp1-test-bank', 'WP1 Test Bank');
   insert into card_products (id, issuer_id, slug, name, network, status, verified_at,
@@ -270,6 +270,28 @@ begin
   insert into reward_rules (card_product_id, unit, rate, notes, max_engine_version)
     values (v_card, 'points_per_100', 9, 'v1 only', null);
   delete from reward_rules where id = v_dr;
+
+  -- Large values: ~10 KB conditions and 300 MCCs must index (hashed identity)
+  big_conditions := jsonb_build_object('text', (select string_agg(md5(i::text), '') from generate_series(1, 320) i));
+  big_mcc := (select array_agg(lpad(i::text, 4, '0') order by i) from generate_series(1, 300) i);
+  if length(big_conditions::text) < 10000 then raise exception 'test fixture too small'; end if;
+  insert into reward_rules (card_product_id, unit, rate, notes, conditions, mcc_include, min_engine_version)
+    values (v_card, 'points_per_100', 4, repeat('long note ', 300), big_conditions, big_mcc, 2);
+  begin
+    insert into reward_rules (card_product_id, unit, rate, notes, conditions, mcc_include, min_engine_version)
+      values (v_card, 'points_per_100', 4, repeat('long note ', 300), big_conditions, big_mcc, 2);
+    raise exception 'exact duplicate of a large rule must be rejected';
+  exception when unique_violation then null; end;
+  insert into reward_rules (card_product_id, unit, rate, notes, conditions, mcc_include, min_engine_version)
+    values (v_card, 'points_per_100', 4, repeat('long note ', 300), big_conditions,
+            big_mcc[1:299] || array['9999'], 2);
+  insert into card_benefits (card_product_id, kind, label, description, conditions)
+    values (v_card, 'lounge_domestic', 'Big', repeat('d', 5000), big_conditions);
+  begin
+    insert into card_benefits (card_product_id, kind, label, description, conditions)
+      values (v_card, 'lounge_domestic', ' BIG ', repeat('d', 5000), big_conditions);
+    raise exception 'duplicate large benefit must be rejected';
+  exception when unique_violation then null; end;
 
   -- D7: extra rounding modes
   update card_products set accrual_rounding = 'points_half_up' where id = v_card;
