@@ -32,6 +32,7 @@ const { registerSupportTicketRoute } = require('./support_tickets');
 const { registerDataErrorReportRoute } = require('./data_error_reports');
 const { createReadinessHandler } = require('./readiness');
 const { createNotificationPostHandler } = require('./notification_routes');
+const { registerNotificationDeviceRoutes } = require('./notification_devices_route');
 const { createPostgresFeedbackRateLimiter } = require('./feedback_rate_limit');
 const { periodBounds, effectiveRatePerRupee, effectivePointsPerRupee } = require('./cycles');
 const { replayCurrentCapConsumption } = require('./card_state_reconciliation');
@@ -1154,6 +1155,8 @@ app.post('/notification-devices', requireAuth, async (req, res) => {
     });
   }
 });
+
+registerNotificationDeviceRoutes(app, { requireAuth, notificationService });
 
 /**
  * POST /notifications/test — requests one real remote push to the current

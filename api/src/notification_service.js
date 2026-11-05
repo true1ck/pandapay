@@ -238,6 +238,36 @@ async function registerDevice({ subscriberId, token, platform, email, displayNam
   return { configured: true, registered: true };
 }
 
+async function unregisterDevice({ subscriberId, token }) {
+  if (!isConfigured()) return { configured: false, unregistered: false };
+  if (!subscriberId || !token) throw new Error('subscriberId and token are required');
+  const id = encodeURIComponent(subscriberId);
+  const current = await request(`/v1/subscribers/${id}`, { method: 'GET' });
+  if (current.status === 404) return { configured: true, unregistered: false };
+  if (!current.ok) {
+    throw new Error(`Notification subscriber lookup failed: ${await readError(current)}`);
+  }
+  const body = await readJson(current);
+  const fcm = (body?.data?.channels || []).find((channel) => channel?.providerId === 'fcm');
+  const tokens = fcm?.credentials?.deviceTokens || [];
+  if (!tokens.includes(token)) return { configured: true, unregistered: false };
+  // The provider replaces the whole token list on PUT, so send what remains.
+  const update = await request(`/v1/subscribers/${id}/credentials`, {
+    method: 'PUT',
+    body: JSON.stringify({
+      providerId: 'fcm',
+      ...(config.notificationServiceFcmIntegrationIdentifier
+        ? { integrationIdentifier: config.notificationServiceFcmIntegrationIdentifier }
+        : {}),
+      credentials: { deviceTokens: tokens.filter((t) => t !== token) },
+    }),
+  });
+  if (!update.ok) {
+    throw new Error(`Notification device credential removal failed: ${await readError(update)}`);
+  }
+  return { configured: true, unregistered: true };
+}
+
 async function send({ subscriberId, title, body, category, severity, deepLink, dedupeKey, signal }) {
   if (!isConfigured()) return { configured: false, status: 'disabled' };
   signal?.throwIfAborted();
@@ -298,4 +328,4 @@ async function sendBroadcast({ title, body, category, severity, deepLink, dedupe
   return (await readJson(response)) || { status: 'accepted' };
 }
 
-module.exports = { isConfigured, registerDevice, send, sendBroadcast };
+module.exports = { isConfigured, registerDevice, unregisterDevice, send, sendBroadcast };

@@ -373,3 +373,66 @@ test('registerDevice uses the deployed PUT credentials endpoint', async () => {
     restoreTestConfig(previous);
   }
 });
+
+test('unregisterDevice keeps the other tokens and removes only the given one', async () => {
+  const previousUrl = process.env.NOTIFICATION_SERVICE_URL;
+  const previousKey = process.env.NOTIFICATION_SERVICE_API_KEY;
+  const previous = {};
+  setTestConfig(previous);
+  process.env.NOTIFICATION_SERVICE_URL = 'http://notifications.test';
+  process.env.NOTIFICATION_SERVICE_API_KEY = 'test-key';
+  const calls = [];
+  global.fetch = async (url, options = {}) => {
+    calls.push({ url: String(url), method: options.method, body: options.body && JSON.parse(options.body) });
+    if (options.method === 'GET') {
+      return new Response(JSON.stringify({ data: { channels: [{
+        providerId: 'fcm', credentials: { deviceTokens: ['token-aaaaaaaaaa', 'token-bbbbbbbbbb'] },
+      }] } }), { status: 200, headers: { 'content-type': 'application/json' } });
+    }
+    return new Response('{}', { status: 200, headers: { 'content-type': 'application/json' } });
+  };
+  try {
+    const service = loadService();
+    const result = await service.unregisterDevice({ subscriberId: 'user-1', token: 'token-aaaaaaaaaa' });
+    assert.equal(result.unregistered, true);
+    const put = calls.find((call) => call.method === 'PUT');
+    assert.match(put.url, /\/v1\/subscribers\/user-1\/credentials$/);
+    assert.deepEqual(put.body.credentials, { deviceTokens: ['token-bbbbbbbbbb'] });
+  } finally {
+    global.fetch = originalFetch;
+    if (previousUrl === undefined) delete process.env.NOTIFICATION_SERVICE_URL;
+    else process.env.NOTIFICATION_SERVICE_URL = previousUrl;
+    if (previousKey === undefined) delete process.env.NOTIFICATION_SERVICE_API_KEY;
+    else process.env.NOTIFICATION_SERVICE_API_KEY = previousKey;
+    restoreTestConfig(previous);
+  }
+});
+
+test('unregisterDevice does nothing when the subscriber or token is unknown', async () => {
+  const previousUrl = process.env.NOTIFICATION_SERVICE_URL;
+  const previousKey = process.env.NOTIFICATION_SERVICE_API_KEY;
+  const previous = {};
+  setTestConfig(previous);
+  process.env.NOTIFICATION_SERVICE_URL = 'http://notifications.test';
+  process.env.NOTIFICATION_SERVICE_API_KEY = 'test-key';
+  const methods = [];
+  let status = 404;
+  global.fetch = async (_url, options = {}) => {
+    methods.push(options.method);
+    return new Response(JSON.stringify({ data: { channels: [] } }), { status });
+  };
+  try {
+    const service = loadService();
+    assert.equal((await service.unregisterDevice({ subscriberId: 'u', token: 'token-aaaaaaaaaa' })).unregistered, false);
+    status = 200;
+    assert.equal((await service.unregisterDevice({ subscriberId: 'u', token: 'token-aaaaaaaaaa' })).unregistered, false);
+    assert.deepEqual(methods, ['GET', 'GET']);
+  } finally {
+    global.fetch = originalFetch;
+    if (previousUrl === undefined) delete process.env.NOTIFICATION_SERVICE_URL;
+    else process.env.NOTIFICATION_SERVICE_URL = previousUrl;
+    if (previousKey === undefined) delete process.env.NOTIFICATION_SERVICE_API_KEY;
+    else process.env.NOTIFICATION_SERVICE_API_KEY = previousKey;
+    restoreTestConfig(previous);
+  }
+});
