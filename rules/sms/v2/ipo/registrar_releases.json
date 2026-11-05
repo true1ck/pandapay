@@ -114,8 +114,8 @@
   },
   {
     "id": "IPO-REG-PARTIAL-ALLOTMENT",
-    "version": 1,
-    "family": "ipo_allotment",
+    "version": 2,
+    "family": "ipo_partial_allotment",
     "senders": [
       "*"
     ],

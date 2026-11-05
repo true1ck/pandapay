@@ -1,0 +1,40 @@
+{
+  "id": "lanew:payer_neft_by_payer",
+  "templateHash": "93204a2c5194610f9d5cdb6ae6253f4bf96681af60efe89ef2e4ad013f44db2f",
+  "weight": 1,
+  "source": "synthetic",
+  "messages": [
+    {
+      "sender": "VM-SBIPSG-S",
+      "body": "Dear Customer, INR 25,000.00 credited to your A/c No XX1234 on 12/10/2026 through NEFT with UTR HDFCH12345678901 by ACME SOLUTIONS LLP, INFO: BATCHID:1 PAYMENT-SBI",
+      "observedAt": "2026-11-20T09:00:00.000Z"
+    }
+  ],
+  "expect": {
+    "facts": [
+      {
+        "factType": "movement",
+        "attrs": {
+          "direction": "credit",
+          "purpose": "p2p",
+          "rail": "neft"
+        },
+        "amounts": [
+          {
+            "role": "posted",
+            "minor": 2500000
+          }
+        ],
+        "instrument": {
+          "kind": "bank_account",
+          "maskDigits": "1234"
+        },
+        "counterparty": {
+          "name": "ACME SOLUTIONS"
+        }
+      }
+    ]
+  },
+  "note": "NEFT credit that names the payer after \"by\".",
+  "origin": "lane-w"
+}

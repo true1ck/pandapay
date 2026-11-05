@@ -74,7 +74,7 @@
   },
   {
     "id": "INV-BROKER-PAYOUT-DONE-01",
-    "version": 1,
+    "version": 2,
     "family": "broker_account",
     "senders": [
       "ZERODH",
@@ -94,7 +94,7 @@
     ],
     "priority": 600,
     "match": {
-      "pattern": "(?:settlement\\s+payout|payout|withdrawal)\\s+(?:request\\s+)?of\\s+(?:rs\\.?|inr|₹)\\s*(?<amt>[\\d,]+(?:\\.\\d{1,2})?)\\s+(?:has been\\s+|is\\s+|was\\s+)?(?:credited|completed|settled|successful)(?:[\\s\\S]*?(?:a/c|acct?\\.?|account)\\s*(?:no\\.?\\s*)?(?:ending\\s*(?:with\\s*|in\\s*)?)?(?:[x*•.]+\\s*)?(?<mask>\\d{2,16})\\b)?",
+      "pattern": "(?:^\\s*(?!dear\\b|hi\\b|hello\\b)(?<broker>[a-z][a-z0-9 .&]{1,30}?)\\s*:\\s*[\\s\\S]*?)?(?:settlement\\s+payout|payout|withdrawal)\\s+(?:request\\s+)?of\\s+(?:rs\\.?|inr|₹)\\s*(?<amt>[\\d,]+(?:\\.\\d{1,2})?)\\s+(?:has been\\s+|is\\s+|was\\s+)?(?:credited|completed|settled|successful)(?:[\\s\\S]*?(?:a/c|acct?\\.?|account)\\s*(?:no\\.?\\s*)?(?:ending\\s*(?:with\\s*|in\\s*)?)?(?:[x*•.]+\\s*)?(?<mask>\\d{2,16})\\b)?",
       "flags": "i",
       "rejectAny": [
         "failed",
@@ -108,8 +108,7 @@
         "attrs": {
           "direction": "credit",
           "purpose": "investment",
-          "rail": "unknown",
-          "evidenceOnly": true
+          "rail": "unknown"
         },
         "amounts": [
           {
@@ -118,12 +117,12 @@
             "unit": "INR"
           }
         ],
-        "instrument": {
-          "kind": "broker"
-        },
         "counterparty": {
-          "kind": "bank",
-          "accountMaskFrom": "mask"
+          "kind": "merchant",
+          "nameFrom": "broker",
+          "transforms": [
+            "sanitizeNarration"
+          ]
         }
       }
     ],
@@ -138,13 +137,20 @@
       },
       {
         "sender": "VM-UPSTOX-S",
+        "body": "Your withdrawal of Rs 8,000.00 has been credited to your bank A/c XX1234.",
+        "expectFactTypes": [
+          "movement"
+        ]
+      },
+      {
+        "sender": "VM-UPSTOX-S",
         "body": "Upstox: Your withdrawal of Rs 8,000.00 has failed and will be reversed to your trading account.",
         "expectFactTypes": []
       }
     ],
     "status": "active",
     "createdBy": "baseline",
-    "updatedAt": "2026-11-20T00:00:00Z"
+    "updatedAt": "2026-11-05T00:00:00Z"
   },
   {
     "id": "INV-BROKER-PAYOUT-INIT-01",

@@ -1,0 +1,42 @@
+{
+  "id": "lanew_broker_withdrawal_notice_and_bank_credit",
+  "description": "A broker's 'withdrawal credited to your bank' notice and the bank's own credit alert for the same amount are one investment withdrawal, counted once.",
+  "knownInstruments": [
+    {
+      "kind": "bank_account",
+      "issuerSlug": "sbi",
+      "maskDigits": "1234"
+    }
+  ],
+  "messages": [
+    {
+      "sender": "VM-UPSTOX-S",
+      "body": "Upstox: Your withdrawal of Rs 8,000.00 has been credited to your bank A/c XX1234.",
+      "observedAt": "2026-11-12T08:00:00Z"
+    },
+    {
+      "sender": "AD-SBIBNK-S",
+      "body": "Your A/c XX1234 credit of Rs.8,000.00 on 12Nov26 by IMPS-UPSTOX SECURITIES PRIVATE LTD. -SBI",
+      "observedAt": "2026-11-12T08:05:00Z"
+    }
+  ],
+  "expect": {
+    "events": [
+      {
+        "type": "investment_withdrawal",
+        "legRoles": [
+          "credit_leg",
+          "duplicate_notice"
+        ]
+      }
+    ],
+    "totals": {
+      "from": "2026-10-31T18:30:00Z",
+      "to": "2026-11-30T18:30:00Z",
+      "spendMinor": 0,
+      "incomeMinor": 0,
+      "investmentMinor": -800000,
+      "transactionCount": 1
+    }
+  }
+}

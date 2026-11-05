@@ -185,8 +185,8 @@
   },
   {
     "id": "IPO-DEMAT-IPO-CREDIT",
-    "version": 1,
-    "family": "ipo_notice",
+    "version": 2,
+    "family": "ipo_allotment_shares",
     "senders": [
       "*"
     ],

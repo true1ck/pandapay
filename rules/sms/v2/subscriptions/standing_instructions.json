@@ -203,14 +203,14 @@
   },
   {
     "id": "SUB-SI-CHARGED-01",
-    "version": 1,
+    "version": 2,
     "family": "standing_instruction_charged",
     "senders": [
       "*"
     ],
     "priority": 650,
     "match": {
-      "pattern": "successfully\\s+processed\\s+(?:the\\s+)?payment\\s+of\\s+(?:rs\\.?|inr|₹)\\s*(?<amt>[\\d,]+(?:\\.\\d{1,2})?)\\s+(?:to|for)\\s+(?:merchant\\s+)?(?<m>[a-z0-9&.' _*-]+?)\\s*,?\\s+as\\s+per\\s+(?:the\\s+)?standing\\s+instructions?\\s+[a-z0-9]+\\s*,?\\s+on\\s+(?<date>\\d{2}[-/ ](?:\\d{2}|(?:jan|feb|mar|apr|may|jun|jul|aug|sep|oct|nov|dec))[-/ ]\\d{2,4}|\\d{2}(?:jan|feb|mar|apr|may|jun|jul|aug|sep|oct|nov|dec)\\d{2,4})\\s+for\\s+(?:your\\s+)?(?:[a-z]{1,15}\\s+)?(?:[a-z]{1,15}\\s+)?(?:[a-z]{1,15}\\s+)?credit\\s+card\\s+(?:no\\.?\\s*)?(?:ending\\s*(?:with\\s*|in\\s*)?)?(?:[x*•.]+\\s*)?(?<mask>\\d{2,6})\\b",
+      "pattern": "successfully\\s+processed\\s+(?:the\\s+)?payment\\s+of\\s+(?:rs\\.?|inr|₹)\\s*(?<amt>[\\d,]+(?:\\.\\d{1,2})?)\\s+(?:to|for)\\s+(?:merchant\\s+)?(?<m>[a-z0-9&.' _*-]+?)\\s*,?\\s+as\\s+per\\s+(?:the\\s+)?standing\\s+instructions?\\s+(?<ref_umrn>[a-z0-9]+)\\s*,?\\s+on\\s+(?<date>\\d{2}[-/ ](?:\\d{2}|(?:jan|feb|mar|apr|may|jun|jul|aug|sep|oct|nov|dec))[-/ ]\\d{2,4}|\\d{2}(?:jan|feb|mar|apr|may|jun|jul|aug|sep|oct|nov|dec)\\d{2,4})\\s+for\\s+(?:your\\s+)?(?:[a-z]{1,15}\\s+)?(?:[a-z]{1,15}\\s+)?(?:[a-z]{1,15}\\s+)?credit\\s+card\\s+(?:no\\.?\\s*)?(?:ending\\s*(?:with\\s*|in\\s*)?)?(?:[x*•.]+\\s*)?(?<mask>\\d{2,6})\\b",
       "flags": "i",
       "rejectAny": [
         "could not",
@@ -253,6 +253,32 @@
             "dd/MM/yy"
           ]
         }
+      },
+      {
+        "factType": "mandate",
+        "attrs": {
+          "phase": "created",
+          "merchantName": {
+            "from": "m",
+            "transforms": [
+              "sanitizeNarration"
+            ]
+          },
+          "mandatePurpose": "subscription",
+          "oneTime": false
+        },
+        "instrument": {
+          "kind": "credit_card",
+          "maskFrom": "mask"
+        },
+        "occurredAt": {
+          "from": "date",
+          "formats": [
+            "dd/MM/yyyy",
+            "dd-MM-yyyy",
+            "dd/MM/yy"
+          ]
+        }
       }
     ],
     "confidence": 0.95,
@@ -261,7 +287,8 @@
         "sender": "VM-EXAMPL-S",
         "body": "Dear Customer, we have successfully processed the payment of INR 100.00 for ExampleTV, as per the Standing Instruction AbCd12, on 05/12/2026 for your Example Bank Credit Card 1234. To manage your Standing Instructions, visit the Example Bank site.",
         "expectFactTypes": [
-          "movement"
+          "movement",
+          "mandate"
         ]
       },
       {

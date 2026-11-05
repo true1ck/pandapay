@@ -1,0 +1,39 @@
+{
+  "id": "lanew:payer_refund_account_merchant",
+  "templateHash": "0ff1fe61e3b023b9a2d6833ebc43df3cb276744a9d56f80e4666a7cc079dd20b",
+  "weight": 1,
+  "source": "synthetic",
+  "messages": [
+    {
+      "sender": "VM-UCOBNK-S",
+      "body": "Refund of Rs.1,299.00 from MEESHO credited to your A/c XX1234 on 12-10-26",
+      "observedAt": "2026-11-20T09:00:00.000Z"
+    }
+  ],
+  "expect": {
+    "facts": [
+      {
+        "factType": "movement",
+        "attrs": {
+          "direction": "credit",
+          "purpose": "refund"
+        },
+        "amounts": [
+          {
+            "role": "posted",
+            "minor": 129900
+          }
+        ],
+        "instrument": {
+          "kind": "bank_account",
+          "maskDigits": "1234"
+        },
+        "counterparty": {
+          "name": "MEESHO"
+        }
+      }
+    ]
+  },
+  "note": "Account refund that names the merchant.",
+  "origin": "lane-w"
+}

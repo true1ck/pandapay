@@ -1,0 +1,125 @@
+[
+  {
+    "id": "IPO-UPI-MANDATE-CREATED-LARGE",
+    "version": 1,
+    "family": "ipo_mandate",
+    "senders": [
+      "*"
+    ],
+    "priority": 835,
+    "match": {
+      "pattern": "upi[- ]?mandate\\s+successfully\\s+created\\s+towards\\s+(?<issue>[a-z0-9&.' ()-]+?)\\s+for\\s+(?:rs\\.?|inr|₹)\\s*(?<amt>(?=[\\d,]*\\d[\\d,]*\\d[\\d,]*\\d[\\d,]*\\d[\\d,]*\\d)[\\d,]+(?:\\.\\d{1,2})?)(?![\\d,])",
+      "flags": "i",
+      "rejectAny": [
+        "blocked",
+        "umn",
+        "monthly",
+        "weekly",
+        "quarterly",
+        "yearly",
+        "failed",
+        "declined"
+      ]
+    },
+    "emit": [
+      {
+        "factType": "mandate",
+        "attrs": {
+          "phase": "created",
+          "merchantName": {
+            "from": "issue",
+            "transforms": [
+              "upperTrim"
+            ]
+          },
+          "mandatePurpose": "ipo",
+          "oneTime": true
+        },
+        "amounts": [
+          {
+            "role": "ceiling",
+            "from": "amt",
+            "unit": "INR"
+          }
+        ]
+      }
+    ],
+    "confidence": 0.85,
+    "examples": [
+      {
+        "sender": "VM-EXAMPL-S",
+        "body": "UPI-Mandate successfully created towards SAMPLE WORKS L for Rs15000.00 -Example Bank",
+        "expectFactTypes": [
+          "mandate"
+        ]
+      },
+      {
+        "sender": "VM-EXAMPL-S",
+        "body": "UPI-Mandate could not be created towards SAMPLE WORKS L for Rs15000.00 -Example Bank",
+        "expectFactTypes": []
+      }
+    ],
+    "status": "active",
+    "createdBy": "lane-w",
+    "updatedAt": "2026-11-05T00:00:00Z"
+  },
+  {
+    "id": "IPO-UPI-MANDATE-REVOKED-LARGE",
+    "version": 1,
+    "family": "ipo_mandate",
+    "senders": [
+      "*"
+    ],
+    "priority": 835,
+    "match": {
+      "pattern": "upi-?\\s*mandate\\s+successfully\\s+(?:revoked|cancelled|canceled|deleted)\\s+by\\s+(?<issue>[a-z0-9&.' ()-]+?)\\s+for\\s+(?:rs\\.?|inr|₹)\\s*(?<amt>(?=[\\d,]*\\d[\\d,]*\\d[\\d,]*\\d[\\d,]*\\d[\\d,]*\\d)[\\d,]+(?:\\.\\d{1,2})?)(?![\\d,])",
+      "flags": "i",
+      "rejectAny": [
+        "could not",
+        "failed",
+        "unsuccessful"
+      ]
+    },
+    "emit": [
+      {
+        "factType": "mandate",
+        "attrs": {
+          "phase": "revoked",
+          "merchantName": {
+            "from": "issue",
+            "transforms": [
+              "upperTrim"
+            ]
+          },
+          "mandatePurpose": "ipo",
+          "oneTime": true
+        },
+        "amounts": [
+          {
+            "role": "ceiling",
+            "from": "amt",
+            "unit": "INR"
+          }
+        ]
+      }
+    ],
+    "confidence": 0.85,
+    "examples": [
+      {
+        "sender": "VM-EXAMPL-S",
+        "body": "UPI-Mandate successfully Revoked by SAMPLE WORKS L for Rs15000.00 -Example Bank",
+        "expectFactTypes": [
+          "mandate"
+        ]
+      },
+      {
+        "sender": "VM-EXAMPL-S",
+        "body": "UPI-Mandate could not be Revoked by SAMPLE WORKS L for Rs15000.00 -Example Bank",
+        "expectFactTypes": []
+      }
+    ],
+    "status": "active",
+    "createdBy": "lane-w",
+    "updatedAt": "2026-11-05T00:00:00Z"
+  }
+]

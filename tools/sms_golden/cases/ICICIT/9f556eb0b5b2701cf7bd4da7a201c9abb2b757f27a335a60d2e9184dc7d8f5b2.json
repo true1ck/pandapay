@@ -1,0 +1,33 @@
+{
+  "id": "lanew:mandate_revoked_ipo_issuer",
+  "templateHash": "9f556eb0b5b2701cf7bd4da7a201c9abb2b757f27a335a60d2e9184dc7d8f5b2",
+  "weight": 1,
+  "source": "synthetic",
+  "messages": [
+    {
+      "sender": "AX-ICICIT-S",
+      "body": "Dear Customer, the mandate of INR 15000.00 raised by SAMPLE WORKS LI on 10-Aug-26 and is revoked through RRN 600100200300-ICICI Bank.",
+      "observedAt": "2026-11-20T09:00:00.000Z"
+    }
+  ],
+  "expect": {
+    "facts": [
+      {
+        "factType": "mandate",
+        "attrs": {
+          "phase": "revoked",
+          "mandatePurpose": "ipo",
+          "oneTime": true
+        },
+        "amounts": [
+          {
+            "role": "ceiling",
+            "minor": 1500000
+          }
+        ]
+      }
+    ]
+  },
+  "note": "A revoked IPO issuer mandate stays a one-time IPO mandate, never a subscription.",
+  "origin": "lane-w"
+}

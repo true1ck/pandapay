@@ -179,7 +179,7 @@
   },
   {
     "id": "BRK-PAYOUT-BANK-CREDITED-01",
-    "version": 1,
+    "version": 2,
     "family": "broker_withdraw",
     "senders": [
       "ZERODH",
@@ -199,7 +199,7 @@
     ],
     "priority": 640,
     "match": {
-      "pattern": "(?:funds?|withdrawal|payout|settlement)(?:\\s+amount)?\\s+(?:of\\s+)?(?:rs\\.?|inr|₹)\\s*(?<amt>[\\d,]+(?:\\.\\d{1,2})?)\\s+(?:has been\\s+|have been\\s+|was\\s+|were\\s+)?(?:transferred|credited|settled|paid)\\s+to\\s+your\\s+(?:linked\\s+)?(?:bank\\s+)?(?:(?:a/c|acct?\\.?|account)\\s*(?:no\\.?\\s*)?(?:ending\\s*(?:with\\s*|in\\s*)?)?(?:[x*•.]+\\s*)?(?<mask>\\d{2,16})\\b)?[\\s\\S]{0,120}?(?:utr|ref(?:erence)?)\\s*(?:no\\.?|id)?\\s*[:#]?\\s*(?<ref_txnId>[a-z0-9]{6,})",
+      "pattern": "(?:^\\s*(?!dear\\b|hi\\b|hello\\b)(?<broker>[a-z][a-z0-9 .&]{1,30}?)\\s*:\\s*[\\s\\S]*?)?(?:funds?|withdrawal|payout|settlement)(?:\\s+amount)?\\s+(?:of\\s+)?(?:rs\\.?|inr|₹)\\s*(?<amt>[\\d,]+(?:\\.\\d{1,2})?)\\s+(?:has been\\s+|have been\\s+|was\\s+|were\\s+)?(?:transferred|credited|settled|paid)\\s+to\\s+your\\s+(?:linked\\s+)?(?:bank\\s+)?(?:(?:a/c|acct?\\.?|account)\\s*(?:no\\.?\\s*)?(?:ending\\s*(?:with\\s*|in\\s*)?)?(?:[x*•.]+\\s*)?(?<mask>\\d{2,16})\\b)?[\\s\\S]{0,120}?(?:utr|ref(?:erence)?)\\s*(?:no\\.?|id)?\\s*[:#]?\\s*(?<ref_txnId>[a-z0-9]{6,})",
       "flags": "i",
       "rejectAny": [
         "will be",
@@ -223,12 +223,12 @@
             "unit": "INR"
           }
         ],
-        "instrument": {
-          "kind": "bank_account",
-          "maskFrom": "mask"
-        },
         "counterparty": {
-          "kind": "bank"
+          "kind": "merchant",
+          "nameFrom": "broker",
+          "transforms": [
+            "sanitizeNarration"
+          ]
         }
       }
     ],

@@ -1,0 +1,41 @@
+{
+  "id": "lanew_broker_funds_added_with_bank_debit",
+  "description": "A broker's 'funds added' confirmation is evidence only; the bank's UPI debit alert is the one put-in, counted once.",
+  "knownInstruments": [
+    {
+      "kind": "bank_account",
+      "issuerSlug": "sbi",
+      "maskDigits": "1234"
+    }
+  ],
+  "messages": [
+    {
+      "sender": "VM-ZERODH-S",
+      "body": "Funds of Rs 5,000.00 have been added to your Zerodha trading account via UPI.",
+      "observedAt": "2026-11-12T09:00:00Z"
+    },
+    {
+      "sender": "AD-SBIBNK-S",
+      "body": "Dear UPI user A/C X1234 debited by 5000.0 on date 12Nov26 trf to ZERODHA BROKING Refno 531998072318 If not u? call-1800111109 for other services-18001234-SBI",
+      "observedAt": "2026-11-12T09:00:05Z"
+    }
+  ],
+  "expect": {
+    "events": [
+      {
+        "type": "investment",
+        "legRoles": [
+          "debit_leg"
+        ]
+      }
+    ],
+    "totals": {
+      "from": "2026-10-31T18:30:00Z",
+      "to": "2026-11-30T18:30:00Z",
+      "spendMinor": 0,
+      "incomeMinor": 0,
+      "investmentMinor": 500000,
+      "transactionCount": 1
+    }
+  }
+}

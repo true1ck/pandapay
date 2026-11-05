@@ -246,6 +246,40 @@ void main() {
       expect(reading(due), 'bill_due');
     });
 
+    test('IPO holds, mandates and allotments read the way the labels do', () {
+      HoldFact hold(HoldPurpose purpose, HoldPhase phase) => HoldFact(
+        envelope(amounts: [amount(10000, role: AmountRole.held)]),
+        phase: phase,
+        purpose: purpose,
+      );
+      expect(reading(hold(HoldPurpose.upiMandateBlock, HoldPhase.placed)), 'ipo_hold');
+      expect(reading(hold(HoldPurpose.upiMandateBlock, HoldPhase.released)), 'ipo_release');
+      // A block whose purpose is only "other" is not claimed as an IPO.
+      expect(reading(hold(HoldPurpose.other, HoldPhase.placed)), 'hold');
+      MandateFact mandate(MandatePhase phase, MandatePurpose purpose) =>
+          MandateFact(envelope(), phase: phase, mandatePurpose: purpose);
+      expect(
+        reading(mandate(MandatePhase.created, MandatePurpose.ipo)),
+        'ipo_mandate_approved',
+      );
+      expect(reading(mandate(MandatePhase.revoked, MandatePurpose.ipo)), 'mandate_revoked');
+      expect(
+        reading(mandate(MandatePhase.created, MandatePurpose.subscription)),
+        'mandate_created',
+      );
+      final info = InfoFact(envelope(), category: InfoCategory.service);
+      expect(reading(info, ruleFamily: 'ipo_allotment_shares'), 'ipo_allotment_shares');
+      expect(reading(info, ruleFamily: 'demat'), 'demat_movement');
+      expect(reading(info, ruleFamily: 'card_statement_notice'), 'statement');
+      expect(reading(info, ruleFamily: 'card_statement'), 'service_notice');
+      final partial = movement(
+        purpose: MovementPurpose.investment,
+        rail: Rail.unknown,
+      );
+      expect(reading(partial, ruleFamily: 'ipo_partial_allotment'), 'ipo_partial_allotment');
+      expect(reading(partial, ruleFamily: 'ipo_allotment'), 'investment_topup');
+    });
+
     test('an info fact amount is read but is never money', () {
       final info = InfoFact(
         envelope(ruleId: 'ANY-IPO-RULE'),

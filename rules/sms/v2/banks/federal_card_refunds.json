@@ -1,14 +1,14 @@
 [
   {
     "id": "FED-CARD-CREDIT-RECEIVED",
-    "version": 1,
+    "version": 2,
     "family": "card_refund",
     "senders": [
       "FEDSMS"
     ],
     "priority": 770,
     "match": {
-      "pattern": "^(?:hi!\\s*)?(?:(?:you have|you've) received (?:a )?refund|refund received)\\s+of\\s+(?:rs\\.?|inr|₹)\\s*(?<amt>\\d[\\d,]*(?:\\.\\d{1,2})?)(?![\\d.,])(?:\\s+from\\s+[^.\\r\\n]{1,65})?\\s+on\\s+your\\s+(?:[a-z][a-z0-9 -]{0,32}\\s+)?federal(?:\\s+(?:bank|[a-z]{2,15}))?\\s+credit\\s+card\\b",
+      "pattern": "^(?:hi!\\s*)?(?:(?:you have|you've) received (?:a )?refund|refund received)\\s+of\\s+(?:rs\\.?|inr|₹)\\s*(?<amt>\\d[\\d,]*(?:\\.\\d{1,2})?)(?![\\d.,])(?:\\s+from\\s+(?<merchant>[^.\\r\\n]{1,65}))?\\s+on\\s+your\\s+(?:[a-z][a-z0-9 -]{0,32}\\s+)?federal(?:\\s+(?:bank|[a-z]{2,15}))?\\s+credit\\s+card\\b",
       "flags": "i"
     },
     "emit": [
@@ -29,6 +29,13 @@
         "instrument": {
           "kind": "credit_card",
           "issuerSlug": "federal"
+        },
+        "counterparty": {
+          "kind": "merchant",
+          "nameFrom": "merchant",
+          "transforms": [
+            "sanitizeNarration"
+          ]
         }
       }
     ],
@@ -49,18 +56,18 @@
     ],
     "status": "active",
     "createdBy": "baseline",
-    "updatedAt": "2026-11-04T00:00:00Z"
+    "updatedAt": "2026-11-05T00:00:00Z"
   },
   {
     "id": "FED-CARD-CREDIT-CARD-FIRST",
-    "version": 1,
+    "version": 2,
     "family": "card_refund",
     "senders": [
       "FEDSMS"
     ],
     "priority": 770,
     "match": {
-      "pattern": "^refund received\\s+of\\s+(?:rs\\.?|inr|₹)\\s*(?<amt>\\d[\\d,]*(?:\\.\\d{1,2})?)(?![\\d.,])\\s+on\\s+your\\s+(?:[a-z][a-z0-9 -]{0,32}\\s+)?federal(?:\\s+(?:bank|[a-z]{2,15}))?\\s+credit\\s+card\\b\\s+from\\s+[^.\\r\\n]{1,65}",
+      "pattern": "^refund received\\s+of\\s+(?:rs\\.?|inr|₹)\\s*(?<amt>\\d[\\d,]*(?:\\.\\d{1,2})?)(?![\\d.,])\\s+on\\s+your\\s+(?:[a-z][a-z0-9 -]{0,32}\\s+)?federal(?:\\s+(?:bank|[a-z]{2,15}))?\\s+credit\\s+card\\b\\s+from\\s+(?<merchant>[^.\\r\\n]{1,65})",
       "flags": "i"
     },
     "emit": [
@@ -81,6 +88,13 @@
         "instrument": {
           "kind": "credit_card",
           "issuerSlug": "federal"
+        },
+        "counterparty": {
+          "kind": "merchant",
+          "nameFrom": "merchant",
+          "transforms": [
+            "sanitizeNarration"
+          ]
         }
       }
     ],
@@ -101,7 +115,7 @@
     ],
     "status": "active",
     "createdBy": "baseline",
-    "updatedAt": "2026-11-04T00:00:00Z"
+    "updatedAt": "2026-11-05T00:00:00Z"
   },
   {
     "id": "FED-CARD-CREDIT-REVERSED",

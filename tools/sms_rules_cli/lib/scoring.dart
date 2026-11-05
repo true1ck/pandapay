@@ -87,6 +87,13 @@ String reading(Fact fact, {String? ruleFamily}) => switch (fact) {
           (ruleFamily == 'bill_receipt' ||
               f.purpose == MovementPurpose.billPayment) =>
     _rechargeRule.hasMatch(f.provenance.ruleId) ? 'recharge' : 'bill_receipt',
+  // The bank debit of a partly allotted IPO (the rule also releases the rest
+  // of the block): the labels read it as a partial allotment, not a top-up.
+  MovementFact f
+      when ruleFamily == 'ipo_partial_allotment' &&
+          f.purpose == MovementPurpose.investment &&
+          f.direction == Direction.debit =>
+    'ipo_partial_allotment',
   MovementFact f => switch (f.purpose) {
     MovementPurpose.cardPayment =>
       f.direction == Direction.credit
@@ -106,8 +113,11 @@ String reading(Fact fact, {String? ruleFamily}) => switch (fact) {
     _ => 'movement',
   },
   HoldFact f => switch ((f.purpose, f.phase)) {
-    (HoldPurpose.ipoAsba, HoldPhase.released) => 'ipo_release',
-    (HoldPurpose.ipoAsba, _) => 'ipo_hold',
+    // A UPI one-time mandate block is how an IPO bid is held (the linker joins
+    // both purposes into one IPO application), so it reads the same way.
+    (HoldPurpose.ipoAsba || HoldPurpose.upiMandateBlock, HoldPhase.released) =>
+      'ipo_release',
+    (HoldPurpose.ipoAsba || HoldPurpose.upiMandateBlock, _) => 'ipo_hold',
     (_, HoldPhase.released) => 'hold_release',
     _ => 'hold',
   },
@@ -125,6 +135,13 @@ String reading(Fact fact, {String? ruleFamily}) => switch (fact) {
   AttemptFact f =>
     f.status == AttemptStatus.scheduled ? 'upcoming_charge' : 'failed_attempt',
   BillDueFact _ => ruleFamily == 'card_statement' ? 'statement' : 'bill_due',
+  // The approval of an IPO issuer's one-time block mandate. The draft labels
+  // call it `ipo_mandate_approved`; a revoked IPO mandate stays
+  // `mandate_revoked` (the labels read it that way too).
+  MandateFact f
+      when f.mandatePurpose == MandatePurpose.ipo &&
+          f.phase == MandatePhase.created =>
+    'ipo_mandate_approved',
   MandateFact f => 'mandate_${f.phase.wire}',
   LimitChangeFact _ => 'limit_change',
   RewardFact _ => 'reward_points',
@@ -132,6 +149,13 @@ String reading(Fact fact, {String? ruleFamily}) => switch (fact) {
     'broker_balance_report',
   BalanceSnapshotFact _ => 'balance_snapshot',
   InfoFact _ when ruleFamily == 'ipo_notice' => 'ipo_application_notice',
+  // A depository debit or credit notice: shares moved, no money.
+  InfoFact _ when ruleFamily == 'demat' => 'demat_movement',
+  // Shares credited to a demat account through an IPO allotment.
+  InfoFact _ when ruleFamily == 'ipo_allotment_shares' => 'ipo_allotment_shares',
+  // A statement-ready notice that prints no amount: nothing to record, but it
+  // is a statement notice and not a service message.
+  InfoFact _ when ruleFamily == 'card_statement_notice' => 'statement',
   InfoFact f => switch (f.category) {
     InfoCategory.otp => 'otp',
     InfoCategory.promotion => 'promo',
