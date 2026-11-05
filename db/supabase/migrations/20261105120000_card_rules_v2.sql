@@ -297,7 +297,8 @@ select
                                  and (rr.min_engine_version <> 1 or rr.rule_role = 'info'))
           ), '[]'::jsonb) as cap_rules,
   coalesce((select jsonb_agg(to_jsonb(m) - 'card_product_id') from milestone_rules m
-             where m.card_product_id = c.id), '[]'::jsonb) as milestone_rules,
+             where m.card_product_id = c.id
+               and m.window_days is null), '[]'::jsonb) as milestone_rules,
   coalesce((select jsonb_agg(to_jsonb(f) - 'card_product_id') from fee_waiver_rules f
              where f.card_product_id = c.id), '[]'::jsonb) as fee_waiver_rules,
   coalesce((select jsonb_agg(to_jsonb(b) - 'card_product_id') from card_benefits b
