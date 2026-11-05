@@ -33,7 +33,7 @@ Status values: `not started` · `running` · `done (branch ready)` · `merged` �
 | WP2 | Loader v2 (pure transform), coverage, audit script | 1 | `card-rewards/wp2-loader` | running | 2026-11-05 | |
 | WP3 | Dart engine v2 + tolerant parsing | 1 | `card-rewards/wp3-dart-engine` | running | 2026-11-05 | |
 | WP4 | JS engine v2 + merchant resolver | 1 | `card-rewards/wp4-js-engine` | running | 2026-11-05 | |
-| WP5 | Merchant and platform directory data | 1 | `card-rewards/wp5-directory` | needs rework (fix round 1) | 2026-11-06 | 162 merchants, 61 platforms; fixing Titan parents, bare 'indigo', D6 groups |
+| WP5 | Merchant and platform directory data | 1 | `card-rewards/wp5-directory` | **merged** | 2026-11-06 | 164 merchants (9 true sub-brand parents, `group` tags per D6), 61 platforms; review + 1 fix round clean; IHCL brands kept under `taj` (ruling in ledger) |
 | WP6a | Worked examples: HDFC, SBI Card | 1 | `card-rewards/wp6a-examples-hdfc-sbi` | running | 2026-11-05 | |
 | WP6b | Worked examples: ICICI, Axis, Amex, IDFC, others | 1 | `card-rewards/wp6b-examples-others` | running | 2026-11-05 | |
 | WP7 | Integration: worked examples through both engines | 2 | — | not started | | Needs wave 1 merged |
@@ -68,6 +68,7 @@ Status values: `not started` · `running` · `done (branch ready)` · `merged` �
 
 ## Changelog
 
+- **2026-11-06:** WP5 merged into `card-rewards/phase1` after one fix round.
 - **2026-11-06:** All agents paused by the 5-hour usage limit, then resumed. WP1 finished (review pending). WP5 finished, in fix round 1 (Titan parent links, bare "indigo" alias, contract D6). Contract changes D1–D6 recorded in plan §4 C8.
 - **2026-11-05:** Feature spec approved with the card-wide change. Phase 1 plan,
   agent plan, later-phases summary and this tracker written. Integration worktree
