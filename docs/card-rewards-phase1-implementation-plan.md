@@ -362,7 +362,7 @@ File `db/fixtures/merchant_directory.json` (format below), seeded into C1 tables
 { "version": 1,
   "merchants": [ { "slug": "instamart", "name": "Swiggy Instamart", "parent_slug": "swiggy", "category_slug": "groceries",
                    "aliases": ["swiggy instamart", "instamart"], "vpa_prefixes": [], "mcc": [], "notes": "" } ],
-  "platforms": [ { "slug": "hdfc_smartbuy", "name": "HDFC SmartBuy", "kind": "bank_portal", "issuer_slug": "hdfc-bank",
+  "platforms": [ { "slug": "hdfc_smartbuy", "name": "HDFC SmartBuy", "kind": "bank_portal", "issuer_slug": "hdfc",
                    "aliases": ["smartbuy"], "notes": "" } ] }
 ```
 
@@ -525,6 +525,17 @@ database UUIDs.
     suspect units, and milestone anchors. `api/scripts/audit_catalogue.js` takes
     any catalogue JSON (v1 or v2 feed) and prints the R1–R9 metrics from the
     feature spec, for before/after comparison.
+
+### C8 — Contract changes after wave 1 started (these win over the text above)
+
+| # | Date | Change | Affects |
+|---|---|---|---|
+| D1 | 2026-11-05 | The existing semantic-identity unique indexes are recreated with the v2 columns, so two v2 rules or caps that differ only in v2 fields don't collide. **`uq_reward_rules_semantic_identity`** adds `rule_role`, `merchant_slugs`, `platform_slugs`, `mcc_include`, `mcc_exclude`, `block_inr`, `min_engine_version`. **`uq_cap_rules_semantic_identity`** and **`uq_cap_rules_label_identity_v1`** add `cap_kind`, `cap_amount`, `scope`, `parent_cap_id`, `post_cap_behavior`, `anchor`, `min_engine_version`. **`uq_milestone_rules_semantic_identity`** adds `reward_points`, `reward_kind`, `window_days`, `excluded_category_ids`. `source_local_id` is **not** part of identity. `api/src/catalogue_label_identity.js` `RULE_KEYS.cap_rules` mirrors its index and changes with it (plus its test). The Dart identity keys (`rewardRuleIdentityKey`, `capRuleIdentityKey`, `milestoneRuleIdentityKey`) must include the same v2 fields, so the app's de-duplication never merges two different v2 rules. | WP1, WP3 |
+| D2 | 2026-11-05 | The v1 view also hides a cap whose `reward_rule_id` points at a rule hidden from v1 (`min_engine_version = 2` or `rule_role = 'info'`), and any cap with a `cap_rule_targets` row pointing at such a rule. This is defence in depth; the loader also does it (D3). | WP1 |
+| D3 | 2026-11-05 | C7.7 addition: a cap gets `min_engine_version = 2` if **any** of its targets is v2-only. | WP2 |
+| D4 | 2026-11-05 | `payment_platforms.issuer_slug` uses the app's issuer seed slugs (`hdfc`, `sbi`, `axis`, `icici`, `kotak`, `idfc`, `indusind`, `scb`, `rbl`, `amex`, `yes`, …) and is **not** a foreign key (some issuers, e.g. HSBC, aren't seeded). The C5 example's `"hdfc-bank"` should read `"hdfc"`. | WP1, WP5 |
+| D5 | 2026-11-05 | WP1's addition to `api/src/portable_backup/coverage.json` (four `global_catalog` entries for the new tables) is accepted as part of WP1. | WP1 |
+| D6 | 2026-11-05 | **`parent_slug` means "the same merchant for reward purposes"**, because a rule on the parent also pays on the child (C3.3 step 5). Use it only for true sub-brands that card terms treat as the parent (e.g. Swiggy → Instamart, Dineout, Genie; Air India → Vistara). Corporate-group siblings that are separate brands (Myntra/Cleartrip under Flipkart; BigBasket/Croma/Tata CLiQ under Tata; Blinkit/District under Zomato; Goibibo under MakeMyTrip; Titan brands; Reliance and Landmark store brands) get **no** `parent_slug`. Instead they get an optional JSON field **`group`** (e.g. `"tata"`, `"flipkart"`, `"zomato"`, `"titan"`, `"reliance"`, `"landmark"`, `"ihcl"`). `group` is informational. Engines ignore it, and the seeder ignores it (no DB column in Phase 1). The loader (WP2) uses it to expand group-wide card terms (e.g. "Tata Neu partner brands") into an explicit `merchant_slugs` list. | WP5, WP2, WP1 (seeder must tolerate the key) |
 
 ## 5. Work packages
 
