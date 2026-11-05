@@ -4,7 +4,7 @@
   "inputs": {
     "transform_version": "7",
     "source_record_sha256": "cc3062a39eabf90bb0a381daf5ac98cf272928d0ff30320e17bf4d0ea1d3fc52",
-    "override_sha256": "d2694067e3b83b7b656ac0d2053322edd8a9a84a0920d699209a4a3de9c02a51",
+    "override_sha256": "7fb325d5fe488af2df373488c54f8b8c0f21e003be03c6124f61bc74d9baff1b",
     "directory_sha256": "b1094d54b77e848d22f7a9a64f3ae6d1ef43ca3eb2fc8e40cd43ed1994664694",
     "verified": false
   },
@@ -27,8 +27,8 @@
     "points_expiry_months": 24,
     "model_status": "partial",
     "model_coverage": {
-      "rules_total": 15,
-      "rules_modelled": 11,
+      "rules_total": 16,
+      "rules_modelled": 12,
       "rules_info": 4,
       "caps_total": 2,
       "caps_enforced": 1,
@@ -214,6 +214,14 @@
           "value_sha256": "0bf3a047a3fe5814",
           "reason": "WP7: Standard points continue after the cap (MITC booklet g).",
           "source_url": "https://www.sbicard.com/sbi-card-en/assets/docs/pdf/simply-click-tnc-MITC-booklet.pdf",
+          "checked_on": "2026-11-05"
+        },
+        {
+          "path": "reward_rules",
+          "op": "append",
+          "value_sha256": "bcdd7e8d8d0f3912",
+          "reason": "WP7: D28c: T&C: Reward Points are reversed for \"Merchant EMI i.e. EMI availed at the time of purchase at Merchant establishment or websites, w.e.f 20th November 2020\". The record's EMI row needs category emi AND rail emi, so an EMI purchase in another category earned. Rail-EMI exclusion on all spend.",
+          "source_url": "https://www.sbicard.com/sbi-card-en/assets/docs/pdf/SimplyClick-TnC.pdf",
           "checked_on": "2026-11-05"
         }
       ]
@@ -1127,6 +1135,40 @@
         "max_engine_version": null,
         "source_local_id": "digital_gaming_exclusion",
         "display_note": "Digital gaming transactions identified under the applicable gaming MCCs are excluded from Reward Points accrual."
+      },
+      {
+        "id": "sbi-simplyclick:rule:wp7_emi_rail_exclusion",
+        "category_id": null,
+        "category_slug": null,
+        "merchant_pattern": null,
+        "rail": "emi",
+        "unit": "points_per_100",
+        "rate": 0,
+        "min_txn_inr": null,
+        "max_txn_inr": null,
+        "priority": 0,
+        "conditions": {
+          "source_local_id": "wp7_emi_rail_exclusion",
+          "part": null,
+          "info_reasons": [],
+          "flags": []
+        },
+        "notes": null,
+        "effective_from": "2020-11-20",
+        "effective_to": null,
+        "excluded_categories": [],
+        "rule_role": "exclusion",
+        "merchant_slugs": [],
+        "platform_slugs": [],
+        "mcc_include": [],
+        "mcc_exclude": [],
+        "except_merchant_slugs": [],
+        "except_platform_slugs": [],
+        "block_inr": null,
+        "min_engine_version": 2,
+        "max_engine_version": null,
+        "source_local_id": "wp7_emi_rail_exclusion",
+        "display_note": "EMI transactions earn no rewards."
       }
     ],
     "cap_rules": [

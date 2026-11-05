@@ -88,6 +88,31 @@
       "reason": "WP7: Standard points continue after the cap (MITC booklet g).",
       "source_url": "https://www.sbicard.com/sbi-card-en/assets/docs/pdf/simply-click-tnc-MITC-booklet.pdf",
       "checked_on": "2026-11-05"
+    },
+    {
+      "path": "reward_rules",
+      "op": "append",
+      "value": {
+        "id": "wp7_emi_rail_exclusion",
+        "category_id": "all_retail",
+        "priority": 0,
+        "evaluation_type": "exclusion",
+        "rail": "emi",
+        "channel_type": "all",
+        "conditions": {},
+        "action": {
+          "multiplier": 0,
+          "points_per_block": 0,
+          "cashback_percent": null,
+          "cap_reference": null,
+          "reason": "EMI transactions earn no rewards."
+        },
+        "effective_from": "2020-11-20",
+        "effective_to": null
+      },
+      "reason": "WP7: D28c: T&C: Reward Points are reversed for \"Merchant EMI i.e. EMI availed at the time of purchase at Merchant establishment or websites, w.e.f 20th November 2020\". The record's EMI row needs category emi AND rail emi, so an EMI purchase in another category earned. Rail-EMI exclusion on all spend.",
+      "source_url": "https://www.sbicard.com/sbi-card-en/assets/docs/pdf/SimplyClick-TnC.pdf",
+      "checked_on": "2026-11-05"
     }
   ]
 }
