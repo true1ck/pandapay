@@ -43,6 +43,10 @@ const ROLES = new Set(['base', 'earn', 'exclusion', 'info']);
 const BRANDISH_BRAND = /(paytm|amazon|flipkart|smartbuy|phonepe|swiggy|zomato|tata|neu|reliance|samsung|apple|kiwi|myntra|irctc|indigo|uber|\bola\b|lic|hpcl|bpcl|indianoil|iocl|jio|airtel|marriott|taj|vistara|air_india|makemytrip|yatra|cleartrip|bookmyshow|pvr|landmark|shoppers|lifestyle)/;
 const BRANDISH = /(paytm|amazon|flipkart|smartbuy|phonepe|swiggy|zomato|tata|reliance|samsung|apple|kiwi|myntra|irctc|indigo|uber|ola|lic|hpcl|bpcl|indianoil|iocl|jio|airtel|partner|select|preferred|exclusive|promoted|accelerated|brand)/;
 
+// D19c reading switch: true = v2 MCC row keeps the exact category (falls back
+// to it when the MCC is unknown); false = MCC-only v2 row.
+const EXCLUSION_MCC_ROW_KEEPS_CATEGORY = true;
+
 const UNIT_BLOCK = { points_per_100: 100, points_per_150: 150, points_per_200: 200, miles_per_100: 100 };
 function valuePerRupee(unit, rate, pointValue, blockInr) {
   if (rate === null || rate === undefined || !unit) return null;
@@ -709,11 +713,15 @@ function transformRule(src, idx, ctx) {
         }
         split.push(p);
       } else if (p.categorySlug && p.mccInclude?.length && plain) {
-        // D19c: an explicit MCC list is the exclusion's scope and the
-        // category only a label: v2 uses the MCC row; the category row is
-        // v1-only (v1 can't read MCCs, so it excludes the whole category).
+        // D19c: an explicit MCC list is the exclusion's scope: v2 matches on
+        // the MCCs; the category-only row is v1-only (v1 can't read MCCs).
+        // Conservative reading (contract question, see WP2 report): the v2
+        // row keeps the category too, so per C3.3 step 7 the MCC list decides
+        // when the MCC is known and the category stands in when it isn't.
+        // An MCC-only v2 row would stop excluding fuel/rent/wallet spend
+        // whose MCC is unknown (most SMS) — widening v2 on ~770 exclusions.
         split.push({ ...p, mccInclude: [], maxEngine: 1, v1Projection: true });
-        split.push({ ...p, categorySlug: null, broad: false });
+        split.push(EXCLUSION_MCC_ROW_KEEPS_CATEGORY ? { ...p } : { ...p, categorySlug: null, broad: false });
         flags.push('mcc_scoped_exclusion');
       } else {
         split.push(p);

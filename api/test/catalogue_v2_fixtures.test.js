@@ -99,9 +99,9 @@ test('app-platform card (PhonePe SBI SELECT BLACK): platform parts, nested caps,
     [['exclusion', 'upi_qr', 'phonepe_app']]);
   assert.deepEqual(rows(t, 'utilities-outside-phonepe-base').map((r) => [r.rule_role, r.except_platform_slugs.join(), r.min_engine_version]),
     [['earn', 'phonepe_app', 2]]);
-  // Exclusions: category row (v1) + MCC row (v2).
-  assert.deepEqual(rows(t, 'fuel-exclusion').map((r) => [r.category_slug, r.mcc_include.join(), r.min_engine_version]),
-    [['fuel', '', 1], [null, '5172,5541,5542,5983', 2]]);
+  // Exclusions (D19c): v1-only category row + v2 category-and-MCC row.
+  assert.deepEqual(rows(t, 'fuel-exclusion').map((r) => [r.category_slug, r.mcc_include.join(), r.min_engine_version, r.max_engine_version]),
+    [['fuel', '', 1, 1], ['fuel', '5172,5541,5542,5983', 2, null]]);
   // Nested caps: the insurance sub-cap targets only the insurance part and keeps its parent.
   const insurance = cap(t, 'phonepe-insurance-monthly');
   assert.equal(insurance.parent_key, 'phonepe-other-monthly');
