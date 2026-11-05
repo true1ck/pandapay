@@ -119,7 +119,8 @@
           "value_sha256": "3e3e8e84e722887a",
           "reason": "It is a 10% value back credited to partner wallets (Rs 200 per partner per month), not Axis cashback; must not be ranked as card cashback.",
           "source_url": "https://www.axis.bank.in/docs/default-source/default-document-library/terms-and-conditions-for-airtel-cbcc-cvp.pdf?sfvrsn=9deed8c1_5",
-          "checked_on": "2026-11-05"
+          "checked_on": "2026-11-05",
+          "citation": null
         },
         {
           "path": "reward_rules[id=airtel_telecom_25pct].rule_role",
@@ -127,7 +128,8 @@
           "value_sha256": "3e3e8e84e722887a",
           "reason": "Cap is twice the base cashback earned in the statement month (dynamic); cannot be enforced as a static cap yet.",
           "source_url": "https://www.axis.bank.in/docs/default-source/default-document-library/terms-and-conditions-for-airtel-cbcc-cvp.pdf?sfvrsn=9deed8c1_5",
-          "checked_on": "2026-11-05"
+          "checked_on": "2026-11-05",
+          "citation": null
         },
         {
           "path": "reward_rules[id=airtel_utility_10pct].rule_role",
@@ -135,7 +137,8 @@
           "value_sha256": "3e3e8e84e722887a",
           "reason": "Cap is the base cashback earned in the statement month (dynamic); cannot be enforced as a static cap yet.",
           "source_url": "https://www.axis.bank.in/docs/default-source/default-document-library/terms-and-conditions-for-airtel-cbcc-cvp.pdf?sfvrsn=9deed8c1_5",
-          "checked_on": "2026-11-05"
+          "checked_on": "2026-11-05",
+          "citation": null
         },
         {
           "path": "accrual_engine.cashback_rounding",
@@ -143,7 +146,8 @@
           "value_sha256": "657bf85a75fa70bf",
           "reason": "Cashback is rounded down per transaction (15.6 -> 15).",
           "source_url": "https://www.axis.bank.in/docs/default-source/default-document-library/credit-cards/terms-and-conditions-for-cashback-for-airtel-axis-bank-credit-card.pdf",
-          "checked_on": "2026-11-05"
+          "checked_on": "2026-11-05",
+          "citation": null
         },
         {
           "path": "reward_rules",
@@ -151,7 +155,8 @@
           "value_sha256": "762388406eefedcc",
           "reason": "WP7: The record lists \"utility_outside_airtel_thanks\" in the base rule's excluded categories, which the loader cannot read (underscored negation token). Restated as an exclusion with an Airtel Thanks exception (D16a).",
           "source_url": "https://www.axis.bank.in/docs/default-source/default-document-library/credit-cards/terms-and-conditions-for-cashback-for-airtel-axis-bank-credit-card.pdf",
-          "checked_on": "2026-11-05"
+          "checked_on": "2026-11-05",
+          "citation": null
         },
         {
           "path": "reward_rules",
@@ -159,7 +164,8 @@
           "value_sha256": "94d92f34544978c6",
           "reason": "WP7: Same as utility_outside_airtel_thanks_exclusion (\"telecom_outside_airtel_thanks\").",
           "source_url": "https://www.axis.bank.in/docs/default-source/default-document-library/credit-cards/terms-and-conditions-for-cashback-for-airtel-axis-bank-credit-card.pdf",
-          "checked_on": "2026-11-05"
+          "checked_on": "2026-11-05",
+          "citation": null
         },
         {
           "path": "reward_rules",
@@ -167,7 +173,8 @@
           "value_sha256": "2ed6846eb2297d7c",
           "reason": "WP7: D28c: Cashback T&C: \"Cashback shall not be eligible on EMI transactions, Purchase converted to EMI post facto\". The record's EMI row needs category emi AND rail emi, so an EMI purchase in another category earned. Rail-EMI exclusion on all spend.",
           "source_url": "https://www.axis.bank.in/docs/default-source/default-document-library/credit-cards/terms-and-conditions-for-cashback-for-airtel-axis-bank-credit-card.pdf",
-          "checked_on": "2026-11-05"
+          "checked_on": "2026-11-05",
+          "citation": null
         }
       ]
     },

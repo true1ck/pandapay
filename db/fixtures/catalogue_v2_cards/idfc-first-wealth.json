@@ -39,6 +39,11 @@
           "detail": null
         },
         {
+          "code": "emi_alternatives",
+          "source_local_id": "emi_exclusion",
+          "detail": null
+        },
+        {
           "code": "info_rule",
           "source_local_id": "fee_charge_exclusion",
           "detail": "non_purchase_category"
@@ -106,7 +111,8 @@
           "value_sha256": "27badc983df1780b",
           "reason": "1X = 1 reward point per Rs 200 spent.",
           "source_url": "https://www.idfcfirst.bank.in/content/idfcfirstbank/en/credit-card/wealth.html",
-          "checked_on": "2026-11-05"
+          "checked_on": "2026-11-05",
+          "citation": null
         },
         {
           "path": "reward_rules",
@@ -114,7 +120,8 @@
           "value_sha256": "8c876f850351dcbc",
           "reason": "Replaces the 3X-then-10X-above-Rs-20,000 model with the issuer structure. Restates the four source exclusions (fuel, EMI, cash withdrawal, fees and charges). 1X rules (utility, insurance, railway MCC 4112, FASTag MCC 4784) have lower priority numbers than 10X travel so they win. International and birthday 10X are info (not expressible in Phase 1). The in-app hotel/flight bonus rules are not in the Wealth source and are not added (booking-channel dependent; see research note).",
           "source_url": "https://www.idfcfirst.bank.in/content/idfcfirstbank/en/credit-card/wealth.html",
-          "checked_on": "2026-11-05"
+          "checked_on": "2026-11-05",
+          "citation": null
         },
         {
           "path": "cap_rules",
@@ -122,7 +129,8 @@
           "value_sha256": "904afe1abf988419",
           "reason": "Issuer: reward points are earned only on spends up to the credit limit per billing cycle. Amount depends on the user, so cap_amount stays null (D13a, flag cap_depends_on_user). No Rs 20,000 threshold exists.",
           "source_url": "https://www.idfcfirst.bank.in/content/idfcfirstbank/en/credit-card/wealth.html",
-          "checked_on": "2026-11-05"
+          "checked_on": "2026-11-05",
+          "citation": null
         }
       ]
     },
@@ -246,11 +254,11 @@
         "display_note": "Fuel transactions do not earn Reward Points."
       },
       {
-        "id": "idfc-first-wealth:rule:emi_exclusion",
+        "id": "idfc-first-wealth:rule:emi_exclusion#1",
         "category_id": "cat-emi",
         "category_slug": "emi",
         "merchant_pattern": null,
-        "rail": "emi",
+        "rail": null,
         "unit": "points_per_200",
         "rate": 0,
         "min_txn_inr": null,
@@ -258,9 +266,11 @@
         "priority": 5,
         "conditions": {
           "source_local_id": "emi_exclusion",
-          "part": null,
+          "part": 1,
           "info_reasons": [],
-          "flags": []
+          "flags": [
+            "emi_alternatives"
+          ]
         },
         "notes": null,
         "effective_from": "2026-06-18",
@@ -275,6 +285,42 @@
         "except_platform_slugs": [],
         "block_inr": null,
         "min_engine_version": 1,
+        "max_engine_version": null,
+        "source_local_id": "emi_exclusion",
+        "display_note": "EMI transactions/conversions do not earn Reward Points."
+      },
+      {
+        "id": "idfc-first-wealth:rule:emi_exclusion#2",
+        "category_id": null,
+        "category_slug": null,
+        "merchant_pattern": null,
+        "rail": "emi",
+        "unit": "points_per_200",
+        "rate": 0,
+        "min_txn_inr": null,
+        "max_txn_inr": null,
+        "priority": 5,
+        "conditions": {
+          "source_local_id": "emi_exclusion",
+          "part": 2,
+          "info_reasons": [],
+          "flags": [
+            "emi_alternatives"
+          ]
+        },
+        "notes": null,
+        "effective_from": "2026-06-18",
+        "effective_to": null,
+        "excluded_categories": [],
+        "rule_role": "exclusion",
+        "merchant_slugs": [],
+        "platform_slugs": [],
+        "mcc_include": [],
+        "mcc_exclude": [],
+        "except_merchant_slugs": [],
+        "except_platform_slugs": [],
+        "block_inr": null,
+        "min_engine_version": 2,
         "max_engine_version": null,
         "source_local_id": "emi_exclusion",
         "display_note": "EMI transactions/conversions do not earn Reward Points."

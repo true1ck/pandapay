@@ -84,6 +84,11 @@
           "detail": null
         },
         {
+          "code": "exclusion_rail_dropped",
+          "source_local_id": "gaming-exclusion",
+          "detail": null
+        },
+        {
           "code": "broad_exclusion_v1_only",
           "source_local_id": "gaming-exclusion",
           "detail": null
@@ -116,7 +121,8 @@
           "value_sha256": "74234e98afe7498f",
           "reason": "WP7: \"non-EMI retail spend\" restates retail spend (EMI principal on IRCTC is negligible); the key made the 5X rule info.",
           "source_url": "https://www.hdfc.bank.in/content/dam/hdfcbankpws/in/en/personal-banking/discover-products/cards/credit-cards/irctc-credit-card/irctc-tnc-09-10-25.pdf",
-          "checked_on": "2026-11-05"
+          "checked_on": "2026-11-05",
+          "citation": null
         },
         {
           "path": "reward_rules[id=irctc-5x].channel_type",
@@ -124,7 +130,8 @@
           "value_sha256": "5cf7504d9781301d",
           "reason": "WP7: T&C: 5X on IRCTC spends made through IRCTC Ticketing Website / Rail Connect App and HDFC Bank SmartBuy - alternatives, all identified by IRCTC MIDs; the merchant (IRCTC) carries it. As written the loader AND-ed IRCTC with SmartBuy.",
           "source_url": "https://www.hdfc.bank.in/content/dam/hdfcbankpws/in/en/personal-banking/discover-products/cards/credit-cards/irctc-credit-card/irctc-tnc-09-10-25.pdf",
-          "checked_on": "2026-11-05"
+          "checked_on": "2026-11-05",
+          "citation": null
         },
         {
           "path": "reward_rules[id=all-other-standard].conditions.eligible_transaction_type",
@@ -132,7 +139,8 @@
           "value_sha256": "74234e98afe7498f",
           "reason": "WP7: \"retail spend\" restates the catch-all; the key made the other-spends rule info, so its 1,000/month cap never applied.",
           "source_url": "https://www.hdfc.bank.in/content/dam/hdfcbankpws/in/en/personal-banking/discover-products/cards/credit-cards/irctc-credit-card/irctc-tnc-09-10-25.pdf",
-          "checked_on": "2026-11-05"
+          "checked_on": "2026-11-05",
+          "citation": null
         },
         {
           "path": "cap_rules[id=other-spends-annual].target_rule_ids",
@@ -140,7 +148,8 @@
           "value_sha256": "d09dd8f2ada3fb54",
           "reason": "WP7: T&C: \"Reward Points on other spends is capped maximum at 1000 Reward Points per month and 12000 Reward Points Annually.\" With no rule naming it, the loader made it card-wide.",
           "source_url": "https://www.hdfc.bank.in/content/dam/hdfcbankpws/in/en/personal-banking/discover-products/cards/credit-cards/irctc-credit-card/irctc-tnc-09-10-25.pdf",
-          "checked_on": "2026-11-05"
+          "checked_on": "2026-11-05",
+          "citation": null
         },
         {
           "path": "cap_rules[id=irctc-5x-annual].target_rule_ids",
@@ -148,7 +157,8 @@
           "value_sha256": "dab5358b34c76c20",
           "reason": "WP7: T&C: the 12,000 RP annual cap is on \"the 5X Reward Points on partner IRCTC spends\"; category inference also tied it to the SmartBuy cashback rule.",
           "source_url": "https://www.hdfc.bank.in/content/dam/hdfcbankpws/in/en/personal-banking/discover-products/cards/credit-cards/irctc-credit-card/irctc-tnc-09-10-25.pdf",
-          "checked_on": "2026-11-05"
+          "checked_on": "2026-11-05",
+          "citation": null
         },
         {
           "path": "cap_rules[id=smartbuy-5-percent-cashback-annual].target_rule_ids",
@@ -156,7 +166,8 @@
           "value_sha256": "b92bfa17b905e251",
           "reason": "WP7: T&C: \"The accrual of the 5% Cashback on IRCTC Train Ticket booking made via HDFC Bank SmartBuy is capped maximum at INR 1000 per month and INR 12000 Annually\" - the cashback rule only; category inference also tied it to the 5X points rule.",
           "source_url": "https://www.hdfc.bank.in/content/dam/hdfcbankpws/in/en/personal-banking/discover-products/cards/credit-cards/irctc-credit-card/irctc-tnc-09-10-25.pdf",
-          "checked_on": "2026-11-05"
+          "checked_on": "2026-11-05",
+          "citation": null
         }
       ]
     },
@@ -879,7 +890,7 @@
         "category_id": "cat-entertainment",
         "category_slug": "entertainment",
         "merchant_pattern": null,
-        "rail": "online",
+        "rail": null,
         "unit": "points_per_100",
         "rate": 0,
         "min_txn_inr": null,
@@ -890,6 +901,7 @@
           "part": 1,
           "info_reasons": [],
           "flags": [
+            "exclusion_rail_dropped",
             "broad_exclusion_v1_only",
             "broad_category"
           ]
@@ -916,7 +928,7 @@
         "category_id": null,
         "category_slug": null,
         "merchant_pattern": null,
-        "rail": "online",
+        "rail": null,
         "unit": "points_per_100",
         "rate": 0,
         "min_txn_inr": null,
@@ -927,6 +939,7 @@
           "part": 2,
           "info_reasons": [],
           "flags": [
+            "exclusion_rail_dropped",
             "broad_exclusion_v1_only"
           ]
         },

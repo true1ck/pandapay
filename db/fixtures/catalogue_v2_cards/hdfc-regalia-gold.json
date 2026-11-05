@@ -34,6 +34,16 @@
       "caps_enforced": 6,
       "flags": [
         {
+          "code": "emi_alternatives",
+          "source_local_id": "emi_exclusion",
+          "detail": null
+        },
+        {
+          "code": "exclusion_rail_dropped",
+          "source_local_id": "education_third_party_exclusion",
+          "detail": null
+        },
+        {
           "code": "exclusion_scope_broadened",
           "source_local_id": "education_third_party_exclusion",
           "detail": null
@@ -56,7 +66,8 @@
           "value_sha256": "74234e98afe7498f",
           "reason": "WP7: T&C: \"payment must be done directly using HDFC Bank Regalia Gold Credit Card\"; a wallet payment reaches the card as a wallet load (excluded), never as the brand, so the merchant list already enforces it. Removing it lets the 5X rule load (was info).",
           "source_url": "https://www.hdfc.bank.in/content/dam/hdfcbankpws/in/en/personal-banking/discover-products/cards/credit-cards/regalia-gold-credit-card/pdfs/regalia-gold-credit-card-reward-points-t-and-cs.pdf",
-          "checked_on": "2026-11-05"
+          "checked_on": "2026-11-05",
+          "citation": null
         },
         {
           "path": "reward_rules[id=select_brand_5x].action.points_per_block",
@@ -64,7 +75,8 @@
           "value_sha256": "b7a56873cd771f2c",
           "reason": "WP7: The loader reads points_per_block as the full rule rate. T&C: 5X on the four brands with \"Base reward points ... continue as is\"; 5X of the 5 RP/Rs200 base is 25 RP/Rs200 (100 base + 400 incremental on Rs4,000 in the worked example).",
           "source_url": "https://www.hdfc.bank.in/content/dam/hdfcbankpws/in/en/personal-banking/discover-products/cards/credit-cards/regalia-gold-credit-card/pdfs/regalia-gold-credit-card-reward-points-t-and-cs.pdf",
-          "checked_on": "2026-11-05"
+          "checked_on": "2026-11-05",
+          "citation": null
         },
         {
           "path": "reward_rules[id=select_brand_5x].conditions.minimum_transaction_inr",
@@ -72,7 +84,8 @@
           "value_sha256": "27badc983df1780b",
           "reason": "WP7: T&C: \"Minimum transaction value to be eligible for offer or reward points is Rs. 200.\"",
           "source_url": "https://www.hdfc.bank.in/content/dam/hdfcbankpws/in/en/personal-banking/discover-products/cards/credit-cards/regalia-gold-credit-card/pdfs/regalia-gold-credit-card-reward-points-t-and-cs.pdf",
-          "checked_on": "2026-11-05"
+          "checked_on": "2026-11-05",
+          "citation": null
         },
         {
           "path": "reward_rules",
@@ -80,7 +93,8 @@
           "value_sha256": "b75fcb9574c9b415",
           "reason": "WP7: D28c: Reward Points T&C item 4: \"EasyEMI and e-wallet loading transactions will not accrue Reward points\". The record's EMI row needs category emi AND rail emi, so an EMI purchase in another category earned. Rail-EMI exclusion on all spend.",
           "source_url": "https://www.hdfc.bank.in/content/dam/hdfcbankpws/in/en/personal-banking/discover-products/cards/credit-cards/regalia-gold-credit-card/pdfs/regalia-gold-credit-card-reward-points-t-and-cs.pdf",
-          "checked_on": "2026-11-05"
+          "checked_on": "2026-11-05",
+          "citation": null
         }
       ]
     },
@@ -295,11 +309,11 @@
         "display_note": "Wallet loading is excluded from Reward Point accrual."
       },
       {
-        "id": "hdfc-regalia-gold:rule:emi_exclusion",
+        "id": "hdfc-regalia-gold:rule:emi_exclusion#1",
         "category_id": "cat-emi",
         "category_slug": "emi",
         "merchant_pattern": null,
-        "rail": "emi",
+        "rail": null,
         "unit": "points_per_200",
         "rate": 0,
         "min_txn_inr": null,
@@ -307,9 +321,11 @@
         "priority": 1,
         "conditions": {
           "source_local_id": "emi_exclusion",
-          "part": null,
+          "part": 1,
           "info_reasons": [],
-          "flags": []
+          "flags": [
+            "emi_alternatives"
+          ]
         },
         "notes": null,
         "effective_from": "2026-05-15",
@@ -329,11 +345,47 @@
         "display_note": "EMI transactions are excluded."
       },
       {
+        "id": "hdfc-regalia-gold:rule:emi_exclusion#2",
+        "category_id": null,
+        "category_slug": null,
+        "merchant_pattern": null,
+        "rail": "emi",
+        "unit": "points_per_200",
+        "rate": 0,
+        "min_txn_inr": null,
+        "max_txn_inr": null,
+        "priority": 1,
+        "conditions": {
+          "source_local_id": "emi_exclusion",
+          "part": 2,
+          "info_reasons": [],
+          "flags": [
+            "emi_alternatives"
+          ]
+        },
+        "notes": null,
+        "effective_from": "2026-05-15",
+        "effective_to": null,
+        "excluded_categories": [],
+        "rule_role": "exclusion",
+        "merchant_slugs": [],
+        "platform_slugs": [],
+        "mcc_include": [],
+        "mcc_exclude": [],
+        "except_merchant_slugs": [],
+        "except_platform_slugs": [],
+        "block_inr": null,
+        "min_engine_version": 2,
+        "max_engine_version": null,
+        "source_local_id": "emi_exclusion",
+        "display_note": "EMI transactions are excluded."
+      },
+      {
         "id": "hdfc-regalia-gold:rule:education_third_party_exclusion",
         "category_id": "cat-education",
         "category_slug": "education",
         "merchant_pattern": null,
-        "rail": "online",
+        "rail": null,
         "unit": "points_per_200",
         "rate": 0,
         "min_txn_inr": null,
@@ -344,6 +396,7 @@
           "part": null,
           "info_reasons": [],
           "flags": [
+            "exclusion_rail_dropped",
             "exclusion_scope_broadened"
           ]
         },

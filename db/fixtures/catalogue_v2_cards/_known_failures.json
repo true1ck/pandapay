@@ -5,24 +5,6 @@
     "Keys are <source_slug>#<example id>. category: example_wrong | research_data | directory_data | loader_bug | engine_bug."
   ],
   "failures": {
-    "axis-bank-magnus#006": {
-      "engines": [
-        "js",
-        "dart"
-      ],
-      "category": "loader_bug",
-      "routed_to": "WP2, then a WP6b/WP7 override",
-      "summary": "35 pts/Rs200 above Rs1.5 lakh a month needs base_150k_spend to carry post_cap_behavior custom_rate (35 per Rs200). The loader only emits base_rate/zero, so the accelerated band earns the base 12."
-    },
-    "axis-bank-magnus#007": {
-      "engines": [
-        "js",
-        "dart"
-      ],
-      "category": "loader_bug",
-      "routed_to": "WP2, then a WP6b/WP7 override",
-      "summary": "Same as #006: spend after the Rs1.5 lakh line should earn 35 per Rs200 (custom post-cap rate)."
-    },
     "flipkart-axis-bank-credit-card#006": {
       "engines": [
         "js",

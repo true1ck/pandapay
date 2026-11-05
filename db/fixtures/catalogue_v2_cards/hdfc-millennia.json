@@ -130,6 +130,11 @@
           "detail": null
         },
         {
+          "code": "emi_alternatives",
+          "source_local_id": "millennia-emi-zero",
+          "detail": null
+        },
+        {
           "code": "exclusion_scope_broadened",
           "source_local_id": "millennia-cash-advance-zero",
           "detail": null
@@ -155,6 +160,11 @@
           "detail": "non_purchase_category"
         },
         {
+          "code": "exclusion_rail_dropped",
+          "source_local_id": "millennia-online-gaming-zero",
+          "detail": null
+        },
+        {
           "code": "exclusion_scope_broadened",
           "source_local_id": "millennia-online-gaming-zero",
           "detail": null
@@ -168,6 +178,11 @@
           "code": "info_rule",
           "source_local_id": "millennia-education-third-party-zero",
           "detail": "condition:third_party_apps"
+        },
+        {
+          "code": "exclusion_rail_dropped",
+          "source_local_id": "millennia-education-third-party-zero",
+          "detail": null
         },
         {
           "code": "exclusion_scope_broadened",
@@ -192,7 +207,8 @@
           "value_sha256": "74234e98afe7498f",
           "reason": "CashPoints are whole points, 1 per Rs100 block (D8a).",
           "source_url": "https://www.hdfc.bank.in/content/dam/hdfcbankpws/in/en/personal-banking/discover-products/cards/credit-cards/millennia-credit-card/pdf/millennia-tnc-20th-jul26.pdf",
-          "checked_on": "2026-11-05"
+          "checked_on": "2026-11-05",
+          "citation": null
         },
         {
           "path": "accrual_engine.base_points_per_block",
@@ -200,7 +216,8 @@
           "value_sha256": "6b86b273ff34fce1",
           "reason": "1 CashPoint per Rs100.",
           "source_url": "https://www.hdfc.bank.in/content/dam/hdfcbankpws/in/en/personal-banking/discover-products/cards/credit-cards/millennia-credit-card/pdf/millennia-tnc-20th-jul26.pdf",
-          "checked_on": "2026-11-05"
+          "checked_on": "2026-11-05",
+          "citation": null
         },
         {
           "path": "accrual_engine.base_block_inr",
@@ -208,7 +225,8 @@
           "value_sha256": "ad57366865126e55",
           "reason": "Rs100 block.",
           "source_url": "https://www.hdfc.bank.in/content/dam/hdfcbankpws/in/en/personal-banking/discover-products/cards/credit-cards/millennia-credit-card/pdf/millennia-tnc-20th-jul26.pdf",
-          "checked_on": "2026-11-05"
+          "checked_on": "2026-11-05",
+          "citation": null
         },
         {
           "path": "card_product.point_value_inr_baseline",
@@ -216,7 +234,8 @@
           "value_sha256": "6b86b273ff34fce1",
           "reason": "1 CashPoint = Rs1 on statement redemption.",
           "source_url": "https://www.hdfc.bank.in/content/dam/hdfcbankpws/in/en/personal-banking/discover-products/cards/credit-cards/millennia-credit-card/pdf/millennia-tnc-20th-jul26.pdf",
-          "checked_on": "2026-11-05"
+          "checked_on": "2026-11-05",
+          "citation": null
         },
         {
           "path": "reward_rules[id=millennia-5pct-select-merchants].action.cashback_percent",
@@ -224,7 +243,8 @@
           "value_sha256": "74234e98afe7498f",
           "reason": "Model as points, not cashback percent (D8a).",
           "source_url": "https://www.hdfc.bank.in/content/dam/hdfcbankpws/in/en/personal-banking/discover-products/cards/credit-cards/millennia-credit-card/pdf/millennia-tnc-20th-jul26.pdf",
-          "checked_on": "2026-11-05"
+          "checked_on": "2026-11-05",
+          "citation": null
         },
         {
           "path": "reward_rules[id=millennia-uber-mcc4121].action.cashback_percent",
@@ -232,7 +252,8 @@
           "value_sha256": "74234e98afe7498f",
           "reason": "Model as points, not cashback percent (D8a).",
           "source_url": "https://www.hdfc.bank.in/content/dam/hdfcbankpws/in/en/personal-banking/discover-products/cards/credit-cards/millennia-credit-card/pdf/millennia-tnc-20th-jul26.pdf",
-          "checked_on": "2026-11-05"
+          "checked_on": "2026-11-05",
+          "citation": null
         },
         {
           "path": "reward_rules[id=millennia-other-spends-1pct].action.cashback_percent",
@@ -240,7 +261,8 @@
           "value_sha256": "74234e98afe7498f",
           "reason": "Model as points, not cashback percent (D8a).",
           "source_url": "https://www.hdfc.bank.in/content/dam/hdfcbankpws/in/en/personal-banking/discover-products/cards/credit-cards/millennia-credit-card/pdf/millennia-tnc-20th-jul26.pdf",
-          "checked_on": "2026-11-05"
+          "checked_on": "2026-11-05",
+          "citation": null
         },
         {
           "path": "reward_rules[id=millennia-uber-eats-base].action.cashback_percent",
@@ -248,7 +270,8 @@
           "value_sha256": "74234e98afe7498f",
           "reason": "Model as points, not cashback percent (D8a).",
           "source_url": "https://www.hdfc.bank.in/content/dam/hdfcbankpws/in/en/personal-banking/discover-products/cards/credit-cards/millennia-credit-card/pdf/millennia-tnc-20th-jul26.pdf",
-          "checked_on": "2026-11-05"
+          "checked_on": "2026-11-05",
+          "citation": null
         },
         {
           "path": "reward_rules[id=millennia-5pct-select-merchants].conditions.uber_mcc",
@@ -256,7 +279,8 @@
           "value_sha256": "74234e98afe7498f",
           "reason": "WP7: Uber is modelled by its own rule millennia-uber-mcc4121 (issuer: only MCC 4121 Uber qualifies); the extra key made the 10-merchant rule info.",
           "source_url": "https://www.hdfc.bank.in/content/dam/hdfcbankpws/in/en/personal-banking/discover-products/cards/credit-cards/millennia-credit-card/pdf/millennia-tnc-20th-jul26.pdf",
-          "checked_on": "2026-11-05"
+          "checked_on": "2026-11-05",
+          "citation": null
         },
         {
           "path": "reward_rules[id=millennia-5pct-select-merchants].conditions.merchant_names",
@@ -264,7 +288,8 @@
           "value_sha256": "78a645a5fc68d56c",
           "reason": "WP7: Uber moves to millennia-uber-mcc4121 (MCC 4121 only), so Uber Eats never earns 5% here.",
           "source_url": "https://www.hdfc.bank.in/content/dam/hdfcbankpws/in/en/personal-banking/discover-products/cards/credit-cards/millennia-credit-card/pdf/millennia-tnc-20th-jul26.pdf",
-          "checked_on": "2026-11-05"
+          "checked_on": "2026-11-05",
+          "citation": null
         },
         {
           "path": "reward_rules",
@@ -272,7 +297,8 @@
           "value_sha256": "d54789ba83bd44a2",
           "reason": "WP7: Millennia T&C: EMI spends earn no CashPoints (record exclusion millennia-emi-zero; EMI is in the card's excluded categories). The record's EMI exclusion is emitted as category emi AND rail emi, so an EMI purchase in another category was not excluded (D24e: data fix while WP2 changes the loader). Rail-EMI exclusion on all spend, as on flipkart-sbi-card.",
           "source_url": "https://www.hdfc.bank.in/content/dam/hdfcbankpws/in/en/personal-banking/discover-products/cards/credit-cards/millennia-credit-card/pdf/millennia-tnc-20th-jul26.pdf",
-          "checked_on": "2026-11-05"
+          "checked_on": "2026-11-05",
+          "citation": null
         }
       ]
     },
@@ -1041,11 +1067,11 @@
         "display_note": "Fuel purchases are excluded from reward accrual."
       },
       {
-        "id": "hdfc-millennia:rule:millennia-emi-zero",
+        "id": "hdfc-millennia:rule:millennia-emi-zero#1",
         "category_id": "cat-emi",
         "category_slug": "emi",
         "merchant_pattern": null,
-        "rail": "emi",
+        "rail": null,
         "unit": "points_per_100",
         "rate": 0,
         "min_txn_inr": null,
@@ -1053,9 +1079,11 @@
         "priority": 4,
         "conditions": {
           "source_local_id": "millennia-emi-zero",
-          "part": null,
+          "part": 1,
           "info_reasons": [],
-          "flags": []
+          "flags": [
+            "emi_alternatives"
+          ]
         },
         "notes": null,
         "effective_from": "2024-09-01",
@@ -1070,6 +1098,42 @@
         "except_platform_slugs": [],
         "block_inr": null,
         "min_engine_version": 1,
+        "max_engine_version": null,
+        "source_local_id": "millennia-emi-zero",
+        "display_note": "EMI conversions and transactions excluded from CashPoints accrual."
+      },
+      {
+        "id": "hdfc-millennia:rule:millennia-emi-zero#2",
+        "category_id": null,
+        "category_slug": null,
+        "merchant_pattern": null,
+        "rail": "emi",
+        "unit": "points_per_100",
+        "rate": 0,
+        "min_txn_inr": null,
+        "max_txn_inr": null,
+        "priority": 4,
+        "conditions": {
+          "source_local_id": "millennia-emi-zero",
+          "part": 2,
+          "info_reasons": [],
+          "flags": [
+            "emi_alternatives"
+          ]
+        },
+        "notes": null,
+        "effective_from": "2024-09-01",
+        "effective_to": null,
+        "excluded_categories": [],
+        "rule_role": "exclusion",
+        "merchant_slugs": [],
+        "platform_slugs": [],
+        "mcc_include": [],
+        "mcc_exclude": [],
+        "except_merchant_slugs": [],
+        "except_platform_slugs": [],
+        "block_inr": null,
+        "min_engine_version": 2,
         "max_engine_version": null,
         "source_local_id": "millennia-emi-zero",
         "display_note": "EMI conversions and transactions excluded from CashPoints accrual."
@@ -1192,7 +1256,7 @@
         "category_id": "cat-entertainment",
         "category_slug": "entertainment",
         "merchant_pattern": null,
-        "rail": "online",
+        "rail": null,
         "unit": "points_per_100",
         "rate": 0,
         "min_txn_inr": null,
@@ -1203,6 +1267,7 @@
           "part": 1,
           "info_reasons": [],
           "flags": [
+            "exclusion_rail_dropped",
             "exclusion_scope_broadened",
             "broad_exclusion_v1_only",
             "broad_category"
@@ -1230,7 +1295,7 @@
         "category_id": null,
         "category_slug": null,
         "merchant_pattern": null,
-        "rail": "online",
+        "rail": null,
         "unit": "points_per_100",
         "rate": 0,
         "min_txn_inr": null,
@@ -1241,6 +1306,7 @@
           "part": 2,
           "info_reasons": [],
           "flags": [
+            "exclusion_rail_dropped",
             "exclusion_scope_broadened",
             "broad_exclusion_v1_only"
           ]
@@ -1270,7 +1336,7 @@
         "category_id": "cat-education",
         "category_slug": "education",
         "merchant_pattern": null,
-        "rail": "online",
+        "rail": null,
         "unit": "points_per_100",
         "rate": 0,
         "min_txn_inr": null,
@@ -1283,6 +1349,7 @@
             "condition:third_party_apps"
           ],
           "flags": [
+            "exclusion_rail_dropped",
             "exclusion_scope_broadened"
           ]
         },

@@ -40,6 +40,11 @@
           "detail": null
         },
         {
+          "code": "exclusion_rail_dropped",
+          "source_local_id": "fuel_exclusion",
+          "detail": null
+        },
+        {
           "code": "info_rule",
           "source_local_id": "monthly_six_transaction_bonus",
           "detail": "unsupported_trigger"
@@ -65,6 +70,11 @@
           "detail": "condition:excluded_items"
         },
         {
+          "code": "emi_alternatives",
+          "source_local_id": "exclude_merchant_emi",
+          "detail": null
+        },
+        {
           "code": "exclusion_scope_broadened",
           "source_local_id": "exclude_merchant_emi",
           "detail": null
@@ -87,7 +97,8 @@
           "value_sha256": "74234e98afe7498f",
           "reason": "WP7: MR terms: Gold earns on \"Other Utility Services (capped to a maximum of 10000 Points every calendar month)\"; the type list restated the utility category (rule was info).",
           "source_url": "https://www.americanexpress.com/content/dam/amex/en-in/benefits/rewards/membership-rewards/membership-rewards-terms.pdf",
-          "checked_on": "2026-11-05"
+          "checked_on": "2026-11-05",
+          "citation": null
         },
         {
           "path": "reward_rules",
@@ -95,7 +106,8 @@
           "value_sha256": "7e1de12c8be7e7ce",
           "reason": "WP7: MR terms (all Amex India cards): \"Cardmembers will not earn Membership Rewards Points on any EMI option selected from a merchant's website\". Same rule as the Membership Rewards card record.",
           "source_url": "https://www.americanexpress.com/content/dam/amex/en-in/benefits/rewards/membership-rewards/membership-rewards-terms.pdf",
-          "checked_on": "2026-11-05"
+          "checked_on": "2026-11-05",
+          "citation": null
         },
         {
           "path": "reward_rules",
@@ -103,7 +115,8 @@
           "value_sha256": "e5792a972fd5e7fa",
           "reason": "WP7: D28c: MR terms: no points \"on any EMI option selected from a merchant's website\" or terminal (SafeKey/post-purchase EMI, which earn, cannot be told apart on the EMI rail, so this may under-state them). The record's EMI row needs category emi AND rail emi, so an EMI purchase in another category earned. Rail-EMI exclusion on all spend.",
           "source_url": "https://www.americanexpress.com/content/dam/amex/en-in/benefits/rewards/membership-rewards/membership-rewards-terms.pdf",
-          "checked_on": "2026-11-05"
+          "checked_on": "2026-11-05",
+          "citation": null
         }
       ]
     },
@@ -217,7 +230,7 @@
         "category_id": "cat-fuel",
         "category_slug": "fuel",
         "merchant_pattern": null,
-        "rail": "swipe",
+        "rail": null,
         "unit": "points_per_100",
         "rate": 0,
         "min_txn_inr": null,
@@ -227,7 +240,9 @@
           "source_local_id": "fuel_exclusion",
           "part": null,
           "info_reasons": [],
-          "flags": []
+          "flags": [
+            "exclusion_rail_dropped"
+          ]
         },
         "notes": null,
         "effective_from": "2025-06-12",
@@ -393,11 +408,11 @@
         "display_note": "These transactions or charges are not eligible for Membership Rewards accrual."
       },
       {
-        "id": "american-express-gold-charge-card-india:rule:exclude_merchant_emi",
+        "id": "american-express-gold-charge-card-india:rule:exclude_merchant_emi#1",
         "category_id": "cat-emi",
         "category_slug": "emi",
         "merchant_pattern": null,
-        "rail": "emi",
+        "rail": null,
         "unit": "points_per_100",
         "rate": 0,
         "min_txn_inr": null,
@@ -405,9 +420,10 @@
         "priority": 1,
         "conditions": {
           "source_local_id": "exclude_merchant_emi",
-          "part": null,
+          "part": 1,
           "info_reasons": [],
           "flags": [
+            "emi_alternatives",
             "exclusion_scope_broadened"
           ]
         },
@@ -424,6 +440,43 @@
         "except_platform_slugs": [],
         "block_inr": null,
         "min_engine_version": 1,
+        "max_engine_version": null,
+        "source_local_id": "exclude_merchant_emi",
+        "display_note": "No Membership Rewards points on EMI options selected at a merchant website or terminal."
+      },
+      {
+        "id": "american-express-gold-charge-card-india:rule:exclude_merchant_emi#2",
+        "category_id": null,
+        "category_slug": null,
+        "merchant_pattern": null,
+        "rail": "emi",
+        "unit": "points_per_100",
+        "rate": 0,
+        "min_txn_inr": null,
+        "max_txn_inr": null,
+        "priority": 1,
+        "conditions": {
+          "source_local_id": "exclude_merchant_emi",
+          "part": 2,
+          "info_reasons": [],
+          "flags": [
+            "emi_alternatives",
+            "exclusion_scope_broadened"
+          ]
+        },
+        "notes": null,
+        "effective_from": "2020-03-15",
+        "effective_to": null,
+        "excluded_categories": [],
+        "rule_role": "exclusion",
+        "merchant_slugs": [],
+        "platform_slugs": [],
+        "mcc_include": [],
+        "mcc_exclude": [],
+        "except_merchant_slugs": [],
+        "except_platform_slugs": [],
+        "block_inr": null,
+        "min_engine_version": 2,
         "max_engine_version": null,
         "source_local_id": "exclude_merchant_emi",
         "display_note": "No Membership Rewards points on EMI options selected at a merchant website or terminal."

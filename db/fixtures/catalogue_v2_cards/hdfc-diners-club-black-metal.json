@@ -50,6 +50,11 @@
           "detail": null
         },
         {
+          "code": "unresolved_merchant_alternative",
+          "source_local_id": "education_third_party_exclusion",
+          "detail": null
+        },
+        {
           "code": "channel_type_restates_brand",
           "source_local_id": "education_third_party_exclusion",
           "detail": null
@@ -440,6 +445,7 @@
           "flags": [
             "channel_list_alternatives",
             "partial_merchant_list",
+            "unresolved_merchant_alternative",
             "channel_type_restates_brand"
           ]
         },
@@ -481,6 +487,7 @@
           "flags": [
             "channel_list_alternatives",
             "partial_merchant_list",
+            "unresolved_merchant_alternative",
             "channel_type_restates_brand"
           ]
         },
@@ -521,6 +528,7 @@
           "flags": [
             "channel_list_alternatives",
             "partial_merchant_list",
+            "unresolved_merchant_alternative",
             "channel_type_restates_brand",
             "exclusion_v1_projection"
           ]

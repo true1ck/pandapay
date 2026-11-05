@@ -2266,7 +2266,7 @@
             "category_id": "cat-wallet",
             "category_slug": "wallet",
             "merchant_pattern": null,
-            "rail": "online",
+            "rail": null,
             "unit": "points_per_100",
             "rate": 0,
             "min_txn_inr": null,
@@ -2277,6 +2277,7 @@
               "part": 1,
               "info_reasons": [],
               "flags": [
+                "exclusion_rail_dropped",
                 "mcc_scoped_exclusion"
               ]
             },
@@ -2302,7 +2303,7 @@
             "category_id": "cat-wallet",
             "category_slug": "wallet",
             "merchant_pattern": null,
-            "rail": "online",
+            "rail": null,
             "unit": "points_per_100",
             "rate": 0,
             "min_txn_inr": null,
@@ -2313,6 +2314,7 @@
               "part": 2,
               "info_reasons": [],
               "flags": [
+                "exclusion_rail_dropped",
                 "mcc_scoped_exclusion"
               ]
             },
@@ -2340,7 +2342,7 @@
             "category_id": null,
             "category_slug": null,
             "merchant_pattern": null,
-            "rail": "online",
+            "rail": null,
             "unit": "points_per_100",
             "rate": 0,
             "min_txn_inr": null,
@@ -2351,6 +2353,7 @@
               "part": 3,
               "info_reasons": [],
               "flags": [
+                "exclusion_rail_dropped",
                 "mcc_scoped_exclusion"
               ]
             },
@@ -3123,7 +3126,7 @@
             "category_id": "cat-wallet",
             "category_slug": "wallet",
             "merchant_pattern": null,
-            "rail": "online",
+            "rail": null,
             "unit": "points_per_100",
             "rate": 0,
             "min_txn_inr": null,
@@ -3134,6 +3137,7 @@
               "part": 1,
               "info_reasons": [],
               "flags": [
+                "exclusion_rail_dropped",
                 "mcc_scoped_exclusion"
               ]
             },
@@ -3159,7 +3163,7 @@
             "category_id": "cat-wallet",
             "category_slug": "wallet",
             "merchant_pattern": null,
-            "rail": "online",
+            "rail": null,
             "unit": "points_per_100",
             "rate": 0,
             "min_txn_inr": null,
@@ -3170,6 +3174,7 @@
               "part": 2,
               "info_reasons": [],
               "flags": [
+                "exclusion_rail_dropped",
                 "mcc_scoped_exclusion"
               ]
             },
@@ -3197,7 +3202,7 @@
             "category_id": null,
             "category_slug": null,
             "merchant_pattern": null,
-            "rail": "online",
+            "rail": null,
             "unit": "points_per_100",
             "rate": 0,
             "min_txn_inr": null,
@@ -3208,6 +3213,7 @@
               "part": 3,
               "info_reasons": [],
               "flags": [
+                "exclusion_rail_dropped",
                 "mcc_scoped_exclusion"
               ]
             },
@@ -3670,6 +3676,7 @@
               "part": 1,
               "info_reasons": [],
               "flags": [
+                "exception_from_negated_token",
                 "mcc_scoped_exclusion"
               ]
             },
@@ -3708,6 +3715,7 @@
               "part": 2,
               "info_reasons": [],
               "flags": [
+                "exception_from_negated_token",
                 "mcc_scoped_exclusion"
               ]
             },
@@ -3751,6 +3759,7 @@
               "part": 3,
               "info_reasons": [],
               "flags": [
+                "exception_from_negated_token",
                 "mcc_scoped_exclusion"
               ]
             },
@@ -4863,6 +4872,7 @@
               "part": 1,
               "info_reasons": [],
               "flags": [
+                "exception_from_negated_token",
                 "mcc_scoped_exclusion"
               ]
             },
@@ -4901,6 +4911,7 @@
               "part": 2,
               "info_reasons": [],
               "flags": [
+                "exception_from_negated_token",
                 "mcc_scoped_exclusion"
               ]
             },
@@ -4944,6 +4955,7 @@
               "part": 3,
               "info_reasons": [],
               "flags": [
+                "exception_from_negated_token",
                 "mcc_scoped_exclusion"
               ]
             },
@@ -6803,11 +6815,11 @@
             "display_note": "Railway spends are excluded from cashback."
           },
           {
-            "id": "cashback-sbi-card:rule:exclude_merchant_emi",
+            "id": "cashback-sbi-card:rule:exclude_merchant_emi#1",
             "category_id": "cat-emi",
             "category_slug": "emi",
             "merchant_pattern": null,
-            "rail": "emi",
+            "rail": null,
             "unit": "cashback_percent",
             "rate": 0,
             "min_txn_inr": null,
@@ -6815,9 +6827,11 @@
             "priority": 9,
             "conditions": {
               "source_local_id": "exclude_merchant_emi",
-              "part": null,
+              "part": 1,
               "info_reasons": [],
-              "flags": []
+              "flags": [
+                "emi_alternatives"
+              ]
             },
             "notes": null,
             "effective_from": "2026-04-01",
@@ -6837,11 +6851,47 @@
             "display_note": "Cashback is not applicable on Merchant EMI transactions."
           },
           {
-            "id": "cashback-sbi-card:rule:exclude_flexipay_emi",
+            "id": "cashback-sbi-card:rule:exclude_merchant_emi#2",
+            "category_id": null,
+            "category_slug": null,
+            "merchant_pattern": null,
+            "rail": "emi",
+            "unit": "cashback_percent",
+            "rate": 0,
+            "min_txn_inr": null,
+            "max_txn_inr": null,
+            "priority": 9,
+            "conditions": {
+              "source_local_id": "exclude_merchant_emi",
+              "part": 2,
+              "info_reasons": [],
+              "flags": [
+                "emi_alternatives"
+              ]
+            },
+            "notes": null,
+            "effective_from": "2026-04-01",
+            "effective_to": null,
+            "excluded_categories": [],
+            "rule_role": "exclusion",
+            "merchant_slugs": [],
+            "platform_slugs": [],
+            "mcc_include": [],
+            "mcc_exclude": [],
+            "except_merchant_slugs": [],
+            "except_platform_slugs": [],
+            "block_inr": null,
+            "min_engine_version": 2,
+            "max_engine_version": null,
+            "source_local_id": "exclude_merchant_emi",
+            "display_note": "Cashback is not applicable on Merchant EMI transactions."
+          },
+          {
+            "id": "cashback-sbi-card:rule:exclude_flexipay_emi#1",
             "category_id": "cat-emi",
             "category_slug": "emi",
             "merchant_pattern": null,
-            "rail": "emi",
+            "rail": null,
             "unit": "cashback_percent",
             "rate": 0,
             "min_txn_inr": null,
@@ -6849,9 +6899,11 @@
             "priority": 10,
             "conditions": {
               "source_local_id": "exclude_flexipay_emi",
-              "part": null,
+              "part": 1,
               "info_reasons": [],
-              "flags": []
+              "flags": [
+                "emi_alternatives"
+              ]
             },
             "notes": null,
             "effective_from": "2026-04-01",
@@ -6866,6 +6918,42 @@
             "except_platform_slugs": [],
             "block_inr": null,
             "min_engine_version": 1,
+            "max_engine_version": null,
+            "source_local_id": "exclude_flexipay_emi",
+            "display_note": "Cashback is not applicable on Flexipay EMI transactions."
+          },
+          {
+            "id": "cashback-sbi-card:rule:exclude_flexipay_emi#2",
+            "category_id": null,
+            "category_slug": null,
+            "merchant_pattern": null,
+            "rail": "emi",
+            "unit": "cashback_percent",
+            "rate": 0,
+            "min_txn_inr": null,
+            "max_txn_inr": null,
+            "priority": 10,
+            "conditions": {
+              "source_local_id": "exclude_flexipay_emi",
+              "part": 2,
+              "info_reasons": [],
+              "flags": [
+                "emi_alternatives"
+              ]
+            },
+            "notes": null,
+            "effective_from": "2026-04-01",
+            "effective_to": null,
+            "excluded_categories": [],
+            "rule_role": "exclusion",
+            "merchant_slugs": [],
+            "platform_slugs": [],
+            "mcc_include": [],
+            "mcc_exclude": [],
+            "except_merchant_slugs": [],
+            "except_platform_slugs": [],
+            "block_inr": null,
+            "min_engine_version": 2,
             "max_engine_version": null,
             "source_local_id": "exclude_flexipay_emi",
             "display_note": "Cashback is not applicable on Flexipay EMI transactions."
@@ -7106,7 +7194,7 @@
             "category_id": "cat-education",
             "category_slug": "education",
             "merchant_pattern": null,
-            "rail": "online",
+            "rail": null,
             "unit": "cashback_percent",
             "rate": 0,
             "min_txn_inr": null,
@@ -7119,6 +7207,7 @@
                 "unresolved_merchant:channel"
               ],
               "flags": [
+                "exclusion_rail_dropped",
                 "exclusion_scope_broadened"
               ]
             },
@@ -8058,7 +8147,7 @@
             "category_id": "cat-entertainment",
             "category_slug": "entertainment",
             "merchant_pattern": null,
-            "rail": "online",
+            "rail": null,
             "unit": "points_per_100",
             "rate": 0,
             "min_txn_inr": null,
@@ -8069,6 +8158,7 @@
               "part": 1,
               "info_reasons": [],
               "flags": [
+                "exclusion_rail_dropped",
                 "broad_exclusion_v1_only",
                 "broad_category"
               ]
@@ -8095,7 +8185,7 @@
             "category_id": null,
             "category_slug": null,
             "merchant_pattern": null,
-            "rail": "online",
+            "rail": null,
             "unit": "points_per_100",
             "rate": 0,
             "min_txn_inr": null,
@@ -8106,6 +8196,7 @@
               "part": 2,
               "info_reasons": [],
               "flags": [
+                "exclusion_rail_dropped",
                 "broad_exclusion_v1_only"
               ]
             },
@@ -8442,7 +8533,7 @@
             "category_id": "cat-travel",
             "category_slug": "travel",
             "merchant_pattern": "goindigo",
-            "rail": "online",
+            "rail": null,
             "unit": "points_per_100",
             "rate": 0,
             "min_txn_inr": null,
@@ -8456,6 +8547,7 @@
               ],
               "flags": [
                 "depends_on_txn_attribute",
+                "exclusion_rail_dropped",
                 "exclusion_scope_broadened"
               ]
             },
@@ -9828,11 +9920,11 @@
             "display_note": "No Reward Points on Balance Transfer transactions."
           },
           {
-            "id": "phonepe-sbi-select-black:rule:flexipay-exclusion",
+            "id": "phonepe-sbi-select-black:rule:flexipay-exclusion#1",
             "category_id": "cat-emi",
             "category_slug": "emi",
             "merchant_pattern": null,
-            "rail": "emi",
+            "rail": null,
             "unit": "points_per_100",
             "rate": 0,
             "min_txn_inr": null,
@@ -9840,9 +9932,11 @@
             "priority": 22,
             "conditions": {
               "source_local_id": "flexipay-exclusion",
-              "part": null,
+              "part": 1,
               "info_reasons": [],
-              "flags": []
+              "flags": [
+                "emi_alternatives"
+              ]
             },
             "notes": null,
             "effective_from": "2025-07-22",
@@ -9862,11 +9956,47 @@
             "display_note": "No Reward Points on Flexipay transactions."
           },
           {
-            "id": "phonepe-sbi-select-black:rule:merchant-emi-exclusion",
+            "id": "phonepe-sbi-select-black:rule:flexipay-exclusion#2",
+            "category_id": null,
+            "category_slug": null,
+            "merchant_pattern": null,
+            "rail": "emi",
+            "unit": "points_per_100",
+            "rate": 0,
+            "min_txn_inr": null,
+            "max_txn_inr": null,
+            "priority": 22,
+            "conditions": {
+              "source_local_id": "flexipay-exclusion",
+              "part": 2,
+              "info_reasons": [],
+              "flags": [
+                "emi_alternatives"
+              ]
+            },
+            "notes": null,
+            "effective_from": "2025-07-22",
+            "effective_to": null,
+            "excluded_categories": [],
+            "rule_role": "exclusion",
+            "merchant_slugs": [],
+            "platform_slugs": [],
+            "mcc_include": [],
+            "mcc_exclude": [],
+            "except_merchant_slugs": [],
+            "except_platform_slugs": [],
+            "block_inr": null,
+            "min_engine_version": 2,
+            "max_engine_version": null,
+            "source_local_id": "flexipay-exclusion",
+            "display_note": "No Reward Points on Flexipay transactions."
+          },
+          {
+            "id": "phonepe-sbi-select-black:rule:merchant-emi-exclusion#1",
             "category_id": "cat-emi",
             "category_slug": "emi",
             "merchant_pattern": null,
-            "rail": "emi",
+            "rail": null,
             "unit": "points_per_100",
             "rate": 0,
             "min_txn_inr": null,
@@ -9874,9 +10004,11 @@
             "priority": 23,
             "conditions": {
               "source_local_id": "merchant-emi-exclusion",
-              "part": null,
+              "part": 1,
               "info_reasons": [],
-              "flags": []
+              "flags": [
+                "emi_alternatives"
+              ]
             },
             "notes": null,
             "effective_from": "2025-07-22",
@@ -9891,6 +10023,42 @@
             "except_platform_slugs": [],
             "block_inr": null,
             "min_engine_version": 1,
+            "max_engine_version": null,
+            "source_local_id": "merchant-emi-exclusion",
+            "display_note": "No Reward Points on Merchant EMI transactions."
+          },
+          {
+            "id": "phonepe-sbi-select-black:rule:merchant-emi-exclusion#2",
+            "category_id": null,
+            "category_slug": null,
+            "merchant_pattern": null,
+            "rail": "emi",
+            "unit": "points_per_100",
+            "rate": 0,
+            "min_txn_inr": null,
+            "max_txn_inr": null,
+            "priority": 23,
+            "conditions": {
+              "source_local_id": "merchant-emi-exclusion",
+              "part": 2,
+              "info_reasons": [],
+              "flags": [
+                "emi_alternatives"
+              ]
+            },
+            "notes": null,
+            "effective_from": "2025-07-22",
+            "effective_to": null,
+            "excluded_categories": [],
+            "rule_role": "exclusion",
+            "merchant_slugs": [],
+            "platform_slugs": [],
+            "mcc_include": [],
+            "mcc_exclude": [],
+            "except_merchant_slugs": [],
+            "except_platform_slugs": [],
+            "block_inr": null,
+            "min_engine_version": 2,
             "max_engine_version": null,
             "source_local_id": "merchant-emi-exclusion",
             "display_note": "No Reward Points on Merchant EMI transactions."
@@ -11814,8 +11982,8 @@
             "measure": "spend_amount",
             "period": "calendar_month",
             "cap_value": 200000,
-            "post_cap_unit": null,
-            "post_cap_rate": null,
+            "post_cap_unit": "points_per_100",
+            "post_cap_rate": 2,
             "resets_on_day": 1,
             "cap_kind": "eligible_spend",
             "cap_amount": 200000,
@@ -11825,7 +11993,7 @@
               "axis-atlas:rule:travel-edge-portal"
             ],
             "parent_cap_id": null,
-            "post_cap_behavior": "base_rate",
+            "post_cap_behavior": "custom_rate",
             "anchor": null,
             "min_engine_version": 2,
             "source_local_id": "travel-accelerated-monthly-spend-cap"
@@ -12911,7 +13079,8 @@
               "part": null,
               "info_reasons": [],
               "flags": [
-                "partial_merchant_list"
+                "partial_merchant_list",
+                "unresolved_merchant_alternative"
               ]
             },
             "notes": null,

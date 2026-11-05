@@ -79,8 +79,18 @@
           "detail": "non_purchase_category"
         },
         {
+          "code": "emi_alternatives",
+          "source_local_id": "flexipay_exclusion",
+          "detail": null
+        },
+        {
           "code": "exclusion_scope_broadened",
           "source_local_id": "flexipay_exclusion",
+          "detail": null
+        },
+        {
+          "code": "emi_alternatives",
+          "source_local_id": "merchant_emi_exclusion",
           "detail": null
         },
         {
@@ -126,7 +136,8 @@
           "value_sha256": "74234e98afe7498f",
           "reason": "WP7: Restates rail online.",
           "source_url": "https://www.sbicard.com/sbi-card-en/assets/docs/pdf/SimplyClick-TnC.pdf",
-          "checked_on": "2026-11-05"
+          "checked_on": "2026-11-05",
+          "citation": null
         },
         {
           "path": "reward_rules[id=online_5x].conditions.exclusive_partner",
@@ -134,7 +145,8 @@
           "value_sha256": "74234e98afe7498f",
           "reason": "WP7: Exclusive partners have their own higher-priority 10X rule; the negated flag made the 5X rule info.",
           "source_url": "https://www.sbicard.com/sbi-card-en/assets/docs/pdf/SimplyClick-TnC.pdf",
-          "checked_on": "2026-11-05"
+          "checked_on": "2026-11-05",
+          "citation": null
         },
         {
           "path": "reward_rules[id=offline_fuel_exclusion].channel_type",
@@ -142,7 +154,8 @@
           "value_sha256": "5cf7504d9781301d",
           "reason": "WP7: Same as the rail change below: \"offline\" is not an exact rail, so the fuel-MCC exclusion applies on every rail (conservative).",
           "source_url": "https://www.sbicard.com/sbi-card-en/assets/docs/pdf/SimplyClick-TnC.pdf",
-          "checked_on": "2026-11-05"
+          "checked_on": "2026-11-05",
+          "citation": null
         },
         {
           "path": "reward_rules[id=offline_fuel_exclusion].rail",
@@ -150,7 +163,8 @@
           "value_sha256": "251ecb599a3f3a2f",
           "reason": "WP7: T&C 11.1(f): offline fuel (5172, 5541, 5983, 5542) is not in the program. The swipe-only rail was inexact (rule was info); excluding these MCCs on every rail is the conservative reading.",
           "source_url": "https://www.sbicard.com/sbi-card-en/assets/docs/pdf/SimplyClick-TnC.pdf",
-          "checked_on": "2026-11-05"
+          "checked_on": "2026-11-05",
+          "citation": null
         },
         {
           "path": "cap_rules[id=cap_online_5x_monthly].metric",
@@ -158,7 +172,8 @@
           "value_sha256": "57dedf4537fd9493",
           "reason": "WP7: MITC booklet (g): cumulative 5X points on other online spends are capped at 10,000 RP a month, then \"standard Reward Points ... continue to accrue\". 10,000 RP at 5 per Rs100 is Rs2,00,000 of spend; an eligible-spend cap with base_rate models that exactly (a total-points cap paid 0 after it).",
           "source_url": "https://www.sbicard.com/sbi-card-en/assets/docs/pdf/simply-click-tnc-MITC-booklet.pdf",
-          "checked_on": "2026-11-05"
+          "checked_on": "2026-11-05",
+          "citation": null
         },
         {
           "path": "cap_rules[id=cap_online_5x_monthly].limit_value",
@@ -166,7 +181,8 @@
           "value_sha256": "74234e98afe7498f",
           "reason": "WP7: Amount is in rupees of spend (limit_value_inr).",
           "source_url": "https://www.sbicard.com/sbi-card-en/assets/docs/pdf/simply-click-tnc-MITC-booklet.pdf",
-          "checked_on": "2026-11-05"
+          "checked_on": "2026-11-05",
+          "citation": null
         },
         {
           "path": "cap_rules[id=cap_online_5x_monthly].limit_value_inr",
@@ -174,7 +190,8 @@
           "value_sha256": "b552e632666bbf61",
           "reason": "WP7: 10,000 RP / 5 RP per Rs100 = Rs2,00,000.",
           "source_url": "https://www.sbicard.com/sbi-card-en/assets/docs/pdf/simply-click-tnc-MITC-booklet.pdf",
-          "checked_on": "2026-11-05"
+          "checked_on": "2026-11-05",
+          "citation": null
         },
         {
           "path": "cap_rules[id=cap_online_5x_monthly].post_limit_behavior",
@@ -182,7 +199,8 @@
           "value_sha256": "0bf3a047a3fe5814",
           "reason": "WP7: Standard points continue after the cap (MITC booklet g).",
           "source_url": "https://www.sbicard.com/sbi-card-en/assets/docs/pdf/simply-click-tnc-MITC-booklet.pdf",
-          "checked_on": "2026-11-05"
+          "checked_on": "2026-11-05",
+          "citation": null
         },
         {
           "path": "cap_rules[id=cap_exclusive_10x_monthly].metric",
@@ -190,7 +208,8 @@
           "value_sha256": "57dedf4537fd9493",
           "reason": "WP7: D24c: the 10X cap is issuer-documented (MITC booklet g and k: \"Exclusive partner transactions will have a monthly cap of 10,000 point\"), so it stays. 10,000 RP at 10 per Rs100 is Rs1,00,000 of spend, then standard points (g).",
           "source_url": "https://www.sbicard.com/sbi-card-en/assets/docs/pdf/simply-click-tnc-MITC-booklet.pdf",
-          "checked_on": "2026-11-05"
+          "checked_on": "2026-11-05",
+          "citation": null
         },
         {
           "path": "cap_rules[id=cap_exclusive_10x_monthly].limit_value",
@@ -198,7 +217,8 @@
           "value_sha256": "74234e98afe7498f",
           "reason": "WP7: Amount is in rupees of spend (limit_value_inr).",
           "source_url": "https://www.sbicard.com/sbi-card-en/assets/docs/pdf/simply-click-tnc-MITC-booklet.pdf",
-          "checked_on": "2026-11-05"
+          "checked_on": "2026-11-05",
+          "citation": null
         },
         {
           "path": "cap_rules[id=cap_exclusive_10x_monthly].limit_value_inr",
@@ -206,7 +226,8 @@
           "value_sha256": "3bb78535cc9555ff",
           "reason": "WP7: 10,000 RP / 10 RP per Rs100 = Rs1,00,000.",
           "source_url": "https://www.sbicard.com/sbi-card-en/assets/docs/pdf/simply-click-tnc-MITC-booklet.pdf",
-          "checked_on": "2026-11-05"
+          "checked_on": "2026-11-05",
+          "citation": null
         },
         {
           "path": "cap_rules[id=cap_exclusive_10x_monthly].post_limit_behavior",
@@ -214,7 +235,8 @@
           "value_sha256": "0bf3a047a3fe5814",
           "reason": "WP7: Standard points continue after the cap (MITC booklet g).",
           "source_url": "https://www.sbicard.com/sbi-card-en/assets/docs/pdf/simply-click-tnc-MITC-booklet.pdf",
-          "checked_on": "2026-11-05"
+          "checked_on": "2026-11-05",
+          "citation": null
         },
         {
           "path": "reward_rules",
@@ -222,7 +244,8 @@
           "value_sha256": "bcdd7e8d8d0f3912",
           "reason": "WP7: D28c: T&C: Reward Points are reversed for \"Merchant EMI i.e. EMI availed at the time of purchase at Merchant establishment or websites, w.e.f 20th November 2020\". The record's EMI row needs category emi AND rail emi, so an EMI purchase in another category earned. Rail-EMI exclusion on all spend.",
           "source_url": "https://www.sbicard.com/sbi-card-en/assets/docs/pdf/SimplyClick-TnC.pdf",
-          "checked_on": "2026-11-05"
+          "checked_on": "2026-11-05",
+          "citation": null
         }
       ]
     },
@@ -610,11 +633,11 @@
         "display_note": "Encash transactions are excluded from the Reward Points program."
       },
       {
-        "id": "sbi-simplyclick:rule:flexipay_exclusion",
+        "id": "sbi-simplyclick:rule:flexipay_exclusion#1",
         "category_id": "cat-emi",
         "category_slug": "emi",
         "merchant_pattern": null,
-        "rail": "emi",
+        "rail": null,
         "unit": "points_per_100",
         "rate": 0,
         "min_txn_inr": null,
@@ -622,9 +645,10 @@
         "priority": 1,
         "conditions": {
           "source_local_id": "flexipay_exclusion",
-          "part": null,
+          "part": 1,
           "info_reasons": [],
           "flags": [
+            "emi_alternatives",
             "exclusion_scope_broadened"
           ]
         },
@@ -646,11 +670,48 @@
         "display_note": "Reward Points on transactions converted to Flexipay are reversed."
       },
       {
-        "id": "sbi-simplyclick:rule:merchant_emi_exclusion",
+        "id": "sbi-simplyclick:rule:flexipay_exclusion#2",
+        "category_id": null,
+        "category_slug": null,
+        "merchant_pattern": null,
+        "rail": "emi",
+        "unit": "points_per_100",
+        "rate": 0,
+        "min_txn_inr": null,
+        "max_txn_inr": null,
+        "priority": 1,
+        "conditions": {
+          "source_local_id": "flexipay_exclusion",
+          "part": 2,
+          "info_reasons": [],
+          "flags": [
+            "emi_alternatives",
+            "exclusion_scope_broadened"
+          ]
+        },
+        "notes": null,
+        "effective_from": "2020-11-20",
+        "effective_to": null,
+        "excluded_categories": [],
+        "rule_role": "exclusion",
+        "merchant_slugs": [],
+        "platform_slugs": [],
+        "mcc_include": [],
+        "mcc_exclude": [],
+        "except_merchant_slugs": [],
+        "except_platform_slugs": [],
+        "block_inr": null,
+        "min_engine_version": 2,
+        "max_engine_version": null,
+        "source_local_id": "flexipay_exclusion",
+        "display_note": "Reward Points on transactions converted to Flexipay are reversed."
+      },
+      {
+        "id": "sbi-simplyclick:rule:merchant_emi_exclusion#1",
         "category_id": "cat-emi",
         "category_slug": "emi",
         "merchant_pattern": null,
-        "rail": "emi",
+        "rail": null,
         "unit": "points_per_100",
         "rate": 0,
         "min_txn_inr": null,
@@ -658,9 +719,11 @@
         "priority": 2,
         "conditions": {
           "source_local_id": "merchant_emi_exclusion",
-          "part": null,
+          "part": 1,
           "info_reasons": [],
-          "flags": []
+          "flags": [
+            "emi_alternatives"
+          ]
         },
         "notes": null,
         "effective_from": "2020-11-20",
@@ -675,6 +738,42 @@
         "except_platform_slugs": [],
         "block_inr": null,
         "min_engine_version": 1,
+        "max_engine_version": null,
+        "source_local_id": "merchant_emi_exclusion",
+        "display_note": "Reward Points on Merchant EMI transactions are reversed."
+      },
+      {
+        "id": "sbi-simplyclick:rule:merchant_emi_exclusion#2",
+        "category_id": null,
+        "category_slug": null,
+        "merchant_pattern": null,
+        "rail": "emi",
+        "unit": "points_per_100",
+        "rate": 0,
+        "min_txn_inr": null,
+        "max_txn_inr": null,
+        "priority": 2,
+        "conditions": {
+          "source_local_id": "merchant_emi_exclusion",
+          "part": 2,
+          "info_reasons": [],
+          "flags": [
+            "emi_alternatives"
+          ]
+        },
+        "notes": null,
+        "effective_from": "2020-11-20",
+        "effective_to": null,
+        "excluded_categories": [],
+        "rule_role": "exclusion",
+        "merchant_slugs": [],
+        "platform_slugs": [],
+        "mcc_include": [],
+        "mcc_exclude": [],
+        "except_merchant_slugs": [],
+        "except_platform_slugs": [],
+        "block_inr": null,
+        "min_engine_version": 2,
         "max_engine_version": null,
         "source_local_id": "merchant_emi_exclusion",
         "display_note": "Reward Points on Merchant EMI transactions are reversed."

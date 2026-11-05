@@ -186,7 +186,8 @@
           "value_sha256": "08831f31c1a5bffd",
           "reason": "WP7: Ledger deferral: \"mcc_range\" is not a key the loader reads, so the reduced 0.5 rate became info and government spends paid the base 3. The issuer reason says MCC 9000-9999; written as a range the loader expands.",
           "source_url": "https://www.idfcfirst.bank.in/credit-card/indigo-credit-card",
-          "checked_on": "2026-11-05"
+          "checked_on": "2026-11-05",
+          "citation": null
         }
       ]
     },

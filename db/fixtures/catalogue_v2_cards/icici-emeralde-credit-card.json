@@ -54,9 +54,19 @@
           "detail": null
         },
         {
+          "code": "emi_alternatives",
+          "source_local_id": "emi_zero_reward",
+          "detail": null
+        },
+        {
           "code": "info_rule",
           "source_local_id": "education_direct_standard",
           "detail": "condition:channel_type"
+        },
+        {
+          "code": "exclusion_rail_dropped",
+          "source_local_id": "education_third_party_zero_reward",
+          "detail": null
         },
         {
           "code": "exclusion_scope_broadened",
@@ -86,7 +96,8 @@
           "value_sha256": "1aa52872906045f3",
           "reason": "MITC says reward points accrued per statement cycle are capped on transportation.",
           "source_url": "https://www.icicibank.com/managed-assets/docs/personal/cards/mitc_cc.pdf",
-          "checked_on": "2026-11-05"
+          "checked_on": "2026-11-05",
+          "citation": null
         }
       ]
     },
@@ -582,11 +593,11 @@
         "display_note": "Cash withdrawals do not earn Reward Points."
       },
       {
-        "id": "icici-emeralde-credit-card:rule:emi_zero_reward",
+        "id": "icici-emeralde-credit-card:rule:emi_zero_reward#1",
         "category_id": "cat-emi",
         "category_slug": "emi",
         "merchant_pattern": null,
-        "rail": "emi",
+        "rail": null,
         "unit": "points_per_100",
         "rate": 0,
         "min_txn_inr": null,
@@ -594,9 +605,11 @@
         "priority": 1,
         "conditions": {
           "source_local_id": "emi_zero_reward",
-          "part": null,
+          "part": 1,
           "info_reasons": [],
-          "flags": []
+          "flags": [
+            "emi_alternatives"
+          ]
         },
         "notes": null,
         "effective_from": "2026-01-15",
@@ -611,6 +624,42 @@
         "except_platform_slugs": [],
         "block_inr": null,
         "min_engine_version": 1,
+        "max_engine_version": null,
+        "source_local_id": "emi_zero_reward",
+        "display_note": "EMI transactions and transactions converted into EMI do not earn Reward Points."
+      },
+      {
+        "id": "icici-emeralde-credit-card:rule:emi_zero_reward#2",
+        "category_id": null,
+        "category_slug": null,
+        "merchant_pattern": null,
+        "rail": "emi",
+        "unit": "points_per_100",
+        "rate": 0,
+        "min_txn_inr": null,
+        "max_txn_inr": null,
+        "priority": 1,
+        "conditions": {
+          "source_local_id": "emi_zero_reward",
+          "part": 2,
+          "info_reasons": [],
+          "flags": [
+            "emi_alternatives"
+          ]
+        },
+        "notes": null,
+        "effective_from": "2026-01-15",
+        "effective_to": null,
+        "excluded_categories": [],
+        "rule_role": "exclusion",
+        "merchant_slugs": [],
+        "platform_slugs": [],
+        "mcc_include": [],
+        "mcc_exclude": [],
+        "except_merchant_slugs": [],
+        "except_platform_slugs": [],
+        "block_inr": null,
+        "min_engine_version": 2,
         "max_engine_version": null,
         "source_local_id": "emi_zero_reward",
         "display_note": "EMI transactions and transactions converted into EMI do not earn Reward Points."
@@ -656,7 +705,7 @@
         "category_id": "cat-education",
         "category_slug": "education",
         "merchant_pattern": null,
-        "rail": "online",
+        "rail": null,
         "unit": "points_per_100",
         "rate": 0,
         "min_txn_inr": null,
@@ -667,6 +716,7 @@
           "part": null,
           "info_reasons": [],
           "flags": [
+            "exclusion_rail_dropped",
             "exclusion_scope_broadened"
           ]
         },

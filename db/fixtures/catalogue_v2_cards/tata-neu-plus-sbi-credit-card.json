@@ -129,6 +129,11 @@
           "detail": "unrestricted_exclusion"
         },
         {
+          "code": "emi_alternatives",
+          "source_local_id": "exclude-flexipay",
+          "detail": null
+        },
+        {
           "code": "broad_exclusion_v1_only",
           "source_local_id": "exclude-gaming",
           "detail": null
@@ -151,7 +156,8 @@
           "value_sha256": "7af78ba28cf9ccb3",
           "reason": "SBI caps NeuCoins per category per month.",
           "source_url": "https://www.sbicard.com/sbi-card-en/assets/docs/pdf/ekit-tncs/Tata-Neu-Plus-Booklet.pdf",
-          "checked_on": "2026-11-05"
+          "checked_on": "2026-11-05",
+          "citation": null
         },
         {
           "path": "cap_rules[id=insurance-neucoins-cap].metric",
@@ -159,7 +165,8 @@
           "value_sha256": "7af78ba28cf9ccb3",
           "reason": "SBI caps NeuCoins per category per month.",
           "source_url": "https://www.sbicard.com/sbi-card-en/assets/docs/pdf/ekit-tncs/Tata-Neu-Plus-Booklet.pdf",
-          "checked_on": "2026-11-05"
+          "checked_on": "2026-11-05",
+          "citation": null
         },
         {
           "path": "cap_rules[id=utility-neucoins-cap].metric",
@@ -167,7 +174,8 @@
           "value_sha256": "7af78ba28cf9ccb3",
           "reason": "SBI caps NeuCoins per category per month.",
           "source_url": "https://www.sbicard.com/sbi-card-en/assets/docs/pdf/ekit-tncs/Tata-Neu-Plus-Booklet.pdf",
-          "checked_on": "2026-11-05"
+          "checked_on": "2026-11-05",
+          "citation": null
         },
         {
           "path": "cap_rules[id=telecom-cable-neucoins-cap].metric",
@@ -175,7 +183,8 @@
           "value_sha256": "7af78ba28cf9ccb3",
           "reason": "SBI caps NeuCoins per category per month.",
           "source_url": "https://www.sbicard.com/sbi-card-en/assets/docs/pdf/ekit-tncs/Tata-Neu-Plus-Booklet.pdf",
-          "checked_on": "2026-11-05"
+          "checked_on": "2026-11-05",
+          "citation": null
         },
         {
           "path": "cap_rules[id=grocery-neucoins-cap].post_limit_behavior.action",
@@ -183,7 +192,8 @@
           "value_sha256": "b1b0e5d61df2ff9a",
           "reason": "Nothing earned above the cap.",
           "source_url": "https://www.sbicard.com/sbi-card-en/assets/docs/pdf/ekit-tncs/Tata-Neu-Plus-Booklet.pdf",
-          "checked_on": "2026-11-05"
+          "checked_on": "2026-11-05",
+          "citation": null
         },
         {
           "path": "cap_rules[id=insurance-neucoins-cap].post_limit_behavior.action",
@@ -191,7 +201,8 @@
           "value_sha256": "b1b0e5d61df2ff9a",
           "reason": "Nothing earned above the cap.",
           "source_url": "https://www.sbicard.com/sbi-card-en/assets/docs/pdf/ekit-tncs/Tata-Neu-Plus-Booklet.pdf",
-          "checked_on": "2026-11-05"
+          "checked_on": "2026-11-05",
+          "citation": null
         },
         {
           "path": "cap_rules[id=utility-neucoins-cap].post_limit_behavior.action",
@@ -199,7 +210,8 @@
           "value_sha256": "b1b0e5d61df2ff9a",
           "reason": "Nothing earned above the cap.",
           "source_url": "https://www.sbicard.com/sbi-card-en/assets/docs/pdf/ekit-tncs/Tata-Neu-Plus-Booklet.pdf",
-          "checked_on": "2026-11-05"
+          "checked_on": "2026-11-05",
+          "citation": null
         },
         {
           "path": "cap_rules[id=telecom-cable-neucoins-cap].post_limit_behavior.action",
@@ -207,7 +219,8 @@
           "value_sha256": "b1b0e5d61df2ff9a",
           "reason": "Nothing earned above the cap.",
           "source_url": "https://www.sbicard.com/sbi-card-en/assets/docs/pdf/ekit-tncs/Tata-Neu-Plus-Booklet.pdf",
-          "checked_on": "2026-11-05"
+          "checked_on": "2026-11-05",
+          "citation": null
         },
         {
           "path": "accrual_engine.rounding_mode",
@@ -215,7 +228,8 @@
           "value_sha256": "b3c132a10399a05e",
           "reason": "Issuer rounds the exact-amount NeuCoins down to a whole number (D7).",
           "source_url": "https://www.sbicard.com/sbi-card-en/assets/docs/pdf/ekit-tncs/Tata-Neu-Plus-Booklet.pdf",
-          "checked_on": "2026-11-05"
+          "checked_on": "2026-11-05",
+          "citation": null
         },
         {
           "path": "reward_rules[id=base-other-eligible-spends].conditions",
@@ -223,7 +237,8 @@
           "value_sha256": "bea29710a0319372",
           "reason": "WP7: \"exclude_reward_exclusions\" restates the card's exclusion rules; \"exclude_emi\" kept as an excluded category. The rule pays the base 1% the implicit base already paid, so nothing widens; it was an info earning rule.",
           "source_url": "https://www.sbicard.com/sbi-card-en/assets/docs/pdf/ekit-tncs/Tata-Neu-Plus-Booklet.pdf",
-          "checked_on": "2026-11-05"
+          "checked_on": "2026-11-05",
+          "citation": null
         },
         {
           "path": "reward_rules[id=rupay-upi-1pct].conditions.network",
@@ -231,7 +246,8 @@
           "value_sha256": "74234e98afe7498f",
           "reason": "WP7: Replaced by card_variant below: UPI earn applies only to the RuPay variant of the card (research note).",
           "source_url": "https://www.sbicard.com/sbi-card-en/assets/docs/pdf/ekit-tncs/Tata-Neu-Plus-Booklet.pdf",
-          "checked_on": "2026-11-05"
+          "checked_on": "2026-11-05",
+          "citation": null
         },
         {
           "path": "reward_rules[id=rupay-upi-1pct].conditions.card_variant",
@@ -239,7 +255,8 @@
           "value_sha256": "a862b80783ac5b88",
           "reason": "WP7: D13b: the rule depends on which card variant the user holds (RuPay only), a user attribute the context does not carry; stays info with depends_on_user_attribute.",
           "source_url": "https://www.sbicard.com/sbi-card-en/assets/docs/pdf/ekit-tncs/Tata-Neu-Plus-Booklet.pdf",
-          "checked_on": "2026-11-05"
+          "checked_on": "2026-11-05",
+          "citation": null
         },
         {
           "path": "reward_rules[id=tata-neu-partner-brands-2pct].conditions.eligible_partner_brands",
@@ -247,7 +264,8 @@
           "value_sha256": "cd2b55424d900c12",
           "reason": "WP7: T&C 11.3(b)/(d): value back on \"spends on Tata Neu App/Website and partner Tata Brands\" (Air India & AI Express, Big Basket, Tata Cliq, Taj, Tata 1MG, Titan & Tanishq, Croma, Westside, Qmin). One list feeds the partner rule and its UPI carve-out, so they always cover the same merchants.",
           "source_url": "https://www.sbicard.com/sbi-card-en/assets/docs/pdf/ekit-tncs/Tata-Neu-Plus-Booklet.pdf",
-          "checked_on": "2026-11-05"
+          "checked_on": "2026-11-05",
+          "citation": null
         },
         {
           "path": "reward_rules[id=tata-neu-partner-brands-2pct].channel_type",
@@ -255,7 +273,8 @@
           "value_sha256": "5cf7504d9781301d",
           "reason": "WP7: Tata Neu is now in the brand list itself (it was only implied by the channel text).",
           "source_url": "https://www.sbicard.com/sbi-card-en/assets/docs/pdf/ekit-tncs/Tata-Neu-Plus-Booklet.pdf",
-          "checked_on": "2026-11-05"
+          "checked_on": "2026-11-05",
+          "citation": null
         },
         {
           "path": "reward_rules",
@@ -263,7 +282,8 @@
           "value_sha256": "ea3e4dcb8f40b0ea",
           "reason": "WP7: T&C 11.3(e): \"UPI Spends : Any UPI Spends on Rupay Credit Card (Including partner Tata Brands) : 1% back as NeuCoins\" - so the 2% partner rate must not apply on UPI.",
           "source_url": "https://www.sbicard.com/sbi-card-en/assets/docs/pdf/ekit-tncs/Tata-Neu-Plus-Booklet.pdf",
-          "checked_on": "2026-11-05"
+          "checked_on": "2026-11-05",
+          "citation": null
         },
         {
           "path": "reward_rules",
@@ -271,7 +291,8 @@
           "value_sha256": "f875ab007f65a078",
           "reason": "WP7: D25e: T&C 11.4(a) excludes \"Merchant EMI - Flexipay\" (Infinity) / \"Flexipay\" (Plus), and 11.6(e) forfeits NeuCoins when \"The transaction on which NeuCoins were accrued, got converted to EMI\". Rail-EMI exclusion on all spend, as on Millennia (the record's category emi AND rail emi row missed EMI in other categories).",
           "source_url": "https://www.sbicard.com/sbi-card-en/assets/docs/pdf/ekit-tncs/Tata-Neu-Plus-Booklet.pdf",
-          "checked_on": "2026-11-05"
+          "checked_on": "2026-11-05",
+          "citation": null
         },
         {
           "path": "reward_rules",
@@ -279,7 +300,8 @@
           "value_sha256": "3586e3be78712a67",
           "reason": "WP7: D25d: T&C 11.4 lists MCC 7349 with rent (6513) and education MCCs 5111, 5192, 5942, 5943, 5947, 8351 besides 8211-8299; the record carried only part of each list.",
           "source_url": "https://www.sbicard.com/sbi-card-en/assets/docs/pdf/ekit-tncs/Tata-Neu-Plus-Booklet.pdf",
-          "checked_on": "2026-11-05"
+          "checked_on": "2026-11-05",
+          "citation": null
         },
         {
           "path": "reward_rules",
@@ -287,7 +309,8 @@
           "value_sha256": "eaca59be20ec5085",
           "reason": "WP7: D25d: T&C 11.4(a) \"NeuCoins will not be accrued for Rental and Government related transactions\"; the record's rent row was MCC 6513 only, so a rent-category spend with another or no MCC earned.",
           "source_url": "https://www.sbicard.com/sbi-card-en/assets/docs/pdf/ekit-tncs/Tata-Neu-Plus-Booklet.pdf",
-          "checked_on": "2026-11-05"
+          "checked_on": "2026-11-05",
+          "citation": null
         }
       ]
     },
@@ -1073,11 +1096,11 @@
         "display_note": "Card fees and other charges do not earn NeuCoins."
       },
       {
-        "id": "tata-neu-plus-sbi-credit-card:rule:exclude-flexipay",
+        "id": "tata-neu-plus-sbi-credit-card:rule:exclude-flexipay#1",
         "category_id": "cat-emi",
         "category_slug": "emi",
         "merchant_pattern": null,
-        "rail": "emi",
+        "rail": null,
         "unit": "points_per_100",
         "rate": 0,
         "min_txn_inr": null,
@@ -1085,9 +1108,11 @@
         "priority": 9,
         "conditions": {
           "source_local_id": "exclude-flexipay",
-          "part": null,
+          "part": 1,
           "info_reasons": [],
-          "flags": []
+          "flags": [
+            "emi_alternatives"
+          ]
         },
         "notes": null,
         "effective_from": "2025-04-01",
@@ -1102,6 +1127,42 @@
         "except_platform_slugs": [],
         "block_inr": null,
         "min_engine_version": 1,
+        "max_engine_version": null,
+        "source_local_id": "exclude-flexipay",
+        "display_note": "Flexipay transactions do not earn NeuCoins."
+      },
+      {
+        "id": "tata-neu-plus-sbi-credit-card:rule:exclude-flexipay#2",
+        "category_id": null,
+        "category_slug": null,
+        "merchant_pattern": null,
+        "rail": "emi",
+        "unit": "points_per_100",
+        "rate": 0,
+        "min_txn_inr": null,
+        "max_txn_inr": null,
+        "priority": 9,
+        "conditions": {
+          "source_local_id": "exclude-flexipay",
+          "part": 2,
+          "info_reasons": [],
+          "flags": [
+            "emi_alternatives"
+          ]
+        },
+        "notes": null,
+        "effective_from": "2025-04-01",
+        "effective_to": null,
+        "excluded_categories": [],
+        "rule_role": "exclusion",
+        "merchant_slugs": [],
+        "platform_slugs": [],
+        "mcc_include": [],
+        "mcc_exclude": [],
+        "except_merchant_slugs": [],
+        "except_platform_slugs": [],
+        "block_inr": null,
+        "min_engine_version": 2,
         "max_engine_version": null,
         "source_local_id": "exclude-flexipay",
         "display_note": "Flexipay transactions do not earn NeuCoins."

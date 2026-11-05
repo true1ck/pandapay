@@ -74,6 +74,11 @@
           "detail": null
         },
         {
+          "code": "emi_alternatives",
+          "source_local_id": "exclusion-merchant-emi",
+          "detail": null
+        },
+        {
           "code": "exclusion_scope_broadened",
           "source_local_id": "exclusion-merchant-emi",
           "detail": null
@@ -440,11 +445,11 @@
         "display_note": "No Membership Rewards points on cash transactions/cash advances."
       },
       {
-        "id": "american-express-smartearn-credit-card-india:rule:exclusion-merchant-emi",
+        "id": "american-express-smartearn-credit-card-india:rule:exclusion-merchant-emi#1",
         "category_id": "cat-emi",
         "category_slug": "emi",
         "merchant_pattern": null,
-        "rail": "emi",
+        "rail": null,
         "unit": "points_per_100",
         "rate": 0,
         "min_txn_inr": null,
@@ -452,9 +457,10 @@
         "priority": 5,
         "conditions": {
           "source_local_id": "exclusion-merchant-emi",
-          "part": null,
+          "part": 1,
           "info_reasons": [],
           "flags": [
+            "emi_alternatives",
             "exclusion_scope_broadened"
           ]
         },
@@ -471,6 +477,43 @@
         "except_platform_slugs": [],
         "block_inr": null,
         "min_engine_version": 1,
+        "max_engine_version": null,
+        "source_local_id": "exclusion-merchant-emi",
+        "display_note": "No Membership Rewards points on EMI options selected from a merchant website or at a merchant terminal."
+      },
+      {
+        "id": "american-express-smartearn-credit-card-india:rule:exclusion-merchant-emi#2",
+        "category_id": null,
+        "category_slug": null,
+        "merchant_pattern": null,
+        "rail": "emi",
+        "unit": "points_per_100",
+        "rate": 0,
+        "min_txn_inr": null,
+        "max_txn_inr": null,
+        "priority": 5,
+        "conditions": {
+          "source_local_id": "exclusion-merchant-emi",
+          "part": 2,
+          "info_reasons": [],
+          "flags": [
+            "emi_alternatives",
+            "exclusion_scope_broadened"
+          ]
+        },
+        "notes": null,
+        "effective_from": "2020-02-01",
+        "effective_to": null,
+        "excluded_categories": [],
+        "rule_role": "exclusion",
+        "merchant_slugs": [],
+        "platform_slugs": [],
+        "mcc_include": [],
+        "mcc_exclude": [],
+        "except_merchant_slugs": [],
+        "except_platform_slugs": [],
+        "block_inr": null,
+        "min_engine_version": 2,
         "max_engine_version": null,
         "source_local_id": "exclusion-merchant-emi",
         "display_note": "No Membership Rewards points on EMI options selected from a merchant website or at a merchant terminal."

@@ -12,7 +12,7 @@
     },
     {
       "source_slug": "axis-atlas",
-      "examples_passed": 9,
+      "examples_passed": 10,
       "examples_not_checkable": 0,
       "checked_on": "2026-11-05"
     },
@@ -122,7 +122,7 @@
   "held_back": [
     {
       "source_slug": "hdfc-phonepe-uno",
-      "reason": "Examples pass, but its UPI Scan & Pay rule is still v1-visible, so v1 pays 1% on unknown-rail spends until WP2 lands D24b (UPI-rail earn rules v2-only). List after that merge."
+      "reason": "Held until WP2 landed D24b (UPI-rail earn rules v2-only). That condition is met since the WP2 merge (4b33990): its UPI Scan & Pay rule is v2-only, examples pass, no blocking flag. Kept held until the lead confirms the listing."
     }
   ]
 }

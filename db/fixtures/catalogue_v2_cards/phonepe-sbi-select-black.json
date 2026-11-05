@@ -97,6 +97,16 @@
           "detail": "unrestricted_exclusion"
         },
         {
+          "code": "emi_alternatives",
+          "source_local_id": "flexipay-exclusion",
+          "detail": null
+        },
+        {
+          "code": "emi_alternatives",
+          "source_local_id": "merchant-emi-exclusion",
+          "detail": null
+        },
+        {
           "code": "info_rule",
           "source_local_id": "encash-exclusion",
           "detail": "unrestricted_exclusion"
@@ -119,7 +129,8 @@
           "value_sha256": "7af78ba28cf9ccb3",
           "reason": "SBI limits total RPs per spend type per calendar month.",
           "source_url": "https://www.sbicard.com/sbi-card-en/assets/media/images/personal/credit-cards/rewards/phonepe/tnc/RP-tnc.pdf",
-          "checked_on": "2026-11-05"
+          "checked_on": "2026-11-05",
+          "citation": null
         },
         {
           "path": "cap_rules[id=phonepe-insurance-monthly].metric",
@@ -127,7 +138,8 @@
           "value_sha256": "7af78ba28cf9ccb3",
           "reason": "SBI limits total RPs per spend type per calendar month.",
           "source_url": "https://www.sbicard.com/sbi-card-en/assets/media/images/personal/credit-cards/rewards/phonepe/tnc/RP-tnc.pdf",
-          "checked_on": "2026-11-05"
+          "checked_on": "2026-11-05",
+          "citation": null
         },
         {
           "path": "cap_rules[id=online-monthly].metric",
@@ -135,7 +147,8 @@
           "value_sha256": "7af78ba28cf9ccb3",
           "reason": "SBI limits total RPs per spend type per calendar month.",
           "source_url": "https://www.sbicard.com/sbi-card-en/assets/media/images/personal/credit-cards/rewards/phonepe/tnc/RP-tnc.pdf",
-          "checked_on": "2026-11-05"
+          "checked_on": "2026-11-05",
+          "citation": null
         },
         {
           "path": "cap_rules[id=phonepe-insurance-monthly].parent_cap_id",
@@ -143,7 +156,8 @@
           "value_sha256": "74234e98afe7498f",
           "reason": "Insurance (500) is a separate limit from non-insurance PhonePe spends (1,500).",
           "source_url": "https://www.sbicard.com/sbi-card-en/assets/media/images/personal/credit-cards/rewards/phonepe/tnc/RP-tnc.pdf",
-          "checked_on": "2026-11-05"
+          "checked_on": "2026-11-05",
+          "citation": null
         },
         {
           "path": "reward_rules[id=utilities-outside-phonepe-base].evaluation_type",
@@ -151,7 +165,8 @@
           "value_sha256": "2e1734d865b187db",
           "reason": "WP7: Revision notice eff. 1 Jul 2026, \"REWARD POINTS EXCLUSION\": Reward Points will not accrue on \"Utilities (non-PhonePe App spends) 4900, 4814, 4899\".",
           "source_url": "https://www.sbicard.com/sbi-card-en/assets/docs/pdf/ekit-tncs/PhonePe-Black-pdf-27Apr2026.pdf",
-          "checked_on": "2026-11-05"
+          "checked_on": "2026-11-05",
+          "citation": null
         },
         {
           "path": "reward_rules[id=utilities-outside-phonepe-base].action",
@@ -159,7 +174,8 @@
           "value_sha256": "2d79f003377daad8",
           "reason": "WP7: Exclusion, not base earn (same revision notice).",
           "source_url": "https://www.sbicard.com/sbi-card-en/assets/docs/pdf/ekit-tncs/PhonePe-Black-pdf-27Apr2026.pdf",
-          "checked_on": "2026-11-05"
+          "checked_on": "2026-11-05",
+          "citation": null
         },
         {
           "path": "reward_rules[id=insurance-outside-phonepe-base].evaluation_type",
@@ -167,7 +183,8 @@
           "value_sha256": "2e1734d865b187db",
           "reason": "WP7: Revision notice eff. 1 Jul 2026: Reward Points will not accrue on \"Insurance (non-PhonePe App spends) 5960, 6300, 6380\".",
           "source_url": "https://www.sbicard.com/sbi-card-en/assets/docs/pdf/ekit-tncs/PhonePe-Black-pdf-27Apr2026.pdf",
-          "checked_on": "2026-11-05"
+          "checked_on": "2026-11-05",
+          "citation": null
         },
         {
           "path": "reward_rules[id=insurance-outside-phonepe-base].action",
@@ -175,7 +192,8 @@
           "value_sha256": "4e29ea75d877328b",
           "reason": "WP7: Exclusion, not base earn (same revision notice).",
           "source_url": "https://www.sbicard.com/sbi-card-en/assets/docs/pdf/ekit-tncs/PhonePe-Black-pdf-27Apr2026.pdf",
-          "checked_on": "2026-11-05"
+          "checked_on": "2026-11-05",
+          "citation": null
         },
         {
           "path": "reward_rules[id=phonepe-10x].conditions.cap_insurance",
@@ -183,7 +201,8 @@
           "value_sha256": "74234e98afe7498f",
           "reason": "WP7: The insurance cap moves to the new phonepe-10x-insurance rule; this key linked it to the non-insurance rows.",
           "source_url": "https://www.sbicard.com/sbi-card-en/assets/docs/pdf/ekit-tncs/PhonePe-Black-pdf-27Apr2026.pdf",
-          "checked_on": "2026-11-05"
+          "checked_on": "2026-11-05",
+          "citation": null
         },
         {
           "path": "reward_rules[id=phonepe-10x].conditions.eligible_categories",
@@ -191,7 +210,8 @@
           "value_sha256": "63ea65ed94395a1f",
           "reason": "WP7: Insurance in the PhonePe app has its own 500 RP cap, separate from the 1,500 RP non-insurance cap (revision notice); split into phonepe-10x-insurance so the non-insurance cap never counts it.",
           "source_url": "https://www.sbicard.com/sbi-card-en/assets/docs/pdf/ekit-tncs/PhonePe-Black-pdf-27Apr2026.pdf",
-          "checked_on": "2026-11-05"
+          "checked_on": "2026-11-05",
+          "citation": null
         },
         {
           "path": "reward_rules",
@@ -199,7 +219,8 @@
           "value_sha256": "02ba3cccda3ab94c",
           "reason": "WP7: Revision notice: \"Max. 500 RPs on Insurance Spends\" for eligible PhonePe spends, separate from \"Max. 1,500 RPs on Other Spends\".",
           "source_url": "https://www.sbicard.com/sbi-card-en/assets/docs/pdf/ekit-tncs/PhonePe-Black-pdf-27Apr2026.pdf",
-          "checked_on": "2026-11-05"
+          "checked_on": "2026-11-05",
+          "citation": null
         },
         {
           "path": "reward_rules",
@@ -207,7 +228,8 @@
           "value_sha256": "906f65db73df3af0",
           "reason": "WP7: D28c: Reward Program T&C exclusions: \"Flexipay Transactions\" and \"Merchant EMI i.e. EMI's availed at the time of purchase at Merchant establishment or websites\". The record's EMI row needs category emi AND rail emi, so an EMI purchase in another category earned. Rail-EMI exclusion on all spend.",
           "source_url": "https://www.sbicard.com/sbi-card-en/assets/media/images/personal/credit-cards/rewards/phonepe/tnc/RP-tnc.pdf",
-          "checked_on": "2026-11-05"
+          "checked_on": "2026-11-05",
+          "citation": null
         }
       ]
     },
@@ -1513,11 +1535,11 @@
         "display_note": "No Reward Points on Balance Transfer transactions."
       },
       {
-        "id": "phonepe-sbi-select-black:rule:flexipay-exclusion",
+        "id": "phonepe-sbi-select-black:rule:flexipay-exclusion#1",
         "category_id": "cat-emi",
         "category_slug": "emi",
         "merchant_pattern": null,
-        "rail": "emi",
+        "rail": null,
         "unit": "points_per_100",
         "rate": 0,
         "min_txn_inr": null,
@@ -1525,9 +1547,11 @@
         "priority": 22,
         "conditions": {
           "source_local_id": "flexipay-exclusion",
-          "part": null,
+          "part": 1,
           "info_reasons": [],
-          "flags": []
+          "flags": [
+            "emi_alternatives"
+          ]
         },
         "notes": null,
         "effective_from": "2025-07-22",
@@ -1547,11 +1571,47 @@
         "display_note": "No Reward Points on Flexipay transactions."
       },
       {
-        "id": "phonepe-sbi-select-black:rule:merchant-emi-exclusion",
+        "id": "phonepe-sbi-select-black:rule:flexipay-exclusion#2",
+        "category_id": null,
+        "category_slug": null,
+        "merchant_pattern": null,
+        "rail": "emi",
+        "unit": "points_per_100",
+        "rate": 0,
+        "min_txn_inr": null,
+        "max_txn_inr": null,
+        "priority": 22,
+        "conditions": {
+          "source_local_id": "flexipay-exclusion",
+          "part": 2,
+          "info_reasons": [],
+          "flags": [
+            "emi_alternatives"
+          ]
+        },
+        "notes": null,
+        "effective_from": "2025-07-22",
+        "effective_to": null,
+        "excluded_categories": [],
+        "rule_role": "exclusion",
+        "merchant_slugs": [],
+        "platform_slugs": [],
+        "mcc_include": [],
+        "mcc_exclude": [],
+        "except_merchant_slugs": [],
+        "except_platform_slugs": [],
+        "block_inr": null,
+        "min_engine_version": 2,
+        "max_engine_version": null,
+        "source_local_id": "flexipay-exclusion",
+        "display_note": "No Reward Points on Flexipay transactions."
+      },
+      {
+        "id": "phonepe-sbi-select-black:rule:merchant-emi-exclusion#1",
         "category_id": "cat-emi",
         "category_slug": "emi",
         "merchant_pattern": null,
-        "rail": "emi",
+        "rail": null,
         "unit": "points_per_100",
         "rate": 0,
         "min_txn_inr": null,
@@ -1559,9 +1619,11 @@
         "priority": 23,
         "conditions": {
           "source_local_id": "merchant-emi-exclusion",
-          "part": null,
+          "part": 1,
           "info_reasons": [],
-          "flags": []
+          "flags": [
+            "emi_alternatives"
+          ]
         },
         "notes": null,
         "effective_from": "2025-07-22",
@@ -1576,6 +1638,42 @@
         "except_platform_slugs": [],
         "block_inr": null,
         "min_engine_version": 1,
+        "max_engine_version": null,
+        "source_local_id": "merchant-emi-exclusion",
+        "display_note": "No Reward Points on Merchant EMI transactions."
+      },
+      {
+        "id": "phonepe-sbi-select-black:rule:merchant-emi-exclusion#2",
+        "category_id": null,
+        "category_slug": null,
+        "merchant_pattern": null,
+        "rail": "emi",
+        "unit": "points_per_100",
+        "rate": 0,
+        "min_txn_inr": null,
+        "max_txn_inr": null,
+        "priority": 23,
+        "conditions": {
+          "source_local_id": "merchant-emi-exclusion",
+          "part": 2,
+          "info_reasons": [],
+          "flags": [
+            "emi_alternatives"
+          ]
+        },
+        "notes": null,
+        "effective_from": "2025-07-22",
+        "effective_to": null,
+        "excluded_categories": [],
+        "rule_role": "exclusion",
+        "merchant_slugs": [],
+        "platform_slugs": [],
+        "mcc_include": [],
+        "mcc_exclude": [],
+        "except_merchant_slugs": [],
+        "except_platform_slugs": [],
+        "block_inr": null,
+        "min_engine_version": 2,
         "max_engine_version": null,
         "source_local_id": "merchant-emi-exclusion",
         "display_note": "No Reward Points on Merchant EMI transactions."

@@ -37,6 +37,11 @@
           "detail": null
         },
         {
+          "code": "exception_from_negated_token",
+          "source_local_id": "ace-exclude-utility-non-gpay",
+          "detail": null
+        },
+        {
           "code": "mcc_scoped_exclusion",
           "source_local_id": "ace-exclude-utility-non-gpay",
           "detail": null
@@ -89,7 +94,8 @@
           "value_sha256": "7af78ba28cf9ccb3",
           "reason": "Cap is on cashback (Rs 500 combined for 5% and 4% categories per statement), not on eligible spend.",
           "source_url": "https://www.axis.bank.in/docs/default-source/default-document-library/credit-card/axis-bank-ace-credit-card-tncs.pdf",
-          "checked_on": "2026-11-05"
+          "checked_on": "2026-11-05",
+          "citation": null
         },
         {
           "path": "cap_rules[id=ace-accelerated-cashback-500].limit_value",
@@ -97,7 +103,8 @@
           "value_sha256": "0604cd3138feed20",
           "reason": "Native cashback amount in rupees.",
           "source_url": "https://www.axis.bank.in/docs/default-source/default-document-library/credit-card/axis-bank-ace-credit-card-tncs.pdf",
-          "checked_on": "2026-11-05"
+          "checked_on": "2026-11-05",
+          "citation": null
         },
         {
           "path": "cap_rules[id=ace-accelerated-cashback-500].limit_value_inr",
@@ -105,7 +112,8 @@
           "value_sha256": "0604cd3138feed20",
           "reason": "Was 10000 (spend); issuer cap is Rs 500 cashback.",
           "source_url": "https://www.axis.bank.in/docs/default-source/default-document-library/credit-card/axis-bank-ace-credit-card-tncs.pdf",
-          "checked_on": "2026-11-05"
+          "checked_on": "2026-11-05",
+          "citation": null
         },
         {
           "path": "accrual_engine.cashback_rounding",
@@ -113,7 +121,8 @@
           "value_sha256": "e98088164cee2b8c",
           "reason": "Cashback is rounded to the nearest rupee per transaction (17.25 -> 17, 18.75 -> 19).",
           "source_url": "https://www.axis.bank.in/docs/default-source/default-document-library/credit-card/axis-bank-ace-credit-card-tncs.pdf",
-          "checked_on": "2026-11-05"
+          "checked_on": "2026-11-05",
+          "citation": null
         },
         {
           "path": "reward_rules[id=ace-gpay-utility-5pct].conditions",
@@ -121,7 +130,8 @@
           "value_sha256": "afcac98be6e21cad",
           "reason": "WP7: The eligible-category names (postpaid, DTH, electricity ...) are the utility MCCs the issuer uses for the Google Pay rule (4814/4816/4899/4900, as in ace-exclude-utility-non-gpay); the free-text payment requirement restated Google Pay. Rule was info.",
           "source_url": "https://www.axis.bank.in/docs/default-source/default-document-library/credit-card/axis-bank-ace-credit-card-tncs.pdf",
-          "checked_on": "2026-11-05"
+          "checked_on": "2026-11-05",
+          "citation": null
         },
         {
           "path": "cap_rules[id=ace-accelerated-cashback-500].post_limit_behavior",
@@ -129,7 +139,8 @@
           "value_sha256": "74234e98afe7498f",
           "reason": "WP7: Total cashback cap (override); what spend over the cap earns is not stated (research note), so no fallback.",
           "source_url": "https://www.axis.bank.in/docs/default-source/default-document-library/credit-card/axis-bank-ace-credit-card-tncs.pdf",
-          "checked_on": "2026-11-05"
+          "checked_on": "2026-11-05",
+          "citation": null
         }
       ]
     },
@@ -269,6 +280,7 @@
           "part": 1,
           "info_reasons": [],
           "flags": [
+            "exception_from_negated_token",
             "mcc_scoped_exclusion"
           ]
         },
@@ -307,6 +319,7 @@
           "part": 2,
           "info_reasons": [],
           "flags": [
+            "exception_from_negated_token",
             "mcc_scoped_exclusion"
           ]
         },
@@ -350,6 +363,7 @@
           "part": 3,
           "info_reasons": [],
           "flags": [
+            "exception_from_negated_token",
             "mcc_scoped_exclusion"
           ]
         },

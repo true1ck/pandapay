@@ -119,7 +119,8 @@
           "value_sha256": "7af78ba28cf9ccb3",
           "reason": "Issuer cap is Rs 1,200 of cashback on the 10% tier.",
           "source_url": "https://www.hsbc.bank.in/credit-cards/products/live-plus/",
-          "checked_on": "2026-11-05"
+          "checked_on": "2026-11-05",
+          "citation": null
         },
         {
           "path": "cap_rules[id=liveplus-accelerated-cap].limit_value",
@@ -127,7 +128,8 @@
           "value_sha256": "15197cf7214b58e6",
           "reason": "Native cashback amount.",
           "source_url": "https://www.hsbc.bank.in/credit-cards/products/live-plus/",
-          "checked_on": "2026-11-05"
+          "checked_on": "2026-11-05",
+          "citation": null
         },
         {
           "path": "cap_rules[id=liveplus-accelerated-cap].limit_value_inr",
@@ -135,7 +137,8 @@
           "value_sha256": "15197cf7214b58e6",
           "reason": "Was 10000 of spend.",
           "source_url": "https://www.hsbc.bank.in/credit-cards/products/live-plus/",
-          "checked_on": "2026-11-05"
+          "checked_on": "2026-11-05",
+          "citation": null
         },
         {
           "path": "cap_rules[id=liveplus-accelerated-cap].period",
@@ -143,7 +146,8 @@
           "value_sha256": "90d558c7c6a21aa1",
           "reason": "Issuer says \"a month\".",
           "source_url": "https://www.hsbc.bank.in/credit-cards/products/live-plus/",
-          "checked_on": "2026-11-05"
+          "checked_on": "2026-11-05",
+          "citation": null
         },
         {
           "path": "cap_rules[id=liveplus-accelerated-cap].post_limit_behavior.action",
@@ -151,7 +155,8 @@
           "value_sha256": "b1b0e5d61df2ff9a",
           "reason": "Worked example shows no further cashback on the capped tier.",
           "source_url": "https://www.hsbc.bank.in/credit-cards/products/live-plus/",
-          "checked_on": "2026-11-05"
+          "checked_on": "2026-11-05",
+          "citation": null
         }
       ]
     },

@@ -47,6 +47,11 @@
           "detail": null
         },
         {
+          "code": "exclusion_rail_dropped",
+          "source_local_id": "wallet_load_exclusion",
+          "detail": null
+        },
+        {
           "code": "mcc_scoped_exclusion",
           "source_local_id": "wallet_load_exclusion",
           "detail": null
@@ -69,7 +74,8 @@
           "value_sha256": "7eb8bc431ee35297",
           "reason": "Points rounded to nearest integer per transaction.",
           "source_url": "https://www.icici.bank.in/managed-assets/docs/terms-condition/hpcl-super-saver-credit-card-tnc.pdf",
-          "checked_on": "2026-11-05"
+          "checked_on": "2026-11-05",
+          "citation": null
         },
         {
           "path": "cap_rules[id=fuel_cashback_monthly_cap].metric",
@@ -77,7 +83,8 @@
           "value_sha256": "7af78ba28cf9ccb3",
           "reason": "Cap is Rs 200 of cashback per month.",
           "source_url": "https://www.icici.bank.in/managed-assets/docs/terms-condition/hpcl-super-saver-credit-card-tnc.pdf",
-          "checked_on": "2026-11-05"
+          "checked_on": "2026-11-05",
+          "citation": null
         },
         {
           "path": "cap_rules[id=fuel_cashback_monthly_cap].limit_value",
@@ -85,7 +92,8 @@
           "value_sha256": "27badc983df1780b",
           "reason": "Native unit: Rs 200 cashback.",
           "source_url": "https://www.icici.bank.in/managed-assets/docs/terms-condition/hpcl-super-saver-credit-card-tnc.pdf",
-          "checked_on": "2026-11-05"
+          "checked_on": "2026-11-05",
+          "citation": null
         },
         {
           "path": "cap_rules[id=fuel_cashback_monthly_cap].period",
@@ -93,7 +101,8 @@
           "value_sha256": "90d558c7c6a21aa1",
           "reason": "T&C say per month.",
           "source_url": "https://www.icici.bank.in/managed-assets/docs/terms-condition/hpcl-super-saver-credit-card-tnc.pdf",
-          "checked_on": "2026-11-05"
+          "checked_on": "2026-11-05",
+          "citation": null
         },
         {
           "path": "cap_rules[id=daily_essentials_reward_cap].metric",
@@ -101,7 +110,8 @@
           "value_sha256": "7af78ba28cf9ccb3",
           "reason": "The 400-point cap is on the whole accelerated benefit.",
           "source_url": "https://www.icici.bank.in/managed-assets/docs/terms-condition/hpcl-super-saver-credit-card-tnc.pdf",
-          "checked_on": "2026-11-05"
+          "checked_on": "2026-11-05",
+          "citation": null
         },
         {
           "path": "reward_rules[id=fuel_reward_points_exclusion].conditions.not_merchant",
@@ -109,7 +119,8 @@
           "value_sha256": "5ae3bdd028411676",
           "reason": "WP7: T&C: 4% cashback on HPCL fuel (capped at Rs200 per month); the reward-point exclusion on fuel must not block HPCL fuel cashback (D16a except list).",
           "source_url": "https://www.icici.bank.in/managed-assets/docs/terms-condition/hpcl-super-saver-credit-card-tnc.pdf",
-          "checked_on": "2026-11-05"
+          "checked_on": "2026-11-05",
+          "citation": null
         },
         {
           "path": "cap_rules[id=daily_essentials_reward_cap].post_limit_behavior",
@@ -117,7 +128,8 @@
           "value_sha256": "74234e98afe7498f",
           "reason": "WP7: Total cap of 400 accelerated points per cycle (override); what follows after the cap is not stated (research note).",
           "source_url": "https://www.icici.bank.in/managed-assets/docs/terms-condition/hpcl-super-saver-credit-card-tnc.pdf",
-          "checked_on": "2026-11-05"
+          "checked_on": "2026-11-05",
+          "citation": null
         }
       ]
     },
@@ -563,7 +575,7 @@
         "category_id": "cat-wallet",
         "category_slug": "wallet",
         "merchant_pattern": null,
-        "rail": "online",
+        "rail": null,
         "unit": "points_per_100",
         "rate": 0,
         "min_txn_inr": null,
@@ -574,6 +586,7 @@
           "part": 1,
           "info_reasons": [],
           "flags": [
+            "exclusion_rail_dropped",
             "mcc_scoped_exclusion"
           ]
         },
@@ -599,7 +612,7 @@
         "category_id": "cat-wallet",
         "category_slug": "wallet",
         "merchant_pattern": null,
-        "rail": "online",
+        "rail": null,
         "unit": "points_per_100",
         "rate": 0,
         "min_txn_inr": null,
@@ -610,6 +623,7 @@
           "part": 2,
           "info_reasons": [],
           "flags": [
+            "exclusion_rail_dropped",
             "mcc_scoped_exclusion"
           ]
         },
@@ -637,7 +651,7 @@
         "category_id": null,
         "category_slug": null,
         "merchant_pattern": null,
-        "rail": "online",
+        "rail": null,
         "unit": "points_per_100",
         "rate": 0,
         "min_txn_inr": null,
@@ -648,6 +662,7 @@
           "part": 3,
           "info_reasons": [],
           "flags": [
+            "exclusion_rail_dropped",
             "mcc_scoped_exclusion"
           ]
         },

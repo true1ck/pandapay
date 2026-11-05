@@ -70,6 +70,11 @@
           "code": "partial_merchant_list",
           "source_local_id": "excluded_non_mcc_transactions",
           "detail": null
+        },
+        {
+          "code": "unresolved_merchant_alternative",
+          "source_local_id": "excluded_non_mcc_transactions",
+          "detail": null
         }
       ],
       "overrides_applied": [
@@ -79,7 +84,8 @@
           "value_sha256": "657bf85a75fa70bf",
           "reason": "Cashback is rounded down to a whole rupee per transaction (D11).",
           "source_url": "https://www.sbicard.com/sbi-card-en/assets/docs/pdf/ekit-tncs/Flipkart-SBI-CreditCard-TandC-Booklet.pdf",
-          "checked_on": "2026-11-05"
+          "checked_on": "2026-11-05",
+          "citation": null
         },
         {
           "path": "reward_rules",
@@ -87,7 +93,8 @@
           "value_sha256": "752888984661d673",
           "reason": "WP7: The record's own exclusion excluded_non_mcc_transactions lists \"merchant EMI transaction\" and \"Flexipay transaction\", but the loader keeps only names it can resolve (partial_merchant_list), so EMI was dropped. Restated as a rail-emi exclusion.",
           "source_url": "https://www.sbicard.com/sbi-card-en/assets/docs/pdf/ekit-tncs/Flipkart-SBI-CreditCard-TandC-Booklet.pdf",
-          "checked_on": "2026-11-05"
+          "checked_on": "2026-11-05",
+          "citation": null
         }
       ]
     },
@@ -1121,7 +1128,8 @@
           "part": null,
           "info_reasons": [],
           "flags": [
-            "partial_merchant_list"
+            "partial_merchant_list",
+            "unresolved_merchant_alternative"
           ]
         },
         "notes": null,

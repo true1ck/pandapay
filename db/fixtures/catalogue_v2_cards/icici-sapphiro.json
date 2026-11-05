@@ -95,7 +95,8 @@
           "value_sha256": "44136fa355b3678a",
           "reason": "WP7: The condition restated the grocery/departmental category; the rule earns the domestic rate and carries the Rs40,000 grocery cap (MITC capped-MCC table). Rule was info, so the cap never applied.",
           "source_url": "https://www.icicibank.com/managed-assets/docs/personal/cards/mitc_cc.pdf",
-          "checked_on": "2026-11-05"
+          "checked_on": "2026-11-05",
+          "citation": null
         },
         {
           "path": "reward_rules",
@@ -103,7 +104,8 @@
           "value_sha256": "32c62aed87e7ff47",
           "reason": "WP7: D25d: ICICI MITC: \"No reward points will be provided for transactions falling under the E-Wallet Reload category\" (Third Party Wallets - 6540) and \"... the Cash and Rent categories\". The card excluded these by category only; MCC rows catch them in any category.",
           "source_url": "https://www.icici.bank.in/managed-assets/docs/personal/cards/mitc_cc.pdf",
-          "checked_on": "2026-11-05"
+          "checked_on": "2026-11-05",
+          "citation": null
         }
       ]
     },

@@ -110,6 +110,11 @@
           "code": "info_rule",
           "source_local_id": "exclude-fees-interest",
           "detail": "transaction_type"
+        },
+        {
+          "code": "emi_alternatives",
+          "source_local_id": "exclude-emi-bt-plcc",
+          "detail": null
         }
       ],
       "overrides_applied": [
@@ -119,7 +124,8 @@
           "value_sha256": "7eb8bc431ee35297",
           "reason": "My Cash rounded to nearest integer per transaction.",
           "source_url": "https://www.icici.bank.in/terms-condition/tnc-for-signature-credit-card",
-          "checked_on": "2026-11-05"
+          "checked_on": "2026-11-05",
+          "citation": null
         },
         {
           "path": "cap_rules",
@@ -127,7 +133,8 @@
           "value_sha256": "7acc5e21cbc8960a",
           "reason": "CardPipeline cap_rules is empty; MITC caps insurance points at 1,000 per anniversary year.",
           "source_url": "https://www.icicibank.com/managed-assets/docs/personal/cards/mitc_cc.pdf",
-          "checked_on": "2026-11-05"
+          "checked_on": "2026-11-05",
+          "citation": null
         },
         {
           "path": "reward_rules",
@@ -135,7 +142,8 @@
           "value_sha256": "6ec1c8586c17dfc9",
           "reason": "Restates every source rule (including all exclusions). Adds an insurance rule carrying the cap so the 1,000-point annual cap targets insurance only, not the whole card. Flight and hotel rates differ by booking type with no MCC, so those two rules are info (D13c/D14b). International 1.5 is info (needs an international flag). Base domestic rule keeps no platform restriction so it is not turned into an info rule. Exclusions rewritten to MCC/rail form (fuel 5172/5541/5542/5983, wallet 6540, EMI rail emi, cash advance rail atm); fees/interest stay info (not purchases).",
           "source_url": "https://www.icicibank.com/managed-assets/docs/personal/cards/mitc_cc.pdf",
-          "checked_on": "2026-11-05"
+          "checked_on": "2026-11-05",
+          "citation": null
         }
       ]
     },
@@ -715,11 +723,11 @@
         "display_note": "Service charges, interest, late-payment charges, joining/renewal fees and other card fees do not qualify for My Cash."
       },
       {
-        "id": "makemytrip-icici-bank-signature-credit-card:rule:exclude-emi-bt-plcc",
+        "id": "makemytrip-icici-bank-signature-credit-card:rule:exclude-emi-bt-plcc#1",
         "category_id": "cat-emi",
         "category_slug": "emi",
         "merchant_pattern": null,
-        "rail": "emi",
+        "rail": null,
         "unit": "points_per_200",
         "rate": 0,
         "min_txn_inr": null,
@@ -727,9 +735,11 @@
         "priority": 1,
         "conditions": {
           "source_local_id": "exclude-emi-bt-plcc",
-          "part": null,
+          "part": 1,
           "info_reasons": [],
-          "flags": []
+          "flags": [
+            "emi_alternatives"
+          ]
         },
         "notes": null,
         "effective_from": "2026-08-26",
@@ -744,6 +754,42 @@
         "except_platform_slugs": [],
         "block_inr": null,
         "min_engine_version": 1,
+        "max_engine_version": null,
+        "source_local_id": "exclude-emi-bt-plcc",
+        "display_note": "EMI transactions, balance transfers and Personal Loan on Credit Card expenditure are excluded from My Cash earnings."
+      },
+      {
+        "id": "makemytrip-icici-bank-signature-credit-card:rule:exclude-emi-bt-plcc#2",
+        "category_id": null,
+        "category_slug": null,
+        "merchant_pattern": null,
+        "rail": "emi",
+        "unit": "points_per_200",
+        "rate": 0,
+        "min_txn_inr": null,
+        "max_txn_inr": null,
+        "priority": 1,
+        "conditions": {
+          "source_local_id": "exclude-emi-bt-plcc",
+          "part": 2,
+          "info_reasons": [],
+          "flags": [
+            "emi_alternatives"
+          ]
+        },
+        "notes": null,
+        "effective_from": "2026-08-26",
+        "effective_to": null,
+        "excluded_categories": [],
+        "rule_role": "exclusion",
+        "merchant_slugs": [],
+        "platform_slugs": [],
+        "mcc_include": [],
+        "mcc_exclude": [],
+        "except_merchant_slugs": [],
+        "except_platform_slugs": [],
+        "block_inr": null,
+        "min_engine_version": 2,
         "max_engine_version": null,
         "source_local_id": "exclude-emi-bt-plcc",
         "display_note": "EMI transactions, balance transfers and Personal Loan on Credit Card expenditure are excluded from My Cash earnings."

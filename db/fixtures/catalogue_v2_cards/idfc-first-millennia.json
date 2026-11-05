@@ -97,6 +97,11 @@
           "detail": null
         },
         {
+          "code": "emi_alternatives",
+          "source_local_id": "emi-zero",
+          "detail": null
+        },
+        {
           "code": "exclusion_scope_broadened",
           "source_local_id": "cash-withdrawal-zero",
           "detail": null
@@ -124,7 +129,8 @@
           "value_sha256": "ef2d127de37b942b",
           "reason": "1X rule must win over 10X travel (priority 11).",
           "source_url": "https://www.idfcfirst.bank.in/content/idfcfirstbank/en/credit-card/millennia.html",
-          "checked_on": "2026-11-05"
+          "checked_on": "2026-11-05",
+          "citation": null
         },
         {
           "path": "reward_rules[id=insurance-1x].priority",
@@ -132,7 +138,8 @@
           "value_sha256": "e7f6c011776e8db7",
           "reason": "1X rule must win over 10X travel (priority 11).",
           "source_url": "https://www.idfcfirst.bank.in/content/idfcfirstbank/en/credit-card/millennia.html",
-          "checked_on": "2026-11-05"
+          "checked_on": "2026-11-05",
+          "citation": null
         },
         {
           "path": "reward_rules[id=railway-1x].priority",
@@ -140,7 +147,8 @@
           "value_sha256": "7902699be42c8a8e",
           "reason": "1X rule must win over 10X travel (priority 11).",
           "source_url": "https://www.idfcfirst.bank.in/content/idfcfirstbank/en/credit-card/millennia.html",
-          "checked_on": "2026-11-05"
+          "checked_on": "2026-11-05",
+          "citation": null
         },
         {
           "path": "reward_rules[id=fastag-1x].priority",
@@ -148,7 +156,8 @@
           "value_sha256": "2c624232cdd22177",
           "reason": "1X rule must win over 10X travel (priority 11).",
           "source_url": "https://www.idfcfirst.bank.in/content/idfcfirstbank/en/credit-card/millennia.html",
-          "checked_on": "2026-11-05"
+          "checked_on": "2026-11-05",
+          "citation": null
         },
         {
           "path": "reward_rules[id=international-10x].rule_role",
@@ -156,7 +165,8 @@
           "value_sha256": "3e3e8e84e722887a",
           "reason": "Depends on a foreign-currency flag / the cardholder birthday; not expressible in Phase 1 (D14b, D13b).",
           "source_url": "https://www.idfcfirst.bank.in/content/idfcfirstbank/en/credit-card/millennia.html",
-          "checked_on": "2026-11-05"
+          "checked_on": "2026-11-05",
+          "citation": null
         },
         {
           "path": "reward_rules[id=birthday-10x].rule_role",
@@ -164,7 +174,8 @@
           "value_sha256": "3e3e8e84e722887a",
           "reason": "Depends on a foreign-currency flag / the cardholder birthday; not expressible in Phase 1 (D14b, D13b).",
           "source_url": "https://www.idfcfirst.bank.in/content/idfcfirstbank/en/credit-card/millennia.html",
-          "checked_on": "2026-11-05"
+          "checked_on": "2026-11-05",
+          "citation": null
         },
         {
           "path": "reward_rules[id=standard-eligible-3x].conditions",
@@ -172,7 +183,8 @@
           "value_sha256": "3d2aab61a4828091",
           "reason": "Free-text restriction on the base 3X rule would turn it into an info rule; the issuer applies 3X to all other eligible spends.",
           "source_url": "https://www.idfcfirst.bank.in/content/idfcfirstbank/en/credit-card/millennia.html",
-          "checked_on": "2026-11-05"
+          "checked_on": "2026-11-05",
+          "citation": null
         }
       ]
     },
@@ -1344,11 +1356,11 @@
         "display_note": "Fuel transactions do not earn Reward Points."
       },
       {
-        "id": "idfc-first-millennia:rule:emi-zero",
+        "id": "idfc-first-millennia:rule:emi-zero#1",
         "category_id": "cat-emi",
         "category_slug": "emi",
         "merchant_pattern": null,
-        "rail": "emi",
+        "rail": null,
         "unit": "points_per_200",
         "rate": 0,
         "min_txn_inr": null,
@@ -1356,9 +1368,11 @@
         "priority": 2,
         "conditions": {
           "source_local_id": "emi-zero",
-          "part": null,
+          "part": 1,
           "info_reasons": [],
-          "flags": []
+          "flags": [
+            "emi_alternatives"
+          ]
         },
         "notes": null,
         "effective_from": "2026-06-18",
@@ -1373,6 +1387,42 @@
         "except_platform_slugs": [],
         "block_inr": null,
         "min_engine_version": 1,
+        "max_engine_version": null,
+        "source_local_id": "emi-zero",
+        "display_note": "EMI transactions do not earn Reward Points."
+      },
+      {
+        "id": "idfc-first-millennia:rule:emi-zero#2",
+        "category_id": null,
+        "category_slug": null,
+        "merchant_pattern": null,
+        "rail": "emi",
+        "unit": "points_per_200",
+        "rate": 0,
+        "min_txn_inr": null,
+        "max_txn_inr": null,
+        "priority": 2,
+        "conditions": {
+          "source_local_id": "emi-zero",
+          "part": 2,
+          "info_reasons": [],
+          "flags": [
+            "emi_alternatives"
+          ]
+        },
+        "notes": null,
+        "effective_from": "2026-06-18",
+        "effective_to": null,
+        "excluded_categories": [],
+        "rule_role": "exclusion",
+        "merchant_slugs": [],
+        "platform_slugs": [],
+        "mcc_include": [],
+        "mcc_exclude": [],
+        "except_merchant_slugs": [],
+        "except_platform_slugs": [],
+        "block_inr": null,
+        "min_engine_version": 2,
         "max_engine_version": null,
         "source_local_id": "emi-zero",
         "display_note": "EMI transactions do not earn Reward Points."

@@ -139,6 +139,11 @@
           "detail": null
         },
         {
+          "code": "emi_alternatives",
+          "source_local_id": "exclusion-emi",
+          "detail": null
+        },
+        {
           "code": "partial_merchant_list",
           "source_local_id": "tata-neu-partner-upi-wp7",
           "detail": null
@@ -221,7 +226,8 @@
           "value_sha256": "7af78ba28cf9ccb3",
           "reason": "SBI caps NeuCoins per category per month.",
           "source_url": "https://www.sbicard.com/sbi-card-en/assets/docs/pdf/ekit-tncs/Tata-Neu-Infinity-Booklet.pdf",
-          "checked_on": "2026-11-05"
+          "checked_on": "2026-11-05",
+          "citation": null
         },
         {
           "path": "cap_rules[id=cap-insurance-monthly-2000].metric",
@@ -229,7 +235,8 @@
           "value_sha256": "7af78ba28cf9ccb3",
           "reason": "SBI caps NeuCoins per category per month.",
           "source_url": "https://www.sbicard.com/sbi-card-en/assets/docs/pdf/ekit-tncs/Tata-Neu-Infinity-Booklet.pdf",
-          "checked_on": "2026-11-05"
+          "checked_on": "2026-11-05",
+          "citation": null
         },
         {
           "path": "cap_rules[id=cap-utility-monthly-2000].metric",
@@ -237,7 +244,8 @@
           "value_sha256": "7af78ba28cf9ccb3",
           "reason": "SBI caps NeuCoins per category per month.",
           "source_url": "https://www.sbicard.com/sbi-card-en/assets/docs/pdf/ekit-tncs/Tata-Neu-Infinity-Booklet.pdf",
-          "checked_on": "2026-11-05"
+          "checked_on": "2026-11-05",
+          "citation": null
         },
         {
           "path": "cap_rules[id=cap-telecom-cable-monthly-2000].metric",
@@ -245,7 +253,8 @@
           "value_sha256": "7af78ba28cf9ccb3",
           "reason": "SBI caps NeuCoins per category per month.",
           "source_url": "https://www.sbicard.com/sbi-card-en/assets/docs/pdf/ekit-tncs/Tata-Neu-Infinity-Booklet.pdf",
-          "checked_on": "2026-11-05"
+          "checked_on": "2026-11-05",
+          "citation": null
         },
         {
           "path": "accrual_engine.rounding_mode",
@@ -253,7 +262,8 @@
           "value_sha256": "b3c132a10399a05e",
           "reason": "Issuer rounds the exact-amount NeuCoins down to a whole number (D7).",
           "source_url": "https://www.sbicard.com/sbi-card-en/assets/docs/pdf/ekit-tncs/Tata-Neu-Infinity-Booklet.pdf",
-          "checked_on": "2026-11-05"
+          "checked_on": "2026-11-05",
+          "citation": null
         },
         {
           "path": "accrual_engine.base_cashback_percent",
@@ -261,7 +271,8 @@
           "value_sha256": "74234e98afe7498f",
           "reason": "Source holds the string N/A.",
           "source_url": "https://www.sbicard.com/sbi-card-en/assets/docs/pdf/ekit-tncs/Tata-Neu-Infinity-Booklet.pdf",
-          "checked_on": "2026-11-05"
+          "checked_on": "2026-11-05",
+          "citation": null
         },
         {
           "path": "reward_rules",
@@ -269,7 +280,8 @@
           "value_sha256": "3d4e016b3f2aaa42",
           "reason": "WP7: T&C booklet: \"Maximum Capping per month on NeuCoins ... Grocery, Insurance, Utility, Telecom and cable\" - the cap covers all NeuCoins in the category, but the record tied it only to the extra-5% Tata Neu app rule (info). Base-rate rule carrying the cap; priority 15 (ahead of the 5% partner rule, as on the HDFC Infinity record) so a capped category never pays the partner rate uncapped (H2: may under-state at partner grocery brands).",
           "source_url": "https://www.sbicard.com/sbi-card-en/assets/docs/pdf/ekit-tncs/Tata-Neu-Infinity-Booklet.pdf",
-          "checked_on": "2026-11-05"
+          "checked_on": "2026-11-05",
+          "citation": null
         },
         {
           "path": "reward_rules",
@@ -277,7 +289,8 @@
           "value_sha256": "dad461a4f2af8fc3",
           "reason": "WP7: Same as grocery-standard-capped (insurance cap).",
           "source_url": "https://www.sbicard.com/sbi-card-en/assets/docs/pdf/ekit-tncs/Tata-Neu-Infinity-Booklet.pdf",
-          "checked_on": "2026-11-05"
+          "checked_on": "2026-11-05",
+          "citation": null
         },
         {
           "path": "reward_rules",
@@ -285,7 +298,8 @@
           "value_sha256": "280376766bab82ce",
           "reason": "WP7: Same as grocery-standard-capped (utility cap).",
           "source_url": "https://www.sbicard.com/sbi-card-en/assets/docs/pdf/ekit-tncs/Tata-Neu-Infinity-Booklet.pdf",
-          "checked_on": "2026-11-05"
+          "checked_on": "2026-11-05",
+          "citation": null
         },
         {
           "path": "reward_rules[id=tata-neu-partner-5pct].conditions.brands",
@@ -293,7 +307,8 @@
           "value_sha256": "cd2b55424d900c12",
           "reason": "WP7: T&C 11.3(b)/(d): value back on \"spends on Tata Neu App/Website and partner Tata Brands\" (Air India & AI Express, Big Basket, Tata Cliq, Taj, Tata 1MG, Titan & Tanishq, Croma, Westside, Qmin). One list feeds the partner rule and its UPI carve-out, so they always cover the same merchants.",
           "source_url": "https://www.sbicard.com/sbi-card-en/assets/docs/pdf/ekit-tncs/Tata-Neu-Infinity-Booklet.pdf",
-          "checked_on": "2026-11-05"
+          "checked_on": "2026-11-05",
+          "citation": null
         },
         {
           "path": "reward_rules[id=tata-neu-partner-5pct].channel_type",
@@ -301,7 +316,8 @@
           "value_sha256": "5cf7504d9781301d",
           "reason": "WP7: Tata Neu is now in the brand list itself (it was only implied by the channel text).",
           "source_url": "https://www.sbicard.com/sbi-card-en/assets/docs/pdf/ekit-tncs/Tata-Neu-Infinity-Booklet.pdf",
-          "checked_on": "2026-11-05"
+          "checked_on": "2026-11-05",
+          "citation": null
         },
         {
           "path": "reward_rules[id=tata-neu-partner-5pct].conditions.channel",
@@ -309,7 +325,8 @@
           "value_sha256": "74234e98afe7498f",
           "reason": "WP7: Restates the partner brands (Tata Neu app/website and partner brands); made the rule info.",
           "source_url": "https://www.sbicard.com/sbi-card-en/assets/docs/pdf/ekit-tncs/Tata-Neu-Infinity-Booklet.pdf",
-          "checked_on": "2026-11-05"
+          "checked_on": "2026-11-05",
+          "citation": null
         },
         {
           "path": "reward_rules",
@@ -317,7 +334,8 @@
           "value_sha256": "5beac21aa02824a5",
           "reason": "WP7: T&C 11.3(e): \"1.5% Value back as NeuCoins on other spends, including UPI transactions (applicable on spends on RuPay Variant)\". Read as: UPI spends earn the 1.5% UPI/other rate, including at partner brands (the Plus SBI booklet says so explicitly); the 5% partner rate is not applied on UPI.",
           "source_url": "https://www.sbicard.com/sbi-card-en/assets/docs/pdf/ekit-tncs/Tata-Neu-Infinity-Booklet.pdf",
-          "checked_on": "2026-11-05"
+          "checked_on": "2026-11-05",
+          "citation": null
         },
         {
           "path": "reward_rules",
@@ -325,7 +343,8 @@
           "value_sha256": "f875ab007f65a078",
           "reason": "WP7: D25e: T&C 11.4(a) excludes \"Merchant EMI - Flexipay\" (Infinity) / \"Flexipay\" (Plus), and 11.6(e) forfeits NeuCoins when \"The transaction on which NeuCoins were accrued, got converted to EMI\". Rail-EMI exclusion on all spend, as on Millennia (the record's category emi AND rail emi row missed EMI in other categories).",
           "source_url": "https://www.sbicard.com/sbi-card-en/assets/docs/pdf/ekit-tncs/Tata-Neu-Infinity-Booklet.pdf",
-          "checked_on": "2026-11-05"
+          "checked_on": "2026-11-05",
+          "citation": null
         },
         {
           "path": "reward_rules",
@@ -333,7 +352,8 @@
           "value_sha256": "3586e3be78712a67",
           "reason": "WP7: D25d: T&C 11.4 lists MCC 7349 with rent (6513) and education MCCs 5111, 5192, 5942, 5943, 5947, 8351 besides 8211-8299; the record carried only part of each list.",
           "source_url": "https://www.sbicard.com/sbi-card-en/assets/docs/pdf/ekit-tncs/Tata-Neu-Infinity-Booklet.pdf",
-          "checked_on": "2026-11-05"
+          "checked_on": "2026-11-05",
+          "citation": null
         },
         {
           "path": "reward_rules",
@@ -341,7 +361,8 @@
           "value_sha256": "def3222f2ff96e76",
           "reason": "WP7: D25d: T&C 11.4(g) \"Gaming ( 5816, 7993, 7994)\"; the record had no gaming exclusion.",
           "source_url": "https://www.sbicard.com/sbi-card-en/assets/docs/pdf/ekit-tncs/Tata-Neu-Infinity-Booklet.pdf",
-          "checked_on": "2026-11-05"
+          "checked_on": "2026-11-05",
+          "citation": null
         },
         {
           "path": "reward_rules",
@@ -349,7 +370,8 @@
           "value_sha256": "6c753973db4cb603",
           "reason": "WP7: D25d: T&C 11.4(a) \"cash advances\"; the record had no cash-advance exclusion.",
           "source_url": "https://www.sbicard.com/sbi-card-en/assets/docs/pdf/ekit-tncs/Tata-Neu-Infinity-Booklet.pdf",
-          "checked_on": "2026-11-05"
+          "checked_on": "2026-11-05",
+          "citation": null
         },
         {
           "path": "reward_rules",
@@ -357,7 +379,8 @@
           "value_sha256": "122a1fd23c60953f",
           "reason": "WP7: D25d: T&C 11.4(a)/(g) exclude it; not a purchase the context can tell apart, so info with depends_on_txn_attribute (D14b).",
           "source_url": "https://www.sbicard.com/sbi-card-en/assets/docs/pdf/ekit-tncs/Tata-Neu-Infinity-Booklet.pdf",
-          "checked_on": "2026-11-05"
+          "checked_on": "2026-11-05",
+          "citation": null
         },
         {
           "path": "reward_rules",
@@ -365,7 +388,8 @@
           "value_sha256": "6d8a87a571e2d79d",
           "reason": "WP7: D25d: T&C 11.4(a)/(g) exclude it; not a purchase the context can tell apart, so info with depends_on_txn_attribute (D14b).",
           "source_url": "https://www.sbicard.com/sbi-card-en/assets/docs/pdf/ekit-tncs/Tata-Neu-Infinity-Booklet.pdf",
-          "checked_on": "2026-11-05"
+          "checked_on": "2026-11-05",
+          "citation": null
         },
         {
           "path": "reward_rules",
@@ -373,7 +397,8 @@
           "value_sha256": "319077735cc26e32",
           "reason": "WP7: D25d: T&C 11.4(a)/(g) exclude it; not a purchase the context can tell apart, so info with depends_on_txn_attribute (D14b).",
           "source_url": "https://www.sbicard.com/sbi-card-en/assets/docs/pdf/ekit-tncs/Tata-Neu-Infinity-Booklet.pdf",
-          "checked_on": "2026-11-05"
+          "checked_on": "2026-11-05",
+          "citation": null
         },
         {
           "path": "reward_rules",
@@ -381,7 +406,8 @@
           "value_sha256": "72358a3110dbcd4f",
           "reason": "WP7: D25d: T&C 11.4(a)/(g) exclude it; not a purchase the context can tell apart, so info with depends_on_txn_attribute (D14b).",
           "source_url": "https://www.sbicard.com/sbi-card-en/assets/docs/pdf/ekit-tncs/Tata-Neu-Infinity-Booklet.pdf",
-          "checked_on": "2026-11-05"
+          "checked_on": "2026-11-05",
+          "citation": null
         }
       ]
     },
@@ -1259,11 +1285,11 @@
         "display_note": "Education payments do not earn NeuCoins."
       },
       {
-        "id": "tata-neu-infinity-sbi-credit-card:rule:exclusion-emi",
+        "id": "tata-neu-infinity-sbi-credit-card:rule:exclusion-emi#1",
         "category_id": "cat-emi",
         "category_slug": "emi",
         "merchant_pattern": null,
-        "rail": "emi",
+        "rail": null,
         "unit": "points_per_100",
         "rate": 0,
         "min_txn_inr": null,
@@ -1271,9 +1297,11 @@
         "priority": 1,
         "conditions": {
           "source_local_id": "exclusion-emi",
-          "part": null,
+          "part": 1,
           "info_reasons": [],
-          "flags": []
+          "flags": [
+            "emi_alternatives"
+          ]
         },
         "notes": null,
         "effective_from": "2025-04-16",
@@ -1288,6 +1316,42 @@
         "except_platform_slugs": [],
         "block_inr": null,
         "min_engine_version": 1,
+        "max_engine_version": null,
+        "source_local_id": "exclusion-emi",
+        "display_note": "Merchant EMI and Flexipay transactions do not earn NeuCoins."
+      },
+      {
+        "id": "tata-neu-infinity-sbi-credit-card:rule:exclusion-emi#2",
+        "category_id": null,
+        "category_slug": null,
+        "merchant_pattern": null,
+        "rail": "emi",
+        "unit": "points_per_100",
+        "rate": 0,
+        "min_txn_inr": null,
+        "max_txn_inr": null,
+        "priority": 1,
+        "conditions": {
+          "source_local_id": "exclusion-emi",
+          "part": 2,
+          "info_reasons": [],
+          "flags": [
+            "emi_alternatives"
+          ]
+        },
+        "notes": null,
+        "effective_from": "2025-04-16",
+        "effective_to": null,
+        "excluded_categories": [],
+        "rule_role": "exclusion",
+        "merchant_slugs": [],
+        "platform_slugs": [],
+        "mcc_include": [],
+        "mcc_exclude": [],
+        "except_merchant_slugs": [],
+        "except_platform_slugs": [],
+        "block_inr": null,
+        "min_engine_version": 2,
         "max_engine_version": null,
         "source_local_id": "exclusion-emi",
         "display_note": "Merchant EMI and Flexipay transactions do not earn NeuCoins."

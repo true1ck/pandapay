@@ -797,6 +797,13 @@
       "reason": "WP7: D29d: the UPI rate applies to \"Any UPI Spends\", so it outranks the capped category rules and the base rule; the partner UPI carve-out (9, same rate) still takes partner spends.",
       "source_url": "https://www.hdfc.bank.in/content/dam/hdfcbankpws/in/en/personal-banking/discover-products/cards/credit-cards/tata-neu-infinity-credit-card/pdf/tata_neu_infinity_card_tnc.pdf",
       "checked_on": "2026-11-05"
+    },
+    {
+      "path": "reward_rules[id=smart_emi_exclusion].rail",
+      "value": "any",
+      "reason": "WP7: T&C exclude \"Smart EMI / Dial an EMI transaction\" (post-purchase conversions) while \"Merchant EMI Spends (Any Brand)\" earn 1.5% (issuer example: Merchant EMI on Tata Brand - Principal, 1.5% NeuCoins). Since the WP2 loader reads category and rail as alternatives, the rail made this a rail-EMI exclusion on all spend. Without the rail it is the emi-category exclusion it was before (v1 unchanged); merchant EMI earns through tata_partner_emi_wp7 and the base rule.",
+      "source_url": "https://www.hdfc.bank.in/content/dam/hdfcbankpws/in/en/personal-banking/discover-products/cards/credit-cards/tata-neu-infinity-credit-card/pdf/tata_neu_infinity_card_tnc.pdf",
+      "checked_on": "2026-11-05"
     }
   ]
 }

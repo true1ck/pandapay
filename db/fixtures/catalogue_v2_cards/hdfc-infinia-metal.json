@@ -45,9 +45,19 @@
           "detail": null
         },
         {
+          "code": "emi_alternatives",
+          "source_local_id": "emi-exclusion",
+          "detail": null
+        },
+        {
           "code": "info_rule",
           "source_local_id": "education-aggregator-exclusion",
           "detail": "condition:aggregators"
+        },
+        {
+          "code": "exclusion_rail_dropped",
+          "source_local_id": "education-aggregator-exclusion",
+          "detail": null
         },
         {
           "code": "exclusion_scope_broadened",
@@ -117,7 +127,8 @@
           "value_sha256": "7af78ba28cf9ccb3",
           "reason": "Issuer caps total RP in this category per month, not only bonus RP.",
           "source_url": "https://www.hdfc.bank.in/content/dam/hdfcbankpws/in/en/personal-banking/discover-products/cards/credit-cards/personal-mitc/mitc-in-english.pdf",
-          "checked_on": "2026-11-05"
+          "checked_on": "2026-11-05",
+          "citation": null
         },
         {
           "path": "cap_rules[id=grocery-rp-monthly-cap].metric",
@@ -125,7 +136,8 @@
           "value_sha256": "7af78ba28cf9ccb3",
           "reason": "Issuer caps total RP in this category per month, not only bonus RP.",
           "source_url": "https://www.hdfc.bank.in/content/dam/hdfcbankpws/in/en/personal-banking/discover-products/cards/credit-cards/personal-mitc/mitc-in-english.pdf",
-          "checked_on": "2026-11-05"
+          "checked_on": "2026-11-05",
+          "citation": null
         },
         {
           "path": "cap_rules[id=utility-rp-monthly-cap].metric",
@@ -133,7 +145,8 @@
           "value_sha256": "7af78ba28cf9ccb3",
           "reason": "Issuer caps total RP in this category per month, not only bonus RP.",
           "source_url": "https://www.hdfc.bank.in/content/dam/hdfcbankpws/in/en/personal-banking/discover-products/cards/credit-cards/personal-mitc/mitc-in-english.pdf",
-          "checked_on": "2026-11-05"
+          "checked_on": "2026-11-05",
+          "citation": null
         },
         {
           "path": "cap_rules[id=telecom-rp-monthly-cap].metric",
@@ -141,7 +154,8 @@
           "value_sha256": "7af78ba28cf9ccb3",
           "reason": "Issuer caps total RP in this category per month, not only bonus RP.",
           "source_url": "https://www.hdfc.bank.in/content/dam/hdfcbankpws/in/en/personal-banking/discover-products/cards/credit-cards/personal-mitc/mitc-in-english.pdf",
-          "checked_on": "2026-11-05"
+          "checked_on": "2026-11-05",
+          "citation": null
         },
         {
           "path": "cap_rules[id=insurance-rp-monthly-cap].post_limit_behavior.action",
@@ -149,7 +163,8 @@
           "value_sha256": "b1b0e5d61df2ff9a",
           "reason": "Points above the cap are not earned at all.",
           "source_url": "https://www.hdfc.bank.in/content/dam/hdfcbankpws/in/en/personal-banking/discover-products/cards/credit-cards/personal-mitc/mitc-in-english.pdf",
-          "checked_on": "2026-11-05"
+          "checked_on": "2026-11-05",
+          "citation": null
         },
         {
           "path": "cap_rules[id=grocery-rp-monthly-cap].post_limit_behavior.action",
@@ -157,7 +172,8 @@
           "value_sha256": "b1b0e5d61df2ff9a",
           "reason": "Points above the cap are not earned at all.",
           "source_url": "https://www.hdfc.bank.in/content/dam/hdfcbankpws/in/en/personal-banking/discover-products/cards/credit-cards/personal-mitc/mitc-in-english.pdf",
-          "checked_on": "2026-11-05"
+          "checked_on": "2026-11-05",
+          "citation": null
         },
         {
           "path": "cap_rules[id=utility-rp-monthly-cap].post_limit_behavior.action",
@@ -165,7 +181,8 @@
           "value_sha256": "b1b0e5d61df2ff9a",
           "reason": "Points above the cap are not earned at all.",
           "source_url": "https://www.hdfc.bank.in/content/dam/hdfcbankpws/in/en/personal-banking/discover-products/cards/credit-cards/personal-mitc/mitc-in-english.pdf",
-          "checked_on": "2026-11-05"
+          "checked_on": "2026-11-05",
+          "citation": null
         },
         {
           "path": "cap_rules[id=telecom-rp-monthly-cap].post_limit_behavior.action",
@@ -173,7 +190,8 @@
           "value_sha256": "b1b0e5d61df2ff9a",
           "reason": "Points above the cap are not earned at all.",
           "source_url": "https://www.hdfc.bank.in/content/dam/hdfcbankpws/in/en/personal-banking/discover-products/cards/credit-cards/personal-mitc/mitc-in-english.pdf",
-          "checked_on": "2026-11-05"
+          "checked_on": "2026-11-05",
+          "citation": null
         },
         {
           "path": "reward_rules[id=smartbuy-up-to-10x].category_id",
@@ -181,7 +199,8 @@
           "value_sha256": "16ddae3988d47013",
           "reason": "WP7: D8b: SmartBuy pays per travel type, never one \"up to\" rule. This row becomes the 10X hotels rule (same shape as the Diners Black Metal source).",
           "source_url": "https://offers.smartbuy.hdfc.bank.in/v2/accelerated-earn-rules",
-          "checked_on": "2026-11-05"
+          "checked_on": "2026-11-05",
+          "citation": null
         },
         {
           "path": "reward_rules[id=smartbuy-up-to-10x].conditions",
@@ -189,7 +208,8 @@
           "value_sha256": "80f0bf0c613d59d7",
           "reason": "WP7: D8b: 10X on SmartBuy hotel bookings (hotel MCCs).",
           "source_url": "https://offers.smartbuy.hdfc.bank.in/v2/accelerated-earn-rules",
-          "checked_on": "2026-11-05"
+          "checked_on": "2026-11-05",
+          "citation": null
         },
         {
           "path": "reward_rules[id=smartbuy-up-to-10x].action.reason",
@@ -197,7 +217,8 @@
           "value_sha256": "06c3d0d489092642",
           "reason": "WP7: Drop the \"up to\" wording now that the row is one travel type.",
           "source_url": "https://offers.smartbuy.hdfc.bank.in/v2/accelerated-earn-rules",
-          "checked_on": "2026-11-05"
+          "checked_on": "2026-11-05",
+          "citation": null
         },
         {
           "path": "reward_rules",
@@ -205,7 +226,8 @@
           "value_sha256": "cba7452892e03c35",
           "reason": "WP7: D8b: SmartBuy flights are 5X for Infinia (research note on the SmartBuy accelerated-earn page); counts to the 15,000/month SmartBuy cap.",
           "source_url": "https://offers.smartbuy.hdfc.bank.in/v2/accelerated-earn-rules",
-          "checked_on": "2026-11-05"
+          "checked_on": "2026-11-05",
+          "citation": null
         },
         {
           "path": "reward_rules",
@@ -213,7 +235,8 @@
           "value_sha256": "dcfbad72f40af804",
           "reason": "WP7: D8b: SmartBuy trains are 3X (research note on the SmartBuy accelerated-earn page).",
           "source_url": "https://offers.smartbuy.hdfc.bank.in/v2/accelerated-earn-rules",
-          "checked_on": "2026-11-05"
+          "checked_on": "2026-11-05",
+          "citation": null
         },
         {
           "path": "reward_rules[id=smartbuy-up-to-10x].id",
@@ -221,7 +244,8 @@
           "value_sha256": "46c0b2c909e44c60",
           "reason": "WP7: Rename last: the old id (\"up-to-10x\") still tripped the loader's multi-rate \"up to\" check after the row became the single 10X hotels rate.",
           "source_url": "https://offers.smartbuy.hdfc.bank.in/v2/accelerated-earn-rules",
-          "checked_on": "2026-11-05"
+          "checked_on": "2026-11-05",
+          "citation": null
         },
         {
           "path": "reward_rules",
@@ -229,7 +253,8 @@
           "value_sha256": "b8d7b08a76bb3ac7",
           "reason": "WP7: D28c: Rewards Points Program T&C item 3: \"EasyEMI and e-wallet loading transactions will not accrue reward points\". The record's EMI row needs category emi AND rail emi, so an EMI purchase in another category earned. Rail-EMI exclusion on all spend.",
           "source_url": "https://www.hdfc.bank.in/content/dam/hdfcbankpws/in/en/personal-banking/discover-products/cards/credit-cards/infinia-credit-card/rewards-points-program-terms-and-conditions.pdf",
-          "checked_on": "2026-11-05"
+          "checked_on": "2026-11-05",
+          "citation": null
         }
       ]
     },
@@ -945,11 +970,11 @@
         "display_note": "Wallet loading transactions do not accrue Reward Points."
       },
       {
-        "id": "hdfc-infinia-metal:rule:emi-exclusion",
+        "id": "hdfc-infinia-metal:rule:emi-exclusion#1",
         "category_id": "cat-emi",
         "category_slug": "emi",
         "merchant_pattern": null,
-        "rail": "emi",
+        "rail": null,
         "unit": "points_per_150",
         "rate": 0,
         "min_txn_inr": null,
@@ -957,9 +982,11 @@
         "priority": 1,
         "conditions": {
           "source_local_id": "emi-exclusion",
-          "part": null,
+          "part": 1,
           "info_reasons": [],
-          "flags": []
+          "flags": [
+            "emi_alternatives"
+          ]
         },
         "notes": null,
         "effective_from": "2026-08-18",
@@ -979,11 +1006,47 @@
         "display_note": "EasyEMI and retail transactions converted to SmartEMI do not retain Reward Points; accrued points are reversed."
       },
       {
+        "id": "hdfc-infinia-metal:rule:emi-exclusion#2",
+        "category_id": null,
+        "category_slug": null,
+        "merchant_pattern": null,
+        "rail": "emi",
+        "unit": "points_per_150",
+        "rate": 0,
+        "min_txn_inr": null,
+        "max_txn_inr": null,
+        "priority": 1,
+        "conditions": {
+          "source_local_id": "emi-exclusion",
+          "part": 2,
+          "info_reasons": [],
+          "flags": [
+            "emi_alternatives"
+          ]
+        },
+        "notes": null,
+        "effective_from": "2026-08-18",
+        "effective_to": null,
+        "excluded_categories": [],
+        "rule_role": "exclusion",
+        "merchant_slugs": [],
+        "platform_slugs": [],
+        "mcc_include": [],
+        "mcc_exclude": [],
+        "except_merchant_slugs": [],
+        "except_platform_slugs": [],
+        "block_inr": null,
+        "min_engine_version": 2,
+        "max_engine_version": null,
+        "source_local_id": "emi-exclusion",
+        "display_note": "EasyEMI and retail transactions converted to SmartEMI do not retain Reward Points; accrued points are reversed."
+      },
+      {
         "id": "hdfc-infinia-metal:rule:education-aggregator-exclusion",
         "category_id": "cat-education",
         "category_slug": "education",
         "merchant_pattern": null,
-        "rail": "online",
+        "rail": null,
         "unit": "points_per_150",
         "rate": 0,
         "min_txn_inr": null,
@@ -996,6 +1059,7 @@
             "condition:aggregators"
           ],
           "flags": [
+            "exclusion_rail_dropped",
             "exclusion_scope_broadened"
           ]
         },

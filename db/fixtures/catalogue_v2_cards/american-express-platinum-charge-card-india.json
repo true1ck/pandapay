@@ -55,6 +55,11 @@
           "detail": null
         },
         {
+          "code": "emi_alternatives",
+          "source_local_id": "emi_zero_rewards",
+          "detail": null
+        },
+        {
           "code": "info_rule",
           "source_local_id": "overseas_spend_3x",
           "detail": "condition:transaction_currency"
@@ -127,7 +132,8 @@
           "value_sha256": "7af78ba28cf9ccb3",
           "reason": "Issuer caps the fuel earning at 5,000 points per month in total, not only the bonus part.",
           "source_url": "https://www.americanexpress.com/content/dam/amex/en-in/benefits/rewards/membership-rewards/membership-rewards-terms.pdf",
-          "checked_on": "2026-11-05"
+          "checked_on": "2026-11-05",
+          "citation": null
         },
         {
           "path": "reward_rules[id=utility_zero_rewards].conditions",
@@ -135,7 +141,8 @@
           "value_sha256": "8a3a647f2dc328ee",
           "reason": "WP7: Electricity, water and gas are MCC 4900; the sub-category names made the exclusion info, so utility bills earned points.",
           "source_url": "https://www.americanexpress.com/content/dam/amex/en-in/benefits/rewards/membership-rewards/membership-rewards-terms.pdf",
-          "checked_on": "2026-11-05"
+          "checked_on": "2026-11-05",
+          "citation": null
         },
         {
           "path": "reward_rules",
@@ -143,7 +150,8 @@
           "value_sha256": "e5792a972fd5e7fa",
           "reason": "WP7: D28c: MR terms: no points \"on any EMI option selected from a merchant's website\" or terminal (SafeKey/post-purchase EMI may be under-stated). The record's EMI row needs category emi AND rail emi, so an EMI purchase in another category earned. Rail-EMI exclusion on all spend.",
           "source_url": "https://www.americanexpress.com/content/dam/amex/en-in/benefits/rewards/membership-rewards/membership-rewards-terms.pdf",
-          "checked_on": "2026-11-05"
+          "checked_on": "2026-11-05",
+          "citation": null
         }
       ]
     },
@@ -408,11 +416,11 @@
         "display_note": "No Membership Rewards Points on cash withdrawals."
       },
       {
-        "id": "american-express-platinum-charge-card-india:rule:emi_zero_rewards",
+        "id": "american-express-platinum-charge-card-india:rule:emi_zero_rewards#1",
         "category_id": "cat-emi",
         "category_slug": "emi",
         "merchant_pattern": null,
-        "rail": "emi",
+        "rail": null,
         "unit": "points_per_100",
         "rate": 0,
         "min_txn_inr": null,
@@ -420,9 +428,11 @@
         "priority": 1,
         "conditions": {
           "source_local_id": "emi_zero_rewards",
-          "part": null,
+          "part": 1,
           "info_reasons": [],
-          "flags": []
+          "flags": [
+            "emi_alternatives"
+          ]
         },
         "notes": null,
         "effective_from": "2020-03-15",
@@ -437,6 +447,42 @@
         "except_platform_slugs": [],
         "block_inr": null,
         "min_engine_version": 1,
+        "max_engine_version": null,
+        "source_local_id": "emi_zero_rewards",
+        "display_note": "The Platinum Charge Card is not eligible for the American Express EMI facility."
+      },
+      {
+        "id": "american-express-platinum-charge-card-india:rule:emi_zero_rewards#2",
+        "category_id": null,
+        "category_slug": null,
+        "merchant_pattern": null,
+        "rail": "emi",
+        "unit": "points_per_100",
+        "rate": 0,
+        "min_txn_inr": null,
+        "max_txn_inr": null,
+        "priority": 1,
+        "conditions": {
+          "source_local_id": "emi_zero_rewards",
+          "part": 2,
+          "info_reasons": [],
+          "flags": [
+            "emi_alternatives"
+          ]
+        },
+        "notes": null,
+        "effective_from": "2020-03-15",
+        "effective_to": null,
+        "excluded_categories": [],
+        "rule_role": "exclusion",
+        "merchant_slugs": [],
+        "platform_slugs": [],
+        "mcc_include": [],
+        "mcc_exclude": [],
+        "except_merchant_slugs": [],
+        "except_platform_slugs": [],
+        "block_inr": null,
+        "min_engine_version": 2,
         "max_engine_version": null,
         "source_local_id": "emi_zero_rewards",
         "display_note": "The Platinum Charge Card is not eligible for the American Express EMI facility."

@@ -106,6 +106,11 @@
           "detail": null
         },
         {
+          "code": "emi_alternatives",
+          "source_local_id": "0x_emi",
+          "detail": null
+        },
+        {
           "code": "info_rule",
           "source_local_id": "20pct_hotel_bonus",
           "detail": "override_rule_role"
@@ -173,7 +178,8 @@
           "value_sha256": "3d2aab61a4828091",
           "reason": "Removes the invented statement-cycle spend threshold; issuer applies 3X to all eligible spends.",
           "source_url": "https://www.idfcfirst.bank.in/content/idfcfirstbank/en/credit-card/select.html",
-          "checked_on": "2026-11-05"
+          "checked_on": "2026-11-05",
+          "citation": null
         },
         {
           "path": "reward_rules[id=1x_utility].priority",
@@ -181,7 +187,8 @@
           "value_sha256": "ef2d127de37b942b",
           "reason": "1X rule must win over 10X travel (priority 11).",
           "source_url": "https://www.idfcfirst.bank.in/content/idfcfirstbank/en/credit-card/select.html",
-          "checked_on": "2026-11-05"
+          "checked_on": "2026-11-05",
+          "citation": null
         },
         {
           "path": "reward_rules[id=1x_insurance].priority",
@@ -189,7 +196,8 @@
           "value_sha256": "e7f6c011776e8db7",
           "reason": "1X rule must win over 10X travel (priority 11).",
           "source_url": "https://www.idfcfirst.bank.in/content/idfcfirstbank/en/credit-card/select.html",
-          "checked_on": "2026-11-05"
+          "checked_on": "2026-11-05",
+          "citation": null
         },
         {
           "path": "reward_rules[id=1x_railway].priority",
@@ -197,7 +205,8 @@
           "value_sha256": "7902699be42c8a8e",
           "reason": "1X rule must win over 10X travel (priority 11).",
           "source_url": "https://www.idfcfirst.bank.in/content/idfcfirstbank/en/credit-card/select.html",
-          "checked_on": "2026-11-05"
+          "checked_on": "2026-11-05",
+          "citation": null
         },
         {
           "path": "reward_rules[id=1x_fastag].priority",
@@ -205,7 +214,8 @@
           "value_sha256": "2c624232cdd22177",
           "reason": "1X rule must win over 10X travel (priority 11).",
           "source_url": "https://www.idfcfirst.bank.in/content/idfcfirstbank/en/credit-card/select.html",
-          "checked_on": "2026-11-05"
+          "checked_on": "2026-11-05",
+          "citation": null
         },
         {
           "path": "reward_rules[id=10x_international].rule_role",
@@ -213,7 +223,8 @@
           "value_sha256": "3e3e8e84e722887a",
           "reason": "Depends on a foreign-currency flag / the cardholder birthday; not expressible in Phase 1 (D14b, D13b).",
           "source_url": "https://www.idfcfirst.bank.in/content/idfcfirstbank/en/credit-card/select.html",
-          "checked_on": "2026-11-05"
+          "checked_on": "2026-11-05",
+          "citation": null
         },
         {
           "path": "reward_rules[id=10x_birthday].rule_role",
@@ -221,7 +232,8 @@
           "value_sha256": "3e3e8e84e722887a",
           "reason": "Depends on a foreign-currency flag / the cardholder birthday; not expressible in Phase 1 (D14b, D13b).",
           "source_url": "https://www.idfcfirst.bank.in/content/idfcfirstbank/en/credit-card/select.html",
-          "checked_on": "2026-11-05"
+          "checked_on": "2026-11-05",
+          "citation": null
         },
         {
           "path": "reward_rules[id=10x_dining].conditions.activation",
@@ -229,7 +241,8 @@
           "value_sha256": "74234e98afe7498f",
           "reason": "The text \"From the first eligible transaction.\" means there is no minimum spend; it is not a restriction on the rule.",
           "source_url": "https://www.idfcfirst.bank.in/content/idfcfirstbank/en/credit-card/select.html",
-          "checked_on": "2026-11-05"
+          "checked_on": "2026-11-05",
+          "citation": null
         },
         {
           "path": "reward_rules[id=10x_travel].conditions.activation",
@@ -237,7 +250,8 @@
           "value_sha256": "74234e98afe7498f",
           "reason": "The text \"From the first eligible transaction.\" means there is no minimum spend; it is not a restriction on the rule.",
           "source_url": "https://www.idfcfirst.bank.in/content/idfcfirstbank/en/credit-card/select.html",
-          "checked_on": "2026-11-05"
+          "checked_on": "2026-11-05",
+          "citation": null
         },
         {
           "path": "reward_rules[id=0x_cash_withdrawal].category_id",
@@ -245,7 +259,8 @@
           "value_sha256": "1e08efd699e66ddd",
           "reason": "Token cash_withdrawal is not mapped by the loader; the rail (atm) already restricts the exclusion.",
           "source_url": "https://www.idfcfirst.bank.in/content/idfcfirstbank/en/credit-card/select.html",
-          "checked_on": "2026-11-05"
+          "checked_on": "2026-11-05",
+          "citation": null
         },
         {
           "path": "reward_rules[id=20pct_hotel_bonus].rule_role",
@@ -253,7 +268,8 @@
           "value_sha256": "3e3e8e84e722887a",
           "reason": "The issuer pays a 20% (hotel) / 10% (flight) bonus on the normal points, not a flat 3 points per Rs 200, and only on bookings via the app Rewards Gallery. The rate is misread, so it must not be ranked.",
           "source_url": "https://www.idfcfirst.bank.in/content/idfcfirstbank/en/credit-card/select.html",
-          "checked_on": "2026-11-05"
+          "checked_on": "2026-11-05",
+          "citation": null
         },
         {
           "path": "reward_rules[id=10pct_flight_bonus].rule_role",
@@ -261,7 +277,8 @@
           "value_sha256": "3e3e8e84e722887a",
           "reason": "The issuer pays a 20% (hotel) / 10% (flight) bonus on the normal points, not a flat 3 points per Rs 200, and only on bookings via the app Rewards Gallery. The rate is misread, so it must not be ranked.",
           "source_url": "https://www.idfcfirst.bank.in/content/idfcfirstbank/en/credit-card/select.html",
-          "checked_on": "2026-11-05"
+          "checked_on": "2026-11-05",
+          "citation": null
         },
         {
           "path": "cap_rules",
@@ -269,7 +286,8 @@
           "value_sha256": "52de7c8df66a4a5c",
           "reason": "Restates the three source caps and adds the issuer rule that reward points are earned only on spends up to the credit limit per billing cycle (same wording as Wealth and Millennia). Amount depends on the user: null with depends_on_user (D13a).",
           "source_url": "https://www.idfcfirst.bank.in/content/idfcfirstbank/en/credit-card/select.html",
-          "checked_on": "2026-11-05"
+          "checked_on": "2026-11-05",
+          "citation": null
         }
       ]
     },
@@ -1002,11 +1020,11 @@
         "display_note": "Reward program is not applicable to Fuel transactions."
       },
       {
-        "id": "idfc-first-select:rule:0x_emi",
+        "id": "idfc-first-select:rule:0x_emi#1",
         "category_id": "cat-emi",
         "category_slug": "emi",
         "merchant_pattern": null,
-        "rail": "emi",
+        "rail": null,
         "unit": "points_per_200",
         "rate": 0,
         "min_txn_inr": null,
@@ -1014,9 +1032,11 @@
         "priority": 2,
         "conditions": {
           "source_local_id": "0x_emi",
-          "part": null,
+          "part": 1,
           "info_reasons": [],
-          "flags": []
+          "flags": [
+            "emi_alternatives"
+          ]
         },
         "notes": null,
         "effective_from": "2026-06-19",
@@ -1031,6 +1051,42 @@
         "except_platform_slugs": [],
         "block_inr": null,
         "min_engine_version": 1,
+        "max_engine_version": null,
+        "source_local_id": "0x_emi",
+        "display_note": "Transactions converted to EMI do not earn Reward Points."
+      },
+      {
+        "id": "idfc-first-select:rule:0x_emi#2",
+        "category_id": null,
+        "category_slug": null,
+        "merchant_pattern": null,
+        "rail": "emi",
+        "unit": "points_per_200",
+        "rate": 0,
+        "min_txn_inr": null,
+        "max_txn_inr": null,
+        "priority": 2,
+        "conditions": {
+          "source_local_id": "0x_emi",
+          "part": 2,
+          "info_reasons": [],
+          "flags": [
+            "emi_alternatives"
+          ]
+        },
+        "notes": null,
+        "effective_from": "2026-06-19",
+        "effective_to": null,
+        "excluded_categories": [],
+        "rule_role": "exclusion",
+        "merchant_slugs": [],
+        "platform_slugs": [],
+        "mcc_include": [],
+        "mcc_exclude": [],
+        "except_merchant_slugs": [],
+        "except_platform_slugs": [],
+        "block_inr": null,
+        "min_engine_version": 2,
         "max_engine_version": null,
         "source_local_id": "0x_emi",
         "display_note": "Transactions converted to EMI do not earn Reward Points."

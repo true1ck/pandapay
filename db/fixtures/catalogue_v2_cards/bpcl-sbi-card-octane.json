@@ -52,6 +52,11 @@
           "detail": "non_purchase_channel"
         },
         {
+          "code": "exclusion_rail_dropped",
+          "source_local_id": "wallet_load_exclusion",
+          "detail": null
+        },
+        {
           "code": "mcc_scoped_exclusion",
           "source_local_id": "wallet_load_exclusion",
           "detail": null
@@ -117,6 +122,11 @@
           "detail": null
         },
         {
+          "code": "emi_alternatives",
+          "source_local_id": "merchant_emi_exclusion",
+          "detail": null
+        },
+        {
           "code": "hidden_from_v1_uncapped",
           "source_local_id": null,
           "detail": "bpcl_fuel_25x, bpcl_lubricants_25x"
@@ -129,7 +139,8 @@
           "value_sha256": "7af78ba28cf9ccb3",
           "reason": "Issuer caps total RP in the bucket per statement cycle.",
           "source_url": "https://www.sbicard.com/sbi-card-en/assets/docs/pdf/ekit-tncs/BPCLOctanetnc.pdf",
-          "checked_on": "2026-11-05"
+          "checked_on": "2026-11-05",
+          "citation": null
         },
         {
           "path": "cap_rules[id=bharat_gas_reward_cap].metric",
@@ -137,7 +148,8 @@
           "value_sha256": "7af78ba28cf9ccb3",
           "reason": "Issuer caps total RP in the bucket per statement cycle.",
           "source_url": "https://www.sbicard.com/sbi-card-en/assets/docs/pdf/ekit-tncs/BPCLOctanetnc.pdf",
-          "checked_on": "2026-11-05"
+          "checked_on": "2026-11-05",
+          "citation": null
         },
         {
           "path": "cap_rules[id=lifestyle_reward_cap].metric",
@@ -145,7 +157,8 @@
           "value_sha256": "7af78ba28cf9ccb3",
           "reason": "WP7: T&C 11.4(3): \"Cumulative 10X Reward Points accrued ... will have a maximum cap of 7,500 Reward Points per month\" - all 10X points, not only the bonus.",
           "source_url": "https://www.sbicard.com/sbi-card-en/assets/docs/pdf/ekit-tncs/BPCLOctanetnc.pdf",
-          "checked_on": "2026-11-05"
+          "checked_on": "2026-11-05",
+          "citation": null
         },
         {
           "path": "cap_rules[id=lifestyle_reward_cap].post_limit_behavior",
@@ -153,7 +166,8 @@
           "value_sha256": "74234e98afe7498f",
           "reason": "WP7: T&C states no fallback after the 7,500 cap (research note); left unstated.",
           "source_url": "https://www.sbicard.com/sbi-card-en/assets/docs/pdf/ekit-tncs/BPCLOctanetnc.pdf",
-          "checked_on": "2026-11-05"
+          "checked_on": "2026-11-05",
+          "citation": null
         },
         {
           "path": "reward_rules[id=other_retail_base].conditions.eligible_scope",
@@ -161,7 +175,8 @@
           "value_sha256": "74234e98afe7498f",
           "reason": "WP7: T&C 11.4(4): \"1 Reward Point on all other retail spends, except fuel\"; the scope text restated the catch-all (rule was info).",
           "source_url": "https://www.sbicard.com/sbi-card-en/assets/docs/pdf/ekit-tncs/BPCLOctanetnc.pdf",
-          "checked_on": "2026-11-05"
+          "checked_on": "2026-11-05",
+          "citation": null
         },
         {
           "path": "reward_rules[id=bpcl_bharat_gas_25x].conditions.channel",
@@ -169,7 +184,8 @@
           "value_sha256": "74234e98afe7498f",
           "reason": "WP7: T&C: \"Bharat Gas (Website & App only)\" restates rail online; the rule already has rail online and merchant Bharat Gas.",
           "source_url": "https://www.sbicard.com/sbi-card-en/assets/docs/pdf/ekit-tncs/BPCLOctanetnc.pdf",
-          "checked_on": "2026-11-05"
+          "checked_on": "2026-11-05",
+          "citation": null
         }
       ]
     },
@@ -449,7 +465,7 @@
         "category_id": "cat-wallet",
         "category_slug": "wallet",
         "merchant_pattern": null,
-        "rail": "online",
+        "rail": null,
         "unit": "points_per_100",
         "rate": 0,
         "min_txn_inr": null,
@@ -460,6 +476,7 @@
           "part": 1,
           "info_reasons": [],
           "flags": [
+            "exclusion_rail_dropped",
             "mcc_scoped_exclusion"
           ]
         },
@@ -485,7 +502,7 @@
         "category_id": "cat-wallet",
         "category_slug": "wallet",
         "merchant_pattern": null,
-        "rail": "online",
+        "rail": null,
         "unit": "points_per_100",
         "rate": 0,
         "min_txn_inr": null,
@@ -496,6 +513,7 @@
           "part": 2,
           "info_reasons": [],
           "flags": [
+            "exclusion_rail_dropped",
             "mcc_scoped_exclusion"
           ]
         },
@@ -524,7 +542,7 @@
         "category_id": null,
         "category_slug": null,
         "merchant_pattern": null,
-        "rail": "online",
+        "rail": null,
         "unit": "points_per_100",
         "rate": 0,
         "min_txn_inr": null,
@@ -535,6 +553,7 @@
           "part": 3,
           "info_reasons": [],
           "flags": [
+            "exclusion_rail_dropped",
             "mcc_scoped_exclusion"
           ]
         },
@@ -952,11 +971,11 @@
         "display_note": "Flexipay transactions do not earn Reward Points; points previously accrued are reversed on conversion."
       },
       {
-        "id": "bpcl-sbi-card-octane:rule:merchant_emi_exclusion",
+        "id": "bpcl-sbi-card-octane:rule:merchant_emi_exclusion#1",
         "category_id": "cat-emi",
         "category_slug": "emi",
         "merchant_pattern": null,
-        "rail": "emi",
+        "rail": null,
         "unit": "points_per_100",
         "rate": 0,
         "min_txn_inr": null,
@@ -964,9 +983,11 @@
         "priority": 11,
         "conditions": {
           "source_local_id": "merchant_emi_exclusion",
-          "part": null,
+          "part": 1,
           "info_reasons": [],
-          "flags": []
+          "flags": [
+            "emi_alternatives"
+          ]
         },
         "notes": null,
         "effective_from": "2020-11-20",
@@ -981,6 +1002,42 @@
         "except_platform_slugs": [],
         "block_inr": null,
         "min_engine_version": 1,
+        "max_engine_version": null,
+        "source_local_id": "merchant_emi_exclusion",
+        "display_note": "Merchant EMI transactions do not earn Reward Points; points previously accrued are reversed on conversion."
+      },
+      {
+        "id": "bpcl-sbi-card-octane:rule:merchant_emi_exclusion#2",
+        "category_id": null,
+        "category_slug": null,
+        "merchant_pattern": null,
+        "rail": "emi",
+        "unit": "points_per_100",
+        "rate": 0,
+        "min_txn_inr": null,
+        "max_txn_inr": null,
+        "priority": 11,
+        "conditions": {
+          "source_local_id": "merchant_emi_exclusion",
+          "part": 2,
+          "info_reasons": [],
+          "flags": [
+            "emi_alternatives"
+          ]
+        },
+        "notes": null,
+        "effective_from": "2020-11-20",
+        "effective_to": null,
+        "excluded_categories": [],
+        "rule_role": "exclusion",
+        "merchant_slugs": [],
+        "platform_slugs": [],
+        "mcc_include": [],
+        "mcc_exclude": [],
+        "except_merchant_slugs": [],
+        "except_platform_slugs": [],
+        "block_inr": null,
+        "min_engine_version": 2,
         "max_engine_version": null,
         "source_local_id": "merchant_emi_exclusion",
         "display_note": "Merchant EMI transactions do not earn Reward Points; points previously accrued are reversed on conversion."

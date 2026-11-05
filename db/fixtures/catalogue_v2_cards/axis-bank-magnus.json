@@ -4,7 +4,7 @@
   "inputs": {
     "transform_version": "7",
     "source_record_sha256": "47d373ddfe49e0b50e401f8c819727021c7cd7093d6ee7298a84a1033df38867",
-    "override_sha256": "e458176d8e1acecc1b563d794617e7b8e747ffb98a366f12eacb20e23967a10a",
+    "override_sha256": "2b98f65cee3aca6ac93fdfa851d38d573c9452ef42dd293a41e0548ccfb1f457",
     "directory_sha256": "b1094d54b77e848d22f7a9a64f3ae6d1ef43ca3eb2fc8e40cd43ed1994664694",
     "verified": false
   },
@@ -105,6 +105,11 @@
           "detail": "transaction_type"
         },
         {
+          "code": "post_limit_above_cap_rate_allowed",
+          "source_local_id": "base_150k_spend",
+          "detail": null
+        },
+        {
           "code": "missing_cap_value",
           "source_local_id": "accelerated_spend_cap",
           "detail": null
@@ -132,7 +137,26 @@
           "value_sha256": "74234e98afe7498f",
           "reason": "WP7: \"Up to Rs2,00,000\" restates the travel_edge_200k_spend cap (base rate above); the rule was info.",
           "source_url": "https://www.axis.bank.in/docs/default-source/default-document-library/credit-card-tnc/terms-and-conditions-for-magnus-credit-card.pdf?sfvrsn=1d8117ef_1",
-          "checked_on": "2026-11-05"
+          "checked_on": "2026-11-05",
+          "citation": null
+        },
+        {
+          "path": "cap_rules[id=base_150k_spend].post_limit_behavior.points_per_block",
+          "op": "set",
+          "value_sha256": "9f14025af0065b30",
+          "reason": "WP7: D26a: Magnus T&C (revision effective 20 Jun 2025): 12 EDGE REWARD Points per Rs200 up to Rs1.5 lakh of monthly spend, 35 per Rs200 above it. The record stated 12 after the limit. Worked examples 006 and 007.",
+          "source_url": "https://www.axis.bank.in/docs/default-source/default-document-library/credit-card-tnc/terms-and-conditions-for-magnus-credit-card.pdf?sfvrsn=1d8117ef_1",
+          "checked_on": "2026-11-05",
+          "citation": null
+        },
+        {
+          "path": "cap_rules[id=base_150k_spend].allow_post_limit_above_cap_rate",
+          "op": "set",
+          "value_sha256": "b5bea41b6c623f7c",
+          "reason": "WP7: D26a: the post-limit rate (35 per Rs200) is above the in-cap rate (12), as the issuer states; the cited flag lets the loader emit it as custom_rate.",
+          "source_url": "https://www.axis.bank.in/docs/default-source/default-document-library/credit-card-tnc/terms-and-conditions-for-magnus-credit-card.pdf?sfvrsn=1d8117ef_1",
+          "checked_on": "2026-11-05",
+          "citation": "You will earn 35 EDGE REWARD Points per INR 200 on spends^ above INR 1.5 lakhs"
         }
       ]
     },
@@ -926,8 +950,8 @@
         "measure": "spend_amount",
         "period": "calendar_month",
         "cap_value": 150000,
-        "post_cap_unit": null,
-        "post_cap_rate": null,
+        "post_cap_unit": "points_per_200",
+        "post_cap_rate": 35,
         "resets_on_day": null,
         "cap_kind": "eligible_spend",
         "cap_amount": 150000,
@@ -937,7 +961,7 @@
           "axis-bank-magnus:rule:education_direct_vs_aggregator"
         ],
         "parent_cap_id": null,
-        "post_cap_behavior": "base_rate",
+        "post_cap_behavior": "custom_rate",
         "anchor": null,
         "min_engine_version": 2,
         "source_local_id": "base_150k_spend"
@@ -952,8 +976,8 @@
         "measure": "spend_amount",
         "period": "calendar_month",
         "cap_value": 200000,
-        "post_cap_unit": null,
-        "post_cap_rate": null,
+        "post_cap_unit": "points_per_200",
+        "post_cap_rate": 35,
         "resets_on_day": null,
         "cap_kind": "eligible_spend",
         "cap_amount": 200000,
@@ -962,7 +986,7 @@
           "axis-bank-magnus:rule:travel_edge_60"
         ],
         "parent_cap_id": null,
-        "post_cap_behavior": "base_rate",
+        "post_cap_behavior": "custom_rate",
         "anchor": null,
         "min_engine_version": 2,
         "source_local_id": "travel_edge_200k_spend"

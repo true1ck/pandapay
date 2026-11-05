@@ -72,6 +72,16 @@
           "detail": null
         },
         {
+          "code": "emi_alternatives",
+          "source_local_id": "exclude_merchant_emi",
+          "detail": null
+        },
+        {
+          "code": "emi_alternatives",
+          "source_local_id": "exclude_flexipay_emi",
+          "detail": null
+        },
+        {
           "code": "broad_exclusion_v1_only",
           "source_local_id": "exclude_digital_gaming",
           "detail": null
@@ -90,6 +100,11 @@
           "code": "info_rule",
           "source_local_id": "education_direct_payment",
           "detail": "unresolved_merchant:channel"
+        },
+        {
+          "code": "exclusion_rail_dropped",
+          "source_local_id": "education_direct_payment",
+          "detail": null
         },
         {
           "code": "exclusion_scope_broadened",
@@ -114,7 +129,8 @@
           "value_sha256": "7af78ba28cf9ccb3",
           "reason": "Caps limit cashback earned per statement cycle (Rs2,000 per bucket).",
           "source_url": "https://www.sbicard.com/sbi-card-en/assets/docs/pdf/cashback-revised.pdf",
-          "checked_on": "2026-11-05"
+          "checked_on": "2026-11-05",
+          "citation": null
         },
         {
           "path": "cap_rules[id=cap_offline_cashback_cycle].metric",
@@ -122,7 +138,8 @@
           "value_sha256": "7af78ba28cf9ccb3",
           "reason": "Caps limit cashback earned per statement cycle (Rs2,000 per bucket).",
           "source_url": "https://www.sbicard.com/sbi-card-en/assets/docs/pdf/cashback-revised.pdf",
-          "checked_on": "2026-11-05"
+          "checked_on": "2026-11-05",
+          "citation": null
         },
         {
           "path": "cap_rules[id=cap_online_cashback_cycle].limit_value",
@@ -130,7 +147,8 @@
           "value_sha256": "81a83544cf93c245",
           "reason": "Rs2,000 cashback cap per bucket.",
           "source_url": "https://www.sbicard.com/sbi-card-en/assets/docs/pdf/cashback-revised.pdf",
-          "checked_on": "2026-11-05"
+          "checked_on": "2026-11-05",
+          "citation": null
         },
         {
           "path": "cap_rules[id=cap_offline_cashback_cycle].limit_value",
@@ -138,7 +156,8 @@
           "value_sha256": "81a83544cf93c245",
           "reason": "Rs2,000 cashback cap per bucket.",
           "source_url": "https://www.sbicard.com/sbi-card-en/assets/docs/pdf/cashback-revised.pdf",
-          "checked_on": "2026-11-05"
+          "checked_on": "2026-11-05",
+          "citation": null
         },
         {
           "path": "accrual_engine.cashback_rounding",
@@ -146,7 +165,8 @@
           "value_sha256": "657bf85a75fa70bf",
           "reason": "Cashback is rounded down to a whole rupee per transaction (D11).",
           "source_url": "https://www.sbicard.com/sbi-card-en/assets/docs/pdf/ekit-tncs/cashback-tnc-ekit.pdf",
-          "checked_on": "2026-11-05"
+          "checked_on": "2026-11-05",
+          "citation": null
         },
         {
           "path": "reward_rules",
@@ -154,7 +174,8 @@
           "value_sha256": "4540a2abedf85712",
           "reason": "WP7: T&C booklet: \"Card Cashback is not applicable on transactions less than Rs100\" (D16b exclusion with max_txn_inr); the record had no minimum.",
           "source_url": "https://www.sbicard.com/sbi-card-en/assets/docs/pdf/ekit-tncs/cashback-tnc-ekit.pdf",
-          "checked_on": "2026-11-05"
+          "checked_on": "2026-11-05",
+          "citation": null
         },
         {
           "path": "reward_rules",
@@ -162,7 +183,8 @@
           "value_sha256": "03c9e55f05ccad8f",
           "reason": "WP7: D28c: Revision notice: \"Cashback not applicable on Merchant EMI & Flexipay EMI\". The record's EMI row needs category emi AND rail emi, so an EMI purchase in another category earned. Rail-EMI exclusion on all spend.",
           "source_url": "https://www.sbicard.com/sbi-card-en/assets/docs/pdf/cashback-revised.pdf",
-          "checked_on": "2026-11-05"
+          "checked_on": "2026-11-05",
+          "citation": null
         }
       ]
     },
@@ -1045,11 +1067,11 @@
         "display_note": "Railway spends are excluded from cashback."
       },
       {
-        "id": "cashback-sbi-card:rule:exclude_merchant_emi",
+        "id": "cashback-sbi-card:rule:exclude_merchant_emi#1",
         "category_id": "cat-emi",
         "category_slug": "emi",
         "merchant_pattern": null,
-        "rail": "emi",
+        "rail": null,
         "unit": "cashback_percent",
         "rate": 0,
         "min_txn_inr": null,
@@ -1057,9 +1079,11 @@
         "priority": 9,
         "conditions": {
           "source_local_id": "exclude_merchant_emi",
-          "part": null,
+          "part": 1,
           "info_reasons": [],
-          "flags": []
+          "flags": [
+            "emi_alternatives"
+          ]
         },
         "notes": null,
         "effective_from": "2026-04-01",
@@ -1079,11 +1103,47 @@
         "display_note": "Cashback is not applicable on Merchant EMI transactions."
       },
       {
-        "id": "cashback-sbi-card:rule:exclude_flexipay_emi",
+        "id": "cashback-sbi-card:rule:exclude_merchant_emi#2",
+        "category_id": null,
+        "category_slug": null,
+        "merchant_pattern": null,
+        "rail": "emi",
+        "unit": "cashback_percent",
+        "rate": 0,
+        "min_txn_inr": null,
+        "max_txn_inr": null,
+        "priority": 9,
+        "conditions": {
+          "source_local_id": "exclude_merchant_emi",
+          "part": 2,
+          "info_reasons": [],
+          "flags": [
+            "emi_alternatives"
+          ]
+        },
+        "notes": null,
+        "effective_from": "2026-04-01",
+        "effective_to": null,
+        "excluded_categories": [],
+        "rule_role": "exclusion",
+        "merchant_slugs": [],
+        "platform_slugs": [],
+        "mcc_include": [],
+        "mcc_exclude": [],
+        "except_merchant_slugs": [],
+        "except_platform_slugs": [],
+        "block_inr": null,
+        "min_engine_version": 2,
+        "max_engine_version": null,
+        "source_local_id": "exclude_merchant_emi",
+        "display_note": "Cashback is not applicable on Merchant EMI transactions."
+      },
+      {
+        "id": "cashback-sbi-card:rule:exclude_flexipay_emi#1",
         "category_id": "cat-emi",
         "category_slug": "emi",
         "merchant_pattern": null,
-        "rail": "emi",
+        "rail": null,
         "unit": "cashback_percent",
         "rate": 0,
         "min_txn_inr": null,
@@ -1091,9 +1151,11 @@
         "priority": 10,
         "conditions": {
           "source_local_id": "exclude_flexipay_emi",
-          "part": null,
+          "part": 1,
           "info_reasons": [],
-          "flags": []
+          "flags": [
+            "emi_alternatives"
+          ]
         },
         "notes": null,
         "effective_from": "2026-04-01",
@@ -1108,6 +1170,42 @@
         "except_platform_slugs": [],
         "block_inr": null,
         "min_engine_version": 1,
+        "max_engine_version": null,
+        "source_local_id": "exclude_flexipay_emi",
+        "display_note": "Cashback is not applicable on Flexipay EMI transactions."
+      },
+      {
+        "id": "cashback-sbi-card:rule:exclude_flexipay_emi#2",
+        "category_id": null,
+        "category_slug": null,
+        "merchant_pattern": null,
+        "rail": "emi",
+        "unit": "cashback_percent",
+        "rate": 0,
+        "min_txn_inr": null,
+        "max_txn_inr": null,
+        "priority": 10,
+        "conditions": {
+          "source_local_id": "exclude_flexipay_emi",
+          "part": 2,
+          "info_reasons": [],
+          "flags": [
+            "emi_alternatives"
+          ]
+        },
+        "notes": null,
+        "effective_from": "2026-04-01",
+        "effective_to": null,
+        "excluded_categories": [],
+        "rule_role": "exclusion",
+        "merchant_slugs": [],
+        "platform_slugs": [],
+        "mcc_include": [],
+        "mcc_exclude": [],
+        "except_merchant_slugs": [],
+        "except_platform_slugs": [],
+        "block_inr": null,
+        "min_engine_version": 2,
         "max_engine_version": null,
         "source_local_id": "exclude_flexipay_emi",
         "display_note": "Cashback is not applicable on Flexipay EMI transactions."
@@ -1348,7 +1446,7 @@
         "category_id": "cat-education",
         "category_slug": "education",
         "merchant_pattern": null,
-        "rail": "online",
+        "rail": null,
         "unit": "cashback_percent",
         "rate": 0,
         "min_txn_inr": null,
@@ -1361,6 +1459,7 @@
             "unresolved_merchant:channel"
           ],
           "flags": [
+            "exclusion_rail_dropped",
             "exclusion_scope_broadened"
           ]
         },

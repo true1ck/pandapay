@@ -84,7 +84,8 @@
           "value_sha256": "2c33d2f81c31f5ec",
           "reason": "WP7: T&C: 5 EDGE Miles per Rs100 on Travel EDGE, direct airline and hotel spends up to Rs2,00,000 a month. The Travel EDGE alternative of travel-accelerated was dropped by the loader (merchant id text, partial_alternatives); restated as its own platform rule sharing the same cap.",
           "source_url": "https://www.axis.bank.in/docs/default-source/atlas-credit-card/terms-and-conditions-of-features-of-axis-bank-atlas-credit-card.pdf",
-          "checked_on": "2026-11-05"
+          "checked_on": "2026-11-05",
+          "citation": null
         },
         {
           "path": "reward_rules[id=travel-above-monthly-cap]",
@@ -92,7 +93,8 @@
           "value_sha256": "74234e98afe7498f",
           "reason": "WP7: Restates the cap's post-limit behaviour (base 2 Miles above Rs2,00,000), which travel-accelerated-monthly-spend-cap already models (base_rate); as an info rule it only blocked verification.",
           "source_url": "https://www.axis.bank.in/docs/default-source/atlas-credit-card/terms-and-conditions-of-features-of-axis-bank-atlas-credit-card.pdf",
-          "checked_on": "2026-11-05"
+          "checked_on": "2026-11-05",
+          "citation": null
         },
         {
           "path": "reward_rules",
@@ -100,7 +102,8 @@
           "value_sha256": "6e5820d5438e4e97",
           "reason": "WP7: D29a: the record's Axis reward-ledger terms say \"EDGE Miles are debited when a credit-card transaction is converted to EMI; cancellation of the EMI does not restore the miles\". A debit-on-EMI clause counts as an EMI exclusion (D28c): rail-EMI exclusion on all spend. Atlas had no EMI row.",
           "source_url": "https://www.axis.bank.in/docs/default-source/atlas-credit-card/terms-and-conditions-of-features-of-axis-bank-atlas-credit-card.pdf",
-          "checked_on": "2026-11-05"
+          "checked_on": "2026-11-05",
+          "citation": null
         }
       ]
     },
@@ -1692,8 +1695,8 @@
         "measure": "spend_amount",
         "period": "calendar_month",
         "cap_value": 200000,
-        "post_cap_unit": null,
-        "post_cap_rate": null,
+        "post_cap_unit": "points_per_100",
+        "post_cap_rate": 2,
         "resets_on_day": 1,
         "cap_kind": "eligible_spend",
         "cap_amount": 200000,
@@ -1703,7 +1706,7 @@
           "axis-atlas:rule:travel-edge-portal"
         ],
         "parent_cap_id": null,
-        "post_cap_behavior": "base_rate",
+        "post_cap_behavior": "custom_rate",
         "anchor": null,
         "min_engine_version": 2,
         "source_local_id": "travel-accelerated-monthly-spend-cap"
