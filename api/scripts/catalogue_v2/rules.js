@@ -827,6 +827,38 @@ function transformRule(src, idx, ctx) {
   // A v1-only row that the v1 feed couldn't show either is pointless.
   rows = rows.filter((r) => !(r.max_engine_version === 1 && (r.min_engine_version !== 1 || r.rule_role === 'info')));
 
+  // A categorised exclusion must not vanish from v1 either (v1 would then
+  // pay there). When every row is v2-only (a platform, MCCs only), add a
+  // v1-only row excluding the whole category — broader, the safe side for
+  // an exclusion (as D18b). Not for amount-bounded exclusions, where v1
+  // would exclude the whole category at every amount.
+  const exclusionRows = rows.filter((r) => r.rule_role === 'exclusion');
+  // Only for exclusions whose own token is a category ("education" excluded
+  // via third-party apps); a list-scoped one ("PayZapp: no accelerator on
+  // rent") is not a category exclusion.
+  if (tokenHasCategory && exclusionRows.length && !rows.some((r) => r.min_engine_version === 1 && r.rule_role === 'exclusion') && maxTxn === null) {
+    const cats = uniq(token.parts.map((tp) => tp.categorySlug).filter(Boolean));
+    for (const cat of cats) {
+      rows.push({
+        ...exclusionRows[0],
+        part: cats.length > 1 ? `v1-${cat}` : 'v1',
+        category_slug: cat,
+        merchant_pattern: null,
+        merchant_slugs: [],
+        platform_slugs: [],
+        mcc_include: [],
+        mcc_exclude: [],
+        except_merchant_slugs: [],
+        except_platform_slugs: [],
+        rail: null,
+        min_engine_version: 1,
+        max_engine_version: 1,
+        flags: uniq([...exclusionRows[0].flags, 'exclusion_v1_projection']),
+        v2_reasons: [],
+      });
+    }
+  }
+
   // D18c: a reduced-rate rule must not vanish from v1 (v1 would then pay
   // the higher base). When every row is v2-only (MCCs, a platform, a block,
   // several merchants), add a v1-only row on the rule's category at the
@@ -859,6 +891,13 @@ function transformRule(src, idx, ctx) {
         v1_projection_of: cat,
       });
     }
+  }
+
+  if (isReduced && rows.some((r) => ['earn', 'base'].includes(r.rule_role)) &&
+      !rows.some((r) => r.min_engine_version === 1 && r.rule_role !== 'info')) {
+    // No app category to project onto (an MCC list spanning several, or
+    // FASTag): v1 can't show the reduced rate. Reported for review.
+    for (const r of rows) r.flags = uniq([...r.flags, 'reduced_rate_no_v1_row']);
   }
 
   for (const row of rows) {

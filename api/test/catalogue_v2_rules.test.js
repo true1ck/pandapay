@@ -889,6 +889,14 @@ test('D18c reduced-rate rules keep a v1 row: narrowed ones get a v1-only broad r
   assert.ok(util.some((x) => x.min_engine_version === 2 && x.mcc_include.join() === '4900'));
 });
 
+test('a categorised exclusion that is v2-only (e.g. education via third-party apps) keeps a v1-only category row', () => {
+  const r = run(card({
+    rules: [rule({ id: 'education_third_party_exclusion', category_id: 'education', evaluation_type: 'exclusion', conditions: { app: 'PhonePe' }, action: { cashback_percent: 0 } })],
+  }));
+  assert.deepEqual(only(r, 'education_third_party_exclusion').map((x) => [x.category_slug, x.platform_slugs.join(), x.min_engine_version, x.max_engine_version]),
+    [['education', 'phonepe_app', 2, null], ['education', '', 1, 1]]);
+});
+
 test('D18d a composite or synonym restatement of the rule\'s own category is not "unknown"', () => {
   const r = run(pointsCard([
     rule({ id: 'utility-reduced', category_id: 'utility', evaluation_type: 'standard_accrual', conditions: { category: 'utility_bill_payments' }, action: { points_per_block: 1 } }),
