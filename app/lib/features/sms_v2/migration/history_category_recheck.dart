@@ -29,8 +29,20 @@ class HistoryCategoryReport {
   Map<String, Object?> toJson() => Map.of(data);
 }
 
-/// An explicitly requested category pass. Ordinary sync never invokes it.
-/// Stored money facts and event identities keep their existing authority.
+/// Categories the rules chose on their own. A person's own choice (`user`) and
+/// one they confirmed through history (`historyConfirmed`) are never in this set.
+const automaticCategorySources = <CategorySource>{
+  CategorySource.fallback,
+  CategorySource.catalogue,
+  CategorySource.shared,
+  CategorySource.mcc,
+  CategorySource.ai,
+};
+
+/// An explicitly requested category pass. Ordinary sync never invokes it,
+/// except through [HistoryCategoryRecheck.automaticChoices] once per shared
+/// rule-set revision. Stored money facts and event identities keep their
+/// existing authority.
 class HistoryCategoryRecheck {
   HistoryCategoryRecheck({
     required this.financial,
@@ -40,10 +52,36 @@ class HistoryCategoryRecheck {
     required this.to,
     required this.accountIsCurrent,
     this.categoryIdBySlug = const {},
+    this.onlySources,
   }) {
     if (!from.isBefore(to)) throw ArgumentError('Choose a nonempty period');
     SmsV2Schema.ensure(db);
   }
+
+  /// Every spend in the account's history, re-categorised only where the
+  /// current decision came from the rules (see [automaticCategorySources]).
+  /// The user's own choices and confirmed history are left exactly as they are.
+  factory HistoryCategoryRecheck.automaticChoices({
+    required FinancialStore financial,
+    required String namespace,
+    required RuleBundle bundle,
+    required bool Function() accountIsCurrent,
+    Map<String, String> categoryIdBySlug = const {},
+    DateTime? now,
+  }) => HistoryCategoryRecheck(
+    financial: financial,
+    namespace: namespace,
+    bundle: bundle,
+    from: DateTime.utc(1970),
+    to: (now ?? DateTime.now()).toUtc().add(const Duration(days: 2)),
+    accountIsCurrent: accountIsCurrent,
+    categoryIdBySlug: categoryIdBySlug,
+    onlySources: automaticCategorySources,
+  );
+
+  /// When set, only decisions from these sources are recomputed; every other
+  /// decision stays locked.
+  final Set<CategorySource>? onlySources;
 
   final FinancialStore financial;
   final String namespace;
@@ -94,6 +132,8 @@ class HistoryCategoryRecheck {
       },
       'from': from.toUtc().toIso8601String(),
       'to': to.toUtc().toIso8601String(),
+      if (onlySources != null)
+        'onlySources': (onlySources!.map((source) => source.wire).toList()..sort()),
       'targets': _targets,
     });
     return 'history:categories:${sha256.convert(utf8.encode(revision))}';
@@ -244,6 +284,7 @@ class HistoryCategoryRecheck {
         (id, decision) =>
             !customCategories.contains(id) &&
             decision.source != CategorySource.user &&
+            (onlySources == null || onlySources!.contains(decision.source)) &&
             (affected[id]!.type == EventType.refund ||
                 affected[id]!.occurredAt.isBefore(to) &&
                     !affected[id]!.occurredAt.isBefore(from)),

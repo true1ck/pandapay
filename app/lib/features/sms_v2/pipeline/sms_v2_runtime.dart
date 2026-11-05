@@ -2,6 +2,8 @@ import '../personal/personal_rule_engine.dart';
 import '../personal/personal_rule_store.dart';
 import '../migration/legacy_replay.dart';
 import '../migration/history_update.dart';
+import '../migration/history_category_recheck.dart';
+import 'package:crypto/crypto.dart';
 import 'dart:convert';
 import 'dart:io';
 
@@ -436,6 +438,43 @@ class SmsV2Runtime {
         if (messages.isNotEmpty) await capture(messages, backfill: true);
       }
       _state.put('pipeline:revision', _revision(active.revision));
+    }
+    await _refreshAutomaticCategories();
+  }
+
+  /// A new shared rule set can categorise shops that earlier sat in "Other".
+  /// Once per rule-set revision, spends whose category the rules chose are
+  /// worked out again; a category the person set or confirmed is never touched.
+  Future<void> _refreshAutomaticCategories() async {
+    final shared = _bundle;
+    if (shared == null || !accountIsCurrent()) return;
+    final revision = sha256
+        .convert(
+          utf8.encode(
+            canonicalJson({
+              'categoryRules': [for (final rule in shared.categoryRules) rule.toJson()],
+              'merchantAliases': [for (final alias in shared.merchantAliases) alias.toJson()],
+              'taxonomy': shared.taxonomyVersion,
+            }),
+          ),
+        )
+        .toString();
+    if (_state.get('pipeline:category-revision') == revision) return;
+    try {
+      final report = await HistoryCategoryRecheck.automaticChoices(
+        financial: financial,
+        namespace: namespace,
+        bundle: shared,
+        accountIsCurrent: accountIsCurrent,
+        categoryIdBySlug: categoryIdBySlug,
+        now: clock(),
+      ).run(chunkSize: 50, shouldContinue: accountIsCurrent);
+      // Money still waiting for the server is picked up on a later pass.
+      if (report.complete && report.awaitingSync == 0) {
+        _state.put('pipeline:category-revision', revision);
+      }
+    } catch (_) {
+      // A failed pass never blocks sync; the next sync tries again.
     }
   }
 }
