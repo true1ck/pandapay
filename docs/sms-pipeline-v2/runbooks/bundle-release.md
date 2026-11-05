@@ -49,7 +49,7 @@ The script then checks that all four cohorts were minted, or that nothing was ne
 ## 3. After the import
 
 - Rules page: one active bundle per cohort, all signed with the expected key id.
-- The hourly job `run_sms_v2_rule_jobs.js` is scheduled on the maintenance host (it also re-signs served bundles before their 7-day expiry; see `signing-keys.md`). Run it once by hand now, check its output, and check that `GET /sms/v2/rules` answers 200 for a tester.
+- The hourly rule job runs as the `sms-v2-rule-jobs` service on the private admin host (it also re-signs served bundles before their 7-day expiry; see `signing-keys.md` and `deploy/admin/RUNBOOK.md`). Restart it now (it runs at start-up), check its log for `"status":"ok"`, and check that `GET /sms/v2/rules` answers 200 for a tester.
 - `GET /admin/sms/v2/metrics`: `bundleChecks.active` lists the four bundles; `bundleChecks.checks` starts rising as phones check (about one check per phone every 6 hours).
 - On a tester phone, force a bundle check and confirm the version arrives and verifies (the phone ignores a bundle whose signature or key id it does not trust).
 - Then follow the release checklist: flag on for testers, then everyone.
@@ -64,7 +64,7 @@ The script then checks that all four cohorts were minted, or that nothing was ne
 | Import produced the wrong bundle versions | Do not re-import over it. Use the Rules page rollback, then correct `rules/sms/v2` and release again as a rule change. |
 | v2 ingestion should stop altogether | Turn `sms_pipeline_v2_enabled` off. Phones keep everything in their outbox. |
 | Signing key exposed | "Revoking a leaked rule key" in `signing-keys.md`: switch the maintenance environment to the spare key and run the hourly job once. |
-| `/sms/v2/rules` answers 503 `bundle_unavailable` | The served copy is missing or expired. Run `run_sms_v2_rule_jobs.js` on the maintenance host and fix whatever stopped the hourly job. |
+| `/sms/v2/rules` answers 503 `bundle_unavailable` | The served copy is missing or expired. Read the `sms-v2-rule-jobs` log on the private admin host, fix whatever stopped the hourly job, then restart that service (it runs at start-up). |
 
 ## Legacy routes
 

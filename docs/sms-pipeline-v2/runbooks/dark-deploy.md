@@ -18,8 +18,8 @@ Diff between the last production deploy and `sms-v2/main` (production line tip `
 | API image | New code under `api/src/sms_v2/`, vendored `api/sms_v2_assets/` (contracts, gates), 2 new dependencies (`ajv`, `ajv-formats`), `SMS_V2_CONTRACTS_DIR` / `SMS_V2_GATES_PATH` env set in the Dockerfile. |
 | Legacy routes | `api/src/index.js` (about 22 changed lines): the `registerSmsV2(...)` line, `status` guards on several existing queries, plus `event_id, pipeline_version` added to the transaction list/detail SELECT. Also `self_transfer.js` and `transaction_splits.js` (+2/-2 and +4/-2, the same status guard). |
 | Admin routes | `api/src/admin/routes.js` and `route_manifest.js` register `/admin/sms/v2/*` on the private admin app (all behind the flag guard too). |
-| Compose, deploy scripts, workflows | **No change** to `docker-compose.prod.yml` or `deploy/*`. No new container, worker or cron. The v2 job scripts (`run_sms_v2_rule_jobs.js`, `run_sms_v2_templates.js`) are not scheduled. |
-| Env | **No new required variable.** A missing rule-signing key only makes rule routes answer 503 (they answer 404 first while the flag is off). `GEMINI_API_KEY` is read only by the template worker, which is not started. |
+| Compose, deploy scripts, workflows | **No change** to `docker-compose.prod.yml`. The private admin profile (`deploy/admin/compose.private.yml`) runs the two v2 jobs as services: `sms-v2-rule-jobs` (hourly rule job, `src/sms_v2/jobs/rule_jobs_main.js --loop`) and `sms-v2-template-worker` (AI drafts, `src/sms_v2/jobs/template_worker_main.js`). See `deploy/admin/RUNBOOK.md`. |
+| Env | **No new variable on the public API.** A missing rule-signing key only makes rule routes answer 503 (they answer 404 first while the flag is off). `SMS_RULES_SIGNING_KEY`, `SMS_RULES_KEY_ID`, `SMS_V2_JOB_ADMIN_ID`, `GEMINI_API_KEY` and the `SMS_V2_AI_*` settings are set only on the private admin host. |
 
 Startup risk: `registerSmsV2` throws if the contracts are missing. They are copied into the image (`COPY sms_v2_assets`), and `scripts/sync_sms_v2_assets.js` plus `npm run check` keep them in step. Verify in pre-checks (section 5).
 
