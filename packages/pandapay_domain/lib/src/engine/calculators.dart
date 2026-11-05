@@ -1,4 +1,5 @@
 import 'engine.dart';
+import 'reward_engine_v2.dart';
 import '../card_rules/card_rules.dart';
 import '../clock/clock.dart';
 import '../money/money.dart';
@@ -200,6 +201,9 @@ class SplitOptimizer {
     RecommendationContext baseContext,
   ) {
     if (consumed.isZero) return snapshot;
+    if (snapshot.product.isV2Shaped) {
+      return _withNativeCapsConsumed(snapshot, consumed, baseContext);
+    }
 
     // `capRemaining` is measured in the cap's own unit. The old optimizer
     // subtracted allocated rupees from every cap, which made a ₹100 reward-
@@ -274,6 +278,64 @@ class SplitOptimizer {
     return CardSnapshot(
       product: snapshot.product,
       capRemaining: reduced,
+      milestoneProgress: snapshot.milestoneProgress,
+      forcedOverrideCardId: snapshot.forcedOverrideCardId,
+    );
+  }
+
+  /// The v2-shaped counterpart of [_withReducedCaps] (plan C8/D30a).
+  ///
+  /// A v2 card's caps are in NATIVE units and live in
+  /// [CardSnapshot.capConsumed]; `capRemaining` is the v1 measure and must
+  /// never be reduced here, or the engine would subtract a v1 ₹ figure from
+  /// a native points cap (and, with `capConsumed` dropped, would forget what
+  /// the card had already used, so the plan piled spend onto a card whose
+  /// bonus was used up or unknown).
+  ///
+  /// The portion already allocated is evaluated by the v2 engine as one
+  /// charge against the snapshot's own consumption, and each cap's native
+  /// delta is added to `capConsumed`. Transaction-count caps are left alone:
+  /// a split allocation is one eventual charge on the card, so the marginal
+  /// steps must not count it repeatedly (as the v1 path does). A cap that is
+  /// already at its amount (used up, or unknown and fed as used up) gets no
+  /// delta and stays so.
+  CardSnapshot _withNativeCapsConsumed(
+    CardSnapshot snapshot,
+    Money consumed,
+    RecommendationContext baseContext,
+  ) {
+    final allocated = RecommendationEngine.evaluateRewardV2(
+      snapshot.product,
+      RecommendationContext(
+        amount: consumed,
+        categoryId: baseContext.categoryId,
+        categorySlug: baseContext.categorySlug,
+        mcc: baseContext.mcc,
+        vpa: baseContext.vpa,
+        rail: baseContext.rail,
+        isP2P: baseContext.isP2P,
+        travelMode: baseContext.travelMode,
+        merchantName: baseContext.merchantName,
+        now: baseContext.now,
+      ),
+      capConsumedBefore: snapshot.v2CapConsumed,
+      directory: engine.merchantDirectory,
+    );
+    final countCapIds = {
+      for (final usage in allocated.caps)
+        if (usage.kind == CapKind.txnCount) usage.cap.id,
+    };
+    final next = Map<String, double>.of(snapshot.v2CapConsumed);
+    for (final entry in allocated.capDeltas.entries) {
+      if (countCapIds.contains(entry.key)) continue;
+      next[entry.key] = (next[entry.key] ?? 0) + entry.value;
+    }
+    return CardSnapshot(
+      product: snapshot.product,
+      // Deliberately empty: v2CapConsumed above already folded in anything
+      // a caller passed there.
+      capRemaining: const {},
+      capConsumed: next,
       milestoneProgress: snapshot.milestoneProgress,
       forcedOverrideCardId: snapshot.forcedOverrideCardId,
     );

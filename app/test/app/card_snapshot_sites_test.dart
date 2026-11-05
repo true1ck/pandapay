@@ -260,4 +260,31 @@ void main() {
     }
     expect(offenders, isEmpty);
   });
+
+  test('the domain package builds a CardSnapshot only in the engine, the '
+      'acquisition engine and the split optimizer, and the optimizer\'s v2 '
+      'rebuild carries capConsumed (D30a)', () {
+    // A rebuild that drops capConsumed makes a v2 card forget what it has
+    // used (the split planner then piles spend onto a used-up card).
+    final offenders = <String>[];
+    for (final entity in Directory(
+      '../packages/pandapay_domain/lib',
+    ).listSync(recursive: true)) {
+      if (entity is! File || !entity.path.endsWith('.dart')) continue;
+      if (RegExp(r'\bCardSnapshot\(').hasMatch(entity.readAsStringSync())) {
+        offenders.add(entity.path.split('/').last);
+      }
+    }
+    offenders.sort();
+    expect(offenders, [
+      'acquisition_engine.dart',
+      'calculators.dart',
+      'engine.dart',
+    ]);
+    final optimizer = File(
+      '../packages/pandapay_domain/lib/src/engine/calculators.dart',
+    ).readAsStringSync();
+    expect(optimizer, contains('capConsumed: next'));
+    expect(optimizer, contains('if (snapshot.product.isV2Shaped)'));
+  });
 }
