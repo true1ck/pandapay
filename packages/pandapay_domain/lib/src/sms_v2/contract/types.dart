@@ -35,6 +35,21 @@ final class Amount extends JsonValue {
   final String unit;
   final OriginalAmount? original;
 
+  /// True when [minor] is paise of INR, the only unit the ledger counts.
+  bool get isInr => unit == 'INR';
+
+  /// The foreign amount this message stated, if any (CCR-004).
+  ///
+  /// With an INR [unit] it is [original]: the bank also printed the INR it
+  /// posted. With a foreign [unit] the amount itself is the foreign price and
+  /// no INR is known yet: `{minor, unit}` is the whole evidence. `POINTS` and
+  /// INR amounts without an original have none.
+  OriginalAmount? get foreign {
+    if (unit == 'INR') return original;
+    if (unit == 'POINTS') return null;
+    return OriginalAmount(minor: minor, currency: unit);
+  }
+
   @override
   Json toJson() => {
         'role': role.wire,

@@ -147,15 +147,54 @@ final class RuleMatch extends JsonValue {
       };
 }
 
-/// An amount an emit builds from a regex group.
+/// How an emit reads the original foreign amount of an INR posting (CCR-004).
+/// [from] is the group holding the printed foreign amount. The currency is the
+/// fixed [currency] or the text of the group [currencyFrom].
+final class EmitOriginal extends JsonValue {
+  const EmitOriginal({required this.from, this.currency, this.currencyFrom});
+
+  factory EmitOriginal.fromJson(Json j) => EmitOriginal(
+        from: j['from'] as String,
+        currency: j['currency'] as String?,
+        currencyFrom: j['currencyFrom'] as String?,
+      );
+
+  final String from;
+
+  /// A fixed ISO code, for a rule that is about one currency.
+  final String? currency;
+
+  /// Named regex group holding a code or symbol (`USD`, `US$`, `€`).
+  final String? currencyFrom;
+
+  @override
+  Json toJson() => {
+        'from': from,
+        if (currency != null) 'currency': currency,
+        if (currencyFrom != null) 'currencyFrom': currencyFrom,
+      };
+}
+
+/// An amount an emit builds from a regex group. The unit is fixed ([unit]) or
+/// read from the message ([unitFrom], CCR-004); exactly one is set. With a
+/// foreign unit the amount is a foreign-only price: no INR is known.
 final class EmitAmount extends JsonValue {
-  EmitAmount({required this.role, required this.from, required this.unit, List<String>? transforms})
-      : transforms = transforms == null ? null : List.unmodifiable(transforms);
+  EmitAmount({
+    required this.role,
+    required this.from,
+    this.unit,
+    this.unitFrom,
+    this.original,
+    List<String>? transforms,
+  })  : assert(unit != null || unitFrom != null, 'unit or unitFrom is required'),
+        transforms = transforms == null ? null : List.unmodifiable(transforms);
 
   factory EmitAmount.fromJson(Json j) => EmitAmount(
         role: AmountRole.fromWire(j['role'] as String),
         from: j['from'] as String,
-        unit: j['unit'] as String,
+        unit: j['unit'] as String?,
+        unitFrom: j['unitFrom'] as String?,
+        original: j['original'] == null ? null : EmitOriginal.fromJson(j['original'] as Json),
         transforms: _strings(j['transforms']),
       );
 
@@ -163,14 +202,22 @@ final class EmitAmount extends JsonValue {
 
   /// Named regex group.
   final String from;
-  final String unit;
+  final String? unit;
+
+  /// Named regex group holding the currency of [from].
+  final String? unitFrom;
+
+  /// The foreign amount printed beside an INR posting.
+  final EmitOriginal? original;
   final List<String>? transforms;
 
   @override
   Json toJson() => {
         'role': role.wire,
         'from': from,
-        'unit': unit,
+        if (unit != null) 'unit': unit,
+        if (unitFrom != null) 'unitFrom': unitFrom,
+        if (original != null) 'original': original!.toJson(),
         if (transforms != null) 'transforms': [...transforms!],
       };
 }

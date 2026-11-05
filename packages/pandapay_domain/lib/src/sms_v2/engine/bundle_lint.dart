@@ -206,6 +206,9 @@ List<LintIssue> lintBundle(RuleBundle bundle) {
       final e = r.emit[i];
       for (final a in e.amounts ?? const <EmitAmount>[]) {
         need(a.from, 'emit[$i].amounts');
+        need(a.unitFrom, 'emit[$i].amounts.unitFrom');
+        need(a.original?.from, 'emit[$i].amounts.original');
+        need(a.original?.currencyFrom, 'emit[$i].amounts.original.currencyFrom');
       }
       need(e.occurredAt?['from'] as String?, 'emit[$i].occurredAt');
       for (final k in const ['maskFrom', 'maskLengthFrom', 'productNameFrom', 'issuerSlugFrom']) {

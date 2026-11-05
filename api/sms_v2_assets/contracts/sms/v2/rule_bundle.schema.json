@@ -145,8 +145,7 @@
       "type": "object",
       "required": [
         "role",
-        "from",
-        "unit"
+        "from"
       ],
       "additionalProperties": false,
       "properties": {
@@ -194,7 +193,91 @@
             ],
             "x-code": "bundle.emit.transform_unknown"
           }
+        },
+        "unitFrom": {
+          "type": "string",
+          "pattern": "^[A-Za-z][A-Za-z0-9_]*$",
+          "x-code": "bundle.emit.amount_unit_required"
+        },
+        "original": {
+          "type": "object",
+          "required": [
+            "from"
+          ],
+          "additionalProperties": false,
+          "properties": {
+            "from": {
+              "type": "string",
+              "pattern": "^[A-Za-z][A-Za-z0-9_]*$",
+              "x-code": "bundle.emit.original_invalid"
+            },
+            "currency": {
+              "type": "string",
+              "pattern": "^[A-Z]{3}$",
+              "x-code": "bundle.emit.original_invalid"
+            },
+            "currencyFrom": {
+              "type": "string",
+              "pattern": "^[A-Za-z][A-Za-z0-9_]*$",
+              "x-code": "bundle.emit.original_invalid"
+            }
+          },
+          "anyOf": [
+            {
+              "type": "object",
+              "required": [
+                "currency"
+              ],
+              "properties": {
+                "currency": {
+                  "type": "string"
+                }
+              }
+            },
+            {
+              "type": "object",
+              "required": [
+                "currencyFrom"
+              ],
+              "properties": {
+                "currencyFrom": {
+                  "type": "string"
+                }
+              }
+            }
+          ],
+          "x-codes": {
+            "anyOf": "bundle.emit.original_invalid"
+          },
+          "x-code": "bundle.emit.original_invalid"
         }
+      },
+      "anyOf": [
+        {
+          "type": "object",
+          "required": [
+            "unit"
+          ],
+          "properties": {
+            "unit": {
+              "type": "string"
+            }
+          }
+        },
+        {
+          "type": "object",
+          "required": [
+            "unitFrom"
+          ],
+          "properties": {
+            "unitFrom": {
+              "type": "string"
+            }
+          }
+        }
+      ],
+      "x-codes": {
+        "anyOf": "bundle.emit.amount_unit_required"
       }
     },
     "emit": {
