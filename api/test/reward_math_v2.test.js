@@ -625,6 +625,110 @@ test('pickRuleV2: ties compare this transaction\'s pre-cap value, then rule id (
   assert.strictEqual(pickRuleV2([twin, rate], ctxOf({ amount: 1000 }), card).rule.id, 'a-rate');
 });
 
+// --- C8 D15 robustness rulings ---------------------------------------------------
+
+function cashbackCard(over = {}) {
+  return {
+    id: 'c', point_value_inr: 0, base_reward_unit: 'cashback_percent', base_reward_rate: 1, excluded_categories: [],
+    reward_rules: [{ id: 'on', rule_role: 'earn', rail: 'online', unit: 'cashback_percent', rate: 5, priority: 10 }],
+    cap_rules: [], ...over,
+  };
+}
+
+test('D15b: an unknown cashback_rounding marks the card v2 and falls back to rupee_floor', () => {
+  const card = cashbackCard({ cashback_rounding: 'nearest_coin' });
+  assert.strictEqual(isV2Card(card), true);
+  const r = computeTransactionRewardV2({ card, capConsumedBefore: {}, ctx: ctxOf({ amount: 2999, rail: 'online' }) });
+  assert.strictEqual(r.cashbackInr, 149); // 149.95 floored to whole rupees, never paise or half-up
+  // null still means paise.
+  const paise = computeTransactionRewardV2({ card: cashbackCard({ accrual_rounding: 'none', cashback_rounding: null }), capConsumedBefore: {}, ctx: ctxOf({ amount: 2999, rail: 'online' }) });
+  assert.strictEqual(paise.cashbackInr, 149.95);
+});
+
+test('D15b: an unknown accrual_rounding marks the card v2 and falls back to floor', () => {
+  const card = pointsCard({
+    accrual_rounding: 'banker',
+    reward_rules: [{ id: 'on', rule_role: 'earn', rail: 'online', unit: 'points_per_100', rate: 5, priority: 10 }],
+  });
+  assert.strictEqual(isV2Card(card), true);
+  const r = computeTransactionRewardV2({ card, capConsumedBefore: {}, ctx: ctxOf({ amount: 199, rail: 'online' }) });
+  assert.strictEqual(r.points, 5); // 1 block, not 1.99 (none) or 2 (round)
+});
+
+test('D15c: the tie-break compares integer paise, so decimal-equal values tie and fall to the rule id', () => {
+  const card = { base_reward_unit: 'points_per_100', base_reward_rate: 1, point_value_inr: 0.1, accrual_rounding: 'floor' };
+  // 10 blocks x 3.3 = 33 points x ₹0.1 = 3.3000000000000003 in doubles; 0.33% of ₹1,000 = ₹3.30.
+  assert.ok(33 * 0.1 > 3.3);
+  const pts = { id: 'z-points', rule_role: 'earn', priority: 10, unit: 'points_per_100', rate: 3.3 };
+  const cb = { id: 'a-cashback', rule_role: 'earn', priority: 10, unit: 'cashback_percent', rate: 0.33 };
+  assert.strictEqual(pickRuleV2([pts, cb], ctxOf({ amount: 1000 }), card).rule.id, 'a-cashback');
+  assert.strictEqual(pickRuleV2([cb, pts], ctxOf({ amount: 1000 }), card).rule.id, 'a-cashback');
+  // A real paisa of difference still wins.
+  const better = { ...pts, rate: 3.31 }; // 33.1 points = ₹3.31
+  assert.strictEqual(pickRuleV2([cb, better], ctxOf({ amount: 1000 }), card).rule.id, 'z-points');
+});
+
+test('D15d: a rule with an unknown role or unparseable field is skipped and reported', () => {
+  const card = cashbackCard({
+    accrual_rounding: 'none',
+    reward_rules: [
+      { id: 'bogus', rule_role: 'bogus', unit: 'cashback_percent', rate: 20, priority: 1 },
+      { id: 'bad-list', rule_role: 'earn', platform_slugs: 'phonepe_app', unit: 'cashback_percent', rate: 15, priority: 2 },
+      { id: 'bad-unit', rule_role: 'earn', unit: 'stars_per_100', rate: 15, priority: 3 },
+      { id: 'on', rule_role: 'earn', rail: 'online', unit: 'cashback_percent', rate: 5, priority: 10 },
+    ],
+  });
+  const r = computeTransactionRewardV2({ card, capConsumedBefore: {}, ctx: ctxOf({ amount: 1000, rail: 'online', platform: 'phonepe_app' }) });
+  assert.strictEqual(r.ruleId, 'on');
+  assert.strictEqual(r.cashbackInr, 50);
+  assert.ok(r.reasons.includes('rule_skipped:bogus:unknown_rule_role'));
+  assert.ok(r.reasons.includes('rule_skipped:bad-list:unparseable_platform_slugs'));
+  assert.ok(r.reasons.includes('rule_skipped:bad-unit:unknown_unit'));
+  assert.ok(!r.assumptions.includes('exclusion_unparsed'));
+  assert.strictEqual(ruleAppliesV2(card.reward_rules[0], ctxOf({})), false);
+});
+
+test('D15d: an unknown role alone is enough to leave the v1 path', () => {
+  const card = cashbackCard({ reward_rules: [{ id: 'bogus', rule_role: 'bogus', unit: 'cashback_percent', rate: 20, priority: 1 }] });
+  assert.strictEqual(isV2Card(card), true);
+  const r = computeTransactionRewardV2({ card, capConsumedBefore: {}, ctx: ctxOf({ amount: 1000 }) });
+  assert.strictEqual(r.ruleId, null); // never applied as an earn rule
+  assert.strictEqual(r.cashbackInr, 10);
+});
+
+test('D15d/e: an unparseable exclusion is skipped and flagged exclusion_unparsed; MCCs are never coerced', () => {
+  const card = cashbackCard({
+    accrual_rounding: 'none',
+    reward_rules: [
+      { id: 'excl-wallet', rule_role: 'exclusion', mcc_include: [6540], unit: 'cashback_percent', rate: 0, priority: 1 },
+      { id: 'on', rule_role: 'earn', rail: 'online', unit: 'cashback_percent', rate: 5, priority: 10 },
+    ],
+  });
+  const r = computeTransactionRewardV2({ card, capConsumedBefore: {}, ctx: ctxOf({ amount: 1000, rail: 'online', mcc: '6540' }) });
+  assert.strictEqual(r.excluded, false); // the number 6540 is not coerced to '6540'
+  assert.strictEqual(r.ruleId, 'on');
+  assert.ok(r.reasons.includes('rule_skipped:excl-wallet:unparseable_mcc_include'));
+  assert.ok(r.assumptions.includes('exclusion_unparsed'));
+
+  // An mcc_exclude with a non-string element makes that earn rule unparseable too.
+  const leading = { id: 'r', rule_role: 'earn', mcc_exclude: ['0742', 742], unit: 'cashback_percent', rate: 5 };
+  assert.strictEqual(ruleAppliesV2(leading, ctxOf({ mcc: '5411' })), false);
+  // String MCCs keep their leading zeros.
+  const ok = { id: 'r2', rule_role: 'earn', mcc_include: ['0742'], unit: 'cashback_percent', rate: 5 };
+  assert.strictEqual(ruleAppliesV2(ok, ctxOf({ mcc: '0742' })), true);
+  assert.strictEqual(ruleAppliesV2(ok, ctxOf({ mcc: '742' })), false);
+});
+
+test('D15d: skipped rules are reported on excluded results too', () => {
+  const card = cashbackCard({
+    excluded_categories: ['cat-rent'],
+    reward_rules: [{ id: 'bogus', rule_role: 'bogus', unit: 'cashback_percent', rate: 20, priority: 1 }],
+  });
+  const r = computeTransactionRewardV2({ card, capConsumedBefore: {}, ctx: ctxOf({ amount: 1000, category_id: 'cat-rent' }) });
+  assert.strictEqual(r.excluded, true);
+  assert.ok(r.reasons.includes('rule_skipped:bogus:unknown_rule_role'));
+});
+
 // --- computeTransactionRewardV2: details outside the shared scenarios ----------
 
 function pointsCard(over = {}) {

@@ -85,13 +85,43 @@ function startOfDay(value) {
 
 const V2_ONLY_ROLES = new Set(['base', 'exclusion', 'info']);
 
+/** Non-empty list — or any non-null non-array value, which v2 then rejects (D15d). */
+function hasValue(value) {
+  return Array.isArray(value) ? value.length > 0 : value != null;
+}
+
 function ruleIsV2(rule) {
   if (!rule) return false;
   if (V2_ONLY_ROLES.has(rule.rule_role)) return true;
-  if (arr(rule.merchant_slugs).length > 0 || arr(rule.platform_slugs).length > 0) return true;
-  if (arr(rule.mcc_include).length > 0 || arr(rule.mcc_exclude).length > 0) return true;
+  // An unknown role is not a v1 role either: send it to v2, which skips the
+  // rule visibly (D15d) instead of v1 applying it as an earn rule.
+  if (rule.rule_role != null && !ROLES.has(rule.rule_role)) return true;
+  if (hasValue(rule.merchant_slugs) || hasValue(rule.platform_slugs)) return true;
+  if (hasValue(rule.mcc_include) || hasValue(rule.mcc_exclude)) return true;
   if (rule.block_inr != null) return true;
   return num(rule.min_engine_version) === 2;
+}
+
+const RAILS = new Set(['upi_qr', 'swipe', 'online', 'contactless', 'atm', 'emi', 'unknown']);
+
+function isStringList(value) {
+  return Array.isArray(value) && value.every((x) => typeof x === 'string');
+}
+
+/**
+ * C8 D15d/e: why a rule can't be applied as written (an unknown role, unit
+ * or rail; a list that isn't a list of strings — MCCs are never coerced, so
+ * "0742" can't silently become 742; a non-numeric block), or null if it can.
+ */
+function ruleProblem(rule) {
+  if (rule.rule_role != null && !ROLES.has(rule.rule_role)) return 'unknown_rule_role';
+  if (rule.unit != null && currencyOf(rule.unit) == null) return 'unknown_unit';
+  if (rule.rail != null && !RAILS.has(rule.rail)) return 'unknown_rail';
+  for (const field of ['merchant_slugs', 'platform_slugs', 'mcc_include', 'mcc_exclude']) {
+    if (rule[field] != null && !isStringList(rule[field])) return `unparseable_${field}`;
+  }
+  if (rule.block_inr != null && num(rule.block_inr) == null) return 'unparseable_block_inr';
+  return null;
 }
 
 /**
@@ -186,8 +216,8 @@ function resolveContext(ctx, directory) {
  */
 function ruleAppliesV2(rule, ctx, directory) {
   if (!rule) return false;
-  const role = roleOf(rule);
-  if (!ROLES.has(role) || role === 'info') return false;
+  if (ruleProblem(rule) != null) return false;
+  if (roleOf(rule) === 'info') return false;
   const c = resolveContext(ctx, directory);
 
   // 1. Effective dates, as v1: DATE bounds, the end day inclusive.
@@ -222,7 +252,7 @@ function ruleAppliesV2(rule, ctx, directory) {
 
   // 7. MCC include; an unknown MCC is stood in for by a matching category
   //    (step 3 already enforced it), otherwise it fails.
-  const include = arr(rule.mcc_include).map(String);
+  const include = arr(rule.mcc_include);
   if (include.length > 0) {
     if (c.mcc != null) {
       if (!include.includes(c.mcc)) return false;
@@ -232,7 +262,7 @@ function ruleAppliesV2(rule, ctx, directory) {
   }
 
   // 8. MCC exclude.
-  if (c.mcc != null && arr(rule.mcc_exclude).map(String).includes(c.mcc)) return false;
+  if (c.mcc != null && arr(rule.mcc_exclude).includes(c.mcc)) return false;
 
   // 9. Rail: unknown never matches on a v2 card.
   if (rule.rail != null && (c.rail === 'unknown' || rule.rail !== c.rail)) return false;
@@ -253,8 +283,11 @@ function cardModes(card) {
   const c = card || {};
   return {
     pointValue: num(c.point_value_inr) || 0,
+    // C8 D15b: null / unknown accrual_rounding → floor. cashback_rounding null
+    // means paise; an unknown value → rupee_floor, the mode that never over-states.
     rounding: ROUNDING.has(c.accrual_rounding) ? c.accrual_rounding : 'floor',
-    cashbackRounding: CASHBACK_ROUNDING.has(c.cashback_rounding) ? c.cashback_rounding : 'paise',
+    cashbackRounding:
+      c.cashback_rounding == null ? 'paise' : CASHBACK_ROUNDING.has(c.cashback_rounding) ? c.cashback_rounding : 'rupee_floor',
     baseUnit: c.base_reward_unit || null,
     baseRate: num(c.base_reward_rate),
   };
@@ -285,7 +318,8 @@ function preCapValue(rule, ctx, modes) {
 function byPriority(rules, ctx, modes) {
   const idKey = (rule) => (rule.id == null ? '' : String(rule.id));
   return rules
-    .map((rule) => ({ rule, priority: num(rule.priority) ?? 100, value: preCapValue(rule, ctx, modes) }))
+    // C8 D15c: compare in integer paise, so decimal-equal values tie.
+    .map((rule) => ({ rule, priority: num(rule.priority) ?? 100, value: Math.round(preCapValue(rule, ctx, modes) * 100 + PAISE_EPS) }))
     .sort((a, b) => {
       if (a.priority !== b.priority) return a.priority - b.priority;
       if (a.value !== b.value) return b.value - a.value;
@@ -319,21 +353,28 @@ function implicitBaseRule(card) {
 function pickRuleV2(rules, ctx, card, directory) {
   const c = resolveContext(ctx, directory);
   const modes = cardModes(card);
+  // C8 D15d: rules that can't be applied as written are listed, not silently dropped.
+  const skippedRules = [];
+  for (const r of arr(rules)) {
+    const problem = r ? ruleProblem(r) : null;
+    if (problem) skippedRules.push({ id: r.id, reason: problem, exclusion: r.rule_role === 'exclusion' });
+  }
   const applicable = arr(rules).filter((r) => ruleAppliesV2(r, c));
+  const result = (excluded, rule, implicit) => ({ excluded, rule, implicit, skippedRules });
 
   const exclusions = applicable.filter((r) => roleOf(r) === 'exclusion');
-  if (exclusions.length > 0) return { excluded: true, rule: byPriority(exclusions, c, modes)[0], implicit: false };
+  if (exclusions.length > 0) return result(true, byPriority(exclusions, c, modes)[0], false);
 
   if (c.category_id != null && arr(card && card.excluded_categories).includes(c.category_id)) {
-    return { excluded: true, rule: null, implicit: false };
+    return result(true, null, false);
   }
 
   const earners = applicable.filter((r) => {
     const role = roleOf(r);
     return role === 'base' || role === 'earn';
   });
-  if (earners.length === 0) return { excluded: false, rule: implicitBaseRule(card), implicit: true };
-  return { excluded: false, rule: byPriority(earners, c, modes)[0], implicit: false };
+  if (earners.length === 0) return result(false, implicitBaseRule(card), true);
+  return result(false, byPriority(earners, c, modes)[0], false);
 }
 
 // ---------------------------------------------------------------------------
@@ -625,18 +666,21 @@ function computeTransactionRewardV2({ card, rewardRules, capRules, capConsumedBe
   if (!(Number.isFinite(c.amount) && c.amount > 0)) return shape(cardCur, { reasons: ['non_positive_amount'] });
 
   const pick = pickRuleV2(rules, c, card);
+  const ruleSkips = pick.skippedRules.map((s) => `rule_skipped:${s.id}:${s.reason}`);
+  if (pick.skippedRules.some((s) => s.exclusion)) assumptions.push('exclusion_unparsed');
   if (pick.excluded) {
     const note = pick.rule && pick.rule.display_note;
     return shape(cardCur || currencyOf(pick.rule && pick.rule.unit), {
       ruleId: pick.rule ? pick.rule.id : null,
       excluded: true,
-      reasons: [note || (pick.rule ? 'excluded_by_rule' : 'excluded_category')],
+      reasons: [note || (pick.rule ? 'excluded_by_rule' : 'excluded_category'), ...ruleSkips],
     });
   }
 
   const rule = pick.rule;
   const reasons = [];
   if (rule.display_note) reasons.push(rule.display_note);
+  reasons.push(...ruleSkips);
   if (pick.implicit) assumptions.push('implicit_base_rule');
   if (arr(rule.mcc_include).length > 0 && c.mcc == null) assumptions.push('mcc_unknown_category_stand_in');
 
