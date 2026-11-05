@@ -1,0 +1,658 @@
+{
+  "id": "american-express-india-platinum-travel-credit-card",
+  "card_name": "Platinum Travel Credit Card",
+  "issuer": "American Express India",
+  "source_slug": "american-express-platinum-travel-credit-card-india",
+  "run_id": "20260829-232418-zip-import",
+  "ok": true,
+  "final": {
+    "$schema": "https://json-schema.org/draft/2020-12/schema",
+    "schema_version": "5.0.0",
+    "_notes": "Universal card-extraction template. Every card (credit, debit, prepaid; any issuer) fills this same shape. Use null for 'not yet verified / unknown', use the string \"N/A\" for 'this field genuinely does not apply to this card' (e.g. cash_advance on a debit card, invite_only fields on an open-application card), and use [] for 'verified — this card has none of these'. Never delete a key because it doesn't apply — mark it N/A so downstream ingestion can tell 'not applicable' apart from 'not scraped yet'.",
+    "card_product": {
+      "slug": "american-express-platinum-travel-credit-card-india",
+      "name": "American Express Platinum Travel Credit Card",
+      "issuer_slug": "american-express-india",
+      "network": "amex",
+      "network_tier": "platinum",
+      "card_tier": "premium",
+      "card_type": "credit",
+      "bin_ranges": [],
+      "joining_fee_inr": 5000,
+      "annual_fee_inr": 5000,
+      "fee_gst_applicable": true,
+      "gst_rate_percent": 18,
+      "is_upi_linkable": false,
+      "application_mode": "open",
+      "form_factors": [
+        "physical_plastic",
+        "nfc_contactless"
+      ],
+      "tokenization_support": [],
+      "contactless_pin_free_limit_inr": 5000,
+      "point_value_inr_baseline": 0.4,
+      "point_value_baseline_basis": "Taj Hotels and Resorts Platinum Travel Collection redemption: 12,500 Membership Rewards points = ₹5,000, equivalent to ₹0.40 per point. Current Platinum Travel Collection also offers Air India at ₹0.30 per point and The Postcard Hotels at ₹0.50 per point.",
+      "point_expiry_months": 0,
+      "confirmed_flat_base_outside_smartbuy_or_equivalent_portal": true,
+      "display_assets": {
+        "art_asset_key": null,
+        "card_image_url": null,
+        "logo_url": null,
+        "primary_color_hex": "#D2D5D9",
+        "secondary_color_hex": "#1A1A1A"
+      },
+      "status": "verified",
+      "data_source_tier": "issuer_mitc_plus_manual_audit",
+      "source_url": "https://www.americanexpress.com/in/credit-cards/platinum-travel-credit-card/\n",
+      "verified_at": "2026-08-28T19:01:00+05:30"
+    },
+    "eligibility_engine": {
+      "evaluation_mode": "all_pass",
+      "notes": "American Express states that applicants must be over 18, have an Indian or multinational bank savings/current account in India, have a good credit history with no payment defaults, have personal annual income of ₹6 lakh or above for salaried and self-employed applicants, have a permanent residential address in India, and, if self-employed, have a company trading for more than 12 months. Card issuance is currently restricted to specified serviceable Indian cities and subject to internal policy checks.",
+      "rules": [
+        {
+          "parameter": "age_years",
+          "operator": ">=",
+          "threshold_value": 18,
+          "allowed_values": []
+        },
+        {
+          "parameter": "personal_annual_income_inr",
+          "operator": ">=",
+          "threshold_value": 600000,
+          "allowed_values": []
+        }
+      ],
+      "community_benchmarks": {
+        "min_net_monthly_salary_inr": null,
+        "min_annual_itr_inr": null,
+        "min_existing_issuer_credit_limit_inr": null,
+        "min_cibil_score": 700,
+        "is_contractually_enforceable": false
+      },
+      "required_documents": [
+        "PAN Card",
+        "Proof of Identity",
+        "Proof of Address",
+        "Income Proof (Salary Slips / Form 16 / ITR)"
+      ],
+      "processing_time_days": 10
+    },
+    "accrual_engine": {
+      "base_block_inr": 50,
+      "rounding_mode": "floor",
+      "base_points_per_block": 1,
+      "base_cashback_percent": null,
+      "effective_base_return_percent": 0.8,
+      "cycle_accrual_ceiling_points": null,
+      "capping_period_basis": "N/A",
+      "reversal_policy": {
+        "mode": "proportional_deduction",
+        "negative_balance_allowed": null,
+        "negative_balance_settlement": null
+      }
+    },
+    "reward_rules": [
+      {
+        "id": "base_all_retail",
+        "category_id": "all_retail",
+        "priority": 100,
+        "evaluation_type": "standard_accrual",
+        "rail": "any",
+        "channel_type": "all",
+        "conditions": {
+          "eligible_spend": "All eligible purchases not otherwise excluded."
+        },
+        "action": {
+          "multiplier": 1,
+          "points_per_block": 1,
+          "cashback_percent": null,
+          "cap_reference": null,
+          "reason": "1 Membership Rewards point per ₹50 spent."
+        },
+        "effective_from": "2025-08-31",
+        "effective_to": null
+      },
+      {
+        "id": "exclude_fuel",
+        "category_id": "fuel",
+        "priority": 1,
+        "evaluation_type": "exclusion",
+        "rail": "any",
+        "channel_type": "all",
+        "conditions": {
+          "merchant_category": "fuel",
+          "fuel_definition": "Petrol, diesel and CNG from Oil Marketing Companies."
+        },
+        "action": {
+          "multiplier": 0,
+          "points_per_block": 0,
+          "cashback_percent": null,
+          "cap_reference": null,
+          "reason": "No Membership Rewards points on fuel spend."
+        },
+        "effective_from": "2025-08-31",
+        "effective_to": null
+      },
+      {
+        "id": "exclude_insurance",
+        "category_id": "insurance",
+        "priority": 2,
+        "evaluation_type": "exclusion",
+        "rail": "any",
+        "channel_type": "all",
+        "conditions": {
+          "merchant_category": "insurance"
+        },
+        "action": {
+          "multiplier": 0,
+          "points_per_block": 0,
+          "cashback_percent": null,
+          "cap_reference": null,
+          "reason": "No Membership Rewards points on insurance spend."
+        },
+        "effective_from": "2025-08-31",
+        "effective_to": null
+      },
+      {
+        "id": "exclude_utility",
+        "category_id": "utility",
+        "priority": 3,
+        "evaluation_type": "exclusion",
+        "rail": "any",
+        "channel_type": "all",
+        "conditions": {
+          "merchant_category": "utility",
+          "covered_services": [
+            "electricity",
+            "water",
+            "gas"
+          ],
+          "provider_scope": "Household/domestic providers including government departments and agencies, local/state/municipal organizations, public housing societies and apartment associations."
+        },
+        "action": {
+          "multiplier": 0,
+          "points_per_block": 0,
+          "cashback_percent": null,
+          "cap_reference": null,
+          "reason": "No Membership Rewards points on specified utility payments."
+        },
+        "effective_from": "2025-08-31",
+        "effective_to": null
+      },
+      {
+        "id": "exclude_cash_transactions",
+        "category_id": "cash_advance",
+        "priority": 4,
+        "evaluation_type": "exclusion",
+        "rail": "atm",
+        "channel_type": "all",
+        "conditions": {
+          "transaction_type": "Cash advances, express cash transactions and other cash transactions."
+        },
+        "action": {
+          "multiplier": 0,
+          "points_per_block": 0,
+          "cashback_percent": null,
+          "cap_reference": null,
+          "reason": "No Membership Rewards points on cash transactions."
+        },
+        "effective_from": "2025-08-31",
+        "effective_to": null
+      },
+      {
+        "id": "exclude_merchant_emi",
+        "category_id": "emi",
+        "priority": 5,
+        "evaluation_type": "exclusion",
+        "rail": "emi",
+        "channel_type": "online_or_pos_merchant",
+        "conditions": {
+          "transaction_type": "EMI option selected from a merchant website or at a merchant terminal."
+        },
+        "action": {
+          "multiplier": 0,
+          "points_per_block": 0,
+          "cashback_percent": null,
+          "cap_reference": null,
+          "reason": "No Membership Rewards points on merchant-selected EMI transactions. American Express states that EMI transactions through SafeKey and post-purchase EMI conversions continue to earn Membership Rewards points."
+        },
+        "effective_from": "2020-03-15",
+        "effective_to": null
+      },
+      {
+        "id": "reward_multiplier_online_brands",
+        "category_id": "all_retail",
+        "priority": 10,
+        "evaluation_type": "accelerator",
+        "rail": "smartbuy_or_equivalent_portal",
+        "channel_type": "online",
+        "conditions": {
+          "program": "Reward Multiplier",
+          "eligible_merchants": "50+ participating leading online brands",
+          "examples": [
+            "Apple",
+            "Nykaa",
+            "Tanishq",
+            "Flipkart",
+            "MakeMyTrip"
+          ]
+        },
+        "action": {
+          "multiplier": 3,
+          "points_per_block": 3,
+          "cashback_percent": null,
+          "cap_reference": null,
+          "reason": "3X Membership Rewards points on eligible Reward Multiplier purchases."
+        },
+        "effective_from": "2025-08-31",
+        "effective_to": null
+      }
+    ],
+    "cap_rules": [],
+    "brand_specific_voucher_caps": [],
+    "fees_and_surcharges": {
+      "apr": {
+        "monthly_interest_rate_percent": 3.5,
+        "annual_interest_rate_percent": 42
+      },
+      "forex_markup": {
+        "markup_percent": 3.5,
+        "gst_applicable": true
+      },
+      "dynamic_currency_conversion_dcc": {
+        "fee_percent": null,
+        "gst_applicable": null,
+        "trigger_condition": null
+      },
+      "fuel_surcharge": {
+        "category_id": "fuel",
+        "surcharge_percent": 1,
+        "waiver_percent": 1,
+        "min_txn_inr": 5000,
+        "max_txn_inr": null,
+        "monthly_waiver_cap_inr": null
+      },
+      "cash_advance": {
+        "atm_transaction_fee_percent": 3.5,
+        "atm_transaction_fee_min_inr": 250,
+        "interest_applicable_from_day_one": true,
+        "daily_interest_percent": 0.115,
+        "max_limit_percent": 20
+      },
+      "category_surcharges": [
+        {
+          "category_id": "railway_ticket",
+          "mcc_list": [],
+          "fee_percent": 1.8,
+          "gst_applicable": true,
+          "trigger_condition": "Internet booking through IRCTC; minimum ₹10.",
+          "threshold_spend_inr": null,
+          "effective_from": "2025-08-31",
+          "effective_to": null
+        },
+        {
+          "category_id": "fuel_hpcl",
+          "mcc_list": [],
+          "fee_percent": 1,
+          "gst_applicable": true,
+          "trigger_condition": "HPCL fuel transaction of ₹5,000 or above; transactions below ₹5,000 have zero convenience fee.",
+          "threshold_spend_inr": 5000,
+          "effective_from": "2025-08-31",
+          "effective_to": null
+        },
+        {
+          "category_id": "fuel_bpcl_iocl",
+          "mcc_list": [],
+          "fee_percent": 1,
+          "gst_applicable": true,
+          "trigger_condition": "Fuel stations operated by BPCL and IOCL; minimum ₹10 plus applicable taxes.",
+          "threshold_spend_inr": null,
+          "effective_from": "2025-08-31",
+          "effective_to": null
+        },
+        {
+          "category_id": "fuel_other_omc",
+          "mcc_list": [],
+          "fee_percent": 2.5,
+          "gst_applicable": true,
+          "trigger_condition": "Fuel stations of OMCs other than HPCL, BPCL and IOCL; minimum ₹10 plus applicable taxes.",
+          "threshold_spend_inr": null,
+          "effective_from": "2025-08-31",
+          "effective_to": null
+        },
+        {
+          "category_id": "government_gras",
+          "mcc_list": [],
+          "fee_percent": 0.94,
+          "gst_applicable": true,
+          "trigger_condition": "Payments to Government Receipt Accounting System through SBI ePay from ₹1 to ₹90,00,000; American Express convenience fee.",
+          "threshold_spend_inr": 9000000,
+          "effective_from": "2025-08-31",
+          "effective_to": null
+        },
+        {
+          "category_id": "government_gras",
+          "mcc_list": [],
+          "fee_percent": 0.99,
+          "gst_applicable": true,
+          "trigger_condition": "Payments to Government Receipt Accounting System through SBI ePay of ₹90,00,001 or above; American Express convenience fee.",
+          "threshold_spend_inr": 9000001,
+          "effective_from": "2025-08-31",
+          "effective_to": null
+        }
+      ],
+      "emi_charges": {
+        "merchant_instant_emi_processing_fee_inr": 199,
+        "post_purchase_emi_processing_fee_inr": 2,
+        "foreclosure_charge_percent": 3,
+        "gst_applicable": true
+      },
+      "banking_penalties": {
+        "overlimit_charge": {
+          "fee_percent": null,
+          "min_fee_inr": 500,
+          "gst_applicable": true
+        },
+        "auto_debit_bounce_charge_inr": 250,
+        "cheque_bounce_charge_inr": 250
+      },
+      "reward_redemption_fee": {
+        "fee_inr": 0,
+        "gst_applicable": false,
+        "exempted_channels": [],
+        "notes": "No redemption fee is charged for the Platinum Travel Collection."
+      }
+    },
+    "statement_and_late_fees": {
+      "grace_period_days": 48,
+      "grace_period_void_on_revolving_balance": true,
+      "minimum_amount_due_mad": {
+        "calculation_mode": "max",
+        "components": [
+          "5% of the outstanding amount or ₹100, whichever is greater",
+          "Plus the total sum of any Card Fee",
+          "Plus any overdue minimum payment",
+          "Plus any amount exceeding the credit limit",
+          "Plus any instalment due under an extended/deferred payment plan"
+        ]
+      },
+      "late_payment_slabs": []
+    },
+    "fee_waiver_and_milestones": {
+      "annual_fee_waiver": {
+        "threshold_spend_inr": null,
+        "period": "N/A",
+        "evaluation_condition": "N/A",
+        "excluded_category_ids": [],
+        "excluded_mcc_list": [],
+        "waives_fee_inr": null
+      },
+      "welcome_and_renewal_gift": {
+        "trigger": "First year only: payment of the annual fee and spending ₹15,000 within 90 days of Cardmembership.",
+        "benefit_points": 10000,
+        "effective_value_inr": 4000,
+        "condition": "Welcome Gift is available only in the first year."
+      },
+      "spend_milestones": [
+        {
+          "id": "welcome_15k_90d",
+          "label": "Welcome Gift - 10,000 Membership Rewards points",
+          "threshold_spend_inr": 15000,
+          "reward_value_inr": 4000,
+          "period": "card_anniversary_year",
+          "is_repeatable": false,
+          "effective_from": "2026-08-28",
+          "effective_to": null
+        },
+        {
+          "id": "milestone_1_9l",
+          "label": "₹1.9 lakh Cardmembership-year milestone - 7,500 bonus Membership Rewards points",
+          "threshold_spend_inr": 190000,
+          "reward_value_inr": 3000,
+          "period": "card_anniversary_year",
+          "is_repeatable": true,
+          "effective_from": "2026-08-28",
+          "effective_to": null
+        },
+        {
+          "id": "milestone_4l",
+          "label": "₹4 lakh Cardmembership-year milestone - 10,000 bonus Membership Rewards points",
+          "threshold_spend_inr": 400000,
+          "reward_value_inr": 4000,
+          "period": "card_anniversary_year",
+          "is_repeatable": true,
+          "effective_from": "2026-08-28",
+          "effective_to": null
+        },
+        {
+          "id": "milestone_7l",
+          "label": "₹7 lakh Cardmembership-year milestone - 22,500 bonus Membership Rewards points plus ₹10,000 Taj Stay voucher",
+          "threshold_spend_inr": 700000,
+          "reward_value_inr": 19000,
+          "period": "card_anniversary_year",
+          "is_repeatable": true,
+          "effective_from": "2026-08-28",
+          "effective_to": null
+        }
+      ]
+    },
+    "lifestyle_and_network_benefits": [
+      {
+        "benefit_id": "domestic_lounge_8_visits",
+        "category_id": "lounge",
+        "network_program": "american_express_domestic_lounge_program",
+        "sponsor": "American Express",
+        "label": "8 complimentary domestic airport lounge visits per year, limited to 2 complimentary visits per quarter.",
+        "evaluation_engine": {
+          "conditions": {
+            "spend_condition": "None"
+          },
+          "benefit_calculation": {
+            "quota": 8
+          },
+          "perks": [
+            "Domestic airport lounge access"
+          ]
+        },
+        "quota_count": 8,
+        "quota_period": "annual",
+        "value_estimate_inr": 8000,
+        "effective_from": "2026-08-28",
+        "effective_to": null
+      },
+      {
+        "benefit_id": "priority_pass_membership",
+        "category_id": "lounge",
+        "network_program": "priority_pass",
+        "sponsor": "American Express",
+        "label": "Complimentary Priority Pass membership for the Basic Cardmember with the US$99 annual membership fee waived; lounge usage fees apply.",
+        "evaluation_engine": {
+          "conditions": {
+            "eligible_holder": "Basic Cardmember"
+          },
+          "benefit_calculation": {
+            "membership_fee_waived_usd": 99,
+            "usage_fee_usd": 35
+          },
+          "perks": [
+            "Priority Pass membership"
+          ]
+        },
+        "quota_count": null,
+        "quota_period": "N/A",
+        "value_estimate_inr": 8200,
+        "effective_from": "2026-08-28",
+        "effective_to": null
+      },
+      {
+        "benefit_id": "taj_stay_voucher_7l",
+        "category_id": "other",
+        "network_program": null,
+        "sponsor": "Taj Hotels",
+        "label": "₹10,000 Taj Stay voucher on achieving ₹7 lakh Cardmembership-year spend.",
+        "evaluation_engine": {
+          "conditions": {
+            "threshold_spend_inr": 700000,
+            "period": "cardmembership year"
+          },
+          "benefit_calculation": {
+            "voucher_value_inr": 10000
+          },
+          "perks": [
+            "Taj Stay voucher"
+          ]
+        },
+        "quota_count": 1,
+        "quota_period": "annual",
+        "value_estimate_inr": 10000,
+        "effective_from": "2026-08-28",
+        "effective_to": null
+      }
+    ],
+    "insurance_and_protection": [],
+    "addon_card_rules": {
+      "max_addon_cards": 2,
+      "fee_per_card_inr": 0,
+      "separate_priority_pass": false,
+      "lounge_quota_shared": true,
+      "reward_points_pooled": true,
+      "min_age_years": 18
+    },
+    "redemption_matrix": {
+      "direct_options": [
+        {
+          "channel": "Platinum Travel Collection - Air India",
+          "redemption_type": "partner_catalogue",
+          "inr_value_per_point": 0.3,
+          "max_bill_percentage_payable_via_points": null,
+          "min_points_per_txn": 20000,
+          "cycle_points_burn_cap": null,
+          "redemption_fee_inr": 0,
+          "effective_from": "2026-08-28",
+          "effective_to": null
+        },
+        {
+          "channel": "Platinum Travel Collection - Taj Hotels and Resorts",
+          "redemption_type": "partner_catalogue",
+          "inr_value_per_point": 0.4,
+          "max_bill_percentage_payable_via_points": null,
+          "min_points_per_txn": 12500,
+          "cycle_points_burn_cap": null,
+          "redemption_fee_inr": 0,
+          "effective_from": "2026-08-28",
+          "effective_to": null
+        },
+        {
+          "channel": "Platinum Travel Collection - The Postcard Hotels",
+          "redemption_type": "partner_catalogue",
+          "inr_value_per_point": 0.5,
+          "max_bill_percentage_payable_via_points": null,
+          "min_points_per_txn": 20000,
+          "cycle_points_burn_cap": null,
+          "redemption_fee_inr": 0,
+          "effective_from": "2026-08-28",
+          "effective_to": null
+        },
+        {
+          "channel": "Pay Card Charges with Points",
+          "redemption_type": "statement_credit",
+          "inr_value_per_point": 0.25,
+          "max_bill_percentage_payable_via_points": null,
+          "min_points_per_txn": null,
+          "cycle_points_burn_cap": null,
+          "redemption_fee_inr": 0,
+          "effective_from": "2026-08-28",
+          "effective_to": null
+        }
+      ],
+      "partner_transfers": []
+    },
+    "dynamic_promotions_registry": [],
+    "additional_data": {
+      "_notes": "Source-supported data that cannot be represented faithfully by any existing universal schema field. Do not duplicate data already represented elsewhere. Do not use this section for unknown values, assumptions, or inferred data.",
+      "items": [
+        {
+          "label": "Current joining-fee correction",
+          "description": "The current American Express product page and the 31 August 2025 Schedule of Fees and Charges both state ₹5,000 for the first year and ₹5,000 from the second year onward. A ₹3,500 first-year fee appears in historical/targeted promotional documents and is not the current standard product fee."
+        },
+        {
+          "label": "Current milestone correction",
+          "description": "The current American Express product page states 7,500 bonus Membership Rewards points at ₹1.9 lakh, 10,000 bonus points at ₹4 lakh, and 22,500 additional bonus points at ₹7 lakh plus a ₹10,000 Taj Stay voucher. The ₹1.9 lakh and ₹7 lakh values in the supplied JSON were therefore corrected."
+        },
+        {
+          "label": "Current lounge period",
+          "description": "American Express currently describes the benefit as 8 complimentary visits per year, limited to two complimentary visits per quarter. The product's Cardmembership-year definition is 12 months from card issuance/renewal; the lounge quota itself is described as an annual quota with quarterly limits."
+        },
+        {
+          "label": "Priority Pass usage",
+          "description": "The complimentary Priority Pass membership is for the Basic Cardmember. The current Platinum Travel terms state that the Basic Cardmember and accompanying guests are charged the prevailing usage fee, currently US$35 per visit."
+        },
+        {
+          "label": "EMI terms",
+          "description": "Current American Express EMI terms state ₹199 + applicable taxes processing fee for point-of-sale EMI transactions from 10 August 2023. Post-purchase EMI carries a one-time processing fee of 2% of the converted amount plus applicable taxes. Foreclosure after 10 August 2023 carries a 3% + taxes fee on the outstanding balance. The schema stores the post-purchase processing fee as the published 2% rate because it is variable rather than a fixed rupee amount."
+        },
+        {
+          "label": "Default interest rate",
+          "description": "The American Express Schedule of Fees and Charges updated 31 August 2025 lists 3.50% per month as the regular interest rate and 3.99% per month as the interest rate in case of default for the Platinum Travel Credit Card."
+        },
+        {
+          "label": "Late payment charge",
+          "description": "The current Schedule of Fees and Charges states a delinquency charge of 30% of the Minimum Amount Due, subject to a minimum of ₹500 and maximum of ₹1,000, plus applicable taxes. Because the universal late-payment slab requires a fixed fee_inr, this variable formula is retained here rather than incorrectly represented as a flat fee."
+        },
+        {
+          "label": "Additional service charges",
+          "description": "The current Schedule of Fees and Charges lists duplicate statement fee ₹100 per statement for statements older than 3 months; cheque/ECS/NACH return fee ₹250 per returned instrument for consumer cards; and record-of-charge/summary-of-charge retrieval fee ₹100 per retrieval."
+        },
+        {
+          "label": "Government GRAS convenience fee",
+          "description": "The 31 August 2025 Schedule of Fees and Charges lists an American Express convenience fee for Government Receipt Accounting System payments through SBI ePay of 0.94% for ₹1–₹90,00,000 and 0.99% for ₹90,00,001 or above. SBI ePay additionally charges 1% for ₹1–₹90,00,000 and 0.87% for ₹90,00,001 or above inclusive of taxes."
+        },
+        {
+          "label": "Cash withdrawal availability",
+          "description": "Cash withdrawal services on American Express cards are temporarily suspended in India effective 31 January 2022, although international cash withdrawal may remain available. The current schedule lists the Platinum Travel cash withdrawal limit as USD 333 every 14 days or 20% of the credit limit, whichever is lower."
+        },
+        {
+          "label": "Points expiry and cancellation",
+          "description": "Membership Rewards points accrued to the Platinum Travel Credit Card no longer expire while the card is active and in good standing. On card cancellation, the points are forfeited within 30 days."
+        },
+        {
+          "label": "Milestone accounting",
+          "description": "Membership Rewards points received on spend milestones comprise threshold Membership Rewards points and Bonus Membership Rewards points. Bonus points are issued automatically after 9 March 2026; annual milestones achieved before 9 March 2026 may require a claim through American Express."
+        },
+        {
+          "label": "Contactless limit",
+          "description": "Current American Express benefits information states that contactless purchases up to ₹5,000 can be made without entering a PIN."
+        },
+        {
+          "label": "Eligibility geography",
+          "description": "American Express currently states that cards are issued to residents of Delhi/NCR, Mumbai, Bangalore, Chennai, Pune, Hyderabad, Jaipur, Indore, Coimbatore, Chandigarh, Ahmedabad, Surat, Vadodara, Lucknow, Ludhiana, Nagpur, Nashik, Trivandrum and Mysuru, subject to conditions."
+        },
+        {
+          "label": "Self-employed eligibility",
+          "description": "For self-employed applicants, American Express states that the applicant's company must have been trading for more than 12 months."
+        },
+        {
+          "label": "Reward Multiplier merchant scope",
+          "description": "Current American Express benefits information states that Reward Multiplier provides 3X Membership Rewards points at 50+ participating leading online brands, including examples such as Apple, Nykaa, Tanishq, Flipkart and MakeMyTrip."
+        },
+        {
+          "label": "Zero lost-card liability",
+          "description": "American Express states that liability for unauthorized use is nil when fraud is reported within 3 working days; when reported after 3 days, liability is capped at ₹1,000, subject to the MITC."
+        },
+        {
+          "label": "Card activation",
+          "description": "American Express states that if the Card is not activated within 37 days of card approval, it will be cancelled."
+        },
+        {
+          "label": "Supplementary card fee",
+          "description": "The current Schedule of Fees and Charges provides up to two Supplementary Cards at no extra cost; ₹1,500 is charged for each Supplementary Card beyond the first two."
+        },
+        {
+          "label": "Redemption values",
+          "description": "Current Platinum Travel Collection terms state Air India: 20,000 points for ₹6,000 or 40,000 points for ₹12,000; Taj Hotels and Resorts: 12,500 points for ₹5,000 or 25,000 points for ₹10,000; The Postcard Hotels: 20,000 points for ₹10,000."
+        }
+      ]
+    }
+  }
+}
