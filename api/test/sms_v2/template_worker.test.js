@@ -47,6 +47,31 @@ test("prompt uses only redacted data and at most five public rule summaries", ()
   );
 });
 
+test("prompt carries the India SMS rules and the placeholder legend", () => {
+  const prompt = JSON.parse(buildPrompt(template));
+  assert.ok(prompt.domainRules.some((rule) => rule.includes("bill_due")));
+  assert.ok(prompt.domainRules.some((rule) => rule.includes("hold fact")));
+  assert.ok(
+    prompt.domainRules.some((rule) =>
+      rule.includes("never the movement amount"),
+    ),
+  );
+  assert.equal(prompt.placeholders["<AMT>"], "an amount, with its currency marker");
+  assert.equal(prompt.placeholders["#"], "one digit");
+  // Every placeholder the phone or the synthetic filler can produce is explained.
+  for (const key of ["AMT", "DATE", "MASK", "VPA", "REF", "PHONE", "EMAIL", "URL", "PARTY", "W"])
+    assert.ok(prompt.placeholders[`<${key}>`], key);
+  // The rules come right after the instruction, and every fact type they name exists.
+  assert.deepEqual(Object.keys(prompt).slice(0, 3), ["instruction", "placeholders", "domainRules"]);
+  const named = new Set(
+    prompt.domainRules
+      .flatMap((rule) => [...rule.matchAll(/\b(\w+) facts?\b/g)].map((m) => m[1]))
+      .filter((word) => !["a", "an", "one", "each"].includes(word)),
+  );
+  assert.ok(named.size >= 5);
+  for (const type of named) assert.ok(type in prompt.factContract, type);
+});
+
 test("draft validation checks scope, captures, two positives/negatives and family consistency", () => {
   assert.deepEqual(validateDraft(rule(), template, config.model), []);
   const mutate = (fn) => {
