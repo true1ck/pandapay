@@ -1,0 +1,68 @@
+{
+  "source_slug": "tata-neu-plus-sbi-credit-card",
+  "changes": [
+    {
+      "path": "cap_rules[id=grocery-neucoins-cap].metric",
+      "value": "total_reward_points",
+      "reason": "SBI caps NeuCoins per category per month.",
+      "source_url": "https://www.sbicard.com/sbi-card-en/assets/docs/pdf/ekit-tncs/Tata-Neu-Plus-Booklet.pdf",
+      "checked_on": "2026-11-05"
+    },
+    {
+      "path": "cap_rules[id=insurance-neucoins-cap].metric",
+      "value": "total_reward_points",
+      "reason": "SBI caps NeuCoins per category per month.",
+      "source_url": "https://www.sbicard.com/sbi-card-en/assets/docs/pdf/ekit-tncs/Tata-Neu-Plus-Booklet.pdf",
+      "checked_on": "2026-11-05"
+    },
+    {
+      "path": "cap_rules[id=utility-neucoins-cap].metric",
+      "value": "total_reward_points",
+      "reason": "SBI caps NeuCoins per category per month.",
+      "source_url": "https://www.sbicard.com/sbi-card-en/assets/docs/pdf/ekit-tncs/Tata-Neu-Plus-Booklet.pdf",
+      "checked_on": "2026-11-05"
+    },
+    {
+      "path": "cap_rules[id=telecom-cable-neucoins-cap].metric",
+      "value": "total_reward_points",
+      "reason": "SBI caps NeuCoins per category per month.",
+      "source_url": "https://www.sbicard.com/sbi-card-en/assets/docs/pdf/ekit-tncs/Tata-Neu-Plus-Booklet.pdf",
+      "checked_on": "2026-11-05"
+    },
+    {
+      "path": "cap_rules[id=grocery-neucoins-cap].post_limit_behavior.action",
+      "value": "zero_accrual",
+      "reason": "Nothing earned above the cap.",
+      "source_url": "https://www.sbicard.com/sbi-card-en/assets/docs/pdf/ekit-tncs/Tata-Neu-Plus-Booklet.pdf",
+      "checked_on": "2026-11-05"
+    },
+    {
+      "path": "cap_rules[id=insurance-neucoins-cap].post_limit_behavior.action",
+      "value": "zero_accrual",
+      "reason": "Nothing earned above the cap.",
+      "source_url": "https://www.sbicard.com/sbi-card-en/assets/docs/pdf/ekit-tncs/Tata-Neu-Plus-Booklet.pdf",
+      "checked_on": "2026-11-05"
+    },
+    {
+      "path": "cap_rules[id=utility-neucoins-cap].post_limit_behavior.action",
+      "value": "zero_accrual",
+      "reason": "Nothing earned above the cap.",
+      "source_url": "https://www.sbicard.com/sbi-card-en/assets/docs/pdf/ekit-tncs/Tata-Neu-Plus-Booklet.pdf",
+      "checked_on": "2026-11-05"
+    },
+    {
+      "path": "cap_rules[id=telecom-cable-neucoins-cap].post_limit_behavior.action",
+      "value": "zero_accrual",
+      "reason": "Nothing earned above the cap.",
+      "source_url": "https://www.sbicard.com/sbi-card-en/assets/docs/pdf/ekit-tncs/Tata-Neu-Plus-Booklet.pdf",
+      "checked_on": "2026-11-05"
+    },
+    {
+      "path": "accrual_engine.rounding_mode",
+      "value": "points_floor",
+      "reason": "Issuer rounds the exact-amount NeuCoins down to a whole number (D7).",
+      "source_url": "https://www.sbicard.com/sbi-card-en/assets/docs/pdf/ekit-tncs/Tata-Neu-Plus-Booklet.pdf",
+      "checked_on": "2026-11-05"
+    }
+  ]
+}

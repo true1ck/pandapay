@@ -1,0 +1,61 @@
+{
+  "source_slug": "hdfc-infinia-metal",
+  "changes": [
+    {
+      "path": "cap_rules[id=insurance-rp-monthly-cap].metric",
+      "value": "total_reward_points",
+      "reason": "Issuer caps total RP in this category per month, not only bonus RP.",
+      "source_url": "https://www.hdfc.bank.in/content/dam/hdfcbankpws/in/en/personal-banking/discover-products/cards/credit-cards/personal-mitc/mitc-in-english.pdf",
+      "checked_on": "2026-11-05"
+    },
+    {
+      "path": "cap_rules[id=grocery-rp-monthly-cap].metric",
+      "value": "total_reward_points",
+      "reason": "Issuer caps total RP in this category per month, not only bonus RP.",
+      "source_url": "https://www.hdfc.bank.in/content/dam/hdfcbankpws/in/en/personal-banking/discover-products/cards/credit-cards/personal-mitc/mitc-in-english.pdf",
+      "checked_on": "2026-11-05"
+    },
+    {
+      "path": "cap_rules[id=utility-rp-monthly-cap].metric",
+      "value": "total_reward_points",
+      "reason": "Issuer caps total RP in this category per month, not only bonus RP.",
+      "source_url": "https://www.hdfc.bank.in/content/dam/hdfcbankpws/in/en/personal-banking/discover-products/cards/credit-cards/personal-mitc/mitc-in-english.pdf",
+      "checked_on": "2026-11-05"
+    },
+    {
+      "path": "cap_rules[id=telecom-rp-monthly-cap].metric",
+      "value": "total_reward_points",
+      "reason": "Issuer caps total RP in this category per month, not only bonus RP.",
+      "source_url": "https://www.hdfc.bank.in/content/dam/hdfcbankpws/in/en/personal-banking/discover-products/cards/credit-cards/personal-mitc/mitc-in-english.pdf",
+      "checked_on": "2026-11-05"
+    },
+    {
+      "path": "cap_rules[id=insurance-rp-monthly-cap].post_limit_behavior.action",
+      "value": "zero_accrual",
+      "reason": "Points above the cap are not earned at all.",
+      "source_url": "https://www.hdfc.bank.in/content/dam/hdfcbankpws/in/en/personal-banking/discover-products/cards/credit-cards/personal-mitc/mitc-in-english.pdf",
+      "checked_on": "2026-11-05"
+    },
+    {
+      "path": "cap_rules[id=grocery-rp-monthly-cap].post_limit_behavior.action",
+      "value": "zero_accrual",
+      "reason": "Points above the cap are not earned at all.",
+      "source_url": "https://www.hdfc.bank.in/content/dam/hdfcbankpws/in/en/personal-banking/discover-products/cards/credit-cards/personal-mitc/mitc-in-english.pdf",
+      "checked_on": "2026-11-05"
+    },
+    {
+      "path": "cap_rules[id=utility-rp-monthly-cap].post_limit_behavior.action",
+      "value": "zero_accrual",
+      "reason": "Points above the cap are not earned at all.",
+      "source_url": "https://www.hdfc.bank.in/content/dam/hdfcbankpws/in/en/personal-banking/discover-products/cards/credit-cards/personal-mitc/mitc-in-english.pdf",
+      "checked_on": "2026-11-05"
+    },
+    {
+      "path": "cap_rules[id=telecom-rp-monthly-cap].post_limit_behavior.action",
+      "value": "zero_accrual",
+      "reason": "Points above the cap are not earned at all.",
+      "source_url": "https://www.hdfc.bank.in/content/dam/hdfcbankpws/in/en/personal-banking/discover-products/cards/credit-cards/personal-mitc/mitc-in-english.pdf",
+      "checked_on": "2026-11-05"
+    }
+  ]
+}

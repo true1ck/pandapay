@@ -1,0 +1,19 @@
+{
+  "source_slug": "bpcl-sbi-card-octane",
+  "changes": [
+    {
+      "path": "cap_rules[id=bpcl_fuel_reward_cap].metric",
+      "value": "total_reward_points",
+      "reason": "Issuer caps total RP in the bucket per statement cycle.",
+      "source_url": "https://www.sbicard.com/sbi-card-en/assets/docs/pdf/ekit-tncs/BPCLOctanetnc.pdf",
+      "checked_on": "2026-11-05"
+    },
+    {
+      "path": "cap_rules[id=bharat_gas_reward_cap].metric",
+      "value": "total_reward_points",
+      "reason": "Issuer caps total RP in the bucket per statement cycle.",
+      "source_url": "https://www.sbicard.com/sbi-card-en/assets/docs/pdf/ekit-tncs/BPCLOctanetnc.pdf",
+      "checked_on": "2026-11-05"
+    }
+  ]
+}

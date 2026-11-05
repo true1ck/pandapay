@@ -1,0 +1,337 @@
+{
+  "source_slug": "bpcl-sbi-card-octane",
+  "cardpipeline_id": "state-bank-of-india-bpcl-sbi-card-octane",
+  "card_name": "BPCL SBI Card OCTANE",
+  "verified_on": "2026-11-05",
+  "sources": [
+    {
+      "url": "https://www.sbicard.com/sbi-card-en/assets/docs/pdf/ekit-tncs/BPCLOctanetnc.pdf",
+      "doc": "BPCL SBI Card OCTANE T&C booklet (Aug 2026)",
+      "quote": "25 Reward Points per `100 on BPCL Fuel spends (Max. of 2500 Reward Points per statement cycle)"
+    },
+    {
+      "url": "https://www.sbicard.com/sbi-card-en/assets/docs/pdf/ekit-tncs/BPCLOctanetnc.pdf",
+      "doc": "BPCL SBI Card OCTANE T&C booklet (Aug 2026)",
+      "quote": "10X Reward Points on every `100 spent on Groceries, Departmental stores, Movies & Dining"
+    },
+    {
+      "url": "https://www.sbicard.com/sbi-card-en/assets/docs/pdf/ekit-tncs/BPCLOctanetnc.pdf",
+      "doc": "BPCL SBI Card OCTANE T&C booklet (Aug 2026)",
+      "quote": "maximum cap of 7,500 Reward Points per month"
+    },
+    {
+      "url": "https://www.sbicard.com/sbi-card-en/assets/docs/pdf/ekit-tncs/BPCLOctanetnc.pdf",
+      "doc": "BPCL SBI Card OCTANE T&C booklet (Aug 2026)",
+      "quote": "1 Reward Point on all other retail spends, except fuel"
+    }
+  ],
+  "examples": [
+    {
+      "id": "001",
+      "title": "Rs 2,000 fuel at a BPCL pump",
+      "ctx": {
+        "amount": 2000,
+        "occurred": "2026-11-05T10:00:00+05:30",
+        "category_slug": "fuel",
+        "mcc": 5541,
+        "merchant_name": "BPCL pump",
+        "merchant_vpa": null,
+        "merchant_slug": "bpcl",
+        "platform": null,
+        "rail": "swipe"
+      },
+      "state_before": {
+        "caps_by_source_id": {}
+      },
+      "expect": {
+        "currency": "points",
+        "amount": 500,
+        "value_inr": null,
+        "excluded": false,
+        "cap_deltas_by_source_id": {
+          "bpcl_fuel_reward_cap": 500
+        }
+      },
+      "why": "25 RP per Rs100 on BPCL fuel: 20 blocks = 500. Cap 2,500 RP per statement cycle."
+    },
+    {
+      "id": "002",
+      "title": "Rs 5,000 BPCL fuel with 2,400 of 2,500 cap used",
+      "ctx": {
+        "amount": 5000,
+        "occurred": "2026-11-05T10:00:00+05:30",
+        "category_slug": "fuel",
+        "mcc": 5541,
+        "merchant_name": "BPCL pump",
+        "merchant_vpa": null,
+        "merchant_slug": "bpcl",
+        "platform": null,
+        "rail": "swipe"
+      },
+      "state_before": {
+        "caps_by_source_id": {
+          "bpcl_fuel_reward_cap": 2400
+        }
+      },
+      "expect": {
+        "currency": "points",
+        "amount": 100,
+        "value_inr": null,
+        "excluded": false,
+        "cap_deltas_by_source_id": {
+          "bpcl_fuel_reward_cap": 100
+        }
+      },
+      "why": "Would be 1,250 RP; only 100 remain in the statement-cycle cap."
+    },
+    {
+      "id": "003",
+      "title": "Rs 3,000 BPCL fuel after cap used",
+      "ctx": {
+        "amount": 3000,
+        "occurred": "2026-11-05T10:00:00+05:30",
+        "category_slug": "fuel",
+        "mcc": 5541,
+        "merchant_name": "BPCL pump",
+        "merchant_vpa": null,
+        "merchant_slug": "bpcl",
+        "platform": null,
+        "rail": "swipe"
+      },
+      "state_before": {
+        "caps_by_source_id": {
+          "bpcl_fuel_reward_cap": 2500
+        }
+      },
+      "expect": {
+        "currency": "points",
+        "amount": 0,
+        "value_inr": null,
+        "excluded": false,
+        "cap_deltas_by_source_id": {}
+      },
+      "why": "Fuel at BPCL is capped at 2,500 RP per cycle and fuel is otherwise excluded, so nothing more is earned."
+    },
+    {
+      "id": "004",
+      "title": "Rs 3,000 grocery (MCC 5411)",
+      "ctx": {
+        "amount": 3000,
+        "occurred": "2026-11-05T10:00:00+05:30",
+        "category_slug": "groceries",
+        "mcc": 5411,
+        "merchant_name": "Supermarket",
+        "merchant_vpa": null,
+        "merchant_slug": null,
+        "platform": null,
+        "rail": "swipe"
+      },
+      "state_before": {
+        "caps_by_source_id": {}
+      },
+      "expect": {
+        "currency": "points",
+        "amount": 300,
+        "value_inr": null,
+        "excluded": false,
+        "cap_deltas_by_source_id": {
+          "lifestyle_reward_cap": 300
+        }
+      },
+      "why": "10 RP per Rs100: 300. Counts toward the 7,500 RP/month cap on 10X categories."
+    },
+    {
+      "id": "005",
+      "title": "Rs 1,500 restaurant (MCC 5812)",
+      "ctx": {
+        "amount": 1500,
+        "occurred": "2026-11-05T10:00:00+05:30",
+        "category_slug": "dining",
+        "mcc": 5812,
+        "merchant_name": "Restaurant",
+        "merchant_vpa": null,
+        "merchant_slug": null,
+        "platform": null,
+        "rail": "swipe"
+      },
+      "state_before": {
+        "caps_by_source_id": {}
+      },
+      "expect": {
+        "currency": "points",
+        "amount": 150,
+        "value_inr": null,
+        "excluded": false,
+        "cap_deltas_by_source_id": {
+          "lifestyle_reward_cap": 150
+        }
+      },
+      "why": "10 RP per Rs100: 150."
+    },
+    {
+      "id": "006",
+      "title": "Rs 2,000 at an apparel store",
+      "ctx": {
+        "amount": 2000,
+        "occurred": "2026-11-05T10:00:00+05:30",
+        "category_slug": "other",
+        "mcc": 5651,
+        "merchant_name": "Apparel store",
+        "merchant_vpa": null,
+        "merchant_slug": null,
+        "platform": null,
+        "rail": "swipe"
+      },
+      "state_before": {
+        "caps_by_source_id": {}
+      },
+      "expect": {
+        "currency": "points",
+        "amount": 20,
+        "value_inr": null,
+        "excluded": false,
+        "cap_deltas_by_source_id": {}
+      },
+      "why": "1 RP per Rs100: 20."
+    },
+    {
+      "id": "007",
+      "title": "Rs 1,000 Bharat Gas LPG booking on the website",
+      "ctx": {
+        "amount": 1000,
+        "occurred": "2026-11-05T10:00:00+05:30",
+        "category_slug": "bills",
+        "mcc": 5984,
+        "merchant_name": "Bharat Gas",
+        "merchant_vpa": null,
+        "merchant_slug": null,
+        "platform": null,
+        "rail": "online"
+      },
+      "state_before": {
+        "caps_by_source_id": {}
+      },
+      "expect": {
+        "currency": "points",
+        "amount": 250,
+        "value_inr": null,
+        "excluded": false,
+        "cap_deltas_by_source_id": {
+          "bharat_gas_reward_cap": 250
+        }
+      },
+      "why": "25 RP per Rs100: 250. Cap 500 RP per billing cycle."
+    },
+    {
+      "id": "008",
+      "title": "Rs 1,000 fuel at a non-BPCL pump",
+      "ctx": {
+        "amount": 1000,
+        "occurred": "2026-11-05T10:00:00+05:30",
+        "category_slug": "fuel",
+        "mcc": 5541,
+        "merchant_name": "Other petrol pump",
+        "merchant_vpa": null,
+        "merchant_slug": null,
+        "platform": null,
+        "rail": "swipe"
+      },
+      "state_before": {
+        "caps_by_source_id": {}
+      },
+      "expect": {
+        "currency": "points",
+        "amount": 0,
+        "value_inr": null,
+        "excluded": true,
+        "cap_deltas_by_source_id": {}
+      },
+      "why": "Petrol pump purchases other than the BPCL accelerator are excluded."
+    },
+    {
+      "id": "009",
+      "title": "Rs 3,000 wallet load",
+      "ctx": {
+        "amount": 3000,
+        "occurred": "2026-11-05T10:00:00+05:30",
+        "category_slug": "wallet",
+        "mcc": 6540,
+        "merchant_name": "Wallet top up",
+        "merchant_vpa": null,
+        "merchant_slug": null,
+        "platform": null,
+        "rail": "online"
+      },
+      "state_before": {
+        "caps_by_source_id": {}
+      },
+      "expect": {
+        "currency": "points",
+        "amount": 0,
+        "value_inr": null,
+        "excluded": true,
+        "cap_deltas_by_source_id": {}
+      },
+      "why": "e-Wallet loading excluded."
+    },
+    {
+      "id": "010",
+      "title": "Rs 20,000 rent",
+      "ctx": {
+        "amount": 20000,
+        "occurred": "2026-11-05T10:00:00+05:30",
+        "category_slug": "rent",
+        "mcc": 6513,
+        "merchant_name": "Rent payment",
+        "merchant_vpa": null,
+        "merchant_slug": null,
+        "platform": null,
+        "rail": "online"
+      },
+      "state_before": {
+        "caps_by_source_id": {}
+      },
+      "expect": {
+        "currency": "points",
+        "amount": 0,
+        "value_inr": null,
+        "excluded": true,
+        "cap_deltas_by_source_id": {}
+      },
+      "why": "Rent excluded since 15 Apr 2024 (MCC 6513)."
+    }
+  ],
+  "research_notes": [
+    {
+      "item": "caps bpcl_fuel_reward_cap, bharat_gas_reward_cap",
+      "cardpipeline_says": "bonus_reward_points.",
+      "issuer_says": "\"Max of 2500 Reward Points\" per statement cycle for fuel; 500 for Bharat Gas. Total RP in those buckets.",
+      "proposed_fix": "override",
+      "override_file": "api/scripts/catalogue_overrides/bpcl-sbi-card-octane.json"
+    },
+    {
+      "item": "lifestyle_reward_cap downgrade_to_base_rate",
+      "cardpipeline_says": "Spend over the 7,500 RP cap falls to 1 RP/Rs100.",
+      "issuer_says": "Cap stated as a maximum of 7,500 RP per month; fallback not stated. No post-cap example.",
+      "proposed_fix": "none"
+    },
+    {
+      "item": "\"RP earned for max spend Rs10,000 per month\"",
+      "cardpipeline_says": "Not modelled.",
+      "issuer_says": "T&C 11.4 item 6 says points can be earned on a maximum spend of Rs10,000 per month. It does not say to which categories this applies; no example.",
+      "proposed_fix": "none"
+    },
+    {
+      "item": "merchant exclusions in accelerated categories",
+      "cardpipeline_says": "Not modelled.",
+      "issuer_says": "Metro Cash & Carry and Walmart excluded from the 10X categories.",
+      "proposed_fix": "importer"
+    },
+    {
+      "item": "card status",
+      "cardpipeline_says": "Active.",
+      "issuer_says": "A web result said the Octane card is to be discontinued; not confirmed from an SBI Card page.",
+      "proposed_fix": "none"
+    }
+  ]
+}
