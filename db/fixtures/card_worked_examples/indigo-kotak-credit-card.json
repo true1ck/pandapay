@@ -1,0 +1,278 @@
+{
+  "source_slug": "indigo-kotak-credit-card",
+  "cardpipeline_id": "kotak-mahindra-bank-indigo-kotak",
+  "card_name": "IndiGo Kotak Credit Card",
+  "verified_on": "2026-11-05",
+  "sources": [
+    {
+      "url": "https://images.kotak.bank.in/bank/mailers/2025/files/Kotak%20IndiGo%20Credit%20Card%20TnC.pdf",
+      "doc": "IndiGo Kotak Credit Card T&C",
+      "quote": "Rent, wallet, Education, Government spends, utilities, insurance, online skill based gaming and B2B are excluded categories"
+    },
+    {
+      "url": "https://images.kotak.bank.in/bank/mailers/2025/files/Kotak%20IndiGo%20Credit%20Card%20TnC.pdf",
+      "doc": "IndiGo Kotak Credit Card T&C Table B",
+      "quote": "Total IndiGo BluChips earned 15 / 17 / 19 per Rs 100 for tiers Blu 3 / Blu 2 / Blu 1"
+    },
+    {
+      "url": "https://www.kotak.bank.in/en/personal-banking/cards/credit-cards/indigo-credit-card.html",
+      "doc": "IndiGo Kotak Credit Card page",
+      "quote": "Earn unlimited 2 IndiGo BluChips per Rs 100 spent on all Dining & Entertainment spends"
+    }
+  ],
+  "examples": [
+    {
+      "id": "001",
+      "title": "Rs 5,000 general retail spend",
+      "ctx": {
+        "amount": 5000,
+        "occurred": "2026-11-10T10:00:00+05:30",
+        "category_id": null,
+        "category_slug": "other",
+        "mcc": "5651",
+        "merchant_name": "Apparel store",
+        "merchant_vpa": null,
+        "merchant_slug": null,
+        "platform": null,
+        "rail": "swipe"
+      },
+      "state_before": {
+        "caps_by_source_id": {}
+      },
+      "expect": {
+        "currency": "points",
+        "amount": 50,
+        "value_inr": null,
+        "excluded": false,
+        "cap_deltas_by_source_id": {}
+      },
+      "why": "1 IndiGo BluChip per Rs 100 on all other categories: 50 x 1 = 50."
+    },
+    {
+      "id": "002",
+      "title": "Rs 2,000 restaurant bill",
+      "ctx": {
+        "amount": 2000,
+        "occurred": "2026-11-10T10:00:00+05:30",
+        "category_id": null,
+        "category_slug": "dining",
+        "mcc": "5812",
+        "merchant_name": "Restaurant",
+        "merchant_vpa": null,
+        "merchant_slug": null,
+        "platform": null,
+        "rail": "swipe"
+      },
+      "state_before": {
+        "caps_by_source_id": {}
+      },
+      "expect": {
+        "currency": "points",
+        "amount": 40,
+        "value_inr": null,
+        "excluded": false,
+        "cap_deltas_by_source_id": {}
+      },
+      "why": "Unlimited 2 BluChips per Rs 100 on dining: 20 x 2 = 40."
+    },
+    {
+      "id": "003",
+      "title": "Rs 1,000 cinema tickets",
+      "ctx": {
+        "amount": 1000,
+        "occurred": "2026-11-10T10:00:00+05:30",
+        "category_id": null,
+        "category_slug": "entertainment",
+        "mcc": "7832",
+        "merchant_name": "Cinema",
+        "merchant_vpa": null,
+        "merchant_slug": null,
+        "platform": null,
+        "rail": "swipe"
+      },
+      "state_before": {
+        "caps_by_source_id": {}
+      },
+      "expect": {
+        "currency": "points",
+        "amount": 20,
+        "value_inr": null,
+        "excluded": false,
+        "cap_deltas_by_source_id": {}
+      },
+      "why": "Entertainment MCCs (for example 7832) earn the same 2 BluChips per Rs 100: 10 x 2 = 20."
+    },
+    {
+      "id": "004",
+      "title": "Rs 10,000 flight booked on the IndiGo website (entry tier Blu 3)",
+      "ctx": {
+        "amount": 10000,
+        "occurred": "2026-11-10T10:00:00+05:30",
+        "category_id": null,
+        "category_slug": "travel",
+        "mcc": "4511",
+        "merchant_name": "IndiGo",
+        "merchant_vpa": null,
+        "merchant_slug": "indigo",
+        "platform": null,
+        "rail": "online"
+      },
+      "state_before": {
+        "caps_by_source_id": {}
+      },
+      "expect": {
+        "currency": "points",
+        "amount": 1500,
+        "value_inr": null,
+        "excluded": false,
+        "cap_deltas_by_source_id": {}
+      },
+      "why": "Table B for the IndiGo Kotak Credit Card: 8 base + 3 card + 4 website/app = 15 BluChips per Rs 100 at tier Blu 3 (17 at Blu 2, 19 at Blu 1): 100 x 15 = 1,500."
+    },
+    {
+      "id": "005",
+      "title": "Rs 20,000 rent payment",
+      "ctx": {
+        "amount": 20000,
+        "occurred": "2026-11-10T10:00:00+05:30",
+        "category_id": null,
+        "category_slug": "rent",
+        "mcc": "6513",
+        "merchant_name": "Rent payment",
+        "merchant_vpa": null,
+        "merchant_slug": null,
+        "platform": null,
+        "rail": "online"
+      },
+      "state_before": {
+        "caps_by_source_id": {}
+      },
+      "expect": {
+        "currency": "points",
+        "amount": 0,
+        "value_inr": null,
+        "excluded": true,
+        "cap_deltas_by_source_id": {}
+      },
+      "why": "Rent is an excluded category: no BluChips."
+    },
+    {
+      "id": "006",
+      "title": "Rs 3,000 electricity bill",
+      "ctx": {
+        "amount": 3000,
+        "occurred": "2026-11-10T10:00:00+05:30",
+        "category_id": null,
+        "category_slug": "bills",
+        "mcc": "4900",
+        "merchant_name": "Electricity board",
+        "merchant_vpa": null,
+        "merchant_slug": null,
+        "platform": null,
+        "rail": "online"
+      },
+      "state_before": {
+        "caps_by_source_id": {}
+      },
+      "expect": {
+        "currency": "points",
+        "amount": 0,
+        "value_inr": null,
+        "excluded": true,
+        "cap_deltas_by_source_id": {}
+      },
+      "why": "Utilities are excluded."
+    },
+    {
+      "id": "007",
+      "title": "Rs 5,000 wallet top-up",
+      "ctx": {
+        "amount": 5000,
+        "occurred": "2026-11-10T10:00:00+05:30",
+        "category_id": null,
+        "category_slug": "wallet",
+        "mcc": "6540",
+        "merchant_name": "Wallet top-up",
+        "merchant_vpa": null,
+        "merchant_slug": null,
+        "platform": null,
+        "rail": "online"
+      },
+      "state_before": {
+        "caps_by_source_id": {}
+      },
+      "expect": {
+        "currency": "points",
+        "amount": 0,
+        "value_inr": null,
+        "excluded": true,
+        "cap_deltas_by_source_id": {}
+      },
+      "why": "Wallet loads are excluded."
+    },
+    {
+      "id": "008",
+      "title": "Rs 10,000 insurance premium",
+      "ctx": {
+        "amount": 10000,
+        "occurred": "2026-11-10T10:00:00+05:30",
+        "category_id": null,
+        "category_slug": "insurance",
+        "mcc": "6300",
+        "merchant_name": "Insurer",
+        "merchant_vpa": null,
+        "merchant_slug": null,
+        "platform": null,
+        "rail": "online"
+      },
+      "state_before": {
+        "caps_by_source_id": {}
+      },
+      "expect": {
+        "currency": "points",
+        "amount": 0,
+        "value_inr": null,
+        "excluded": true,
+        "cap_deltas_by_source_id": {}
+      },
+      "why": "Insurance is excluded."
+    }
+  ],
+  "research_notes": [
+    {
+      "item": "IndiGo flight rate depends on member tier",
+      "cardpipeline_says": "indigo_flight_booking_accelerator 19 points per Rs 100 (tier_dependent)",
+      "issuer_says": "Table B: 15 / 17 / 19 BluChips per Rs 100 for tiers Blu 3 / Blu 2 / Blu 1 on IndiGo website/app bookings; example uses entry tier Blu 3 (15). The importer should model the lowest tier or keep it as info.",
+      "proposed_fix": "importer: tier_by_member_tier",
+      "override_file": null
+    },
+    {
+      "item": "third-party and group bookings",
+      "cardpipeline_says": "third_party_booking_excluded",
+      "issuer_says": "Flights on third-party sites and group/corporate/SME/agent bookings do not earn the flight accelerator.",
+      "proposed_fix": "none",
+      "override_file": null
+    },
+    {
+      "item": "milestones",
+      "cardpipeline_says": "not examined",
+      "issuer_says": "Kotak page: 2,500-BluChip voucher at Rs 1.25 lakh, Rs 2.5 lakh and Rs 6 lakh in an anniversary year (up to 7,500).",
+      "proposed_fix": "none",
+      "override_file": null
+    },
+    {
+      "item": "BluChip value",
+      "cardpipeline_says": "point_value_inr_baseline 1",
+      "issuer_says": "Redemption value is at IndiGo's discretion; value_inr left null.",
+      "proposed_fix": "none",
+      "override_file": null
+    },
+    {
+      "item": "rounding",
+      "cardpipeline_says": "rounding_mode floor",
+      "issuer_says": "Current T&C silent.",
+      "proposed_fix": "none",
+      "override_file": null
+    }
+  ]
+}
