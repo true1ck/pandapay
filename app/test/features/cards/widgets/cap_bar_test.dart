@@ -3,7 +3,6 @@ import 'package:flutter_test/flutter_test.dart';
 import 'package:pandapay/app/design/app_theme.dart';
 import 'package:pandapay/features/cards/cap_progress.dart';
 import 'package:pandapay/features/cards/widgets/cap_bar.dart';
-import 'package:pandapay_domain/pandapay_domain.dart';
 
 import '../../../support/v2_catalogue_fixtures.dart';
 
