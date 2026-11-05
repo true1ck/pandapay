@@ -340,7 +340,8 @@ test('C7.6 exclusions: category stays v1 at rate 0; MCC-only is v2; category+MCC
   assert.equal(only(r, 'cat')[0].min_engine_version, 1);
   assert.equal(only(r, 'mcc')[0].min_engine_version, 2);
   const both = only(r, 'both');
-  assert.deepEqual(both.map((x) => [x.category_slug, x.mcc_include.length, x.min_engine_version]), [['fuel', 0, 1], [null, 2, 2]]);
+  // D19c: the MCC list is the scope; the category row is v1-only.
+  assert.deepEqual(both.map((x) => [x.category_slug, x.mcc_include.length, x.min_engine_version, x.max_engine_version]), [['fuel', 0, 1, 1], [null, 2, 2, null]]);
   assert.equal(only(r, 'none')[0].rule_role, 'info', 'an exclusion with nothing to match would exclude everything');
 });
 
@@ -1040,6 +1041,17 @@ test('D19b card-level excluded categories hold only exact categories; narrow one
   // v2 view: the movies bonus (MCC 7832) is not covered by any category-only exclusion.
   const v2CategoryExclusions = r.rewardRules.filter((x) => x.rule_role === 'exclusion' && x.max_engine_version !== 1 && x.category_slug);
   assert.ok(!v2CategoryExclusions.some((x) => x.category_slug === 'entertainment'));
+});
+
+test('D19c an exclusion with an explicit MCC list: v2 row MCC-only, category row v1-only', () => {
+  const r = run(card({ rules: [
+    rule({ id: 'excluded_railways', category_id: 'travel', evaluation_type: 'exclusion', conditions: { mcc_target_list: [4011, 4112] }, action: { cashback_percent: 0 } }),
+    rule({ id: 'cleartrip_cashback', category_id: 'travel', conditions: { merchant: 'Swiggy' }, action: { cashback_percent: 5 } }),
+  ] }));
+  assert.deepEqual(only(r, 'excluded_railways').map((x) => [x.category_slug, x.mcc_include.join(), x.min_engine_version, x.max_engine_version]),
+    [['travel', '', 1, 1], [null, '4011,4112', 2, null]]);
+  const v2TravelExclusions = r.rewardRules.filter((x) => x.rule_role === 'exclusion' && x.max_engine_version !== 1 && x.category_slug === 'travel');
+  assert.equal(v2TravelExclusions.length, 0);
 });
 
 // ── C8 D13: terms that depend on the cardholder; override conventions ───

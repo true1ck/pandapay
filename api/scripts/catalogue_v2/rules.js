@@ -708,8 +708,12 @@ function transformRule(src, idx, ctx) {
         }
         split.push(p);
       } else if (p.categorySlug && p.mccInclude?.length && plain) {
-        split.push({ ...p, mccInclude: [] });
+        // D19c: an explicit MCC list is the exclusion's scope and the
+        // category only a label: v2 uses the MCC row; the category row is
+        // v1-only (v1 can't read MCCs, so it excludes the whole category).
+        split.push({ ...p, mccInclude: [], maxEngine: 1, v1Projection: true });
         split.push({ ...p, categorySlug: null, broad: false });
+        flags.push('mcc_scoped_exclusion');
       } else {
         split.push(p);
       }
