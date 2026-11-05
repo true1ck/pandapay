@@ -15,6 +15,7 @@ import '../../data/local/sms_dismissal_outbox.dart';
 import '../../data/local/sms_feedback_outbox.dart';
 import '../consent/sms_access_disclosure.dart';
 import '../consent/sms_reading_consent.dart';
+import '../consent/template_sharing_disclosure.dart';
 import '../import/gmail_connect_service.dart';
 
 /// H4 Privacy & Permissions (docs/superpowers/plans/2026-08-07-group-h-settings-and-group-a-completion.md).
@@ -604,6 +605,17 @@ class _PurposeConsents extends ConsumerWidget {
         ref.invalidate(_consentHistoryProvider);
         return;
       }
+      if (purpose == smsSharedLearningPurpose && granted) {
+        // Sharing redacted templates (processed by Google Gemini) is off
+        // until someone chooses "Turn on" in its own disclosure.
+        await TemplateSharingDisclosure.show(
+          context,
+          sourceScreen: 'privacy_permissions',
+        );
+        ref.invalidate(_latestConsentsProvider);
+        ref.invalidate(_consentHistoryProvider);
+        return;
+      }
       try {
         await api.submit(
           purpose: purpose,
@@ -733,11 +745,11 @@ class _PurposeConsents extends ConsumerWidget {
             SwitchListTile(
               contentPadding: EdgeInsets.zero,
               title: Text(
-                'Improve shared SMS decisions',
+                TemplateSharingCopy.title,
                 style: BambooFonts.heading(14.5, color: BambooInk.ink900),
               ),
               subtitle: Text(
-                'If enabled, future AI auto-resolved SMS decisions and your confirmations, edits, dismissals, and reversals may contribute generalized message patterns and decision fields to admin-reviewed shared rules. An AI decision is labeled as unconfirmed until a person reviews it. The full SMS, account/card identifiers, and exact transaction references are removed on this device. This choice is separate from merchant contributions and can be turned off any time.',
+                TemplateSharingCopy.body,
                 style: BambooFonts.ui(12.5, color: BambooInk.ink500),
               ),
               activeTrackColor: BambooInk.jade,
@@ -747,14 +759,6 @@ class _PurposeConsents extends ConsumerWidget {
                       smsSharedLearningPolicyVersion,
               onChanged: (v) => set(smsSharedLearningPurpose, v),
             ),
-            Align(
-              alignment: Alignment.centerLeft,
-              child: Text(
-                'The SMS learning policy needs review before collection is enabled in a production release.',
-                style: BambooFonts.ui(11.5, color: BambooInk.ink500),
-              ),
-            ),
-            const SizedBox(height: AppSpace.sm),
             Align(
               alignment: Alignment.centerLeft,
               child: Text(

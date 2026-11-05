@@ -173,4 +173,74 @@ void main() {
       isFalse,
     );
   });
+
+  group('template sharing opt-in names the AI provider', () {
+    const title = 'Help PandaPay read new bank messages';
+    const body =
+        'When PandaPay can\'t read a message, it can send a copy with every '
+        'amount, name, number and date removed, so a rule can be added for '
+        'everyone. These copies may be processed by Google Gemini to suggest '
+        'the rule. Nothing is sent unless you turn this on, and you can turn '
+        'it off at any time.';
+
+    testWidgets('is off by default and the tile carries the exact copy', (
+      tester,
+    ) async {
+      await _pump(tester, _Server());
+      expect(tester.widget<SwitchListTile>(_switchFor(title)).value, isFalse);
+      expect(find.text(body), findsOneWidget);
+      expect(find.text('Improve shared SMS decisions'), findsNothing);
+    });
+
+    testWidgets('turning it on shows the disclosure first and sends nothing', (
+      tester,
+    ) async {
+      final server = _Server();
+      await _pump(tester, server);
+
+      await tester.tap(_switchFor(title));
+      await tester.pumpAndSettle();
+
+      // One copy on the tile, one in the sheet.
+      expect(find.text(body), findsNWidgets(2));
+      expect(find.textContaining('Google Gemini'), findsNWidgets(2));
+      expect(find.text('Turn on'), findsOneWidget);
+      expect(find.text('Not now'), findsOneWidget);
+      expect(server.posted, isEmpty);
+      expect(tester.widget<SwitchListTile>(_switchFor(title)).value, isFalse);
+    });
+
+    testWidgets('Turn on records the consent', (tester) async {
+      final server = _Server();
+      await _pump(tester, server);
+
+      await tester.tap(_switchFor(title));
+      await tester.pumpAndSettle();
+      await tester.tap(find.text('Turn on'));
+      await tester.pumpAndSettle();
+
+      expect(server.posted, [
+        {
+          'purpose': 'sms_shared_learning',
+          'granted': true,
+          'policyVersion': 'sms-shared-learning-v2',
+          'sourceScreen': 'privacy_permissions',
+        },
+      ]);
+      expect(tester.widget<SwitchListTile>(_switchFor(title)).value, isTrue);
+    });
+
+    testWidgets('Not now leaves sharing off and sends nothing', (tester) async {
+      final server = _Server();
+      await _pump(tester, server);
+
+      await tester.tap(_switchFor(title));
+      await tester.pumpAndSettle();
+      await tester.tap(find.text('Not now'));
+      await tester.pumpAndSettle();
+
+      expect(server.posted, isEmpty);
+      expect(tester.widget<SwitchListTile>(_switchFor(title)).value, isFalse);
+    });
+  });
 }
