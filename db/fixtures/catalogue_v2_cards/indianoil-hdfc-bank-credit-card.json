@@ -4,8 +4,8 @@
   "inputs": {
     "transform_version": "7",
     "source_record_sha256": "a64fd46907a426c27c52910331888b7b4f2ca9d2a00243d36e8ffc9269316e45",
-    "override_sha256": "ab1225ce149a8285bfd933a164bc91cc4077e6a890a381d1d2f0c911a26216e6",
-    "directory_sha256": "3d9f9f535481544d4b19262838290f77d8270eb3b4aec73c48608f10c39cedf2",
+    "override_sha256": "3f97cf155d4451eec4aabed32906d84045cdf5a553c368d6bceff59430a0e6ed",
+    "directory_sha256": "b1094d54b77e848d22f7a9a64f3ae6d1ef43ca3eb2fc8e40cd43ed1994664694",
     "verified": true
   },
   "blocking_flags": [],
@@ -28,8 +28,8 @@
       "rules_total": 12,
       "rules_modelled": 12,
       "rules_info": 0,
-      "caps_total": 6,
-      "caps_enforced": 3,
+      "caps_total": 7,
+      "caps_enforced": 4,
       "flags": [
         {
           "code": "mcc_scoped_exclusion",
@@ -164,6 +164,14 @@
           "value_sha256": "922abdcde3e7251a",
           "reason": "WP7: T&C 2.1: Reward Points will not be accrued for Wallet, Rent, Government, Insurance, EMI; the record had no insurance exclusion.",
           "source_url": "https://www.hdfc.bank.in/content/dam/hdfcbankpws/in/en/personal-banking/discover-products/cards/credit-cards/indian-oil-hdfc-bank-credit-card/T-and-C-Indian-Oil-Credit-Card.pdf",
+          "checked_on": "2026-11-05"
+        },
+        {
+          "path": "cap_rules",
+          "op": "append",
+          "value_sha256": "9452ceddb374f644",
+          "reason": "WP7: HDFC MITC fair usage policy: \"The maximum reward points that can be earned in a statement cycle for ... IOCL, IRCTC* ... is 25,000.\" Card-wide total cap.",
+          "source_url": "https://www.hdfc.bank.in/content/dam/hdfcbankpws/in/en/personal-banking/discover-products/cards/credit-cards/personal-mitc/mitc-in-english.pdf",
           "checked_on": "2026-11-05"
         }
       ]
@@ -960,6 +968,29 @@
         "anchor": null,
         "min_engine_version": 2,
         "source_local_id": "utility_monthly_cap"
+      },
+      {
+        "id": "indianoil-hdfc-bank-credit-card:cap:wp7_fair_usage_statement_cycle",
+        "reward_rule_id": null,
+        "category_id": null,
+        "category_slug": null,
+        "benefit_kind": null,
+        "label": "Wp7 fair usage statement cycle",
+        "measure": "reward_value",
+        "period": "statement_cycle",
+        "cap_value": 24000,
+        "post_cap_unit": null,
+        "post_cap_rate": 0,
+        "resets_on_day": null,
+        "cap_kind": "total_points",
+        "cap_amount": 25000,
+        "scope": "card",
+        "targets": [],
+        "parent_cap_id": null,
+        "post_cap_behavior": null,
+        "anchor": null,
+        "min_engine_version": 1,
+        "source_local_id": "wp7_fair_usage_statement_cycle"
       }
     ],
     "milestone_rules": [],
