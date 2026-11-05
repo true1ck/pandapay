@@ -29,10 +29,10 @@ Status values: `not started` · `running` · `done (branch ready)` · `merged` �
 | WP | Title | Wave | Branch | Status | Updated | Notes |
 |---|---|---|---|---|---|---|
 | WP0 | Docs, contracts, scenario seed, directory skeleton | 0 | `card-rewards/phase1` | merged | 2026-11-05 | Lead |
-| WP1 | Schema v2, v1/v2 feeds, directory seeding | 1 | `card-rewards/wp1-schema` | **merged** | 2026-11-06 | Review approved + 1 fix round (D1, D2, D7, CI step); 1393 api tests; DB test fresh + incremental; seeder loads 164/61 |
-| WP2 | Loader v2 (pure transform), coverage, audit script | 1 | `card-rewards/wp2-loader` | needs rework (fix round 2) | 2026-11-06 | All 14 review findings fixed and verified on 376 cards; fixing 2 side effects via D18 (old-feed-only rows so broad exclusions don't zero bonuses in the new app; reduced-rate rules kept for old apps) |
-| WP3 | Dart engine v2 + tolerant parsing | 1 | `card-rewards/wp3-dart-engine` | **merged** | 2026-11-06 | Review approved + 1 fix round (K15 harness, D15, D16); 464/464 on merged branch; all 123 shared scenarios agree with JS |
-| WP4 | JS engine v2 + merchant resolver | 1 | `card-rewards/wp4-js-engine` | **merged** (incl. D15, D16) | 2026-11-06 | 190 targeted tests; 29 contract + 47 JS scenarios |
+| WP1 | Schema v2, v1/v2 feeds, directory seeding | 1 | `card-rewards/wp1-schema` | **merged** | 2026-11-06 | Review + 5 follow-ups (D1, D2, D7, D11, D16, D17l, D18a); DB test passes fresh + incremental; in CI |
+| WP2 | Loader v2 (pure transform), coverage, audit script | 1 | `card-rewards/wp2-loader` | fix round 2 in final re-review | 2026-11-06 | All 376 cards transform; 0 bonus rules dropped; D18 v1-only rows; checks (a)–(g) pass on its own run |
+| WP3 | Dart engine v2 + tolerant parsing | 1 | `card-rewards/wp3-dart-engine` | **merged** | 2026-11-06 | 477/477 tests; all 127 shared scenarios agree with JS (incl. D15, D16, D18) |
+| WP4 | JS engine v2 + merchant resolver | 1 | `card-rewards/wp4-js-engine` | **merged** | 2026-11-06 | 272/272 targeted tests on merged branch; passes all 127 shared scenarios incl. Dart's own |
 | WP5 | Merchant and platform directory data | 1 | `card-rewards/wp5-directory` | **merged** | 2026-11-06 | 164 merchants (9 true sub-brand parents, `group` tags per D6), 61 platforms; review + 1 fix round clean; IHCL brands kept under `taj` (ruling in ledger) |
 | WP6a | Worked examples: HDFC, SBI Card | 1 | `card-rewards/wp6a-examples-hdfc-sbi` | **merged** | 2026-11-06 | 21/21 cards, 15 override files; review + 1 fix round clean; Swiggy exact-half rounding parked |
 | WP6b | Worked examples: ICICI, Axis, Amex, IDFC, others | 1 | `card-rewards/wp6b-examples-others` | **merged** | 2026-11-06 | 23/25 cards (Amazon Pay ICICI, AU Zenith+ skipped), 13 override files; 2 fix rounds, verified with the real loader; 18-card loader mismatches carried to WP7 |
