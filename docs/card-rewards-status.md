@@ -30,7 +30,7 @@ Status values: `not started` · `running` · `done (branch ready)` · `merged` �
 |---|---|---|---|---|---|---|
 | WP0 | Docs, contracts, scenario seed, directory skeleton | 0 | `card-rewards/phase1` | merged | 2026-11-05 | Lead |
 | WP1 | Schema v2, v1/v2 feeds, directory seeding | 1 | `card-rewards/wp1-schema` | **merged** | 2026-11-06 | Review + 5 follow-ups (D1, D2, D7, D11, D16, D17l, D18a); DB test passes fresh + incremental; in CI |
-| WP2 | Loader v2 (pure transform), coverage, audit script | 1 | `card-rewards/wp2-loader` | fix round 3 in re-review | 2026-11-06 | 1689 api tests pass; 0 real exclusions mislabelled; all 23 affected bonuses earn in the new app; D19c amended to the safer reading |
+| WP2 | Loader v2 (pure transform), coverage, audit script | 1 | `card-rewards/wp2-loader` | needs rework (fix round 4 of 5) | 2026-11-06 | Round 3 verified (41 exclusions restored, all 23 bonuses earn); fixing MCC-exclusion gap, one fast-food misread, stated-rate exclusions → reduced-rate rules — D20 |
 | WP3 | Dart engine v2 + tolerant parsing | 1 | `card-rewards/wp3-dart-engine` | **merged** | 2026-11-06 | 477/477 tests; all 127 shared scenarios agree with JS (incl. D15, D16, D18) |
 | WP4 | JS engine v2 + merchant resolver | 1 | `card-rewards/wp4-js-engine` | **merged** | 2026-11-06 | 272/272 targeted tests on merged branch; passes all 127 shared scenarios incl. Dart's own |
 | WP5 | Merchant and platform directory data | 1 | `card-rewards/wp5-directory` | **merged** | 2026-11-06 | 164 merchants (9 true sub-brand parents, `group` tags per D6), 61 platforms; review + 1 fix round clean; IHCL brands kept under `taj` (ruling in ledger) |
