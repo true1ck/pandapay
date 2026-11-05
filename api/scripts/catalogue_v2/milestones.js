@@ -75,6 +75,7 @@ function transformMilestones(record) {
   const flags = [];
   const anchors = {};
   const usedLabels = new Set();
+  const seenTerms = new Map();
   (Array.isArray(source) ? source : []).forEach((m, idx) => {
     const sourceId = isNA(m?.id) ? `milestone-${idx + 1}` : String(m.id);
     const flag = (code, detail = null) => flags.push({ code, source_local_id: sourceId, detail });
@@ -100,9 +101,16 @@ function transformMilestones(record) {
     if (spec.approximated) flag('period_approximated', m?.period);
 
     let label = typeof m?.label === 'string' && m.label.trim() ? m.label.trim() : `₹${rewardValue} at ₹${threshold} spend`;
+    const reward = parseReward(m?.label);
+    // The same milestone twice (same label, terms and reward) would be paid
+    // twice; keep the first. A shared label on different terms is kept, the
+    // label made unique by the source id.
+    const sameTerms = JSON.stringify([label, spec.period, spec.anchor, threshold, rewardValue,
+      isWelcome ? false : m?.is_repeatable === true, reward.points, reward.kind, windowDays]);
+    if (seenTerms.has(sameTerms)) return flag('duplicate_milestone_dropped', `duplicates ${seenTerms.get(sameTerms)}`);
+    seenTerms.set(sameTerms, sourceId);
     if (usedLabels.has(label)) label = `${label} (${sourceId})`;
     usedLabels.add(label);
-    const reward = parseReward(m?.label);
     anchors[`${spec.period}/${spec.anchor}`] = (anchors[`${spec.period}/${spec.anchor}`] || 0) + 1;
     milestones.push({
       key: sourceId,

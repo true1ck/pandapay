@@ -1173,6 +1173,46 @@ test('D21b a carve-out at or below base that v1 cannot express hides the acceler
   assert.ok(r.card.model_coverage.flags.some((f) => f.code === 'hidden_from_v1_carve_out'));
 });
 
+test('rows that would break a database identity index are deduplicated: first kept, the rest reported', () => {
+  // bobcard-select: four empty lifestyle benefits; bobcard-corporate: two empty insurance rows.
+  const emptyBenefit = { benefit_id: null, category_id: null, network_program: null, sponsor: null, label: null,
+    evaluation_engine: { conditions: null, benefit_calculation: null, perks: [] }, quota_count: null, quota_period: null, value_estimate_inr: null };
+  const select = run(card({ benefits: [emptyBenefit, emptyBenefit, emptyBenefit, emptyBenefit] }));
+  assert.equal(select.benefits.length, 1);
+  assert.equal(select.card.model_coverage.flags.filter((f) => f.code === 'duplicate_benefit_dropped').length, 3);
+  const corporate = card();
+  corporate.insurance_and_protection = [
+    { cover_type: null, coverage_inr: null, coverage_usd: null, claim_condition: null },
+    { cover_type: null, coverage_inr: null, coverage_usd: null, claim_condition: null },
+  ];
+  const corp = run(corporate);
+  assert.equal(corp.benefits.length, 1);
+  assert.ok(corp.card.model_coverage.flags.some((f) => f.code === 'duplicate_benefit_dropped'));
+  // labels equal after whitespace/case normalisation collide too (uq_card_benefits_label_identity_v1)
+  const lounge = (label) => ({ ...emptyBenefit, category_id: 'lounge', label, quota_count: 2, quota_period: 'quarter' });
+  assert.equal(run(card({ benefits: [lounge('2 lounge visits'), lounge('  2 Lounge   visits ')] })).benefits.length, 1);
+  assert.equal(run(card({ benefits: [lounge('2 lounge visits'), lounge('4 lounge visits')] })).benefits.length, 2);
+
+  // milestones and caps with the same identity
+  const m = (id) => ({ id, label: '₹1,000 voucher', threshold_spend_inr: 100000, reward_value_inr: 1000, period: 'calendar_year', is_repeatable: false });
+  const ms = run(card({ milestones: [m('a'), m('b')] }));
+  assert.equal(ms.milestones.length, 1);
+  assert.ok(ms.card.model_coverage.flags.some((f) => f.code === 'duplicate_milestone_dropped'));
+  // cap labels come from the source id: "dining-cap" and "dining_cap" both read "Dining cap"
+  const cap = (id) => ({ id, category_id: 'dining', metric: 'total_reward_points', limit_value: 500, period: 'calendar_month', post_limit_behavior: { action: 'zero_accrual' }, parent_cap_id: null });
+  const cr = run(card({
+    rules: [
+      rule({ id: 'd1', category_id: 'dining', action: { points_per_block: 10 } }),
+      rule({ id: 'd2', category_id: 'dining', priority: 11, action: { points_per_block: 8 } }),
+    ],
+    accrual: { base_points_per_block: 2, base_cashback_percent: null },
+    caps: [cap('dining-cap'), cap('dining_cap')],
+  }));
+  assert.equal(cr.capRules.length, 1);
+  assert.ok(cr.card.model_coverage.flags.some((f) => f.code === 'duplicate_cap_dropped'));
+  assert.deepEqual(cr.capTargets.map((t) => `${t.cap_key}>${t.rule_key}`).sort(), ['dining-cap>d1', 'dining-cap>d2']);
+});
+
 test('H2 an exclusion whose one name list holds merchants and apps excludes at any of them (never merchant AND app)', () => {
   const r = run(pointsCard([
     rule({ id: 'edu_apps', category_id: 'education', evaluation_type: 'exclusion', conditions: { mcc: [8211], platforms: ['Amazon', 'PhonePe', 'Kiwi App'] },

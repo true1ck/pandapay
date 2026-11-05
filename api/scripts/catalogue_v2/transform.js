@@ -19,6 +19,7 @@ const { transformMilestones } = require('./milestones');
 const { transformBenefits } = require('./unlocks');
 const { applyOverrides } = require('./overrides');
 const { buildCoverage } = require('./coverage');
+const { dedupeBenefits, dedupeCaps, dedupeMilestones } = require('./dedupe');
 
 // Bump with any mapping change; the publish gate then requires re-review.
 const TRANSFORM_VERSION_V2 = '7';
@@ -484,12 +485,23 @@ function transformCardRecordV2(rawRecord, opts = {}) {
     extraFlags.push({ code: 'hidden_from_v1_carve_out', source_local_id: null, detail: hiddenByCarveOut.join(', ') });
   }
   const capResult = transformCaps(record, rewardRules, ctx);
+  // Rows the database's identity indexes would reject (see dedupe.js).
+  const capDedupe = dedupeCaps(capResult.caps, capResult.capTargets);
+  capResult.caps = capDedupe.caps;
+  capResult.capTargets = capDedupe.capTargets;
+  extraFlags.push(...capDedupe.flags);
   const hiddenUncapped = hideUncappedFromV1(rewardRules, capResult.caps, ctx.card);
   if (hiddenUncapped.length) {
     extraFlags.push({ code: 'hidden_from_v1_uncapped', source_local_id: null, detail: hiddenUncapped.join(', ') });
   }
   const milestoneResult = transformMilestones(record);
+  const milestoneDedupe = dedupeMilestones(milestoneResult.milestones);
+  milestoneResult.milestones = milestoneDedupe.milestones;
+  extraFlags.push(...milestoneDedupe.flags);
   const benefitResult = transformBenefits(record);
+  const benefitDedupe = dedupeBenefits(benefitResult.benefits, benefitResult.unlockRules);
+  benefitResult.benefits = benefitDedupe.benefits;
+  extraFlags.push(...benefitDedupe.flags);
   const redemption = redemptionRows(record);
 
   // D7 + D10: accrual_rounding is always set on a loaded card.
