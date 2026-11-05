@@ -30,7 +30,7 @@ Status values: `not started` · `running` · `done (branch ready)` · `merged` �
 |---|---|---|---|---|---|---|
 | WP0 | Docs, contracts, scenario seed, directory skeleton | 0 | `card-rewards/phase1` | merged | 2026-11-05 | Lead |
 | WP1 | Schema v2, v1/v2 feeds, directory seeding | 1 | `card-rewards/wp1-schema` | **merged** | 2026-11-06 | Review approved + 1 fix round (D1, D2, D7, CI step); 1393 api tests; DB test fresh + incremental; seeder loads 164/61 |
-| WP2 | Loader v2 (pure transform), coverage, audit script | 1 | `card-rewards/wp2-loader` | done (in review) | 2026-11-06 | All 376 cards transform; 27 override files apply (113 changes, 0 errors); see metrics below |
+| WP2 | Loader v2 (pure transform), coverage, audit script | 1 | `card-rewards/wp2-loader` | needs rework (fix round 1) | 2026-11-06 | v1 projection, overrides and DB writer verified on all 376 cards; fixing 5 code paths that widen bonuses (IndianOil MID/TID, broad category tokens, dropped v1 exclusion rows, inverted exclusion lists, cap inference) — D17 |
 | WP3 | Dart engine v2 + tolerant parsing | 1 | `card-rewards/wp3-dart-engine` | **merged** | 2026-11-06 | Review approved + 1 fix round (K15 harness, D15, D16); 464/464 on merged branch; all 123 shared scenarios agree with JS |
 | WP4 | JS engine v2 + merchant resolver | 1 | `card-rewards/wp4-js-engine` | **merged** (incl. D15, D16) | 2026-11-06 | 190 targeted tests; 29 contract + 47 JS scenarios |
 | WP5 | Merchant and platform directory data | 1 | `card-rewards/wp5-directory` | **merged** | 2026-11-06 | 164 merchants (9 true sub-brand parents, `group` tags per D6), 61 platforms; review + 1 fix round clean; IHCL brands kept under `taj` (ruling in ledger) |
@@ -71,6 +71,7 @@ Status values: `not started` · `running` · `done (branch ready)` · `merged` �
 | 2026-11-06 | D14: examples depending on facts a purchase can't tell us (gift card, international, birthday) are kept but not engine-checked; such rules are info-only until Phase 2; overrides must never drop exclusions. | Lead |
 | 2026-11-06 | D15: engines never silently drop limits or exclusions they can't read; they skip visibly and lower confidence. The app must not use cap headroom for points caps until server state is in native units (WP8). | Lead |
 | 2026-11-06 | D16: exclusions with exceptions ("no rewards on fuel except at IndianOil", "utilities only via Google Pay") and minimum amounts ("nothing below ₹100") are modelled; an unknown merchant or app never proves an exception. | Lead |
+| 2026-11-06 | D17: the loader never widens a narrow bonus (pharmacy, movies, hotels, flights) to a whole category — it uses MCC codes or keeps it information-only; exclusions never lose their old-app row; fee/surcharge/redemption limits are never attached to earning rules. | Lead |
 | 2026-11-06 | D10: cards switch to the v2 engine only when re-imported by the v2 loader (DB defaults alone never switch a card), so existing cards keep today's behaviour until re-import. | Lead |
 
 ## Changelog
