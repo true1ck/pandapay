@@ -30,7 +30,7 @@ Status values: `not started` · `running` · `done (branch ready)` · `merged` �
 |---|---|---|---|---|---|---|
 | WP0 | Docs, contracts, scenario seed, directory skeleton | 0 | `card-rewards/phase1` | merged | 2026-11-05 | Lead |
 | WP1 | Schema v2, v1/v2 feeds, directory seeding | 1 | `card-rewards/wp1-schema` | **merged** | 2026-11-06 | Review + 6 follow-ups incl. hashed identity indexes (checkpoint); DB test in CI |
-| WP2 | Loader v2 (pure transform), coverage, audit script | 1 | `card-rewards/wp2-loader` | needs rework (review fix round 1) | 2026-11-06 | Follow-up round confirmed (EMI exclusions on 136 cards, UPI-only bonuses hidden from old apps, no card earns more in old apps). Fixing: an edge case where a lower-rate carve-out could let a higher bonus pay, plus the Magnus higher-rate switch (D26/D27) |
+| WP2 | Loader v2 (pure transform), coverage, audit script | 1 | `card-rewards/wp2-loader` | review fix round done, in re-review | 2026-11-06 | Carve-out edge case fixed, Magnus switch built (needs a cited correction file), Samsung EMI exclusion added; no card earns more in either engine versus the last review |
 | WP3 | Dart engine v2 + tolerant parsing | 1 | `card-rewards/wp3-dart-engine` | **merged** | 2026-11-06 | 477/477 tests; all 127 shared scenarios agree with JS (incl. D15, D16, D18) |
 | WP4 | JS engine v2 + merchant resolver | 1 | `card-rewards/wp4-js-engine` | **merged** | 2026-11-06 | 272/272 targeted tests on merged branch; passes all 127 shared scenarios incl. Dart's own |
 | WP5 | Merchant and platform directory data | 1 | `card-rewards/wp5-directory` | **merged** | 2026-11-06 | 164 merchants (9 true sub-brand parents, `group` tags per D6), 61 platforms; review + 1 fix round clean; IHCL brands kept under `taj` (ruling in ledger) |
