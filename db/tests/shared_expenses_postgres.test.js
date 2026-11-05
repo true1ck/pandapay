@@ -60,6 +60,7 @@ test('real PostgreSQL: forced RLS, source eligibility, replay and fail-closed wr
   await db.query(fs.readFileSync(path.resolve(__dirname,'../supabase/migrations/20261114000000_shared_expense_phone_directory.sql'),'utf8'));
   await db.query(fs.readFileSync(path.resolve(__dirname,'../supabase/migrations/20261114010000_shared_expense_context_label.sql'),'utf8'));
   await db.query(fs.readFileSync(path.resolve(__dirname,'../supabase/migrations/20261114020000_shared_expense_group_links.sql'),'utf8'));
+  await db.query(fs.readFileSync(path.resolve(__dirname,'../supabase/migrations/20261114030000_shared_expense_membership_exit.sql'),'utf8'));
   // Replay the pre-existing role setup's broad grants. A new isolated schema
   // must retain its ACL even when public and pandapay grants are restored.
   await db.query('GRANT USAGE ON SCHEMA public,pandapay TO app_user; GRANT SELECT,INSERT,UPDATE,DELETE ON ALL TABLES IN SCHEMA public TO app_user; GRANT EXECUTE ON ALL FUNCTIONS IN SCHEMA pandapay TO app_user');
@@ -308,6 +309,44 @@ test('real PostgreSQL: forced RLS, source eligibility, replay and fail-closed wr
     await db.query("INSERT INTO shared_expenses.members(context_id,member_id,role,state,display_name) SELECT $1,gen_random_uuid(),'member','invited','x' FROM generate_series(1,20)",[g]);
     await db.query("INSERT INTO shared_expenses.invitations(invitation_id,context_id,member_id,issuer_profile_id,token_hash,claimed_profile_id,state,via_group_link) SELECT gen_random_uuid(),$1,m.member_id,$2,encode(sha256(convert_to(m.member_id::text,'UTF8')),'hex'),$2,'awaiting_owner',true FROM shared_expenses.members m WHERE m.context_id=$1 AND m.display_name='x'",[g,a]);
     await assert.rejects(claim(c,t3),/join_requests_full/);
+  });
+  await t.test('leaving and removing: only unjoined people without expenses, and only when settled up',async()=>{
+    const H=(ch)=>ch.repeat(64), g=crypto.randomUUID(), m1=crypto.randomUUID(), m2=crypto.randomUUID(), tok=()=>crypto.randomBytes(32).toString('hex');
+    await actor(a,()=>db.query("SELECT shared_expenses.create_context($1,'group','Exit trip',$2,$3)",[g,crypto.randomUUID(),H('1')]));
+    for(const [m,n] of [[m1,'Dev'],[m2,'Ria']]) await actor(a,()=>db.query('SELECT shared_expenses.invite_member($1,$2,$3)',[{contextId:g,memberId:m,displayName:n},crypto.randomUUID(),H('2')]));
+    const remove=(who,member,op=crypto.randomUUID())=>actor(who,()=>db.query('SELECT shared_expenses.remove_member($1,$2,$3,$4) AS v',[g,member,op,H('3')]));
+    await assert.rejects(remove(b,m1),/context_not_authorized/,'only owners remove');
+    const op=crypto.randomUUID();
+    assert.equal((await remove(a,m1,op)).rows[0].v.status,'removed');
+    assert.equal((await remove(a,m1,op)).rows[0].v.status,'removed','replay');
+    assert.equal((await db.query('SELECT state FROM shared_expenses.members WHERE member_id=$1',[m1])).rows[0].state,'declined');
+    await assert.rejects(remove(a,m1),/membership_conflict/,'already removed');
+    // A person with an expense cannot be removed.
+    const exp=crypto.randomUUID(), rev=crypto.randomUUID(), ownerMember=(await db.query("SELECT member_id FROM shared_expenses.members WHERE context_id=$1 AND role='owner'",[g])).rows[0].member_id;
+    const snapshot={currency:'INR',totalMinor:'10000',memberOrder:[ownerMember,m2],contributions:[{memberId:ownerMember,amountMinor:'10000'}],shares:[{memberId:ownerMember,amountMinor:'5000'},{memberId:m2,amountMinor:'5000'}]};
+    await actor(a,()=>db.query('SELECT shared_expenses.submit_proposal($1,$2,$3)',[{contextId:g,expenseId:exp,revisionId:rev,expectedHeadRevisionId:null,title:'Dinner',occurredOn:'2026-11-05',snapshot,sources:[],void:false},crypto.randomUUID(),H('4')]));
+    await assert.rejects(remove(a,m2),/member_has_expenses/);
+    // Joined members: owner cannot leave; a member with a pending expense must settle first.
+    await actor(a,()=>db.query('SELECT shared_expenses.create_invitation($1,$2)',[{invitationId:crypto.randomUUID(),contextId:g,memberId:m2,targetPhoneHash:H('b'),tokenHash:tok()},H('5')]));
+    const inv=(await db.query("SELECT invitation_id FROM shared_expenses.invitations WHERE member_id=$1 AND state='open'",[m2])).rows[0].invitation_id;
+    await actor(b,()=>db.query('SELECT shared_expenses.claim_invitation_by_id($1,$2,$3,$4,$5)',[inv,H('b'),'3210',crypto.randomUUID(),H('6')]));
+    const leave=(who,op2=crypto.randomUUID())=>actor(who,()=>db.query('SELECT shared_expenses.leave_context($1,$2,$3) AS v',[g,op2,H('7')]));
+    await assert.rejects(leave(a),/owner_cannot_leave/);
+    await assert.rejects(leave(c),/membership_not_authorized/,'a stranger cannot leave');
+    await assert.rejects(leave(b),/settle_first/,'pending expense blocks leaving');
+    // A settled member with nothing pending can leave, and loses access.
+    const g2=crypto.randomUUID(), q1=crypto.randomUUID(), i2=crypto.randomUUID();
+    await actor(a,()=>db.query("SELECT shared_expenses.create_context($1,'group','Quiet',$2,$3)",[g2,crypto.randomUUID(),H('1')]));
+    await actor(a,()=>db.query('SELECT shared_expenses.invite_member($1,$2,$3)',[{contextId:g2,memberId:q1,displayName:'Bee'},crypto.randomUUID(),H('2')]));
+    await actor(a,()=>db.query('SELECT shared_expenses.create_invitation($1,$2)',[{invitationId:i2,contextId:g2,memberId:q1,targetPhoneHash:H('b'),tokenHash:tok()},H('5')]));
+    await actor(b,()=>db.query('SELECT shared_expenses.claim_invitation_by_id($1,$2,$3,$4,$5)',[i2,H('b'),'3210',crypto.randomUUID(),H('6')]));
+    assert.equal((await actor(b,()=>db.query('SELECT * FROM shared_expenses.contexts WHERE context_id=$1',[g2]))).rowCount,1);
+    const lop=crypto.randomUUID();
+    const left=()=>actor(b,()=>db.query('SELECT shared_expenses.leave_context($1,$2,$3) AS v',[g2,lop,H('7')]));
+    assert.equal((await left()).rows[0].v.status,'left');
+    assert.equal((await db.query('SELECT state FROM shared_expenses.members WHERE member_id=$1',[q1])).rows[0].state,'left');
+    assert.equal((await actor(b,()=>db.query('SELECT * FROM shared_expenses.contexts WHERE context_id=$1',[g2]))).rowCount,0,'no access after leaving');
+    await assert.rejects(actor(b,()=>db.query('SELECT shared_expenses.leave_context($1,$2,$3)',[g2,crypto.randomUUID(),H('8')])),/membership_not_authorized/);
   });
   await t.test('owner invitations create pending membership without consenting to financial debt',async()=>{
     const invitedCtx=crypto.randomUUID(), invited=crypto.randomUUID();

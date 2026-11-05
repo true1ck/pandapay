@@ -155,6 +155,18 @@ function registerInvitationRoutes(app,{protect,withUserClient,sendError,secret,a
     const result=await withUserClient(req.userId,async client=>(await client.query('SELECT shared_expenses.list_my_invitations($1::text) AS result',[phone])).rows[0].result);
     res.json({phoneVerified:true,items:(result.items||[]).map(i=>({...i,inviterName:maskName(i.inviterName)}))});
   }));
+  route('/shared-expenses/members/remove',async(req,res)=>{
+    const b=req.body;record(b,['contextId','memberId','operationId']);for(const f of ['contextId','memberId','operationId'])uuid(b[f],f);
+    const rh=requestHash({contextId:b.contextId,memberId:b.memberId,action:'remove'});
+    const result=await withUserClient(req.userId,async client=>(await client.query('SELECT shared_expenses.remove_member($1::uuid,$2::uuid,$3::uuid,$4::text) AS result',[b.contextId,b.memberId,b.operationId,rh])).rows[0].result);
+    res.json(result);
+  });
+  route('/shared-expenses/contexts/leave',async(req,res)=>{
+    const b=req.body;record(b,['contextId','operationId']);uuid(b.contextId,'contextId');uuid(b.operationId,'operationId');
+    const rh=requestHash({contextId:b.contextId,action:'leave'});
+    const result=await withUserClient(req.userId,async client=>(await client.query('SELECT shared_expenses.leave_context($1::uuid,$2::uuid,$3::text) AS result',[b.contextId,b.operationId,rh])).rows[0].result);
+    res.json(result);
+  });
   route('/shared-expenses/groups/link',async(req,res)=>{
     const b=req.body;record(b,['contextId','linkId']);uuid(b.contextId,'contextId');uuid(b.linkId,'linkId');
     const creds=groupLinkCredentials(secret,req.userId,b.contextId,b.linkId);

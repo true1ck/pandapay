@@ -493,6 +493,39 @@ final class SharedExpensesHttpTransport implements SharedExpensesTransport {
     );
   }
 
+  Future<void> removeMember({
+    required String contextId,
+    required String memberId,
+    required String operationId,
+  }) async {
+    for (final id in [contextId, memberId, operationId]) {
+      if (!sharedUuid(id)) throw ArgumentError('Invalid identifier');
+    }
+    await _request(
+      'POST',
+      '/shared-expenses/members/remove',
+      body: jsonEncode({
+        'contextId': contextId,
+        'memberId': memberId,
+        'operationId': operationId,
+      }),
+    );
+  }
+
+  Future<void> leaveContext({
+    required String contextId,
+    required String operationId,
+  }) async {
+    if (!sharedUuid(contextId) || !sharedUuid(operationId)) {
+      throw ArgumentError('Invalid identifier');
+    }
+    await _request(
+      'POST',
+      '/shared-expenses/contexts/leave',
+      body: jsonEncode({'contextId': contextId, 'operationId': operationId}),
+    );
+  }
+
   Future<SharedGroupLinkStatus> fetchGroupLinkStatus(String contextId) async {
     if (!sharedUuid(contextId)) throw ArgumentError('Invalid identifier');
     final value = (await _request(

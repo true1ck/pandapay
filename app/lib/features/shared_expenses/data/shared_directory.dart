@@ -203,6 +203,12 @@ String sharedInviteIssueMessage(Object error) {
     'membership_conflict' =>
       'You cannot join with this link. Ask the owner to add you directly.',
     'context_member_limit' => 'This split is full.',
+    'member_has_expenses' =>
+      'They already have expenses in this split, so they cannot be removed.',
+    'owner_cannot_leave' =>
+      'The owner cannot leave. Remove the people first, or ask the group to start a new split.',
+    'settle_first' =>
+      'Settle up and clear any waiting expenses before leaving.',
     'phone_not_verified' =>
       'Verify your mobile number in your profile to use phone invites.',
     'invitation_unavailable' =>

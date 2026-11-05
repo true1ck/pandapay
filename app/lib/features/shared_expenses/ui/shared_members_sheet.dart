@@ -70,6 +70,76 @@ class _SharedMembersSheetState extends State<SharedMembersSheet> {
     _loadGroupLink();
   }
 
+  Future<bool> _confirm(String title, String body, String action) async =>
+      await showDialog<bool>(
+        context: context,
+        builder: (ctx) => AlertDialog(
+          title: Text(title),
+          content: Text(body),
+          actions: [
+            TextButton(
+              onPressed: () => Navigator.pop(ctx, false),
+              child: const Text('Cancel'),
+            ),
+            TextButton(
+              onPressed: () => Navigator.pop(ctx, true),
+              child: Text(action),
+            ),
+          ],
+        ),
+      ) ??
+      false;
+
+  Future<void> _remove(SharedEditorMember member) async {
+    if (_busy || !_authorized) return;
+    final ok = await _confirm(
+      'Remove ${member.name}?',
+      'They have not joined and have no expenses here. You can add them again later.',
+      'Remove',
+    );
+    if (!ok || !mounted) return;
+    setState(() => _busy = true);
+    try {
+      await widget.runtime.removeMember(widget.contextId, member.id);
+      if (!mounted) return;
+      setState(() {
+        _notice = '${member.name} was removed.';
+        _roster = widget.runtime.contextRoster(widget.contextId);
+      });
+      await _loadInvitations();
+    } catch (error) {
+      if (mounted) setState(() => _notice = sharedInviteIssueMessage(error));
+    } finally {
+      if (mounted) setState(() => _busy = false);
+    }
+  }
+
+  /// Rare on purpose: a split stays after everyone settles and can be used for
+  /// the next expense. Leaving only works when nothing is owed or waiting.
+  Future<void> _leave() async {
+    if (_busy || !_authorized) return;
+    final ok = await _confirm(
+      'Leave ${widget.groupName}?',
+      'You will stop seeing this split. Past expenses stay for the others. '
+          'You can only leave when nothing is owed and nothing is waiting. '
+          'Someone can add you again later.',
+      'Leave',
+    );
+    if (!ok || !mounted) return;
+    setState(() => _busy = true);
+    try {
+      await widget.runtime.leaveContext(widget.contextId);
+      if (mounted) Navigator.pop(context);
+    } catch (error) {
+      if (mounted) {
+        setState(() {
+          _notice = sharedInviteIssueMessage(error);
+          _busy = false;
+        });
+      }
+    }
+  }
+
   Future<void> _loadGroupLink() async {
     try {
       final status = await widget.runtime.groupLinkStatus(widget.contextId);
@@ -621,27 +691,40 @@ class _SharedMembersSheetState extends State<SharedMembersSheet> {
                                               widget.runtime.proposalsEnabled &&
                                               member.state == 'invited' &&
                                               member.profileId == null
-                                        ? TextButton.icon(
-                                            onPressed: _busy
-                                                ? null
-                                                : () => _share(
-                                                    member,
-                                                    direct: roster.direct,
-                                                  ),
-                                            icon: const Icon(
-                                              Icons.share_outlined,
-                                              size: 18,
-                                            ),
-                                            label: Text(
-                                              switch (_inv[member.id]?.status) {
-                                                'declined' ||
-                                                'expired' ||
-                                                'rejected' => 'Invite again',
-                                                'open' => 'Send link',
-                                                _ => 'Invite',
-                                              },
-                                              style: BambooFonts.ui(13),
-                                            ),
+                                        ? Row(
+                                            mainAxisSize: MainAxisSize.min,
+                                            children: [
+                                              TextButton(
+                                                onPressed: _busy
+                                                    ? null
+                                                    : () => _remove(member),
+                                                child: Text(
+                                                  'Remove',
+                                                  style: BambooFonts.ui(13),
+                                                ),
+                                              ),
+                                              TextButton.icon(
+                                                onPressed: _busy
+                                                    ? null
+                                                    : () => _share(
+                                                        member,
+                                                        direct: roster.direct,
+                                                      ),
+                                                icon: const Icon(
+                                                  Icons.share_outlined,
+                                                  size: 18,
+                                                ),
+                                                label: Text(switch (_inv[member
+                                                        .id]
+                                                    ?.status) {
+                                                  'declined' ||
+                                                  'expired' ||
+                                                  'rejected' => 'Invite again',
+                                                  'open' => 'Send link',
+                                                  _ => 'Invite',
+                                                }, style: BambooFonts.ui(13)),
+                                              ),
+                                            ],
                                           )
                                         : null,
                                   ),
@@ -659,6 +742,21 @@ class _SharedMembersSheetState extends State<SharedMembersSheet> {
                                       style: BambooFonts.ui(
                                         14,
                                         color: BambooInk.lime,
+                                      ),
+                                    ),
+                                  ),
+                                if (!roster.canShareLink &&
+                                    roster.ownMemberId.isNotEmpty)
+                                  Align(
+                                    alignment: Alignment.centerLeft,
+                                    child: TextButton(
+                                      onPressed: _busy ? null : _leave,
+                                      child: Text(
+                                        'Leave this split',
+                                        style: BambooFonts.ui(
+                                          13,
+                                          color: BambooInk.ink700,
+                                        ),
                                       ),
                                     ),
                                   ),

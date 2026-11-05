@@ -290,6 +290,36 @@ class SharedExpensesRuntime extends ChangeNotifier {
     return status;
   }
 
+  /// Owner removes someone who never joined and has no expense.
+  Future<void> removeMember(String contextId, String memberId) async {
+    _current();
+    if (!proposalsEnabled || store.isContextRevoked(contextId)) {
+      throw const SharedRuntimeUnavailable();
+    }
+    await remote.removeMember(
+      contextId: contextId,
+      memberId: memberId,
+      operationId: const Uuid().v4(),
+    );
+    _current();
+    await refresh();
+  }
+
+  /// Leaves a split the person is settled in. The device forgets it at once.
+  Future<void> leaveContext(String contextId) async {
+    _current();
+    if (!proposalsEnabled || store.isContextRevoked(contextId)) {
+      throw const SharedRuntimeUnavailable();
+    }
+    await remote.leaveContext(
+      contextId: contextId,
+      operationId: const Uuid().v4(),
+    );
+    _current();
+    await revokeContext(contextId);
+    await refresh();
+  }
+
   Future<SharedGroupLinkStatus> groupLinkStatus(String contextId) async {
     _current();
     if (!proposalsEnabled || store.isContextRevoked(contextId)) {
