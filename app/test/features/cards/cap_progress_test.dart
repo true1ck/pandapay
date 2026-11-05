@@ -193,6 +193,24 @@ void main() {
     });
   });
 
+  group('percentFloor', () {
+    test('rounds down: never 100% before the cap is reached', () {
+      expect(percentFloor(0.8267), 82);
+      expect(percentFloor(0.9993), 99);
+      expect(percentFloor(0.999999), 99);
+      expect(percentFloor(1.0), 100);
+      expect(percentFloor(0), 0);
+    });
+
+    test('exact figures stay exact despite floating point (0.58 x 100 is '
+        '57.999...)', () {
+      expect(percentFloor(0.58), 58);
+      expect(percentFloor(0.57), 57);
+      expect(percentFloor(0.29), 29);
+      expect(percentFloor(870 / 1500), 58);
+    });
+  });
+
   group('ratio', () {
     test('is consumed over amount, clamped to 1', () {
       expect(_progress(_product(), _owned(native: 750)).ratio, 0.5);

@@ -229,7 +229,8 @@ class _CapTile extends StatelessWidget {
         : null;
     if (progress != null) {
       final ratio = progress.ratio ?? 0;
-      final suggestion = ratio >= 0.9
+      // From the 80% alert line, as the cap alerts do.
+      final suggestion = ratio >= 0.8
           ? nextBestOwnedCard(
               owned: allOwned,
               cappedCard: userCard,

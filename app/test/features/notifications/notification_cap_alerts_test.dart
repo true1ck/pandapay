@@ -112,8 +112,11 @@ void main() {
       expect(_plan(_ownedA(1185)), isEmpty);
     });
 
-    test('exactly 80% warns', () {
-      expect(_plan(_ownedA(1200)), hasLength(1));
+    test('exactly 80% warns, and says 80% (one rounding rule with the bars)',
+        () {
+      final alerts = _plan(_ownedA(1200));
+      expect(alerts, hasLength(1));
+      expect(alerts.single.body, contains('80%'));
     });
 
     test('99.7% says 99%, never 100% before the cap is reached', () {

@@ -41,6 +41,11 @@ enum CapUnit {
 String formatNative(double value) =>
     Money.fromRupees(value).format(showSymbol: false, hidePaise: true);
 
+/// A whole-number percentage for [ratio], rounded DOWN so a bar or alert
+/// never reads 100% before the cap is actually reached. The small epsilon
+/// keeps exact figures exact (0.58 × 100 is 57.999…).
+int percentFloor(double ratio) => (ratio * 100 + 1e-9).floor();
+
 String _rupees(double value) =>
     Money.fromRupees(value).format(hidePaise: true);
 

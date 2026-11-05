@@ -2118,9 +2118,11 @@ class _CapsTab extends ConsumerWidget {
                   ),
                   subtitle:
                       '${categoryName(cap.categoryId)} · ${_capKindLabel(progress.kind)}',
+                  // Rounded down, as in the alerts: never 100% before the
+                  // cap is reached.
                   trailing: ratio == null
                       ? 'Updating…'
-                      : '${(ratio * 100).ceil()}%',
+                      : '${percentFloor(ratio)}%',
                   details: [CapBar(progress: progress)],
                 );
               }

@@ -164,7 +164,7 @@ class NotificationTriggerRunner {
           title: reached ? '$name cap reached' : '$name is close to its cap',
           body: reached
               ? 'You\'ve used up this period\'s "$label" — extra spend here won\'t earn the bonus rate.$suffix'
-              : 'You\'ve used ${(ratio * 100).floor()}% of $name\'s "$label" this period.$suffix',
+              : 'You\'ve used ${percentFloor(ratio)}% of $name\'s "$label" this period.$suffix',
           dedupeKey:
               'cap:${userCard.id}:${cap.id}:$bucket:${reached ? 'reached' : 'warning'}',
         ),

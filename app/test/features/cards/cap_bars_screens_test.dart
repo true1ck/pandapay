@@ -126,6 +126,29 @@ void main() {
       );
     });
 
+    testWidgets('the suggestion starts at the 80% alert line, as the alerts '
+        'do', (tester) async {
+      // 1,275 of 1,500 = 85%: named (it was 90% before).
+      await _pump(
+        tester,
+        const Scaffold(body: CapsScreen()),
+        _overrides([_v2(), _other()], [_owned(1275), _ownedOther()]),
+      );
+      expect(
+        find.text('Use Dining Specialist for Dining instead'),
+        findsOneWidget,
+      );
+    });
+
+    testWidgets('below 80% there is no suggestion', (tester) async {
+      await _pump(
+        tester,
+        const Scaffold(body: CapsScreen()),
+        _overrides([_v2(), _other()], [_owned(1185), _ownedOther()]),
+      );
+      expect(find.byKey(const ValueKey('cap-next-best')), findsNothing);
+    });
+
     testWidgets('no suggestion when no other card earns more than base', (
       tester,
     ) async {
@@ -165,7 +188,7 @@ void main() {
       );
       // The caps section lists the cap; its detail is inside the tile.
       expect(find.text('Rewards Card'), findsWidgets);
-      final tile = find.text('83%');
+      final tile = find.text('82%'); // 1,240 / 1,500 = 82.67%, rounded down
       expect(tile, findsOneWidget);
       await tester.ensureVisible(tile);
       await tester.tap(tile);
@@ -241,6 +264,48 @@ void main() {
         withClock(DateTime(2026, 12, 10)),
       );
       expect(find.text('Updating…'), findsOneWidget);
+    });
+
+    testWidgets('card detail: the tile percentage is rounded down (82.67% is '
+        '82%, never 83%)', (tester) async {
+      await _pump(
+        tester,
+        const CardDetailScreen(userCardId: 'ua', initialTabIndex: 2),
+        withClock(DateTime(2026, 11, 15)),
+      );
+      expect(find.text('82%'), findsOneWidget);
+    });
+
+    testWidgets('card detail: 1,499 of 1,500 reads 99%, never 100%', (
+      tester,
+    ) async {
+      final nearly = parseUserCard(
+        userCardJson(
+          'ua',
+          'a',
+          capStates: [
+            capStateRowJson(
+              'a-cap',
+              consumed: 0,
+              consumedNative: 1499,
+              capKind: 'bonus_points',
+              capAmount: 1500,
+              periodStart: '2026-11-01',
+              periodEnd: '2026-11-30',
+            ),
+          ],
+        ),
+      );
+      await _pump(
+        tester,
+        const CardDetailScreen(userCardId: 'ua', initialTabIndex: 2),
+        [
+          ..._overrides([_v2()], [nearly]),
+          clockProvider.overrideWithValue(TestClock(DateTime(2026, 11, 15))),
+        ],
+      );
+      expect(find.text('99%'), findsOneWidget);
+      expect(find.text('100%'), findsNothing);
     });
 
     testWidgets('card detail: the injected clock decides', (tester) async {
