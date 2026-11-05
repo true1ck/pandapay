@@ -93,6 +93,7 @@ const { DEFAULT_DIRECTORY_PATH, buildDirectoryIndex, loadDirectory } = require('
 const { DEFAULT_OVERRIDES_DIR, loadOverride, loadVerifiedSlugs } = require('./catalogue_v2/overrides');
 const { aggregateReport, renderMarkdown } = require('./catalogue_v2/coverage');
 const { loadDoneRecords } = require('./catalogue_v2/source');
+const { toV2WireCard } = require('./catalogue_v2/wire');
 
 // pg is only needed when writing to a database; --transform-only must run
 // without it.
@@ -2171,6 +2172,20 @@ function runTransformOnly(args) {
   const { report, jsonPath, mdPath } = writeCoverageReport(cards, reportDir, {
     source: args.input || args.pipeline || 'CardPipeline checklist (done rows)',
   });
+  // A v2-feed-shaped preview (local ids, no database) that
+  // audit_catalogue.js can measure before anything is imported.
+  const previewPath = path.join(reportDir, 'catalogue-v2-preview.json');
+  const directory = loadDirectory(args.directory ? path.resolve(args.directory) : DEFAULT_DIRECTORY_PATH);
+  fs.writeFileSync(previewPath, JSON.stringify({
+    schema: 2,
+    preview: true,
+    cards: cards.filter((c) => c.result).map((c) => toV2WireCard(c.result, {
+      network: c.result.record?.card_product?.network ?? null,
+      issuerSlug: c.result.record?.card_product?.issuer_slug ?? null,
+    })),
+    merchants: directory.merchants || [],
+    platforms: directory.platforms || [],
+  }));
   const a = report.accelerators;
   console.log(`Transformed ${report.cards_transformed} of ${report.cards_total} record(s) (no database).`);
   console.log(`  skipped ${report.cards_skipped.length}, failed ${report.cards_failed.length}`);
@@ -2179,7 +2194,7 @@ function runTransformOnly(args) {
   console.log(`  after: ${a.after_modelled} modelled, ${a.after_info} info, ${a.after_dropped} dropped, ${a.after_unrestricted} unrestricted (flagged)`);
   console.log(`  caps: ${report.caps.written} written of ${report.caps.source_total}, ${report.caps.enforced} enforced, ${report.caps.orphan} orphan`);
   console.log(`  unlock rules: ${report.unlocks.rows} (${report.unlocks.lounge_with_unlocks} of ${report.unlocks.lounge_benefits} lounge benefits)`);
-  console.log(`\nWrote:\n  ${jsonPath}\n  ${mdPath}`);
+  console.log(`\nWrote:\n  ${jsonPath}\n  ${mdPath}\n  ${previewPath}`);
   if (report.cards_failed.length) process.exitCode = 1;
   return report;
 }

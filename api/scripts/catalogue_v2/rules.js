@@ -381,8 +381,15 @@ function transformRule(src, idx, ctx) {
     parts = parts.map((p) => {
       let out = p;
       if (cond.merchantSlugs.length) {
-        const r = mergeSlugs(out.merchantSlugs, cond.merchantSlugs);
-        out = r.conflict ? { ...out, conflict: true } : { ...out, merchantSlugs: r.slugs };
+        if (out.group) {
+          // A group token ("tata_neu_partner_brands") with the issuer's own
+          // brand list: the explicit list is the restriction.
+          out = { ...out, merchantSlugs: cond.merchantSlugs };
+          flags.push('group_replaced_by_condition_list');
+        } else {
+          const r = mergeSlugs(out.merchantSlugs, cond.merchantSlugs);
+          out = r.conflict ? { ...out, conflict: true } : { ...out, merchantSlugs: r.slugs };
+        }
       }
       if (cond.platformSlugs.length) {
         // A merchant rule whose condition names a payment app ("Swiggy, via

@@ -21,7 +21,7 @@ const GENERIC_WORDS = new Set([
   'outlet', 'outlets', 'the', 'and', 'or', 'via', 'through', 'using', 'on', 'at',
   'brand', 'transactions', 'transaction', 'payments', 'payment', 'spends', 'spend',
   'eligible', 'participating', 'authorised', 'authorized', 'petrol', 'pump', 'pumps',
-  'station', 'stations', 'fuel', 'pos', 'android', 'ios', 'websites',
+  'station', 'stations', 'fuel', 'pos', 'android', 'ios', 'websites', 'group', 'brands',
 ]);
 
 function loadDirectory(file = DEFAULT_DIRECTORY_PATH) {

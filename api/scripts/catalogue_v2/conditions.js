@@ -270,6 +270,21 @@ function addMccs(m, key, value, target) {
 }
 
 function mapNameValue(m, key, value, index, { allowRail }) {
+  // A list of names: resolve each; unresolved names make it a partial list.
+  if (Array.isArray(value) && value.length > 1 && value.every((v) => typeof v === 'string')) {
+    const sub = { ...emptyMapping(), merchantSlugs: [], platformSlugs: [], merchantProse: [], rails: [], blockers: [], flags: [] };
+    for (const v of value) mapNameValue(sub, key, v, index, { allowRail });
+    m.merchantSlugs.push(...sub.merchantSlugs);
+    m.platformSlugs.push(...sub.platformSlugs);
+    m.rails.push(...sub.rails);
+    m.blockers.push(...sub.blockers);
+    m.flags.push(...sub.flags);
+    if (sub.merchantProse.length) {
+      const resolvedAny = sub.merchantSlugs.length || sub.platformSlugs.length;
+      m.merchantProse.push({ key, text: sub.merchantProse.map((p) => p.text).join(', '), partial: Boolean(resolvedAny) });
+    }
+    return;
+  }
   const values = Array.isArray(value) ? value : [value];
   for (const raw of values) {
     if (raw === null || raw === undefined || raw === '' || typeof raw === 'boolean') continue;
