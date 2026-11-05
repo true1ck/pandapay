@@ -268,6 +268,114 @@
         "cap_deltas_by_source_id": {}
       },
       "why": "All EMI types excluded."
+    },
+    {
+      "id": "010",
+      "title": "Rs 150 Swiggy order, below the Rs249 minimum",
+      "ctx": {
+        "amount": 150,
+        "occurred": "2026-11-05T10:00:00+05:30",
+        "category_slug": "dining",
+        "mcc": 5814,
+        "merchant_name": "Swiggy",
+        "merchant_vpa": null,
+        "merchant_slug": "swiggy",
+        "platform": "swiggy_app",
+        "rail": "online"
+      },
+      "state_before": {
+        "caps_by_source_id": {}
+      },
+      "expect": {
+        "currency": "cashback",
+        "amount": 0,
+        "value_inr": 0,
+        "excluded": false,
+        "cap_deltas_by_source_id": {}
+      },
+      "why": "Issuer worked example: a Swiggy transaction below Rs249 earns 0 cashback. The T&C do not say whether it falls to the 1% category, so the expectation is only the issuer stated 0."
+    },
+    {
+      "id": "011",
+      "title": "Rs 153 Swiggy order, cashback rounds down",
+      "ctx": {
+        "amount": 153,
+        "occurred": "2026-11-05T10:00:00+05:30",
+        "category_slug": "dining",
+        "mcc": 5814,
+        "merchant_name": "Swiggy",
+        "merchant_vpa": null,
+        "merchant_slug": "swiggy",
+        "platform": "swiggy_app",
+        "rail": "online"
+      },
+      "state_before": {
+        "caps_by_source_id": {}
+      },
+      "expect": {
+        "currency": "cashback",
+        "amount": 15,
+        "value_inr": 15,
+        "excluded": false,
+        "cap_deltas_by_source_id": {
+          "swiggy_cashback_cap": 15
+        }
+      },
+      "why": "Issuer worked example: 10% of 153 = 15.3, Rs15 credited."
+    },
+    {
+      "id": "012",
+      "title": "Rs 156 Swiggy order, cashback rounds up",
+      "ctx": {
+        "amount": 156,
+        "occurred": "2026-11-05T10:00:00+05:30",
+        "category_slug": "dining",
+        "mcc": 5814,
+        "merchant_name": "Swiggy",
+        "merchant_vpa": null,
+        "merchant_slug": "swiggy",
+        "platform": "swiggy_app",
+        "rail": "online"
+      },
+      "state_before": {
+        "caps_by_source_id": {}
+      },
+      "expect": {
+        "currency": "cashback",
+        "amount": 16,
+        "value_inr": 16,
+        "excluded": false,
+        "cap_deltas_by_source_id": {
+          "swiggy_cashback_cap": 16
+        }
+      },
+      "why": "Issuer worked example: 10% of 156 = 15.6, Rs16 credited. Issuer also shows 6.5 rounded down to 6 in a statement example, so exact-half behaviour is not asserted."
+    },
+    {
+      "id": "013",
+      "title": "Rs 90 offline spend, below the Rs100 minimum",
+      "ctx": {
+        "amount": 90,
+        "occurred": "2026-11-05T10:00:00+05:30",
+        "category_slug": "other",
+        "mcc": 5411,
+        "merchant_name": "Local shop",
+        "merchant_vpa": null,
+        "merchant_slug": null,
+        "platform": null,
+        "rail": "swipe"
+      },
+      "state_before": {
+        "caps_by_source_id": {}
+      },
+      "expect": {
+        "currency": "cashback",
+        "amount": 0,
+        "value_inr": 0,
+        "excluded": false,
+        "cap_deltas_by_source_id": {}
+      },
+      "why": "T&C: 5% and 1% categories need a minimum transaction of Rs100."
     }
   ],
   "research_notes": [
@@ -281,7 +389,7 @@
     {
       "item": "10% minimum transaction",
       "cardpipeline_says": "Rs249 minimum on Swiggy 10%.",
-      "issuer_says": "Product page says no cashback below Rs100; T&C excerpt read does not state Rs249.",
+      "issuer_says": "T&C 4.1: from 21 Apr 2026 the 10% category needs a transaction of at least Rs249; 5% and 1% need at least Rs100. Issuer worked example: Rs150 Swiggy order earns 0. Matches CardPipeline.",
       "proposed_fix": "none"
     },
     {
