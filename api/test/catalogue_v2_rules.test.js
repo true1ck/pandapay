@@ -251,7 +251,10 @@ test('C7.4 platform / app / channel naming an app or portal become platform_slug
   assert.deepEqual(only(r, 'app')[0].platform_slugs, ['phonepe_app']);
   assert.deepEqual(only(r, 'kiwi')[0].platform_slugs, ['kiwi_app']);
   assert.equal(only(r, 'kiwi')[0].rail, 'upi_qr');
-  assert.equal(only(r, 'notapp')[0].rule_role, 'info', 'app: not_X cannot be expressed');
+  // D16: "not via PhonePe" is an exception list (v2-only on an earn rule).
+  const [notapp] = only(r, 'notapp');
+  assert.deepEqual([notapp.rule_role, notapp.except_platform_slugs.join(), notapp.min_engine_version], ['earn', 'phonepe_app', 2]);
+  assert.deepEqual(notapp.platform_slugs, []);
 });
 
 test('C7.4 minimum_transaction_inr -> min_txn_inr; excluded_categories -> excluded categories', () => {
@@ -630,6 +633,57 @@ test('D14c a whole-array override that drops an exclusion, and dangling cap refe
   assert.ok(flags.some((f) => f.code === 'dangling_cap_reference' && f.detail === 'gone'));
   const untouched = run(record);
   assert.ok(!untouched.card.model_coverage.flags.some((f) => f.code === 'override_removed_exclusion'));
+});
+
+// ── C8 D16: exceptions and minimum amounts ──────────────────────────────
+
+test('D16a "except at X" / "not via X" become except lists; exclusions keep v1, earn rules go v2', () => {
+  const dir = {
+    ...DIRECTORY,
+    merchants: [...DIRECTORY.merchants, { slug: 'hpcl', name: 'HPCL', aliases: ['hpcl', 'hindustan petroleum'] }],
+    platforms: [...DIRECTORY.platforms, { slug: 'google_pay', name: 'Google Pay', kind: 'payment_app', aliases: ['google pay', 'gpay'] }],
+  };
+  const r = transformCardRecordV2(card({
+    rules: [
+      rule({ id: 'fuel-ex', category_id: 'fuel', evaluation_type: 'exclusion', channel_type: 'non-HPCL fuel', action: { cashback_percent: 0 } }),
+      rule({ id: 'util-ex', category_id: 'utility', evaluation_type: 'exclusion', conditions: { platform: 'not via Google Pay' }, action: { cashback_percent: 0 } }),
+      rule({ id: 'upi-ex', category_id: 'all_retail', evaluation_type: 'exclusion', rail: 'upi_qr', conditions: { app: 'not_PhonePe' }, action: { cashback_percent: 0 } }),
+    ],
+  }), { directory: dir });
+  const [fuel] = only(r, 'fuel-ex');
+  assert.deepEqual([fuel.rule_role, fuel.category_slug, fuel.except_merchant_slugs.join(), fuel.min_engine_version], ['exclusion', 'fuel', 'hpcl', 1]);
+  const [util] = only(r, 'util-ex');
+  assert.deepEqual([util.rule_role, util.category_slug, util.except_platform_slugs.join(), util.min_engine_version], ['exclusion', 'bills', 'google_pay', 1]);
+  const [upi] = only(r, 'upi-ex');
+  assert.deepEqual([upi.rule_role, upi.rail, upi.except_platform_slugs.join()], ['exclusion', 'upi_qr', 'phonepe_app']);
+  assert.equal(upi.min_engine_version, 2, 'rail-only exclusion');
+});
+
+test('D16b a minimum on an exclusion becomes max_txn_inr (v2); a card-wide floor gets its own exclusion', () => {
+  const r = run(card({
+    rules: [
+      rule({ id: 'small', category_id: 'excluded_spend', evaluation_type: 'exclusion', conditions: { minimum_transaction_inr: 100 }, action: { cashback_percent: 0 } }),
+    ],
+  }));
+  const [small] = only(r, 'small');
+  assert.deepEqual([small.rule_role, small.max_txn_inr, small.min_txn_inr, small.min_engine_version], ['exclusion', 100, null, 2]);
+
+  const floor = run(card({
+    rules: [
+      rule({ id: 'sw', category_id: 'swiggy_app', conditions: { minimum_transaction_inr: 249 }, action: { cashback_percent: 10 } }),
+      rule({ id: 'other', category_id: 'all_retail', evaluation_type: 'standard_accrual', conditions: { minimum_transaction_inr: 100 }, action: { cashback_percent: 1 } }),
+    ],
+  }));
+  const ex = floor.rewardRules.find((x) => x.key === 'other#min-amount');
+  assert.deepEqual([ex.rule_role, ex.max_txn_inr, ex.category_slug, ex.min_engine_version], ['exclusion', 100, null, 2]);
+
+  const notWide = run(card({
+    rules: [
+      rule({ id: 'dine', category_id: 'dining', action: { cashback_percent: 5 } }),
+      rule({ id: 'other', category_id: 'all_retail', evaluation_type: 'standard_accrual', conditions: { minimum_transaction_inr: 100 }, action: { cashback_percent: 1 } }),
+    ],
+  }));
+  assert.equal(notWide.rewardRules.find((x) => x.key === 'other#min-amount'), undefined, 'dining has no floor, so the floor is not card-wide');
 });
 
 // ── C8 D13: terms that depend on the cardholder; override conventions ───

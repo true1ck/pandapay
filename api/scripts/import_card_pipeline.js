@@ -1820,10 +1820,12 @@ async function writeCardV2(client, cardProductId, t) {
          (card_product_id, category_id, merchant_pattern, rail, unit, rate, min_txn_inr,
           max_txn_inr, priority, conditions, effective_from, effective_to, excluded_categories,
           rule_role, merchant_slugs, platform_slugs, mcc_include, mcc_exclude, block_inr,
-          min_engine_version, source_local_id, display_note)
+          min_engine_version, source_local_id, display_note, except_merchant_slugs,
+          except_platform_slugs)
        VALUES ($1, (select id from spend_categories where slug = $2), $3, $4, $5, $6, $7,
          $8, $9, $10, $11, $12, ${categoryIdsSql(13)},
-         $14, $15::text[], $16::text[], $17::text[], $18::text[], $19, $20, $21, $22)
+         $14, $15::text[], $16::text[], $17::text[], $18::text[], $19, $20, $21, $22,
+         $23::text[], $24::text[])
        RETURNING id`,
       [
         cardProductId,
@@ -1856,6 +1858,8 @@ async function writeCardV2(client, cardProductId, t) {
         r.min_engine_version,
         r.source_local_id,
         r.display_note,
+        r.except_merchant_slugs || [],
+        r.except_platform_slugs || [],
       ]
     );
     ruleIds[r.key] = inserted.rows[0].id;

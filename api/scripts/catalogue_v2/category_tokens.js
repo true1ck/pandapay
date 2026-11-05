@@ -63,6 +63,9 @@ const CATEGORY_MAP = {
   rent_property_management: exact('rent'),
   rent_payment: exact('rent'),
   insurance: exact('insurance'),
+  insurance_premium: exact('insurance'),
+  insurance_premiums: exact('insurance'),
+  insurance_premium_payments: exact('insurance'),
   education: exact('education'),
   government: exact('government'),
   govt: exact('government'),
@@ -277,6 +280,7 @@ const TXN_ATTRIBUTE_TOKENS = new Set([
 
 const NON_PURCHASE_TOKENS = new Set([
   'cash_advance', 'cash_withdrawal', 'cash', 'cash_transaction', 'cash_transactions',
+  'cash_advances', 'atm_cash_withdrawal', 'atm_withdrawal', 'cash_withdrawals',
   'atm_withdrawal', 'balance_transfer', 'encash', 'fees_and_charges', 'fees', 'fees_charges',
   'card_fees', 'financial_charges', 'fees_interest', 'interest', 'disputed_transactions',
   'disputed_spend', 'repayment', 'repayments', 'loan_on_card', 'credit_card_payment',

@@ -197,8 +197,11 @@ function transformRule(src, idx, ctx) {
   // 1. Start from the token's parts.
   let parts;
   let tokenNeedsConditions = null;
+  const pendingNonPurchase = [];
   if (token.kind === 'non_purchase') {
-    info.push('non_purchase_category');
+    // Cash advances, fees, balance transfers: judged in step 10 — an
+    // exclusion pinned to the ATM rail or to MCCs is still expressible.
+    pendingNonPurchase.push('non_purchase_category');
     unmappedTokens.push(rawToken);
     parts = [{}];
   } else if (token.kind === 'txn_attribute') {
@@ -238,7 +241,7 @@ function transformRule(src, idx, ctx) {
     const t2 = resolveCategoryToken(categoryKey(value), ctx);
     if (t2.kind === 'unrestricted') continue;
     if (t2.kind === 'non_purchase') {
-      info.push(`non_purchase_condition:${key}`);
+      pendingNonPurchase.push(`non_purchase_condition:${key}`);
       continue;
     }
     if (t2.kind === 'category') {
@@ -268,12 +271,8 @@ function transformRule(src, idx, ctx) {
     }
   }
 
-  // 3. Transaction types (merchant_emi, balance_transfer, ...).
-  if (cond.restatedTransactionTypes?.length) {
-    const emiOnly = cond.restatedTransactionTypes.every((v) => /emi|flexipay/i.test(String(v)));
-    const emiRule = parts.some((p) => p.categorySlug === 'emi') || String(src?.rail) === 'emi';
-    if (!(emiOnly && emiRule)) info.push('transaction_type');
-  }
+  // 3. Transaction types (merchant_emi, balance_transfer, ...) are judged
+  // in step 10, once rails and MCCs are known.
 
   // 4. channel_type naming a brand, platform, rail or category.
   if (cond.channelTokenParts) {
@@ -449,11 +448,39 @@ function transformRule(src, idx, ctx) {
   if (isExclusion && rails.some((r) => r.inexact)) info.push('inexact_rail_on_exclusion');
   if (railSet.length === 1) parts = parts.map((p) => andPart(p, { rail: railSet[0] }) || { ...p, conflict: true });
 
+  // 8b. Merchants named under other keys ("location": "HPCL petrol pump").
+  for (const mention of cond.mentions || []) {
+    if (mention.merchant) {
+      const has = parts.some((p) => p.merchantSlugs?.includes(mention.merchant));
+      if (!has) parts = parts.map((p) => andPart(p, { merchantSlugs: [mention.merchant] }) || { ...p, conflict: true });
+    } else if (mention.platform) {
+      const has = parts.some((p) => p.platformSlugs?.includes(mention.platform));
+      if (!has) parts = parts.map((p) => andPart(p, { platformSlugs: [mention.platform] }) || { ...p, conflict: true });
+    }
+  }
+
+  // An exclusion still restricted by something we did map (a category, a
+  // brand, a rail, MCCs) may ignore extra sub-scope it can't express: it then
+  // excludes a little more than the source, which H2 allows (it can only hide
+  // reward). Never for amounts, transaction attributes, user attributes or
+  // negations — those change who is excluded, not how much.
+  const exclusionAnchored = isExclusion && (cond.mccInclude.length > 0 ||
+    parts.every((p) => p.categorySlug || p.merchantSlugs?.length || p.platformSlugs?.length || p.rail));
+  const SCOPE_KEY = /(types?|scope|services|target|items|origin|location|conversion|channel|channel_type|definition|kind|source|notice|purpose|mode|requirement)$/;
+
   // 9. Blockers.
   for (const b of cond.blockers) {
     if (b.key === 'channel_type' && (parts.some((p) => p.merchantSlugs?.length || p.platformSlugs?.length))) {
       // channel_type prose on an already brand-restricted rule is a restatement.
       flags.push('channel_type_restates_brand');
+      continue;
+    }
+    if (/^non_/.test(b.key) && (cond.exceptMerchantSlugs.length || cond.exceptPlatformSlugs.length)) {
+      continue; // "non_partner: true" restates the exception list
+    }
+    if (exclusionAnchored && SCOPE_KEY.test(b.key) && !USER_ATTRIBUTE_KEY.test(b.key) &&
+        !/\b(not|non|outside|except|excluding|international|domestic|foreign)\b/i.test(String(b.detail || ''))) {
+      flags.push('exclusion_scope_broadened');
       continue;
     }
     info.push(`condition:${b.key}`);
@@ -465,15 +492,45 @@ function transformRule(src, idx, ctx) {
   // 10. Amounts, MCCs, excluded categories.
   let minTxn = cond.minTxn;
   let maxTxn = cond.maxTxn;
-  if (isExclusion && (minTxn !== null || maxTxn !== null)) {
-    // "No reward below ₹100" inverts to "applies at/above ₹100" if stored as
-    // min_txn_inr on a zero-rate rule.
+  if (isExclusion && maxTxn !== null) {
+    // "Excluded up to ₹X" has no form here (D16b gives max_txn_inr on an
+    // exclusion the opposite meaning).
     info.push('amount_bound_on_exclusion');
-    minTxn = null;
     maxTxn = null;
+  }
+  if (isExclusion && minTxn !== null) {
+    // D16b: "no reward below ₹100" on a zero-rate rule is an exclusion that
+    // applies while amount < ₹100 — stored as max_txn_inr.
+    maxTxn = minTxn;
+    minTxn = null;
+    flags.push('min_amount_exclusion');
   }
   if (cond.mccInclude.length) parts = parts.map((p) => andPart(p, { mccInclude: cond.mccInclude }) || { ...p, conflict: true });
   if (cond.mccExclude.length) parts = parts.map((p) => andPart(p, { mccExclude: cond.mccExclude }) || p);
+
+  // Transaction types and non-purchase channels (cash withdrawal, merchant
+  // EMI, fees). Fine on an exclusion that is otherwise pinned down by a
+  // rail (ATM, EMI), MCCs, the EMI category or a brand; otherwise not
+  // expressible.
+  const pinned = parts.every((p) => p.mccInclude?.length || ['atm', 'emi'].includes(p.rail) ||
+    p.categorySlug === 'emi' || p.merchantSlugs?.length || p.platformSlugs?.length);
+  if (cond.restatedTransactionTypes?.length) {
+    const emiOnly = cond.restatedTransactionTypes.every((v) => /emi|flexipay/i.test(String(v)));
+    const emiRule = parts.some((p) => p.categorySlug === 'emi' || p.rail === 'emi');
+    if (emiOnly && emiRule) {
+      // merchant EMI on an EMI rule: a restatement.
+    } else if (isExclusion && pinned) {
+      flags.push('exclusion_scope_broadened');
+    } else {
+      info.push('transaction_type');
+    }
+  }
+  if (cond.channelNonPurchase) pendingNonPurchase.push('non_purchase_channel');
+  if (pendingNonPurchase.length) {
+    const pinnedNonPurchase = parts.every((p) => p.mccInclude?.length || ['atm', 'emi'].includes(p.rail));
+    if (isExclusion && pinnedNonPurchase) flags.push('exclusion_scope_broadened');
+    else info.push(...pendingNonPurchase);
+  }
   if (cond.unmappedExcluded.length) flags.push('unmapped_excluded_category');
 
   if (tokenNeedsConditions) {
@@ -521,10 +578,11 @@ function transformRule(src, idx, ctx) {
     const platformSlugs = uniq(p.platformSlugs || []).sort();
     const mccInclude = uniq(p.mccInclude || []).sort();
     const mccExclude = uniq(p.mccExclude || []).sort();
-    const restricted = hasRestriction({ ...p, minTxn, maxTxn });
+    const restricted = hasRestriction({ ...p, minTxn, maxTxn }) ||
+      cond.exceptMerchantSlugs.length > 0 || cond.exceptPlatformSlugs.length > 0;
     const rowInfo = [...info];
     if (isExclusion && !isInfo && !p.categorySlug && !merchantSlugs.length && !platformSlugs.length &&
-        !mccInclude.length && !p.rail) {
+        !mccInclude.length && !p.rail && maxTxn === null) {
       // An exclusion with nothing to match on would exclude every spend.
       rowInfo.push('unrestricted_exclusion');
     }
@@ -551,6 +609,11 @@ function transformRule(src, idx, ctx) {
     if (mccInclude.length || mccExclude.length) v2Reasons.push('mcc');
     if (merchantSlugs.length > 1) v2Reasons.push('merchants');
     if (ur.blockInr !== null) v2Reasons.push('block_inr');
+    // D16c: an earn rule with exceptions is v2-only; an exclusion with
+    // exceptions stays v1 (v1 ignores them and excludes more, which is safe);
+    // an exclusion bounded by max_txn_inr would exclude everything in v1.
+    if ((cond.exceptMerchantSlugs.length || cond.exceptPlatformSlugs.length) && role !== 'exclusion') v2Reasons.push('except_lists');
+    if (role === 'exclusion' && maxTxn !== null) v2Reasons.push('exclusion_max_txn');
     if (role === 'exclusion' && !p.categorySlug && !merchantSlugs.length && !platformSlugs.length && !mccInclude.length && p.rail) {
       // v1 treats an unknown rail as a match, so a rail-only exclusion would
       // exclude almost every imported transaction.
@@ -581,6 +644,8 @@ function transformRule(src, idx, ctx) {
       platform_slugs: platformSlugs,
       mcc_include: mccInclude,
       mcc_exclude: mccExclude,
+      except_merchant_slugs: cond.exceptMerchantSlugs,
+      except_platform_slugs: cond.exceptPlatformSlugs,
       block_inr: ur.blockInr,
       min_engine_version: minEngineVersion,
       display_note: displayNote,
@@ -595,6 +660,7 @@ function transformRule(src, idx, ctx) {
   for (const row of rows) {
     for (const s of row.merchant_slugs) if (!ctx.index.merchants.has(s)) needsDirectory.push(s);
     for (const s of row.platform_slugs) if (!ctx.index.platforms.has(s)) needsDirectory.push(`platform:${s}`);
+    for (const s of row.except_merchant_slugs) if (!ctx.index.merchants.has(s)) needsDirectory.push(s);
   }
 
   return {
@@ -670,7 +736,50 @@ function transformRewardRules(record, ctx) {
       needs_directory: result.needsDirectory,
     });
   });
+  addMinimumAmountExclusion(rows, perSource);
   return { rows, perSource };
+}
+
+// D16(d): "no rewards below ₹100" stated on the catch-all rule. When every
+// earning rule on the card has at least that floor, the floor is card-wide:
+// add an exclusion (all spend, max_txn_inr = floor) so the implicit base
+// doesn't pay below it either.
+function addMinimumAmountExclusion(rows, perSource) {
+  const catchAll = rows.find((r) => r.rule_role === 'earn' && r.min_txn_inr !== null &&
+    ['standard_accrual', 'fallback'].includes(r.evaluation_type) && !r.category_slug &&
+    !r.merchant_slugs.length && !r.platform_slugs.length && !r.mcc_include.length && !r.rail);
+  if (!catchAll) return;
+  const floor = Number(catchAll.min_txn_inr);
+  const earning = rows.filter((r) => ['earn', 'base'].includes(r.rule_role) && Number(r.rate) > 0);
+  if (!earning.every((r) => r.min_txn_inr !== null && Number(r.min_txn_inr) >= floor)) {
+    catchAll.flags.push('min_amount_not_card_wide');
+    return;
+  }
+  rows.push({
+    ...catchAll,
+    key: `${catchAll.key}#min-amount`,
+    part: null,
+    evaluation_type: 'exclusion',
+    unit: catchAll.unit,
+    rate: 0,
+    min_txn_inr: null,
+    max_txn_inr: floor,
+    priority: 0,
+    excluded_category_slugs: [],
+    rule_role: 'exclusion',
+    except_merchant_slugs: [],
+    except_platform_slugs: [],
+    block_inr: null,
+    min_engine_version: 2,
+    display_note: `No rewards below ₹${floor}`,
+    currency: null,
+    cap_refs: [],
+    info_reasons: [],
+    flags: ['synthesized_min_amount_exclusion'],
+    v2_reasons: ['exclusion_max_txn'],
+  });
+  const src = perSource.find((p) => p.source_local_id === catchAll.source_local_id);
+  if (src) src.keys.push(`${catchAll.key}#min-amount`);
 }
 
 module.exports = {

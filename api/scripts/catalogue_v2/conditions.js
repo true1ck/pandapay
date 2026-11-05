@@ -44,7 +44,7 @@ const MERCHANT_KEYS = new Set([
   'merchant_domain', 'merchant_platforms', 'merchant_partner_list', 'partner_list',
   'merchant_eligibility', 'eligible_merchant', 'eligible_partner_brands', 'merchant_group',
   'merchant_groups', 'merchant_brand', 'preferred_merchants', 'partner_merchant_list',
-  'merchant_identifier',
+  'merchant_identifier', 'merchant_requirement',
 ]);
 const PLATFORM_KEYS = new Set([
   'platform', 'platforms', 'app', 'apps', 'portal', 'program', 'programme', 'booking_channel',
@@ -61,6 +61,7 @@ const CATEGORY_LIST_KEYS = new Set([
   'merchant_categories', 'transaction_categories', 'eligible_spend', 'selected_categories',
 ]);
 const EXCLUDED_CATEGORY_KEYS = new Set([
+  'excluded_merchants', 'except_merchants', 'except_at', 'excluding', 'except', 'excluded_platforms',
   'excluded_categories', 'exclude_categories', 'exclusions', 'excludes', 'exclude',
   'excluded_spend_categories', 'excluded_spends', 'merchant_exclusions', 'category_exclusions',
 ]);
@@ -144,6 +145,8 @@ const RAIL_WORDS = {
 // D14b: things a transaction context can't carry.
 const TXN_ATTRIBUTE_VALUE = /^(international|international transactions?|international spends?|international transaction flag|foreign currency|foreign currency transactions?|overseas|overseas spends?|domestic|domestic transactions?|domestic spends?|cross border|dcc)$/;
 const TXN_ATTRIBUTE_KEY = /^(birthday_window|date_window|transaction_day|day_of_week|weekday|travel_dates|booking_type|booking_types|transaction_date|transaction_region|geography|transaction_scope|transaction_currency|currency|international_transaction|international_transaction_flag|ticket_class|classes|passenger)$/;
+const NEGATION_INSIDE = /\b(outside|except|excluding|other than|not via|not through|unless)\b/;
+const NEGATION_SPLIT = /^(.*?)\b(?:not via|not through|not at|not on|not|non|outside of|outside|except at|except via|except|excluding|other than|unless paid via|unless)\s+(.+)$/;
 const NEGATION = /^(not|non|outside|except|excluding|other than)\b/;
 
 // Lifecycle / accumulated-state triggers (moved here from the v1 importer so
@@ -224,6 +227,9 @@ function emptyMapping() {
   return {
     mccInclude: [],
     mccExclude: [],
+    exceptMerchantSlugs: [],
+    exceptPlatformSlugs: [],
+    mentions: [],
     merchantSlugs: [],
     platformSlugs: [],
     rails: [],
@@ -280,6 +286,8 @@ function mapNameValue(m, key, value, index, { allowRail }) {
     m.rails.push(...sub.rails);
     m.blockers.push(...sub.blockers);
     m.flags.push(...sub.flags);
+    m.exceptMerchantSlugs.push(...sub.exceptMerchantSlugs);
+    m.exceptPlatformSlugs.push(...sub.exceptPlatformSlugs);
     if (sub.merchantProse.length) {
       const resolvedAny = sub.merchantSlugs.length || sub.platformSlugs.length;
       m.merchantProse.push({ key, text: sub.merchantProse.map((p) => p.text).join(', '), partial: Boolean(resolvedAny) });
@@ -295,7 +303,19 @@ function mapNameValue(m, key, value, index, { allowRail }) {
     }
     const n = normalizeText(raw);
     if (!n) continue;
-    if (NEGATION.test(n) || /\b(outside|except|excluding|other than)\b/.test(n) || /^not_/.test(raw.trim().toLowerCase())) {
+    if (NEGATION.test(n) || NEGATION_INSIDE.test(n) || /^not_/.test(raw.trim().toLowerCase())) {
+      // D16: "not via PhonePe", "non-HPCL fuel", "UPI outside PhonePe" ->
+      // an exception list, when what follows the negation resolves.
+      const neg = n.match(NEGATION_SPLIT);
+      const before = neg ? neg[1].trim() : '';
+      const after = neg ? neg[2].trim() : '';
+      const hit = after ? resolveName(after, index) : null;
+      if (hit) {
+        if (hit.merchant) m.exceptMerchantSlugs.push(hit.merchant);
+        if (hit.platform) m.exceptPlatformSlugs.push(hit.platform);
+        if (before && allowRail && RAIL_WORDS[before]) m.rails.push({ ...RAIL_WORDS[before], key });
+        continue;
+      }
       block(m, key, raw);
       m.flags.push('negated_condition');
       continue;
@@ -350,12 +370,19 @@ function mapCategoryListValue(m, key, value) {
   m.categoryListKey = key;
 }
 
-function mapExcludedCategories(m, value) {
+function mapExcludedCategories(m, value, index) {
   const list = Array.isArray(value) ? value : typeof value === 'string' ? splitNames(value) : [];
   for (const item of list) {
     if (typeof item !== 'string') continue;
     const slug = mapCategorySlug(item);
-    if (slug) m.excludedCategorySlugs.push(slug);
+    if (slug) {
+      m.excludedCategorySlugs.push(slug);
+      continue;
+    }
+    // An excluded merchant or app ("Paytm Mall") is an exception list (D16).
+    const hit = index ? resolveName(item, index) : null;
+    if (hit?.merchant) m.exceptMerchantSlugs.push(hit.merchant);
+    else if (hit?.platform) m.exceptPlatformSlugs.push(hit.platform);
     else m.unmappedExcluded.push(item);
   }
 }
@@ -372,7 +399,7 @@ function mapClause(m, clause, ctx) {
     if (notIn) return addMccs(m, field, value, 'mccExclude');
   }
   if (['transaction_category', 'category', 'merchant_category', 'spend_category', 'category_id'].includes(field)) {
-    if (notIn) return mapExcludedCategories(m, Array.isArray(value) ? value : [value]);
+    if (notIn) return mapExcludedCategories(m, Array.isArray(value) ? value : [value], ctx.index);
     if (isIn) return mapCategoryListValue(m, field, Array.isArray(value) ? value : [value]);
   }
   if (['merchant', 'merchant_name', 'merchant_brand'].includes(field) && isIn) {
@@ -440,7 +467,7 @@ function mapOne(m, key, value, ctx) {
     if (max !== null) m.maxTxn = m.maxTxn === null ? max : Math.min(m.maxTxn, max);
     return;
   }
-  if (EXCLUDED_CATEGORY_KEYS.has(lower)) return mapExcludedCategories(m, value);
+  if (EXCLUDED_CATEGORY_KEYS.has(lower)) return mapExcludedCategories(m, value, ctx.index);
   if (lower === 'non_emi' && value === true) {
     m.excludedCategorySlugs.push('emi');
     return;
@@ -448,9 +475,13 @@ function mapOne(m, key, value, ctx) {
   if (MERCHANT_KEYS.has(lower)) return mapNameValue(m, k, value, ctx.index, { allowRail: false });
   if (PLATFORM_KEYS.has(lower)) return mapNameValue(m, k, value, ctx.index, { allowRail: true });
   if (CATEGORY_LIST_KEYS.has(lower)) {
-    if (typeof value === 'string' && !/[,;/]/.test(value) && !resolveCategoryToken(value.trim().toLowerCase().replace(/[\s-]+/g, '_'), ctx).parts.length) {
-      // Prose such as "All eligible purchases not otherwise excluded."
-      if (/eligible|not otherwise|all /i.test(value)) return;
+    if (typeof value === 'string') {
+      const pieces = splitNames(value);
+      const allResolve = pieces.length && pieces.every((piece) =>
+        resolveCategoryToken(piece.trim().toLowerCase().replace(/[\s-]+/g, '_'), ctx).parts.length);
+      // Prose such as "All eligible purchases not otherwise excluded." or
+      // "Eligible calendar-month spend up to ₹1,50,000" describes, not restricts.
+      if (!allResolve && (lower === 'eligible_spend' || /eligible|not otherwise|all /i.test(value))) return;
     }
     return mapCategoryListValue(m, k, value);
   }
@@ -467,6 +498,12 @@ function mapOne(m, key, value, ctx) {
   }
   if (lower === 'transaction_type' || lower === 'transaction_types' || lower === 'purchase_type') {
     if (isPurchaseType(value)) return;
+    // "fuel_purchase" on a fuel rule restates the category.
+    const values = Array.isArray(value) ? value : [value];
+    if (values.every((v) => typeof v === 'string' && /_(purchase|purchases|spend|spends|transaction|transactions)$/.test(v.trim().toLowerCase()))) {
+      m.restatedCategories.push(...values.map((v) => ({ key: k, value: v.trim().toLowerCase().replace(/_(purchase|purchases|spend|spends|transaction|transactions)$/, '') })));
+      return;
+    }
     m.restatedTransactionTypes = [...(m.restatedTransactionTypes || []), ...(Array.isArray(value) ? value : [value])];
     return;
   }
@@ -499,6 +536,24 @@ function mapOne(m, key, value, ctx) {
   }
   if (value === false || value === 0 || (Array.isArray(value) && !value.length)) return;
   if (/^including_/.test(lower) && value === true) return; // widens the scope; ignoring it narrows
+  if (/multiplier/.test(lower) && typeof value === 'number') return; // the rate itself, restated
+  // D16: "platform_not": "Google Pay", "not_merchant": "HPCL", "except_app": ...
+  const negatedKey = lower.match(/^(?:not|except|excluding|non)_(.+)$|^(.+)_(?:not|except|excluded|exclusions?)$/);
+  if (negatedKey && (typeof value === 'string' || Array.isArray(value))) {
+    const values = (Array.isArray(value) ? value : [value]).filter((v) => typeof v === 'string');
+    for (const v of values) mapNameValue(m, k, `not ${v}`, ctx.index, { allowRail: false });
+    return;
+  }
+  if (/^non_/.test(lower) && value === true && (m.exceptMerchantSlugs.length || m.exceptPlatformSlugs.length)) return;
+  // A key whose value just names a merchant ("location": "HPCL petrol pump"):
+  // the caller checks it restates the rule's own merchant.
+  if (typeof value === 'string') {
+    const hit = resolveName(value, ctx.index);
+    if (hit) {
+      m.mentions.push({ key: k, ...hit });
+      return;
+    }
+  }
   block(m, k, value);
 }
 
@@ -536,11 +591,16 @@ function mapRuleConditions(rule, ctx) {
     // a swiggy_app rule) is handled by the caller via channelTokenParts.
     if (m.merchantProse.length && m.merchantProse[m.merchantProse.length - 1].key === 'channel_type') {
       const prose = m.merchantProse.pop();
-      const token = resolveCategoryToken(String(channel).trim().toLowerCase().replace(/[\s\-/.]+/g, '_'), ctx);
+      const channelKey = String(channel).trim().toLowerCase().replace(/[\s\-/.]+/g, '_');
+      let token = resolveCategoryToken(channelKey, ctx);
+      const trimmed = channelKey.replace(/_(transactions?|premiums?|payments?|spends?|purchases?|bills?)$/, '').replace(/^atm_/, '');
+      if (token.kind === 'unknown' && trimmed !== channelKey) token = resolveCategoryToken(trimmed, ctx);
       if (['merchant', 'platform', 'rail'].includes(token.kind)) {
         m.channelTokenParts = token.parts;
       } else if (token.kind === 'unrestricted' || token.kind === 'category' || token.kind === 'composite') {
         m.channelCategoryToken = token;
+      } else if (token.kind === 'non_purchase') {
+        m.channelNonPurchase = true;
       } else {
         m.blockers.push({ key: 'channel_type', detail: prose.text });
       }
@@ -552,6 +612,8 @@ function mapRuleConditions(rule, ctx) {
   m.merchantSlugs = uniq(m.merchantSlugs).sort();
   m.platformSlugs = uniq(m.platformSlugs).sort();
   m.excludedCategorySlugs = uniq(m.excludedCategorySlugs).sort();
+  m.exceptMerchantSlugs = uniq(m.exceptMerchantSlugs).sort();
+  m.exceptPlatformSlugs = uniq(m.exceptPlatformSlugs).sort();
   m.capRefs = uniq(m.capRefs);
   return m;
 }

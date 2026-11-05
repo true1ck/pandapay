@@ -55,6 +55,8 @@ function toV2WireCard(t, opts = {}) {
       platform_slugs: r.platform_slugs,
       mcc_include: r.mcc_include,
       mcc_exclude: r.mcc_exclude,
+      except_merchant_slugs: r.except_merchant_slugs || [],
+      except_platform_slugs: r.except_platform_slugs || [],
       block_inr: r.block_inr,
       min_engine_version: r.min_engine_version,
       source_local_id: r.source_local_id,

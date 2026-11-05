@@ -94,8 +94,11 @@ test('app-platform card (PhonePe SBI SELECT BLACK): platform parts, nested caps,
   assert.equal(rows(t, 'online-5x')[0].rail, 'online');
   assert.equal(rows(t, 'base-1x')[0].rule_role, 'base');
   assert.deepEqual(rows(t, 'phonepe-scanpay-1x').map((r) => [r.platform_slugs.join(), r.rail]), [['phonepe_app', 'upi_qr']]);
-  // "app: not_PhonePe" can't be expressed.
-  assert.equal(rows(t, 'upi-outside-phonepe')[0].rule_role, 'info');
+  // "UPI outside PhonePe" (D16): an exclusion on UPI with PhonePe as the exception.
+  assert.deepEqual(rows(t, 'upi-outside-phonepe').map((r) => [r.rule_role, r.rail, r.except_platform_slugs.join()]),
+    [['exclusion', 'upi_qr', 'phonepe_app']]);
+  assert.deepEqual(rows(t, 'utilities-outside-phonepe-base').map((r) => [r.rule_role, r.except_platform_slugs.join(), r.min_engine_version]),
+    [['earn', 'phonepe_app', 2]]);
   // Exclusions: category row (v1) + MCC row (v2).
   assert.deepEqual(rows(t, 'fuel-exclusion').map((r) => [r.category_slug, r.mcc_include.join(), r.min_engine_version]),
     [['fuel', '', 1], [null, '5172,5541,5542,5983', 2]]);

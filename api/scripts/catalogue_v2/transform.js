@@ -254,6 +254,8 @@ function transformCardRecordV2(rawRecord, opts = {}) {
       platform_slugs: [],
       mcc_include: [],
       mcc_exclude: [],
+      except_merchant_slugs: [],
+      except_platform_slugs: [],
       block_inr: economics.unusualBlock,
       min_engine_version: 2,
       display_note: `${economics.basePointsPerBlock} pts per ₹${economics.unusualBlock}`,
