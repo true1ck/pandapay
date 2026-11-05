@@ -4,8 +4,8 @@
   "inputs": {
     "transform_version": "7",
     "source_record_sha256": "0a3a7af1ba043e95d953f16558c23e774f9e4a448de7a1aad99086d9c9e4be20",
-    "override_sha256": "6998cf4da09720d0ade026fee83597a34f3d39361ea30ca98cdaf563ff95ffc8",
-    "directory_sha256": "3d9f9f535481544d4b19262838290f77d8270eb3b4aec73c48608f10c39cedf2",
+    "override_sha256": "928356530fa82106a23ee8cc0963f2810358a9e6899f3e1904457955b24fd055",
+    "directory_sha256": "b1094d54b77e848d22f7a9a64f3ae6d1ef43ca3eb2fc8e40cd43ed1994664694",
     "verified": false
   },
   "blocking_flags": [],
@@ -25,9 +25,9 @@
     "points_expiry_months": 24,
     "model_status": "partial",
     "model_coverage": {
-      "rules_total": 16,
-      "rules_modelled": 10,
-      "rules_info": 6,
+      "rules_total": 18,
+      "rules_modelled": 14,
+      "rules_info": 4,
       "caps_total": 4,
       "caps_enforced": 3,
       "flags": [
@@ -82,11 +82,6 @@
           "detail": "non_purchase_channel"
         },
         {
-          "code": "info_rule",
-          "source_local_id": "excluded_rent",
-          "detail": "unmapped_condition_category:category"
-        },
-        {
           "code": "exclusion_scope_broadened",
           "source_local_id": "excluded_education",
           "detail": null
@@ -99,16 +94,6 @@
         {
           "code": "info_rule",
           "source_local_id": "excluded_investments",
-          "detail": "condition:channel_type"
-        },
-        {
-          "code": "info_rule",
-          "source_local_id": "excluded_jewellery",
-          "detail": "unmapped_condition_category:category"
-        },
-        {
-          "code": "info_rule",
-          "source_local_id": "excluded_jewellery",
           "detail": "condition:channel_type"
         },
         {
@@ -195,6 +180,62 @@
           "op": "set",
           "value_sha256": "7af78ba28cf9ccb3",
           "reason": "WP7: Same as phonepe_2pct_monthly_cap (base 0).",
+          "source_url": "https://www.hdfc.bank.in/content/dam/hdfcbankpws/in/en/personal-banking/discover-products/cards/credit-cards/phonepe-hdfc-bank-uno-credit-card-/phonepe-hdfc-bank-uno-cc-reward-points-tncs.pdf",
+          "checked_on": "2026-11-05"
+        },
+        {
+          "path": "reward_rules[id=excluded_rent].category_id",
+          "op": "set",
+          "value_sha256": "23d3c44d8dec5c2e",
+          "reason": "WP7: D24d: rent was info (free-text category), so loaded UPI/online rules paid on rent. T&C Note 1: \"No reward points will be given for EMI transactions, fuel, wallet load, gift cards, cash advances, credit card bill payments, charges, government payments, rental transactions, education fees, insurance, investments, jewelry purchases\".",
+          "source_url": "https://www.hdfc.bank.in/content/dam/hdfcbankpws/in/en/personal-banking/discover-products/cards/credit-cards/phonepe-hdfc-bank-uno-credit-card-/phonepe-hdfc-bank-uno-cc-reward-points-tncs.pdf",
+          "checked_on": "2026-11-05"
+        },
+        {
+          "path": "reward_rules[id=excluded_rent].conditions",
+          "op": "set",
+          "value_sha256": "44136fa355b3678a",
+          "reason": "WP7: Rent by category on every MCC (the free-text category condition made it info); MCC 6513 is a separate row below, so a known non-rent MCC never lifts the category exclusion. T&C Note 1: \"No reward points will be given for EMI transactions, fuel, wallet load, gift cards, cash advances, credit card bill payments, charges, government payments, rental transactions, education fees, insurance, investments, jewelry purchases\".",
+          "source_url": "https://www.hdfc.bank.in/content/dam/hdfcbankpws/in/en/personal-banking/discover-products/cards/credit-cards/phonepe-hdfc-bank-uno-credit-card-/phonepe-hdfc-bank-uno-cc-reward-points-tncs.pdf",
+          "checked_on": "2026-11-05"
+        },
+        {
+          "path": "reward_rules",
+          "op": "append",
+          "value_sha256": "865c6dface71caa4",
+          "reason": "WP7: Rent by MCC 6513 whatever the category (e.g. a UPI rent payment the app did not categorise). T&C Note 1: \"No reward points will be given for EMI transactions, fuel, wallet load, gift cards, cash advances, credit card bill payments, charges, government payments, rental transactions, education fees, insurance, investments, jewelry purchases\".",
+          "source_url": "https://www.hdfc.bank.in/content/dam/hdfcbankpws/in/en/personal-banking/discover-products/cards/credit-cards/phonepe-hdfc-bank-uno-credit-card-/phonepe-hdfc-bank-uno-cc-reward-points-tncs.pdf",
+          "checked_on": "2026-11-05"
+        },
+        {
+          "path": "reward_rules[id=excluded_jewellery].category_id",
+          "op": "set",
+          "value_sha256": "1e08efd699e66ddd",
+          "reason": "WP7: D24d: jewellery was info (free-text category). T&C Note 1: \"No reward points will be given for EMI transactions, fuel, wallet load, gift cards, cash advances, credit card bill payments, charges, government payments, rental transactions, education fees, insurance, investments, jewelry purchases\".",
+          "source_url": "https://www.hdfc.bank.in/content/dam/hdfcbankpws/in/en/personal-banking/discover-products/cards/credit-cards/phonepe-hdfc-bank-uno-credit-card-/phonepe-hdfc-bank-uno-cc-reward-points-tncs.pdf",
+          "checked_on": "2026-11-05"
+        },
+        {
+          "path": "reward_rules[id=excluded_jewellery].channel_type",
+          "op": "set",
+          "value_sha256": "5cf7504d9781301d",
+          "reason": "WP7: The channel restated \"all\".",
+          "source_url": "https://www.hdfc.bank.in/content/dam/hdfcbankpws/in/en/personal-banking/discover-products/cards/credit-cards/phonepe-hdfc-bank-uno-credit-card-/phonepe-hdfc-bank-uno-cc-reward-points-tncs.pdf",
+          "checked_on": "2026-11-05"
+        },
+        {
+          "path": "reward_rules[id=excluded_jewellery].conditions",
+          "op": "set",
+          "value_sha256": "e3f40daa0d039251",
+          "reason": "WP7: Jewellery by MCC (5944 jewellery stores, 5094 precious stones/metals). T&C Note 1: \"No reward points will be given for EMI transactions, fuel, wallet load, gift cards, cash advances, credit card bill payments, charges, government payments, rental transactions, education fees, insurance, investments, jewelry purchases\".",
+          "source_url": "https://www.hdfc.bank.in/content/dam/hdfcbankpws/in/en/personal-banking/discover-products/cards/credit-cards/phonepe-hdfc-bank-uno-credit-card-/phonepe-hdfc-bank-uno-cc-reward-points-tncs.pdf",
+          "checked_on": "2026-11-05"
+        },
+        {
+          "path": "reward_rules",
+          "op": "append",
+          "value_sha256": "6fa189901ab2fe42",
+          "reason": "WP7: T&C Note 1: \"No reward points will be given for EMI transactions, fuel, wallet load, gift cards, cash advances, credit card bill payments, charges, government payments, rental transactions, education fees, insurance, investments, jewelry purchases\". The record's EMI exclusion is emitted as category emi AND rail emi, so an EMI purchase in another category was not excluded (D24e: data fix while WP2 changes the loader). Rail-EMI exclusion on all spend, as on flipkart-sbi-card.",
           "source_url": "https://www.hdfc.bank.in/content/dam/hdfcbankpws/in/en/personal-banking/discover-products/cards/credit-cards/phonepe-hdfc-bank-uno-credit-card-/phonepe-hdfc-bank-uno-cc-reward-points-tncs.pdf",
           "checked_on": "2026-11-05"
         }
@@ -637,16 +678,14 @@
         "conditions": {
           "source_local_id": "excluded_rent",
           "part": null,
-          "info_reasons": [
-            "unmapped_condition_category:category"
-          ],
+          "info_reasons": [],
           "flags": []
         },
         "notes": null,
         "effective_from": "2025-06-10",
         "effective_to": null,
         "excluded_categories": [],
-        "rule_role": "info",
+        "rule_role": "exclusion",
         "merchant_slugs": [],
         "platform_slugs": [],
         "mcc_include": [],
@@ -654,7 +693,7 @@
         "except_merchant_slugs": [],
         "except_platform_slugs": [],
         "block_inr": null,
-        "min_engine_version": 2,
+        "min_engine_version": 1,
         "max_engine_version": null,
         "source_local_id": "excluded_rent",
         "display_note": "No Reward Points on rental transactions."
@@ -780,17 +819,87 @@
         "conditions": {
           "source_local_id": "excluded_jewellery",
           "part": null,
-          "info_reasons": [
-            "unmapped_condition_category:category",
-            "condition:channel_type"
-          ],
+          "info_reasons": [],
           "flags": []
         },
         "notes": null,
         "effective_from": "2025-06-10",
         "effective_to": null,
         "excluded_categories": [],
-        "rule_role": "info",
+        "rule_role": "exclusion",
+        "merchant_slugs": [],
+        "platform_slugs": [],
+        "mcc_include": [
+          "5094",
+          "5944"
+        ],
+        "mcc_exclude": [],
+        "except_merchant_slugs": [],
+        "except_platform_slugs": [],
+        "block_inr": null,
+        "min_engine_version": 2,
+        "max_engine_version": null,
+        "source_local_id": "excluded_jewellery",
+        "display_note": "No Reward Points on jewellery purchases."
+      },
+      {
+        "id": "hdfc-phonepe-uno:rule:wp7_rent_mcc_exclusion",
+        "category_id": null,
+        "category_slug": null,
+        "merchant_pattern": null,
+        "rail": null,
+        "unit": "points_per_100",
+        "rate": 0,
+        "min_txn_inr": null,
+        "max_txn_inr": null,
+        "priority": 1,
+        "conditions": {
+          "source_local_id": "wp7_rent_mcc_exclusion",
+          "part": null,
+          "info_reasons": [],
+          "flags": []
+        },
+        "notes": null,
+        "effective_from": "2025-06-10",
+        "effective_to": null,
+        "excluded_categories": [],
+        "rule_role": "exclusion",
+        "merchant_slugs": [],
+        "platform_slugs": [],
+        "mcc_include": [
+          "6513"
+        ],
+        "mcc_exclude": [],
+        "except_merchant_slugs": [],
+        "except_platform_slugs": [],
+        "block_inr": null,
+        "min_engine_version": 2,
+        "max_engine_version": null,
+        "source_local_id": "wp7_rent_mcc_exclusion",
+        "display_note": "Rental transactions earn no reward points."
+      },
+      {
+        "id": "hdfc-phonepe-uno:rule:wp7_emi_rail_exclusion",
+        "category_id": null,
+        "category_slug": null,
+        "merchant_pattern": null,
+        "rail": "emi",
+        "unit": "points_per_100",
+        "rate": 0,
+        "min_txn_inr": null,
+        "max_txn_inr": null,
+        "priority": 0,
+        "conditions": {
+          "source_local_id": "wp7_emi_rail_exclusion",
+          "part": null,
+          "info_reasons": [],
+          "flags": []
+        },
+        "notes": null,
+        "effective_from": "2025-06-10",
+        "effective_to": null,
+        "excluded_categories": [],
+        "rule_role": "exclusion",
         "merchant_slugs": [],
         "platform_slugs": [],
         "mcc_include": [],
@@ -800,8 +909,8 @@
         "block_inr": null,
         "min_engine_version": 2,
         "max_engine_version": null,
-        "source_local_id": "excluded_jewellery",
-        "display_note": "No Reward Points on jewellery purchases."
+        "source_local_id": "wp7_emi_rail_exclusion",
+        "display_note": "EMI transactions earn no rewards."
       }
     ],
     "cap_rules": [

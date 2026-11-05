@@ -79,6 +79,100 @@
       "reason": "WP7: Same as phonepe_2pct_monthly_cap (base 0).",
       "source_url": "https://www.hdfc.bank.in/content/dam/hdfcbankpws/in/en/personal-banking/discover-products/cards/credit-cards/phonepe-hdfc-bank-uno-credit-card-/phonepe-hdfc-bank-uno-cc-reward-points-tncs.pdf",
       "checked_on": "2026-11-05"
+    },
+    {
+      "path": "reward_rules[id=excluded_rent].category_id",
+      "value": "rent",
+      "reason": "WP7: D24d: rent was info (free-text category), so loaded UPI/online rules paid on rent. T&C Note 1: \"No reward points will be given for EMI transactions, fuel, wallet load, gift cards, cash advances, credit card bill payments, charges, government payments, rental transactions, education fees, insurance, investments, jewelry purchases\".",
+      "source_url": "https://www.hdfc.bank.in/content/dam/hdfcbankpws/in/en/personal-banking/discover-products/cards/credit-cards/phonepe-hdfc-bank-uno-credit-card-/phonepe-hdfc-bank-uno-cc-reward-points-tncs.pdf",
+      "checked_on": "2026-11-05"
+    },
+    {
+      "path": "reward_rules[id=excluded_rent].conditions",
+      "value": {},
+      "reason": "WP7: Rent by category on every MCC (the free-text category condition made it info); MCC 6513 is a separate row below, so a known non-rent MCC never lifts the category exclusion. T&C Note 1: \"No reward points will be given for EMI transactions, fuel, wallet load, gift cards, cash advances, credit card bill payments, charges, government payments, rental transactions, education fees, insurance, investments, jewelry purchases\".",
+      "source_url": "https://www.hdfc.bank.in/content/dam/hdfcbankpws/in/en/personal-banking/discover-products/cards/credit-cards/phonepe-hdfc-bank-uno-credit-card-/phonepe-hdfc-bank-uno-cc-reward-points-tncs.pdf",
+      "checked_on": "2026-11-05"
+    },
+    {
+      "path": "reward_rules",
+      "op": "append",
+      "value": {
+        "id": "wp7_rent_mcc_exclusion",
+        "category_id": "all_retail",
+        "priority": 1,
+        "evaluation_type": "exclusion",
+        "rail": "any",
+        "channel_type": "all",
+        "conditions": {
+          "mcc_list": [
+            6513
+          ]
+        },
+        "action": {
+          "multiplier": 0,
+          "points_per_block": 0,
+          "cashback_percent": null,
+          "cap_reference": null,
+          "reason": "Rental transactions earn no reward points."
+        },
+        "effective_from": "2025-06-10",
+        "effective_to": null
+      },
+      "reason": "WP7: Rent by MCC 6513 whatever the category (e.g. a UPI rent payment the app did not categorise). T&C Note 1: \"No reward points will be given for EMI transactions, fuel, wallet load, gift cards, cash advances, credit card bill payments, charges, government payments, rental transactions, education fees, insurance, investments, jewelry purchases\".",
+      "source_url": "https://www.hdfc.bank.in/content/dam/hdfcbankpws/in/en/personal-banking/discover-products/cards/credit-cards/phonepe-hdfc-bank-uno-credit-card-/phonepe-hdfc-bank-uno-cc-reward-points-tncs.pdf",
+      "checked_on": "2026-11-05"
+    },
+    {
+      "path": "reward_rules[id=excluded_jewellery].category_id",
+      "value": "all_retail",
+      "reason": "WP7: D24d: jewellery was info (free-text category). T&C Note 1: \"No reward points will be given for EMI transactions, fuel, wallet load, gift cards, cash advances, credit card bill payments, charges, government payments, rental transactions, education fees, insurance, investments, jewelry purchases\".",
+      "source_url": "https://www.hdfc.bank.in/content/dam/hdfcbankpws/in/en/personal-banking/discover-products/cards/credit-cards/phonepe-hdfc-bank-uno-credit-card-/phonepe-hdfc-bank-uno-cc-reward-points-tncs.pdf",
+      "checked_on": "2026-11-05"
+    },
+    {
+      "path": "reward_rules[id=excluded_jewellery].channel_type",
+      "value": "all",
+      "reason": "WP7: The channel restated \"all\".",
+      "source_url": "https://www.hdfc.bank.in/content/dam/hdfcbankpws/in/en/personal-banking/discover-products/cards/credit-cards/phonepe-hdfc-bank-uno-credit-card-/phonepe-hdfc-bank-uno-cc-reward-points-tncs.pdf",
+      "checked_on": "2026-11-05"
+    },
+    {
+      "path": "reward_rules[id=excluded_jewellery].conditions",
+      "value": {
+        "mcc_list": [
+          5944,
+          5094
+        ]
+      },
+      "reason": "WP7: Jewellery by MCC (5944 jewellery stores, 5094 precious stones/metals). T&C Note 1: \"No reward points will be given for EMI transactions, fuel, wallet load, gift cards, cash advances, credit card bill payments, charges, government payments, rental transactions, education fees, insurance, investments, jewelry purchases\".",
+      "source_url": "https://www.hdfc.bank.in/content/dam/hdfcbankpws/in/en/personal-banking/discover-products/cards/credit-cards/phonepe-hdfc-bank-uno-credit-card-/phonepe-hdfc-bank-uno-cc-reward-points-tncs.pdf",
+      "checked_on": "2026-11-05"
+    },
+    {
+      "path": "reward_rules",
+      "op": "append",
+      "value": {
+        "id": "wp7_emi_rail_exclusion",
+        "category_id": "all_retail",
+        "priority": 0,
+        "evaluation_type": "exclusion",
+        "rail": "emi",
+        "channel_type": "all",
+        "conditions": {},
+        "action": {
+          "multiplier": 0,
+          "points_per_block": 0,
+          "cashback_percent": null,
+          "cap_reference": null,
+          "reason": "EMI transactions earn no rewards."
+        },
+        "effective_from": "2025-06-10",
+        "effective_to": null
+      },
+      "reason": "WP7: T&C Note 1: \"No reward points will be given for EMI transactions, fuel, wallet load, gift cards, cash advances, credit card bill payments, charges, government payments, rental transactions, education fees, insurance, investments, jewelry purchases\". The record's EMI exclusion is emitted as category emi AND rail emi, so an EMI purchase in another category was not excluded (D24e: data fix while WP2 changes the loader). Rail-EMI exclusion on all spend, as on flipkart-sbi-card.",
+      "source_url": "https://www.hdfc.bank.in/content/dam/hdfcbankpws/in/en/personal-banking/discover-products/cards/credit-cards/phonepe-hdfc-bank-uno-credit-card-/phonepe-hdfc-bank-uno-cc-reward-points-tncs.pdf",
+      "checked_on": "2026-11-05"
     }
   ]
 }
