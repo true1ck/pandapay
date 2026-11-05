@@ -41,6 +41,11 @@ Future<void> _pumpAdminConsole(
     ),
   );
   await tester.pumpAndSettle();
+  // The console lands on Overview; phones reach Catalogue via the drawer.
+  await tester.tap(find.byTooltip('Open navigation'));
+  await tester.pumpAndSettle();
+  await tester.tap(find.text('Catalogue'));
+  await tester.pumpAndSettle();
 }
 
 void main() {

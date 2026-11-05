@@ -8,6 +8,7 @@ const smsLearning = require('../sms_learning');
 const smsLearningFeedbackRoute = require('../sms_learning_feedback_route');
 const smsRuleBundle = require('../sms_rule_bundle');
 const { registerPrivateRulesAdminRoutes } = require('../sms_v2/rules_admin_route');
+const { registerSystemStatusRoutes } = require('./system_status');
 
 function registerAdminRoutes(api) {
   const { legacyApp, legacyDependencies } = api;
@@ -158,6 +159,7 @@ registerRuleFamilyRoutes(api.legacyApp, adminRouteDeps, {
   });
   api.route('POST', '/admin/sms-learning/cycle', async (_req, res) =>
     res.status(409).json({ error: 'autonomous_cycle_is_worker_only' }));
+  registerSystemStatusRoutes(api);
 }
 
 module.exports = { registerAdminRoutes };

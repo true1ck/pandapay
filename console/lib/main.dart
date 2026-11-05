@@ -4,6 +4,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import 'app/admin_design.dart';
+import 'app/admin_identity.dart';
 import 'app/providers.dart';
 import 'data/admin_api.dart';
 import 'data/private_admin_auth.dart';
@@ -18,6 +19,7 @@ import 'features/crowdsource/merchants_screen.dart';
 import 'features/dashboard/anonymization_audit_screen.dart';
 import 'features/dashboard/data_quality_dashboard_screen.dart';
 import 'features/dashboard/sms_ai_operations_screen.dart';
+import 'features/overview/overview_screen.dart';
 import 'features/parser_patterns/parser_patterns_screen.dart';
 import 'features/parser_patterns/sms_category_proposals_screen.dart';
 import 'features/queues/card_requests_screen.dart';
@@ -26,6 +28,7 @@ import 'features/queues/support_tickets_screen.dart';
 import 'features/referrals/referral_operations_screen.dart';
 import 'features/scraper/scrape_diff_review_screen.dart';
 import 'features/scraper/sources_screen.dart';
+import 'features/system/system_status_screen.dart';
 
 void main() {
   runApp(const ProviderScope(child: PandaPayConsoleApp()));
@@ -227,15 +230,33 @@ class _ConsoleHome extends ConsumerStatefulWidget {
 }
 
 class _ConsoleHomeState extends ConsumerState<_ConsoleHome> {
-  int _selected = 0;
+  String _selected = 'Overview';
 
   /// Screens are built lazily and then kept alive in the IndexedStack. Building
-  /// all 16 upfront would fire every provider's request on login; rebuilding
-  /// only the selected child would discard scroll position, filters and
-  /// half-filled forms on every tab switch.
-  final Set<int> _visited = {0};
+  /// all of them upfront would fire every provider's request on login;
+  /// rebuilding only the selected child would discard scroll position,
+  /// filters and half-filled forms on every tab switch.
+  final Set<String> _visited = {'Overview'};
 
-  static final _destinations = <_ConsoleDestination>[
+  late final List<_ConsoleDestination> _destinations = <_ConsoleDestination>[
+    _ConsoleDestination(
+      group: 'Overview',
+      label: 'Overview',
+      description:
+          'What is waiting for a decision, what looks broken, and which environment you are in.',
+      icon: Icons.space_dashboard_outlined,
+      screen: OverviewScreen(onOpen: _select),
+      refresh: (ref) {
+        ref.invalidate(dataQualityDashboardProvider);
+        ref.invalidate(smsAiSummaryProvider);
+        ref.invalidate(anonymizationAuditRunsProvider);
+        ref.invalidate(systemStatusProvider);
+        ref.invalidate(smsCategoryProposalsProvider);
+        ref.invalidate(smsParserProposalsProvider);
+        ref.invalidate(smsAiProposalsProvider);
+        ref.invalidate(smsCorrectionCasesProvider);
+      },
+    ),
     _ConsoleDestination(
       group: 'Card catalogue',
       label: 'Catalogue',
@@ -312,6 +333,18 @@ class _ConsoleHomeState extends ConsumerState<_ConsoleHome> {
       refresh: (ref) {
         ref.invalidate(acceptanceSummaryProvider);
         ref.invalidate(effectiveRateSummaryProvider);
+      },
+    ),
+    _ConsoleDestination(
+      group: 'System health',
+      label: 'System Status',
+      description:
+          'Which servers run, which code they run, whether they are healthy, and which branches exist.',
+      icon: Icons.dns_outlined,
+      screen: const SystemStatusScreen(),
+      refresh: (ref) {
+        ref.invalidate(systemStatusProvider);
+        ref.invalidate(smsAiSummaryProvider);
       },
     ),
     _ConsoleDestination(
@@ -411,7 +444,17 @@ class _ConsoleHomeState extends ConsumerState<_ConsoleHome> {
 
   @override
   Widget build(BuildContext context) {
-    final destination = _destinations[_selected];
+    // Hide screens the role cannot read. The server still enforces every
+    // permission; this only avoids showing doors that will not open.
+    final identity = ref.watch(adminIdentityProvider);
+    final visible = _destinations
+        .where((d) => identity.can(d.permission))
+        .toList();
+    final selectedIndex = visible
+        .indexWhere((d) => d.label == _selected)
+        .clamp(0, visible.length - 1);
+    final destination = visible[selectedIndex];
+    void selectIndex(int index) => _select(visible[index].label);
     return LayoutBuilder(
       builder: (context, constraints) {
         final isDesktop = constraints.maxWidth >= 1180;
@@ -426,9 +469,11 @@ class _ConsoleHomeState extends ConsumerState<_ConsoleHome> {
                   width: 300,
                   child: SafeArea(
                     child: _ConsoleSidebar(
-                      selected: _selected,
+                      destinations: visible,
+                      identity: identity,
+                      selected: selectedIndex,
                       onSelect: (index) {
-                        _select(index);
+                        selectIndex(index);
                         Navigator.of(context).pop();
                       },
                       onSignOut: () => _signOutFromShell(context),
@@ -441,8 +486,10 @@ class _ConsoleHomeState extends ConsumerState<_ConsoleHome> {
                 SizedBox(
                   width: 264,
                   child: _ConsoleSidebar(
-                    selected: _selected,
-                    onSelect: _select,
+                    destinations: visible,
+                    identity: identity,
+                    selected: selectedIndex,
+                    onSelect: selectIndex,
                     onSignOut: () => _signOutFromShell(context),
                   ),
                 )
@@ -450,8 +497,9 @@ class _ConsoleHomeState extends ConsumerState<_ConsoleHome> {
                 SizedBox(
                   width: 112,
                   child: _CompactNavigation(
-                    selected: _selected,
-                    onSelect: _select,
+                    destinations: visible,
+                    selected: selectedIndex,
+                    onSelect: selectIndex,
                   ),
                 ),
               Expanded(
@@ -459,6 +507,7 @@ class _ConsoleHomeState extends ConsumerState<_ConsoleHome> {
                   children: [
                     _ConsoleTopBar(
                       destination: destination,
+                      identity: identity,
                       compact: !isDesktop,
                       onMenu: isTablet
                           ? null
@@ -466,6 +515,7 @@ class _ConsoleHomeState extends ConsumerState<_ConsoleHome> {
                       onRefresh: destination.refresh,
                       onSignOut: () => _signOutFromShell(context),
                     ),
+                    EnvironmentBanner(environment: identity.environment),
                     Expanded(
                       child: Material(
                         color: AdminColors.canvas,
@@ -481,11 +531,11 @@ class _ConsoleHomeState extends ConsumerState<_ConsoleHome> {
                                 20,
                               ),
                               child: IndexedStack(
-                                index: _selected,
+                                index: selectedIndex,
                                 children: [
-                                  for (var i = 0; i < _destinations.length; i++)
-                                    _visited.contains(i)
-                                        ? _destinations[i].screen
+                                  for (final d in visible)
+                                    _visited.contains(d.label)
+                                        ? d.screen
                                         : const SizedBox.shrink(),
                                 ],
                               ),
@@ -504,10 +554,10 @@ class _ConsoleHomeState extends ConsumerState<_ConsoleHome> {
     );
   }
 
-  void _select(int index) {
+  void _select(String label) {
     setState(() {
-      _selected = index;
-      _visited.add(index);
+      _selected = label;
+      _visited.add(label);
     });
   }
 
@@ -532,15 +582,22 @@ class _ConsoleDestination {
   final IconData icon;
   final Widget screen;
   final void Function(WidgetRef ref)? refresh;
+
+  /// Read permission needed to open this screen (null: always visible).
+  String? get permission => kDestinationPermissions[label];
 }
 
 class _ConsoleSidebar extends StatelessWidget {
   const _ConsoleSidebar({
+    required this.destinations,
+    required this.identity,
     required this.selected,
     required this.onSelect,
     required this.onSignOut,
   });
 
+  final List<_ConsoleDestination> destinations;
+  final AdminIdentity identity;
   final int selected;
   final ValueChanged<int> onSelect;
   final VoidCallback onSignOut;
@@ -548,8 +605,8 @@ class _ConsoleSidebar extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final groups = <String, List<int>>{};
-    for (var i = 0; i < _ConsoleHomeState._destinations.length; i++) {
-      final group = _ConsoleHomeState._destinations[i].group;
+    for (var i = 0; i < destinations.length; i++) {
+      final group = destinations[i].group;
       groups.putIfAbsent(group, () => []).add(i);
     }
     return ColoredBox(
@@ -614,7 +671,7 @@ class _ConsoleSidebar extends StatelessWidget {
                   ),
                   for (final index in entry.value)
                     _SidebarDestination(
-                      destination: _ConsoleHomeState._destinations[index],
+                      destination: destinations[index],
                       selected: selected == index,
                       onTap: () => onSelect(index),
                     ),
@@ -625,15 +682,11 @@ class _ConsoleSidebar extends StatelessWidget {
           const Divider(color: AdminColors.slateLine, height: 1),
           Padding(
             padding: const EdgeInsets.fromLTRB(14, 12, 14, 16),
-            child: Consumer(
-              builder: (context, ref, _) {
-                final auth = ref.read(authApiProvider);
-                final target = auth is PrivateAdminAuthApi
-                    ? auth.administrator
-                    : null;
-                final role = (target?['role'] ?? 'Administrator').toString();
+            child: Builder(
+              builder: (context) {
+                final role = _titleCase(identity.role);
                 final environment =
-                    (target?['environment'] ?? 'Private workspace').toString();
+                    identity.email ?? identity.environment.label;
                 return Column(
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
@@ -653,6 +706,10 @@ class _ConsoleSidebar extends StatelessWidget {
                           child: Column(
                             crossAxisAlignment: CrossAxisAlignment.start,
                             children: [
+                              _EnvironmentPill(
+                                environment: identity.environment,
+                              ),
+                              const SizedBox(height: 4),
                               Text(
                                 role,
                                 style: const TextStyle(
@@ -764,8 +821,13 @@ class _SidebarDestination extends StatelessWidget {
 }
 
 class _CompactNavigation extends StatelessWidget {
-  const _CompactNavigation({required this.selected, required this.onSelect});
+  const _CompactNavigation({
+    required this.destinations,
+    required this.selected,
+    required this.onSelect,
+  });
 
+  final List<_ConsoleDestination> destinations;
   final int selected;
   final ValueChanged<int> onSelect;
 
@@ -813,7 +875,7 @@ class _CompactNavigation extends StatelessWidget {
                       fontSize: 10,
                     ),
                     destinations: [
-                      for (final destination in _ConsoleHomeState._destinations)
+                      for (final destination in destinations)
                         NavigationRailDestination(
                           icon: Icon(destination.icon),
                           label: Text(
@@ -837,6 +899,7 @@ class _CompactNavigation extends StatelessWidget {
 class _ConsoleTopBar extends ConsumerWidget {
   const _ConsoleTopBar({
     required this.destination,
+    required this.identity,
     required this.compact,
     required this.onMenu,
     required this.onRefresh,
@@ -844,6 +907,7 @@ class _ConsoleTopBar extends ConsumerWidget {
   });
 
   final _ConsoleDestination destination;
+  final AdminIdentity identity;
   final bool compact;
   final VoidCallback? onMenu;
   final void Function(WidgetRef ref)? onRefresh;
@@ -852,10 +916,8 @@ class _ConsoleTopBar extends ConsumerWidget {
   @override
   Widget build(BuildContext context, WidgetRef ref) {
     final auth = ref.read(authApiProvider);
-    final target = auth is PrivateAdminAuthApi ? auth.administrator : null;
-    final environment = (target?['environment'] ?? 'Private workspace')
-        .toString();
-    final role = (target?['role'] ?? 'Admin').toString();
+    final environment = identity.environment.label;
+    final role = _titleCase(identity.role);
     return Container(
       padding: EdgeInsets.symmetric(
         horizontal: compact ? 14 : 28,
@@ -898,7 +960,7 @@ class _ConsoleTopBar extends ConsumerWidget {
           ),
           if (!compact) ...[
             const SizedBox(width: 16),
-            _WorkspaceBadge(environment: environment, role: role),
+            _WorkspaceBadge(environment: identity.environment, role: role),
           ],
           if (onRefresh != null)
             IconButton(
@@ -979,29 +1041,63 @@ class _ConsoleTopBar extends ConsumerWidget {
 class _WorkspaceBadge extends StatelessWidget {
   const _WorkspaceBadge({required this.environment, required this.role});
 
-  final String environment;
+  final AdminEnvironment environment;
   final String role;
 
   @override
   Widget build(BuildContext context) {
+    final tone = environment.tone;
     return Container(
       padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
       decoration: BoxDecoration(
-        color: AdminColors.paperMuted,
+        color: tone.withValues(alpha: 0.08),
         borderRadius: BorderRadius.circular(12),
-        border: Border.all(color: AdminColors.hairline),
+        border: Border.all(color: tone.withValues(alpha: 0.45)),
       ),
       child: Row(
         mainAxisSize: MainAxisSize.min,
         children: [
-          const Icon(Icons.lock_outline, size: 16, color: AdminColors.muted),
+          Icon(Icons.lock_outline, size: 16, color: tone),
           const SizedBox(width: 7),
           Text(
-            '$environment · $role',
-            style: Theme.of(context).textTheme.labelMedium,
+            '${environment.label} · $role',
+            style: Theme.of(
+              context,
+            ).textTheme.labelMedium?.copyWith(fontWeight: FontWeight.w600),
           ),
         ],
       ),
     );
   }
 }
+
+/// Small coloured environment marker for the dark sidebar.
+class _EnvironmentPill extends StatelessWidget {
+  const _EnvironmentPill({required this.environment});
+
+  final AdminEnvironment environment;
+
+  @override
+  Widget build(BuildContext context) {
+    final local = environment == AdminEnvironment.local;
+    return Container(
+      padding: const EdgeInsets.symmetric(horizontal: 7, vertical: 2),
+      decoration: BoxDecoration(
+        color: local ? AdminColors.lime : environment.tone,
+        borderRadius: BorderRadius.circular(6),
+      ),
+      child: Text(
+        environment.label.toUpperCase(),
+        style: TextStyle(
+          color: local ? AdminColors.slate : Colors.white,
+          fontSize: 9.5,
+          letterSpacing: 1.1,
+          fontWeight: FontWeight.w700,
+        ),
+      ),
+    );
+  }
+}
+
+String _titleCase(String value) =>
+    value.isEmpty ? value : value[0].toUpperCase() + value.substring(1);
