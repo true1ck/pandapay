@@ -1,6 +1,8 @@
 import '../card_rules/card_rules.dart';
+import '../card_rules/merchant_directory.dart';
 import '../confidence/confidence.dart';
 import '../money/money.dart';
+import 'reward_engine_v2.dart';
 
 /// UA-2.1.1. Everything the engine needs to know about *this* transaction.
 class RecommendationContext {
@@ -32,6 +34,17 @@ class RecommendationContext {
 
   final DateTime? now;
 
+  /// Payment platform slug (plan C3.1), e.g. `phonepe_app`,
+  /// `hdfc_smartbuy`. The engine never infers it: callers that know the
+  /// spend went through an app or portal pass it. Null means unknown, which
+  /// never satisfies a platform-restricted v2 rule.
+  final String? platform;
+
+  /// Resolved merchant slug (plan C5). When null, the engine resolves one
+  /// from [merchantName]/[vpa] with its `merchantDirectory`. Only the v2
+  /// path reads it.
+  final String? merchantSlug;
+
   const RecommendationContext({
     required this.amount,
     this.categoryId,
@@ -43,6 +56,8 @@ class RecommendationContext {
     this.travelMode = false,
     this.merchantName,
     this.now,
+    this.platform,
+    this.merchantSlug,
   });
 
   /// Whether this context represents a fuel transaction (by category slug, id, or MCC).
@@ -62,12 +77,39 @@ class CardSnapshot {
   milestoneProgress; // milestoneRule.id -> spend so far
   final String? forcedOverrideCardId; // set when a B8 override targets this txn
 
+  /// v2 cards only: capRule.id -> consumption so far this period, in the
+  /// cap's NATIVE unit (points, ₹ cashback, ₹ spend, or a count — plan
+  /// C3.6). When a cap has no entry here but has one in [capRemaining], the
+  /// consumption is recovered as `capValue − capRemaining` (the figure the
+  /// caller subtracted), on the understanding that cap_states for v2 cards
+  /// are recorded in native units (plan WP8).
+  final Map<String, double> capConsumed;
+
   const CardSnapshot({
     required this.product,
     this.capRemaining = const {},
     this.milestoneProgress = const {},
     this.forcedOverrideCardId,
+    this.capConsumed = const {},
   });
+
+  /// Native-unit consumption per cap for the v2 engine — see [capConsumed].
+  Map<String, double> get v2CapConsumed {
+    final out = <String, double>{};
+    for (final cap in product.capRules) {
+      final direct = capConsumed[cap.id];
+      if (direct != null) {
+        out[cap.id] = direct;
+        continue;
+      }
+      final remaining = capRemaining[cap.id];
+      if (remaining != null) {
+        final consumed = (cap.capValue - remaining).rupees;
+        out[cap.id] = consumed > 0 ? consumed : 0;
+      }
+    }
+    return out;
+  }
 }
 
 /// Where a recommendation stands against the matched rule's cap.
@@ -231,6 +273,11 @@ class Recommendation {
   /// down.
   final RecommendationBreakdown? breakdown;
 
+  /// The plan C3 result in native units — points, ₹ cashback, the matched
+  /// rule id, per-cap consumption deltas and whether the spend is excluded.
+  /// Set for v2-shaped cards only (C3.2); null on the v1 path.
+  final RewardEvaluation? reward;
+
   const Recommendation({
     required this.card,
     required this.expectedValue,
@@ -240,6 +287,7 @@ class Recommendation {
     this.isOverride = false,
     this.effectiveRatePerRupee,
     this.breakdown,
+    this.reward,
   });
 
   bool get isExcluded => exclusionReason != null;
@@ -256,7 +304,39 @@ class RecommendationEngine {
   /// plan's wording ("define 'materially' as a configurable fraction").
   final double milestoneMaterialFraction;
 
-  const RecommendationEngine({this.milestoneMaterialFraction = 0.5});
+  /// Plan C5 directory for resolving merchant slugs on v2 cards. Without
+  /// one, a merchant is known only when the context carries
+  /// [RecommendationContext.merchantSlug]; merchant-restricted v2 rules
+  /// otherwise don't apply (unknown merchant ⇒ no).
+  final MerchantDirectory? merchantDirectory;
+
+  const RecommendationEngine({
+    this.milestoneMaterialFraction = 0.5,
+    this.merchantDirectory,
+  });
+
+  /// Plan C3 for one card and one transaction, in native units. Works on
+  /// any card; [rank] uses it for v2-shaped cards (C3.2). Consumption in
+  /// [capConsumedBefore] is per cap id, in the cap's native unit.
+  static RewardEvaluation evaluateRewardV2(
+    CardProduct card,
+    RecommendationContext context, {
+    Map<String, double> capConsumedBefore = const {},
+    MerchantDirectory? directory,
+  }) => computeRewardV2(
+    card,
+    context,
+    capConsumedBefore: capConsumedBefore,
+    directory: directory,
+  );
+
+  /// C3.3 applicability (the v2 counterpart of [ruleApplies]).
+  /// [merchantLineage] is the resolved merchant slug plus its ancestors.
+  static bool ruleAppliesV2(
+    RewardRule rule,
+    RecommendationContext context, {
+    Set<String> merchantLineage = const {},
+  }) => rewardRuleAppliesV2(rule, context, merchantLineage: merchantLineage);
 
   /// Whether [rule] is applicable to [context] at all.
   ///
@@ -443,6 +523,10 @@ class RecommendationEngine {
         reasonLines: const [],
       );
     }
+
+    // C3.2: v2-shaped cards take the plan C3 path. v1-shaped cards continue
+    // below, unchanged.
+    if (card.isV2Shaped) return _evaluateV2(context, snapshot);
 
     // Card-level category exclusion, checked before any rule is considered
     // — an excluded category earns nothing on this card at ANY rate, base
@@ -859,6 +943,226 @@ class RecommendationEngine {
       ),
     );
   }
+}
+
+extension _V2Path on RecommendationEngine {
+  /// The v2 counterpart of the rule/cap part of [RecommendationEngine._evaluate]:
+  /// the C3 reward in native units, then the same ranking adjustments the
+  /// v1 path makes (forex in travel mode, fuel surcharge waiver, milestone
+  /// bonus) so v1 and v2 cards rank on one scale.
+  Recommendation _evaluateV2(
+    RecommendationContext context,
+    CardSnapshot snapshot,
+  ) {
+    final card = snapshot.product;
+    final reward = computeRewardV2(
+      card,
+      context,
+      capConsumedBefore: snapshot.v2CapConsumed,
+      directory: merchantDirectory,
+    );
+    final isOverride = snapshot.forcedOverrideCardId == card.id;
+    final fuelApplies =
+        context.isFuel &&
+        card.fuelRule != null &&
+        RecommendationEngine.fuelRuleApplies(card.fuelRule!, context.amount);
+    final waiverFraction = fuelApplies ? card.fuelRule!.waiverPercent / 100 : 0.0;
+    final waiverValue = fuelApplies
+        ? context.amount * waiverFraction
+        : const Money.zero();
+
+    // Excluded, or nothing to earn at all: as v1, a fuel spend can still be
+    // worth its surcharge waiver; anything else is a greyed-out exclusion.
+    final earnsNothing =
+        reward.excluded ||
+        (reward.ruleId == null && reward.ratePerRupee <= 0) ||
+        reward.currency == null;
+    if (earnsNothing) {
+      if (fuelApplies) {
+        return Recommendation(
+          card: card,
+          expectedValue: waiverValue,
+          confidence: Confidence.estimated,
+          effectiveRatePerRupee: waiverFraction,
+          reasonLines: [
+            if (reward.excluded) ...reward.reasons,
+            'Fuel surcharge waiver: +${waiverValue.format()}',
+          ],
+          isOverride: isOverride,
+          reward: reward,
+          breakdown: RecommendationBreakdown(
+            baseRatePerRupee: 0,
+            baseValue: const Money.zero(),
+            fuelWaiver: waiverValue,
+            effectiveRatePerRupee: waiverFraction,
+          ),
+        );
+      }
+      return Recommendation(
+        card: card,
+        expectedValue: const Money.zero(),
+        confidence: Confidence.estimated,
+        exclusionReason: reward.excluded
+            ? reward.reasons.first
+            : 'No applicable reward rule.',
+        reasonLines: const [],
+        isOverride: isOverride,
+        reward: reward,
+      );
+    }
+
+    final reasons = [...reward.reasons];
+    var value = reward.value;
+    var forexCost = const Money.zero();
+    var milestoneBonus = const Money.zero();
+
+    if (context.travelMode && card.forexRule != null) {
+      final markupFraction = card.forexRule!.effectiveMarkupFraction();
+      forexCost = context.amount * markupFraction;
+      value -= forexCost;
+      reasons.add(
+        'Less forex markup ${(markupFraction * 100).toStringAsFixed(2)}% '
+        '(incl. GST): -${forexCost.format()}',
+      );
+    }
+    if (fuelApplies) {
+      value += waiverValue;
+      reasons.add('Fuel surcharge waiver: +${waiverValue.format()}');
+    }
+    for (final milestone in uniqueMilestoneRules(card.milestoneRules)) {
+      final progress =
+          snapshot.milestoneProgress[milestone.id] ?? const Money.zero();
+      final remaining = milestone.thresholdSpend - progress;
+      if (remaining.isZero || remaining.isNegative) continue;
+      final coversFraction = context.amount.paise / remaining.paise;
+      if (coversFraction < milestoneMaterialFraction) continue;
+      final closedPortion = context.amount < remaining
+          ? context.amount
+          : remaining;
+      final bonus =
+          milestone.rewardValue *
+          (closedPortion.paise / milestone.thresholdSpend.paise);
+      value += bonus;
+      milestoneBonus += bonus;
+      final verb = context.amount >= remaining
+          ? 'completes'
+          : 'materially advances';
+      reasons.add('$verb "${milestone.label}" milestone: +${bonus.format()}');
+    }
+    if (isOverride) {
+      reasons.add('Manual override — always use this card here');
+    }
+
+    final rule = reward.rule;
+    final display = _primaryCapDisplay(reward, card.pointValueInr);
+    final isCashbackRule = reward.currency == RewardCurrency.cashback;
+    return Recommendation(
+      card: card,
+      expectedValue: value,
+      confidence: Confidence.estimated,
+      effectiveRatePerRupee: reward.ratePerRupee > 0
+          ? reward.ratePerRupee
+          : (fuelApplies ? waiverFraction : null),
+      reasonLines: reasons,
+      isOverride: isOverride,
+      reward: reward,
+      breakdown: RecommendationBreakdown(
+        baseRatePerRupee: reward.ratePerRupee,
+        baseValue: context.amount * reward.ratePerRupee,
+        capStatus: reward.capStatus,
+        effectiveRatePerRupee: context.amount.paise == 0
+            ? 0
+            : value.paise / context.amount.paise,
+        capHeadroom: display?.headroom,
+        capNote: display?.note,
+        capRemaining: display?.remaining,
+        capLimit: display?.limit,
+        capMeasure: display?.measure,
+        capPeriod: display?.period,
+        merchantRestriction:
+            rule?.merchantPattern ??
+            (rule == null || rule.merchantSlugs.isEmpty
+                ? null
+                : rule.merchantSlugs.join(', ')),
+        pointValueInr: isCashbackRule ? null : card.pointValueInr,
+        forexCost: forexCost,
+        fuelWaiver: fuelApplies ? waiverValue : const Money.zero(),
+        milestoneBonus: milestoneBonus,
+      ),
+    );
+  }
+}
+
+class _CapDisplay {
+  final Money? headroom;
+  final String? note;
+  final Money? remaining;
+  final Money? limit;
+  final CapMeasure? measure;
+  final CapPeriod? period;
+  const _CapDisplay({
+    this.headroom,
+    this.note,
+    this.remaining,
+    this.limit,
+    this.measure,
+    this.period,
+  });
+}
+
+/// The one cap the breakdown shows: the cap that limited this spend, else
+/// the first rule-specific cap, else the first card-wide one. Native units
+/// map onto the v1 display fields: ₹ spend → spendAmount, ₹ cashback and
+/// points (at the card's ₹/point) → rewardValue, counts → txnCount.
+_CapDisplay? _primaryCapDisplay(RewardEvaluation reward, double pointValueInr) {
+  if (reward.caps.isEmpty) return null;
+  final usage =
+      reward.caps.where((c) => c.limiting).firstOrNull ??
+      reward.caps.where((c) => c.cap.scope == CapScope.targets).firstOrNull ??
+      reward.caps.first;
+  final remaining = usage.remainingBefore;
+  final exhausted = usage.kind == CapKind.txnCount ? remaining < 1 : remaining <= 0;
+
+  Money? toMoney(double nativeAmount) => switch (usage.kind) {
+    CapKind.bonusPoints || CapKind.totalPoints =>
+      pointValueInr > 0 ? Money.fromRupees(nativeAmount * pointValueInr) : null,
+    _ => Money.fromRupees(nativeAmount),
+  };
+  final measure = switch (usage.kind) {
+    CapKind.eligibleSpend => CapMeasure.spendAmount,
+    CapKind.txnCount => CapMeasure.txnCount,
+    _ => CapMeasure.rewardValue,
+  };
+  final remainingText = switch (usage.kind) {
+    CapKind.bonusPoints => '${remaining.toStringAsFixed(0)} bonus pts',
+    CapKind.totalPoints => '${remaining.toStringAsFixed(0)} pts',
+    CapKind.bonusCashback || CapKind.totalCashback =>
+      '${Money.fromRupees(remaining).format()} of cashback',
+    CapKind.eligibleSpend => '${Money.fromRupees(remaining).format()} of spend',
+    CapKind.txnCount => '${remaining.toStringAsFixed(0)} transactions',
+  };
+  final String? note;
+  if (exhausted && usage.limiting) {
+    note = 'Cap reached';
+  } else if (usage.limiting) {
+    note = 'Only $remainingText left';
+  } else if (usage.kind == CapKind.eligibleSpend) {
+    note = null;
+  } else {
+    note = '$remainingText left';
+  }
+  final remainingMoney = toMoney(remaining);
+  final limitMoney = toMoney(usage.amount);
+  return _CapDisplay(
+    headroom: usage.kind == CapKind.eligibleSpend
+        ? Money.fromRupees(remaining)
+        : null,
+    note: note,
+    remaining: remainingMoney,
+    limit: limitMoney,
+    measure: remainingMoney == null ? null : measure,
+    period: usage.cap.period,
+  );
 }
 
 extension _FirstOrNull<T> on Iterable<T> {

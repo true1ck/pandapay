@@ -10,6 +10,7 @@ export 'src/card_rules/card_rules.dart';
 export 'src/card_rules/card_rules_json.dart';
 export 'src/card_rules/merchant_directory.dart';
 export 'src/engine/engine.dart';
+export 'src/engine/reward_engine_v2.dart';
 export 'src/engine/acquisition_engine.dart';
 export 'src/engine/calculators.dart';
 export 'src/engine/historical_comparison.dart';
