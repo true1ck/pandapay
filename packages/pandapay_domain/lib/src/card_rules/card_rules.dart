@@ -71,6 +71,108 @@ enum CapPeriod {
 /// cashback regardless of the rate that earned it.
 enum CapMeasure { rewardValue, spendAmount, txnCount }
 
+/// The newest catalogue rule semantics this package's engine implements
+/// (plan C1 `min_engine_version`). Rules and caps that ask for a newer
+/// engine are skipped at parse time rather than misread.
+const int kRewardEngineVersion = 2;
+
+/// v2 `reward_rules.rule_role` (plan C1 / C3.3).
+///
+/// Null on [RewardRule.role] means the catalogue row predates v2 (no
+/// `rule_role` key on the wire); the v2 engine reads that as [earn].
+enum RuleRole {
+  /// The card's everything-else rate, written out as a rule.
+  base,
+
+  /// An earning rule (accelerated, reduced, or merchant/app specific).
+  earn,
+
+  /// Earns nothing; matching spend is excluded.
+  exclusion,
+
+  /// A rule the catalogue cannot express faithfully. Shown, never ranked.
+  info,
+}
+
+/// v2 `cap_rules.cap_kind` (plan C1 / C3.6). Every amount is in the cap's
+/// native unit: points for the `*Points` kinds, ₹ for the `*Cashback` kinds
+/// and [eligibleSpend], a count for [txnCount].
+enum CapKind {
+  bonusPoints,
+  totalPoints,
+  bonusCashback,
+  totalCashback,
+  eligibleSpend,
+  txnCount;
+
+  bool get isBonus => this == bonusPoints || this == bonusCashback;
+  bool get isTotal => this == totalPoints || this == totalCashback;
+  bool get isPoints => this == bonusPoints || this == totalPoints;
+  bool get isCashback => this == bonusCashback || this == totalCashback;
+}
+
+/// v2 `cap_rules.scope`: [targets] limits only the rules listed in
+/// [CapRule.targets]; [card] limits all earning on the card.
+enum CapScope { targets, card }
+
+/// What spend past an eligible-spend or transaction-count cap earns.
+enum PostCapBehavior { baseRate, zero, customRate }
+
+/// `milestone_rules.anchor` values, also used by `cap_rules.anchor`.
+enum PeriodAnchor { cardAnniversary, calendarYear, fiscalYear, statementCycle }
+
+/// v2 `card_products.accrual_rounding`: how a transaction's spend is turned
+/// into points. Null on a v2 card means [floor].
+///
+/// [floor], [round] (half-up) and [none] (fractional) apply to the number
+/// of blocks (C3.5). [pointsHalfUp] and [pointsFloor] (plan C8/D7) round
+/// the whole-transaction product `eligible × rate / block` instead — some
+/// issuers pay ₹7,500 × 1.5 pts/₹100 as 113 points, not 75 blocks × 1.5.
+enum AccrualRounding { floor, round, none, pointsHalfUp, pointsFloor }
+
+/// v2 `card_products.cashback_rounding` (plan C8/D11): how each cashback
+/// accrual piece is rounded before caps. Null on the card means [paise].
+/// `accrual_rounding` governs points only.
+enum CashbackRounding { paise, rupeeFloor, rupeeHalfUp }
+
+/// v2 `card_products.model_status`: how faithfully the catalogue models
+/// this card's earning (plan §1 item 6).
+enum ModelStatus { verified, partial, basic }
+
+/// v2 `milestone_rules.reward_kind`.
+enum MilestoneRewardKind {
+  points,
+  voucher,
+  cashback,
+  feeWaiver,
+  benefit,
+  other,
+}
+
+/// v2 `benefit_unlock_rules.kind`.
+enum UnlockKind {
+  loungeDomestic,
+  loungeInternational,
+  loungeRailway,
+  feeWaiver,
+  tier,
+  welcome,
+  membership,
+  other,
+}
+
+/// v2 `benefit_unlock_rules.spend_window`.
+enum UnlockSpendWindow {
+  previousCalendarQuarter,
+  currentCalendarQuarter,
+  previousCalendarMonth,
+  calendarMonth,
+  cardYear,
+  calendarYear,
+  firstDaysAfterIssue,
+  rollingDays,
+}
+
 /// A single reward rule (`reward_rules` table). `categoryId == null` means
 /// "all other spends" — the base rate.
 ///
@@ -118,6 +220,40 @@ class RewardRule {
 
   final int priority; // lower wins
 
+  // ---- v2 fields (plan C1). All optional; defaults mean "v1 row". ----
+
+  /// Null when the wire row carried no `rule_role` (a v1 row).
+  final RuleRole? role;
+
+  /// Any-of merchant slugs (C5 directory). Matches the resolved merchant or
+  /// any of its ancestors. Empty means unrestricted by merchant slug.
+  final List<String> merchantSlugs;
+
+  /// Any-of payment platform slugs. Empty means unrestricted.
+  final List<String> platformSlugs;
+
+  /// 4-digit MCC strings the spend must be in / must not be in.
+  final List<String> mccInclude;
+  final List<String> mccExclude;
+
+  /// Plan C8/D16a exceptions: the rule does not apply when the resolved
+  /// merchant (or an ancestor) / the context platform is KNOWN and listed
+  /// here. An unknown merchant or platform never proves an exception.
+  final List<String> exceptMerchantSlugs;
+  final List<String> exceptPlatformSlugs;
+
+  /// Overrides the unit's block size: [rate] points per [blockInr] rupees.
+  final int? blockInr;
+
+  /// 2 means hidden from the v1 feed (plan C1).
+  final int minEngineVersion;
+
+  /// CardPipeline rule id. Not part of identity.
+  final String? sourceLocalId;
+
+  /// Plain-language rule text for the UI; also the exclusion reason.
+  final String? displayNote;
+
   const RewardRule({
     required this.id,
     this.categoryId,
@@ -131,7 +267,51 @@ class RewardRule {
     this.effectiveFrom,
     this.effectiveTo,
     this.priority = 100,
+    this.role,
+    this.merchantSlugs = const [],
+    this.platformSlugs = const [],
+    this.mccInclude = const [],
+    this.mccExclude = const [],
+    this.exceptMerchantSlugs = const [],
+    this.exceptPlatformSlugs = const [],
+    this.blockInr,
+    this.minEngineVersion = 1,
+    this.sourceLocalId,
+    this.displayNote,
   });
+
+  /// The role the v2 engine uses: a v1 row on a v2 card is an earning rule.
+  RuleRole get effectiveRole => role ?? RuleRole.earn;
+
+  /// Plan C8/D10/D16c: whether this rule makes its card v2-shaped — a role
+  /// other than the DB default `earn`, any non-empty slug/MCC/exception
+  /// list, an exclusion with a `max_txn_inr` threshold, a `block_inr`, or
+  /// `min_engine_version` 2. `rule_role = 'earn'` alone does not.
+  bool get marksV2 =>
+      (role != null && role != RuleRole.earn) ||
+      merchantSlugs.isNotEmpty ||
+      platformSlugs.isNotEmpty ||
+      mccInclude.isNotEmpty ||
+      mccExclude.isNotEmpty ||
+      exceptMerchantSlugs.isNotEmpty ||
+      exceptPlatformSlugs.isNotEmpty ||
+      (role == RuleRole.exclusion && maxTxn != null) ||
+      blockInr != null ||
+      minEngineVersion >= 2;
+
+  /// Whether any v2-only field differs from its v1 default.
+  bool get hasV2Fields =>
+      role != null ||
+      merchantSlugs.isNotEmpty ||
+      platformSlugs.isNotEmpty ||
+      mccInclude.isNotEmpty ||
+      mccExclude.isNotEmpty ||
+      exceptMerchantSlugs.isNotEmpty ||
+      exceptPlatformSlugs.isNotEmpty ||
+      blockInr != null ||
+      minEngineVersion != 1 ||
+      sourceLocalId != null ||
+      displayNote != null;
 }
 
 /// `cap_rules` — UA-2.2.3 cap blending depends on this exactly.
@@ -163,6 +343,33 @@ class CapRule {
 
   final CapPeriod period;
 
+  // ---- v2 fields (plan C1). All optional; defaults mean "v1 row". ----
+
+  /// Null = legacy row; the v2 engine converts it from [measure] (C3.6).
+  final CapKind? capKind;
+
+  /// Native units: points, ₹ cashback, ₹ spend, or a count (see [CapKind]).
+  final double? capAmount;
+
+  final CapScope scope;
+
+  /// Reward rule ids this cap limits (`cap_rule_targets`).
+  final List<String> targets;
+
+  /// A cap inside a cap: the parent also applies whenever this one does.
+  final String? parentCapId;
+
+  /// Used by [CapKind.eligibleSpend] / [CapKind.txnCount] caps.
+  final PostCapBehavior? postCapBehavior;
+
+  /// For card-year caps.
+  final PeriodAnchor? anchor;
+
+  final int minEngineVersion;
+
+  /// CardPipeline cap id. Not part of identity.
+  final String? sourceLocalId;
+
   const CapRule({
     required this.id,
     this.rewardRuleId,
@@ -173,7 +380,28 @@ class CapRule {
     this.postCapUnit,
     this.postCapRate,
     required this.period,
+    this.capKind,
+    this.capAmount,
+    this.scope = CapScope.targets,
+    this.targets = const [],
+    this.parentCapId,
+    this.postCapBehavior,
+    this.anchor,
+    this.minEngineVersion = 1,
+    this.sourceLocalId,
   });
+
+  /// Whether any v2-only field differs from its v1 default.
+  bool get hasV2Fields =>
+      capKind != null ||
+      capAmount != null ||
+      scope != CapScope.targets ||
+      targets.isNotEmpty ||
+      parentCapId != null ||
+      postCapBehavior != null ||
+      anchor != null ||
+      minEngineVersion != 1 ||
+      sourceLocalId != null;
 }
 
 /// `milestone_rules` — UA-2.2.4.
@@ -184,12 +412,91 @@ class MilestoneRule {
   final Money rewardValue;
   final bool isRepeatable;
 
+  /// The milestone's window and the date it counts from (plan C3.7). Both
+  /// are on the v1 wire already; null when absent or not recognised.
+  final CapPeriod? period;
+  final PeriodAnchor? anchor;
+
+  // ---- v2 fields (plan C1). ----
+  final double? rewardPoints;
+  final MilestoneRewardKind? rewardKind;
+  final List<String> excludedCategoryIds;
+
+  /// e.g. a welcome milestone "₹15,000 within 90 days".
+  final int? windowDays;
+
+  /// Not part of identity.
+  final String? sourceLocalId;
+
   const MilestoneRule({
     required this.id,
     required this.label,
     required this.thresholdSpend,
     required this.rewardValue,
     this.isRepeatable = false,
+    this.period,
+    this.anchor,
+    this.rewardPoints,
+    this.rewardKind,
+    this.excludedCategoryIds = const [],
+    this.windowDays,
+    this.sourceLocalId,
+  });
+}
+
+/// v2 `benefit_unlock_rules`: a benefit (lounge visits, fee waiver, tier)
+/// that unlocks after a spend threshold in a window. Phase 1 carries the
+/// data only; progress is Phase 2.
+class BenefitUnlockRule {
+  final String id;
+  final String? cardBenefitId;
+  final UnlockKind kind;
+  final String label;
+  final Money spendThreshold;
+  final UnlockSpendWindow spendWindow;
+  final int? windowDays;
+  final int? unlocksQuota;
+  final CapPeriod? unlocksPeriod;
+  final String? tierLabel;
+  final List<String> excludedCategoryIds;
+  final String? notes;
+  final String? sourceLocalId;
+
+  const BenefitUnlockRule({
+    required this.id,
+    this.cardBenefitId,
+    required this.kind,
+    required this.label,
+    required this.spendThreshold,
+    required this.spendWindow,
+    this.windowDays,
+    this.unlocksQuota,
+    this.unlocksPeriod,
+    this.tierLabel,
+    this.excludedCategoryIds = const [],
+    this.notes,
+    this.sourceLocalId,
+  });
+}
+
+/// `redemption_options`: how points turn into value.
+class RedemptionOption {
+  final String? id;
+  final String programName;
+
+  /// Free text on the wire ('statement_credit', 'airmiles_transfer', ...).
+  final String method;
+  final double valuePerPointInr;
+  final int? minPoints;
+  final String? notes;
+
+  const RedemptionOption({
+    this.id,
+    required this.programName,
+    required this.method,
+    required this.valuePerPointInr,
+    this.minPoints,
+    this.notes,
   });
 }
 
@@ -359,6 +666,48 @@ class CardProduct {
   /// person relying on it. See migration 0030's header.
   final bool hasApplyUrl;
 
+  // ---- v2 fields (plan C1/C2). All optional; defaults mean "v1 card". ----
+
+  /// Default points block (100/125/150/200/500). Informational: the engine
+  /// uses the rule's `block_inr` or the unit's own block (C3.5).
+  final int? accrualBlockInr;
+
+  /// Per-transaction rounding of points blocks. Non-null marks the card as
+  /// v2-shaped (C3.2).
+  final AccrualRounding? accrualRounding;
+
+  /// Per-piece cashback rounding (D11). Non-null marks the card v2-shaped.
+  final CashbackRounding? cashbackRounding;
+  final int? pointsExpiryMonths;
+
+  /// Null when the feed doesn't say (the v1 feed).
+  final ModelStatus? modelStatus;
+  final Map<String, dynamic> modelCoverage;
+  final List<BenefitUnlockRule> unlockRules;
+  final List<RedemptionOption> redemptionOptions;
+
+  /// What the tolerant v2 parser skipped or defaulted, one line each, for
+  /// logging. Never serialized.
+  final List<String> parseWarnings;
+
+  /// Cap id → why the parser dropped it (an unsupported v2 value). The v2
+  /// engine reports each as `cap_skipped:<id>:<reason>` (plan C8/D12d), so
+  /// a dropped cap is never silent. Never serialized.
+  final Map<String, String> skippedCaps;
+
+  /// Reward rule id → why the parser dropped it. The v2 engine reports each
+  /// as `rule_skipped:<id>:<reason>` (plan C8/D15d). Never serialized.
+  final Map<String, String> skippedRules;
+
+  /// Whether a dropped rule was an exclusion (raw `rule_role = 'exclusion'`).
+  /// The v2 engine then adds the assumption `exclusion_unparsed`, because
+  /// the estimate may pay on spend the card actually excludes (D15d).
+  final bool skippedExclusionRule;
+
+  /// Set by the JSON parser when the wire card carried a v2 marker (C3.2)
+  /// on a row that was then skipped, so the card still takes the v2 path.
+  final bool wireV2Shaped;
+
   const CardProduct({
     required this.id,
     required this.name,
@@ -383,7 +732,33 @@ class CardProduct {
     this.artAssetUrl,
     this.artPrimaryColor,
     this.hasApplyUrl = false,
+    this.accrualBlockInr,
+    this.accrualRounding,
+    this.cashbackRounding,
+    this.pointsExpiryMonths,
+    this.modelStatus,
+    this.modelCoverage = const {},
+    this.unlockRules = const [],
+    this.redemptionOptions = const [],
+    this.parseWarnings = const [],
+    this.skippedCaps = const {},
+    this.skippedRules = const {},
+    this.skippedExclusionRule = false,
+    this.wireV2Shaped = false,
   });
+
+  /// C3.2 as amended by plan C8/D10/D11: v2-shaped iff the card has
+  /// `accrual_rounding` or `cashback_rounding`, any cap has a `cap_kind`, or any rule carries a
+  /// non-default v2 value ([RewardRule.marksV2]). It must not key on
+  /// DB-defaulted columns: after the v2 migration every row has
+  /// `rule_role = 'earn'` and empty arrays, and such a card must keep
+  /// today's v1 answers. v1-shaped cards take the engine's original path.
+  bool get isV2Shaped =>
+      wireV2Shaped ||
+      accrualRounding != null ||
+      cashbackRounding != null ||
+      rewardRules.any((r) => r.marksV2) ||
+      capRules.any((c) => c.capKind != null);
 
   /// The card's everything-else earn rate as a fraction of spend, or 0 when
   /// the catalogue doesn't state one.
@@ -418,22 +793,48 @@ String _catalogueMoneyKey(Money value) => value.paise.toString();
 
 String _catalogueDateKey(DateTime? value) => value?.toIso8601String() ?? '';
 
+/// Plan C8/D1: the v2 identity fields, appended to an identity key only
+/// when at least one of them is set, so two v2 rows that differ only in a
+/// v2 field (merchant slugs, platform, cap kind/amount, ...) never collapse
+/// into one. `source_local_id` is deliberately not identity.
+///
+/// A row with every v2 field unset (an old cache blob, a hand-built rule)
+/// keeps exactly its pre-v2 key. Rows from the v1 feed after the v2
+/// migration carry `rule_role = 'earn'` (a DB default), so their keys DO
+/// gain a v2 part — the same part for every such row, so which rows de-dup
+/// together is unchanged. Keys are only compared in memory; the app never
+/// persists them. (v2-shaped cards are not de-duplicated at all — D15a.)
+String _v2IdentitySuffix(List<String> parts) =>
+    parts.every((p) => p.isEmpty) ? '' : '|v2|${parts.join('|')}';
+
 /// Stable semantic identity for a cap definition.
 ///
 /// The database id is deliberately excluded: catalogue imports can recreate
 /// the same rule with a new id, and showing that as a second cap is misleading.
 /// [rewardRuleId] remains part of the key because two different reward rules
 /// can intentionally have the same visible cap amount.
-String capRuleIdentityKey(CapRule rule) => [
-  rule.rewardRuleId ?? '',
-  rule.categoryId ?? '',
-  _catalogueTextKey(rule.label),
-  rule.measure.name,
-  rule.period.name,
-  _catalogueMoneyKey(rule.capValue),
-  rule.postCapUnit?.name ?? '',
-  rule.postCapRate?.toString() ?? '',
-].join('|');
+String capRuleIdentityKey(CapRule rule) =>
+    [
+      rule.rewardRuleId ?? '',
+      rule.categoryId ?? '',
+      _catalogueTextKey(rule.label),
+      rule.measure.name,
+      rule.period.name,
+      _catalogueMoneyKey(rule.capValue),
+      rule.postCapUnit?.name ?? '',
+      rule.postCapRate?.toString() ?? '',
+    ].join('|') +
+    _v2IdentitySuffix([
+      rule.capKind?.name ?? '',
+      rule.capAmount?.toString() ?? '',
+      rule.scope == CapScope.targets ? '' : rule.scope.name,
+      // Targets are ids, compared verbatim (sorted, not case-folded).
+      (rule.targets.toList()..sort()).join(','),
+      rule.parentCapId ?? '',
+      rule.postCapBehavior?.name ?? '',
+      rule.anchor?.name ?? '',
+      rule.minEngineVersion == 1 ? '' : rule.minEngineVersion.toString(),
+    ]);
 
 List<CapRule> uniqueCapRules(Iterable<CapRule> rules) {
   final seen = <String>{};
@@ -443,19 +844,35 @@ List<CapRule> uniqueCapRules(Iterable<CapRule> rules) {
   ];
 }
 
-String rewardRuleIdentityKey(RewardRule rule) => [
-  rule.categoryId ?? '',
-  _catalogueTextKey(rule.merchantPattern),
-  rule.rail?.name ?? '',
-  rule.unit.name,
-  rule.rate.toString(),
-  rule.minTxn == null ? '' : _catalogueMoneyKey(rule.minTxn!),
-  rule.maxTxn == null ? '' : _catalogueMoneyKey(rule.maxTxn!),
-  _catalogueListKey(rule.excludedCategoryIds),
-  _catalogueDateKey(rule.effectiveFrom),
-  _catalogueDateKey(rule.effectiveTo),
-  rule.priority.toString(),
-].join('|');
+String rewardRuleIdentityKey(RewardRule rule) =>
+    [
+      rule.categoryId ?? '',
+      _catalogueTextKey(rule.merchantPattern),
+      rule.rail?.name ?? '',
+      rule.unit.name,
+      rule.rate.toString(),
+      rule.minTxn == null ? '' : _catalogueMoneyKey(rule.minTxn!),
+      rule.maxTxn == null ? '' : _catalogueMoneyKey(rule.maxTxn!),
+      _catalogueListKey(rule.excludedCategoryIds),
+      _catalogueDateKey(rule.effectiveFrom),
+      _catalogueDateKey(rule.effectiveTo),
+      rule.priority.toString(),
+    ].join('|') +
+    _v2IdentitySuffix([
+      rule.role?.name ?? '',
+      _catalogueListKey(rule.merchantSlugs),
+      _catalogueListKey(rule.platformSlugs),
+      _catalogueListKey(rule.mccInclude),
+      _catalogueListKey(rule.mccExclude),
+      rule.blockInr?.toString() ?? '',
+      rule.minEngineVersion == 1 ? '' : rule.minEngineVersion.toString(),
+      // D16: appended only when set, so pre-D16 v2 keys are unchanged.
+      if (rule.exceptMerchantSlugs.isNotEmpty ||
+          rule.exceptPlatformSlugs.isNotEmpty) ...[
+        _catalogueListKey(rule.exceptMerchantSlugs),
+        _catalogueListKey(rule.exceptPlatformSlugs),
+      ],
+    ]);
 
 List<RewardRule> uniqueRewardRules(Iterable<RewardRule> rules) {
   final seen = <String>{};
@@ -465,12 +882,19 @@ List<RewardRule> uniqueRewardRules(Iterable<RewardRule> rules) {
   ];
 }
 
-String milestoneRuleIdentityKey(MilestoneRule rule) => [
-  _catalogueTextKey(rule.label),
-  _catalogueMoneyKey(rule.thresholdSpend),
-  _catalogueMoneyKey(rule.rewardValue),
-  rule.isRepeatable.toString(),
-].join('|');
+String milestoneRuleIdentityKey(MilestoneRule rule) =>
+    [
+      _catalogueTextKey(rule.label),
+      _catalogueMoneyKey(rule.thresholdSpend),
+      _catalogueMoneyKey(rule.rewardValue),
+      rule.isRepeatable.toString(),
+    ].join('|') +
+    _v2IdentitySuffix([
+      rule.rewardPoints?.toString() ?? '',
+      rule.rewardKind?.name ?? '',
+      rule.windowDays?.toString() ?? '',
+      _catalogueListKey(rule.excludedCategoryIds),
+    ]);
 
 List<MilestoneRule> uniqueMilestoneRules(Iterable<MilestoneRule> rules) {
   final seen = <String>{};

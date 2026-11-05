@@ -1,0 +1,396 @@
+{
+  "source_slug": "icici-hpcl-super-saver-credit-card",
+  "cardpipeline_id": "icici-bank-hpcl-super-saver-credit-card",
+  "card_name": "ICICI Bank HPCL Super Saver Credit Card",
+  "verified_on": "2026-11-05",
+  "sources": [
+    {
+      "url": "https://www.icici.bank.in/managed-assets/docs/terms-condition/hpcl-super-saver-credit-card-tnc.pdf",
+      "doc": "HPCL Super Saver T&C (Jun 2021)",
+      "quote": "entitled to 4% cashback on fuel purchases, where such cashback shall be capped at INR 200 per month."
+    },
+    {
+      "url": "https://www.icici.bank.in/managed-assets/docs/terms-condition/hpcl-super-saver-credit-card-tnc.pdf",
+      "doc": "HPCL Super Saver T&C (Jun 2021)",
+      "quote": "The ICICI Bank Reward benefit shall be capped at 400 ICICI Bank Reward Points per Statement cycle."
+    },
+    {
+      "url": "https://www.icici.bank.in/managed-assets/docs/terms-condition/hpcl-super-saver-credit-card-tnc.pdf",
+      "doc": "HPCL Super Saver T&C (Jun 2021)",
+      "quote": "rounded off to the nearest integer at the time of posting"
+    },
+    {
+      "url": "https://www.icicibank.com/managed-assets/docs/personal/cards/mitc_cc.pdf",
+      "doc": "ICICI Credit Card MITC",
+      "quote": "ICICI Bank HPCL Super Saver Credit Card: insurance reward points capped per statement cycle"
+    }
+  ],
+  "examples": [
+    {
+      "id": "001",
+      "title": "Rs 5,000 clothing spend",
+      "ctx": {
+        "amount": 5000,
+        "occurred": "2026-11-10T10:00:00+05:30",
+        "category_id": null,
+        "category_slug": "other",
+        "mcc": "5651",
+        "merchant_name": "Apparel store",
+        "merchant_vpa": null,
+        "merchant_slug": null,
+        "platform": null,
+        "rail": "swipe"
+      },
+      "state_before": {
+        "caps_by_source_id": {}
+      },
+      "expect": {
+        "currency": "points",
+        "amount": 100,
+        "value_inr": null,
+        "excluded": false,
+        "cap_deltas_by_source_id": {}
+      },
+      "why": "2 ICICI Bank Reward Points per Rs 100 on other eligible retail spend: 50 x 2 = 100."
+    },
+    {
+      "id": "002",
+      "title": "Rs 1,240 retail spend: points rounded to nearest integer",
+      "ctx": {
+        "amount": 1240,
+        "occurred": "2026-11-10T10:00:00+05:30",
+        "category_id": null,
+        "category_slug": "other",
+        "mcc": "5651",
+        "merchant_name": "Apparel store",
+        "merchant_vpa": null,
+        "merchant_slug": null,
+        "platform": null,
+        "rail": "swipe"
+      },
+      "state_before": {
+        "caps_by_source_id": {}
+      },
+      "expect": {
+        "currency": "points",
+        "amount": 25,
+        "value_inr": null,
+        "excluded": false,
+        "cap_deltas_by_source_id": {}
+      },
+      "why": "Reward points for each qualifying transaction are rounded to the nearest integer when posted: 1240/100 x 2 = 24.8 -> 25 (not 24)."
+    },
+    {
+      "id": "003",
+      "title": "Rs 2,000 fuel at an HPCL pump",
+      "ctx": {
+        "amount": 2000,
+        "occurred": "2026-11-10T10:00:00+05:30",
+        "category_id": null,
+        "category_slug": "fuel",
+        "mcc": "5541",
+        "merchant_name": "HPCL pump",
+        "merchant_vpa": null,
+        "merchant_slug": "hpcl",
+        "platform": null,
+        "rail": "swipe"
+      },
+      "state_before": {
+        "caps_by_source_id": {}
+      },
+      "expect": {
+        "currency": "cashback_inr",
+        "amount": 80,
+        "value_inr": null,
+        "excluded": false,
+        "cap_deltas_by_source_id": {
+          "fuel_cashback_monthly_cap": 80
+        }
+      },
+      "why": "4% cashback on HPCL fuel: 2000 x 4% = 80, within the Rs 200 per month cap. No standard reward points on fuel. (The surcharge waiver and extra 1.5% in Payback points are separate benefits.)"
+    },
+    {
+      "id": "004",
+      "title": "Rs 2,000 HPCL fuel with Rs 160 cashback already earned this month",
+      "ctx": {
+        "amount": 2000,
+        "occurred": "2026-11-10T10:00:00+05:30",
+        "category_id": null,
+        "category_slug": "fuel",
+        "mcc": "5541",
+        "merchant_name": "HPCL pump",
+        "merchant_vpa": null,
+        "merchant_slug": "hpcl",
+        "platform": null,
+        "rail": "swipe"
+      },
+      "state_before": {
+        "caps_by_source_id": {
+          "fuel_cashback_monthly_cap": 160
+        }
+      },
+      "expect": {
+        "currency": "cashback_inr",
+        "amount": 40,
+        "value_inr": null,
+        "excluded": false,
+        "cap_deltas_by_source_id": {
+          "fuel_cashback_monthly_cap": 40
+        }
+      },
+      "why": "4% would be 80 but only Rs 40 of the Rs 200 monthly cashback cap remains."
+    },
+    {
+      "id": "005",
+      "title": "Rs 2,000 HPCL fuel after the Rs 200 monthly cap is used",
+      "ctx": {
+        "amount": 2000,
+        "occurred": "2026-11-10T10:00:00+05:30",
+        "category_id": null,
+        "category_slug": "fuel",
+        "mcc": "5541",
+        "merchant_name": "HPCL pump",
+        "merchant_vpa": null,
+        "merchant_slug": "hpcl",
+        "platform": null,
+        "rail": "swipe"
+      },
+      "state_before": {
+        "caps_by_source_id": {
+          "fuel_cashback_monthly_cap": 200
+        }
+      },
+      "expect": {
+        "currency": "cashback_inr",
+        "amount": 0,
+        "value_inr": null,
+        "excluded": false,
+        "cap_deltas_by_source_id": {}
+      },
+      "why": "The 4% cashback stops at Rs 200 per month; fuel never earns standard reward points."
+    },
+    {
+      "id": "006",
+      "title": "Rs 2,000 fuel at a non-HPCL pump",
+      "ctx": {
+        "amount": 2000,
+        "occurred": "2026-11-10T10:00:00+05:30",
+        "category_id": null,
+        "category_slug": "fuel",
+        "mcc": "5541",
+        "merchant_name": "Other fuel station",
+        "merchant_vpa": null,
+        "merchant_slug": null,
+        "platform": null,
+        "rail": "swipe"
+      },
+      "state_before": {
+        "caps_by_source_id": {}
+      },
+      "expect": {
+        "currency": "points",
+        "amount": 0,
+        "value_inr": null,
+        "excluded": true,
+        "cap_deltas_by_source_id": {}
+      },
+      "why": "The cashback applies only at HPCL pumps; fuel spend earns no reward points."
+    },
+    {
+      "id": "007",
+      "title": "Rs 1,000 electricity bill",
+      "ctx": {
+        "amount": 1000,
+        "occurred": "2026-11-10T10:00:00+05:30",
+        "category_id": null,
+        "category_slug": "bills",
+        "mcc": "4900",
+        "merchant_name": "Electricity board",
+        "merchant_vpa": null,
+        "merchant_slug": null,
+        "platform": null,
+        "rail": "online"
+      },
+      "state_before": {
+        "caps_by_source_id": {}
+      },
+      "expect": {
+        "currency": "points",
+        "amount": 200,
+        "value_inr": null,
+        "excluded": false,
+        "cap_deltas_by_source_id": {
+          "daily_essentials_reward_cap": 200
+        }
+      },
+      "why": "20 points per Rs 100 on utility and departmental store spend: 10 x 20 = 200, counting towards the 400 points per statement cycle cap."
+    },
+    {
+      "id": "008",
+      "title": "Rs 1,000 departmental store with 380 of 400 points already earned",
+      "ctx": {
+        "amount": 1000,
+        "occurred": "2026-11-10T10:00:00+05:30",
+        "category_id": null,
+        "category_slug": "groceries",
+        "mcc": "5311",
+        "merchant_name": "Departmental store",
+        "merchant_vpa": null,
+        "merchant_slug": null,
+        "platform": null,
+        "rail": "swipe"
+      },
+      "state_before": {
+        "caps_by_source_id": {
+          "daily_essentials_reward_cap": 380
+        }
+      },
+      "expect": {
+        "currency": "points",
+        "amount": 20,
+        "value_inr": null,
+        "excluded": false,
+        "cap_deltas_by_source_id": {
+          "daily_essentials_reward_cap": 20
+        }
+      },
+      "why": "Accelerated 20 per Rs 100 would be 200 points, but only 20 of the 400 points per statement cycle remain."
+    },
+    {
+      "id": "009",
+      "title": "Rs 10,000 insurance premium",
+      "ctx": {
+        "amount": 10000,
+        "occurred": "2026-11-10T10:00:00+05:30",
+        "category_id": null,
+        "category_slug": "insurance",
+        "mcc": "6300",
+        "merchant_name": "Insurer",
+        "merchant_vpa": null,
+        "merchant_slug": null,
+        "platform": null,
+        "rail": "online"
+      },
+      "state_before": {
+        "caps_by_source_id": {}
+      },
+      "expect": {
+        "currency": "points",
+        "amount": 200,
+        "value_inr": null,
+        "excluded": false,
+        "cap_deltas_by_source_id": {
+          "insurance_reward_spend_cap": 10000
+        }
+      },
+      "why": "Insurance earns the standard 2 per Rs 100 until Rs 40,000 of spend per statement cycle: 100 x 2 = 200."
+    },
+    {
+      "id": "010",
+      "title": "Rs 5,000 insurance premium after Rs 40,000 limit used",
+      "ctx": {
+        "amount": 5000,
+        "occurred": "2026-11-10T10:00:00+05:30",
+        "category_id": null,
+        "category_slug": "insurance",
+        "mcc": "6300",
+        "merchant_name": "Insurer",
+        "merchant_vpa": null,
+        "merchant_slug": null,
+        "platform": null,
+        "rail": "online"
+      },
+      "state_before": {
+        "caps_by_source_id": {
+          "insurance_reward_spend_cap": 40000
+        }
+      },
+      "expect": {
+        "currency": "points",
+        "amount": 0,
+        "value_inr": null,
+        "excluded": false,
+        "cap_deltas_by_source_id": {}
+      },
+      "why": "Insurance reward points are capped at Rs 40,000 of spend per statement cycle."
+    },
+    {
+      "id": "011",
+      "title": "Rs 20,000 rent payment",
+      "ctx": {
+        "amount": 20000,
+        "occurred": "2026-11-10T10:00:00+05:30",
+        "category_id": null,
+        "category_slug": "rent",
+        "mcc": "6513",
+        "merchant_name": "Rent payment",
+        "merchant_vpa": null,
+        "merchant_slug": null,
+        "platform": null,
+        "rail": "online"
+      },
+      "state_before": {
+        "caps_by_source_id": {}
+      },
+      "expect": {
+        "currency": "points",
+        "amount": 0,
+        "value_inr": null,
+        "excluded": true,
+        "cap_deltas_by_source_id": {}
+      },
+      "why": "No reward points for Cash and Rent categories."
+    }
+  ],
+  "research_notes": [
+    {
+      "item": "rounding",
+      "cardpipeline_says": "rounding_mode floor",
+      "issuer_says": "T&C: reward points per qualifying transaction are rounded off to the nearest integer when posted.",
+      "proposed_fix": "override",
+      "override_file": "api/scripts/catalogue_overrides/icici-hpcl-super-saver-credit-card.json"
+    },
+    {
+      "item": "cap fuel_cashback_monthly_cap",
+      "cardpipeline_says": "eligible_spend_amount Rs 5,000 per statement cycle, zero after",
+      "issuer_says": "T&C: 4% cashback capped at Rs 200 per month. Equivalent to Rs 5,000 of HPCL fuel; period is a month, not the statement cycle.",
+      "proposed_fix": "override",
+      "override_file": "api/scripts/catalogue_overrides/icici-hpcl-super-saver-credit-card.json"
+    },
+    {
+      "item": "cap daily_essentials_reward_cap",
+      "cardpipeline_says": "bonus_reward_points 400, then base",
+      "issuer_says": "T&C: the accelerated benefit is capped at 400 reward points per statement cycle (all accelerated earning, not only the bonus). What follows after the cap is not stated.",
+      "proposed_fix": "override",
+      "override_file": "api/scripts/catalogue_overrides/icici-hpcl-super-saver-credit-card.json"
+    },
+    {
+      "item": "transport cap",
+      "cardpipeline_says": "transport_reward_spend_cap Rs 10,000 per calendar month, zero after",
+      "issuer_says": "MITC lists the Rs 10,000 transportation cap for Platinum, HPCL (Coral), ManU, CSK, Expressions, Parakram; Super Saver is only listed under the insurance cap table (Rs 40,000). Applicability of the transport cap to Super Saver not confirmed.",
+      "proposed_fix": "none",
+      "override_file": null
+    },
+    {
+      "item": "extra 1.5% on HPCL fuel",
+      "cardpipeline_says": "fuel_hp_pay_additional_reward 6 points per Rs 100 via HP Pay only",
+      "issuer_says": "T&C: additional 1.5% in 6 Payback points per Rs 100 on all fuel at HPCL retail outlets (not only HP Pay). Different currency.",
+      "proposed_fix": "none",
+      "override_file": null
+    },
+    {
+      "item": "document date",
+      "cardpipeline_says": "n/a",
+      "issuer_says": "The Super Saver T&C PDF was last updated 22 Jun 2021; MITC (reward caps) is the 2026 document.",
+      "proposed_fix": "none",
+      "override_file": null
+    },
+    {
+      "item": "cashback rounding (D11)",
+      "cardpipeline_says": "n/a",
+      "issuer_says": "The T&C state rounding only for reward points (nearest integer). The 4% fuel cashback has no stated rounding, so cashback_rounding is left unset (paise); accrual_rounding = points_half_up applies to the points side.",
+      "proposed_fix": "none",
+      "override_file": null
+    }
+  ]
+}

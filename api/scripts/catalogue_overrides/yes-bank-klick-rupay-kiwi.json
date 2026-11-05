@@ -1,0 +1,122 @@
+{
+  "source_slug": "yes-bank-klick-rupay-kiwi",
+  "changes": [
+    {
+      "path": "reward_rules[id=kiwi_regular_online].action.cashback_percent",
+      "value": null,
+      "reason": "Issuer pays whole Kiwis, not a percentage.",
+      "source_url": "https://gokiwi.in/rewards-policy-v2/",
+      "checked_on": "2026-11-05"
+    },
+    {
+      "path": "reward_rules[id=kiwi_regular_online].action.points_per_block",
+      "value": 2,
+      "reason": "2 Kiwis per Rs 100 online.",
+      "source_url": "https://gokiwi.in/rewards-policy-v2/",
+      "checked_on": "2026-11-05"
+    },
+    {
+      "path": "reward_rules[id=kiwi_regular_scan_pay].action.cashback_percent",
+      "value": null,
+      "reason": "Issuer pays whole Kiwis, not a percentage.",
+      "source_url": "https://gokiwi.in/rewards-policy-v2/",
+      "checked_on": "2026-11-05"
+    },
+    {
+      "path": "reward_rules[id=kiwi_regular_scan_pay].action.points_per_block",
+      "value": 6,
+      "reason": "6 Kiwis per Rs 100 on Scan & Pay.",
+      "source_url": "https://gokiwi.in/rewards-policy-v2/",
+      "checked_on": "2026-11-05"
+    },
+    {
+      "path": "accrual_engine.base_points_per_block",
+      "value": 2,
+      "reason": "Base is 2 Kiwis per Rs 100.",
+      "source_url": "https://gokiwi.in/rewards-policy-v2/",
+      "checked_on": "2026-11-05"
+    },
+    {
+      "path": "accrual_engine.base_cashback_percent",
+      "value": null,
+      "reason": "Kiwis are points worth Rs 0.25.",
+      "source_url": "https://gokiwi.in/rewards-policy-v2/",
+      "checked_on": "2026-11-05"
+    },
+    {
+      "path": "card_product.point_value_inr_baseline",
+      "value": 0.25,
+      "reason": "Each Kiwi is worth Rs 0.25.",
+      "source_url": "https://gokiwi.in/rewards-policy-v2/",
+      "checked_on": "2026-11-05"
+    },
+    {
+      "path": "reward_rules[id=kiwi_neon_scan_pay].rule_role",
+      "value": "info",
+      "reason": "Needs a paid Kiwi Neon membership (user attribute); not verified.",
+      "source_url": "https://gokiwi.in/rewards-policy-v2/",
+      "checked_on": "2026-11-05"
+    },
+    {
+      "path": "reward_rules[id=kiwi_neon_online].rule_role",
+      "value": "info",
+      "reason": "Needs a paid Kiwi Neon membership.",
+      "source_url": "https://gokiwi.in/rewards-policy-v2/",
+      "checked_on": "2026-11-05"
+    },
+    {
+      "path": "cap_rules",
+      "value": [
+        {
+          "id": "monthly-kiwi-cap",
+          "category_id": "all_retail",
+          "metric": "total_reward_points",
+          "mcc_target_list": [],
+          "period": "calendar_month",
+          "limit_value": null,
+          "limit_value_inr": null,
+          "post_limit_behavior": {
+            "action": "zero_accrual",
+            "points_per_block": 0
+          },
+          "parent_cap_id": null,
+          "reset_day": 1,
+          "effective_from": "2024-07-04",
+          "effective_to": null,
+          "depends_on_user": true
+        }
+      ],
+      "reason": "Issuer: monthly cap on Kiwis is 1% of the total credit limit on the card. Per-user amount, so the cap keeps its kind with a null amount (D13a, flag cap_depends_on_user). Also removes a dangling cap_reference monthly-kiwi-cap. depends_on_user: true so the loader keeps the cap with a null amount.",
+      "source_url": "https://gokiwi.in/rewards-policy-v2/",
+      "checked_on": "2026-11-05"
+    },
+    {
+      "path": "reward_rules[id=kiwi_regular_online].conditions",
+      "value": {},
+      "reason": "issued_via_kiwi / not-Neon / accrual-unit keys are the default Kiwi regular terms (entry-tier rate stated by the issuer, D13b) and must not turn the rule into info.",
+      "source_url": "https://gokiwi.in/rewards-policy-v2/",
+      "checked_on": "2026-11-05"
+    },
+    {
+      "path": "reward_rules[id=kiwi_regular_scan_pay].conditions",
+      "value": {},
+      "reason": "issued_via_kiwi / not-Neon / accrual-unit keys are the default Kiwi regular terms (entry-tier rate stated by the issuer, D13b) and must not turn the rule into info.",
+      "source_url": "https://gokiwi.in/rewards-policy-v2/",
+      "checked_on": "2026-11-05"
+    },
+    {
+      "path": "reward_rules[id=kiwi_excluded_transportation].category_id",
+      "value": "all_retail",
+      "reason": "Issuer excludes only toll MCCs 4784 and 4789; the transportation token maps to all travel, which over-excludes.",
+      "source_url": "https://gokiwi.in/rewards-policy-v2/",
+      "checked_on": "2026-11-05"
+    },
+    {
+      "path": "reward_rules[id=kiwi_regular_online].channel_type",
+      "value": "all",
+      "reason": "channel_type \"kiwi_online\" is prose for online spend (the rail already restricts it); it would turn the rule into info.",
+      "source_url": "https://gokiwi.in/rewards-policy-v2/",
+      "checked_on": "2026-11-05"
+    }
+  ]
+}

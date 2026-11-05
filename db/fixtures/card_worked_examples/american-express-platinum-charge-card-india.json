@@ -1,0 +1,245 @@
+{
+  "source_slug": "american-express-platinum-charge-card-india",
+  "cardpipeline_id": "american-express-india-platinum-charge-card",
+  "card_name": "American Express Platinum Card",
+  "verified_on": "2026-11-05",
+  "sources": [
+    {
+      "url": "https://www.americanexpress.com/content/dam/amex/en-in/benefits/rewards/membership-rewards/membership-rewards-terms.pdf",
+      "doc": "Membership Rewards terms",
+      "quote": "you earn 5 Membership Rewards Points for every Rs. 100 spent on Fuel* (capped at a maximum of 5000 Points every calendar month)"
+    },
+    {
+      "url": "https://www.americanexpress.com/content/dam/amex/en-in/benefits/rewards/membership-rewards/membership-rewards-terms.pdf",
+      "doc": "Membership Rewards terms",
+      "quote": "You earn 3X Membership Rewards Points on all your overseas spends."
+    },
+    {
+      "url": "https://www.americanexpress.com/in/charge-cards/platinum-card/",
+      "doc": "Platinum Card page",
+      "quote": "Also earn 1 Membership Reward points for every INR 40 spent with your Card"
+    }
+  ],
+  "examples": [
+    {
+      "id": "001",
+      "title": "Rs 4,000 domestic retail spend",
+      "ctx": {
+        "amount": 4000,
+        "occurred": "2026-11-10T10:00:00+05:30",
+        "category_id": null,
+        "category_slug": "other",
+        "mcc": "5651",
+        "merchant_name": "Apparel store",
+        "merchant_vpa": null,
+        "merchant_slug": null,
+        "platform": null,
+        "rail": "swipe"
+      },
+      "state_before": {
+        "caps_by_source_id": {}
+      },
+      "expect": {
+        "currency": "points",
+        "amount": 100,
+        "value_inr": null,
+        "excluded": false,
+        "cap_deltas_by_source_id": {}
+      },
+      "why": "The Platinum Card earns 1 point per Rs 40: 100 x 1 = 100."
+    },
+    {
+      "id": "002",
+      "title": "Rs 4,000 spend in a foreign currency",
+      "ctx": {
+        "amount": 4000,
+        "occurred": "2026-11-10T10:00:00+05:30",
+        "category_id": null,
+        "category_slug": "other",
+        "mcc": "5651",
+        "merchant_name": "Overseas store (non-INR)",
+        "merchant_vpa": null,
+        "merchant_slug": null,
+        "platform": null,
+        "rail": "online"
+      },
+      "state_before": {
+        "caps_by_source_id": {}
+      },
+      "expect": {
+        "currency": "points",
+        "amount": 300,
+        "value_inr": null,
+        "excluded": false,
+        "cap_deltas_by_source_id": {}
+      },
+      "why": "3X Membership Rewards on all overseas spends (any currency other than INR): 100 x 3 = 300. Context carries no currency field; caller marks it via merchant/rail.",
+      "engine_checkable": false,
+      "not_checkable_reason": "Needs an is_international / foreign-currency flag (D14a)."
+    },
+    {
+      "id": "003",
+      "title": "Rs 10,000 fuel",
+      "ctx": {
+        "amount": 10000,
+        "occurred": "2026-11-10T10:00:00+05:30",
+        "category_id": null,
+        "category_slug": "fuel",
+        "mcc": "5541",
+        "merchant_name": "Fuel station",
+        "merchant_vpa": null,
+        "merchant_slug": null,
+        "platform": null,
+        "rail": "swipe"
+      },
+      "state_before": {
+        "caps_by_source_id": {}
+      },
+      "expect": {
+        "currency": "points",
+        "amount": 500,
+        "value_inr": null,
+        "excluded": false,
+        "cap_deltas_by_source_id": {
+          "fuel_bonus_points_monthly_cap": 500
+        }
+      },
+      "why": "The Platinum Card earns 5 points per Rs 100 on fuel, capped at 5,000 points per calendar month: 100 x 5 = 500."
+    },
+    {
+      "id": "004",
+      "title": "Rs 10,000 fuel with 4,800 of the 5,000 monthly fuel points used",
+      "ctx": {
+        "amount": 10000,
+        "occurred": "2026-11-10T10:00:00+05:30",
+        "category_id": null,
+        "category_slug": "fuel",
+        "mcc": "5541",
+        "merchant_name": "Fuel station",
+        "merchant_vpa": null,
+        "merchant_slug": null,
+        "platform": null,
+        "rail": "swipe"
+      },
+      "state_before": {
+        "caps_by_source_id": {
+          "fuel_bonus_points_monthly_cap": 4800
+        }
+      },
+      "expect": {
+        "currency": "points",
+        "amount": 200,
+        "value_inr": null,
+        "excluded": false,
+        "cap_deltas_by_source_id": {
+          "fuel_bonus_points_monthly_cap": 200
+        }
+      },
+      "why": "Only 200 of the 5,000 monthly fuel points remain, so 200 instead of 500."
+    },
+    {
+      "id": "005",
+      "title": "Rs 20,000 insurance premium",
+      "ctx": {
+        "amount": 20000,
+        "occurred": "2026-11-10T10:00:00+05:30",
+        "category_id": null,
+        "category_slug": "insurance",
+        "mcc": "6300",
+        "merchant_name": "Insurer",
+        "merchant_vpa": null,
+        "merchant_slug": null,
+        "platform": null,
+        "rail": "online"
+      },
+      "state_before": {
+        "caps_by_source_id": {}
+      },
+      "expect": {
+        "currency": "points",
+        "amount": 0,
+        "value_inr": null,
+        "excluded": true,
+        "cap_deltas_by_source_id": {}
+      },
+      "why": "No points on insurance."
+    },
+    {
+      "id": "006",
+      "title": "Rs 3,000 electricity bill",
+      "ctx": {
+        "amount": 3000,
+        "occurred": "2026-11-10T10:00:00+05:30",
+        "category_id": null,
+        "category_slug": "bills",
+        "mcc": "4900",
+        "merchant_name": "Electricity board",
+        "merchant_vpa": null,
+        "merchant_slug": null,
+        "platform": null,
+        "rail": "online"
+      },
+      "state_before": {
+        "caps_by_source_id": {}
+      },
+      "expect": {
+        "currency": "points",
+        "amount": 0,
+        "value_inr": null,
+        "excluded": true,
+        "cap_deltas_by_source_id": {}
+      },
+      "why": "Platinum Card earns no points on other utility services."
+    },
+    {
+      "id": "007",
+      "title": "Rs 10,000 EMI chosen at the merchant",
+      "ctx": {
+        "amount": 10000,
+        "occurred": "2026-11-10T10:00:00+05:30",
+        "category_id": null,
+        "category_slug": "emi",
+        "mcc": null,
+        "merchant_name": "Electronics store",
+        "merchant_vpa": null,
+        "merchant_slug": null,
+        "platform": null,
+        "rail": "emi"
+      },
+      "state_before": {
+        "caps_by_source_id": {}
+      },
+      "expect": {
+        "currency": "points",
+        "amount": 0,
+        "value_inr": null,
+        "excluded": true,
+        "cap_deltas_by_source_id": {}
+      },
+      "why": "No points on EMI options selected on a merchant website or terminal."
+    }
+  ],
+  "research_notes": [
+    {
+      "item": "fuel cap",
+      "cardpipeline_says": "fuel_bonus_points_monthly_cap: bonus_reward_points 5000, falls back to base",
+      "issuer_says": "Terms: 5 points per Rs 100 on fuel, capped at a maximum of 5,000 points every calendar month. The cap is on the whole fuel earning; what fuel earns after the cap is not stated.",
+      "proposed_fix": "override",
+      "override_file": "api/scripts/catalogue_overrides/american-express-platinum-charge-card-india.json"
+    },
+    {
+      "item": "base rate",
+      "cardpipeline_says": "base block Rs 40",
+      "issuer_says": "Confirmed by the terms table and the product page: 1 point per Rs 40 for the Platinum Card.",
+      "proposed_fix": "none",
+      "override_file": null
+    },
+    {
+      "item": "rounding",
+      "cardpipeline_says": "rounding_mode floor",
+      "issuer_says": "Not stated in Amex terms.",
+      "proposed_fix": "none",
+      "override_file": null
+    }
+  ]
+}

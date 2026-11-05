@@ -1,0 +1,31 @@
+{
+  "source_slug": "pnb-kiwi-credit-card",
+  "changes": [
+    {
+      "path": "cap_rules",
+      "value": [
+        {
+          "id": "monthly-kiwi-cap",
+          "category_id": "all_retail",
+          "metric": "total_reward_points",
+          "mcc_target_list": [],
+          "period": "calendar_month",
+          "limit_value": null,
+          "limit_value_inr": null,
+          "post_limit_behavior": {
+            "action": "zero_accrual",
+            "points_per_block": 0
+          },
+          "parent_cap_id": null,
+          "reset_day": 1,
+          "effective_from": "2024-07-04",
+          "effective_to": null,
+          "depends_on_user": true
+        }
+      ],
+      "reason": "Issuer: monthly cap on Kiwis is 1% of the total credit limit on the card. Per-user amount, so the cap keeps its kind with a null amount (D13a, flag cap_depends_on_user). Also removes a dangling cap_reference monthly-kiwi-cap. depends_on_user: true so the loader keeps the cap with a null amount.",
+      "source_url": "https://gokiwi.in/rewards-policy-v2/",
+      "checked_on": "2026-11-05"
+    }
+  ]
+}

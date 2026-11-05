@@ -1,0 +1,33 @@
+{
+  "source_slug": "airtel-axis-bank-credit-card",
+  "changes": [
+    {
+      "path": "reward_rules[id=preferred_partner_value_back_10pct].rule_role",
+      "value": "info",
+      "reason": "It is a 10% value back credited to partner wallets (Rs 200 per partner per month), not Axis cashback; must not be ranked as card cashback.",
+      "source_url": "https://www.axis.bank.in/docs/default-source/default-document-library/terms-and-conditions-for-airtel-cbcc-cvp.pdf?sfvrsn=9deed8c1_5",
+      "checked_on": "2026-11-05"
+    },
+    {
+      "path": "reward_rules[id=airtel_telecom_25pct].rule_role",
+      "value": "info",
+      "reason": "Cap is twice the base cashback earned in the statement month (dynamic); cannot be enforced as a static cap yet.",
+      "source_url": "https://www.axis.bank.in/docs/default-source/default-document-library/terms-and-conditions-for-airtel-cbcc-cvp.pdf?sfvrsn=9deed8c1_5",
+      "checked_on": "2026-11-05"
+    },
+    {
+      "path": "reward_rules[id=airtel_utility_10pct].rule_role",
+      "value": "info",
+      "reason": "Cap is the base cashback earned in the statement month (dynamic); cannot be enforced as a static cap yet.",
+      "source_url": "https://www.axis.bank.in/docs/default-source/default-document-library/terms-and-conditions-for-airtel-cbcc-cvp.pdf?sfvrsn=9deed8c1_5",
+      "checked_on": "2026-11-05"
+    },
+    {
+      "path": "accrual_engine.cashback_rounding",
+      "value": "rupee_floor",
+      "reason": "Cashback is rounded down per transaction (15.6 -> 15).",
+      "source_url": "https://www.axis.bank.in/docs/default-source/default-document-library/credit-cards/terms-and-conditions-for-cashback-for-airtel-axis-bank-credit-card.pdf",
+      "checked_on": "2026-11-05"
+    }
+  ]
+}
