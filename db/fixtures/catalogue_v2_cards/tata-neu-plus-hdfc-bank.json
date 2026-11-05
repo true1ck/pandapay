@@ -4,7 +4,7 @@
   "inputs": {
     "transform_version": "7",
     "source_record_sha256": "657a9e89e7d34f8d89df45dcb26ec07ee33619ef2b1f7043b0f1f4710240916d",
-    "override_sha256": "d75b93ae042dc31eb775c22499d8e0e7d76183fda81e13cddc2c1751e8aa06eb",
+    "override_sha256": "eeec153bc87415ad2859805218b48d9b55a7e64c067e533c86fd9b8ea2fab6c4",
     "directory_sha256": "b1094d54b77e848d22f7a9a64f3ae6d1ef43ca3eb2fc8e40cd43ed1994664694",
     "verified": false
   },
@@ -28,17 +28,12 @@
     "points_expiry_months": 12,
     "model_status": "partial",
     "model_coverage": {
-      "rules_total": 26,
-      "rules_modelled": 17,
-      "rules_info": 9,
+      "rules_total": 30,
+      "rules_modelled": 22,
+      "rules_info": 8,
       "caps_total": 18,
       "caps_enforced": 18,
       "flags": [
-        {
-          "code": "info_rule",
-          "source_local_id": "base_non_tata_non_upi",
-          "detail": "condition:not"
-        },
         {
           "code": "info_rule",
           "source_local_id": "merchant_emi",
@@ -424,8 +419,8 @@
         {
           "path": "cap_rules",
           "op": "append",
-          "value_sha256": "9452ceddb374f644",
-          "reason": "WP7: HDFC MITC fair usage policy: the maximum reward points per statement cycle for Tata Neu Plus* ... is 25,000. The asterisk's footnote could not be read; applied card-wide to all NeuCoins (conservative: can only under-state).",
+          "value_sha256": "eba5e88edc5f6617",
+          "reason": "WP7: HDFC MITC fair usage policy: the maximum reward points per statement cycle for Tata Neu Plus* ... is 25,000. MITC footnote: \"(*) applicable only on the spend categories that does not have an existing Fair Usage Policy\" (C8 D28b). So it targets only the rules without a fair-usage limit of their own: the base rule (base_non_tata_non_upi) and merchant EMI at partner brands (tata_partner_emi_wp7). The Annex 1 partner rules, the capped grocery/insurance/utility/telecom rules and UPI (500/month) keep their own limits.",
           "source_url": "https://www.hdfc.bank.in/content/dam/hdfcbankpws/in/en/personal-banking/discover-products/cards/credit-cards/personal-mitc/mitc-in-english.pdf",
           "checked_on": "2026-11-05"
         },
@@ -516,6 +511,62 @@
           "reason": "WP7: T&C exclusion: \"Payment of card fees and other charges\". Not expressible by MCC or category, so it stays info (D25d), flagged depends_on_txn_attribute (D14b).",
           "source_url": "https://www.hdfc.bank.in/content/dam/hdfcbankpws/in/en/personal-banking/discover-products/cards/credit-cards/tata-neu-plus-hdfc-bank-credit-card/pdfs/tata_neu_plus_card_tnc.pdf",
           "checked_on": "2026-11-05"
+        },
+        {
+          "path": "reward_rules[id=base_non_tata_non_upi].conditions",
+          "op": "set",
+          "value_sha256": "44136fa355b3678a",
+          "reason": "WP7: The base rate on non-partner, non-EMI spends; the brand/EMI/UPI clauses restated what other rules carve out and made it info. Restated so the asterisked MITC cap can target it (D28b); it pays the same base rate the implicit base paid.",
+          "source_url": "https://www.hdfc.bank.in/content/dam/hdfcbankpws/in/en/personal-banking/discover-products/cards/credit-cards/tata-neu-plus-hdfc-bank-credit-card/pdfs/tata_neu_plus_card_tnc.pdf",
+          "checked_on": "2026-11-05"
+        },
+        {
+          "path": "reward_rules[id=base_non_tata_non_upi].channel_type",
+          "op": "set",
+          "value_sha256": "5cf7504d9781301d",
+          "reason": "WP7: See conditions.",
+          "source_url": "https://www.hdfc.bank.in/content/dam/hdfcbankpws/in/en/personal-banking/discover-products/cards/credit-cards/tata-neu-plus-hdfc-bank-credit-card/pdfs/tata_neu_plus_card_tnc.pdf",
+          "checked_on": "2026-11-05"
+        },
+        {
+          "path": "reward_rules",
+          "op": "append",
+          "value_sha256": "b97643194effc1a9",
+          "reason": "WP7: T&C: grocery, insurance, utility and telecom NeuCoins have their own monthly caps; MITC footnote: \"(*) applicable only on the spend categories that does not have an existing Fair Usage Policy\" (C8 D28b). A base-rate rule per category carries its cap, so these spends stay outside the 25,000 cap's target (D28b).",
+          "source_url": "https://www.hdfc.bank.in/content/dam/hdfcbankpws/in/en/personal-banking/discover-products/cards/credit-cards/tata-neu-plus-hdfc-bank-credit-card/pdfs/tata_neu_plus_card_tnc.pdf",
+          "checked_on": "2026-11-05"
+        },
+        {
+          "path": "reward_rules",
+          "op": "append",
+          "value_sha256": "e84e0e47a6ae1e4d",
+          "reason": "WP7: T&C: grocery, insurance, utility and telecom NeuCoins have their own monthly caps; MITC footnote: \"(*) applicable only on the spend categories that does not have an existing Fair Usage Policy\" (C8 D28b). A base-rate rule per category carries its cap, so these spends stay outside the 25,000 cap's target (D28b).",
+          "source_url": "https://www.hdfc.bank.in/content/dam/hdfcbankpws/in/en/personal-banking/discover-products/cards/credit-cards/tata-neu-plus-hdfc-bank-credit-card/pdfs/tata_neu_plus_card_tnc.pdf",
+          "checked_on": "2026-11-05"
+        },
+        {
+          "path": "reward_rules",
+          "op": "append",
+          "value_sha256": "fe467793c44e64d3",
+          "reason": "WP7: T&C: grocery, insurance, utility and telecom NeuCoins have their own monthly caps; MITC footnote: \"(*) applicable only on the spend categories that does not have an existing Fair Usage Policy\" (C8 D28b). A base-rate rule per category carries its cap, so these spends stay outside the 25,000 cap's target (D28b).",
+          "source_url": "https://www.hdfc.bank.in/content/dam/hdfcbankpws/in/en/personal-banking/discover-products/cards/credit-cards/tata-neu-plus-hdfc-bank-credit-card/pdfs/tata_neu_plus_card_tnc.pdf",
+          "checked_on": "2026-11-05"
+        },
+        {
+          "path": "reward_rules",
+          "op": "append",
+          "value_sha256": "a7e4baeacfd9d2af",
+          "reason": "WP7: T&C: grocery, insurance, utility and telecom NeuCoins have their own monthly caps; MITC footnote: \"(*) applicable only on the spend categories that does not have an existing Fair Usage Policy\" (C8 D28b). A base-rate rule per category carries its cap, so these spends stay outside the 25,000 cap's target (D28b).",
+          "source_url": "https://www.hdfc.bank.in/content/dam/hdfcbankpws/in/en/personal-banking/discover-products/cards/credit-cards/tata-neu-plus-hdfc-bank-credit-card/pdfs/tata_neu_plus_card_tnc.pdf",
+          "checked_on": "2026-11-05"
+        },
+        {
+          "path": "cap_rules[id=grocery_monthly_1000].target_rule_ids",
+          "op": "set",
+          "value_sha256": "6ec6764d4685f226",
+          "reason": "WP7: The grocery cap also counts BigBasket partner NeuCoins, as the category cap did before (conservative).",
+          "source_url": "https://www.hdfc.bank.in/content/dam/hdfcbankpws/in/en/personal-banking/discover-products/cards/credit-cards/tata-neu-plus-hdfc-bank-credit-card/pdfs/tata_neu_plus_card_tnc.pdf",
+          "checked_on": "2026-11-05"
         }
       ]
     },
@@ -534,16 +585,14 @@
         "conditions": {
           "source_local_id": "base_non_tata_non_upi",
           "part": null,
-          "info_reasons": [
-            "condition:not"
-          ],
+          "info_reasons": [],
           "flags": []
         },
         "notes": null,
         "effective_from": "2023-01-01",
         "effective_to": null,
         "excluded_categories": [],
-        "rule_role": "info",
+        "rule_role": "base",
         "merchant_slugs": [],
         "platform_slugs": [],
         "mcc_include": [],
@@ -551,7 +600,7 @@
         "except_merchant_slugs": [],
         "except_platform_slugs": [],
         "block_inr": null,
-        "min_engine_version": 2,
+        "min_engine_version": 1,
         "max_engine_version": null,
         "source_local_id": "base_non_tata_non_upi",
         "display_note": "1% base NeuCoins on eligible non-UPI non-EMI retail spends."
@@ -1644,14 +1693,154 @@
         "max_engine_version": null,
         "source_local_id": "wp7_wallet_category_exclusion",
         "display_note": "Wallet loads earn no NeuCoins."
+      },
+      {
+        "id": "tata-neu-plus-hdfc-bank:rule:wp7_grocery_capped",
+        "category_id": "cat-groceries",
+        "category_slug": "groceries",
+        "merchant_pattern": null,
+        "rail": null,
+        "unit": "points_per_100",
+        "rate": 1,
+        "min_txn_inr": null,
+        "max_txn_inr": null,
+        "priority": 15,
+        "conditions": {
+          "source_local_id": "wp7_grocery_capped",
+          "part": null,
+          "info_reasons": [],
+          "flags": []
+        },
+        "notes": null,
+        "effective_from": "2023-01-01",
+        "effective_to": null,
+        "excluded_categories": [],
+        "rule_role": "earn",
+        "merchant_slugs": [],
+        "platform_slugs": [],
+        "mcc_include": [],
+        "mcc_exclude": [],
+        "except_merchant_slugs": [],
+        "except_platform_slugs": [],
+        "block_inr": null,
+        "min_engine_version": 1,
+        "max_engine_version": null,
+        "source_local_id": "wp7_grocery_capped",
+        "display_note": "1% NeuCoins, capped by grocery_monthly_1000."
+      },
+      {
+        "id": "tata-neu-plus-hdfc-bank:rule:wp7_insurance_capped",
+        "category_id": "cat-insurance",
+        "category_slug": "insurance",
+        "merchant_pattern": null,
+        "rail": null,
+        "unit": "points_per_100",
+        "rate": 1,
+        "min_txn_inr": null,
+        "max_txn_inr": null,
+        "priority": 15,
+        "conditions": {
+          "source_local_id": "wp7_insurance_capped",
+          "part": null,
+          "info_reasons": [],
+          "flags": []
+        },
+        "notes": null,
+        "effective_from": "2023-01-01",
+        "effective_to": null,
+        "excluded_categories": [],
+        "rule_role": "earn",
+        "merchant_slugs": [],
+        "platform_slugs": [],
+        "mcc_include": [],
+        "mcc_exclude": [],
+        "except_merchant_slugs": [],
+        "except_platform_slugs": [],
+        "block_inr": null,
+        "min_engine_version": 1,
+        "max_engine_version": null,
+        "source_local_id": "wp7_insurance_capped",
+        "display_note": "1% NeuCoins, capped by insurance_monthly_2000."
+      },
+      {
+        "id": "tata-neu-plus-hdfc-bank:rule:wp7_utility_capped",
+        "category_id": "cat-bills",
+        "category_slug": "bills",
+        "merchant_pattern": null,
+        "rail": null,
+        "unit": "points_per_100",
+        "rate": 1,
+        "min_txn_inr": null,
+        "max_txn_inr": null,
+        "priority": 15,
+        "conditions": {
+          "source_local_id": "wp7_utility_capped",
+          "part": null,
+          "info_reasons": [],
+          "flags": []
+        },
+        "notes": null,
+        "effective_from": "2023-01-01",
+        "effective_to": null,
+        "excluded_categories": [],
+        "rule_role": "earn",
+        "merchant_slugs": [],
+        "platform_slugs": [],
+        "mcc_include": [],
+        "mcc_exclude": [],
+        "except_merchant_slugs": [],
+        "except_platform_slugs": [],
+        "block_inr": null,
+        "min_engine_version": 1,
+        "max_engine_version": null,
+        "source_local_id": "wp7_utility_capped",
+        "display_note": "1% NeuCoins, capped by utility_monthly_2000."
+      },
+      {
+        "id": "tata-neu-plus-hdfc-bank:rule:wp7_telecom_capped",
+        "category_id": null,
+        "category_slug": null,
+        "merchant_pattern": null,
+        "rail": null,
+        "unit": "points_per_100",
+        "rate": 1,
+        "min_txn_inr": null,
+        "max_txn_inr": null,
+        "priority": 15,
+        "conditions": {
+          "source_local_id": "wp7_telecom_capped",
+          "part": null,
+          "info_reasons": [],
+          "flags": []
+        },
+        "notes": null,
+        "effective_from": "2023-01-01",
+        "effective_to": null,
+        "excluded_categories": [],
+        "rule_role": "earn",
+        "merchant_slugs": [],
+        "platform_slugs": [],
+        "mcc_include": [
+          "4812",
+          "4814",
+          "4899"
+        ],
+        "mcc_exclude": [],
+        "except_merchant_slugs": [],
+        "except_platform_slugs": [],
+        "block_inr": null,
+        "min_engine_version": 2,
+        "max_engine_version": null,
+        "source_local_id": "wp7_telecom_capped",
+        "display_note": "1% NeuCoins, capped by telecom_cable_monthly_2000."
       }
     ],
     "cap_rules": [
       {
         "id": "tata-neu-plus-hdfc-bank:cap:grocery_monthly_1000",
         "reward_rule_id": null,
-        "category_id": "cat-groceries",
-        "category_slug": "groceries",
+        "category_id": null,
+        "category_slug": null,
         "benefit_kind": null,
         "label": "Grocery monthly 1000",
         "measure": "reward_value",
@@ -1663,18 +1852,21 @@
         "cap_kind": "total_points",
         "cap_amount": 1000,
         "scope": "targets",
-        "targets": [],
+        "targets": [
+          "tata-neu-plus-hdfc-bank:rule:wp7_grocery_capped",
+          "tata-neu-plus-hdfc-bank:rule:tata_partner_bigbasket_wp7"
+        ],
         "parent_cap_id": null,
         "post_cap_behavior": null,
         "anchor": null,
-        "min_engine_version": 1,
+        "min_engine_version": 2,
         "source_local_id": "grocery_monthly_1000"
       },
       {
         "id": "tata-neu-plus-hdfc-bank:cap:utility_monthly_2000",
-        "reward_rule_id": null,
-        "category_id": "cat-bills",
-        "category_slug": "bills",
+        "reward_rule_id": "tata-neu-plus-hdfc-bank:rule:wp7_utility_capped",
+        "category_id": null,
+        "category_slug": null,
         "benefit_kind": null,
         "label": "Utility monthly 2000",
         "measure": "reward_value",
@@ -1686,7 +1878,9 @@
         "cap_kind": "total_points",
         "cap_amount": 2000,
         "scope": "targets",
-        "targets": [],
+        "targets": [
+          "tata-neu-plus-hdfc-bank:rule:wp7_utility_capped"
+        ],
         "parent_cap_id": null,
         "post_cap_behavior": null,
         "anchor": null,
@@ -1695,9 +1889,9 @@
       },
       {
         "id": "tata-neu-plus-hdfc-bank:cap:telecom_cable_monthly_2000",
-        "reward_rule_id": null,
-        "category_id": "cat-bills",
-        "category_slug": "bills",
+        "reward_rule_id": "tata-neu-plus-hdfc-bank:rule:wp7_telecom_capped",
+        "category_id": null,
+        "category_slug": null,
         "benefit_kind": null,
         "label": "Telecom cable monthly 2000",
         "measure": "reward_value",
@@ -1709,18 +1903,20 @@
         "cap_kind": "total_points",
         "cap_amount": 2000,
         "scope": "targets",
-        "targets": [],
+        "targets": [
+          "tata-neu-plus-hdfc-bank:rule:wp7_telecom_capped"
+        ],
         "parent_cap_id": null,
         "post_cap_behavior": null,
         "anchor": null,
-        "min_engine_version": 1,
+        "min_engine_version": 2,
         "source_local_id": "telecom_cable_monthly_2000"
       },
       {
         "id": "tata-neu-plus-hdfc-bank:cap:insurance_monthly_2000",
-        "reward_rule_id": null,
-        "category_id": "cat-insurance",
-        "category_slug": "insurance",
+        "reward_rule_id": "tata-neu-plus-hdfc-bank:rule:wp7_insurance_capped",
+        "category_id": null,
+        "category_slug": null,
         "benefit_kind": null,
         "label": "Insurance monthly 2000",
         "measure": "reward_value",
@@ -1732,7 +1928,9 @@
         "cap_kind": "total_points",
         "cap_amount": 2000,
         "scope": "targets",
-        "targets": [],
+        "targets": [
+          "tata-neu-plus-hdfc-bank:rule:wp7_insurance_capped"
+        ],
         "parent_cap_id": null,
         "post_cap_behavior": null,
         "anchor": null,
@@ -2081,12 +2279,15 @@
         "resets_on_day": null,
         "cap_kind": "total_points",
         "cap_amount": 25000,
-        "scope": "card",
-        "targets": [],
+        "scope": "targets",
+        "targets": [
+          "tata-neu-plus-hdfc-bank:rule:base_non_tata_non_upi",
+          "tata-neu-plus-hdfc-bank:rule:tata_partner_emi_wp7"
+        ],
         "parent_cap_id": null,
         "post_cap_behavior": null,
         "anchor": null,
-        "min_engine_version": 1,
+        "min_engine_version": 2,
         "source_local_id": "wp7_fair_usage_statement_cycle"
       }
     ],

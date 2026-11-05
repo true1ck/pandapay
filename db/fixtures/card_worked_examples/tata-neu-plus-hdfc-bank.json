@@ -138,7 +138,6 @@
         "value_inr": 422,
         "excluded": false,
         "cap_deltas_by_source_id": {
-          "wp7_fair_usage_statement_cycle": 422,
           "tata_partner_croma_wp7_monthly": 21100,
           "tata_partner_croma_wp7_annual": 21100
         }
@@ -224,8 +223,7 @@
         "value_inr": 50,
         "excluded": false,
         "cap_deltas_by_source_id": {
-          "grocery_monthly_1000": 50,
-          "wp7_fair_usage_statement_cycle": 50
+          "grocery_monthly_1000": 50
         }
       },
       "why": "1.0% would be 100 but only 50 NeuCoins remain in the 1000/month grocery cap."
@@ -281,8 +279,7 @@
         "value_inr": 200,
         "excluded": false,
         "cap_deltas_by_source_id": {
-          "insurance_monthly_2000": 200,
-          "wp7_fair_usage_statement_cycle": 200
+          "insurance_monthly_2000": 200
         }
       },
       "why": "Insurance earns the base rate, capped at 2,000 NeuCoins per month: 200."
@@ -318,6 +315,13 @@
       "item": "WP7 r2: caps in examples 001, 002, 003, 004, 006, 007, 009",
       "cardpipeline_says": "No statement-cycle ceiling; partner 5%/2% uncapped.",
       "issuer_says": "MITC fair usage: Times Platinum, Times Titanium, Tata Neu Plus* ... is 25,000. Annex 1 caps the spend eligible for the partner rate per brand (Croma 3,00,000 9,00,000). Earning examples list the card-wide cap delta; 004 also the Croma monthly/annual spend caps. Amounts unchanged.",
+      "proposed_fix": "override",
+      "override_file": "api/scripts/catalogue_overrides/tata-neu-plus-hdfc-bank.json"
+    },
+    {
+      "item": "WP7 r3: MITC cap scope (examples 004, 007, 009)",
+      "cardpipeline_says": "Round 2 applied the MITC cap to every earning spend.",
+      "issuer_says": "MITC footnote: \"(*) applicable only on the spend categories that does not have an existing Fair Usage Policy\" (C8 D28b). The cap now targets only the base rule and merchant EMI at partner brands; the Annex 1 partner spends (004) and the capped grocery/insurance categories (007, 009) keep their own limits and no longer count toward it. Amounts unchanged.",
       "proposed_fix": "override",
       "override_file": "api/scripts/catalogue_overrides/tata-neu-plus-hdfc-bank.json"
     }
