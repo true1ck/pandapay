@@ -87,7 +87,7 @@ module.exports = {
   jwtAccessSecret: process.env.JWT_ACCESS_SECRET,
   jwtRefreshSecret: process.env.JWT_REFRESH_SECRET,
   jwtAccessTtl: process.env.JWT_ACCESS_TTL || '15m',
-  jwtRefreshTtl: process.env.JWT_REFRESH_TTL || '180d',
+  jwtRefreshTtl: process.env.JWT_REFRESH_TTL || '90d',
   jwtIssuer: process.env.JWT_ISSUER || 'pandapay-auth',
   jwtAudience: process.env.JWT_AUDIENCE || 'mobile-app',
   dbPoolMax: Math.min(100, Math.max(1, Number(process.env.DB_POOL_MAX) || 10)),
