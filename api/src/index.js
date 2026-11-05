@@ -1498,6 +1498,13 @@ app.post('/sync/push', requireAuth, async (req, res) => {
             JSON.stringify(payload), JSON.stringify(fieldClocks),
             Number.isFinite(clientSeq) ? clientSeq : 0,
           ];
+          // card-rewards (WP8, C8 D23d): the typed applier locks the row and
+          // reverses/re-applies card state; take the user's ingest lock first.
+          if (config.syncTypedWritesEnabled && entity === 'transactions') {
+            await client.query(`SELECT pg_advisory_xact_lock(hashtextextended($1::text, 0))`, [
+              `transaction-ingest:${req.userId}`,
+            ]);
+          }
           const row = config.syncTypedWritesEnabled && entity === 'transactions'
             ? await applyTransactionSync(client, {
                 userId: req.userId, deviceId, entityId, op, payload, fieldClocks, clientSeq,
@@ -3652,6 +3659,11 @@ async function importParsedMessage(client, userId, {
  * merged. The older/live row is retained; a backfill replay is ignored.
  */
 async function reconcileArchivedCardReferences(client, userId) {
+  // card-rewards (WP8, C8 D23d): the user's ingest lock before any row or
+  // card-state write (it remaps transactions and rebuilds caps below).
+  await client.query(`SELECT pg_advisory_xact_lock(hashtextextended($1::text, 0))`, [
+    `transaction-ingest:${userId}`,
+  ]);
   // A replacement is safe only when the physical identity is unique on both
   // sides: issuer + instrument type + last four. If two active catalogue rows
   // could match, leave the transaction unresolved instead of assigning it to
@@ -3767,6 +3779,11 @@ async function profileDisplayName(db, userId) {
 }
 
 async function repairSmsHistory(client, userId, { reviewCrossSource = false, reviewCardId = null } = {}) {
+  // card-rewards (WP8, C8 D23d): the user's ingest lock before any row lock
+  // or card-state write in this repair (re-entrant with the calls below).
+  await client.query(`SELECT pg_advisory_xact_lock(hashtextextended($1::text, 0))`, [
+    `transaction-ingest:${userId}`,
+  ]);
   const cardReplacement = await reconcileArchivedCardReferences(client, userId);
   // Parser upgrades retain their strongest decision in observation metadata.
   // Reconcile those rows before duplicate repair so a card-bill/transfer row
@@ -6075,6 +6092,11 @@ app.post('/duplicate-candidates/:id/resolve', requireAuth, async (req, res) => {
   }
   try {
     const result = await withUserClient(req.userId, async (client) => {
+      // card-rewards (WP8, C8 D23d): the user's ingest lock first — before the
+      // duplicate-review lock, the order the insert path takes them in.
+      await client.query(`SELECT pg_advisory_xact_lock(hashtextextended($1::text, 0))`, [
+        `transaction-ingest:${req.userId}`,
+      ]);
       // Candidate creation uses the same transaction lock: no new edge may
       // appear after we enumerate the neighbors that this decision releases.
       await client.query("SELECT pg_advisory_xact_lock(hashtextextended('duplicate-review:' || $1::text, 0))", [req.userId]);
@@ -6770,6 +6792,11 @@ app.post('/transactions/category-bulk-apply', requireAuth, async (req, res) => {
 
   try {
     const result = await withUserClient(req.userId, async (client) => {
+      // card-rewards (WP8, C8 D23d): the user's ingest lock first; this route
+      // locks transaction rows and reverses/re-applies their card state.
+      await client.query(`SELECT pg_advisory_xact_lock(hashtextextended($1::text, 0))`, [
+        `transaction-ingest:${req.userId}`,
+      ]);
       // Serialize attempts for this profile/key before checking or creating
       // the receipt. This avoids two retries doing the same state mutation and
       // lets us recover null-result markers left by the pre-fix 4xx path.

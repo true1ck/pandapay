@@ -354,14 +354,29 @@ test('records keep entries for periods the replay did not rebuild', () => {
   assert.deepEqual(record.fee_waivers, withForeign.card_state_v2.fee_waivers);
 });
 
-test('C8 D23d: edit, ignore/delete and restore take the ingest lock before the row lock', () => {
+test('C8 D23d: every route that changes a transaction takes the ingest lock before its row locks and state writes', () => {
   const source = require('node:fs').readFileSync(require('node:path').join(__dirname, '../src/index.js'), 'utf8');
-  for (const route of ["app.patch('/transactions/:id', ", "app.post('/transactions/:id/ignore'", "app.post('/transactions/:id/restore'"]) {
-    const start = source.indexOf(route);
-    assert.ok(start >= 0, route);
-    const lock = source.indexOf('`transaction-ingest:${req.userId}`', start);
-    const rowLock = source.indexOf('FOR UPDATE', start);
-    assert.ok(lock > start && rowLock > lock, `${route}: ingest lock first`);
+  // [where the code starts, markers that must all come after the ingest lock]
+  const sites = [
+    ["app.patch('/transactions/:id', ", ['FOR UPDATE', 'reverseTransactionState(']],
+    ["app.post('/transactions/:id/ignore'", ['FOR UPDATE', 'reverseTransactionState(']],
+    ["app.post('/transactions/:id/restore'", ['FOR UPDATE', 'applyTransactionState(']],
+    ["app.post('/sync/push'", ['applyTransactionSync(client']],
+    ["app.post('/duplicate-candidates/:id/resolve'", ["'duplicate-review:'", 'FOR UPDATE', 'reverseTransactionState(']],
+    ["app.post('/transactions/category-bulk-apply'", ['transaction-category-bulk:', 'FOR UPDATE', 'reverseTransactionState(']],
+    ['async function reconcileArchivedCardReferences(client, userId)', ['UPDATE transactions', 'DELETE FROM ${table}', 'reconcileCurrentCapStates(']],
+    ['async function repairSmsHistory(client, userId', ['reconcileArchivedCardReferences(client', 'FOR UPDATE', 'reverseTransactionState(']],
+  ];
+  for (const [site, laterMarkers] of sites) {
+    const start = source.indexOf(site);
+    assert.ok(start >= 0, site);
+    const lock = Math.min(...['`transaction-ingest:${req.userId}`', '`transaction-ingest:${userId}`']
+      .map((m) => source.indexOf(m, start)).filter((i) => i > start));
+    for (const marker of laterMarkers) {
+      const at = source.indexOf(marker, start);
+      assert.ok(at > start, `${site}: ${marker} present`);
+      assert.ok(lock < at, `${site}: ingest lock before ${marker}`);
+    }
   }
 });
 
