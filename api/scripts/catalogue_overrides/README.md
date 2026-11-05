@@ -73,6 +73,29 @@ are listed in the card's `model_coverage.overrides_applied`.
   `rupee_half_up` (D11).
 - **User-dependent cap**: set `cap_rules[id=x].depends_on_user` to `true` and
   `limit_value` to `null` (D13a).
+- **Keeping a deferral flag** (D13/D14): when a restated rule or cap no longer
+  carries the key the flag came from, set it explicitly:
+  `reward_rules[id=x].depends_on_user_attribute` or
+  `reward_rules[id=x].depends_on_txn_attribute` = `true` (the rule becomes
+  `info` with that flag), or `cap_rules[id=x].cap_depends_on_user` = `true`
+  (the flag is kept; the amount stays as given, or null).
+- **Post-limit rate**: a cap whose `post_limit_behavior` states a rate
+  (`points_per_block` or `cashback_percent`) gets `post_cap_behavior =
+  custom_rate` at that rate, when the action maps to `base_rate` or is unknown
+  (an explicit `zero_accrual` wins, D27b). A stated rate **above** the capped
+  rule's own rate is flagged `post_limit_rate_above_cap_rate` and not emitted,
+  unless the override sets `cap_rules[id=x].allow_post_limit_above_cap_rate`
+  to `true` **with a non-empty `citation`** of the issuer text on that change
+  (D26a; e.g. Magnus: 12 pts/₹200 up to ₹1.5 lakh a month, then 35):
+
+  ```json
+  { "path": "cap_rules[id=base_150k_spend].post_limit_behavior.points_per_block", "value": 35, "reason": "…" },
+  { "path": "cap_rules[id=base_150k_spend].allow_post_limit_above_cap_rate", "value": true,
+    "citation": "<issuer text, under 25 words>", "source_url": "…", "checked_on": "…" }
+  ```
+
+  Without a citation the change is rejected (`override_not_applied`, naming
+  the card and the cap); the cap stays flagged.
 - **Card-age cap tier**: set `cap_rules[id=x].tier_by_card_age` to `true` on
   the introductory tier (D8d).
 

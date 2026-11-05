@@ -93,14 +93,37 @@ function applyChange(target, change) {
 }
 
 /** Returns { record (a copy), applied: [...], errors: [...] }. Never mutates the input. */
+// D26a: a change that turns on allow_post_limit_above_cap_rate (directly, or
+// inside a cap / cap list it writes) must cite the issuer text.
+const ALLOW_ABOVE = 'allow_post_limit_above_cap_rate';
+function setsAllowAbove(change) {
+  if (String(change?.path || '').endsWith(`.${ALLOW_ABOVE}`) && change.value === true) return true;
+  return change?.value !== null && typeof change?.value === 'object' && JSON.stringify(change.value).includes(`"${ALLOW_ABOVE}":true`);
+}
+function capIdsIn(change) {
+  const fromPath = String(change?.path || '').match(/cap_rules\[id=([^\]]+)\]/);
+  if (fromPath) return [fromPath[1]];
+  const v = Array.isArray(change?.value) ? change.value : [change?.value];
+  return v.filter((c) => c && c[ALLOW_ABOVE] === true).map((c) => String(c.id ?? c.cap_id ?? '?'));
+}
+
 function applyOverrides(record, overrideFile) {
   const out = deepClone(record);
   const applied = [];
   const errors = [];
   if (!overrideFile) return { record: out, applied, errors };
   const changes = Array.isArray(overrideFile.changes) ? overrideFile.changes : [];
+  const slug = overrideFile.source_slug || record?.card_product?.slug || '?';
   changes.forEach((change, i) => {
     try {
+      if (setsAllowAbove(change) && !(typeof change.citation === 'string' && change.citation.trim())) {
+        errors.push({
+          index: i,
+          path: change.path,
+          error: `${slug}: cap ${capIdsIn(change).join(', ') || '?'}: ${ALLOW_ABOVE} needs a non-empty citation of the issuer text (D26a)`,
+        });
+        return;
+      }
       const r = applyChange(out, change);
       if (r.ok) {
         applied.push({
@@ -112,6 +135,7 @@ function applyOverrides(record, overrideFile) {
           reason: change.reason || null,
           source_url: change.source_url || null,
           checked_on: change.checked_on || null,
+          citation: typeof change.citation === 'string' && change.citation.trim() ? change.citation.trim() : null,
         });
       } else {
         errors.push({ index: i, path: change.path, error: r.error });
