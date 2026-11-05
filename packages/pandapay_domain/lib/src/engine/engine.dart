@@ -925,6 +925,11 @@ class RecommendationEngine {
     // milestone reward, and a transaction that completes it claims exactly
     // the reward once (never more, never double-counted across scenarios).
     for (final milestone in uniqueMilestoneRules(card.milestoneRules)) {
+      // D32b: a windowed (welcome) milestone is not credited in Phase 1. The
+      // app has no window maths, and once the window closes the server
+      // returns no row, so progress reads 0 and the bonus would be pro-rated
+      // in for ever.
+      if (milestone.windowDays != null) continue;
       final progress =
           snapshot.milestoneProgress[milestone.id] ?? const Money.zero();
       final remaining = milestone.thresholdSpend - progress;
@@ -1089,6 +1094,8 @@ extension _V2Path on RecommendationEngine {
       reasons.add('Fuel surcharge waiver: +${waiverValue.format()}');
     }
     for (final milestone in uniqueMilestoneRules(card.milestoneRules)) {
+      // D32b: as in the v1 loop above, a windowed milestone is not credited.
+      if (milestone.windowDays != null) continue;
       final progress =
           snapshot.milestoneProgress[milestone.id] ?? const Money.zero();
       final remaining = milestone.thresholdSpend - progress;
