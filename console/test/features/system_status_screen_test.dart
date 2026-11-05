@@ -44,12 +44,6 @@ Map<String, Object?> _status() {
         'health': 'database',
       },
       {
-        'key': 'gemini-worker',
-        'name': 'SMS AI worker',
-        'purpose': 'Gemini.',
-        'health': 'ai_queue',
-      },
-      {
         'key': 'backup',
         'name': 'Backup',
         'purpose': 'Nightly.',
@@ -148,14 +142,6 @@ void main() {
     final client = MockClient(
       (request) async => switch (request.url.path) {
         '/admin/system/status' => http.Response(jsonEncode(_status()), 200),
-        '/admin/sms-ai/summary' => http.Response(
-          jsonEncode({
-            'statusCounts': {'queued': 1},
-            'failureCount24h': 0,
-            'oldestAgeSeconds': 30,
-          }),
-          200,
-        ),
         _ => http.Response('{}', 404),
       },
     );
@@ -170,7 +156,6 @@ void main() {
               environment: AdminEnvironment.local,
               permissions: {
                 'operations.read',
-                'ai.queue.read',
                 'admin.audit.read',
               },
             ),
@@ -195,7 +180,6 @@ void main() {
     expect(find.text('Up · 113 ms'), findsOneWidget);
     expect(find.text('No answer in 3 s'), findsOneWidget);
     expect(find.text('Up · 2 ms'), findsOneWidget);
-    expect(find.text('Queue healthy'), findsOneWidget);
     expect(find.text('Not monitored yet'), findsOneWidget);
     expect(find.text('Runs during deploys'), findsOneWidget);
     expect(find.text('Always on · Rewards.'), findsOneWidget);

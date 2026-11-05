@@ -2,23 +2,17 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import '../../app/admin_design.dart';
-import '../../app/admin_identity.dart';
 import '../../app/providers.dart';
 import '../../app/time_format.dart';
 
 /// Which servers exist, which code they run, and whether they are healthy.
-/// Read-only; data comes from GET /admin/system/status plus the SMS AI
-/// summary the console already loads.
+/// Read-only; data comes from GET /admin/system/status.
 class SystemStatusScreen extends ConsumerWidget {
   const SystemStatusScreen({super.key});
 
   @override
   Widget build(BuildContext context, WidgetRef ref) {
     final status = ref.watch(systemStatusProvider);
-    final identity = ref.watch(adminIdentityProvider);
-    final aiSummary = identity.can('ai.queue.read')
-        ? ref.watch(smsAiSummaryProvider).valueOrNull
-        : null;
     return status.when(
       loading: () => const Center(child: CircularProgressIndicator()),
       error: (error, _) => AdminLoadError(
@@ -34,7 +28,7 @@ class SystemStatusScreen extends ConsumerWidget {
             message: 'The admin API did not return a system status.',
           );
         }
-        final report = _StatusReport.from(data, aiSummary);
+        final report = _StatusReport.from(data);
         return ListView(
           padding: const EdgeInsets.only(bottom: 32),
           children: [
@@ -147,10 +141,7 @@ class _StatusReport {
   final List<String> problems;
   final DateTime? generatedAt;
 
-  static _StatusReport from(
-    Map<String, dynamic> data,
-    Map<String, dynamic>? aiSummary,
-  ) {
+  static _StatusReport from(Map<String, dynamic> data) {
     final checks = (data['checks'] as List? ?? const [])
         .whereType<Map>()
         .toList();
@@ -206,33 +197,6 @@ class _StatusReport {
         }
         final (state, label) = _jobLabel(j);
         return _ServiceStatus(s, state, label, null);
-      }
-      if (health == 'ai_queue') {
-        if (aiSummary == null || aiSummary.isEmpty) {
-          return _ServiceStatus(s, _State.neutral, 'Not checked', null);
-        }
-        final failed = (aiSummary['failureCount24h'] as num?)?.toInt() ?? 0;
-        final oldest = (aiSummary['oldestAgeSeconds'] as num?)?.toInt() ?? 0;
-        final queued =
-            ((aiSummary['statusCounts'] as Map?)?['queued'] as num?)?.toInt() ??
-            0;
-        if (failed > 0) {
-          return _ServiceStatus(
-            s,
-            _State.bad,
-            '$failed failed in 24 h',
-            '$queued queued',
-          );
-        }
-        if (queued > 0 && oldest > 900) {
-          return _ServiceStatus(
-            s,
-            _State.warn,
-            'Backlog · oldest ${formatAge(oldest)}',
-            '$queued queued',
-          );
-        }
-        return _ServiceStatus(s, _State.ok, 'Queue healthy', '$queued queued');
       }
       return switch (s['runs']) {
         'per_deploy' => _ServiceStatus(
@@ -601,8 +565,6 @@ class _ServiceRow extends StatelessWidget {
     'api': Icons.cloud_outlined,
     'auth': Icons.lock_outline,
     'postgres': Icons.storage_outlined,
-    'gemini-worker': Icons.auto_awesome_outlined,
-    'sms-learning-worker': Icons.school_outlined,
     'rewards-worker': Icons.redeem_outlined,
     'backup': Icons.backup_outlined,
     'admin-gateway': Icons.shield_outlined,

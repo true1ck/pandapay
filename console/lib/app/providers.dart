@@ -260,63 +260,6 @@ final systemStatusProvider = FutureProvider<Map<String, dynamic>>((ref) async {
   return api.fetchSystemStatus();
 });
 
-final smsAiSummaryProvider = FutureProvider<Map<String, dynamic>>((ref) async {
-  final api = ref.watch(adminApiProvider);
-  if (api == null) return const {};
-  return api.fetchSmsAiSummary();
-});
-
-final smsLearningCandidatesProvider =
-    FutureProvider<List<Map<String, dynamic>>>((ref) async {
-      final api = ref.watch(adminApiProvider);
-      if (api == null) return const [];
-      return api.fetchSmsLearningCandidates();
-    });
-
-final smsLearningOperationsProvider = FutureProvider<Map<String, dynamic>>((
-  ref,
-) async {
-  final api = ref.watch(adminApiProvider);
-  if (api == null) return const {};
-  return api.fetchSmsLearningOperations();
-});
-
-final smsAiJobStatusFilterProvider = StateProvider<String?>((ref) => null);
-
-final smsAiJobsProvider = FutureProvider<List<Map<String, dynamic>>>((
-  ref,
-) async {
-  final api = ref.watch(adminApiProvider);
-  if (api == null) return const [];
-  return api.fetchSmsAiJobs(
-    status: ref.watch(smsAiJobStatusFilterProvider),
-    limit: 100,
-  );
-});
-
-final smsAiQuotaProvider = FutureProvider<List<Map<String, dynamic>>>((
-  ref,
-) async {
-  final api = ref.watch(adminApiProvider);
-  if (api == null) return const [];
-  return api.fetchSmsAiQuota();
-});
-
-/// Resolved rollout booleans plus the raw feature-flag rows behind them.
-final smsRolloutProvider = FutureProvider<Map<String, dynamic>>((ref) async {
-  final api = ref.watch(adminApiProvider);
-  if (api == null) return const {};
-  return api.fetchSmsRolloutStatus();
-});
-
-final smsRuleBundlesProvider = FutureProvider<List<Map<String, dynamic>>>((
-  ref,
-) async {
-  final api = ref.watch(adminApiProvider);
-  if (api == null) return const [];
-  return api.fetchSmsRuleBundles();
-});
-
 final smsCategoryProposalsProvider = FutureProvider<List<Map<String, dynamic>>>(
   (ref) async {
     final api = ref.watch(adminApiProvider);
@@ -332,35 +275,6 @@ final smsParserProposalsProvider = FutureProvider<List<Map<String, dynamic>>>((
   if (api == null) return const [];
   return api.fetchSmsParserProposals();
 });
-
-final smsAiProposalsProvider = FutureProvider<List<Map<String, dynamic>>>((
-  ref,
-) async {
-  final api = ref.watch(adminApiProvider);
-  if (api == null) return const [];
-  return api.fetchSmsAiProposals();
-});
-
-/// C7: explicit user-correction cases (typed correction envelope). Admin
-/// review affects candidate eligibility only; final rule approval remains
-/// separate.
-final smsCorrectionCasesProvider = FutureProvider<List<Map<String, dynamic>>>((
-  ref,
-) async {
-  final api = ref.watch(adminApiProvider);
-  if (api == null) return const [];
-  return api.fetchSmsCorrectionCases();
-});
-
-final smsAiJobTimelineProvider =
-    FutureProvider.family<List<Map<String, dynamic>>, String>((
-      ref,
-      jobId,
-    ) async {
-      final api = ref.watch(adminApiProvider);
-      if (api == null) return const [];
-      return api.fetchSmsAiJobTimeline(jobId);
-    });
 
 final anonymizationAuditRunsProvider =
     FutureProvider<List<Map<String, dynamic>>>((ref) async {
