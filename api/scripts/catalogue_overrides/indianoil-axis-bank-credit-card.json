@@ -34,6 +34,60 @@
       "reason": "WP7: Revision eff. 20 Apr 2024: \"Non-IOCL fuel transactions will not be eligible for any EDGE REWARD Points.\" The record had no such exclusion.",
       "source_url": "https://www.axis.bank.in/docs/default-source/default-document-library/credit-card/terms-and-conditions-indian-oil-credit-card.pdf",
       "checked_on": "2026-11-05"
+    },
+    {
+      "path": "reward_rules[id=gold-jewellery-exclusion].category_id",
+      "value": "all_retail",
+      "reason": "WP7: D25d: T&C \"Excluded MCCs: ... Jewellery\"; the free-text spend category made it info.",
+      "source_url": "https://www.axis.bank.in/docs/default-source/default-document-library/terms-and-conditions-for-iocl-credit-card.pdf?sfvrsn=9ab59582_5",
+      "checked_on": "2026-11-05"
+    },
+    {
+      "path": "reward_rules[id=gold-jewellery-exclusion].conditions",
+      "value": {
+        "mcc_list": [
+          5944,
+          5094
+        ]
+      },
+      "reason": "WP7: Jewellery by MCC (5944, 5094). T&C \"Excluded MCCs\".",
+      "source_url": "https://www.axis.bank.in/docs/default-source/default-document-library/terms-and-conditions-for-iocl-credit-card.pdf?sfvrsn=9ab59582_5",
+      "checked_on": "2026-11-05"
+    },
+    {
+      "path": "reward_rules",
+      "op": "append",
+      "value": {
+        "id": "wp7_telecom_transport_mcc_exclusion",
+        "category_id": "all_retail",
+        "priority": 3,
+        "evaluation_type": "exclusion",
+        "rail": "any",
+        "channel_type": "all",
+        "conditions": {
+          "mcc_list": [
+            4812,
+            4814,
+            4111,
+            4121,
+            4131,
+            4784,
+            4789
+          ]
+        },
+        "action": {
+          "multiplier": 0,
+          "points_per_block": 0,
+          "cashback_percent": null,
+          "cap_reference": null,
+          "reason": "Telecom and transportation/toll MCCs earn no EDGE REWARD Points."
+        },
+        "effective_from": "2024-04-20",
+        "effective_to": null
+      },
+      "reason": "WP7: D25d: T&C \"Excluded MCCs: Transportation & Tolls, Telecom, ... Bridge, Toll and Road fees\"; the record had neither. Read as local transport, tolls and telecom MCCs (4111, 4121, 4131, 4784, 4789; 4812, 4814); airline/rail MCCs are not added.",
+      "source_url": "https://www.axis.bank.in/docs/default-source/default-document-library/terms-and-conditions-for-iocl-credit-card.pdf?sfvrsn=9ab59582_5",
+      "checked_on": "2026-11-05"
     }
   ]
 }

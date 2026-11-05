@@ -4,7 +4,7 @@
   "inputs": {
     "transform_version": "7",
     "source_record_sha256": "b18e463e2a1652ebb1aef086acf2d90cf60142b3e4289de42f1c493f6508a86a",
-    "override_sha256": "f970123e8affb1ec402f855fb683a2e2f163174c9362ecd9f00800435418b8c0",
+    "override_sha256": "92b5f1da3a0fdd90f98956b13c41b765bddfbfa634f5c6da3620e953230d787c",
     "directory_sha256": "b1094d54b77e848d22f7a9a64f3ae6d1ef43ca3eb2fc8e40cd43ed1994664694",
     "verified": true
   },
@@ -25,22 +25,12 @@
     "points_expiry_months": 36,
     "model_status": "verified",
     "model_coverage": {
-      "rules_total": 15,
-      "rules_modelled": 12,
-      "rules_info": 3,
+      "rules_total": 16,
+      "rules_modelled": 14,
+      "rules_info": 2,
       "caps_total": 2,
       "caps_enforced": 2,
       "flags": [
-        {
-          "code": "info_rule",
-          "source_local_id": "gold-jewellery-exclusion",
-          "detail": "unmapped_condition_category:spend_category"
-        },
-        {
-          "code": "info_rule",
-          "source_local_id": "gold-jewellery-exclusion",
-          "detail": "unmapped_category_token"
-        },
         {
           "code": "exclusion_scope_broadened",
           "source_local_id": "utility-exclusion",
@@ -82,6 +72,30 @@
           "value_sha256": "817bd033d22fd02a",
           "reason": "WP7: Revision eff. 20 Apr 2024: \"Non-IOCL fuel transactions will not be eligible for any EDGE REWARD Points.\" The record had no such exclusion.",
           "source_url": "https://www.axis.bank.in/docs/default-source/default-document-library/credit-card/terms-and-conditions-indian-oil-credit-card.pdf",
+          "checked_on": "2026-11-05"
+        },
+        {
+          "path": "reward_rules[id=gold-jewellery-exclusion].category_id",
+          "op": "set",
+          "value_sha256": "1e08efd699e66ddd",
+          "reason": "WP7: D25d: T&C \"Excluded MCCs: ... Jewellery\"; the free-text spend category made it info.",
+          "source_url": "https://www.axis.bank.in/docs/default-source/default-document-library/terms-and-conditions-for-iocl-credit-card.pdf?sfvrsn=9ab59582_5",
+          "checked_on": "2026-11-05"
+        },
+        {
+          "path": "reward_rules[id=gold-jewellery-exclusion].conditions",
+          "op": "set",
+          "value_sha256": "e3f40daa0d039251",
+          "reason": "WP7: Jewellery by MCC (5944, 5094). T&C \"Excluded MCCs\".",
+          "source_url": "https://www.axis.bank.in/docs/default-source/default-document-library/terms-and-conditions-for-iocl-credit-card.pdf?sfvrsn=9ab59582_5",
+          "checked_on": "2026-11-05"
+        },
+        {
+          "path": "reward_rules",
+          "op": "append",
+          "value_sha256": "82521a2d4a7dff68",
+          "reason": "WP7: D25d: T&C \"Excluded MCCs: Transportation & Tolls, Telecom, ... Bridge, Toll and Road fees\"; the record had neither. Read as local transport, tolls and telecom MCCs (4111, 4121, 4131, 4784, 4789; 4812, 4814); airline/rail MCCs are not added.",
+          "source_url": "https://www.axis.bank.in/docs/default-source/default-document-library/terms-and-conditions-for-iocl-credit-card.pdf?sfvrsn=9ab59582_5",
           "checked_on": "2026-11-05"
         }
       ]
@@ -239,20 +253,20 @@
         "conditions": {
           "source_local_id": "gold-jewellery-exclusion",
           "part": null,
-          "info_reasons": [
-            "unmapped_condition_category:spend_category",
-            "unmapped_category_token"
-          ],
+          "info_reasons": [],
           "flags": []
         },
         "notes": null,
         "effective_from": "2025-06-20",
         "effective_to": null,
         "excluded_categories": [],
-        "rule_role": "info",
+        "rule_role": "exclusion",
         "merchant_slugs": [],
         "platform_slugs": [],
-        "mcc_include": [],
+        "mcc_include": [
+          "5094",
+          "5944"
+        ],
         "mcc_exclude": [],
         "except_merchant_slugs": [],
         "except_platform_slugs": [],
@@ -612,6 +626,48 @@
         "max_engine_version": null,
         "source_local_id": "non-iocl-fuel-exclusion",
         "display_note": "Non-IOCL fuel transactions earn no EDGE REWARD Points."
+      },
+      {
+        "id": "indianoil-axis-bank-credit-card:rule:wp7_telecom_transport_mcc_exclusion",
+        "category_id": null,
+        "category_slug": null,
+        "merchant_pattern": null,
+        "rail": null,
+        "unit": "points_per_100",
+        "rate": 0,
+        "min_txn_inr": null,
+        "max_txn_inr": null,
+        "priority": 3,
+        "conditions": {
+          "source_local_id": "wp7_telecom_transport_mcc_exclusion",
+          "part": null,
+          "info_reasons": [],
+          "flags": []
+        },
+        "notes": null,
+        "effective_from": "2024-04-20",
+        "effective_to": null,
+        "excluded_categories": [],
+        "rule_role": "exclusion",
+        "merchant_slugs": [],
+        "platform_slugs": [],
+        "mcc_include": [
+          "4111",
+          "4121",
+          "4131",
+          "4784",
+          "4789",
+          "4812",
+          "4814"
+        ],
+        "mcc_exclude": [],
+        "except_merchant_slugs": [],
+        "except_platform_slugs": [],
+        "block_inr": null,
+        "min_engine_version": 2,
+        "max_engine_version": null,
+        "source_local_id": "wp7_telecom_transport_mcc_exclusion",
+        "display_note": "Telecom and transportation/toll MCCs earn no EDGE REWARD Points."
       }
     ],
     "cap_rules": [
