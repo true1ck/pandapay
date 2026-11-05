@@ -82,7 +82,16 @@ class RewardEvaluation {
 
   /// Every cap that applied, in catalogue order.
   final List<RewardCapUsage> caps;
+
+  /// Machine-readable reasons, aligned with the JS engine: the rule's
+  /// display note, then codes such as `above_max_txn`, `spend_cap_reached`,
+  /// `txn_count_cap_reached`, `bonus_cap_reached`, `total_cap_reached` and
+  /// `cap_skipped:<cap_id>:<reason>` (D12d). An exclusion carries its
+  /// display note, `excluded_by_rule` or `excluded_category`.
   final List<String> reasons;
+
+  /// The same story in plain language, for the "Why this card?" UI.
+  final List<String> reasonLines;
 
   /// Machine-readable notes on what the engine had to assume, e.g.
   /// `merchant_resolved_by_alias`.
@@ -117,6 +126,7 @@ class RewardEvaluation {
     this.capDeltas = const {},
     this.caps = const [],
     this.reasons = const [],
+    this.reasonLines = const [],
     this.assumptions = const [],
     this.merchant,
     this.ratePerRupee = 0,
@@ -565,6 +575,7 @@ RewardEvaluation computeRewardV2(
         baseCurrency ??
         (exclusionRule == null ? null : rewardCurrencyOf(exclusionRule.unit));
     final note = exclusionRule?.displayNote;
+    final hasNote = note != null && note.trim().isNotEmpty;
     return RewardEvaluation(
       excluded: true,
       ruleId: exclusionRule?.id,
@@ -574,32 +585,71 @@ RewardEvaluation computeRewardV2(
       cashbackInr: currency == RewardCurrency.cashback ? 0 : null,
       valueInr: 0,
       reasons: [
-        (note != null && note.trim().isNotEmpty) ? note : _excludedReason,
+        hasNote
+            ? note
+            : (exclusionRule != null
+                  ? 'excluded_by_rule'
+                  : 'excluded_category'),
       ],
+      reasonLines: [hasNote ? note : _excludedReason],
       assumptions: assumptions,
       merchant: merchant,
     );
   }
 
-  // C3.4.2 lowest priority; tie → highest ₹-per-₹ rate; tie → catalogue order.
-  double rateOf(RewardRule r) =>
-      _ratePerRupee(r.unit, r.rate, pointValue, blockInr: r.blockInr);
-  final earning =
-      applicable
-          .where(
-            (e) =>
-                e.$2.effectiveRole == RuleRole.base ||
-                e.$2.effectiveRole == RuleRole.earn,
-          )
-          .toList()
-        ..sort((a, b) {
-          final byPriority = a.$2.priority.compareTo(b.$2.priority);
-          if (byPriority != 0) return byPriority;
-          final byRate = rateOf(b.$2).compareTo(rateOf(a.$2));
-          if (byRate != 0) return byRate;
-          return a.$1.compareTo(b.$1);
-        });
-  final RewardRule? rule = earning.isEmpty ? null : earning.first.$2;
+  final rounding = card.accrualRounding ?? AccrualRounding.floor;
+  final cashbackRounding = card.cashbackRounding ?? CashbackRounding.paise;
+  final amountPaise = context.amount.paise;
+
+  double baseAccrual(int paise) => hasBase
+      ? _accrue(baseUnit, baseRate, paise, rounding, cashbackRounding)
+      : 0;
+  double inRupees(RewardUnit unit, double accrual) =>
+      rewardCurrencyOf(unit) == RewardCurrency.points
+      ? accrual * pointValue
+      : accrual;
+  int eligibleFor(RewardRule? r) {
+    final max = r?.maxTxn?.paise;
+    if (max == null || amountPaise <= max) return amountPaise;
+    return max < 0 ? 0 : max;
+  }
+
+  // D12c tie-break: the rule's pre-cap ₹ value for this transaction — its
+  // own accrual on the eligible spend (D12a: base part + bonus) plus the
+  // base rate on any spend above its max_txn_inr.
+  double preCapValue(RewardRule r) {
+    final eligible = eligibleFor(r);
+    final own = _accrue(
+      r.unit,
+      r.rate,
+      eligible,
+      rounding,
+      cashbackRounding,
+      blockInr: r.blockInr,
+    );
+    final over = amountPaise - eligible;
+    return inRupees(r.unit, own) +
+        (over > 0 && hasBase ? inRupees(baseUnit, baseAccrual(over)) : 0);
+  }
+
+  // C3.4.2 lowest priority; tie → higher pre-cap value; tie → rule id.
+  final earningRules = [
+    for (final e in applicable)
+      if (e.$2.effectiveRole == RuleRole.base ||
+          e.$2.effectiveRole == RuleRole.earn)
+        e.$2,
+  ];
+  final tieValue = <RewardRule, double>{};
+  double tieValueOf(RewardRule r) =>
+      tieValue.putIfAbsent(r, () => preCapValue(r));
+  earningRules.sort((a, b) {
+    final byPriority = a.priority.compareTo(b.priority);
+    if (byPriority != 0) return byPriority;
+    final byValue = tieValueOf(b).compareTo(tieValueOf(a));
+    if (byValue != 0) return byValue;
+    return a.id.compareTo(b.id);
+  });
+  final RewardRule? rule = earningRules.firstOrNull;
 
   // C3.4.3 implicit base rule (id null) when nothing applies.
   final RewardUnit? ruleUnit = rule?.unit ?? baseUnit;
@@ -608,32 +658,32 @@ RewardEvaluation computeRewardV2(
     return RewardEvaluation(
       excluded: false,
       valueInr: 0,
-      reasons: const ['No applicable reward rule.'],
+      reasons: const ['no_applicable_rule'],
+      reasonLines: const ['No applicable reward rule.'],
       assumptions: assumptions,
       merchant: merchant,
     );
   }
   final ruleCurrency = rewardCurrencyOf(ruleUnit);
   final isBaseRole = rule == null || rule.effectiveRole == RuleRole.base;
-  final rounding = card.accrualRounding ?? AccrualRounding.floor;
-  final cashbackRounding = card.cashbackRounding ?? CashbackRounding.paise;
-  final ratePerRupee = rule == null
-      ? _ratePerRupee(ruleUnit, ruleRate, pointValue)
-      : rateOf(rule);
-
-  double baseAccrual(int paise) => hasBase
-      ? _accrue(baseUnit, baseRate, paise, rounding, cashbackRounding)
-      : 0;
+  final ratePerRupee = _ratePerRupee(
+    ruleUnit,
+    ruleRate,
+    pointValue,
+    blockInr: rule?.blockInr,
+  );
 
   // C3.5 eligible spend: up to max_txn_inr; the excess earns the base rate.
-  final amountPaise = context.amount.paise;
   final maxTxn = rule?.maxTxn;
-  final eligiblePaise = maxTxn != null && amountPaise > maxTxn.paise
-      ? (maxTxn.paise < 0 ? 0 : maxTxn.paise)
-      : amountPaise;
+  final eligiblePaise = eligibleFor(rule);
   final overMaxPaise = amountPaise - eligiblePaise;
 
-  // C3.6 caps, resolved to native units.
+  // C3.6 caps, resolved to native units. A cap that can't be enforced as
+  // written is skipped with a reason, never guessed (D9.9/D12d). Caps the
+  // parser already dropped for an unsupported v2 value are reported too.
+  final skipped = <String>[
+    for (final e in card.skippedCaps.entries) 'cap_skipped:${e.key}:${e.value}',
+  ];
   final applied = <_AppliedCap>[];
   for (final cap in _applicableCaps(card, rule, context)) {
     CapKind? kind = cap.capKind;
@@ -659,7 +709,10 @@ RewardEvaluation computeRewardV2(
       }
     }
     if (kind == null || amount == null) {
-      assumptions.add('cap_unenforced:${cap.id}');
+      skipped.add(
+        'cap_skipped:${cap.id}:'
+        '${legacy ? 'point_value_zero' : 'cap_amount_null'}',
+      );
       continue;
     }
     applied.add(
@@ -740,11 +793,20 @@ RewardEvaluation computeRewardV2(
       case PostCapBehavior.zero:
         break;
       case PostCapBehavior.customRate:
-        final unit = overflowCap.cap.postCapUnit ?? ruleUnit;
+        // D12b: post_cap_unit when set, else the rule's unit and block.
+        final postUnit = overflowCap.cap.postCapUnit;
+        final unit = postUnit ?? ruleUnit;
         final rate = overflowCap.cap.postCapRate ?? 0;
         addPiece(
           rewardCurrencyOf(unit),
-          _accrue(unit, rate, overflowPaise, rounding, cashbackRounding),
+          _accrue(
+            unit,
+            rate,
+            overflowPaise,
+            rounding,
+            cashbackRounding,
+            blockInr: postUnit == null ? rule?.blockInr : null,
+          ),
         );
     }
   }
@@ -753,6 +815,8 @@ RewardEvaluation computeRewardV2(
   }
 
   // Steps 4–7, per currency.
+  var bonusCapReached = false;
+  var totalCapReached = false;
   final finalEarned = _Ledger();
   for (final currency in RewardCurrency.values) {
     final isPoints = currency == RewardCurrency.points;
@@ -766,6 +830,7 @@ RewardEvaluation computeRewardV2(
       if (c.remaining < allowedBonus) allowedBonus = c.remaining;
     }
     if (allowedBonus < bonus[currency]) {
+      bonusCapReached = true;
       for (final c in bonusCaps) {
         if (c.remaining <= allowedBonus) c.limiting = true;
       }
@@ -778,6 +843,7 @@ RewardEvaluation computeRewardV2(
     }
     final cut = earned - allowedTotal;
     if (cut > 0) {
+      totalCapReached = true;
       for (final c in totalCaps) {
         if (c.remaining <= allowedTotal) c.limiting = true;
       }
@@ -814,9 +880,20 @@ RewardEvaluation computeRewardV2(
     finalEarned.points * pointValue + finalEarned.cashback,
   );
 
+  final note = rule?.displayNote;
   final reasons = <String>[
-    if (rule?.displayNote != null && rule!.displayNote!.trim().isNotEmpty)
-      rule.displayNote!
+    if (note != null && note.trim().isNotEmpty) note,
+    ...skipped,
+    if (overMaxPaise > 0) 'above_max_txn',
+    if (forcing == null && rulePaise < eligiblePaise) 'spend_cap_reached',
+    if (forcing != null) 'txn_count_cap_reached',
+    if (bonusCapReached) 'bonus_cap_reached',
+    if (totalCapReached) 'total_cap_reached',
+  ];
+  if (rule == null) assumptions.add('implicit_base_rule');
+  final reasonLines = <String>[
+    if (note != null && note.trim().isNotEmpty)
+      note
     else if (rule == null)
       'Base rate ${_percent(ratePerRupee)} — no category bonus on this spend'
     else
@@ -860,6 +937,7 @@ RewardEvaluation computeRewardV2(
         ),
     ],
     reasons: reasons,
+    reasonLines: reasonLines,
     assumptions: assumptions,
     merchant: merchant,
     ratePerRupee: ratePerRupee,

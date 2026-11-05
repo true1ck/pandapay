@@ -310,7 +310,6 @@ void main() {
       'cap_kind': 'bonus_miles',
       'scope': 'issuer',
       'post_cap_behavior': 'half_rate',
-      'anchor': 'birthday',
     }.entries) {
       test('an unknown cap ${entry.key} skips that cap only', () {
         final card = CardProductJson.fromJson(
@@ -327,8 +326,26 @@ void main() {
         );
         expect(card.capRules.map((c) => c.id), ['good']);
         expect(card.parseWarnings.single, contains(entry.key));
+        // D12d: the engine reports it as cap_skipped:<id>:<reason>.
+        expect(card.skippedCaps, {'bad': 'unsupported_${entry.key}'});
       });
     }
+
+    test('an unknown cap anchor reads as null and keeps the cap', () {
+      final card = CardProductJson.fromJson(
+        _card(
+          caps: [
+            _cap('c1', {
+              'cap_kind': 'bonus_points',
+              'cap_amount': 50,
+              'anchor': 'birthday',
+            }),
+          ],
+        ),
+      );
+      expect(card.capRules.single.anchor, isNull);
+      expect(card.skippedCaps, isEmpty);
+    });
 
     test('a bad cap_amount skips the cap', () {
       final card = CardProductJson.fromJson(

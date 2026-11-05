@@ -351,8 +351,7 @@ class RecommendationEngine {
       capRemaining: {
         for (final cap in uniqueCapRules(card.capRules))
           if (capConsumedBefore.containsKey(cap.id))
-            cap.id:
-                cap.capValue - Money.fromRupees(capConsumedBefore[cap.id]!),
+            cap.id: cap.capValue - Money.fromRupees(capConsumedBefore[cap.id]!),
       },
     );
     final rec = const RecommendationEngine()._evaluate(context, snapshot);
@@ -361,9 +360,9 @@ class RecommendationEngine {
     if (!rec.isExcluded) {
       final matching = card.excludesCategory(context.categoryId)
           ? <RewardRule>[]
-          : (uniqueRewardRules(card.rewardRules)
-                  .where((r) => ruleApplies(r, context))
-                  .toList()
+          : (uniqueRewardRules(
+                card.rewardRules,
+              ).where((r) => ruleApplies(r, context)).toList()
               ..sort((a, b) => a.priority.compareTo(b.priority)));
       ruleId = matching.firstOrNull?.id;
     }
@@ -380,7 +379,8 @@ class RecommendationEngine {
           : null,
       cashbackInr: currency == RewardCurrency.cashback ? value : null,
       valueInr: value,
-      reasons: rec.isExcluded ? [rec.exclusionReason!] : rec.reasonLines,
+      reasons: rec.isExcluded ? const ['excluded'] : const [],
+      reasonLines: rec.isExcluded ? [rec.exclusionReason!] : rec.reasonLines,
       assumptions: const ['v1_path'],
       ratePerRupee: rec.effectiveRatePerRupee ?? 0,
       engineVersion: 1,
@@ -1023,7 +1023,9 @@ extension _V2Path on RecommendationEngine {
         context.isFuel &&
         card.fuelRule != null &&
         RecommendationEngine.fuelRuleApplies(card.fuelRule!, context.amount);
-    final waiverFraction = fuelApplies ? card.fuelRule!.waiverPercent / 100 : 0.0;
+    final waiverFraction = fuelApplies
+        ? card.fuelRule!.waiverPercent / 100
+        : 0.0;
     final waiverValue = fuelApplies
         ? context.amount * waiverFraction
         : const Money.zero();
@@ -1042,7 +1044,7 @@ extension _V2Path on RecommendationEngine {
           confidence: Confidence.estimated,
           effectiveRatePerRupee: waiverFraction,
           reasonLines: [
-            if (reward.excluded) ...reward.reasons,
+            if (reward.excluded) ...reward.reasonLines,
             'Fuel surcharge waiver: +${waiverValue.format()}',
           ],
           isOverride: isOverride,
@@ -1060,7 +1062,7 @@ extension _V2Path on RecommendationEngine {
         expectedValue: const Money.zero(),
         confidence: Confidence.estimated,
         exclusionReason: reward.excluded
-            ? reward.reasons.first
+            ? reward.reasonLines.first
             : 'No applicable reward rule.',
         reasonLines: const [],
         isOverride: isOverride,
@@ -1068,7 +1070,7 @@ extension _V2Path on RecommendationEngine {
       );
     }
 
-    final reasons = [...reward.reasons];
+    final reasons = [...reward.reasonLines];
     var value = reward.value;
     var forexCost = const Money.zero();
     var milestoneBonus = const Money.zero();
@@ -1178,7 +1180,9 @@ _CapDisplay? _primaryCapDisplay(RewardEvaluation reward, double pointValueInr) {
       reward.caps.where((c) => c.cap.scope == CapScope.targets).firstOrNull ??
       reward.caps.first;
   final remaining = usage.remainingBefore;
-  final exhausted = usage.kind == CapKind.txnCount ? remaining < 1 : remaining <= 0;
+  final exhausted = usage.kind == CapKind.txnCount
+      ? remaining < 1
+      : remaining <= 0;
 
   Money? toMoney(double nativeAmount) => switch (usage.kind) {
     CapKind.bonusPoints || CapKind.totalPoints =>

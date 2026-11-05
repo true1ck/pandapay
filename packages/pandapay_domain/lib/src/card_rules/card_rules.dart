@@ -676,6 +676,11 @@ class CardProduct {
   /// logging. Never serialized.
   final List<String> parseWarnings;
 
+  /// Cap id → why the parser dropped it (an unsupported v2 value). The v2
+  /// engine reports each as `cap_skipped:<id>:<reason>` (plan C8/D12d), so
+  /// a dropped cap is never silent. Never serialized.
+  final Map<String, String> skippedCaps;
+
   /// Set by the JSON parser when the wire card carried a v2 marker (C3.2)
   /// on a row that was then skipped, so the card still takes the v2 path.
   final bool wireV2Shaped;
@@ -713,6 +718,7 @@ class CardProduct {
     this.unlockRules = const [],
     this.redemptionOptions = const [],
     this.parseWarnings = const [],
+    this.skippedCaps = const {},
     this.wireV2Shaped = false,
   });
 

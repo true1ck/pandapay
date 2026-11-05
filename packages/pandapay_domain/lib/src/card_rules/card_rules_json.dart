@@ -282,7 +282,9 @@ extension CapRuleJson on CapRule {
         json['post_cap_behavior'],
         'post_cap_behavior',
       ),
-      anchor: _v2EnumOrNull(PeriodAnchor.values, json['anchor'], 'anchor'),
+      // Not read by either engine, so an unknown anchor never costs the cap
+      // (D12d lists the fields that do); it reads as null.
+      anchor: _enumOrNullLenient(PeriodAnchor.values, json['anchor']),
       minEngineVersion: _v2EngineVersion(json['min_engine_version']),
       sourceLocalId: _v2StringOrNull(
         json['source_local_id'],
@@ -495,6 +497,8 @@ List<T> _parseRowsTolerantly<T>(
   List<String> warnings, {
   bool Function(Map<String, dynamic>)? isV2Marker,
   void Function()? onV2Marker,
+  void Function(Map<String, dynamic> row, CatalogueV2FieldException e)?
+  onSkipped,
   bool skipAnyFormatError = false,
 }) {
   final rows = (raw as List?) ?? const [];
@@ -507,6 +511,7 @@ List<T> _parseRowsTolerantly<T>(
       if (e is! CatalogueV2FieldException && !skipAnyFormatError) rethrow;
       warnings.add('$table ${json['id'] ?? '?'} skipped: ${e.message}');
       if (isV2Marker != null && isV2Marker(json)) onV2Marker?.call();
+      if (e is CatalogueV2FieldException) onSkipped?.call(json, e);
     } on TypeError catch (e) {
       if (!skipAnyFormatError) rethrow;
       warnings.add('$table ${json['id'] ?? '?'} skipped: $e');
@@ -617,6 +622,7 @@ extension CardProductJson on CardProduct {
   /// [CardProduct.parseWarnings]. A v2 problem never fails the card.
   static CardProduct fromJson(Map<String, dynamic> json) {
     final warnings = <String>[];
+    final skippedCaps = <String, String>{};
     var wireV2 = false;
     void markV2() => wireV2 = true;
 
@@ -635,6 +641,10 @@ extension CardProductJson on CardProduct {
       warnings,
       isV2Marker: (c) => c['cap_kind'] != null,
       onV2Marker: markV2,
+      onSkipped: (row, e) {
+        final id = row['id'];
+        if (id is String) skippedCaps[id] = 'unsupported_${e.field}';
+      },
     );
     final milestoneRules = _parseRowsTolerantly(
       json['milestone_rules'],
@@ -760,6 +770,7 @@ extension CardProductJson on CardProduct {
       unlockRules: unlockRules,
       redemptionOptions: redemptionOptions,
       parseWarnings: List.unmodifiable(warnings),
+      skippedCaps: Map.unmodifiable(skippedCaps),
       wireV2Shaped: wireV2,
     );
   }
