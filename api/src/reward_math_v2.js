@@ -35,6 +35,7 @@ const ROLES = new Set(['base', 'earn', 'exclusion', 'info']);
 const CAP_KINDS = new Set(['bonus_points', 'total_points', 'bonus_cashback', 'total_cashback', 'eligible_spend', 'txn_count']);
 const POST_CAP = new Set(['base_rate', 'zero', 'custom_rate']);
 const ROUNDING = new Set(['floor', 'round', 'none', 'points_half_up', 'points_floor']);
+const CASHBACK_ROUNDING = new Set(['paise', 'rupee_floor', 'rupee_half_up']);
 
 // Guards paise rounding against binary float error (1.5% of ₹67 is
 // 1.0049999… in doubles but ₹1.005 → ₹1.01 on paper). Far below a paisa.
@@ -80,18 +81,32 @@ function startOfDay(value) {
 // C3.2 — v1/v2 switch
 // ---------------------------------------------------------------------------
 
+const V2_ONLY_ROLES = new Set(['base', 'exclusion', 'info']);
+
+function ruleIsV2(rule) {
+  if (!rule) return false;
+  if (V2_ONLY_ROLES.has(rule.rule_role)) return true;
+  if (arr(rule.merchant_slugs).length > 0 || arr(rule.platform_slugs).length > 0) return true;
+  if (arr(rule.mcc_include).length > 0 || arr(rule.mcc_exclude).length > 0) return true;
+  if (rule.block_inr != null) return true;
+  return num(rule.min_engine_version) === 2;
+}
+
 /**
- * A card is v2-shaped if any rule carries `rule_role`, any cap a non-null
- * `cap_kind`, or the card an `accrual_rounding`. `rewardRules` / `capRules`
- * default to the lists embedded in the wire card.
+ * C3.2 as amended by C8 D10/D11: the switch never keys on a column that has
+ * a database default (after the migration every rule has rule_role 'earn'
+ * and empty arrays). A card is v2-shaped iff it has `accrual_rounding` or
+ * `cashback_rounding`, any cap has a `cap_kind`, or any rule has a v2-only
+ * role (base / exclusion / info), a non-empty merchant/platform/MCC list, a
+ * `block_inr`, or `min_engine_version` 2 (pg may send it as a string).
+ * `rewardRules` / `capRules` default to the lists embedded in the wire card.
  */
 function isV2Card(card, rewardRules, capRules) {
   const rules = rewardRules || (card && card.reward_rules) || [];
   const caps = capRules || (card && card.cap_rules) || [];
-  if (card && card.accrual_rounding != null) return true;
-  if (arr(rules).some((r) => r && r.rule_role != null)) return true;
+  if (card && (card.accrual_rounding != null || card.cashback_rounding != null)) return true;
   if (arr(caps).some((c) => c && c.cap_kind != null)) return true;
-  return false;
+  return arr(rules).some(ruleIsV2);
 }
 
 // ---------------------------------------------------------------------------
@@ -231,21 +246,51 @@ function ruleAppliesV2(rule, ctx, directory) {
 // C3.4 — rule selection
 // ---------------------------------------------------------------------------
 
-/** Effective ₹ value per ₹ spent, for priority tie-breaks. */
-function effectiveRate(rule, pointValue) {
-  const rate = num(rule.rate);
-  if (rate == null) return 0;
-  if (CASHBACK_UNITS.has(rule.unit)) return rate / 100;
-  if (rule.unit === 'flat_points') return 0;
-  const block = num(rule.block_inr) || UNIT_BLOCK[rule.unit];
-  if (!block) return 0;
-  return (rate * pointValue) / block;
+/** The card-level accrual settings every accrual on the card uses. */
+function cardModes(card) {
+  const c = card || {};
+  return {
+    pointValue: num(c.point_value_inr) || 0,
+    rounding: ROUNDING.has(c.accrual_rounding) ? c.accrual_rounding : 'floor',
+    cashbackRounding: CASHBACK_ROUNDING.has(c.cashback_rounding) ? c.cashback_rounding : 'paise',
+    baseUnit: c.base_reward_unit || null,
+    baseRate: num(c.base_reward_rate),
+  };
 }
 
-function byPriority(rules, pointValue) {
+function valueOf(amount, currency, pointValue) {
+  if (currency === 'points') return amount * pointValue;
+  if (currency === 'cashback') return amount;
+  return 0;
+}
+
+/**
+ * C8 D12c: a rule's pre-cap ₹ value for this transaction (its accrual on the
+ * eligible spend plus the base accrual above max_txn_inr). Used only to
+ * break priority ties, so flat-point rules compare fairly with rates.
+ */
+function preCapValue(rule, ctx, modes) {
+  const rate = num(rule.rate);
+  if (!rule.unit || rate == null) return 0;
+  const maxTxn = num(rule.max_txn_inr);
+  const eligible = maxTxn != null && ctx.amount > maxTxn ? Math.max(0, maxTxn) : ctx.amount;
+  const own = accrue(rule.unit, rate, eligible, rule.block_inr, modes.rounding, modes.cashbackRounding);
+  const over = accrue(modes.baseUnit, modes.baseRate, ctx.amount - eligible, null, modes.rounding, modes.cashbackRounding);
+  return valueOf(own, currencyOf(rule.unit), modes.pointValue) + valueOf(over, currencyOf(modes.baseUnit), modes.pointValue);
+}
+
+/** Lowest priority; tie → higher pre-cap ₹ value; tie → rule id sorting first. */
+function byPriority(rules, ctx, modes) {
+  const idKey = (rule) => (rule.id == null ? '' : String(rule.id));
   return rules
-    .map((rule, index) => ({ rule, index, priority: num(rule.priority) ?? 100, eff: effectiveRate(rule, pointValue) }))
-    .sort((a, b) => a.priority - b.priority || b.eff - a.eff || a.index - b.index)
+    .map((rule) => ({ rule, priority: num(rule.priority) ?? 100, value: preCapValue(rule, ctx, modes) }))
+    .sort((a, b) => {
+      if (a.priority !== b.priority) return a.priority - b.priority;
+      if (a.value !== b.value) return b.value - a.value;
+      const ia = idKey(a.rule);
+      const ib = idKey(b.rule);
+      return ia < ib ? -1 : ia > ib ? 1 : 0;
+    })
     .map((x) => x.rule);
 }
 
@@ -266,16 +311,16 @@ function implicitBaseRule(card) {
  *   - an applicable exclusion rule (lowest priority) → excluded, that rule;
  *   - the card's excluded_categories holds the category → excluded, rule null;
  *   - else the lowest-priority applicable base/earn rule (tie → higher
- *     effective rate, then list order);
+ *     pre-cap ₹ value for this transaction, then the rule id sorting first);
  *   - else the card's base unit/rate as an implicit base rule (id null).
  */
 function pickRuleV2(rules, ctx, card, directory) {
   const c = resolveContext(ctx, directory);
-  const pointValue = num(card && card.point_value_inr) || 0;
+  const modes = cardModes(card);
   const applicable = arr(rules).filter((r) => ruleAppliesV2(r, c));
 
   const exclusions = applicable.filter((r) => roleOf(r) === 'exclusion');
-  if (exclusions.length > 0) return { excluded: true, rule: byPriority(exclusions, pointValue)[0], implicit: false };
+  if (exclusions.length > 0) return { excluded: true, rule: byPriority(exclusions, c, modes)[0], implicit: false };
 
   if (c.category_id != null && arr(card && card.excluded_categories).includes(c.category_id)) {
     return { excluded: true, rule: null, implicit: false };
@@ -286,26 +331,29 @@ function pickRuleV2(rules, ctx, card, directory) {
     return role === 'base' || role === 'earn';
   });
   if (earners.length === 0) return { excluded: false, rule: implicitBaseRule(card), implicit: true };
-  return { excluded: false, rule: byPriority(earners, pointValue)[0], implicit: false };
+  return { excluded: false, rule: byPriority(earners, c, modes)[0], implicit: false };
 }
 
 // ---------------------------------------------------------------------------
 // C3.6 — which caps apply, in native units
 // ---------------------------------------------------------------------------
 
+/**
+ * C8 D9(3): with no explicit behaviour, read v1's post_cap_rate the way v1
+ * does (null = base rate continues, explicit 0 = nothing, other = that
+ * rate). An unknown explicit value returns null (the cap is skipped, D12d).
+ */
 function postCapBehavior(cap) {
-  if (cap.post_cap_behavior != null) return POST_CAP.has(cap.post_cap_behavior) ? cap.post_cap_behavior : 'base_rate';
-  // No explicit behaviour: read v1's post_cap_rate the way v1 does (null =
-  // base rate continues, explicit 0 = nothing, anything else = that rate).
+  if (cap.post_cap_behavior != null) return POST_CAP.has(cap.post_cap_behavior) ? cap.post_cap_behavior : null;
   const rate = num(cap.post_cap_rate);
   if (rate == null) return 'base_rate';
   return rate === 0 ? 'zero' : 'custom_rate';
 }
 
 /**
- * One cap row in native units: `{ id, kind, amount, behavior, postUnit,
- * postRate, legacy }`, or null when it can't be enforced as written (unknown
- * kind, no amount, a points value cap on a card with no point value).
+ * One cap row in native units — `{ cap: { id, kind, amount, behavior,
+ * postUnit, postRate, legacy } }` — or `{ skip: reason }` when it can't be
+ * enforced as written (C8 D9(9), D12d: never guessed).
  */
 function normalizeCap(cap, rule, card) {
   let kind = cap.cap_kind;
@@ -314,7 +362,7 @@ function normalizeCap(cap, rule, card) {
   if (kind == null) {
     legacy = true;
     const value = num(cap.cap_value);
-    if (value == null) return null;
+    if (value == null) return { skip: 'missing_cap_value' };
     if (cap.measure === 'spend_amount') {
       kind = 'eligible_spend';
       amount = value;
@@ -328,28 +376,32 @@ function normalizeCap(cap, rule, card) {
         amount = value;
       } else if (cur === 'points') {
         const pointValue = num(card && card.point_value_inr) || 0;
-        if (!(pointValue > 0)) return null;
+        if (!(pointValue > 0)) return { skip: 'no_point_value' };
         kind = 'total_points';
         amount = value / pointValue;
       } else {
-        return null;
+        return { skip: 'unknown_rule_currency' };
       }
     } else {
-      return null;
+      return { skip: 'unknown_measure' };
     }
   } else {
-    if (!CAP_KINDS.has(kind)) return null;
+    if (!CAP_KINDS.has(kind)) return { skip: 'unknown_cap_kind' };
     amount = num(cap.cap_amount);
-    if (amount == null) return null;
+    if (amount == null) return { skip: 'missing_cap_amount' };
   }
+  const behavior = postCapBehavior(cap);
+  if (behavior == null) return { skip: 'unknown_post_cap_behavior' };
   return {
-    id: cap.id,
-    kind,
-    amount,
-    behavior: postCapBehavior(cap),
-    postUnit: cap.post_cap_unit || null,
-    postRate: num(cap.post_cap_rate),
-    legacy,
+    cap: {
+      id: cap.id,
+      kind,
+      amount,
+      behavior,
+      postUnit: cap.post_cap_unit || null,
+      postRate: num(cap.post_cap_rate),
+      legacy,
+    },
   };
 }
 
@@ -359,18 +411,29 @@ function normalizeCap(cap, rule, card) {
  * or no rule id and `category_id` = the context category); every
  * `scope = 'card'` cap; plus every ancestor via `parent_cap_id`,
  * deduplicated, in catalogue order. None for an excluded spend.
+ *
+ * Caps that can't be enforced as written (unknown kind/scope/behaviour, no
+ * amount) are left out; pass a `skipped` array to collect
+ * `cap_skipped:<cap_id>:<reason>` strings for them (C8 D12d).
  */
-function applicableCaps({ card, capRules, rule, ctx, excluded = false }) {
+function applicableCaps({ card, capRules, rule, ctx, excluded = false, skipped = null }) {
   if (excluded) return [];
   const c = ctx && ctx[RESOLVED] ? ctx : normalizeContext(ctx);
   const caps = arr(capRules).filter((cap) => cap && cap.id != null);
   const byId = new Map(caps.map((cap) => [cap.id, cap]));
   const ruleId = rule && rule.id != null ? rule.id : null;
+  const skip = (id, reason) => {
+    const entry = `cap_skipped:${id}:${reason}`;
+    if (skipped && !skipped.includes(entry)) skipped.push(entry);
+  };
 
   const chosen = new Set();
   for (const cap of caps) {
     const scope = cap.scope == null ? 'targets' : cap.scope;
-    if (scope === 'card') {
+    if (scope !== 'card' && scope !== 'targets') {
+      // Unknown scope: we can't tell whether it applies, so it never does.
+      skip(cap.id, 'unknown_scope');
+    } else if (scope === 'card') {
       chosen.add(cap.id);
     } else if (scope === 'targets') {
       const targets = arr(cap.targets);
@@ -392,10 +455,16 @@ function applicableCaps({ card, capRules, rule, ctx, excluded = false }) {
     }
   }
 
-  return caps
-    .filter((cap) => chosen.has(cap.id))
-    .map((cap) => normalizeCap(cap, rule, card))
-    .filter(Boolean);
+  const out = [];
+  for (const cap of caps) {
+    if (!chosen.has(cap.id)) continue;
+    const scope = cap.scope == null ? 'targets' : cap.scope;
+    if (scope !== 'card' && scope !== 'targets') continue; // reached as a parent; already reported
+    const n = normalizeCap(cap, rule, card);
+    if (n.cap) out.push(n.cap);
+    else skip(cap.id, n.skip);
+  }
+  return out;
 }
 
 // ---------------------------------------------------------------------------
@@ -422,16 +491,25 @@ function divHalfUp(n, d) {
  * What `spend` earns at `unit`/`rate`, in that unit's currency: cashback in ₹
  * (to paise), points per block with the card's rounding, flat points once.
  *
- * Rounding modes (C3.5 + C8 D7): `floor` / `round` (half-up) / `none` apply
- * to the number of blocks; `points_floor` / `points_half_up` apply to the
- * whole-transaction product spend × rate / block. Every mode but `none` is
- * computed in integer paise with BigInt, so ₹7,500 × 1.5 / 100 is exactly
- * 112.5 (→ 113 half-up), never 112.4999….
+ * Points rounding (`rounding`, C3.5 + C8 D7): `floor` / `round` (half-up) /
+ * `none` apply to the number of blocks; `points_floor` / `points_half_up`
+ * apply to the whole-transaction product spend × rate / block.
+ * Cashback rounding (`cashbackRounding`, C8 D11): null / `paise` keeps paise
+ * (half-up); `rupee_floor` / `rupee_half_up` pay whole rupees per piece.
+ * Every mode but points `none` is computed in integer paise with BigInt, so
+ * ₹7,500 × 1.5 / 100 is exactly 112.5 (→ 113 half-up), never 112.4999….
  */
-function accrue(unit, rate, spend, blockOverride, rounding) {
+function accrue(unit, rate, spend, blockOverride, rounding, cashbackRounding) {
   const r = num(rate);
   if (!unit || r == null || r <= 0 || !(spend > 0)) return 0;
-  if (CASHBACK_UNITS.has(unit)) return round2((spend * r) / 100);
+  if (CASHBACK_UNITS.has(unit)) {
+    const [rateNum, rateDen] = exactDecimal(r);
+    const n = BigInt(Math.round(spend * 100)) * rateNum; // paise × rate
+    const toPaise = 100n * rateDen;
+    if (cashbackRounding === 'rupee_floor') return Number(n / (toPaise * 100n));
+    if (cashbackRounding === 'rupee_half_up') return Number(divHalfUp(n, toPaise * 100n));
+    return Number(divHalfUp(n, toPaise)) / 100;
+  }
   if (unit === 'flat_points') return r;
   const override = num(blockOverride);
   const block = override != null && override > 0 ? override : UNIT_BLOCK[unit];
@@ -454,6 +532,16 @@ function accrue(unit, rate, spend, blockOverride, rounding) {
 // v1 delegation
 // ---------------------------------------------------------------------------
 
+/**
+ * v1-shaped cards (C3.2 / C8 D10) go through reward_math.js unchanged.
+ *
+ * v1 has a single native figure, `points`: points on a points card, but ₹ of
+ * cashback on a cashback card (cashback_percent's "points per rupee" is
+ * rate / 100). So on a v1 cashback card `cashbackInr` carries v1's `points`
+ * figure and `points` is null. The raw v1 result, unrounded and untouched,
+ * is under `v1`; `capDeltas` are in v1's cap measure (₹ value for a
+ * reward_value cap), not v2 native units.
+ */
 function computeViaV1({ card, rules, caps, capConsumedBefore, ctx }) {
   const c = normalizeContext(ctx);
   const v1ctx = { amount: c.amount, categoryId: c.category_id, merchantName: c.merchant_name, rail: c.rail, occurred: c.occurred };
@@ -489,11 +577,15 @@ function computeViaV1({ card, rules, caps, capConsumedBefore, ctx }) {
  * `capConsumedBefore` is `{ capId: consumed }` in native units as it stood
  * BEFORE this transaction. Returns
  * `{ points, cashbackInr, valueInr, ruleId, capDeltas, excluded, reasons,
- *    assumptions, engine }` — `points` is null unless points are involved
- * (a points card, or a points rule/overflow), `cashbackInr` likewise.
- * `capDeltas` lists only non-zero consumption, keyed by cap id.
- * v1-shaped cards return v1's numbers (unrounded) with `engine: 'v1'` and
- * the raw v1 result under `v1`; their deltas are in v1's cap measure.
+ *    assumptions, engine }`.
+ *   - `points` is non-null (0 if nothing earned) when the card's base unit is
+ *     a points unit or any points accrual exists; `cashbackInr` likewise for
+ *     cashback (C8 D12f). An accrual "exists" when a piece of spend (rule
+ *     spend, overflow, above-max) was accrued in that currency.
+ *   - `capDeltas` lists only non-zero consumption, keyed by cap id.
+ *   - `reasons` carries the rule's display_note, cap events, and
+ *     `cap_skipped:<cap_id>:<reason>` for caps that can't be enforced (D12d).
+ * v1-shaped cards return v1's numbers (see computeViaV1).
  */
 function computeTransactionRewardV2({ card, rewardRules, capRules, capConsumedBefore, ctx, directory } = {}) {
   const rules = arr(rewardRules || (card && card.reward_rules));
@@ -502,11 +594,9 @@ function computeTransactionRewardV2({ card, rewardRules, capRules, capConsumedBe
 
   const c = resolveContext(ctx, directory);
   const consumed = capConsumedBefore && typeof capConsumedBefore === 'object' ? capConsumedBefore : {};
-  const pointValue = num(card.point_value_inr) || 0;
-  const rounding = ROUNDING.has(card.accrual_rounding) ? card.accrual_rounding : 'floor';
-  const baseUnit = card.base_reward_unit || null;
-  const baseRate = num(card.base_reward_rate);
+  const { pointValue, rounding, cashbackRounding, baseUnit, baseRate } = cardModes(card);
   const cardCur = currencyOf(baseUnit);
+  const accrueAt = (unit, rate, spend, block) => accrue(unit, rate, spend, block, rounding, cashbackRounding);
 
   const assumptions = [];
   if (c.merchantResolvedVia === 'alias') assumptions.push('merchant_resolved_by_alias');
@@ -558,7 +648,9 @@ function computeTransactionRewardV2({ card, rewardRules, capRules, capConsumedBe
   const overMax = c.amount - eligible;
   if (overMax > 0) reasons.push('above_max_txn');
 
-  const capsApplied = applicableCaps({ card, capRules: caps, rule, ctx: c });
+  const skipped = [];
+  const capsApplied = applicableCaps({ card, capRules: caps, rule, ctx: c, skipped });
+  reasons.push(...skipped);
   if (capsApplied.some((cap) => cap.legacy)) assumptions.push('legacy_cap_converted');
   const remaining = (cap) => Math.max(0, cap.amount - (num(consumed[cap.id]) ?? 0));
   const spendCaps = capsApplied.filter((cap) => cap.kind === 'eligible_spend');
@@ -585,7 +677,8 @@ function computeTransactionRewardV2({ card, rewardRules, capRules, capConsumedBe
   if (ruleSpend < eligible) reasons.push('spend_cap_reached');
 
   // 2. Transaction-count caps: one exhausted cap pushes the whole eligible
-  //    spend to overflow; otherwise each consumes 1.
+  //    spend to overflow; otherwise each consumes 1 (even when an
+  //    eligible-spend cap is exhausted, D9(8)).
   const forcing = countCaps.find((cap) => remaining(cap) < 1) || null;
   if (forcing) {
     ruleSpend = 0;
@@ -594,33 +687,44 @@ function computeTransactionRewardV2({ card, rewardRules, capRules, capConsumedBe
   }
   const overflow = eligible - ruleSpend;
 
-  // 3. Accrue on the rule's spend; base vs bonus.
-  const ruleAccrual = accrue(ruleUnit, rule.rate, ruleSpend, rule.block_inr, rounding);
-  let baseAccrual;
+  // Each piece of spend is accrued (and rounded) on its own (D9(5)).
+  const pieces = []; // { cur, amount } — overflow and above-max accruals
+  const accrued = new Set(); // currencies with an accrual on spend > 0 (D12f)
+  if (ruleSpend > 0 && ruleCur) accrued.add(ruleCur);
+
+  // 3. Accrue on the rule's spend; base part vs bonus.
+  const ruleAccrual = accrueAt(ruleUnit, rule.rate, ruleSpend, rule.block_inr);
+  let basePart;
   let bonus;
   if (isBase) {
-    baseAccrual = ruleAccrual;
+    // D9(1): a base-role rule earns at its own rate, with no bonus.
+    basePart = ruleAccrual;
     bonus = 0;
   } else if (ruleCur != null && ruleCur === cardCur) {
-    baseAccrual = accrue(baseUnit, baseRate, ruleSpend, null, rounding);
-    bonus = Math.max(0, ruleAccrual - baseAccrual);
+    // D12a: a rule paying less than the base still earns its own rate.
+    const baseAccrual = accrueAt(baseUnit, baseRate, ruleSpend, null);
+    basePart = Math.min(ruleAccrual, baseAccrual);
+    bonus = ruleAccrual - basePart;
   } else {
-    baseAccrual = 0;
+    basePart = 0;
     bonus = ruleAccrual;
   }
 
   // Overflow (post-cap) and over-max spend, each in its own unit's currency.
-  const pieces = [];
   if (overflow > 0) {
     const behavior = binding ? binding.behavior : 'base_rate';
     if (behavior === 'base_rate') {
-      pieces.push({ cur: cardCur, amount: accrue(baseUnit, baseRate, overflow, null, rounding) });
+      pieces.push({ cur: cardCur, amount: accrueAt(baseUnit, baseRate, overflow, null) });
     } else if (behavior === 'custom_rate') {
-      const unit = binding.postUnit || ruleUnit;
-      pieces.push({ cur: currencyOf(unit), amount: accrue(unit, binding.postRate, overflow, null, rounding) });
+      // D12b: post_cap_unit when set (its own unit block); else the rule's
+      // unit and the rule's block_inr.
+      const ownUnit = binding.postUnit == null;
+      const unit = ownUnit ? ruleUnit : binding.postUnit;
+      pieces.push({ cur: currencyOf(unit), amount: accrueAt(unit, binding.postRate, overflow, ownUnit ? rule.block_inr : null) });
     }
   }
-  if (overMax > 0) pieces.push({ cur: cardCur, amount: accrue(baseUnit, baseRate, overMax, null, rounding) });
+  if (overMax > 0) pieces.push({ cur: cardCur, amount: accrueAt(baseUnit, baseRate, overMax, null) });
+  for (const p of pieces) if (p.cur) accrued.add(p.cur);
 
   // 4. Bonus caps (same currency as the rule's accrual).
   let allowedBonus = bonus;
@@ -629,7 +733,7 @@ function computeTransactionRewardV2({ card, rewardRules, capRules, capConsumedBe
 
   // 5. Earned, per currency.
   const earned = { points: 0, cashback: 0 };
-  if (ruleCur) earned[ruleCur] += baseAccrual + allowedBonus;
+  if (ruleCur) earned[ruleCur] += basePart + allowedBonus;
   for (const p of pieces) if (p.cur) earned[p.cur] += p.amount;
 
   // 6. Total caps; the cut comes off the bonus first.
@@ -658,13 +762,12 @@ function computeTransactionRewardV2({ card, rewardRules, capRules, capConsumedBe
   for (const cap of countCaps) record(cap.id, forcing ? 0 : 1);
 
   // 8. Result.
-  const involved = new Set([cardCur, ruleCur]);
-  for (const p of pieces) if (p.amount > 0) involved.add(p.cur);
-  if (involved.has('points') && earned.points > 0 && !(pointValue > 0)) assumptions.push('point_value_unknown');
+  const shows = (cur) => cardCur === cur || accrued.has(cur);
+  if (shows('points') && earned.points > 0 && !(pointValue > 0)) assumptions.push('point_value_unknown');
 
   return {
-    points: involved.has('points') ? round2(earned.points) : null,
-    cashbackInr: involved.has('cashback') ? round2(earned.cashback) : null,
+    points: shows('points') ? round2(earned.points) : null,
+    cashbackInr: shows('cashback') ? round2(earned.cashback) : null,
     valueInr: round2(earned.points * pointValue + earned.cashback),
     ruleId: rule.id,
     capDeltas,
