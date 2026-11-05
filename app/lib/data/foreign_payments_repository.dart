@@ -90,9 +90,118 @@ Map<String, dynamic> _createPayload(ForeignPayment payment) => {
   if (payment.billedInr != null && payment.confirmationSource == 'sms') ...{
     'billed_inr': moneyDecimal(payment.billedInr),
     'confirmation_source': 'sms',
-    if (payment.transactionId != null) 'transaction_id': payment.transactionId,
+    // A local ledger id (`v2:<event>`) is not a server id: the server links
+    // the SMS to its transaction by source key.
+    if (payment.transactionId != null &&
+        _uuid.hasMatch(payment.transactionId!))
+      'transaction_id': payment.transactionId,
   },
 };
+
+final _uuid = RegExp(
+  r'^[a-f0-9]{8}-[a-f0-9]{4}-[a-f0-9]{4}-[a-f0-9]{4}-[a-f0-9]{12}$',
+  caseSensitive: false,
+);
+
+/// A later alert that states the billed INR settles an earlier alert that
+/// stated only the foreign price (CCR-004). Both describe one purchase, so the
+/// earlier, unvalued record is dismissed and the billed one stays: the INR
+/// counts once, in the ledger, through the billed alert's own transaction.
+///
+/// A pair matches only on exact evidence: the same direction, currency and
+/// original amount, the same card (saved card, else last four digits, else the
+/// same merchant when neither names a card) and within [window]. A record that
+/// the user edited is left alone. A weak match, where one record could settle
+/// with several, is not made. Synchronous like [captureLocalForeignPayment].
+/// Returns how many records were settled.
+int settleAwaitingForeignPayments(
+  AppDatabase database,
+  String namespace, {
+  Duration window = const Duration(days: 7),
+}) {
+  ensureForeignPaymentsSchema(database);
+  final db = database.db;
+  final rows = [
+    for (final r in db.select(
+      'SELECT payload FROM foreign_payments_local WHERE namespace=?',
+      [namespace],
+    ))
+      ForeignPayment.fromJson(
+        jsonDecode(r['payload'] as String) as Map<String, dynamic>,
+      ),
+  ];
+  final awaiting = [
+    for (final p in rows)
+      if (p.isPending &&
+          p.billedInr == null &&
+          !p.userModified &&
+          p.originalCurrency != null &&
+          p.originalAmount != null)
+        p,
+  ];
+  final billed = [
+    for (final p in rows)
+      if (!p.isIgnored && p.billedInr != null && p.originalCurrency != null)
+        p,
+  ];
+  String merchantKey(String? name) =>
+      (name ?? '').toLowerCase().replaceAll(RegExp(r'[^a-z0-9]'), '');
+  bool sameCard(ForeignPayment a, ForeignPayment b) {
+    if (a.userCardId != null && b.userCardId != null) {
+      return a.userCardId == b.userCardId;
+    }
+    if (a.cardLast4 != null && b.cardLast4 != null) {
+      return a.cardLast4 == b.cardLast4;
+    }
+    if (a.cardLast4 != null || b.cardLast4 != null) return false;
+    final m = merchantKey(a.merchantName);
+    return m.isNotEmpty && m == merchantKey(b.merchantName);
+  }
+
+  bool matches(ForeignPayment a, ForeignPayment b) =>
+      a.direction == b.direction &&
+      a.originalCurrency == b.originalCurrency &&
+      a.originalAmount == b.originalAmount &&
+      a.occurredAt.difference(b.occurredAt).abs() <= window &&
+      sameCard(a, b);
+
+  final forAwaiting = {
+    for (final a in awaiting) a.sourceKey: [for (final b in billed) if (matches(a, b)) b],
+  };
+  final forBilled = <String, int>{};
+  for (final candidates in forAwaiting.values) {
+    for (final b in candidates) {
+      forBilled.update(b.sourceKey, (n) => n + 1, ifAbsent: () => 1);
+    }
+  }
+  var settled = 0;
+  for (final a in awaiting) {
+    final candidates = forAwaiting[a.sourceKey]!;
+    if (candidates.length != 1 || forBilled[candidates.single.sourceKey] != 1) {
+      continue;
+    }
+    final next = a.withPatch({
+      'valuation_status': 'ignored',
+      'locally_pending': true,
+      'sync_error': null,
+    });
+    db.execute(
+      'UPDATE foreign_payments_local SET payload=? WHERE namespace=? AND source_key=?',
+      [jsonEncode(next.toJson()), namespace, a.sourceKey],
+    );
+    db.execute(
+      'INSERT INTO foreign_payments_outbox(namespace,source_key,kind,payload) VALUES(?,?,?,?)',
+      [
+        namespace,
+        a.sourceKey,
+        'edit',
+        jsonEncode({'valuation_status': 'ignored'}),
+      ],
+    );
+    settled++;
+  }
+  return settled;
+}
 
 /// Offline-first, account-scoped foreign payment evidence and durable edits.
 /// Only confirmed INR is submitted to the canonical ledger by the backend.
