@@ -14,7 +14,7 @@ to resume.
 
 ## ▶ Resumed (2026-11-06, at the owner's request)
 
-WP2 re-review came back clean and WP2 is merged (4b33990). WP7's re-review found gaps (Atlas and IndiGo IDFC Dual EMI wording, Plus HDFC partner rule order, lost v1 limits); fix round 4 (D29) is running and ends with the Magnus correction. WP9 is continuing from its branch `card-rewards/wp9-app-caps`.
+WP2 (4b33990), WP9 (fd81ee4) and WP7 (7a4a1d0) are merged into `card-rewards/phase1` along with WP8 (d2b1969). Next is Checkpoint B (full test pass on the combined branch, real database import, old feed parsed by the released app, emulator pass), then the final whole-branch review, then the owner-run rollout.
 
 ## Progress at a glance (lead's estimate, 2026-11-06)
 
@@ -30,12 +30,12 @@ WP2 re-review came back clean and WP2 is merged (4b33990). WP7's re-review found
 | WP5 Merchant directory | 100% | Merged |
 | WP6a Worked examples (HDFC, SBI) | 100% | Merged |
 | WP6b Worked examples (others) | 100% | Merged (2 of 25 cards skipped by design) |
-| WP7 Integration | 88% | 401 of 405 checkable examples pass; fix round 4 (D29) and Magnus correction running, then re-review and merge |
+| WP7 Integration | 100% | Reviewed to clean; merged (7a4a1d0) |
 | WP8 Server recording | 100% | Merged |
 | WP9 App | 100% | Reviewed twice; merged (fd81ee4) |
 | Checkpoint B (full test pass) | 0% | After WP2, WP7, WP9 merge |
 | Rollout (owner-run) | 0% | After Checkpoint B |
-| **Phase 1 overall** | **about 88%** | |
+| **Phase 1 overall** | **about 93%** | |
 | Phase 2 | 0% | Not started |
 | Phase 3 | 0% | Not started |
 | Phase 4 | 0% | Not started |
@@ -65,7 +65,7 @@ Status values: `not started` · `running` · `done (branch ready)` · `merged` �
 | WP5 | Merchant and platform directory data | 1 | `card-rewards/wp5-directory` | **merged** | 2026-11-06 | 164 merchants (9 true sub-brand parents, `group` tags per D6), 61 platforms; review + 1 fix round clean; IHCL brands kept under `taj` (ruling in ledger) |
 | WP6a | Worked examples: HDFC, SBI Card | 1 | `card-rewards/wp6a-examples-hdfc-sbi` | **merged** | 2026-11-06 | 21/21 cards, 15 override files; review + 1 fix round clean; Swiggy exact-half rounding parked |
 | WP6b | Worked examples: ICICI, Axis, Amex, IDFC, others | 1 | `card-rewards/wp6b-examples-others` | **merged** | 2026-11-06 | 23/25 cards (Amazon Pay ICICI, AU Zenith+ skipped), 13 override files; 2 fix rounds, verified with the real loader; 18-card loader mismatches carried to WP7 |
-| WP7 | Integration: worked examples through both engines | 2 | `card-rewards/wp7-integration` | fix round 4 running (re-review of round 3 found gaps, D29) | 2026-11-06 | 401 of 405 checkable examples pass in both engines (Magnus x2 waits for WP2 merge; Flipkart Axis and Swiggy research); 19 Verified; EMI exclusion added on 13 more cards; no spend earns more in either engine version since the last review |
+| WP7 | Integration: worked examples through both engines | 2 | `card-rewards/wp7-integration` | merged 7a4a1d0 (4 review rounds + small final round) | 2026-11-06 | 414 checkable examples (424 total): 412 pass in both engines; 2 known failures are research data (Flipkart Axis 006, Swiggy 004); 20 Verified; EMI exclusions added across touched cards; Tata Neu HDFC partner rules, UPI rates and limits restructured without losing any limit for installed apps (one accepted exception: Flipkart Axis, D31a); Magnus 35 points per ₹200 above ₹1.5 lakh; no spend earns more in v1, and v2 increases are only the intended partner-brand ones |
 | WP8 | Server recording v2 + recompute script | 2 | `card-rewards/wp8-server-state` | **merged** | 2026-11-06 | 2 fix rounds; 1,739 API tests pass on the merged branch; native-unit limit state, Indian-time windows, correct statement cycles, edit/recalc lock on every edit route. Parked: sync batch lock timing, 12 statement-cycle fee waivers |
 | WP9 | App: v2 feed, tolerant parse, cap bars, alerts | 2 | `card-rewards/wp9-app-caps` | merged fd81ee4 (2 review rounds) | 2026-11-06 | v2 feed with per-card tolerant parse and versioned cache; native-unit limit state in one snapshot builder; limit bars on My Cards, card detail and the caps screen; 80% / 100% alerts with the next-best owned card; Partial/Basic label; split planner fixed to use native units (domain exception D30a); CI-only golden images. Open follow-ups: home_alerts, insights_hub and comparison_view still read the old measure (can only under-warn); bundled fallback catalogue still v1 (9 cards) |
 | — | Checkpoint A (after wave 1) | — | — | **passed** | 2026-11-06 | API 1695/0 fail; Dart 477/0; real DB import 376/376; old feed parsed by the released app parser with 0 errors; JS = Dart on 11,914 real-data purchases (0 mismatches) |
@@ -83,7 +83,7 @@ Status values: `not started` · `running` · `done (branch ready)` · `merged` �
 | Milestones on the wrong anchor | 292 / 292 (60 non-annual) | 0 / 308 — WP2 dry run |
 | Spend-gated lounges structured | 0 / 124 | 115 cards (195 unlock rows) — WP2 dry run |
 | Co-brand cards with a merchant rule | 8 / 74 (WP2 count 5 / 102) | 53 / 102 — WP2 dry run |
-| Cards Verified | 0 | 19 (WP7, pending review); 15 more pass all examples but blocked by loader flags |
+| Cards Verified | 0 | 20 (WP7, merged); 14 more pass all examples but are blocked by loader flags |
 
 ## Decisions log
 
