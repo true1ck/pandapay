@@ -2207,7 +2207,9 @@ function runTransformOnly(args) {
   console.log(`  after: ${a.after_modelled} modelled, ${a.after_info} info, ${a.after_dropped} dropped, ${a.after_unrestricted} unrestricted (flagged)`);
   console.log(`  caps: ${report.caps.written} written of ${report.caps.source_total}, ${report.caps.enforced} enforced, ${report.caps.orphan} orphan`);
   console.log(`  unlock rules: ${report.unlocks.rows} (${report.unlocks.lounge_with_unlocks} of ${report.unlocks.lounge_benefits} lounge benefits)`);
-  console.log(`  classification changes since the previous report: ${report.previous_generated_at ? report.classification_changes.length : 'n/a (no previous report)'}`);
+  console.log(`  classification changes since the previous report: ${report.previous_comparable
+    ? report.classification_changes.length
+    : report.previous_generated_at ? 'n/a (no comparable previous report)' : 'n/a (no previous report)'}`);
   console.log(`\nWrote:\n  ${jsonPath}\n  ${mdPath}\n  ${previewPath}`);
   if (report.cards_failed.length) process.exitCode = 1;
   return report;

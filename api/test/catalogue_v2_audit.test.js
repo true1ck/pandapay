@@ -70,7 +70,7 @@ test('the loader preview of real records reads as a v2 feed with structured rule
 });
 
 test('D20e the coverage report lists classification changes against the previous report', () => {
-  const { aggregateReport } = require('../scripts/catalogue_v2/coverage');
+  const { aggregateReport, renderMarkdown } = require('../scripts/catalogue_v2/coverage');
   const fixtures = path.join(__dirname, 'fixtures', 'cardpipeline');
   const dir = loadDirectory();
   const { final } = JSON.parse(fs.readFileSync(path.join(fixtures, 'swiggy-hdfc-bank-credit-card.json'), 'utf8'));
@@ -81,4 +81,14 @@ test('D20e the coverage report lists classification changes against the previous
   const second = aggregateReport(cards, { previous });
   assert.deepEqual(second.classification_changes.find((c) => c.source === 'swiggy_10pct'), { slug: 'swiggy-hdfc-bank-credit-card', source: 'swiggy_10pct', before: 'info@v2', after: 'earn@v1+v2' });
   assert.ok(second.classification_changes.some((c) => c.slug === 'gone' && c.after === null));
+  assert.equal(second.previous_comparable, true);
+  assert.match(renderMarkdown(second), /2 source rule\(s\) changed/);
+
+  // A previous report without classification data is not "0 changed".
+  const old = aggregateReport(cards, { previous: { generated_at: 'y' } });
+  assert.equal(old.previous_comparable, false);
+  assert.equal(old.classification_changes.length, 0);
+  const md = renderMarkdown(old);
+  assert.match(md, /No comparable previous report/);
+  assert.doesNotMatch(md, /0 source rule\(s\) changed/);
 });
