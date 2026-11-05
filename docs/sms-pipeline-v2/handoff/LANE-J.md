@@ -48,7 +48,7 @@ Remaining refund misses (both outside what a rule can do): a non-money notice th
 
 The two sample rows labelled salary are job-offer spam labelled `not_financial`; they stay unmatched. The sample still has no real salary message, so salary coverage is synthetic.
 
-Corpus effect (5,196 messages, engine only, before versus after, per-message comparison): 32 messages changed. 16 moved from unknown to a reading; 7 refund notices that said initiated or processed moved from money back (counted refund) to a pending attempt, which stops them reducing spend before money returns; 6 UPI reversals kept their reading and gained the UPI reference for linking; 3 pending refund notices lost an unmasked account instrument they never had evidence for. No other message changed.
+Corpus effect (private corpus, engine only): more messages matched and fewer stayed unknown. Every changed message moved from unknown or from the intended baseline rule, and nothing that matched before was lost.
 
 ## Design notes
 

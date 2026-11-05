@@ -36,7 +36,7 @@ Phone ledger effect measured with the offline phone replay, before versus after.
 
 No row that was correct before became incorrect (0 regressions, 21 additional correct rows on the phone measure; 29 on the engine-only measure). Replay on the sample: counted transactions 50 to 52, open review rows 66 to 60, no reused money fact, no card bill or IPO event counted as spending.
 
-Corpus effect (5,196 messages, engine only): matched 1,749 to 1,831, unknown 1,929 to 1,847, ignored unchanged. A per-message rule comparison shows every changed message moved from unknown or from the intended baseline rule; no unrelated rule lost a message.
+Corpus effect (private corpus, engine only): more messages matched and fewer stayed unknown. Every changed message moved from unknown or from the intended baseline rule, and nothing that matched before was lost.
 
 `other` did not move: its remaining misses are non-financial notices whose draft reading cannot be produced from an ignored message, plus two card debits whose label and contract disagree (see requests).
 

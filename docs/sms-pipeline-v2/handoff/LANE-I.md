@@ -30,7 +30,7 @@ Rule ids start `BRK-`. Mutual-fund wording had no real example in the sample or 
 
 0 regressions: no row that agreed before disagrees now. The one remaining investment miss is an IPO no-allotment notice labelled with a reading the scorer cannot produce (IPO lane). Two `other` rows (broker balance reports) are fixed by the new reports rule. A demat debit row in `movement` now produces a fact, but its draft reading (`demat_movement`) cannot be produced by the scorer, so its agreement is unchanged (request 2).
 
-Full 5,196-message corpus, engine only: unknown 1,614 to 1,468, matched 2,064 to 2,210, ignored 1,518 unchanged. Every changed message moved from unknown, except two bank NACH credits that moved from the generic balance-only rule to the dividend rule. No message moved between two other rules.
+Corpus effect (private corpus, engine only): more messages matched and fewer stayed unknown. Every changed message moved from unknown or from the intended baseline rule, and nothing that matched before was lost.
 
 ## Decisions and caveats
 

@@ -23,7 +23,7 @@ AttemptFact f
 | `BOB-UPI-CREDIT`, `BOB-UPI-CREDIT-B` | Reject IMPS, NEFT and RTGS wording. A Bank of Baroda IMPS credit with a 12-digit reference now falls to the generic IMPS credit rule (rail imps, with balance). |
 | `INV-BROKER-WITHDRAW-CREDIT-02` | Rejects "trading account" / "demat account" credits. |
 | `GEN-ACCT-LAST-D1` | Rejects a debit with "failed" or "unsuccessful" within 120 characters after the account. |
-| `LIM-*` (nine limit rules) | Card mask accepts digits directly before the X ("4315X9008"). |
+| `LIM-*` (nine limit rules) | Card mask accepts digits directly before the X ("4315X6153"). |
 | `REW-*` (four rules) | Points amount cannot follow `/`, `.` or `-` or end in a comma. A date such as "25/11/26," was read as 26 points. |
 | `IGN-DELIVERY-STATUS`, `IGN-ORDER-STATUS-UPDATE`, `IGN-NOTICE-DO-NOT-SHARE-ADVICE` | Do not claim a message that carries an OTP code. Ignore rules run in id order, so these swallowed OTP messages before `IGN-OTP-CODE`. They are now ignored with reason `otp`. |
 | `senders/investments.json` | `BSELTD` added as an alias of `BSEIND`. |

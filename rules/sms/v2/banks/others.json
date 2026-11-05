@@ -18797,7 +18797,7 @@
     "examples": [
       {
         "sender": "VM-UCOBNK-S",
-        "body": "Rs.499.00 credited to A/c XX1234 on 30-10-26 from VPA alice@oksbi (UPI 630371662093) Avl Bal Rs.12,345.67",
+        "body": "Rs.499.00 credited to A/c XX1234 on 30-10-26 from VPA alice@oksbi (UPI 432100000901) Avl Bal Rs.12,345.67",
         "expectFactTypes": [
           "movement",
           "balance_snapshot"
@@ -18805,7 +18805,7 @@
       },
       {
         "sender": "VM-UCOBNK-S",
-        "body": "Rs.499.00 could not be credited to A/c XX1234 on 30-10-26 from VPA alice@oksbi (UPI 630371662093)",
+        "body": "Rs.499.00 could not be credited to A/c XX1234 on 30-10-26 from VPA alice@oksbi (UPI 432100000901)",
         "expectFactTypes": []
       }
     ],
@@ -20017,7 +20017,7 @@
     "examples": [
       {
         "sender": "VM-UCOBNK-S",
-        "body": "Your A/c XX1234 is credited with Rs.499.00 on 30-10-26 from VPA alice@oksbi (UPI 630371662093) Avl Bal Rs.12,345.67",
+        "body": "Your A/c XX1234 is credited with Rs.499.00 on 30-10-26 from VPA alice@oksbi (UPI 432100000901) Avl Bal Rs.12,345.67",
         "expectFactTypes": [
           "movement",
           "balance_snapshot"
@@ -20025,7 +20025,7 @@
       },
       {
         "sender": "VM-UCOBNK-S",
-        "body": "Your A/c XX1234 could not be credited with Rs.499.00 on 30-10-26 from VPA alice@oksbi (UPI 630371662093)",
+        "body": "Your A/c XX1234 could not be credited with Rs.499.00 on 30-10-26 from VPA alice@oksbi (UPI 432100000901)",
         "expectFactTypes": []
       }
     ],
@@ -22963,14 +22963,14 @@
     "examples": [
       {
         "sender": "VM-UCOBNK-S",
-        "body": "Rs.499.00 credited to A/c XX1234 on 30-10-26 from VPA alice@oksbi (UPI 630371662093)",
+        "body": "Rs.499.00 credited to A/c XX1234 on 30-10-26 from VPA alice@oksbi (UPI 432100000901)",
         "expectFactTypes": [
           "movement"
         ]
       },
       {
         "sender": "VM-UCOBNK-S",
-        "body": "Rs.499.00 could not be credited to A/c XX1234 on 30-10-26 from VPA alice@oksbi (UPI 630371662093)",
+        "body": "Rs.499.00 could not be credited to A/c XX1234 on 30-10-26 from VPA alice@oksbi (UPI 432100000901)",
         "expectFactTypes": []
       }
     ],
@@ -23614,14 +23614,14 @@
     "examples": [
       {
         "sender": "VM-UCOBNK-S",
-        "body": "Your A/c XX1234 is credited with Rs.499.00 on 30-10-26 from VPA alice@oksbi (UPI 630371662093)",
+        "body": "Your A/c XX1234 is credited with Rs.499.00 on 30-10-26 from VPA alice@oksbi (UPI 432100000901)",
         "expectFactTypes": [
           "movement"
         ]
       },
       {
         "sender": "VM-UCOBNK-S",
-        "body": "Your A/c XX1234 could not be credited with Rs.499.00 on 30-10-26 from VPA alice@oksbi (UPI 630371662093)",
+        "body": "Your A/c XX1234 could not be credited with Rs.499.00 on 30-10-26 from VPA alice@oksbi (UPI 432100000901)",
         "expectFactTypes": []
       }
     ],

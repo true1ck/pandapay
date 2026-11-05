@@ -6,7 +6,7 @@
   "messages": [
     {
       "sender": "VM-ICICIT-S",
-      "body": "Dear Customer, The credit limit for your Example Bank Credit Card 4315X9008 has been changed from INR 70000 to INR 520000 on 2025-12-21.",
+      "body": "Dear Customer, The credit limit for your Example Bank Credit Card 4315X6153 has been changed from INR 70000 to INR 520000 on 2025-12-21.",
       "observedAt": "2026-12-01T09:00:00.000Z"
     }
   ],
@@ -22,7 +22,7 @@
         ],
         "instrument": {
           "kind": "credit_card",
-          "maskDigits": "9008"
+          "maskDigits": "6153"
         }
       }
     ]

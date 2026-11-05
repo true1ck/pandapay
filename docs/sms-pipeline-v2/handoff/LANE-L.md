@@ -27,15 +27,14 @@ Demographic, social and marketing: `IGN-SOCIAL-MATRIMONIAL-NOTICE`, `IGN-ASTROLO
 - **Alias trap.** The engine compares an ignore rule's `senders` with the canonical brand only; lint accepts aliases. A rule scoped to an alias never fires. Two such mistakes were found (a Jio and a Federal Bank alias) and fixed by writing canonical brands. Request filed below.
 - Not ignored on purpose: bills and statements with no due date, mandates, IPO holds and unblocks, broker fund-balance reports, refunds, recharge and wallet-recharge receipts, rental payment receipts, card EMI conversion confirmations.
 
-## Results (private corpus 5,196 messages; labeled sample 327, draft labels)
+## Results (private corpus and labeled sample, draft labels)
 
 | Measure | Before | After |
 | --- | --- | --- |
-| Corpus matched | 2,064 | 2,064 |
-| Corpus ignored | 1,518 | 2,290 |
-| Corpus unknown | 1,614 (31.1%) | 842 (16.2%) |
-| Unknown to ignored | | 805 |
-| Ignored to unknown (shadow fix) | | 33 |
+| Corpus unknown share | 31.1% | 16.2% |
+| Corpus matched | unchanged | unchanged |
+| Corpus messages moved from unknown to ignored | | most of the drop |
+| Ignored back to unknown (shadow fix) | | a few |
 | Matched rows lost to an ignore rule | | 0 |
 | Sample accuracy (rows right of 327) | 176 | 188 |
 | Sample rows labeled non-financial but unknown | 26 | 0 |

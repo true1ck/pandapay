@@ -6,7 +6,7 @@
   "messages": [
     {
       "sender": "VM-ICICIT-S",
-      "body": "Dear Customer, your Example Bank Account XXX1234 has been credited with Rs 2500.00 on 23-Oct-26 as reversal of transaction with UPI: 666226463540.",
+      "body": "Dear Customer, your Example Bank Account XXX1234 has been credited with Rs 2500.00 on 23-Oct-26 as reversal of transaction with UPI: 432100000901.",
       "observedAt": "2026-12-01T09:00:00.000Z"
     }
   ],

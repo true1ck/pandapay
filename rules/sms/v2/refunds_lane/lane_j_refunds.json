@@ -1055,14 +1055,14 @@
     "examples": [
       {
         "sender": "VM-EXBANK-S",
-        "body": "Dear Customer, your Example Bank Account XXX911 has been credited with Rs 2500.00 on 23-Oct-26 as reversal of transaction with UPI: 666226463540.",
+        "body": "Dear Customer, your Example Bank Account XXX911 has been credited with Rs 2500.00 on 23-Oct-26 as reversal of transaction with UPI: 432100000902.",
         "expectFactTypes": [
           "movement"
         ]
       },
       {
         "sender": "VM-EXBANK-S",
-        "body": "Dear Customer, your Example Bank Account XXX911 has been credited with Rs 2500.00 on 23-Oct-26 as interest. UPI: 666226463540.",
+        "body": "Dear Customer, your Example Bank Account XXX911 has been credited with Rs 2500.00 on 23-Oct-26 as interest. UPI: 432100000902.",
         "expectFactTypes": []
       }
     ],
@@ -1449,14 +1449,14 @@
     "examples": [
       {
         "sender": "VM-EXBANK-S",
-        "body": "Rs.236.25 has been credited to your credit card ending with 2837 as reversal of UPI trxn. dated 18-08-26 at EXAMPLE MERCHANT (UPI Ref No. 116956643601) - Example Bank",
+        "body": "Rs.236.25 has been credited to your credit card ending with 7421 as reversal of UPI trxn. dated 18-08-26 at EXAMPLE MERCHANT (UPI Ref No. 432100000901) - Example Bank",
         "expectFactTypes": [
           "movement"
         ]
       },
       {
         "sender": "VM-EXBANK-S",
-        "body": "Rs.236.25 has been debited from your credit card ending with 2837 for UPI trxn. dated 18-08-26 at EXAMPLE MERCHANT (UPI Ref No. 116956643601) - Example Bank",
+        "body": "Rs.236.25 has been debited from your credit card ending with 7421 for UPI trxn. dated 18-08-26 at EXAMPLE MERCHANT (UPI Ref No. 432100000901) - Example Bank",
         "expectFactTypes": []
       }
     ],
