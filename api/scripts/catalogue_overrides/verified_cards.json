@@ -1,7 +1,8 @@
 {
   "_readme": [
     "WP7 (plan C7.10, C8 D18j): cards whose engine-checkable worked examples all pass in both engines (JS and Dart) against the generated snapshots, and whose transform carries no blocking flag.",
-    "The loader marks a listed card model_status = verified only if it still has no blocking flag. api/test/card_worked_examples.test.js re-checks every entry."
+    "The loader marks a listed card model_status = verified only if it still has no blocking flag. api/test/card_worked_examples.test.js re-checks every entry.",
+    "hdfc-phonepe-uno was held back until the WP2 loader made UPI-rail earn rules v2-only (C8 D24b); listed after the WP2 merge (4b33990) once its examples passed with no blocking flag (C8 D31c)."
   ],
   "verified": [
     {
@@ -39,6 +40,12 @@
       "examples_passed": 10,
       "examples_not_checkable": 0,
       "checked_on": "2026-11-05"
+    },
+    {
+      "source_slug": "hdfc-phonepe-uno",
+      "examples_passed": 14,
+      "examples_not_checkable": 0,
+      "checked_on": "2026-11-06"
     },
     {
       "source_slug": "hsbc-live-plus-credit-card",
@@ -119,10 +126,5 @@
       "checked_on": "2026-11-05"
     }
   ],
-  "held_back": [
-    {
-      "source_slug": "hdfc-phonepe-uno",
-      "reason": "Held until WP2 landed D24b (UPI-rail earn rules v2-only). That condition is met since the WP2 merge (4b33990): its UPI Scan & Pay rule is v2-only, examples pass, no blocking flag. Kept held until the lead confirms the listing."
-    }
-  ]
+  "held_back": []
 }
