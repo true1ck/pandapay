@@ -327,6 +327,21 @@ begin
   end if;
   delete from card_products where id = v_ord;
 
+  -- M7/D33f: index_hash accepts only text[] and uuid[] (a date[]/timestamp[] cast is DateStyle dependent)
+  if (select count(*) from pg_proc where pronamespace = 'pandapay'::regnamespace and proname = 'index_hash') <> 2
+     or exists (select 1 from pg_proc where pronamespace = 'pandapay'::regnamespace
+                   and proname = 'index_hash' and proargtypes::oid[] = array['anyarray'::regtype::oid]) then
+    raise exception 'pandapay.index_hash must have exactly the text[] and uuid[] overloads';
+  end if;
+  begin
+    perform pandapay.index_hash(array[date '2026-01-01']);
+    raise exception 'index_hash must reject date[]';
+  exception when undefined_function then null; end;
+  if pandapay.index_hash(array['a','b']::text[]) = pandapay.index_hash(array['a','c']::text[])
+     or pandapay.index_hash(array[gen_random_uuid()]) is null then
+    raise exception 'index_hash must hash text[] and uuid[]';
+  end if;
+
   -- D7: extra rounding modes
   update card_products set accrual_rounding = 'points_half_up' where id = v_card;
   update card_products set accrual_rounding = 'points_floor' where id = v_card;
