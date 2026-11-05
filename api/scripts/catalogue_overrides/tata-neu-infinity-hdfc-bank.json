@@ -1,0 +1,33 @@
+{
+  "source_slug": "tata-neu-infinity-hdfc-bank",
+  "changes": [
+    {
+      "path": "cap_rules[id=grocery_monthly_2000].metric",
+      "value": "total_reward_points",
+      "reason": "Issuer caps total NeuCoins in the category per month.",
+      "source_url": "https://www.hdfc.bank.in/content/dam/hdfcbankpws/in/en/personal-banking/discover-products/cards/credit-cards/tata-neu-infinity-credit-card/pdf/tata_neu_infinity_card_tnc.pdf",
+      "checked_on": "2026-11-05"
+    },
+    {
+      "path": "cap_rules[id=utility_monthly_2000].metric",
+      "value": "total_reward_points",
+      "reason": "Issuer caps total NeuCoins in the category per month.",
+      "source_url": "https://www.hdfc.bank.in/content/dam/hdfcbankpws/in/en/personal-banking/discover-products/cards/credit-cards/tata-neu-infinity-credit-card/pdf/tata_neu_infinity_card_tnc.pdf",
+      "checked_on": "2026-11-05"
+    },
+    {
+      "path": "cap_rules[id=telecom_monthly_2000].metric",
+      "value": "total_reward_points",
+      "reason": "Issuer caps total NeuCoins in the category per month.",
+      "source_url": "https://www.hdfc.bank.in/content/dam/hdfcbankpws/in/en/personal-banking/discover-products/cards/credit-cards/tata-neu-infinity-credit-card/pdf/tata_neu_infinity_card_tnc.pdf",
+      "checked_on": "2026-11-05"
+    },
+    {
+      "path": "cap_rules[id=insurance_monthly_2000].metric",
+      "value": "total_reward_points",
+      "reason": "Issuer caps total NeuCoins in the category per month.",
+      "source_url": "https://www.hdfc.bank.in/content/dam/hdfcbankpws/in/en/personal-banking/discover-products/cards/credit-cards/tata-neu-infinity-credit-card/pdf/tata_neu_infinity_card_tnc.pdf",
+      "checked_on": "2026-11-05"
+    }
+  ]
+}
