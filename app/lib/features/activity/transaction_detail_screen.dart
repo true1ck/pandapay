@@ -1807,10 +1807,13 @@ class _SmsEvidenceSection extends ConsumerWidget {
         )
         .toList();
     final sms = smsEvidence.isEmpty ? null : smsEvidence.first;
-    final captured = sms?.sourceKey == null
+    // Rows made by the v2 pipeline carry the message key on the row itself
+    // and have no observations list, so fall back to it.
+    final messageKey = sms?.sourceKey ?? entry.sourceKey;
+    final captured = messageKey == null || messageKey.isEmpty
         ? null
-        : ref.watch(_capturedSmsProvider(sms!.sourceKey!)).valueOrNull;
-    final received = sms?.observedAt?.toLocal();
+        : ref.watch(_capturedSmsProvider(messageKey)).valueOrNull;
+    final received = (sms?.observedAt ?? entry.smsReceivedAt)?.toLocal();
     final receivedLabel = received == null
         ? 'Received time unavailable'
         : received.toString().split('.').first;

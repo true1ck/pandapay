@@ -173,6 +173,7 @@ void main() {
     Future<void> pumpEvidence(
       WidgetTester tester, {
       required bool messageOnPhone,
+      bool keyOnEntryOnly = false,
     }) async {
       final database = openInMemoryForTesting();
       addTearDown(database.close);
@@ -191,13 +192,19 @@ void main() {
         merchantName: 'TESTSHOP',
         source: 'sms',
         status: 'active',
-        observations: [
-          TransactionObservation(
-            source: 'sms',
-            sourceKey: key,
-            observedAt: DateTime(2026, 11, 1, 10),
-          ),
-        ],
+        // Rows made by the v2 pipeline carry the message key on the row
+        // itself and have no observations list.
+        sourceKey: keyOnEntryOnly ? key : null,
+        smsReceivedAt: keyOnEntryOnly ? DateTime(2026, 11, 1, 10) : null,
+        observations: keyOnEntryOnly
+            ? const []
+            : [
+                TransactionObservation(
+                  source: 'sms',
+                  sourceKey: key,
+                  observedAt: DateTime(2026, 11, 1, 10),
+                ),
+              ],
       );
       await _pump(
         tester,
@@ -223,6 +230,18 @@ void main() {
       expect(find.textContaining('Original SMS captured on this device'), findsOneWidget);
       expect(find.textContaining('screenshot'), findsNothing);
       expect(find.textContaining('not uploaded as transaction evidence'), findsNothing);
+    });
+
+    testWidgets('v2 row (key on the row, no observations): finds the message', (
+      tester,
+    ) async {
+      await pumpEvidence(
+        tester,
+        messageOnPhone: true,
+        keyOnEntryOnly: true,
+      );
+      expect(find.text(present), findsOneWidget);
+      expect(find.text(missing), findsNothing);
     });
 
     testWidgets('message missing: says so, with no screenshot advice', (
