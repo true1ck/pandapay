@@ -1141,6 +1141,38 @@ test('D20a/D20b a reduced-rate rule or carve-out with an explicit MCC list also 
   assert.deepEqual(shape('accel_mcc'), [['earn', 'dining', '5812', 2, null, 10]]);
 });
 
+test('D21b a carve-out at or below base that v1 cannot express hides the accelerators it carves out of from v1', () => {
+  const r = run(pointsCard([
+    rule({ id: 'accel_grocery', category_id: 'grocery', priority: 10, action: { points_per_block: 10 } }),
+    rule({ id: 'accel_dining', category_id: 'dining', priority: 11, action: { points_per_block: 10 } }),
+    rule({ id: 'accel_amazon', category_id: 'amazon', priority: 12, action: { points_per_block: 10 } }),
+    rule({ id: 'accel_utility', category_id: 'utility', priority: 13, action: { points_per_block: 10 } }),
+    // multi-merchant carve-out at the base rate: v2-only
+    rule({ id: 'wholesale_carve', category_id: 'grocery', evaluation_type: 'exclusion', priority: 50, conditions: { merchant: ['Amazon', 'Flipkart'] },
+      action: { points_per_block: 2, reason: 'Accelerated points are not available at these merchants; spend earns the standard rate.' } }),
+    // MCC-only carve-out at the base rate: v2-only, MCC 5812 is dining
+    rule({ id: 'fast_food_carve', category_id: 'excluded_spend', evaluation_type: 'exclusion', priority: 51, conditions: { mcc: [5812] },
+      action: { points_per_block: 2, reason: 'Accelerated points do not accrue here; eligible spend earns the standard rate.' } }),
+    // below base on an MCC with an app category: v1 shows its D18c/D19h projection, nothing hidden
+    rule({ id: 'accel_fuel', category_id: 'fuel', priority: 14, action: { points_per_block: 10 } }),
+    rule({ id: 'fuel_carve', category_id: 'excluded_spend', evaluation_type: 'exclusion', priority: 53, conditions: { mcc: [5541] },
+      action: { points_per_block: 1, reason: 'Accelerated points do not accrue here; eligible spend earns the base 1 RP.' } }),
+    // a category-only carve-out is v1-visible itself: nothing is hidden for it
+    rule({ id: 'utility_carve', category_id: 'utility', evaluation_type: 'exclusion', priority: 52,
+      action: { points_per_block: 1, reason: 'Accelerated points do not accrue on utilities; eligible spend earns the base 1 RP.' } }),
+  ]));
+  const v = (id) => only(r, id).map((x) => x.min_engine_version);
+  assert.deepEqual(v('accel_grocery'), [2], 'carved out by the wholesale merchants');
+  assert.ok(only(r, 'accel_grocery')[0].flags.includes('hidden_from_v1_carve_out'));
+  assert.deepEqual(v('accel_amazon'), [2], 'Amazon is one of the carved-out merchants');
+  assert.deepEqual(v('accel_dining'), [2], 'carved out by the MCC 5812 carve-out');
+  assert.deepEqual(v('accel_utility'), [1], 'the utility carve-out is visible to v1 itself');
+  assert.deepEqual(v('accel_fuel'), [1], 'the fuel carve-out has a v1-only projection row');
+  assert.ok(only(r, 'fuel_carve').some((x) => x.min_engine_version === 1 && x.max_engine_version === 1 && x.category_slug === 'fuel'));
+  assert.ok(only(r, 'wholesale_carve').every((x) => x.min_engine_version === 2));
+  assert.ok(r.card.model_coverage.flags.some((f) => f.code === 'hidden_from_v1_carve_out'));
+});
+
 test('H2 an exclusion whose one name list holds merchants and apps excludes at any of them (never merchant AND app)', () => {
   const r = run(pointsCard([
     rule({ id: 'edu_apps', category_id: 'education', evaluation_type: 'exclusion', conditions: { mcc: [8211], platforms: ['Amazon', 'PhonePe', 'Kiwi App'] },

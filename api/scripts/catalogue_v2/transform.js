@@ -12,7 +12,7 @@
 
 const { asNumber, isNA, uniq } = require('./util');
 const { buildDirectoryIndex } = require('./directory');
-const { NARROW_TOKEN_MCC, mapCategorySlugs, resolveCategoryToken } = require('./category_tokens');
+const { MCC_CATEGORY, NARROW_TOKEN_MCC, mapCategorySlugs, resolveCategoryToken } = require('./category_tokens');
 const { transformRewardRules, valuePerRupee } = require('./rules');
 const { transformCaps } = require('./caps');
 const { transformMilestones } = require('./milestones');
@@ -162,6 +162,83 @@ function hideUncappedFromV1(rules, caps, card) {
         changed = true;
       }
     }
+  }
+  return hidden;
+}
+
+// D21b: a carve-out at or below the base rate that v1 can't show (MCC- or
+// multi-merchant-scoped, so all its rows are v2-only) would leave v1 paying
+// the accelerator where the bank pays only the base. Every v1-visible
+// above-base earn row that could match the carve-out's scope is hidden from
+// v1 (min_engine_version 2): v1 then pays the base there. Conservative: a
+// scope that can't be told apart counts as overlapping.
+function hideCarvedAcceleratorsFromV1(rules, card, index) {
+  const v1Visible = (r) => r.min_engine_version === 1 && r.rule_role !== 'info';
+  const earnPerRupee = (r) => valuePerRupee(r.unit, r.rate, 1, r.block_inr);
+  const bySource = new Map();
+  for (const r of rules) {
+    if (!bySource.has(r.source_local_id)) bySource.set(r.source_local_id, []);
+    bySource.get(r.source_local_id).push(r);
+  }
+  const carveOuts = [];
+  for (const rows of bySource.values()) {
+    const earning = rows.filter((r) => r.flags.includes('exclusion_with_stated_rate') && ['earn', 'base'].includes(r.rule_role));
+    if (!earning.length || rows.some(v1Visible)) continue; // v1 shows it (or a broader projection of it)
+    const atOrBelowBase = card.baseEarnPerRupee != null && earning.every((r) => {
+      const e = earnPerRupee(r);
+      return r.currency === card.baseCurrency && e !== null && e <= card.baseEarnPerRupee + 1e-9;
+    });
+    if (atOrBelowBase) carveOuts.push(...earning.filter((r) => r.max_engine_version !== 1));
+  }
+  if (!carveOuts.length) return [];
+
+  const chain = (slug) => {
+    const out = [];
+    const seen = new Set();
+    for (let cur = slug; cur && !seen.has(cur); cur = index?.merchants?.get(cur)?.parent_slug || null) {
+      seen.add(cur);
+      out.push(cur);
+    }
+    return out;
+  };
+  const overlaps = (a, c) => {
+    if (a.rail && c.rail && a.rail !== c.rail) return false;
+    if (a.category_slug && c.category_slug && a.category_slug !== c.category_slug) return false;
+    if (a.category_slug && !c.category_slug && c.mcc_include.length) {
+      const cats = c.mcc_include.map((m) => MCC_CATEGORY[m]);
+      if (cats.every(Boolean) && !cats.includes(a.category_slug)) return false;
+    }
+    const am = a.merchant_slugs || [];
+    if (am.length && c.merchant_slugs.length && !c.merchant_slugs.some((cm) => chain(cm).some((x) => am.includes(x)))) return false;
+    if (am.length && !c.merchant_slugs.length && c.mcc_include.length) {
+      const known = am.flatMap((s) => (index?.merchants?.get(s)?.mcc || []).map((m) => String(m).padStart(4, '0')));
+      if (known.length && !known.some((m) => c.mcc_include.includes(m))) return false;
+    }
+    return true;
+  };
+
+  const hidden = [];
+  for (const a of rules) {
+    if (!v1Visible(a) || a.rule_role !== 'earn' || a.flags.includes('exclusion_with_stated_rate')) continue;
+    let above;
+    if (a.currency && a.currency === card.baseCurrency) {
+      const e = earnPerRupee(a);
+      above = e !== null && card.baseEarnPerRupee != null && e > card.baseEarnPerRupee + 1e-9;
+    } else {
+      const v = valuePerRupee(a.unit, a.rate, card.pointValueInr, a.block_inr);
+      above = v !== null && card.baseValue != null && v > card.baseValue + 1e-9;
+    }
+    if (!above) continue;
+    const by = uniq(carveOuts.filter((c) => overlaps(a, c)).map((c) => c.source_local_id));
+    if (!by.length) continue;
+    a.min_engine_version = 2;
+    a.v2_reasons = uniq([...(a.v2_reasons || []), 'carve_out_not_v1_visible']);
+    a.flags = uniq([...a.flags, 'hidden_from_v1_carve_out']);
+    hidden.push(`${a.key} (by ${by.join('+')})`);
+  }
+  // A v1-only row hidden from v1 is visible nowhere.
+  for (let i = rules.length - 1; i >= 0; i -= 1) {
+    if (rules[i].max_engine_version === 1 && rules[i].min_engine_version !== 1) rules.splice(i, 1);
   }
   return hidden;
 }
@@ -402,6 +479,10 @@ function transformCardRecordV2(rawRecord, opts = {}) {
     extraFlags.push({ code: 'card_level_narrow_exclusion', source_local_id: null, detail: cardExclusions.narrow.map((n) => n.token).join(', ') });
   }
 
+  const hiddenByCarveOut = hideCarvedAcceleratorsFromV1(rewardRules, ctx.card, ctx.index);
+  if (hiddenByCarveOut.length) {
+    extraFlags.push({ code: 'hidden_from_v1_carve_out', source_local_id: null, detail: hiddenByCarveOut.join(', ') });
+  }
   const capResult = transformCaps(record, rewardRules, ctx);
   const hiddenUncapped = hideUncappedFromV1(rewardRules, capResult.caps, ctx.card);
   if (hiddenUncapped.length) {
