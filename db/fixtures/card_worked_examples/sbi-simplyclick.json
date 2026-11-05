@@ -1,0 +1,283 @@
+{
+  "source_slug": "sbi-simplyclick",
+  "cardpipeline_id": "state-bank-of-india-simplyclick-sbi-credit-card",
+  "card_name": "SimplyCLICK SBI Credit Card",
+  "verified_on": "2026-11-05",
+  "sources": [
+    {
+      "url": "https://www.sbicard.com/sbi-card-en/assets/docs/pdf/SimplyClick-TnC.pdf",
+      "doc": "SimplyCLICK T&C booklet (Jul 2026)",
+      "quote": "5X Reward Points are applicable for all online spends made other than on exclusive partner brands and will be capped at 10,000 Reward Points per calendar month"
+    },
+    {
+      "url": "https://www.sbicard.com/sbi-card-en/assets/docs/pdf/SimplyClick-TnC.pdf",
+      "doc": "SimplyCLICK T&C booklet (Jul 2026)",
+      "quote": "Post that, every Rs.100 spent will accrue 1 Reward Point"
+    },
+    {
+      "url": "https://www.sbicard.com/sbi-card-en/assets/docs/pdf/SimplyClick-TnC.pdf",
+      "doc": "SimplyCLICK T&C booklet (Jul 2026)",
+      "quote": "Cash Advance, Balance Transfer, Encash, Flexipay and Offline Fuel transaction (5172, 5541, 5983, 5542) are not included"
+    }
+  ],
+  "examples": [
+    {
+      "id": "001",
+      "title": "Rs 2,000 offline shop purchase",
+      "ctx": {
+        "amount": 2000,
+        "occurred": "2026-11-05T10:00:00+05:30",
+        "category_slug": "other",
+        "mcc": 5651,
+        "merchant_name": "Clothes shop",
+        "merchant_vpa": null,
+        "merchant_slug": null,
+        "platform": null,
+        "rail": "swipe"
+      },
+      "state_before": {
+        "caps_by_source_id": {}
+      },
+      "expect": {
+        "currency": "points",
+        "amount": 20,
+        "value_inr": null,
+        "excluded": false,
+        "cap_deltas_by_source_id": {}
+      },
+      "why": "1 RP per Rs100 offline: 20."
+    },
+    {
+      "id": "002",
+      "title": "Rs 3,000 online purchase on Amazon (5X)",
+      "ctx": {
+        "amount": 3000,
+        "occurred": "2026-11-05T10:00:00+05:30",
+        "category_slug": "online",
+        "mcc": 5311,
+        "merchant_name": "Amazon",
+        "merchant_vpa": null,
+        "merchant_slug": "amazon",
+        "platform": null,
+        "rail": "online"
+      },
+      "state_before": {
+        "caps_by_source_id": {}
+      },
+      "expect": {
+        "currency": "points",
+        "amount": 150,
+        "value_inr": null,
+        "excluded": false,
+        "cap_deltas_by_source_id": {
+          "cap_online_5x_monthly": 150
+        }
+      },
+      "why": "5X on non-partner online spends: 5 RP per Rs100 = 150. Counts toward the 10,000 RP/month 5X cap."
+    },
+    {
+      "id": "003",
+      "title": "Rs 10,000 on Cleartrip (exclusive partner, 10X)",
+      "ctx": {
+        "amount": 10000,
+        "occurred": "2026-11-05T10:00:00+05:30",
+        "category_slug": "travel",
+        "mcc": 4722,
+        "merchant_name": "Cleartrip",
+        "merchant_vpa": null,
+        "merchant_slug": "cleartrip",
+        "platform": null,
+        "rail": "online"
+      },
+      "state_before": {
+        "caps_by_source_id": {}
+      },
+      "expect": {
+        "currency": "points",
+        "amount": 1000,
+        "value_inr": null,
+        "excluded": false,
+        "cap_deltas_by_source_id": {}
+      },
+      "why": "10X on exclusive online partners (Cleartrip is named in the T&C): 10 RP per Rs100 = 1,000. The T&C read states no cap for the 10X tier."
+    },
+    {
+      "id": "004",
+      "title": "Rs 5,000 online after the 5X cap is used",
+      "ctx": {
+        "amount": 5000,
+        "occurred": "2026-11-05T10:00:00+05:30",
+        "category_slug": "online",
+        "mcc": 5311,
+        "merchant_name": "Amazon",
+        "merchant_vpa": null,
+        "merchant_slug": "amazon",
+        "platform": null,
+        "rail": "online"
+      },
+      "state_before": {
+        "caps_by_source_id": {
+          "cap_online_5x_monthly": 10000
+        }
+      },
+      "expect": {
+        "currency": "points",
+        "amount": 50,
+        "value_inr": null,
+        "excluded": false,
+        "cap_deltas_by_source_id": {}
+      },
+      "why": "Issuer: after the 10,000 RP cap, every Rs100 earns 1 RP: 50."
+    },
+    {
+      "id": "005",
+      "title": "Rs 2,000 fuel at a pump",
+      "ctx": {
+        "amount": 2000,
+        "occurred": "2026-11-05T10:00:00+05:30",
+        "category_slug": "fuel",
+        "mcc": 5541,
+        "merchant_name": "Petrol pump",
+        "merchant_vpa": null,
+        "merchant_slug": null,
+        "platform": null,
+        "rail": "swipe"
+      },
+      "state_before": {
+        "caps_by_source_id": {}
+      },
+      "expect": {
+        "currency": "points",
+        "amount": 0,
+        "value_inr": null,
+        "excluded": true,
+        "cap_deltas_by_source_id": {}
+      },
+      "why": "Offline fuel excluded."
+    },
+    {
+      "id": "006",
+      "title": "Rs 20,000 rent",
+      "ctx": {
+        "amount": 20000,
+        "occurred": "2026-11-05T10:00:00+05:30",
+        "category_slug": "rent",
+        "mcc": 6513,
+        "merchant_name": "Rent payment",
+        "merchant_vpa": null,
+        "merchant_slug": null,
+        "platform": null,
+        "rail": "online"
+      },
+      "state_before": {
+        "caps_by_source_id": {}
+      },
+      "expect": {
+        "currency": "points",
+        "amount": 0,
+        "value_inr": null,
+        "excluded": true,
+        "cap_deltas_by_source_id": {}
+      },
+      "why": "Rent excluded since 1 Apr 2024."
+    },
+    {
+      "id": "007",
+      "title": "Rs 3,000 wallet load",
+      "ctx": {
+        "amount": 3000,
+        "occurred": "2026-11-05T10:00:00+05:30",
+        "category_slug": "wallet",
+        "mcc": 6540,
+        "merchant_name": "Wallet top up",
+        "merchant_vpa": null,
+        "merchant_slug": null,
+        "platform": null,
+        "rail": "online"
+      },
+      "state_before": {
+        "caps_by_source_id": {}
+      },
+      "expect": {
+        "currency": "points",
+        "amount": 0,
+        "value_inr": null,
+        "excluded": true,
+        "cap_deltas_by_source_id": {}
+      },
+      "why": "e-Wallet loads excluded."
+    },
+    {
+      "id": "008",
+      "title": "Rs 2,000 government payment",
+      "ctx": {
+        "amount": 2000,
+        "occurred": "2026-11-05T10:00:00+05:30",
+        "category_slug": "government",
+        "mcc": 9399,
+        "merchant_name": "Government fee",
+        "merchant_vpa": null,
+        "merchant_slug": null,
+        "platform": null,
+        "rail": "online"
+      },
+      "state_before": {
+        "caps_by_source_id": {}
+      },
+      "expect": {
+        "currency": "points",
+        "amount": 0,
+        "value_inr": null,
+        "excluded": true,
+        "cap_deltas_by_source_id": {}
+      },
+      "why": "Government spends excluded since 1 Jun 2024."
+    },
+    {
+      "id": "009",
+      "title": "Rs 2,000 digital gaming",
+      "ctx": {
+        "amount": 2000,
+        "occurred": "2026-11-05T10:00:00+05:30",
+        "category_slug": "entertainment",
+        "mcc": 7993,
+        "merchant_name": "Gaming platform",
+        "merchant_vpa": null,
+        "merchant_slug": null,
+        "platform": null,
+        "rail": "online"
+      },
+      "state_before": {
+        "caps_by_source_id": {}
+      },
+      "expect": {
+        "currency": "points",
+        "amount": 0,
+        "value_inr": null,
+        "excluded": true,
+        "cap_deltas_by_source_id": {}
+      },
+      "why": "Digital gaming excluded since 1 Dec 2024."
+    }
+  ],
+  "research_notes": [
+    {
+      "item": "10X partner cap cap_exclusive_10x_monthly (10,000)",
+      "cardpipeline_says": "10,000 RP per month on the 10X tier.",
+      "issuer_says": "T&C state the 10,000 cap for the 5X tier only. No cap is stated for 10X, so no boundary example.",
+      "proposed_fix": "importer"
+    },
+    {
+      "item": "5X cap straddle",
+      "cardpipeline_says": "downgrade_to_base_rate.",
+      "issuer_says": "Matches (\"every Rs.100 spent will accrue 1 RP\" after the cap). How a transaction that crosses the cap is split is not stated, so no boundary example.",
+      "proposed_fix": "none"
+    },
+    {
+      "item": "exclusive partner list",
+      "cardpipeline_says": "10 partners incl. Apollo, BookMyShow, Dominos, IGP, Myntra, Netmeds, Yatra, GyFTR, Tata CLiQ.",
+      "issuer_says": "The booklet lists partners as images, so the list could not be read as text. Cleartrip, Yatra and GyFTR are named in the text.",
+      "proposed_fix": "none"
+    }
+  ]
+}
