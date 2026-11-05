@@ -4,8 +4,8 @@
   "inputs": {
     "transform_version": "7",
     "source_record_sha256": "0f0ab8fafeeb5e5343353df94f7376dd03be6af9a34bc87e34bc01d886cf69fb",
-    "override_sha256": "3aeaacc59e61233cc334f702ac74e387211615e412860e32c07cf8ac8e160d2f",
-    "directory_sha256": "3d9f9f535481544d4b19262838290f77d8270eb3b4aec73c48608f10c39cedf2",
+    "override_sha256": "32cb7be5e2deaceb32fe3be17101c76f27dafc42950e6e720806d1a2d1394114",
+    "directory_sha256": "b1094d54b77e848d22f7a9a64f3ae6d1ef43ca3eb2fc8e40cd43ed1994664694",
     "verified": false
   },
   "blocking_flags": [
@@ -36,8 +36,8 @@
     "points_expiry_months": null,
     "model_status": "partial",
     "model_coverage": {
-      "rules_total": 18,
-      "rules_modelled": 14,
+      "rules_total": 19,
+      "rules_modelled": 15,
       "rules_info": 4,
       "caps_total": 3,
       "caps_enforced": 2,
@@ -214,6 +214,14 @@
           "op": "append",
           "value_sha256": "1b4562f83e4f9fcd",
           "reason": "WP7: T&C 4.1: from 21 Apr 2026 the 10% Swiggy category needs at least Rs249; issuer worked example: a Rs150 Swiggy order earns 0 (not the 1% other rate). D16b: a no-reward-below-minimum term is an exclusion with max_txn_inr.",
+          "source_url": "https://www.hdfc.bank.in/content/dam/hdfcbankpws/in/en/personal-banking/discover-products/cards/credit-cards/swiggy-hdfc-bank-credit-card/pdf/terms-and-conditions-swiggy-hdfc-bank-credit-card-18092026.pdf",
+          "checked_on": "2026-11-05"
+        },
+        {
+          "path": "reward_rules",
+          "op": "append",
+          "value_sha256": "d2ab06b1d9b8bedb",
+          "reason": "WP7: T&C: \"Cashback will not be accrued ... EMI (all type)\". The record's EMI exclusion is emitted as category emi AND rail emi, so an EMI purchase in another category was not excluded (D24e: data fix while WP2 changes the loader). Rail-EMI exclusion on all spend, as on flipkart-sbi-card.",
           "source_url": "https://www.hdfc.bank.in/content/dam/hdfcbankpws/in/en/personal-banking/discover-products/cards/credit-cards/swiggy-hdfc-bank-credit-card/pdf/terms-and-conditions-swiggy-hdfc-bank-credit-card-18092026.pdf",
           "checked_on": "2026-11-05"
         }
@@ -1376,6 +1384,40 @@
         "max_engine_version": null,
         "source_local_id": "swiggy_below_minimum_exclusion",
         "display_note": "Swiggy transactions below Rs249 earn no cashback."
+      },
+      {
+        "id": "swiggy-hdfc-bank-credit-card:rule:wp7_emi_rail_exclusion",
+        "category_id": null,
+        "category_slug": null,
+        "merchant_pattern": null,
+        "rail": "emi",
+        "unit": "cashback_percent",
+        "rate": 0,
+        "min_txn_inr": null,
+        "max_txn_inr": null,
+        "priority": 0,
+        "conditions": {
+          "source_local_id": "wp7_emi_rail_exclusion",
+          "part": null,
+          "info_reasons": [],
+          "flags": []
+        },
+        "notes": null,
+        "effective_from": "2026-05-22",
+        "effective_to": null,
+        "excluded_categories": [],
+        "rule_role": "exclusion",
+        "merchant_slugs": [],
+        "platform_slugs": [],
+        "mcc_include": [],
+        "mcc_exclude": [],
+        "except_merchant_slugs": [],
+        "except_platform_slugs": [],
+        "block_inr": null,
+        "min_engine_version": 2,
+        "max_engine_version": null,
+        "source_local_id": "wp7_emi_rail_exclusion",
+        "display_note": "EMI transactions earn no rewards."
       },
       {
         "id": "swiggy-hdfc-bank-credit-card:rule:other_1pct#min-amount",
