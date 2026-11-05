@@ -608,4 +608,86 @@ void main() {
       expect(result.points, 0);
     });
   });
+  group('v1-only rows (D18a)', () {
+    // A precise v2 rule (fast-food MCC exclusion) with its broad v1
+    // projection (all dining excluded), as the loader emits them.
+    const card = CardProduct(
+      id: 'd18',
+      name: 'D18',
+      network: CardNetwork.visa,
+      baseRewardUnit: RewardUnit.cashbackPercent,
+      baseRewardRate: 1,
+      rewardRules: [
+        RewardRule(
+          id: 'broad-excl',
+          categoryId: 'cat-dining',
+          unit: RewardUnit.cashbackPercent,
+          rate: 0,
+          priority: 1,
+          role: RuleRole.exclusion,
+          maxEngineVersion: 1,
+        ),
+        RewardRule(
+          id: 'broad-high',
+          categoryId: 'cat-dining',
+          unit: RewardUnit.cashbackPercent,
+          rate: 20,
+          priority: 5,
+          role: RuleRole.earn,
+          maxEngineVersion: 1,
+        ),
+        RewardRule(
+          id: 'fast-food-excl',
+          unit: RewardUnit.cashbackPercent,
+          rate: 0,
+          priority: 1,
+          role: RuleRole.exclusion,
+          mccInclude: ['5814'],
+        ),
+        RewardRule(
+          id: 'dining-5',
+          categoryId: 'cat-dining',
+          unit: RewardUnit.cashbackPercent,
+          rate: 5,
+          priority: 10,
+          role: RuleRole.earn,
+        ),
+      ],
+    );
+
+    test('is never applicable, excluded or a tie candidate in v2', () {
+      expect(
+        RecommendationEngine.ruleAppliesV2(
+          card.rewardRules.first,
+          _ctx(1000, categoryId: 'cat-dining'),
+        ),
+        isFalse,
+      );
+      final result = RecommendationEngine.evaluateRewardV2(
+        card,
+        _ctx(1000, categoryId: 'cat-dining'),
+      );
+      expect(result.excluded, isFalse);
+      expect(result.ruleId, 'dining-5');
+      expect(result.cashbackInr, 50);
+      expect(
+        result.reasons.where((r) => r.startsWith('rule_skipped')),
+        isEmpty,
+      );
+    });
+
+    test('the precise v2 exclusion still applies', () {
+      final result = computeRewardV2(
+        card,
+        RecommendationContext(
+          amount: Money.fromRupees(1000),
+          categoryId: 'cat-dining',
+          mcc: '5814',
+          rail: TxnRail.swipe,
+        ),
+      );
+      expect(result.excluded, isTrue);
+      expect(result.ruleId, 'fast-food-excl');
+    });
+  });
 }

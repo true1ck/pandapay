@@ -29,10 +29,10 @@ Status values: `not started` · `running` · `done (branch ready)` · `merged` �
 | WP | Title | Wave | Branch | Status | Updated | Notes |
 |---|---|---|---|---|---|---|
 | WP0 | Docs, contracts, scenario seed, directory skeleton | 0 | `card-rewards/phase1` | merged | 2026-11-05 | Lead |
-| WP1 | Schema v2, v1/v2 feeds, directory seeding | 1 | `card-rewards/wp1-schema` | **merged** | 2026-11-06 | Review approved + 1 fix round (D1, D2, D7, CI step); 1393 api tests; DB test fresh + incremental; seeder loads 164/61 |
-| WP2 | Loader v2 (pure transform), coverage, audit script | 1 | `card-rewards/wp2-loader` | needs rework (fix round 2) | 2026-11-06 | All 14 review findings fixed and verified on 376 cards; fixing 2 side effects via D18 (old-feed-only rows so broad exclusions don't zero bonuses in the new app; reduced-rate rules kept for old apps) |
-| WP3 | Dart engine v2 + tolerant parsing | 1 | `card-rewards/wp3-dart-engine` | **merged** | 2026-11-06 | Review approved + 1 fix round (K15 harness, D15, D16); 464/464 on merged branch; all 123 shared scenarios agree with JS |
-| WP4 | JS engine v2 + merchant resolver | 1 | `card-rewards/wp4-js-engine` | **merged** (incl. D15, D16) | 2026-11-06 | 190 targeted tests; 29 contract + 47 JS scenarios |
+| WP1 | Schema v2, v1/v2 feeds, directory seeding | 1 | `card-rewards/wp1-schema` | **merged** | 2026-11-06 | Review + 5 follow-ups (D1, D2, D7, D11, D16, D17l, D18a); DB test passes fresh + incremental; in CI |
+| WP2 | Loader v2 (pure transform), coverage, audit script | 1 | `card-rewards/wp2-loader` | needs rework (fix round 3) | 2026-11-06 | Round 2 fixed 19/21 over-blocked bonuses + reduced rates; fixing a too-eager "bonus-only" detector (41 real exclusions on 9 cards), Landmark SBI movie bonuses, one lost cap — D19 |
+| WP3 | Dart engine v2 + tolerant parsing | 1 | `card-rewards/wp3-dart-engine` | **merged** | 2026-11-06 | 477/477 tests; all 127 shared scenarios agree with JS (incl. D15, D16, D18) |
+| WP4 | JS engine v2 + merchant resolver | 1 | `card-rewards/wp4-js-engine` | **merged** | 2026-11-06 | 272/272 targeted tests on merged branch; passes all 127 shared scenarios incl. Dart's own |
 | WP5 | Merchant and platform directory data | 1 | `card-rewards/wp5-directory` | **merged** | 2026-11-06 | 164 merchants (9 true sub-brand parents, `group` tags per D6), 61 platforms; review + 1 fix round clean; IHCL brands kept under `taj` (ruling in ledger) |
 | WP6a | Worked examples: HDFC, SBI Card | 1 | `card-rewards/wp6a-examples-hdfc-sbi` | **merged** | 2026-11-06 | 21/21 cards, 15 override files; review + 1 fix round clean; Swiggy exact-half rounding parked |
 | WP6b | Worked examples: ICICI, Axis, Amex, IDFC, others | 1 | `card-rewards/wp6b-examples-others` | **merged** | 2026-11-06 | 23/25 cards (Amazon Pay ICICI, AU Zenith+ skipped), 13 override files; 2 fix rounds, verified with the real loader; 18-card loader mismatches carried to WP7 |
@@ -73,6 +73,7 @@ Status values: `not started` · `running` · `done (branch ready)` · `merged` �
 | 2026-11-06 | D16: exclusions with exceptions ("no rewards on fuel except at IndianOil", "utilities only via Google Pay") and minimum amounts ("nothing below ₹100") are modelled; an unknown merchant or app never proves an exception. | Lead |
 | 2026-11-06 | D17: the loader never widens a narrow bonus (pharmacy, movies, hotels, flights) to a whole category — it uses MCC codes or keeps it information-only; exclusions never lose their old-app row; fee/surcharge/redemption limits are never attached to earning rules. | Lead |
 | 2026-11-06 | D18: some rows exist only for the old feed (broad exclusions, broad reduced rates); the new engines ignore them and use the precise version, so old apps stay cautious and the new app stays accurate. | Lead |
+| 2026-11-06 | D19: an exclusion counts as "bonus-only" only if every benefit it removes is a bonus/accelerated rate; an explicit MCC list is the exclusion's real scope; caps follow their source rule; a capped bonus without its cap is hidden from old apps. | Lead |
 | 2026-11-06 | D10: cards switch to the v2 engine only when re-imported by the v2 loader (DB defaults alone never switch a card), so existing cards keep today's behaviour until re-import. | Lead |
 
 ## Changelog

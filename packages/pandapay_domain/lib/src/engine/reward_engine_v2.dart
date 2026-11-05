@@ -325,6 +325,10 @@ bool rewardRuleAppliesV2(
   RecommendationContext context, {
   Set<String> merchantLineage = const {},
 }) {
+  // D18a: a v1-only row (max_engine_version 1) does not exist for v2 — not
+  // applicable, not an exclusion, not a tie candidate, not reported.
+  if (rule.isV1Only) return false;
+
   // 1. Effective dates, as v1: only checked when the caller gave a date;
   // effective_to is inclusive of that whole day.
   final now = context.now;

@@ -102,7 +102,17 @@ function ruleIsV2(rule) {
   if (hasValue(rule.except_merchant_slugs) || hasValue(rule.except_platform_slugs)) return true;
   if (rule.rule_role === 'exclusion' && rule.max_txn_inr != null) return true;
   if (rule.block_inr != null) return true;
+  if (rule.max_engine_version != null) return true; // C8 D18a
   return num(rule.min_engine_version) === 2;
+}
+
+/**
+ * C8 D18a: a row with max_engine_version 1 exists only for the v1 feed. The
+ * v2 engine ignores it entirely — not applicable, not reported as skipped,
+ * never an exclusion or a tie candidate. pg may send the number as a string.
+ */
+function isV1Only(rule) {
+  return rule != null && rule.max_engine_version != null && num(rule.max_engine_version) === 1;
 }
 
 const RAILS = new Set(['upi_qr', 'swipe', 'online', 'contactless', 'atm', 'emi', 'unknown']);
@@ -127,6 +137,7 @@ function ruleProblem(rule) {
     if (rule[field] != null && !isStringList(rule[field])) return `unparseable_${field}`;
   }
   if (rule.block_inr != null && num(rule.block_inr) == null) return 'unparseable_block_inr';
+  if (rule.max_engine_version != null && num(rule.max_engine_version) == null) return 'unparseable_max_engine_version';
   return null;
 }
 
@@ -221,7 +232,7 @@ function resolveContext(ctx, directory) {
  * set, `merchant_pattern` is only its v1 projection and is ignored.
  */
 function ruleAppliesV2(rule, ctx, directory) {
-  if (!rule) return false;
+  if (!rule || isV1Only(rule)) return false;
   if (ruleProblem(rule) != null) return false;
   if (roleOf(rule) === 'info') return false;
   const c = resolveContext(ctx, directory);
@@ -374,12 +385,14 @@ function pickRuleV2(rules, ctx, card, directory) {
   const c = resolveContext(ctx, directory);
   const modes = cardModes(card);
   // C8 D15d: rules that can't be applied as written are listed, not silently dropped.
+  // C8 D18a: v1-only rows don't exist for v2 — not even as skipped rules.
+  const v2Rules = arr(rules).filter((r) => r && !isV1Only(r));
   const skippedRules = [];
-  for (const r of arr(rules)) {
-    const problem = r ? ruleProblem(r) : null;
+  for (const r of v2Rules) {
+    const problem = ruleProblem(r);
     if (problem) skippedRules.push({ id: r.id, reason: problem, exclusion: r.rule_role === 'exclusion' });
   }
-  const applicable = arr(rules).filter((r) => ruleAppliesV2(r, c));
+  const applicable = v2Rules.filter((r) => ruleAppliesV2(r, c));
   const result = (excluded, rule, implicit) => ({ excluded, rule, implicit, skippedRules });
 
   const exclusions = applicable.filter((r) => roleOf(r) === 'exclusion');
@@ -665,7 +678,7 @@ function computeTransactionRewardV2({ card, rewardRules, capRules, capConsumedBe
   if (c.merchantResolvedVia === 'alias') assumptions.push('merchant_resolved_by_alias');
   else if (c.merchantResolvedVia === 'vpa') assumptions.push('merchant_resolved_by_vpa');
   else if (c.resolvedMerchantSlug == null && (c.merchant_name || c.merchant_vpa)) assumptions.push('merchant_unresolved');
-  const earning = rules.filter((r) => r && (roleOf(r) === 'earn' || roleOf(r) === 'base'));
+  const earning = rules.filter((r) => r && !isV1Only(r) && (roleOf(r) === 'earn' || roleOf(r) === 'base'));
   if (c.rail === 'unknown' && earning.some((r) => r.rail != null)) assumptions.push('rail_unknown');
   if (c.platform == null && earning.some((r) => arr(r.platform_slugs).length > 0)) assumptions.push('platform_unknown');
 

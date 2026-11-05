@@ -789,6 +789,50 @@ test('D16 + D15d/e: a malformed except list skips the rule, visibly', () => {
   assert.ok(fuel.assumptions.includes('exclusion_unparsed'));
 });
 
+// --- C8 D18a: v1-only rows ---------------------------------------------------------
+
+test('D18a: max_engine_version 1 rows are invisible to v2 — not applicable, not skipped, no exclusion, no tie', () => {
+  const card = cashbackCard({
+    accrual_rounding: 'none',
+    reward_rules: [
+      // A broad v1-only exclusion and a v1-only earn rule that would win the tie on value.
+      { id: 'v1-excl', rule_role: 'exclusion', category_id: 'cat-dining', max_engine_version: 1, unit: 'cashback_percent', rate: 0, priority: 1 },
+      { id: 'a-v1-earn', rule_role: 'earn', category_id: 'cat-dining', max_engine_version: '1', unit: 'cashback_percent', rate: 20, priority: 10 },
+      { id: 'z-dining', rule_role: 'earn', category_id: 'cat-dining', unit: 'cashback_percent', rate: 10, priority: 10 },
+    ],
+  });
+  const r = computeTransactionRewardV2({ card, capConsumedBefore: {}, ctx: ctxOf({ amount: 1000, category_id: 'cat-dining' }) });
+  assert.deepStrictEqual([r.excluded, r.ruleId, r.cashbackInr], [false, 'z-dining', 100]);
+  assert.ok(!r.reasons.some((x) => x.startsWith('rule_skipped:')));
+  assert.ok(!r.assumptions.includes('exclusion_unparsed'));
+  assert.strictEqual(ruleAppliesV2(card.reward_rules[0], ctxOf({ category_id: 'cat-dining' })), false);
+  assert.strictEqual(pickRuleV2(card.reward_rules, ctxOf({ category_id: 'cat-dining' }), card).skippedRules.length, 0);
+});
+
+test('D18a: a non-null max_engine_version makes the card v2; other numbers have no effect on v2', () => {
+  const base = { base_reward_unit: 'cashback_percent', base_reward_rate: 1 };
+  const plain = { id: 'r', rule_role: 'earn', unit: 'cashback_percent', rate: 5, max_engine_version: null };
+  assert.strictEqual(isV2Card({ ...base, reward_rules: [plain] }), false, 'null = no maximum');
+  assert.strictEqual(isV2Card({ ...base, reward_rules: [{ ...plain, max_engine_version: 1 }] }), true);
+  assert.strictEqual(isV2Card({ ...base, reward_rules: [{ ...plain, max_engine_version: '1' }] }), true);
+  assert.strictEqual(isV2Card({ ...base, reward_rules: [{ ...plain, max_engine_version: 2 }] }), true);
+  assert.strictEqual(ruleAppliesV2({ ...plain, max_engine_version: 2 }, ctxOf({})), true);
+  assert.strictEqual(ruleAppliesV2({ ...plain, max_engine_version: '2' }, ctxOf({})), true);
+});
+
+test('D18a + D15d: a non-numeric max_engine_version skips the rule, visibly', () => {
+  const card = cashbackCard({
+    accrual_rounding: 'none',
+    reward_rules: [
+      { id: 'odd', rule_role: 'exclusion', category_id: 'cat-dining', max_engine_version: 'one', unit: 'cashback_percent', rate: 0, priority: 1 },
+    ],
+  });
+  const r = computeTransactionRewardV2({ card, capConsumedBefore: {}, ctx: ctxOf({ amount: 1000, category_id: 'cat-dining' }) });
+  assert.strictEqual(r.excluded, false);
+  assert.ok(r.reasons.includes('rule_skipped:odd:unparseable_max_engine_version'));
+  assert.ok(r.assumptions.includes('exclusion_unparsed'));
+});
+
 // --- computeTransactionRewardV2: details outside the shared scenarios ----------
 
 function pointsCard(over = {}) {
