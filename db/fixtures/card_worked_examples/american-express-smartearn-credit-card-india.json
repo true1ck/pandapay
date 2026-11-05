@@ -1,0 +1,330 @@
+{
+  "source_slug": "american-express-smartearn-credit-card-india",
+  "cardpipeline_id": "american-express-india-smartearn-credit-card",
+  "card_name": "American Express SmartEarn Credit Card",
+  "verified_on": "2026-11-05",
+  "sources": [
+    {
+      "url": "https://www.americanexpress.com/in/credit-cards/smart-earn-credit-card/",
+      "doc": "SmartEarn product page",
+      "quote": "1 Membership Rewards point for every Rs. 50 spent, except on the excluded categories"
+    },
+    {
+      "url": "https://www.americanexpress.com/in/credit-cards/smart-earn-credit-card/",
+      "doc": "SmartEarn product page",
+      "quote": "500 points per month per Card Account for 10X partners; 250 for Amazon (5X)"
+    },
+    {
+      "url": "https://www.americanexpress.com/content/dam/amex/en-in/benefits/rewards/membership-rewards/membership-rewards-terms.pdf",
+      "doc": "Membership Rewards terms",
+      "quote": "you earn 1 Membership Rewards Point for every Rs. 50 spent on all purchases, except Fuel*, Insurance and Other Utility Services"
+    }
+  ],
+  "examples": [
+    {
+      "id": "001",
+      "title": "Rs 5,000 general retail spend",
+      "ctx": {
+        "amount": 5000,
+        "occurred": "2026-11-10T10:00:00+05:30",
+        "category_id": null,
+        "category_slug": "other",
+        "mcc": "5651",
+        "merchant_name": "Apparel store",
+        "merchant_vpa": null,
+        "merchant_slug": null,
+        "platform": null,
+        "rail": "swipe"
+      },
+      "state_before": {
+        "caps_by_source_id": {}
+      },
+      "expect": {
+        "currency": "points",
+        "amount": 100,
+        "value_inr": null,
+        "excluded": false,
+        "cap_deltas_by_source_id": {}
+      },
+      "why": "1 Membership Rewards point per Rs 50 on eligible spends: 100 x 1 = 100."
+    },
+    {
+      "id": "002",
+      "title": "Rs 1,000 on Zomato (10X)",
+      "ctx": {
+        "amount": 1000,
+        "occurred": "2026-11-10T10:00:00+05:30",
+        "category_id": null,
+        "category_slug": "dining",
+        "mcc": null,
+        "merchant_name": "Zomato",
+        "merchant_vpa": null,
+        "merchant_slug": "zomato",
+        "platform": null,
+        "rail": "online"
+      },
+      "state_before": {
+        "caps_by_source_id": {}
+      },
+      "expect": {
+        "currency": "points",
+        "amount": 200,
+        "value_inr": null,
+        "excluded": false,
+        "cap_deltas_by_source_id": {
+          "cap-10x-zomato-easemytrip": 180
+        }
+      },
+      "why": "10X = 10 points per Rs 50 in total (1 base + 9 bonus): 20 x 10 = 200. The 180 bonus points count to the 500 per month cap shared by Zomato and EaseMyTrip."
+    },
+    {
+      "id": "003",
+      "title": "Rs 1,000 on Flipkart (10X)",
+      "ctx": {
+        "amount": 1000,
+        "occurred": "2026-11-10T10:00:00+05:30",
+        "category_id": null,
+        "category_slug": "online",
+        "mcc": null,
+        "merchant_name": "Flipkart",
+        "merchant_vpa": null,
+        "merchant_slug": "flipkart",
+        "platform": null,
+        "rail": "online"
+      },
+      "state_before": {
+        "caps_by_source_id": {}
+      },
+      "expect": {
+        "currency": "points",
+        "amount": 200,
+        "value_inr": null,
+        "excluded": false,
+        "cap_deltas_by_source_id": {
+          "cap-10x-shopping-lifestyle": 180
+        }
+      },
+      "why": "10X at Flipkart, Uber, BookMyShow and others: 20 x 10 = 200; 180 bonus points count to the shared 500 per month cap."
+    },
+    {
+      "id": "004",
+      "title": "Rs 1,000 on Amazon (5X)",
+      "ctx": {
+        "amount": 1000,
+        "occurred": "2026-11-10T10:00:00+05:30",
+        "category_id": null,
+        "category_slug": "online",
+        "mcc": null,
+        "merchant_name": "Amazon",
+        "merchant_vpa": null,
+        "merchant_slug": "amazon",
+        "platform": null,
+        "rail": "online"
+      },
+      "state_before": {
+        "caps_by_source_id": {}
+      },
+      "expect": {
+        "currency": "points",
+        "amount": 100,
+        "value_inr": null,
+        "excluded": false,
+        "cap_deltas_by_source_id": {
+          "cap-5x-amazon": 80
+        }
+      },
+      "why": "5X = 5 points per Rs 50 in total (1 base + 4 bonus): 20 x 5 = 100; 80 bonus points count to the 250 per month Amazon cap."
+    },
+    {
+      "id": "005",
+      "title": "Rs 2,000 on Flipkart with 400 of the 500 bonus points already earned",
+      "ctx": {
+        "amount": 2000,
+        "occurred": "2026-11-10T10:00:00+05:30",
+        "category_id": null,
+        "category_slug": "online",
+        "mcc": null,
+        "merchant_name": "Flipkart",
+        "merchant_vpa": null,
+        "merchant_slug": "flipkart",
+        "platform": null,
+        "rail": "online"
+      },
+      "state_before": {
+        "caps_by_source_id": {
+          "cap-10x-shopping-lifestyle": 400
+        }
+      },
+      "expect": {
+        "currency": "points",
+        "amount": 140,
+        "value_inr": null,
+        "excluded": false,
+        "cap_deltas_by_source_id": {
+          "cap-10x-shopping-lifestyle": 100
+        }
+      },
+      "why": "10X would give 400 points (360 bonus) but only 100 bonus points remain: 40 base + 100 bonus = 140."
+    },
+    {
+      "id": "006",
+      "title": "Rs 1,000 on Zomato after the 500 bonus points are used",
+      "ctx": {
+        "amount": 1000,
+        "occurred": "2026-11-10T10:00:00+05:30",
+        "category_id": null,
+        "category_slug": "dining",
+        "mcc": null,
+        "merchant_name": "Zomato",
+        "merchant_vpa": null,
+        "merchant_slug": "zomato",
+        "platform": null,
+        "rail": "online"
+      },
+      "state_before": {
+        "caps_by_source_id": {
+          "cap-10x-zomato-easemytrip": 500
+        }
+      },
+      "expect": {
+        "currency": "points",
+        "amount": 20,
+        "value_inr": null,
+        "excluded": false,
+        "cap_deltas_by_source_id": {}
+      },
+      "why": "Bonus is exhausted; the spend still earns the standard 1 point per Rs 50: 20 x 1 = 20."
+    },
+    {
+      "id": "007",
+      "title": "Rs 2,000 fuel",
+      "ctx": {
+        "amount": 2000,
+        "occurred": "2026-11-10T10:00:00+05:30",
+        "category_id": null,
+        "category_slug": "fuel",
+        "mcc": "5541",
+        "merchant_name": "Fuel station",
+        "merchant_vpa": null,
+        "merchant_slug": null,
+        "platform": null,
+        "rail": "swipe"
+      },
+      "state_before": {
+        "caps_by_source_id": {}
+      },
+      "expect": {
+        "currency": "points",
+        "amount": 0,
+        "value_inr": null,
+        "excluded": true,
+        "cap_deltas_by_source_id": {}
+      },
+      "why": "Fuel (petrol, diesel, CNG from OMCs) earns no Membership Rewards points."
+    },
+    {
+      "id": "008",
+      "title": "Rs 20,000 insurance premium",
+      "ctx": {
+        "amount": 20000,
+        "occurred": "2026-11-10T10:00:00+05:30",
+        "category_id": null,
+        "category_slug": "insurance",
+        "mcc": "6300",
+        "merchant_name": "Insurer",
+        "merchant_vpa": null,
+        "merchant_slug": null,
+        "platform": null,
+        "rail": "online"
+      },
+      "state_before": {
+        "caps_by_source_id": {}
+      },
+      "expect": {
+        "currency": "points",
+        "amount": 0,
+        "value_inr": null,
+        "excluded": true,
+        "cap_deltas_by_source_id": {}
+      },
+      "why": "No points on insurance."
+    },
+    {
+      "id": "009",
+      "title": "Rs 3,000 electricity bill",
+      "ctx": {
+        "amount": 3000,
+        "occurred": "2026-11-10T10:00:00+05:30",
+        "category_id": null,
+        "category_slug": "bills",
+        "mcc": "4900",
+        "merchant_name": "Electricity board",
+        "merchant_vpa": null,
+        "merchant_slug": null,
+        "platform": null,
+        "rail": "online"
+      },
+      "state_before": {
+        "caps_by_source_id": {}
+      },
+      "expect": {
+        "currency": "points",
+        "amount": 0,
+        "value_inr": null,
+        "excluded": true,
+        "cap_deltas_by_source_id": {}
+      },
+      "why": "Other utility services (household electricity, gas, water) earn no points on this card."
+    },
+    {
+      "id": "010",
+      "title": "Rs 10,000 EMI chosen at an electronics store terminal",
+      "ctx": {
+        "amount": 10000,
+        "occurred": "2026-11-10T10:00:00+05:30",
+        "category_id": null,
+        "category_slug": "emi",
+        "mcc": null,
+        "merchant_name": "Electronics store",
+        "merchant_vpa": null,
+        "merchant_slug": null,
+        "platform": null,
+        "rail": "emi"
+      },
+      "state_before": {
+        "caps_by_source_id": {}
+      },
+      "expect": {
+        "currency": "points",
+        "amount": 0,
+        "value_inr": null,
+        "excluded": true,
+        "cap_deltas_by_source_id": {}
+      },
+      "why": "No points on EMI options selected on a merchant website or at a merchant terminal."
+    }
+  ],
+  "research_notes": [
+    {
+      "item": "bonus caps",
+      "cardpipeline_says": "bonus_reward_points 500 / 500 / 250 per calendar month, then base",
+      "issuer_says": "Matches the SmartEarn page: 500 shared by Flipkart, Uber, BookMyShow and others; 500 shared by EaseMyTrip and Zomato; 250 for Amazon (bonus points only).",
+      "proposed_fix": "none",
+      "override_file": null
+    },
+    {
+      "item": "partner lists",
+      "cardpipeline_says": "two accelerators with merchant_pattern lists",
+      "issuer_says": "The page lists Zomato, Ajio, Nykaa, BookMyShow, Uber as 10X and says the list may change; merchants such as Blinkit, PVR, Myntra in CardPipeline are not on the fetched page excerpt.",
+      "proposed_fix": "importer: re-check the partner list at amex.co/seccrewards",
+      "override_file": null
+    },
+    {
+      "item": "rounding",
+      "cardpipeline_says": "rounding_mode floor",
+      "issuer_says": "Amex Membership Rewards terms do not state rounding of Rs 50 blocks; no rounding example.",
+      "proposed_fix": "none",
+      "override_file": null
+    }
+  ]
+}

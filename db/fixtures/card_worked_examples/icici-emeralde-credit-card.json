@@ -1,0 +1,317 @@
+{
+  "source_slug": "icici-emeralde-credit-card",
+  "cardpipeline_id": "icici-bank-sapphiro-credit-card",
+  "card_name": "ICICI Bank Emeralde Credit Card",
+  "verified_on": "2026-11-05",
+  "sources": [
+    {
+      "url": "https://www.icicibank.com/managed-assets/docs/personal/cards/mitc_cc.pdf",
+      "doc": "ICICI Credit Card MITC (reward points capping)",
+      "quote": "No reward points will be provided for transactions falling under the Fuel category."
+    },
+    {
+      "url": "https://www.icicibank.com/managed-assets/docs/personal/cards/mitc_cc.pdf",
+      "doc": "ICICI Credit Card MITC (reward points capping)",
+      "quote": "Reward Points accrued per statement cycle will be capped for certain MCCs"
+    },
+    {
+      "url": "https://www.icici.bank.in/personal-banking/cards/credit-card/emeralde-credit-card",
+      "doc": "Emeralde product page",
+      "quote": "Earn Points on every Rs 100 spend: 4 international, 2 domestic, 1 utility and insurance"
+    }
+  ],
+  "examples": [
+    {
+      "id": "001",
+      "title": "Rs 10,000 domestic retail spend",
+      "ctx": {
+        "amount": 10000,
+        "occurred": "2026-11-10T10:00:00+05:30",
+        "category_id": null,
+        "category_slug": "other",
+        "mcc": "5651",
+        "merchant_name": "Apparel store",
+        "merchant_vpa": null,
+        "merchant_slug": null,
+        "platform": null,
+        "rail": "swipe"
+      },
+      "state_before": {
+        "caps_by_source_id": {}
+      },
+      "expect": {
+        "currency": "points",
+        "amount": 400,
+        "value_inr": null,
+        "excluded": false,
+        "cap_deltas_by_source_id": {}
+      },
+      "why": "4 reward points per Rs 100 on eligible retail spends: 100 x 4 = 400."
+    },
+    {
+      "id": "002",
+      "title": "Rs 10,000 international spend",
+      "ctx": {
+        "amount": 10000,
+        "occurred": "2026-11-10T10:00:00+05:30",
+        "category_id": null,
+        "category_slug": "other",
+        "mcc": "5651",
+        "merchant_name": "Overseas store",
+        "merchant_vpa": null,
+        "merchant_slug": null,
+        "platform": null,
+        "rail": "online"
+      },
+      "state_before": {
+        "caps_by_source_id": {}
+      },
+      "expect": {
+        "currency": "points",
+        "amount": 400,
+        "value_inr": null,
+        "excluded": false,
+        "cap_deltas_by_source_id": {}
+      },
+      "why": "4 reward points per Rs 100 on international spends too: 100 x 4 = 400."
+    },
+    {
+      "id": "003",
+      "title": "Rs 20,000 grocery spend",
+      "ctx": {
+        "amount": 20000,
+        "occurred": "2026-11-10T10:00:00+05:30",
+        "category_id": null,
+        "category_slug": "groceries",
+        "mcc": "5411",
+        "merchant_name": "Supermarket",
+        "merchant_vpa": null,
+        "merchant_slug": null,
+        "platform": null,
+        "rail": "swipe"
+      },
+      "state_before": {
+        "caps_by_source_id": {}
+      },
+      "expect": {
+        "currency": "points",
+        "amount": 800,
+        "value_inr": null,
+        "excluded": false,
+        "cap_deltas_by_source_id": {
+          "grocery_departmental_spend_cap": 20000
+        }
+      },
+      "why": "Grocery and departmental stores earn the standard 4 per Rs 100, up to Rs 40,000 of spend per statement cycle: 200 x 4 = 800."
+    },
+    {
+      "id": "004",
+      "title": "Rs 10,000 electricity bill",
+      "ctx": {
+        "amount": 10000,
+        "occurred": "2026-11-10T10:00:00+05:30",
+        "category_id": null,
+        "category_slug": "bills",
+        "mcc": "4900",
+        "merchant_name": "Electricity board",
+        "merchant_vpa": null,
+        "merchant_slug": null,
+        "platform": null,
+        "rail": "online"
+      },
+      "state_before": {
+        "caps_by_source_id": {}
+      },
+      "expect": {
+        "currency": "points",
+        "amount": 100,
+        "value_inr": null,
+        "excluded": false,
+        "cap_deltas_by_source_id": {
+          "utility_spend_cap": 10000
+        }
+      },
+      "why": "Utility spend earns 1 point per Rs 100 (ICICI product page) and counts to the Rs 80,000 per statement cycle utility limit."
+    },
+    {
+      "id": "005",
+      "title": "Rs 5,000 on a taxi/metro MCC 4111",
+      "ctx": {
+        "amount": 5000,
+        "occurred": "2026-11-10T10:00:00+05:30",
+        "category_id": null,
+        "category_slug": "travel",
+        "mcc": "4111",
+        "merchant_name": "Metro transit",
+        "merchant_vpa": null,
+        "merchant_slug": null,
+        "platform": null,
+        "rail": "swipe"
+      },
+      "state_before": {
+        "caps_by_source_id": {}
+      },
+      "expect": {
+        "currency": "points",
+        "amount": 200,
+        "value_inr": null,
+        "excluded": false,
+        "cap_deltas_by_source_id": {
+          "transport_spend_cap": 5000
+        }
+      },
+      "why": "Transportation MCCs (4111, 4112, 4784, 4131) earn 4 per Rs 100 until Rs 20,000 spend per statement cycle (from 1 Feb 2026): 50 x 4 = 200."
+    },
+    {
+      "id": "006",
+      "title": "Rs 10,000 grocery reaching the Rs 40,000 limit exactly",
+      "ctx": {
+        "amount": 10000,
+        "occurred": "2026-11-10T10:00:00+05:30",
+        "category_id": null,
+        "category_slug": "groceries",
+        "mcc": "5411",
+        "merchant_name": "Supermarket",
+        "merchant_vpa": null,
+        "merchant_slug": null,
+        "platform": null,
+        "rail": "swipe"
+      },
+      "state_before": {
+        "caps_by_source_id": {
+          "grocery_departmental_spend_cap": 30000
+        }
+      },
+      "expect": {
+        "currency": "points",
+        "amount": 400,
+        "value_inr": null,
+        "excluded": false,
+        "cap_deltas_by_source_id": {
+          "grocery_departmental_spend_cap": 10000
+        }
+      },
+      "why": "Rs 30,000 of the Rs 40,000 grocery limit is used; Rs 10,000 more earns 100 x 4 = 400 and fills the limit."
+    },
+    {
+      "id": "007",
+      "title": "Rs 5,000 grocery after the limit is used",
+      "ctx": {
+        "amount": 5000,
+        "occurred": "2026-11-10T10:00:00+05:30",
+        "category_id": null,
+        "category_slug": "groceries",
+        "mcc": "5411",
+        "merchant_name": "Supermarket",
+        "merchant_vpa": null,
+        "merchant_slug": null,
+        "platform": null,
+        "rail": "swipe"
+      },
+      "state_before": {
+        "caps_by_source_id": {
+          "grocery_departmental_spend_cap": 40000
+        }
+      },
+      "expect": {
+        "currency": "points",
+        "amount": 0,
+        "value_inr": null,
+        "excluded": false,
+        "cap_deltas_by_source_id": {}
+      },
+      "why": "Reward points are capped for grocery and departmental spend beyond Rs 40,000 per statement cycle: no points."
+    },
+    {
+      "id": "008",
+      "title": "Rs 3,000 fuel",
+      "ctx": {
+        "amount": 3000,
+        "occurred": "2026-11-10T10:00:00+05:30",
+        "category_id": null,
+        "category_slug": "fuel",
+        "mcc": "5541",
+        "merchant_name": "Fuel station",
+        "merchant_vpa": null,
+        "merchant_slug": null,
+        "platform": null,
+        "rail": "swipe"
+      },
+      "state_before": {
+        "caps_by_source_id": {}
+      },
+      "expect": {
+        "currency": "points",
+        "amount": 0,
+        "value_inr": null,
+        "excluded": true,
+        "cap_deltas_by_source_id": {}
+      },
+      "why": "MITC: no reward points for the Fuel category (Emeralde is not an exception)."
+    },
+    {
+      "id": "009",
+      "title": "Rs 25,000 rent payment",
+      "ctx": {
+        "amount": 25000,
+        "occurred": "2026-11-10T10:00:00+05:30",
+        "category_id": null,
+        "category_slug": "rent",
+        "mcc": "6513",
+        "merchant_name": "Rent payment",
+        "merchant_vpa": null,
+        "merchant_slug": null,
+        "platform": null,
+        "rail": "online"
+      },
+      "state_before": {
+        "caps_by_source_id": {}
+      },
+      "expect": {
+        "currency": "points",
+        "amount": 0,
+        "value_inr": null,
+        "excluded": true,
+        "cap_deltas_by_source_id": {}
+      },
+      "why": "MITC: no reward points for Cash and Rent categories."
+    }
+  ],
+  "research_notes": [
+    {
+      "item": "caps unit",
+      "cardpipeline_says": "eligible_spend_amount, Rs 80,000 utility / 80,000 insurance / 40,000 grocery / 20,000 transport per statement cycle, zero after",
+      "issuer_says": "MITC table (w.e.f. 15 Nov 2024; transportation w.e.f. 1 Feb 2026) matches: reward points accrued per statement cycle are capped on utility, insurance and grocery/departmental spend.",
+      "proposed_fix": "none",
+      "override_file": null
+    },
+    {
+      "item": "transport cap period",
+      "cardpipeline_says": "transport_spend_cap period calendar_month",
+      "issuer_says": "MITC: Rubyx/Sapphiro/Emeralde transportation spend cap of Rs 20,000 applies per statement cycle (w.e.f. 1 Feb 2026).",
+      "proposed_fix": "override",
+      "override_file": "api/scripts/catalogue_overrides/icici-emeralde-credit-card.json"
+    },
+    {
+      "item": "utility and insurance rate",
+      "cardpipeline_says": "utility_standard / insurance_standard have no points shown in the digest",
+      "issuer_says": "ICICI product page: utility and insurance earn 1 point per Rs 100. Utility/insurance spend beyond Rs 80,000 earns nothing.",
+      "proposed_fix": "importer: confirm the 1 point rate is in the record",
+      "override_file": null
+    },
+    {
+      "item": "rounding",
+      "cardpipeline_says": "rounding_mode floor",
+      "issuer_says": "ICICI MITC does not state how fractional Rs 100 blocks are treated; no rounding example written.",
+      "proposed_fix": "none",
+      "override_file": null
+    },
+    {
+      "item": "wallet and cash",
+      "cardpipeline_says": "excluded: third-party wallet, cash advance",
+      "issuer_says": "MITC also lists skill-based gaming and education MCCs in the capped/restricted table; education MCC 8211.. listed. Direct education payment treatment not verified.",
+      "proposed_fix": "none",
+      "override_file": null
+    }
+  ]
+}

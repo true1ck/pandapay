@@ -1,0 +1,317 @@
+{
+  "source_slug": "indianoil-axis-bank-credit-card",
+  "cardpipeline_id": "axis-bank-indianoil-axis-bank-credit-card",
+  "card_name": "IndianOil Axis Bank Credit Card",
+  "verified_on": "2026-11-05",
+  "sources": [
+    {
+      "url": "https://www.axis.bank.in/docs/default-source/default-document-library/terms-and-conditions-for-iocl-credit-card.pdf?sfvrsn=9ab59582_5",
+      "doc": "IndianOil Axis Bank Credit Card T&C",
+      "quote": "The accelerated benefit shall be capped at 1,000 EDGE REWARD Points per calendar month."
+    },
+    {
+      "url": "https://www.axis.bank.in/docs/default-source/default-document-library/terms-and-conditions-for-iocl-credit-card.pdf?sfvrsn=9ab59582_5",
+      "doc": "IndianOil Axis Bank Credit Card T&C",
+      "quote": "Fuel transactions beyond the monthly eligible spend shall not receive any reward."
+    },
+    {
+      "url": "https://www.axis.bank.in/docs/default-source/default-document-library/terms-and-conditions-for-iocl-credit-card.pdf?sfvrsn=9ab59582_5",
+      "doc": "IndianOil Axis Bank Credit Card T&C",
+      "quote": "Transactions below INR 100 and any residual amount below a complete INR 100 multiple shall not earn points."
+    },
+    {
+      "url": "https://www.axis.bank.in/docs/default-source/default-document-library/credit-card/terms-and-conditions-indian-oil-credit-card.pdf",
+      "doc": "Revision eff. 20 Apr 2024",
+      "quote": "Non-IOCL fuel transactions will not be eligible for any EDGE REWARD Points."
+    }
+  ],
+  "examples": [
+    {
+      "id": "001",
+      "title": "Rs 10,000 grocery spend in store",
+      "ctx": {
+        "amount": 10000,
+        "occurred": "2026-11-10T10:00:00+05:30",
+        "category_id": null,
+        "category_slug": "groceries",
+        "mcc": "5411",
+        "merchant_name": "Supermarket",
+        "merchant_vpa": null,
+        "merchant_slug": null,
+        "platform": null,
+        "rail": "swipe"
+      },
+      "state_before": {
+        "caps_by_source_id": {}
+      },
+      "expect": {
+        "currency": "points",
+        "amount": 100,
+        "value_inr": null,
+        "excluded": false,
+        "cap_deltas_by_source_id": {}
+      },
+      "why": "1 EDGE Reward Point per Rs 100 on other eligible retail spend: 100 blocks x 1 = 100."
+    },
+    {
+      "id": "002",
+      "title": "Rs 2,000 fuel at an IndianOil outlet",
+      "ctx": {
+        "amount": 2000,
+        "occurred": "2026-11-10T10:00:00+05:30",
+        "category_id": null,
+        "category_slug": "fuel",
+        "mcc": "5541",
+        "merchant_name": "IndianOil outlet",
+        "merchant_vpa": null,
+        "merchant_slug": "indianoil",
+        "platform": null,
+        "rail": "swipe"
+      },
+      "state_before": {
+        "caps_by_source_id": {}
+      },
+      "expect": {
+        "currency": "points",
+        "amount": 400,
+        "value_inr": null,
+        "excluded": false,
+        "cap_deltas_by_source_id": {
+          "iocl-fuel-monthly-points-cap": 400
+        }
+      },
+      "why": "20 points per Rs 100 on IndianOil fuel (transactions Rs 400-4,000): 20 x 20 = 400. Counts towards the 1,000 points per month limit."
+    },
+    {
+      "id": "003",
+      "title": "Rs 2,000 IndianOil fuel reaching the 1,000-point monthly limit exactly",
+      "ctx": {
+        "amount": 2000,
+        "occurred": "2026-11-10T10:00:00+05:30",
+        "category_id": null,
+        "category_slug": "fuel",
+        "mcc": "5541",
+        "merchant_name": "IndianOil outlet",
+        "merchant_vpa": null,
+        "merchant_slug": "indianoil",
+        "platform": null,
+        "rail": "swipe"
+      },
+      "state_before": {
+        "caps_by_source_id": {
+          "iocl-fuel-monthly-points-cap": 600
+        }
+      },
+      "expect": {
+        "currency": "points",
+        "amount": 400,
+        "value_inr": null,
+        "excluded": false,
+        "cap_deltas_by_source_id": {
+          "iocl-fuel-monthly-points-cap": 400
+        }
+      },
+      "why": "600 of the 1,000 monthly points are already used; this fuel spend earns 400 and reaches the limit."
+    },
+    {
+      "id": "004",
+      "title": "Rs 2,000 IndianOil fuel after the monthly limit",
+      "ctx": {
+        "amount": 2000,
+        "occurred": "2026-11-10T10:00:00+05:30",
+        "category_id": null,
+        "category_slug": "fuel",
+        "mcc": "5541",
+        "merchant_name": "IndianOil outlet",
+        "merchant_vpa": null,
+        "merchant_slug": "indianoil",
+        "platform": null,
+        "rail": "swipe"
+      },
+      "state_before": {
+        "caps_by_source_id": {
+          "iocl-fuel-monthly-points-cap": 1000
+        }
+      },
+      "expect": {
+        "currency": "points",
+        "amount": 0,
+        "value_inr": null,
+        "excluded": false,
+        "cap_deltas_by_source_id": {}
+      },
+      "why": "Beyond the monthly cap, fuel transactions at IndianOil earn no points (not even the base 1 point)."
+    },
+    {
+      "id": "005",
+      "title": "Rs 2,000 fuel at a non-IndianOil pump",
+      "ctx": {
+        "amount": 2000,
+        "occurred": "2026-11-10T10:00:00+05:30",
+        "category_id": null,
+        "category_slug": "fuel",
+        "mcc": "5541",
+        "merchant_name": "Other fuel station",
+        "merchant_vpa": null,
+        "merchant_slug": null,
+        "platform": null,
+        "rail": "swipe"
+      },
+      "state_before": {
+        "caps_by_source_id": {}
+      },
+      "expect": {
+        "currency": "points",
+        "amount": 0,
+        "value_inr": null,
+        "excluded": true,
+        "cap_deltas_by_source_id": {}
+      },
+      "why": "Non-IOCL fuel transactions do not earn any points."
+    },
+    {
+      "id": "006",
+      "title": "Rs 3,000 online shopping",
+      "ctx": {
+        "amount": 3000,
+        "occurred": "2026-11-10T10:00:00+05:30",
+        "category_id": null,
+        "category_slug": "online",
+        "mcc": null,
+        "merchant_name": "Online store",
+        "merchant_vpa": null,
+        "merchant_slug": null,
+        "platform": null,
+        "rail": "online"
+      },
+      "state_before": {
+        "caps_by_source_id": {}
+      },
+      "expect": {
+        "currency": "points",
+        "amount": 150,
+        "value_inr": null,
+        "excluded": false,
+        "cap_deltas_by_source_id": {
+          "online-shopping-monthly-spend-cap": 3000
+        }
+      },
+      "why": "5 points per Rs 100 on eligible online spend up to Rs 5,000 per month: 30 x 5 = 150."
+    },
+    {
+      "id": "007",
+      "title": "Rs 1,000 online shopping with Rs 4,000 already used this month",
+      "ctx": {
+        "amount": 1000,
+        "occurred": "2026-11-10T10:00:00+05:30",
+        "category_id": null,
+        "category_slug": "online",
+        "mcc": null,
+        "merchant_name": "Online store",
+        "merchant_vpa": null,
+        "merchant_slug": null,
+        "platform": null,
+        "rail": "online"
+      },
+      "state_before": {
+        "caps_by_source_id": {
+          "online-shopping-monthly-spend-cap": 4000
+        }
+      },
+      "expect": {
+        "currency": "points",
+        "amount": 50,
+        "value_inr": null,
+        "excluded": false,
+        "cap_deltas_by_source_id": {
+          "online-shopping-monthly-spend-cap": 1000
+        }
+      },
+      "why": "Rs 1,000 of eligible online spend remains in the Rs 5,000 limit: 10 x 5 = 50 (max 250 points per month)."
+    },
+    {
+      "id": "008",
+      "title": "Rs 1,990 in-store spend: residual below Rs 100 ignored",
+      "ctx": {
+        "amount": 1990,
+        "occurred": "2026-11-10T10:00:00+05:30",
+        "category_id": null,
+        "category_slug": "other",
+        "mcc": "5651",
+        "merchant_name": "Apparel store",
+        "merchant_vpa": null,
+        "merchant_slug": null,
+        "platform": null,
+        "rail": "swipe"
+      },
+      "state_before": {
+        "caps_by_source_id": {}
+      },
+      "expect": {
+        "currency": "points",
+        "amount": 19,
+        "value_inr": null,
+        "excluded": false,
+        "cap_deltas_by_source_id": {}
+      },
+      "why": "Points are calculated on settled spends in multiples of Rs 100; the residual Rs 90 earns nothing: 19 x 1 = 19."
+    },
+    {
+      "id": "009",
+      "title": "Rs 3,000 electricity bill",
+      "ctx": {
+        "amount": 3000,
+        "occurred": "2026-11-10T10:00:00+05:30",
+        "category_id": null,
+        "category_slug": "bills",
+        "mcc": "4900",
+        "merchant_name": "Electricity board",
+        "merchant_vpa": null,
+        "merchant_slug": null,
+        "platform": null,
+        "rail": "online"
+      },
+      "state_before": {
+        "caps_by_source_id": {}
+      },
+      "expect": {
+        "currency": "points",
+        "amount": 0,
+        "value_inr": null,
+        "excluded": true,
+        "cap_deltas_by_source_id": {}
+      },
+      "why": "Utilities are in the excluded MCC list and earn no base points."
+    }
+  ],
+  "research_notes": [
+    {
+      "item": "cap iocl-fuel-monthly-points-cap",
+      "cardpipeline_says": "bonus_reward_points 1000, post-limit zero_accrual",
+      "issuer_says": "Cap is 1,000 TOTAL points (20 per Rs 100 on Rs 5,000) per calendar month and fuel at IndianOil beyond it earns nothing, not even the base 1 point. As a bonus-only cap the loader would give base back after the cap.",
+      "proposed_fix": "override",
+      "override_file": "api/scripts/catalogue_overrides/indianoil-axis-bank-credit-card.json"
+    },
+    {
+      "item": "online shopping surplus",
+      "cardpipeline_says": "cap eligible_spend Rs 5,000, downgrade to base",
+      "issuer_says": "T&C cap online benefit at 250 points per month on Rs 5,000; what surplus online spend earns is not stated clearly.",
+      "proposed_fix": "none",
+      "override_file": null
+    },
+    {
+      "item": "rounding",
+      "cardpipeline_says": "rounding_mode floor, block 100",
+      "issuer_says": "Confirmed: points on multiples of Rs 100 per settled transaction; residual dropped.",
+      "proposed_fix": "none",
+      "override_file": null
+    },
+    {
+      "item": "non-IOCL fuel",
+      "cardpipeline_says": "only IndianOil fuel rule",
+      "issuer_says": "Fuel elsewhere earns nothing (excluded from base).",
+      "proposed_fix": "none",
+      "override_file": null
+    }
+  ]
+}

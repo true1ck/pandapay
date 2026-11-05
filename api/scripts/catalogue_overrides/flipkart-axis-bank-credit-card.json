@@ -1,0 +1,77 @@
+{
+  "source_slug": "flipkart-axis-bank-credit-card",
+  "changes": [
+    {
+      "path": "cap_rules",
+      "value": [
+        {
+          "id": "flipkart-quarterly-4000",
+          "category_id": "shopping_flipkart",
+          "metric": "total_reward_points",
+          "mcc_target_list": [],
+          "period": "statement_cycle_quarter",
+          "limit_value": 4000,
+          "limit_value_inr": 4000,
+          "post_limit_behavior": {
+            "action": "zero_accrual",
+            "points_per_block": null
+          },
+          "target_rule_ids": [
+            "flipkart_cashback_5"
+          ],
+          "parent_cap_id": null,
+          "effective_from": "2025-06-20",
+          "effective_to": null
+        },
+        {
+          "id": "myntra-quarterly-4000",
+          "category_id": "shopping_myntra",
+          "metric": "total_reward_points",
+          "mcc_target_list": [],
+          "period": "statement_cycle_quarter",
+          "limit_value": 4000,
+          "limit_value_inr": 4000,
+          "post_limit_behavior": {
+            "action": "zero_accrual",
+            "points_per_block": null
+          },
+          "target_rule_ids": [
+            "myntra_cashback_7_5"
+          ],
+          "parent_cap_id": null,
+          "effective_from": "2025-06-20",
+          "effective_to": null
+        },
+        {
+          "id": "cleartrip-quarterly-4000",
+          "category_id": "travel",
+          "metric": "total_reward_points",
+          "mcc_target_list": [],
+          "period": "statement_cycle_quarter",
+          "limit_value": 4000,
+          "limit_value_inr": 4000,
+          "post_limit_behavior": {
+            "action": "zero_accrual",
+            "points_per_block": null
+          },
+          "target_rule_ids": [
+            "cleartrip_cashback_5"
+          ],
+          "parent_cap_id": null,
+          "effective_from": "2025-06-20",
+          "effective_to": null
+        }
+      ],
+      "reason": "CardPipeline cap_rules is empty. Issuer T&C: Rs 4,000 cashback per statement quarter, separately for Flipkart, Myntra and Cleartrip. Loader period mapping for a statement-cycle quarter is to be confirmed by WP2 (closest: quarter).",
+      "source_url": "https://www.axis.bank.in/docs/default-source/default-document-library/cashback-tncs---final.pdf?sfvrsn=b55a0e1a_5",
+      "checked_on": "2026-11-05"
+    },
+    {
+      "path": "accrual_engine.cashback_rounding",
+      "value": "rupee_floor",
+      "reason": "Cashback is rounded down per transaction (11.80 -> 11).",
+      "source_url": "https://www.axis.bank.in/docs/default-source/default-document-library/cashback-tncs---final.pdf?sfvrsn=b55a0e1a_5",
+      "checked_on": "2026-11-05"
+    }
+  ]
+}

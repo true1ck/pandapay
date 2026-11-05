@@ -1,0 +1,252 @@
+{
+  "source_slug": "american-express-gold-charge-card-india",
+  "cardpipeline_id": "american-express-india-gold-charge-card",
+  "card_name": "American Express Gold Card",
+  "verified_on": "2026-11-05",
+  "sources": [
+    {
+      "url": "https://www.americanexpress.com/content/dam/amex/en-in/benefits/rewards/membership-rewards/membership-rewards-terms.pdf",
+      "doc": "Membership Rewards terms",
+      "quote": "On the American Express Gold Card, you earn 1 Membership Rewards Point for every Rs.50 spent"
+    },
+    {
+      "url": "https://www.americanexpress.com/content/dam/amex/en-in/benefits/rewards/membership-rewards/membership-rewards-terms.pdf",
+      "doc": "Membership Rewards terms",
+      "quote": "Other Utility Services (capped to a maximum of 10000 Points every calendar month)"
+    },
+    {
+      "url": "https://www.americanexpress.com/content/dam/amex/en-in/benefits/rewards/membership-rewards/membership-rewards-terms.pdf",
+      "doc": "Membership Rewards terms",
+      "quote": "Effective 12th June 2025, Cardmembers will not earn Membership Rewards point on Fuel payments."
+    }
+  ],
+  "examples": [
+    {
+      "id": "001",
+      "title": "Rs 5,000 general retail spend",
+      "ctx": {
+        "amount": 5000,
+        "occurred": "2026-11-10T10:00:00+05:30",
+        "category_id": null,
+        "category_slug": "other",
+        "mcc": "5651",
+        "merchant_name": "Apparel store",
+        "merchant_vpa": null,
+        "merchant_slug": null,
+        "platform": null,
+        "rail": "swipe"
+      },
+      "state_before": {
+        "caps_by_source_id": {}
+      },
+      "expect": {
+        "currency": "points",
+        "amount": 100,
+        "value_inr": null,
+        "excluded": false,
+        "cap_deltas_by_source_id": {}
+      },
+      "why": "1 Membership Rewards point per Rs 50: 100 x 1 = 100."
+    },
+    {
+      "id": "002",
+      "title": "Rs 10,000 electricity bill",
+      "ctx": {
+        "amount": 10000,
+        "occurred": "2026-11-10T10:00:00+05:30",
+        "category_id": null,
+        "category_slug": "bills",
+        "mcc": "4900",
+        "merchant_name": "Electricity board",
+        "merchant_vpa": null,
+        "merchant_slug": null,
+        "platform": null,
+        "rail": "online"
+      },
+      "state_before": {
+        "caps_by_source_id": {}
+      },
+      "expect": {
+        "currency": "points",
+        "amount": 200,
+        "value_inr": null,
+        "excluded": false,
+        "cap_deltas_by_source_id": {
+          "utility_monthly_points_cap": 200
+        }
+      },
+      "why": "Gold earns 1 point per Rs 50 on other utility services, capped at 10,000 points per calendar month: 200 x 1 = 200."
+    },
+    {
+      "id": "003",
+      "title": "Rs 10,000 utility bill with 9,900 of the 10,000 utility points already earned",
+      "ctx": {
+        "amount": 10000,
+        "occurred": "2026-11-10T10:00:00+05:30",
+        "category_id": null,
+        "category_slug": "bills",
+        "mcc": "4900",
+        "merchant_name": "Electricity board",
+        "merchant_vpa": null,
+        "merchant_slug": null,
+        "platform": null,
+        "rail": "online"
+      },
+      "state_before": {
+        "caps_by_source_id": {
+          "utility_monthly_points_cap": 9900
+        }
+      },
+      "expect": {
+        "currency": "points",
+        "amount": 100,
+        "value_inr": null,
+        "excluded": false,
+        "cap_deltas_by_source_id": {
+          "utility_monthly_points_cap": 100
+        }
+      },
+      "why": "Only 100 of the monthly utility points remain, so 100 instead of 200."
+    },
+    {
+      "id": "004",
+      "title": "Rs 5,000 utility bill after the 10,000-point monthly utility cap",
+      "ctx": {
+        "amount": 5000,
+        "occurred": "2026-11-10T10:00:00+05:30",
+        "category_id": null,
+        "category_slug": "bills",
+        "mcc": "4900",
+        "merchant_name": "Electricity board",
+        "merchant_vpa": null,
+        "merchant_slug": null,
+        "platform": null,
+        "rail": "online"
+      },
+      "state_before": {
+        "caps_by_source_id": {
+          "utility_monthly_points_cap": 10000
+        }
+      },
+      "expect": {
+        "currency": "points",
+        "amount": 0,
+        "value_inr": null,
+        "excluded": false,
+        "cap_deltas_by_source_id": {}
+      },
+      "why": "Utility points are capped at a maximum of 10,000 per calendar month."
+    },
+    {
+      "id": "005",
+      "title": "Rs 2,000 fuel",
+      "ctx": {
+        "amount": 2000,
+        "occurred": "2026-11-10T10:00:00+05:30",
+        "category_id": null,
+        "category_slug": "fuel",
+        "mcc": "5541",
+        "merchant_name": "Fuel station",
+        "merchant_vpa": null,
+        "merchant_slug": null,
+        "platform": null,
+        "rail": "swipe"
+      },
+      "state_before": {
+        "caps_by_source_id": {}
+      },
+      "expect": {
+        "currency": "points",
+        "amount": 0,
+        "value_inr": null,
+        "excluded": true,
+        "cap_deltas_by_source_id": {}
+      },
+      "why": "Effective 12 Jun 2025 Gold Card members earn no points on fuel payments."
+    },
+    {
+      "id": "006",
+      "title": "Rs 20,000 insurance premium",
+      "ctx": {
+        "amount": 20000,
+        "occurred": "2026-11-10T10:00:00+05:30",
+        "category_id": null,
+        "category_slug": "insurance",
+        "mcc": "6300",
+        "merchant_name": "Insurer",
+        "merchant_vpa": null,
+        "merchant_slug": null,
+        "platform": null,
+        "rail": "online"
+      },
+      "state_before": {
+        "caps_by_source_id": {}
+      },
+      "expect": {
+        "currency": "points",
+        "amount": 0,
+        "value_inr": null,
+        "excluded": true,
+        "cap_deltas_by_source_id": {}
+      },
+      "why": "No points on insurance."
+    },
+    {
+      "id": "007",
+      "title": "Rs 10,000 EMI chosen at the merchant",
+      "ctx": {
+        "amount": 10000,
+        "occurred": "2026-11-10T10:00:00+05:30",
+        "category_id": null,
+        "category_slug": "emi",
+        "mcc": null,
+        "merchant_name": "Electronics store",
+        "merchant_vpa": null,
+        "merchant_slug": null,
+        "platform": null,
+        "rail": "emi"
+      },
+      "state_before": {
+        "caps_by_source_id": {}
+      },
+      "expect": {
+        "currency": "points",
+        "amount": 0,
+        "value_inr": null,
+        "excluded": true,
+        "cap_deltas_by_source_id": {}
+      },
+      "why": "No points on EMI options selected on a merchant website or terminal."
+    }
+  ],
+  "research_notes": [
+    {
+      "item": "monthly 1,000-point bonus",
+      "cardpipeline_says": "rule monthly_six_transaction_bonus modelled as an accelerator of 1000 points per block",
+      "issuer_says": "Amex Gold page: 1,000 bonus points on six transactions of Rs 1,000 or more in a calendar month. It is a milestone on a transaction count, not a per-spend rate.",
+      "proposed_fix": "importer: model as a monthly milestone, not as an earn rule",
+      "override_file": null
+    },
+    {
+      "item": "fuel",
+      "cardpipeline_says": "exclude fuel present",
+      "issuer_says": "Terms: Gold earned 1 point per Rs 50 on fuel (capped 5,000) until 12 Jun 2025; now none. CardPipeline already excludes fuel.",
+      "proposed_fix": "none",
+      "override_file": null
+    },
+    {
+      "item": "Reward Multiplier cap",
+      "cardpipeline_says": "reward_multiplier_monthly_cap 25,000 total points",
+      "issuer_says": "Not verified against the issuer pages fetched; merchant-specific. Left as is.",
+      "proposed_fix": "none",
+      "override_file": null
+    },
+    {
+      "item": "rounding",
+      "cardpipeline_says": "rounding_mode floor",
+      "issuer_says": "Not stated in Amex terms.",
+      "proposed_fix": "none",
+      "override_file": null
+    }
+  ]
+}

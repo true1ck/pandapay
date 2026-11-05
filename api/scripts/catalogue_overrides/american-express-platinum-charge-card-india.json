@@ -1,0 +1,12 @@
+{
+  "source_slug": "american-express-platinum-charge-card-india",
+  "changes": [
+    {
+      "path": "cap_rules[id=fuel_bonus_points_monthly_cap].metric",
+      "value": "total_reward_points",
+      "reason": "Issuer caps the fuel earning at 5,000 points per month in total, not only the bonus part.",
+      "source_url": "https://www.americanexpress.com/content/dam/amex/en-in/benefits/rewards/membership-rewards/membership-rewards-terms.pdf",
+      "checked_on": "2026-11-05"
+    }
+  ]
+}
