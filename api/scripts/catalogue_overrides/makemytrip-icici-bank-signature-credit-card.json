@@ -48,10 +48,8 @@
           "priority": 100,
           "evaluation_type": "fallback",
           "rail": "any",
-          "channel_type": "domestic",
-          "conditions": {
-            "note": "Domestic spends; the MakeMyTrip-platform booking rules are info, so this base applies to all non-excluded domestic spend."
-          },
+          "channel_type": "all",
+          "conditions": {},
           "action": {
             "multiplier": 1,
             "points_per_block": 1.25,
@@ -156,13 +154,15 @@
         },
         {
           "id": "exclude-wallet-loading",
-          "category_id": "wallet_load",
+          "category_id": "wallet",
           "priority": 1,
           "evaluation_type": "exclusion",
           "rail": "any",
           "channel_type": "all",
           "conditions": {
-            "transaction_type": "e-wallet loading"
+            "mcc_list": [
+              6540
+            ]
           },
           "action": {
             "multiplier": 0,
@@ -182,7 +182,12 @@
           "rail": "any",
           "channel_type": "all",
           "conditions": {
-            "transaction_type": "fuel"
+            "mcc_list": [
+              5172,
+              5541,
+              5542,
+              5983
+            ]
           },
           "action": {
             "multiplier": 0,
@@ -196,14 +201,12 @@
         },
         {
           "id": "exclude-cash-advance",
-          "category_id": "cash_advance",
+          "category_id": "all_retail",
           "priority": 1,
           "evaluation_type": "exclusion",
           "rail": "atm",
           "channel_type": "all",
-          "conditions": {
-            "transaction_type": "cash_advance"
-          },
+          "conditions": {},
           "action": {
             "multiplier": 0,
             "points_per_block": 0,
@@ -242,18 +245,12 @@
         },
         {
           "id": "exclude-emi-bt-plcc",
-          "category_id": "excluded_spend",
+          "category_id": "emi",
           "priority": 1,
           "evaluation_type": "exclusion",
           "rail": "emi",
           "channel_type": "all",
-          "conditions": {
-            "transaction_type": [
-              "emi",
-              "balance_transfer",
-              "personal_loan_on_credit_card"
-            ]
-          },
+          "conditions": {},
           "action": {
             "multiplier": 0,
             "points_per_block": 0,
@@ -289,7 +286,7 @@
           "effective_to": null
         }
       ],
-      "reason": "Restates every source rule (including all exclusions). Adds an insurance rule carrying the cap so the 1,000-point annual cap targets insurance only, not the whole card. Flight and hotel rates differ by booking type with no MCC, so those two rules are info (D13c/D14b). International 1.5 is info (needs an international flag). Base domestic rule keeps no platform restriction so it is not turned into an info rule.",
+      "reason": "Restates every source rule (including all exclusions). Adds an insurance rule carrying the cap so the 1,000-point annual cap targets insurance only, not the whole card. Flight and hotel rates differ by booking type with no MCC, so those two rules are info (D13c/D14b). International 1.5 is info (needs an international flag). Base domestic rule keeps no platform restriction so it is not turned into an info rule. Exclusions rewritten to MCC/rail form (fuel 5172/5541/5542/5983, wallet 6540, EMI rail emi, cash advance rail atm); fees/interest stay info (not purchases).",
       "source_url": "https://www.icicibank.com/managed-assets/docs/personal/cards/mitc_cc.pdf",
       "checked_on": "2026-11-05"
     }

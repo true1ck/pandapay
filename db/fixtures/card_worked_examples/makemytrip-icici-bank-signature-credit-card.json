@@ -380,6 +380,20 @@
       "issuer_says": "Issuer: 1.5 My Cash per Rs 200 international, 1.25 domestic outside MakeMyTrip. International is info (no international flag in context); the base domestic rule is kept unrestricted so it is not lost.",
       "proposed_fix": "override",
       "override_file": "api/scripts/catalogue_overrides/makemytrip-icici-bank-signature-credit-card.json"
+    },
+    {
+      "item": "base rule also covers international spend (Phase 1 approximation)",
+      "cardpipeline_says": "base-domestic-retail channel_type \"domestic\"",
+      "issuer_says": "The domestic base 1.25 per Rs 200 is made unrestricted (channel_type all) because the international 1.5 accelerator is info in Phase 1; international spend therefore earns 1.25 in the engine instead of 1.5 (under-states, never over-states).",
+      "proposed_fix": "override",
+      "override_file": "api/scripts/catalogue_overrides/makemytrip-icici-bank-signature-credit-card.json"
+    },
+    {
+      "item": "exclusion forms",
+      "cardpipeline_says": "exclusions keyed on transaction_type",
+      "issuer_says": "Fuel, wallet and EMI exclusions are rewritten to MCC / rail so they are real exclusion rules; fees/interest are not purchases and remain info.",
+      "proposed_fix": "override",
+      "override_file": "api/scripts/catalogue_overrides/makemytrip-icici-bank-signature-credit-card.json"
     }
   ]
 }
