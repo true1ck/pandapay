@@ -1,0 +1,296 @@
+{
+  "source_slug": "hdfc-millennia",
+  "cardpipeline_id": "hdfc-bank-millennia-credit-card",
+  "card_name": "Millennia Credit Card",
+  "verified_on": "2026-11-05",
+  "sources": [
+    {
+      "url": "https://www.hdfc.bank.in/content/dam/hdfcbankpws/in/en/personal-banking/discover-products/cards/credit-cards/millennia-credit-card/pdf/millennia-tnc-20th-jul26.pdf",
+      "doc": "Millennia T&C published 20 Jul 2026",
+      "quote": "The Cardholder can earn up to 1,000 CashPoints under the 5% CashBack on 10 online merchants in a calendar month"
+    },
+    {
+      "url": "https://www.hdfc.bank.in/content/dam/hdfcbankpws/in/en/personal-banking/discover-products/cards/credit-cards/millennia-credit-card/pdf/millennia-tnc-20th-jul26.pdf",
+      "doc": "Millennia T&C published 20 Jul 2026",
+      "quote": "The Cardholder can earn up to 1,000 CashPoints under the 1% CashBack on other spends in a calendar month"
+    },
+    {
+      "url": "https://www.hdfc.bank.in/content/dam/hdfcbankpws/in/en/personal-banking/discover-products/cards/credit-cards/personal-mitc/mitc-in-english.pdf",
+      "doc": "HDFC Bank credit card MITC v4.18, Oct 2026",
+      "quote": "Millennia / Tata Neu Credit Cards, Reward Points/ CashPoints are earned on transaction amounts in multiples of ₹100"
+    },
+    {
+      "url": "https://www.hdfc.bank.in/content/dam/hdfcbankpws/in/en/personal-banking/discover-products/cards/credit-cards/millennia-credit-card/pdf/millennia-tnc-20th-jul26.pdf",
+      "doc": "Millennia T&C published 20 Jul 2026",
+      "quote": "1 CashPoint = ₹1 for Millennia Credit Card Holders"
+    }
+  ],
+  "examples": [
+    {
+      "id": "001",
+      "title": "Rs 2,550 restaurant bill, partial block dropped",
+      "ctx": {
+        "amount": 2550,
+        "occurred": "2026-11-05T10:00:00+05:30",
+        "category_slug": "dining",
+        "mcc": 5812,
+        "merchant_name": "Local restaurant",
+        "merchant_vpa": null,
+        "merchant_slug": null,
+        "platform": null,
+        "rail": "swipe"
+      },
+      "state_before": {
+        "caps_by_source_id": {}
+      },
+      "expect": {
+        "currency": "points",
+        "amount": 25,
+        "value_inr": 25,
+        "excluded": false,
+        "cap_deltas_by_source_id": {
+          "millennia-1pct-monthly-cap": 25
+        }
+      },
+      "why": "1% = 1 CashPoint per Rs100 block, residual below Rs100 earns nothing (MITC): 25 CashPoints. 1 CashPoint = Rs1."
+    },
+    {
+      "id": "002",
+      "title": "Rs 3,000 at Amazon (5%)",
+      "ctx": {
+        "amount": 3000,
+        "occurred": "2026-11-05T10:00:00+05:30",
+        "category_slug": "online",
+        "mcc": 5311,
+        "merchant_name": "Amazon",
+        "merchant_vpa": null,
+        "merchant_slug": "amazon",
+        "platform": null,
+        "rail": "online"
+      },
+      "state_before": {
+        "caps_by_source_id": {}
+      },
+      "expect": {
+        "currency": "points",
+        "amount": 150,
+        "value_inr": 150,
+        "excluded": false,
+        "cap_deltas_by_source_id": {
+          "millennia-5pct-monthly-cap": 150
+        }
+      },
+      "why": "5% on the 10 listed online merchants: 30 blocks x 5 = 150 CashPoints."
+    },
+    {
+      "id": "003",
+      "title": "Rs 5,000 at Flipkart with 900 of 5% cap used",
+      "ctx": {
+        "amount": 5000,
+        "occurred": "2026-11-05T10:00:00+05:30",
+        "category_slug": "online",
+        "mcc": 5311,
+        "merchant_name": "Flipkart",
+        "merchant_vpa": null,
+        "merchant_slug": "flipkart",
+        "platform": null,
+        "rail": "online"
+      },
+      "state_before": {
+        "caps_by_source_id": {
+          "millennia-5pct-monthly-cap": 900
+        }
+      },
+      "expect": {
+        "currency": "points",
+        "amount": 100,
+        "value_inr": 100,
+        "excluded": false,
+        "cap_deltas_by_source_id": {
+          "millennia-5pct-monthly-cap": 100
+        }
+      },
+      "why": "Would be 250 but only 100 of the 1,000/month 5% cap remains; spends beyond the cap are not considered."
+    },
+    {
+      "id": "004",
+      "title": "Rs 5,000 other spend after 1% cap used",
+      "ctx": {
+        "amount": 5000,
+        "occurred": "2026-11-05T10:00:00+05:30",
+        "category_slug": "other",
+        "mcc": 5651,
+        "merchant_name": "Fashion store",
+        "merchant_vpa": null,
+        "merchant_slug": null,
+        "platform": null,
+        "rail": "swipe"
+      },
+      "state_before": {
+        "caps_by_source_id": {
+          "millennia-1pct-monthly-cap": 1000
+        }
+      },
+      "expect": {
+        "currency": "points",
+        "amount": 0,
+        "value_inr": 0,
+        "excluded": false,
+        "cap_deltas_by_source_id": {}
+      },
+      "why": "The 1% category is capped at 1,000 CashPoints per month; nothing more is posted."
+    },
+    {
+      "id": "005",
+      "title": "Rs 400 Uber ride (MCC 4121)",
+      "ctx": {
+        "amount": 400,
+        "occurred": "2026-11-05T10:00:00+05:30",
+        "category_slug": "travel",
+        "mcc": 4121,
+        "merchant_name": "Uber",
+        "merchant_vpa": null,
+        "merchant_slug": "uber",
+        "platform": null,
+        "rail": "online"
+      },
+      "state_before": {
+        "caps_by_source_id": {}
+      },
+      "expect": {
+        "currency": "points",
+        "amount": 20,
+        "value_inr": 20,
+        "excluded": false,
+        "cap_deltas_by_source_id": {
+          "millennia-5pct-monthly-cap": 20
+        }
+      },
+      "why": "Uber earns 5% only for MCC 4121 rides: 4 blocks x 5 = 20."
+    },
+    {
+      "id": "006",
+      "title": "Rs 3,000 fuel",
+      "ctx": {
+        "amount": 3000,
+        "occurred": "2026-11-05T10:00:00+05:30",
+        "category_slug": "fuel",
+        "mcc": 5541,
+        "merchant_name": "Petrol pump",
+        "merchant_vpa": null,
+        "merchant_slug": null,
+        "platform": null,
+        "rail": "swipe"
+      },
+      "state_before": {
+        "caps_by_source_id": {}
+      },
+      "expect": {
+        "currency": "points",
+        "amount": 0,
+        "value_inr": 0,
+        "excluded": true,
+        "cap_deltas_by_source_id": {}
+      },
+      "why": "Fuel is excluded from CashPoints."
+    },
+    {
+      "id": "007",
+      "title": "Rs 2,000 wallet load (MCC 6540)",
+      "ctx": {
+        "amount": 2000,
+        "occurred": "2026-11-05T10:00:00+05:30",
+        "category_slug": "wallet",
+        "mcc": 6540,
+        "merchant_name": "Wallet top up",
+        "merchant_vpa": null,
+        "merchant_slug": null,
+        "platform": null,
+        "rail": "online"
+      },
+      "state_before": {
+        "caps_by_source_id": {}
+      },
+      "expect": {
+        "currency": "points",
+        "amount": 0,
+        "value_inr": 0,
+        "excluded": true,
+        "cap_deltas_by_source_id": {}
+      },
+      "why": "Wallet loading does not earn."
+    },
+    {
+      "id": "008",
+      "title": "Rs 20,000 rent",
+      "ctx": {
+        "amount": 20000,
+        "occurred": "2026-11-05T10:00:00+05:30",
+        "category_slug": "rent",
+        "mcc": 6513,
+        "merchant_name": "Rent payment",
+        "merchant_vpa": null,
+        "merchant_slug": null,
+        "platform": null,
+        "rail": "online"
+      },
+      "state_before": {
+        "caps_by_source_id": {}
+      },
+      "expect": {
+        "currency": "points",
+        "amount": 0,
+        "value_inr": 0,
+        "excluded": true,
+        "cap_deltas_by_source_id": {}
+      },
+      "why": "Rent never earns."
+    },
+    {
+      "id": "009",
+      "title": "Rs 12,000 EMI purchase",
+      "ctx": {
+        "amount": 12000,
+        "occurred": "2026-11-05T10:00:00+05:30",
+        "category_slug": "other",
+        "mcc": 5732,
+        "merchant_name": "Electronics store",
+        "merchant_vpa": null,
+        "merchant_slug": null,
+        "platform": null,
+        "rail": "emi"
+      },
+      "state_before": {
+        "caps_by_source_id": {}
+      },
+      "expect": {
+        "currency": "points",
+        "amount": 0,
+        "value_inr": 0,
+        "excluded": true,
+        "cap_deltas_by_source_id": {}
+      },
+      "why": "All EMI transactions are excluded."
+    }
+  ],
+  "research_notes": [
+    {
+      "item": "unit and rounding",
+      "cardpipeline_says": "Base has both base_cashback_percent 1 and points 1/Rs100; importer picks cashback_percent, which pays to the paisa.",
+      "issuer_says": "Pays whole CashPoints per full Rs100 block (1 CashPoint = Rs1), residual dropped.",
+      "proposed_fix": "importer"
+    },
+    {
+      "item": "spend above the 5% cap",
+      "cardpipeline_says": "zero_accrual.",
+      "issuer_says": "\"Spends beyond the capping of 1,000 shall not be considered for CashPoints posting.\" Whether such spend then earns the 1% rate is not stated, so no example.",
+      "proposed_fix": "none"
+    },
+    {
+      "item": "Uber",
+      "cardpipeline_says": "Rule millennia-uber-mcc4121 5%.",
+      "issuer_says": "Confirmed: only MCC 4121 Uber transactions.",
+      "proposed_fix": "none"
+    }
+  ]
+}

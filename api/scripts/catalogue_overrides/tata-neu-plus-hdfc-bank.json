@@ -1,0 +1,68 @@
+{
+  "source_slug": "tata-neu-plus-hdfc-bank",
+  "changes": [
+    {
+      "path": "cap_rules[id=grocery_monthly_1000].metric",
+      "value": "total_reward_points",
+      "reason": "Issuer caps total NeuCoins in the category per month.",
+      "source_url": "https://www.hdfc.bank.in/content/dam/hdfcbankpws/in/en/personal-banking/discover-products/cards/credit-cards/tata-neu-plus-hdfc-bank-credit-card/pdfs/tata_neu_plus_card_tnc.pdf",
+      "checked_on": "2026-11-05"
+    },
+    {
+      "path": "cap_rules[id=utility_monthly_2000].metric",
+      "value": "total_reward_points",
+      "reason": "Issuer caps total NeuCoins in the category per month.",
+      "source_url": "https://www.hdfc.bank.in/content/dam/hdfcbankpws/in/en/personal-banking/discover-products/cards/credit-cards/tata-neu-plus-hdfc-bank-credit-card/pdfs/tata_neu_plus_card_tnc.pdf",
+      "checked_on": "2026-11-05"
+    },
+    {
+      "path": "cap_rules[id=telecom_cable_monthly_2000].metric",
+      "value": "total_reward_points",
+      "reason": "Issuer caps total NeuCoins in the category per month.",
+      "source_url": "https://www.hdfc.bank.in/content/dam/hdfcbankpws/in/en/personal-banking/discover-products/cards/credit-cards/tata-neu-plus-hdfc-bank-credit-card/pdfs/tata_neu_plus_card_tnc.pdf",
+      "checked_on": "2026-11-05"
+    },
+    {
+      "path": "cap_rules[id=insurance_monthly_2000].metric",
+      "value": "total_reward_points",
+      "reason": "Issuer caps total NeuCoins in the category per month.",
+      "source_url": "https://www.hdfc.bank.in/content/dam/hdfcbankpws/in/en/personal-banking/discover-products/cards/credit-cards/tata-neu-plus-hdfc-bank-credit-card/pdfs/tata_neu_plus_card_tnc.pdf",
+      "checked_on": "2026-11-05"
+    },
+    {
+      "path": "cap_rules[id=grocery_monthly_1000].post_limit_behavior.action",
+      "value": "zero_accrual",
+      "reason": "Nothing earned above the cap.",
+      "source_url": "https://www.hdfc.bank.in/content/dam/hdfcbankpws/in/en/personal-banking/discover-products/cards/credit-cards/tata-neu-plus-hdfc-bank-credit-card/pdfs/tata_neu_plus_card_tnc.pdf",
+      "checked_on": "2026-11-05"
+    },
+    {
+      "path": "cap_rules[id=utility_monthly_2000].post_limit_behavior.action",
+      "value": "zero_accrual",
+      "reason": "Nothing earned above the cap.",
+      "source_url": "https://www.hdfc.bank.in/content/dam/hdfcbankpws/in/en/personal-banking/discover-products/cards/credit-cards/tata-neu-plus-hdfc-bank-credit-card/pdfs/tata_neu_plus_card_tnc.pdf",
+      "checked_on": "2026-11-05"
+    },
+    {
+      "path": "cap_rules[id=telecom_cable_monthly_2000].post_limit_behavior.action",
+      "value": "zero_accrual",
+      "reason": "Nothing earned above the cap.",
+      "source_url": "https://www.hdfc.bank.in/content/dam/hdfcbankpws/in/en/personal-banking/discover-products/cards/credit-cards/tata-neu-plus-hdfc-bank-credit-card/pdfs/tata_neu_plus_card_tnc.pdf",
+      "checked_on": "2026-11-05"
+    },
+    {
+      "path": "cap_rules[id=insurance_monthly_2000].post_limit_behavior.action",
+      "value": "zero_accrual",
+      "reason": "Nothing earned above the cap.",
+      "source_url": "https://www.hdfc.bank.in/content/dam/hdfcbankpws/in/en/personal-banking/discover-products/cards/credit-cards/tata-neu-plus-hdfc-bank-credit-card/pdfs/tata_neu_plus_card_tnc.pdf",
+      "checked_on": "2026-11-05"
+    },
+    {
+      "path": "accrual_engine.rounding_mode",
+      "value": "points_half_up",
+      "reason": "Issuer rounds the final NeuCoins to nearest whole (half up) on the exact amount (D7).",
+      "source_url": "https://www.hdfc.bank.in/content/dam/hdfcbankpws/in/en/personal-banking/discover-products/cards/credit-cards/tata-neu-plus-hdfc-bank-credit-card/pdfs/tata_neu_plus_card_tnc.pdf",
+      "checked_on": "2026-11-05"
+    }
+  ]
+}
