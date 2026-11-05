@@ -91,6 +91,19 @@ async function dates(client) {
   return { today: r.rows[0].today, monthStart: r.rows[0].month_start, prevMonthStart: r.rows[0].prev_month_start };
 }
 
+/**
+ * The same for v1 cards, from the "today" the v1 code itself uses: the
+ * database's CURRENT_DATE (GET /user-cards' v1 rows, reconcile). Spends are
+ * placed at 06:30 UTC on these days, so their UTC day (v1's periodBounds)
+ * is the day named, whatever the session time zone (±11:59 of UTC).
+ */
+async function v1Dates(client) {
+  const r = await client.query(
+    `SELECT CURRENT_DATE::text AS today, date_trunc('month', CURRENT_DATE)::date::text AS month_start`,
+  );
+  return { today: r.rows[0].today, monthStart: r.rows[0].month_start };
+}
+
 async function categoryIds(client) {
   const r = await client.query(`SELECT slug, id FROM spend_categories`);
   return Object.fromEntries(r.rows.map((row) => [row.slug, row.id]));
@@ -458,11 +471,48 @@ test('v2 card: a cap row written in v1 units is rebuilt in native units before p
   });
 });
 
+test('C8 D23c: the wallet\'s "current" v2 cap and milestone rows follow the India day across 18:30 UTC', { skip }, async () => {
+  cardStateV2.clearDirectoryCache();
+  await withRollback(async (client) => {
+    const ids = await seedSyntheticCard(client, { openedOn: '2026-10-01' });
+    // Two adjacent monthly windows for one cap and one milestone (fixed dates,
+    // independent of the clock; the reads take `now` explicitly).
+    for (const [start, end, consumed] of [['2026-11-01', '2026-11-30', 10], ['2026-12-01', '2026-12-31', 20]]) {
+      await client.query(
+        `INSERT INTO cap_states (profile_id, user_card_id, cap_rule_id, period_start, period_end, consumed,
+                                 cap_value_snapshot, cap_kind, cap_amount)
+         VALUES ($1, $2, $3, $4, $5, $6, 625, 'total_points', 2500)`,
+        [ids.profileId, ids.userCardId, F.CAP.parent, start, end, consumed],
+      );
+      await client.query(
+        `INSERT INTO milestone_states (profile_id, user_card_id, milestone_rule_id, period_start, period_end, qualified_spend)
+         VALUES ($1, $2, $3, $4, $5, $6)`,
+        [ids.profileId, ids.userCardId, F.MILESTONE.annual, start, end, consumed * 100],
+      );
+    }
+    await asUser(client, ids.profileId);
+    const at = async (iso) => {
+      const now = new Date(iso);
+      const caps = await cardStateV2.currentCapStates(client, ids.userCardId, { now });
+      const milestones = await cardStateV2.currentMilestoneStates(client, ids.userCardId, { now });
+      return [caps.map((r) => r.period_start), milestones.map((r) => r.period_start)];
+    };
+    // 18:15 UTC on 30 Nov is 23:45 IST, still November; 18:45 UTC is 00:15 IST on 1 Dec.
+    assert.deepEqual(await at('2026-11-30T18:15:00Z'), [['2026-11-01'], ['2026-11-01']]);
+    assert.deepEqual(await at('2026-11-30T18:45:00Z'), [['2026-12-01'], ['2026-12-01']]);
+    // Another profile reads nothing (profile_id filter + RLS).
+    await client.query(`SELECT set_config('app.user_id', $1, true)`, [crypto.randomUUID()]);
+    assert.deepEqual(await at('2026-11-30T18:45:00Z'), [[], []]);
+  });
+});
+
 test('v1-shaped card: today\'s path, v1 measure, no kind, no record', { skip }, async () => {
   cardStateV2.clearDirectoryCache();
   await withRollback(async (client) => {
     const fns = extractIndexFunctions();
-    const { monthStart } = await dates(client);
+    // v1 windows run on the database's date, so the test does too (never IST):
+    // deterministic at any hour, including 18:30–24:00 UTC on a month's last day.
+    const { monthStart } = await v1Dates(client);
     const cats = await categoryIds(client);
     const issuer = (await client.query(`INSERT INTO issuers (slug, name) VALUES ('wp8-v1-bank', 'WP8 V1 Bank') RETURNING id`)).rows[0].id;
     const product = (await client.query(
@@ -486,7 +536,9 @@ test('v1-shaped card: today\'s path, v1 measure, no kind, no record', { skip }, 
     await asUser(client, profileId);
     assert.equal(await cardStateV2.loadV2Card(client, userCardId), null, 'v1-shaped');
 
-    const spends = [{ amount: 2000, day: monthStart, category: 'dining' }, { amount: 2000, day: addDays(monthStart, 1), category: 'dining' }];
+    // Both on the month's first day: never after today, so v1's reconcile
+    // (which replays up to CURRENT_DATE) sees both, even on the 1st.
+    const spends = [{ amount: 2000, day: monthStart, category: 'dining' }, { amount: 2000, day: monthStart, category: 'dining' }];
     const txnIds = [];
     for (const s of spends) txnIds.push((await recordSpend(client, fns, ids, s)).txnId);
     const rows = await capRows(client, userCardId);
