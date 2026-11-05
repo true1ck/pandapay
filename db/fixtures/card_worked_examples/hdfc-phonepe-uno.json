@@ -1,0 +1,267 @@
+{
+  "source_slug": "hdfc-phonepe-uno",
+  "cardpipeline_id": "hdfc-bank-phonepe-hdfc-bank-uno",
+  "card_name": "PhonePe HDFC Bank Uno",
+  "verified_on": "2026-11-05",
+  "sources": [
+    {
+      "url": "https://www.hdfc.bank.in/content/dam/hdfcbankpws/in/en/personal-banking/discover-products/cards/credit-cards/phonepe-hdfc-bank-uno-credit-card-/phonepe-hdfc-bank-uno-cc-reward-points-tncs.pdf",
+      "doc": "PhonePe HDFC Bank Uno Reward Points T&C, Jul 2026",
+      "quote": "Capping of 500 reward points per calendar month (PhonePe categories)"
+    },
+    {
+      "url": "https://www.hdfc.bank.in/content/dam/hdfcbankpws/in/en/personal-banking/discover-products/cards/credit-cards/phonepe-hdfc-bank-uno-credit-card-/phonepe-hdfc-bank-uno-cc-reward-points-tncs.pdf",
+      "doc": "PhonePe HDFC Bank Uno Reward Points T&C, Jul 2026",
+      "quote": "Capping of 500 reward points per calendar month (online brands and Scan & Pay)"
+    },
+    {
+      "url": "https://www.hdfc.bank.in/content/dam/hdfcbankpws/in/en/personal-banking/discover-products/cards/credit-cards/phonepe-hdfc-bank-uno-credit-card-/phonepe-hdfc-bank-uno-cc-reward-points-tncs.pdf",
+      "doc": "PhonePe HDFC Bank Uno Reward Points T&C, Jul 2026",
+      "quote": "No reward points will be given for EMI transactions, fuel, wallet load, gift cards"
+    }
+  ],
+  "examples": [
+    {
+      "id": "001",
+      "title": "Rs 3,000 electricity bill in the PhonePe app",
+      "ctx": {
+        "amount": 3000,
+        "occurred": "2026-11-05T10:00:00+05:30",
+        "category_slug": "bills",
+        "mcc": 4900,
+        "merchant_name": "Electricity bill",
+        "merchant_vpa": null,
+        "merchant_slug": null,
+        "platform": "phonepe_app",
+        "rail": "online"
+      },
+      "state_before": {
+        "caps_by_source_id": {}
+      },
+      "expect": {
+        "currency": "points",
+        "amount": 60,
+        "value_inr": null,
+        "excluded": false,
+        "cap_deltas_by_source_id": {
+          "phonepe_2pct_monthly_cap": 60
+        }
+      },
+      "why": "2% on PhonePe recharges and bills = 60 RP. Cap 500 RP per month."
+    },
+    {
+      "id": "002",
+      "title": "Rs 800 Swiggy order (online brand)",
+      "ctx": {
+        "amount": 800,
+        "occurred": "2026-11-05T10:00:00+05:30",
+        "category_slug": "dining",
+        "mcc": 5814,
+        "merchant_name": "Swiggy",
+        "merchant_vpa": null,
+        "merchant_slug": "swiggy",
+        "platform": null,
+        "rail": "online"
+      },
+      "state_before": {
+        "caps_by_source_id": {}
+      },
+      "expect": {
+        "currency": "points",
+        "amount": 8,
+        "value_inr": null,
+        "excluded": false,
+        "cap_deltas_by_source_id": {
+          "online_brands_1pct_monthly_cap": 8
+        }
+      },
+      "why": "1% on listed online brands (needs listed MCC): 8 RP. Cap 500 per month."
+    },
+    {
+      "id": "003",
+      "title": "Rs 500 UPI QR payment at a shop",
+      "ctx": {
+        "amount": 500,
+        "occurred": "2026-11-05T10:00:00+05:30",
+        "category_slug": "shopping",
+        "mcc": 5411,
+        "merchant_name": "Local shop",
+        "merchant_vpa": null,
+        "merchant_slug": null,
+        "platform": null,
+        "rail": "upi_qr"
+      },
+      "state_before": {
+        "caps_by_source_id": {}
+      },
+      "expect": {
+        "currency": "points",
+        "amount": 5,
+        "value_inr": null,
+        "excluded": false,
+        "cap_deltas_by_source_id": {
+          "upi_scan_pay_1pct_monthly_cap": 5
+        }
+      },
+      "why": "1% on Scan & Pay (UPI, QR): 5 RP. Cap 500 per month."
+    },
+    {
+      "id": "004",
+      "title": "Rs 8,000 travel booking in PhonePe app with 400 of 500 cap used",
+      "ctx": {
+        "amount": 8000,
+        "occurred": "2026-11-05T10:00:00+05:30",
+        "category_slug": "travel",
+        "mcc": 4511,
+        "merchant_name": "Flight booking",
+        "merchant_vpa": null,
+        "merchant_slug": null,
+        "platform": "phonepe_app",
+        "rail": "online"
+      },
+      "state_before": {
+        "caps_by_source_id": {
+          "phonepe_2pct_monthly_cap": 400
+        }
+      },
+      "expect": {
+        "currency": "points",
+        "amount": 100,
+        "value_inr": null,
+        "excluded": false,
+        "cap_deltas_by_source_id": {
+          "phonepe_2pct_monthly_cap": 100
+        }
+      },
+      "why": "Would be 160 RP; only 100 remain in the monthly cap."
+    },
+    {
+      "id": "005",
+      "title": "Rs 1,000 Zomato after online-brand cap used",
+      "ctx": {
+        "amount": 1000,
+        "occurred": "2026-11-05T10:00:00+05:30",
+        "category_slug": "dining",
+        "mcc": 5812,
+        "merchant_name": "Zomato",
+        "merchant_vpa": null,
+        "merchant_slug": "zomato",
+        "platform": null,
+        "rail": "online"
+      },
+      "state_before": {
+        "caps_by_source_id": {
+          "online_brands_1pct_monthly_cap": 500
+        }
+      },
+      "expect": {
+        "currency": "points",
+        "amount": 0,
+        "value_inr": null,
+        "excluded": false,
+        "cap_deltas_by_source_id": {}
+      },
+      "why": "Online brand cap of 500 RP per month is used; nothing further."
+    },
+    {
+      "id": "006",
+      "title": "Rs 2,000 fuel",
+      "ctx": {
+        "amount": 2000,
+        "occurred": "2026-11-05T10:00:00+05:30",
+        "category_slug": "fuel",
+        "mcc": 5541,
+        "merchant_name": "Petrol pump",
+        "merchant_vpa": null,
+        "merchant_slug": null,
+        "platform": null,
+        "rail": "swipe"
+      },
+      "state_before": {
+        "caps_by_source_id": {}
+      },
+      "expect": {
+        "currency": "points",
+        "amount": 0,
+        "value_inr": null,
+        "excluded": true,
+        "cap_deltas_by_source_id": {}
+      },
+      "why": "Fuel is excluded."
+    },
+    {
+      "id": "007",
+      "title": "Rs 5,000 insurance premium",
+      "ctx": {
+        "amount": 5000,
+        "occurred": "2026-11-05T10:00:00+05:30",
+        "category_slug": "insurance",
+        "mcc": 6300,
+        "merchant_name": "Insurance premium",
+        "merchant_vpa": null,
+        "merchant_slug": null,
+        "platform": null,
+        "rail": "online"
+      },
+      "state_before": {
+        "caps_by_source_id": {}
+      },
+      "expect": {
+        "currency": "points",
+        "amount": 0,
+        "value_inr": null,
+        "excluded": true,
+        "cap_deltas_by_source_id": {}
+      },
+      "why": "Insurance is excluded."
+    },
+    {
+      "id": "008",
+      "title": "Rs 8,000 EMI purchase",
+      "ctx": {
+        "amount": 8000,
+        "occurred": "2026-11-05T10:00:00+05:30",
+        "category_slug": "shopping",
+        "mcc": 5732,
+        "merchant_name": "Electronics store",
+        "merchant_vpa": null,
+        "merchant_slug": null,
+        "platform": null,
+        "rail": "emi"
+      },
+      "state_before": {
+        "caps_by_source_id": {}
+      },
+      "expect": {
+        "currency": "points",
+        "amount": 0,
+        "value_inr": null,
+        "excluded": true,
+        "cap_deltas_by_source_id": {}
+      },
+      "why": "EMI is excluded."
+    }
+  ],
+  "research_notes": [
+    {
+      "item": "MCC list for PhonePe categories",
+      "cardpipeline_says": "Includes 5262 and 7999.",
+      "issuer_says": "Eligible MCCs: 4111, 4112, 4511, 4722, 4784, 4814, 4899, 4900 only.",
+      "proposed_fix": "override",
+      "override_file": "api/scripts/catalogue_overrides/hdfc-phonepe-uno.json"
+    },
+    {
+      "item": "fractional rounding",
+      "cardpipeline_says": "Block Rs100 floor.",
+      "issuer_says": "MITC: points earned on multiples of Rs1. T&C do not say how fractions of a point are rounded, so no rounding example.",
+      "proposed_fix": "none"
+    },
+    {
+      "item": "base earn on other spends",
+      "cardpipeline_says": "Base 1 point per Rs100.",
+      "issuer_says": "T&C list only three earning categories and an exclusion list; no base earn on other spends is stated.",
+      "proposed_fix": "override",
+      "override_file": "api/scripts/catalogue_overrides/hdfc-phonepe-uno.json"
+    }
+  ]
+}
