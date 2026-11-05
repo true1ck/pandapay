@@ -10,7 +10,7 @@ void main() {
     final file = File(
       '${Directory.systemTemp.path}${Platform.pathSeparator}pandapay-manual-bank-${DateTime.now().microsecondsSinceEpoch}.sqlite',
     );
-    final database = AppDatabase.openFile(file.path);
+    final database = AppDatabase.openUnencryptedFileForTesting(file.path);
     final store = FinancialStore(database);
     try {
       store.setManualBankBalance(

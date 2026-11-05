@@ -4282,7 +4282,10 @@ final responseCacheProvider = FutureProvider<ResponseCache>((ref) async {
   // read isolate.
   final worker = database.filePath == null
       ? null
-      : FinancialReadWorker(database.filePath!);
+      : FinancialReadWorker(
+          database.filePath!,
+          keyHex: database.keyHexForWorker,
+        );
   final cache = ResponseCache(database, financialReadWorker: worker);
   final store = cache.financialStore;
   ref.onDispose(store.dispose);

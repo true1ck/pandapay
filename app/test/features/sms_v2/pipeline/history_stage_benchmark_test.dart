@@ -83,7 +83,7 @@ void main() {
       final dir = Directory.systemTemp.createTempSync('sms_v2_bench');
       addTearDown(() => dir.deleteSync(recursive: true));
       final file = '${dir.path}/bench.sqlite';
-      final database = AppDatabase.openFile(file);
+      final database = AppDatabase.openUnencryptedFileForTesting(file);
       final financial = FinancialStore(database);
       addTearDown(() {
         financial.dispose();

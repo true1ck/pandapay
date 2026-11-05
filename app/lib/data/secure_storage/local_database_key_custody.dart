@@ -105,6 +105,16 @@ final class LocalDatabaseKeyCustody {
     }
   }
 
+  /// Deletes this install key and its metadata. After this the encrypted
+  /// database can never be read again; a later [openKey] provisions a new key.
+  /// Sign-out and "key lost" recovery call this.
+  Future<void> destroy() async {
+    await lease.runExclusive(() async {
+      await storage.delete(_metaKey);
+      await storage.delete('$_slotPrefix${1}');
+    });
+  }
+
   Future<LocalKeyResult> _openKeyLocked({
     required String installId,
     required bool encryptedManifestExists,

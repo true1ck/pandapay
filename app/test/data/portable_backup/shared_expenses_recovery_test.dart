@@ -27,7 +27,7 @@ void main() {
     () async {
       final folder = await Directory.systemTemp.createTemp('shared-forward-');
       final file = '${folder.path}/personal.sqlite';
-      final first = AppDatabase.openFile(file);
+      final first = AppDatabase.openUnencryptedFileForTesting(file);
       first.db.execute(
         'CREATE TABLE personal_preserved(id TEXT PRIMARY KEY,amount INTEGER)',
       );
@@ -38,7 +38,7 @@ void main() {
         "UPDATE shared_schema_version SET version=999 WHERE module='shared_expenses'",
       );
       first.close();
-      final reopened = AppDatabase.openFile(file);
+      final reopened = AppDatabase.openUnencryptedFileForTesting(file);
       try {
         expect(
           reopened.db

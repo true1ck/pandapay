@@ -46,6 +46,9 @@ class LocalTransactionPage {
 /// store and discard results when their account/session generation changes.
 class FinancialReadWorker {
   final String databasePath;
+
+  /// Null only in host tests, which run on the system SQLite.
+  final String? keyHex;
   final AccountRecoveryOperationGate recoveryGate;
   final int maxPendingRequests;
   final _responses = ReceivePort();
@@ -60,6 +63,7 @@ class FinancialReadWorker {
 
   FinancialReadWorker(
     this.databasePath, {
+    this.keyHex,
     AccountRecoveryOperationGate? recoveryGate,
     this.maxPendingRequests = 2,
   }) : recoveryGate = recoveryGate ?? AccountRecoveryOperationGate.process {
@@ -111,7 +115,7 @@ class FinancialReadWorker {
     unawaited(
       Isolate.spawn(
         _run,
-        [_responses.sendPort, databasePath],
+        [_responses.sendPort, databasePath, keyHex],
         onError: _responses.sendPort,
         onExit: _responses.sendPort,
         debugName: 'pandapay-financial-read',
@@ -206,7 +210,10 @@ class FinancialReadWorker {
     AppDatabase? database;
     FinancialStore? store;
     try {
-      database = AppDatabase.openFile(arguments[1] as String);
+      final keyHex = arguments[2] as String?;
+      database = keyHex == null
+          ? AppDatabase.openUnencryptedFileForTesting(arguments[1] as String)
+          : AppDatabase.openFile(arguments[1] as String, keyHex: keyHex);
       var changed = <String>{};
       store = FinancialStore(
         database,

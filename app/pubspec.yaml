@@ -165,7 +165,8 @@ dependencies:
   # can't satisfy. sqlite3 needs no codegen, so the conflict doesn't apply.
   # connectivity_plus drives the online/offline signal.
   sqlite3: ^2.9.4
-  sqlite3_flutter_libs: ^0.5.42
+  # SQLCipher replaces sqlite3_flutter_libs. Never ship both.
+  sqlcipher_flutter_libs: ^0.6.8
   path: ^1.9.0
   connectivity_plus: ^7.3.1
 

@@ -5,6 +5,7 @@ import 'package:flutter/widgets.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 
 import '../../data/local/app_database.dart';
+import '../../data/local/database_key.dart';
 import '../../data/local/financial_store.dart';
 import '../../data/local/ios_sms_acquisition_receipts.dart';
 import '../../data/local/sms_import_store.dart';
@@ -59,7 +60,13 @@ class IosSmsBackgroundDrain {
                 .toList();
         if (rows.isEmpty) return {'success': true};
         if (stopped) break;
-        database ??= await openDatabase();
+        try {
+          database ??= await openDatabase();
+        } on DatabaseKeyUnavailable {
+          // The phone has not been unlocked since boot, so the key is not
+          // readable yet. Leave every message in the native spool.
+          return {'success': false};
+        }
         // Opening storage can await a plugin while account restoration or
         // logout proceeds on the UI engine. Recheck before any mutation.
         final owner = Map<String, Object?>.from(
