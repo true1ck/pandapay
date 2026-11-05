@@ -254,6 +254,11 @@ extension RewardRuleJson on RewardRule {
       ),
       blockInr: _v2IntOrNull(json['block_inr'], 'block_inr'),
       minEngineVersion: _v2EngineVersion(json['min_engine_version']),
+      // D18a: a non-integer value makes the rule unparseable (D15d).
+      maxEngineVersion: _v2IntOrNull(
+        json['max_engine_version'],
+        'max_engine_version',
+      ),
       sourceLocalId: _v2StringOrNull(
         json['source_local_id'],
         'source_local_id',
@@ -288,6 +293,7 @@ extension RewardRuleJson on RewardRule {
       'except_platform_slugs': exceptPlatformSlugs,
     if (blockInr != null) 'block_inr': blockInr,
     if (minEngineVersion != 1) 'min_engine_version': minEngineVersion,
+    if (maxEngineVersion != null) 'max_engine_version': maxEngineVersion,
     if (sourceLocalId != null) 'source_local_id': sourceLocalId,
     if (displayNote != null) 'display_note': displayNote,
   };
@@ -533,6 +539,7 @@ bool _rawRuleMarksV2(Map<String, dynamic> json) {
       nonEmpty(json['except_merchant_slugs']) ||
       nonEmpty(json['except_platform_slugs']) ||
       (role == 'exclusion' && json['max_txn_inr'] != null) ||
+      json['max_engine_version'] != null ||
       json['block_inr'] != null ||
       (engine is num && engine >= 2) ||
       (engine is String && (num.tryParse(engine) ?? 1) >= 2);

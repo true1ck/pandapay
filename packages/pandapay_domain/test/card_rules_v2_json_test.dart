@@ -689,6 +689,95 @@ void main() {
     });
   });
 
+  group('D18a max_engine_version', () {
+    test('parses, marks the card v2 and round-trips only when set', () {
+      final card = CardProductJson.fromJson(
+        _card(
+          rules: [
+            _rule('broad', {'rule_role': 'earn', 'max_engine_version': 1}),
+            _rule('plain', {'rule_role': 'earn', 'max_engine_version': null}),
+          ],
+        ),
+      );
+      expect(card.isV2Shaped, isTrue);
+      final broad = card.rewardRules.firstWhere((r) => r.id == 'broad');
+      final plain = card.rewardRules.firstWhere((r) => r.id == 'plain');
+      expect(broad.maxEngineVersion, 1);
+      expect(broad.isV1Only, isTrue);
+      expect(plain.maxEngineVersion, isNull);
+      expect(plain.isV1Only, isFalse);
+
+      final json = card.toJson();
+      final rules = (json['reward_rules'] as List).cast<Map>();
+      expect(rules.first['max_engine_version'], 1);
+      expect(rules.last.containsKey('max_engine_version'), isFalse);
+      final again = CardProductJson.fromJson(
+        jsonDecode(jsonEncode(json)) as Map<String, dynamic>,
+      );
+      expect(again.rewardRules.first.maxEngineVersion, 1);
+    });
+
+    test('a null value alone keeps a card v1-shaped', () {
+      final card = CardProductJson.fromJson(
+        _card(
+          rules: [
+            _rule('r', {'rule_role': 'earn', 'max_engine_version': null}),
+          ],
+        ),
+      );
+      expect(card.isV2Shaped, isFalse);
+    });
+
+    test('max_engine_version 2 is an ordinary rule', () {
+      const rule = RewardRule(
+        id: 'r',
+        unit: RewardUnit.pointsPer100,
+        rate: 1,
+        maxEngineVersion: 2,
+      );
+      expect(rule.isV1Only, isFalse);
+      expect(rule.marksV2, isTrue);
+    });
+
+    for (final bad in <Object>[1.5, 'one', true]) {
+      test('a non-integer value ($bad) skips the rule visibly', () {
+        final card = CardProductJson.fromJson(
+          _card(
+            rules: [
+              _rule('ok', {'rule_role': 'earn'}),
+              _rule('odd', {'rule_role': 'earn', 'max_engine_version': bad}),
+            ],
+          ),
+        );
+        expect(card.rewardRules.map((r) => r.id), ['ok']);
+        expect(card.skippedRules, {'odd': 'unparseable_max_engine_version'});
+        expect(card.isV2Shaped, isTrue);
+      });
+    }
+
+    test('is identity: rows differing only in it never merge', () {
+      const a = RewardRule(
+        id: 'a',
+        categoryId: 'cat-dining',
+        unit: RewardUnit.pointsPer100,
+        rate: 0,
+      );
+      const b = RewardRule(
+        id: 'b',
+        categoryId: 'cat-dining',
+        unit: RewardUnit.pointsPer100,
+        rate: 0,
+        maxEngineVersion: 1,
+      );
+      expect(
+        rewardRuleIdentityKey(a),
+        'cat-dining|||pointsPer100|0.0||||||100',
+      );
+      expect(rewardRuleIdentityKey(b), isNot(rewardRuleIdentityKey(a)));
+      expect(uniqueRewardRules([a, b]), hasLength(2));
+    });
+  });
+
   group('round trip', () {
     test('every v2 field survives toJson -> jsonEncode -> fromJson', () {
       final wire = _card(
