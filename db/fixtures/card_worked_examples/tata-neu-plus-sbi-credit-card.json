@@ -376,6 +376,62 @@
         "cap_deltas_by_source_id": {}
       },
       "why": "T&C 11.4: NeuCoins are not accrued for Rental transactions. Proves the rent category row."
+    },
+    {
+      "state_before": {
+        "caps_by_source_id": {}
+      },
+      "id": "014",
+      "title": "Rs 3,000 on Tata Neu by UPI QR (RuPay variant)",
+      "ctx": {
+        "amount": 3000,
+        "occurred": "2026-11-10T10:00:00+05:30",
+        "category_id": null,
+        "category_slug": "online",
+        "mcc": null,
+        "merchant_name": "Tata Neu",
+        "merchant_vpa": null,
+        "merchant_slug": "tata_neu",
+        "platform": null,
+        "rail": "upi_qr"
+      },
+      "expect": {
+        "currency": "points",
+        "amount": 30,
+        "value_inr": 30,
+        "excluded": false,
+        "cap_deltas_by_source_id": {
+          "upi-neucoins-cap": 30
+        }
+      },
+      "why": "T&C 11.3(e): any UPI spend, including at partner brands, earns the 1% UPI rate (not the 2% partner rate); counts toward the 500 NeuCoin UPI cap."
+    },
+    {
+      "state_before": {
+        "caps_by_source_id": {}
+      },
+      "id": "015",
+      "title": "Rs 4,900 merchant EMI on Tata Neu",
+      "ctx": {
+        "amount": 4900,
+        "occurred": "2026-11-10T10:00:00+05:30",
+        "category_id": null,
+        "category_slug": "online",
+        "mcc": null,
+        "merchant_name": "Tata Neu",
+        "merchant_vpa": null,
+        "merchant_slug": "tata_neu",
+        "platform": null,
+        "rail": "emi"
+      },
+      "expect": {
+        "currency": "points",
+        "amount": 0,
+        "value_inr": null,
+        "excluded": true,
+        "cap_deltas_by_source_id": {}
+      },
+      "why": "T&C 11.4(a) (Flexipay) and 11.6(e) (NeuCoins forfeited on EMI conversion): EMI earns nothing (C8 D25e)."
     }
   ],
   "research_notes": [
@@ -411,6 +467,12 @@
       "issuer_says": "SBI T&C 11.4(a) and 11.6(e): no NeuCoins on EMI (D25e). UPI at partner brands earns the UPI rate (11.3(e)). Rent excluded by category as well as MCC 6513.",
       "proposed_fix": "override",
       "override_file": "api/scripts/catalogue_overrides/tata-neu-plus-sbi-credit-card.json"
+    },
+    {
+      "item": "WP7 r3: examples 014-015",
+      "cardpipeline_says": "The UPI/EMI carve-outs were only probe-tested on Tata Neu.",
+      "issuer_says": "Tata Neu is a partner (11.3(b)); its UPI spends earn the UPI rate and its EMI spends earn nothing, as for Croma (012, 011).",
+      "proposed_fix": "none"
     }
   ]
 }
