@@ -1,3 +1,4 @@
+import 'invalidation_coalescer.dart';
 import 'dart:async';
 import 'dart:io' show Platform;
 
@@ -60,8 +61,17 @@ class SyncEngine {
   bool _pullHasMore = false;
 
   SyncEngine(this._ref) {
-    _ref.onDispose(() => _continuation?.cancel());
+    _ref.onDispose(() {
+      _continuation?.cancel();
+      _invalidations.dispose();
+    });
   }
+
+  /// A long import syncs once per batch. Refreshing every screen each time
+  /// makes open pages flicker, so changes inside a few seconds are merged.
+  late final InvalidationCoalescer _invalidations = InvalidationCoalescer(
+    onFlush: _applyInvalidation,
+  );
 
   static String get _platform {
     if (kIsWeb) return 'web';
@@ -282,8 +292,10 @@ class SyncEngine {
     final remote = await api.fetchSelfTransferRules();
     if (remote == null) return;
     final cache = await _ref.read(responseCacheProvider.future);
-    SelfTransferRules(cache.financialStore.database, namespace: queue.namespace)
-        .replaceRemote(remote);
+    SelfTransferRules(
+      cache.financialStore.database,
+      namespace: queue.namespace,
+    ).replaceRemote(remote);
   }
 
   Future<void> _materialize(
@@ -356,7 +368,9 @@ class SyncEngine {
     }
   }
 
-  void _invalidateFor(Set<String> entities) {
+  void _invalidateFor(Set<String> entities) => _invalidations.add(entities);
+
+  void _applyInvalidation(Set<String> entities) {
     // _materialize has already committed the changed entities and their
     // offline snapshots. Invalidating the broad Home refresh here would
     // immediately fetch the complete transaction history a second time and
