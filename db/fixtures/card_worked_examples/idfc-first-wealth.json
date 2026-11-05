@@ -348,6 +348,13 @@
       "issuer_says": "Points are earned only on spends up to the credit limit per billing cycle. Per-user amount: cap kept with a null amount (flag cap_depends_on_user, D13a).",
       "proposed_fix": "override",
       "override_file": "api/scripts/catalogue_overrides/idfc-first-wealth.json"
+    },
+    {
+      "item": "fees and charges exclusion stays info",
+      "cardpipeline_says": "fee_charge_exclusion with no MCC or rail",
+      "issuer_says": "Fees and charges are not purchase transactions and do not reach the engine, so the exclusion has nothing to match and stays info. Cash withdrawal uses rail atm.",
+      "proposed_fix": "none",
+      "override_file": null
     }
   ]
 }

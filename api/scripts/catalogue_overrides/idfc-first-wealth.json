@@ -56,7 +56,7 @@
         },
         {
           "id": "cash_withdrawal_exclusion",
-          "category_id": "cash_withdrawal",
+          "category_id": "all_retail",
           "priority": 5,
           "evaluation_type": "exclusion",
           "rail": "atm",
@@ -307,7 +307,8 @@
           "parent_cap_id": null,
           "reset_day": null,
           "effective_from": "2026-06-18",
-          "effective_to": null
+          "effective_to": null,
+          "depends_on_user": true
         }
       ],
       "reason": "Issuer: reward points are earned only on spends up to the credit limit per billing cycle. Amount depends on the user, so cap_amount stays null (D13a, flag cap_depends_on_user). No Rs 20,000 threshold exists.",
