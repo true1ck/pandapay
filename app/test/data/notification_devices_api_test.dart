@@ -63,4 +63,39 @@ void main() {
 
     await api.register(token: 'fcm-token', platform: 'android');
   });
+  unregisterTests();
+}
+
+void unregisterTests() {
+  test('unregister sends DELETE with only the phone token', () async {
+    late http.Request request;
+    final api = NotificationDevicesApi(
+      apiBaseUrl: 'https://api.test',
+      accessToken: 'access-token',
+      client: MockClient((incoming) async {
+        request = incoming;
+        return http.Response('', 204);
+      }),
+    );
+
+    await api.unregister(token: 'fcm-token-123');
+
+    expect(request.method, 'DELETE');
+    expect(request.url.path, '/notification-devices');
+    expect(request.headers['Authorization'], 'Bearer access-token');
+    expect(jsonDecode(request.body), {'token': 'fcm-token-123'});
+  });
+
+  test('unregister throws when the API refuses', () async {
+    final api = NotificationDevicesApi(
+      apiBaseUrl: 'https://api.test',
+      accessToken: 'access-token',
+      client: MockClient((_) async => http.Response('{}', 502)),
+    );
+
+    await expectLater(
+      api.unregister(token: 'fcm-token-123'),
+      throwsA(isA<ApiException>()),
+    );
+  });
 }

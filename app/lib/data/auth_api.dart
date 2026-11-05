@@ -234,6 +234,27 @@ class AuthApi {
     );
   }
 
+  /// Revokes this device's refresh token on the server. A 200 is returned
+  /// for an already-invalid token too, so signing out twice is harmless.
+  Future<void> logout({
+    required String accessToken,
+    required String refreshToken,
+  }) async {
+    final response = await _client
+        .post(
+          Uri.parse('$authBaseUrl/auth/logout'),
+          headers: {
+            'Content-Type': 'application/json',
+            'Authorization': 'Bearer $accessToken',
+          },
+          body: jsonEncode({'refresh_token': refreshToken}),
+        )
+        .timeout(_requestTimeout);
+    if (response.statusCode != 200) {
+      throw ApiException('Logout failed: ${response.statusCode}');
+    }
+  }
+
   /// Existing email OTP. Legacy requests retain their supported request
   /// fields. V2 requests send only email/device; a phone claim cannot select
   /// an identity or prove phone ownership. There is no automatic downgrade.

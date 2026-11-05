@@ -39,7 +39,19 @@ class PushNotificationService {
   int _lifecycleGeneration = 0;
   bool _started = false;
 
-  PushNotificationService({required this.api, required this.gate});
+  /// Reads this phone's current FCM token. Replaceable so sign-out can be
+  /// tested without Firebase.
+  final Future<String?> Function()? readToken;
+
+  /// Deletes this phone's FCM token so the provider stops delivering to it.
+  final Future<void> Function()? deleteToken;
+
+  PushNotificationService({
+    required this.api,
+    required this.gate,
+    this.readToken,
+    this.deleteToken,
+  });
 
   Future<void> start() async {
     if (_started) return;
@@ -180,6 +192,42 @@ class PushNotificationService {
     _registrationRetryAttempt = 0;
     _startupRetryAttempt = 0;
     _started = false;
+  }
+
+  /// Sign-out: stops listening, asks the API to drop this phone's token, then
+  /// deletes the token on the phone. The local delete runs even when the API
+  /// call fails (offline), because it alone stops delivery to this phone.
+  /// Rethrows the API failure afterwards so the caller can tell.
+  Future<void> unregister() async {
+    final knownToken = _lastToken;
+    await stop();
+    Object? apiError;
+    try {
+      final token = knownToken ?? await _currentToken();
+      if (token != null && token.isNotEmpty) {
+        await api.unregister(token: token);
+      }
+    } catch (error) {
+      apiError = error;
+    }
+    try {
+      await (deleteToken ?? _deleteFirebaseToken)();
+    } catch (error) {
+      debugPrint('PandaPay FCM token delete failed: $error');
+    }
+    if (apiError != null) throw apiError;
+  }
+
+  Future<String?> _currentToken() async {
+    final read = readToken;
+    if (read != null) return read();
+    await Firebase.initializeApp();
+    return FirebaseMessaging.instance.getToken();
+  }
+
+  static Future<void> _deleteFirebaseToken() async {
+    await Firebase.initializeApp();
+    await FirebaseMessaging.instance.deleteToken();
   }
 
   String _platformName() {

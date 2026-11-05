@@ -1,10 +1,9 @@
 import 'package:flutter/material.dart';
-import '../../data/portable_backup/account_recovery_operation_gate.dart';
-import '../sms_import/ios_sms_intake_service.dart';
+import '../auth/account_sign_out_dialog.dart';
+import '../auth/account_sign_out_provider.dart';
 import '../system/device_authentication.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
-import 'package:path_provider/path_provider.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 
 import '../../app/design/app_theme.dart';
@@ -14,7 +13,6 @@ import '../../app/providers.dart';
 import '../../data/account_api.dart';
 import '../../data/api_exception.dart';
 import '../../app/env.dart';
-import 'storage_util.dart';
 
 /// H2 Account (real) — replaces AccountScreen's ~15%-built body (signed-in
 /// state + sign-out only) with the full spec surface: sign-out, a
@@ -154,20 +152,17 @@ class _SignOutButton extends ConsumerWidget {
         ),
       ),
       icon: const Icon(Icons.logout_rounded, size: 18),
-      onPressed: () => _signOut(ref),
+      onPressed: () =>
+          confirmAndSignOut(context, ref.read(accountSignOutProvider)),
       label: const Text('Sign out'),
     );
   }
 }
 
-/// Same clear-token-store + null-out-state pattern as AccountScreen's
-/// existing sign-out button — reused (not reinvented) by both the manual
-/// "Sign out" button and the post-deletion-request auto-sign-out below.
-Future<void> _signOut(WidgetRef ref) async {
-  final store = await ref.read(tokenStoreProvider.future);
-  await store.clear();
-  ref.read(accessTokenProvider.notifier).state = null;
-}
+/// Account deletion has already happened on the server, so there is nothing
+/// to warn about: revoke what can be revoked and wipe the phone.
+Future<void> _wipeAfterDeletion(WidgetRef ref) =>
+    ref.read(accountSignOutProvider).run();
 
 // ---------------------------------------------------------------------------
 // Biometric lock toggle
@@ -339,23 +334,13 @@ class _DeleteAccountSectionState extends ConsumerState<_DeleteAccountSection> {
       );
       await api.deleteAccountPermanently();
       deletionCompletedRemotely = true;
-      final namespace = ref.read(cacheNamespaceProvider);
-      final database = await ref.read(appDatabaseProvider.future);
-      await AccountRecoveryOperationGate.process.exclusive(() async {
-        await IosSmsIntakeService().revoke(namespace);
-        await database.clearAccountNamespace(namespace);
-      });
-      final prefs = await SharedPreferences.getInstance();
-      await clearPreferencesExceptPrefixes(prefs, const ['pandapay_app.']);
-      final cacheDirectory = await getApplicationCacheDirectory();
-      await clearDirectoryContents(cacheDirectory);
-      await _signOut(ref);
+      await _wipeAfterDeletion(ref);
       ref.invalidate(profileProvider);
       if (!mounted) return;
       context.go(AppRoute.welcome);
     } catch (err) {
       if (deletionCompletedRemotely) {
-        await _signOut(ref);
+        await _wipeAfterDeletion(ref);
         ref.invalidate(profileProvider);
         if (mounted) context.go(AppRoute.welcome);
         return;

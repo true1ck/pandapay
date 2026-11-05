@@ -57,6 +57,24 @@ class NotificationDevicesApi {
     }
   }
 
+  /// Removes this phone's push token from the signed-in account. Only the
+  /// token is sent; the API derives the account from the bearer token.
+  Future<void> unregister({required String token}) async {
+    final response = await _client.delete(
+      Uri.parse('$apiBaseUrl/notification-devices'),
+      headers: {
+        'Authorization': 'Bearer $accessToken',
+        'Content-Type': 'application/json',
+      },
+      body: jsonEncode({'token': token}),
+    );
+    if (response.statusCode != 204 && response.statusCode != 200) {
+      throw ApiException(
+        'DELETE /notification-devices failed: ${response.statusCode}',
+      );
+    }
+  }
+
   /// Requests one real remote push for this signed-in account.
   ///
   /// The API deliberately derives the recipient from the bearer token. The
