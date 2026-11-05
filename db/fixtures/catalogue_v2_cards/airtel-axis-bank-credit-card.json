@@ -4,7 +4,7 @@
   "inputs": {
     "transform_version": "7",
     "source_record_sha256": "cc76514cd56bbf83040199957bfc05c3a5fbefc2539e9a89379d73480f8de1a3",
-    "override_sha256": "29796b7e7b4a73763b55cd112b6f9d8110bc8a88e3179833a42cfd45b36b575b",
+    "override_sha256": "818ad2fda0b105ee53122ae6b1698d8fe8f943c39e418413d642176a0318b820",
     "directory_sha256": "b1094d54b77e848d22f7a9a64f3ae6d1ef43ca3eb2fc8e40cd43ed1994664694",
     "verified": false
   },
@@ -35,8 +35,8 @@
     "points_expiry_months": null,
     "model_status": "partial",
     "model_coverage": {
-      "rules_total": 12,
-      "rules_modelled": 9,
+      "rules_total": 13,
+      "rules_modelled": 10,
       "rules_info": 3,
       "caps_total": 0,
       "caps_enforced": 0,
@@ -158,6 +158,14 @@
           "op": "append",
           "value_sha256": "94d92f34544978c6",
           "reason": "WP7: Same as utility_outside_airtel_thanks_exclusion (\"telecom_outside_airtel_thanks\").",
+          "source_url": "https://www.axis.bank.in/docs/default-source/default-document-library/credit-cards/terms-and-conditions-for-cashback-for-airtel-axis-bank-credit-card.pdf",
+          "checked_on": "2026-11-05"
+        },
+        {
+          "path": "reward_rules",
+          "op": "append",
+          "value_sha256": "2ed6846eb2297d7c",
+          "reason": "WP7: D28c: Cashback T&C: \"Cashback shall not be eligible on EMI transactions, Purchase converted to EMI post facto\". The record's EMI row needs category emi AND rail emi, so an EMI purchase in another category earned. Rail-EMI exclusion on all spend.",
           "source_url": "https://www.axis.bank.in/docs/default-source/default-document-library/credit-cards/terms-and-conditions-for-cashback-for-airtel-axis-bank-credit-card.pdf",
           "checked_on": "2026-11-05"
         }
@@ -1069,6 +1077,40 @@
         "max_engine_version": null,
         "source_local_id": "telecom_outside_airtel_thanks_exclusion",
         "display_note": "Telecom payments outside the Airtel Thanks app earn no cashback."
+      },
+      {
+        "id": "airtel-axis-bank-credit-card:rule:wp7_emi_rail_exclusion",
+        "category_id": null,
+        "category_slug": null,
+        "merchant_pattern": null,
+        "rail": "emi",
+        "unit": "cashback_percent",
+        "rate": 0,
+        "min_txn_inr": null,
+        "max_txn_inr": null,
+        "priority": 0,
+        "conditions": {
+          "source_local_id": "wp7_emi_rail_exclusion",
+          "part": null,
+          "info_reasons": [],
+          "flags": []
+        },
+        "notes": null,
+        "effective_from": "2026-04-12",
+        "effective_to": null,
+        "excluded_categories": [],
+        "rule_role": "exclusion",
+        "merchant_slugs": [],
+        "platform_slugs": [],
+        "mcc_include": [],
+        "mcc_exclude": [],
+        "except_merchant_slugs": [],
+        "except_platform_slugs": [],
+        "block_inr": null,
+        "min_engine_version": 2,
+        "max_engine_version": null,
+        "source_local_id": "wp7_emi_rail_exclusion",
+        "display_note": "EMI transactions earn no rewards."
       }
     ],
     "cap_rules": [],
