@@ -582,6 +582,12 @@ function transformRule(src, idx, ctx) {
     const text = String(prose.text);
     if (prose.partial) {
       flags.push('partial_merchant_list');
+      if (scopeLists) {
+        // An exclusion keeps the alternatives it resolved; the ones it
+        // couldn't are reported (they are not excluded until resolved).
+        flags.push('unresolved_merchant_alternative');
+        for (const u of prose.unresolved || [text]) needsDirectory.push(String(u).slice(0, 60));
+      }
       continue;
     }
     if (anyPlatform && /(participating|partner|select|eligible|brands|merchants|\d+\s*\+|leading|catalogue)/i.test(text)) {

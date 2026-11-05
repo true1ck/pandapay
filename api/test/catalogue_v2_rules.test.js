@@ -1267,6 +1267,21 @@ test('D16/D18e underscored negations ("non_iocl_fuel", "fuel_non_iocl", not_phon
   assert.ok(!base.flags.includes('unmapped_excluded_category'));
 });
 
+test('an exclusion keeps the merchants it resolves and flags the alternatives it cannot', () => {
+  const r = run(pointsCard([
+    rule({ id: 'x_list', category_id: 'excluded_spend', evaluation_type: 'exclusion', conditions: { merchant: ['Amazon', 'Zqxmart Stores'] }, action: { points_per_block: 0, reason: 'No points.' } }),
+    rule({ id: 'x_text', category_id: 'excluded_spend', evaluation_type: 'exclusion', conditions: { merchant: 'Amazon, Flipkart and Zqxmart Stores' }, action: { points_per_block: 0, reason: 'No points.' } }),
+  ]));
+  const list = only(r, 'x_list');
+  assert.ok(list.every((x) => x.rule_role === 'exclusion' && x.merchant_slugs.join() === 'amazon'));
+  assert.ok(list[0].flags.includes('unresolved_merchant_alternative'));
+  const text = only(r, 'x_text');
+  assert.ok(text.every((x) => x.rule_role === 'exclusion' && x.merchant_slugs.join() === 'amazon,flipkart'));
+  assert.ok(text[0].flags.includes('unresolved_merchant_alternative'));
+  const src = r.coverage.perSource.find((s) => s.source_local_id === 'x_list');
+  assert.ok(src.needs_directory.some((n) => /zqxmart/i.test(n)));
+});
+
 test('rows that would break a database identity index are deduplicated: first kept, the rest reported', () => {
   // bobcard-select: four empty lifestyle benefits; bobcard-corporate: two empty insurance rows.
   const emptyBenefit = { benefit_id: null, category_id: null, network_program: null, sponsor: null, label: null,

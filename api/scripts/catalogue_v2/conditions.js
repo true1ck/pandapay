@@ -311,7 +311,8 @@ function mapNameValueInner(m, key, value, index, { allowRail }) {
     m.exceptPlatformSlugs.push(...sub.exceptPlatformSlugs);
     if (sub.merchantProse.length) {
       const resolvedAny = sub.merchantSlugs.length || sub.platformSlugs.length;
-      m.merchantProse.push({ key, text: sub.merchantProse.map((p) => p.text).join(', '), partial: Boolean(resolvedAny) });
+      m.merchantProse.push({ key, text: sub.merchantProse.map((p) => p.text).join(', '), partial: Boolean(resolvedAny),
+        unresolved: sub.merchantProse.flatMap((p) => p.unresolved || [p.text]) });
     }
     return;
   }
@@ -397,7 +398,7 @@ function mapNameValueInner(m, key, value, index, { allowRail }) {
           block(m, key, raw);
           continue;
         }
-        m.merchantProse.push({ key, text: raw, partial: true });
+        m.merchantProse.push({ key, text: raw, partial: true, unresolved: leftover });
         continue;
       }
     }
