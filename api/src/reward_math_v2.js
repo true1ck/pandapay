@@ -98,11 +98,17 @@ function ruleIsV2(rule) {
   if (rule.rule_role != null && !ROLES.has(rule.rule_role)) return true;
   if (hasValue(rule.merchant_slugs) || hasValue(rule.platform_slugs)) return true;
   if (hasValue(rule.mcc_include) || hasValue(rule.mcc_exclude)) return true;
+  // C8 D16c: exception lists, and an exclusion with a minimum amount.
+  if (hasValue(rule.except_merchant_slugs) || hasValue(rule.except_platform_slugs)) return true;
+  if (rule.rule_role === 'exclusion' && rule.max_txn_inr != null) return true;
   if (rule.block_inr != null) return true;
   return num(rule.min_engine_version) === 2;
 }
 
 const RAILS = new Set(['upi_qr', 'swipe', 'online', 'contactless', 'atm', 'emi', 'unknown']);
+const LIST_FIELDS = [
+  'merchant_slugs', 'platform_slugs', 'mcc_include', 'mcc_exclude', 'except_merchant_slugs', 'except_platform_slugs',
+];
 
 function isStringList(value) {
   return Array.isArray(value) && value.every((x) => typeof x === 'string');
@@ -117,7 +123,7 @@ function ruleProblem(rule) {
   if (rule.rule_role != null && !ROLES.has(rule.rule_role)) return 'unknown_rule_role';
   if (rule.unit != null && currencyOf(rule.unit) == null) return 'unknown_unit';
   if (rule.rail != null && !RAILS.has(rule.rail)) return 'unknown_rail';
-  for (const field of ['merchant_slugs', 'platform_slugs', 'mcc_include', 'mcc_exclude']) {
+  for (const field of LIST_FIELDS) {
     if (rule[field] != null && !isStringList(rule[field])) return `unparseable_${field}`;
   }
   if (rule.block_inr != null && num(rule.block_inr) == null) return 'unparseable_block_inr';
@@ -250,6 +256,13 @@ function ruleAppliesV2(rule, ctx, directory) {
   const platforms = arr(rule.platform_slugs);
   if (platforms.length > 0 && (c.platform == null || !platforms.includes(c.platform))) return false;
 
+  // C8 D16a: exceptions. Only a KNOWN merchant (or an ancestor) / platform
+  // that is listed takes the rule off; unknown never proves an exception.
+  const exceptMerchants = arr(rule.except_merchant_slugs);
+  if (exceptMerchants.length > 0 && c.merchantChain.some((s) => exceptMerchants.includes(s))) return false;
+  const exceptPlatforms = arr(rule.except_platform_slugs);
+  if (c.platform != null && exceptPlatforms.includes(c.platform)) return false;
+
   // 7. MCC include; an unknown MCC is stood in for by a matching category
   //    (step 3 already enforced it), otherwise it fails.
   const include = arr(rule.mcc_include);
@@ -270,6 +283,13 @@ function ruleAppliesV2(rule, ctx, directory) {
   // 10. Minimum transaction.
   const min = num(rule.min_txn_inr);
   if (min != null && c.amount < min) return false;
+
+  // C8 D16b: on an exclusion, max_txn_inr means "applies only below it"
+  // (e.g. no rewards under ₹100). On earn rules it keeps its C3.5 meaning.
+  if (roleOf(rule) === 'exclusion') {
+    const below = num(rule.max_txn_inr);
+    if (below != null && !(c.amount < below)) return false;
+  }
 
   return true;
 }

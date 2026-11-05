@@ -729,6 +729,66 @@ test('D15d: skipped rules are reported on excluded results too', () => {
   assert.ok(r.reasons.includes('rule_skipped:bogus:unknown_rule_role'));
 });
 
+// --- C8 D16: exceptions and minimum-amount exclusions ---------------------------
+
+test('D16a: except lists take a rule off only for a known, listed merchant (or ancestor) or platform', () => {
+  const dir = loadDirectory(DIR_JSON);
+  const excl = { id: 'x', rule_role: 'exclusion', category_id: 'cat-food', except_merchant_slugs: ['swiggy'], except_platform_slugs: ['phonepe_app'], unit: 'cashback_percent', rate: 0 };
+  const food = (over) => ctxOf({ category_id: 'cat-food', ...over });
+  assert.strictEqual(ruleAppliesV2(excl, food({ merchant_name: 'Swiggy' }), dir), false);
+  assert.strictEqual(ruleAppliesV2(excl, food({ merchant_name: 'INSTAMART' }), dir), false, 'an ancestor in the list counts');
+  assert.strictEqual(ruleAppliesV2(excl, food({ platform: 'phonepe_app' }), dir), false);
+  // Unknown merchant / platform never proves the exception.
+  assert.strictEqual(ruleAppliesV2(excl, food({ merchant_name: 'Corner Cafe' }), dir), true);
+  assert.strictEqual(ruleAppliesV2(excl, food({ merchant_name: null, platform: null }), dir), true);
+  // A known merchant or platform that isn't listed doesn't either.
+  assert.strictEqual(ruleAppliesV2(excl, food({ merchant_name: 'Zomato', platform: 'gpay' }), dir), true);
+  // Exceptions apply to earn rules too.
+  const earn = { id: 'e', rule_role: 'earn', except_platform_slugs: ['phonepe_app'], unit: 'cashback_percent', rate: 5 };
+  assert.strictEqual(ruleAppliesV2(earn, ctxOf({ platform: 'phonepe_app' })), false);
+  assert.strictEqual(ruleAppliesV2(earn, ctxOf({ platform: null })), true);
+});
+
+test('D16b: an exclusion with max_txn_inr applies only below it; earn rules keep the C3.5 meaning', () => {
+  const card = cashbackCard({
+    reward_rules: [
+      { id: 'min100', rule_role: 'exclusion', max_txn_inr: 100, unit: 'cashback_percent', rate: 0, priority: 1 },
+      { id: 'cap-txn', rule_role: 'earn', rail: 'online', max_txn_inr: 500, unit: 'cashback_percent', rate: 5, priority: 10 },
+    ],
+  });
+  const below = computeTransactionRewardV2({ card, capConsumedBefore: {}, ctx: ctxOf({ amount: 99.99, rail: 'online' }) });
+  assert.deepStrictEqual([below.excluded, below.ruleId, below.cashbackInr], [true, 'min100', 0]);
+  const at = computeTransactionRewardV2({ card, capConsumedBefore: {}, ctx: ctxOf({ amount: 100, rail: 'online' }) });
+  assert.deepStrictEqual([at.excluded, at.ruleId, at.cashbackInr], [false, 'cap-txn', 5]);
+  // ₹500 at 5% + ₹500 above max_txn at the 1% base.
+  const big = computeTransactionRewardV2({ card, capConsumedBefore: {}, ctx: ctxOf({ amount: 1000, rail: 'online' }) });
+  assert.strictEqual(big.cashbackInr, 30);
+});
+
+test('D16c: except lists and a minimum-amount exclusion make a card v2-shaped', () => {
+  const base = { base_reward_unit: 'cashback_percent', base_reward_rate: 1 };
+  const plain = { id: 'r', rule_role: 'earn', merchant_slugs: [], platform_slugs: [], mcc_include: [], mcc_exclude: [],
+    except_merchant_slugs: [], except_platform_slugs: [], block_inr: null, min_engine_version: 1 };
+  assert.strictEqual(isV2Card({ ...base, reward_rules: [plain] }), false, 'empty except lists are DB defaults');
+  assert.strictEqual(isV2Card({ ...base, reward_rules: [{ ...plain, except_merchant_slugs: ['indianoil'] }] }), true);
+  assert.strictEqual(isV2Card({ ...base, reward_rules: [{ ...plain, except_platform_slugs: ['google_pay'] }] }), true);
+  assert.strictEqual(isV2Card({ ...base, reward_rules: [{ ...plain, rule_role: 'exclusion', max_txn_inr: 100 }] }), true);
+});
+
+test('D16 + D15d/e: a malformed except list skips the rule, visibly', () => {
+  const card = cashbackCard({
+    accrual_rounding: 'none',
+    reward_rules: [
+      { id: 'excl-fuel', rule_role: 'exclusion', category_id: 'cat-fuel', except_merchant_slugs: 'indianoil', unit: 'cashback_percent', rate: 0, priority: 1 },
+      { id: 'excl-bills', rule_role: 'exclusion', category_id: 'cat-bills', except_platform_slugs: ['google_pay', 7], unit: 'cashback_percent', rate: 0, priority: 1 },
+    ],
+  });
+  const fuel = computeTransactionRewardV2({ card, capConsumedBefore: {}, ctx: ctxOf({ amount: 1000, category_id: 'cat-fuel' }) });
+  assert.ok(fuel.reasons.includes('rule_skipped:excl-fuel:unparseable_except_merchant_slugs'));
+  assert.ok(fuel.reasons.includes('rule_skipped:excl-bills:unparseable_except_platform_slugs'));
+  assert.ok(fuel.assumptions.includes('exclusion_unparsed'));
+});
+
 // --- computeTransactionRewardV2: details outside the shared scenarios ----------
 
 function pointsCard(over = {}) {
