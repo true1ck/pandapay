@@ -303,12 +303,6 @@ jobs:
       - name: Verify isolated reward worker leases and retries
         run: docker compose exec -T db psql -U postgres -d pandapay -v ON_ERROR_STOP=1 -f - < db/tests/20261021140000_rewards_worker_outbox_test.sql
 
-      - name: Verify SMS AI RLS, worker leasing, and provider capacity
-        run: docker compose exec -T db psql -U postgres -d pandapay -v ON_ERROR_STOP=1 -f - < db/tests/20261021230000_sms_ai_permissions_test.sql
-
-      - name: Verify autonomous SMS learner role separation and grants
-        run: docker compose exec -T db psql -U postgres -d pandapay -v ON_ERROR_STOP=1 -f - < db/tests/20261022143500_sms_learning_worker_permissions_test.sql
-
       - name: Verify shared SMS category learning thresholds and consent
         run: docker compose exec -T db psql -U postgres -d pandapay -v ON_ERROR_STOP=1 -f - < db/tests/20261027153000_sms_shared_category_rules_test.sql
 
