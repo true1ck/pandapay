@@ -58,12 +58,13 @@
       ],
       "vpa_prefixes": [],
       "mcc": [],
-      "notes": ""
+      "notes": "",
+      "group": "zomato"
     },
     {
       "slug": "blinkit",
       "name": "Blinkit",
-      "parent_slug": "zomato",
+      "parent_slug": null,
       "category_slug": "groceries",
       "aliases": [
         "blinkit",
@@ -74,7 +75,8 @@
         "blinkit"
       ],
       "mcc": [],
-      "notes": ""
+      "notes": "",
+      "group": "zomato"
     },
     {
       "slug": "zepto",
@@ -120,12 +122,13 @@
         "flipkart"
       ],
       "mcc": [],
-      "notes": ""
+      "notes": "",
+      "group": "flipkart"
     },
     {
       "slug": "myntra",
       "name": "Myntra",
-      "parent_slug": "flipkart",
+      "parent_slug": null,
       "category_slug": "online",
       "aliases": [
         "myntra",
@@ -135,12 +138,13 @@
         "myntra"
       ],
       "mcc": [],
-      "notes": ""
+      "notes": "",
+      "group": "flipkart"
     },
     {
       "slug": "cleartrip",
       "name": "Cleartrip",
-      "parent_slug": "flipkart",
+      "parent_slug": null,
       "category_slug": "travel",
       "aliases": [
         "cleartrip",
@@ -148,7 +152,8 @@
       ],
       "vpa_prefixes": [],
       "mcc": [],
-      "notes": ""
+      "notes": "",
+      "group": "flipkart"
     },
     {
       "slug": "tata_neu",
@@ -162,12 +167,13 @@
       ],
       "vpa_prefixes": [],
       "mcc": [],
-      "notes": ""
+      "notes": "",
+      "group": "tata"
     },
     {
       "slug": "bigbasket",
       "name": "BigBasket",
-      "parent_slug": "tata_neu",
+      "parent_slug": null,
       "category_slug": "groceries",
       "aliases": [
         "bigbasket",
@@ -179,12 +185,13 @@
         "bigbasket"
       ],
       "mcc": [],
-      "notes": ""
+      "notes": "",
+      "group": "tata"
     },
     {
       "slug": "croma",
       "name": "Croma",
-      "parent_slug": "tata_neu",
+      "parent_slug": null,
       "category_slug": "online",
       "aliases": [
         "croma",
@@ -192,12 +199,13 @@
       ],
       "vpa_prefixes": [],
       "mcc": [],
-      "notes": ""
+      "notes": "",
+      "group": "tata"
     },
     {
       "slug": "tata_cliq",
       "name": "Tata CLiQ",
-      "parent_slug": "tata_neu",
+      "parent_slug": null,
       "category_slug": "online",
       "aliases": [
         "tata cliq",
@@ -210,7 +218,8 @@
       ],
       "vpa_prefixes": [],
       "mcc": [],
-      "notes": ""
+      "notes": "",
+      "group": "tata"
     },
     {
       "slug": "ajio",
@@ -304,12 +313,13 @@
         "makemytrip"
       ],
       "mcc": [],
-      "notes": ""
+      "notes": "",
+      "group": "mmt"
     },
     {
       "slug": "goibibo",
       "name": "Goibibo",
-      "parent_slug": "makemytrip",
+      "parent_slug": null,
       "category_slug": "travel",
       "aliases": [
         "goibibo",
@@ -320,7 +330,8 @@
         "goibibo"
       ],
       "mcc": [],
-      "notes": ""
+      "notes": "",
+      "group": "mmt"
     },
     {
       "slug": "yatra",
@@ -367,14 +378,13 @@
       "parent_slug": null,
       "category_slug": "travel",
       "aliases": [
-        "indigo",
         "interglobe aviation",
         "indigo airlines",
         "goindigo"
       ],
       "vpa_prefixes": [],
       "mcc": [],
-      "notes": "Alias \"indigo\" alone can collide with non-airline merchants; prefer travel-category context when both exist."
+      "notes": "Bare \"indigo\" is not an alias (collides with Indigo Paints/Hotel); only qualified names."
     },
     {
       "slug": "air_india",
@@ -387,7 +397,8 @@
       ],
       "vpa_prefixes": [],
       "mcc": [],
-      "notes": ""
+      "notes": "",
+      "group": "air_india"
     },
     {
       "slug": "vistara",
@@ -400,7 +411,8 @@
       ],
       "vpa_prefixes": [],
       "mcc": [],
-      "notes": "Merged into Air India in 2024; kept for historic SMS."
+      "notes": "Merged into Air India in 2024; kept for historic SMS.",
+      "group": "air_india"
     },
     {
       "slug": "spicejet",
@@ -429,7 +441,8 @@
       ],
       "vpa_prefixes": [],
       "mcc": [],
-      "notes": ""
+      "notes": "",
+      "group": "ihcl"
     },
     {
       "slug": "marriott",
@@ -617,7 +630,6 @@
       "category_slug": "entertainment",
       "aliases": [
         "pvr",
-        "inox",
         "pvr inox",
         "pvr cinemas",
         "inox leisure"
@@ -671,12 +683,13 @@
       ],
       "vpa_prefixes": [],
       "mcc": [],
-      "notes": ""
+      "notes": "",
+      "group": "landmark"
     },
     {
       "slug": "lifestyle_stores",
       "name": "Lifestyle",
-      "parent_slug": "landmark",
+      "parent_slug": null,
       "category_slug": "online",
       "aliases": [
         "lifestyle stores",
@@ -684,19 +697,21 @@
       ],
       "vpa_prefixes": [],
       "mcc": [],
-      "notes": ""
+      "notes": "",
+      "group": "landmark"
     },
     {
       "slug": "max_fashion",
       "name": "Max Fashion",
-      "parent_slug": "landmark",
+      "parent_slug": null,
       "category_slug": "online",
       "aliases": [
         "max fashion"
       ],
       "vpa_prefixes": [],
       "mcc": [],
-      "notes": ""
+      "notes": "",
+      "group": "landmark"
     },
     {
       "slug": "fabindia",
@@ -717,15 +732,14 @@
       "parent_slug": null,
       "category_slug": "online",
       "aliases": [
-        "tanishq",
-        "titan company",
-        "world of titan"
+        "tanishq"
       ],
       "vpa_prefixes": [],
       "mcc": [
         "5944"
       ],
-      "notes": ""
+      "notes": "",
+      "group": "titan"
     },
     {
       "slug": "lenskart",
@@ -772,7 +786,7 @@
     {
       "slug": "district",
       "name": "District by Zomato",
-      "parent_slug": "zomato",
+      "parent_slug": null,
       "category_slug": "entertainment",
       "aliases": [
         "district by zomato",
@@ -781,7 +795,8 @@
       ],
       "vpa_prefixes": [],
       "mcc": [],
-      "notes": "Zomato movies/events/dining app; \"district\" alone is not an alias."
+      "notes": "Zomato movies/events/dining app; \"district\" alone is not an alias.",
+      "group": "zomato"
     },
     {
       "slug": "zomato_dining",
@@ -793,7 +808,8 @@
       ],
       "vpa_prefixes": [],
       "mcc": [],
-      "notes": "Dine-out payments."
+      "notes": "Dine-out payments.",
+      "group": "zomato"
     },
     {
       "slug": "dominos",
@@ -915,7 +931,7 @@
     {
       "slug": "flipkart_wholesale",
       "name": "Flipkart Wholesale",
-      "parent_slug": "flipkart",
+      "parent_slug": null,
       "category_slug": "groceries",
       "aliases": [
         "flipkart wholesale",
@@ -923,7 +939,8 @@
       ],
       "vpa_prefixes": [],
       "mcc": [],
-      "notes": "B2B; co-brand card is business-only."
+      "notes": "B2B; co-brand card is business-only.",
+      "group": "flipkart"
     },
     {
       "slug": "best_price",
@@ -966,24 +983,26 @@
       ],
       "vpa_prefixes": [],
       "mcc": [],
-      "notes": "Umbrella for Reliance Smart, Digital, Trends, Market for the SBI Reliance card."
+      "notes": "Umbrella for Reliance Smart, Digital, Trends, Market for the SBI Reliance card.",
+      "group": "reliance"
     },
     {
       "slug": "reliance_digital",
       "name": "Reliance Digital",
-      "parent_slug": "reliance_retail",
+      "parent_slug": null,
       "category_slug": "online",
       "aliases": [
         "reliance digital"
       ],
       "vpa_prefixes": [],
       "mcc": [],
-      "notes": ""
+      "notes": "",
+      "group": "reliance"
     },
     {
       "slug": "reliance_smart",
       "name": "Reliance Smart",
-      "parent_slug": "reliance_retail",
+      "parent_slug": null,
       "category_slug": "groceries",
       "aliases": [
         "reliance smart",
@@ -993,31 +1012,34 @@
       ],
       "vpa_prefixes": [],
       "mcc": [],
-      "notes": ""
+      "notes": "",
+      "group": "reliance"
     },
     {
       "slug": "reliance_trends",
       "name": "Reliance Trends",
-      "parent_slug": "reliance_retail",
+      "parent_slug": null,
       "category_slug": "online",
       "aliases": [
         "reliance trends"
       ],
       "vpa_prefixes": [],
       "mcc": [],
-      "notes": ""
+      "notes": "",
+      "group": "reliance"
     },
     {
       "slug": "reliance_market",
       "name": "Reliance Market",
-      "parent_slug": "reliance_retail",
+      "parent_slug": null,
       "category_slug": "groceries",
       "aliases": [
         "reliance market"
       ],
       "vpa_prefixes": [],
       "mcc": [],
-      "notes": ""
+      "notes": "",
+      "group": "reliance"
     },
     {
       "slug": "marks_spencer",
@@ -1045,19 +1067,21 @@
       ],
       "vpa_prefixes": [],
       "mcc": [],
-      "notes": "Alias \"apple\" alone not used."
+      "notes": "Alias \"apple\" alone not used.",
+      "group": "apple"
     },
     {
       "slug": "imagine_tresor",
       "name": "Imagine Tresor",
-      "parent_slug": "apple",
+      "parent_slug": null,
       "category_slug": "online",
       "aliases": [
         "imagine tresor"
       ],
       "vpa_prefixes": [],
       "mcc": [],
-      "notes": ""
+      "notes": "",
+      "group": "apple"
     },
     {
       "slug": "vijay_sales",
@@ -1366,7 +1390,7 @@
     {
       "slug": "home_centre",
       "name": "Home Centre",
-      "parent_slug": "landmark",
+      "parent_slug": null,
       "category_slug": "online",
       "aliases": [
         "home centre",
@@ -1374,12 +1398,13 @@
       ],
       "vpa_prefixes": [],
       "mcc": [],
-      "notes": ""
+      "notes": "",
+      "group": "landmark"
     },
     {
       "slug": "baby_shop",
       "name": "Babyshop",
-      "parent_slug": "landmark",
+      "parent_slug": null,
       "category_slug": "online",
       "aliases": [
         "babyshop",
@@ -1387,31 +1412,34 @@
       ],
       "vpa_prefixes": [],
       "mcc": [],
-      "notes": ""
+      "notes": "",
+      "group": "landmark"
     },
     {
       "slug": "spar",
       "name": "SPAR Hypermarket",
-      "parent_slug": "landmark",
+      "parent_slug": null,
       "category_slug": "groceries",
       "aliases": [
         "spar hypermarket"
       ],
       "vpa_prefixes": [],
       "mcc": [],
-      "notes": ""
+      "notes": "",
+      "group": "landmark"
     },
     {
       "slug": "easybuy",
       "name": "EasyBuy",
-      "parent_slug": "landmark",
+      "parent_slug": null,
       "category_slug": "online",
       "aliases": [
         "easybuy"
       ],
       "vpa_prefixes": [],
       "mcc": [],
-      "notes": ""
+      "notes": "",
+      "group": "landmark"
     },
     {
       "slug": "big_bazaar",
@@ -1470,7 +1498,7 @@
     {
       "slug": "titan_eye",
       "name": "Titan Eye+",
-      "parent_slug": "tanishq",
+      "parent_slug": null,
       "category_slug": "online",
       "aliases": [
         "titan eye",
@@ -1478,60 +1506,65 @@
       ],
       "vpa_prefixes": [],
       "mcc": [],
-      "notes": ""
+      "notes": "",
+      "group": "titan"
     },
     {
       "slug": "mia_titan",
       "name": "Mia by Tanishq",
-      "parent_slug": "tanishq",
+      "parent_slug": null,
       "category_slug": "online",
       "aliases": [
         "mia by tanishq"
       ],
       "vpa_prefixes": [],
       "mcc": [],
-      "notes": ""
+      "notes": "",
+      "group": "titan"
     },
     {
       "slug": "caratlane",
       "name": "CaratLane",
-      "parent_slug": "tanishq",
+      "parent_slug": null,
       "category_slug": "online",
       "aliases": [
         "caratlane"
       ],
       "vpa_prefixes": [],
       "mcc": [],
-      "notes": ""
+      "notes": "",
+      "group": "titan"
     },
     {
       "slug": "zoya",
       "name": "Zoya",
-      "parent_slug": "tanishq",
+      "parent_slug": null,
       "category_slug": "online",
       "aliases": [
         "zoya by titan"
       ],
       "vpa_prefixes": [],
       "mcc": [],
-      "notes": ""
+      "notes": "",
+      "group": "titan"
     },
     {
       "slug": "taneira",
       "name": "Taneira",
-      "parent_slug": "tanishq",
+      "parent_slug": null,
       "category_slug": "online",
       "aliases": [
         "taneira"
       ],
       "vpa_prefixes": [],
       "mcc": [],
-      "notes": ""
+      "notes": "",
+      "group": "titan"
     },
     {
       "slug": "helios",
       "name": "Helios Watches",
-      "parent_slug": "tanishq",
+      "parent_slug": null,
       "category_slug": "online",
       "aliases": [
         "helios watches",
@@ -1539,43 +1572,47 @@
       ],
       "vpa_prefixes": [],
       "mcc": [],
-      "notes": ""
+      "notes": "",
+      "group": "titan"
     },
     {
       "slug": "fastrack",
       "name": "Fastrack",
-      "parent_slug": "tanishq",
+      "parent_slug": null,
       "category_slug": "online",
       "aliases": [
         "fastrack"
       ],
       "vpa_prefixes": [],
       "mcc": [],
-      "notes": ""
+      "notes": "",
+      "group": "titan"
     },
     {
       "slug": "sonata",
       "name": "Sonata Watches",
-      "parent_slug": "tanishq",
+      "parent_slug": null,
       "category_slug": "online",
       "aliases": [
         "sonata watches"
       ],
       "vpa_prefixes": [],
       "mcc": [],
-      "notes": ""
+      "notes": "",
+      "group": "titan"
     },
     {
       "slug": "skinn",
       "name": "Skinn by Titan",
-      "parent_slug": "tanishq",
+      "parent_slug": null,
       "category_slug": "online",
       "aliases": [
         "skinn by titan"
       ],
       "vpa_prefixes": [],
       "mcc": [],
-      "notes": ""
+      "notes": "",
+      "group": "titan"
     },
     {
       "slug": "netmeds",
@@ -1619,7 +1656,8 @@
       "mcc": [
         "5912"
       ],
-      "notes": ""
+      "notes": "",
+      "group": "tata"
     },
     {
       "slug": "practo",
@@ -1757,14 +1795,15 @@
     {
       "slug": "air_india_express",
       "name": "Air India Express",
-      "parent_slug": "air_india",
+      "parent_slug": null,
       "category_slug": "travel",
       "aliases": [
         "air india express"
       ],
       "vpa_prefixes": [],
       "mcc": [],
-      "notes": ""
+      "notes": "",
+      "group": "air_india"
     },
     {
       "slug": "hyatt",
@@ -1789,7 +1828,8 @@
       ],
       "vpa_prefixes": [],
       "mcc": [],
-      "notes": ""
+      "notes": "",
+      "group": "ihcl"
     },
     {
       "slug": "vivanta",
@@ -1801,7 +1841,8 @@
       ],
       "vpa_prefixes": [],
       "mcc": [],
-      "notes": ""
+      "notes": "",
+      "group": "ihcl"
     },
     {
       "slug": "gateway_hotels",
@@ -1814,7 +1855,8 @@
       ],
       "vpa_prefixes": [],
       "mcc": [],
-      "notes": ""
+      "notes": "",
+      "group": "ihcl"
     },
     {
       "slug": "ama_stays",
@@ -1827,7 +1869,8 @@
       ],
       "vpa_prefixes": [],
       "mcc": [],
-      "notes": ""
+      "notes": "",
+      "group": "ihcl"
     },
     {
       "slug": "club_itc",
@@ -2133,7 +2176,8 @@
       ],
       "vpa_prefixes": [],
       "mcc": [],
-      "notes": ""
+      "notes": "",
+      "group": "tata"
     },
     {
       "slug": "hp_pay",
@@ -2238,14 +2282,42 @@
     {
       "slug": "irth",
       "name": "Irth by Titan",
-      "parent_slug": "tanishq",
+      "parent_slug": null,
       "category_slug": "online",
       "aliases": [
         "irth by titan"
       ],
       "vpa_prefixes": [],
       "mcc": [],
-      "notes": ""
+      "notes": "",
+      "group": "titan"
+    },
+    {
+      "slug": "titan_company",
+      "name": "Titan Company",
+      "parent_slug": null,
+      "category_slug": "online",
+      "aliases": [
+        "titan company",
+        "world of titan"
+      ],
+      "vpa_prefixes": [],
+      "mcc": [],
+      "notes": "Group entity; Tanishq and other Titan brands are separate merchants (group titan).",
+      "group": "titan"
+    },
+    {
+      "slug": "aws",
+      "name": "Amazon Web Services",
+      "parent_slug": null,
+      "category_slug": "online",
+      "aliases": [
+        "amazon web services",
+        "aws"
+      ],
+      "vpa_prefixes": [],
+      "mcc": [],
+      "notes": "Cloud billing; not the Amazon shopping brand."
     }
   ],
   "platforms": [
