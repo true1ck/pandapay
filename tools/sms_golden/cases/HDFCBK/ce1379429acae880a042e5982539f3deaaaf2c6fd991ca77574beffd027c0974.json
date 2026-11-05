@@ -1,0 +1,38 @@
+{
+  "id": "foreign:foreign_inr_billed",
+  "templateHash": "ce1379429acae880a042e5982539f3deaaaf2c6fd991ca77574beffd027c0974",
+  "weight": 1,
+  "source": "synthetic",
+  "messages": [
+    {
+      "sender": "VM-HDFCBK-S",
+      "body": "USD 20 spent using HDFC Bank Card XX1234 at SAMPLE AI. Billed INR 1742. Avl Limit INR 100000.",
+      "observedAt": "2026-11-03T10:00:00.000Z"
+    }
+  ],
+  "expect": {
+    "facts": [
+      {
+        "factType": "movement",
+        "attrs": {
+          "direction": "debit",
+          "purpose": "purchase",
+          "rail": "card"
+        },
+        "amounts": [
+          {
+            "role": "posted",
+            "minor": 174200,
+            "unit": "INR",
+            "original": {
+              "minor": 2000,
+              "currency": "USD"
+            }
+          }
+        ]
+      }
+    ]
+  },
+  "note": "Billed INR after the foreign price.",
+  "origin": "foreign-v2"
+}

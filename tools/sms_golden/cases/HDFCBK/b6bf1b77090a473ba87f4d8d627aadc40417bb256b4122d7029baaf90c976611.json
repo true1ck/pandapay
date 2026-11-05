@@ -1,0 +1,34 @@
+{
+  "id": "foreign:foreign_only_bare_dollar_sign",
+  "templateHash": "b6bf1b77090a473ba87f4d8d627aadc40417bb256b4122d7029baaf90c976611",
+  "weight": 1,
+  "source": "synthetic",
+  "messages": [
+    {
+      "sender": "VM-HDFCBK-S",
+      "body": "Txn of $20 on Card XX1234 at SAMPLE AI approved",
+      "observedAt": "2026-11-03T10:00:00.000Z"
+    }
+  ],
+  "expect": {
+    "facts": [
+      {
+        "factType": "movement",
+        "attrs": {
+          "direction": "debit",
+          "purpose": "purchase",
+          "rail": "card"
+        },
+        "amounts": [
+          {
+            "role": "posted",
+            "minor": 2000,
+            "unit": "XXX"
+          }
+        ]
+      }
+    ]
+  },
+  "note": "A bare dollar sign names no single currency: unit XXX, currency asked for.",
+  "origin": "foreign-v2"
+}

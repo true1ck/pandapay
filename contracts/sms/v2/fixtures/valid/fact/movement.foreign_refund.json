@@ -1,0 +1,55 @@
+{
+  "contractVersion": "2.0",
+  "factId": "f687c6a77f4d02b905ac8ee7a5b70dae10bf7019fa5f5fc91e8ca68272beeadb",
+  "sourceKey": "sms:synthetic:0022",
+  "factType": "movement",
+  "observedAt": "2026-11-01T07:00:20Z",
+  "occurredAt": "2026-11-01T07:00:11Z",
+  "instrument": {
+    "kind": "credit_card",
+    "issuerSlug": "hdfc",
+    "maskDigits": "5678",
+    "maskLength": 16,
+    "productName": null,
+    "raw": "x5678"
+  },
+  "counterparty": {
+    "name": "SYNTH AI INC",
+    "vpa": null,
+    "kind": "merchant",
+    "accountMask": null
+  },
+  "amounts": [
+    {
+      "role": "posted",
+      "minor": 175000,
+      "unit": "INR",
+      "original": {
+        "minor": 2000,
+        "currency": "USD"
+      }
+    }
+  ],
+  "references": {},
+  "attrs": {
+    "direction": "credit",
+    "purpose": "refund",
+    "rail": "card"
+  },
+  "provenance": {
+    "engine": "rules",
+    "ruleId": "SYN-RULE-REFUND",
+    "ruleVersion": 1,
+    "bundleVersion": 1,
+    "engineVersion": "2.0.0",
+    "appVersion": "1.0.0+1"
+  },
+  "evidence": [
+    {
+      "field": "amt",
+      "start": 0,
+      "end": 10
+    }
+  ],
+  "confidence": 0.99
+}

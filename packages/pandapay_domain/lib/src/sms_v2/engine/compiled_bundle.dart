@@ -8,7 +8,11 @@ import 'transforms.dart';
 ///
 /// 2.1.0: `info` facts may carry `amountMinor` (CCR-002). A 2.0.x engine drops
 /// those facts as invalid, so `rules/sms/v2/meta.json` requires 2.1.0.
-const String smsEngineVersion = '2.1.0';
+///
+/// 2.2.0: an emit amount may read its unit from the message (`unitFrom`) and an
+/// INR posting may carry the foreign amount printed beside it (`original`),
+/// CCR-004. A 2.1.x engine refuses a bundle that uses either field.
+const String smsEngineVersion = '2.2.0';
 
 /// Why a bundle cannot be used.
 class BundleRefusedException implements Exception {

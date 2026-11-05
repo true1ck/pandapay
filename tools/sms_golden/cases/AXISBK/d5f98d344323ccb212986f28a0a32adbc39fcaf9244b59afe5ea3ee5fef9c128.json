@@ -1,0 +1,38 @@
+{
+  "id": "foreign:foreign_inr_approx_paren",
+  "templateHash": "d5f98d344323ccb212986f28a0a32adbc39fcaf9244b59afe5ea3ee5fef9c128",
+  "weight": 1,
+  "source": "synthetic",
+  "messages": [
+    {
+      "sender": "VM-AXISBK-S",
+      "body": "USD 25.00 (approx INR 2,100.00) spent on your HDFC Bank Credit Card ending 1234 at SAMPLE SAAS on 22-10-26",
+      "observedAt": "2026-11-03T10:00:00.000Z"
+    }
+  ],
+  "expect": {
+    "facts": [
+      {
+        "factType": "movement",
+        "attrs": {
+          "direction": "debit",
+          "purpose": "purchase",
+          "rail": "card"
+        },
+        "amounts": [
+          {
+            "role": "posted",
+            "minor": 210000,
+            "unit": "INR",
+            "original": {
+              "minor": 2500,
+              "currency": "USD"
+            }
+          }
+        ]
+      }
+    ]
+  },
+  "note": "INR equivalent printed in brackets.",
+  "origin": "foreign-v2"
+}

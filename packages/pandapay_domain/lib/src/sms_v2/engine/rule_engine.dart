@@ -2,6 +2,7 @@ import 'dart:convert';
 
 import 'package:crypto/crypto.dart';
 
+import '../contract/currency.dart';
 import '../contract/errors.dart';
 import '../contract/fact.dart';
 import '../contract/interfaces.dart';
@@ -306,12 +307,43 @@ class RuleEngine implements SmsInterpreter {
     for (final a in e.amounts ?? const <EmitAmount>[]) {
       final raw = ctx.group(a.from);
       if (raw == null) continue;
-      // POINTS are whole points, not paise.
-      final minor = a.unit == 'POINTS'
-          ? int.tryParse(raw.replaceAll(',', ''))
-          : parseAmountIndian(raw);
+      // The unit is fixed by the rule or read from the message (CCR-004).
+      var unit = a.unit;
+      if (unit == null) {
+        final token = ctx.group(a.unitFrom!);
+        if (token == null) throw _Emitted('amount "${a.from}" has no currency: group "${a.unitFrom}" did not match');
+        unit = token.trim().toUpperCase() == 'INR' ? 'INR' : smsForeignCurrencyCode(token);
+        if (unit == null) throw _Emitted('amount "${a.from}" has an unknown currency: "$token"');
+      }
+      // POINTS are whole points, not paise; a foreign amount uses the
+      // precision of its own currency and is never rounded.
+      final int? minor;
+      if (unit == 'POINTS') {
+        minor = int.tryParse(raw.replaceAll(',', ''));
+      } else if (unit == 'INR') {
+        minor = parseAmountIndian(raw);
+      } else {
+        final exponent = smsCurrencyExponent(unit);
+        if (exponent == null) throw _Emitted('amount "${a.from}" has an unknown currency: "$unit"');
+        minor = parseDecimalMinor(raw, exponent);
+      }
       if (minor == null) throw _Emitted('amount "${a.from}" is not a number: "$raw"');
-      amounts.add({'role': a.role.wire, 'minor': minor, 'unit': a.unit});
+      final amount = <String, Object?>{'role': a.role.wire, 'minor': minor, 'unit': unit};
+      final og = a.original;
+      if (og != null) {
+        final printed = ctx.group(og.from);
+        if (printed != null) {
+          if (unit != 'INR') throw _Emitted('amount "${a.from}": an original foreign amount needs an INR posting');
+          final token = og.currency ?? (og.currencyFrom == null ? null : ctx.group(og.currencyFrom!));
+          final code = token == null ? null : smsForeignCurrencyCode(token);
+          if (code == null) throw _Emitted('amount "${a.from}": original currency "$token" is not a foreign currency');
+          final originalMinor = parseDecimalMinor(printed, smsCurrencyExponent(code)!);
+          if (originalMinor == null) throw _Emitted('original "${og.from}" is not a number: "$printed"');
+          amount['original'] = {'minor': originalMinor, 'currency': code};
+          span('amounts.${a.role.wire}.original', og.from);
+        }
+      }
+      amounts.add(amount);
       span('amounts.${a.role.wire}', a.from);
     }
 

@@ -1,0 +1,34 @@
+{
+  "id": "foreign:foreign_only_txn_of",
+  "templateHash": "437384ed7f7ffd7c668332c98c1a0bd44fc8240f22c20fe27ef39f195f3c327f",
+  "weight": 1,
+  "source": "synthetic",
+  "messages": [
+    {
+      "sender": "VM-HDFCBK-S",
+      "body": "Transaction of GBP 9.99 done on HDFC Bank Debit Card ending 1234 at SAMPLE CAFE on 01-11-2026.",
+      "observedAt": "2026-11-03T10:00:00.000Z"
+    }
+  ],
+  "expect": {
+    "facts": [
+      {
+        "factType": "movement",
+        "attrs": {
+          "direction": "debit",
+          "purpose": "purchase",
+          "rail": "card"
+        },
+        "amounts": [
+          {
+            "role": "posted",
+            "minor": 999,
+            "unit": "GBP"
+          }
+        ]
+      }
+    ]
+  },
+  "note": "Transaction-of wording.",
+  "origin": "foreign-v2"
+}

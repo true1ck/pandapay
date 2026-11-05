@@ -194,6 +194,8 @@ MovementFact move(
   bool? evidenceOnly,
   String? sourceKey,
   String ruleId = 'SYN',
+  String unit = 'INR',
+  Map<String, Object?>? original,
 }) =>
     Fact.fromJson(
           _envelope(
@@ -203,7 +205,7 @@ MovementFact move(
             instrument: mention ?? (inst == null ? null : on(inst)),
             counterparty: counterparty,
             amounts: [
-              {'role': 'posted', 'minor': minor, 'unit': 'INR'},
+              {'role': 'posted', 'minor': minor, 'unit': unit, 'original': ?original},
             ],
             references: references,
             attrs: {

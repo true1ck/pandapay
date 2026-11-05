@@ -1,0 +1,38 @@
+{
+  "id": "foreign:foreign_inr_forex_markup",
+  "templateHash": "d6e26980a537483837a8946b74abe4bccc4b567711b694e6e2c801121d6e5147",
+  "weight": 1,
+  "source": "synthetic",
+  "messages": [
+    {
+      "sender": "VM-KOTAKB-S",
+      "body": "Rs 1750.00 spent on Kotak Credit Card XX1234 at SAMPLE AI. Foreign currency amount USD 20.00 with forex markup of Rs 52.50 applied.",
+      "observedAt": "2026-11-03T10:00:00.000Z"
+    }
+  ],
+  "expect": {
+    "facts": [
+      {
+        "factType": "movement",
+        "attrs": {
+          "direction": "debit",
+          "purpose": "purchase",
+          "rail": "card"
+        },
+        "amounts": [
+          {
+            "role": "posted",
+            "minor": 175000,
+            "unit": "INR",
+            "original": {
+              "minor": 2000,
+              "currency": "USD"
+            }
+          }
+        ]
+      }
+    ]
+  },
+  "note": "The markup is a separate INR figure, never added to the amount.",
+  "origin": "foreign-v2"
+}

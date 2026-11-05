@@ -1,0 +1,38 @@
+{
+  "id": "foreign:foreign_inr_paren_spent_first",
+  "templateHash": "e8c5272fbfdbe32987c8da6aa72aef6cc0b1b3d25e29ce5953fe3877ee96a05e",
+  "weight": 1,
+  "source": "synthetic",
+  "messages": [
+    {
+      "sender": "VM-HDFCBK-S",
+      "body": "Spent Rs.1,750.00 on HDFC Bank Card x1234 at SAMPLE AI (USD 20.00) on 2026-11-01:07:00:11.",
+      "observedAt": "2026-11-03T10:00:00.000Z"
+    }
+  ],
+  "expect": {
+    "facts": [
+      {
+        "factType": "movement",
+        "attrs": {
+          "direction": "debit",
+          "purpose": "purchase",
+          "rail": "card"
+        },
+        "amounts": [
+          {
+            "role": "posted",
+            "minor": 175000,
+            "unit": "INR",
+            "original": {
+              "minor": 2000,
+              "currency": "USD"
+            }
+          }
+        ]
+      }
+    ]
+  },
+  "note": "INR posted with the foreign amount in brackets.",
+  "origin": "foreign-v2"
+}

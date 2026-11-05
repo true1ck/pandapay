@@ -7,6 +7,7 @@ import 'package:crypto/crypto.dart';
 
 import '../../../data/local/financial_store.dart';
 import '../../../data/local/sms_intake_repository.dart';
+import '../ledger/foreign_payment_bridge.dart';
 import '../ledger/projection_writer.dart';
 import '../storage/event_store.dart';
 import '../storage/fact_store.dart';
@@ -57,6 +58,7 @@ class SmsV2Pipeline {
   late final _outbox = OutboxStore(_db, namespace: namespace);
   late final _intake = SmsIntakeRepository(financial.database);
   late final _writer = ProjectionWriter(financial, _ledger);
+  late final _foreign = ForeignPaymentBridge(financial.database, namespace);
 
   /// Returns false for a replay of a source already processed by v2.
   bool process(SmsMessage message, {bool backfill = false}) =>
@@ -339,6 +341,20 @@ class SmsV2Pipeline {
           rules: bundle.linkRules,
         );
     review.addAll(result.ambiguous);
+    // Foreign amounts (CCR-004) go to the foreign payments records, beside the
+    // INR ledger. They run after the ledger write below so an INR posting can
+    // find its own transaction.
+    void bridgeForeign() {
+      if (_foreign.apply(
+            incoming,
+            instrumentsById: instrumentsById,
+            instrumentIdByFactId: instrumentIds,
+          ) >
+          0) {
+        financial.notifyExternalChanges(namespace, const ['foreign_payments']);
+      }
+    }
+
     final affected = [
       for (final event in [...result.created, ...result.updated])
         _events.upsert(event),
@@ -346,6 +362,7 @@ class SmsV2Pipeline {
     // A funding debit that joined a receipt answers the receipt question.
     ReceiptReviews.resolveJoined(_db, namespace, affected);
     if (affected.isEmpty) {
+      bridgeForeign();
       return {
         for (final message in messages)
           message.sourceKey: DecisionTrace(
@@ -433,6 +450,7 @@ class SmsV2Pipeline {
         backfill: backfill,
       );
     }
+    bridgeForeign();
     final eventByFact = {
       for (final event in affected)
         for (final leg in event.legs) leg.factId: event,

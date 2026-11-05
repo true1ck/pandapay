@@ -1,0 +1,25 @@
+[
+  {
+    "rule": "IGN-FX-ZERO-AMOUNT",
+    "positive": [
+      {
+        "sender": "VM-EXAMPL-S",
+        "body": "Spent USD 0.00 on Example Bank Card x1234 at SAMPLE AI on 2026-11-01:07:00:11."
+      },
+      {
+        "sender": "VM-EXAMPL-S",
+        "body": "Transaction of EUR 0 done on Example Bank Card ending 1234 at SAMPLE on 01-11-2026."
+      }
+    ],
+    "negative": [
+      {
+        "sender": "VM-EXAMPL-S",
+        "body": "Spent USD 20.00 on Example Bank Card x1234 at SAMPLE AI on 2026-11-01:07:00:11."
+      },
+      {
+        "sender": "VM-EXAMPL-S",
+        "body": "Spent USD 10.05 on Example Bank Card x1234 at SAMPLE AI on 2026-11-01:07:00:11."
+      }
+    ]
+  }
+]

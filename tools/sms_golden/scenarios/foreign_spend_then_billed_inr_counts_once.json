@@ -1,0 +1,33 @@
+{
+  "id": "foreign_spend_then_billed_inr_counts_once",
+  "description": "The foreign-only alert is not spend. The later alert that states the INR counts once.",
+  "knownInstruments": [
+    {
+      "kind": "credit_card",
+      "issuerSlug": "hdfc",
+      "maskDigits": "1234"
+    }
+  ],
+  "messages": [
+    {
+      "sender": "VM-HDFCBK-S",
+      "body": "Spent USD 20.00 on HDFC Bank Card x1234 at SAMPLE AI on 2026-11-01:07:00:11.",
+      "observedAt": "2026-11-01T07:00:20Z"
+    },
+    {
+      "sender": "VM-HDFCBK-S",
+      "body": "Spent Rs.1,750.00 on HDFC Bank Card x1234 at SAMPLE AI (USD 20.00) on 2026-11-03:07:00:11.",
+      "observedAt": "2026-11-03T07:00:20Z"
+    }
+  ],
+  "expect": {
+    "totals": {
+      "from": "2026-10-31T18:30:00Z",
+      "to": "2026-11-30T18:30:00Z",
+      "spendMinor": 175000,
+      "incomeMinor": 0,
+      "investmentMinor": 0,
+      "transactionCount": 1
+    }
+  }
+}

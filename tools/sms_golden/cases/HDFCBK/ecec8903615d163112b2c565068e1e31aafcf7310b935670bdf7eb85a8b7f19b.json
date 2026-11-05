@@ -1,0 +1,18 @@
+{
+  "id": "foreign:foreign_zero_value_ignored",
+  "templateHash": "ecec8903615d163112b2c565068e1e31aafcf7310b935670bdf7eb85a8b7f19b",
+  "weight": 1,
+  "source": "synthetic",
+  "messages": [
+    {
+      "sender": "VM-HDFCBK-S",
+      "body": "Spent USD 0.00 on HDFC Bank Card x1234 at SAMPLE AI on 2026-11-01:07:00:11.",
+      "observedAt": "2026-11-03T10:00:00.000Z"
+    }
+  ],
+  "expect": {
+    "ignore": true
+  },
+  "note": "A zero-value card verification is not a purchase.",
+  "origin": "foreign-v2"
+}

@@ -5,6 +5,7 @@
 /// validates with Ajv against the same files; see `api/src/sms_v2/contracts.js`.
 library;
 
+export 'src/sms_v2/contract/currency.dart';
 export 'src/sms_v2/contract/enums.dart';
 export 'src/sms_v2/engine/engine.dart';
 export 'src/sms_v2/contract/errors.dart';

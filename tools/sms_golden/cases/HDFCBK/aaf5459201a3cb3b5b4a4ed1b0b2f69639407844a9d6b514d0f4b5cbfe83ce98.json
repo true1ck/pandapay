@@ -1,0 +1,34 @@
+{
+  "id": "foreign:foreign_only_zero_decimal_jpy",
+  "templateHash": "aaf5459201a3cb3b5b4a4ed1b0b2f69639407844a9d6b514d0f4b5cbfe83ce98",
+  "weight": 1,
+  "source": "synthetic",
+  "messages": [
+    {
+      "sender": "VM-HDFCBK-S",
+      "body": "Spent JPY 1,500 on HDFC Bank Debit Card x1234 at SAMPLE SHOP on 2026-11-01:07:00:11.",
+      "observedAt": "2026-11-03T10:00:00.000Z"
+    }
+  ],
+  "expect": {
+    "facts": [
+      {
+        "factType": "movement",
+        "attrs": {
+          "direction": "debit",
+          "purpose": "purchase",
+          "rail": "card"
+        },
+        "amounts": [
+          {
+            "role": "posted",
+            "minor": 1500,
+            "unit": "JPY"
+          }
+        ]
+      }
+    ]
+  },
+  "note": "JPY has no minor unit.",
+  "origin": "foreign-v2"
+}

@@ -2821,14 +2821,14 @@
   },
   {
     "id": "GENZ-CARD-FOREIGN-PAREN-CR",
-    "version": 1,
+    "version": 2,
     "family": "card_spend_foreign",
     "senders": [
       "*"
     ],
     "priority": 238,
     "match": {
-      "pattern": "(?:spent|charged|debited)\\s+(?:usd|eur|gbp|aed|sgd|aud|cad|chf|jpy|sar|hkd|myr|thb|[a-z]{3})\\s*:?\\s*\\d[\\d,]*(?:\\.\\d{1,2})?\\s*\\(\\s*(?:approx(?:imately)?\\.?|equivalent(?:\\s+to)?|~|=)?\\s*(?:\\b(?:rs\\.?|inr)|₹)\\s*:?\\s*(?<amt>\\d[\\d,]*(?:\\.\\d{1,2})?)\\s*\\)\\s*(?:on|using|with|via|through|in)\\s+(?:your\\s+)?(?:the\\s+)?(?:[a-z][a-z0-9+&.'/ -]{0,40}?\\s)?(?:(?:your|the)\\s+)?(?:[a-z][a-z0-9+&.'/ -]{0,40}?\\s)?credit\\s+card(?:\\s*(?:no|number)\\.?)?(?:\\s+(?:ending|ends)(?:\\s+(?:with|in))?)?\\s*[:\\-]?\\s*[x*•.]*\\s?(?<mask>\\d{2,18})\\s+(?:at|@)\\s+(?<merchant>[^\\n]+?)(?=\\s+(?:on|dated)\\s+(?:date\\s+)?\\d|\\s+on\\s+[a-z]{3}\\b|\\.(?:\\s|$)|[;,(/\\n]|\\s+(?:on|using|with)\\s+(?:your|the|my|a)\\b|\\s+(?:from|avl|avail|available|ref|reference|not\\s+you|if\\s+not|if\\s+this|call|txn|trxn|bal|balance|limit|lmt|total|via|using|upi|utr|ending)\\b|$)(?=[\\s\\S]*?\\b(?:on|dated|date)\\s+(?<date>\\d{4}-\\d{2}-\\d{2}(?:[: ]\\d{2}:\\d{2}(?::\\d{2})?)?|\\d{1,2}[-/]\\d{1,2}[-/]\\d{2,4}(?:,?\\s*\\d{2}:\\d{2}(?::\\d{2})?)?|\\d{1,2}[-/ ]?[a-z]{3}[-/ ,]*\\d{2,4}(?:,?\\s*\\d{2}:\\d{2}(?::\\d{2})?)?)|)",
+      "pattern": "(?:spent|charged|debited)\\s+(?<cur>(?:usd|eur|gbp|aed|sgd|aud|cad|chf|jpy|sar|hkd|myr|thb|cny|nzd|krw|zar|sek|nok|dkk|qar|kwd|omr|bhd))(?![a-z])\\s*:?\\s*(?<fx>\\d[\\d,]*(?:\\.\\d{1,2})?)\\s*\\(\\s*(?:approx(?:imately)?\\.?|equivalent(?:\\s+to)?|~|=)?\\s*(?:\\b(?:rs\\.?|inr)|₹)\\s*:?\\s*(?<amt>\\d[\\d,]*(?:\\.\\d{1,2})?)\\s*\\)\\s*(?:on|using|with|via|through|in)\\s+(?:your\\s+)?(?:the\\s+)?(?:[a-z][a-z0-9+&.'/ -]{0,40}?\\s)?(?:(?:your|the)\\s+)?(?:[a-z][a-z0-9+&.'/ -]{0,40}?\\s)?credit\\s+card(?:\\s*(?:no|number)\\.?)?(?:\\s+(?:ending|ends)(?:\\s+(?:with|in))?)?\\s*[:\\-]?\\s*[x*•.]*\\s?(?<mask>\\d{2,18})\\s+(?:at|@)\\s+(?<merchant>[^\\n]+?)(?=\\s+(?:on|dated)\\s+(?:date\\s+)?\\d|\\s+on\\s+[a-z]{3}\\b|\\.(?:\\s|$)|[;,(/\\n]|\\s+(?:on|using|with)\\s+(?:your|the|my|a)\\b|\\s+(?:from|avl|avail|available|ref|reference|not\\s+you|if\\s+not|if\\s+this|call|txn|trxn|bal|balance|limit|lmt|total|via|using|upi|utr|ending)\\b|$)(?=[\\s\\S]*?\\b(?:on|dated|date)\\s+(?<date>\\d{4}-\\d{2}-\\d{2}(?:[: ]\\d{2}:\\d{2}(?::\\d{2})?)?|\\d{1,2}[-/]\\d{1,2}[-/]\\d{2,4}(?:,?\\s*\\d{2}:\\d{2}(?::\\d{2})?)?|\\d{1,2}[-/ ]?[a-z]{3}[-/ ,]*\\d{2,4}(?:,?\\s*\\d{2}:\\d{2}(?::\\d{2})?)?)|)",
       "flags": "i",
       "rejectAny": [
         "failed",
@@ -2857,7 +2857,11 @@
           {
             "role": "posted",
             "from": "amt",
-            "unit": "INR"
+            "unit": "INR",
+            "original": {
+              "from": "fx",
+              "currencyFrom": "cur"
+            }
           }
         ],
         "occurredAt": {
@@ -2968,14 +2972,14 @@
   },
   {
     "id": "GENZ-CARD-FOREIGN-PAREN-DB",
-    "version": 1,
+    "version": 2,
     "family": "card_spend_foreign",
     "senders": [
       "*"
     ],
     "priority": 237,
     "match": {
-      "pattern": "(?:spent|charged|debited)\\s+(?:usd|eur|gbp|aed|sgd|aud|cad|chf|jpy|sar|hkd|myr|thb|[a-z]{3})\\s*:?\\s*\\d[\\d,]*(?:\\.\\d{1,2})?\\s*\\(\\s*(?:approx(?:imately)?\\.?|equivalent(?:\\s+to)?|~|=)?\\s*(?:\\b(?:rs\\.?|inr)|₹)\\s*:?\\s*(?<amt>\\d[\\d,]*(?:\\.\\d{1,2})?)\\s*\\)\\s*(?:on|using|with|via|through|in)\\s+(?:your\\s+)?(?:the\\s+)?(?:[a-z][a-z0-9+&.'/ -]{0,40}?\\s)?(?:(?:your|the)\\s+)?(?:[a-z][a-z0-9+&.'/ -]{0,40}?\\s)?debit\\s+card(?:\\s*(?:no|number)\\.?)?(?:\\s+(?:ending|ends)(?:\\s+(?:with|in))?)?\\s*[:\\-]?\\s*[x*•.]*\\s?(?<mask>\\d{2,18})\\s+(?:at|@)\\s+(?<merchant>[^\\n]+?)(?=\\s+(?:on|dated)\\s+(?:date\\s+)?\\d|\\s+on\\s+[a-z]{3}\\b|\\.(?:\\s|$)|[;,(/\\n]|\\s+(?:on|using|with)\\s+(?:your|the|my|a)\\b|\\s+(?:from|avl|avail|available|ref|reference|not\\s+you|if\\s+not|if\\s+this|call|txn|trxn|bal|balance|limit|lmt|total|via|using|upi|utr|ending)\\b|$)(?=[\\s\\S]*?\\b(?:on|dated|date)\\s+(?<date>\\d{4}-\\d{2}-\\d{2}(?:[: ]\\d{2}:\\d{2}(?::\\d{2})?)?|\\d{1,2}[-/]\\d{1,2}[-/]\\d{2,4}(?:,?\\s*\\d{2}:\\d{2}(?::\\d{2})?)?|\\d{1,2}[-/ ]?[a-z]{3}[-/ ,]*\\d{2,4}(?:,?\\s*\\d{2}:\\d{2}(?::\\d{2})?)?)|)",
+      "pattern": "(?:spent|charged|debited)\\s+(?<cur>(?:usd|eur|gbp|aed|sgd|aud|cad|chf|jpy|sar|hkd|myr|thb|cny|nzd|krw|zar|sek|nok|dkk|qar|kwd|omr|bhd))(?![a-z])\\s*:?\\s*(?<fx>\\d[\\d,]*(?:\\.\\d{1,2})?)\\s*\\(\\s*(?:approx(?:imately)?\\.?|equivalent(?:\\s+to)?|~|=)?\\s*(?:\\b(?:rs\\.?|inr)|₹)\\s*:?\\s*(?<amt>\\d[\\d,]*(?:\\.\\d{1,2})?)\\s*\\)\\s*(?:on|using|with|via|through|in)\\s+(?:your\\s+)?(?:the\\s+)?(?:[a-z][a-z0-9+&.'/ -]{0,40}?\\s)?(?:(?:your|the)\\s+)?(?:[a-z][a-z0-9+&.'/ -]{0,40}?\\s)?debit\\s+card(?:\\s*(?:no|number)\\.?)?(?:\\s+(?:ending|ends)(?:\\s+(?:with|in))?)?\\s*[:\\-]?\\s*[x*•.]*\\s?(?<mask>\\d{2,18})\\s+(?:at|@)\\s+(?<merchant>[^\\n]+?)(?=\\s+(?:on|dated)\\s+(?:date\\s+)?\\d|\\s+on\\s+[a-z]{3}\\b|\\.(?:\\s|$)|[;,(/\\n]|\\s+(?:on|using|with)\\s+(?:your|the|my|a)\\b|\\s+(?:from|avl|avail|available|ref|reference|not\\s+you|if\\s+not|if\\s+this|call|txn|trxn|bal|balance|limit|lmt|total|via|using|upi|utr|ending)\\b|$)(?=[\\s\\S]*?\\b(?:on|dated|date)\\s+(?<date>\\d{4}-\\d{2}-\\d{2}(?:[: ]\\d{2}:\\d{2}(?::\\d{2})?)?|\\d{1,2}[-/]\\d{1,2}[-/]\\d{2,4}(?:,?\\s*\\d{2}:\\d{2}(?::\\d{2})?)?|\\d{1,2}[-/ ]?[a-z]{3}[-/ ,]*\\d{2,4}(?:,?\\s*\\d{2}:\\d{2}(?::\\d{2})?)?)|)",
       "flags": "i",
       "rejectAny": [
         "failed",
@@ -3004,7 +3008,11 @@
           {
             "role": "posted",
             "from": "amt",
-            "unit": "INR"
+            "unit": "INR",
+            "original": {
+              "from": "fx",
+              "currencyFrom": "cur"
+            }
           }
         ],
         "occurredAt": {
@@ -3115,14 +3123,14 @@
   },
   {
     "id": "GENZ-CARD-FOREIGN-PAREN-NONE",
-    "version": 1,
+    "version": 2,
     "family": "card_spend_foreign",
     "senders": [
       "*"
     ],
     "priority": 236,
     "match": {
-      "pattern": "(?:spent|charged|debited)\\s+(?:usd|eur|gbp|aed|sgd|aud|cad|chf|jpy|sar|hkd|myr|thb|[a-z]{3})\\s*:?\\s*\\d[\\d,]*(?:\\.\\d{1,2})?\\s*\\(\\s*(?:approx(?:imately)?\\.?|equivalent(?:\\s+to)?|~|=)?\\s*(?:\\b(?:rs\\.?|inr)|₹)\\s*:?\\s*(?<amt>\\d[\\d,]*(?:\\.\\d{1,2})?)\\s*\\)\\s*(?:on|using|with|via|through|in)\\s+(?:your\\s+)?(?:the\\s+)?(?:[a-z][a-z0-9+&.'/ -]{0,40}?\\s)?(?:(?:your|the)\\s+)?(?:[a-z][a-z0-9+&.'/ -]{0,40}?\\s)?[a-z]{0,10}card(?:\\s*(?:no|number)\\.?)?(?:\\s+(?:ending|ends)(?:\\s+(?:with|in))?)?\\s*[:\\-]?\\s*[x*•.]*\\s?(?<mask>\\d{2,18})\\s+(?:at|@)\\s+(?<merchant>[^\\n]+?)(?=\\s+(?:on|dated)\\s+(?:date\\s+)?\\d|\\s+on\\s+[a-z]{3}\\b|\\.(?:\\s|$)|[;,(/\\n]|\\s+(?:on|using|with)\\s+(?:your|the|my|a)\\b|\\s+(?:from|avl|avail|available|ref|reference|not\\s+you|if\\s+not|if\\s+this|call|txn|trxn|bal|balance|limit|lmt|total|via|using|upi|utr|ending)\\b|$)(?=[\\s\\S]*?\\b(?:on|dated|date)\\s+(?<date>\\d{4}-\\d{2}-\\d{2}(?:[: ]\\d{2}:\\d{2}(?::\\d{2})?)?|\\d{1,2}[-/]\\d{1,2}[-/]\\d{2,4}(?:,?\\s*\\d{2}:\\d{2}(?::\\d{2})?)?|\\d{1,2}[-/ ]?[a-z]{3}[-/ ,]*\\d{2,4}(?:,?\\s*\\d{2}:\\d{2}(?::\\d{2})?)?)|)",
+      "pattern": "(?:spent|charged|debited)\\s+(?<cur>(?:usd|eur|gbp|aed|sgd|aud|cad|chf|jpy|sar|hkd|myr|thb|cny|nzd|krw|zar|sek|nok|dkk|qar|kwd|omr|bhd))(?![a-z])\\s*:?\\s*(?<fx>\\d[\\d,]*(?:\\.\\d{1,2})?)\\s*\\(\\s*(?:approx(?:imately)?\\.?|equivalent(?:\\s+to)?|~|=)?\\s*(?:\\b(?:rs\\.?|inr)|₹)\\s*:?\\s*(?<amt>\\d[\\d,]*(?:\\.\\d{1,2})?)\\s*\\)\\s*(?:on|using|with|via|through|in)\\s+(?:your\\s+)?(?:the\\s+)?(?:[a-z][a-z0-9+&.'/ -]{0,40}?\\s)?(?:(?:your|the)\\s+)?(?:[a-z][a-z0-9+&.'/ -]{0,40}?\\s)?[a-z]{0,10}card(?:\\s*(?:no|number)\\.?)?(?:\\s+(?:ending|ends)(?:\\s+(?:with|in))?)?\\s*[:\\-]?\\s*[x*•.]*\\s?(?<mask>\\d{2,18})\\s+(?:at|@)\\s+(?<merchant>[^\\n]+?)(?=\\s+(?:on|dated)\\s+(?:date\\s+)?\\d|\\s+on\\s+[a-z]{3}\\b|\\.(?:\\s|$)|[;,(/\\n]|\\s+(?:on|using|with)\\s+(?:your|the|my|a)\\b|\\s+(?:from|avl|avail|available|ref|reference|not\\s+you|if\\s+not|if\\s+this|call|txn|trxn|bal|balance|limit|lmt|total|via|using|upi|utr|ending)\\b|$)(?=[\\s\\S]*?\\b(?:on|dated|date)\\s+(?<date>\\d{4}-\\d{2}-\\d{2}(?:[: ]\\d{2}:\\d{2}(?::\\d{2})?)?|\\d{1,2}[-/]\\d{1,2}[-/]\\d{2,4}(?:,?\\s*\\d{2}:\\d{2}(?::\\d{2})?)?|\\d{1,2}[-/ ]?[a-z]{3}[-/ ,]*\\d{2,4}(?:,?\\s*\\d{2}:\\d{2}(?::\\d{2})?)?)|)",
       "flags": "i",
       "rejectAny": [
         "failed",
@@ -3151,7 +3159,11 @@
           {
             "role": "posted",
             "from": "amt",
-            "unit": "INR"
+            "unit": "INR",
+            "original": {
+              "from": "fx",
+              "currencyFrom": "cur"
+            }
           }
         ],
         "occurredAt": {

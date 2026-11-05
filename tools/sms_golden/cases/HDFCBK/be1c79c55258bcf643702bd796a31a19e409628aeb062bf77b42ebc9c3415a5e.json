@@ -1,0 +1,34 @@
+{
+  "id": "foreign:foreign_only_spent_first_limit",
+  "templateHash": "be1c79c55258bcf643702bd796a31a19e409628aeb062bf77b42ebc9c3415a5e",
+  "weight": 1,
+  "source": "synthetic",
+  "messages": [
+    {
+      "sender": "VM-HDFCBK-S",
+      "body": "Spent EUR 15.50 on HDFC Bank Credit Card x1234 at SAMPLE STREAMING on 2026-11-01:07:00:11. Avl Lmt: Rs.100000.00",
+      "observedAt": "2026-11-03T10:00:00.000Z"
+    }
+  ],
+  "expect": {
+    "facts": [
+      {
+        "factType": "movement",
+        "attrs": {
+          "direction": "debit",
+          "purpose": "purchase",
+          "rail": "card"
+        },
+        "amounts": [
+          {
+            "role": "posted",
+            "minor": 1550,
+            "unit": "EUR"
+          }
+        ]
+      }
+    ]
+  },
+  "note": "The INR available limit is a balance, never the price.",
+  "origin": "foreign-v2"
+}
