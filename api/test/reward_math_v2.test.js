@@ -153,6 +153,7 @@ const {
   ruleAppliesV2,
   pickRuleV2,
   applicableCaps,
+  accrue,
   computeTransactionRewardV2,
 } = require('../src/reward_math_v2');
 
@@ -480,6 +481,41 @@ test('applicableCaps: unknown cap_kind / scope and a missing cap_amount are skip
     { id: 'no-amount', cap_kind: 'bonus_points', cap_amount: null, scope: 'targets', targets: ['r1'] },
   ];
   assert.deepStrictEqual(applicableCaps({ card, capRules: caps, rule, ctx: ctxOf({}) }), []);
+});
+
+// --- accrue (C3.5 + C8 D7) ------------------------------------------------------
+
+test('accrue: block modes round the number of blocks', () => {
+  assert.strictEqual(accrue('points_per_100', 5, 199, null, 'floor'), 5);
+  assert.strictEqual(accrue('points_per_200', 2, 300, null, 'round'), 4); // 1.5 blocks → 2
+  assert.strictEqual(accrue('points_per_200', 2, 299.99, null, 'round'), 2); // 1.49995 → 1
+  assert.strictEqual(accrue('points_per_100', 3, 250, null, 'none'), 7.5);
+  assert.strictEqual(accrue('points_per_100', 5, 1000, 150, 'floor'), 30); // block_inr override
+  // Unknown/null rounding on a v2 card is floor.
+  assert.strictEqual(accrue('points_per_100', 1, 199.99, null, undefined), 1);
+});
+
+test('accrue: points_half_up / points_floor round the whole product exactly (D7)', () => {
+  assert.strictEqual(accrue('points_per_100', 1.5, 7500, null, 'points_half_up'), 113); // 112.5
+  assert.strictEqual(accrue('points_per_100', 1.5, 7499, null, 'points_half_up'), 112); // 112.485
+  assert.strictEqual(accrue('points_per_100', 1.5, 199, null, 'points_floor'), 2); // 2.985
+  // In doubles 3000 × 1.15 / 100 is 34.49999999999999; exactly it is 34.5.
+  assert.ok(3000 * 1.15 / 100 < 34.5);
+  assert.strictEqual(accrue('points_per_100', 1.15, 3000, null, 'points_half_up'), 35);
+  assert.strictEqual(accrue('points_per_100', 4.35, 7000, null, 'points_half_up'), 305); // 304.5
+  assert.strictEqual(accrue('points_per_100', 0.3, 50, null, 'points_half_up'), 0); // 0.15
+  assert.strictEqual(accrue('points_per_100', 1.1, 4500, null, 'points_half_up'), 50); // 49.5 exactly
+  assert.strictEqual(accrue('points_per_150', 2, 112.5, null, 'points_half_up'), 2); // 1.5
+  assert.strictEqual(accrue('points_per_100', 1.5, 7500.5, null, 'points_floor'), 112);
+});
+
+test('accrue: cashback to paise, flat once, unusable inputs earn nothing', () => {
+  assert.strictEqual(accrue('cashback_percent', 5, 333, null, 'floor'), 16.65);
+  assert.strictEqual(accrue('flat_points', 500, 1, null, 'floor'), 500);
+  assert.strictEqual(accrue('flat_points', 500, 0, null, 'floor'), 0);
+  assert.strictEqual(accrue(null, 5, 100, null, 'floor'), 0);
+  assert.strictEqual(accrue('points_per_100', null, 100, null, 'floor'), 0);
+  assert.strictEqual(accrue('mystery_unit', 5, 100, null, 'floor'), 0);
 });
 
 // --- computeTransactionRewardV2: details outside the shared scenarios ----------

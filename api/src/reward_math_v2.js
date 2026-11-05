@@ -34,11 +34,10 @@ const UNIT_BLOCK = { points_per_100: 100, points_per_150: 150, points_per_200: 2
 const ROLES = new Set(['base', 'earn', 'exclusion', 'info']);
 const CAP_KINDS = new Set(['bonus_points', 'total_points', 'bonus_cashback', 'total_cashback', 'eligible_spend', 'txn_count']);
 const POST_CAP = new Set(['base_rate', 'zero', 'custom_rate']);
-const ROUNDING = new Set(['floor', 'round', 'none']);
+const ROUNDING = new Set(['floor', 'round', 'none', 'points_half_up', 'points_floor']);
 
-// Guards block/paise rounding against binary float error (e.g. 1.5% of ₹67
-// is 1.0049999… in doubles but ₹1.005 → ₹1.01 on paper). Far below a paisa.
-const BLOCK_EPS = 1e-9;
+// Guards paise rounding against binary float error (1.5% of ₹67 is
+// 1.0049999… in doubles but ₹1.005 → ₹1.01 on paper). Far below a paisa.
 const PAISE_EPS = 1e-6;
 
 const RESOLVED = Symbol('pandapay.rewardContextV2');
@@ -403,9 +402,31 @@ function applicableCaps({ card, capRules, rule, ctx, excluded = false }) {
 // C3.5 — accrual
 // ---------------------------------------------------------------------------
 
+/** `value` as an exact fraction `[numerator, denominator]` of BigInts (≤ 8 dp). */
+function exactDecimal(value) {
+  for (let dp = 0; dp <= 8; dp += 1) {
+    const scale = 10 ** dp;
+    const scaled = value * scale;
+    const whole = Math.round(scaled);
+    if (Math.abs(scaled - whole) <= 1e-9 * Math.max(1, Math.abs(scaled))) return [BigInt(whole), BigInt(scale)];
+  }
+  return [BigInt(Math.round(value * 1e8)), 100000000n];
+}
+
+/** num / den rounded half-up (both positive BigInts). */
+function divHalfUp(n, d) {
+  return (2n * n + d) / (2n * d);
+}
+
 /**
  * What `spend` earns at `unit`/`rate`, in that unit's currency: cashback in ₹
  * (to paise), points per block with the card's rounding, flat points once.
+ *
+ * Rounding modes (C3.5 + C8 D7): `floor` / `round` (half-up) / `none` apply
+ * to the number of blocks; `points_floor` / `points_half_up` apply to the
+ * whole-transaction product spend × rate / block. Every mode but `none` is
+ * computed in integer paise with BigInt, so ₹7,500 × 1.5 / 100 is exactly
+ * 112.5 (→ 113 half-up), never 112.4999….
  */
 function accrue(unit, rate, spend, blockOverride, rounding) {
   const r = num(rate);
@@ -415,12 +436,18 @@ function accrue(unit, rate, spend, blockOverride, rounding) {
   const override = num(blockOverride);
   const block = override != null && override > 0 ? override : UNIT_BLOCK[unit];
   if (!block) return 0;
-  const raw = spend / block;
-  let blocks;
-  if (rounding === 'none') blocks = raw;
-  else if (rounding === 'round') blocks = Math.floor(raw + 0.5 + BLOCK_EPS);
-  else blocks = Math.floor(raw + BLOCK_EPS);
-  return blocks * r;
+  if (rounding === 'none') return (spend / block) * r;
+
+  const spendPaise = BigInt(Math.round(spend * 100));
+  const blockPaise = BigInt(Math.round(block * 100));
+  if (rounding === 'points_floor' || rounding === 'points_half_up') {
+    const [rateNum, rateDen] = exactDecimal(r);
+    const n = spendPaise * rateNum;
+    const d = blockPaise * rateDen;
+    return Number(rounding === 'points_floor' ? n / d : divHalfUp(n, d));
+  }
+  const blocks = rounding === 'round' ? divHalfUp(spendPaise, blockPaise) : spendPaise / blockPaise;
+  return Number(blocks) * r;
 }
 
 // ---------------------------------------------------------------------------
