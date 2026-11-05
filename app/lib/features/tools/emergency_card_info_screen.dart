@@ -46,7 +46,7 @@ class EmergencyCardInfoScreen extends ConsumerWidget {
         title: Text('Emergency Card Info', style: BambooFonts.heading(17, color: BambooInk.ink900)),
       ),
       body: AppBackground(
-        child: result.when(
+        child: result.when(skipLoadingOnReload: true, skipLoadingOnRefresh: true, 
           // Only reachable on a genuine first paint before the provider
           // resolves — resolves near-instantly even fully offline, since the
           // bundled fallback requires no IO at all.

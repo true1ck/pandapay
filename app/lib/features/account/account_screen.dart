@@ -48,7 +48,7 @@ class AccountScreen extends ConsumerWidget {
     }
 
     final profile = ref.watch(profileProvider);
-    return profile.when(
+    return profile.when(skipLoadingOnReload: true, skipLoadingOnRefresh: true, 
       loading: () => const _AccountLoading(),
       error: (err, _) => ErrorState(
         message: userFacingErrorMessage(err),

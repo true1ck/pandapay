@@ -84,7 +84,7 @@ class _MigrationReportScreenState extends ConsumerState<MigrationReportScreen> {
     appBar: AppBar(title: const Text('Your history update')),
     body: ref
         .watch(migrationReportProvider)
-        .when(
+        .when(skipLoadingOnReload: true, skipLoadingOnRefresh: true, 
           loading: () => const SmsLoading(),
           error: (_, _) =>
               SmsError(onRetry: () => ref.invalidate(migrationReportProvider)),

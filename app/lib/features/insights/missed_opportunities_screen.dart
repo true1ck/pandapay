@@ -59,7 +59,7 @@ class MissedOpportunitiesScreen extends ConsumerWidget {
     AsyncValue<List<_MissedOpportunity>> missed,
   ) {
     return AppBackground(
-      child: missed.when(
+      child: missed.when(skipLoadingOnReload: true, skipLoadingOnRefresh: true, 
         loading: () => const Center(child: CircularProgressIndicator()),
         error: (err, _) => ErrorState(
           message: userFacingErrorMessage(err),

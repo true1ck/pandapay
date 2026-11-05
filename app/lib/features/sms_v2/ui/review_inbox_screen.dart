@@ -285,7 +285,7 @@ class _ReviewInboxScreenState extends ConsumerState<ReviewInboxScreen> {
     appBar: AppBar(title: const Text('Needs review')),
     body: ref
         .watch(reviewItemsProvider)
-        .when(
+        .when(skipLoadingOnReload: true, skipLoadingOnRefresh: true, 
           loading: () => const SmsLoading(),
           error: (_, _) =>
               SmsError(onRetry: () => ref.invalidate(reviewItemsProvider)),

@@ -43,7 +43,7 @@ class TravelModeScreen extends ConsumerWidget {
         ),
       ),
       body: AppBackground(
-        child: pairs.when(
+        child: pairs.when(skipLoadingOnReload: true, skipLoadingOnRefresh: true, 
           loading: () => const Center(child: CircularProgressIndicator()),
           error: (err, _) => ErrorState(
             message: userFacingErrorMessage(err),
@@ -267,7 +267,7 @@ class _LoungeAbroadSection extends ConsumerWidget {
         ),
       );
     }
-    return visits.when(
+    return visits.when(skipLoadingOnReload: true, skipLoadingOnRefresh: true, 
       loading: () => const Padding(
         padding: EdgeInsets.all(AppSpace.md),
         child: LinearProgressIndicator(),

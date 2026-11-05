@@ -373,7 +373,7 @@ class _StorageRow extends StatelessWidget {
               style: BambooFonts.ui(13.5, color: BambooInk.ink900),
             ),
           ),
-          cacheSize.when(
+          cacheSize.when(skipLoadingOnReload: true, skipLoadingOnRefresh: true, 
             data: (bytes) => Text(
               formatBytes(bytes),
               style: BambooFonts.heading(14.5, color: BambooInk.ink900),
@@ -414,7 +414,7 @@ class _RecordCountsCard extends StatelessWidget {
         children: [
           _CountLine(
             icon: Icons.credit_card_outlined,
-            label: cardsAsync.when(
+            label: cardsAsync.when(skipLoadingOnReload: true, skipLoadingOnRefresh: true, 
               data: (cards) => '${cards.length} cards',
               loading: () => 'Loading cards...',
               error: (_, _) => 'Unable to load cards',
@@ -423,7 +423,7 @@ class _RecordCountsCard extends StatelessWidget {
           const SizedBox(height: AppSpace.sm),
           _CountLine(
             icon: Icons.receipt_long_outlined,
-            label: txnCountAsync.when(
+            label: txnCountAsync.when(skipLoadingOnReload: true, skipLoadingOnRefresh: true, 
               data: (count) => '$count transactions',
               loading: () => 'Loading transactions...',
               error: (_, _) => 'Unable to load transactions',

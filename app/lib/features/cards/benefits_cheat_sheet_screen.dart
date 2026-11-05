@@ -40,7 +40,7 @@ class BenefitsCheatSheetScreen extends ConsumerWidget {
         ),
       ),
       body: AppBackground(
-        child: owned.when(
+        child: owned.when(skipLoadingOnReload: true, skipLoadingOnRefresh: true, 
           loading: () => const Center(child: CircularProgressIndicator()),
           error: (err, _) => ErrorState(
             message: userFacingErrorMessage(err),

@@ -446,7 +446,7 @@ class _NearbyMerchantTile extends ConsumerWidget {
               ),
             ),
           const SizedBox(height: 6),
-          best.when(
+          best.when(skipLoadingOnReload: true, skipLoadingOnRefresh: true, 
             loading: () => const LinearProgressIndicator(),
             error: (err, _) => Text(
               'Could not rank cards: $err',

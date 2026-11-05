@@ -93,7 +93,7 @@ class MyContributionsScreen extends ConsumerWidget {
           ),
         ),
         const SizedBox(height: AppSpace.sm),
-        stats.when(
+        stats.when(skipLoadingOnReload: true, skipLoadingOnRefresh: true, 
           loading: () => const Center(child: CircularProgressIndicator()),
           error: (err, _) => ErrorState(
             message: userFacingErrorMessage(err),

@@ -37,7 +37,7 @@ class PointsExpiryScreen extends ConsumerWidget {
         ),
       ),
       body: AppBackground(
-        child: pairs.when(
+        child: pairs.when(skipLoadingOnReload: true, skipLoadingOnRefresh: true, 
           loading: () => const Center(child: CircularProgressIndicator()),
           error: (err, _) => ErrorState(
             message: userFacingErrorMessage(err),

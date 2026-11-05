@@ -307,7 +307,7 @@ class _ForeignPaymentsScreenState extends ConsumerState<ForeignPaymentsScreen> {
               ),
             ),
             Expanded(
-              child: state.when(
+              child: state.when(skipLoadingOnReload: true, 
                 skipLoadingOnRefresh: true,
                 loading: () => const Center(child: CircularProgressIndicator()),
                 error: (error, _) => ErrorState(

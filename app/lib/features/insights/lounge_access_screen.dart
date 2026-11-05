@@ -35,14 +35,14 @@ class LoungeAccessScreen extends ConsumerWidget {
     final pairs = ref.watch(ownedCardsWithProductProvider);
     final visits = ref.watch(loungeUsageProvider);
 
-    return pairs.when(
+    return pairs.when(skipLoadingOnReload: true, skipLoadingOnRefresh: true, 
       loading: () => const Center(child: CircularProgressIndicator()),
       error: (err, _) => ErrorState(
         message: userFacingErrorMessage(err),
         onRetry: () => ref.invalidate(ownedCardsWithProductProvider),
       ),
       data: (owned) {
-        return visits.when(
+        return visits.when(skipLoadingOnReload: true, skipLoadingOnRefresh: true, 
           loading: () => const Center(child: CircularProgressIndicator()),
           error: (err, _) => ErrorState(
             message: userFacingErrorMessage(err),

@@ -2323,7 +2323,7 @@ class _QuickAddScreenState extends ConsumerState<QuickAddScreen> {
           onPressed: () => categories.whenData(_chooseCategory),
           child: const Text('View all'),
         ),
-        child: categories.when(
+        child: categories.when(skipLoadingOnReload: true, skipLoadingOnRefresh: true, 
           loading: () => const LinearProgressIndicator(color: BambooInk.slate),
           error: (err, _) => Text(
             userFacingErrorMessage(err),
@@ -2493,7 +2493,7 @@ class _QuickAddScreenState extends ConsumerState<QuickAddScreen> {
         if (_instrument == TxnInstrument.creditCard ||
             _instrument == TxnInstrument.debitCard) ...[
           const SizedBox(height: 12),
-          userCards.when(
+          userCards.when(skipLoadingOnReload: true, skipLoadingOnRefresh: true, 
             loading: () =>
                 const LinearProgressIndicator(color: BambooInk.slate),
             error: (err, _) => Text(

@@ -234,7 +234,7 @@ class _AddFirstCardScreenState extends ConsumerState<AddFirstCardScreen> {
         ),
       ),
       body: AppBackground(
-        child: catalogue.when(
+        child: catalogue.when(skipLoadingOnReload: true, skipLoadingOnRefresh: true, 
           loading: () => const Center(child: CircularProgressIndicator()),
           error: (err, _) => ErrorState(
             message: userFacingErrorMessage(err),

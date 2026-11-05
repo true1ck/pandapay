@@ -127,7 +127,7 @@ class _BigPurchaseCalculatorScreenState
                 },
               ),
               const SizedBox(height: AppSpace.md),
-              categories.when(
+              categories.when(skipLoadingOnReload: true, skipLoadingOnRefresh: true, 
                 loading: () => const LinearProgressIndicator(),
                 error: (err, _) => Text(userFacingErrorMessage(err)),
                 data: (list) => _CategoryPicker(

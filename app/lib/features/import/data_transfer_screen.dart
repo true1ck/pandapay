@@ -171,7 +171,7 @@ class _RecentImportsSectionState extends State<_RecentImportsSection> {
             style: BambooFonts.ui(12.5, color: BambooInk.ink500),
           ),
           const SizedBox(height: AppSpace.md),
-          widget.imports.when(
+          widget.imports.when(skipLoadingOnReload: true, skipLoadingOnRefresh: true, 
             loading: () => const Padding(
               padding: EdgeInsets.symmetric(vertical: AppSpace.md),
               child: Center(child: CircularProgressIndicator()),

@@ -1478,7 +1478,7 @@ class _RankedSectionState extends State<_RankedSection> {
 
   @override
   Widget build(BuildContext context) {
-    return widget.ranked.when(
+    return widget.ranked.when(skipLoadingOnReload: true, skipLoadingOnRefresh: true, 
       loading: () => const Padding(
         padding: EdgeInsets.symmetric(vertical: 40),
         child: Center(child: CircularProgressIndicator()),

@@ -96,7 +96,7 @@ class _ComparisonViewScreenState extends ConsumerState<ComparisonViewScreen> {
         ),
       ),
       body: AppBackground(
-        child: ranked.when(
+        child: ranked.when(skipLoadingOnReload: true, skipLoadingOnRefresh: true, 
           loading: () => const Center(child: CircularProgressIndicator()),
           error: (err, _) => ErrorState(message: userFacingErrorMessage(err)),
           data: (recommendations) {

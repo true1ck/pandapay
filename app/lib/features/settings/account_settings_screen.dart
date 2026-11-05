@@ -48,7 +48,7 @@ class _AccountSettingsBody extends ConsumerWidget {
   @override
   Widget build(BuildContext context, WidgetRef ref) {
     final profile = ref.watch(profileProvider);
-    return profile.when(
+    return profile.when(skipLoadingOnReload: true, skipLoadingOnRefresh: true, 
       loading: () => const Center(child: CircularProgressIndicator()),
       error: (err, _) => ErrorState(
         message: userFacingErrorMessage(err),

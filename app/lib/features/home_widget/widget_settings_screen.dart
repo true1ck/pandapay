@@ -244,7 +244,7 @@ class _WidgetSettingsScreenState extends ConsumerState<WidgetSettingsScreen> {
                 ),
               ),
               const SizedBox(height: 6),
-              ranked.when(
+              ranked.when(skipLoadingOnReload: true, skipLoadingOnRefresh: true, 
                 loading: () => const Center(
                   child: Padding(
                     padding: EdgeInsets.all(24),

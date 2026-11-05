@@ -29,7 +29,7 @@ class PastBillReceiptsScreen extends ConsumerWidget {
         ),
       ),
       body: AppBackground(
-        child: history.when(
+        child: history.when(skipLoadingOnReload: true, skipLoadingOnRefresh: true, 
           loading: () => const Padding(
             padding: EdgeInsets.all(AppSpace.lg),
             child: SkeletonList(count: 4),

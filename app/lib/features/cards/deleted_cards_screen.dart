@@ -135,7 +135,7 @@ class _DeletedCardsScreenState extends ConsumerState<DeletedCardsScreen> {
                 icon: Icons.lock_outline_rounded,
                 title: 'Sign in to manage deleted cards',
               )
-            : archived.when(
+            : archived.when(skipLoadingOnReload: true, 
                 skipLoadingOnRefresh: true,
                 loading: () => const Padding(
                   padding: EdgeInsets.fromLTRB(

@@ -50,7 +50,7 @@ class SyncBackupScreen extends ConsumerWidget {
         ),
       ),
       body: AppBackground(
-        child: status.when(
+        child: status.when(skipLoadingOnReload: true, skipLoadingOnRefresh: true, 
           loading: () => const Center(child: CircularProgressIndicator()),
           error: (err, _) => ErrorState(
             message: userFacingErrorMessage(err),

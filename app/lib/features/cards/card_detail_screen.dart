@@ -179,7 +179,7 @@ class CardDetailScreen extends ConsumerWidget {
         child: Column(
           children: [
             Expanded(
-              child: pairs.when(
+              child: pairs.when(skipLoadingOnReload: true, skipLoadingOnRefresh: true, 
                 loading: () => const Padding(
                   padding: EdgeInsets.symmetric(horizontal: AppSpace.lg),
                   child: SkeletonList(count: 4),
@@ -674,7 +674,7 @@ class _CardSpendingMixSectionState
         .where((e) => e.userCardId == widget.userCard.id)
         .toList();
 
-    final content = reportState.when(
+    final content = reportState.when(skipLoadingOnReload: true, skipLoadingOnRefresh: true, 
       loading: () => const CardSummaryPanel(
         child: Padding(
           padding: EdgeInsets.symmetric(vertical: AppSpace.md),
@@ -1450,7 +1450,7 @@ class _SpendSection extends ConsumerWidget {
     final selectedQuery = ref.watch(cardDetailSpendQueryProvider(userCard.id));
     final report = ref.watch(spendReportProvider(selectedQuery));
 
-    return report.when(
+    return report.when(skipLoadingOnReload: true, skipLoadingOnRefresh: true, 
       loading: () => const _SpendDisclosure(
         trailing: 'Loading',
         details: [

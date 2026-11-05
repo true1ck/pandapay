@@ -36,7 +36,7 @@ class ManualOverridesScreen extends ConsumerWidget {
         title: Text('Manual overrides', style: BambooFonts.heading(17, color: BambooInk.ink900)),
       ),
       body: AppBackground(
-        child: overrides.when(
+        child: overrides.when(skipLoadingOnReload: true, skipLoadingOnRefresh: true, 
           loading: () => const Center(child: CircularProgressIndicator()),
           error: (err, _) => ErrorState(
             message: userFacingErrorMessage(err),

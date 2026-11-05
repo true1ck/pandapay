@@ -107,7 +107,7 @@ class _CardPickerScreenState extends ConsumerState<CardPickerScreen> {
         ],
       ),
       body: AppBackground(
-        child: catalogue.when(
+        child: catalogue.when(skipLoadingOnReload: true, skipLoadingOnRefresh: true, 
           loading: () => const Center(child: CircularProgressIndicator()),
           error: (err, _) => ErrorState(
             message: userFacingErrorMessage(err),

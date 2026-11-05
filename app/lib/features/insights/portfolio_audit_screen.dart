@@ -23,7 +23,7 @@ class PortfolioAuditScreen extends ConsumerWidget {
   @override
   Widget build(BuildContext context, WidgetRef ref) {
     final pairs = ref.watch(ownedCardsWithProductProvider);
-    return pairs.when(
+    return pairs.when(skipLoadingOnReload: true, skipLoadingOnRefresh: true, 
       loading: () => const Center(child: CircularProgressIndicator()),
       error: (err, _) => ErrorState(
         message: userFacingErrorMessage(err),
@@ -89,7 +89,7 @@ class _AuditTile extends ConsumerWidget {
     final title = userCard.nickname?.isNotEmpty == true
         ? userCard.nickname!
         : product.name;
-    final usageLabel = usageAsync.when(
+    final usageLabel = usageAsync.when(skipLoadingOnReload: true, skipLoadingOnRefresh: true, 
       loading: () => 'Checking usage…',
       error: (_, _) => 'Usage unavailable',
       data: (count) => '$count transaction${count == 1 ? '' : 's'}',
@@ -180,7 +180,7 @@ class _AuditTile extends ConsumerWidget {
             const SizedBox(height: AppSpace.sm),
             _AuditNotice(
               icon: Icons.swap_horiz_rounded,
-              text: usageAsync.when(
+              text: usageAsync.when(skipLoadingOnReload: true, skipLoadingOnRefresh: true, 
                 loading: () => 'Checking transaction usage…',
                 error: (_, _) => 'Transaction usage is unavailable.',
                 data: (count) =>

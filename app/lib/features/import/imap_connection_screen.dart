@@ -168,7 +168,7 @@ class _ImapConnectionScreenState extends ConsumerState<ImapConnectionScreen> {
               ),
             ),
             const SizedBox(height: AppSpace.lg),
-            connection.when(
+            connection.when(skipLoadingOnReload: true, skipLoadingOnRefresh: true, 
               loading: () => const Center(child: CircularProgressIndicator()),
               error: (err, _) => ErrorState(
                 message: userFacingErrorMessage(err),

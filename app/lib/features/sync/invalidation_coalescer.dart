@@ -5,10 +5,10 @@ import 'dart:async';
 /// Every refresh makes each open screen show its loading state again, so one
 /// per imported batch makes pages flicker for the whole import. The first
 /// change is applied immediately (normal use stays instant). Changes that
-/// arrive inside [window] are merged and applied once the window ends.
+/// arrive inside [window] (10 seconds by default) are merged and applied once the window ends.
 class InvalidationCoalescer {
   InvalidationCoalescer({
-    this.window = const Duration(seconds: 3),
+    this.window = const Duration(seconds: 10),
     required this.onFlush,
   });
 

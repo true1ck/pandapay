@@ -158,7 +158,7 @@ class MyCardsScreen extends ConsumerWidget {
             ),
           ),
           Expanded(
-            child: myCards.when(
+            child: myCards.when(skipLoadingOnReload: true, skipLoadingOnRefresh: true, 
               // Skeleton rows rather than a centred spinner: the wallet is
               // a list of known shape, so showing that shape reads as
               // "your cards are coming" instead of "something is busy".
@@ -1065,7 +1065,7 @@ class _AddCardFormState extends ConsumerState<_AddCardForm> {
   @override
   Widget build(BuildContext context) {
     final catalogue = ref.watch(catalogueProvider);
-    return catalogue.when(
+    return catalogue.when(skipLoadingOnReload: true, skipLoadingOnRefresh: true, 
       loading: () => const SizedBox.shrink(),
       error: (err, _) => Text(
         userFacingErrorMessage(err),

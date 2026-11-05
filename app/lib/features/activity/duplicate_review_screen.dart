@@ -30,7 +30,7 @@ class DuplicateReviewScreen extends ConsumerWidget {
         title: Text('Duplicate review', style: BambooFonts.heading(19)),
       ),
       body: AppBackground(
-        child: candidates.when(
+        child: candidates.when(skipLoadingOnReload: true, skipLoadingOnRefresh: true, 
           loading: () => const Center(child: CircularProgressIndicator()),
           error: (err, _) => ErrorState(
             message: userFacingErrorMessage(err),

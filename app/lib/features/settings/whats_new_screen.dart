@@ -22,7 +22,7 @@ class WhatsNewContent extends ConsumerWidget {
   Widget build(BuildContext context, WidgetRef ref) {
     final changelog = ref.watch(changelogProvider);
 
-    return changelog.when(
+    return changelog.when(skipLoadingOnReload: true, skipLoadingOnRefresh: true, 
       loading: () => const Padding(
         padding: EdgeInsets.all(AppSpace.xxl),
         child: Center(child: CircularProgressIndicator()),

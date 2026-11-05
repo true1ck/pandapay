@@ -46,7 +46,7 @@ class _PerksTab extends ConsumerWidget {
   @override
   Widget build(BuildContext context, WidgetRef ref) {
     final cards = ref.watch(ownedCardsWithProductProvider);
-    return cards.when(
+    return cards.when(skipLoadingOnReload: true, skipLoadingOnRefresh: true, 
       loading: () => const Center(child: CircularProgressIndicator()),
       error: (error, _) => ErrorState(
         message: userFacingErrorMessage(error),
@@ -164,7 +164,7 @@ class _LoungeOverview extends ConsumerWidget {
             style: BambooFonts.ui(12, color: BambooInk.ink500),
           ),
           const SizedBox(height: AppSpace.md),
-          usage.when(
+          usage.when(skipLoadingOnReload: true, skipLoadingOnRefresh: true, 
             loading: () => const LinearProgressIndicator(),
             error: (error, _) => Column(
               crossAxisAlignment: CrossAxisAlignment.start,

@@ -42,7 +42,7 @@ class CapsScreen extends ConsumerWidget {
   @override
   Widget build(BuildContext context, WidgetRef ref) {
     final pairs = ref.watch(ownedCardsWithProductProvider);
-    return pairs.when(
+    return pairs.when(skipLoadingOnReload: true, skipLoadingOnRefresh: true, 
       loading: () => const Center(child: CircularProgressIndicator()),
       error: (err, _) => ErrorState(
         message: userFacingErrorMessage(err),

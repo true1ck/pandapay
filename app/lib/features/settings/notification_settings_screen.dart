@@ -117,7 +117,7 @@ class _NotificationSettingsBodyState
   Widget build(BuildContext context) {
     final prefsAsync = ref.watch(notificationPreferencesProvider);
 
-    return prefsAsync.when(
+    return prefsAsync.when(skipLoadingOnReload: true, skipLoadingOnRefresh: true, 
       loading: () => const Center(child: CircularProgressIndicator()),
       error: (err, _) => ErrorState(
         message: userFacingErrorMessage(err),
@@ -419,7 +419,7 @@ class _MutedMerchantsList extends ConsumerWidget {
   Widget build(BuildContext context, WidgetRef ref) {
     final mutedAsync = ref.watch(_mutedMerchantsProvider);
 
-    return mutedAsync.when(
+    return mutedAsync.when(skipLoadingOnReload: true, skipLoadingOnRefresh: true, 
       loading: () => const Padding(
         padding: EdgeInsets.all(AppSpace.lg),
         child: Center(child: CircularProgressIndicator()),

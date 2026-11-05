@@ -341,7 +341,7 @@ class _MerchantResultTile extends ConsumerWidget {
             candidate.displayName ?? 'Unnamed merchant',
             style: BambooFonts.heading(14.5, color: BambooInk.ink900),
           ),
-          subtitle: best.when(
+          subtitle: best.when(skipLoadingOnReload: true, skipLoadingOnRefresh: true, 
             loading: () => Text('Ranking…', style: BambooFonts.ui(12.5, color: BambooInk.ink500)),
             error: (err, _) =>
                 Text(userFacingErrorMessage(err), style: BambooFonts.ui(12.5, color: BambooInk.clay)),
@@ -370,7 +370,7 @@ class _CategoryFallback extends ConsumerWidget {
   @override
   Widget build(BuildContext context, WidgetRef ref) {
     final categories = ref.watch(categoriesProvider);
-    return categories.when(
+    return categories.when(skipLoadingOnReload: true, skipLoadingOnRefresh: true, 
       loading: () => const Center(child: CircularProgressIndicator()),
       error: (err, _) => ErrorState(message: userFacingErrorMessage(err)),
       data: (list) => ListView(

@@ -142,7 +142,7 @@ class TransactionDetailScreen extends ConsumerWidget {
                       ),
                     )
                   : _DetailBody(entry: entry)
-            : txn.when(
+            : txn.when(skipLoadingOnReload: true, skipLoadingOnRefresh: true, 
                 loading: () => const Center(child: CircularProgressIndicator()),
                 error: (err, _) => ErrorState(
                   message: userFacingErrorMessage(err),
@@ -1382,7 +1382,7 @@ class _DetailBodyState extends ConsumerState<_DetailBody> {
                             observation.source == 'sms_bulk',
                       ))
                     _SmsEvidenceSection(entry: entry),
-                  attachments.when(
+                  attachments.when(skipLoadingOnReload: true, skipLoadingOnRefresh: true, 
                     loading: () => const SizedBox.shrink(),
                     error: (_, __) => _ReceiptSection(
                       attachments: const [],

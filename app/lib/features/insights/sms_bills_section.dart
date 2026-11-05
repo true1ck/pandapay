@@ -33,7 +33,7 @@ class _SmsBillsSectionState extends ConsumerState<SmsBillsSection> {
   Widget build(BuildContext context) {
     final ref = this.ref;
     final bills = ref.watch(smsBillRowsProvider);
-    return bills.when(
+    return bills.when(skipLoadingOnReload: true, skipLoadingOnRefresh: true, 
       loading: () => const SizedBox.shrink(),
       error: (_, _) => const SizedBox.shrink(),
       data: (rows) {

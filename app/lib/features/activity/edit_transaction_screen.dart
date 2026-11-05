@@ -696,7 +696,7 @@ class _EditTransactionScreenState extends ConsumerState<EditTransactionScreen> {
         ),
       ),
       body: AppBackground(
-        child: txn.when(
+        child: txn.when(skipLoadingOnReload: true, skipLoadingOnRefresh: true, 
           loading: () => const Center(child: CircularProgressIndicator()),
           error: (err, _) => ErrorState(message: userFacingErrorMessage(err)),
           data: (entry) {

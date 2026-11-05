@@ -165,7 +165,7 @@ class _LinkedDevicesScreenState extends ConsumerState<LinkedDevicesScreen> {
         ],
       ),
       body: AppBackground(
-        child: devices.when(
+        child: devices.when(skipLoadingOnReload: true, skipLoadingOnRefresh: true, 
           // On a failed refresh, keep showing the last successful list. The
           // initial request still uses the error state because no cached data
           // exists yet.

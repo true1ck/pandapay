@@ -278,7 +278,7 @@ class _PermissionRow extends ConsumerWidget {
                   style: BambooFonts.ui(12.5, color: BambooInk.ink500),
                 ),
                 const SizedBox(height: 4),
-                status.when(
+                status.when(skipLoadingOnReload: true, 
                   skipLoadingOnRefresh: false,
                   loading: () => Text(
                     'Checking…',
@@ -417,7 +417,7 @@ class _GmailConnectionRow extends ConsumerWidget {
                   style: BambooFonts.ui(12.5, color: BambooInk.ink500),
                 ),
                 const SizedBox(height: 4),
-                conn.when(
+                conn.when(skipLoadingOnReload: true, skipLoadingOnRefresh: true, 
                   loading: () => Text(
                     'Checking…',
                     style: BambooFonts.ui(12.5, color: BambooInk.ink500),
@@ -665,7 +665,7 @@ class _PurposeConsents extends ConsumerWidget {
       padding: const EdgeInsets.all(AppSpace.lg),
       child: Material(
         type: MaterialType.transparency,
-        child: consents.when(
+        child: consents.when(skipLoadingOnReload: true, skipLoadingOnRefresh: true, 
           loading: () => const SkeletonRow(),
           error: (e, _) => ErrorState(
             message: userFacingErrorMessage(e),
@@ -775,7 +775,7 @@ class _ConsentHistoryList extends ConsumerWidget {
   Widget build(BuildContext context, WidgetRef ref) {
     final history = ref.watch(_consentHistoryProvider);
 
-    return history.when(
+    return history.when(skipLoadingOnReload: true, skipLoadingOnRefresh: true, 
       loading: () => const Padding(
         padding: EdgeInsets.symmetric(vertical: AppSpace.lg),
         child: Center(child: CircularProgressIndicator()),

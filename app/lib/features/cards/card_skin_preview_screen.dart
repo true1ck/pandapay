@@ -34,7 +34,7 @@ class CardSkinPreviewScreen extends ConsumerWidget {
         ),
       ),
       body: AppBackground(
-        child: catalogue.when(
+        child: catalogue.when(skipLoadingOnReload: true, skipLoadingOnRefresh: true, 
           loading: () => const Center(child: CircularProgressIndicator()),
           error: (error, _) => _PreviewMessage(
             icon: Icons.error_outline_rounded,

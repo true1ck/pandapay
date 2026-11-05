@@ -43,7 +43,7 @@ class SmsLedgerScreenView extends ConsumerWidget {
     ),
     body: ref
         .watch(smsV2LedgerReadModelProvider)
-        .when(
+        .when(skipLoadingOnReload: true, skipLoadingOnRefresh: true, 
           loading: () => const SmsLoading(),
           error: (_, _) => SmsError(
             onRetry: () => ref.invalidate(smsV2LedgerReadModelProvider),
@@ -225,7 +225,7 @@ class InstrumentDetailScreen extends ConsumerWidget {
     appBar: AppBar(title: const Text('Account details')),
     body: ref
         .watch(smsV2LedgerReadModelProvider)
-        .when(
+        .when(skipLoadingOnReload: true, skipLoadingOnRefresh: true, 
           loading: () => const SmsLoading(),
           error: (_, _) => SmsError(
             onRetry: () => ref.invalidate(smsV2LedgerReadModelProvider),
@@ -319,7 +319,7 @@ class LinkedInstrumentUsage extends ConsumerWidget {
   @override
   Widget build(BuildContext context, WidgetRef ref) {
     final model = ref.watch(smsV2LedgerReadModelProvider);
-    return model.when(
+    return model.when(skipLoadingOnReload: true, skipLoadingOnRefresh: true, 
       loading: () => const LinearProgressIndicator(),
       error: (_, _) => TextButton(
         onPressed: () => ref.invalidate(smsV2LedgerReadModelProvider),

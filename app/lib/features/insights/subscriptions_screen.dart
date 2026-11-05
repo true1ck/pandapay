@@ -239,7 +239,7 @@ class SubscriptionsScreen extends ConsumerWidget {
         ),
       ),
       body: AppBackground(
-        child: report.when(
+        child: report.when(skipLoadingOnReload: true, skipLoadingOnRefresh: true, 
           loading: () => const Center(child: CircularProgressIndicator()),
           error: (err, _) => ErrorState(
             message: userFacingErrorMessage(err),

@@ -261,7 +261,7 @@ class _InviteFriendsScreenState extends ConsumerState<InviteFriendsScreen>
               )
             : ref
                   .watch(referralDashboardProvider(year))
-                  .when(
+                  .when(skipLoadingOnReload: true, skipLoadingOnRefresh: true, 
                     loading: () =>
                         const Center(child: CircularProgressIndicator()),
                     error: (error, _) => ErrorState(

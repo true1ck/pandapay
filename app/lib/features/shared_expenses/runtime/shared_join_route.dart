@@ -80,7 +80,7 @@ class _SharedJoinRouteState extends ConsumerState<SharedJoinRoute> {
       backgroundColor: BambooInk.paper,
       appBar: AppBar(title: Text('Join', style: BambooFonts.heading(17))),
       body: AppBackground(
-        child: runtime.when(
+        child: runtime.when(skipLoadingOnReload: true, skipLoadingOnRefresh: true, 
           loading: () => const Center(
             child: CircularProgressIndicator(color: BambooInk.slate),
           ),

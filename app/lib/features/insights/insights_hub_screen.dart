@@ -287,7 +287,7 @@ class InsightsHubScreen extends ConsumerWidget {
           const SizedBox(height: AppSpace.md),
           const _PeriodChips(),
           const SizedBox(height: AppSpace.lg),
-          overview.when(
+          overview.when(skipLoadingOnReload: true, 
             // Keep the last report visible while a background sync refreshes
             // the provider. The skeleton is only for the first load with no
             // local snapshot to render.

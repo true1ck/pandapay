@@ -118,7 +118,7 @@ class _PendingStatementImportsCardState
     if (!Env.statementImportContinuationEnabled) return const SizedBox.shrink();
     return ref
         .watch(statementImportContinuationProvider)
-        .when(
+        .when(skipLoadingOnReload: true, skipLoadingOnRefresh: true, 
           loading: () => const SizedBox.shrink(),
           error: (_, _) => const Card(
             child: Padding(

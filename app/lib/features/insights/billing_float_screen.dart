@@ -29,7 +29,7 @@ class BillingFloatScreen extends ConsumerWidget {
   Widget build(BuildContext context, WidgetRef ref) {
     final pairs = ref.watch(ownedCardsWithProductProvider);
     final clock = ref.watch(clockProvider);
-    return pairs.when(
+    return pairs.when(skipLoadingOnReload: true, skipLoadingOnRefresh: true, 
       loading: () => const Center(child: CircularProgressIndicator()),
       error: (err, _) => ErrorState(
         message: userFacingErrorMessage(err),

@@ -94,7 +94,7 @@ class NotificationsScreen extends ConsumerWidget {
                         message:
                             'Your inbox syncs with your account. Sign in to view your notifications.',
                       )
-                    : inbox.when(
+                    : inbox.when(skipLoadingOnReload: true, skipLoadingOnRefresh: true, 
                         loading: () =>
                             const Center(child: CircularProgressIndicator()),
                         error: (err, _) => ErrorState(

@@ -110,7 +110,7 @@ class FoundInstrumentsScreen extends ConsumerWidget {
     final instruments = ref.watch(instrumentsProvider);
     return Scaffold(
       appBar: AppBar(title: const Text('Accounts and cards we found')),
-      body: instruments.when(
+      body: instruments.when(skipLoadingOnReload: true, skipLoadingOnRefresh: true, 
         loading: () => const SmsLoading(),
         error: (_, _) =>
             SmsError(onRetry: () => ref.invalidate(instrumentsProvider)),

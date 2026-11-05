@@ -124,7 +124,7 @@ class _SubscriptionCreditsScreenState
               )
             : ref
                   .watch(subscriptionCreditDataProvider)
-                  .when(
+                  .when(skipLoadingOnReload: true, skipLoadingOnRefresh: true, 
                     loading: () =>
                         const Center(child: CircularProgressIndicator()),
                     error: (error, _) => ErrorState(

@@ -165,7 +165,7 @@ class MonthlySavingsScreen extends ConsumerWidget {
   @override
   Widget build(BuildContext context, WidgetRef ref) {
     final report = ref.watch(currentMonthlyReportProvider);
-    return report.when(
+    return report.when(skipLoadingOnReload: true, skipLoadingOnRefresh: true, 
       loading: () => const Center(child: CircularProgressIndicator()),
       error: (err, _) => ErrorState(
         message: userFacingErrorMessage(err),
@@ -262,7 +262,7 @@ class MonthlySavingsScreen extends ConsumerWidget {
                           ),
                         ),
                         const Divider(height: AppSpace.xl),
-                        extras.when(
+                        extras.when(skipLoadingOnReload: true, skipLoadingOnRefresh: true, 
                           loading: () => const Padding(
                             padding: EdgeInsets.symmetric(
                               vertical: AppSpace.lg,

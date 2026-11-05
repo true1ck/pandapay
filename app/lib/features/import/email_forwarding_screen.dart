@@ -52,7 +52,7 @@ class EmailForwardingScreen extends ConsumerWidget {
         title: Text('Email statements', style: BambooFonts.heading(17, color: BambooInk.ink900)),
       ),
       body: AppBackground(
-        child: forwarding.when(
+        child: forwarding.when(skipLoadingOnReload: true, skipLoadingOnRefresh: true, 
           loading: () => const Center(child: CircularProgressIndicator()),
           error: (err, _) => ErrorState(
             message: userFacingErrorMessage(err),
@@ -278,7 +278,7 @@ class _SetupView extends ConsumerWidget {
               style: BambooFonts.heading(15, color: BambooInk.ink900),
             ),
             const SizedBox(height: AppSpace.sm),
-            inboundEmails.when(
+            inboundEmails.when(skipLoadingOnReload: true, skipLoadingOnRefresh: true, 
               loading: () => const Padding(
                 padding: EdgeInsets.symmetric(vertical: AppSpace.md),
                 child: Center(child: CircularProgressIndicator()),

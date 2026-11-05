@@ -60,7 +60,7 @@ class DueDateCalendarScreen extends ConsumerWidget {
       ],
     );
 
-    return pairs.when(
+    return pairs.when(skipLoadingOnReload: true, skipLoadingOnRefresh: true, 
       loading: () => const Center(child: CircularProgressIndicator()),
       error: (err, _) => ErrorState(
         message: userFacingErrorMessage(err),

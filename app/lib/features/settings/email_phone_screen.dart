@@ -53,7 +53,7 @@ class EmailPhoneScreen extends ConsumerWidget {
         title: Text('Email & phone', style: BambooFonts.heading(19, color: BambooInk.ink900)),
       ),
       body: AppBackground(
-        child: profile.when(
+        child: profile.when(skipLoadingOnReload: true, skipLoadingOnRefresh: true, 
           loading: () => const Center(child: CircularProgressIndicator()),
           error: (err, _) => ErrorState(
             message: userFacingErrorMessage(err),

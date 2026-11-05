@@ -44,7 +44,7 @@ class BenefitDetailScreen extends ConsumerWidget {
     }
 
     final owned = ref.watch(ownedCardsWithProductProvider);
-    return owned.when(
+    return owned.when(skipLoadingOnReload: true, skipLoadingOnRefresh: true, 
       loading: () => Scaffold(
         backgroundColor: BambooInk.paper,
         appBar: AppBar(
@@ -421,7 +421,7 @@ class _BenefitDetailBody extends ConsumerWidget {
         borderRadius: BorderRadius.circular(AppRadius.lg),
         border: Border.all(color: BambooInk.hairlineOnPaper),
       ),
-      child: visitsAsync.when(
+      child: visitsAsync.when(skipLoadingOnReload: true, skipLoadingOnRefresh: true, 
         loading: () => const Center(
           child: Padding(
             padding: EdgeInsets.symmetric(vertical: AppSpace.md),

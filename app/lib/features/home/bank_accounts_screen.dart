@@ -205,7 +205,7 @@ class _BankAccountsScreenState extends ConsumerState<BankAccountsScreen> {
           ),
         ],
       ),
-      body: result.when(
+      body: result.when(skipLoadingOnReload: true, skipLoadingOnRefresh: true, 
         loading: () => const Center(child: CircularProgressIndicator()),
         error: (error, _) => Center(
           child: Padding(

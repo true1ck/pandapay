@@ -201,7 +201,7 @@ class _SmsImportScreenState extends ConsumerState<SmsImportScreen> {
                   style: BambooFonts.ui(13.5, color: BambooInk.jade),
                 ),
               const SizedBox(height: 16),
-              userCards.when(
+              userCards.when(skipLoadingOnReload: true, skipLoadingOnRefresh: true, 
                 loading: () => const CircularProgressIndicator(),
                 error: (err, _) => Text(
                   'Failed to load cards: $err',
