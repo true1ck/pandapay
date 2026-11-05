@@ -9,7 +9,6 @@ import 'package:package_info_plus/package_info_plus.dart';
 import 'package:pandapay/app/env.dart';
 import 'package:pandapay/app/providers.dart' as app;
 import 'package:pandapay/features/sms_import/ios_shortcut_sms.dart';
-import 'package:pandapay/features/sms_v2/flag.dart';
 import 'package:pandapay/features/sms_v2/providers/runtime_provider.dart';
 import 'package:pandapay/features/sms_v2/storage/ledger_store.dart';
 import 'package:pandapay/features/sms_v2/sync/bundle_verifier.dart';
@@ -44,7 +43,6 @@ void main() {
       await tester.pump(const Duration(seconds: 2));
       final container = ProviderContainer();
       addTearDown(container.dispose);
-      expect(container.read(smsPipelineV2EnabledProvider), isTrue);
       await container.read(app.sessionInitProvider.future);
       final token = container.read(app.accessTokenProvider);
       expect(token, isNotNull, reason: 'Sign in to the local rig first');

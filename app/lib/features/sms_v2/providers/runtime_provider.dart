@@ -11,7 +11,6 @@ import '../../../data/authenticated_http_client.dart';
 import '../../../app/env.dart';
 import '../../../app/local_sms_rig_http_client.dart';
 import '../../../app/local_sms_rig_build.dart';
-import '../flag.dart';
 import '../pipeline/sms_v2_runtime.dart';
 import '../sync/bundle_verifier.dart';
 import '../sync/rule_keys.dart';
@@ -19,7 +18,6 @@ import '../sync/attestation.dart';
 
 final FutureProvider<SmsV2Runtime?>
 smsV2RuntimeProvider = FutureProvider<SmsV2Runtime?>((ref) async {
-  if (!ref.watch(smsPipelineV2EnabledProvider)) return null;
   final namespace = ref.watch(app.cacheNamespaceProvider);
   if (!namespace.startsWith('user:')) return null;
   var disposed = false;
@@ -34,7 +32,6 @@ smsV2RuntimeProvider = FutureProvider<SmsV2Runtime?>((ref) async {
     inner: ApiRequestHeadersClient(
       inner: localSmsRigHttpClient() ?? http.Client(),
       apiBaseUrl: Uri.parse(Env.apiBaseUrl),
-      pipelineV2Enabled: () => ref.read(smsPipelineV2EnabledProvider),
     ),
     refreshAccessToken: () async {
       if (!current()) return null;
@@ -88,7 +85,6 @@ smsV2RuntimeProvider = FutureProvider<SmsV2Runtime?>((ref) async {
 });
 
 final smsV2LifecycleProvider = Provider<void>((ref) {
-  if (!ref.watch(smsPipelineV2EnabledProvider)) return;
   var disposed = false;
   ref.onDispose(() => disposed = true);
   Future<void> run() async {

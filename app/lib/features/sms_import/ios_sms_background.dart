@@ -1,4 +1,3 @@
-import '../sms_v2/flag.dart';
 import 'dart:async';
 
 import 'package:flutter/services.dart';
@@ -10,7 +9,6 @@ import '../../data/local/financial_store.dart';
 import '../../data/local/ios_sms_acquisition_receipts.dart';
 import '../../data/local/sms_import_store.dart';
 import '../../data/local/sms_intake_repository.dart';
-import '../../data/local/sms_rule_bundle_store.dart';
 import 'ios_shortcut_sms.dart';
 import 'ios_sms_intake_service.dart';
 
@@ -34,7 +32,6 @@ class IosSmsBackgroundDrain {
     );
     final namespace = initial['namespace'] as String?;
     final generation = initial['generation'] as String?;
-    final clientVersion = initial['clientVersion'] as String? ?? '1.0.0';
     if (initial['enabled'] != true ||
         namespace == null ||
         generation == null ||
@@ -83,18 +80,7 @@ class IosSmsBackgroundDrain {
         if (batch.messages.length + batch.sensitive != rows.length) {
           throw StateError('Shortcut input needs attention');
         }
-        final rules = SmsRuleBundleStore(database);
-        SmsImportStore(
-          store,
-          deferToSmsV2: kSmsPipelineV2,
-          downloadedRules: rules.loadActiveBundleSync(
-            clientVersion: clientVersion,
-          ),
-          candidateRules: rules.loadCandidateBundlesSync(
-            namespace: namespace,
-            clientVersion: clientVersion,
-          ),
-        ).captureBatch(namespace, batch.messages);
+        SmsImportStore(store).captureBatch(namespace, batch.messages);
         final outcomes = IosSmsAcquisitionReceipts(
           store,
         ).record(namespace, generation, rows);

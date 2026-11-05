@@ -332,17 +332,6 @@ CREATE TABLE IF NOT EXISTS sms_v2_migration_sources(namespace TEXT NOT NULL,sour
     );
   }
 
-  bool get hasLegacyHistory =>
-      financial
-          .entities(namespace, 'transactions')
-          .any(
-            (r) =>
-                (r['pipeline_version'] ?? 1) == 1 &&
-                ['sms', 'sms_bulk'].contains(r['source']),
-          ) ||
-      db.select('SELECT 1 FROM local_needs_review WHERE namespace=? LIMIT 1', [
-        namespace,
-      ]).isNotEmpty;
   Future<ReplayReport> run({
     int chunkSize = 200,
     void Function(int)? onChunk,

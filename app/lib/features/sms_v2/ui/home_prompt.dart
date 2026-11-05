@@ -4,16 +4,12 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 import 'package:pandapay_domain/sms_v2.dart';
-import '../flag.dart';
 import '../providers/data_providers.dart';
 
 class SmsV2HomePrompt extends ConsumerWidget {
   const SmsV2HomePrompt({super.key});
   @override
   Widget build(BuildContext context, WidgetRef ref) {
-    if (!ref.watch(smsPipelineV2EnabledProvider)) {
-      return const SizedBox.shrink();
-    }
     final available =
         ref.watch(instrumentsProvider).valueOrNull ?? const <Instrument>[];
     if (available.isEmpty) {

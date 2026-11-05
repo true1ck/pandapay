@@ -29,7 +29,7 @@ void main() {
     expect(find.text('Auto SMS detection'), findsOneWidget);
     expect(find.text('Import spending file'), findsOneWidget);
     expect(find.text('Import from screenshots'), findsOneWidget);
-    expect(find.text('Import SMS backup file'), findsOneWidget);
+    expect(find.text('Import SMS backup file'), findsNothing);
     expect(find.text('Import history'), findsOneWidget);
 
     // Verify that when permission is not granted, no checkmark tick is rendered

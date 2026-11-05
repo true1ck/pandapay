@@ -40,12 +40,6 @@ class Env {
     defaultValue: false,
   );
 
-  /// Manual account-bound recovery remains off until signed-device acceptance.
-  static const bool accountDataRecoveryEnabled = bool.fromEnvironment(
-    'PANDAPAY_ACCOUNT_RECOVERY_ENABLED',
-    defaultValue: false,
-  );
-
   /// Enable only after auth v2 migrations, providers and supported clients pass
   /// acceptance. A v2 request never falls back to a legacy code.
   static const bool versionedOtpEnabled = bool.fromEnvironment(

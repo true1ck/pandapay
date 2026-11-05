@@ -6,7 +6,6 @@ import 'package:pandapay_domain/sms_v2_category.dart';
 
 import '../../../app/providers.dart' as app;
 import '../../../data/local/sms_intake_repository.dart';
-import '../flag.dart';
 import '../ledger/providers.dart';
 import '../storage/schema.dart';
 import '../storage/fact_store.dart';
@@ -16,12 +15,10 @@ final merchantPromptMinimumOccurrencesProvider = Provider<int>((ref) => 2);
 final merchantPromptLargeAmountProvider = Provider<int>((ref) => 200000);
 
 final instrumentsProvider = FutureProvider<List<Instrument>>((ref) async {
-  if (!ref.watch(smsPipelineV2EnabledProvider)) return const [];
   return (await ref.watch(smsV2LedgerReadModelProvider.future)).instruments;
 });
 
 final eventsProvider = FutureProvider<List<Event>>((ref) async {
-  if (!ref.watch(smsPipelineV2EnabledProvider)) return const [];
   return (await ref.watch(smsV2LedgerReadModelProvider.future)).ledger.events;
 });
 
@@ -49,7 +46,6 @@ class LocalReviewItem {
 }
 
 final reviewItemsProvider = FutureProvider<List<LocalReviewItem>>((ref) async {
-  if (!ref.watch(smsPipelineV2EnabledProvider)) return const [];
   ref.watch(app.financialStoreRevisionProvider('needs_review'));
   ref.watch(app.financialStoreRevisionProvider('observations'));
   final namespace = ref.watch(app.cacheNamespaceProvider);

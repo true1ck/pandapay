@@ -5,7 +5,6 @@ import 'package:pandapay/data/ios_live_probe_session.dart';
 import 'package:pandapay/data/local/app_database.dart';
 import 'package:pandapay/main_ios_history_device_probe.dart';
 import 'package:pandapay/widgets/ios_live_probe_panel.dart';
-import '../data/ios_live_probe_session_test.dart' show liveRow;
 
 void main() {
   testWidgets('ignored event exposes its input and processing reason', (
@@ -162,96 +161,6 @@ void main() {
       await tester.pump();
       expect(refreshed, isTrue);
       expect(find.byType(SelectableText), findsNothing);
-    },
-  );
-  testWidgets(
-    'acknowledgement failure retries without claiming completion or reprocessing',
-    (tester) async {
-      tester.view.physicalSize = const Size(1000, 2400);
-      tester.view.devicePixelRatio = 1;
-      addTearDown(tester.view.resetPhysicalSize);
-      addTearDown(tester.view.resetDevicePixelRatio);
-      const channel = MethodChannel('pandapay/ios_history_device_probe');
-      var ackAttempts = 0;
-      final row = liveRow('live1');
-      Map<String, Object?> snapshot(bool done) => {
-        'records': done ? [] : [row],
-        'counts': {
-          'calls': 1,
-          'records_received': 1,
-          'pending': done ? 0 : 1,
-          'processed': done ? 1 : 0,
-          'needs_review': done ? 1 : 0,
-        },
-        'events': [
-          {
-            'id': 'live1',
-            'state': done ? 'needs_review' : 'pending',
-            'handler': 'person_sender',
-          },
-        ],
-      };
-      tester.binding.defaultBinaryMessenger.setMockMethodCallHandler(channel, (
-        call,
-      ) async {
-        if (call.method == 'readPending') {
-          return {
-            'records': [],
-            'runs': [],
-            'live': snapshot(ackAttempts >= 2),
-          };
-        }
-        if (call.method == 'completeLive') {
-          ackAttempts++;
-          expect((call.arguments as List).single['outcome'], 'needs_review');
-          if (ackAttempts == 1) {
-            throw PlatformException(code: 'synthetic_ack_failure');
-          }
-          return snapshot(true);
-        }
-        return null;
-      });
-      addTearDown(
-        () => tester.binding.defaultBinaryMessenger.setMockMethodCallHandler(
-          channel,
-          null,
-        ),
-      );
-      await tester.pumpWidget(
-        const MaterialApp(home: DeviceHistoryProbeScreen()),
-      );
-      await tester.pumpAndSettle();
-      expect(
-        find.text('Pending: 1 · Processed and acknowledged: 0'),
-        findsOneWidget,
-      );
-      expect(find.textContaining('acknowledgement failed'), findsOneWidget);
-      expect(
-        find.textContaining('Live shared intake: 1 retained SMS'),
-        findsOneWidget,
-      );
-      await tester.ensureVisible(find.text('Refresh / retry live handoffs'));
-      await tester.tap(find.text('Refresh / retry live handoffs'));
-      await tester.pumpAndSettle();
-      expect(ackAttempts, 2);
-      await tester.scrollUntilVisible(
-        find.text('Pending: 0 · Processed and acknowledged: 1'),
-        -300,
-        scrollable: find.byType(Scrollable).first,
-      );
-      expect(
-        find.text('Pending: 0 · Processed and acknowledged: 1'),
-        findsOneWidget,
-      );
-      expect(
-        find.textContaining('Live shared intake: 1 retained SMS'),
-        findsOneWidget,
-      );
-      expect(
-        find.textContaining('Cumulative session: 0 retained SMS'),
-        findsOneWidget,
-      );
-      await tester.pumpWidget(const SizedBox());
     },
   );
   testWidgets(

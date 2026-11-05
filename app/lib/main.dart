@@ -25,7 +25,6 @@ import 'data/api_request_headers_client.dart';
 import 'data/spend_reports_repository.dart';
 import 'data/product_access_api.dart';
 import 'features/settings/appearance_providers.dart';
-import 'features/recovery/automatic_account_recovery.dart';
 import 'features/sms_import/ios_sms_background.dart' as ios_background;
 
 @pragma('vm:entry-point')
@@ -399,7 +398,6 @@ class _PandaPayAppState extends ConsumerState<PandaPayApp> {
     // Restore saved location monitoring for every entry point, including
     // assistant links that open a screen outside the tab shell.
     ref.watch(backgroundAlertsLifecycleProvider);
-    ref.watch(automaticAccountRecoveryProvider);
     return MaterialApp.router(
       debugShowCheckedModeBanner: false,
       title: 'PandaPay',

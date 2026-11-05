@@ -2,59 +2,10 @@ import 'dart:convert';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_test/flutter_test.dart';
-import 'package:pandapay/data/ios_body_evidence_session.dart';
 import 'package:pandapay/main_ios_history_device_probe.dart';
-import 'package:pandapay/widgets/ios_body_evidence_panel.dart';
-import '../data/ios_body_evidence_session_test.dart' show input;
 import '../data/ios_main_sender_card_intake_test.dart' as fixture;
 
 void main() {
-  testWidgets(
-    'narrow screen distinguishes extracted facts from captured sender',
-    (tester) async {
-      tester.view.physicalSize = const Size(320, 900);
-      tester.view.devicePixelRatio = 1;
-      addTearDown(tester.view.resetPhysicalSize);
-      addTearDown(tester.view.resetDevicePixelRatio);
-      final session = IosBodyEvidenceSession()
-        ..process([
-          input('paid', fixture.posted),
-          input('request', fixture.request),
-        ]);
-      await tester.pumpWidget(
-        MaterialApp(
-          home: Scaffold(
-            body: SingleChildScrollView(
-              child: IosBodyEvidencePanel(snapshot: session.snapshot),
-            ),
-          ),
-        ),
-      );
-      expect(
-        find.text('Transaction extracted; sender unavailable'),
-        findsOneWidget,
-      );
-      expect(
-        find.text('Payment requested · completion unconfirmed'),
-        findsOneWidget,
-      );
-      expect(find.text('Captured sender: Unavailable'), findsNWidgets(2));
-      expect(find.text('Card ending 4242'), findsOneWidget);
-      expect(find.text('Spending added: ₹0'), findsOneWidget);
-      expect(find.text('Issuer named in SMS: SBI'), findsOneWidget);
-      expect(
-        find.textContaining('previews, not posted spending'),
-        findsOneWidget,
-      );
-      final jsonTile = find.text('Extraction input and output (JSON)').last;
-      await tester.ensureVisible(jsonTile);
-      await tester.tap(jsonTile);
-      await tester.pumpAndSettle();
-      expect(find.byType(SelectableText), findsOneWidget);
-      expect(tester.takeException(), isNull);
-    },
-  );
-
   for (final startup in ['ready', 'not_staged', 'locked']) {
     testWidgets(
       'diagnostic replay recovers from $startup without running a shortcut',
@@ -138,7 +89,7 @@ void main() {
         );
         expect(
           find.text(
-            '1 messages · 1 transaction candidates · 0 payment requests',
+            '1 messages · 0 transaction candidates · 0 payment requests',
           ),
           findsOneWidget,
         );
@@ -146,7 +97,7 @@ void main() {
         expect(acknowledged?['counts'], {
           'input_records': 2,
           'unique_message_inputs': 1,
-          'transaction_candidates': 1,
+          'transaction_candidates': 0,
           'payment_requests': 0,
           'omitted_inputs': 0,
         });

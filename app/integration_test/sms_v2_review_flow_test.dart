@@ -1,6 +1,6 @@
 import 'dart:io';
 // Uses only an in-memory synthetic account and a rejecting HTTP client.
-// Run with --flavor dev --dart-define=SMS_PIPELINE_V2=true and the defines
+// Run with --flavor dev and the defines
 // produced by tool/build_sms_v2_smoke.dart. Never launches production main().
 import 'dart:convert';
 import 'package:flutter/material.dart';
@@ -11,12 +11,10 @@ import 'package:http/testing.dart';
 import 'package:sqlite3/sqlite3.dart';
 import 'package:pandapay/app/providers.dart' as app;
 import 'package:pandapay/app/design/app_theme.dart';
-import 'package:pandapay/data/sms_backup_xml_parser.dart';
 import 'package:pandapay/features/sms_import/ios_shortcut_sms.dart';
 import 'package:pandapay/data/local/app_database.dart';
 import 'package:pandapay/data/local/response_cache.dart';
 import 'package:pandapay/features/sms_import/sms_background_queue.dart';
-import 'package:pandapay/features/sms_v2/flag.dart';
 import 'package:pandapay/features/sms_v2/pipeline/sms_v2_runtime.dart';
 import 'package:pandapay/features/sms_v2/providers/data_providers.dart';
 import 'package:pandapay/features/sms_v2/providers/runtime_provider.dart';
@@ -66,7 +64,6 @@ void main() {
     );
     final container = ProviderContainer(
       overrides: [
-        smsPipelineV2EnabledProvider.overrideWithValue(true),
         app.cacheNamespaceProvider.overrideWithValue(namespace),
         app.responseCacheProvider.overrideWith((_) async => cache),
         smsV2RuntimeProvider.overrideWith((_) async => runtime),
@@ -103,15 +100,11 @@ void main() {
               },
           ]).messages
         : [
-            for (final message in parseSmsBackupXml(
-              '<smses count="2">${[for (var index = 0; index < bodies.length; index++) '<sms address="VM-HDFCBK-S" '
-                    'date="${DateTime.utc(2026, 11, 1, 7 + index).millisecondsSinceEpoch}" '
-                    'body="${const HtmlEscape(HtmlEscapeMode.attribute).convert(bodies[index]).replaceAll('\n', '&#10;')}" />'].join()}</smses>',
-            ))
+            for (var index = 0; index < bodies.length; index++)
               QueuedSms(
-                sender: message.sender,
-                body: message.body,
-                receivedAt: message.sentAt!,
+                sender: 'VM-HDFCBK-S',
+                body: bodies[index],
+                receivedAt: DateTime.utc(2026, 11, 1, 7 + index),
               ),
           ];
     expect(messages, hasLength(2));

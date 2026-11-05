@@ -138,9 +138,24 @@ void main() {
     },
   );
 
+  test('a message with no sender is held for review, never parsed', () {
+    final sms = message();
+    SmsImportStore(financial, v2Pipeline: pipeline).capture(
+      'user:test',
+      QueuedSms(sender: '', body: sms.body, receivedAt: sms.observedAt),
+    );
+    expect(db.db.select('SELECT * FROM v2_events'), isEmpty);
+    expect(financial.entities('user:test', 'transactions'), isEmpty);
+    final key = smsSourceKey('user:test', '', sms.body);
+    final decision = SmsIntakeRepository(db).decision('user:test', key);
+    expect(decision?.decision, 'financial_review');
+    expect(decision?.reasonCode, 'sender_unavailable');
+    expect(SmsIntakeRepository(db).pending('user:test'), isEmpty);
+  });
+
   test('background capture defers processing and preserves the raw sender', () {
     final sms = message();
-    SmsImportStore(financial, deferToSmsV2: true).capture(
+    SmsImportStore(financial).capture(
       'user:test',
       QueuedSms(
         sender: 'HDFCBK-S(smsft_fi)',

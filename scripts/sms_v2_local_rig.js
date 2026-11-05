@@ -266,7 +266,7 @@ async function main() {
     const defines = path.join(dir, 'flutter-defines.json');
     fs.writeFileSync(defines, JSON.stringify({
       PANDAPAY_ENV: 'dev', PANDAPAY_API_BASE_URL: apiBase, PANDAPAY_AUTH_BASE_URL: authBase,
-      PANDAPAY_LEGAL_BASE_URL: apiBase + '/legal/', SMS_PIPELINE_V2: 'true',
+      PANDAPAY_LEGAL_BASE_URL: apiBase + '/legal/',
       SMS_V2_LOCAL_RULE_PUBLIC_KEY: publicKey,
       SMS_V2_LOCAL_CA_PEM: ca.toString('base64'),
     }, null, 2));

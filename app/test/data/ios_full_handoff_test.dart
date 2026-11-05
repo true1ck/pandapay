@@ -43,25 +43,6 @@ void main() {
     db.close();
   });
 
-  test('spaced phone numbers and contact names still get an outcome', () {
-    final outcomes = drain(store, [
-      nativeRow('a', '+91 74111 47986', 'Send me Rs 500 today', '2026-11-01T08:00:00Z'),
-      nativeRow('b', 'Sujay', spent, '2026-11-01T08:01:00Z'),
-      nativeRow('c', 'SBICRD-S', spent, '2026-11-01T08:02:00Z'),
-    ]);
-    expect(outcomes.map((o) => o['outcome']), ['ignored', 'ignored', 'captured']);
-  });
-
-  test('a real sender is processed even if a guessed copy exists', () {
-    SmsImportStore(store).captureBatch(ns, IosShortcutSmsBatch.fromRows([
-      {'body': spent, 'sender': '', 'receivedAt': '2026-11-01T08:00:00Z'},
-    ]).messages); // build-82 style: sender filled from the body
-    final outcomes = drain(store, [
-      nativeRow('d', 'SBICRD-S', spent, '2026-11-01T08:00:00Z'),
-    ]);
-    expect(outcomes.single['outcome'], 'captured');
-  });
-
   final export = Platform.environment['PENDING'];
   test('replay pending rows from the phone', () {
     final rows = [

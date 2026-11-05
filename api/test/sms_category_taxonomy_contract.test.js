@@ -51,9 +51,7 @@ test('taxonomy v1 fixture matches the API and mobile fact contracts exactly', ()
   assert.deepEqual(new Set(canonical).size, canonical.length);
   assert.ok(canonical.every((slug) => /^[a-z][a-z0-9_]*$/.test(slug)));
 });
-test('downloaded/shared SMS rules use the same vocabulary and reject proposal-only slugs', () => {
-  const bundleSource = read('app/lib/data/local/sms_rule_bundle.dart');
-  assert.match(bundleSource, /allowedCategories[\s\S]*smsSpendCategories/);
+test('shared SMS rules use the same vocabulary and reject proposal-only slugs', () => {
   assert.deepEqual(
     dartList('app/lib/data/sms_fact_contract.dart', 'const List<String> smsSpendCategories'),
     canonical,

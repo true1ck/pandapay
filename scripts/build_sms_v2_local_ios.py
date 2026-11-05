@@ -27,7 +27,7 @@ if args.simulator and not re.fullmatch(r"[0-9a-fA-F-]{36}", args.simulator):
     parser.error("Pass an explicit simulator UUID")
 defines = rig / "flutter-defines.json"
 data = json.loads(defines.read_text())
-if (data.get("PANDAPAY_ENV") != "dev" or data.get("SMS_PIPELINE_V2") != "true"
+if (data.get("PANDAPAY_ENV") != "dev"
         or not data.get("SMS_V2_LOCAL_CA_PEM") or not data.get("SMS_V2_LOCAL_RULE_PUBLIC_KEY")):
     parser.error("Expected the local SMS v2 Debug defines and scratch CA")
 if args.simulator:

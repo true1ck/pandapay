@@ -6,7 +6,6 @@ import '../../app/providers.dart';
 import '../../data/consents_api.dart' show smsSharedLearningPolicyVersion;
 import '../../data/sms_fact_contract.dart' show smsSpendCategories;
 import '../../data/local/response_cache.dart' show ResponseCache;
-import '../../data/local/auto_resolved_history_repository.dart';
 import '../../data/local/sms_feedback_outbox.dart';
 import '../../data/local/sms_intake_repository.dart';
 import '../../data/local/sms_learning_feedback.dart';
@@ -216,16 +215,7 @@ Future<void> queueSmsTransactionCorrection({
         .hasRepeatedOccurrence(ref.read(cacheNamespaceProvider), sourceKey)) {
       return;
     }
-    if (original.id.startsWith('local-ai:')) {
-      final history = AutoResolvedHistoryRepository(
-        cache.financialStore.database,
-        namespace: ref.read(cacheNamespaceProvider),
-      ).findById('ai:$sourceKey');
-      if (history?.factIndex == null) return;
-      factIndex = history!.factIndex!;
-    } else if (feedbackOutbox.hasMultiplePersistedFacts(sourceKey)) {
-      return;
-    }
+    if (feedbackOutbox.hasMultiplePersistedFacts(sourceKey)) return;
   } catch (_) {
     // If the local source index is unavailable, retain the financial edit and
     // abstain from shared learning rather than assign it to fact zero.
@@ -247,7 +237,7 @@ Future<void> queueSmsTransactionCorrection({
     occurredAtIso: original.occurredAt.toUtc().toIso8601String(),
     originalDecision: {
       'kind': 'posted_movement',
-      'origin': original.id.startsWith('local-ai:') ? 'ai' : 'parser',
+      'origin': 'parser',
       'fields': {
         'amountInr': original.amount.rupees,
         'occurredAt': original.occurredAt.toUtc().toIso8601String(),

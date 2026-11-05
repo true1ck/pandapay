@@ -11,7 +11,6 @@ import '../../app/design/widgets.dart';
 import '../../app/device_permissions.dart';
 import '../../app/providers.dart';
 import '../../data/import_repository.dart';
-import '../sms_import/sms_backup_import_screen.dart';
 import '../sms_import/ios_sms_import_screen.dart';
 import 'auto_sms_sync_screen.dart';
 import 'statement_pdf_import_screen.dart';
@@ -80,15 +79,6 @@ class _ImportHubScreenState extends ConsumerState<ImportHubScreen>
   Widget build(BuildContext context) {
     final statementImports = ref.watch(statementImportsProvider);
     final smsBatches = ref.watch(smsImportBatchesProvider);
-    // Fails open: an unreachable app-status endpoint must not withdraw a
-    // working feature, only a deliberate flag flip should.
-    final smsBackupEnabled = ref
-        .watch(appStatusProvider)
-        .maybeWhen(
-          data: (s) => s?.smsBackupImportEnabled ?? true,
-          orElse: () => true,
-        );
-
     final body = AppBackground(
       child: ListView(
         padding: const EdgeInsets.all(AppSpace.lg),
@@ -181,33 +171,6 @@ class _ImportHubScreenState extends ConsumerState<ImportHubScreen>
             ),
           ),
           const SizedBox(height: AppSpace.md),
-          if (smsBackupEnabled)
-            _ChannelCard(
-              icon: Icons.upload_file_outlined,
-              title: 'Import SMS backup file',
-              status: smsBatches.when(
-                data: (batches) => batches.isEmpty
-                    ? const _Status(
-                        'One-off action — tap to import a backup export',
-                        BambooInk.ink500,
-                      )
-                    : _Status(
-                        'Imported ${batches.length} time${batches.length == 1 ? '' : 's'}',
-                        BambooInk.jade,
-                      ),
-                loading: () => const _Status('Checking…', BambooInk.ink500),
-                error: (_, _) => const _Status(
-                  'One-off action — tap to import a backup export',
-                  BambooInk.ink500,
-                ),
-              ),
-              onTap: () => Navigator.of(context).push(
-                MaterialPageRoute(
-                  builder: (_) => const SmsBackupImportScreen(),
-                ),
-              ),
-            ),
-          if (smsBackupEnabled) const SizedBox(height: AppSpace.md),
           const SizedBox(height: AppSpace.xxl),
           const PendingStatementImportsCard(),
           _ImportHistorySection(

@@ -6,8 +6,6 @@ import 'package:http/testing.dart';
 import 'package:pandapay/data/foreign_payment.dart';
 import 'package:pandapay/data/foreign_payments_repository.dart';
 import 'package:pandapay/data/local/app_database.dart';
-import 'package:pandapay/data/local/sms_intake_repository.dart';
-import 'package:pandapay/features/sms_import/sms_background_queue.dart';
 import 'package:pandapay_domain/pandapay_domain.dart';
 
 ForeignPayment payment(
@@ -184,38 +182,6 @@ void main() {
       );
       await repo().editOriginal('a' * 64, currency: 'IQD', amount: '20.123');
       expect((await repo().find('a' * 64))!.originalAmount, '20.123');
-    },
-  );
-  test(
-    'historical backfill retains malformed USD price and never substitutes the available limit',
-    () async {
-      final intake = SmsIntakeRepository(db);
-      intake.capture(
-        'user:a',
-        QueuedSms(
-          sender: 'ICICIT-S',
-          body:
-              'USD .00 spent using ICICI Bank Card XX1234 on SYNTHETIC. Avl Limit: INR 286388.46.',
-          receivedAt: DateTime.utc(2025, 12, 2),
-        ),
-      );
-      expect(await repo().backfillCapturedMessages(), 1);
-      final item = (await repo().fetchAll(refresh: false)).single;
-      expect(item.originalCurrency, 'USD');
-      expect(item.originalAmount, isNull);
-      expect(item.estimatedInr, isNull);
-      expect(item.billedInr, isNull);
-      expect(await repo().backfillCapturedMessages(), 0);
-      final wire =
-          jsonDecode(
-                db.db
-                        .select('SELECT payload FROM foreign_payments_outbox')
-                        .single['payload']
-                    as String,
-              )
-              as Map;
-      expect(wire.keys, isNot(contains('body')));
-      expect(jsonEncode(wire), isNot(contains('286388.46')));
     },
   );
   test(

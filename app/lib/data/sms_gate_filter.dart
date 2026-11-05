@@ -1,4 +1,4 @@
-import 'local_sms_parser.dart';
+import 'sms_capture_signals.dart';
 import 'sms_security_policy.dart';
 
 enum SmsGateAction { pass, drop }
@@ -111,10 +111,10 @@ class SmsGateFilter {
 
     // Check promotional route suffix (-P)
     final actionableInsuranceRenewal =
-        LocalSmsParser.isActionableInsuranceRenewal(body);
+        SmsCaptureSignals.isActionableInsuranceRenewal(body);
     final isPromoRoute = RegExp(r'-[Pp]$').hasMatch(trimmedSender);
     if (isPromoRoute &&
-        !LocalSmsParser.isCompletedTransactionOrBill(body) &&
+        !SmsCaptureSignals.isCompletedTransactionOrBill(body) &&
         !actionableInsuranceRenewal) {
       return const SmsGateVerdict.drop(SmsGateDropReason.promotionalNoise);
     }
@@ -143,7 +143,7 @@ class SmsGateFilter {
     }
 
     // If it is known non-transaction noise (e.g. general service notices, app ads)
-    if (LocalSmsParser.isNonTransactionNoise(sender, body) &&
+    if (SmsCaptureSignals.isNonTransactionNoise(sender, body) &&
         !_balanceSnapshotRe.hasMatch(body)) {
       return const SmsGateVerdict.drop(SmsGateDropReason.promotionalNoise);
     }

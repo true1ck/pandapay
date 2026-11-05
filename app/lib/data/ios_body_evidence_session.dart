@@ -1,7 +1,6 @@
 import 'dart:convert';
 import 'package:crypto/crypto.dart';
 import '../features/sms_import/ios_shortcut_sms.dart';
-import 'local_sms_parser.dart';
 import 'user_cards_repository.dart';
 
 /// Extraction previews, not financial postings. An absent sender stays absent;
@@ -17,7 +16,7 @@ class IosBodyEvidenceSession {
   List<Map<String, Object?>> get records =>
       List.unmodifiable(_records.values.toList().reversed);
   Map<String, Object?> get snapshot => {
-    'mode': 'shared_parser_without_fabricated_sender',
+    'mode': 'inputs_without_fabricated_sender',
     'posting_state': 'preview_only',
     'unique_message_inputs': _records.length,
     'transaction_candidates': _records.values
@@ -72,28 +71,10 @@ class IosBodyEvidenceSession {
           .whereType<String>()
           .toSet();
       final supplied = senders.length == 1 ? senders.single : '';
-      LocalSmsObservation? observation;
-      String? parserErrorType;
-      try {
-        observation = LocalSmsParser.parse(
-          namespace: 'user:isolated-body-evidence',
-          sender: supplied,
-          body: message.body,
-          receivedAt: message.receivedAt,
-          cards: cards,
-        );
-      } catch (error) {
-        // Keep this input inspectable without interrupting other messages or
-        // exposing the body through an exception/log message.
-        parserErrorType = error.runtimeType.toString();
-      }
-      final transaction = observation?.transaction;
-      final request = transaction == null
-          ? RegExp(
-              r'^(.{1,160}?)\s+has\s+requested\s+(?:money|payment)\s+from\s+you\b',
-              caseSensitive: false,
-            ).firstMatch(message.body.trim())
-          : null;
+      final request = RegExp(
+        r'^(.{1,160}?)\s+has\s+requested\s+(?:money|payment)\s+from\s+you\b',
+        caseSensitive: false,
+      ).firstMatch(message.body.trim());
       final issuer = RegExp(
         r'\bon\s+(?:your\s+)?([A-Za-z][A-Za-z &]{1,40}?)\s+(?:credit|debit)\s+card\b',
         caseSensitive: false,
@@ -119,37 +100,22 @@ class IosBodyEvidenceSession {
             : 'supplied',
         'issuer_named_in_body': issuer,
         'payment_app_named_in_body': app,
-        'kind': parserErrorType != null
-            ? 'parser_error'
-            : transaction != null
-            ? 'transaction_candidate'
-            : request != null
+        'kind': request != null
             ? 'payment_request'
             : 'non_transaction_observation',
         'posting_state': 'not_posted',
         'facts_basis': supplied.isEmpty
             ? 'message_body_and_receive_date'
             : 'message_body_and_supplied_sender',
-        'transaction_facts': transaction == null
-            ? null
-            : ({...transaction.toJson()}
-                ..remove('id')
-                ..remove('source_key')
-                ..remove('status')),
+        'transaction_facts': null,
         if (request != null)
           'request_facts': {
             'requester': request.group(1)?.trim(),
-            'requested_amount_inr':
-                observation?.amountDue?.rupees ??
-                (amount?.isFinite == true ? amount : null),
+            'requested_amount_inr': amount?.isFinite == true ? amount : null,
             'payment_app': app,
             'completion_confirmed': false,
             'spending_added': 0,
           },
-        'parser_event_type': observation?.eventType.wireValue,
-        'parser_reason_codes': observation?.reasonCodes ?? const [],
-        'parser_confidence': observation?.confidence,
-        'parser_error_type': ?parserErrorType,
         'receiver_inputs': sources,
       };
     }

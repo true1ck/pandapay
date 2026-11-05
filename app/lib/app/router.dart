@@ -1,5 +1,4 @@
 import '../features/sms_v2/ui/migration_report_screen.dart';
-import '../features/sms_v2/flag.dart';
 import '../features/sms_v2/ui/found_instruments_screen.dart';
 import '../features/sms_v2/ui/review_inbox_screen.dart';
 import '../features/sms_v2/ui/ledger_screens.dart';
@@ -27,7 +26,6 @@ import '../features/activity/activity_screen.dart';
 import '../features/activity/duplicate_review_screen.dart';
 import '../features/activity/edit_transaction_screen.dart';
 import '../features/activity/foreign_payments_screen.dart';
-import '../features/activity/needs_review_screen.dart';
 import '../features/activity/transaction_detail_screen.dart';
 import '../features/auth/login_screen.dart';
 import '../features/auth/invite_link_screen.dart';
@@ -566,41 +564,39 @@ final goRouterProvider = Provider<GoRouter>((ref) {
       return AppRoute.preOnboarding.contains(path) ? AppRoute.home : null;
     },
     routes: [
-      if (ref.watch(smsPipelineV2EnabledProvider)) ...[
-        GoRoute(
-          path: '/sms-v2/migration',
-          builder: (_, _) => const MigrationReportScreen(),
-        ),
-        GoRoute(
-          path: '/sms-v2/instruments',
-          builder: (_, _) => const FoundInstrumentsScreen(),
-        ),
-        GoRoute(
-          path: '/sms-v2/instruments/:id',
-          builder: (_, state) =>
-              InstrumentDetailScreen(instrumentId: state.pathParameters['id']!),
-        ),
-        GoRoute(
-          path: '/sms-v2/investments',
-          builder: (_, _) =>
-              const SmsLedgerScreenView(screen: SmsLedgerScreen.investments),
-        ),
-        GoRoute(
-          path: '/sms-v2/ipos',
-          builder: (_, _) =>
-              const SmsLedgerScreenView(screen: SmsLedgerScreen.ipos),
-        ),
-        GoRoute(
-          path: '/sms-v2/money-in',
-          builder: (_, _) =>
-              const SmsLedgerScreenView(screen: SmsLedgerScreen.moneyIn),
-        ),
-        GoRoute(
-          path: '/sms-v2/subscriptions',
-          builder: (_, _) =>
-              const SmsLedgerScreenView(screen: SmsLedgerScreen.subscriptions),
-        ),
-      ],
+      GoRoute(
+        path: '/sms-v2/migration',
+        builder: (_, _) => const MigrationReportScreen(),
+      ),
+      GoRoute(
+        path: '/sms-v2/instruments',
+        builder: (_, _) => const FoundInstrumentsScreen(),
+      ),
+      GoRoute(
+        path: '/sms-v2/instruments/:id',
+        builder: (_, state) =>
+            InstrumentDetailScreen(instrumentId: state.pathParameters['id']!),
+      ),
+      GoRoute(
+        path: '/sms-v2/investments',
+        builder: (_, _) =>
+            const SmsLedgerScreenView(screen: SmsLedgerScreen.investments),
+      ),
+      GoRoute(
+        path: '/sms-v2/ipos',
+        builder: (_, _) =>
+            const SmsLedgerScreenView(screen: SmsLedgerScreen.ipos),
+      ),
+      GoRoute(
+        path: '/sms-v2/money-in',
+        builder: (_, _) =>
+            const SmsLedgerScreenView(screen: SmsLedgerScreen.moneyIn),
+      ),
+      GoRoute(
+        path: '/sms-v2/subscriptions',
+        builder: (_, _) =>
+            const SmsLedgerScreenView(screen: SmsLedgerScreen.subscriptions),
+      ),
       GoRoute(
         path: AppRoute.splash,
         pageBuilder: (context, state) =>
@@ -730,9 +726,7 @@ final goRouterProvider = Provider<GoRouter>((ref) {
       // cardDetail's '/cards/:id' vs. its own static siblings above.
       GoRoute(
         path: AppRoute.needsReview,
-        builder: (context, state) => ref.read(smsPipelineV2EnabledProvider)
-            ? const ReviewInboxScreen()
-            : const NeedsReviewScreen(),
+        builder: (context, state) => const ReviewInboxScreen(),
       ),
       GoRoute(
         path: AppRoute.duplicateReview,

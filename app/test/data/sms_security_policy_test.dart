@@ -2,7 +2,6 @@ import 'dart:convert';
 import 'dart:io';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:pandapay/data/sms_security_policy.dart';
-import 'package:pandapay/data/local_sms_parser.dart';
 import 'package:pandapay/data/sms_gate_filter.dart';
 import 'package:pandapay/features/sms_import/sms_text_hint.dart';
 import 'package:pandapay/features/sms_import/ios_shortcut_sms.dart';
@@ -23,7 +22,6 @@ void main() {
       final body = row['body'] as String;
       final sensitive = row['sensitive'] as bool;
       expect(SmsSecurityPolicy.sensitive(body), sensitive);
-      expect(LocalSmsParser.sensitive(body), sensitive);
       expect(
         SmsGateFilter.evaluate('VM-FABLEBK', body).dropReason ==
             SmsGateDropReason.otpOrSecurity,
@@ -51,55 +49,6 @@ void main() {
       if (!sensitive) expect(batch.messages.single.body, body);
     });
   }
-  test(
-    'safe credit is retained and parsed with original receive time separate from body date',
-    () {
-      final live = IosLiveProbeSession(openInMemoryForTesting());
-      addTearDown(live.dispose);
-      final body = corpus.first['body'] as String;
-      final row = <Object?, Object?>{
-        'id': 'credit',
-        'origin': 'live',
-        'sender': 'VM-FABLEBK',
-        'body': body,
-        'receivedAt': '2026-10-29T08:11:23Z',
-        'capturedAt': '2026-10-29T08:12:00Z',
-      };
-      expect(live.process([row]).single['outcome'], 'retained_new');
-      expect(live.intake.transactionsForRun('live'), hasLength(1));
-      final source = live.intake.retainedInputsForRun('live').single;
-      expect(source.date, DateTime.utc(2026, 10, 29, 8, 11, 23));
-      expect(source.body, body);
-      expect(source.capturedAt, DateTime.utc(2026, 10, 29, 8, 12));
-    },
-  );
-  test('safe debit and balance reach unchanged shared parsing', () {
-    final live = IosLiveProbeSession(openInMemoryForTesting());
-    addTearDown(live.dispose);
-    final cases = corpus
-        .where((r) => r['id'] == 'safe-debit' || r['id'] == 'safe-balance')
-        .toList();
-    final outcomes = live.process([
-      for (final item in cases)
-        {
-          'id': item['id'],
-          'origin': 'live',
-          'body': item['body'],
-          'sender': 'VM-ICICIB',
-          'receivedAt': '2026-10-29T08:11:23Z',
-        },
-    ]);
-    expect(outcomes.map((r) => r['outcome']), everyElement('retained_new'));
-    expect(live.intake.transactions, 1);
-    expect(
-      live.intake.observations.map((r) => r['event_type']),
-      contains('balance'),
-    );
-    expect(
-      live.intake.retainedInputs.map((r) => r.body),
-      containsAll(cases.map((r) => r['body'])),
-    );
-  });
   test(
     'safe advisory without original receive date is still rejected; real secrets remain excluded',
     () {

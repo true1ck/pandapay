@@ -12,12 +12,6 @@ import '../app/startup_timing.dart';
 /// Android Keystore, not SharedPreferences' plaintext plist/XML, which is
 /// readable on a jailbroken/rooted device and can end up in an unencrypted
 /// backup. `flutter_secure_storage` wraps exactly that OS-level storage.
-///
-/// [load] transparently migrates anyone already signed in under the old
-/// SharedPreferences-backed version of this class (pre-dates this fix) —
-/// read the old plaintext values once, move them into secure storage, then
-/// delete the plaintext copies, so nobody already logged in gets silently
-/// signed out by this change.
 class TokenStore {
   static const _accessKey = 'pandapay_app.access_token';
   static const _refreshKey = 'pandapay_app.refresh_token';
@@ -45,47 +39,19 @@ class TokenStore {
     // runs each method on its secure-storage worker and two sequential
     // `read` calls pay the platform/keystore boundary twice before the
     // router can leave the splash.  `readAll`
-    // returns only this plugin's prefixed keys, keeps the same encrypted
-    // storage and error behavior, and still lets the legacy migration below
-    // repair either credential independently.
+    // returns only this plugin's prefixed keys and keeps the same encrypted
+    // storage and error behavior.
     final secureValues = await secureStorage.readAll();
-    var accessToken = secureValues[_accessKey];
+    final accessToken = secureValues[_accessKey];
     markStartup('access token read complete');
-    var refreshToken = secureValues[_refreshKey];
+    final refreshToken = secureValues[_refreshKey];
     markStartup('refresh token read complete');
 
-    // Migrate each credential independently. An interrupted first migration
-    // can leave the access token in secure storage while the refresh token is
-    // still in SharedPreferences (or vice versa). The old all-or-nothing gate
-    // skipped migration in that state, leaving the app with an access token
-    // that eventually expired and no way to refresh it. Remove the plaintext
-    // copy only after the corresponding secure write has succeeded.
     final prefs = await SharedPreferences.getInstance();
     markStartup('token preferences ready');
-    final legacyAccess = prefs.getString(_accessKey);
-    final legacyRefresh = prefs.getString(_refreshKey);
 
-    if (accessToken == null && legacyAccess != null) {
-      await secureStorage.write(key: _accessKey, value: legacyAccess);
-      accessToken = legacyAccess;
-    }
-    if (refreshToken == null && legacyRefresh != null) {
-      await secureStorage.write(key: _refreshKey, value: legacyRefresh);
-      refreshToken = legacyRefresh;
-    }
-
-    // Even when secure storage already had the value, delete any duplicate
-    // legacy copy so a stale plaintext credential cannot survive the upgrade.
-    if (accessToken != null && legacyAccess != null) {
-      await prefs.remove(_accessKey);
-    }
-    if (refreshToken != null && legacyRefresh != null) {
-      await prefs.remove(_refreshKey);
-    }
-
-    // Keep the hint in sync for installs upgraded from the old plaintext
-    // implementation too. A false value is equally important: an interrupted
-    // sign-out must never leave a future cold start looking authenticated.
+    // A false value is as important as a true one: an interrupted sign-out
+    // must never leave a future cold start looking authenticated.
     await prefs.setBool(
       sessionPresenceKey,
       accessToken != null || refreshToken != null,

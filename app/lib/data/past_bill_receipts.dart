@@ -4,7 +4,6 @@ import 'dart:convert';
 import 'package:pandapay_domain/pandapay_domain.dart';
 
 import 'local/app_database.dart';
-import 'local_sms_parser.dart';
 
 enum PastBillReceiptStatus {
   paidLinked,
@@ -143,41 +142,6 @@ class PastBillReceiptRepository {
       [namespace, id],
     );
     _changes.add(namespace);
-  }
-
-  /// Archives a completed merchant e-bill/receipt without creating spending.
-  /// The existing transaction remains the accounting source of truth.
-  void archiveReceipt({
-    required String id,
-    required String sender,
-    required String body,
-    required DateTime receivedAt,
-    String? linkedTransactionId,
-    required PastBillReceiptStatus status,
-  }) {
-    final parsed = LocalSmsParser.reviewDraft(
-      namespace: namespace,
-      body: body,
-      sender: sender,
-      receivedAt: receivedAt,
-    );
-    final merchant = parsed.merchantName?.trim().isNotEmpty == true
-        ? parsed.merchantName!.trim()
-        : sender.trim();
-    upsert(
-      PastBillReceipt(
-        id: id,
-        sourceKey: id,
-        merchant: merchant.isEmpty ? 'Paid receipt' : merchant,
-        amount: parsed.amount ?? LocalSmsParser.extractReceiptAmount(body),
-        occurredAt: parsed.occurredAt,
-        receivedAt: receivedAt,
-        status: status,
-        linkedTransactionId: linkedTransactionId,
-        sender: sender,
-        body: body,
-      ),
-    );
   }
 
   void archiveBill({

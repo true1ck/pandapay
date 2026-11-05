@@ -5,7 +5,6 @@ import 'package:pandapay/app/providers.dart';
 import 'package:pandapay/data/user_cards_repository.dart';
 import 'package:pandapay/features/activity/activity_screen.dart';
 import 'package:pandapay/features/home/home_screen.dart';
-import 'package:pandapay/features/sms_v2/flag.dart';
 import 'package:pandapay/features/sms_v2/ledger/providers.dart';
 import 'package:pandapay/features/sms_v2/ledger/reports.dart';
 import 'package:pandapay/main.dart' show MoneyText;
@@ -30,53 +29,43 @@ List<TransactionEntry> rows() => [
     ),
 ];
 void main() {
-  for (final enabled in [false, true]) {
-    testWidgets(
-      'Activity uses ${enabled ? 'ledger' : 'legacy'} summary and keeps transfer rows visible',
-      (tester) async {
-        final transactions = rows()
-            .map(
-              (row) => !enabled && row.entryKind == TxnEntryKind.refund
-                  ? row.copyWith(entryKind: TxnEntryKind.transfer)
-                  : row,
-            )
-            .toList();
-        final model = LedgerReadModel(
-          ledger: LedgerSnapshot(entries: [], events: []),
-          transactions: transactions,
-        );
-        await tester.pumpWidget(
-          ProviderScope(
-            overrides: [
-              smsPipelineV2EnabledProvider.overrideWithValue(enabled),
-              smsV2LedgerReadModelProvider.overrideWith((ref) async => model),
-              activityTransactionsProvider.overrideWith(
-                (ref) async => transactions,
-              ),
-              foreignPaymentsProvider.overrideWith((ref) async => const []),
-              accessTokenProvider.overrideWith((ref) => 'test-token'),
-              sessionInitProvider.overrideWith((ref) async {}),
-              userCardsRepositoryProvider.overrideWithValue(null),
-              userCardsProvider.overrideWith((ref) async => const []),
-              categoriesProvider.overrideWith((ref) async => const []),
-            ],
-            child: const MaterialApp(home: Scaffold(body: ActivityScreen())),
-          ),
-        );
-        await tester.pumpAndSettle();
-        final out = tester
-            .widgetList<MoneyText>(find.byType(MoneyText))
-            .where((w) => w.prefix == '−')
-            .first;
-        expect(out.amount.paise, enabled ? 6000 : 60000);
-        expect(find.text(enabled ? '3 txns' : '4 txns'), findsOneWidget);
-        expect(find.text('transfer'), findsOneWidget);
-        expect(tester.takeException(), isNull);
-      },
+  testWidgets('Activity uses ledger summary and keeps transfer rows visible', (
+    tester,
+  ) async {
+    final transactions = rows();
+    final model = LedgerReadModel(
+      ledger: LedgerSnapshot(entries: [], events: []),
+      transactions: transactions,
     );
-  }
+    await tester.pumpWidget(
+      ProviderScope(
+        overrides: [
+          smsV2LedgerReadModelProvider.overrideWith((ref) async => model),
+          activityTransactionsProvider.overrideWith(
+            (ref) async => transactions,
+          ),
+          foreignPaymentsProvider.overrideWith((ref) async => const []),
+          accessTokenProvider.overrideWith((ref) => 'test-token'),
+          sessionInitProvider.overrideWith((ref) async {}),
+          userCardsRepositoryProvider.overrideWithValue(null),
+          userCardsProvider.overrideWith((ref) async => const []),
+          categoriesProvider.overrideWith((ref) async => const []),
+        ],
+        child: const MaterialApp(home: Scaffold(body: ActivityScreen())),
+      ),
+    );
+    await tester.pumpAndSettle();
+    final out = tester
+        .widgetList<MoneyText>(find.byType(MoneyText))
+        .where((w) => w.prefix == '−')
+        .first;
+    expect(out.amount.paise, 6000);
+    expect(find.text('3 txns'), findsOneWidget);
+    expect(find.text('transfer'), findsOneWidget);
+    expect(tester.takeException(), isNull);
+  });
   testWidgets(
-    'a flag-on upgrade keeps legacy history until its account has v2 data',
+    'an account without v2 data yet keeps its history until its account has v2 data',
     (tester) async {
       final transactions = rows()
           .where((r) => r.entryKind != TxnEntryKind.refund)
@@ -89,7 +78,6 @@ void main() {
       await tester.pumpWidget(
         ProviderScope(
           overrides: [
-            smsPipelineV2EnabledProvider.overrideWithValue(true),
             smsV2LedgerReadModelProvider.overrideWith((ref) async => model),
             activityTransactionsProvider.overrideWith(
               (ref) async => transactions,
@@ -118,7 +106,7 @@ void main() {
     },
   );
 
-  testWidgets('Home consumes the real flag-on ledger report', (tester) async {
+  testWidgets('Home consumes the real ledger report', (tester) async {
     await tester.binding.setSurfaceSize(const Size(390, 900));
     addTearDown(() => tester.binding.setSurfaceSize(null));
     final model = LedgerReadModel(
@@ -128,7 +116,6 @@ void main() {
     await tester.pumpWidget(
       ProviderScope(
         overrides: [
-          smsPipelineV2EnabledProvider.overrideWithValue(true),
           smsV2LedgerReadModelProvider.overrideWith((ref) async => model),
           rankedRecommendationsProvider.overrideWithValue(
             const AsyncValue.data([]),

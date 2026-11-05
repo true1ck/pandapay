@@ -1,8 +1,5 @@
-import '../sms_v2/flag.dart';
 import 'dart:ui';
 
-import 'package:path/path.dart' as path;
-import 'package:path_provider/path_provider.dart';
 
 import 'package:flutter/widgets.dart';
 import 'package:permission_handler/permission_handler.dart';
@@ -14,10 +11,8 @@ import 'sms_text_hint.dart';
 import '../../data/local/app_database.dart';
 import '../../data/local/sms_intake_repository.dart';
 import '../../data/local/financial_store.dart';
-import '../../data/local_sms_parser.dart';
 import '../../data/local/sms_import_store.dart';
-import '../../data/local/sms_rule_bundle_store.dart';
-import '../../data/local/recovery_deferred_sms.dart';
+import '../../data/sms_security_policy.dart';
 
 /// The background-isolate entry point for an SMS that arrives while the app
 /// is closed or backgrounded.
@@ -50,7 +45,7 @@ Future<void> smsBackgroundHandler(SmsMessage message) async {
   // messages (autopay mandate life-cycle, declined attempts) are captured
   // too, so their typed facts reach the server.
   if (!capturesFinancialSms(body, sender: sender) ||
-      LocalSmsParser.sensitive(body)) {
+      SmsSecurityPolicy.sensitive(body)) {
     return;
   }
 
@@ -71,14 +66,7 @@ Future<void> smsBackgroundHandler(SmsMessage message) async {
       try {
         final store = FinancialStore(database);
         try {
-          final ruleStore = SmsRuleBundleStore(database);
-          final bundle = ruleStore.loadActiveBundleSync();
-          SmsImportStore(
-            store,
-            deferToSmsV2: kSmsPipelineV2,
-            downloadedRules: bundle,
-            candidateRules: ruleStore.loadCandidateBundlesSync(namespace: namespace),
-          ).capture(namespace, queued);
+          SmsImportStore(store).capture(namespace, queued);
         } finally {
           store.dispose();
         }
@@ -86,16 +74,8 @@ Future<void> smsBackgroundHandler(SmsMessage message) async {
         database.close();
       }
     } catch (_) {
-      // Recovery may own the main SQLite writer lock in another isolate.
-      // Preserve this event in an account-labelled, separate durable spool;
-      // foreground reconciliation drains it only after the main DB is free.
-      final root = await getApplicationDocumentsDirectory();
-      final deferred = RecoveryDeferredSms.open(path.join(root.path, 'pandapay.sqlite'));
-      try {
-        deferred.enqueue(namespace, queued);
-      } finally {
-        deferred.close();
-      }
+      // The main database can be busy in another isolate. The Android inbox
+      // scan reads this message again, so nothing is lost.
     }
   } catch (_) {
     // Nothing in a background isolate can surface an error to the user, and
@@ -222,7 +202,7 @@ class SmsListenerService {
           body == null ||
           date == null ||
           !capturesFinancialSms(body, sender: sender) ||
-          LocalSmsParser.sensitive(body)) {
+          SmsSecurityPolicy.sensitive(body)) {
         continue;
       }
       messages.add(
@@ -374,7 +354,7 @@ class SmsListenerService {
       await legacy.reload();
       // This is upgrade-only input. All new callbacks append to SQLite.
       for (final message in SmsBackgroundQueue.read(legacy)) {
-        if (!LocalSmsParser.sensitive(message.body)) {
+        if (!SmsSecurityPolicy.sensitive(message.body)) {
           intake.capture('legacy', message);
         }
       }

@@ -5,7 +5,6 @@ import 'package:pandapay_domain/sms_v2_ledger.dart';
 import '../ledger/adapters.dart';
 import '../ledger/providers.dart';
 import '../ledger/reports.dart';
-import '../flag.dart';
 import '../instruments/issuer_slugs.dart';
 import 'screen_parts.dart';
 
@@ -319,9 +318,6 @@ class LinkedInstrumentUsage extends ConsumerWidget {
   final String? userCardId, accountMask, issuerName;
   @override
   Widget build(BuildContext context, WidgetRef ref) {
-    if (!ref.watch(smsPipelineV2EnabledProvider)) {
-      return const SizedBox.shrink();
-    }
     final model = ref.watch(smsV2LedgerReadModelProvider);
     return model.when(
       loading: () => const LinearProgressIndicator(),

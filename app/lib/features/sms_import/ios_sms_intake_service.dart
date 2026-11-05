@@ -4,7 +4,7 @@ import 'dart:io';
 import 'package:flutter/foundation.dart';
 import 'package:flutter/services.dart';
 
-import '../../data/local_sms_parser.dart';
+import '../../data/sms_capture_signals.dart';
 
 /// Transport only. Platform-independent intake and financial policy live in
 /// the existing capture owner, not in this channel or native App Intents.
@@ -42,7 +42,7 @@ class IosSmsIntakeService {
           'namespace': namespace,
           'enabled': ?enabled,
           'reset': reset,
-          'parserVersion': LocalSmsParser.version,
+          'parserVersion': SmsCaptureSignals.version,
         }))!
         as Map,
   );

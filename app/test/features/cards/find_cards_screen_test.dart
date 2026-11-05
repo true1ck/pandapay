@@ -97,7 +97,7 @@ void main() {
     expect(find.text('Connect Gmail (1-Tap Auto Find)'), findsNothing);
     expect(find.text('Search & pick from catalogue'), findsOneWidget);
     expect(
-      find.text('PDF Statement · SMS Backup · Email Forwarding'),
+      find.text('PDF Statement · Email Forwarding'),
       findsOneWidget,
     );
   });
@@ -239,13 +239,13 @@ void main() {
     await pumpFindCardsScreen(tester, smsBodies: const []);
 
     await tester.tap(
-      find.text('PDF Statement · SMS Backup · Email Forwarding'),
+      find.text('PDF Statement · Email Forwarding'),
     );
     await tester.pumpAndSettle();
 
     expect(find.text('Other ways to import'), findsOneWidget);
     expect(find.text('Import bank statement PDF'), findsOneWidget);
-    expect(find.text('Import SMS backup file'), findsOneWidget);
+    expect(find.text('Import SMS backup file'), findsNothing);
     expect(find.text('Set up email forwarding'), findsOneWidget);
   });
 }

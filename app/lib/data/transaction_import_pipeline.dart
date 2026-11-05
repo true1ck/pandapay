@@ -74,7 +74,7 @@ class ImportDocument {
     final text = decodeStatementBytes(bytes).trimLeft();
     if (text.startsWith('<')) {
       throw const StatementParseException(
-        'This is an XML or HTML export. For SMS backups use Import SMS backup; for spending export CSV or XLSX.',
+        'This is an XML or HTML export. Export your spending as CSV or XLSX instead.',
       );
     }
     return ImportDocument._(

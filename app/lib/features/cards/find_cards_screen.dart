@@ -15,7 +15,6 @@ import '../../data/user_cards_repository.dart'
     show CardDiscoveryResult, DiscoveredCard;
 import '../import/email_forwarding_screen.dart';
 import '../import/statement_pdf_import_screen.dart';
-import '../sms_import/sms_backup_import_screen.dart';
 import '../sms_import/sms_listener_service.dart';
 import 'card_network_util.dart';
 import 'card_picker_screen.dart';
@@ -398,38 +397,6 @@ class _FindCardsScreenState extends ConsumerState<FindCardsScreen> {
                   Navigator.of(context).push(
                     MaterialPageRoute(
                       builder: (_) => const StatementPdfImportScreen(),
-                    ),
-                  );
-                },
-              ),
-              const Divider(height: AppSpace.lg),
-              ListTile(
-                contentPadding: EdgeInsets.zero,
-                leading: Container(
-                  width: 40,
-                  height: 40,
-                  decoration: BoxDecoration(
-                    color: BambooInk.paperMuted,
-                    borderRadius: BorderRadius.circular(12),
-                  ),
-                  child: const Icon(
-                    Icons.upload_file_outlined,
-                    color: BambooInk.slate,
-                  ),
-                ),
-                title: Text(
-                  'Import SMS backup file',
-                  style: BambooFonts.heading(15, color: BambooInk.ink900),
-                ),
-                subtitle: Text(
-                  'Import XML backup from SMS Backup & Restore',
-                  style: BambooFonts.ui(12.5, color: BambooInk.ink500),
-                ),
-                onTap: () {
-                  Navigator.of(sheetCtx).pop();
-                  Navigator.of(context).push(
-                    MaterialPageRoute(
-                      builder: (_) => const SmsBackupImportScreen(),
                     ),
                   );
                 },
@@ -1150,7 +1117,7 @@ class _DiscoveryActionButtons extends StatelessWidget {
             color: BambooInk.ink500,
           ),
           label: Text(
-            'PDF Statement · SMS Backup · Email Forwarding',
+            'PDF Statement · Email Forwarding',
             style: BambooFonts.ui(
               12.5,
               color: BambooInk.ink500,

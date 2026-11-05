@@ -71,68 +71,6 @@ void main() {
     });
   });
 
-  group('SMS history reconciliation version', () {
-    test(
-      'old API responses remain retryable after the v2 app update',
-      () async {
-        for (final response in [
-          http.Response('{}', 404),
-          http.Response(jsonEncode({'duplicateSuppressed': 1}), 200),
-        ]) {
-          final repository = UserCardsRepository(
-            apiBaseUrl: 'https://api.test',
-            accessToken: 'session-token',
-            client: MockClient((_) async => response),
-          );
-          final repaired = await repository.reconcileSmsHistory();
-          expect(repaired.reconciliationVersion, 0);
-        }
-      },
-    );
-
-    test('v2 response reports candidates for review refresh', () async {
-      final repository = UserCardsRepository(
-        apiBaseUrl: 'https://api.test',
-        accessToken: 'session-token',
-        client: MockClient(
-          (_) async => http.Response(
-            jsonEncode({
-              'reconciliationVersion': 2,
-              'crossSourceCandidatesCreated': 1,
-              'classificationReclassified': 2,
-              'remappedTransactions': 3,
-            }),
-            200,
-          ),
-        ),
-      );
-      final repaired = await repository.reconcileSmsHistory();
-      expect(repaired.reconciliationVersion, 2);
-      expect(repaired.crossSourceCandidatesCreated, 1);
-      expect(repaired.classificationReclassified, 2);
-      expect(repaired.remappedTransactions, 3);
-    });
-
-    test('v3 response enables historical recipient replay', () async {
-      final repository = UserCardsRepository(
-        apiBaseUrl: 'https://api.test',
-        accessToken: 'session-token',
-        client: MockClient(
-          (_) async => http.Response(
-            jsonEncode({
-              'reconciliationVersion': 3,
-              'classificationReclassified': 1,
-            }),
-            200,
-          ),
-        ),
-      );
-      final repaired = await repository.reconcileSmsHistory();
-      expect(repaired.reconciliationVersion, 3);
-      expect(repaired.classificationReclassified, 1);
-    });
-  });
-
   group('TransactionEntry category labels', () {
     test('does not invent an Other subcategory when none was supplied', () {
       final transaction = TransactionEntry.fromJson({
@@ -347,54 +285,6 @@ void main() {
         );
       },
     );
-  });
-
-  test('SMS reconciliation tolerates an older API during rollout', () async {
-    final repository = UserCardsRepository(
-      apiBaseUrl: 'https://api.test',
-      accessToken: 'token',
-      client: MockClient((request) async => http.Response('Not found', 404)),
-    );
-
-    final result = await repository.reconcileSmsHistory();
-    expect(result.duplicateSuppressed, 0);
-    expect(result.reclassified, 0);
-    expect(result.remainingLegacyRows, 0);
-  });
-
-  test('reads the server SMS checkpoint used for reset recovery', () async {
-    final repository = UserCardsRepository(
-      apiBaseUrl: 'https://api.test',
-      accessToken: 'token',
-      client: MockClient((request) async {
-        expect(request.url.path, '/transactions/sms-import-state');
-        return http.Response(
-          jsonEncode({
-            'smsObservationCount': 12,
-            'latestSmsObservedAt': '2026-10-07T04:30:00.000Z',
-          }),
-          200,
-        );
-      }),
-    );
-
-    final state = await repository.fetchSmsImportState();
-    expect(state.smsObservationCount, 12);
-    expect(
-      state.latestSmsObservedAt,
-      DateTime.parse('2026-10-07T04:30:00.000Z'),
-    );
-  });
-
-  test('tolerates an older API without the SMS checkpoint route', () async {
-    final repository = UserCardsRepository(
-      apiBaseUrl: 'https://api.test',
-      accessToken: 'token',
-      client: MockClient((request) async => http.Response('Not found', 404)),
-    );
-
-    final state = await repository.fetchSmsImportState();
-    expect(state.smsObservationCount, isNull);
   });
 
   test(

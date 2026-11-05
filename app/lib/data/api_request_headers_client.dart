@@ -1,7 +1,6 @@
 import 'package:http/http.dart' as http;
 import 'package:package_info_plus/package_info_plus.dart';
 
-import '../features/sms_v2/flag.dart';
 
 /// Build-time fallback for the app version, used only when the platform
 /// cannot report one (for example a background isolate without plugins).
@@ -32,9 +31,8 @@ Future<String?> loadApiAppVersion() async {
   return _cachedVersion = value;
 }
 
-/// Adds `X-App-Version` (always) and `X-Sms-Pipeline: v2` (only when the v2
-/// pipeline is enabled) to requests for the PandaPay API origin. Requests to
-/// any other origin, and every other part of a request, pass through unchanged.
+/// Adds `X-App-Version` and `X-Sms-Pipeline: v2` to requests for the PandaPay
+/// API origin. Requests to any other origin, and every other part of a request, pass through unchanged.
 ///
 /// The server uses `X-App-Version` for the legacy-SMS upgrade gate and
 /// `X-Sms-Pipeline: v2` to decide whether a client understands `refund` rows.
@@ -43,15 +41,12 @@ class ApiRequestHeadersClient extends http.BaseClient {
     required this.inner,
     required Uri apiBaseUrl,
     Future<String?> Function()? appVersion,
-    bool Function()? pipelineV2Enabled,
   }) : _origin = apiBaseUrl.origin,
-       _appVersion = appVersion ?? loadApiAppVersion,
-       _pipelineV2Enabled = pipelineV2Enabled ?? (() => kSmsPipelineV2);
+       _appVersion = appVersion ?? loadApiAppVersion;
 
   final http.Client inner;
   final String _origin;
   final Future<String?> Function() _appVersion;
-  final bool Function() _pipelineV2Enabled;
 
   @override
   Future<http.StreamedResponse> send(http.BaseRequest request) async {
@@ -60,9 +55,7 @@ class ApiRequestHeadersClient extends http.BaseClient {
       if (version != null && _safeVersion.hasMatch(version)) {
         request.headers['X-App-Version'] = version;
       }
-      if (_pipelineV2Enabled()) {
-        request.headers['X-Sms-Pipeline'] = 'v2';
-      }
+      request.headers['X-Sms-Pipeline'] = 'v2';
     }
     return inner.send(request);
   }

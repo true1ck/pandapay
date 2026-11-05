@@ -35,7 +35,7 @@ void main() {
         body: bundle.rules.first.examples.first.body,
         receivedAt: now,
       );
-      SmsImportStore(financial, deferToSmsV2: true).capture('user:test', sms);
+      SmsImportStore(financial).capture('user:test', sms);
       expect(SmsIntakeRepository(db).pending('user:test'), hasLength(1));
       final paths = <String>[];
       final runtime = SmsV2Runtime(

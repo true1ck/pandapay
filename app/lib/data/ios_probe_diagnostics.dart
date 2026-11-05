@@ -1,6 +1,7 @@
 import 'ios_device_probe_session.dart';
 import 'ios_sender_probe_session.dart';
-import 'local_sms_parser.dart';
+import 'sms_capture_signals.dart';
+import 'sms_security_policy.dart';
 
 /// Explicit, user-shared snapshot of the isolated probe. No auth state,
 /// production store, device identifier or automatic upload is consulted.
@@ -25,7 +26,7 @@ Map<String, Object?> buildIosProbeDiagnostics({
     final withheld =
         raw['state'] == 'sensitive' ||
         raw['state'] == 'invalid' ||
-        (body is String && LocalSmsParser.sensitive(body));
+        (body is String && SmsSecurityPolicy.sensitive(body));
     attempts.add({
       for (final key in [
         'id',
@@ -65,7 +66,7 @@ Map<String, Object?> buildIosProbeDiagnostics({
     'schema_version': 1,
     'session_started_at': startedAt.toUtc().toIso8601String(),
     'exported_at': exportedAt.toUtc().toIso8601String(),
-    'parser_version': LocalSmsParser.version,
+    'parser_version': SmsCaptureSignals.version,
     'selected_shortcut': shortcut,
     'selection': selection,
     'processing_in_progress': processing,
@@ -126,7 +127,7 @@ List<Map<String, Object?>> _pending(Object? input) => [
     if (row is Map)
       if (row['body'] is String &&
           (row['body'] as String).length <= 20000 &&
-          !LocalSmsParser.sensitive(row['body'] as String))
+          !SmsSecurityPolicy.sensitive(row['body'] as String))
         {
           for (final key in [
             'id',

@@ -17,7 +17,6 @@ import '../settings/feedback_support_screen.dart';
 import '../settings/legal_screen.dart';
 import 'account_recovery_screen.dart';
 import 'auth_feedback.dart';
-import '../recovery/account_data_recovery.dart';
 
 /// A4: DPDP §8.2 — purpose-specific, unbundled consent, never a single
 /// bundled "I agree to everything" checkbox. Bumped by hand whenever the
@@ -371,8 +370,6 @@ class _LoginScreenState extends ConsumerState<LoginScreen> {
             );
       }
 
-      if (!mounted) return;
-      await offerAccountDataRecovery(context, ref, tokens.accessToken);
       if (!mounted) return;
       final store = await ref.read(tokenStoreProvider.future);
       await store.save(

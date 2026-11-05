@@ -167,10 +167,6 @@ jobs:
           # state into another on a shared test VM.
           flutter test --concurrency=1
 
-      - name: App test with SMS v2 enabled
-        working-directory: app
-        run: flutter test --concurrency=1 --dart-define=SMS_PIPELINE_V2=true
-
       # A fresh runner has never built a debug APK and may have no fallback
       # keystore. This bundle is a manifest check, never a published release.
       - name: Prepare ephemeral CI signing key

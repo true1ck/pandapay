@@ -1,6 +1,5 @@
 import 'package:flutter_test/flutter_test.dart';
 import 'package:pandapay/data/user_cards_repository.dart';
-import 'package:pandapay/data/local_sms_parser.dart';
 import 'package:pandapay/features/activity/activity_projection.dart';
 import 'package:pandapay_domain/pandapay_domain.dart';
 
@@ -64,17 +63,13 @@ void main() {
   });
 
   test('received UPI credit flows into the Activity Money in total', () {
-    final parsed = LocalSmsParser.parse(
-      namespace: 'user:test',
-      sender: 'AX-HDFCBK-S',
-      body:
-          'Credit Alert! Rs.500.00 credited to HDFC Bank A/c XX5552 from VPA: alice@oksbi on 30-10-26',
-      receivedAt: DateTime(2026, 10, 30, 13, 37),
+    final transaction = entry(
+      'credit',
+      50000,
+      DateTime(2026, 10, 30, 13, 37),
+      kind: TxnEntryKind.income,
     );
-    final transaction = parsed?.transaction;
-
-    expect(transaction, isNotNull);
-    final projection = ActivityProjection.build([transaction!]);
+    final projection = ActivityProjection.build([transaction]);
 
     expect(projection.totalIncoming.paise, 50000);
     expect(projection.totalOutgoing.paise, 0);

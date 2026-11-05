@@ -3,8 +3,8 @@ import 'dart:convert';
 import '../features/sms_import/ios_shortcut_sms.dart';
 import 'ios_live_probe_session.dart';
 import 'local/app_database.dart';
-import 'local_sms_parser.dart';
 import 'ios_body_evidence_session.dart';
+import 'sms_security_policy.dart';
 
 /// Two disposable comparison databases. Neither is the main app database or
 /// an upload owner. Guessed senders never become evidence in the direct branch.
@@ -133,7 +133,7 @@ class IosSenderProbeSession {
         body is! String ||
         body.trim().isEmpty ||
         body.length > 20000 ||
-        LocalSmsParser.sensitive(body)) {
+        SmsSecurityPolicy.sensitive(body)) {
       return;
     }
     final input = _input(row);
@@ -197,7 +197,7 @@ class IosSenderProbeSession {
           body is! String ||
           body.trim().isEmpty ||
           body.length > 20000 ||
-          LocalSmsParser.sensitive(body) ||
+          SmsSecurityPolicy.sensitive(body) ||
           _seen.contains(id)) {
         continue;
       }

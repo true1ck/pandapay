@@ -1,5 +1,5 @@
-import '../../data/local_sms_parser.dart';
 import 'sms_background_queue.dart';
+import '../../data/sms_security_policy.dart';
 
 /// Validates the iOS acquisition boundary. Accepted messages are the exact
 /// QueuedSms values consumed by Android's SmsImportStore and upload worker.
@@ -164,7 +164,7 @@ class IosShortcutSmsBatch {
         invalid++;
         continue;
       }
-      if (LocalSmsParser.sensitive(body)) {
+      if (SmsSecurityPolicy.sensitive(body)) {
         sensitive++;
         continue;
       }

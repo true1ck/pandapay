@@ -5,7 +5,6 @@ import 'package:pandapay_domain/sms_v2_ledger.dart';
 import '../../../app/providers.dart' as app;
 import '../../../data/user_cards_repository.dart';
 import '../storage/schema.dart';
-import '../flag.dart';
 import '../storage/event_store.dart';
 import '../storage/instrument_store.dart';
 import '../storage/ledger_store.dart';
@@ -61,6 +60,5 @@ final smsV2LedgerReadModelProvider = FutureProvider<LedgerReadModel>((
 /// Keep its established read path until the first processed v2 facts/events.
 /// This gate affects reports only; capture routing still uses the build flag.
 final smsV2ReportingEnabledProvider = Provider<bool>((ref) {
-  if (!ref.watch(smsPipelineV2EnabledProvider)) return false;
   return ref.watch(smsV2LedgerReadModelProvider).valueOrNull?.v2Ready == true;
 });
