@@ -155,3 +155,58 @@ test('the payload holds no profile ids, message text or secrets', async () => {
   assert.doesNotMatch(text, /00000000-0000-4000/);
   assert.doesNotMatch(text, /profile_id|source_key|redacted/);
 });
+
+// --- minimum sample size for a go decision ---
+const { MIN_SAMPLE } = require('../../src/sms_v2/metrics_route');
+const goodTotals = { sync_attempts: 2000, sync_errors_network: 5, migration_completed: 300 };
+const withReport = (reports, totals = goodTotals, extra = {}) => ({ clientReport: { totals, byVersion: [], reports, ...extra } });
+
+test('the minimum sample is 20 reporting devices and 200 sync runs', () => {
+  assert.deepEqual({ ...MIN_SAMPLE }, { devices: 20, syncRuns: 200 });
+});
+
+test('all gates passing on a handful of phones stays incomplete, with the sample stated', async () => {
+  const m = await collectMetrics(fakeClient(withReport(7)), { days: 7, now: NOW });
+  assert.equal(m.gates.syncErrorRate.status, 'pass');
+  assert.equal(m.gates.migrationFailureRate.status, 'pass');
+  assert.equal(m.gates.correctionRate.status, 'pass');
+  assert.equal(m.decision, 'incomplete');
+  assert.equal(m.sample.sufficient, false);
+  assert.equal(m.sample.reportingDevices, 1);
+  assert.equal(m.sample.minDevices, 20);
+  assert.equal(m.sample.syncRuns, 2000);
+  assert.equal(m.sample.minSyncRuns, 200);
+  assert.deepEqual(m.missingSignals, [], 'the gates themselves are measured');
+});
+
+test('too few sync runs keeps the decision incomplete even with enough devices', async () => {
+  const m = await collectMetrics(fakeClient(withReport(140, { sync_attempts: 199, migration_completed: 50 })), { days: 7, now: NOW });
+  assert.equal(m.sample.reportingDevices, 20);
+  assert.equal(m.sample.sufficient, false);
+  assert.equal(m.decision, 'incomplete');
+});
+
+test('enough devices and sync runs allow go', async () => {
+  const m = await collectMetrics(fakeClient(withReport(140, { sync_attempts: 200, sync_errors_network: 1, migration_completed: 50 })), { days: 7, now: NOW });
+  assert.equal(m.sample.sufficient, true);
+  assert.equal(m.decision, 'go');
+});
+
+test('a real failure is a no-go whatever the sample size', async () => {
+  const m = await collectMetrics(fakeClient(withReport(3, { sync_attempts: 100, sync_errors_server: 5, migration_completed: 10 })), { days: 7, now: NOW });
+  assert.equal(m.sample.sufficient, false);
+  assert.equal(m.decision, 'no-go');
+});
+
+test('the minimums are configurable per call', async () => {
+  const m = await collectMetrics(fakeClient(withReport(7)), { days: 7, now: NOW, minSample: { devices: 1, syncRuns: 10 } });
+  assert.equal(m.sample.minDevices, 1);
+  assert.equal(m.decision, 'go');
+});
+
+test('a distinct device count from the report is used when it is present', async () => {
+  const m = await collectMetrics(fakeClient(withReport(140, goodTotals, { devices: 4 })), { days: 7, now: NOW });
+  assert.equal(m.sample.reportingDevices, 4);
+  assert.equal(m.sample.devicesBasis, 'distinct');
+  assert.equal(m.decision, 'incomplete');
+});

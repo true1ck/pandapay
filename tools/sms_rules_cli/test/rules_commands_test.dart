@@ -4,6 +4,7 @@ import 'dart:io';
 import 'package:args/command_runner.dart';
 import 'package:cryptography/cryptography.dart';
 import 'package:pandapay_domain/sms_v2.dart';
+import 'package:sms_rules_cli/rules_source.dart' show parseUnsignedBundle;
 import 'package:test/test.dart';
 
 import '../bin/sms_rules.dart' show commandRegistry;
@@ -71,6 +72,58 @@ void main() {
     File('${dir.path}/r.json').writeAsStringSync(jsonEncode([r]));
     File('${dir.path}/meta.json').writeAsStringSync(jsonEncode({'bundleVersion': 1, 'createdAt': '2026-11-20T00:00:00Z'}));
     expect(await _run(['lint', '--rules', dir.path]), 1);
+  });
+
+  Directory copyGood(String name, String minEngine) {
+    final dir = Directory('${tmp.path}/$name')..createSync(recursive: true);
+    Directory('test/sample_rules/good').listSync(recursive: true).whereType<File>().forEach((f) {
+      final rel = f.path.substring('test/sample_rules/good/'.length);
+      File('${dir.path}/$rel')
+        ..parent.createSync(recursive: true)
+        ..writeAsStringSync(f.readAsStringSync());
+    });
+    File('${dir.path}/meta.json').writeAsStringSync(jsonEncode({'minEngineVersion': minEngine}));
+    return dir;
+  }
+
+  test('build takes minEngineVersion from meta.json and refuses one this engine cannot read', () async {
+    final ok = copyGood('meta_ok', smsEngineVersion);
+    final out = '${tmp.path}/meta_ok.json';
+    expect(await _run(['build', '--rules', ok.path, '--out', out]), 0);
+    expect((jsonDecode(File(out).readAsStringSync()) as Map)['minEngineVersion'], smsEngineVersion);
+
+    final tooNew = copyGood('meta_new', '99.0.0');
+    final out2 = '${tmp.path}/meta_new.json';
+    expect(await _run(['build', '--rules', tooNew.path, '--out', out2]), 1);
+    expect(File(out2).existsSync(), isFalse);
+    expect(await _run(['lint', '--rules', tooNew.path]), 1);
+  });
+
+  test('the shipped rules require 2.1.0: this engine reads them, an older one refuses them', () async {
+    final out = '${tmp.path}/shipped.json';
+    expect(await _run(['build', '--rules', '../../rules/sms/v2', '--out', out]), 0);
+    final bundle = parseUnsignedBundle(jsonDecode(File(out).readAsStringSync()) as Map<String, Object?>);
+    expect(compareSemver(bundle.minEngineVersion, '2.1.0'), greaterThanOrEqualTo(0));
+    expect(compareSemver(bundle.minEngineVersion, smsEngineVersion), lessThanOrEqualTo(0));
+    expect(() => CompiledBundle.compile(bundle), returnsNormally);
+    expect(
+      () => CompiledBundle.compile(bundle, engineVersion: '2.0.0'),
+      throwsA(isA<BundleRefusedException>().having((e) => e.code, 'code', 'engine_too_old')),
+    );
+  });
+
+  test('lint rejects an alias in rule and ignore-rule senders', () async {
+    final dir = copyGood('alias', smsEngineVersion);
+    // The sample registry maps HDFCCC to HDFCBK.
+    expect(await _run(['lint', '--rules', dir.path]), 0);
+    final ign = [
+      {'id': 'IGN-ALIAS', 'senders': ['HDFCCC'], 'pattern': 'promo', 'flags': 'i', 'reason': 'promotion'},
+    ];
+    File('${dir.path}/ignore_rules.json').writeAsStringSync(jsonEncode(ign));
+    expect(await _run(['lint', '--rules', dir.path]), 1);
+    ign.single['senders'] = ['HDFCBK'];
+    File('${dir.path}/ignore_rules.json').writeAsStringSync(jsonEncode(ign));
+    expect(await _run(['lint', '--rules', dir.path]), 0);
   });
 
   test('sign-dev needs a key, then signs a verifiable signature', () async {

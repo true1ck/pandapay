@@ -182,12 +182,13 @@ function metricsClient({ clientReport, newEvents = 1000, corrections = 2 }) {
     throw new Error(`unexpected query: ${sql}`);
   } };
 }
-const report = (totals, byVersion = []) => ({ totals, byVersion, reports: 4 });
+// 140 receipts over 7 days is at least 20 reporting devices (the go floor).
+const report = (totals, byVersion = [], reports = 4) => ({ totals, byVersion, reports });
 
 test('metrics: reported sync and migration counters make both gates available and the decision can be go', async () => {
   const m = await collectMetrics(metricsClient({ clientReport: report(
     { sync_attempts: 2000, sync_errors_network: 10, sync_errors_timeout: 5, migration_started: 300, migration_completed: 299, migration_failed: 1, bundle_download_failures: 7 },
-    [{ appVersion: '2.0.0', attestation: 'verified', counters: { sync_attempts: 2000, sync_errors_network: 10, sync_errors_timeout: 5 } }]) }), { days: 7, now: NOW });
+    [{ appVersion: '2.0.0', attestation: 'verified', counters: { sync_attempts: 2000, sync_errors_network: 10, sync_errors_timeout: 5 } }], 140) }), { days: 7, now: NOW });
   assert.equal(m.syncErrorRate.available, true);
   assert.equal(m.syncErrorRate.value, 15 / 2000);
   assert.deepEqual([m.syncErrorRate.attempts, m.syncErrorRate.errors, m.syncErrorRate.byReason.network, m.syncErrorRate.byReason.timeout], [2000, 15, 10, 5]);

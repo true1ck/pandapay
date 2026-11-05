@@ -13,6 +13,10 @@
 // aggregate counters the app uploads (client_metrics_route.js, read through
 // pandapay.sms_v2_client_metrics_report). Until a phone has reported, they stay
 // {available:false, reason}: a missing signal is never guessed and never read as zero.
+//
+// Decision: `no-go` if any gate fails; `go` only when every gate passes AND the
+// sample is large enough (MIN_SAMPLE: 20 reporting devices and 200 sync runs in
+// the window, see `sample` in the payload); otherwise `incomplete`.
 
 const { cohortFor } = require('./bundle_builder');
 
@@ -22,6 +26,11 @@ const GATES = Object.freeze({
   syncErrorRate: Object.freeze({ max: 0.01 }),
   migrationFailureRate: Object.freeze({ max: 0.005 }),
 });
+// Minimum sample for a `go`. A handful of phones can pass every rate by luck, so
+// below either floor the decision stays `incomplete` (a failing gate is still a
+// `no-go`). Override per call (`minSample`) or in the environment with
+// SMS_V2_METRICS_MIN_DEVICES and SMS_V2_METRICS_MIN_SYNC_RUNS.
+const MIN_SAMPLE = Object.freeze({ devices: 20, syncRuns: 200 });
 const COHORTS = ['testers', 'pct5', 'pct25', 'all'];
 const DEFAULT_DAYS = 7;
 const MAX_DAYS = 30;
@@ -67,6 +76,28 @@ function migrationFailureSignal(totals) {
   const finished = completed + failed;
   if (finished === 0) return unavailable('No phone has reported a finished history migration in this window yet.');
   return { available: true, source: 'client_metrics', value: ratio(failed, finished), started, completed, failed };
+}
+
+function envInt(name, fallback) {
+  const raw = process.env[name];
+  return /^[0-9]{1,6}$/.test(String(raw ?? '')) ? Number(raw) : fallback;
+}
+
+function configuredMinSample() {
+  return {
+    devices: envInt('SMS_V2_METRICS_MIN_DEVICES', MIN_SAMPLE.devices),
+    syncRuns: envInt('SMS_V2_METRICS_MIN_SYNC_RUNS', MIN_SAMPLE.syncRuns),
+  };
+}
+
+// Reporting devices. The server keeps one receipt per device per day, so when the
+// report has no distinct device count, receipts / days is a lower bound (at least
+// that many different devices reported on the busiest day). It can only understate.
+function reportingDevices(clientData, days) {
+  if (clientData.devices !== undefined && clientData.devices !== null) {
+    return { value: num(clientData.devices), basis: 'distinct' };
+  }
+  return { value: Math.ceil(num(clientData.reports) / Math.max(1, days)), basis: 'lower_bound_from_receipts' };
 }
 
 async function aiRows(client) {
@@ -132,7 +163,7 @@ async function cohortRuleStats(client, sinceDay) {
   return out;
 }
 
-async function collectMetrics(client, { days = DEFAULT_DAYS, now = new Date() } = {}) {
+async function collectMetrics(client, { days = DEFAULT_DAYS, now = new Date(), minSample = MIN_SAMPLE } = {}) {
   const since = new Date(now.getTime() - days * 86400000);
   const sinceDay = since.toISOString().slice(0, 10);
   // One pooled client runs one query at a time, so these are awaited in turn.
@@ -190,7 +221,17 @@ async function collectMetrics(client, { days = DEFAULT_DAYS, now = new Date() } 
       status: migrationFailure.available ? judge(migrationFailure.value, GATES.migrationFailureRate.max) : 'unknown' },
   };
   const statuses = Object.values(gates).map((gate) => gate.status);
-  const decision = statuses.includes('fail') ? 'no-go' : statuses.every((s) => s === 'pass') ? 'go' : 'incomplete';
+  const devices = reportingDevices(clientData, days);
+  const sample = {
+    reportingDevices: devices.value,
+    devicesBasis: devices.basis,
+    minDevices: minSample.devices,
+    syncRuns: num(clientTotals.sync_attempts),
+    minSyncRuns: minSample.syncRuns,
+  };
+  sample.sufficient = sample.reportingDevices >= sample.minDevices && sample.syncRuns >= sample.minSyncRuns;
+  const decision = statuses.includes('fail') ? 'no-go'
+    : statuses.every((s) => s === 'pass') && sample.sufficient ? 'go' : 'incomplete';
 
   return {
     generatedAt: now.toISOString(),
@@ -198,6 +239,7 @@ async function collectMetrics(client, { days = DEFAULT_DAYS, now = new Date() } 
     decision,
     missingSignals: Object.keys(gates).filter((key) => gates[key].status === 'unknown'),
     gates,
+    sample,
     volume: { newEvents, newFacts: num(m.newFacts), activeProfiles30d },
     corrections: {
       cases: correctionCases,
@@ -276,8 +318,8 @@ async function metricsHandler(req, res, ctx) {
     if (error instanceof MetricsInputError) return res.status(400).json({ error: error.message });
     throw error;
   }
-  const payload = await ctx.withAdminClient((client) => collectMetrics(client, { days }));
+  const payload = await ctx.withAdminClient((client) => collectMetrics(client, { days, minSample: configuredMinSample() }));
   return res.json(payload);
 }
 
-module.exports = { collectMetrics, metricsHandler, parseDays, summariseAi, GATES };
+module.exports = { collectMetrics, metricsHandler, parseDays, summariseAi, GATES, MIN_SAMPLE };

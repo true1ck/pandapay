@@ -5,7 +5,10 @@ import 'transforms.dart';
 
 /// The engine's own version. A phone refuses a bundle whose `minEngineVersion`
 /// is newer.
-const String smsEngineVersion = '2.0.0';
+///
+/// 2.1.0: `info` facts may carry `amountMinor` (CCR-002). A 2.0.x engine drops
+/// those facts as invalid, so `rules/sms/v2/meta.json` requires 2.1.0.
+const String smsEngineVersion = '2.1.0';
 
 /// Why a bundle cannot be used.
 class BundleRefusedException implements Exception {

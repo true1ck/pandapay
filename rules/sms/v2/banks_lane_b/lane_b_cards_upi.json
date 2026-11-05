@@ -316,7 +316,6 @@
     "version": 1,
     "family": "card_spend",
     "senders": [
-      "FEDSCP",
       "FEDSMS",
       "FEDBNK"
     ],
@@ -384,7 +383,6 @@
     "version": 1,
     "family": "attempt_card",
     "senders": [
-      "FEDSCP",
       "FEDSMS",
       "FEDBNK"
     ],
@@ -445,7 +443,6 @@
     "version": 1,
     "family": "card_spend",
     "senders": [
-      "FEDSCP",
       "FEDSMS",
       "FEDBNK"
     ],
@@ -513,7 +510,6 @@
     "version": 1,
     "family": "attempt_card",
     "senders": [
-      "FEDSCP",
       "FEDSMS",
       "FEDBNK"
     ],
@@ -574,7 +570,6 @@
     "version": 1,
     "family": "card_payment_received",
     "senders": [
-      "FEDSCP",
       "FEDSMS",
       "FEDBNK"
     ],
