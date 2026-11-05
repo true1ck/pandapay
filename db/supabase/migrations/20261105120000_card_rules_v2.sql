@@ -40,6 +40,7 @@ alter table reward_rules
   add column if not exists except_platform_slugs text[] not null default '{}',
   add column if not exists block_inr          int,
   add column if not exists min_engine_version int not null default 1,
+  add column if not exists max_engine_version int,
   add column if not exists source_local_id    text,
   add column if not exists display_note       text;
 
@@ -47,7 +48,10 @@ alter table reward_rules
   add constraint reward_rule_role_known
     check (rule_role in ('base','earn','exclusion','info')),
   add constraint reward_rule_engine_version_known
-    check (min_engine_version between 1 and 2);
+    check (min_engine_version between 1 and 2),
+  add constraint reward_rule_max_engine_version_known
+    check (max_engine_version is null or
+           (max_engine_version between 1 and 2 and max_engine_version >= min_engine_version));
 
 -- ── cap_rules ────────────────────────────────────────────────────────────────
 alter table cap_rules
@@ -132,7 +136,8 @@ create unique index uq_reward_rules_semantic_identity
     min_txn_inr, max_txn_inr, priority, conditions, notes,
     effective_from, effective_to, excluded_categories,
     rule_role, merchant_slugs, platform_slugs, mcc_include, mcc_exclude,
-    block_inr, min_engine_version, except_merchant_slugs, except_platform_slugs
+    block_inr, min_engine_version, except_merchant_slugs, except_platform_slugs,
+    max_engine_version
   ) nulls not distinct;
 
 drop index if exists uq_cap_rules_semantic_identity;
