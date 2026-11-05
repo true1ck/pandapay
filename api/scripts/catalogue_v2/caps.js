@@ -217,12 +217,15 @@ function transformCaps(record, rules, ctx) {
     const capAmount = asNumber(firstDefined(c.limit_value, c.limit_value_inr, c.cap_limit));
     // D13(a): an amount that depends on the cardholder (a share of the credit
     // limit, a tier) is kept with a null amount; engines skip it.
+    // An override may set cap_depends_on_user explicitly: the flag is kept,
+    // with or without an amount.
+    const explicitUserDependent = c.cap_depends_on_user === true;
     const userDependent = capAmount === null && (
-      c.depends_on_user === true ||
+      c.depends_on_user === true || explicitUserDependent ||
       USER_DEPENDENT.test(`${sourceId} ${categoryToken} ${[c.limit_value, c.limit_value_inr, c.cap_limit].filter((v) => typeof v === 'string').join(' ')}`.toLowerCase())
     );
-    if (userDependent) flags.push('cap_depends_on_user');
-    else if (capAmount === null || capAmount <= 0) return skip('missing_cap_value');
+    if (userDependent || explicitUserDependent) flags.push('cap_depends_on_user');
+    if (!userDependent && (capAmount === null || capAmount <= 0)) return skip('missing_cap_value');
 
     if (ageTiered.has(sourceId)) {
       // The steady-state sibling: the same family without a tier marker, or

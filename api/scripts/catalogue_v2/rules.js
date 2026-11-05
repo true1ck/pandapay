@@ -39,6 +39,7 @@ const SOURCE_RAIL = {
 
 const V1_POINT_BLOCKS = { 100: 'points_per_100', 150: 'points_per_150', 200: 'points_per_200' };
 const DATE = /^\d{4}-\d{2}-\d{2}$/;
+const EXPLICIT_DEFERRALS = ['depends_on_user_attribute', 'depends_on_txn_attribute'];
 const USER_ATTRIBUTE_KEY = /(membership|tier|prime|neon|selected|selection|plan$|pack|variant|relationship|customer_segment|salary|premier|eligible_card|card_side|opt_in|enrol)/i;
 const ROLES = new Set(['base', 'earn', 'exclusion', 'info']);
 const BRANDISH_BRAND = /(paytm|amazon|flipkart|smartbuy|phonepe|swiggy|zomato|tata|neu|reliance|samsung|apple|kiwi|myntra|irctc|indigo|uber|\bola\b|lic|hpcl|bpcl|indianoil|iocl|jio|airtel|marriott|taj|vistara|air_india|makemytrip|yatra|cleartrip|bookmyshow|pvr|landmark|shoppers|lifestyle)/;
@@ -306,6 +307,14 @@ function transformRule(src, idx, ctx) {
   // `earn` onto a rule we couldn't restrict would widen it).
   const forcedRole = ROLES.has(String(src?.rule_role || '')) ? String(src.rule_role) : null;
   if (forcedRole === 'info') info.push('override_rule_role');
+  // D13 / D14: an override may mark the rule as a deferral explicitly (when
+  // its restatement drops the key the flag came from). Kept: info + flag.
+  for (const f of EXPLICIT_DEFERRALS) {
+    if (src?.[f] === true || src?.conditions?.[f] === true) {
+      info.push(f);
+      flags.push(f);
+    }
+  }
 
   // 1. Start from the token's parts.
   let parts;

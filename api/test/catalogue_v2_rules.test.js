@@ -1384,6 +1384,38 @@ test('D13b a rule gated on a paid membership becomes info with depends_on_user_a
   assert.ok(row.flags.includes('depends_on_user_attribute'));
 });
 
+test('D13 an override can set a deferral flag explicitly on a rule or a cap, and it is kept', () => {
+  const record = card({
+    rules: [
+      rule({ id: 'neon', rail: 'upi_qr', conditions: { kiwi_neon_membership: true }, action: { cashback_percent: 2, cap_reference: 'limit_cap' } }),
+      rule({ id: 'intl', category_id: 'travel', priority: 11, action: { cashback_percent: 3 } }),
+    ],
+    caps: [{ id: 'limit_cap', category_id: 'all_retail', metric: 'eligible_spend_amount', limit_value_inr: 50000, period: 'statement_cycle', post_limit_behavior: { action: 'zero_accrual' }, parent_cap_id: null }],
+  });
+  const overrides = {
+    source_slug: 'test-card',
+    changes: [
+      // restating the rule drops the membership key the flag came from …
+      { path: 'reward_rules[id=neon].conditions', value: {} },
+      // … so the override keeps the deferral explicitly
+      { path: 'reward_rules[id=neon].depends_on_user_attribute', value: true },
+      { path: 'reward_rules[id=intl].depends_on_txn_attribute', value: true },
+      { path: 'cap_rules[id=limit_cap].cap_depends_on_user', value: true },
+    ],
+  };
+  const r = run(record, { overrides });
+  const [neon] = only(r, 'neon');
+  assert.equal(neon.rule_role, 'info');
+  assert.ok(neon.flags.includes('depends_on_user_attribute'));
+  const [intl] = only(r, 'intl');
+  assert.equal(intl.rule_role, 'info');
+  assert.ok(intl.flags.includes('depends_on_txn_attribute'));
+  const cap = r.capRules.find((c) => c.key === 'limit_cap');
+  assert.ok(cap.flags.includes('cap_depends_on_user'));
+  // deferrals don't block verified
+  assert.ok(!r.card.model_coverage.verified_blocked_by?.some?.((f) => ['neon', 'intl'].includes(f.source_local_id)));
+});
+
 test('D13d overrides may replace whole arrays, set nulls and set rule_role; statement_cycle_quarter maps to quarter', () => {
   const record = card({
     rules: [

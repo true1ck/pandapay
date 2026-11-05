@@ -513,6 +513,8 @@ function mapOne(m, key, value, ctx) {
   if (value === null || value === undefined || value === 'N/A' || value === '') return;
 
   if (DESCRIPTIVE_KEYS.has(lower) || (DESCRIPTIVE_SUFFIX.test(lower) && typeof value !== 'object')) return;
+  // Explicit D13/D14 deferral markers (read by the rule transform).
+  if (lower === 'depends_on_user_attribute' || lower === 'depends_on_txn_attribute') return;
   if (EXCLUSION_FLAG.test(lower) && typeof value === 'boolean') return;
   // D18e: an explicit "other than X" / "except X" / "excluding X" naming a
   // brand is an exception, whatever the key (checked before any key-specific handling).

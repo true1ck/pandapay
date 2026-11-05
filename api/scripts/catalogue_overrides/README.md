@@ -73,6 +73,12 @@ are listed in the card's `model_coverage.overrides_applied`.
   `rupee_half_up` (D11).
 - **User-dependent cap**: set `cap_rules[id=x].depends_on_user` to `true` and
   `limit_value` to `null` (D13a).
+- **Keeping a deferral flag** (D13/D14): when a restated rule or cap no longer
+  carries the key the flag came from, set it explicitly:
+  `reward_rules[id=x].depends_on_user_attribute` or
+  `reward_rules[id=x].depends_on_txn_attribute` = `true` (the rule becomes
+  `info` with that flag), or `cap_rules[id=x].cap_depends_on_user` = `true`
+  (the flag is kept; the amount stays as given, or null).
 - **Card-age cap tier**: set `cap_rules[id=x].tier_by_card_age` to `true` on
   the introductory tier (D8d).
 
