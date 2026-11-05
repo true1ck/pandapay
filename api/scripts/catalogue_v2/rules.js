@@ -566,6 +566,16 @@ function transformRule(src, idx, ctx) {
   if (railSet.length > 1) info.push('rail_conflict');
   if (isExclusion && rails.some((r) => r.inexact)) info.push('inexact_rail_on_exclusion');
   if (railSet.length === 1) parts = parts.map((p) => andPart(p, { rail: railSet[0] }) || { ...p, conflict: true });
+  // The EMI category and the EMI rail name the same thing. On an exclusion,
+  // carve-out or reduced rate either one identifies it (as D21a for
+  // merchant/app lists): AND-ing them would miss EMI spend whose category or
+  // rail is unknown. One row on the category, one on the rail.
+  if (lowerOrNone && parts.some((p) => p.categorySlug === 'emi' && p.rail === 'emi')) {
+    parts = dedupeParts(parts.flatMap((p) => (p.categorySlug === 'emi' && p.rail === 'emi'
+      ? [{ ...p, rail: null }, { ...p, categorySlug: null, broad: false, narrowTokens: [] }]
+      : [p])));
+    flags.push('emi_alternatives');
+  }
 
   // 8b. Merchants named under other keys ("location": "HPCL petrol pump").
   for (const mention of cond.mentions || []) {
