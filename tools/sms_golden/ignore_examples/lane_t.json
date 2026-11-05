@@ -1,0 +1,62 @@
+[
+  {
+    "rule": "IGN-REWARD-CLAIM-REMINDER",
+    "positive": [
+      {
+        "sender": "VM-EXAMPL-S",
+        "body": "UPDATE: From 25/11/26, claim Example Coins earned on Example Bank Card in 3 steps: App>Card>Tap Claim"
+      }
+    ],
+    "negative": [
+      {
+        "sender": "VM-EXAMPL-S",
+        "body": "250 Reward Points have been credited to your Example Bank Credit Card XX5678 for your spends this month."
+      }
+    ]
+  },
+  {
+    "rule": "IGN-DELIVERY-STATUS",
+    "positive": [
+      {
+        "sender": "VM-EXAMPL-S",
+        "body": "Your order 1234567 is out for delivery and will reach you today."
+      }
+    ],
+    "negative": [
+      {
+        "sender": "VM-EXAMPL-S",
+        "body": "Your order 1234567 is out for delivery. Share OTP 123456 with the delivery executive."
+      }
+    ]
+  },
+  {
+    "rule": "IGN-ORDER-STATUS-UPDATE",
+    "positive": [
+      {
+        "sender": "VM-EKARTL-S",
+        "body": "Ekart Update: your shipment with tracking id ABC123 is out for delivery."
+      }
+    ],
+    "negative": [
+      {
+        "sender": "VM-EKARTL-S",
+        "body": "Ekart Update: OTP 123456 for your shipment with tracking id ABC123. Share the OTP only after checking the package."
+      }
+    ]
+  },
+  {
+    "rule": "IGN-NOTICE-DO-NOT-SHARE-ADVICE",
+    "positive": [
+      {
+        "sender": "VM-EXAMPL-S",
+        "body": "Never share your OTP, CVV or PIN with anyone, even if they claim to be from the bank."
+      }
+    ],
+    "negative": [
+      {
+        "sender": "VM-EXAMPL-S",
+        "body": "123456 is the OTP to link your account. Do not share your OTP with anyone."
+      }
+    ]
+  }
+]
