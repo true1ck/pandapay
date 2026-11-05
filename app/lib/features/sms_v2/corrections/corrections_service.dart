@@ -19,6 +19,7 @@ import '../storage/instrument_store.dart';
 import '../storage/ledger_store.dart';
 import '../storage/outbox_store.dart';
 import '../storage/sync_state_store.dart';
+import '../sync/learning_signals.dart';
 
 /// A device-local correction. [corrected] uses contract field names such as
 /// amountMinor, occurredAt, merchantName, instrumentId, category, or legs.
@@ -558,8 +559,19 @@ class CorrectionsService {
             ruleVersion: correction.trace.ruleVersion!,
           );
         }
+        // A shared fix also teaches which shop it was, as an anonymised signal.
+        final signal = correction.sharedLearningConsent
+            ? _shopSignal(correction, current, event?.type)
+            : null;
+        if (signal != null) enqueueLearningSignal(_outbox, signal);
         if (stage != null && correction.reportCase) {
-          _queueCase(correction, stage);
+          _queueCase(
+            correction,
+            stage,
+            merchantKey: correction.kind == CorrectionKind.wrongCategory
+                ? signal?.merchantKey
+                : null,
+          );
         }
         _db.execute('RELEASE sms_v2_correction');
         financial.notifyExternalChanges(namespace, const [
@@ -662,7 +674,37 @@ class CorrectionsService {
     }
   }
 
-  void _queueCase(SmsCorrection correction, String stage) {
+  /// The shop signal for a category or shop-name fix, or null when it must stay
+  /// on the phone (see [learningSignalFor]).
+  LearningSignal? _shopSignal(
+    SmsCorrection correction,
+    Fact? current,
+    EventType? eventType,
+  ) {
+    final sender = correction.message?.sender;
+    if (sender == null || current == null || eventType == null) return null;
+    final (kind, value) = switch (correction.kind) {
+      CorrectionKind.wrongCategory => (
+        'category_choice',
+        correction.corrected['category'],
+      ),
+      CorrectionKind.wrongMerchant => (
+        'merchant_name',
+        correction.corrected['merchantName'],
+      ),
+      _ => ('', null),
+    };
+    if (value is! String) return null;
+    return learningSignalFor(
+      kind: kind,
+      eventType: eventType,
+      counterparty: current.counterparty,
+      sender: sender,
+      value: value,
+    );
+  }
+
+  void _queueCase(SmsCorrection correction, String stage, {String? merchantKey}) {
     final payload = <String, Object?>{
       'sourceKey': correction.sourceKey,
       'factIds': correction.factIds,
@@ -688,6 +730,8 @@ class CorrectionsService {
         // reviewed synthetic example for code-fix export.
         if (correction.corrected['category'] case final String category)
           'category': category,
+        // The shop, only when it passed the same filters as a shop signal.
+        'merchantKey': ?merchantKey,
         '_template': {
           'senderBrand': brand,
           'hash': smsTemplateHash(brand, skeleton),

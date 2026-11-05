@@ -25,6 +25,7 @@ import '../storage/schema.dart';
 import '../storage/sync_state_store.dart';
 import '../storage/provisional_store.dart';
 import '../storage/stats_store.dart';
+import '../sync/learning_signals.dart';
 import '../sync/template_upload.dart';
 import '../sync/stats_upload.dart';
 import '../telemetry/client_metrics.dart';
@@ -375,6 +376,17 @@ class SmsV2Runtime {
       headers: headers,
       hasConsent: hasSharingConsent,
       accountIsCurrent: accountIsCurrent,
+      clock: clock,
+    ).drain();
+    await LearningSignalUpload(
+      intake: intake,
+      queue: OutboxStore(financial.database.db, namespace: namespace),
+      client: client,
+      baseUri: baseUri,
+      headers: headers,
+      hasConsent: hasSharingConsent,
+      accountIsCurrent: accountIsCurrent,
+      taxonomyVersion: () => _bundle!.taxonomyVersion,
       clock: clock,
     ).drain();
     await StatsUpload(

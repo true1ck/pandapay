@@ -25,6 +25,10 @@ import 'activity_projection.dart';
 import 'foreign_payments_screen.dart';
 import 'deleted_transactions_screen.dart';
 import 'local_category_learning.dart';
+import '../../data/local/sms_intake_repository.dart';
+import '../sms_v2/storage/outbox_store.dart';
+import '../sms_v2/sync/learning_signals.dart';
+import '../sms_v2/ui/review_controller.dart' show readSharingConsent;
 
 /// D1 Transaction List (ui-spec Group D, implementation-plan-group-c-d.md)
 /// — extends the original flat list (UA-3+/Chunk 18) with date grouping,
@@ -372,6 +376,7 @@ class _ActivityScreenState extends ConsumerState<ActivityScreen> {
         ids.map((id) => repo.editTransaction(id, categoryId: chosen)),
       );
       unawaited(_teachLocalCategoryRules(visible, chosen));
+      unawaited(_shareCategoryChoices(visible, chosen));
       if (mounted) {
         setState(() {
           _selectedIds.clear();
@@ -432,6 +437,41 @@ class _ActivityScreenState extends ConsumerState<ActivityScreen> {
       }
     } catch (_) {
       // Local rules are a convenience; the category edit already committed.
+    }
+  }
+
+  /// With the sharing opt-in, queues one anonymised `category_choice` per
+  /// distinct shop among the selected SMS readings (never people or own
+  /// accounts; see [learningSignalFor]). Without the opt-in nothing is queued.
+  Future<void> _shareCategoryChoices(
+    List<TransactionEntry> visible,
+    String chosenCategoryId,
+  ) async {
+    final categories = ref.read(categoriesProvider).valueOrNull ?? const [];
+    String? slug;
+    for (final category in categories) {
+      if (category.id == chosenCategoryId) slug = category.slug;
+    }
+    if (slug == null) return;
+    try {
+      if (!await readSharingConsent(ref)) return;
+      final cache = await ref.read(responseCacheProvider.future);
+      final namespace = ref.read(cacheNamespaceProvider);
+      final database = cache.financialStore.database;
+      final selected = _selectedIds.toSet();
+      final queue = OutboxStore(database.db, namespace: namespace);
+      for (final signal in categoryChoiceSignalsForEntries(
+        db: database.db,
+        intake: SmsIntakeRepository(database),
+        namespace: namespace,
+        entries: visible.where((entry) => selected.contains(entry.id)),
+        categorySlug: slug,
+        chosenCategoryId: chosenCategoryId,
+      )) {
+        enqueueLearningSignal(queue, signal);
+      }
+    } catch (_) {
+      // Sharing is optional; the category edit already committed.
     }
   }
 
