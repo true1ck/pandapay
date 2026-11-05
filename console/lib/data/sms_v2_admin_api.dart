@@ -107,6 +107,33 @@ class SmsV2AdminApi {
     body: {'revision': revision, 'reason': reason, 'goldenReports': reports},
   );
 
+  // ---- Learning page (learning-loop A7): counted, k-anonymous candidates.
+  Future<Map<String, dynamic>> learningSummary({int days = 30}) =>
+      request('GET', 'learning/summary?days=$days');
+  Future<Map<String, dynamic>> learningCategories({int days = 90}) =>
+      request('GET', 'learning/categories?days=$days');
+  Future<Map<String, dynamic>> learningMerchantNames({int days = 90}) =>
+      request('GET', 'learning/merchant-names?days=$days');
+  Future<Map<String, dynamic>> learningUncategorised({int days = 90}) =>
+      request('GET', 'learning/uncategorised?days=$days');
+  Future<Map<String, dynamic>> recordLearningDecision({
+    required String kind,
+    required String merchantKey,
+    required String value,
+    required String decision,
+    required String reason,
+  }) => request(
+    'POST',
+    'learning/decisions',
+    body: {
+      'kind': kind,
+      'merchantKey': merchantKey,
+      'value': value,
+      'decision': decision,
+      'reason': reason,
+    },
+  );
+
   // ---- Settings and per-user limits (learning-loop A4).
   Future<List<Map<String, dynamic>>> settings() async =>
       _rows((await request('GET', 'settings'))['settings']);

@@ -183,6 +183,7 @@ void main() {
         ),
       );
       await tester.pumpAndSettle();
+      await tester.ensureVisible(find.text('Corrections'));
       await tester.tap(find.text('Corrections'));
       await tester.pumpAndSettle();
       await tester.tap(find.text('template-a · 1 cases'));

@@ -206,6 +206,7 @@ void main() {
         },
       ];
     await screen(tester, fake: fake);
+    await tester.ensureVisible(find.text('Templates'));
     await tester.tap(find.text('Templates'));
     await tester.pumpAndSettle();
     expect(
@@ -234,6 +235,7 @@ void main() {
           },
         };
       await screen(tester, fake: fake);
+      await tester.ensureVisible(find.text('Metrics'));
       await tester.tap(find.text('Metrics'));
       await tester.pumpAndSettle();
       expect(find.text('Layouts sent to the AI: 3 · Held: 2'), findsOneWidget);
@@ -242,6 +244,7 @@ void main() {
   );
 
   Future<void> correction(WidgetTester tester, String label) async {
+    await tester.ensureVisible(find.text('Corrections'));
     await tester.tap(find.text('Corrections'));
     await tester.pumpAndSettle();
     await tester.tap(find.text('template-a · 1 cases'));

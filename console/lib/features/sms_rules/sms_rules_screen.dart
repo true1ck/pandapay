@@ -8,6 +8,7 @@ import 'rule_editor.dart';
 import 'category_editor.dart';
 import 'golden_runner.dart';
 import 'settings_tab.dart';
+import 'learning_tab.dart';
 import 'package:pandapay_domain/sms_v2_template.dart';
 import 'download_stub.dart' if (dart.library.js_interop) 'download_web.dart';
 
@@ -35,13 +36,14 @@ class SmsRulesScreen extends ConsumerWidget {
     }
 
     return DefaultTabController(
-      length: 6,
+      length: 7,
       child: Scaffold(
         appBar: AppBar(
           title: const Text('SMS pipeline rules'),
           bottom: const TabBar(
             isScrollable: true,
             tabs: [
+              Tab(text: 'Learning'),
               Tab(text: 'Rules'),
               Tab(text: 'Templates'),
               Tab(text: 'Categories'),
@@ -53,6 +55,24 @@ class SmsRulesScreen extends ConsumerWidget {
         ),
         body: TabBarView(
           children: [
+            Builder(
+              builder: (tabs) => SmsLearningTab(
+                api: api,
+                onCreateCategoryRule: (key, category) => Navigator.of(context).push(
+                  MaterialPageRoute<void>(
+                    builder: (_) => SmsCategoryEditor(
+                      api: api,
+                      id: learningDraftId(key),
+                      initialRule: learnedCategoryRule(key, category),
+                      runner: runner,
+                    ),
+                  ),
+                ),
+                // The Corrections tab is the sixth: Learning, Rules, Templates,
+                // Categories, then Corrections.
+                onOpenCorrections: () => DefaultTabController.of(tabs).animateTo(4),
+              ),
+            ),
             ref
                 .watch(smsV2RulesProvider)
                 .when(

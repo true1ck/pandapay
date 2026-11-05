@@ -78,6 +78,44 @@ BrowserGoldenRunner tinyRunner() => BrowserGoldenRunner(
 );
 const caseId = '00000000-0000-4000-8000-000000000001';
 
+Map<String, dynamic> fixtureLearningSummary() => {
+  'days': 30,
+  'minUsers': 3,
+  'layouts': {'new': 4, 'held': 1, 'queued': 2, 'working': 0, 'ready': 3, 'failed': 1, 'covered': 2, 'drafted': 1, 'rejected': 0, 'blocked': 0},
+  'ai': {'calls': 17, 'costUsd': 0.42, 'approvedRules': 2, 'costPerApprovedRule': 0.21, 'notMoneyDrafts': 1},
+  'corrections': [
+    {'kind': 'wrong_amount', 'cases': 5, 'users': 3},
+    {'kind': 'not_financial', 'cases': 2, 'users': 2},
+  ],
+  'signals': [
+    {'kind': 'category_choice', 'users': 6, 'attestedShare': 0.83, 'belowThreshold': 2},
+    {'kind': 'uncategorised', 'users': 4, 'attestedShare': 1, 'belowThreshold': 1},
+  ],
+  'coverage': {'hits': 900, 'toReview': 100, 'corrected': 4, 'readByRulesShare': 0.9},
+  'trend': [
+    {'day': '2026-11-04', 'aiCalls': 6, 'newLayouts': 3},
+    {'day': '2026-11-05', 'aiCalls': 4, 'newLayouts': 2},
+    {'day': '2026-11-06', 'aiCalls': 2, 'newLayouts': 1},
+  ],
+  'optIn': {'sharingNow': 12, 'synced30d': 30, 'shareOfSynced': 0.4, 'perDay': <Object?>[]},
+  'candidates': {'categories': 1, 'merchantNames': 1, 'uncategorised': 1, 'total': 3},
+};
+
+Map<String, dynamic> fixtureCategoryCandidate({String status = 'new', double agreement = 0.86}) => {
+  'merchantKey': 'SWIGGY',
+  'category': 'dining',
+  'users': 12,
+  'keyUsers': 14,
+  'testerUsers': 2,
+  'times': 30,
+  'agreement': agreement,
+  'split': {'dining': 12, 'groceries': 2},
+  'senders': ['HDFCBK', 'ICICIB'],
+  'lastAt': '2026-11-06T09:00:00Z',
+  'status': status,
+  'decision': null,
+};
+
 /// One row per registry key, as GET /admin/sms/v2/settings returns them.
 List<Map<String, dynamic>> fixtureSettings({Map<String, Object?> values = const {}}) {
   Map<String, dynamic> row(String key, String type, Object? def, {num? min, num? max, List<String>? allowed}) => {
@@ -123,6 +161,10 @@ class FakeAdmin extends AdminApi {
   Map<String, dynamic> metrics = {'ai': <Object?>[]};
   List<Map<String, dynamic>> settings = fixtureSettings();
   List<Object?> userLimits = <Object?>[];
+  Map<String, dynamic> learningSummary = fixtureLearningSummary();
+  List<Object?> learningCategories = <Object?>[];
+  List<Object?> learningNames = <Object?>[];
+  List<Object?> learningOther = <Object?>[];
 
   /// When set, the next settings save answers with this HTTP status.
   int? failSettingSaveWith;
@@ -148,6 +190,17 @@ class FakeAdmin extends AdminApi {
         ],
       };
     }
+    if (path.startsWith('/admin/sms/v2/learning/summary')) return learningSummary;
+    if (path.startsWith('/admin/sms/v2/learning/categories')) {
+      return {'minUsers': 3, 'days': 90, 'taxonomyVersion': 1, 'candidates': learningCategories};
+    }
+    if (path.startsWith('/admin/sms/v2/learning/merchant-names')) {
+      return {'minUsers': 3, 'days': 90, 'taxonomyVersion': 1, 'candidates': learningNames};
+    }
+    if (path.startsWith('/admin/sms/v2/learning/uncategorised')) {
+      return {'minUsers': 3, 'days': 90, 'taxonomyVersion': 1, 'candidates': learningOther};
+    }
+    if (path == '/admin/sms/v2/learning/decisions') return {'recorded': true};
     if (path == '/admin/sms/v2/settings') return {'settings': settings};
     if (path.startsWith('/admin/sms/v2/settings/')) {
       if (failSettingSaveWith != null) {

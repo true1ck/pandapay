@@ -700,5 +700,35 @@
     "path": "/admin/sms/v2/user-limits/:profileId/:key",
     "permission": "learning.publish",
     "freshMfa": true
+  },
+  {
+    "method": "GET",
+    "path": "/admin/sms/v2/learning/summary",
+    "permission": "learning.read",
+    "freshMfa": false
+  },
+  {
+    "method": "GET",
+    "path": "/admin/sms/v2/learning/categories",
+    "permission": "learning.read",
+    "freshMfa": false
+  },
+  {
+    "method": "GET",
+    "path": "/admin/sms/v2/learning/merchant-names",
+    "permission": "learning.read",
+    "freshMfa": false
+  },
+  {
+    "method": "GET",
+    "path": "/admin/sms/v2/learning/uncategorised",
+    "permission": "learning.read",
+    "freshMfa": false
+  },
+  {
+    "method": "POST",
+    "path": "/admin/sms/v2/learning/decisions",
+    "permission": "learning.publish",
+    "freshMfa": true
   }
 ]
