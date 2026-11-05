@@ -1,5 +1,6 @@
 import 'dart:convert';
 import 'dart:io';
+import 'dart:typed_data';
 
 import 'package:flutter_test/flutter_test.dart';
 import 'package:pandapay/data/local/app_database.dart';
@@ -165,7 +166,7 @@ void main() {
     final writer = LocalPortableRestoreWriter(
       appDb: targetDb,
       namespace: namespace,
-      attachmentsDirectory: attachmentsDir,
+      receipts: _FakeReceiptStore(attachmentsDir),
     );
     await writer.beginFreshNamespace();
     for (final entry in sections.entries) {
@@ -206,7 +207,7 @@ void main() {
     final writer = LocalPortableRestoreWriter(
       appDb: targetDb,
       namespace: namespace,
-      attachmentsDirectory: attachmentsDir,
+      receipts: _FakeReceiptStore(attachmentsDir),
     );
     await writer.beginFreshNamespace();
     final rows = utf8
@@ -235,7 +236,7 @@ void main() {
     final writer = LocalPortableRestoreWriter(
       appDb: targetDb,
       namespace: namespace,
-      attachmentsDirectory: attachmentsDir,
+      receipts: _FakeReceiptStore(attachmentsDir),
     );
     targetDb.db.execute(
       'INSERT INTO transaction_attachments(id, transaction_id, file_name, local_path, mime_type, '
@@ -259,7 +260,7 @@ void main() {
     final writer = LocalPortableRestoreWriter(
       appDb: targetDb,
       namespace: namespace,
-      attachmentsDirectory: attachmentsDir,
+      receipts: _FakeReceiptStore(attachmentsDir),
     );
     await writer.beginFreshNamespace();
     final rows = utf8
@@ -277,43 +278,85 @@ void main() {
     );
   });
 
-  test('installAttachment copies bytes and writes metadata', () async {
+  test(
+    'installAttachment re-encrypts through the receipt store and records its path',
+    () async {
+      final targetDb = freshTargetDatabase();
+      final receipts = _FakeReceiptStore(attachmentsDir);
+      final writer = LocalPortableRestoreWriter(
+        appDb: targetDb,
+        namespace: namespace,
+        receipts: receipts,
+      );
+      final staged = File('${stagingA.path}/staged.bin')
+        ..writeAsBytesSync([1, 2, 3, 4]);
+      await writer.beginFreshNamespace();
+      await writer.installAttachment(metadata: _attachment, stagedFile: staged);
+      await writer.commit();
+
+      final call = receipts.stored.single;
+      expect(call.id, 'att-9');
+      expect(call.transactionId, 'txn-1');
+      expect(call.bytes, [1, 2, 3, 4]);
+      final row = targetDb.db
+          .select(
+            'SELECT transaction_id, file_name, local_path FROM transaction_attachments',
+          )
+          .single;
+      expect(row['transaction_id'], 'txn-1');
+      expect(row['file_name'], 'receipt.png');
+      expect(row['local_path'], '${attachmentsDir.path}/att-9.pprc');
+      expect(
+        attachmentsDir.listSync().map((e) => e.path),
+        ['${attachmentsDir.path}/att-9.pprc'],
+        reason: 'no plaintext copy next to the encrypted receipt',
+      );
+    },
+  );
+
+  test('a rolled-back restore removes the receipts it encrypted', () async {
     final targetDb = freshTargetDatabase();
     final writer = LocalPortableRestoreWriter(
       appDb: targetDb,
       namespace: namespace,
-      attachmentsDirectory: attachmentsDir,
+      receipts: _FakeReceiptStore(attachmentsDir),
     );
     final staged = File('${stagingA.path}/staged.bin')
       ..writeAsBytesSync([1, 2, 3, 4]);
-    const attachment = PortableBackupAttachment(
-      id: 'att-9',
-      path: 'attachments/att-9.bin',
-      transactionId: 'txn-1',
-      fileName: 'receipt.png',
-      mimeType: 'image/png',
-      byteLength: 4,
-      sha256:
-          '0000000000000000000000000000000000000000000000000000000000000000',
-    );
     await writer.beginFreshNamespace();
-    await writer.installAttachment(metadata: attachment, stagedFile: staged);
-    await writer.commit();
+    await writer.installAttachment(metadata: _attachment, stagedFile: staged);
+    await writer.rollback();
 
-    final row = targetDb.db
-        .select(
-          'SELECT transaction_id, file_name, local_path FROM transaction_attachments',
-        )
-        .single;
-    expect(row['transaction_id'], 'txn-1');
-    expect(row['file_name'], 'receipt.png');
-    expect(row['local_path'], 'att-9');
-    expect(File('${attachmentsDir.path}/att-9').readAsBytesSync(), [
-      1,
-      2,
-      3,
-      4,
-    ]);
+    expect(attachmentsDir.listSync(), isEmpty);
+    expect(
+      targetDb.db
+          .select('SELECT COUNT(*) AS c FROM transaction_attachments')
+          .first['c'],
+      0,
+    );
+  });
+
+  test('a receipt store failure leaves no row behind', () async {
+    final targetDb = freshTargetDatabase();
+    final writer = LocalPortableRestoreWriter(
+      appDb: targetDb,
+      namespace: namespace,
+      receipts: _FakeReceiptStore(attachmentsDir, fail: true),
+    );
+    final staged = File('${stagingA.path}/staged.bin')
+      ..writeAsBytesSync([1, 2, 3, 4]);
+    await writer.beginFreshNamespace();
+    await expectLater(
+      writer.installAttachment(metadata: _attachment, stagedFile: staged),
+      throwsA(isA<StateError>()),
+    );
+    await writer.rollback();
+    expect(
+      targetDb.db
+          .select('SELECT COUNT(*) AS c FROM transaction_attachments')
+          .first['c'],
+      0,
+    );
   });
 
   test('unknown section names are rejected', () async {
@@ -321,7 +364,7 @@ void main() {
     final writer = LocalPortableRestoreWriter(
       appDb: targetDb,
       namespace: namespace,
-      attachmentsDirectory: attachmentsDir,
+      receipts: _FakeReceiptStore(attachmentsDir),
     );
     await writer.beginFreshNamespace();
     await expectLater(
@@ -332,4 +375,41 @@ void main() {
       throwsA(isA<FormatException>()),
     );
   });
+}
+
+const _attachment = PortableBackupAttachment(
+  id: 'att-9',
+  path: 'attachments/att-9.bin',
+  transactionId: 'txn-1',
+  fileName: 'receipt.png',
+  mimeType: 'image/png',
+  byteLength: 4,
+  sha256: '0000000000000000000000000000000000000000000000000000000000000000',
+);
+
+/// Stands in for the per-account encrypted receipt store: "encrypts" by
+/// prefixing the PPRC magic, so tests can tell stored files from plaintext.
+final class _FakeReceiptStore implements PortableReceiptVault {
+  _FakeReceiptStore(this.directory, {this.fail = false});
+  final Directory directory;
+  final bool fail;
+  final stored = <({String id, String transactionId, List<int> bytes})>[];
+
+  @override
+  Future<Uint8List> readPlaintext(PortableAttachmentSource source) async =>
+      throw UnimplementedError();
+
+  @override
+  Future<String> storeEncrypted({
+    required String attachmentId,
+    required String transactionId,
+    required File plaintext,
+  }) async {
+    if (fail) throw StateError('receipt key locked');
+    final bytes = await plaintext.readAsBytes();
+    stored.add((id: attachmentId, transactionId: transactionId, bytes: bytes));
+    final file = File('${directory.path}/$attachmentId.pprc');
+    await file.writeAsBytes([0x50, 0x50, 0x52, 0x43, ...bytes]);
+    return file.path;
+  }
 }

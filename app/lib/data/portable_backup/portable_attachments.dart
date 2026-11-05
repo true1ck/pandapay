@@ -1,5 +1,6 @@
 import 'dart:async';
 import 'dart:io';
+import 'dart:typed_data';
 
 import 'package:uuid/uuid.dart';
 
@@ -22,6 +23,31 @@ class PortableAttachmentSource {
   });
 }
 
+/// The per-account encrypted receipt store, as the portable backup uses it.
+///
+/// Receipts are encrypted at rest under a key that never leaves the phone
+/// (`.pprc`, see `TransactionAttachmentsRepository`), so the stored files are
+/// never copied as they are: a backup of them could not be read anywhere
+/// else. Export decrypts through the store into private backup staging, and
+/// the archive is then passphrase-encrypted. Restore encrypts the staged
+/// bytes back into the store under the current account's key. Plaintext only
+/// exists in private staging, which the caller removes.
+abstract interface class PortableReceiptVault {
+  /// The decrypted bytes of one stored receipt. Throws when the current
+  /// account cannot decrypt it (key locked or lost, file damaged or another
+  /// account's). The caller clears the returned bytes after use.
+  Future<Uint8List> readPlaintext(PortableAttachmentSource source);
+
+  /// Encrypts [plaintext] into the store as [attachmentId] for the current
+  /// account and returns the encrypted file's path. Does not write the
+  /// attachment row and does not delete [plaintext].
+  Future<String> storeEncrypted({
+    required String attachmentId,
+    required String transactionId,
+    required File plaintext,
+  });
+}
+
 class PortableCollectedAttachment {
   final PortableBackupAttachment metadata;
   final File stagedFile;
@@ -41,8 +67,9 @@ class PortableAttachmentLimits {
   });
 }
 
-/// Copies attachment bytes into private staging while hashing the source.
-/// The source path is never used as an archive path or written to metadata.
+/// Decrypts each attachment through the receipt store into private staging
+/// and hashes the plaintext. The source path is never used as an archive path
+/// or written to metadata, and the stored (encrypted) file is never copied.
 class PortableAttachmentCollector {
   final Uuid _uuid;
   final PortableAttachmentLimits limits;
@@ -53,62 +80,55 @@ class PortableAttachmentCollector {
   Future<List<PortableCollectedAttachment>> collect({
     required Iterable<PortableAttachmentSource> sources,
     required Directory stagingDirectory,
+    required PortableReceiptVault receipts,
     Future<bool> Function()? isCancelled,
   }) async {
     await stagingDirectory.create(recursive: true);
     final output = <PortableCollectedAttachment>[];
+    final staged = <File>[];
     var total = 0;
     try {
       for (final source in sources) {
         if (await isCancelled?.call() == true) throw const PortableBackupCancelled();
-        final file = File(source.localPath);
-        if (!await file.exists()) throw FileSystemException('attachment is missing', source.localPath);
-        final size = await file.length();
-        if (size > limits.maxAttachmentBytes || total > limits.maxTotalBytes - size) {
-          throw PortableBackupLimitExceeded('attachment bytes exceed portable backup limits');
-        }
-        final id = _uuid.v4();
-        final destination = File('${stagingDirectory.path}${Platform.pathSeparator}$id.bin');
-        final digest = PortableSha256Accumulator();
-        final sink = destination.openWrite();
-        var copied = 0;
+        final clear = await receipts.readPlaintext(source);
         try {
-          await for (final chunk in file.openRead()) {
-            if (await isCancelled?.call() == true) throw const PortableBackupCancelled();
-            copied += chunk.length;
-            if (copied > limits.maxAttachmentBytes || total + copied > limits.maxTotalBytes) {
-              throw PortableBackupLimitExceeded('attachment bytes exceed portable backup limits');
-            }
-            sink.add(chunk);
-            digest.add(chunk);
+          final size = clear.length;
+          if (size > limits.maxAttachmentBytes || total > limits.maxTotalBytes - size) {
+            throw PortableBackupLimitExceeded('attachment bytes exceed portable backup limits');
           }
-          await sink.flush();
-        } finally {
-          await sink.close();
-        }
-        final hash = digest.close();
-        final extension = _safeExtension(source.fileName);
-        final archivePath = 'attachments/$hash${extension.isEmpty ? '' : '.$extension'}';
-        validatePortableArchivePath(archivePath);
-        output.add(
-          PortableCollectedAttachment(
-            stagedFile: destination,
-            metadata: PortableBackupAttachment(
-              id: id,
-              path: archivePath,
-              transactionId: source.transactionId,
-              fileName: _safeDisplayName(source.fileName),
-              mimeType: source.mimeType,
-              byteLength: copied,
-              sha256: hash,
+          if (await isCancelled?.call() == true) throw const PortableBackupCancelled();
+          final id = _uuid.v4();
+          final destination = File('${stagingDirectory.path}${Platform.pathSeparator}$id.bin');
+          await destination.create(exclusive: true);
+          staged.add(destination);
+          await destination.writeAsBytes(clear, flush: true);
+          final digest = PortableSha256Accumulator()..add(clear);
+          final hash = digest.close();
+          final extension = _safeExtension(source.fileName);
+          final archivePath = 'attachments/$hash${extension.isEmpty ? '' : '.$extension'}';
+          validatePortableArchivePath(archivePath);
+          output.add(
+            PortableCollectedAttachment(
+              stagedFile: destination,
+              metadata: PortableBackupAttachment(
+                id: id,
+                path: archivePath,
+                transactionId: source.transactionId,
+                fileName: _safeDisplayName(source.fileName),
+                mimeType: source.mimeType,
+                byteLength: size,
+                sha256: hash,
+              ),
             ),
-          ),
-        );
-        total += copied;
+          );
+          total += size;
+        } finally {
+          clear.fillRange(0, clear.length, 0);
+        }
       }
       return output;
     } catch (_) {
-      await cleanup(output.map((entry) => entry.stagedFile));
+      await cleanup(staged);
       rethrow;
     }
   }

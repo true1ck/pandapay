@@ -1,6 +1,7 @@
 import 'dart:async';
 import 'dart:convert';
 import 'dart:io';
+import 'dart:typed_data';
 
 import 'package:flutter_test/flutter_test.dart';
 import 'package:http/http.dart' as http;
@@ -9,6 +10,7 @@ import 'package:pandapay/data/local/app_database.dart';
 import 'package:pandapay/data/local/financial_store.dart';
 import 'package:pandapay/data/local/sync_queue.dart';
 import 'package:pandapay/data/portable_backup/local_restore_writer.dart';
+import 'package:pandapay/data/portable_backup/portable_attachments.dart';
 import 'package:pandapay/data/transaction_page_refresh.dart';
 import 'package:pandapay/data/user_cards_repository.dart';
 import 'package:pandapay_domain/pandapay_domain.dart';
@@ -277,12 +279,10 @@ void main() {
 
   test('fresh portable restore clears page progress transactionally', () async {
     await owner(MockClient((_) async => page('first', next: 'next'))).refresh();
-    final directory = await Directory.systemTemp.createTemp('paging-restore-');
-    addTearDown(() => directory.delete(recursive: true));
     final writer = LocalPortableRestoreWriter(
       appDb: db,
       namespace: 'user:a',
-      attachmentsDirectory: directory,
+      receipts: _NoReceipts(),
     );
     await writer.beginFreshNamespace();
     expect(
@@ -297,5 +297,18 @@ void main() {
       'next',
     );
   });
+}
 
+/// This test installs no attachments; any use is a test failure.
+final class _NoReceipts implements PortableReceiptVault {
+  @override
+  Future<Uint8List> readPlaintext(PortableAttachmentSource source) =>
+      throw UnimplementedError();
+
+  @override
+  Future<String> storeEncrypted({
+    required String attachmentId,
+    required String transactionId,
+    required File plaintext,
+  }) => throw UnimplementedError();
 }

@@ -1,5 +1,6 @@
 import 'dart:convert';
 import 'dart:io';
+import 'dart:typed_data';
 
 import 'package:crypto/crypto.dart';
 import 'package:cryptography/cryptography.dart';
@@ -7,6 +8,7 @@ import 'package:path/path.dart' as p;
 
 import '../portable_backup/account_recovery_operation_gate.dart';
 import '../portable_backup/app_private_temporary_storage.dart';
+import '../portable_backup/portable_attachments.dart';
 import '../portable_backup/private_temporary_workspace.dart';
 import '../secure_storage/encrypted_receipt_file.dart';
 import '../secure_storage/flutter_secure_key_value_store.dart';
@@ -63,8 +65,9 @@ final class DecryptedAttachment {
 /// Receipt files are AES-256-GCM encrypted (`PPRC` format) under
 /// `Application Support/PandaPay/receipts/ACCOUNT/TRANSACTION/`, with a
 /// per-account key kept in the Keychain/Keystore. A decrypted copy exists only
-/// while a viewer is open.
-class TransactionAttachmentsRepository {
+/// while a viewer is open, or in private staging while a portable backup is
+/// built or restored ([PortableReceiptVault]).
+class TransactionAttachmentsRepository implements PortableReceiptVault {
   final AppDatabase _database;
   final String namespace;
   final Future<String> Function() installId;
@@ -299,6 +302,72 @@ class TransactionAttachmentsRepository {
       await workspace.cleanup();
       throw const ReceiptUnavailable();
     }
+  }
+
+  /// Portable backup export. Not gated by [AccountRecoveryOperationGate]: it
+  /// only reads, and a backup or restore already runs as the recovery side.
+  @override
+  Future<Uint8List> readPlaintext(PortableAttachmentSource source) async {
+    try {
+      return await _withKey(
+        receiptsExist: true,
+        use: (key, version) => _store.decryptBytes(
+          encryptedFile: File(source.localPath),
+          key: key,
+          accountNamespace: _keyNamespace,
+          attachmentId: source.id,
+          keyVersion: version,
+        ),
+      );
+    } on ReceiptUnavailable {
+      rethrow;
+    } on Object {
+      throw const ReceiptUnavailable();
+    }
+  }
+
+  /// Portable backup restore: encrypts a restored receipt for this account.
+  /// The restore writer records the row inside its own transaction, and
+  /// deletes the file again if that transaction rolls back.
+  @override
+  Future<String> storeEncrypted({
+    required String attachmentId,
+    required String transactionId,
+    required File plaintext,
+  }) async {
+    // The id names the file and is bound into the ciphertext.
+    if (!RegExp(r'^[A-Za-z0-9][A-Za-z0-9_-]{0,127}$').hasMatch(attachmentId)) {
+      throw const FormatException('Invalid restored attachment id');
+    }
+    final directory = await _transactionDirectory(transactionId);
+    final destination = File(p.join(directory.path, '$attachmentId.pprc'));
+    final existing = await _accountHasReceipts();
+    await _withKey(
+      receiptsExist: existing,
+      use: (key, version) async {
+        await directory.create(recursive: true);
+        // An interrupted restore can leave a file that no row points to; a
+        // retry replaces it. A file with a row is never replaced.
+        final referenced = _database.db.select(
+          'SELECT 1 FROM transaction_attachments WHERE id = ? OR local_path = ?',
+          [attachmentId, destination.path],
+        );
+        if (referenced.isEmpty &&
+            await FileSystemEntity.type(destination.path, followLinks: false) ==
+                FileSystemEntityType.file) {
+          await destination.delete();
+        }
+        await _store.copyEncrypted(
+          source: plaintext,
+          destination: destination,
+          key: key,
+          accountNamespace: _keyNamespace,
+          attachmentId: attachmentId,
+          keyVersion: version,
+        );
+      },
+    );
+    return destination.path;
   }
 
   Future<void> delete(TransactionAttachment attachment) =>
