@@ -18,6 +18,16 @@
       "url": "https://www.hdfc.bank.in/content/dam/hdfcbankpws/in/en/personal-banking/discover-products/cards/credit-cards/personal-mitc/mitc-in-english.pdf",
       "doc": "HDFC Bank credit card MITC v4.18, Oct 2026",
       "quote": "Reward Points earned on Grocery transactions will be capped per month"
+    },
+    {
+      "url": "https://www.hdfc.bank.in/content/dam/hdfcbankpws/in/en/personal-banking/discover-products/cards/credit-cards/personal-mitc/mitc-in-english.pdf",
+      "doc": "HDFC Bank credit card MITC v4.18, Oct 2026 (Fair Usage Policy)",
+      "quote": "The maximum reward points that can be earned in a statement cycle for Times Platinum, Times Titanium, Tata Neu Plus* ... is 25,000"
+    },
+    {
+      "url": "https://www.hdfc.bank.in/content/dam/hdfcbankpws/in/en/personal-banking/discover-products/cards/credit-cards/tata-neu-plus-hdfc-bank-credit-card/pdfs/tata_neu_plus_card_tnc.pdf",
+      "doc": "T&C Annex 1 - Tata Brand Merchants and Fair Usage Policy",
+      "quote": "Electronics Croma 3,00,000 9,00,000"
     }
   ],
   "examples": [
@@ -43,7 +53,9 @@
         "amount": 5,
         "value_inr": 5,
         "excluded": false,
-        "cap_deltas_by_source_id": {}
+        "cap_deltas_by_source_id": {
+          "wp7_fair_usage_statement_cycle": 5
+        }
       },
       "why": "Issuer worked example: 1.0% of 499, rounded to nearest whole NeuCoin = 5. 1 NeuCoin = Rs1."
     },
@@ -69,7 +81,9 @@
         "amount": 29,
         "value_inr": 29,
         "excluded": false,
-        "cap_deltas_by_source_id": {}
+        "cap_deltas_by_source_id": {
+          "wp7_fair_usage_statement_cycle": 29
+        }
       },
       "why": "Issuer worked example: 1.0% of 2,949 = 29.490, nearest whole NeuCoin = 29. Computed on the exact amount, not Rs100 blocks."
     },
@@ -95,7 +109,9 @@
         "amount": 75,
         "value_inr": 75,
         "excluded": false,
-        "cap_deltas_by_source_id": {}
+        "cap_deltas_by_source_id": {
+          "wp7_fair_usage_statement_cycle": 75
+        }
       },
       "why": "Issuer worked example: 1.0% of 7,500 = 75.0, posted as 75. Half rounds up."
     },
@@ -121,7 +137,11 @@
         "amount": 422,
         "value_inr": 422,
         "excluded": false,
-        "cap_deltas_by_source_id": {}
+        "cap_deltas_by_source_id": {
+          "wp7_fair_usage_statement_cycle": 422,
+          "tata_partner_croma_wp7_monthly": 21100,
+          "tata_partner_croma_wp7_annual": 21100
+        }
       },
       "why": "Issuer worked example: base 211 + additional 211, each rounded separately."
     },
@@ -173,7 +193,9 @@
         "amount": 49,
         "value_inr": 49,
         "excluded": false,
-        "cap_deltas_by_source_id": {}
+        "cap_deltas_by_source_id": {
+          "wp7_fair_usage_statement_cycle": 49
+        }
       },
       "why": "Issuer worked example: merchant EMI earns only the base 1.0%, no partner uplift: 49."
     },
@@ -202,7 +224,8 @@
         "value_inr": 50,
         "excluded": false,
         "cap_deltas_by_source_id": {
-          "grocery_monthly_1000": 50
+          "grocery_monthly_1000": 50,
+          "wp7_fair_usage_statement_cycle": 50
         }
       },
       "why": "1.0% would be 100 but only 50 NeuCoins remain in the 1000/month grocery cap."
@@ -258,7 +281,8 @@
         "value_inr": 200,
         "excluded": false,
         "cap_deltas_by_source_id": {
-          "insurance_monthly_2000": 200
+          "insurance_monthly_2000": 200,
+          "wp7_fair_usage_statement_cycle": 200
         }
       },
       "why": "Insurance earns the base rate, capped at 2,000 NeuCoins per month: 200."
@@ -289,6 +313,13 @@
       "cardpipeline_says": "1,000 per month.",
       "issuer_says": "MITC: 2,000 for Tata Neu Infinity cards, 1,000 for the rest, so Plus is 1,000. Matches.",
       "proposed_fix": "none"
+    },
+    {
+      "item": "WP7 r2: caps in examples 001, 002, 003, 004, 006, 007, 009",
+      "cardpipeline_says": "No statement-cycle ceiling; partner 5%/2% uncapped.",
+      "issuer_says": "MITC fair usage: Times Platinum, Times Titanium, Tata Neu Plus* ... is 25,000. Annex 1 caps the spend eligible for the partner rate per brand (Croma 3,00,000 9,00,000). Earning examples list the card-wide cap delta; 004 also the Croma monthly/annual spend caps. Amounts unchanged.",
+      "proposed_fix": "override",
+      "override_file": "api/scripts/catalogue_overrides/tata-neu-plus-hdfc-bank.json"
     }
   ]
 }
