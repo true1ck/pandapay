@@ -4,7 +4,7 @@
   "inputs": {
     "transform_version": "7",
     "source_record_sha256": "667d4701d4614008289fe18cfd043975dd9106ba5ba494db117e6433993923bb",
-    "override_sha256": "3181b926e548fb0ece4685e85607009c66683b46d3e12efbe394e9232d3795cd",
+    "override_sha256": "00a6d7665724d4b2b4ea579ac96baeb9f0d255bc6c66f5d9401dac61bf6a7e7f",
     "directory_sha256": "b1094d54b77e848d22f7a9a64f3ae6d1ef43ca3eb2fc8e40cd43ed1994664694",
     "verified": true
   },
@@ -25,8 +25,8 @@
     "points_expiry_months": 24,
     "model_status": "verified",
     "model_coverage": {
-      "rules_total": 24,
-      "rules_modelled": 20,
+      "rules_total": 25,
+      "rules_modelled": 21,
       "rules_info": 4,
       "caps_total": 4,
       "caps_enforced": 4,
@@ -199,6 +199,14 @@
           "value_sha256": "02ba3cccda3ab94c",
           "reason": "WP7: Revision notice: \"Max. 500 RPs on Insurance Spends\" for eligible PhonePe spends, separate from \"Max. 1,500 RPs on Other Spends\".",
           "source_url": "https://www.sbicard.com/sbi-card-en/assets/docs/pdf/ekit-tncs/PhonePe-Black-pdf-27Apr2026.pdf",
+          "checked_on": "2026-11-05"
+        },
+        {
+          "path": "reward_rules",
+          "op": "append",
+          "value_sha256": "906f65db73df3af0",
+          "reason": "WP7: D28c: Reward Program T&C exclusions: \"Flexipay Transactions\" and \"Merchant EMI i.e. EMI's availed at the time of purchase at Merchant establishment or websites\". The record's EMI row needs category emi AND rail emi, so an EMI purchase in another category earned. Rail-EMI exclusion on all spend.",
+          "source_url": "https://www.sbicard.com/sbi-card-en/assets/media/images/personal/credit-cards/rewards/phonepe/tnc/RP-tnc.pdf",
           "checked_on": "2026-11-05"
         }
       ]
@@ -1715,6 +1723,40 @@
         "max_engine_version": null,
         "source_local_id": "phonepe-10x-insurance",
         "display_note": "10 Reward Points per Rs100 on insurance paid in the PhonePe app (max 500 RP per month)."
+      },
+      {
+        "id": "phonepe-sbi-select-black:rule:wp7_emi_rail_exclusion",
+        "category_id": null,
+        "category_slug": null,
+        "merchant_pattern": null,
+        "rail": "emi",
+        "unit": "points_per_100",
+        "rate": 0,
+        "min_txn_inr": null,
+        "max_txn_inr": null,
+        "priority": 0,
+        "conditions": {
+          "source_local_id": "wp7_emi_rail_exclusion",
+          "part": null,
+          "info_reasons": [],
+          "flags": []
+        },
+        "notes": null,
+        "effective_from": "2025-07-22",
+        "effective_to": null,
+        "excluded_categories": [],
+        "rule_role": "exclusion",
+        "merchant_slugs": [],
+        "platform_slugs": [],
+        "mcc_include": [],
+        "mcc_exclude": [],
+        "except_merchant_slugs": [],
+        "except_platform_slugs": [],
+        "block_inr": null,
+        "min_engine_version": 2,
+        "max_engine_version": null,
+        "source_local_id": "wp7_emi_rail_exclusion",
+        "display_note": "EMI transactions earn no rewards."
       }
     ],
     "cap_rules": [
