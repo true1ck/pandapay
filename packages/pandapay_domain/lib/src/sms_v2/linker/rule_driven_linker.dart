@@ -746,10 +746,13 @@ class _Run {
     LegRole otherRole,
     Fact g,
   ) {
-    final a = _principal(f);
-    final b = _principal(g);
+    final pa = _priced(f);
+    final pb = _priced(g);
     final tol = rule.join.amountTolerancePct ?? 0;
-    if (a == null || b == null) return tol >= 100;
+    // Amounts in different units (paise against cents) never compare.
+    if (pa == null || pb == null || pa.unit != pb.unit) return tol >= 100;
+    final a = pa.minor;
+    final b = pb.minor;
     if (tol >= 100) {
       // "Up to": the dependent leg is at most the reference leg.
       if (_isReference(otherRole)) return b >= a;
@@ -1925,15 +1928,26 @@ class _Run {
     return k == null || k == InstrumentKind.wallet;
   }
 
-  static int? _principal(Fact f) => switch (f) {
-    MovementFact() => f.amount(AmountRole.posted)?.minor,
-    HoldFact() =>
-      (f.amount(AmountRole.held) ?? f.amount(AmountRole.released))?.minor,
-    MandateFact() => f.amount(AmountRole.ceiling)?.minor,
-    AttemptFact() =>
-      (f.amount(AmountRole.posted) ?? f.amount(AmountRole.scheduled))?.minor,
-    _ => null,
-  };
+  /// The amount a fact moves, with its unit.
+  static ({String unit, int minor})? _priced(Fact f) {
+    final a = switch (f) {
+      MovementFact() => f.amount(AmountRole.posted),
+      HoldFact() => f.amount(AmountRole.held) ?? f.amount(AmountRole.released),
+      MandateFact() => f.amount(AmountRole.ceiling),
+      AttemptFact() =>
+        f.amount(AmountRole.posted) ?? f.amount(AmountRole.scheduled),
+      _ => null,
+    };
+    return a == null ? null : (unit: a.unit, minor: a.minor);
+  }
+
+  /// The rupee amount (paise) a fact moves, or null. A foreign-only amount
+  /// (CCR-004) is never paise: it cannot be compared with one, indexed beside
+  /// one or become an event's amount.
+  static int? _principal(Fact f) {
+    final p = _priced(f);
+    return p != null && p.unit == 'INR' ? p.minor : null;
+  }
 
   static DateTime _latest(Fact f) =>
       f.effectiveAt.isAfter(f.observedAt) ? f.effectiveAt : f.observedAt;
