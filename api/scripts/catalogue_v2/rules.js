@@ -750,7 +750,7 @@ function transformRule(src, idx, ctx) {
   }
   if (cond.channelNonPurchase) pendingNonPurchase.push('non_purchase_channel');
   if (pendingNonPurchase.length) {
-    const pinnedNonPurchase = parts.every((p) => p.mccInclude?.length || ['atm', 'emi'].includes(p.rail));
+    const pinnedNonPurchase = parts.every((p) => p.mccInclude?.length || ['atm', 'emi'].includes(p.rail) || p.categorySlug === 'emi');
     if (isExclusion && pinnedNonPurchase) flags.push('exclusion_scope_broadened');
     else info.push(...pendingNonPurchase);
   }

@@ -1199,8 +1199,11 @@ test('an EMI exclusion on the EMI category and the EMI rail excludes either (alt
     // SBI shape
     rule({ id: 'merchant_emi', category_id: 'emi', evaluation_type: 'exclusion', rail: 'emi',
       conditions: { transaction_type: 'merchant_emi' }, action: { points_per_block: 0, reason: 'Merchant EMI does not earn reward points.' } }),
+    // SBI Flexipay: a non-purchase channel, pinned by the EMI category / rail
+    rule({ id: 'flexipay', category_id: 'emi', evaluation_type: 'exclusion', rail: 'emi', channel_type: 'flexipay',
+      conditions: { transaction_type: 'flexipay' }, action: { points_per_block: 0, reason: 'Flexipay transactions do not earn reward points.' } }),
   ]));
-  for (const id of ['emi_zero', 'merchant_emi']) {
+  for (const id of ['emi_zero', 'merchant_emi', 'flexipay']) {
     const rows = only(r, id).map((x) => [x.rule_role, x.category_slug, x.rail, x.min_engine_version]).sort((a, b) => a[3] - b[3]);
     assert.deepEqual(rows, [['exclusion', 'emi', null, 1], ['exclusion', null, 'emi', 2]], id);
     assert.ok(only(r, id)[0].flags.includes('emi_alternatives'));
