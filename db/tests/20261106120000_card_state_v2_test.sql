@@ -45,6 +45,12 @@ begin
   if v_count <> 6 then
     raise exception 'card_state_v2 columns missing or wrongly typed (found % of 6)', v_count;
   end if;
+  -- C8 D33f: the kind check is added NOT VALID and then validated, so it ends validated.
+  if not exists (select 1 from pg_constraint
+                  where conrelid = 'public.cap_states'::regclass
+                    and conname = 'cap_states_cap_kind_known' and contype = 'c' and convalidated) then
+    raise exception 'cap_states_cap_kind_known must exist and be validated';
+  end if;
 
   -- Seed: a card, its cap and milestone, two profiles, one user card, one spend.
   insert into issuers (id, slug, name) values (v_issuer, 'wp8-test-bank', 'WP8 Test Bank');

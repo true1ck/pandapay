@@ -410,6 +410,17 @@ test('C8 D23d: every route that changes a transaction takes the ingest lock befo
   }
 });
 
+test('C8 D33f (M2): the cap_states kind check is added NOT VALID, then validated in its own statement', () => {
+  const sql = require('node:fs').readFileSync(require('node:path').join(
+    __dirname, '../../db/supabase/migrations/20261106120000_card_state_v2.sql'), 'utf8')
+    .replace(/--[^\n]*/g, '').replace(/\s+/g, ' ').toLowerCase();
+  const statements = sql.split(';').map((s) => s.trim()).filter(Boolean);
+  const add = statements.findIndex((s) => s.includes('add constraint cap_states_cap_kind_known'));
+  const validate = statements.findIndex((s) => s === 'alter table cap_states validate constraint cap_states_cap_kind_known');
+  assert.ok(add >= 0 && / not valid$/.test(statements[add]), 'added NOT VALID');
+  assert.ok(validate > add, 'validated afterwards, in a separate statement');
+});
+
 test('recompute_card_state: dry run by default; options are validated', () => {
   const { parseArgs } = require('../scripts/recompute_card_state');
   assert.equal(parseArgs([]).apply, false);
