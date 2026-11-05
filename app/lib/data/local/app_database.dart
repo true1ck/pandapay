@@ -4,6 +4,7 @@ import 'package:path/path.dart' as p;
 import 'package:sqlite3/sqlite3.dart';
 import '../../features/shared_expenses/storage/shared_schema.dart';
 import '../device_identity.dart';
+import '../secure_storage/install_guard.dart';
 import 'database_key.dart';
 import 'storage_paths.dart';
 
@@ -551,6 +552,7 @@ class AppDatabase {
       return AppDatabase._(sqlite3.openInMemory());
     }
     ensureSqlCipherLoaded();
+    await InstallGuard.ensure();
     final paths = await StoragePaths.resolve();
     final installId = await DeviceIdentity().localDeviceId();
     final keyHex = await DatabaseKeyLoader(

@@ -23,6 +23,7 @@ import 'app/router.dart';
 import 'app/startup_timing.dart';
 import 'data/api_request_headers_client.dart';
 import 'data/local/database_key.dart';
+import 'data/secure_storage/install_guard.dart';
 import 'data/spend_reports_repository.dart';
 import 'data/product_access_api.dart';
 import 'features/settings/appearance_providers.dart';
@@ -59,6 +60,8 @@ void _start() {
     WidgetsFlutterBinding.ensureInitialized();
     ensureSqlCipherLoaded();
     unawaited(SharedPreferences.getInstance());
+    // Warm the reinstall check; the token store and database await it too.
+    unawaited(InstallGuard.ensure().catchError((Object _) {}));
 
     // error_handling.dart: catches errors outside Flutter's build recovery
     // (unawaited futures and platform callbacks) before the first frame.
