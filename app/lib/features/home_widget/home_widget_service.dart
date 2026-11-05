@@ -1,3 +1,5 @@
+import 'dart:io';
+
 import 'package:flutter/material.dart';
 import 'package:home_widget/home_widget.dart';
 import 'package:pandapay_domain/pandapay_domain.dart';
@@ -85,6 +87,67 @@ class HomeWidgetService {
   static const String cardReasonKey = 'best_card_reason';
   static const String noCardKey = 'best_card_none';
   static const String updatedAtKey = 'best_card_updated_at';
+
+  /// Every key this service writes to the shared widget store. Sign-out
+  /// clears all of them; a test keeps the list in step with the constants.
+  static const List<String> allDataKeys = <String>[
+    spendChartPathKey,
+    brandMarkPathKey,
+    compactDetailsPathKey,
+    compactWideDetailsPathKey,
+    spendingCompactDetailsPathKey,
+    spendingCompactWideDetailsPathKey,
+    expandedDetailsPathKey,
+    expandedLandscapeDetailsPathKey,
+    expandedTallDetailsPathKey,
+    spendingLandscapeDetailsPathKey,
+    spendingTallDetailsPathKey,
+    expandedPortraitDetailsPathKey,
+    expandedWideDetailsPathKey,
+    expandedMediumDetailsPathKey,
+    expandedLargeDetailsPathKey,
+    spendingDetailsPathKey,
+    spendingPortraitDetailsPathKey,
+    spendingWideDetailsPathKey,
+    spendingMediumDetailsPathKey,
+    spendingLargeDetailsPathKey,
+    cardArtPathKey,
+    spendTotalKey,
+    spendPeriodKey,
+    spendTopCategoryKey,
+    spendTopCategoryValueKey,
+    spendRewardsKey,
+    cardNameKey,
+    cardValueKey,
+    cardReasonKey,
+    noCardKey,
+    updatedAtKey,
+  ];
+
+  /// Keys whose value is the path of an image rendered for the widgets.
+  static const List<String> _imagePathKeys = <String>[
+    spendChartPathKey,
+    brandMarkPathKey,
+    compactDetailsPathKey,
+    compactWideDetailsPathKey,
+    spendingCompactDetailsPathKey,
+    spendingCompactWideDetailsPathKey,
+    expandedDetailsPathKey,
+    expandedLandscapeDetailsPathKey,
+    expandedTallDetailsPathKey,
+    spendingLandscapeDetailsPathKey,
+    spendingTallDetailsPathKey,
+    expandedPortraitDetailsPathKey,
+    expandedWideDetailsPathKey,
+    expandedMediumDetailsPathKey,
+    expandedLargeDetailsPathKey,
+    spendingDetailsPathKey,
+    spendingPortraitDetailsPathKey,
+    spendingWideDetailsPathKey,
+    spendingMediumDetailsPathKey,
+    spendingLargeDetailsPathKey,
+    cardArtPathKey,
+  ];
 
   final HomeWidgetRenderer _renderer;
   bool _configured = false;
@@ -398,6 +461,58 @@ class HomeWidgetService {
         iOSName: recommendationIosWidgetName,
       ),
     ]);
+  }
+
+  /// Removes everything the widgets show: deletes the rendered images, empties
+  /// every shared key and refreshes the widgets so they go blank. Call it on
+  /// sign-out. Failures to refresh a widget never stop the wipe.
+  Future<void> clearAll() async {
+    await configure();
+    for (final key in _imagePathKeys) {
+      try {
+        final path = await HomeWidget.getWidgetData<String>(key);
+        if (path != null && path.endsWith('.png')) {
+          final file = File(path);
+          if (await file.exists()) await file.delete();
+        }
+      } catch (_) {
+        // A missing or unreadable image must not stop the data wipe below.
+      }
+    }
+    for (final key in allDataKeys) {
+      if (key == noCardKey) {
+        await HomeWidget.saveWidgetData<bool>(key, null);
+      } else {
+        await HomeWidget.saveWidgetData<String>(key, null);
+      }
+    }
+    for (final (android, qualified, ios) in const [
+      (
+        combinedAndroidWidgetName,
+        combinedQualifiedAndroidName,
+        combinedIosWidgetName,
+      ),
+      (
+        spendingAndroidWidgetName,
+        spendingQualifiedAndroidName,
+        spendingIosWidgetName,
+      ),
+      (
+        recommendationAndroidWidgetName,
+        recommendationQualifiedAndroidName,
+        recommendationIosWidgetName,
+      ),
+    ]) {
+      try {
+        await HomeWidget.updateWidget(
+          androidName: android,
+          qualifiedAndroidName: qualified,
+          iOSName: ios,
+        );
+      } catch (_) {
+        // The widget may not be installed.
+      }
+    }
   }
 
   Future<void> updateBestCardWidget({
