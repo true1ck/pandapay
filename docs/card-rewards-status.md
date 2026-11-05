@@ -31,7 +31,7 @@ Status values: `not started` · `running` · `done (branch ready)` · `merged` �
 | WP0 | Docs, contracts, scenario seed, directory skeleton | 0 | `card-rewards/phase1` | merged | 2026-11-05 | Lead |
 | WP1 | Schema v2, v1/v2 feeds, directory seeding | 1 | `card-rewards/wp1-schema` | **merged** | 2026-11-06 | Review approved + 1 fix round (D1, D2, D7, CI step); 1393 api tests; DB test fresh + incremental; seeder loads 164/61 |
 | WP2 | Loader v2 (pure transform), coverage, audit script | 1 | `card-rewards/wp2-loader` | running | 2026-11-05 | |
-| WP3 | Dart engine v2 + tolerant parsing | 1 | `card-rewards/wp3-dart-engine` | done (in review) | 2026-11-06 | 382 tests (233 existing unchanged); passes all contract scenarios + WP4's 32 (J07 marker fix pending in WP4); bad card data skips one rule/card, never the catalogue |
+| WP3 | Dart engine v2 + tolerant parsing | 1 | `card-rewards/wp3-dart-engine` | needs rework (fix round 1) | 2026-11-06 | Review approved; agrees with the server engine on 117/118 shared cases (K15 harness fix); applying D15 robustness rulings |
 | WP4 | JS engine v2 + merchant resolver | 1 | `card-rewards/wp4-js-engine` | **merged** | 2026-11-06 | Review approved + 1 fix round (D10–D12); 47 JS scenarios pin every ruling; 200/200 targeted tests on merged branch; Dart engine already agrees on 117/118 (K15 harness fix pending in WP3) |
 | WP5 | Merchant and platform directory data | 1 | `card-rewards/wp5-directory` | **merged** | 2026-11-06 | 164 merchants (9 true sub-brand parents, `group` tags per D6), 61 platforms; review + 1 fix round clean; IHCL brands kept under `taj` (ruling in ledger) |
 | WP6a | Worked examples: HDFC, SBI Card | 1 | `card-rewards/wp6a-examples-hdfc-sbi` | **merged** | 2026-11-06 | 21/21 cards, 15 override files; review + 1 fix round clean; Swiggy exact-half rounding parked |
@@ -69,6 +69,7 @@ Status values: `not started` · `running` · `done (branch ready)` · `merged` �
 | 2026-11-06 | IHCL hotel brands stay under `taj` (taj = IHCL). | Lead (ledger ruling) |
 | 2026-11-06 | D12: a category paying less than the base earns its own (lower) rate; D13: cardholder-dependent caps/rates (credit-limit caps, tiers, paid memberships) are deferred to Phase 2 and never guessed. | Lead |
 | 2026-11-06 | D14: examples depending on facts a purchase can't tell us (gift card, international, birthday) are kept but not engine-checked; such rules are info-only until Phase 2; overrides must never drop exclusions. | Lead |
+| 2026-11-06 | D15: engines never silently drop limits or exclusions they can't read; they skip visibly and lower confidence. The app must not use cap headroom for points caps until server state is in native units (WP8). | Lead |
 | 2026-11-06 | D10: cards switch to the v2 engine only when re-imported by the v2 loader (DB defaults alone never switch a card), so existing cards keep today's behaviour until re-import. | Lead |
 
 ## Changelog
