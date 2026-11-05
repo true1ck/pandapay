@@ -26,6 +26,7 @@ import '../data/card_feedback_repository.dart';
 import '../data/card_overrides_repository.dart';
 import '../data/card_requests_api.dart';
 import '../data/catalogue_repository.dart';
+import '../data/catalogue_v2.dart';
 import '../data/commitments_repository.dart';
 import '../data/consents_api.dart';
 import '../data/device_identity.dart';
@@ -2654,16 +2655,14 @@ final homeDataRefreshProvider = FutureProvider<void>((ref) async {
 
   Future<void> refreshCatalogue() async {
     try {
-      final cards = await ref
+      // WP9: v2 live (cached losslessly under the versioned key), else v1.
+      await ref
           .read(catalogueRepositoryProvider)
-          .fetchCatalogue()
-          .timeout(_homeRequestTimeout);
-      if (cards.isNotEmpty) {
-        await cache.put(
-          _catalogueCacheKey,
-          jsonEncode({'cards': cards.map((c) => c.toJson()).toList()}),
-        );
-      }
+          .loader(
+            cache: ResponseCacheCatalogueStore(cache),
+            timeout: _homeRequestTimeout,
+          )
+          .refreshCache();
     } catch (_) {}
   }
 
@@ -4862,7 +4861,6 @@ final lastSyncedAtProvider = FutureProvider<DateTime?>((ref) async {
   }
 });
 
-const _catalogueCacheKey = 'catalogue';
 const _categoriesCacheKey = 'categories';
 const _userCardsCacheKey = 'user_cards';
 const _userCardsWithArchivedCacheKey = 'user_cards_with_archived';
@@ -6109,64 +6107,47 @@ Future<TransactionEntry?> cachedTransactionById(Ref ref, String id) async {
   return null;
 }
 
-/// UA-0.3 offline step: live fetch first, caching the raw response on
-/// success; on ANY fetch failure, falls back to the last cached response
-/// rather than leaving Home with nothing to rank against. Only fires the
-/// fallback on a genuine failure — a successful-but-empty catalogue is
-/// never treated as "fetch failed."
+/// UA-0.3 offline step, as extended by Card Rewards Phase 1 (WP9): the
+/// catalogue load is `CatalogueLoader` (data/catalogue_v2.dart) — v2 cache
+/// first (today's cache-first policy), then live v2 (`?schema=2`), live v1
+/// for an older server, the old v1 cache key as a v1 last resort, then the
+/// bundled asset. Every step parses card by card, so one bad card is
+/// skipped and never drops the catalogue. A successful-but-empty feed is
+/// never treated as a fetch that worked.
 final catalogueProvider = FutureProvider<List<CardProduct>>((ref) async {
+  // Resolve Ref values before the first async gap (see _cacheOrNull).
+  final directoryHolder = ref.read(_catalogueDirectoryHolderProvider);
+  final repository = ref.watch(catalogueRepositoryProvider);
   final cache = await _cacheOrNull(ref);
-  final cached = await cache?.get(_catalogueCacheKey);
-  if (cached != null) {
-    try {
-      final body = jsonDecode(cached) as Map<String, dynamic>;
-      final cards = (body['cards'] as List)
-          .cast<Map<String, dynamic>>()
-          .map(CardProductJson.fromJson)
-          .toList();
-      if (cards.isNotEmpty) return cards;
-    } catch (_) {
-      // Fall through to the live/bundled catalogue below.
-    }
-  }
-  try {
-    final cards = await ref
-        .watch(catalogueRepositoryProvider)
-        .fetchCatalogue()
-        .timeout(const Duration(seconds: 15));
-    if (cards.isNotEmpty) {
-      await cache?.put(
-        _catalogueCacheKey,
-        jsonEncode({'cards': cards.map((c) => c.toJson()).toList()}),
-      );
-      return cards;
-    }
-  } catch (_) {}
+  final feed = await repository
+      .loader(
+        cache: cache == null ? null : ResponseCacheCatalogueStore(cache),
+        loadBundled: () => rootBundle.loadString(bundledCatalogueAsset),
+      )
+      .load();
+  directoryHolder.directory = feed.directory;
+  return feed.cards;
+});
 
-  try {
-    if (cached != null) {
-      final body = jsonDecode(cached) as Map<String, dynamic>;
-      final cards = (body['cards'] as List)
-          .cast<Map<String, dynamic>>()
-          .map(CardProductJson.fromJson)
-          .toList();
-      if (cards.isNotEmpty) return cards;
-    }
-  } catch (_) {}
+/// The merchant directory that arrived with the catalogue [catalogueProvider]
+/// last loaded (v2 feed `merchants` / `platforms`); empty on every v1 source.
+/// A plain holder, written by [catalogueProvider] before its future
+/// completes, so the directory always belongs to the same load as the cards
+/// and `invalidate(catalogueProvider)` still refetches both.
+class CatalogueDirectoryHolder {
+  MerchantDirectory directory = MerchantDirectory.empty;
+}
 
-  try {
-    final raw = await rootBundle.loadString(
-      'assets/data/bundled_catalogue.json',
-    );
-    final body = jsonDecode(raw) as Map<String, dynamic>;
-    final cards = (body['cards'] as List)
-        .cast<Map<String, dynamic>>()
-        .map(CardProductJson.fromJson)
-        .toList();
-    if (cards.isNotEmpty) return cards;
-  } catch (_) {}
+final _catalogueDirectoryHolderProvider = Provider<CatalogueDirectoryHolder>(
+  (ref) => CatalogueDirectoryHolder(),
+);
 
-  return const [];
+/// Plan C5 directory for the recommendation engine and the context
+/// builders. Rebuilds when the catalogue does; [MerchantDirectory.empty]
+/// until a v2 feed has loaded.
+final merchantDirectoryProvider = Provider<MerchantDirectory>((ref) {
+  ref.watch(catalogueProvider);
+  return ref.read(_catalogueDirectoryHolderProvider).directory;
 });
 
 final categoriesProvider = FutureProvider<List<SpendCategory>>((ref) async {
@@ -6308,7 +6289,11 @@ final enteredAmountProvider = StateProvider<Money>(
 final pendingScannedCardIdProvider = StateProvider<String?>((ref) => null);
 
 final recommendationEngineProvider = Provider<RecommendationEngine>((ref) {
-  return const RecommendationEngine();
+  // WP9: the C5 directory resolves merchant slugs on v2 cards; empty (the
+  // engine's own default) until a v2 feed has loaded.
+  return RecommendationEngine(
+    merchantDirectory: ref.watch(merchantDirectoryProvider),
+  );
 });
 
 /// Ranks the fetched catalogue for the selected category, scoped to the

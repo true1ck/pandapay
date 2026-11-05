@@ -4,6 +4,7 @@ import 'package:http/http.dart' as http;
 import 'package:pandapay_domain/pandapay_domain.dart';
 
 import 'api_exception.dart';
+import 'catalogue_v2.dart';
 
 /// UA-1.2 (partial): fetches the published card catalogue from api/'s
 /// GET /catalogue, which serves `v_card_catalogue_export` — the device sync
@@ -11,25 +12,75 @@ import 'api_exception.dart';
 /// and does incremental `data_version > local_max` sync (drift-backed local
 /// cache); neither exists yet — this always does a full network fetch, so
 /// there is currently no offline path. Flagged, not hidden.
+///
+/// Card Rewards Phase 1 (WP9): [HttpCatalogueRepository] also serves the v2
+/// feed through [V2CatalogueSource]. This interface stays v1-only so every
+/// existing fake keeps compiling; [CatalogueRepositoryLoading.loader] picks
+/// v2 up when the repository offers it.
 abstract class CatalogueRepository {
   Future<List<CardProduct>> fetchCatalogue();
 }
 
-class HttpCatalogueRepository implements CatalogueRepository {
+extension CatalogueRepositoryLoading on CatalogueRepository {
+  /// The WP9 fallback chain over this repository (v2 live, v1 live, cache,
+  /// bundle). See [CatalogueLoader].
+  CatalogueLoader loader({
+    CatalogueCacheStore? cache,
+    Future<String> Function()? loadBundled,
+    Duration timeout = const Duration(seconds: 15),
+    CatalogueLog? log,
+  }) {
+    final self = this;
+    return CatalogueLoader(
+      fetchV1: fetchCatalogue,
+      v2Source: self is V2CatalogueSource ? self as V2CatalogueSource : null,
+      cache: cache,
+      loadBundled: loadBundled,
+      timeout: timeout,
+      log: log,
+    );
+  }
+}
+
+class HttpCatalogueRepository
+    implements CatalogueRepository, V2CatalogueSource {
   final String baseUrl;
   final http.Client _client;
 
   HttpCatalogueRepository({required this.baseUrl, http.Client? client}) : _client = client ?? http.Client();
 
+  /// `GET /catalogue` (v1). Parsed card by card: a card that throws is
+  /// skipped (id and error type logged), never the whole list.
   @override
   Future<List<CardProduct>> fetchCatalogue() async {
     final response = await _client.get(Uri.parse('$baseUrl/catalogue'));
     if (response.statusCode != 200) {
       throw ApiException('GET /catalogue failed: ${response.statusCode} ${response.body}');
     }
-    final body = jsonDecode(response.body) as Map<String, dynamic>;
-    final cards = (body['cards'] as List).cast<Map<String, dynamic>>();
-    return cards.map((json) => CardProductJson.fromJson(json)).toList();
+    return parseCatalogueBody(
+      jsonDecode(response.body),
+      schema: 1,
+      origin: CatalogueOrigin.liveV1,
+    ).cards;
+  }
+
+  /// `GET /catalogue?schema=2` (plan C2). An older server ignores the query
+  /// parameter and answers with the v1 body; that is not a v2 feed, so it
+  /// throws [CatalogueSchemaMismatch] and the loader goes on to v1.
+  @override
+  Future<CatalogueV2Fetch> fetchV2() async {
+    final response = await _client.get(Uri.parse('$baseUrl/catalogue?schema=2'));
+    if (response.statusCode != 200) {
+      throw ApiException('GET /catalogue?schema=2 failed: ${response.statusCode}');
+    }
+    final decoded = jsonDecode(response.body);
+    if (decoded is! Map || decoded['schema'] != 2) {
+      throw const CatalogueSchemaMismatch();
+    }
+    return CatalogueV2Fetch(
+      parseCatalogueBody(decoded, schema: 2, origin: CatalogueOrigin.liveV2),
+      response.body,
+    );
   }
 }
 
