@@ -78,6 +78,7 @@ function registerSmsV2(app, deps) {
   require('./client_metrics_route').registerClientMetrics(app, shared); // Lane N
 
   require('./ai_templates').registerTemplates(app, shared);
+  require('./learning_signals').registerLearningSignals(app, shared);
 
   require('./legacy_supersede').installLegacySupersede(hooks);
 

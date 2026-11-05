@@ -733,6 +733,10 @@
       "disposition": "platform_ops",
       "reason": "Admin-set learning and AI settings are platform administration state preserved by full PostgreSQL recovery, outside a customer portable archive."
     },
+    "sms_v2_learning_signals": {
+      "disposition": "excluded_with_intent",
+      "reason": "Opt-in, anonymised shop signals (category choices, shop-name fixes, shops left in Other) hold no amounts, dates, account numbers or people. They are deleted when the person withdraws sharing or deletes the account, and are preserved by full PostgreSQL recovery."
+    },
     "sms_v2_user_limits": {
       "disposition": "excluded_with_intent",
       "reason": "Admin-set, time-limited abuse and capacity overrides for one account are operations state, not the person's data. They expire within 90 days and are preserved by full PostgreSQL recovery."

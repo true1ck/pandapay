@@ -1,0 +1,65 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://pandapay.app/contracts/sms/v2/api/learning_signals.request.schema.json",
+  "title": "POST /sms/v2/learning-signals request",
+  "description": "Anonymised shop learning signals, sent only with the sms_shared_learning opt-in. Keys and values pass the shop-key filters again on the server.",
+  "type": "object",
+  "required": [
+    "items"
+  ],
+  "additionalProperties": false,
+  "properties": {
+    "items": {
+      "type": "array",
+      "minItems": 1,
+      "maxItems": 50,
+      "x-codes": {
+        "maxItems": "request.learning_signals.items_too_many"
+      },
+      "items": {
+        "type": "object",
+        "required": [
+          "kind",
+          "senderBrand",
+          "merchantKey",
+          "value",
+          "eventType",
+          "taxonomyVersion"
+        ],
+        "additionalProperties": false,
+        "properties": {
+          "kind": {
+            "enum": [
+              "category_choice",
+              "merchant_name",
+              "uncategorised"
+            ],
+            "x-code": "request.learning_signals.kind_invalid"
+          },
+          "senderBrand": {
+            "type": "string",
+            "pattern": "^[A-Z0-9]{1,32}$",
+            "x-code": "request.learning_signals.sender_brand_invalid"
+          },
+          "merchantKey": {
+            "type": "string",
+            "minLength": 2,
+            "maxLength": 60
+          },
+          "value": {
+            "type": "string",
+            "maxLength": 40
+          },
+          "eventType": {
+            "const": "purchase",
+            "x-code": "request.learning_signals.event_type_invalid"
+          },
+          "taxonomyVersion": {
+            "type": "integer",
+            "minimum": 1
+          }
+        }
+      }
+    }
+  }
+}

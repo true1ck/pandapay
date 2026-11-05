@@ -110,6 +110,11 @@ class PgTx {
   async isTester() { return (await this.c.query('SELECT pandapay.sms_v2_is_tester() AS t')).rows[0].t === true; }
   // Console settings (settings.js); the hourly job wants current values, not a cached read.
   async settings() { return readSettings(this.c, { force: true }); }
+  // Learning signals older than the retention setting (days) are deleted by the hourly job.
+  async pruneSignals(days) {
+    const r = await this.c.query('DELETE FROM sms_v2_learning_signals WHERE last_at < now() - make_interval(days => $1::int)', [days]);
+    return r.rowCount;
+  }
   async phoneBundle(cohort) {
     // The pre-signed copy (`body` is null until the maintenance job has signed it).
     const r = await this.c.query('SELECT * FROM pandapay.sms_v2_latest_served_bundle($1)', [cohort]);
@@ -205,6 +210,7 @@ class MemoryStore {
       async audit(a) { st().audit.push(structuredClone({ ...a, at: new Date().toISOString() })); },
       async isTester(profileId) { return st().testers.has(profileId); },
       async settings() { return mergeSettings(st().settings); },
+      async pruneSignals() { return 0; },
       async phoneBundle(cohort) {
         const b = await this.latestBundle(cohort);
         return b ? { bundleVersion: b.bundleVersion, body: b.servedBody || null, sha256: b.sha256 } : null;

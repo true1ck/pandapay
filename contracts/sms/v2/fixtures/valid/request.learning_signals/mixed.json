@@ -1,0 +1,20 @@
+{
+  "items": [
+    {
+      "kind": "merchant_name",
+      "senderBrand": "ICICIB",
+      "merchantKey": "PAYU SWIGGY",
+      "value": "SWIGGY",
+      "eventType": "purchase",
+      "taxonomyVersion": 1
+    },
+    {
+      "kind": "uncategorised",
+      "senderBrand": "ICICIB",
+      "merchantKey": "BLINKIT",
+      "value": "",
+      "eventType": "purchase",
+      "taxonomyVersion": 1
+    }
+  ]
+}

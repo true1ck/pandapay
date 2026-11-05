@@ -1,0 +1,12 @@
+{
+  "items": [
+    {
+      "kind": "category_choice",
+      "senderBrand": "HDFCBK",
+      "merchantKey": "SWIGGY",
+      "value": "dining",
+      "eventType": "income",
+      "taxonomyVersion": 1
+    }
+  ]
+}

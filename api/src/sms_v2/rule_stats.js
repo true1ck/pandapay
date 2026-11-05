@@ -104,6 +104,9 @@ async function runRuleJobs({ store, signer, adminId, now = new Date(), refreshBe
       rules: await s.allRules(), cohorts: await s.allCohorts(), stats,
       minHits: settings.auto_pause_min_hits, minRate: settings.auto_pause_min_rate,
     });
+    // Shared signals are kept for signals_retention_days only.
+    const prunedSignals = typeof s.pruneSignals === 'function' && settings.signals_retention_days
+      ? await s.pruneSignals(settings.signals_retention_days) : 0;
     for (const p of toPause) {
       await pauseRuleVersion(s, { ruleId: p.ruleId, version: p.version, reason: AUTO_PAUSE_REASON, adminId, now });
     }
@@ -111,7 +114,7 @@ async function runRuleJobs({ store, signer, adminId, now = new Date(), refreshBe
     if (toPause.length) minted = await mintBundles(s, { signer, now, publishedBy: 'auto_pause' });
     // The public API only serves pre-signed bundles, so this job also keeps their expiry fresh.
     const refreshed = await refreshServedBundles(s, { signer, now, refreshBeforeMs });
-    return { rolledUp: rolled, paused: toPause, minted: minted.map((m) => ({ bundleVersion: m.bundleVersion, cohort: m.cohort })), refreshed };
+    return { rolledUp: rolled, prunedSignals, paused: toPause, minted: minted.map((m) => ({ bundleVersion: m.bundleVersion, cohort: m.cohort })), refreshed };
   });
 }
 

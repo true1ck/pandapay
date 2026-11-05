@@ -26,7 +26,7 @@ const BASE = 'https://pandapay.app/contracts/sms/v2/';
 const DAY_MS = 24 * 60 * 60 * 1000;
 
 const REQUEST_ROUTES = [
-  'facts_batch', 'rule_stats_batch', 'unknown_templates', 'corrections',
+  'facts_batch', 'rule_stats_batch', 'unknown_templates', 'corrections', 'learning_signals',
   'admin_rule_draft', 'admin_rule_publish', 'admin_rule_pause', 'admin_rule_rollback', 'admin_correction_decision',
 ];
 const RESPONSE_ROUTES = ['facts_batch', 'unknown_templates', 'corrections', 'sync'];
