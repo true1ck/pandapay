@@ -345,10 +345,9 @@ function mapNameValue(m, key, value, index, { allowRail }) {
         m.merchantSlugs.push(...named.merchants);
         m.platformSlugs.push(...named.platforms);
         m.flags.push('brand_from_identification_text');
-      } else if (/[A-Z]{3,}|[a-z][A-Z]/.test(raw.replace(/\b(MIDs?|TIDs?|MID\/TID|ID|IDs)\b/g, ''))) {
-        // An unknown brand-looking word: can't tell which merchants qualify.
-        m.merchantProse.push({ key, text: raw, partial: false });
       }
+      // D18g: brands are found by directory alias only; with none named the
+      // text just says how merchants are identified.
       continue;
     }
     const push = (hit) => {
@@ -463,6 +462,20 @@ function mapOne(m, key, value, ctx) {
 
   if (DESCRIPTIVE_KEYS.has(lower) || (DESCRIPTIVE_SUFFIX.test(lower) && typeof value !== 'object')) return;
   if (EXCLUSION_FLAG.test(lower) && typeof value === 'boolean') return;
+  // D18e: an explicit "other than X" / "except X" / "excluding X" naming a
+  // brand is an exception, whatever the key (checked before any key-specific handling).
+  if (typeof value === 'string') {
+    const neg = normalizeText(value).match(/\b(?:other than|except(?: at| via| for)?|excluding|apart from)\s+(.+)$/);
+    if (neg) {
+      const named = findContainedNames(neg[1], ctx.index);
+      if (named.merchants.length || named.platforms.length) {
+        m.exceptMerchantSlugs.push(...named.merchants);
+        m.exceptPlatformSlugs.push(...named.platforms);
+        m.flags.push('exception_from_prose');
+        return;
+      }
+    }
+  }
   if (/^cap(_|$)|_cap$|_cap_ref|cap_reference/.test(lower) && typeof value === 'string') {
     m.capRefs.push(value);
     return;
@@ -575,7 +588,7 @@ function mapOne(m, key, value, ctx) {
   if (/^non_/.test(lower) && value === true && (m.exceptMerchantSlugs.length || m.exceptPlatformSlugs.length)) return;
   // "payzapp_exception": "PayZapp transactions can qualify ..." names the
   // exception in prose: the brands it names are the except list.
-  if (/exceptions?$|^exception/.test(lower) && typeof value === 'string') {
+  if (/(^|_)(except|exception|exceptions)(_|$)/.test(lower) && !/(note|description|text|definition)/.test(lower) && typeof value === 'string') {
     const named = findContainedNames(value, ctx.index);
     if (named.merchants.length || named.platforms.length) {
       m.exceptMerchantSlugs.push(...named.merchants);

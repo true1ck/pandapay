@@ -62,8 +62,12 @@ const CATEGORY_MAP = {
   property_rental: exact('rent'),
   rent_property_management: exact('rent'),
   rent_payment: exact('rent'),
+  real_estate: exact('rent'),
+  rent_or_real_estate: exact('rent'),
   insurance: exact('insurance'),
   insurance_premium: exact('insurance'),
+  insurance_related_perk: exact('insurance'),
+  insurance_related: exact('insurance'),
   insurance_premiums: exact('insurance'),
   insurance_premium_payments: exact('insurance'),
   education: exact('education'),
@@ -188,9 +192,19 @@ const NARROW_TOKEN_MCC = (() => {
     fast_food: ['5814'], bars_pubs: ['5813'],
     telecom: ['4812', '4814'], telecommunication: ['4812', '4814'], telecom_cable: ['4814', '4899'],
     recharges: ['4814'], recharge: ['4814'], utility_telecom: ['4814', '4899', '4900'],
+    tolls: ['4784'], toll: ['4784'], tolls_bridges: ['4784'], road_tolls: ['4784'], travel_tolls: ['4784'],
+    transportation_tolls: ['4111', '4121', '4131', '4784'], transportation_and_tolls: ['4111', '4121', '4131', '4784'],
   };
   return Object.fromEntries(Object.entries(table).map(([k, v]) => [k, [...new Set(v)].sort()]));
 })();
+
+// D18i: merchants that are themselves an airline or a hotel brand (a
+// flights-vs-hotels split on them is not a booking-type guess).
+const AIRLINE_OR_HOTEL = new Set([
+  'indigo', 'air_india', 'air_india_express', 'vistara', 'spicejet', 'akasa_air', 'emirates',
+  'qatar_airways', 'british_airways', 'singapore_airlines', 'etihad', 'taj', 'ihcl_seleqtions',
+  'vivanta', 'gateway_hotels', 'ama_stays', 'marriott', 'hyatt', 'club_itc', 'postcard_hotels',
+]);
 
 // Brand tokens -> merchant slugs. Slugs not yet in the directory are still
 // emitted (merchant_slugs is text[], no FK) and listed as "needs directory
@@ -362,7 +376,8 @@ const UNMAPPED_NOUNS = new Set([
   'subscriptions', 'ott',
 ]);
 const CONNECTORS = new Set(['and', 'or', 'with', 'plus', 'n']);
-const IGNORABLE = new Set(['spend', 'spends', 'categories', 'category', 'merchants', 'transactions']);
+const IGNORABLE = new Set(['spend', 'spends', 'categories', 'category', 'merchants', 'transactions',
+  'payment', 'payments', 'charges', 'charge', 'services', 'service']);
 
 function pieceFor(key, ctx) {
   if (CATEGORY_MAP[key]) return { key, kind: 'category', categorySlug: CATEGORY_MAP[key].slug, broad: CATEGORY_MAP[key].broad };
@@ -458,6 +473,14 @@ function resolveCategoryToken(token, ctx = {}) {
 
   const pieces = parseComposite(t, ctx);
   const meaningful = pieces.filter((p) => p.kind !== 'qualifier');
+  // "rent_payments", "government_services_charges_payments": one real piece
+  // plus filler words.
+  if (pieces.length === 1 && meaningful.length === 1 && t.includes('_')) {
+    const part = partFromPiece(meaningful[0]);
+    if (part) {
+      return { kind: 'composite', parts: [part], unmapped: [], flags: part.broad ? ['broad_category'] : [] };
+    }
+  }
   if (pieces.length >= 2 && meaningful.length >= 1) {
     const tainted = new Set();
     pieces.forEach((p, idx) => {
@@ -499,7 +522,7 @@ function resolveCategoryToken(token, ctx = {}) {
       parts.push(part);
     });
     if (unmapped.some((u) => TXN_ATTRIBUTE_TOKENS.has(u))) flags.push('depends_on_txn_attribute');
-    if (parts.length >= 1 && (parts.length + unmapped.length) >= 2) {
+    if (parts.length >= 1 && (meaningful.length >= 2 || (parts.length + unmapped.length) >= 2)) {
       return { kind: 'composite', parts, unmapped, flags: [...new Set(flags)] };
     }
   }
@@ -528,6 +551,7 @@ function mapCategorySlugs(token) {
 }
 
 module.exports = {
+  AIRLINE_OR_HOTEL,
   NARROW_TOKEN_MCC,
   APP_CATEGORIES,
   CATEGORY_MAP,

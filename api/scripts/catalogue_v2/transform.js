@@ -124,6 +124,14 @@ function cardEconomics(record) {
   };
 }
 
+const UNIT_BLOCK = { points_per_100: 100, points_per_150: 150, points_per_200: 200, miles_per_100: 100 };
+function baseValuePerRupee(e) {
+  if (!e.baseUnit || e.baseRate === null) return null;
+  if (e.baseUnit === 'cashback_percent') return e.baseRate / 100;
+  const block = UNIT_BLOCK[e.baseUnit];
+  return block ? (e.baseRate / block) * (e.pointValueInr || 0) : null;
+}
+
 function feeWaiverRow(record) {
   const waiver = record?.fee_waiver_and_milestones?.annual_fee_waiver;
   if (!waiver) return [];
@@ -199,6 +207,7 @@ function transformCardRecordV2(rawRecord, opts = {}) {
     issuerSlug: issuerSlug.replace(/-bank$/, '').replace(/^american-express.*$/, 'amex') || issuerSlug,
     cardNetwork: typeof cp.network === 'string' ? cp.network : null,
     card: {
+      baseValue: baseValuePerRupee(economics),
       baseUnit: economics.baseUnit,
       baseBlockInr: economics.baseBlockInr,
       pointValueInr: economics.pointValueInr,
@@ -262,6 +271,7 @@ function transformCardRecordV2(rawRecord, opts = {}) {
       except_platform_slugs: [],
       block_inr: economics.unusualBlock,
       min_engine_version: 2,
+      max_engine_version: null,
       display_note: `${economics.basePointsPerBlock} pts per ₹${economics.unusualBlock}`,
       currency: 'points',
       cap_refs: [],

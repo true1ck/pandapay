@@ -16,6 +16,7 @@
 
 const { asNumber, isNA, normalizeText, uniq } = require('./util');
 const {
+  AIRLINE_OR_HOTEL,
   APP_CATEGORIES,
   ISSUER_PORTAL,
   NARROW_TOKEN_MCC,
@@ -40,6 +41,15 @@ const USER_ATTRIBUTE_KEY = /(membership|tier|prime|neon|selected|selection|plan$
 const ROLES = new Set(['base', 'earn', 'exclusion', 'info']);
 const BRANDISH_BRAND = /(paytm|amazon|flipkart|smartbuy|phonepe|swiggy|zomato|tata|neu|reliance|samsung|apple|kiwi|myntra|irctc|indigo|uber|\bola\b|lic|hpcl|bpcl|indianoil|iocl|jio|airtel|marriott|taj|vistara|air_india|makemytrip|yatra|cleartrip|bookmyshow|pvr|landmark|shoppers|lifestyle)/;
 const BRANDISH = /(paytm|amazon|flipkart|smartbuy|phonepe|swiggy|zomato|tata|reliance|samsung|apple|kiwi|myntra|irctc|indigo|uber|ola|lic|hpcl|bpcl|indianoil|iocl|jio|airtel|partner|select|preferred|exclusive|promoted|accelerated|brand)/;
+
+const UNIT_BLOCK = { points_per_100: 100, points_per_150: 150, points_per_200: 200, miles_per_100: 100 };
+function valuePerRupee(unit, rate, pointValue, blockInr) {
+  if (rate === null || rate === undefined || !unit) return null;
+  if (unit === 'cashback_percent' || unit === 'discount_percent') return Number(rate) / 100;
+  const block = blockInr || UNIT_BLOCK[unit];
+  if (!block) return null;
+  return (Number(rate) / block) * (Number(pointValue) || 0);
+}
 
 function categoryKey(s) {
   return String(s || '').trim().toLowerCase().replace(/[\s\-/.]+/g, '_');
@@ -108,8 +118,18 @@ function andPart(part, extra) {
   const out = { ...part };
   if (extra.categorySlug) {
     if (out.categorySlug && out.categorySlug !== extra.categorySlug) return null;
+    const sameExact = out.categorySlug === extra.categorySlug && !out.broad;
     out.categorySlug = extra.categorySlug;
-    if (extra.broad) out.broad = true;
+    // D18f: a narrow item stays narrow inside a combined restriction (its
+    // MCC pinning comes from its token). An exact match on either side wins.
+    if (extra.broad && !sameExact) {
+      out.broad = true;
+      out.narrowTokens = uniq([...(out.narrowTokens || []), ...(extra.narrowTokens || []), extra.token].filter(Boolean));
+      if (!out.token) out.token = extra.token;
+    } else if (!extra.broad) {
+      out.broad = false;
+      out.narrowTokens = [];
+    }
   }
   if (extra.merchantSlugs?.length) {
     const r = mergeSlugs(out.merchantSlugs, extra.merchantSlugs);
@@ -183,6 +203,10 @@ function transformRule(src, idx, ctx) {
     : unitAndRate(src, cond.block, ctx.card);
   flags.push(...ur.flags);
   if (!isExclusion && ur.rate === null) info.push('missing_rate');
+  // D18c: a rule paying less than the card's base (same currency).
+  const ruleValue = valuePerRupee(ur.unit, ur.rate, ctx.card.pointValueInr, ur.blockInr);
+  const isReduced = !isExclusion && ur.rate !== null && ur.currency && ur.currency === ctx.card.baseCurrency &&
+    ruleValue !== null && ctx.card.baseValue != null && ruleValue < ctx.card.baseValue - 1e-9;
 
   if (!isExclusion && rewardRuleHasUnsupportedTrigger(src)) info.push('unsupported_trigger');
   if (!isExclusion && /up[\s_-]*to[\s_-]*\d+(?:\.\d+)?\s*(?:x\b|%|(?:bonus\s+|reward\s+)?points?\b|rp\b|miles\b)/i.test(`${src?.id || ''} ${src?.action?.reason || ''}`)) {
@@ -265,6 +289,12 @@ function transformRule(src, idx, ctx) {
       }
       continue;
     }
+    // D18d: "utility_bill_payments", "telecom_and_utilities" on a bills rule:
+    // every mapped part is the rule's own category — a restatement.
+    if (t2.kind === 'composite' && !t2.unmapped.length && t2.parts.length &&
+        t2.parts.every((tp) => tp.categorySlug && parts.some((p) => p.categorySlug === tp.categorySlug))) {
+      continue;
+    }
     // Merchant/platform/unknown label.
     if (!tokenHasCategory && !tokenHasBrand) {
       if (['merchant', 'platform'].includes(t2.kind)) {
@@ -279,6 +309,7 @@ function transformRule(src, idx, ctx) {
       // we can't express. An earning rule becomes info; an exclusion may
       // ignore it (it then excludes more).
       if (isExclusion) flags.push('exclusion_scope_broadened');
+      else if (isReduced) flags.push('reduced_rate_kept_broad'); // D18c: broad is conservative here
       else {
         info.push(`unmapped_condition_category:${key}`);
         unmappedTokens.push(String(value));
@@ -561,9 +592,12 @@ function transformRule(src, idx, ctx) {
   // merchants are the exclusion's own scope ("PayZapp: no accelerator on
   // rent, education, ..."): one exclusion row per listed item, within the
   // rule's other restrictions. Never exception lists.
+  // D18e: "non-LIC insurance" with excluded_merchants ["LIC"] — a brand
+  // listed against a "non-/other than/except" exclusion is its exception.
+  const negatedScope = isExclusion && /(^|[_\s-])non[_\s-]|other than|except|excluding/i.test(`${rawToken} ${src?.action?.reason || ''} ${src?.id || ''}`);
   const listedCats = isExclusion ? cond.excludedCategorySlugs : [];
-  const listedMerchants = isExclusion ? cond.listedExcludedMerchants : [];
-  const listedPlatforms = isExclusion ? cond.listedExcludedPlatforms : [];
+  const listedMerchants = isExclusion && !negatedScope ? cond.listedExcludedMerchants : [];
+  const listedPlatforms = isExclusion && !negatedScope ? cond.listedExcludedPlatforms : [];
   if (listedCats.length || listedMerchants.length || listedPlatforms.length) {
     const expanded = [];
     for (const p of parts) {
@@ -584,14 +618,38 @@ function transformRule(src, idx, ctx) {
     if (cond.unmappedExcluded.length) flags.push('partial_category_list');
   }
   const ruleExcludedCategories = isExclusion ? [] : cond.excludedCategorySlugs;
-  const exceptMerchants = uniq([...cond.exceptMerchantSlugs, ...(isExclusion ? [] : cond.listedExcludedMerchants)]).sort();
-  const exceptPlatforms = uniq([...cond.exceptPlatformSlugs, ...(isExclusion ? [] : cond.listedExcludedPlatforms)]).sort();
+  const exceptMerchants = uniq([...cond.exceptMerchantSlugs, ...(isExclusion && !negatedScope ? [] : cond.listedExcludedMerchants)]).sort();
+  const exceptPlatforms = uniq([...cond.exceptPlatformSlugs, ...(isExclusion && !negatedScope ? [] : cond.listedExcludedPlatforms)]).sort();
+
+  // D18e: an exclusion that only takes away an accelerated/bonus rate (or
+  // only counts against a milestone) is not a full exclusion.
+  if (isExclusion) {
+    const text = `${src?.action?.reason || ''} ${src?.conditions?.description || ''} ${src?.id || ''}`.replace(/[_-]+/g, ' ');
+    const fullExclusion = /\b(no|not earn|do not earn|does not earn|don't earn|doesn't earn|zero)\s+(\w+\s+){0,2}(reward|points?|cashback|miles|neucoins)\b/i.test(text);
+    const bonusOnly =
+      /(not|n't)\s+(qualify|count|eligible|apply)[^.]{0,40}\b(accelerated|bonus|additional|extra|milestone|\d+(\.\d+)?\s*%|\d+\s*x)\b/i.test(text) ||
+      /excluded from [^.]{0,60}\b(milestone|accelerat\w*|bonus|ticket)\b/i.test(text) ||
+      /\b(milestone|accelerated|bonus)\b[^.]{0,30}\bexclusions?\b|\bfrom (the )?(ticket )?milestone\b/i.test(text);
+    if (bonusOnly && !fullExclusion) {
+      info.push('bonus_only_exclusion');
+      flags.push('bonus_only_exclusion');
+    }
+  }
+
+  // The categories the rule had before any MCC narrowing (D18c projection).
+  const preNarrowCategories = uniq(parts.map((p) => p.categorySlug).filter(Boolean));
 
   // 10c. D17(a): a narrow token on an earning rule ("pharmacy", "hotels")
   // never widens to its app category. It is restricted to the token's MCCs
   // and the category is dropped (so an unknown MCC can't stand in for it);
   // with no MCC mapping the part is left out, and with no part left the
   // rule is info. An exclusion keeps the broad category (it excludes more).
+  //  - D18i: on a merchant rule the merchant is the restriction; no MCCs
+  //    (aggregators book under their own MCC).
+  //  - D18c: a reduced-rate rule (below the card's base) is the inverse case:
+  //    broad is conservative. Its v2 row is narrowed as above, plus a
+  //    v1-only broad row at the reduced rate; with no MCC mapping it keeps
+  //    the broad category in both feeds.
   if (!isExclusion) {
     const kept = [];
     let dropped = 0;
@@ -600,20 +658,27 @@ function transformRule(src, idx, ctx) {
         kept.push(p);
         continue;
       }
-      if (p.mccInclude?.length) {
-        // The source's own MCC list already pins it.
-        kept.push({ ...p, categorySlug: null, broad: false, narrowedByMcc: true });
+      const tokens = p.narrowTokens?.length ? p.narrowTokens : [p.token].filter(Boolean);
+      if (p.merchantSlugs?.length) {
+        kept.push({ ...p, categorySlug: null, broad: false, narrowOnMerchant: tokens.join('+') || 'narrow' });
         continue;
       }
-      const tokens = p.narrowTokens?.length ? p.narrowTokens : [p.token].filter(Boolean);
-      const mccs = tokens.map((tk) => NARROW_TOKEN_MCC[tk]);
-      if (tokens.length && mccs.every(Boolean)) {
-        kept.push({ ...p, categorySlug: null, broad: false, mccInclude: uniq(mccs.flat()).sort(), narrowedByMcc: true });
+      let mccs = null;
+      if (p.mccInclude?.length) mccs = p.mccInclude; // the source's own MCC list pins it
+      else if (tokens.length && tokens.every((tk) => NARROW_TOKEN_MCC[tk])) mccs = uniq(tokens.flatMap((tk) => NARROW_TOKEN_MCC[tk])).sort();
+      if (mccs) {
+        kept.push({ ...p, categorySlug: null, broad: false, mccInclude: mccs, narrowedByMcc: true });
+        if (isReduced) kept.push({ ...p, mccInclude: [], maxEngine: 1, v1Projection: true });
+      } else if (isReduced) {
+        kept.push(p);
+        flags.push('reduced_rate_kept_broad');
       } else {
         dropped += 1;
       }
     }
     if (kept.some((p) => p.narrowedByMcc)) flags.push('narrow_token_to_mcc');
+    if (kept.some((p) => p.narrowOnMerchant)) flags.push('narrow_token_on_merchant');
+    if (kept.some((p) => p.v1Projection)) flags.push('reduced_rate_v1_projection');
     if (dropped && kept.length) flags.push('composite_partial');
     if (dropped && !kept.length) info.push('narrow_category_without_mcc');
     if (kept.length) parts = dedupeParts(kept);
@@ -621,12 +686,31 @@ function transformRule(src, idx, ctx) {
 
   // 11. Exclusions with a category AND an MCC list: one row per restriction,
   // because an exclusion applies to the union (the category, or any listed
-  // MCC). The category row stays v1-visible — also for a narrow token
-  // (D17b: dropping it would let v1 pay there); the MCC row is v2-only.
+  // MCC). The category row stays v1-visible (D17b: dropping it would let v1
+  // pay there); the MCC row is v2-only.
+  //  - D18b: for a narrow token ("fast_food", "movie", "railways") the broad
+  //    category row is v1-only. v2 uses only the precise MCC row (the
+  //    source's MCCs, else the token's), so a fast-food exclusion doesn't
+  //    zero all dining in v2. With no MCCs at all the broad row stays in both.
   if (isExclusion && !info.length) {
     const split = [];
     for (const p of parts) {
-      if (p.categorySlug && p.mccInclude?.length && !p.merchantSlugs?.length && !p.platformSlugs?.length) {
+      const plain = !p.merchantSlugs?.length && !p.platformSlugs?.length;
+      if (p.categorySlug && p.broad && plain) {
+        const tokens = [...(p.narrowTokens || []), p.token].filter(Boolean);
+        const mccs = p.mccInclude?.length
+          ? p.mccInclude
+          : NARROW_TOKEN_MCC[categoryKey(rawToken)] || (tokens.length && tokens.every((tk) => NARROW_TOKEN_MCC[tk])
+            ? uniq(tokens.flatMap((tk) => NARROW_TOKEN_MCC[tk])).sort()
+            : null);
+        if (mccs) {
+          split.push({ ...p, mccInclude: [], maxEngine: 1, v1Projection: true });
+          split.push({ ...p, categorySlug: null, broad: false, mccInclude: mccs });
+          flags.push('broad_exclusion_v1_only');
+          continue;
+        }
+        split.push(p);
+      } else if (p.categorySlug && p.mccInclude?.length && plain) {
         split.push({ ...p, mccInclude: [] });
         split.push({ ...p, categorySlug: null, broad: false });
       } else {
@@ -648,7 +732,7 @@ function transformRule(src, idx, ctx) {
     ? src.action.reason.trim().slice(0, 300)
     : null;
 
-  const rows = parts.map((p, partIdx) => {
+  let rows = parts.map((p, partIdx) => {
     const merchantSlugs = uniq(p.merchantSlugs || []).sort();
     const platformSlugs = uniq(p.platformSlugs || []).sort();
     const mccInclude = uniq(p.mccInclude || []).sort();
@@ -661,6 +745,10 @@ function transformRule(src, idx, ctx) {
       // An exclusion with nothing to match on would exclude every spend.
       rowInfo.push('unrestricted_exclusion');
     }
+    // D18h: "PayTM spends except via PayTM" can never apply.
+    const selfContradictory = platformSlugs.some((x) => exceptPlatforms.includes(x)) ||
+      merchantSlugs.some((x) => exceptMerchants.includes(x));
+    if (selfContradictory) rowInfo.push('self_contradictory_rule');
     const rowIsInfo = rowInfo.length > 0;
     let role;
     if (forcedRole && forcedRole !== 'info' && !rowIsInfo) role = forcedRole;
@@ -677,6 +765,7 @@ function transformRule(src, idx, ctx) {
     }
     if (role === 'earn' && isAccelerator && !restricted) rowFlags.push('unrestricted_accelerator');
     if (p.broad && role !== 'info') rowFlags.push('broad_category');
+    if (selfContradictory) rowFlags.push('self_contradictory_rule');
 
     const v2Reasons = [];
     if (role === 'info') v2Reasons.push('info');
@@ -723,14 +812,54 @@ function transformRule(src, idx, ctx) {
       except_platform_slugs: exceptPlatforms,
       block_inr: ur.blockInr,
       min_engine_version: minEngineVersion,
+      // D18a: v1-only projection rows (v2 engines ignore them).
+      max_engine_version: p.maxEngine === 1 ? 1 : null,
       display_note: displayNote,
       currency: isExclusion ? null : ur.currency,
       cap_refs: capRefs,
       info_reasons: uniq(rowInfo),
       flags: uniq([...flags, ...rowFlags]),
       v2_reasons: v2Reasons,
+      narrow_on_merchant: p.narrowOnMerchant || null,
     };
   });
+
+  // A v1-only row that the v1 feed couldn't show either is pointless.
+  rows = rows.filter((r) => !(r.max_engine_version === 1 && (r.min_engine_version !== 1 || r.rule_role === 'info')));
+
+  // D18c: a reduced-rate rule must not vanish from v1 (v1 would then pay
+  // the higher base). When every row is v2-only (MCCs, a platform, a block,
+  // several merchants), add a v1-only row on the rule's category at the
+  // reduced rate — broad is the conservative reading for a reduced rate.
+  const earning = rows.filter((r) => ['earn', 'base'].includes(r.rule_role));
+  if (isReduced && earning.length && !rows.some((r) => r.min_engine_version === 1 && r.rule_role !== 'info') &&
+      preNarrowCategories.length) {
+    const model = earning[0];
+    const v1Unit = model.block_inr ? 'points_per_100' : model.unit;
+    const v1Rate = model.block_inr ? Math.round((Number(model.rate) * 100 / model.block_inr) * 10000) / 10000 : model.rate;
+    for (const cat of preNarrowCategories) {
+      rows.push({
+        ...model,
+        part: preNarrowCategories.length > 1 ? `v1-${cat}` : 'v1',
+        category_slug: cat,
+        merchant_pattern: model.merchant_slugs.length === 1 ? model.merchant_pattern : null,
+        merchant_slugs: model.merchant_slugs.length === 1 ? model.merchant_slugs : [],
+        platform_slugs: [],
+        mcc_include: [],
+        mcc_exclude: [],
+        except_merchant_slugs: [],
+        except_platform_slugs: [],
+        unit: v1Unit,
+        rate: v1Rate,
+        block_inr: null,
+        min_engine_version: 1,
+        max_engine_version: 1,
+        flags: uniq([...model.flags, 'reduced_rate_v1_projection']),
+        v2_reasons: [],
+        v1_projection_of: cat,
+      });
+    }
+  }
 
   for (const row of rows) {
     for (const s of row.merchant_slugs) if (!ctx.index.merchants.has(s)) needsDirectory.push(s);
@@ -751,7 +880,7 @@ function dedupeParts(parts) {
   const seen = new Map();
   const out = [];
   for (const p of parts) {
-    const sig = JSON.stringify([p.categorySlug, p.merchantSlugs, p.platformSlugs, p.mccInclude, p.mccExclude, p.rail]);
+    const sig = JSON.stringify([p.categorySlug, p.merchantSlugs, p.platformSlugs, p.mccInclude, p.mccExclude, p.rail, p.maxEngine || null]);
     const prior = seen.get(sig);
     if (prior) {
       // Same row twice: it is narrow only if every source of it was narrow
@@ -824,7 +953,42 @@ function transformRewardRules(record, ctx) {
     });
   });
   addMinimumAmountExclusion(rows, perSource);
+  markBookingTypeSplits(rows, perSource);
   return { rows, perSource };
+}
+
+// D18i: a narrow token on a merchant rule adds no MCCs (an aggregator such
+// as MakeMyTrip books flights and hotels under its own MCC). When the source
+// gives that merchant different rates by booking type, we can't tell the
+// bookings apart, so those rules are info (D14b) — unless the merchant is
+// itself an airline or hotel.
+function markBookingTypeSplits(rows, perSource) {
+  const groups = new Map();
+  for (const r of rows) {
+    if (!r.narrow_on_merchant || !['earn', 'base'].includes(r.rule_role)) continue;
+    const sig = JSON.stringify(r.merchant_slugs);
+    if (!groups.has(sig)) groups.set(sig, []);
+    groups.get(sig).push(r);
+  }
+  for (const [sig, group] of groups) {
+    const merchants = JSON.parse(sig);
+    if (merchants.every((m) => AIRLINE_OR_HOTEL.has(m))) continue;
+    const tokens = new Set(group.map((r) => r.narrow_on_merchant));
+    const rates = new Set(group.map((r) => `${r.unit}:${r.rate}:${r.block_inr}`));
+    if (tokens.size < 2 || rates.size < 2) continue;
+    for (const r of group) {
+      r.rule_role = 'info';
+      r.min_engine_version = 2;
+      r.info_reasons = uniq([...r.info_reasons, 'booking_type_on_merchant']);
+      r.flags = uniq([...r.flags, 'depends_on_txn_attribute']);
+      const src = perSource.find((p) => p.source_local_id === r.source_local_id);
+      if (src) {
+        src.roles = uniq([...src.roles, 'info']);
+        src.info_reasons = uniq([...src.info_reasons, 'booking_type_on_merchant']);
+        src.flags = uniq([...src.flags, 'depends_on_txn_attribute']);
+      }
+    }
+  }
 }
 
 // D16(d): "no rewards below ₹100" stated on the catch-all rule. When every
