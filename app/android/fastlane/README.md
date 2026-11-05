@@ -23,6 +23,22 @@ For _fastlane_ installation instructions, see [Installing _fastlane_](https://do
 
 Build PandaPay production AAB and publish it to Google Play internal testing
 
+### android closed
+
+```sh
+[bundle exec] fastlane android closed
+```
+
+Build PandaPay production AAB and publish it to Google Play closed testing
+
+### android closed_draft
+
+```sh
+[bundle exec] fastlane android closed_draft
+```
+
+Build PandaPay production AAB and upload a draft to Google Play closed testing
+
 ### android production_draft
 
 ```sh

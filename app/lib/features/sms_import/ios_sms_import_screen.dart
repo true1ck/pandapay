@@ -14,6 +14,7 @@ import 'ios_sms_intake_service.dart';
 import 'ios_history_coverage.dart';
 import 'ios_shortcut_links.dart';
 import 'ios_sms_sharing_setup.dart';
+import 'live_alert_status.dart';
 
 const iosSmsHistoryShortcutName = 'PANDAPAY SMS HISTORY';
 const _shortcutNameKey = 'pandapay_app.ios_history_shortcut_name_v1';
@@ -131,6 +132,11 @@ class _IosSmsImportScreenState extends ConsumerState<IosSmsImportScreen> {
         : DateTime(_custom!.end.year, _custom!.end.month, _custom!.end.day + 1);
     final end = _months == 0 && selectedEnd.isBefore(now) ? selectedEnd : now;
     final active = state.activeJob != null;
+    final live = LiveAlertStatus.of(
+      enabled: state.enabled,
+      lastLiveAt: state.lastLiveAt,
+      now: now,
+    );
     final history = buildHistoryMonths(
       now: now,
       coverage: state.importedRanges,
@@ -203,10 +209,14 @@ class _IosSmsImportScreenState extends ConsumerState<IosSmsImportScreen> {
                           ),
                         ),
                         Text(
-                          state.enabled
-                              ? 'Enabled on this iPhone'
-                              : 'Connect your incoming-message shortcut',
-                          style: BambooFonts.ui(12, color: BambooInk.ink700),
+                          live.label,
+                          key: const ValueKey('live-alert-status'),
+                          style: BambooFonts.ui(
+                            12,
+                            color: live.health == LiveAlertHealth.quiet
+                                ? BambooInk.clayInk
+                                : BambooInk.ink700,
+                          ),
                         ),
                       ],
                     ),
@@ -227,7 +237,7 @@ class _IosSmsImportScreenState extends ConsumerState<IosSmsImportScreen> {
                 if (mounted) setState(() => _sharingConfirmed = value);
               },
             ),
-            const IosShortcutInstallPanel(),
+            IosShortcutInstallPanel(liveHealth: live.health),
             const SizedBox(height: AppSpace.lg),
             if (active) ...[
               _progress(state, controller),
@@ -345,7 +355,8 @@ class _IosSmsImportScreenState extends ConsumerState<IosSmsImportScreen> {
                         ? 'Complete History permissions first.'
                         : active
                         ? 'Replaces the current check. Saved messages stay.'
-                        : 'Months import in order. You can pause anytime.',
+                        : 'Takes a few minutes per month and runs in Shortcuts. '
+                              'You can switch apps while it imports.',
                     style: BambooFonts.ui(12, color: BambooInk.ink700),
                   ),
                 ],
@@ -643,6 +654,7 @@ class _IosSmsImportScreenState extends ConsumerState<IosSmsImportScreen> {
 
   Widget _progress(IosSmsIntakeState state, IosSmsIntakeController controller) {
     final automatic = controller.automaticallyAdvancing;
+    final counts = state.importCounts;
     final total = state.activeJob?['kind'] == 'history'
         ? state.monthCount
         : state.currentWindows.length;
@@ -703,11 +715,20 @@ class _IosSmsImportScreenState extends ConsumerState<IosSmsImportScreen> {
           ],
           const SizedBox(height: AppSpace.sm),
           Text(
-            '${_messages(_sum(state.currentWindows, 'enumerated'))} read'
-            ' · ${_sum(state.currentWindows, 'processed')} processed'
-            '${_sum(state.currentWindows, 'needs_review') > 0 ? ' · ${_sum(state.currentWindows, 'needs_review')} to review' : ''}',
+            '${_messages(counts.saved)} read'
+            ' · ${counts.processed} processed'
+            '${counts.review > 0 ? ' · ${counts.review} to review' : ''}',
             style: BambooFonts.ui(13, color: BambooInk.onSlateSubtle),
           ),
+          if (!state.paused && state.activeJob?['kind'] == 'history') ...[
+            const SizedBox(height: AppSpace.xs),
+            Text(
+              'Runs in Shortcuts. You can switch apps; progress stays on '
+              'your Lock Screen.',
+              key: const ValueKey('import-runs-in-shortcuts'),
+              style: BambooFonts.ui(12, color: BambooInk.onSlateSubtle),
+            ),
+          ],
           const SizedBox(height: AppSpace.lg),
           LinearProgressIndicator(
             value: state.coverage ?? (total == 0 ? null : done / total),
@@ -873,11 +894,16 @@ class IosShortcutInstallPanel extends StatelessWidget {
   final String historyLink;
   final String liveLink;
   final Future<bool> Function(Uri uri)? open;
+
+  /// Once live alerts are working the live button is no longer needed; when
+  /// they go quiet it offers to turn them back on.
+  final LiveAlertHealth? liveHealth;
   const IosShortcutInstallPanel({
     super.key,
     this.historyLink = IosShortcutLinks.history,
     this.liveLink = IosShortcutLinks.live,
     this.open,
+    this.liveHealth,
   });
 
   Future<void> _open(BuildContext context, Uri uri) async {
@@ -895,7 +921,9 @@ class IosShortcutInstallPanel extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final history = IosShortcutLinks.parse(historyLink);
-    final live = IosShortcutLinks.parse(liveLink);
+    final live = liveHealth == LiveAlertHealth.working
+        ? null
+        : IosShortcutLinks.parse(liveLink);
     if (history == null && live == null) return const SizedBox.shrink();
     ButtonStyle style(bool primary) => FilledButton.styleFrom(
       backgroundColor: primary ? BambooInk.slate : BambooInk.paper,
@@ -947,13 +975,16 @@ class IosShortcutInstallPanel extends StatelessWidget {
                 style: style(false),
                 onPressed: () => _open(context, live),
                 icon: const Icon(Icons.add_rounded),
-                label: const Text('Add live alerts shortcut'),
+                label: Text(
+                  liveHealth == LiveAlertHealth.quiet
+                      ? 'Turn live alerts back on'
+                      : 'Add live alerts shortcut',
+                ),
               ),
               const SizedBox(height: AppSpace.md),
               Text(
-                'Then turn on live alerts: Shortcuts → Automation → + → Message '
-                '→ Message Contains: a space → Run Immediately → Run the live '
-                'alerts shortcut.',
+                'New bank SMS then reach PandaPay on their own. If Shortcuts '
+                'shows an Automation switch, keep it on.',
                 style: BambooFonts.ui(12, color: BambooInk.ink700),
               ),
             ],

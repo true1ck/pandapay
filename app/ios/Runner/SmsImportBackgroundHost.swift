@@ -88,7 +88,17 @@ enum SmsImportBackgroundHost {
 
   private static func start(_ value: BGTask) {
     if value.identifier == processingID { submitted = false }
-    guard task == nil else { value.setTaskCompleted(success: false); return }
+    if let current = task {
+      // Two tasks can overlap (a scheduled processing task and the import's
+      // continued task). The import's task takes over; nothing has failed.
+      if #available(iOS 26.0, *), value is BGContinuedProcessingTask, !(current is BGContinuedProcessingTask), !running {
+        current.setTaskCompleted(success: true)
+        task = nil
+      } else {
+        value.setTaskCompleted(success: true)
+        return
+      }
+    }
     task = value; expired = false
     if #available(iOS 26.0, *), let continued = value as? BGContinuedProcessingTask {
       continued.progress.totalUnitCount = 1000
@@ -98,19 +108,16 @@ enum SmsImportBackgroundHost {
       DispatchQueue.main.async {
         guard task === value else { return }
         expired = true
-        if #available(iOS 26.0, *), value is BGContinuedProcessingTask {
-          worker.async {
-            if let snapshot = try? IncomingSmsSpool.shared.snapshot(),
-               let generation = snapshot["generation"] as? String {
-              try? IncomingSmsSpool.shared.control(generation: generation, command: "pause")
-              SmsImportLiveActivityHost.refresh()
-            }
-          }
+        // The Shortcut does the reading and keeps going without this task.
+        // Saved messages stay queued and are processed on the next launch or
+        // background run, so the import is not paused and nothing is lost.
+        if #available(iOS 26.0, *), let continued = value as? BGContinuedProcessingTask {
+          continued.updateTitle("Importing SMS history", subtitle: "Continuing in Shortcuts")
         }
         channel?.invokeMethod("expireBackground", arguments: nil)
         backgroundChannel?.invokeMethod("stop", arguments: nil)
         // A committed batch is never abandoned by destroying its engine.
-        if !running { complete(false) }
+        if !running { complete(true) }
       }
     }
     drain()
@@ -137,16 +144,7 @@ enum SmsImportBackgroundHost {
     }
     let created = FlutterEngine(name: "pandapay-sms-background", project: nil, allowHeadlessExecution: true)
     engine = created
-    guard created.run(withEntrypoint: "iosSmsBackgroundMain") else {
-      running = false
-      complete(false)
-      return
-    }
-#if targetEnvironment(simulator)
-    SimulatorPluginRegistrant.register(with: created)
-#else
     GeneratedPluginRegistrant.register(with: created)
-#endif
     let bridge = FlutterMethodChannel(name: "pandapay/ios_sms_background", binaryMessenger: created.binaryMessenger)
     backgroundChannel = bridge
     bridge.setMethodCallHandler { call, result in
@@ -183,6 +181,9 @@ enum SmsImportBackgroundHost {
         }
       }
     }
+    if !created.run(withEntrypoint: "iosSmsBackgroundMain") {
+      running = false; complete(false)
+    }
   }
 
   private static func drained(_ success: Bool) {
@@ -193,18 +194,17 @@ enum SmsImportBackgroundHost {
       DispatchQueue.main.async {
         guard task != nil || shortTask != .invalid else { return }
         SmsImportLiveActivityHost.refresh()
-        if expired || !success { complete(false); return }
+        if expired { complete(true); return }
+        if !success { complete(false); return }
         if #available(iOS 26.0, *), task is BGContinuedProcessingTask,
            ["paused", "stopped"].contains(progress?["state"] as? String ?? "") {
-          complete(false); return
+          complete(true); return
         }
         let pending = snapshot?["pending"] as? Int ?? 0
         if pending > 0 { workArrived(); return }
         if #available(iOS 26.0, *), let continued = task as? BGContinuedProcessingTask,
            progress?["state"] as? String == "importing" {
-          continued.progress.totalUnitCount = Int64(max(progress?["total"] as? Int ?? 1, 1))
-          continued.progress.completedUnitCount = Int64(progress?["done"] as? Int ?? 0)
-          continued.updateTitle("Importing SMS history", subtitle: "\(progress?["received"] as? Int ?? 0) read · \(progress?["processed"] as? Int ?? 0) processed")
+          if let progress { report(continued, progress) }
           // The current Shortcut is still producing input. Each capture wakes
           // the same admitted task; no new workflow or request is issued.
           return
@@ -220,12 +220,24 @@ enum SmsImportBackgroundHost {
       guard let progress = try? IncomingSmsSpool.shared.importProgress() else { return }
       DispatchQueue.main.async {
         guard task === continued else { return }
-        continued.progress.totalUnitCount = Int64(max(progress["total"] as? Int ?? 1, 1))
-        continued.progress.completedUnitCount = Int64(progress["done"] as? Int ?? 0)
-        let title = progress["state"] as? String == "processing" ? "Processing saved messages" : "Importing SMS history"
-        continued.updateTitle(title, subtitle: "\(progress["received"] as? Int ?? 0) read · \(progress["processed"] as? Int ?? 0) processed")
+        report(continued, progress)
       }
     }
+  }
+
+  /// iOS ends a continued task whose progress stops moving. A month can hold
+  /// hundreds of messages, so each message moves the bar a little within its
+  /// month (approaching, never reaching, the next month's mark).
+  @available(iOS 26.0, *)
+  private static func report(_ continued: BGContinuedProcessingTask, _ progress: [String: Any]) {
+    let total = max(progress["total"] as? Int ?? 1, 1), done = progress["done"] as? Int ?? 0
+    let current = Double(progress["current_received"] as? Int ?? 0)
+    let within = Int64(1000 * current / (current + 300))
+    continued.progress.totalUnitCount = Int64(total) * 1000
+    continued.progress.completedUnitCount = max(continued.progress.completedUnitCount,
+                                                min(Int64(done) * 1000 + within, Int64(total) * 1000))
+    let title = progress["state"] as? String == "processing" ? "Processing saved messages" : "Importing SMS history"
+    continued.updateTitle(title, subtitle: "\(progress["received"] as? Int ?? 0) saved · \(progress["processed"] as? Int ?? 0) processed")
   }
 
   private static func complete(_ success: Bool) {

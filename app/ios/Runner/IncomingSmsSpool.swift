@@ -293,6 +293,10 @@ final class IncomingSmsSpool {
         }
       } else if useMessageReceipt {
         throw IncomingSmsError.invalid
+      } else {
+        // Proof the live automation fires, whatever the message turns out
+        // to be (OTPs and personal texts count too).
+        try execute(db, "INSERT INTO settings VALUES('last_live_at',?) ON CONFLICT(key) DO UPDATE SET value=excluded.value", [stamp(now())])
       }
       // Missing metadata is not a reason to discard a valid message body.
       // Keep an unknown sender explicit; shared intake routes financial
@@ -445,6 +449,16 @@ final class IncomingSmsSpool {
       FROM windows w WHERE w.job_id IN (SELECT id FROM jobs ORDER BY rowid DESC LIMIT 20) ORDER BY w.ordinal
       """)
     for row in try query(db, "SELECT * FROM settings WHERE key NOT IN ('last_intent_attempt','last_handoff_attempt','last_receiver_attempt','last_sender_attempt')") { result[row["key"] as! String] = row["value"] }
+    if let generation = account["generation"] as? String,
+       let job = try query(db, "SELECT id FROM jobs WHERE state IN ('active','paused','partial') ORDER BY rowid DESC LIMIT 1").first {
+      var counts: [String: Any] = try periodCounts(db, generation: generation, job: job["id"])
+      counts["job"] = job["id"]
+      result["active_counts"] = counts
+    }
+    if result["last_live_at"] == nil {
+      // Live captures saved before last_live_at existed.
+      result["last_live_at"] = try query(db, "SELECT MAX(captured_at) AS at FROM captures WHERE generation=? AND date_provenance='estimated'", [account["generation"]]).first?["at"]
+    }
     if let generation = account["generation"] as? String {
       // Everything ever imported for this account, for the month overview.
       result["coverage"] = try coveredRanges(db, generation: generation).map { ["start": stamp($0.0), "end": stamp($0.1)] }
@@ -571,7 +585,7 @@ final class IncomingSmsSpool {
             let job = try query(db, "SELECT * FROM jobs WHERE kind='history' AND generation=? ORDER BY rowid DESC LIMIT 1", [generation]).first else {
         return ["state": "none"]
       }
-      let windows = try query(db, "SELECT start,end,state,COALESCE(logical_id,id) AS month FROM windows WHERE job_id=? ORDER BY ordinal", [job["id"]])
+      let windows = try query(db, "SELECT start,end,state,attempt,COALESCE(logical_id,id) AS month FROM windows WHERE job_id=? ORDER BY ordinal", [job["id"]])
       var months: [String] = [], open = Set<String>()
       for row in windows {
         let month = row["month"] as! String
@@ -588,12 +602,31 @@ final class IncomingSmsSpool {
       default: state = current == nil ? "complete" : (current?["state"] as? String == "partial" ? "paused" : (receiving ? "importing" : "processing"))
       }
       var result: [String: Any] = ["state": state, "done": months.count - open.count, "total": months.count]
-      let counts = try query(db, "SELECT COUNT(*) AS received,SUM(CASE WHEN c.state='committed' THEN 1 ELSE 0 END) AS processed FROM receipts r JOIN windows w ON w.attempt=r.attempt LEFT JOIN captures c ON c.id=r.capture_id WHERE w.job_id=?", [job["id"]]).first
-      result["received"] = counts?["received"] as? Int ?? 0
-      result["processed"] = counts?["processed"] as? Int ?? 0
-      if let current { result["start"] = current["start"]; result["end"] = current["end"] }
+      let counts = try periodCounts(db, generation: generation, job: job["id"])
+      result["received"] = counts["saved"]
+      result["processed"] = counts["processed"]
+      if let current {
+        result["start"] = current["start"]; result["end"] = current["end"]
+        // Moves with every message, so a long month still shows progress.
+        result["current_received"] = try query(db, "SELECT COUNT(*) AS n FROM receipts WHERE attempt=?", [current["attempt"]]).first?["n"] as? Int ?? 0
+      }
       return result
     }
+  }
+
+  /// Messages from this import's period that PandaPay holds. Unlike receipts
+  /// (one set per attempt), this never drops when a range is read again
+  /// after Resume: a message read twice is still one saved message.
+  private func periodCounts(_ db: OpaquePointer, generation: String, job: Any?) throws -> [String: Int] {
+    let row = try query(db, """
+      SELECT COUNT(*) AS saved,
+        COALESCE(SUM(CASE WHEN c.state='committed' THEN 1 ELSE 0 END),0) AS processed,
+        COALESCE(SUM(CASE WHEN c.state='committed' AND c.outcome='review' THEN 1 ELSE 0 END),0) AS review
+      FROM captures c, (SELECT julianday(MIN(start)) AS s, julianday(MAX(end)) AS e FROM windows WHERE job_id=?) p
+      WHERE c.generation=? AND c.date_provenance='original'
+        AND julianday(c.received_at) >= p.s AND julianday(c.received_at) < p.e
+      """, [job, generation]).first
+    return ["saved": row?["saved"] as? Int ?? 0, "processed": row?["processed"] as? Int ?? 0, "review": row?["review"] as? Int ?? 0]
   }
 
   func finish(request: String, found: Int, limitOff: Bool, warning: Bool) throws -> String {

@@ -40,11 +40,19 @@ class AuthApi {
   // service that is slow must never hold the app's first frame indefinitely.
   static const _requestTimeout = Duration(seconds: 8);
 
+  // Sending and checking a code are user-initiated, and the server uses a
+  // code up the moment it accepts it. Giving up too early can burn a valid
+  // code while the reply is still on its way, so these get longer.
+  static const _otpTimeout = Duration(seconds: 20);
+
   final String authBaseUrl;
   final http.Client _client;
   final bool versionedOtpEnabled;
   final DateTime Function() _now;
   int get otpCodeLength => versionedOtpEnabled ? 6 : 4;
+
+  /// The clock used for code expiry, so screens count down on the same time.
+  DateTime now() => _now();
   AuthApi({
     required this.authBaseUrl,
     http.Client? client,
@@ -153,7 +161,7 @@ class AuthApi {
             if (recoveryOnly) 'recovery_only': true,
           }),
         )
-        .timeout(_requestTimeout);
+        .timeout(_otpTimeout);
     if (response.statusCode != 200) {
       throw ApiException(
         'OTP request failed: ${response.statusCode} ${response.body}',
@@ -190,7 +198,7 @@ class AuthApi {
             if (recoveryOnly) 'recovery_only': true,
           }),
         )
-        .timeout(_requestTimeout);
+        .timeout(_otpTimeout);
     if (response.statusCode != 200) {
       throw ApiException(
         'OTP verify failed: ${response.statusCode} ${response.body}',
@@ -251,7 +259,7 @@ class AuthApi {
               'phone_number': phoneNumber.trim(),
           }),
         )
-        .timeout(_requestTimeout);
+        .timeout(_otpTimeout);
     if (response.statusCode != 200) {
       throw ApiException(
         'OTP request failed: ${response.statusCode} ${response.body}',
@@ -297,7 +305,7 @@ class AuthApi {
             if (recoveryOnly) 'recovery_only': true,
           }),
         )
-        .timeout(_requestTimeout);
+        .timeout(_otpTimeout);
     if (response.statusCode != 200) {
       throw ApiException(
         'OTP verify failed: ${response.statusCode} ${response.body}',

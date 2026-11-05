@@ -83,6 +83,10 @@ Future<void> _scrollTo(
 }
 
 void main() {
+  setUpAll(() {
+    IosSmsIntakeController.readyInterval = Duration.zero;
+    IosSmsIntakeController.batchGap = Duration.zero;
+  });
   testWidgets(
     'Resume stays disabled during delivery and saved-message processing',
     (tester) async {
@@ -364,6 +368,10 @@ void main() {
         ];
         await _pumpImport(tester, service);
         expect(find.text('Split busy dates'), findsNothing);
+        await _scrollTo(
+          tester,
+          find.text('79 messages read · 30 processed · 4 to review'),
+        );
         expect(
           find.text('79 messages read · 30 processed · 4 to review'),
           findsOneWidget,

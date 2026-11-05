@@ -23,6 +23,7 @@ class MemoryBridge extends IosSmsIntakeService {
     'jobs': <Object?>[],
     'windows': <Object?>[],
   };
+  Future<void> Function()? ready;
   @override
   bool get supported => true;
   @override
@@ -30,7 +31,7 @@ class MemoryBridge extends IosSmsIntakeService {
     Future<void> Function()? callback, {
     Future<Map<String, Object?>> Function()? onBackground,
     void Function()? onExpiration,
-  }) {}
+  }) => ready = callback;
   @override
   Future<Object?> call(String method, [Map<String, Object?>? arguments]) async {
     calls.add(method);
@@ -168,7 +169,35 @@ void main() {
       expect(service.calls, isNot(contains('control')));
     },
   );
-  setUpAll(() => IosSmsIntakeController.drainRetryDelay = Duration.zero);
+  test(
+    'a burst of saved-message events reloads once, then once more',
+    () async {
+      IosSmsIntakeController.readyInterval = const Duration(milliseconds: 100);
+      addTearDown(() => IosSmsIntakeController.readyInterval = Duration.zero);
+      final service = MemoryBridge();
+      final controller = IosSmsIntakeController(
+        service: service,
+        namespace: () => 'user:a',
+        capture: (_, _, _) async => [],
+        requestUpload: () {},
+      );
+      addTearDown(controller.dispose);
+      await Future<void>.delayed(const Duration(milliseconds: 10));
+      final before = service.calls.where((c) => c == 'configure').length;
+      // A running Shortcut saving twenty messages in a row.
+      for (var i = 0; i < 20; i++) {
+        unawaited(service.ready!());
+      }
+      await Future<void>.delayed(const Duration(milliseconds: 300));
+      expect(service.calls.where((c) => c == 'configure').length - before, 2);
+    },
+  );
+
+  setUpAll(() {
+    IosSmsIntakeController.drainRetryDelay = Duration.zero;
+    IosSmsIntakeController.readyInterval = Duration.zero;
+    IosSmsIntakeController.batchGap = Duration.zero;
+  });
 
   test('a batch that fails once is retried without showing an error', () async {
     final service = MemoryBridge()..rows.add({'id': 'one'});

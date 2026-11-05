@@ -61,6 +61,44 @@ platform :android do
     )
   end
 
+  desc "Build PandaPay production AAB and publish it to Google Play closed testing"
+  lane :closed do |options|
+    build_number = options[:build_number] || ENV["PANDAPAY_BUILD_NUMBER"]
+    UI.user_error!("Pass build_number:N or set PANDAPAY_BUILD_NUMBER to a new Play version code") unless build_number
+    bundle_path = build_prod_bundle(build_number: build_number)
+
+    upload_to_play_store(
+      package_name: APP_ID,
+      json_key: service_account_path,
+      aab: bundle_path,
+      track: "alpha",
+      release_status: "completed",
+      skip_upload_metadata: true,
+      skip_upload_changelogs: true,
+      skip_upload_images: true,
+      skip_upload_screenshots: true
+    )
+  end
+
+  desc "Build PandaPay production AAB and upload a draft to Google Play closed testing"
+  lane :closed_draft do |options|
+    build_number = options[:build_number] || ENV["PANDAPAY_BUILD_NUMBER"]
+    UI.user_error!("Pass build_number:N or set PANDAPAY_BUILD_NUMBER to a new Play version code") unless build_number
+    bundle_path = build_prod_bundle(build_number: build_number)
+
+    upload_to_play_store(
+      package_name: APP_ID,
+      json_key: service_account_path,
+      aab: bundle_path,
+      track: "alpha",
+      release_status: "draft",
+      skip_upload_metadata: true,
+      skip_upload_changelogs: true,
+      skip_upload_images: true,
+      skip_upload_screenshots: true
+    )
+  end
+
   desc "Build PandaPay production AAB and upload a draft to the production track"
   lane :production_draft do |options|
     build_number = options[:build_number] || ENV["PANDAPAY_BUILD_NUMBER"]

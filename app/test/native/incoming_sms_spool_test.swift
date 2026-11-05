@@ -23,6 +23,7 @@ fails { _ = try spool.capture(body: body, sender: sender, receivedAt: receive, p
 let owner = try spool.configure(namespace: "user:synthetic-a", enabled: true, parserVersion: 22)
 let generation = owner["generation"] as! String
 require(try spool.capture(body: body, sender: sender, receivedAt: receive, provenance: "original") == "saved_for_processing", "save")
+require(try spool.snapshot()["last_live_at"] as? String == "2026-10-30T10:00:00.000Z", "a live capture records when the automation last fired")
 let restarted = IncomingSmsSpool(directory: root, maxPending: 2, now: { time })
 var rows = try restarted.pending(generation: generation)
 require(rows.count == 1, "survives fresh store/process")
@@ -430,6 +431,8 @@ do {
   let first = try store.issueNextRange()!
   require(try store.issueNextRange() == first, "the same unsearched range is offered until it is searched")
   _ = try store.capture(body: "INR 5 spent at SHOP.", sender: "ICICIT-S", receivedAt: d0.addingTimeInterval(60), provenance: "original", request: first, useMessageReceipt: true)
+  require(try store.importProgress()["received"] as? Int == 1 && store.importProgress()["current_received"] as? Int == 1, "each message moves progress within its range")
+  require(try (store.snapshot()["active_counts"] as? [String: Any])?["saved"] as? Int == 1, "the screen gets the same import-wide count")
   require(try store.finish(request: first, found: 1, limitOff: true, warning: false) == "finished", "searched, waiting for PandaPay")
   let second = try store.issueNextRange()!
   require(second != first, "the loop moves on while PandaPay has not processed the first range")
@@ -440,8 +443,10 @@ do {
   let saved = try store.pending(generation: g)
   try store.control(generation: g, command: "retry")
   require(try store.issueNextRange() == nil, "retry cannot reissue an already searched range")
+  require(try store.importProgress()["received"] as? Int == 1, "Resume never resets the saved count")
   try store.acknowledge(generation: g, outcomes: saved.map { ["id": $0["id"]!, "sourceKey": String(repeating: "b", count: 64), "parserVersion": 26, "outcome": "captured"] })
   require(try store.importProgress()["state"] as? String == "complete" && store.importProgress()["done"] as? Int == 2, "processing completion agrees with job completion")
+  require(try store.importProgress()["processed"] as? Int == 1, "processed counts committed messages from the import period")
   print("PASS: a looping Shortcut moves through ranges while PandaPay is closed")
 }
 

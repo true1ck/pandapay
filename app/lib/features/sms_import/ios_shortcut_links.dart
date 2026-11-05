@@ -18,9 +18,16 @@ abstract final class IosShortcutLinks {
     defaultValue:
         'https://www.icloud.com/shortcuts/f8e3a510ba904480886fbaa475f38b2c',
   );
+
+  /// PandaPay Incoming SMS (iOS 27): its own "When I receive a message
+  /// containing a space" trigger → Capture Incoming SMS in PandaPay (body =
+  /// the message, sender = its Sender, date = Current Date, Estimated).
+  /// The trigger travels with the link, so adding it is the whole setup.
+  /// Shared from a Personal Team build; re-share from the release build.
   static const live = String.fromEnvironment(
     'PANDAPAY_IOS_LIVE_SHORTCUT_URL',
-    defaultValue: '',
+    defaultValue:
+        'https://www.icloud.com/shortcuts/ea897aea99a74b3f867b6b067d71b4e9',
   );
 
   /// Only genuine iCloud shortcut links are offered; anything else is

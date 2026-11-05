@@ -108,10 +108,11 @@ void main() {
       await tester.pumpAndSettle();
 
       expect(find.text('Verification code'), findsOneWidget);
-      expect(
-        find.text('A code was already sent. Enter that code below.'),
-        findsOneWidget,
-      );
+      expect(find.text('Code already sent'), findsOneWidget);
+      // Its exact expiry is unknown, so no made-up countdown and resend
+      // stays available.
+      expect(find.text('Codes are valid for 2 minutes.'), findsOneWidget);
+      expect(find.text('Resend code'), findsOneWidget);
       expect(find.text('Verify & continue'), findsOneWidget);
       expect(find.byType(TextField), findsOneWidget);
       final codeField = tester.widget<TextField>(find.byType(TextField));
@@ -122,51 +123,44 @@ void main() {
     },
   );
 
-  testWidgets(
-    'Send verification code stays disabled until Terms is checked',
-    (tester) async {
-      var otpRequested = false;
-      final authApi = AuthApi(
-        authBaseUrl: 'http://auth.test',
-        client: MockClient((req) async {
-          otpRequested = true;
-          return http.Response('{}', 200);
-        }),
-      );
+  testWidgets('Send verification code stays disabled until Terms is checked', (
+    tester,
+  ) async {
+    var otpRequested = false;
+    final authApi = AuthApi(
+      authBaseUrl: 'http://auth.test',
+      client: MockClient((req) async {
+        otpRequested = true;
+        return http.Response('{}', 200);
+      }),
+    );
 
-      await tester.pumpWidget(
-        wrap(overrides: [authApiProvider.overrideWithValue(authApi)]),
-      );
+    await tester.pumpWidget(
+      wrap(overrides: [authApiProvider.overrideWithValue(authApi)]),
+    );
 
-      await tester.enterText(
-        find.byType(TextField).at(0),
-        'newuser@example.com',
-      );
-      await tester.enterText(find.byType(TextField).at(1), '9876543210');
-      await tester.pump();
+    await tester.enterText(find.byType(TextField).at(0), 'newuser@example.com');
+    await tester.enterText(find.byType(TextField).at(1), '9876543210');
+    await tester.pump();
 
-      final submit = find.widgetWithText(
-        FilledButton,
-        'Send verification code',
-      );
-      // Email and phone are valid, but the required Terms box is unchecked —
-      // the button must read as inert, not just reject the tap.
-      expect(tester.widget<FilledButton>(submit).onPressed, isNull);
-      await tester.ensureVisible(submit);
-      await tester.tap(submit, warnIfMissed: false);
-      await tester.pumpAndSettle();
-      expect(otpRequested, isFalse);
+    final submit = find.widgetWithText(FilledButton, 'Send verification code');
+    // Email and phone are valid, but the required Terms box is unchecked —
+    // the button must read as inert, not just reject the tap.
+    expect(tester.widget<FilledButton>(submit).onPressed, isNull);
+    await tester.ensureVisible(submit);
+    await tester.tap(submit, warnIfMissed: false);
+    await tester.pumpAndSettle();
+    expect(otpRequested, isFalse);
 
-      await tester.ensureVisible(find.byType(CheckboxListTile).at(0));
-      await tester.tap(find.byType(CheckboxListTile).at(0)); // required Terms
-      await tester.pump();
-      expect(tester.widget<FilledButton>(submit).onPressed, isNotNull);
+    await tester.ensureVisible(find.byType(CheckboxListTile).at(0));
+    await tester.tap(find.byType(CheckboxListTile).at(0)); // required Terms
+    await tester.pump();
+    expect(tester.widget<FilledButton>(submit).onPressed, isNotNull);
 
-      await tester.tap(submit);
-      await tester.pumpAndSettle();
-      expect(otpRequested, isTrue);
-    },
-  );
+    await tester.tap(submit);
+    await tester.pumpAndSettle();
+    expect(otpRequested, isTrue);
+  });
 
   testWidgets(
     'Send code on the sign-in form is disabled until email and phone are valid',

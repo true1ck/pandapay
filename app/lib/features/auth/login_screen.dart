@@ -1,19 +1,22 @@
+import 'dart:async';
+
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:go_router/go_router.dart';
 
 import '../../app/design/app_theme.dart';
 import '../onboarding/entry_brand.dart';
 import '../onboarding/onboarding_back.dart';
 import '../../app/providers.dart';
 import '../../app/router.dart' show AppRoute;
-import '../../data/api_exception.dart';
 import '../../data/auth_api.dart';
 import '../../data/phone_number_hint.dart';
 import '../../data/product_access_api.dart';
 import '../settings/feedback_support_screen.dart';
 import '../settings/legal_screen.dart';
 import 'account_recovery_screen.dart';
+import 'auth_feedback.dart';
 import '../recovery/account_data_recovery.dart';
 
 /// A4: DPDP §8.2 — purpose-specific, unbundled consent, never a single
@@ -59,13 +62,43 @@ class _LoginScreenState extends ConsumerState<LoginScreen> {
   final _phoneController = TextEditingController();
   final _codeController = TextEditingController();
   final _phoneFocusNode = FocusNode();
+  final _codeFocusNode = FocusNode();
+
+  /// auth/'s OTP_TTL_SECONDS and OTP_VERIFY_MAX_ATTEMPTS defaults, which
+  /// production uses. v2 challenges carry their own expiry.
+  static const _codeLifetime = Duration(seconds: 120);
+  static const _maxCodeAttempts = 5;
 
   OtpChallenge? _challenge;
   int get _codeLength => ref.read(authApiProvider).otpCodeLength;
   bool _otpRequested = false;
   bool _loading = false;
-  String? _error;
+  AuthNotice? _notice;
   bool _autoPhoneHintRequested = false;
+
+  /// When the current code stops working. Null when another request sent
+  /// it, so its exact expiry is unknown.
+  DateTime? _codeExpiresAt;
+  Duration? _codeTimeLeft;
+  Timer? _codeTicker;
+
+  /// Wrong tries on the current code. Only counted for a code this screen
+  /// requested, since an earlier code's tries are unknown.
+  int _wrongAttempts = 0;
+
+  /// Set when a new code can be requested before the timer ends, e.g. after
+  /// a verify reply was lost and the code may already be used.
+  bool _resendUnlocked = false;
+
+  /// The server accepts a code only once. Keep the session it returned so a
+  /// failure while saving it or creating the profile is retried with
+  /// Continue instead of resubmitting a used code.
+  AuthTokens? _verifiedTokens;
+
+  bool get _codeExpired => _codeTimeLeft == Duration.zero;
+  bool get _codeLocked => _wrongAttempts >= _maxCodeAttempts;
+  bool get _canResend =>
+      _codeTimeLeft == null || _codeExpired || _resendUnlocked;
 
   /// A4's three purpose-specific checkboxes — sign-up only. [_acceptedTerms]
   /// is required (gates submit); the other two default OFF and are optional.
@@ -98,18 +131,60 @@ class _LoginScreenState extends ConsumerState<LoginScreen> {
       text: trimmed,
       selection: TextSelection.collapsed(offset: trimmed.length),
     );
-    setState(() => _error = null);
+    setState(() => _notice = null);
   }
 
   @override
   void dispose() {
+    _codeTicker?.cancel();
     _identifierController.dispose();
     _phoneController.dispose();
     _codeController.dispose();
+    _codeFocusNode.dispose();
     _phoneFocusNode
       ..removeListener(_onPhoneFocusChanged)
       ..dispose();
     super.dispose();
+  }
+
+  DateTime _now() => ref.read(authApiProvider).now();
+
+  /// Starts the visible countdown for a freshly sent code. Time left is
+  /// always measured against the expiry instant, so it stays correct after
+  /// the app was in the background.
+  void _startCodeTimer(DateTime? expiresAt) {
+    _codeTicker?.cancel();
+    _codeExpiresAt = expiresAt;
+    _wrongAttempts = 0;
+    _resendUnlocked = false;
+    _verifiedTokens = null;
+    _syncCodeTimeLeft();
+    if (expiresAt == null) return;
+    _codeTicker = Timer.periodic(const Duration(seconds: 1), (timer) {
+      if (!mounted) {
+        timer.cancel();
+        return;
+      }
+      setState(_syncCodeTimeLeft);
+      if (_codeExpired) timer.cancel();
+    });
+  }
+
+  void _syncCodeTimeLeft() {
+    final expiresAt = _codeExpiresAt;
+    if (expiresAt == null) {
+      _codeTimeLeft = null;
+      return;
+    }
+    final left = expiresAt.difference(_now());
+    _codeTimeLeft = left <= Duration.zero
+        ? Duration.zero
+        : Duration(seconds: (left.inMilliseconds / 1000).ceil());
+  }
+
+  void _stopCodeTimer() {
+    _codeTicker?.cancel();
+    _codeTicker = null;
   }
 
   /// Client-side checks that mirror auth/'s own validators, so an obviously
@@ -156,15 +231,16 @@ class _LoginScreenState extends ConsumerState<LoginScreen> {
   Future<void> _requestOtp() async {
     final validationError = _validate();
     if (validationError != null) {
-      setState(() => _error = validationError);
+      setState(() => _notice = AuthNotice.input(validationError));
       return;
     }
+    final resending = _otpRequested;
     setState(() {
       _loading = true;
-      _error = null;
+      _notice = null;
     });
+    final identifier = _identifierController.text.trim();
     try {
-      final identifier = _identifierController.text.trim();
       final auth = ref.read(authApiProvider);
       final deviceId = auth.versionedOtpEnabled
           ? await ref.read(localDeviceIdProvider.future)
@@ -175,8 +251,26 @@ class _LoginScreenState extends ConsumerState<LoginScreen> {
         isSignUp: _isSignUp,
         phoneNumber: _isSignUp ? _phoneController.text.trim() : null,
       );
-      if (mounted) setState(() => _otpRequested = true);
-    } catch (e) {
+      if (!mounted) return;
+      setState(() {
+        _otpRequested = true;
+        _codeController.clear();
+        _startCodeTimer(_challenge?.expiresAt ?? _now().add(_codeLifetime));
+        if (resending) {
+          _notice = AuthNotice(
+            title: 'New code sent',
+            message:
+                'Check $identifier for the newest email. Earlier codes no '
+                'longer work.',
+            kind: AuthFailureKind.codeAlreadySent,
+            tone: AuthNoticeTone.info,
+          );
+        }
+      });
+      _codeFocusNode.requestFocus();
+    } catch (e, stack) {
+      debugPrint('Sign-in code request failed: $e\n$stack');
+      if (!mounted) return;
       // The auth service deliberately rejects a second request while the
       // first code is still valid. That is not a dead end: the code already
       // in the user's inbox is the one they should enter. Move straight to
@@ -185,18 +279,20 @@ class _LoginScreenState extends ConsumerState<LoginScreen> {
       final activeOtp =
           (!ref.read(authApiProvider).versionedOtpEnabled ||
               _challenge != null) &&
-          e is ApiException &&
-          e.statusCode == 429 &&
-          e.userMessage.toLowerCase().contains('otp') &&
-          e.userMessage.toLowerCase().contains('active');
-      if (activeOtp) {
-        setState(() {
+          isCodeStillActive(e);
+      setState(() {
+        _notice = describeAuthFailure(
+          e,
+          stage: AuthStage.sendCode,
+          email: identifier,
+        );
+        if (activeOtp) {
+          // Keep a running countdown; a code sent elsewhere has an unknown
+          // expiry, so resend stays available.
+          if (!_otpRequested || _codeExpiresAt == null) _startCodeTimer(null);
           _otpRequested = true;
-          _error = 'A code was already sent. Enter that code below.';
-        });
-      } else {
-        setState(() => _error = userFacingErrorMessage(e));
-      }
+        }
+      });
     } finally {
       if (mounted) {
         setState(() => _loading = false);
@@ -205,35 +301,57 @@ class _LoginScreenState extends ConsumerState<LoginScreen> {
   }
 
   Future<void> _verifyOtp() async {
-    if (!RegExp(
-      '^[0-9]{$_codeLength}\$',
-    ).hasMatch(_codeController.text.trim())) {
-      setState(
-        () => _error = 'Enter the $_codeLength-digit code from your email.',
-      );
-      return;
+    final alreadyVerified = _verifiedTokens != null;
+    if (!alreadyVerified) {
+      if (_codeExpired) {
+        setState(() => _notice = const AuthNotice.codeExpired());
+        return;
+      }
+      if (_codeLocked) {
+        setState(() => _notice = const AuthNotice.codeLocked());
+        return;
+      }
+      if (!RegExp(
+        '^[0-9]{$_codeLength}\$',
+      ).hasMatch(_codeController.text.trim())) {
+        setState(
+          () => _notice = AuthNotice.input(
+            'Enter the $_codeLength-digit code from your email.',
+          ),
+        );
+        return;
+      }
     }
     setState(() {
       _loading = true;
-      _error = null;
+      _notice = null;
     });
+    var stage = alreadyVerified ? AuthStage.finishSignIn : AuthStage.verifyCode;
+    final identifier = _identifierController.text.trim();
     try {
-      final identifier = _identifierController.text.trim();
       final code = _codeController.text.trim();
       final authApi = ref.read(authApiProvider);
-      final deviceId = await ref.read(localDeviceIdProvider.future);
-      final deviceInfo = await ref.read(deviceMetadataProvider.future);
 
-      final tokens = await authApi.verifyEmailOtp(
-        identifier,
-        code,
-        deviceId,
-        deviceInfo: deviceInfo,
-        challenge: _challenge,
-        // Only sign-up links the phone. Returning-user login is authorized by
-        // the email OTP and keeps the existing account linkage unchanged.
-        phoneNumber: _isSignUp ? _phoneController.text.trim() : null,
-      );
+      var tokens = _verifiedTokens;
+      if (tokens == null) {
+        final deviceId = await ref.read(localDeviceIdProvider.future);
+        final deviceInfo = await ref.read(deviceMetadataProvider.future);
+        tokens = await authApi.verifyEmailOtp(
+          identifier,
+          code,
+          deviceId,
+          deviceInfo: deviceInfo,
+          challenge: _challenge,
+          // Only sign-up links the phone. Returning-user login is authorized
+          // by the email OTP and keeps the existing account linkage unchanged.
+          phoneNumber: _isSignUp ? _phoneController.text.trim() : null,
+        );
+        // The code is used up now. Anything that fails from here is retried
+        // with these tokens, never by resubmitting the code.
+        _verifiedTokens = tokens;
+        _stopCodeTimer();
+      }
+      stage = AuthStage.finishSignIn;
 
       // Keep the explicit A4 choices through the OTP -> server activation
       // handoff, including a process restart. Sign-in does not create or
@@ -277,19 +395,71 @@ class _LoginScreenState extends ConsumerState<LoginScreen> {
       if (!_isSignUp && mounted && Navigator.of(context).canPop()) {
         Navigator.of(context).pop();
       }
-    } catch (e) {
-      setState(() => _error = userFacingErrorMessage(e));
+    } catch (e, stack) {
+      debugPrint('Sign-in failed at ${stage.name}: $e\n$stack');
+      if (!mounted) return;
+      final rejected = stage == AuthStage.verifyCode && isRejectedCode(e);
+      // Tries are only countable for a code this screen sent and timed.
+      final countTries = rejected && _codeTimeLeft != null;
+      if (countTries) _wrongAttempts++;
+      setState(() {
+        _notice = describeAuthFailure(
+          e,
+          stage: stage,
+          email: identifier,
+          codeTimeLeft: _codeTimeLeft,
+          attemptsLeft: countTries ? _maxCodeAttempts - _wrongAttempts : null,
+        );
+        if (rejected) _codeController.clear();
+        // A lost verify reply may have used the code; let the user get a
+        // new one now instead of waiting out the timer.
+        if (stage == AuthStage.verifyCode && e is TimeoutException) {
+          _resendUnlocked = true;
+        }
+        if (_notice?.kind == AuthFailureKind.sessionRejected) {
+          _verifiedTokens = null;
+          _resendUnlocked = true;
+        }
+      });
+      if (rejected && !_codeLocked) _codeFocusNode.requestFocus();
     } finally {
       if (mounted) setState(() => _loading = false);
     }
   }
 
   void _changeIdentifier() {
+    _stopCodeTimer();
     setState(() {
       _otpRequested = false;
-      _error = null;
+      _notice = null;
       _codeController.clear();
+      _codeExpiresAt = null;
+      _codeTimeLeft = null;
+      _wrongAttempts = 0;
+      _resendUnlocked = false;
+      _verifiedTokens = null;
     });
+  }
+
+  /// A one-tap way out of the error, when there is an obvious one.
+  ({String label, VoidCallback onPressed})? _noticeAction(AuthNotice notice) {
+    if (notice.kind == AuthFailureKind.accountNotFound &&
+        !_isSignUp &&
+        GoRouter.maybeOf(context) != null) {
+      return (
+        label: 'Create an account',
+        onPressed: () => context.pushReplacement(AppRoute.signUp),
+      );
+    }
+    if (notice.kind == AuthFailureKind.accountExists &&
+        _isSignUp &&
+        GoRouter.maybeOf(context) != null) {
+      return (
+        label: 'Sign in instead',
+        onPressed: () => context.pushReplacement(AppRoute.logIn),
+      );
+    }
+    return null;
   }
 
   String get _title => _otpRequested
@@ -427,14 +597,30 @@ class _LoginScreenState extends ConsumerState<LoginScreen> {
                           _OtpStep(
                             codeLength: _codeLength,
                             controller: _codeController,
+                            focusNode: _codeFocusNode,
                             loading: _loading,
+                            codeTimeLeft: _codeTimeLeft,
+                            canResend: _canResend,
+                            locked: _codeLocked,
+                            verified: _verifiedTokens != null,
+                            // Shown beside the code boxes, where the user is
+                            // looking, rather than at the bottom of the page.
+                            notice: _notice == null
+                                ? null
+                                : _NoticeBanner(
+                                    notice: _notice!,
+                                    action: _noticeAction(_notice!),
+                                  ),
                             onSubmit: _verifyOtp,
                             onChangeIdentifier: _changeIdentifier,
                             onResend: _requestOtp,
                           ),
-                        if (_error != null) ...[
+                        if (_notice != null && !_otpRequested) ...[
                           const SizedBox(height: 16),
-                          _ErrorBanner(message: _error!),
+                          _NoticeBanner(
+                            notice: _notice!,
+                            action: _noticeAction(_notice!),
+                          ),
                         ],
                         if (!_isSignUp && !_otpRequested) ...[
                           const SizedBox(height: 14),
@@ -454,7 +640,7 @@ class _LoginScreenState extends ConsumerState<LoginScreen> {
                                   _phoneController.clear();
                                   _codeController.clear();
                                   _otpRequested = false;
-                                  _error = null;
+                                  _notice = null;
                                 });
                               },
                               style: TextButton.styleFrom(
@@ -763,7 +949,18 @@ class _ConsentCheckbox extends StatelessWidget {
 class _OtpStep extends StatefulWidget {
   final int codeLength;
   final TextEditingController controller;
+  final FocusNode focusNode;
   final bool loading;
+
+  /// Null when the code's expiry is unknown (it was sent by an earlier
+  /// request); [Duration.zero] once it has expired.
+  final Duration? codeTimeLeft;
+  final bool canResend;
+  final bool locked;
+
+  /// The code was accepted but sign-in has not finished yet.
+  final bool verified;
+  final Widget? notice;
   final VoidCallback onSubmit;
   final VoidCallback onChangeIdentifier;
   final VoidCallback onResend;
@@ -771,219 +968,406 @@ class _OtpStep extends StatefulWidget {
   const _OtpStep({
     required this.codeLength,
     required this.controller,
+    required this.focusNode,
     required this.loading,
+    required this.codeTimeLeft,
+    required this.canResend,
+    required this.locked,
+    required this.verified,
+    required this.notice,
     required this.onSubmit,
     required this.onChangeIdentifier,
     required this.onResend,
   });
+
+  bool get expired => codeTimeLeft == Duration.zero;
 
   @override
   State<_OtpStep> createState() => _OtpStepState();
 }
 
 class _OtpStepState extends State<_OtpStep> {
-  final _focus = FocusNode();
-
   @override
   void initState() {
     super.initState();
-    _focus.addListener(_focusChanged);
+    widget.focusNode.addListener(_focusChanged);
+  }
+
+  @override
+  void didUpdateWidget(covariant _OtpStep oldWidget) {
+    super.didUpdateWidget(oldWidget);
+    if (oldWidget.focusNode != widget.focusNode) {
+      oldWidget.focusNode.removeListener(_focusChanged);
+      widget.focusNode.addListener(_focusChanged);
+    }
   }
 
   void _focusChanged() => setState(() {});
 
   @override
   void dispose() {
-    _focus.removeListener(_focusChanged);
-    _focus.dispose();
+    widget.focusNode.removeListener(_focusChanged);
     super.dispose();
   }
 
-  @override
-  Widget build(BuildContext context) => Column(
-    crossAxisAlignment: CrossAxisAlignment.stretch,
-    children: [
-      Text(
-        'Verification code',
-        textAlign: TextAlign.center,
-        style: BambooFonts.ui(13, weight: FontWeight.w600),
-      ),
-      const SizedBox(height: 14),
-      Center(
-        child: ConstrainedBox(
-          constraints: const BoxConstraints(maxWidth: 310),
-          child: SizedBox(
-            height: 64,
-            child: Stack(
-              fit: StackFit.expand,
-              children: [
-                TextField(
-                  controller: widget.controller,
-                  focusNode: _focus,
-                  enabled: !widget.loading,
-                  autofocus: true,
-                  keyboardType: TextInputType.number,
-                  textInputAction: TextInputAction.done,
-                  autofillHints: const [AutofillHints.oneTimeCode],
-                  inputFormatters: [
-                    FilteringTextInputFormatter.digitsOnly,
-                    LengthLimitingTextInputFormatter(widget.codeLength),
-                  ],
-                  onSubmitted: (_) => widget.loading ? null : widget.onSubmit(),
-                  showCursor: false,
-                  enableInteractiveSelection: false,
-                  style: const TextStyle(
-                    color: Colors.transparent,
-                    fontSize: 1,
-                  ),
-                  decoration: InputDecoration(
-                    labelText: '${widget.codeLength}-digit verification code',
-                    floatingLabelBehavior: FloatingLabelBehavior.never,
-                    labelStyle: TextStyle(
-                      color: Colors.transparent,
-                      fontSize: 1,
-                    ),
-                    border: InputBorder.none,
-                    enabledBorder: InputBorder.none,
-                    focusedBorder: InputBorder.none,
-                    filled: false,
-                  ),
-                ),
-                IgnorePointer(
-                  child: ExcludeSemantics(
-                    child: ValueListenableBuilder<TextEditingValue>(
-                      valueListenable: widget.controller,
-                      builder: (context, value, _) => Row(
-                        children: [
-                          for (var i = 0; i < widget.codeLength; i++) ...[
-                            if (i > 0) const SizedBox(width: 12),
-                            Expanded(
-                              child: AnimatedContainer(
-                                duration: const Duration(milliseconds: 160),
-                                alignment: Alignment.center,
-                                decoration: BoxDecoration(
-                                  color: Colors.white,
-                                  borderRadius: BorderRadius.circular(15),
-                                  border: Border.all(
-                                    color:
-                                        _focus.hasFocus &&
-                                            i ==
-                                                value.text.length.clamp(
-                                                  0,
-                                                  widget.codeLength - 1,
-                                                )
-                                        ? BambooInk.jade
-                                        : const Color(0xFFDDE1E3),
-                                    width:
-                                        _focus.hasFocus &&
-                                            i == value.text.length.clamp(0, 3)
-                                        ? 1.6
-                                        : 1,
-                                  ),
-                                ),
-                                child: Text(
-                                  i < value.text.length ? value.text[i] : '–',
-                                  style: BambooFonts.heading(
-                                    28,
-                                    weight: FontWeight.w600,
-                                    color: i < value.text.length
-                                        ? BambooInk.ink900
-                                        : const Color(0xFFCDD1CE),
-                                  ),
-                                ),
-                              ),
-                            ),
-                          ],
-                        ],
-                      ),
-                    ),
-                  ),
-                ),
-              ],
-            ),
-          ),
-        ),
-      ),
-      const SizedBox(height: 12),
-      Text(
-        'Your code is valid for 2 minutes.',
-        textAlign: TextAlign.center,
-        style: BambooFonts.ui(12, color: BambooInk.ink700),
-      ),
-      const SizedBox(height: 26),
-      EntryButton(
-        label: 'Verify & continue',
-        onPressed: widget.onSubmit,
-        loading: widget.loading,
-      ),
-      const SizedBox(height: 12),
-      Wrap(
-        alignment: WrapAlignment.center,
-        crossAxisAlignment: WrapCrossAlignment.center,
-        children: [
-          TextButton(
-            onPressed: widget.loading ? null : widget.onChangeIdentifier,
-            style: TextButton.styleFrom(foregroundColor: BambooInk.ink700),
-            child: const Text('Change email'),
-          ),
-          Text('·', style: BambooFonts.ui(13, color: BambooInk.ink700)),
-          TextButton(
-            onPressed: widget.loading ? null : widget.onResend,
-            style: TextButton.styleFrom(foregroundColor: BambooInk.jade),
-            child: const Text('Resend code'),
-          ),
-        ],
-      ),
-      Center(
-        child: TextButton(
-          style: TextButton.styleFrom(foregroundColor: BambooInk.ink700),
-          onPressed: () => Navigator.of(context).push(
-            MaterialPageRoute(
-              builder: (_) => const FeedbackSupportScreen(
-                prefilledKind: 'general',
-                prefilledMessage: "I'm not receiving my OTP code.",
-              ),
-            ),
-          ),
-          child: Text(
-            'Trouble receiving it?',
-            style: BambooFonts.ui(12.5, color: BambooInk.ink700),
-          ),
-        ),
-      ),
-    ],
-  );
-}
-
-class _ErrorBanner extends StatelessWidget {
-  final String message;
-  const _ErrorBanner({required this.message});
+  /// The one obvious next step for the current state.
+  ({String label, VoidCallback? onPressed}) get _primary {
+    if (widget.verified) {
+      return (label: 'Continue', onPressed: widget.onSubmit);
+    }
+    if (widget.expired || (widget.locked && widget.canResend)) {
+      return (label: 'Send a new code', onPressed: widget.onResend);
+    }
+    return (
+      label: 'Verify & continue',
+      onPressed: widget.locked ? null : widget.onSubmit,
+    );
+  }
 
   @override
   Widget build(BuildContext context) {
-    return Container(
-      padding: const EdgeInsets.all(AppSpace.md),
-      decoration: BoxDecoration(
-        color: BambooInk.clay.withValues(alpha: 0.16),
-        borderRadius: BorderRadius.circular(16),
-        border: Border.all(color: BambooInk.clay.withValues(alpha: 0.4)),
-      ),
-      child: Row(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          const Icon(
-            Icons.error_outline_rounded,
-            color: BambooInk.clay,
-            size: 20,
-          ),
-          const SizedBox(width: AppSpace.sm),
-          Expanded(
-            child: Text(
-              message,
-              style: BambooFonts.ui(13, color: BambooInk.clayInk),
+    final focus = widget.focusNode;
+    final inputLocked = widget.verified || widget.expired || widget.locked;
+    final primary = _primary;
+    final showResendLink =
+        !widget.verified && primary.label != 'Send a new code';
+    final timeLeft = widget.codeTimeLeft;
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.stretch,
+      children: [
+        Text(
+          'Verification code',
+          textAlign: TextAlign.center,
+          style: BambooFonts.ui(13, weight: FontWeight.w600),
+        ),
+        const SizedBox(height: 14),
+        Center(
+          child: ConstrainedBox(
+            constraints: const BoxConstraints(maxWidth: 310),
+            child: SizedBox(
+              height: 64,
+              child: Stack(
+                fit: StackFit.expand,
+                children: [
+                  TextField(
+                    controller: widget.controller,
+                    focusNode: focus,
+                    enabled: !widget.loading && !inputLocked,
+                    autofocus: true,
+                    keyboardType: TextInputType.number,
+                    textInputAction: TextInputAction.done,
+                    autofillHints: const [AutofillHints.oneTimeCode],
+                    inputFormatters: [
+                      FilteringTextInputFormatter.digitsOnly,
+                      LengthLimitingTextInputFormatter(widget.codeLength),
+                    ],
+                    onSubmitted: (_) =>
+                        widget.loading ? null : primary.onPressed?.call(),
+                    showCursor: false,
+                    enableInteractiveSelection: false,
+                    style: const TextStyle(
+                      color: Colors.transparent,
+                      fontSize: 1,
+                    ),
+                    decoration: InputDecoration(
+                      labelText: '${widget.codeLength}-digit verification code',
+                      floatingLabelBehavior: FloatingLabelBehavior.never,
+                      labelStyle: TextStyle(
+                        color: Colors.transparent,
+                        fontSize: 1,
+                      ),
+                      border: InputBorder.none,
+                      enabledBorder: InputBorder.none,
+                      focusedBorder: InputBorder.none,
+                      disabledBorder: InputBorder.none,
+                      filled: false,
+                    ),
+                  ),
+                  IgnorePointer(
+                    child: ExcludeSemantics(
+                      child: ValueListenableBuilder<TextEditingValue>(
+                        valueListenable: widget.controller,
+                        builder: (context, value, _) {
+                          final active = value.text.length.clamp(
+                            0,
+                            widget.codeLength - 1,
+                          );
+                          return Row(
+                            children: [
+                              for (var i = 0; i < widget.codeLength; i++) ...[
+                                if (i > 0) const SizedBox(width: 12),
+                                Expanded(
+                                  child: AnimatedContainer(
+                                    duration: const Duration(milliseconds: 160),
+                                    alignment: Alignment.center,
+                                    decoration: BoxDecoration(
+                                      color: inputLocked
+                                          ? BambooInk.paperMuted
+                                          : Colors.white,
+                                      borderRadius: BorderRadius.circular(15),
+                                      border: Border.all(
+                                        color: focus.hasFocus && i == active
+                                            ? BambooInk.jade
+                                            : const Color(0xFFDDE1E3),
+                                        width: focus.hasFocus && i == active
+                                            ? 1.6
+                                            : 1,
+                                      ),
+                                    ),
+                                    child: Text(
+                                      i < value.text.length
+                                          ? value.text[i]
+                                          : '–',
+                                      style: BambooFonts.heading(
+                                        28,
+                                        weight: FontWeight.w600,
+                                        color: i < value.text.length
+                                            ? BambooInk.ink900
+                                            : const Color(0xFFCDD1CE),
+                                      ),
+                                    ),
+                                  ),
+                                ),
+                              ],
+                            ],
+                          );
+                        },
+                      ),
+                    ),
+                  ),
+                ],
+              ),
             ),
           ),
+        ),
+        const SizedBox(height: 12),
+        _CodeStatusLine(timeLeft: timeLeft, verified: widget.verified),
+        if (widget.notice != null) ...[
+          const SizedBox(height: 16),
+          widget.notice!,
         ],
+        const SizedBox(height: 22),
+        EntryButton(
+          label: primary.label,
+          onPressed: primary.onPressed,
+          loading: widget.loading,
+        ),
+        const SizedBox(height: 12),
+        Wrap(
+          alignment: WrapAlignment.center,
+          crossAxisAlignment: WrapCrossAlignment.center,
+          children: [
+            TextButton(
+              onPressed: widget.loading ? null : widget.onChangeIdentifier,
+              style: TextButton.styleFrom(foregroundColor: BambooInk.ink700),
+              child: const Text('Change email'),
+            ),
+            if (showResendLink) ...[
+              Text('·', style: BambooFonts.ui(13, color: BambooInk.ink700)),
+              TextButton(
+                onPressed: widget.loading || !widget.canResend
+                    ? null
+                    : widget.onResend,
+                style: TextButton.styleFrom(
+                  foregroundColor: BambooInk.jade,
+                  disabledForegroundColor: BambooInk.ink500,
+                ),
+                child: Text(
+                  widget.canResend || timeLeft == null
+                      ? 'Resend code'
+                      : 'Resend in ${formatCountdown(timeLeft)}',
+                ),
+              ),
+            ],
+          ],
+        ),
+        Center(
+          child: TextButton(
+            style: TextButton.styleFrom(foregroundColor: BambooInk.ink700),
+            onPressed: () => Navigator.of(context).push(
+              MaterialPageRoute(
+                builder: (_) => const FeedbackSupportScreen(
+                  prefilledKind: 'general',
+                  prefilledMessage: "I'm not receiving my OTP code.",
+                ),
+              ),
+            ),
+            child: Text(
+              'Trouble receiving it?',
+              style: BambooFonts.ui(12.5, color: BambooInk.ink700),
+            ),
+          ),
+        ),
+      ],
+    );
+  }
+}
+
+/// "Code expires in 1:42", turning amber in the last 30 seconds and showing
+/// a clear expired state, like the countdowns in banking and payment apps.
+class _CodeStatusLine extends StatelessWidget {
+  final Duration? timeLeft;
+  final bool verified;
+  const _CodeStatusLine({required this.timeLeft, required this.verified});
+
+  @override
+  Widget build(BuildContext context) {
+    final left = timeLeft;
+    final (
+      IconData icon,
+      String text,
+      Color color,
+      FontWeight weight,
+    ) = switch (left) {
+      _ when verified => (
+        Icons.check_circle_rounded,
+        'Code accepted',
+        BambooInk.jade,
+        FontWeight.w600,
+      ),
+      null => (
+        Icons.schedule_rounded,
+        'Codes are valid for 2 minutes.',
+        BambooInk.ink700,
+        FontWeight.w400,
+      ),
+      Duration.zero => (
+        Icons.timer_off_outlined,
+        'Code expired',
+        BambooInk.clayInk,
+        FontWeight.w600,
+      ),
+      _ when left <= const Duration(seconds: 30) => (
+        Icons.timer_outlined,
+        'Code expires in ${formatCountdown(left)}',
+        BambooInk.amber,
+        FontWeight.w600,
+      ),
+      _ => (
+        Icons.timer_outlined,
+        'Code expires in ${formatCountdown(left)}',
+        BambooInk.ink700,
+        FontWeight.w400,
+      ),
+    };
+    return Row(
+      mainAxisAlignment: MainAxisAlignment.center,
+      children: [
+        Icon(icon, size: 15, color: color),
+        const SizedBox(width: 6),
+        Flexible(
+          child: Text(
+            text,
+            textAlign: TextAlign.center,
+            style: BambooFonts.ui(
+              12.5,
+              color: color,
+              weight: weight,
+            ).copyWith(fontFeatures: const [FontFeature.tabularFigures()]),
+          ),
+        ),
+      ],
+    );
+  }
+}
+
+/// Title, plain-language explanation, optional next step and support
+/// reference. Errors are clay, things to wait out are amber, and neutral
+/// updates (a code was sent) are jade.
+class _NoticeBanner extends StatelessWidget {
+  final AuthNotice notice;
+  final ({String label, VoidCallback onPressed})? action;
+  const _NoticeBanner({required this.notice, this.action});
+
+  @override
+  Widget build(BuildContext context) {
+    final (Color accent, Color ink, IconData icon) = switch (notice.tone) {
+      AuthNoticeTone.error => (
+        BambooInk.clay,
+        BambooInk.clayInk,
+        Icons.error_outline_rounded,
+      ),
+      AuthNoticeTone.warning => (
+        BambooInk.amber,
+        BambooInk.ink900,
+        Icons.info_outline_rounded,
+      ),
+      AuthNoticeTone.info => (
+        BambooInk.jade,
+        BambooInk.ink900,
+        Icons.mark_email_read_outlined,
+      ),
+    };
+    final title = notice.title;
+    final reference = notice.reference;
+    final next = action;
+    return Semantics(
+      liveRegion: true,
+      container: true,
+      child: Container(
+        padding: const EdgeInsets.all(AppSpace.md),
+        decoration: BoxDecoration(
+          color: accent.withValues(alpha: 0.12),
+          borderRadius: BorderRadius.circular(16),
+          border: Border.all(color: accent.withValues(alpha: 0.4)),
+        ),
+        child: Row(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Icon(icon, color: accent, size: 20),
+            const SizedBox(width: AppSpace.sm),
+            Expanded(
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  if (title != null) ...[
+                    Text(
+                      title,
+                      style: BambooFonts.ui(
+                        13.5,
+                        color: ink,
+                        weight: FontWeight.w700,
+                      ),
+                    ),
+                    const SizedBox(height: 2),
+                  ],
+                  Text(
+                    notice.message,
+                    style: BambooFonts.ui(13, color: ink, height: 1.35),
+                  ),
+                  if (next != null)
+                    Align(
+                      alignment: Alignment.centerLeft,
+                      child: TextButton(
+                        onPressed: next.onPressed,
+                        style: TextButton.styleFrom(
+                          foregroundColor: BambooInk.jade,
+                          padding: const EdgeInsets.only(top: 6),
+                          minimumSize: const Size(0, 32),
+                          tapTargetSize: MaterialTapTargetSize.shrinkWrap,
+                        ),
+                        child: Text(
+                          next.label,
+                          style: BambooFonts.ui(
+                            13,
+                            color: BambooInk.jade,
+                            weight: FontWeight.w700,
+                          ),
+                        ),
+                      ),
+                    ),
+                  if (reference != null) ...[
+                    const SizedBox(height: 6),
+                    SelectableText(
+                      reference,
+                      style: BambooFonts.ui(11, color: BambooInk.ink500),
+                    ),
+                  ],
+                ],
+              ),
+            ),
+          ],
+        ),
       ),
     );
   }

@@ -55,6 +55,28 @@ class IosSmsIntakeState {
       .where((row) => row['job_id'] == lastCompletedJob?['id'])
       .toList(growable: false);
 
+  /// Messages from the current import's period that PandaPay holds. Unlike
+  /// per-range counts, these never drop when Resume reads a range again.
+  ({int saved, int processed, int review}) get importCounts {
+    final counts = snapshot['active_counts'];
+    if (counts is Map && counts['job'] == activeJob?['id']) {
+      return (
+        saved: counts['saved'] as int? ?? 0,
+        processed: counts['processed'] as int? ?? 0,
+        review: counts['review'] as int? ?? 0,
+      );
+    }
+    int sum(String key) => currentWindows.fold(
+      0,
+      (total, window) => total + (window[key] as int? ?? 0),
+    );
+    return (
+      saved: sum('enumerated'),
+      processed: sum('processed'),
+      review: sum('needs_review'),
+    );
+  }
+
   String countsFor(Iterable<Map<String, Object?>> rows) {
     int sum(String key) =>
         rows.fold(0, (total, window) => total + (window[key] as int? ?? 0));
@@ -101,6 +123,10 @@ class IosSmsIntakeState {
       (a, b) =>
           (a['ordinal'] as int? ?? 0).compareTo(b['ordinal'] as int? ?? 0),
     );
+
+  /// When the live automation last handed PandaPay an incoming SMS.
+  DateTime? get lastLiveAt =>
+      DateTime.tryParse(snapshot['last_live_at'] as String? ?? '');
 
   /// End of the unbroken run of finished date ranges from the job's start.
   DateTime? get importedThrough {
@@ -531,7 +557,7 @@ class IosSmsIntakeController extends ChangeNotifier {
        sessionStore = sessionStore ?? const IosImportSessionStore() {
     if (service.supported) {
       service.listen(
-        refresh,
+        _onReady,
         onBackground: processInBackground,
         onExpiration: stopBackgroundProcessing,
       );
@@ -565,8 +591,43 @@ class IosSmsIntakeController extends ChangeNotifier {
   @visibleForTesting
   static Duration drainRetryDelay = const Duration(milliseconds: 400);
 
+  /// A running Shortcut reports every saved message. Reloading import state
+  /// for each one keeps the screen busy, so reloads run at most this often.
+  /// Messages wait safely in the native store meanwhile. Zero in tests.
+  @visibleForTesting
+  static Duration readyInterval = const Duration(milliseconds: 800);
+
+  /// Breathing room between 50-message batches so the screen keeps drawing.
+  @visibleForTesting
+  static Duration batchGap = const Duration(milliseconds: 60);
+  final _sinceReady = Stopwatch();
+  Timer? _readyTimer;
+
+  Future<void> _onReady() {
+    if (_disposed || _readyTimer != null) return Future.value();
+    final wait = _sinceReady.isRunning
+        ? readyInterval - _sinceReady.elapsed
+        : Duration.zero;
+    if (wait <= Duration.zero) {
+      _sinceReady
+        ..reset()
+        ..start();
+      return refresh();
+    }
+    _readyTimer = Timer(wait, () {
+      _readyTimer = null;
+      if (_disposed) return;
+      _sinceReady
+        ..reset()
+        ..start();
+      unawaited(refresh());
+    });
+    return Future.value();
+  }
+
   String? _haltError;
-  static const _pausedMessage = 'Import paused. Resume when you’re ready.';
+  static const _pausedMessage =
+      'Import paused. Resume picks up at the current month; saved messages stay.';
   String? _haltProgress;
   String? _drainError;
 
@@ -691,7 +752,7 @@ class IosSmsIntakeController extends ChangeNotifier {
               if (!state.enabled) return;
               final generation = state.generation!;
               var drained = false;
-              var nextProgress = now().add(const Duration(seconds: 1));
+              var nextProgress = now().add(const Duration(seconds: 2));
               do {
                 _refreshAgain = false;
                 while (true) {
@@ -763,10 +824,10 @@ class IosSmsIntakeController extends ChangeNotifier {
                         processing: true,
                       ),
                     );
-                    nextProgress = now().add(const Duration(seconds: 1));
+                    nextProgress = now().add(const Duration(seconds: 2));
                   }
                   // Let frames render between batches.
-                  await Future<void>.delayed(const Duration(milliseconds: 16));
+                  await Future<void>.delayed(batchGap);
                 }
               } while (_refreshAgain && !_stopDrainRequested);
               // One upload pass for the whole drain, not one per batch.
@@ -1186,6 +1247,7 @@ class IosSmsIntakeController extends ChangeNotifier {
   void dispose() {
     _disposed = true;
     _autoResumeTimer?.cancel();
+    _readyTimer?.cancel();
     // Teardown is not the person stopping the import: keep the saved session.
     _endAutomaticSession(forget: false);
     _revision++;

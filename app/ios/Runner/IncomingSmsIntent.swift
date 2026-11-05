@@ -27,7 +27,10 @@ struct CapturePandaPayMessageIntent: AppIntent {
   func perform() async throws -> some IntentResult & ReturnsValue<String> {
     let value: String
     do {
-      value = try IncomingSmsSpool.shared.capture(body: body, sender: sender, receivedAt: receivedAt, provenance: dateSource.rawValue)
+      // A live automation runs as the SMS arrives, so "Estimated (Current
+      // Date)" with the date left empty means now. Original dates stay required.
+      let date = receivedAt ?? (dateSource == .estimated ? Date() : nil)
+      value = try IncomingSmsSpool.shared.capture(body: body, sender: sender, receivedAt: date, provenance: dateSource.rawValue)
     } catch IncomingSmsError.inactive {
       // A signed-out or deliberately disabled capture is an expected no-op,
       // not a recurring Shortcuts error notification on every incoming SMS.
