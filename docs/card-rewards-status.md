@@ -30,14 +30,14 @@ Status values: `not started` · `running` · `done (branch ready)` · `merged` �
 |---|---|---|---|---|---|---|
 | WP0 | Docs, contracts, scenario seed, directory skeleton | 0 | `card-rewards/phase1` | merged | 2026-11-05 | Lead |
 | WP1 | Schema v2, v1/v2 feeds, directory seeding | 1 | `card-rewards/wp1-schema` | **merged** | 2026-11-06 | Review + 6 follow-ups incl. hashed identity indexes (checkpoint); DB test in CI |
-| WP2 | Loader v2 (pure transform), coverage, audit script | 1 | `card-rewards/wp2-loader` | **merged** | 2026-11-06 | 4 fix rounds + checkpoint fix (duplicate benefits); real import 376/376 |
+| WP2 | Loader v2 (pure transform), coverage, audit script | 1 | `card-rewards/wp2-loader` | merged; follow-up round running | 2026-11-06 | D24b UPI-only bonuses hidden from old apps; EMI exclusion alternatives; Magnus higher-tier rate; loader limits found by WP7 |
 | WP3 | Dart engine v2 + tolerant parsing | 1 | `card-rewards/wp3-dart-engine` | **merged** | 2026-11-06 | 477/477 tests; all 127 shared scenarios agree with JS (incl. D15, D16, D18) |
 | WP4 | JS engine v2 + merchant resolver | 1 | `card-rewards/wp4-js-engine` | **merged** | 2026-11-06 | 272/272 targeted tests on merged branch; passes all 127 shared scenarios incl. Dart's own |
 | WP5 | Merchant and platform directory data | 1 | `card-rewards/wp5-directory` | **merged** | 2026-11-06 | 164 merchants (9 true sub-brand parents, `group` tags per D6), 61 platforms; review + 1 fix round clean; IHCL brands kept under `taj` (ruling in ledger) |
 | WP6a | Worked examples: HDFC, SBI Card | 1 | `card-rewards/wp6a-examples-hdfc-sbi` | **merged** | 2026-11-06 | 21/21 cards, 15 override files; review + 1 fix round clean; Swiggy exact-half rounding parked |
 | WP6b | Worked examples: ICICI, Axis, Amex, IDFC, others | 1 | `card-rewards/wp6b-examples-others` | **merged** | 2026-11-06 | 23/25 cards (Amazon Pay ICICI, AU Zenith+ skipped), 13 override files; 2 fix rounds, verified with the real loader; 18-card loader mismatches carried to WP7 |
-| WP7 | Integration: worked examples through both engines | 2 | `card-rewards/wp7-integration` | done (in review) | 2026-11-06 | 374/397 bank examples pass in both engines (14 known failures routed, 9 not checkable); JS = Dart on all 388; 19 cards Verified; 31 override corrections |
-| WP8 | Server recording v2 + recompute script | 2 | `card-rewards/wp8-server-state` | needs rework (fix round 1) | 2026-11-06 | Review: core sound and money-exact; applying D22 + fixing statement-cycle dates (days 1, 29–31), an edit/recalc race, IST periods, one broken DB test — D23 |
+| WP7 | Integration: worked examples through both engines | 2 | `card-rewards/wp7-integration` | fix round 1 done, in re-review | 2026-11-06 | 385 of 390 checkable examples pass in both engines (5 known failures with routed fixes); 19 cards Verified; UNO, rent/jewellery, SimplyCLICK cap, IndiGo, EMI and Tata Neu fixes in |
+| WP8 | Server recording v2 + recompute script | 2 | `card-rewards/wp8-server-state` | needs rework (fix round 2) | 2026-11-06 | Round 1 fixes confirmed (dates, Indian time, statement cycles, edit/recalc lock). Round 2: cashback must not be added to the points balance; the same lock on four more edit routes; two small items |
 | WP9 | App: v2 feed, tolerant parse, cap bars, alerts | 2 | — | not started | | Starts after WP8 merges |
 | — | Checkpoint A (after wave 1) | — | — | **passed** | 2026-11-06 | API 1695/0 fail; Dart 477/0; real DB import 376/376; old feed parsed by the released app parser with 0 errors; JS = Dart on 11,914 real-data purchases (0 mismatches) |
 | — | Checkpoint B (after wave 2) | — | — | not started | | |
@@ -76,6 +76,7 @@ Status values: `not started` · `running` · `done (branch ready)` · `merged` �
 | 2026-11-06 | D19: an exclusion counts as "bonus-only" only if every benefit it removes is a bonus/accelerated rate; an explicit MCC list is the exclusion's real scope; caps follow their source rule; a capped bonus without its cap is hidden from old apps. | Lead |
 | 2026-11-06 | D22: milestone progress counts only spends that earn (never over-states); welcome offers start from the card's issue date; old app installs keep the old meaning of limit progress; rule order made deterministic. | Lead |
 | 2026-11-06 | D23: limit periods follow Indian time and correct statement dates (incl. 1st and 29th–31st); edits and recalculations can't overlap. | Lead |
+| 2026-11-06 | D24: a card's value counts only rewards the card itself gives (not the merchant's own loyalty programme); UPI-only bonuses are hidden from old app versions; newer documents' silence never removes a documented limit. | Lead |
 | 2026-11-06 | D10: cards switch to the v2 engine only when re-imported by the v2 loader (DB defaults alone never switch a card), so existing cards keep today's behaviour until re-import. | Lead |
 
 ## Changelog
