@@ -1,0 +1,365 @@
+{
+  "source_slug": "makemytrip-icici-bank-signature-credit-card",
+  "cardpipeline_id": "icici-bank-makemytrip-icici-bank-signature-credit-card",
+  "card_name": "MakeMyTrip ICICI Bank Signature Credit Card",
+  "verified_on": "2026-11-05",
+  "sources": [
+    {
+      "url": "https://www.icici.bank.in/terms-condition/tnc-for-signature-credit-card",
+      "doc": "MakeMyTrip ICICI Bank Signature Credit Card T&C",
+      "quote": "rounded off to the nearest integer at the time of posting"
+    },
+    {
+      "url": "https://www.icicibank.com/managed-assets/docs/personal/cards/mitc_cc.pdf",
+      "doc": "ICICI Credit Card MITC",
+      "quote": "For MakeMyTrip ICICI bank Credit Card ... Insurance Category: 1,000 Reward Points/anniversary year."
+    },
+    {
+      "url": "https://www.icici.bank.in/terms-condition/tnc-for-signature-credit-card",
+      "doc": "MakeMyTrip ICICI Bank Signature Credit Card T&C",
+      "quote": "earn rates per Rs 200: domestic 1.25, international 1.50, flights 2.00, hotels/holidays 4.00 My Cash"
+    }
+  ],
+  "examples": [
+    {
+      "id": "001",
+      "title": "Rs 8,000 domestic spend outside MakeMyTrip",
+      "ctx": {
+        "amount": 8000,
+        "occurred": "2026-11-10T10:00:00+05:30",
+        "category_id": null,
+        "category_slug": "other",
+        "mcc": "5651",
+        "merchant_name": "Apparel store",
+        "merchant_vpa": null,
+        "merchant_slug": null,
+        "platform": null,
+        "rail": "swipe"
+      },
+      "state_before": {
+        "caps_by_source_id": {}
+      },
+      "expect": {
+        "currency": "points",
+        "amount": 50,
+        "value_inr": 50.0,
+        "excluded": false,
+        "cap_deltas_by_source_id": {}
+      },
+      "why": "1.25 My Cash per Rs 200: 40 x 1.25 = 50. 1 My Cash = Rs 1 on MakeMyTrip."
+    },
+    {
+      "id": "002",
+      "title": "Rs 1,000 domestic spend: My Cash rounded to nearest integer (down)",
+      "ctx": {
+        "amount": 1000,
+        "occurred": "2026-11-10T10:00:00+05:30",
+        "category_id": null,
+        "category_slug": "other",
+        "mcc": "5651",
+        "merchant_name": "Apparel store",
+        "merchant_vpa": null,
+        "merchant_slug": null,
+        "platform": null,
+        "rail": "swipe"
+      },
+      "state_before": {
+        "caps_by_source_id": {}
+      },
+      "expect": {
+        "currency": "points",
+        "amount": 6,
+        "value_inr": 6.0,
+        "excluded": false,
+        "cap_deltas_by_source_id": {}
+      },
+      "why": "1000/200 x 1.25 = 6.25; My Cash on each qualifying transaction is rounded off to the nearest integer at posting -> 6."
+    },
+    {
+      "id": "003",
+      "title": "Rs 1,100 domestic spend: My Cash rounded to nearest integer (up)",
+      "ctx": {
+        "amount": 1100,
+        "occurred": "2026-11-10T10:00:00+05:30",
+        "category_id": null,
+        "category_slug": "other",
+        "mcc": "5651",
+        "merchant_name": "Apparel store",
+        "merchant_vpa": null,
+        "merchant_slug": null,
+        "platform": null,
+        "rail": "swipe"
+      },
+      "state_before": {
+        "caps_by_source_id": {}
+      },
+      "expect": {
+        "currency": "points",
+        "amount": 7,
+        "value_inr": 7.0,
+        "excluded": false,
+        "cap_deltas_by_source_id": {}
+      },
+      "why": "1100/200 x 1.25 = 6.875 -> nearest integer 7 (a floor-per-block rule would give 6)."
+    },
+    {
+      "id": "004",
+      "title": "Rs 8,000 international spend",
+      "ctx": {
+        "amount": 8000,
+        "occurred": "2026-11-10T10:00:00+05:30",
+        "category_id": null,
+        "category_slug": "other",
+        "mcc": "5651",
+        "merchant_name": "Overseas store",
+        "merchant_vpa": null,
+        "merchant_slug": null,
+        "platform": null,
+        "rail": "online"
+      },
+      "state_before": {
+        "caps_by_source_id": {}
+      },
+      "expect": {
+        "currency": "points",
+        "amount": 60,
+        "value_inr": 60.0,
+        "excluded": false,
+        "cap_deltas_by_source_id": {}
+      },
+      "why": "1.5 My Cash per Rs 200 on international spends outside MakeMyTrip: 40 x 1.5 = 60."
+    },
+    {
+      "id": "005",
+      "title": "Rs 20,000 flight booked on MakeMyTrip (booking_type flight)",
+      "ctx": {
+        "amount": 20000,
+        "occurred": "2026-11-10T10:00:00+05:30",
+        "category_id": null,
+        "category_slug": "travel",
+        "mcc": null,
+        "merchant_name": "MakeMyTrip",
+        "merchant_vpa": null,
+        "merchant_slug": "makemytrip",
+        "platform": null,
+        "rail": "online"
+      },
+      "state_before": {
+        "caps_by_source_id": {}
+      },
+      "expect": {
+        "currency": "points",
+        "amount": 200,
+        "value_inr": 200.0,
+        "excluded": false,
+        "cap_deltas_by_source_id": {}
+      },
+      "why": "2 My Cash per Rs 200 on flights booked on MakeMyTrip: 100 x 2 = 200. The rule depends on booking type, which a merchant name alone does not give."
+    },
+    {
+      "id": "006",
+      "title": "Rs 20,000 hotel booked on MakeMyTrip (booking_type hotel)",
+      "ctx": {
+        "amount": 20000,
+        "occurred": "2026-11-10T10:00:00+05:30",
+        "category_id": null,
+        "category_slug": "travel",
+        "mcc": null,
+        "merchant_name": "MakeMyTrip",
+        "merchant_vpa": null,
+        "merchant_slug": "makemytrip",
+        "platform": null,
+        "rail": "online"
+      },
+      "state_before": {
+        "caps_by_source_id": {}
+      },
+      "expect": {
+        "currency": "points",
+        "amount": 400,
+        "value_inr": 400.0,
+        "excluded": false,
+        "cap_deltas_by_source_id": {}
+      },
+      "why": "4 My Cash per Rs 200 on hotel and holiday bookings: 100 x 4 = 400."
+    },
+    {
+      "id": "007",
+      "title": "Rs 3,000 fuel",
+      "ctx": {
+        "amount": 3000,
+        "occurred": "2026-11-10T10:00:00+05:30",
+        "category_id": null,
+        "category_slug": "fuel",
+        "mcc": "5541",
+        "merchant_name": "Fuel station",
+        "merchant_vpa": null,
+        "merchant_slug": null,
+        "platform": null,
+        "rail": "swipe"
+      },
+      "state_before": {
+        "caps_by_source_id": {}
+      },
+      "expect": {
+        "currency": "points",
+        "amount": 0,
+        "value_inr": null,
+        "excluded": true,
+        "cap_deltas_by_source_id": {}
+      },
+      "why": "Fuel transactions are non-qualifying on the Visa Signature card (the fuel exception in the MITC is only for the Amex network variant of MakeMyTrip/HPCL Coral cards)."
+    },
+    {
+      "id": "008",
+      "title": "Rs 10,000 EMI purchase",
+      "ctx": {
+        "amount": 10000,
+        "occurred": "2026-11-10T10:00:00+05:30",
+        "category_id": null,
+        "category_slug": "emi",
+        "mcc": null,
+        "merchant_name": "Electronics store",
+        "merchant_vpa": null,
+        "merchant_slug": null,
+        "platform": null,
+        "rail": "emi"
+      },
+      "state_before": {
+        "caps_by_source_id": {}
+      },
+      "expect": {
+        "currency": "points",
+        "amount": 0,
+        "value_inr": null,
+        "excluded": true,
+        "cap_deltas_by_source_id": {}
+      },
+      "why": "EMI, balance transfer and personal loan on credit card transactions do not earn My Cash."
+    },
+    {
+      "id": "009",
+      "title": "Rs 20,000 rent payment",
+      "ctx": {
+        "amount": 20000,
+        "occurred": "2026-11-10T10:00:00+05:30",
+        "category_id": null,
+        "category_slug": "rent",
+        "mcc": "6513",
+        "merchant_name": "Rent payment",
+        "merchant_vpa": null,
+        "merchant_slug": null,
+        "platform": null,
+        "rail": "online"
+      },
+      "state_before": {
+        "caps_by_source_id": {}
+      },
+      "expect": {
+        "currency": "points",
+        "amount": 0,
+        "value_inr": null,
+        "excluded": true,
+        "cap_deltas_by_source_id": {}
+      },
+      "why": "Rent payments are not eligible."
+    },
+    {
+      "id": "010",
+      "title": "Rs 1,00,000 insurance premium with 900 of the 1,000 points already earned this card year",
+      "ctx": {
+        "amount": 100000,
+        "occurred": "2026-11-10T10:00:00+05:30",
+        "category_id": null,
+        "category_slug": "insurance",
+        "mcc": "6300",
+        "merchant_name": "Insurer",
+        "merchant_vpa": null,
+        "merchant_slug": null,
+        "platform": null,
+        "rail": "online"
+      },
+      "state_before": {
+        "caps_by_source_id": {
+          "mmt-insurance-annual-1000": 900
+        }
+      },
+      "expect": {
+        "currency": "points",
+        "amount": 100,
+        "value_inr": 100.0,
+        "excluded": false,
+        "cap_deltas_by_source_id": {
+          "mmt-insurance-annual-1000": 100
+        }
+      },
+      "why": "Base would be 500 x 1.25 = 625, but insurance reward points are capped at 1,000 per anniversary year (MITC); only 100 remain."
+    },
+    {
+      "id": "011",
+      "title": "Rs 20,000 insurance premium after the 1,000-point annual limit",
+      "ctx": {
+        "amount": 20000,
+        "occurred": "2026-11-10T10:00:00+05:30",
+        "category_id": null,
+        "category_slug": "insurance",
+        "mcc": "6300",
+        "merchant_name": "Insurer",
+        "merchant_vpa": null,
+        "merchant_slug": null,
+        "platform": null,
+        "rail": "online"
+      },
+      "state_before": {
+        "caps_by_source_id": {
+          "mmt-insurance-annual-1000": 1000
+        }
+      },
+      "expect": {
+        "currency": "points",
+        "amount": 0,
+        "value_inr": null,
+        "excluded": false,
+        "cap_deltas_by_source_id": {}
+      },
+      "why": "Insurance points beyond 1,000 per anniversary year are not given."
+    }
+  ],
+  "research_notes": [
+    {
+      "item": "insurance cap",
+      "cardpipeline_says": "cap_rules is empty",
+      "issuer_says": "MITC: for the MakeMyTrip ICICI Bank Credit Card, insurance reward points are capped at 1,000 per anniversary year.",
+      "proposed_fix": "override",
+      "override_file": "api/scripts/catalogue_overrides/makemytrip-icici-bank-signature-credit-card.json"
+    },
+    {
+      "item": "rounding",
+      "cardpipeline_says": "rounding_mode round on block 200, 1.25 points per block",
+      "issuer_says": "T&C: My Cash for each qualifying spend transaction is rounded off to the nearest integer at posting (final points, not per block).",
+      "proposed_fix": "override",
+      "override_file": "api/scripts/catalogue_overrides/makemytrip-icici-bank-signature-credit-card.json"
+    },
+    {
+      "item": "MakeMyTrip flights vs hotels",
+      "cardpipeline_says": "two rules on platform MakeMyTrip by booking_type",
+      "issuer_says": "Rates are per booking type (flights 2, hotels/holidays 4 My Cash per Rs 200). Merchant-only context cannot distinguish them; keep as separate rules and do not collapse to an up-to rate. Trains/buses/cabs rates are not stated in this T&C.",
+      "proposed_fix": "importer",
+      "override_file": null
+    },
+    {
+      "item": "newer MakeMyTrip card terms",
+      "cardpipeline_says": "n/a",
+      "issuer_says": "A separate newer ICICI MakeMyTrip programme (changes dated 10 Nov 2026, 6 and 3 My Cash per Rs 100, round down) is a different product from the Signature card page used here. Not applied.",
+      "proposed_fix": "none",
+      "override_file": null
+    },
+    {
+      "item": "wallet and utilities",
+      "cardpipeline_says": "exclude-wallet-loading",
+      "issuer_says": "MITC says e-wallet reload earns nothing for ICICI cards (Amazon Pay excepted). Utility and grocery caps in the general MITC table do not list this card.",
+      "proposed_fix": "none",
+      "override_file": null
+    }
+  ]
+}

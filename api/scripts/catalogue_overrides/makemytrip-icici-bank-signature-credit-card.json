@@ -1,0 +1,43 @@
+{
+  "source_slug": "makemytrip-icici-bank-signature-credit-card",
+  "changes": [
+    {
+      "path": "accrual_engine.rounding_mode",
+      "value": "points_half_up",
+      "reason": "My Cash rounded to nearest integer per transaction.",
+      "source_url": "https://www.icici.bank.in/terms-condition/tnc-for-signature-credit-card",
+      "checked_on": "2026-11-05"
+    },
+    {
+      "path": "cap_rules",
+      "value": [
+        {
+          "id": "mmt-insurance-annual-1000",
+          "category_id": "insurance",
+          "metric": "total_reward_points",
+          "mcc_target_list": [
+            5960,
+            6300,
+            6381,
+            6399
+          ],
+          "period": "annual",
+          "limit_value": 1000,
+          "limit_value_inr": null,
+          "post_limit_behavior": {
+            "action": "zero_accrual",
+            "points_per_block": 0
+          },
+          "parent_cap_id": null,
+          "reset_day": null,
+          "effective_from": "2024-11-15",
+          "effective_to": null,
+          "anchor": "card_anniversary"
+        }
+      ],
+      "reason": "CardPipeline cap_rules is empty; MITC caps insurance points at 1,000 per anniversary year.",
+      "source_url": "https://www.icicibank.com/managed-assets/docs/personal/cards/mitc_cc.pdf",
+      "checked_on": "2026-11-05"
+    }
+  ]
+}
