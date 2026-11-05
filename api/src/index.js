@@ -187,11 +187,6 @@ registerReferralRoutes(app);
 registerPortableBackupRoutes(app, { requireAuth, pool:accountBackupPool });
 registerPortableBackupRestoreRoutes(app, { requireAuth, pool:accountBackupPool });
 registerSharedExpenseRoutes(app, { requireAuth, withUserClient });
-require('./account_recovery_routes').registerAccountRecoveryRoutes(app,{
-  requireAuth,withUserClient,enabled:['true','1'].includes(process.env.ACCOUNT_RECOVERY_ENABLED),
-  wrappingKeyBase64:process.env.ACCOUNT_RECOVERY_WRAPPING_KEY,wrappingKeyId:process.env.ACCOUNT_RECOVERY_WRAPPING_KEY_ID,
-  wrappingReadKeysJson:process.env.ACCOUNT_RECOVERY_WRAPPING_READ_KEYS_JSON,
-});
 registerUserMerchantCategoryRuleRoutes(app, { requireAuth, withUserClient });
 
 /**

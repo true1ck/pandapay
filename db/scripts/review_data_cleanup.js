@@ -10,7 +10,7 @@ const {resolveDatabaseTls}=require('../../api/src/db_tls');
 const FORMAT='pandapay-data-cleanup-review-v1';
 const CATALOG_LIMIT=10000;
 const sqlDigest=expression=>`encode(sha256(convert_to(${expression},'UTF8')),'hex')`;
-const SCHEMAS={product:['public','pandapay','promotions','partner_webhook','backup_status','imap_worker','account_lifecycle','account_recovery','maintenance'],auth:['public','auth_private','console_private']};
+const SCHEMAS={product:['public','pandapay','promotions','partner_webhook','backup_status','imap_worker','account_lifecycle','maintenance'],auth:['public','auth_private','console_private']};
 const DUPLICATE_RULES=[
  {name:'cap_rule_business_equivalence',table:'public.cap_rules',exclude:['id','created_at','updated_at'],normalize:['label']},
  {name:'benefit_business_equivalence',table:'public.card_benefits',exclude:['id','created_at','updated_at'],normalize:['label']},

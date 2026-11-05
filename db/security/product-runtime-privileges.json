@@ -9,7 +9,6 @@
     "backup_status",
     "imap_worker",
     "account_lifecycle",
-    "account_recovery",
     "maintenance",
     "notification_delivery",
     "feedback_admission",
@@ -118,11 +117,6 @@
     },
     {
       "name": "account_lifecycle_owner",
-      "kind": "owner",
-      "required": false
-    },
-    {
-      "name": "account_recovery_owner",
       "kind": "owner",
       "required": false
     },
@@ -525,22 +519,6 @@
     {
       "role": "account_lifecycle_runtime",
       "identity": "account_lifecycle.replay_tombstone(uuid,uuid,bigint)"
-    },
-    {
-      "role": "app_user",
-      "identity": "account_recovery.put_snapshot(uuid,uuid,bytea,text,bytea,text,boolean,boolean,text)"
-    },
-    {
-      "role": "app_user",
-      "identity": "account_recovery.read_snapshot(uuid,uuid)"
-    },
-    {
-      "role": "app_user",
-      "identity": "account_recovery.list_snapshots(uuid)"
-    },
-    {
-      "role": "app_user",
-      "identity": "account_recovery.remove_snapshots(uuid)"
     },
     {
       "role": "account_lifecycle_runtime",
