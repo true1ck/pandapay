@@ -145,10 +145,13 @@ void main() {
         final title = scenario['name'] as String;
         final why = scenario['why'] as String? ?? title;
         test(title, () {
+          // No parse-warning check here: some scenarios (e.g. 20_js K15)
+          // deliberately carry unsupported values that must be skipped.
+          // Clean parsing of the contract cards is pinned in
+          // card_rules_v2_json_test.dart instead.
           final card = CardProductJson.fromJson(
             scenario['card'] as Map<String, dynamic>,
           );
-          expect(card.parseWarnings, isEmpty);
           final ctx = _context(scenario['ctx'] as Map<String, dynamic>);
           final consumed = {
             for (final e
