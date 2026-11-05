@@ -18,6 +18,11 @@
       "url": "https://www.hdfc.bank.in/content/dam/hdfcbankpws/in/en/personal-banking/discover-products/cards/credit-cards/phonepe-hdfc-bank-ultimo-credit-card/phonepe-hdfc-bank-ultimo-cc-reward-points-tncs.pdf",
       "doc": "PhonePe HDFC Bank Ultimo Reward Points T&C, Jul 2026",
       "quote": "No reward points will be given for EMI transactions, fuel, wallet load, gift cards"
+    },
+    {
+      "url": "https://www.hdfc.bank.in/content/dam/hdfcbankpws/in/en/personal-banking/discover-products/cards/credit-cards/phonepe-hdfc-bank-ultimo-credit-card/phonepe-hdfc-bank-ultimo-cc-reward-points-tncs.pdf",
+      "doc": "PhonePe HDFC Bank Ultimo Reward Points T&C, Note 1",
+      "quote": "No reward points will be given for ... rental transactions, education fees, insurance, investments, jewelry purchases"
     }
   ],
   "examples": [
@@ -266,6 +271,33 @@
         "cap_deltas_by_source_id": {}
       },
       "why": "The T&C list no other earning category, so ordinary spend earns nothing."
+    },
+    {
+      "id": "010",
+      "title": "Rs 10,000 jewellery purchase",
+      "ctx": {
+        "amount": 10000,
+        "occurred": "2026-11-10T10:00:00+05:30",
+        "category_id": null,
+        "category_slug": "other",
+        "mcc": "5944",
+        "merchant_name": "Jewellery store",
+        "merchant_vpa": null,
+        "merchant_slug": null,
+        "platform": null,
+        "rail": "swipe"
+      },
+      "state_before": {
+        "caps_by_source_id": {}
+      },
+      "expect": {
+        "currency": "points",
+        "amount": 0,
+        "value_inr": null,
+        "excluded": true,
+        "cap_deltas_by_source_id": {}
+      },
+      "why": "T&C Note 1: jewelry purchases earn no reward points."
     }
   ],
   "research_notes": [
@@ -281,6 +313,13 @@
       "cardpipeline_says": "Block Rs100 floor.",
       "issuer_says": "MITC: points earned on multiples of Rs1. T&C do not say how fractions of a point are rounded, so no rounding example.",
       "proposed_fix": "none"
+    },
+    {
+      "item": "WP7 r1: jewellery",
+      "cardpipeline_says": "exclude_jewellery was info (free-text category).",
+      "issuer_says": "T&C Note 1 excludes jewelry purchases. Overridden to an MCC exclusion (5944, 5094); example 010 added.",
+      "proposed_fix": "override",
+      "override_file": "api/scripts/catalogue_overrides/phonepe-hdfc-bank-ultimo.json"
     }
   ]
 }

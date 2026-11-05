@@ -4,8 +4,8 @@
   "inputs": {
     "transform_version": "7",
     "source_record_sha256": "47c8726d4469931a2d489c3e07278a9e69e665eb0946398eed2b6679be43705d",
-    "override_sha256": "d2ea560702f2f45bfe0b3d05d08fa9d157e0dd77192f41943235da4c5af88ca9",
-    "directory_sha256": "3d9f9f535481544d4b19262838290f77d8270eb3b4aec73c48608f10c39cedf2",
+    "override_sha256": "837ad26ee1efcda57fd4ecd09a342b5a324d203620841e66e8e157dd2004c25c",
+    "directory_sha256": "b1094d54b77e848d22f7a9a64f3ae6d1ef43ca3eb2fc8e40cd43ed1994664694",
     "verified": false
   },
   "blocking_flags": [
@@ -28,9 +28,9 @@
     "points_expiry_months": 24,
     "model_status": "partial",
     "model_coverage": {
-      "rules_total": 16,
-      "rules_modelled": 11,
-      "rules_info": 5,
+      "rules_total": 18,
+      "rules_modelled": 14,
+      "rules_info": 4,
       "caps_total": 4,
       "caps_enforced": 3,
       "flags": [
@@ -72,16 +72,6 @@
         {
           "code": "info_rule",
           "source_local_id": "exclude_investments",
-          "detail": "unmapped_category_token"
-        },
-        {
-          "code": "info_rule",
-          "source_local_id": "exclude_jewellery",
-          "detail": "unmapped_condition_category:category"
-        },
-        {
-          "code": "info_rule",
-          "source_local_id": "exclude_jewellery",
           "detail": "unmapped_category_token"
         },
         {
@@ -155,6 +145,38 @@
           "op": "remove",
           "value_sha256": "74234e98afe7498f",
           "reason": "WP7: P2M restates a merchant QR payment (rail upi_qr).",
+          "source_url": "https://www.hdfc.bank.in/content/dam/hdfcbankpws/in/en/personal-banking/discover-products/cards/credit-cards/phonepe-hdfc-bank-ultimo-credit-card/phonepe-hdfc-bank-ultimo-cc-reward-points-tncs.pdf",
+          "checked_on": "2026-11-05"
+        },
+        {
+          "path": "reward_rules",
+          "op": "append",
+          "value_sha256": "865c6dface71caa4",
+          "reason": "WP7: Rent also by MCC 6513 whatever the category; the existing category exclusion stays. T&C Note 1: \"rental transactions ... jewelry purchases\" earn no points.",
+          "source_url": "https://www.hdfc.bank.in/content/dam/hdfcbankpws/in/en/personal-banking/discover-products/cards/credit-cards/phonepe-hdfc-bank-ultimo-credit-card/phonepe-hdfc-bank-ultimo-cc-reward-points-tncs.pdf",
+          "checked_on": "2026-11-05"
+        },
+        {
+          "path": "reward_rules[id=exclude_jewellery].category_id",
+          "op": "set",
+          "value_sha256": "1e08efd699e66ddd",
+          "reason": "WP7: D24d: jewellery was info (free-text category). T&C Note 1 excludes \"jewelry purchases\".",
+          "source_url": "https://www.hdfc.bank.in/content/dam/hdfcbankpws/in/en/personal-banking/discover-products/cards/credit-cards/phonepe-hdfc-bank-ultimo-credit-card/phonepe-hdfc-bank-ultimo-cc-reward-points-tncs.pdf",
+          "checked_on": "2026-11-05"
+        },
+        {
+          "path": "reward_rules[id=exclude_jewellery].conditions",
+          "op": "set",
+          "value_sha256": "e3f40daa0d039251",
+          "reason": "WP7: Jewellery by MCC (5944, 5094). T&C Note 1.",
+          "source_url": "https://www.hdfc.bank.in/content/dam/hdfcbankpws/in/en/personal-banking/discover-products/cards/credit-cards/phonepe-hdfc-bank-ultimo-credit-card/phonepe-hdfc-bank-ultimo-cc-reward-points-tncs.pdf",
+          "checked_on": "2026-11-05"
+        },
+        {
+          "path": "reward_rules",
+          "op": "append",
+          "value_sha256": "6fa189901ab2fe42",
+          "reason": "WP7: T&C Note 1: \"No reward points will be given for EMI transactions ...\". The record's EMI exclusion is emitted as category emi AND rail emi, so an EMI purchase in another category was not excluded (D24e: data fix while WP2 changes the loader). Rail-EMI exclusion on all spend, as on flipkart-sbi-card.",
           "source_url": "https://www.hdfc.bank.in/content/dam/hdfcbankpws/in/en/personal-banking/discover-products/cards/credit-cards/phonepe-hdfc-bank-ultimo-credit-card/phonepe-hdfc-bank-ultimo-cc-reward-points-tncs.pdf",
           "checked_on": "2026-11-05"
         }
@@ -597,20 +619,20 @@
         "conditions": {
           "source_local_id": "exclude_jewellery",
           "part": null,
-          "info_reasons": [
-            "unmapped_condition_category:category",
-            "unmapped_category_token"
-          ],
+          "info_reasons": [],
           "flags": []
         },
         "notes": null,
         "effective_from": "2025-06-10",
         "effective_to": null,
         "excluded_categories": [],
-        "rule_role": "info",
+        "rule_role": "exclusion",
         "merchant_slugs": [],
         "platform_slugs": [],
-        "mcc_include": [],
+        "mcc_include": [
+          "5094",
+          "5944"
+        ],
         "mcc_exclude": [],
         "except_merchant_slugs": [],
         "except_platform_slugs": [],
@@ -759,6 +781,76 @@
         "max_engine_version": null,
         "source_local_id": "scan_pay_1pct",
         "display_note": "1 Reward Point per ₹100 on eligible RuPay Credit Card on UPI Scan & Pay spends."
+      },
+      {
+        "id": "phonepe-hdfc-bank-ultimo:rule:wp7_rent_mcc_exclusion",
+        "category_id": null,
+        "category_slug": null,
+        "merchant_pattern": null,
+        "rail": null,
+        "unit": "points_per_100",
+        "rate": 0,
+        "min_txn_inr": null,
+        "max_txn_inr": null,
+        "priority": 1,
+        "conditions": {
+          "source_local_id": "wp7_rent_mcc_exclusion",
+          "part": null,
+          "info_reasons": [],
+          "flags": []
+        },
+        "notes": null,
+        "effective_from": "2025-06-10",
+        "effective_to": null,
+        "excluded_categories": [],
+        "rule_role": "exclusion",
+        "merchant_slugs": [],
+        "platform_slugs": [],
+        "mcc_include": [
+          "6513"
+        ],
+        "mcc_exclude": [],
+        "except_merchant_slugs": [],
+        "except_platform_slugs": [],
+        "block_inr": null,
+        "min_engine_version": 2,
+        "max_engine_version": null,
+        "source_local_id": "wp7_rent_mcc_exclusion",
+        "display_note": "Rental transactions earn no reward points."
+      },
+      {
+        "id": "phonepe-hdfc-bank-ultimo:rule:wp7_emi_rail_exclusion",
+        "category_id": null,
+        "category_slug": null,
+        "merchant_pattern": null,
+        "rail": "emi",
+        "unit": "points_per_100",
+        "rate": 0,
+        "min_txn_inr": null,
+        "max_txn_inr": null,
+        "priority": 0,
+        "conditions": {
+          "source_local_id": "wp7_emi_rail_exclusion",
+          "part": null,
+          "info_reasons": [],
+          "flags": []
+        },
+        "notes": null,
+        "effective_from": "2025-06-10",
+        "effective_to": null,
+        "excluded_categories": [],
+        "rule_role": "exclusion",
+        "merchant_slugs": [],
+        "platform_slugs": [],
+        "mcc_include": [],
+        "mcc_exclude": [],
+        "except_merchant_slugs": [],
+        "except_platform_slugs": [],
+        "block_inr": null,
+        "min_engine_version": 2,
+        "max_engine_version": null,
+        "source_local_id": "wp7_emi_rail_exclusion",
+        "display_note": "EMI transactions earn no rewards."
       }
     ],
     "cap_rules": [
