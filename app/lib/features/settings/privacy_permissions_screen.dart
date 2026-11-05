@@ -9,29 +9,21 @@ import '../../app/design/widgets.dart';
 import '../../app/device_permissions.dart';
 import '../../app/providers.dart';
 import '../../data/api_exception.dart';
+import '../../data/consent_policy.dart';
 import '../../data/consents_api.dart';
 import '../../data/local/sms_dismissal_outbox.dart';
 import '../../data/local/sms_feedback_outbox.dart';
-import '../../app/env.dart';
+import '../consent/sms_access_disclosure.dart';
+import '../consent/sms_reading_consent.dart';
 import '../import/gmail_connect_service.dart';
 
 /// H4 Privacy & Permissions (docs/superpowers/plans/2026-08-07-group-h-settings-and-group-a-completion.md).
 /// Reached via `Navigator.of(context).push(MaterialPageRoute(builder: (_) =>
 /// const PrivacyPermissionsScreen()))` — a plain pushed screen, not a
 /// registered go_router route, same pattern as ToolsHubScreen's children.
-final _consentsApiProvider = Provider<ConsentsApi?>((ref) {
-  final token = ref.watch(accessTokenProvider);
-  if (token == null) return null;
-  return ConsentsApi(
-    apiBaseUrl: Env.apiBaseUrl,
-    accessToken: token,
-    client: ref.read(authenticatedHttpClientProvider),
-  );
-});
-
 final _consentHistoryProvider = FutureProvider.autoDispose<List<ConsentRecord>>(
   (ref) async {
-    final api = ref.watch(_consentsApiProvider);
+    final api = ref.watch(consentsApiProvider);
     if (api == null) return const [];
     return api.fetchHistory();
   },
@@ -534,7 +526,9 @@ class _ContributionToggle extends ConsumerWidget {
         border: Border.all(color: BambooInk.hairlineOnPaper),
       ),
       padding: const EdgeInsets.all(AppSpace.lg),
-      child: SwitchListTile(
+      // A transparent Material under the tinted box keeps the switch's ink
+      // splash visible.
+      child: Material(type: MaterialType.transparency, child: SwitchListTile(
         contentPadding: EdgeInsets.zero,
         title: Text(
           'Share what you see',
@@ -562,7 +556,7 @@ class _ContributionToggle extends ConsumerWidget {
             }
           }
         },
-      ),
+      )),
     );
   }
 }
@@ -580,7 +574,7 @@ class _ContributionToggle extends ConsumerWidget {
 /// reviewed.
 final _latestConsentsProvider =
     FutureProvider.autoDispose<Map<String, ConsentRecord>>((ref) async {
-      final api = ref.watch(_consentsApiProvider);
+      final api = ref.watch(consentsApiProvider);
       if (api == null) return const {};
       final latest = await api.fetchLatest();
       return {for (final c in latest) c.purpose: c};
@@ -589,15 +583,27 @@ final _latestConsentsProvider =
 class _PurposeConsents extends ConsumerWidget {
   const _PurposeConsents();
 
-  static const _policyVersion = 'draft-0';
-
   @override
   Widget build(BuildContext context, WidgetRef ref) {
     final consents = ref.watch(_latestConsentsProvider);
 
     Future<void> set(String purpose, bool granted) async {
-      final api = ref.read(_consentsApiProvider);
+      final api = ref.read(consentsApiProvider);
       if (api == null) return;
+      if (purpose == smsReadingConsentPurpose && granted) {
+        // Turning SMS reading on is the same standalone disclosure as
+        // everywhere else; it records the consent itself when agreed.
+        await SmsAccessDisclosure.show(
+          context,
+          sourceScreen: 'privacy_permissions',
+          accountLabel: maskedAccountLabel(
+            ref.read(profileProvider).valueOrNull,
+          ),
+        );
+        ref.invalidate(_latestConsentsProvider);
+        ref.invalidate(_consentHistoryProvider);
+        return;
+      }
       try {
         await api.submit(
           purpose: purpose,
@@ -605,13 +611,21 @@ class _PurposeConsents extends ConsumerWidget {
           // Every consent row records the policy version it was given
           // against, which is what makes a later policy change detectable as
           // "this person agreed to something older" rather than silently
-          // inheriting agreement. 'draft-0' is honest about what they'd be
-          // agreeing to right now — see the class doc comment.
+          // inheriting agreement. All purposes share one policy version;
+          // SMS shared learning keeps its own because the database matches it.
           policyVersion: purpose == smsSharedLearningPurpose
               ? smsSharedLearningPolicyVersion
-              : _policyVersion,
+              : consentPolicyVersion,
           sourceScreen: 'privacy_permissions',
         );
+        if (purpose == smsReadingConsentPurpose) {
+          // Withdrawn: stop reading on this phone for this account.
+          await SmsReadingConsentMirror.set(
+            ref.read(cacheNamespaceProvider),
+            false,
+          );
+          ref.invalidate(smsReadingConsentProvider);
+        }
         if (purpose == smsSharedLearningPurpose && !granted) {
           final cache = await ref.read(responseCacheProvider.future);
           final namespace = ref.read(cacheNamespaceProvider);
@@ -645,7 +659,7 @@ class _PurposeConsents extends ConsumerWidget {
         border: Border.all(color: BambooInk.hairlineOnPaper),
       ),
       padding: const EdgeInsets.all(AppSpace.lg),
-      child: consents.when(
+      child: Material(type: MaterialType.transparency, child: consents.when(
         loading: () => const SkeletonRow(),
         error: (e, _) => ErrorState(
           message: userFacingErrorMessage(e),
@@ -653,6 +667,30 @@ class _PurposeConsents extends ConsumerWidget {
         ),
         data: (granted) => Column(
           children: [
+            SwitchListTile(
+              contentPadding: EdgeInsets.zero,
+              title: Text(
+                'Read my bank SMS',
+                style: BambooFonts.heading(14.5, color: BambooInk.ink900),
+              ),
+              subtitle: Text(
+                'PandaPay reads bank, card and wallet messages on this phone and sends only '
+                'the transaction details to your account. Turning this off stops reading; '
+                'transactions already recorded stay.',
+                style: BambooFonts.ui(12.5, color: BambooInk.ink500),
+              ),
+              activeTrackColor: BambooInk.jade,
+              value:
+                  granted[smsReadingConsentPurpose]?.granted == true &&
+                  granted[smsReadingConsentPurpose]?.revokedAt == null &&
+                  granted[smsReadingConsentPurpose]?.policyVersion ==
+                      consentPolicyVersion,
+              onChanged: (v) => set(smsReadingConsentPurpose, v),
+            ),
+            const Divider(
+              height: AppSpace.lg,
+              color: BambooInk.hairlineOnPaper,
+            ),
             SwitchListTile(
               contentPadding: EdgeInsets.zero,
               title: Text(
@@ -726,7 +764,7 @@ class _PurposeConsents extends ConsumerWidget {
             ),
           ],
         ),
-      ),
+      )),
     );
   }
 }

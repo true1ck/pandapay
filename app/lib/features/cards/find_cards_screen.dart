@@ -13,6 +13,7 @@ import '../../data/card_discovery_engine.dart';
 import '../../data/card_discovery_filter.dart';
 import '../../data/user_cards_repository.dart'
     show CardDiscoveryResult, DiscoveredCard;
+import '../consent/sms_access_disclosure.dart';
 import '../import/email_forwarding_screen.dart';
 import '../import/statement_pdf_import_screen.dart';
 import '../sms_import/sms_listener_service.dart';
@@ -77,8 +78,15 @@ class _FindCardsScreenState extends ConsumerState<FindCardsScreen> {
           : List<String>.from(widget.smsBodies);
       if (bodies.isEmpty && _isAndroid) {
         const smsService = SmsListenerService();
-        var hasPerm = await smsService.hasPermissions();
-        if (!hasPerm) {
+        // The SMS disclosure comes before the permission request and before
+        // any message is read. Without agreement the scan continues without SMS.
+        final agreed = await ensureSmsReadingConsent(
+          context,
+          ref,
+          sourceScreen: 'find_cards',
+        );
+        var hasPerm = agreed && await smsService.hasPermissions();
+        if (agreed && !hasPerm) {
           hasPerm = await smsService.requestPermissions();
         }
         if (hasPerm) {
@@ -88,7 +96,7 @@ class _FindCardsScreenState extends ConsumerState<FindCardsScreen> {
           if (readBodies.isNotEmpty) {
             bodies = readBodies;
           }
-        } else {
+        } else if (agreed) {
           _smsPermanentlyDenied = await smsService.isPermanentlyDenied();
         }
       }
@@ -205,6 +213,23 @@ class _FindCardsScreenState extends ConsumerState<FindCardsScreen> {
     });
     try {
       const smsService = SmsListenerService();
+      final agreed = await ensureSmsReadingConsent(
+        context,
+        ref,
+        sourceScreen: 'find_cards',
+      );
+      if (!agreed) {
+        if (mounted) {
+          ScaffoldMessenger.of(context).showSnackBar(
+            const SnackBar(
+              content: Text(
+                'SMS reading is off. You can pick cards from the catalogue.',
+              ),
+            ),
+          );
+        }
+        return;
+      }
       var hasPerm = await smsService.hasPermissions();
       if (!hasPerm) {
         hasPerm = await smsService.requestPermissions();

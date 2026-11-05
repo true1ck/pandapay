@@ -4,6 +4,7 @@ import 'dart:async';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_test/flutter_test.dart';
+import 'package:pandapay/features/consent/sms_reading_consent.dart';
 import 'package:pandapay/features/sms_import/ios_sms_import_screen.dart';
 import 'package:pandapay/features/sms_import/ios_history_coverage.dart';
 import 'package:pandapay/features/sms_import/ios_sms_intake_controller.dart';
@@ -42,6 +43,7 @@ Future<void> _pumpImport(
   await tester.pumpWidget(
     ProviderScope(
       overrides: [
+        smsReadingConsentProvider.overrideWith((_) async => true),
         iosSmsIntakeServiceProvider.overrideWithValue(service),
         iosSmsIntakeControllerProvider.overrideWith((_) => controller),
       ],
@@ -707,6 +709,7 @@ void main() {
       await tester.pumpWidget(
         ProviderScope(
           overrides: [
+            smsReadingConsentProvider.overrideWith((_) async => true),
             iosSmsIntakeServiceProvider.overrideWithValue(service),
             iosSmsIntakeControllerProvider.overrideWith((_) => controller),
           ],

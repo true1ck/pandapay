@@ -4,6 +4,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import '../../app/providers.dart';
+import '../consent/sms_reading_consent.dart';
 import '../../data/local/ios_sms_acquisition_receipts.dart';
 import 'ios_sms_intake_controller.dart';
 import 'ios_sms_intake_service.dart';
@@ -19,6 +20,7 @@ final iosSmsIntakeControllerProvider =
         service: service,
         namespace: () => ref.read(cacheNamespaceProvider),
         requestUpload: () => ref.read(smsFlushTriggerProvider.notifier).state++,
+        smsReadingConsent: () => currentAccountHasSmsReadingConsent(ref),
         capture: (namespace, generation, rows) async {
           final owner = ref.read(smsAutoImportProvider);
           final batch = await owner.captureShortcutMessages(

@@ -12,6 +12,7 @@ import '../../app/device_permissions.dart';
 import '../../app/providers.dart';
 import '../../app/router.dart';
 import '../sms_import/sms_inbox_scanner.dart';
+import '../consent/sms_access_disclosure.dart';
 import '../sms_import/ios_sms_import_screen.dart';
 import 'entry_brand.dart';
 import 'onboarding_back.dart';
@@ -124,6 +125,24 @@ class _PermissionsScreenState extends ConsumerState<PermissionsScreen>
       _message = null;
     });
     try {
+      // The standalone SMS disclosure comes immediately before the SMS
+      // permission request (and before importing with an existing grant).
+      // Not now leaves the app usable for manual entry.
+      if (permission == Permission.sms &&
+          !await ensureSmsReadingConsent(
+            context,
+            ref,
+            sourceScreen: 'onboarding_permissions',
+          )) {
+        if (mounted) {
+          setState(
+            () => _message =
+                'No problem. You can add spends yourself and turn on SMS reading later.',
+          );
+        }
+        return;
+      }
+      if (!mounted) return;
       final current = await readDevicePermissionStatus(permission);
       if (!mounted) return;
       setState(() => _statuses[permission] = current);
@@ -228,6 +247,14 @@ class _PermissionsScreenState extends ConsumerState<PermissionsScreen>
 
   Future<void> _importSms() async {
     if (_importRunning) return;
+    if (!await ensureSmsReadingConsent(
+      context,
+      ref,
+      sourceScreen: 'onboarding_permissions',
+    )) {
+      return;
+    }
+    if (!mounted || _importRunning) return;
     setState(() {
       _importRunning = true;
       _page = _SetupPage.importing;

@@ -11,6 +11,8 @@ import '../../app/design/app_theme.dart';
 import '../../app/device_permissions.dart';
 import '../../app/providers.dart';
 import '../../app/router.dart';
+import '../consent/sms_access_disclosure.dart';
+import '../consent/sms_reading_consent.dart';
 import '../onboarding/entry_brand.dart';
 import '../onboarding/permission_art.dart';
 import '../sms_import/sms_inbox_scanner.dart';
@@ -108,7 +110,13 @@ class _AutoSmsSyncScreenState extends ConsumerState<AutoSmsSyncScreen>
     if (!mounted) return;
     setState(() => _permissionGranted = granted);
     if (granted && _stage == _AutoSmsStage.prompt && !_importRunning) {
-      await _startInboxScan();
+      // Coming back to the screen must not reopen the disclosure; only a
+      // consent that already exists lets the scan start on its own.
+      var agreed = false;
+      try {
+        agreed = await ref.read(smsReadingConsentProvider.future);
+      } catch (_) {}
+      if (agreed && mounted) await _startInboxScan();
     }
   }
 
@@ -127,6 +135,14 @@ class _AutoSmsSyncScreenState extends ConsumerState<AutoSmsSyncScreen>
     });
 
     try {
+      // The standalone SMS disclosure comes immediately before the SMS
+      // permission request. Not now leaves manual entry fully available.
+      final agreed = await ensureSmsReadingConsent(
+        context,
+        ref,
+        sourceScreen: 'auto_sms_sync',
+      );
+      if (!agreed || !mounted) return;
       final current = await readDevicePermissionStatus(Permission.sms);
       if (current.isGranted) {
         setState(() {
@@ -178,6 +194,17 @@ class _AutoSmsSyncScreenState extends ConsumerState<AutoSmsSyncScreen>
 
   Future<void> _startInboxScan() async {
     if (_importRunning) return;
+    // Never read the inbox for an account that has not agreed.
+    final agreed = await ensureSmsReadingConsent(
+      context,
+      ref,
+      sourceScreen: 'auto_sms_sync',
+    );
+    if (!mounted || _importRunning) return;
+    if (!agreed) {
+      setState(() => _stage = _AutoSmsStage.prompt);
+      return;
+    }
     setState(() {
       _importRunning = true;
       _stage = _AutoSmsStage.scanning;

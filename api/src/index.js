@@ -8001,6 +8001,7 @@ const CONSENT_PURPOSES = [
   'partner_sharing',
   'sms_shared_learning',
   'email_import',
+  'sms_reading',
 ];
 
 /**

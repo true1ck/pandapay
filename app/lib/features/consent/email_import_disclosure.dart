@@ -4,10 +4,11 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import '../../app/design/app_theme.dart';
 import '../../app/providers.dart';
 import '../../data/api_exception.dart';
+import '../../data/consent_policy.dart';
 
-/// Consent purpose and policy version recorded with `POST /consents`.
+/// Consent purpose recorded with `POST /consents`; the policy version is the
+/// shared [consentPolicyVersion].
 const emailImportConsentPurpose = 'email_import';
-const emailImportPolicyVersion = '2026-11-15';
 
 /// Email import sends email text to the server, so it has its own disclosure
 /// and consent, separate from SMS and never bundled into the terms.
@@ -58,7 +59,7 @@ class _EmailImportDisclosureState extends ConsumerState<EmailImportDisclosure> {
       await api.submit(
         purpose: emailImportConsentPurpose,
         granted: true,
-        policyVersion: emailImportPolicyVersion,
+        policyVersion: consentPolicyVersion,
         sourceScreen: widget.sourceScreen,
       );
       if (mounted) Navigator.of(context).pop(true);
@@ -205,7 +206,7 @@ Future<bool> _hasCurrentEmailImportConsent(WidgetRef ref) async {
           c.purpose == emailImportConsentPurpose &&
           c.granted &&
           c.revokedAt == null &&
-          c.policyVersion == emailImportPolicyVersion,
+          c.policyVersion == consentPolicyVersion,
     );
   } catch (_) {
     return false;

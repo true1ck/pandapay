@@ -46,7 +46,7 @@ class QueuedSms {
 /// from both isolates without extra plugin registration. The queue holds
 /// raw SMS text, so it is bounded, cleared as soon as it is uploaded, and
 /// never synced anywhere — the same on-device-only promise
-/// [SmsConsentScreen] already makes.
+/// the SMS disclosure makes.
 class SmsBackgroundQueue {
   static const storageKey = 'pandapay_app.sms_background_queue_v1';
 

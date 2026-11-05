@@ -1,6 +1,7 @@
 import '../features/sms_v2/providers/data_providers.dart' as sms_v2_data;
 import '../features/sms_v2/instruments/bank_summary_adapter.dart';
 import '../features/sms_v2/providers/runtime_provider.dart';
+import '../features/consent/sms_reading_consent.dart';
 import '../features/sms_v2/ledger/providers.dart';
 import '../features/sms_v2/ledger/adapters.dart' as sms_v2_adapters;
 import 'package:pandapay_domain/sms_v2_ledger.dart' as sms_v2_ledger;
@@ -6539,10 +6540,20 @@ class SmsAutoImportController {
   Future<void> start() =>
       _starting ??= _start().whenComplete(() => _starting = null);
 
+  /// Whether the signed-in account has agreed to PandaPay reading its bank
+  /// SMS (the `sms_reading` consent). Android permission is per phone, but
+  /// consent is per account, so a second account on this phone reads nothing
+  /// until it has seen the disclosure.
+  Future<bool> _hasSmsReadingConsent() =>
+      currentAccountHasSmsReadingConsent(_ref);
+
   Future<void> _start() async {
     if (_disposed ||
         _registered ||
+        // The phone's permission is a cheap local read (always false on
+        // iPhone), so check it before asking the server about consent.
         !await _service.hasPermissions() ||
+        !await _hasSmsReadingConsent() ||
         _disposed) {
       return;
     }
@@ -6563,6 +6574,9 @@ class SmsAutoImportController {
       AccountRecoveryOperationGate.process.run(_captureExistingInboxAdmitted);
 
   Future<int> _captureExistingInboxAdmitted() async {
+    if (_disposed) return 0;
+    // No history import for an account that has not agreed to SMS reading.
+    if (!await _hasSmsReadingConsent()) return 0;
     if (_disposed) return 0;
     final namespace = _ref.read(cacheNamespaceProvider);
     final active = _activeInboxCapture;
@@ -6807,6 +6821,7 @@ class SmsAutoImportController {
 
   Future<void> _handleAdmitted(String namespace, String sender, String body, DateTime receivedAt) async {
     try {
+      if (!await _hasSmsReadingConsent()) return;
       final cache = await _ref.read(responseCacheProvider.future);
       if (_ref.read(cacheNamespaceProvider) != namespace) return;
       await _captureMessages(namespace, cache, [

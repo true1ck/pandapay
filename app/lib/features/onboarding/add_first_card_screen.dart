@@ -12,6 +12,7 @@ import '../../app/providers.dart';
 import '../../app/router.dart';
 import '../../data/api_exception.dart';
 import '../cards/find_cards_screen.dart';
+import '../consent/sms_access_disclosure.dart';
 import '../cards/card_visual.dart';
 import '../scan/scan_card_screen.dart';
 import '../sms_import/sms_listener_service.dart';
@@ -137,7 +138,14 @@ class _AddFirstCardScreenState extends ConsumerState<AddFirstCardScreen> {
     List<String> bodies = [];
     if (!kIsWeb && Platform.isAndroid) {
       const smsService = SmsListenerService();
-      final granted = await smsService.requestPermissions();
+      // The SMS disclosure comes right before the permission request. Without
+      // agreement the card search simply continues without SMS.
+      final agreed = await ensureSmsReadingConsent(
+        context,
+        ref,
+        sourceScreen: 'add_first_card',
+      );
+      final granted = agreed && await smsService.requestPermissions();
       if (granted) {
         bodies = await ref.read(smsAutoImportProvider).capturedSmsBodies();
       }

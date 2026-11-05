@@ -8,6 +8,7 @@ import 'package:url_launcher/url_launcher.dart';
 
 import '../../app/design/app_theme.dart';
 import '../../app/design/widgets.dart';
+import '../consent/sms_access_disclosure.dart';
 import 'ios_sms_intake_controller.dart';
 import 'ios_sms_intake_providers.dart';
 import 'ios_sms_intake_service.dart';
@@ -19,13 +20,28 @@ import 'live_alert_status.dart';
 const iosSmsHistoryShortcutName = 'PANDAPAY SMS HISTORY';
 const _shortcutNameKey = 'pandapay_app.ios_history_shortcut_name_v1';
 
-class IosSmsImportScreen extends ConsumerStatefulWidget {
+/// The iPhone Shortcut setup and history import. The standalone SMS
+/// disclosure comes first, every time the signed-in account has not yet
+/// agreed; declining leaves this screen, so nothing here is reachable
+/// without that account's `sms_reading` consent.
+class IosSmsImportScreen extends StatelessWidget {
   const IosSmsImportScreen({super.key});
+
   @override
-  ConsumerState<IosSmsImportScreen> createState() => _IosSmsImportScreenState();
+  Widget build(BuildContext context) => const SmsReadingConsentGate(
+    sourceScreen: 'ios_sms_import',
+    ios: true,
+    child: _IosSmsImportView(),
+  );
 }
 
-class _IosSmsImportScreenState extends ConsumerState<IosSmsImportScreen> {
+class _IosSmsImportView extends ConsumerStatefulWidget {
+  const _IosSmsImportView();
+  @override
+  ConsumerState<_IosSmsImportView> createState() => _IosSmsImportScreenState();
+}
+
+class _IosSmsImportScreenState extends ConsumerState<_IosSmsImportView> {
   final _shortcutName = TextEditingController(text: iosSmsHistoryShortcutName);
   final _nameScroll = ScrollController(keepScrollOffset: false);
   int _months = 24;
