@@ -1,0 +1,37 @@
+{
+  "id": "foreign:spend_with_emi_offer_tail",
+  "templateHash": "d425e52ebb9b1596177de40f8b2efed01158a4485fc962ea4985c240ae3eee8a",
+  "weight": 1,
+  "source": "synthetic",
+  "messages": [
+    {
+      "sender": "VM-HDFCBK-S",
+      "body": "Spent USD 20.00 on Card x1234 at SAMPLE AI on 2026-11-01:07:00:11. To convert this txn to EMI call us.",
+      "observedAt": "2026-11-03T10:00:00.000Z"
+    }
+  ],
+  "expect": {
+    "facts": [
+      {
+        "factType": "movement",
+        "attrs": {
+          "direction": "debit",
+          "purpose": "purchase",
+          "rail": "card"
+        },
+        "amounts": [
+          {
+            "role": "posted",
+            "minor": 2000,
+            "unit": "USD"
+          }
+        ],
+        "instrument": {
+          "maskDigits": "1234"
+        }
+      }
+    ]
+  },
+  "note": "A foreign spend with an EMI offer tail is the spend, not a promotion.",
+  "origin": "foreign-v2-more"
+}

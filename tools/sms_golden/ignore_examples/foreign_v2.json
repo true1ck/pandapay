@@ -21,5 +21,24 @@
         "body": "Spent USD 10.05 on Example Bank Card x1234 at SAMPLE AI on 2026-11-01:07:00:11."
       }
     ]
+  },
+  {
+    "rule": "IGN-EMI-AND-CARD-OFFER",
+    "positive": [
+      {
+        "sender": "VM-EXAMPL-S",
+        "body": "Convert your transaction of USD 500.00 on Credit Card XX1234 to EMI at 13% p.a. Reply EMI to 56767."
+      }
+    ],
+    "negative": [
+      {
+        "sender": "VM-EXAMPL-S",
+        "body": "Spent USD 20.00 on Card x1234 at SAMPLE AI on 2026-11-01:07:00:11. To convert this txn to EMI call us."
+      },
+      {
+        "sender": "VM-EXAMPL-S",
+        "body": "EUR 15.50 spent on Credit Card XX1234 at SAMPLE on 01-11-26. Convert to EMI now."
+      }
+    ]
   }
 ]

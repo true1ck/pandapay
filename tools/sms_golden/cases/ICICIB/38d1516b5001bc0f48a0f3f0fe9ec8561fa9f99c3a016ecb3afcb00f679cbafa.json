@@ -1,0 +1,38 @@
+{
+  "id": "foreign:amount_first_spend_with_emi_offer_tail",
+  "templateHash": "38d1516b5001bc0f48a0f3f0fe9ec8561fa9f99c3a016ecb3afcb00f679cbafa",
+  "weight": 1,
+  "source": "synthetic",
+  "messages": [
+    {
+      "sender": "VM-ICICIB-S",
+      "body": "EUR 15.50 spent on Credit Card XX4321 at SAMPLE on 01-11-26. Convert to EMI now.",
+      "observedAt": "2026-11-03T10:00:00.000Z"
+    }
+  ],
+  "expect": {
+    "facts": [
+      {
+        "factType": "movement",
+        "attrs": {
+          "direction": "debit",
+          "purpose": "purchase",
+          "rail": "card"
+        },
+        "amounts": [
+          {
+            "role": "posted",
+            "minor": 1550,
+            "unit": "EUR"
+          }
+        ],
+        "instrument": {
+          "maskDigits": "4321",
+          "kind": "credit_card"
+        }
+      }
+    ]
+  },
+  "note": "Amount-first foreign spend with an EMI offer tail.",
+  "origin": "foreign-v2-more"
+}
