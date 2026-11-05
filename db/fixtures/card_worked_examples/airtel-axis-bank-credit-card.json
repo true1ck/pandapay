@@ -1,0 +1,237 @@
+{
+  "source_slug": "airtel-axis-bank-credit-card",
+  "cardpipeline_id": "axis-bank-airtel-axis-bank-credit-card",
+  "card_name": "Airtel Axis Bank Credit Card",
+  "verified_on": "2026-11-05",
+  "sources": [
+    {
+      "url": "https://www.axis.bank.in/docs/default-source/default-document-library/terms-and-conditions-for-airtel-cbcc-cvp.pdf?sfvrsn=9deed8c1_5",
+      "doc": "Revision eff. 12 Apr 2026",
+      "quote": "Capped at twice the base cashback earned during the same statement month"
+    },
+    {
+      "url": "https://www.axis.bank.in/docs/default-source/default-document-library/credit-cards/terms-and-conditions-for-cashback-for-airtel-axis-bank-credit-card.pdf",
+      "doc": "Airtel Axis cashback and value back T&C",
+      "quote": "The cashback will be rounded down for each individual transaction."
+    },
+    {
+      "url": "https://www.axis.bank.in/docs/default-source/default-document-library/credit-cards/terms-and-conditions-for-cashback-for-airtel-axis-bank-credit-card.pdf",
+      "doc": "Airtel Axis cashback and value back T&C",
+      "quote": "if customer does not spend any amount under Base category, the customer would not be eligible to earn cashback towards Airtel Bill"
+    }
+  ],
+  "examples": [
+    {
+      "id": "001",
+      "title": "Rs 25,000 electronics purchase",
+      "ctx": {
+        "amount": 25000,
+        "occurred": "2026-11-10T10:00:00+05:30",
+        "category_id": null,
+        "category_slug": "shopping",
+        "mcc": "5732",
+        "merchant_name": "Electronics store",
+        "merchant_vpa": null,
+        "merchant_slug": null,
+        "platform": null,
+        "rail": "swipe"
+      },
+      "state_before": {
+        "caps_by_source_id": {}
+      },
+      "expect": {
+        "currency": "cashback_inr",
+        "amount": 250,
+        "value_inr": null,
+        "excluded": false,
+        "cap_deltas_by_source_id": {}
+      },
+      "why": "1% base cashback with no cap: 25,000 x 1% = 250 (bank illustration)."
+    },
+    {
+      "id": "002",
+      "title": "Rs 1,560 retail spend rounds down",
+      "ctx": {
+        "amount": 1560,
+        "occurred": "2026-11-10T10:00:00+05:30",
+        "category_id": null,
+        "category_slug": "shopping",
+        "mcc": "5651",
+        "merchant_name": "Apparel store",
+        "merchant_vpa": null,
+        "merchant_slug": null,
+        "platform": null,
+        "rail": "swipe"
+      },
+      "state_before": {
+        "caps_by_source_id": {}
+      },
+      "expect": {
+        "currency": "cashback_inr",
+        "amount": 15,
+        "value_inr": null,
+        "excluded": false,
+        "cap_deltas_by_source_id": {}
+      },
+      "why": "Cashback is rounded down per transaction: 1560 x 1% = 15.6 -> Rs 15 (bank example)."
+    },
+    {
+      "id": "003",
+      "title": "Rs 3,000 fuel",
+      "ctx": {
+        "amount": 3000,
+        "occurred": "2026-11-10T10:00:00+05:30",
+        "category_id": null,
+        "category_slug": "fuel",
+        "mcc": "5541",
+        "merchant_name": "Fuel station",
+        "merchant_vpa": null,
+        "merchant_slug": null,
+        "platform": null,
+        "rail": "swipe"
+      },
+      "state_before": {
+        "caps_by_source_id": {}
+      },
+      "expect": {
+        "currency": "cashback_inr",
+        "amount": 0,
+        "value_inr": null,
+        "excluded": true,
+        "cap_deltas_by_source_id": {}
+      },
+      "why": "Fuel spends are on the not-eligible list."
+    },
+    {
+      "id": "004",
+      "title": "Rs 20,000 rent payment",
+      "ctx": {
+        "amount": 20000,
+        "occurred": "2026-11-10T10:00:00+05:30",
+        "category_id": null,
+        "category_slug": "rent",
+        "mcc": "6513",
+        "merchant_name": "Rent payment",
+        "merchant_vpa": null,
+        "merchant_slug": null,
+        "platform": null,
+        "rail": "online"
+      },
+      "state_before": {
+        "caps_by_source_id": {}
+      },
+      "expect": {
+        "currency": "cashback_inr",
+        "amount": 0,
+        "value_inr": null,
+        "excluded": true,
+        "cap_deltas_by_source_id": {}
+      },
+      "why": "Rent payments are not eligible for cashback."
+    },
+    {
+      "id": "005",
+      "title": "Rs 2,000 wallet recharge",
+      "ctx": {
+        "amount": 2000,
+        "occurred": "2026-11-10T10:00:00+05:30",
+        "category_id": null,
+        "category_slug": "wallet",
+        "mcc": "6540",
+        "merchant_name": "Wallet top-up",
+        "merchant_vpa": null,
+        "merchant_slug": null,
+        "platform": null,
+        "rail": "online"
+      },
+      "state_before": {
+        "caps_by_source_id": {}
+      },
+      "expect": {
+        "currency": "cashback_inr",
+        "amount": 0,
+        "value_inr": null,
+        "excluded": true,
+        "cap_deltas_by_source_id": {}
+      },
+      "why": "Wallet recharge is not eligible for cashback."
+    },
+    {
+      "id": "006",
+      "title": "Rs 5,000 electricity bill NOT paid through Airtel Thanks",
+      "ctx": {
+        "amount": 5000,
+        "occurred": "2026-11-10T10:00:00+05:30",
+        "category_id": null,
+        "category_slug": "utility",
+        "mcc": "4900",
+        "merchant_name": "Electricity board",
+        "merchant_vpa": null,
+        "merchant_slug": null,
+        "platform": null,
+        "rail": "online"
+      },
+      "state_before": {
+        "caps_by_source_id": {}
+      },
+      "expect": {
+        "currency": "cashback_inr",
+        "amount": 0,
+        "value_inr": null,
+        "excluded": true,
+        "cap_deltas_by_source_id": {}
+      },
+      "why": "Utility and telecom payments outside the Airtel Thanks app fall in no rewarded category (base 1% does not cover utility MCCs here)."
+    },
+    {
+      "id": "007",
+      "title": "Rs 5,000 EMI purchase",
+      "ctx": {
+        "amount": 5000,
+        "occurred": "2026-11-10T10:00:00+05:30",
+        "category_id": null,
+        "category_slug": "shopping",
+        "mcc": null,
+        "merchant_name": "Electronics store",
+        "merchant_vpa": null,
+        "merchant_slug": null,
+        "platform": null,
+        "rail": "emi"
+      },
+      "state_before": {
+        "caps_by_source_id": {}
+      },
+      "expect": {
+        "currency": "cashback_inr",
+        "amount": 0,
+        "value_inr": null,
+        "excluded": true,
+        "cap_deltas_by_source_id": {}
+      },
+      "why": "EMI transactions and post-facto EMI conversions earn no cashback."
+    }
+  ],
+  "research_notes": [
+    {
+      "item": "caps on 25% / 10% Airtel Thanks cashback",
+      "cardpipeline_says": "cap_rules is empty",
+      "issuer_says": "From 12 Apr 2026 (statements from 12 Jun 2026): 25% category is capped at 2x the base cashback earned in the statement month, 10% category at 1x. With no base spend there is no Airtel cashback. Bank illustration: base 250, Airtel mobile Rs 2,500 at 25% = 625 -> 500, utility Rs 4,000 at 10% = 400 -> 250.",
+      "proposed_fix": "engine: needs a cap whose amount is a multiple of base cashback earned in the period; until then the Airtel bonus rules should stay info-only (never ranked)",
+      "override_file": null
+    },
+    {
+      "item": "Zomato / Blinkit / District Movies",
+      "cardpipeline_says": "rule preferred_partner_value_back_10pct modelled as 10% cashback",
+      "issuer_says": "10% value back goes into the partner wallet (max Rs 200 per partner per month, min order Rs 499), with no Axis cashback. It is not card cashback.",
+      "proposed_fix": "override",
+      "override_file": "api/scripts/catalogue_overrides/airtel-axis-bank-credit-card.json"
+    },
+    {
+      "item": "rounding",
+      "cardpipeline_says": "rounding_mode floor",
+      "issuer_says": "Cashback is rounded down per transaction.",
+      "proposed_fix": "engine: integer floor for cashback",
+      "override_file": null
+    }
+  ]
+}
