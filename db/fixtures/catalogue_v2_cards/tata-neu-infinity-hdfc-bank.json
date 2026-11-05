@@ -4,7 +4,7 @@
   "inputs": {
     "transform_version": "7",
     "source_record_sha256": "93890edb87a631081cfe42490e8b5b7e0183887b346200ba6b50a4e3d1500cc4",
-    "override_sha256": "7a38e194334c824adf2580ce41318226ba8d73533c103564429342b126c82558",
+    "override_sha256": "04a52034ca5fd74b3019c8d6c63e013ace324cd13ba81208ec4856b06c8b8b38",
     "directory_sha256": "b1094d54b77e848d22f7a9a64f3ae6d1ef43ca3eb2fc8e40cd43ed1994664694",
     "verified": false
   },
@@ -315,8 +315,8 @@
         {
           "path": "reward_rules",
           "op": "append",
-          "value_sha256": "37dab5106173dc47",
-          "reason": "WP7: T&C: 5% back as NeuCoins (Non-EMI) on partner Tata Brands \"as defined in Annex 1\", governed by the Annex 1 fair-usage policy. mcc_exclude restates Annex 1's non-accruing rental/government MCC transactions and keeps this rule v2-only, so the old feed (which has no UPI carve-out) never pays the partner rate on UPI.",
+          "value_sha256": "8e014ec38f803dde",
+          "reason": "WP7: T&C: 5% back as NeuCoins (Non-EMI) on partner Tata Brands \"as defined in Annex 1\", governed by the Annex 1 fair-usage policy. mcc_exclude restates Annex 1's non-accruing rental/government MCC transactions and keeps this rule v2-only, so the old feed (which has no UPI carve-out) never pays the partner rate on UPI. D29b: priority 11 outranks the capped insurance/grocery/utility/telecom rules (14-17), so a partner spend in a capped category (BigBasket groceries, Tata Play at MCC 4899) earns the partner rate; the UPI (9) and merchant-EMI (10) carve-outs still outrank it.",
           "source_url": "https://www.hdfc.bank.in/content/dam/hdfcbankpws/in/en/personal-banking/discover-products/cards/credit-cards/tata-neu-infinity-credit-card/pdf/tata_neu_infinity_card_tnc.pdf",
           "checked_on": "2026-11-05"
         },
@@ -339,8 +339,8 @@
         {
           "path": "reward_rules",
           "op": "append",
-          "value_sha256": "6ef42dfaf996bfd6",
-          "reason": "WP7: T&C: 5% back as NeuCoins (Non-EMI) on partner Tata Brands \"as defined in Annex 1\", governed by the Annex 1 fair-usage policy. mcc_exclude restates Annex 1's non-accruing rental/government MCC transactions and keeps this rule v2-only, so the old feed (which has no UPI carve-out) never pays the partner rate on UPI.",
+          "value_sha256": "27ea02eade45fe4d",
+          "reason": "WP7: T&C: 5% back as NeuCoins (Non-EMI) on partner Tata Brands \"as defined in Annex 1\", governed by the Annex 1 fair-usage policy. mcc_exclude restates Annex 1's non-accruing rental/government MCC transactions and keeps this rule v2-only, so the old feed (which has no UPI carve-out) never pays the partner rate on UPI. D29b: priority 11 outranks the capped insurance/grocery/utility/telecom rules (14-17), so a partner spend in a capped category (BigBasket groceries, Tata Play at MCC 4899) earns the partner rate; the UPI (9) and merchant-EMI (10) carve-outs still outrank it.",
           "source_url": "https://www.hdfc.bank.in/content/dam/hdfcbankpws/in/en/personal-banking/discover-products/cards/credit-cards/tata-neu-infinity-credit-card/pdf/tata_neu_infinity_card_tnc.pdf",
           "checked_on": "2026-11-05"
         },
@@ -363,8 +363,8 @@
         {
           "path": "reward_rules",
           "op": "append",
-          "value_sha256": "b1b0b14fd2d09a1c",
-          "reason": "WP7: T&C: 5% back as NeuCoins (Non-EMI) on partner Tata Brands \"as defined in Annex 1\", governed by the Annex 1 fair-usage policy. mcc_exclude restates Annex 1's non-accruing rental/government MCC transactions and keeps this rule v2-only, so the old feed (which has no UPI carve-out) never pays the partner rate on UPI.",
+          "value_sha256": "6013beafc3b4d268",
+          "reason": "WP7: T&C: 5% back as NeuCoins (Non-EMI) on partner Tata Brands \"as defined in Annex 1\", governed by the Annex 1 fair-usage policy. mcc_exclude restates Annex 1's non-accruing rental/government MCC transactions and keeps this rule v2-only, so the old feed (which has no UPI carve-out) never pays the partner rate on UPI. D29b: priority 11 outranks the capped insurance/grocery/utility/telecom rules (14-17), so a partner spend in a capped category (BigBasket groceries, Tata Play at MCC 4899) earns the partner rate; the UPI (9) and merchant-EMI (10) carve-outs still outrank it.",
           "source_url": "https://www.hdfc.bank.in/content/dam/hdfcbankpws/in/en/personal-banking/discover-products/cards/credit-cards/tata-neu-infinity-credit-card/pdf/tata_neu_infinity_card_tnc.pdf",
           "checked_on": "2026-11-05"
         },
@@ -387,8 +387,8 @@
         {
           "path": "reward_rules",
           "op": "append",
-          "value_sha256": "2a1f80caf5ea70cc",
-          "reason": "WP7: T&C: 5% back as NeuCoins (Non-EMI) on partner Tata Brands \"as defined in Annex 1\", governed by the Annex 1 fair-usage policy. mcc_exclude restates Annex 1's non-accruing rental/government MCC transactions and keeps this rule v2-only, so the old feed (which has no UPI carve-out) never pays the partner rate on UPI.",
+          "value_sha256": "cc63a6c41ad63468",
+          "reason": "WP7: T&C: 5% back as NeuCoins (Non-EMI) on partner Tata Brands \"as defined in Annex 1\", governed by the Annex 1 fair-usage policy. mcc_exclude restates Annex 1's non-accruing rental/government MCC transactions and keeps this rule v2-only, so the old feed (which has no UPI carve-out) never pays the partner rate on UPI. D29b: priority 11 outranks the capped insurance/grocery/utility/telecom rules (14-17), so a partner spend in a capped category (BigBasket groceries, Tata Play at MCC 4899) earns the partner rate; the UPI (9) and merchant-EMI (10) carve-outs still outrank it.",
           "source_url": "https://www.hdfc.bank.in/content/dam/hdfcbankpws/in/en/personal-banking/discover-products/cards/credit-cards/tata-neu-infinity-credit-card/pdf/tata_neu_infinity_card_tnc.pdf",
           "checked_on": "2026-11-05"
         },
@@ -411,8 +411,8 @@
         {
           "path": "reward_rules",
           "op": "append",
-          "value_sha256": "7c0fc0f48acc42a3",
-          "reason": "WP7: T&C: 5% back as NeuCoins (Non-EMI) on partner Tata Brands \"as defined in Annex 1\", governed by the Annex 1 fair-usage policy. mcc_exclude restates Annex 1's non-accruing rental/government MCC transactions and keeps this rule v2-only, so the old feed (which has no UPI carve-out) never pays the partner rate on UPI. Priority 14 puts BigBasket ahead of the 1.5% grocery rule; the 2,000 NeuCoin grocery cap also targets it (conservative).",
+          "value_sha256": "6bb07a40bc406668",
+          "reason": "WP7: T&C: 5% back as NeuCoins (Non-EMI) on partner Tata Brands \"as defined in Annex 1\", governed by the Annex 1 fair-usage policy. mcc_exclude restates Annex 1's non-accruing rental/government MCC transactions and keeps this rule v2-only, so the old feed (which has no UPI carve-out) never pays the partner rate on UPI. D29b: priority 11 outranks the capped insurance/grocery/utility/telecom rules (14-17), so a partner spend in a capped category (BigBasket groceries, Tata Play at MCC 4899) earns the partner rate; the UPI (9) and merchant-EMI (10) carve-outs still outrank it.",
           "source_url": "https://www.hdfc.bank.in/content/dam/hdfcbankpws/in/en/personal-banking/discover-products/cards/credit-cards/tata-neu-infinity-credit-card/pdf/tata_neu_infinity_card_tnc.pdf",
           "checked_on": "2026-11-05"
         },
@@ -435,8 +435,8 @@
         {
           "path": "reward_rules",
           "op": "append",
-          "value_sha256": "a7b0294155b8ecdb",
-          "reason": "WP7: T&C: 5% back as NeuCoins (Non-EMI) on partner Tata Brands \"as defined in Annex 1\", governed by the Annex 1 fair-usage policy. mcc_exclude restates Annex 1's non-accruing rental/government MCC transactions and keeps this rule v2-only, so the old feed (which has no UPI carve-out) never pays the partner rate on UPI.",
+          "value_sha256": "6c5f3c15f79e21dc",
+          "reason": "WP7: T&C: 5% back as NeuCoins (Non-EMI) on partner Tata Brands \"as defined in Annex 1\", governed by the Annex 1 fair-usage policy. mcc_exclude restates Annex 1's non-accruing rental/government MCC transactions and keeps this rule v2-only, so the old feed (which has no UPI carve-out) never pays the partner rate on UPI. D29b: priority 11 outranks the capped insurance/grocery/utility/telecom rules (14-17), so a partner spend in a capped category (BigBasket groceries, Tata Play at MCC 4899) earns the partner rate; the UPI (9) and merchant-EMI (10) carve-outs still outrank it.",
           "source_url": "https://www.hdfc.bank.in/content/dam/hdfcbankpws/in/en/personal-banking/discover-products/cards/credit-cards/tata-neu-infinity-credit-card/pdf/tata_neu_infinity_card_tnc.pdf",
           "checked_on": "2026-11-05"
         },
@@ -459,16 +459,16 @@
         {
           "path": "reward_rules",
           "op": "append",
-          "value_sha256": "71c2404035c8ee09",
-          "reason": "WP7: T&C table: \"Merchant EMI Spends (Any Brand) 1.5% back as NeuCoins\"; the partner rate is \"Non-EMI\". Same brand list as the partner rules (plus Tata Neu); priority 13 is ahead of every partner rule (BigBasket is 14).",
+          "value_sha256": "060ec3fe111b6466",
+          "reason": "WP7: T&C table: \"Merchant EMI Spends (Any Brand) 1.5% back as NeuCoins\"; the partner rate is \"Non-EMI\". Same brand list as the partner rules (plus Tata Neu); priority 10 is ahead of every partner rule (11) and of the capped category rules (D29b).",
           "source_url": "https://www.hdfc.bank.in/content/dam/hdfcbankpws/in/en/personal-banking/discover-products/cards/credit-cards/tata-neu-infinity-credit-card/pdf/tata_neu_infinity_card_tnc.pdf",
           "checked_on": "2026-11-05"
         },
         {
           "path": "reward_rules",
           "op": "append",
-          "value_sha256": "44c6668bd868ea98",
-          "reason": "WP7: T&C: for partner Tata Brands \"if you have completed your transaction using UPI ... then such transaction will not qualify for this benefit\"; UPI earns 0.50% \"for transactions done using any UPI ID\" (more only with the Tata Neu UPI ID). Carve-out at the any-UPI-ID rate.",
+          "value_sha256": "bf41a56f55c1fe2c",
+          "reason": "WP7: T&C: for partner Tata Brands \"if you have completed your transaction using UPI ... then such transaction will not qualify for this benefit\"; UPI earns 0.50% \"for transactions done using any UPI ID\" (more only with the Tata Neu UPI ID). Carve-out at the any-UPI-ID rate. Priority 9 is ahead of the merchant-EMI carve-out (10), the partner rules (11) and the capped category rules (D29b).",
           "source_url": "https://www.hdfc.bank.in/content/dam/hdfcbankpws/in/en/personal-banking/discover-products/cards/credit-cards/tata-neu-infinity-credit-card/pdf/tata_neu_infinity_card_tnc.pdf",
           "checked_on": "2026-11-05"
         },
@@ -1527,7 +1527,7 @@
         "rate": 5,
         "min_txn_inr": null,
         "max_txn_inr": null,
-        "priority": 20,
+        "priority": 11,
         "conditions": {
           "source_local_id": "tata_partner_croma_wp7",
           "part": null,
@@ -1567,7 +1567,7 @@
         "rate": 5,
         "min_txn_inr": null,
         "max_txn_inr": null,
-        "priority": 20,
+        "priority": 11,
         "conditions": {
           "source_local_id": "tata_partner_fashion_wp7",
           "part": null,
@@ -1609,7 +1609,7 @@
         "rate": 5,
         "min_txn_inr": null,
         "max_txn_inr": null,
-        "priority": 20,
+        "priority": 11,
         "conditions": {
           "source_local_id": "tata_partner_travel_wp7",
           "part": null,
@@ -1651,7 +1651,7 @@
         "rate": 5,
         "min_txn_inr": null,
         "max_txn_inr": null,
-        "priority": 20,
+        "priority": 11,
         "conditions": {
           "source_local_id": "tata_partner_others_wp7",
           "part": null,
@@ -1693,7 +1693,7 @@
         "rate": 5,
         "min_txn_inr": null,
         "max_txn_inr": null,
-        "priority": 14,
+        "priority": 11,
         "conditions": {
           "source_local_id": "tata_partner_bigbasket_wp7",
           "part": null,
@@ -1733,7 +1733,7 @@
         "rate": 5,
         "min_txn_inr": null,
         "max_txn_inr": null,
-        "priority": 20,
+        "priority": 11,
         "conditions": {
           "source_local_id": "tata_partner_titan_wp7",
           "part": null,
@@ -1775,7 +1775,7 @@
         "rate": 1.5,
         "min_txn_inr": null,
         "max_txn_inr": null,
-        "priority": 13,
+        "priority": 10,
         "conditions": {
           "source_local_id": "tata_partner_emi_wp7",
           "part": null,
@@ -1823,7 +1823,7 @@
         "rate": 0.5,
         "min_txn_inr": null,
         "max_txn_inr": null,
-        "priority": 12,
+        "priority": 9,
         "conditions": {
           "source_local_id": "tata_partner_upi_wp7",
           "part": null,
