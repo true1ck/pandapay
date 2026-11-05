@@ -33,7 +33,8 @@ function extractTransactionStateFunctions() {
   const start = source.indexOf('async function loadUserCardForState(client');
   const end = source.indexOf('/** Mirrors the txn_instrument / txn_entry_kind enums', start);
   assert.ok(start >= 0 && end > start, 'actual transaction state functions must be present');
-  const context = { rewardMath, periodBounds };
+  // cardStateV2: applyTransactionState hands v2-shaped cards to it (card-rewards WP8).
+  const context = { rewardMath, periodBounds, cardStateV2: require('../src/card_state_v2') };
   vm.runInNewContext(source.slice(start, end), context, { filename: 'api/src/index.js' });
   return {
     loadUserCardForState: context.loadUserCardForState,
