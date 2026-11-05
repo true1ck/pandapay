@@ -8,13 +8,13 @@
     "axis-bank-magnus#006": {
       "engines": ["js", "dart"],
       "category": "loader_bug",
-      "routed_to": "WP2, then a WP6b override",
+      "routed_to": "WP2, then a WP6b/WP7 override",
       "summary": "35 pts/Rs200 above Rs1.5 lakh a month needs base_150k_spend to carry post_cap_behavior custom_rate (35 per Rs200). The loader only emits base_rate/zero, so the accelerated band earns the base 12."
     },
     "axis-bank-magnus#007": {
       "engines": ["js", "dart"],
       "category": "loader_bug",
-      "routed_to": "WP2, then a WP6b override",
+      "routed_to": "WP2, then a WP6b/WP7 override",
       "summary": "Same as #006: spend after the Rs1.5 lakh line should earn 35 per Rs200 (custom post-cap rate)."
     },
     "flipkart-axis-bank-credit-card#006": {
@@ -22,42 +22,6 @@
       "category": "research_data",
       "routed_to": "WP6b",
       "summary": "The preferred-merchant list is not published (research note), so preferred_merchants_cashback_4 stays info (H2). Cite an issuer list naming Swiggy (then override merchant Swiggy, except Instamart/Genie) or mark the example engine_checkable false."
-    },
-    "hdfc-millennia#009": {
-      "engines": ["js", "dart"],
-      "category": "loader_bug",
-      "routed_to": "WP2",
-      "summary": "EMI exclusion is emitted as category emi AND rail emi; an EMI purchase in another category (ctx other + rail emi) is not excluded. Emit category-only and rail-only exclusion rows as alternatives (as D21a does for merchant/app lists)."
-    },
-    "hdfc-phonepe-uno#008": {
-      "engines": ["js", "dart"],
-      "category": "loader_bug",
-      "routed_to": "WP2",
-      "summary": "Same EMI pattern as hdfc-millennia#009 (excluded_emi: category emi AND rail emi)."
-    },
-    "phonepe-hdfc-bank-ultimo#008": {
-      "engines": ["js", "dart"],
-      "category": "loader_bug",
-      "routed_to": "WP2",
-      "summary": "Same EMI pattern as hdfc-millennia#009 (exclude_emi: category emi AND rail emi)."
-    },
-    "swiggy-hdfc-bank-credit-card#009": {
-      "engines": ["js", "dart"],
-      "category": "loader_bug",
-      "routed_to": "WP2",
-      "summary": "Same EMI pattern as hdfc-millennia#009 (emi_exclusion: category emi AND rail emi; card-level excluded category emi needs ctx category emi)."
-    },
-    "sbi-simplyclick#003": {
-      "engines": ["js", "dart"],
-      "category": "example_wrong",
-      "routed_to": "WP6a (or a lead ruling)",
-      "summary": "10X on Cleartrip excludes affiliate-channel bookings (T&C 11.1(i)), a transaction attribute the context cannot carry, so D14b keeps exclusive_partner_10x info. Per D14a the example should be engine_checkable false, unless the lead rules that a direct booking may be assumed."
-    },
-    "sbi-simplyclick#004": {
-      "engines": ["js", "dart"],
-      "category": "research_data",
-      "routed_to": "WP6a",
-      "summary": "T&C 11.1(h): 5X capped at 10,000 RP a month, then 1 RP per Rs100. A total_points cap pays 0 after the cap. Exact model: eligible_spend Rs2,00,000 with base_rate (override), with the examples' cap deltas restated in rupees."
     },
     "swiggy-hdfc-bank-credit-card#004": {
       "engines": ["js", "dart"],
@@ -67,27 +31,9 @@
     },
     "tata-neu-infinity-hdfc-bank#004": {
       "engines": ["js", "dart"],
-      "category": "research_data",
-      "routed_to": "WP6a",
-      "summary": "Partner-brand 5% is written as brand_type/emi clauses (info). Needs an override restating it on the tata group token (tata_neu_partner) plus an EMI carve-out row (rail emi at the base rate, lower priority number), because non_emi only maps to the emi category."
-    },
-    "tata-neu-plus-hdfc-bank#004": {
-      "engines": ["js", "dart"],
-      "category": "research_data",
-      "routed_to": "WP6a",
-      "summary": "Same as tata-neu-infinity-hdfc-bank#004 (partner_tata_brand_non_emi uses partner_tata_brand/emi/upi flags)."
-    },
-    "tata-neu-infinity-sbi-credit-card#002": {
-      "engines": ["js", "dart"],
-      "category": "research_data",
-      "routed_to": "WP6a",
-      "summary": "tata-neu-partner-5pct is info (free-text channel). Removing the channel alone would pay 5% on EMI-rail partner spends (non_emi maps only to the emi category), so it needs the same EMI carve-out as tata-neu-infinity-hdfc-bank#004."
-    },
-    "tata-neu-infinity-sbi-credit-card#003": {
-      "engines": ["js", "dart"],
-      "category": "research_data",
-      "routed_to": "WP6a",
-      "summary": "Same as tata-neu-infinity-sbi-credit-card#002."
+      "category": "engine_bug",
+      "routed_to": "Lead (contract question on C3.5 rounding)",
+      "summary": "Not an engine defect against the contract: the issuer rounds the base 1.5% and the additional 3.5% separately (316.5 -> 317 plus 738.5 -> 739 = 1,056); C3.5/D7 round the rule's whole accrual once (1,055). Needs a component-wise rounding mode if the 1-point gap matters. The partner-brand rule itself now loads (group token + EMI/UPI carve-outs)."
     }
   }
 }

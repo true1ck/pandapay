@@ -816,6 +816,29 @@
             "anchor": null,
             "min_engine_version": 2,
             "source_local_id": "utility_monthly_cap"
+          },
+          {
+            "id": "indianoil-hdfc-bank-credit-card:cap:wp7_fair_usage_statement_cycle",
+            "reward_rule_id": null,
+            "category_id": null,
+            "category_slug": null,
+            "benefit_kind": null,
+            "label": "Wp7 fair usage statement cycle",
+            "measure": "reward_value",
+            "period": "statement_cycle",
+            "cap_value": 24000,
+            "post_cap_unit": null,
+            "post_cap_rate": 0,
+            "resets_on_day": null,
+            "cap_kind": "total_points",
+            "cap_amount": 25000,
+            "scope": "card",
+            "targets": [],
+            "parent_cap_id": null,
+            "post_cap_behavior": null,
+            "anchor": null,
+            "min_engine_version": 1,
+            "source_local_id": "wp7_fair_usage_statement_cycle"
           }
         ],
         "model_coverage": {},
@@ -842,7 +865,8 @@
       "expect": {
         "excluded": false,
         "cap_deltas": {
-          "indianoil-hdfc-bank-credit-card:cap:fuel_post_6m": 100
+          "indianoil-hdfc-bank-credit-card:cap:fuel_post_6m": 100,
+          "indianoil-hdfc-bank-credit-card:cap:wp7_fair_usage_statement_cycle": 100
         },
         "points": 100
       }
@@ -1658,6 +1682,29 @@
             "anchor": null,
             "min_engine_version": 2,
             "source_local_id": "utility_monthly_cap"
+          },
+          {
+            "id": "indianoil-hdfc-bank-credit-card:cap:wp7_fair_usage_statement_cycle",
+            "reward_rule_id": null,
+            "category_id": null,
+            "category_slug": null,
+            "benefit_kind": null,
+            "label": "Wp7 fair usage statement cycle",
+            "measure": "reward_value",
+            "period": "statement_cycle",
+            "cap_value": 24000,
+            "post_cap_unit": null,
+            "post_cap_rate": 0,
+            "resets_on_day": null,
+            "cap_kind": "total_points",
+            "cap_amount": 25000,
+            "scope": "card",
+            "targets": [],
+            "parent_cap_id": null,
+            "post_cap_behavior": null,
+            "anchor": null,
+            "min_engine_version": 1,
+            "source_local_id": "wp7_fair_usage_statement_cycle"
           }
         ],
         "model_coverage": {},
@@ -1684,7 +1731,8 @@
       "expect": {
         "excluded": false,
         "cap_deltas": {
-          "indianoil-hdfc-bank-credit-card:cap:grocery_monthly_cap": 50
+          "indianoil-hdfc-bank-credit-card:cap:grocery_monthly_cap": 50,
+          "indianoil-hdfc-bank-credit-card:cap:wp7_fair_usage_statement_cycle": 50
         },
         "points": 50
       }
@@ -7149,8 +7197,8 @@
       }
     },
     {
-      "name": "WP7 indigo-kotak-credit-card#004: Rs 10,000 flight booked on the IndiGo website (entry tier Blu 3)",
-      "why": "airline co-brand at the entry-tier rate (D13b). Issuer-verified worked example (db/fixtures/card_worked_examples/indigo-kotak-credit-card.json #004): Table B for the IndiGo Kotak Credit Card: 8 base + 3 card + 4 website/app = 15 BluChips per Rs 100 at tier Blu 3 (17 at Blu 2, 19 at Blu 1): 100 x 15 = 1,500.",
+      "name": "WP7 indigo-kotak-credit-card#004: Rs 10,000 flight booked on the IndiGo website",
+      "why": "airline co-brand at the entry-tier rate (D13b). Issuer-verified worked example (db/fixtures/card_worked_examples/indigo-kotak-credit-card.json #004): Table B: of the 15 BluChips per Rs100 (Blu 3), 8 base and 4 channel are IndiGo's own programme for any member; the card adds 3 per Rs100 at every tier: 100 x 3 = 300 (D24a).",
       "card": {
         "id": "indigo-kotak-credit-card:card",
         "slug": "indigo-kotak-credit-card",
@@ -7248,7 +7296,7 @@
             "merchant_pattern": "goindigo",
             "rail": "online",
             "unit": "points_per_100",
-            "rate": 15,
+            "rate": 3,
             "min_txn_inr": null,
             "max_txn_inr": null,
             "priority": 10,
@@ -7277,7 +7325,7 @@
             "min_engine_version": 1,
             "max_engine_version": null,
             "source_local_id": "indigo_flight_booking_accelerator",
-            "display_note": "15 IndiGo BluChips per Rs100 (entry tier Blu 3) on IndiGo flights booked on the IndiGo website or app."
+            "display_note": "3 IndiGo BluChips per Rs100 from the card on IndiGo flights booked on the IndiGo website or app (IndiGo's own base, tier and channel BluChips are not card rewards)."
           },
           {
             "id": "indigo-kotak-credit-card:rule:rent_exclusion#1",
@@ -8286,6 +8334,47 @@
             "max_engine_version": null,
             "source_local_id": "entertainment_accelerator",
             "display_note": "Earn 2 IndiGo BluChips per Rs100 on Entertainment spends."
+          },
+          {
+            "id": "indigo-kotak-credit-card:rule:indigo_group_booking_exclusion",
+            "category_id": "cat-travel",
+            "category_slug": "travel",
+            "merchant_pattern": "goindigo",
+            "rail": "online",
+            "unit": "points_per_100",
+            "rate": 0,
+            "min_txn_inr": null,
+            "max_txn_inr": null,
+            "priority": 5,
+            "conditions": {
+              "source_local_id": "indigo_group_booking_exclusion",
+              "part": null,
+              "info_reasons": [
+                "override_rule_role"
+              ],
+              "flags": [
+                "depends_on_txn_attribute",
+                "exclusion_scope_broadened"
+              ]
+            },
+            "notes": null,
+            "effective_from": "2025-07-10",
+            "effective_to": null,
+            "excluded_categories": [],
+            "rule_role": "info",
+            "merchant_slugs": [
+              "indigo"
+            ],
+            "platform_slugs": [],
+            "mcc_include": [],
+            "mcc_exclude": [],
+            "except_merchant_slugs": [],
+            "except_platform_slugs": [],
+            "block_inr": null,
+            "min_engine_version": 2,
+            "max_engine_version": null,
+            "source_local_id": "indigo_group_booking_exclusion",
+            "display_note": "No IndiGo BluChips on group, corporate, SME and agent bookings done through the IndiGo website/app."
           }
         ],
         "cap_rules": [],
@@ -8313,7 +8402,7 @@
       "expect": {
         "excluded": false,
         "cap_deltas": {},
-        "points": 1500
+        "points": 300
       }
     },
     {

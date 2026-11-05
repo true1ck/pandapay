@@ -101,12 +101,14 @@ function checkExample(card, example) {
   const problems = [];
   if (Boolean(result.excluded) !== Boolean(expect.excluded)) problems.push(`excluded ${result.excluded}, expected ${expect.excluded}`);
 
+  // Currency: the expected currency's field is present (C8 D12f), and nothing
+  // is earned in the other currency.
   const isPoints = expect.currency === 'points';
   const actual = isPoints ? result.points : result.cashbackInr;
-  const expected = money2(Number(expect.amount));
-  // "Nothing earned" may come back as null in the other currency's field.
-  const got = actual == null ? (expected === 0 ? 0 : null) : money2(actual);
-  if (got !== expected) problems.push(`${isPoints ? 'points' : 'cashback_inr'} ${actual}, expected ${expect.amount}`);
+  const other = isPoints ? result.cashbackInr : result.points;
+  if (actual == null) problems.push(`currency: no ${isPoints ? 'points' : 'cashback_inr'} in the result, expected ${expect.currency}`);
+  else if (money2(actual) !== money2(Number(expect.amount))) problems.push(`${isPoints ? 'points' : 'cashback_inr'} ${actual}, expected ${expect.amount}`);
+  if (other != null && money2(other) !== 0) problems.push(`currency: earned ${other} in ${isPoints ? 'cashback_inr' : 'points'}, expected ${expect.currency} only`);
 
   if (expect.value_inr != null && money2(result.valueInr) !== money2(Number(expect.value_inr))) {
     problems.push(`value_inr ${result.valueInr}, expected ${expect.value_inr}`);

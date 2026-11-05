@@ -118,5 +118,11 @@
       "examples_not_checkable": 0,
       "checked_on": "2026-11-05"
     }
+  ],
+  "held_back": [
+    {
+      "source_slug": "hdfc-phonepe-uno",
+      "reason": "Examples pass, but its UPI Scan & Pay rule is still v1-visible, so v1 pays 1% on unknown-rail spends until WP2 lands D24b (UPI-rail earn rules v2-only). List after that merge."
+    }
   ]
 }

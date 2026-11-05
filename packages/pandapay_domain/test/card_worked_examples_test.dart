@@ -100,13 +100,25 @@ List<String> _check(
       'excluded ${result.excluded}, expected ${expect_['excluded']}',
     );
   }
+  // Currency: the expected currency's field is present (C8 D12f), and
+  // nothing is earned in the other currency.
   final isPoints = expect_['currency'] == 'points';
   final actual = isPoints ? result.points : result.cashbackInr;
-  final expected = _paise(expect_['amount'] as num);
-  final got = actual == null ? (expected == 0 ? 0 : null) : _paise(actual);
-  if (got != expected) {
+  final other = isPoints ? result.cashbackInr : result.points;
+  if (actual == null) {
+    problems.add(
+      'currency: no ${isPoints ? 'points' : 'cashback_inr'} in the result, '
+      'expected ${expect_['currency']}',
+    );
+  } else if (_paise(actual) != _paise(expect_['amount'] as num)) {
     problems.add(
       '${isPoints ? 'points' : 'cashback_inr'} $actual, expected ${expect_['amount']}',
+    );
+  }
+  if (other != null && _paise(other) != 0) {
+    problems.add(
+      'currency: earned $other in ${isPoints ? 'cashback_inr' : 'points'}, '
+      'expected ${expect_['currency']} only',
     );
   }
   final value = expect_['value_inr'] as num?;
