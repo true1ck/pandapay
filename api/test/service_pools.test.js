@@ -68,7 +68,7 @@ test('configured IMAP readiness rejects broad roles, raw credential reads, or sc
   await checkImapWorkerReadiness(null);
   const valid={bounded_role:true,can_execute:true,can_defer:true,direct_credentials_read:false,schema_create:false};
   await checkImapWorkerReadiness({query:async(sql)=>{
-    assert.match(sql,/imap_worker\.next_connections\(text,integer\)/);
+    assert.match(sql,/imap_worker\.next_connections\(integer\)/);
     assert.match(sql,/imap_worker\.defer_connections\(uuid\)/);
     return {rows:[valid]};
   }});

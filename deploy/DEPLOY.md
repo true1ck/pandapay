@@ -157,7 +157,7 @@ generate each value (JWT secrets, the stable `PHONE_LOOKUP_HMAC_KEY`,
 `APP_USER_PASSWORD`, the separate
 `REWARD_WORKER_DB_PASSWORD`, webhook secrets,
 `IMAP_ENCRYPTION_KEY`, `ENCRYPTION_KEY`). Don't confuse the last two:
-`IMAP_ENCRYPTION_KEY` is `api/`'s key for stored IMAP app passwords;
+`IMAP_ENCRYPTION_KEY` is `api/`'s AES-256-GCM key for stored IMAP app passwords (32 random bytes as base64: `openssl rand -base64 32`; optional `IMAP_ENCRYPTION_KEY_ID`, default `k1`; the API refuses to start with any other format);
 `ENCRYPTION_KEY` is `auth/`'s separate key for field-level PII encryption —
 both are required. Auth startup rejects missing, malformed or disabled
 encryption in production/staging; Compose also requires the key with `:?`.

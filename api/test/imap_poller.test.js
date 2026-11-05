@@ -2,6 +2,20 @@ const test = require('node:test');
 const assert = require('node:assert');
 const { pollConnection, runPollCycle, INITIAL_LOOKBACK_DAYS, POLL_ADVISORY_LOCK_KEY } = require('../src/imap_poller');
 const { parseFetchResponse, quoted, imapDate } = require('../src/imap_client');
+const crypto = require('node:crypto');
+const { sealPassword } = require('../src/imap_credentials');
+
+const KEY = { id: 'k1', bytes: crypto.randomBytes(32) };
+const IMAP_KEYS = new Map([[KEY.id, KEY.bytes]]);
+
+// What imap_worker.next_connections returns: the password sealed for its row.
+function workerRow(connection) {
+  const { app_password: password, credential_error: broken, ...rest } = connection;
+  const sealed = broken
+    ? { keyId: KEY.id, ciphertext: crypto.randomBytes(40) }
+    : sealPassword(password, { profileId: connection.profile_id, connectionId: connection.id }, KEY);
+  return { ...rest, app_password_ciphertext: sealed.ciphertext, app_password_key_id: sealed.keyId };
+}
 
 /**
  * The poller, exercised without a socket or a database.
@@ -56,7 +70,7 @@ function pollCycleDeps({ lock = true, connections = [], queryError = null, unloc
       if (queryError && sql.includes('FROM imap_worker.next_connections')) throw queryError;
       if (sql.includes('pg_try_advisory_lock')) return { rows: [{ acquired: lock }] };
       if (sql.includes('pg_advisory_unlock')) return { rows: [{ released: unlock }] };
-      return { rows: connections };
+      return { rows: connections.map(workerRow) };
     },
     release(error) {
       releasedWith = error;
@@ -68,7 +82,7 @@ function pollCycleDeps({ lock = true, connections = [], queryError = null, unloc
     get releasedWith() { return releasedWith; },
     deps: {
       workerPool: { options: { max: 1 }, connect: async () => client },
-      encryptionKey: 'synthetic-key',
+      imapKeys: IMAP_KEYS,
       withUserClient: async (_userId, fn) => fn({ query: async () => ({ rows: [] }) }),
       parseSmsAgainstPatterns: () => ({ ok: false }),
       importParsedMessage: async () => ({ status: 201 }),
@@ -152,7 +166,7 @@ test('missing encryption key does not check out a database client', async () => 
   let connections = 0;
   const result = await runPollCycle({
     pool: { connect: async () => { connections += 1; } },
-    encryptionKey: null,
+    imapKeys: null,
   });
 
   assert.deepStrictEqual(result, { skipped: 'no_encryption_key' });
@@ -163,7 +177,7 @@ test('missing worker capability never falls back to the ordinary application poo
   let connections = 0;
   const result = await runPollCycle({
     pool: { options: { max: 10 }, connect: async () => { connections += 1; } },
-    encryptionKey: 'synthetic-key',
+    imapKeys: IMAP_KEYS,
   });
   assert.deepStrictEqual(result, { skipped: 'no_worker_database' });
   assert.strictEqual(connections, 0);
@@ -171,7 +185,7 @@ test('missing worker capability never falls back to the ordinary application poo
 
 test('the worker and ordinary application pool must be separate', async () => {
   const pool = { options: { max: 1 }, connect: async () => { throw new Error('must not connect'); } };
-  assert.deepStrictEqual(await runPollCycle({ pool, workerPool: pool, encryptionKey: 'synthetic-key' }), {
+  assert.deepStrictEqual(await runPollCycle({ pool, workerPool: pool, imapKeys: IMAP_KEYS }), {
     skipped: 'worker_database_pool_not_separate',
   });
 });
@@ -187,7 +201,8 @@ test('separate one-connection pools can enumerate and perform per-user work in s
   const result = await runPollCycle(fake.deps);
   assert.strictEqual(result.polled, 1);
   assert.strictEqual(perUserCalls, 2);
-  assert.deepStrictEqual(fake.calls[1].params, ['synthetic-key', 100]);
+  assert.deepStrictEqual(fake.calls[1].params, [100]);
+  assert.ok(!JSON.stringify(fake.calls).includes(KEY.bytes.toString('base64')));
   assert.strictEqual(fake.releasedWith, undefined);
 });
 
@@ -203,7 +218,6 @@ test('credential failures never contact providers, expose passwords, or advance 
   assert.strictEqual(updates.length, 1);
   assert.strictEqual(updates[0].userId, CONNECTION.profile_id);
   assert.ok(!updates[0].sql.includes('last_poll_at ='));
-  assert.strictEqual(connection.app_password, null);
 });
 
 test('cycle deadline defers unprocessed connections and clears all batch credentials', async () => {
@@ -218,7 +232,6 @@ test('cycle deadline defers unprocessed connections and clears all batch credent
   assert.strictEqual(result.polled, 1);
   assert.strictEqual(result.deferredCount, 2);
   assert.strictEqual(providerCalls, 1);
-  assert.ok(connections.every(connection => connection.app_password === null));
   assert.match(fake.calls.at(-2).sql, /imap_worker.defer_connections/);
   assert.deepStrictEqual(fake.calls.at(-2).params, ['c1']);
   assert.match(fake.calls.at(-1).sql, /pg_advisory_unlock/);
@@ -229,7 +242,7 @@ test('a repeated first-row status failure does not starve later rows in a short 
   const fake = pollCycleDeps({ connections });
   const originalQuery = fake.client.query.bind(fake.client);
   fake.client.query = async (sql, params) => sql.includes('FROM imap_worker.next_connections')
-    ? { rows: connections.map(connection => ({ ...connection })) }
+    ? { rows: connections.map(connection => workerRow({ ...connection })) }
     : originalQuery(sql, params);
   const fetches = [];
   const lastPollAt = new Map(connections.map(connection => [connection.id, 'retained-window']));
@@ -298,7 +311,7 @@ test('interval warns for missing worker capability and stays quiet when another 
     const errors = [];
     const underSizedStop = require('../src/imap_poller').startImapPoller({
       pool: { options: { max: 1 }, connect: async () => { throw new Error('must not connect'); } },
-      encryptionKey: 'synthetic-key',
+      imapKeys: IMAP_KEYS,
     }, {
       intervalMinutes: 1,
       logger: { warn: (message) => warnings.push(message), error: (message) => errors.push(message) },

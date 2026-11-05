@@ -54,6 +54,11 @@ const centralProjection = require('./central_financial_projection');
 const { registerBillsProjectionRoutes } = require('./bills_projection_route');
 const smsRuleBundleRoute = require('./sms_rule_bundle');
 const { testImapLogin } = require('./imap_test');
+const {
+  saveImapConnection, openStoredImapPassword, deleteImapConnection, bankSenderPatterns, requireBankSenders,
+} = require('./imap_connections_store');
+const { normalizeSenderFilter } = require('./imap_credentials');
+const { markInboundEmailConverted } = require('./inbound_email_retention');
 const { hasImapControlChars, isValidImapHost } = require('./imap_network');
 const { extractLocalPart, scanPolicyKeywords } = require('./email_ingest');
 const { discoverCardsAcrossMessages } = require('./card_discovery');
@@ -7966,6 +7971,7 @@ const CONSENT_PURPOSES = [
   'aggregate_insights',
   'partner_sharing',
   'sms_shared_learning',
+  'email_import',
 ];
 
 /**
@@ -8812,10 +8818,8 @@ app.post('/inbound-emails/webhook', async (req, res) => {
             },
           });
           if ((imported.status === 200 || imported.status === 201) && imported.transaction) {
-            await client.query(`UPDATE inbound_emails SET produced_txn_id = $1 WHERE id = $2`, [
-              imported.transaction.id,
-              row.inbound_email_id,
-            ]);
+            // Link the transaction and drop the email text in one statement.
+            await markInboundEmailConverted(client, row.inbound_email_id, imported.transaction.id);
             await client.query(`UPDATE transactions SET raw_source_ref = $1 WHERE id = $2`, [
               row.inbound_email_id,
               imported.transaction.id,
@@ -8985,10 +8989,7 @@ app.post('/inbound-emails/:id/create-transaction', requireAuth, async (req, res)
       }
       if (inserted.status !== 200 && inserted.status !== 201) return inserted;
 
-      await client.query(
-        `UPDATE inbound_emails SET produced_txn_id = $1 WHERE id = $2`,
-        [inserted.transaction.id, email.id]
-      );
+      await markInboundEmailConverted(client, email.id, inserted.transaction.id);
       await client.query(`UPDATE transactions SET raw_source_ref = $1 WHERE id = $2`, [email.id, inserted.transaction.id]);
 
       return { ...inserted, status: inserted.status };
@@ -9202,20 +9203,14 @@ app.get('/export', requireAuth, async (req, res) => {
 });
 
 /**
- * POST /imap-connections — Task F7. `imap_connections` is a genuinely new
- * table this pass added (0018_imap_connections.sql — no migration modeled
- * IMAP credentials before). The app password is encrypted at rest via
- * pgcrypto's `pgp_sym_encrypt` (extension already enabled,
- * 0001_extensions_and_enums.sql) keyed off `IMAP_ENCRYPTION_KEY`, an env
- * var never committed/logged — NOT plaintext, per this project's
- * payments-app security stance. This is still a stopgap: a single static
- * symmetric key in an env var is weaker than real envelope
- * encryption/KMS-managed key rotation, flagged explicitly as a follow-up
- * (see the migration's own comment and this chunk's PROGRESS.md entry) —
- * do not treat this as the final answer for credential-at-rest storage.
+ * POST /imap-connections — Task F7. The mailbox app password is sealed in this
+ * process with AES-256-GCM (imap_credentials.js): the key never reaches
+ * PostgreSQL, and each sealed value is bound to the profile, the connection id
+ * and the key id. A bank-sender filter is required, and every address in it
+ * must match a sender the email parser already knows, so polling never reads
+ * the rest of the mailbox. The password is never logged or returned.
  * Both connectors restrict TLS destinations to public IP addresses; this
  * policy reports private destinations without rewriting saved settings.
- * The password itself is never logged anywhere in this route.
  */
 app.post('/imap-connections', requireAuth, async (req, res) => {
   const { email, appPassword, imapHost, imapPort, senderFilter } = req.body || {};
@@ -9241,36 +9236,55 @@ app.post('/imap-connections', requireAuth, async (req, res) => {
   if (parsedImapPort != null && (!Number.isInteger(parsedImapPort) || parsedImapPort < 1 || parsedImapPort > 65535)) {
     return res.status(400).json({ error: 'imapPort is invalid' });
   }
-  const encryptionKey = config.imapEncryptionKey;
-  if (!encryptionKey) {
+  let senders;
+  try {
+    senders = normalizeSenderFilter(senderFilter);
+  } catch (_) {
+    return res.status(400).json({ error: 'sender_filter_required' });
+  }
+  const key = config.imapKeyring?.current;
+  if (!key) {
     // Fail loudly rather than silently falling back to plaintext storage.
     console.error('POST /imap-connections: IMAP_ENCRYPTION_KEY is not set');
     return res.status(500).json({ error: 'internal_error' });
   }
   try {
-    const result = await withUserClient(req.userId, (client) =>
-      client.query(
-        `INSERT INTO imap_connections (profile_id, email, app_password_encrypted, imap_host, imap_port, sender_filter)
-         VALUES ($1, $2, pgp_sym_encrypt($3, $4), $5, $6, $7)
-         ON CONFLICT (profile_id, email) DO UPDATE
-           SET app_password_encrypted = EXCLUDED.app_password_encrypted,
-               imap_host = EXCLUDED.imap_host,
-               imap_port = EXCLUDED.imap_port,
-               sender_filter = EXCLUDED.sender_filter,
-               is_active = true
-         RETURNING id, profile_id, email, imap_host, imap_port, sender_filter, is_active, verified_at, last_poll_at, last_poll_status, created_at`,
-        [req.userId, email, appPassword, encryptionKey, imapHost, imapPort ?? 993, senderFilter ?? null]
-      )
-    );
-    // Never echo app_password_encrypted (or the plaintext) back to the client.
-    res.status(201).json({ imapConnection: result.rows[0] });
+    const saved = await withUserClient(req.userId, async (client) => {
+      requireBankSenders(senders, await bankSenderPatterns(client));
+      return saveImapConnection(client, {
+        profileId: req.userId, email, appPassword, imapHost, imapPort: parsedImapPort, senderFilter: senders.join(','),
+      }, key);
+    });
+    // The sealed password is never selected or echoed back to the client.
+    res.status(201).json({ imapConnection: saved });
   } catch (err) {
+    if (err?.message === 'sender_filter_not_bank') {
+      return res.status(400).json({ error: 'sender_filter_not_bank' });
+    }
     console.error('POST /imap-connections error', safeErrorCode(err));
     res.status(500).json({ error: 'internal_error' });
   }
 });
 
-/** GET /imap-connections/me — never selects app_password_encrypted. */
+/**
+ * GET /imap-connections/bank-senders — the default sender list the connect
+ * screen pre-fills: full bank addresses the email parser already uses. The
+ * user can remove entries but the server rejects anything outside this set.
+ */
+app.get('/imap-connections/bank-senders', requireAuth, async (req, res) => {
+  try {
+    const patterns = await withUserClient(req.userId, (client) => bankSenderPatterns(client));
+    const senders = patterns.filter((p) => {
+      try { normalizeSenderFilter(p); return true; } catch (_) { return false; }
+    }).sort();
+    res.json({ senders });
+  } catch (err) {
+    console.error('GET /imap-connections/bank-senders error', safeErrorCode(err));
+    res.status(500).json({ error: 'internal_error' });
+  }
+});
+
+/** GET /imap-connections/me — never selects the sealed password. */
 app.get('/imap-connections/me', requireAuth, async (req, res) => {
   try {
     const result = await withUserClient(req.userId, (client) =>
@@ -9288,33 +9302,21 @@ app.get('/imap-connections/me', requireAuth, async (req, res) => {
 });
 
 /**
- * POST /imap-connections/:id/test — a real IMAP handshake (see
- * ./imap_test.js). Decrypts the stored app password server-side via
- * pgp_sym_decrypt, opens a TLS socket to imap_host:imap_port, and attempts
- * a LOGIN. The decrypted password lives only in this request's memory —
- * never logged, never echoed back to the client, and the query that
- * decrypts it is scoped to this user's own row (RLS + explicit
- * profile_id match). On success marks `verified_at`; on failure leaves it
- * untouched and returns a fixed user-facing reason for expected IMAP
- * failures. Server response text and socket exception details are never
- * returned.
- *
- * Falls back to a format-only check when IMAP_ENCRYPTION_KEY isn't set,
- * so local/dev environments without the key configured don't hard-fail —
- * but production must have it set for this to mean anything.
+ * POST /imap-connections/:id/test — a real IMAP handshake (see ./imap_test.js).
+ * Opens the sealed password in memory, opens a TLS socket to
+ * imap_host:imap_port and attempts a LOGIN. The password is never logged or
+ * echoed back, and the lookup is scoped to this user's own row (RLS plus an
+ * explicit profile_id match). On success marks `verified_at`; on failure
+ * leaves it untouched and returns a fixed user-facing reason for expected
+ * IMAP failures. Server response text and socket exception details are
+ * never returned.
  */
 app.post('/imap-connections/:id/test', requireAuth, async (req, res) => {
   try {
-    const encryptionKey = config.imapEncryptionKey;
+    const keyring = config.imapKeyring;
     const result = await withUserClient(req.userId, async (client) => {
-      const existing = await client.query(
-        encryptionKey
-          ? `SELECT id, email, imap_host, imap_port, pgp_sym_decrypt(app_password_encrypted, $3) AS app_password
-               FROM imap_connections WHERE id = $1 AND profile_id = $2`
-          : `SELECT id, email, imap_host, imap_port FROM imap_connections WHERE id = $1 AND profile_id = $2`,
-        encryptionKey ? [req.params.id, req.userId, encryptionKey] : [req.params.id, req.userId]
-      );
-      const conn = existing.rows[0];
+      const conn = await openStoredImapPassword(
+        client, { connectionId: req.params.id, profileId: req.userId }, keyring?.byId ?? new Map());
       if (!conn) return null;
 
       const hostLooksValid = isValidImapHost(conn.imap_host);
@@ -9327,8 +9329,8 @@ app.post('/imap-connections/:id/test', requireAuth, async (req, res) => {
       if (!formatOk) {
         return { ok: false, connection: safeConn, reason: 'One or more fields look malformed.' };
       }
-      if (!encryptionKey || !conn.app_password) {
-        return { ok: false, connection: safeConn, reason: 'IMAP_ENCRYPTION_KEY not configured on this server — cannot decrypt the stored password to test it.' };
+      if (!keyring || !conn.app_password) {
+        return { ok: false, connection: safeConn, reason: 'The stored password could not be opened. Disconnect and connect the mailbox again.' };
       }
 
       const loginResult = await testImapLogin({
@@ -9353,6 +9355,25 @@ app.post('/imap-connections/:id/test', requireAuth, async (req, res) => {
     res.json(result);
   } catch (err) {
     console.error('POST /imap-connections/:id/test error', safeErrorCode(err));
+    res.status(500).json({ error: 'internal_error' });
+  }
+});
+
+/**
+ * DELETE /imap-connections/:id — disconnect. The row is deleted, and the
+ * sealed password goes with it. Account deletion cascades the same way.
+ */
+app.delete('/imap-connections/:id', requireAuth, async (req, res) => {
+  if (!/^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(req.params.id)) {
+    return res.status(404).json({ error: 'not_found' });
+  }
+  try {
+    const deleted = await withUserClient(req.userId, (client) =>
+      deleteImapConnection(client, { connectionId: req.params.id, profileId: req.userId }));
+    if (!deleted) return res.status(404).json({ error: 'not_found' });
+    res.status(204).end();
+  } catch (err) {
+    console.error('DELETE /imap-connections/:id error', safeErrorCode(err));
     res.status(500).json({ error: 'internal_error' });
   }
 });
@@ -9411,7 +9432,7 @@ const stopImapPoller = startImapPoller(
     pool,
     workerPool: imapWorkerPool,
     withUserClient,
-    encryptionKey: config.imapEncryptionKey,
+    imapKeys: config.imapKeyring?.byId ?? null,
     parseSmsAgainstPatterns,
     importParsedMessage,
     importSourceKey,

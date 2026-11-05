@@ -26,6 +26,7 @@ function fetchWithSocket(socket) {
     email: 'member@example.com',
     password: 'private-secret',
     since: new Date('2026-08-20T00:00:00Z'),
+    senderFilter: 'alerts@example.com',
     tlsConnect: () => socket,
     resolveHost: async (host) => createPinnedImapResolution(host, [
       { address: '8.8.8.8', family: 4 },
@@ -87,6 +88,7 @@ test('poller TLS connection uses pinned DNS and preserves verified custom-host T
     email: 'member@example.com',
     password: 'safe-password',
     since: new Date('2026-08-20T00:00:00Z'),
+    senderFilter: 'alerts@example.com',
     tlsConnect: (tlsOptions) => { options = tlsOptions; return socket; },
     resolveHost: async (host) => createPinnedImapResolution(host, [
       { address: '8.8.8.8', family: 4 },
@@ -116,4 +118,23 @@ test('poller response cap counts UTF-8 bytes and destroys the socket', async () 
 
   assert.deepEqual(await resultPromise, { ok: false, reason: 'response_too_large' });
   assert.equal(destroyed, true);
+});
+
+test('poller refuses to read a mailbox without a sender filter, before any network use', async () => {
+  let touched = false;
+  const result = await fetchRecentMessages({
+    host: 'imap.example.com', email: 'member@example.com', password: 'safe-password',
+    since: new Date('2026-08-20T00:00:00Z'), senderFilter: ' , ',
+    resolveHost: async () => { touched = true; throw new Error('must not resolve'); },
+    tlsConnect: () => { touched = true; throw new Error('must not connect'); },
+  });
+  assert.deepEqual(result, { ok: false, reason: 'sender_filter_required' });
+  assert.equal(touched, false);
+});
+
+test('several sender addresses become nested IMAP OR criteria', () => {
+  const { fromCriteria } = require('../src/imap_client');
+  assert.equal(fromCriteria(['a@x.test']), 'FROM "a@x.test"');
+  assert.equal(fromCriteria(['a@x.test', 'b@y.test', 'c@z.test']),
+    'OR FROM "a@x.test" OR FROM "b@y.test" FROM "c@z.test"');
 });

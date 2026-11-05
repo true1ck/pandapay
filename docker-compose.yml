@@ -124,7 +124,8 @@ services:
       PRODUCT_TERMS_VERSION: "2026-08-07"
       INBOUND_EMAIL_WEBHOOK_SECRET: dev_inbound_secret_change_me
       PARTNER_WEBHOOK_SECRET: dev_partner_secret_change_me
-      IMAP_ENCRYPTION_KEY: dev_imap_key_change_me_32_bytes_ok
+      # 32 bytes, base64. Local development only.
+      IMAP_ENCRYPTION_KEY: ZGV2LWltYXAta2V5LW5vdC1mb3ItcHJvZHVjdGlvbiE=
       GOOGLE_PLACES_API_KEY: "${GOOGLE_PLACES_API_KEY:-}"
       # The lightweight notification service is a separate compose project on
       # the host during local development. host.docker.internal is the Docker

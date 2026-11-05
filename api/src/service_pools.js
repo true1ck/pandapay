@@ -97,7 +97,7 @@ async function checkImapWorkerReadiness(pool) {
   if (!pool) return;
   const result=await pool.query(`SELECT
     NOT r.rolsuper AND NOT r.rolbypassrls AND NOT r.rolcreatedb AND NOT r.rolcreaterole AND NOT r.rolreplication AS bounded_role,
-    has_function_privilege(current_user, 'imap_worker.next_connections(text,integer)', 'EXECUTE') AS can_execute,
+    has_function_privilege(current_user, 'imap_worker.next_connections(integer)', 'EXECUTE') AS can_execute,
     has_function_privilege(current_user, 'imap_worker.defer_connections(uuid)', 'EXECUTE') AS can_defer,
     has_table_privilege(current_user, 'public.imap_connections', 'SELECT') AS direct_credentials_read,
     has_schema_privilege(current_user, 'imap_worker', 'CREATE') AS schema_create
