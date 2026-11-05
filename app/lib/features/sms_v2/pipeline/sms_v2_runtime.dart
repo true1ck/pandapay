@@ -330,13 +330,6 @@ class SmsV2Runtime {
       await _metrics.bundleDownloadFailed();
     }
     _checkAccount();
-    final replay = migration(await activeBundle());
-    if (_bundle!.rules.isNotEmpty &&
-        replay.hasLegacyHistory &&
-        replay.savedReport() == null) {
-      await _metrics.measureMigration(() => replay.run());
-    }
-    _checkAccount();
     final intake = SmsIntakeRepository(financial.database);
     while (accountIsCurrent()) {
       final pending = intake.pending(namespace, limit: 200);

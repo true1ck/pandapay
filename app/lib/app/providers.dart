@@ -44,7 +44,6 @@ import '../data/foreign_payment.dart';
 import '../data/foreign_payments_repository.dart';
 import '../data/import_repository.dart';
 import '../data/local/app_database.dart';
-import '../data/local/recovery_deferred_sms.dart';
 import '../data/portable_backup/account_recovery_operation_gate.dart';
 import '../data/local/response_cache.dart';
 import '../data/local/financial_store.dart';
@@ -6790,16 +6789,6 @@ class SmsAutoImportController {
     try {
       await AccountRecoveryOperationGate.process.run(() =>
           _handleAdmitted(namespace, sender, body, receivedAt));
-    } on AccountRecoveryBusy {
-      final location = _ref.read(appDatabaseProvider).valueOrNull?.filePath;
-      if (location != null) {
-        final spool = RecoveryDeferredSms.open(location);
-        try {
-          spool.enqueue(namespace, QueuedSms(sender: sender, body: body, receivedAt: receivedAt));
-        } finally {
-          spool.close();
-        }
-      }
     } catch (_) {
       // Android inbox reconciliation retries when storage is available.
     }

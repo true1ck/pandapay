@@ -1,3 +1,4 @@
+import 'dart:async';
 import 'dart:convert';
 
 import 'package:fake_async/fake_async.dart';
@@ -8,6 +9,7 @@ import 'package:http/testing.dart';
 import 'package:pandapay/app/providers.dart';
 import 'package:pandapay/data/auth_api.dart';
 import 'package:pandapay/data/token_store.dart';
+import 'package:flutter_secure_storage/flutter_secure_storage.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 
 /// Task 2: prove the session actually survives past auth/'s 15-minute access
@@ -23,16 +25,21 @@ import 'package:shared_preferences/shared_preferences.dart';
 /// but flaked under full-suite load (CPU contention shifts real-time
 /// scheduling enough to miss a tick window). FakeAsync's virtual clock
 /// removes wall-clock timing from the equation entirely.
+Future<void> _seedTokens(String access, String refresh) async {
+  SharedPreferences.setMockInitialValues({});
+  const secure = FlutterSecureStorage();
+  await secure.deleteAll();
+  await secure.write(key: 'pandapay_app.access_token', value: access);
+  await secure.write(key: 'pandapay_app.refresh_token', value: refresh);
+}
+
 void main() {
   TestWidgetsFlutterBinding.ensureInitialized();
 
   test(
     'lost response retries the persisted rotation identity after restart',
     () async {
-      SharedPreferences.setMockInitialValues({
-        'pandapay_app.access_token': 'access',
-        'pandapay_app.refresh_token': 'refresh',
-      });
+      await _seedTokens('access', 'refresh');
       final requests = <Map<String, dynamic>>[];
       final client = MockClient((request) async {
         requests.add(jsonDecode(request.body) as Map<String, dynamic>);
@@ -126,10 +133,7 @@ void main() {
   test(
     'requires sign-in when the server rejects the startup refresh token',
     () async {
-      SharedPreferences.setMockInitialValues({
-        'pandapay_app.access_token': 'stale-access',
-        'pandapay_app.refresh_token': 'revoked-refresh',
-      });
+      await _seedTokens('stale-access', 'revoked-refresh');
 
       final client = MockClient(
         (req) async =>
@@ -162,10 +166,7 @@ void main() {
   test(
     'does not replay a one-time refresh token after a server error',
     () async {
-      SharedPreferences.setMockInitialValues({
-        'pandapay_app.access_token': 'cached-access',
-        'pandapay_app.refresh_token': 'one-time-refresh',
-      });
+      await _seedTokens('cached-access', 'one-time-refresh');
       var calls = 0;
       final client = MockClient((request) async {
         calls++;
@@ -208,10 +209,7 @@ void main() {
           .replaceAll('=', '');
       final expiredAccess = '$header.$payload.signature';
 
-      SharedPreferences.setMockInitialValues({
-        'pandapay_app.access_token': expiredAccess,
-        'pandapay_app.refresh_token': 'still-recoverable-refresh',
-      });
+      await _seedTokens(expiredAccess, 'still-recoverable-refresh');
 
       final client = MockClient(
         (req) async =>
@@ -237,10 +235,7 @@ void main() {
   );
 
   test('does not log out for a refresh policy/step-up response', () async {
-    SharedPreferences.setMockInitialValues({
-      'pandapay_app.access_token': 'access',
-      'pandapay_app.refresh_token': 'refresh',
-    });
+    await _seedTokens('access', 'refresh');
 
     final client = MockClient(
       (req) async =>
@@ -266,10 +261,8 @@ void main() {
 
   test('rotates the access token on the interval, well inside the 15m TTL', () {
     fakeAsync((async) {
-      SharedPreferences.setMockInitialValues({
-        'pandapay_app.access_token': 'initial-access',
-        'pandapay_app.refresh_token': 'initial-refresh',
-      });
+      unawaited(_seedTokens('initial-access', 'initial-refresh'));
+      async.flushMicrotasks();
 
       var counter = 0;
       final client = MockClient((req) async {
@@ -323,10 +316,8 @@ void main() {
       // auth/ rotates the refresh token on every /auth/refresh and treats
       // reuse of a spent one as theft — revoking the whole device family.
       // Re-sending the original would log the user out on the second tick.
-      SharedPreferences.setMockInitialValues({
-        'pandapay_app.access_token': 'initial-access',
-        'pandapay_app.refresh_token': 'initial-refresh',
-      });
+      unawaited(_seedTokens('initial-access', 'initial-refresh'));
+      async.flushMicrotasks();
 
       final refreshTokensSeen = <String>[];
       var counter = 0;
@@ -380,10 +371,8 @@ void main() {
 
   test('clears a rejected refresh token and requires sign-in', () {
     fakeAsync((async) {
-      SharedPreferences.setMockInitialValues({
-        'pandapay_app.access_token': 'initial-access',
-        'pandapay_app.refresh_token': 'initial-refresh',
-      });
+      unawaited(_seedTokens('initial-access', 'initial-refresh'));
+      async.flushMicrotasks();
 
       final client = MockClient(
         (req) async =>
@@ -421,10 +410,8 @@ void main() {
 
   test('keeps the session when refresh has a temporary server failure', () {
     fakeAsync((async) {
-      SharedPreferences.setMockInitialValues({
-        'pandapay_app.access_token': 'initial-access',
-        'pandapay_app.refresh_token': 'initial-refresh',
-      });
+      unawaited(_seedTokens('initial-access', 'initial-refresh'));
+      async.flushMicrotasks();
 
       final client = MockClient(
         (req) async =>
@@ -460,10 +447,8 @@ void main() {
 
   test('does not refresh at all while signed out', () {
     fakeAsync((async) {
-      SharedPreferences.setMockInitialValues({
-        'pandapay_app.access_token': 'initial-access',
-        'pandapay_app.refresh_token': 'initial-refresh',
-      });
+      unawaited(_seedTokens('initial-access', 'initial-refresh'));
+      async.flushMicrotasks();
 
       final refreshTokensSeen = <String>[];
       final client = MockClient((req) async {

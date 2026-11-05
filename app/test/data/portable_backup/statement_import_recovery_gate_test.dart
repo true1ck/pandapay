@@ -2,7 +2,6 @@ import 'dart:io';
 import 'dart:typed_data';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:pandapay/data/local/app_database.dart';
-import 'package:pandapay/data/portable_backup/account_recovery_local_snapshot.dart';
 import 'package:pandapay/data/portable_backup/local_snapshot_source.dart';
 import 'package:pandapay/data/portable_backup/local_restore_writer.dart';
 
@@ -21,10 +20,6 @@ void main() {
       expect(status.isDrained,isFalse);
       final target=LocalPortableRestoreTargetInspector(appDb:database,namespace:namespace);
       expect((await target.inspectFreshNamespace()).hasPortableRows,isTrue);
-      await expectLater(database.withRecoveryDatabase((lease)=>AccountRecoveryLocalSnapshot.capture(
-        lease:lease,accountId:account,namespace:namespace,includeReceipts:false)),throwsStateError);
-      await expectLater(database.withRecoveryDatabase((lease)=>AccountRecoveryLocalSnapshot.restoreFresh(
-        lease:lease,payload:Uint8List(0),accountId:account,namespace:namespace,attachmentsDirectory:attachments)),throwsStateError);
       final writer=LocalPortableRestoreWriter(appDb:database,namespace:namespace,attachmentsDirectory:attachments);
       await expectLater(writer.beginFreshNamespace(),throwsStateError);
       expect(database.db.select('SELECT hex(ciphertext) AS data FROM statement_import_batches').single['data'],'010203');

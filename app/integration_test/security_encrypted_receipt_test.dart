@@ -5,7 +5,6 @@ import 'package:cryptography/cryptography.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:integration_test/integration_test.dart';
 import 'package:pandapay/data/portable_backup/private_temporary_workspace.dart';
-import 'package:pandapay/data/secure_storage/encrypted_database_copy.dart';
 import 'package:pandapay/data/secure_storage/encrypted_receipt_file.dart';
 
 void main() {
@@ -13,17 +12,14 @@ void main() {
   testWidgets(
     'native receipt copy authenticates account and keeps original through scoped viewing',
     (tester) async {
-      final owned = await AppPrivateDatabaseCopyDirectory.documents(
-        subdirectory:
-            'receipt-fixture-${DateTime.now().microsecondsSinceEpoch}',
-      );
-      final source = File('${owned.directory.path}/original.bin'),
-          encrypted = File('${owned.directory.path}/encrypted.pprc');
+      final owned = await Directory.systemTemp.createTemp('receipt-fixture-');
+      final source = File('${owned.path}/original.bin'),
+          encrypted = File('${owned.path}/encrypted.pprc');
       final bytes = List<int>.generate(1024, (i) => i % 256),
           key = SecretKey(
             List.generate(32, (_) => Random.secure().nextInt(256)),
           );
-      final workspace = await PrivateTemporaryWorkspace.create(owned.directory);
+      final workspace = await PrivateTemporaryWorkspace.create(owned);
       try {
         await source.writeAsBytes(bytes, flush: true);
         final store = EncryptedReceiptFileStore();
@@ -75,7 +71,7 @@ void main() {
         expect(viewed.readAsBytesSync(), bytes);
       } finally {
         expect(await workspace.cleanup(), true);
-        await owned.directory.delete(recursive: true);
+        await owned.delete(recursive: true);
       }
     },
   );

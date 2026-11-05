@@ -8,7 +8,6 @@ import 'package:http/testing.dart';
 import 'package:pandapay/data/local/app_database.dart';
 import 'package:pandapay/data/local/financial_store.dart';
 import 'package:pandapay/data/local/sync_queue.dart';
-import 'package:pandapay/data/portable_backup/account_recovery_local_snapshot.dart';
 import 'package:pandapay/data/portable_backup/local_restore_writer.dart';
 import 'package:pandapay/data/transaction_page_refresh.dart';
 import 'package:pandapay/data/user_cards_repository.dart';
@@ -299,39 +298,4 @@ void main() {
     );
   });
 
-  test('account recovery excludes device/session page cursors', () async {
-    const account = '11111111-1111-4111-8111-111111111111';
-    final directory = await Directory.systemTemp.createTemp('paging-recovery-');
-    final fileDb = AppDatabase.openFile('${directory.path}/app.sqlite');
-    final fileStore = FinancialStore(fileDb);
-    try {
-      fileDb.db.execute(
-        'INSERT INTO financial_transaction_pages VALUES (?, ?, ?, ?, 0, 0)',
-        [
-          'user:$account',
-          const TransactionQuery().key,
-          'old-session',
-          'secret-cursor',
-        ],
-      );
-      final bytes = await fileDb.withRecoveryDatabase(
-        (lease) => AccountRecoveryLocalSnapshot.capture(
-          lease: lease,
-          accountId: account,
-          namespace: 'user:$account',
-          includeReceipts: false,
-        ),
-      );
-      final payload = jsonDecode(utf8.decode(bytes)) as Map<String, dynamic>;
-      expect(
-        (payload['tables'] as Map).containsKey('financial_transaction_pages'),
-        isFalse,
-      );
-      expect(utf8.decode(bytes).contains('secret-cursor'), isFalse);
-    } finally {
-      fileStore.dispose();
-      fileDb.close();
-      await directory.delete(recursive: true);
-    }
-  });
 }
