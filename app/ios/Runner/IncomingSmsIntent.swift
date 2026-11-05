@@ -284,7 +284,7 @@ enum IncomingSmsBridge {
               if args["userInitiated"] as? Bool == true { SmsImportBackgroundHost.beginUserImport() }
               foregroundReturn = SmsShortcutForegroundReturn(request: request)
               // Shown on the Lock Screen and Dynamic Island while it imports.
-              if !SmsImportBackgroundHost.hasContinuedRuntime { SmsImportLiveActivityHost.start() }
+              if !SmsImportBackgroundHost.continuedTaskRunning { SmsImportLiveActivityHost.start() }
               UIApplication.shared.open(launch.url, options: [:]) { opened in
                 if !opened { pendingLaunch = nil; foregroundReturn = nil }
                 result(opened)

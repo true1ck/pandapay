@@ -18,6 +18,13 @@ enum SmsImportBackgroundHost {
   private static var submitted = false
   private static var continuedSubmitted = false
   static var hasContinuedRuntime: Bool { continuedSubmitted }
+  /// True only once iOS has actually started the continued-processing task
+  /// (and so shows its own progress). A submitted request that iOS never
+  /// starts must not hide the Lock Screen progress.
+  static var continuedTaskRunning: Bool {
+    if #available(iOS 26.0, *) { return task is BGContinuedProcessingTask }
+    return false
+  }
   private static var shortTask: UIBackgroundTaskIdentifier = .invalid
   private static var check: DispatchWorkItem?
   private static let worker = DispatchQueue(label: "app.pandapay.sms-background", qos: .utility)
