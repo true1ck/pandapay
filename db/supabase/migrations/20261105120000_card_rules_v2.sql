@@ -129,21 +129,34 @@ alter table milestone_rules
 -- Recreated with the v2 columns so two v2 rules/caps that differ only in v2
 -- fields do not collide. The new keys only widen identity, so existing rows
 -- cannot violate them. source_local_id is deliberately not part of identity.
+--
+-- A btree entry is limited to ~2.7 KB, and long conditions/notes/arrays blow
+-- it. Every potentially large column is therefore indexed through md5() (a
+-- fixed 32 chars). Equal values give equal hashes and NULL stays NULL (nulls
+-- not distinct still collides), so uniqueness semantics are unchanged apart
+-- from a negligible md5 collision chance. Array::text is STABLE, not
+-- IMMUTABLE, so arrays go through this wrapper (text/uuid arrays only).
+create or replace function pandapay.index_hash(anyarray) returns text
+language sql immutable parallel safe
+as $$ select pg_catalog.md5($1::pg_catalog.text) $$;
+
 drop index if exists uq_reward_rules_semantic_identity;
 create unique index uq_reward_rules_semantic_identity
   on reward_rules (
-    card_product_id, category_id, merchant_pattern, rail, unit, rate,
-    min_txn_inr, max_txn_inr, priority, conditions, notes,
-    effective_from, effective_to, excluded_categories,
-    rule_role, merchant_slugs, platform_slugs, mcc_include, mcc_exclude,
-    block_inr, min_engine_version, except_merchant_slugs, except_platform_slugs,
+    card_product_id, category_id, md5(merchant_pattern), rail, unit, rate,
+    min_txn_inr, max_txn_inr, priority, md5(conditions::text), md5(notes),
+    effective_from, effective_to, pandapay.index_hash(excluded_categories),
+    rule_role, pandapay.index_hash(merchant_slugs), pandapay.index_hash(platform_slugs),
+    pandapay.index_hash(mcc_include), pandapay.index_hash(mcc_exclude),
+    block_inr, min_engine_version,
+    pandapay.index_hash(except_merchant_slugs), pandapay.index_hash(except_platform_slugs),
     max_engine_version
   ) nulls not distinct;
 
 drop index if exists uq_cap_rules_semantic_identity;
 create unique index uq_cap_rules_semantic_identity
   on cap_rules (
-    card_product_id, reward_rule_id, category_id, benefit_kind, label, measure,
+    card_product_id, reward_rule_id, category_id, benefit_kind, md5(label), measure,
     period, cap_value, post_cap_unit, post_cap_rate, resets_on_day,
     cap_kind, cap_amount, scope, parent_cap_id, post_cap_behavior, anchor,
     min_engine_version
@@ -153,7 +166,7 @@ drop index if exists uq_cap_rules_label_identity_v1;
 create unique index uq_cap_rules_label_identity_v1
   on cap_rules (
     card_product_id, reward_rule_id, category_id, benefit_kind,
-    (pg_catalog.translate(pg_catalog.btrim(pg_catalog.regexp_replace(label, E'[\011-\015 ]+', ' ', 'g')), 'ABCDEFGHIJKLMNOPQRSTUVWXYZ', 'abcdefghijklmnopqrstuvwxyz')) collate "C",
+    (pg_catalog.md5(pg_catalog.translate(pg_catalog.btrim(pg_catalog.regexp_replace(label, E'[\011-\015 ]+', ' ', 'g')), 'ABCDEFGHIJKLMNOPQRSTUVWXYZ', 'abcdefghijklmnopqrstuvwxyz') collate "C")),
     measure, period, cap_value, post_cap_unit, post_cap_rate, resets_on_day,
     cap_kind, cap_amount, scope, parent_cap_id, post_cap_behavior, anchor,
     min_engine_version
@@ -162,9 +175,26 @@ create unique index uq_cap_rules_label_identity_v1
 drop index if exists uq_milestone_rules_semantic_identity;
 create unique index uq_milestone_rules_semantic_identity
   on milestone_rules (
-    card_product_id, label, period, threshold_spend_inr, reward_description,
+    card_product_id, md5(label), period, threshold_spend_inr, md5(reward_description),
     reward_value_inr, is_repeatable, max_repeats, anchor,
-    reward_points, reward_kind, window_days, excluded_category_ids
+    reward_points, reward_kind, window_days, pandapay.index_hash(excluded_category_ids)
+  ) nulls not distinct;
+
+-- card_benefits identity indexes carry conditions/description too; same fix.
+drop index if exists uq_card_benefits_semantic_identity;
+create unique index uq_card_benefits_semantic_identity
+  on card_benefits (
+    card_product_id, kind, md5(label), md5(description), quota_count, quota_period,
+    md5(network_program), value_estimate_inr, md5(conditions::text)
+  ) nulls not distinct;
+
+drop index if exists uq_card_benefits_label_identity_v1;
+create unique index uq_card_benefits_label_identity_v1
+  on card_benefits (
+    card_product_id, kind,
+    (pg_catalog.md5(pg_catalog.translate(pg_catalog.btrim(pg_catalog.regexp_replace(label, E'[\011-\015 ]+', ' ', 'g')), 'ABCDEFGHIJKLMNOPQRSTUVWXYZ', 'abcdefghijklmnopqrstuvwxyz') collate "C")),
+    md5(description), quota_count, quota_period, md5(network_program),
+    value_estimate_inr, md5(conditions::text)
   ) nulls not distinct;
 
 -- ── benefit_unlock_rules (spend-gated benefits as structured data) ───────────
