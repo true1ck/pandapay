@@ -29,6 +29,33 @@ List<String> categoryEditorIssues(String source) {
   }
 }
 
+/// Which shared bundle part an editor changes. Both go through the same draft,
+/// four-cohort golden check and publish steps.
+enum SharedPart { category, alias }
+
+/// What is wrong with a shop-name draft before it is sent, or an empty list.
+List<String> aliasEditorIssues(String source) {
+  try {
+    final rule = (jsonDecode(source) as Map).cast<String, dynamic>();
+    final alias = rule['alias'], key = rule['merchantKey'];
+    if (rule.keys.toSet().difference({'alias', 'merchantKey', 'kind'}).isNotEmpty ||
+        alias is! String ||
+        key is! String ||
+        rule['kind'] != 'learned') {
+      return ['A shop name has an alias, a merchantKey and kind "learned".'];
+    }
+    if (alias.trim().toUpperCase() == key.trim().toUpperCase()) {
+      return ['The alias must differ from the shop name it points to.'];
+    }
+    if (RegExp(r'\d{4,}').hasMatch(alias) || RegExp(r'\d{4,}').hasMatch(key)) {
+      return ['A name with a run of four or more digits is never shared.'];
+    }
+    return [];
+  } catch (_) {
+    return ['Enter a valid shop name JSON object.'];
+  }
+}
+
 class SmsCategoryEditor extends StatefulWidget {
   const SmsCategoryEditor({
     super.key,
@@ -37,7 +64,9 @@ class SmsCategoryEditor extends StatefulWidget {
     required this.initialRule,
     this.revision,
     this.runner,
+    this.part = SharedPart.category,
   });
+  final SharedPart part;
   final SmsV2AdminApi api;
   final String id;
   final Map<String, dynamic> initialRule;
@@ -79,25 +108,24 @@ class _SmsCategoryEditorState extends State<SmsCategoryEditor> {
   }
 
   Future<void> _save() => _act(() async {
-    final saved = await widget.api.saveCategory(
-      widget.id,
-      (jsonDecode(_json.text) as Map).cast<String, dynamic>(),
-    );
+    final body = (jsonDecode(_json.text) as Map).cast<String, dynamic>();
+    final saved = _alias
+        ? await widget.api.saveAlias(widget.id, body)
+        : await widget.api.saveCategory(widget.id, body);
     if (mounted) {
       setState(() {
         _revision = saved['revision'] as int;
         _reports = {};
-        _notice = 'Category draft revision $_revision saved.';
+        _notice = '$_noun draft revision $_revision saved.';
       });
     }
   });
   Future<void> _run() => _act(() async {
     setState(() => _reports = {});
     final candidates =
-        (await widget.api.categoryCandidates(
-              widget.id,
-              _revision!,
-            ))['candidates']
+        (await (_alias
+                ? widget.api.aliasCandidates(widget.id, _revision!)
+                : widget.api.categoryCandidates(widget.id, _revision!)))['candidates']
             as List;
     if (candidates.length != 4 ||
         !candidates.map((row) => row['cohort']).toSet().containsAll({
@@ -131,43 +159,50 @@ class _SmsCategoryEditorState extends State<SmsCategoryEditor> {
   Future<void> _publish() async {
     if (!await confirmAdminAction(
       context,
-      title: 'Publish this category rule to every cohort?',
+      title: 'Publish this ${_noun.toLowerCase()} to every cohort?',
       message:
-          'This updates shared category rules in testers, pct5, pct25 and all together. Reason: ${_reason.text.trim()}',
+          'This updates shared ${_alias ? 'shop names' : 'category rules'} in testers, pct5, pct25 and all together. Reason: ${_reason.text.trim()}',
     )) {
       return;
     }
     await _act(() async {
-      await widget.api.publishCategory(
-        widget.id,
-        _revision!,
-        _reason.text.trim(),
-        {for (final entry in _reports.entries) entry.key: entry.value.report},
-      );
+      final reports = {
+        for (final entry in _reports.entries) entry.key: entry.value.report,
+      };
+      await (_alias
+          ? widget.api.publishAlias(widget.id, _revision!, _reason.text.trim(), reports)
+          : widget.api.publishCategory(widget.id, _revision!, _reason.text.trim(), reports));
       if (mounted) {
         setState(() {
           _revision = null;
           _reports = {};
-          _notice = 'Category rule published to every cohort.';
+          _notice = '$_noun published to every cohort.';
         });
       }
     });
   }
 
+  bool get _alias => widget.part == SharedPart.alias;
+  String get _noun => _alias ? 'Shop name' : 'Category rule';
+
   @override
   Widget build(BuildContext context) {
-    final issues = categoryEditorIssues(_json.text),
+    final issues = _alias
+            ? aliasEditorIssues(_json.text)
+            : categoryEditorIssues(_json.text),
         passed =
             _reports.length == 4 &&
             _reports.values.every((report) => report.passed);
     return Scaffold(
-      appBar: AppBar(title: const Text('Review category rule')),
+      appBar: AppBar(title: Text(_alias ? 'Review shop name' : 'Review category rule')),
       body: ListView(
         key: const Key('category-editor-scroll'),
         padding: const EdgeInsets.all(24),
         children: [
-          const Text(
-            'Category rules are shared by every cohort. Saving a draft changes no live bundle. Publication requires passing golden reports for all four prospective bundles.',
+          Text(
+            _alias
+                ? 'Shop names are shared by every cohort. Saving a draft changes no live bundle. Publication requires passing golden reports for all four prospective bundles.'
+                : 'Category rules are shared by every cohort. Saving a draft changes no live bundle. Publication requires passing golden reports for all four prospective bundles.',
           ),
           Text('Draft ${widget.id} · revision ${_revision ?? 'unsaved'}'),
           if (_busy) const LinearProgressIndicator(),
@@ -184,8 +219,8 @@ class _SmsCategoryEditorState extends State<SmsCategoryEditor> {
             minLines: 10,
             maxLines: 18,
             style: const TextStyle(fontFamily: 'monospace', fontSize: 13),
-            decoration: const InputDecoration(
-              labelText: 'CategoryRule JSON',
+            decoration: InputDecoration(
+              labelText: _alias ? 'Shop name JSON' : 'CategoryRule JSON',
               border: OutlineInputBorder(),
             ),
             onChanged: (_) => setState(() {
@@ -200,7 +235,7 @@ class _SmsCategoryEditorState extends State<SmsCategoryEditor> {
               FilledButton(
                 key: const Key('save-category'),
                 onPressed: _busy || issues.isNotEmpty ? null : _save,
-                child: const Text('Save category draft'),
+                child: Text(_alias ? 'Save shop name draft' : 'Save category draft'),
               ),
               OutlinedButton(
                 key: const Key('run-category-golden'),
@@ -237,7 +272,7 @@ class _SmsCategoryEditorState extends State<SmsCategoryEditor> {
               onPressed: _busy || !passed || _reason.text.trim().isEmpty
                   ? null
                   : _publish,
-              child: const Text('Publish category to every cohort'),
+              child: Text(_alias ? 'Publish shop name to every cohort' : 'Publish category to every cohort'),
             ),
           ),
         ],

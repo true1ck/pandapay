@@ -107,6 +107,24 @@ class SmsV2AdminApi {
     body: {'revision': revision, 'reason': reason, 'goldenReports': reports},
   );
 
+  // ---- Shop names (merchant aliases, learning-loop A8).
+  Future<Map<String, dynamic>> saveAlias(String id, Map<String, dynamic> alias) =>
+      request('PUT', 'merchant-aliases/${Uri.encodeComponent(id)}/draft', body: alias);
+  Future<Map<String, dynamic>> aliasCandidates(String id, int revision) => request(
+    'GET',
+    'merchant-aliases/${Uri.encodeComponent(id)}/candidate?revision=$revision',
+  );
+  Future<Map<String, dynamic>> publishAlias(
+    String id,
+    int revision,
+    String reason,
+    Map<String, dynamic> reports,
+  ) => request(
+    'POST',
+    'merchant-aliases/${Uri.encodeComponent(id)}/publish',
+    body: {'revision': revision, 'reason': reason, 'goldenReports': reports},
+  );
+
   // ---- Learning page (learning-loop A7): counted, k-anonymous candidates.
   Future<Map<String, dynamic>> learningSummary({int days = 30}) =>
       request('GET', 'learning/summary?days=$days');

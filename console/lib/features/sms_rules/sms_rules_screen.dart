@@ -68,6 +68,17 @@ class SmsRulesScreen extends ConsumerWidget {
                     ),
                   ),
                 ),
+                onCreateName: (alias, name) => Navigator.of(context).push(
+                  MaterialPageRoute<void>(
+                    builder: (_) => SmsCategoryEditor(
+                      api: api,
+                      part: SharedPart.alias,
+                      id: learningDraftId(alias),
+                      initialRule: learnedAlias(alias, name),
+                      runner: runner,
+                    ),
+                  ),
+                ),
                 // The Corrections tab is the sixth: Learning, Rules, Templates,
                 // Categories, then Corrections.
                 onOpenCorrections: () => DefaultTabController.of(tabs).animateTo(4),

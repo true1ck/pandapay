@@ -107,6 +107,10 @@ add('GET', '/admin/sms/v2/learning/merchant-names', 'learning.read');
 add('GET', '/admin/sms/v2/learning/uncategorised', 'learning.read');
 add('POST', '/admin/sms/v2/learning/decisions', 'learning.publish', true);
 
+add('PUT', '/admin/sms/v2/merchant-aliases/:id/draft', 'learning.publish', true);
+add('GET', '/admin/sms/v2/merchant-aliases/:id/candidate', 'learning.read');
+add('POST', '/admin/sms/v2/merchant-aliases/:id/publish', 'learning.publish', true);
+
 const routeManifest = Object.freeze(definitions.map(([method, path, permission, freshMfa]) =>
   Object.freeze({ method, path, permission, freshMfa })
 ));

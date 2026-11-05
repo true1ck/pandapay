@@ -44,6 +44,14 @@ Map<String, dynamic> learnedCategoryRule(String merchantKey, String category) =>
   'source': 'shared',
 };
 
+/// The shop name the editor opens with: [alias] is what the SMS prints and
+/// [name] is what people say the shop is called.
+Map<String, dynamic> learnedAlias(String alias, String name) => {
+  'alias': alias,
+  'merchantKey': name,
+  'kind': 'learned',
+};
+
 /// "12 people chose Dining · 2 chose Groceries" from a split, leader first.
 String splitSentence(Map split, {required Object? leader}) {
   final entries = split.entries.toList()

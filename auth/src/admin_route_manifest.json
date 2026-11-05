@@ -730,5 +730,23 @@
     "path": "/admin/sms/v2/learning/decisions",
     "permission": "learning.publish",
     "freshMfa": true
+  },
+  {
+    "method": "PUT",
+    "path": "/admin/sms/v2/merchant-aliases/:id/draft",
+    "permission": "learning.publish",
+    "freshMfa": true
+  },
+  {
+    "method": "GET",
+    "path": "/admin/sms/v2/merchant-aliases/:id/candidate",
+    "permission": "learning.read",
+    "freshMfa": false
+  },
+  {
+    "method": "POST",
+    "path": "/admin/sms/v2/merchant-aliases/:id/publish",
+    "permission": "learning.publish",
+    "freshMfa": true
   }
 ]

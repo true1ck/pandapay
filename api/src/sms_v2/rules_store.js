@@ -67,17 +67,28 @@ class PgTx {
       );
     }
   }
-  async categoryDraft(id,revision) {
-    const result=await this.c.query('SELECT draft_id AS id,revision,status,body,created_by AS "createdBy",created_at AS "createdAt" FROM sms_v2_category_drafts WHERE draft_id=$1 AND ($2::int IS NULL OR revision=$2) ORDER BY revision DESC LIMIT 1',[id,revision ?? null]);
+  // Draft tables for the shared bundle parts: category rules and shop-name aliases.
+  async _draft(table,id,revision) {
+    const result=await this.c.query(`SELECT draft_id AS id,revision,status,body,created_by AS "createdBy",created_at AS "createdAt" FROM ${table} WHERE draft_id=$1 AND ($2::int IS NULL OR revision=$2) ORDER BY revision DESC LIMIT 1`,[id,revision ?? null]);
     return result.rows[0] || null;
   }
-  async previousPublishedCategoryDraft(id,revision) {
-    const result=await this.c.query("SELECT draft_id AS id,revision,body FROM sms_v2_category_drafts WHERE draft_id=$1 AND revision<$2 AND status='published' ORDER BY revision DESC LIMIT 1",[id,revision]);
+  async _previousPublished(table,id,revision) {
+    const result=await this.c.query(`SELECT draft_id AS id,revision,body FROM ${table} WHERE draft_id=$1 AND revision<$2 AND status='published' ORDER BY revision DESC LIMIT 1`,[id,revision]);
     return result.rows[0] || null;
   }
-  async listCategoryDrafts() { return (await this.c.query('SELECT DISTINCT ON (draft_id) draft_id AS id,revision,status,body,created_by AS "createdBy",created_at AS "createdAt" FROM sms_v2_category_drafts ORDER BY draft_id,revision DESC LIMIT 500')).rows; }
-  async insertCategoryDraft(row) { await this.c.query('INSERT INTO sms_v2_category_drafts(draft_id,revision,status,body,created_by,created_at) VALUES($1,$2,$3,$4,$5,$6)',[row.id,row.revision,row.status,JSON.stringify(row.body),row.createdBy,row.createdAt]); }
-  async publishCategoryDraft(id,revision) { await this.c.query("UPDATE sms_v2_category_drafts SET status='published' WHERE draft_id=$1 AND revision=$2",[id,revision]); }
+  async _listDrafts(table) { return (await this.c.query(`SELECT DISTINCT ON (draft_id) draft_id AS id,revision,status,body,created_by AS "createdBy",created_at AS "createdAt" FROM ${table} ORDER BY draft_id,revision DESC LIMIT 500`)).rows; }
+  async _insertDraft(table,row) { await this.c.query(`INSERT INTO ${table}(draft_id,revision,status,body,created_by,created_at) VALUES($1,$2,$3,$4,$5,$6)`,[row.id,row.revision,row.status,JSON.stringify(row.body),row.createdBy,row.createdAt]); }
+  async _publishDraft(table,id,revision) { await this.c.query(`UPDATE ${table} SET status='published' WHERE draft_id=$1 AND revision=$2`,[id,revision]); }
+  categoryDraft(id,revision) { return this._draft('sms_v2_category_drafts',id,revision); }
+  previousPublishedCategoryDraft(id,revision) { return this._previousPublished('sms_v2_category_drafts',id,revision); }
+  listCategoryDrafts() { return this._listDrafts('sms_v2_category_drafts'); }
+  insertCategoryDraft(row) { return this._insertDraft('sms_v2_category_drafts',row); }
+  publishCategoryDraft(id,revision) { return this._publishDraft('sms_v2_category_drafts',id,revision); }
+  aliasDraft(id,revision) { return this._draft('sms_v2_alias_drafts',id,revision); }
+  previousPublishedAliasDraft(id,revision) { return this._previousPublished('sms_v2_alias_drafts',id,revision); }
+  listAliasDrafts() { return this._listDrafts('sms_v2_alias_drafts'); }
+  insertAliasDraft(row) { return this._insertDraft('sms_v2_alias_drafts',row); }
+  publishAliasDraft(id,revision) { return this._publishDraft('sms_v2_alias_drafts',id,revision); }
   async maxBundleVersion() { return (await this.c.query('SELECT COALESCE(MAX(bundle_version), 0) AS v FROM sms_v2_bundles')).rows[0].v; }
   async latestBundle(cohort) {
     const r = await this.c.query("SELECT * FROM sms_v2_bundles WHERE cohort = $1 AND status = 'active' ORDER BY bundle_version DESC LIMIT 1", [cohort]);
@@ -153,7 +164,7 @@ function createPgStore({ withUserClient }) {
 
 class MemoryStore {
   constructor() {
-    this.state = { rules: [], cohorts: [], bundles: [], parts: {}, audit: [], testers: new Set(), profileStats: [], daily: [], categoryDrafts: [], settings: [] };
+    this.state = { rules: [], cohorts: [], bundles: [], parts: {}, audit: [], testers: new Set(), profileStats: [], daily: [], categoryDrafts: [], aliasDrafts: [], settings: [] };
     this.today = () => utcDay(new Date());
   }
   async tx(_userId, fn) {
@@ -168,6 +179,13 @@ class MemoryStore {
   view() {
     const st = () => this.state;
     const self = this;
+    const drafts = (name) => ({
+      latest(id,revision) { const rows=st()[name].filter(row=>row.id===id && (revision===undefined || row.revision===revision)).sort((a,b)=>b.revision-a.revision); return structuredClone(rows[0] || null); },
+      previousPublished(id,revision) { return structuredClone(st()[name].filter(row=>row.id===id&&row.revision<revision&&row.status==='published').sort((a,b)=>b.revision-a.revision)[0] || null); },
+      list() { return structuredClone(st()[name].filter(row=>!st()[name].some(other=>other.id===row.id && other.revision>row.revision))); },
+      insert(row) { st()[name].push(structuredClone(row)); },
+      publish(id,revision) { st()[name].find(row=>row.id===id && row.revision===revision).status='published'; },
+    });
     return {
       async lock() {},
       async allRules() { return structuredClone(st().rules); },
@@ -193,11 +211,16 @@ class MemoryStore {
       },
       async getParts() { return structuredClone(st().parts); },
       async setParts(parts) { Object.assign(st().parts, structuredClone(parts)); },
-      async categoryDraft(id,revision) { const rows=st().categoryDrafts.filter(row=>row.id===id && (revision===undefined || row.revision===revision)).sort((a,b)=>b.revision-a.revision); return structuredClone(rows[0] || null); },
-      async previousPublishedCategoryDraft(id,revision) { return structuredClone(st().categoryDrafts.filter(row=>row.id===id&&row.revision<revision&&row.status==='published').sort((a,b)=>b.revision-a.revision)[0] || null); },
-      async listCategoryDrafts() { return structuredClone(st().categoryDrafts.filter(row=>!st().categoryDrafts.some(other=>other.id===row.id && other.revision>row.revision))); },
-      async insertCategoryDraft(row) { st().categoryDrafts.push(structuredClone(row)); },
-      async publishCategoryDraft(id,revision) { st().categoryDrafts.find(row=>row.id===id && row.revision===revision).status='published'; },
+      async categoryDraft(id,revision) { return drafts('categoryDrafts').latest(id,revision); },
+      async previousPublishedCategoryDraft(id,revision) { return drafts('categoryDrafts').previousPublished(id,revision); },
+      async listCategoryDrafts() { return drafts('categoryDrafts').list(); },
+      async insertCategoryDraft(row) { drafts('categoryDrafts').insert(row); },
+      async publishCategoryDraft(id,revision) { drafts('categoryDrafts').publish(id,revision); },
+      async aliasDraft(id,revision) { return drafts('aliasDrafts').latest(id,revision); },
+      async previousPublishedAliasDraft(id,revision) { return drafts('aliasDrafts').previousPublished(id,revision); },
+      async listAliasDrafts() { return drafts('aliasDrafts').list(); },
+      async insertAliasDraft(row) { drafts('aliasDrafts').insert(row); },
+      async publishAliasDraft(id,revision) { drafts('aliasDrafts').publish(id,revision); },
       async maxBundleVersion() { return st().bundles.reduce((m, b) => Math.max(m, b.bundleVersion), 0); },
       async latestBundle(cohort) {
         const rows = st().bundles.filter((b) => b.cohort === cohort && b.status === 'active').sort((a, b) => b.bundleVersion - a.bundleVersion);
