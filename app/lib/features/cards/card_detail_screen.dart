@@ -13,6 +13,7 @@ import 'cap_progress.dart';
 import 'card_actions_screen.dart';
 import 'card_visual.dart';
 import 'widgets/cap_bar.dart';
+import 'widgets/model_status_label.dart';
 import '../insights/credit_utilization_ui.dart';
 import '../insights/spending_visuals.dart';
 import '../insights/spend_trends_screen.dart'
@@ -318,6 +319,16 @@ class CardDetailScreen extends ConsumerWidget {
                               ),
                             ],
                           ],
+                        ),
+                      ],
+                      // WP9: Partial / Basic cards say so (tap for why);
+                      // Verified cards and v1-feed cards show nothing.
+                      if (ModelStatusLabel.labelFor(product.modelStatus) !=
+                          null) ...[
+                        const SizedBox(height: AppSpace.sm),
+                        Align(
+                          alignment: Alignment.centerLeft,
+                          child: ModelStatusLabel(status: product.modelStatus),
                         ),
                       ],
                       const SizedBox(height: AppSpace.xs),
