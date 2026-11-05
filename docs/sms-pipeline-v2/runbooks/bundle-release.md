@@ -41,7 +41,7 @@ node api/scripts/release_sms_v2_bundle.js --apply --admin-id <admin_users.id>
 `--apply` first checks, before building anything, that the admin id is a UUID, the signing key loads and `ADMIN_API_DATABASE_URL` is set. Then it repeats the dry-run steps, and only if all pass it runs `import_sms_v2_rules.js`, which:
 
 1. stores every rule as version 1 on cohort `all` (rules already there are left alone) and the non-rule parts (senders, ignore, link and category rules, merchant aliases);
-2. signs with the key from the environment and mints a bundle for each cohort whose content changed: `all`, `pct25`, `pct5`, `testers` (the first import gives bundles 1 to 4 with the same content);
+2. signs with the key from the environment and mints a bundle for each cohort whose content changed: `all`, `pct25`, `pct5`, `testers` (the first import gives bundles 1 to 4 with the same content). The signed copy is stored with the bundle; the public API serves that copy and never signs;
 3. writes an audit row.
 
 The script then checks that all four cohorts were minted, or that nothing was new. Running it again with the same rules is safe and reports "nothing new to mint". The key is never printed, written to a file or put on a command line, and anything a child process echoes back is filtered.
@@ -49,6 +49,7 @@ The script then checks that all four cohorts were minted, or that nothing was ne
 ## 3. After the import
 
 - Rules page: one active bundle per cohort, all signed with the expected key id.
+- The hourly job `run_sms_v2_rule_jobs.js` is scheduled on the maintenance host (it also re-signs served bundles before their 7-day expiry; see `signing-keys.md`). Run it once by hand now, check its output, and check that `GET /sms/v2/rules` answers 200 for a tester.
 - `GET /admin/sms/v2/metrics`: `bundleChecks.active` lists the four bundles; `bundleChecks.checks` starts rising as phones check (about one check per phone every 6 hours).
 - On a tester phone, force a bundle check and confirm the version arrives and verifies (the phone ignores a bundle whose signature or key id it does not trust).
 - Then follow the release checklist: flag on for testers, then everyone.
@@ -62,7 +63,8 @@ The script then checks that all four cohorts were minted, or that nothing was ne
 | The whole bundle is bad | On the Rules page, republish the previous bundle (rollback). Do not delete rows. |
 | Import produced the wrong bundle versions | Do not re-import over it. Use the Rules page rollback, then correct `rules/sms/v2` and release again as a rule change. |
 | v2 ingestion should stop altogether | Turn `sms_pipeline_v2_enabled` off. Phones keep everything in their outbox. |
-| Signing key exposed | Key rotation in `signing-keys.md`. |
+| Signing key exposed | "Revoking a leaked rule key" in `signing-keys.md`: switch the maintenance environment to the spare key and run the hourly job once. |
+| `/sms/v2/rules` answers 503 `bundle_unavailable` | The served copy is missing or expired. Run `run_sms_v2_rule_jobs.js` on the maintenance host and fix whatever stopped the hourly job. |
 
 ## Legacy route cutoff (WP-17)
 

@@ -17,13 +17,13 @@ Severity: HIGH = an authenticated caller or a modified phone can cause material 
 | LO-06 | MEDIUM | M5 | Release APK allows cleartext to `localhost` and `10.0.2.2` | Fixed |
 | LO-07 | MEDIUM | M6 privacy | Consenting phones can store free text in `corrected` | Fixed |
 | LO-08 | MEDIUM | API4 | `rule-stats` accepts unbounded version strings, rule ids, rows, counters | Fixed |
-| LO-09 | MEDIUM | M10 keys | Rule signing key lives in the public API process and signs per request | Open |
-| LO-10 | MEDIUM | M3 / API2 | App Check tokens are bearer tokens not bound to account or device id; monitor mode admits unattested scripts | Open (by design for monitor) |
+| LO-09 | MEDIUM | M10 keys | Rule signing key lives in the public API process and signs per request | Fixed (Lane U) |
+| LO-10 | MEDIUM | M3 / API2 | App Check tokens are bearer tokens not bound to account or device id; monitor mode admits unattested scripts | Binding fixed; limited-use replay protection built, off by default; monitor admission unchanged (Lane U) |
 | LO-11 | MEDIUM | M9 | Raw SMS bodies and facts sit in plaintext SQLite in the backup-eligible iOS Documents directory | Open |
 | LO-12 | LOW | M5 | No certificate pinning | Open |
-| LO-13 | LOW | M10 | Leaked rule key can only be revoked by an app release | Open |
+| LO-13 | LOW | M10 | Leaked rule key can only be revoked by an app release | Mitigated: release-free runbook (Lane U); removal from the app still needs a release |
 | LO-14 | LOW | M4 | Signed-bundle patterns are not re-linted on the phone; stacked polynomial quantifiers and the lack of a match timeout remain | Open |
-| LO-15 | LOW | API2 | Debug App Check tokens are valid to the server if registered in the production Firebase project | Open (runbook) |
+| LO-15 | LOW | API2 | Debug App Check tokens are valid to the server if registered in the production Firebase project | Fixed best effort (Lane U); a separate Firebase project remains the dependable control |
 | LO-16 | INFO | API5 | Legacy version gate trusts the `X-App-Version` header | Accepted |
 | LO-17 | INFO | API4 | `legacy_entry_kind` recurses without a depth bound (own-data DoS only) | Accepted |
 
@@ -77,13 +77,13 @@ Evidence (before): the contract allows any `appVersion` string, any `ruleId`, an
 
 ## Open findings
 
-### LO-09 MEDIUM: signing key in the public API process
+### LO-09 MEDIUM: signing key in the public API process (fixed, Lane U)
 
-`bundleForServing` (`api/src/sms_v2/bundle_builder.js:173`) re-signs the stored bundle with a fresh expiry on each request, so `SMS_RULES_SIGNING_KEY` is loaded by the public-facing API (`index.js`, `rules_route.js`). Anyone who gets code execution in that process can mint bundles that every phone accepts. Recommended: pre-sign hourly in the admin/maintenance job (which already holds the key per the signing-keys runbook) and have the public route serve stored signed bytes. Not done here because it changes the rules serving path owned by another lane.
+Before: `bundleForServing` re-signed the stored bundle on each request, so `SMS_RULES_SIGNING_KEY` sat in the public API. Now minting stores the signed copy in `sms_v2_bundles.served_body` (migration `20261114100000`, read through `pandapay.sms_v2_latest_served_bundle`). The hourly job `run_sms_v2_rule_jobs.js` re-signs it before the 7-day expiry (default when less than 72 hours remain) and when the key id changes. `rules_route.js` and `index.js` no longer load a signer; the route serves the stored copy only if it is signed, matches the row's version and is unexpired, otherwise `503 bundle_unavailable` (fail closed, no re-signing, no older bundle). The public process logs an error at start-up in production if the key is in its environment. The job refuses to sign a body whose content hash differs from the mint-time hash. Tests: `api/test/sms_v2/lane_u_signing.test.js`. Runbooks: `signing-keys.md`, `bundle-release.md`.
 
-### LO-10 MEDIUM: attestation is transferable and optional in monitor mode
+### LO-10 MEDIUM: attestation is transferable and optional in monitor mode (binding fixed, Lane U)
 
-The verifier (`security.js` `createAppCheckVerifier`) checks signature, issuer, audience, expiry and app id, but an App Check token is not bound to the profile or the `X-Sms-Device-Id`, and replay protection (limited-use tokens) is not used. A token from any genuine install gives a script "verified" status for its lifetime. In `monitor` mode (`security.js:135`) a caller with no token is admitted at half limits. This matches the WP-13 design; the WP-17 decision to enforce should be paired with limited-use tokens on the high-value routes (`unknown-templates`, `corrections`, `rule-stats`). Verified-only gating of shared aggregates and AI drafting is correct and tested.
+Before: the verifier checked signature, issuer, audience, expiry and app id, but a token was not tied to a profile or `X-Sms-Device-Id`. Now the first (profile, installation digest) to present a token owns it (`sms_v2_attestation_bindings`, migration `20261114110000`, durable `db` mode in production, per-process `memory` elsewhere). Another profile or installation presenting it is unattested: half limits and no shared learning in monitor mode, `403` in enforce. The rate counters were already keyed by profile and installation digest, so the same pair now governs both the budget and the token. Limited-use replay protection (Firebase `verifyAppCheckToken`, `alreadyConsumed`) is implemented behind `SMS_V2_APPCHECK_REPLAY_PROTECTION=on`, default off, needs `google-auth-library` and credentials, and needs the app to send `getLimitedUseToken()` tokens (`DeviceAttestation.limitedUseHeaders()` is added; the sync client is not wired to it yet, so the switch stays off). Monitor mode still admits callers without a token at half limits, by design. The client-metrics receipt rows belong to another lane and were not touched. Tests: `api/test/sms_v2/lane_u_attestation.test.js`, `app/test/features/sms_v2/sync/attestation_test.dart`.
 
 ### LO-11 MEDIUM: plaintext SMS store on the phone
 
@@ -93,17 +93,17 @@ The verifier (`security.js` `createAppCheckVerifier`) checks signature, issuer, 
 
 Neither platform pins. Trust is the system store; the local rig CA is unreachable in release (see the proof below). Add a `<pin-set>` to the Android config and an iOS pin when the production domain is fixed.
 
-### LO-13 LOW: key revocation needs an app release
+### LO-13 LOW: key revocation needs an app release (mitigated, Lane U)
 
-`rule_keys.dart` is a compile-time map; a leaked private key keeps being trusted by installed apps until they update. The runbook covers rotation but not revocation. The phone never uses an expired or older bundle (`bundle_store.dart:28` rejects a lower version), which limits replay.
+`rule_keys.dart` is a compile-time map, so a leaked key stays trusted by installed apps until a release removes it. A release-free recovery now exists as a runbook (`runbooks/signing-keys.md`, "Revoking a leaked rule key without an app release"): ship a spare public key one release ahead, then switch the maintenance environment to the spare and run the hourly job once, which re-signs every served bundle. The leaked key remains usable only by someone who can deliver a forged bundle to a phone. A phone-side ratchet (refuse bundles signed by a lower-ranked key once a higher one was seen) would close that gap but needs new persisted state in the bundle store and a release, so it is a follow-up. The phone never uses an older bundle (`bundle_store.dart:28` rejects a lower version), which limits replay.
 
 ### LO-14 LOW: engine regex limits
 
 The engine enforces 2,000 characters through the bundle schema and the new alternation rule through the publish lint only. Stacked polynomial quantifiers such as `.*.*.*.*x` and the absence of any match timeout are not mitigated. Mitigation if needed: cap unbounded quantifiers per pattern in the lint, and truncate the matched body to a fixed length (SMS bodies are short).
 
-### LO-15 LOW: debug App Check provider
+### LO-15 LOW: debug App Check provider (fixed best effort, Lane U)
 
-`attestation.dart` selects the debug provider for debug and rig builds only, but a debug token registered in the production Firebase project is accepted by the server. Keep development registrations in a separate project (the runbook says "development installations only").
+`attestation.dart` selects the debug provider for debug and rig builds only. The server now rejects, when `NODE_ENV=production`, tokens carrying a provider claim that names a debug provider, or whose subject is listed in `SMS_V2_DEBUG_APP_IDS`, unless `SMS_V2_ALLOW_DEBUG_APP_CHECK=true`. Firebase documents no stable debug claim, so keep development registrations in a separate project or under dedicated app ids listed in `SMS_V2_DEBUG_APP_IDS`. Tests: `lane_u_attestation.test.js` (LO-15).
 
 ## Accepted and informational
 

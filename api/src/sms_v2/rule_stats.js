@@ -4,7 +4,7 @@
 // auto-pause decision.
 
 const { validateRequest } = require('./contracts');
-const { COHORT_RANK, mintBundles } = require('./bundle_builder');
+const { COHORT_RANK, mintBundles, refreshServedBundles } = require('./bundle_builder');
 const { utcDay } = require('./rules_store');
 
 const AUTO_PAUSE_MIN_HITS = 50;
@@ -92,7 +92,7 @@ async function pauseRuleVersion(s, { ruleId, version, reason, adminId, now }) {
 }
 
 // Hourly job body: roll up, evaluate, pause, re-mint. Returns what was paused.
-async function runRuleJobs({ store, signer, adminId, now = new Date() }) {
+async function runRuleJobs({ store, signer, adminId, now = new Date(), refreshBeforeMs }) {
   return store.tx(adminId, async (s) => {
     await s.lock();
     const rolled = await s.rollupRuleStats();
@@ -104,7 +104,9 @@ async function runRuleJobs({ store, signer, adminId, now = new Date() }) {
     }
     let minted = [];
     if (toPause.length) minted = await mintBundles(s, { signer, now, publishedBy: 'auto_pause' });
-    return { rolledUp: rolled, paused: toPause, minted: minted.map((m) => ({ bundleVersion: m.bundleVersion, cohort: m.cohort })) };
+    // The public API only serves pre-signed bundles, so this job also keeps their expiry fresh.
+    const refreshed = await refreshServedBundles(s, { signer, now, refreshBeforeMs });
+    return { rolledUp: rolled, paused: toPause, minted: minted.map((m) => ({ bundleVersion: m.bundleVersion, cohort: m.cohort })), refreshed };
   });
 }
 
