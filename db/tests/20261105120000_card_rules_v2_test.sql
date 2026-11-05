@@ -229,6 +229,27 @@ begin
   exception when check_violation then null; end;
   update card_products set accrual_rounding = 'floor' where id = v_card;
 
+  -- D11: cashback_rounding
+  update card_products set cashback_rounding = 'rupee_floor' where id = v_card;
+  update card_products set cashback_rounding = 'rupee_half_up' where id = v_card;
+  update card_products set cashback_rounding = 'paise' where id = v_card;
+  begin
+    update card_products set cashback_rounding = 'ceil' where id = v_card;
+    raise exception 'cashback_rounding check too loose';
+  exception when check_violation then null; end;
+  update card_products set cashback_rounding = 'rupee_floor' where id = v_card;
+  select to_jsonb(x) into v2 from v_card_catalogue_export_v2 x where x.id = v_card;
+  select to_jsonb(x) into v1 from v_card_catalogue_export x where x.id = v_card;
+  if v2->>'cashback_rounding' is distinct from 'rupee_floor' then
+    raise exception 'v2 view must return cashback_rounding';
+  end if;
+  if v1 ? 'cashback_rounding' then
+    raise exception 'v1 view must not return cashback_rounding';
+  end if;
+  if (select cashback_rounding from v_admin_card_catalogue_export where id = v_card) is distinct from 'rupee_floor' then
+    raise exception 'admin view must return cashback_rounding';
+  end if;
+
   -- D2: v1 view hides engine-1 caps tied to a hidden rule
   insert into cap_rules (card_product_id, reward_rule_id, label, measure, period, cap_value)
     values (v_card, v_rule2, 'cap on hidden rule', 'spend_amount', 'calendar_month', 500)
