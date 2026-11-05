@@ -42,7 +42,22 @@
  *
  * --force allows re-importing over a card already in `in_review` or
  * `published` (see WHY in upsertCardProduct below). Without it those
- * cards are left alone and reported as skipped.
+ * cards are left alone and reported as skipped; the end-of-run report says
+ * how many published cards were skipped and so stay v1-shaped.
+ *
+ * FORCED IMPORT OVER PUBLISHED CARDS (plan D33a) is the production path for
+ * shipping new mapping rules. A forced refresh deletes and re-inserts the
+ * card's rules in place inside one transaction and KEEPS THE CARD'S STATUS:
+ * a published card stays published, it is never demoted to draft (RLS would
+ * hide a draft from the v1 feed and from wallets). Each forced refresh of a
+ * published or in-review card writes one admin_audit_log row
+ * (action 'card_import_force_refresh': card id, status, previous and new
+ * data_version and transform version, admin id; no card content). The
+ * delete cascades away the cards' cap_states, milestone_states and
+ * fee_waiver_states, so RUN `node api/scripts/recompute_card_state.js
+ * --apply` STRAIGHT AFTER a forced import (without --apply it only prints
+ * diffs); until then that progress is missing. --dry-run
+ * rolls the audit rows back with everything else.
  *
  * --transform-only runs the catalogue v2 transform (catalogue_v2/, plan C7)
  * over every `done` CardPipeline checklist row (or over --input) with NO
@@ -75,7 +90,8 @@
  * as the data — so nothing loses the audit trail just because the transport
  * is direct-to-Postgres instead of HTTP.
  *
- * Every card lands as status='draft', full stop. This script never sets
+ * Every NEW card lands as status='draft', full stop; a forced refresh keeps
+ * an existing card's status (above). This script never sets
  * status='published' or touches verified_at/verified_by — the only way a
  * card reaches 'published' is a human going through
  * POST /admin/cards/:id/status (or the console's equivalent button),
@@ -1066,7 +1082,7 @@ async function upsertCardProduct(
   overridesFingerprint = null
 ) {
   const existing = await client.query(
-    `SELECT id, status, import_source_hash, import_transform_version${overridesFingerprint ? ",\n            model_coverage->'overrides_applied' AS overrides_applied" : ''}
+    `SELECT id, status, import_source_hash, import_transform_version, data_version${overridesFingerprint ? ",\n            model_coverage->'overrides_applied' AS overrides_applied" : ''}
        FROM card_products WHERE slug = $1`,
     [cp.slug]
   );
@@ -1208,7 +1224,13 @@ async function upsertCardProduct(
   ]) {
     await client.query(`DELETE FROM ${table} WHERE card_product_id = $1`, [row.id]);
   }
-  return { cardProductId: row.id, action: row.status === 'draft' ? 'refreshed' : 'refreshed_forced', existingStatus: row.status };
+  return {
+    cardProductId: row.id,
+    action: row.status === 'draft' ? 'refreshed' : 'refreshed_forced',
+    existingStatus: row.status,
+    previousDataVersion: row.data_version == null ? null : Number(row.data_version), // bigint arrives as text
+    previousTransformVersion: row.import_transform_version ?? null,
+  };
 }
 
 /// The unit+rate a source rule projects onto. Shared by the collision pre-pass
@@ -2015,7 +2037,7 @@ async function importOneCard(client, adminId, record, indexEntry, force, report,
   // to them alone is detected separately from the stored coverage.
   const overridesFingerprint = sourceHash(transformed.card.model_coverage.overrides_applied);
 
-  const { cardProductId, action, existingStatus, sourceChanged, transformChanged } =
+  const { cardProductId, action, existingStatus, sourceChanged, transformChanged, previousDataVersion, previousTransformVersion } =
     await upsertCardProduct(
       client,
       issuerId,
@@ -2037,6 +2059,7 @@ async function importOneCard(client, adminId, record, indexEntry, force, report,
   if (action === 'skipped_reviewed') {
     report.skipped.push({
       slug: cp.slug,
+      status: existingStatus,
       reason: sourceChanged
         ? `source changed but card is already ${existingStatus}; review and use --force to override`
         : transformChanged
@@ -2060,18 +2083,72 @@ async function importOneCard(client, adminId, record, indexEntry, force, report,
     legacy: legacyAcceleratorStats(record),
   });
 
-  await client.query(
-    `INSERT INTO admin_audit_log (admin_id, action, entity, entity_id, reason)
-     VALUES ($1, $2, 'card_products', $3, $4)`,
-    [
-      adminId,
-      action === 'created' ? 'import_card_product' : 'import_refresh_card_product',
-      cardProductId,
-      `CardPipeline import: ${cp.slug}${indexEntry ? ` (checklist id: ${indexEntry.id}, run: ${indexEntry.runId || 'unknown'})` : ''}; source sha256 ${hash}; transform ${IMPORT_TRANSFORM_VERSION}`,
-    ]
-  );
+  if (action === 'refreshed_forced') {
+    // D33a: a forced refresh of a published (or in-review) card rewrites
+    // its rules in place and the card stays published. One audit row per
+    // card, carrying only ids, status and versions (no card content).
+    const after = await client.query('SELECT data_version FROM card_products WHERE id = $1', [cardProductId]);
+    await client.query(
+      `INSERT INTO admin_audit_log (admin_id, action, entity, entity_id, before_value, after_value, reason)
+       VALUES ($1, $2, 'card_products', $3, $4, $5, $6)`,
+      [
+        adminId,
+        'card_import_force_refresh',
+        cardProductId,
+        JSON.stringify({ status: existingStatus, data_version: previousDataVersion, transform_version: previousTransformVersion }),
+        JSON.stringify({
+          status: existingStatus,
+          data_version: after.rows[0]?.data_version == null ? null : Number(after.rows[0].data_version),
+          transform_version: IMPORT_TRANSFORM_VERSION,
+        }),
+        `Forced CardPipeline re-import of ${existingStatus} card ${cp.slug}; rules rewritten in place, status kept; ` +
+          `source sha256 ${hash}; run recompute_card_state.js next`,
+      ]
+    );
+    report.forcedRefreshes.push({ slug: cp.slug, cardProductId, status: existingStatus });
+  } else {
+    await client.query(
+      `INSERT INTO admin_audit_log (admin_id, action, entity, entity_id, reason)
+       VALUES ($1, $2, 'card_products', $3, $4)`,
+      [
+        adminId,
+        action === 'created' ? 'import_card_product' : 'import_refresh_card_product',
+        cardProductId,
+        `CardPipeline import: ${cp.slug}${indexEntry ? ` (checklist id: ${indexEntry.id}, run: ${indexEntry.runId || 'unknown'})` : ''}; source sha256 ${hash}; transform ${IMPORT_TRANSFORM_VERSION}`,
+      ]
+    );
+  }
 
   (action === 'created' ? report.created : report.updated).push({ slug: cp.slug, name: cp.name, cardProductId });
+}
+
+// One card in its own transaction. With dryRun the transaction (data and
+// audit rows alike) is always rolled back; the report still records what
+// would have happened.
+async function importCardInTransaction(pool, adminId, record, indexEntry, force, report, v2Context, dryRun) {
+  try {
+    await withAdminClient(pool, adminId, async (client) => {
+      await importOneCard(client, adminId, record, indexEntry, force, report, v2Context);
+      if (dryRun) throw new Error('__DRY_RUN_ROLLBACK__');
+    });
+  } catch (err) {
+    if (err.message !== '__DRY_RUN_ROLLBACK__') throw err;
+  }
+}
+
+// D33a: the end-of-run lines about published cards. A forced refresh keeps
+// them published and cascades away their cap / milestone / fee-waiver
+// progress rows, which recompute_card_state.js rebuilds.
+function publishedRefreshLines(report) {
+  const refreshed = report.forcedRefreshes.filter((r) => r.status === 'published').length;
+  const inReview = report.forcedRefreshes.filter((r) => r.status === 'in_review').length;
+  const skipped = report.skipped.filter((r) => r.status === 'published').length;
+  const lines = [
+    `published cards refreshed in place: ${refreshed} (cap, milestone and fee-waiver progress rows for these cards are removed until recompute_card_state.js runs)`,
+    `published cards skipped (stay v1-shaped): ${skipped} — re-run with --force to apply Phase 1 rules`,
+  ];
+  if (inReview) lines.push(`in-review cards refreshed in place: ${inReview}`);
+  return lines;
 }
 
 // ───────────────────────────────────────────────────────────────────────
@@ -2080,7 +2157,7 @@ async function importOneCard(client, adminId, record, indexEntry, force, report,
 function newReport() {
   return {
     transformVersion: IMPORT_TRANSFORM_VERSION,
-    created: [], updated: [], unchanged: [], skipped: [], skippedGarbage: [], failed: [],
+    created: [], updated: [], unchanged: [], skipped: [], skippedGarbage: [], failed: [], forcedRefreshes: [],
     issuersCreated: [], issuerResolutions: [],
     unmappedCategories: {}, skippedCategories: [], unmappedPeriods: {}, unmappedRails: {},
     unusualBlockSizes: {}, aggregateScopeCaps: [], unenforcedCaps: [],
@@ -2376,15 +2453,11 @@ async function main() {
       seenImportSlugs.add(slug);
 
       try {
-        await withAdminClient(pool, args.adminId, async (client) => {
-          await importOneCard(client, args.adminId, record, indexEntry, args.force, report, v2Context);
-          if (args.dryRun) throw new Error('__DRY_RUN_ROLLBACK__');
-        });
-      } catch (err) {
         // Report entries (report.created/updated/etc.) are pushed by
-        // importOneCard BEFORE this throw fires, so dry-run still shows what
-        // WOULD have happened even though the transaction below rolls back.
-        if (err.message === '__DRY_RUN_ROLLBACK__') continue;
+        // importOneCard before a dry-run rolls back, so dry-run still shows
+        // what WOULD have happened.
+        await importCardInTransaction(pool, args.adminId, record, indexEntry, args.force, report, v2Context, args.dryRun);
+      } catch (err) {
         hadDatabaseFailure = true;
         report.failed.push({ slug, reason: `DB error: ${err.message}` });
       }
@@ -2404,6 +2477,7 @@ async function main() {
     console.log(`skipped (garbage/invalid): ${report.skippedGarbage.length}`);
     console.log(`failed (database):  ${report.failed.length}`);
     console.log(`issuers created:    ${report.issuersCreated.length}`);
+    for (const line of publishedRefreshLines(report)) console.log(line);
     if (Object.keys(report.unmappedCategories).length) {
       console.log('unmapped categories:', report.unmappedCategories);
     }
@@ -2495,7 +2569,10 @@ module.exports = {
   importNetworkVariants,
   importRewardRules,
   importOneCard,
+  importCardInTransaction,
   mapCategory,
+  newReport,
+  publishedRefreshLines,
   parseArgs,
   pointsUnitAndRate,
   rewardRuleHasUnsupportedTrigger,
