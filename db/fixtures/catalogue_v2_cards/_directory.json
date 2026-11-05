@@ -1,6 +1,6 @@
 {
   "generated_by": "api/scripts/catalogue_v2/snapshot_examples.js",
-  "directory_sha256": "c2fded34df886aef08595eebb7629a4dd140c98af750f3c891d6c291b4874b53",
+  "directory_sha256": "3d9f9f535481544d4b19262838290f77d8270eb3b4aec73c48608f10c39cedf2",
   "merchants": [
     {
       "slug": "swiggy",
@@ -379,8 +379,10 @@
         "goindigo"
       ],
       "vpa_prefixes": [],
-      "mcc": [],
-      "notes": "Bare \"indigo\" is not an alias (collides with Indigo Paints/Hotel); only qualified names."
+      "mcc": [
+        "4511"
+      ],
+      "notes": "Bare \"indigo\" is not an alias (collides with Indigo Paints/Hotel); only qualified names. MCC 4511 (airlines) added by WP7 so MCC-scoped carve-outs no longer hide IndiGo flight rules from v1."
     },
     {
       "slug": "air_india",
@@ -934,8 +936,26 @@
         "flipkart india wholesale"
       ],
       "vpa_prefixes": [],
+      "mcc": [
+        "5311",
+        "5411"
+      ],
+      "notes": "B2B; co-brand card is business-only. MCCs 5311/5411 added by WP7 (card terms name these wholesale merchants under departmental/grocery MCCs) so a filled-in MCC lets wholesale carve-outs apply.",
+      "group": "flipkart"
+    },
+    {
+      "slug": "flipkart_health",
+      "name": "Flipkart Health+",
+      "parent_slug": null,
+      "category_slug": "health",
+      "aliases": [
+        "flipkart health",
+        "flipkart health plus",
+        "flipkart healthplus"
+      ],
+      "vpa_prefixes": [],
       "mcc": [],
-      "notes": "B2B; co-brand card is business-only.",
+      "notes": "Separate brand from Flipkart for card terms (e.g. Flipkart Axis 5% excludes Flipkart Health); no parent_slug per D6. Added by WP7.",
       "group": "flipkart"
     },
     {
@@ -949,8 +969,11 @@
         "walmart india"
       ],
       "vpa_prefixes": [],
-      "mcc": [],
-      "notes": "Walmart HDFC card; \"best price\" alone not aliased."
+      "mcc": [
+        "5311",
+        "5411"
+      ],
+      "notes": "Walmart HDFC card; \"best price\" alone not aliased. MCCs 5311/5411 added by WP7 (card terms name these wholesale merchants under departmental/grocery MCCs) so a filled-in MCC lets wholesale carve-outs apply."
     },
     {
       "slug": "metro_cash_carry",
@@ -964,8 +987,11 @@
         "metro cash n carry"
       ],
       "vpa_prefixes": [],
-      "mcc": [],
-      "notes": ""
+      "mcc": [
+        "5311",
+        "5411"
+      ],
+      "notes": "MCCs 5311/5411 added by WP7 (card terms name these wholesale merchants under departmental/grocery MCCs) so a filled-in MCC lets wholesale carve-outs apply."
     },
     {
       "slug": "reliance_retail",

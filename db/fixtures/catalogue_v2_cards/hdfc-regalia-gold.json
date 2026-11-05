@@ -4,8 +4,8 @@
   "inputs": {
     "transform_version": "7",
     "source_record_sha256": "43666c620871e3bde0c0bcd3e6ae8d46ac8b81bce1c94543f621143f35fb842e",
-    "override_sha256": null,
-    "directory_sha256": "c2fded34df886aef08595eebb7629a4dd140c98af750f3c891d6c291b4874b53",
+    "override_sha256": "0397635714c64d227f068101841cf5aa64f48a21ca51ba272fd4ef20b77599fd",
+    "directory_sha256": "3d9f9f535481544d4b19262838290f77d8270eb3b4aec73c48608f10c39cedf2",
     "verified": false
   },
   "blocking_flags": [
@@ -28,16 +28,11 @@
     "model_status": "partial",
     "model_coverage": {
       "rules_total": 9,
-      "rules_modelled": 7,
-      "rules_info": 2,
+      "rules_modelled": 8,
+      "rules_info": 1,
       "caps_total": 6,
-      "caps_enforced": 5,
+      "caps_enforced": 6,
       "flags": [
-        {
-          "code": "info_rule",
-          "source_local_id": "select_brand_5x",
-          "detail": "condition:payment_requirement"
-        },
         {
           "code": "exclusion_scope_broadened",
           "source_local_id": "education_third_party_exclusion",
@@ -49,17 +44,37 @@
           "detail": "condition:channel_type"
         },
         {
-          "code": "cap_targets_info_only",
-          "source_local_id": "select_brand_5x_monthly_bonus",
-          "detail": null
-        },
-        {
           "code": "broad_category",
           "source_local_id": "telecom_reward_points_monthly",
           "detail": null
         }
       ],
-      "overrides_applied": []
+      "overrides_applied": [
+        {
+          "path": "reward_rules[id=select_brand_5x].conditions.payment_requirement",
+          "op": "remove",
+          "value_sha256": "74234e98afe7498f",
+          "reason": "WP7: T&C: \"payment must be done directly using HDFC Bank Regalia Gold Credit Card\"; a wallet payment reaches the card as a wallet load (excluded), never as the brand, so the merchant list already enforces it. Removing it lets the 5X rule load (was info).",
+          "source_url": "https://www.hdfc.bank.in/content/dam/hdfcbankpws/in/en/personal-banking/discover-products/cards/credit-cards/regalia-gold-credit-card/pdfs/regalia-gold-credit-card-reward-points-t-and-cs.pdf",
+          "checked_on": "2026-11-05"
+        },
+        {
+          "path": "reward_rules[id=select_brand_5x].action.points_per_block",
+          "op": "set",
+          "value_sha256": "b7a56873cd771f2c",
+          "reason": "WP7: The loader reads points_per_block as the full rule rate. T&C: 5X on the four brands with \"Base reward points ... continue as is\"; 5X of the 5 RP/Rs200 base is 25 RP/Rs200 (100 base + 400 incremental on Rs4,000 in the worked example).",
+          "source_url": "https://www.hdfc.bank.in/content/dam/hdfcbankpws/in/en/personal-banking/discover-products/cards/credit-cards/regalia-gold-credit-card/pdfs/regalia-gold-credit-card-reward-points-t-and-cs.pdf",
+          "checked_on": "2026-11-05"
+        },
+        {
+          "path": "reward_rules[id=select_brand_5x].conditions.minimum_transaction_inr",
+          "op": "set",
+          "value_sha256": "27badc983df1780b",
+          "reason": "WP7: T&C: \"Minimum transaction value to be eligible for offer or reward points is Rs. 200.\"",
+          "source_url": "https://www.hdfc.bank.in/content/dam/hdfcbankpws/in/en/personal-banking/discover-products/cards/credit-cards/regalia-gold-credit-card/pdfs/regalia-gold-credit-card-reward-points-t-and-cs.pdf",
+          "checked_on": "2026-11-05"
+        }
+      ]
     },
     "reward_rules": [
       {
@@ -103,23 +118,21 @@
         "merchant_pattern": null,
         "rail": null,
         "unit": "points_per_200",
-        "rate": 20,
-        "min_txn_inr": 150,
+        "rate": 25,
+        "min_txn_inr": 200,
         "max_txn_inr": null,
         "priority": 20,
         "conditions": {
           "source_local_id": "select_brand_5x",
           "part": null,
-          "info_reasons": [
-            "condition:payment_requirement"
-          ],
+          "info_reasons": [],
           "flags": []
         },
         "notes": null,
         "effective_from": "2026-05-15",
         "effective_to": null,
         "excluded_categories": [],
-        "rule_role": "info",
+        "rule_role": "earn",
         "merchant_slugs": [
           "marks_spencer",
           "myntra",

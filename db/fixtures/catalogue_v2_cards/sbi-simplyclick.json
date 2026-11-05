@@ -4,8 +4,8 @@
   "inputs": {
     "transform_version": "7",
     "source_record_sha256": "cc3062a39eabf90bb0a381daf5ac98cf272928d0ff30320e17bf4d0ea1d3fc52",
-    "override_sha256": null,
-    "directory_sha256": "c2fded34df886aef08595eebb7629a4dd140c98af750f3c891d6c291b4874b53",
+    "override_sha256": "6af5b90fc8e4525ca31ad585e1759d6e4dcb0236da962be3ab61ccdafe1e7c81",
+    "directory_sha256": "3d9f9f535481544d4b19262838290f77d8270eb3b4aec73c48608f10c39cedf2",
     "verified": false
   },
   "blocking_flags": [
@@ -29,16 +29,11 @@
     "model_status": "partial",
     "model_coverage": {
       "rules_total": 15,
-      "rules_modelled": 9,
-      "rules_info": 6,
-      "caps_total": 2,
+      "rules_modelled": 11,
+      "rules_info": 4,
+      "caps_total": 1,
       "caps_enforced": 1,
       "flags": [
-        {
-          "code": "info_rule",
-          "source_local_id": "online_5x",
-          "detail": "condition:online_flag"
-        },
         {
           "code": "info_rule",
           "source_local_id": "exclusive_partner_10x",
@@ -90,9 +85,9 @@
           "detail": null
         },
         {
-          "code": "info_rule",
+          "code": "mcc_scoped_exclusion",
           "source_local_id": "offline_fuel_exclusion",
-          "detail": "inexact_rail_on_exclusion"
+          "detail": null
         },
         {
           "code": "info_rule",
@@ -120,22 +115,61 @@
           "detail": null
         },
         {
-          "code": "post_limit_conflict",
-          "source_local_id": "cap_exclusive_10x_monthly",
-          "detail": null
-        },
-        {
-          "code": "cap_targets_info_only",
-          "source_local_id": "cap_exclusive_10x_monthly",
-          "detail": null
-        },
-        {
           "code": "hidden_from_v1_uncapped",
           "source_local_id": null,
-          "detail": "swiggy_5x"
+          "detail": "online_5x, swiggy_5x"
         }
       ],
-      "overrides_applied": []
+      "overrides_applied": [
+        {
+          "path": "reward_rules[id=online_5x].conditions.online_flag",
+          "op": "remove",
+          "value_sha256": "74234e98afe7498f",
+          "reason": "WP7: Restates rail online.",
+          "source_url": "https://www.sbicard.com/sbi-card-en/assets/docs/pdf/SimplyClick-TnC.pdf",
+          "checked_on": "2026-11-05"
+        },
+        {
+          "path": "reward_rules[id=online_5x].conditions.exclusive_partner",
+          "op": "remove",
+          "value_sha256": "74234e98afe7498f",
+          "reason": "WP7: Exclusive partners have their own higher-priority 10X rule; the negated flag made the 5X rule info.",
+          "source_url": "https://www.sbicard.com/sbi-card-en/assets/docs/pdf/SimplyClick-TnC.pdf",
+          "checked_on": "2026-11-05"
+        },
+        {
+          "path": "reward_rules[id=offline_fuel_exclusion].channel_type",
+          "op": "set",
+          "value_sha256": "5cf7504d9781301d",
+          "reason": "WP7: Same as the rail change below: \"offline\" is not an exact rail, so the fuel-MCC exclusion applies on every rail (conservative).",
+          "source_url": "https://www.sbicard.com/sbi-card-en/assets/docs/pdf/SimplyClick-TnC.pdf",
+          "checked_on": "2026-11-05"
+        },
+        {
+          "path": "reward_rules[id=offline_fuel_exclusion].rail",
+          "op": "set",
+          "value_sha256": "251ecb599a3f3a2f",
+          "reason": "WP7: T&C 11.1(f): offline fuel (5172, 5541, 5983, 5542) is not in the program. The swipe-only rail was inexact (rule was info); excluding these MCCs on every rail is the conservative reading.",
+          "source_url": "https://www.sbicard.com/sbi-card-en/assets/docs/pdf/SimplyClick-TnC.pdf",
+          "checked_on": "2026-11-05"
+        },
+        {
+          "path": "cap_rules[id=cap_exclusive_10x_monthly]",
+          "op": "remove",
+          "value_sha256": "74234e98afe7498f",
+          "reason": "WP7: T&C 11.1(h) caps only the 5X tier at 10,000 RP per month; no cap is stated for 10X (research note).",
+          "source_url": "https://www.sbicard.com/sbi-card-en/assets/docs/pdf/SimplyClick-TnC.pdf",
+          "checked_on": "2026-11-05"
+        },
+        {
+          "path": "reward_rules[id=exclusive_partner_10x].action.cap_reference",
+          "op": "set",
+          "value_sha256": "74234e98afe7498f",
+          "reason": "WP7: Its cap is removed (no 10X cap in the T&C).",
+          "source_url": "https://www.sbicard.com/sbi-card-en/assets/docs/pdf/SimplyClick-TnC.pdf",
+          "checked_on": "2026-11-05"
+        }
+      ]
     },
     "reward_rules": [
       {
@@ -186,16 +220,16 @@
         "conditions": {
           "source_local_id": "online_5x",
           "part": null,
-          "info_reasons": [
-            "condition:online_flag"
-          ],
-          "flags": []
+          "info_reasons": [],
+          "flags": [
+            "hidden_from_v1_uncapped"
+          ]
         },
         "notes": null,
         "effective_from": "2020-10-01",
         "effective_to": null,
         "excluded_categories": [],
-        "rule_role": "info",
+        "rule_role": "earn",
         "merchant_slugs": [],
         "platform_slugs": [],
         "mcc_include": [],
@@ -591,11 +625,11 @@
         "display_note": "Reward Points on Merchant EMI transactions are reversed."
       },
       {
-        "id": "sbi-simplyclick:rule:offline_fuel_exclusion",
+        "id": "sbi-simplyclick:rule:offline_fuel_exclusion#1",
         "category_id": "cat-fuel",
         "category_slug": "fuel",
         "merchant_pattern": null,
-        "rail": "swipe",
+        "rail": null,
         "unit": "points_per_100",
         "rate": 0,
         "min_txn_inr": null,
@@ -603,17 +637,94 @@
         "priority": 1,
         "conditions": {
           "source_local_id": "offline_fuel_exclusion",
-          "part": null,
-          "info_reasons": [
-            "inexact_rail_on_exclusion"
-          ],
-          "flags": []
+          "part": 1,
+          "info_reasons": [],
+          "flags": [
+            "mcc_scoped_exclusion"
+          ]
         },
         "notes": null,
         "effective_from": "2015-09-15",
         "effective_to": null,
         "excluded_categories": [],
-        "rule_role": "info",
+        "rule_role": "exclusion",
+        "merchant_slugs": [],
+        "platform_slugs": [],
+        "mcc_include": [],
+        "mcc_exclude": [],
+        "except_merchant_slugs": [],
+        "except_platform_slugs": [],
+        "block_inr": null,
+        "min_engine_version": 1,
+        "max_engine_version": 1,
+        "source_local_id": "offline_fuel_exclusion",
+        "display_note": "Fuel transactions identified under the applicable fuel MCCs are excluded from Reward Points accrual."
+      },
+      {
+        "id": "sbi-simplyclick:rule:offline_fuel_exclusion#2",
+        "category_id": "cat-fuel",
+        "category_slug": "fuel",
+        "merchant_pattern": null,
+        "rail": null,
+        "unit": "points_per_100",
+        "rate": 0,
+        "min_txn_inr": null,
+        "max_txn_inr": null,
+        "priority": 1,
+        "conditions": {
+          "source_local_id": "offline_fuel_exclusion",
+          "part": 2,
+          "info_reasons": [],
+          "flags": [
+            "mcc_scoped_exclusion"
+          ]
+        },
+        "notes": null,
+        "effective_from": "2015-09-15",
+        "effective_to": null,
+        "excluded_categories": [],
+        "rule_role": "exclusion",
+        "merchant_slugs": [],
+        "platform_slugs": [],
+        "mcc_include": [
+          "5172",
+          "5541",
+          "5542",
+          "5983"
+        ],
+        "mcc_exclude": [],
+        "except_merchant_slugs": [],
+        "except_platform_slugs": [],
+        "block_inr": null,
+        "min_engine_version": 2,
+        "max_engine_version": null,
+        "source_local_id": "offline_fuel_exclusion",
+        "display_note": "Fuel transactions identified under the applicable fuel MCCs are excluded from Reward Points accrual."
+      },
+      {
+        "id": "sbi-simplyclick:rule:offline_fuel_exclusion#3",
+        "category_id": null,
+        "category_slug": null,
+        "merchant_pattern": null,
+        "rail": null,
+        "unit": "points_per_100",
+        "rate": 0,
+        "min_txn_inr": null,
+        "max_txn_inr": null,
+        "priority": 1,
+        "conditions": {
+          "source_local_id": "offline_fuel_exclusion",
+          "part": 3,
+          "info_reasons": [],
+          "flags": [
+            "mcc_scoped_exclusion"
+          ]
+        },
+        "notes": null,
+        "effective_from": "2015-09-15",
+        "effective_to": null,
+        "excluded_categories": [],
+        "rule_role": "exclusion",
         "merchant_slugs": [],
         "platform_slugs": [],
         "mcc_include": [
@@ -997,31 +1108,6 @@
         "anchor": null,
         "min_engine_version": 2,
         "source_local_id": "cap_online_5x_monthly"
-      },
-      {
-        "id": "sbi-simplyclick:cap:cap_exclusive_10x_monthly",
-        "reward_rule_id": "sbi-simplyclick:rule:exclusive_partner_10x",
-        "category_id": null,
-        "category_slug": null,
-        "benefit_kind": null,
-        "label": "Cap exclusive 10x monthly",
-        "measure": "reward_value",
-        "period": "calendar_month",
-        "cap_value": 2500,
-        "post_cap_unit": null,
-        "post_cap_rate": 0,
-        "resets_on_day": 1,
-        "cap_kind": "total_points",
-        "cap_amount": 10000,
-        "scope": "targets",
-        "targets": [
-          "sbi-simplyclick:rule:exclusive_partner_10x"
-        ],
-        "parent_cap_id": null,
-        "post_cap_behavior": null,
-        "anchor": null,
-        "min_engine_version": 2,
-        "source_local_id": "cap_exclusive_10x_monthly"
       }
     ],
     "milestone_rules": [

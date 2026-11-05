@@ -4,13 +4,11 @@
   "inputs": {
     "transform_version": "7",
     "source_record_sha256": "8494b6efa37aeed3f1e604e248e6bf471c6af8cf39deb3a621abd9700012053a",
-    "override_sha256": "ea1e847e170a91d3effa8a03ffd4064fa003ff022680ba6fea70dd9208a19abd",
-    "directory_sha256": "c2fded34df886aef08595eebb7629a4dd140c98af750f3c891d6c291b4874b53",
-    "verified": false
+    "override_sha256": "fefda1afd2f5ceb0090bd903bb8b39b36c1b6ab6621e4f0d4b900d302f591793",
+    "directory_sha256": "3d9f9f535481544d4b19262838290f77d8270eb3b4aec73c48608f10c39cedf2",
+    "verified": true
   },
-  "blocking_flags": [
-    "post_limit_conflict"
-  ],
+  "blocking_flags": [],
   "card": {
     "id": "icici-hpcl-super-saver-credit-card:card",
     "slug": "icici-hpcl-super-saver-credit-card",
@@ -25,7 +23,7 @@
     "accrual_rounding": "points_half_up",
     "cashback_rounding": null,
     "points_expiry_months": 36,
-    "model_status": "partial",
+    "model_status": "verified",
     "model_coverage": {
       "rules_total": 12,
       "rules_modelled": 12,
@@ -61,11 +59,6 @@
         {
           "code": "narrow_token_to_mcc",
           "source_local_id": "transport_reward_cap",
-          "detail": null
-        },
-        {
-          "code": "post_limit_conflict",
-          "source_local_id": "daily_essentials_reward_cap",
           "detail": null
         }
       ],
@@ -107,6 +100,22 @@
           "op": "set",
           "value_sha256": "7af78ba28cf9ccb3",
           "reason": "The 400-point cap is on the whole accelerated benefit.",
+          "source_url": "https://www.icici.bank.in/managed-assets/docs/terms-condition/hpcl-super-saver-credit-card-tnc.pdf",
+          "checked_on": "2026-11-05"
+        },
+        {
+          "path": "reward_rules[id=fuel_reward_points_exclusion].conditions.not_merchant",
+          "op": "set",
+          "value_sha256": "5ae3bdd028411676",
+          "reason": "WP7: T&C: 4% cashback on HPCL fuel (capped at Rs200 per month); the reward-point exclusion on fuel must not block HPCL fuel cashback (D16a except list).",
+          "source_url": "https://www.icici.bank.in/managed-assets/docs/terms-condition/hpcl-super-saver-credit-card-tnc.pdf",
+          "checked_on": "2026-11-05"
+        },
+        {
+          "path": "cap_rules[id=daily_essentials_reward_cap].post_limit_behavior",
+          "op": "set",
+          "value_sha256": "74234e98afe7498f",
+          "reason": "WP7: Total cap of 400 accelerated points per cycle (override); what follows after the cap is not stated (research note).",
           "source_url": "https://www.icici.bank.in/managed-assets/docs/terms-condition/hpcl-super-saver-credit-card-tnc.pdf",
           "checked_on": "2026-11-05"
         }
@@ -426,7 +435,10 @@
         "platform_slugs": [],
         "mcc_include": [],
         "mcc_exclude": [],
-        "except_merchant_slugs": [],
+        "except_merchant_slugs": [
+          "hp_pay",
+          "hpcl"
+        ],
         "except_platform_slugs": [],
         "block_inr": null,
         "min_engine_version": 1,

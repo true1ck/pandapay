@@ -4,9 +4,9 @@
   "inputs": {
     "transform_version": "7",
     "source_record_sha256": "b562dc5f12fd550992b584efec46545974ec6b0e087d82cac3e7a554d47b9958",
-    "override_sha256": "4d0e884429687e6b701081aceba3f6a11ba2fc8ce8fbdaa8de4dfc8b650c80ea",
-    "directory_sha256": "c2fded34df886aef08595eebb7629a4dd140c98af750f3c891d6c291b4874b53",
-    "verified": false
+    "override_sha256": "2ca3f56e5d2a1f2a5f2a3ff9fe448f9a416308f96846c7a40b2a2ba5a29f229f",
+    "directory_sha256": "3d9f9f535481544d4b19262838290f77d8270eb3b4aec73c48608f10c39cedf2",
+    "verified": true
   },
   "blocking_flags": [],
   "card": {
@@ -23,10 +23,10 @@
     "accrual_rounding": "floor",
     "cashback_rounding": "rupee_floor",
     "points_expiry_months": null,
-    "model_status": "partial",
+    "model_status": "verified",
     "model_coverage": {
-      "rules_total": 18,
-      "rules_modelled": 18,
+      "rules_total": 19,
+      "rules_modelled": 19,
       "rules_info": 0,
       "caps_total": 4,
       "caps_enforced": 4,
@@ -78,6 +78,14 @@
           "op": "set",
           "value_sha256": "657bf85a75fa70bf",
           "reason": "Cashback is rounded down to a whole rupee per transaction (D11).",
+          "source_url": "https://www.sbicard.com/sbi-card-en/assets/docs/pdf/ekit-tncs/Flipkart-SBI-CreditCard-TandC-Booklet.pdf",
+          "checked_on": "2026-11-05"
+        },
+        {
+          "path": "reward_rules",
+          "op": "append",
+          "value_sha256": "752888984661d673",
+          "reason": "WP7: The record's own exclusion excluded_non_mcc_transactions lists \"merchant EMI transaction\" and \"Flexipay transaction\", but the loader keeps only names it can resolve (partial_merchant_list), so EMI was dropped. Restated as a rail-emi exclusion.",
           "source_url": "https://www.sbicard.com/sbi-card-en/assets/docs/pdf/ekit-tncs/Flipkart-SBI-CreditCard-TandC-Booklet.pdf",
           "checked_on": "2026-11-05"
         }
@@ -1168,6 +1176,40 @@
         "max_engine_version": null,
         "source_local_id": "base_cashback",
         "display_note": "1% unlimited cashback on other eligible spends."
+      },
+      {
+        "id": "flipkart-sbi-card:rule:excluded_merchant_emi",
+        "category_id": null,
+        "category_slug": null,
+        "merchant_pattern": null,
+        "rail": "emi",
+        "unit": "cashback_percent",
+        "rate": 0,
+        "min_txn_inr": null,
+        "max_txn_inr": null,
+        "priority": 4,
+        "conditions": {
+          "source_local_id": "excluded_merchant_emi",
+          "part": null,
+          "info_reasons": [],
+          "flags": []
+        },
+        "notes": null,
+        "effective_from": "2025-08-26",
+        "effective_to": null,
+        "excluded_categories": [],
+        "rule_role": "exclusion",
+        "merchant_slugs": [],
+        "platform_slugs": [],
+        "mcc_include": [],
+        "mcc_exclude": [],
+        "except_merchant_slugs": [],
+        "except_platform_slugs": [],
+        "block_inr": null,
+        "min_engine_version": 2,
+        "max_engine_version": null,
+        "source_local_id": "excluded_merchant_emi",
+        "display_note": "Merchant EMI and Flexipay transactions earn no cashback."
       }
     ],
     "cap_rules": [

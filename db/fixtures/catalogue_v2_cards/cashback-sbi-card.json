@@ -4,9 +4,9 @@
   "inputs": {
     "transform_version": "7",
     "source_record_sha256": "bcb72cd3bc9b63cfe461bf1feffb8b7d71a66dbfe6e1df48a2b10e576585c7b9",
-    "override_sha256": "aee654c36761dfedae2cca7da8848523039d13d3735bfce811b56f896a84813f",
-    "directory_sha256": "c2fded34df886aef08595eebb7629a4dd140c98af750f3c891d6c291b4874b53",
-    "verified": false
+    "override_sha256": "d08f1865a463a56ddb79d5405fb952a68d5944c4a08547948df8acdadf5ca811",
+    "directory_sha256": "3d9f9f535481544d4b19262838290f77d8270eb3b4aec73c48608f10c39cedf2",
+    "verified": true
   },
   "blocking_flags": [],
   "card": {
@@ -23,10 +23,10 @@
     "accrual_rounding": "none",
     "cashback_rounding": "rupee_floor",
     "points_expiry_months": null,
-    "model_status": "partial",
+    "model_status": "verified",
     "model_coverage": {
-      "rules_total": 16,
-      "rules_modelled": 15,
+      "rules_total": 17,
+      "rules_modelled": 16,
       "rules_info": 1,
       "caps_total": 3,
       "caps_enforced": 2,
@@ -97,6 +97,11 @@
           "detail": null
         },
         {
+          "code": "min_amount_exclusion",
+          "source_local_id": "below_minimum_exclusion",
+          "detail": null
+        },
+        {
           "code": "cap_missing_id",
           "source_local_id": null,
           "detail": null
@@ -140,6 +145,14 @@
           "op": "set",
           "value_sha256": "657bf85a75fa70bf",
           "reason": "Cashback is rounded down to a whole rupee per transaction (D11).",
+          "source_url": "https://www.sbicard.com/sbi-card-en/assets/docs/pdf/ekit-tncs/cashback-tnc-ekit.pdf",
+          "checked_on": "2026-11-05"
+        },
+        {
+          "path": "reward_rules",
+          "op": "append",
+          "value_sha256": "4540a2abedf85712",
+          "reason": "WP7: T&C booklet: \"Card Cashback is not applicable on transactions less than Rs100\" (D16b exclusion with max_txn_inr); the record had no minimum.",
           "source_url": "https://www.sbicard.com/sbi-card-en/assets/docs/pdf/ekit-tncs/cashback-tnc-ekit.pdf",
           "checked_on": "2026-11-05"
         }
@@ -1366,6 +1379,42 @@
         "max_engine_version": null,
         "source_local_id": "education_direct_payment",
         "display_note": "Education payments through third-party apps attract the applicable education-payment fee and are excluded from cashback; direct payments to schools/colleges through their websites or POS machines do not attract the education-payment fee, but the card cashback exclusion for school and educational ser"
+      },
+      {
+        "id": "cashback-sbi-card:rule:below_minimum_exclusion",
+        "category_id": null,
+        "category_slug": null,
+        "merchant_pattern": null,
+        "rail": null,
+        "unit": "cashback_percent",
+        "rate": 0,
+        "min_txn_inr": null,
+        "max_txn_inr": 100,
+        "priority": 0,
+        "conditions": {
+          "source_local_id": "below_minimum_exclusion",
+          "part": null,
+          "info_reasons": [],
+          "flags": [
+            "min_amount_exclusion"
+          ]
+        },
+        "notes": null,
+        "effective_from": "2026-04-01",
+        "effective_to": null,
+        "excluded_categories": [],
+        "rule_role": "exclusion",
+        "merchant_slugs": [],
+        "platform_slugs": [],
+        "mcc_include": [],
+        "mcc_exclude": [],
+        "except_merchant_slugs": [],
+        "except_platform_slugs": [],
+        "block_inr": null,
+        "min_engine_version": 2,
+        "max_engine_version": null,
+        "source_local_id": "below_minimum_exclusion",
+        "display_note": "Card Cashback is not applicable on transactions less than Rs100."
       }
     ],
     "cap_rules": [

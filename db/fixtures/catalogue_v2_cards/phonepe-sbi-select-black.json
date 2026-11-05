@@ -4,9 +4,9 @@
   "inputs": {
     "transform_version": "7",
     "source_record_sha256": "667d4701d4614008289fe18cfd043975dd9106ba5ba494db117e6433993923bb",
-    "override_sha256": "25fdd191e019db8c4acaae5ea5d7f94bc8bb5e1cde77c1b9f65fea9922e3a2c0",
-    "directory_sha256": "c2fded34df886aef08595eebb7629a4dd140c98af750f3c891d6c291b4874b53",
-    "verified": false
+    "override_sha256": "3181b926e548fb0ece4685e85607009c66683b46d3e12efbe394e9232d3795cd",
+    "directory_sha256": "3d9f9f535481544d4b19262838290f77d8270eb3b4aec73c48608f10c39cedf2",
+    "verified": true
   },
   "blocking_flags": [],
   "card": {
@@ -23,14 +23,24 @@
     "accrual_rounding": "floor",
     "cashback_rounding": null,
     "points_expiry_months": 24,
-    "model_status": "partial",
+    "model_status": "verified",
     "model_coverage": {
-      "rules_total": 23,
-      "rules_modelled": 19,
+      "rules_total": 24,
+      "rules_modelled": 20,
       "rules_info": 4,
       "caps_total": 4,
       "caps_enforced": 4,
       "flags": [
+        {
+          "code": "mcc_scoped_exclusion",
+          "source_local_id": "utilities-outside-phonepe-base",
+          "detail": null
+        },
+        {
+          "code": "mcc_scoped_exclusion",
+          "source_local_id": "insurance-outside-phonepe-base",
+          "detail": null
+        },
         {
           "code": "mcc_scoped_exclusion",
           "source_local_id": "fuel-exclusion",
@@ -134,6 +144,62 @@
           "reason": "Insurance (500) is a separate limit from non-insurance PhonePe spends (1,500).",
           "source_url": "https://www.sbicard.com/sbi-card-en/assets/media/images/personal/credit-cards/rewards/phonepe/tnc/RP-tnc.pdf",
           "checked_on": "2026-11-05"
+        },
+        {
+          "path": "reward_rules[id=utilities-outside-phonepe-base].evaluation_type",
+          "op": "set",
+          "value_sha256": "2e1734d865b187db",
+          "reason": "WP7: Revision notice eff. 1 Jul 2026, \"REWARD POINTS EXCLUSION\": Reward Points will not accrue on \"Utilities (non-PhonePe App spends) 4900, 4814, 4899\".",
+          "source_url": "https://www.sbicard.com/sbi-card-en/assets/docs/pdf/ekit-tncs/PhonePe-Black-pdf-27Apr2026.pdf",
+          "checked_on": "2026-11-05"
+        },
+        {
+          "path": "reward_rules[id=utilities-outside-phonepe-base].action",
+          "op": "set",
+          "value_sha256": "2d79f003377daad8",
+          "reason": "WP7: Exclusion, not base earn (same revision notice).",
+          "source_url": "https://www.sbicard.com/sbi-card-en/assets/docs/pdf/ekit-tncs/PhonePe-Black-pdf-27Apr2026.pdf",
+          "checked_on": "2026-11-05"
+        },
+        {
+          "path": "reward_rules[id=insurance-outside-phonepe-base].evaluation_type",
+          "op": "set",
+          "value_sha256": "2e1734d865b187db",
+          "reason": "WP7: Revision notice eff. 1 Jul 2026: Reward Points will not accrue on \"Insurance (non-PhonePe App spends) 5960, 6300, 6380\".",
+          "source_url": "https://www.sbicard.com/sbi-card-en/assets/docs/pdf/ekit-tncs/PhonePe-Black-pdf-27Apr2026.pdf",
+          "checked_on": "2026-11-05"
+        },
+        {
+          "path": "reward_rules[id=insurance-outside-phonepe-base].action",
+          "op": "set",
+          "value_sha256": "4e29ea75d877328b",
+          "reason": "WP7: Exclusion, not base earn (same revision notice).",
+          "source_url": "https://www.sbicard.com/sbi-card-en/assets/docs/pdf/ekit-tncs/PhonePe-Black-pdf-27Apr2026.pdf",
+          "checked_on": "2026-11-05"
+        },
+        {
+          "path": "reward_rules[id=phonepe-10x].conditions.cap_insurance",
+          "op": "remove",
+          "value_sha256": "74234e98afe7498f",
+          "reason": "WP7: The insurance cap moves to the new phonepe-10x-insurance rule; this key linked it to the non-insurance rows.",
+          "source_url": "https://www.sbicard.com/sbi-card-en/assets/docs/pdf/ekit-tncs/PhonePe-Black-pdf-27Apr2026.pdf",
+          "checked_on": "2026-11-05"
+        },
+        {
+          "path": "reward_rules[id=phonepe-10x].conditions.eligible_categories",
+          "op": "set",
+          "value_sha256": "63ea65ed94395a1f",
+          "reason": "WP7: Insurance in the PhonePe app has its own 500 RP cap, separate from the 1,500 RP non-insurance cap (revision notice); split into phonepe-10x-insurance so the non-insurance cap never counts it.",
+          "source_url": "https://www.sbicard.com/sbi-card-en/assets/docs/pdf/ekit-tncs/PhonePe-Black-pdf-27Apr2026.pdf",
+          "checked_on": "2026-11-05"
+        },
+        {
+          "path": "reward_rules",
+          "op": "append",
+          "value_sha256": "02ba3cccda3ab94c",
+          "reason": "WP7: Revision notice: \"Max. 500 RPs on Insurance Spends\" for eligible PhonePe spends, separate from \"Max. 1,500 RPs on Other Spends\".",
+          "source_url": "https://www.sbicard.com/sbi-card-en/assets/docs/pdf/ekit-tncs/PhonePe-Black-pdf-27Apr2026.pdf",
+          "checked_on": "2026-11-05"
         }
       ]
     },
@@ -176,42 +242,6 @@
       },
       {
         "id": "phonepe-sbi-select-black:rule:phonepe-10x#2",
-        "category_id": "cat-insurance",
-        "category_slug": "insurance",
-        "merchant_pattern": null,
-        "rail": null,
-        "unit": "points_per_100",
-        "rate": 10,
-        "min_txn_inr": null,
-        "max_txn_inr": null,
-        "priority": 10,
-        "conditions": {
-          "source_local_id": "phonepe-10x",
-          "part": 2,
-          "info_reasons": [],
-          "flags": []
-        },
-        "notes": null,
-        "effective_from": "2025-07-22",
-        "effective_to": null,
-        "excluded_categories": [],
-        "rule_role": "earn",
-        "merchant_slugs": [],
-        "platform_slugs": [
-          "phonepe_app"
-        ],
-        "mcc_include": [],
-        "mcc_exclude": [],
-        "except_merchant_slugs": [],
-        "except_platform_slugs": [],
-        "block_inr": null,
-        "min_engine_version": 2,
-        "max_engine_version": null,
-        "source_local_id": "phonepe-10x",
-        "display_note": "10 Reward Points per Rs.100 on eligible PhonePe spends in select categories including recharges, utilities, bill payments, insurance and travel."
-      },
-      {
-        "id": "phonepe-sbi-select-black:rule:phonepe-10x#3",
         "category_id": "cat-travel",
         "category_slug": "travel",
         "merchant_pattern": null,
@@ -223,7 +253,7 @@
         "priority": 10,
         "conditions": {
           "source_local_id": "phonepe-10x",
-          "part": 3,
+          "part": 2,
           "info_reasons": [],
           "flags": []
         },
@@ -351,27 +381,67 @@
         "display_note": "All Scan & Pay transactions made via the PhonePe App accrue 1% value back."
       },
       {
-        "id": "phonepe-sbi-select-black:rule:utilities-outside-phonepe-base",
+        "id": "phonepe-sbi-select-black:rule:utilities-outside-phonepe-base#1",
         "category_id": "cat-bills",
         "category_slug": "bills",
         "merchant_pattern": null,
         "rail": null,
         "unit": "points_per_100",
-        "rate": 1,
+        "rate": 0,
         "min_txn_inr": null,
         "max_txn_inr": null,
         "priority": 32,
         "conditions": {
           "source_local_id": "utilities-outside-phonepe-base",
-          "part": null,
+          "part": 1,
           "info_reasons": [],
-          "flags": []
+          "flags": [
+            "mcc_scoped_exclusion"
+          ]
         },
         "notes": null,
         "effective_from": "2026-07-01",
         "effective_to": null,
         "excluded_categories": [],
-        "rule_role": "earn",
+        "rule_role": "exclusion",
+        "merchant_slugs": [],
+        "platform_slugs": [],
+        "mcc_include": [],
+        "mcc_exclude": [],
+        "except_merchant_slugs": [],
+        "except_platform_slugs": [
+          "phonepe_app"
+        ],
+        "block_inr": null,
+        "min_engine_version": 1,
+        "max_engine_version": 1,
+        "source_local_id": "utilities-outside-phonepe-base",
+        "display_note": "Utility payments outside the PhonePe app earn no Reward Points."
+      },
+      {
+        "id": "phonepe-sbi-select-black:rule:utilities-outside-phonepe-base#2",
+        "category_id": "cat-bills",
+        "category_slug": "bills",
+        "merchant_pattern": null,
+        "rail": null,
+        "unit": "points_per_100",
+        "rate": 0,
+        "min_txn_inr": null,
+        "max_txn_inr": null,
+        "priority": 32,
+        "conditions": {
+          "source_local_id": "utilities-outside-phonepe-base",
+          "part": 2,
+          "info_reasons": [],
+          "flags": [
+            "mcc_scoped_exclusion"
+          ]
+        },
+        "notes": null,
+        "effective_from": "2026-07-01",
+        "effective_to": null,
+        "excluded_categories": [],
+        "rule_role": "exclusion",
         "merchant_slugs": [],
         "platform_slugs": [],
         "mcc_include": [
@@ -388,30 +458,112 @@
         "min_engine_version": 2,
         "max_engine_version": null,
         "source_local_id": "utilities-outside-phonepe-base",
-        "display_note": "Utility payments outside the PhonePe app earn only base Reward Points at 1 Reward Point per Rs.100; they do not earn accelerated PhonePe Reward Points."
+        "display_note": "Utility payments outside the PhonePe app earn no Reward Points."
       },
       {
-        "id": "phonepe-sbi-select-black:rule:insurance-outside-phonepe-base",
-        "category_id": "cat-insurance",
-        "category_slug": "insurance",
+        "id": "phonepe-sbi-select-black:rule:utilities-outside-phonepe-base#3",
+        "category_id": null,
+        "category_slug": null,
         "merchant_pattern": null,
         "rail": null,
         "unit": "points_per_100",
-        "rate": 1,
+        "rate": 0,
         "min_txn_inr": null,
         "max_txn_inr": null,
-        "priority": 33,
+        "priority": 32,
         "conditions": {
-          "source_local_id": "insurance-outside-phonepe-base",
-          "part": null,
+          "source_local_id": "utilities-outside-phonepe-base",
+          "part": 3,
           "info_reasons": [],
-          "flags": []
+          "flags": [
+            "mcc_scoped_exclusion"
+          ]
         },
         "notes": null,
         "effective_from": "2026-07-01",
         "effective_to": null,
         "excluded_categories": [],
-        "rule_role": "earn",
+        "rule_role": "exclusion",
+        "merchant_slugs": [],
+        "platform_slugs": [],
+        "mcc_include": [
+          "4814",
+          "4899",
+          "4900"
+        ],
+        "mcc_exclude": [],
+        "except_merchant_slugs": [],
+        "except_platform_slugs": [
+          "phonepe_app"
+        ],
+        "block_inr": null,
+        "min_engine_version": 2,
+        "max_engine_version": null,
+        "source_local_id": "utilities-outside-phonepe-base",
+        "display_note": "Utility payments outside the PhonePe app earn no Reward Points."
+      },
+      {
+        "id": "phonepe-sbi-select-black:rule:insurance-outside-phonepe-base#1",
+        "category_id": "cat-insurance",
+        "category_slug": "insurance",
+        "merchant_pattern": null,
+        "rail": null,
+        "unit": "points_per_100",
+        "rate": 0,
+        "min_txn_inr": null,
+        "max_txn_inr": null,
+        "priority": 33,
+        "conditions": {
+          "source_local_id": "insurance-outside-phonepe-base",
+          "part": 1,
+          "info_reasons": [],
+          "flags": [
+            "mcc_scoped_exclusion"
+          ]
+        },
+        "notes": null,
+        "effective_from": "2026-07-01",
+        "effective_to": null,
+        "excluded_categories": [],
+        "rule_role": "exclusion",
+        "merchant_slugs": [],
+        "platform_slugs": [],
+        "mcc_include": [],
+        "mcc_exclude": [],
+        "except_merchant_slugs": [],
+        "except_platform_slugs": [
+          "phonepe_app"
+        ],
+        "block_inr": null,
+        "min_engine_version": 1,
+        "max_engine_version": 1,
+        "source_local_id": "insurance-outside-phonepe-base",
+        "display_note": "Insurance payments outside the PhonePe app earn no Reward Points."
+      },
+      {
+        "id": "phonepe-sbi-select-black:rule:insurance-outside-phonepe-base#2",
+        "category_id": "cat-insurance",
+        "category_slug": "insurance",
+        "merchant_pattern": null,
+        "rail": null,
+        "unit": "points_per_100",
+        "rate": 0,
+        "min_txn_inr": null,
+        "max_txn_inr": null,
+        "priority": 33,
+        "conditions": {
+          "source_local_id": "insurance-outside-phonepe-base",
+          "part": 2,
+          "info_reasons": [],
+          "flags": [
+            "mcc_scoped_exclusion"
+          ]
+        },
+        "notes": null,
+        "effective_from": "2026-07-01",
+        "effective_to": null,
+        "excluded_categories": [],
+        "rule_role": "exclusion",
         "merchant_slugs": [],
         "platform_slugs": [],
         "mcc_include": [
@@ -428,7 +580,49 @@
         "min_engine_version": 2,
         "max_engine_version": null,
         "source_local_id": "insurance-outside-phonepe-base",
-        "display_note": "Insurance payments outside the PhonePe app earn only base Reward Points at 1 Reward Point per Rs.100; they do not earn accelerated PhonePe Reward Points."
+        "display_note": "Insurance payments outside the PhonePe app earn no Reward Points."
+      },
+      {
+        "id": "phonepe-sbi-select-black:rule:insurance-outside-phonepe-base#3",
+        "category_id": null,
+        "category_slug": null,
+        "merchant_pattern": null,
+        "rail": null,
+        "unit": "points_per_100",
+        "rate": 0,
+        "min_txn_inr": null,
+        "max_txn_inr": null,
+        "priority": 33,
+        "conditions": {
+          "source_local_id": "insurance-outside-phonepe-base",
+          "part": 3,
+          "info_reasons": [],
+          "flags": [
+            "mcc_scoped_exclusion"
+          ]
+        },
+        "notes": null,
+        "effective_from": "2026-07-01",
+        "effective_to": null,
+        "excluded_categories": [],
+        "rule_role": "exclusion",
+        "merchant_slugs": [],
+        "platform_slugs": [],
+        "mcc_include": [
+          "5960",
+          "6300",
+          "6380"
+        ],
+        "mcc_exclude": [],
+        "except_merchant_slugs": [],
+        "except_platform_slugs": [
+          "phonepe_app"
+        ],
+        "block_inr": null,
+        "min_engine_version": 2,
+        "max_engine_version": null,
+        "source_local_id": "insurance-outside-phonepe-base",
+        "display_note": "Insurance payments outside the PhonePe app earn no Reward Points."
       },
       {
         "id": "phonepe-sbi-select-black:rule:fuel-exclusion#1",
@@ -1485,6 +1679,42 @@
         "max_engine_version": null,
         "source_local_id": "disputed-exclusion",
         "display_note": "No Reward Points on disputed transactions."
+      },
+      {
+        "id": "phonepe-sbi-select-black:rule:phonepe-10x-insurance",
+        "category_id": "cat-insurance",
+        "category_slug": "insurance",
+        "merchant_pattern": null,
+        "rail": null,
+        "unit": "points_per_100",
+        "rate": 10,
+        "min_txn_inr": null,
+        "max_txn_inr": null,
+        "priority": 10,
+        "conditions": {
+          "source_local_id": "phonepe-10x-insurance",
+          "part": null,
+          "info_reasons": [],
+          "flags": []
+        },
+        "notes": null,
+        "effective_from": "2025-07-22",
+        "effective_to": null,
+        "excluded_categories": [],
+        "rule_role": "earn",
+        "merchant_slugs": [],
+        "platform_slugs": [
+          "phonepe_app"
+        ],
+        "mcc_include": [],
+        "mcc_exclude": [],
+        "except_merchant_slugs": [],
+        "except_platform_slugs": [],
+        "block_inr": null,
+        "min_engine_version": 2,
+        "max_engine_version": null,
+        "source_local_id": "phonepe-10x-insurance",
+        "display_note": "10 Reward Points per Rs100 on insurance paid in the PhonePe app (max 500 RP per month)."
       }
     ],
     "cap_rules": [
@@ -1506,8 +1736,7 @@
         "scope": "targets",
         "targets": [
           "phonepe-sbi-select-black:rule:phonepe-10x#1",
-          "phonepe-sbi-select-black:rule:phonepe-10x#2",
-          "phonepe-sbi-select-black:rule:phonepe-10x#3"
+          "phonepe-sbi-select-black:rule:phonepe-10x#2"
         ],
         "parent_cap_id": null,
         "post_cap_behavior": null,
@@ -1517,7 +1746,7 @@
       },
       {
         "id": "phonepe-sbi-select-black:cap:phonepe-insurance-monthly",
-        "reward_rule_id": "phonepe-sbi-select-black:rule:phonepe-10x#2",
+        "reward_rule_id": "phonepe-sbi-select-black:rule:phonepe-10x-insurance",
         "category_id": null,
         "category_slug": null,
         "benefit_kind": null,
@@ -1532,7 +1761,7 @@
         "cap_amount": 500,
         "scope": "targets",
         "targets": [
-          "phonepe-sbi-select-black:rule:phonepe-10x#2"
+          "phonepe-sbi-select-black:rule:phonepe-10x-insurance"
         ],
         "parent_cap_id": null,
         "post_cap_behavior": null,
@@ -1583,9 +1812,7 @@
         "scope": "targets",
         "targets": [
           "phonepe-sbi-select-black:rule:base-1x",
-          "phonepe-sbi-select-black:rule:phonepe-scanpay-1x",
-          "phonepe-sbi-select-black:rule:utilities-outside-phonepe-base",
-          "phonepe-sbi-select-black:rule:insurance-outside-phonepe-base"
+          "phonepe-sbi-select-black:rule:phonepe-scanpay-1x"
         ],
         "parent_cap_id": null,
         "post_cap_behavior": null,

@@ -4,8 +4,8 @@
   "inputs": {
     "transform_version": "7",
     "source_record_sha256": "7257b808c842f4e5735f518bbc51cdaceb28a432838c5ab42ea3b572b99d24d5",
-    "override_sha256": null,
-    "directory_sha256": "c2fded34df886aef08595eebb7629a4dd140c98af750f3c891d6c291b4874b53",
+    "override_sha256": "5e5e58258f0c5167c3a08cc0f1aed6acd43b4ae74bc87d3a25170bc18e53511e",
+    "directory_sha256": "3d9f9f535481544d4b19262838290f77d8270eb3b4aec73c48608f10c39cedf2",
     "verified": false
   },
   "blocking_flags": [
@@ -28,21 +28,16 @@
     "points_expiry_months": 0,
     "model_status": "partial",
     "model_coverage": {
-      "rules_total": 8,
-      "rules_modelled": 4,
-      "rules_info": 4,
+      "rules_total": 9,
+      "rules_modelled": 6,
+      "rules_info": 3,
       "caps_total": 2,
-      "caps_enforced": 0,
+      "caps_enforced": 1,
       "flags": [
         {
           "code": "exclusion_scope_broadened",
           "source_local_id": "cash_transaction_exclusion",
           "detail": null
-        },
-        {
-          "code": "info_rule",
-          "source_local_id": "utility_base_earn",
-          "detail": "condition:utility_types"
         },
         {
           "code": "info_rule",
@@ -70,8 +65,8 @@
           "detail": "condition:excluded_items"
         },
         {
-          "code": "cap_targets_info_only",
-          "source_local_id": "utility_monthly_points_cap",
+          "code": "exclusion_scope_broadened",
+          "source_local_id": "exclude_merchant_emi",
           "detail": null
         },
         {
@@ -85,7 +80,24 @@
           "detail": null
         }
       ],
-      "overrides_applied": []
+      "overrides_applied": [
+        {
+          "path": "reward_rules[id=utility_base_earn].conditions.utility_types",
+          "op": "remove",
+          "value_sha256": "74234e98afe7498f",
+          "reason": "WP7: MR terms: Gold earns on \"Other Utility Services (capped to a maximum of 10000 Points every calendar month)\"; the type list restated the utility category (rule was info).",
+          "source_url": "https://www.americanexpress.com/content/dam/amex/en-in/benefits/rewards/membership-rewards/membership-rewards-terms.pdf",
+          "checked_on": "2026-11-05"
+        },
+        {
+          "path": "reward_rules",
+          "op": "append",
+          "value_sha256": "7e1de12c8be7e7ce",
+          "reason": "WP7: MR terms (all Amex India cards): \"Cardmembers will not earn Membership Rewards Points on any EMI option selected from a merchant's website\". Same rule as the Membership Rewards card record.",
+          "source_url": "https://www.americanexpress.com/content/dam/amex/en-in/benefits/rewards/membership-rewards/membership-rewards-terms.pdf",
+          "checked_on": "2026-11-05"
+        }
+      ]
     },
     "reward_rules": [
       {
@@ -240,16 +252,14 @@
         "conditions": {
           "source_local_id": "utility_base_earn",
           "part": null,
-          "info_reasons": [
-            "condition:utility_types"
-          ],
+          "info_reasons": [],
           "flags": []
         },
         "notes": null,
         "effective_from": "2021-07-01",
         "effective_to": null,
         "excluded_categories": [],
-        "rule_role": "info",
+        "rule_role": "earn",
         "merchant_slugs": [],
         "platform_slugs": [],
         "mcc_include": [],
@@ -373,6 +383,42 @@
         "max_engine_version": null,
         "source_local_id": "cash_advance_and_fee_exclusion",
         "display_note": "These transactions or charges are not eligible for Membership Rewards accrual."
+      },
+      {
+        "id": "american-express-gold-charge-card-india:rule:exclude_merchant_emi",
+        "category_id": "cat-emi",
+        "category_slug": "emi",
+        "merchant_pattern": null,
+        "rail": "emi",
+        "unit": "points_per_100",
+        "rate": 0,
+        "min_txn_inr": null,
+        "max_txn_inr": null,
+        "priority": 1,
+        "conditions": {
+          "source_local_id": "exclude_merchant_emi",
+          "part": null,
+          "info_reasons": [],
+          "flags": [
+            "exclusion_scope_broadened"
+          ]
+        },
+        "notes": null,
+        "effective_from": "2020-03-15",
+        "effective_to": null,
+        "excluded_categories": [],
+        "rule_role": "exclusion",
+        "merchant_slugs": [],
+        "platform_slugs": [],
+        "mcc_include": [],
+        "mcc_exclude": [],
+        "except_merchant_slugs": [],
+        "except_platform_slugs": [],
+        "block_inr": null,
+        "min_engine_version": 1,
+        "max_engine_version": null,
+        "source_local_id": "exclude_merchant_emi",
+        "display_note": "No Membership Rewards points on EMI options selected at a merchant website or terminal."
       }
     ],
     "cap_rules": [

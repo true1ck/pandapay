@@ -4,8 +4,8 @@
   "inputs": {
     "transform_version": "7",
     "source_record_sha256": "93890edb87a631081cfe42490e8b5b7e0183887b346200ba6b50a4e3d1500cc4",
-    "override_sha256": "af168ac3d183615e1c27e66cd694a02e992b160eac7cd09b54bc13dc653d55eb",
-    "directory_sha256": "c2fded34df886aef08595eebb7629a4dd140c98af750f3c891d6c291b4874b53",
+    "override_sha256": "4fc93a335e31eb5f2f52147c1ce3e82a61ded0468eda099d168ac5f3180ce9a9",
+    "directory_sha256": "3d9f9f535481544d4b19262838290f77d8270eb3b4aec73c48608f10c39cedf2",
     "verified": false
   },
   "blocking_flags": [
@@ -28,10 +28,10 @@
     "model_status": "partial",
     "model_coverage": {
       "rules_total": 24,
-      "rules_modelled": 10,
-      "rules_info": 14,
+      "rules_modelled": 13,
+      "rules_info": 11,
       "caps_total": 5,
-      "caps_enforced": 1,
+      "caps_enforced": 4,
       "flags": [
         {
           "code": "info_rule",
@@ -239,38 +239,8 @@
           "detail": "condition:channel_type"
         },
         {
-          "code": "info_rule",
-          "source_local_id": "insurance_standard_capped",
-          "detail": "condition:channel_type"
-        },
-        {
-          "code": "info_rule",
-          "source_local_id": "grocery_standard_capped",
-          "detail": "condition:channel_type"
-        },
-        {
-          "code": "info_rule",
-          "source_local_id": "utility_standard_capped",
-          "detail": "condition:channel_type"
-        },
-        {
           "code": "narrow_token_to_mcc",
           "source_local_id": "telecom_cable_standard_capped",
-          "detail": null
-        },
-        {
-          "code": "cap_targets_info_only",
-          "source_local_id": "grocery_monthly_2000",
-          "detail": null
-        },
-        {
-          "code": "cap_targets_info_only",
-          "source_local_id": "utility_monthly_2000",
-          "detail": null
-        },
-        {
-          "code": "cap_targets_info_only",
-          "source_local_id": "insurance_monthly_2000",
           "detail": null
         },
         {
@@ -317,6 +287,30 @@
           "op": "set",
           "value_sha256": "7eb8bc431ee35297",
           "reason": "Issuer rounds the final NeuCoins to nearest whole (half up) on the exact amount (D7).",
+          "source_url": "https://www.hdfc.bank.in/content/dam/hdfcbankpws/in/en/personal-banking/discover-products/cards/credit-cards/tata-neu-infinity-credit-card/pdf/tata_neu_infinity_card_tnc.pdf",
+          "checked_on": "2026-11-05"
+        },
+        {
+          "path": "reward_rules[id=insurance_standard_capped].channel_type",
+          "op": "set",
+          "value_sha256": "5cf7504d9781301d",
+          "reason": "WP7: \"eligible_insurance\" restates the category; the rule earns the base rate on insurance and carries the 2,000 NeuCoin cap.",
+          "source_url": "https://www.hdfc.bank.in/content/dam/hdfcbankpws/in/en/personal-banking/discover-products/cards/credit-cards/tata-neu-infinity-credit-card/pdf/tata_neu_infinity_card_tnc.pdf",
+          "checked_on": "2026-11-05"
+        },
+        {
+          "path": "reward_rules[id=grocery_standard_capped].channel_type",
+          "op": "set",
+          "value_sha256": "5cf7504d9781301d",
+          "reason": "WP7: \"eligible_grocery\" restates the category (2,000 NeuCoin cap).",
+          "source_url": "https://www.hdfc.bank.in/content/dam/hdfcbankpws/in/en/personal-banking/discover-products/cards/credit-cards/tata-neu-infinity-credit-card/pdf/tata_neu_infinity_card_tnc.pdf",
+          "checked_on": "2026-11-05"
+        },
+        {
+          "path": "reward_rules[id=utility_standard_capped].channel_type",
+          "op": "set",
+          "value_sha256": "5cf7504d9781301d",
+          "reason": "WP7: \"eligible_utility\" restates the category (2,000 NeuCoin cap).",
           "source_url": "https://www.hdfc.bank.in/content/dam/hdfcbankpws/in/en/personal-banking/discover-products/cards/credit-cards/tata-neu-infinity-credit-card/pdf/tata_neu_infinity_card_tnc.pdf",
           "checked_on": "2026-11-05"
         }
@@ -1249,16 +1243,14 @@
         "conditions": {
           "source_local_id": "insurance_standard_capped",
           "part": null,
-          "info_reasons": [
-            "condition:channel_type"
-          ],
+          "info_reasons": [],
           "flags": []
         },
         "notes": null,
         "effective_from": "2025-07-01",
         "effective_to": null,
         "excluded_categories": [],
-        "rule_role": "info",
+        "rule_role": "earn",
         "merchant_slugs": [],
         "platform_slugs": [],
         "mcc_include": [],
@@ -1266,7 +1258,7 @@
         "except_merchant_slugs": [],
         "except_platform_slugs": [],
         "block_inr": null,
-        "min_engine_version": 2,
+        "min_engine_version": 1,
         "max_engine_version": null,
         "source_local_id": "insurance_standard_capped",
         "display_note": "Insurance transactions earn NeuCoins subject to a maximum of 2,000 NeuCoins per calendar month from 1-Jul-2025."
@@ -1285,16 +1277,14 @@
         "conditions": {
           "source_local_id": "grocery_standard_capped",
           "part": null,
-          "info_reasons": [
-            "condition:channel_type"
-          ],
+          "info_reasons": [],
           "flags": []
         },
         "notes": null,
         "effective_from": "2023-01-01",
         "effective_to": null,
         "excluded_categories": [],
-        "rule_role": "info",
+        "rule_role": "earn",
         "merchant_slugs": [],
         "platform_slugs": [],
         "mcc_include": [],
@@ -1302,7 +1292,7 @@
         "except_merchant_slugs": [],
         "except_platform_slugs": [],
         "block_inr": null,
-        "min_engine_version": 2,
+        "min_engine_version": 1,
         "max_engine_version": null,
         "source_local_id": "grocery_standard_capped",
         "display_note": "NeuCoins on grocery transactions are capped at 2,000 NeuCoins per month."
@@ -1321,16 +1311,14 @@
         "conditions": {
           "source_local_id": "utility_standard_capped",
           "part": null,
-          "info_reasons": [
-            "condition:channel_type"
-          ],
+          "info_reasons": [],
           "flags": []
         },
         "notes": null,
         "effective_from": "2024-09-01",
         "effective_to": null,
         "excluded_categories": [],
-        "rule_role": "info",
+        "rule_role": "earn",
         "merchant_slugs": [],
         "platform_slugs": [],
         "mcc_include": [],
@@ -1338,7 +1326,7 @@
         "except_merchant_slugs": [],
         "except_platform_slugs": [],
         "block_inr": null,
-        "min_engine_version": 2,
+        "min_engine_version": 1,
         "max_engine_version": null,
         "source_local_id": "utility_standard_capped",
         "display_note": "NeuCoins on utility transactions are capped at 2,000 NeuCoins per calendar month."
@@ -1407,7 +1395,7 @@
         "parent_cap_id": null,
         "post_cap_behavior": null,
         "anchor": null,
-        "min_engine_version": 2,
+        "min_engine_version": 1,
         "source_local_id": "grocery_monthly_2000"
       },
       {
@@ -1432,7 +1420,7 @@
         "parent_cap_id": null,
         "post_cap_behavior": null,
         "anchor": null,
-        "min_engine_version": 2,
+        "min_engine_version": 1,
         "source_local_id": "utility_monthly_2000"
       },
       {
@@ -1482,7 +1470,7 @@
         "parent_cap_id": null,
         "post_cap_behavior": null,
         "anchor": null,
-        "min_engine_version": 2,
+        "min_engine_version": 1,
         "source_local_id": "insurance_monthly_2000"
       },
       {

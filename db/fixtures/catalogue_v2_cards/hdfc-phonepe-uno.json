@@ -4,14 +4,11 @@
   "inputs": {
     "transform_version": "7",
     "source_record_sha256": "0a3a7af1ba043e95d953f16558c23e774f9e4a448de7a1aad99086d9c9e4be20",
-    "override_sha256": "909c7c2e4168a93368ed5a4457160afa6f581213ea3423914593d0fe889ec30e",
-    "directory_sha256": "c2fded34df886aef08595eebb7629a4dd140c98af750f3c891d6c291b4874b53",
+    "override_sha256": "6998cf4da09720d0ade026fee83597a34f3d39361ea30ca98cdaf563ff95ffc8",
+    "directory_sha256": "3d9f9f535481544d4b19262838290f77d8270eb3b4aec73c48608f10c39cedf2",
     "verified": false
   },
-  "blocking_flags": [
-    "info_rule",
-    "post_limit_conflict"
-  ],
+  "blocking_flags": [],
   "card": {
     "id": "hdfc-phonepe-uno:card",
     "slug": "hdfc-phonepe-uno",
@@ -29,28 +26,13 @@
     "model_status": "partial",
     "model_coverage": {
       "rules_total": 16,
-      "rules_modelled": 8,
-      "rules_info": 8,
+      "rules_modelled": 10,
+      "rules_info": 6,
       "caps_total": 4,
-      "caps_enforced": 1,
+      "caps_enforced": 3,
       "flags": [
         {
-          "code": "info_rule",
-          "source_local_id": "phonepe_categories_2pct",
-          "detail": "restriction_conflict"
-        },
-        {
-          "code": "partial_category_list",
-          "source_local_id": "phonepe_categories_2pct",
-          "detail": null
-        },
-        {
           "code": "channel_type_restates_brand",
-          "source_local_id": "phonepe_categories_2pct",
-          "detail": null
-        },
-        {
-          "code": "narrow_token_to_mcc",
           "source_local_id": "phonepe_categories_2pct",
           "detail": null
         },
@@ -58,11 +40,6 @@
           "code": "channel_type_restates_brand",
           "source_local_id": "online_brands_1pct",
           "detail": null
-        },
-        {
-          "code": "info_rule",
-          "source_local_id": "rupay_upi_scan_pay_1pct",
-          "detail": "transaction_type"
         },
         {
           "code": "info_rule",
@@ -135,31 +112,6 @@
           "detail": "condition:channel_type"
         },
         {
-          "code": "post_limit_conflict",
-          "source_local_id": "phonepe_2pct_monthly_cap",
-          "detail": null
-        },
-        {
-          "code": "cap_targets_info_only",
-          "source_local_id": "phonepe_2pct_monthly_cap",
-          "detail": null
-        },
-        {
-          "code": "post_limit_conflict",
-          "source_local_id": "online_brands_1pct_monthly_cap",
-          "detail": null
-        },
-        {
-          "code": "post_limit_conflict",
-          "source_local_id": "upi_scan_pay_1pct_monthly_cap",
-          "detail": null
-        },
-        {
-          "code": "cap_targets_info_only",
-          "source_local_id": "upi_scan_pay_1pct_monthly_cap",
-          "detail": null
-        },
-        {
           "code": "non_earning_cap_skipped",
           "source_local_id": "cashback_redemption_monthly_cap",
           "detail": null
@@ -181,6 +133,70 @@
           "reason": "T&C list no base earning on other spends.",
           "source_url": "https://www.hdfc.bank.in/content/dam/hdfcbankpws/in/en/personal-banking/discover-products/cards/credit-cards/phonepe-hdfc-bank-uno-credit-card-/phonepe-hdfc-bank-uno-cc-reward-points-tncs.pdf",
           "checked_on": "2026-11-05"
+        },
+        {
+          "path": "reward_rules[id=phonepe_categories_2pct].conditions.categories",
+          "op": "remove",
+          "value_sha256": "74234e98afe7498f",
+          "reason": "WP7: The issuer MCC list (already overridden) defines the PhonePe categories exactly; the free-text category names conflicted with it (restriction_conflict -> info).",
+          "source_url": "https://www.hdfc.bank.in/content/dam/hdfcbankpws/in/en/personal-banking/discover-products/cards/credit-cards/phonepe-hdfc-bank-uno-credit-card-/phonepe-hdfc-bank-uno-cc-reward-points-tncs.pdf",
+          "checked_on": "2026-11-05"
+        },
+        {
+          "path": "reward_rules[id=phonepe_categories_2pct].conditions.pincode_condition",
+          "op": "remove",
+          "value_sha256": "74234e98afe7498f",
+          "reason": "WP7: PINCODE note restates the RuPay-on-UPI channel; not a restriction on PhonePe-app category spends.",
+          "source_url": "https://www.hdfc.bank.in/content/dam/hdfcbankpws/in/en/personal-banking/discover-products/cards/credit-cards/phonepe-hdfc-bank-uno-credit-card-/phonepe-hdfc-bank-uno-cc-reward-points-tncs.pdf",
+          "checked_on": "2026-11-05"
+        },
+        {
+          "path": "reward_rules[id=rupay_upi_scan_pay_1pct].conditions.transaction_type",
+          "op": "remove",
+          "value_sha256": "74234e98afe7498f",
+          "reason": "WP7: \"Scan and Pay\" restates rail upi_qr.",
+          "source_url": "https://www.hdfc.bank.in/content/dam/hdfcbankpws/in/en/personal-banking/discover-products/cards/credit-cards/phonepe-hdfc-bank-uno-credit-card-/phonepe-hdfc-bank-uno-cc-reward-points-tncs.pdf",
+          "checked_on": "2026-11-05"
+        },
+        {
+          "path": "reward_rules[id=rupay_upi_scan_pay_1pct].conditions.network",
+          "op": "remove",
+          "value_sha256": "74234e98afe7498f",
+          "reason": "WP7: The card is a RuPay card; network restates the card.",
+          "source_url": "https://www.hdfc.bank.in/content/dam/hdfcbankpws/in/en/personal-banking/discover-products/cards/credit-cards/phonepe-hdfc-bank-uno-credit-card-/phonepe-hdfc-bank-uno-cc-reward-points-tncs.pdf",
+          "checked_on": "2026-11-05"
+        },
+        {
+          "path": "reward_rules[id=rupay_upi_scan_pay_1pct].channel_type",
+          "op": "set",
+          "value_sha256": "5cf7504d9781301d",
+          "reason": "WP7: \"RuPay credit card on UPI\" restates this RuPay card on rail upi_qr; it was read as a payment-app platform, so Scan & Pay never matched.",
+          "source_url": "https://www.hdfc.bank.in/content/dam/hdfcbankpws/in/en/personal-banking/discover-products/cards/credit-cards/phonepe-hdfc-bank-uno-credit-card-/phonepe-hdfc-bank-uno-cc-reward-points-tncs.pdf",
+          "checked_on": "2026-11-05"
+        },
+        {
+          "path": "cap_rules[id=phonepe_2pct_monthly_cap].metric",
+          "op": "set",
+          "value_sha256": "7af78ba28cf9ccb3",
+          "reason": "WP7: T&C: \"Capping of 500 reward points per calendar month\" on the category. The card has no base earn (base 0 override), so bonus = total; total removes the bonus-then-zero conflict flag.",
+          "source_url": "https://www.hdfc.bank.in/content/dam/hdfcbankpws/in/en/personal-banking/discover-products/cards/credit-cards/phonepe-hdfc-bank-uno-credit-card-/phonepe-hdfc-bank-uno-cc-reward-points-tncs.pdf",
+          "checked_on": "2026-11-05"
+        },
+        {
+          "path": "cap_rules[id=online_brands_1pct_monthly_cap].metric",
+          "op": "set",
+          "value_sha256": "7af78ba28cf9ccb3",
+          "reason": "WP7: Same as phonepe_2pct_monthly_cap (base 0).",
+          "source_url": "https://www.hdfc.bank.in/content/dam/hdfcbankpws/in/en/personal-banking/discover-products/cards/credit-cards/phonepe-hdfc-bank-uno-credit-card-/phonepe-hdfc-bank-uno-cc-reward-points-tncs.pdf",
+          "checked_on": "2026-11-05"
+        },
+        {
+          "path": "cap_rules[id=upi_scan_pay_1pct_monthly_cap].metric",
+          "op": "set",
+          "value_sha256": "7af78ba28cf9ccb3",
+          "reason": "WP7: Same as phonepe_2pct_monthly_cap (base 0).",
+          "source_url": "https://www.hdfc.bank.in/content/dam/hdfcbankpws/in/en/personal-banking/discover-products/cards/credit-cards/phonepe-hdfc-bank-uno-credit-card-/phonepe-hdfc-bank-uno-cc-reward-points-tncs.pdf",
+          "checked_on": "2026-11-05"
         }
       ]
     },
@@ -199,20 +215,16 @@
         "conditions": {
           "source_local_id": "phonepe_categories_2pct",
           "part": null,
-          "info_reasons": [
-            "restriction_conflict"
-          ],
+          "info_reasons": [],
           "flags": [
-            "partial_category_list",
-            "channel_type_restates_brand",
-            "narrow_token_to_mcc"
+            "channel_type_restates_brand"
           ]
         },
         "notes": null,
         "effective_from": "2025-06-10",
         "effective_to": null,
         "excluded_categories": [],
-        "rule_role": "info",
+        "rule_role": "earn",
         "merchant_slugs": [],
         "platform_slugs": [
           "phonepe_app"
@@ -307,26 +319,22 @@
         "conditions": {
           "source_local_id": "rupay_upi_scan_pay_1pct",
           "part": null,
-          "info_reasons": [
-            "transaction_type"
-          ],
+          "info_reasons": [],
           "flags": []
         },
         "notes": null,
         "effective_from": "2025-06-10",
         "effective_to": null,
         "excluded_categories": [],
-        "rule_role": "info",
+        "rule_role": "earn",
         "merchant_slugs": [],
-        "platform_slugs": [
-          "rupay_upi"
-        ],
+        "platform_slugs": [],
         "mcc_include": [],
         "mcc_exclude": [],
         "except_merchant_slugs": [],
         "except_platform_slugs": [],
         "block_inr": null,
-        "min_engine_version": 2,
+        "min_engine_version": 1,
         "max_engine_version": null,
         "source_local_id": "rupay_upi_scan_pay_1pct",
         "display_note": "1% Reward Points on eligible Scan & Pay spends through RuPay credit card on UPI."
@@ -808,9 +816,9 @@
         "period": "calendar_month",
         "cap_value": 500,
         "post_cap_unit": null,
-        "post_cap_rate": null,
+        "post_cap_rate": 0,
         "resets_on_day": 1,
-        "cap_kind": "bonus_points",
+        "cap_kind": "total_points",
         "cap_amount": 500,
         "scope": "targets",
         "targets": [
@@ -833,9 +841,9 @@
         "period": "calendar_month",
         "cap_value": 500,
         "post_cap_unit": null,
-        "post_cap_rate": null,
+        "post_cap_rate": 0,
         "resets_on_day": 1,
-        "cap_kind": "bonus_points",
+        "cap_kind": "total_points",
         "cap_amount": 500,
         "scope": "targets",
         "targets": [
@@ -858,9 +866,9 @@
         "period": "calendar_month",
         "cap_value": 500,
         "post_cap_unit": null,
-        "post_cap_rate": null,
+        "post_cap_rate": 0,
         "resets_on_day": 1,
-        "cap_kind": "bonus_points",
+        "cap_kind": "total_points",
         "cap_amount": 500,
         "scope": "targets",
         "targets": [
@@ -869,7 +877,7 @@
         "parent_cap_id": null,
         "post_cap_behavior": null,
         "anchor": null,
-        "min_engine_version": 2,
+        "min_engine_version": 1,
         "source_local_id": "upi_scan_pay_1pct_monthly_cap"
       }
     ],

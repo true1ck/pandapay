@@ -4,8 +4,8 @@
   "inputs": {
     "transform_version": "7",
     "source_record_sha256": "61935416c29b40b70a4cfd88628795f2ed0a4795ec48bb5ba448b2c89cde1cf6",
-    "override_sha256": "513b9791fa62e2289262528535d0a9e570742796147b5b8925d1f3677e9bdfcd",
-    "directory_sha256": "c2fded34df886aef08595eebb7629a4dd140c98af750f3c891d6c291b4874b53",
+    "override_sha256": "c72872150b9275f68e1669a7a714e085cfc05d4fd502d03d96107dc4976798c2",
+    "directory_sha256": "3d9f9f535481544d4b19262838290f77d8270eb3b4aec73c48608f10c39cedf2",
     "verified": false
   },
   "blocking_flags": [
@@ -28,16 +28,11 @@
     "model_status": "partial",
     "model_coverage": {
       "rules_total": 10,
-      "rules_modelled": 8,
-      "rules_info": 2,
+      "rules_modelled": 9,
+      "rules_info": 1,
       "caps_total": 3,
-      "caps_enforced": 2,
+      "caps_enforced": 3,
       "flags": [
-        {
-          "code": "info_rule",
-          "source_local_id": "fuel_hpcl_30x",
-          "detail": "up_to_rate"
-        },
         {
           "code": "channel_type_restates_brand",
           "source_local_id": "fastag_30x",
@@ -74,11 +69,6 @@
           "detail": null
         },
         {
-          "code": "cap_targets_info_only",
-          "source_local_id": "fuel_monthly_spend_cap",
-          "detail": null
-        },
-        {
           "code": "unsupported_milestone",
           "source_local_id": "first_hpcl_welcome",
           "detail": "welcome milestone without a window"
@@ -90,6 +80,14 @@
           "op": "set",
           "value_sha256": "c5d1866aabc15dda",
           "reason": "Issuer caps the 5% fuel reward points at Rs 12,000 per statement cycle (2,400 points); Rs 10,000 is the HP Pay Happy Coins limit.",
+          "source_url": "https://www.idfcfirst.bank.in/content/dam/idfcfirstbank/pdf/Savings-Maximiser-FIRST-Power-plus.pdf",
+          "checked_on": "2026-11-05"
+        },
+        {
+          "path": "reward_rules[id=fuel_hpcl_30x].action.reason",
+          "op": "set",
+          "value_sha256": "c8353307acc930a7",
+          "reason": "WP7: The old reason mentioned \"up to 1.5%\" HP Pay Happy Coins (a different currency), which tripped the loader's \"up to\" multi-rate check. Savings Maximiser: max Rs12,000 spend and 2,400 points per cycle = a fixed 30 per Rs150.",
           "source_url": "https://www.idfcfirst.bank.in/content/dam/idfcfirstbank/pdf/Savings-Maximiser-FIRST-Power-plus.pdf",
           "checked_on": "2026-11-05"
         }
@@ -110,16 +108,14 @@
         "conditions": {
           "source_local_id": "fuel_hpcl_30x",
           "part": null,
-          "info_reasons": [
-            "up_to_rate"
-          ],
+          "info_reasons": [],
           "flags": []
         },
         "notes": null,
         "effective_from": "2024-05-01",
         "effective_to": null,
         "excluded_categories": [],
-        "rule_role": "info",
+        "rule_role": "earn",
         "merchant_slugs": [
           "hp_pay",
           "hpcl"
@@ -138,7 +134,7 @@
         "min_engine_version": 2,
         "max_engine_version": null,
         "source_local_id": "fuel_hpcl_30x",
-        "display_note": "30X rewards equivalent to 5% savings via reward points at ₹0.25/RP (plus up to 1.5% via HP Pay Happy Coins and 1% fuel surcharge waiver)"
+        "display_note": "30X Reward Points (5% at Rs0.25 per point) on HPCL fuel."
       },
       {
         "id": "hpcl-idfc-first-power-plus:rule:grocery_utility_30x#1",

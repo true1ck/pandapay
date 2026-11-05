@@ -4,13 +4,11 @@
   "inputs": {
     "transform_version": "7",
     "source_record_sha256": "9d0b13f66d28f1dbd68ce624da340f4bbce0d18ec71d896aad0112bed04b2dc7",
-    "override_sha256": "6d91c0bb2f65f4ebf7479e3d9db72be84f9db2cafe891ccf185af913b396fe65",
-    "directory_sha256": "c2fded34df886aef08595eebb7629a4dd140c98af750f3c891d6c291b4874b53",
-    "verified": false
+    "override_sha256": "a72bd1b22d05a381b166247fa2a00ec38fa1c2ec4d7277afb54771d2dd5b7b7e",
+    "directory_sha256": "3d9f9f535481544d4b19262838290f77d8270eb3b4aec73c48608f10c39cedf2",
+    "verified": true
   },
-  "blocking_flags": [
-    "info_rule"
-  ],
+  "blocking_flags": [],
   "card": {
     "id": "tata-neu-plus-sbi-credit-card:card",
     "slug": "tata-neu-plus-sbi-credit-card",
@@ -20,16 +18,18 @@
     "base_reward_unit": "points_per_100",
     "base_reward_rate": 1,
     "point_value_inr": 1,
-    "excluded_categories": [],
+    "excluded_categories": [
+      "cat-emi"
+    ],
     "accrual_block_inr": 100,
     "accrual_rounding": "points_floor",
     "cashback_rounding": null,
     "points_expiry_months": 12,
-    "model_status": "partial",
+    "model_status": "verified",
     "model_coverage": {
       "rules_total": 14,
-      "rules_modelled": 9,
-      "rules_info": 5,
+      "rules_modelled": 10,
+      "rules_info": 4,
       "caps_total": 5,
       "caps_enforced": 4,
       "flags": [
@@ -75,28 +75,23 @@
         },
         {
           "code": "info_rule",
-          "source_local_id": "base-other-eligible-spends",
-          "detail": "condition:exclude_emi"
-        },
-        {
-          "code": "info_rule",
-          "source_local_id": "base-other-eligible-spends",
-          "detail": "condition:exclude_reward_exclusions"
-        },
-        {
-          "code": "info_rule",
-          "source_local_id": "rupay-upi-1pct",
-          "detail": "condition:network"
-        },
-        {
-          "code": "info_rule",
           "source_local_id": "rupay-upi-1pct",
           "detail": "condition:includes_partner_tata_brands"
         },
         {
           "code": "info_rule",
           "source_local_id": "rupay-upi-1pct",
+          "detail": "condition:card_variant"
+        },
+        {
+          "code": "info_rule",
+          "source_local_id": "rupay-upi-1pct",
           "detail": "condition:channel_type"
+        },
+        {
+          "code": "depends_on_user_attribute",
+          "source_local_id": "rupay-upi-1pct",
+          "detail": null
         },
         {
           "code": "mcc_scoped_exclusion",
@@ -226,6 +221,30 @@
           "reason": "Issuer rounds the exact-amount NeuCoins down to a whole number (D7).",
           "source_url": "https://www.sbicard.com/sbi-card-en/assets/docs/pdf/ekit-tncs/Tata-Neu-Plus-Booklet.pdf",
           "checked_on": "2026-11-05"
+        },
+        {
+          "path": "reward_rules[id=base-other-eligible-spends].conditions",
+          "op": "set",
+          "value_sha256": "bea29710a0319372",
+          "reason": "WP7: \"exclude_reward_exclusions\" restates the card's exclusion rules; \"exclude_emi\" kept as an excluded category. The rule pays the base 1% the implicit base already paid, so nothing widens; it was an info earning rule.",
+          "source_url": "https://www.sbicard.com/sbi-card-en/assets/docs/pdf/ekit-tncs/Tata-Neu-Plus-Booklet.pdf",
+          "checked_on": "2026-11-05"
+        },
+        {
+          "path": "reward_rules[id=rupay-upi-1pct].conditions.network",
+          "op": "remove",
+          "value_sha256": "74234e98afe7498f",
+          "reason": "WP7: Replaced by card_variant below: UPI earn applies only to the RuPay variant of the card (research note).",
+          "source_url": "https://www.sbicard.com/sbi-card-en/assets/docs/pdf/ekit-tncs/Tata-Neu-Plus-Booklet.pdf",
+          "checked_on": "2026-11-05"
+        },
+        {
+          "path": "reward_rules[id=rupay-upi-1pct].conditions.card_variant",
+          "op": "set",
+          "value_sha256": "a862b80783ac5b88",
+          "reason": "WP7: D13b: the rule depends on which card variant the user holds (RuPay only), a user attribute the context does not carry; stays info with depends_on_user_attribute.",
+          "source_url": "https://www.sbicard.com/sbi-card-en/assets/docs/pdf/ekit-tncs/Tata-Neu-Plus-Booklet.pdf",
+          "checked_on": "2026-11-05"
         }
       ]
     },
@@ -335,17 +354,16 @@
         "conditions": {
           "source_local_id": "base-other-eligible-spends",
           "part": null,
-          "info_reasons": [
-            "condition:exclude_emi",
-            "condition:exclude_reward_exclusions"
-          ],
+          "info_reasons": [],
           "flags": []
         },
         "notes": null,
         "effective_from": "2025-04-01",
         "effective_to": null,
-        "excluded_categories": [],
-        "rule_role": "info",
+        "excluded_categories": [
+          "cat-emi"
+        ],
+        "rule_role": "base",
         "merchant_slugs": [],
         "platform_slugs": [],
         "mcc_include": [],
@@ -353,7 +371,7 @@
         "except_merchant_slugs": [],
         "except_platform_slugs": [],
         "block_inr": null,
-        "min_engine_version": 2,
+        "min_engine_version": 1,
         "max_engine_version": null,
         "source_local_id": "base-other-eligible-spends",
         "display_note": "1% value back as NeuCoins on other eligible spends."
@@ -373,11 +391,13 @@
           "source_local_id": "rupay-upi-1pct",
           "part": null,
           "info_reasons": [
-            "condition:network",
             "condition:includes_partner_tata_brands",
+            "condition:card_variant",
             "condition:channel_type"
           ],
-          "flags": []
+          "flags": [
+            "depends_on_user_attribute"
+          ]
         },
         "notes": null,
         "effective_from": "2025-04-01",

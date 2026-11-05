@@ -4,8 +4,8 @@
   "inputs": {
     "transform_version": "7",
     "source_record_sha256": "7b371da3daece551ec05d29a274542a09a514c7c1213adfdfc6e08914d0ebedd",
-    "override_sha256": "aa46a85851752e004f45d9a9e1c169d10ae175328e8815b4514df7e385de08ac",
-    "directory_sha256": "c2fded34df886aef08595eebb7629a4dd140c98af750f3c891d6c291b4874b53",
+    "override_sha256": "ba619ddbedc7b8c182c6cd4fe9634647aec920942f0d7bd6227106da06c86bf0",
+    "directory_sha256": "3d9f9f535481544d4b19262838290f77d8270eb3b4aec73c48608f10c39cedf2",
     "verified": false
   },
   "blocking_flags": [
@@ -28,10 +28,10 @@
     "model_status": "partial",
     "model_coverage": {
       "rules_total": 14,
-      "rules_modelled": 6,
-      "rules_info": 8,
+      "rules_modelled": 7,
+      "rules_info": 7,
       "caps_total": 1,
-      "caps_enforced": 0,
+      "caps_enforced": 1,
       "flags": [
         {
           "code": "info_rule",
@@ -69,17 +69,7 @@
           "detail": null
         },
         {
-          "code": "info_rule",
-          "source_local_id": "irctc_air_and_ecatering_accelerator",
-          "detail": "condition:merchant_in"
-        },
-        {
-          "code": "info_rule",
-          "source_local_id": "irctc_air_and_ecatering_accelerator",
-          "detail": "condition:channel_type"
-        },
-        {
-          "code": "narrow_token_to_mcc",
+          "code": "narrow_token_on_merchant",
           "source_local_id": "irctc_air_and_ecatering_accelerator",
           "detail": null
         },
@@ -149,11 +139,6 @@
           "detail": "condition:channel_type"
         },
         {
-          "code": "cap_targets_info_only",
-          "source_local_id": "air_ticket_reward_cap_statement_cycle",
-          "detail": null
-        },
-        {
           "code": "synthesized_base_rule",
           "source_local_id": null,
           "detail": "block ₹125"
@@ -173,6 +158,22 @@
           "op": "set",
           "value_sha256": "7af78ba28cf9ccb3",
           "reason": "Cap is on total air-ticket earning per cycle.",
+          "source_url": "https://www.sbicard.com/sbi-card-en/assets/docs/pdf/ekit-tncs/IRCTCPremiertnc.pdf",
+          "checked_on": "2026-11-05"
+        },
+        {
+          "path": "reward_rules[id=irctc_air_and_ecatering_accelerator].conditions",
+          "op": "set",
+          "value_sha256": "b48da05ac37104b5",
+          "reason": "WP7: T&C: 5 RP per Rs125 on IRCTC Air (air.irctc.co.in). The website names did not resolve (rule was info); merchant IRCTC plus airline MCCs keeps rail tickets out.",
+          "source_url": "https://www.sbicard.com/sbi-card-en/assets/docs/pdf/ekit-tncs/IRCTCPremiertnc.pdf",
+          "checked_on": "2026-11-05"
+        },
+        {
+          "path": "reward_rules[id=irctc_air_and_ecatering_accelerator].channel_type",
+          "op": "set",
+          "value_sha256": "5cf7504d9781301d",
+          "reason": "WP7: The channel restated the IRCTC air website.",
           "source_url": "https://www.sbicard.com/sbi-card-en/assets/docs/pdf/ekit-tncs/IRCTCPremiertnc.pdf",
           "checked_on": "2026-11-05"
         }
@@ -338,7 +339,7 @@
         "id": "irctc-sbi-card-premier:rule:irctc_air_and_ecatering_accelerator",
         "category_id": null,
         "category_slug": null,
-        "merchant_pattern": null,
+        "merchant_pattern": "irctc",
         "rail": "online",
         "unit": "points_per_100",
         "rate": 5,
@@ -348,20 +349,19 @@
         "conditions": {
           "source_local_id": "irctc_air_and_ecatering_accelerator",
           "part": null,
-          "info_reasons": [
-            "condition:merchant_in",
-            "condition:channel_type"
-          ],
+          "info_reasons": [],
           "flags": [
-            "narrow_token_to_mcc"
+            "narrow_token_on_merchant"
           ]
         },
         "notes": null,
         "effective_from": "2025-07-26",
         "effective_to": null,
         "excluded_categories": [],
-        "rule_role": "info",
-        "merchant_slugs": [],
+        "rule_role": "earn",
+        "merchant_slugs": [
+          "irctc"
+        ],
         "platform_slugs": [],
         "mcc_include": [
           "3000",

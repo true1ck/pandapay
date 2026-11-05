@@ -4,9 +4,9 @@
   "inputs": {
     "transform_version": "7",
     "source_record_sha256": "b3c006725cad44a9c6110152007164ab7c6efbf62765530fd068b7083f2e0f95",
-    "override_sha256": null,
-    "directory_sha256": "c2fded34df886aef08595eebb7629a4dd140c98af750f3c891d6c291b4874b53",
-    "verified": false
+    "override_sha256": "8d51329cc1ff4a8b8a08e521522a3aad34466172d29f6cf54d01ed7aa708c4e0",
+    "directory_sha256": "3d9f9f535481544d4b19262838290f77d8270eb3b4aec73c48608f10c39cedf2",
+    "verified": true
   },
   "blocking_flags": [],
   "card": {
@@ -23,44 +23,14 @@
     "accrual_rounding": "floor",
     "cashback_rounding": null,
     "points_expiry_months": 0,
-    "model_status": "partial",
+    "model_status": "verified",
     "model_coverage": {
-      "rules_total": 13,
-      "rules_modelled": 12,
-      "rules_info": 1,
+      "rules_total": 14,
+      "rules_modelled": 14,
+      "rules_info": 0,
       "caps_total": 0,
       "caps_enforced": 0,
       "flags": [
-        {
-          "code": "info_rule",
-          "source_local_id": "indigo_flight_booking_accelerator",
-          "detail": "condition:flight_booking_only"
-        },
-        {
-          "code": "info_rule",
-          "source_local_id": "indigo_flight_booking_accelerator",
-          "detail": "condition:third_party_booking_excluded"
-        },
-        {
-          "code": "info_rule",
-          "source_local_id": "indigo_flight_booking_accelerator",
-          "detail": "condition:booking_types_excluded"
-        },
-        {
-          "code": "info_rule",
-          "source_local_id": "indigo_flight_booking_accelerator",
-          "detail": "condition:tier_dependent"
-        },
-        {
-          "code": "negated_condition",
-          "source_local_id": "indigo_flight_booking_accelerator",
-          "detail": null
-        },
-        {
-          "code": "depends_on_user_attribute",
-          "source_local_id": "indigo_flight_booking_accelerator",
-          "detail": null
-        },
         {
           "code": "narrow_token_on_merchant",
           "source_local_id": "indigo_flight_booking_accelerator",
@@ -107,7 +77,48 @@
           "detail": null
         }
       ],
-      "overrides_applied": []
+      "overrides_applied": [
+        {
+          "path": "reward_rules[id=dining_entertainment_accelerator].conditions.mcc_list",
+          "op": "set",
+          "value_sha256": "000c1d697f3c1065",
+          "reason": "WP7: Kotak page: 2 BluChips per Rs100 on Dining & Entertainment. This row keeps the dining MCCs; entertainment gets its own row (the dining category blocked cinema spends).",
+          "source_url": "https://www.kotak.bank.in/en/personal-banking/cards/credit-cards/indigo-credit-card.html",
+          "checked_on": "2026-11-05"
+        },
+        {
+          "path": "reward_rules",
+          "op": "append",
+          "value_sha256": "e939dadf2f35ff0f",
+          "reason": "WP7: Kotak page: \"Earn unlimited 2 IndiGo BluChips per Rs 100 spent on all Dining & Entertainment spends\"; entertainment MCCs from the record.",
+          "source_url": "https://www.kotak.bank.in/en/personal-banking/cards/credit-cards/indigo-credit-card.html",
+          "checked_on": "2026-11-05"
+        },
+        {
+          "path": "reward_rules[id=indigo_flight_booking_accelerator].action.points_per_block",
+          "op": "set",
+          "value_sha256": "e629fa6598d73276",
+          "reason": "WP7: D13b: T&C Table B gives 15 / 17 / 19 BluChips per Rs100 for Blu 3 / Blu 2 / Blu 1; the entry tier (Blu 3) is 15.",
+          "source_url": "https://images.kotak.bank.in/bank/mailers/2025/files/Kotak%20IndiGo%20Credit%20Card%20TnC.pdf",
+          "checked_on": "2026-11-05"
+        },
+        {
+          "path": "reward_rules[id=indigo_flight_booking_accelerator].action.reason",
+          "op": "set",
+          "value_sha256": "0a64d844abb439c4",
+          "reason": "WP7: Entry-tier rate (D13b); the old \"Up to 19\" wording tripped the multi-rate check.",
+          "source_url": "https://images.kotak.bank.in/bank/mailers/2025/files/Kotak%20IndiGo%20Credit%20Card%20TnC.pdf",
+          "checked_on": "2026-11-05"
+        },
+        {
+          "path": "reward_rules[id=indigo_flight_booking_accelerator].conditions",
+          "op": "set",
+          "value_sha256": "affc851ee25ce030",
+          "reason": "WP7: D13b entry-tier earn rule. Website/app-only and no third-party bookings are carried by merchant IndiGo on rail online; group/corporate/SME/agent bookings cannot be told apart in the context and are rare on a personal card (accepted, noted in the WP7 report).",
+          "source_url": "https://images.kotak.bank.in/bank/mailers/2025/files/Kotak%20IndiGo%20Credit%20Card%20TnC.pdf",
+          "checked_on": "2026-11-05"
+        }
+      ]
     },
     "reward_rules": [
       {
@@ -172,25 +183,7 @@
           "5811",
           "5812",
           "5813",
-          "5814",
-          "7829",
-          "7832",
-          "7833",
-          "7841",
-          "7911",
-          "7922",
-          "7929",
-          "7932",
-          "7933",
-          "7941",
-          "7991",
-          "7992",
-          "7993",
-          "7994",
-          "7996",
-          "7997",
-          "7998",
-          "7999"
+          "5814"
         ],
         "mcc_exclude": [],
         "except_merchant_slugs": [],
@@ -208,22 +201,15 @@
         "merchant_pattern": "goindigo",
         "rail": "online",
         "unit": "points_per_100",
-        "rate": 19,
+        "rate": 15,
         "min_txn_inr": null,
         "max_txn_inr": null,
         "priority": 10,
         "conditions": {
           "source_local_id": "indigo_flight_booking_accelerator",
           "part": null,
-          "info_reasons": [
-            "condition:flight_booking_only",
-            "condition:third_party_booking_excluded",
-            "condition:booking_types_excluded",
-            "condition:tier_dependent"
-          ],
+          "info_reasons": [],
           "flags": [
-            "negated_condition",
-            "depends_on_user_attribute",
             "narrow_token_on_merchant"
           ]
         },
@@ -231,7 +217,7 @@
         "effective_from": "2025-07-10",
         "effective_to": null,
         "excluded_categories": [],
-        "rule_role": "info",
+        "rule_role": "earn",
         "merchant_slugs": [
           "indigo"
         ],
@@ -241,10 +227,10 @@
         "except_merchant_slugs": [],
         "except_platform_slugs": [],
         "block_inr": null,
-        "min_engine_version": 2,
+        "min_engine_version": 1,
         "max_engine_version": null,
         "source_local_id": "indigo_flight_booking_accelerator",
-        "display_note": "Up to 19 IndiGo BluChips per ₹100 on eligible IndiGo flight bookings through the IndiGo website or mobile application, comprising 8 base BluChips, 3 card bonus BluChips, 4 website/app BluChips and up to 4 tier-based bonus BluChips."
+        "display_note": "15 IndiGo BluChips per Rs100 (entry tier Blu 3) on IndiGo flights booked on the IndiGo website or app."
       },
       {
         "id": "indigo-kotak-credit-card:rule:rent_exclusion#1",
@@ -1200,6 +1186,59 @@
         "max_engine_version": null,
         "source_local_id": "telecom_mcc_exclusion",
         "display_note": "Telecommunication and cable service MCCs are excluded from BluChip earning."
+      },
+      {
+        "id": "indigo-kotak-credit-card:rule:entertainment_accelerator",
+        "category_id": "cat-entertainment",
+        "category_slug": "entertainment",
+        "merchant_pattern": null,
+        "rail": null,
+        "unit": "points_per_100",
+        "rate": 2,
+        "min_txn_inr": null,
+        "max_txn_inr": null,
+        "priority": 20,
+        "conditions": {
+          "source_local_id": "entertainment_accelerator",
+          "part": null,
+          "info_reasons": [],
+          "flags": []
+        },
+        "notes": null,
+        "effective_from": "2025-07-10",
+        "effective_to": null,
+        "excluded_categories": [],
+        "rule_role": "earn",
+        "merchant_slugs": [],
+        "platform_slugs": [],
+        "mcc_include": [
+          "7829",
+          "7832",
+          "7833",
+          "7841",
+          "7911",
+          "7922",
+          "7929",
+          "7932",
+          "7933",
+          "7941",
+          "7991",
+          "7992",
+          "7993",
+          "7994",
+          "7996",
+          "7997",
+          "7998",
+          "7999"
+        ],
+        "mcc_exclude": [],
+        "except_merchant_slugs": [],
+        "except_platform_slugs": [],
+        "block_inr": null,
+        "min_engine_version": 2,
+        "max_engine_version": null,
+        "source_local_id": "entertainment_accelerator",
+        "display_note": "Earn 2 IndiGo BluChips per Rs100 on Entertainment spends."
       }
     ],
     "cap_rules": [],

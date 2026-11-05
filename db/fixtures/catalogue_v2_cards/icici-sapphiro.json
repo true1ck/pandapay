@@ -4,8 +4,8 @@
   "inputs": {
     "transform_version": "7",
     "source_record_sha256": "b72c8ef6ba52f5b3cbc30dbe02280e16cfb00ba7efcb82f7fbc4ad385edcdcaf",
-    "override_sha256": null,
-    "directory_sha256": "c2fded34df886aef08595eebb7629a4dd140c98af750f3c891d6c291b4874b53",
+    "override_sha256": "ab7bfed1eb461a24250f9f3475c561e46b0a1b95c81fb1bbc05e9a8c11595859",
+    "directory_sha256": "3d9f9f535481544d4b19262838290f77d8270eb3b4aec73c48608f10c39cedf2",
     "verified": false
   },
   "blocking_flags": [
@@ -32,10 +32,10 @@
     "model_status": "partial",
     "model_coverage": {
       "rules_total": 12,
-      "rules_modelled": 7,
-      "rules_info": 5,
+      "rules_modelled": 8,
+      "rules_info": 4,
       "caps_total": 4,
-      "caps_enforced": 3,
+      "caps_enforced": 4,
       "flags": [
         {
           "code": "unmapped_excluded_category",
@@ -51,11 +51,6 @@
           "code": "unmapped_excluded_category",
           "source_local_id": "international_standard",
           "detail": null
-        },
-        {
-          "code": "info_rule",
-          "source_local_id": "grocery_standard",
-          "detail": "unmapped_condition_category:category"
         },
         {
           "code": "narrow_token_to_mcc",
@@ -91,14 +86,18 @@
           "code": "info_rule",
           "source_local_id": "government_utility_rate",
           "detail": "condition:classification"
-        },
-        {
-          "code": "cap_targets_info_only",
-          "source_local_id": "grocery_reward_cap",
-          "detail": null
         }
       ],
-      "overrides_applied": []
+      "overrides_applied": [
+        {
+          "path": "reward_rules[id=grocery_standard].conditions",
+          "op": "set",
+          "value_sha256": "44136fa355b3678a",
+          "reason": "WP7: The condition restated the grocery/departmental category; the rule earns the domestic rate and carries the Rs40,000 grocery cap (MITC capped-MCC table). Rule was info, so the cap never applied.",
+          "source_url": "https://www.icicibank.com/managed-assets/docs/personal/cards/mitc_cc.pdf",
+          "checked_on": "2026-11-05"
+        }
+      ]
     },
     "reward_rules": [
       {
@@ -265,16 +264,14 @@
         "conditions": {
           "source_local_id": "grocery_standard",
           "part": null,
-          "info_reasons": [
-            "unmapped_condition_category:category"
-          ],
+          "info_reasons": [],
           "flags": []
         },
         "notes": null,
         "effective_from": "2024-11-15",
         "effective_to": null,
         "excluded_categories": [],
-        "rule_role": "info",
+        "rule_role": "earn",
         "merchant_slugs": [],
         "platform_slugs": [],
         "mcc_include": [],
@@ -282,7 +279,7 @@
         "except_merchant_slugs": [],
         "except_platform_slugs": [],
         "block_inr": null,
-        "min_engine_version": 2,
+        "min_engine_version": 1,
         "max_engine_version": null,
         "source_local_id": "grocery_standard",
         "display_note": "Grocery and departmental-store spending earns 2 Reward Points per ₹100 up to ₹40,000 spend per statement cycle."
@@ -694,7 +691,7 @@
         "parent_cap_id": null,
         "post_cap_behavior": "zero",
         "anchor": null,
-        "min_engine_version": 2,
+        "min_engine_version": 1,
         "source_local_id": "grocery_reward_cap"
       },
       {

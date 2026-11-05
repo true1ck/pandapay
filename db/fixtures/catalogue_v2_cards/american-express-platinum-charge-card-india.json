@@ -4,8 +4,8 @@
   "inputs": {
     "transform_version": "7",
     "source_record_sha256": "020b50efb744714ece417fda47ba7e482e177debf2f0ff73aabdc9b8801ed8d5",
-    "override_sha256": "6d530455a1b0041a61e58c142315eba882b712308accb2487d648f6317a94af0",
-    "directory_sha256": "c2fded34df886aef08595eebb7629a4dd140c98af750f3c891d6c291b4874b53",
+    "override_sha256": "7f8df85a82defdcec87f3c5d3ac43fefa8d322ca24f60912926a313ace3f67f9",
+    "directory_sha256": "3d9f9f535481544d4b19262838290f77d8270eb3b4aec73c48608f10c39cedf2",
     "verified": false
   },
   "blocking_flags": [
@@ -29,8 +29,8 @@
     "model_status": "partial",
     "model_coverage": {
       "rules_total": 9,
-      "rules_modelled": 4,
-      "rules_info": 5,
+      "rules_modelled": 5,
+      "rules_info": 4,
       "caps_total": 1,
       "caps_enforced": 1,
       "flags": [
@@ -45,9 +45,9 @@
           "detail": null
         },
         {
-          "code": "info_rule",
+          "code": "mcc_scoped_exclusion",
           "source_local_id": "utility_zero_rewards",
-          "detail": "condition:subcategories"
+          "detail": null
         },
         {
           "code": "exclusion_scope_broadened",
@@ -126,6 +126,14 @@
           "op": "set",
           "value_sha256": "7af78ba28cf9ccb3",
           "reason": "Issuer caps the fuel earning at 5,000 points per month in total, not only the bonus part.",
+          "source_url": "https://www.americanexpress.com/content/dam/amex/en-in/benefits/rewards/membership-rewards/membership-rewards-terms.pdf",
+          "checked_on": "2026-11-05"
+        },
+        {
+          "path": "reward_rules[id=utility_zero_rewards].conditions",
+          "op": "set",
+          "value_sha256": "8a3a647f2dc328ee",
+          "reason": "WP7: Electricity, water and gas are MCC 4900; the sub-category names made the exclusion info, so utility bills earned points.",
           "source_url": "https://www.americanexpress.com/content/dam/amex/en-in/benefits/rewards/membership-rewards/membership-rewards-terms.pdf",
           "checked_on": "2026-11-05"
         }
@@ -244,7 +252,7 @@
         "display_note": "No Membership Rewards Points on insurance spends."
       },
       {
-        "id": "american-express-platinum-charge-card-india:rule:utility_zero_rewards",
+        "id": "american-express-platinum-charge-card-india:rule:utility_zero_rewards#1",
         "category_id": "cat-bills",
         "category_slug": "bills",
         "merchant_pattern": null,
@@ -256,20 +264,96 @@
         "priority": 1,
         "conditions": {
           "source_local_id": "utility_zero_rewards",
-          "part": null,
-          "info_reasons": [
-            "condition:subcategories"
-          ],
-          "flags": []
+          "part": 1,
+          "info_reasons": [],
+          "flags": [
+            "mcc_scoped_exclusion"
+          ]
         },
         "notes": null,
         "effective_from": "2015-03-01",
         "effective_to": null,
         "excluded_categories": [],
-        "rule_role": "info",
+        "rule_role": "exclusion",
         "merchant_slugs": [],
         "platform_slugs": [],
         "mcc_include": [],
+        "mcc_exclude": [],
+        "except_merchant_slugs": [],
+        "except_platform_slugs": [],
+        "block_inr": null,
+        "min_engine_version": 1,
+        "max_engine_version": 1,
+        "source_local_id": "utility_zero_rewards",
+        "display_note": "No Membership Rewards Points on electricity, water and gas utility payments."
+      },
+      {
+        "id": "american-express-platinum-charge-card-india:rule:utility_zero_rewards#2",
+        "category_id": "cat-bills",
+        "category_slug": "bills",
+        "merchant_pattern": null,
+        "rail": null,
+        "unit": "points_per_100",
+        "rate": 0,
+        "min_txn_inr": null,
+        "max_txn_inr": null,
+        "priority": 1,
+        "conditions": {
+          "source_local_id": "utility_zero_rewards",
+          "part": 2,
+          "info_reasons": [],
+          "flags": [
+            "mcc_scoped_exclusion"
+          ]
+        },
+        "notes": null,
+        "effective_from": "2015-03-01",
+        "effective_to": null,
+        "excluded_categories": [],
+        "rule_role": "exclusion",
+        "merchant_slugs": [],
+        "platform_slugs": [],
+        "mcc_include": [
+          "4900"
+        ],
+        "mcc_exclude": [],
+        "except_merchant_slugs": [],
+        "except_platform_slugs": [],
+        "block_inr": null,
+        "min_engine_version": 2,
+        "max_engine_version": null,
+        "source_local_id": "utility_zero_rewards",
+        "display_note": "No Membership Rewards Points on electricity, water and gas utility payments."
+      },
+      {
+        "id": "american-express-platinum-charge-card-india:rule:utility_zero_rewards#3",
+        "category_id": null,
+        "category_slug": null,
+        "merchant_pattern": null,
+        "rail": null,
+        "unit": "points_per_100",
+        "rate": 0,
+        "min_txn_inr": null,
+        "max_txn_inr": null,
+        "priority": 1,
+        "conditions": {
+          "source_local_id": "utility_zero_rewards",
+          "part": 3,
+          "info_reasons": [],
+          "flags": [
+            "mcc_scoped_exclusion"
+          ]
+        },
+        "notes": null,
+        "effective_from": "2015-03-01",
+        "effective_to": null,
+        "excluded_categories": [],
+        "rule_role": "exclusion",
+        "merchant_slugs": [],
+        "platform_slugs": [],
+        "mcc_include": [
+          "4900"
+        ],
         "mcc_exclude": [],
         "except_merchant_slugs": [],
         "except_platform_slugs": [],

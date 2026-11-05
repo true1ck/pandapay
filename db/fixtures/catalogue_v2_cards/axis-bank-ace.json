@@ -4,14 +4,11 @@
   "inputs": {
     "transform_version": "7",
     "source_record_sha256": "e59f700fc92a8c2562f66b0dcd1574d29c682c88f5a0d3d5e2647f102934800c",
-    "override_sha256": "80b25f9792e7f6bae16ed54d5dc398df1638df1ec55ad66d4b8c39bf6d040dd3",
-    "directory_sha256": "c2fded34df886aef08595eebb7629a4dd140c98af750f3c891d6c291b4874b53",
-    "verified": false
+    "override_sha256": "10b9e1e965189d07dcd5c00164d17eb05c85aad289878ca7334d03d1aefd3f43",
+    "directory_sha256": "3d9f9f535481544d4b19262838290f77d8270eb3b4aec73c48608f10c39cedf2",
+    "verified": true
   },
-  "blocking_flags": [
-    "info_rule",
-    "post_limit_conflict"
-  ],
+  "blocking_flags": [],
   "card": {
     "id": "axis-bank-ace:card",
     "slug": "axis-bank-ace",
@@ -26,24 +23,14 @@
     "accrual_rounding": "round",
     "cashback_rounding": "rupee_half_up",
     "points_expiry_months": null,
-    "model_status": "partial",
+    "model_status": "verified",
     "model_coverage": {
       "rules_total": 15,
-      "rules_modelled": 13,
-      "rules_info": 2,
+      "rules_modelled": 14,
+      "rules_info": 1,
       "caps_total": 1,
       "caps_enforced": 1,
       "flags": [
-        {
-          "code": "info_rule",
-          "source_local_id": "ace-gpay-utility-5pct",
-          "detail": "unmapped_category_list:eligible_categories"
-        },
-        {
-          "code": "info_rule",
-          "source_local_id": "ace-gpay-utility-5pct",
-          "detail": "condition:merchant_platform_requirement"
-        },
         {
           "code": "unmapped_excluded_category",
           "source_local_id": "ace-base-cashback-1-5pct",
@@ -93,11 +80,6 @@
           "code": "info_rule",
           "source_local_id": "ace-exclude-card-fees-repayments",
           "detail": "transaction_type"
-        },
-        {
-          "code": "post_limit_conflict",
-          "source_local_id": "ace-accelerated-cashback-500",
-          "detail": null
         }
       ],
       "overrides_applied": [
@@ -132,6 +114,22 @@
           "reason": "Cashback is rounded to the nearest rupee per transaction (17.25 -> 17, 18.75 -> 19).",
           "source_url": "https://www.axis.bank.in/docs/default-source/default-document-library/credit-card/axis-bank-ace-credit-card-tncs.pdf",
           "checked_on": "2026-11-05"
+        },
+        {
+          "path": "reward_rules[id=ace-gpay-utility-5pct].conditions",
+          "op": "set",
+          "value_sha256": "afcac98be6e21cad",
+          "reason": "WP7: The eligible-category names (postpaid, DTH, electricity ...) are the utility MCCs the issuer uses for the Google Pay rule (4814/4816/4899/4900, as in ace-exclude-utility-non-gpay); the free-text payment requirement restated Google Pay. Rule was info.",
+          "source_url": "https://www.axis.bank.in/docs/default-source/default-document-library/credit-card/axis-bank-ace-credit-card-tncs.pdf",
+          "checked_on": "2026-11-05"
+        },
+        {
+          "path": "cap_rules[id=ace-accelerated-cashback-500].post_limit_behavior",
+          "op": "set",
+          "value_sha256": "74234e98afe7498f",
+          "reason": "WP7: Total cashback cap (override); what spend over the cap earns is not stated (research note), so no fallback.",
+          "source_url": "https://www.axis.bank.in/docs/default-source/default-document-library/credit-card/axis-bank-ace-credit-card-tncs.pdf",
+          "checked_on": "2026-11-05"
         }
       ]
     },
@@ -150,22 +148,24 @@
         "conditions": {
           "source_local_id": "ace-gpay-utility-5pct",
           "part": null,
-          "info_reasons": [
-            "unmapped_category_list:eligible_categories",
-            "condition:merchant_platform_requirement"
-          ],
+          "info_reasons": [],
           "flags": []
         },
         "notes": null,
         "effective_from": "2024-04-20",
         "effective_to": null,
         "excluded_categories": [],
-        "rule_role": "info",
+        "rule_role": "earn",
         "merchant_slugs": [],
         "platform_slugs": [
           "google_pay"
         ],
-        "mcc_include": [],
+        "mcc_include": [
+          "4814",
+          "4816",
+          "4899",
+          "4900"
+        ],
         "mcc_exclude": [],
         "except_merchant_slugs": [],
         "except_platform_slugs": [],

@@ -4,14 +4,11 @@
   "inputs": {
     "transform_version": "7",
     "source_record_sha256": "124b9f6010b0c792aec763a7e7d8d91f990eb54a24339b6a51bdda88b6cf3a78",
-    "override_sha256": "29c73446a32880634c77c1addf008aa0a98534c21ff7cba3531f793a96b8f43b",
-    "directory_sha256": "c2fded34df886aef08595eebb7629a4dd140c98af750f3c891d6c291b4874b53",
-    "verified": false
+    "override_sha256": "40959ead744bca1e04afeed8fbe7d0274ba7800b86ae399d7e3b91cd93370a04",
+    "directory_sha256": "3d9f9f535481544d4b19262838290f77d8270eb3b4aec73c48608f10c39cedf2",
+    "verified": true
   },
-  "blocking_flags": [
-    "info_rule",
-    "post_limit_conflict"
-  ],
+  "blocking_flags": [],
   "card": {
     "id": "phonepe-sbi-card-purple:card",
     "slug": "phonepe-sbi-card-purple",
@@ -26,28 +23,18 @@
     "accrual_rounding": "floor",
     "cashback_rounding": null,
     "points_expiry_months": 24,
-    "model_status": "partial",
+    "model_status": "verified",
     "model_coverage": {
       "rules_total": 22,
-      "rules_modelled": 17,
-      "rules_info": 5,
+      "rules_modelled": 19,
+      "rules_info": 3,
       "caps_total": 4,
-      "caps_enforced": 3,
+      "caps_enforced": 4,
       "flags": [
         {
           "code": "channel_type_restates_brand",
           "source_local_id": "phonepe_accelerated",
           "detail": null
-        },
-        {
-          "code": "info_rule",
-          "source_local_id": "base_standard",
-          "detail": "condition:channel_type"
-        },
-        {
-          "code": "info_rule",
-          "source_local_id": "phonepe_scan_pay",
-          "detail": "condition:channel_type"
         },
         {
           "code": "mcc_scoped_exclusion",
@@ -158,26 +145,6 @@
           "code": "info_rule",
           "source_local_id": "financial_charges_excl",
           "detail": "non_purchase_channel"
-        },
-        {
-          "code": "post_limit_conflict",
-          "source_local_id": "phonepe_other_monthly",
-          "detail": null
-        },
-        {
-          "code": "post_limit_conflict",
-          "source_local_id": "phonepe_insurance_monthly",
-          "detail": null
-        },
-        {
-          "code": "post_limit_conflict",
-          "source_local_id": "online_monthly",
-          "detail": null
-        },
-        {
-          "code": "cap_targets_info_only",
-          "source_local_id": "other_monthly",
-          "detail": null
         }
       ],
       "overrides_applied": [
@@ -218,6 +185,62 @@
           "op": "set",
           "value_sha256": "74234e98afe7498f",
           "reason": "Card pays reward points; the field holds the string N/A in the source.",
+          "source_url": "https://www.sbicard.com/sbi-card-en/assets/media/images/personal/credit-cards/rewards/phonepe/tnc/PhonePe-SBI-Card-PURPLE-Reward-Program-TnC.pdf",
+          "checked_on": "2026-11-05"
+        },
+        {
+          "path": "reward_rules[id=phonepe_insurance].priority",
+          "op": "set",
+          "value_sha256": "0e17daca5f3e175f",
+          "reason": "WP7: D14d: the narrower insurance rule must win over the general PhonePe rule (same priority 50 tie went to the non-insurance rule and its 750 cap). T&C lists insurance (max 250) and non-insurance (max 750) separately.",
+          "source_url": "https://www.sbicard.com/sbi-card-en/assets/media/images/personal/credit-cards/rewards/phonepe/tnc/PhonePe-SBI-Card-PURPLE-Reward-Program-TnC.pdf",
+          "checked_on": "2026-11-05"
+        },
+        {
+          "path": "reward_rules[id=base_standard].channel_type",
+          "op": "set",
+          "value_sha256": "5cf7504d9781301d",
+          "reason": "WP7: \"Other eligible spends\" restates the catch-all; the rule carries the 1,000 RP other-spends cap.",
+          "source_url": "https://www.sbicard.com/sbi-card-en/assets/media/images/personal/credit-cards/rewards/phonepe/tnc/PhonePe-SBI-Card-PURPLE-Reward-Program-TnC.pdf",
+          "checked_on": "2026-11-05"
+        },
+        {
+          "path": "reward_rules[id=phonepe_scan_pay].channel_type",
+          "op": "set",
+          "value_sha256": "992cc5df26d9a638",
+          "reason": "WP7: T&C: Scan & Pay earns only through the PhonePe app (\"Scan and Pay or Online UPI transactions outside PhonePe would not accrue any reward point\"); \"PhonePe Scan & Pay\" restated the app on rail upi_qr.",
+          "source_url": "https://www.sbicard.com/sbi-card-en/assets/media/images/personal/credit-cards/rewards/phonepe/tnc/PhonePe-SBI-Card-PURPLE-Reward-Program-TnC.pdf",
+          "checked_on": "2026-11-05"
+        },
+        {
+          "path": "reward_rules[id=phonepe_scan_pay].category_id",
+          "op": "set",
+          "value_sha256": "1e08efd699e66ddd",
+          "reason": "WP7: The \"upi\" token restates rail upi_qr.",
+          "source_url": "https://www.sbicard.com/sbi-card-en/assets/media/images/personal/credit-cards/rewards/phonepe/tnc/PhonePe-SBI-Card-PURPLE-Reward-Program-TnC.pdf",
+          "checked_on": "2026-11-05"
+        },
+        {
+          "path": "cap_rules[id=phonepe_other_monthly].post_limit_behavior",
+          "op": "set",
+          "value_sha256": "74234e98afe7498f",
+          "reason": "WP7: Total cap (override); T&C silent on spill-over (research note), so the base-rate fallback is not stated.",
+          "source_url": "https://www.sbicard.com/sbi-card-en/assets/media/images/personal/credit-cards/rewards/phonepe/tnc/PhonePe-SBI-Card-PURPLE-Reward-Program-TnC.pdf",
+          "checked_on": "2026-11-05"
+        },
+        {
+          "path": "cap_rules[id=phonepe_insurance_monthly].post_limit_behavior",
+          "op": "set",
+          "value_sha256": "74234e98afe7498f",
+          "reason": "WP7: As phonepe_other_monthly.",
+          "source_url": "https://www.sbicard.com/sbi-card-en/assets/media/images/personal/credit-cards/rewards/phonepe/tnc/PhonePe-SBI-Card-PURPLE-Reward-Program-TnC.pdf",
+          "checked_on": "2026-11-05"
+        },
+        {
+          "path": "cap_rules[id=online_monthly].post_limit_behavior",
+          "op": "set",
+          "value_sha256": "74234e98afe7498f",
+          "reason": "WP7: As phonepe_other_monthly.",
           "source_url": "https://www.sbicard.com/sbi-card-en/assets/media/images/personal/credit-cards/rewards/phonepe/tnc/PhonePe-SBI-Card-PURPLE-Reward-Program-TnC.pdf",
           "checked_on": "2026-11-05"
         }
@@ -272,7 +295,7 @@
         "rate": 3,
         "min_txn_inr": null,
         "max_txn_inr": null,
-        "priority": 50,
+        "priority": 49,
         "conditions": {
           "source_local_id": "phonepe_insurance",
           "part": null,
@@ -346,16 +369,14 @@
         "conditions": {
           "source_local_id": "base_standard",
           "part": null,
-          "info_reasons": [
-            "condition:channel_type"
-          ],
+          "info_reasons": [],
           "flags": []
         },
         "notes": null,
         "effective_from": "2025-07-22",
         "effective_to": null,
         "excluded_categories": [],
-        "rule_role": "info",
+        "rule_role": "base",
         "merchant_slugs": [],
         "platform_slugs": [],
         "mcc_include": [],
@@ -363,7 +384,7 @@
         "except_merchant_slugs": [],
         "except_platform_slugs": [],
         "block_inr": null,
-        "min_engine_version": 2,
+        "min_engine_version": 1,
         "max_engine_version": null,
         "source_local_id": "base_standard",
         "display_note": "1 Reward Point per ₹100 on other eligible spends."
@@ -382,18 +403,18 @@
         "conditions": {
           "source_local_id": "phonepe_scan_pay",
           "part": null,
-          "info_reasons": [
-            "condition:channel_type"
-          ],
+          "info_reasons": [],
           "flags": []
         },
         "notes": null,
         "effective_from": "2026-07-01",
         "effective_to": null,
         "excluded_categories": [],
-        "rule_role": "info",
+        "rule_role": "earn",
         "merchant_slugs": [],
-        "platform_slugs": [],
+        "platform_slugs": [
+          "phonepe_app"
+        ],
         "mcc_include": [],
         "mcc_exclude": [],
         "except_merchant_slugs": [],

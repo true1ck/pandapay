@@ -4,8 +4,8 @@
   "inputs": {
     "transform_version": "7",
     "source_record_sha256": "e1ccabed32d2880c7a27f212d996fe69937c54e943112a7e999c45625212103d",
-    "override_sha256": "f35727bda954302abad27fe6269dbaa985398f554ccd370686d0e991ae04f7c2",
-    "directory_sha256": "c2fded34df886aef08595eebb7629a4dd140c98af750f3c891d6c291b4874b53",
+    "override_sha256": "686680e82910479c782f0769bdc9211a9cd4f76066942c32530b3d70557a1fcd",
+    "directory_sha256": "3d9f9f535481544d4b19262838290f77d8270eb3b4aec73c48608f10c39cedf2",
     "verified": false
   },
   "blocking_flags": [
@@ -27,11 +27,11 @@
     "points_expiry_months": 24,
     "model_status": "partial",
     "model_coverage": {
-      "rules_total": 13,
-      "rules_modelled": 7,
+      "rules_total": 16,
+      "rules_modelled": 10,
       "rules_info": 6,
       "caps_total": 5,
-      "caps_enforced": 0,
+      "caps_enforced": 3,
       "flags": [
         {
           "code": "info_rule",
@@ -150,21 +150,6 @@
         },
         {
           "code": "cap_targets_info_only",
-          "source_local_id": "cap-grocery-monthly-2000",
-          "detail": null
-        },
-        {
-          "code": "cap_targets_info_only",
-          "source_local_id": "cap-insurance-monthly-2000",
-          "detail": null
-        },
-        {
-          "code": "cap_targets_info_only",
-          "source_local_id": "cap-utility-monthly-2000",
-          "detail": null
-        },
-        {
-          "code": "cap_targets_info_only",
           "source_local_id": "cap-telecom-cable-monthly-2000",
           "detail": null
         },
@@ -220,6 +205,30 @@
           "op": "set",
           "value_sha256": "74234e98afe7498f",
           "reason": "Source holds the string N/A.",
+          "source_url": "https://www.sbicard.com/sbi-card-en/assets/docs/pdf/ekit-tncs/Tata-Neu-Infinity-Booklet.pdf",
+          "checked_on": "2026-11-05"
+        },
+        {
+          "path": "reward_rules",
+          "op": "append",
+          "value_sha256": "8b12d04281e02653",
+          "reason": "WP7: T&C booklet: \"Maximum Capping per month on NeuCoins ... Grocery, Insurance, Utility, Telecom and cable\" - the cap covers all NeuCoins in the category, but the record tied it only to the extra-5% Tata Neu app rule (info). Base-rate rule carrying the cap.",
+          "source_url": "https://www.sbicard.com/sbi-card-en/assets/docs/pdf/ekit-tncs/Tata-Neu-Infinity-Booklet.pdf",
+          "checked_on": "2026-11-05"
+        },
+        {
+          "path": "reward_rules",
+          "op": "append",
+          "value_sha256": "1b27e14939d1fbc0",
+          "reason": "WP7: Same as grocery-standard-capped (insurance cap).",
+          "source_url": "https://www.sbicard.com/sbi-card-en/assets/docs/pdf/ekit-tncs/Tata-Neu-Infinity-Booklet.pdf",
+          "checked_on": "2026-11-05"
+        },
+        {
+          "path": "reward_rules",
+          "op": "append",
+          "value_sha256": "77071efaa5c74f92",
+          "reason": "WP7: Same as grocery-standard-capped (utility cap).",
           "source_url": "https://www.sbicard.com/sbi-card-en/assets/docs/pdf/ekit-tncs/Tata-Neu-Infinity-Booklet.pdf",
           "checked_on": "2026-11-05"
         }
@@ -1133,6 +1142,108 @@
         "max_engine_version": null,
         "source_local_id": "exclusion-emi",
         "display_note": "Merchant EMI and Flexipay transactions do not earn NeuCoins."
+      },
+      {
+        "id": "tata-neu-infinity-sbi-credit-card:rule:grocery-standard-capped",
+        "category_id": "cat-groceries",
+        "category_slug": "groceries",
+        "merchant_pattern": null,
+        "rail": null,
+        "unit": "points_per_100",
+        "rate": 1.5,
+        "min_txn_inr": null,
+        "max_txn_inr": null,
+        "priority": 50,
+        "conditions": {
+          "source_local_id": "grocery-standard-capped",
+          "part": null,
+          "info_reasons": [],
+          "flags": []
+        },
+        "notes": null,
+        "effective_from": "2025-04-16",
+        "effective_to": null,
+        "excluded_categories": [],
+        "rule_role": "earn",
+        "merchant_slugs": [],
+        "platform_slugs": [],
+        "mcc_include": [],
+        "mcc_exclude": [],
+        "except_merchant_slugs": [],
+        "except_platform_slugs": [],
+        "block_inr": null,
+        "min_engine_version": 1,
+        "max_engine_version": null,
+        "source_local_id": "grocery-standard-capped",
+        "display_note": "Grocery earns the base 1.5% as NeuCoins, capped at 2,000 NeuCoins per month."
+      },
+      {
+        "id": "tata-neu-infinity-sbi-credit-card:rule:insurance-standard-capped",
+        "category_id": "cat-insurance",
+        "category_slug": "insurance",
+        "merchant_pattern": null,
+        "rail": null,
+        "unit": "points_per_100",
+        "rate": 1.5,
+        "min_txn_inr": null,
+        "max_txn_inr": null,
+        "priority": 50,
+        "conditions": {
+          "source_local_id": "insurance-standard-capped",
+          "part": null,
+          "info_reasons": [],
+          "flags": []
+        },
+        "notes": null,
+        "effective_from": "2025-04-16",
+        "effective_to": null,
+        "excluded_categories": [],
+        "rule_role": "earn",
+        "merchant_slugs": [],
+        "platform_slugs": [],
+        "mcc_include": [],
+        "mcc_exclude": [],
+        "except_merchant_slugs": [],
+        "except_platform_slugs": [],
+        "block_inr": null,
+        "min_engine_version": 1,
+        "max_engine_version": null,
+        "source_local_id": "insurance-standard-capped",
+        "display_note": "Insurance earns the base 1.5% as NeuCoins, capped at 2,000 NeuCoins per month."
+      },
+      {
+        "id": "tata-neu-infinity-sbi-credit-card:rule:utility-standard-capped",
+        "category_id": "cat-bills",
+        "category_slug": "bills",
+        "merchant_pattern": null,
+        "rail": null,
+        "unit": "points_per_100",
+        "rate": 1.5,
+        "min_txn_inr": null,
+        "max_txn_inr": null,
+        "priority": 50,
+        "conditions": {
+          "source_local_id": "utility-standard-capped",
+          "part": null,
+          "info_reasons": [],
+          "flags": []
+        },
+        "notes": null,
+        "effective_from": "2025-04-16",
+        "effective_to": null,
+        "excluded_categories": [],
+        "rule_role": "earn",
+        "merchant_slugs": [],
+        "platform_slugs": [],
+        "mcc_include": [],
+        "mcc_exclude": [],
+        "except_merchant_slugs": [],
+        "except_platform_slugs": [],
+        "block_inr": null,
+        "min_engine_version": 1,
+        "max_engine_version": null,
+        "source_local_id": "utility-standard-capped",
+        "display_note": "Utilities earn the base 1.5% as NeuCoins, capped at 2,000 NeuCoins per month."
       }
     ],
     "cap_rules": [
@@ -1163,7 +1274,7 @@
       },
       {
         "id": "tata-neu-infinity-sbi-credit-card:cap:cap-grocery-monthly-2000",
-        "reward_rule_id": "tata-neu-infinity-sbi-credit-card:rule:select-grocery-extra-5pct",
+        "reward_rule_id": null,
         "category_id": null,
         "category_slug": null,
         "benefit_kind": null,
@@ -1178,7 +1289,8 @@
         "cap_amount": 2000,
         "scope": "targets",
         "targets": [
-          "tata-neu-infinity-sbi-credit-card:rule:select-grocery-extra-5pct"
+          "tata-neu-infinity-sbi-credit-card:rule:select-grocery-extra-5pct",
+          "tata-neu-infinity-sbi-credit-card:rule:grocery-standard-capped"
         ],
         "parent_cap_id": null,
         "post_cap_behavior": null,
@@ -1188,7 +1300,7 @@
       },
       {
         "id": "tata-neu-infinity-sbi-credit-card:cap:cap-insurance-monthly-2000",
-        "reward_rule_id": "tata-neu-infinity-sbi-credit-card:rule:select-insurance-extra-5pct",
+        "reward_rule_id": null,
         "category_id": null,
         "category_slug": null,
         "benefit_kind": null,
@@ -1203,7 +1315,8 @@
         "cap_amount": 2000,
         "scope": "targets",
         "targets": [
-          "tata-neu-infinity-sbi-credit-card:rule:select-insurance-extra-5pct"
+          "tata-neu-infinity-sbi-credit-card:rule:select-insurance-extra-5pct",
+          "tata-neu-infinity-sbi-credit-card:rule:insurance-standard-capped"
         ],
         "parent_cap_id": null,
         "post_cap_behavior": null,
@@ -1213,7 +1326,7 @@
       },
       {
         "id": "tata-neu-infinity-sbi-credit-card:cap:cap-utility-monthly-2000",
-        "reward_rule_id": "tata-neu-infinity-sbi-credit-card:rule:select-utility-extra-5pct",
+        "reward_rule_id": null,
         "category_id": null,
         "category_slug": null,
         "benefit_kind": null,
@@ -1228,7 +1341,8 @@
         "cap_amount": 2000,
         "scope": "targets",
         "targets": [
-          "tata-neu-infinity-sbi-credit-card:rule:select-utility-extra-5pct"
+          "tata-neu-infinity-sbi-credit-card:rule:select-utility-extra-5pct",
+          "tata-neu-infinity-sbi-credit-card:rule:utility-standard-capped"
         ],
         "parent_cap_id": null,
         "post_cap_behavior": null,

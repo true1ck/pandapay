@@ -4,8 +4,8 @@
   "inputs": {
     "transform_version": "7",
     "source_record_sha256": "47d373ddfe49e0b50e401f8c819727021c7cd7093d6ee7298a84a1033df38867",
-    "override_sha256": null,
-    "directory_sha256": "c2fded34df886aef08595eebb7629a4dd140c98af750f3c891d6c291b4874b53",
+    "override_sha256": "e458176d8e1acecc1b563d794617e7b8e747ffb98a366f12eacb20e23967a10a",
+    "directory_sha256": "3d9f9f535481544d4b19262838290f77d8270eb3b4aec73c48608f10c39cedf2",
     "verified": false
   },
   "blocking_flags": [
@@ -29,10 +29,10 @@
     "model_status": "partial",
     "model_coverage": {
       "rules_total": 17,
-      "rules_modelled": 9,
-      "rules_info": 8,
+      "rules_modelled": 10,
+      "rules_info": 7,
       "caps_total": 7,
-      "caps_enforced": 2,
+      "caps_enforced": 3,
       "flags": [
         {
           "code": "info_rule",
@@ -43,11 +43,6 @@
           "code": "info_rule",
           "source_local_id": "accelerated_35_above_150k",
           "detail": "condition:calendar_month_spend"
-        },
-        {
-          "code": "info_rule",
-          "source_local_id": "travel_edge_60",
-          "detail": "condition:monthly_travel_edge_spend"
         },
         {
           "code": "info_rule",
@@ -115,11 +110,6 @@
           "detail": null
         },
         {
-          "code": "cap_targets_info_only",
-          "source_local_id": "travel_edge_200k_spend",
-          "detail": null
-        },
-        {
           "code": "non_earning_cap_skipped",
           "source_local_id": "miles_transfer_annual",
           "detail": null
@@ -135,7 +125,16 @@
           "detail": null
         }
       ],
-      "overrides_applied": []
+      "overrides_applied": [
+        {
+          "path": "reward_rules[id=travel_edge_60].conditions.monthly_travel_edge_spend",
+          "op": "remove",
+          "value_sha256": "74234e98afe7498f",
+          "reason": "WP7: \"Up to Rs2,00,000\" restates the travel_edge_200k_spend cap (base rate above); the rule was info.",
+          "source_url": "https://www.axis.bank.in/docs/default-source/default-document-library/credit-card-tnc/terms-and-conditions-for-magnus-credit-card.pdf?sfvrsn=1d8117ef_1",
+          "checked_on": "2026-11-05"
+        }
+      ]
     },
     "reward_rules": [
       {
@@ -223,16 +222,14 @@
         "conditions": {
           "source_local_id": "travel_edge_60",
           "part": null,
-          "info_reasons": [
-            "condition:monthly_travel_edge_spend"
-          ],
+          "info_reasons": [],
           "flags": []
         },
         "notes": null,
         "effective_from": "2025-06-20",
         "effective_to": null,
         "excluded_categories": [],
-        "rule_role": "info",
+        "rule_role": "earn",
         "merchant_slugs": [],
         "platform_slugs": [
           "axis_travel_edge"

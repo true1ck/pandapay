@@ -4,9 +4,9 @@
   "inputs": {
     "transform_version": "7",
     "source_record_sha256": "b18e463e2a1652ebb1aef086acf2d90cf60142b3e4289de42f1c493f6508a86a",
-    "override_sha256": "05da659b0a73aa237ebe9df20d6dec27156808c4ee7796a35a3da4a08da26ba0",
-    "directory_sha256": "c2fded34df886aef08595eebb7629a4dd140c98af750f3c891d6c291b4874b53",
-    "verified": false
+    "override_sha256": "f970123e8affb1ec402f855fb683a2e2f163174c9362ecd9f00800435418b8c0",
+    "directory_sha256": "3d9f9f535481544d4b19262838290f77d8270eb3b4aec73c48608f10c39cedf2",
+    "verified": true
   },
   "blocking_flags": [],
   "card": {
@@ -23,10 +23,10 @@
     "accrual_rounding": "floor",
     "cashback_rounding": null,
     "points_expiry_months": 36,
-    "model_status": "partial",
+    "model_status": "verified",
     "model_coverage": {
-      "rules_total": 14,
-      "rules_modelled": 11,
+      "rules_total": 15,
+      "rules_modelled": 12,
       "rules_info": 3,
       "caps_total": 2,
       "caps_enforced": 2,
@@ -74,6 +74,14 @@
           "value_sha256": "7af78ba28cf9ccb3",
           "reason": "1,000 points is the whole fuel earning (20 per Rs 100 on Rs 5,000); fuel beyond it earns nothing, so it is a total cap, not bonus-only.",
           "source_url": "https://www.axis.bank.in/docs/default-source/default-document-library/terms-and-conditions-for-iocl-credit-card.pdf?sfvrsn=9ab59582_5",
+          "checked_on": "2026-11-05"
+        },
+        {
+          "path": "reward_rules",
+          "op": "append",
+          "value_sha256": "817bd033d22fd02a",
+          "reason": "WP7: Revision eff. 20 Apr 2024: \"Non-IOCL fuel transactions will not be eligible for any EDGE REWARD Points.\" The record had no such exclusion.",
+          "source_url": "https://www.axis.bank.in/docs/default-source/default-document-library/credit-card/terms-and-conditions-indian-oil-credit-card.pdf",
           "checked_on": "2026-11-05"
         }
       ]
@@ -568,6 +576,42 @@
         "max_engine_version": null,
         "source_local_id": "emi-exclusion",
         "display_note": "EDGE REWARD Points are debited for credit card transactions converted to EMI and are not credited back for the original transaction when the EMI is cancelled."
+      },
+      {
+        "id": "indianoil-axis-bank-credit-card:rule:non-iocl-fuel-exclusion",
+        "category_id": "cat-fuel",
+        "category_slug": "fuel",
+        "merchant_pattern": null,
+        "rail": null,
+        "unit": "points_per_100",
+        "rate": 0,
+        "min_txn_inr": null,
+        "max_txn_inr": null,
+        "priority": 2,
+        "conditions": {
+          "source_local_id": "non-iocl-fuel-exclusion",
+          "part": null,
+          "info_reasons": [],
+          "flags": []
+        },
+        "notes": null,
+        "effective_from": "2024-04-20",
+        "effective_to": null,
+        "excluded_categories": [],
+        "rule_role": "exclusion",
+        "merchant_slugs": [],
+        "platform_slugs": [],
+        "mcc_include": [],
+        "mcc_exclude": [],
+        "except_merchant_slugs": [
+          "indianoil"
+        ],
+        "except_platform_slugs": [],
+        "block_inr": null,
+        "min_engine_version": 1,
+        "max_engine_version": null,
+        "source_local_id": "non-iocl-fuel-exclusion",
+        "display_note": "Non-IOCL fuel transactions earn no EDGE REWARD Points."
       }
     ],
     "cap_rules": [

@@ -4,12 +4,11 @@
   "inputs": {
     "transform_version": "7",
     "source_record_sha256": "47c8726d4469931a2d489c3e07278a9e69e665eb0946398eed2b6679be43705d",
-    "override_sha256": "0806cb63abb7b53a6f52c125b24344bc60fd45ea8f9383a3cd18c20ffa343f3a",
-    "directory_sha256": "c2fded34df886aef08595eebb7629a4dd140c98af750f3c891d6c291b4874b53",
+    "override_sha256": "d2ea560702f2f45bfe0b3d05d08fa9d157e0dd77192f41943235da4c5af88ca9",
+    "directory_sha256": "3d9f9f535481544d4b19262838290f77d8270eb3b4aec73c48608f10c39cedf2",
     "verified": false
   },
   "blocking_flags": [
-    "info_rule",
     "post_limit_conflict",
     "orphan_cap"
   ],
@@ -30,10 +29,10 @@
     "model_status": "partial",
     "model_coverage": {
       "rules_total": 16,
-      "rules_modelled": 10,
-      "rules_info": 6,
+      "rules_modelled": 11,
+      "rules_info": 5,
       "caps_total": 4,
-      "caps_enforced": 2,
+      "caps_enforced": 3,
       "flags": [
         {
           "code": "info_rule",
@@ -106,16 +105,6 @@
           "detail": null
         },
         {
-          "code": "info_rule",
-          "source_local_id": "scan_pay_1pct",
-          "detail": "condition:merchant_payment"
-        },
-        {
-          "code": "info_rule",
-          "source_local_id": "scan_pay_1pct",
-          "detail": "transaction_type"
-        },
-        {
           "code": "post_limit_conflict",
           "source_local_id": "phonepe_categories_monthly_cap",
           "detail": null
@@ -131,11 +120,6 @@
           "detail": null
         },
         {
-          "code": "cap_targets_info_only",
-          "source_local_id": "upi_scan_pay_monthly_cap",
-          "detail": null
-        },
-        {
           "code": "orphan_cap",
           "source_local_id": "overall_monthly_reward_cap",
           "detail": null
@@ -147,6 +131,30 @@
           "op": "set",
           "value_sha256": "da7b0d0d2595a8bf",
           "reason": "Issuer MCC list excludes 5262 and 7999.",
+          "source_url": "https://www.hdfc.bank.in/content/dam/hdfcbankpws/in/en/personal-banking/discover-products/cards/credit-cards/phonepe-hdfc-bank-ultimo-credit-card/phonepe-hdfc-bank-ultimo-cc-reward-points-tncs.pdf",
+          "checked_on": "2026-11-05"
+        },
+        {
+          "path": "reward_rules[id=scan_pay_1pct].conditions.transaction_type",
+          "op": "remove",
+          "value_sha256": "74234e98afe7498f",
+          "reason": "WP7: \"UPI Scan & Pay\" restates rail upi_qr.",
+          "source_url": "https://www.hdfc.bank.in/content/dam/hdfcbankpws/in/en/personal-banking/discover-products/cards/credit-cards/phonepe-hdfc-bank-ultimo-credit-card/phonepe-hdfc-bank-ultimo-cc-reward-points-tncs.pdf",
+          "checked_on": "2026-11-05"
+        },
+        {
+          "path": "reward_rules[id=scan_pay_1pct].conditions.network",
+          "op": "remove",
+          "value_sha256": "74234e98afe7498f",
+          "reason": "WP7: The card is a RuPay card; network restates the card.",
+          "source_url": "https://www.hdfc.bank.in/content/dam/hdfcbankpws/in/en/personal-banking/discover-products/cards/credit-cards/phonepe-hdfc-bank-ultimo-credit-card/phonepe-hdfc-bank-ultimo-cc-reward-points-tncs.pdf",
+          "checked_on": "2026-11-05"
+        },
+        {
+          "path": "reward_rules[id=scan_pay_1pct].conditions.merchant_payment",
+          "op": "remove",
+          "value_sha256": "74234e98afe7498f",
+          "reason": "WP7: P2M restates a merchant QR payment (rail upi_qr).",
           "source_url": "https://www.hdfc.bank.in/content/dam/hdfcbankpws/in/en/personal-banking/discover-products/cards/credit-cards/phonepe-hdfc-bank-ultimo-credit-card/phonepe-hdfc-bank-ultimo-cc-reward-points-tncs.pdf",
           "checked_on": "2026-11-05"
         }
@@ -732,17 +740,14 @@
         "conditions": {
           "source_local_id": "scan_pay_1pct",
           "part": null,
-          "info_reasons": [
-            "condition:merchant_payment",
-            "transaction_type"
-          ],
+          "info_reasons": [],
           "flags": []
         },
         "notes": null,
         "effective_from": "2025-06-10",
         "effective_to": null,
         "excluded_categories": [],
-        "rule_role": "info",
+        "rule_role": "earn",
         "merchant_slugs": [],
         "platform_slugs": [],
         "mcc_include": [],
@@ -750,7 +755,7 @@
         "except_merchant_slugs": [],
         "except_platform_slugs": [],
         "block_inr": null,
-        "min_engine_version": 2,
+        "min_engine_version": 1,
         "max_engine_version": null,
         "source_local_id": "scan_pay_1pct",
         "display_note": "1 Reward Point per ₹100 on eligible RuPay Credit Card on UPI Scan & Pay spends."
@@ -829,7 +834,7 @@
         "parent_cap_id": null,
         "post_cap_behavior": null,
         "anchor": null,
-        "min_engine_version": 2,
+        "min_engine_version": 1,
         "source_local_id": "upi_scan_pay_monthly_cap"
       },
       {

@@ -4,8 +4,8 @@
   "inputs": {
     "transform_version": "7",
     "source_record_sha256": "a016dc7598e597ded59eed88133625377b9bf406f4973d06fb4b027e5f453d7c",
-    "override_sha256": null,
-    "directory_sha256": "c2fded34df886aef08595eebb7629a4dd140c98af750f3c891d6c291b4874b53",
+    "override_sha256": "29a3ff70e24b9c0c0cf8bc6d9916419069d53bbdb5acf7a4081415ce07c7859f",
+    "directory_sha256": "3d9f9f535481544d4b19262838290f77d8270eb3b4aec73c48608f10c39cedf2",
     "verified": false
   },
   "blocking_flags": [
@@ -28,23 +28,13 @@
     "model_status": "partial",
     "model_coverage": {
       "rules_total": 14,
-      "rules_modelled": 11,
-      "rules_info": 3,
+      "rules_modelled": 13,
+      "rules_info": 1,
       "caps_total": 12,
-      "caps_enforced": 6,
+      "caps_enforced": 9,
       "flags": [
         {
-          "code": "info_rule",
-          "source_local_id": "irctc-5x",
-          "detail": "condition:eligible_transaction_type"
-        },
-        {
           "code": "brand_from_identification_text",
-          "source_local_id": "irctc-5x",
-          "detail": null
-        },
-        {
-          "code": "channel_type_restates_brand",
           "source_local_id": "irctc-5x",
           "detail": null
         },
@@ -62,11 +52,6 @@
           "code": "narrow_token_to_mcc",
           "source_local_id": "smartbuy-train-cashback",
           "detail": null
-        },
-        {
-          "code": "info_rule",
-          "source_local_id": "all-other-standard",
-          "detail": "condition:eligible_transaction_type"
         },
         {
           "code": "unmapped_excluded_category",
@@ -110,47 +95,12 @@
         },
         {
           "code": "cap_targets_info_only",
-          "source_local_id": "irctc-5x-monthly",
-          "detail": null
-        },
-        {
-          "code": "cap_target_inferred_by_category",
-          "source_local_id": "irctc-5x-annual",
-          "detail": null
-        },
-        {
-          "code": "mixed_target_currency",
-          "source_local_id": "irctc-5x-annual",
-          "detail": null
-        },
-        {
-          "code": "cap_targets_info_only",
-          "source_local_id": "irctc-5x-annual",
-          "detail": null
-        },
-        {
-          "code": "cap_targets_info_only",
           "source_local_id": "smartbuy-5-percent-cashback-monthly",
           "detail": null
         },
         {
-          "code": "cap_target_inferred_by_category",
-          "source_local_id": "smartbuy-5-percent-cashback-annual",
-          "detail": null
-        },
-        {
-          "code": "mixed_target_currency",
-          "source_local_id": "smartbuy-5-percent-cashback-annual",
-          "detail": null
-        },
-        {
           "code": "cap_targets_info_only",
           "source_local_id": "smartbuy-5-percent-cashback-annual",
-          "detail": null
-        },
-        {
-          "code": "cap_targets_info_only",
-          "source_local_id": "other-spends-monthly",
           "detail": null
         },
         {
@@ -159,7 +109,56 @@
           "detail": null
         }
       ],
-      "overrides_applied": []
+      "overrides_applied": [
+        {
+          "path": "reward_rules[id=irctc-5x].conditions.eligible_transaction_type",
+          "op": "remove",
+          "value_sha256": "74234e98afe7498f",
+          "reason": "WP7: \"non-EMI retail spend\" restates retail spend (EMI principal on IRCTC is negligible); the key made the 5X rule info.",
+          "source_url": "https://www.hdfc.bank.in/content/dam/hdfcbankpws/in/en/personal-banking/discover-products/cards/credit-cards/irctc-credit-card/irctc-tnc-09-10-25.pdf",
+          "checked_on": "2026-11-05"
+        },
+        {
+          "path": "reward_rules[id=irctc-5x].channel_type",
+          "op": "set",
+          "value_sha256": "5cf7504d9781301d",
+          "reason": "WP7: T&C: 5X on IRCTC spends made through IRCTC Ticketing Website / Rail Connect App and HDFC Bank SmartBuy - alternatives, all identified by IRCTC MIDs; the merchant (IRCTC) carries it. As written the loader AND-ed IRCTC with SmartBuy.",
+          "source_url": "https://www.hdfc.bank.in/content/dam/hdfcbankpws/in/en/personal-banking/discover-products/cards/credit-cards/irctc-credit-card/irctc-tnc-09-10-25.pdf",
+          "checked_on": "2026-11-05"
+        },
+        {
+          "path": "reward_rules[id=all-other-standard].conditions.eligible_transaction_type",
+          "op": "remove",
+          "value_sha256": "74234e98afe7498f",
+          "reason": "WP7: \"retail spend\" restates the catch-all; the key made the other-spends rule info, so its 1,000/month cap never applied.",
+          "source_url": "https://www.hdfc.bank.in/content/dam/hdfcbankpws/in/en/personal-banking/discover-products/cards/credit-cards/irctc-credit-card/irctc-tnc-09-10-25.pdf",
+          "checked_on": "2026-11-05"
+        },
+        {
+          "path": "cap_rules[id=other-spends-annual].target_rule_ids",
+          "op": "set",
+          "value_sha256": "d09dd8f2ada3fb54",
+          "reason": "WP7: T&C: \"Reward Points on other spends is capped maximum at 1000 Reward Points per month and 12000 Reward Points Annually.\" With no rule naming it, the loader made it card-wide.",
+          "source_url": "https://www.hdfc.bank.in/content/dam/hdfcbankpws/in/en/personal-banking/discover-products/cards/credit-cards/irctc-credit-card/irctc-tnc-09-10-25.pdf",
+          "checked_on": "2026-11-05"
+        },
+        {
+          "path": "cap_rules[id=irctc-5x-annual].target_rule_ids",
+          "op": "set",
+          "value_sha256": "dab5358b34c76c20",
+          "reason": "WP7: T&C: the 12,000 RP annual cap is on \"the 5X Reward Points on partner IRCTC spends\"; category inference also tied it to the SmartBuy cashback rule.",
+          "source_url": "https://www.hdfc.bank.in/content/dam/hdfcbankpws/in/en/personal-banking/discover-products/cards/credit-cards/irctc-credit-card/irctc-tnc-09-10-25.pdf",
+          "checked_on": "2026-11-05"
+        },
+        {
+          "path": "cap_rules[id=smartbuy-5-percent-cashback-annual].target_rule_ids",
+          "op": "set",
+          "value_sha256": "b92bfa17b905e251",
+          "reason": "WP7: T&C: \"The accrual of the 5% Cashback on IRCTC Train Ticket booking made via HDFC Bank SmartBuy is capped maximum at INR 1000 per month and INR 12000 Annually\" - the cashback rule only; category inference also tied it to the 5X points rule.",
+          "source_url": "https://www.hdfc.bank.in/content/dam/hdfcbankpws/in/en/personal-banking/discover-products/cards/credit-cards/irctc-credit-card/irctc-tnc-09-10-25.pdf",
+          "checked_on": "2026-11-05"
+        }
+      ]
     },
     "reward_rules": [
       {
@@ -176,12 +175,9 @@
         "conditions": {
           "source_local_id": "irctc-5x",
           "part": null,
-          "info_reasons": [
-            "condition:eligible_transaction_type"
-          ],
+          "info_reasons": [],
           "flags": [
             "brand_from_identification_text",
-            "channel_type_restates_brand",
             "narrow_token_on_merchant"
           ]
         },
@@ -189,19 +185,17 @@
         "effective_from": "2023-03-01",
         "effective_to": null,
         "excluded_categories": [],
-        "rule_role": "info",
+        "rule_role": "earn",
         "merchant_slugs": [
           "irctc"
         ],
-        "platform_slugs": [
-          "hdfc_smartbuy"
-        ],
+        "platform_slugs": [],
         "mcc_include": [],
         "mcc_exclude": [],
         "except_merchant_slugs": [],
         "except_platform_slugs": [],
         "block_inr": null,
-        "min_engine_version": 2,
+        "min_engine_version": 1,
         "max_engine_version": null,
         "source_local_id": "irctc-5x",
         "display_note": "5 Reward Points per ₹100 on eligible IRCTC train-ticket bookings, comprising 1X base Reward Point plus 4X additional Reward Points."
@@ -262,11 +256,10 @@
         "conditions": {
           "source_local_id": "all-other-standard",
           "part": null,
-          "info_reasons": [
-            "condition:eligible_transaction_type"
-          ],
+          "info_reasons": [],
           "flags": [
-            "unmapped_excluded_category"
+            "unmapped_excluded_category",
+            "min_amount_not_card_wide"
           ]
         },
         "notes": null,
@@ -280,7 +273,7 @@
           "cat-rent",
           "cat-wallet"
         ],
-        "rule_role": "info",
+        "rule_role": "earn",
         "merchant_slugs": [],
         "platform_slugs": [],
         "mcc_include": [],
@@ -288,7 +281,7 @@
         "except_merchant_slugs": [],
         "except_platform_slugs": [],
         "block_inr": null,
-        "min_engine_version": 2,
+        "min_engine_version": 1,
         "max_engine_version": null,
         "source_local_id": "all-other-standard",
         "display_note": "1 Reward Point per ₹100 on eligible other retail spends."
@@ -1172,12 +1165,12 @@
         "parent_cap_id": null,
         "post_cap_behavior": null,
         "anchor": null,
-        "min_engine_version": 2,
+        "min_engine_version": 1,
         "source_local_id": "irctc-5x-monthly"
       },
       {
         "id": "irctc-hdfc-bank-credit-card:cap:irctc-5x-annual",
-        "reward_rule_id": null,
+        "reward_rule_id": "irctc-hdfc-bank-credit-card:rule:irctc-5x",
         "category_id": null,
         "category_slug": null,
         "benefit_kind": null,
@@ -1192,13 +1185,12 @@
         "cap_amount": 12000,
         "scope": "targets",
         "targets": [
-          "irctc-hdfc-bank-credit-card:rule:irctc-5x",
-          "irctc-hdfc-bank-credit-card:rule:smartbuy-train-cashback"
+          "irctc-hdfc-bank-credit-card:rule:irctc-5x"
         ],
         "parent_cap_id": null,
         "post_cap_behavior": null,
         "anchor": null,
-        "min_engine_version": 2,
+        "min_engine_version": 1,
         "source_local_id": "irctc-5x-annual"
       },
       {
@@ -1228,7 +1220,7 @@
       },
       {
         "id": "irctc-hdfc-bank-credit-card:cap:smartbuy-5-percent-cashback-annual",
-        "reward_rule_id": null,
+        "reward_rule_id": "irctc-hdfc-bank-credit-card:rule:smartbuy-train-cashback",
         "category_id": null,
         "category_slug": null,
         "benefit_kind": null,
@@ -1243,7 +1235,6 @@
         "cap_amount": 240000,
         "scope": "targets",
         "targets": [
-          "irctc-hdfc-bank-credit-card:rule:irctc-5x",
           "irctc-hdfc-bank-credit-card:rule:smartbuy-train-cashback"
         ],
         "parent_cap_id": null,
@@ -1399,12 +1390,12 @@
         "parent_cap_id": null,
         "post_cap_behavior": null,
         "anchor": null,
-        "min_engine_version": 2,
+        "min_engine_version": 1,
         "source_local_id": "other-spends-monthly"
       },
       {
         "id": "irctc-hdfc-bank-credit-card:cap:other-spends-annual",
-        "reward_rule_id": null,
+        "reward_rule_id": "irctc-hdfc-bank-credit-card:rule:all-other-standard",
         "category_id": null,
         "category_slug": null,
         "benefit_kind": null,
@@ -1417,8 +1408,10 @@
         "resets_on_day": null,
         "cap_kind": "total_points",
         "cap_amount": 12000,
-        "scope": "card",
-        "targets": [],
+        "scope": "targets",
+        "targets": [
+          "irctc-hdfc-bank-credit-card:rule:all-other-standard"
+        ],
         "parent_cap_id": null,
         "post_cap_behavior": null,
         "anchor": null,

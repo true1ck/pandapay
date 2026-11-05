@@ -4,8 +4,8 @@
   "inputs": {
     "transform_version": "7",
     "source_record_sha256": "0f0ab8fafeeb5e5343353df94f7376dd03be6af9a34bc87e34bc01d886cf69fb",
-    "override_sha256": "e34aa331d4da2886c881751e62df74efb667fd66b6db4e5da65bc80cd319b922",
-    "directory_sha256": "c2fded34df886aef08595eebb7629a4dd140c98af750f3c891d6c291b4874b53",
+    "override_sha256": "3aeaacc59e61233cc334f702ac74e387211615e412860e32c07cf8ac8e160d2f",
+    "directory_sha256": "3d9f9f535481544d4b19262838290f77d8270eb3b4aec73c48608f10c39cedf2",
     "verified": false
   },
   "blocking_flags": [
@@ -36,8 +36,8 @@
     "points_expiry_months": null,
     "model_status": "partial",
     "model_coverage": {
-      "rules_total": 17,
-      "rules_modelled": 13,
+      "rules_total": 18,
+      "rules_modelled": 14,
       "rules_info": 4,
       "caps_total": 3,
       "caps_enforced": 2,
@@ -116,6 +116,11 @@
           "code": "info_rule",
           "source_local_id": "swiggy_minis_exclusion",
           "detail": "unresolved_merchant:merchant_pattern"
+        },
+        {
+          "code": "min_amount_exclusion",
+          "source_local_id": "swiggy_below_minimum_exclusion",
+          "detail": null
         },
         {
           "code": "cap_targets_info_only",
@@ -201,6 +206,14 @@
           "op": "set",
           "value_sha256": "e98088164cee2b8c",
           "reason": "Cashback is rounded to the nearest whole rupee per transaction (15.3 to 15, 15.6 to 16) (D11).",
+          "source_url": "https://www.hdfc.bank.in/content/dam/hdfcbankpws/in/en/personal-banking/discover-products/cards/credit-cards/swiggy-hdfc-bank-credit-card/pdf/terms-and-conditions-swiggy-hdfc-bank-credit-card-18092026.pdf",
+          "checked_on": "2026-11-05"
+        },
+        {
+          "path": "reward_rules",
+          "op": "append",
+          "value_sha256": "1b4562f83e4f9fcd",
+          "reason": "WP7: T&C 4.1: from 21 Apr 2026 the 10% Swiggy category needs at least Rs249; issuer worked example: a Rs150 Swiggy order earns 0 (not the 1% other rate). D16b: a no-reward-below-minimum term is an exclusion with max_txn_inr.",
           "source_url": "https://www.hdfc.bank.in/content/dam/hdfcbankpws/in/en/personal-banking/discover-products/cards/credit-cards/swiggy-hdfc-bank-credit-card/pdf/terms-and-conditions-swiggy-hdfc-bank-credit-card-18092026.pdf",
           "checked_on": "2026-11-05"
         }
@@ -1325,6 +1338,44 @@
         "max_engine_version": null,
         "source_local_id": "smartbuy_exclusion",
         "display_note": "Transactions made via the SmartBuy portal do not earn cashback."
+      },
+      {
+        "id": "swiggy-hdfc-bank-credit-card:rule:swiggy_below_minimum_exclusion",
+        "category_id": null,
+        "category_slug": null,
+        "merchant_pattern": "swiggy",
+        "rail": null,
+        "unit": "cashback_percent",
+        "rate": 0,
+        "min_txn_inr": null,
+        "max_txn_inr": 249,
+        "priority": 0,
+        "conditions": {
+          "source_local_id": "swiggy_below_minimum_exclusion",
+          "part": null,
+          "info_reasons": [],
+          "flags": [
+            "min_amount_exclusion"
+          ]
+        },
+        "notes": null,
+        "effective_from": "2026-04-21",
+        "effective_to": null,
+        "excluded_categories": [],
+        "rule_role": "exclusion",
+        "merchant_slugs": [
+          "swiggy"
+        ],
+        "platform_slugs": [],
+        "mcc_include": [],
+        "mcc_exclude": [],
+        "except_merchant_slugs": [],
+        "except_platform_slugs": [],
+        "block_inr": null,
+        "min_engine_version": 2,
+        "max_engine_version": null,
+        "source_local_id": "swiggy_below_minimum_exclusion",
+        "display_note": "Swiggy transactions below Rs249 earn no cashback."
       },
       {
         "id": "swiggy-hdfc-bank-credit-card:rule:other_1pct#min-amount",

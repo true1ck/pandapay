@@ -4,8 +4,8 @@
   "inputs": {
     "transform_version": "7",
     "source_record_sha256": "cc76514cd56bbf83040199957bfc05c3a5fbefc2539e9a89379d73480f8de1a3",
-    "override_sha256": "3292a07cbb449a925305d6f2dd45c82210d3df6fb6f8477ee498d4044b55691d",
-    "directory_sha256": "c2fded34df886aef08595eebb7629a4dd140c98af750f3c891d6c291b4874b53",
+    "override_sha256": "29796b7e7b4a73763b55cd112b6f9d8110bc8a88e3179833a42cfd45b36b575b",
+    "directory_sha256": "3d9f9f535481544d4b19262838290f77d8270eb3b4aec73c48608f10c39cedf2",
     "verified": false
   },
   "blocking_flags": [
@@ -35,8 +35,8 @@
     "points_expiry_months": null,
     "model_status": "partial",
     "model_coverage": {
-      "rules_total": 10,
-      "rules_modelled": 7,
+      "rules_total": 12,
+      "rules_modelled": 9,
       "rules_info": 3,
       "caps_total": 0,
       "caps_enforced": 0,
@@ -105,6 +105,11 @@
           "code": "mcc_scoped_exclusion",
           "source_local_id": "government_zero_cashback",
           "detail": null
+        },
+        {
+          "code": "broad_exclusion_v1_only",
+          "source_local_id": "telecom_outside_airtel_thanks_exclusion",
+          "detail": null
         }
       ],
       "overrides_applied": [
@@ -137,6 +142,22 @@
           "op": "set",
           "value_sha256": "657bf85a75fa70bf",
           "reason": "Cashback is rounded down per transaction (15.6 -> 15).",
+          "source_url": "https://www.axis.bank.in/docs/default-source/default-document-library/credit-cards/terms-and-conditions-for-cashback-for-airtel-axis-bank-credit-card.pdf",
+          "checked_on": "2026-11-05"
+        },
+        {
+          "path": "reward_rules",
+          "op": "append",
+          "value_sha256": "762388406eefedcc",
+          "reason": "WP7: The record lists \"utility_outside_airtel_thanks\" in the base rule's excluded categories, which the loader cannot read (underscored negation token). Restated as an exclusion with an Airtel Thanks exception (D16a).",
+          "source_url": "https://www.axis.bank.in/docs/default-source/default-document-library/credit-cards/terms-and-conditions-for-cashback-for-airtel-axis-bank-credit-card.pdf",
+          "checked_on": "2026-11-05"
+        },
+        {
+          "path": "reward_rules",
+          "op": "append",
+          "value_sha256": "94d92f34544978c6",
+          "reason": "WP7: Same as utility_outside_airtel_thanks_exclusion (\"telecom_outside_airtel_thanks\").",
           "source_url": "https://www.axis.bank.in/docs/default-source/default-document-library/credit-cards/terms-and-conditions-for-cashback-for-airtel-axis-bank-credit-card.pdf",
           "checked_on": "2026-11-05"
         }
@@ -932,6 +953,122 @@
         "max_engine_version": null,
         "source_local_id": "government_zero_cashback",
         "display_note": "Government-service transactions are excluded from cashback."
+      },
+      {
+        "id": "airtel-axis-bank-credit-card:rule:utility_outside_airtel_thanks_exclusion",
+        "category_id": "cat-bills",
+        "category_slug": "bills",
+        "merchant_pattern": null,
+        "rail": null,
+        "unit": "cashback_percent",
+        "rate": 0,
+        "min_txn_inr": null,
+        "max_txn_inr": null,
+        "priority": 7,
+        "conditions": {
+          "source_local_id": "utility_outside_airtel_thanks_exclusion",
+          "part": null,
+          "info_reasons": [],
+          "flags": []
+        },
+        "notes": null,
+        "effective_from": "2026-04-12",
+        "effective_to": null,
+        "excluded_categories": [],
+        "rule_role": "exclusion",
+        "merchant_slugs": [],
+        "platform_slugs": [],
+        "mcc_include": [],
+        "mcc_exclude": [],
+        "except_merchant_slugs": [],
+        "except_platform_slugs": [
+          "airtel_thanks_app"
+        ],
+        "block_inr": null,
+        "min_engine_version": 1,
+        "max_engine_version": null,
+        "source_local_id": "utility_outside_airtel_thanks_exclusion",
+        "display_note": "Utility payments outside the Airtel Thanks app earn no cashback."
+      },
+      {
+        "id": "airtel-axis-bank-credit-card:rule:telecom_outside_airtel_thanks_exclusion#1",
+        "category_id": "cat-bills",
+        "category_slug": "bills",
+        "merchant_pattern": null,
+        "rail": null,
+        "unit": "cashback_percent",
+        "rate": 0,
+        "min_txn_inr": null,
+        "max_txn_inr": null,
+        "priority": 8,
+        "conditions": {
+          "source_local_id": "telecom_outside_airtel_thanks_exclusion",
+          "part": 1,
+          "info_reasons": [],
+          "flags": [
+            "broad_exclusion_v1_only",
+            "broad_category"
+          ]
+        },
+        "notes": null,
+        "effective_from": "2026-04-12",
+        "effective_to": null,
+        "excluded_categories": [],
+        "rule_role": "exclusion",
+        "merchant_slugs": [],
+        "platform_slugs": [],
+        "mcc_include": [],
+        "mcc_exclude": [],
+        "except_merchant_slugs": [],
+        "except_platform_slugs": [
+          "airtel_thanks_app"
+        ],
+        "block_inr": null,
+        "min_engine_version": 1,
+        "max_engine_version": 1,
+        "source_local_id": "telecom_outside_airtel_thanks_exclusion",
+        "display_note": "Telecom payments outside the Airtel Thanks app earn no cashback."
+      },
+      {
+        "id": "airtel-axis-bank-credit-card:rule:telecom_outside_airtel_thanks_exclusion#2",
+        "category_id": null,
+        "category_slug": null,
+        "merchant_pattern": null,
+        "rail": null,
+        "unit": "cashback_percent",
+        "rate": 0,
+        "min_txn_inr": null,
+        "max_txn_inr": null,
+        "priority": 8,
+        "conditions": {
+          "source_local_id": "telecom_outside_airtel_thanks_exclusion",
+          "part": 2,
+          "info_reasons": [],
+          "flags": [
+            "broad_exclusion_v1_only"
+          ]
+        },
+        "notes": null,
+        "effective_from": "2026-04-12",
+        "effective_to": null,
+        "excluded_categories": [],
+        "rule_role": "exclusion",
+        "merchant_slugs": [],
+        "platform_slugs": [],
+        "mcc_include": [
+          "4812",
+          "4814"
+        ],
+        "mcc_exclude": [],
+        "except_merchant_slugs": [],
+        "except_platform_slugs": [
+          "airtel_thanks_app"
+        ],
+        "block_inr": null,
+        "min_engine_version": 2,
+        "max_engine_version": null,
+        "source_local_id": "telecom_outside_airtel_thanks_exclusion",
+        "display_note": "Telecom payments outside the Airtel Thanks app earn no cashback."
       }
     ],
     "cap_rules": [],
