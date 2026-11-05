@@ -4,7 +4,7 @@
   "inputs": {
     "transform_version": "7",
     "source_record_sha256": "657a9e89e7d34f8d89df45dcb26ec07ee33619ef2b1f7043b0f1f4710240916d",
-    "override_sha256": "5d57b0b20b63220a9470ffaa1e00b02579c02c1a13f039549565e8b4d35ee408",
+    "override_sha256": "784579e565d555d250a519d023a825025e631c86cc23499aa09fc6d4e52ac4b8",
     "directory_sha256": "b1094d54b77e848d22f7a9a64f3ae6d1ef43ca3eb2fc8e40cd43ed1994664694",
     "verified": false
   },
@@ -615,8 +615,8 @@
         {
           "path": "cap_rules",
           "op": "append",
-          "value_sha256": "228d580848782330",
-          "reason": "WP7: D29c: BigBasket partner NeuCoins count toward the 1,000 NeuCoin grocery cap (grocery_monthly_1000; WP7's conservative reading, kept by D29b). Modelled as a child of that cap, so grocery_monthly_1000 keeps its single target and stays visible to the v1 feed with its pre-WP7 reach; the child itself is v2-only (its target is).",
+          "value_sha256": "8d3f2917105b7f21",
+          "reason": "WP7: D29c: BigBasket partner NeuCoins count toward the 1,000 NeuCoin grocery cap (grocery_monthly_1000; WP7's conservative reading, kept by D29b). Modelled as a child of that cap, so grocery_monthly_1000 keeps its single target and stays visible to the v1 feed with its pre-WP7 reach; the child itself is v2-only (its target is). The id has no wp7_ prefix because the loader labels a cap from its id (\"Bigbasket grocery share\", C8 D31b).",
           "source_url": "https://www.hdfc.bank.in/content/dam/hdfcbankpws/in/en/personal-banking/discover-products/cards/credit-cards/tata-neu-plus-hdfc-bank-credit-card/pdfs/tata_neu_plus_card_tnc.pdf",
           "checked_on": "2026-11-05",
           "citation": null
@@ -2429,12 +2429,12 @@
         "source_local_id": "wp7_fair_usage_statement_cycle"
       },
       {
-        "id": "tata-neu-plus-hdfc-bank:cap:wp7_bigbasket_grocery_share",
+        "id": "tata-neu-plus-hdfc-bank:cap:bigbasket_grocery_share",
         "reward_rule_id": "tata-neu-plus-hdfc-bank:rule:tata_partner_bigbasket_wp7",
         "category_id": null,
         "category_slug": null,
         "benefit_kind": null,
-        "label": "Wp7 bigbasket grocery share",
+        "label": "Bigbasket grocery share",
         "measure": "reward_value",
         "period": "calendar_month",
         "cap_value": 1000,
@@ -2451,7 +2451,7 @@
         "post_cap_behavior": null,
         "anchor": null,
         "min_engine_version": 2,
-        "source_local_id": "wp7_bigbasket_grocery_share"
+        "source_local_id": "bigbasket_grocery_share"
       }
     ],
     "milestone_rules": [],

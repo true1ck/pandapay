@@ -313,10 +313,10 @@
           "tata_partner_bigbasket_wp7_monthly": 2000,
           "tata_partner_bigbasket_wp7_annual": 2000,
           "grocery_monthly_2000": 100,
-          "wp7_bigbasket_grocery_share": 100
+          "bigbasket_grocery_share": 100
         }
       },
-      "why": "T&C: 5% back as NeuCoins on non-EMI spends at partner Tata Brands \"as defined in Annex 1\"; Annex 1 lists BigBasket (monthly eligible spend Rs1,00,000). A BigBasket order is still a grocery spend, so the partner rate beats the grocery_standard_capped (1.5%) grocery rule (C8 D29b): 2,000 x 5% = 100. The NeuCoins also count toward the 2,000 NeuCoin grocery cap (WP7's conservative reading, kept by D29b), through the child cap wp7_bigbasket_grocery_share (C8 D29c)."
+      "why": "T&C: 5% back as NeuCoins on non-EMI spends at partner Tata Brands \"as defined in Annex 1\"; Annex 1 lists BigBasket (monthly eligible spend Rs1,00,000). A BigBasket order is still a grocery spend, so the partner rate beats the grocery_standard_capped (1.5%) grocery rule (C8 D29b): 2,000 x 5% = 100. The NeuCoins also count toward the 2,000 NeuCoin grocery cap (WP7's conservative reading, kept by D29b), through the child cap bigbasket_grocery_share (C8 D29c)."
     },
     {
       "state_before": {
@@ -444,7 +444,7 @@
     {
       "item": "WP7 r4: example 010 (grocery cap structure)",
       "cardpipeline_says": "Round 2 made BigBasket a second target of grocery_monthly_2000, which made the cap v2-only, so installed (v1) apps lost it.",
-      "issuer_says": "The T&C cap grocery NeuCoins per month; counting BigBasket partner NeuCoins too is WP7's conservative reading (C8 D29b). grocery_monthly_2000 targets the grocery rule only again (v1-visible, pre-WP7 reach) and BigBasket counts through its child cap wp7_bigbasket_grocery_share (C8 D29c). Amounts unchanged; example 010 lists both caps.",
+      "issuer_says": "The T&C cap grocery NeuCoins per month; counting BigBasket partner NeuCoins too is WP7's conservative reading (C8 D29b). grocery_monthly_2000 targets the grocery rule only again (v1-visible, pre-WP7 reach) and BigBasket counts through its child cap bigbasket_grocery_share (C8 D29c). Amounts unchanged; example 010 lists both caps.",
       "proposed_fix": "override",
       "override_file": "api/scripts/catalogue_overrides/tata-neu-infinity-hdfc-bank.json"
     },

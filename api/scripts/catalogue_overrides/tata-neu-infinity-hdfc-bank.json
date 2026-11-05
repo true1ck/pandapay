@@ -748,7 +748,7 @@
       "path": "cap_rules",
       "op": "append",
       "value": {
-        "id": "wp7_bigbasket_grocery_share",
+        "id": "bigbasket_grocery_share",
         "category_id": "all_retail",
         "metric": "total_reward_points",
         "mcc_target_list": [],
@@ -767,7 +767,7 @@
         "effective_from": "2024-01-01",
         "effective_to": null
       },
-      "reason": "WP7: D29c: BigBasket partner NeuCoins count toward the 2,000 NeuCoin grocery cap (grocery_monthly_2000; WP7's conservative reading, kept by D29b). Modelled as a child of that cap, so grocery_monthly_2000 keeps its single target and stays visible to the v1 feed with its pre-WP7 reach; the child itself is v2-only (its target is).",
+      "reason": "WP7: D29c: BigBasket partner NeuCoins count toward the 2,000 NeuCoin grocery cap (grocery_monthly_2000; WP7's conservative reading, kept by D29b). Modelled as a child of that cap, so grocery_monthly_2000 keeps its single target and stays visible to the v1 feed with its pre-WP7 reach; the child itself is v2-only (its target is). The id has no wp7_ prefix because the loader labels a cap from its id (\"Bigbasket grocery share\", C8 D31b).",
       "source_url": "https://www.hdfc.bank.in/content/dam/hdfcbankpws/in/en/personal-banking/discover-products/cards/credit-cards/tata-neu-infinity-credit-card/pdf/tata_neu_infinity_card_tnc.pdf",
       "checked_on": "2026-11-05"
     },
