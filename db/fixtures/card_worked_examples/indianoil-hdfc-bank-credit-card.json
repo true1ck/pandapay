@@ -44,10 +44,10 @@
         "value_inr": null,
         "excluded": false,
         "cap_deltas_by_source_id": {
-          "fuel_first_6m": 100
+          "fuel_post_6m": 100
         }
       },
-      "why": "5% of spend as Fuel Points = 100 FP, within 250/month (first 6 months) or 150/month (after)."
+      "why": "5% of spend as Fuel Points = 100 FP, within the 150/month cap (steady-state tier, D8d)."
     },
     {
       "id": "002",
@@ -256,8 +256,8 @@
     {
       "item": "fuel cap tier",
       "cardpipeline_says": "fuel_first_6m 250 and fuel_post_6m 150 both attached.",
-      "issuer_says": "250 in first 6 months from issuance, 150 after; needs card age, which ctx lacks. No cap-boundary example for fuel.",
-      "proposed_fix": "engine"
+      "issuer_says": "250 in first 6 months from issuance, 150 after. Examples use the 150 steady-state value (D8d).",
+      "proposed_fix": "importer"
     },
     {
       "item": "post-cap grocery",
