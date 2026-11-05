@@ -56,6 +56,80 @@
       "reason": "WP7: \"eligible_utility\" restates the category (2,000 NeuCoin cap).",
       "source_url": "https://www.hdfc.bank.in/content/dam/hdfcbankpws/in/en/personal-banking/discover-products/cards/credit-cards/tata-neu-infinity-credit-card/pdf/tata_neu_infinity_card_tnc.pdf",
       "checked_on": "2026-11-05"
+    },
+    {
+      "path": "reward_rules[id=tata_partner_non_emi].category_id",
+      "value": "tata_neu_partner",
+      "reason": "WP7: D24e: partner Tata brands via the group token (tata group + Tata Neu); the brand_type clause made the 5% rule info.",
+      "source_url": "https://www.hdfc.bank.in/content/dam/hdfcbankpws/in/en/personal-banking/discover-products/cards/credit-cards/tata-neu-infinity-credit-card/pdf/tata_neu_infinity_card_tnc.pdf",
+      "checked_on": "2026-11-05"
+    },
+    {
+      "path": "reward_rules[id=tata_partner_non_emi].channel_type",
+      "value": "all",
+      "reason": "WP7: \"non_upi\" is carried by the UPI carve-out row below (tata_partner_upi_wp7), not by a rail the loader can read.",
+      "source_url": "https://www.hdfc.bank.in/content/dam/hdfcbankpws/in/en/personal-banking/discover-products/cards/credit-cards/tata-neu-infinity-credit-card/pdf/tata_neu_infinity_card_tnc.pdf",
+      "checked_on": "2026-11-05"
+    },
+    {
+      "path": "reward_rules[id=tata_partner_non_emi].conditions",
+      "value": {},
+      "reason": "WP7: Brand restated by the group token; non-EMI carried by tata_partner_emi (carve-out, lower priority number).",
+      "source_url": "https://www.hdfc.bank.in/content/dam/hdfcbankpws/in/en/personal-banking/discover-products/cards/credit-cards/tata-neu-infinity-credit-card/pdf/tata_neu_infinity_card_tnc.pdf",
+      "checked_on": "2026-11-05"
+    },
+    {
+      "path": "reward_rules[id=tata_partner_emi].category_id",
+      "value": "tata_neu_partner",
+      "reason": "WP7: EMI carve-out on the same partner brands: merchant EMI earns only the base 1.5% (issuer worked example 006).",
+      "source_url": "https://www.hdfc.bank.in/content/dam/hdfcbankpws/in/en/personal-banking/discover-products/cards/credit-cards/tata-neu-infinity-credit-card/pdf/tata_neu_infinity_card_tnc.pdf",
+      "checked_on": "2026-11-05"
+    },
+    {
+      "path": "reward_rules[id=tata_partner_emi].channel_type",
+      "value": "all",
+      "reason": "WP7: Rail emi carries the merchant-EMI channel.",
+      "source_url": "https://www.hdfc.bank.in/content/dam/hdfcbankpws/in/en/personal-banking/discover-products/cards/credit-cards/tata-neu-infinity-credit-card/pdf/tata_neu_infinity_card_tnc.pdf",
+      "checked_on": "2026-11-05"
+    },
+    {
+      "path": "reward_rules[id=tata_partner_emi].conditions",
+      "value": {},
+      "reason": "WP7: Brand restated by the group token.",
+      "source_url": "https://www.hdfc.bank.in/content/dam/hdfcbankpws/in/en/personal-banking/discover-products/cards/credit-cards/tata-neu-infinity-credit-card/pdf/tata_neu_infinity_card_tnc.pdf",
+      "checked_on": "2026-11-05"
+    },
+    {
+      "path": "reward_rules[id=tata_partner_emi].priority",
+      "value": 19,
+      "reason": "WP7: D14d: the carve-out must win over the 5% partner rule (priority 20).",
+      "source_url": "https://www.hdfc.bank.in/content/dam/hdfcbankpws/in/en/personal-banking/discover-products/cards/credit-cards/tata-neu-infinity-credit-card/pdf/tata_neu_infinity_card_tnc.pdf",
+      "checked_on": "2026-11-05"
+    },
+    {
+      "path": "reward_rules",
+      "op": "append",
+      "value": {
+        "id": "tata_partner_upi_wp7",
+        "category_id": "tata_neu_partner",
+        "priority": 18,
+        "evaluation_type": "standard_accrual",
+        "rail": "upi_qr",
+        "channel_type": "all",
+        "conditions": {},
+        "action": {
+          "multiplier": 0.3333333333,
+          "points_per_block": 0.5,
+          "cashback_percent": null,
+          "cap_reference": "upi_monthly_500_neucoins",
+          "reason": "UPI spends at partner Tata brands earn the UPI rate, not the 5% partner rate."
+        },
+        "effective_from": "2024-01-01",
+        "effective_to": null
+      },
+      "reason": "WP7: The record's partner 5% is \"non_upi\"; UPI spends earn the UPI rates (record upi_generic: 0.5%, more only with the Tata Neu UPI ID). Carve-out at the lowest stated UPI rate so the partner rate never applies to UPI (H2).",
+      "source_url": "https://www.hdfc.bank.in/content/dam/hdfcbankpws/in/en/personal-banking/discover-products/cards/credit-cards/tata-neu-infinity-credit-card/pdf/tata_neu_infinity_card_tnc.pdf",
+      "checked_on": "2026-11-05"
     }
   ]
 }
