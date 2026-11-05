@@ -433,7 +433,7 @@ void main() {
       expect(
         result.reasons,
         containsAll([
-          'cap_skipped:mystery:unsupported_cap_kind',
+          'cap_skipped:mystery:unknown_cap_kind',
           'cap_skipped:no-amount:cap_amount_null',
         ]),
       );
@@ -476,6 +476,136 @@ void main() {
         'total_cap_reached',
       ]);
       expect(result.points, 40);
+    });
+  });
+  group('skipped rules (D15d/D15g)', () {
+    Map<String, dynamic> wireCard(List<Map<String, dynamic>> rules) => {
+      'id': 'c',
+      'name': 'C',
+      'network': 'visa',
+      'base_reward_unit': 'cashback_percent',
+      'base_reward_rate': 1,
+      'excluded_categories': ['cat-rent'],
+      'reward_rules': rules,
+      'cap_rules': const [],
+    };
+    Map<String, dynamic> wireRule(String id, Map<String, dynamic> extra) => {
+      'id': id,
+      'unit': 'cashback_percent',
+      'rate': 5,
+      'priority': 10,
+      ...extra,
+    };
+
+    test('an unparseable exclusion is reported and flagged', () {
+      final card = CardProductJson.fromJson(
+        wireCard([
+          wireRule('cash-excl', {
+            'rule_role': 'exclusion',
+            'rate': 0,
+            'mcc_include': [6011],
+          }),
+        ]),
+      );
+      final earning = RecommendationEngine.evaluateRewardV2(card, _ctx(1000));
+      expect(earning.cashbackInr, 10);
+      expect(
+        earning.reasons,
+        contains('rule_skipped:cash-excl:unparseable_mcc_include'),
+      );
+      expect(earning.assumptions, contains('exclusion_unparsed'));
+
+      final excluded = RecommendationEngine.evaluateRewardV2(
+        card,
+        _ctx(1000, categoryId: 'cat-rent'),
+      );
+      expect(excluded.excluded, isTrue);
+      expect(excluded.reasons, [
+        'excluded_category',
+        'rule_skipped:cash-excl:unparseable_mcc_include',
+      ]);
+      expect(excluded.assumptions, contains('exclusion_unparsed'));
+    });
+
+    test('D15g: an unknown role sends an otherwise-v1 card to v2', () {
+      final card = CardProductJson.fromJson(
+        wireCard([
+          wireRule('online', {'rule_role': 'earn', 'rail': 'online'}),
+          wireRule('promo', {'rule_role': 'festive', 'rate': 20}),
+        ]),
+      );
+      expect(card.isV2Shaped, isTrue);
+      final rec = const RecommendationEngine().rank(
+        _ctx(1000, rail: TxnRail.online),
+        [CardSnapshot(product: card)],
+      ).single;
+      expect(rec.reward, isNotNull);
+      expect(rec.reward!.ruleId, 'online');
+      expect(
+        rec.reward!.reasons,
+        contains('rule_skipped:promo:unknown_rule_role'),
+      );
+      expect(rec.reward!.assumptions, isNot(contains('exclusion_unparsed')));
+    });
+
+    test('D15g: a non-array list value sends an otherwise-v1 card to v2', () {
+      final card = CardProductJson.fromJson(
+        wireCard([
+          wireRule('online', {'rule_role': 'earn', 'rail': 'online'}),
+          wireRule('swiggy', {'rule_role': 'earn', 'merchant_slugs': 'swiggy'}),
+        ]),
+      );
+      expect(card.isV2Shaped, isTrue);
+      final result = RecommendationEngine.evaluateRewardV2(
+        card,
+        _ctx(1000, rail: TxnRail.unknown),
+      );
+      expect(result.engineVersion, 2);
+      // v2 semantics: unknown rail misses the online rule; base 1%.
+      expect(result.ruleId, isNull);
+      expect(result.cashbackInr, 10);
+      expect(
+        result.reasons,
+        contains('rule_skipped:swiggy:unparseable_merchant_slugs'),
+      );
+    });
+  });
+
+  group('tie-break in integer paise (D15c)', () {
+    test('values equal to the paisa fall through to the rule id', () {
+      // 3 pts × ₹0.10 is 0.30000000000000004 in binary; 0.3% of ₹100 is
+      // ₹0.30. Compared raw, the points rule would win.
+      const card = CardProduct(
+        id: 'q',
+        name: 'Q',
+        network: CardNetwork.visa,
+        pointValueInr: 0.1,
+        baseRewardUnit: RewardUnit.pointsPer100,
+        baseRewardRate: 1,
+        accrualRounding: AccrualRounding.floor,
+        rewardRules: [
+          RewardRule(
+            id: 'z-points',
+            categoryId: 'cat-gifts',
+            unit: RewardUnit.pointsPer100,
+            rate: 3,
+            priority: 10,
+            role: RuleRole.earn,
+          ),
+          RewardRule(
+            id: 'a-cash',
+            categoryId: 'cat-gifts',
+            unit: RewardUnit.cashbackPercent,
+            rate: 0.3,
+            priority: 10,
+            role: RuleRole.earn,
+          ),
+        ],
+      );
+      final result = computeRewardV2(card, _ctx(100, categoryId: 'cat-gifts'));
+      expect(result.ruleId, 'a-cash');
+      expect(result.cashbackInr, 0.3);
+      expect(result.points, 0);
     });
   });
 }
