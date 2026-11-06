@@ -67,6 +67,7 @@ PostgreSQL tests ran against a throwaway Docker database (`learning-loop-pg`, po
 9. **Smaller choices.** The history re-check of B5 works in batches of 50 events; the Overview tile "Learning candidates" opens "SMS Pipeline Rules"; a category draft opened from the Learning page uses a stable UUID per shop, so reopening it continues the same draft.
 10. **The legacy "SMS Rule Approvals" screen and its routes were left in place.** Removing them is a separate change.
 11. **The plan text was not edited.** Items 2 to 4 are the places where its text no longer matches what shipped.
+12. **The admin route contracts check was already failing before this branch and is now fixed.** `node scripts/sync_admin_contracts.js --check` (the last step of `bash scripts/test_private_admin.sh`, which needs `LC_ALL=en_US.UTF-8` on this Mac) failed on `sms-v2/integration` because `auth/src/admin_route_manifest.json` and `docs/admin-console-contracts/v1/routes.json` still listed 18 removed `/admin/sms-ai/*` and `/admin/sms-learning/*` routes. The follow-up commit regenerates both mirrors from the API manifest; the check now exits 0 and the script passes end to end.
 
 ## Owner checklist (nothing here can be done by code)
 

@@ -403,108 +403,6 @@
   },
   {
     "method": "GET",
-    "path": "/admin/sms-ai/summary",
-    "permission": "ai.queue.read",
-    "freshMfa": false
-  },
-  {
-    "method": "GET",
-    "path": "/admin/sms-ai/jobs",
-    "permission": "ai.queue.read",
-    "freshMfa": false
-  },
-  {
-    "method": "GET",
-    "path": "/admin/sms-ai/jobs/:id/events",
-    "permission": "ai.queue.read",
-    "freshMfa": false
-  },
-  {
-    "method": "GET",
-    "path": "/admin/sms-ai/quota",
-    "permission": "ai.queue.read",
-    "freshMfa": false
-  },
-  {
-    "method": "POST",
-    "path": "/admin/sms-ai/dry-run",
-    "permission": "ai.queue.run",
-    "freshMfa": false
-  },
-  {
-    "method": "GET",
-    "path": "/admin/sms-ai/rollout",
-    "permission": "ai.queue.read",
-    "freshMfa": false
-  },
-  {
-    "method": "PATCH",
-    "path": "/admin/sms-ai/rollout/:key",
-    "permission": "learning.publish",
-    "freshMfa": true
-  },
-  {
-    "method": "GET",
-    "path": "/admin/sms-learning/operations",
-    "permission": "learning.read",
-    "freshMfa": false
-  },
-  {
-    "method": "GET",
-    "path": "/admin/sms-learning/candidates",
-    "permission": "learning.read",
-    "freshMfa": false
-  },
-  {
-    "method": "GET",
-    "path": "/admin/sms-learning/rule-negative-evidence",
-    "permission": "learning.read",
-    "freshMfa": false
-  },
-  {
-    "method": "GET",
-    "path": "/admin/sms-learning/feedback-events",
-    "permission": "learning.read",
-    "freshMfa": false
-  },
-  {
-    "method": "POST",
-    "path": "/admin/sms-learning/feedback-events/:eventId/review",
-    "permission": "review.write",
-    "freshMfa": false
-  },
-  {
-    "method": "POST",
-    "path": "/admin/sms-learning/candidates/:id/decision",
-    "permission": "learning.publish",
-    "freshMfa": true
-  },
-  {
-    "method": "POST",
-    "path": "/admin/sms-learning/candidates/:id/pause",
-    "permission": "learning.publish",
-    "freshMfa": true
-  },
-  {
-    "method": "POST",
-    "path": "/admin/sms-learning/candidates/:id/resume",
-    "permission": "learning.publish",
-    "freshMfa": true
-  },
-  {
-    "method": "GET",
-    "path": "/admin/sms-learning/ai-proposals",
-    "permission": "learning.read",
-    "freshMfa": false
-  },
-  {
-    "method": "POST",
-    "path": "/admin/sms-learning/ai-proposals/review",
-    "permission": "learning.publish",
-    "freshMfa": true
-  },
-  {
-    "method": "GET",
     "path": "/admin/sms-rules/category-proposals",
     "permission": "learning.read",
     "freshMfa": false
@@ -549,12 +447,6 @@
     "method": "POST",
     "path": "/admin/sms-rules/:bundleVersion/rollback",
     "permission": "learning.publish",
-    "freshMfa": true
-  },
-  {
-    "method": "POST",
-    "path": "/admin/sms-learning/cycle",
-    "permission": "learning.cycle",
     "freshMfa": true
   },
   {
