@@ -77,7 +77,7 @@ function landingPage(token,packageId) {
   '<a class="btn p" href="'+store+'">Install PandaPay</a><a class="btn s" href="'+open+'">Already have the app? Open it</a>'+
   '<small>Opening this page does not join anyone.</small></main></body></html>';
 }
-function registerInvitationRoutes(app,{protect,withUserClient,sendError,secret,androidPackageId='app.pandapay.pandapay'}) {
+function registerInvitationRoutes(app,{protect,withUserClient,sendError,secret,androidPackageId='app.pandapay.pandapay',notify=async()=>0}) {
   app.get('/split/join/:token',(req,res)=>{
     res.set({'Cache-Control':'no-store','Referrer-Policy':'no-referrer','X-Robots-Tag':'noindex, nofollow','Content-Security-Policy':"default-src 'none'; style-src 'unsafe-inline'; base-uri 'none'; form-action 'none'"});
     if(!TOKEN.test(req.params.token))return res.status(404).type('text/plain').send('Not found');
@@ -116,6 +116,7 @@ function registerInvitationRoutes(app,{protect,withUserClient,sendError,secret,a
       throw error;
     }
     res.json(result);
+    void notify({actorId:req.userId,kind:result?.status==='joined'?'invitation.joined':'invitation.requested',payload:{},contextId:result?.contextId,operationId:b.operationId});
   });
   route('/shared-expenses/invitations/respond',async(req,res)=>{
     const b=req.body;record(b,['invitationId','operationId','approve']);uuid(b.invitationId,'invitationId');uuid(b.operationId,'operationId');if(typeof b.approve!=='boolean')fail('INVALID_INPUT','approve');

@@ -5,6 +5,7 @@ const {parseSharedExpenseSourceReference}=require('./source_reference');
 const {canonicalJson}=require('./canonical');
 const q=require('./queries');
 const {registerInvitationRoutes}=require('./invitations');
+const {notifyAfterCommit}=require('./notifications');
 const config=require('../config');
 
 const UNAVAILABLE=Object.freeze({schemaVersion:1,available:false,reads:false,proposals:false,acceptedWrites:false,settlements:false,sourceFunding:false});
@@ -51,7 +52,8 @@ function registerSharedExpenseRoutes(app,{requireAuth,withUserClient,invitationS
     res.set('Cache-Control','private, no-store');
     try {uuid(req.userId,'actorId');await handler(req,res);}catch(error){sendError(res,error);}
   }];
-  registerInvitationRoutes(app,{protect,withUserClient,sendError,secret:invitationSecret,androidPackageId:config.androidPackageId});
+  registerInvitationRoutes(app,{protect,withUserClient,sendError,secret:invitationSecret,androidPackageId:config.androidPackageId,
+    notify:(args)=>notifyAfterCommit({withUserClient,...args})});
   app.get('/shared-expenses/capabilities',...protect(async(req,res)=>{
     const result=await withUserClient(req.userId,client=>capabilities(client,{allowMissing:true}));
     res.json(result);
@@ -60,6 +62,9 @@ function registerSharedExpenseRoutes(app,{requireAuth,withUserClient,invitationS
     const validated=validateCommand(req.body); // reject before DB or write locks
     const result=await withUserClient(req.userId,client=>executeCommand(client,validated.command));
     res.json({receipt:result,records:[]});
+    // After the commit and the response: push is best effort and never blocks or fails a command.
+    void notifyAfterCommit({withUserClient,actorId:req.userId,kind:validated.command.kind,payload:validated.command.payload,
+      contextId:validated.command.payload.contextId,operationId:validated.command.operationId});
   }));
   app.post('/shared-expenses/sources/inspect',...protect(async(req,res)=>{
     const identity=validateSourceIdentity(req.body);

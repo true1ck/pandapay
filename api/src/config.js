@@ -120,6 +120,8 @@ module.exports = {
   authInternalServiceSecret: process.env.AUTH_INTERNAL_SERVICE_SECRET || null,
   sharedExpenseInviteSecret: process.env.SHARED_EXPENSE_INVITE_SECRET || null,
   androidPackageId: process.env.ANDROID_PACKAGE_ID || 'app.pandapay.pandapay',
+  // Separate kill switch for push about pending split items. Off unless set.
+  sharedExpenseNotificationsEnabled: process.env.SHARED_EXPENSE_NOTIFICATIONS_ENABLED === 'true',
   referralIdentityHmacKey: process.env.REFERRAL_IDENTITY_HMAC_KEY || null,
   referralIdentityHmacKeyVersion: process.env.REFERRAL_IDENTITY_HMAC_KEY_VERSION || 'v1',
   referralPreviewSecret: process.env.REFERRAL_PREVIEW_SECRET || null,

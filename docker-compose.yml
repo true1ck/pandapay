@@ -126,6 +126,7 @@ services:
       # the host during local development. host.docker.internal is the Docker
       # Desktop route back to it.
       NOTIFICATION_SERVICE_URL: "${NOTIFICATION_SERVICE_URL:-http://host.docker.internal:3100}"
+      SHARED_EXPENSE_NOTIFICATIONS_ENABLED: "${SHARED_EXPENSE_NOTIFICATIONS_ENABLED:-true}"
       NOTIFICATION_SERVICE_API_KEY: "${NOTIFICATION_SERVICE_API_KEY:-}"
       NOTIFICATION_SERVICE_TIMEOUT_MS: "${NOTIFICATION_SERVICE_TIMEOUT_MS:-4000}"
     ports:

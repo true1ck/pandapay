@@ -130,3 +130,9 @@ Local only, uncommitted. **Migration `20261114000000_shared_expense_phone_direct
 - Remove: an unjoined person was removed by the owner and dropped from the list.
 - Found and fixed on device: the "Syncing your latest changes" notice stuck forever after a server-refused command; the group screen errored after leaving; the Join button label was dark on dark.
 - Known small items: a left or owner member without a verified phone shows as "Member"; a lingering "Check status" link after adding a person.
+
+### Update — push for pending split items (6 November 2026)
+
+Server: `api/src/shared_expenses/notifications.js`, behind its own kill switch `SHARED_EXPENSE_NOTIFICATIONS_ENABLED` (off by default; on in local compose). After a command commits and the response is sent, recipients are notified through the existing inbox + delivery outbox (category `needs_review`, so user preferences apply): new expense to review (everyone else), payment to confirm (receiver), join request (owners), invite accepted (owners). Rows are written as the recipient (the outbox only lets a user enqueue for themselves), deduped per operation and recipient, copy has no amounts, tap opens `/insights/splits/<id>`. A failure is logged and dropped; it cannot fail or repeat a financial command. Notification service URL switched to `https://novu-notifications.onrender.com` (local `.env`, `.env.prod.example`).
+
+Verified: 7 notifier unit tests with a fake DB (audience, kill switch, dedupe keys, failure isolation); API `shared_expenses*` suite passes; local API restarted with the new URL and flag. **Not verified:** a real push reaching a second device/account (needs a second signed-in account and a registered FCM token); settlement-response and expense-response notifications are not sent yet; delivery is at-most-once if the API dies right after a commit (a relay from the domain-event table would make it at-least-once).
