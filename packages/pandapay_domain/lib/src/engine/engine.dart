@@ -85,12 +85,24 @@ class CardSnapshot {
   /// are recorded in native units (plan WP8).
   final Map<String, double> capConsumed;
 
+  /// v2 cards only (plan C8/D32c): caps whose consumption this period is
+  /// **unknown** (a cap row with no native figure yet, or from a period that
+  /// has ended). Unknown is not empty and not used up: a used-up cap is only
+  /// the conservative reading when the rate after the limit is not higher
+  /// than the rate inside it (Magnus pays 12 pts/₹200 inside its limit and
+  /// 35 above it). So the engine evaluates the card twice, once with these
+  /// caps at whatever [capConsumed] says for them (nothing, i.e. fresh, unless
+  /// a caller has already added spend to them) and once with them used up,
+  /// and keeps the result with the LOWER value.
+  final Set<String> unknownCapIds;
+
   const CardSnapshot({
     required this.product,
     this.capRemaining = const {},
     this.milestoneProgress = const {},
     this.forcedOverrideCardId,
     this.capConsumed = const {},
+    this.unknownCapIds = const {},
   });
 
   /// Native-unit consumption per cap for the v2 engine — see [capConsumed].
@@ -925,6 +937,11 @@ class RecommendationEngine {
     // milestone reward, and a transaction that completes it claims exactly
     // the reward once (never more, never double-counted across scenarios).
     for (final milestone in uniqueMilestoneRules(card.milestoneRules)) {
+      // D32b: a windowed (welcome) milestone is not credited in Phase 1. The
+      // app has no window maths, and once the window closes the server
+      // returns no row, so progress reads 0 and the bonus would be pro-rated
+      // in for ever.
+      if (milestone.windowDays != null) continue;
       final progress =
           snapshot.milestoneProgress[milestone.id] ?? const Money.zero();
       final remaining = milestone.thresholdSpend - progress;
@@ -1002,7 +1019,43 @@ class RecommendationEngine {
   }
 }
 
+/// Larger than any real cap amount, for an unknown legacy cap whose native
+/// amount only the engine's own conversion knows: `max(0, amount − it)` is 0.
+const double _kCapUsedUp = 1e12;
+
 extension _V2Path on RecommendationEngine {
+  /// The C3 reward for [snapshot], honouring [CardSnapshot.unknownCapIds]
+  /// (plan C8/D32c): with none, the plain evaluation; otherwise the card is
+  /// evaluated with those caps as [CardSnapshot.capConsumed] has them
+  /// (fresh unless spend was added) and again with them used up, and the
+  /// result with the LOWER value is kept (a tie keeps the used-up one). Known
+  /// caps are untouched in both.
+  RewardEvaluation _rewardWithUnknownCaps(
+    CardSnapshot snapshot,
+    RecommendationContext context,
+  ) {
+    final card = snapshot.product;
+    final fresh = snapshot.v2CapConsumed;
+    RewardEvaluation evaluate(Map<String, double> consumed) => computeRewardV2(
+      card,
+      context,
+      capConsumedBefore: consumed,
+      directory: merchantDirectory,
+    );
+    if (snapshot.unknownCapIds.isEmpty) return evaluate(fresh);
+
+    final usedUp = Map<String, double>.of(fresh);
+    for (final cap in card.capRules) {
+      if (!snapshot.unknownCapIds.contains(cap.id)) continue;
+      final amount = cap.capAmount ?? _kCapUsedUp;
+      final before = fresh[cap.id] ?? 0;
+      usedUp[cap.id] = before > amount ? before : amount;
+    }
+    final whenFresh = evaluate(fresh);
+    final whenUsedUp = evaluate(usedUp);
+    return whenUsedUp.valueInr <= whenFresh.valueInr ? whenUsedUp : whenFresh;
+  }
+
   /// The v2 counterpart of the rule/cap part of [RecommendationEngine._evaluate]:
   /// the C3 reward in native units, then the same ranking adjustments the
   /// v1 path makes (forex in travel mode, fuel surcharge waiver, milestone
@@ -1012,12 +1065,7 @@ extension _V2Path on RecommendationEngine {
     CardSnapshot snapshot,
   ) {
     final card = snapshot.product;
-    final reward = computeRewardV2(
-      card,
-      context,
-      capConsumedBefore: snapshot.v2CapConsumed,
-      directory: merchantDirectory,
-    );
+    final reward = _rewardWithUnknownCaps(snapshot, context);
     final isOverride = snapshot.forcedOverrideCardId == card.id;
     final fuelApplies =
         context.isFuel &&
@@ -1089,6 +1137,8 @@ extension _V2Path on RecommendationEngine {
       reasons.add('Fuel surcharge waiver: +${waiverValue.format()}');
     }
     for (final milestone in uniqueMilestoneRules(card.milestoneRules)) {
+      // D32b: as in the v1 loop above, a windowed milestone is not credited.
+      if (milestone.windowDays != null) continue;
       final progress =
           snapshot.milestoneProgress[milestone.id] ?? const Money.zero();
       final remaining = milestone.thresholdSpend - progress;

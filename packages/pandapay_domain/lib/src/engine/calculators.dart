@@ -296,8 +296,8 @@ class SplitOptimizer {
   /// delta is added to `capConsumed`. Transaction-count caps are left alone:
   /// a split allocation is one eventual charge on the card, so the marginal
   /// steps must not count it repeatedly (as the v1 path does). A cap that is
-  /// already at its amount (used up, or unknown and fed as used up) gets no
-  /// delta and stays so.
+  /// already at its amount (used up) gets no delta and stays so. A cap in
+  /// [CardSnapshot.unknownCapIds] is carried through as unknown (D32c).
   CardSnapshot _withNativeCapsConsumed(
     CardSnapshot snapshot,
     Money consumed,
@@ -335,6 +335,10 @@ class SplitOptimizer {
       // a caller passed there.
       capRemaining: const {},
       capConsumed: next,
+      // D32c: an unknown cap stays unknown. Its entry in `next` is the fresh
+      // reading plus what this allocation would add; the engine still
+      // evaluates it used up as well and keeps the lower value.
+      unknownCapIds: snapshot.unknownCapIds,
       milestoneProgress: snapshot.milestoneProgress,
       forcedOverrideCardId: snapshot.forcedOverrideCardId,
     );

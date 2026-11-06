@@ -25,6 +25,7 @@ import '../../data/user_cards_repository.dart'
     show TransactionEntry, TxnEntryKind, TxnInstrument, UserCard;
 import '../cards/card_summary.dart';
 import '../cards/card_visual.dart';
+import '../cards/recommendation_confidence.dart';
 import '../import/import_hub_screen.dart';
 import '../insights/spending_visuals.dart'
     show spendingCategoryVisual, spendingInstrumentVisual;
@@ -1242,7 +1243,7 @@ class _QuickAddScreenState extends ConsumerState<QuickAddScreen> {
                 children: [
                   MoneyText(
                     best.expectedValue,
-                    confidence: best.confidence,
+                    confidence: confidenceOf(best),
                     style: BambooFonts.money(18, color: BambooInk.lime),
                     hidePaise: true,
                     showConfidenceIcon: false,
@@ -1410,7 +1411,7 @@ class _QuickAddScreenState extends ConsumerState<QuickAddScreen> {
                 const SizedBox(width: 7),
                 MoneyText(
                   recommendation.expectedValue,
-                  confidence: recommendation.confidence,
+                  confidence: confidenceOf(recommendation),
                   style: BambooFonts.money(13, color: BambooInk.lime),
                   hidePaise: true,
                   showConfidenceIcon: false,

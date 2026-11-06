@@ -19,13 +19,12 @@ import 'user_cards_repository.dart';
 /// *No row for a cap* means nothing consumed this period. *A row without a
 /// native figure* (written before the server's recompute), *a row from a
 /// period that has ended*, and *a row recorded for a different cap kind* are
-/// all **unknown, not empty**: the snapshot feeds `consumed = cap amount`, so
-/// the engine promises no capped bonus.
-
-/// Larger than any real cap: used when an unknown cap has no amount to feed
-/// (a legacy cap the engine converts itself). The engine reads a remaining
-/// of `max(0, amount − consumed)`, so this leaves nothing.
-const double kCapExhaustedSentinel = 1e12;
+/// all **unknown, not empty**: the snapshot lists them in
+/// [CardSnapshot.unknownCapIds] (and gives them no consumption), and the
+/// engine evaluates the card with those caps both fresh and used up and keeps
+/// the lower value (plan C8/D32c). Feeding "used up" alone is not safe: it is
+/// only conservative when the rate after the limit is not higher than the rate
+/// inside it (Axis Magnus pays 35 above its limit against 12 inside it).
 
 enum CapUsageStatus {
   /// No row this period: nothing consumed.
@@ -101,17 +100,6 @@ CapUsage resolveCapUsage(UserCard? owned, CapRule cap, {required DateTime now}) 
   return CapUsage.known(native < 0 ? 0 : native, row);
 }
 
-/// The native amount to feed as `consumed` for an unknown cap so the engine
-/// has no headroom to promise: the cap's own amount.
-double _exhaustedConsumed(CapRule cap, CapUsage usage) {
-  final amounts = <double>[
-    ?cap.capAmount,
-    if (cap.capKind != null) ?usage.row?.capAmount,
-  ];
-  if (amounts.isEmpty) return kCapExhaustedSentinel;
-  return amounts.reduce((a, b) => a > b ? a : b);
-}
-
 /// [product] as the engine should see it for [owned] (null when the user
 /// does not hold it: every cap is then fresh).
 CardSnapshot buildCardSnapshot(
@@ -138,6 +126,7 @@ CardSnapshot buildCardSnapshot(
   }
 
   final consumed = <String, double>{};
+  final unknown = <String>{};
   // Every cap by id; v2-shaped cards are not de-duplicated (D15a).
   for (final cap in product.capRules) {
     final usage = resolveCapUsage(owned, cap, now: now);
@@ -147,7 +136,8 @@ CardSnapshot buildCardSnapshot(
       case CapUsageStatus.known:
         consumed[cap.id] = usage.consumed!;
       case CapUsageStatus.unknown:
-        consumed[cap.id] = _exhaustedConsumed(cap, usage);
+        // No consumption entry: the engine reads it fresh and used up.
+        unknown.add(cap.id);
     }
   }
   return CardSnapshot(
@@ -155,6 +145,7 @@ CardSnapshot buildCardSnapshot(
     // Deliberately empty: capRemaining is the v1 measure.
     capRemaining: const {},
     capConsumed: consumed,
+    unknownCapIds: unknown,
     milestoneProgress: milestoneProgress,
     forcedOverrideCardId: forcedOverrideCardId,
   );

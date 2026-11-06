@@ -8,6 +8,7 @@ import '../../app/providers.dart';
 import '../../data/spend_reports_repository.dart'
     show SpendPeriod, SpendReportQuery;
 import '../../main.dart' show MoneyText;
+import '../cards/recommendation_confidence.dart';
 import 'home_widget_service.dart';
 
 /// UA-8.2: Home-screen widget management panel.
@@ -318,7 +319,7 @@ class _WidgetSettingsScreenState extends ConsumerState<WidgetSettingsScreen> {
                               ),
                               MoneyText(
                                 rec.expectedValue,
-                                confidence: rec.confidence,
+                                confidence: confidenceOf(rec),
                                 style: BambooFonts.money(
                                   14,
                                   color: BambooInk.ink900,

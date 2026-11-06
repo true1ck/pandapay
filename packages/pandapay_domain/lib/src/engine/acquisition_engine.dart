@@ -328,6 +328,23 @@ class CardAcquisitionRecommender {
         artAssetUrl: card.artAssetUrl,
         artPrimaryColor: card.artPrimaryColor,
         hasApplyUrl: card.hasApplyUrl,
+        cardType: card.cardType,
+        // The v2 card fields: without them a card projects with the wrong
+        // rounding (rupee_floor read as paise) and can fall back to the v1
+        // path (D32 review M2).
+        accrualBlockInr: card.accrualBlockInr,
+        accrualRounding: card.accrualRounding,
+        cashbackRounding: card.cashbackRounding,
+        pointsExpiryMonths: card.pointsExpiryMonths,
+        modelStatus: card.modelStatus,
+        modelCoverage: card.modelCoverage,
+        unlockRules: card.unlockRules,
+        redemptionOptions: card.redemptionOptions,
+        parseWarnings: card.parseWarnings,
+        skippedCaps: card.skippedCaps,
+        skippedRules: card.skippedRules,
+        skippedExclusionRule: card.skippedExclusionRule,
+        wireV2Shaped: card.wireV2Shaped,
       );
 
   /// [CapRule.capValue] is one period's headroom; the projection needs a

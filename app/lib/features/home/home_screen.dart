@@ -32,6 +32,7 @@ import '../quickadd/quick_add_screen.dart';
 import '../scan/scan_result_screen.dart';
 import '../scan/upi_qr_scanner_screen.dart';
 import '../cards/card_visual.dart';
+import '../cards/recommendation_confidence.dart';
 import '../../domain/cycle_engine.dart';
 import 'home_alerts.dart';
 import 'home_context_line.dart';
@@ -1686,7 +1687,7 @@ class _BackupCardRow extends StatelessWidget {
                 children: [
                   MoneyText(
                     backup.expectedValue,
-                    confidence: backup.confidence,
+                    confidence: confidenceOf(backup),
                     style: BambooFonts.ui(
                       12.5,
                       weight: FontWeight.w700,
@@ -1992,7 +1993,7 @@ class _RecommendationCardState extends ConsumerState<_RecommendationCard> {
                 children: [
                   MoneyText(
                     recommendation.expectedValue,
-                    confidence: recommendation.confidence,
+                    confidence: confidenceOf(recommendation),
                     style: BambooFonts.money(36, color: BambooInk.lime),
                     hidePaise: true,
                     // The confidence marker belongs after the whole phrase,
@@ -2013,11 +2014,11 @@ class _RecommendationCardState extends ConsumerState<_RecommendationCard> {
                         ),
                         const SizedBox(width: 6),
                         Icon(
-                          recommendation.confidence.isConfirmed
+                          confidenceOf(recommendation).isConfirmed
                               ? Icons.check_circle_rounded
                               : Icons.hourglass_top_rounded,
                           size: 12,
-                          color: recommendation.confidence.isConfirmed
+                          color: confidenceOf(recommendation).isConfirmed
                               ? BambooInk.lime
                               : BambooInk.onSlateMuted,
                         ),
@@ -2029,7 +2030,7 @@ class _RecommendationCardState extends ConsumerState<_RecommendationCard> {
             else
               MoneyText(
                 recommendation.expectedValue,
-                confidence: recommendation.confidence,
+                confidence: confidenceOf(recommendation),
                 style: BambooFonts.money(22, color: BambooInk.ink900),
                 hidePaise: true,
               ),
@@ -2045,6 +2046,11 @@ class _RecommendationCardState extends ConsumerState<_RecommendationCard> {
                 ),
                 maxLines: isHero ? 1 : 2,
                 overflow: TextOverflow.ellipsis,
+              ),
+              // D32d: say so when an exclusion could not be read.
+              RecommendationCaution(
+                recommendation: recommendation,
+                color: isHero ? BambooInk.onSlateSubtle : BambooInk.ink500,
               ),
               if (recommendation.reasonLines.length > 1) ...[
                 ConstrainedBox(
@@ -2386,7 +2392,7 @@ class _RecommendationCardState extends ConsumerState<_RecommendationCard> {
             children: [
               MoneyText(
                 recommendation.expectedValue,
-                confidence: recommendation.confidence,
+                confidence: confidenceOf(recommendation),
                 style: BambooFonts.money(26, color: BambooInk.lime),
                 hidePaise: true,
                 showConfidenceIcon: false,
