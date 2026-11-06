@@ -263,7 +263,8 @@
           "direction": "debit",
           "purpose": [
             "transfer",
-            "p2p"
+            "p2p",
+            "purchase"
           ],
           "instrumentKind": [
             "bank_account"

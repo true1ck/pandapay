@@ -52,6 +52,7 @@ class SmsV2Runtime {
     required this.loadShippedBundle,
     required this.accountIsCurrent,
     this.hasSharingConsent = _noConsent,
+    this.ownerNames = _noOwnerNames,
     this.catalogue = const [],
     this.cardRepository,
 
@@ -62,7 +63,11 @@ class SmsV2Runtime {
   }
 
   static Future<bool> _noConsent() async => false;
+  static List<String> _noOwnerNames() => const [];
   final Future<bool> Function() hasSharingConsent;
+
+  /// The account owner's names, read when messages are captured.
+  final List<String> Function() ownerNames;
   final List<CardProduct> catalogue;
   final UserCardsRepository? cardRepository;
   final FinancialStore financial;
@@ -191,6 +196,7 @@ class SmsV2Runtime {
         categoryIdBySlug: categoryIdBySlug,
         engine: _engine,
         revision: _revision(overlay.revision),
+        ownerNames: ownerNames(),
       );
       for (final history in [true, false]) {
         final selected = chunk

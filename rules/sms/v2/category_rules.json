@@ -4525,5 +4525,38 @@
     "category": "travel",
     "priority": 950,
     "source": "catalogue"
+  },
+  {
+    "merchantKey": "COMPASS",
+    "match": "token",
+    "senders": [
+      "*"
+    ],
+    "context": [],
+    "category": "dining",
+    "priority": 900,
+    "source": "catalogue"
+  },
+  {
+    "merchantKey": "EATCLUB",
+    "match": "token",
+    "senders": [
+      "*"
+    ],
+    "context": [],
+    "category": "dining",
+    "priority": 800,
+    "source": "catalogue"
+  },
+  {
+    "merchantKey": "ANTHROPIC",
+    "match": "token",
+    "senders": [
+      "*"
+    ],
+    "context": [],
+    "category": "entertainment",
+    "priority": 800,
+    "source": "catalogue"
   }
 ]

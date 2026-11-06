@@ -353,12 +353,14 @@ LinkResult linkAll(
   List<LinkRule>? rules,
   RuleDrivenLinker? linker,
   Map<String, Instrument>? instruments,
+  List<String> ownerNames = const [],
 }) => (linker ?? testLinker()).link(
   incoming: facts,
   context: RuleLinkContext(
     recentFacts: const [],
     openEvents: const [],
     instrumentsById: instruments ?? allInstruments,
+    ownerNames: ownerNames,
   ),
   rules: rules ?? baselineLinkRules(),
 );

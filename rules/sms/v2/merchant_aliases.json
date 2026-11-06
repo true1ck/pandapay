@@ -388,5 +388,50 @@
     "alias": "ZERODHA BROKING",
     "merchantKey": "ZERODHA",
     "kind": "legal_name"
+  },
+  {
+    "alias": "ETERNAL LIM",
+    "merchantKey": "ZOMATO",
+    "kind": "variant"
+  },
+  {
+    "alias": "ZOMATOLTD",
+    "merchantKey": "ZOMATO",
+    "kind": "variant"
+  },
+  {
+    "alias": "ZOMATOLIMITED",
+    "merchantKey": "ZOMATO",
+    "kind": "variant"
+  },
+  {
+    "alias": "DISTRICTDINING",
+    "merchantKey": "ZOMATO",
+    "kind": "variant"
+  },
+  {
+    "alias": "COMPASSINDIAFOODSERV",
+    "merchantKey": "COMPASS",
+    "kind": "variant"
+  },
+  {
+    "alias": "COMPASS INDIA FOOD SERVICES",
+    "merchantKey": "COMPASS",
+    "kind": "variant"
+  },
+  {
+    "alias": "ZEPTOMARKETPLACEPRIVA",
+    "merchantKey": "ZEPTO",
+    "kind": "variant"
+  },
+  {
+    "alias": "ZEPTO MARKETPLACE",
+    "merchantKey": "ZEPTO",
+    "kind": "variant"
+  },
+  {
+    "alias": "WWWBIGBASKETCOM",
+    "merchantKey": "BIGBASKET",
+    "kind": "variant"
   }
 ]
