@@ -162,14 +162,22 @@ function createCatalogueHandler({ withUserClient, logger = console, limiter } = 
         body = { cards: result.rows };
       }
 
-      cacheHeaders();
-      if (!useGzip) return res.json(body);
+      if (!useGzip) {
+        cacheHeaders();
+        return res.json(body);
+      }
+      // Compress first: validators and Cache-Control are set only once a 200
+      // body is certain, so a failure can never leave a cacheable 500 (D34d).
       const compressed = await gzip(Buffer.from(JSON.stringify(body), 'utf8'));
+      cacheHeaders();
       res.set('Content-Type', 'application/json; charset=utf-8');
       res.set('Content-Encoding', 'gzip');
       return res.status(200).send(compressed);
     } catch (err) {
       logger.error('GET /catalogue error', safeErrorCode(err));
+      if (typeof res.removeHeader === 'function') {
+        for (const name of ['ETag', 'Cache-Control', 'Vary', 'Content-Encoding']) res.removeHeader(name);
+      }
       return res.status(500).json({ error: 'internal_error' });
     }
   };

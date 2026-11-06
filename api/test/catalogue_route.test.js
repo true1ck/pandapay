@@ -291,3 +291,38 @@ test('default limiter fails OPEN for a new identity when its table is full; the 
   closed.consume('a', false);
   assert.equal(closed.consume('b', false).allowed, false, 'default behaviour for existing users is unchanged');
 });
+
+test('a failure while compressing or sending gives a 500 with no ETag or Cache-Control', async () => {
+  // BigInt makes JSON.stringify throw inside the gzip path, after the heavy queries succeeded.
+  const handler = createCatalogueHandler({
+    withUserClient: async (_u, cb) => cb({
+      query: async (sql) => (sql === FINGERPRINT_SQL ? { rows: [FINGERPRINT] } : { rows: [{ id: 1n }] }),
+    }),
+    logger: { error() {} },
+  });
+  for (const query of [{}, { schema: '2' }]) {
+    const res = responseDouble();
+    await handler({ query, ip: 'g', headers: { 'accept-encoding': 'gzip' } }, res);
+    assert.equal(res.statusCode, 500);
+    assert.deepEqual(res.body, { error: 'internal_error' });
+    for (const name of ['ETag', 'Cache-Control', 'Content-Encoding']) {
+      assert.equal(res.headers[name], undefined, `${name} must not be set on a 500`);
+    }
+  }
+  // a throw while sending the plain body also leaves no validators behind
+  const sendFails = createCatalogueHandler({
+    withUserClient: async (_u, cb) => cb({ query: async (sql) => (sql === FINGERPRINT_SQL ? { rows: [FINGERPRINT] } : { rows: [] }) }),
+    logger: { error() {} },
+  });
+  const res = responseDouble();
+  let first = true;
+  res.json = function json(value) {
+    if (first) { first = false; throw new Error('send failed'); }
+    this.body = value; return this;
+  };
+  res.removeHeader = function removeHeader(name) { delete this.headers[name]; };
+  await sendFails({ query: {}, ip: 'h' }, res);
+  assert.equal(res.statusCode, 500);
+  assert.equal(res.headers.ETag, undefined);
+  assert.equal(res.headers['Cache-Control'], undefined);
+});
