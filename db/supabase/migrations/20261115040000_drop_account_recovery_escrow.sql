@@ -47,6 +47,14 @@ begin
     revoke usage on schema public, pandapay, account_lifecycle from account_recovery_owner;
     revoke execute on function pandapay.uid() from account_recovery_owner;
     execute pg_catalog.format('revoke connect on database %I from account_recovery_owner', pg_catalog.current_database());
-    drop role account_recovery_owner;
+    begin
+      drop role account_recovery_owner;
+    exception when dependent_objects_still_exist then
+      -- Roles are cluster-wide. On a shared managed cluster another database
+      -- (the pre-fresh-start product database, or a restore-drill copy) can
+      -- still hold objects this role owns. It has no login and no rights here
+      -- any more; drop it once those databases are gone.
+      raise notice 'account_recovery_owner kept: it still owns objects in another database';
+    end;
   end if;
 end $$;
