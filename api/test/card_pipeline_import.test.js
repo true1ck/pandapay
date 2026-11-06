@@ -767,3 +767,99 @@ test('network arrives as an array on at least one real card and still resolves',
   // A single-element array is not ambiguous and resolves normally.
   assert.equal(resolveNetwork(['Visa']).network, 'visa');
 });
+
+// ── D33a: a forced import over published cards is audited ────────────────
+function fakeCatalogueClient(existing) {
+  const queries = [];
+  let n = 0;
+  return {
+    queries,
+    async query(sql, params) {
+      queries.push({ sql, params });
+      if (/^SELECT id, slug, name FROM issuers WHERE slug/.test(sql)) return { rows: [{ id: 'issuer-id', slug: 'hdfc', name: 'HDFC Bank' }] };
+      if (/^SELECT id, status, import_source_hash/.test(sql)) return { rows: existing ? [existing] : [] };
+      if (/^SELECT data_version FROM card_products/.test(sql)) return { rows: [{ data_version: 57 }] };
+      if (/RETURNING id/.test(sql)) return { rows: [{ id: `row-${++n}` }] };
+      return { rows: [] };
+    },
+  };
+}
+
+function swiggyRecord() {
+  const file = path.join(__dirname, 'fixtures', 'cardpipeline', 'swiggy-hdfc-bank-credit-card.json');
+  return JSON.parse(fs.readFileSync(file, 'utf8')).final;
+}
+
+const publishedRow = () => ({
+  id: 'card-id', status: 'published', import_source_hash: 'old-hash', import_transform_version: '6', data_version: 41, overrides_applied: [],
+});
+const auditRows = (client) => client.queries.filter((q) => /INSERT INTO admin_audit_log/.test(q.sql));
+
+test('D33a a forced refresh of a published card writes one card_import_force_refresh audit row', async () => {
+  const { importOneCard, newReport } = require('../scripts/import_card_pipeline');
+  const client = fakeCatalogueClient(publishedRow());
+  const r = newReport();
+  await importOneCard(client, 'admin-id', swiggyRecord(), null, true, r);
+  const audits = auditRows(client);
+  assert.equal(audits.length, 1, 'exactly one audit row per forced refresh');
+  const [adminId, action, entityId, beforeJson, afterJson, reason] = audits[0].params;
+  assert.equal(adminId, 'admin-id');
+  assert.equal(action, 'card_import_force_refresh');
+  assert.equal(entityId, 'card-id');
+  const before = JSON.parse(beforeJson);
+  const after = JSON.parse(afterJson);
+  assert.deepEqual([before.status, before.data_version, before.transform_version], ['published', 41, '6']);
+  assert.deepEqual([after.status, after.data_version, after.transform_version], ['published', 57, IMPORT_TRANSFORM_VERSION]);
+  assert.match(reason, /swiggy-hdfc-bank-credit-card/);
+  // ids, versions, status and a hash only: no card content
+  assert.ok(!JSON.stringify(audits[0].params).includes(swiggyRecord().card_product.name));
+  // the card is never demoted
+  assert.ok(!client.queries.some((q) => /UPDATE card_products SET[\s\S]*\bstatus\s*=/.test(q.sql)));
+  assert.deepEqual(r.forcedRefreshes.map((x) => [x.slug, x.status]), [['swiggy-hdfc-bank-credit-card', 'published']]);
+});
+
+test('D33a draft creates and draft refreshes never write the force-refresh audit row', async () => {
+  const { importOneCard, newReport } = require('../scripts/import_card_pipeline');
+  const created = fakeCatalogueClient(null);
+  await importOneCard(created, 'admin-id', swiggyRecord(), null, false, newReport());
+  assert.deepEqual(auditRows(created).map((q) => q.params[1]), ['import_card_product']);
+  const draft = fakeCatalogueClient({ ...publishedRow(), status: 'draft' });
+  const r = newReport();
+  await importOneCard(draft, 'admin-id', swiggyRecord(), null, true, r);
+  assert.deepEqual(auditRows(draft).map((q) => q.params[1]), ['import_refresh_card_product']);
+  assert.equal(r.forcedRefreshes.length, 0);
+});
+
+test('D33a the report counts published cards refreshed in place and skipped without --force', async () => {
+  const { importOneCard, newReport, publishedRefreshLines } = require('../scripts/import_card_pipeline');
+  const skippedClient = fakeCatalogueClient(publishedRow());
+  const skipped = newReport();
+  await importOneCard(skippedClient, 'admin-id', swiggyRecord(), null, false, skipped);
+  assert.equal(auditRows(skippedClient).length, 0);
+  const lines = publishedRefreshLines(skipped);
+  assert.ok(lines.includes('published cards skipped (stay v1-shaped): 1 — re-run with --force to apply Phase 1 rules'), lines.join('\n'));
+  assert.ok(lines.includes('published cards refreshed in place: 0 (cap, milestone and fee-waiver progress rows for these cards are removed until recompute_card_state.js runs)'));
+
+  const forced = newReport();
+  await importOneCard(fakeCatalogueClient(publishedRow()), 'admin-id', swiggyRecord(), null, true, forced);
+  const forcedLines = publishedRefreshLines(forced);
+  assert.ok(forcedLines.includes('published cards refreshed in place: 1 (cap, milestone and fee-waiver progress rows for these cards are removed until recompute_card_state.js runs)'), forcedLines.join('\n'));
+  assert.ok(forcedLines.includes('published cards skipped (stay v1-shaped): 0 — re-run with --force to apply Phase 1 rules'));
+});
+
+test('D33a --dry-run rolls back a forced refresh, its audit row included', async () => {
+  const { importCardInTransaction, newReport } = require('../scripts/import_card_pipeline');
+  for (const dryRun of [true, false]) {
+    const client = fakeCatalogueClient(publishedRow());
+    client.release = () => {};
+    const pool = { async connect() { return client; } };
+    const r = newReport();
+    await importCardInTransaction(pool, 'admin-id', swiggyRecord(), null, true, r, undefined, dryRun);
+    const verbs = client.queries.map((q) => q.sql.trim().split(/\s+/)[0].toUpperCase());
+    assert.equal(verbs[0], 'BEGIN');
+    assert.equal(auditRows(client).length, 1, 'written inside the card transaction');
+    if (dryRun) assert.ok(verbs.includes('ROLLBACK') && !verbs.includes('COMMIT'), 'dry-run commits nothing');
+    else assert.ok(verbs.includes('COMMIT') && !verbs.includes('ROLLBACK'));
+    assert.equal(r.forcedRefreshes.length, 1, 'the report still shows what would happen');
+  }
+});

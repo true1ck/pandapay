@@ -79,9 +79,15 @@ record is stored with a canonical SHA-256 fingerprint:
 - new card: inserted as `draft`;
 - changed draft: refreshed transactionally;
 - unchanged card: no database writes and no `data_version` bump;
-- changed `in_review`/`published` card: left untouched and reported;
-- `--force`: deliberately refreshes a reviewed card, but still never
-  publishes it.
+- changed `in_review`/`published` card: left untouched and reported
+  (`published cards skipped (stay v1-shaped): N`);
+- `--force`: deliberately refreshes a reviewed card in place. It never
+  publishes a draft and never demotes a published card: the status is kept.
+  Each forced refresh of a published or in-review card writes an
+  `admin_audit_log` row (`card_import_force_refresh`). The refresh cascades
+  away the card's cap, milestone and fee-waiver progress rows, so run
+  `node api/scripts/recompute_card_state.js --apply` straight after a forced import
+  (the report line `published cards refreshed in place: N` says how many).
 
 The source hash is paired with an importer transform version. When mapping
 logic changes, incrementing that version rebuilds existing drafts even if the
