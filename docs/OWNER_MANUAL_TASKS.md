@@ -19,7 +19,7 @@ Tags used below:
 
 - **Installing a test build on your iPhone (local test backend):** nothing on your list stops it. You only need the iPhone plugged in, unlocked, trusted by the Mac, with Developer Mode on, and the Mac and iPhone on the same Wi-Fi. One thing is on my side, not yours: the card-rewards work is on its own branch and has to be merged into the SMS v2 integration branch (the one your iPhone builds come from) before a build can include it.
 - **Production deploy (real servers):** several of your items stop it. The main ones are below. None can be done by me.
-  - Legal pages still contain `[OWNER TO FILL]` placeholders.
+  - Legal pages: placeholders filled on 6 Nov 2026; the new pages still have to be copied to the server (`/var/www/pandapay-legal/`).
   - The SMS rule-signing key has not been created, and its public half is not in the app yet (the shipped map is empty).
   - Firebase App Check is not registered for the two app identities.
   - The paid Gemini key and its settings are not set on the private admin host.
@@ -175,7 +175,7 @@ Source: `docs/card-rewards-phase1-implementation-plan.md` section 9, `docs/card-
 
 Source: `docs/release/store-and-legal-checklist.md` (the full draft answers for the forms are there).
 
-- **Fill every `[OWNER TO FILL: ...]` placeholder.** Edit both `deploy/legal/privacy.html` / `terms.html` and `app/lib/features/settings/legal_text.dart` (a test fails if they differ). The placeholders are: legal entity name and registered address; grievance officer name and email; hosting provider and region; where error reports are hosted (GlitchTip self-hosted or cloud); governing law and courts.
+- **Placeholders: done (6 Nov 2026).** Operator and grievance officer: Chandresh Kerkar (individual, Goa), panda.paths123@gmail.com. Hosting: Oracle Cloud Hyderabad and Supabase on AWS Mumbai. Error reports: none collected today. Governing law: India, no courts named. No postal address yet, by choice. To change any of it, edit both `deploy/legal/*.html` and `app/lib/features/settings/legal_text.dart` (a test fails if they differ).
 - **Grievance officer.** The DPDP Act expects one with contact details and a reply time; the policy promises a reply within 30 days.
 - **Contact address.** The pages use `panda.paths123@gmail.com`. Replace it if you want a company address on a public policy.
 - **Hosting facts.** Get written confirmation that the server's disks are encrypted at rest, then add a sentence to privacy section 7. Check the real backup schedule matches "backups expire within 30 days after account data is deleted", or change section 8.

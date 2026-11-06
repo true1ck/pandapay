@@ -6,14 +6,13 @@ Policy version for this release: **2026-11-15** (the published policy date; one 
 
 ## 1. Before anything is published
 
-- [ ] **Fill every `[OWNER TO FILL: ...]` placeholder** in the hosted pages and the in-app text. They appear on purpose so they cannot be missed. To change a placeholder, edit both `deploy/legal/privacy.html` / `terms.html` and `app/lib/features/settings/legal_text.dart` (a test fails if the two differ).
-  - Legal entity name and registered address (privacy 1).
-  - Grievance officer name (privacy 1).
-  - Grievance officer email (privacy 1).
-  - Hosting provider and region (privacy 6).
-  - Where error reports are hosted: GlitchTip, self-hosted or cloud (privacy 6).
-  - Governing law and courts (terms 11).
-- [ ] **Name a grievance officer.** The DPDP Act expects one to be published with contact details and a reply time. The policy promises a reply within 30 days.
+- [x] **Fill every `[OWNER TO FILL: ...]` placeholder** (done 6 Nov 2026, owner's answers). To change any of these, edit both `deploy/legal/privacy.html` / `terms.html` and `app/lib/features/settings/legal_text.dart` (a test fails if the two differ).
+  - Operator (privacy 1): Chandresh Kerkar, an individual in Goa, India. No postal address yet: the owner chose to leave it out for now.
+  - Grievance officer (privacy 1): Chandresh Kerkar, panda.paths123@gmail.com.
+  - Hosting (privacy 6): Oracle Cloud for the servers (Hyderabad), Supabase on AWS for the database (Mumbai).
+  - Error reports (privacy 6): none collected today (no reporting address in the app builds or on the servers). Change this line before turning GlitchTip on.
+  - Governing law (terms 11): the laws of India. No courts named: the owner chose not to name any for now.
+- [x] **Name a grievance officer.** Done (see above). The policy promises a reply within 30 days.
 - [ ] **Confirm the general contact address.** The pages still use `panda.paths123@gmail.com` as the general contact. Replace it if you want a company address on a public policy.
 - [ ] **Confirm with the hosting provider that the server's disks are encrypted at rest.** The policy does not claim it. Add a sentence to privacy section 7 only after you have the answer in writing.
 - [ ] **Confirm the backup retention.** The policy says encrypted server backups expire within 30 days after account data is deleted. Check the real backup schedule matches, or change section 8.
