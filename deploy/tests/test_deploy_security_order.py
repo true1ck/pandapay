@@ -353,7 +353,8 @@ class DeploySecurityOrderTest(unittest.TestCase):
         self.assertIn('current_tip_sha" != "$SHA"', workflow[gate:deploy])
         # Only allow-listed branches may deploy, and the server is told which
         # ref the SHA must be the exact tip of.
-        self.assertIn("master|latest-dev)", workflow)
+        self.assertIn("latest-dev) ;;", workflow)
+        self.assertNotIn("master|latest-dev", workflow)
         self.assertIn('"$SHA" "$DEPLOY_BRANCH"', workflow[deploy:])
 
     def test_partial_service_start_is_stopped_when_readiness_fails(self):

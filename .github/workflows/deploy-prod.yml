@@ -1,4 +1,4 @@
-# Deploys master to the production backend after tests pass.
+# Deploys latest-dev to the production backend after tests pass.
 #
 # Before this, production was a COPIED DIRECTORY on the host — not a git
 # checkout — so nothing on the server moved when master did. It had drifted
@@ -35,7 +35,7 @@ on:
   workflow_run:
     workflows: ["Build and test"]
     types: [completed]
-    branches: [master, latest-dev]
+    branches: [latest-dev]
   # latest-dev deploys itself on every push. `workflow_run` cannot do this:
   # GitHub always runs a workflow_run workflow from the DEFAULT branch's copy
   # of the file, so a latest-dev edit never fires it. A `push` trigger does use
@@ -45,7 +45,7 @@ on:
     branches: [latest-dev]
   # Manual run, e.g. to redeploy the current commit after a server change, or
   # to ship latest-dev: `gh workflow run deploy-prod.yml --ref latest-dev`.
-  # Only master and latest-dev are accepted (see the first step below).
+  # Only latest-dev is accepted (see the first step below).
   workflow_dispatch:
 
 # Never let two deploys interleave: they would fight over the same working
@@ -109,9 +109,9 @@ jobs:
             DEPLOY_BRANCH="$RUN_BRANCH"
           fi
           case "$DEPLOY_BRANCH" in
-            master|latest-dev) ;;
+            latest-dev) ;;
             *)
-              echo "FATAL: refusing to deploy branch '$DEPLOY_BRANCH'; only master and latest-dev are allowed" >&2
+              echo "FATAL: refusing to deploy branch '$DEPLOY_BRANCH'; only latest-dev is allowed" >&2
               exit 1
               ;;
           esac
