@@ -336,6 +336,33 @@
         "amount": 0
       },
       "why": "Savings Maximiser: the HPCL fuel 30X is 'Not Applicable on UPI transactions', and UPI Rewards exclude 'fuel spends': nothing is earned."
+    },
+    {
+      "id": "012",
+      "title": "Rs 3,000 HPCL fuel by UPI QR, no MCC on the SMS",
+      "ctx": {
+        "amount": 3000,
+        "occurred": "2026-11-10T10:00:00+05:30",
+        "category_id": null,
+        "category_slug": "fuel",
+        "mcc": null,
+        "merchant_name": "HPCL pump",
+        "merchant_vpa": null,
+        "merchant_slug": "hpcl",
+        "platform": null,
+        "rail": "upi_qr"
+      },
+      "state_before": {
+        "caps_by_source_id": {}
+      },
+      "expect": {
+        "currency": "points",
+        "value_inr": null,
+        "excluded": true,
+        "cap_deltas_by_source_id": {},
+        "amount": 0
+      },
+      "why": "Savings Maximiser: the HPCL fuel 30X is 'Not Applicable on UPI transactions', and UPI Rewards exclude 'fuel spends'. The fuel category decides when the SMS carries no MCC: nothing is earned."
     }
   ],
   "research_notes": [

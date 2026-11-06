@@ -52,7 +52,7 @@
       "op": "append",
       "value": {
         "id": "cd4_upi_fuel_exclusion",
-        "category_id": "all_retail",
+        "category_id": "fuel",
         "priority": 0,
         "evaluation_type": "exclusion",
         "rail": "upi_qr",
@@ -75,7 +75,7 @@
         "effective_from": "2024-05-01",
         "effective_to": null
       },
-      "reason": "card-data group4: HPCL fuel 30X: \"Not Applicable on UPI transactions\"; Savings Maximiser, UPI Rewards: \"Exclusions: Insurance premium payments, fuel spends, EMI transactions, ATM cash withdrawals, utility spends, grocery spends and IDFC FIRST FASTag recharges.\" The 30X HPCL rule had no rail, so HPCL fuel by UPI QR earned 30X (over-statement). Rail-scoped (D25b). MCC-only (category all_retail) so every row is v2-only: v1 has no rail and would match an unknown rail (D28d). A UPI spend with no MCC in these categories is not caught (residual).",
+      "reason": "card-data group4: HPCL fuel 30X: \"Not Applicable on UPI transactions\"; Savings Maximiser, UPI Rewards: \"Exclusions: Insurance premium payments, fuel spends, EMI transactions, ATM cash withdrawals, utility spends, grocery spends and IDFC FIRST FASTag recharges.\" The 30X HPCL rule had no rail, so HPCL fuel by UPI QR earned 30X (over-statement). Rail-scoped (D25b). Category-scoped with the MCC list (D20a rows), so a UPI spend in this category with no MCC (typical SMS) is caught in v2 (H2, lead ruling 2026-11-06). The loader's v1 row cannot see the rail, so v1 excludes the whole category on an unknown rail: installed apps under-state (accepted; fresh-start release).",
       "source_url": "https://www.idfcfirst.bank.in/content/dam/idfcfirstbank/pdf/Savings-Maximiser-FIRST-Power-plus.pdf",
       "checked_on": "2026-11-06"
     },
@@ -84,7 +84,7 @@
       "op": "append",
       "value": {
         "id": "cd4_upi_grocery_exclusion",
-        "category_id": "all_retail",
+        "category_id": "grocery",
         "priority": 0,
         "evaluation_type": "exclusion",
         "rail": "upi_qr",
@@ -109,7 +109,7 @@
         "effective_from": "2024-05-01",
         "effective_to": null
       },
-      "reason": "card-data group4: Savings Maximiser, UPI Rewards: \"Exclusions: Insurance premium payments, fuel spends, EMI transactions, ATM cash withdrawals, utility spends, grocery spends and IDFC FIRST FASTag recharges.\" The grocery section does not say the 30X applies on UPI; H2 takes the lower reading (0 on the UPI rail; under-states if the 30X applies). Rail-scoped (D25b). MCC-only (category all_retail) so every row is v2-only: v1 has no rail and would match an unknown rail (D28d). A UPI spend with no MCC in these categories is not caught (residual).",
+      "reason": "card-data group4: Savings Maximiser, UPI Rewards: \"Exclusions: Insurance premium payments, fuel spends, EMI transactions, ATM cash withdrawals, utility spends, grocery spends and IDFC FIRST FASTag recharges.\" The grocery section does not say the 30X applies on UPI; H2 takes the lower reading (0 on the UPI rail; under-states if the 30X applies). Rail-scoped (D25b). Category-scoped with the MCC list (D20a rows), so a UPI spend in this category with no MCC (typical SMS) is caught in v2 (H2, lead ruling 2026-11-06). The loader's v1 row cannot see the rail, so v1 excludes the whole category on an unknown rail: installed apps under-state (accepted; fresh-start release).",
       "source_url": "https://www.idfcfirst.bank.in/content/dam/idfcfirstbank/pdf/Savings-Maximiser-FIRST-Power-plus.pdf",
       "checked_on": "2026-11-06"
     },
@@ -118,7 +118,7 @@
       "op": "append",
       "value": {
         "id": "cd4_upi_utility_exclusion",
-        "category_id": "all_retail",
+        "category_id": "utility",
         "priority": 0,
         "evaluation_type": "exclusion",
         "rail": "upi_qr",
@@ -141,7 +141,7 @@
         "effective_from": "2024-05-01",
         "effective_to": null
       },
-      "reason": "card-data group4: Savings Maximiser, UPI Rewards: \"Exclusions: Insurance premium payments, fuel spends, EMI transactions, ATM cash withdrawals, utility spends, grocery spends and IDFC FIRST FASTag recharges.\" The utility section does not say the 30X applies on UPI; H2 takes the lower reading. Rail-scoped (D25b). MCC-only (category all_retail) so every row is v2-only: v1 has no rail and would match an unknown rail (D28d). A UPI spend with no MCC in these categories is not caught (residual).",
+      "reason": "card-data group4: Savings Maximiser, UPI Rewards: \"Exclusions: Insurance premium payments, fuel spends, EMI transactions, ATM cash withdrawals, utility spends, grocery spends and IDFC FIRST FASTag recharges.\" The utility section does not say the 30X applies on UPI; H2 takes the lower reading. Rail-scoped (D25b). Category-scoped with the MCC list (D20a rows), so a UPI spend in this category with no MCC (typical SMS) is caught in v2 (H2, lead ruling 2026-11-06). The loader's v1 row cannot see the rail, so v1 excludes the whole category on an unknown rail: installed apps under-state (accepted; fresh-start release).",
       "source_url": "https://www.idfcfirst.bank.in/content/dam/idfcfirstbank/pdf/Savings-Maximiser-FIRST-Power-plus.pdf",
       "checked_on": "2026-11-06"
     },
