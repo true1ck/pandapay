@@ -1,0 +1,492 @@
+{
+ "about": "Recorded by app/test/features/sms_v2/sync/phone_replay_fixture_test.dart. Refresh with UPDATE_PHONE_REPLAY=1.",
+ "scenarios": [
+  {
+   "name": "wallet_promo_not_financial",
+   "requests": [
+    {
+     "method": "POST",
+     "path": "/sms/v2/corrections",
+     "body": {
+      "sourceKey": "1c2def929458f346d19e1735854cab99b20d1316157464b4e39f2af31443d353",
+      "factIds": [],
+      "correctionKind": "not_financial",
+      "corrected": {
+       "_template": {
+        "senderBrand": "IPAYTM",
+        "hash": "c76f55d5a748376ceff4d61c61284843eb144037ec3bb500f265356f9a74f409",
+        "observedAt": "2027-01-01T07:00:00.000Z"
+       }
+      },
+      "trace": {
+       "appVersion": "2",
+       "engineVersion": "2.3.0",
+       "bundleVersion": 0,
+       "ruleId": null,
+       "ruleVersion": null,
+       "stage": "extraction"
+      },
+      "redactedTemplate": "Add money to your Paytm Wallet and get <AMT> cashback on your first load. Offer valid till ## Nov."
+     }
+    }
+   ]
+  },
+  {
+   "name": "demat_credit_not_financial",
+   "requests": [
+    {
+     "method": "POST",
+     "path": "/sms/v2/corrections",
+     "body": {
+      "sourceKey": "ed4f709a9fdff144e7e71bf829dc91dc3ff95531a93a0c864fad831906661078",
+      "factIds": [],
+      "correctionKind": "not_financial",
+      "corrected": {
+       "_template": {
+        "senderBrand": "CDSLTX",
+        "hash": "f544ea5df5ecd7006cad6756bf658fa3d317e8833333e9aff439cfb2b5449772",
+        "observedAt": "2026-12-29T07:00:00.000Z"
+       }
+      },
+      "trace": {
+       "appVersion": "2",
+       "engineVersion": "2.3.0",
+       "bundleVersion": 0,
+       "ruleId": "BRK-DEMAT-CREDIT-01",
+       "ruleVersion": 1,
+       "stage": "extraction"
+      },
+      "redactedTemplate": "<PARTY>: Credit in a/c *<REF> for ##-<PARTY> LIMITED-<PARTY> on ##NOV"
+     }
+    }
+   ]
+  },
+  {
+   "name": "fund_trade_value_missing",
+   "requests": [
+    {
+     "method": "POST",
+     "path": "/sms/v2/corrections",
+     "body": {
+      "sourceKey": "f6a45ea2074b47d42bc42a2a36040822099f8f1288167ce6c0416b71f4da1592",
+      "factIds": [],
+      "correctionKind": "missing",
+      "corrected": {
+       "_template": {
+        "senderBrand": "NSEIND",
+        "hash": "59990ae74ea165282701f7aee35599dec14707e97cad5842a6f00c6bd6363c05",
+        "observedAt": "2026-12-26T07:00:00.000Z"
+       }
+      },
+      "trace": {
+       "appVersion": "2",
+       "engineVersion": "2.3.0",
+       "bundleVersion": 0,
+       "ruleId": null,
+       "ruleVersion": null,
+       "stage": "gate"
+      },
+      "redactedTemplate": "<PARTY>: Dear <PARTY>, trade value payable to you by GROWW <PARTY> PVT LTD for all trades on <DATE> is <AMT>."
+     }
+    }
+   ]
+  },
+  {
+   "name": "statement_sent_to_hidden_email_not_financial",
+   "requests": [
+    {
+     "method": "POST",
+     "path": "/sms/v2/facts:batch",
+     "body": {
+      "contractVersion": "2.0",
+      "appVersion": "2",
+      "deviceId": "replay-device",
+      "items": [
+       {
+        "sourceKey": "1968dbc13b5a527cb287fc2125de9010950c296b789288d2fc6bd7f3fac53035",
+        "senderBrand": "EXAMPL",
+        "observedAt": "2026-11-10T07:00:00.000Z",
+        "bodyHash": "97955036fcfb31761d60ea3cb626754ad28e74c1b7b1b760f60785f97b8f6f18",
+        "facts": [
+         {
+          "contractVersion": "2.0",
+          "factId": "f0590b474f33d0f57e147c864034cf683b82c90e0f63ffc1eb69d64d127aa39c",
+          "sourceKey": "1968dbc13b5a527cb287fc2125de9010950c296b789288d2fc6bd7f3fac53035",
+          "factType": "bill_due",
+          "observedAt": "2026-11-10T07:00:00Z",
+          "occurredAt": null,
+          "instrument": {
+           "kind": "credit_card",
+           "issuerSlug": null,
+           "maskDigits": "1234",
+           "maskLength": 4,
+           "productName": null,
+           "raw": null
+          },
+          "counterparty": null,
+          "amounts": [
+           {
+            "role": "due_total",
+            "minor": 500000,
+            "unit": "INR"
+           },
+           {
+            "role": "due_minimum",
+            "minor": 25000,
+            "unit": "INR"
+           }
+          ],
+          "references": {},
+          "attrs": {
+           "dueDate": "2026-06-30"
+          },
+          "provenance": {
+           "engine": "rules",
+           "ruleId": "SUB-CC-STMT-SENT-01",
+           "ruleVersion": 1,
+           "bundleVersion": 0,
+           "engineVersion": "2.3.0",
+           "appVersion": "2"
+          },
+          "evidence": [],
+          "confidence": 0.95
+         }
+        ]
+       }
+      ],
+      "instruments": [],
+      "events": [],
+      "ledger": []
+     }
+    },
+    {
+     "method": "POST",
+     "path": "/sms/v2/corrections",
+     "body": {
+      "sourceKey": "1968dbc13b5a527cb287fc2125de9010950c296b789288d2fc6bd7f3fac53035",
+      "factIds": [
+       "f0590b474f33d0f57e147c864034cf683b82c90e0f63ffc1eb69d64d127aa39c"
+      ],
+      "correctionKind": "not_financial",
+      "corrected": {
+       "_template": {
+        "senderBrand": "EXAMPL",
+        "hash": "90bf82f2298df97f83fa87f934e607a13a21f74586fe5a8a2fe1c8f8ce346342",
+        "observedAt": "2026-12-21T07:00:00.000Z"
+       }
+      },
+      "trace": {
+       "appVersion": "2",
+       "engineVersion": "2.3.0",
+       "bundleVersion": 0,
+       "ruleId": "SUB-CC-STMT-SENT-01",
+       "ruleVersion": 1,
+       "stage": "extraction"
+      },
+      "redactedTemplate": "<PARTY> Bank Credit Card <MASK> Statement is sent to <EMAIL> Total of <AMT> or minimum of <AMT> is due by <DATE>."
+     }
+    }
+   ]
+  },
+  {
+   "name": "card_spend_shop_and_category_changed",
+   "requests": [
+    {
+     "method": "POST",
+     "path": "/sms/v2/facts:batch",
+     "body": {
+      "contractVersion": "2.0",
+      "appVersion": "2",
+      "deviceId": "replay-device",
+      "items": [
+       {
+        "sourceKey": "43e9df7cc998a5c43d885c99c6ed7386cb3f39a4ccc35ac8b3f559cf8a708b4b",
+        "senderBrand": "HDFCBK",
+        "observedAt": "2026-11-10T07:00:00.000Z",
+        "bodyHash": "3f71a3157c1081a81d53ff8fb359aa97793f639b9b641179ff1e3523bb734149",
+        "facts": [
+         {
+          "contractVersion": "2.0",
+          "factId": "a0362f971013f0601cd5f6508865861494416e5d8af12cc52ede3cdd77ab1f55",
+          "sourceKey": "43e9df7cc998a5c43d885c99c6ed7386cb3f39a4ccc35ac8b3f559cf8a708b4b",
+          "factType": "movement",
+          "observedAt": "2026-11-10T07:00:00Z",
+          "occurredAt": "2025-05-11T07:37:50Z",
+          "instrument": {
+           "kind": "credit_card",
+           "issuerSlug": "hdfc",
+           "maskDigits": "1234",
+           "maskLength": 4,
+           "productName": null,
+           "raw": null
+          },
+          "counterparty": {
+           "name": "SAMPLE CAFE",
+           "vpa": null,
+           "kind": "merchant",
+           "accountMask": null
+          },
+          "amounts": [
+           {
+            "role": "posted",
+            "minor": 29300,
+            "unit": "INR"
+           }
+          ],
+          "references": {},
+          "attrs": {
+           "direction": "debit",
+           "purpose": "purchase",
+           "rail": "card"
+          },
+          "provenance": {
+           "engine": "rules",
+           "ruleId": "HDFC-CARD-SPEND-SPENTFIRST-CC",
+           "ruleVersion": 1,
+           "bundleVersion": 0,
+           "engineVersion": "2.3.0",
+           "appVersion": "2"
+          },
+          "evidence": [],
+          "confidence": 0.97
+         }
+        ]
+       }
+      ],
+      "instruments": [
+       {
+        "instrumentId": "46d75d15-3e2d-4fb1-8689-95d2f8f229e4",
+        "kind": "credit_card",
+        "issuerSlug": "hdfc",
+        "maskDigits": "1234",
+        "maskLength": null,
+        "displayName": "HDFC credit card ••1234",
+        "status": "detected",
+        "userCardId": null,
+        "parentInstrumentId": null,
+        "aliases": {
+         "senders": [],
+         "vpas": [],
+         "productNames": []
+        },
+        "creditLimitMinor": null,
+        "creditLimitSource": null,
+        "creditLimitAt": null,
+        "availableMinor": null,
+        "availableAt": null,
+        "pointsBalance": null,
+        "pointsAt": null,
+        "firstSeenAt": "2026-11-10T07:00:00Z",
+        "lastSeenAt": "2026-11-10T07:00:00Z",
+        "evidenceCount": 1
+       }
+      ],
+      "events": [
+       {
+        "eventId": "a0362f971013f0601cd5f6508865861494416e5d8af12cc52ede3cdd77ab1f55",
+        "type": "purchase",
+        "status": "complete",
+        "legs": [
+         {
+          "factId": "a0362f971013f0601cd5f6508865861494416e5d8af12cc52ede3cdd77ab1f55",
+          "role": "debit_leg"
+         }
+        ],
+        "linkRuleId": null,
+        "confidence": 0.97,
+        "occurredAt": "2025-05-11T07:37:50Z",
+        "amountMinor": 29300
+       }
+      ],
+      "ledger": [
+       {
+        "entryId": "64c9738a3a4d9ca2c42dbb4fa818be8bdd277cacc1d0b8edc4136c2b2b6841d5",
+        "eventId": "a0362f971013f0601cd5f6508865861494416e5d8af12cc52ede3cdd77ab1f55",
+        "from": {
+         "instrumentId": "46d75d15-3e2d-4fb1-8689-95d2f8f229e4"
+        },
+        "to": {
+         "external": "SAMPLE CAFE"
+        },
+        "amountMinor": 29300,
+        "unit": "INR",
+        "occurredAt": "2025-05-11T07:37:50Z",
+        "category": "other",
+        "categorySource": "default",
+        "countsAsTransaction": true,
+        "isSpend": true,
+        "isIncome": false,
+        "isInvestment": false
+       }
+      ]
+     }
+    },
+    {
+     "method": "POST",
+     "path": "/sms/v2/facts:batch",
+     "body": {
+      "contractVersion": "2.0",
+      "appVersion": "2",
+      "deviceId": "replay-device",
+      "items": [
+       {
+        "sourceKey": "correction:dea283c3-89db-4908-9192-6e52b2c0079b",
+        "senderBrand": "HDFCBK",
+        "observedAt": "2026-11-10T07:00:00.000Z",
+        "bodyHash": "0141b2799a22fdda266aa5cda225abcf724f2d71faaea37fdd791196aa9333bb",
+        "facts": [
+         {
+          "contractVersion": "2.0",
+          "factId": "3db7fc5a3f7c27d080f36f75d50d5c3c8f02185426755f75f3de2cc5107d4af6",
+          "sourceKey": "correction:dea283c3-89db-4908-9192-6e52b2c0079b",
+          "factType": "movement",
+          "observedAt": "2026-11-10T07:00:00Z",
+          "occurredAt": "2025-05-11T07:37:50Z",
+          "instrument": {
+           "kind": "credit_card",
+           "issuerSlug": "hdfc",
+           "maskDigits": "1234",
+           "maskLength": 4,
+           "productName": null,
+           "raw": null
+          },
+          "counterparty": {
+           "name": "Corner Shop",
+           "vpa": null,
+           "kind": "merchant",
+           "accountMask": null
+          },
+          "amounts": [
+           {
+            "role": "posted",
+            "minor": 29300,
+            "unit": "INR"
+           }
+          ],
+          "references": {},
+          "attrs": {
+           "direction": "debit",
+           "purpose": "purchase",
+           "rail": "card"
+          },
+          "provenance": {
+           "engine": "user",
+           "ruleId": "USER-CORRECTION",
+           "ruleVersion": 1,
+           "bundleVersion": 0,
+           "engineVersion": "2.3.0",
+           "appVersion": "2"
+          },
+          "evidence": [],
+          "confidence": 0.97
+         }
+        ]
+       }
+      ],
+      "instruments": [],
+      "events": [
+       {
+        "eventId": "a0362f971013f0601cd5f6508865861494416e5d8af12cc52ede3cdd77ab1f55",
+        "type": "purchase",
+        "status": "user_confirmed",
+        "legs": [
+         {
+          "factId": "a0362f971013f0601cd5f6508865861494416e5d8af12cc52ede3cdd77ab1f55",
+          "role": "original"
+         },
+         {
+          "factId": "3db7fc5a3f7c27d080f36f75d50d5c3c8f02185426755f75f3de2cc5107d4af6",
+          "role": "debit_leg"
+         }
+        ],
+        "linkRuleId": null,
+        "confidence": 0.97,
+        "occurredAt": "2025-05-11T07:37:50Z",
+        "amountMinor": 29300
+       }
+      ],
+      "ledger": [
+       {
+        "entryId": "64c9738a3a4d9ca2c42dbb4fa818be8bdd277cacc1d0b8edc4136c2b2b6841d5",
+        "eventId": "a0362f971013f0601cd5f6508865861494416e5d8af12cc52ede3cdd77ab1f55",
+        "from": {
+         "instrumentId": "46d75d15-3e2d-4fb1-8689-95d2f8f229e4"
+        },
+        "to": {
+         "external": "CORNER SHOP"
+        },
+        "amountMinor": 29300,
+        "unit": "INR",
+        "occurredAt": "2025-05-11T07:37:50Z",
+        "category": "groceries",
+        "categorySource": "user",
+        "countsAsTransaction": true,
+        "isSpend": true,
+        "isIncome": false,
+        "isInvestment": false
+       }
+      ]
+     }
+    },
+    {
+     "method": "POST",
+     "path": "/sms/v2/corrections",
+     "body": {
+      "sourceKey": "43e9df7cc998a5c43d885c99c6ed7386cb3f39a4ccc35ac8b3f559cf8a708b4b",
+      "factIds": [
+       "a0362f971013f0601cd5f6508865861494416e5d8af12cc52ede3cdd77ab1f55"
+      ],
+      "eventId": "a0362f971013f0601cd5f6508865861494416e5d8af12cc52ede3cdd77ab1f55",
+      "correctionKind": "wrong_merchant",
+      "corrected": {
+       "_template": {
+        "senderBrand": "HDFCBK",
+        "hash": "8ad065add64760eb930de02141e4192b6346b58d0c14728e1533293876568a9a",
+        "observedAt": "2026-11-20T07:00:00.000Z"
+       }
+      },
+      "trace": {
+       "appVersion": "2",
+       "engineVersion": "2.3.0",
+       "bundleVersion": 0,
+       "ruleId": "HDFC-CARD-SPEND-SPENTFIRST-CC",
+       "ruleVersion": 1,
+       "stage": "extraction"
+      },
+      "redactedTemplate": "Spent <AMT> On HDFC Bank Card #### At <PARTY> On <DATE>.Not You? To Block+<PARTY> Call <PHONE>/SMS BLOCK <PARTY> #### to <PHONE>"
+     }
+    },
+    {
+     "method": "POST",
+     "path": "/sms/v2/corrections",
+     "body": {
+      "sourceKey": "43e9df7cc998a5c43d885c99c6ed7386cb3f39a4ccc35ac8b3f559cf8a708b4b",
+      "factIds": [
+       "a0362f971013f0601cd5f6508865861494416e5d8af12cc52ede3cdd77ab1f55"
+      ],
+      "eventId": "a0362f971013f0601cd5f6508865861494416e5d8af12cc52ede3cdd77ab1f55",
+      "correctionKind": "wrong_category",
+      "corrected": {
+       "category": "groceries",
+       "merchantKey": "CORNER SHOP",
+       "_template": {
+        "senderBrand": "HDFCBK",
+        "hash": "8ad065add64760eb930de02141e4192b6346b58d0c14728e1533293876568a9a",
+        "observedAt": "2027-01-06T07:00:00.000Z"
+       }
+      },
+      "trace": {
+       "appVersion": "2",
+       "engineVersion": "2.3.0",
+       "bundleVersion": 0,
+       "ruleId": "HDFC-CARD-SPEND-SPENTFIRST-CC",
+       "ruleVersion": 1,
+       "stage": "category"
+      },
+      "redactedTemplate": "Spent <AMT> On HDFC Bank Card #### At <PARTY> On <DATE>.Not You? To Block+<PARTY> Call <PHONE>/SMS BLOCK <PARTY> #### to <PHONE>"
+     }
+    }
+   ]
+  }
+ ]
+}

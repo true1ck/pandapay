@@ -239,3 +239,29 @@ test('sync rejects a malformed cursor before touching the database', async () =>
     assert.equal(h1.state.dbCalls, 0);
   } finally { h1.close(); }
 });
+
+test('a refused upload and refused items say why in the server log, with codes only', async () => {
+  const { logRejections } = require('../../src/sms_v2/facts_route');
+  const logged = [];
+  const warn = console.warn;
+  console.warn = (...args) => logged.push(args.join(' '));
+  const h1 = await harness();
+  try {
+    assert.equal((await h1.post(FACTS, { not: 'a batch' })).status, 400);
+    logRejections([
+      { id: 'secret-id-1', kind: 'instrument', status: 'rejected', errors: [{ code: 'instrument_key_conflict', path: 'existingInstrumentId:abc' }] },
+      { id: 'secret-id-2', kind: 'instrument', status: 'rejected', errors: [{ code: 'instrument_key_conflict' }] },
+      { id: 'secret-id-3', kind: 'event', status: 'rejected', errors: [{ code: 'event_leg_fact_unknown' }] },
+      { id: 'ok', kind: 'fact', status: 'accepted' },
+      { id: 'dup', kind: 'fact', status: 'duplicate' },
+    ]);
+    logRejections([{ id: 'ok', kind: 'fact', status: 'accepted' }]);
+  } finally {
+    console.warn = warn;
+    h1.close();
+  }
+  assert.match(logged[0], /^sms_v2 facts:batch refused 400 /);
+  assert.equal(logged[1], 'sms_v2 facts:batch rejected {"instrument:instrument_key_conflict":2,"event:event_leg_fact_unknown":1}');
+  assert.equal(logged.length, 2, 'accepted items add nothing');
+  assert.ok(!logged.join('\n').includes('secret-id'));
+});

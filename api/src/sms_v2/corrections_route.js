@@ -102,7 +102,11 @@ function createCorrectionsHandler({ withUserClient, hooks }) {
       }));
       return res.status(200).json(response);
     } catch (error) {
-      if (error.status) return res.status(error.status).json({ error: error.message });
+      if (error.status) {
+        // The code is a fixed word (never a value from the phone), so it is safe to log and is the only way to learn why a phone was refused.
+        console.warn('sms_v2 corrections refused', error.status, error.message);
+        return res.status(error.status).json({ error: error.message });
+      }
       console.error('sms_v2 corrections failed', error?.code || 'internal');
       return res.status(503).json({ error: 'corrections_unavailable' });
     }

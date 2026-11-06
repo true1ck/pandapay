@@ -32,6 +32,7 @@ import '../sync/template_upload.dart';
 import '../sync/stats_upload.dart';
 import '../telemetry/client_metrics.dart';
 import '../sync/corrections_sync.dart';
+import '../sync/requeue_for_upload.dart';
 import '../sync/facts_upload.dart';
 import '../sync/sync_pull.dart';
 import 'receipt_review.dart';
@@ -368,12 +369,24 @@ class SmsV2Runtime {
     }
     await _applyCardState();
     await _upload.drain();
+    final senders = (await activeBundle()).senders;
+    final correctionQueue = OutboxStore(
+      financial.database.db,
+      namespace: namespace,
+    );
     await CorrectionsSync(
-      queue: OutboxStore(financial.database.db, namespace: namespace),
+      queue: correctionQueue,
       client: client,
       baseUri: baseUri,
       headers: headers,
       accountIsCurrent: accountIsCurrent,
+      requeue: (sourceKey, eventId) => requeueForUpload(
+        queue: correctionQueue,
+        intake: intake,
+        sourceKey: sourceKey,
+        eventId: eventId,
+        brandOf: (sender) => normalizeSenderBrand(sender, senders).brand,
+      ),
       clock: clock,
     ).drain();
     await TemplateUpload(

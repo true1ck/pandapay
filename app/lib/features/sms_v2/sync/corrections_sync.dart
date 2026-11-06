@@ -6,6 +6,19 @@ import '../storage/outbox_store.dart';
 
 /// A correction is uploaded after fact/event sync, so the server can verify
 /// account ownership of the referenced facts. Retries retain its stable ID.
+///
+/// What happens when the server refuses a correction:
+/// * It could not find the facts or the event it names: they are sent again
+///   (see [requeue]) and the correction is tried once more. If that fails too,
+///   the correction stays on this phone only.
+/// * It did not accept the shared template: the correction is tried once
+///   more without the template.
+/// * Any other refusal that retrying cannot change: the correction stays on
+///   this phone only.
+/// * The server is busy, the network is down or the sign-in is stale: it is
+///   retried later with a growing wait.
+/// A correction that stays on the phone is taken out of the queue, so it no
+/// longer blocks the ones behind it, and its review row records why.
 class CorrectionsSync {
   CorrectionsSync({
     required this.queue,
@@ -13,6 +26,7 @@ class CorrectionsSync {
     required this.baseUri,
     required this.headers,
     required this.accountIsCurrent,
+    this.requeue,
     DateTime Function()? clock,
   }) : clock = clock ?? DateTime.now;
 
@@ -21,20 +35,55 @@ class CorrectionsSync {
   final Uri baseUri;
   final Future<Map<String, String>> Function() headers;
   final bool Function() accountIsCurrent;
+
+  /// Puts the facts, event and ledger entries of a source back in the upload
+  /// queue. Optional: without it a correction the server cannot match stays
+  /// on this phone after the first refusal.
+  final void Function(String sourceKey, String? eventId)? requeue;
   final DateTime Function() clock;
   Future<int>? _running;
+
+  /// A refusal marker kept inside the queued payload; never sent.
+  static const _resentKey = '_resent';
+  static const _noTemplateKey = '_templateDropped';
+
+  /// Stop waiting for a source's facts after this many failed uploads of them,
+  /// so a source the server refuses for good cannot hold a correction forever.
+  static const _waitAttempts = 6;
+
+  static const _factsMissing = {
+    'correction_facts_not_found',
+    'correction_event_not_found',
+  };
+  static const _templateRefused = {
+    'redacted_template_invalid',
+    'template_hash_mismatch',
+  };
 
   Future<int> drain() =>
       _running ??= _drain().whenComplete(() => _running = null);
 
   Future<int> _drain() async {
     var sent = 0;
-    while (accountIsCurrent()) {
+    // Corrections that wait for their facts are looked at again next pass.
+    final waiting = <String>{};
+    // Bounds one pass, however many corrections are queued.
+    var handled = 0;
+    while (accountIsCurrent() && handled < 50) {
       final pending = queue
           .due(clock(), limit: 500)
-          .where((record) => record.kind == 'correction')
+          .where(
+            (record) =>
+                record.kind == 'correction' && !waiting.contains(record.id),
+          )
           .firstOrNull;
       if (pending == null) return sent;
+      handled++;
+      final payload = pending.json;
+      if (_waitsForUpload(payload)) {
+        waiting.add(pending.id);
+        continue;
+      }
       try {
         final requestHeaders = await headers();
         if (!accountIsCurrent()) return sent;
@@ -42,13 +91,18 @@ class CorrectionsSync {
             .post(
               baseUri.resolve('/sms/v2/corrections'),
               headers: {...requestHeaders, 'Content-Type': 'application/json'},
-              body: jsonEncode(pending.json),
+              body: jsonEncode(_wire(payload)),
             )
             .timeout(const Duration(seconds: 30));
         if (!accountIsCurrent()) return sent;
         if (response.statusCode != 200) {
-          queue.retry(pending, clock());
-          return sent;
+          switch (_afterRefusal(pending, payload, response)) {
+            case _Next.later:
+              queue.retry(pending, clock());
+              return sent;
+            case _Next.again || _Next.parked:
+              continue;
+          }
         }
         final decoded = jsonDecode(response.body);
         if (decoded is! Map ||
@@ -82,6 +136,105 @@ class CorrectionsSync {
     return sent;
   }
 
+  /// What the server receives: the payload without the phone's own markers.
+  Map<String, Object?> _wire(Map<String, Object?> payload) => {
+    for (final entry in payload.entries)
+      if (entry.key != _resentKey && entry.key != _noTemplateKey)
+        entry.key: entry.value,
+  };
+
+  /// True while the source or the event the correction names is still waiting
+  /// in the upload queue: the server cannot match a correction to facts it has
+  /// not received. A source that keeps failing to upload stops holding it.
+  bool _waitsForUpload(Map<String, Object?> payload) {
+    final ids = [
+      if (payload['sourceKey'] is String) 'source:${payload['sourceKey']}',
+      if (payload['eventId'] is String) 'event:${payload['eventId']}',
+    ];
+    if (ids.isEmpty) return false;
+    final rows = queue.db.select(
+      'SELECT attempts FROM v2_outbox WHERE namespace=? AND id IN (${List.filled(ids.length, '?').join(',')})',
+      [queue.namespace, ...ids],
+    );
+    return rows.any((row) => (row['attempts'] as int) < _waitAttempts);
+  }
+
+  String? _reason(http.Response response) {
+    try {
+      final decoded = jsonDecode(response.body);
+      if (decoded is Map && decoded['error'] is String) {
+        return decoded['error'] as String;
+      }
+    } catch (_) {}
+    return null;
+  }
+
+  _Next _afterRefusal(
+    OutboxRecord pending,
+    Map<String, Object?> payload,
+    http.Response response,
+  ) {
+    final status = response.statusCode;
+    // Busy server, rate limit, stale sign-in, App Check, timeouts and server
+    // faults pass with time; so does anything that is not a plain refusal.
+    if (status != 400 && status != 404 && status != 410 && status != 413) {
+      return _Next.later;
+    }
+    // A refusal without the server's own error code (a proxy page, a cut-off
+    // body) is not a verdict on this correction: try again later.
+    final reason = _reason(response);
+    if (reason == null) return _Next.later;
+    if (_factsMissing.contains(reason) && requeue != null) {
+      if (payload[_resentKey] == true) return _park(pending, reason);
+      final sourceKey = payload['sourceKey'];
+      if (sourceKey is! String) return _park(pending, reason);
+      requeue!(sourceKey, payload['eventId'] as String?);
+      queue.enqueue('correction', pending.id.substring('correction:'.length), {
+        ...payload,
+        _resentKey: true,
+      });
+      return _Next.again;
+    }
+    if (_templateRefused.contains(reason) &&
+        payload[_noTemplateKey] != true &&
+        (payload.containsKey('redactedTemplate') ||
+            (payload['corrected'] as Map?)?.containsKey('_template') == true)) {
+      final corrected = {
+        for (final entry in ((payload['corrected'] as Map?) ?? const {}).entries)
+          if (entry.key != '_template') entry.key as String: entry.value,
+      };
+      queue.enqueue('correction', pending.id.substring('correction:'.length), {
+        for (final entry in payload.entries)
+          if (entry.key != 'redactedTemplate') entry.key: entry.value,
+        'corrected': corrected,
+        _noTemplateKey: true,
+      });
+      return _Next.again;
+    }
+    return _park(pending, reason);
+  }
+
+  /// Takes a refused correction out of the queue. The change itself stays on
+  /// the phone; the review row says it was not sent, and why.
+  _Next _park(OutboxRecord pending, String reason) {
+    queue.db.execute('SAVEPOINT sms_v2_correction_park');
+    try {
+      if (queue.acknowledge(pending)) {
+        queue.db.execute(
+          'UPDATE v2_review_items SET status=\'resolved\',payload=json_set(payload,\'\$.notSent\',?) '
+          'WHERE namespace=? AND review_id=?',
+          [reason, queue.namespace, pending.id],
+        );
+      }
+      queue.db.execute('RELEASE sms_v2_correction_park');
+    } catch (_) {
+      queue.db.execute('ROLLBACK TO sms_v2_correction_park');
+      queue.db.execute('RELEASE sms_v2_correction_park');
+      rethrow;
+    }
+    return _Next.parked;
+  }
+
   /// Apply the owner-scoped status rows delivered by the normal sync response.
   /// This participates in the puller's existing transaction.
   void applyStatuses(List<Map<String, Object?>> statuses) {
@@ -99,3 +252,5 @@ class CorrectionsSync {
     }
   }
 }
+
+enum _Next { later, again, parked }

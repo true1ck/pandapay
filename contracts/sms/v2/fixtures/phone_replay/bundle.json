@@ -1,0 +1,3190 @@
+{
+ "bundleVersion": 0,
+ "categoryRules": [],
+ "counterpartyPurposes": [
+  {
+   "id": "CPP-AMAZONPAY-TOPUP",
+   "namePattern": "^AMAZON PAY (?:WALL|IN E)",
+   "purpose": "wallet_topup",
+   "targetInstrument": {
+    "issuerSlug": "amazonpay",
+    "kind": "wallet"
+   },
+   "vpaPattern": "^amazonpay@"
+  },
+  {
+   "id": "CPP-BANK-CREDIT-CARD",
+   "namePattern": "^(?:[A-Z&.-]{2,20} ){1,3}(?:BANK )?(?:CREDIT ?CARD|CC)(?: (?:BILL(?: ?PAY(?:MENT)?)?|PAYMENT|REPAYMENT|PAY))?$",
+   "purpose": "card_payment",
+   "targetInstrument": {
+    "kind": "credit_card"
+   },
+   "vpaPattern": null
+  },
+  {
+   "id": "CPP-BBPS-BILLDESK-CARD",
+   "namePattern": "^(?:BBPS|BILL ?DESK)\\b[^\\n]{0,30}?\\b(?:CREDIT ?CARD|CC)\\b",
+   "purpose": "card_payment",
+   "targetInstrument": {
+    "kind": "credit_card"
+   },
+   "vpaPattern": "^(?:bbps|billdesk)[\\w.-]*(?:creditcard|ccbill|cc)[\\w.-]*@"
+  },
+  {
+   "id": "CPP-BILLPAY-APP-CARD",
+   "namePattern": "^(?:TATA ?NEU|TNEU|PAYZAPP)\\b[^\\n]{0,20}?\\bBILL ?(?:PAY(?:MENT)?)?",
+   "purpose": "card_payment",
+   "targetInstrument": {
+    "kind": "credit_card"
+   },
+   "vpaPattern": "^(?:tataneu|tneu|payzapp)[\\w.-]*bill[\\w.-]*@"
+  },
+  {
+   "id": "CPP-CARD-ISSUER-PAYEE",
+   "namePattern": "^(?:SBI CARDS?(?: (?:AND|&) PAYMENT SERVICES(?: LTD| LIMITED)?)?|AMERICAN EXPRESS(?: BANKING CORP)?|AMEX)$",
+   "purpose": "card_payment",
+   "targetInstrument": {
+    "kind": "credit_card"
+   },
+   "vpaPattern": null
+  },
+  {
+   "id": "CPP-CHEQ",
+   "namePattern": "^CHEQ(?: DIGITAL)?",
+   "purpose": "card_payment",
+   "targetInstrument": {
+    "kind": "credit_card"
+   },
+   "vpaPattern": "^cheq[\\w.-]*@"
+  },
+  {
+   "id": "CPP-CRED",
+   "namePattern": "^CRED(?: CLUB)?$",
+   "purpose": "card_payment",
+   "targetInstrument": {
+    "kind": "credit_card"
+   },
+   "vpaPattern": "^cred\\.?club@"
+  },
+  {
+   "id": "CPP-FREECHARGE-TOPUP",
+   "namePattern": "^(?:FREECHARGE WALLET|ADD MONEY TO FREECHARGE)",
+   "purpose": "wallet_topup",
+   "targetInstrument": {
+    "issuerSlug": "freecharge",
+    "kind": "wallet"
+   },
+   "vpaPattern": "^freecharge-?(?:wallet|addmoney)@"
+  },
+  {
+   "id": "CPP-GENERIC-CREDIT-CARD-BILL",
+   "namePattern": "^CREDIT ?CARD(?: BILL(?: ?PAY(?:MENT)?)?| PAYMENT)?$",
+   "purpose": "card_payment",
+   "targetInstrument": {
+    "kind": "credit_card"
+   },
+   "vpaPattern": null
+  },
+  {
+   "id": "CPP-MOBIKWIK-TOPUP",
+   "namePattern": "^(?:MOBIKWIK WALLET|ADD MONEY TO MOBIKWIK)",
+   "purpose": "wallet_topup",
+   "targetInstrument": {
+    "issuerSlug": "mobikwik",
+    "kind": "wallet"
+   },
+   "vpaPattern": "^mobikwik-?(?:wallet|addmoney)@"
+  },
+  {
+   "id": "CPP-PAYTM-TOPUP",
+   "namePattern": "^(?:PAYTM(?: PAYMENTS)? WALLET|ADD MONEY TO PAYTM)",
+   "purpose": "wallet_topup",
+   "targetInstrument": {
+    "issuerSlug": "paytm",
+    "kind": "wallet"
+   },
+   "vpaPattern": "^add-?money@"
+  },
+  {
+   "id": "CPP-PHONEPE-TOPUP",
+   "namePattern": "^(?:PHONEPE WALLET|ADD MONEY TO PHONEPE)",
+   "purpose": "wallet_topup",
+   "targetInstrument": {
+    "issuerSlug": "phonepe",
+    "kind": "wallet"
+   },
+   "vpaPattern": "^phonepe-?wallet@"
+  },
+  {
+   "id": "CPP-PLUXEE-TOPUP",
+   "namePattern": "^(?:PLUXEE|SODEXO) (?:WALLET|CARD|MEAL)",
+   "purpose": "wallet_topup",
+   "targetInstrument": {
+    "issuerSlug": "pluxee",
+    "kind": "wallet"
+   },
+   "vpaPattern": null
+  },
+  {
+   "id": "CPP-SURYODAY-STABLEMONEY-FD",
+   "namePattern": "^SURYODAY SMALL",
+   "purpose": "investment",
+   "targetInstrument": null,
+   "vpaPattern": null
+  },
+  {
+   "id": "CPP-ZOMATO-MONEY-TOPUP",
+   "namePattern": "^ZOMATO MONEY",
+   "purpose": "wallet_topup",
+   "targetInstrument": {
+    "issuerSlug": "zomato_money",
+    "kind": "wallet"
+   },
+   "vpaPattern": "^zomato-?money@"
+  }
+ ],
+ "createdAt": "2026-11-07T00:00:00Z",
+ "expiresAt": "2026-11-14T00:00:00Z",
+ "ignoreRules": [],
+ "linkRules": [
+  {
+   "eventType": "card_bill_payment",
+   "id": "LINK-CARD-BILL",
+   "join": {
+    "amountRole": "posted",
+    "amountTolerancePct": 0,
+    "reference": "prefer",
+    "windowHours": 72
+   },
+   "legs": [
+    {
+     "match": {
+      "direction": "debit",
+      "factType": "movement",
+      "instrumentKind": [
+       "bank_account"
+      ],
+      "purpose": [
+       "card_payment",
+       "bill_payment"
+      ]
+     },
+     "role": "debit_leg"
+    },
+    {
+     "match": {
+      "direction": "credit",
+      "factType": "movement",
+      "instrumentKind": [
+       "credit_card"
+      ],
+      "purpose": [
+       "card_payment"
+      ]
+     },
+     "role": "credit_leg"
+    }
+   ],
+   "priority": 100,
+   "singleLeg": "complete"
+  },
+  {
+   "eventType": "investment_withdrawal",
+   "id": "LINK-DUP-INVEST-CREDIT",
+   "join": {
+    "amountRole": "posted",
+    "amountTolerancePct": 0,
+    "reference": "prefer",
+    "windowHours": 24
+   },
+   "legs": [
+    {
+     "match": {
+      "direction": "credit",
+      "evidenceOnly": false,
+      "factType": "movement",
+      "purpose": [
+       "investment"
+      ]
+     },
+     "role": "credit_leg"
+    },
+    {
+     "match": {
+      "direction": "credit",
+      "evidenceOnly": false,
+      "factType": "movement",
+      "purpose": [
+       "investment"
+      ]
+     },
+     "role": "duplicate_notice"
+    }
+   ],
+   "priority": 55,
+   "singleLeg": "complete"
+  },
+  {
+   "eventType": "investment",
+   "id": "LINK-DUP-INVEST-DEBIT",
+   "join": {
+    "amountRole": "posted",
+    "amountTolerancePct": 0,
+    "reference": "prefer",
+    "windowHours": 24
+   },
+   "legs": [
+    {
+     "match": {
+      "direction": "debit",
+      "evidenceOnly": false,
+      "factType": "movement",
+      "purpose": [
+       "investment"
+      ]
+     },
+     "role": "debit_leg"
+    },
+    {
+     "match": {
+      "direction": "debit",
+      "evidenceOnly": false,
+      "factType": "movement",
+      "purpose": [
+       "investment"
+      ]
+     },
+     "role": "duplicate_notice"
+    }
+   ],
+   "priority": 55,
+   "singleLeg": "complete"
+  },
+  {
+   "eventType": "purchase",
+   "id": "LINK-DUP-NOTIFY",
+   "join": {
+    "amountRole": "posted",
+    "amountTolerancePct": 0,
+    "reference": "prefer",
+    "windowHours": 0.1667
+   },
+   "legs": [
+    {
+     "match": {
+      "direction": "debit",
+      "evidenceOnly": false,
+      "factType": "movement"
+     },
+     "role": "debit_leg"
+    },
+    {
+     "match": {
+      "direction": "debit",
+      "evidenceOnly": false,
+      "factType": "movement"
+     },
+     "role": "duplicate_notice"
+    }
+   ],
+   "priority": 60,
+   "singleLeg": "complete"
+  },
+  {
+   "eventType": "fee",
+   "id": "LINK-FEE-ON-TXN",
+   "join": {
+    "amountRole": "posted",
+    "amountTolerancePct": 100,
+    "reference": "prefer",
+    "windowHours": 1080
+   },
+   "legs": [
+    {
+     "match": {
+      "direction": "debit",
+      "evidenceOnly": false,
+      "factType": "movement",
+      "purpose": [
+       "fee"
+      ]
+     },
+     "role": "charge"
+    },
+    {
+     "match": {
+      "direction": "debit",
+      "evidenceOnly": false,
+      "factType": "movement",
+      "purpose": [
+       "purchase",
+       "atm"
+      ]
+     },
+     "role": "original"
+    }
+   ],
+   "priority": 95,
+   "singleLeg": "complete"
+  },
+  {
+   "eventType": "ipo_application",
+   "id": "LINK-IPO",
+   "join": {
+    "amountRole": "held",
+    "amountTolerancePct": 100,
+    "reference": "prefer",
+    "windowHours": 504
+   },
+   "legs": [
+    {
+     "match": {
+      "factType": "hold",
+      "phase": [
+       "placed"
+      ],
+      "purpose": [
+       "ipo_asba",
+       "upi_mandate_block"
+      ]
+     },
+     "role": "hold_placed"
+    },
+    {
+     "match": {
+      "factType": "hold",
+      "phase": [
+       "released"
+      ],
+      "purpose": [
+       "ipo_asba",
+       "upi_mandate_block"
+      ]
+     },
+     "role": "hold_released"
+    },
+    {
+     "match": {
+      "factType": "hold",
+      "phase": [
+       "converted"
+      ],
+      "purpose": [
+       "ipo_asba",
+       "upi_mandate_block"
+      ]
+     },
+     "role": "hold_converted"
+    },
+    {
+     "match": {
+      "direction": "debit",
+      "factType": "movement",
+      "instrumentKind": [
+       "bank_account"
+      ],
+      "purpose": [
+       "investment"
+      ]
+     },
+     "role": "debit_leg"
+    }
+   ],
+   "priority": 120,
+   "singleLeg": "awaiting_leg"
+  },
+  {
+   "eventType": "subscription_charge",
+   "id": "LINK-MANDATE-CHARGE",
+   "join": {
+    "amountRole": "posted",
+    "amountTolerancePct": 100,
+    "reference": "prefer",
+    "windowHours": 8784
+   },
+   "legs": [
+    {
+     "match": {
+      "factType": "mandate"
+     },
+     "role": "original"
+    },
+    {
+     "match": {
+      "direction": "debit",
+      "evidenceOnly": false,
+      "factType": "movement"
+     },
+     "role": "charge"
+    }
+   ],
+   "priority": 110,
+   "singleLeg": "complete"
+  },
+  {
+   "eventType": "own_transfer",
+   "id": "LINK-OWN-TRANSFER",
+   "join": {
+    "amountRole": "posted",
+    "amountTolerancePct": 0,
+    "reference": "prefer",
+    "windowHours": 24
+   },
+   "legs": [
+    {
+     "match": {
+      "direction": "debit",
+      "factType": "movement",
+      "instrumentKind": [
+       "bank_account"
+      ],
+      "purpose": [
+       "transfer",
+       "p2p",
+       "purchase"
+      ]
+     },
+     "role": "debit_leg"
+    },
+    {
+     "match": {
+      "direction": "credit",
+      "factType": "movement",
+      "instrumentKind": [
+       "bank_account"
+      ],
+      "purpose": [
+       "transfer",
+       "p2p"
+      ]
+     },
+     "role": "credit_leg"
+    }
+   ],
+   "priority": 80,
+   "singleLeg": "complete"
+  },
+  {
+   "eventType": "purchase",
+   "id": "LINK-RECEIPT",
+   "join": {
+    "amountRole": "posted",
+    "amountTolerancePct": 0,
+    "reference": "ignore",
+    "windowHours": 72
+   },
+   "legs": [
+    {
+     "match": {
+      "direction": "debit",
+      "evidenceOnly": true,
+      "factType": "movement"
+     },
+     "role": "duplicate_notice"
+    },
+    {
+     "match": {
+      "direction": "debit",
+      "evidenceOnly": false,
+      "factType": "movement"
+     },
+     "role": "debit_leg"
+    }
+   ],
+   "priority": 70,
+   "singleLeg": "review"
+  },
+  {
+   "eventType": "refund",
+   "id": "LINK-REFUND",
+   "join": {
+    "amountRole": "posted",
+    "amountTolerancePct": 100,
+    "reference": "prefer",
+    "windowHours": 2880
+   },
+   "legs": [
+    {
+     "match": {
+      "direction": "debit",
+      "evidenceOnly": false,
+      "factType": "movement",
+      "purpose": [
+       "purchase",
+       "bill_payment",
+       "fee",
+       "emi"
+      ]
+     },
+     "role": "original"
+    },
+    {
+     "match": {
+      "direction": "credit",
+      "factType": "movement",
+      "purpose": [
+       "refund",
+       "reversal"
+      ]
+     },
+     "role": "reversal"
+    }
+   ],
+   "priority": 90,
+   "singleLeg": "complete"
+  },
+  {
+   "eventType": "wallet_topup",
+   "id": "LINK-WALLET-TOPUP",
+   "join": {
+    "amountRole": "posted",
+    "amountTolerancePct": 0,
+    "reference": "prefer",
+    "windowHours": 48
+   },
+   "legs": [
+    {
+     "match": {
+      "direction": "debit",
+      "factType": "movement",
+      "instrumentKind": [
+       "bank_account",
+       "credit_card",
+       "debit_card",
+       "prepaid_card"
+      ],
+      "purpose": [
+       "wallet_topup"
+      ]
+     },
+     "role": "debit_leg"
+    },
+    {
+     "match": {
+      "direction": "credit",
+      "factType": "movement",
+      "instrumentKind": [
+       "wallet"
+      ],
+      "purpose": [
+       "wallet_topup"
+      ]
+     },
+     "role": "credit_leg"
+    }
+   ],
+   "priority": 100,
+   "singleLeg": "complete"
+  }
+ ],
+ "merchantAliases": [
+  {
+   "alias": "AIR FIBER ONBOARDI",
+   "kind": "variant",
+   "merchantKey": "JIO"
+  },
+  {
+   "alias": "AIR FIBER PAYMENT",
+   "kind": "variant",
+   "merchantKey": "JIO"
+  },
+  {
+   "alias": "AMAZON DIGITAL",
+   "kind": "marketplace",
+   "merchantKey": "AMAZON"
+  },
+  {
+   "alias": "AMAZON IN",
+   "kind": "marketplace",
+   "merchantKey": "AMAZON"
+  },
+  {
+   "alias": "AMAZON INDIA",
+   "kind": "marketplace",
+   "merchantKey": "AMAZON"
+  },
+  {
+   "alias": "AMAZON PAY IN",
+   "kind": "marketplace",
+   "merchantKey": "AMAZON"
+  },
+  {
+   "alias": "AMAZON PAY INDIA",
+   "kind": "marketplace",
+   "merchantKey": "AMAZON"
+  },
+  {
+   "alias": "AMAZON RETAIL",
+   "kind": "marketplace",
+   "merchantKey": "AMAZON"
+  },
+  {
+   "alias": "AMAZON SELLER SERVICES",
+   "kind": "marketplace",
+   "merchantKey": "AMAZON"
+  },
+  {
+   "alias": "AMZN MKTP",
+   "kind": "marketplace",
+   "merchantKey": "AMAZON"
+  },
+  {
+   "alias": "AMZN MKTP IN",
+   "kind": "marketplace",
+   "merchantKey": "AMAZON"
+  },
+  {
+   "alias": "ANI TECHNOLOGIES",
+   "kind": "legal_name",
+   "merchantKey": "OLA CABS"
+  },
+  {
+   "alias": "APPLE COM BILL",
+   "kind": "abbreviation",
+   "merchantKey": "APPLE SERVICES"
+  },
+  {
+   "alias": "APPLE INDIA PRI",
+   "kind": "variant",
+   "merchantKey": "APPLE INDIA"
+  },
+  {
+   "alias": "APPLE MEDIA SERV",
+   "kind": "variant",
+   "merchantKey": "APPLE SERVICES"
+  },
+  {
+   "alias": "APPLE.COM/BILL",
+   "kind": "abbreviation",
+   "merchantKey": "APPLE SERVICES"
+  },
+  {
+   "alias": "ASSPL",
+   "kind": "abbreviation",
+   "merchantKey": "AMAZON"
+  },
+  {
+   "alias": "ATRIA CONVERGENCE",
+   "kind": "legal_name",
+   "merchantKey": "ACT FIBERNET"
+  },
+  {
+   "alias": "AVENUE E COMMERCE",
+   "kind": "legal_name",
+   "merchantKey": "DMART"
+  },
+  {
+   "alias": "AVENUE SUPERMARTS",
+   "kind": "legal_name",
+   "merchantKey": "DMART"
+  },
+  {
+   "alias": "BARBEQUE NATION HOSPITALITY",
+   "kind": "legal_name",
+   "merchantKey": "BARBEQUE NATION"
+  },
+  {
+   "alias": "BHARTI AIRTEL",
+   "kind": "legal_name",
+   "merchantKey": "AIRTEL"
+  },
+  {
+   "alias": "BIGTREE ENTERTAINMENT",
+   "kind": "legal_name",
+   "merchantKey": "BOOKMYSHOW"
+  },
+  {
+   "alias": "BLINK COMMERCE",
+   "kind": "legal_name",
+   "merchantKey": "BLINKIT"
+  },
+  {
+   "alias": "BRAINBEES SOLUTIONS",
+   "kind": "legal_name",
+   "merchantKey": "FIRSTCRY"
+  },
+  {
+   "alias": "BSES RAJDHANI",
+   "kind": "legal_name",
+   "merchantKey": "BSES"
+  },
+  {
+   "alias": "BSES YAMUNA",
+   "kind": "legal_name",
+   "merchantKey": "BSES"
+  },
+  {
+   "alias": "BUNDL TECHNOLOGIES",
+   "kind": "legal_name",
+   "merchantKey": "SWIGGY"
+  },
+  {
+   "alias": "BUNDL TECHNOLOGIES PRIVAT",
+   "kind": "variant",
+   "merchantKey": "SWIGGY"
+  },
+  {
+   "alias": "BURGER KING INDIA",
+   "kind": "legal_name",
+   "merchantKey": "BURGER KING"
+  },
+  {
+   "alias": "BYJU S",
+   "kind": "variant",
+   "merchantKey": "BYJUS"
+  },
+  {
+   "alias": "BYJU'S",
+   "kind": "variant",
+   "merchantKey": "BYJUS"
+  },
+  {
+   "alias": "COLIFE ADVISORY",
+   "kind": "legal_name",
+   "merchantKey": "COLIVE"
+  },
+  {
+   "alias": "COLIFE ADVISORY PRIVATE L",
+   "kind": "variant",
+   "merchantKey": "COLIVE"
+  },
+  {
+   "alias": "COLIFEADVISORYPRIVATE",
+   "kind": "variant",
+   "merchantKey": "COLIVE"
+  },
+  {
+   "alias": "COMPASS INDIA FOOD SERVICES",
+   "kind": "variant",
+   "merchantKey": "COMPASS"
+  },
+  {
+   "alias": "COMPASSINDIAFOODSERV",
+   "kind": "variant",
+   "merchantKey": "COMPASS"
+  },
+  {
+   "alias": "CONFIRM TICKET",
+   "kind": "variant",
+   "merchantKey": "IXIGO"
+  },
+  {
+   "alias": "CONFIRMTKT",
+   "kind": "variant",
+   "merchantKey": "IXIGO"
+  },
+  {
+   "alias": "CTRLX TECHNOLOGIES",
+   "kind": "legal_name",
+   "merchantKey": "OWNLY"
+  },
+  {
+   "alias": "CTRLXTECHNOLOGIES",
+   "kind": "variant",
+   "merchantKey": "OWNLY"
+  },
+  {
+   "alias": "CTRLXTECHNOLOGIESPRIV",
+   "kind": "variant",
+   "merchantKey": "OWNLY"
+  },
+  {
+   "alias": "CURSOR AI POWERED IDE",
+   "kind": "variant",
+   "merchantKey": "CURSOR"
+  },
+  {
+   "alias": "DEVYANI INTERNATIONAL",
+   "kind": "legal_name",
+   "merchantKey": "KFC"
+  },
+  {
+   "alias": "DISNEY STAR",
+   "kind": "legal_name",
+   "merchantKey": "DISNEY HOTSTAR"
+  },
+  {
+   "alias": "DISTRICTDINING",
+   "kind": "variant",
+   "merchantKey": "ZOMATO"
+  },
+  {
+   "alias": "DOMINO'S",
+   "kind": "variant",
+   "merchantKey": "DOMINOS"
+  },
+  {
+   "alias": "DOMINO'S PIZZA",
+   "kind": "variant",
+   "merchantKey": "DOMINOS"
+  },
+  {
+   "alias": "DOMINOS PIZZA",
+   "kind": "variant",
+   "merchantKey": "DOMINOS"
+  },
+  {
+   "alias": "DREAMPLUG PAYTECH",
+   "kind": "legal_name",
+   "merchantKey": "CRED"
+  },
+  {
+   "alias": "DREAMPLUG TECHNOLOGIES",
+   "kind": "legal_name",
+   "merchantKey": "CRED"
+  },
+  {
+   "alias": "ETERNAL",
+   "kind": "legal_name",
+   "merchantKey": "ZOMATO"
+  },
+  {
+   "alias": "ETERNAL LIM",
+   "kind": "variant",
+   "merchantKey": "ZOMATO"
+  },
+  {
+   "alias": "FASHNEAR TECHNOLOGIES",
+   "kind": "legal_name",
+   "merchantKey": "MEESHO"
+  },
+  {
+   "alias": "FLIPKART INDIA",
+   "kind": "marketplace",
+   "merchantKey": "FLIPKART"
+  },
+  {
+   "alias": "FLIPKART INTERNET",
+   "kind": "marketplace",
+   "merchantKey": "FLIPKART"
+  },
+  {
+   "alias": "FLIPKART INTERNET PRIV",
+   "kind": "variant",
+   "merchantKey": "FLIPKART"
+  },
+  {
+   "alias": "FLIPKARTINTERNETPVTL",
+   "kind": "variant",
+   "merchantKey": "FLIPKART"
+  },
+  {
+   "alias": "FSN E COMMERCE VENTURES",
+   "kind": "legal_name",
+   "merchantKey": "NYKAA"
+  },
+  {
+   "alias": "FSN E-COMMERCE VENTURES",
+   "kind": "legal_name",
+   "merchantKey": "NYKAA"
+  },
+  {
+   "alias": "GOOGLE INDIA DIG",
+   "kind": "variant",
+   "merchantKey": "GOOGLE PLAY"
+  },
+  {
+   "alias": "GOOGLE INDIA DIGITAL SERVICES",
+   "kind": "legal_name",
+   "merchantKey": "GOOGLE PLAY"
+  },
+  {
+   "alias": "GOOGLE INDIA SER",
+   "kind": "variant",
+   "merchantKey": "GOOGLE PLAY"
+  },
+  {
+   "alias": "GOOGLE PLAY STORE",
+   "kind": "variant",
+   "merchantKey": "GOOGLE PLAY"
+  },
+  {
+   "alias": "GOOGLEPLAY",
+   "kind": "variant",
+   "merchantKey": "GOOGLE PLAY"
+  },
+  {
+   "alias": "GROFERS INDIA",
+   "kind": "legal_name",
+   "merchantKey": "BLINKIT"
+  },
+  {
+   "alias": "HALDIRAM'S",
+   "kind": "variant",
+   "merchantKey": "HALDIRAMS"
+  },
+  {
+   "alias": "HARDCASTLE RESTAURANTS",
+   "kind": "legal_name",
+   "merchantKey": "MCDONALDS"
+  },
+  {
+   "alias": "IBIBO GROUP",
+   "kind": "legal_name",
+   "merchantKey": "GOIBIBO"
+  },
+  {
+   "alias": "IBIBO GROUP PRIVAT",
+   "kind": "variant",
+   "merchantKey": "GOIBIBO"
+  },
+  {
+   "alias": "INDIAN RAILWAY CATERING AND TOURISM",
+   "kind": "legal_name",
+   "merchantKey": "IRCTC"
+  },
+  {
+   "alias": "INFINITI RETAIL",
+   "kind": "legal_name",
+   "merchantKey": "CROMA"
+  },
+  {
+   "alias": "INNOVATIVE RETAIL CONCEPTS",
+   "kind": "legal_name",
+   "merchantKey": "BIGBASKET"
+  },
+  {
+   "alias": "INTERGLOBE AVIATION",
+   "kind": "legal_name",
+   "merchantKey": "INDIGO AIRLINES"
+  },
+  {
+   "alias": "JIORECHARGE",
+   "kind": "variant",
+   "merchantKey": "JIO"
+  },
+  {
+   "alias": "JUBILANT FOODWORKS",
+   "kind": "legal_name",
+   "merchantKey": "DOMINOS"
+  },
+  {
+   "alias": "KIRANAKART TECHNOLOGIES",
+   "kind": "legal_name",
+   "merchantKey": "ZEPTO"
+  },
+  {
+   "alias": "LE TRAVENUES TECHN",
+   "kind": "variant",
+   "merchantKey": "IXIGO"
+  },
+  {
+   "alias": "LE TRAVENUES TECHNOLOGY",
+   "kind": "legal_name",
+   "merchantKey": "IXIGO"
+  },
+  {
+   "alias": "LENSKART SOLUTIONS",
+   "kind": "legal_name",
+   "merchantKey": "LENSKART"
+  },
+  {
+   "alias": "MAKE MY TRIP",
+   "kind": "variant",
+   "merchantKey": "MAKEMYTRIP"
+  },
+  {
+   "alias": "MAKEMYTRIP INDIA",
+   "kind": "legal_name",
+   "merchantKey": "MAKEMYTRIP"
+  },
+  {
+   "alias": "MAKEMYTRIPINDIAPVT",
+   "kind": "variant",
+   "merchantKey": "MAKEMYTRIP"
+  },
+  {
+   "alias": "MC DONALD'S",
+   "kind": "variant",
+   "merchantKey": "MCDONALDS"
+  },
+  {
+   "alias": "MC DONALDS",
+   "kind": "variant",
+   "merchantKey": "MCDONALDS"
+  },
+  {
+   "alias": "MCDONALD'S",
+   "kind": "variant",
+   "merchantKey": "MCDONALDS"
+  },
+  {
+   "alias": "MOVING TECH",
+   "kind": "legal_name",
+   "merchantKey": "NAMMA YATRI"
+  },
+  {
+   "alias": "MYJIO",
+   "kind": "variant",
+   "merchantKey": "JIO"
+  },
+  {
+   "alias": "MYNTRA DESIGNS",
+   "kind": "legal_name",
+   "merchantKey": "MYNTRA"
+  },
+  {
+   "alias": "NATURE'S BASKET",
+   "kind": "variant",
+   "merchantKey": "NATURES BASKET"
+  },
+  {
+   "alias": "NETFLIX COM",
+   "kind": "variant",
+   "merchantKey": "NETFLIX"
+  },
+  {
+   "alias": "NEXTBILLION TECHNOLOGY",
+   "kind": "legal_name",
+   "merchantKey": "GROWW"
+  },
+  {
+   "alias": "NYKAA E RETAIL",
+   "kind": "legal_name",
+   "merchantKey": "NYKAA"
+  },
+  {
+   "alias": "OMSHARADHA FAST FO",
+   "kind": "variant",
+   "merchantKey": "FAST FOOD"
+  },
+  {
+   "alias": "ONE97 COMMUNICATIONS",
+   "kind": "legal_name",
+   "merchantKey": "PAYTM"
+  },
+  {
+   "alias": "OPENAI LLC",
+   "kind": "legal_name",
+   "merchantKey": "OPENAI"
+  },
+  {
+   "alias": "OPENAILLC",
+   "kind": "legal_name",
+   "merchantKey": "OPENAI"
+  },
+  {
+   "alias": "ORACLE SINGAPORE SINGAPOR",
+   "kind": "variant",
+   "merchantKey": "ORACLE"
+  },
+  {
+   "alias": "PAYTM PAYMENTS SERVICES",
+   "kind": "legal_name",
+   "merchantKey": "PAYTM"
+  },
+  {
+   "alias": "PEOPLE INTERACTIVE",
+   "kind": "legal_name",
+   "merchantKey": "REDBUS"
+  },
+  {
+   "alias": "PEOPLE INTERACTIVE INDIA",
+   "kind": "legal_name",
+   "merchantKey": "REDBUS"
+  },
+  {
+   "alias": "RAZORPAYREDBUS",
+   "kind": "variant",
+   "merchantKey": "REDBUS"
+  },
+  {
+   "alias": "RELIANCE JIO",
+   "kind": "legal_name",
+   "merchantKey": "JIO"
+  },
+  {
+   "alias": "RELIANCE JIO INFOCOMM",
+   "kind": "legal_name",
+   "merchantKey": "JIO"
+  },
+  {
+   "alias": "RESTAURANT BRANDS ASIA",
+   "kind": "legal_name",
+   "merchantKey": "BURGER KING"
+  },
+  {
+   "alias": "RKSV SECURITIES",
+   "kind": "legal_name",
+   "merchantKey": "UPSTOX"
+  },
+  {
+   "alias": "ROPPEN TRANSPORTATION",
+   "kind": "legal_name",
+   "merchantKey": "RAPIDO"
+  },
+  {
+   "alias": "SPACESHIP COM",
+   "kind": "variant",
+   "merchantKey": "SPACESHIP"
+  },
+  {
+   "alias": "SPOTIFY INDIA",
+   "kind": "variant",
+   "merchantKey": "SPOTIFY"
+  },
+  {
+   "alias": "SUNSHINE TEAHOUSE",
+   "kind": "legal_name",
+   "merchantKey": "CHAAYOS"
+  },
+  {
+   "alias": "SWIGGY LIMITED",
+   "kind": "legal_name",
+   "merchantKey": "SWIGGY"
+  },
+  {
+   "alias": "SWIGGYDINERS",
+   "kind": "variant",
+   "merchantKey": "SWIGGY"
+  },
+  {
+   "alias": "SWIGGYINSTAMART",
+   "kind": "abbreviation",
+   "merchantKey": "SWIGGY INSTAMART"
+  },
+  {
+   "alias": "SWIGGYINSTAMARTPRIVAT",
+   "kind": "variant",
+   "merchantKey": "SWIGGY INSTAMART"
+  },
+  {
+   "alias": "SWIGGYUPI",
+   "kind": "variant",
+   "merchantKey": "SWIGGY"
+  },
+  {
+   "alias": "TATA POWER DELHI DISTRIBUTION",
+   "kind": "legal_name",
+   "merchantKey": "TATA POWER"
+  },
+  {
+   "alias": "TATA SKY",
+   "kind": "legal_name",
+   "merchantKey": "TATA PLAY"
+  },
+  {
+   "alias": "TATA STARBUCKS",
+   "kind": "legal_name",
+   "merchantKey": "STARBUCKS"
+  },
+  {
+   "alias": "THINK AND LEARN",
+   "kind": "legal_name",
+   "merchantKey": "BYJUS"
+  },
+  {
+   "alias": "TRAE SINGAPORE SG",
+   "kind": "variant",
+   "merchantKey": "TRAE"
+  },
+  {
+   "alias": "TWILIO US",
+   "kind": "variant",
+   "merchantKey": "TWILIO"
+  },
+  {
+   "alias": "UBER INDIA SYSTEMS",
+   "kind": "legal_name",
+   "merchantKey": "UBER"
+  },
+  {
+   "alias": "UPA APPLE MEDIA SERVIC",
+   "kind": "variant",
+   "merchantKey": "APPLE SERVICES"
+  },
+  {
+   "alias": "VISHAL RETAIL",
+   "kind": "legal_name",
+   "merchantKey": "VISHAL MEGA MART"
+  },
+  {
+   "alias": "VODAFONE IDEA",
+   "kind": "legal_name",
+   "merchantKey": "VI"
+  },
+  {
+   "alias": "WESTLIFE DEVELOPMENT",
+   "kind": "legal_name",
+   "merchantKey": "MCDONALDS"
+  },
+  {
+   "alias": "WESTLIFE FOODWORLD",
+   "kind": "legal_name",
+   "merchantKey": "MCDONALDS"
+  },
+  {
+   "alias": "WWWBIGBASKETCOM",
+   "kind": "variant",
+   "merchantKey": "BIGBASKET"
+  },
+  {
+   "alias": "YOUTUBEGOOGLE",
+   "kind": "variant",
+   "merchantKey": "YOUTUBE"
+  },
+  {
+   "alias": "ZEPTO MARKETPLACE",
+   "kind": "variant",
+   "merchantKey": "ZEPTO"
+  },
+  {
+   "alias": "ZEPTOMARKETPLACEPRIVA",
+   "kind": "variant",
+   "merchantKey": "ZEPTO"
+  },
+  {
+   "alias": "ZEPTONOW",
+   "kind": "variant",
+   "merchantKey": "ZEPTO"
+  },
+  {
+   "alias": "ZEPTONOW BDPG",
+   "kind": "variant",
+   "merchantKey": "ZEPTO"
+  },
+  {
+   "alias": "ZERODHA BROKING",
+   "kind": "legal_name",
+   "merchantKey": "ZERODHA"
+  },
+  {
+   "alias": "ZOMATO MEDIA",
+   "kind": "legal_name",
+   "merchantKey": "ZOMATO"
+  },
+  {
+   "alias": "ZOMATOFOOD",
+   "kind": "variant",
+   "merchantKey": "ZOMATO"
+  },
+  {
+   "alias": "ZOMATOLIMITED",
+   "kind": "variant",
+   "merchantKey": "ZOMATO"
+  },
+  {
+   "alias": "ZOMATOLTD",
+   "kind": "variant",
+   "merchantKey": "ZOMATO"
+  }
+ ],
+ "minEngineVersion": "2.3.0",
+ "rules": [
+  {
+   "confidence": 0.9,
+   "createdBy": "lane-i",
+   "emit": [
+    {
+     "attrs": {
+      "category": "service"
+     },
+     "factType": "info"
+    }
+   ],
+   "examples": [
+    {
+     "body": "CDSL: Credit in a/c *12345678 for 10-ACME LIMITED-EQ on 05NOV",
+     "expectFactTypes": [
+      "info"
+     ],
+     "sender": "VM-CDSLTX-S"
+    },
+    {
+     "body": "CDSL: Credit in a/c *12345678 through IPO/FPO for 10-ACME LIMITED-EQ on 05NOV",
+     "expectFactTypes": [],
+     "sender": "VM-CDSLTX-S"
+    }
+   ],
+   "family": "demat",
+   "id": "BRK-DEMAT-CREDIT-01",
+   "match": {
+    "flags": "i",
+    "pattern": "^\\s*(?:cdsl|nsdl)\\s*:\\s*credit\\s+in\\s+a/c\\s*[*x]*\\d{2,16}\\s+for\\s+\\d+[-\\s]",
+    "rejectAny": [
+     "ipo",
+     "fpo"
+    ]
+   },
+   "priority": 520,
+   "senders": [
+    "*"
+   ],
+   "status": "active",
+   "updatedAt": "2026-11-05T00:00:00Z",
+   "version": 1
+  },
+  {
+   "confidence": 0.97,
+   "createdBy": "review-2y",
+   "emit": [
+    {
+     "amounts": [
+      {
+       "from": "amt",
+       "role": "posted",
+       "unit": "INR"
+      }
+     ],
+     "attrs": {
+      "direction": "debit",
+      "purpose": "purchase",
+      "rail": "card"
+     },
+     "counterparty": {
+      "kind": "merchant",
+      "nameFrom": "merchant",
+      "transforms": [
+       "sanitizeNarration"
+      ]
+     },
+     "factType": "movement",
+     "instrument": {
+      "kind": "credit_card",
+      "maskFrom": "mask"
+     },
+     "occurredAt": {
+      "formats": [
+       "dd-MM-yyyy",
+       "dd-MM-yyyy, HH:mm:ss",
+       "dd-MM-yyyy,HH:mm:ss",
+       "dd-MM-yyyy, HH:mm",
+       "dd-MM-yyyy HH:mm:ss",
+       "dd-MM-yy",
+       "dd-MM-yy, HH:mm:ss",
+       "dd-MM-yy,HH:mm:ss",
+       "dd-MM-yy, HH:mm",
+       "dd-MM-yy HH:mm:ss",
+       "dd/MM/yyyy",
+       "dd/MM/yyyy, HH:mm:ss",
+       "dd/MM/yyyy,HH:mm:ss",
+       "dd/MM/yyyy, HH:mm",
+       "dd/MM/yyyy HH:mm:ss",
+       "dd/MM/yy",
+       "dd/MM/yy, HH:mm:ss",
+       "dd/MM/yy,HH:mm:ss",
+       "dd/MM/yy, HH:mm",
+       "dd/MM/yy HH:mm:ss",
+       "dd-MMM-yyyy",
+       "dd-MMM-yyyy, HH:mm:ss",
+       "dd-MMM-yyyy,HH:mm:ss",
+       "dd-MMM-yyyy, HH:mm",
+       "dd-MMM-yyyy HH:mm:ss",
+       "dd-MMM-yy",
+       "dd-MMM-yy, HH:mm:ss",
+       "dd-MMM-yy,HH:mm:ss",
+       "dd-MMM-yy, HH:mm",
+       "dd-MMM-yy HH:mm:ss",
+       "ddMMMyyyy",
+       "ddMMMyyyy, HH:mm:ss",
+       "ddMMMyyyy,HH:mm:ss",
+       "ddMMMyyyy, HH:mm",
+       "ddMMMyyyy HH:mm:ss",
+       "ddMMMyy",
+       "ddMMMyy, HH:mm:ss",
+       "ddMMMyy,HH:mm:ss",
+       "ddMMMyy, HH:mm",
+       "ddMMMyy HH:mm:ss",
+       "dd MMM yyyy",
+       "dd MMM yyyy, HH:mm:ss",
+       "dd MMM yyyy,HH:mm:ss",
+       "dd MMM yyyy, HH:mm",
+       "dd MMM yyyy HH:mm:ss",
+       "dd MMM yy",
+       "dd MMM yy, HH:mm:ss",
+       "dd MMM yy,HH:mm:ss",
+       "dd MMM yy, HH:mm",
+       "dd MMM yy HH:mm:ss",
+       "dd-MMM yyyy",
+       "dd-MMM yyyy, HH:mm:ss",
+       "dd-MMM yyyy,HH:mm:ss",
+       "dd-MMM yyyy, HH:mm",
+       "dd-MMM yyyy HH:mm:ss",
+       "dd.MM.yyyy",
+       "dd.MM.yyyy, HH:mm:ss",
+       "dd.MM.yyyy,HH:mm:ss",
+       "dd.MM.yyyy, HH:mm",
+       "dd.MM.yyyy HH:mm:ss",
+       "dd.MM.yy",
+       "dd.MM.yy, HH:mm:ss",
+       "dd.MM.yy,HH:mm:ss",
+       "dd.MM.yy, HH:mm",
+       "dd.MM.yy HH:mm:ss",
+       "yyyy-MM-dd",
+       "yyyy-MM-dd:HH:mm:ss",
+       "yyyy-MM-dd HH:mm:ss",
+       "yyyy-MM-dd HH:mm"
+      ],
+      "from": "date"
+     }
+    }
+   ],
+   "examples": [
+    {
+     "body": "Spent Rs.293.00 On HDFC Bank Card 1234 At SAMPLE CAFE On 2025-05-11:13:07:50.Not You? To Block+Reissue Call 18002586161/SMS BLOCK CC 1234 to 7308080808",
+     "expectFactTypes": [
+      "movement"
+     ],
+     "sender": "AD-HDFCBK-S"
+    },
+    {
+     "body": "Spent Rs.293.00 On HDFC Bank Card 1234 At SAMPLE CAFE On 2025-05-11:13:07:50.Not You? To Block+Reissue Call 18002586161/SMS BLOCK DC 1234 to 7308080808",
+     "expectFactTypes": [],
+     "sender": "AD-HDFCBK-S"
+    }
+   ],
+   "family": "card_spend",
+   "id": "HDFC-CARD-SPEND-SPENTFIRST-CC",
+   "match": {
+    "flags": "i",
+    "pattern": "\\bspent\\s+(?:\\b(?:rs\\.?|inr)|\u20b9)\\s*:?\\s*(?<amt>\\d[\\d,]*(?:\\.\\d{1,2})?)\\s+on\\s+(?:(?:your|the)\\s+)?(?:[a-z][a-z0-9+&.'/ -]{0,40}?\\s)?(?:(?:credit|debit|prepaid|forex)\\s+)?card(?:\\s*(?:no|number)\\.?)?(?:\\s+(?:ending|ends)(?:\\s+(?:with|in))?)?\\s*[:\\-]?\\s*[x*\u2022.]*\\s?(?<mask>\\d{2,18})\\s+at\\s+(?<merchant>[^\\n]+?)(?=\\s+(?:on|dated)\\s+(?:date\\s+)?\\d|\\s+on\\s+[a-z]{3}\\b|\\.(?:\\s|$)|[;,(/\\n]|\\s+(?:on|using|with)\\s+(?:your|the|my|a)\\b|\\s+(?:from|avl|avail|available|ref|reference|not\\s+you|if\\s+not|if\\s+this|call|txn|trxn|bal|balance|limit|lmt|total|via|using|upi|utr|ending)\\b|$)(?:\\s+on\\s+(?<date>\\d{4}-\\d{2}-\\d{2}(?:[: ]\\d{2}:\\d{2}(?::\\d{2})?)?|\\d{1,2}[-/]\\d{1,2}[-/]\\d{2,4}(?:,?\\s*\\d{2}:\\d{2}(?::\\d{2})?)?|\\d{1,2}[-/ ]?[a-z]{3}[-/ ,]*\\d{2,4}(?:,?\\s*\\d{2}:\\d{2}(?::\\d{2})?)?))?",
+    "requireAll": [
+     "block cc"
+    ]
+   },
+   "priority": 752,
+   "senders": [
+    "HDFCBK",
+    "HDFCBN"
+   ],
+   "status": "active",
+   "updatedAt": "2026-11-07T00:00:00Z",
+   "version": 1
+  },
+  {
+   "confidence": 0.85,
+   "createdBy": "baseline",
+   "emit": [
+    {
+     "amounts": [
+      {
+       "from": "bal",
+       "role": "available_balance",
+       "unit": "INR"
+      }
+     ],
+     "attrs": {
+      "asOf": {
+       "from": "date"
+      }
+     },
+     "factType": "balance_snapshot",
+     "instrument": {
+      "issuerSlug": "groww",
+      "kind": "broker"
+     },
+     "occurredAt": {
+      "from": "date"
+     }
+    }
+   ],
+   "examples": [
+    {
+     "body": "NSE: Dear Investor, your Fund Balance reported by GROWW INVEST TECH PVT LTD as on 31-Oct-26 is Rs.12,345.67 (excludes your bank balance). Contact your broker for details.",
+     "expectFactTypes": [
+      "balance_snapshot"
+     ],
+     "sender": "VM-NSEIND-S"
+    },
+    {
+     "body": "NSE: Dear Investor, trade value payable to you by GROWW INVEST TECH PVT LTD for all trades on 31-Oct-26 is Rs.12,345.67.",
+     "expectFactTypes": [],
+     "sender": "VM-NSEIND-S"
+    }
+   ],
+   "family": "broker_balance",
+   "id": "INV-FUNDBAL-GROWW-01",
+   "match": {
+    "flags": "i",
+    "pattern": "(?:fund|funds|running\\s+account)\\s+bal(?:ance)?[\\s\\S]{0,60}?(?:reported\\s+by|with|at|held\\s+by)\\s+(?:groww(?:\\s+invest\\w*)?(?:\\s+(?:ltd|limited))?)(?:[\\s\\S]{0,80}?as\\s+(?:on|of)\\s+(?<date>\\d{2}[-/ ](?:\\d{2}|(?:jan|feb|mar|apr|may|jun|jul|aug|sep|oct|nov|dec))[-/ ]\\d{2,4}|\\d{2}(?:jan|feb|mar|apr|may|jun|jul|aug|sep|oct|nov|dec)\\d{2,4}))[\\s\\S]{0,40}?(?:is|of|:|-)\\s*(?:rs\\.?|inr|\u20b9)\\s*(?<bal>[\\d,]+(?:\\.\\d{1,2})?)",
+    "rejectAny": [
+     "payable"
+    ],
+    "requireAll": [
+     "bal"
+    ]
+   },
+   "priority": 450,
+   "senders": [
+    "*"
+   ],
+   "status": "active",
+   "updatedAt": "2026-11-20T00:00:00Z",
+   "version": 1
+  },
+  {
+   "confidence": 0.95,
+   "createdBy": "baseline",
+   "emit": [
+    {
+     "amounts": [
+      {
+       "from": "tot",
+       "role": "due_total",
+       "unit": "INR"
+      },
+      {
+       "from": "min",
+       "role": "due_minimum",
+       "unit": "INR"
+      }
+     ],
+     "attrs": {
+      "dueDate": {
+       "from": "due"
+      }
+     },
+     "factType": "bill_due",
+     "instrument": {
+      "kind": "credit_card",
+      "maskFrom": "mask"
+     }
+    }
+   ],
+   "examples": [
+    {
+     "body": "Example Bank Credit Card XX1234 Statement is sent to ab***@example.invalid. Total of Rs 5,000.00 or minimum of Rs 250.00 is due by 30-JUN-26.",
+     "expectFactTypes": [
+      "bill_due"
+     ],
+     "sender": "VM-EXAMPL-S"
+    },
+    {
+     "body": "Example Bank Credit Card XX1234 Statement is sent to ab***@example.invalid. Total of Rs 0.00 or minimum of Rs 0.00 is due by 30-JUN-26.",
+     "expectFactTypes": [],
+     "sender": "VM-EXAMPL-S"
+    }
+   ],
+   "family": "card_statement",
+   "id": "SUB-CC-STMT-SENT-01",
+   "match": {
+    "flags": "i",
+    "pattern": "credit\\s+card\\s+(?:[x*\u2022.]+\\s*)?(?<mask>\\d{2,16})\\s+statement\\s+is\\s+sent\\s+to\\s+\\S+[\\s\\S]{0,20}?total\\s+of\\s+(?:rs\\.?|inr|\u20b9)\\s*(?<tot>[\\d,]+(?:\\.\\d{1,2})?)\\s+or\\s+minimum\\s+of\\s+(?:rs\\.?|inr|\u20b9)\\s*(?<min>[\\d,]+(?:\\.\\d{1,2})?)\\s+is\\s+due\\s+by\\s+(?<due>\\d{2}[-/ ](?:\\d{2}|(?:jan|feb|mar|apr|may|jun|jul|aug|sep|oct|nov|dec))[-/ ]\\d{2,4}|\\d{2}(?:jan|feb|mar|apr|may|jun|jul|aug|sep|oct|nov|dec)\\d{2,4})",
+    "rejectAny": [
+     "total of rs 0.00",
+     "total of rs 0 "
+    ]
+   },
+   "priority": 710,
+   "senders": [
+    "*"
+   ],
+   "status": "active",
+   "updatedAt": "2026-11-05T00:00:00Z",
+   "version": 1
+  },
+  {
+   "confidence": 0.96,
+   "createdBy": "baseline",
+   "emit": [
+    {
+     "amounts": [
+      {
+       "from": "amt",
+       "role": "posted",
+       "unit": "INR"
+      }
+     ],
+     "attrs": {
+      "direction": "credit",
+      "purpose": "wallet_topup",
+      "rail": "wallet"
+     },
+     "factType": "movement",
+     "instrument": {
+      "issuerSlug": "paytm",
+      "kind": "wallet"
+     }
+    },
+    {
+     "amounts": [
+      {
+       "from": "bal",
+       "role": "available_balance",
+       "unit": "INR"
+      }
+     ],
+     "attrs": {
+      "asOf": {
+       "field": "occurredAt",
+       "sameAs": 0
+      }
+     },
+     "factType": "balance_snapshot",
+     "instrument": {
+      "sameAs": 0
+     }
+    }
+   ],
+   "examples": [
+    {
+     "body": "Rs 500 has been added to your Paytm Wallet. Updated balance: Rs 500. Txn ID 12345678900",
+     "expectFactTypes": [
+      "movement",
+      "balance_snapshot"
+     ],
+     "sender": "JM-iPaytm"
+    },
+    {
+     "body": "Add money to your Paytm Wallet and get Rs 100 cashback on your first load. Offer valid till 30 Nov.",
+     "expectFactTypes": [],
+     "sender": "JM-iPaytm"
+    }
+   ],
+   "family": "wallet_load",
+   "id": "WAL-PAYTM-LOAD-01",
+   "match": {
+    "flags": "is",
+    "pattern": "^(?:rs\\.?|inr|\u20b9)\\s*(?<amt>[\\d,]+(?:\\.\\d{1,2})?) (?:has been |was |is )?(?:successfully )?(?:added|loaded|credited|received)(?: in| into| to| in to) (?:your )?paytm(?: wallet| balance)?(?=(?:.*?\\bupi ref(?:erence)?(?: no)?\\.?:?\\s*(?<ref_upiRef>\\d{6,}))?)(?=(?:.*?\\b(?:txn|transaction)\\s*(?:id|no|number)?\\.?:?\\s*#?(?<ref_txnId>(?=[a-z]*\\d)[a-z0-9]{6,}))?).*?\\b(?:(?:updated|available|current|remaining|closing|wallet) )?bal(?:ance)?\\b\\.?\\s*(?:is|:|-|=)?\\s*(?:rs\\.?|inr|\u20b9)\\s*(?<bal>[\\d,]+(?:\\.\\d{1,2})?)",
+    "rejectAny": [
+     "cashback",
+     "refund",
+     "reward",
+     "reversal",
+     "reversed",
+     "bonus",
+     "gift",
+     "promo",
+     "compensation",
+     "will be",
+     "failed"
+    ]
+   },
+   "priority": 580,
+   "senders": [
+    "PAYTM"
+   ],
+   "status": "active",
+   "updatedAt": "2026-11-03T00:00:00Z",
+   "version": 1
+  }
+ ],
+ "schema": "pandapay.sms.rules/2",
+ "senders": [
+  {
+   "aliases": [],
+   "brand": "620020",
+   "issuerKind": "other",
+   "issuerSlug": null
+  },
+  {
+   "aliases": [],
+   "brand": "650001",
+   "issuerKind": "other",
+   "issuerSlug": null
+  },
+  {
+   "aliases": [],
+   "brand": "650002",
+   "issuerKind": "other",
+   "issuerSlug": null
+  },
+  {
+   "aliases": [],
+   "brand": "650003",
+   "issuerKind": "other",
+   "issuerSlug": null
+  },
+  {
+   "aliases": [],
+   "brand": "650022",
+   "issuerKind": "other",
+   "issuerSlug": null
+  },
+  {
+   "aliases": [],
+   "brand": "650024",
+   "issuerKind": "other",
+   "issuerSlug": null
+  },
+  {
+   "aliases": [],
+   "brand": "650025",
+   "issuerKind": "other",
+   "issuerSlug": null
+  },
+  {
+   "aliases": [],
+   "brand": "ABIBUS",
+   "issuerKind": "other",
+   "issuerSlug": null
+  },
+  {
+   "aliases": [
+    "ACTCRP"
+   ],
+   "brand": "ACTFBR",
+   "issuerKind": "biller",
+   "issuerSlug": "act_fibernet"
+  },
+  {
+   "aliases": [],
+   "brand": "AIRDOT",
+   "issuerKind": "other",
+   "issuerSlug": null
+  },
+  {
+   "aliases": [],
+   "brand": "AIRMCA",
+   "issuerKind": "other",
+   "issuerSlug": null
+  },
+  {
+   "aliases": [
+    "AIRTLP",
+    "AIRTLF",
+    "ARTLPY"
+   ],
+   "brand": "AIRTEL",
+   "issuerKind": "biller",
+   "issuerSlug": "airtel"
+  },
+  {
+   "aliases": [
+    "ALEGRN",
+    "ALEGBB"
+   ],
+   "brand": "ALEGRA",
+   "issuerKind": "biller",
+   "issuerSlug": "alegra"
+  },
+  {
+   "aliases": [],
+   "brand": "AMAZON",
+   "issuerKind": "wallet",
+   "issuerSlug": "amazonpay",
+   "walletSpendVisibility": "partial"
+  },
+  {
+   "aliases": [],
+   "brand": "AMEXBK",
+   "issuerKind": "bank",
+   "issuerSlug": "amex"
+  },
+  {
+   "aliases": [],
+   "brand": "AMEXIN",
+   "issuerKind": "bank",
+   "issuerSlug": "amex"
+  },
+  {
+   "aliases": [
+    "ANGLEO",
+    "ANGELB",
+    "ANGLBR"
+   ],
+   "brand": "ANGELO",
+   "issuerKind": "broker",
+   "issuerSlug": "angel_one"
+  },
+  {
+   "aliases": [],
+   "brand": "ARWGOV",
+   "issuerKind": "other",
+   "issuerSlug": null
+  },
+  {
+   "aliases": [],
+   "brand": "ARWINF",
+   "issuerKind": "other",
+   "issuerSlug": null
+  },
+  {
+   "aliases": [],
+   "brand": "ASTCHT",
+   "issuerKind": "other",
+   "issuerSlug": null
+  },
+  {
+   "aliases": [],
+   "brand": "AUBANK",
+   "issuerKind": "bank",
+   "issuerSlug": "au"
+  },
+  {
+   "aliases": [],
+   "brand": "AUSFBL",
+   "issuerKind": "bank",
+   "issuerSlug": "au"
+  },
+  {
+   "aliases": [
+    "AXIOFS",
+    "AXIOAP",
+    "AXIOCR"
+   ],
+   "brand": "AXIOPL",
+   "issuerKind": "other",
+   "issuerSlug": "axio"
+  },
+  {
+   "aliases": [],
+   "brand": "AXISBK",
+   "issuerKind": "bank",
+   "issuerSlug": "axis"
+  },
+  {
+   "aliases": [],
+   "brand": "AXISBN",
+   "issuerKind": "bank",
+   "issuerSlug": "axis"
+  },
+  {
+   "aliases": [],
+   "brand": "AXISCC",
+   "issuerKind": "bank",
+   "issuerSlug": "axis"
+  },
+  {
+   "aliases": [],
+   "brand": "AXISMB",
+   "issuerKind": "bank",
+   "issuerSlug": "axis"
+  },
+  {
+   "aliases": [
+    "AXISMFS"
+   ],
+   "brand": "AXISMF",
+   "issuerKind": "other",
+   "issuerSlug": "axis_mf"
+  },
+  {
+   "aliases": [],
+   "brand": "BANDHN",
+   "issuerKind": "bank",
+   "issuerSlug": "bandhan"
+  },
+  {
+   "aliases": [],
+   "brand": "BDNSMS",
+   "issuerKind": "bank",
+   "issuerSlug": "bandhan"
+  },
+  {
+   "aliases": [
+    "BESCOMP"
+   ],
+   "brand": "BESCOM",
+   "issuerKind": "biller",
+   "issuerSlug": "bescom"
+  },
+  {
+   "aliases": [],
+   "brand": "BETRHF",
+   "issuerKind": "other",
+   "issuerSlug": null
+  },
+  {
+   "aliases": [
+    "BHIMAP"
+   ],
+   "brand": "BHIM",
+   "issuerKind": "other",
+   "issuerSlug": "bhim"
+  },
+  {
+   "aliases": [],
+   "brand": "BIGVEN",
+   "issuerKind": "other",
+   "issuerSlug": null
+  },
+  {
+   "aliases": [],
+   "brand": "BITLAA",
+   "issuerKind": "other",
+   "issuerSlug": null
+  },
+  {
+   "aliases": [],
+   "brand": "BLUDRT",
+   "issuerKind": "other",
+   "issuerSlug": null
+  },
+  {
+   "aliases": [],
+   "brand": "BOBCRD",
+   "issuerKind": "bank",
+   "issuerSlug": "bob"
+  },
+  {
+   "aliases": [],
+   "brand": "BOBSMS",
+   "issuerKind": "bank",
+   "issuerSlug": "bob"
+  },
+  {
+   "aliases": [],
+   "brand": "BOBTXN",
+   "issuerKind": "bank",
+   "issuerSlug": "bob"
+  },
+  {
+   "aliases": [],
+   "brand": "BOIIND",
+   "issuerKind": "bank",
+   "issuerSlug": "boi"
+  },
+  {
+   "aliases": [],
+   "brand": "BOISMS",
+   "issuerKind": "bank",
+   "issuerSlug": "boi"
+  },
+  {
+   "aliases": [],
+   "brand": "BOMSMS",
+   "issuerKind": "bank",
+   "issuerSlug": "bom"
+  },
+  {
+   "aliases": [
+    "BSEMKT",
+    "BSEIPO",
+    "BSEINF",
+    "BSESTR",
+    "BSELTD"
+   ],
+   "brand": "BSEIND",
+   "issuerKind": "other",
+   "issuerSlug": "bse"
+  },
+  {
+   "aliases": [
+    "BSNL",
+    "BSNLCP"
+   ],
+   "brand": "BSNLTL",
+   "issuerKind": "biller",
+   "issuerSlug": "bsnl"
+  },
+  {
+   "aliases": [
+    "CAMSON",
+    "CAMSRG",
+    "CAMSCS"
+   ],
+   "brand": "CAMSMF",
+   "issuerKind": "other",
+   "issuerSlug": "cams"
+  },
+  {
+   "aliases": [],
+   "brand": "CANARA",
+   "issuerKind": "bank",
+   "issuerSlug": "canara"
+  },
+  {
+   "aliases": [],
+   "brand": "CANBNK",
+   "issuerKind": "bank",
+   "issuerSlug": "canara"
+  },
+  {
+   "aliases": [],
+   "brand": "CBOISM",
+   "issuerKind": "bank",
+   "issuerSlug": "cbi"
+  },
+  {
+   "aliases": [],
+   "brand": "CBSSBI",
+   "issuerKind": "bank",
+   "issuerSlug": "sbi"
+  },
+  {
+   "aliases": [],
+   "brand": "CDSLEV",
+   "issuerKind": "other",
+   "issuerSlug": null
+  },
+  {
+   "aliases": [],
+   "brand": "CDSLTX",
+   "issuerKind": "other",
+   "issuerSlug": null
+  },
+  {
+   "aliases": [],
+   "brand": "CENTBK",
+   "issuerKind": "bank",
+   "issuerSlug": "cbi"
+  },
+  {
+   "aliases": [],
+   "brand": "CIBILA",
+   "issuerKind": "other",
+   "issuerSlug": null
+  },
+  {
+   "aliases": [],
+   "brand": "CIBILP",
+   "issuerKind": "other",
+   "issuerSlug": null
+  },
+  {
+   "aliases": [],
+   "brand": "CITIBK",
+   "issuerKind": "bank",
+   "issuerSlug": "citi"
+  },
+  {
+   "aliases": [],
+   "brand": "CITIBN",
+   "issuerKind": "bank",
+   "issuerSlug": "citi"
+  },
+  {
+   "aliases": [],
+   "brand": "COINDC",
+   "issuerKind": "other",
+   "issuerSlug": null
+  },
+  {
+   "aliases": [],
+   "brand": "COWRKS",
+   "issuerKind": "other",
+   "issuerSlug": null
+  },
+  {
+   "aliases": [
+    "CREDIN",
+    "CREDCM",
+    "CREDAP"
+   ],
+   "brand": "CREDCL",
+   "issuerKind": "other",
+   "issuerSlug": null
+  },
+  {
+   "aliases": [],
+   "brand": "CSBBNK",
+   "issuerKind": "bank",
+   "issuerSlug": "csb"
+  },
+  {
+   "aliases": [],
+   "brand": "CSBSMS",
+   "issuerKind": "bank",
+   "issuerSlug": "csb"
+  },
+  {
+   "aliases": [],
+   "brand": "DBSBIN",
+   "issuerKind": "bank",
+   "issuerSlug": "dbs"
+  },
+  {
+   "aliases": [],
+   "brand": "DBSBNK",
+   "issuerKind": "bank",
+   "issuerSlug": "dbs"
+  },
+  {
+   "aliases": [],
+   "brand": "DCBBNK",
+   "issuerKind": "bank",
+   "issuerSlug": "dcb"
+  },
+  {
+   "aliases": [],
+   "brand": "DCBSMS",
+   "issuerKind": "bank",
+   "issuerSlug": "dcb"
+  },
+  {
+   "aliases": [],
+   "brand": "DCTHLN",
+   "issuerKind": "other",
+   "issuerSlug": null
+  },
+  {
+   "aliases": [
+    "DHANAI",
+    "DHANBR"
+   ],
+   "brand": "DHANHQ",
+   "issuerKind": "broker",
+   "issuerSlug": "dhan"
+  },
+  {
+   "aliases": [],
+   "brand": "DLHVRY",
+   "issuerKind": "other",
+   "issuerSlug": null
+  },
+  {
+   "aliases": [],
+   "brand": "DOMINO",
+   "issuerKind": "other",
+   "issuerSlug": null
+  },
+  {
+   "aliases": [],
+   "brand": "DOPBNK",
+   "issuerKind": "bank",
+   "issuerSlug": "indiapost"
+  },
+  {
+   "aliases": [],
+   "brand": "DOTMAH",
+   "issuerKind": "other",
+   "issuerSlug": null
+  },
+  {
+   "aliases": [
+    "DISTRI"
+   ],
+   "brand": "DSTRKT",
+   "issuerKind": "wallet",
+   "issuerSlug": "district",
+   "walletSpendVisibility": "sms"
+  },
+  {
+   "aliases": [],
+   "brand": "EKACRE",
+   "issuerKind": "other",
+   "issuerSlug": null
+  },
+  {
+   "aliases": [],
+   "brand": "EKARTL",
+   "issuerKind": "other",
+   "issuerSlug": null
+  },
+  {
+   "aliases": [],
+   "brand": "ELSRUN",
+   "issuerKind": "other",
+   "issuerSlug": null
+  },
+  {
+   "aliases": [],
+   "brand": "EPGRUP",
+   "issuerKind": "other",
+   "issuerSlug": null
+  },
+  {
+   "aliases": [],
+   "brand": "ESHRAM",
+   "issuerKind": "other",
+   "issuerSlug": null
+  },
+  {
+   "aliases": [],
+   "brand": "FEDBNK",
+   "issuerKind": "bank",
+   "issuerSlug": "federal"
+  },
+  {
+   "aliases": [
+    "FEDSCP"
+   ],
+   "brand": "FEDSMS",
+   "issuerKind": "bank",
+   "issuerSlug": "federal"
+  },
+  {
+   "aliases": [],
+   "brand": "FINVUU",
+   "issuerKind": "other",
+   "issuerSlug": null
+  },
+  {
+   "aliases": [
+    "5PAISA",
+    "FIVEPAISA"
+   ],
+   "brand": "FIVEPS",
+   "issuerKind": "broker",
+   "issuerSlug": "five_paisa"
+  },
+  {
+   "aliases": [
+    "FREECHARGE"
+   ],
+   "brand": "FRCHRG",
+   "issuerKind": "wallet",
+   "issuerSlug": "freecharge",
+   "walletSpendVisibility": "sms"
+  },
+  {
+   "aliases": [],
+   "brand": "GKIWIP",
+   "issuerKind": "other",
+   "issuerSlug": "kiwi"
+  },
+  {
+   "aliases": [
+    "GOOGLEPAY"
+   ],
+   "brand": "GPAY",
+   "issuerKind": "other",
+   "issuerSlug": "googlepay"
+  },
+  {
+   "aliases": [
+    "GROWWZ",
+    "GROWWI",
+    "GRWWMF"
+   ],
+   "brand": "GROWW",
+   "issuerKind": "broker",
+   "issuerSlug": "groww"
+  },
+  {
+   "aliases": [],
+   "brand": "HDFCBK",
+   "issuerKind": "bank",
+   "issuerSlug": "hdfc"
+  },
+  {
+   "aliases": [],
+   "brand": "HDFCBN",
+   "issuerKind": "bank",
+   "issuerSlug": "hdfc"
+  },
+  {
+   "aliases": [],
+   "brand": "HDFCCB",
+   "issuerKind": "bank",
+   "issuerSlug": "hdfc"
+  },
+  {
+   "aliases": [],
+   "brand": "HDFCCC",
+   "issuerKind": "bank",
+   "issuerSlug": "hdfc"
+  },
+  {
+   "aliases": [
+    "HDFCERG"
+   ],
+   "brand": "HDFCER",
+   "issuerKind": "biller",
+   "issuerSlug": "hdfc_ergo"
+  },
+  {
+   "aliases": [
+    "HDFCMFS"
+   ],
+   "brand": "HDFCMF",
+   "issuerKind": "other",
+   "issuerSlug": "hdfc_mf"
+  },
+  {
+   "aliases": [
+    "HDFCSE",
+    "HDFCSEC"
+   ],
+   "brand": "HDFCSC",
+   "issuerKind": "broker",
+   "issuerSlug": "hdfc_securities"
+  },
+  {
+   "aliases": [],
+   "brand": "HSBCBK",
+   "issuerKind": "bank",
+   "issuerSlug": "hsbc"
+  },
+  {
+   "aliases": [],
+   "brand": "HSBCIN",
+   "issuerKind": "bank",
+   "issuerSlug": "hsbc"
+  },
+  {
+   "aliases": [],
+   "brand": "ICICIB",
+   "issuerKind": "bank",
+   "issuerSlug": "icici"
+  },
+  {
+   "aliases": [],
+   "brand": "ICICIC",
+   "issuerKind": "bank",
+   "issuerSlug": "icici"
+  },
+  {
+   "aliases": [
+    "ICICIS",
+    "ICICIDIRECT"
+   ],
+   "brand": "ICICID",
+   "issuerKind": "broker",
+   "issuerSlug": "icici_securities"
+  },
+  {
+   "aliases": [
+    "ICICLM"
+   ],
+   "brand": "ICICIL",
+   "issuerKind": "biller",
+   "issuerSlug": "icici_lombard"
+  },
+  {
+   "aliases": [],
+   "brand": "ICICIO",
+   "issuerKind": "bank",
+   "issuerSlug": "icici"
+  },
+  {
+   "aliases": [
+    "ICICIMF",
+    "ICIPRU"
+   ],
+   "brand": "ICICIP",
+   "issuerKind": "other",
+   "issuerSlug": "icici_prudential_mf"
+  },
+  {
+   "aliases": [],
+   "brand": "ICICIS",
+   "issuerKind": "bank",
+   "issuerSlug": "icici"
+  },
+  {
+   "aliases": [],
+   "brand": "ICICIT",
+   "issuerKind": "bank",
+   "issuerSlug": "icici"
+  },
+  {
+   "aliases": [],
+   "brand": "IDBIBK",
+   "issuerKind": "bank",
+   "issuerSlug": "idbi"
+  },
+  {
+   "aliases": [],
+   "brand": "IDBISM",
+   "issuerKind": "bank",
+   "issuerSlug": "idbi"
+  },
+  {
+   "aliases": [],
+   "brand": "IDFCBK",
+   "issuerKind": "bank",
+   "issuerSlug": "idfc"
+  },
+  {
+   "aliases": [],
+   "brand": "IDFCFB",
+   "issuerKind": "bank",
+   "issuerSlug": "idfc"
+  },
+  {
+   "aliases": [],
+   "brand": "INDBNK",
+   "issuerKind": "bank",
+   "issuerSlug": "indusind"
+  },
+  {
+   "aliases": [
+    "INDMON",
+    "INDMONEY"
+   ],
+   "brand": "INDMNY",
+   "issuerKind": "broker",
+   "issuerSlug": "indmoney"
+  },
+  {
+   "aliases": [],
+   "brand": "INDUSB",
+   "issuerKind": "bank",
+   "issuerSlug": "indusind"
+  },
+  {
+   "aliases": [],
+   "brand": "INDUSI",
+   "issuerKind": "bank",
+   "issuerSlug": "indusind"
+  },
+  {
+   "aliases": [],
+   "brand": "INTERY",
+   "issuerKind": "other",
+   "issuerSlug": null
+  },
+  {
+   "aliases": [],
+   "brand": "IOBCHN",
+   "issuerKind": "bank",
+   "issuerSlug": "iob"
+  },
+  {
+   "aliases": [],
+   "brand": "IOBSMS",
+   "issuerKind": "bank",
+   "issuerSlug": "iob"
+  },
+  {
+   "aliases": [],
+   "brand": "IPPBMS",
+   "issuerKind": "bank",
+   "issuerSlug": "indiapost"
+  },
+  {
+   "aliases": [],
+   "brand": "IPRCTO",
+   "issuerKind": "other",
+   "issuerSlug": null
+  },
+  {
+   "aliases": [],
+   "brand": "IRCTCI",
+   "issuerKind": "other",
+   "issuerSlug": null
+  },
+  {
+   "aliases": [],
+   "brand": "IRSMSA",
+   "issuerKind": "other",
+   "issuerSlug": null
+  },
+  {
+   "aliases": [],
+   "brand": "ISATHI",
+   "issuerKind": "other",
+   "issuerSlug": null
+  },
+  {
+   "aliases": [],
+   "brand": "JAINUN",
+   "issuerKind": "other",
+   "issuerSlug": null
+  },
+  {
+   "aliases": [],
+   "brand": "JIOFIB",
+   "issuerKind": "other",
+   "issuerSlug": null
+  },
+  {
+   "aliases": [],
+   "brand": "JIOMRT",
+   "issuerKind": "other",
+   "issuerSlug": null
+  },
+  {
+   "aliases": [],
+   "brand": "JIONET",
+   "issuerKind": "other",
+   "issuerSlug": null
+  },
+  {
+   "aliases": [
+    "JIOCNT",
+    "JIOFBR",
+    "JIOINF",
+    "JIOCRE"
+   ],
+   "brand": "JIOPAY",
+   "issuerKind": "biller",
+   "issuerSlug": "jio"
+  },
+  {
+   "aliases": [],
+   "brand": "JIOSVC",
+   "issuerKind": "other",
+   "issuerSlug": null
+  },
+  {
+   "aliases": [],
+   "brand": "JIOVOC",
+   "issuerKind": "other",
+   "issuerSlug": null
+  },
+  {
+   "aliases": [],
+   "brand": "JKBANK",
+   "issuerKind": "bank",
+   "issuerSlug": "jkb"
+  },
+  {
+   "aliases": [],
+   "brand": "JKBSMS",
+   "issuerKind": "bank",
+   "issuerSlug": "jkb"
+  },
+  {
+   "aliases": [
+    "QCAMZN"
+   ],
+   "brand": "JUSPAY",
+   "issuerKind": "gateway",
+   "issuerSlug": "juspay"
+  },
+  {
+   "aliases": [],
+   "brand": "KARBNK",
+   "issuerKind": "bank",
+   "issuerSlug": "karnataka"
+  },
+  {
+   "aliases": [],
+   "brand": "KBLSMS",
+   "issuerKind": "bank",
+   "issuerSlug": "karnataka"
+  },
+  {
+   "aliases": [
+    "KFINTK",
+    "KARVYM",
+    "KFINTECH",
+    "KFINCR",
+    "KFINTH"
+   ],
+   "brand": "KFINTC",
+   "issuerKind": "other",
+   "issuerSlug": "kfintech"
+  },
+  {
+   "aliases": [],
+   "brand": "KMBANK",
+   "issuerKind": "bank",
+   "issuerSlug": "kotak"
+  },
+  {
+   "aliases": [],
+   "brand": "KOTAKB",
+   "issuerKind": "bank",
+   "issuerSlug": "kotak"
+  },
+  {
+   "aliases": [],
+   "brand": "KOTAKC",
+   "issuerKind": "bank",
+   "issuerSlug": "kotak"
+  },
+  {
+   "aliases": [
+    "KOTAKS",
+    "KSECUR",
+    "KOTSEC"
+   ],
+   "brand": "KOTAKN",
+   "issuerKind": "broker",
+   "issuerSlug": "kotak_securities"
+  },
+  {
+   "aliases": [],
+   "brand": "KVBANK",
+   "issuerKind": "bank",
+   "issuerSlug": "kvb"
+  },
+  {
+   "aliases": [],
+   "brand": "KVBSMS",
+   "issuerKind": "bank",
+   "issuerSlug": "kvb"
+  },
+  {
+   "aliases": [
+    "LAZYPAY",
+    "LZYPAY"
+   ],
+   "brand": "LAZYPY",
+   "issuerKind": "other",
+   "issuerSlug": "lazypay"
+  },
+  {
+   "aliases": [
+    "LICOFI",
+    "LICSMS"
+   ],
+   "brand": "LICIND",
+   "issuerKind": "biller",
+   "issuerSlug": "lic"
+  },
+  {
+   "aliases": [],
+   "brand": "LSMEAT",
+   "issuerKind": "other",
+   "issuerSlug": null
+  },
+  {
+   "aliases": [],
+   "brand": "MAHABK",
+   "issuerKind": "bank",
+   "issuerSlug": "bom"
+  },
+  {
+   "aliases": [
+    "MGLIMT"
+   ],
+   "brand": "MGLCNG",
+   "issuerKind": "biller",
+   "issuerSlug": "mgl"
+  },
+  {
+   "aliases": [
+    "MIRAEAM"
+   ],
+   "brand": "MIRAEM",
+   "issuerKind": "other",
+   "issuerSlug": "mirae_mf"
+  },
+  {
+   "aliases": [],
+   "brand": "MMTRIP",
+   "issuerKind": "other",
+   "issuerSlug": null
+  },
+  {
+   "aliases": [
+    "MOBIKWIK"
+   ],
+   "brand": "MOBIKW",
+   "issuerKind": "wallet",
+   "issuerSlug": "mobikwik",
+   "walletSpendVisibility": "sms"
+  },
+  {
+   "aliases": [
+    "MOTILAL",
+    "MOFSL"
+   ],
+   "brand": "MOSLTD",
+   "issuerKind": "broker",
+   "issuerSlug": "motilal_oswal"
+  },
+  {
+   "aliases": [
+    "MSEDCLP",
+    "MAHAVT"
+   ],
+   "brand": "MSEDCL",
+   "issuerKind": "biller",
+   "issuerSlug": "msedcl"
+  },
+  {
+   "aliases": [],
+   "brand": "NBHOME",
+   "issuerKind": "other",
+   "issuerSlug": null
+  },
+  {
+   "aliases": [
+    "NIPPMF",
+    "NIPPONMF"
+   ],
+   "brand": "NIPPON",
+   "issuerKind": "other",
+   "issuerSlug": "nippon_mf"
+  },
+  {
+   "aliases": [],
+   "brand": "NSDLBP",
+   "issuerKind": "other",
+   "issuerSlug": null
+  },
+  {
+   "aliases": [],
+   "brand": "NSDLDP",
+   "issuerKind": "other",
+   "issuerSlug": null
+  },
+  {
+   "aliases": [
+    "NSEMKT",
+    "NSEINF",
+    "NSEIPO",
+    "NSECLG",
+    "NSESMS",
+    "NSETRA",
+    "NSEWEL"
+   ],
+   "brand": "NSEIND",
+   "issuerKind": "other",
+   "issuerSlug": "nse"
+  },
+  {
+   "aliases": [
+    "PYTM",
+    "IPAYTM"
+   ],
+   "brand": "PAYTM",
+   "issuerKind": "wallet",
+   "issuerSlug": "paytm",
+   "walletSpendVisibility": "sms"
+  },
+  {
+   "aliases": [
+    "PTMMNY",
+    "PAYTMMONEY"
+   ],
+   "brand": "PAYTMM",
+   "issuerKind": "broker",
+   "issuerSlug": "paytm_money"
+  },
+  {
+   "aliases": [
+    "PAYZAPP"
+   ],
+   "brand": "PAYZPP",
+   "issuerKind": "other",
+   "issuerSlug": "payzapp"
+  },
+  {
+   "aliases": [
+    "PHONEPE"
+   ],
+   "brand": "PHONPE",
+   "issuerKind": "wallet",
+   "issuerSlug": "phonepe",
+   "walletSpendVisibility": "sms"
+  },
+  {
+   "aliases": [
+    "PINELABS"
+   ],
+   "brand": "PINELB",
+   "issuerKind": "gateway",
+   "issuerSlug": "pinelabs"
+  },
+  {
+   "aliases": [
+    "SODEXO"
+   ],
+   "brand": "PLUXEE",
+   "issuerKind": "wallet",
+   "issuerSlug": "pluxee",
+   "walletSpendVisibility": "sms"
+  },
+  {
+   "aliases": [],
+   "brand": "PNBBNK",
+   "issuerKind": "bank",
+   "issuerSlug": "pnb"
+  },
+  {
+   "aliases": [],
+   "brand": "PNBSMS",
+   "issuerKind": "bank",
+   "issuerSlug": "pnb"
+  },
+  {
+   "aliases": [],
+   "brand": "POPEYE",
+   "issuerKind": "other",
+   "issuerSlug": null
+  },
+  {
+   "aliases": [
+    "PPFASM"
+   ],
+   "brand": "PPFAS",
+   "issuerKind": "other",
+   "issuerSlug": "ppfas_mf"
+  },
+  {
+   "aliases": [],
+   "brand": "PREUNI",
+   "issuerKind": "other",
+   "issuerSlug": null
+  },
+  {
+   "aliases": [],
+   "brand": "RBISAY",
+   "issuerKind": "other",
+   "issuerSlug": null
+  },
+  {
+   "aliases": [],
+   "brand": "RBLBNK",
+   "issuerKind": "bank",
+   "issuerSlug": "rbl"
+  },
+  {
+   "aliases": [],
+   "brand": "RBLCRD",
+   "issuerKind": "bank",
+   "issuerSlug": "rbl"
+  },
+  {
+   "aliases": [],
+   "brand": "RBOGDS",
+   "issuerKind": "other",
+   "issuerSlug": null
+  },
+  {
+   "aliases": [],
+   "brand": "REGINF",
+   "issuerKind": "other",
+   "issuerSlug": null
+  },
+  {
+   "aliases": [],
+   "brand": "RNTMJO",
+   "issuerKind": "other",
+   "issuerSlug": null
+  },
+  {
+   "aliases": [],
+   "brand": "SANGAM",
+   "issuerKind": "other",
+   "issuerSlug": null
+  },
+  {
+   "aliases": [],
+   "brand": "SBIBNK",
+   "issuerKind": "bank",
+   "issuerSlug": "sbi"
+  },
+  {
+   "aliases": [],
+   "brand": "SBICARD",
+   "issuerKind": "bank",
+   "issuerSlug": "sbi"
+  },
+  {
+   "aliases": [],
+   "brand": "SBICRD",
+   "issuerKind": "bank",
+   "issuerSlug": "sbi"
+  },
+  {
+   "aliases": [],
+   "brand": "SBIINB",
+   "issuerKind": "bank",
+   "issuerSlug": "sbi"
+  },
+  {
+   "aliases": [
+    "SBIMF",
+    "SBIMFN"
+   ],
+   "brand": "SBIMFS",
+   "issuerKind": "other",
+   "issuerSlug": "sbi_mf"
+  },
+  {
+   "aliases": [],
+   "brand": "SBIPSG",
+   "issuerKind": "bank",
+   "issuerSlug": "sbi"
+  },
+  {
+   "aliases": [],
+   "brand": "SBIUPI",
+   "issuerKind": "bank",
+   "issuerSlug": "sbi"
+  },
+  {
+   "aliases": [],
+   "brand": "SBMSMS",
+   "issuerKind": "bank",
+   "issuerSlug": "sbi"
+  },
+  {
+   "aliases": [],
+   "brand": "SBYONO",
+   "issuerKind": "bank",
+   "issuerSlug": "sbi"
+  },
+  {
+   "aliases": [],
+   "brand": "SCBANK",
+   "issuerKind": "bank",
+   "issuerSlug": "sc"
+  },
+  {
+   "aliases": [],
+   "brand": "SCBIND",
+   "issuerKind": "bank",
+   "issuerSlug": "sc"
+  },
+  {
+   "aliases": [],
+   "brand": "SELMOE",
+   "issuerKind": "other",
+   "issuerSlug": null
+  },
+  {
+   "aliases": [],
+   "brand": "SHAADI",
+   "issuerKind": "other",
+   "issuerSlug": null
+  },
+  {
+   "aliases": [],
+   "brand": "SHPRKT",
+   "issuerKind": "other",
+   "issuerSlug": null
+  },
+  {
+   "aliases": [
+    "SHAREK",
+    "SHRKHAN"
+   ],
+   "brand": "SHRKHN",
+   "issuerKind": "broker",
+   "issuerSlug": "sharekhan"
+  },
+  {
+   "aliases": [],
+   "brand": "SIBSMS",
+   "issuerKind": "bank",
+   "issuerSlug": "sib"
+  },
+  {
+   "aliases": [
+    "SIMPLAP",
+    "GETSMP"
+   ],
+   "brand": "SIMPLP",
+   "issuerKind": "other",
+   "issuerSlug": "simpl"
+  },
+  {
+   "aliases": [],
+   "brand": "SLICEB",
+   "issuerKind": "bank",
+   "issuerSlug": "slice"
+  },
+  {
+   "aliases": [],
+   "brand": "SLICEI",
+   "issuerKind": "bank",
+   "issuerSlug": "slice"
+  },
+  {
+   "aliases": [],
+   "brand": "SLKCLB",
+   "issuerKind": "other",
+   "issuerSlug": null
+  },
+  {
+   "aliases": [],
+   "brand": "SOUTHB",
+   "issuerKind": "bank",
+   "issuerSlug": "sib"
+  },
+  {
+   "aliases": [],
+   "brand": "SSCBLR",
+   "issuerKind": "other",
+   "issuerSlug": null
+  },
+  {
+   "aliases": [],
+   "brand": "SSCSMS",
+   "issuerKind": "other",
+   "issuerSlug": null
+  },
+  {
+   "aliases": [],
+   "brand": "SSFBNK",
+   "issuerKind": "bank",
+   "issuerSlug": null
+  },
+  {
+   "aliases": [
+    "STARHI",
+    "STARHEALTH"
+   ],
+   "brand": "STARHL",
+   "issuerKind": "biller",
+   "issuerSlug": "star_health"
+  },
+  {
+   "aliases": [],
+   "brand": "STMRUN",
+   "issuerKind": "other",
+   "issuerSlug": null
+  },
+  {
+   "aliases": [
+    "TATAPWR"
+   ],
+   "brand": "TATAPW",
+   "issuerKind": "biller",
+   "issuerSlug": "tata_power"
+  },
+  {
+   "aliases": [
+    "TATANEU",
+    "TNEU"
+   ],
+   "brand": "TATNEU",
+   "issuerKind": "other",
+   "issuerSlug": "tataneu"
+  },
+  {
+   "aliases": [
+    "TINYMART",
+    "TNYMRT"
+   ],
+   "brand": "TINYMT",
+   "issuerKind": "wallet",
+   "issuerSlug": "tinymart",
+   "walletSpendVisibility": "sms"
+  },
+  {
+   "aliases": [],
+   "brand": "TMBANK",
+   "issuerKind": "bank",
+   "issuerSlug": "tmb"
+  },
+  {
+   "aliases": [],
+   "brand": "TMBSMS",
+   "issuerKind": "bank",
+   "issuerSlug": "tmb"
+  },
+  {
+   "aliases": [
+    "TNEBLT",
+    "TANGEDCO"
+   ],
+   "brand": "TNBPAY",
+   "issuerKind": "biller",
+   "issuerSlug": "tneb"
+  },
+  {
+   "aliases": [],
+   "brand": "TRAIND",
+   "issuerKind": "other",
+   "issuerSlug": null
+  },
+  {
+   "aliases": [],
+   "brand": "TVSMOT",
+   "issuerKind": "other",
+   "issuerSlug": null
+  },
+  {
+   "aliases": [],
+   "brand": "TVSMTR",
+   "issuerKind": "other",
+   "issuerSlug": null
+  },
+  {
+   "aliases": [],
+   "brand": "UBOI",
+   "issuerKind": "bank",
+   "issuerSlug": "union"
+  },
+  {
+   "aliases": [],
+   "brand": "UCOBNK",
+   "issuerKind": "bank",
+   "issuerSlug": "uco"
+  },
+  {
+   "aliases": [],
+   "brand": "UCOSMS",
+   "issuerKind": "bank",
+   "issuerSlug": "uco"
+  },
+  {
+   "aliases": [],
+   "brand": "UNIONB",
+   "issuerKind": "bank",
+   "issuerSlug": "union"
+  },
+  {
+   "aliases": [
+    "UNIVEST"
+   ],
+   "brand": "UNIVST",
+   "issuerKind": "broker",
+   "issuerSlug": "univest"
+  },
+  {
+   "aliases": [
+    "UPSTXS",
+    "RKSVSE",
+    "UPSTOXS",
+    "UPSTX"
+   ],
+   "brand": "UPSTOX",
+   "issuerKind": "broker",
+   "issuerSlug": "upstox"
+  },
+  {
+   "aliases": [],
+   "brand": "VEROMM",
+   "issuerKind": "other",
+   "issuerSlug": null
+  },
+  {
+   "aliases": [
+    "VIPOST",
+    "VIBILL",
+    "VIAPPS"
+   ],
+   "brand": "VICARE",
+   "issuerKind": "biller",
+   "issuerSlug": "vi"
+  },
+  {
+   "aliases": [],
+   "brand": "WSTSUP",
+   "issuerKind": "other",
+   "issuerSlug": null
+  },
+  {
+   "aliases": [],
+   "brand": "XPBEES",
+   "issuerKind": "other",
+   "issuerSlug": null
+  },
+  {
+   "aliases": [],
+   "brand": "YESBK",
+   "issuerKind": "bank",
+   "issuerSlug": "yes"
+  },
+  {
+   "aliases": [
+    "YESBCC",
+    "YESBAK"
+   ],
+   "brand": "YESBNK",
+   "issuerKind": "bank",
+   "issuerSlug": "yes"
+  },
+  {
+   "aliases": [],
+   "brand": "YESCRD",
+   "issuerKind": "bank",
+   "issuerSlug": "yes"
+  },
+  {
+   "aliases": [],
+   "brand": "YURBUS",
+   "issuerKind": "other",
+   "issuerSlug": null
+  },
+  {
+   "aliases": [
+    "ZEPTO",
+    "ZEPTOO"
+   ],
+   "brand": "ZEPTON",
+   "issuerKind": "wallet",
+   "issuerSlug": "zepto",
+   "walletSpendVisibility": "sms"
+  },
+  {
+   "aliases": [
+    "ZERODHA",
+    "ZRDHA"
+   ],
+   "brand": "ZERODH",
+   "issuerKind": "broker",
+   "issuerSlug": "zerodha"
+  },
+  {
+   "aliases": [],
+   "brand": "ZOMATO",
+   "issuerKind": "wallet",
+   "issuerSlug": "zomato_money",
+   "walletSpendVisibility": "sms"
+  }
+ ],
+ "signature": null,
+ "taxonomyVersion": 1
+}

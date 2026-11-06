@@ -99,3 +99,25 @@ test('private synthetic example preparation is strict, audited and supports the 
   assert.equal(decided.goldenCase.source,'synthetic');
   assert.equal(audits,2);
 });
+
+test('a refused correction says why in the server log, without any value from the phone', async () => {
+  const { createCorrectionsHandler } = require('../../src/sms_v2/corrections_route');
+  const hooks = { security: { verifyAttestation: async () => true, checkRate: async () => true } };
+  const handler = createCorrectionsHandler({
+    hooks,
+    withUserClient: async () => { throw Object.assign(new Error('correction_facts_not_found'), { status: 400 }); },
+  });
+  const logged = [];
+  const warn = console.warn;
+  console.warn = (...args) => logged.push(args.join(' '));
+  const sent = {};
+  try {
+    await handler({ userId: 'u', headers: {}, body: { sourceKey: 'S', corrected: { merchantName: 'Private Name' } } },
+      { status(code) { sent.status = code; return this; }, json(body) { sent.body = body; return this; } });
+  } finally {
+    console.warn = warn;
+  }
+  assert.equal(sent.status, 400);
+  assert.deepEqual(sent.body, { error: 'correction_facts_not_found' });
+  assert.deepEqual(logged, ['sms_v2 corrections refused 400 correction_facts_not_found']);
+});

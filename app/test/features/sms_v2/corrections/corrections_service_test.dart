@@ -15,6 +15,7 @@ import 'package:pandapay/features/sms_v2/storage/outbox_store.dart';
 import 'package:pandapay/features/sms_v2/storage/schema.dart';
 import 'package:pandapay/features/sms_v2/storage/sync_state_store.dart';
 import 'package:pandapay_domain/sms_v2.dart';
+import 'package:pandapay_domain/sms_v2_template.dart';
 import 'package:pandapay/features/sms_v2/ledger/projection_writer.dart';
 import 'package:pandapay_domain/sms_v2_ledger.dart';
 import 'package:sqlite3/sqlite3.dart';
@@ -188,6 +189,74 @@ void main() {
         ).forEvent(event.eventId).single.category,
         'groceries',
       );
+    },
+  );
+
+  test('a correction names only the facts that were uploaded', () {
+    // An info fact (a balance notice, a top-up) never leaves the phone, so the
+    // server cannot find it and would refuse the whole correction for good.
+    final info = Fact.fromJson(
+      (jsonDecode(
+                File(
+                  '../contracts/sms/v2/fixtures/valid/fact/info.service.json',
+                ).readAsStringSync(),
+              )
+              as Map)
+          .cast<String, Object?>(),
+    );
+    FactStore(db.db, namespace: 'user:a').insert(info);
+    expect(info.factType, FactType.info);
+    service.apply(
+      SmsCorrection(
+        id: 'info-case',
+        sourceKey: info.sourceKey,
+        kind: CorrectionKind.missing,
+        corrected: const {},
+        trace: trace,
+        factIds: [info.factId],
+      ),
+    );
+    final queued = OutboxStore(db.db, namespace: 'user:a')
+        .due(DateTime.now())
+        .where((row) => row.kind == 'correction')
+        .single
+        .json;
+    expect(queued['factIds'], isEmpty);
+    expect(queued['sourceKey'], info.sourceKey);
+  });
+
+  test(
+    'a skeleton that still carries an address is not shared, and the correction is sent without a template',
+    () {
+      service.apply(
+        SmsCorrection(
+          id: 'email-case',
+          sourceKey: fact.sourceKey,
+          kind: CorrectionKind.wrongCategory,
+          corrected: const {'merchantKey': 'SWIGGY', 'category': 'groceries'},
+          trace: trace,
+          factIds: [fact.factId],
+          eventId: event.eventId,
+          sharedLearningConsent: true,
+          message: SmsMessage(
+            sender: 'HDFCBK',
+            // The bank hides part of the address; the part before the @ used
+            // to survive redaction and the server refused the correction.
+            body:
+                'Credit Card XX1234 Statement is sent to ab***@gmail.com. Total of Rs 5,000.00 is due by 30-JUN-26.',
+            observedAt: fact.observedAt,
+            sourceKey: fact.sourceKey,
+          ),
+        ),
+      );
+      final queued = OutboxStore(db.db, namespace: 'user:a')
+          .due(DateTime.now())
+          .where((row) => row.kind == 'correction')
+          .single
+          .json;
+      expect(queued['redactedTemplate'], isNot(contains('@')));
+      expect(queued['redactedTemplate'], contains('<'));
+      expect(smsSkeletonIsShareable(queued['redactedTemplate'] as String), isTrue);
     },
   );
 

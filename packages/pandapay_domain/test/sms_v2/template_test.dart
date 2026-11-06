@@ -229,6 +229,36 @@ void main() {
       expect(smsSkeleton('Order #123 shipped'), 'Order #### shipped');
     });
 
+    test('an address with a hidden part is still an address', () {
+      expect(
+        smsSkeleton('Statement is sent to ab***@gmail.com. Pay Rs 5,000.00'),
+        'Statement is sent to <VPA> Pay <AMT>',
+      );
+      expect(smsSkeleton('Write to care@hdfcbank.com or visit hdfcbank.com'),
+          'Write to <VPA> or visit <URL>');
+      final redacted = redactSms(
+        sender: 'VM-HDFCBK-S',
+        body: 'Statement is sent to ab***@gmail.com. Pay Rs 5,000.00',
+        observedAt: DateTime.utc(2026, 11, 1),
+        options: SmsRedactionOptions(salt: 'x'),
+      );
+      expect(redacted.body, isNot(contains('@')));
+    });
+
+    test('a skeleton is shareable only without digits, addresses and links', () {
+      expect(smsSkeletonIsShareable('<AMT> spent at <W> on <DATE>'), isTrue);
+      expect(smsSkeletonIsShareable(''), isFalse);
+      expect(smsSkeletonIsShareable('Order 123 shipped'), isFalse);
+      expect(smsSkeletonIsShareable('Mail ab***@<URL>'), isFalse);
+      expect(smsSkeletonIsShareable('See HTTPS://x.example'), isFalse);
+      expect(smsSkeletonIsShareable('a' * 20001), isFalse);
+      // Whatever the builder produces for an address must pass the check.
+      expect(
+        smsSkeletonIsShareable(smsSkeleton('Sent to ab***@gmail.com, call 18002662')),
+        isTrue,
+      );
+    });
+
     test('hash is sha256 of brand, newline, skeleton', () {
       expect(smsTemplateHash('A', 'B'),
           '23519a43c66b4c342f25b32e09797ec5f3fc0be388cd8243fb3449afbdce4013');
