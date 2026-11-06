@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:permission_handler/permission_handler.dart';
 
 import '../../app/design/app_theme.dart';
 import '../../app/design/widgets.dart';
@@ -117,7 +118,9 @@ class _NotificationSettingsBodyState
   Widget build(BuildContext context) {
     final prefsAsync = ref.watch(notificationPreferencesProvider);
 
-    return prefsAsync.when(skipLoadingOnReload: true, skipLoadingOnRefresh: true, 
+    return prefsAsync.when(
+      skipLoadingOnReload: true,
+      skipLoadingOnRefresh: true,
       loading: () => const Center(child: CircularProgressIndicator()),
       error: (err, _) => ErrorState(
         message: userFacingErrorMessage(err),
@@ -133,6 +136,7 @@ class _NotificationSettingsBodyState
         return ListView(
           padding: const EdgeInsets.symmetric(vertical: AppSpace.md),
           children: [
+            const NotificationPermissionBanner(),
             _SectionHeader('Categories'),
             SwitchListTile(
               title: const Text('Location-based tips'),
@@ -419,7 +423,9 @@ class _MutedMerchantsList extends ConsumerWidget {
   Widget build(BuildContext context, WidgetRef ref) {
     final mutedAsync = ref.watch(_mutedMerchantsProvider);
 
-    return mutedAsync.when(skipLoadingOnReload: true, skipLoadingOnRefresh: true, 
+    return mutedAsync.when(
+      skipLoadingOnReload: true,
+      skipLoadingOnRefresh: true,
       loading: () => const Padding(
         padding: EdgeInsets.all(AppSpace.lg),
         child: Center(child: CircularProgressIndicator()),
@@ -477,6 +483,133 @@ class _MutedMerchantsList extends ConsumerWidget {
           ],
         );
       },
+    );
+  }
+}
+
+/// Android only shows a notification once the user has allowed it. Without
+/// this, a phone that never turned on location alerts (the only other place the
+/// app asks) receives pushes but never shows a banner. Shown only while
+/// notifications are off, it asks from an explained, user-initiated tap and
+/// sends the user to system settings if Android will not ask again.
+class NotificationPermissionBanner extends StatefulWidget {
+  final Future<PermissionStatus> Function()? readStatus;
+  final Future<PermissionStatus> Function()? request;
+  final Future<bool> Function()? openSettings;
+  const NotificationPermissionBanner({
+    super.key,
+    this.readStatus,
+    this.request,
+    this.openSettings,
+  });
+
+  @override
+  State<NotificationPermissionBanner> createState() =>
+      _NotificationPermissionBannerState();
+}
+
+class _NotificationPermissionBannerState
+    extends State<NotificationPermissionBanner>
+    with WidgetsBindingObserver {
+  PermissionStatus? _status;
+  bool _busy = false;
+
+  Future<PermissionStatus> _read() =>
+      (widget.readStatus ?? () => Permission.notification.status)();
+
+  Future<void> _refresh() async {
+    final status = await _read();
+    if (mounted) setState(() => _status = status);
+  }
+
+  @override
+  void initState() {
+    super.initState();
+    WidgetsBinding.instance.addObserver(this);
+    _refresh();
+  }
+
+  @override
+  void dispose() {
+    WidgetsBinding.instance.removeObserver(this);
+    super.dispose();
+  }
+
+  /// The user may have switched it on in system settings and come back.
+  @override
+  void didChangeAppLifecycleState(AppLifecycleState state) {
+    if (state == AppLifecycleState.resumed) _refresh();
+  }
+
+  Future<void> _turnOn() async {
+    if (_busy) return;
+    setState(() => _busy = true);
+    try {
+      var status = _status ?? await _read();
+      if (!status.isGranted && !status.isPermanentlyDenied) {
+        status = await (widget.request ?? Permission.notification.request)();
+      }
+      if (!status.isGranted && status.isPermanentlyDenied) {
+        await (widget.openSettings ?? openAppSettings)();
+      }
+      if (mounted) setState(() => _status = status);
+    } finally {
+      if (mounted) setState(() => _busy = false);
+    }
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final status = _status;
+    // Unknown (still reading) or already on: take no space.
+    if (status == null || status.isGranted || status.isProvisional) {
+      return const SizedBox.shrink();
+    }
+    final blocked = status.isPermanentlyDenied;
+    return Padding(
+      padding: const EdgeInsets.fromLTRB(
+        AppSpace.lg,
+        AppSpace.sm,
+        AppSpace.lg,
+        AppSpace.md,
+      ),
+      child: Container(
+        padding: const EdgeInsets.all(AppSpace.lg),
+        decoration: BoxDecoration(
+          color: AppColors.surfaceMuted,
+          borderRadius: BorderRadius.circular(AppRadius.md),
+        ),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.stretch,
+          children: [
+            Row(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                const Icon(Icons.notifications_off_outlined, size: 22),
+                const SizedBox(width: AppSpace.md),
+                Expanded(
+                  child: Text(
+                    'Notifications are off on this phone',
+                    style: BambooFonts.heading(16),
+                  ),
+                ),
+              ],
+            ),
+            const SizedBox(height: AppSpace.sm),
+            Text(
+              blocked
+                  ? 'Android has turned them off for PandaPay. Open settings and allow notifications to get alerts, including updates from shared expenses.'
+                  : 'Turn them on to get alerts, including updates from shared expenses.',
+              style: BambooFonts.ui(13),
+            ),
+            const SizedBox(height: AppSpace.md),
+            FilledButton(
+              onPressed: _busy ? null : _turnOn,
+              child: Text(blocked ? 'Open settings' : 'Turn on notifications'),
+            ),
+          ],
+        ),
+      ),
     );
   }
 }
