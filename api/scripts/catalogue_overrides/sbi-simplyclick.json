@@ -113,6 +113,187 @@
       "reason": "WP7: D28c: T&C: Reward Points are reversed for \"Merchant EMI i.e. EMI availed at the time of purchase at Merchant establishment or websites, w.e.f 20th November 2020\". The record's EMI row needs category emi AND rail emi, so an EMI purchase in another category earned. Rail-EMI exclusion on all spend.",
       "source_url": "https://www.sbicard.com/sbi-card-en/assets/docs/pdf/SimplyClick-TnC.pdf",
       "checked_on": "2026-11-05"
+    },
+    {
+      "path": "reward_rules[id=exclusive_partner_10x].conditions",
+      "value": {
+        "currency": "INR",
+        "merchant_partner_list": [
+          "bookmyshow",
+          "netmeds"
+        ]
+      },
+      "reason": "Card-data: T&C Reward Point (a)/(f)/(j) and the \"Exclusive Online Partner / Effective Date\" table (BookMyShow 15 Sep 2015, Netmeds 11 Mar 2019): 10X on online INR spends at the partner. The affiliate-channel exclusion is only for Cleartrip (h) and Yatra (l); MID dependence (i) is how SBI identifies the partner, which the merchant directory carries; the online flag (j) is rail online. Partners with other start dates or a channel/portal condition are split into their own rules below.",
+      "source_url": "https://www.sbicard.com/sbi-card-en/assets/docs/pdf/SimplyClick-TnC.pdf",
+      "checked_on": "2026-11-06"
+    },
+    {
+      "path": "reward_rules[id=exclusive_partner_10x].effective_from",
+      "value": "2019-03-11",
+      "reason": "Card-data: Netmeds joined on 11 Mar 2019 (T&C partner table); BookMyShow (15 Sep 2015) is under-stated before that date, never over-stated.",
+      "source_url": "https://www.sbicard.com/sbi-card-en/assets/docs/pdf/SimplyClick-TnC.pdf",
+      "checked_on": "2026-11-06"
+    },
+    {
+      "path": "reward_rules",
+      "op": "append",
+      "value": {
+        "id": "exclusive_partner_10x_2023",
+        "category_id": "exclusive_online_partner",
+        "priority": 10,
+        "evaluation_type": "accelerator",
+        "rail": "online",
+        "channel_type": "online",
+        "conditions": {
+          "currency": "INR",
+          "merchant_partner_list": [
+            "dominos",
+            "myntra"
+          ]
+        },
+        "action": {
+          "multiplier": 10,
+          "points_per_block": 10,
+          "cashback_percent": "N/A",
+          "cap_reference": "cap_exclusive_10x_monthly",
+          "reason": "10X on Domino's and Myntra online spends from 1 Aug 2023."
+        },
+        "effective_from": "2023-08-01",
+        "effective_to": null
+      },
+      "reason": "Card-data: T&C partner table: Domino's and Myntra effective 1st August, 2023; 10X (T&C (f), (g)) inside the same 10,000 RP monthly exclusive-partner cap (MITC booklet (g), (k)).",
+      "source_url": "https://www.sbicard.com/sbi-card-en/assets/docs/pdf/SimplyClick-TnC.pdf",
+      "checked_on": "2026-11-06"
+    },
+    {
+      "path": "reward_rules",
+      "op": "append",
+      "value": {
+        "id": "exclusive_partner_10x_2025",
+        "category_id": "exclusive_online_partner",
+        "priority": 10,
+        "evaluation_type": "accelerator",
+        "rail": "online",
+        "channel_type": "online",
+        "conditions": {
+          "currency": "INR",
+          "merchant_partner_list": [
+            "igp"
+          ]
+        },
+        "action": {
+          "multiplier": 10,
+          "points_per_block": 10,
+          "cashback_percent": "N/A",
+          "cap_reference": "cap_exclusive_10x_monthly",
+          "reason": "10X on IGP online spends from 10 Feb 2025."
+        },
+        "effective_from": "2025-02-10",
+        "effective_to": null
+      },
+      "reason": "Card-data: T&C partner table: IGP effective 10th February, 2025; same cap.",
+      "source_url": "https://www.sbicard.com/sbi-card-en/assets/docs/pdf/SimplyClick-TnC.pdf",
+      "checked_on": "2026-11-06"
+    },
+    {
+      "path": "reward_rules",
+      "op": "append",
+      "value": {
+        "id": "exclusive_partner_10x_2026",
+        "category_id": "exclusive_online_partner",
+        "priority": 10,
+        "evaluation_type": "accelerator",
+        "rail": "online",
+        "channel_type": "online",
+        "conditions": {
+          "currency": "INR",
+          "merchant_partner_list": [
+            "tata_cliq"
+          ]
+        },
+        "action": {
+          "multiplier": 10,
+          "points_per_block": 10,
+          "cashback_percent": "N/A",
+          "cap_reference": "cap_exclusive_10x_monthly",
+          "reason": "10X on Tata CLiQ online spends from 20 Mar 2026."
+        },
+        "effective_from": "2026-03-20",
+        "effective_to": null
+      },
+      "reason": "Card-data: T&C partner table: Tata CLiQ effective 20th March, 2026 (before it, Tata CLiQ is an \"other online spend\", 5X per T&C (g)); same cap.",
+      "source_url": "https://www.sbicard.com/sbi-card-en/assets/docs/pdf/SimplyClick-TnC.pdf",
+      "checked_on": "2026-11-06"
+    },
+    {
+      "path": "reward_rules",
+      "op": "append",
+      "value": {
+        "id": "exclusive_partner_10x_channel_info",
+        "category_id": "exclusive_online_partner",
+        "priority": 10,
+        "evaluation_type": "accelerator",
+        "rail": "online",
+        "channel_type": "online",
+        "conditions": {
+          "currency": "INR",
+          "merchant_partner_list": [
+            "apollo_24x7",
+            "cleartrip",
+            "yatra",
+            "gyftr"
+          ],
+          "affiliate_channel_excluded": true
+        },
+        "action": {
+          "multiplier": 10,
+          "points_per_block": 10,
+          "cashback_percent": "N/A",
+          "cap_reference": "cap_exclusive_10x_monthly",
+          "reason": "10X at Apollo 24|7, Cleartrip, Yatra and GyFTR depends on the booking channel or portal, which the transaction context does not carry."
+        },
+        "effective_from": "2015-09-15",
+        "effective_to": null,
+        "depends_on_txn_attribute": true
+      },
+      "reason": "Card-data: D14b. T&C (h) \"Cleartrip transactions done from affiliate channels will not be eligible for 10X\" and (l) the same for Yatra; (p) \"10X Reward Points on e-Gift Voucher purchases shall be applicable only on transactions made at GyFTR portal\" (gyftr.com/sbicsimplyclick, not other GyFTR storefronts); the directory merchant \"apollo\" also covers Apollo Pharmacy and Apollo Hospitals, while only Apollo 24|7 is a partner. None of these is in the context, so this part stays info with depends_on_txn_attribute; these spends earn the 5X/1X the other rules give (under-states).",
+      "source_url": "https://www.sbicard.com/sbi-card-en/assets/docs/pdf/SimplyClick-TnC.pdf",
+      "checked_on": "2026-11-06"
+    },
+    {
+      "path": "reward_rules[id=utility_sbi_platform_no_5x].channel_type",
+      "value": "SBI Card platform",
+      "reason": "Card-data: T&C Reward Point (c): \"Utility Bill Payments done using SimplyCLICK SBI Card on SBI Card website/ mobile app will not accrue 5X Reward Points.\" Mapped to the directory platform sbi_card_app (alias \"sbi card platform\"); the rule earns the 1 RP per Rs100 base.",
+      "source_url": "https://www.sbicard.com/sbi-card-en/assets/docs/pdf/SimplyClick-TnC.pdf",
+      "checked_on": "2026-11-06"
+    },
+    {
+      "path": "reward_rules[id=utility_sbi_platform_no_5x].category_id",
+      "value": "all_retail",
+      "reason": "Card-data: the context cannot tell a utility bill on the SBI Card app from another payment there; any spend on that platform at the 1X base (never above base) is the conservative reading of T&C (c).",
+      "source_url": "https://www.sbicard.com/sbi-card-en/assets/docs/pdf/SimplyClick-TnC.pdf",
+      "checked_on": "2026-11-06"
+    },
+    {
+      "path": "reward_rules[id=utility_sbi_platform_no_5x].priority",
+      "value": 19,
+      "reason": "Card-data: carve-out ahead of the 5X online rule (priority 20), so a spend on the SBI Card app never gets 5X (T&C (c)).",
+      "source_url": "https://www.sbicard.com/sbi-card-en/assets/docs/pdf/SimplyClick-TnC.pdf",
+      "checked_on": "2026-11-06"
+    },
+    {
+      "path": "reward_rules[id=balance_transfer_exclusion].depends_on_txn_attribute",
+      "value": true,
+      "reason": "Card-data: D25d. T&C (e) \"Cash Advance, Balance Transfer, Encash, Flexipay and Offline Fuel transaction ... are not included in Reward Points program\". A balance transfer is not a purchase the context can tell apart: info with depends_on_txn_attribute (D14b).",
+      "source_url": "https://www.sbicard.com/sbi-card-en/assets/docs/pdf/SimplyClick-TnC.pdf",
+      "checked_on": "2026-11-06"
+    },
+    {
+      "path": "reward_rules[id=encash_exclusion].depends_on_txn_attribute",
+      "value": true,
+      "reason": "Card-data: D25d. T&C (e) excludes Encash. Not a purchase the context can tell apart: info with depends_on_txn_attribute (D14b).",
+      "source_url": "https://www.sbicard.com/sbi-card-en/assets/docs/pdf/SimplyClick-TnC.pdf",
+      "checked_on": "2026-11-06"
     }
   ]
 }

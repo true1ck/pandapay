@@ -23,6 +23,11 @@
       "url": "https://www.sbicard.com/sbi-card-en/assets/docs/pdf/ekit-tncs/Tata-Neu-Plus-Booklet.pdf",
       "doc": "T&C booklet 11.4(a) and 11.6(e)",
       "quote": "NeuCoins ... forfeited ... The transaction on which NeuCoins were accrued, got converted to EMI."
+    },
+    {
+      "url": "https://www.sbicard.com/sbi-card-en/assets/docs/pdf/ekit-tncs/Tata-Neu-Plus-Booklet.pdf",
+      "doc": "Tata Neu Plus SBI T&C booklet 11.3(e), 11.4(h)",
+      "quote": "the total NeuCoins earned on eligible UPI transactions are capped to 500 NeuCoins per statement cycle"
     }
   ],
   "examples": [
@@ -432,6 +437,97 @@
         "cap_deltas_by_source_id": {}
       },
       "why": "T&C 11.4(a) (Flexipay) and 11.6(e) (NeuCoins forfeited on EMI conversion): EMI earns nothing (C8 D25e)."
+    },
+    {
+      "id": "016",
+      "title": "Rs 4,000 UPI QR at a non-partner store (RuPay variant)",
+      "ctx": {
+        "amount": 4000,
+        "occurred": "2026-11-10T10:00:00+05:30",
+        "category_id": null,
+        "category_slug": "other",
+        "mcc": "5651",
+        "merchant_name": "Clothes shop",
+        "merchant_vpa": null,
+        "merchant_slug": null,
+        "platform": null,
+        "rail": "upi_qr"
+      },
+      "state_before": {
+        "caps_by_source_id": {}
+      },
+      "expect": {
+        "currency": "points",
+        "amount": 40,
+        "value_inr": 40,
+        "excluded": false,
+        "cap_deltas_by_source_id": {
+          "upi-neucoins-cap": 40
+        }
+      },
+      "why": "T&C 11.3(e): any UPI spend on the RuPay credit card earns 1%: 4,000 x 1% = 40 NeuCoins, counted toward the 500 NeuCoin UPI cap per statement cycle."
+    },
+    {
+      "id": "017",
+      "title": "Rs 4,000 UPI QR with 480 of the 500 UPI cap used",
+      "ctx": {
+        "amount": 4000,
+        "occurred": "2026-11-10T10:00:00+05:30",
+        "category_id": null,
+        "category_slug": "other",
+        "mcc": "5651",
+        "merchant_name": "Clothes shop",
+        "merchant_vpa": null,
+        "merchant_slug": null,
+        "platform": null,
+        "rail": "upi_qr"
+      },
+      "state_before": {
+        "caps_by_source_id": {
+          "upi-neucoins-cap": 480
+        }
+      },
+      "expect": {
+        "currency": "points",
+        "amount": 20,
+        "value_inr": 20,
+        "excluded": false,
+        "cap_deltas_by_source_id": {
+          "upi-neucoins-cap": 20
+        }
+      },
+      "why": "T&C 11.3(e): UPI NeuCoins are capped at 500 per statement cycle; 40 would be earned but only 20 remain."
+    },
+    {
+      "id": "018",
+      "title": "Rs 10,000 mobile bill (MCC 4814, not tagged bills) with 1,990 of the telecom cap used",
+      "ctx": {
+        "amount": 10000,
+        "occurred": "2026-11-10T10:00:00+05:30",
+        "category_id": null,
+        "category_slug": "other",
+        "mcc": "4814",
+        "merchant_name": "Mobile operator",
+        "merchant_vpa": null,
+        "merchant_slug": null,
+        "platform": null,
+        "rail": "online"
+      },
+      "state_before": {
+        "caps_by_source_id": {
+          "telecom-cable-neucoins-cap": 1990
+        }
+      },
+      "expect": {
+        "currency": "points",
+        "amount": 10,
+        "value_inr": 10,
+        "excluded": false,
+        "cap_deltas_by_source_id": {
+          "telecom-cable-neucoins-cap": 10
+        }
+      },
+      "why": "T&C 11.4(h): telecom and cable NeuCoins are capped at 2,000 a month; 100 would be earned (1%) but only 10 remain."
     }
   ],
   "research_notes": [

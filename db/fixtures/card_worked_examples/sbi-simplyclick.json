@@ -23,6 +23,16 @@
       "url": "https://www.sbicard.com/sbi-card-en/assets/docs/pdf/simply-click-tnc-MITC-booklet.pdf",
       "doc": "SimplyCLICK MITC booklet, Reward Point (g), (k)",
       "quote": "Exclusive partner transactions will have a monthly cap of 10,000 point."
+    },
+    {
+      "url": "https://www.sbicard.com/sbi-card-en/assets/docs/pdf/SimplyClick-TnC.pdf",
+      "doc": "SimplyCLICK T&C booklet (Jul 2026), Exclusive Online Partner table (page 13)",
+      "quote": "Tata CLiQ 20th March, 2026; IGP 10th February, 2025; BookMyShow 15th September, 2015"
+    },
+    {
+      "url": "https://www.sbicard.com/sbi-card-en/assets/docs/pdf/SimplyClick-TnC.pdf",
+      "doc": "SimplyCLICK T&C booklet (Jul 2026), Reward Point (c)",
+      "quote": "Utility Bill Payments done ... on SBI Card website/ mobile app will not accrue 5X Reward Points."
     }
   ],
   "examples": [
@@ -267,13 +277,123 @@
         "cap_deltas_by_source_id": {}
       },
       "why": "Digital gaming excluded since 1 Dec 2024."
+    },
+    {
+      "id": "010",
+      "title": "Rs 2,000 on BookMyShow (exclusive partner, 10X)",
+      "ctx": {
+        "amount": 2000,
+        "occurred": "2026-11-05T10:00:00+05:30",
+        "category_slug": "entertainment",
+        "mcc": 7832,
+        "merchant_name": "BookMyShow",
+        "merchant_vpa": null,
+        "merchant_slug": "bookmyshow",
+        "platform": null,
+        "rail": "online"
+      },
+      "state_before": {
+        "caps_by_source_id": {}
+      },
+      "expect": {
+        "currency": "points",
+        "amount": 200,
+        "value_inr": null,
+        "excluded": false,
+        "cap_deltas_by_source_id": {
+          "cap_exclusive_10x_monthly": 2000
+        }
+      },
+      "why": "T&C (f)/(g): 10X Reward Points on online spends with exclusive partners; BookMyShow is a partner since 15 Sep 2015 (partner table). 20 x 10 = 200 RP, inside the 10,000 RP monthly 10X cap (MITC g, k), which is Rs1,00,000 of 10X spend, so the cap counts the Rs2,000."
+    },
+    {
+      "id": "011",
+      "title": "Rs 2,000 on Tata CLiQ before it became a partner (5X)",
+      "ctx": {
+        "amount": 2000,
+        "occurred": "2026-02-15T10:00:00+05:30",
+        "category_slug": "online",
+        "mcc": null,
+        "merchant_name": "Tata CLiQ",
+        "merchant_vpa": null,
+        "merchant_slug": "tata_cliq",
+        "platform": null,
+        "rail": "online"
+      },
+      "state_before": {
+        "caps_by_source_id": {}
+      },
+      "expect": {
+        "currency": "points",
+        "amount": 100,
+        "value_inr": null,
+        "excluded": false,
+        "cap_deltas_by_source_id": {
+          "cap_online_5x_monthly": 2000
+        }
+      },
+      "why": "Partner table: Tata CLiQ is a 10X partner from 20th March, 2026. On 15 Feb 2026 it is an other online spend: T&C (g) 5X = 20 x 5 = 100 RP, counted in the 5X cap (Rs2,00,000 of spend)."
+    },
+    {
+      "id": "012",
+      "title": "Rs 2,000 on Tata CLiQ after it became a partner (10X)",
+      "ctx": {
+        "amount": 2000,
+        "occurred": "2026-11-05T10:00:00+05:30",
+        "category_slug": "online",
+        "mcc": null,
+        "merchant_name": "Tata CLiQ",
+        "merchant_vpa": null,
+        "merchant_slug": "tata_cliq",
+        "platform": null,
+        "rail": "online"
+      },
+      "state_before": {
+        "caps_by_source_id": {}
+      },
+      "expect": {
+        "currency": "points",
+        "amount": 200,
+        "value_inr": null,
+        "excluded": false,
+        "cap_deltas_by_source_id": {
+          "cap_exclusive_10x_monthly": 2000
+        }
+      },
+      "why": "Partner table: Tata CLiQ 10X from 20th March, 2026. 20 x 10 = 200 RP, counted in the 10X cap (Rs1,00,000 of spend)."
+    },
+    {
+      "id": "013",
+      "title": "Rs 2,000 paid on the SBI Card app (no 5X)",
+      "ctx": {
+        "amount": 2000,
+        "occurred": "2026-11-05T10:00:00+05:30",
+        "category_slug": "online",
+        "mcc": 4900,
+        "merchant_name": "SBI Card bill pay",
+        "merchant_vpa": null,
+        "merchant_slug": null,
+        "platform": "sbi_card_app",
+        "rail": "online"
+      },
+      "state_before": {
+        "caps_by_source_id": {}
+      },
+      "expect": {
+        "currency": "points",
+        "amount": 20,
+        "value_inr": null,
+        "excluded": false,
+        "cap_deltas_by_source_id": {}
+      },
+      "why": "T&C Reward Point (c): utility bill payments on the SBI Card website/mobile app do not accrue 5X; standard 1 RP per Rs100 applies: 20 x 1 = 20 RP, nothing counted in the 5X cap."
     }
   ],
   "research_notes": [
     {
       "item": "10X partner cap cap_exclusive_10x_monthly (10,000)",
       "cardpipeline_says": "10,000 RP per month on the 10X tier.",
-      "issuer_says": "T&C state the 10,000 cap for the 5X tier only. No cap is stated for 10X, so no boundary example.",
+      "issuer_says": "T&C state the 10,000 cap for the 5X tier only. No cap is stated for 10X, so no boundary example. Superseded: the MITC booklet (g), (k) states the 10X cap (10,000 RP a month); modelled since WP7 round 1.",
       "proposed_fix": "importer"
     },
     {
@@ -285,13 +405,20 @@
     {
       "item": "exclusive partner list",
       "cardpipeline_says": "10 partners incl. Apollo, BookMyShow, Dominos, IGP, Myntra, Netmeds, Yatra, GyFTR, Tata CLiQ.",
-      "issuer_says": "The booklet lists partners as images, so the list could not be read as text. Cleartrip, Yatra and GyFTR are named in the text.",
+      "issuer_says": "The booklet lists partners as images, so the list could not be read as text. Cleartrip, Yatra and GyFTR are named in the text. Superseded 2026-11-06: the rendered product page lists them as text (see the Card-data note).",
       "proposed_fix": "none"
     },
     {
       "item": "WP7 r1: cap units in examples 002 and 004",
       "cardpipeline_says": "cap_online_5x_monthly total_reward_points 10,000 (post-cap 0).",
       "issuer_says": "MITC booklet (g): 5X and 10X are each capped at 10,000 RP a month, then standard points continue. Modelled as eligible-spend caps (Rs2,00,000 for 5X, Rs1,00,000 for 10X) with base_rate, so the examples state the 5X cap in rupees. Points unchanged.",
+      "proposed_fix": "override",
+      "override_file": "api/scripts/catalogue_overrides/sbi-simplyclick.json"
+    },
+    {
+      "item": "Card-data 2026-11-06: exclusive partner list and dates",
+      "cardpipeline_says": "One 10X rule for 10 partners, effective 2023-01-01, info (affiliate channel, MID, online flag).",
+      "issuer_says": "Product page (rendered) lists the partners as text: Apollo 24x7, BookMyShow, Cleartrip, Dominos, IGP, Myntra, Netmeds, Swiggy, Yatra, Gyftr, Tata Cliq. T&C page 13 table gives each partner's start date (read from the rendered page). Affiliate exclusion only for Cleartrip (h) and Yatra (l); GyFTR 10X only on the SBI SimplyCLICK GyFTR portal (p). Split into dated earn rules for BookMyShow/Netmeds, Domino's/Myntra, IGP, Tata CLiQ; Apollo 24|7 (directory 'apollo' also covers Apollo Pharmacy/Hospitals), Cleartrip, Yatra, GyFTR stay info with depends_on_txn_attribute.",
       "proposed_fix": "override",
       "override_file": "api/scripts/catalogue_overrides/sbi-simplyclick.json"
     }
