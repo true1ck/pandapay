@@ -112,6 +112,15 @@ create trigger trg_cap_rule_targets_version
   after insert or update or delete on cap_rule_targets
   for each row execute function pandapay.bump_card_data_version_via_cap();
 
+-- redemption_options is served in the v2/admin views but had no version
+-- trigger; without one an edit would not move the card's data_version and the
+-- /catalogue ETag could stay stale. card_product_id is nullable (a NULL row
+-- matches no card, so the bump is then a no-op).
+drop trigger if exists trg_redemption_options_version on redemption_options;
+create trigger trg_redemption_options_version
+  after insert or update or delete on redemption_options
+  for each row execute function pandapay.bump_card_data_version();
+
 -- ── milestone_rules ──────────────────────────────────────────────────────────
 alter table milestone_rules
   add column if not exists reward_points          numeric(14,2),

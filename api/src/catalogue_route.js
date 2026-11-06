@@ -24,20 +24,31 @@ const V2_PLATFORMS_SQL =
   'SELECT slug, name, kind, issuer_slug, aliases ' +
   'FROM payment_platforms WHERE is_active ORDER BY slug';
 
-// One cheap query over base tables (no jsonb aggregation). Child-row changes
-// bump card_products.data_version via triggers; directory rows are covered by
-// max(updated_at) plus counts (payment_platforms has no updated_at).
+// One cheap query over base tables (no jsonb aggregation) that changes whenever
+// anything either feed serves changes (D34a):
+//  - cards: max(updated_at) + sum(data_version) + count over published active
+//    cards. data_version is a PER-CARD counter, so max() alone would miss edits
+//    to any card not holding the maximum. The bump trigger (reward/cap/milestone/
+//    fee-waiver/benefit/forex/fuel rows, network variants, cap targets, unlock
+//    rules, redemption options) moves both data_version and updated_at, and the
+//    touch trigger moves updated_at on every card column edit. Sum + count also
+//    catch unpublish-one/publish-another.
+//  - issuers: max(updated_at) (issuer_name / issuer_slug are in both views).
+//  - directory: md5 over exactly the rows and columns V2_MERCHANTS_SQL and
+//    V2_PLATFORMS_SQL serve (both tables are small).
 const FINGERPRINT_SQL =
   'SELECT ' +
-  '(SELECT coalesce(max(c.data_version), 0)::text FROM card_products c ' +
-  "   JOIN issuers i ON i.id = c.issuer_id WHERE c.status = 'published' AND c.is_active) AS max_data_version, " +
+  '(SELECT coalesce(max(c.updated_at)::text, \'\') FROM card_products c ' +
+  "   WHERE c.status = 'published' AND c.is_active) AS cards_updated_at, " +
+  '(SELECT coalesce(sum(c.data_version), 0)::text FROM card_products c ' +
+  "   WHERE c.status = 'published' AND c.is_active) AS cards_version_sum, " +
   '(SELECT count(*)::text FROM card_products c JOIN issuers i ON i.id = c.issuer_id ' +
   "   WHERE c.status = 'published' AND c.is_active) AS card_count, " +
-  "(SELECT coalesce(max(updated_at)::text, '') FROM merchant_brands) AS merchants_updated_at, " +
-  '(SELECT count(*)::text FROM merchant_brands) AS merchants_total, ' +
-  '(SELECT count(*)::text FROM merchant_brands WHERE is_active) AS merchants_active, ' +
-  '(SELECT count(*)::text FROM payment_platforms) AS platforms_total, ' +
-  '(SELECT count(*)::text FROM payment_platforms WHERE is_active) AS platforms_active';
+  "(SELECT coalesce(max(updated_at)::text, '') FROM issuers) AS issuers_updated_at, " +
+  "(SELECT md5(coalesce(string_agg(row(slug, name, parent_slug, category_slug, aliases, vpa_prefixes, mcc)::text, '|' ORDER BY slug), '')) " +
+  '   FROM merchant_brands WHERE is_active) AS merchants_hash, ' +
+  "(SELECT md5(coalesce(string_agg(row(slug, name, kind, issuer_slug, aliases)::text, '|' ORDER BY slug), '')) " +
+  '   FROM payment_platforms WHERE is_active) AS platforms_hash';
 
 const CACHE_CONTROL = 'public, max-age=300';
 const RATE_WINDOW_MS = 60 * 1000;

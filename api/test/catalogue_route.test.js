@@ -23,8 +23,8 @@ function responseDouble() {
 }
 
 const FINGERPRINT = {
-  max_data_version: '7', card_count: '2', merchants_updated_at: '2026-11-05 10:00:00+00',
-  merchants_total: '3', merchants_active: '3', platforms_total: '1', platforms_active: '1',
+  cards_updated_at: '2026-11-05 10:00:00+00', cards_version_sum: '14', card_count: '2',
+  issuers_updated_at: '2026-11-01 10:00:00+00', merchants_hash: 'm1', platforms_hash: 'p1',
 };
 
 function harness(rowsBySql, { limiter } = {}) {
@@ -121,15 +121,15 @@ test('ETag is stable across calls, differs by feed, and changes with card or dir
   assert.match(a1, /^"[0-9a-f]{32}"$/);
   assert.equal(a1, a2);
   assert.notEqual(a1, b1);
-  state.fingerprint.max_data_version = '8';
-  const afterCard = await etag({});
-  assert.notEqual(afterCard, a1);
-  state.fingerprint.max_data_version = '7';
-  state.fingerprint.merchants_updated_at = '2026-11-06 09:00:00+00';
-  assert.notEqual(await etag({ schema: '2' }), b1);
-  state.fingerprint.merchants_updated_at = FINGERPRINT.merchants_updated_at;
-  state.fingerprint.platforms_active = '0';
-  assert.notEqual(await etag({ schema: '2' }), b1);
+  // every fingerprint component must move the validator (real-DB scenarios live in catalogue_route_postgres.js)
+  for (const [key, value] of Object.entries({
+    cards_updated_at: 'x', cards_version_sum: '15', card_count: '3',
+    issuers_updated_at: 'x', merchants_hash: 'm2', platforms_hash: 'p2',
+  })) {
+    state.fingerprint = { ...FINGERPRINT, [key]: value };
+    assert.notEqual(await etag({}), a1, `${key} must change the v1 validator`);
+    assert.notEqual(await etag({ schema: '2' }), b1, `${key} must change the v2 validator`);
+  }
 });
 
 test('matching If-None-Match answers 304 without running any heavy view query', async () => {

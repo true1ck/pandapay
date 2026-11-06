@@ -93,6 +93,13 @@ begin
                                reward_value_inr, reward_points, reward_kind, window_days)
     values (v_card, 'Welcome', 15000, 'bonus points', 0, 10000, 'points', 90);
 
+  -- D34a: redemption option edits bump the card's data_version
+  select data_version into v_before from card_products where id = v_card;
+  update redemption_options set value_per_point_inr = 0.26 where card_product_id = v_card;
+  select data_version into v_after from card_products where id = v_card;
+  if v_after <= v_before then raise exception 'redemption_options update did not bump data_version'; end if;
+  update redemption_options set value_per_point_inr = 0.25 where card_product_id = v_card;
+
   -- ── v1 view ──
   select to_jsonb(x) into v1 from v_card_catalogue_export x where x.id = v_card;
   if jsonb_array_length(v1->'reward_rules') <> 1
