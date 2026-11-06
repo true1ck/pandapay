@@ -1,0 +1,12 @@
+{
+  "source_slug": "fabindia-sbi-card",
+  "changes": [
+    {
+      "path": "reward_rules[id=base_other_spend].rule_role",
+      "value": "info",
+      "reason": "WP7: D33e: the cited Fabindia SBI Card T&C (11.4 Points) state only \"5 Reward Points per Rs100 spent at Fabindia\" and \"Added Reward Points on Dining, Entertainment, International spends and more\"; they give no rate for other spends. The record contradicts itself: its accrual base is 1 Reward Point per Rs200, while this rule says 1 per Rs100 (and its \"2x\" international rule is also 1 per Rs100). Unknown rate, so info (H2): the card base of 1 per Rs200 governs and can only under-state.",
+      "source_url": "https://www.sbicard.com/sbi-card-en/assets/docs/pdf/Fabindia-TnC.pdf",
+      "checked_on": "2026-11-06"
+    }
+  ]
+}
