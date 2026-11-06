@@ -135,8 +135,15 @@ alter table milestone_rules
 -- fixed 32 chars). Equal values give equal hashes and NULL stays NULL (nulls
 -- not distinct still collides), so uniqueness semantics are unchanged apart
 -- from a negligible md5 collision chance. Array::text is STABLE, not
--- IMMUTABLE, so arrays go through this wrapper (text/uuid arrays only).
-create or replace function pandapay.index_hash(anyarray) returns text
+-- IMMUTABLE, so arrays go through these wrappers. Only text[] and uuid[] are
+-- accepted: their text form does not depend on DateStyle/TimeZone, so declaring
+-- the wrappers IMMUTABLE is safe. (An anyarray version would let a future
+-- date/timestamp array silently make the index depend on session settings.)
+create or replace function pandapay.index_hash(pg_catalog.text[]) returns pg_catalog.text
+language sql immutable parallel safe
+as $$ select pg_catalog.md5($1::pg_catalog.text) $$;
+
+create or replace function pandapay.index_hash(pg_catalog.uuid[]) returns pg_catalog.text
 language sql immutable parallel safe
 as $$ select pg_catalog.md5($1::pg_catalog.text) $$;
 
