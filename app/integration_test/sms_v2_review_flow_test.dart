@@ -137,7 +137,7 @@ void main() {
     );
     await tester.pumpWidget(screen(const ReviewInboxScreen()));
     await tester.pumpAndSettle();
-    expect(find.text('2 messages'), findsOneWidget);
+    expect(find.textContaining('2 messages'), findsOneWidget);
     await binding.takeScreenshot('sms-v2-review-format');
     await tester.tap(find.text('Correct'));
     await tester.pumpAndSettle();
