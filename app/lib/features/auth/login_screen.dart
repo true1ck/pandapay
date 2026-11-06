@@ -336,6 +336,8 @@ class _LoginScreenState extends ConsumerState<LoginScreen> {
     });
     var stage = alreadyVerified ? AuthStage.finishSignIn : AuthStage.verifyCode;
     final identifier = _identifierController.text.trim();
+    // Taken before any await: it outlives this screen (see below).
+    final container = ProviderScope.containerOf(context, listen: false);
     try {
       final code = _codeController.text.trim();
       final authApi = ref.read(authApiProvider);
@@ -385,13 +387,20 @@ class _LoginScreenState extends ConsumerState<LoginScreen> {
         accessToken: tokens.accessToken,
         refreshToken: tokens.refreshToken,
       );
-      ref.read(accessTokenProvider.notifier).state = tokens.accessToken;
+      // Setting the token swaps this screen out of the tree, which disposes
+      // this State and its `ref`. Keep the provider container, which outlives
+      // the screen, for the steps that must still run afterwards; using `ref`
+      // there threw "Cannot use ref after the widget was disposed", skipped
+      // ensureProfile and logged a false sign-in failure.
+      container.read(accessTokenProvider.notifier).state = tokens.accessToken;
 
       // Keep returning-user sign-in on its existing path. New sign-ups must
       // pass the product-access gate before POST /profile creates a profile.
       if (!_isSignUp) {
-        await ref.read(profileApiProvider)!.ensureProfile(email: identifier);
-        ref.invalidate(profileProvider);
+        await container
+            .read(profileApiProvider)!
+            .ensureProfile(email: identifier);
+        container.invalidate(profileProvider);
       }
 
       // This screen is also reached by being pushed (Home's "Sign in" banner),
