@@ -858,14 +858,14 @@
   },
   {
     "id": "WAL-ZOMATO-PAYMENT-SUCCESS-01",
-    "version": 1,
+    "version": 2,
     "family": "wallet_spend",
     "senders": [
       "ZOMATO"
     ],
     "priority": 600,
     "match": {
-      "pattern": "^payment of\\s+(?:rs\\.?|inr|₹)\\s*(?<amt>[\\d,]+(?:\\.\\d{1,2})?)\\s+from zomato money balance is successful\\.\\s+updated balance:\\s*(?:rs\\.?|inr|₹)\\s*(?<bal>[\\d,]+(?:\\.\\d{1,2})?)(?![\\d,])(?:\\.|\\s|$)",
+      "pattern": "^payment of\\s+(?:rs\\.?|inr|₹)\\s*(?<amt>[\\d,]+(?:\\.\\d{1,2})?)\\s+from (?<merchant>zomato) money balance is successful\\.\\s+updated balance:\\s*(?:rs\\.?|inr|₹)\\s*(?<bal>[\\d,]+(?:\\.\\d{1,2})?)(?![\\d,])(?:\\.|\\s|$)",
       "flags": "is",
       "rejectAny": [
         "failed",
@@ -895,6 +895,13 @@
         "instrument": {
           "kind": "wallet",
           "issuerSlug": "zomato_money"
+        },
+        "counterparty": {
+          "nameFrom": "merchant",
+          "kind": "merchant",
+          "transforms": [
+            "sanitizeNarration"
+          ]
         }
       },
       {
@@ -935,6 +942,6 @@
     ],
     "status": "active",
     "createdBy": "baseline",
-    "updatedAt": "2026-11-03T00:00:00Z"
+    "updatedAt": "2026-11-07T00:00:00Z"
   }
 ]

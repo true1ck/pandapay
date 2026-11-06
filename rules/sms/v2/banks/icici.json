@@ -1227,7 +1227,7 @@
   },
   {
     "id": "ICICI-ACCT-DEBIT-UPI",
-    "version": 2,
+    "version": 3,
     "family": "upi_debit",
     "senders": [
       "ICICIB",
@@ -1238,7 +1238,7 @@
     ],
     "priority": 770,
     "match": {
-      "pattern": "^(?![\\s\\S]*\\b(?:umrn|ipo|asba|folio|groww)\\b)[\\s\\S]*?(?:icici\\s+bank\\s+acct\\s*[x*•.]*\\s?(?<mask>\\d{2,18})\\s+debited\\s+(?:for|with)\\s+(?:\\b(?:rs\\.?|inr)|₹)\\s*:?\\s*(?<amt>\\d[\\d,]*(?:\\.\\d{1,2})?)\\s+on\\s+(?<date>\\d{4}-\\d{2}-\\d{2}(?:[: ]\\d{2}:\\d{2}(?::\\d{2})?)?|\\d{1,2}[-/]\\d{1,2}[-/]\\d{2,4}(?:,?\\s*\\d{2}:\\d{2}(?::\\d{2})?)?|\\d{1,2}[-/ ]?[a-z]{3}[-/ ,]*\\d{2,4}(?:,?\\s*\\d{2}:\\d{2}(?::\\d{2})?)?)\\s*;\\s*(?<payee>[^.;\\n]+?)\\s+credited\\.?\\s*(?:upi:?\\s*(?<ref_upiRef>\\d{9,18}))?)",
+      "pattern": "^(?![\\s\\S]*\\b(?:umrn|ipo|asba|folio|groww)\\b)[\\s\\S]*?(?:icici\\s+bank\\s+acct\\s*[x*•.]*\\s?(?<mask>\\d{2,18})\\s+debited\\s+(?:for|with)\\s+(?:\\b(?:rs\\.?|inr)|₹)\\s*:?\\s*(?<amt>\\d[\\d,]*(?:\\.\\d{1,2})?)\\s+on\\s+(?<date>\\d{4}-\\d{2}-\\d{2}(?:[: ]\\d{2}:\\d{2}(?::\\d{2})?)?|\\d{1,2}[-/]\\d{1,2}[-/]\\d{2,4}(?:,?\\s*\\d{2}:\\d{2}(?::\\d{2})?)?|\\d{1,2}[-/ ]?[a-z]{3}[-/ ,]*\\d{2,4}(?:,?\\s*\\d{2}:\\d{2}(?::\\d{2})?)?)\\s*[;,]\\s*(?<payee>[^.;\\n]+?)\\s+credited\\.?\\s*(?:upi:?\\s*(?<ref_upiRef>\\d{9,18}))?)",
       "flags": "i",
       "rejectAny": [
         "mandate",
@@ -1382,13 +1382,20 @@
       },
       {
         "sender": "AX-ICICIT-S",
+        "body": "ICICI Bank Acct XX1234 debited for Rs 499.00 on 10-Nov-26, SWIGGY credited. UPI:432198765434. Call 18002662 for dispute.",
+        "expectFactTypes": [
+          "movement"
+        ]
+      },
+      {
+        "sender": "AX-ICICIT-S",
         "body": "ICICI Bank Acct XX1234 debited for Rs 25000.00 on 10-Nov-26; CRED Club failed.",
         "expectFactTypes": []
       }
     ],
     "status": "active",
     "createdBy": "baseline",
-    "updatedAt": "2026-11-20T00:00:00Z"
+    "updatedAt": "2026-11-07T00:00:00Z"
   },
   {
     "id": "ICICI-ACCT-CREDIT-UPI",

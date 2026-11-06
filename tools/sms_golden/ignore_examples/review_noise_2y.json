@@ -1,0 +1,152 @@
+[
+  {
+    "rule": "IGN-CARD-DUE-REMINDER-PAYZAPP",
+    "positive": [
+      {
+        "sender": "VM-HDFCBK-S",
+        "body": "Amt Due: Rs.1,234.00 on HDFC Bank Credit Card 1234. Pay Instant with PayZapp. Steps: PayZapp-Bill-Credit Card"
+      }
+    ],
+    "negative": [
+      {
+        "sender": "VM-HDFCBK-S",
+        "body": "Amt Due: Rs.1,234.00 on HDFC Bank Credit Card 1234. Thank you for your payment."
+      }
+    ]
+  },
+  {
+    "rule": "IGN-CARD-STATEMENT-NOTICE-NO-DUE",
+    "positive": [
+      {
+        "sender": "VM-HDFCBK-S",
+        "body": "Statement Generated: For HDFC Bank Credit Card XX1234. View: example.com/s Pay: example.com/p"
+      }
+    ],
+    "negative": [
+      {
+        "sender": "VM-HDFCBK-S",
+        "body": "Payment of Rs.500.00 received towards your HDFC Bank Credit Card XX1234. Thank you."
+      }
+    ]
+  },
+  {
+    "rule": "IGN-CARD-AUTODEBIT-DUE-REMINDER",
+    "positive": [
+      {
+        "sender": "VM-ICICIT-S",
+        "body": "Total Amount of Rs 1,234.00 is due on ICICI Bank Credit Card XX1234. Amount will be debited from Savings Account XX567 on 05-Jun-26. Please ignore if paid."
+      }
+    ],
+    "negative": [
+      {
+        "sender": "VM-ICICIT-S",
+        "body": "Rs 1,234.00 has been debited from your account towards ICICI Bank Credit Card XX1234."
+      }
+    ]
+  },
+  {
+    "rule": "IGN-BROKER-CLIENT-LEDGER-SUMMARY",
+    "positive": [
+      {
+        "sender": "VM-KOTAKS-S",
+        "body": "Client: A1B2C3, Rs 1,234.00 is total amount payable to you at the end of date 05/11/26. This includes all trades."
+      }
+    ],
+    "negative": [
+      {
+        "sender": "VM-KOTAKS-S",
+        "body": "Client: A1B2C3, your order to buy 10 shares is executed at Rs 100."
+      }
+    ]
+  },
+  {
+    "rule": "IGN-REWARD-COINS-EXPIRY",
+    "positive": [
+      {
+        "sender": "VM-TNCARD-S",
+        "body": "ATTENTION User: Your Example Account has been credited with 50 NeuCoins expiring on 31-MAY. Visit example.com"
+      }
+    ],
+    "negative": [
+      {
+        "sender": "VM-TNCARD-S",
+        "body": "Rs 500.00 has been credited to your account."
+      }
+    ]
+  },
+  {
+    "rule": "IGN-TELECOM-PAYMENT-PROCESSED-RECEIPT",
+    "positive": [
+      {
+        "sender": "VM-AIRINF-S",
+        "body": "Hi, we have processed Rs 299.00 for your Airtel Mobile 9000000000. The payment will be updated within 5 minutes."
+      }
+    ],
+    "negative": [
+      {
+        "sender": "VM-AIRINF-S",
+        "body": "Your Airtel Mobile 9000000000 plan expires tomorrow. Recharge now."
+      }
+    ]
+  },
+  {
+    "rule": "IGN-RENT-PAYMENT-RECEIPT",
+    "positive": [
+      {
+        "sender": "VM-RNTMJO-S",
+        "body": "Hi User, we have received a payment of Rs 1,500.00 against your rental payment for the plan. Thank you."
+      }
+    ],
+    "negative": [
+      {
+        "sender": "VM-RNTMJO-S",
+        "body": "Your rental payment of Rs 1,500.00 is overdue. Late charges will apply."
+      }
+    ]
+  },
+  {
+    "rule": "IGN-PAYMENT-REQUEST-CLICK-TO-PAY",
+    "positive": [
+      {
+        "sender": "VM-PYTMPS-S",
+        "body": "Dear Customer, ExampleApp has requested payment of Rs 799.00. Click example.com/p to pay. Regards, Paytm"
+      }
+    ],
+    "negative": [
+      {
+        "sender": "VM-PYTMPS-S",
+        "body": "Dear Customer, you have paid Rs 799.00 to ExampleApp."
+      }
+    ]
+  },
+  {
+    "rule": "IGN-ORDER-PAYMENT-NOT-COMPLETED",
+    "positive": [
+      {
+        "sender": "VM-SWIGGY-S",
+        "body": "Your payment for Example order 123456 was not completed. Any amount if debited from your card will get refunded."
+      }
+    ],
+    "negative": [
+      {
+        "sender": "VM-SWIGGY-S",
+        "body": "Your payment for Example order 123456 was completed successfully."
+      }
+    ]
+  },
+  {
+    "rule": "IGN-CRED-MONEY-REQUEST",
+    "positive": [
+      {
+        "sender": "VM-CREDIN-S",
+        "body": "Example Foods has requested money from you on CRED. On approving the request, Rs 250.00 will be debited from your account."
+      }
+    ],
+    "negative": [
+      {
+        "sender": "VM-CREDIN-S",
+        "body": "Rs 250.00 was debited from your account towards Example Foods via CRED."
+      }
+    ]
+  }
+]

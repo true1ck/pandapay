@@ -1,0 +1,64 @@
+{
+  "id": "upi_transfer_to_business_gets_category",
+  "description": "A bank's 'trf to NAME' cannot say whether the payee is a person. A payee whose whole name is a known business gets its category; a person's name stays Other.",
+  "knownInstruments": [
+    {
+      "kind": "bank_account",
+      "issuerSlug": "sbi",
+      "maskDigits": "4321"
+    }
+  ],
+  "messages": [
+    {
+      "sender": "VM-SBIUPI-S",
+      "body": "Dear UPI user A/C X4321 debited by 191.24 on date 20Aug26 trf to ZOMATO LTD Refno 432100112233 If not u? call-1800111109 for other services-18001234-SBI",
+      "observedAt": "2026-08-20T10:00:00Z"
+    },
+    {
+      "sender": "VM-SBIUPI-S",
+      "body": "Dear UPI user A/C X4321 debited by 500.00 on date 21Aug26 trf to ASHA MARIA RAO Refno 432100445566 If not u? call-1800111109 for other services-18001234-SBI",
+      "observedAt": "2026-08-21T10:00:00Z"
+    }
+  ],
+  "expect": {
+    "events": [
+      {
+        "type": "p2p_out",
+        "legRoles": [
+          "debit_leg"
+        ]
+      },
+      {
+        "type": "p2p_out",
+        "legRoles": [
+          "debit_leg"
+        ]
+      }
+    ],
+    "instruments": [
+      {
+        "kind": "bank_account",
+        "issuerSlug": "sbi",
+        "maskDigits": "4321"
+      }
+    ],
+    "totals": {
+      "from": "2026-07-31T18:30:00Z",
+      "to": "2026-08-31T18:30:00Z",
+      "spendMinor": 69124,
+      "incomeMinor": 0,
+      "investmentMinor": 0,
+      "transactionCount": 2
+    },
+    "categories": [
+      {
+        "eventIndex": 0,
+        "category": "dining"
+      },
+      {
+        "eventIndex": 1,
+        "category": "other"
+      }
+    ]
+  }
+}

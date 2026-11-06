@@ -129,5 +129,14 @@
     "namePattern": "^SURYODAY SMALL",
     "purpose": "investment",
     "targetInstrument": null
+  },
+  {
+    "id": "CPP-GENERIC-CREDIT-CARD-BILL",
+    "vpaPattern": null,
+    "namePattern": "^CREDIT ?CARD(?: BILL(?: ?PAY(?:MENT)?)?| PAYMENT)?$",
+    "purpose": "card_payment",
+    "targetInstrument": {
+      "kind": "credit_card"
+    }
   }
 ]

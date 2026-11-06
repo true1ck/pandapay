@@ -1,0 +1,88 @@
+[
+  {
+    "id": "IPPB-ACCT-DEBIT",
+    "version": 1,
+    "family": "acct_debit",
+    "senders": [
+      "DOPBNK"
+    ],
+    "priority": 700,
+    "match": {
+      "pattern": "account\\s+no\\.?\\s*[x*•.]*\\s?(?<mask>\\d{2,18})\\s+debit\\s+with\\s+amount\\s+(?:\\b(?:rs\\.?|inr)|₹)\\s*:?\\s*(?<amt>\\d[\\d,]*(?:\\.\\d{1,2})?)\\s+on\\s+(?<date>\\d{1,2}-\\d{1,2}-\\d{4})\\.\\s*balance:\\s*(?:\\b(?:rs\\.?|inr)|₹)\\s*:?\\s*(?<bal>\\d[\\d,]*(?:\\.\\d{1,2})?)",
+      "flags": "i"
+    },
+    "emit": [
+      {
+        "factType": "movement",
+        "attrs": {
+          "direction": "debit",
+          "purpose": "unknown",
+          "rail": "unknown"
+        },
+        "amounts": [
+          {
+            "role": "posted",
+            "from": "amt",
+            "unit": "INR"
+          }
+        ],
+        "occurredAt": {
+          "from": "date",
+          "formats": [
+            "dd-MM-yyyy"
+          ]
+        },
+        "instrument": {
+          "kind": "bank_account",
+          "maskFrom": "mask"
+        }
+      },
+      {
+        "factType": "balance_snapshot",
+        "amounts": [
+          {
+            "role": "available_balance",
+            "from": "bal",
+            "unit": "INR"
+          }
+        ],
+        "instrument": {
+          "sameAs": 0
+        },
+        "attrs": {
+          "asOf": {
+            "sameAs": 0,
+            "field": "occurredAt"
+          }
+        }
+      }
+    ],
+    "confidence": 0.93,
+    "examples": [
+      {
+        "sender": "BT-DOPBNK-G",
+        "body": "Account No. XXXXXXXX1234 DEBIT with amount Rs.900.00 on 29-07-2026. Balance: Rs.514.00.[IN0000001]",
+        "expectFactTypes": [
+          "movement",
+          "balance_snapshot"
+        ]
+      },
+      {
+        "sender": "DOPBNK-S",
+        "body": "Account No. XXXXXXXX1234 DEBIT with amount Rs. 1500.00 on 18-08-2026. Balance: Rs.2045.00. [IN0000002]",
+        "expectFactTypes": [
+          "movement",
+          "balance_snapshot"
+        ]
+      },
+      {
+        "sender": "DOPBNK-S",
+        "body": "Account No. XXXXXXXX1234 DEBIT FAILED for amount Rs. 1500.00 on 18-08-2026.",
+        "expectFactTypes": []
+      }
+    ],
+    "status": "active",
+    "createdBy": "review-noise-2y",
+    "updatedAt": "2026-11-07T00:00:00Z"
+  }
+]

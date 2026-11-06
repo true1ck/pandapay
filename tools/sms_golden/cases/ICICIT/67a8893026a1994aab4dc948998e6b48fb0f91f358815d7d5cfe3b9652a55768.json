@@ -1,0 +1,40 @@
+{
+  "id": "reviewnoise2y:icici_comma_payee",
+  "templateHash": "67a8893026a1994aab4dc948998e6b48fb0f91f358815d7d5cfe3b9652a55768",
+  "weight": 1,
+  "source": "synthetic",
+  "messages": [
+    {
+      "sender": "AX-ICICIT-S",
+      "body": "ICICI Bank Acct XX4321 debited for Rs 499.00 on 10-Nov-26, SAMPLE CAFE credited. UPI:432198765434. Call 18002662 for dispute.",
+      "observedAt": "2026-11-03T10:00:00.000Z"
+    }
+  ],
+  "expect": {
+    "facts": [
+      {
+        "factType": "movement",
+        "attrs": {
+          "direction": "debit",
+          "purpose": "purchase",
+          "rail": "upi"
+        },
+        "amounts": [
+          {
+            "role": "posted",
+            "minor": 49900
+          }
+        ],
+        "instrument": {
+          "kind": "bank_account",
+          "maskDigits": "4321"
+        },
+        "counterparty": {
+          "name": "SAMPLE CAFE"
+        }
+      }
+    ]
+  },
+  "note": "ICICI debit with a comma before the payee keeps the payee name.",
+  "origin": "review-noise-2y"
+}

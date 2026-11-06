@@ -855,5 +855,97 @@
     "pattern": "^(?![\\s\\S]*?\\b(?:debited|credited|deducted|withdrawn|charged|spent|refund(?:ed|s)?|reversed|reversal|received|paid|receipt|thank\\s+you|success(?:ful|fully)?)\\b)[\\s\\S]*?(?:\\bfunds?\\s+ready\\s+for\\s+disbursal\\b|\\bverify\\s+the\\s+disbursal\\b|\\bauthori[sz]e\\s+the\\s+transfer\\s+of\\b[^\\n]{0,40}\\bcredit\\s+card\\b|\\bconfirm\\s+your\\s+emi\\s+tenure\\b[^\\n]{0,40}\\bloan\\b)",
     "flags": "i",
     "reason": "promotion"
+  },
+  {
+    "id": "IGN-CARD-DUE-REMINDER-PAYZAPP",
+    "senders": [
+      "HDFCBK",
+      "HDFCBN"
+    ],
+    "pattern": "^(?![\\s\\S]*?\\b(?:thank\\s+you|successfully\\s+paid|payment\\s+received)\\b)[\\s\\S]*?\\bamt\\s+due\\b[^\\n]{0,60}\\bcredit\\s+card\\b[\\s\\S]{0,80}?\\bpay\\s+instant\\s+with\\s+payzapp\\b",
+    "flags": "i",
+    "reason": "service"
+  },
+  {
+    "id": "IGN-CARD-STATEMENT-NOTICE-NO-DUE",
+    "senders": [
+      "HDFCBK",
+      "HDFCBN"
+    ],
+    "pattern": "^(?![\\s\\S]*?\\b(?:thank\\s+you|successfully\\s+paid|payment\\s+received)\\b)[\\s\\S]*?(?:\\bstatement\\s+generated:?\\s+for\\s+hdfc\\s+bank\\s+credit\\s+card\\b|\\bcredit\\s+card\\s+[x*]*\\d+\\s+statement:\\s*total\\s+due:\\s*(?:rs\\.?|inr|₹)\\s*-)",
+    "flags": "i",
+    "reason": "service"
+  },
+  {
+    "id": "IGN-CARD-AUTODEBIT-DUE-REMINDER",
+    "senders": [
+      "ICICIT"
+    ],
+    "pattern": "^(?![\\s\\S]*?\\b(?:has\\s+been|was)\\s+(?:debited|credited)\\b)[\\s\\S]*?\\btotal\\s+amount\\s+(?:of\\s+(?:rs\\.?|inr|₹)\\s*[\\d,]+(?:\\.\\d+)?\\s+is\\s+due\\s+on|due\\s+on)\\s+icici\\s+bank\\s+credit\\s+card\\b[\\s\\S]{0,120}?\\bwill\\s+be\\s+debited\\b",
+    "flags": "i",
+    "reason": "service"
+  },
+  {
+    "id": "IGN-BROKER-CLIENT-LEDGER-SUMMARY",
+    "senders": [
+      "*"
+    ],
+    "pattern": "\\bis\\s+total\\s+amount\\s+payable\\s+to\\s+you\\s+at\\s+the\\s+end\\s+of\\s+date\\b",
+    "flags": "i",
+    "reason": "service"
+  },
+  {
+    "id": "IGN-REWARD-COINS-EXPIRY",
+    "senders": [
+      "*"
+    ],
+    "pattern": "\\bneucoins\\s+expiring\\b",
+    "flags": "i",
+    "reason": "promotion"
+  },
+  {
+    "id": "IGN-TELECOM-PAYMENT-PROCESSED-RECEIPT",
+    "senders": [
+      "*"
+    ],
+    "pattern": "\\bwe\\s+have\\s+processed\\s+(?:rs\\.?|inr|₹)\\s*[\\d,]+(?:\\.\\d+)?\\s+for\\s+your\\s+airtel\\s+(?:mobile|dth|broadband)\\b",
+    "flags": "i",
+    "reason": "service"
+  },
+  {
+    "id": "IGN-RENT-PAYMENT-RECEIPT",
+    "senders": [
+      "RNTMJO"
+    ],
+    "pattern": "\\bwe\\s+have\\s+received\\s+a\\s+payment\\s+of\\s+(?:rs\\.?|inr|₹)\\s*[\\d,]+(?:\\.\\d+)?\\s+against\\s+your\\s+rental\\s+payment\\b",
+    "flags": "i",
+    "reason": "service"
+  },
+  {
+    "id": "IGN-PAYMENT-REQUEST-CLICK-TO-PAY",
+    "senders": [
+      "*"
+    ],
+    "pattern": "\\bhas\\s+requested\\s+payment\\s+of\\s+(?:rs\\.?|inr|₹)\\s*[\\d,]+(?:\\.\\d+)?\\.\\s*click\\s+\\S+\\s+to\\s+pay\\b",
+    "flags": "i",
+    "reason": "service"
+  },
+  {
+    "id": "IGN-ORDER-PAYMENT-NOT-COMPLETED",
+    "senders": [
+      "*"
+    ],
+    "pattern": "\\byour\\s+payment\\s+for\\s+[a-z ]{2,20}\\s+order\\s+\\S+\\s+was\\s+not\\s+completed\\b",
+    "flags": "i",
+    "reason": "service"
+  },
+  {
+    "id": "IGN-CRED-MONEY-REQUEST",
+    "senders": [
+      "*"
+    ],
+    "pattern": "\\bhas\\s+requested\\s+money\\s+from\\s+you\\s+on\\s+cred\\b",
+    "flags": "i",
+    "reason": "service"
   }
 ]

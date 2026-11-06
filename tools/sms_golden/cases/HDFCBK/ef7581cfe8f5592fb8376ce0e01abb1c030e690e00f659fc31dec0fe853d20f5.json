@@ -1,0 +1,40 @@
+{
+  "id": "reviewnoise2y:hdfc_card_upi_vpa",
+  "templateHash": "ef7581cfe8f5592fb8376ce0e01abb1c030e690e00f659fc31dec0fe853d20f5",
+  "weight": 1,
+  "source": "synthetic",
+  "messages": [
+    {
+      "sender": "AD-HDFCBK-S",
+      "body": "Txn Rs.293.00 On HDFC Bank Card 4321 At examplefood@icici by UPI 432100112233 On 30-06 Not You? Call 18002586161/SMS BLOCK CC 4321 to 7308080808",
+      "observedAt": "2026-11-03T10:00:00.000Z"
+    }
+  ],
+  "expect": {
+    "facts": [
+      {
+        "factType": "movement",
+        "attrs": {
+          "direction": "debit",
+          "purpose": "purchase",
+          "rail": "upi"
+        },
+        "amounts": [
+          {
+            "role": "posted",
+            "minor": 29300
+          }
+        ],
+        "instrument": {
+          "kind": "credit_card",
+          "maskDigits": "4321"
+        },
+        "counterparty": {
+          "vpa": "examplefood@icici"
+        }
+      }
+    ]
+  },
+  "note": "HDFC card spend by UPI keeps the payee UPI ID.",
+  "origin": "review-noise-2y"
+}

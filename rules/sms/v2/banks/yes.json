@@ -560,5 +560,168 @@
     "status": "active",
     "createdBy": "baseline",
     "updatedAt": "2026-11-20T00:00:00Z"
+  },
+  {
+    "id": "YES-CARD-SPEND-UPI-AT",
+    "version": 1,
+    "family": "card_spend",
+    "senders": [
+      "YESBNK",
+      "YESBK",
+      "YESCRD"
+    ],
+    "priority": 758,
+    "match": {
+      "pattern": "(?:\\b(?:rs\\.?|inr)|₹)\\s*:?\\s*(?<amt>\\d[\\d,]*(?:\\.\\d{1,2})?)\\s+spent\\s+on\\s+yes\\s+bank\\s+card\\s+[x*•.]*\\s?(?<mask>\\d{2,6})\\s+@(?:upi_)?(?<merchant>[^\\n]+?)\\s+(?<date>\\d{1,2}-\\d{1,2}-\\d{4})\\s+\\d{1,2}:\\d{2}(?::\\d{2})?\\s*[ap]m\\.?\\s*avl\\s+lmt\\s+(?:\\b(?:rs\\.?|inr)|₹)\\s*:?\\s*(?<bal>\\d[\\d,]*(?:\\.\\d{1,2})?)",
+      "flags": "i"
+    },
+    "emit": [
+      {
+        "factType": "movement",
+        "attrs": {
+          "direction": "debit",
+          "purpose": "purchase",
+          "rail": "card"
+        },
+        "amounts": [
+          {
+            "role": "posted",
+            "from": "amt",
+            "unit": "INR"
+          }
+        ],
+        "occurredAt": {
+          "from": "date",
+          "formats": [
+            "dd-MM-yyyy",
+            "dd-MM-yyyy, HH:mm:ss",
+            "dd-MM-yyyy,HH:mm:ss",
+            "dd-MM-yyyy, HH:mm",
+            "dd-MM-yyyy HH:mm:ss",
+            "dd-MM-yy",
+            "dd-MM-yy, HH:mm:ss",
+            "dd-MM-yy,HH:mm:ss",
+            "dd-MM-yy, HH:mm",
+            "dd-MM-yy HH:mm:ss",
+            "dd/MM/yyyy",
+            "dd/MM/yyyy, HH:mm:ss",
+            "dd/MM/yyyy,HH:mm:ss",
+            "dd/MM/yyyy, HH:mm",
+            "dd/MM/yyyy HH:mm:ss",
+            "dd/MM/yy",
+            "dd/MM/yy, HH:mm:ss",
+            "dd/MM/yy,HH:mm:ss",
+            "dd/MM/yy, HH:mm",
+            "dd/MM/yy HH:mm:ss",
+            "dd-MMM-yyyy",
+            "dd-MMM-yyyy, HH:mm:ss",
+            "dd-MMM-yyyy,HH:mm:ss",
+            "dd-MMM-yyyy, HH:mm",
+            "dd-MMM-yyyy HH:mm:ss",
+            "dd-MMM-yy",
+            "dd-MMM-yy, HH:mm:ss",
+            "dd-MMM-yy,HH:mm:ss",
+            "dd-MMM-yy, HH:mm",
+            "dd-MMM-yy HH:mm:ss",
+            "ddMMMyyyy",
+            "ddMMMyyyy, HH:mm:ss",
+            "ddMMMyyyy,HH:mm:ss",
+            "ddMMMyyyy, HH:mm",
+            "ddMMMyyyy HH:mm:ss",
+            "ddMMMyy",
+            "ddMMMyy, HH:mm:ss",
+            "ddMMMyy,HH:mm:ss",
+            "ddMMMyy, HH:mm",
+            "ddMMMyy HH:mm:ss",
+            "dd MMM yyyy",
+            "dd MMM yyyy, HH:mm:ss",
+            "dd MMM yyyy,HH:mm:ss",
+            "dd MMM yyyy, HH:mm",
+            "dd MMM yyyy HH:mm:ss",
+            "dd MMM yy",
+            "dd MMM yy, HH:mm:ss",
+            "dd MMM yy,HH:mm:ss",
+            "dd MMM yy, HH:mm",
+            "dd MMM yy HH:mm:ss",
+            "dd-MMM yyyy",
+            "dd-MMM yyyy, HH:mm:ss",
+            "dd-MMM yyyy,HH:mm:ss",
+            "dd-MMM yyyy, HH:mm",
+            "dd-MMM yyyy HH:mm:ss",
+            "dd.MM.yyyy",
+            "dd.MM.yyyy, HH:mm:ss",
+            "dd.MM.yyyy,HH:mm:ss",
+            "dd.MM.yyyy, HH:mm",
+            "dd.MM.yyyy HH:mm:ss",
+            "dd.MM.yy",
+            "dd.MM.yy, HH:mm:ss",
+            "dd.MM.yy,HH:mm:ss",
+            "dd.MM.yy, HH:mm",
+            "dd.MM.yy HH:mm:ss",
+            "yyyy-MM-dd",
+            "yyyy-MM-dd:HH:mm:ss",
+            "yyyy-MM-dd HH:mm:ss",
+            "yyyy-MM-dd HH:mm"
+          ]
+        },
+        "instrument": {
+          "kind": "credit_card",
+          "maskFrom": "mask"
+        },
+        "counterparty": {
+          "nameFrom": "merchant",
+          "kind": "merchant",
+          "transforms": [
+            "sanitizeNarration"
+          ]
+        }
+      },
+      {
+        "factType": "balance_snapshot",
+        "amounts": [
+          {
+            "role": "available_credit",
+            "from": "bal",
+            "unit": "INR"
+          }
+        ],
+        "instrument": {
+          "sameAs": 0
+        },
+        "attrs": {
+          "asOf": {
+            "sameAs": 0,
+            "field": "occurredAt"
+          }
+        }
+      }
+    ],
+    "confidence": 0.98,
+    "examples": [
+      {
+        "sender": "VM-YESBNK-S",
+        "body": "INR 25.00 spent on YES BANK Card X1234 @UPI_EXAMPLE CAFE 08-07-2026 06:28:00 pm. Avl Lmt INR 74,845.00. SMS BLKCC 1234 to 9840909000 if not you",
+        "expectFactTypes": [
+          "movement",
+          "balance_snapshot"
+        ]
+      },
+      {
+        "sender": "VM-YESBNK-S",
+        "body": "INR 1,250.50 spent on YES BANK Card X1234 @UPI_SAMPLE FUEL STATION 21-06-2026 09:51:00 am. Avl Lmt INR 71,941.68. SMS BLKCC 1234 to 9840909000 if not you",
+        "expectFactTypes": [
+          "movement",
+          "balance_snapshot"
+        ]
+      },
+      {
+        "sender": "VM-YESBNK-S",
+        "body": "INR 25.00 declined on YES BANK Card X1234 @UPI_EXAMPLE CAFE 08-07-2026 06:28:00 pm.",
+        "expectFactTypes": []
+      }
+    ],
+    "status": "active",
+    "createdBy": "review-noise-2y",
+    "updatedAt": "2026-11-07T00:00:00Z"
   }
 ]

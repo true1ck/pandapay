@@ -182,6 +182,47 @@ void main() {
       expect(resolveName('UBER').slug, 'travel');
     });
 
+    test('a legal or cut-short name resolves to its brand\'s category', () {
+      // Names as banks print them: truncated, run together or the company name.
+      const expected = {
+        'CTRLX TECHNOLOGIES PRIVATE LIMITED': 'dining', // Rapido\'s Ownly
+        'CTRLXTECHNOLOGIESPRIV': 'dining',
+        'COLIFE ADVISORY PRIVATE LIMITED': 'rent', // Colive
+        'ColifeAdvisoryPrivate': 'rent',
+        'LE TRAVENUES TECHN': 'travel', // ixigo
+        'CONFIRM TICKET': 'travel',
+        'RAZORPAYREDBUS': 'travel',
+        'IBIBO GROUP PRIVAT': 'travel',
+        'POPO VENTURES PRIVATE LIMITED': 'dining',
+        'FLIPKARTINTERNETPVTL': 'online',
+        'ASSPL': 'online',
+        'SWIGGYINSTAMARTPRIVAT': 'groceries',
+        'ZOMATOLTD': 'dining',
+        'ETERNAL LIM': 'dining',
+        'GOOGLE INDIA DIG': 'entertainment',
+        'YOUTUBEGOOGLE': 'entertainment',
+        'MYJIO': 'bills',
+        'AIR FIBER PAYMENT': 'bills',
+        'SAMAHITA FUELLING': 'fuel',
+        'RFA HYPER MARKET': 'groceries',
+        'YK FOODS SNACKS AN': 'dining',
+        'OMSHARADHA FAST FO': 'dining',
+        'ICONICFITNESSINTERNAT': 'health',
+        'YOGIS FITNESS': 'health',
+        'CENTRAL BOARD O': 'government',
+      };
+      for (final e in expected.entries) {
+        expect(resolveName(e.key).slug, e.value, reason: e.key);
+      }
+    });
+
+    test('words that only look like a category word stay Other', () {
+      // A person, and names that merely contain letters of a category word.
+      for (final n in ['ASHA MARIA RAO', 'BREAKFAST FORMAL', 'GYMKHANA CLUB', 'FOODSTUFF TRADERS']) {
+        expect(resolveName(n).slug, isNot(anyOf('dining', 'health', 'fuel', 'rent')), reason: n);
+      }
+    });
+
     test('SWIGGY INSTAMART is groceries, SWIGGY is dining', () {
       expect(resolveName('SWIGGY INSTAMART').slug, 'groceries');
       expect(resolveName('SWIGGYINSTAMART').slug, 'groceries');
@@ -426,7 +467,7 @@ void main() {
       expect(refund!.slug, 'travel');
     });
 
-    test('p2p_out stays other unless the user has a rule', () {
+    test('p2p_out stays other for a person, whatever the catalogue holds', () {
       final person = Counterparty(name: 'Ramesh Kumar', vpa: 'ramesh@okhdfcbank', kind: CounterpartyKind.person);
       final withoutRule = r.decide(
         eventType: EventType.p2pOut,
@@ -435,9 +476,18 @@ void main() {
       expect(withoutRule!.slug, 'other');
       expect(withoutRule.source, CategorySource.fallback);
 
-      // Even a merchant-looking payee: the catalogue is not consulted.
-      final shop = r.decide(eventType: EventType.p2pOut, input: input('SWIGGY'));
-      expect(shop!.slug, 'other');
+      // A person who shares a business's name is still a person.
+      final namesake = r.decide(eventType: EventType.p2pOut, input: input('SWIGGY', kind: CounterpartyKind.person));
+      expect(namesake!.slug, 'other');
+
+      // A payee that only contains a business's name is not that business.
+      for (final n in ['SWIGGY KUMAR', 'RAMESH ZOMATO', 'ASHA ZEPTO RAO']) {
+        final d = r.decide(
+          eventType: EventType.p2pOut,
+          input: CategoryInput(counterparty: Counterparty(name: n), senderBrand: 'SBIUPI', bundleRules: bundle),
+        );
+        expect(d!.slug, 'other', reason: n);
+      }
 
       final withRule = r.decide(
         eventType: EventType.p2pOut,
@@ -452,6 +502,33 @@ void main() {
       );
       expect(withRule!.slug, 'rent');
       expect(withRule.source, CategorySource.user);
+    });
+
+    test('p2p_out to a payee whose whole name is a known business gets the catalogue category', () {
+      // A bank\'s "trf to ZOMATO LTD" has no payee kind. The name is a business.
+      CategoryInput sbi(String name) =>
+          CategoryInput(counterparty: Counterparty(name: name), senderBrand: 'SBIUPI', bundleRules: bundle);
+
+      final exact = r.decide(eventType: EventType.p2pOut, input: sbi('SWIGGY'));
+      expect(exact!.slug, 'dining');
+      expect(exact.source, CategorySource.catalogue);
+
+      // A legal suffix is not part of the name.
+      expect(r.decide(eventType: EventType.p2pOut, input: sbi('SWIGGY LTD'))!.slug, 'dining');
+      expect(r.decide(eventType: EventType.p2pOut, input: sbi('UBER'))!.slug, 'travel');
+
+      // The user\'s own rule for the payee still wins.
+      final mine = r.decide(
+        eventType: EventType.p2pOut,
+        input: CategoryInput(
+          counterparty: Counterparty(name: 'SWIGGY'),
+          senderBrand: 'SBIUPI',
+          bundleRules: bundle,
+          userRules: [_rule('SWIGGY', 'rent', source: CategorySource.user, match: CategoryMatch.exact, priority: 0)],
+        ),
+      );
+      expect(mine!.slug, 'rent');
+      expect(mine.source, CategorySource.user);
     });
 
     test('a person never becomes a merchant key', () {

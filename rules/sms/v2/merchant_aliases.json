@@ -433,5 +433,260 @@
     "alias": "WWWBIGBASKETCOM",
     "merchantKey": "BIGBASKET",
     "kind": "variant"
+  },
+  {
+    "alias": "CTRLX TECHNOLOGIES",
+    "merchantKey": "OWNLY",
+    "kind": "legal_name"
+  },
+  {
+    "alias": "CTRLXTECHNOLOGIES",
+    "merchantKey": "OWNLY",
+    "kind": "variant"
+  },
+  {
+    "alias": "CTRLXTECHNOLOGIESPRIV",
+    "merchantKey": "OWNLY",
+    "kind": "variant"
+  },
+  {
+    "alias": "COLIFE ADVISORY",
+    "merchantKey": "COLIVE",
+    "kind": "legal_name"
+  },
+  {
+    "alias": "COLIFE ADVISORY PRIVATE L",
+    "merchantKey": "COLIVE",
+    "kind": "variant"
+  },
+  {
+    "alias": "COLIFEADVISORYPRIVATE",
+    "merchantKey": "COLIVE",
+    "kind": "variant"
+  },
+  {
+    "alias": "LE TRAVENUES TECHNOLOGY",
+    "merchantKey": "IXIGO",
+    "kind": "legal_name"
+  },
+  {
+    "alias": "LE TRAVENUES TECHN",
+    "merchantKey": "IXIGO",
+    "kind": "variant"
+  },
+  {
+    "alias": "CONFIRM TICKET",
+    "merchantKey": "IXIGO",
+    "kind": "variant"
+  },
+  {
+    "alias": "CONFIRMTKT",
+    "merchantKey": "IXIGO",
+    "kind": "variant"
+  },
+  {
+    "alias": "IBIBO GROUP PRIVAT",
+    "merchantKey": "GOIBIBO",
+    "kind": "variant"
+  },
+  {
+    "alias": "MAKEMYTRIPINDIAPVT",
+    "merchantKey": "MAKEMYTRIP",
+    "kind": "variant"
+  },
+  {
+    "alias": "RAZORPAYREDBUS",
+    "merchantKey": "REDBUS",
+    "kind": "variant"
+  },
+  {
+    "alias": "PEOPLE INTERACTIVE INDIA",
+    "merchantKey": "REDBUS",
+    "kind": "legal_name"
+  },
+  {
+    "alias": "PEOPLE INTERACTIVE",
+    "merchantKey": "REDBUS",
+    "kind": "legal_name"
+  },
+  {
+    "alias": "FLIPKARTINTERNETPVTL",
+    "merchantKey": "FLIPKART",
+    "kind": "variant"
+  },
+  {
+    "alias": "FLIPKART INTERNET PRIV",
+    "merchantKey": "FLIPKART",
+    "kind": "variant"
+  },
+  {
+    "alias": "SWIGGYINSTAMARTPRIVAT",
+    "merchantKey": "SWIGGY INSTAMART",
+    "kind": "variant"
+  },
+  {
+    "alias": "BUNDL TECHNOLOGIES PRIVAT",
+    "merchantKey": "SWIGGY",
+    "kind": "variant"
+  },
+  {
+    "alias": "SWIGGYDINERS",
+    "merchantKey": "SWIGGY",
+    "kind": "variant"
+  },
+  {
+    "alias": "ZOMATOFOOD",
+    "merchantKey": "ZOMATO",
+    "kind": "variant"
+  },
+  {
+    "alias": "ZEPTONOW",
+    "merchantKey": "ZEPTO",
+    "kind": "variant"
+  },
+  {
+    "alias": "ASSPL",
+    "merchantKey": "AMAZON",
+    "kind": "abbreviation"
+  },
+  {
+    "alias": "BRAINBEES SOLUTIONS",
+    "merchantKey": "FIRSTCRY",
+    "kind": "legal_name"
+  },
+  {
+    "alias": "LENSKART SOLUTIONS",
+    "merchantKey": "LENSKART",
+    "kind": "legal_name"
+  },
+  {
+    "alias": "FASHNEAR TECHNOLOGIES",
+    "merchantKey": "MEESHO",
+    "kind": "legal_name"
+  },
+  {
+    "alias": "AVENUE E COMMERCE",
+    "merchantKey": "DMART",
+    "kind": "legal_name"
+  },
+  {
+    "alias": "NYKAA E RETAIL",
+    "merchantKey": "NYKAA",
+    "kind": "legal_name"
+  },
+  {
+    "alias": "VISHAL RETAIL",
+    "merchantKey": "VISHAL MEGA MART",
+    "kind": "legal_name"
+  },
+  {
+    "alias": "SUNSHINE TEAHOUSE",
+    "merchantKey": "CHAAYOS",
+    "kind": "legal_name"
+  },
+  {
+    "alias": "BARBEQUE NATION HOSPITALITY",
+    "merchantKey": "BARBEQUE NATION",
+    "kind": "legal_name"
+  },
+  {
+    "alias": "OMSHARADHA FAST FO",
+    "merchantKey": "FAST FOOD",
+    "kind": "variant"
+  },
+  {
+    "alias": "APPLE INDIA PRI",
+    "merchantKey": "APPLE INDIA",
+    "kind": "variant"
+  },
+  {
+    "alias": "APPLE MEDIA SERV",
+    "merchantKey": "APPLE SERVICES",
+    "kind": "variant"
+  },
+  {
+    "alias": "UPA APPLE MEDIA SERVIC",
+    "merchantKey": "APPLE SERVICES",
+    "kind": "variant"
+  },
+  {
+    "alias": "GOOGLE INDIA DIG",
+    "merchantKey": "GOOGLE PLAY",
+    "kind": "variant"
+  },
+  {
+    "alias": "GOOGLE INDIA DIGITAL SERVICES",
+    "merchantKey": "GOOGLE PLAY",
+    "kind": "legal_name"
+  },
+  {
+    "alias": "GOOGLE INDIA SER",
+    "merchantKey": "GOOGLE PLAY",
+    "kind": "variant"
+  },
+  {
+    "alias": "GOOGLEPLAY",
+    "merchantKey": "GOOGLE PLAY",
+    "kind": "variant"
+  },
+  {
+    "alias": "YOUTUBEGOOGLE",
+    "merchantKey": "YOUTUBE",
+    "kind": "variant"
+  },
+  {
+    "alias": "TWILIO US",
+    "merchantKey": "TWILIO",
+    "kind": "variant"
+  },
+  {
+    "alias": "SPACESHIP COM",
+    "merchantKey": "SPACESHIP",
+    "kind": "variant"
+  },
+  {
+    "alias": "ORACLE SINGAPORE SINGAPOR",
+    "merchantKey": "ORACLE",
+    "kind": "variant"
+  },
+  {
+    "alias": "CURSOR AI POWERED IDE",
+    "merchantKey": "CURSOR",
+    "kind": "variant"
+  },
+  {
+    "alias": "TRAE SINGAPORE SG",
+    "merchantKey": "TRAE",
+    "kind": "variant"
+  },
+  {
+    "alias": "MYJIO",
+    "merchantKey": "JIO",
+    "kind": "variant"
+  },
+  {
+    "alias": "JIORECHARGE",
+    "merchantKey": "JIO",
+    "kind": "variant"
+  },
+  {
+    "alias": "AIR FIBER PAYMENT",
+    "merchantKey": "JIO",
+    "kind": "variant"
+  },
+  {
+    "alias": "AIR FIBER ONBOARDI",
+    "merchantKey": "JIO",
+    "kind": "variant"
+  },
+  {
+    "alias": "SWIGGYUPI",
+    "merchantKey": "SWIGGY",
+    "kind": "variant"
+  },
+  {
+    "alias": "ZEPTONOW BDPG",
+    "merchantKey": "ZEPTO",
+    "kind": "variant"
   }
 ]

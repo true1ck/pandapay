@@ -1,0 +1,40 @@
+{
+  "id": "reviewnoise2y:yes_card_upi_merchant",
+  "templateHash": "5441b21a7f1e05c583c05f25c5277cb4a28a9b60bc4c1a3ba1123f7250c1e908",
+  "weight": 1,
+  "source": "synthetic",
+  "messages": [
+    {
+      "sender": "VM-YESBNK-S",
+      "body": "INR 120.00 spent on YES BANK Card X4321 @UPI_SAMPLE CAFE 08-07-2026 06:28:00 pm. Avl Lmt INR 74,845.00. SMS BLKCC 4321 to 9840909000 if not you",
+      "observedAt": "2026-11-03T10:00:00.000Z"
+    }
+  ],
+  "expect": {
+    "facts": [
+      {
+        "factType": "movement",
+        "attrs": {
+          "direction": "debit",
+          "purpose": "purchase",
+          "rail": "card"
+        },
+        "amounts": [
+          {
+            "role": "posted",
+            "minor": 12000
+          }
+        ],
+        "instrument": {
+          "kind": "credit_card",
+          "maskDigits": "4321"
+        },
+        "counterparty": {
+          "name": "SAMPLE CAFE"
+        }
+      }
+    ]
+  },
+  "note": "YES Bank card spend in the @UPI_ layout keeps the merchant name.",
+  "origin": "review-noise-2y"
+}

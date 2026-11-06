@@ -6615,5 +6615,73 @@
     "status": "active",
     "createdBy": "baseline",
     "updatedAt": "2026-11-20T00:00:00Z"
+  },
+  {
+    "id": "HDFC-CARD-SPEND-UPI-VPA",
+    "version": 1,
+    "family": "upi_spend",
+    "senders": [
+      "HDFCBK",
+      "HDFCBN"
+    ],
+    "priority": 740,
+    "match": {
+      "pattern": "txn\\s+(?:\\b(?:rs\\.?|inr)|₹)\\s*:?\\s*(?<amt>\\d[\\d,]*(?:\\.\\d{1,2})?)\\s+on\\s+hdfc\\s+bank\\s+card\\s+[x*•.]*\\s?(?<mask>\\d{2,6})\\s+at\\s+(?<vpa>[^\\s@]+@[^\\s]+)\\s+by\\s+upi\\s+(?<ref_upiRef>\\d{9,18})",
+      "flags": "i",
+      "rejectAny": [
+        "declined",
+        "failed"
+      ]
+    },
+    "emit": [
+      {
+        "factType": "movement",
+        "attrs": {
+          "direction": "debit",
+          "purpose": "purchase",
+          "rail": "upi"
+        },
+        "amounts": [
+          {
+            "role": "posted",
+            "from": "amt",
+            "unit": "INR"
+          }
+        ],
+        "instrument": {
+          "kind": "credit_card",
+          "maskFrom": "mask"
+        },
+        "counterparty": {
+          "kind": "merchant",
+          "vpaFrom": "vpa"
+        }
+      }
+    ],
+    "confidence": 0.95,
+    "examples": [
+      {
+        "sender": "AD-HDFCBK-S",
+        "body": "Txn Rs.293.00 On HDFC Bank Card 1234 At examplefood@icici by UPI 432100112233 On 30-06 Not You? Call 18002586161/SMS BLOCK CC 1234 to 7308080808",
+        "expectFactTypes": [
+          "movement"
+        ]
+      },
+      {
+        "sender": "AX-HDFCBK-S",
+        "body": "Txn Rs.1,049.50 On HDFC Bank Card 1234 At samplemart.bdpg@icici by UPI 432100445566 On 26-05 Not You? Call 18002586161/SMS BLOCK CC 1234 to 7308080808",
+        "expectFactTypes": [
+          "movement"
+        ]
+      },
+      {
+        "sender": "AX-HDFCBK-S",
+        "body": "Txn Rs.293.00 declined On HDFC Bank Card 1234 At examplefood@icici by UPI 432100112233 On 30-06",
+        "expectFactTypes": []
+      }
+    ],
+    "status": "active",
+    "createdBy": "review-noise-2y",
+    "updatedAt": "2026-11-07T00:00:00Z"
   }
 ]
