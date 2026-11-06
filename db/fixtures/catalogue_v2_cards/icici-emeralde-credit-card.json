@@ -4,13 +4,11 @@
   "inputs": {
     "transform_version": "7",
     "source_record_sha256": "53e6e2eb10f4aec6230e9b75a0460d695a1da46374b912cc0a467ffa0bbc1bff",
-    "override_sha256": "890d10b6c5919d2871082f4ac19c208ff48b4f74eaf5af3f66292aab718b3dee",
+    "override_sha256": "12d36cadb67e064fac742a88a3fb6e42ad59c23e3df50b56dfc1efb9be85977c",
     "directory_sha256": "b1094d54b77e848d22f7a9a64f3ae6d1ef43ca3eb2fc8e40cd43ed1994664694",
     "verified": false
   },
-  "blocking_flags": [
-    "info_rule"
-  ],
+  "blocking_flags": [],
   "card": {
     "id": "icici-emeralde-credit-card:card",
     "slug": "icici-emeralde-credit-card",
@@ -27,8 +25,8 @@
     "points_expiry_months": 36,
     "model_status": "partial",
     "model_coverage": {
-      "rules_total": 12,
-      "rules_modelled": 10,
+      "rules_total": 13,
+      "rules_modelled": 11,
       "rules_info": 2,
       "caps_total": 4,
       "caps_enforced": 4,
@@ -61,7 +59,17 @@
         {
           "code": "info_rule",
           "source_local_id": "education_direct_standard",
+          "detail": "depends_on_txn_attribute"
+        },
+        {
+          "code": "info_rule",
+          "source_local_id": "education_direct_standard",
           "detail": "condition:channel_type"
+        },
+        {
+          "code": "depends_on_txn_attribute",
+          "source_local_id": "education_direct_standard",
+          "detail": null
         },
         {
           "code": "exclusion_rail_dropped",
@@ -97,6 +105,24 @@
           "reason": "MITC says reward points accrued per statement cycle are capped on transportation.",
           "source_url": "https://www.icicibank.com/managed-assets/docs/personal/cards/mitc_cc.pdf",
           "checked_on": "2026-11-05",
+          "citation": null
+        },
+        {
+          "path": "reward_rules[id=education_direct_standard].depends_on_txn_attribute",
+          "op": "set",
+          "value_sha256": "b5bea41b6c623f7c",
+          "reason": "card-data group4: D14b. The rule is restricted to education paid directly (channel 'direct_pos_or_education_gateway'); the MITC charges 1% only on \"education payments made through third-party apps\", and direct vs third-party app is not in the C3.1 context. Its rate equals the 4 per Rs100 base. The record's education_third_party_zero_reward exclusion is broadened by the loader to all education (under-states); the MITC states no reward exclusion for third-party education.",
+          "source_url": "https://www.icici.bank.in/managed-assets/docs/personal/cards/mitc_cc.pdf",
+          "checked_on": "2026-11-06",
+          "citation": null
+        },
+        {
+          "path": "reward_rules",
+          "op": "append",
+          "value_sha256": "1b8b214f8fbc2475",
+          "reason": "card-data group4: D24d. MITC: \"No reward points will be provided for transactions falling under the Cash and Rent categories\"; MCC table: Rent 7014, 7407, 5271, 6513; Cash 6011, 6050, 6051, 6529, 6530, 6538, 6666, 7777, 9999, 6010, 3882, 6541, 6542. The record lists rent MCCs 6513/7349 only and cash by ATM rail only.",
+          "source_url": "https://www.icici.bank.in/managed-assets/docs/personal/cards/mitc_cc.pdf",
+          "checked_on": "2026-11-06",
           "citation": null
         }
       ]
@@ -679,9 +705,12 @@
           "source_local_id": "education_direct_standard",
           "part": null,
           "info_reasons": [
+            "depends_on_txn_attribute",
             "condition:channel_type"
           ],
-          "flags": []
+          "flags": [
+            "depends_on_txn_attribute"
+          ]
         },
         "notes": null,
         "effective_from": "2024-11-15",
@@ -806,6 +835,57 @@
         "max_engine_version": null,
         "source_local_id": "fee_interest_zero_reward",
         "display_note": "Non-purchase charges and reversals do not earn Reward Points."
+      },
+      {
+        "id": "icici-emeralde-credit-card:rule:cd4_mitc_mcc_exclusions",
+        "category_id": null,
+        "category_slug": null,
+        "merchant_pattern": null,
+        "rail": null,
+        "unit": "points_per_100",
+        "rate": 0,
+        "min_txn_inr": null,
+        "max_txn_inr": null,
+        "priority": 1,
+        "conditions": {
+          "source_local_id": "cd4_mitc_mcc_exclusions",
+          "part": null,
+          "info_reasons": [],
+          "flags": []
+        },
+        "notes": null,
+        "effective_from": "2024-11-15",
+        "effective_to": null,
+        "excluded_categories": [],
+        "rule_role": "exclusion",
+        "merchant_slugs": [],
+        "platform_slugs": [],
+        "mcc_include": [
+          "3882",
+          "5271",
+          "6010",
+          "6011",
+          "6050",
+          "6051",
+          "6529",
+          "6530",
+          "6538",
+          "6541",
+          "6542",
+          "6666",
+          "7014",
+          "7407",
+          "7777",
+          "9999"
+        ],
+        "mcc_exclude": [],
+        "except_merchant_slugs": [],
+        "except_platform_slugs": [],
+        "block_inr": null,
+        "min_engine_version": 2,
+        "max_engine_version": null,
+        "source_local_id": "cd4_mitc_mcc_exclusions",
+        "display_note": "Rent and cash MCCs earn no reward points."
       }
     ],
     "cap_rules": [
