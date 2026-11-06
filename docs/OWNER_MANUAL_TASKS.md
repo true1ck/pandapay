@@ -26,7 +26,7 @@ Tags used below:
   - A new `IMAP_ENCRYPTION_KEY` has to be made, and `PRODUCT_TERMS_VERSION` set.
   - You have to approve each cutover step, and every push or merge that triggers a deploy.
   - Backups, maintenance window and tester list need your decisions.
-  - The device acceptance checks (about 25 rows) and the accuracy check on your real messages are still open.
+  - The device acceptance checks (about 23 rows) and the accuracy check on your real messages are still open.
 
 ## A. Before a test build on your iPhone [iPhone test]
 
