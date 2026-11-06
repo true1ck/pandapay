@@ -4,13 +4,12 @@
   "inputs": {
     "transform_version": "7",
     "source_record_sha256": "020b50efb744714ece417fda47ba7e482e177debf2f0ff73aabdc9b8801ed8d5",
-    "override_sha256": "8fc21ba6975810b31bf7a363ea0af0ad97b9b4303941212a6817aa2f07912a5b",
+    "override_sha256": "afdad699d22883a3a3f1a554bb816d3b5bf47f5faec49c16854d357b30d73dc3",
     "directory_sha256": "b1094d54b77e848d22f7a9a64f3ae6d1ef43ca3eb2fc8e40cd43ed1994664694",
     "verified": false
   },
   "blocking_flags": [
-    "info_rule",
-    "post_limit_conflict"
+    "info_rule"
   ],
   "card": {
     "id": "american-express-platinum-charge-card-india:card",
@@ -29,21 +28,11 @@
     "model_status": "partial",
     "model_coverage": {
       "rules_total": 10,
-      "rules_modelled": 6,
-      "rules_info": 4,
+      "rules_modelled": 7,
+      "rules_info": 3,
       "caps_total": 1,
       "caps_enforced": 1,
       "flags": [
-        {
-          "code": "info_rule",
-          "source_local_id": "base_all_eligible_spend",
-          "detail": "condition:clause:eligible_spend"
-        },
-        {
-          "code": "unmapped_excluded_category",
-          "source_local_id": "base_all_eligible_spend",
-          "detail": null
-        },
         {
           "code": "mcc_scoped_exclusion",
           "source_local_id": "utility_zero_rewards",
@@ -113,16 +102,6 @@
           "code": "token_replaced_by_conditions",
           "source_local_id": "shopwise_up_to_5x",
           "detail": null
-        },
-        {
-          "code": "post_limit_conflict",
-          "source_local_id": "fuel_bonus_points_monthly_cap",
-          "detail": null
-        },
-        {
-          "code": "synthesized_base_rule",
-          "source_local_id": null,
-          "detail": "block ₹40"
         }
       ],
       "overrides_applied": [
@@ -152,6 +131,24 @@
           "source_url": "https://www.americanexpress.com/content/dam/amex/en-in/benefits/rewards/membership-rewards/membership-rewards-terms.pdf",
           "checked_on": "2026-11-05",
           "citation": null
+        },
+        {
+          "path": "reward_rules[id=base_all_eligible_spend].conditions",
+          "op": "set",
+          "value_sha256": "44136fa355b3678a",
+          "reason": "MR terms table (Platinum Card): \"All other spends: 1 MR point for every Rs. 40 spent\", telecommunications included; card page: \"1 Membership Reward points for every INR 40 spent\". The conditions only restated the exclusions, which are their own rows (insurance, utilities MCC 4900, cash, EMI; fuel has its own rule); the \"eligible_spend == true\" clause made the base rule info. A category list here would also exclude telecom bills, which earn.",
+          "source_url": "https://www.americanexpress.com/content/dam/amex/en-in/benefits/rewards/membership-rewards/membership-rewards-terms.pdf",
+          "checked_on": "2026-11-06",
+          "citation": null
+        },
+        {
+          "path": "cap_rules[id=fuel_bonus_points_monthly_cap].post_limit_behavior",
+          "op": "set",
+          "value_sha256": "633ad9b7e4fddc1d",
+          "reason": "MR terms: \"5 Membership Rewards Points for every Rs. 100 spent on Fuel* (capped at a maximum of 5000 Points every calendar month)\". What fuel earns after the 5,000 points is not stated; the total cap is kept with nothing after it (the engines already applied this stricter reading, flagged post_limit_conflict). H2: may under-state.",
+          "source_url": "https://www.americanexpress.com/content/dam/amex/en-in/benefits/rewards/membership-rewards/membership-rewards-terms.pdf",
+          "checked_on": "2026-11-06",
+          "citation": null
         }
       ]
     },
@@ -170,23 +167,14 @@
         "conditions": {
           "source_local_id": "base_all_eligible_spend",
           "part": null,
-          "info_reasons": [
-            "condition:clause:eligible_spend"
-          ],
-          "flags": [
-            "unmapped_excluded_category"
-          ]
+          "info_reasons": [],
+          "flags": []
         },
         "notes": null,
         "effective_from": "2025-06-12",
         "effective_to": null,
-        "excluded_categories": [
-          "cat-bills",
-          "cat-emi",
-          "cat-fuel",
-          "cat-insurance"
-        ],
-        "rule_role": "info",
+        "excluded_categories": [],
+        "rule_role": "base",
         "merchant_slugs": [],
         "platform_slugs": [],
         "mcc_include": [],
@@ -643,42 +631,6 @@
         "max_engine_version": null,
         "source_local_id": "wp7_emi_rail_exclusion",
         "display_note": "EMI transactions earn no rewards."
-      },
-      {
-        "id": "american-express-platinum-charge-card-india:rule:base-block",
-        "category_id": null,
-        "category_slug": null,
-        "merchant_pattern": null,
-        "rail": null,
-        "unit": "points_per_100",
-        "rate": 1,
-        "min_txn_inr": null,
-        "max_txn_inr": null,
-        "priority": 1000,
-        "conditions": {
-          "source_local_id": null,
-          "part": null,
-          "info_reasons": [],
-          "flags": [
-            "synthesized_base_rule"
-          ]
-        },
-        "notes": null,
-        "effective_from": null,
-        "effective_to": null,
-        "excluded_categories": [],
-        "rule_role": "base",
-        "merchant_slugs": [],
-        "platform_slugs": [],
-        "mcc_include": [],
-        "mcc_exclude": [],
-        "except_merchant_slugs": [],
-        "except_platform_slugs": [],
-        "block_inr": 40,
-        "min_engine_version": 2,
-        "max_engine_version": null,
-        "source_local_id": null,
-        "display_note": "1 pts per ₹40"
       }
     ],
     "cap_rules": [
