@@ -1,0 +1,26 @@
+{
+  "source_slug": "american-express-membership-rewards-credit-card-india",
+  "changes": [
+    {
+      "path": "reward_rules[id=safekey_emi_standard].depends_on_txn_attribute",
+      "value": true,
+      "reason": "Card page footnote 2: points continue \"on all EMI transactions through American Express SafeKey\" but not \"on any EMI option selected from a merchant's website\". SafeKey EMI, merchant-website EMI and terminal EMI all arrive on the EMI rail; the C3.1 context cannot tell them apart (D14b), so the rule stays info and the rail-EMI exclusion applies (may under-state, H2).",
+      "source_url": "https://www.americanexpress.com/in/credit-cards/membership-rewards-card/",
+      "checked_on": "2026-11-06"
+    },
+    {
+      "path": "reward_rules[id=post_purchase_emi_standard].depends_on_txn_attribute",
+      "value": true,
+      "reason": "Card page footnote 2: points continue \"on all EMI conversions done post purchase\". Whether an EMI was converted after purchase or chosen at the merchant is not in the C3.1 context (D14b); info, the rail-EMI exclusion applies (may under-state, H2).",
+      "source_url": "https://www.americanexpress.com/in/credit-cards/membership-rewards-card/",
+      "checked_on": "2026-11-06"
+    },
+    {
+      "path": "reward_rules[id=reward_multiplier_2x]",
+      "op": "remove",
+      "reason": "The card page (fetched 2026-11-06) names no Reward Multiplier rate for this card, and Amex India's notice (quoted by Business Today, 1 Sep 2026) says \"Effective 30 September 2026, the Reward Multiplier program will be discontinued.\" An unverified 2X on a closed programme is removed (H2); Reward Multiplier spends earn the base rate.",
+      "source_url": "https://www.businesstoday.in/personal-finance/story/american-express-reward-multiplier-ends-this-month-what-cardholders-should-know-552371-2026-09-01",
+      "checked_on": "2026-11-06"
+    }
+  ]
+}
