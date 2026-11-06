@@ -4,14 +4,11 @@
   "inputs": {
     "transform_version": "7",
     "source_record_sha256": "0bdfbebce5797eaa49a7f26b434c775fba6fba4cd6b0b1d09fff2d94542d18b5",
-    "override_sha256": null,
+    "override_sha256": "bcaf594a9c6896300669451984ee252a8f8a30abde201357d53c884d22d81ea6",
     "directory_sha256": "b1094d54b77e848d22f7a9a64f3ae6d1ef43ca3eb2fc8e40cd43ed1994664694",
     "verified": false
   },
-  "blocking_flags": [
-    "info_rule",
-    "orphan_cap"
-  ],
+  "blocking_flags": [],
   "card": {
     "id": "hdfc-diners-club-black-metal:card",
     "slug": "hdfc-diners-club-black-metal",
@@ -31,7 +28,7 @@
       "rules_total": 16,
       "rules_modelled": 15,
       "rules_info": 1,
-      "caps_total": 10,
+      "caps_total": 9,
       "caps_enforced": 6,
       "flags": [
         {
@@ -40,24 +37,14 @@
           "detail": null
         },
         {
-          "code": "channel_list_alternatives",
+          "code": "mcc_scoped_exclusion",
           "source_local_id": "education_third_party_exclusion",
           "detail": null
         },
         {
-          "code": "partial_merchant_list",
-          "source_local_id": "education_third_party_exclusion",
-          "detail": null
-        },
-        {
-          "code": "unresolved_merchant_alternative",
-          "source_local_id": "education_third_party_exclusion",
-          "detail": null
-        },
-        {
-          "code": "channel_type_restates_brand",
-          "source_local_id": "education_third_party_exclusion",
-          "detail": null
+          "code": "info_rule",
+          "source_local_id": "weekend_dining",
+          "detail": "depends_on_txn_attribute"
         },
         {
           "code": "info_rule",
@@ -68,6 +55,11 @@
           "code": "info_rule",
           "source_local_id": "weekend_dining",
           "detail": "condition:channel_type"
+        },
+        {
+          "code": "depends_on_txn_attribute",
+          "source_local_id": "weekend_dining",
+          "detail": null
         },
         {
           "code": "partial_category_list",
@@ -115,11 +107,6 @@
           "detail": null
         },
         {
-          "code": "orphan_cap",
-          "source_local_id": "smartbuy_voucher_monthly",
-          "detail": null
-        },
-        {
           "code": "unenforced_period",
           "source_local_id": "weekend_dining_daily",
           "detail": null
@@ -145,7 +132,53 @@
           "detail": "mentions spend, no threshold read"
         }
       ],
-      "overrides_applied": []
+      "overrides_applied": [
+        {
+          "path": "reward_rules[id=weekend_dining].depends_on_txn_attribute",
+          "op": "set",
+          "value_sha256": "b5bea41b6c623f7c",
+          "reason": "Card data review: product page: \"2X Rewards on Weekend Dining\". The rule is limited to Saturdays and Sundays at participating standalone restaurants; the day-of-week window is a D14b transaction attribute (the loader's own TXN_ATTRIBUTE_KEY lists day_of_week) and the participating list is not published, so the rule stays info with the deferral flag and dining earns the base 5 RP/Rs150 (under-states weekend dining).",
+          "source_url": "https://www.hdfc.bank.in/credit-cards/diners-club-black-metal-edition-credit-card",
+          "checked_on": "2026-11-06",
+          "citation": null
+        },
+        {
+          "path": "reward_rules[id=education_third_party_exclusion].conditions",
+          "op": "set",
+          "value_sha256": "c7e0bfaa920cc7c0",
+          "reason": "Card data review: MITC v4.18 (Oct 2026) I: \"Education payments made through third-party apps like (but not limited to) CRED, Cheq, MobiKwik, etc will not earn Reward Points.\" The record named three apps, so v2 excluded only those; an SMS spend never carries the platform and CRED is not a directory merchant, so app-paid education earned 5 RP/Rs150 in v2 (over-statement). Restated as an exclusion on the education category and education MCCs (D20a rows); direct school/college payments are under-stated (H2).",
+          "source_url": "https://www.hdfc.bank.in/content/dam/hdfcbankpws/in/en/personal-banking/discover-products/cards/credit-cards/personal-mitc/mitc-in-english.pdf",
+          "checked_on": "2026-11-06",
+          "citation": null
+        },
+        {
+          "path": "reward_rules[id=education_third_party_exclusion].rail",
+          "op": "set",
+          "value_sha256": "251ecb599a3f3a2f",
+          "reason": "Card data review: an app payment may reach the card on any rail.",
+          "source_url": "https://www.hdfc.bank.in/content/dam/hdfcbankpws/in/en/personal-banking/discover-products/cards/credit-cards/personal-mitc/mitc-in-english.pdf",
+          "checked_on": "2026-11-06",
+          "citation": null
+        },
+        {
+          "path": "reward_rules[id=education_third_party_exclusion].channel_type",
+          "op": "set",
+          "value_sha256": "5cf7504d9781301d",
+          "reason": "Card data review: the third-party-app channel cannot be told from the context (see the conditions change).",
+          "source_url": "https://www.hdfc.bank.in/content/dam/hdfcbankpws/in/en/personal-banking/discover-products/cards/credit-cards/personal-mitc/mitc-in-english.pdf",
+          "checked_on": "2026-11-06",
+          "citation": null
+        },
+        {
+          "path": "cap_rules[id=smartbuy_voucher_monthly]",
+          "op": "remove",
+          "value_sha256": "74234e98afe7498f",
+          "reason": "Card data review: the record's 3,000 RP/month SmartBuy voucher sub-cap (from 1 July 2026) limits accelerated points on SmartBuy brand vouchers. No loaded rule pays an accelerated rate on vouchers (the 3X 'instant vouchers' item does not load; only hotels 10X, flights/Myntra 5X, IRCTC 3X do), so the sub-cap had no target (orphan_cap) and limited nothing in either engine (v1 matches caps only by rule or category). Restore it when a voucher accelerator is modelled.",
+          "source_url": "https://offers.smartbuy.hdfc.bank.in/v2/accelerated-earn-rules",
+          "checked_on": "2026-11-06",
+          "citation": null
+        }
+      ]
     },
     "reward_rules": [
       {
@@ -443,94 +476,7 @@
           "part": 1,
           "info_reasons": [],
           "flags": [
-            "channel_list_alternatives",
-            "partial_merchant_list",
-            "unresolved_merchant_alternative",
-            "channel_type_restates_brand"
-          ]
-        },
-        "notes": null,
-        "effective_from": "2024-09-01",
-        "effective_to": null,
-        "excluded_categories": [],
-        "rule_role": "exclusion",
-        "merchant_slugs": [
-          "cred_pay",
-          "mobikwik"
-        ],
-        "platform_slugs": [],
-        "mcc_include": [],
-        "mcc_exclude": [],
-        "except_merchant_slugs": [],
-        "except_platform_slugs": [],
-        "block_inr": null,
-        "min_engine_version": 2,
-        "max_engine_version": null,
-        "source_local_id": "education_third_party_exclusion",
-        "display_note": "Third-party education payments do not earn Reward Points; points earned are reversed. Direct college/school website or POS education payments remain eligible for base rewards."
-      },
-      {
-        "id": "hdfc-diners-club-black-metal:rule:education_third_party_exclusion#2",
-        "category_id": "cat-education",
-        "category_slug": "education",
-        "merchant_pattern": null,
-        "rail": null,
-        "unit": "points_per_150",
-        "rate": 0,
-        "min_txn_inr": null,
-        "max_txn_inr": null,
-        "priority": 7,
-        "conditions": {
-          "source_local_id": "education_third_party_exclusion",
-          "part": 2,
-          "info_reasons": [],
-          "flags": [
-            "channel_list_alternatives",
-            "partial_merchant_list",
-            "unresolved_merchant_alternative",
-            "channel_type_restates_brand"
-          ]
-        },
-        "notes": null,
-        "effective_from": "2024-09-01",
-        "effective_to": null,
-        "excluded_categories": [],
-        "rule_role": "exclusion",
-        "merchant_slugs": [],
-        "platform_slugs": [
-          "cheq_app"
-        ],
-        "mcc_include": [],
-        "mcc_exclude": [],
-        "except_merchant_slugs": [],
-        "except_platform_slugs": [],
-        "block_inr": null,
-        "min_engine_version": 2,
-        "max_engine_version": null,
-        "source_local_id": "education_third_party_exclusion",
-        "display_note": "Third-party education payments do not earn Reward Points; points earned are reversed. Direct college/school website or POS education payments remain eligible for base rewards."
-      },
-      {
-        "id": "hdfc-diners-club-black-metal:rule:education_third_party_exclusion#v1",
-        "category_id": "cat-education",
-        "category_slug": "education",
-        "merchant_pattern": null,
-        "rail": null,
-        "unit": "points_per_150",
-        "rate": 0,
-        "min_txn_inr": null,
-        "max_txn_inr": null,
-        "priority": 7,
-        "conditions": {
-          "source_local_id": "education_third_party_exclusion",
-          "part": "v1",
-          "info_reasons": [],
-          "flags": [
-            "channel_list_alternatives",
-            "partial_merchant_list",
-            "unresolved_merchant_alternative",
-            "channel_type_restates_brand",
-            "exclusion_v1_projection"
+            "mcc_scoped_exclusion"
           ]
         },
         "notes": null,
@@ -551,6 +497,92 @@
         "display_note": "Third-party education payments do not earn Reward Points; points earned are reversed. Direct college/school website or POS education payments remain eligible for base rewards."
       },
       {
+        "id": "hdfc-diners-club-black-metal:rule:education_third_party_exclusion#2",
+        "category_id": "cat-education",
+        "category_slug": "education",
+        "merchant_pattern": null,
+        "rail": null,
+        "unit": "points_per_150",
+        "rate": 0,
+        "min_txn_inr": null,
+        "max_txn_inr": null,
+        "priority": 7,
+        "conditions": {
+          "source_local_id": "education_third_party_exclusion",
+          "part": 2,
+          "info_reasons": [],
+          "flags": [
+            "mcc_scoped_exclusion"
+          ]
+        },
+        "notes": null,
+        "effective_from": "2024-09-01",
+        "effective_to": null,
+        "excluded_categories": [],
+        "rule_role": "exclusion",
+        "merchant_slugs": [],
+        "platform_slugs": [],
+        "mcc_include": [
+          "8211",
+          "8220",
+          "8241",
+          "8244",
+          "8249",
+          "8299"
+        ],
+        "mcc_exclude": [],
+        "except_merchant_slugs": [],
+        "except_platform_slugs": [],
+        "block_inr": null,
+        "min_engine_version": 2,
+        "max_engine_version": null,
+        "source_local_id": "education_third_party_exclusion",
+        "display_note": "Third-party education payments do not earn Reward Points; points earned are reversed. Direct college/school website or POS education payments remain eligible for base rewards."
+      },
+      {
+        "id": "hdfc-diners-club-black-metal:rule:education_third_party_exclusion#3",
+        "category_id": null,
+        "category_slug": null,
+        "merchant_pattern": null,
+        "rail": null,
+        "unit": "points_per_150",
+        "rate": 0,
+        "min_txn_inr": null,
+        "max_txn_inr": null,
+        "priority": 7,
+        "conditions": {
+          "source_local_id": "education_third_party_exclusion",
+          "part": 3,
+          "info_reasons": [],
+          "flags": [
+            "mcc_scoped_exclusion"
+          ]
+        },
+        "notes": null,
+        "effective_from": "2024-09-01",
+        "effective_to": null,
+        "excluded_categories": [],
+        "rule_role": "exclusion",
+        "merchant_slugs": [],
+        "platform_slugs": [],
+        "mcc_include": [
+          "8211",
+          "8220",
+          "8241",
+          "8244",
+          "8249",
+          "8299"
+        ],
+        "mcc_exclude": [],
+        "except_merchant_slugs": [],
+        "except_platform_slugs": [],
+        "block_inr": null,
+        "min_engine_version": 2,
+        "max_engine_version": null,
+        "source_local_id": "education_third_party_exclusion",
+        "display_note": "Third-party education payments do not earn Reward Points; points earned are reversed. Direct college/school website or POS education payments remain eligible for base rewards."
+      },
+      {
         "id": "hdfc-diners-club-black-metal:rule:weekend_dining",
         "category_id": "cat-dining",
         "category_slug": "dining",
@@ -565,10 +597,13 @@
           "source_local_id": "weekend_dining",
           "part": null,
           "info_reasons": [
+            "depends_on_txn_attribute",
             "condition:days_of_week",
             "condition:channel_type"
           ],
-          "flags": []
+          "flags": [
+            "depends_on_txn_attribute"
+          ]
         },
         "notes": null,
         "effective_from": "2023-11-08",
@@ -1750,29 +1785,6 @@
         "anchor": null,
         "min_engine_version": 2,
         "source_local_id": "smartbuy_accelerated_monthly"
-      },
-      {
-        "id": "hdfc-diners-club-black-metal:cap:smartbuy_voucher_monthly",
-        "reward_rule_id": null,
-        "category_id": null,
-        "category_slug": null,
-        "benefit_kind": null,
-        "label": "Smartbuy voucher monthly",
-        "measure": "reward_value",
-        "period": "calendar_month",
-        "cap_value": 3000,
-        "post_cap_unit": null,
-        "post_cap_rate": null,
-        "resets_on_day": 1,
-        "cap_kind": "bonus_points",
-        "cap_amount": 3000,
-        "scope": "targets",
-        "targets": [],
-        "parent_cap_id": "hdfc-diners-club-black-metal:cap:smartbuy_accelerated_monthly",
-        "post_cap_behavior": null,
-        "anchor": null,
-        "min_engine_version": 1,
-        "source_local_id": "smartbuy_voucher_monthly"
       },
       {
         "id": "hdfc-diners-club-black-metal:cap:weekend_dining_daily",
