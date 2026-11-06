@@ -345,12 +345,16 @@ class DeploySecurityOrderTest(unittest.TestCase):
         self.assertFalse(any(c[0] == "docker" and "stop" in c[1] for c in commands))
         self.assertTrue(running.issuperset(WRITERS))
 
-    def test_deploy_workflow_checks_master_tip_before_ssh_deploy(self):
+    def test_deploy_workflow_checks_branch_tip_before_ssh_deploy(self):
         workflow = (ROOT / ".github" / "workflows" / "deploy-prod.yml").read_text()
-        gate = workflow.index("Confirm the tested target is still current master")
+        gate = workflow.index("Confirm the tested target is still the current branch tip")
         deploy = workflow.index("- name: Deploy\n", gate)
-        self.assertIn("git/ref/heads/master", workflow[gate:deploy])
-        self.assertIn('current_master_sha" != "$SHA"', workflow[gate:deploy])
+        self.assertIn("git/ref/heads/$DEPLOY_BRANCH", workflow[gate:deploy])
+        self.assertIn('current_tip_sha" != "$SHA"', workflow[gate:deploy])
+        # Only allow-listed branches may deploy, and the server is told which
+        # ref the SHA must be the exact tip of.
+        self.assertIn("master|latest-dev)", workflow)
+        self.assertIn('"$SHA" "$DEPLOY_BRANCH"', workflow[deploy:])
 
     def test_partial_service_start_is_stopped_when_readiness_fails(self):
         result, commands, running = self.run_deploy(FAIL_AUTH_READY="1")
