@@ -7,17 +7,27 @@
  *   - expected_points / expected_value_inr (and the estimated points-ledger
  *     row) for every spend the cap replay covers, at least this month;
  *   - each replayed transaction's card_state_v2 record, so later edits
- *     reverse exactly.
+ *     reverse exactly;
+ *   - on EVERY user card whose product has fee-waiver rules (v1 or v2), the
+ *     current period's fee_waiver_states (C8 D33b): qualified spend replayed
+ *     with the live path's (v1) maths, then waived_at settled. Earlier
+ *     periods' fee-waiver history is not rebuilt.
  *
- * A catalogue re-import deletes and re-creates a card's rules, so their old
- * state rows are gone; this replays the ledger against the new rules.
- * v1-shaped cards are skipped (they keep today's behaviour).
+ * A forced catalogue re-import deletes and re-creates a card's rules, so
+ * their state rows cascade away; this replays the ledger against the new
+ * rules. v1-shaped cards get only the fee-waiver rebuild (the rest of their
+ * state keeps today's behaviour).
+ *
+ * After `seed_merchant_directory.js --apply`, a running API server keeps its
+ * cached merchant directory for up to 5 minutes (C8 D33f, M4); this script
+ * loads the directory fresh each run.
  *
  * Usage:
  *   node api/scripts/recompute_card_state.js                 # dry run: prints diffs, writes nothing
  *   node api/scripts/recompute_card_state.js --apply
  *   Options:
- *     --as-of YYYY-MM-DD      the "current" day (default: today in India, Asia/Kolkata)
+ *     --as-of YYYY-MM-DD      the "current" day (default: now — India day for v2
+ *                             windows, the UTC day for fee-waiver periods, as live)
  *     --since YYYY-MM-DD      also replay from this day (wider rebuild)
  *     --card-slug <slug>      only user cards of this card product
  *     --user-card <uuid>      only this user card
@@ -33,6 +43,7 @@
 'use strict';
 
 const cardStateV2 = require('../src/card_state_v2');
+const { istDay } = require('../src/cycles');
 
 const DATE = /^\d{4}-\d{2}-\d{2}$/;
 const UUID = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
@@ -82,6 +93,15 @@ function describe(plan, verbose, log) {
   }
 }
 
+function describeFeeWaivers(feePlan, verbose, log) {
+  if (!verbose || !feePlan) return;
+  for (const d of feePlan.diff) {
+    log(`    fee waiver ${d.fee_waiver_rule_id} ${d.period_start}: `
+      + `${d.before ? `${fmt(d.before.qualified_spend)}${d.before.waived ? ' waived' : ''}` : '–'}`
+      + ` → ${fmt(d.after.qualified_spend)}${d.after.waived ? ' waived' : ''}`);
+  }
+}
+
 /**
  * Recomputes every matching user card. `nested` runs each card in a
  * savepoint of the caller's transaction (tests) instead of its own
@@ -92,13 +112,16 @@ async function recompute(client, opts = {}) {
   const tx = opts.nested
     ? { begin: 'SAVEPOINT recompute_card', commit: 'RELEASE SAVEPOINT recompute_card', rollback: 'ROLLBACK TO SAVEPOINT recompute_card' }
     : { begin: 'BEGIN', commit: 'COMMIT', rollback: 'ROLLBACK' };
-  let asOfDay = opts.asOf;
-  // v2 windows are India calendar days (C8 D23c).
-  if (!asOfDay) asOfDay = (await client.query(`SELECT (now() AT TIME ZONE 'Asia/Kolkata')::date::text AS today`)).rows[0].today;
-  const asOf = new Date(`${asOfDay}T12:00:00.000Z`);
+  // An explicit day is taken at noon UTC (the same day in UTC and India);
+  // otherwise "now": v2 windows read its India day (C8 D23c) and fee-waiver
+  // periods its UTC day, exactly as the live path keys each.
+  const asOf = opts.asOf
+    ? new Date(`${opts.asOf}T12:00:00.000Z`)
+    : new Date((await client.query(`SELECT now() AS now`)).rows[0].now);
+  const asOfDay = opts.asOf || istDay(asOf);
 
   const candidates = await client.query(
-    `SELECT uc.id, uc.profile_id, cp.slug
+    `SELECT uc.id, uc.profile_id, uc.card_product_id, uc.statement_day, cp.slug
        FROM user_cards uc
        JOIN card_products cp ON cp.id = uc.card_product_id
       WHERE uc.is_archived = false AND cp.status = 'published'
@@ -110,7 +133,7 @@ async function recompute(client, opts = {}) {
 
   const summary = {
     mode: opts.apply ? 'apply' : 'dry-run', asOf: asOfDay, scanned: 0, v2Cards: 0, changedCards: 0,
-    capRows: 0, milestoneRows: 0, transactions: 0, records: 0, failed: 0,
+    capRows: 0, milestoneRows: 0, transactions: 0, records: 0, feeWaiverRows: 0, failed: 0,
   };
   for (const row of candidates.rows) {
     summary.scanned += 1;
@@ -121,29 +144,44 @@ async function recompute(client, opts = {}) {
       await client.query(`SELECT set_config('app.user_id', $1, true)`, [row.profile_id]);
       await client.query(`SELECT pg_advisory_xact_lock(hashtextextended($1::text, 0))`, [`transaction-ingest:${row.profile_id}`]);
       const v2 = await cardStateV2.loadV2Card(client, row.id, { profileId: row.profile_id });
-      if (!v2) {
-        await client.query(tx.rollback);
-        if (opts.nested) await client.query(tx.commit);
-        continue;
-      }
-      summary.v2Cards += 1;
-      const plan = await cardStateV2.planCardRebuild(client, v2, {
-        asOf, since: opts.since || null, caps: true, milestones: true, expected: true,
-      });
-      const changes = plan.diff.caps.length + plan.diff.milestones.length + plan.diff.transactions.length
-        + plan.txnRecordUpdates.length;
-      if (changes > 0) {
+      const card = {
+        userCardId: row.id, profileId: row.profile_id, cardProductId: row.card_product_id, statementDay: row.statement_day,
+      };
+      if (v2) summary.v2Cards += 1;
+      const plan = v2
+        ? await cardStateV2.planCardRebuild(client, v2, {
+          asOf, since: opts.since || null, caps: true, milestones: true, expected: true,
+        })
+        : null;
+      const changes = plan
+        ? plan.diff.caps.length + plan.diff.milestones.length + plan.diff.transactions.length + plan.txnRecordUpdates.length
+        : 0;
+      // C8 D33b: fee waivers on every card with rules (v1 maths, current period).
+      let feePlan = await cardStateV2.planFeeWaiverRebuild(client, card, { asOf, v2 });
+      const feeChanges = feePlan ? feePlan.diff.length : 0;
+      if (changes > 0 || feeChanges > 0) {
         summary.changedCards += 1;
-        summary.capRows += plan.diff.caps.length;
-        summary.milestoneRows += plan.diff.milestones.length;
-        summary.transactions += plan.diff.transactions.length;
-        summary.records += plan.txnRecordUpdates.length;
-        log(`  ${row.slug} user_card ${row.id}: caps ${plan.diff.caps.length}, milestones ${plan.diff.milestones.length}, `
-          + `expected values ${plan.diff.transactions.length}, records ${plan.txnRecordUpdates.length}`);
-        describe(plan, opts.verbose, log);
+        if (plan) {
+          summary.capRows += plan.diff.caps.length;
+          summary.milestoneRows += plan.diff.milestones.length;
+          summary.transactions += plan.diff.transactions.length;
+          summary.records += plan.txnRecordUpdates.length;
+        }
+        summary.feeWaiverRows += feeChanges;
+        log(`  ${row.slug} user_card ${row.id}: caps ${plan ? plan.diff.caps.length : 0}, `
+          + `milestones ${plan ? plan.diff.milestones.length : 0}, `
+          + `expected values ${plan ? plan.diff.transactions.length : 0}, records ${plan ? plan.txnRecordUpdates.length : 0}, `
+          + `fee waivers ${feeChanges}`);
+        if (plan) describe(plan, opts.verbose, log);
+        describeFeeWaivers(feePlan, opts.verbose, log);
       }
-      if (opts.apply && changes > 0) {
-        await cardStateV2.applyCardRebuild(client, row.profile_id, v2, plan);
+      if (opts.apply && (changes > 0 || feeChanges > 0 || (feePlan && feePlan.recordUpdates.length > 0))) {
+        if (changes > 0) {
+          await cardStateV2.applyCardRebuild(client, row.profile_id, v2, plan);
+          // Records just changed; plan the fee-waiver section on top of them.
+          feePlan = await cardStateV2.planFeeWaiverRebuild(client, card, { asOf, v2 });
+        }
+        if (feePlan) await cardStateV2.applyFeeWaiverRebuild(client, row.profile_id, card, feePlan);
         await client.query(tx.commit);
       } else {
         await client.query(tx.rollback);
@@ -161,7 +199,7 @@ async function recompute(client, opts = {}) {
   log(`recompute_card_state (${summary.mode}, as of ${summary.asOf}): scanned ${summary.scanned}, `
     + `v2 ${summary.v2Cards}, changed ${summary.changedCards} — cap rows ${summary.capRows}, `
     + `milestone rows ${summary.milestoneRows}, expected values ${summary.transactions}, `
-    + `records ${summary.records}, failed ${summary.failed}`);
+    + `records ${summary.records}, fee-waiver rows ${summary.feeWaiverRows}, failed ${summary.failed}`);
   if (!opts.apply && summary.changedCards > 0) log('dry run: nothing written. Re-run with --apply to write.');
   return summary;
 }

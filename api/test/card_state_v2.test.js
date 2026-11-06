@@ -410,6 +410,32 @@ test('C8 D23d: every route that changes a transaction takes the ingest lock befo
   }
 });
 
+test('C8 D33b: fee-waiver replay keys each spend by its own v1 period, as live — statement cycles included, never wider', () => {
+  const { periodBounds } = require('../src/cycles');
+  const rule = { id: '00000000-0000-4000-8000-0000000000f9', period: 'statement_cycle', threshold_spend_inr: '5000', excluded_categories: [F.CATEGORY.rent] };
+  const asOf = new Date('2026-02-15T12:00:00Z');
+  const windows = cardStateV2.feeWaiverWindows([rule], asOf, 31);
+  // The window is exactly v1's (statement day 31 in February: Jan 31 – Feb 27, v1's approximation).
+  assert.deepEqual([windows[0].start, windows[0].end], [periodBounds('statement_cycle', asOf, { statementDay: 31 }).start, '2026-02-27']);
+  const spends = [
+    txn('2026-01-30', 1000), // previous cycle
+    txn('2026-02-10', 2000),
+    txn('2026-02-28', 3000), // outside v1's end, but v1 keys it to this cycle: counted, as live
+    txn('2026-03-01', 4000), // next cycle
+    txn('2026-02-11', 9000, { category_id: F.CATEGORY.rent }), // the rule's excluded category
+    txn('2026-02-12', 9000, { status: 'ignored' }),
+  ];
+  const plan = cardStateV2.planFeeWaivers({ windows, transactions: spends, statementDay: 31 });
+  assert.deepEqual(plan.rows.map((r) => [r.period_start, r.qualified_spend, r.waived]), [['2026-01-31', 5000, true]]);
+  // Each counted spend is one the live path adds to this same row.
+  for (const t of spends.slice(0, 4)) {
+    const own = periodBounds('statement_cycle', t.occurred_at, { statementDay: 31 });
+    assert.equal(own.start === '2026-01-31', ['2026-02-10', '2026-02-28'].includes(t.occurred_at.toISOString().slice(0, 10)));
+  }
+  // Nothing written when nothing qualifies and no row exists.
+  assert.deepEqual(cardStateV2.planFeeWaivers({ windows, transactions: [], statementDay: 31 }).toWrite, []);
+});
+
 test('C8 D33f (M2): the cap_states kind check is added NOT VALID, then validated in its own statement', () => {
   const sql = require('node:fs').readFileSync(require('node:path').join(
     __dirname, '../../db/supabase/migrations/20261106120000_card_state_v2.sql'), 'utf8')
