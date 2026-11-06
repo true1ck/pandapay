@@ -209,6 +209,170 @@
         "cap_deltas_by_source_id": {}
       },
       "why": "EMI transactions and post-facto EMI conversions earn no cashback."
+    },
+    {
+      "id": "008",
+      "title": "Rs 2,500 Airtel mobile bill via Airtel Thanks, no base spend this cycle",
+      "ctx": {
+        "amount": 2500,
+        "occurred": "2026-11-10T10:00:00+05:30",
+        "category_id": null,
+        "category_slug": "bills",
+        "mcc": "4814",
+        "merchant_name": "Airtel",
+        "merchant_vpa": null,
+        "merchant_slug": null,
+        "platform": "airtel_thanks_app",
+        "rail": "online"
+      },
+      "state_before": {
+        "caps_by_source_id": {}
+      },
+      "expect": {
+        "currency": "cashback_inr",
+        "amount": 0,
+        "value_inr": null,
+        "excluded": true,
+        "cap_deltas_by_source_id": {}
+      },
+      "why": "T&C: \"if customer does not spend any amount under Base category, the customer would not be eligible to earn cashback towards Airtel Bill payments made via Airtel Thanks platform\". The 1% base does not cover this category."
+    },
+    {
+      "id": "009",
+      "title": "Rs 4,000 electricity bill via Airtel Thanks, no base spend this cycle",
+      "ctx": {
+        "amount": 4000,
+        "occurred": "2026-11-10T10:00:00+05:30",
+        "category_id": null,
+        "category_slug": "bills",
+        "mcc": "4900",
+        "merchant_name": "Electricity board",
+        "merchant_vpa": null,
+        "merchant_slug": null,
+        "platform": "airtel_thanks_app",
+        "rail": "online"
+      },
+      "state_before": {
+        "caps_by_source_id": {}
+      },
+      "expect": {
+        "currency": "cashback_inr",
+        "amount": 0,
+        "value_inr": null,
+        "excluded": true,
+        "cap_deltas_by_source_id": {}
+      },
+      "why": "T&C: the 10% utility category via Airtel Thanks is \"capped at the base cashback earned during the statement month\"; with no base spend nothing is earned, and the 1% base is for \"all other spends\" only."
+    },
+    {
+      "id": "010",
+      "title": "Bank illustration: Rs 2,500 Airtel mobile bill after Rs 250 base cashback this cycle",
+      "ctx": {
+        "amount": 2500,
+        "occurred": "2026-11-10T10:00:00+05:30",
+        "category_id": null,
+        "category_slug": "bills",
+        "mcc": "4814",
+        "merchant_name": "Airtel",
+        "merchant_vpa": null,
+        "merchant_slug": null,
+        "platform": "airtel_thanks_app",
+        "rail": "online"
+      },
+      "state_before": {
+        "caps_by_source_id": {}
+      },
+      "expect": {
+        "currency": "cashback_inr",
+        "amount": 500,
+        "value_inr": null,
+        "excluded": false,
+        "cap_deltas_by_source_id": {}
+      },
+      "why": "Bank illustration: 25% of 2,500 = 625, capped at 2 x Rs 250 base cashback = 500.",
+      "engine_checkable": false,
+      "not_checkable_reason": "The cap is a multiple of the cardholder's base cashback in the statement month (D13): not in the C3.1 context."
+    },
+    {
+      "id": "011",
+      "title": "Rs 1,000 Zomato order",
+      "ctx": {
+        "amount": 1000,
+        "occurred": "2026-11-10T10:00:00+05:30",
+        "category_id": null,
+        "category_slug": "dining",
+        "mcc": null,
+        "merchant_name": "Zomato",
+        "merchant_vpa": null,
+        "merchant_slug": "zomato",
+        "platform": null,
+        "rail": "online"
+      },
+      "state_before": {
+        "caps_by_source_id": {}
+      },
+      "expect": {
+        "currency": "cashback_inr",
+        "amount": 0,
+        "value_inr": null,
+        "excluded": true,
+        "cap_deltas_by_source_id": {}
+      },
+      "why": "T&C, 10% value back on preferred merchants (Zomato, Blinkit, District): \"Axis Bank cashback shall not be applicable for this category\". The partner-wallet value back needs a coupon and is not card cashback here (info)."
+    },
+    {
+      "id": "012",
+      "title": "Rs 50,000 jewellery purchase",
+      "ctx": {
+        "amount": 50000,
+        "occurred": "2026-11-10T10:00:00+05:30",
+        "category_id": null,
+        "category_slug": "shopping",
+        "mcc": "5944",
+        "merchant_name": "Jewellery store",
+        "merchant_vpa": null,
+        "merchant_slug": null,
+        "platform": null,
+        "rail": "swipe"
+      },
+      "state_before": {
+        "caps_by_source_id": {}
+      },
+      "expect": {
+        "currency": "cashback_inr",
+        "amount": 0,
+        "value_inr": null,
+        "excluded": true,
+        "cap_deltas_by_source_id": {}
+      },
+      "why": "T&C exclusion list: \"Jewelry\"."
+    },
+    {
+      "id": "013",
+      "title": "Rs 300 highway toll",
+      "ctx": {
+        "amount": 300,
+        "occurred": "2026-11-10T10:00:00+05:30",
+        "category_id": null,
+        "category_slug": "travel",
+        "mcc": "4784",
+        "merchant_name": "FASTag toll",
+        "merchant_vpa": null,
+        "merchant_slug": null,
+        "platform": null,
+        "rail": "online"
+      },
+      "state_before": {
+        "caps_by_source_id": {}
+      },
+      "expect": {
+        "currency": "cashback_inr",
+        "amount": 0,
+        "value_inr": null,
+        "excluded": true,
+        "cap_deltas_by_source_id": {}
+      },
+      "why": "T&C exclusion list: \"Bridge Fees, Road Fees & Tolls\"."
     }
   ],
   "research_notes": [
@@ -238,6 +402,13 @@
       "cardpipeline_says": "accelerator rules with caps tied to base cashback",
       "issuer_says": "The 25% and 10% Airtel Thanks rules depend on the cardholder base cashback earned in the month: rules set to info with flag depends_on_user_attribute; no entry-tier rate exists.",
       "proposed_fix": "override",
+      "override_file": "api/scripts/catalogue_overrides/airtel-axis-bank-credit-card.json"
+    },
+    {
+      "item": "Airtel Thanks, preferred merchants and exclusions (2026-11-06)",
+      "cardpipeline_says": "25%/10% rules info; base 1% paid on Airtel Thanks bills and at Zomato/Blinkit; jewellery, tolls, cash/financial institutions, gift cards unmapped",
+      "issuer_says": "T&C (eff. 12 Apr 2026): 25%/10% capped at 2x/1x the month's base cashback, nothing without base spend; base 1% is for other spends only; \"Axis Bank cashback shall not be applicable\" on the preferred-merchant category; exclusion list includes Jewelry, Gift Cards, Bridge Fees, Road Fees & Tolls, Cash advances / Financial Institutions.",
+      "proposed_fix": "override: 25%/10% deferred (D13 depends_on_user_attribute), Airtel Thanks bills and Zomato/Blinkit/District excluded from base, value back deferred (coupon, D14b), MCC exclusions added",
       "override_file": "api/scripts/catalogue_overrides/airtel-axis-bank-credit-card.json"
     }
   ]

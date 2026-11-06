@@ -4,13 +4,11 @@
   "inputs": {
     "transform_version": "7",
     "source_record_sha256": "b72c8ef6ba52f5b3cbc30dbe02280e16cfb00ba7efcb82f7fbc4ad385edcdcaf",
-    "override_sha256": "8be492fbb0928d8e5299111b3c31cfd7da4663d59f6d19942c541d30b5d58a8d",
-    "directory_sha256": "b1094d54b77e848d22f7a9a64f3ae6d1ef43ca3eb2fc8e40cd43ed1994664694",
-    "verified": false
+    "override_sha256": "2a4203d33c6aeccbc549121c69f3a39876cb466135c00b78181c73ef5dea285c",
+    "directory_sha256": "15c375346504fca57465605d625ef45ca6cec4f5866ba3f4f16a1f5cbe0b8a90",
+    "verified": true
   },
-  "blocking_flags": [
-    "info_rule"
-  ],
+  "blocking_flags": [],
   "card": {
     "id": "icici-sapphiro:card",
     "slug": "icici-sapphiro",
@@ -29,11 +27,11 @@
     "accrual_rounding": "floor",
     "cashback_rounding": null,
     "points_expiry_months": 36,
-    "model_status": "partial",
+    "model_status": "verified",
     "model_coverage": {
-      "rules_total": 13,
-      "rules_modelled": 9,
-      "rules_info": 4,
+      "rules_total": 14,
+      "rules_modelled": 11,
+      "rules_info": 3,
       "caps_total": 4,
       "caps_enforced": 4,
       "flags": [
@@ -45,7 +43,17 @@
         {
           "code": "info_rule",
           "source_local_id": "international_standard",
+          "detail": "depends_on_txn_attribute"
+        },
+        {
+          "code": "info_rule",
+          "source_local_id": "international_standard",
           "detail": "unmapped_condition_category:transaction_type"
+        },
+        {
+          "code": "depends_on_txn_attribute",
+          "source_local_id": "international_standard",
+          "detail": null
         },
         {
           "code": "unmapped_excluded_category",
@@ -75,17 +83,22 @@
         {
           "code": "info_rule",
           "source_local_id": "education_direct_standard",
+          "detail": "depends_on_txn_attribute"
+        },
+        {
+          "code": "info_rule",
+          "source_local_id": "education_direct_standard",
           "detail": "unresolved_merchant:payment_channel"
         },
         {
-          "code": "info_rule",
-          "source_local_id": "government_utility_rate",
-          "detail": "condition:payment_type"
+          "code": "depends_on_txn_attribute",
+          "source_local_id": "education_direct_standard",
+          "detail": null
         },
         {
-          "code": "info_rule",
+          "code": "mcc_scoped_reduced_rate",
           "source_local_id": "government_utility_rate",
-          "detail": "condition:classification"
+          "detail": null
         }
       ],
       "overrides_applied": [
@@ -105,6 +118,51 @@
           "reason": "WP7: D25d: ICICI MITC: \"No reward points will be provided for transactions falling under the E-Wallet Reload category\" (Third Party Wallets - 6540) and \"... the Cash and Rent categories\". The card excluded these by category only; MCC rows catch them in any category.",
           "source_url": "https://www.icici.bank.in/managed-assets/docs/personal/cards/mitc_cc.pdf",
           "checked_on": "2026-11-05",
+          "citation": null
+        },
+        {
+          "path": "reward_rules[id=international_standard].depends_on_txn_attribute",
+          "op": "set",
+          "value_sha256": "b5bea41b6c623f7c",
+          "reason": "card-data group4: D14b. Product page: \"Earn Points on every Rs100 spend: 4 On International Spend\". The 4-point rate needs an is_international / foreign-currency flag the C3.1 context does not carry, so the rule stays info as a D14 deferral (domestic 2 per Rs100 governs, under-states abroad).",
+          "source_url": "https://www.icici.bank.in/personal-banking/cards/credit-card/sapphiro-card",
+          "checked_on": "2026-11-06",
+          "citation": null
+        },
+        {
+          "path": "reward_rules[id=education_direct_standard].depends_on_txn_attribute",
+          "op": "set",
+          "value_sha256": "b5bea41b6c623f7c",
+          "reason": "card-data group4: D14b. The rule is restricted to education paid directly to the school/college (MITC charges 1% only on \"education payments made through third-party apps\"); direct vs third-party app is not in the C3.1 context. Its rate (2 per Rs100) equals the domestic base, which governs. The MITC states no reward exclusion for third-party education payments.",
+          "source_url": "https://www.icici.bank.in/managed-assets/docs/personal/cards/mitc_cc.pdf",
+          "checked_on": "2026-11-06",
+          "citation": null
+        },
+        {
+          "path": "reward_rules[id=government_utility_rate].category_id",
+          "op": "set",
+          "value_sha256": "56b909b854b229eb",
+          "reason": "card-data group4: MITC: \"Starting Feb 05, 2024, government transactions will be included under utility payment transactions.\" Government payments earn the utility rate (product page: \"1 On Utility and Insurance Spend\" per Rs100) and count toward the utility cap. The rule was info, so government spends earned the domestic 2 per Rs100 (over-statement).",
+          "source_url": "https://www.icici.bank.in/managed-assets/docs/personal/cards/mitc_cc.pdf",
+          "checked_on": "2026-11-06",
+          "citation": null
+        },
+        {
+          "path": "reward_rules[id=government_utility_rate].conditions",
+          "op": "set",
+          "value_sha256": "911ed0327fc936b6",
+          "reason": "card-data group4: MITC MCC table: \"Government 6760, 9222, 9211, 9399, 9402, 9405, 9313, 9311\". Replaces the unmappable payment_type/classification conditions.",
+          "source_url": "https://www.icici.bank.in/managed-assets/docs/personal/cards/mitc_cc.pdf",
+          "checked_on": "2026-11-06",
+          "citation": null
+        },
+        {
+          "path": "reward_rules",
+          "op": "append",
+          "value_sha256": "ebcd099e9c78e4ac",
+          "reason": "card-data group4: D24d. MITC: \"No reward points will be provided for transactions falling under the Cash and Rent categories\" and \"... under the Fuel category\"; MCC table: Rent 7014, 7407, 5271, 6513; Fuel 1361, 3851, 5172, 5541, 5542, 5983, 9752, 5555; Cash 6011, 6050, 6051, 6529, 6530, 6538, 6666, 7777, 9999, 6010, 3882, 6541, 6542. The card excluded fuel by category and rent by MCC 6513 only; these rows catch the listed MCCs in any category.",
+          "source_url": "https://www.icici.bank.in/managed-assets/docs/personal/cards/mitc_cc.pdf",
+          "checked_on": "2026-11-06",
           "citation": null
         }
       ]
@@ -165,9 +223,11 @@
           "source_local_id": "international_standard",
           "part": null,
           "info_reasons": [
+            "depends_on_txn_attribute",
             "unmapped_condition_category:transaction_type"
           ],
           "flags": [
+            "depends_on_txn_attribute",
             "unmapped_excluded_category"
           ]
         },
@@ -568,9 +628,12 @@
           "source_local_id": "education_direct_standard",
           "part": null,
           "info_reasons": [
+            "depends_on_txn_attribute",
             "unresolved_merchant:payment_channel"
           ],
-          "flags": []
+          "flags": [
+            "depends_on_txn_attribute"
+          ]
         },
         "notes": null,
         "effective_from": "2024-11-15",
@@ -590,9 +653,9 @@
         "display_note": "Direct education payments earn 2 Reward Points per ₹100 but are excluded from milestone and annual-fee-waiver spend calculations."
       },
       {
-        "id": "icici-sapphiro:rule:government_utility_rate",
-        "category_id": "cat-bills",
-        "category_slug": "bills",
+        "id": "icici-sapphiro:rule:government_utility_rate#1",
+        "category_id": "cat-government",
+        "category_slug": "government",
         "merchant_pattern": null,
         "rail": null,
         "unit": "points_per_100",
@@ -602,18 +665,108 @@
         "priority": 22,
         "conditions": {
           "source_local_id": "government_utility_rate",
-          "part": null,
-          "info_reasons": [
-            "condition:payment_type",
-            "condition:classification"
-          ],
-          "flags": []
+          "part": 1,
+          "info_reasons": [],
+          "flags": [
+            "mcc_scoped_reduced_rate"
+          ]
         },
         "notes": null,
         "effective_from": "2024-11-15",
         "effective_to": null,
         "excluded_categories": [],
-        "rule_role": "info",
+        "rule_role": "earn",
+        "merchant_slugs": [],
+        "platform_slugs": [],
+        "mcc_include": [
+          "6760",
+          "9211",
+          "9222",
+          "9311",
+          "9313",
+          "9399",
+          "9402",
+          "9405"
+        ],
+        "mcc_exclude": [],
+        "except_merchant_slugs": [],
+        "except_platform_slugs": [],
+        "block_inr": null,
+        "min_engine_version": 2,
+        "max_engine_version": null,
+        "source_local_id": "government_utility_rate",
+        "display_note": "Government-related payments classified as utility transactions earn 1 Reward Point per ₹100."
+      },
+      {
+        "id": "icici-sapphiro:rule:government_utility_rate#2",
+        "category_id": null,
+        "category_slug": null,
+        "merchant_pattern": null,
+        "rail": null,
+        "unit": "points_per_100",
+        "rate": 1,
+        "min_txn_inr": null,
+        "max_txn_inr": null,
+        "priority": 22,
+        "conditions": {
+          "source_local_id": "government_utility_rate",
+          "part": 2,
+          "info_reasons": [],
+          "flags": [
+            "mcc_scoped_reduced_rate"
+          ]
+        },
+        "notes": null,
+        "effective_from": "2024-11-15",
+        "effective_to": null,
+        "excluded_categories": [],
+        "rule_role": "earn",
+        "merchant_slugs": [],
+        "platform_slugs": [],
+        "mcc_include": [
+          "6760",
+          "9211",
+          "9222",
+          "9311",
+          "9313",
+          "9399",
+          "9402",
+          "9405"
+        ],
+        "mcc_exclude": [],
+        "except_merchant_slugs": [],
+        "except_platform_slugs": [],
+        "block_inr": null,
+        "min_engine_version": 2,
+        "max_engine_version": null,
+        "source_local_id": "government_utility_rate",
+        "display_note": "Government-related payments classified as utility transactions earn 1 Reward Point per ₹100."
+      },
+      {
+        "id": "icici-sapphiro:rule:government_utility_rate#v1",
+        "category_id": "cat-government",
+        "category_slug": "government",
+        "merchant_pattern": null,
+        "rail": null,
+        "unit": "points_per_100",
+        "rate": 1,
+        "min_txn_inr": null,
+        "max_txn_inr": null,
+        "priority": 22,
+        "conditions": {
+          "source_local_id": "government_utility_rate",
+          "part": "v1",
+          "info_reasons": [],
+          "flags": [
+            "mcc_scoped_reduced_rate",
+            "reduced_rate_v1_projection"
+          ]
+        },
+        "notes": null,
+        "effective_from": "2024-11-15",
+        "effective_to": null,
+        "excluded_categories": [],
+        "rule_role": "earn",
         "merchant_slugs": [],
         "platform_slugs": [],
         "mcc_include": [],
@@ -621,8 +774,8 @@
         "except_merchant_slugs": [],
         "except_platform_slugs": [],
         "block_inr": null,
-        "min_engine_version": 2,
-        "max_engine_version": null,
+        "min_engine_version": 1,
+        "max_engine_version": 1,
         "source_local_id": "government_utility_rate",
         "display_note": "Government-related payments classified as utility transactions earn 1 Reward Point per ₹100."
       },
@@ -662,6 +815,65 @@
         "max_engine_version": null,
         "source_local_id": "wp7_wallet_rent_mcc_exclusion",
         "display_note": "Wallet reloads and rent earn no reward points."
+      },
+      {
+        "id": "icici-sapphiro:rule:cd4_mitc_mcc_exclusions",
+        "category_id": null,
+        "category_slug": null,
+        "merchant_pattern": null,
+        "rail": null,
+        "unit": "points_per_100",
+        "rate": 0,
+        "min_txn_inr": null,
+        "max_txn_inr": null,
+        "priority": 1,
+        "conditions": {
+          "source_local_id": "cd4_mitc_mcc_exclusions",
+          "part": null,
+          "info_reasons": [],
+          "flags": []
+        },
+        "notes": null,
+        "effective_from": "2024-11-15",
+        "effective_to": null,
+        "excluded_categories": [],
+        "rule_role": "exclusion",
+        "merchant_slugs": [],
+        "platform_slugs": [],
+        "mcc_include": [
+          "1361",
+          "3851",
+          "3882",
+          "5172",
+          "5271",
+          "5541",
+          "5542",
+          "5555",
+          "5983",
+          "6010",
+          "6011",
+          "6050",
+          "6051",
+          "6529",
+          "6530",
+          "6538",
+          "6541",
+          "6542",
+          "6666",
+          "7014",
+          "7407",
+          "7777",
+          "9752",
+          "9999"
+        ],
+        "mcc_exclude": [],
+        "except_merchant_slugs": [],
+        "except_platform_slugs": [],
+        "block_inr": null,
+        "min_engine_version": 2,
+        "max_engine_version": null,
+        "source_local_id": "cd4_mitc_mcc_exclusions",
+        "display_note": "Fuel, rent and cash MCCs earn no reward points."
       }
     ],
     "cap_rules": [
@@ -683,7 +895,9 @@
         "scope": "targets",
         "targets": [
           "icici-sapphiro:rule:utility_standard",
-          "icici-sapphiro:rule:government_utility_rate"
+          "icici-sapphiro:rule:government_utility_rate#1",
+          "icici-sapphiro:rule:government_utility_rate#2",
+          "icici-sapphiro:rule:government_utility_rate#v1"
         ],
         "parent_cap_id": null,
         "post_cap_behavior": "zero",

@@ -107,6 +107,257 @@
       "reason": "WP7: D28c: Cashback T&C: \"Cashback shall not be eligible on EMI transactions, Purchase converted to EMI post facto\". The record's EMI row needs category emi AND rail emi, so an EMI purchase in another category earned. Rail-EMI exclusion on all spend.",
       "source_url": "https://www.axis.bank.in/docs/default-source/default-document-library/credit-cards/terms-and-conditions-for-cashback-for-airtel-axis-bank-credit-card.pdf",
       "checked_on": "2026-11-05"
+    },
+    {
+      "path": "reward_rules[id=airtel_telecom_25pct].depends_on_user_attribute",
+      "value": true,
+      "reason": "Cashback T&C (eff. 12 Apr 2026): 25% on Airtel bills via Airtel Thanks is \"capped at twice the base cashback earned during the statement month\", and \"if customer does not spend any amount under Base category, the customer would not be eligible\". The amount depends on the cardholder's own base spend that month (D13): deferred, not guessed.",
+      "source_url": "https://www.axis.bank.in/docs/default-source/default-document-library/credit-cards/terms-and-conditions-for-cashback-for-airtel-axis-bank-credit-card.pdf",
+      "checked_on": "2026-11-06"
+    },
+    {
+      "path": "reward_rules[id=airtel_utility_10pct].depends_on_user_attribute",
+      "value": true,
+      "reason": "Cashback T&C: 10% on utility bills via Airtel Thanks is \"capped at the base cashback earned during the statement month\"; nothing without base spend. Depends on the cardholder's base spend (D13): deferred.",
+      "source_url": "https://www.axis.bank.in/docs/default-source/default-document-library/credit-cards/terms-and-conditions-for-cashback-for-airtel-axis-bank-credit-card.pdf",
+      "checked_on": "2026-11-06"
+    },
+    {
+      "path": "reward_rules",
+      "op": "append",
+      "value": {
+        "id": "airtel_thanks_utility_no_base",
+        "category_id": "utility",
+        "priority": 7,
+        "evaluation_type": "exclusion",
+        "rail": "any",
+        "channel_type": "all",
+        "conditions": {
+          "merchant_platform": "Airtel Thanks App"
+        },
+        "action": {
+          "multiplier": 0,
+          "points_per_block": null,
+          "cashback_percent": 0,
+          "cap_reference": null,
+          "reason": "Utility bills via Airtel Thanks earn only the 10% category cashback, limited by the month's base cashback; never the 1% base."
+        },
+        "effective_from": "2026-04-12",
+        "effective_to": null
+      },
+      "reason": "Cashback T&C table: 1% base is for \"All other merchants/ other spends\"; utility bills via Airtel Thanks are the 10% category, capped at the month's base cashback, and earn nothing when there is no base spend. With the 10% rule deferred (D13), base 1% here could over-state (e.g. a Rs 5,000 bill in a month with no other spend: engine Rs 50, issuer Rs 0). Excluded until the cap can be modelled (H2, under-states).",
+      "source_url": "https://www.axis.bank.in/docs/default-source/default-document-library/credit-cards/terms-and-conditions-for-cashback-for-airtel-axis-bank-credit-card.pdf",
+      "checked_on": "2026-11-06"
+    },
+    {
+      "path": "reward_rules",
+      "op": "append",
+      "value": {
+        "id": "airtel_thanks_telecom_no_base",
+        "category_id": "telecom",
+        "priority": 8,
+        "evaluation_type": "exclusion",
+        "rail": "any",
+        "channel_type": "all",
+        "conditions": {
+          "merchant_platform": "Airtel Thanks App"
+        },
+        "action": {
+          "multiplier": 0,
+          "points_per_block": null,
+          "cashback_percent": 0,
+          "cap_reference": null,
+          "reason": "Airtel bills via Airtel Thanks earn only the 25% category cashback, limited by twice the month's base cashback; never the 1% base."
+        },
+        "effective_from": "2026-04-12",
+        "effective_to": null
+      },
+      "reason": "Cashback T&C: Airtel Mobile, Broadband, WiFi and DTH bills via Airtel Thanks are the 25% category, \"capped at twice the base cashback earned during the statement month\", nothing without base spend; not the 1% base category. Same H2 treatment as utilities.",
+      "source_url": "https://www.axis.bank.in/docs/default-source/default-document-library/credit-cards/terms-and-conditions-for-cashback-for-airtel-axis-bank-credit-card.pdf",
+      "checked_on": "2026-11-06"
+    },
+    {
+      "path": "reward_rules",
+      "op": "append",
+      "value": {
+        "id": "preferred_partner_no_axis_cashback",
+        "category_id": "all_retail",
+        "priority": 9,
+        "evaluation_type": "exclusion",
+        "rail": "any",
+        "channel_type": "all",
+        "conditions": {
+          "merchants": [
+            "Zomato",
+            "Blinkit",
+            "District"
+          ]
+        },
+        "action": {
+          "multiplier": 0,
+          "points_per_block": null,
+          "cashback_percent": 0,
+          "cap_reference": null,
+          "reason": "Axis Bank cashback does not apply at Zomato, Blinkit and District (10% partner-wallet value back instead)."
+        },
+        "effective_from": "2026-04-12",
+        "effective_to": null
+      },
+      "reason": "Cashback T&C, 10% Value Back on Preferred merchants [Zomato, Blinkit and District Movies]: \"Axis Bank cashback shall not be applicable for this category\". The value back (partner wallet, coupon, Rs 200 per partner per month) stays info, so the 1% base must not pay here (H2).",
+      "source_url": "https://www.axis.bank.in/docs/default-source/default-document-library/credit-cards/terms-and-conditions-for-cashback-for-airtel-axis-bank-credit-card.pdf",
+      "checked_on": "2026-11-06"
+    },
+    {
+      "path": "reward_rules",
+      "op": "append",
+      "value": {
+        "id": "wp_jewellery_exclusion",
+        "category_id": "all_retail",
+        "priority": 10,
+        "evaluation_type": "exclusion",
+        "rail": "any",
+        "channel_type": "all",
+        "conditions": {
+          "mcc_list": [
+            5944,
+            5094
+          ]
+        },
+        "action": {
+          "multiplier": 0,
+          "points_per_block": null,
+          "cashback_percent": 0,
+          "cap_reference": null,
+          "reason": "Jewellery earns no cashback."
+        },
+        "effective_from": "2026-04-12",
+        "effective_to": null
+      },
+      "reason": "D24d: cashback T&C exclusion list: \"Jewelry\". Jewellery MCCs 5944, 5094 (as on the Flipkart Axis and IndianOil Axis cards). The record listed it only in the base rule's excluded categories, which the loader could not map.",
+      "source_url": "https://www.axis.bank.in/docs/default-source/default-document-library/credit-cards/terms-and-conditions-for-cashback-for-airtel-axis-bank-credit-card.pdf",
+      "checked_on": "2026-11-06"
+    },
+    {
+      "path": "reward_rules",
+      "op": "append",
+      "value": {
+        "id": "wp_toll_exclusion",
+        "category_id": "all_retail",
+        "priority": 10,
+        "evaluation_type": "exclusion",
+        "rail": "any",
+        "channel_type": "all",
+        "conditions": {
+          "mcc_list": [
+            4784
+          ]
+        },
+        "action": {
+          "multiplier": 0,
+          "points_per_block": null,
+          "cashback_percent": 0,
+          "cap_reference": null,
+          "reason": "Bridge fees, road fees and tolls earn no cashback."
+        },
+        "effective_from": "2026-04-12",
+        "effective_to": null
+      },
+      "reason": "D24d: cashback T&C exclusion list: \"Bridge Fees, Road Fees & Tolls\" (MCC 4784). Missing from the record.",
+      "source_url": "https://www.axis.bank.in/docs/default-source/default-document-library/credit-cards/terms-and-conditions-for-cashback-for-airtel-axis-bank-credit-card.pdf",
+      "checked_on": "2026-11-06"
+    },
+    {
+      "path": "reward_rules",
+      "op": "append",
+      "value": {
+        "id": "wp_financial_institution_exclusion",
+        "category_id": "all_retail",
+        "priority": 10,
+        "evaluation_type": "exclusion",
+        "rail": "any",
+        "channel_type": "all",
+        "conditions": {
+          "mcc_list": [
+            6010,
+            6011,
+            6012,
+            6051,
+            6211
+          ]
+        },
+        "action": {
+          "multiplier": 0,
+          "points_per_block": null,
+          "cashback_percent": 0,
+          "cap_reference": null,
+          "reason": "Cash advances and financial-institution transactions earn no cashback."
+        },
+        "effective_from": "2026-04-12",
+        "effective_to": null
+      },
+      "reason": "D24d: cashback T&C exclusion list: \"Cash advances / Financial Institutions\". Cash and financial-institution MCCs 6010, 6011, 6012, 6051, 6211 (the Flipkart Axis card's list plus 6010 manual cash). The record listed them only as unmapped excluded categories.",
+      "source_url": "https://www.axis.bank.in/docs/default-source/default-document-library/credit-cards/terms-and-conditions-for-cashback-for-airtel-axis-bank-credit-card.pdf",
+      "checked_on": "2026-11-06"
+    },
+    {
+      "path": "reward_rules",
+      "op": "append",
+      "value": {
+        "id": "wp_cash_advance_rail_exclusion",
+        "category_id": "all_retail",
+        "priority": 10,
+        "evaluation_type": "exclusion",
+        "rail": "atm",
+        "channel_type": "all",
+        "conditions": {},
+        "action": {
+          "multiplier": 0,
+          "points_per_block": null,
+          "cashback_percent": 0,
+          "cap_reference": null,
+          "reason": "Cash withdrawals earn no cashback."
+        },
+        "effective_from": "2026-04-12",
+        "effective_to": null
+      },
+      "reason": "D24d: cashback T&C exclusion list: \"Cash advances\". ATM rail, as on the other Axis cards.",
+      "source_url": "https://www.axis.bank.in/docs/default-source/default-document-library/credit-cards/terms-and-conditions-for-cashback-for-airtel-axis-bank-credit-card.pdf",
+      "checked_on": "2026-11-06"
+    },
+    {
+      "path": "reward_rules",
+      "op": "append",
+      "value": {
+        "id": "wp_gift_card_exclusion",
+        "category_id": "all_retail",
+        "priority": 10,
+        "evaluation_type": "exclusion",
+        "rail": "any",
+        "channel_type": "all",
+        "conditions": {
+          "transaction_scope": "gift card purchase"
+        },
+        "action": {
+          "multiplier": 0,
+          "points_per_block": null,
+          "cashback_percent": 0,
+          "cap_reference": null,
+          "reason": "Gift card purchases earn no cashback."
+        },
+        "effective_from": "2026-04-12",
+        "effective_to": null,
+        "rule_role": "info"
+      },
+      "reason": "D24d: cashback T&C exclusion list: \"Gift Cards\". Bought at ordinary merchants under their own MCCs, so no MCC carries it: info (D14b), as on the IndianOil Axis card.",
+      "source_url": "https://www.axis.bank.in/docs/default-source/default-document-library/credit-cards/terms-and-conditions-for-cashback-for-airtel-axis-bank-credit-card.pdf",
+      "checked_on": "2026-11-06"
+    },
+    {
+      "path": "reward_rules[id=preferred_partner_value_back_10pct].depends_on_txn_attribute",
+      "value": true,
+      "reason": "Cashback T&C: the 10% value back needs the coupon \"Get 10% back using Airtel Axis Credit Card\" applied at checkout, via Ecom (not UPI), min order Rs 499 at Zomato/Blinkit, max Rs 200 per partner per month, credited to the partner wallet. Whether the coupon was applied is not in the C3.1 context (D14b): stays info; Axis cashback is excluded at these merchants (preferred_partner_no_axis_cashback).",
+      "source_url": "https://www.axis.bank.in/docs/default-source/default-document-library/credit-cards/terms-and-conditions-for-cashback-for-airtel-axis-bank-credit-card.pdf",
+      "checked_on": "2026-11-06"
     }
   ]
 }

@@ -4,8 +4,8 @@
   "inputs": {
     "transform_version": "7",
     "source_record_sha256": "68ecd0dbe2902a02fcb593ad15010312652276059d7cfd998ac86dbb42e47496",
-    "override_sha256": null,
-    "directory_sha256": "b1094d54b77e848d22f7a9a64f3ae6d1ef43ca3eb2fc8e40cd43ed1994664694",
+    "override_sha256": "78f88b2af827b4d3f4255dd81d5d843b6d257b0e481ae30515dc0e66e40d3ab2",
+    "directory_sha256": "15c375346504fca57465605d625ef45ca6cec4f5866ba3f4f16a1f5cbe0b8a90",
     "verified": true
   },
   "blocking_flags": [],
@@ -47,7 +47,17 @@
           "detail": null
         }
       ],
-      "overrides_applied": []
+      "overrides_applied": [
+        {
+          "path": "reward_rules[id=reward_multiplier_online_brands].effective_to",
+          "op": "set",
+          "value_sha256": "7ed41c8bf8d9480f",
+          "reason": "Amex India's notice (quoted by Business Today, 1 Sep 2026): \"Effective 30 September 2026, the Reward Multiplier program will be discontinued\"; purchases must be completed by 29 September 2026 to qualify. The rate stays for earlier spends and ends on 29 Sep 2026 (end day inclusive).",
+          "source_url": "https://www.businesstoday.in/personal-finance/story/american-express-reward-multiplier-ends-this-month-what-cardholders-should-know-552371-2026-09-01",
+          "checked_on": "2026-11-06",
+          "citation": null
+        }
+      ]
     },
     "reward_rules": [
       {
@@ -315,7 +325,7 @@
         },
         "notes": null,
         "effective_from": "2025-08-31",
-        "effective_to": null,
+        "effective_to": "2026-09-29",
         "excluded_categories": [],
         "rule_role": "earn",
         "merchant_slugs": [],

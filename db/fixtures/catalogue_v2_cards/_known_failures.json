@@ -4,24 +4,5 @@
     "Both harnesses (api/test/card_worked_examples.test.js, packages/pandapay_domain/test/card_worked_examples_test.dart) assert that each listed example STILL fails in the listed engines, so a fix shows up as a failing test until its entry is removed. No example is skipped silently.",
     "Keys are <source_slug>#<example id>. category: example_wrong | research_data | directory_data | loader_bug | engine_bug."
   ],
-  "failures": {
-    "flipkart-axis-bank-credit-card#006": {
-      "engines": [
-        "js",
-        "dart"
-      ],
-      "category": "research_data",
-      "routed_to": "WP6b",
-      "summary": "The preferred-merchant list is not published (research note), so preferred_merchants_cashback_4 stays info (H2). Cite an issuer list naming Swiggy (then override merchant Swiggy, except Instamart/Genie) or mark the example engine_checkable false."
-    },
-    "swiggy-hdfc-bank-credit-card#004": {
-      "engines": [
-        "js",
-        "dart"
-      ],
-      "category": "research_data",
-      "routed_to": "WP6a",
-      "summary": "T&C 2.3: 5% online applies only to select merchants mapped under the Table 1.2 MCCs; the merchant list is not published, so an MCC-only rule would widen (H2) and online_5pct stays info. Needs the merchant list, or engine_checkable false."
-    }
-  }
+  "failures": {}
 }

@@ -4,13 +4,11 @@
   "inputs": {
     "transform_version": "7",
     "source_record_sha256": "a9dd9374a416c35b1c899516cd5ad0d80e91d7ba5e36f2fb3f2515ae84b54d6e",
-    "override_sha256": null,
-    "directory_sha256": "b1094d54b77e848d22f7a9a64f3ae6d1ef43ca3eb2fc8e40cd43ed1994664694",
-    "verified": false
+    "override_sha256": "81e213971a92fafbb5b310c3a2f1ecdbf90f1da86479f5fb26bd48b33c997b6c",
+    "directory_sha256": "15c375346504fca57465605d625ef45ca6cec4f5866ba3f4f16a1f5cbe0b8a90",
+    "verified": true
   },
-  "blocking_flags": [
-    "info_rule"
-  ],
+  "blocking_flags": [],
   "card": {
     "id": "american-express-membership-rewards-credit-card-india:card",
     "slug": "american-express-membership-rewards-credit-card-india",
@@ -25,10 +23,10 @@
     "accrual_rounding": "floor",
     "cashback_rounding": null,
     "points_expiry_months": 0,
-    "model_status": "partial",
+    "model_status": "verified",
     "model_coverage": {
-      "rules_total": 10,
-      "rules_modelled": 7,
+      "rules_total": 9,
+      "rules_modelled": 6,
       "rules_info": 3,
       "caps_total": 0,
       "caps_enforced": 0,
@@ -56,12 +54,27 @@
         {
           "code": "info_rule",
           "source_local_id": "safekey_emi_standard",
+          "detail": "depends_on_txn_attribute"
+        },
+        {
+          "code": "info_rule",
+          "source_local_id": "safekey_emi_standard",
           "detail": "condition:emi_channel"
         },
         {
           "code": "info_rule",
           "source_local_id": "safekey_emi_standard",
           "detail": "condition:channel_type"
+        },
+        {
+          "code": "depends_on_txn_attribute",
+          "source_local_id": "safekey_emi_standard",
+          "detail": null
+        },
+        {
+          "code": "info_rule",
+          "source_local_id": "post_purchase_emi_standard",
+          "detail": "depends_on_txn_attribute"
         },
         {
           "code": "info_rule",
@@ -74,12 +87,45 @@
           "detail": "condition:channel_type"
         },
         {
+          "code": "depends_on_txn_attribute",
+          "source_local_id": "post_purchase_emi_standard",
+          "detail": null
+        },
+        {
           "code": "info_rule",
           "source_local_id": "excluded_fees_and_finance_charges",
           "detail": "non_purchase_channel"
         }
       ],
-      "overrides_applied": []
+      "overrides_applied": [
+        {
+          "path": "reward_rules[id=safekey_emi_standard].depends_on_txn_attribute",
+          "op": "set",
+          "value_sha256": "b5bea41b6c623f7c",
+          "reason": "Card page footnote 2: points continue \"on all EMI transactions through American Express SafeKey\" but not \"on any EMI option selected from a merchant's website\". SafeKey EMI, merchant-website EMI and terminal EMI all arrive on the EMI rail; the C3.1 context cannot tell them apart (D14b), so the rule stays info and the rail-EMI exclusion applies (may under-state, H2).",
+          "source_url": "https://www.americanexpress.com/in/credit-cards/membership-rewards-card/",
+          "checked_on": "2026-11-06",
+          "citation": null
+        },
+        {
+          "path": "reward_rules[id=post_purchase_emi_standard].depends_on_txn_attribute",
+          "op": "set",
+          "value_sha256": "b5bea41b6c623f7c",
+          "reason": "Card page footnote 2: points continue \"on all EMI conversions done post purchase\". Whether an EMI was converted after purchase or chosen at the merchant is not in the C3.1 context (D14b); info, the rail-EMI exclusion applies (may under-state, H2).",
+          "source_url": "https://www.americanexpress.com/in/credit-cards/membership-rewards-card/",
+          "checked_on": "2026-11-06",
+          "citation": null
+        },
+        {
+          "path": "reward_rules[id=reward_multiplier_2x]",
+          "op": "remove",
+          "value_sha256": "74234e98afe7498f",
+          "reason": "The card page (fetched 2026-11-06) names no Reward Multiplier rate for this card, and Amex India's notice (quoted by Business Today, 1 Sep 2026) says \"Effective 30 September 2026, the Reward Multiplier program will be discontinued.\" An unverified 2X on a closed programme is removed (H2); Reward Multiplier spends earn the base rate.",
+          "source_url": "https://www.businesstoday.in/personal-finance/story/american-express-reward-multiplier-ends-this-month-what-cardholders-should-know-552371-2026-09-01",
+          "checked_on": "2026-11-06",
+          "citation": null
+        }
+      ]
     },
     "reward_rules": [
       {
@@ -345,10 +391,13 @@
           "source_local_id": "safekey_emi_standard",
           "part": null,
           "info_reasons": [
+            "depends_on_txn_attribute",
             "condition:emi_channel",
             "condition:channel_type"
           ],
-          "flags": []
+          "flags": [
+            "depends_on_txn_attribute"
+          ]
         },
         "notes": null,
         "effective_from": "2020-03-15",
@@ -382,10 +431,13 @@
           "source_local_id": "post_purchase_emi_standard",
           "part": null,
           "info_reasons": [
+            "depends_on_txn_attribute",
             "condition:conversion_type",
             "condition:channel_type"
           ],
-          "flags": []
+          "flags": [
+            "depends_on_txn_attribute"
+          ]
         },
         "notes": null,
         "effective_from": "2020-03-15",
@@ -403,42 +455,6 @@
         "max_engine_version": null,
         "source_local_id": "post_purchase_emi_standard",
         "display_note": "Membership Rewards Points continue to accrue on post-purchase EMI conversions."
-      },
-      {
-        "id": "american-express-membership-rewards-credit-card-india:rule:reward_multiplier_2x",
-        "category_id": null,
-        "category_slug": null,
-        "merchant_pattern": null,
-        "rail": null,
-        "unit": "points_per_100",
-        "rate": 2,
-        "min_txn_inr": null,
-        "max_txn_inr": null,
-        "priority": 3,
-        "conditions": {
-          "source_local_id": "reward_multiplier_2x",
-          "part": null,
-          "info_reasons": [],
-          "flags": []
-        },
-        "notes": null,
-        "effective_from": "2026-08-28",
-        "effective_to": null,
-        "excluded_categories": [],
-        "rule_role": "earn",
-        "merchant_slugs": [],
-        "platform_slugs": [
-          "amex_reward_multiplier"
-        ],
-        "mcc_include": [],
-        "mcc_exclude": [],
-        "except_merchant_slugs": [],
-        "except_platform_slugs": [],
-        "block_inr": 50,
-        "min_engine_version": 2,
-        "max_engine_version": null,
-        "source_local_id": "reward_multiplier_2x",
-        "display_note": "Eligible Reward Multiplier merchants earn 2X Membership Rewards Points on this card."
       },
       {
         "id": "american-express-membership-rewards-credit-card-india:rule:excluded_fees_and_finance_charges",

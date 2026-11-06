@@ -4,14 +4,11 @@
   "inputs": {
     "transform_version": "7",
     "source_record_sha256": "47c8726d4469931a2d489c3e07278a9e69e665eb0946398eed2b6679be43705d",
-    "override_sha256": "65a8895bfe57f6c5d88915eb0dada1cb85f8d73cfd1e5d44bdddcbcafe665248",
-    "directory_sha256": "b1094d54b77e848d22f7a9a64f3ae6d1ef43ca3eb2fc8e40cd43ed1994664694",
-    "verified": false
+    "override_sha256": "6ee96b8d4025add92b447b27ad8e7a9aa2ef1cbd300cbd93b6dffeaeb18ba9e7",
+    "directory_sha256": "15c375346504fca57465605d625ef45ca6cec4f5866ba3f4f16a1f5cbe0b8a90",
+    "verified": true
   },
-  "blocking_flags": [
-    "post_limit_conflict",
-    "orphan_cap"
-  ],
+  "blocking_flags": [],
   "card": {
     "id": "phonepe-hdfc-bank-ultimo:card",
     "slug": "phonepe-hdfc-bank-ultimo",
@@ -26,13 +23,13 @@
     "accrual_rounding": "floor",
     "cashback_rounding": null,
     "points_expiry_months": 24,
-    "model_status": "partial",
+    "model_status": "verified",
     "model_coverage": {
-      "rules_total": 18,
-      "rules_modelled": 15,
+      "rules_total": 19,
+      "rules_modelled": 16,
       "rules_info": 3,
       "caps_total": 4,
-      "caps_enforced": 3,
+      "caps_enforced": 4,
       "flags": [
         {
           "code": "emi_alternatives",
@@ -120,23 +117,8 @@
           "detail": null
         },
         {
-          "code": "post_limit_conflict",
-          "source_local_id": "phonepe_categories_monthly_cap",
-          "detail": null
-        },
-        {
-          "code": "post_limit_conflict",
-          "source_local_id": "online_brands_monthly_cap",
-          "detail": null
-        },
-        {
-          "code": "post_limit_conflict",
-          "source_local_id": "upi_scan_pay_monthly_cap",
-          "detail": null
-        },
-        {
-          "code": "orphan_cap",
-          "source_local_id": "overall_monthly_reward_cap",
+          "code": "broad_exclusion_v1_only",
+          "source_local_id": "cd_gaming_exclusion",
           "detail": null
         }
       ],
@@ -265,6 +247,51 @@
           "reason": "WP7: T&C Note 1: no reward points on \"... gift cards, cash advances, credit card bill payments, charges, ... investments ...\". Fees and charges are not purchases. Not expressible by MCC or category, so it stays info (D25d), flagged depends_on_txn_attribute (D14b).",
           "source_url": "https://www.hdfc.bank.in/content/dam/hdfcbankpws/in/en/personal-banking/discover-products/cards/credit-cards/phonepe-hdfc-bank-ultimo-credit-card/phonepe-hdfc-bank-ultimo-cc-reward-points-tncs.pdf",
           "checked_on": "2026-11-05",
+          "citation": null
+        },
+        {
+          "path": "cap_rules[id=phonepe_categories_monthly_cap].metric",
+          "op": "set",
+          "value_sha256": "7af78ba28cf9ccb3",
+          "reason": "Card data review: T&C: 10% on PhonePe categories with \"Capping of 1000 reward points per calendar month\". The card has no base rate (only the three categories earn), so the category's points are its total; a bonus cap with zero after the limit was flagged post_limit_conflict. Same limit, same result.",
+          "source_url": "https://www.hdfc.bank.in/content/dam/hdfcbankpws/in/en/personal-banking/discover-products/cards/credit-cards/phonepe-hdfc-bank-ultimo-credit-card/phonepe-hdfc-bank-ultimo-cc-reward-points-tncs.pdf",
+          "checked_on": "2026-11-06",
+          "citation": null
+        },
+        {
+          "path": "cap_rules[id=online_brands_monthly_cap].metric",
+          "op": "set",
+          "value_sha256": "7af78ba28cf9ccb3",
+          "reason": "Card data review: T&C: 5% on select online brands with \"Capping of 500 reward points per calendar month\"; no base rate, so a total cap (clears post_limit_conflict). Same limit, same result.",
+          "source_url": "https://www.hdfc.bank.in/content/dam/hdfcbankpws/in/en/personal-banking/discover-products/cards/credit-cards/phonepe-hdfc-bank-ultimo-credit-card/phonepe-hdfc-bank-ultimo-cc-reward-points-tncs.pdf",
+          "checked_on": "2026-11-06",
+          "citation": null
+        },
+        {
+          "path": "cap_rules[id=upi_scan_pay_monthly_cap].metric",
+          "op": "set",
+          "value_sha256": "7af78ba28cf9ccb3",
+          "reason": "Card data review: T&C: 1% on Scan & Pay with \"Capping of 500 reward points per calendar month\"; no base rate, so a total cap (clears post_limit_conflict). Same limit, same result.",
+          "source_url": "https://www.hdfc.bank.in/content/dam/hdfcbankpws/in/en/personal-banking/discover-products/cards/credit-cards/phonepe-hdfc-bank-ultimo-credit-card/phonepe-hdfc-bank-ultimo-cc-reward-points-tncs.pdf",
+          "checked_on": "2026-11-06",
+          "citation": null
+        },
+        {
+          "path": "cap_rules[id=overall_monthly_reward_cap].category_id",
+          "op": "set",
+          "value_sha256": "1e08efd699e66ddd",
+          "reason": "Card data review: the record's 2,000 RP/month overall cap named an unmapped category (all_rewards), so it had no target (orphan_cap). The reward T&C (29 Jul 2026) state only the three category caps, 1,000 + 500 + 500 = 2,000, so a card-wide 2,000 total cap can never bind before them; kept card-wide (can only under-state).",
+          "source_url": "https://www.hdfc.bank.in/content/dam/hdfcbankpws/in/en/personal-banking/discover-products/cards/credit-cards/phonepe-hdfc-bank-ultimo-credit-card/phonepe-hdfc-bank-ultimo-cc-reward-points-tncs.pdf",
+          "checked_on": "2026-11-06",
+          "citation": null
+        },
+        {
+          "path": "reward_rules",
+          "op": "append",
+          "value_sha256": "86a8d96d60d7e56e",
+          "reason": "Card data review: D24d. MITC v4.18 (Oct 2026) I(g): \"With effect from 1st July 2025, Online Skill-Based gaming transactions will not earn Reward Points/CashPoints on all the cards.\" Without it a Scan & Pay at a gaming merchant (MCC 5816) earned 1%. Reward T&C Note 1 also excludes \"any other categories excluded as per the Bank's internal policies\".",
+          "source_url": "https://www.hdfc.bank.in/content/dam/hdfcbankpws/in/en/personal-banking/discover-products/cards/credit-cards/personal-mitc/mitc-in-english.pdf",
+          "checked_on": "2026-11-06",
           "citation": null
         }
       ]
@@ -984,6 +1011,81 @@
         "max_engine_version": null,
         "source_local_id": "wp7_emi_rail_exclusion",
         "display_note": "EMI transactions earn no rewards."
+      },
+      {
+        "id": "phonepe-hdfc-bank-ultimo:rule:cd_gaming_exclusion#1",
+        "category_id": "cat-entertainment",
+        "category_slug": "entertainment",
+        "merchant_pattern": null,
+        "rail": null,
+        "unit": "points_per_100",
+        "rate": 0,
+        "min_txn_inr": null,
+        "max_txn_inr": null,
+        "priority": 1,
+        "conditions": {
+          "source_local_id": "cd_gaming_exclusion",
+          "part": 1,
+          "info_reasons": [],
+          "flags": [
+            "broad_exclusion_v1_only",
+            "broad_category"
+          ]
+        },
+        "notes": null,
+        "effective_from": "2025-07-01",
+        "effective_to": null,
+        "excluded_categories": [],
+        "rule_role": "exclusion",
+        "merchant_slugs": [],
+        "platform_slugs": [],
+        "mcc_include": [],
+        "mcc_exclude": [],
+        "except_merchant_slugs": [],
+        "except_platform_slugs": [],
+        "block_inr": null,
+        "min_engine_version": 1,
+        "max_engine_version": 1,
+        "source_local_id": "cd_gaming_exclusion",
+        "display_note": "Online skill-based gaming transactions do not earn Reward Points from 1 July 2025."
+      },
+      {
+        "id": "phonepe-hdfc-bank-ultimo:rule:cd_gaming_exclusion#2",
+        "category_id": null,
+        "category_slug": null,
+        "merchant_pattern": null,
+        "rail": null,
+        "unit": "points_per_100",
+        "rate": 0,
+        "min_txn_inr": null,
+        "max_txn_inr": null,
+        "priority": 1,
+        "conditions": {
+          "source_local_id": "cd_gaming_exclusion",
+          "part": 2,
+          "info_reasons": [],
+          "flags": [
+            "broad_exclusion_v1_only"
+          ]
+        },
+        "notes": null,
+        "effective_from": "2025-07-01",
+        "effective_to": null,
+        "excluded_categories": [],
+        "rule_role": "exclusion",
+        "merchant_slugs": [],
+        "platform_slugs": [],
+        "mcc_include": [
+          "5816"
+        ],
+        "mcc_exclude": [],
+        "except_merchant_slugs": [],
+        "except_platform_slugs": [],
+        "block_inr": null,
+        "min_engine_version": 2,
+        "max_engine_version": null,
+        "source_local_id": "cd_gaming_exclusion",
+        "display_note": "Online skill-based gaming transactions do not earn Reward Points from 1 July 2025."
       }
     ],
     "cap_rules": [
@@ -998,9 +1100,9 @@
         "period": "calendar_month",
         "cap_value": 1000,
         "post_cap_unit": null,
-        "post_cap_rate": null,
+        "post_cap_rate": 0,
         "resets_on_day": 1,
-        "cap_kind": "bonus_points",
+        "cap_kind": "total_points",
         "cap_amount": 1000,
         "scope": "targets",
         "targets": [
@@ -1023,9 +1125,9 @@
         "period": "calendar_month",
         "cap_value": 500,
         "post_cap_unit": null,
-        "post_cap_rate": null,
+        "post_cap_rate": 0,
         "resets_on_day": 1,
-        "cap_kind": "bonus_points",
+        "cap_kind": "total_points",
         "cap_amount": 500,
         "scope": "targets",
         "targets": [
@@ -1048,9 +1150,9 @@
         "period": "calendar_month",
         "cap_value": 500,
         "post_cap_unit": null,
-        "post_cap_rate": null,
+        "post_cap_rate": 0,
         "resets_on_day": 1,
-        "cap_kind": "bonus_points",
+        "cap_kind": "total_points",
         "cap_amount": 500,
         "scope": "targets",
         "targets": [
@@ -1077,7 +1179,7 @@
         "resets_on_day": 1,
         "cap_kind": "total_points",
         "cap_amount": 2000,
-        "scope": "targets",
+        "scope": "card",
         "targets": [],
         "parent_cap_id": null,
         "post_cap_behavior": null,

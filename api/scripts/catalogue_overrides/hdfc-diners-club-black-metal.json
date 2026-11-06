@@ -1,0 +1,49 @@
+{
+  "source_slug": "hdfc-diners-club-black-metal",
+  "changes": [
+    {
+      "path": "reward_rules[id=weekend_dining].depends_on_txn_attribute",
+      "value": true,
+      "reason": "Card data review: product page: \"2X Rewards on Weekend Dining\". The rule is limited to Saturdays and Sundays at participating standalone restaurants; the day-of-week window is a D14b transaction attribute (the loader's own TXN_ATTRIBUTE_KEY lists day_of_week) and the participating list is not published, so the rule stays info with the deferral flag and dining earns the base 5 RP/Rs150 (under-states weekend dining).",
+      "source_url": "https://www.hdfc.bank.in/credit-cards/diners-club-black-metal-edition-credit-card",
+      "checked_on": "2026-11-06"
+    },
+    {
+      "path": "reward_rules[id=education_third_party_exclusion].conditions",
+      "value": {
+        "mcc_list": [
+          8211,
+          8220,
+          8241,
+          8244,
+          8249,
+          8299
+        ]
+      },
+      "reason": "Card data review: MITC v4.18 (Oct 2026) I: \"Education payments made through third-party apps like (but not limited to) CRED, Cheq, MobiKwik, etc will not earn Reward Points.\" The record named three apps, so v2 excluded only those; an SMS spend never carries the platform and CRED is not a directory merchant, so app-paid education earned 5 RP/Rs150 in v2 (over-statement). Restated as an exclusion on the education category and education MCCs (D20a rows); direct school/college payments are under-stated (H2).",
+      "source_url": "https://www.hdfc.bank.in/content/dam/hdfcbankpws/in/en/personal-banking/discover-products/cards/credit-cards/personal-mitc/mitc-in-english.pdf",
+      "checked_on": "2026-11-06"
+    },
+    {
+      "path": "reward_rules[id=education_third_party_exclusion].rail",
+      "value": "any",
+      "reason": "Card data review: an app payment may reach the card on any rail.",
+      "source_url": "https://www.hdfc.bank.in/content/dam/hdfcbankpws/in/en/personal-banking/discover-products/cards/credit-cards/personal-mitc/mitc-in-english.pdf",
+      "checked_on": "2026-11-06"
+    },
+    {
+      "path": "reward_rules[id=education_third_party_exclusion].channel_type",
+      "value": "all",
+      "reason": "Card data review: the third-party-app channel cannot be told from the context (see the conditions change).",
+      "source_url": "https://www.hdfc.bank.in/content/dam/hdfcbankpws/in/en/personal-banking/discover-products/cards/credit-cards/personal-mitc/mitc-in-english.pdf",
+      "checked_on": "2026-11-06"
+    },
+    {
+      "path": "cap_rules[id=smartbuy_voucher_monthly]",
+      "op": "remove",
+      "reason": "Card data review: the record's 3,000 RP/month SmartBuy voucher sub-cap (from 1 July 2026) limits accelerated points on SmartBuy brand vouchers. No loaded rule pays an accelerated rate on vouchers (the 3X 'instant vouchers' item does not load; only hotels 10X, flights/Myntra 5X, IRCTC 3X do), so the sub-cap had no target (orphan_cap) and limited nothing in either engine (v1 matches caps only by rule or category). Restore it when a voucher accelerator is modelled.",
+      "source_url": "https://offers.smartbuy.hdfc.bank.in/v2/accelerated-earn-rules",
+      "checked_on": "2026-11-06"
+    }
+  ]
+}

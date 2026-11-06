@@ -2,7 +2,7 @@
   "source_slug": "idfc-first-select",
   "cardpipeline_id": "idfc-first-bank-first-select",
   "card_name": "IDFC FIRST Select Credit Card",
-  "verified_on": "2026-11-05",
+  "verified_on": "2026-11-06",
   "sources": [
     {
       "url": "https://www.idfcfirst.bank.in/content/idfcfirstbank/en/credit-card/select.html",
@@ -13,6 +13,11 @@
       "url": "https://www.idfcfirst.bank.in/content/idfcfirstbank/en/credit-card/select.html",
       "doc": "FIRST Select page",
       "quote": "Reward program not applicable on Fuel, EMI transactions and Cash withdrawals."
+    },
+    {
+      "url": "https://www.idfcfirst.bank.in/credit-card/select",
+      "doc": "FIRST Select product page (FAQ)",
+      "quote": "10X ... the following transactions are excluded - Rental & Property Management, Government Services, Education, Wallet Load transactions"
     }
   ],
   "examples": [
@@ -260,6 +265,60 @@
         "cap_deltas_by_source_id": {}
       },
       "why": "The reward programme is not applicable on fuel."
+    },
+    {
+      "id": "010",
+      "title": "Rs 20,000 rent payment (MCC 6513)",
+      "ctx": {
+        "amount": 20000,
+        "occurred": "2026-11-10T10:00:00+05:30",
+        "category_id": null,
+        "category_slug": "rent",
+        "mcc": "6513",
+        "merchant_name": "Rent payment",
+        "merchant_vpa": null,
+        "merchant_slug": null,
+        "platform": null,
+        "rail": "online"
+      },
+      "state_before": {
+        "caps_by_source_id": {}
+      },
+      "expect": {
+        "currency": "points",
+        "value_inr": null,
+        "excluded": false,
+        "cap_deltas_by_source_id": {},
+        "amount": 300
+      },
+      "why": "Issuer page: 'All spend categories earn 3X Reward Points; except insurance, utilities, railways, FASTag recharges, Dining, Travel and International purchases', and rent is excluded from 10X (FAQ). 1X = 1 point per Rs 200: 100 blocks x 3 = 300."
+    },
+    {
+      "id": "011",
+      "title": "Rs 2,000 wallet load (MCC 6540)",
+      "ctx": {
+        "amount": 2000,
+        "occurred": "2026-11-10T10:00:00+05:30",
+        "category_id": null,
+        "category_slug": "wallet",
+        "mcc": "6540",
+        "merchant_name": "Wallet top-up",
+        "merchant_vpa": null,
+        "merchant_slug": null,
+        "platform": null,
+        "rail": "online"
+      },
+      "state_before": {
+        "caps_by_source_id": {}
+      },
+      "expect": {
+        "currency": "points",
+        "value_inr": null,
+        "excluded": false,
+        "cap_deltas_by_source_id": {},
+        "amount": 30
+      },
+      "why": "Wallet loads earn the 3X on all spend categories and are excluded from 10X (issuer FAQ): 10 blocks of Rs 200 x 3 = 30."
     }
   ],
   "research_notes": [

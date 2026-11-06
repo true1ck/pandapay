@@ -984,6 +984,27 @@
       "reason": "WP7: D29d: T&C: \"The total NeuCoins earned on eligible UPI transactions are capped to 500 NeuCoins per month\". A bonus cap never binds on a UPI rate below the base rate (C3.5 bonus = 0), so the 500 cap is a total cap (as the Infinity record has it).",
       "source_url": "https://www.hdfc.bank.in/content/dam/hdfcbankpws/in/en/personal-banking/discover-products/cards/credit-cards/tata-neu-plus-hdfc-bank-credit-card/pdfs/tata_neu_plus_card_tnc.pdf",
       "checked_on": "2026-11-05"
+    },
+    {
+      "path": "reward_rules[id=merchant_emi].depends_on_txn_attribute",
+      "value": true,
+      "reason": "Card-data: D14b. T&C table: \"Merchant EMI Spends (Any Brand) 1% back as NeuCoins\", while the exclusions list \"Smart EMI / Dial an EMI transaction\". The rule applies only to merchant EMI; an EMI spend in the context (rail emi) cannot be told apart from a Smart EMI / Dial an EMI conversion. Stays info with depends_on_txn_attribute; the rate equals the base 1%, which the base rule already pays on such spends, so nothing is lost.",
+      "source_url": "https://www.hdfc.bank.in/content/dam/hdfcbankpws/in/en/personal-banking/discover-products/cards/credit-cards/tata-neu-plus-hdfc-bank-credit-card/pdfs/tata_neu_plus_card_tnc.pdf",
+      "checked_on": "2026-11-06"
+    },
+    {
+      "path": "reward_rules[id=upi_tata_neu_id].depends_on_user_attribute",
+      "value": true,
+      "reason": "Card-data: D13b. T&C: \"Additional 0.75% back as NeuCoins if the transaction is done using the Tata Neu UPI ID\" on \"Any UPI Spends on Rupay Credit Card\" - whether the user pays through a Tata Neu UPI ID (and holds the RuPay variant) is not in the context. Stays info with depends_on_user_attribute (as upi_tata_neu_id_additional on Infinity HDFC); UPI spends earn the 0.25% upi_other_id rate (under-states for Tata Neu UPI ID payers).",
+      "source_url": "https://www.hdfc.bank.in/content/dam/hdfcbankpws/in/en/personal-banking/discover-products/cards/credit-cards/tata-neu-plus-hdfc-bank-credit-card/pdfs/tata_neu_plus_card_tnc.pdf",
+      "checked_on": "2026-11-06"
+    },
+    {
+      "path": "reward_rules[id=education_direct_standard].depends_on_txn_attribute",
+      "value": true,
+      "reason": "Card-data: D14b. T&C: \"NeuCoins will not be accrued for Education payments made through third-party apps like (but not limited to) CRED, Cheq, MobiKwik, and others. However, education payments made directly through college/school websites, or their POS machines will earn NeuCoins.\" Whether an education payment went direct or through a third-party app is not in the context. Stays info with depends_on_txn_attribute; education spends stay excluded by the third-party exclusion (under-states).",
+      "source_url": "https://www.hdfc.bank.in/content/dam/hdfcbankpws/in/en/personal-banking/discover-products/cards/credit-cards/tata-neu-plus-hdfc-bank-credit-card/pdfs/tata_neu_plus_card_tnc.pdf",
+      "checked_on": "2026-11-06"
     }
   ]
 }

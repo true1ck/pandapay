@@ -74,8 +74,11 @@ void main() {
       expect(rec.reasonLines.where((l) => l.contains('milestone')), isEmpty);
     });
 
-    test('the fixture does carry the windowed milestone', () {
-      expect(card.milestoneRules.any((m) => m.windowDays != null), isTrue);
+    // Platinum Charge's welcome/renewal values are "up to" figures and were set
+    // to null (D13), so the loaded card no longer carries a windowed milestone;
+    // the synthetic cases below still prove windowed milestones are skipped.
+    test('the loaded card no longer credits any welcome milestone', () {
+      expect(card.milestoneRules.where((m) => m.windowDays != null), isEmpty);
     });
   });
 

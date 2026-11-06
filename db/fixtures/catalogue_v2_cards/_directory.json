@@ -1,6 +1,6 @@
 {
   "generated_by": "api/scripts/catalogue_v2/snapshot_examples.js",
-  "directory_sha256": "b1094d54b77e848d22f7a9a64f3ae6d1ef43ca3eb2fc8e40cd43ed1994664694",
+  "directory_sha256": "15c375346504fca57465605d625ef45ca6cec4f5866ba3f4f16a1f5cbe0b8a90",
   "merchants": [
     {
       "slug": "swiggy",
@@ -2340,6 +2340,59 @@
       "vpa_prefixes": [],
       "mcc": [],
       "notes": "Cloud billing; not the Amazon shopping brand."
+    },
+    {
+      "slug": "swiggy_liquor",
+      "name": "Swiggy Liquor",
+      "parent_slug": null,
+      "category_slug": "shopping",
+      "aliases": [
+        "swiggy liquor"
+      ],
+      "vpa_prefixes": [],
+      "mcc": [],
+      "notes": "Separate brand from Swiggy for card terms (Swiggy HDFC 10% excludes Swiggy Liquor); no parent_slug per D6.",
+      "group": "swiggy"
+    },
+    {
+      "slug": "swiggy_minis",
+      "name": "Swiggy Minis",
+      "parent_slug": null,
+      "category_slug": "shopping",
+      "aliases": [
+        "swiggy minis"
+      ],
+      "vpa_prefixes": [],
+      "mcc": [],
+      "notes": "Separate brand from Swiggy for card terms (Swiggy HDFC 10% excludes Swiggy Minis); no parent_slug per D6.",
+      "group": "swiggy"
+    },
+    {
+      "slug": "swiggy_genie",
+      "name": "Swiggy Genie",
+      "parent_slug": null,
+      "category_slug": "other",
+      "aliases": [
+        "swiggy genie"
+      ],
+      "vpa_prefixes": [],
+      "mcc": [],
+      "notes": "Separate brand from Swiggy for card terms (Swiggy HDFC 10% covers only Food, Instamart, Dineout); no parent_slug per D6.",
+      "group": "swiggy"
+    },
+    {
+      "slug": "swiggy_money",
+      "name": "Swiggy Money",
+      "parent_slug": null,
+      "category_slug": "wallet",
+      "aliases": [
+        "swiggy money",
+        "swiggy money wallet"
+      ],
+      "vpa_prefixes": [],
+      "mcc": [],
+      "notes": "Swiggy's wallet; loads are wallet loads (Swiggy HDFC excludes Swiggy Money Wallet); no parent_slug per D6.",
+      "group": "swiggy"
     }
   ],
   "platforms": [

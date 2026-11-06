@@ -4,13 +4,11 @@
   "inputs": {
     "transform_version": "7",
     "source_record_sha256": "657a9e89e7d34f8d89df45dcb26ec07ee33619ef2b1f7043b0f1f4710240916d",
-    "override_sha256": "784579e565d555d250a519d023a825025e631c86cc23499aa09fc6d4e52ac4b8",
-    "directory_sha256": "b1094d54b77e848d22f7a9a64f3ae6d1ef43ca3eb2fc8e40cd43ed1994664694",
-    "verified": false
+    "override_sha256": "8569d5c16f25c67347a807c6266481c8b7842932cc6fa09c2f3e7f833f6099b3",
+    "directory_sha256": "15c375346504fca57465605d625ef45ca6cec4f5866ba3f4f16a1f5cbe0b8a90",
+    "verified": true
   },
-  "blocking_flags": [
-    "info_rule"
-  ],
+  "blocking_flags": [],
   "card": {
     "id": "tata-neu-plus-hdfc-bank:card",
     "slug": "tata-neu-plus-hdfc-bank",
@@ -25,7 +23,7 @@
     "accrual_rounding": "points_half_up",
     "cashback_rounding": null,
     "points_expiry_months": 12,
-    "model_status": "partial",
+    "model_status": "verified",
     "model_coverage": {
       "rules_total": 30,
       "rules_modelled": 23,
@@ -36,7 +34,17 @@
         {
           "code": "info_rule",
           "source_local_id": "merchant_emi",
+          "detail": "depends_on_txn_attribute"
+        },
+        {
+          "code": "info_rule",
+          "source_local_id": "merchant_emi",
           "detail": "condition:merchant_emi"
+        },
+        {
+          "code": "depends_on_txn_attribute",
+          "source_local_id": "merchant_emi",
+          "detail": null
         },
         {
           "code": "info_rule",
@@ -66,7 +74,17 @@
         {
           "code": "info_rule",
           "source_local_id": "upi_tata_neu_id",
+          "detail": "depends_on_user_attribute"
+        },
+        {
+          "code": "info_rule",
+          "source_local_id": "upi_tata_neu_id",
           "detail": "condition:upi_id"
+        },
+        {
+          "code": "depends_on_user_attribute",
+          "source_local_id": "upi_tata_neu_id",
+          "detail": null
         },
         {
           "code": "info_rule",
@@ -141,12 +159,22 @@
         {
           "code": "info_rule",
           "source_local_id": "education_direct_standard",
+          "detail": "depends_on_txn_attribute"
+        },
+        {
+          "code": "info_rule",
+          "source_local_id": "education_direct_standard",
           "detail": "condition:direct_college_or_school_website_or_pos"
         },
         {
           "code": "info_rule",
           "source_local_id": "education_direct_standard",
           "detail": "condition:channel_type"
+        },
+        {
+          "code": "depends_on_txn_attribute",
+          "source_local_id": "education_direct_standard",
+          "detail": null
         },
         {
           "code": "exclusion_rail_dropped",
@@ -656,6 +684,33 @@
           "source_url": "https://www.hdfc.bank.in/content/dam/hdfcbankpws/in/en/personal-banking/discover-products/cards/credit-cards/tata-neu-plus-hdfc-bank-credit-card/pdfs/tata_neu_plus_card_tnc.pdf",
           "checked_on": "2026-11-05",
           "citation": null
+        },
+        {
+          "path": "reward_rules[id=merchant_emi].depends_on_txn_attribute",
+          "op": "set",
+          "value_sha256": "b5bea41b6c623f7c",
+          "reason": "Card-data: D14b. T&C table: \"Merchant EMI Spends (Any Brand) 1% back as NeuCoins\", while the exclusions list \"Smart EMI / Dial an EMI transaction\". The rule applies only to merchant EMI; an EMI spend in the context (rail emi) cannot be told apart from a Smart EMI / Dial an EMI conversion. Stays info with depends_on_txn_attribute; the rate equals the base 1%, which the base rule already pays on such spends, so nothing is lost.",
+          "source_url": "https://www.hdfc.bank.in/content/dam/hdfcbankpws/in/en/personal-banking/discover-products/cards/credit-cards/tata-neu-plus-hdfc-bank-credit-card/pdfs/tata_neu_plus_card_tnc.pdf",
+          "checked_on": "2026-11-06",
+          "citation": null
+        },
+        {
+          "path": "reward_rules[id=upi_tata_neu_id].depends_on_user_attribute",
+          "op": "set",
+          "value_sha256": "b5bea41b6c623f7c",
+          "reason": "Card-data: D13b. T&C: \"Additional 0.75% back as NeuCoins if the transaction is done using the Tata Neu UPI ID\" on \"Any UPI Spends on Rupay Credit Card\" - whether the user pays through a Tata Neu UPI ID (and holds the RuPay variant) is not in the context. Stays info with depends_on_user_attribute (as upi_tata_neu_id_additional on Infinity HDFC); UPI spends earn the 0.25% upi_other_id rate (under-states for Tata Neu UPI ID payers).",
+          "source_url": "https://www.hdfc.bank.in/content/dam/hdfcbankpws/in/en/personal-banking/discover-products/cards/credit-cards/tata-neu-plus-hdfc-bank-credit-card/pdfs/tata_neu_plus_card_tnc.pdf",
+          "checked_on": "2026-11-06",
+          "citation": null
+        },
+        {
+          "path": "reward_rules[id=education_direct_standard].depends_on_txn_attribute",
+          "op": "set",
+          "value_sha256": "b5bea41b6c623f7c",
+          "reason": "Card-data: D14b. T&C: \"NeuCoins will not be accrued for Education payments made through third-party apps like (but not limited to) CRED, Cheq, MobiKwik, and others. However, education payments made directly through college/school websites, or their POS machines will earn NeuCoins.\" Whether an education payment went direct or through a third-party app is not in the context. Stays info with depends_on_txn_attribute; education spends stay excluded by the third-party exclusion (under-states).",
+          "source_url": "https://www.hdfc.bank.in/content/dam/hdfcbankpws/in/en/personal-banking/discover-products/cards/credit-cards/tata-neu-plus-hdfc-bank-credit-card/pdfs/tata_neu_plus_card_tnc.pdf",
+          "checked_on": "2026-11-06",
+          "citation": null
         }
       ]
     },
@@ -709,9 +764,12 @@
           "source_local_id": "merchant_emi",
           "part": null,
           "info_reasons": [
+            "depends_on_txn_attribute",
             "condition:merchant_emi"
           ],
-          "flags": []
+          "flags": [
+            "depends_on_txn_attribute"
+          ]
         },
         "notes": null,
         "effective_from": "2023-01-01",
@@ -828,9 +886,12 @@
           "source_local_id": "upi_tata_neu_id",
           "part": null,
           "info_reasons": [
+            "depends_on_user_attribute",
             "condition:upi_id"
           ],
-          "flags": []
+          "flags": [
+            "depends_on_user_attribute"
+          ]
         },
         "notes": null,
         "effective_from": "2024-08-01",
@@ -1317,10 +1378,13 @@
           "source_local_id": "education_direct_standard",
           "part": null,
           "info_reasons": [
+            "depends_on_txn_attribute",
             "condition:direct_college_or_school_website_or_pos",
             "condition:channel_type"
           ],
-          "flags": []
+          "flags": [
+            "depends_on_txn_attribute"
+          ]
         },
         "notes": null,
         "effective_from": "2024-09-01",
