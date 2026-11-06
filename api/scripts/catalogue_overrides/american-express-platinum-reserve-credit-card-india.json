@@ -1,0 +1,19 @@
+{
+  "source_slug": "american-express-platinum-reserve-credit-card-india",
+  "changes": [
+    {
+      "path": "reward_rules[id=reward_multiplier_3x].effective_to",
+      "value": "2026-09-29",
+      "reason": "Amex India's notice (quoted by Business Today, 1 Sep 2026): \"Effective 30 September 2026, the Reward Multiplier program will be discontinued\"; purchases must be completed by 29 September 2026 to qualify. The rate stays for earlier spends and ends on 29 Sep 2026 (end day inclusive).",
+      "source_url": "https://www.businesstoday.in/personal-finance/story/american-express-reward-multiplier-ends-this-month-what-cardholders-should-know-552371-2026-09-01",
+      "checked_on": "2026-11-06"
+    },
+    {
+      "path": "cap_rules[id=reward_multiplier_monthly_cap].effective_to",
+      "value": "2026-09-29",
+      "reason": "The 25,000-point Reward Multiplier cap ends with the programme. Amex India's notice (quoted by Business Today, 1 Sep 2026): \"Effective 30 September 2026, the Reward Multiplier program will be discontinued\"; purchases must be completed by 29 September 2026 to qualify. The rate stays for earlier spends and ends on 29 Sep 2026 (end day inclusive).",
+      "source_url": "https://www.businesstoday.in/personal-finance/story/american-express-reward-multiplier-ends-this-month-what-cardholders-should-know-552371-2026-09-01",
+      "checked_on": "2026-11-06"
+    }
+  ]
+}
