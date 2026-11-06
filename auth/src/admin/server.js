@@ -40,13 +40,17 @@ function createSimpleWebAuthn() {
     },
   };
 }
+// Upper bound on how long one private API call may run. Callers ask for what they need (most 5-10 s; the card catalogue
+// list asks for 40 s); nothing may exceed this.
+const MAX_PRIVATE_API_MS = 45_000;
+function boundedTimeoutMs(timeoutMs) { return Math.min(MAX_PRIVATE_API_MS, timeoutMs); }
 function createPrivateApiClient(baseUrl) {
   return {
     async request({ method, path, body, accessToken, timeoutMs = 10_000, maxResponseBytes = 4 * 1024 * 1024 }) {
       const routePath = path.split('?')[0];
       if (!/^\/admin\/[a-zA-Z0-9_./:-]*$/.test(routePath) || routePath.includes('..') || routePath.includes('//')) throw new Error('invalid fixed private API path');
       const controller = new AbortController();
-      const timer = setTimeout(() => controller.abort(), Math.min(10_000, timeoutMs));
+      const timer = setTimeout(() => controller.abort(), boundedTimeoutMs(timeoutMs));
       try {
         const target = new URL(path, baseUrl);
         if (target.origin !== baseUrl.origin || !target.pathname.startsWith('/admin/')) throw new Error('private API redirect/path rejected');
@@ -128,4 +132,4 @@ if (require.main === module) {
     process.once('SIGTERM', close); process.once('SIGINT', close);
   }).catch(error => { console.error('Private admin gateway failed closed:', error.name); process.exitCode = 1; });
 }
-module.exports = { createAdminGatewayRuntime, createPrivateApiClient, createSmtpClient, createSimpleWebAuthn };
+module.exports = { createAdminGatewayRuntime, createPrivateApiClient, createSmtpClient, createSimpleWebAuthn, boundedTimeoutMs, MAX_PRIVATE_API_MS };

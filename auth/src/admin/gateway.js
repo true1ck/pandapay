@@ -6,6 +6,12 @@ const express = require('express');
 const COOKIE = '__Host-pandapay_console';
 const PREAUTH = '__Host-pandapay_admin_pre';
 const LIMITS = Object.freeze({ accessMs: 300_000, preauthMs: 120_000, idleMs: 900_000, absoluteMs: 28_800_000, stepUpMs: 300_000 });
+// Size and time allowed for one proxied admin reply. Most replies are small. The card catalogue list is the whole
+// catalogue in a single reply (about 14 MB for 376 cards) and takes several seconds to read, so only that read gets
+// more room; writes and every other route keep the small limits.
+const DEFAULT_REPLY = Object.freeze({ maxResponseBytes: 4 * 1024 * 1024, timeoutMs: 10_000 });
+const LARGE_REPLIES = new Map([['GET /admin/cards', Object.freeze({ maxResponseBytes: 32 * 1024 * 1024, timeoutMs: 40_000 })]]);
+function replyLimits(method, routePath) { return LARGE_REPLIES.get(`${method} ${routePath}`) || DEFAULT_REPLY; }
 const assurance = 'email+webauthn-uv';
 
 function digest(value, key) {
@@ -296,7 +302,8 @@ function createAdminGatewayApp(deps) {
     try {
       const accessToken = decrypt(req.adminSession.encryptedUpstreamToken, config.sessionEncryptionKey);
       const query = String(req.originalUrl || '').split('?')[1];
-      const result = await privateApi.request({ method, path: query ? `${path}?${query}` : path, body: req.body, accessToken, timeoutMs: 10_000, maxResponseBytes: 4 * 1024 * 1024, redirect: 'error' });
+      const limits = replyLimits(method, matched.path);
+      const result = await privateApi.request({ method, path: query ? `${path}?${query}` : path, body: req.body, accessToken, timeoutMs: limits.timeoutMs, maxResponseBytes: limits.maxResponseBytes, redirect: 'error' });
       if (!result || !Number.isInteger(result.status) || result.status < 200 || result.status > 599 || result.body === undefined) return fail(res, 503, 'temporarily_unavailable');
       return res.status(result.status).json(result.body);
     } catch { return fail(res, 503, 'temporarily_unavailable'); }
@@ -317,4 +324,4 @@ function createAdminGatewayApp(deps) {
   return app;
 }
 
-module.exports = { createAdminGatewayApp, COOKIE, PREAUTH, LIMITS, digest };
+module.exports = { createAdminGatewayApp, COOKIE, PREAUTH, LIMITS, digest, replyLimits };
