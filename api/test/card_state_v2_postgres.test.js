@@ -1004,6 +1004,36 @@ test('C8 D33b: after a forced re-import of a v2 card\'s fee-waiver rules, recomp
   });
 });
 
+test('C8 D34e: a fee-waiver change that touches only records is counted and logged by the dry run', { skip }, async () => {
+  cardStateV2.clearDirectoryCache();
+  await withRollback(async (client) => {
+    const fns = extractIndexFunctions();
+    const { today, monthStart, prevMonthStart } = await dates(client);
+    const ids = await seedSyntheticCard(client, { openedOn: prevMonthStart });
+    await asUser(client, ids.profileId);
+    await recordSpend(client, fns, ids, { amount: 2000, day: monthStart, category: 'dining' });
+    await recordSpend(client, fns, ids, { amount: 3000, day: addDays(monthStart, 1), category: 'dining' });
+    const rows = await feeWaiverRows(client, ids.userCardId);
+    // The rows are right; only the records lost their fee-waiver entries.
+    await client.query(`UPDATE transactions SET card_state_v2 = card_state_v2 - 'fee_waivers' WHERE user_card_id = $1`, [ids.userCardId]);
+
+    const lines = [];
+    const dry = await recompute(client, { nested: true, asOf: today, userCardId: ids.userCardId, log: (l) => lines.push(l) });
+    assert.deepEqual([dry.changedCards, dry.feeWaiverRows, dry.feeWaiverRecords], [1, 0, 2]);
+    assert.ok(lines.some((l) => l.includes(`user_card ${ids.userCardId}`) && l.includes('fee-waiver records 2')), lines.join('\n'));
+    assert.ok(lines.some((l) => l.includes('fee-waiver records 2,') || l.endsWith('fee-waiver records 2')), lines.join('\n'));
+    const [txn] = (await client.query(
+      `SELECT card_state_v2 FROM transactions WHERE user_card_id = $1 ORDER BY occurred_at LIMIT 1`, [ids.userCardId])).rows;
+    assert.equal(txn.card_state_v2.fee_waivers, undefined, 'dry run writes nothing');
+
+    const applied = await recompute(client, { nested: true, apply: true, asOf: today, userCardId: ids.userCardId, log: quietLog });
+    assert.deepEqual([applied.changedCards, applied.feeWaiverRecords], [1, 2]);
+    assert.deepEqual(await feeWaiverRows(client, ids.userCardId), rows);
+    const again = await recompute(client, { nested: true, asOf: today, userCardId: ids.userCardId, log: quietLog });
+    assert.deepEqual([again.changedCards, again.feeWaiverRecords], [0, 0]);
+  });
+});
+
 // ---------------------------------------------------------------------------
 // Real catalogue cards (imported from CardPipeline); skipped when absent.
 

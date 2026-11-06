@@ -133,7 +133,7 @@ async function recompute(client, opts = {}) {
 
   const summary = {
     mode: opts.apply ? 'apply' : 'dry-run', asOf: asOfDay, scanned: 0, v2Cards: 0, changedCards: 0,
-    capRows: 0, milestoneRows: 0, transactions: 0, records: 0, feeWaiverRows: 0, failed: 0,
+    capRows: 0, milestoneRows: 0, transactions: 0, records: 0, feeWaiverRows: 0, feeWaiverRecords: 0, failed: 0,
   };
   for (const row of candidates.rows) {
     summary.scanned += 1;
@@ -159,7 +159,9 @@ async function recompute(client, opts = {}) {
       // C8 D33b: fee waivers on every card with rules (v1 maths, current period).
       let feePlan = await cardStateV2.planFeeWaiverRebuild(client, card, { asOf, v2 });
       const feeChanges = feePlan ? feePlan.diff.length : 0;
-      if (changes > 0 || feeChanges > 0) {
+      // C8 D34e: a fee-waiver change that touches only records still counts.
+      const feeRecords = feePlan ? feePlan.recordUpdates.length : 0;
+      if (changes > 0 || feeChanges > 0 || feeRecords > 0) {
         summary.changedCards += 1;
         if (plan) {
           summary.capRows += plan.diff.caps.length;
@@ -168,14 +170,15 @@ async function recompute(client, opts = {}) {
           summary.records += plan.txnRecordUpdates.length;
         }
         summary.feeWaiverRows += feeChanges;
+        summary.feeWaiverRecords += feeRecords;
         log(`  ${row.slug} user_card ${row.id}: caps ${plan ? plan.diff.caps.length : 0}, `
           + `milestones ${plan ? plan.diff.milestones.length : 0}, `
           + `expected values ${plan ? plan.diff.transactions.length : 0}, records ${plan ? plan.txnRecordUpdates.length : 0}, `
-          + `fee waivers ${feeChanges}`);
+          + `fee waivers ${feeChanges}, fee-waiver records ${feeRecords}`);
         if (plan) describe(plan, opts.verbose, log);
         describeFeeWaivers(feePlan, opts.verbose, log);
       }
-      if (opts.apply && (changes > 0 || feeChanges > 0 || (feePlan && feePlan.recordUpdates.length > 0))) {
+      if (opts.apply && (changes > 0 || feeChanges > 0 || feeRecords > 0)) {
         if (changes > 0) {
           await cardStateV2.applyCardRebuild(client, row.profile_id, v2, plan);
           // Records just changed; plan the fee-waiver section on top of them.
@@ -199,7 +202,8 @@ async function recompute(client, opts = {}) {
   log(`recompute_card_state (${summary.mode}, as of ${summary.asOf}): scanned ${summary.scanned}, `
     + `v2 ${summary.v2Cards}, changed ${summary.changedCards} — cap rows ${summary.capRows}, `
     + `milestone rows ${summary.milestoneRows}, expected values ${summary.transactions}, `
-    + `records ${summary.records}, fee-waiver rows ${summary.feeWaiverRows}, failed ${summary.failed}`);
+    + `records ${summary.records}, fee-waiver rows ${summary.feeWaiverRows}, `
+    + `fee-waiver records ${summary.feeWaiverRecords}, failed ${summary.failed}`);
   if (!opts.apply && summary.changedCards > 0) log('dry run: nothing written. Re-run with --apply to write.');
   return summary;
 }
