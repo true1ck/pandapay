@@ -105,6 +105,70 @@
       "reason": "WP7: Millennia T&C: EMI spends earn no CashPoints (record exclusion millennia-emi-zero; EMI is in the card's excluded categories). The record's EMI exclusion is emitted as category emi AND rail emi, so an EMI purchase in another category was not excluded (D24e: data fix while WP2 changes the loader). Rail-EMI exclusion on all spend, as on flipkart-sbi-card.",
       "source_url": "https://www.hdfc.bank.in/content/dam/hdfcbankpws/in/en/personal-banking/discover-products/cards/credit-cards/millennia-credit-card/pdf/millennia-tnc-20th-jul26.pdf",
       "checked_on": "2026-11-05"
+    },
+    {
+      "path": "reward_rules[id=millennia-wallet-mcc6540-base]",
+      "op": "remove",
+      "reason": "Card data review: the record's own row ended on 31 Aug 2024 (effective_to 2024-08-31). Millennia T&C (published 20 Jul 2026): \"Effective 1st September 2024, Wallet loading and EMI transactions will NOT earn Reward Points. Wallet MCC: 6540\". A lapsed earning row that could never apply was loaded as info and blocked Verified; removing it changes no result.",
+      "source_url": "https://www.hdfc.bank.in/content/dam/hdfcbankpws/in/en/personal-banking/discover-products/cards/credit-cards/millennia-credit-card/pdf/millennia-tnc-20th-jul26.pdf",
+      "checked_on": "2026-11-06"
+    },
+    {
+      "path": "reward_rules[id=millennia-uber-eats-base]",
+      "op": "remove",
+      "reason": "Card data review: T&C: \"The 5% CashPoints on Uber is eligible for travel/commute related spends ... MCC code of 4121 ... will only be considered\"; everything else at Uber falls under \"1% cashback on all other spends\". This row restated the 1% other-spends rule (same rate, same 1,000 cap) for an 'Uber Eats' merchant the directory cannot resolve, so it loaded as info and blocked Verified. millennia-other-spends-1pct already pays it; removing the row changes no result.",
+      "source_url": "https://www.hdfc.bank.in/content/dam/hdfcbankpws/in/en/personal-banking/discover-products/cards/credit-cards/millennia-credit-card/pdf/millennia-tnc-20th-jul26.pdf",
+      "checked_on": "2026-11-06"
+    },
+    {
+      "path": "reward_rules[id=millennia-education-third-party-zero].conditions",
+      "value": {
+        "mcc_list": [
+          8211,
+          8220,
+          8241,
+          8244,
+          8249,
+          8299
+        ]
+      },
+      "reason": "Card data review: T&C: \"Effective 1st September 2024, Education payments made through third-party apps will NOT earn Reward Points ... Education MCCs: 8211,8220,8241,8244,8249,8299\"; the fee note says apps \"like (but not limited to) CRED, PayTM, Cheq, MobiKwik and others\". The app condition made the row info, so app-paid education earned 1% (over-statement); SMS spends never carry the platform. Restated as an exclusion on the education category and these MCCs (D20a rows). Direct school/college payments, which do earn per the T&C, are now under-stated (H2).",
+      "source_url": "https://www.hdfc.bank.in/content/dam/hdfcbankpws/in/en/personal-banking/discover-products/cards/credit-cards/millennia-credit-card/pdf/millennia-tnc-20th-jul26.pdf",
+      "checked_on": "2026-11-06"
+    },
+    {
+      "path": "reward_rules[id=millennia-education-third-party-zero].rail",
+      "value": "any",
+      "reason": "Card data review: an app payment may reach the card on any rail.",
+      "source_url": "https://www.hdfc.bank.in/content/dam/hdfcbankpws/in/en/personal-banking/discover-products/cards/credit-cards/millennia-credit-card/pdf/millennia-tnc-20th-jul26.pdf",
+      "checked_on": "2026-11-06"
+    },
+    {
+      "path": "reward_rules[id=millennia-education-third-party-zero].channel_type",
+      "value": "all",
+      "reason": "Card data review: the third-party-app channel cannot be told from the context (see the conditions change).",
+      "source_url": "https://www.hdfc.bank.in/content/dam/hdfcbankpws/in/en/personal-banking/discover-products/cards/credit-cards/millennia-credit-card/pdf/millennia-tnc-20th-jul26.pdf",
+      "checked_on": "2026-11-06"
+    },
+    {
+      "path": "reward_rules[id=millennia-5pct-select-merchants].conditions.not_platform",
+      "value": [
+        "SmartBuy",
+        "PayZapp"
+      ],
+      "reason": "Card data review: T&C (5% on 10 online merchants): \"A cardholder will be eligible for 1% CashPoints as per product feature if he/she does a transaction through SmartBuy/PayZapp which includes transaction from 10 online merchants also.\" except_platform_slugs [hdfc_smartbuy, payzapp] (D16a): a known SmartBuy/PayZapp spend at a partner falls to the 1% rule. The rule was already v2-only (several merchants), so v1 is unchanged.",
+      "source_url": "https://www.hdfc.bank.in/content/dam/hdfcbankpws/in/en/personal-banking/discover-products/cards/credit-cards/millennia-credit-card/pdf/millennia-tnc-20th-jul26.pdf",
+      "checked_on": "2026-11-06"
+    },
+    {
+      "path": "reward_rules[id=millennia-uber-mcc4121].conditions.not_platform",
+      "value": [
+        "SmartBuy",
+        "PayZapp"
+      ],
+      "reason": "Card data review: same T&C clause: Uber is one of the 10 merchants, and a SmartBuy/PayZapp transaction there earns 1%.",
+      "source_url": "https://www.hdfc.bank.in/content/dam/hdfcbankpws/in/en/personal-banking/discover-products/cards/credit-cards/millennia-credit-card/pdf/millennia-tnc-20th-jul26.pdf",
+      "checked_on": "2026-11-06"
     }
   ]
 }

@@ -33,6 +33,21 @@
       "url": "https://www.hdfc.bank.in/content/dam/hdfcbankpws/in/en/personal-banking/discover-products/cards/credit-cards/personal-mitc/mitc-in-english.pdf",
       "doc": "HDFC Bank credit card MITC v4.18, Oct 2026 (Fair Usage Policy)",
       "quote": "The maximum reward points that can be earned in a statement cycle for Infinia/infinia Metal is 2,00,000."
+    },
+    {
+      "url": "https://www.hdfc.bank.in/content/dam/hdfcbankpws/in/en/personal-banking/discover-products/cards/credit-cards/personal-mitc/mitc-in-english.pdf",
+      "doc": "HDFC Bank credit card MITC v4.18, Oct 2026",
+      "quote": "Online Skill-Based gaming transactions will not earn Reward Points/CashPoints on all the cards."
+    },
+    {
+      "url": "https://www.hdfc.bank.in/content/dam/hdfcbankpws/in/en/personal-banking/discover-products/cards/credit-cards/infinia-credit-card/rewards-points-program-terms-and-conditions.pdf",
+      "doc": "Infinia Rewards Points Program T&C",
+      "quote": "Education payments made through third-party apps like (but not limited to) CRED, Cheq, MobiKwik, and others will NOT earn Reward Points."
+    },
+    {
+      "url": "https://www.hdfc.bank.in/content/dam/hdfcbankpws/in/en/personal-banking/discover-products/cards/credit-cards/infinia-credit-card/rewards-points-program-terms-and-conditions.pdf",
+      "doc": "Infinia Rewards Points Program T&C",
+      "quote": "The 3,000-RP limit is part of, not additional to, Infinia's unchanged 15,000 maximum accelerated-RP monthly SmartBuy cap."
     }
   ],
   "examples": [
@@ -289,6 +304,58 @@
         }
       },
       "why": "SmartBuy flights are 5X, not 10X: 25 RP per Rs150, 200 blocks = 5,000 total (1,000 base + 4,000 accelerated)."
+    },
+    {
+      "id": "010",
+      "title": "Rs 3,000 online skill-based gaming (MCC 5816)",
+      "ctx": {
+        "amount": 3000,
+        "occurred": "2026-11-05T10:00:00+05:30",
+        "category_slug": "entertainment",
+        "mcc": 5816,
+        "merchant_name": "Online gaming platform",
+        "merchant_vpa": null,
+        "merchant_slug": null,
+        "platform": null,
+        "rail": "online"
+      },
+      "state_before": {
+        "caps_by_source_id": {}
+      },
+      "expect": {
+        "currency": "points",
+        "amount": 0,
+        "value_inr": null,
+        "excluded": true,
+        "cap_deltas_by_source_id": {}
+      },
+      "why": "MITC v4.18 I(g): from 1 July 2025 online skill-based gaming earns no Reward Points on all cards."
+    },
+    {
+      "id": "011",
+      "title": "Rs 45,000 college fee paid through CRED",
+      "ctx": {
+        "amount": 45000,
+        "occurred": "2026-11-05T10:00:00+05:30",
+        "category_slug": "education",
+        "mcc": 8220,
+        "merchant_name": "CRED college fee payment",
+        "merchant_vpa": null,
+        "merchant_slug": null,
+        "platform": null,
+        "rail": "online"
+      },
+      "state_before": {
+        "caps_by_source_id": {}
+      },
+      "expect": {
+        "currency": "points",
+        "amount": 0,
+        "value_inr": null,
+        "excluded": true,
+        "cap_deltas_by_source_id": {}
+      },
+      "why": "Rewards Points Program T&C 15(c): education payments through third-party apps like CRED earn no Reward Points (from 1 Sep 2024)."
     }
   ],
   "research_notes": [
@@ -322,6 +389,27 @@
       "cardpipeline_says": "total_reward_points 2,00,000 per statement cycle, card-wide.",
       "issuer_says": "Confirmed (HDFC Bank credit card MITC v4.18, Oct 2026 (Fair Usage Policy)). Every earning spend counts toward it, so each earning example now lists this cap's delta (= the points earned). Amounts unchanged.",
       "proposed_fix": "none"
+    },
+    {
+      "item": "Card data review (2026-11-06): third-party education",
+      "cardpipeline_says": "Exclusion only for CRED/Cheq/MobiKwik (loaded as info, so all education earned 5 RP/Rs150).",
+      "issuer_says": "T&C 15(c): third-party apps 'like (but not limited to)' those earn nothing; direct payments earn. The context cannot tell them apart, so education is excluded (category + MCCs); direct payments are under-stated.",
+      "proposed_fix": "override",
+      "override_file": "api/scripts/catalogue_overrides/hdfc-infinia-metal.json"
+    },
+    {
+      "item": "Card data review (2026-11-06): online gaming exclusion",
+      "cardpipeline_says": "No gaming exclusion.",
+      "issuer_says": "MITC v4.18 I(g): no Reward Points on online skill-based gaming from 1 July 2025.",
+      "proposed_fix": "override",
+      "override_file": "api/scripts/catalogue_overrides/hdfc-infinia-metal.json"
+    },
+    {
+      "item": "Card data review (2026-11-06): SmartBuy voucher sub-cap",
+      "cardpipeline_says": "3,000 RP/month voucher sub-cap under the SmartBuy cap.",
+      "issuer_says": "Matches T&C item 18. No voucher accelerator is loaded, so the sub-cap (orphan) is removed until one is.",
+      "proposed_fix": "override",
+      "override_file": "api/scripts/catalogue_overrides/hdfc-infinia-metal.json"
     }
   ]
 }

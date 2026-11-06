@@ -18,6 +18,16 @@
       "url": "https://www.hdfc.bank.in/content/dam/hdfcbankpws/in/en/personal-banking/discover-products/cards/credit-cards/swiggy-hdfc-bank-credit-card/pdf/terms-and-conditions-swiggy-hdfc-bank-credit-card-18092026.pdf",
       "doc": "Swiggy HDFC Bank Credit Card T&C, published 18 Sep 2026",
       "quote": "Cashback will not be accrued ... Smartbuy portal ... EMI (all type)"
+    },
+    {
+      "url": "https://www.hdfc.bank.in/content/dam/hdfcbankpws/in/en/personal-banking/discover-products/cards/credit-cards/swiggy-hdfc-bank-credit-card/pdf/terms-and-conditions-swiggy-hdfc-bank-credit-card-18092026.pdf",
+      "doc": "Swiggy HDFC Bank Credit Card T&C, published 18 Sep 2026",
+      "quote": "Only select merchants mapped under the MCCs listed in Table 1.2 are eligible for 5% Cashback."
+    },
+    {
+      "url": "https://www.hdfc.bank.in/content/dam/hdfcbankpws/in/en/personal-banking/discover-products/cards/credit-cards/swiggy-hdfc-bank-credit-card/pdf/terms-and-conditions-swiggy-hdfc-bank-credit-card-18092026.pdf",
+      "doc": "Swiggy HDFC Bank Credit Card T&C, published 18 Sep 2026",
+      "quote": "Discount Stores 5399 (Flipkart, Amazon, Meesho, Ajio); Local Cabs 4121,4111,5511,5521,7512 (Ola, Uber, Zoom, ANI Technologies)"
     }
   ],
   "examples": [
@@ -376,6 +386,92 @@
         "cap_deltas_by_source_id": {}
       },
       "why": "T&C: 5% and 1% categories need a minimum transaction of Rs100."
+    },
+    {
+      "id": "014",
+      "title": "Rs 20,000 online order at Croma (electronics, MCC 5732)",
+      "ctx": {
+        "amount": 20000,
+        "occurred": "2026-11-05T10:00:00+05:30",
+        "category_slug": "online",
+        "mcc": 5732,
+        "merchant_name": "Croma",
+        "merchant_vpa": null,
+        "merchant_slug": "croma",
+        "platform": null,
+        "rail": "online"
+      },
+      "state_before": {
+        "caps_by_source_id": {}
+      },
+      "expect": {
+        "currency": "cashback",
+        "amount": 1000,
+        "value_inr": 1000,
+        "excluded": false,
+        "cap_deltas_by_source_id": {
+          "online_5pct_cashback_cap": 1000
+        }
+      },
+      "why": "T&C 4.2 example: 'Online Transaction on Croma' Rs20,000 earns Rs1,000 as 5% Swiggy Cashback. MCC 5732 (Electronics, Table 1.2) is this example's assumption; the issuer example gives no MCC."
+    },
+    {
+      "id": "015",
+      "title": "Rs 2,500 online order at Nykaa with Rs1,000 of 5% cap used",
+      "ctx": {
+        "amount": 2500,
+        "occurred": "2026-11-05T10:00:00+05:30",
+        "category_slug": "online",
+        "mcc": 5977,
+        "merchant_name": "Nykaa",
+        "merchant_vpa": null,
+        "merchant_slug": "nykaa",
+        "platform": null,
+        "rail": "online"
+      },
+      "state_before": {
+        "caps_by_source_id": {
+          "online_5pct_cashback_cap": 1000
+        }
+      },
+      "expect": {
+        "currency": "cashback",
+        "amount": 125,
+        "value_inr": 125,
+        "excluded": false,
+        "cap_deltas_by_source_id": {
+          "online_5pct_cashback_cap": 125
+        }
+      },
+      "why": "T&C 4.2 example: 'Online Transaction on Nykaa' Rs2,500 earns Rs125 (5%), within the Rs1,500 per-cycle cap. MCC 5977 (Personal Care, Table 1.2) is this example's assumption."
+    },
+    {
+      "id": "016",
+      "title": "Rs 1,000 Amazon order after the 5% cap is reached",
+      "ctx": {
+        "amount": 1000,
+        "occurred": "2026-11-05T10:00:00+05:30",
+        "category_slug": "online",
+        "mcc": 5399,
+        "merchant_name": "Amazon",
+        "merchant_vpa": null,
+        "merchant_slug": "amazon",
+        "platform": null,
+        "rail": "online"
+      },
+      "state_before": {
+        "caps_by_source_id": {
+          "online_5pct_cashback_cap": 1500
+        }
+      },
+      "expect": {
+        "currency": "cashback",
+        "amount": 0,
+        "value_inr": 0,
+        "excluded": false,
+        "cap_deltas_by_source_id": {}
+      },
+      "why": "T&C 4.1 illustration: after Flipkart Rs1,000 + Myntra Rs500, an Amazon Rs1,000 order earns nothing: 'Rs.1500 capping reached under 5% cashback category'. Amazon at MCC 5399 is a Table 1.2 Discount Stores merchant."
     }
   ],
   "research_notes": [
@@ -410,6 +506,19 @@
       "issuer_says": "No cashback below the minimum (Rs249 for 10%, Rs100 otherwise; issuer example: Rs150 Swiggy order earns 0). Contract C8 D16b models \"no reward below Rs X\" as an exclusion, so excluded is true. Amounts unchanged (0).",
       "proposed_fix": "override",
       "override_file": "api/scripts/catalogue_overrides/swiggy-hdfc-bank-credit-card.json"
+    },
+    {
+      "item": "Card data review (2026-11-06): 5% online merchants (fixes example 004)",
+      "cardpipeline_says": "5% on Table 1.2 MCCs for 'selected merchants' (unpublished), so the rule was info.",
+      "issuer_says": "The T&C name Amazon, Flipkart, Meesho, Ajio (Discount Stores), Ola, Uber (Local Cabs), and in the illustrations Myntra, Nykaa, Croma as 5% merchants. Modelled as those merchants at a Table 1.2 MCC, online rail. 5411 left out (notes ** and *** contradict); Cleartrip left out (Table 1.1 lists discounts, not cashback).",
+      "proposed_fix": "override",
+      "override_file": "api/scripts/catalogue_overrides/swiggy-hdfc-bank-credit-card.json"
+    },
+    {
+      "item": "Card data review (2026-11-06): exact-half rounding (open, for the lead)",
+      "cardpipeline_says": "Nearest rupee (override: rupee_half_up).",
+      "issuer_says": "T&C 4.1 table: 'Offline spend at a merchant outlet 650 -> 6: 6.5 will be rounded down to 6'; Instamart 187 -> 19 (18.7 up). rupee_half_up pays 7 on Rs650 at 1% (over-states Re1 on every exact half). No D11 mode rounds half down; rupee_floor would under-state 25.6 -> 25 and break example 012. No 650 example is added until the lead rules.",
+      "proposed_fix": "lead"
     }
   ]
 }

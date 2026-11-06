@@ -28,6 +28,16 @@
       "url": "https://www.hdfc.bank.in/content/dam/hdfcbankpws/in/en/personal-banking/discover-products/cards/credit-cards/regalia-gold-credit-card/pdfs/regalia-gold-credit-card-reward-points-t-and-cs.pdf",
       "doc": "Regalia Gold Reward Points T&C (Aug 2026), item 16",
       "quote": "The maximum reward points that can be earned in a statement cycle for Regalia Gold is 50,000."
+    },
+    {
+      "url": "https://www.hdfc.bank.in/content/dam/hdfcbankpws/in/en/personal-banking/discover-products/cards/credit-cards/personal-mitc/mitc-in-english.pdf",
+      "doc": "HDFC Bank credit card MITC v4.18, Oct 2026",
+      "quote": "Online Skill-Based gaming transactions will not earn Reward Points/CashPoints on all the cards."
+    },
+    {
+      "url": "https://www.hdfc.bank.in/content/dam/hdfcbankpws/in/en/personal-banking/discover-products/cards/credit-cards/personal-mitc/mitc-in-english.pdf",
+      "doc": "HDFC Bank credit card MITC v4.18, Oct 2026",
+      "quote": "Education payments made through third-party apps like (but not limited to) CRED, Cheq, MobiKwik, etc will not earn Reward Points."
     }
   ],
   "examples": [
@@ -288,6 +298,58 @@
         "cap_deltas_by_source_id": {}
       },
       "why": "E-wallet loading does not accrue points."
+    },
+    {
+      "id": "010",
+      "title": "Rs 2,000 online skill-based gaming (MCC 5816)",
+      "ctx": {
+        "amount": 2000,
+        "occurred": "2026-11-05T10:00:00+05:30",
+        "category_slug": "entertainment",
+        "mcc": 5816,
+        "merchant_name": "Online gaming platform",
+        "merchant_vpa": null,
+        "merchant_slug": null,
+        "platform": null,
+        "rail": "online"
+      },
+      "state_before": {
+        "caps_by_source_id": {}
+      },
+      "expect": {
+        "currency": "points",
+        "amount": 0,
+        "value_inr": null,
+        "excluded": true,
+        "cap_deltas_by_source_id": {}
+      },
+      "why": "MITC v4.18 I(g): from 1 July 2025 online skill-based gaming earns no Reward Points on all cards."
+    },
+    {
+      "id": "011",
+      "title": "Rs 20,000 school fee paid through CRED",
+      "ctx": {
+        "amount": 20000,
+        "occurred": "2026-11-05T10:00:00+05:30",
+        "category_slug": "education",
+        "mcc": 8211,
+        "merchant_name": "CRED school fee payment",
+        "merchant_vpa": null,
+        "merchant_slug": null,
+        "platform": null,
+        "rail": "online"
+      },
+      "state_before": {
+        "caps_by_source_id": {}
+      },
+      "expect": {
+        "currency": "points",
+        "amount": 0,
+        "value_inr": null,
+        "excluded": true,
+        "cap_deltas_by_source_id": {}
+      },
+      "why": "MITC v4.18 I: education payments through third-party apps like CRED earn no Reward Points (from 1 Sep 2024)."
     }
   ],
   "research_notes": [
@@ -314,6 +376,20 @@
       "cardpipeline_says": "total_reward_points 50,000 per statement cycle, card-wide.",
       "issuer_says": "Confirmed (Regalia Gold Reward Points T&C (Aug 2026), item 16). Every earning spend counts toward it, so each earning example now lists this cap's delta (= the points earned). Amounts unchanged.",
       "proposed_fix": "none"
+    },
+    {
+      "item": "Card data review (2026-11-06): online gaming exclusion",
+      "cardpipeline_says": "No gaming exclusion.",
+      "issuer_says": "MITC v4.18 I(g): online skill-based gaming earns no Reward Points on all cards from 1 July 2025.",
+      "proposed_fix": "override",
+      "override_file": "api/scripts/catalogue_overrides/hdfc-regalia-gold.json"
+    },
+    {
+      "item": "Card data review (2026-11-06): direct education payments",
+      "cardpipeline_says": "education_direct_standard: base rate on direct school/college payments.",
+      "issuer_says": "MITC v4.18: third-party app education payments earn nothing; direct ones are not charged and earn. The context cannot tell direct from app, so the rule is info with depends_on_txn_attribute (D14b) and the education exclusion governs (under-states direct payments). No example for a direct payment, because the engine would not reproduce the issuer's figure.",
+      "proposed_fix": "override",
+      "override_file": "api/scripts/catalogue_overrides/hdfc-regalia-gold.json"
     }
   ]
 }

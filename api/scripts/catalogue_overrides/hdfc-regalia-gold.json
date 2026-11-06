@@ -46,6 +46,38 @@
       "reason": "WP7: D28c: Reward Points T&C item 4: \"EasyEMI and e-wallet loading transactions will not accrue Reward points\". The record's EMI row needs category emi AND rail emi, so an EMI purchase in another category earned. Rail-EMI exclusion on all spend.",
       "source_url": "https://www.hdfc.bank.in/content/dam/hdfcbankpws/in/en/personal-banking/discover-products/cards/credit-cards/regalia-gold-credit-card/pdfs/regalia-gold-credit-card-reward-points-t-and-cs.pdf",
       "checked_on": "2026-11-05"
+    },
+    {
+      "path": "reward_rules[id=education_direct_standard].depends_on_txn_attribute",
+      "value": true,
+      "reason": "Card data review: MITC v4.18 (Oct 2026) I: \"Education payments made through third-party apps like (but not limited to) CRED, Cheq, MobiKwik, etc will not earn Reward Points\"; charges t: education \"done directly through ... their POS machines\" is not charged. Whether a payment went direct or through an app is not in the transaction context (the platform is never known for SMS spends, and an unknown platform cannot prove 'direct'), so this base-rate rule stays info with the D14b deferral flag. The education exclusion (category education, all channels) governs: direct education payments are under-stated, never over-stated.",
+      "source_url": "https://www.hdfc.bank.in/content/dam/hdfcbankpws/in/en/personal-banking/discover-products/cards/credit-cards/personal-mitc/mitc-in-english.pdf",
+      "checked_on": "2026-11-06"
+    },
+    {
+      "path": "reward_rules",
+      "op": "append",
+      "value": {
+        "id": "cd_gaming_exclusion",
+        "category_id": "online_skill_based_gaming",
+        "priority": 1,
+        "evaluation_type": "exclusion",
+        "rail": "any",
+        "channel_type": "all",
+        "conditions": {},
+        "action": {
+          "multiplier": 0,
+          "points_per_block": 0,
+          "cashback_percent": null,
+          "cap_reference": null,
+          "reason": "Online skill-based gaming transactions do not earn Reward Points from 1 July 2025."
+        },
+        "effective_from": "2025-07-01",
+        "effective_to": null
+      },
+      "reason": "Card data review: D24d. MITC v4.18 (Oct 2026) I(g): \"With effect from 1st July 2025, Online Skill-Based gaming transactions will not earn Reward Points/CashPoints on all the cards.\" The record had no gaming row. Same token as the Diners Black Metal record: v1-only entertainment row (D18b) plus a v2 MCC 5816 row.",
+      "source_url": "https://www.hdfc.bank.in/content/dam/hdfcbankpws/in/en/personal-banking/discover-products/cards/credit-cards/personal-mitc/mitc-in-english.pdf",
+      "checked_on": "2026-11-06"
     }
   ]
 }

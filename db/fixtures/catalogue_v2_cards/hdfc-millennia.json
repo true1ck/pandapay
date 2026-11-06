@@ -4,13 +4,11 @@
   "inputs": {
     "transform_version": "7",
     "source_record_sha256": "e3b2de500ac15bd04ff08f437aae49ef6aada3c5292590b4dd0f845d85de70ef",
-    "override_sha256": "73b06f3b7dfb4ee3cda0636f7e82fd8f80d7edd243cf05a992525311105839d6",
+    "override_sha256": "bac537aeca0664def957be0912a1abdb8f7ad6e8df838a07dbcb624ac6b008a1",
     "directory_sha256": "b1094d54b77e848d22f7a9a64f3ae6d1ef43ca3eb2fc8e40cd43ed1994664694",
     "verified": false
   },
-  "blocking_flags": [
-    "info_rule"
-  ],
+  "blocking_flags": [],
   "card": {
     "id": "hdfc-millennia:card",
     "slug": "hdfc-millennia",
@@ -33,9 +31,9 @@
     "points_expiry_months": 24,
     "model_status": "partial",
     "model_coverage": {
-      "rules_total": 16,
-      "rules_modelled": 10,
-      "rules_info": 6,
+      "rules_total": 14,
+      "rules_modelled": 11,
+      "rules_info": 3,
       "caps_total": 5,
       "caps_enforced": 3,
       "flags": [
@@ -73,31 +71,6 @@
           "code": "bonus_only_exclusion",
           "source_local_id": "millennia-5pct-merchant-exclusions",
           "detail": null
-        },
-        {
-          "code": "info_rule",
-          "source_local_id": "millennia-wallet-mcc6540-base",
-          "detail": "condition:merchant_networks"
-        },
-        {
-          "code": "info_rule",
-          "source_local_id": "millennia-wallet-mcc6540-base",
-          "detail": "condition:channel_type"
-        },
-        {
-          "code": "points_and_cashback_both",
-          "source_local_id": "millennia-wallet-mcc6540-base",
-          "detail": null
-        },
-        {
-          "code": "info_rule",
-          "source_local_id": "millennia-uber-eats-base",
-          "detail": "unresolved_merchant:merchant"
-        },
-        {
-          "code": "info_rule",
-          "source_local_id": "millennia-uber-eats-base",
-          "detail": "condition:channel_type"
         },
         {
           "code": "channel_type_restates_brand",
@@ -175,17 +148,7 @@
           "detail": null
         },
         {
-          "code": "info_rule",
-          "source_local_id": "millennia-education-third-party-zero",
-          "detail": "condition:third_party_apps"
-        },
-        {
-          "code": "exclusion_rail_dropped",
-          "source_local_id": "millennia-education-third-party-zero",
-          "detail": null
-        },
-        {
-          "code": "exclusion_scope_broadened",
+          "code": "mcc_scoped_exclusion",
           "source_local_id": "millennia-education-third-party-zero",
           "detail": null
         },
@@ -299,6 +262,69 @@
           "source_url": "https://www.hdfc.bank.in/content/dam/hdfcbankpws/in/en/personal-banking/discover-products/cards/credit-cards/millennia-credit-card/pdf/millennia-tnc-20th-jul26.pdf",
           "checked_on": "2026-11-05",
           "citation": null
+        },
+        {
+          "path": "reward_rules[id=millennia-wallet-mcc6540-base]",
+          "op": "remove",
+          "value_sha256": "74234e98afe7498f",
+          "reason": "Card data review: the record's own row ended on 31 Aug 2024 (effective_to 2024-08-31). Millennia T&C (published 20 Jul 2026): \"Effective 1st September 2024, Wallet loading and EMI transactions will NOT earn Reward Points. Wallet MCC: 6540\". A lapsed earning row that could never apply was loaded as info and blocked Verified; removing it changes no result.",
+          "source_url": "https://www.hdfc.bank.in/content/dam/hdfcbankpws/in/en/personal-banking/discover-products/cards/credit-cards/millennia-credit-card/pdf/millennia-tnc-20th-jul26.pdf",
+          "checked_on": "2026-11-06",
+          "citation": null
+        },
+        {
+          "path": "reward_rules[id=millennia-uber-eats-base]",
+          "op": "remove",
+          "value_sha256": "74234e98afe7498f",
+          "reason": "Card data review: T&C: \"The 5% CashPoints on Uber is eligible for travel/commute related spends ... MCC code of 4121 ... will only be considered\"; everything else at Uber falls under \"1% cashback on all other spends\". This row restated the 1% other-spends rule (same rate, same 1,000 cap) for an 'Uber Eats' merchant the directory cannot resolve, so it loaded as info and blocked Verified. millennia-other-spends-1pct already pays it; removing the row changes no result.",
+          "source_url": "https://www.hdfc.bank.in/content/dam/hdfcbankpws/in/en/personal-banking/discover-products/cards/credit-cards/millennia-credit-card/pdf/millennia-tnc-20th-jul26.pdf",
+          "checked_on": "2026-11-06",
+          "citation": null
+        },
+        {
+          "path": "reward_rules[id=millennia-education-third-party-zero].conditions",
+          "op": "set",
+          "value_sha256": "c7e0bfaa920cc7c0",
+          "reason": "Card data review: T&C: \"Effective 1st September 2024, Education payments made through third-party apps will NOT earn Reward Points ... Education MCCs: 8211,8220,8241,8244,8249,8299\"; the fee note says apps \"like (but not limited to) CRED, PayTM, Cheq, MobiKwik and others\". The app condition made the row info, so app-paid education earned 1% (over-statement); SMS spends never carry the platform. Restated as an exclusion on the education category and these MCCs (D20a rows). Direct school/college payments, which do earn per the T&C, are now under-stated (H2).",
+          "source_url": "https://www.hdfc.bank.in/content/dam/hdfcbankpws/in/en/personal-banking/discover-products/cards/credit-cards/millennia-credit-card/pdf/millennia-tnc-20th-jul26.pdf",
+          "checked_on": "2026-11-06",
+          "citation": null
+        },
+        {
+          "path": "reward_rules[id=millennia-education-third-party-zero].rail",
+          "op": "set",
+          "value_sha256": "251ecb599a3f3a2f",
+          "reason": "Card data review: an app payment may reach the card on any rail.",
+          "source_url": "https://www.hdfc.bank.in/content/dam/hdfcbankpws/in/en/personal-banking/discover-products/cards/credit-cards/millennia-credit-card/pdf/millennia-tnc-20th-jul26.pdf",
+          "checked_on": "2026-11-06",
+          "citation": null
+        },
+        {
+          "path": "reward_rules[id=millennia-education-third-party-zero].channel_type",
+          "op": "set",
+          "value_sha256": "5cf7504d9781301d",
+          "reason": "Card data review: the third-party-app channel cannot be told from the context (see the conditions change).",
+          "source_url": "https://www.hdfc.bank.in/content/dam/hdfcbankpws/in/en/personal-banking/discover-products/cards/credit-cards/millennia-credit-card/pdf/millennia-tnc-20th-jul26.pdf",
+          "checked_on": "2026-11-06",
+          "citation": null
+        },
+        {
+          "path": "reward_rules[id=millennia-5pct-select-merchants].conditions.not_platform",
+          "op": "set",
+          "value_sha256": "b8d1a0b1c4d7b637",
+          "reason": "Card data review: T&C (5% on 10 online merchants): \"A cardholder will be eligible for 1% CashPoints as per product feature if he/she does a transaction through SmartBuy/PayZapp which includes transaction from 10 online merchants also.\" except_platform_slugs [hdfc_smartbuy, payzapp] (D16a): a known SmartBuy/PayZapp spend at a partner falls to the 1% rule. The rule was already v2-only (several merchants), so v1 is unchanged.",
+          "source_url": "https://www.hdfc.bank.in/content/dam/hdfcbankpws/in/en/personal-banking/discover-products/cards/credit-cards/millennia-credit-card/pdf/millennia-tnc-20th-jul26.pdf",
+          "checked_on": "2026-11-06",
+          "citation": null
+        },
+        {
+          "path": "reward_rules[id=millennia-uber-mcc4121].conditions.not_platform",
+          "op": "set",
+          "value_sha256": "b8d1a0b1c4d7b637",
+          "reason": "Card data review: same T&C clause: Uber is one of the 10 merchants, and a SmartBuy/PayZapp transaction there earns 1%.",
+          "source_url": "https://www.hdfc.bank.in/content/dam/hdfcbankpws/in/en/personal-banking/discover-products/cards/credit-cards/millennia-credit-card/pdf/millennia-tnc-20th-jul26.pdf",
+          "checked_on": "2026-11-06",
+          "citation": null
         }
       ]
     },
@@ -343,7 +369,10 @@
         "mcc_include": [],
         "mcc_exclude": [],
         "except_merchant_slugs": [],
-        "except_platform_slugs": [],
+        "except_platform_slugs": [
+          "hdfc_smartbuy",
+          "payzapp"
+        ],
         "block_inr": null,
         "min_engine_version": 2,
         "max_engine_version": null,
@@ -556,84 +585,6 @@
         "display_note": "Transactions in excluded categories do not qualify for accelerated 5% CashBack."
       },
       {
-        "id": "hdfc-millennia:rule:millennia-wallet-mcc6540-base",
-        "category_id": "cat-wallet",
-        "category_slug": "wallet",
-        "merchant_pattern": null,
-        "rail": "online",
-        "unit": "points_per_100",
-        "rate": 1,
-        "min_txn_inr": 100,
-        "max_txn_inr": null,
-        "priority": 12,
-        "conditions": {
-          "source_local_id": "millennia-wallet-mcc6540-base",
-          "part": null,
-          "info_reasons": [
-            "condition:merchant_networks",
-            "condition:channel_type"
-          ],
-          "flags": [
-            "points_and_cashback_both"
-          ]
-        },
-        "notes": null,
-        "effective_from": "2024-08-13",
-        "effective_to": "2024-08-31",
-        "excluded_categories": [],
-        "rule_role": "info",
-        "merchant_slugs": [],
-        "platform_slugs": [],
-        "mcc_include": [
-          "6540"
-        ],
-        "mcc_exclude": [],
-        "except_merchant_slugs": [],
-        "except_platform_slugs": [],
-        "block_inr": null,
-        "min_engine_version": 2,
-        "max_engine_version": null,
-        "source_local_id": "millennia-wallet-mcc6540-base",
-        "display_note": "Historical wallet reload treatment; effective from 1 September 2024 wallet loading no longer earns Reward Points."
-      },
-      {
-        "id": "hdfc-millennia:rule:millennia-uber-eats-base",
-        "category_id": "cat-dining",
-        "category_slug": "dining",
-        "merchant_pattern": null,
-        "rail": "online",
-        "unit": "points_per_100",
-        "rate": 1,
-        "min_txn_inr": 100,
-        "max_txn_inr": null,
-        "priority": 13,
-        "conditions": {
-          "source_local_id": "millennia-uber-eats-base",
-          "part": null,
-          "info_reasons": [
-            "unresolved_merchant:merchant",
-            "condition:channel_type"
-          ],
-          "flags": []
-        },
-        "notes": null,
-        "effective_from": "2024-08-13",
-        "effective_to": null,
-        "excluded_categories": [],
-        "rule_role": "info",
-        "merchant_slugs": [],
-        "platform_slugs": [],
-        "mcc_include": [],
-        "mcc_exclude": [],
-        "except_merchant_slugs": [],
-        "except_platform_slugs": [],
-        "block_inr": null,
-        "min_engine_version": 2,
-        "max_engine_version": null,
-        "source_local_id": "millennia-uber-eats-base",
-        "display_note": "Uber Eats orders do not qualify for the Millennia 5% partner-merchant accelerator and otherwise fall under the 1% other-spends proposition."
-      },
-      {
         "id": "hdfc-millennia:rule:millennia-uber-mcc4121",
         "category_id": null,
         "category_slug": null,
@@ -667,7 +618,10 @@
         ],
         "mcc_exclude": [],
         "except_merchant_slugs": [],
-        "except_platform_slugs": [],
+        "except_platform_slugs": [
+          "hdfc_smartbuy",
+          "payzapp"
+        ],
         "block_inr": null,
         "min_engine_version": 2,
         "max_engine_version": null,
@@ -1332,7 +1286,7 @@
         "display_note": "Online skill-based gaming transactions excluded from reward accrual."
       },
       {
-        "id": "hdfc-millennia:rule:millennia-education-third-party-zero",
+        "id": "hdfc-millennia:rule:millennia-education-third-party-zero#1",
         "category_id": "cat-education",
         "category_slug": "education",
         "merchant_pattern": null,
@@ -1344,20 +1298,96 @@
         "priority": 9,
         "conditions": {
           "source_local_id": "millennia-education-third-party-zero",
-          "part": null,
-          "info_reasons": [
-            "condition:third_party_apps"
-          ],
+          "part": 1,
+          "info_reasons": [],
           "flags": [
-            "exclusion_rail_dropped",
-            "exclusion_scope_broadened"
+            "mcc_scoped_exclusion"
           ]
         },
         "notes": null,
         "effective_from": "2024-09-01",
         "effective_to": null,
         "excluded_categories": [],
-        "rule_role": "info",
+        "rule_role": "exclusion",
+        "merchant_slugs": [],
+        "platform_slugs": [],
+        "mcc_include": [],
+        "mcc_exclude": [],
+        "except_merchant_slugs": [],
+        "except_platform_slugs": [],
+        "block_inr": null,
+        "min_engine_version": 1,
+        "max_engine_version": 1,
+        "source_local_id": "millennia-education-third-party-zero",
+        "display_note": "Education payments made through third-party aggregator apps do not earn CashPoints. Direct school/college website and POS payments remain eligible for reward accrual."
+      },
+      {
+        "id": "hdfc-millennia:rule:millennia-education-third-party-zero#2",
+        "category_id": "cat-education",
+        "category_slug": "education",
+        "merchant_pattern": null,
+        "rail": null,
+        "unit": "points_per_100",
+        "rate": 0,
+        "min_txn_inr": null,
+        "max_txn_inr": null,
+        "priority": 9,
+        "conditions": {
+          "source_local_id": "millennia-education-third-party-zero",
+          "part": 2,
+          "info_reasons": [],
+          "flags": [
+            "mcc_scoped_exclusion"
+          ]
+        },
+        "notes": null,
+        "effective_from": "2024-09-01",
+        "effective_to": null,
+        "excluded_categories": [],
+        "rule_role": "exclusion",
+        "merchant_slugs": [],
+        "platform_slugs": [],
+        "mcc_include": [
+          "8211",
+          "8220",
+          "8241",
+          "8244",
+          "8249",
+          "8299"
+        ],
+        "mcc_exclude": [],
+        "except_merchant_slugs": [],
+        "except_platform_slugs": [],
+        "block_inr": null,
+        "min_engine_version": 2,
+        "max_engine_version": null,
+        "source_local_id": "millennia-education-third-party-zero",
+        "display_note": "Education payments made through third-party aggregator apps do not earn CashPoints. Direct school/college website and POS payments remain eligible for reward accrual."
+      },
+      {
+        "id": "hdfc-millennia:rule:millennia-education-third-party-zero#3",
+        "category_id": null,
+        "category_slug": null,
+        "merchant_pattern": null,
+        "rail": null,
+        "unit": "points_per_100",
+        "rate": 0,
+        "min_txn_inr": null,
+        "max_txn_inr": null,
+        "priority": 9,
+        "conditions": {
+          "source_local_id": "millennia-education-third-party-zero",
+          "part": 3,
+          "info_reasons": [],
+          "flags": [
+            "mcc_scoped_exclusion"
+          ]
+        },
+        "notes": null,
+        "effective_from": "2024-09-01",
+        "effective_to": null,
+        "excluded_categories": [],
+        "rule_role": "exclusion",
         "merchant_slugs": [],
         "platform_slugs": [],
         "mcc_include": [
@@ -1477,7 +1507,7 @@
       },
       {
         "id": "hdfc-millennia:cap:millennia-1pct-monthly-cap",
-        "reward_rule_id": null,
+        "reward_rule_id": "hdfc-millennia:rule:millennia-other-spends-1pct",
         "category_id": null,
         "category_slug": null,
         "benefit_kind": null,
@@ -1492,14 +1522,12 @@
         "cap_amount": 1000,
         "scope": "targets",
         "targets": [
-          "hdfc-millennia:rule:millennia-wallet-mcc6540-base",
-          "hdfc-millennia:rule:millennia-uber-eats-base",
           "hdfc-millennia:rule:millennia-other-spends-1pct"
         ],
         "parent_cap_id": null,
         "post_cap_behavior": null,
         "anchor": null,
-        "min_engine_version": 2,
+        "min_engine_version": 1,
         "source_local_id": "millennia-1pct-monthly-cap"
       },
       {

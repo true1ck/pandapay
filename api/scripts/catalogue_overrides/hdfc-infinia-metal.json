@@ -172,6 +172,75 @@
       "reason": "WP7: D28c: Rewards Points Program T&C item 3: \"EasyEMI and e-wallet loading transactions will not accrue reward points\". The record's EMI row needs category emi AND rail emi, so an EMI purchase in another category earned. Rail-EMI exclusion on all spend.",
       "source_url": "https://www.hdfc.bank.in/content/dam/hdfcbankpws/in/en/personal-banking/discover-products/cards/credit-cards/infinia-credit-card/rewards-points-program-terms-and-conditions.pdf",
       "checked_on": "2026-11-05"
+    },
+    {
+      "path": "reward_rules[id=education-aggregator-exclusion].conditions",
+      "value": {
+        "mcc_list": [
+          8211,
+          8220,
+          8241,
+          8244,
+          8249,
+          8299
+        ]
+      },
+      "reason": "Card data review: Rewards Points Program T&C item 15(c): \"Education payments made through third-party apps like (but not limited to) CRED, Cheq, MobiKwik, and others will NOT earn Reward Points.\" The app list is open-ended and SMS spends never carry the platform, so the aggregator condition made the row info and every education spend earned 5 RP/Rs150 (over-statement). Restated as an exclusion on the education category and the education MCCs the record gives (D20a rows). Direct school/college payments, which the issuer says do earn, are now under-stated (H2).",
+      "source_url": "https://www.hdfc.bank.in/content/dam/hdfcbankpws/in/en/personal-banking/discover-products/cards/credit-cards/infinia-credit-card/rewards-points-program-terms-and-conditions.pdf",
+      "checked_on": "2026-11-06"
+    },
+    {
+      "path": "reward_rules[id=education-aggregator-exclusion].rail",
+      "value": "any",
+      "reason": "Card data review: an app payment may reach the card on any rail; the exclusion is not limited to online.",
+      "source_url": "https://www.hdfc.bank.in/content/dam/hdfcbankpws/in/en/personal-banking/discover-products/cards/credit-cards/infinia-credit-card/rewards-points-program-terms-and-conditions.pdf",
+      "checked_on": "2026-11-06"
+    },
+    {
+      "path": "reward_rules[id=education-aggregator-exclusion].channel_type",
+      "value": "all",
+      "reason": "Card data review: the third-party-app channel cannot be told from the context (see the conditions change).",
+      "source_url": "https://www.hdfc.bank.in/content/dam/hdfcbankpws/in/en/personal-banking/discover-products/cards/credit-cards/infinia-credit-card/rewards-points-program-terms-and-conditions.pdf",
+      "checked_on": "2026-11-06"
+    },
+    {
+      "path": "reward_rules[id=education-direct-standard].depends_on_txn_attribute",
+      "value": true,
+      "reason": "Card data review: T&C item 15(c): \"education payments made directly through college/school websites or their POS machines will earn Reward Points.\" Direct vs third-party app is not in the transaction context, so this base-rate rule stays info with the D14b deferral flag; the education exclusion governs (under-states direct payments).",
+      "source_url": "https://www.hdfc.bank.in/content/dam/hdfcbankpws/in/en/personal-banking/discover-products/cards/credit-cards/infinia-credit-card/rewards-points-program-terms-and-conditions.pdf",
+      "checked_on": "2026-11-06"
+    },
+    {
+      "path": "cap_rules[id=smartbuy-brand-voucher-rp-subcap]",
+      "op": "remove",
+      "reason": "Card data review: T&C item 18: SmartBuy brand vouchers (GyFTR/Woohoo via SmartBuy) are capped at 3,000 accelerated RP a month inside the 15,000 SmartBuy cap. No loaded rule pays an accelerated rate on vouchers (only SmartBuy hotels 10X, flights 5X, trains 3X load), so the sub-cap had no target (orphan_cap) and limited nothing in either engine. Restore it when a voucher accelerator is modelled.",
+      "source_url": "https://www.hdfc.bank.in/content/dam/hdfcbankpws/in/en/personal-banking/discover-products/cards/credit-cards/infinia-credit-card/rewards-points-program-terms-and-conditions.pdf",
+      "checked_on": "2026-11-06"
+    },
+    {
+      "path": "reward_rules",
+      "op": "append",
+      "value": {
+        "id": "cd_gaming_exclusion",
+        "category_id": "online_skill_based_gaming",
+        "priority": 1,
+        "evaluation_type": "exclusion",
+        "rail": "any",
+        "channel_type": "all",
+        "conditions": {},
+        "action": {
+          "multiplier": 0,
+          "points_per_block": 0,
+          "cashback_percent": null,
+          "cap_reference": null,
+          "reason": "Online skill-based gaming transactions do not earn Reward Points from 1 July 2025."
+        },
+        "effective_from": "2025-07-01",
+        "effective_to": null
+      },
+      "reason": "Card data review: D24d. MITC v4.18 (Oct 2026) I(g): \"With effect from 1st July 2025, Online Skill-Based gaming transactions will not earn Reward Points/CashPoints on all the cards.\" The record had no gaming row. Same token as the Diners Black Metal record (v1-only entertainment row, v2 MCC 5816).",
+      "source_url": "https://www.hdfc.bank.in/content/dam/hdfcbankpws/in/en/personal-banking/discover-products/cards/credit-cards/personal-mitc/mitc-in-english.pdf",
+      "checked_on": "2026-11-06"
     }
   ]
 }
