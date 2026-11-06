@@ -4,13 +4,11 @@
   "inputs": {
     "transform_version": "7",
     "source_record_sha256": "93890edb87a631081cfe42490e8b5b7e0183887b346200ba6b50a4e3d1500cc4",
-    "override_sha256": "a8ccc9f657ccb18ba28fadae69abc25f396dd631c98c4cafb8b3b1c3a55dda01",
+    "override_sha256": "1967f536167c35c836de70a72a4b0c99658f14fb5205ef0f7ac294c57678ac2f",
     "directory_sha256": "b1094d54b77e848d22f7a9a64f3ae6d1ef43ca3eb2fc8e40cd43ed1994664694",
     "verified": false
   },
-  "blocking_flags": [
-    "info_rule"
-  ],
+  "blocking_flags": [],
   "card": {
     "id": "tata-neu-infinity-hdfc-bank:card",
     "slug": "tata-neu-infinity-hdfc-bank",
@@ -36,7 +34,22 @@
         {
           "code": "info_rule",
           "source_local_id": "merchant_emi_any_brand",
+          "detail": "depends_on_txn_attribute"
+        },
+        {
+          "code": "info_rule",
+          "source_local_id": "merchant_emi_any_brand",
           "detail": "condition:clause:emi_type"
+        },
+        {
+          "code": "depends_on_txn_attribute",
+          "source_local_id": "merchant_emi_any_brand",
+          "detail": null
+        },
+        {
+          "code": "info_rule",
+          "source_local_id": "neupass_selected_categories",
+          "detail": "depends_on_user_attribute"
         },
         {
           "code": "info_rule",
@@ -47,6 +60,11 @@
           "code": "info_rule",
           "source_local_id": "neupass_selected_categories",
           "detail": "condition:clause:primary_cardholder_mobile_account"
+        },
+        {
+          "code": "depends_on_user_attribute",
+          "source_local_id": "neupass_selected_categories",
+          "detail": null
         },
         {
           "code": "partial_category_list",
@@ -191,12 +209,22 @@
         {
           "code": "info_rule",
           "source_local_id": "education_direct_standard",
+          "detail": "depends_on_txn_attribute"
+        },
+        {
+          "code": "info_rule",
+          "source_local_id": "education_direct_standard",
           "detail": "condition:clause:payment_channel"
         },
         {
           "code": "info_rule",
           "source_local_id": "education_direct_standard",
           "detail": "condition:channel_type"
+        },
+        {
+          "code": "depends_on_txn_attribute",
+          "source_local_id": "education_direct_standard",
+          "detail": null
         },
         {
           "code": "narrow_token_to_mcc",
@@ -593,6 +621,33 @@
           "source_url": "https://www.hdfc.bank.in/content/dam/hdfcbankpws/in/en/personal-banking/discover-products/cards/credit-cards/tata-neu-infinity-credit-card/pdf/tata_neu_infinity_card_tnc.pdf",
           "checked_on": "2026-11-05",
           "citation": null
+        },
+        {
+          "path": "reward_rules[id=merchant_emi_any_brand].depends_on_txn_attribute",
+          "op": "set",
+          "value_sha256": "b5bea41b6c623f7c",
+          "reason": "Card-data: D14b. T&C table: \"Merchant EMI Spends (Any Brand) 1.5% back as NeuCoins\", while the exclusions list \"Smart EMI / Dial an EMI transaction\". The rule applies only to merchant EMI; an EMI spend in the context (rail emi) cannot be told apart from a Smart EMI / Dial an EMI conversion. Stays info with depends_on_txn_attribute; the rate equals the base 1.5%, which the base rule already pays on such spends, so nothing is lost.",
+          "source_url": "https://www.hdfc.bank.in/content/dam/hdfcbankpws/in/en/personal-banking/discover-products/cards/credit-cards/tata-neu-infinity-credit-card/pdf/tata_neu_infinity_card_tnc.pdf",
+          "checked_on": "2026-11-06",
+          "citation": null
+        },
+        {
+          "path": "reward_rules[id=neupass_selected_categories].depends_on_user_attribute",
+          "op": "set",
+          "value_sha256": "b5bea41b6c623f7c",
+          "reason": "Card-data: D13b. The additional 5% on selected Tata Neu app/website categories requires a NeuPass registration on the primary cardholder's mobile number (record conditions neupass_registered, primary_cardholder_mobile_account): a user attribute. Stays info with depends_on_user_attribute (as neupass_selected_tata_neu on Plus HDFC).",
+          "source_url": "https://www.hdfc.bank.in/content/dam/hdfcbankpws/in/en/personal-banking/discover-products/cards/credit-cards/tata-neu-infinity-credit-card/pdf/tata_neu_infinity_card_tnc.pdf",
+          "checked_on": "2026-11-06",
+          "citation": null
+        },
+        {
+          "path": "reward_rules[id=education_direct_standard].depends_on_txn_attribute",
+          "op": "set",
+          "value_sha256": "b5bea41b6c623f7c",
+          "reason": "Card-data: D14b. T&C: \"NeuCoins will not be accrued for Education payments made through third-party apps like (but not limited to) CRED, Cheq, MobiKwik, and others. However, education payments made directly through college/school websites, or their POS machines will earn NeuCoins.\" Whether an education payment went direct or through a third-party app is not in the context. Stays info with depends_on_txn_attribute; education spends stay excluded by the third-party exclusion (under-states).",
+          "source_url": "https://www.hdfc.bank.in/content/dam/hdfcbankpws/in/en/personal-banking/discover-products/cards/credit-cards/tata-neu-infinity-credit-card/pdf/tata_neu_infinity_card_tnc.pdf",
+          "checked_on": "2026-11-06",
+          "citation": null
         }
       ]
     },
@@ -646,9 +701,12 @@
           "source_local_id": "merchant_emi_any_brand",
           "part": null,
           "info_reasons": [
+            "depends_on_txn_attribute",
             "condition:clause:emi_type"
           ],
-          "flags": []
+          "flags": [
+            "depends_on_txn_attribute"
+          ]
         },
         "notes": null,
         "effective_from": "2024-01-01",
@@ -682,10 +740,12 @@
           "source_local_id": "neupass_selected_categories",
           "part": 1,
           "info_reasons": [
+            "depends_on_user_attribute",
             "condition:clause:neupass_registered",
             "condition:clause:primary_cardholder_mobile_account"
           ],
           "flags": [
+            "depends_on_user_attribute",
             "partial_category_list",
             "token_replaced_by_conditions",
             "narrow_token_on_merchant"
@@ -725,10 +785,12 @@
           "source_local_id": "neupass_selected_categories",
           "part": 2,
           "info_reasons": [
+            "depends_on_user_attribute",
             "condition:clause:neupass_registered",
             "condition:clause:primary_cardholder_mobile_account"
           ],
           "flags": [
+            "depends_on_user_attribute",
             "partial_category_list",
             "token_replaced_by_conditions",
             "narrow_token_on_merchant"
@@ -768,10 +830,12 @@
           "source_local_id": "neupass_selected_categories",
           "part": 3,
           "info_reasons": [
+            "depends_on_user_attribute",
             "condition:clause:neupass_registered",
             "condition:clause:primary_cardholder_mobile_account"
           ],
           "flags": [
+            "depends_on_user_attribute",
             "partial_category_list",
             "token_replaced_by_conditions",
             "narrow_token_on_merchant"
@@ -1412,10 +1476,13 @@
           "source_local_id": "education_direct_standard",
           "part": null,
           "info_reasons": [
+            "depends_on_txn_attribute",
             "condition:clause:payment_channel",
             "condition:channel_type"
           ],
-          "flags": []
+          "flags": [
+            "depends_on_txn_attribute"
+          ]
         },
         "notes": null,
         "effective_from": "2024-09-01",
