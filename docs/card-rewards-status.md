@@ -14,7 +14,7 @@ to resume.
 
 ## ▶ Resumed (2026-11-06, at the owner's request)
 
-WP2 (4b33990), WP9 (fd81ee4) and WP7 (7a4a1d0) are merged into `card-rewards/phase1` along with WP8 (d2b1969). Next is Checkpoint B (full test pass on the combined branch, real database import, old feed parsed by the released app, emulator pass), then the final whole-branch review, then the owner-run rollout.
+All nine work packages are merged into `card-rewards/phase1` (head 75efce3). Two whole-branch reviews (server and app) found three Critical over-statements and four Important rollout problems; all were fixed and re-reviewed (rulings D32–D35). Checkpoint B was re-run on the final branch and passed. What is left: the owner-run rollout (plan §9) and an emulator pass on a signed-in device, which has not been done.
 
 ## Progress at a glance (lead's estimate, 2026-11-06)
 
@@ -33,9 +33,9 @@ WP2 (4b33990), WP9 (fd81ee4) and WP7 (7a4a1d0) are merged into `card-rewards/pha
 | WP7 Integration | 100% | Reviewed to clean; merged (7a4a1d0) |
 | WP8 Server recording | 100% | Merged |
 | WP9 App | 100% | Reviewed twice; merged (fd81ee4) |
-| Checkpoint B (full test pass) | 90% | Automated checks passed on the combined branch (2026-11-06); emulator pass not done; whole-branch review running |
+| Checkpoint B (full test pass) | 97% | Re-run on the final branch (75efce3) after the two whole-branch reviews and their fixes: all automated checks passed; emulator pass not done |
 | Rollout (owner-run) | 0% | After Checkpoint B |
-| **Phase 1 overall** | **about 96%** | |
+| **Phase 1 overall** | **about 98%** | |
 | Phase 2 | 0% | Not started |
 | Phase 3 | 0% | Not started |
 | Phase 4 | 0% | Not started |
@@ -69,7 +69,7 @@ Status values: `not started` · `running` · `done (branch ready)` · `merged` �
 | WP8 | Server recording v2 + recompute script | 2 | `card-rewards/wp8-server-state` | **merged** | 2026-11-06 | 2 fix rounds; 1,739 API tests pass on the merged branch; native-unit limit state, Indian-time windows, correct statement cycles, edit/recalc lock on every edit route. Parked: sync batch lock timing, 12 statement-cycle fee waivers |
 | WP9 | App: v2 feed, tolerant parse, cap bars, alerts | 2 | `card-rewards/wp9-app-caps` | merged fd81ee4 (2 review rounds) | 2026-11-06 | v2 feed with per-card tolerant parse and versioned cache; native-unit limit state in one snapshot builder; limit bars on My Cards, card detail and the caps screen; 80% / 100% alerts with the next-best owned card; Partial/Basic label; split planner fixed to use native units (domain exception D30a); CI-only golden images. Open follow-ups: home_alerts, insights_hub and comparison_view still read the old measure (can only under-warn); bundled fallback catalogue still v1 (9 cards) |
 | — | Checkpoint A (after wave 1) | — | — | **passed** | 2026-11-06 | API 1695/0 fail; Dart 477/0; real DB import 376/376; old feed parsed by the released app parser with 0 errors; JS = Dart on 11,914 real-data purchases (0 mismatches) |
-| — | Checkpoint B (after wave 2) | — | `card-rewards/phase1` @ e82633e | automated checks passed; emulator pass not done | 2026-11-06 | api 2189 pass / 0 fail / 22 skip (DB-backed); domain 924 pass; app 2832 pass / 2 fail that also fail before WP9 (`local_first_sms_test`, `payments_due_test`); analyze 0 errors; both migrations pass their SQL tests; card state and sync Postgres tests pass; real import 376/376; v1 feed (376 cards) parsed by the released app code with 0 errors; JS = Dart on 84,780 contexts over all 376 cards |
+| — | Checkpoint B (after wave 2) | — | `card-rewards/phase1` @ 75efce3 | passed (automated); emulator pass not done | 2026-11-06 | api 2208 pass / 0 fail / 28 skip (DB-backed, run separately below); domain 1023 pass; app 2872 pass / 2 fail that also fail before WP9 (`local_first_sms_test`, `payments_due_test`); analyze 0 errors; both migrations pass their SQL tests; card state (15), sync (3 fixtures) and catalogue ETag Postgres checks pass; real import 376/376; rehearsal of the production path (publish all, import without `--force`, `--force --dry-run`, `--force`): 376 refreshed in place, 376 audit rows, all still published; v1 feed (376 cards) parsed by the released app code with 0 errors; JS = Dart on 84,780 contexts over all 376 cards |
 | — | Rollout (owner) | 3 | — | not started | | See plan §9 |
 
 ## Metrics (from `audit_catalogue.js`)
@@ -77,7 +77,7 @@ Status values: `not started` · `running` · `done (branch ready)` · `merged` �
 | Metric | Baseline 2026-11-05 (prod v1) | After Phase 1 (v2) |
 |---|---|---|
 | Bonus rules dropped (unmapped category) | 176 / 500 (104 cards); WP2 count 249 / 147 cards | 0 dropped (375 modelled, 436 info) — Checkpoint B |
-| Unrestricted accelerators | 98 rules / 74 cards | 7 rules / 7 cards (2 flagged) — Checkpoint B |
+| Unrestricted accelerators | 98 rules / 74 cards | 5 rules / 5 cards, all stated by the source — Checkpoint B (final) |
 | Caps linked to nothing | 238 / 641 | 29 / 618, all flagged — Checkpoint B |
 | Caps with post-cap 0 | 428 (273 bonus caps zeroing base) | 0 bonus caps zeroing base — Checkpoint B |
 | Milestones on the wrong anchor | 292 / 292 (60 non-annual) | 0 / 308 — Checkpoint B |
