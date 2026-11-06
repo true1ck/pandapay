@@ -157,6 +157,10 @@ services:
       NOTIFICATION_SERVICE_URL: "${NOTIFICATION_SERVICE_URL:-}"
       NOTIFICATION_SERVICE_API_KEY: "${NOTIFICATION_SERVICE_API_KEY:-}"
       NOTIFICATION_SERVICE_TIMEOUT_MS: "${NOTIFICATION_SERVICE_TIMEOUT_MS:-4000}"
+      # Split invitations sign invite links and hash invited phone numbers with
+      # this host-only key (at least 32 characters). Blank keeps the invitation
+      # routes answering a truthful 503 instead of stopping the API.
+      SHARED_EXPENSE_INVITE_SECRET: "${SHARED_EXPENSE_INVITE_SECRET:-}"
     ports:
       - "127.0.0.1:4000:4000"
 
