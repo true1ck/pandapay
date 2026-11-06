@@ -4,13 +4,11 @@
   "inputs": {
     "transform_version": "7",
     "source_record_sha256": "cc3062a39eabf90bb0a381daf5ac98cf272928d0ff30320e17bf4d0ea1d3fc52",
-    "override_sha256": "7fb325d5fe488af2df373488c54f8b8c0f21e003be03c6124f61bc74d9baff1b",
+    "override_sha256": "715d2076749ac094140e556d4009a2389fa0fcb7056b084f38d146b047fe8ebd",
     "directory_sha256": "b1094d54b77e848d22f7a9a64f3ae6d1ef43ca3eb2fc8e40cd43ed1994664694",
     "verified": false
   },
-  "blocking_flags": [
-    "info_rule"
-  ],
+  "blocking_flags": [],
   "card": {
     "id": "sbi-simplyclick:card",
     "slug": "sbi-simplyclick",
@@ -27,27 +25,12 @@
     "points_expiry_months": 24,
     "model_status": "partial",
     "model_coverage": {
-      "rules_total": 16,
-      "rules_modelled": 12,
-      "rules_info": 4,
+      "rules_total": 20,
+      "rules_modelled": 17,
+      "rules_info": 3,
       "caps_total": 2,
-      "caps_enforced": 1,
+      "caps_enforced": 2,
       "flags": [
-        {
-          "code": "info_rule",
-          "source_local_id": "exclusive_partner_10x",
-          "detail": "condition:online_flag"
-        },
-        {
-          "code": "info_rule",
-          "source_local_id": "exclusive_partner_10x",
-          "detail": "condition:affiliate_channel_excluded"
-        },
-        {
-          "code": "info_rule",
-          "source_local_id": "exclusive_partner_10x",
-          "detail": "condition:merchant_identifier_required"
-        },
         {
           "code": "token_replaced_by_conditions",
           "source_local_id": "exclusive_partner_10x",
@@ -71,12 +54,32 @@
         {
           "code": "info_rule",
           "source_local_id": "balance_transfer_exclusion",
+          "detail": "depends_on_txn_attribute"
+        },
+        {
+          "code": "info_rule",
+          "source_local_id": "balance_transfer_exclusion",
           "detail": "non_purchase_category"
+        },
+        {
+          "code": "depends_on_txn_attribute",
+          "source_local_id": "balance_transfer_exclusion",
+          "detail": null
+        },
+        {
+          "code": "info_rule",
+          "source_local_id": "encash_exclusion",
+          "detail": "depends_on_txn_attribute"
         },
         {
           "code": "info_rule",
           "source_local_id": "encash_exclusion",
           "detail": "non_purchase_category"
+        },
+        {
+          "code": "depends_on_txn_attribute",
+          "source_local_id": "encash_exclusion",
+          "detail": null
         },
         {
           "code": "emi_alternatives",
@@ -99,11 +102,6 @@
           "detail": null
         },
         {
-          "code": "info_rule",
-          "source_local_id": "utility_sbi_platform_no_5x",
-          "detail": "condition:channel_type"
-        },
-        {
           "code": "mcc_scoped_exclusion",
           "source_local_id": "rent_exclusion",
           "detail": null
@@ -119,14 +117,44 @@
           "detail": null
         },
         {
-          "code": "cap_targets_info_only",
-          "source_local_id": "cap_exclusive_10x_monthly",
+          "code": "token_replaced_by_conditions",
+          "source_local_id": "exclusive_partner_10x_2023",
+          "detail": null
+        },
+        {
+          "code": "token_replaced_by_conditions",
+          "source_local_id": "exclusive_partner_10x_2025",
+          "detail": null
+        },
+        {
+          "code": "token_replaced_by_conditions",
+          "source_local_id": "exclusive_partner_10x_2026",
+          "detail": null
+        },
+        {
+          "code": "info_rule",
+          "source_local_id": "exclusive_partner_10x_channel_info",
+          "detail": "depends_on_txn_attribute"
+        },
+        {
+          "code": "info_rule",
+          "source_local_id": "exclusive_partner_10x_channel_info",
+          "detail": "condition:affiliate_channel_excluded"
+        },
+        {
+          "code": "depends_on_txn_attribute",
+          "source_local_id": "exclusive_partner_10x_channel_info",
+          "detail": null
+        },
+        {
+          "code": "token_replaced_by_conditions",
+          "source_local_id": "exclusive_partner_10x_channel_info",
           "detail": null
         },
         {
           "code": "hidden_from_v1_uncapped",
           "source_local_id": null,
-          "detail": "online_5x, swiggy_5x"
+          "detail": "online_5x, swiggy_5x, exclusive_partner_10x_2025, exclusive_partner_10x_2026"
         }
       ],
       "overrides_applied": [
@@ -246,6 +274,105 @@
           "source_url": "https://www.sbicard.com/sbi-card-en/assets/docs/pdf/SimplyClick-TnC.pdf",
           "checked_on": "2026-11-05",
           "citation": null
+        },
+        {
+          "path": "reward_rules[id=exclusive_partner_10x].conditions",
+          "op": "set",
+          "value_sha256": "e6c87890014a7b43",
+          "reason": "Card-data: T&C Reward Point (a)/(f)/(j) and the \"Exclusive Online Partner / Effective Date\" table (BookMyShow 15 Sep 2015, Netmeds 11 Mar 2019): 10X on online INR spends at the partner. The affiliate-channel exclusion is only for Cleartrip (h) and Yatra (l); MID dependence (i) is how SBI identifies the partner, which the merchant directory carries; the online flag (j) is rail online. Partners with other start dates or a channel/portal condition are split into their own rules below.",
+          "source_url": "https://www.sbicard.com/sbi-card-en/assets/docs/pdf/SimplyClick-TnC.pdf",
+          "checked_on": "2026-11-06",
+          "citation": null
+        },
+        {
+          "path": "reward_rules[id=exclusive_partner_10x].effective_from",
+          "op": "set",
+          "value_sha256": "078b15c1bfc91d78",
+          "reason": "Card-data: Netmeds joined on 11 Mar 2019 (T&C partner table); BookMyShow (15 Sep 2015) is under-stated before that date, never over-stated.",
+          "source_url": "https://www.sbicard.com/sbi-card-en/assets/docs/pdf/SimplyClick-TnC.pdf",
+          "checked_on": "2026-11-06",
+          "citation": null
+        },
+        {
+          "path": "reward_rules",
+          "op": "append",
+          "value_sha256": "9944975ac4a30a6b",
+          "reason": "Card-data: T&C partner table: Domino's and Myntra effective 1st August, 2023; 10X (T&C (f), (g)) inside the same 10,000 RP monthly exclusive-partner cap (MITC booklet (g), (k)).",
+          "source_url": "https://www.sbicard.com/sbi-card-en/assets/docs/pdf/SimplyClick-TnC.pdf",
+          "checked_on": "2026-11-06",
+          "citation": null
+        },
+        {
+          "path": "reward_rules",
+          "op": "append",
+          "value_sha256": "5355c88c810c9cb6",
+          "reason": "Card-data: T&C partner table: IGP effective 10th February, 2025; same cap.",
+          "source_url": "https://www.sbicard.com/sbi-card-en/assets/docs/pdf/SimplyClick-TnC.pdf",
+          "checked_on": "2026-11-06",
+          "citation": null
+        },
+        {
+          "path": "reward_rules",
+          "op": "append",
+          "value_sha256": "958499a64442d4cc",
+          "reason": "Card-data: T&C partner table: Tata CLiQ effective 20th March, 2026 (before it, Tata CLiQ is an \"other online spend\", 5X per T&C (g)); same cap.",
+          "source_url": "https://www.sbicard.com/sbi-card-en/assets/docs/pdf/SimplyClick-TnC.pdf",
+          "checked_on": "2026-11-06",
+          "citation": null
+        },
+        {
+          "path": "reward_rules",
+          "op": "append",
+          "value_sha256": "770cefc44e3ef80f",
+          "reason": "Card-data: D14b. T&C (h) \"Cleartrip transactions done from affiliate channels will not be eligible for 10X\" and (l) the same for Yatra; (p) \"10X Reward Points on e-Gift Voucher purchases shall be applicable only on transactions made at GyFTR portal\" (gyftr.com/sbicsimplyclick, not other GyFTR storefronts); the directory merchant \"apollo\" also covers Apollo Pharmacy and Apollo Hospitals, while only Apollo 24|7 is a partner. None of these is in the context, so this part stays info with depends_on_txn_attribute; these spends earn the 5X/1X the other rules give (under-states).",
+          "source_url": "https://www.sbicard.com/sbi-card-en/assets/docs/pdf/SimplyClick-TnC.pdf",
+          "checked_on": "2026-11-06",
+          "citation": null
+        },
+        {
+          "path": "reward_rules[id=utility_sbi_platform_no_5x].channel_type",
+          "op": "set",
+          "value_sha256": "bb0ba9ac5326d4e8",
+          "reason": "Card-data: T&C Reward Point (c): \"Utility Bill Payments done using SimplyCLICK SBI Card on SBI Card website/ mobile app will not accrue 5X Reward Points.\" Mapped to the directory platform sbi_card_app (alias \"sbi card platform\"); the rule earns the 1 RP per Rs100 base.",
+          "source_url": "https://www.sbicard.com/sbi-card-en/assets/docs/pdf/SimplyClick-TnC.pdf",
+          "checked_on": "2026-11-06",
+          "citation": null
+        },
+        {
+          "path": "reward_rules[id=utility_sbi_platform_no_5x].category_id",
+          "op": "set",
+          "value_sha256": "1e08efd699e66ddd",
+          "reason": "Card-data: the context cannot tell a utility bill on the SBI Card app from another payment there; any spend on that platform at the 1X base (never above base) is the conservative reading of T&C (c).",
+          "source_url": "https://www.sbicard.com/sbi-card-en/assets/docs/pdf/SimplyClick-TnC.pdf",
+          "checked_on": "2026-11-06",
+          "citation": null
+        },
+        {
+          "path": "reward_rules[id=utility_sbi_platform_no_5x].priority",
+          "op": "set",
+          "value_sha256": "9400f1b21cb527d7",
+          "reason": "Card-data: carve-out ahead of the 5X online rule (priority 20), so a spend on the SBI Card app never gets 5X (T&C (c)).",
+          "source_url": "https://www.sbicard.com/sbi-card-en/assets/docs/pdf/SimplyClick-TnC.pdf",
+          "checked_on": "2026-11-06",
+          "citation": null
+        },
+        {
+          "path": "reward_rules[id=balance_transfer_exclusion].depends_on_txn_attribute",
+          "op": "set",
+          "value_sha256": "b5bea41b6c623f7c",
+          "reason": "Card-data: D25d. T&C (e) \"Cash Advance, Balance Transfer, Encash, Flexipay and Offline Fuel transaction ... are not included in Reward Points program\". A balance transfer is not a purchase the context can tell apart: info with depends_on_txn_attribute (D14b).",
+          "source_url": "https://www.sbicard.com/sbi-card-en/assets/docs/pdf/SimplyClick-TnC.pdf",
+          "checked_on": "2026-11-06",
+          "citation": null
+        },
+        {
+          "path": "reward_rules[id=encash_exclusion].depends_on_txn_attribute",
+          "op": "set",
+          "value_sha256": "b5bea41b6c623f7c",
+          "reason": "Card-data: D25d. T&C (e) excludes Encash. Not a purchase the context can tell apart: info with depends_on_txn_attribute (D14b).",
+          "source_url": "https://www.sbicard.com/sbi-card-en/assets/docs/pdf/SimplyClick-TnC.pdf",
+          "checked_on": "2026-11-06",
+          "citation": null
         }
       ]
     },
@@ -334,31 +461,19 @@
         "conditions": {
           "source_local_id": "exclusive_partner_10x",
           "part": null,
-          "info_reasons": [
-            "condition:online_flag",
-            "condition:affiliate_channel_excluded",
-            "condition:merchant_identifier_required"
-          ],
+          "info_reasons": [],
           "flags": [
             "token_replaced_by_conditions"
           ]
         },
         "notes": null,
-        "effective_from": "2023-01-01",
+        "effective_from": "2019-03-11",
         "effective_to": null,
         "excluded_categories": [],
-        "rule_role": "info",
+        "rule_role": "earn",
         "merchant_slugs": [
-          "apollo",
           "bookmyshow",
-          "cleartrip",
-          "dominos",
-          "gyftr",
-          "igp",
-          "myntra",
-          "netmeds",
-          "tata_cliq",
-          "yatra"
+          "netmeds"
         ],
         "platform_slugs": [],
         "mcc_include": [],
@@ -575,9 +690,12 @@
           "source_local_id": "balance_transfer_exclusion",
           "part": null,
           "info_reasons": [
+            "depends_on_txn_attribute",
             "non_purchase_category"
           ],
-          "flags": []
+          "flags": [
+            "depends_on_txn_attribute"
+          ]
         },
         "notes": null,
         "effective_from": "2015-09-15",
@@ -611,9 +729,12 @@
           "source_local_id": "encash_exclusion",
           "part": null,
           "info_reasons": [
+            "depends_on_txn_attribute",
             "non_purchase_category"
           ],
-          "flags": []
+          "flags": [
+            "depends_on_txn_attribute"
+          ]
         },
         "notes": null,
         "effective_from": "2015-09-15",
@@ -898,30 +1019,30 @@
       },
       {
         "id": "sbi-simplyclick:rule:utility_sbi_platform_no_5x",
-        "category_id": "cat-bills",
-        "category_slug": "bills",
+        "category_id": null,
+        "category_slug": null,
         "merchant_pattern": null,
-        "rail": "online",
+        "rail": null,
         "unit": "points_per_100",
         "rate": 1,
         "min_txn_inr": null,
         "max_txn_inr": null,
-        "priority": 30,
+        "priority": 19,
         "conditions": {
           "source_local_id": "utility_sbi_platform_no_5x",
           "part": null,
-          "info_reasons": [
-            "condition:channel_type"
-          ],
+          "info_reasons": [],
           "flags": []
         },
         "notes": null,
         "effective_from": "2015-09-15",
         "effective_to": null,
         "excluded_categories": [],
-        "rule_role": "info",
+        "rule_role": "earn",
         "merchant_slugs": [],
-        "platform_slugs": [],
+        "platform_slugs": [
+          "sbi_card_app"
+        ],
         "mcc_include": [],
         "mcc_exclude": [],
         "except_merchant_slugs": [],
@@ -1268,6 +1389,168 @@
         "max_engine_version": null,
         "source_local_id": "wp7_emi_rail_exclusion",
         "display_note": "EMI transactions earn no rewards."
+      },
+      {
+        "id": "sbi-simplyclick:rule:exclusive_partner_10x_2023",
+        "category_id": null,
+        "category_slug": null,
+        "merchant_pattern": null,
+        "rail": "online",
+        "unit": "points_per_100",
+        "rate": 10,
+        "min_txn_inr": null,
+        "max_txn_inr": null,
+        "priority": 10,
+        "conditions": {
+          "source_local_id": "exclusive_partner_10x_2023",
+          "part": null,
+          "info_reasons": [],
+          "flags": [
+            "token_replaced_by_conditions"
+          ]
+        },
+        "notes": null,
+        "effective_from": "2023-08-01",
+        "effective_to": null,
+        "excluded_categories": [],
+        "rule_role": "earn",
+        "merchant_slugs": [
+          "dominos",
+          "myntra"
+        ],
+        "platform_slugs": [],
+        "mcc_include": [],
+        "mcc_exclude": [],
+        "except_merchant_slugs": [],
+        "except_platform_slugs": [],
+        "block_inr": null,
+        "min_engine_version": 2,
+        "max_engine_version": null,
+        "source_local_id": "exclusive_partner_10x_2023",
+        "display_note": "10X on Domino's and Myntra online spends from 1 Aug 2023."
+      },
+      {
+        "id": "sbi-simplyclick:rule:exclusive_partner_10x_2025",
+        "category_id": null,
+        "category_slug": null,
+        "merchant_pattern": "igp com",
+        "rail": "online",
+        "unit": "points_per_100",
+        "rate": 10,
+        "min_txn_inr": null,
+        "max_txn_inr": null,
+        "priority": 10,
+        "conditions": {
+          "source_local_id": "exclusive_partner_10x_2025",
+          "part": null,
+          "info_reasons": [],
+          "flags": [
+            "token_replaced_by_conditions",
+            "hidden_from_v1_uncapped"
+          ]
+        },
+        "notes": null,
+        "effective_from": "2025-02-10",
+        "effective_to": null,
+        "excluded_categories": [],
+        "rule_role": "earn",
+        "merchant_slugs": [
+          "igp"
+        ],
+        "platform_slugs": [],
+        "mcc_include": [],
+        "mcc_exclude": [],
+        "except_merchant_slugs": [],
+        "except_platform_slugs": [],
+        "block_inr": null,
+        "min_engine_version": 2,
+        "max_engine_version": null,
+        "source_local_id": "exclusive_partner_10x_2025",
+        "display_note": "10X on IGP online spends from 10 Feb 2025."
+      },
+      {
+        "id": "sbi-simplyclick:rule:exclusive_partner_10x_2026",
+        "category_id": null,
+        "category_slug": null,
+        "merchant_pattern": "tatacliq",
+        "rail": "online",
+        "unit": "points_per_100",
+        "rate": 10,
+        "min_txn_inr": null,
+        "max_txn_inr": null,
+        "priority": 10,
+        "conditions": {
+          "source_local_id": "exclusive_partner_10x_2026",
+          "part": null,
+          "info_reasons": [],
+          "flags": [
+            "token_replaced_by_conditions",
+            "hidden_from_v1_uncapped"
+          ]
+        },
+        "notes": null,
+        "effective_from": "2026-03-20",
+        "effective_to": null,
+        "excluded_categories": [],
+        "rule_role": "earn",
+        "merchant_slugs": [
+          "tata_cliq"
+        ],
+        "platform_slugs": [],
+        "mcc_include": [],
+        "mcc_exclude": [],
+        "except_merchant_slugs": [],
+        "except_platform_slugs": [],
+        "block_inr": null,
+        "min_engine_version": 2,
+        "max_engine_version": null,
+        "source_local_id": "exclusive_partner_10x_2026",
+        "display_note": "10X on Tata CLiQ online spends from 20 Mar 2026."
+      },
+      {
+        "id": "sbi-simplyclick:rule:exclusive_partner_10x_channel_info",
+        "category_id": null,
+        "category_slug": null,
+        "merchant_pattern": null,
+        "rail": "online",
+        "unit": "points_per_100",
+        "rate": 10,
+        "min_txn_inr": null,
+        "max_txn_inr": null,
+        "priority": 10,
+        "conditions": {
+          "source_local_id": "exclusive_partner_10x_channel_info",
+          "part": null,
+          "info_reasons": [
+            "depends_on_txn_attribute",
+            "condition:affiliate_channel_excluded"
+          ],
+          "flags": [
+            "depends_on_txn_attribute",
+            "token_replaced_by_conditions"
+          ]
+        },
+        "notes": null,
+        "effective_from": "2015-09-15",
+        "effective_to": null,
+        "excluded_categories": [],
+        "rule_role": "info",
+        "merchant_slugs": [
+          "apollo",
+          "cleartrip",
+          "gyftr",
+          "yatra"
+        ],
+        "platform_slugs": [],
+        "mcc_include": [],
+        "mcc_exclude": [],
+        "except_merchant_slugs": [],
+        "except_platform_slugs": [],
+        "block_inr": null,
+        "min_engine_version": 2,
+        "max_engine_version": null,
+        "source_local_id": "exclusive_partner_10x_channel_info",
+        "display_note": "10X at Apollo 24|7, Cleartrip, Yatra and GyFTR depends on the booking channel or portal, which the transaction context does not carry."
       }
     ],
     "cap_rules": [
@@ -1299,7 +1582,7 @@
       },
       {
         "id": "sbi-simplyclick:cap:cap_exclusive_10x_monthly",
-        "reward_rule_id": "sbi-simplyclick:rule:exclusive_partner_10x",
+        "reward_rule_id": null,
         "category_id": null,
         "category_slug": null,
         "benefit_kind": null,
@@ -1314,7 +1597,11 @@
         "cap_amount": 100000,
         "scope": "targets",
         "targets": [
-          "sbi-simplyclick:rule:exclusive_partner_10x"
+          "sbi-simplyclick:rule:exclusive_partner_10x",
+          "sbi-simplyclick:rule:exclusive_partner_10x_2023",
+          "sbi-simplyclick:rule:exclusive_partner_10x_2025",
+          "sbi-simplyclick:rule:exclusive_partner_10x_2026",
+          "sbi-simplyclick:rule:exclusive_partner_10x_channel_info"
         ],
         "parent_cap_id": null,
         "post_cap_behavior": "base_rate",
