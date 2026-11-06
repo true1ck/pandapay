@@ -22,6 +22,7 @@ import '../../data/upi_payment_service.dart';
 import '../../data/user_cards_repository.dart' show UserCard;
 import '../../main.dart' show MoneyText;
 import '../cards/card_visual.dart';
+import '../cards/recommendation_confidence.dart';
 import '../cards/card_picker_screen.dart';
 import '../comparison/comparison_view_screen.dart';
 import 'payment_sent_screen.dart';
@@ -782,7 +783,7 @@ class _ScanResultScreenState extends ConsumerState<ScanResultScreen> {
                   .valueOrNull
                   ?.mcc,
           expectedValue: rec.expectedValue,
-          confidence: rec.confidence,
+          confidence: confidenceOf(rec),
           // Plan Phase 2.1: both needed for the acceptance report that
           // screen asks for once the user confirms they finished paying.
           vpa: widget.parsed.pa,
@@ -1118,7 +1119,7 @@ class _ScanResultCard extends StatelessWidget {
                 children: [
                   MoneyText(
                     recommendation.expectedValue,
-                    confidence: recommendation.confidence,
+                    confidence: confidenceOf(recommendation),
                     style: BambooFonts.money(
                       hero ? 34 : 22,
                       color: BambooInk.ink900,
@@ -1141,6 +1142,8 @@ class _ScanResultCard extends StatelessWidget {
                     style: BambooFonts.ui(12.5, color: BambooInk.ink500),
                   ),
                 ),
+              // D32d: say so when an exclusion could not be read.
+              RecommendationCaution(recommendation: recommendation),
             ] else
               Text(
                 'Enter an amount to see your reward',

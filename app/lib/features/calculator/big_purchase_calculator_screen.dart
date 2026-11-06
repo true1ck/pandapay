@@ -15,6 +15,7 @@ import '../../data/override_resolver.dart';
 import '../../data/user_cards_repository.dart' show UserCard;
 import '../../main.dart' show MoneyText;
 import '../cards/card_visual.dart';
+import '../cards/recommendation_confidence.dart';
 import '../tools/emi_advisor_screen.dart';
 import '../tools/split_planner_screen.dart';
 
@@ -411,13 +412,20 @@ class _BigPurchaseCalculatorScreenState
                                   ),
                                 ),
                               ),
+                            // D32d: say so when an exclusion could not be read.
+                            RecommendationCaution(
+                              recommendation: rec,
+                              color: isBest
+                                  ? BambooInk.slate
+                                  : BambooInk.ink500,
+                            ),
                           ],
                         ),
                       ),
                       const SizedBox(width: AppSpace.sm),
                       MoneyText(
                         rec.expectedValue,
-                        confidence: rec.confidence,
+                        confidence: confidenceOf(rec),
                         style: BambooFonts.money(
                           isBest ? 24 : 20,
                           color: BambooInk.ink900,
