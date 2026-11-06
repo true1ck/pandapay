@@ -33,7 +33,21 @@ class _SharedJoinRouteState extends ConsumerState<SharedJoinRoute> {
 
   Future<SharedInvitePreview> _load(SharedExpensesRuntime runtime) async {
     await runtime.refresh(maxPullPages: 1);
-    return runtime.previewInvite(widget.token);
+    // A link that opens the app from cold can reach the server before the
+    // signed-in session has finished refreshing, which reads as "unavailable".
+    // Retry once after a short wait before telling the person the link is dead.
+    try {
+      return await runtime.previewInvite(widget.token);
+    } on SharedTransportException catch (error) {
+      final transient =
+          error.code == 'invitation_unavailable' ||
+          error.statusCode == 401 ||
+          error.statusCode == 403;
+      if (!transient) rethrow;
+      await Future<void>.delayed(const Duration(seconds: 3));
+      await runtime.refresh(maxPullPages: 1);
+      return runtime.previewInvite(widget.token);
+    }
   }
 
   Future<void> _join() async {
@@ -85,8 +99,11 @@ class _SharedJoinRouteState extends ConsumerState<SharedJoinRoute> {
             child: CircularProgressIndicator(color: BambooInk.slate),
           ),
           error: (_, _) => _message(
-            'Shared expenses are not available yet. Try again later.',
-            action: ('Close', widget.onDone),
+            'Shared expenses are not ready yet. Give it a moment and try again.',
+            action: (
+              'Try again',
+              () => ref.invalidate(sharedExpensesRuntimeProvider),
+            ),
           ),
           data: (value) {
             if (!identical(_runtime, value)) {
