@@ -6,7 +6,7 @@ const http = require('node:http');
 const zlib = require('node:zlib');
 const express = require('express');
 const {
-  createCatalogueHandler, V1_SQL, V2_CARDS_SQL, V2_MERCHANTS_SQL, V2_PLATFORMS_SQL, FINGERPRINT_SQL,
+  createCatalogueHandler, rateLimitIdentity, V1_SQL, V2_CARDS_SQL, V2_MERCHANTS_SQL, V2_PLATFORMS_SQL, FINGERPRINT_SQL,
 } = require('../src/catalogue_route');
 const { createFeedbackRateLimiter } = require('../src/feedback_rate_limit');
 
@@ -23,8 +23,8 @@ function responseDouble() {
 }
 
 const FINGERPRINT = {
-  max_data_version: '7', card_count: '2', merchants_updated_at: '2026-11-05 10:00:00+00',
-  merchants_total: '3', merchants_active: '3', platforms_total: '1', platforms_active: '1',
+  cards_updated_at: '2026-11-05 10:00:00+00', cards_version_sum: '14', card_count: '2',
+  issuers_updated_at: '2026-11-01 10:00:00+00', merchants_hash: 'm1', platforms_hash: 'p1',
 };
 
 function harness(rowsBySql, { limiter } = {}) {
@@ -121,15 +121,15 @@ test('ETag is stable across calls, differs by feed, and changes with card or dir
   assert.match(a1, /^"[0-9a-f]{32}"$/);
   assert.equal(a1, a2);
   assert.notEqual(a1, b1);
-  state.fingerprint.max_data_version = '8';
-  const afterCard = await etag({});
-  assert.notEqual(afterCard, a1);
-  state.fingerprint.max_data_version = '7';
-  state.fingerprint.merchants_updated_at = '2026-11-06 09:00:00+00';
-  assert.notEqual(await etag({ schema: '2' }), b1);
-  state.fingerprint.merchants_updated_at = FINGERPRINT.merchants_updated_at;
-  state.fingerprint.platforms_active = '0';
-  assert.notEqual(await etag({ schema: '2' }), b1);
+  // every fingerprint component must move the validator (real-DB scenarios live in catalogue_route_postgres.js)
+  for (const [key, value] of Object.entries({
+    cards_updated_at: 'x', cards_version_sum: '15', card_count: '3',
+    issuers_updated_at: 'x', merchants_hash: 'm2', platforms_hash: 'p2',
+  })) {
+    state.fingerprint = { ...FINGERPRINT, [key]: value };
+    assert.notEqual(await etag({}), a1, `${key} must change the v1 validator`);
+    assert.notEqual(await etag({ schema: '2' }), b1, `${key} must change the v2 validator`);
+  }
 });
 
 test('matching If-None-Match answers 304 without running any heavy view query', async () => {
@@ -252,4 +252,77 @@ test('v1 body bytes equal the previous handler output; gzip decodes to the ident
     legacyServer.close();
     currentServer.close();
   }
+});
+
+test('IPv6 addresses in the same /64 share a rate-limit bucket; other prefixes and IPv4 do not', async () => {
+  assert.equal(rateLimitIdentity('2001:db8:1:2:aaaa:bbbb:cccc:dddd'), rateLimitIdentity('2001:0db8:0001:0002::1'));
+  assert.notEqual(rateLimitIdentity('2001:db8:1:2::1'), rateLimitIdentity('2001:db8:1:3::1'));
+  assert.equal(rateLimitIdentity('::ffff:10.1.2.3'), '10.1.2.3');
+  assert.equal(rateLimitIdentity('10.1.2.3'), '10.1.2.3');
+  assert.equal(rateLimitIdentity('fe80::1%eth0'), rateLimitIdentity('fe80::2'));
+  const limiter = createFeedbackRateLimiter({ windowMs: 60_000, authenticatedLimit: 2, anonymousLimit: 2 });
+  const { handler } = harness({}, { limiter });
+  for (const ip of ['2001:db8:1:2::1', '2001:db8:1:2:ffff::9']) {
+    const res = responseDouble();
+    await handler({ query: {}, ip }, res);
+    assert.equal(res.statusCode, 200);
+  }
+  const blocked = responseDouble();
+  await handler({ query: {}, ip: '2001:db8:1:2:1:2:3:4' }, blocked);
+  assert.equal(blocked.statusCode, 429);
+  const elsewhere = responseDouble();
+  await handler({ query: {}, ip: '2001:db8:1:9::1' }, elsewhere);
+  assert.equal(elsewhere.statusCode, 200);
+});
+
+test('default limiter fails OPEN for a new identity when its table is full; the feedback default stays closed', async () => {
+  const open = createFeedbackRateLimiter({ windowMs: 60_000, authenticatedLimit: 1, anonymousLimit: 1, maxEntries: 1, failOpenWhenFull: true });
+  const { handler } = harness({}, { limiter: open });
+  const first = responseDouble();
+  await handler({ query: {}, ip: '1.1.1.1' }, first);
+  assert.equal(first.statusCode, 200);
+  const overflow = responseDouble();
+  await handler({ query: {}, ip: '2.2.2.2' }, overflow);
+  assert.equal(overflow.statusCode, 200, 'table full must allow, not 429');
+  const tracked = responseDouble();
+  await handler({ query: {}, ip: '1.1.1.1' }, tracked);
+  assert.equal(tracked.statusCode, 429, 'tracked identities are still limited');
+  const closed = createFeedbackRateLimiter({ windowMs: 60_000, authenticatedLimit: 1, anonymousLimit: 1, maxEntries: 1 });
+  closed.consume('a', false);
+  assert.equal(closed.consume('b', false).allowed, false, 'default behaviour for existing users is unchanged');
+});
+
+test('a failure while compressing or sending gives a 500 with no ETag or Cache-Control', async () => {
+  // BigInt makes JSON.stringify throw inside the gzip path, after the heavy queries succeeded.
+  const handler = createCatalogueHandler({
+    withUserClient: async (_u, cb) => cb({
+      query: async (sql) => (sql === FINGERPRINT_SQL ? { rows: [FINGERPRINT] } : { rows: [{ id: 1n }] }),
+    }),
+    logger: { error() {} },
+  });
+  for (const query of [{}, { schema: '2' }]) {
+    const res = responseDouble();
+    await handler({ query, ip: 'g', headers: { 'accept-encoding': 'gzip' } }, res);
+    assert.equal(res.statusCode, 500);
+    assert.deepEqual(res.body, { error: 'internal_error' });
+    for (const name of ['ETag', 'Cache-Control', 'Content-Encoding']) {
+      assert.equal(res.headers[name], undefined, `${name} must not be set on a 500`);
+    }
+  }
+  // a throw while sending the plain body also leaves no validators behind
+  const sendFails = createCatalogueHandler({
+    withUserClient: async (_u, cb) => cb({ query: async (sql) => (sql === FINGERPRINT_SQL ? { rows: [FINGERPRINT] } : { rows: [] }) }),
+    logger: { error() {} },
+  });
+  const res = responseDouble();
+  let first = true;
+  res.json = function json(value) {
+    if (first) { first = false; throw new Error('send failed'); }
+    this.body = value; return this;
+  };
+  res.removeHeader = function removeHeader(name) { delete this.headers[name]; };
+  await sendFails({ query: {}, ip: 'h' }, res);
+  assert.equal(res.statusCode, 500);
+  assert.equal(res.headers.ETag, undefined);
+  assert.equal(res.headers['Cache-Control'], undefined);
 });
