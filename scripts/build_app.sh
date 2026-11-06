@@ -86,6 +86,7 @@ if [ "$ENV_NAME" = "prod" ] && [ "$BUILD_TARGET" = "apk" ]; then
   fi
 fi
 
+SHARED_EXPENSES_DEFAULT=false
 case "$ENV_NAME" in
   dev)
     FLAVOR=dev
@@ -108,6 +109,9 @@ case "$ENV_NAME" in
     API_BASE_URL="$PANDAPAY_API_BASE_URL"
     AUTH_BASE_URL="$PANDAPAY_AUTH_BASE_URL"
     LEGAL_BASE_URL="${PANDAPAY_LEGAL_BASE_URL:-${API_BASE_URL%/}/legal/}"
+    # Splits (shared expenses) is live in production since 6 Nov 2026: the
+    # server has reads and proposals on. The app hides it unless this is set.
+    SHARED_EXPENSES_DEFAULT=true
     ;;
   *)
     echo "Unknown environment '$ENV_NAME' — expected dev, staging, or prod" >&2
@@ -131,7 +135,9 @@ cd "$REPO_ROOT/app"
 echo "==> Building $FLAVOR flavor ($BUILD_TARGET), backend environment $BACKEND_ENV_NAME, against:"
 echo "    PANDAPAY_API_BASE_URL=$API_BASE_URL"
 echo "    PANDAPAY_AUTH_BASE_URL=$AUTH_BASE_URL"
+SHARED_EXPENSES_ENABLED="${PANDAPAY_SHARED_EXPENSES_ENABLED:-$SHARED_EXPENSES_DEFAULT}"
 echo "    PANDAPAY_LEGAL_BASE_URL=$LEGAL_BASE_URL"
+echo "    PANDAPAY_SHARED_EXPENSES_ENABLED=$SHARED_EXPENSES_ENABLED"
 
 # Release and profile-less builds (Flutter's default for `build apk|appbundle`)
 # are obfuscated, and the symbol map is written to build/debug-info (relative
@@ -151,4 +157,5 @@ exec flutter build "$BUILD_TARGET" \
   --dart-define=PANDAPAY_API_BASE_URL="$API_BASE_URL" \
   --dart-define=PANDAPAY_AUTH_BASE_URL="$AUTH_BASE_URL" \
   --dart-define=PANDAPAY_LEGAL_BASE_URL="$LEGAL_BASE_URL" \
+  --dart-define=PANDAPAY_SHARED_EXPENSES_ENABLED="$SHARED_EXPENSES_ENABLED" \
   "$@"
