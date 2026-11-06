@@ -17,6 +17,9 @@ name: Build and test
 
 on:
   push:
+    # latest-dev is deliberately absent: a latest-dev push runs this workflow
+    # through deploy-prod.yml (workflow_call) so the deploy can wait on it.
+    # Listing it here too would run every test twice.
     branches: [main, master]
   pull_request:
   workflow_call:
@@ -168,6 +171,7 @@ jobs:
       - uses: subosito/flutter-action@v2
         with:
           flutter-version: '3.44.8'
+          cache: true
 
       - name: Domain package tests
         working-directory: packages/pandapay_domain
@@ -203,13 +207,74 @@ jobs:
           # production deployment when the source has no actionable issue.
           flutter analyze --no-fatal-infos
 
+      - name: Console analyze
+        working-directory: console
+        run: |
+          flutter pub get
+          dart run tool/copy_golden.dart
+          git diff --exit-code -- assets/sms_golden/
+          flutter analyze
+
+      - name: Console session regressions and CSP bundle
+        working-directory: console
+        run: |
+          flutter test --no-pub
+          flutter build web --release --no-pub --csp --no-web-resources-cdn
+
+  # The full app suite used to run as one serial ~14 minute step. It is now
+  # split across shards that run in parallel on separate runners. Each shard is
+  # its own `flutter test` process with `--concurrency=1`, so the reason the
+  # suite was serial (several widget suites replace global Riverpod/plugin
+  # overrides, and one file must not leak state into another on a shared test
+  # VM) still holds: no two test files ever share a VM, only different shards
+  # run at the same time, on different machines.
+  app-test:
+    name: App tests (shard ${{ matrix.shard }}/4)
+    runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        shard: [1, 2, 3, 4]
+    steps:
+      - uses: actions/checkout@v4
+      - uses: subosito/flutter-action@v2
+        with:
+          flutter-version: '3.44.8'
+          cache: true
+
+      - name: App dependencies
+        working-directory: app
+        run: flutter pub get
+
       - name: App test
         working-directory: app
-        run: |
-          # Several widget suites replace global Riverpod/plugin overrides.
-          # Run the complete suite serially so one test file cannot leak
-          # state into another on a shared test VM.
-          flutter test --concurrency=1
+        run: flutter test --no-pub --concurrency=1 --total-shards=4 --shard-index=$(( ${{ matrix.shard }} - 1 ))
+
+  # The release bundle build is ~9 minutes and does not depend on the tests,
+  # so it runs alongside them instead of after them.
+  app-bundle:
+    name: Prod bundle and merged manifest check
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: subosito/flutter-action@v2
+        with:
+          flutter-version: '3.44.8'
+          cache: true
+
+      - name: Cache Gradle
+        uses: actions/cache@v4
+        with:
+          path: |
+            ~/.gradle/caches
+            ~/.gradle/wrapper
+          key: gradle-${{ runner.os }}-${{ hashFiles('app/android/**/*.gradle*', 'app/android/**/gradle-wrapper.properties', 'app/pubspec.lock') }}
+          restore-keys: |
+            gradle-${{ runner.os }}-
+
+      - name: App dependencies
+        working-directory: app
+        run: flutter pub get
 
       # A fresh runner has never built a debug APK and may have no fallback
       # keystore. This bundle is a manifest check, never a published release.
@@ -234,7 +299,7 @@ jobs:
       - name: Build prod bundle and check its merged manifest
         working-directory: app
         run: |
-          flutter build appbundle --release --flavor prod \
+          flutter build appbundle --release --no-pub --flavor prod \
             --obfuscate --split-debug-info=build/debug-info \
             --dart-define=PANDAPAY_ENV=prod \
             --dart-define=PANDAPAY_API_BASE_URL=https://api.invalid \
@@ -252,20 +317,6 @@ jobs:
           if-no-files-found: error
           retention-days: 90
 
-      - name: Console analyze
-        working-directory: console
-        run: |
-          flutter pub get
-          dart run tool/copy_golden.dart
-          git diff --exit-code -- assets/sms_golden/
-          flutter analyze
-
-      - name: Console session regressions and CSP bundle
-        working-directory: console
-        run: |
-          flutter test --no-pub
-          flutter build web --release --no-pub --csp --no-web-resources-cdn
-
   images:
     name: Container images
     runs-on: ubuntu-latest
@@ -277,7 +328,7 @@ jobs:
     # itself (push: false path, PR runs) still runs unconditionally — only
     # the push gate needs every validation, including the integration smoke
     # test and anonymization audit, before publishing a deployable image.
-    needs: [api, flutter, smoke, anonymization-audit, security-recovery]
+    needs: [api, flutter, app-test, app-bundle, smoke, anonymization-audit, security-recovery]
     # Needed to push to GHCR under GITHUB_TOKEN — this repo's default token
     # permissions may be read-only, so this is explicit rather than assumed.
     permissions:
@@ -306,7 +357,7 @@ jobs:
           context: ./api
           push: ${{ github.event_name == 'push' }}
           tags: |
-            ghcr.io/${{ github.repository_owner }}/pandapay-api:latest
+            ${{ github.ref == 'refs/heads/master' && format('ghcr.io/{0}/pandapay-api:latest', github.repository_owner) || '' }}
             ghcr.io/${{ github.repository_owner }}/pandapay-api:${{ github.sha }}
           cache-from: type=gha
           cache-to: type=gha,mode=max
@@ -317,7 +368,7 @@ jobs:
           context: ./auth
           push: ${{ github.event_name == 'push' }}
           tags: |
-            ghcr.io/${{ github.repository_owner }}/pandapay-auth:latest
+            ${{ github.ref == 'refs/heads/master' && format('ghcr.io/{0}/pandapay-auth:latest', github.repository_owner) || '' }}
             ghcr.io/${{ github.repository_owner }}/pandapay-auth:${{ github.sha }}
           cache-from: type=gha
           cache-to: type=gha,mode=max

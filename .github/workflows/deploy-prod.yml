@@ -35,8 +35,17 @@ on:
   workflow_run:
     workflows: ["Build and test"]
     types: [completed]
-    branches: [master]
-  # Manual re-run, e.g. to redeploy the current commit after a server change.
+    branches: [master, latest-dev]
+  # latest-dev deploys itself on every push. `workflow_run` cannot do this:
+  # GitHub always runs a workflow_run workflow from the DEFAULT branch's copy
+  # of the file, so a latest-dev edit never fires it. A `push` trigger does use
+  # the pushed branch's own file, so this run first calls "Build and test" as a
+  # reusable workflow (the `test` job) and `deploy` waits for it to pass.
+  push:
+    branches: [latest-dev]
+  # Manual run, e.g. to redeploy the current commit after a server change, or
+  # to ship latest-dev: `gh workflow run deploy-prod.yml --ref latest-dev`.
+  # Only master and latest-dev are accepted (see the first step below).
   workflow_dispatch:
 
 # Never let two deploys interleave: they would fight over the same working
@@ -49,65 +58,104 @@ concurrency:
 permissions:
   actions: read
   contents: read
+  # Only so the called Build and test workflow's `images` job can push to GHCR.
+  packages: write
 
 jobs:
+  # Push to latest-dev only: run the full test gate inside this workflow. On
+  # the other triggers the tests already ran (or are checked via the API
+  # below), so this job is skipped.
+  test:
+    name: Build and test (latest-dev push)
+    if: github.event_name == 'push'
+    uses: ./.github/workflows/build-and-test.yml
+    secrets: inherit
+    permissions:
+      actions: read
+      contents: read
+      packages: write
+
   deploy:
     name: Migrate and restart backend
     runs-on: ubuntu-latest
-    # Manual dispatch is branch-checked in its first step and must find a
-    # successful exact-SHA Build and test run before deployment.
+    needs: [test]
+    # `!cancelled()` so a skipped `test` job (every non-push trigger) does not
+    # skip the deploy. A push deploys only if its own test run succeeded;
+    # manual dispatch must find a successful exact-SHA Build and test run.
     if: >-
-      github.event_name == 'workflow_dispatch' ||
-      github.event.workflow_run.conclusion == 'success'
+      ${{ !cancelled() && (
+        github.event_name == 'workflow_dispatch' ||
+        (github.event_name == 'workflow_run' && github.event.workflow_run.conclusion == 'success') ||
+        (github.event_name == 'push' && needs.test.result == 'success')
+      ) }}
     environment: production
     steps:
       - name: Resolve the commit to deploy
         id: sha
         env:
           DEPLOY_SHA: ${{ github.event.workflow_run.head_sha || github.sha }}
+          RUN_BRANCH: ${{ github.event.workflow_run.head_branch }}
         run: |
-          if [ "$GITHUB_EVENT_NAME" = workflow_dispatch ] && [ "$GITHUB_REF" != refs/heads/master ]; then
-            echo 'FATAL: production can only be manually dispatched from master' >&2
-            exit 1
+          # Production deploys only from an allow-listed branch. The branch is
+          # the one the tested commit lives on: the dispatch ref, or the
+          # branch of the Build and test run that triggered this workflow.
+          if [ "$GITHUB_EVENT_NAME" = workflow_dispatch ] || [ "$GITHUB_EVENT_NAME" = push ]; then
+            DEPLOY_BRANCH="${GITHUB_REF#refs/heads/}"
+            [ "$GITHUB_REF" = "refs/heads/$DEPLOY_BRANCH" ] || {
+              echo 'FATAL: production can only be dispatched from a branch' >&2
+              exit 1
+            }
+          else
+            DEPLOY_BRANCH="$RUN_BRANCH"
           fi
-          if [ "$GITHUB_EVENT_NAME" = workflow_run ] && [ "${{ github.event.workflow_run.head_branch }}" != master ]; then
-            echo 'FATAL: refusing a Build and test run from a non-master branch' >&2
-            exit 1
-          fi
+          case "$DEPLOY_BRANCH" in
+            master|latest-dev) ;;
+            *)
+              echo "FATAL: refusing to deploy branch '$DEPLOY_BRANCH'; only master and latest-dev are allowed" >&2
+              exit 1
+              ;;
+          esac
           [[ "$DEPLOY_SHA" =~ ^[a-fA-F0-9]{40}$ ]] || {
             echo 'FATAL: deployment event did not provide a full commit SHA' >&2
             exit 1
           }
           echo "sha=$DEPLOY_SHA" >> "$GITHUB_OUTPUT"
+          echo "branch=$DEPLOY_BRANCH" >> "$GITHUB_OUTPUT"
 
       - name: Verify exact commit passed Build and test
         env:
           GH_TOKEN: ${{ github.token }}
           SHA: ${{ steps.sha.outputs.sha }}
+          DEPLOY_BRANCH: ${{ steps.sha.outputs.branch }}
           UPSTREAM_RUN_ID: ${{ github.event.workflow_run.id }}
         run: |
           set -euo pipefail
-          if [ "$GITHUB_EVENT_NAME" = workflow_run ]; then
+          if [ "$GITHUB_EVENT_NAME" = push ]; then
+            # Build and test ran as the `test` job of this very run (the
+            # deploy job's `needs` + `if` already require it to have passed),
+            # so it has no separate run for the API to find.
+            echo "Build and test passed in this run for $SHA on $DEPLOY_BRANCH."
+          elif [ "$GITHUB_EVENT_NAME" = workflow_run ]; then
             run_json="$(gh api "repos/$GITHUB_REPOSITORY/actions/runs/$UPSTREAM_RUN_ID")"
-            jq -e --arg sha "$SHA" '
+            jq -e --arg sha "$SHA" --arg branch "$DEPLOY_BRANCH" '
               .head_sha == $sha and
-              .head_branch == "master" and
+              .head_branch == $branch and
               .conclusion == "success" and
               .path == ".github/workflows/build-and-test.yml"
             ' <<< "$run_json" >/dev/null || {
-              echo 'FATAL: triggering Build and test run does not verify this master commit' >&2
+              echo "FATAL: triggering Build and test run does not verify this $DEPLOY_BRANCH commit" >&2
               exit 1
             }
           else
             runs_json="$(gh api --paginate --slurp \
               "repos/$GITHUB_REPOSITORY/actions/workflows/build-and-test.yml/runs?head_sha=$SHA&status=success&per_page=100")"
-            matching_runs="$(jq -r --arg sha "$SHA" '
+            matching_runs="$(jq -r --arg sha "$SHA" --arg branch "$DEPLOY_BRANCH" '
               [.[].workflow_runs[] |
-                select(.head_sha == $sha and .head_branch == "master" and .conclusion == "success") |
+                select(.head_sha == $sha and .head_branch == $branch and .conclusion == "success") |
                 .id] | length
             ' <<< "$runs_json")"
             [ "$matching_runs" -gt 0 ] || {
-              echo 'FATAL: this exact master commit has no successful Build and test run' >&2
+              echo "FATAL: this exact $DEPLOY_BRANCH commit has no successful Build and test run" >&2
               exit 1
             }
           fi
@@ -128,15 +176,16 @@ jobs:
           echo "${{ secrets.PROD_SSH_KNOWN_HOSTS }}" > ~/.ssh/known_hosts
           chmod 644 ~/.ssh/known_hosts
 
-      - name: Confirm the tested target is still current master
+      - name: Confirm the tested target is still the current branch tip
         env:
           GH_TOKEN: ${{ github.token }}
           SHA: ${{ steps.sha.outputs.sha }}
+          DEPLOY_BRANCH: ${{ steps.sha.outputs.branch }}
         run: |
           set -euo pipefail
-          current_master_sha="$(gh api "repos/$GITHUB_REPOSITORY/git/ref/heads/master" --jq '.object.sha')"
-          if [ "$current_master_sha" != "$SHA" ]; then
-            echo 'FATAL: tested target is no longer the current master tip; refusing a stale deploy.' >&2
+          current_tip_sha="$(gh api "repos/$GITHUB_REPOSITORY/git/ref/heads/$DEPLOY_BRANCH" --jq '.object.sha')"
+          if [ "$current_tip_sha" != "$SHA" ]; then
+            echo "FATAL: tested target is no longer the current $DEPLOY_BRANCH tip; refusing a stale deploy." >&2
             exit 1
           fi
 
@@ -145,6 +194,7 @@ jobs:
           HOST: ${{ secrets.PROD_HOST }}
           DEPLOY_USER: ${{ secrets.PROD_USER }}
           SHA: ${{ steps.sha.outputs.sha }}
+          DEPLOY_BRANCH: ${{ steps.sha.outputs.branch }}
           NOTIFICATION_SERVICE_URL: ${{ secrets.NOTIFICATION_SERVICE_URL }}
           NOTIFICATION_SERVICE_API_KEY: ${{ secrets.NOTIFICATION_SERVICE_API_KEY }}
           GOOGLE_PLACES_API_KEY: ${{ secrets.GOOGLE_PLACES_API_KEY }}
@@ -158,7 +208,7 @@ jobs:
               printf 'export GOOGLE_PLACES_API_KEY=%q\n' "$GOOGLE_PLACES_API_KEY"
             fi
             cat deploy/deploy.sh
-          } | bash deploy/ssh_script.sh "$DEPLOY_USER@$HOST" "$SHA"
+          } | bash deploy/ssh_script.sh "$DEPLOY_USER@$HOST" "$SHA" "$DEPLOY_BRANCH"
 
       - name: Verify production is healthy
         env:
