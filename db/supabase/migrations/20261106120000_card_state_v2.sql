@@ -31,9 +31,11 @@ alter table cap_states
   add column if not exists cap_amount         numeric(14,2),
   add column if not exists approximate_window boolean not null default false;
 
--- Added NOT VALID (no scan under the ACCESS EXCLUSIVE lock), then validated
--- in its own statement, which takes only a SHARE UPDATE EXCLUSIVE lock
--- (C8 D33f). Every existing row has cap_kind NULL, so validation passes.
+-- Added NOT VALID, then validated in its own statement (C8 D33f). The
+-- migration runs as one transaction, and the ADD COLUMN statements above
+-- already hold ACCESS EXCLUSIVE on cap_states until it commits, so this split
+-- does not shorten that lock here; it keeps validation an explicit step.
+-- Every existing row has cap_kind NULL, so validation passes.
 alter table cap_states drop constraint if exists cap_states_cap_kind_known;
 alter table cap_states
   add constraint cap_states_cap_kind_known
