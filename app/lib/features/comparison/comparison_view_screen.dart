@@ -10,6 +10,7 @@ import '../../data/analytics.dart';
 import '../../data/api_exception.dart';
 import '../cards/card_visual.dart';
 import '../../main.dart' show MoneyText;
+import '../cards/recommendation_confidence.dart';
 
 enum _SortBy { value, name }
 
@@ -389,6 +390,8 @@ class _ComparisonRowState extends ConsumerState<_ComparisonRow> {
                           _headlineFor(breakdown),
                           style: BambooFonts.ui(12.5, color: BambooInk.ink500),
                         ),
+                      // D35b: say so when an exclusion could not be read.
+                      RecommendationCaution(recommendation: rec),
                       if (breakdown != null && _hasNumericCap(breakdown))
                         Padding(
                           padding: const EdgeInsets.only(top: 7),
@@ -409,7 +412,7 @@ class _ComparisonRowState extends ConsumerState<_ComparisonRow> {
                 ? const Icon(Icons.block_rounded, color: BambooInk.ink500)
                 : MoneyText(
                     rec.expectedValue,
-                    confidence: rec.confidence,
+                    confidence: confidenceOf(rec),
                     style: BambooFonts.money(17, color: BambooInk.ink900),
                   ),
           ),
