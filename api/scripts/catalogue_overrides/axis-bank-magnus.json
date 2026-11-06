@@ -22,6 +22,68 @@
       "source_url": "https://www.axis.bank.in/docs/default-source/default-document-library/credit-card-tnc/terms-and-conditions-for-magnus-credit-card.pdf?sfvrsn=1d8117ef_1",
       "checked_on": "2026-11-05",
       "citation": "You will earn 35 EDGE REWARD Points per INR 200 on spends^ above INR 1.5 lakhs"
+    },
+    {
+      "path": "reward_rules[id=accelerated_35_above_150k].depends_on_user_attribute",
+      "value": true,
+      "reason": "Revision eff. 20 Jun 2025: 35 per INR 200 above INR 1.5 lakh \"up to spends equivalent to your credit limit + additional INR 1.5 Lakhs per calendar month. Thereafter, you will earn 12\". The 35 band itself is carried by base_150k_spend (custom post-limit 35, D26a); its upper bound depends on the cardholder's credit limit (D13).",
+      "source_url": "https://www.axis.bank.in/docs/default-source/default-document-library/credit-card-tnc/terms-and-conditions-for-magnus-credit-card.pdf?sfvrsn=1d8117ef_1",
+      "checked_on": "2026-11-06"
+    },
+    {
+      "path": "cap_rules[id=accelerated_spend_cap].depends_on_user",
+      "value": true,
+      "reason": "Ceiling = assigned credit limit + INR 1.5 lakh per calendar month (revision eff. 20 Jun 2025): user-dependent cap (D13a), amount null.",
+      "source_url": "https://www.axis.bank.in/docs/default-source/default-document-library/credit-card-tnc/terms-and-conditions-for-magnus-credit-card.pdf?sfvrsn=1d8117ef_1",
+      "checked_on": "2026-11-06"
+    },
+    {
+      "path": "cap_rules[id=travel_edge_200k_spend].post_limit_behavior.points_per_block",
+      "value": 12,
+      "reason": "Accelerated 35 T&C example row 4: Travel EDGE Rs 2,10,000 earns 12 EP/Rs.200 base, and only the spend above Rs 2 lakh is \"Considered in eligible spends\" for the 23-point accelerated top-up, which needs monthly eligible spend above Rs 1.5 lakh. Paying 35 above Rs 2 lakh unconditionally over-states; 12 (base) is paid and the conditional top-up is not modelled (H2).",
+      "source_url": "https://www.axis.bank.in/docs/default-source/default-document-library/credit-cards/terms-and-conditions-for-accelerated-35-edge-reward-points.pdf",
+      "checked_on": "2026-11-06"
+    },
+    {
+      "path": "reward_rules[id=travel_edge_above_200k]",
+      "op": "remove",
+      "reason": "Same T&C: Travel EDGE spend above Rs 2 lakh is ordinary eligible spend (12 base, plus 23 only through the monthly accelerated calculation), not a flat 35. The travel_edge_200k_spend post-limit (12) carries it; this info row stated 35 unconditionally.",
+      "source_url": "https://www.axis.bank.in/docs/default-source/default-document-library/credit-cards/terms-and-conditions-for-accelerated-35-edge-reward-points.pdf",
+      "checked_on": "2026-11-06"
+    },
+    {
+      "path": "reward_rules[id=education_direct_vs_aggregator].conditions",
+      "value": {},
+      "reason": "Education is not in the Magnus exclusion list (revision eff. 20 Jun 2025: Utility & Telecom, Rent, Wallet, Government, Insurance, Gold & Jewellery, Fuel, Cash advances, Repayments; 35 T&C point 3). The conditions were commentary (direct vs third-party fee) that made the rule info; it earns the base 12 per Rs 200 under base_150k_spend, like any eligible spend.",
+      "source_url": "https://www.axis.bank.in/docs/default-source/default-document-library/credit-card-tnc/terms-and-conditions-for-magnus-credit-card.pdf?sfvrsn=1d8117ef_1",
+      "checked_on": "2026-11-06"
+    },
+    {
+      "path": "reward_rules",
+      "op": "append",
+      "value": {
+        "id": "grab_deals_base_not_counted",
+        "category_id": "all_retail",
+        "priority": 40,
+        "evaluation_type": "standard_accrual",
+        "rail": "any",
+        "channel_type": "Grab Deals",
+        "conditions": {
+          "platform": "Axis Grab Deals"
+        },
+        "action": {
+          "multiplier": 1,
+          "points_per_block": 12,
+          "cashback_percent": null,
+          "cap_reference": null,
+          "reason": "Grab Deals spends earn the base 12 EDGE Reward Points per Rs 200 and do not count toward the Rs 1.5 lakh accelerated threshold."
+        },
+        "effective_from": "2025-06-20",
+        "effective_to": null
+      },
+      "reason": "Accelerated 35 T&C example row 6 and note 2: Grab Deals/GYFTR earn \"12 EP/Rs.200\" with \"no AEP\", and \"spends on Grab Deals, GYFTR will not be calculated for Total Eligible Spends\". Without this row a Grab Deals spend counted toward base_150k_spend and could unlock 35 per Rs 200 early (over-statement). The 'up to 5X' Grab Deals bonus is not modelled (H2).",
+      "source_url": "https://www.axis.bank.in/docs/default-source/default-document-library/credit-cards/terms-and-conditions-for-accelerated-35-edge-reward-points.pdf",
+      "checked_on": "2026-11-06"
     }
   ]
 }

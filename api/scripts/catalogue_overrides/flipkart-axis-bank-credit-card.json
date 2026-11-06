@@ -146,6 +146,31 @@
       "reason": "WP7: D24e/D25d: cashback T&C exclude \"EMI transactions, purchases converted to EMI post-facto\"; the record's row is category emi AND rail emi.",
       "source_url": "https://www.axis.bank.in/docs/default-source/default-document-library/cashback-tncs---final.pdf?sfvrsn=b55a0e1a_5",
       "checked_on": "2026-11-05"
+    },
+    {
+      "path": "reward_rules[id=preferred_merchants_cashback_4].category_id",
+      "value": "dining",
+      "reason": "The only preferred merchant the cashback T&C name is Swiggy, and only its food delivery: the rule is restated as a Swiggy dining rule (the unmapped 'preferred_merchants' token goes). The dining scope keeps a generic \"Swiggy\" grocery spend (likely Instamart, not eligible) at 1% (H2).",
+      "source_url": "https://www.axis.bank.in/docs/default-source/default-document-library/cashback-tncs---final.pdf?sfvrsn=b55a0e1a_5",
+      "checked_on": "2026-11-06"
+    },
+    {
+      "path": "reward_rules[id=preferred_merchants_cashback_4].conditions",
+      "value": {
+        "merchant": "Swiggy",
+        "not_merchant": [
+          "Swiggy Instamart",
+          "Swiggy Dineout"
+        ],
+        "not_platform": [
+          "Swiggy Instamart app",
+          "Swiggy Dineout app"
+        ],
+        "minimum_transaction_inr": 100
+      },
+      "reason": "Cashback T&C (Jun 2026): Preferred Merchants earn 4% (\"Unlimited\"), and \"only transactions made towards Food Delivery on Swiggy App shall be eligible for accelerated cashback. Transactions made on 'Instamart', 'genie' etc. shall not be eligible\". Swiggy is not Flipkart, Myntra or Cleartrip, so its accelerated rate is the 4% preferred rate. Modelled for Swiggy only, except Instamart and Dineout (not food delivery); the rest of the unpublished list earns 1% (H2). Residual: Genie has no directory entry.",
+      "source_url": "https://www.axis.bank.in/docs/default-source/default-document-library/cashback-tncs---final.pdf?sfvrsn=b55a0e1a_5",
+      "checked_on": "2026-11-06"
     }
   ]
 }

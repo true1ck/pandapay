@@ -177,6 +177,33 @@
         "cap_deltas_by_source_id": {}
       },
       "why": "No points on EMI options selected on a merchant website or terminal."
+    },
+    {
+      "id": "007",
+      "title": "Rs 5,000 through Reward Multiplier after the programme closed",
+      "ctx": {
+        "amount": 5000,
+        "occurred": "2026-11-10T10:00:00+05:30",
+        "category_id": null,
+        "category_slug": "online",
+        "mcc": null,
+        "merchant_name": "Amex Reward Multiplier",
+        "merchant_vpa": null,
+        "merchant_slug": null,
+        "platform": "amex_reward_multiplier",
+        "rail": "online"
+      },
+      "state_before": {
+        "caps_by_source_id": {}
+      },
+      "expect": {
+        "currency": "points",
+        "amount": 100,
+        "value_inr": null,
+        "excluded": false,
+        "cap_deltas_by_source_id": {}
+      },
+      "why": "Amex notice: \"Effective 30 September 2026, the Reward Multiplier program will be discontinued\" (quoted by Business Today, 1 Sep 2026). A spend on 10 Nov 2026 earns the regular 1 point per Rs 50: 100 x 1 = 100, not 3X."
     }
   ],
   "research_notes": [
