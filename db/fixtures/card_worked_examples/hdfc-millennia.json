@@ -23,6 +23,16 @@
       "url": "https://www.hdfc.bank.in/content/dam/hdfcbankpws/in/en/personal-banking/discover-products/cards/credit-cards/millennia-credit-card/pdf/millennia-tnc-20th-jul26.pdf",
       "doc": "Millennia T&C published 20 Jul 2026",
       "quote": "1 CashPoint = ₹1 for Millennia Credit Card Holders"
+    },
+    {
+      "url": "https://www.hdfc.bank.in/content/dam/hdfcbankpws/in/en/personal-banking/discover-products/cards/credit-cards/millennia-credit-card/pdf/millennia-tnc-20th-jul26.pdf",
+      "doc": "Millennia Credit Card T&C, published 20 Jul 2026",
+      "quote": "eligible for 1% CashPoints as per product feature if he/she does a transaction through SmartBuy/PayZapp which includes transaction from 10 online merchants also."
+    },
+    {
+      "url": "https://www.hdfc.bank.in/content/dam/hdfcbankpws/in/en/personal-banking/discover-products/cards/credit-cards/millennia-credit-card/pdf/millennia-tnc-20th-jul26.pdf",
+      "doc": "Millennia Credit Card T&C, published 20 Jul 2026",
+      "quote": "Effective 1st September 2024, Education payments made through third-party apps will NOT earn Reward Points."
     }
   ],
   "examples": [
@@ -271,6 +281,60 @@
         "cap_deltas_by_source_id": {}
       },
       "why": "All EMI transactions are excluded."
+    },
+    {
+      "id": "010",
+      "title": "Rs 3,000 at Amazon booked through SmartBuy (1%)",
+      "ctx": {
+        "amount": 3000,
+        "occurred": "2026-11-05T10:00:00+05:30",
+        "category_slug": "online",
+        "mcc": 5311,
+        "merchant_name": "Amazon",
+        "merchant_vpa": null,
+        "merchant_slug": "amazon",
+        "platform": "hdfc_smartbuy",
+        "rail": "online"
+      },
+      "state_before": {
+        "caps_by_source_id": {}
+      },
+      "expect": {
+        "currency": "points",
+        "amount": 30,
+        "value_inr": 30,
+        "excluded": false,
+        "cap_deltas_by_source_id": {
+          "millennia-1pct-monthly-cap": 30
+        }
+      },
+      "why": "T&C: a transaction through SmartBuy/PayZapp, including at the 10 online merchants, earns the 1% product rate: 30 blocks x 1 = 30 CashPoints."
+    },
+    {
+      "id": "011",
+      "title": "Rs 20,000 school fee paid through CRED",
+      "ctx": {
+        "amount": 20000,
+        "occurred": "2026-11-05T10:00:00+05:30",
+        "category_slug": "education",
+        "mcc": 8211,
+        "merchant_name": "CRED school fee payment",
+        "merchant_vpa": null,
+        "merchant_slug": null,
+        "platform": null,
+        "rail": "online"
+      },
+      "state_before": {
+        "caps_by_source_id": {}
+      },
+      "expect": {
+        "currency": "points",
+        "amount": 0,
+        "value_inr": 0,
+        "excluded": true,
+        "cap_deltas_by_source_id": {}
+      },
+      "why": "T&C: from 1 Sep 2024 education payments made through third-party apps (CRED, PayTM, Cheq, MobiKwik and others) earn no Reward Points."
     }
   ],
   "research_notes": [
@@ -290,6 +354,32 @@
       "item": "Uber",
       "cardpipeline_says": "Rule millennia-uber-mcc4121 5%.",
       "issuer_says": "Confirmed: only MCC 4121 Uber transactions.",
+      "proposed_fix": "none"
+    },
+    {
+      "item": "Card data review (2026-11-06): SmartBuy/PayZapp at the 10 merchants",
+      "cardpipeline_says": "5% at the 10 merchants on the online rail, any platform.",
+      "issuer_says": "T&C: through SmartBuy/PayZapp, the 10 merchants earn the 1% product rate.",
+      "proposed_fix": "override",
+      "override_file": "api/scripts/catalogue_overrides/hdfc-millennia.json"
+    },
+    {
+      "item": "Card data review (2026-11-06): third-party education",
+      "cardpipeline_says": "Exclusion only for named apps (loaded as info, so app-paid education earned 1%).",
+      "issuer_says": "T&C: apps 'like (but not limited to)' those earn nothing; direct payments earn. Excluded by category and the T&C education MCCs; direct payments are under-stated.",
+      "proposed_fix": "override",
+      "override_file": "api/scripts/catalogue_overrides/hdfc-millennia.json"
+    },
+    {
+      "item": "Card data review (2026-11-06): cap window",
+      "cardpipeline_says": "1,000 CashPoints per calendar month for each of 5% and 1%.",
+      "issuer_says": "The T&C table header says 'Maximum CashBack / CashPoints per Cycle', but both detailed sections say 'in a calendar month' and posting is on a calendar-month basis. Kept as calendar month.",
+      "proposed_fix": "none"
+    },
+    {
+      "item": "Card data review (2026-11-06): gift cards and vouchers",
+      "cardpipeline_says": "Not modelled.",
+      "issuer_says": "The T&C contradict each other (table note: gift/prepaid card loads and vouchers count as other spends; 1% section: not eligible for 1%). A gift-card purchase on a normal merchant is not in the context (D14a), so nothing is modelled; MCC 6540 wallet loads stay excluded.",
       "proposed_fix": "none"
     }
   ]
