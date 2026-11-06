@@ -280,6 +280,10 @@ class CardAcquisitionRecommender {
       final spend = attributedTotalSpend[card.id] ?? const Money.zero();
       if (spend.isZero) continue;
       for (final milestone in uniqueMilestoneRules(card.milestoneRules)) {
+        // D35a: a windowed (welcome) milestone is not credited. Its window
+        // (e.g. ₹50,000 within 60 days) says nothing about a year's spend,
+        // and Phase 1 has no window maths.
+        if (milestone.windowDays != null) continue;
         Money bonus;
         if (milestone.isRepeatable) {
           final times = (spend.paise / milestone.thresholdSpend.paise).floor();
@@ -314,8 +318,17 @@ class CardAcquisitionRecommender {
         pointValueInr: card.pointValueInr,
         baseRewardUnit: card.baseRewardUnit,
         baseRewardRate: card.baseRewardRate,
-        rewardRules: uniqueRewardRules(card.rewardRules),
-        capRules: uniqueCapRules(card.capRules),
+        // D35d: card-level exclusions stay (both engines read
+        // card.excludesCategory); dropping them credited a card for spend it
+        // excludes. A v2-shaped card is not de-duplicated (D15a): merging
+        // rows can orphan a cap's targets or parent.
+        excludedCategoryIds: card.excludedCategoryIds,
+        rewardRules: card.isV2Shaped
+            ? card.rewardRules
+            : uniqueRewardRules(card.rewardRules),
+        capRules: card.isV2Shaped
+            ? card.capRules
+            : uniqueCapRules(card.capRules),
         milestoneRules: const [],
         forexRule: card.forexRule,
         fuelRule: card.fuelRule,

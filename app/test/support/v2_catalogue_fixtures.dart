@@ -91,6 +91,29 @@ Map<String, dynamic> v2CardJson(
   ],
 };
 
+/// A v2 card with a skipped EXCLUSION rule (its `mcc_include` holds a number,
+/// which makes the rule unparseable, D15e): the engine adds the
+/// `exclusion_unparsed` assumption to its results.
+Map<String, dynamic> flaggedExclusionCardJson(
+  String id, {
+  String name = 'Flagged Card',
+}) {
+  final json = v2CardJson(id, name: name);
+  (json['reward_rules'] as List).add({
+    'id': '$id-exclusion',
+    'category_id': null,
+    'merchant_pattern': null,
+    'rail': null,
+    'unit': 'points_per_100',
+    'rate': 0,
+    'priority': 1,
+    'rule_role': 'exclusion',
+    'mcc_include': [5411],
+    'min_engine_version': 2,
+  });
+  return json;
+}
+
 /// A card that cannot parse (an unknown v1 reward unit is strict).
 Map<String, dynamic> badCardJson(String id, {String name = 'Secret Name'}) => {
   'id': id,

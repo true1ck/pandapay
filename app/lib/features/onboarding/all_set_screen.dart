@@ -9,6 +9,7 @@ import '../../app/router.dart';
 import '../../data/api_exception.dart';
 import '../../data/card_snapshots.dart';
 import '../../main.dart' show MoneyText;
+import '../cards/recommendation_confidence.dart';
 import 'entry_brand.dart';
 import 'onboarding_back.dart';
 
@@ -260,13 +261,18 @@ class _TryItNowPreview extends ConsumerWidget {
           const SizedBox(height: AppSpace.sm),
           MoneyText(
             winner.expectedValue,
-            confidence: winner.confidence,
+            confidence: confidenceOf(winner),
             style: BambooFonts.money(32, color: BambooInk.lime),
           ),
           const SizedBox(height: 2),
           Text(
             'with ${winner.card.name}',
             style: BambooFonts.ui(13.5, color: BambooInk.onSlateSubtle),
+          ),
+          // D35b: say so when an exclusion could not be read.
+          RecommendationCaution(
+            recommendation: winner,
+            color: BambooInk.onSlateSubtle,
           ),
         ],
       ),

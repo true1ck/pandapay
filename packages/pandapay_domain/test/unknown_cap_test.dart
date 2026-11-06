@@ -244,6 +244,153 @@ void main() {
     });
   });
 
+  group('two or more unknown caps: every fresh/used-up combination (D35c)', () {
+    // The reviewer's probe: rule 5 pts/₹100 on a card whose base is 1 pt/₹100
+    // and whose points are worth ₹1, a 100-point bonus cap, and a ₹50,000
+    // eligible-spend cap that pays 10 pts/₹100 ABOVE its limit.
+    //   both fresh                      ₹200 (100 base + 100 bonus)
+    //   both used up                    ₹1,000 (all spend above the limit)
+    //   bonus used up, tier fresh       ₹100 (base only)  <- lower than both
+    //   bonus fresh, tier used up       ₹1,000
+    CardProduct probeCard({int extraCaps = 0}) => CardProduct(
+      id: 'probe',
+      name: 'probe',
+      network: CardNetwork.visa,
+      pointValueInr: 1,
+      baseRewardUnit: RewardUnit.pointsPer100,
+      baseRewardRate: 1,
+      accrualRounding: AccrualRounding.floor,
+      rewardRules: const [
+        RewardRule(
+          id: 'r',
+          unit: RewardUnit.pointsPer100,
+          rate: 5,
+          priority: 10,
+        ),
+      ],
+      capRules: [
+        CapRule(
+          id: 'bonus',
+          label: 'Bonus points',
+          capValue: Money.fromRupees(100),
+          measure: CapMeasure.rewardValue,
+          period: CapPeriod.calendarMonth,
+          capKind: CapKind.bonusPoints,
+          capAmount: 100,
+          targets: const ['r'],
+        ),
+        CapRule(
+          id: 'tier',
+          label: 'Spend tier',
+          capValue: Money.fromRupees(50000),
+          measure: CapMeasure.spendAmount,
+          period: CapPeriod.calendarMonth,
+          capKind: CapKind.eligibleSpend,
+          capAmount: 50000,
+          postCapBehavior: PostCapBehavior.customRate,
+          postCapUnit: RewardUnit.pointsPer100,
+          postCapRate: 10,
+          targets: const ['r'],
+        ),
+        // Extra idle unknown caps, to push k past the enumeration limit.
+        for (var i = 0; i < extraCaps; i++)
+          CapRule(
+            id: 'idle$i',
+            label: 'Idle $i',
+            capValue: Money.fromRupees(1000),
+            measure: CapMeasure.rewardValue,
+            period: CapPeriod.calendarMonth,
+            capKind: CapKind.bonusPoints,
+            capAmount: 1000,
+            targets: const ['other-rule'],
+          ),
+      ],
+    );
+
+    Money value(CardSnapshot s) => _value(s);
+
+    test('the four extremes are as the probe says', () {
+      final card = probeCard();
+      Money at(Map<String, double> consumed) =>
+          value(CardSnapshot(product: card, capConsumed: consumed));
+      expect(at(const {}), Money.fromRupees(200));
+      expect(at(const {'bonus': 100, 'tier': 50000}), Money.fromRupees(1000));
+      expect(at(const {'bonus': 100}), Money.fromRupees(100));
+      expect(at(const {'tier': 50000}), Money.fromRupees(1000));
+    });
+
+    test('unknown caps take the minimum over all four combinations: ₹100, '
+        'not the ₹200 of "both fresh"', () {
+      final unknown = value(
+        CardSnapshot(
+          product: probeCard(),
+          unknownCapIds: const {'bonus', 'tier'},
+        ),
+      );
+      expect(unknown, Money.fromRupees(100));
+    });
+
+    test('one unknown cap, one known: the known one stays as it is', () {
+      // tier known fresh (0 used), bonus unknown: bonus used up = ₹100,
+      // bonus fresh = ₹200.
+      final unknown = value(
+        CardSnapshot(
+          product: probeCard(),
+          capConsumed: const {'tier': 0},
+          unknownCapIds: const {'bonus'},
+        ),
+      );
+      expect(unknown, Money.fromRupees(100));
+      // tier known used up: bonus is irrelevant (all spend is above the
+      // limit): ₹1,000 either way.
+      final tierUsed = value(
+        CardSnapshot(
+          product: probeCard(),
+          capConsumed: const {'tier': 50000},
+          unknownCapIds: const {'bonus'},
+        ),
+      );
+      expect(tierUsed, Money.fromRupees(1000));
+    });
+
+    test('many unknown caps (past the limit) still find the mixed minimum '
+        'through single-cap flips', () {
+      // 2 real unknown caps + 8 idle ones = 10 unknown (1,024 combinations,
+      // beyond the enumeration limit): the extremes plus each single flip
+      // still reach "bonus used up, tier fresh".
+      final card = probeCard(extraCaps: 8);
+      final unknown = value(
+        CardSnapshot(
+          product: card,
+          unknownCapIds: {
+            'bonus',
+            'tier',
+            for (var i = 0; i < 8; i++) 'idle$i',
+          },
+        ),
+      );
+      expect(unknown, Money.fromRupees(100));
+    });
+
+    test('the result is never above fresh or above used up', () {
+      final card = probeCard();
+      final unknown = value(
+        CardSnapshot(product: card, unknownCapIds: const {'bonus', 'tier'}),
+      );
+      expect(unknown <= value(CardSnapshot(product: card)), isTrue);
+      expect(
+        unknown <=
+            value(
+              CardSnapshot(
+                product: card,
+                capConsumed: const {'bonus': 100, 'tier': 50000},
+              ),
+            ),
+        isTrue,
+      );
+    });
+  });
+
   group('the split optimizer carries unknown caps through', () {
     final magnus = CardProductJson.fromJson(_fixture('axis-bank-magnus'));
     final cap = magnus.capRules.firstWhere(
