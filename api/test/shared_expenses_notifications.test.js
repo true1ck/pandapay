@@ -86,3 +86,25 @@ test('a database failure resolves quietly instead of rejecting', async () => {
   const sent = await notifyAfterCommit({ withUserClient: async () => { throw new Error('db down'); }, actorId: actor, kind: 'expense.propose', payload: {}, contextId: ctx, operationId: 'op-3', options: { enabled: true }, logger: quiet });
   assert.equal(sent, 0);
 });
+
+test('join request: a claimant who cannot read the roster still notifies the owner, by name', async () => {
+  const seen = [];
+  const withUserClient = async (profileId, fn) => fn({
+    async query(sql, params) {
+      seen.push({ profileId, sql: sql.replace(/\s+/g, ' ').slice(0, 60), params });
+      if (/invitation_audience/.test(sql)) {
+        return { rows: [{ result: { contextId: ctx, contextName: 'Goa trip', claimantName: 'Ravi', owners: [owner] } }] };
+      }
+      if (/FROM shared_expenses.members/.test(sql)) throw new Error('claimant must not read the roster');
+      if (/notification_preferences/.test(sql)) return { rowCount: 0, rows: [] };
+      if (/INSERT INTO notifications/.test(sql)) return { rowCount: 1, rows: [{ id: 'n1' }] };
+      return { rows: [] };
+    },
+  });
+  const sent = await notifyAfterCommit({ withUserClient, actorId: friend, kind: 'invitation.requested', payload: {}, contextId: ctx, operationId: 'op-j', tokenHash: 'a'.repeat(64), options: { enabled: true }, logger: quiet });
+  assert.equal(sent, 1);
+  const insert = seen.find((s) => s.sql.startsWith('INSERT INTO notifi'));
+  assert.equal(insert.profileId, owner);
+  assert.match(insert.params[3], /Ravi asked to join/);
+  assert.equal(insert.params[5], `split:op-j:${owner}`);
+});

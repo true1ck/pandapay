@@ -108,15 +108,30 @@ async function deliverOne({ withUserClient, target, contextId, dedupeKey, logger
  * Fire-and-forget entry point. Resolves with how many recipients were notified;
  * never rejects.
  */
-async function notifyAfterCommit({ withUserClient, actorId, kind, payload, contextId, operationId, options = {}, logger = console }) {
+/** A claimant is not a member yet, so owners come from a narrow, claimant-scoped function. */
+async function loadInvitationAudience(client, tokenHash) {
+  const { rows } = await client.query('SELECT shared_expenses.invitation_audience($1::text) AS result', [tokenHash]);
+  const r = rows[0]?.result;
+  if (!r) return { members: [], contextName: null, actorName: null };
+  return {
+    members: (r.owners ?? []).map((profileId) => ({ memberId: null, profileId, role: 'owner', name: null })),
+    contextName: r.contextName ?? null,
+    actorName: r.claimantName ?? null,
+  };
+}
+
+async function notifyAfterCommit({ withUserClient, actorId, kind, payload, contextId, operationId, tokenHash, options = {}, logger = console }) {
   if (!enabled(options)) return 0;
   try {
-    const audience = await withUserClient(actorId, (client) => loadAudience(client, contextId, actorId));
+    const invitation = kind.startsWith('invitation.');
+    const audience = invitation
+      ? await withUserClient(actorId, (client) => loadInvitationAudience(client, tokenHash))
+      : await withUserClient(actorId, (client) => loadAudience(client, contextId, actorId));
     const actor = audience.members.find((m) => m.profileId === actorId);
     const targets = plan({
       kind,
       payload: payload ?? {},
-      actorMemberName: actor?.name,
+      actorMemberName: invitation ? audience.actorName : actor?.name,
       contextName: audience.contextName,
       members: audience.members,
       actorId,

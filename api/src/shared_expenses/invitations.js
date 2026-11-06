@@ -116,7 +116,7 @@ function registerInvitationRoutes(app,{protect,withUserClient,sendError,secret,a
       throw error;
     }
     res.json(result);
-    void notify({actorId:req.userId,kind:result?.status==='joined'?'invitation.joined':'invitation.requested',payload:{},contextId:result?.contextId,operationId:b.operationId});
+    void notify({actorId:req.userId,kind:result?.status==='joined'?'invitation.joined':'invitation.requested',payload:{},contextId:result?.contextId,operationId:b.operationId,tokenHash:hash});
   });
   route('/shared-expenses/invitations/respond',async(req,res)=>{
     const b=req.body;record(b,['invitationId','operationId','approve']);uuid(b.invitationId,'invitationId');uuid(b.operationId,'operationId');if(typeof b.approve!=='boolean')fail('INVALID_INPUT','approve');
