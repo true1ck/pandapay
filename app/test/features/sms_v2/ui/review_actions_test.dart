@@ -6,7 +6,9 @@ import 'package:flutter_test/flutter_test.dart';
 import 'package:pandapay/data/local/app_database.dart';
 import 'package:pandapay/data/local/financial_store.dart';
 import 'package:pandapay/data/local/sms_intake_repository.dart';
+import 'package:pandapay/features/sms_v2/category/category_snapshot.dart';
 import 'package:pandapay/features/sms_v2/pipeline/sms_v2_pipeline.dart';
+import 'package:pandapay_domain/sms_v2_category.dart';
 import 'package:pandapay/features/sms_v2/pipeline/trace.dart';
 import 'package:pandapay/features/sms_v2/providers/data_providers.dart';
 import 'package:pandapay/features/sms_v2/storage/event_store.dart';
@@ -95,6 +97,59 @@ void main() {
     namespace: namespace,
     bundle: bundle,
   );
+  test(
+    'renaming a shop and choosing its category in one save keys the category on the printed shop',
+    () {
+      final first = items.first;
+      controller().apply(
+        items: [first],
+        kind: CorrectionKind.wrongMerchant,
+        corrected: const {'merchantName': 'Corner Shop'},
+      );
+      controller().apply(
+        items: [first],
+        kind: CorrectionKind.wrongCategory,
+        corrected: const {'category': 'groceries'},
+      );
+      // The next SMS from the same printed shop must get the chosen category.
+      final source = '9' * 64;
+      final message = SmsMessage(
+        sender: 'VM-HDFCBK-S',
+        body: bundle.rules.first.examples.first.body,
+        sourceKey: source,
+        observedAt: DateTime.utc(2026, 11, 9, 7),
+      );
+      database.db.execute(
+        'INSERT INTO sms_captured_messages(namespace,id,sender,body,received_at) VALUES(?,?,?,?,?)',
+        [
+          namespace,
+          source,
+          message.sender,
+          message.body,
+          message.observedAt.millisecondsSinceEpoch,
+        ],
+      );
+      final categories = CategorySnapshot.load(
+        financial.database,
+        namespace: namespace,
+        aliases: bundle.merchantAliases,
+      );
+      SmsV2Pipeline(
+        financial: financial,
+        namespace: namespace,
+        bundle: bundle,
+        appVersion: '2',
+        userRules: categories.userRules,
+        confirmedHistory: categories.confirmedHistory,
+      ).process(message);
+      final row = financial
+          .entities(namespace, 'transactions')
+          .map(TransactionEntry.fromJson)
+          .firstWhere((entry) => entry.sourceKey == source);
+      expect(row.categoryName, TaxonomyRegistry.v1.categoryFor('groceries')!.displayName);
+    },
+  );
+
   test(
     'confirming a format locks every reading without reporting a false defect',
     () {

@@ -5,6 +5,7 @@ import 'package:pandapay_domain/sms_v2_category.dart';
 import 'package:pandapay_domain/sms_v2_ledger.dart';
 import '../../../data/local/financial_store.dart';
 import '../../../data/user_cards_repository.dart';
+import '../personal/personal_merchant_aliases.dart';
 import '../storage/ledger_store.dart';
 
 /// Maps the ledger to the existing transaction model. All attribution comes
@@ -17,6 +18,7 @@ TransactionEntry? transactionForEvent(
   v2.CategoryDecision? category,
   Map<String, String> categoryIdBySlug = const {},
   Map<String, String> instrumentIdByFactId = const {},
+  Map<String, PersonalMerchantAlias> merchantAliases = const {},
 }) {
   final kind = transactionKindForEvent(event);
   final fact = moneyFactForEvent(event, facts);
@@ -40,7 +42,16 @@ TransactionEntry? transactionForEvent(
       : row.from is v2.ExternalEndpoint
       ? row.from as v2.ExternalEndpoint
       : null;
-  final printed = fact.counterparty?.name;
+  // The person's own name for this shop wins over the printed one, for SMS
+  // received since they chose it. A reading they wrote themselves (an edit) is
+  // already their words and is never renamed again.
+  final printedName = fact.counterparty?.name;
+  final alias = printedName == null || fact.provenance.engine == v2.Engine.user
+      ? null
+      : merchantAliases[normalizeMerchantText(printedName)];
+  final printed = alias != null && alias.appliesTo(fact.observedAt)
+      ? alias.name
+      : printedName;
   // A card bill is a payment to the user's own card, however it was paid
   // (bank transfer, CHEQ, CRED, BBPS), so it is labelled as one.
   final merchant = event.type == v2.EventType.cardBillPayment
@@ -113,6 +124,10 @@ class ProjectionWriter {
     Map<String, String> categoryIdBySlug = const {},
     Map<String, String> instrumentIdByFactId = const {},
   }) {
+    final merchantAliases = PersonalMerchantAliases(
+      ledger.db,
+      namespace: ledger.namespace,
+    ).load();
     final existing = <String, TransactionEntry>{};
     final legacyBySource = <String, List<TransactionEntry>>{};
     final db = ledger.db;
@@ -180,6 +195,7 @@ class ProjectionWriter {
             category: snapshot.categoryByEvent[e.eventId],
             categoryIdBySlug: categoryIdBySlug,
             instrumentIdByFactId: instrumentIdByFactId,
+            merchantAliases: merchantAliases,
           );
           var old = existing[e.eventId];
           if (old == null && row != null) {

@@ -53,6 +53,7 @@ class HistoryCategoryRecheck {
     required this.accountIsCurrent,
     this.categoryIdBySlug = const {},
     this.onlySources,
+    this.onlyEventIds,
   }) {
     if (!from.isBefore(to)) throw ArgumentError('Choose a nonempty period');
     SmsV2Schema.ensure(db);
@@ -83,6 +84,10 @@ class HistoryCategoryRecheck {
   /// decision stays locked.
   final Set<CategorySource>? onlySources;
 
+  /// When set, only these events are looked at (a bulk change from the edit
+  /// screen); the period then only bounds which of them count.
+  final Set<String>? onlyEventIds;
+
   final FinancialStore financial;
   final String namespace;
   final RuleBundle bundle;
@@ -105,11 +110,18 @@ class HistoryCategoryRecheck {
     ))
       (jsonDecode(row['payload'] as String) as Map)['eventId'] as String,
   };
-  late final _periodEvents = _events
-      .listSince(from)
-      .where((event) => event.occurredAt.isBefore(to))
-      .map((event) => event.eventId)
-      .toSet();
+  late final _periodEvents = onlyEventIds != null
+      ? {
+          for (final id in onlyEventIds!)
+            if (_events.get(id) case final event?)
+              if (!event.occurredAt.isBefore(from) && event.occurredAt.isBefore(to))
+                event.eventId,
+        }
+      : _events
+            .listSince(from)
+            .where((event) => event.occurredAt.isBefore(to))
+            .map((event) => event.eventId)
+            .toSet();
   late final _awaiting = _periodEvents.intersection(_pendingMoneyEvents());
   late final _targets = _periodEvents.difference(_awaiting).toList()..sort();
   String get _key {

@@ -32,6 +32,7 @@ import '../sync/template_upload.dart';
 import '../sync/stats_upload.dart';
 import '../telemetry/client_metrics.dart';
 import '../sync/corrections_sync.dart';
+import '../similar/fact_keys.dart';
 import '../sync/requeue_for_upload.dart';
 import '../sync/facts_upload.dart';
 import '../sync/sync_pull.dart';
@@ -295,6 +296,20 @@ class SmsV2Runtime {
     }
   }
 
+  /// Writes the shop and rule keys of facts stored before those columns
+  /// existed, a little on each pass so no pass is held up: at most about a
+  /// fifth of a second, 500 facts at a time.
+  void _keyFacts() {
+    final db = financial.database.db;
+    final watch = Stopwatch()..start();
+    try {
+      while (watch.elapsedMilliseconds < 200 &&
+          FactKeys.backfill(db, namespace) > 0) {}
+    } catch (_) {
+      // The keys only speed up "similar transactions"; sync never waits on them.
+    }
+  }
+
   Future<void> _applyCardState() async {
     final repository = cardRepository;
     if (repository == null) return;
@@ -368,6 +383,7 @@ class SmsV2Runtime {
       }
     }
     await _applyCardState();
+    _keyFacts();
     await _upload.drain();
     final senders = (await activeBundle()).senders;
     final correctionQueue = OutboxStore(

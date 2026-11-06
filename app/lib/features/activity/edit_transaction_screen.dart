@@ -1,3 +1,5 @@
+import '../sms_v2/similar/similar_changes.dart';
+import '../sms_v2/similar/similar_offer_sheet.dart';
 import '../sms_v2/ui/review_controller.dart';
 import '../sms_v2/ui/transaction_actions.dart';
 import '../sms_v2/providers/data_providers.dart';
@@ -62,6 +64,11 @@ class _EditTransactionScreenState extends ConsumerState<EditTransactionScreen> {
   TxnRail _rail = TxnRail.unknown;
   bool _initialized = false;
   bool _saving = false;
+  // After a saved SMS edit: the others that look the same, offered once the edit is committed.
+  SimilarChanges? _similar;
+  List<SimilarOffer> _similarOffers = const [];
+  String _similarShop = '';
+  String _instrumentLabel = 'this card';
   String? _error;
 
   @override
@@ -190,6 +197,12 @@ class _EditTransactionScreenState extends ConsumerState<EditTransactionScreen> {
           );
         }
         await _offerFutureCategoryRule(targetCategoryId: _categoryId);
+      }
+      try {
+        await _offerSimilar();
+      } catch (_) {
+        // The edit is saved; a failed offer to change the others never undoes
+        // or reports it as failed.
       }
       if (mounted) context.pop(true);
     } catch (e) {
@@ -335,6 +348,10 @@ class _EditTransactionScreenState extends ConsumerState<EditTransactionScreen> {
           : _rail == TxnRail.upiQr
           ? v2.Rail.upi
           : v2.Rail.unknown;
+      // What the transaction looked like before this edit changes it.
+      final similar = SimilarChanges.forController(controller);
+      final before = similar.snapshot(original);
+      final typeChanged = _entryKind != original.entryKind;
       SmsTransactionActions(controller: controller).edit(
         original,
         amountMinor: Money.fromRupees(amount).paise,
@@ -345,6 +362,32 @@ class _EditTransactionScreenState extends ConsumerState<EditTransactionScreen> {
         eventType: kind,
         rail: rail,
       );
+      // The edit is committed. Looking for others that look the same is a
+      // separate, optional step and never puts the edit at risk.
+      try {
+        if (before != null) {
+          final name = _merchantController.text.trim();
+          _similar = similar;
+          _similarShop = before.printedName ?? name;
+          _instrumentLabel =
+              instruments
+                  .where((i) => i.instrumentId == instrumentId)
+                  .firstOrNull
+                  ?.displayName ??
+              'this card';
+          _similarOffers = similar.offers(
+            before,
+            shopName: name.isNotEmpty && name != (original.merchantName ?? '')
+                ? name
+                : null,
+            categorySlug: category,
+            instrumentId: instrumentId,
+            eventType: typeChanged ? kind : null,
+          );
+        }
+      } catch (_) {
+        _similarOffers = const [];
+      }
       return;
     }
 
@@ -376,6 +419,66 @@ class _EditTransactionScreenState extends ConsumerState<EditTransactionScreen> {
             },
       rail: _rail,
     );
+  }
+
+  /// Asks about the other transactions that look the same, one change at a
+  /// time, after the edit itself is saved.
+  Future<void> _offerSimilar() async {
+    final similar = _similar;
+    final offers = _similarOffers;
+    _similar = null;
+    _similarOffers = const [];
+    if (similar == null || offers.isEmpty) return;
+    for (final offer in offers) {
+      if (!mounted) return;
+      final target = switch (offer.field) {
+        SimilarField.shopName => offer.change['name'] as String,
+        SimilarField.category => _categoryLabel(_categoryId),
+        SimilarField.paymentMethod => _instrumentLabel,
+        SimilarField.type => switch (_entryKind) {
+          TxnEntryKind.income => 'income',
+          TxnEntryKind.investment => 'an investment',
+          TxnEntryKind.refund => 'a refund',
+          TxnEntryKind.transfer => 'a transfer between your accounts',
+          _ => 'a spend',
+        },
+      };
+      final result = await showSimilarOfferSheet(
+        context: context,
+        offer: offer,
+        changes: similar,
+        shop: _similarShop,
+        target: target,
+      );
+      if (result == null || !mounted) continue;
+      ref.invalidate(transactionsProvider);
+      ref.invalidate(utilizationTransactionsProvider);
+      ref.invalidate(homeSummaryProvider);
+      ref.invalidate(spendReportProvider);
+      ref.invalidate(categorySpendProvider);
+      final changeId = result.changeId;
+      final waiting = result.awaitingSync > 0
+          ? ' ${result.awaitingSync} still syncing; try again after the next sync.'
+          : '';
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text(
+            result.stopped
+                ? 'Stopped after changing ${result.changed}.$waiting'
+                : 'Changed ${result.changed} other transaction${result.changed == 1 ? '' : 's'}.$waiting',
+          ),
+          action: changeId == null
+              ? null
+              : SnackBarAction(
+                  label: 'Undo',
+                  onPressed: () {
+                    similar.undo(changeId);
+                    ref.invalidate(transactionsProvider);
+                  },
+                ),
+        ),
+      );
+    }
   }
 
   Future<void> _rememberSelfTransfer() async {

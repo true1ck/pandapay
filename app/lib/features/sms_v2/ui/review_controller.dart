@@ -12,6 +12,7 @@ import '../../../data/local/sms_learning_feedback.dart';
 import '../../../data/local/sms_intake_repository.dart';
 import '../corrections/corrections_service.dart';
 import '../pipeline/receipt_review.dart';
+import '../personal/personal_merchant_aliases.dart';
 import '../pipeline/trace.dart';
 import '../providers/data_providers.dart';
 import '../providers/runtime_provider.dart';
@@ -164,8 +165,12 @@ class ReviewController {
           }
           if (kind == CorrectionKind.wrongCategory ||
               kind == CorrectionKind.preferenceOnly) {
+            // The rule is keyed on the shop as the SMS prints it. An earlier edit in the same save may already have
+            // renamed the shop on the current reading, and a rule under the new name would never match the next SMS.
             patch['merchantKey'] = normalizeMerchantText(
-              money?.counterparty?.name ?? 'UNKNOWN',
+              receipt?.counterparty?.name ??
+                  money?.counterparty?.name ??
+                  'UNKNOWN',
             );
           }
           service.apply(
@@ -207,6 +212,27 @@ class ReviewController {
               ),
             ),
           );
+          // A renamed shop is remembered under the name the SMS prints, so the
+          // person's name shows on this and every later SMS from that shop. The
+          // earlier ones change only when they ask for it (see SimilarChanges).
+          if (kind == CorrectionKind.wrongMerchant && !confirm) {
+            final printed = receipt?.counterparty?.name;
+            final chosen = (patch['merchantName'] as String?)?.trim();
+            if (printed != null && chosen != null && chosen.isNotEmpty) {
+              final aliases = PersonalMerchantAliases(db, namespace: namespace);
+              if (normalizeMerchantText(chosen) ==
+                  normalizeMerchantText(printed)) {
+                // Typing the printed name back means "no special name".
+                aliases.remove(normalizeMerchantText(printed));
+              } else {
+                aliases.save(
+                  printedName: printed,
+                  name: chosen,
+                  since: receipt!.observedAt,
+                );
+              }
+            }
+          }
         }
         for (final item in items) {
           db.execute(

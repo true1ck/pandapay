@@ -3,6 +3,8 @@ import 'dart:convert';
 import 'package:pandapay_domain/sms_v2.dart';
 import 'package:sqlite3/sqlite3.dart';
 
+import '../similar/fact_keys.dart';
+
 /// Immutable extracted facts in the signed-in account's local database.
 class FactStore {
   FactStore(this._db, {required this.namespace});
@@ -21,8 +23,9 @@ class FactStore {
     _db.execute(
       '''
 INSERT INTO v2_facts
-  (namespace, fact_id, source_key, fact_type, observed_at, instrument_id, payload)
-VALUES (?, ?, ?, ?, ?, ?, ?)
+  (namespace, fact_id, source_key, fact_type, observed_at, instrument_id, payload,
+   merchant_key, rule_id, keyed)
+VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, 1)
 ON CONFLICT(namespace, fact_id) DO NOTHING
 ''',
       [
@@ -33,6 +36,8 @@ ON CONFLICT(namespace, fact_id) DO NOTHING
         _timestamp(fact.observedAt),
         instrumentId,
         jsonEncode(fact.toJson()),
+        FactKeys.of(fact).merchantKey,
+        FactKeys.of(fact).ruleId,
       ],
     );
     final inserted = _db.updatedRows != 0;
