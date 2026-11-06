@@ -99,3 +99,18 @@ Phone filters (section 2), the K threshold, attestation, one row per account, sh
 | Withdrawal and account deletion | triggers named in section 6 | `learning_security_pg.test.js`, `learning_loop_e2e_pg.test.js` |
 | Prompts treat layouts and shop names as data; nothing the AI returns is published | `api/src/sms_v2/template_worker.js`, `merchant_suggestions.js` | `api/test/sms_v2_learning_prompt_injection.test.js` |
 | Retention | `api/src/sms_v2/rules_store.js` (`pruneSignals`) | `api/test/sms_v2/learning_signals_pg.test.js` |
+
+## Friends run: seeing a tester whose phone cannot pass App Check (7 Nov 2026)
+
+A free Apple developer account cannot produce an App Check token, so every layout, signal and case from such a phone is
+stored as not eligible and never reaches the Learning page. The console setting `testers_count_without_attestation`
+(Settings tab, default **off**) changes that for profiles listed in `sms_v2_testers` only:
+
+- On: those profiles count as eligible like an attested phone. Rate limits still treat the phone as unverified.
+- Off, or the profile is not in `sms_v2_testers`: nothing changes.
+- The list is a table (`sms_v2_testers`), edited by the owner; there is no console screen for it yet.
+
+The admin Corrections list also shows, for each layout, how many **different people** reported it, the mix of what was
+wrong (category, shop name, payment method, type, amount, date, missed SMS), and the totals of shared against
+private cases. Patterns many people hit come first. Account ids are never part of that answer.
+

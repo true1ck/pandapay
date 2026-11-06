@@ -12,6 +12,31 @@ import 'package:pandapay_console/features/sms_rules/sms_rules_screen.dart';
 import 'support.dart';
 
 void main() {
+  test('the pattern line says how many different people and what was wrong, most common first', () {
+    final cases = <Map>[
+      {'is_tester': true},
+      {'is_tester': false},
+      {'is_tester': false},
+      {'is_tester': false},
+    ];
+    expect(
+      correctionSubtitle({
+        'summary': {
+          'distinctUsers': 3,
+          'mix': {'missing': 1, 'wrong_category': 3},
+        },
+      }, cases),
+      '3 different people · 1 tester · category 3, missed SMS 1',
+    );
+    expect(
+      correctionSubtitle({
+        'summary': {'distinctUsers': 1, 'mix': {'wrong_instrument': 2}},
+      }, [<String, Object?>{}, <String, Object?>{}]),
+      '1 person · payment method 2',
+    );
+    expect(correctionSubtitle({}, cases), '1 tester cases');
+  });
+
   test('editor validates JSON, missing fields and regex dialect', () {
     expect(validateEditor(jsonEncode(rule()), senders: catalog), isEmpty);
     expect(validateEditor('{'), isNotEmpty);
