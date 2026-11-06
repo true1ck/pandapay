@@ -198,7 +198,7 @@
         "excluded": false,
         "cap_deltas_by_source_id": {}
       },
-      "why": "4% unlimited on Preferred Merchants; the T&C say Swiggy food delivery qualifies for accelerated cashback. Not part of any cap."
+      "why": "Cashback T&C: Preferred Merchants earn 4% (unlimited), and \"only transactions made towards Food Delivery on Swiggy App shall be eligible for accelerated cashback\" (not Instamart, Genie). 4% of 1,000 = 40. Not part of any cap."
     },
     {
       "id": "007",
@@ -349,9 +349,9 @@
     {
       "item": "Swiggy preferred-merchant coverage",
       "cardpipeline_says": "merchant_list_source: Axis Bank Preferred Merchant list",
-      "issuer_says": "Preferred merchant list is not published in the T&C and can change; Swiggy food delivery only (Instamart, Genie excluded).",
-      "proposed_fix": "none",
-      "override_file": null
+      "issuer_says": "The full preferred-merchant list is not published and can change, but the cashback T&C name Swiggy: \"only transactions made towards Food Delivery on Swiggy App shall be eligible for accelerated cashback. Transactions made on 'Instamart', 'genie' etc. shall not be eligible\".",
+      "proposed_fix": "override (2026-11-06): 4% rule restated for Swiggy dining, except Instamart and Dineout; other preferred merchants earn 1% (H2). Remove flipkart-axis-bank-credit-card#006 from _known_failures.json.",
+      "override_file": "api/scripts/catalogue_overrides/flipkart-axis-bank-credit-card.json"
     },
     {
       "item": "rounding",
