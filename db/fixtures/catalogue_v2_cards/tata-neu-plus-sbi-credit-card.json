@@ -4,7 +4,7 @@
   "inputs": {
     "transform_version": "7",
     "source_record_sha256": "9d0b13f66d28f1dbd68ce624da340f4bbce0d18ec71d896aad0112bed04b2dc7",
-    "override_sha256": "ef9c7104260f374120dd96f54d764e2ad92cd2f2084d56f4e66805ade6945f8b",
+    "override_sha256": "9af53fe9cf6de99cf53a9577fe8288d31033edf8d2ef61ec902334527424e1eb",
     "directory_sha256": "b1094d54b77e848d22f7a9a64f3ae6d1ef43ca3eb2fc8e40cd43ed1994664694",
     "verified": true
   },
@@ -27,9 +27,9 @@
     "points_expiry_months": 12,
     "model_status": "verified",
     "model_coverage": {
-      "rules_total": 18,
-      "rules_modelled": 14,
-      "rules_info": 4,
+      "rules_total": 19,
+      "rules_modelled": 16,
+      "rules_info": 3,
       "caps_total": 5,
       "caps_enforced": 5,
       "flags": [
@@ -66,26 +66,6 @@
         {
           "code": "token_replaced_by_conditions",
           "source_local_id": "tata-neu-select-categories-additional-5pct",
-          "detail": null
-        },
-        {
-          "code": "info_rule",
-          "source_local_id": "rupay-upi-1pct",
-          "detail": "condition:includes_partner_tata_brands"
-        },
-        {
-          "code": "info_rule",
-          "source_local_id": "rupay-upi-1pct",
-          "detail": "condition:card_variant"
-        },
-        {
-          "code": "info_rule",
-          "source_local_id": "rupay-upi-1pct",
-          "detail": "condition:channel_type"
-        },
-        {
-          "code": "depends_on_user_attribute",
-          "source_local_id": "rupay-upi-1pct",
           "detail": null
         },
         {
@@ -141,11 +121,6 @@
         {
           "code": "partial_merchant_list",
           "source_local_id": "tata-neu-partner-upi-wp7",
-          "detail": null
-        },
-        {
-          "code": "broad_category",
-          "source_local_id": "telecom-cable-neucoins-cap",
           "detail": null
         }
       ],
@@ -311,6 +286,33 @@
           "source_url": "https://www.sbicard.com/sbi-card-en/assets/docs/pdf/ekit-tncs/Tata-Neu-Plus-Booklet.pdf",
           "checked_on": "2026-11-05",
           "citation": null
+        },
+        {
+          "path": "reward_rules[id=rupay-upi-1pct].conditions",
+          "op": "set",
+          "value_sha256": "b17c465fb5c31af8",
+          "reason": "Card-data: T&C 11.3(e): \"UPI Spends : Any UPI Spends on Rupay Credit Card (Including partner Tata Brands) : 1% back as NeuCoins, the total NeuCoins earned on eligible UPI transactions are capped to 500 NeuCoins per statement cycle\" (also 11.4(h) \"UPI Spends - 500\"). A credit-card spend on the UPI rail can only come from the RuPay variant, so the rail carries the variant; as info (card_variant, D13b) the rule never applied and non-partner UPI spends earned the uncapped base 1%, over the 500 NeuCoin cap (over-statement on a Verified card). Replaces the WP7 card_variant condition. mcc_exclude restates the rent/government MCC exclusions (11.4) and keeps this UPI-rail rule v2-only (D24b, as D29d on the HDFC Tata Neu cards and upi-rupay on Infinity SBI).",
+          "source_url": "https://www.sbicard.com/sbi-card-en/assets/docs/pdf/ekit-tncs/Tata-Neu-Plus-Booklet.pdf",
+          "checked_on": "2026-11-06",
+          "citation": null
+        },
+        {
+          "path": "reward_rules[id=rupay-upi-1pct].channel_type",
+          "op": "set",
+          "value_sha256": "5cf7504d9781301d",
+          "reason": "Card-data: the UPI rail carries it (see conditions).",
+          "source_url": "https://www.sbicard.com/sbi-card-en/assets/docs/pdf/ekit-tncs/Tata-Neu-Plus-Booklet.pdf",
+          "checked_on": "2026-11-06",
+          "citation": null
+        },
+        {
+          "path": "reward_rules",
+          "op": "append",
+          "value_sha256": "fd7eb5a1e71d550c",
+          "reason": "Card-data: T&C 11.4(h): \"Maximum Capping per month on NeuCoins ... Telecom and cable - 2000\". The cap was scoped to the bills category only, so a telecom spend in another category (e.g. MCC 4814 labelled other) earned an uncapped 1%. Base-rate rule on the telecom/cable MCCs 4812, 4814, 4899 (as telecom_cable_standard_capped on Infinity HDFC and telecom-standard-capped on Infinity SBI) carrying the cap.",
+          "source_url": "https://www.sbicard.com/sbi-card-en/assets/docs/pdf/ekit-tncs/Tata-Neu-Plus-Booklet.pdf",
+          "checked_on": "2026-11-06",
+          "citation": null
         }
       ]
     },
@@ -455,24 +457,23 @@
         "conditions": {
           "source_local_id": "rupay-upi-1pct",
           "part": null,
-          "info_reasons": [
-            "condition:includes_partner_tata_brands",
-            "condition:card_variant",
-            "condition:channel_type"
-          ],
-          "flags": [
-            "depends_on_user_attribute"
-          ]
+          "info_reasons": [],
+          "flags": []
         },
         "notes": null,
         "effective_from": "2025-04-01",
         "effective_to": null,
         "excluded_categories": [],
-        "rule_role": "info",
+        "rule_role": "earn",
         "merchant_slugs": [],
         "platform_slugs": [],
         "mcc_include": [],
-        "mcc_exclude": [],
+        "mcc_exclude": [
+          "6513",
+          "7349",
+          "9311",
+          "9399"
+        ],
         "except_merchant_slugs": [],
         "except_platform_slugs": [],
         "block_inr": null,
@@ -1399,6 +1400,44 @@
         "max_engine_version": null,
         "source_local_id": "wp7_rent_category_exclusion",
         "display_note": "Rental transactions earn no NeuCoins."
+      },
+      {
+        "id": "tata-neu-plus-sbi-credit-card:rule:telecom-standard-capped",
+        "category_id": null,
+        "category_slug": null,
+        "merchant_pattern": null,
+        "rail": null,
+        "unit": "points_per_100",
+        "rate": 1,
+        "min_txn_inr": null,
+        "max_txn_inr": null,
+        "priority": 16,
+        "conditions": {
+          "source_local_id": "telecom-standard-capped",
+          "part": null,
+          "info_reasons": [],
+          "flags": []
+        },
+        "notes": null,
+        "effective_from": "2025-04-01",
+        "effective_to": null,
+        "excluded_categories": [],
+        "rule_role": "earn",
+        "merchant_slugs": [],
+        "platform_slugs": [],
+        "mcc_include": [
+          "4812",
+          "4814",
+          "4899"
+        ],
+        "mcc_exclude": [],
+        "except_merchant_slugs": [],
+        "except_platform_slugs": [],
+        "block_inr": null,
+        "min_engine_version": 2,
+        "max_engine_version": null,
+        "source_local_id": "telecom-standard-capped",
+        "display_note": "Telecom and cable earn the base 1% as NeuCoins, capped at 2,000 NeuCoins per month."
       }
     ],
     "cap_rules": [
@@ -1473,9 +1512,9 @@
       },
       {
         "id": "tata-neu-plus-sbi-credit-card:cap:telecom-cable-neucoins-cap",
-        "reward_rule_id": null,
-        "category_id": "cat-bills",
-        "category_slug": "bills",
+        "reward_rule_id": "tata-neu-plus-sbi-credit-card:rule:telecom-standard-capped",
+        "category_id": null,
+        "category_slug": null,
         "benefit_kind": null,
         "label": "Telecom cable neucoins cap",
         "measure": "reward_value",
@@ -1487,11 +1526,13 @@
         "cap_kind": "total_points",
         "cap_amount": 2000,
         "scope": "targets",
-        "targets": [],
+        "targets": [
+          "tata-neu-plus-sbi-credit-card:rule:telecom-standard-capped"
+        ],
         "parent_cap_id": null,
         "post_cap_behavior": null,
         "anchor": null,
-        "min_engine_version": 1,
+        "min_engine_version": 2,
         "source_local_id": "telecom-cable-neucoins-cap"
       },
       {
