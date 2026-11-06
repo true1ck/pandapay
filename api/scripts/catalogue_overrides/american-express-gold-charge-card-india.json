@@ -62,6 +62,27 @@
       "reason": "WP7: D28c: MR terms: no points \"on any EMI option selected from a merchant's website\" or terminal (SafeKey/post-purchase EMI, which earn, cannot be told apart on the EMI rail, so this may under-state them). The record's EMI row needs category emi AND rail emi, so an EMI purchase in another category earned. Rail-EMI exclusion on all spend.",
       "source_url": "https://www.americanexpress.com/content/dam/amex/en-in/benefits/rewards/membership-rewards/membership-rewards-terms.pdf",
       "checked_on": "2026-11-05"
+    },
+    {
+      "path": "reward_rules[id=rewards_multiplier_5x]",
+      "op": "remove",
+      "reason": "Amex India's notice (quoted by Business Today, 1 Sep 2026): \"Effective 30 September 2026, the Reward Multiplier program will be discontinued.\" The \"up to 5X\" row (info) described a closed programme.",
+      "source_url": "https://www.businesstoday.in/personal-finance/story/american-express-reward-multiplier-ends-this-month-what-cardholders-should-know-552371-2026-09-01",
+      "checked_on": "2026-11-06"
+    },
+    {
+      "path": "cap_rules[id=reward_multiplier_monthly_cap]",
+      "op": "remove",
+      "reason": "The 25,000-point Reward Multiplier cap only limited rewards_multiplier_5x, removed with the programme (closed 30 Sep 2026). It was also flagged post_limit_conflict (total cap, then base).",
+      "source_url": "https://www.businesstoday.in/personal-finance/story/american-express-reward-multiplier-ends-this-month-what-cardholders-should-know-552371-2026-09-01",
+      "checked_on": "2026-11-06"
+    },
+    {
+      "path": "fee_waiver_and_milestones.spend_milestones[id=monthly_milestone_6x1000]",
+      "op": "remove",
+      "reason": "Gold card page: 1,000 bonus points for six transactions of Rs 1,000 or more in a calendar month. A Rs 6,000 monthly spend milestone pays it on one Rs 6,000 spend (or 3 x Rs 2,000), which the issuer does not: over-states. The milestone schema has no transaction count, so it is removed; the bonus stays documented as the info rule monthly_six_transaction_bonus.",
+      "source_url": "https://www.americanexpress.com/in/charge-cards/gold-card/",
+      "checked_on": "2026-11-06"
     }
   ]
 }
