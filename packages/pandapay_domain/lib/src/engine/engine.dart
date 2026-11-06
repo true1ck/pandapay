@@ -1023,13 +1023,21 @@ class RecommendationEngine {
 /// amount only the engine's own conversion knows: `max(0, amount − it)` is 0.
 const double _kCapUsedUp = 1e12;
 
+/// Up to this many unknown caps on one card, every fresh/used-up combination
+/// (2^k evaluations) is tried; beyond it, the extremes and single flips.
+const int _kMaxUnknownCapsExhaustive = 6;
+
 extension _V2Path on RecommendationEngine {
   /// The C3 reward for [snapshot], honouring [CardSnapshot.unknownCapIds]
-  /// (plan C8/D32c): with none, the plain evaluation; otherwise the card is
-  /// evaluated with those caps as [CardSnapshot.capConsumed] has them
-  /// (fresh unless spend was added) and again with them used up, and the
-  /// result with the LOWER value is kept (a tie keeps the used-up one). Known
-  /// caps are untouched in both.
+  /// (plan C8/D32c, D35c): with none, the plain evaluation; otherwise every
+  /// unknown cap is either fresh (as [CardSnapshot.capConsumed] has it:
+  /// nothing, unless spend was added) or used up, and the result with the
+  /// LOWEST value over those states is kept (among equals, the one with more
+  /// caps used up). A mixed state can be lower than both extremes (a bonus cap
+  /// used up with a spend tier still fresh), so with k unknown caps all 2^k
+  /// combinations are evaluated when k is at most [_kMaxUnknownCapsExhaustive];
+  /// beyond that the two extremes and every single-cap flip of each are.
+  /// Known caps are untouched in all of them.
   RewardEvaluation _rewardWithUnknownCaps(
     CardSnapshot snapshot,
     RecommendationContext context,
@@ -1042,18 +1050,58 @@ extension _V2Path on RecommendationEngine {
       capConsumedBefore: consumed,
       directory: merchantDirectory,
     );
-    if (snapshot.unknownCapIds.isEmpty) return evaluate(fresh);
+    final unknown = [
+      for (final cap in card.capRules)
+        if (snapshot.unknownCapIds.contains(cap.id)) cap,
+    ];
+    if (unknown.isEmpty) return evaluate(fresh);
 
-    final usedUp = Map<String, double>.of(fresh);
-    for (final cap in card.capRules) {
-      if (!snapshot.unknownCapIds.contains(cap.id)) continue;
+    // The consumption that makes cap i used up (never below what it has).
+    double usedUpAt(int i) {
+      final cap = unknown[i];
       final amount = cap.capAmount ?? _kCapUsedUp;
       final before = fresh[cap.id] ?? 0;
-      usedUp[cap.id] = before > amount ? before : amount;
+      return before > amount ? before : amount;
     }
-    final whenFresh = evaluate(fresh);
-    final whenUsedUp = evaluate(usedUp);
-    return whenUsedUp.valueInr <= whenFresh.valueInr ? whenUsedUp : whenFresh;
+
+    final k = unknown.length;
+    final masks = <int>{};
+    if (k <= _kMaxUnknownCapsExhaustive) {
+      for (var mask = 0; mask < (1 << k); mask++) {
+        masks.add(mask);
+      }
+    } else {
+      final all = (1 << k) - 1;
+      masks
+        ..add(0)
+        ..add(all);
+      for (var i = 0; i < k; i++) {
+        masks
+          ..add(1 << i) // fresh, with cap i used up
+          ..add(all & ~(1 << i)); // used up, with cap i fresh
+      }
+    }
+
+    RewardEvaluation? best;
+    var bestUsedUp = -1;
+    for (final mask in masks) {
+      final consumed = Map<String, double>.of(fresh);
+      var usedUpCount = 0;
+      for (var i = 0; i < k; i++) {
+        if (mask & (1 << i) != 0) {
+          consumed[unknown[i].id] = usedUpAt(i);
+          usedUpCount++;
+        }
+      }
+      final result = evaluate(consumed);
+      if (best == null ||
+          result.valueInr < best.valueInr ||
+          (result.valueInr == best.valueInr && usedUpCount > bestUsedUp)) {
+        best = result;
+        bestUsedUp = usedUpCount;
+      }
+    }
+    return best!;
   }
 
   /// The v2 counterpart of the rule/cap part of [RecommendationEngine._evaluate]:
