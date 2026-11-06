@@ -109,7 +109,7 @@
             "multiplier": 1,
             "points_per_block": 1,
             "cashback_percent": null,
-            "cap_reference": null,
+            "cap_reference": "wealth_credit_limit_cycle",
             "reason": "Utility payments earn 1X and are excluded from the 10X threshold calculation."
           },
           "effective_from": "2026-06-18",
@@ -132,7 +132,7 @@
             "multiplier": 1,
             "points_per_block": 1,
             "cashback_percent": null,
-            "cap_reference": null,
+            "cap_reference": "wealth_credit_limit_cycle",
             "reason": "Insurance premium payments earn 1X and are excluded from the 10X threshold calculation."
           },
           "effective_from": "2026-06-18",
@@ -154,7 +154,7 @@
             "multiplier": 1,
             "points_per_block": 1,
             "cashback_percent": null,
-            "cap_reference": null,
+            "cap_reference": "wealth_credit_limit_cycle",
             "reason": "Passenger railway spends earn 1X Reward Points."
           },
           "effective_from": "2026-06-18",
@@ -176,7 +176,7 @@
             "multiplier": 1,
             "points_per_block": 1,
             "cashback_percent": null,
-            "cap_reference": null,
+            "cap_reference": "wealth_credit_limit_cycle",
             "reason": "FASTag/toll MCC 4784 transactions earn 1X Reward Points."
           },
           "effective_from": "2026-06-18",
@@ -196,7 +196,7 @@
             "multiplier": 10,
             "points_per_block": 10,
             "cashback_percent": null,
-            "cap_reference": null,
+            "cap_reference": "wealth_credit_limit_cycle",
             "reason": "10X Reward Points on Dining purchases."
           },
           "effective_from": "2026-06-19",
@@ -216,7 +216,7 @@
             "multiplier": 10,
             "points_per_block": 10,
             "cashback_percent": null,
-            "cap_reference": null,
+            "cap_reference": "wealth_credit_limit_cycle",
             "reason": "10X Reward Points on Travel purchases."
           },
           "effective_from": "2026-06-19",
@@ -236,7 +236,7 @@
             "multiplier": 10,
             "points_per_block": 10,
             "cashback_percent": null,
-            "cap_reference": null,
+            "cap_reference": "wealth_credit_limit_cycle",
             "reason": "10X Reward Points on International purchases."
           },
           "effective_from": "2026-06-19",
@@ -257,7 +257,7 @@
             "multiplier": 10,
             "points_per_block": 10,
             "cashback_percent": null,
-            "cap_reference": null,
+            "cap_reference": "wealth_credit_limit_cycle",
             "reason": "10X Reward Points on eligible spends done on the cardholder's birthday."
           },
           "effective_from": "2026-06-19",
@@ -278,16 +278,16 @@
             "multiplier": 3,
             "points_per_block": 3,
             "cashback_percent": null,
-            "cap_reference": null,
+            "cap_reference": "wealth_credit_limit_cycle",
             "reason": "3X Reward Points on all eligible spend categories."
           },
           "effective_from": "2026-06-18",
           "effective_to": null
         }
       ],
-      "reason": "Replaces the 3X-then-10X-above-Rs-20,000 model with the issuer structure. Restates the four source exclusions (fuel, EMI, cash withdrawal, fees and charges). 1X rules (utility, insurance, railway MCC 4112, FASTag MCC 4784) have lower priority numbers than 10X travel so they win. International and birthday 10X are info (not expressible in Phase 1). The in-app hotel/flight bonus rules are not in the Wealth source and are not added (booking-channel dependent; see research note).",
+      "reason": "Replaces the 3X-then-10X-above-Rs-20,000 model with the issuer structure. Restates the four source exclusions (fuel, EMI, cash withdrawal, fees and charges). 1X rules (utility, insurance, railway MCC 4112, FASTag MCC 4784) have lower priority numbers than 10X travel so they win. International and birthday 10X are info (not expressible in Phase 1). The in-app hotel/flight bonus rules are not in the Wealth source and are not added (booking-channel dependent; see research note). card-data group4 (2026-11-06): every earning rule names wealth_credit_limit_cycle as its cap_reference, so the issuer's credit-limit ceiling (\"Reward Points will be earned for spends up to your credit limit per billing cycle\") targets them instead of being an orphan cap (same as Millennia); the amount stays null (D13a) and engines skip it.",
       "source_url": "https://www.idfcfirst.bank.in/content/idfcfirstbank/en/credit-card/wealth.html",
-      "checked_on": "2026-11-05"
+      "checked_on": "2026-11-06"
     },
     {
       "path": "cap_rules",

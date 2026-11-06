@@ -4,13 +4,11 @@
   "inputs": {
     "transform_version": "7",
     "source_record_sha256": "53efc7514284965a3d8602c03b63c9198927876324329c8b665d7cdd6190bd3a",
-    "override_sha256": "f258d12f739e6d8694d4a433a0cf8749ab8f8e878e01208ba72c71d3a9081165",
+    "override_sha256": "c9f251b421060e67ef361aec0653ccaccc7c0c0bd95544daa6f8d839311e3dd7",
     "directory_sha256": "b1094d54b77e848d22f7a9a64f3ae6d1ef43ca3eb2fc8e40cd43ed1994664694",
     "verified": false
   },
-  "blocking_flags": [
-    "orphan_cap"
-  ],
+  "blocking_flags": [],
   "card": {
     "id": "idfc-first-wealth:card",
     "slug": "idfc-first-wealth",
@@ -99,9 +97,9 @@
           "detail": null
         },
         {
-          "code": "orphan_cap",
-          "source_local_id": "wealth_credit_limit_cycle",
-          "detail": null
+          "code": "hidden_from_v1_uncapped",
+          "source_local_id": null,
+          "detail": "wealth_dining_10x, wealth_travel_10x"
         }
       ],
       "overrides_applied": [
@@ -117,10 +115,10 @@
         {
           "path": "reward_rules",
           "op": "set",
-          "value_sha256": "8c876f850351dcbc",
-          "reason": "Replaces the 3X-then-10X-above-Rs-20,000 model with the issuer structure. Restates the four source exclusions (fuel, EMI, cash withdrawal, fees and charges). 1X rules (utility, insurance, railway MCC 4112, FASTag MCC 4784) have lower priority numbers than 10X travel so they win. International and birthday 10X are info (not expressible in Phase 1). The in-app hotel/flight bonus rules are not in the Wealth source and are not added (booking-channel dependent; see research note).",
+          "value_sha256": "a4e1898f11f1e31d",
+          "reason": "Replaces the 3X-then-10X-above-Rs-20,000 model with the issuer structure. Restates the four source exclusions (fuel, EMI, cash withdrawal, fees and charges). 1X rules (utility, insurance, railway MCC 4112, FASTag MCC 4784) have lower priority numbers than 10X travel so they win. International and birthday 10X are info (not expressible in Phase 1). The in-app hotel/flight bonus rules are not in the Wealth source and are not added (booking-channel dependent; see research note). card-data group4 (2026-11-06): every earning rule names wealth_credit_limit_cycle as its cap_reference, so the issuer's credit-limit ceiling (\"Reward Points will be earned for spends up to your credit limit per billing cycle\") targets them instead of being an orphan cap (same as Millennia); the amount stays null (D13a) and engines skip it.",
           "source_url": "https://www.idfcfirst.bank.in/content/idfcfirstbank/en/credit-card/wealth.html",
-          "checked_on": "2026-11-05",
+          "checked_on": "2026-11-06",
           "citation": null
         },
         {
@@ -560,7 +558,9 @@
           "source_local_id": "wealth_dining_10x",
           "part": null,
           "info_reasons": [],
-          "flags": []
+          "flags": [
+            "hidden_from_v1_uncapped"
+          ]
         },
         "notes": null,
         "effective_from": "2026-06-19",
@@ -574,7 +574,7 @@
         "except_merchant_slugs": [],
         "except_platform_slugs": [],
         "block_inr": null,
-        "min_engine_version": 1,
+        "min_engine_version": 2,
         "max_engine_version": null,
         "source_local_id": "wealth_dining_10x",
         "display_note": "10X Reward Points on Dining purchases."
@@ -594,7 +594,9 @@
           "source_local_id": "wealth_travel_10x",
           "part": null,
           "info_reasons": [],
-          "flags": []
+          "flags": [
+            "hidden_from_v1_uncapped"
+          ]
         },
         "notes": null,
         "effective_from": "2026-06-19",
@@ -608,7 +610,7 @@
         "except_merchant_slugs": [],
         "except_platform_slugs": [],
         "block_inr": null,
-        "min_engine_version": 1,
+        "min_engine_version": 2,
         "max_engine_version": null,
         "source_local_id": "wealth_travel_10x",
         "display_note": "10X Reward Points on Travel purchases."
@@ -745,7 +747,17 @@
         "cap_kind": "eligible_spend",
         "cap_amount": null,
         "scope": "targets",
-        "targets": [],
+        "targets": [
+          "idfc-first-wealth:rule:wealth_utility_1x",
+          "idfc-first-wealth:rule:wealth_insurance_1x",
+          "idfc-first-wealth:rule:wealth_railway_1x",
+          "idfc-first-wealth:rule:wealth_fastag_1x",
+          "idfc-first-wealth:rule:wealth_dining_10x",
+          "idfc-first-wealth:rule:wealth_travel_10x",
+          "idfc-first-wealth:rule:wealth_international_10x",
+          "idfc-first-wealth:rule:wealth_birthday_10x",
+          "idfc-first-wealth:rule:wealth_base_3x"
+        ],
         "parent_cap_id": null,
         "post_cap_behavior": "zero",
         "anchor": null,
