@@ -4,7 +4,25 @@ import 'package:alchemist/alchemist.dart';
 import 'package:flutter/foundation.dart';
 import 'package:flutter_secure_storage_platform_interface/flutter_secure_storage_platform_interface.dart';
 import 'package:flutter_test/flutter_test.dart';
+// ignore: implementation_imports
+import 'package:google_fonts/src/google_fonts_base.dart' as google_fonts_base;
+import 'package:http/http.dart' as http;
 import 'package:package_info_plus/package_info_plus.dart';
+
+/// `google_fonts` downloads Outfit / IBM Plex on first use. Under the widget
+/// test binding every HTTP request is answered with status 400, so the
+/// download fails and `google_fonts` rethrows an unhandled async error. That
+/// error only surfaces if real time passes before the test ends, which makes
+/// it a race: widget tests that wait with `tester.runAsync(Future.delayed)`
+/// (for SharedPreferences) failed on the Linux CI runner and passed on a
+/// developer machine. Tests never need the real fonts (text is laid out with
+/// the test font), so make the download simply never answer: no network, no
+/// error, no race.
+class _NeverRespondingClient extends http.BaseClient {
+  @override
+  Future<http.StreamedResponse> send(http.BaseRequest request) =>
+      Completer<http.StreamedResponse>().future;
+}
 
 /// `flutter test` runs on the headless `flutter_tester` harness, which never
 /// registers real platform plugins — `FlutterSecureStorage`'s default
@@ -72,6 +90,7 @@ class _TolerantGoldenComparator extends LocalFileComparator {
 }
 
 Future<void> testExecutable(FutureOr<void> Function() testMain) async {
+  google_fonts_base.httpClient = _NeverRespondingClient();
   final fakeSecureStorage = _FakeSecureStoragePlatform();
   FlutterSecureStoragePlatform.instance = fakeSecureStorage;
   // A single fake instance backs the whole test run (one process, every
