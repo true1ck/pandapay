@@ -4,7 +4,7 @@
   "inputs": {
     "transform_version": "7",
     "source_record_sha256": "a64fd46907a426c27c52910331888b7b4f2ca9d2a00243d36e8ffc9269316e45",
-    "override_sha256": "039bbe5697f88a17db2744dc35e5cab2d724eb16bc3b98b14d37c6b21852e463",
+    "override_sha256": "773839781f64809a1c8595a3aae64534b5fbbb74391446b2007585cb7142a775",
     "directory_sha256": "b1094d54b77e848d22f7a9a64f3ae6d1ef43ca3eb2fc8e40cd43ed1994664694",
     "verified": true
   },
@@ -25,8 +25,8 @@
     "points_expiry_months": 24,
     "model_status": "verified",
     "model_coverage": {
-      "rules_total": 13,
-      "rules_modelled": 13,
+      "rules_total": 14,
+      "rules_modelled": 14,
       "rules_info": 0,
       "caps_total": 7,
       "caps_enforced": 4,
@@ -54,6 +54,11 @@
         {
           "code": "token_replaced_by_conditions",
           "source_local_id": "exclusion_financial_and_forex",
+          "detail": null
+        },
+        {
+          "code": "broad_exclusion_v1_only",
+          "source_local_id": "cd_gaming_exclusion",
           "detail": null
         },
         {
@@ -193,6 +198,15 @@
           "reason": "WP7: D28c: T&C 2.1: \"Reward Points will not be accrued for ... Wallet, Rent, Government, Insurance, EMI\"; the record's EMI row was category-only. The record's EMI row needs category emi AND rail emi, so an EMI purchase in another category earned. Rail-EMI exclusion on all spend.",
           "source_url": "https://www.hdfc.bank.in/content/dam/hdfcbankpws/in/en/personal-banking/discover-products/cards/credit-cards/indian-oil-hdfc-bank-credit-card/T-and-C-Indian-Oil-Credit-Card.pdf",
           "checked_on": "2026-11-05",
+          "citation": null
+        },
+        {
+          "path": "reward_rules",
+          "op": "append",
+          "value_sha256": "86a8d96d60d7e56e",
+          "reason": "Card data review: D24d. MITC v4.18 (Oct 2026) I(g): \"With effect from 1st July 2025, Online Skill-Based gaming transactions will not earn Reward Points/CashPoints on all the cards.\" The record had no gaming row, so a spend at MCC 5816 earned. Same token as the Diners Black Metal record: v1-only entertainment row (D18b, accepted under-statement for installed apps) plus a v2 MCC 5816 row.",
+          "source_url": "https://www.hdfc.bank.in/content/dam/hdfcbankpws/in/en/personal-banking/discover-products/cards/credit-cards/personal-mitc/mitc-in-english.pdf",
+          "checked_on": "2026-11-06",
           "citation": null
         }
       ]
@@ -910,6 +924,81 @@
         "max_engine_version": null,
         "source_local_id": "wp7_emi_rail_exclusion",
         "display_note": "EMI transactions earn no rewards."
+      },
+      {
+        "id": "indianoil-hdfc-bank-credit-card:rule:cd_gaming_exclusion#1",
+        "category_id": "cat-entertainment",
+        "category_slug": "entertainment",
+        "merchant_pattern": null,
+        "rail": null,
+        "unit": "points_per_150",
+        "rate": 0,
+        "min_txn_inr": null,
+        "max_txn_inr": null,
+        "priority": 1,
+        "conditions": {
+          "source_local_id": "cd_gaming_exclusion",
+          "part": 1,
+          "info_reasons": [],
+          "flags": [
+            "broad_exclusion_v1_only",
+            "broad_category"
+          ]
+        },
+        "notes": null,
+        "effective_from": "2025-07-01",
+        "effective_to": null,
+        "excluded_categories": [],
+        "rule_role": "exclusion",
+        "merchant_slugs": [],
+        "platform_slugs": [],
+        "mcc_include": [],
+        "mcc_exclude": [],
+        "except_merchant_slugs": [],
+        "except_platform_slugs": [],
+        "block_inr": null,
+        "min_engine_version": 1,
+        "max_engine_version": 1,
+        "source_local_id": "cd_gaming_exclusion",
+        "display_note": "Online skill-based gaming transactions do not earn Reward Points from 1 July 2025."
+      },
+      {
+        "id": "indianoil-hdfc-bank-credit-card:rule:cd_gaming_exclusion#2",
+        "category_id": null,
+        "category_slug": null,
+        "merchant_pattern": null,
+        "rail": null,
+        "unit": "points_per_150",
+        "rate": 0,
+        "min_txn_inr": null,
+        "max_txn_inr": null,
+        "priority": 1,
+        "conditions": {
+          "source_local_id": "cd_gaming_exclusion",
+          "part": 2,
+          "info_reasons": [],
+          "flags": [
+            "broad_exclusion_v1_only"
+          ]
+        },
+        "notes": null,
+        "effective_from": "2025-07-01",
+        "effective_to": null,
+        "excluded_categories": [],
+        "rule_role": "exclusion",
+        "merchant_slugs": [],
+        "platform_slugs": [],
+        "mcc_include": [
+          "5816"
+        ],
+        "mcc_exclude": [],
+        "except_merchant_slugs": [],
+        "except_platform_slugs": [],
+        "block_inr": null,
+        "min_engine_version": 2,
+        "max_engine_version": null,
+        "source_local_id": "cd_gaming_exclusion",
+        "display_note": "Online skill-based gaming transactions do not earn Reward Points from 1 July 2025."
       },
       {
         "id": "indianoil-hdfc-bank-credit-card:rule:base_other_retail#min-amount",
