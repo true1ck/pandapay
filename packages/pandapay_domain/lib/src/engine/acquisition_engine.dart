@@ -280,6 +280,10 @@ class CardAcquisitionRecommender {
       final spend = attributedTotalSpend[card.id] ?? const Money.zero();
       if (spend.isZero) continue;
       for (final milestone in uniqueMilestoneRules(card.milestoneRules)) {
+        // D35a: a windowed (welcome) milestone is not credited. Its window
+        // (e.g. ₹50,000 within 60 days) says nothing about a year's spend,
+        // and Phase 1 has no window maths.
+        if (milestone.windowDays != null) continue;
         Money bonus;
         if (milestone.isRepeatable) {
           final times = (spend.paise / milestone.thresholdSpend.paise).floor();
