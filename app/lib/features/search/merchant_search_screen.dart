@@ -12,6 +12,7 @@ import '../../app/providers.dart';
 import '../../data/api_exception.dart';
 import '../../data/local/response_cache.dart';
 import '../../main.dart' show MoneyText;
+import '../cards/recommendation_confidence.dart';
 
 /// ui-spec B5. Recent searches persisted locally (same shared_preferences
 /// pattern onboardingCompleteProvider uses in providers.dart) — no backend
@@ -345,15 +346,22 @@ class _MerchantResultTile extends ConsumerWidget {
             loading: () => Text('Ranking…', style: BambooFonts.ui(12.5, color: BambooInk.ink500)),
             error: (err, _) =>
                 Text(userFacingErrorMessage(err), style: BambooFonts.ui(12.5, color: BambooInk.clay)),
-            data: (rec) => Text(
-              rec == null ? 'No usable card for this merchant.' : 'Use ${rec.card.name}',
-              style: BambooFonts.ui(12.5, color: BambooInk.ink500),
+            data: (rec) => Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Text(
+                  rec == null ? 'No usable card for this merchant.' : 'Use ${rec.card.name}',
+                  style: BambooFonts.ui(12.5, color: BambooInk.ink500),
+                ),
+                // D35b: say so when an exclusion could not be read.
+                if (rec != null) RecommendationCaution(recommendation: rec),
+              ],
             ),
           ),
           trailing: best.valueOrNull != null
               ? MoneyText(
                   best.value!.expectedValue,
-                  confidence: best.value!.confidence,
+                  confidence: confidenceOf(best.value!),
                   style: BambooFonts.money(14, color: BambooInk.ink900),
                 )
               : null,

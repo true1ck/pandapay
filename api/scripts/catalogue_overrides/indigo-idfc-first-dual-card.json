@@ -1,0 +1,19 @@
+{
+  "source_slug": "indigo-idfc-first-dual-card",
+  "changes": [
+    {
+      "path": "reward_rules[id=government_reduced].conditions",
+      "value": {
+        "mcc_list": [
+          [
+            9000,
+            9999
+          ]
+        ]
+      },
+      "reason": "WP7: Ledger deferral: \"mcc_range\" is not a key the loader reads, so the reduced 0.5 rate became info and government spends paid the base 3. The issuer reason says MCC 9000-9999; written as a range the loader expands.",
+      "source_url": "https://www.idfcfirst.bank.in/credit-card/indigo-credit-card",
+      "checked_on": "2026-11-05"
+    }
+  ]
+}

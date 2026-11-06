@@ -1,0 +1,319 @@
+{
+  "source_slug": "hdfc-regalia-gold",
+  "cardpipeline_id": "hdfc-bank-regalia-gold",
+  "card_name": "Regalia Gold",
+  "verified_on": "2026-11-05",
+  "sources": [
+    {
+      "url": "https://www.hdfc.bank.in/content/dam/hdfcbankpws/in/en/pdf/common/Credit-Cards/Regalia-Gold-Product-feature-change.pdf",
+      "doc": "Regalia Gold feature change notice (Apr 2026)",
+      "quote": "Earn 5 Reward Points for every ₹200 spent on eligible categories. (Effective 15th May, 2026)"
+    },
+    {
+      "url": "https://www.hdfc.bank.in/content/dam/hdfcbankpws/in/en/personal-banking/discover-products/cards/credit-cards/regalia-gold-credit-card/pdfs/regalia-gold-credit-card-reward-points-t-and-cs.pdf",
+      "doc": "Regalia Gold Reward Points T&C (Aug 2026)",
+      "quote": "5X Reward points will be capped at 5000 RP per month across all brands combined"
+    },
+    {
+      "url": "https://www.hdfc.bank.in/content/dam/hdfcbankpws/in/en/personal-banking/discover-products/cards/credit-cards/regalia-gold-credit-card/pdfs/regalia-gold-credit-card-reward-points-t-and-cs.pdf",
+      "doc": "Regalia Gold Reward Points T&C (Aug 2026)",
+      "quote": "Reward points accrued for Insurance transactions will have a maximum cap of 2,000 per month"
+    },
+    {
+      "url": "https://www.hdfc.bank.in/content/dam/hdfcbankpws/in/en/personal-banking/discover-products/cards/credit-cards/personal-mitc/mitc-in-english.pdf",
+      "doc": "HDFC Bank credit card MITC v4.18, Oct 2026",
+      "quote": "residual amounts or transactions below ₹200 will not earn Reward Points"
+    },
+    {
+      "url": "https://www.hdfc.bank.in/content/dam/hdfcbankpws/in/en/personal-banking/discover-products/cards/credit-cards/regalia-gold-credit-card/pdfs/regalia-gold-credit-card-reward-points-t-and-cs.pdf",
+      "doc": "Regalia Gold Reward Points T&C (Aug 2026), item 16",
+      "quote": "The maximum reward points that can be earned in a statement cycle for Regalia Gold is 50,000."
+    }
+  ],
+  "examples": [
+    {
+      "id": "001",
+      "title": "Rs 10,000 apparel swipe",
+      "ctx": {
+        "amount": 10000,
+        "occurred": "2026-11-05T10:00:00+05:30",
+        "category_slug": "other",
+        "mcc": 5651,
+        "merchant_name": "Fashion store",
+        "merchant_vpa": null,
+        "merchant_slug": null,
+        "platform": null,
+        "rail": "swipe"
+      },
+      "state_before": {
+        "caps_by_source_id": {}
+      },
+      "expect": {
+        "currency": "points",
+        "amount": 250,
+        "value_inr": null,
+        "excluded": false,
+        "cap_deltas_by_source_id": {
+          "statement_cycle_total_reward_points": 250
+        }
+      },
+      "why": "5 RP per Rs200: 50 blocks = 250."
+    },
+    {
+      "id": "002",
+      "title": "Rs 1,150 swipe, partial block dropped",
+      "ctx": {
+        "amount": 1150,
+        "occurred": "2026-11-05T10:00:00+05:30",
+        "category_slug": "other",
+        "mcc": 5311,
+        "merchant_name": "Department store",
+        "merchant_vpa": null,
+        "merchant_slug": null,
+        "platform": null,
+        "rail": "swipe"
+      },
+      "state_before": {
+        "caps_by_source_id": {}
+      },
+      "expect": {
+        "currency": "points",
+        "amount": 25,
+        "value_inr": null,
+        "excluded": false,
+        "cap_deltas_by_source_id": {
+          "statement_cycle_total_reward_points": 25
+        }
+      },
+      "why": "5 full Rs200 blocks (Rs1,000) = 25 RP; the Rs150 residual earns nothing."
+    },
+    {
+      "id": "003",
+      "title": "Rs 4,000 at Myntra (5X)",
+      "ctx": {
+        "amount": 4000,
+        "occurred": "2026-11-05T10:00:00+05:30",
+        "category_slug": "online",
+        "mcc": 5651,
+        "merchant_name": "Myntra",
+        "merchant_vpa": null,
+        "merchant_slug": "myntra",
+        "platform": null,
+        "rail": "online"
+      },
+      "state_before": {
+        "caps_by_source_id": {}
+      },
+      "expect": {
+        "currency": "points",
+        "amount": 500,
+        "value_inr": null,
+        "excluded": false,
+        "cap_deltas_by_source_id": {
+          "select_brand_5x_monthly_bonus": 400,
+          "statement_cycle_total_reward_points": 500
+        }
+      },
+      "why": "5X on Myntra/Nykaa/Reliance Digital/Marks & Spencer: 25 RP per Rs200 = 500 total, 100 base + 400 incremental. The 5,000/month cap applies to the incremental part only. Reading of \"5X\" as five times base is an interpretation: the T&C calls the extra points \"incremental\"."
+    },
+    {
+      "id": "004",
+      "title": "Rs 4,000 at Nykaa with 4,900 of 5X cap used",
+      "ctx": {
+        "amount": 4000,
+        "occurred": "2026-11-05T10:00:00+05:30",
+        "category_slug": "online",
+        "mcc": 5977,
+        "merchant_name": "Nykaa",
+        "merchant_vpa": null,
+        "merchant_slug": "nykaa",
+        "platform": null,
+        "rail": "online"
+      },
+      "state_before": {
+        "caps_by_source_id": {
+          "select_brand_5x_monthly_bonus": 4900
+        }
+      },
+      "expect": {
+        "currency": "points",
+        "amount": 200,
+        "value_inr": null,
+        "excluded": false,
+        "cap_deltas_by_source_id": {
+          "select_brand_5x_monthly_bonus": 100,
+          "statement_cycle_total_reward_points": 200
+        }
+      },
+      "why": "Only 100 incremental points remain; base 100 is never capped. 100 + 100 = 200."
+    },
+    {
+      "id": "005",
+      "title": "Rs 2,000 at Myntra after 5X cap used",
+      "ctx": {
+        "amount": 2000,
+        "occurred": "2026-11-05T10:00:00+05:30",
+        "category_slug": "online",
+        "mcc": 5651,
+        "merchant_name": "Myntra",
+        "merchant_vpa": null,
+        "merchant_slug": "myntra",
+        "platform": null,
+        "rail": "online"
+      },
+      "state_before": {
+        "caps_by_source_id": {
+          "select_brand_5x_monthly_bonus": 5000
+        }
+      },
+      "expect": {
+        "currency": "points",
+        "amount": 50,
+        "value_inr": null,
+        "excluded": false,
+        "cap_deltas_by_source_id": {
+          "statement_cycle_total_reward_points": 50
+        }
+      },
+      "why": "Issuer: base points on these brands continue with no capping. 10 blocks x 5 = 50."
+    },
+    {
+      "id": "006",
+      "title": "Rs 5,000 fuel",
+      "ctx": {
+        "amount": 5000,
+        "occurred": "2026-11-05T10:00:00+05:30",
+        "category_slug": "fuel",
+        "mcc": 5541,
+        "merchant_name": "Petrol pump",
+        "merchant_vpa": null,
+        "merchant_slug": null,
+        "platform": null,
+        "rail": "swipe"
+      },
+      "state_before": {
+        "caps_by_source_id": {}
+      },
+      "expect": {
+        "currency": "points",
+        "amount": 0,
+        "value_inr": null,
+        "excluded": true,
+        "cap_deltas_by_source_id": {}
+      },
+      "why": "No points on fuel."
+    },
+    {
+      "id": "007",
+      "title": "Rs 5,000 grocery within cap",
+      "ctx": {
+        "amount": 5000,
+        "occurred": "2026-11-05T10:00:00+05:30",
+        "category_slug": "groceries",
+        "mcc": 5411,
+        "merchant_name": "Supermarket",
+        "merchant_vpa": null,
+        "merchant_slug": null,
+        "platform": null,
+        "rail": "swipe"
+      },
+      "state_before": {
+        "caps_by_source_id": {}
+      },
+      "expect": {
+        "currency": "points",
+        "amount": 125,
+        "value_inr": null,
+        "excluded": false,
+        "cap_deltas_by_source_id": {
+          "grocery_reward_points_monthly": 125,
+          "statement_cycle_total_reward_points": 125
+        }
+      },
+      "why": "25 blocks x 5 = 125 RP; grocery capped at 2,000 RP per calendar month."
+    },
+    {
+      "id": "008",
+      "title": "Rs 20,000 insurance with 1,990 of cap used",
+      "ctx": {
+        "amount": 20000,
+        "occurred": "2026-11-05T10:00:00+05:30",
+        "category_slug": "insurance",
+        "mcc": 6300,
+        "merchant_name": "Insurance premium",
+        "merchant_vpa": null,
+        "merchant_slug": null,
+        "platform": null,
+        "rail": "online"
+      },
+      "state_before": {
+        "caps_by_source_id": {
+          "insurance_reward_points_daily": 1990
+        }
+      },
+      "expect": {
+        "currency": "points",
+        "amount": 10,
+        "value_inr": null,
+        "excluded": false,
+        "cap_deltas_by_source_id": {
+          "insurance_reward_points_daily": 10,
+          "statement_cycle_total_reward_points": 10
+        }
+      },
+      "why": "100 blocks would be 500 RP; insurance is capped at 2,000 RP per month so 10 remain."
+    },
+    {
+      "id": "009",
+      "title": "Rs 3,000 e-wallet load",
+      "ctx": {
+        "amount": 3000,
+        "occurred": "2026-11-05T10:00:00+05:30",
+        "category_slug": "wallet",
+        "mcc": 6540,
+        "merchant_name": "Wallet top up",
+        "merchant_vpa": null,
+        "merchant_slug": null,
+        "platform": null,
+        "rail": "online"
+      },
+      "state_before": {
+        "caps_by_source_id": {}
+      },
+      "expect": {
+        "currency": "points",
+        "amount": 0,
+        "value_inr": null,
+        "excluded": true,
+        "cap_deltas_by_source_id": {}
+      },
+      "why": "E-wallet loading does not accrue points."
+    }
+  ],
+  "research_notes": [
+    {
+      "item": "cap id insurance_reward_points_daily",
+      "cardpipeline_says": "Id says daily; period calendar_month, 2,000.",
+      "issuer_says": "2,000 per month. Period is right, only the id is misleading.",
+      "proposed_fix": "none"
+    },
+    {
+      "item": "5X meaning on select brands",
+      "cardpipeline_says": "Accelerator contributes 20 bonus RP per Rs200 (25 total).",
+      "issuer_says": "\"5X\" with a 5,000 RP/month cap on \"incremental\" points. Does not state the per-Rs200 figure.",
+      "proposed_fix": "none"
+    },
+    {
+      "item": "Statement-cycle ceiling 50,000 RP",
+      "cardpipeline_says": "50,000 per statement cycle.",
+      "issuer_says": "Confirmed on product page and T&C.",
+      "proposed_fix": "none"
+    },
+    {
+      "item": "WP7: card-wide cap statement_cycle_total_reward_points in examples 001, 002, 003, 004, 005, 007, 008",
+      "cardpipeline_says": "total_reward_points 50,000 per statement cycle, card-wide.",
+      "issuer_says": "Confirmed (Regalia Gold Reward Points T&C (Aug 2026), item 16). Every earning spend counts toward it, so each earning example now lists this cap's delta (= the points earned). Amounts unchanged.",
+      "proposed_fix": "none"
+    }
+  ]
+}

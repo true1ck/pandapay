@@ -1,0 +1,55 @@
+{
+  "source_slug": "axis-bank-ace",
+  "changes": [
+    {
+      "path": "cap_rules[id=ace-accelerated-cashback-500].metric",
+      "value": "total_reward_points",
+      "reason": "Cap is on cashback (Rs 500 combined for 5% and 4% categories per statement), not on eligible spend.",
+      "source_url": "https://www.axis.bank.in/docs/default-source/default-document-library/credit-card/axis-bank-ace-credit-card-tncs.pdf",
+      "checked_on": "2026-11-05"
+    },
+    {
+      "path": "cap_rules[id=ace-accelerated-cashback-500].limit_value",
+      "value": 500,
+      "reason": "Native cashback amount in rupees.",
+      "source_url": "https://www.axis.bank.in/docs/default-source/default-document-library/credit-card/axis-bank-ace-credit-card-tncs.pdf",
+      "checked_on": "2026-11-05"
+    },
+    {
+      "path": "cap_rules[id=ace-accelerated-cashback-500].limit_value_inr",
+      "value": 500,
+      "reason": "Was 10000 (spend); issuer cap is Rs 500 cashback.",
+      "source_url": "https://www.axis.bank.in/docs/default-source/default-document-library/credit-card/axis-bank-ace-credit-card-tncs.pdf",
+      "checked_on": "2026-11-05"
+    },
+    {
+      "path": "accrual_engine.cashback_rounding",
+      "value": "rupee_half_up",
+      "reason": "Cashback is rounded to the nearest rupee per transaction (17.25 -> 17, 18.75 -> 19).",
+      "source_url": "https://www.axis.bank.in/docs/default-source/default-document-library/credit-card/axis-bank-ace-credit-card-tncs.pdf",
+      "checked_on": "2026-11-05"
+    },
+    {
+      "path": "reward_rules[id=ace-gpay-utility-5pct].conditions",
+      "value": {
+        "platform": "Google Pay",
+        "mcc_list": [
+          4814,
+          4816,
+          4899,
+          4900
+        ]
+      },
+      "reason": "WP7: The eligible-category names (postpaid, DTH, electricity ...) are the utility MCCs the issuer uses for the Google Pay rule (4814/4816/4899/4900, as in ace-exclude-utility-non-gpay); the free-text payment requirement restated Google Pay. Rule was info.",
+      "source_url": "https://www.axis.bank.in/docs/default-source/default-document-library/credit-card/axis-bank-ace-credit-card-tncs.pdf",
+      "checked_on": "2026-11-05"
+    },
+    {
+      "path": "cap_rules[id=ace-accelerated-cashback-500].post_limit_behavior",
+      "value": null,
+      "reason": "WP7: Total cashback cap (override); what spend over the cap earns is not stated (research note), so no fallback.",
+      "source_url": "https://www.axis.bank.in/docs/default-source/default-document-library/credit-card/axis-bank-ace-credit-card-tncs.pdf",
+      "checked_on": "2026-11-05"
+    }
+  ]
+}

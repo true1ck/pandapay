@@ -1,0 +1,459 @@
+{
+  "source_slug": "tata-neu-infinity-hdfc-bank",
+  "cardpipeline_id": "hdfc-bank-tata-neu-infinity-hdfc-bank-credit-card",
+  "card_name": "Tata Neu Infinity HDFC Bank Credit Card",
+  "verified_on": "2026-11-05",
+  "sources": [
+    {
+      "url": "https://www.hdfc.bank.in/content/dam/hdfcbankpws/in/en/personal-banking/discover-products/cards/credit-cards/tata-neu-infinity-credit-card/pdf/tata_neu_infinity_card_tnc.pdf",
+      "doc": "Tata Neu Infinity HDFC Bank Credit Card T&C, updated 24 Oct 2026",
+      "quote": "NeuCoins will be calculated and posted on nearest round integer"
+    },
+    {
+      "url": "https://www.hdfc.bank.in/content/dam/hdfcbankpws/in/en/personal-banking/discover-products/cards/credit-cards/tata-neu-infinity-credit-card/pdf/tata_neu_infinity_card_tnc.pdf",
+      "doc": "Tata Neu Infinity HDFC Bank Credit Card T&C, updated 24 Oct 2026",
+      "quote": "Capping of NeuCoins Accrued ... Grocery, Insurance, Utility, Telecom&Cable: 2,000 NeuCoins per month"
+    },
+    {
+      "url": "https://www.hdfc.bank.in/content/dam/hdfcbankpws/in/en/personal-banking/discover-products/cards/credit-cards/personal-mitc/mitc-in-english.pdf",
+      "doc": "HDFC Bank credit card MITC v4.18, Oct 2026",
+      "quote": "Reward Points earned on Grocery transactions will be capped per month"
+    },
+    {
+      "url": "https://www.hdfc.bank.in/content/dam/hdfcbankpws/in/en/personal-banking/discover-products/cards/credit-cards/personal-mitc/mitc-in-english.pdf",
+      "doc": "HDFC Bank credit card MITC v4.18, Oct 2026 (Fair Usage Policy)",
+      "quote": "The maximum reward points that can be earned in a statement cycle for Tata Neu Infinity* is 50,000"
+    },
+    {
+      "url": "https://www.hdfc.bank.in/content/dam/hdfcbankpws/in/en/personal-banking/discover-products/cards/credit-cards/tata-neu-infinity-credit-card/pdf/tata_neu_infinity_card_tnc.pdf",
+      "doc": "T&C Annex 1 - Tata Brand Merchants and Fair Usage Policy",
+      "quote": "Electronics Croma 6,00,000 18,00,000"
+    }
+  ],
+  "examples": [
+    {
+      "id": "001",
+      "title": "Rs 499 at an electronics store",
+      "ctx": {
+        "amount": 499,
+        "occurred": "2026-11-05T10:00:00+05:30",
+        "category_slug": "other",
+        "mcc": 5732,
+        "merchant_name": "Electronics store",
+        "merchant_vpa": null,
+        "merchant_slug": null,
+        "platform": null,
+        "rail": "swipe"
+      },
+      "state_before": {
+        "caps_by_source_id": {}
+      },
+      "expect": {
+        "currency": "points",
+        "amount": 7,
+        "value_inr": 7,
+        "excluded": false,
+        "cap_deltas_by_source_id": {
+          "wp7_fair_usage_statement_cycle": 7
+        }
+      },
+      "why": "Issuer worked example: 1.5% of 499, rounded to nearest whole NeuCoin = 7. 1 NeuCoin = Rs1."
+    },
+    {
+      "id": "002",
+      "title": "Rs 2,949 at an apparel store",
+      "ctx": {
+        "amount": 2949,
+        "occurred": "2026-11-05T10:00:00+05:30",
+        "category_slug": "other",
+        "mcc": 5651,
+        "merchant_name": "Apparel store",
+        "merchant_vpa": null,
+        "merchant_slug": null,
+        "platform": null,
+        "rail": "swipe"
+      },
+      "state_before": {
+        "caps_by_source_id": {}
+      },
+      "expect": {
+        "currency": "points",
+        "amount": 44,
+        "value_inr": 44,
+        "excluded": false,
+        "cap_deltas_by_source_id": {
+          "wp7_fair_usage_statement_cycle": 44
+        }
+      },
+      "why": "Issuer worked example: 1.5% of 2,949 = 44.235, nearest whole NeuCoin = 44. Computed on the exact amount, not Rs100 blocks."
+    },
+    {
+      "id": "003",
+      "title": "Rs 7,500 restaurant bill, .5 rounds up",
+      "ctx": {
+        "amount": 7500,
+        "occurred": "2026-11-05T10:00:00+05:30",
+        "category_slug": "dining",
+        "mcc": 5812,
+        "merchant_name": "Restaurant",
+        "merchant_vpa": null,
+        "merchant_slug": null,
+        "platform": null,
+        "rail": "swipe"
+      },
+      "state_before": {
+        "caps_by_source_id": {}
+      },
+      "expect": {
+        "currency": "points",
+        "amount": 113,
+        "value_inr": 113,
+        "excluded": false,
+        "cap_deltas_by_source_id": {
+          "wp7_fair_usage_statement_cycle": 113
+        }
+      },
+      "why": "Issuer worked example: 1.5% of 7,500 = 112.5, posted as 113. Half rounds up."
+    },
+    {
+      "id": "004",
+      "title": "Rs 21,100 at Croma (partner Tata brand)",
+      "ctx": {
+        "amount": 21100,
+        "occurred": "2026-11-05T10:00:00+05:30",
+        "category_slug": "online",
+        "mcc": 5732,
+        "merchant_name": "Croma",
+        "merchant_vpa": null,
+        "merchant_slug": "croma",
+        "platform": null,
+        "rail": "online"
+      },
+      "state_before": {
+        "caps_by_source_id": {}
+      },
+      "expect": {
+        "currency": "points",
+        "amount": 1056,
+        "value_inr": 1056,
+        "excluded": false,
+        "cap_deltas_by_source_id": {
+          "tata_partner_croma_wp7_monthly": 21100,
+          "tata_partner_croma_wp7_annual": 21100
+        },
+        "tolerance_points": 1,
+        "tolerance_note": "Issuer example 1: base 1.5% = 316.5 -> 317 and additional 3.5% = 738.5 -> 739, rounded separately = 1,056; engines round the 5% accrual once (1,055). C8 D25a."
+      },
+      "why": "Issuer worked example: base 317 + additional 739, each rounded separately."
+    },
+    {
+      "id": "005",
+      "title": "Rs 1,000 fuel",
+      "ctx": {
+        "amount": 1000,
+        "occurred": "2026-11-05T10:00:00+05:30",
+        "category_slug": "fuel",
+        "mcc": 5541,
+        "merchant_name": "Petrol pump",
+        "merchant_vpa": null,
+        "merchant_slug": null,
+        "platform": null,
+        "rail": "swipe"
+      },
+      "state_before": {
+        "caps_by_source_id": {}
+      },
+      "expect": {
+        "currency": "points",
+        "amount": 0,
+        "value_inr": 0,
+        "excluded": true,
+        "cap_deltas_by_source_id": {}
+      },
+      "why": "Issuer worked example: fuel earns nothing."
+    },
+    {
+      "id": "006",
+      "title": "Rs 4,900 merchant EMI principal on a Tata brand",
+      "ctx": {
+        "amount": 4900,
+        "occurred": "2026-11-05T10:00:00+05:30",
+        "category_slug": "online",
+        "mcc": 5732,
+        "merchant_name": "Croma",
+        "merchant_vpa": null,
+        "merchant_slug": "croma",
+        "platform": null,
+        "rail": "emi"
+      },
+      "state_before": {
+        "caps_by_source_id": {}
+      },
+      "expect": {
+        "currency": "points",
+        "amount": 74,
+        "value_inr": 74,
+        "excluded": false,
+        "cap_deltas_by_source_id": {
+          "wp7_fair_usage_statement_cycle": 74
+        }
+      },
+      "why": "Issuer worked example: merchant EMI earns only the base 1.5%, no partner uplift: 74."
+    },
+    {
+      "id": "007",
+      "title": "Rs 10,000 grocery with 1950 of 2000 monthly cap used",
+      "ctx": {
+        "amount": 10000,
+        "occurred": "2026-11-05T10:00:00+05:30",
+        "category_slug": "groceries",
+        "mcc": 5411,
+        "merchant_name": "Supermarket",
+        "merchant_vpa": null,
+        "merchant_slug": "dmart",
+        "platform": null,
+        "rail": "swipe"
+      },
+      "state_before": {
+        "caps_by_source_id": {
+          "grocery_monthly_2000": 1950
+        }
+      },
+      "expect": {
+        "currency": "points",
+        "amount": 50,
+        "value_inr": 50,
+        "excluded": false,
+        "cap_deltas_by_source_id": {
+          "grocery_monthly_2000": 50
+        }
+      },
+      "why": "1.5% would be 150 but only 50 NeuCoins remain in the 2000/month grocery cap."
+    },
+    {
+      "id": "008",
+      "title": "Rs 5,000 grocery after cap used",
+      "ctx": {
+        "amount": 5000,
+        "occurred": "2026-11-05T10:00:00+05:30",
+        "category_slug": "groceries",
+        "mcc": 5411,
+        "merchant_name": "Supermarket",
+        "merchant_vpa": null,
+        "merchant_slug": "dmart",
+        "platform": null,
+        "rail": "swipe"
+      },
+      "state_before": {
+        "caps_by_source_id": {
+          "grocery_monthly_2000": 2000
+        }
+      },
+      "expect": {
+        "currency": "points",
+        "amount": 0,
+        "value_inr": 0,
+        "excluded": false,
+        "cap_deltas_by_source_id": {}
+      },
+      "why": "Grocery NeuCoins are capped at 2000 per month; none after that."
+    },
+    {
+      "id": "009",
+      "title": "Rs 20,000 insurance premium within cap",
+      "ctx": {
+        "amount": 20000,
+        "occurred": "2026-11-05T10:00:00+05:30",
+        "category_slug": "insurance",
+        "mcc": 6300,
+        "merchant_name": "Insurance premium",
+        "merchant_vpa": null,
+        "merchant_slug": null,
+        "platform": null,
+        "rail": "online"
+      },
+      "state_before": {
+        "caps_by_source_id": {}
+      },
+      "expect": {
+        "currency": "points",
+        "amount": 300,
+        "value_inr": 300,
+        "excluded": false,
+        "cap_deltas_by_source_id": {
+          "insurance_monthly_2000": 300
+        }
+      },
+      "why": "Insurance earns the base rate, capped at 2,000 NeuCoins per month: 300."
+    },
+    {
+      "state_before": {
+        "caps_by_source_id": {}
+      },
+      "id": "010",
+      "title": "Rs 2,000 BigBasket grocery order",
+      "ctx": {
+        "amount": 2000,
+        "occurred": "2026-11-10T10:00:00+05:30",
+        "category_id": null,
+        "category_slug": "groceries",
+        "mcc": "5411",
+        "merchant_name": "BigBasket",
+        "merchant_vpa": null,
+        "merchant_slug": "bigbasket",
+        "platform": null,
+        "rail": "online"
+      },
+      "expect": {
+        "currency": "points",
+        "amount": 100,
+        "value_inr": 100,
+        "excluded": false,
+        "cap_deltas_by_source_id": {
+          "tata_partner_bigbasket_wp7_monthly": 2000,
+          "tata_partner_bigbasket_wp7_annual": 2000,
+          "grocery_monthly_2000": 100,
+          "bigbasket_grocery_share": 100
+        }
+      },
+      "why": "T&C: 5% back as NeuCoins on non-EMI spends at partner Tata Brands \"as defined in Annex 1\"; Annex 1 lists BigBasket (monthly eligible spend Rs1,00,000). A BigBasket order is still a grocery spend, so the partner rate beats the grocery_standard_capped (1.5%) grocery rule (C8 D29b): 2,000 x 5% = 100. The NeuCoins also count toward the 2,000 NeuCoin grocery cap (WP7's conservative reading, kept by D29b), through the child cap bigbasket_grocery_share (C8 D29c)."
+    },
+    {
+      "state_before": {
+        "caps_by_source_id": {}
+      },
+      "id": "011",
+      "title": "Rs 1,500 Tata Play recharge (MCC 4899)",
+      "ctx": {
+        "amount": 1500,
+        "occurred": "2026-11-10T10:00:00+05:30",
+        "category_id": null,
+        "category_slug": "bills",
+        "mcc": "4899",
+        "merchant_name": "Tata Play",
+        "merchant_vpa": null,
+        "merchant_slug": "tata_play",
+        "platform": null,
+        "rail": "online"
+      },
+      "expect": {
+        "currency": "points",
+        "amount": 75,
+        "value_inr": 75,
+        "excluded": false,
+        "cap_deltas_by_source_id": {
+          "tata_partner_others_wp7_monthly": 1500,
+          "tata_partner_others_wp7_annual": 1500
+        }
+      },
+      "why": "T&C: 5% back as NeuCoins on non-EMI spends at partner Tata Brands; Annex 1 lists Tata Play in its \"Others\" row (monthly eligible spend Rs2,00,000). The cable/DTH MCC 4899 also matches telecom_cable_standard_capped (1.5%, 2,000 NeuCoin cap), but the partner rule outranks it (C8 D29b): 1,500 x 5% = 75, counted against the Annex 1 caps only."
+    },
+    {
+      "state_before": {
+        "caps_by_source_id": {}
+      },
+      "id": "012",
+      "title": "Rs 4,000 UPI QR payment at a non-partner store",
+      "ctx": {
+        "amount": 4000,
+        "occurred": "2026-11-10T10:00:00+05:30",
+        "category_id": null,
+        "category_slug": "other",
+        "mcc": "5651",
+        "merchant_name": "Apparel store",
+        "merchant_vpa": null,
+        "merchant_slug": null,
+        "platform": null,
+        "rail": "upi_qr"
+      },
+      "expect": {
+        "currency": "points",
+        "amount": 20,
+        "value_inr": 20,
+        "excluded": false,
+        "cap_deltas_by_source_id": {
+          "upi_monthly_500_neucoins": 20
+        }
+      },
+      "why": "T&C: \"0.50% back as NeuCoins for transactions done using any UPI ID (Google Pay, PhonePe, Cred, etc.)\"; the additional 1% needs the Tata Neu UPI ID and is posted to the Tata Neu account, not the card. 4,000 x 0.50% = 20, counted toward \"The total NeuCoins earned on eligible UPI transactions are capped to 500 NeuCoins per month\" (C8 D29d)."
+    },
+    {
+      "state_before": {
+        "caps_by_source_id": {}
+      },
+      "id": "013",
+      "title": "Rs 4,000 grocery bill paid by UPI QR",
+      "ctx": {
+        "amount": 4000,
+        "occurred": "2026-11-10T10:00:00+05:30",
+        "category_id": null,
+        "category_slug": "groceries",
+        "mcc": "5411",
+        "merchant_name": "Supermarket",
+        "merchant_vpa": null,
+        "merchant_slug": null,
+        "platform": null,
+        "rail": "upi_qr"
+      },
+      "expect": {
+        "currency": "points",
+        "amount": 20,
+        "value_inr": 20,
+        "excluded": false,
+        "cap_deltas_by_source_id": {
+          "upi_monthly_500_neucoins": 20
+        }
+      },
+      "why": "The UPI rate covers \"Any UPI Spends on Rupay Credit Card\", so a grocery bill paid by UPI earns 0.50% (20) under the 500 UPI cap, not the grocery_standard_capped (1.5%) grocery rate (C8 D29d; the lower reading)."
+    }
+  ],
+  "research_notes": [
+    {
+      "item": "accrual block and rounding",
+      "cardpipeline_says": "Block Rs100, rounding floor.",
+      "issuer_says": "Worked examples in the T&C compute the rate on the exact amount and round to nearest whole NeuCoin (half up); the MITC separately mentions Rs100 multiples. Examples follow the T&C worked table.",
+      "proposed_fix": "engine"
+    },
+    {
+      "item": "grocery/insurance/utility/telecom caps",
+      "cardpipeline_says": "bonus_reward_points caps.",
+      "issuer_says": "Caps limit the total NeuCoins from the category per month; nothing above.",
+      "proposed_fix": "override",
+      "override_file": "api/scripts/catalogue_overrides/tata-neu-infinity-hdfc-bank.json"
+    },
+    {
+      "item": "UPI (RuPay variant only)",
+      "cardpipeline_says": "UPI rules modelled.",
+      "issuer_says": "UPI earn applies only to the RuPay variant; no example written because variant is not in ctx.",
+      "proposed_fix": "none"
+    },
+    {
+      "item": "WP7 r3: MITC cap scope (examples 004, 007, 009)",
+      "cardpipeline_says": "Round 2 applied the MITC cap to every earning spend.",
+      "issuer_says": "MITC footnote: \"(*) applicable only on the spend categories that does not have an existing Fair Usage Policy\" (C8 D28b). The cap now targets only the base rule and merchant EMI at partner brands; the Annex 1 partner spends (004) and the capped grocery/insurance categories (007, 009) keep their own limits and no longer count toward it. Amounts unchanged.",
+      "proposed_fix": "override",
+      "override_file": "api/scripts/catalogue_overrides/tata-neu-infinity-hdfc-bank.json"
+    },
+    {
+      "item": "WP7 r4: examples 010-011 (partner spend in a capped category)",
+      "cardpipeline_says": "Round 3 gave the capped grocery/telecom rules a lower priority number than the partner rules, so BigBasket groceries and Tata Play (MCC 4899) were paid at the capped category rate.",
+      "issuer_says": "Annex 1 names BigBasket and Tata Play as partner Tata Brands earning the partner rate; nothing in the T&C lowers it for a capped category (C8 D29b).",
+      "proposed_fix": "override",
+      "override_file": "api/scripts/catalogue_overrides/tata-neu-infinity-hdfc-bank.json"
+    },
+    {
+      "item": "WP7 r4: example 010 (grocery cap structure)",
+      "cardpipeline_says": "Round 2 made BigBasket a second target of grocery_monthly_2000, which made the cap v2-only, so installed (v1) apps lost it.",
+      "issuer_says": "The T&C cap grocery NeuCoins per month; counting BigBasket partner NeuCoins too is WP7's conservative reading (C8 D29b). grocery_monthly_2000 targets the grocery rule only again (v1-visible, pre-WP7 reach) and BigBasket counts through its child cap bigbasket_grocery_share (C8 D29c). Amounts unchanged; example 010 lists both caps.",
+      "proposed_fix": "override",
+      "override_file": "api/scripts/catalogue_overrides/tata-neu-infinity-hdfc-bank.json"
+    },
+    {
+      "item": "WP7 r4: examples 012-013 (UPI at a non-partner merchant)",
+      "cardpipeline_says": "The any-UPI-ID rule was info (UPI-ID and eligibility conditions), so a non-partner UPI spend earned the base rate.",
+      "issuer_says": "T&C table: \"0.50% back as NeuCoins for transactions done using any UPI ID\"; the Tata Neu UPI ID extra (1%) is posted to the Tata Neu account and stays info (C8 D29d, D24a).",
+      "proposed_fix": "override",
+      "override_file": "api/scripts/catalogue_overrides/tata-neu-infinity-hdfc-bank.json"
+    }
+  ]
+}

@@ -1,0 +1,1512 @@
+{
+  "id": "axis-bank-axis-bank-atlas",
+  "card_name": "Axis Bank Atlas",
+  "issuer": "Axis Bank",
+  "source_slug": "axis-atlas",
+  "run_id": "20260830-195420-publish-review",
+  "ok": true,
+  "final": {
+    "$schema": "https://json-schema.org/draft/2020-12/schema",
+    "schema_version": "5.0.0",
+    "_notes": "Universal card-extraction template. Every card (credit, debit, prepaid; any issuer) fills this same shape. Use null for 'not yet verified / unknown', use the string \"N/A\" for 'this field genuinely does not apply to this card' (e.g. cash_advance on a debit card, invite_only fields on an open-application card), and use [] for 'verified — this card has none of these'. Never delete a key because it doesn't apply — mark it N/A so downstream ingestion can tell 'not applicable' apart from 'not scraped yet'.",
+    "card_product": {
+      "slug": "axis-atlas",
+      "name": "Axis Bank Atlas Credit Card",
+      "issuer_slug": "axis-bank",
+      "network": "visa",
+      "network_tier": "visa_signature",
+      "card_tier": "premium",
+      "card_type": "credit",
+      "bin_ranges": [
+        "410038"
+      ],
+      "joining_fee_inr": 5000,
+      "annual_fee_inr": 5000,
+      "fee_gst_applicable": true,
+      "gst_rate_percent": 18,
+      "is_upi_linkable": false,
+      "application_mode": null,
+      "form_factors": [
+        "physical_plastic"
+      ],
+      "tokenization_support": [],
+      "contactless_pin_free_limit_inr": null,
+      "point_value_inr_baseline": 1,
+      "point_value_baseline_basis": "Axis Bank states that 1 EDGE Mile is equal to ₹1 when redeemed through the applicable Axis Travel EDGE redemption mechanism.",
+      "point_expiry_months": null,
+      "confirmed_flat_base_outside_smartbuy_or_equivalent_portal": true,
+      "display_assets": {
+        "art_asset_key": null,
+        "card_image_url": null,
+        "logo_url": null,
+        "primary_color_hex": null,
+        "secondary_color_hex": null
+      },
+      "status": "verified",
+      "data_source_tier": "issuer_mitc_plus_manual_audit",
+      "source_url": "https://www.axis.bank.in/cards/credit-card/axis-bank-atlas-credit-card",
+      "verified_at": "2026-08-30T14:24:20.434Z"
+    },
+    "eligibility_engine": {
+      "evaluation_mode": "guideline_only",
+      "notes": "Axis Bank publishes indicative eligibility criteria but states that the bank reserves the right to approve or decline applications. Primary cardholder age is 18-70 years, applicant must be a resident of India, and indicative net annual income is ₹12 lakh for salaried applicants and ₹15 lakh for self-employed applicants. These are not treated as contractually enforceable underwriting rules.",
+      "rules": [],
+      "community_benchmarks": {
+        "min_net_monthly_salary_inr": null,
+        "min_annual_itr_inr": null,
+        "min_existing_issuer_credit_limit_inr": null,
+        "min_cibil_score": null,
+        "is_contractually_enforceable": false
+      },
+      "required_documents": [
+        "PAN card photocopy or Form 60",
+        "Latest payslip / Form 16 / Income Tax Return copy as income proof",
+        "Residence proof such as passport, driving licence, electricity bill or landline telephone bill"
+      ],
+      "processing_time_days": null
+    },
+    "accrual_engine": {
+      "base_block_inr": 100,
+      "rounding_mode": "floor",
+      "base_points_per_block": 2,
+      "base_cashback_percent": null,
+      "effective_base_return_percent": 2,
+      "cycle_accrual_ceiling_points": null,
+      "capping_period_basis": "N/A",
+      "reversal_policy": {
+        "mode": null,
+        "negative_balance_allowed": null,
+        "negative_balance_settlement": null
+      }
+    },
+    "reward_rules": [
+      {
+        "id": "base-other-spend",
+        "category_id": "all_retail",
+        "priority": 100,
+        "evaluation_type": "standard_accrual",
+        "rail": "any",
+        "channel_type": "all",
+        "conditions": {
+          "all": [
+            {
+              "field": "transaction_category",
+              "operator": "not_in",
+              "value": [
+                "travel_accelerated",
+                "gold_jewellery",
+                "rent",
+                "wallet",
+                "government",
+                "insurance",
+                "fuel",
+                "utility_telecom"
+              ]
+            }
+          ]
+        },
+        "action": {
+          "multiplier": 1,
+          "points_per_block": 2,
+          "cashback_percent": null,
+          "cap_reference": null,
+          "reason": "2 EDGE Miles per ₹100 on eligible other spends."
+        },
+        "effective_from": "2022-12-20",
+        "effective_to": null
+      },
+      {
+        "id": "travel-accelerated",
+        "category_id": "travel_flights",
+        "priority": 10,
+        "evaluation_type": "accelerator",
+        "rail": "any",
+        "channel_type": "all",
+        "conditions": {
+          "any": [
+            {
+              "merchant_category": "airlines",
+              "mcc_ranges": [
+                "3000-3350",
+                "4511"
+              ]
+            },
+            {
+              "merchant_category": "hotels",
+              "mcc_ranges": [
+                "3501-3838",
+                "7011"
+              ]
+            },
+            {
+              "merchant_identifier": "VERNMAKRUPCYB21",
+              "description": "Axis Bank Travel EDGE portal"
+            }
+          ]
+        },
+        "action": {
+          "multiplier": 2.5,
+          "points_per_block": 5,
+          "cashback_percent": null,
+          "cap_reference": "travel-accelerated-monthly-spend-cap",
+          "reason": "5 EDGE Miles per ₹100 on eligible Travel EDGE, direct airline and direct hotel spends up to ₹2,00,000 cumulative monthly transactions; spend above the cap earns the base 2 EDGE Miles per ₹100."
+        },
+        "effective_from": "2024-04-20",
+        "effective_to": null
+      },
+      {
+        "id": "exclude-gold-jewellery",
+        "category_id": "excluded_spend",
+        "priority": 1,
+        "evaluation_type": "exclusion",
+        "rail": "any",
+        "channel_type": "all",
+        "conditions": {
+          "mcc_list": [
+            5094,
+            5944
+          ]
+        },
+        "action": {
+          "multiplier": 0,
+          "points_per_block": 0,
+          "cashback_percent": null,
+          "cap_reference": null,
+          "reason": "Gold/jewellery transactions do not earn EDGE Miles."
+        },
+        "effective_from": "2024-04-20",
+        "effective_to": null
+      },
+      {
+        "id": "exclude-rent",
+        "category_id": "rent",
+        "priority": 2,
+        "evaluation_type": "exclusion",
+        "rail": "any",
+        "channel_type": "all",
+        "conditions": {
+          "mcc_list": [
+            6513
+          ]
+        },
+        "action": {
+          "multiplier": 0,
+          "points_per_block": 0,
+          "cashback_percent": null,
+          "cap_reference": null,
+          "reason": "Rent transactions do not earn EDGE Miles."
+        },
+        "effective_from": "2024-04-20",
+        "effective_to": null
+      },
+      {
+        "id": "exclude-wallet",
+        "category_id": "wallet",
+        "priority": 3,
+        "evaluation_type": "exclusion",
+        "rail": "any",
+        "channel_type": "all",
+        "conditions": {
+          "mcc_list": [
+            6540
+          ]
+        },
+        "action": {
+          "multiplier": 0,
+          "points_per_block": 0,
+          "cashback_percent": null,
+          "cap_reference": null,
+          "reason": "Wallet transactions do not earn EDGE Miles."
+        },
+        "effective_from": "2024-04-20",
+        "effective_to": null
+      },
+      {
+        "id": "exclude-government",
+        "category_id": "government",
+        "priority": 4,
+        "evaluation_type": "exclusion",
+        "rail": "any",
+        "channel_type": "all",
+        "conditions": {
+          "mcc_list": [
+            9222,
+            9311,
+            9399,
+            9402
+          ]
+        },
+        "action": {
+          "multiplier": 0,
+          "points_per_block": 0,
+          "cashback_percent": null,
+          "cap_reference": null,
+          "reason": "Government institution transactions do not earn EDGE Miles."
+        },
+        "effective_from": "2024-04-20",
+        "effective_to": null
+      },
+      {
+        "id": "exclude-insurance",
+        "category_id": "insurance",
+        "priority": 5,
+        "evaluation_type": "exclusion",
+        "rail": "any",
+        "channel_type": "all",
+        "conditions": {
+          "mcc_list": [
+            6300,
+            6381,
+            5960,
+            6012,
+            6051
+          ]
+        },
+        "action": {
+          "multiplier": 0,
+          "points_per_block": 0,
+          "cashback_percent": null,
+          "cap_reference": null,
+          "reason": "Insurance transactions do not earn EDGE Miles."
+        },
+        "effective_from": "2024-04-20",
+        "effective_to": null
+      },
+      {
+        "id": "exclude-fuel",
+        "category_id": "fuel",
+        "priority": 6,
+        "evaluation_type": "exclusion",
+        "rail": "any",
+        "channel_type": "all",
+        "conditions": {
+          "mcc_list": [
+            5541,
+            5542,
+            5983
+          ]
+        },
+        "action": {
+          "multiplier": 0,
+          "points_per_block": 0,
+          "cashback_percent": null,
+          "cap_reference": null,
+          "reason": "Fuel transactions do not earn EDGE Miles."
+        },
+        "effective_from": "2024-04-20",
+        "effective_to": null
+      },
+      {
+        "id": "exclude-utility-telecom",
+        "category_id": "utility",
+        "priority": 7,
+        "evaluation_type": "exclusion",
+        "rail": "any",
+        "channel_type": "all",
+        "conditions": {
+          "mcc_list": [
+            4814,
+            4816,
+            4899,
+            4900
+          ]
+        },
+        "action": {
+          "multiplier": 0,
+          "points_per_block": 0,
+          "cashback_percent": null,
+          "cap_reference": null,
+          "reason": "Utilities and telecom transactions are excluded from EDGE Miles earn."
+        },
+        "effective_from": "2024-04-20",
+        "effective_to": null
+      },
+      {
+        "id": "travel-above-monthly-cap",
+        "category_id": "travel_flights",
+        "priority": 20,
+        "evaluation_type": "fallback",
+        "rail": "any",
+        "channel_type": "all",
+        "conditions": {
+          "all": [
+            {
+              "field": "cumulative_monthly_travel_spend_inr",
+              "operator": ">",
+              "value": 200000
+            }
+          ]
+        },
+        "action": {
+          "multiplier": 1,
+          "points_per_block": 2,
+          "cashback_percent": null,
+          "cap_reference": "travel-accelerated-monthly-spend-cap",
+          "reason": "Travel transactions above ₹2,00,000 cumulative spend per month earn the standard 2 EDGE Miles per ₹100."
+        },
+        "effective_from": "2024-04-20",
+        "effective_to": null
+      }
+    ],
+    "cap_rules": [
+      {
+        "id": "travel-accelerated-monthly-spend-cap",
+        "category_id": "travel_flights",
+        "metric": "eligible_spend_amount",
+        "mcc_target_list": [],
+        "period": "calendar_month",
+        "limit_value": null,
+        "limit_value_inr": 200000,
+        "post_limit_behavior": {
+          "action": "downgrade_to_base_rate",
+          "points_per_block": 2
+        },
+        "parent_cap_id": null,
+        "reset_day": 1,
+        "effective_from": "2024-04-20",
+        "effective_to": null
+      }
+    ],
+    "brand_specific_voucher_caps": [],
+    "fees_and_surcharges": {
+      "apr": {
+        "monthly_interest_rate_percent": 3.75,
+        "annual_interest_rate_percent": 55.55
+      },
+      "forex_markup": {
+        "markup_percent": 3.5,
+        "gst_applicable": true
+      },
+      "dynamic_currency_conversion_dcc": {
+        "fee_percent": 1.5,
+        "gst_applicable": true,
+        "trigger_condition": "International transaction performed in Indian currency at an international location, or transaction performed in Indian currency with a merchant located in India but registered in a foreign nation."
+      },
+      "fuel_surcharge": {
+        "category_id": "fuel",
+        "surcharge_percent": 1,
+        "waiver_percent": 1,
+        "min_txn_inr": 400,
+        "max_txn_inr": 4000,
+        "monthly_waiver_cap_inr": 400
+      },
+      "cash_advance": {
+        "atm_transaction_fee_percent": 2.5,
+        "atm_transaction_fee_min_inr": 500,
+        "interest_applicable_from_day_one": true,
+        "daily_interest_percent": null,
+        "max_limit_percent": null
+      },
+      "category_surcharges": [
+        {
+          "category_id": "rent",
+          "mcc_list": [
+            6513
+          ],
+          "fee_percent": 1,
+          "gst_applicable": true,
+          "trigger_condition": "Each rental transaction.",
+          "threshold_spend_inr": null,
+          "effective_from": "2023-03-05",
+          "effective_to": null
+        },
+        {
+          "category_id": "wallet",
+          "mcc_list": [
+            6540
+          ],
+          "fee_percent": 1,
+          "gst_applicable": true,
+          "trigger_condition": "Cumulative wallet-load transactions of ₹10,000 or more in a statement cycle.",
+          "threshold_spend_inr": 10000,
+          "effective_from": "2024-12-20",
+          "effective_to": null
+        },
+        {
+          "category_id": "fuel",
+          "mcc_list": [
+            5541,
+            5542,
+            5983,
+            5172
+          ],
+          "fee_percent": 1,
+          "gst_applicable": true,
+          "trigger_condition": "Cumulative fuel transactions of ₹50,000 or more in a statement cycle.",
+          "threshold_spend_inr": 50000,
+          "effective_from": "2024-12-20",
+          "effective_to": null
+        },
+        {
+          "category_id": "education",
+          "mcc_list": [
+            8211,
+            8220,
+            8241,
+            8244,
+            8249,
+            8299
+          ],
+          "fee_percent": 1,
+          "gst_applicable": true,
+          "trigger_condition": "Each education payment through a third-party app. Direct payments through education institutional websites or POS machines do not incur this fee.",
+          "threshold_spend_inr": null,
+          "effective_from": "2024-12-20",
+          "effective_to": null
+        },
+        {
+          "category_id": "utility",
+          "mcc_list": [
+            4814,
+            4899,
+            4900
+          ],
+          "fee_percent": 1,
+          "gst_applicable": true,
+          "trigger_condition": "Cumulative utility spends of ₹25,000 or more in a statement cycle.",
+          "threshold_spend_inr": 25000,
+          "effective_from": "2024-12-20",
+          "effective_to": null
+        },
+        {
+          "category_id": "online_skill_based_gaming",
+          "mcc_list": [
+            5816
+          ],
+          "fee_percent": 1,
+          "gst_applicable": true,
+          "trigger_condition": "Cumulative online skill-based gaming spends of ₹10,000 or more in a statement cycle.",
+          "threshold_spend_inr": 10000,
+          "effective_from": "2024-12-20",
+          "effective_to": null
+        }
+      ],
+      "emi_charges": {
+        "merchant_instant_emi_processing_fee_inr": null,
+        "post_purchase_emi_processing_fee_inr": null,
+        "foreclosure_charge_percent": null,
+        "gst_applicable": true
+      },
+      "banking_penalties": {
+        "overlimit_charge": {
+          "fee_percent": 2.5,
+          "min_fee_inr": 500,
+          "gst_applicable": true
+        },
+        "auto_debit_bounce_charge_inr": null,
+        "cheque_bounce_charge_inr": null
+      },
+      "reward_redemption_fee": {
+        "fee_inr": 99,
+        "gst_applicable": true,
+        "exempted_channels": [],
+        "notes": "₹99 per redemption transaction on the EDGE portal. A separate ₹199 fee applies for each conversion/transfer of EDGE Miles to partner loyalty programs."
+      }
+    },
+    "statement_and_late_fees": {
+      "grace_period_days": 50,
+      "grace_period_void_on_revolving_balance": true,
+      "minimum_amount_due_mad": {
+        "calculation_mode": "fixed_percent",
+        "components": [
+          "2% of remaining balance outstanding",
+          "100% of applicable instalments",
+          "100% of interest/finance charges",
+          "100% of fees and charges",
+          "100% of applicable taxes",
+          "100% of amount utilized over the credit limit, where applicable"
+        ]
+      },
+      "late_payment_slabs": [
+        {
+          "min_balance_inr": 0,
+          "max_balance_inr": 500,
+          "fee_inr": 0
+        },
+        {
+          "min_balance_inr": 501,
+          "max_balance_inr": 5000,
+          "fee_inr": 500
+        },
+        {
+          "min_balance_inr": 5001,
+          "max_balance_inr": 10000,
+          "fee_inr": 750
+        },
+        {
+          "min_balance_inr": 10001,
+          "max_balance_inr": null,
+          "fee_inr": 1200
+        }
+      ]
+    },
+    "fee_waiver_and_milestones": {
+      "annual_fee_waiver": {
+        "threshold_spend_inr": null,
+        "period": "N/A",
+        "evaluation_condition": "There is no published annual-fee waiver for the Atlas card. Instead, eligible cardholders receive annual EDGE Miles after successful payment of the ₹5,000 + GST annual fee.",
+        "excluded_category_ids": [
+          "gold_jewellery",
+          "rent",
+          "wallet",
+          "government",
+          "insurance",
+          "fuel",
+          "utility_telecom"
+        ],
+        "excluded_mcc_list": [
+          5094,
+          5944,
+          6513,
+          6540,
+          9222,
+          9311,
+          9399,
+          9402,
+          6300,
+          6381,
+          5960,
+          6012,
+          6051,
+          5541,
+          5542,
+          5983,
+          4814,
+          4816,
+          4899,
+          4900
+        ],
+        "waives_fee_inr": null
+      },
+      "welcome_and_renewal_gift": {
+        "trigger": "First successful transaction within 37 days from card issuance for cards sourced from 20 April 2024 onwards.",
+        "benefit_points": 2500,
+        "effective_value_inr": 2500,
+        "condition": "Welcome benefit is available only once and only for paid cards. It is not applicable after cancellation and subsequent reopening of the same card variant."
+      },
+      "spend_milestones": [
+        {
+          "id": "atlas-milestone-300k",
+          "label": "₹3 lakh annual spend milestone",
+          "threshold_spend_inr": 300000,
+          "reward_value_inr": 2500,
+          "period": "card_anniversary_year",
+          "is_repeatable": true,
+          "effective_from": "2024-04-20",
+          "effective_to": null
+        },
+        {
+          "id": "atlas-milestone-750k",
+          "label": "₹7.5 lakh annual spend milestone",
+          "threshold_spend_inr": 750000,
+          "reward_value_inr": 2500,
+          "period": "card_anniversary_year",
+          "is_repeatable": true,
+          "effective_from": "2024-04-20",
+          "effective_to": null
+        },
+        {
+          "id": "atlas-milestone-1500k",
+          "label": "₹15 lakh annual spend milestone",
+          "threshold_spend_inr": 1500000,
+          "reward_value_inr": 5000,
+          "period": "card_anniversary_year",
+          "is_repeatable": true,
+          "effective_from": "2024-04-20",
+          "effective_to": null
+        }
+      ]
+    },
+    "lifestyle_and_network_benefits": [
+      {
+        "benefit_id": "atlas-silver-lounge-domestic",
+        "category_id": "lounge",
+        "network_program": "axis_bank_lounge_program",
+        "sponsor": "Axis Bank",
+        "label": "Silver tier domestic airport lounge access",
+        "evaluation_engine": {
+          "conditions": {
+            "tier": "silver"
+          },
+          "benefit_calculation": {
+            "visits": 8,
+            "period": "annual_tier_entitlement"
+          },
+          "perks": [
+            "Domestic airport lounge access",
+            "Access available to primary cardholder and accompanying guests subject to the applicable lounge program rules"
+          ]
+        },
+        "quota_count": 8,
+        "quota_period": "annual",
+        "value_estimate_inr": null,
+        "effective_from": "2024-04-20",
+        "effective_to": null
+      },
+      {
+        "benefit_id": "atlas-silver-lounge-international",
+        "category_id": "lounge",
+        "network_program": "axis_bank_lounge_program",
+        "sponsor": "Axis Bank",
+        "label": "Silver tier international airport lounge access",
+        "evaluation_engine": {
+          "conditions": {
+            "tier": "silver"
+          },
+          "benefit_calculation": {
+            "visits": 4,
+            "period": "annual_tier_entitlement"
+          },
+          "perks": [
+            "International airport lounge access",
+            "Access available to primary cardholder and accompanying guests subject to applicable lounge program rules"
+          ]
+        },
+        "quota_count": 4,
+        "quota_period": "annual",
+        "value_estimate_inr": null,
+        "effective_from": "2024-04-20",
+        "effective_to": null
+      },
+      {
+        "benefit_id": "atlas-gold-lounge-domestic",
+        "category_id": "lounge",
+        "network_program": "axis_bank_lounge_program",
+        "sponsor": "Axis Bank",
+        "label": "Gold tier domestic airport lounge access",
+        "evaluation_engine": {
+          "conditions": {
+            "tier": "gold",
+            "tier_unlock_spend_inr": 750000,
+            "evaluation_period": "card_anniversary_year"
+          },
+          "benefit_calculation": {
+            "visits": 12,
+            "period": "annual_tier_entitlement"
+          },
+          "perks": [
+            "Domestic airport lounge access",
+            "Access available to primary cardholder and accompanying guests subject to applicable lounge program rules"
+          ]
+        },
+        "quota_count": 12,
+        "quota_period": "annual",
+        "value_estimate_inr": null,
+        "effective_from": "2024-04-20",
+        "effective_to": null
+      },
+      {
+        "benefit_id": "atlas-gold-lounge-international",
+        "category_id": "lounge",
+        "network_program": "axis_bank_lounge_program",
+        "sponsor": "Axis Bank",
+        "label": "Gold tier international airport lounge access",
+        "evaluation_engine": {
+          "conditions": {
+            "tier": "gold",
+            "tier_unlock_spend_inr": 750000,
+            "evaluation_period": "card_anniversary_year"
+          },
+          "benefit_calculation": {
+            "visits": 6,
+            "period": "annual_tier_entitlement"
+          },
+          "perks": [
+            "International airport lounge access",
+            "Access available to primary cardholder and accompanying guests subject to applicable lounge program rules"
+          ]
+        },
+        "quota_count": 6,
+        "quota_period": "annual",
+        "value_estimate_inr": null,
+        "effective_from": "2024-04-20",
+        "effective_to": null
+      },
+      {
+        "benefit_id": "atlas-platinum-lounge-domestic",
+        "category_id": "lounge",
+        "network_program": "axis_bank_lounge_program",
+        "sponsor": "Axis Bank",
+        "label": "Platinum tier domestic airport lounge access",
+        "evaluation_engine": {
+          "conditions": {
+            "tier": "platinum",
+            "tier_unlock_spend_inr": 1500000,
+            "evaluation_period": "card_anniversary_year"
+          },
+          "benefit_calculation": {
+            "visits": 18,
+            "period": "annual_tier_entitlement"
+          },
+          "perks": [
+            "Domestic airport lounge access",
+            "Access available to primary cardholder and accompanying guests subject to applicable lounge program rules"
+          ]
+        },
+        "quota_count": 18,
+        "quota_period": "annual",
+        "value_estimate_inr": null,
+        "effective_from": "2024-04-20",
+        "effective_to": null
+      },
+      {
+        "benefit_id": "atlas-platinum-lounge-international",
+        "category_id": "lounge",
+        "network_program": "axis_bank_lounge_program",
+        "sponsor": "Axis Bank",
+        "label": "Platinum tier international airport lounge access",
+        "evaluation_engine": {
+          "conditions": {
+            "tier": "platinum",
+            "tier_unlock_spend_inr": 1500000,
+            "evaluation_period": "card_anniversary_year"
+          },
+          "benefit_calculation": {
+            "visits": 12,
+            "period": "annual_tier_entitlement"
+          },
+          "perks": [
+            "International airport lounge access",
+            "Access available to primary cardholder and accompanying guests subject to applicable lounge program rules"
+          ]
+        },
+        "quota_count": 12,
+        "quota_period": "annual",
+        "value_estimate_inr": null,
+        "effective_from": "2024-04-20",
+        "effective_to": null
+      },
+      {
+        "benefit_id": "atlas-platinum-airport-pickup",
+        "category_id": "other",
+        "network_program": "axis_bank_airport_pickup",
+        "sponsor": "Axis Bank / DreamFolks",
+        "label": "Complimentary airport pickup services",
+        "evaluation_engine": {
+          "conditions": {
+            "tier": "platinum"
+          },
+          "benefit_calculation": {
+            "visits": 2,
+            "booking_notice_hours": 48
+          },
+          "perks": [
+            "Two complimentary chauffeur-driven airport pickup services at select airports in India",
+            "Bookings must be made at least 48 hours before travel",
+            "No-show conditions apply"
+          ]
+        },
+        "quota_count": 2,
+        "quota_period": "annual",
+        "value_estimate_inr": null,
+        "effective_from": "2024-04-20",
+        "effective_to": null
+      },
+      {
+        "benefit_id": "atlas-airport-concierge",
+        "category_id": "concierge",
+        "network_program": "axis_bank_airport_concierge",
+        "sponsor": "Axis Bank / DreamFolks",
+        "label": "Airport concierge services for Gold and Platinum tiers",
+        "evaluation_engine": {
+          "conditions": {
+            "tier_in": [
+              "gold",
+              "platinum"
+            ]
+          },
+          "benefit_calculation": "N/A",
+          "perks": [
+            "Assistance with check-in",
+            "Security-check assistance",
+            "Immigration assistance",
+            "Porter services",
+            "Add-on passenger service may attract charges and is subject to DreamFolks review"
+          ]
+        },
+        "quota_count": null,
+        "quota_period": "N/A",
+        "value_estimate_inr": null,
+        "effective_from": "2024-04-20",
+        "effective_to": null
+      },
+      {
+        "benefit_id": "atlas-dining-delights",
+        "category_id": "dining",
+        "network_program": "dining_delights",
+        "sponsor": "Axis Bank / EazyDiner",
+        "label": "Dining Delights offer",
+        "evaluation_engine": {
+          "conditions": {
+            "minimum_order_value_inr": 2500,
+            "frequency": "once per card per month"
+          },
+          "benefit_calculation": {
+            "discount_percent": 25,
+            "maximum_discount_inr": 800
+          },
+          "perks": [
+            "25% off up to ₹800 on eligible EazyDiner dining transactions"
+          ]
+        },
+        "quota_count": 1,
+        "quota_period": "calendar_month",
+        "value_estimate_inr": 800,
+        "effective_from": "2024-07-01",
+        "effective_to": null
+      },
+      {
+        "benefit_id": "atlas-fuel-surcharge-waiver",
+        "category_id": "other",
+        "network_program": "axis_bank_fuel_surcharge_waiver",
+        "sponsor": "Axis Bank",
+        "label": "Fuel surcharge waiver",
+        "evaluation_engine": {
+          "conditions": {
+            "transaction_min_inr": 400,
+            "transaction_max_inr": 4000
+          },
+          "benefit_calculation": {
+            "waiver_percent": 1,
+            "maximum_waiver_inr_per_statement_cycle": 400
+          },
+          "perks": [
+            "1% fuel surcharge waiver within the stated transaction range"
+          ]
+        },
+        "quota_count": null,
+        "quota_period": "statement_cycle",
+        "value_estimate_inr": 400,
+        "effective_from": "2024-04-20",
+        "effective_to": null
+      }
+    ],
+    "insurance_and_protection": [],
+    "addon_card_rules": {
+      "max_addon_cards": null,
+      "fee_per_card_inr": 0,
+      "separate_priority_pass": null,
+      "lounge_quota_shared": null,
+      "reward_points_pooled": null,
+      "min_age_years": 18
+    },
+    "redemption_matrix": {
+      "direct_options": [
+        {
+          "channel": "Axis Travel EDGE / Atlas Miles dashboard",
+          "redemption_type": "flight_hotel_booking",
+          "inr_value_per_point": 1,
+          "max_bill_percentage_payable_via_points": null,
+          "min_points_per_txn": null,
+          "cycle_points_burn_cap": null,
+          "redemption_fee_inr": 99,
+          "effective_from": "2024-04-20",
+          "effective_to": null
+        }
+      ],
+      "partner_transfers": [
+        {
+          "partner_code": "airasia",
+          "program_name": "Air Asia",
+          "network_program": "Axis Miles Transfer Program",
+          "type": "airline",
+          "conversion_ratio": {
+            "card_points": 1,
+            "partner_miles": 2
+          },
+          "min_transfer_points": null,
+          "transfer_multiple": null,
+          "yearly_cap_points": null,
+          "turnaround_days": null,
+          "effective_from": "2026-04-02",
+          "effective_to": null
+        },
+        {
+          "partner_code": "aeroplan",
+          "program_name": "Aeroplan",
+          "network_program": "Axis Miles Transfer Program",
+          "type": "airline",
+          "conversion_ratio": {
+            "card_points": 1,
+            "partner_miles": 2
+          },
+          "min_transfer_points": null,
+          "transfer_multiple": null,
+          "yearly_cap_points": null,
+          "turnaround_days": 1,
+          "effective_from": "2026-04-02",
+          "effective_to": null
+        },
+        {
+          "partner_code": "flying_blue",
+          "program_name": "Flying Blue",
+          "network_program": "Axis Miles Transfer Program",
+          "type": "airline",
+          "conversion_ratio": {
+            "card_points": 1,
+            "partner_miles": 2
+          },
+          "min_transfer_points": null,
+          "transfer_multiple": null,
+          "yearly_cap_points": null,
+          "turnaround_days": 1,
+          "effective_from": "2026-04-02",
+          "effective_to": null
+        },
+        {
+          "partner_code": "air_india",
+          "program_name": "Air India Maharaja Club",
+          "network_program": "Axis Miles Transfer Program",
+          "type": "airline",
+          "conversion_ratio": {
+            "card_points": 1,
+            "partner_miles": 2
+          },
+          "min_transfer_points": null,
+          "transfer_multiple": null,
+          "yearly_cap_points": null,
+          "turnaround_days": 5,
+          "effective_from": "2026-04-02",
+          "effective_to": null
+        },
+        {
+          "partner_code": "british_airways",
+          "program_name": "The British Airways Club",
+          "network_program": "Axis Miles Transfer Program",
+          "type": "airline",
+          "conversion_ratio": {
+            "card_points": 2,
+            "partner_miles": 1
+          },
+          "min_transfer_points": null,
+          "transfer_multiple": null,
+          "yearly_cap_points": null,
+          "turnaround_days": 1,
+          "effective_from": "2026-04-02",
+          "effective_to": null
+        },
+        {
+          "partner_code": "ethiopian_airlines",
+          "program_name": "Ethiopian Airlines",
+          "network_program": "Axis Miles Transfer Program",
+          "type": "airline",
+          "conversion_ratio": {
+            "card_points": 1,
+            "partner_miles": 2
+          },
+          "min_transfer_points": null,
+          "transfer_multiple": null,
+          "yearly_cap_points": null,
+          "turnaround_days": 1,
+          "effective_from": "2026-04-02",
+          "effective_to": null
+        },
+        {
+          "partner_code": "etihad_guest",
+          "program_name": "Etihad Guest",
+          "network_program": "Axis Miles Transfer Program",
+          "type": "airline",
+          "conversion_ratio": {
+            "card_points": 1,
+            "partner_miles": 2
+          },
+          "min_transfer_points": null,
+          "transfer_multiple": null,
+          "yearly_cap_points": null,
+          "turnaround_days": 1,
+          "effective_from": "2026-04-02",
+          "effective_to": null
+        },
+        {
+          "partner_code": "finnair_plus",
+          "program_name": "Finnair Plus",
+          "network_program": "Axis Miles Transfer Program",
+          "type": "airline",
+          "conversion_ratio": {
+            "card_points": 2,
+            "partner_miles": 1
+          },
+          "min_transfer_points": null,
+          "transfer_multiple": null,
+          "yearly_cap_points": null,
+          "turnaround_days": 1,
+          "effective_from": "2026-04-02",
+          "effective_to": null
+        },
+        {
+          "partner_code": "ihg",
+          "program_name": "IHG One Rewards",
+          "network_program": "Axis Miles Transfer Program",
+          "type": "hotel",
+          "conversion_ratio": {
+            "card_points": 1,
+            "partner_miles": 2
+          },
+          "min_transfer_points": null,
+          "transfer_multiple": null,
+          "yearly_cap_points": null,
+          "turnaround_days": 1,
+          "effective_from": "2026-04-02",
+          "effective_to": null
+        },
+        {
+          "partner_code": "indigo_bluchip",
+          "program_name": "IndiGo BluChip",
+          "network_program": "Axis Miles Transfer Program",
+          "type": "airline",
+          "conversion_ratio": {
+            "card_points": 2,
+            "partner_miles": 1
+          },
+          "min_transfer_points": null,
+          "transfer_multiple": null,
+          "yearly_cap_points": null,
+          "turnaround_days": null,
+          "effective_from": "2026-04-02",
+          "effective_to": null
+        },
+        {
+          "partner_code": "itc",
+          "program_name": "ITC",
+          "network_program": "Axis Miles Transfer Program",
+          "type": "hotel",
+          "conversion_ratio": {
+            "card_points": 1,
+            "partner_miles": 2
+          },
+          "min_transfer_points": null,
+          "transfer_multiple": null,
+          "yearly_cap_points": null,
+          "turnaround_days": 10,
+          "effective_from": "2026-04-02",
+          "effective_to": null
+        },
+        {
+          "partner_code": "jal",
+          "program_name": "JAL Mileage Bank",
+          "network_program": "Axis Miles Transfer Program",
+          "type": "airline",
+          "conversion_ratio": {
+            "card_points": 1,
+            "partner_miles": 2
+          },
+          "min_transfer_points": null,
+          "transfer_multiple": null,
+          "yearly_cap_points": null,
+          "turnaround_days": 10,
+          "effective_from": "2026-04-02",
+          "effective_to": null
+        },
+        {
+          "partner_code": "orchid_rewards",
+          "program_name": "Orchid Rewards",
+          "network_program": "Axis Miles Transfer Program",
+          "type": "hotel",
+          "conversion_ratio": {
+            "card_points": 1,
+            "partner_miles": 1
+          },
+          "min_transfer_points": null,
+          "transfer_multiple": null,
+          "yearly_cap_points": null,
+          "turnaround_days": 1,
+          "effective_from": "2026-04-02",
+          "effective_to": null
+        },
+        {
+          "partner_code": "postcard_sunshine",
+          "program_name": "The Postcard Sunshine Club",
+          "network_program": "Axis Miles Transfer Program",
+          "type": "hotel",
+          "conversion_ratio": {
+            "card_points": 1,
+            "partner_miles": 2
+          },
+          "min_transfer_points": null,
+          "transfer_multiple": null,
+          "yearly_cap_points": null,
+          "turnaround_days": 2,
+          "effective_from": "2026-04-02",
+          "effective_to": null
+        },
+        {
+          "partner_code": "qantas",
+          "program_name": "Qantas Frequent Flyer",
+          "network_program": "Axis Miles Transfer Program",
+          "type": "airline",
+          "conversion_ratio": {
+            "card_points": 1,
+            "partner_miles": 2
+          },
+          "min_transfer_points": null,
+          "transfer_multiple": null,
+          "yearly_cap_points": null,
+          "turnaround_days": null,
+          "effective_from": "2026-04-02",
+          "effective_to": null
+        },
+        {
+          "partner_code": "qatar_privilege_club",
+          "program_name": "Privilege Club",
+          "network_program": "Axis Miles Transfer Program",
+          "type": "airline",
+          "conversion_ratio": {
+            "card_points": 2,
+            "partner_miles": 1
+          },
+          "min_transfer_points": null,
+          "transfer_multiple": null,
+          "yearly_cap_points": null,
+          "turnaround_days": 1,
+          "effective_from": "2026-04-02",
+          "effective_to": null
+        },
+        {
+          "partner_code": "radisson",
+          "program_name": "Radisson Rewards",
+          "network_program": "Axis Miles Transfer Program",
+          "type": "hotel",
+          "conversion_ratio": {
+            "card_points": 1,
+            "partner_miles": 1
+          },
+          "min_transfer_points": null,
+          "transfer_multiple": null,
+          "yearly_cap_points": null,
+          "turnaround_days": 1,
+          "effective_from": "2026-04-02",
+          "effective_to": null
+        },
+        {
+          "partner_code": "singapore_airlines",
+          "program_name": "Singapore Airlines KrisFlyer",
+          "network_program": "Axis Miles Transfer Program",
+          "type": "airline",
+          "conversion_ratio": {
+            "card_points": 1,
+            "partner_miles": 2
+          },
+          "min_transfer_points": null,
+          "transfer_multiple": null,
+          "yearly_cap_points": null,
+          "turnaround_days": 10,
+          "effective_from": "2026-04-02",
+          "effective_to": null
+        },
+        {
+          "partner_code": "spicejet",
+          "program_name": "SpiceJet",
+          "network_program": "Axis Miles Transfer Program",
+          "type": "airline",
+          "conversion_ratio": {
+            "card_points": 1,
+            "partner_miles": 2
+          },
+          "min_transfer_points": null,
+          "transfer_multiple": null,
+          "yearly_cap_points": null,
+          "turnaround_days": 10,
+          "effective_from": "2026-04-02",
+          "effective_to": null
+        },
+        {
+          "partner_code": "royal_orchid_plus",
+          "program_name": "Royal Orchid Plus",
+          "network_program": "Axis Miles Transfer Program",
+          "type": "hotel",
+          "conversion_ratio": {
+            "card_points": 1,
+            "partner_miles": 2
+          },
+          "min_transfer_points": null,
+          "transfer_multiple": null,
+          "yearly_cap_points": null,
+          "turnaround_days": 1,
+          "effective_from": "2026-04-02",
+          "effective_to": null
+        },
+        {
+          "partner_code": "turkish",
+          "program_name": "Turkish Airlines Miles&Smiles",
+          "network_program": "Axis Miles Transfer Program",
+          "type": "airline",
+          "conversion_ratio": {
+            "card_points": 1,
+            "partner_miles": 2
+          },
+          "min_transfer_points": null,
+          "transfer_multiple": null,
+          "yearly_cap_points": null,
+          "turnaround_days": null,
+          "effective_from": "2026-04-02",
+          "effective_to": null
+        },
+        {
+          "partner_code": "united",
+          "program_name": "United MileagePlus",
+          "network_program": "Axis Miles Transfer Program",
+          "type": "airline",
+          "conversion_ratio": {
+            "card_points": 1,
+            "partner_miles": 2
+          },
+          "min_transfer_points": null,
+          "transfer_multiple": null,
+          "yearly_cap_points": null,
+          "turnaround_days": 1,
+          "effective_from": "2026-04-02",
+          "effective_to": null
+        },
+        {
+          "partner_code": "lotusmiles",
+          "program_name": "Lotusmiles (Vietnam Airlines)",
+          "network_program": "Axis Miles Transfer Program",
+          "type": "airline",
+          "conversion_ratio": {
+            "card_points": 2,
+            "partner_miles": 1
+          },
+          "min_transfer_points": null,
+          "transfer_multiple": null,
+          "yearly_cap_points": null,
+          "turnaround_days": 1,
+          "effective_from": "2026-04-02",
+          "effective_to": null
+        },
+        {
+          "partner_code": "wyndham",
+          "program_name": "Wyndham Rewards",
+          "network_program": "Axis Miles Transfer Program",
+          "type": "hotel",
+          "conversion_ratio": {
+            "card_points": 1,
+            "partner_miles": 2
+          },
+          "min_transfer_points": null,
+          "transfer_multiple": null,
+          "yearly_cap_points": null,
+          "turnaround_days": 1,
+          "effective_from": "2026-04-02",
+          "effective_to": null
+        }
+      ]
+    },
+    "dynamic_promotions_registry": [],
+    "additional_data": {
+      "_notes": "Source-supported data that cannot be represented faithfully by any existing universal schema field. Do not duplicate data already represented elsewhere.",
+      "items": [
+        {
+          "key": "tier_structure",
+          "value": {
+            "silver": {
+              "starting_tier": true,
+              "upgrade_threshold_inr": 0,
+              "domestic_lounge_visits": 8,
+              "international_lounge_visits": 4,
+              "tier_reward_miles": 0
+            },
+            "gold": {
+              "upgrade_threshold_inr": 750000,
+              "domestic_lounge_visits": 12,
+              "international_lounge_visits": 6,
+              "tier_reward_miles": 2500
+            },
+            "platinum": {
+              "upgrade_threshold_inr": 1500000,
+              "domestic_lounge_visits": 18,
+              "international_lounge_visits": 12,
+              "tier_reward_miles": 5000
+            },
+            "evaluation_period": "card_anniversary_year",
+            "excluded_categories_for_tier_evaluation": [
+              "gold/jewellery",
+              "rent",
+              "wallet",
+              "government institution",
+              "insurance",
+              "fuel",
+              "utilities and telecom"
+            ]
+          }
+        },
+        {
+          "key": "annual_benefit",
+          "value": "After successful payment of the ₹5,000 + GST annual fee, Gold tier receives 2,500 EDGE Miles and Platinum tier receives 5,000 EDGE Miles; Silver tier receives none."
+        },
+        {
+          "key": "legacy_welcome_benefits",
+          "value": {
+            "cards_sourced_2022-12-20_to_2024-04-19": "5,000 EDGE Miles after one transaction within 30 days of issuance",
+            "cards_sourced_before_2022-12-20": "5,000 EDGE Miles after three transactions within 60 days of issuance"
+          }
+        },
+        {
+          "key": "legacy_reward_exclusion_mccs",
+          "value": {
+            "gold_jewellery": [
+              5094,
+              5944
+            ],
+            "rent": [
+              6513
+            ],
+            "insurance": [
+              6300,
+              6381,
+              5960,
+              6012,
+              6051
+            ],
+            "government_institutions": [
+              9222,
+              9311,
+              9399,
+              9402
+            ],
+            "utilities": [
+              4814,
+              4816,
+              4899,
+              4900
+            ],
+            "fuel": [
+              5541,
+              5542,
+              5983
+            ],
+            "wallet": [
+              6540
+            ]
+          }
+        },
+        {
+          "key": "travel_reward_mcc_scope",
+          "value": {
+            "airlines": [
+              "3000-3350",
+              4511
+            ],
+            "hotels": [
+              "3501-3838",
+              7011
+            ],
+            "travel_edge_mid": "VERNMAKRUPCYB21",
+            "direct_airline_definition": "Airline-owned websites, airline counters and airline helpline numbers.",
+            "direct_hotel_definition": "Hotel-owned websites and hotel counters.",
+            "travel_agents_and_otas": "Bookings through travel agents, corporate travel agents, online travel agencies or their websites/IVR systems receive only the standard 2 EDGE Miles per ₹100."
+          }
+        },
+        {
+          "key": "miles_transfer_annual_caps",
+          "value": {
+            "overall_calendar_year_cap_edge_miles": 150000,
+            "group_a_calendar_year_cap_edge_miles": 30000,
+            "group_b_calendar_year_cap_edge_miles": 120000,
+            "cap_basis": "Customer ID and calendar year, 1 January to 31 December.",
+            "group_a_partners": [
+              "Aeroplan",
+              "The British Airways Club",
+              "Ethiopian Airlines",
+              "Etihad Guest",
+              "Finnair Plus",
+              "JAL Mileage Bank",
+              "Privilege Club",
+              "Singapore Airlines KrisFlyer",
+              "Royal Orchid Plus",
+              "Turkish Airlines Miles&Smiles",
+              "United MileagePlus",
+              "Lotusmiles (Vietnam Airlines)",
+              "Wyndham Rewards"
+            ],
+            "group_b_partners": [
+              "Air Asia",
+              "Flying Blue",
+              "Air India Maharaja Club",
+              "IHG One Rewards",
+              "IndiGo BluChip",
+              "ITC",
+              "Orchid Rewards",
+              "The Postcard Sunshine Club",
+              "Qantas Frequent Flyer",
+              "Radisson Rewards",
+              "SpiceJet"
+            ]
+          }
+        },
+        {
+          "key": "partner_transfer_operational_rules",
+          "value": {
+            "partner_membership_ids": "Only one loyalty ID may be linked per partner at a time.",
+            "relink_waiting_period_days": 60,
+            "post_link_transfer_waiting_period_working_days": 5,
+            "turkish_airlines_daily_transfer_limit": "One transfer per day; partner-controlled."
+          }
+        },
+        {
+          "key": "reward_ledger_rules",
+          "value": {
+            "crediting_time": "EDGE Miles may take up to 12 days from the eligible transaction date to reflect.",
+            "emi_conversion": "EDGE Miles are debited when a credit-card transaction is converted to EMI; cancellation of the EMI does not restore the miles for the original transaction.",
+            "closure_forfeiture": "From 1 October 2025, unredeemed EDGE Miles may be forfeited 30 days after card closure.",
+            "overdue_forfeiture": "Unredeemed EDGE Miles may be forfeited when the minimum amount due remains outstanding for more than 90 days."
+          }
+        },
+        {
+          "key": "other_documented_fees",
+          "value": {
+            "cash_payment_fee_inr": 175,
+            "card_replacement_fee_inr": 0,
+            "duplicate_statement_fee": "Waived",
+            "charge_slip_retrieval_fee": "Waived",
+            "outstation_cheque_fee": "Waived",
+            "mobile_alert_fee": "Waived",
+            "hotlisting_fee": "Waived",
+            "balance_enquiry_fee": "Waived",
+            "railway_ticket_surcharge": "As prescribed by IRCTC / Indian Railways",
+            "returned_payment_or_auto_debit_reversal": "2% of payment amount subject to minimum ₹500",
+            "late_payment_additional_consecutive_mad_charge": "Additional ₹100 when Minimum Amount Due is missed for two consecutive cycles; continues each payment cycle until MAD is cleared."
+          }
+        },
+        {
+          "key": "fuel_surcharge_qualification",
+          "value": "The published fuel surcharge is 1% and is refunded for fuel transactions between ₹400 and ₹4,000, subject to a maximum benefit of ₹400 per statement cycle. Axis notes that certain fuel transactions may be charged by the fuel merchant/acquirer as ₹10 + GST instead of 1% + GST."
+        },
+        {
+          "key": "eligibility_guidance",
+          "value": {
+            "primary_age_years": "18-70",
+            "add_on_age_years": "18+",
+            "salaried_net_annual_income_inr": 1200000,
+            "self_employed_net_annual_income_inr": 1500000,
+            "residency": "Resident of India",
+            "contractual_status": "Indicative only; Axis Bank retains final approval discretion."
+          }
+        },
+        {
+          "key": "official_research_sources",
+          "value": [
+            "https://www.axis.bank.in/cards/credit-card/axis-bank-atlas-credit-card",
+            "https://www.axis.bank.in/cards/credit-card/axis-bank-atlas-credit-card/rewards-benefits",
+            "https://www.axis.bank.in/cards/credit-card/axis-bank-atlas-credit-card/tiered-benefits",
+            "https://www.axis.bank.in/cards/credit-card/axis-bank-atlas-credit-card/privileges",
+            "https://www.axis.bank.in/docs/default-source/atlas-credit-card/terms-and-conditions-of-features-of-axis-bank-atlas-credit-card.pdf",
+            "https://traveledge.axis.bank.in/travel/common/termsandcondition"
+          ]
+        },
+        {
+          "key": "publication_quality_review",
+          "description": "Incremental publication gate audit; prior extraction and fact-check provenance is retained here.",
+          "value": {
+            "strategy": "full_fact_check",
+            "source_run_id": "20260830-194514-fact-check",
+            "source_data_tier": "issuer_mitc_plus_manual_audit",
+            "fact_check_findings": {
+              "unknown": 2
+            },
+            "finalized_at": "2026-08-30T14:24:20.434Z"
+          }
+        }
+      ]
+    }
+  }
+}

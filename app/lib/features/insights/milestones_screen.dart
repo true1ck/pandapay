@@ -169,7 +169,10 @@ class _MilestoneTile extends StatelessWidget {
           ).where((r) => r.categoryId == null).toList()
           ..sort((a, b) => a.priority.compareTo(b.priority));
     MilestoneChase? chase;
-    if (!reached && baseRule.isNotEmpty) {
+    // D35a: no "worth chasing" advice for a windowed (welcome) milestone: its
+    // window may have closed (the server then returns no row, so it reads
+    // "to go"), and Phase 1 has no window maths. Progress is still shown.
+    if (!reached && baseRule.isNotEmpty && milestone.windowDays == null) {
       final baseRate = baseRule.first.unit.effectiveRatePerRupee(
         baseRule.first.rate,
         pointValueInr: product.pointValueInr,

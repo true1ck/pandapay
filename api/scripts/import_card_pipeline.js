@@ -42,7 +42,38 @@
  *
  * --force allows re-importing over a card already in `in_review` or
  * `published` (see WHY in upsertCardProduct below). Without it those
- * cards are left alone and reported as skipped.
+ * cards are left alone and reported as skipped; the end-of-run report says
+ * how many published cards were skipped and so stay v1-shaped.
+ *
+ * FORCED IMPORT OVER PUBLISHED CARDS (plan D33a) is the production path for
+ * shipping new mapping rules. A forced refresh deletes and re-inserts the
+ * card's rules in place inside one transaction and KEEPS THE CARD'S STATUS:
+ * a published card stays published, it is never demoted to draft (RLS would
+ * hide a draft from the v1 feed and from wallets). Each forced refresh of a
+ * published or in-review card writes one admin_audit_log row
+ * (action 'card_import_force_refresh': card id, status, previous and new
+ * data_version and transform version, admin id; no card content). The
+ * delete cascades away the cards' cap_states, milestone_states and
+ * fee_waiver_states, so RUN `node api/scripts/recompute_card_state.js
+ * --apply` STRAIGHT AFTER a forced import (without --apply it only prints
+ * diffs); until then that progress is missing. --dry-run
+ * rolls the audit rows back with everything else.
+ *
+ * --transform-only runs the catalogue v2 transform (catalogue_v2/, plan C7)
+ * over every `done` CardPipeline checklist row (or over --input) with NO
+ * database at all, and writes the coverage report:
+ *   node api/scripts/import_card_pipeline.js --transform-only \
+ *     [--pipeline /path/to/CardPipeline] [--input all-collected.json] \
+ *     [--directory db/fixtures/merchant_directory.json] \
+ *     [--overrides-dir api/scripts/catalogue_overrides] [--report-dir dir]
+ * Output: <report-dir, default api/scripts/.staging>/coverage-report.{json,md}.
+ *
+ * Since transform version 7 every card is written through
+ * catalogue_v2/transform.js: v2 rule roles, merchant/platform/MCC
+ * restrictions, native-unit caps with targets and parents, milestone
+ * clocks, structured unlock rules and per-card model coverage (plan C1/C7).
+ * The v1 columns of each row are the v1 projection (plan C7.7); rows the v1
+ * feed can't represent carry min_engine_version = 2.
  *
  * ─────────────────────────────────────────────────────────────────────
  * WHY THIS IS A SEPARATE SCRIPT, NOT db/seed/*.sql OR HTTP CALLS TO THE
@@ -59,7 +90,8 @@
  * as the data — so nothing loses the audit trail just because the transport
  * is direct-to-Postgres instead of HTTP.
  *
- * Every card lands as status='draft', full stop. This script never sets
+ * Every NEW card lands as status='draft', full stop; a forced refresh keeps
+ * an existing card's status (above). This script never sets
  * status='published' or touches verified_at/verified_by — the only way a
  * card reaches 'published' is a human going through
  * POST /admin/cards/:id/status (or the console's equivalent button),
@@ -72,7 +104,18 @@
 const crypto = require('crypto');
 const fs = require('fs');
 const path = require('path');
-const { Pool } = require('pg');
+const { TRANSFORM_VERSION_V2, transformCardRecordV2 } = require('./catalogue_v2/transform');
+const { DEFAULT_DIRECTORY_PATH, buildDirectoryIndex, loadDirectory } = require('./catalogue_v2/directory');
+const { DEFAULT_OVERRIDES_DIR, loadOverride, loadVerifiedSlugs } = require('./catalogue_v2/overrides');
+const { aggregateReport, renderMarkdown } = require('./catalogue_v2/coverage');
+const { loadDoneRecords } = require('./catalogue_v2/source');
+const { toV2WireCard } = require('./catalogue_v2/wire');
+
+// pg is only needed when writing to a database; --transform-only must run
+// without it.
+function loadPg() {
+  return require('pg');
+}
 
 // Increment whenever mapping semantics change in a way that should rebuild
 // existing drafts even if their CardPipeline JSON is byte-identical.
@@ -106,7 +149,11 @@ const { Pool } = require('pg');
 // likewise not transaction rates. The engine does not know whether that
 // threshold has already been met, so fixed milestone awards must not be
 // converted to a per-₹100 rate.
-const IMPORT_TRANSFORM_VERSION = '6';
+// '6' -> '7': catalogue rules v2 (plan C7). Every card is rebuilt through
+// catalogue_v2/transform.js — rule roles, merchant/platform/MCC restrictions,
+// native-unit caps, milestone anchors, unlock rules, model coverage. The
+// publish gate (publish_card_pipeline.js) requires re-review of every card.
+const IMPORT_TRANSFORM_VERSION = TRANSFORM_VERSION_V2;
 
 // Resolve env files from the repository, not process.cwd(), so the wrapper
 // works the same from a terminal, cron, or the production deploy directory.
@@ -138,6 +185,7 @@ function createPool() {
   if (!databaseUrl) {
     throw new Error('DATABASE_URL, API_DATABASE_URL, or ADMIN_DATABASE_URL must be set.');
   }
+  const { Pool } = loadPg();
   return new Pool({
     connectionString: databaseUrl,
     ssl: process.env.DB_SSL === 'false' ? false : { rejectUnauthorized: false },
@@ -168,9 +216,13 @@ function parseArgs(argv) {
   const args = {
     dryRun: false,
     force: false,
+    transformOnly: false,
     slugs: [],
     adminId: process.env.CARD_IMPORT_ADMIN_ID || null,
     reportDir: process.env.CARD_IMPORT_REPORT_DIR || null,
+    pipeline: null,
+    directory: null,
+    overridesDir: null,
   };
   const takeValue = (flag, index) => {
     const value = argv[index + 1];
@@ -183,6 +235,10 @@ function parseArgs(argv) {
     else if (a === '--slug') args.slugs.push(takeValue(a, i++));
     else if (a === '--admin-id') args.adminId = takeValue(a, i++);
     else if (a === '--report-dir') args.reportDir = takeValue(a, i++);
+    else if (a === '--pipeline') args.pipeline = takeValue(a, i++);
+    else if (a === '--directory') args.directory = takeValue(a, i++);
+    else if (a === '--overrides-dir') args.overridesDir = takeValue(a, i++);
+    else if (a === '--transform-only') args.transformOnly = true;
     else if (a === '--dry-run') args.dryRun = true;
     else if (a === '--force') args.force = true;
     else if (a === '--help' || a === '-h') args.help = true;
@@ -1022,10 +1078,11 @@ async function upsertCardProduct(
   force,
   hash,
   runId,
-  verifiedNetworkVariants = []
+  verifiedNetworkVariants = [],
+  overridesFingerprint = null
 ) {
   const existing = await client.query(
-    `SELECT id, status, import_source_hash, import_transform_version
+    `SELECT id, status, import_source_hash, import_transform_version, data_version${overridesFingerprint ? ",\n            model_coverage->'overrides_applied' AS overrides_applied" : ''}
        FROM card_products WHERE slug = $1`,
     [cp.slug]
   );
@@ -1092,10 +1149,13 @@ async function upsertCardProduct(
   // pandapay.bump_card_data_version() — so a no-op re-import of the full
   // catalogue would move every card's sync version and make every installed
   // device re-download data it already has. See migration 0041.
+  const overridesUnchanged =
+    !overridesFingerprint || sourceHash(row.overrides_applied || []) === overridesFingerprint;
   if (
     hash &&
     row.import_source_hash === hash &&
     row.import_transform_version === IMPORT_TRANSFORM_VERSION &&
+    overridesUnchanged &&
     !force
   ) {
     return { cardProductId: row.id, action: 'unchanged', existingStatus: row.status };
@@ -1153,6 +1213,9 @@ async function upsertCardProduct(
     'cap_rules',
     'milestone_rules',
     'fee_waiver_rules',
+    // Unlock rows linked to a benefit go with it (cascade); this also clears
+    // the card-level ones with no benefit link.
+    'benefit_unlock_rules',
     'card_benefits',
     'redemption_options',
     'forex_rules',
@@ -1161,7 +1224,13 @@ async function upsertCardProduct(
   ]) {
     await client.query(`DELETE FROM ${table} WHERE card_product_id = $1`, [row.id]);
   }
-  return { cardProductId: row.id, action: row.status === 'draft' ? 'refreshed' : 'refreshed_forced', existingStatus: row.status };
+  return {
+    cardProductId: row.id,
+    action: row.status === 'draft' ? 'refreshed' : 'refreshed_forced',
+    existingStatus: row.status,
+    previousDataVersion: row.data_version == null ? null : Number(row.data_version), // bigint arrives as text
+    previousTransformVersion: row.import_transform_version ?? null,
+  };
 }
 
 /// The unit+rate a source rule projects onto. Shared by the collision pre-pass
@@ -1740,13 +1809,235 @@ function buildExtendedData(record) {
   };
 }
 
-async function importOneCard(client, adminId, record, indexEntry, force, report) {
+// ───────────────────────────────────────────────────────────────────────
+// Catalogue v2 writer (plan C1 / C7). Writes the output of
+// catalogue_v2/transform.js; every row's v1 columns are the v1 projection.
+// ───────────────────────────────────────────────────────────────────────
+const CATEGORY_IDS_SQL = 'ARRAY(select id from spend_categories where slug = any($X::text[]))';
+function categoryIdsSql(n) {
+  return CATEGORY_IDS_SQL.replace('$X', `$${n}`);
+}
+
+async function writeCardV2(client, cardProductId, t) {
+  await client.query(
+    `UPDATE card_products SET
+       accrual_block_inr = $2, accrual_rounding = $3, cashback_rounding = $4,
+       points_expiry_months = $5, model_status = $6, model_coverage = $7
+     WHERE id = $1`,
+    [
+      cardProductId,
+      t.card.accrual_block_inr,
+      t.card.accrual_rounding,
+      t.card.cashback_rounding,
+      t.card.points_expiry_months,
+      t.card.model_status,
+      JSON.stringify(t.card.model_coverage),
+    ]
+  );
+
+  const ruleIds = {};
+  for (const r of t.rewardRules) {
+    const inserted = await client.query(
+      `INSERT INTO reward_rules
+         (card_product_id, category_id, merchant_pattern, rail, unit, rate, min_txn_inr,
+          max_txn_inr, priority, conditions, effective_from, effective_to, excluded_categories,
+          rule_role, merchant_slugs, platform_slugs, mcc_include, mcc_exclude, block_inr,
+          min_engine_version, source_local_id, display_note, except_merchant_slugs,
+          except_platform_slugs, max_engine_version)
+       VALUES ($1, (select id from spend_categories where slug = $2), $3, $4, $5, $6, $7,
+         $8, $9, $10, $11, $12, ${categoryIdsSql(13)},
+         $14, $15::text[], $16::text[], $17::text[], $18::text[], $19, $20, $21, $22,
+         $23::text[], $24::text[], $25)
+       RETURNING id`,
+      [
+        cardProductId,
+        r.category_slug,
+        r.merchant_pattern,
+        r.rail,
+        r.unit,
+        r.rate,
+        r.min_txn_inr,
+        r.max_txn_inr,
+        r.priority,
+        JSON.stringify({
+          source_local_id: r.source_local_id,
+          part: r.part,
+          evaluation_type: r.evaluation_type,
+          source_category_token: r.source_category_token,
+          cap_references: r.cap_refs,
+          info_reasons: r.info_reasons.length ? r.info_reasons : undefined,
+          flags: r.flags.length ? r.flags : undefined,
+        }),
+        r.effective_from,
+        r.effective_to,
+        r.excluded_category_slugs,
+        r.rule_role,
+        r.merchant_slugs,
+        r.platform_slugs,
+        r.mcc_include,
+        r.mcc_exclude,
+        r.block_inr,
+        r.min_engine_version,
+        r.source_local_id,
+        r.display_note,
+        r.except_merchant_slugs || [],
+        r.except_platform_slugs || [],
+        r.max_engine_version ?? null,
+      ]
+    );
+    ruleIds[r.key] = inserted.rows[0].id;
+  }
+
+  // Caps arrive parents-first, so a parent's id is always known.
+  const capIds = {};
+  for (const c of t.capRules) {
+    const inserted = await client.query(
+      `INSERT INTO cap_rules
+         (card_product_id, reward_rule_id, category_id, label, measure, period, cap_value,
+          post_cap_unit, post_cap_rate, resets_on_day, cap_kind, cap_amount, scope,
+          parent_cap_id, post_cap_behavior, anchor, min_engine_version, source_local_id)
+       VALUES ($1, $2, (select id from spend_categories where slug = $3), $4, $5, $6, $7,
+         $8, $9, $10, $11, $12, $13, $14, $15, $16, $17, $18)
+       RETURNING id`,
+      [
+        cardProductId,
+        c.reward_rule_key ? ruleIds[c.reward_rule_key] : null,
+        c.category_slug,
+        c.label,
+        c.measure,
+        c.period,
+        c.cap_value,
+        c.post_cap_unit,
+        c.post_cap_rate,
+        c.resets_on_day,
+        c.cap_kind,
+        c.cap_amount,
+        c.scope,
+        c.parent_key ? capIds[c.parent_key] : null,
+        c.post_cap_behavior,
+        c.anchor,
+        c.min_engine_version,
+        c.source_local_id,
+      ]
+    );
+    capIds[c.key] = inserted.rows[0].id;
+  }
+  for (const target of t.capTargets) {
+    await client.query(
+      'INSERT INTO cap_rule_targets (cap_rule_id, reward_rule_id) VALUES ($1, $2)',
+      [capIds[target.cap_key], ruleIds[target.rule_key]]
+    );
+  }
+
+  for (const m of t.milestones) {
+    await client.query(
+      `INSERT INTO milestone_rules
+         (card_product_id, label, period, threshold_spend_inr, reward_description,
+          reward_value_inr, is_repeatable, anchor, reward_points, reward_kind,
+          excluded_category_ids, window_days, source_local_id)
+       VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, ${categoryIdsSql(11)}, $12, $13)`,
+      [
+        cardProductId, m.label, m.period, m.threshold_spend_inr, m.reward_description,
+        m.reward_value_inr, m.is_repeatable, m.anchor, m.reward_points, m.reward_kind,
+        m.excluded_category_slugs, m.window_days, m.source_local_id,
+      ]
+    );
+  }
+
+  for (const w of t.feeWaivers) {
+    await client.query(
+      `INSERT INTO fee_waiver_rules (card_product_id, threshold_spend_inr, period, waives_fee_inr, excluded_categories, notes)
+       VALUES ($1, $2, $3, $4, ${categoryIdsSql(5)}, $6)`,
+      [cardProductId, w.threshold_spend_inr, w.period, w.waives_fee_inr, w.excluded_category_slugs, w.notes]
+    );
+  }
+
+  const benefitIds = {};
+  for (const b of t.benefits) {
+    const inserted = await client.query(
+      `INSERT INTO card_benefits (card_product_id, kind, label, description, quota_count, quota_period, network_program, value_estimate_inr, conditions)
+       VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9)
+       RETURNING id`,
+      [
+        cardProductId, b.kind, b.label, b.description, b.quota_count, b.quota_period,
+        b.network_program, b.value_estimate_inr, JSON.stringify(b.conditions),
+      ]
+    );
+    benefitIds[b.key] = inserted.rows[0].id;
+  }
+  for (const u of t.unlockRules) {
+    await client.query(
+      `INSERT INTO benefit_unlock_rules
+         (card_product_id, card_benefit_id, kind, label, spend_threshold_inr, spend_window,
+          window_days, unlocks_quota, unlocks_period, tier_label, excluded_category_ids,
+          notes, source_local_id)
+       VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, ${categoryIdsSql(11)}, $12, $13)`,
+      [
+        cardProductId, benefitIds[u.benefit_key] || null, u.kind, u.label, u.spend_threshold_inr,
+        u.spend_window, u.window_days, u.unlocks_quota, u.unlocks_period, u.tier_label,
+        u.excluded_category_slugs, u.notes, u.source_local_id,
+      ]
+    );
+  }
+
+  for (const o of t.redemptionOptions) {
+    await client.query(
+      `INSERT INTO redemption_options (card_product_id, program_name, method, value_per_point_inr, min_points, notes)
+       VALUES ($1, $2, $3, $4, $5, $6)`,
+      [cardProductId, o.program_name, o.method, o.value_per_point_inr, o.min_points, o.notes]
+    );
+  }
+}
+
+// What the v1 loader (transform version 6) would have dropped: accelerators
+// in a category token it could not map, or with a lifecycle trigger. Used as
+// the "before" column of the coverage report.
+function legacyAcceleratorStats(record) {
+  let total = 0;
+  let unmapped = 0;
+  let dropped = 0;
+  for (const rule of record?.reward_rules || []) {
+    if (String(rule?.evaluation_type) !== 'accelerator') continue;
+    total += 1;
+    const token = rule?.category_id;
+    const unmappedToken = !isNA(token) && token !== CATEGORY_ALL_RETAIL && !CATEGORY_MAP[token];
+    if (unmappedToken) unmapped += 1;
+    if (unmappedToken || rewardRuleHasUnsupportedTrigger(rule)) dropped += 1;
+  }
+  return { acceleratorsTotal: total, acceleratorsUnmapped: unmapped, acceleratorsDropped: dropped };
+}
+
+function transformForImport(record, sourceSlug, v2) {
+  const overrides = loadOverride(sourceSlug, v2.overridesDir);
+  return transformCardRecordV2(record, {
+    index: v2.index,
+    overrides,
+    verifiedSlugs: v2.verifiedSlugs,
+    sourceSlug,
+  });
+}
+
+async function importOneCard(client, adminId, record, indexEntry, force, report, v2 = null) {
   const cp = record.card_product;
   const issuerId = await resolveIssuer(client, cp.issuer_slug, report);
   const hash = sourceHash(record);
-  const economics = deriveCardEconomics(record, report);
+  const v2Context = v2 || defaultV2Context();
+  const transformed = transformForImport(record, cp.slug, v2Context);
+  // Base unit/rate, point value and card-level exclusions follow the v2
+  // transform (D8a: whole points per block are points), after overrides.
+  const economics = {
+    baseRewardUnit: transformed.card.base_reward_unit,
+    baseRewardRate: transformed.card.base_reward_rate,
+    pointValueInr: transformed.card.point_value_inr,
+    pointValueBasis: transformed.card.point_value_basis,
+    excludedCategorySlugs: transformed.card.excluded_category_slugs,
+  };
+  // import_source_hash stays the hash of the raw record (the publish gate
+  // recomputes exactly that). Overrides change what gets written, so a change
+  // to them alone is detected separately from the stored coverage.
+  const overridesFingerprint = sourceHash(transformed.card.model_coverage.overrides_applied);
 
-  const { cardProductId, action, existingStatus, sourceChanged, transformChanged } =
+  const { cardProductId, action, existingStatus, sourceChanged, transformChanged, previousDataVersion, previousTransformVersion } =
     await upsertCardProduct(
       client,
       issuerId,
@@ -1756,7 +2047,8 @@ async function importOneCard(client, adminId, record, indexEntry, force, report)
       force,
       hash,
       indexEntry?.runId || null,
-      extractVerifiedNetworkVariants(record)
+      extractVerifiedNetworkVariants(record),
+      overridesFingerprint
     );
 
   if (action === 'unchanged') {
@@ -1767,6 +2059,7 @@ async function importOneCard(client, adminId, record, indexEntry, force, report)
   if (action === 'skipped_reviewed') {
     report.skipped.push({
       slug: cp.slug,
+      status: existingStatus,
       reason: sourceChanged
         ? `source changed but card is already ${existingStatus}; review and use --force to override`
         : transformChanged
@@ -1778,43 +2071,84 @@ async function importOneCard(client, adminId, record, indexEntry, force, report)
 
   await importNetworkVariants(client, cardProductId, record, report);
 
-  const { localIdToUuid, capReferenceToRewardIds } = await importRewardRules(
-    client, cardProductId, record.reward_rules, asNumber(record.accrual_engine?.base_block_inr), report
-  );
-  const categoryByLocalRewardId = {};
-  for (const r of record.reward_rules || []) {
-    if (r.id) categoryByLocalRewardId[r.id] = CATEGORY_MAP[r.category_id] || null;
-  }
-  await importCapRules(
-    client,
-    cardProductId,
-    record.cap_rules,
-    localIdToUuid,
-    capReferenceToRewardIds,
-    categoryByLocalRewardId,
-    economics.pointValueInr,
-    asNumber(record.accrual_engine?.base_block_inr),
-    report
-  );
-  await importMilestoneRules(client, cardProductId, record.fee_waiver_and_milestones?.spend_milestones, report);
-  await importFeeWaiverRule(client, cardProductId, record.fee_waiver_and_milestones?.annual_fee_waiver, report);
-  await importBenefits(client, cardProductId, record.lifestyle_and_network_benefits, record.insurance_and_protection);
-  await importForexAndFuel(client, cardProductId, record.fees_and_surcharges, report);
-  await importBillingCycle(client, cardProductId, record.statement_and_late_fees);
-  await importRedemptionOptions(client, cardProductId, record.redemption_matrix, report);
+  // Rules, caps (+ targets), milestones, fee waiver, benefits (+ unlock
+  // rules) and redemption options all come from the v2 transform.
+  await writeCardV2(client, cardProductId, transformed);
+  const effective = transformed.record;
+  await importForexAndFuel(client, cardProductId, effective.fees_and_surcharges, report);
+  await importBillingCycle(client, cardProductId, effective.statement_and_late_fees);
+  report.v2Cards.push({
+    sourceSlug: cp.slug,
+    result: transformed,
+    legacy: legacyAcceleratorStats(record),
+  });
 
-  await client.query(
-    `INSERT INTO admin_audit_log (admin_id, action, entity, entity_id, reason)
-     VALUES ($1, $2, 'card_products', $3, $4)`,
-    [
-      adminId,
-      action === 'created' ? 'import_card_product' : 'import_refresh_card_product',
-      cardProductId,
-      `CardPipeline import: ${cp.slug}${indexEntry ? ` (checklist id: ${indexEntry.id}, run: ${indexEntry.runId || 'unknown'})` : ''}; source sha256 ${hash}; transform ${IMPORT_TRANSFORM_VERSION}`,
-    ]
-  );
+  if (action === 'refreshed_forced') {
+    // D33a: a forced refresh of a published (or in-review) card rewrites
+    // its rules in place and the card stays published. One audit row per
+    // card, carrying only ids, status and versions (no card content).
+    const after = await client.query('SELECT data_version FROM card_products WHERE id = $1', [cardProductId]);
+    await client.query(
+      `INSERT INTO admin_audit_log (admin_id, action, entity, entity_id, before_value, after_value, reason)
+       VALUES ($1, $2, 'card_products', $3, $4, $5, $6)`,
+      [
+        adminId,
+        'card_import_force_refresh',
+        cardProductId,
+        JSON.stringify({ status: existingStatus, data_version: previousDataVersion, transform_version: previousTransformVersion }),
+        JSON.stringify({
+          status: existingStatus,
+          data_version: after.rows[0]?.data_version == null ? null : Number(after.rows[0].data_version),
+          transform_version: IMPORT_TRANSFORM_VERSION,
+        }),
+        `Forced CardPipeline re-import of ${existingStatus} card ${cp.slug}; rules rewritten in place, status kept; ` +
+          `source sha256 ${hash}; run recompute_card_state.js next`,
+      ]
+    );
+    report.forcedRefreshes.push({ slug: cp.slug, cardProductId, status: existingStatus });
+  } else {
+    await client.query(
+      `INSERT INTO admin_audit_log (admin_id, action, entity, entity_id, reason)
+       VALUES ($1, $2, 'card_products', $3, $4)`,
+      [
+        adminId,
+        action === 'created' ? 'import_card_product' : 'import_refresh_card_product',
+        cardProductId,
+        `CardPipeline import: ${cp.slug}${indexEntry ? ` (checklist id: ${indexEntry.id}, run: ${indexEntry.runId || 'unknown'})` : ''}; source sha256 ${hash}; transform ${IMPORT_TRANSFORM_VERSION}`,
+      ]
+    );
+  }
 
   (action === 'created' ? report.created : report.updated).push({ slug: cp.slug, name: cp.name, cardProductId });
+}
+
+// One card in its own transaction. With dryRun the transaction (data and
+// audit rows alike) is always rolled back; the report still records what
+// would have happened.
+async function importCardInTransaction(pool, adminId, record, indexEntry, force, report, v2Context, dryRun) {
+  try {
+    await withAdminClient(pool, adminId, async (client) => {
+      await importOneCard(client, adminId, record, indexEntry, force, report, v2Context);
+      if (dryRun) throw new Error('__DRY_RUN_ROLLBACK__');
+    });
+  } catch (err) {
+    if (err.message !== '__DRY_RUN_ROLLBACK__') throw err;
+  }
+}
+
+// D33a: the end-of-run lines about published cards. A forced refresh keeps
+// them published and cascades away their cap / milestone / fee-waiver
+// progress rows, which recompute_card_state.js rebuilds.
+function publishedRefreshLines(report) {
+  const refreshed = report.forcedRefreshes.filter((r) => r.status === 'published').length;
+  const inReview = report.forcedRefreshes.filter((r) => r.status === 'in_review').length;
+  const skipped = report.skipped.filter((r) => r.status === 'published').length;
+  const lines = [
+    `published cards refreshed in place: ${refreshed} (cap, milestone and fee-waiver progress rows for these cards are removed until recompute_card_state.js runs)`,
+    `published cards skipped (stay v1-shaped): ${skipped} — re-run with --force to apply Phase 1 rules`,
+  ];
+  if (inReview) lines.push(`in-review cards refreshed in place: ${inReview}`);
+  return lines;
 }
 
 // ───────────────────────────────────────────────────────────────────────
@@ -1823,7 +2157,7 @@ async function importOneCard(client, adminId, record, indexEntry, force, report)
 function newReport() {
   return {
     transformVersion: IMPORT_TRANSFORM_VERSION,
-    created: [], updated: [], unchanged: [], skipped: [], skippedGarbage: [], failed: [],
+    created: [], updated: [], unchanged: [], skipped: [], skippedGarbage: [], failed: [], forcedRefreshes: [],
     issuersCreated: [], issuerResolutions: [],
     unmappedCategories: {}, skippedCategories: [], unmappedPeriods: {}, unmappedRails: {},
     unusualBlockSizes: {}, aggregateScopeCaps: [], unenforcedCaps: [],
@@ -1839,7 +2173,123 @@ function newReport() {
     unenforceableRewardTriggers: [], unenforceableMilestones: [],
     unusableMerchantPatterns: [],
     warnings: [],
+    // Catalogue v2 transform results, for the coverage report. Not written
+    // into import-report-*.json (see writeImportReport).
+    v2Cards: [],
   };
+}
+
+function defaultV2Context(args = {}) {
+  const overridesDir = args.overridesDir ? path.resolve(args.overridesDir) : DEFAULT_OVERRIDES_DIR;
+  return {
+    index: buildDirectoryIndex(loadDirectory(args.directory ? path.resolve(args.directory) : DEFAULT_DIRECTORY_PATH)),
+    overridesDir,
+    verifiedSlugs: loadVerifiedSlugs(overridesDir),
+  };
+}
+
+function writeCoverageReport(cards, reportDir, meta) {
+  fs.mkdirSync(reportDir, { recursive: true });
+  const jsonPath = path.join(reportDir, 'coverage-report.json');
+  const mdPath = path.join(reportDir, 'coverage-report.md');
+  // D20e: compare with the previous report so classification changes
+  // (demotions included) are always listed.
+  let previous = null;
+  try {
+    previous = fs.existsSync(jsonPath) ? JSON.parse(fs.readFileSync(jsonPath, 'utf8')) : null;
+  } catch {
+    previous = null;
+  }
+  const report = aggregateReport(cards, { transformVersion: IMPORT_TRANSFORM_VERSION, ...meta, previous });
+  fs.writeFileSync(jsonPath, JSON.stringify(report, null, 2));
+  fs.writeFileSync(mdPath, renderMarkdown(report));
+  return { report, jsonPath, mdPath };
+}
+
+function loadInputRecords(args) {
+  if (args.input) {
+    const records = JSON.parse(fs.readFileSync(args.input, 'utf8'));
+    if (!Array.isArray(records)) throw new Error(`${args.input} must contain a JSON array.`);
+    const index = loadIndex(args.input, { warnings: [] });
+    return records.map((record, i) => ({
+      record,
+      indexEntry: index ? index[i] : null,
+      sourceSlug: record?.card_product?.slug || null,
+    }));
+  }
+  const pipeline = path.resolve(args.pipeline || path.resolve(__dirname, '../../../CardPipeline'));
+  const { records, problems } = loadDoneRecords(pipeline);
+  for (const p of problems) console.warn(`  ${p.id}: ${p.reason}`);
+  return records.map((r) => ({
+    record: r.record,
+    indexEntry: { id: r.id, card_name: r.cardName, issuer: r.issuer, runId: r.runId },
+    sourceSlug: r.sourceSlug,
+  }));
+}
+
+/**
+ * --transform-only: no database. Runs the v2 transform over every record and
+ * writes coverage-report.{json,md}.
+ */
+function runTransformOnly(args) {
+  const v2 = defaultV2Context(args);
+  const inputs = loadInputRecords(args);
+  const requested = new Set(args.slugs);
+  const cards = [];
+  const seen = new Set();
+  const scratch = newReport();
+  for (const { record, indexEntry, sourceSlug } of inputs) {
+    const slug = record?.card_product?.slug || sourceSlug || '(no slug)';
+    if (requested.size && !requested.has(slug)) continue;
+    const failReason = sanityCheck(record, indexEntry, scratch);
+    if (failReason) {
+      cards.push({ sourceSlug: slug, skippedReason: failReason });
+      continue;
+    }
+    if (seen.has(slug)) {
+      cards.push({ sourceSlug: slug, skippedReason: 'duplicate slug in this input' });
+      continue;
+    }
+    seen.add(slug);
+    try {
+      const result = transformForImport(record, slug, v2);
+      cards.push({ sourceSlug: slug, result, legacy: legacyAcceleratorStats(record) });
+    } catch (err) {
+      cards.push({ sourceSlug: slug, error: err.message });
+    }
+  }
+  const reportDir = path.resolve(args.reportDir || path.join(__dirname, '.staging'));
+  const { report, jsonPath, mdPath } = writeCoverageReport(cards, reportDir, {
+    source: args.input || args.pipeline || 'CardPipeline checklist (done rows)',
+  });
+  // A v2-feed-shaped preview (local ids, no database) that
+  // audit_catalogue.js can measure before anything is imported.
+  const previewPath = path.join(reportDir, 'catalogue-v2-preview.json');
+  const directory = loadDirectory(args.directory ? path.resolve(args.directory) : DEFAULT_DIRECTORY_PATH);
+  fs.writeFileSync(previewPath, JSON.stringify({
+    schema: 2,
+    preview: true,
+    cards: cards.filter((c) => c.result).map((c) => toV2WireCard(c.result, {
+      network: c.result.record?.card_product?.network ?? null,
+      issuerSlug: c.result.record?.card_product?.issuer_slug ?? null,
+    })),
+    merchants: directory.merchants || [],
+    platforms: directory.platforms || [],
+  }));
+  const a = report.accelerators;
+  console.log(`Transformed ${report.cards_transformed} of ${report.cards_total} record(s) (no database).`);
+  console.log(`  skipped ${report.cards_skipped.length}, failed ${report.cards_failed.length}`);
+  console.log(`  model status: ${JSON.stringify(report.model_status)}`);
+  console.log(`  accelerators: ${a.total}; before: ${a.before_unmapped_token} in unmapped tokens on ${a.before_unmapped_cards} cards`);
+  console.log(`  after: ${a.after_modelled} modelled, ${a.after_info} info, ${a.after_dropped} dropped, ${a.after_unrestricted} unrestricted (flagged)`);
+  console.log(`  caps: ${report.caps.written} written of ${report.caps.source_total}, ${report.caps.enforced} enforced, ${report.caps.orphan} orphan`);
+  console.log(`  unlock rules: ${report.unlocks.rows} (${report.unlocks.lounge_with_unlocks} of ${report.unlocks.lounge_benefits} lounge benefits)`);
+  console.log(`  classification changes since the previous report: ${report.previous_comparable
+    ? report.classification_changes.length
+    : report.previous_generated_at ? 'n/a (no comparable previous report)' : 'n/a (no previous report)'}`);
+  console.log(`\nWrote:\n  ${jsonPath}\n  ${mdPath}\n  ${previewPath}`);
+  if (report.cards_failed.length) process.exitCode = 1;
+  return report;
 }
 
 async function main() {
@@ -1848,9 +2298,15 @@ async function main() {
     console.log(
       'Usage: node import_card_pipeline.js --input <all-collected.json> ' +
         '[--admin-id <uuid>] [--report-dir <dir>] [--slug <card-slug>] ' +
-        '[--dry-run] [--force]\n' +
+        '[--dry-run] [--force] [--directory <merchant_directory.json>] [--overrides-dir <dir>]\n' +
+        '       node import_card_pipeline.js --transform-only [--pipeline <CardPipeline root> | --input <file>] ' +
+        '[--report-dir <dir>] [--slug <card-slug>] [--directory <file>] [--overrides-dir <dir>]\n' +
         'CARD_IMPORT_ADMIN_ID may be used instead of --admin-id.'
     );
+    return;
+  }
+  if (args.transformOnly) {
+    runTransformOnly(args);
     return;
   }
   if (!args.input) {
@@ -1930,6 +2386,27 @@ async function main() {
         '0043_card_product_network_variants.sql first.'
       );
     }
+    // Catalogue rules v2 (plan C1). Checked once, up front, for the same
+    // reason as 0041 above.
+    const v2Schema = await pool.query(
+      `select
+         (select count(*) from information_schema.columns
+           where table_schema = 'public' and table_name = 'card_products'
+             and column_name in ('model_status', 'model_coverage', 'accrual_rounding', 'cashback_rounding')) as card_columns,
+         (select count(*) from information_schema.columns
+           where table_schema = 'public' and table_name = 'reward_rules'
+             and column_name in ('except_merchant_slugs', 'except_platform_slugs', 'max_engine_version')) as rule_columns,
+         to_regclass('public.cap_rule_targets') as targets,
+         to_regclass('public.benefit_unlock_rules') as unlocks`
+    );
+    const v2Row = v2Schema.rows[0] || {};
+    if (Number(v2Row.card_columns) !== 4 || Number(v2Row.rule_columns) !== 3 || !v2Row.targets || !v2Row.unlocks) {
+      throw new Error(
+        'database is missing the catalogue rules v2 schema; apply migration ' +
+        '20261105120000_card_rules_v2.sql first.'
+      );
+    }
+    const v2Context = defaultV2Context(args);
 
     // Set app.user_id even for the preflight read. admin_users has FORCE RLS,
     // so a naked SELECT with the app role can never see the row it is trying
@@ -1976,15 +2453,11 @@ async function main() {
       seenImportSlugs.add(slug);
 
       try {
-        await withAdminClient(pool, args.adminId, async (client) => {
-          await importOneCard(client, args.adminId, record, indexEntry, args.force, report);
-          if (args.dryRun) throw new Error('__DRY_RUN_ROLLBACK__');
-        });
-      } catch (err) {
         // Report entries (report.created/updated/etc.) are pushed by
-        // importOneCard BEFORE this throw fires, so dry-run still shows what
-        // WOULD have happened even though the transaction below rolls back.
-        if (err.message === '__DRY_RUN_ROLLBACK__') continue;
+        // importOneCard before a dry-run rolls back, so dry-run still shows
+        // what WOULD have happened.
+        await importCardInTransaction(pool, args.adminId, record, indexEntry, args.force, report, v2Context, args.dryRun);
+      } catch (err) {
         hadDatabaseFailure = true;
         report.failed.push({ slug, reason: `DB error: ${err.message}` });
       }
@@ -1993,7 +2466,8 @@ async function main() {
     const reportDir = path.resolve(args.reportDir || path.dirname(args.input));
     fs.mkdirSync(reportDir, { recursive: true });
     const reportPath = path.join(reportDir, `import-report-${Date.now()}.json`);
-    fs.writeFileSync(reportPath, JSON.stringify(report, null, 2));
+    fs.writeFileSync(reportPath, JSON.stringify({ ...report, v2Cards: undefined }, null, 2));
+    const coverage = writeCoverageReport(report.v2Cards, reportDir, { source: args.input });
 
     console.log('\n─── Import report ───');
     console.log(`created:            ${report.created.length}`);
@@ -2003,6 +2477,7 @@ async function main() {
     console.log(`skipped (garbage/invalid): ${report.skippedGarbage.length}`);
     console.log(`failed (database):  ${report.failed.length}`);
     console.log(`issuers created:    ${report.issuersCreated.length}`);
+    for (const line of publishedRefreshLines(report)) console.log(line);
     if (Object.keys(report.unmappedCategories).length) {
       console.log('unmapped categories:', report.unmappedCategories);
     }
@@ -2052,6 +2527,7 @@ async function main() {
       for (const failure of report.failed) console.log(`  - ${failure.slug}: ${failure.reason}`);
     }
     console.log(`\nFull report written to ${reportPath}`);
+    console.log(`Coverage report written to ${coverage.mdPath}`);
 
     if (hadDatabaseFailure) process.exitCode = 1;
   } finally {
@@ -2075,6 +2551,9 @@ if (require.main === module) {
 module.exports = {
   buildExtendedData,
   canonicalize,
+  legacyAcceleratorStats,
+  runTransformOnly,
+  writeCardV2,
   missingSections,
   resolveNetwork,
   shadowingZeroRateRules,
@@ -2090,7 +2569,10 @@ module.exports = {
   importNetworkVariants,
   importRewardRules,
   importOneCard,
+  importCardInTransaction,
   mapCategory,
+  newReport,
+  publishedRefreshLines,
   parseArgs,
   pointsUnitAndRate,
   rewardRuleHasUnsupportedTrigger,

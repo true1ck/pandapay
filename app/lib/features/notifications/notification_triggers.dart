@@ -1,10 +1,27 @@
+import 'package:flutter/foundation.dart' show visibleForTesting;
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:intl/intl.dart';
 import 'package:pandapay_domain/pandapay_domain.dart';
 
 import '../../app/design/display_text.dart';
 import '../../app/providers.dart';
+import '../../data/catalogue_repository.dart' show SpendCategory;
+import '../../data/user_cards_repository.dart' show UserCard;
+import '../cards/cap_progress.dart';
+import '../cards/next_best_card.dart';
 import '../insights/payments_due_screen.dart' show paymentsDueProvider;
+
+/// One cap notification, ready for `NotificationGate.fire`.
+class CapAlert {
+  final String title;
+  final String body;
+  final String dedupeKey;
+  const CapAlert({
+    required this.title,
+    required this.body,
+    required this.dedupeKey,
+  });
+}
 
 /// UA-8.3 (B3) — the trigger side of the notification system: given the
 /// data each per-screen provider already computes for its own UI, decide
@@ -95,12 +112,96 @@ class NotificationTriggerRunner {
     }
   }
 
+  /// The 80% / 100% alerts for a v2-shaped card's caps (WP9).
+  ///
+  /// The ratio is `consumed_native / cap_amount`, never the v1 measure. A cap
+  /// with no row (nothing consumed) or an unknown figure (no native number
+  /// yet, or from a period that has ended) raises nothing: an alert must be
+  /// something the app can stand behind. The dedupe bucket is the server's
+  /// `period_start`, so a new period alerts again; the key shape is the v1
+  /// one, so the gate's dedupe and budget apply unchanged. Each alert adds
+  /// the next-best OWNED card for the cap's category ("Use X for Y instead"),
+  /// and only when it earns more than base.
+  static List<CapAlert> planV2CapAlerts({
+    required UserCard userCard,
+    required CardProduct product,
+    required List<(UserCard, CardProduct)> owned,
+    required List<SpendCategory> categories,
+    required DateTime now,
+  }) {
+    final alerts = <CapAlert>[];
+    final name = userCard.nickname?.isNotEmpty == true
+        ? userCard.nickname!
+        : product.name;
+    for (final cap in product.capRules) {
+      final progress = capProgressFor(
+        product: product,
+        cap: cap,
+        owned: userCard,
+        now: now,
+      );
+      final consumed = progress?.consumed;
+      if (progress == null || consumed == null) continue;
+      final ratio = consumed / progress.amount;
+      if (ratio < 0.8) continue;
+      final reached = ratio >= 1.0;
+      final start = progress.usage.row?.periodStart;
+      final bucket = start == null
+          ? capPeriodBucket(cap.period, now)
+          : '${start.year}-${start.month.toString().padLeft(2, '0')}-${start.day.toString().padLeft(2, '0')}';
+      final label = capRuleDisplayLabel(cap);
+      final next = nextBestOwnedCard(
+        owned: owned,
+        cappedCard: userCard,
+        cappedProduct: product,
+        cap: cap,
+        categories: categories,
+        now: now,
+      );
+      final suffix = next == null ? '' : ' ${next.message}.';
+      alerts.add(
+        CapAlert(
+          title: reached ? '$name cap reached' : '$name is close to its cap',
+          body: reached
+              ? 'You\'ve used up this period\'s "$label" — ${progress.reachedConsequence}.$suffix'
+              : 'You\'ve used ${percentFloor(ratio)}% of $name\'s "$label" this period.$suffix',
+          dedupeKey:
+              'cap:${userCard.id}:${cap.id}:$bucket:${reached ? 'reached' : 'warning'}',
+        ),
+      );
+    }
+    return alerts;
+  }
+
+  /// Runs only the cap check (tests).
+  @visibleForTesting
+  Future<void> runCapChecks() => _checkCaps();
+
   Future<void> _checkCaps() async {
     final owned = ref.read(ownedCardsWithProductProvider).valueOrNull;
     if (owned == null) return;
     final gate = ref.read(notificationGateProvider);
-    final now = DateTime.now();
+    final now = ref.read(clockProvider).now();
+    final categories =
+        ref.read(categoriesProvider).valueOrNull ?? const <SpendCategory>[];
     for (final (userCard, product) in owned) {
+      if (product.isV2Shaped) {
+        for (final alert in planV2CapAlerts(
+          userCard: userCard,
+          product: product,
+          owned: owned,
+          categories: categories,
+          now: now,
+        )) {
+          await gate.fire(
+            category: 'caps',
+            title: alert.title,
+            body: alert.body,
+            dedupeKey: alert.dedupeKey,
+          );
+        }
+        continue;
+      }
       for (final cap in uniqueCapRules(product.capRules)) {
         final consumed = userCard.capConsumed[cap.id] ?? const Money.zero();
         final ratio = capRatio(consumed, cap.capValue);

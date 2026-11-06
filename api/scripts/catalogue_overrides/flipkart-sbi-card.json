@@ -1,0 +1,37 @@
+{
+  "source_slug": "flipkart-sbi-card",
+  "changes": [
+    {
+      "path": "accrual_engine.cashback_rounding",
+      "value": "rupee_floor",
+      "reason": "Cashback is rounded down to a whole rupee per transaction (D11).",
+      "source_url": "https://www.sbicard.com/sbi-card-en/assets/docs/pdf/ekit-tncs/Flipkart-SBI-CreditCard-TandC-Booklet.pdf",
+      "checked_on": "2026-11-05"
+    },
+    {
+      "path": "reward_rules",
+      "op": "append",
+      "value": {
+        "id": "excluded_merchant_emi",
+        "category_id": "all_retail",
+        "priority": 4,
+        "evaluation_type": "exclusion",
+        "rail": "emi",
+        "channel_type": "all",
+        "conditions": {},
+        "action": {
+          "multiplier": 0,
+          "points_per_block": null,
+          "cashback_percent": 0,
+          "cap_reference": null,
+          "reason": "Merchant EMI and Flexipay transactions earn no cashback."
+        },
+        "effective_from": "2025-08-26",
+        "effective_to": null
+      },
+      "reason": "WP7: The record's own exclusion excluded_non_mcc_transactions lists \"merchant EMI transaction\" and \"Flexipay transaction\", but the loader keeps only names it can resolve (partial_merchant_list), so EMI was dropped. Restated as a rail-emi exclusion.",
+      "source_url": "https://www.sbicard.com/sbi-card-en/assets/docs/pdf/ekit-tncs/Flipkart-SBI-CreditCard-TandC-Booklet.pdf",
+      "checked_on": "2026-11-05"
+    }
+  ]
+}

@@ -8,6 +8,7 @@ import '../../app/design/widgets.dart';
 import '../../app/providers.dart';
 import '../../data/api_exception.dart';
 import '../../main.dart' show MoneyText;
+import '../cards/recommendation_confidence.dart';
 import 'nearby_merchants_repository.dart';
 import 'geofence_monitor_service.dart';
 
@@ -378,7 +379,7 @@ class _NearbyMerchantsScreenState extends ConsumerState<NearbyMerchantsScreen> {
     }
     return ListView.builder(
       itemCount: _matches.length,
-      itemBuilder: (context, index) => _NearbyMerchantTile(_matches[index]),
+      itemBuilder: (context, index) => NearbyMerchantTile(_matches[index]),
     );
   }
 }
@@ -396,9 +397,10 @@ String _placeDisplayName(NearbyMerchantCandidate candidate) {
       : name;
 }
 
-class _NearbyMerchantTile extends ConsumerWidget {
+@visibleForTesting
+class NearbyMerchantTile extends ConsumerWidget {
   final NearbyMerchantMatch match;
-  const _NearbyMerchantTile(this.match);
+  const NearbyMerchantTile(this.match, {super.key});
 
   @override
   Widget build(BuildContext context, WidgetRef ref) {
@@ -479,12 +481,14 @@ class _NearbyMerchantTile extends ConsumerWidget {
                             '${_rateLabel(rec.effectiveRatePerRupee!)} reward rate',
                             style: BambooFonts.ui(11.5, color: BambooInk.jade),
                           ),
+                        // D35b: say so when an exclusion could not be read.
+                        RecommendationCaution(recommendation: rec),
                       ],
                     ),
                   ),
                   MoneyText(
                     rec.expectedValue,
-                    confidence: rec.confidence,
+                    confidence: confidenceOf(rec),
                     style: BambooFonts.money(14, color: BambooInk.ink900),
                   ),
                 ],

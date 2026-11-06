@@ -32,10 +32,12 @@ import '../data/product_access_api.dart';
 import '../data/api_request_headers_client.dart';
 import '../data/authenticated_http_client.dart';
 import '../data/card_bill_ledger.dart';
+import '../data/card_snapshots.dart';
 import '../data/card_feedback_repository.dart';
 import '../data/card_overrides_repository.dart';
 import '../data/card_requests_api.dart';
 import '../data/catalogue_repository.dart';
+import '../data/catalogue_v2.dart';
 import '../data/commitments_repository.dart';
 import '../data/consents_api.dart';
 import '../data/device_identity.dart';
@@ -58,6 +60,7 @@ import '../data/local/transaction_outbox_repository.dart';
 import '../data/local/transaction_attachments_repository.dart';
 import '../data/secure_storage/install_guard.dart';
 import '../data/local_user_cards_repository.dart';
+import '../data/merchant_context.dart';
 import '../data/transaction_page_refresh.dart';
 import '../data/merchant_category_rules_repository.dart';
 import '../data/merchant_issue_rules_repository.dart';
@@ -2308,16 +2311,14 @@ final homeDataRefreshProvider = FutureProvider<void>((ref) async {
 
   Future<void> refreshCatalogue() async {
     try {
-      final cards = await ref
+      // WP9: v2 live (cached losslessly under the versioned key), else v1.
+      await ref
           .read(catalogueRepositoryProvider)
-          .fetchCatalogue()
-          .timeout(_homeRequestTimeout);
-      if (cards.isNotEmpty) {
-        await cache.put(
-          _catalogueCacheKey,
-          jsonEncode({'cards': cards.map((c) => c.toJson()).toList()}),
-        );
-      }
+          .loader(
+            cache: ResponseCacheCatalogueStore(cache),
+            timeout: _homeRequestTimeout,
+          )
+          .refreshCache();
     } catch (_) {}
   }
 
@@ -2941,7 +2942,11 @@ final splitPlanProvider = Provider<List<SplitAllocation>>((ref) {
 
   final snapshots = [
     for (final (uc, product) in pairs)
-      _userCardSnapshots([product], [uc]).single,
+      _userCardSnapshots(
+        [product],
+        [uc],
+        now: ref.watch(clockProvider).now(),
+      ).single,
   ];
   final transactions =
       ref.watch(utilizationTransactionsProvider).valueOrNull ?? const [];
@@ -3011,7 +3016,11 @@ final emiAdviceProvider = Provider.family<EmiAdvice?, EmiAdviceParams>((
 
   final engine = ref.watch(recommendationEngineProvider);
   final principal = Money.fromRupees(params.principalRupees);
-  final snapshot = _userCardSnapshots([product], [userCard]).first;
+  final snapshot = _userCardSnapshots(
+    [product],
+    [userCard],
+    now: ref.watch(clockProvider).now(),
+  ).first;
   final rec = engine.rank(
     RecommendationContext(
       amount: principal,
@@ -4559,7 +4568,6 @@ final lastSyncedAtProvider = FutureProvider<DateTime?>((ref) async {
   }
 });
 
-const _catalogueCacheKey = 'catalogue';
 const _categoriesCacheKey = 'categories';
 const _userCardsCacheKey = 'user_cards';
 const _userCardsWithArchivedCacheKey = 'user_cards_with_archived';
@@ -5806,64 +5814,59 @@ Future<TransactionEntry?> cachedTransactionById(Ref ref, String id) async {
   return null;
 }
 
-/// UA-0.3 offline step: live fetch first, caching the raw response on
-/// success; on ANY fetch failure, falls back to the last cached response
-/// rather than leaving Home with nothing to rank against. Only fires the
-/// fallback on a genuine failure — a successful-but-empty catalogue is
-/// never treated as "fetch failed."
+/// UA-0.3 offline step, as extended by Card Rewards Phase 1 (WP9): the
+/// catalogue load is `CatalogueLoader` (data/catalogue_v2.dart) — v2 cache
+/// first (today's cache-first policy), then live v2 (`?schema=2`), live v1
+/// for an older server, the old v1 cache key as a v1 last resort, then the
+/// bundled asset. Every step parses card by card, so one bad card is
+/// skipped and never drops the catalogue. A successful-but-empty feed is
+/// never treated as a fetch that worked.
 final catalogueProvider = FutureProvider<List<CardProduct>>((ref) async {
+  // Resolve Ref values before the first async gap (see _cacheOrNull).
+  final directoryHolder = ref.read(_catalogueDirectoryHolderProvider);
+  final load = directoryHolder.beginLoad();
+  final repository = ref.watch(catalogueRepositoryProvider);
   final cache = await _cacheOrNull(ref);
-  final cached = await cache?.get(_catalogueCacheKey);
-  if (cached != null) {
-    try {
-      final body = jsonDecode(cached) as Map<String, dynamic>;
-      final cards = (body['cards'] as List)
-          .cast<Map<String, dynamic>>()
-          .map(CardProductJson.fromJson)
-          .toList();
-      if (cards.isNotEmpty) return cards;
-    } catch (_) {
-      // Fall through to the live/bundled catalogue below.
-    }
+  final feed = await repository
+      .loader(
+        cache: cache == null ? null : ResponseCacheCatalogueStore(cache),
+        loadBundled: () => rootBundle.loadString(bundledCatalogueAsset),
+      )
+      .load();
+  // Only the newest load may publish its directory: an older one finishing
+  // late (its result is discarded by Riverpod) must not overwrite it (M1).
+  directoryHolder.finishLoad(load, feed.directory);
+  return feed.cards;
+});
+
+/// The merchant directory that arrived with the catalogue [catalogueProvider]
+/// last loaded (v2 feed `merchants` / `platforms`); empty on every v1 source.
+/// A plain holder, written by [catalogueProvider] before its future
+/// completes, so the directory always belongs to the same load as the cards
+/// and `invalidate(catalogueProvider)` still refetches both.
+class CatalogueDirectoryHolder {
+  MerchantDirectory directory = MerchantDirectory.empty;
+  int _latestLoad = 0;
+
+  /// A load is starting; the returned token is the newest.
+  int beginLoad() => ++_latestLoad;
+
+  /// Publishes [loaded] only if [token] is still the newest load.
+  void finishLoad(int token, MerchantDirectory loaded) {
+    if (token == _latestLoad) directory = loaded;
   }
-  try {
-    final cards = await ref
-        .watch(catalogueRepositoryProvider)
-        .fetchCatalogue()
-        .timeout(const Duration(seconds: 15));
-    if (cards.isNotEmpty) {
-      await cache?.put(
-        _catalogueCacheKey,
-        jsonEncode({'cards': cards.map((c) => c.toJson()).toList()}),
-      );
-      return cards;
-    }
-  } catch (_) {}
+}
 
-  try {
-    if (cached != null) {
-      final body = jsonDecode(cached) as Map<String, dynamic>;
-      final cards = (body['cards'] as List)
-          .cast<Map<String, dynamic>>()
-          .map(CardProductJson.fromJson)
-          .toList();
-      if (cards.isNotEmpty) return cards;
-    }
-  } catch (_) {}
+final _catalogueDirectoryHolderProvider = Provider<CatalogueDirectoryHolder>(
+  (ref) => CatalogueDirectoryHolder(),
+);
 
-  try {
-    final raw = await rootBundle.loadString(
-      'assets/data/bundled_catalogue.json',
-    );
-    final body = jsonDecode(raw) as Map<String, dynamic>;
-    final cards = (body['cards'] as List)
-        .cast<Map<String, dynamic>>()
-        .map(CardProductJson.fromJson)
-        .toList();
-    if (cards.isNotEmpty) return cards;
-  } catch (_) {}
-
-  return const [];
+/// Plan C5 directory for the recommendation engine and the context
+/// builders. Rebuilds when the catalogue does; [MerchantDirectory.empty]
+/// until a v2 feed has loaded.
+final merchantDirectoryProvider = Provider<MerchantDirectory>((ref) {
+  ref.watch(catalogueProvider);
+  return ref.read(_catalogueDirectoryHolderProvider).directory;
 });
 
 final categoriesProvider = FutureProvider<List<SpendCategory>>((ref) async {
@@ -6005,7 +6008,11 @@ final enteredAmountProvider = StateProvider<Money>(
 final pendingScannedCardIdProvider = StateProvider<String?>((ref) => null);
 
 final recommendationEngineProvider = Provider<RecommendationEngine>((ref) {
-  return const RecommendationEngine();
+  // WP9: the C5 directory resolves merchant slugs on v2 cards; empty (the
+  // engine's own default) until a v2 feed has loaded.
+  return RecommendationEngine(
+    merchantDirectory: ref.watch(merchantDirectoryProvider),
+  );
 });
 
 /// Ranks the fetched catalogue for the selected category, scoped to the
@@ -6150,7 +6157,10 @@ AsyncValue<List<Recommendation>> _rankRecommendations(
     wallet: wallet,
     categoryId: resolvedCategoryId,
   );
-  final context = RecommendationContext(
+  // WP9: the merchant name resolves through the C5 directory (slug, and the
+  // merchant's first listed MCC when the context has none).
+  final context = buildRecommendationContext(
+    directory: ref.watch(merchantDirectoryProvider),
     amount: amount,
     categoryId: resolvedCategoryId,
     categorySlug: resolvedCategorySlug,
@@ -6163,6 +6173,7 @@ AsyncValue<List<Recommendation>> _rankRecommendations(
     cards,
     wallet,
     forcedOverrideCardId: overrideProductId,
+    now: ref.watch(clockProvider).now(),
   );
   final ranked = engine.rank(context, snapshots);
   return AsyncValue.data(
@@ -6179,23 +6190,20 @@ List<CardSnapshot> _userCardSnapshots(
   List<CardProduct> cards,
   List<UserCard> wallet, {
   String? forcedOverrideCardId,
+  required DateTime now,
 }) {
-  return cards.map((c) {
-    final owned = wallet.firstWhereOrNull((w) => w.cardProductId == c.id);
-    final capRemaining = owned == null
-        ? const <String, Money>{}
-        : {
-            for (final cap in uniqueCapRules(c.capRules))
-              if (owned.capConsumed.containsKey(cap.id))
-                cap.id: cap.capValue - owned.capConsumed[cap.id]!,
-          };
-    return CardSnapshot(
-      product: c,
-      capRemaining: capRemaining,
-      milestoneProgress: owned?.milestoneQualifiedSpend ?? const {},
-      forcedOverrideCardId: forcedOverrideCardId,
-    );
-  }).toList();
+  // WP9: cap state is assembled in data/card_snapshots.dart (v1 measure for
+  // v1-shaped cards, native units for v2-shaped cards; never mixed).
+  return cards
+      .map(
+        (c) => buildCardSnapshot(
+          c,
+          owned: wallet.firstWhereOrNull((w) => w.cardProductId == c.id),
+          now: now,
+          forcedOverrideCardId: forcedOverrideCardId,
+        ),
+      )
+      .toList();
 }
 
 /// UA-8 (Chunk 32): the app's first use of injectable `Clock` outside
@@ -6917,7 +6925,30 @@ final bestCardForMerchantProvider =
         cards,
         wallet,
         forcedOverrideCardId: overrideProductId,
+        now: ref.watch(clockProvider).now(),
       );
+
+      // WP9: with a merchant name the context resolves it through the C5
+      // directory (slug + first listed MCC), which BestCardForWidget's own
+      // context cannot carry; same "first non-excluded" pick otherwise.
+      if (merchantName != null && merchantName.trim().isNotEmpty) {
+        if (snapshots.isEmpty) return const AsyncValue.data(null);
+        final ranked = ref
+            .watch(recommendationEngineProvider)
+            .rank(
+              buildRecommendationContext(
+                directory: ref.watch(merchantDirectoryProvider),
+                amount: BestCardForWidget.defaultNominalAmount,
+                categoryId: resolvedCategoryId,
+                categorySlug: categorySlug,
+                merchantName: merchantName,
+                rail: TxnRail.swipe,
+                now: ref.watch(clockProvider).now(),
+              ),
+              snapshots,
+            );
+        return AsyncValue.data(ranked.where((r) => !r.isExcluded).firstOrNull);
+      }
 
       return AsyncValue.data(
         picker.pickBestCard(

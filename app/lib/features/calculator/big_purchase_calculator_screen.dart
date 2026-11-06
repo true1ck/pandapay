@@ -8,12 +8,14 @@ import '../../app/category_picker.dart';
 import '../../app/providers.dart';
 import '../../data/api_exception.dart';
 import '../../data/card_overrides_repository.dart' show CardOverride;
+import '../../data/card_snapshots.dart';
 import '../../data/catalogue_repository.dart'
     show SpendCategory, categoryIdForServer;
 import '../../data/override_resolver.dart';
 import '../../data/user_cards_repository.dart' show UserCard;
 import '../../main.dart' show MoneyText;
 import '../cards/card_visual.dart';
+import '../cards/recommendation_confidence.dart';
 import '../tools/emi_advisor_screen.dart';
 import '../tools/split_planner_screen.dart';
 
@@ -236,12 +238,14 @@ class _BigPurchaseCalculatorScreenState
               ?.where((c) => c.id == effectiveCategoryId)
               .firstOrNull
               ?.slug;
+    // One clock (clockProvider) for the context and the cap state.
+    final now = ref.watch(clockProvider).now();
     final context = RecommendationContext(
       amount: _amount,
       categoryId: effectiveCategoryId,
       categorySlug: categorySlug,
       rail: TxnRail.swipe,
-      now: DateTime.now(),
+      now: now,
     );
     // Same B8 wiring as rankedRecommendationsProvider (app/providers.dart):
     // this screen only carries category context (no merchant/vpa), so an
@@ -253,17 +257,14 @@ class _BigPurchaseCalculatorScreenState
       wallet: wallet,
       categoryId: effectiveCategoryId,
     );
+    // WP9: v1 cards keep the v1 measure; v2-shaped cards pass native
+    // consumption (data/card_snapshots.dart).
     final snapshots = owned.map((c) {
       final uc = wallet.where((w) => w.cardProductId == c.id).first;
-      final capRemaining = {
-        for (final cap in uniqueCapRules(c.capRules))
-          if (uc.capConsumed.containsKey(cap.id))
-            cap.id: cap.capValue - uc.capConsumed[cap.id]!,
-      };
-      return CardSnapshot(
-        product: c,
-        capRemaining: capRemaining,
-        milestoneProgress: uc.milestoneQualifiedSpend,
+      return buildCardSnapshot(
+        c,
+        owned: uc,
+        now: now,
         forcedOverrideCardId: overrideProductId,
       );
     }).toList();
@@ -411,13 +412,20 @@ class _BigPurchaseCalculatorScreenState
                                   ),
                                 ),
                               ),
+                            // D32d: say so when an exclusion could not be read.
+                            RecommendationCaution(
+                              recommendation: rec,
+                              color: isBest
+                                  ? BambooInk.slate
+                                  : BambooInk.ink500,
+                            ),
                           ],
                         ),
                       ),
                       const SizedBox(width: AppSpace.sm),
                       MoneyText(
                         rec.expectedValue,
-                        confidence: rec.confidence,
+                        confidence: confidenceOf(rec),
                         style: BambooFonts.money(
                           isBest ? 24 : 20,
                           color: BambooInk.ink900,

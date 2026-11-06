@@ -361,6 +361,9 @@ jobs:
       - name: Verify SMS v2 core tables, RLS and transaction columns
         run: docker compose exec -T db psql -U postgres -d pandapay -v ON_ERROR_STOP=1 -f - < db/tests/20261111120000_sms_v2_core_test.sql
 
+      - name: Verify card rewards v2 schema, v1 feed compatibility and RLS
+        run: docker compose exec -T db psql -U postgres -d pandapay -v ON_ERROR_STOP=1 -f - < db/tests/20261105120000_card_rules_v2_test.sql
+
       # The deploy runs the role script as an admin that has CREATEROLE but
       # not SUPERUSER. Restating a role's SUPERUSER attribute is refused for
       # that admin ("permission denied to alter role"), so the second and

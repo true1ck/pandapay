@@ -1,0 +1,294 @@
+{
+  "source_slug": "makemytrip-icici-bank-signature-credit-card",
+  "changes": [
+    {
+      "path": "accrual_engine.rounding_mode",
+      "value": "points_half_up",
+      "reason": "My Cash rounded to nearest integer per transaction.",
+      "source_url": "https://www.icici.bank.in/terms-condition/tnc-for-signature-credit-card",
+      "checked_on": "2026-11-05"
+    },
+    {
+      "path": "cap_rules",
+      "value": [
+        {
+          "id": "mmt-insurance-annual-1000",
+          "category_id": "insurance",
+          "metric": "total_reward_points",
+          "mcc_target_list": [
+            5960,
+            6300,
+            6381,
+            6399
+          ],
+          "period": "annual",
+          "limit_value": 1000,
+          "limit_value_inr": null,
+          "post_limit_behavior": {
+            "action": "zero_accrual",
+            "points_per_block": 0
+          },
+          "parent_cap_id": null,
+          "reset_day": null,
+          "effective_from": "2024-11-15",
+          "effective_to": null,
+          "anchor": "card_anniversary"
+        }
+      ],
+      "reason": "CardPipeline cap_rules is empty; MITC caps insurance points at 1,000 per anniversary year.",
+      "source_url": "https://www.icicibank.com/managed-assets/docs/personal/cards/mitc_cc.pdf",
+      "checked_on": "2026-11-05"
+    },
+    {
+      "path": "reward_rules",
+      "value": [
+        {
+          "id": "base-domestic-retail",
+          "category_id": "all_retail",
+          "priority": 100,
+          "evaluation_type": "fallback",
+          "rail": "any",
+          "channel_type": "all",
+          "conditions": {},
+          "action": {
+            "multiplier": 1,
+            "points_per_block": 1.25,
+            "cashback_percent": null,
+            "cap_reference": null,
+            "reason": "Domestic spends outside MakeMyTrip earn 1.25 My Cash per ₹200."
+          },
+          "effective_from": "2026-08-26",
+          "effective_to": null
+        },
+        {
+          "id": "international-retail",
+          "category_id": "all_retail",
+          "priority": 90,
+          "evaluation_type": "accelerator",
+          "rail": "any",
+          "channel_type": "international",
+          "conditions": {
+            "geography": "international",
+            "platform": "outside_makemytrip"
+          },
+          "action": {
+            "multiplier": 1,
+            "points_per_block": 1.5,
+            "cashback_percent": null,
+            "cap_reference": null,
+            "reason": "International spends outside MakeMyTrip earn 1.5 My Cash per ₹200."
+          },
+          "effective_from": "2026-08-26",
+          "effective_to": null,
+          "rule_role": "info"
+        },
+        {
+          "id": "mmt-flight",
+          "category_id": "travel_flights",
+          "priority": 10,
+          "evaluation_type": "accelerator",
+          "rail": "any",
+          "channel_type": "makemytrip",
+          "conditions": {
+            "platform": "MakeMyTrip",
+            "booking_type": "flight"
+          },
+          "action": {
+            "multiplier": 1,
+            "points_per_block": 2,
+            "cashback_percent": null,
+            "cap_reference": null,
+            "reason": "Flight bookings on MakeMyTrip earn 2 My Cash per ₹200."
+          },
+          "effective_from": "2026-08-26",
+          "effective_to": null,
+          "rule_role": "info"
+        },
+        {
+          "id": "mmt-hotel-holiday",
+          "category_id": "travel_hotels",
+          "priority": 10,
+          "evaluation_type": "accelerator",
+          "rail": "any",
+          "channel_type": "makemytrip",
+          "conditions": {
+            "platform": "MakeMyTrip",
+            "booking_type": [
+              "hotel",
+              "holiday"
+            ]
+          },
+          "action": {
+            "multiplier": 1,
+            "points_per_block": 4,
+            "cashback_percent": null,
+            "cap_reference": null,
+            "reason": "Hotel and holiday bookings on MakeMyTrip earn 4 My Cash per ₹200."
+          },
+          "effective_from": "2026-08-26",
+          "effective_to": null,
+          "rule_role": "info"
+        },
+        {
+          "id": "exclude-rent",
+          "category_id": "rent",
+          "priority": 1,
+          "evaluation_type": "exclusion",
+          "rail": "any",
+          "channel_type": "all",
+          "conditions": {
+            "mcc": [
+              6513,
+              7349
+            ]
+          },
+          "action": {
+            "multiplier": 0,
+            "points_per_block": 0,
+            "cashback_percent": null,
+            "cap_reference": null,
+            "reason": "Rent payment transactions do not accrue reward points from 2024-02-05; ICICI identifies MCC 6513 and 7349 as rental payments."
+          },
+          "effective_from": "2024-02-05",
+          "effective_to": null
+        },
+        {
+          "id": "exclude-wallet-loading",
+          "category_id": "wallet",
+          "priority": 1,
+          "evaluation_type": "exclusion",
+          "rail": "any",
+          "channel_type": "all",
+          "conditions": {
+            "mcc_list": [
+              6540
+            ]
+          },
+          "action": {
+            "multiplier": 0,
+            "points_per_block": 0,
+            "cashback_percent": null,
+            "cap_reference": null,
+            "reason": "E-wallet loading transactions do not accrue reward points from 2024-02-05."
+          },
+          "effective_from": "2024-02-05",
+          "effective_to": null
+        },
+        {
+          "id": "exclude-fuel",
+          "category_id": "fuel",
+          "priority": 1,
+          "evaluation_type": "exclusion",
+          "rail": "any",
+          "channel_type": "all",
+          "conditions": {
+            "mcc_list": [
+              5172,
+              5541,
+              5542,
+              5983
+            ]
+          },
+          "action": {
+            "multiplier": 0,
+            "points_per_block": 0,
+            "cashback_percent": null,
+            "cap_reference": null,
+            "reason": "Fuel transactions on the MakeMyTrip ICICI Bank Credit Card do not qualify for My Cash."
+          },
+          "effective_from": "2026-08-26",
+          "effective_to": null
+        },
+        {
+          "id": "exclude-cash-advance",
+          "category_id": "all_retail",
+          "priority": 1,
+          "evaluation_type": "exclusion",
+          "rail": "atm",
+          "channel_type": "all",
+          "conditions": {},
+          "action": {
+            "multiplier": 0,
+            "points_per_block": 0,
+            "cashback_percent": null,
+            "cap_reference": null,
+            "reason": "Cash advances do not qualify as reward-earning spend."
+          },
+          "effective_from": "2026-08-26",
+          "effective_to": null
+        },
+        {
+          "id": "exclude-fees-interest",
+          "category_id": "excluded_spend",
+          "priority": 1,
+          "evaluation_type": "exclusion",
+          "rail": "any",
+          "channel_type": "all",
+          "conditions": {
+            "transaction_type": [
+              "fees",
+              "interest",
+              "late_payment_charges",
+              "joining_fee",
+              "renewal_fee"
+            ]
+          },
+          "action": {
+            "multiplier": 0,
+            "points_per_block": 0,
+            "cashback_percent": null,
+            "cap_reference": null,
+            "reason": "Service charges, interest, late-payment charges, joining/renewal fees and other card fees do not qualify for My Cash."
+          },
+          "effective_from": "2026-08-26",
+          "effective_to": null
+        },
+        {
+          "id": "exclude-emi-bt-plcc",
+          "category_id": "emi",
+          "priority": 1,
+          "evaluation_type": "exclusion",
+          "rail": "emi",
+          "channel_type": "all",
+          "conditions": {},
+          "action": {
+            "multiplier": 0,
+            "points_per_block": 0,
+            "cashback_percent": null,
+            "cap_reference": null,
+            "reason": "EMI transactions, balance transfers and Personal Loan on Credit Card expenditure are excluded from My Cash earnings."
+          },
+          "effective_from": "2026-08-26",
+          "effective_to": null
+        },
+        {
+          "id": "mmt-insurance-base",
+          "category_id": "insurance",
+          "priority": 5,
+          "evaluation_type": "standard_accrual",
+          "rail": "any",
+          "channel_type": "all",
+          "conditions": {
+            "mcc_list": [
+              5960,
+              6300,
+              6381,
+              6399
+            ]
+          },
+          "action": {
+            "multiplier": 1,
+            "points_per_block": 1.25,
+            "cap_reference": "mmt-insurance-annual-1000",
+            "reason": "Insurance earns the base My Cash rate, capped at 1,000 points per anniversary year."
+          },
+          "effective_from": "2024-11-15",
+          "effective_to": null
+        }
+      ],
+      "reason": "Restates every source rule (including all exclusions). Adds an insurance rule carrying the cap so the 1,000-point annual cap targets insurance only, not the whole card. Flight and hotel rates differ by booking type with no MCC, so those two rules are info (D13c/D14b). International 1.5 is info (needs an international flag). Base domestic rule keeps no platform restriction so it is not turned into an info rule. Exclusions rewritten to MCC/rail form (fuel 5172/5541/5542/5983, wallet 6540, EMI rail emi, cash advance rail atm); fees/interest stay info (not purchases).",
+      "source_url": "https://www.icicibank.com/managed-assets/docs/personal/cards/mitc_cc.pdf",
+      "checked_on": "2026-11-05"
+    }
+  ]
+}

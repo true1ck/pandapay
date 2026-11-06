@@ -1,0 +1,535 @@
+{
+  "generated_by": "api/scripts/catalogue_v2/snapshot_examples.js",
+  "source_slug": "american-express-platinum-travel-credit-card-india",
+  "inputs": {
+    "transform_version": "7",
+    "source_record_sha256": "68ecd0dbe2902a02fcb593ad15010312652276059d7cfd998ac86dbb42e47496",
+    "override_sha256": null,
+    "directory_sha256": "b1094d54b77e848d22f7a9a64f3ae6d1ef43ca3eb2fc8e40cd43ed1994664694",
+    "verified": true
+  },
+  "blocking_flags": [],
+  "card": {
+    "id": "american-express-platinum-travel-credit-card-india:card",
+    "slug": "american-express-platinum-travel-credit-card-india",
+    "name": "American Express Platinum Travel Credit Card",
+    "network": "amex",
+    "issuer_slug": "american-express-india",
+    "base_reward_unit": "points_per_100",
+    "base_reward_rate": 2,
+    "point_value_inr": 0.4,
+    "excluded_categories": [],
+    "accrual_block_inr": 50,
+    "accrual_rounding": "floor",
+    "cashback_rounding": null,
+    "points_expiry_months": 0,
+    "model_status": "verified",
+    "model_coverage": {
+      "rules_total": 7,
+      "rules_modelled": 7,
+      "rules_info": 0,
+      "caps_total": 0,
+      "caps_enforced": 0,
+      "flags": [
+        {
+          "code": "exclusion_scope_broadened",
+          "source_local_id": "exclude_cash_transactions",
+          "detail": null
+        },
+        {
+          "code": "emi_alternatives",
+          "source_local_id": "exclude_merchant_emi",
+          "detail": null
+        },
+        {
+          "code": "merchant_prose_platform_scoped",
+          "source_local_id": "reward_multiplier_online_brands",
+          "detail": null
+        }
+      ],
+      "overrides_applied": []
+    },
+    "reward_rules": [
+      {
+        "id": "american-express-platinum-travel-credit-card-india:rule:base_all_retail",
+        "category_id": null,
+        "category_slug": null,
+        "merchant_pattern": null,
+        "rail": null,
+        "unit": "points_per_100",
+        "rate": 1,
+        "min_txn_inr": null,
+        "max_txn_inr": null,
+        "priority": 100,
+        "conditions": {
+          "source_local_id": "base_all_retail",
+          "part": null,
+          "info_reasons": [],
+          "flags": []
+        },
+        "notes": null,
+        "effective_from": "2025-08-31",
+        "effective_to": null,
+        "excluded_categories": [],
+        "rule_role": "base",
+        "merchant_slugs": [],
+        "platform_slugs": [],
+        "mcc_include": [],
+        "mcc_exclude": [],
+        "except_merchant_slugs": [],
+        "except_platform_slugs": [],
+        "block_inr": 50,
+        "min_engine_version": 2,
+        "max_engine_version": null,
+        "source_local_id": "base_all_retail",
+        "display_note": "1 Membership Rewards point per ₹50 spent."
+      },
+      {
+        "id": "american-express-platinum-travel-credit-card-india:rule:exclude_fuel",
+        "category_id": "cat-fuel",
+        "category_slug": "fuel",
+        "merchant_pattern": null,
+        "rail": null,
+        "unit": "points_per_100",
+        "rate": 0,
+        "min_txn_inr": null,
+        "max_txn_inr": null,
+        "priority": 1,
+        "conditions": {
+          "source_local_id": "exclude_fuel",
+          "part": null,
+          "info_reasons": [],
+          "flags": []
+        },
+        "notes": null,
+        "effective_from": "2025-08-31",
+        "effective_to": null,
+        "excluded_categories": [],
+        "rule_role": "exclusion",
+        "merchant_slugs": [],
+        "platform_slugs": [],
+        "mcc_include": [],
+        "mcc_exclude": [],
+        "except_merchant_slugs": [],
+        "except_platform_slugs": [],
+        "block_inr": null,
+        "min_engine_version": 1,
+        "max_engine_version": null,
+        "source_local_id": "exclude_fuel",
+        "display_note": "No Membership Rewards points on fuel spend."
+      },
+      {
+        "id": "american-express-platinum-travel-credit-card-india:rule:exclude_insurance",
+        "category_id": "cat-insurance",
+        "category_slug": "insurance",
+        "merchant_pattern": null,
+        "rail": null,
+        "unit": "points_per_100",
+        "rate": 0,
+        "min_txn_inr": null,
+        "max_txn_inr": null,
+        "priority": 2,
+        "conditions": {
+          "source_local_id": "exclude_insurance",
+          "part": null,
+          "info_reasons": [],
+          "flags": []
+        },
+        "notes": null,
+        "effective_from": "2025-08-31",
+        "effective_to": null,
+        "excluded_categories": [],
+        "rule_role": "exclusion",
+        "merchant_slugs": [],
+        "platform_slugs": [],
+        "mcc_include": [],
+        "mcc_exclude": [],
+        "except_merchant_slugs": [],
+        "except_platform_slugs": [],
+        "block_inr": null,
+        "min_engine_version": 1,
+        "max_engine_version": null,
+        "source_local_id": "exclude_insurance",
+        "display_note": "No Membership Rewards points on insurance spend."
+      },
+      {
+        "id": "american-express-platinum-travel-credit-card-india:rule:exclude_utility",
+        "category_id": "cat-bills",
+        "category_slug": "bills",
+        "merchant_pattern": null,
+        "rail": null,
+        "unit": "points_per_100",
+        "rate": 0,
+        "min_txn_inr": null,
+        "max_txn_inr": null,
+        "priority": 3,
+        "conditions": {
+          "source_local_id": "exclude_utility",
+          "part": null,
+          "info_reasons": [],
+          "flags": []
+        },
+        "notes": null,
+        "effective_from": "2025-08-31",
+        "effective_to": null,
+        "excluded_categories": [],
+        "rule_role": "exclusion",
+        "merchant_slugs": [],
+        "platform_slugs": [],
+        "mcc_include": [],
+        "mcc_exclude": [],
+        "except_merchant_slugs": [],
+        "except_platform_slugs": [],
+        "block_inr": null,
+        "min_engine_version": 1,
+        "max_engine_version": null,
+        "source_local_id": "exclude_utility",
+        "display_note": "No Membership Rewards points on specified utility payments."
+      },
+      {
+        "id": "american-express-platinum-travel-credit-card-india:rule:exclude_cash_transactions",
+        "category_id": null,
+        "category_slug": null,
+        "merchant_pattern": null,
+        "rail": "atm",
+        "unit": "points_per_100",
+        "rate": 0,
+        "min_txn_inr": null,
+        "max_txn_inr": null,
+        "priority": 4,
+        "conditions": {
+          "source_local_id": "exclude_cash_transactions",
+          "part": null,
+          "info_reasons": [],
+          "flags": [
+            "exclusion_scope_broadened"
+          ]
+        },
+        "notes": null,
+        "effective_from": "2025-08-31",
+        "effective_to": null,
+        "excluded_categories": [],
+        "rule_role": "exclusion",
+        "merchant_slugs": [],
+        "platform_slugs": [],
+        "mcc_include": [],
+        "mcc_exclude": [],
+        "except_merchant_slugs": [],
+        "except_platform_slugs": [],
+        "block_inr": null,
+        "min_engine_version": 2,
+        "max_engine_version": null,
+        "source_local_id": "exclude_cash_transactions",
+        "display_note": "No Membership Rewards points on cash transactions."
+      },
+      {
+        "id": "american-express-platinum-travel-credit-card-india:rule:exclude_merchant_emi#1",
+        "category_id": "cat-emi",
+        "category_slug": "emi",
+        "merchant_pattern": null,
+        "rail": null,
+        "unit": "points_per_100",
+        "rate": 0,
+        "min_txn_inr": null,
+        "max_txn_inr": null,
+        "priority": 5,
+        "conditions": {
+          "source_local_id": "exclude_merchant_emi",
+          "part": 1,
+          "info_reasons": [],
+          "flags": [
+            "emi_alternatives"
+          ]
+        },
+        "notes": null,
+        "effective_from": "2020-03-15",
+        "effective_to": null,
+        "excluded_categories": [],
+        "rule_role": "exclusion",
+        "merchant_slugs": [],
+        "platform_slugs": [],
+        "mcc_include": [],
+        "mcc_exclude": [],
+        "except_merchant_slugs": [],
+        "except_platform_slugs": [],
+        "block_inr": null,
+        "min_engine_version": 1,
+        "max_engine_version": null,
+        "source_local_id": "exclude_merchant_emi",
+        "display_note": "No Membership Rewards points on merchant-selected EMI transactions. American Express states that EMI transactions through SafeKey and post-purchase EMI conversions continue to earn Membership Rewards points."
+      },
+      {
+        "id": "american-express-platinum-travel-credit-card-india:rule:exclude_merchant_emi#2",
+        "category_id": null,
+        "category_slug": null,
+        "merchant_pattern": null,
+        "rail": "emi",
+        "unit": "points_per_100",
+        "rate": 0,
+        "min_txn_inr": null,
+        "max_txn_inr": null,
+        "priority": 5,
+        "conditions": {
+          "source_local_id": "exclude_merchant_emi",
+          "part": 2,
+          "info_reasons": [],
+          "flags": [
+            "emi_alternatives"
+          ]
+        },
+        "notes": null,
+        "effective_from": "2020-03-15",
+        "effective_to": null,
+        "excluded_categories": [],
+        "rule_role": "exclusion",
+        "merchant_slugs": [],
+        "platform_slugs": [],
+        "mcc_include": [],
+        "mcc_exclude": [],
+        "except_merchant_slugs": [],
+        "except_platform_slugs": [],
+        "block_inr": null,
+        "min_engine_version": 2,
+        "max_engine_version": null,
+        "source_local_id": "exclude_merchant_emi",
+        "display_note": "No Membership Rewards points on merchant-selected EMI transactions. American Express states that EMI transactions through SafeKey and post-purchase EMI conversions continue to earn Membership Rewards points."
+      },
+      {
+        "id": "american-express-platinum-travel-credit-card-india:rule:reward_multiplier_online_brands",
+        "category_id": null,
+        "category_slug": null,
+        "merchant_pattern": null,
+        "rail": null,
+        "unit": "points_per_100",
+        "rate": 3,
+        "min_txn_inr": null,
+        "max_txn_inr": null,
+        "priority": 10,
+        "conditions": {
+          "source_local_id": "reward_multiplier_online_brands",
+          "part": null,
+          "info_reasons": [],
+          "flags": [
+            "merchant_prose_platform_scoped"
+          ]
+        },
+        "notes": null,
+        "effective_from": "2025-08-31",
+        "effective_to": null,
+        "excluded_categories": [],
+        "rule_role": "earn",
+        "merchant_slugs": [],
+        "platform_slugs": [
+          "amex_reward_multiplier"
+        ],
+        "mcc_include": [],
+        "mcc_exclude": [],
+        "except_merchant_slugs": [],
+        "except_platform_slugs": [],
+        "block_inr": 50,
+        "min_engine_version": 2,
+        "max_engine_version": null,
+        "source_local_id": "reward_multiplier_online_brands",
+        "display_note": "3X Membership Rewards points on eligible Reward Multiplier purchases."
+      }
+    ],
+    "cap_rules": [],
+    "milestone_rules": [
+      {
+        "id": "american-express-platinum-travel-credit-card-india:milestone:welcome_15k_90d",
+        "label": "Welcome Gift - 10,000 Membership Rewards points",
+        "period": "lifetime",
+        "threshold_spend_inr": 15000,
+        "reward_description": "Welcome Gift - 10,000 Membership Rewards points",
+        "reward_value_inr": 4000,
+        "is_repeatable": false,
+        "max_repeats": null,
+        "anchor": "card_anniversary",
+        "reward_points": 10000,
+        "reward_kind": "points",
+        "excluded_category_ids": [],
+        "window_days": 90,
+        "source_local_id": "welcome_15k_90d"
+      },
+      {
+        "id": "american-express-platinum-travel-credit-card-india:milestone:milestone_1_9l",
+        "label": "₹1.9 lakh Cardmembership-year milestone - 7,500 bonus Membership Rewards points",
+        "period": "annual",
+        "threshold_spend_inr": 190000,
+        "reward_description": "₹1.9 lakh Cardmembership-year milestone - 7,500 bonus Membership Rewards points",
+        "reward_value_inr": 3000,
+        "is_repeatable": true,
+        "max_repeats": null,
+        "anchor": "card_anniversary",
+        "reward_points": 7500,
+        "reward_kind": "points",
+        "excluded_category_ids": [],
+        "window_days": null,
+        "source_local_id": "milestone_1_9l"
+      },
+      {
+        "id": "american-express-platinum-travel-credit-card-india:milestone:milestone_4l",
+        "label": "₹4 lakh Cardmembership-year milestone - 10,000 bonus Membership Rewards points",
+        "period": "annual",
+        "threshold_spend_inr": 400000,
+        "reward_description": "₹4 lakh Cardmembership-year milestone - 10,000 bonus Membership Rewards points",
+        "reward_value_inr": 4000,
+        "is_repeatable": true,
+        "max_repeats": null,
+        "anchor": "card_anniversary",
+        "reward_points": 10000,
+        "reward_kind": "points",
+        "excluded_category_ids": [],
+        "window_days": null,
+        "source_local_id": "milestone_4l"
+      },
+      {
+        "id": "american-express-platinum-travel-credit-card-india:milestone:milestone_7l",
+        "label": "₹7 lakh Cardmembership-year milestone - 22,500 bonus Membership Rewards points plus ₹10,000 Taj Stay voucher",
+        "period": "annual",
+        "threshold_spend_inr": 700000,
+        "reward_description": "₹7 lakh Cardmembership-year milestone - 22,500 bonus Membership Rewards points plus ₹10,000 Taj Stay voucher",
+        "reward_value_inr": 19000,
+        "is_repeatable": true,
+        "max_repeats": null,
+        "anchor": "card_anniversary",
+        "reward_points": 22500,
+        "reward_kind": "points",
+        "excluded_category_ids": [],
+        "window_days": null,
+        "source_local_id": "milestone_7l"
+      }
+    ],
+    "fee_waiver_rules": [],
+    "benefits": [
+      {
+        "id": "american-express-platinum-travel-credit-card-india:benefit:domestic_lounge_8_visits",
+        "key": "domestic_lounge_8_visits",
+        "source_local_id": "domestic_lounge_8_visits",
+        "kind": "lounge_domestic",
+        "label": "8 complimentary domestic airport lounge visits per year, limited to 2 complimentary visits per quarter.",
+        "description": "Sponsor: American Express",
+        "quota_count": 8,
+        "quota_period": "annual",
+        "network_program": "american_express_domestic_lounge_program",
+        "value_estimate_inr": 8000,
+        "conditions": {
+          "source_category_id": "lounge",
+          "evaluation_engine": {
+            "conditions": {
+              "spend_condition": "None"
+            },
+            "benefit_calculation": {
+              "quota": 8
+            },
+            "perks": [
+              "Domestic airport lounge access"
+            ]
+          }
+        }
+      },
+      {
+        "id": "american-express-platinum-travel-credit-card-india:benefit:priority_pass_membership",
+        "key": "priority_pass_membership",
+        "source_local_id": "priority_pass_membership",
+        "kind": "lounge_international",
+        "label": "Complimentary Priority Pass membership for the Basic Cardmember with the US$99 annual membership fee waived; lounge usage fees apply.",
+        "description": "Sponsor: American Express",
+        "quota_count": null,
+        "quota_period": null,
+        "network_program": "priority_pass",
+        "value_estimate_inr": 8200,
+        "conditions": {
+          "source_category_id": "lounge",
+          "evaluation_engine": {
+            "conditions": {
+              "eligible_holder": "Basic Cardmember"
+            },
+            "benefit_calculation": {
+              "membership_fee_waived_usd": 99,
+              "usage_fee_usd": 35
+            },
+            "perks": [
+              "Priority Pass membership"
+            ]
+          }
+        }
+      },
+      {
+        "id": "american-express-platinum-travel-credit-card-india:benefit:taj_stay_voucher_7l",
+        "key": "taj_stay_voucher_7l",
+        "source_local_id": "taj_stay_voucher_7l",
+        "kind": "other",
+        "label": "₹10,000 Taj Stay voucher on achieving ₹7 lakh Cardmembership-year spend.",
+        "description": "Sponsor: Taj Hotels",
+        "quota_count": 1,
+        "quota_period": "annual",
+        "network_program": null,
+        "value_estimate_inr": 10000,
+        "conditions": {
+          "source_category_id": "other",
+          "evaluation_engine": {
+            "conditions": {
+              "threshold_spend_inr": 700000,
+              "period": "cardmembership year"
+            },
+            "benefit_calculation": {
+              "voucher_value_inr": 10000
+            },
+            "perks": [
+              "Taj Stay voucher"
+            ]
+          }
+        }
+      }
+    ],
+    "unlock_rules": [
+      {
+        "id": "american-express-platinum-travel-credit-card-india:unlock:taj_stay_voucher_7l@1",
+        "card_benefit_id": "american-express-platinum-travel-credit-card-india:benefit:taj_stay_voucher_7l",
+        "kind": "other",
+        "label": "₹10,000 Taj Stay voucher on achieving ₹7 lakh Cardmembership-year spend.",
+        "spend_threshold_inr": 700000,
+        "spend_window": "card_year",
+        "window_days": null,
+        "unlocks_quota": 1,
+        "unlocks_period": "annual",
+        "tier_label": null,
+        "excluded_category_ids": [],
+        "notes": null,
+        "source_local_id": "taj_stay_voucher_7l"
+      }
+    ],
+    "redemption_options": [
+      {
+        "program_name": "Platinum Travel Collection - Air India",
+        "method": "partner_catalogue",
+        "value_per_point_inr": 0.3,
+        "min_points": 20000,
+        "notes": "Redemption fee: ₹0"
+      },
+      {
+        "program_name": "Platinum Travel Collection - Taj Hotels and Resorts",
+        "method": "partner_catalogue",
+        "value_per_point_inr": 0.4,
+        "min_points": 12500,
+        "notes": "Redemption fee: ₹0"
+      },
+      {
+        "program_name": "Platinum Travel Collection - The Postcard Hotels",
+        "method": "partner_catalogue",
+        "value_per_point_inr": 0.5,
+        "min_points": 20000,
+        "notes": "Redemption fee: ₹0"
+      },
+      {
+        "program_name": "Pay Card Charges with Points",
+        "method": "statement_credit",
+        "value_per_point_inr": 0.25,
+        "min_points": null,
+        "notes": "Redemption fee: ₹0"
+      }
+    ],
+    "is_upi_linkable": false
+  }
+}

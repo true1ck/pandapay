@@ -1,0 +1,1617 @@
+{
+  "generated_by": "api/scripts/catalogue_v2/snapshot_examples.js",
+  "source_slug": "tata-neu-plus-sbi-credit-card",
+  "inputs": {
+    "transform_version": "7",
+    "source_record_sha256": "9d0b13f66d28f1dbd68ce624da340f4bbce0d18ec71d896aad0112bed04b2dc7",
+    "override_sha256": "ef9c7104260f374120dd96f54d764e2ad92cd2f2084d56f4e66805ade6945f8b",
+    "directory_sha256": "b1094d54b77e848d22f7a9a64f3ae6d1ef43ca3eb2fc8e40cd43ed1994664694",
+    "verified": true
+  },
+  "blocking_flags": [],
+  "card": {
+    "id": "tata-neu-plus-sbi-credit-card:card",
+    "slug": "tata-neu-plus-sbi-credit-card",
+    "name": "Tata Neu Plus SBI Credit Card",
+    "network": "unknown",
+    "issuer_slug": "sbi-card",
+    "base_reward_unit": "points_per_100",
+    "base_reward_rate": 1,
+    "point_value_inr": 1,
+    "excluded_categories": [
+      "cat-emi"
+    ],
+    "accrual_block_inr": 100,
+    "accrual_rounding": "points_floor",
+    "cashback_rounding": null,
+    "points_expiry_months": 12,
+    "model_status": "verified",
+    "model_coverage": {
+      "rules_total": 18,
+      "rules_modelled": 14,
+      "rules_info": 4,
+      "caps_total": 5,
+      "caps_enforced": 5,
+      "flags": [
+        {
+          "code": "group_replaced_by_condition_list",
+          "source_local_id": "tata-neu-partner-brands-2pct",
+          "detail": null
+        },
+        {
+          "code": "partial_merchant_list",
+          "source_local_id": "tata-neu-partner-brands-2pct",
+          "detail": null
+        },
+        {
+          "code": "info_rule",
+          "source_local_id": "tata-neu-select-categories-additional-5pct",
+          "detail": "up_to_rate"
+        },
+        {
+          "code": "info_rule",
+          "source_local_id": "tata-neu-select-categories-additional-5pct",
+          "detail": "condition:membership_or_program"
+        },
+        {
+          "code": "info_rule",
+          "source_local_id": "tata-neu-select-categories-additional-5pct",
+          "detail": "condition:additional_value_back_percent"
+        },
+        {
+          "code": "depends_on_user_attribute",
+          "source_local_id": "tata-neu-select-categories-additional-5pct",
+          "detail": null
+        },
+        {
+          "code": "token_replaced_by_conditions",
+          "source_local_id": "tata-neu-select-categories-additional-5pct",
+          "detail": null
+        },
+        {
+          "code": "info_rule",
+          "source_local_id": "rupay-upi-1pct",
+          "detail": "condition:includes_partner_tata_brands"
+        },
+        {
+          "code": "info_rule",
+          "source_local_id": "rupay-upi-1pct",
+          "detail": "condition:card_variant"
+        },
+        {
+          "code": "info_rule",
+          "source_local_id": "rupay-upi-1pct",
+          "detail": "condition:channel_type"
+        },
+        {
+          "code": "depends_on_user_attribute",
+          "source_local_id": "rupay-upi-1pct",
+          "detail": null
+        },
+        {
+          "code": "mcc_scoped_exclusion",
+          "source_local_id": "exclude-fuel",
+          "detail": null
+        },
+        {
+          "code": "mcc_scoped_exclusion",
+          "source_local_id": "exclude-wallet-loads",
+          "detail": null
+        },
+        {
+          "code": "exclusion_scope_broadened",
+          "source_local_id": "exclude-rent-gift-prepaid-vouchers",
+          "detail": null
+        },
+        {
+          "code": "mcc_scoped_exclusion",
+          "source_local_id": "exclude-government",
+          "detail": null
+        },
+        {
+          "code": "mcc_scoped_exclusion",
+          "source_local_id": "exclude-education",
+          "detail": null
+        },
+        {
+          "code": "exclusion_scope_broadened",
+          "source_local_id": "exclude-cash-advance",
+          "detail": null
+        },
+        {
+          "code": "info_rule",
+          "source_local_id": "exclude-outstanding-payment",
+          "detail": "unrestricted_exclusion"
+        },
+        {
+          "code": "info_rule",
+          "source_local_id": "exclude-fees-charges",
+          "detail": "unrestricted_exclusion"
+        },
+        {
+          "code": "emi_alternatives",
+          "source_local_id": "exclude-flexipay",
+          "detail": null
+        },
+        {
+          "code": "broad_exclusion_v1_only",
+          "source_local_id": "exclude-gaming",
+          "detail": null
+        },
+        {
+          "code": "partial_merchant_list",
+          "source_local_id": "tata-neu-partner-upi-wp7",
+          "detail": null
+        },
+        {
+          "code": "broad_category",
+          "source_local_id": "telecom-cable-neucoins-cap",
+          "detail": null
+        }
+      ],
+      "overrides_applied": [
+        {
+          "path": "cap_rules[id=grocery-neucoins-cap].metric",
+          "op": "set",
+          "value_sha256": "7af78ba28cf9ccb3",
+          "reason": "SBI caps NeuCoins per category per month.",
+          "source_url": "https://www.sbicard.com/sbi-card-en/assets/docs/pdf/ekit-tncs/Tata-Neu-Plus-Booklet.pdf",
+          "checked_on": "2026-11-05",
+          "citation": null
+        },
+        {
+          "path": "cap_rules[id=insurance-neucoins-cap].metric",
+          "op": "set",
+          "value_sha256": "7af78ba28cf9ccb3",
+          "reason": "SBI caps NeuCoins per category per month.",
+          "source_url": "https://www.sbicard.com/sbi-card-en/assets/docs/pdf/ekit-tncs/Tata-Neu-Plus-Booklet.pdf",
+          "checked_on": "2026-11-05",
+          "citation": null
+        },
+        {
+          "path": "cap_rules[id=utility-neucoins-cap].metric",
+          "op": "set",
+          "value_sha256": "7af78ba28cf9ccb3",
+          "reason": "SBI caps NeuCoins per category per month.",
+          "source_url": "https://www.sbicard.com/sbi-card-en/assets/docs/pdf/ekit-tncs/Tata-Neu-Plus-Booklet.pdf",
+          "checked_on": "2026-11-05",
+          "citation": null
+        },
+        {
+          "path": "cap_rules[id=telecom-cable-neucoins-cap].metric",
+          "op": "set",
+          "value_sha256": "7af78ba28cf9ccb3",
+          "reason": "SBI caps NeuCoins per category per month.",
+          "source_url": "https://www.sbicard.com/sbi-card-en/assets/docs/pdf/ekit-tncs/Tata-Neu-Plus-Booklet.pdf",
+          "checked_on": "2026-11-05",
+          "citation": null
+        },
+        {
+          "path": "cap_rules[id=grocery-neucoins-cap].post_limit_behavior.action",
+          "op": "set",
+          "value_sha256": "b1b0e5d61df2ff9a",
+          "reason": "Nothing earned above the cap.",
+          "source_url": "https://www.sbicard.com/sbi-card-en/assets/docs/pdf/ekit-tncs/Tata-Neu-Plus-Booklet.pdf",
+          "checked_on": "2026-11-05",
+          "citation": null
+        },
+        {
+          "path": "cap_rules[id=insurance-neucoins-cap].post_limit_behavior.action",
+          "op": "set",
+          "value_sha256": "b1b0e5d61df2ff9a",
+          "reason": "Nothing earned above the cap.",
+          "source_url": "https://www.sbicard.com/sbi-card-en/assets/docs/pdf/ekit-tncs/Tata-Neu-Plus-Booklet.pdf",
+          "checked_on": "2026-11-05",
+          "citation": null
+        },
+        {
+          "path": "cap_rules[id=utility-neucoins-cap].post_limit_behavior.action",
+          "op": "set",
+          "value_sha256": "b1b0e5d61df2ff9a",
+          "reason": "Nothing earned above the cap.",
+          "source_url": "https://www.sbicard.com/sbi-card-en/assets/docs/pdf/ekit-tncs/Tata-Neu-Plus-Booklet.pdf",
+          "checked_on": "2026-11-05",
+          "citation": null
+        },
+        {
+          "path": "cap_rules[id=telecom-cable-neucoins-cap].post_limit_behavior.action",
+          "op": "set",
+          "value_sha256": "b1b0e5d61df2ff9a",
+          "reason": "Nothing earned above the cap.",
+          "source_url": "https://www.sbicard.com/sbi-card-en/assets/docs/pdf/ekit-tncs/Tata-Neu-Plus-Booklet.pdf",
+          "checked_on": "2026-11-05",
+          "citation": null
+        },
+        {
+          "path": "accrual_engine.rounding_mode",
+          "op": "set",
+          "value_sha256": "b3c132a10399a05e",
+          "reason": "Issuer rounds the exact-amount NeuCoins down to a whole number (D7).",
+          "source_url": "https://www.sbicard.com/sbi-card-en/assets/docs/pdf/ekit-tncs/Tata-Neu-Plus-Booklet.pdf",
+          "checked_on": "2026-11-05",
+          "citation": null
+        },
+        {
+          "path": "reward_rules[id=base-other-eligible-spends].conditions",
+          "op": "set",
+          "value_sha256": "bea29710a0319372",
+          "reason": "WP7: \"exclude_reward_exclusions\" restates the card's exclusion rules; \"exclude_emi\" kept as an excluded category. The rule pays the base 1% the implicit base already paid, so nothing widens; it was an info earning rule.",
+          "source_url": "https://www.sbicard.com/sbi-card-en/assets/docs/pdf/ekit-tncs/Tata-Neu-Plus-Booklet.pdf",
+          "checked_on": "2026-11-05",
+          "citation": null
+        },
+        {
+          "path": "reward_rules[id=rupay-upi-1pct].conditions.network",
+          "op": "remove",
+          "value_sha256": "74234e98afe7498f",
+          "reason": "WP7: Replaced by card_variant below: UPI earn applies only to the RuPay variant of the card (research note).",
+          "source_url": "https://www.sbicard.com/sbi-card-en/assets/docs/pdf/ekit-tncs/Tata-Neu-Plus-Booklet.pdf",
+          "checked_on": "2026-11-05",
+          "citation": null
+        },
+        {
+          "path": "reward_rules[id=rupay-upi-1pct].conditions.card_variant",
+          "op": "set",
+          "value_sha256": "a862b80783ac5b88",
+          "reason": "WP7: D13b: the rule depends on which card variant the user holds (RuPay only), a user attribute the context does not carry; stays info with depends_on_user_attribute.",
+          "source_url": "https://www.sbicard.com/sbi-card-en/assets/docs/pdf/ekit-tncs/Tata-Neu-Plus-Booklet.pdf",
+          "checked_on": "2026-11-05",
+          "citation": null
+        },
+        {
+          "path": "reward_rules[id=tata-neu-partner-brands-2pct].conditions.eligible_partner_brands",
+          "op": "set",
+          "value_sha256": "cd2b55424d900c12",
+          "reason": "WP7: T&C 11.3(b)/(d): value back on \"spends on Tata Neu App/Website and partner Tata Brands\" (Air India & AI Express, Big Basket, Tata Cliq, Taj, Tata 1MG, Titan & Tanishq, Croma, Westside, Qmin). One list feeds the partner rule and its UPI carve-out, so they always cover the same merchants.",
+          "source_url": "https://www.sbicard.com/sbi-card-en/assets/docs/pdf/ekit-tncs/Tata-Neu-Plus-Booklet.pdf",
+          "checked_on": "2026-11-05",
+          "citation": null
+        },
+        {
+          "path": "reward_rules[id=tata-neu-partner-brands-2pct].channel_type",
+          "op": "set",
+          "value_sha256": "5cf7504d9781301d",
+          "reason": "WP7: Tata Neu is now in the brand list itself (it was only implied by the channel text).",
+          "source_url": "https://www.sbicard.com/sbi-card-en/assets/docs/pdf/ekit-tncs/Tata-Neu-Plus-Booklet.pdf",
+          "checked_on": "2026-11-05",
+          "citation": null
+        },
+        {
+          "path": "reward_rules",
+          "op": "append",
+          "value_sha256": "ea3e4dcb8f40b0ea",
+          "reason": "WP7: T&C 11.3(e): \"UPI Spends : Any UPI Spends on Rupay Credit Card (Including partner Tata Brands) : 1% back as NeuCoins\" - so the 2% partner rate must not apply on UPI.",
+          "source_url": "https://www.sbicard.com/sbi-card-en/assets/docs/pdf/ekit-tncs/Tata-Neu-Plus-Booklet.pdf",
+          "checked_on": "2026-11-05",
+          "citation": null
+        },
+        {
+          "path": "reward_rules",
+          "op": "append",
+          "value_sha256": "f875ab007f65a078",
+          "reason": "WP7: D25e: T&C 11.4(a) excludes \"Merchant EMI - Flexipay\" (Infinity) / \"Flexipay\" (Plus), and 11.6(e) forfeits NeuCoins when \"The transaction on which NeuCoins were accrued, got converted to EMI\". Rail-EMI exclusion on all spend, as on Millennia (the record's category emi AND rail emi row missed EMI in other categories).",
+          "source_url": "https://www.sbicard.com/sbi-card-en/assets/docs/pdf/ekit-tncs/Tata-Neu-Plus-Booklet.pdf",
+          "checked_on": "2026-11-05",
+          "citation": null
+        },
+        {
+          "path": "reward_rules",
+          "op": "append",
+          "value_sha256": "3586e3be78712a67",
+          "reason": "WP7: D25d: T&C 11.4 lists MCC 7349 with rent (6513) and education MCCs 5111, 5192, 5942, 5943, 5947, 8351 besides 8211-8299; the record carried only part of each list.",
+          "source_url": "https://www.sbicard.com/sbi-card-en/assets/docs/pdf/ekit-tncs/Tata-Neu-Plus-Booklet.pdf",
+          "checked_on": "2026-11-05",
+          "citation": null
+        },
+        {
+          "path": "reward_rules",
+          "op": "append",
+          "value_sha256": "eaca59be20ec5085",
+          "reason": "WP7: D25d: T&C 11.4(a) \"NeuCoins will not be accrued for Rental and Government related transactions\"; the record's rent row was MCC 6513 only, so a rent-category spend with another or no MCC earned.",
+          "source_url": "https://www.sbicard.com/sbi-card-en/assets/docs/pdf/ekit-tncs/Tata-Neu-Plus-Booklet.pdf",
+          "checked_on": "2026-11-05",
+          "citation": null
+        }
+      ]
+    },
+    "reward_rules": [
+      {
+        "id": "tata-neu-plus-sbi-credit-card:rule:tata-neu-partner-brands-2pct",
+        "category_id": null,
+        "category_slug": null,
+        "merchant_pattern": null,
+        "rail": null,
+        "unit": "points_per_100",
+        "rate": 2,
+        "min_txn_inr": null,
+        "max_txn_inr": null,
+        "priority": 10,
+        "conditions": {
+          "source_local_id": "tata-neu-partner-brands-2pct",
+          "part": null,
+          "info_reasons": [],
+          "flags": [
+            "group_replaced_by_condition_list",
+            "partial_merchant_list"
+          ]
+        },
+        "notes": null,
+        "effective_from": "2025-04-01",
+        "effective_to": null,
+        "excluded_categories": [],
+        "rule_role": "earn",
+        "merchant_slugs": [
+          "air_india",
+          "air_india_express",
+          "bigbasket",
+          "croma",
+          "taj",
+          "tanishq",
+          "tata_1mg",
+          "tata_cliq",
+          "tata_neu"
+        ],
+        "platform_slugs": [],
+        "mcc_include": [],
+        "mcc_exclude": [],
+        "except_merchant_slugs": [],
+        "except_platform_slugs": [],
+        "block_inr": null,
+        "min_engine_version": 2,
+        "max_engine_version": null,
+        "source_local_id": "tata-neu-partner-brands-2pct",
+        "display_note": "2% value back as NeuCoins on non-EMI spends on Tata Neu App/Website and partner Tata brands."
+      },
+      {
+        "id": "tata-neu-plus-sbi-credit-card:rule:tata-neu-select-categories-additional-5pct",
+        "category_id": null,
+        "category_slug": null,
+        "merchant_pattern": "tataneu",
+        "rail": null,
+        "unit": "points_per_100",
+        "rate": 7,
+        "min_txn_inr": null,
+        "max_txn_inr": null,
+        "priority": 20,
+        "conditions": {
+          "source_local_id": "tata-neu-select-categories-additional-5pct",
+          "part": null,
+          "info_reasons": [
+            "up_to_rate",
+            "condition:membership_or_program",
+            "condition:additional_value_back_percent"
+          ],
+          "flags": [
+            "depends_on_user_attribute",
+            "token_replaced_by_conditions"
+          ]
+        },
+        "notes": null,
+        "effective_from": "2025-04-01",
+        "effective_to": null,
+        "excluded_categories": [],
+        "rule_role": "info",
+        "merchant_slugs": [
+          "tata_neu"
+        ],
+        "platform_slugs": [],
+        "mcc_include": [],
+        "mcc_exclude": [],
+        "except_merchant_slugs": [],
+        "except_platform_slugs": [],
+        "block_inr": null,
+        "min_engine_version": 2,
+        "max_engine_version": null,
+        "source_local_id": "tata-neu-select-categories-additional-5pct",
+        "display_note": "Additional value back of up to 5% in NeuCoins on select category spends on Tata Neu App/Website. This is additional to the card's applicable base/accelerated reward."
+      },
+      {
+        "id": "tata-neu-plus-sbi-credit-card:rule:base-other-eligible-spends",
+        "category_id": null,
+        "category_slug": null,
+        "merchant_pattern": null,
+        "rail": null,
+        "unit": "points_per_100",
+        "rate": 1,
+        "min_txn_inr": null,
+        "max_txn_inr": null,
+        "priority": 100,
+        "conditions": {
+          "source_local_id": "base-other-eligible-spends",
+          "part": null,
+          "info_reasons": [],
+          "flags": []
+        },
+        "notes": null,
+        "effective_from": "2025-04-01",
+        "effective_to": null,
+        "excluded_categories": [
+          "cat-emi"
+        ],
+        "rule_role": "base",
+        "merchant_slugs": [],
+        "platform_slugs": [],
+        "mcc_include": [],
+        "mcc_exclude": [],
+        "except_merchant_slugs": [],
+        "except_platform_slugs": [],
+        "block_inr": null,
+        "min_engine_version": 1,
+        "max_engine_version": null,
+        "source_local_id": "base-other-eligible-spends",
+        "display_note": "1% value back as NeuCoins on other eligible spends."
+      },
+      {
+        "id": "tata-neu-plus-sbi-credit-card:rule:rupay-upi-1pct",
+        "category_id": null,
+        "category_slug": null,
+        "merchant_pattern": null,
+        "rail": "upi_qr",
+        "unit": "points_per_100",
+        "rate": 1,
+        "min_txn_inr": null,
+        "max_txn_inr": null,
+        "priority": 30,
+        "conditions": {
+          "source_local_id": "rupay-upi-1pct",
+          "part": null,
+          "info_reasons": [
+            "condition:includes_partner_tata_brands",
+            "condition:card_variant",
+            "condition:channel_type"
+          ],
+          "flags": [
+            "depends_on_user_attribute"
+          ]
+        },
+        "notes": null,
+        "effective_from": "2025-04-01",
+        "effective_to": null,
+        "excluded_categories": [],
+        "rule_role": "info",
+        "merchant_slugs": [],
+        "platform_slugs": [],
+        "mcc_include": [],
+        "mcc_exclude": [],
+        "except_merchant_slugs": [],
+        "except_platform_slugs": [],
+        "block_inr": null,
+        "min_engine_version": 2,
+        "max_engine_version": null,
+        "source_local_id": "rupay-upi-1pct",
+        "display_note": "Eligible UPI spends on the RuPay variant earn 1% NeuCoins, including UPI spends at partner Tata brands."
+      },
+      {
+        "id": "tata-neu-plus-sbi-credit-card:rule:exclude-fuel#1",
+        "category_id": "cat-fuel",
+        "category_slug": "fuel",
+        "merchant_pattern": null,
+        "rail": null,
+        "unit": "points_per_100",
+        "rate": 0,
+        "min_txn_inr": null,
+        "max_txn_inr": null,
+        "priority": 1,
+        "conditions": {
+          "source_local_id": "exclude-fuel",
+          "part": 1,
+          "info_reasons": [],
+          "flags": [
+            "mcc_scoped_exclusion"
+          ]
+        },
+        "notes": null,
+        "effective_from": "2025-04-01",
+        "effective_to": null,
+        "excluded_categories": [],
+        "rule_role": "exclusion",
+        "merchant_slugs": [],
+        "platform_slugs": [],
+        "mcc_include": [],
+        "mcc_exclude": [],
+        "except_merchant_slugs": [],
+        "except_platform_slugs": [],
+        "block_inr": null,
+        "min_engine_version": 1,
+        "max_engine_version": 1,
+        "source_local_id": "exclude-fuel",
+        "display_note": "Fuel spends do not earn NeuCoins."
+      },
+      {
+        "id": "tata-neu-plus-sbi-credit-card:rule:exclude-fuel#2",
+        "category_id": "cat-fuel",
+        "category_slug": "fuel",
+        "merchant_pattern": null,
+        "rail": null,
+        "unit": "points_per_100",
+        "rate": 0,
+        "min_txn_inr": null,
+        "max_txn_inr": null,
+        "priority": 1,
+        "conditions": {
+          "source_local_id": "exclude-fuel",
+          "part": 2,
+          "info_reasons": [],
+          "flags": [
+            "mcc_scoped_exclusion"
+          ]
+        },
+        "notes": null,
+        "effective_from": "2025-04-01",
+        "effective_to": null,
+        "excluded_categories": [],
+        "rule_role": "exclusion",
+        "merchant_slugs": [],
+        "platform_slugs": [],
+        "mcc_include": [
+          "5172",
+          "5541",
+          "5542",
+          "5983"
+        ],
+        "mcc_exclude": [],
+        "except_merchant_slugs": [],
+        "except_platform_slugs": [],
+        "block_inr": null,
+        "min_engine_version": 2,
+        "max_engine_version": null,
+        "source_local_id": "exclude-fuel",
+        "display_note": "Fuel spends do not earn NeuCoins."
+      },
+      {
+        "id": "tata-neu-plus-sbi-credit-card:rule:exclude-fuel#3",
+        "category_id": null,
+        "category_slug": null,
+        "merchant_pattern": null,
+        "rail": null,
+        "unit": "points_per_100",
+        "rate": 0,
+        "min_txn_inr": null,
+        "max_txn_inr": null,
+        "priority": 1,
+        "conditions": {
+          "source_local_id": "exclude-fuel",
+          "part": 3,
+          "info_reasons": [],
+          "flags": [
+            "mcc_scoped_exclusion"
+          ]
+        },
+        "notes": null,
+        "effective_from": "2025-04-01",
+        "effective_to": null,
+        "excluded_categories": [],
+        "rule_role": "exclusion",
+        "merchant_slugs": [],
+        "platform_slugs": [],
+        "mcc_include": [
+          "5172",
+          "5541",
+          "5542",
+          "5983"
+        ],
+        "mcc_exclude": [],
+        "except_merchant_slugs": [],
+        "except_platform_slugs": [],
+        "block_inr": null,
+        "min_engine_version": 2,
+        "max_engine_version": null,
+        "source_local_id": "exclude-fuel",
+        "display_note": "Fuel spends do not earn NeuCoins."
+      },
+      {
+        "id": "tata-neu-plus-sbi-credit-card:rule:exclude-wallet-loads#1",
+        "category_id": "cat-wallet",
+        "category_slug": "wallet",
+        "merchant_pattern": null,
+        "rail": null,
+        "unit": "points_per_100",
+        "rate": 0,
+        "min_txn_inr": null,
+        "max_txn_inr": null,
+        "priority": 2,
+        "conditions": {
+          "source_local_id": "exclude-wallet-loads",
+          "part": 1,
+          "info_reasons": [],
+          "flags": [
+            "mcc_scoped_exclusion"
+          ]
+        },
+        "notes": null,
+        "effective_from": "2025-04-01",
+        "effective_to": null,
+        "excluded_categories": [],
+        "rule_role": "exclusion",
+        "merchant_slugs": [],
+        "platform_slugs": [],
+        "mcc_include": [],
+        "mcc_exclude": [],
+        "except_merchant_slugs": [],
+        "except_platform_slugs": [],
+        "block_inr": null,
+        "min_engine_version": 1,
+        "max_engine_version": 1,
+        "source_local_id": "exclude-wallet-loads",
+        "display_note": "Wallet loads do not earn NeuCoins."
+      },
+      {
+        "id": "tata-neu-plus-sbi-credit-card:rule:exclude-wallet-loads#2",
+        "category_id": "cat-wallet",
+        "category_slug": "wallet",
+        "merchant_pattern": null,
+        "rail": null,
+        "unit": "points_per_100",
+        "rate": 0,
+        "min_txn_inr": null,
+        "max_txn_inr": null,
+        "priority": 2,
+        "conditions": {
+          "source_local_id": "exclude-wallet-loads",
+          "part": 2,
+          "info_reasons": [],
+          "flags": [
+            "mcc_scoped_exclusion"
+          ]
+        },
+        "notes": null,
+        "effective_from": "2025-04-01",
+        "effective_to": null,
+        "excluded_categories": [],
+        "rule_role": "exclusion",
+        "merchant_slugs": [],
+        "platform_slugs": [],
+        "mcc_include": [
+          "6540",
+          "6541"
+        ],
+        "mcc_exclude": [],
+        "except_merchant_slugs": [],
+        "except_platform_slugs": [],
+        "block_inr": null,
+        "min_engine_version": 2,
+        "max_engine_version": null,
+        "source_local_id": "exclude-wallet-loads",
+        "display_note": "Wallet loads do not earn NeuCoins."
+      },
+      {
+        "id": "tata-neu-plus-sbi-credit-card:rule:exclude-wallet-loads#3",
+        "category_id": null,
+        "category_slug": null,
+        "merchant_pattern": null,
+        "rail": null,
+        "unit": "points_per_100",
+        "rate": 0,
+        "min_txn_inr": null,
+        "max_txn_inr": null,
+        "priority": 2,
+        "conditions": {
+          "source_local_id": "exclude-wallet-loads",
+          "part": 3,
+          "info_reasons": [],
+          "flags": [
+            "mcc_scoped_exclusion"
+          ]
+        },
+        "notes": null,
+        "effective_from": "2025-04-01",
+        "effective_to": null,
+        "excluded_categories": [],
+        "rule_role": "exclusion",
+        "merchant_slugs": [],
+        "platform_slugs": [],
+        "mcc_include": [
+          "6540",
+          "6541"
+        ],
+        "mcc_exclude": [],
+        "except_merchant_slugs": [],
+        "except_platform_slugs": [],
+        "block_inr": null,
+        "min_engine_version": 2,
+        "max_engine_version": null,
+        "source_local_id": "exclude-wallet-loads",
+        "display_note": "Wallet loads do not earn NeuCoins."
+      },
+      {
+        "id": "tata-neu-plus-sbi-credit-card:rule:exclude-rent-gift-prepaid-vouchers",
+        "category_id": null,
+        "category_slug": null,
+        "merchant_pattern": null,
+        "rail": null,
+        "unit": "points_per_100",
+        "rate": 0,
+        "min_txn_inr": null,
+        "max_txn_inr": null,
+        "priority": 3,
+        "conditions": {
+          "source_local_id": "exclude-rent-gift-prepaid-vouchers",
+          "part": null,
+          "info_reasons": [],
+          "flags": [
+            "exclusion_scope_broadened"
+          ]
+        },
+        "notes": null,
+        "effective_from": "2025-04-01",
+        "effective_to": null,
+        "excluded_categories": [],
+        "rule_role": "exclusion",
+        "merchant_slugs": [],
+        "platform_slugs": [],
+        "mcc_include": [
+          "6513"
+        ],
+        "mcc_exclude": [],
+        "except_merchant_slugs": [],
+        "except_platform_slugs": [],
+        "block_inr": null,
+        "min_engine_version": 2,
+        "max_engine_version": null,
+        "source_local_id": "exclude-rent-gift-prepaid-vouchers",
+        "display_note": "Rental payments and gift/prepaid card loads or voucher purchases are excluded."
+      },
+      {
+        "id": "tata-neu-plus-sbi-credit-card:rule:exclude-government#1",
+        "category_id": "cat-government",
+        "category_slug": "government",
+        "merchant_pattern": null,
+        "rail": null,
+        "unit": "points_per_100",
+        "rate": 0,
+        "min_txn_inr": null,
+        "max_txn_inr": null,
+        "priority": 4,
+        "conditions": {
+          "source_local_id": "exclude-government",
+          "part": 1,
+          "info_reasons": [],
+          "flags": [
+            "mcc_scoped_exclusion"
+          ]
+        },
+        "notes": null,
+        "effective_from": "2025-04-01",
+        "effective_to": null,
+        "excluded_categories": [],
+        "rule_role": "exclusion",
+        "merchant_slugs": [],
+        "platform_slugs": [],
+        "mcc_include": [],
+        "mcc_exclude": [],
+        "except_merchant_slugs": [],
+        "except_platform_slugs": [],
+        "block_inr": null,
+        "min_engine_version": 1,
+        "max_engine_version": 1,
+        "source_local_id": "exclude-government",
+        "display_note": "Government-related transactions do not earn NeuCoins."
+      },
+      {
+        "id": "tata-neu-plus-sbi-credit-card:rule:exclude-government#2",
+        "category_id": "cat-government",
+        "category_slug": "government",
+        "merchant_pattern": null,
+        "rail": null,
+        "unit": "points_per_100",
+        "rate": 0,
+        "min_txn_inr": null,
+        "max_txn_inr": null,
+        "priority": 4,
+        "conditions": {
+          "source_local_id": "exclude-government",
+          "part": 2,
+          "info_reasons": [],
+          "flags": [
+            "mcc_scoped_exclusion"
+          ]
+        },
+        "notes": null,
+        "effective_from": "2025-04-01",
+        "effective_to": null,
+        "excluded_categories": [],
+        "rule_role": "exclusion",
+        "merchant_slugs": [],
+        "platform_slugs": [],
+        "mcc_include": [
+          "9311",
+          "9399"
+        ],
+        "mcc_exclude": [],
+        "except_merchant_slugs": [],
+        "except_platform_slugs": [],
+        "block_inr": null,
+        "min_engine_version": 2,
+        "max_engine_version": null,
+        "source_local_id": "exclude-government",
+        "display_note": "Government-related transactions do not earn NeuCoins."
+      },
+      {
+        "id": "tata-neu-plus-sbi-credit-card:rule:exclude-government#3",
+        "category_id": null,
+        "category_slug": null,
+        "merchant_pattern": null,
+        "rail": null,
+        "unit": "points_per_100",
+        "rate": 0,
+        "min_txn_inr": null,
+        "max_txn_inr": null,
+        "priority": 4,
+        "conditions": {
+          "source_local_id": "exclude-government",
+          "part": 3,
+          "info_reasons": [],
+          "flags": [
+            "mcc_scoped_exclusion"
+          ]
+        },
+        "notes": null,
+        "effective_from": "2025-04-01",
+        "effective_to": null,
+        "excluded_categories": [],
+        "rule_role": "exclusion",
+        "merchant_slugs": [],
+        "platform_slugs": [],
+        "mcc_include": [
+          "9311",
+          "9399"
+        ],
+        "mcc_exclude": [],
+        "except_merchant_slugs": [],
+        "except_platform_slugs": [],
+        "block_inr": null,
+        "min_engine_version": 2,
+        "max_engine_version": null,
+        "source_local_id": "exclude-government",
+        "display_note": "Government-related transactions do not earn NeuCoins."
+      },
+      {
+        "id": "tata-neu-plus-sbi-credit-card:rule:exclude-education#1",
+        "category_id": "cat-education",
+        "category_slug": "education",
+        "merchant_pattern": null,
+        "rail": null,
+        "unit": "points_per_100",
+        "rate": 0,
+        "min_txn_inr": null,
+        "max_txn_inr": null,
+        "priority": 5,
+        "conditions": {
+          "source_local_id": "exclude-education",
+          "part": 1,
+          "info_reasons": [],
+          "flags": [
+            "mcc_scoped_exclusion"
+          ]
+        },
+        "notes": null,
+        "effective_from": "2025-04-01",
+        "effective_to": null,
+        "excluded_categories": [],
+        "rule_role": "exclusion",
+        "merchant_slugs": [],
+        "platform_slugs": [],
+        "mcc_include": [],
+        "mcc_exclude": [],
+        "except_merchant_slugs": [],
+        "except_platform_slugs": [],
+        "block_inr": null,
+        "min_engine_version": 1,
+        "max_engine_version": 1,
+        "source_local_id": "exclude-education",
+        "display_note": "Education payments do not earn NeuCoins. Current SBI Card fee terms identify MCC 8211, 8220, 8241, 8244, 8249 and 8299 for education-payment classification."
+      },
+      {
+        "id": "tata-neu-plus-sbi-credit-card:rule:exclude-education#2",
+        "category_id": "cat-education",
+        "category_slug": "education",
+        "merchant_pattern": null,
+        "rail": null,
+        "unit": "points_per_100",
+        "rate": 0,
+        "min_txn_inr": null,
+        "max_txn_inr": null,
+        "priority": 5,
+        "conditions": {
+          "source_local_id": "exclude-education",
+          "part": 2,
+          "info_reasons": [],
+          "flags": [
+            "mcc_scoped_exclusion"
+          ]
+        },
+        "notes": null,
+        "effective_from": "2025-04-01",
+        "effective_to": null,
+        "excluded_categories": [],
+        "rule_role": "exclusion",
+        "merchant_slugs": [],
+        "platform_slugs": [],
+        "mcc_include": [
+          "8211",
+          "8220",
+          "8241",
+          "8244",
+          "8249",
+          "8299"
+        ],
+        "mcc_exclude": [],
+        "except_merchant_slugs": [],
+        "except_platform_slugs": [],
+        "block_inr": null,
+        "min_engine_version": 2,
+        "max_engine_version": null,
+        "source_local_id": "exclude-education",
+        "display_note": "Education payments do not earn NeuCoins. Current SBI Card fee terms identify MCC 8211, 8220, 8241, 8244, 8249 and 8299 for education-payment classification."
+      },
+      {
+        "id": "tata-neu-plus-sbi-credit-card:rule:exclude-education#3",
+        "category_id": null,
+        "category_slug": null,
+        "merchant_pattern": null,
+        "rail": null,
+        "unit": "points_per_100",
+        "rate": 0,
+        "min_txn_inr": null,
+        "max_txn_inr": null,
+        "priority": 5,
+        "conditions": {
+          "source_local_id": "exclude-education",
+          "part": 3,
+          "info_reasons": [],
+          "flags": [
+            "mcc_scoped_exclusion"
+          ]
+        },
+        "notes": null,
+        "effective_from": "2025-04-01",
+        "effective_to": null,
+        "excluded_categories": [],
+        "rule_role": "exclusion",
+        "merchant_slugs": [],
+        "platform_slugs": [],
+        "mcc_include": [
+          "8211",
+          "8220",
+          "8241",
+          "8244",
+          "8249",
+          "8299"
+        ],
+        "mcc_exclude": [],
+        "except_merchant_slugs": [],
+        "except_platform_slugs": [],
+        "block_inr": null,
+        "min_engine_version": 2,
+        "max_engine_version": null,
+        "source_local_id": "exclude-education",
+        "display_note": "Education payments do not earn NeuCoins. Current SBI Card fee terms identify MCC 8211, 8220, 8241, 8244, 8249 and 8299 for education-payment classification."
+      },
+      {
+        "id": "tata-neu-plus-sbi-credit-card:rule:exclude-cash-advance",
+        "category_id": null,
+        "category_slug": null,
+        "merchant_pattern": null,
+        "rail": "atm",
+        "unit": "points_per_100",
+        "rate": 0,
+        "min_txn_inr": null,
+        "max_txn_inr": null,
+        "priority": 6,
+        "conditions": {
+          "source_local_id": "exclude-cash-advance",
+          "part": null,
+          "info_reasons": [],
+          "flags": [
+            "exclusion_scope_broadened"
+          ]
+        },
+        "notes": null,
+        "effective_from": "2025-04-01",
+        "effective_to": null,
+        "excluded_categories": [],
+        "rule_role": "exclusion",
+        "merchant_slugs": [],
+        "platform_slugs": [],
+        "mcc_include": [],
+        "mcc_exclude": [],
+        "except_merchant_slugs": [],
+        "except_platform_slugs": [],
+        "block_inr": null,
+        "min_engine_version": 2,
+        "max_engine_version": null,
+        "source_local_id": "exclude-cash-advance",
+        "display_note": "Cash advances do not earn NeuCoins."
+      },
+      {
+        "id": "tata-neu-plus-sbi-credit-card:rule:exclude-outstanding-payment",
+        "category_id": null,
+        "category_slug": null,
+        "merchant_pattern": null,
+        "rail": null,
+        "unit": "points_per_100",
+        "rate": 0,
+        "min_txn_inr": null,
+        "max_txn_inr": null,
+        "priority": 7,
+        "conditions": {
+          "source_local_id": "exclude-outstanding-payment",
+          "part": null,
+          "info_reasons": [
+            "unrestricted_exclusion"
+          ],
+          "flags": []
+        },
+        "notes": null,
+        "effective_from": "2025-04-01",
+        "effective_to": null,
+        "excluded_categories": [],
+        "rule_role": "info",
+        "merchant_slugs": [],
+        "platform_slugs": [],
+        "mcc_include": [],
+        "mcc_exclude": [],
+        "except_merchant_slugs": [],
+        "except_platform_slugs": [],
+        "block_inr": null,
+        "min_engine_version": 2,
+        "max_engine_version": null,
+        "source_local_id": "exclude-outstanding-payment",
+        "display_note": "Payments of outstanding balances do not earn NeuCoins."
+      },
+      {
+        "id": "tata-neu-plus-sbi-credit-card:rule:exclude-fees-charges",
+        "category_id": null,
+        "category_slug": null,
+        "merchant_pattern": null,
+        "rail": null,
+        "unit": "points_per_100",
+        "rate": 0,
+        "min_txn_inr": null,
+        "max_txn_inr": null,
+        "priority": 8,
+        "conditions": {
+          "source_local_id": "exclude-fees-charges",
+          "part": null,
+          "info_reasons": [
+            "unrestricted_exclusion"
+          ],
+          "flags": []
+        },
+        "notes": null,
+        "effective_from": "2025-04-01",
+        "effective_to": null,
+        "excluded_categories": [],
+        "rule_role": "info",
+        "merchant_slugs": [],
+        "platform_slugs": [],
+        "mcc_include": [],
+        "mcc_exclude": [],
+        "except_merchant_slugs": [],
+        "except_platform_slugs": [],
+        "block_inr": null,
+        "min_engine_version": 2,
+        "max_engine_version": null,
+        "source_local_id": "exclude-fees-charges",
+        "display_note": "Card fees and other charges do not earn NeuCoins."
+      },
+      {
+        "id": "tata-neu-plus-sbi-credit-card:rule:exclude-flexipay#1",
+        "category_id": "cat-emi",
+        "category_slug": "emi",
+        "merchant_pattern": null,
+        "rail": null,
+        "unit": "points_per_100",
+        "rate": 0,
+        "min_txn_inr": null,
+        "max_txn_inr": null,
+        "priority": 9,
+        "conditions": {
+          "source_local_id": "exclude-flexipay",
+          "part": 1,
+          "info_reasons": [],
+          "flags": [
+            "emi_alternatives"
+          ]
+        },
+        "notes": null,
+        "effective_from": "2025-04-01",
+        "effective_to": null,
+        "excluded_categories": [],
+        "rule_role": "exclusion",
+        "merchant_slugs": [],
+        "platform_slugs": [],
+        "mcc_include": [],
+        "mcc_exclude": [],
+        "except_merchant_slugs": [],
+        "except_platform_slugs": [],
+        "block_inr": null,
+        "min_engine_version": 1,
+        "max_engine_version": null,
+        "source_local_id": "exclude-flexipay",
+        "display_note": "Flexipay transactions do not earn NeuCoins."
+      },
+      {
+        "id": "tata-neu-plus-sbi-credit-card:rule:exclude-flexipay#2",
+        "category_id": null,
+        "category_slug": null,
+        "merchant_pattern": null,
+        "rail": "emi",
+        "unit": "points_per_100",
+        "rate": 0,
+        "min_txn_inr": null,
+        "max_txn_inr": null,
+        "priority": 9,
+        "conditions": {
+          "source_local_id": "exclude-flexipay",
+          "part": 2,
+          "info_reasons": [],
+          "flags": [
+            "emi_alternatives"
+          ]
+        },
+        "notes": null,
+        "effective_from": "2025-04-01",
+        "effective_to": null,
+        "excluded_categories": [],
+        "rule_role": "exclusion",
+        "merchant_slugs": [],
+        "platform_slugs": [],
+        "mcc_include": [],
+        "mcc_exclude": [],
+        "except_merchant_slugs": [],
+        "except_platform_slugs": [],
+        "block_inr": null,
+        "min_engine_version": 2,
+        "max_engine_version": null,
+        "source_local_id": "exclude-flexipay",
+        "display_note": "Flexipay transactions do not earn NeuCoins."
+      },
+      {
+        "id": "tata-neu-plus-sbi-credit-card:rule:exclude-gaming#1",
+        "category_id": "cat-entertainment",
+        "category_slug": "entertainment",
+        "merchant_pattern": null,
+        "rail": null,
+        "unit": "points_per_100",
+        "rate": 0,
+        "min_txn_inr": null,
+        "max_txn_inr": null,
+        "priority": 10,
+        "conditions": {
+          "source_local_id": "exclude-gaming",
+          "part": 1,
+          "info_reasons": [],
+          "flags": [
+            "broad_exclusion_v1_only",
+            "broad_category"
+          ]
+        },
+        "notes": null,
+        "effective_from": "2025-04-01",
+        "effective_to": null,
+        "excluded_categories": [],
+        "rule_role": "exclusion",
+        "merchant_slugs": [],
+        "platform_slugs": [],
+        "mcc_include": [],
+        "mcc_exclude": [],
+        "except_merchant_slugs": [],
+        "except_platform_slugs": [],
+        "block_inr": null,
+        "min_engine_version": 1,
+        "max_engine_version": 1,
+        "source_local_id": "exclude-gaming",
+        "display_note": "Gaming transactions do not earn NeuCoins."
+      },
+      {
+        "id": "tata-neu-plus-sbi-credit-card:rule:exclude-gaming#2",
+        "category_id": null,
+        "category_slug": null,
+        "merchant_pattern": null,
+        "rail": null,
+        "unit": "points_per_100",
+        "rate": 0,
+        "min_txn_inr": null,
+        "max_txn_inr": null,
+        "priority": 10,
+        "conditions": {
+          "source_local_id": "exclude-gaming",
+          "part": 2,
+          "info_reasons": [],
+          "flags": [
+            "broad_exclusion_v1_only"
+          ]
+        },
+        "notes": null,
+        "effective_from": "2025-04-01",
+        "effective_to": null,
+        "excluded_categories": [],
+        "rule_role": "exclusion",
+        "merchant_slugs": [],
+        "platform_slugs": [],
+        "mcc_include": [
+          "5816",
+          "7993",
+          "7994"
+        ],
+        "mcc_exclude": [],
+        "except_merchant_slugs": [],
+        "except_platform_slugs": [],
+        "block_inr": null,
+        "min_engine_version": 2,
+        "max_engine_version": null,
+        "source_local_id": "exclude-gaming",
+        "display_note": "Gaming transactions do not earn NeuCoins."
+      },
+      {
+        "id": "tata-neu-plus-sbi-credit-card:rule:tata-neu-partner-upi-wp7",
+        "category_id": null,
+        "category_slug": null,
+        "merchant_pattern": null,
+        "rail": "upi_qr",
+        "unit": "points_per_100",
+        "rate": 1,
+        "min_txn_inr": null,
+        "max_txn_inr": null,
+        "priority": 8,
+        "conditions": {
+          "source_local_id": "tata-neu-partner-upi-wp7",
+          "part": null,
+          "info_reasons": [],
+          "flags": [
+            "partial_merchant_list"
+          ]
+        },
+        "notes": null,
+        "effective_from": "2025-04-01",
+        "effective_to": null,
+        "excluded_categories": [],
+        "rule_role": "earn",
+        "merchant_slugs": [
+          "air_india",
+          "air_india_express",
+          "bigbasket",
+          "croma",
+          "taj",
+          "tanishq",
+          "tata_1mg",
+          "tata_cliq",
+          "tata_neu"
+        ],
+        "platform_slugs": [],
+        "mcc_include": [],
+        "mcc_exclude": [],
+        "except_merchant_slugs": [],
+        "except_platform_slugs": [],
+        "block_inr": null,
+        "min_engine_version": 2,
+        "max_engine_version": null,
+        "source_local_id": "tata-neu-partner-upi-wp7",
+        "display_note": "UPI spends at partner Tata brands earn the UPI rate, not the partner rate."
+      },
+      {
+        "id": "tata-neu-plus-sbi-credit-card:rule:wp7_emi_rail_exclusion",
+        "category_id": null,
+        "category_slug": null,
+        "merchant_pattern": null,
+        "rail": "emi",
+        "unit": "points_per_100",
+        "rate": 0,
+        "min_txn_inr": null,
+        "max_txn_inr": null,
+        "priority": 0,
+        "conditions": {
+          "source_local_id": "wp7_emi_rail_exclusion",
+          "part": null,
+          "info_reasons": [],
+          "flags": []
+        },
+        "notes": null,
+        "effective_from": "2025-04-01",
+        "effective_to": null,
+        "excluded_categories": [],
+        "rule_role": "exclusion",
+        "merchant_slugs": [],
+        "platform_slugs": [],
+        "mcc_include": [],
+        "mcc_exclude": [],
+        "except_merchant_slugs": [],
+        "except_platform_slugs": [],
+        "block_inr": null,
+        "min_engine_version": 2,
+        "max_engine_version": null,
+        "source_local_id": "wp7_emi_rail_exclusion",
+        "display_note": "Merchant EMI / Flexipay earn no NeuCoins; NeuCoins are forfeited when a spend is converted to EMI."
+      },
+      {
+        "id": "tata-neu-plus-sbi-credit-card:rule:wp7_rent_education_mcc_exclusion",
+        "category_id": null,
+        "category_slug": null,
+        "merchant_pattern": null,
+        "rail": null,
+        "unit": "points_per_100",
+        "rate": 0,
+        "min_txn_inr": null,
+        "max_txn_inr": null,
+        "priority": 3,
+        "conditions": {
+          "source_local_id": "wp7_rent_education_mcc_exclusion",
+          "part": null,
+          "info_reasons": [],
+          "flags": []
+        },
+        "notes": null,
+        "effective_from": "2025-04-01",
+        "effective_to": null,
+        "excluded_categories": [],
+        "rule_role": "exclusion",
+        "merchant_slugs": [],
+        "platform_slugs": [],
+        "mcc_include": [
+          "5111",
+          "5192",
+          "5942",
+          "5943",
+          "5947",
+          "7349",
+          "8351"
+        ],
+        "mcc_exclude": [],
+        "except_merchant_slugs": [],
+        "except_platform_slugs": [],
+        "block_inr": null,
+        "min_engine_version": 2,
+        "max_engine_version": null,
+        "source_local_id": "wp7_rent_education_mcc_exclusion",
+        "display_note": "Rental/maintenance and education MCCs listed by the issuer earn no NeuCoins."
+      },
+      {
+        "id": "tata-neu-plus-sbi-credit-card:rule:wp7_rent_category_exclusion",
+        "category_id": "cat-rent",
+        "category_slug": "rent",
+        "merchant_pattern": null,
+        "rail": null,
+        "unit": "points_per_100",
+        "rate": 0,
+        "min_txn_inr": null,
+        "max_txn_inr": null,
+        "priority": 3,
+        "conditions": {
+          "source_local_id": "wp7_rent_category_exclusion",
+          "part": null,
+          "info_reasons": [],
+          "flags": []
+        },
+        "notes": null,
+        "effective_from": "2025-04-01",
+        "effective_to": null,
+        "excluded_categories": [],
+        "rule_role": "exclusion",
+        "merchant_slugs": [],
+        "platform_slugs": [],
+        "mcc_include": [],
+        "mcc_exclude": [],
+        "except_merchant_slugs": [],
+        "except_platform_slugs": [],
+        "block_inr": null,
+        "min_engine_version": 1,
+        "max_engine_version": null,
+        "source_local_id": "wp7_rent_category_exclusion",
+        "display_note": "Rental transactions earn no NeuCoins."
+      }
+    ],
+    "cap_rules": [
+      {
+        "id": "tata-neu-plus-sbi-credit-card:cap:grocery-neucoins-cap",
+        "reward_rule_id": null,
+        "category_id": "cat-groceries",
+        "category_slug": "groceries",
+        "benefit_kind": null,
+        "label": "Grocery neucoins cap",
+        "measure": "reward_value",
+        "period": "calendar_month",
+        "cap_value": 1000,
+        "post_cap_unit": null,
+        "post_cap_rate": 0,
+        "resets_on_day": null,
+        "cap_kind": "total_points",
+        "cap_amount": 1000,
+        "scope": "targets",
+        "targets": [],
+        "parent_cap_id": null,
+        "post_cap_behavior": null,
+        "anchor": null,
+        "min_engine_version": 1,
+        "source_local_id": "grocery-neucoins-cap"
+      },
+      {
+        "id": "tata-neu-plus-sbi-credit-card:cap:insurance-neucoins-cap",
+        "reward_rule_id": null,
+        "category_id": "cat-insurance",
+        "category_slug": "insurance",
+        "benefit_kind": null,
+        "label": "Insurance neucoins cap",
+        "measure": "reward_value",
+        "period": "calendar_month",
+        "cap_value": 2000,
+        "post_cap_unit": null,
+        "post_cap_rate": 0,
+        "resets_on_day": null,
+        "cap_kind": "total_points",
+        "cap_amount": 2000,
+        "scope": "targets",
+        "targets": [],
+        "parent_cap_id": null,
+        "post_cap_behavior": null,
+        "anchor": null,
+        "min_engine_version": 1,
+        "source_local_id": "insurance-neucoins-cap"
+      },
+      {
+        "id": "tata-neu-plus-sbi-credit-card:cap:utility-neucoins-cap",
+        "reward_rule_id": null,
+        "category_id": "cat-bills",
+        "category_slug": "bills",
+        "benefit_kind": null,
+        "label": "Utility neucoins cap",
+        "measure": "reward_value",
+        "period": "calendar_month",
+        "cap_value": 2000,
+        "post_cap_unit": null,
+        "post_cap_rate": 0,
+        "resets_on_day": null,
+        "cap_kind": "total_points",
+        "cap_amount": 2000,
+        "scope": "targets",
+        "targets": [],
+        "parent_cap_id": null,
+        "post_cap_behavior": null,
+        "anchor": null,
+        "min_engine_version": 1,
+        "source_local_id": "utility-neucoins-cap"
+      },
+      {
+        "id": "tata-neu-plus-sbi-credit-card:cap:telecom-cable-neucoins-cap",
+        "reward_rule_id": null,
+        "category_id": "cat-bills",
+        "category_slug": "bills",
+        "benefit_kind": null,
+        "label": "Telecom cable neucoins cap",
+        "measure": "reward_value",
+        "period": "calendar_month",
+        "cap_value": 2000,
+        "post_cap_unit": null,
+        "post_cap_rate": 0,
+        "resets_on_day": null,
+        "cap_kind": "total_points",
+        "cap_amount": 2000,
+        "scope": "targets",
+        "targets": [],
+        "parent_cap_id": null,
+        "post_cap_behavior": null,
+        "anchor": null,
+        "min_engine_version": 1,
+        "source_local_id": "telecom-cable-neucoins-cap"
+      },
+      {
+        "id": "tata-neu-plus-sbi-credit-card:cap:upi-neucoins-cap",
+        "reward_rule_id": null,
+        "category_id": null,
+        "category_slug": null,
+        "benefit_kind": null,
+        "label": "Upi neucoins cap",
+        "measure": "reward_value",
+        "period": "statement_cycle",
+        "cap_value": 500,
+        "post_cap_unit": null,
+        "post_cap_rate": 0,
+        "resets_on_day": null,
+        "cap_kind": "total_points",
+        "cap_amount": 500,
+        "scope": "targets",
+        "targets": [
+          "tata-neu-plus-sbi-credit-card:rule:rupay-upi-1pct",
+          "tata-neu-plus-sbi-credit-card:rule:tata-neu-partner-upi-wp7"
+        ],
+        "parent_cap_id": null,
+        "post_cap_behavior": null,
+        "anchor": null,
+        "min_engine_version": 2,
+        "source_local_id": "upi-neucoins-cap"
+      }
+    ],
+    "milestone_rules": [],
+    "fee_waiver_rules": [
+      {
+        "id": "tata-neu-plus-sbi-credit-card:waiver:1",
+        "threshold_spend_inr": 100000,
+        "period": "annual",
+        "waives_fee_inr": 499,
+        "excluded_category_slugs": [],
+        "notes": "Eligible spends incurred within the last 365 days from the Annual Card Fee billing date are considered for spend-based reversal of the annual fee.",
+        "excluded_categories": []
+      }
+    ],
+    "benefits": [
+      {
+        "id": "tata-neu-plus-sbi-credit-card:benefit:domestic-airport-lounge",
+        "key": "domestic-airport-lounge",
+        "source_local_id": "domestic-airport-lounge",
+        "kind": "lounge_domestic",
+        "label": "4 complimentary domestic airport lounge visits per year, 1 per quarter",
+        "description": "Sponsor: SBI Card",
+        "quota_count": 4,
+        "quota_period": "annual",
+        "network_program": "domestic_airport_lounge_program",
+        "value_estimate_inr": null,
+        "conditions": {
+          "source_category_id": "lounge",
+          "evaluation_engine": {
+            "conditions": {
+              "minimum_previous_calendar_quarter_spend_inr": 50000,
+              "new_card_exception": "Spend criterion is waived for the month of card issuance and the card issuance calendar quarter.",
+              "eligible_spend_exclusions": [
+                "SBI Card interest",
+                "SBI Card fees",
+                "SBI Card other charges",
+                "reversed payments"
+              ],
+              "eligibility_start": "7th day of the first month of every quarter"
+            },
+            "benefit_calculation": {
+              "visits_per_year": 4,
+              "visits_per_quarter": 1
+            },
+            "perks": [
+              "Complimentary domestic airport lounge access for the primary cardholder after satisfying the previous-calendar-quarter spend criterion.",
+              "Additional visits beyond the complimentary quota are chargeable.",
+              "Add-on cardholders and guests can use lounge access by paying applicable lounge rates."
+            ]
+          }
+        }
+      }
+    ],
+    "unlock_rules": [
+      {
+        "id": "tata-neu-plus-sbi-credit-card:unlock:domestic-airport-lounge@1",
+        "card_benefit_id": "tata-neu-plus-sbi-credit-card:benefit:domestic-airport-lounge",
+        "kind": "lounge_domestic",
+        "label": "4 complimentary domestic airport lounge visits per year, 1 per quarter",
+        "spend_threshold_inr": 50000,
+        "spend_window": "previous_calendar_quarter",
+        "window_days": null,
+        "unlocks_quota": 4,
+        "unlocks_period": "annual",
+        "tier_label": null,
+        "excluded_category_ids": [],
+        "notes": null,
+        "source_local_id": "domestic-airport-lounge"
+      }
+    ],
+    "redemption_options": [
+      {
+        "program_name": "Tata Pay on Tata Neu Mobile App/Website",
+        "method": "other",
+        "value_per_point_inr": 1,
+        "min_points": null,
+        "notes": "Redemption fee: ₹0"
+      },
+      {
+        "program_name": "NeuCoins / Use My NeuCoins / Loyalty Redemption on Tata Neu Mobile App/Website",
+        "method": "other",
+        "value_per_point_inr": 1,
+        "min_points": null,
+        "notes": "Redemption fee: ₹0"
+      },
+      {
+        "program_name": "Partner-store point of sale",
+        "method": "other",
+        "value_per_point_inr": 1,
+        "min_points": null,
+        "notes": "Redemption fee: ₹0"
+      }
+    ],
+    "is_upi_linkable": true
+  }
+}

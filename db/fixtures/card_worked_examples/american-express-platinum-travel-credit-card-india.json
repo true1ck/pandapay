@@ -1,0 +1,205 @@
+{
+  "source_slug": "american-express-platinum-travel-credit-card-india",
+  "cardpipeline_id": "american-express-india-platinum-travel-credit-card",
+  "card_name": "American Express Platinum Travel Credit Card",
+  "verified_on": "2026-11-05",
+  "sources": [
+    {
+      "url": "https://www.americanexpress.com/in/credit-cards/platinum-travel-credit-card/",
+      "doc": "Platinum Travel Credit Card page",
+      "quote": "Earn 1 Membership Rewards Point for every Rs. 50 spent"
+    },
+    {
+      "url": "https://www.americanexpress.com/content/dam/amex/en-in/benefits/rewards/membership-rewards/membership-rewards-terms.pdf",
+      "doc": "Membership Rewards terms",
+      "quote": "Platinum Travel Credit Card ... fuel, insurance and utilities: No MR points"
+    }
+  ],
+  "examples": [
+    {
+      "id": "001",
+      "title": "Rs 5,000 general retail spend",
+      "ctx": {
+        "amount": 5000,
+        "occurred": "2026-11-10T10:00:00+05:30",
+        "category_id": null,
+        "category_slug": "other",
+        "mcc": "5651",
+        "merchant_name": "Apparel store",
+        "merchant_vpa": null,
+        "merchant_slug": null,
+        "platform": null,
+        "rail": "swipe"
+      },
+      "state_before": {
+        "caps_by_source_id": {}
+      },
+      "expect": {
+        "currency": "points",
+        "amount": 100,
+        "value_inr": null,
+        "excluded": false,
+        "cap_deltas_by_source_id": {}
+      },
+      "why": "1 point per Rs 50: 100 x 1 = 100."
+    },
+    {
+      "id": "002",
+      "title": "Rs 2,000 cash advance",
+      "ctx": {
+        "amount": 2000,
+        "occurred": "2026-11-10T10:00:00+05:30",
+        "category_id": null,
+        "category_slug": "other",
+        "mcc": null,
+        "merchant_name": "ATM",
+        "merchant_vpa": null,
+        "merchant_slug": null,
+        "platform": null,
+        "rail": "atm"
+      },
+      "state_before": {
+        "caps_by_source_id": {}
+      },
+      "expect": {
+        "currency": "points",
+        "amount": 0,
+        "value_inr": null,
+        "excluded": true,
+        "cap_deltas_by_source_id": {}
+      },
+      "why": "Cash transactions earn no points."
+    },
+    {
+      "id": "003",
+      "title": "Rs 2,000 fuel",
+      "ctx": {
+        "amount": 2000,
+        "occurred": "2026-11-10T10:00:00+05:30",
+        "category_id": null,
+        "category_slug": "fuel",
+        "mcc": "5541",
+        "merchant_name": "Fuel station",
+        "merchant_vpa": null,
+        "merchant_slug": null,
+        "platform": null,
+        "rail": "swipe"
+      },
+      "state_before": {
+        "caps_by_source_id": {}
+      },
+      "expect": {
+        "currency": "points",
+        "amount": 0,
+        "value_inr": null,
+        "excluded": true,
+        "cap_deltas_by_source_id": {}
+      },
+      "why": "Fuel (petrol, diesel, CNG from OMCs) earns no Membership Rewards points on this card."
+    },
+    {
+      "id": "004",
+      "title": "Rs 20,000 insurance premium",
+      "ctx": {
+        "amount": 20000,
+        "occurred": "2026-11-10T10:00:00+05:30",
+        "category_id": null,
+        "category_slug": "insurance",
+        "mcc": "6300",
+        "merchant_name": "Insurer",
+        "merchant_vpa": null,
+        "merchant_slug": null,
+        "platform": null,
+        "rail": "online"
+      },
+      "state_before": {
+        "caps_by_source_id": {}
+      },
+      "expect": {
+        "currency": "points",
+        "amount": 0,
+        "value_inr": null,
+        "excluded": true,
+        "cap_deltas_by_source_id": {}
+      },
+      "why": "No points on insurance."
+    },
+    {
+      "id": "005",
+      "title": "Rs 3,000 electricity bill",
+      "ctx": {
+        "amount": 3000,
+        "occurred": "2026-11-10T10:00:00+05:30",
+        "category_id": null,
+        "category_slug": "bills",
+        "mcc": "4900",
+        "merchant_name": "Electricity board",
+        "merchant_vpa": null,
+        "merchant_slug": null,
+        "platform": null,
+        "rail": "online"
+      },
+      "state_before": {
+        "caps_by_source_id": {}
+      },
+      "expect": {
+        "currency": "points",
+        "amount": 0,
+        "value_inr": null,
+        "excluded": true,
+        "cap_deltas_by_source_id": {}
+      },
+      "why": "Other utility services (household electricity, gas, water) earn no points."
+    },
+    {
+      "id": "006",
+      "title": "Rs 10,000 EMI chosen at the merchant",
+      "ctx": {
+        "amount": 10000,
+        "occurred": "2026-11-10T10:00:00+05:30",
+        "category_id": null,
+        "category_slug": "emi",
+        "mcc": null,
+        "merchant_name": "Electronics store",
+        "merchant_vpa": null,
+        "merchant_slug": null,
+        "platform": null,
+        "rail": "emi"
+      },
+      "state_before": {
+        "caps_by_source_id": {}
+      },
+      "expect": {
+        "currency": "points",
+        "amount": 0,
+        "value_inr": null,
+        "excluded": true,
+        "cap_deltas_by_source_id": {}
+      },
+      "why": "No points on EMI options selected on a merchant website or terminal."
+    }
+  ],
+  "research_notes": [
+    {
+      "item": "Reward Multiplier 3X",
+      "cardpipeline_says": "reward_multiplier_online_brands 3X",
+      "issuer_says": "Card page lists Reward Multiplier but the 3X figure could not be confirmed from the issuer pages retrieved; no example written.",
+      "proposed_fix": "importer: keep as info unless the platform is supplied",
+      "override_file": null
+    },
+    {
+      "item": "milestones",
+      "cardpipeline_says": "annual spend milestones",
+      "issuer_says": "Page: 10,000 points at Rs 4 lakh and a Rs 20,000 Taj stay voucher at Rs 7 lakh in a membership year (not Rs 1.9 lakh). Eligible spend only.",
+      "proposed_fix": "none",
+      "override_file": null
+    },
+    {
+      "item": "rounding",
+      "cardpipeline_says": "rounding_mode floor",
+      "issuer_says": "Not stated in Amex terms.",
+      "proposed_fix": "none",
+      "override_file": null
+    }
+  ]
+}

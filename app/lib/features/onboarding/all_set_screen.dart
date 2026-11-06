@@ -7,7 +7,9 @@ import '../../app/design/app_theme.dart';
 import '../../app/providers.dart';
 import '../../app/router.dart';
 import '../../data/api_exception.dart';
+import '../../data/card_snapshots.dart';
 import '../../main.dart' show MoneyText;
+import '../cards/recommendation_confidence.dart';
 import 'entry_brand.dart';
 import 'onboarding_back.dart';
 
@@ -215,19 +217,18 @@ class _TryItNowPreview extends ConsumerWidget {
         .firstOrNull
         ?.id;
     final engine = ref.watch(recommendationEngineProvider);
+    final now = ref.watch(clockProvider).now();
+    // WP9: every CardSnapshot is built in one place (v1 measure for v1
+    // cards, native units for v2-shaped cards).
     final snapshots = [
-      for (final (_, product) in owned)
-        CardSnapshot(
-          product: product,
-          capRemaining: const {},
-          milestoneProgress: const {},
-        ),
+      for (final (userCard, product) in owned)
+        buildCardSnapshot(product, owned: userCard, now: now),
     ];
     final recContext = RecommendationContext(
       amount: Money.fromRupees(2500),
       categoryId: groceriesId,
       rail: TxnRail.swipe,
-      now: DateTime.now(),
+      now: now,
     );
     final ranked = engine
         .rank(recContext, snapshots)
@@ -260,13 +261,18 @@ class _TryItNowPreview extends ConsumerWidget {
           const SizedBox(height: AppSpace.sm),
           MoneyText(
             winner.expectedValue,
-            confidence: winner.confidence,
+            confidence: confidenceOf(winner),
             style: BambooFonts.money(32, color: BambooInk.lime),
           ),
           const SizedBox(height: 2),
           Text(
             'with ${winner.card.name}',
             style: BambooFonts.ui(13.5, color: BambooInk.onSlateSubtle),
+          ),
+          // D35b: say so when an exclusion could not be read.
+          RecommendationCaution(
+            recommendation: winner,
+            color: BambooInk.onSlateSubtle,
           ),
         ],
       ),

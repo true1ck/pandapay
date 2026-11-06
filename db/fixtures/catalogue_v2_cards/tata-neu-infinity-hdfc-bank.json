@@ -1,0 +1,2633 @@
+{
+  "generated_by": "api/scripts/catalogue_v2/snapshot_examples.js",
+  "source_slug": "tata-neu-infinity-hdfc-bank",
+  "inputs": {
+    "transform_version": "7",
+    "source_record_sha256": "93890edb87a631081cfe42490e8b5b7e0183887b346200ba6b50a4e3d1500cc4",
+    "override_sha256": "a8ccc9f657ccb18ba28fadae69abc25f396dd631c98c4cafb8b3b1c3a55dda01",
+    "directory_sha256": "b1094d54b77e848d22f7a9a64f3ae6d1ef43ca3eb2fc8e40cd43ed1994664694",
+    "verified": false
+  },
+  "blocking_flags": [
+    "info_rule"
+  ],
+  "card": {
+    "id": "tata-neu-infinity-hdfc-bank:card",
+    "slug": "tata-neu-infinity-hdfc-bank",
+    "name": "Tata Neu Infinity HDFC Bank Credit Card",
+    "network": "rupay",
+    "issuer_slug": "hdfc",
+    "base_reward_unit": "points_per_100",
+    "base_reward_rate": 1.5,
+    "point_value_inr": 1,
+    "excluded_categories": [],
+    "accrual_block_inr": 100,
+    "accrual_rounding": "points_half_up",
+    "cashback_rounding": null,
+    "points_expiry_months": 12,
+    "model_status": "partial",
+    "model_coverage": {
+      "rules_total": 31,
+      "rules_modelled": 24,
+      "rules_info": 7,
+      "caps_total": 19,
+      "caps_enforced": 19,
+      "flags": [
+        {
+          "code": "info_rule",
+          "source_local_id": "merchant_emi_any_brand",
+          "detail": "condition:clause:emi_type"
+        },
+        {
+          "code": "info_rule",
+          "source_local_id": "neupass_selected_categories",
+          "detail": "condition:clause:neupass_registered"
+        },
+        {
+          "code": "info_rule",
+          "source_local_id": "neupass_selected_categories",
+          "detail": "condition:clause:primary_cardholder_mobile_account"
+        },
+        {
+          "code": "partial_category_list",
+          "source_local_id": "neupass_selected_categories",
+          "detail": null
+        },
+        {
+          "code": "token_replaced_by_conditions",
+          "source_local_id": "neupass_selected_categories",
+          "detail": null
+        },
+        {
+          "code": "narrow_token_on_merchant",
+          "source_local_id": "neupass_selected_categories",
+          "detail": null
+        },
+        {
+          "code": "info_rule",
+          "source_local_id": "neupass_excluded_tanishq_tatapay_cultfit_airindia_tataplay",
+          "detail": "condition:clause:brand"
+        },
+        {
+          "code": "info_rule",
+          "source_local_id": "neupass_excluded_tanishq_tatapay_cultfit_airindia_tataplay",
+          "detail": "bonus_only_exclusion"
+        },
+        {
+          "code": "exclusion_rail_dropped",
+          "source_local_id": "neupass_excluded_tanishq_tatapay_cultfit_airindia_tataplay",
+          "detail": null
+        },
+        {
+          "code": "token_replaced_by_conditions",
+          "source_local_id": "neupass_excluded_tanishq_tatapay_cultfit_airindia_tataplay",
+          "detail": null
+        },
+        {
+          "code": "bonus_only_exclusion",
+          "source_local_id": "neupass_excluded_tanishq_tatapay_cultfit_airindia_tataplay",
+          "detail": null
+        },
+        {
+          "code": "info_rule",
+          "source_local_id": "upi_tata_neu_id_additional",
+          "detail": "condition:clause:upi_variant"
+        },
+        {
+          "code": "info_rule",
+          "source_local_id": "upi_tata_neu_id_additional",
+          "detail": "condition:clause:upi_id"
+        },
+        {
+          "code": "info_rule",
+          "source_local_id": "upi_tata_neu_id_additional",
+          "detail": "condition:clause:eligible_for_upi_rewards"
+        },
+        {
+          "code": "info_rule",
+          "source_local_id": "upi_tata_neu_id_additional",
+          "detail": "condition:channel_type"
+        },
+        {
+          "code": "depends_on_user_attribute",
+          "source_local_id": "upi_tata_neu_id_additional",
+          "detail": null
+        },
+        {
+          "code": "partial_category_list",
+          "source_local_id": "wallet_exclusion",
+          "detail": null
+        },
+        {
+          "code": "broad_exclusion_v1_only",
+          "source_local_id": "online_gaming_exclusion",
+          "detail": null
+        },
+        {
+          "code": "broad_exclusion_v1_only",
+          "source_local_id": "skill_gaming_mcc_5816_exclusion",
+          "detail": null
+        },
+        {
+          "code": "exclusion_scope_broadened",
+          "source_local_id": "cash_advance_exclusion",
+          "detail": null
+        },
+        {
+          "code": "info_rule",
+          "source_local_id": "outstanding_payment_exclusion",
+          "detail": "condition:clause:transaction_type"
+        },
+        {
+          "code": "info_rule",
+          "source_local_id": "outstanding_payment_exclusion",
+          "detail": "condition:transaction_scope"
+        },
+        {
+          "code": "info_rule",
+          "source_local_id": "outstanding_payment_exclusion",
+          "detail": "condition:channel_type"
+        },
+        {
+          "code": "depends_on_txn_attribute",
+          "source_local_id": "outstanding_payment_exclusion",
+          "detail": null
+        },
+        {
+          "code": "info_rule",
+          "source_local_id": "fees_charges_exclusion",
+          "detail": "condition:clause:transaction_type"
+        },
+        {
+          "code": "info_rule",
+          "source_local_id": "fees_charges_exclusion",
+          "detail": "condition:transaction_scope"
+        },
+        {
+          "code": "info_rule",
+          "source_local_id": "fees_charges_exclusion",
+          "detail": "non_purchase_channel"
+        },
+        {
+          "code": "depends_on_txn_attribute",
+          "source_local_id": "fees_charges_exclusion",
+          "detail": null
+        },
+        {
+          "code": "exclusion_scope_broadened",
+          "source_local_id": "smart_emi_exclusion",
+          "detail": null
+        },
+        {
+          "code": "exclusion_rail_dropped",
+          "source_local_id": "education_aggregator_exclusion",
+          "detail": null
+        },
+        {
+          "code": "exclusion_scope_broadened",
+          "source_local_id": "education_aggregator_exclusion",
+          "detail": null
+        },
+        {
+          "code": "info_rule",
+          "source_local_id": "education_direct_standard",
+          "detail": "condition:clause:payment_channel"
+        },
+        {
+          "code": "info_rule",
+          "source_local_id": "education_direct_standard",
+          "detail": "condition:channel_type"
+        },
+        {
+          "code": "narrow_token_to_mcc",
+          "source_local_id": "telecom_cable_standard_capped",
+          "detail": null
+        },
+        {
+          "code": "partial_merchant_list",
+          "source_local_id": "tata_partner_fashion_wp7",
+          "detail": null
+        },
+        {
+          "code": "partial_merchant_list",
+          "source_local_id": "tata_partner_titan_wp7",
+          "detail": null
+        },
+        {
+          "code": "partial_merchant_list",
+          "source_local_id": "tata_partner_emi_wp7",
+          "detail": null
+        },
+        {
+          "code": "partial_merchant_list",
+          "source_local_id": "tata_partner_upi_wp7",
+          "detail": null
+        }
+      ],
+      "overrides_applied": [
+        {
+          "path": "cap_rules[id=grocery_monthly_2000].metric",
+          "op": "set",
+          "value_sha256": "7af78ba28cf9ccb3",
+          "reason": "Issuer caps total NeuCoins in the category per month.",
+          "source_url": "https://www.hdfc.bank.in/content/dam/hdfcbankpws/in/en/personal-banking/discover-products/cards/credit-cards/tata-neu-infinity-credit-card/pdf/tata_neu_infinity_card_tnc.pdf",
+          "checked_on": "2026-11-05",
+          "citation": null
+        },
+        {
+          "path": "cap_rules[id=utility_monthly_2000].metric",
+          "op": "set",
+          "value_sha256": "7af78ba28cf9ccb3",
+          "reason": "Issuer caps total NeuCoins in the category per month.",
+          "source_url": "https://www.hdfc.bank.in/content/dam/hdfcbankpws/in/en/personal-banking/discover-products/cards/credit-cards/tata-neu-infinity-credit-card/pdf/tata_neu_infinity_card_tnc.pdf",
+          "checked_on": "2026-11-05",
+          "citation": null
+        },
+        {
+          "path": "cap_rules[id=telecom_monthly_2000].metric",
+          "op": "set",
+          "value_sha256": "7af78ba28cf9ccb3",
+          "reason": "Issuer caps total NeuCoins in the category per month.",
+          "source_url": "https://www.hdfc.bank.in/content/dam/hdfcbankpws/in/en/personal-banking/discover-products/cards/credit-cards/tata-neu-infinity-credit-card/pdf/tata_neu_infinity_card_tnc.pdf",
+          "checked_on": "2026-11-05",
+          "citation": null
+        },
+        {
+          "path": "cap_rules[id=insurance_monthly_2000].metric",
+          "op": "set",
+          "value_sha256": "7af78ba28cf9ccb3",
+          "reason": "Issuer caps total NeuCoins in the category per month.",
+          "source_url": "https://www.hdfc.bank.in/content/dam/hdfcbankpws/in/en/personal-banking/discover-products/cards/credit-cards/tata-neu-infinity-credit-card/pdf/tata_neu_infinity_card_tnc.pdf",
+          "checked_on": "2026-11-05",
+          "citation": null
+        },
+        {
+          "path": "accrual_engine.rounding_mode",
+          "op": "set",
+          "value_sha256": "7eb8bc431ee35297",
+          "reason": "Issuer rounds the final NeuCoins to nearest whole (half up) on the exact amount (D7).",
+          "source_url": "https://www.hdfc.bank.in/content/dam/hdfcbankpws/in/en/personal-banking/discover-products/cards/credit-cards/tata-neu-infinity-credit-card/pdf/tata_neu_infinity_card_tnc.pdf",
+          "checked_on": "2026-11-05",
+          "citation": null
+        },
+        {
+          "path": "reward_rules[id=insurance_standard_capped].channel_type",
+          "op": "set",
+          "value_sha256": "5cf7504d9781301d",
+          "reason": "WP7: \"eligible_insurance\" restates the category; the rule earns the base rate on insurance and carries the 2,000 NeuCoin cap.",
+          "source_url": "https://www.hdfc.bank.in/content/dam/hdfcbankpws/in/en/personal-banking/discover-products/cards/credit-cards/tata-neu-infinity-credit-card/pdf/tata_neu_infinity_card_tnc.pdf",
+          "checked_on": "2026-11-05",
+          "citation": null
+        },
+        {
+          "path": "reward_rules[id=grocery_standard_capped].channel_type",
+          "op": "set",
+          "value_sha256": "5cf7504d9781301d",
+          "reason": "WP7: \"eligible_grocery\" restates the category (2,000 NeuCoin cap).",
+          "source_url": "https://www.hdfc.bank.in/content/dam/hdfcbankpws/in/en/personal-banking/discover-products/cards/credit-cards/tata-neu-infinity-credit-card/pdf/tata_neu_infinity_card_tnc.pdf",
+          "checked_on": "2026-11-05",
+          "citation": null
+        },
+        {
+          "path": "reward_rules[id=utility_standard_capped].channel_type",
+          "op": "set",
+          "value_sha256": "5cf7504d9781301d",
+          "reason": "WP7: \"eligible_utility\" restates the category (2,000 NeuCoin cap).",
+          "source_url": "https://www.hdfc.bank.in/content/dam/hdfcbankpws/in/en/personal-banking/discover-products/cards/credit-cards/tata-neu-infinity-credit-card/pdf/tata_neu_infinity_card_tnc.pdf",
+          "checked_on": "2026-11-05",
+          "citation": null
+        },
+        {
+          "path": "reward_rules[id=tata_partner_non_emi]",
+          "op": "remove",
+          "value_sha256": "74234e98afe7498f",
+          "reason": "WP7: Replaced by one partner rule per Annex 1 row (below), each carrying that row's fair-usage caps (D25g).",
+          "source_url": "https://www.hdfc.bank.in/content/dam/hdfcbankpws/in/en/personal-banking/discover-products/cards/credit-cards/tata-neu-infinity-credit-card/pdf/tata_neu_infinity_card_tnc.pdf",
+          "checked_on": "2026-11-05",
+          "citation": null
+        },
+        {
+          "path": "reward_rules",
+          "op": "append",
+          "value_sha256": "8e014ec38f803dde",
+          "reason": "WP7: T&C: 5% back as NeuCoins (Non-EMI) on partner Tata Brands \"as defined in Annex 1\", governed by the Annex 1 fair-usage policy. mcc_exclude restates Annex 1's non-accruing rental/government MCC transactions and keeps this rule v2-only, so the old feed (which has no UPI carve-out) never pays the partner rate on UPI. D29b: priority 11 outranks the capped insurance/grocery/utility/telecom rules (14-17), so a partner spend in a capped category (BigBasket groceries, Tata Play at MCC 4899) earns the partner rate; the UPI (9) and merchant-EMI (10) carve-outs still outrank it.",
+          "source_url": "https://www.hdfc.bank.in/content/dam/hdfcbankpws/in/en/personal-banking/discover-products/cards/credit-cards/tata-neu-infinity-credit-card/pdf/tata_neu_infinity_card_tnc.pdf",
+          "checked_on": "2026-11-05",
+          "citation": null
+        },
+        {
+          "path": "cap_rules",
+          "op": "append",
+          "value_sha256": "573dff71cf24e358",
+          "reason": "WP7: Annex 1: maximum monthly spends eligible for 5% at Croma: Rs6,00,000. One cap per Annex row; for rows naming several brands it is read as a combined limit (can only under-state; flagged).",
+          "source_url": "https://www.hdfc.bank.in/content/dam/hdfcbankpws/in/en/personal-banking/discover-products/cards/credit-cards/tata-neu-infinity-credit-card/pdf/tata_neu_infinity_card_tnc.pdf",
+          "checked_on": "2026-11-05",
+          "citation": null
+        },
+        {
+          "path": "cap_rules",
+          "op": "append",
+          "value_sha256": "423cdf5930faa91d",
+          "reason": "WP7: Annex 1: maximum annual spends eligible for 5% at Croma: Rs18,00,000. The year's start is not stated; calendar year assumed (flagged).",
+          "source_url": "https://www.hdfc.bank.in/content/dam/hdfcbankpws/in/en/personal-banking/discover-products/cards/credit-cards/tata-neu-infinity-credit-card/pdf/tata_neu_infinity_card_tnc.pdf",
+          "checked_on": "2026-11-05",
+          "citation": null
+        },
+        {
+          "path": "reward_rules",
+          "op": "append",
+          "value_sha256": "27ea02eade45fe4d",
+          "reason": "WP7: T&C: 5% back as NeuCoins (Non-EMI) on partner Tata Brands \"as defined in Annex 1\", governed by the Annex 1 fair-usage policy. mcc_exclude restates Annex 1's non-accruing rental/government MCC transactions and keeps this rule v2-only, so the old feed (which has no UPI carve-out) never pays the partner rate on UPI. D29b: priority 11 outranks the capped insurance/grocery/utility/telecom rules (14-17), so a partner spend in a capped category (BigBasket groceries, Tata Play at MCC 4899) earns the partner rate; the UPI (9) and merchant-EMI (10) carve-outs still outrank it.",
+          "source_url": "https://www.hdfc.bank.in/content/dam/hdfcbankpws/in/en/personal-banking/discover-products/cards/credit-cards/tata-neu-infinity-credit-card/pdf/tata_neu_infinity_card_tnc.pdf",
+          "checked_on": "2026-11-05",
+          "citation": null
+        },
+        {
+          "path": "cap_rules",
+          "op": "append",
+          "value_sha256": "888dea9fbe617ca2",
+          "reason": "WP7: Annex 1: maximum monthly spends eligible for 5% at Tata CLiQ, Westside: Rs3,00,000. One cap per Annex row; for rows naming several brands it is read as a combined limit (can only under-state; flagged).",
+          "source_url": "https://www.hdfc.bank.in/content/dam/hdfcbankpws/in/en/personal-banking/discover-products/cards/credit-cards/tata-neu-infinity-credit-card/pdf/tata_neu_infinity_card_tnc.pdf",
+          "checked_on": "2026-11-05",
+          "citation": null
+        },
+        {
+          "path": "cap_rules",
+          "op": "append",
+          "value_sha256": "3b91ec209003b417",
+          "reason": "WP7: Annex 1: maximum annual spends eligible for 5% at Tata CLiQ, Westside: Rs18,00,000. The year's start is not stated; calendar year assumed (flagged).",
+          "source_url": "https://www.hdfc.bank.in/content/dam/hdfcbankpws/in/en/personal-banking/discover-products/cards/credit-cards/tata-neu-infinity-credit-card/pdf/tata_neu_infinity_card_tnc.pdf",
+          "checked_on": "2026-11-05",
+          "citation": null
+        },
+        {
+          "path": "reward_rules",
+          "op": "append",
+          "value_sha256": "6013beafc3b4d268",
+          "reason": "WP7: T&C: 5% back as NeuCoins (Non-EMI) on partner Tata Brands \"as defined in Annex 1\", governed by the Annex 1 fair-usage policy. mcc_exclude restates Annex 1's non-accruing rental/government MCC transactions and keeps this rule v2-only, so the old feed (which has no UPI carve-out) never pays the partner rate on UPI. D29b: priority 11 outranks the capped insurance/grocery/utility/telecom rules (14-17), so a partner spend in a capped category (BigBasket groceries, Tata Play at MCC 4899) earns the partner rate; the UPI (9) and merchant-EMI (10) carve-outs still outrank it.",
+          "source_url": "https://www.hdfc.bank.in/content/dam/hdfcbankpws/in/en/personal-banking/discover-products/cards/credit-cards/tata-neu-infinity-credit-card/pdf/tata_neu_infinity_card_tnc.pdf",
+          "checked_on": "2026-11-05",
+          "citation": null
+        },
+        {
+          "path": "cap_rules",
+          "op": "append",
+          "value_sha256": "a1d6c4aa3cf392b9",
+          "reason": "WP7: Annex 1: maximum monthly spends eligible for 5% at Taj Hotels, Air India Express, Air India: Rs8,00,000. One cap per Annex row; for rows naming several brands it is read as a combined limit (can only under-state; flagged).",
+          "source_url": "https://www.hdfc.bank.in/content/dam/hdfcbankpws/in/en/personal-banking/discover-products/cards/credit-cards/tata-neu-infinity-credit-card/pdf/tata_neu_infinity_card_tnc.pdf",
+          "checked_on": "2026-11-05",
+          "citation": null
+        },
+        {
+          "path": "cap_rules",
+          "op": "append",
+          "value_sha256": "92dda7ebd3a68753",
+          "reason": "WP7: Annex 1: maximum annual spends eligible for 5% at Taj Hotels, Air India Express, Air India: Rs30,00,000. The year's start is not stated; calendar year assumed (flagged).",
+          "source_url": "https://www.hdfc.bank.in/content/dam/hdfcbankpws/in/en/personal-banking/discover-products/cards/credit-cards/tata-neu-infinity-credit-card/pdf/tata_neu_infinity_card_tnc.pdf",
+          "checked_on": "2026-11-05",
+          "citation": null
+        },
+        {
+          "path": "reward_rules",
+          "op": "append",
+          "value_sha256": "cc63a6c41ad63468",
+          "reason": "WP7: T&C: 5% back as NeuCoins (Non-EMI) on partner Tata Brands \"as defined in Annex 1\", governed by the Annex 1 fair-usage policy. mcc_exclude restates Annex 1's non-accruing rental/government MCC transactions and keeps this rule v2-only, so the old feed (which has no UPI carve-out) never pays the partner rate on UPI. D29b: priority 11 outranks the capped insurance/grocery/utility/telecom rules (14-17), so a partner spend in a capped category (BigBasket groceries, Tata Play at MCC 4899) earns the partner rate; the UPI (9) and merchant-EMI (10) carve-outs still outrank it.",
+          "source_url": "https://www.hdfc.bank.in/content/dam/hdfcbankpws/in/en/personal-banking/discover-products/cards/credit-cards/tata-neu-infinity-credit-card/pdf/tata_neu_infinity_card_tnc.pdf",
+          "checked_on": "2026-11-05",
+          "citation": null
+        },
+        {
+          "path": "cap_rules",
+          "op": "append",
+          "value_sha256": "0ff939484d209d3f",
+          "reason": "WP7: Annex 1: maximum monthly spends eligible for 5% at Tata 1mg, Cult.fit, Tata Play: Rs2,00,000. One cap per Annex row; for rows naming several brands it is read as a combined limit (can only under-state; flagged).",
+          "source_url": "https://www.hdfc.bank.in/content/dam/hdfcbankpws/in/en/personal-banking/discover-products/cards/credit-cards/tata-neu-infinity-credit-card/pdf/tata_neu_infinity_card_tnc.pdf",
+          "checked_on": "2026-11-05",
+          "citation": null
+        },
+        {
+          "path": "cap_rules",
+          "op": "append",
+          "value_sha256": "8ef83c655090cf92",
+          "reason": "WP7: Annex 1: maximum annual spends eligible for 5% at Tata 1mg, Cult.fit, Tata Play: Rs15,00,000. The year's start is not stated; calendar year assumed (flagged).",
+          "source_url": "https://www.hdfc.bank.in/content/dam/hdfcbankpws/in/en/personal-banking/discover-products/cards/credit-cards/tata-neu-infinity-credit-card/pdf/tata_neu_infinity_card_tnc.pdf",
+          "checked_on": "2026-11-05",
+          "citation": null
+        },
+        {
+          "path": "reward_rules",
+          "op": "append",
+          "value_sha256": "6bb07a40bc406668",
+          "reason": "WP7: T&C: 5% back as NeuCoins (Non-EMI) on partner Tata Brands \"as defined in Annex 1\", governed by the Annex 1 fair-usage policy. mcc_exclude restates Annex 1's non-accruing rental/government MCC transactions and keeps this rule v2-only, so the old feed (which has no UPI carve-out) never pays the partner rate on UPI. D29b: priority 11 outranks the capped insurance/grocery/utility/telecom rules (14-17), so a partner spend in a capped category (BigBasket groceries, Tata Play at MCC 4899) earns the partner rate; the UPI (9) and merchant-EMI (10) carve-outs still outrank it.",
+          "source_url": "https://www.hdfc.bank.in/content/dam/hdfcbankpws/in/en/personal-banking/discover-products/cards/credit-cards/tata-neu-infinity-credit-card/pdf/tata_neu_infinity_card_tnc.pdf",
+          "checked_on": "2026-11-05",
+          "citation": null
+        },
+        {
+          "path": "cap_rules",
+          "op": "append",
+          "value_sha256": "d3042ad2dcdb6ce9",
+          "reason": "WP7: Annex 1: maximum monthly spends eligible for 5% at BigBasket: Rs1,00,000. One cap per Annex row; for rows naming several brands it is read as a combined limit (can only under-state; flagged).",
+          "source_url": "https://www.hdfc.bank.in/content/dam/hdfcbankpws/in/en/personal-banking/discover-products/cards/credit-cards/tata-neu-infinity-credit-card/pdf/tata_neu_infinity_card_tnc.pdf",
+          "checked_on": "2026-11-05",
+          "citation": null
+        },
+        {
+          "path": "cap_rules",
+          "op": "append",
+          "value_sha256": "4e9bbf7c3b4409b0",
+          "reason": "WP7: Annex 1: maximum annual spends eligible for 5% at BigBasket: Rs12,00,000. The year's start is not stated; calendar year assumed (flagged).",
+          "source_url": "https://www.hdfc.bank.in/content/dam/hdfcbankpws/in/en/personal-banking/discover-products/cards/credit-cards/tata-neu-infinity-credit-card/pdf/tata_neu_infinity_card_tnc.pdf",
+          "checked_on": "2026-11-05",
+          "citation": null
+        },
+        {
+          "path": "reward_rules",
+          "op": "append",
+          "value_sha256": "6c5f3c15f79e21dc",
+          "reason": "WP7: T&C: 5% back as NeuCoins (Non-EMI) on partner Tata Brands \"as defined in Annex 1\", governed by the Annex 1 fair-usage policy. mcc_exclude restates Annex 1's non-accruing rental/government MCC transactions and keeps this rule v2-only, so the old feed (which has no UPI carve-out) never pays the partner rate on UPI. D29b: priority 11 outranks the capped insurance/grocery/utility/telecom rules (14-17), so a partner spend in a capped category (BigBasket groceries, Tata Play at MCC 4899) earns the partner rate; the UPI (9) and merchant-EMI (10) carve-outs still outrank it.",
+          "source_url": "https://www.hdfc.bank.in/content/dam/hdfcbankpws/in/en/personal-banking/discover-products/cards/credit-cards/tata-neu-infinity-credit-card/pdf/tata_neu_infinity_card_tnc.pdf",
+          "checked_on": "2026-11-05",
+          "citation": null
+        },
+        {
+          "path": "cap_rules",
+          "op": "append",
+          "value_sha256": "c57c667c606b4360",
+          "reason": "WP7: Annex 1: maximum monthly spends eligible for 5% at Titan, Tanishq: Rs6,00,000. One cap per Annex row; for rows naming several brands it is read as a combined limit (can only under-state; flagged).",
+          "source_url": "https://www.hdfc.bank.in/content/dam/hdfcbankpws/in/en/personal-banking/discover-products/cards/credit-cards/tata-neu-infinity-credit-card/pdf/tata_neu_infinity_card_tnc.pdf",
+          "checked_on": "2026-11-05",
+          "citation": null
+        },
+        {
+          "path": "cap_rules",
+          "op": "append",
+          "value_sha256": "f0afc0d8aec2743e",
+          "reason": "WP7: Annex 1: maximum annual spends eligible for 5% at Titan, Tanishq: Rs18,00,000. The year's start is not stated; calendar year assumed (flagged).",
+          "source_url": "https://www.hdfc.bank.in/content/dam/hdfcbankpws/in/en/personal-banking/discover-products/cards/credit-cards/tata-neu-infinity-credit-card/pdf/tata_neu_infinity_card_tnc.pdf",
+          "checked_on": "2026-11-05",
+          "citation": null
+        },
+        {
+          "path": "reward_rules",
+          "op": "append",
+          "value_sha256": "060ec3fe111b6466",
+          "reason": "WP7: T&C table: \"Merchant EMI Spends (Any Brand) 1.5% back as NeuCoins\"; the partner rate is \"Non-EMI\". Same brand list as the partner rules (plus Tata Neu); priority 10 is ahead of every partner rule (11) and of the capped category rules (D29b).",
+          "source_url": "https://www.hdfc.bank.in/content/dam/hdfcbankpws/in/en/personal-banking/discover-products/cards/credit-cards/tata-neu-infinity-credit-card/pdf/tata_neu_infinity_card_tnc.pdf",
+          "checked_on": "2026-11-05",
+          "citation": null
+        },
+        {
+          "path": "reward_rules",
+          "op": "append",
+          "value_sha256": "bf41a56f55c1fe2c",
+          "reason": "WP7: T&C: for partner Tata Brands \"if you have completed your transaction using UPI ... then such transaction will not qualify for this benefit\"; UPI earns 0.50% \"for transactions done using any UPI ID\" (more only with the Tata Neu UPI ID). Carve-out at the any-UPI-ID rate. Priority 9 is ahead of the merchant-EMI carve-out (10), the partner rules (11) and the capped category rules (D29b).",
+          "source_url": "https://www.hdfc.bank.in/content/dam/hdfcbankpws/in/en/personal-banking/discover-products/cards/credit-cards/tata-neu-infinity-credit-card/pdf/tata_neu_infinity_card_tnc.pdf",
+          "checked_on": "2026-11-05",
+          "citation": null
+        },
+        {
+          "path": "cap_rules",
+          "op": "append",
+          "value_sha256": "929acac666bed3ed",
+          "reason": "WP7: HDFC MITC fair usage policy: the maximum reward points per statement cycle for Tata Neu Infinity* is 50,000. MITC footnote: \"(*) applicable only on the spend categories that does not have an existing Fair Usage Policy\" (C8 D28b). So it targets only the rules without a fair-usage limit of their own: the base rule (base_non_tata_non_emi) and merchant EMI at partner brands (tata_partner_emi_wp7). The Annex 1 partner rules, the capped grocery/insurance/utility/telecom rules and UPI (500/month) keep their own limits.",
+          "source_url": "https://www.hdfc.bank.in/content/dam/hdfcbankpws/in/en/personal-banking/discover-products/cards/credit-cards/personal-mitc/mitc-in-english.pdf",
+          "checked_on": "2026-11-05",
+          "citation": null
+        },
+        {
+          "path": "reward_rules[id=tata_partner_emi]",
+          "op": "remove",
+          "value_sha256": "74234e98afe7498f",
+          "reason": "WP7: Replaced by tata_partner_emi_wp7 (same brand list as the partner rules).",
+          "source_url": "https://www.hdfc.bank.in/content/dam/hdfcbankpws/in/en/personal-banking/discover-products/cards/credit-cards/tata-neu-infinity-credit-card/pdf/tata_neu_infinity_card_tnc.pdf",
+          "checked_on": "2026-11-05",
+          "citation": null
+        },
+        {
+          "path": "reward_rules",
+          "op": "append",
+          "value_sha256": "6e528ae0c87868d2",
+          "reason": "WP7: D25d: T&C exclusion \"Rental and Government related transactions\" (Annex 1: Rental MCC / Government MCC transactions). The record had category rows only; MCC rows catch them in any category.",
+          "source_url": "https://www.hdfc.bank.in/content/dam/hdfcbankpws/in/en/personal-banking/discover-products/cards/credit-cards/tata-neu-infinity-credit-card/pdf/tata_neu_infinity_card_tnc.pdf",
+          "checked_on": "2026-11-05",
+          "citation": null
+        },
+        {
+          "path": "reward_rules[id=outstanding_payment_exclusion].conditions.transaction_scope",
+          "op": "set",
+          "value_sha256": "ca40b229a075d111",
+          "reason": "WP7: T&C exclusion: \"Payment of Outstanding Balances\". Not expressible by MCC or category, so it stays info (D25d), flagged depends_on_txn_attribute (D14b).",
+          "source_url": "https://www.hdfc.bank.in/content/dam/hdfcbankpws/in/en/personal-banking/discover-products/cards/credit-cards/tata-neu-infinity-credit-card/pdf/tata_neu_infinity_card_tnc.pdf",
+          "checked_on": "2026-11-05",
+          "citation": null
+        },
+        {
+          "path": "reward_rules[id=fees_charges_exclusion].conditions.transaction_scope",
+          "op": "set",
+          "value_sha256": "fb867005b6ee2356",
+          "reason": "WP7: T&C exclusion: \"Payment of card fees and other charges\". Not expressible by MCC or category, so it stays info (D25d), flagged depends_on_txn_attribute (D14b).",
+          "source_url": "https://www.hdfc.bank.in/content/dam/hdfcbankpws/in/en/personal-banking/discover-products/cards/credit-cards/tata-neu-infinity-credit-card/pdf/tata_neu_infinity_card_tnc.pdf",
+          "checked_on": "2026-11-05",
+          "citation": null
+        },
+        {
+          "path": "reward_rules[id=base_non_tata_non_emi].conditions",
+          "op": "set",
+          "value_sha256": "44136fa355b3678a",
+          "reason": "WP7: The base rate on non-partner, non-EMI spends; the brand/EMI/UPI clauses restated what other rules carve out and made it info. Restated so the asterisked MITC cap can target it (D28b); it pays the same base rate the implicit base paid.",
+          "source_url": "https://www.hdfc.bank.in/content/dam/hdfcbankpws/in/en/personal-banking/discover-products/cards/credit-cards/tata-neu-infinity-credit-card/pdf/tata_neu_infinity_card_tnc.pdf",
+          "checked_on": "2026-11-05",
+          "citation": null
+        },
+        {
+          "path": "reward_rules[id=base_non_tata_non_emi].channel_type",
+          "op": "set",
+          "value_sha256": "5cf7504d9781301d",
+          "reason": "WP7: See conditions.",
+          "source_url": "https://www.hdfc.bank.in/content/dam/hdfcbankpws/in/en/personal-banking/discover-products/cards/credit-cards/tata-neu-infinity-credit-card/pdf/tata_neu_infinity_card_tnc.pdf",
+          "checked_on": "2026-11-05",
+          "citation": null
+        },
+        {
+          "path": "cap_rules",
+          "op": "append",
+          "value_sha256": "3fe006d3a3254845",
+          "reason": "WP7: D29c: BigBasket partner NeuCoins count toward the 2,000 NeuCoin grocery cap (grocery_monthly_2000; WP7's conservative reading, kept by D29b). Modelled as a child of that cap, so grocery_monthly_2000 keeps its single target and stays visible to the v1 feed with its pre-WP7 reach; the child itself is v2-only (its target is). The id has no wp7_ prefix because the loader labels a cap from its id (\"Bigbasket grocery share\", C8 D31b).",
+          "source_url": "https://www.hdfc.bank.in/content/dam/hdfcbankpws/in/en/personal-banking/discover-products/cards/credit-cards/tata-neu-infinity-credit-card/pdf/tata_neu_infinity_card_tnc.pdf",
+          "checked_on": "2026-11-05",
+          "citation": null
+        },
+        {
+          "path": "reward_rules[id=upi_generic].conditions",
+          "op": "set",
+          "value_sha256": "8aa93f2e26dd1b1a",
+          "reason": "WP7: D29d: T&C: \"0.50% back as NeuCoins for transactions done using any UPI ID (Google Pay, PhonePe, Cred, etc.)\"; the \"Additional 1% ... if the transaction is done using the Tata Neu UPI ID\" is the separate info rule. The UPI-ID/eligibility conditions made this rule info, so a non-partner UPI spend earned the base rate. mcc_exclude restates the card's rental/government MCC exclusion and keeps this UPI-rail rule v2-only (D24b): v1 treats an unknown rail as a match.",
+          "source_url": "https://www.hdfc.bank.in/content/dam/hdfcbankpws/in/en/personal-banking/discover-products/cards/credit-cards/tata-neu-infinity-credit-card/pdf/tata_neu_infinity_card_tnc.pdf",
+          "checked_on": "2026-11-05",
+          "citation": null
+        },
+        {
+          "path": "reward_rules[id=upi_generic].channel_type",
+          "op": "set",
+          "value_sha256": "5cf7504d9781301d",
+          "reason": "WP7: D29d: the UPI rail carries it (see conditions).",
+          "source_url": "https://www.hdfc.bank.in/content/dam/hdfcbankpws/in/en/personal-banking/discover-products/cards/credit-cards/tata-neu-infinity-credit-card/pdf/tata_neu_infinity_card_tnc.pdf",
+          "checked_on": "2026-11-05",
+          "citation": null
+        },
+        {
+          "path": "reward_rules[id=upi_generic].priority",
+          "op": "set",
+          "value_sha256": "6b51d431df5d7f14",
+          "reason": "WP7: D29d: the UPI rate applies to \"Any UPI Spends\", so it outranks the capped category rules and the base rule; the partner UPI carve-out (9, same rate) still takes partner spends.",
+          "source_url": "https://www.hdfc.bank.in/content/dam/hdfcbankpws/in/en/personal-banking/discover-products/cards/credit-cards/tata-neu-infinity-credit-card/pdf/tata_neu_infinity_card_tnc.pdf",
+          "checked_on": "2026-11-05",
+          "citation": null
+        },
+        {
+          "path": "reward_rules[id=smart_emi_exclusion].rail",
+          "op": "set",
+          "value_sha256": "251ecb599a3f3a2f",
+          "reason": "WP7: T&C exclude \"Smart EMI / Dial an EMI transaction\" (post-purchase conversions) while \"Merchant EMI Spends (Any Brand)\" earn 1.5% (issuer example: Merchant EMI on Tata Brand - Principal, 1.5% NeuCoins). Since the WP2 loader reads category and rail as alternatives, the rail made this a rail-EMI exclusion on all spend. Without the rail it is the emi-category exclusion it was before (v1 unchanged); merchant EMI earns through tata_partner_emi_wp7 and the base rule.",
+          "source_url": "https://www.hdfc.bank.in/content/dam/hdfcbankpws/in/en/personal-banking/discover-products/cards/credit-cards/tata-neu-infinity-credit-card/pdf/tata_neu_infinity_card_tnc.pdf",
+          "checked_on": "2026-11-05",
+          "citation": null
+        }
+      ]
+    },
+    "reward_rules": [
+      {
+        "id": "tata-neu-infinity-hdfc-bank:rule:base_non_tata_non_emi",
+        "category_id": null,
+        "category_slug": null,
+        "merchant_pattern": null,
+        "rail": null,
+        "unit": "points_per_100",
+        "rate": 1.5,
+        "min_txn_inr": null,
+        "max_txn_inr": null,
+        "priority": 100,
+        "conditions": {
+          "source_local_id": "base_non_tata_non_emi",
+          "part": null,
+          "info_reasons": [],
+          "flags": []
+        },
+        "notes": null,
+        "effective_from": "2024-01-01",
+        "effective_to": null,
+        "excluded_categories": [],
+        "rule_role": "base",
+        "merchant_slugs": [],
+        "platform_slugs": [],
+        "mcc_include": [],
+        "mcc_exclude": [],
+        "except_merchant_slugs": [],
+        "except_platform_slugs": [],
+        "block_inr": null,
+        "min_engine_version": 1,
+        "max_engine_version": null,
+        "source_local_id": "base_non_tata_non_emi",
+        "display_note": "1.5% back as NeuCoins on eligible non-Tata brand non-EMI spends."
+      },
+      {
+        "id": "tata-neu-infinity-hdfc-bank:rule:merchant_emi_any_brand",
+        "category_id": "cat-emi",
+        "category_slug": "emi",
+        "merchant_pattern": null,
+        "rail": "emi",
+        "unit": "points_per_100",
+        "rate": 1.5,
+        "min_txn_inr": null,
+        "max_txn_inr": null,
+        "priority": 40,
+        "conditions": {
+          "source_local_id": "merchant_emi_any_brand",
+          "part": null,
+          "info_reasons": [
+            "condition:clause:emi_type"
+          ],
+          "flags": []
+        },
+        "notes": null,
+        "effective_from": "2024-01-01",
+        "effective_to": null,
+        "excluded_categories": [],
+        "rule_role": "info",
+        "merchant_slugs": [],
+        "platform_slugs": [],
+        "mcc_include": [],
+        "mcc_exclude": [],
+        "except_merchant_slugs": [],
+        "except_platform_slugs": [],
+        "block_inr": null,
+        "min_engine_version": 2,
+        "max_engine_version": null,
+        "source_local_id": "merchant_emi_any_brand",
+        "display_note": "Any merchant EMI spend earns 1.5% NeuCoins."
+      },
+      {
+        "id": "tata-neu-infinity-hdfc-bank:rule:neupass_selected_categories#1",
+        "category_id": "cat-groceries",
+        "category_slug": "groceries",
+        "merchant_pattern": "tataneu",
+        "rail": "online",
+        "unit": "points_per_100",
+        "rate": 5,
+        "min_txn_inr": null,
+        "max_txn_inr": null,
+        "priority": 10,
+        "conditions": {
+          "source_local_id": "neupass_selected_categories",
+          "part": 1,
+          "info_reasons": [
+            "condition:clause:neupass_registered",
+            "condition:clause:primary_cardholder_mobile_account"
+          ],
+          "flags": [
+            "partial_category_list",
+            "token_replaced_by_conditions",
+            "narrow_token_on_merchant"
+          ]
+        },
+        "notes": null,
+        "effective_from": "2025-01-15",
+        "effective_to": null,
+        "excluded_categories": [],
+        "rule_role": "info",
+        "merchant_slugs": [
+          "tata_neu"
+        ],
+        "platform_slugs": [],
+        "mcc_include": [],
+        "mcc_exclude": [],
+        "except_merchant_slugs": [],
+        "except_platform_slugs": [],
+        "block_inr": null,
+        "min_engine_version": 2,
+        "max_engine_version": null,
+        "source_local_id": "neupass_selected_categories",
+        "display_note": "Additional 5% NeuCoins via NeuPass on selected Tata Neu categories, on top of the base/brand reward where applicable."
+      },
+      {
+        "id": "tata-neu-infinity-hdfc-bank:rule:neupass_selected_categories#2",
+        "category_id": "cat-travel",
+        "category_slug": "travel",
+        "merchant_pattern": "tataneu",
+        "rail": "online",
+        "unit": "points_per_100",
+        "rate": 5,
+        "min_txn_inr": null,
+        "max_txn_inr": null,
+        "priority": 10,
+        "conditions": {
+          "source_local_id": "neupass_selected_categories",
+          "part": 2,
+          "info_reasons": [
+            "condition:clause:neupass_registered",
+            "condition:clause:primary_cardholder_mobile_account"
+          ],
+          "flags": [
+            "partial_category_list",
+            "token_replaced_by_conditions",
+            "narrow_token_on_merchant"
+          ]
+        },
+        "notes": null,
+        "effective_from": "2025-01-15",
+        "effective_to": null,
+        "excluded_categories": [],
+        "rule_role": "info",
+        "merchant_slugs": [
+          "tata_neu"
+        ],
+        "platform_slugs": [],
+        "mcc_include": [],
+        "mcc_exclude": [],
+        "except_merchant_slugs": [],
+        "except_platform_slugs": [],
+        "block_inr": null,
+        "min_engine_version": 2,
+        "max_engine_version": null,
+        "source_local_id": "neupass_selected_categories",
+        "display_note": "Additional 5% NeuCoins via NeuPass on selected Tata Neu categories, on top of the base/brand reward where applicable."
+      },
+      {
+        "id": "tata-neu-infinity-hdfc-bank:rule:neupass_selected_categories#3",
+        "category_id": null,
+        "category_slug": null,
+        "merchant_pattern": "tataneu",
+        "rail": "online",
+        "unit": "points_per_100",
+        "rate": 5,
+        "min_txn_inr": null,
+        "max_txn_inr": null,
+        "priority": 10,
+        "conditions": {
+          "source_local_id": "neupass_selected_categories",
+          "part": 3,
+          "info_reasons": [
+            "condition:clause:neupass_registered",
+            "condition:clause:primary_cardholder_mobile_account"
+          ],
+          "flags": [
+            "partial_category_list",
+            "token_replaced_by_conditions",
+            "narrow_token_on_merchant"
+          ]
+        },
+        "notes": null,
+        "effective_from": "2025-01-15",
+        "effective_to": null,
+        "excluded_categories": [],
+        "rule_role": "info",
+        "merchant_slugs": [
+          "tata_neu"
+        ],
+        "platform_slugs": [],
+        "mcc_include": [],
+        "mcc_exclude": [],
+        "except_merchant_slugs": [],
+        "except_platform_slugs": [],
+        "block_inr": null,
+        "min_engine_version": 2,
+        "max_engine_version": null,
+        "source_local_id": "neupass_selected_categories",
+        "display_note": "Additional 5% NeuCoins via NeuPass on selected Tata Neu categories, on top of the base/brand reward where applicable."
+      },
+      {
+        "id": "tata-neu-infinity-hdfc-bank:rule:neupass_excluded_tanishq_tatapay_cultfit_airindia_tataplay",
+        "category_id": null,
+        "category_slug": null,
+        "merchant_pattern": "tataneu",
+        "rail": null,
+        "unit": "points_per_100",
+        "rate": 0,
+        "min_txn_inr": null,
+        "max_txn_inr": null,
+        "priority": 11,
+        "conditions": {
+          "source_local_id": "neupass_excluded_tanishq_tatapay_cultfit_airindia_tataplay",
+          "part": null,
+          "info_reasons": [
+            "condition:clause:brand",
+            "bonus_only_exclusion"
+          ],
+          "flags": [
+            "exclusion_rail_dropped",
+            "token_replaced_by_conditions",
+            "bonus_only_exclusion"
+          ]
+        },
+        "notes": null,
+        "effective_from": "2025-01-15",
+        "effective_to": null,
+        "excluded_categories": [],
+        "rule_role": "info",
+        "merchant_slugs": [
+          "tata_neu"
+        ],
+        "platform_slugs": [],
+        "mcc_include": [],
+        "mcc_exclude": [],
+        "except_merchant_slugs": [],
+        "except_platform_slugs": [],
+        "block_inr": null,
+        "min_engine_version": 2,
+        "max_engine_version": null,
+        "source_local_id": "neupass_excluded_tanishq_tatapay_cultfit_airindia_tataplay",
+        "display_note": "These transactions are not eligible for the additional 5% NeuCoins through NeuPass."
+      },
+      {
+        "id": "tata-neu-infinity-hdfc-bank:rule:upi_generic",
+        "category_id": null,
+        "category_slug": null,
+        "merchant_pattern": null,
+        "rail": "upi_qr",
+        "unit": "points_per_100",
+        "rate": 0.5,
+        "min_txn_inr": null,
+        "max_txn_inr": null,
+        "priority": 12,
+        "conditions": {
+          "source_local_id": "upi_generic",
+          "part": null,
+          "info_reasons": [],
+          "flags": [
+            "reduced_rate_no_v1_row"
+          ]
+        },
+        "notes": null,
+        "effective_from": "2024-08-01",
+        "effective_to": null,
+        "excluded_categories": [],
+        "rule_role": "earn",
+        "merchant_slugs": [],
+        "platform_slugs": [],
+        "mcc_include": [],
+        "mcc_exclude": [
+          "6513",
+          "9311",
+          "9399"
+        ],
+        "except_merchant_slugs": [],
+        "except_platform_slugs": [],
+        "block_inr": null,
+        "min_engine_version": 2,
+        "max_engine_version": null,
+        "source_local_id": "upi_generic",
+        "display_note": "Eligible UPI transactions earn 0.50% NeuCoins."
+      },
+      {
+        "id": "tata-neu-infinity-hdfc-bank:rule:upi_tata_neu_id_additional",
+        "category_id": null,
+        "category_slug": null,
+        "merchant_pattern": null,
+        "rail": "upi_qr",
+        "unit": "points_per_100",
+        "rate": 1,
+        "min_txn_inr": null,
+        "max_txn_inr": null,
+        "priority": 49,
+        "conditions": {
+          "source_local_id": "upi_tata_neu_id_additional",
+          "part": null,
+          "info_reasons": [
+            "condition:clause:upi_variant",
+            "condition:clause:upi_id",
+            "condition:clause:eligible_for_upi_rewards",
+            "condition:channel_type"
+          ],
+          "flags": [
+            "depends_on_user_attribute"
+          ]
+        },
+        "notes": null,
+        "effective_from": "2024-08-01",
+        "effective_to": null,
+        "excluded_categories": [],
+        "rule_role": "info",
+        "merchant_slugs": [],
+        "platform_slugs": [],
+        "mcc_include": [],
+        "mcc_exclude": [],
+        "except_merchant_slugs": [],
+        "except_platform_slugs": [],
+        "block_inr": null,
+        "min_engine_version": 2,
+        "max_engine_version": null,
+        "source_local_id": "upi_tata_neu_id_additional",
+        "display_note": "Additional 1% NeuCoins on eligible UPI payments made using Tata Neu UPI ID, making total eligible UPI earn up to 1.5%."
+      },
+      {
+        "id": "tata-neu-infinity-hdfc-bank:rule:fuel_exclusion",
+        "category_id": "cat-fuel",
+        "category_slug": "fuel",
+        "merchant_pattern": null,
+        "rail": null,
+        "unit": "points_per_100",
+        "rate": 0,
+        "min_txn_inr": null,
+        "max_txn_inr": null,
+        "priority": 1,
+        "conditions": {
+          "source_local_id": "fuel_exclusion",
+          "part": null,
+          "info_reasons": [],
+          "flags": []
+        },
+        "notes": null,
+        "effective_from": "2024-01-01",
+        "effective_to": null,
+        "excluded_categories": [],
+        "rule_role": "exclusion",
+        "merchant_slugs": [],
+        "platform_slugs": [],
+        "mcc_include": [],
+        "mcc_exclude": [],
+        "except_merchant_slugs": [],
+        "except_platform_slugs": [],
+        "block_inr": null,
+        "min_engine_version": 1,
+        "max_engine_version": null,
+        "source_local_id": "fuel_exclusion",
+        "display_note": "NeuCoins are not accrued on fuel transactions."
+      },
+      {
+        "id": "tata-neu-infinity-hdfc-bank:rule:wallet_exclusion",
+        "category_id": "cat-wallet",
+        "category_slug": "wallet",
+        "merchant_pattern": null,
+        "rail": null,
+        "unit": "points_per_100",
+        "rate": 0,
+        "min_txn_inr": null,
+        "max_txn_inr": null,
+        "priority": 2,
+        "conditions": {
+          "source_local_id": "wallet_exclusion",
+          "part": null,
+          "info_reasons": [],
+          "flags": [
+            "partial_category_list"
+          ]
+        },
+        "notes": null,
+        "effective_from": "2024-01-01",
+        "effective_to": null,
+        "excluded_categories": [],
+        "rule_role": "exclusion",
+        "merchant_slugs": [],
+        "platform_slugs": [],
+        "mcc_include": [],
+        "mcc_exclude": [],
+        "except_merchant_slugs": [],
+        "except_platform_slugs": [],
+        "block_inr": null,
+        "min_engine_version": 1,
+        "max_engine_version": null,
+        "source_local_id": "wallet_exclusion",
+        "display_note": "NeuCoins are not accrued on wallet loads, gift/prepaid card loads, voucher purchases or wallet reloads."
+      },
+      {
+        "id": "tata-neu-infinity-hdfc-bank:rule:rental_exclusion",
+        "category_id": "cat-rent",
+        "category_slug": "rent",
+        "merchant_pattern": null,
+        "rail": null,
+        "unit": "points_per_100",
+        "rate": 0,
+        "min_txn_inr": null,
+        "max_txn_inr": null,
+        "priority": 3,
+        "conditions": {
+          "source_local_id": "rental_exclusion",
+          "part": null,
+          "info_reasons": [],
+          "flags": []
+        },
+        "notes": null,
+        "effective_from": "2024-01-01",
+        "effective_to": null,
+        "excluded_categories": [],
+        "rule_role": "exclusion",
+        "merchant_slugs": [],
+        "platform_slugs": [],
+        "mcc_include": [],
+        "mcc_exclude": [],
+        "except_merchant_slugs": [],
+        "except_platform_slugs": [],
+        "block_inr": null,
+        "min_engine_version": 1,
+        "max_engine_version": null,
+        "source_local_id": "rental_exclusion",
+        "display_note": "NeuCoins are not accrued on rental transactions."
+      },
+      {
+        "id": "tata-neu-infinity-hdfc-bank:rule:government_exclusion",
+        "category_id": "cat-government",
+        "category_slug": "government",
+        "merchant_pattern": null,
+        "rail": null,
+        "unit": "points_per_100",
+        "rate": 0,
+        "min_txn_inr": null,
+        "max_txn_inr": null,
+        "priority": 4,
+        "conditions": {
+          "source_local_id": "government_exclusion",
+          "part": null,
+          "info_reasons": [],
+          "flags": []
+        },
+        "notes": null,
+        "effective_from": "2024-01-01",
+        "effective_to": null,
+        "excluded_categories": [],
+        "rule_role": "exclusion",
+        "merchant_slugs": [],
+        "platform_slugs": [],
+        "mcc_include": [],
+        "mcc_exclude": [],
+        "except_merchant_slugs": [],
+        "except_platform_slugs": [],
+        "block_inr": null,
+        "min_engine_version": 1,
+        "max_engine_version": null,
+        "source_local_id": "government_exclusion",
+        "display_note": "NeuCoins are not accrued on government-related transactions."
+      },
+      {
+        "id": "tata-neu-infinity-hdfc-bank:rule:online_gaming_exclusion#1",
+        "category_id": "cat-entertainment",
+        "category_slug": "entertainment",
+        "merchant_pattern": null,
+        "rail": null,
+        "unit": "points_per_100",
+        "rate": 0,
+        "min_txn_inr": null,
+        "max_txn_inr": null,
+        "priority": 5,
+        "conditions": {
+          "source_local_id": "online_gaming_exclusion",
+          "part": 1,
+          "info_reasons": [],
+          "flags": [
+            "broad_exclusion_v1_only",
+            "broad_category"
+          ]
+        },
+        "notes": null,
+        "effective_from": "2024-01-01",
+        "effective_to": null,
+        "excluded_categories": [],
+        "rule_role": "exclusion",
+        "merchant_slugs": [],
+        "platform_slugs": [],
+        "mcc_include": [],
+        "mcc_exclude": [],
+        "except_merchant_slugs": [],
+        "except_platform_slugs": [],
+        "block_inr": null,
+        "min_engine_version": 1,
+        "max_engine_version": 1,
+        "source_local_id": "online_gaming_exclusion",
+        "display_note": "NeuCoins are not accrued on online gaming transactions."
+      },
+      {
+        "id": "tata-neu-infinity-hdfc-bank:rule:online_gaming_exclusion#2",
+        "category_id": null,
+        "category_slug": null,
+        "merchant_pattern": null,
+        "rail": null,
+        "unit": "points_per_100",
+        "rate": 0,
+        "min_txn_inr": null,
+        "max_txn_inr": null,
+        "priority": 5,
+        "conditions": {
+          "source_local_id": "online_gaming_exclusion",
+          "part": 2,
+          "info_reasons": [],
+          "flags": [
+            "broad_exclusion_v1_only"
+          ]
+        },
+        "notes": null,
+        "effective_from": "2024-01-01",
+        "effective_to": null,
+        "excluded_categories": [],
+        "rule_role": "exclusion",
+        "merchant_slugs": [],
+        "platform_slugs": [],
+        "mcc_include": [
+          "5816"
+        ],
+        "mcc_exclude": [],
+        "except_merchant_slugs": [],
+        "except_platform_slugs": [],
+        "block_inr": null,
+        "min_engine_version": 2,
+        "max_engine_version": null,
+        "source_local_id": "online_gaming_exclusion",
+        "display_note": "NeuCoins are not accrued on online gaming transactions."
+      },
+      {
+        "id": "tata-neu-infinity-hdfc-bank:rule:skill_gaming_mcc_5816_exclusion#1",
+        "category_id": "cat-entertainment",
+        "category_slug": "entertainment",
+        "merchant_pattern": null,
+        "rail": null,
+        "unit": "points_per_100",
+        "rate": 0,
+        "min_txn_inr": null,
+        "max_txn_inr": null,
+        "priority": 6,
+        "conditions": {
+          "source_local_id": "skill_gaming_mcc_5816_exclusion",
+          "part": 1,
+          "info_reasons": [],
+          "flags": [
+            "broad_exclusion_v1_only",
+            "broad_category"
+          ]
+        },
+        "notes": null,
+        "effective_from": "2025-07-01",
+        "effective_to": null,
+        "excluded_categories": [],
+        "rule_role": "exclusion",
+        "merchant_slugs": [],
+        "platform_slugs": [],
+        "mcc_include": [],
+        "mcc_exclude": [],
+        "except_merchant_slugs": [],
+        "except_platform_slugs": [],
+        "block_inr": null,
+        "min_engine_version": 1,
+        "max_engine_version": 1,
+        "source_local_id": "skill_gaming_mcc_5816_exclusion",
+        "display_note": "No NeuCoins are earned on online skill-based gaming transactions, MCC 5816."
+      },
+      {
+        "id": "tata-neu-infinity-hdfc-bank:rule:skill_gaming_mcc_5816_exclusion#2",
+        "category_id": null,
+        "category_slug": null,
+        "merchant_pattern": null,
+        "rail": null,
+        "unit": "points_per_100",
+        "rate": 0,
+        "min_txn_inr": null,
+        "max_txn_inr": null,
+        "priority": 6,
+        "conditions": {
+          "source_local_id": "skill_gaming_mcc_5816_exclusion",
+          "part": 2,
+          "info_reasons": [],
+          "flags": [
+            "broad_exclusion_v1_only"
+          ]
+        },
+        "notes": null,
+        "effective_from": "2025-07-01",
+        "effective_to": null,
+        "excluded_categories": [],
+        "rule_role": "exclusion",
+        "merchant_slugs": [],
+        "platform_slugs": [],
+        "mcc_include": [
+          "5816"
+        ],
+        "mcc_exclude": [],
+        "except_merchant_slugs": [],
+        "except_platform_slugs": [],
+        "block_inr": null,
+        "min_engine_version": 2,
+        "max_engine_version": null,
+        "source_local_id": "skill_gaming_mcc_5816_exclusion",
+        "display_note": "No NeuCoins are earned on online skill-based gaming transactions, MCC 5816."
+      },
+      {
+        "id": "tata-neu-infinity-hdfc-bank:rule:cash_advance_exclusion",
+        "category_id": null,
+        "category_slug": null,
+        "merchant_pattern": null,
+        "rail": "atm",
+        "unit": "points_per_100",
+        "rate": 0,
+        "min_txn_inr": null,
+        "max_txn_inr": null,
+        "priority": 7,
+        "conditions": {
+          "source_local_id": "cash_advance_exclusion",
+          "part": null,
+          "info_reasons": [],
+          "flags": [
+            "exclusion_scope_broadened"
+          ]
+        },
+        "notes": null,
+        "effective_from": "2024-01-01",
+        "effective_to": null,
+        "excluded_categories": [],
+        "rule_role": "exclusion",
+        "merchant_slugs": [],
+        "platform_slugs": [],
+        "mcc_include": [],
+        "mcc_exclude": [],
+        "except_merchant_slugs": [],
+        "except_platform_slugs": [],
+        "block_inr": null,
+        "min_engine_version": 2,
+        "max_engine_version": null,
+        "source_local_id": "cash_advance_exclusion",
+        "display_note": "NeuCoins are not accrued on cash advances."
+      },
+      {
+        "id": "tata-neu-infinity-hdfc-bank:rule:outstanding_payment_exclusion",
+        "category_id": null,
+        "category_slug": null,
+        "merchant_pattern": null,
+        "rail": null,
+        "unit": "points_per_100",
+        "rate": 0,
+        "min_txn_inr": null,
+        "max_txn_inr": null,
+        "priority": 8,
+        "conditions": {
+          "source_local_id": "outstanding_payment_exclusion",
+          "part": null,
+          "info_reasons": [
+            "condition:clause:transaction_type",
+            "condition:transaction_scope",
+            "condition:channel_type"
+          ],
+          "flags": [
+            "depends_on_txn_attribute"
+          ]
+        },
+        "notes": null,
+        "effective_from": "2024-01-01",
+        "effective_to": null,
+        "excluded_categories": [],
+        "rule_role": "info",
+        "merchant_slugs": [],
+        "platform_slugs": [],
+        "mcc_include": [],
+        "mcc_exclude": [],
+        "except_merchant_slugs": [],
+        "except_platform_slugs": [],
+        "block_inr": null,
+        "min_engine_version": 2,
+        "max_engine_version": null,
+        "source_local_id": "outstanding_payment_exclusion",
+        "display_note": "Payments of outstanding balances do not earn NeuCoins."
+      },
+      {
+        "id": "tata-neu-infinity-hdfc-bank:rule:fees_charges_exclusion",
+        "category_id": null,
+        "category_slug": null,
+        "merchant_pattern": null,
+        "rail": null,
+        "unit": "points_per_100",
+        "rate": 0,
+        "min_txn_inr": null,
+        "max_txn_inr": null,
+        "priority": 9,
+        "conditions": {
+          "source_local_id": "fees_charges_exclusion",
+          "part": null,
+          "info_reasons": [
+            "condition:clause:transaction_type",
+            "condition:transaction_scope",
+            "non_purchase_channel"
+          ],
+          "flags": [
+            "depends_on_txn_attribute"
+          ]
+        },
+        "notes": null,
+        "effective_from": "2024-01-01",
+        "effective_to": null,
+        "excluded_categories": [],
+        "rule_role": "info",
+        "merchant_slugs": [],
+        "platform_slugs": [],
+        "mcc_include": [],
+        "mcc_exclude": [],
+        "except_merchant_slugs": [],
+        "except_platform_slugs": [],
+        "block_inr": null,
+        "min_engine_version": 2,
+        "max_engine_version": null,
+        "source_local_id": "fees_charges_exclusion",
+        "display_note": "Card fees and other charges do not earn NeuCoins."
+      },
+      {
+        "id": "tata-neu-infinity-hdfc-bank:rule:smart_emi_exclusion",
+        "category_id": "cat-emi",
+        "category_slug": "emi",
+        "merchant_pattern": null,
+        "rail": null,
+        "unit": "points_per_100",
+        "rate": 0,
+        "min_txn_inr": null,
+        "max_txn_inr": null,
+        "priority": 10,
+        "conditions": {
+          "source_local_id": "smart_emi_exclusion",
+          "part": null,
+          "info_reasons": [],
+          "flags": [
+            "exclusion_scope_broadened"
+          ]
+        },
+        "notes": null,
+        "effective_from": "2024-01-01",
+        "effective_to": null,
+        "excluded_categories": [],
+        "rule_role": "exclusion",
+        "merchant_slugs": [],
+        "platform_slugs": [],
+        "mcc_include": [],
+        "mcc_exclude": [],
+        "except_merchant_slugs": [],
+        "except_platform_slugs": [],
+        "block_inr": null,
+        "min_engine_version": 1,
+        "max_engine_version": null,
+        "source_local_id": "smart_emi_exclusion",
+        "display_note": "Smart EMI, Dial an EMI and post-transaction EMI conversion transactions do not earn NeuCoins."
+      },
+      {
+        "id": "tata-neu-infinity-hdfc-bank:rule:education_aggregator_exclusion",
+        "category_id": "cat-education",
+        "category_slug": "education",
+        "merchant_pattern": null,
+        "rail": null,
+        "unit": "points_per_100",
+        "rate": 0,
+        "min_txn_inr": null,
+        "max_txn_inr": null,
+        "priority": 12,
+        "conditions": {
+          "source_local_id": "education_aggregator_exclusion",
+          "part": null,
+          "info_reasons": [],
+          "flags": [
+            "exclusion_rail_dropped",
+            "exclusion_scope_broadened"
+          ]
+        },
+        "notes": null,
+        "effective_from": "2024-09-01",
+        "effective_to": null,
+        "excluded_categories": [],
+        "rule_role": "exclusion",
+        "merchant_slugs": [],
+        "platform_slugs": [],
+        "mcc_include": [],
+        "mcc_exclude": [],
+        "except_merchant_slugs": [],
+        "except_platform_slugs": [],
+        "block_inr": null,
+        "min_engine_version": 1,
+        "max_engine_version": null,
+        "source_local_id": "education_aggregator_exclusion",
+        "display_note": "From 1-Sep-2024, education payments through third-party apps/aggregators do not earn NeuCoins."
+      },
+      {
+        "id": "tata-neu-infinity-hdfc-bank:rule:education_direct_standard",
+        "category_id": "cat-education",
+        "category_slug": "education",
+        "merchant_pattern": null,
+        "rail": "online",
+        "unit": "points_per_100",
+        "rate": 1.5,
+        "min_txn_inr": null,
+        "max_txn_inr": null,
+        "priority": 13,
+        "conditions": {
+          "source_local_id": "education_direct_standard",
+          "part": null,
+          "info_reasons": [
+            "condition:clause:payment_channel",
+            "condition:channel_type"
+          ],
+          "flags": []
+        },
+        "notes": null,
+        "effective_from": "2024-09-01",
+        "effective_to": null,
+        "excluded_categories": [],
+        "rule_role": "info",
+        "merchant_slugs": [],
+        "platform_slugs": [],
+        "mcc_include": [],
+        "mcc_exclude": [],
+        "except_merchant_slugs": [],
+        "except_platform_slugs": [],
+        "block_inr": null,
+        "min_engine_version": 2,
+        "max_engine_version": null,
+        "source_local_id": "education_direct_standard",
+        "display_note": "Education payments made directly through college/school websites or their POS machines earn NeuCoins."
+      },
+      {
+        "id": "tata-neu-infinity-hdfc-bank:rule:insurance_standard_capped",
+        "category_id": "cat-insurance",
+        "category_slug": "insurance",
+        "merchant_pattern": null,
+        "rail": null,
+        "unit": "points_per_100",
+        "rate": 1.5,
+        "min_txn_inr": null,
+        "max_txn_inr": null,
+        "priority": 14,
+        "conditions": {
+          "source_local_id": "insurance_standard_capped",
+          "part": null,
+          "info_reasons": [],
+          "flags": []
+        },
+        "notes": null,
+        "effective_from": "2025-07-01",
+        "effective_to": null,
+        "excluded_categories": [],
+        "rule_role": "earn",
+        "merchant_slugs": [],
+        "platform_slugs": [],
+        "mcc_include": [],
+        "mcc_exclude": [],
+        "except_merchant_slugs": [],
+        "except_platform_slugs": [],
+        "block_inr": null,
+        "min_engine_version": 1,
+        "max_engine_version": null,
+        "source_local_id": "insurance_standard_capped",
+        "display_note": "Insurance transactions earn NeuCoins subject to a maximum of 2,000 NeuCoins per calendar month from 1-Jul-2025."
+      },
+      {
+        "id": "tata-neu-infinity-hdfc-bank:rule:grocery_standard_capped",
+        "category_id": "cat-groceries",
+        "category_slug": "groceries",
+        "merchant_pattern": null,
+        "rail": null,
+        "unit": "points_per_100",
+        "rate": 1.5,
+        "min_txn_inr": null,
+        "max_txn_inr": null,
+        "priority": 15,
+        "conditions": {
+          "source_local_id": "grocery_standard_capped",
+          "part": null,
+          "info_reasons": [],
+          "flags": []
+        },
+        "notes": null,
+        "effective_from": "2023-01-01",
+        "effective_to": null,
+        "excluded_categories": [],
+        "rule_role": "earn",
+        "merchant_slugs": [],
+        "platform_slugs": [],
+        "mcc_include": [],
+        "mcc_exclude": [],
+        "except_merchant_slugs": [],
+        "except_platform_slugs": [],
+        "block_inr": null,
+        "min_engine_version": 1,
+        "max_engine_version": null,
+        "source_local_id": "grocery_standard_capped",
+        "display_note": "NeuCoins on grocery transactions are capped at 2,000 NeuCoins per month."
+      },
+      {
+        "id": "tata-neu-infinity-hdfc-bank:rule:utility_standard_capped",
+        "category_id": "cat-bills",
+        "category_slug": "bills",
+        "merchant_pattern": null,
+        "rail": null,
+        "unit": "points_per_100",
+        "rate": 1.5,
+        "min_txn_inr": null,
+        "max_txn_inr": null,
+        "priority": 16,
+        "conditions": {
+          "source_local_id": "utility_standard_capped",
+          "part": null,
+          "info_reasons": [],
+          "flags": []
+        },
+        "notes": null,
+        "effective_from": "2024-09-01",
+        "effective_to": null,
+        "excluded_categories": [],
+        "rule_role": "earn",
+        "merchant_slugs": [],
+        "platform_slugs": [],
+        "mcc_include": [],
+        "mcc_exclude": [],
+        "except_merchant_slugs": [],
+        "except_platform_slugs": [],
+        "block_inr": null,
+        "min_engine_version": 1,
+        "max_engine_version": null,
+        "source_local_id": "utility_standard_capped",
+        "display_note": "NeuCoins on utility transactions are capped at 2,000 NeuCoins per calendar month."
+      },
+      {
+        "id": "tata-neu-infinity-hdfc-bank:rule:telecom_cable_standard_capped",
+        "category_id": null,
+        "category_slug": null,
+        "merchant_pattern": null,
+        "rail": null,
+        "unit": "points_per_100",
+        "rate": 1.5,
+        "min_txn_inr": null,
+        "max_txn_inr": null,
+        "priority": 17,
+        "conditions": {
+          "source_local_id": "telecom_cable_standard_capped",
+          "part": null,
+          "info_reasons": [],
+          "flags": [
+            "narrow_token_to_mcc"
+          ]
+        },
+        "notes": null,
+        "effective_from": "2024-09-01",
+        "effective_to": null,
+        "excluded_categories": [],
+        "rule_role": "earn",
+        "merchant_slugs": [],
+        "platform_slugs": [],
+        "mcc_include": [
+          "4812",
+          "4814",
+          "4899"
+        ],
+        "mcc_exclude": [],
+        "except_merchant_slugs": [],
+        "except_platform_slugs": [],
+        "block_inr": null,
+        "min_engine_version": 2,
+        "max_engine_version": null,
+        "source_local_id": "telecom_cable_standard_capped",
+        "display_note": "NeuCoins on Telecom & Cable transactions are capped at 2,000 NeuCoins per calendar month."
+      },
+      {
+        "id": "tata-neu-infinity-hdfc-bank:rule:tata_partner_croma_wp7",
+        "category_id": null,
+        "category_slug": null,
+        "merchant_pattern": "croma",
+        "rail": null,
+        "unit": "points_per_100",
+        "rate": 5,
+        "min_txn_inr": null,
+        "max_txn_inr": null,
+        "priority": 11,
+        "conditions": {
+          "source_local_id": "tata_partner_croma_wp7",
+          "part": null,
+          "info_reasons": [],
+          "flags": []
+        },
+        "notes": null,
+        "effective_from": "2024-01-01",
+        "effective_to": null,
+        "excluded_categories": [],
+        "rule_role": "earn",
+        "merchant_slugs": [
+          "croma"
+        ],
+        "platform_slugs": [],
+        "mcc_include": [],
+        "mcc_exclude": [
+          "6513",
+          "9311",
+          "9399"
+        ],
+        "except_merchant_slugs": [],
+        "except_platform_slugs": [],
+        "block_inr": null,
+        "min_engine_version": 2,
+        "max_engine_version": null,
+        "source_local_id": "tata_partner_croma_wp7",
+        "display_note": "5% back as NeuCoins on non-EMI spends at Croma (Annex 1 fair usage applies)."
+      },
+      {
+        "id": "tata-neu-infinity-hdfc-bank:rule:tata_partner_fashion_wp7",
+        "category_id": null,
+        "category_slug": null,
+        "merchant_pattern": "tatacliq",
+        "rail": null,
+        "unit": "points_per_100",
+        "rate": 5,
+        "min_txn_inr": null,
+        "max_txn_inr": null,
+        "priority": 11,
+        "conditions": {
+          "source_local_id": "tata_partner_fashion_wp7",
+          "part": null,
+          "info_reasons": [],
+          "flags": [
+            "partial_merchant_list"
+          ]
+        },
+        "notes": null,
+        "effective_from": "2024-01-01",
+        "effective_to": null,
+        "excluded_categories": [],
+        "rule_role": "earn",
+        "merchant_slugs": [
+          "tata_cliq"
+        ],
+        "platform_slugs": [],
+        "mcc_include": [],
+        "mcc_exclude": [
+          "6513",
+          "9311",
+          "9399"
+        ],
+        "except_merchant_slugs": [],
+        "except_platform_slugs": [],
+        "block_inr": null,
+        "min_engine_version": 2,
+        "max_engine_version": null,
+        "source_local_id": "tata_partner_fashion_wp7",
+        "display_note": "5% back as NeuCoins on non-EMI spends at Tata CLiQ, Westside (Annex 1 fair usage applies)."
+      },
+      {
+        "id": "tata-neu-infinity-hdfc-bank:rule:tata_partner_travel_wp7",
+        "category_id": null,
+        "category_slug": null,
+        "merchant_pattern": null,
+        "rail": null,
+        "unit": "points_per_100",
+        "rate": 5,
+        "min_txn_inr": null,
+        "max_txn_inr": null,
+        "priority": 11,
+        "conditions": {
+          "source_local_id": "tata_partner_travel_wp7",
+          "part": null,
+          "info_reasons": [],
+          "flags": []
+        },
+        "notes": null,
+        "effective_from": "2024-01-01",
+        "effective_to": null,
+        "excluded_categories": [],
+        "rule_role": "earn",
+        "merchant_slugs": [
+          "air_india",
+          "air_india_express",
+          "taj"
+        ],
+        "platform_slugs": [],
+        "mcc_include": [],
+        "mcc_exclude": [
+          "6513",
+          "9311",
+          "9399"
+        ],
+        "except_merchant_slugs": [],
+        "except_platform_slugs": [],
+        "block_inr": null,
+        "min_engine_version": 2,
+        "max_engine_version": null,
+        "source_local_id": "tata_partner_travel_wp7",
+        "display_note": "5% back as NeuCoins on non-EMI spends at Taj Hotels, Air India Express, Air India (Annex 1 fair usage applies)."
+      },
+      {
+        "id": "tata-neu-infinity-hdfc-bank:rule:tata_partner_others_wp7",
+        "category_id": null,
+        "category_slug": null,
+        "merchant_pattern": null,
+        "rail": null,
+        "unit": "points_per_100",
+        "rate": 5,
+        "min_txn_inr": null,
+        "max_txn_inr": null,
+        "priority": 11,
+        "conditions": {
+          "source_local_id": "tata_partner_others_wp7",
+          "part": null,
+          "info_reasons": [],
+          "flags": []
+        },
+        "notes": null,
+        "effective_from": "2024-01-01",
+        "effective_to": null,
+        "excluded_categories": [],
+        "rule_role": "earn",
+        "merchant_slugs": [
+          "cult_fit",
+          "tata_1mg",
+          "tata_play"
+        ],
+        "platform_slugs": [],
+        "mcc_include": [],
+        "mcc_exclude": [
+          "6513",
+          "9311",
+          "9399"
+        ],
+        "except_merchant_slugs": [],
+        "except_platform_slugs": [],
+        "block_inr": null,
+        "min_engine_version": 2,
+        "max_engine_version": null,
+        "source_local_id": "tata_partner_others_wp7",
+        "display_note": "5% back as NeuCoins on non-EMI spends at Tata 1mg, Cult.fit, Tata Play (Annex 1 fair usage applies)."
+      },
+      {
+        "id": "tata-neu-infinity-hdfc-bank:rule:tata_partner_bigbasket_wp7",
+        "category_id": null,
+        "category_slug": null,
+        "merchant_pattern": "bigbasket",
+        "rail": null,
+        "unit": "points_per_100",
+        "rate": 5,
+        "min_txn_inr": null,
+        "max_txn_inr": null,
+        "priority": 11,
+        "conditions": {
+          "source_local_id": "tata_partner_bigbasket_wp7",
+          "part": null,
+          "info_reasons": [],
+          "flags": []
+        },
+        "notes": null,
+        "effective_from": "2024-01-01",
+        "effective_to": null,
+        "excluded_categories": [],
+        "rule_role": "earn",
+        "merchant_slugs": [
+          "bigbasket"
+        ],
+        "platform_slugs": [],
+        "mcc_include": [],
+        "mcc_exclude": [
+          "6513",
+          "9311",
+          "9399"
+        ],
+        "except_merchant_slugs": [],
+        "except_platform_slugs": [],
+        "block_inr": null,
+        "min_engine_version": 2,
+        "max_engine_version": null,
+        "source_local_id": "tata_partner_bigbasket_wp7",
+        "display_note": "5% back as NeuCoins on non-EMI spends at BigBasket (Annex 1 fair usage applies)."
+      },
+      {
+        "id": "tata-neu-infinity-hdfc-bank:rule:tata_partner_titan_wp7",
+        "category_id": null,
+        "category_slug": null,
+        "merchant_pattern": "tanishq",
+        "rail": null,
+        "unit": "points_per_100",
+        "rate": 5,
+        "min_txn_inr": null,
+        "max_txn_inr": null,
+        "priority": 11,
+        "conditions": {
+          "source_local_id": "tata_partner_titan_wp7",
+          "part": null,
+          "info_reasons": [],
+          "flags": [
+            "partial_merchant_list"
+          ]
+        },
+        "notes": null,
+        "effective_from": "2024-01-01",
+        "effective_to": null,
+        "excluded_categories": [],
+        "rule_role": "earn",
+        "merchant_slugs": [
+          "tanishq"
+        ],
+        "platform_slugs": [],
+        "mcc_include": [],
+        "mcc_exclude": [
+          "6513",
+          "9311",
+          "9399"
+        ],
+        "except_merchant_slugs": [],
+        "except_platform_slugs": [],
+        "block_inr": null,
+        "min_engine_version": 2,
+        "max_engine_version": null,
+        "source_local_id": "tata_partner_titan_wp7",
+        "display_note": "5% back as NeuCoins on non-EMI spends at Titan, Tanishq (Annex 1 fair usage applies)."
+      },
+      {
+        "id": "tata-neu-infinity-hdfc-bank:rule:tata_partner_emi_wp7",
+        "category_id": null,
+        "category_slug": null,
+        "merchant_pattern": null,
+        "rail": "emi",
+        "unit": "points_per_100",
+        "rate": 1.5,
+        "min_txn_inr": null,
+        "max_txn_inr": null,
+        "priority": 10,
+        "conditions": {
+          "source_local_id": "tata_partner_emi_wp7",
+          "part": null,
+          "info_reasons": [],
+          "flags": [
+            "partial_merchant_list"
+          ]
+        },
+        "notes": null,
+        "effective_from": "2024-01-01",
+        "effective_to": null,
+        "excluded_categories": [],
+        "rule_role": "earn",
+        "merchant_slugs": [
+          "air_india",
+          "air_india_express",
+          "bigbasket",
+          "croma",
+          "cult_fit",
+          "taj",
+          "tanishq",
+          "tata_1mg",
+          "tata_cliq",
+          "tata_neu",
+          "tata_play"
+        ],
+        "platform_slugs": [],
+        "mcc_include": [],
+        "mcc_exclude": [],
+        "except_merchant_slugs": [],
+        "except_platform_slugs": [],
+        "block_inr": null,
+        "min_engine_version": 2,
+        "max_engine_version": null,
+        "source_local_id": "tata_partner_emi_wp7",
+        "display_note": "Merchant EMI at partner Tata brands earns the base 1.5%."
+      },
+      {
+        "id": "tata-neu-infinity-hdfc-bank:rule:tata_partner_upi_wp7",
+        "category_id": null,
+        "category_slug": null,
+        "merchant_pattern": null,
+        "rail": "upi_qr",
+        "unit": "points_per_100",
+        "rate": 0.5,
+        "min_txn_inr": null,
+        "max_txn_inr": null,
+        "priority": 9,
+        "conditions": {
+          "source_local_id": "tata_partner_upi_wp7",
+          "part": null,
+          "info_reasons": [],
+          "flags": [
+            "partial_merchant_list",
+            "reduced_rate_no_v1_row"
+          ]
+        },
+        "notes": null,
+        "effective_from": "2024-08-01",
+        "effective_to": null,
+        "excluded_categories": [],
+        "rule_role": "earn",
+        "merchant_slugs": [
+          "air_india",
+          "air_india_express",
+          "bigbasket",
+          "croma",
+          "cult_fit",
+          "taj",
+          "tanishq",
+          "tata_1mg",
+          "tata_cliq",
+          "tata_neu",
+          "tata_play"
+        ],
+        "platform_slugs": [],
+        "mcc_include": [],
+        "mcc_exclude": [],
+        "except_merchant_slugs": [],
+        "except_platform_slugs": [],
+        "block_inr": null,
+        "min_engine_version": 2,
+        "max_engine_version": null,
+        "source_local_id": "tata_partner_upi_wp7",
+        "display_note": "UPI spends at partner Tata brands earn the UPI rate, not the partner rate."
+      },
+      {
+        "id": "tata-neu-infinity-hdfc-bank:rule:wp7_rent_government_mcc_exclusion",
+        "category_id": null,
+        "category_slug": null,
+        "merchant_pattern": null,
+        "rail": null,
+        "unit": "points_per_100",
+        "rate": 0,
+        "min_txn_inr": null,
+        "max_txn_inr": null,
+        "priority": 3,
+        "conditions": {
+          "source_local_id": "wp7_rent_government_mcc_exclusion",
+          "part": null,
+          "info_reasons": [],
+          "flags": []
+        },
+        "notes": null,
+        "effective_from": "2024-01-01",
+        "effective_to": null,
+        "excluded_categories": [],
+        "rule_role": "exclusion",
+        "merchant_slugs": [],
+        "platform_slugs": [],
+        "mcc_include": [
+          "6513",
+          "9311",
+          "9399"
+        ],
+        "mcc_exclude": [],
+        "except_merchant_slugs": [],
+        "except_platform_slugs": [],
+        "block_inr": null,
+        "min_engine_version": 2,
+        "max_engine_version": null,
+        "source_local_id": "wp7_rent_government_mcc_exclusion",
+        "display_note": "Rental and government MCC transactions earn no NeuCoins."
+      }
+    ],
+    "cap_rules": [
+      {
+        "id": "tata-neu-infinity-hdfc-bank:cap:grocery_monthly_2000",
+        "reward_rule_id": "tata-neu-infinity-hdfc-bank:rule:grocery_standard_capped",
+        "category_id": null,
+        "category_slug": null,
+        "benefit_kind": null,
+        "label": "Grocery monthly 2000",
+        "measure": "reward_value",
+        "period": "calendar_month",
+        "cap_value": 2000,
+        "post_cap_unit": null,
+        "post_cap_rate": 0,
+        "resets_on_day": 1,
+        "cap_kind": "total_points",
+        "cap_amount": 2000,
+        "scope": "targets",
+        "targets": [
+          "tata-neu-infinity-hdfc-bank:rule:grocery_standard_capped"
+        ],
+        "parent_cap_id": null,
+        "post_cap_behavior": null,
+        "anchor": null,
+        "min_engine_version": 1,
+        "source_local_id": "grocery_monthly_2000"
+      },
+      {
+        "id": "tata-neu-infinity-hdfc-bank:cap:utility_monthly_2000",
+        "reward_rule_id": "tata-neu-infinity-hdfc-bank:rule:utility_standard_capped",
+        "category_id": null,
+        "category_slug": null,
+        "benefit_kind": null,
+        "label": "Utility monthly 2000",
+        "measure": "reward_value",
+        "period": "calendar_month",
+        "cap_value": 2000,
+        "post_cap_unit": null,
+        "post_cap_rate": 0,
+        "resets_on_day": 1,
+        "cap_kind": "total_points",
+        "cap_amount": 2000,
+        "scope": "targets",
+        "targets": [
+          "tata-neu-infinity-hdfc-bank:rule:utility_standard_capped"
+        ],
+        "parent_cap_id": null,
+        "post_cap_behavior": null,
+        "anchor": null,
+        "min_engine_version": 1,
+        "source_local_id": "utility_monthly_2000"
+      },
+      {
+        "id": "tata-neu-infinity-hdfc-bank:cap:telecom_monthly_2000",
+        "reward_rule_id": "tata-neu-infinity-hdfc-bank:rule:telecom_cable_standard_capped",
+        "category_id": null,
+        "category_slug": null,
+        "benefit_kind": null,
+        "label": "Telecom monthly 2000",
+        "measure": "reward_value",
+        "period": "calendar_month",
+        "cap_value": 2000,
+        "post_cap_unit": null,
+        "post_cap_rate": 0,
+        "resets_on_day": 1,
+        "cap_kind": "total_points",
+        "cap_amount": 2000,
+        "scope": "targets",
+        "targets": [
+          "tata-neu-infinity-hdfc-bank:rule:telecom_cable_standard_capped"
+        ],
+        "parent_cap_id": null,
+        "post_cap_behavior": null,
+        "anchor": null,
+        "min_engine_version": 2,
+        "source_local_id": "telecom_monthly_2000"
+      },
+      {
+        "id": "tata-neu-infinity-hdfc-bank:cap:insurance_monthly_2000",
+        "reward_rule_id": "tata-neu-infinity-hdfc-bank:rule:insurance_standard_capped",
+        "category_id": null,
+        "category_slug": null,
+        "benefit_kind": null,
+        "label": "Insurance monthly 2000",
+        "measure": "reward_value",
+        "period": "calendar_month",
+        "cap_value": 2000,
+        "post_cap_unit": null,
+        "post_cap_rate": 0,
+        "resets_on_day": 1,
+        "cap_kind": "total_points",
+        "cap_amount": 2000,
+        "scope": "targets",
+        "targets": [
+          "tata-neu-infinity-hdfc-bank:rule:insurance_standard_capped"
+        ],
+        "parent_cap_id": null,
+        "post_cap_behavior": null,
+        "anchor": null,
+        "min_engine_version": 1,
+        "source_local_id": "insurance_monthly_2000"
+      },
+      {
+        "id": "tata-neu-infinity-hdfc-bank:cap:upi_monthly_500_neucoins",
+        "reward_rule_id": null,
+        "category_id": null,
+        "category_slug": null,
+        "benefit_kind": null,
+        "label": "Upi monthly 500 neucoins",
+        "measure": "reward_value",
+        "period": "calendar_month",
+        "cap_value": 500,
+        "post_cap_unit": null,
+        "post_cap_rate": 0,
+        "resets_on_day": 1,
+        "cap_kind": "total_points",
+        "cap_amount": 500,
+        "scope": "targets",
+        "targets": [
+          "tata-neu-infinity-hdfc-bank:rule:upi_generic",
+          "tata-neu-infinity-hdfc-bank:rule:upi_tata_neu_id_additional",
+          "tata-neu-infinity-hdfc-bank:rule:tata_partner_upi_wp7"
+        ],
+        "parent_cap_id": null,
+        "post_cap_behavior": null,
+        "anchor": null,
+        "min_engine_version": 2,
+        "source_local_id": "upi_monthly_500_neucoins"
+      },
+      {
+        "id": "tata-neu-infinity-hdfc-bank:cap:tata_partner_croma_wp7_monthly",
+        "reward_rule_id": "tata-neu-infinity-hdfc-bank:rule:tata_partner_croma_wp7",
+        "category_id": null,
+        "category_slug": null,
+        "benefit_kind": null,
+        "label": "Tata partner croma wp7 monthly",
+        "measure": "spend_amount",
+        "period": "calendar_month",
+        "cap_value": 600000,
+        "post_cap_unit": null,
+        "post_cap_rate": null,
+        "resets_on_day": null,
+        "cap_kind": "eligible_spend",
+        "cap_amount": 600000,
+        "scope": "targets",
+        "targets": [
+          "tata-neu-infinity-hdfc-bank:rule:tata_partner_croma_wp7"
+        ],
+        "parent_cap_id": null,
+        "post_cap_behavior": "base_rate",
+        "anchor": null,
+        "min_engine_version": 2,
+        "source_local_id": "tata_partner_croma_wp7_monthly"
+      },
+      {
+        "id": "tata-neu-infinity-hdfc-bank:cap:tata_partner_croma_wp7_annual",
+        "reward_rule_id": "tata-neu-infinity-hdfc-bank:rule:tata_partner_croma_wp7",
+        "category_id": null,
+        "category_slug": null,
+        "benefit_kind": null,
+        "label": "Tata partner croma wp7 annual",
+        "measure": "spend_amount",
+        "period": "annual",
+        "cap_value": 1800000,
+        "post_cap_unit": null,
+        "post_cap_rate": null,
+        "resets_on_day": null,
+        "cap_kind": "eligible_spend",
+        "cap_amount": 1800000,
+        "scope": "targets",
+        "targets": [
+          "tata-neu-infinity-hdfc-bank:rule:tata_partner_croma_wp7"
+        ],
+        "parent_cap_id": null,
+        "post_cap_behavior": "base_rate",
+        "anchor": "calendar_year",
+        "min_engine_version": 2,
+        "source_local_id": "tata_partner_croma_wp7_annual"
+      },
+      {
+        "id": "tata-neu-infinity-hdfc-bank:cap:tata_partner_fashion_wp7_monthly",
+        "reward_rule_id": "tata-neu-infinity-hdfc-bank:rule:tata_partner_fashion_wp7",
+        "category_id": null,
+        "category_slug": null,
+        "benefit_kind": null,
+        "label": "Tata partner fashion wp7 monthly",
+        "measure": "spend_amount",
+        "period": "calendar_month",
+        "cap_value": 300000,
+        "post_cap_unit": null,
+        "post_cap_rate": null,
+        "resets_on_day": null,
+        "cap_kind": "eligible_spend",
+        "cap_amount": 300000,
+        "scope": "targets",
+        "targets": [
+          "tata-neu-infinity-hdfc-bank:rule:tata_partner_fashion_wp7"
+        ],
+        "parent_cap_id": null,
+        "post_cap_behavior": "base_rate",
+        "anchor": null,
+        "min_engine_version": 2,
+        "source_local_id": "tata_partner_fashion_wp7_monthly"
+      },
+      {
+        "id": "tata-neu-infinity-hdfc-bank:cap:tata_partner_fashion_wp7_annual",
+        "reward_rule_id": "tata-neu-infinity-hdfc-bank:rule:tata_partner_fashion_wp7",
+        "category_id": null,
+        "category_slug": null,
+        "benefit_kind": null,
+        "label": "Tata partner fashion wp7 annual",
+        "measure": "spend_amount",
+        "period": "annual",
+        "cap_value": 1800000,
+        "post_cap_unit": null,
+        "post_cap_rate": null,
+        "resets_on_day": null,
+        "cap_kind": "eligible_spend",
+        "cap_amount": 1800000,
+        "scope": "targets",
+        "targets": [
+          "tata-neu-infinity-hdfc-bank:rule:tata_partner_fashion_wp7"
+        ],
+        "parent_cap_id": null,
+        "post_cap_behavior": "base_rate",
+        "anchor": "calendar_year",
+        "min_engine_version": 2,
+        "source_local_id": "tata_partner_fashion_wp7_annual"
+      },
+      {
+        "id": "tata-neu-infinity-hdfc-bank:cap:tata_partner_travel_wp7_monthly",
+        "reward_rule_id": "tata-neu-infinity-hdfc-bank:rule:tata_partner_travel_wp7",
+        "category_id": null,
+        "category_slug": null,
+        "benefit_kind": null,
+        "label": "Tata partner travel wp7 monthly",
+        "measure": "spend_amount",
+        "period": "calendar_month",
+        "cap_value": 800000,
+        "post_cap_unit": null,
+        "post_cap_rate": null,
+        "resets_on_day": null,
+        "cap_kind": "eligible_spend",
+        "cap_amount": 800000,
+        "scope": "targets",
+        "targets": [
+          "tata-neu-infinity-hdfc-bank:rule:tata_partner_travel_wp7"
+        ],
+        "parent_cap_id": null,
+        "post_cap_behavior": "base_rate",
+        "anchor": null,
+        "min_engine_version": 2,
+        "source_local_id": "tata_partner_travel_wp7_monthly"
+      },
+      {
+        "id": "tata-neu-infinity-hdfc-bank:cap:tata_partner_travel_wp7_annual",
+        "reward_rule_id": "tata-neu-infinity-hdfc-bank:rule:tata_partner_travel_wp7",
+        "category_id": null,
+        "category_slug": null,
+        "benefit_kind": null,
+        "label": "Tata partner travel wp7 annual",
+        "measure": "spend_amount",
+        "period": "annual",
+        "cap_value": 3000000,
+        "post_cap_unit": null,
+        "post_cap_rate": null,
+        "resets_on_day": null,
+        "cap_kind": "eligible_spend",
+        "cap_amount": 3000000,
+        "scope": "targets",
+        "targets": [
+          "tata-neu-infinity-hdfc-bank:rule:tata_partner_travel_wp7"
+        ],
+        "parent_cap_id": null,
+        "post_cap_behavior": "base_rate",
+        "anchor": "calendar_year",
+        "min_engine_version": 2,
+        "source_local_id": "tata_partner_travel_wp7_annual"
+      },
+      {
+        "id": "tata-neu-infinity-hdfc-bank:cap:tata_partner_others_wp7_monthly",
+        "reward_rule_id": "tata-neu-infinity-hdfc-bank:rule:tata_partner_others_wp7",
+        "category_id": null,
+        "category_slug": null,
+        "benefit_kind": null,
+        "label": "Tata partner others wp7 monthly",
+        "measure": "spend_amount",
+        "period": "calendar_month",
+        "cap_value": 200000,
+        "post_cap_unit": null,
+        "post_cap_rate": null,
+        "resets_on_day": null,
+        "cap_kind": "eligible_spend",
+        "cap_amount": 200000,
+        "scope": "targets",
+        "targets": [
+          "tata-neu-infinity-hdfc-bank:rule:tata_partner_others_wp7"
+        ],
+        "parent_cap_id": null,
+        "post_cap_behavior": "base_rate",
+        "anchor": null,
+        "min_engine_version": 2,
+        "source_local_id": "tata_partner_others_wp7_monthly"
+      },
+      {
+        "id": "tata-neu-infinity-hdfc-bank:cap:tata_partner_others_wp7_annual",
+        "reward_rule_id": "tata-neu-infinity-hdfc-bank:rule:tata_partner_others_wp7",
+        "category_id": null,
+        "category_slug": null,
+        "benefit_kind": null,
+        "label": "Tata partner others wp7 annual",
+        "measure": "spend_amount",
+        "period": "annual",
+        "cap_value": 1500000,
+        "post_cap_unit": null,
+        "post_cap_rate": null,
+        "resets_on_day": null,
+        "cap_kind": "eligible_spend",
+        "cap_amount": 1500000,
+        "scope": "targets",
+        "targets": [
+          "tata-neu-infinity-hdfc-bank:rule:tata_partner_others_wp7"
+        ],
+        "parent_cap_id": null,
+        "post_cap_behavior": "base_rate",
+        "anchor": "calendar_year",
+        "min_engine_version": 2,
+        "source_local_id": "tata_partner_others_wp7_annual"
+      },
+      {
+        "id": "tata-neu-infinity-hdfc-bank:cap:tata_partner_bigbasket_wp7_monthly",
+        "reward_rule_id": "tata-neu-infinity-hdfc-bank:rule:tata_partner_bigbasket_wp7",
+        "category_id": null,
+        "category_slug": null,
+        "benefit_kind": null,
+        "label": "Tata partner bigbasket wp7 monthly",
+        "measure": "spend_amount",
+        "period": "calendar_month",
+        "cap_value": 100000,
+        "post_cap_unit": null,
+        "post_cap_rate": null,
+        "resets_on_day": null,
+        "cap_kind": "eligible_spend",
+        "cap_amount": 100000,
+        "scope": "targets",
+        "targets": [
+          "tata-neu-infinity-hdfc-bank:rule:tata_partner_bigbasket_wp7"
+        ],
+        "parent_cap_id": null,
+        "post_cap_behavior": "base_rate",
+        "anchor": null,
+        "min_engine_version": 2,
+        "source_local_id": "tata_partner_bigbasket_wp7_monthly"
+      },
+      {
+        "id": "tata-neu-infinity-hdfc-bank:cap:tata_partner_bigbasket_wp7_annual",
+        "reward_rule_id": "tata-neu-infinity-hdfc-bank:rule:tata_partner_bigbasket_wp7",
+        "category_id": null,
+        "category_slug": null,
+        "benefit_kind": null,
+        "label": "Tata partner bigbasket wp7 annual",
+        "measure": "spend_amount",
+        "period": "annual",
+        "cap_value": 1200000,
+        "post_cap_unit": null,
+        "post_cap_rate": null,
+        "resets_on_day": null,
+        "cap_kind": "eligible_spend",
+        "cap_amount": 1200000,
+        "scope": "targets",
+        "targets": [
+          "tata-neu-infinity-hdfc-bank:rule:tata_partner_bigbasket_wp7"
+        ],
+        "parent_cap_id": null,
+        "post_cap_behavior": "base_rate",
+        "anchor": "calendar_year",
+        "min_engine_version": 2,
+        "source_local_id": "tata_partner_bigbasket_wp7_annual"
+      },
+      {
+        "id": "tata-neu-infinity-hdfc-bank:cap:tata_partner_titan_wp7_monthly",
+        "reward_rule_id": "tata-neu-infinity-hdfc-bank:rule:tata_partner_titan_wp7",
+        "category_id": null,
+        "category_slug": null,
+        "benefit_kind": null,
+        "label": "Tata partner titan wp7 monthly",
+        "measure": "spend_amount",
+        "period": "calendar_month",
+        "cap_value": 600000,
+        "post_cap_unit": null,
+        "post_cap_rate": null,
+        "resets_on_day": null,
+        "cap_kind": "eligible_spend",
+        "cap_amount": 600000,
+        "scope": "targets",
+        "targets": [
+          "tata-neu-infinity-hdfc-bank:rule:tata_partner_titan_wp7"
+        ],
+        "parent_cap_id": null,
+        "post_cap_behavior": "base_rate",
+        "anchor": null,
+        "min_engine_version": 2,
+        "source_local_id": "tata_partner_titan_wp7_monthly"
+      },
+      {
+        "id": "tata-neu-infinity-hdfc-bank:cap:tata_partner_titan_wp7_annual",
+        "reward_rule_id": "tata-neu-infinity-hdfc-bank:rule:tata_partner_titan_wp7",
+        "category_id": null,
+        "category_slug": null,
+        "benefit_kind": null,
+        "label": "Tata partner titan wp7 annual",
+        "measure": "spend_amount",
+        "period": "annual",
+        "cap_value": 1800000,
+        "post_cap_unit": null,
+        "post_cap_rate": null,
+        "resets_on_day": null,
+        "cap_kind": "eligible_spend",
+        "cap_amount": 1800000,
+        "scope": "targets",
+        "targets": [
+          "tata-neu-infinity-hdfc-bank:rule:tata_partner_titan_wp7"
+        ],
+        "parent_cap_id": null,
+        "post_cap_behavior": "base_rate",
+        "anchor": "calendar_year",
+        "min_engine_version": 2,
+        "source_local_id": "tata_partner_titan_wp7_annual"
+      },
+      {
+        "id": "tata-neu-infinity-hdfc-bank:cap:wp7_fair_usage_statement_cycle",
+        "reward_rule_id": null,
+        "category_id": null,
+        "category_slug": null,
+        "benefit_kind": null,
+        "label": "Wp7 fair usage statement cycle",
+        "measure": "reward_value",
+        "period": "statement_cycle",
+        "cap_value": 50000,
+        "post_cap_unit": null,
+        "post_cap_rate": 0,
+        "resets_on_day": null,
+        "cap_kind": "total_points",
+        "cap_amount": 50000,
+        "scope": "targets",
+        "targets": [
+          "tata-neu-infinity-hdfc-bank:rule:base_non_tata_non_emi",
+          "tata-neu-infinity-hdfc-bank:rule:tata_partner_emi_wp7"
+        ],
+        "parent_cap_id": null,
+        "post_cap_behavior": null,
+        "anchor": null,
+        "min_engine_version": 2,
+        "source_local_id": "wp7_fair_usage_statement_cycle"
+      },
+      {
+        "id": "tata-neu-infinity-hdfc-bank:cap:bigbasket_grocery_share",
+        "reward_rule_id": "tata-neu-infinity-hdfc-bank:rule:tata_partner_bigbasket_wp7",
+        "category_id": null,
+        "category_slug": null,
+        "benefit_kind": null,
+        "label": "Bigbasket grocery share",
+        "measure": "reward_value",
+        "period": "calendar_month",
+        "cap_value": 2000,
+        "post_cap_unit": null,
+        "post_cap_rate": 0,
+        "resets_on_day": 1,
+        "cap_kind": "total_points",
+        "cap_amount": 2000,
+        "scope": "targets",
+        "targets": [
+          "tata-neu-infinity-hdfc-bank:rule:tata_partner_bigbasket_wp7"
+        ],
+        "parent_cap_id": "tata-neu-infinity-hdfc-bank:cap:grocery_monthly_2000",
+        "post_cap_behavior": null,
+        "anchor": null,
+        "min_engine_version": 2,
+        "source_local_id": "bigbasket_grocery_share"
+      }
+    ],
+    "milestone_rules": [],
+    "fee_waiver_rules": [
+      {
+        "id": "tata-neu-infinity-hdfc-bank:waiver:1",
+        "threshold_spend_inr": 300000,
+        "period": "annual",
+        "waives_fee_inr": 1499,
+        "excluded_category_slugs": [],
+        "notes": "Spend ₹3,00,000 or more during the year before the credit-card renewal date.",
+        "excluded_categories": []
+      }
+    ],
+    "benefits": [
+      {
+        "id": "tata-neu-infinity-hdfc-bank:benefit:domestic_lounge_milestone",
+        "key": "domestic_lounge_milestone",
+        "source_local_id": "domestic_lounge_milestone",
+        "kind": "lounge_domestic",
+        "label": "2 complimentary domestic lounge vouchers per calendar quarter, up to 8 per calendar year, after ₹50,000 qualifying spend in that calendar quarter",
+        "description": "Sponsor: HDFC Bank",
+        "quota_count": 2,
+        "quota_period": "quarter",
+        "network_program": "visa_infinite_or_rupay",
+        "value_estimate_inr": null,
+        "conditions": {
+          "source_category_id": "lounge",
+          "evaluation_engine": {
+            "conditions": {
+              "spend_threshold_inr": 50000,
+              "period": "calendar_quarter",
+              "net_spend_basis": "Qualifying spend in the relevant calendar quarter."
+            },
+            "benefit_calculation": {
+              "vouchers_per_qualified_quarter": 2,
+              "annual_maximum_vouchers": 8
+            },
+            "perks": [
+              "Effective 10-Jun-2025, domestic lounge access became milestone-based and is provided through lounge vouchers rather than direct swipe access.",
+              "Voucher must be claimed through HDFC Bank's lounge claim process within the applicable claim period.",
+              "The voucher can be used at participating domestic airport lounges subject to the voucher's validity and lounge terms."
+            ]
+          }
+        }
+      },
+      {
+        "id": "tata-neu-infinity-hdfc-bank:benefit:international_lounge_priority_pass_visa",
+        "key": "international_lounge_priority_pass_visa",
+        "source_local_id": "international_lounge_priority_pass_visa",
+        "kind": "lounge_international",
+        "label": "4 complimentary international lounge visits per calendar year, 1 per quarter, outside India for Visa variant",
+        "description": "Sponsor: HDFC Bank",
+        "quota_count": 4,
+        "quota_period": "annual",
+        "network_program": "priority_pass",
+        "value_estimate_inr": null,
+        "conditions": {
+          "source_category_id": "lounge",
+          "evaluation_engine": {
+            "conditions": {
+              "location": "outside_india",
+              "quota_period": "calendar_year",
+              "priority_pass_required": true
+            },
+            "benefit_calculation": {
+              "complimentary_visits": 4,
+              "visits_per_quarter": 1,
+              "excess_visit_fee_usd": 27,
+              "guest_fee_usd": 27,
+              "india_visit_fee_usd": 27
+            },
+            "perks": [
+              "Priority Pass is issued for the Visa variant subject to HDFC Bank's applicable issuance process.",
+              "Primary cardholder and add-on member can together use up to 4 complimentary visits per calendar year.",
+              "Guest visits are chargeable at US$27 plus applicable taxes per guest per visit.",
+              "Priority Pass visits within India are chargeable at US$27 plus applicable taxes per person per visit."
+            ]
+          }
+        }
+      },
+      {
+        "id": "tata-neu-infinity-hdfc-bank:benefit:international_lounge_rupay",
+        "key": "international_lounge_rupay",
+        "source_local_id": "international_lounge_rupay",
+        "kind": "lounge_international",
+        "label": "4 complimentary international lounge visits per calendar year, 1 per quarter, outside India for RuPay variant",
+        "description": "Sponsor: HDFC Bank",
+        "quota_count": 4,
+        "quota_period": "annual",
+        "network_program": "rupay",
+        "value_estimate_inr": null,
+        "conditions": {
+          "source_category_id": "lounge",
+          "evaluation_engine": {
+            "conditions": {
+              "location": "outside_india",
+              "quota_period": "calendar_year"
+            },
+            "benefit_calculation": {
+              "complimentary_visits": 4,
+              "visits_per_quarter": 1,
+              "temporary_transaction_fee_usd": 3.25,
+              "temporary_transaction_fee_reversal": true
+            },
+            "perks": [
+              "For the RuPay variant, a US$3.25 transaction is charged and reversed for each complimentary international lounge visit, subject to the applicable RuPay lounge program."
+            ]
+          }
+        }
+      },
+      {
+        "id": "tata-neu-infinity-hdfc-bank:benefit:insurance:air_accidental_death",
+        "key": "insurance:air_accidental_death",
+        "source_local_id": null,
+        "kind": "insurance_travel",
+        "label": "Air Accidental Death",
+        "description": "Available to the primary cardholder for death resulting from an air accident, subject to the applicable insurance policy terms. The audited policy document covered 23-Jul-2025 through 22-Jul-2026.",
+        "quota_count": null,
+        "quota_period": null,
+        "network_program": null,
+        "value_estimate_inr": 10000000,
+        "conditions": {
+          "coverage_usd": null
+        }
+      },
+      {
+        "id": "tata-neu-infinity-hdfc-bank:benefit:insurance:medical_emergency_overseas",
+        "key": "insurance:medical_emergency_overseas",
+        "source_local_id": null,
+        "kind": "other",
+        "label": "Medical Emergency Overseas",
+        "description": "Up to ₹15 lakh for emergency medical expenses arising from bodily injury or sudden unexpected sickness during international travel outside India, subject to policy terms. Maximum trip duration 30 days; pre-existing illness excluded in the audited policy.",
+        "quota_count": null,
+        "quota_period": null,
+        "network_program": null,
+        "value_estimate_inr": 1500000,
+        "conditions": {
+          "coverage_usd": null
+        }
+      },
+      {
+        "id": "tata-neu-infinity-hdfc-bank:benefit:insurance:other",
+        "key": "insurance:other",
+        "source_local_id": null,
+        "kind": "other",
+        "label": "Other",
+        "description": "Lost card liability cover up to ₹9 lakh for the primary cardholder, subject to policy terms. The audited policy specified cover for 2 days prior to blocking and 30 days after blocking, with additional activation and dispatch conditions.",
+        "quota_count": null,
+        "quota_period": null,
+        "network_program": null,
+        "value_estimate_inr": 900000,
+        "conditions": {
+          "coverage_usd": null
+        }
+      }
+    ],
+    "unlock_rules": [
+      {
+        "id": "tata-neu-infinity-hdfc-bank:unlock:domestic_lounge_milestone@1",
+        "card_benefit_id": "tata-neu-infinity-hdfc-bank:benefit:domestic_lounge_milestone",
+        "kind": "lounge_domestic",
+        "label": "2 complimentary domestic lounge vouchers per calendar quarter, up to 8 per calendar year, after ₹50,000 qualifying spend in that calendar quarter",
+        "spend_threshold_inr": 50000,
+        "spend_window": "current_calendar_quarter",
+        "window_days": null,
+        "unlocks_quota": 2,
+        "unlocks_period": "quarter",
+        "tier_label": null,
+        "excluded_category_ids": [],
+        "notes": null,
+        "source_local_id": "domestic_lounge_milestone"
+      }
+    ],
+    "redemption_options": [
+      {
+        "program_name": "Tata Neu App/Website",
+        "method": "other",
+        "value_per_point_inr": 1,
+        "min_points": null,
+        "notes": "Redemption fee: ₹0"
+      },
+      {
+        "program_name": "Eligible offline Tata Neu participating stores",
+        "method": "other",
+        "value_per_point_inr": 1,
+        "min_points": null,
+        "notes": "Redemption fee: ₹0"
+      }
+    ],
+    "is_upi_linkable": true
+  }
+}

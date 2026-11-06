@@ -1,0 +1,49 @@
+{
+  "source_slug": "american-express-platinum-charge-card-india",
+  "changes": [
+    {
+      "path": "cap_rules[id=fuel_bonus_points_monthly_cap].metric",
+      "value": "total_reward_points",
+      "reason": "Issuer caps the fuel earning at 5,000 points per month in total, not only the bonus part.",
+      "source_url": "https://www.americanexpress.com/content/dam/amex/en-in/benefits/rewards/membership-rewards/membership-rewards-terms.pdf",
+      "checked_on": "2026-11-05"
+    },
+    {
+      "path": "reward_rules[id=utility_zero_rewards].conditions",
+      "value": {
+        "category": "utility",
+        "mcc_list": [
+          4900
+        ]
+      },
+      "reason": "WP7: Electricity, water and gas are MCC 4900; the sub-category names made the exclusion info, so utility bills earned points.",
+      "source_url": "https://www.americanexpress.com/content/dam/amex/en-in/benefits/rewards/membership-rewards/membership-rewards-terms.pdf",
+      "checked_on": "2026-11-05"
+    },
+    {
+      "path": "reward_rules",
+      "op": "append",
+      "value": {
+        "id": "wp7_emi_rail_exclusion",
+        "category_id": "all_retail",
+        "priority": 0,
+        "evaluation_type": "exclusion",
+        "rail": "emi",
+        "channel_type": "all",
+        "conditions": {},
+        "action": {
+          "multiplier": 0,
+          "points_per_block": 0,
+          "cashback_percent": null,
+          "cap_reference": null,
+          "reason": "EMI transactions earn no rewards."
+        },
+        "effective_from": "2020-03-15",
+        "effective_to": null
+      },
+      "reason": "WP7: D28c: MR terms: no points \"on any EMI option selected from a merchant's website\" or terminal (SafeKey/post-purchase EMI may be under-stated). The record's EMI row needs category emi AND rail emi, so an EMI purchase in another category earned. Rail-EMI exclusion on all spend.",
+      "source_url": "https://www.americanexpress.com/content/dam/amex/en-in/benefits/rewards/membership-rewards/membership-rewards-terms.pdf",
+      "checked_on": "2026-11-05"
+    }
+  ]
+}

@@ -1,0 +1,353 @@
+{
+  "source_slug": "hpcl-idfc-first-power-plus",
+  "cardpipeline_id": "idfc-first-bank-hpcl-idfc-first-power-2",
+  "card_name": "HPCL IDFC FIRST Power+ Credit Card",
+  "verified_on": "2026-11-05",
+  "sources": [
+    {
+      "url": "https://www.idfcfirst.bank.in/content/dam/idfcfirstbank/pdf/Savings-Maximiser-FIRST-Power-plus.pdf",
+      "doc": "FIRST Power+ Savings Maximiser",
+      "quote": "Maximum spends capping: Rs 12,000 per statement cycle (Maximum 2,400 Rewards per statement cycle)"
+    },
+    {
+      "url": "https://www.idfcfirst.bank.in/content/dam/idfcfirstbank/pdf/Savings-Maximiser-FIRST-Power-plus.pdf",
+      "doc": "FIRST Power+ Savings Maximiser",
+      "quote": "Maximum spends capping: Rs 2,000 per statement cycle (Maximum 400 Rewards per statement cycle)"
+    },
+    {
+      "url": "https://www.idfcfirst.bank.in/content/dam/idfcfirstbank/pdf/Savings-Maximiser-FIRST-Power-plus.pdf",
+      "doc": "FIRST Power+ Savings Maximiser",
+      "quote": "30 Reward points per Rs 150 recharge on IDFC FIRST FASTag (1 Reward point = Rs 0.25)"
+    }
+  ],
+  "examples": [
+    {
+      "id": "001",
+      "title": "Rs 3,000 fuel at an authorised HPCL pump",
+      "ctx": {
+        "amount": 3000,
+        "occurred": "2026-11-10T10:00:00+05:30",
+        "category_id": null,
+        "category_slug": "fuel",
+        "mcc": "5541",
+        "merchant_name": "HPCL pump",
+        "merchant_vpa": null,
+        "merchant_slug": "hpcl",
+        "platform": null,
+        "rail": "swipe"
+      },
+      "state_before": {
+        "caps_by_source_id": {}
+      },
+      "expect": {
+        "currency": "points",
+        "amount": 600,
+        "value_inr": 150.0,
+        "excluded": false,
+        "cap_deltas_by_source_id": {
+          "fuel_monthly_spend_cap": 3000
+        }
+      },
+      "why": "30X = 30 reward points per Rs 150 on HPCL fuel (5% at Rs 0.25 a point): 20 blocks x 30 = 600. Counts towards the Rs 12,000 per statement cycle fuel limit."
+    },
+    {
+      "id": "002",
+      "title": "Rs 1,500 HPCL fuel reaching the Rs 12,000 fuel limit exactly",
+      "ctx": {
+        "amount": 1500,
+        "occurred": "2026-11-10T10:00:00+05:30",
+        "category_id": null,
+        "category_slug": "fuel",
+        "mcc": "5541",
+        "merchant_name": "HPCL pump",
+        "merchant_vpa": null,
+        "merchant_slug": "hpcl",
+        "platform": null,
+        "rail": "swipe"
+      },
+      "state_before": {
+        "caps_by_source_id": {
+          "fuel_monthly_spend_cap": 10500
+        }
+      },
+      "expect": {
+        "currency": "points",
+        "amount": 300,
+        "value_inr": 75.0,
+        "excluded": false,
+        "cap_deltas_by_source_id": {
+          "fuel_monthly_spend_cap": 1500
+        }
+      },
+      "why": "Rs 10,500 of the Rs 12,000 per statement cycle (max 2,400 points) is used; this spend earns 10 x 30 = 300 and fills the limit."
+    },
+    {
+      "id": "003",
+      "title": "Rs 1,500 grocery spend",
+      "ctx": {
+        "amount": 1500,
+        "occurred": "2026-11-10T10:00:00+05:30",
+        "category_id": null,
+        "category_slug": "groceries",
+        "mcc": "5411",
+        "merchant_name": "Supermarket",
+        "merchant_vpa": null,
+        "merchant_slug": null,
+        "platform": null,
+        "rail": "swipe"
+      },
+      "state_before": {
+        "caps_by_source_id": {}
+      },
+      "expect": {
+        "currency": "points",
+        "amount": 300,
+        "value_inr": 75.0,
+        "excluded": false,
+        "cap_deltas_by_source_id": {
+          "grocery_utility_cap": 1500
+        }
+      },
+      "why": "30 points per Rs 150 on grocery and utility (MCC based), maximum spend Rs 2,000 per statement cycle (400 points): 10 x 30 = 300."
+    },
+    {
+      "id": "004",
+      "title": "Rs 300 electricity bill reaching the Rs 2,000 grocery and utility limit exactly",
+      "ctx": {
+        "amount": 300,
+        "occurred": "2026-11-10T10:00:00+05:30",
+        "category_id": null,
+        "category_slug": "bills",
+        "mcc": "4900",
+        "merchant_name": "Electricity board",
+        "merchant_vpa": null,
+        "merchant_slug": null,
+        "platform": null,
+        "rail": "online"
+      },
+      "state_before": {
+        "caps_by_source_id": {
+          "grocery_utility_cap": 1700
+        }
+      },
+      "expect": {
+        "currency": "points",
+        "amount": 60,
+        "value_inr": 15.0,
+        "excluded": false,
+        "cap_deltas_by_source_id": {
+          "grocery_utility_cap": 300
+        }
+      },
+      "why": "Rs 1,700 of the Rs 2,000 limit is used; Rs 300 earns 2 x 30 = 60 and fills the limit."
+    },
+    {
+      "id": "005",
+      "title": "Rs 750 IDFC FIRST FASTag recharge",
+      "ctx": {
+        "amount": 750,
+        "occurred": "2026-11-10T10:00:00+05:30",
+        "category_id": null,
+        "category_slug": "travel",
+        "mcc": "4784",
+        "merchant_name": "IDFC FIRST FASTag",
+        "merchant_vpa": null,
+        "merchant_slug": null,
+        "platform": "idfc_mobile_app",
+        "rail": "online"
+      },
+      "state_before": {
+        "caps_by_source_id": {}
+      },
+      "expect": {
+        "currency": "points",
+        "amount": 150,
+        "value_inr": 37.5,
+        "excluded": false,
+        "cap_deltas_by_source_id": {
+          "fastag_cap": 750
+        }
+      },
+      "why": "30 points per Rs 150 on IDFC FIRST FASTag recharge done in the IDFC FIRST app, limit Rs 1,000 per cycle: 5 x 30 = 150."
+    },
+    {
+      "id": "006",
+      "title": "Rs 3,000 other retail spend",
+      "ctx": {
+        "amount": 3000,
+        "occurred": "2026-11-10T10:00:00+05:30",
+        "category_id": null,
+        "category_slug": "other",
+        "mcc": "5651",
+        "merchant_name": "Apparel store",
+        "merchant_vpa": null,
+        "merchant_slug": null,
+        "platform": null,
+        "rail": "swipe"
+      },
+      "state_before": {
+        "caps_by_source_id": {}
+      },
+      "expect": {
+        "currency": "points",
+        "amount": 60,
+        "value_inr": 15.0,
+        "excluded": false,
+        "cap_deltas_by_source_id": {}
+      },
+      "why": "Other retail earns 3X = 3 points per Rs 150 with no cap: 20 x 3 = 60."
+    },
+    {
+      "id": "007",
+      "title": "Rs 3,000 retail spend by UPI QR",
+      "ctx": {
+        "amount": 3000,
+        "occurred": "2026-11-10T10:00:00+05:30",
+        "category_id": null,
+        "category_slug": "other",
+        "mcc": "5651",
+        "merchant_name": "Apparel store",
+        "merchant_vpa": null,
+        "merchant_slug": null,
+        "platform": null,
+        "rail": "upi_qr"
+      },
+      "state_before": {
+        "caps_by_source_id": {}
+      },
+      "expect": {
+        "currency": "points",
+        "amount": 60,
+        "value_inr": 15.0,
+        "excluded": false,
+        "cap_deltas_by_source_id": {}
+      },
+      "why": "Retail spends via UPI earn 3 points per Rs 150: 20 x 3 = 60."
+    },
+    {
+      "id": "008",
+      "title": "Rs 3,000 fuel at a non-HPCL pump",
+      "ctx": {
+        "amount": 3000,
+        "occurred": "2026-11-10T10:00:00+05:30",
+        "category_id": null,
+        "category_slug": "fuel",
+        "mcc": "5541",
+        "merchant_name": "Other fuel station",
+        "merchant_vpa": null,
+        "merchant_slug": null,
+        "platform": null,
+        "rail": "swipe"
+      },
+      "state_before": {
+        "caps_by_source_id": {}
+      },
+      "expect": {
+        "currency": "points",
+        "amount": 0,
+        "value_inr": null,
+        "excluded": true,
+        "cap_deltas_by_source_id": {}
+      },
+      "why": "Non-HPCL fuel spends earn nothing."
+    },
+    {
+      "id": "009",
+      "title": "Rs 10,000 insurance premium",
+      "ctx": {
+        "amount": 10000,
+        "occurred": "2026-11-10T10:00:00+05:30",
+        "category_id": null,
+        "category_slug": "insurance",
+        "mcc": "6300",
+        "merchant_name": "Insurer",
+        "merchant_vpa": null,
+        "merchant_slug": null,
+        "platform": null,
+        "rail": "online"
+      },
+      "state_before": {
+        "caps_by_source_id": {}
+      },
+      "expect": {
+        "currency": "points",
+        "amount": 0,
+        "value_inr": null,
+        "excluded": true,
+        "cap_deltas_by_source_id": {}
+      },
+      "why": "Insurance premium payments are excluded from rewards."
+    },
+    {
+      "id": "010",
+      "title": "Rs 10,000 EMI purchase",
+      "ctx": {
+        "amount": 10000,
+        "occurred": "2026-11-10T10:00:00+05:30",
+        "category_id": null,
+        "category_slug": "emi",
+        "mcc": null,
+        "merchant_name": "Electronics store",
+        "merchant_vpa": null,
+        "merchant_slug": null,
+        "platform": null,
+        "rail": "emi"
+      },
+      "state_before": {
+        "caps_by_source_id": {}
+      },
+      "expect": {
+        "currency": "points",
+        "amount": 0,
+        "value_inr": null,
+        "excluded": true,
+        "cap_deltas_by_source_id": {}
+      },
+      "why": "EMI transactions are excluded."
+    }
+  ],
+  "research_notes": [
+    {
+      "item": "fuel cap",
+      "cardpipeline_says": "fuel_monthly_spend_cap eligible_spend Rs 10,000 per statement cycle",
+      "issuer_says": "Issuer Savings Maximiser: 5% reward points on HPCL fuel capped at Rs 12,000 per statement cycle (max 2,400 points). The Rs 10,000 figure belongs to the 1.5% HP Pay Happy Coins (600 coins a month), a different currency.",
+      "proposed_fix": "override",
+      "override_file": "api/scripts/catalogue_overrides/hpcl-idfc-first-power-plus.json"
+    },
+    {
+      "item": "grocery and utility cap",
+      "cardpipeline_says": "Rs 2,000 per statement cycle",
+      "issuer_says": "Matches the Savings Maximiser: max Rs 2,000 spend, 400 points per cycle. An older IDFC document shows Rs 1,000; not used.",
+      "proposed_fix": "none",
+      "override_file": null
+    },
+    {
+      "item": "FASTag cap",
+      "cardpipeline_says": "Rs 1,000 per statement cycle",
+      "issuer_says": "Matches: max Rs 1,000 spend, 200 points. Only for recharge via the IDFC FIRST Bank mobile banking app or FIRST Forward app.",
+      "proposed_fix": "none",
+      "override_file": null
+    },
+    {
+      "item": "WP7: example 005 platform",
+      "cardpipeline_says": "Example 005 had platform null.",
+      "issuer_says": "The 30X FASTag rate applies only to recharges via the IDFC FIRST mobile banking or FIRST Forward app (note above); engines never infer a platform (C3.1), so the example now carries platform idfc_mobile_app. Expected values unchanged.",
+      "proposed_fix": "none",
+      "override_file": null
+    },
+    {
+      "item": "post-cap earning",
+      "cardpipeline_says": "zero_accrual after caps",
+      "issuer_says": "Not stated by the issuer. Examples avoid it.",
+      "proposed_fix": "none",
+      "override_file": null
+    },
+    {
+      "item": "HP Pay Happy Coins",
+      "cardpipeline_says": "fuel_hp_pay not modelled",
+      "issuer_says": "1.5% extra as Happy Coins (6 per Rs 100, max 600 coins a month) is paid in the HP Pay app, outside the card statement.",
+      "proposed_fix": "none",
+      "override_file": null
+    }
+  ]
+}

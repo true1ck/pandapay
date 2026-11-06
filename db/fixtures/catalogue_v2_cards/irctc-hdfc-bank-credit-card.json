@@ -1,0 +1,1579 @@
+{
+  "generated_by": "api/scripts/catalogue_v2/snapshot_examples.js",
+  "source_slug": "irctc-hdfc-bank-credit-card",
+  "inputs": {
+    "transform_version": "7",
+    "source_record_sha256": "a016dc7598e597ded59eed88133625377b9bf406f4973d06fb4b027e5f453d7c",
+    "override_sha256": "29a3ff70e24b9c0c0cf8bc6d9916419069d53bbdb5acf7a4081415ce07c7859f",
+    "directory_sha256": "b1094d54b77e848d22f7a9a64f3ae6d1ef43ca3eb2fc8e40cd43ed1994664694",
+    "verified": false
+  },
+  "blocking_flags": [
+    "info_rule"
+  ],
+  "card": {
+    "id": "irctc-hdfc-bank-credit-card:card",
+    "slug": "irctc-hdfc-bank-credit-card",
+    "name": "IRCTC HDFC Bank Credit Card",
+    "network": "rupay",
+    "issuer_slug": "hdfc",
+    "base_reward_unit": "points_per_100",
+    "base_reward_rate": 1,
+    "point_value_inr": 1,
+    "excluded_categories": [],
+    "accrual_block_inr": 100,
+    "accrual_rounding": "floor",
+    "cashback_rounding": null,
+    "points_expiry_months": 24,
+    "model_status": "partial",
+    "model_coverage": {
+      "rules_total": 14,
+      "rules_modelled": 13,
+      "rules_info": 1,
+      "caps_total": 12,
+      "caps_enforced": 9,
+      "flags": [
+        {
+          "code": "brand_from_identification_text",
+          "source_local_id": "irctc-5x",
+          "detail": null
+        },
+        {
+          "code": "narrow_token_on_merchant",
+          "source_local_id": "irctc-5x",
+          "detail": null
+        },
+        {
+          "code": "info_rule",
+          "source_local_id": "smartbuy-train-cashback",
+          "detail": "unresolved_merchant:merchant_requirement"
+        },
+        {
+          "code": "narrow_token_to_mcc",
+          "source_local_id": "smartbuy-train-cashback",
+          "detail": null
+        },
+        {
+          "code": "unmapped_excluded_category",
+          "source_local_id": "all-other-standard",
+          "detail": null
+        },
+        {
+          "code": "mcc_scoped_exclusion",
+          "source_local_id": "fuel-exclusion",
+          "detail": null
+        },
+        {
+          "code": "mcc_scoped_exclusion",
+          "source_local_id": "wallet-exclusion",
+          "detail": null
+        },
+        {
+          "code": "mcc_scoped_exclusion",
+          "source_local_id": "rent-exclusion",
+          "detail": null
+        },
+        {
+          "code": "mcc_scoped_exclusion",
+          "source_local_id": "government-exclusion",
+          "detail": null
+        },
+        {
+          "code": "mcc_scoped_exclusion",
+          "source_local_id": "education-exclusion",
+          "detail": null
+        },
+        {
+          "code": "exclusion_rail_dropped",
+          "source_local_id": "gaming-exclusion",
+          "detail": null
+        },
+        {
+          "code": "broad_exclusion_v1_only",
+          "source_local_id": "gaming-exclusion",
+          "detail": null
+        },
+        {
+          "code": "narrow_token_to_mcc",
+          "source_local_id": "telecom-cap",
+          "detail": null
+        },
+        {
+          "code": "cap_targets_info_only",
+          "source_local_id": "smartbuy-5-percent-cashback-monthly",
+          "detail": null
+        },
+        {
+          "code": "cap_targets_info_only",
+          "source_local_id": "smartbuy-5-percent-cashback-annual",
+          "detail": null
+        },
+        {
+          "code": "non_earning_cap_skipped",
+          "source_local_id": "transaction-charge-waiver-monthly",
+          "detail": null
+        }
+      ],
+      "overrides_applied": [
+        {
+          "path": "reward_rules[id=irctc-5x].conditions.eligible_transaction_type",
+          "op": "remove",
+          "value_sha256": "74234e98afe7498f",
+          "reason": "WP7: \"non-EMI retail spend\" restates retail spend (EMI principal on IRCTC is negligible); the key made the 5X rule info.",
+          "source_url": "https://www.hdfc.bank.in/content/dam/hdfcbankpws/in/en/personal-banking/discover-products/cards/credit-cards/irctc-credit-card/irctc-tnc-09-10-25.pdf",
+          "checked_on": "2026-11-05",
+          "citation": null
+        },
+        {
+          "path": "reward_rules[id=irctc-5x].channel_type",
+          "op": "set",
+          "value_sha256": "5cf7504d9781301d",
+          "reason": "WP7: T&C: 5X on IRCTC spends made through IRCTC Ticketing Website / Rail Connect App and HDFC Bank SmartBuy - alternatives, all identified by IRCTC MIDs; the merchant (IRCTC) carries it. As written the loader AND-ed IRCTC with SmartBuy.",
+          "source_url": "https://www.hdfc.bank.in/content/dam/hdfcbankpws/in/en/personal-banking/discover-products/cards/credit-cards/irctc-credit-card/irctc-tnc-09-10-25.pdf",
+          "checked_on": "2026-11-05",
+          "citation": null
+        },
+        {
+          "path": "reward_rules[id=all-other-standard].conditions.eligible_transaction_type",
+          "op": "remove",
+          "value_sha256": "74234e98afe7498f",
+          "reason": "WP7: \"retail spend\" restates the catch-all; the key made the other-spends rule info, so its 1,000/month cap never applied.",
+          "source_url": "https://www.hdfc.bank.in/content/dam/hdfcbankpws/in/en/personal-banking/discover-products/cards/credit-cards/irctc-credit-card/irctc-tnc-09-10-25.pdf",
+          "checked_on": "2026-11-05",
+          "citation": null
+        },
+        {
+          "path": "cap_rules[id=other-spends-annual].target_rule_ids",
+          "op": "set",
+          "value_sha256": "d09dd8f2ada3fb54",
+          "reason": "WP7: T&C: \"Reward Points on other spends is capped maximum at 1000 Reward Points per month and 12000 Reward Points Annually.\" With no rule naming it, the loader made it card-wide.",
+          "source_url": "https://www.hdfc.bank.in/content/dam/hdfcbankpws/in/en/personal-banking/discover-products/cards/credit-cards/irctc-credit-card/irctc-tnc-09-10-25.pdf",
+          "checked_on": "2026-11-05",
+          "citation": null
+        },
+        {
+          "path": "cap_rules[id=irctc-5x-annual].target_rule_ids",
+          "op": "set",
+          "value_sha256": "dab5358b34c76c20",
+          "reason": "WP7: T&C: the 12,000 RP annual cap is on \"the 5X Reward Points on partner IRCTC spends\"; category inference also tied it to the SmartBuy cashback rule.",
+          "source_url": "https://www.hdfc.bank.in/content/dam/hdfcbankpws/in/en/personal-banking/discover-products/cards/credit-cards/irctc-credit-card/irctc-tnc-09-10-25.pdf",
+          "checked_on": "2026-11-05",
+          "citation": null
+        },
+        {
+          "path": "cap_rules[id=smartbuy-5-percent-cashback-annual].target_rule_ids",
+          "op": "set",
+          "value_sha256": "b92bfa17b905e251",
+          "reason": "WP7: T&C: \"The accrual of the 5% Cashback on IRCTC Train Ticket booking made via HDFC Bank SmartBuy is capped maximum at INR 1000 per month and INR 12000 Annually\" - the cashback rule only; category inference also tied it to the 5X points rule.",
+          "source_url": "https://www.hdfc.bank.in/content/dam/hdfcbankpws/in/en/personal-banking/discover-products/cards/credit-cards/irctc-credit-card/irctc-tnc-09-10-25.pdf",
+          "checked_on": "2026-11-05",
+          "citation": null
+        }
+      ]
+    },
+    "reward_rules": [
+      {
+        "id": "irctc-hdfc-bank-credit-card:rule:irctc-5x",
+        "category_id": null,
+        "category_slug": null,
+        "merchant_pattern": "irctc",
+        "rail": null,
+        "unit": "points_per_100",
+        "rate": 5,
+        "min_txn_inr": 100,
+        "max_txn_inr": null,
+        "priority": 10,
+        "conditions": {
+          "source_local_id": "irctc-5x",
+          "part": null,
+          "info_reasons": [],
+          "flags": [
+            "brand_from_identification_text",
+            "narrow_token_on_merchant"
+          ]
+        },
+        "notes": null,
+        "effective_from": "2023-03-01",
+        "effective_to": null,
+        "excluded_categories": [],
+        "rule_role": "earn",
+        "merchant_slugs": [
+          "irctc"
+        ],
+        "platform_slugs": [],
+        "mcc_include": [],
+        "mcc_exclude": [],
+        "except_merchant_slugs": [],
+        "except_platform_slugs": [],
+        "block_inr": null,
+        "min_engine_version": 1,
+        "max_engine_version": null,
+        "source_local_id": "irctc-5x",
+        "display_note": "5 Reward Points per ₹100 on eligible IRCTC train-ticket bookings, comprising 1X base Reward Point plus 4X additional Reward Points."
+      },
+      {
+        "id": "irctc-hdfc-bank-credit-card:rule:smartbuy-train-cashback",
+        "category_id": null,
+        "category_slug": null,
+        "merchant_pattern": null,
+        "rail": null,
+        "unit": "cashback_percent",
+        "rate": 5,
+        "min_txn_inr": null,
+        "max_txn_inr": null,
+        "priority": 20,
+        "conditions": {
+          "source_local_id": "smartbuy-train-cashback",
+          "part": null,
+          "info_reasons": [
+            "unresolved_merchant:merchant_requirement"
+          ],
+          "flags": [
+            "narrow_token_to_mcc"
+          ]
+        },
+        "notes": null,
+        "effective_from": "2023-03-01",
+        "effective_to": null,
+        "excluded_categories": [],
+        "rule_role": "info",
+        "merchant_slugs": [],
+        "platform_slugs": [
+          "hdfc_smartbuy"
+        ],
+        "mcc_include": [
+          "4112"
+        ],
+        "mcc_exclude": [],
+        "except_merchant_slugs": [],
+        "except_platform_slugs": [],
+        "block_inr": null,
+        "min_engine_version": 2,
+        "max_engine_version": null,
+        "source_local_id": "smartbuy-train-cashback",
+        "display_note": "Additional 5% cashback on eligible IRCTC train-ticket bookings via HDFC Bank SmartBuy, in addition to 5X Reward Points."
+      },
+      {
+        "id": "irctc-hdfc-bank-credit-card:rule:all-other-standard",
+        "category_id": null,
+        "category_slug": null,
+        "merchant_pattern": null,
+        "rail": null,
+        "unit": "points_per_100",
+        "rate": 1,
+        "min_txn_inr": 100,
+        "max_txn_inr": null,
+        "priority": 100,
+        "conditions": {
+          "source_local_id": "all-other-standard",
+          "part": null,
+          "info_reasons": [],
+          "flags": [
+            "unmapped_excluded_category",
+            "min_amount_not_card_wide"
+          ]
+        },
+        "notes": null,
+        "effective_from": "2023-03-01",
+        "effective_to": null,
+        "excluded_categories": [
+          "cat-education",
+          "cat-emi",
+          "cat-fuel",
+          "cat-government",
+          "cat-rent",
+          "cat-wallet"
+        ],
+        "rule_role": "earn",
+        "merchant_slugs": [],
+        "platform_slugs": [],
+        "mcc_include": [],
+        "mcc_exclude": [],
+        "except_merchant_slugs": [],
+        "except_platform_slugs": [],
+        "block_inr": null,
+        "min_engine_version": 1,
+        "max_engine_version": null,
+        "source_local_id": "all-other-standard",
+        "display_note": "1 Reward Point per ₹100 on eligible other retail spends."
+      },
+      {
+        "id": "irctc-hdfc-bank-credit-card:rule:fuel-exclusion#1",
+        "category_id": "cat-fuel",
+        "category_slug": "fuel",
+        "merchant_pattern": null,
+        "rail": null,
+        "unit": "points_per_100",
+        "rate": 0,
+        "min_txn_inr": null,
+        "max_txn_inr": null,
+        "priority": 1,
+        "conditions": {
+          "source_local_id": "fuel-exclusion",
+          "part": 1,
+          "info_reasons": [],
+          "flags": [
+            "mcc_scoped_exclusion"
+          ]
+        },
+        "notes": null,
+        "effective_from": "2023-03-01",
+        "effective_to": null,
+        "excluded_categories": [],
+        "rule_role": "exclusion",
+        "merchant_slugs": [],
+        "platform_slugs": [],
+        "mcc_include": [],
+        "mcc_exclude": [],
+        "except_merchant_slugs": [],
+        "except_platform_slugs": [],
+        "block_inr": null,
+        "min_engine_version": 1,
+        "max_engine_version": 1,
+        "source_local_id": "fuel-exclusion",
+        "display_note": "Fuel spends do not earn Reward Points."
+      },
+      {
+        "id": "irctc-hdfc-bank-credit-card:rule:fuel-exclusion#2",
+        "category_id": "cat-fuel",
+        "category_slug": "fuel",
+        "merchant_pattern": null,
+        "rail": null,
+        "unit": "points_per_100",
+        "rate": 0,
+        "min_txn_inr": null,
+        "max_txn_inr": null,
+        "priority": 1,
+        "conditions": {
+          "source_local_id": "fuel-exclusion",
+          "part": 2,
+          "info_reasons": [],
+          "flags": [
+            "mcc_scoped_exclusion"
+          ]
+        },
+        "notes": null,
+        "effective_from": "2023-03-01",
+        "effective_to": null,
+        "excluded_categories": [],
+        "rule_role": "exclusion",
+        "merchant_slugs": [],
+        "platform_slugs": [],
+        "mcc_include": [
+          "1361",
+          "5172",
+          "5541",
+          "5542",
+          "5983",
+          "9752"
+        ],
+        "mcc_exclude": [],
+        "except_merchant_slugs": [],
+        "except_platform_slugs": [],
+        "block_inr": null,
+        "min_engine_version": 2,
+        "max_engine_version": null,
+        "source_local_id": "fuel-exclusion",
+        "display_note": "Fuel spends do not earn Reward Points."
+      },
+      {
+        "id": "irctc-hdfc-bank-credit-card:rule:fuel-exclusion#3",
+        "category_id": null,
+        "category_slug": null,
+        "merchant_pattern": null,
+        "rail": null,
+        "unit": "points_per_100",
+        "rate": 0,
+        "min_txn_inr": null,
+        "max_txn_inr": null,
+        "priority": 1,
+        "conditions": {
+          "source_local_id": "fuel-exclusion",
+          "part": 3,
+          "info_reasons": [],
+          "flags": [
+            "mcc_scoped_exclusion"
+          ]
+        },
+        "notes": null,
+        "effective_from": "2023-03-01",
+        "effective_to": null,
+        "excluded_categories": [],
+        "rule_role": "exclusion",
+        "merchant_slugs": [],
+        "platform_slugs": [],
+        "mcc_include": [
+          "1361",
+          "5172",
+          "5541",
+          "5542",
+          "5983",
+          "9752"
+        ],
+        "mcc_exclude": [],
+        "except_merchant_slugs": [],
+        "except_platform_slugs": [],
+        "block_inr": null,
+        "min_engine_version": 2,
+        "max_engine_version": null,
+        "source_local_id": "fuel-exclusion",
+        "display_note": "Fuel spends do not earn Reward Points."
+      },
+      {
+        "id": "irctc-hdfc-bank-credit-card:rule:wallet-exclusion#1",
+        "category_id": "cat-wallet",
+        "category_slug": "wallet",
+        "merchant_pattern": null,
+        "rail": null,
+        "unit": "points_per_100",
+        "rate": 0,
+        "min_txn_inr": null,
+        "max_txn_inr": null,
+        "priority": 1,
+        "conditions": {
+          "source_local_id": "wallet-exclusion",
+          "part": 1,
+          "info_reasons": [],
+          "flags": [
+            "mcc_scoped_exclusion"
+          ]
+        },
+        "notes": null,
+        "effective_from": "2023-03-01",
+        "effective_to": null,
+        "excluded_categories": [],
+        "rule_role": "exclusion",
+        "merchant_slugs": [],
+        "platform_slugs": [],
+        "mcc_include": [],
+        "mcc_exclude": [],
+        "except_merchant_slugs": [],
+        "except_platform_slugs": [],
+        "block_inr": null,
+        "min_engine_version": 1,
+        "max_engine_version": 1,
+        "source_local_id": "wallet-exclusion",
+        "display_note": "Wallet loading, prepaid card loading, and gift card loads do not earn Reward Points (MCC 6540)."
+      },
+      {
+        "id": "irctc-hdfc-bank-credit-card:rule:wallet-exclusion#2",
+        "category_id": "cat-wallet",
+        "category_slug": "wallet",
+        "merchant_pattern": null,
+        "rail": null,
+        "unit": "points_per_100",
+        "rate": 0,
+        "min_txn_inr": null,
+        "max_txn_inr": null,
+        "priority": 1,
+        "conditions": {
+          "source_local_id": "wallet-exclusion",
+          "part": 2,
+          "info_reasons": [],
+          "flags": [
+            "mcc_scoped_exclusion"
+          ]
+        },
+        "notes": null,
+        "effective_from": "2023-03-01",
+        "effective_to": null,
+        "excluded_categories": [],
+        "rule_role": "exclusion",
+        "merchant_slugs": [],
+        "platform_slugs": [],
+        "mcc_include": [
+          "6540"
+        ],
+        "mcc_exclude": [],
+        "except_merchant_slugs": [],
+        "except_platform_slugs": [],
+        "block_inr": null,
+        "min_engine_version": 2,
+        "max_engine_version": null,
+        "source_local_id": "wallet-exclusion",
+        "display_note": "Wallet loading, prepaid card loading, and gift card loads do not earn Reward Points (MCC 6540)."
+      },
+      {
+        "id": "irctc-hdfc-bank-credit-card:rule:wallet-exclusion#3",
+        "category_id": null,
+        "category_slug": null,
+        "merchant_pattern": null,
+        "rail": null,
+        "unit": "points_per_100",
+        "rate": 0,
+        "min_txn_inr": null,
+        "max_txn_inr": null,
+        "priority": 1,
+        "conditions": {
+          "source_local_id": "wallet-exclusion",
+          "part": 3,
+          "info_reasons": [],
+          "flags": [
+            "mcc_scoped_exclusion"
+          ]
+        },
+        "notes": null,
+        "effective_from": "2023-03-01",
+        "effective_to": null,
+        "excluded_categories": [],
+        "rule_role": "exclusion",
+        "merchant_slugs": [],
+        "platform_slugs": [],
+        "mcc_include": [
+          "6540"
+        ],
+        "mcc_exclude": [],
+        "except_merchant_slugs": [],
+        "except_platform_slugs": [],
+        "block_inr": null,
+        "min_engine_version": 2,
+        "max_engine_version": null,
+        "source_local_id": "wallet-exclusion",
+        "display_note": "Wallet loading, prepaid card loading, and gift card loads do not earn Reward Points (MCC 6540)."
+      },
+      {
+        "id": "irctc-hdfc-bank-credit-card:rule:rent-exclusion#1",
+        "category_id": "cat-rent",
+        "category_slug": "rent",
+        "merchant_pattern": null,
+        "rail": null,
+        "unit": "points_per_100",
+        "rate": 0,
+        "min_txn_inr": null,
+        "max_txn_inr": null,
+        "priority": 1,
+        "conditions": {
+          "source_local_id": "rent-exclusion",
+          "part": 1,
+          "info_reasons": [],
+          "flags": [
+            "mcc_scoped_exclusion"
+          ]
+        },
+        "notes": null,
+        "effective_from": "2023-03-01",
+        "effective_to": null,
+        "excluded_categories": [],
+        "rule_role": "exclusion",
+        "merchant_slugs": [],
+        "platform_slugs": [],
+        "mcc_include": [],
+        "mcc_exclude": [],
+        "except_merchant_slugs": [],
+        "except_platform_slugs": [],
+        "block_inr": null,
+        "min_engine_version": 1,
+        "max_engine_version": 1,
+        "source_local_id": "rent-exclusion",
+        "display_note": "Rental payments do not earn Reward Points."
+      },
+      {
+        "id": "irctc-hdfc-bank-credit-card:rule:rent-exclusion#2",
+        "category_id": "cat-rent",
+        "category_slug": "rent",
+        "merchant_pattern": null,
+        "rail": null,
+        "unit": "points_per_100",
+        "rate": 0,
+        "min_txn_inr": null,
+        "max_txn_inr": null,
+        "priority": 1,
+        "conditions": {
+          "source_local_id": "rent-exclusion",
+          "part": 2,
+          "info_reasons": [],
+          "flags": [
+            "mcc_scoped_exclusion"
+          ]
+        },
+        "notes": null,
+        "effective_from": "2023-03-01",
+        "effective_to": null,
+        "excluded_categories": [],
+        "rule_role": "exclusion",
+        "merchant_slugs": [],
+        "platform_slugs": [],
+        "mcc_include": [
+          "6513"
+        ],
+        "mcc_exclude": [],
+        "except_merchant_slugs": [],
+        "except_platform_slugs": [],
+        "block_inr": null,
+        "min_engine_version": 2,
+        "max_engine_version": null,
+        "source_local_id": "rent-exclusion",
+        "display_note": "Rental payments do not earn Reward Points."
+      },
+      {
+        "id": "irctc-hdfc-bank-credit-card:rule:rent-exclusion#3",
+        "category_id": null,
+        "category_slug": null,
+        "merchant_pattern": null,
+        "rail": null,
+        "unit": "points_per_100",
+        "rate": 0,
+        "min_txn_inr": null,
+        "max_txn_inr": null,
+        "priority": 1,
+        "conditions": {
+          "source_local_id": "rent-exclusion",
+          "part": 3,
+          "info_reasons": [],
+          "flags": [
+            "mcc_scoped_exclusion"
+          ]
+        },
+        "notes": null,
+        "effective_from": "2023-03-01",
+        "effective_to": null,
+        "excluded_categories": [],
+        "rule_role": "exclusion",
+        "merchant_slugs": [],
+        "platform_slugs": [],
+        "mcc_include": [
+          "6513"
+        ],
+        "mcc_exclude": [],
+        "except_merchant_slugs": [],
+        "except_platform_slugs": [],
+        "block_inr": null,
+        "min_engine_version": 2,
+        "max_engine_version": null,
+        "source_local_id": "rent-exclusion",
+        "display_note": "Rental payments do not earn Reward Points."
+      },
+      {
+        "id": "irctc-hdfc-bank-credit-card:rule:government-exclusion#1",
+        "category_id": "cat-government",
+        "category_slug": "government",
+        "merchant_pattern": null,
+        "rail": null,
+        "unit": "points_per_100",
+        "rate": 0,
+        "min_txn_inr": null,
+        "max_txn_inr": null,
+        "priority": 1,
+        "conditions": {
+          "source_local_id": "government-exclusion",
+          "part": 1,
+          "info_reasons": [],
+          "flags": [
+            "mcc_scoped_exclusion"
+          ]
+        },
+        "notes": null,
+        "effective_from": "2023-03-01",
+        "effective_to": null,
+        "excluded_categories": [],
+        "rule_role": "exclusion",
+        "merchant_slugs": [],
+        "platform_slugs": [],
+        "mcc_include": [],
+        "mcc_exclude": [],
+        "except_merchant_slugs": [],
+        "except_platform_slugs": [],
+        "block_inr": null,
+        "min_engine_version": 1,
+        "max_engine_version": 1,
+        "source_local_id": "government-exclusion",
+        "display_note": "Government transactions do not earn Reward Points."
+      },
+      {
+        "id": "irctc-hdfc-bank-credit-card:rule:government-exclusion#2",
+        "category_id": "cat-government",
+        "category_slug": "government",
+        "merchant_pattern": null,
+        "rail": null,
+        "unit": "points_per_100",
+        "rate": 0,
+        "min_txn_inr": null,
+        "max_txn_inr": null,
+        "priority": 1,
+        "conditions": {
+          "source_local_id": "government-exclusion",
+          "part": 2,
+          "info_reasons": [],
+          "flags": [
+            "mcc_scoped_exclusion"
+          ]
+        },
+        "notes": null,
+        "effective_from": "2023-03-01",
+        "effective_to": null,
+        "excluded_categories": [],
+        "rule_role": "exclusion",
+        "merchant_slugs": [],
+        "platform_slugs": [],
+        "mcc_include": [
+          "9211",
+          "9222",
+          "9311",
+          "9399",
+          "9402"
+        ],
+        "mcc_exclude": [],
+        "except_merchant_slugs": [],
+        "except_platform_slugs": [],
+        "block_inr": null,
+        "min_engine_version": 2,
+        "max_engine_version": null,
+        "source_local_id": "government-exclusion",
+        "display_note": "Government transactions do not earn Reward Points."
+      },
+      {
+        "id": "irctc-hdfc-bank-credit-card:rule:government-exclusion#3",
+        "category_id": null,
+        "category_slug": null,
+        "merchant_pattern": null,
+        "rail": null,
+        "unit": "points_per_100",
+        "rate": 0,
+        "min_txn_inr": null,
+        "max_txn_inr": null,
+        "priority": 1,
+        "conditions": {
+          "source_local_id": "government-exclusion",
+          "part": 3,
+          "info_reasons": [],
+          "flags": [
+            "mcc_scoped_exclusion"
+          ]
+        },
+        "notes": null,
+        "effective_from": "2023-03-01",
+        "effective_to": null,
+        "excluded_categories": [],
+        "rule_role": "exclusion",
+        "merchant_slugs": [],
+        "platform_slugs": [],
+        "mcc_include": [
+          "9211",
+          "9222",
+          "9311",
+          "9399",
+          "9402"
+        ],
+        "mcc_exclude": [],
+        "except_merchant_slugs": [],
+        "except_platform_slugs": [],
+        "block_inr": null,
+        "min_engine_version": 2,
+        "max_engine_version": null,
+        "source_local_id": "government-exclusion",
+        "display_note": "Government transactions do not earn Reward Points."
+      },
+      {
+        "id": "irctc-hdfc-bank-credit-card:rule:education-exclusion#1",
+        "category_id": "cat-education",
+        "category_slug": "education",
+        "merchant_pattern": null,
+        "rail": null,
+        "unit": "points_per_100",
+        "rate": 0,
+        "min_txn_inr": null,
+        "max_txn_inr": null,
+        "priority": 1,
+        "conditions": {
+          "source_local_id": "education-exclusion",
+          "part": 1,
+          "info_reasons": [],
+          "flags": [
+            "mcc_scoped_exclusion"
+          ]
+        },
+        "notes": null,
+        "effective_from": "2023-03-01",
+        "effective_to": null,
+        "excluded_categories": [],
+        "rule_role": "exclusion",
+        "merchant_slugs": [],
+        "platform_slugs": [],
+        "mcc_include": [],
+        "mcc_exclude": [],
+        "except_merchant_slugs": [],
+        "except_platform_slugs": [],
+        "block_inr": null,
+        "min_engine_version": 1,
+        "max_engine_version": 1,
+        "source_local_id": "education-exclusion",
+        "display_note": "Education payments do not earn Reward Points."
+      },
+      {
+        "id": "irctc-hdfc-bank-credit-card:rule:education-exclusion#2",
+        "category_id": "cat-education",
+        "category_slug": "education",
+        "merchant_pattern": null,
+        "rail": null,
+        "unit": "points_per_100",
+        "rate": 0,
+        "min_txn_inr": null,
+        "max_txn_inr": null,
+        "priority": 1,
+        "conditions": {
+          "source_local_id": "education-exclusion",
+          "part": 2,
+          "info_reasons": [],
+          "flags": [
+            "mcc_scoped_exclusion"
+          ]
+        },
+        "notes": null,
+        "effective_from": "2023-03-01",
+        "effective_to": null,
+        "excluded_categories": [],
+        "rule_role": "exclusion",
+        "merchant_slugs": [],
+        "platform_slugs": [],
+        "mcc_include": [
+          "8211",
+          "8220",
+          "8241",
+          "8244",
+          "8249",
+          "8299"
+        ],
+        "mcc_exclude": [],
+        "except_merchant_slugs": [],
+        "except_platform_slugs": [],
+        "block_inr": null,
+        "min_engine_version": 2,
+        "max_engine_version": null,
+        "source_local_id": "education-exclusion",
+        "display_note": "Education payments do not earn Reward Points."
+      },
+      {
+        "id": "irctc-hdfc-bank-credit-card:rule:education-exclusion#3",
+        "category_id": null,
+        "category_slug": null,
+        "merchant_pattern": null,
+        "rail": null,
+        "unit": "points_per_100",
+        "rate": 0,
+        "min_txn_inr": null,
+        "max_txn_inr": null,
+        "priority": 1,
+        "conditions": {
+          "source_local_id": "education-exclusion",
+          "part": 3,
+          "info_reasons": [],
+          "flags": [
+            "mcc_scoped_exclusion"
+          ]
+        },
+        "notes": null,
+        "effective_from": "2023-03-01",
+        "effective_to": null,
+        "excluded_categories": [],
+        "rule_role": "exclusion",
+        "merchant_slugs": [],
+        "platform_slugs": [],
+        "mcc_include": [
+          "8211",
+          "8220",
+          "8241",
+          "8244",
+          "8249",
+          "8299"
+        ],
+        "mcc_exclude": [],
+        "except_merchant_slugs": [],
+        "except_platform_slugs": [],
+        "block_inr": null,
+        "min_engine_version": 2,
+        "max_engine_version": null,
+        "source_local_id": "education-exclusion",
+        "display_note": "Education payments do not earn Reward Points."
+      },
+      {
+        "id": "irctc-hdfc-bank-credit-card:rule:gaming-exclusion#1",
+        "category_id": "cat-entertainment",
+        "category_slug": "entertainment",
+        "merchant_pattern": null,
+        "rail": null,
+        "unit": "points_per_100",
+        "rate": 0,
+        "min_txn_inr": null,
+        "max_txn_inr": null,
+        "priority": 1,
+        "conditions": {
+          "source_local_id": "gaming-exclusion",
+          "part": 1,
+          "info_reasons": [],
+          "flags": [
+            "exclusion_rail_dropped",
+            "broad_exclusion_v1_only",
+            "broad_category"
+          ]
+        },
+        "notes": null,
+        "effective_from": "2025-07-01",
+        "effective_to": null,
+        "excluded_categories": [],
+        "rule_role": "exclusion",
+        "merchant_slugs": [],
+        "platform_slugs": [],
+        "mcc_include": [],
+        "mcc_exclude": [],
+        "except_merchant_slugs": [],
+        "except_platform_slugs": [],
+        "block_inr": null,
+        "min_engine_version": 1,
+        "max_engine_version": 1,
+        "source_local_id": "gaming-exclusion",
+        "display_note": "Online gaming and gambling transactions do not earn Reward Points."
+      },
+      {
+        "id": "irctc-hdfc-bank-credit-card:rule:gaming-exclusion#2",
+        "category_id": null,
+        "category_slug": null,
+        "merchant_pattern": null,
+        "rail": null,
+        "unit": "points_per_100",
+        "rate": 0,
+        "min_txn_inr": null,
+        "max_txn_inr": null,
+        "priority": 1,
+        "conditions": {
+          "source_local_id": "gaming-exclusion",
+          "part": 2,
+          "info_reasons": [],
+          "flags": [
+            "exclusion_rail_dropped",
+            "broad_exclusion_v1_only"
+          ]
+        },
+        "notes": null,
+        "effective_from": "2025-07-01",
+        "effective_to": null,
+        "excluded_categories": [],
+        "rule_role": "exclusion",
+        "merchant_slugs": [],
+        "platform_slugs": [],
+        "mcc_include": [
+          "5816",
+          "7995"
+        ],
+        "mcc_exclude": [],
+        "except_merchant_slugs": [],
+        "except_platform_slugs": [],
+        "block_inr": null,
+        "min_engine_version": 2,
+        "max_engine_version": null,
+        "source_local_id": "gaming-exclusion",
+        "display_note": "Online gaming and gambling transactions do not earn Reward Points."
+      },
+      {
+        "id": "irctc-hdfc-bank-credit-card:rule:upi-cap",
+        "category_id": null,
+        "category_slug": null,
+        "merchant_pattern": null,
+        "rail": "upi_qr",
+        "unit": "points_per_100",
+        "rate": 1,
+        "min_txn_inr": null,
+        "max_txn_inr": null,
+        "priority": 50,
+        "conditions": {
+          "source_local_id": "upi-cap",
+          "part": null,
+          "info_reasons": [],
+          "flags": []
+        },
+        "notes": null,
+        "effective_from": "2025-05-29",
+        "effective_to": null,
+        "excluded_categories": [],
+        "rule_role": "earn",
+        "merchant_slugs": [],
+        "platform_slugs": [],
+        "mcc_include": [],
+        "mcc_exclude": [],
+        "except_merchant_slugs": [],
+        "except_platform_slugs": [],
+        "block_inr": null,
+        "min_engine_version": 1,
+        "max_engine_version": null,
+        "source_local_id": "upi-cap",
+        "display_note": "UPI spends earn 1 Reward Point per ₹100 up to a monthly cap of 500 Reward Points."
+      },
+      {
+        "id": "irctc-hdfc-bank-credit-card:rule:grocery-cap",
+        "category_id": "cat-groceries",
+        "category_slug": "groceries",
+        "merchant_pattern": null,
+        "rail": null,
+        "unit": "points_per_100",
+        "rate": 1,
+        "min_txn_inr": null,
+        "max_txn_inr": null,
+        "priority": 50,
+        "conditions": {
+          "source_local_id": "grocery-cap",
+          "part": null,
+          "info_reasons": [],
+          "flags": []
+        },
+        "notes": null,
+        "effective_from": "2025-05-29",
+        "effective_to": null,
+        "excluded_categories": [],
+        "rule_role": "earn",
+        "merchant_slugs": [],
+        "platform_slugs": [],
+        "mcc_include": [
+          "5411",
+          "5422",
+          "5441",
+          "5451",
+          "5462",
+          "5499"
+        ],
+        "mcc_exclude": [],
+        "except_merchant_slugs": [],
+        "except_platform_slugs": [],
+        "block_inr": null,
+        "min_engine_version": 2,
+        "max_engine_version": null,
+        "source_local_id": "grocery-cap",
+        "display_note": "Grocery Reward Points are capped at 1,000 points per month and 12,000 points annually."
+      },
+      {
+        "id": "irctc-hdfc-bank-credit-card:rule:insurance-cap",
+        "category_id": "cat-insurance",
+        "category_slug": "insurance",
+        "merchant_pattern": null,
+        "rail": null,
+        "unit": "points_per_100",
+        "rate": 1,
+        "min_txn_inr": null,
+        "max_txn_inr": null,
+        "priority": 50,
+        "conditions": {
+          "source_local_id": "insurance-cap",
+          "part": null,
+          "info_reasons": [],
+          "flags": []
+        },
+        "notes": null,
+        "effective_from": "2025-07-01",
+        "effective_to": null,
+        "excluded_categories": [],
+        "rule_role": "earn",
+        "merchant_slugs": [],
+        "platform_slugs": [],
+        "mcc_include": [
+          "1235",
+          "1411",
+          "5960",
+          "6300",
+          "6381"
+        ],
+        "mcc_exclude": [],
+        "except_merchant_slugs": [],
+        "except_platform_slugs": [],
+        "block_inr": null,
+        "min_engine_version": 2,
+        "max_engine_version": null,
+        "source_local_id": "insurance-cap",
+        "display_note": "Insurance payments earn Reward Points capped at 2,000 points per month."
+      },
+      {
+        "id": "irctc-hdfc-bank-credit-card:rule:utility-cap",
+        "category_id": "cat-bills",
+        "category_slug": "bills",
+        "merchant_pattern": null,
+        "rail": null,
+        "unit": "points_per_100",
+        "rate": 1,
+        "min_txn_inr": null,
+        "max_txn_inr": null,
+        "priority": 50,
+        "conditions": {
+          "source_local_id": "utility-cap",
+          "part": null,
+          "info_reasons": [],
+          "flags": []
+        },
+        "notes": null,
+        "effective_from": "2025-07-01",
+        "effective_to": null,
+        "excluded_categories": [],
+        "rule_role": "earn",
+        "merchant_slugs": [],
+        "platform_slugs": [],
+        "mcc_include": [
+          "4900"
+        ],
+        "mcc_exclude": [],
+        "except_merchant_slugs": [],
+        "except_platform_slugs": [],
+        "block_inr": null,
+        "min_engine_version": 2,
+        "max_engine_version": null,
+        "source_local_id": "utility-cap",
+        "display_note": "Utility Reward Points are capped at 2,000 points per calendar month."
+      },
+      {
+        "id": "irctc-hdfc-bank-credit-card:rule:telecom-cap",
+        "category_id": null,
+        "category_slug": null,
+        "merchant_pattern": null,
+        "rail": null,
+        "unit": "points_per_100",
+        "rate": 1,
+        "min_txn_inr": null,
+        "max_txn_inr": null,
+        "priority": 50,
+        "conditions": {
+          "source_local_id": "telecom-cap",
+          "part": null,
+          "info_reasons": [],
+          "flags": [
+            "narrow_token_to_mcc"
+          ]
+        },
+        "notes": null,
+        "effective_from": "2025-07-01",
+        "effective_to": null,
+        "excluded_categories": [],
+        "rule_role": "earn",
+        "merchant_slugs": [],
+        "platform_slugs": [],
+        "mcc_include": [
+          "4812",
+          "4814",
+          "4899"
+        ],
+        "mcc_exclude": [],
+        "except_merchant_slugs": [],
+        "except_platform_slugs": [],
+        "block_inr": null,
+        "min_engine_version": 2,
+        "max_engine_version": null,
+        "source_local_id": "telecom-cap",
+        "display_note": "Telecom and cable Reward Points are capped at 2,000 points per calendar month."
+      }
+    ],
+    "cap_rules": [
+      {
+        "id": "irctc-hdfc-bank-credit-card:cap:irctc-5x-monthly",
+        "reward_rule_id": "irctc-hdfc-bank-credit-card:rule:irctc-5x",
+        "category_id": null,
+        "category_slug": null,
+        "benefit_kind": null,
+        "label": "Irctc 5x monthly",
+        "measure": "reward_value",
+        "period": "calendar_month",
+        "cap_value": 1000,
+        "post_cap_unit": null,
+        "post_cap_rate": 0,
+        "resets_on_day": 1,
+        "cap_kind": "total_points",
+        "cap_amount": 1000,
+        "scope": "targets",
+        "targets": [
+          "irctc-hdfc-bank-credit-card:rule:irctc-5x"
+        ],
+        "parent_cap_id": null,
+        "post_cap_behavior": null,
+        "anchor": null,
+        "min_engine_version": 1,
+        "source_local_id": "irctc-5x-monthly"
+      },
+      {
+        "id": "irctc-hdfc-bank-credit-card:cap:irctc-5x-annual",
+        "reward_rule_id": "irctc-hdfc-bank-credit-card:rule:irctc-5x",
+        "category_id": null,
+        "category_slug": null,
+        "benefit_kind": null,
+        "label": "Irctc 5x annual",
+        "measure": "reward_value",
+        "period": "annual",
+        "cap_value": 12000,
+        "post_cap_unit": null,
+        "post_cap_rate": 0,
+        "resets_on_day": null,
+        "cap_kind": "total_points",
+        "cap_amount": 12000,
+        "scope": "targets",
+        "targets": [
+          "irctc-hdfc-bank-credit-card:rule:irctc-5x"
+        ],
+        "parent_cap_id": null,
+        "post_cap_behavior": null,
+        "anchor": null,
+        "min_engine_version": 1,
+        "source_local_id": "irctc-5x-annual"
+      },
+      {
+        "id": "irctc-hdfc-bank-credit-card:cap:smartbuy-5-percent-cashback-monthly",
+        "reward_rule_id": "irctc-hdfc-bank-credit-card:rule:smartbuy-train-cashback",
+        "category_id": null,
+        "category_slug": null,
+        "benefit_kind": null,
+        "label": "Smartbuy 5 percent cashback monthly",
+        "measure": "spend_amount",
+        "period": "calendar_month",
+        "cap_value": 20000,
+        "post_cap_unit": null,
+        "post_cap_rate": 0,
+        "resets_on_day": 1,
+        "cap_kind": "eligible_spend",
+        "cap_amount": 20000,
+        "scope": "targets",
+        "targets": [
+          "irctc-hdfc-bank-credit-card:rule:smartbuy-train-cashback"
+        ],
+        "parent_cap_id": null,
+        "post_cap_behavior": "zero",
+        "anchor": null,
+        "min_engine_version": 2,
+        "source_local_id": "smartbuy-5-percent-cashback-monthly"
+      },
+      {
+        "id": "irctc-hdfc-bank-credit-card:cap:smartbuy-5-percent-cashback-annual",
+        "reward_rule_id": "irctc-hdfc-bank-credit-card:rule:smartbuy-train-cashback",
+        "category_id": null,
+        "category_slug": null,
+        "benefit_kind": null,
+        "label": "Smartbuy 5 percent cashback annual",
+        "measure": "spend_amount",
+        "period": "annual",
+        "cap_value": 240000,
+        "post_cap_unit": null,
+        "post_cap_rate": 0,
+        "resets_on_day": null,
+        "cap_kind": "eligible_spend",
+        "cap_amount": 240000,
+        "scope": "targets",
+        "targets": [
+          "irctc-hdfc-bank-credit-card:rule:smartbuy-train-cashback"
+        ],
+        "parent_cap_id": null,
+        "post_cap_behavior": "zero",
+        "anchor": null,
+        "min_engine_version": 2,
+        "source_local_id": "smartbuy-5-percent-cashback-annual"
+      },
+      {
+        "id": "irctc-hdfc-bank-credit-card:cap:upi-monthly",
+        "reward_rule_id": "irctc-hdfc-bank-credit-card:rule:upi-cap",
+        "category_id": null,
+        "category_slug": null,
+        "benefit_kind": null,
+        "label": "Upi monthly",
+        "measure": "reward_value",
+        "period": "calendar_month",
+        "cap_value": 500,
+        "post_cap_unit": null,
+        "post_cap_rate": 0,
+        "resets_on_day": 1,
+        "cap_kind": "total_points",
+        "cap_amount": 500,
+        "scope": "targets",
+        "targets": [
+          "irctc-hdfc-bank-credit-card:rule:upi-cap"
+        ],
+        "parent_cap_id": null,
+        "post_cap_behavior": null,
+        "anchor": null,
+        "min_engine_version": 1,
+        "source_local_id": "upi-monthly"
+      },
+      {
+        "id": "irctc-hdfc-bank-credit-card:cap:grocery-monthly",
+        "reward_rule_id": "irctc-hdfc-bank-credit-card:rule:grocery-cap",
+        "category_id": null,
+        "category_slug": null,
+        "benefit_kind": null,
+        "label": "Grocery monthly",
+        "measure": "reward_value",
+        "period": "calendar_month",
+        "cap_value": 1000,
+        "post_cap_unit": null,
+        "post_cap_rate": 0,
+        "resets_on_day": 1,
+        "cap_kind": "total_points",
+        "cap_amount": 1000,
+        "scope": "targets",
+        "targets": [
+          "irctc-hdfc-bank-credit-card:rule:grocery-cap"
+        ],
+        "parent_cap_id": null,
+        "post_cap_behavior": null,
+        "anchor": null,
+        "min_engine_version": 2,
+        "source_local_id": "grocery-monthly"
+      },
+      {
+        "id": "irctc-hdfc-bank-credit-card:cap:insurance-monthly",
+        "reward_rule_id": "irctc-hdfc-bank-credit-card:rule:insurance-cap",
+        "category_id": null,
+        "category_slug": null,
+        "benefit_kind": null,
+        "label": "Insurance monthly",
+        "measure": "reward_value",
+        "period": "calendar_month",
+        "cap_value": 2000,
+        "post_cap_unit": null,
+        "post_cap_rate": 0,
+        "resets_on_day": 1,
+        "cap_kind": "total_points",
+        "cap_amount": 2000,
+        "scope": "targets",
+        "targets": [
+          "irctc-hdfc-bank-credit-card:rule:insurance-cap"
+        ],
+        "parent_cap_id": null,
+        "post_cap_behavior": null,
+        "anchor": null,
+        "min_engine_version": 2,
+        "source_local_id": "insurance-monthly"
+      },
+      {
+        "id": "irctc-hdfc-bank-credit-card:cap:utility-monthly",
+        "reward_rule_id": "irctc-hdfc-bank-credit-card:rule:utility-cap",
+        "category_id": null,
+        "category_slug": null,
+        "benefit_kind": null,
+        "label": "Utility monthly",
+        "measure": "reward_value",
+        "period": "calendar_month",
+        "cap_value": 2000,
+        "post_cap_unit": null,
+        "post_cap_rate": 0,
+        "resets_on_day": 1,
+        "cap_kind": "total_points",
+        "cap_amount": 2000,
+        "scope": "targets",
+        "targets": [
+          "irctc-hdfc-bank-credit-card:rule:utility-cap"
+        ],
+        "parent_cap_id": null,
+        "post_cap_behavior": null,
+        "anchor": null,
+        "min_engine_version": 2,
+        "source_local_id": "utility-monthly"
+      },
+      {
+        "id": "irctc-hdfc-bank-credit-card:cap:telecom-monthly",
+        "reward_rule_id": "irctc-hdfc-bank-credit-card:rule:telecom-cap",
+        "category_id": null,
+        "category_slug": null,
+        "benefit_kind": null,
+        "label": "Telecom monthly",
+        "measure": "reward_value",
+        "period": "calendar_month",
+        "cap_value": 2000,
+        "post_cap_unit": null,
+        "post_cap_rate": 0,
+        "resets_on_day": 1,
+        "cap_kind": "total_points",
+        "cap_amount": 2000,
+        "scope": "targets",
+        "targets": [
+          "irctc-hdfc-bank-credit-card:rule:telecom-cap"
+        ],
+        "parent_cap_id": null,
+        "post_cap_behavior": null,
+        "anchor": null,
+        "min_engine_version": 2,
+        "source_local_id": "telecom-monthly"
+      },
+      {
+        "id": "irctc-hdfc-bank-credit-card:cap:other-spends-monthly",
+        "reward_rule_id": "irctc-hdfc-bank-credit-card:rule:all-other-standard",
+        "category_id": null,
+        "category_slug": null,
+        "benefit_kind": null,
+        "label": "Other spends monthly",
+        "measure": "reward_value",
+        "period": "calendar_month",
+        "cap_value": 1000,
+        "post_cap_unit": null,
+        "post_cap_rate": 0,
+        "resets_on_day": 1,
+        "cap_kind": "total_points",
+        "cap_amount": 1000,
+        "scope": "targets",
+        "targets": [
+          "irctc-hdfc-bank-credit-card:rule:all-other-standard"
+        ],
+        "parent_cap_id": null,
+        "post_cap_behavior": null,
+        "anchor": null,
+        "min_engine_version": 1,
+        "source_local_id": "other-spends-monthly"
+      },
+      {
+        "id": "irctc-hdfc-bank-credit-card:cap:other-spends-annual",
+        "reward_rule_id": "irctc-hdfc-bank-credit-card:rule:all-other-standard",
+        "category_id": null,
+        "category_slug": null,
+        "benefit_kind": null,
+        "label": "Other spends annual",
+        "measure": "reward_value",
+        "period": "annual",
+        "cap_value": 12000,
+        "post_cap_unit": null,
+        "post_cap_rate": 0,
+        "resets_on_day": null,
+        "cap_kind": "total_points",
+        "cap_amount": 12000,
+        "scope": "targets",
+        "targets": [
+          "irctc-hdfc-bank-credit-card:rule:all-other-standard"
+        ],
+        "parent_cap_id": null,
+        "post_cap_behavior": null,
+        "anchor": null,
+        "min_engine_version": 1,
+        "source_local_id": "other-spends-annual"
+      }
+    ],
+    "milestone_rules": [
+      {
+        "id": "irctc-hdfc-bank-credit-card:milestone:quarterly-30000-gift",
+        "label": "₹500 gift voucher on quarterly retail spends",
+        "period": "quarter",
+        "threshold_spend_inr": 30000,
+        "reward_description": "₹500 gift voucher on quarterly retail spends",
+        "reward_value_inr": 500,
+        "is_repeatable": true,
+        "max_repeats": null,
+        "anchor": "calendar_year",
+        "reward_points": null,
+        "reward_kind": "voucher",
+        "excluded_category_ids": [],
+        "window_days": null,
+        "source_local_id": "quarterly-30000-gift"
+      }
+    ],
+    "fee_waiver_rules": [
+      {
+        "id": "irctc-hdfc-bank-credit-card:waiver:1",
+        "threshold_spend_inr": 150000,
+        "period": "annual",
+        "waives_fee_inr": 500,
+        "excluded_category_slugs": [
+          "wallet",
+          "rent"
+        ],
+        "notes": "Spend ₹1,50,000 or more in the preceding 12 months prior to renewal date.",
+        "excluded_categories": [
+          "cat-wallet",
+          "cat-rent"
+        ]
+      }
+    ],
+    "benefits": [
+      {
+        "id": "irctc-hdfc-bank-credit-card:benefit:irctc-executive-lounge",
+        "key": "irctc-executive-lounge",
+        "source_local_id": "irctc-executive-lounge",
+        "kind": "lounge_domestic",
+        "label": "Complimentary IRCTC Executive Lounge access",
+        "description": "Sponsor: IRCTC",
+        "quota_count": 2,
+        "quota_period": "quarter",
+        "network_program": "irctc_executive_lounge",
+        "value_estimate_inr": 1200,
+        "conditions": {
+          "source_category_id": "lounge",
+          "evaluation_engine": {
+            "conditions": {
+              "quota": "2 visits per calendar quarter",
+              "card_validation_charge_inr": 2,
+              "valid_train_ticket_required": true
+            },
+            "benefit_calculation": {
+              "annual_quota": 8,
+              "quarterly_quota": 2
+            },
+            "perks": [
+              "Access to select IRCTC Executive Lounges across major Indian railway stations",
+              "Up to 8 complimentary visits per calendar year",
+              "Maximum 2 complimentary visits per calendar quarter"
+            ]
+          }
+        }
+      },
+      {
+        "id": "irctc-hdfc-bank-credit-card:benefit:irctc-transaction-charge-waiver",
+        "key": "irctc-transaction-charge-waiver",
+        "source_local_id": "irctc-transaction-charge-waiver",
+        "kind": "other",
+        "label": "1% railway transaction surcharge waiver",
+        "description": "Sponsor: HDFC Bank / IRCTC",
+        "quota_count": null,
+        "quota_period": "calendar_month",
+        "network_program": "irctc",
+        "value_estimate_inr": null,
+        "conditions": {
+          "source_category_id": "other",
+          "evaluation_engine": {
+            "conditions": {
+              "eligible_channels": [
+                "IRCTC Ticketing Website",
+                "IRCTC Mobile App",
+                "Rail Connect App",
+                "Rail Connect Website",
+                "HDFC Bank SmartBuy"
+              ]
+            },
+            "benefit_calculation": {
+              "waiver_percent": 1,
+              "maximum_waiver_inr": 1000,
+              "period": "calendar_month"
+            },
+            "perks": [
+              "1% transaction surcharge reversal on ticket bookings",
+              "Cancellations/refunds adjust the waiver proportionately"
+            ]
+          }
+        }
+      },
+      {
+        "id": "irctc-hdfc-bank-credit-card:benefit:fuel-surcharge-waiver",
+        "key": "fuel-surcharge-waiver",
+        "source_local_id": "fuel-surcharge-waiver",
+        "kind": "fuel_surcharge",
+        "label": "1% fuel surcharge waiver",
+        "description": "Sponsor: HDFC Bank",
+        "quota_count": null,
+        "quota_period": "statement_cycle",
+        "network_program": "hdfc_fuel_surcharge_waiver",
+        "value_estimate_inr": 250,
+        "conditions": {
+          "source_category_id": "other",
+          "evaluation_engine": {
+            "conditions": {
+              "minimum_transaction_inr": 400,
+              "maximum_transaction_inr": 5000
+            },
+            "benefit_calculation": {
+              "waiver_percent": 1,
+              "maximum_waiver_inr_per_statement_cycle": 250
+            },
+            "perks": [
+              "Applicable at all fuel stations in India",
+              "GST levied on surcharge is non-refundable"
+            ]
+          }
+        }
+      }
+    ],
+    "unlock_rules": [],
+    "redemption_options": [
+      {
+        "program_name": "HDFC Bank SmartBuy / IRCTC ticketing website / Rail Connect app",
+        "method": "other",
+        "value_per_point_inr": 1,
+        "min_points": 100,
+        "notes": "Redemption fee: ₹99"
+      }
+    ],
+    "is_upi_linkable": true
+  }
+}

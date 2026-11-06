@@ -1,0 +1,127 @@
+{
+  "source_slug": "swiggy-hdfc-bank-credit-card",
+  "changes": [
+    {
+      "path": "cap_rules[id=swiggy_cashback_cap].metric",
+      "value": "total_reward_points",
+      "reason": "Cap is on cashback earned, not on spend.",
+      "source_url": "https://www.hdfc.bank.in/content/dam/hdfcbankpws/in/en/personal-banking/discover-products/cards/credit-cards/swiggy-hdfc-bank-credit-card/pdf/terms-and-conditions-swiggy-hdfc-bank-credit-card-18092026.pdf",
+      "checked_on": "2026-11-05"
+    },
+    {
+      "path": "cap_rules[id=swiggy_cashback_cap].limit_value",
+      "value": 1500,
+      "reason": "Rs1,500 cashback per billing cycle.",
+      "source_url": "https://www.hdfc.bank.in/content/dam/hdfcbankpws/in/en/personal-banking/discover-products/cards/credit-cards/swiggy-hdfc-bank-credit-card/pdf/terms-and-conditions-swiggy-hdfc-bank-credit-card-18092026.pdf",
+      "checked_on": "2026-11-05"
+    },
+    {
+      "path": "cap_rules[id=swiggy_cashback_cap].limit_value_inr",
+      "value": null,
+      "reason": "Remove spend-based value so cap_amount is the cashback figure.",
+      "source_url": "https://www.hdfc.bank.in/content/dam/hdfcbankpws/in/en/personal-banking/discover-products/cards/credit-cards/swiggy-hdfc-bank-credit-card/pdf/terms-and-conditions-swiggy-hdfc-bank-credit-card-18092026.pdf",
+      "checked_on": "2026-11-05"
+    },
+    {
+      "path": "cap_rules[id=online_5pct_cashback_cap].metric",
+      "value": "total_reward_points",
+      "reason": "Cap is on cashback earned, not on spend.",
+      "source_url": "https://www.hdfc.bank.in/content/dam/hdfcbankpws/in/en/personal-banking/discover-products/cards/credit-cards/swiggy-hdfc-bank-credit-card/pdf/terms-and-conditions-swiggy-hdfc-bank-credit-card-18092026.pdf",
+      "checked_on": "2026-11-05"
+    },
+    {
+      "path": "cap_rules[id=online_5pct_cashback_cap].limit_value",
+      "value": 1500,
+      "reason": "Rs1,500 cashback per billing cycle.",
+      "source_url": "https://www.hdfc.bank.in/content/dam/hdfcbankpws/in/en/personal-banking/discover-products/cards/credit-cards/swiggy-hdfc-bank-credit-card/pdf/terms-and-conditions-swiggy-hdfc-bank-credit-card-18092026.pdf",
+      "checked_on": "2026-11-05"
+    },
+    {
+      "path": "cap_rules[id=online_5pct_cashback_cap].limit_value_inr",
+      "value": null,
+      "reason": "Remove spend-based value.",
+      "source_url": "https://www.hdfc.bank.in/content/dam/hdfcbankpws/in/en/personal-banking/discover-products/cards/credit-cards/swiggy-hdfc-bank-credit-card/pdf/terms-and-conditions-swiggy-hdfc-bank-credit-card-18092026.pdf",
+      "checked_on": "2026-11-05"
+    },
+    {
+      "path": "cap_rules[id=other_1pct_cashback_cap].metric",
+      "value": "total_reward_points",
+      "reason": "Cap is on cashback earned, not on spend.",
+      "source_url": "https://www.hdfc.bank.in/content/dam/hdfcbankpws/in/en/personal-banking/discover-products/cards/credit-cards/swiggy-hdfc-bank-credit-card/pdf/terms-and-conditions-swiggy-hdfc-bank-credit-card-18092026.pdf",
+      "checked_on": "2026-11-05"
+    },
+    {
+      "path": "cap_rules[id=other_1pct_cashback_cap].limit_value",
+      "value": 500,
+      "reason": "Rs500 cashback per billing cycle.",
+      "source_url": "https://www.hdfc.bank.in/content/dam/hdfcbankpws/in/en/personal-banking/discover-products/cards/credit-cards/swiggy-hdfc-bank-credit-card/pdf/terms-and-conditions-swiggy-hdfc-bank-credit-card-18092026.pdf",
+      "checked_on": "2026-11-05"
+    },
+    {
+      "path": "cap_rules[id=other_1pct_cashback_cap].limit_value_inr",
+      "value": null,
+      "reason": "Remove spend-based value.",
+      "source_url": "https://www.hdfc.bank.in/content/dam/hdfcbankpws/in/en/personal-banking/discover-products/cards/credit-cards/swiggy-hdfc-bank-credit-card/pdf/terms-and-conditions-swiggy-hdfc-bank-credit-card-18092026.pdf",
+      "checked_on": "2026-11-05"
+    },
+    {
+      "path": "accrual_engine.cashback_rounding",
+      "value": "rupee_half_up",
+      "reason": "Cashback is rounded to the nearest whole rupee per transaction (15.3 to 15, 15.6 to 16) (D11).",
+      "source_url": "https://www.hdfc.bank.in/content/dam/hdfcbankpws/in/en/personal-banking/discover-products/cards/credit-cards/swiggy-hdfc-bank-credit-card/pdf/terms-and-conditions-swiggy-hdfc-bank-credit-card-18092026.pdf",
+      "checked_on": "2026-11-05"
+    },
+    {
+      "path": "reward_rules",
+      "op": "append",
+      "value": {
+        "id": "swiggy_below_minimum_exclusion",
+        "category_id": "all_retail",
+        "priority": 0,
+        "evaluation_type": "exclusion",
+        "rail": "any",
+        "channel_type": "all",
+        "conditions": {
+          "merchant": "Swiggy",
+          "minimum_transaction_inr": 249
+        },
+        "action": {
+          "multiplier": 0,
+          "points_per_block": null,
+          "cashback_percent": 0,
+          "cap_reference": null,
+          "reason": "Swiggy transactions below Rs249 earn no cashback."
+        },
+        "effective_from": "2026-04-21",
+        "effective_to": null
+      },
+      "reason": "WP7: T&C 4.1: from 21 Apr 2026 the 10% Swiggy category needs at least Rs249; issuer worked example: a Rs150 Swiggy order earns 0 (not the 1% other rate). D16b: a no-reward-below-minimum term is an exclusion with max_txn_inr.",
+      "source_url": "https://www.hdfc.bank.in/content/dam/hdfcbankpws/in/en/personal-banking/discover-products/cards/credit-cards/swiggy-hdfc-bank-credit-card/pdf/terms-and-conditions-swiggy-hdfc-bank-credit-card-18092026.pdf",
+      "checked_on": "2026-11-05"
+    },
+    {
+      "path": "reward_rules",
+      "op": "append",
+      "value": {
+        "id": "wp7_emi_rail_exclusion",
+        "category_id": "all_retail",
+        "priority": 0,
+        "evaluation_type": "exclusion",
+        "rail": "emi",
+        "channel_type": "all",
+        "conditions": {},
+        "action": {
+          "multiplier": 0,
+          "cashback_percent": 0,
+          "cap_reference": null,
+          "reason": "EMI transactions earn no rewards."
+        },
+        "effective_from": "2026-05-22",
+        "effective_to": null
+      },
+      "reason": "WP7: T&C: \"Cashback will not be accrued ... EMI (all type)\". The record's EMI exclusion is emitted as category emi AND rail emi, so an EMI purchase in another category was not excluded (D24e: data fix while WP2 changes the loader). Rail-EMI exclusion on all spend, as on flipkart-sbi-card.",
+      "source_url": "https://www.hdfc.bank.in/content/dam/hdfcbankpws/in/en/personal-banking/discover-products/cards/credit-cards/swiggy-hdfc-bank-credit-card/pdf/terms-and-conditions-swiggy-hdfc-bank-credit-card-18092026.pdf",
+      "checked_on": "2026-11-05"
+    }
+  ]
+}

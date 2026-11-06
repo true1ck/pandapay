@@ -1,0 +1,1171 @@
+{
+  "generated_by": "api/scripts/catalogue_v2/snapshot_examples.js",
+  "source_slug": "pnb-kiwi-credit-card",
+  "inputs": {
+    "transform_version": "7",
+    "source_record_sha256": "6d942c6b1ca09f8f64c23b73c5b058f98cc97e4fe823ea813a331bbb96fa1052",
+    "override_sha256": "aa07b6425a3bc474103fbb14f1ff799eb715b0409dcc481db75a3d75d14ca98e",
+    "directory_sha256": "b1094d54b77e848d22f7a9a64f3ae6d1ef43ca3eb2fc8e40cd43ed1994664694",
+    "verified": true
+  },
+  "blocking_flags": [],
+  "card": {
+    "id": "pnb-kiwi-credit-card:card",
+    "slug": "pnb-kiwi-credit-card",
+    "name": "PNB Kiwi Credit Card",
+    "network": "rupay",
+    "issuer_slug": "pnb",
+    "base_reward_unit": "points_per_100",
+    "base_reward_rate": 2,
+    "point_value_inr": 0.25,
+    "excluded_categories": [],
+    "accrual_block_inr": 100,
+    "accrual_rounding": "floor",
+    "cashback_rounding": null,
+    "points_expiry_months": null,
+    "model_status": "verified",
+    "model_coverage": {
+      "rules_total": 12,
+      "rules_modelled": 12,
+      "rules_info": 0,
+      "caps_total": 1,
+      "caps_enforced": 0,
+      "flags": [
+        {
+          "code": "mcc_scoped_exclusion",
+          "source_local_id": "exclude-government-services",
+          "detail": null
+        },
+        {
+          "code": "token_replaced_by_conditions",
+          "source_local_id": "exclude-marketing-advertising",
+          "detail": null
+        },
+        {
+          "code": "mcc_scoped_exclusion",
+          "source_local_id": "exclude-professional-services-education",
+          "detail": null
+        },
+        {
+          "code": "mcc_scoped_exclusion",
+          "source_local_id": "exclude-retail-services-fuel",
+          "detail": null
+        },
+        {
+          "code": "token_replaced_by_conditions",
+          "source_local_id": "exclude-transportation-tolls",
+          "detail": null
+        },
+        {
+          "code": "mcc_scoped_exclusion",
+          "source_local_id": "exclude-utilities",
+          "detail": null
+        },
+        {
+          "code": "cap_depends_on_user",
+          "source_local_id": "monthly-kiwi-cap",
+          "detail": null
+        },
+        {
+          "code": "unlock_window_from_quota_period",
+          "source_local_id": "kiwi-neon-milestone-cashback",
+          "detail": null
+        },
+        {
+          "code": "base_points_and_cashback_both",
+          "source_local_id": null,
+          "detail": null
+        }
+      ],
+      "overrides_applied": [
+        {
+          "path": "cap_rules",
+          "op": "set",
+          "value_sha256": "649b2edd338099e4",
+          "reason": "Issuer: monthly cap on Kiwis is 1% of the total credit limit on the card. Per-user amount, so the cap keeps its kind with a null amount (D13a, flag cap_depends_on_user). Also removes a dangling cap_reference monthly-kiwi-cap. depends_on_user: true so the loader keeps the cap with a null amount.",
+          "source_url": "https://gokiwi.in/rewards-policy-v2/",
+          "checked_on": "2026-11-05",
+          "citation": null
+        }
+      ]
+    },
+    "reward_rules": [
+      {
+        "id": "pnb-kiwi-credit-card:rule:online-base-kiwi",
+        "category_id": null,
+        "category_slug": null,
+        "merchant_pattern": null,
+        "rail": "online",
+        "unit": "points_per_100",
+        "rate": 2,
+        "min_txn_inr": null,
+        "max_txn_inr": null,
+        "priority": 100,
+        "conditions": {
+          "source_local_id": "online-base-kiwi",
+          "part": null,
+          "info_reasons": [],
+          "flags": []
+        },
+        "notes": null,
+        "effective_from": "2025-06-01",
+        "effective_to": null,
+        "excluded_categories": [],
+        "rule_role": "earn",
+        "merchant_slugs": [],
+        "platform_slugs": [],
+        "mcc_include": [],
+        "mcc_exclude": [],
+        "except_merchant_slugs": [],
+        "except_platform_slugs": [],
+        "block_inr": null,
+        "min_engine_version": 1,
+        "max_engine_version": null,
+        "source_local_id": "online-base-kiwi",
+        "display_note": "0.5% effective cashback as 2 Kiwis per ₹100 on eligible online transactions for cards issued via the Kiwi App since 4 July 2024 for customers not subscribed to Kiwi Neon."
+      },
+      {
+        "id": "pnb-kiwi-credit-card:rule:upi-scan-pay-kiwi",
+        "category_id": null,
+        "category_slug": null,
+        "merchant_pattern": null,
+        "rail": "upi_qr",
+        "unit": "points_per_100",
+        "rate": 6,
+        "min_txn_inr": null,
+        "max_txn_inr": null,
+        "priority": 90,
+        "conditions": {
+          "source_local_id": "upi-scan-pay-kiwi",
+          "part": null,
+          "info_reasons": [],
+          "flags": []
+        },
+        "notes": null,
+        "effective_from": "2025-06-01",
+        "effective_to": null,
+        "excluded_categories": [],
+        "rule_role": "earn",
+        "merchant_slugs": [],
+        "platform_slugs": [
+          "kiwi_app"
+        ],
+        "mcc_include": [],
+        "mcc_exclude": [],
+        "except_merchant_slugs": [],
+        "except_platform_slugs": [],
+        "block_inr": null,
+        "min_engine_version": 2,
+        "max_engine_version": null,
+        "source_local_id": "upi-scan-pay-kiwi",
+        "display_note": "1.5% effective cashback as 6 Kiwis per ₹100 on eligible Scan & Pay transactions for cards issued via the Kiwi App since 4 July 2024 for customers not subscribed to Kiwi Neon."
+      },
+      {
+        "id": "pnb-kiwi-credit-card:rule:exclude-agricultural-services",
+        "category_id": null,
+        "category_slug": null,
+        "merchant_pattern": null,
+        "rail": null,
+        "unit": "points_per_100",
+        "rate": 0,
+        "min_txn_inr": null,
+        "max_txn_inr": null,
+        "priority": 1,
+        "conditions": {
+          "source_local_id": "exclude-agricultural-services",
+          "part": null,
+          "info_reasons": [],
+          "flags": []
+        },
+        "notes": null,
+        "effective_from": "2025-06-01",
+        "effective_to": null,
+        "excluded_categories": [],
+        "rule_role": "exclusion",
+        "merchant_slugs": [],
+        "platform_slugs": [],
+        "mcc_include": [
+          "0763",
+          "0820",
+          "0821",
+          "0822",
+          "0823",
+          "0824",
+          "0825"
+        ],
+        "mcc_exclude": [],
+        "except_merchant_slugs": [],
+        "except_platform_slugs": [],
+        "block_inr": null,
+        "min_engine_version": 2,
+        "max_engine_version": null,
+        "source_local_id": "exclude-agricultural-services",
+        "display_note": "Agricultural Services and Cooperatives are excluded from Kiwi rewards."
+      },
+      {
+        "id": "pnb-kiwi-credit-card:rule:exclude-horticultural-veterinary",
+        "category_id": null,
+        "category_slug": null,
+        "merchant_pattern": null,
+        "rail": null,
+        "unit": "points_per_100",
+        "rate": 0,
+        "min_txn_inr": null,
+        "max_txn_inr": null,
+        "priority": 2,
+        "conditions": {
+          "source_local_id": "exclude-horticultural-veterinary",
+          "part": null,
+          "info_reasons": [],
+          "flags": []
+        },
+        "notes": null,
+        "effective_from": "2025-06-01",
+        "effective_to": null,
+        "excluded_categories": [],
+        "rule_role": "exclusion",
+        "merchant_slugs": [],
+        "platform_slugs": [],
+        "mcc_include": [
+          "0742",
+          "0743",
+          "0744",
+          "0780"
+        ],
+        "mcc_exclude": [],
+        "except_merchant_slugs": [],
+        "except_platform_slugs": [],
+        "block_inr": null,
+        "min_engine_version": 2,
+        "max_engine_version": null,
+        "source_local_id": "exclude-horticultural-veterinary",
+        "display_note": "Horticultural, landscaping and veterinary services are excluded from Kiwi rewards."
+      },
+      {
+        "id": "pnb-kiwi-credit-card:rule:exclude-business-services",
+        "category_id": null,
+        "category_slug": null,
+        "merchant_pattern": null,
+        "rail": null,
+        "unit": "points_per_100",
+        "rate": 0,
+        "min_txn_inr": null,
+        "max_txn_inr": null,
+        "priority": 3,
+        "conditions": {
+          "source_local_id": "exclude-business-services",
+          "part": null,
+          "info_reasons": [],
+          "flags": []
+        },
+        "notes": null,
+        "effective_from": "2025-06-01",
+        "effective_to": null,
+        "excluded_categories": [],
+        "rule_role": "exclusion",
+        "merchant_slugs": [],
+        "platform_slugs": [],
+        "mcc_include": [
+          "7512",
+          "7523",
+          "7531",
+          "7535",
+          "7538",
+          "7631"
+        ],
+        "mcc_exclude": [],
+        "except_merchant_slugs": [],
+        "except_platform_slugs": [],
+        "block_inr": null,
+        "min_engine_version": 2,
+        "max_engine_version": null,
+        "source_local_id": "exclude-business-services",
+        "display_note": "Specified auto rental, repair, paint, jewellery and watch repair services are excluded."
+      },
+      {
+        "id": "pnb-kiwi-credit-card:rule:exclude-government-services#1",
+        "category_id": "cat-government",
+        "category_slug": "government",
+        "merchant_pattern": null,
+        "rail": null,
+        "unit": "points_per_100",
+        "rate": 0,
+        "min_txn_inr": null,
+        "max_txn_inr": null,
+        "priority": 4,
+        "conditions": {
+          "source_local_id": "exclude-government-services",
+          "part": 1,
+          "info_reasons": [],
+          "flags": [
+            "mcc_scoped_exclusion"
+          ]
+        },
+        "notes": null,
+        "effective_from": "2025-06-01",
+        "effective_to": null,
+        "excluded_categories": [],
+        "rule_role": "exclusion",
+        "merchant_slugs": [],
+        "platform_slugs": [],
+        "mcc_include": [],
+        "mcc_exclude": [],
+        "except_merchant_slugs": [],
+        "except_platform_slugs": [],
+        "block_inr": null,
+        "min_engine_version": 1,
+        "max_engine_version": 1,
+        "source_local_id": "exclude-government-services",
+        "display_note": "Government services including tax payments, court costs, postal services and fines are excluded."
+      },
+      {
+        "id": "pnb-kiwi-credit-card:rule:exclude-government-services#2",
+        "category_id": "cat-government",
+        "category_slug": "government",
+        "merchant_pattern": null,
+        "rail": null,
+        "unit": "points_per_100",
+        "rate": 0,
+        "min_txn_inr": null,
+        "max_txn_inr": null,
+        "priority": 4,
+        "conditions": {
+          "source_local_id": "exclude-government-services",
+          "part": 2,
+          "info_reasons": [],
+          "flags": [
+            "mcc_scoped_exclusion"
+          ]
+        },
+        "notes": null,
+        "effective_from": "2025-06-01",
+        "effective_to": null,
+        "excluded_categories": [],
+        "rule_role": "exclusion",
+        "merchant_slugs": [],
+        "platform_slugs": [],
+        "mcc_include": [
+          "9211",
+          "9222",
+          "9223",
+          "9311",
+          "9399",
+          "9400",
+          "9402",
+          "9405",
+          "9700",
+          "9701",
+          "9702",
+          "9751",
+          "9754",
+          "9950"
+        ],
+        "mcc_exclude": [],
+        "except_merchant_slugs": [],
+        "except_platform_slugs": [],
+        "block_inr": null,
+        "min_engine_version": 2,
+        "max_engine_version": null,
+        "source_local_id": "exclude-government-services",
+        "display_note": "Government services including tax payments, court costs, postal services and fines are excluded."
+      },
+      {
+        "id": "pnb-kiwi-credit-card:rule:exclude-government-services#3",
+        "category_id": null,
+        "category_slug": null,
+        "merchant_pattern": null,
+        "rail": null,
+        "unit": "points_per_100",
+        "rate": 0,
+        "min_txn_inr": null,
+        "max_txn_inr": null,
+        "priority": 4,
+        "conditions": {
+          "source_local_id": "exclude-government-services",
+          "part": 3,
+          "info_reasons": [],
+          "flags": [
+            "mcc_scoped_exclusion"
+          ]
+        },
+        "notes": null,
+        "effective_from": "2025-06-01",
+        "effective_to": null,
+        "excluded_categories": [],
+        "rule_role": "exclusion",
+        "merchant_slugs": [],
+        "platform_slugs": [],
+        "mcc_include": [
+          "9211",
+          "9222",
+          "9223",
+          "9311",
+          "9399",
+          "9400",
+          "9402",
+          "9405",
+          "9700",
+          "9701",
+          "9702",
+          "9751",
+          "9754",
+          "9950"
+        ],
+        "mcc_exclude": [],
+        "except_merchant_slugs": [],
+        "except_platform_slugs": [],
+        "block_inr": null,
+        "min_engine_version": 2,
+        "max_engine_version": null,
+        "source_local_id": "exclude-government-services",
+        "display_note": "Government services including tax payments, court costs, postal services and fines are excluded."
+      },
+      {
+        "id": "pnb-kiwi-credit-card:rule:exclude-marketing-advertising",
+        "category_id": null,
+        "category_slug": null,
+        "merchant_pattern": null,
+        "rail": null,
+        "unit": "points_per_100",
+        "rate": 0,
+        "min_txn_inr": null,
+        "max_txn_inr": null,
+        "priority": 5,
+        "conditions": {
+          "source_local_id": "exclude-marketing-advertising",
+          "part": null,
+          "info_reasons": [],
+          "flags": [
+            "token_replaced_by_conditions"
+          ]
+        },
+        "notes": null,
+        "effective_from": "2025-06-01",
+        "effective_to": null,
+        "excluded_categories": [],
+        "rule_role": "exclusion",
+        "merchant_slugs": [],
+        "platform_slugs": [],
+        "mcc_include": [
+          "5960",
+          "5962",
+          "5964",
+          "5965",
+          "5967",
+          "5968",
+          "5969",
+          "7311"
+        ],
+        "mcc_exclude": [],
+        "except_merchant_slugs": [],
+        "except_platform_slugs": [],
+        "block_inr": null,
+        "min_engine_version": 2,
+        "max_engine_version": null,
+        "source_local_id": "exclude-marketing-advertising",
+        "display_note": "Direct marketing and advertising are excluded."
+      },
+      {
+        "id": "pnb-kiwi-credit-card:rule:exclude-professional-services-education#1",
+        "category_id": "cat-education",
+        "category_slug": "education",
+        "merchant_pattern": null,
+        "rail": null,
+        "unit": "points_per_100",
+        "rate": 0,
+        "min_txn_inr": null,
+        "max_txn_inr": null,
+        "priority": 6,
+        "conditions": {
+          "source_local_id": "exclude-professional-services-education",
+          "part": 1,
+          "info_reasons": [],
+          "flags": [
+            "mcc_scoped_exclusion"
+          ]
+        },
+        "notes": null,
+        "effective_from": "2025-06-01",
+        "effective_to": null,
+        "excluded_categories": [],
+        "rule_role": "exclusion",
+        "merchant_slugs": [],
+        "platform_slugs": [],
+        "mcc_include": [],
+        "mcc_exclude": [],
+        "except_merchant_slugs": [],
+        "except_platform_slugs": [],
+        "block_inr": null,
+        "min_engine_version": 1,
+        "max_engine_version": 1,
+        "source_local_id": "exclude-professional-services-education",
+        "display_note": "Legal, accounting and educational-institution MCCs are excluded from Kiwi rewards."
+      },
+      {
+        "id": "pnb-kiwi-credit-card:rule:exclude-professional-services-education#2",
+        "category_id": "cat-education",
+        "category_slug": "education",
+        "merchant_pattern": null,
+        "rail": null,
+        "unit": "points_per_100",
+        "rate": 0,
+        "min_txn_inr": null,
+        "max_txn_inr": null,
+        "priority": 6,
+        "conditions": {
+          "source_local_id": "exclude-professional-services-education",
+          "part": 2,
+          "info_reasons": [],
+          "flags": [
+            "mcc_scoped_exclusion"
+          ]
+        },
+        "notes": null,
+        "effective_from": "2025-06-01",
+        "effective_to": null,
+        "excluded_categories": [],
+        "rule_role": "exclusion",
+        "merchant_slugs": [],
+        "platform_slugs": [],
+        "mcc_include": [
+          "8111",
+          "8211",
+          "8220",
+          "8241",
+          "8244",
+          "8249",
+          "8299",
+          "8675",
+          "8931"
+        ],
+        "mcc_exclude": [],
+        "except_merchant_slugs": [],
+        "except_platform_slugs": [],
+        "block_inr": null,
+        "min_engine_version": 2,
+        "max_engine_version": null,
+        "source_local_id": "exclude-professional-services-education",
+        "display_note": "Legal, accounting and educational-institution MCCs are excluded from Kiwi rewards."
+      },
+      {
+        "id": "pnb-kiwi-credit-card:rule:exclude-professional-services-education#3",
+        "category_id": null,
+        "category_slug": null,
+        "merchant_pattern": null,
+        "rail": null,
+        "unit": "points_per_100",
+        "rate": 0,
+        "min_txn_inr": null,
+        "max_txn_inr": null,
+        "priority": 6,
+        "conditions": {
+          "source_local_id": "exclude-professional-services-education",
+          "part": 3,
+          "info_reasons": [],
+          "flags": [
+            "mcc_scoped_exclusion"
+          ]
+        },
+        "notes": null,
+        "effective_from": "2025-06-01",
+        "effective_to": null,
+        "excluded_categories": [],
+        "rule_role": "exclusion",
+        "merchant_slugs": [],
+        "platform_slugs": [],
+        "mcc_include": [
+          "8111",
+          "8211",
+          "8220",
+          "8241",
+          "8244",
+          "8249",
+          "8299",
+          "8675",
+          "8931"
+        ],
+        "mcc_exclude": [],
+        "except_merchant_slugs": [],
+        "except_platform_slugs": [],
+        "block_inr": null,
+        "min_engine_version": 2,
+        "max_engine_version": null,
+        "source_local_id": "exclude-professional-services-education",
+        "display_note": "Legal, accounting and educational-institution MCCs are excluded from Kiwi rewards."
+      },
+      {
+        "id": "pnb-kiwi-credit-card:rule:exclude-retail-services-fuel#1",
+        "category_id": "cat-fuel",
+        "category_slug": "fuel",
+        "merchant_pattern": null,
+        "rail": null,
+        "unit": "points_per_100",
+        "rate": 0,
+        "min_txn_inr": null,
+        "max_txn_inr": null,
+        "priority": 7,
+        "conditions": {
+          "source_local_id": "exclude-retail-services-fuel",
+          "part": 1,
+          "info_reasons": [],
+          "flags": [
+            "mcc_scoped_exclusion"
+          ]
+        },
+        "notes": null,
+        "effective_from": "2025-06-01",
+        "effective_to": null,
+        "excluded_categories": [],
+        "rule_role": "exclusion",
+        "merchant_slugs": [],
+        "platform_slugs": [],
+        "mcc_include": [],
+        "mcc_exclude": [],
+        "except_merchant_slugs": [],
+        "except_platform_slugs": [],
+        "block_inr": null,
+        "min_engine_version": 1,
+        "max_engine_version": 1,
+        "source_local_id": "exclude-retail-services-fuel",
+        "display_note": "Auto dealers, fuel stations, jewellery and petroleum MCCs are excluded."
+      },
+      {
+        "id": "pnb-kiwi-credit-card:rule:exclude-retail-services-fuel#2",
+        "category_id": "cat-fuel",
+        "category_slug": "fuel",
+        "merchant_pattern": null,
+        "rail": null,
+        "unit": "points_per_100",
+        "rate": 0,
+        "min_txn_inr": null,
+        "max_txn_inr": null,
+        "priority": 7,
+        "conditions": {
+          "source_local_id": "exclude-retail-services-fuel",
+          "part": 2,
+          "info_reasons": [],
+          "flags": [
+            "mcc_scoped_exclusion"
+          ]
+        },
+        "notes": null,
+        "effective_from": "2025-06-01",
+        "effective_to": null,
+        "excluded_categories": [],
+        "rule_role": "exclusion",
+        "merchant_slugs": [],
+        "platform_slugs": [],
+        "mcc_include": [
+          "5094",
+          "5172",
+          "5451",
+          "5511",
+          "5521",
+          "5531",
+          "5532",
+          "5533",
+          "5541",
+          "5542",
+          "5599"
+        ],
+        "mcc_exclude": [],
+        "except_merchant_slugs": [],
+        "except_platform_slugs": [],
+        "block_inr": null,
+        "min_engine_version": 2,
+        "max_engine_version": null,
+        "source_local_id": "exclude-retail-services-fuel",
+        "display_note": "Auto dealers, fuel stations, jewellery and petroleum MCCs are excluded."
+      },
+      {
+        "id": "pnb-kiwi-credit-card:rule:exclude-retail-services-fuel#3",
+        "category_id": null,
+        "category_slug": null,
+        "merchant_pattern": null,
+        "rail": null,
+        "unit": "points_per_100",
+        "rate": 0,
+        "min_txn_inr": null,
+        "max_txn_inr": null,
+        "priority": 7,
+        "conditions": {
+          "source_local_id": "exclude-retail-services-fuel",
+          "part": 3,
+          "info_reasons": [],
+          "flags": [
+            "mcc_scoped_exclusion"
+          ]
+        },
+        "notes": null,
+        "effective_from": "2025-06-01",
+        "effective_to": null,
+        "excluded_categories": [],
+        "rule_role": "exclusion",
+        "merchant_slugs": [],
+        "platform_slugs": [],
+        "mcc_include": [
+          "5094",
+          "5172",
+          "5451",
+          "5511",
+          "5521",
+          "5531",
+          "5532",
+          "5533",
+          "5541",
+          "5542",
+          "5599"
+        ],
+        "mcc_exclude": [],
+        "except_merchant_slugs": [],
+        "except_platform_slugs": [],
+        "block_inr": null,
+        "min_engine_version": 2,
+        "max_engine_version": null,
+        "source_local_id": "exclude-retail-services-fuel",
+        "display_note": "Auto dealers, fuel stations, jewellery and petroleum MCCs are excluded."
+      },
+      {
+        "id": "pnb-kiwi-credit-card:rule:exclude-transportation-tolls",
+        "category_id": null,
+        "category_slug": null,
+        "merchant_pattern": null,
+        "rail": null,
+        "unit": "points_per_100",
+        "rate": 0,
+        "min_txn_inr": null,
+        "max_txn_inr": null,
+        "priority": 8,
+        "conditions": {
+          "source_local_id": "exclude-transportation-tolls",
+          "part": null,
+          "info_reasons": [],
+          "flags": [
+            "token_replaced_by_conditions"
+          ]
+        },
+        "notes": null,
+        "effective_from": "2025-06-01",
+        "effective_to": null,
+        "excluded_categories": [],
+        "rule_role": "exclusion",
+        "merchant_slugs": [],
+        "platform_slugs": [],
+        "mcc_include": [
+          "4784",
+          "4789"
+        ],
+        "mcc_exclude": [],
+        "except_merchant_slugs": [],
+        "except_platform_slugs": [],
+        "block_inr": null,
+        "min_engine_version": 2,
+        "max_engine_version": null,
+        "source_local_id": "exclude-transportation-tolls",
+        "display_note": "Bridge fees, tolls and miscellaneous transportation services are excluded."
+      },
+      {
+        "id": "pnb-kiwi-credit-card:rule:exclude-utilities#1",
+        "category_id": "cat-bills",
+        "category_slug": "bills",
+        "merchant_pattern": null,
+        "rail": null,
+        "unit": "points_per_100",
+        "rate": 0,
+        "min_txn_inr": null,
+        "max_txn_inr": null,
+        "priority": 9,
+        "conditions": {
+          "source_local_id": "exclude-utilities",
+          "part": 1,
+          "info_reasons": [],
+          "flags": [
+            "mcc_scoped_exclusion"
+          ]
+        },
+        "notes": null,
+        "effective_from": "2025-06-01",
+        "effective_to": null,
+        "excluded_categories": [],
+        "rule_role": "exclusion",
+        "merchant_slugs": [],
+        "platform_slugs": [],
+        "mcc_include": [],
+        "mcc_exclude": [],
+        "except_merchant_slugs": [],
+        "except_platform_slugs": [],
+        "block_inr": null,
+        "min_engine_version": 1,
+        "max_engine_version": 1,
+        "source_local_id": "exclude-utilities",
+        "display_note": "Cable, telecom, electricity, wire-transfer and water-utility MCCs are excluded."
+      },
+      {
+        "id": "pnb-kiwi-credit-card:rule:exclude-utilities#2",
+        "category_id": "cat-bills",
+        "category_slug": "bills",
+        "merchant_pattern": null,
+        "rail": null,
+        "unit": "points_per_100",
+        "rate": 0,
+        "min_txn_inr": null,
+        "max_txn_inr": null,
+        "priority": 9,
+        "conditions": {
+          "source_local_id": "exclude-utilities",
+          "part": 2,
+          "info_reasons": [],
+          "flags": [
+            "mcc_scoped_exclusion"
+          ]
+        },
+        "notes": null,
+        "effective_from": "2025-06-01",
+        "effective_to": null,
+        "excluded_categories": [],
+        "rule_role": "exclusion",
+        "merchant_slugs": [],
+        "platform_slugs": [],
+        "mcc_include": [
+          "4812",
+          "4813",
+          "4814",
+          "4816",
+          "4821",
+          "4829",
+          "4899",
+          "4900"
+        ],
+        "mcc_exclude": [],
+        "except_merchant_slugs": [],
+        "except_platform_slugs": [],
+        "block_inr": null,
+        "min_engine_version": 2,
+        "max_engine_version": null,
+        "source_local_id": "exclude-utilities",
+        "display_note": "Cable, telecom, electricity, wire-transfer and water-utility MCCs are excluded."
+      },
+      {
+        "id": "pnb-kiwi-credit-card:rule:exclude-utilities#3",
+        "category_id": null,
+        "category_slug": null,
+        "merchant_pattern": null,
+        "rail": null,
+        "unit": "points_per_100",
+        "rate": 0,
+        "min_txn_inr": null,
+        "max_txn_inr": null,
+        "priority": 9,
+        "conditions": {
+          "source_local_id": "exclude-utilities",
+          "part": 3,
+          "info_reasons": [],
+          "flags": [
+            "mcc_scoped_exclusion"
+          ]
+        },
+        "notes": null,
+        "effective_from": "2025-06-01",
+        "effective_to": null,
+        "excluded_categories": [],
+        "rule_role": "exclusion",
+        "merchant_slugs": [],
+        "platform_slugs": [],
+        "mcc_include": [
+          "4812",
+          "4813",
+          "4814",
+          "4816",
+          "4821",
+          "4829",
+          "4899",
+          "4900"
+        ],
+        "mcc_exclude": [],
+        "except_merchant_slugs": [],
+        "except_platform_slugs": [],
+        "block_inr": null,
+        "min_engine_version": 2,
+        "max_engine_version": null,
+        "source_local_id": "exclude-utilities",
+        "display_note": "Cable, telecom, electricity, wire-transfer and water-utility MCCs are excluded."
+      },
+      {
+        "id": "pnb-kiwi-credit-card:rule:exclude-miscellaneous-financial-insurance-real-estate",
+        "category_id": null,
+        "category_slug": null,
+        "merchant_pattern": null,
+        "rail": null,
+        "unit": "points_per_100",
+        "rate": 0,
+        "min_txn_inr": null,
+        "max_txn_inr": null,
+        "priority": 10,
+        "conditions": {
+          "source_local_id": "exclude-miscellaneous-financial-insurance-real-estate",
+          "part": null,
+          "info_reasons": [],
+          "flags": []
+        },
+        "notes": null,
+        "effective_from": "2025-06-01",
+        "effective_to": null,
+        "excluded_categories": [],
+        "rule_role": "exclusion",
+        "merchant_slugs": [],
+        "platform_slugs": [],
+        "mcc_include": [
+          "5944",
+          "5947",
+          "5960",
+          "5983",
+          "6011",
+          "6012",
+          "6051",
+          "6300",
+          "6381",
+          "6399",
+          "6513",
+          "6529",
+          "6540"
+        ],
+        "mcc_exclude": [],
+        "except_merchant_slugs": [],
+        "except_platform_slugs": [],
+        "block_inr": null,
+        "min_engine_version": 2,
+        "max_engine_version": null,
+        "source_local_id": "exclude-miscellaneous-financial-insurance-real-estate",
+        "display_note": "Jewellery stores, fuel dealers, financial institutions, insurance, real estate and gift-card MCCs are excluded."
+      }
+    ],
+    "cap_rules": [
+      {
+        "id": "pnb-kiwi-credit-card:cap:monthly-kiwi-cap",
+        "reward_rule_id": null,
+        "category_id": null,
+        "category_slug": null,
+        "benefit_kind": null,
+        "label": "Monthly kiwi cap",
+        "measure": "reward_value",
+        "period": "calendar_month",
+        "cap_value": 0,
+        "post_cap_unit": null,
+        "post_cap_rate": null,
+        "resets_on_day": 1,
+        "cap_kind": "total_points",
+        "cap_amount": null,
+        "scope": "targets",
+        "targets": [
+          "pnb-kiwi-credit-card:rule:online-base-kiwi",
+          "pnb-kiwi-credit-card:rule:upi-scan-pay-kiwi"
+        ],
+        "parent_cap_id": null,
+        "post_cap_behavior": null,
+        "anchor": null,
+        "min_engine_version": 2,
+        "source_local_id": "monthly-kiwi-cap"
+      }
+    ],
+    "milestone_rules": [],
+    "fee_waiver_rules": [
+      {
+        "id": "pnb-kiwi-credit-card:waiver:1",
+        "threshold_spend_inr": 150000,
+        "period": "statement_cycle",
+        "waives_fee_inr": 750,
+        "excluded_category_slugs": [],
+        "notes": "PNB's Kiwi product page states that the ₹750 annual fee is waived on spends of ₹1.50 lakh in the previous year. PNB's current MITC states that fee waivers are calculated on a calendar-year basis; cash withdrawals, reversals and fees/charges are excluded from the waiver threshold.",
+        "excluded_categories": []
+      }
+    ],
+    "benefits": [
+      {
+        "id": "pnb-kiwi-credit-card:benefit:kiwi-neon-lounge",
+        "key": "kiwi-neon-lounge",
+        "source_local_id": "kiwi-neon-lounge",
+        "kind": "lounge_domestic",
+        "label": "Airport lounge access through optional Kiwi Neon membership",
+        "description": "Sponsor: Gokiwi Technologies Private Limited",
+        "quota_count": 3,
+        "quota_period": "annual",
+        "network_program": "kiwi_neon",
+        "value_estimate_inr": null,
+        "conditions": {
+          "source_category_id": "lounge",
+          "evaluation_engine": {
+            "conditions": {
+              "membership_required": true,
+              "membership_fee_inr": 999,
+              "membership_fee_gst_applicable": true,
+              "eligible_spend_milestones_inr": [
+                50000,
+                100000,
+                150000
+              ],
+              "membership_spend_basis": "yearly spends on Kiwi App from date of Kiwi Neon subscription",
+              "pass_unlock": "one lounge pass at each qualifying milestone",
+              "guest_access": false
+            },
+            "benefit_calculation": {
+              "passes_per_year": 3,
+              "stay_duration_hours_max": 2,
+              "pass_validity_months": 6
+            },
+            "perks": [
+              "Each pass admits one customer.",
+              "Pass is unlocked in the Kiwi App after the relevant milestone.",
+              "Airport lounge programme is delivered through third-party lounge partners."
+            ]
+          }
+        }
+      },
+      {
+        "id": "pnb-kiwi-credit-card:benefit:kiwi-neon-milestone-cashback",
+        "key": "kiwi-neon-milestone-cashback",
+        "source_local_id": "kiwi-neon-milestone-cashback",
+        "kind": "other",
+        "label": "Optional Kiwi Neon annual-spend milestone cashback",
+        "description": "Sponsor: Gokiwi Technologies Private Limited",
+        "quota_count": null,
+        "quota_period": "annual",
+        "network_program": "kiwi_neon",
+        "value_estimate_inr": null,
+        "conditions": {
+          "source_category_id": "other",
+          "evaluation_engine": {
+            "conditions": {
+              "membership_required": true,
+              "milestones": [
+                {
+                  "threshold_spend_inr": 50000,
+                  "cashback_percent": 3
+                },
+                {
+                  "threshold_spend_inr": 100000,
+                  "cashback_percent": 4
+                },
+                {
+                  "threshold_spend_inr": 150000,
+                  "cashback_percent": 5
+                }
+              ],
+              "eligible_spend_definition": "Total Kiwi spends minus exclusion-category spends and refunds.",
+              "milestone_rewards_excluded_from_monthly_cap": true
+            },
+            "benefit_calculation": {
+              "membership_fee_inr": 999,
+              "membership_fee_gst_applicable": true
+            },
+            "perks": [
+              "Milestone cashback is provided as Kiwis.",
+              "Milestone cashback is credited after the subsequent month according to the Kiwi Neon terms."
+            ]
+          }
+        }
+      }
+    ],
+    "unlock_rules": [
+      {
+        "id": "pnb-kiwi-credit-card:unlock:kiwi-neon-lounge@1",
+        "card_benefit_id": "pnb-kiwi-credit-card:benefit:kiwi-neon-lounge",
+        "kind": "lounge_domestic",
+        "label": "Airport lounge access through optional Kiwi Neon membership (₹50,000)",
+        "spend_threshold_inr": 50000,
+        "spend_window": "card_year",
+        "window_days": null,
+        "unlocks_quota": 1,
+        "unlocks_period": "annual",
+        "tier_label": null,
+        "excluded_category_ids": [],
+        "notes": null,
+        "source_local_id": "kiwi-neon-lounge"
+      },
+      {
+        "id": "pnb-kiwi-credit-card:unlock:kiwi-neon-lounge@2",
+        "card_benefit_id": "pnb-kiwi-credit-card:benefit:kiwi-neon-lounge",
+        "kind": "lounge_domestic",
+        "label": "Airport lounge access through optional Kiwi Neon membership (₹1,00,000)",
+        "spend_threshold_inr": 100000,
+        "spend_window": "card_year",
+        "window_days": null,
+        "unlocks_quota": 1,
+        "unlocks_period": "annual",
+        "tier_label": null,
+        "excluded_category_ids": [],
+        "notes": null,
+        "source_local_id": "kiwi-neon-lounge"
+      },
+      {
+        "id": "pnb-kiwi-credit-card:unlock:kiwi-neon-lounge@3",
+        "card_benefit_id": "pnb-kiwi-credit-card:benefit:kiwi-neon-lounge",
+        "kind": "lounge_domestic",
+        "label": "Airport lounge access through optional Kiwi Neon membership (₹1,50,000)",
+        "spend_threshold_inr": 150000,
+        "spend_window": "card_year",
+        "window_days": null,
+        "unlocks_quota": 1,
+        "unlocks_period": "annual",
+        "tier_label": null,
+        "excluded_category_ids": [],
+        "notes": null,
+        "source_local_id": "kiwi-neon-lounge"
+      },
+      {
+        "id": "pnb-kiwi-credit-card:unlock:kiwi-neon-milestone-cashback@1",
+        "card_benefit_id": "pnb-kiwi-credit-card:benefit:kiwi-neon-milestone-cashback",
+        "kind": "other",
+        "label": "Optional Kiwi Neon annual-spend milestone cashback (₹50,000)",
+        "spend_threshold_inr": 50000,
+        "spend_window": "card_year",
+        "window_days": null,
+        "unlocks_quota": null,
+        "unlocks_period": "annual",
+        "tier_label": null,
+        "excluded_category_ids": [],
+        "notes": "window approximated from quota_period",
+        "source_local_id": "kiwi-neon-milestone-cashback"
+      },
+      {
+        "id": "pnb-kiwi-credit-card:unlock:kiwi-neon-milestone-cashback@2",
+        "card_benefit_id": "pnb-kiwi-credit-card:benefit:kiwi-neon-milestone-cashback",
+        "kind": "other",
+        "label": "Optional Kiwi Neon annual-spend milestone cashback (₹1,00,000)",
+        "spend_threshold_inr": 100000,
+        "spend_window": "card_year",
+        "window_days": null,
+        "unlocks_quota": null,
+        "unlocks_period": "annual",
+        "tier_label": null,
+        "excluded_category_ids": [],
+        "notes": "window approximated from quota_period",
+        "source_local_id": "kiwi-neon-milestone-cashback"
+      },
+      {
+        "id": "pnb-kiwi-credit-card:unlock:kiwi-neon-milestone-cashback@3",
+        "card_benefit_id": "pnb-kiwi-credit-card:benefit:kiwi-neon-milestone-cashback",
+        "kind": "other",
+        "label": "Optional Kiwi Neon annual-spend milestone cashback (₹1,50,000)",
+        "spend_threshold_inr": 150000,
+        "spend_window": "card_year",
+        "window_days": null,
+        "unlocks_quota": null,
+        "unlocks_period": "annual",
+        "tier_label": null,
+        "excluded_category_ids": [],
+        "notes": "window approximated from quota_period",
+        "source_local_id": "kiwi-neon-milestone-cashback"
+      }
+    ],
+    "redemption_options": [
+      {
+        "program_name": "Kiwi App / goaxb UPI-linked account",
+        "method": "cashback",
+        "value_per_point_inr": 0.25,
+        "min_points": 500,
+        "notes": "Redemption fee: ₹0"
+      }
+    ],
+    "is_upi_linkable": true
+  }
+}

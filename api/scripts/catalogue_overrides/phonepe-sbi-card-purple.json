@@ -1,0 +1,114 @@
+{
+  "source_slug": "phonepe-sbi-card-purple",
+  "changes": [
+    {
+      "path": "cap_rules[id=phonepe_other_monthly].metric",
+      "value": "total_reward_points",
+      "reason": "SBI limits total RPs per spend type per calendar month.",
+      "source_url": "https://www.sbicard.com/sbi-card-en/assets/media/images/personal/credit-cards/rewards/phonepe/tnc/PhonePe-SBI-Card-PURPLE-Reward-Program-TnC.pdf",
+      "checked_on": "2026-11-05"
+    },
+    {
+      "path": "cap_rules[id=phonepe_insurance_monthly].metric",
+      "value": "total_reward_points",
+      "reason": "SBI limits total RPs per spend type per calendar month.",
+      "source_url": "https://www.sbicard.com/sbi-card-en/assets/media/images/personal/credit-cards/rewards/phonepe/tnc/PhonePe-SBI-Card-PURPLE-Reward-Program-TnC.pdf",
+      "checked_on": "2026-11-05"
+    },
+    {
+      "path": "cap_rules[id=online_monthly].metric",
+      "value": "total_reward_points",
+      "reason": "SBI limits total RPs per spend type per calendar month.",
+      "source_url": "https://www.sbicard.com/sbi-card-en/assets/media/images/personal/credit-cards/rewards/phonepe/tnc/PhonePe-SBI-Card-PURPLE-Reward-Program-TnC.pdf",
+      "checked_on": "2026-11-05"
+    },
+    {
+      "path": "cap_rules[id=phonepe_insurance_monthly].parent_cap_id",
+      "value": null,
+      "reason": "Insurance (250) is a separate limit from non-insurance PhonePe spends (750).",
+      "source_url": "https://www.sbicard.com/sbi-card-en/assets/media/images/personal/credit-cards/rewards/phonepe/tnc/PhonePe-SBI-Card-PURPLE-Reward-Program-TnC.pdf",
+      "checked_on": "2026-11-05"
+    },
+    {
+      "path": "accrual_engine.base_cashback_percent",
+      "value": null,
+      "reason": "Card pays reward points; the field holds the string N/A in the source.",
+      "source_url": "https://www.sbicard.com/sbi-card-en/assets/media/images/personal/credit-cards/rewards/phonepe/tnc/PhonePe-SBI-Card-PURPLE-Reward-Program-TnC.pdf",
+      "checked_on": "2026-11-05"
+    },
+    {
+      "path": "reward_rules[id=phonepe_insurance].priority",
+      "value": 49,
+      "reason": "WP7: D14d: the narrower insurance rule must win over the general PhonePe rule (same priority 50 tie went to the non-insurance rule and its 750 cap). T&C lists insurance (max 250) and non-insurance (max 750) separately.",
+      "source_url": "https://www.sbicard.com/sbi-card-en/assets/media/images/personal/credit-cards/rewards/phonepe/tnc/PhonePe-SBI-Card-PURPLE-Reward-Program-TnC.pdf",
+      "checked_on": "2026-11-05"
+    },
+    {
+      "path": "reward_rules[id=base_standard].channel_type",
+      "value": "all",
+      "reason": "WP7: \"Other eligible spends\" restates the catch-all; the rule carries the 1,000 RP other-spends cap.",
+      "source_url": "https://www.sbicard.com/sbi-card-en/assets/media/images/personal/credit-cards/rewards/phonepe/tnc/PhonePe-SBI-Card-PURPLE-Reward-Program-TnC.pdf",
+      "checked_on": "2026-11-05"
+    },
+    {
+      "path": "reward_rules[id=phonepe_scan_pay].channel_type",
+      "value": "PhonePe app",
+      "reason": "WP7: T&C: Scan & Pay earns only through the PhonePe app (\"Scan and Pay or Online UPI transactions outside PhonePe would not accrue any reward point\"); \"PhonePe Scan & Pay\" restated the app on rail upi_qr.",
+      "source_url": "https://www.sbicard.com/sbi-card-en/assets/media/images/personal/credit-cards/rewards/phonepe/tnc/PhonePe-SBI-Card-PURPLE-Reward-Program-TnC.pdf",
+      "checked_on": "2026-11-05"
+    },
+    {
+      "path": "reward_rules[id=phonepe_scan_pay].category_id",
+      "value": "all_retail",
+      "reason": "WP7: The \"upi\" token restates rail upi_qr.",
+      "source_url": "https://www.sbicard.com/sbi-card-en/assets/media/images/personal/credit-cards/rewards/phonepe/tnc/PhonePe-SBI-Card-PURPLE-Reward-Program-TnC.pdf",
+      "checked_on": "2026-11-05"
+    },
+    {
+      "path": "cap_rules[id=phonepe_other_monthly].post_limit_behavior",
+      "value": null,
+      "reason": "WP7: Total cap (override); T&C silent on spill-over (research note), so the base-rate fallback is not stated.",
+      "source_url": "https://www.sbicard.com/sbi-card-en/assets/media/images/personal/credit-cards/rewards/phonepe/tnc/PhonePe-SBI-Card-PURPLE-Reward-Program-TnC.pdf",
+      "checked_on": "2026-11-05"
+    },
+    {
+      "path": "cap_rules[id=phonepe_insurance_monthly].post_limit_behavior",
+      "value": null,
+      "reason": "WP7: As phonepe_other_monthly.",
+      "source_url": "https://www.sbicard.com/sbi-card-en/assets/media/images/personal/credit-cards/rewards/phonepe/tnc/PhonePe-SBI-Card-PURPLE-Reward-Program-TnC.pdf",
+      "checked_on": "2026-11-05"
+    },
+    {
+      "path": "cap_rules[id=online_monthly].post_limit_behavior",
+      "value": null,
+      "reason": "WP7: As phonepe_other_monthly.",
+      "source_url": "https://www.sbicard.com/sbi-card-en/assets/media/images/personal/credit-cards/rewards/phonepe/tnc/PhonePe-SBI-Card-PURPLE-Reward-Program-TnC.pdf",
+      "checked_on": "2026-11-05"
+    },
+    {
+      "path": "reward_rules",
+      "op": "append",
+      "value": {
+        "id": "wp7_emi_rail_exclusion",
+        "category_id": "all_retail",
+        "priority": 0,
+        "evaluation_type": "exclusion",
+        "rail": "emi",
+        "channel_type": "all",
+        "conditions": {},
+        "action": {
+          "multiplier": 0,
+          "points_per_block": 0,
+          "cashback_percent": null,
+          "cap_reference": null,
+          "reason": "EMI transactions earn no rewards."
+        },
+        "effective_from": "2025-07-22",
+        "effective_to": null
+      },
+      "reason": "WP7: D28c: Reward Program T&C exclusions: \"Flexipay Transactions\" and \"Merchant EMI i.e. EMI's availed at the time of purchase at Merchant establishment or websites\". The record's EMI row needs category emi AND rail emi, so an EMI purchase in another category earned. Rail-EMI exclusion on all spend.",
+      "source_url": "https://www.sbicard.com/sbi-card-en/assets/media/images/personal/credit-cards/rewards/phonepe/tnc/PhonePe-SBI-Card-PURPLE-Reward-Program-TnC.pdf",
+      "checked_on": "2026-11-05"
+    }
+  ]
+}

@@ -1,0 +1,929 @@
+{
+  "id": "state-bank-of-india-cashback-sbi-credit-card",
+  "card_name": "Cashback SBI Credit Card",
+  "issuer": "State Bank of India",
+  "source_slug": "cashback-sbi-card",
+  "run_id": "20260827-022016-fact-check",
+  "ok": true,
+  "final": {
+    "$schema": "https://json-schema.org/draft/2020-12/schema",
+    "schema_version": "5.0.0",
+    "_notes": "Universal card-extraction template. Every card (credit, debit, prepaid; any issuer) fills this same shape. Use null for 'not yet verified / unknown', use the string \"N/A\" for 'this field genuinely does not apply to this card' (e.g. cash_advance on a debit card, invite_only fields on an open-application card), and use [] for 'verified — this card has none of these'. Never delete a key because it doesn't apply — mark it N/A so downstream ingestion can tell 'not applicable' apart from 'not scraped yet'.",
+    "card_product": {
+      "slug": "cashback-sbi-card",
+      "name": "CASHBACK SBI Card",
+      "issuer_slug": "sbi-card",
+      "network": "visa",
+      "network_tier": "Signature",
+      "card_tier": "mid",
+      "card_type": "credit",
+      "bin_ranges": [],
+      "joining_fee_inr": 999,
+      "annual_fee_inr": 999,
+      "fee_gst_applicable": true,
+      "gst_rate_percent": 18,
+      "is_upi_linkable": false,
+      "application_mode": "open",
+      "form_factors": [
+        "physical_plastic",
+        "nfc_contactless"
+      ],
+      "tokenization_support": [
+        "google_pay",
+        "sbi_card_pay",
+        "samsung_pay"
+      ],
+      "contactless_pin_free_limit_inr": 5000,
+      "point_value_inr_baseline": null,
+      "point_value_baseline_basis": "N/A",
+      "point_expiry_months": null,
+      "confirmed_flat_base_outside_smartbuy_or_equivalent_portal": null,
+      "display_assets": {
+        "art_asset_key": null,
+        "card_image_url": null,
+        "logo_url": null,
+        "primary_color_hex": null,
+        "secondary_color_hex": null
+      },
+      "status": "verified",
+      "data_source_tier": "issuer_mitc_plus_manual_audit",
+      "source_url": "https://www.sbicard.com/en/personal/credit-cards/cashback-sbi-card.html\n",
+      "verified_at": "2026-08-24T00:59:00+05:30"
+    },
+    "eligibility_engine": {
+      "evaluation_mode": "guideline_only",
+      "notes": "SBI Card does not publish exact salary, ITR or CIBIL thresholds for this card in official product/MITC material. Primary cardholders must be aged 21 to 65 years. Credit limits and underwriting are determined using internal SBICPSL criteria.",
+      "rules": [
+        {
+          "parameter": "age_years",
+          "operator": "gte",
+          "threshold_value": 21,
+          "allowed_values": []
+        },
+        {
+          "parameter": "age_years",
+          "operator": "lte",
+          "threshold_value": 65,
+          "allowed_values": []
+        }
+      ],
+      "community_benchmarks": {
+        "min_net_monthly_salary_inr": 30000,
+        "min_annual_itr_inr": 360000,
+        "min_existing_issuer_credit_limit_inr": null,
+        "min_cibil_score": 750,
+        "is_contractually_enforceable": false
+      },
+      "required_documents": [
+        "identity_proof_pan",
+        "address_proof",
+        "income_proof_salary_slip_or_itr"
+      ],
+      "processing_time_days": 14
+    },
+    "accrual_engine": {
+      "base_block_inr": null,
+      "rounding_mode": "floor_to_nearest_paisa",
+      "base_points_per_block": null,
+      "base_cashback_percent": 1,
+      "effective_base_return_percent": 1,
+      "cycle_accrual_ceiling_points": null,
+      "capping_period_basis": "statement_cycle",
+      "reversal_policy": {
+        "mode": "proportional_deduction",
+        "negative_balance_allowed": true,
+        "negative_balance_settlement": "Cashback from cancelled, reversed, returned or successfully disputed transactions is proportionately reversed and debited in the subsequent statement."
+      }
+    },
+    "reward_rules": [
+      {
+        "id": "standard_offline_cashback",
+        "category_id": "all_retail",
+        "priority": 100,
+        "evaluation_type": "standard_accrual",
+        "rail": "pos_terminal",
+        "channel_type": "offline",
+        "conditions": {
+          "transaction_channel": "offline",
+          "eligibility": "eligible_spend not covered by an exclusion"
+        },
+        "action": {
+          "multiplier": 1,
+          "points_per_block": null,
+          "cashback_percent": 1,
+          "cap_reference": "cap_offline_cashback_cycle",
+          "reason": "1% cashback on eligible offline/POS retail transactions."
+        },
+        "effective_from": "2026-04-01",
+        "effective_to": null
+      },
+      {
+        "id": "online_cashback",
+        "category_id": "all_retail",
+        "priority": 90,
+        "evaluation_type": "accelerator",
+        "rail": "online",
+        "channel_type": "online",
+        "conditions": {
+          "transaction_channel": "online",
+          "eligibility": "eligible spend not covered by an exclusion"
+        },
+        "action": {
+          "multiplier": 5,
+          "points_per_block": null,
+          "cashback_percent": 5,
+          "cap_reference": "cap_online_cashback_cycle",
+          "reason": "5% cashback on eligible online retail transactions across merchant platforms."
+        },
+        "effective_from": "2026-04-01",
+        "effective_to": null
+      },
+      {
+        "id": "exclude_utilities",
+        "category_id": "utility",
+        "priority": 1,
+        "evaluation_type": "exclusion",
+        "rail": "any",
+        "channel_type": "all",
+        "conditions": {
+          "category": "utility",
+          "mcc_list": [
+            4900
+          ]
+        },
+        "action": {
+          "multiplier": 0,
+          "points_per_block": null,
+          "cashback_percent": 0,
+          "cap_reference": null,
+          "reason": "Cashback is not applicable on utility spends."
+        },
+        "effective_from": "2026-04-01",
+        "effective_to": null
+      },
+      {
+        "id": "exclude_insurance",
+        "category_id": "insurance",
+        "priority": 2,
+        "evaluation_type": "exclusion",
+        "rail": "any",
+        "channel_type": "all",
+        "conditions": {
+          "category": "insurance",
+          "mcc_list": [
+            5960,
+            6300,
+            6381
+          ]
+        },
+        "action": {
+          "multiplier": 0,
+          "points_per_block": null,
+          "cashback_percent": 0,
+          "cap_reference": null,
+          "reason": "Cashback is not applicable on insurance spends."
+        },
+        "effective_from": "2026-04-01",
+        "effective_to": null
+      },
+      {
+        "id": "exclude_fuel",
+        "category_id": "fuel",
+        "priority": 3,
+        "evaluation_type": "exclusion",
+        "rail": "any",
+        "channel_type": "all",
+        "conditions": {
+          "category": "fuel",
+          "mcc_list": [
+            5172,
+            5541,
+            5542,
+            5983
+          ]
+        },
+        "action": {
+          "multiplier": 0,
+          "points_per_block": null,
+          "cashback_percent": 0,
+          "cap_reference": null,
+          "reason": "Cashback is not applicable on fuel spends."
+        },
+        "effective_from": "2026-04-01",
+        "effective_to": null
+      },
+      {
+        "id": "exclude_rent",
+        "category_id": "rent",
+        "priority": 4,
+        "evaluation_type": "exclusion",
+        "rail": "any",
+        "channel_type": "all",
+        "conditions": {
+          "category": "rent",
+          "mcc_list": [
+            6513
+          ]
+        },
+        "action": {
+          "multiplier": 0,
+          "points_per_block": null,
+          "cashback_percent": 0,
+          "cap_reference": null,
+          "reason": "Rent transactions are excluded from cashback."
+        },
+        "effective_from": "2026-04-01",
+        "effective_to": null
+      },
+      {
+        "id": "exclude_wallet",
+        "category_id": "wallet",
+        "priority": 5,
+        "evaluation_type": "exclusion",
+        "rail": "any",
+        "channel_type": "all",
+        "conditions": {
+          "category": "wallet",
+          "mcc_list": [
+            6540,
+            6541
+          ]
+        },
+        "action": {
+          "multiplier": 0,
+          "points_per_block": null,
+          "cashback_percent": 0,
+          "cap_reference": null,
+          "reason": "Wallet loading transactions are excluded from cashback."
+        },
+        "effective_from": "2026-04-01",
+        "effective_to": null
+      },
+      {
+        "id": "exclude_education",
+        "category_id": "education",
+        "priority": 6,
+        "evaluation_type": "exclusion",
+        "rail": "any",
+        "channel_type": "all",
+        "conditions": {
+          "category": "school_and_educational_services",
+          "mcc_list": [
+            8211,
+            8220,
+            8241,
+            8244,
+            8249,
+            8299
+          ]
+        },
+        "action": {
+          "multiplier": 0,
+          "points_per_block": null,
+          "cashback_percent": 0,
+          "cap_reference": null,
+          "reason": "School and educational services are excluded from cashback."
+        },
+        "effective_from": "2026-04-01",
+        "effective_to": null
+      },
+      {
+        "id": "exclude_jewellery",
+        "category_id": "jewellery",
+        "priority": 7,
+        "evaluation_type": "exclusion",
+        "rail": "any",
+        "channel_type": "all",
+        "conditions": {
+          "category": "jewellery",
+          "mcc_list": [
+            5094,
+            5944
+          ]
+        },
+        "action": {
+          "multiplier": 0,
+          "points_per_block": null,
+          "cashback_percent": 0,
+          "cap_reference": null,
+          "reason": "Jewellery spends are excluded from cashback."
+        },
+        "effective_from": "2026-04-01",
+        "effective_to": null
+      },
+      {
+        "id": "exclude_railways",
+        "category_id": "railways",
+        "priority": 8,
+        "evaluation_type": "exclusion",
+        "rail": "any",
+        "channel_type": "all",
+        "conditions": {
+          "category": "railways",
+          "mcc_list": [
+            4011,
+            4112
+          ]
+        },
+        "action": {
+          "multiplier": 0,
+          "points_per_block": null,
+          "cashback_percent": 0,
+          "cap_reference": null,
+          "reason": "Railway spends are excluded from cashback."
+        },
+        "effective_from": "2026-04-01",
+        "effective_to": null
+      },
+      {
+        "id": "exclude_merchant_emi",
+        "category_id": "excluded_spend",
+        "priority": 9,
+        "evaluation_type": "exclusion",
+        "rail": "emi",
+        "channel_type": "merchant_emi",
+        "conditions": {
+          "transaction_type": "merchant_emi"
+        },
+        "action": {
+          "multiplier": 0,
+          "points_per_block": null,
+          "cashback_percent": 0,
+          "cap_reference": null,
+          "reason": "Cashback is not applicable on Merchant EMI transactions."
+        },
+        "effective_from": "2026-04-01",
+        "effective_to": null
+      },
+      {
+        "id": "exclude_flexipay_emi",
+        "category_id": "excluded_spend",
+        "priority": 10,
+        "evaluation_type": "exclusion",
+        "rail": "emi",
+        "channel_type": "flexipay_emi",
+        "conditions": {
+          "transaction_type": "flexipay_emi"
+        },
+        "action": {
+          "multiplier": 0,
+          "points_per_block": null,
+          "cashback_percent": 0,
+          "cap_reference": null,
+          "reason": "Cashback is not applicable on Flexipay EMI transactions."
+        },
+        "effective_from": "2026-04-01",
+        "effective_to": null
+      },
+      {
+        "id": "exclude_digital_gaming",
+        "category_id": "gaming",
+        "priority": 11,
+        "evaluation_type": "exclusion",
+        "rail": "any",
+        "channel_type": "all",
+        "conditions": {
+          "mcc_list": [
+            5816,
+            7993,
+            7994
+          ]
+        },
+        "action": {
+          "multiplier": 0,
+          "points_per_block": null,
+          "cashback_percent": 0,
+          "cap_reference": null,
+          "reason": "Effective 1 April 2026, digital gaming platforms/merchants are excluded."
+        },
+        "effective_from": "2026-04-01",
+        "effective_to": null
+      },
+      {
+        "id": "exclude_tolls",
+        "category_id": "tolls",
+        "priority": 12,
+        "evaluation_type": "exclusion",
+        "rail": "any",
+        "channel_type": "all",
+        "conditions": {
+          "mcc_list": [
+            4784
+          ]
+        },
+        "action": {
+          "multiplier": 0,
+          "points_per_block": null,
+          "cashback_percent": 0,
+          "cap_reference": null,
+          "reason": "Effective 1 April 2026, toll transactions are excluded."
+        },
+        "effective_from": "2026-04-01",
+        "effective_to": null
+      },
+      {
+        "id": "exclude_government",
+        "category_id": "government",
+        "priority": 13,
+        "evaluation_type": "exclusion",
+        "rail": "any",
+        "channel_type": "all",
+        "conditions": {
+          "mcc_list": [
+            9222,
+            9311,
+            9402
+          ]
+        },
+        "action": {
+          "multiplier": 0,
+          "points_per_block": null,
+          "cashback_percent": 0,
+          "cap_reference": null,
+          "reason": "Effective 1 April 2026, government-related transactions are excluded."
+        },
+        "effective_from": "2026-04-01",
+        "effective_to": null
+      },
+      {
+        "id": "education_direct_payment",
+        "category_id": "education",
+        "priority": 14,
+        "evaluation_type": "exclusion",
+        "rail": "online",
+        "channel_type": "third_party_education_payment",
+        "conditions": {
+          "mcc_list": [
+            8211,
+            8220,
+            8241,
+            8244,
+            8249,
+            8299
+          ],
+          "channel": "third_party_apps"
+        },
+        "action": {
+          "multiplier": 0,
+          "points_per_block": null,
+          "cashback_percent": 0,
+          "cap_reference": null,
+          "reason": "Education payments through third-party apps attract the applicable education-payment fee and are excluded from cashback; direct payments to schools/colleges through their websites or POS machines do not attract the education-payment fee, but the card cashback exclusion for school and educational services applies."
+        },
+        "effective_from": "2025-11-01",
+        "effective_to": null
+      }
+    ],
+    "cap_rules": [
+      {
+        "id": "cap_online_cashback_cycle",
+        "category_id": null,
+        "metric": null,
+        "mcc_target_list": [],
+        "period": "statement_cycle",
+        "limit_value": null,
+        "limit_value_inr": 2000,
+        "post_limit_behavior": {
+          "action": null,
+          "points_per_block": null
+        },
+        "parent_cap_id": null,
+        "reset_day": null,
+        "effective_from": null,
+        "effective_to": null
+      },
+      {
+        "id": "cap_offline_cashback_cycle",
+        "category_id": null,
+        "metric": null,
+        "mcc_target_list": [],
+        "period": "statement_cycle",
+        "limit_value": null,
+        "limit_value_inr": 2000,
+        "post_limit_behavior": {
+          "action": null,
+          "points_per_block": null
+        },
+        "parent_cap_id": null,
+        "reset_day": null,
+        "effective_from": null,
+        "effective_to": null
+      },
+      {
+        "id": null,
+        "category_id": null,
+        "metric": null,
+        "mcc_target_list": [],
+        "period": null,
+        "limit_value": null,
+        "limit_value_inr": null,
+        "post_limit_behavior": {
+          "action": null,
+          "points_per_block": null
+        },
+        "parent_cap_id": null,
+        "reset_day": null,
+        "effective_from": null,
+        "effective_to": null
+      }
+    ],
+    "brand_specific_voucher_caps": [],
+    "fees_and_surcharges": {
+      "apr": {
+        "monthly_interest_rate_percent": 3.75,
+        "annual_interest_rate_percent": 45
+      },
+      "forex_markup": {
+        "markup_percent": 3.5,
+        "gst_applicable": true
+      },
+      "dynamic_currency_conversion_dcc": {
+        "fee_percent": 3.5,
+        "gst_applicable": true,
+        "trigger_condition": "Charged on transactions of INR 1,000 or more carried out in Indian currency at an international location or at merchants located in India but registered overseas."
+      },
+      "fuel_surcharge": {
+        "category_id": "fuel",
+        "surcharge_percent": 1,
+        "waiver_percent": 1,
+        "min_txn_inr": 500,
+        "max_txn_inr": 3000,
+        "monthly_waiver_cap_inr": 100
+      },
+      "cash_advance": {
+        "atm_transaction_fee_percent": 2.5,
+        "atm_transaction_fee_min_inr": 500,
+        "interest_applicable_from_day_one": true,
+        "daily_interest_percent": 0.1233,
+        "max_limit_percent": 80
+      },
+      "category_surcharges": [
+        {
+          "category_id": "rent",
+          "mcc_list": [
+            6513
+          ],
+          "fee_percent": 0,
+          "gst_applicable": true,
+          "trigger_condition": "Flat processing fee of ₹199 plus applicable taxes applies to all rent payment transactions identified under MCC 6513.",
+          "threshold_spend_inr": null,
+          "effective_from": "2024-12-01",
+          "effective_to": null
+        },
+        {
+          "category_id": "utility",
+          "mcc_list": [
+            4900
+          ],
+          "fee_percent": 1,
+          "gst_applicable": true,
+          "trigger_condition": "If aggregate utility payments in a billing cycle exceed ₹50,000, 1% is charged on the total utility payments in that billing cycle.",
+          "threshold_spend_inr": 50000,
+          "effective_from": "2024-12-01",
+          "effective_to": null
+        },
+        {
+          "category_id": "education",
+          "mcc_list": [
+            8211,
+            8220,
+            8241,
+            8244,
+            8249,
+            8299
+          ],
+          "fee_percent": 1,
+          "gst_applicable": true,
+          "trigger_condition": "From 1 November 2025, 1% fee applies to education payments made through third-party apps such as CRED, Cheq and MobiKwik. Direct payments to colleges or schools through their websites or POS machines do not attract this fee.",
+          "threshold_spend_inr": null,
+          "effective_from": "2025-11-01",
+          "effective_to": null
+        },
+        {
+          "category_id": "wallet",
+          "mcc_list": [
+            6540,
+            6541
+          ],
+          "fee_percent": 1,
+          "gst_applicable": true,
+          "trigger_condition": "From 1 November 2025, a 1% fee applies to every wallet load transaction exceeding ₹1,000.",
+          "threshold_spend_inr": 1000,
+          "effective_from": "2025-11-01",
+          "effective_to": null
+        }
+      ],
+      "emi_charges": {
+        "merchant_instant_emi_processing_fee_inr": 199,
+        "post_purchase_emi_processing_fee_inr": 199,
+        "foreclosure_charge_percent": 3,
+        "gst_applicable": true
+      },
+      "banking_penalties": {
+        "overlimit_charge": {
+          "fee_percent": 2.5,
+          "min_fee_inr": 600,
+          "gst_applicable": true
+        },
+        "auto_debit_bounce_charge_inr": 500,
+        "cheque_bounce_charge_inr": 500
+      },
+      "reward_redemption_fee": {
+        "fee_inr": 0,
+        "gst_applicable": false,
+        "exempted_channels": [
+          "automatic_card_cashback_statement_credit"
+        ],
+        "notes": "CASHBACK SBI Card cashback is automatically credited to the SBI Card account within two working days of statement generation and is adjusted automatically in the next statement; there is no manual points redemption fee for the automatic cashback mechanism."
+      }
+    },
+    "statement_and_late_fees": {
+      "grace_period_days": 3,
+      "grace_period_void_on_revolving_balance": true,
+      "minimum_amount_due_mad": {
+        "calculation_mode": "max",
+        "components": [
+          "100% of GST",
+          "100% of EMI amount",
+          "100% of Fees/Charges",
+          "100% of Finance Charges",
+          "Overlimit Amount, if any",
+          "2% of Remaining Balance Outstanding",
+          "₹200 minimum floor where applicable"
+        ]
+      },
+      "late_payment_slabs": [
+        {
+          "min_balance_inr": 0,
+          "max_balance_inr": 100,
+          "fee_inr": 0
+        },
+        {
+          "min_balance_inr": 100.01,
+          "max_balance_inr": 500,
+          "fee_inr": 100
+        },
+        {
+          "min_balance_inr": 500.01,
+          "max_balance_inr": 1000,
+          "fee_inr": 500
+        },
+        {
+          "min_balance_inr": 1000.01,
+          "max_balance_inr": 10000,
+          "fee_inr": 750
+        },
+        {
+          "min_balance_inr": 10000.01,
+          "max_balance_inr": 25000,
+          "fee_inr": 950
+        },
+        {
+          "min_balance_inr": 25000.01,
+          "max_balance_inr": 50000,
+          "fee_inr": 1100
+        },
+        {
+          "min_balance_inr": 50000.01,
+          "max_balance_inr": null,
+          "fee_inr": 1300
+        }
+      ]
+    },
+    "fee_waiver_and_milestones": {
+      "annual_fee_waiver": {
+        "threshold_spend_inr": 200000,
+        "period": "card_anniversary_year",
+        "evaluation_condition": "Renewal fee is reversed when annual spends in the preceding card anniversary year reach ₹2,00,000 or more.",
+        "excluded_category_ids": [
+          "rent",
+          "wallet",
+          "cash_advance"
+        ],
+        "excluded_mcc_list": [
+          6513,
+          6540,
+          6541,
+          6011
+        ],
+        "waives_fee_inr": 999
+      },
+      "welcome_and_renewal_gift": {
+        "trigger": "N/A",
+        "benefit_points": null,
+        "effective_value_inr": null,
+        "condition": "No separate welcome or renewal gift is published; the published renewal benefit is reversal of the ₹999 renewal fee on qualifying annual spend."
+      },
+      "spend_milestones": []
+    },
+    "lifestyle_and_network_benefits": [
+      {
+        "benefit_id": "fuel_surcharge_waiver",
+        "category_id": "fuel",
+        "network_program": null,
+        "sponsor": "SBI Card",
+        "label": "1% fuel surcharge waiver",
+        "evaluation_engine": {
+          "conditions": {
+            "transaction_amount_min_inr": 500,
+            "transaction_amount_max_inr": 3000,
+            "merchant_scope": "all petrol pumps in India",
+            "statement_cycle_cap_inr": 100
+          },
+          "benefit_calculation": {
+            "waiver_percent": 1,
+            "maximum_waiver_inr_per_statement_cycle": 100
+          },
+          "perks": [
+            "1% fuel surcharge waiver on transactions between ₹500 and ₹3,000"
+          ]
+        },
+        "quota_count": null,
+        "quota_period": "statement_cycle",
+        "value_estimate_inr": 100,
+        "effective_from": "2026-04-01",
+        "effective_to": null
+      },
+      {
+        "benefit_id": "automatic_cashback_credit",
+        "category_id": "rewards",
+        "network_program": null,
+        "sponsor": "SBI Card",
+        "label": "Automatic cashback statement credit",
+        "evaluation_engine": {
+          "conditions": {
+            "eligible_card_account": "valid and in good standing"
+          },
+          "benefit_calculation": {
+            "credit_timing": "within two working days of statement generation"
+          },
+          "perks": [
+            "Cashback is automatically credited to the SBI Card account",
+            "Cashback does not expire while the account remains active and in good standing"
+          ]
+        },
+        "quota_count": null,
+        "quota_period": "N/A",
+        "value_estimate_inr": null,
+        "effective_from": "2026-04-01",
+        "effective_to": null
+      },
+      {
+        "benefit_id": "visa_global_assistance",
+        "category_id": "travel_assistance",
+        "network_program": "visa_signature",
+        "sponsor": "Visa",
+        "label": "Visa Global Customer Assistance Services (GCAS)",
+        "evaluation_engine": {
+          "conditions": {
+            "scope": "emergency assistance for lost or stolen card while travelling internationally"
+          },
+          "benefit_calculation": "N/A",
+          "perks": [
+            "24x7 emergency card replacement and emergency cash disbursement assistance abroad"
+          ]
+        },
+        "quota_count": null,
+        "quota_period": "N/A",
+        "value_estimate_inr": null,
+        "effective_from": "2026-04-01",
+        "effective_to": null
+      }
+    ],
+    "insurance_and_protection": [
+      {
+        "cover_type": "fraud_liability",
+        "coverage_inr": null,
+        "coverage_usd": null,
+        "claim_condition": null,
+        "effective_from": null,
+        "effective_to": null
+      }
+    ],
+    "addon_card_rules": {
+      "max_addon_cards": 2,
+      "fee_per_card_inr": 0,
+      "separate_priority_pass": null,
+      "lounge_quota_shared": null,
+      "reward_points_pooled": null,
+      "min_age_years": 18
+    },
+    "redemption_matrix": {
+      "direct_options": [
+        {
+          "channel": "automatic_statement_credit",
+          "redemption_type": "statement_credit",
+          "inr_value_per_point": null,
+          "max_bill_percentage_payable_via_points": null,
+          "min_points_per_txn": null,
+          "cycle_points_burn_cap": null,
+          "redemption_fee_inr": 0,
+          "effective_from": "2026-04-01",
+          "effective_to": null
+        }
+      ],
+      "partner_transfers": []
+    },
+    "dynamic_promotions_registry": [],
+    "additional_data": {
+      "_notes": "Official source-supported data that cannot be represented faithfully by the universal schema without conflation or loss of detail.",
+      "items": [
+        {
+          "key": "cashback_caps_effective_2026_04_01",
+          "description": "From 1 April 2026, online cashback is capped at ₹2,000 per statement cycle, offline/POS cashback is capped at ₹2,000 per statement cycle, and aggregate cashback is capped at ₹4,000 per statement cycle.",
+          "source": "https://www.sbicard.com/cashback-revised\n"
+        },
+        {
+          "key": "cashback_posting_basis",
+          "description": "Cashback accrues on the transaction posting/settlement date rather than the effective transaction date, using the cashback structure applicable when the transaction posts.",
+          "source": "https://www.sbicard.com/en/faq/cashback-sbi-card-faq.page\n"
+        },
+        {
+          "key": "cashback_forfeiture_and_closure",
+          "description": "If the card is voluntarily closed, earned cashback may be redeemed within 30 days of closure; otherwise it lapses. On cancellation for another reason, earned cashback is forfeited. Cashback is also forfeited following more than 90 days of payment delinquency, settlement of outstanding dues, fraud determined by SBICPSL, or specified regulatory events.",
+          "source": "https://www.sbicard.com/sbi-card-en/assets/docs/pdf/cashback-tnc-booklet.pdf\n"
+        },
+        {
+          "key": "cashback_network_identification",
+          "description": "Online transactions are identified using online indicators sent by card networks and the acquirer; transactions not categorized as online are treated as offline. Network MCC definitions may change.",
+          "source": "https://www.sbicard.com/sbi-card-en/assets/docs/pdf/cashback-tnc-booklet.pdf\n"
+        },
+        {
+          "key": "education_payment_fee_detail",
+          "description": "From 1 November 2025, education payments through third-party apps such as CRED, Cheq and MobiKwik attract a 1% fee. Direct payments to colleges or schools through their websites or POS machines do not attract this fee. Education MCCs identified on a best-effort basis are 8211, 8220, 8241, 8244, 8249 and 8299.",
+          "source": "https://www.sbicard.com/en/most-important-terms-and-conditions.page\n"
+        },
+        {
+          "key": "wallet_load_fee_detail",
+          "description": "From 1 November 2025, a 1% fee applies to every wallet load transaction exceeding ₹1,000. Wallet transactions are identified under MCCs 6540 and 6541 on a best-effort basis.",
+          "source": "https://www.sbicard.com/en/most-important-terms-and-conditions.page\n"
+        },
+        {
+          "key": "rent_payment_fee_detail",
+          "description": "All transactions towards payment of rent through a merchant attract a ₹199 processing fee plus applicable taxes. MCC 6513 is used to identify rent transactions on a best-effort basis.",
+          "source": "https://www.sbicard.com/en/most-important-terms-and-conditions.page\n"
+        },
+        {
+          "key": "utility_payment_fee_detail",
+          "description": "If aggregate utility payments in a billing cycle exceed ₹50,000, a 1% fee applies to the total utility payments in that billing cycle. Utility payments are identified under MCC 4900 on a best-effort basis.",
+          "source": "https://www.sbicard.com/en/most-important-terms-and-conditions.page\n"
+        },
+        {
+          "key": "cash_advance_limit_detail",
+          "description": "Cash advance is part of the overall credit limit. The MITC states a maximum cash withdrawal of ₹15,000 per day on MCC 6011 (ATM withdrawals), subject to cash advance limit availability; cash advance is unavailable for MCC 6010 over-the-counter cash disbursement. The general schedule also specifies cash advance up to 80% of the credit limit.",
+          "source": "https://www.sbicard.com/en/most-important-terms-and-conditions.page\n"
+        },
+        {
+          "key": "cash_payment_fee",
+          "description": "Cash payment of SBI credit card dues at select SBI branches carries a ₹250 service fee plus applicable taxes.",
+          "source": "https://www.sbicard.com/en/most-important-terms-and-conditions.page\n"
+        },
+        {
+          "key": "balance_transfer",
+          "description": "Balance Transfer facility can transfer another bank's credit-card outstanding. The Cashback SBI Card terms state a minimum transfer amount of ₹5,000 and maximum of up to 75% of available credit limit, with processing fee as applicable. A 60-day balance transfer option is shown at 0% interest and a 180-day option at 1.7% per month, with applicable processing fee and restrictions.",
+          "source": "https://www.sbicard.com/sbi-card-en/assets/docs/pdf/cashback-tnc-booklet.pdf\n"
+        },
+        {
+          "key": "minimum_finance_charge",
+          "description": "Minimum finance charge is ₹25 per applicable transaction/cash advance when revolving finance charges apply, exclusive of applicable taxes.",
+          "source": "https://www.sbicard.com/en/most-important-terms-and-conditions.page\n"
+        },
+        {
+          "key": "payment_dishonor_fee",
+          "description": "Payment dishonor fee is 2% of the payment amount subject to a minimum of ₹500.",
+          "source": "https://www.sbicard.com/en/most-important-terms-and-conditions.page\n"
+        },
+        {
+          "key": "late_payment_additional_charge",
+          "description": "An additional ₹100 late-payment charge is levied when Minimum Amount Due is missed by the due date for two consecutive cycles, continuing each payment cycle until MAD is cleared.",
+          "source": "https://www.sbicard.com/en/most-important-terms-and-conditions.page\n"
+        },
+        {
+          "key": "cashback_customer_service",
+          "description": "SBI Card helpline numbers published in the MITC are 39 02 02 02 with the local STD prefix and 1860 180 1290.",
+          "source": "https://www.sbicard.com/en/most-important-terms-and-conditions.page\n"
+        },
+        {
+          "key": "contactless_operation",
+          "description": "The Cashback SBI Card is issued on the Visa network. Contactless transactions do not require a PIN up to ₹5,000 per transaction; transactions above ₹5,000 require chip insert/swipe and PIN.",
+          "source": "https://www.sbicard.com/sbi-card-en/assets/docs/pdf/cashback-tnc-booklet.pdf\n"
+        },
+        {
+          "key": "interest_free_credit_period",
+          "description": "The general SBI Card MITC states an interest-free credit period of 20–50 days for retail purchases when the previous month's outstanding balance is paid in full. This is distinct from the separate 3-day payment grace period.",
+          "source": "https://www.sbicard.com/en/most-important-terms-and-conditions.page\n"
+        },
+        {
+          "key": "payment_grace_period",
+          "description": "A 3-day grace period is allowed after the payment due date where payments are not overdue from previous billing cycles; this accommodates payment-processing time.",
+          "source": "https://www.sbicard.com/sbi-card-en/assets/docs/pdf/kfs/key-fact-statement.pdf\n"
+        },
+        {
+          "key": "lounge_usage_charges",
+          "description": "The general SBI Card MITC states that airport lounge visits in India through international lounge access programs such as Priority Pass are chargeable up to USD 27 per visit plus applicable taxes; outside India, the same charge applies after exhaustion of any complimentary visits. No current complimentary lounge entitlement is included for CASHBACK SBI Card in the current product-page benefits.",
+          "source": "https://www.sbicard.com/sbi-card-en/assets/docs/pdf/kfs/key-fact-statement.pdf\n"
+        }
+      ]
+    }
+  }
+}

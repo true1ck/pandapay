@@ -1,0 +1,47 @@
+{
+  "source_slug": "bpcl-sbi-card-octane",
+  "changes": [
+    {
+      "path": "cap_rules[id=bpcl_fuel_reward_cap].metric",
+      "value": "total_reward_points",
+      "reason": "Issuer caps total RP in the bucket per statement cycle.",
+      "source_url": "https://www.sbicard.com/sbi-card-en/assets/docs/pdf/ekit-tncs/BPCLOctanetnc.pdf",
+      "checked_on": "2026-11-05"
+    },
+    {
+      "path": "cap_rules[id=bharat_gas_reward_cap].metric",
+      "value": "total_reward_points",
+      "reason": "Issuer caps total RP in the bucket per statement cycle.",
+      "source_url": "https://www.sbicard.com/sbi-card-en/assets/docs/pdf/ekit-tncs/BPCLOctanetnc.pdf",
+      "checked_on": "2026-11-05"
+    },
+    {
+      "path": "cap_rules[id=lifestyle_reward_cap].metric",
+      "value": "total_reward_points",
+      "reason": "WP7: T&C 11.4(3): \"Cumulative 10X Reward Points accrued ... will have a maximum cap of 7,500 Reward Points per month\" - all 10X points, not only the bonus.",
+      "source_url": "https://www.sbicard.com/sbi-card-en/assets/docs/pdf/ekit-tncs/BPCLOctanetnc.pdf",
+      "checked_on": "2026-11-05"
+    },
+    {
+      "path": "cap_rules[id=lifestyle_reward_cap].post_limit_behavior",
+      "value": null,
+      "reason": "WP7: T&C states no fallback after the 7,500 cap (research note); left unstated.",
+      "source_url": "https://www.sbicard.com/sbi-card-en/assets/docs/pdf/ekit-tncs/BPCLOctanetnc.pdf",
+      "checked_on": "2026-11-05"
+    },
+    {
+      "path": "reward_rules[id=other_retail_base].conditions.eligible_scope",
+      "op": "remove",
+      "reason": "WP7: T&C 11.4(4): \"1 Reward Point on all other retail spends, except fuel\"; the scope text restated the catch-all (rule was info).",
+      "source_url": "https://www.sbicard.com/sbi-card-en/assets/docs/pdf/ekit-tncs/BPCLOctanetnc.pdf",
+      "checked_on": "2026-11-05"
+    },
+    {
+      "path": "reward_rules[id=bpcl_bharat_gas_25x].conditions.channel",
+      "op": "remove",
+      "reason": "WP7: T&C: \"Bharat Gas (Website & App only)\" restates rail online; the rule already has rail online and merchant Bharat Gas.",
+      "source_url": "https://www.sbicard.com/sbi-card-en/assets/docs/pdf/ekit-tncs/BPCLOctanetnc.pdf",
+      "checked_on": "2026-11-05"
+    }
+  ]
+}

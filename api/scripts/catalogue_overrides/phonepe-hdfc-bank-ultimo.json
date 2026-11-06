@@ -1,0 +1,161 @@
+{
+  "source_slug": "phonepe-hdfc-bank-ultimo",
+  "changes": [
+    {
+      "path": "reward_rules[id=phonepe_categories_10pct].conditions.mcc",
+      "value": [
+        4111,
+        4112,
+        4511,
+        4722,
+        4784,
+        4814,
+        4899,
+        4900
+      ],
+      "reason": "Issuer MCC list excludes 5262 and 7999.",
+      "source_url": "https://www.hdfc.bank.in/content/dam/hdfcbankpws/in/en/personal-banking/discover-products/cards/credit-cards/phonepe-hdfc-bank-ultimo-credit-card/phonepe-hdfc-bank-ultimo-cc-reward-points-tncs.pdf",
+      "checked_on": "2026-11-05"
+    },
+    {
+      "path": "reward_rules[id=scan_pay_1pct].conditions.transaction_type",
+      "op": "remove",
+      "reason": "WP7: \"UPI Scan & Pay\" restates rail upi_qr.",
+      "source_url": "https://www.hdfc.bank.in/content/dam/hdfcbankpws/in/en/personal-banking/discover-products/cards/credit-cards/phonepe-hdfc-bank-ultimo-credit-card/phonepe-hdfc-bank-ultimo-cc-reward-points-tncs.pdf",
+      "checked_on": "2026-11-05"
+    },
+    {
+      "path": "reward_rules[id=scan_pay_1pct].conditions.network",
+      "op": "remove",
+      "reason": "WP7: The card is a RuPay card; network restates the card.",
+      "source_url": "https://www.hdfc.bank.in/content/dam/hdfcbankpws/in/en/personal-banking/discover-products/cards/credit-cards/phonepe-hdfc-bank-ultimo-credit-card/phonepe-hdfc-bank-ultimo-cc-reward-points-tncs.pdf",
+      "checked_on": "2026-11-05"
+    },
+    {
+      "path": "reward_rules[id=scan_pay_1pct].conditions.merchant_payment",
+      "op": "remove",
+      "reason": "WP7: P2M restates a merchant QR payment (rail upi_qr).",
+      "source_url": "https://www.hdfc.bank.in/content/dam/hdfcbankpws/in/en/personal-banking/discover-products/cards/credit-cards/phonepe-hdfc-bank-ultimo-credit-card/phonepe-hdfc-bank-ultimo-cc-reward-points-tncs.pdf",
+      "checked_on": "2026-11-05"
+    },
+    {
+      "path": "reward_rules",
+      "op": "append",
+      "value": {
+        "id": "wp7_rent_mcc_exclusion",
+        "category_id": "all_retail",
+        "priority": 1,
+        "evaluation_type": "exclusion",
+        "rail": "any",
+        "channel_type": "all",
+        "conditions": {
+          "mcc_list": [
+            6513
+          ]
+        },
+        "action": {
+          "multiplier": 0,
+          "points_per_block": 0,
+          "cashback_percent": null,
+          "cap_reference": null,
+          "reason": "Rental transactions earn no reward points."
+        },
+        "effective_from": "2025-06-10",
+        "effective_to": null
+      },
+      "reason": "WP7: Rent also by MCC 6513 whatever the category; the existing category exclusion stays. T&C Note 1: \"rental transactions ... jewelry purchases\" earn no points.",
+      "source_url": "https://www.hdfc.bank.in/content/dam/hdfcbankpws/in/en/personal-banking/discover-products/cards/credit-cards/phonepe-hdfc-bank-ultimo-credit-card/phonepe-hdfc-bank-ultimo-cc-reward-points-tncs.pdf",
+      "checked_on": "2026-11-05"
+    },
+    {
+      "path": "reward_rules[id=exclude_jewellery].category_id",
+      "value": "all_retail",
+      "reason": "WP7: D24d: jewellery was info (free-text category). T&C Note 1 excludes \"jewelry purchases\".",
+      "source_url": "https://www.hdfc.bank.in/content/dam/hdfcbankpws/in/en/personal-banking/discover-products/cards/credit-cards/phonepe-hdfc-bank-ultimo-credit-card/phonepe-hdfc-bank-ultimo-cc-reward-points-tncs.pdf",
+      "checked_on": "2026-11-05"
+    },
+    {
+      "path": "reward_rules[id=exclude_jewellery].conditions",
+      "value": {
+        "mcc_list": [
+          5944,
+          5094
+        ]
+      },
+      "reason": "WP7: Jewellery by MCC (5944, 5094). T&C Note 1.",
+      "source_url": "https://www.hdfc.bank.in/content/dam/hdfcbankpws/in/en/personal-banking/discover-products/cards/credit-cards/phonepe-hdfc-bank-ultimo-credit-card/phonepe-hdfc-bank-ultimo-cc-reward-points-tncs.pdf",
+      "checked_on": "2026-11-05"
+    },
+    {
+      "path": "reward_rules",
+      "op": "append",
+      "value": {
+        "id": "wp7_emi_rail_exclusion",
+        "category_id": "all_retail",
+        "priority": 0,
+        "evaluation_type": "exclusion",
+        "rail": "emi",
+        "channel_type": "all",
+        "conditions": {},
+        "action": {
+          "multiplier": 0,
+          "points_per_block": 0,
+          "cashback_percent": null,
+          "cap_reference": null,
+          "reason": "EMI transactions earn no rewards."
+        },
+        "effective_from": "2025-06-10",
+        "effective_to": null
+      },
+      "reason": "WP7: T&C Note 1: \"No reward points will be given for EMI transactions ...\". The record's EMI exclusion is emitted as category emi AND rail emi, so an EMI purchase in another category was not excluded (D24e: data fix while WP2 changes the loader). Rail-EMI exclusion on all spend, as on flipkart-sbi-card.",
+      "source_url": "https://www.hdfc.bank.in/content/dam/hdfcbankpws/in/en/personal-banking/discover-products/cards/credit-cards/phonepe-hdfc-bank-ultimo-credit-card/phonepe-hdfc-bank-ultimo-cc-reward-points-tncs.pdf",
+      "checked_on": "2026-11-05"
+    },
+    {
+      "path": "reward_rules[id=exclude_investments].category_id",
+      "value": "all_retail",
+      "reason": "WP7: T&C Note 1: no reward points on \"... gift cards, cash advances, credit card bill payments, charges, ... investments ...\". Investments restated by MCC 6211.",
+      "source_url": "https://www.hdfc.bank.in/content/dam/hdfcbankpws/in/en/personal-banking/discover-products/cards/credit-cards/phonepe-hdfc-bank-ultimo-credit-card/phonepe-hdfc-bank-ultimo-cc-reward-points-tncs.pdf",
+      "checked_on": "2026-11-05"
+    },
+    {
+      "path": "reward_rules[id=exclude_investments].channel_type",
+      "value": "all",
+      "reason": "WP7: The channel restated the investment purchase.",
+      "source_url": "https://www.hdfc.bank.in/content/dam/hdfcbankpws/in/en/personal-banking/discover-products/cards/credit-cards/phonepe-hdfc-bank-ultimo-credit-card/phonepe-hdfc-bank-ultimo-cc-reward-points-tncs.pdf",
+      "checked_on": "2026-11-05"
+    },
+    {
+      "path": "reward_rules[id=exclude_investments].conditions",
+      "value": {
+        "mcc_list": [
+          6211
+        ]
+      },
+      "reason": "WP7: T&C Note 1: no reward points on \"... gift cards, cash advances, credit card bill payments, charges, ... investments ...\". D25d: an MCC list can carry investments.",
+      "source_url": "https://www.hdfc.bank.in/content/dam/hdfcbankpws/in/en/personal-banking/discover-products/cards/credit-cards/phonepe-hdfc-bank-ultimo-credit-card/phonepe-hdfc-bank-ultimo-cc-reward-points-tncs.pdf",
+      "checked_on": "2026-11-05"
+    },
+    {
+      "path": "reward_rules[id=exclude_gift_cards].conditions.transaction_scope",
+      "value": "gift or prepaid card purchase",
+      "reason": "WP7: T&C Note 1: no reward points on \"... gift cards, cash advances, credit card bill payments, charges, ... investments ...\". Gift cards are bought at ordinary merchants. Not expressible by MCC or category, so it stays info (D25d), flagged depends_on_txn_attribute (D14b).",
+      "source_url": "https://www.hdfc.bank.in/content/dam/hdfcbankpws/in/en/personal-banking/discover-products/cards/credit-cards/phonepe-hdfc-bank-ultimo-credit-card/phonepe-hdfc-bank-ultimo-cc-reward-points-tncs.pdf",
+      "checked_on": "2026-11-05"
+    },
+    {
+      "path": "reward_rules[id=exclude_cc_bill_payment].conditions.transaction_scope",
+      "value": "credit card bill payment",
+      "reason": "WP7: T&C Note 1: no reward points on \"... gift cards, cash advances, credit card bill payments, charges, ... investments ...\". Card bill payments go through bill-pay apps under varied MCCs. Not expressible by MCC or category, so it stays info (D25d), flagged depends_on_txn_attribute (D14b).",
+      "source_url": "https://www.hdfc.bank.in/content/dam/hdfcbankpws/in/en/personal-banking/discover-products/cards/credit-cards/phonepe-hdfc-bank-ultimo-credit-card/phonepe-hdfc-bank-ultimo-cc-reward-points-tncs.pdf",
+      "checked_on": "2026-11-05"
+    },
+    {
+      "path": "reward_rules[id=exclude_fees].conditions.transaction_scope",
+      "value": "card fees and charges",
+      "reason": "WP7: T&C Note 1: no reward points on \"... gift cards, cash advances, credit card bill payments, charges, ... investments ...\". Fees and charges are not purchases. Not expressible by MCC or category, so it stays info (D25d), flagged depends_on_txn_attribute (D14b).",
+      "source_url": "https://www.hdfc.bank.in/content/dam/hdfcbankpws/in/en/personal-banking/discover-products/cards/credit-cards/phonepe-hdfc-bank-ultimo-credit-card/phonepe-hdfc-bank-ultimo-cc-reward-points-tncs.pdf",
+      "checked_on": "2026-11-05"
+    }
+  ]
+}

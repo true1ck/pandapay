@@ -1,0 +1,1013 @@
+{
+  "generated_by": "api/scripts/catalogue_v2/snapshot_examples.js",
+  "source_slug": "fabindia-sbi-card",
+  "inputs": {
+    "transform_version": "7",
+    "source_record_sha256": "939ef68be8f80ac0b2ea86bfafc0d54a9733a65ff9141a365058d0a412f28062",
+    "override_sha256": "e431c8f6bcd594631206bad82551d96dc3e183bfe33e602dadceb7155044dfb9",
+    "directory_sha256": "b1094d54b77e848d22f7a9a64f3ae6d1ef43ca3eb2fc8e40cd43ed1994664694",
+    "verified": false
+  },
+  "blocking_flags": [
+    "info_rule"
+  ],
+  "card": {
+    "id": "fabindia-sbi-card:card",
+    "slug": "fabindia-sbi-card",
+    "name": "FABindia SBI Card",
+    "network": "visa",
+    "issuer_slug": "sbi",
+    "base_reward_unit": "points_per_200",
+    "base_reward_rate": 1,
+    "point_value_inr": 1,
+    "excluded_categories": [],
+    "accrual_block_inr": 200,
+    "accrual_rounding": "floor",
+    "cashback_rounding": null,
+    "points_expiry_months": 24,
+    "model_status": "partial",
+    "model_coverage": {
+      "rules_total": 13,
+      "rules_modelled": 8,
+      "rules_info": 5,
+      "caps_total": 0,
+      "caps_enforced": 0,
+      "flags": [
+        {
+          "code": "info_rule",
+          "source_local_id": "international_2x_base_equivalent",
+          "detail": "depends_on_txn_attribute"
+        },
+        {
+          "code": "info_rule",
+          "source_local_id": "international_2x_base_equivalent",
+          "detail": "condition:currency_or_location"
+        },
+        {
+          "code": "depends_on_txn_attribute",
+          "source_local_id": "international_2x_base_equivalent",
+          "detail": null
+        },
+        {
+          "code": "info_rule",
+          "source_local_id": "base_other_spend",
+          "detail": "override_rule_role"
+        },
+        {
+          "code": "info_rule",
+          "source_local_id": "exclude_balance_transfer",
+          "detail": "transaction_type"
+        },
+        {
+          "code": "mcc_scoped_exclusion",
+          "source_local_id": "exclude_wallet_mcc",
+          "detail": null
+        },
+        {
+          "code": "info_rule",
+          "source_local_id": "exclude_financial_charges",
+          "detail": "transaction_type"
+        },
+        {
+          "code": "info_rule",
+          "source_local_id": "exclude_disputed_transactions",
+          "detail": "transaction_type"
+        },
+        {
+          "code": "exclusion_scope_broadened",
+          "source_local_id": "exclude_cash_advance",
+          "detail": null
+        },
+        {
+          "code": "mcc_scoped_exclusion",
+          "source_local_id": "exclude_fuel_mcc",
+          "detail": null
+        },
+        {
+          "code": "emi_alternatives",
+          "source_local_id": "exclude_flexipay",
+          "detail": null
+        },
+        {
+          "code": "emi_alternatives",
+          "source_local_id": "exclude_merchant_emi",
+          "detail": null
+        },
+        {
+          "code": "mcc_scoped_exclusion",
+          "source_local_id": "exclude_rent",
+          "detail": null
+        }
+      ],
+      "overrides_applied": [
+        {
+          "path": "reward_rules[id=base_other_spend].rule_role",
+          "op": "set",
+          "value_sha256": "3e3e8e84e722887a",
+          "reason": "WP7: D33e: the cited Fabindia SBI Card T&C (11.4 Points) state only \"5 Reward Points per Rs100 spent at Fabindia\" and \"Added Reward Points on Dining, Entertainment, International spends and more\"; they give no rate for other spends. The record contradicts itself: its accrual base is 1 Reward Point per Rs200, while this rule says 1 per Rs100 (and its \"2x\" international rule is also 1 per Rs100). Unknown rate, so info (H2): the card base of 1 per Rs200 governs and can only under-state.",
+          "source_url": "https://www.sbicard.com/sbi-card-en/assets/docs/pdf/Fabindia-TnC.pdf",
+          "checked_on": "2026-11-06",
+          "citation": null
+        }
+      ]
+    },
+    "reward_rules": [
+      {
+        "id": "fabindia-sbi-card:rule:fabindia_10x_base_equivalent",
+        "category_id": null,
+        "category_slug": null,
+        "merchant_pattern": "fabindia",
+        "rail": null,
+        "unit": "points_per_100",
+        "rate": 5,
+        "min_txn_inr": null,
+        "max_txn_inr": null,
+        "priority": 10,
+        "conditions": {
+          "source_local_id": "fabindia_10x_base_equivalent",
+          "part": null,
+          "info_reasons": [],
+          "flags": []
+        },
+        "notes": null,
+        "effective_from": "2021-06-24",
+        "effective_to": null,
+        "excluded_categories": [],
+        "rule_role": "earn",
+        "merchant_slugs": [
+          "fabindia"
+        ],
+        "platform_slugs": [],
+        "mcc_include": [],
+        "mcc_exclude": [],
+        "except_merchant_slugs": [],
+        "except_platform_slugs": [],
+        "block_inr": null,
+        "min_engine_version": 1,
+        "max_engine_version": null,
+        "source_local_id": "fabindia_10x_base_equivalent",
+        "display_note": "5 Reward Points per ₹100 spent at Fabindia in-store or online."
+      },
+      {
+        "id": "fabindia-sbi-card:rule:dining_movies_entertainment_4x_base_equivalent#1",
+        "category_id": "cat-dining",
+        "category_slug": "dining",
+        "merchant_pattern": null,
+        "rail": null,
+        "unit": "points_per_100",
+        "rate": 2,
+        "min_txn_inr": null,
+        "max_txn_inr": null,
+        "priority": 20,
+        "conditions": {
+          "source_local_id": "dining_movies_entertainment_4x_base_equivalent",
+          "part": 1,
+          "info_reasons": [],
+          "flags": []
+        },
+        "notes": null,
+        "effective_from": "2021-06-24",
+        "effective_to": null,
+        "excluded_categories": [],
+        "rule_role": "earn",
+        "merchant_slugs": [],
+        "platform_slugs": [],
+        "mcc_include": [],
+        "mcc_exclude": [],
+        "except_merchant_slugs": [],
+        "except_platform_slugs": [],
+        "block_inr": null,
+        "min_engine_version": 1,
+        "max_engine_version": null,
+        "source_local_id": "dining_movies_entertainment_4x_base_equivalent",
+        "display_note": "2 Reward Points per ₹100 spent on dining, movies and entertainment."
+      },
+      {
+        "id": "fabindia-sbi-card:rule:dining_movies_entertainment_4x_base_equivalent#2",
+        "category_id": "cat-entertainment",
+        "category_slug": "entertainment",
+        "merchant_pattern": null,
+        "rail": null,
+        "unit": "points_per_100",
+        "rate": 2,
+        "min_txn_inr": null,
+        "max_txn_inr": null,
+        "priority": 20,
+        "conditions": {
+          "source_local_id": "dining_movies_entertainment_4x_base_equivalent",
+          "part": 2,
+          "info_reasons": [],
+          "flags": []
+        },
+        "notes": null,
+        "effective_from": "2021-06-24",
+        "effective_to": null,
+        "excluded_categories": [],
+        "rule_role": "earn",
+        "merchant_slugs": [],
+        "platform_slugs": [],
+        "mcc_include": [],
+        "mcc_exclude": [],
+        "except_merchant_slugs": [],
+        "except_platform_slugs": [],
+        "block_inr": null,
+        "min_engine_version": 1,
+        "max_engine_version": null,
+        "source_local_id": "dining_movies_entertainment_4x_base_equivalent",
+        "display_note": "2 Reward Points per ₹100 spent on dining, movies and entertainment."
+      },
+      {
+        "id": "fabindia-sbi-card:rule:international_2x_base_equivalent",
+        "category_id": null,
+        "category_slug": null,
+        "merchant_pattern": null,
+        "rail": null,
+        "unit": "points_per_100",
+        "rate": 1,
+        "min_txn_inr": null,
+        "max_txn_inr": null,
+        "priority": 30,
+        "conditions": {
+          "source_local_id": "international_2x_base_equivalent",
+          "part": null,
+          "info_reasons": [
+            "depends_on_txn_attribute",
+            "condition:currency_or_location"
+          ],
+          "flags": [
+            "depends_on_txn_attribute"
+          ]
+        },
+        "notes": null,
+        "effective_from": "2021-06-24",
+        "effective_to": null,
+        "excluded_categories": [],
+        "rule_role": "info",
+        "merchant_slugs": [],
+        "platform_slugs": [],
+        "mcc_include": [],
+        "mcc_exclude": [],
+        "except_merchant_slugs": [],
+        "except_platform_slugs": [],
+        "block_inr": null,
+        "min_engine_version": 2,
+        "max_engine_version": null,
+        "source_local_id": "international_2x_base_equivalent",
+        "display_note": "1 Reward Point per ₹100 spent on international transactions."
+      },
+      {
+        "id": "fabindia-sbi-card:rule:base_other_spend",
+        "category_id": null,
+        "category_slug": null,
+        "merchant_pattern": null,
+        "rail": null,
+        "unit": "points_per_100",
+        "rate": 1,
+        "min_txn_inr": null,
+        "max_txn_inr": null,
+        "priority": 100,
+        "conditions": {
+          "source_local_id": "base_other_spend",
+          "part": null,
+          "info_reasons": [
+            "override_rule_role"
+          ],
+          "flags": []
+        },
+        "notes": null,
+        "effective_from": "2021-06-24",
+        "effective_to": null,
+        "excluded_categories": [],
+        "rule_role": "info",
+        "merchant_slugs": [],
+        "platform_slugs": [],
+        "mcc_include": [],
+        "mcc_exclude": [],
+        "except_merchant_slugs": [],
+        "except_platform_slugs": [],
+        "block_inr": null,
+        "min_engine_version": 2,
+        "max_engine_version": null,
+        "source_local_id": "base_other_spend",
+        "display_note": "1 Reward Point per ₹100 spent on all other non-accelerated eligible spends."
+      },
+      {
+        "id": "fabindia-sbi-card:rule:exclude_balance_transfer",
+        "category_id": null,
+        "category_slug": null,
+        "merchant_pattern": null,
+        "rail": null,
+        "unit": "points_per_200",
+        "rate": 0,
+        "min_txn_inr": null,
+        "max_txn_inr": null,
+        "priority": 1,
+        "conditions": {
+          "source_local_id": "exclude_balance_transfer",
+          "part": null,
+          "info_reasons": [
+            "transaction_type"
+          ],
+          "flags": []
+        },
+        "notes": null,
+        "effective_from": "2021-06-24",
+        "effective_to": null,
+        "excluded_categories": [],
+        "rule_role": "info",
+        "merchant_slugs": [],
+        "platform_slugs": [],
+        "mcc_include": [],
+        "mcc_exclude": [],
+        "except_merchant_slugs": [],
+        "except_platform_slugs": [],
+        "block_inr": null,
+        "min_engine_version": 2,
+        "max_engine_version": null,
+        "source_local_id": "exclude_balance_transfer",
+        "display_note": "Balance transfers do not earn Reward Points."
+      },
+      {
+        "id": "fabindia-sbi-card:rule:exclude_wallet_mcc#1",
+        "category_id": "cat-wallet",
+        "category_slug": "wallet",
+        "merchant_pattern": null,
+        "rail": null,
+        "unit": "points_per_200",
+        "rate": 0,
+        "min_txn_inr": null,
+        "max_txn_inr": null,
+        "priority": 2,
+        "conditions": {
+          "source_local_id": "exclude_wallet_mcc",
+          "part": 1,
+          "info_reasons": [],
+          "flags": [
+            "mcc_scoped_exclusion"
+          ]
+        },
+        "notes": null,
+        "effective_from": "2020-07-01",
+        "effective_to": null,
+        "excluded_categories": [],
+        "rule_role": "exclusion",
+        "merchant_slugs": [],
+        "platform_slugs": [],
+        "mcc_include": [],
+        "mcc_exclude": [],
+        "except_merchant_slugs": [],
+        "except_platform_slugs": [],
+        "block_inr": null,
+        "min_engine_version": 1,
+        "max_engine_version": 1,
+        "source_local_id": "exclude_wallet_mcc",
+        "display_note": "e-Wallet loading/recharge transactions identified under MCC 6540 and 6541 do not earn Reward Points."
+      },
+      {
+        "id": "fabindia-sbi-card:rule:exclude_wallet_mcc#2",
+        "category_id": "cat-wallet",
+        "category_slug": "wallet",
+        "merchant_pattern": null,
+        "rail": null,
+        "unit": "points_per_200",
+        "rate": 0,
+        "min_txn_inr": null,
+        "max_txn_inr": null,
+        "priority": 2,
+        "conditions": {
+          "source_local_id": "exclude_wallet_mcc",
+          "part": 2,
+          "info_reasons": [],
+          "flags": [
+            "mcc_scoped_exclusion"
+          ]
+        },
+        "notes": null,
+        "effective_from": "2020-07-01",
+        "effective_to": null,
+        "excluded_categories": [],
+        "rule_role": "exclusion",
+        "merchant_slugs": [],
+        "platform_slugs": [],
+        "mcc_include": [
+          "6540",
+          "6541"
+        ],
+        "mcc_exclude": [],
+        "except_merchant_slugs": [],
+        "except_platform_slugs": [],
+        "block_inr": null,
+        "min_engine_version": 2,
+        "max_engine_version": null,
+        "source_local_id": "exclude_wallet_mcc",
+        "display_note": "e-Wallet loading/recharge transactions identified under MCC 6540 and 6541 do not earn Reward Points."
+      },
+      {
+        "id": "fabindia-sbi-card:rule:exclude_wallet_mcc#3",
+        "category_id": null,
+        "category_slug": null,
+        "merchant_pattern": null,
+        "rail": null,
+        "unit": "points_per_200",
+        "rate": 0,
+        "min_txn_inr": null,
+        "max_txn_inr": null,
+        "priority": 2,
+        "conditions": {
+          "source_local_id": "exclude_wallet_mcc",
+          "part": 3,
+          "info_reasons": [],
+          "flags": [
+            "mcc_scoped_exclusion"
+          ]
+        },
+        "notes": null,
+        "effective_from": "2020-07-01",
+        "effective_to": null,
+        "excluded_categories": [],
+        "rule_role": "exclusion",
+        "merchant_slugs": [],
+        "platform_slugs": [],
+        "mcc_include": [
+          "6540",
+          "6541"
+        ],
+        "mcc_exclude": [],
+        "except_merchant_slugs": [],
+        "except_platform_slugs": [],
+        "block_inr": null,
+        "min_engine_version": 2,
+        "max_engine_version": null,
+        "source_local_id": "exclude_wallet_mcc",
+        "display_note": "e-Wallet loading/recharge transactions identified under MCC 6540 and 6541 do not earn Reward Points."
+      },
+      {
+        "id": "fabindia-sbi-card:rule:exclude_financial_charges",
+        "category_id": null,
+        "category_slug": null,
+        "merchant_pattern": null,
+        "rail": null,
+        "unit": "points_per_200",
+        "rate": 0,
+        "min_txn_inr": null,
+        "max_txn_inr": null,
+        "priority": 3,
+        "conditions": {
+          "source_local_id": "exclude_financial_charges",
+          "part": null,
+          "info_reasons": [
+            "transaction_type"
+          ],
+          "flags": []
+        },
+        "notes": null,
+        "effective_from": "2021-06-24",
+        "effective_to": null,
+        "excluded_categories": [],
+        "rule_role": "info",
+        "merchant_slugs": [],
+        "platform_slugs": [],
+        "mcc_include": [],
+        "mcc_exclude": [],
+        "except_merchant_slugs": [],
+        "except_platform_slugs": [],
+        "block_inr": null,
+        "min_engine_version": 2,
+        "max_engine_version": null,
+        "source_local_id": "exclude_financial_charges",
+        "display_note": "Financial charges including late-payment fees, dishonoured-cheque charges, service fees and transaction charges do not earn Reward Points."
+      },
+      {
+        "id": "fabindia-sbi-card:rule:exclude_disputed_transactions",
+        "category_id": null,
+        "category_slug": null,
+        "merchant_pattern": null,
+        "rail": null,
+        "unit": "points_per_200",
+        "rate": 0,
+        "min_txn_inr": null,
+        "max_txn_inr": null,
+        "priority": 4,
+        "conditions": {
+          "source_local_id": "exclude_disputed_transactions",
+          "part": null,
+          "info_reasons": [
+            "transaction_type"
+          ],
+          "flags": []
+        },
+        "notes": null,
+        "effective_from": "2021-06-24",
+        "effective_to": null,
+        "excluded_categories": [],
+        "rule_role": "info",
+        "merchant_slugs": [],
+        "platform_slugs": [],
+        "mcc_include": [],
+        "mcc_exclude": [],
+        "except_merchant_slugs": [],
+        "except_platform_slugs": [],
+        "block_inr": null,
+        "min_engine_version": 2,
+        "max_engine_version": null,
+        "source_local_id": "exclude_disputed_transactions",
+        "display_note": "Disputed transactions do not earn Reward Points."
+      },
+      {
+        "id": "fabindia-sbi-card:rule:exclude_cash_advance",
+        "category_id": null,
+        "category_slug": null,
+        "merchant_pattern": null,
+        "rail": "atm",
+        "unit": "points_per_200",
+        "rate": 0,
+        "min_txn_inr": null,
+        "max_txn_inr": null,
+        "priority": 5,
+        "conditions": {
+          "source_local_id": "exclude_cash_advance",
+          "part": null,
+          "info_reasons": [],
+          "flags": [
+            "exclusion_scope_broadened"
+          ]
+        },
+        "notes": null,
+        "effective_from": "2021-06-24",
+        "effective_to": null,
+        "excluded_categories": [],
+        "rule_role": "exclusion",
+        "merchant_slugs": [],
+        "platform_slugs": [],
+        "mcc_include": [],
+        "mcc_exclude": [],
+        "except_merchant_slugs": [],
+        "except_platform_slugs": [],
+        "block_inr": null,
+        "min_engine_version": 2,
+        "max_engine_version": null,
+        "source_local_id": "exclude_cash_advance",
+        "display_note": "Cash advances do not earn Reward Points."
+      },
+      {
+        "id": "fabindia-sbi-card:rule:exclude_fuel_mcc#1",
+        "category_id": "cat-fuel",
+        "category_slug": "fuel",
+        "merchant_pattern": null,
+        "rail": null,
+        "unit": "points_per_200",
+        "rate": 0,
+        "min_txn_inr": null,
+        "max_txn_inr": null,
+        "priority": 6,
+        "conditions": {
+          "source_local_id": "exclude_fuel_mcc",
+          "part": 1,
+          "info_reasons": [],
+          "flags": [
+            "mcc_scoped_exclusion"
+          ]
+        },
+        "notes": null,
+        "effective_from": "2021-06-24",
+        "effective_to": null,
+        "excluded_categories": [],
+        "rule_role": "exclusion",
+        "merchant_slugs": [],
+        "platform_slugs": [],
+        "mcc_include": [],
+        "mcc_exclude": [],
+        "except_merchant_slugs": [],
+        "except_platform_slugs": [],
+        "block_inr": null,
+        "min_engine_version": 1,
+        "max_engine_version": 1,
+        "source_local_id": "exclude_fuel_mcc",
+        "display_note": "Purchases at petrol pumps/service stations identified under MCC 5172, 5541, 5983 and 5542 do not earn Reward Points."
+      },
+      {
+        "id": "fabindia-sbi-card:rule:exclude_fuel_mcc#2",
+        "category_id": "cat-fuel",
+        "category_slug": "fuel",
+        "merchant_pattern": null,
+        "rail": null,
+        "unit": "points_per_200",
+        "rate": 0,
+        "min_txn_inr": null,
+        "max_txn_inr": null,
+        "priority": 6,
+        "conditions": {
+          "source_local_id": "exclude_fuel_mcc",
+          "part": 2,
+          "info_reasons": [],
+          "flags": [
+            "mcc_scoped_exclusion"
+          ]
+        },
+        "notes": null,
+        "effective_from": "2021-06-24",
+        "effective_to": null,
+        "excluded_categories": [],
+        "rule_role": "exclusion",
+        "merchant_slugs": [],
+        "platform_slugs": [],
+        "mcc_include": [
+          "5172",
+          "5541",
+          "5542",
+          "5983"
+        ],
+        "mcc_exclude": [],
+        "except_merchant_slugs": [],
+        "except_platform_slugs": [],
+        "block_inr": null,
+        "min_engine_version": 2,
+        "max_engine_version": null,
+        "source_local_id": "exclude_fuel_mcc",
+        "display_note": "Purchases at petrol pumps/service stations identified under MCC 5172, 5541, 5983 and 5542 do not earn Reward Points."
+      },
+      {
+        "id": "fabindia-sbi-card:rule:exclude_fuel_mcc#3",
+        "category_id": null,
+        "category_slug": null,
+        "merchant_pattern": null,
+        "rail": null,
+        "unit": "points_per_200",
+        "rate": 0,
+        "min_txn_inr": null,
+        "max_txn_inr": null,
+        "priority": 6,
+        "conditions": {
+          "source_local_id": "exclude_fuel_mcc",
+          "part": 3,
+          "info_reasons": [],
+          "flags": [
+            "mcc_scoped_exclusion"
+          ]
+        },
+        "notes": null,
+        "effective_from": "2021-06-24",
+        "effective_to": null,
+        "excluded_categories": [],
+        "rule_role": "exclusion",
+        "merchant_slugs": [],
+        "platform_slugs": [],
+        "mcc_include": [
+          "5172",
+          "5541",
+          "5542",
+          "5983"
+        ],
+        "mcc_exclude": [],
+        "except_merchant_slugs": [],
+        "except_platform_slugs": [],
+        "block_inr": null,
+        "min_engine_version": 2,
+        "max_engine_version": null,
+        "source_local_id": "exclude_fuel_mcc",
+        "display_note": "Purchases at petrol pumps/service stations identified under MCC 5172, 5541, 5983 and 5542 do not earn Reward Points."
+      },
+      {
+        "id": "fabindia-sbi-card:rule:exclude_flexipay#1",
+        "category_id": "cat-emi",
+        "category_slug": "emi",
+        "merchant_pattern": null,
+        "rail": null,
+        "unit": "points_per_200",
+        "rate": 0,
+        "min_txn_inr": null,
+        "max_txn_inr": null,
+        "priority": 7,
+        "conditions": {
+          "source_local_id": "exclude_flexipay",
+          "part": 1,
+          "info_reasons": [],
+          "flags": [
+            "emi_alternatives"
+          ]
+        },
+        "notes": null,
+        "effective_from": "2020-11-20",
+        "effective_to": null,
+        "excluded_categories": [],
+        "rule_role": "exclusion",
+        "merchant_slugs": [],
+        "platform_slugs": [],
+        "mcc_include": [],
+        "mcc_exclude": [],
+        "except_merchant_slugs": [],
+        "except_platform_slugs": [],
+        "block_inr": null,
+        "min_engine_version": 1,
+        "max_engine_version": null,
+        "source_local_id": "exclude_flexipay",
+        "display_note": "Flexipay transactions do not earn Reward Points."
+      },
+      {
+        "id": "fabindia-sbi-card:rule:exclude_flexipay#2",
+        "category_id": null,
+        "category_slug": null,
+        "merchant_pattern": null,
+        "rail": "emi",
+        "unit": "points_per_200",
+        "rate": 0,
+        "min_txn_inr": null,
+        "max_txn_inr": null,
+        "priority": 7,
+        "conditions": {
+          "source_local_id": "exclude_flexipay",
+          "part": 2,
+          "info_reasons": [],
+          "flags": [
+            "emi_alternatives"
+          ]
+        },
+        "notes": null,
+        "effective_from": "2020-11-20",
+        "effective_to": null,
+        "excluded_categories": [],
+        "rule_role": "exclusion",
+        "merchant_slugs": [],
+        "platform_slugs": [],
+        "mcc_include": [],
+        "mcc_exclude": [],
+        "except_merchant_slugs": [],
+        "except_platform_slugs": [],
+        "block_inr": null,
+        "min_engine_version": 2,
+        "max_engine_version": null,
+        "source_local_id": "exclude_flexipay",
+        "display_note": "Flexipay transactions do not earn Reward Points."
+      },
+      {
+        "id": "fabindia-sbi-card:rule:exclude_merchant_emi#1",
+        "category_id": "cat-emi",
+        "category_slug": "emi",
+        "merchant_pattern": null,
+        "rail": null,
+        "unit": "points_per_200",
+        "rate": 0,
+        "min_txn_inr": null,
+        "max_txn_inr": null,
+        "priority": 8,
+        "conditions": {
+          "source_local_id": "exclude_merchant_emi",
+          "part": 1,
+          "info_reasons": [],
+          "flags": [
+            "emi_alternatives"
+          ]
+        },
+        "notes": null,
+        "effective_from": "2020-11-20",
+        "effective_to": null,
+        "excluded_categories": [],
+        "rule_role": "exclusion",
+        "merchant_slugs": [],
+        "platform_slugs": [],
+        "mcc_include": [],
+        "mcc_exclude": [],
+        "except_merchant_slugs": [],
+        "except_platform_slugs": [],
+        "block_inr": null,
+        "min_engine_version": 1,
+        "max_engine_version": null,
+        "source_local_id": "exclude_merchant_emi",
+        "display_note": "Merchant EMI transactions do not earn Reward Points; associated Reward Points are reversed."
+      },
+      {
+        "id": "fabindia-sbi-card:rule:exclude_merchant_emi#2",
+        "category_id": null,
+        "category_slug": null,
+        "merchant_pattern": null,
+        "rail": "emi",
+        "unit": "points_per_200",
+        "rate": 0,
+        "min_txn_inr": null,
+        "max_txn_inr": null,
+        "priority": 8,
+        "conditions": {
+          "source_local_id": "exclude_merchant_emi",
+          "part": 2,
+          "info_reasons": [],
+          "flags": [
+            "emi_alternatives"
+          ]
+        },
+        "notes": null,
+        "effective_from": "2020-11-20",
+        "effective_to": null,
+        "excluded_categories": [],
+        "rule_role": "exclusion",
+        "merchant_slugs": [],
+        "platform_slugs": [],
+        "mcc_include": [],
+        "mcc_exclude": [],
+        "except_merchant_slugs": [],
+        "except_platform_slugs": [],
+        "block_inr": null,
+        "min_engine_version": 2,
+        "max_engine_version": null,
+        "source_local_id": "exclude_merchant_emi",
+        "display_note": "Merchant EMI transactions do not earn Reward Points; associated Reward Points are reversed."
+      },
+      {
+        "id": "fabindia-sbi-card:rule:exclude_rent#1",
+        "category_id": "cat-rent",
+        "category_slug": "rent",
+        "merchant_pattern": null,
+        "rail": null,
+        "unit": "points_per_200",
+        "rate": 0,
+        "min_txn_inr": null,
+        "max_txn_inr": null,
+        "priority": 9,
+        "conditions": {
+          "source_local_id": "exclude_rent",
+          "part": 1,
+          "info_reasons": [],
+          "flags": [
+            "mcc_scoped_exclusion"
+          ]
+        },
+        "notes": null,
+        "effective_from": "2023-07-01",
+        "effective_to": null,
+        "excluded_categories": [],
+        "rule_role": "exclusion",
+        "merchant_slugs": [],
+        "platform_slugs": [],
+        "mcc_include": [],
+        "mcc_exclude": [],
+        "except_merchant_slugs": [],
+        "except_platform_slugs": [],
+        "block_inr": null,
+        "min_engine_version": 1,
+        "max_engine_version": 1,
+        "source_local_id": "exclude_rent",
+        "display_note": "Reward Points accrual on rent payments for FABindia SBI Card was discontinued effective 1 July 2023."
+      },
+      {
+        "id": "fabindia-sbi-card:rule:exclude_rent#2",
+        "category_id": "cat-rent",
+        "category_slug": "rent",
+        "merchant_pattern": null,
+        "rail": null,
+        "unit": "points_per_200",
+        "rate": 0,
+        "min_txn_inr": null,
+        "max_txn_inr": null,
+        "priority": 9,
+        "conditions": {
+          "source_local_id": "exclude_rent",
+          "part": 2,
+          "info_reasons": [],
+          "flags": [
+            "mcc_scoped_exclusion"
+          ]
+        },
+        "notes": null,
+        "effective_from": "2023-07-01",
+        "effective_to": null,
+        "excluded_categories": [],
+        "rule_role": "exclusion",
+        "merchant_slugs": [],
+        "platform_slugs": [],
+        "mcc_include": [
+          "6513"
+        ],
+        "mcc_exclude": [],
+        "except_merchant_slugs": [],
+        "except_platform_slugs": [],
+        "block_inr": null,
+        "min_engine_version": 2,
+        "max_engine_version": null,
+        "source_local_id": "exclude_rent",
+        "display_note": "Reward Points accrual on rent payments for FABindia SBI Card was discontinued effective 1 July 2023."
+      },
+      {
+        "id": "fabindia-sbi-card:rule:exclude_rent#3",
+        "category_id": null,
+        "category_slug": null,
+        "merchant_pattern": null,
+        "rail": null,
+        "unit": "points_per_200",
+        "rate": 0,
+        "min_txn_inr": null,
+        "max_txn_inr": null,
+        "priority": 9,
+        "conditions": {
+          "source_local_id": "exclude_rent",
+          "part": 3,
+          "info_reasons": [],
+          "flags": [
+            "mcc_scoped_exclusion"
+          ]
+        },
+        "notes": null,
+        "effective_from": "2023-07-01",
+        "effective_to": null,
+        "excluded_categories": [],
+        "rule_role": "exclusion",
+        "merchant_slugs": [],
+        "platform_slugs": [],
+        "mcc_include": [
+          "6513"
+        ],
+        "mcc_exclude": [],
+        "except_merchant_slugs": [],
+        "except_platform_slugs": [],
+        "block_inr": null,
+        "min_engine_version": 2,
+        "max_engine_version": null,
+        "source_local_id": "exclude_rent",
+        "display_note": "Reward Points accrual on rent payments for FABindia SBI Card was discontinued effective 1 July 2023."
+      }
+    ],
+    "cap_rules": [],
+    "milestone_rules": [
+      {
+        "id": "fabindia-sbi-card:milestone:quarterly_1l_fabindia",
+        "label": "Quarterly spend milestone",
+        "period": "quarter",
+        "threshold_spend_inr": 100000,
+        "reward_description": "Quarterly spend milestone",
+        "reward_value_inr": 750,
+        "is_repeatable": true,
+        "max_repeats": null,
+        "anchor": "calendar_year",
+        "reward_points": null,
+        "reward_kind": null,
+        "excluded_category_ids": [],
+        "window_days": null,
+        "source_local_id": "quarterly_1l_fabindia"
+      }
+    ],
+    "fee_waiver_rules": [
+      {
+        "id": "fabindia-sbi-card:waiver:1",
+        "threshold_spend_inr": 100000,
+        "period": "annual",
+        "waives_fee_inr": 499,
+        "excluded_category_slugs": [],
+        "notes": "Annual spends of ₹1,00,000 or more in the preceding year.",
+        "excluded_categories": []
+      }
+    ],
+    "benefits": [
+      {
+        "id": "fabindia-sbi-card:benefit:fabfamily_gold",
+        "key": "fabfamily_gold",
+        "source_local_id": "fabfamily_gold",
+        "kind": "other",
+        "label": "Fabfamily Gold Tier membership / direct access to Gold Tier",
+        "description": "Sponsor: Fabindia",
+        "quota_count": null,
+        "quota_period": "annual",
+        "network_program": "fabfamily",
+        "value_estimate_inr": null,
+        "conditions": {
+          "source_category_id": "other",
+          "evaluation_engine": {
+            "conditions": {
+              "annual_spend_inr": 30000
+            },
+            "benefit_calculation": null,
+            "perks": [
+              "Shopping by appointment",
+              "Preview to sales and launch of new collection",
+              "Other Fabfamily Gold Tier privileges"
+            ]
+          }
+        }
+      }
+    ],
+    "unlock_rules": [
+      {
+        "id": "fabindia-sbi-card:unlock:fabfamily_gold@1",
+        "card_benefit_id": "fabindia-sbi-card:benefit:fabfamily_gold",
+        "kind": "membership",
+        "label": "Fabfamily Gold Tier membership / direct access to Gold Tier",
+        "spend_threshold_inr": 30000,
+        "spend_window": "card_year",
+        "window_days": null,
+        "unlocks_quota": null,
+        "unlocks_period": "annual",
+        "tier_label": null,
+        "excluded_category_ids": [],
+        "notes": null,
+        "source_local_id": "fabfamily_gold"
+      }
+    ],
+    "redemption_options": [
+      {
+        "program_name": "Fabfamily point transfer via SBI Card Mobile App / Website / Call Centre, followed by Fabindia online or in-store redemption",
+        "method": "partner_catalogue",
+        "value_per_point_inr": 1,
+        "min_points": 100,
+        "notes": null
+      }
+    ],
+    "is_upi_linkable": false
+  }
+}

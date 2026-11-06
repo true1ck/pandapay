@@ -1,0 +1,271 @@
+{
+  "source_slug": "pnb-kiwi-credit-card",
+  "cardpipeline_id": "punjab-national-bank-pnb-kiwi-credit-card",
+  "card_name": "PNB Kiwi Credit Card",
+  "verified_on": "2026-11-05",
+  "sources": [
+    {
+      "url": "https://creditcard.pnb.bank.in/types18.html",
+      "doc": "PNB Kiwi page",
+      "quote": "Maximum monthly cap on Kiwis shall be 1% of the total credit limit on the card."
+    },
+    {
+      "url": "https://gokiwi.in/rewards-policy-v2/",
+      "doc": "Kiwi rewards policy",
+      "quote": "Kiwis are awarded only on transaction amounts in multiples of Rs 100 (from 1 June 2025)"
+    },
+    {
+      "url": "https://gokiwi.in/rewards-policy-v2/",
+      "doc": "Kiwi rewards policy",
+      "quote": "Regular card: 0.5% online (2 Kiwis per Rs 100) and 1.5% Scan & Pay (6 Kiwis per Rs 100)"
+    }
+  ],
+  "examples": [
+    {
+      "id": "001",
+      "title": "Rs 1,000 online purchase",
+      "ctx": {
+        "amount": 1000,
+        "occurred": "2026-11-10T10:00:00+05:30",
+        "category_id": null,
+        "category_slug": "online",
+        "mcc": null,
+        "merchant_name": "Online store",
+        "merchant_vpa": null,
+        "merchant_slug": null,
+        "platform": null,
+        "rail": "online"
+      },
+      "state_before": {
+        "caps_by_source_id": {}
+      },
+      "expect": {
+        "currency": "points",
+        "amount": 20,
+        "value_inr": 5.0,
+        "excluded": false,
+        "cap_deltas_by_source_id": {}
+      },
+      "why": "Regular Kiwi rate online: 2 Kiwis per Rs 100 (0.5%), 1 Kiwi = Rs 0.25: 10 x 2 = 20."
+    },
+    {
+      "id": "002",
+      "title": "Rs 1,000 Scan & Pay merchant payment in the Kiwi app",
+      "ctx": {
+        "amount": 1000,
+        "occurred": "2026-11-10T10:00:00+05:30",
+        "category_id": null,
+        "category_slug": "other",
+        "mcc": "5411",
+        "merchant_name": "Local store",
+        "merchant_vpa": null,
+        "merchant_slug": null,
+        "platform": "kiwi_app",
+        "rail": "upi_qr"
+      },
+      "state_before": {
+        "caps_by_source_id": {}
+      },
+      "expect": {
+        "currency": "points",
+        "amount": 60,
+        "value_inr": 15.0,
+        "excluded": false,
+        "cap_deltas_by_source_id": {}
+      },
+      "why": "Scan & Pay via the Kiwi app: 6 Kiwis per Rs 100 (1.5%): 10 x 6 = 60. Platform is supplied by the caller."
+    },
+    {
+      "id": "003",
+      "title": "Rs 150 Scan & Pay: Kiwis only on multiples of Rs 100",
+      "ctx": {
+        "amount": 150,
+        "occurred": "2026-11-10T10:00:00+05:30",
+        "category_id": null,
+        "category_slug": "other",
+        "mcc": "5411",
+        "merchant_name": "Local store",
+        "merchant_vpa": null,
+        "merchant_slug": null,
+        "platform": "kiwi_app",
+        "rail": "upi_qr"
+      },
+      "state_before": {
+        "caps_by_source_id": {}
+      },
+      "expect": {
+        "currency": "points",
+        "amount": 6,
+        "value_inr": 1.5,
+        "excluded": false,
+        "cap_deltas_by_source_id": {}
+      },
+      "why": "From 1 Jun 2025 Kiwis are awarded only on multiples of Rs 100, so Rs 150 earns the same as Rs 100: 1 x 6 = 6."
+    },
+    {
+      "id": "004",
+      "title": "Rs 1,990 online purchase: residual below Rs 100 ignored",
+      "ctx": {
+        "amount": 1990,
+        "occurred": "2026-11-10T10:00:00+05:30",
+        "category_id": null,
+        "category_slug": "online",
+        "mcc": null,
+        "merchant_name": "Online store",
+        "merchant_vpa": null,
+        "merchant_slug": null,
+        "platform": null,
+        "rail": "online"
+      },
+      "state_before": {
+        "caps_by_source_id": {}
+      },
+      "expect": {
+        "currency": "points",
+        "amount": 38,
+        "value_inr": 9.5,
+        "excluded": false,
+        "cap_deltas_by_source_id": {}
+      },
+      "why": "Only 19 whole Rs 100 blocks count: 19 x 2 = 38."
+    },
+    {
+      "id": "005",
+      "title": "Rs 2,000 fuel",
+      "ctx": {
+        "amount": 2000,
+        "occurred": "2026-11-10T10:00:00+05:30",
+        "category_id": null,
+        "category_slug": "fuel",
+        "mcc": "5541",
+        "merchant_name": "Fuel station",
+        "merchant_vpa": null,
+        "merchant_slug": null,
+        "platform": "kiwi_app",
+        "rail": "upi_qr"
+      },
+      "state_before": {
+        "caps_by_source_id": {}
+      },
+      "expect": {
+        "currency": "points",
+        "amount": 0,
+        "value_inr": null,
+        "excluded": true,
+        "cap_deltas_by_source_id": {}
+      },
+      "why": "Fuel MCCs (5541, 5542, 5172, 5983) are excluded merchant categories."
+    },
+    {
+      "id": "006",
+      "title": "Rs 3,000 electricity bill",
+      "ctx": {
+        "amount": 3000,
+        "occurred": "2026-11-10T10:00:00+05:30",
+        "category_id": null,
+        "category_slug": "bills",
+        "mcc": "4900",
+        "merchant_name": "Electricity board",
+        "merchant_vpa": null,
+        "merchant_slug": null,
+        "platform": null,
+        "rail": "online"
+      },
+      "state_before": {
+        "caps_by_source_id": {}
+      },
+      "expect": {
+        "currency": "points",
+        "amount": 0,
+        "value_inr": null,
+        "excluded": true,
+        "cap_deltas_by_source_id": {}
+      },
+      "why": "Utilities (MCC 4900, 4814, 4899 and others) are excluded."
+    },
+    {
+      "id": "007",
+      "title": "Rs 20,000 rent payment",
+      "ctx": {
+        "amount": 20000,
+        "occurred": "2026-11-10T10:00:00+05:30",
+        "category_id": null,
+        "category_slug": "rent",
+        "mcc": "6513",
+        "merchant_name": "Rent payment",
+        "merchant_vpa": null,
+        "merchant_slug": null,
+        "platform": null,
+        "rail": "online"
+      },
+      "state_before": {
+        "caps_by_source_id": {}
+      },
+      "expect": {
+        "currency": "points",
+        "amount": 0,
+        "value_inr": null,
+        "excluded": true,
+        "cap_deltas_by_source_id": {}
+      },
+      "why": "MCC 6513 is excluded."
+    },
+    {
+      "id": "008",
+      "title": "Rs 5,000 government payment",
+      "ctx": {
+        "amount": 5000,
+        "occurred": "2026-11-10T10:00:00+05:30",
+        "category_id": null,
+        "category_slug": "government",
+        "mcc": "9311",
+        "merchant_name": "Municipal tax",
+        "merchant_vpa": null,
+        "merchant_slug": null,
+        "platform": null,
+        "rail": "online"
+      },
+      "state_before": {
+        "caps_by_source_id": {}
+      },
+      "expect": {
+        "currency": "points",
+        "amount": 0,
+        "value_inr": null,
+        "excluded": true,
+        "cap_deltas_by_source_id": {}
+      },
+      "why": "Government services MCCs (9311, 9399, 9402 and others) are excluded."
+    }
+  ],
+  "research_notes": [
+    {
+      "item": "monthly cap",
+      "cardpipeline_says": "cap_rules empty / monthly-kiwi-cap not numeric",
+      "issuer_says": "Issuer: maximum monthly cap on Kiwis is 1% of the total credit limit on the card (a per-user number; reduced to the lower of 1% of limit or INR 500 only as a corrective action). No static cap exists; no cap-boundary or post-cap example is possible. Override restores the cap with a null amount (flag cap_depends_on_user).",
+      "proposed_fix": "override",
+      "override_file": "api/scripts/catalogue_overrides/pnb-kiwi-credit-card.json"
+    },
+    {
+      "item": "rewards in whole Kiwis",
+      "cardpipeline_says": "cashback_percent / floor",
+      "issuer_says": "Kiwis are whole points per Rs 100 block (online 2, Scan & Pay 6); 1 Kiwi = Rs 0.25. Model as a points unit with block 100 and point value 0.25 (D8a), not as a cashback percent.",
+      "proposed_fix": "override",
+      "override_file": null
+    },
+    {
+      "item": "card issued date",
+      "cardpipeline_says": "issued via Kiwi since 4 July 2024",
+      "issuer_says": "Cards issued before 4 Jul 2024 earn 0.5% online and 1% Scan & Pay (4 Kiwis per Rs 100). Examples use the current rates.",
+      "proposed_fix": "none",
+      "override_file": null
+    },
+    {
+      "item": "Kiwi Neon (paid membership)",
+      "cardpipeline_says": "neon rules modelled as earn rules",
+      "issuer_says": "Neon is a subscription with higher Scan & Pay rate and milestones; needs a user attribute and was not verified from the Kiwi pages retrieved.",
+      "proposed_fix": "override",
+      "override_file": null
+    }
+  ]
+}

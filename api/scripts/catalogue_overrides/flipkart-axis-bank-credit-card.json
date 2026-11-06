@@ -1,0 +1,151 @@
+{
+  "source_slug": "flipkart-axis-bank-credit-card",
+  "changes": [
+    {
+      "path": "cap_rules",
+      "value": [
+        {
+          "id": "flipkart-quarterly-4000",
+          "category_id": "shopping_flipkart",
+          "metric": "total_reward_points",
+          "mcc_target_list": [],
+          "period": "statement_cycle_quarter",
+          "limit_value": 4000,
+          "limit_value_inr": 4000,
+          "post_limit_behavior": {
+            "action": "zero_accrual",
+            "points_per_block": null
+          },
+          "target_rule_ids": [
+            "flipkart_cashback_5"
+          ],
+          "parent_cap_id": null,
+          "effective_from": "2025-06-20",
+          "effective_to": null
+        },
+        {
+          "id": "myntra-quarterly-4000",
+          "category_id": "shopping_myntra",
+          "metric": "total_reward_points",
+          "mcc_target_list": [],
+          "period": "statement_cycle_quarter",
+          "limit_value": 4000,
+          "limit_value_inr": 4000,
+          "post_limit_behavior": {
+            "action": "zero_accrual",
+            "points_per_block": null
+          },
+          "target_rule_ids": [
+            "myntra_cashback_7_5"
+          ],
+          "parent_cap_id": null,
+          "effective_from": "2025-06-20",
+          "effective_to": null
+        },
+        {
+          "id": "cleartrip-quarterly-4000",
+          "category_id": "travel",
+          "metric": "total_reward_points",
+          "mcc_target_list": [],
+          "period": "statement_cycle_quarter",
+          "limit_value": 4000,
+          "limit_value_inr": 4000,
+          "post_limit_behavior": {
+            "action": "zero_accrual",
+            "points_per_block": null
+          },
+          "target_rule_ids": [
+            "cleartrip_cashback_5"
+          ],
+          "parent_cap_id": null,
+          "effective_from": "2025-06-20",
+          "effective_to": null
+        }
+      ],
+      "reason": "CardPipeline cap_rules is empty. Issuer T&C: Rs 4,000 cashback per statement quarter, separately for Flipkart, Myntra and Cleartrip. Loader period mapping for a statement-cycle quarter is to be confirmed by WP2 (closest: quarter).",
+      "source_url": "https://www.axis.bank.in/docs/default-source/default-document-library/cashback-tncs---final.pdf?sfvrsn=b55a0e1a_5",
+      "checked_on": "2026-11-05"
+    },
+    {
+      "path": "accrual_engine.cashback_rounding",
+      "value": "rupee_floor",
+      "reason": "Cashback is rounded down per transaction (11.80 -> 11).",
+      "source_url": "https://www.axis.bank.in/docs/default-source/default-document-library/cashback-tncs---final.pdf?sfvrsn=b55a0e1a_5",
+      "checked_on": "2026-11-05"
+    },
+    {
+      "path": "reward_rules[id=flipkart_cashback_5].conditions.excluded_subcategory",
+      "op": "remove",
+      "reason": "WP7: The free-text sub-category made the 5% Flipkart rule info; Flipkart Health is restated as an except list below.",
+      "source_url": "https://www.axis.bank.in/docs/default-source/default-document-library/cashback-tncs---final.pdf?sfvrsn=b55a0e1a_5",
+      "checked_on": "2026-11-05"
+    },
+    {
+      "path": "reward_rules[id=flipkart_cashback_5].conditions.not_merchant",
+      "value": "Flipkart Health",
+      "reason": "WP7: Flipkart Axis cashback T&C: 5% \"Valid on the website as well as mobile application of Flipkart excluding Flipkart Health\". except_merchant_slugs [flipkart_health] (D16a) makes the rule v2-only (D16c), so the v1 substring \"flipkart\" no longer pays 5% at Flipkart Health.",
+      "source_url": "https://www.axis.bank.in/docs/default-source/default-document-library/cashback-tncs---final.pdf?sfvrsn=b55a0e1a_5",
+      "checked_on": "2026-11-05"
+    },
+    {
+      "path": "reward_rules[id=jewellery_gold_cashback_exclusion].conditions",
+      "value": {
+        "mcc_list": [
+          5944,
+          5094
+        ]
+      },
+      "reason": "WP7: D25d: cashback T&C exclude \"purchase of gold (in any form - gold bar, gold coin, jewelry, artifact etc.)\" and the MCC category \"Clock, Jewelry, Watch and Silverware Stores\"; the extra free-text key made it info.",
+      "source_url": "https://www.axis.bank.in/docs/default-source/default-document-library/cashback-tncs---final.pdf?sfvrsn=b55a0e1a_5",
+      "checked_on": "2026-11-05"
+    },
+    {
+      "path": "reward_rules[id=jewellery_gold_cashback_exclusion].category_id",
+      "value": "all_retail",
+      "reason": "WP7: MCC-scoped jewellery exclusion in any category.",
+      "source_url": "https://www.axis.bank.in/docs/default-source/default-document-library/cashback-tncs---final.pdf?sfvrsn=b55a0e1a_5",
+      "checked_on": "2026-11-05"
+    },
+    {
+      "path": "reward_rules[id=education_cashback_exclusion].conditions",
+      "value": {
+        "mcc_list": [
+          8211,
+          8220,
+          8241,
+          8244,
+          8249,
+          8299
+        ]
+      },
+      "reason": "WP7: D25d: cashback T&C exclude the MCC category \"Educational Services\"; the third-party-app wording made it info. Category plus education MCC rows (D20a).",
+      "source_url": "https://www.axis.bank.in/docs/default-source/default-document-library/cashback-tncs---final.pdf?sfvrsn=b55a0e1a_5",
+      "checked_on": "2026-11-05"
+    },
+    {
+      "path": "reward_rules",
+      "op": "append",
+      "value": {
+        "id": "wp7_emi_rail_exclusion",
+        "category_id": "all_retail",
+        "priority": 0,
+        "evaluation_type": "exclusion",
+        "rail": "emi",
+        "channel_type": "all",
+        "conditions": {},
+        "action": {
+          "multiplier": 0,
+          "points_per_block": null,
+          "cashback_percent": 0,
+          "cap_reference": null,
+          "reason": "EMI transactions earn no cashback."
+        },
+        "effective_from": "2025-06-20",
+        "effective_to": null
+      },
+      "reason": "WP7: D24e/D25d: cashback T&C exclude \"EMI transactions, purchases converted to EMI post-facto\"; the record's row is category emi AND rail emi.",
+      "source_url": "https://www.axis.bank.in/docs/default-source/default-document-library/cashback-tncs---final.pdf?sfvrsn=b55a0e1a_5",
+      "checked_on": "2026-11-05"
+    }
+  ]
+}

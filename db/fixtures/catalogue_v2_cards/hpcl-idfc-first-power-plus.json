@@ -1,0 +1,1006 @@
+{
+  "generated_by": "api/scripts/catalogue_v2/snapshot_examples.js",
+  "source_slug": "hpcl-idfc-first-power-plus",
+  "inputs": {
+    "transform_version": "7",
+    "source_record_sha256": "61935416c29b40b70a4cfd88628795f2ed0a4795ec48bb5ba448b2c89cde1cf6",
+    "override_sha256": "b0642ca0baf8963d2614f7c2668f113b91c1089ec1cfa89c97039df28560f812",
+    "directory_sha256": "b1094d54b77e848d22f7a9a64f3ae6d1ef43ca3eb2fc8e40cd43ed1994664694",
+    "verified": false
+  },
+  "blocking_flags": [
+    "info_rule"
+  ],
+  "card": {
+    "id": "hpcl-idfc-first-power-plus:card",
+    "slug": "hpcl-idfc-first-power-plus",
+    "name": "HPCL\n IDFC FIRST Power+",
+    "network": "rupay",
+    "issuer_slug": "idfc-first-bank",
+    "base_reward_unit": "points_per_150",
+    "base_reward_rate": 3,
+    "point_value_inr": 0.25,
+    "excluded_categories": [],
+    "accrual_block_inr": 150,
+    "accrual_rounding": "floor",
+    "cashback_rounding": null,
+    "points_expiry_months": 0,
+    "model_status": "partial",
+    "model_coverage": {
+      "rules_total": 11,
+      "rules_modelled": 10,
+      "rules_info": 1,
+      "caps_total": 3,
+      "caps_enforced": 3,
+      "flags": [
+        {
+          "code": "channel_type_restates_brand",
+          "source_local_id": "fastag_30x",
+          "detail": null
+        },
+        {
+          "code": "token_replaced_by_conditions",
+          "source_local_id": "fastag_30x",
+          "detail": null
+        },
+        {
+          "code": "unmapped_excluded_category",
+          "source_local_id": "other_retail_3x",
+          "detail": null
+        },
+        {
+          "code": "negated_exclusion_broadened",
+          "source_local_id": "other_retail_3x",
+          "detail": null
+        },
+        {
+          "code": "unmapped_excluded_category",
+          "source_local_id": "upi_3x",
+          "detail": null
+        },
+        {
+          "code": "info_rule",
+          "source_local_id": "education_direct_base",
+          "detail": "condition:channel_type"
+        },
+        {
+          "code": "mcc_scoped_exclusion",
+          "source_local_id": "insurance_exclusion",
+          "detail": null
+        },
+        {
+          "code": "emi_alternatives",
+          "source_local_id": "emi_exclusion",
+          "detail": null
+        },
+        {
+          "code": "exclusion_scope_broadened",
+          "source_local_id": "cash_withdrawal_exclusion",
+          "detail": null
+        },
+        {
+          "code": "unsupported_milestone",
+          "source_local_id": "first_hpcl_welcome",
+          "detail": "welcome milestone without a window"
+        }
+      ],
+      "overrides_applied": [
+        {
+          "path": "cap_rules[id=fuel_monthly_spend_cap].limit_value_inr",
+          "op": "set",
+          "value_sha256": "c5d1866aabc15dda",
+          "reason": "Issuer caps the 5% fuel reward points at Rs 12,000 per statement cycle (2,400 points); Rs 10,000 is the HP Pay Happy Coins limit.",
+          "source_url": "https://www.idfcfirst.bank.in/content/dam/idfcfirstbank/pdf/Savings-Maximiser-FIRST-Power-plus.pdf",
+          "checked_on": "2026-11-05",
+          "citation": null
+        },
+        {
+          "path": "reward_rules[id=fuel_hpcl_30x].action.reason",
+          "op": "set",
+          "value_sha256": "c8353307acc930a7",
+          "reason": "WP7: The old reason mentioned \"up to 1.5%\" HP Pay Happy Coins (a different currency), which tripped the loader's \"up to\" multi-rate check. Savings Maximiser: max Rs12,000 spend and 2,400 points per cycle = a fixed 30 per Rs150.",
+          "source_url": "https://www.idfcfirst.bank.in/content/dam/idfcfirstbank/pdf/Savings-Maximiser-FIRST-Power-plus.pdf",
+          "checked_on": "2026-11-05",
+          "citation": null
+        },
+        {
+          "path": "reward_rules",
+          "op": "append",
+          "value_sha256": "d1ce7445c9e718cd",
+          "reason": "WP7: D28c: Savings Maximiser: 3X \"Applicable on: All other retail spends excluding Insurance premium payments, non-HPCL fuel spends, EMI transactions, ATM cash withdrawals\". The record's EMI row needs category emi AND rail emi, so an EMI purchase in another category earned. Rail-EMI exclusion on all spend.",
+          "source_url": "https://www.idfcfirst.bank.in/content/dam/idfcfirstbank/pdf/Savings-Maximiser-FIRST-Power-plus.pdf",
+          "checked_on": "2026-11-05",
+          "citation": null
+        }
+      ]
+    },
+    "reward_rules": [
+      {
+        "id": "hpcl-idfc-first-power-plus:rule:fuel_hpcl_30x",
+        "category_id": "cat-fuel",
+        "category_slug": "fuel",
+        "merchant_pattern": null,
+        "rail": null,
+        "unit": "points_per_150",
+        "rate": 30,
+        "min_txn_inr": 150,
+        "max_txn_inr": null,
+        "priority": 10,
+        "conditions": {
+          "source_local_id": "fuel_hpcl_30x",
+          "part": null,
+          "info_reasons": [],
+          "flags": []
+        },
+        "notes": null,
+        "effective_from": "2024-05-01",
+        "effective_to": null,
+        "excluded_categories": [],
+        "rule_role": "earn",
+        "merchant_slugs": [
+          "hp_pay",
+          "hpcl"
+        ],
+        "platform_slugs": [],
+        "mcc_include": [
+          "5172",
+          "5541",
+          "5542",
+          "5983"
+        ],
+        "mcc_exclude": [],
+        "except_merchant_slugs": [],
+        "except_platform_slugs": [],
+        "block_inr": null,
+        "min_engine_version": 2,
+        "max_engine_version": null,
+        "source_local_id": "fuel_hpcl_30x",
+        "display_note": "30X Reward Points (5% at Rs0.25 per point) on HPCL fuel."
+      },
+      {
+        "id": "hpcl-idfc-first-power-plus:rule:grocery_utility_30x#1",
+        "category_id": "cat-groceries",
+        "category_slug": "groceries",
+        "merchant_pattern": null,
+        "rail": null,
+        "unit": "points_per_150",
+        "rate": 30,
+        "min_txn_inr": 150,
+        "max_txn_inr": null,
+        "priority": 20,
+        "conditions": {
+          "source_local_id": "grocery_utility_30x",
+          "part": 1,
+          "info_reasons": [],
+          "flags": []
+        },
+        "notes": null,
+        "effective_from": "2024-05-01",
+        "effective_to": null,
+        "excluded_categories": [],
+        "rule_role": "earn",
+        "merchant_slugs": [],
+        "platform_slugs": [],
+        "mcc_include": [
+          "4814",
+          "4816",
+          "4899",
+          "4900",
+          "5411",
+          "5422",
+          "5441",
+          "5451",
+          "5462",
+          "5499"
+        ],
+        "mcc_exclude": [],
+        "except_merchant_slugs": [],
+        "except_platform_slugs": [],
+        "block_inr": null,
+        "min_engine_version": 2,
+        "max_engine_version": null,
+        "source_local_id": "grocery_utility_30x",
+        "display_note": "30 Reward Points per ₹150 (5% value back) up to the monthly category spend cap"
+      },
+      {
+        "id": "hpcl-idfc-first-power-plus:rule:grocery_utility_30x#2",
+        "category_id": "cat-bills",
+        "category_slug": "bills",
+        "merchant_pattern": null,
+        "rail": null,
+        "unit": "points_per_150",
+        "rate": 30,
+        "min_txn_inr": 150,
+        "max_txn_inr": null,
+        "priority": 20,
+        "conditions": {
+          "source_local_id": "grocery_utility_30x",
+          "part": 2,
+          "info_reasons": [],
+          "flags": []
+        },
+        "notes": null,
+        "effective_from": "2024-05-01",
+        "effective_to": null,
+        "excluded_categories": [],
+        "rule_role": "earn",
+        "merchant_slugs": [],
+        "platform_slugs": [],
+        "mcc_include": [
+          "4814",
+          "4816",
+          "4899",
+          "4900",
+          "5411",
+          "5422",
+          "5441",
+          "5451",
+          "5462",
+          "5499"
+        ],
+        "mcc_exclude": [],
+        "except_merchant_slugs": [],
+        "except_platform_slugs": [],
+        "block_inr": null,
+        "min_engine_version": 2,
+        "max_engine_version": null,
+        "source_local_id": "grocery_utility_30x",
+        "display_note": "30 Reward Points per ₹150 (5% value back) up to the monthly category spend cap"
+      },
+      {
+        "id": "hpcl-idfc-first-power-plus:rule:fastag_30x",
+        "category_id": null,
+        "category_slug": null,
+        "merchant_pattern": null,
+        "rail": null,
+        "unit": "points_per_150",
+        "rate": 30,
+        "min_txn_inr": 150,
+        "max_txn_inr": null,
+        "priority": 25,
+        "conditions": {
+          "source_local_id": "fastag_30x",
+          "part": null,
+          "info_reasons": [],
+          "flags": [
+            "channel_type_restates_brand",
+            "token_replaced_by_conditions"
+          ]
+        },
+        "notes": null,
+        "effective_from": "2024-05-01",
+        "effective_to": null,
+        "excluded_categories": [],
+        "rule_role": "earn",
+        "merchant_slugs": [],
+        "platform_slugs": [
+          "idfc_mobile_app"
+        ],
+        "mcc_include": [
+          "4784"
+        ],
+        "mcc_exclude": [],
+        "except_merchant_slugs": [],
+        "except_platform_slugs": [],
+        "block_inr": null,
+        "min_engine_version": 2,
+        "max_engine_version": null,
+        "source_local_id": "fastag_30x",
+        "display_note": "30 Reward Points per ₹150 on IDFC FIRST FASTag recharge"
+      },
+      {
+        "id": "hpcl-idfc-first-power-plus:rule:other_retail_3x",
+        "category_id": null,
+        "category_slug": null,
+        "merchant_pattern": null,
+        "rail": null,
+        "unit": "points_per_150",
+        "rate": 3,
+        "min_txn_inr": 150,
+        "max_txn_inr": null,
+        "priority": 100,
+        "conditions": {
+          "source_local_id": "other_retail_3x",
+          "part": null,
+          "info_reasons": [],
+          "flags": [
+            "unmapped_excluded_category",
+            "negated_exclusion_broadened"
+          ]
+        },
+        "notes": null,
+        "effective_from": "2024-05-01",
+        "effective_to": null,
+        "excluded_categories": [
+          "cat-emi",
+          "cat-insurance",
+          "cat-fuel"
+        ],
+        "rule_role": "earn",
+        "merchant_slugs": [],
+        "platform_slugs": [],
+        "mcc_include": [],
+        "mcc_exclude": [],
+        "except_merchant_slugs": [],
+        "except_platform_slugs": [],
+        "block_inr": null,
+        "min_engine_version": 1,
+        "max_engine_version": null,
+        "source_local_id": "other_retail_3x",
+        "display_note": "3X reward points (0.5% return) on other eligible domestic and international retail spends"
+      },
+      {
+        "id": "hpcl-idfc-first-power-plus:rule:upi_3x",
+        "category_id": null,
+        "category_slug": null,
+        "merchant_pattern": null,
+        "rail": "upi_qr",
+        "unit": "points_per_150",
+        "rate": 3,
+        "min_txn_inr": 150,
+        "max_txn_inr": null,
+        "priority": 90,
+        "conditions": {
+          "source_local_id": "upi_3x",
+          "part": null,
+          "info_reasons": [],
+          "flags": [
+            "unmapped_excluded_category"
+          ]
+        },
+        "notes": null,
+        "effective_from": "2024-05-01",
+        "effective_to": null,
+        "excluded_categories": [
+          "cat-emi",
+          "cat-fuel",
+          "cat-insurance"
+        ],
+        "rule_role": "earn",
+        "merchant_slugs": [],
+        "platform_slugs": [],
+        "mcc_include": [],
+        "mcc_exclude": [],
+        "except_merchant_slugs": [],
+        "except_platform_slugs": [],
+        "block_inr": null,
+        "min_engine_version": 1,
+        "max_engine_version": null,
+        "source_local_id": "upi_3x",
+        "display_note": "3X reward points on linked UPI merchant QR transactions"
+      },
+      {
+        "id": "hpcl-idfc-first-power-plus:rule:education_direct_base",
+        "category_id": "cat-education",
+        "category_slug": "education",
+        "merchant_pattern": null,
+        "rail": null,
+        "unit": "points_per_150",
+        "rate": 3,
+        "min_txn_inr": null,
+        "max_txn_inr": null,
+        "priority": 80,
+        "conditions": {
+          "source_local_id": "education_direct_base",
+          "part": null,
+          "info_reasons": [
+            "condition:channel_type"
+          ],
+          "flags": []
+        },
+        "notes": null,
+        "effective_from": "2024-05-01",
+        "effective_to": null,
+        "excluded_categories": [],
+        "rule_role": "info",
+        "merchant_slugs": [],
+        "platform_slugs": [],
+        "mcc_include": [
+          "8211",
+          "8220",
+          "8241",
+          "8244",
+          "8249",
+          "8299"
+        ],
+        "mcc_exclude": [],
+        "except_merchant_slugs": [],
+        "except_platform_slugs": [],
+        "block_inr": null,
+        "min_engine_version": 2,
+        "max_engine_version": null,
+        "source_local_id": "education_direct_base",
+        "display_note": "Direct education payments earn standard 3X base rewards without third-party surcharge"
+      },
+      {
+        "id": "hpcl-idfc-first-power-plus:rule:insurance_exclusion#1",
+        "category_id": "cat-insurance",
+        "category_slug": "insurance",
+        "merchant_pattern": null,
+        "rail": null,
+        "unit": "points_per_150",
+        "rate": 0,
+        "min_txn_inr": null,
+        "max_txn_inr": null,
+        "priority": 1,
+        "conditions": {
+          "source_local_id": "insurance_exclusion",
+          "part": 1,
+          "info_reasons": [],
+          "flags": [
+            "mcc_scoped_exclusion"
+          ]
+        },
+        "notes": null,
+        "effective_from": "2024-05-01",
+        "effective_to": null,
+        "excluded_categories": [],
+        "rule_role": "exclusion",
+        "merchant_slugs": [],
+        "platform_slugs": [],
+        "mcc_include": [],
+        "mcc_exclude": [],
+        "except_merchant_slugs": [],
+        "except_platform_slugs": [],
+        "block_inr": null,
+        "min_engine_version": 1,
+        "max_engine_version": 1,
+        "source_local_id": "insurance_exclusion",
+        "display_note": "Insurance premium payments excluded from reward accrual"
+      },
+      {
+        "id": "hpcl-idfc-first-power-plus:rule:insurance_exclusion#2",
+        "category_id": "cat-insurance",
+        "category_slug": "insurance",
+        "merchant_pattern": null,
+        "rail": null,
+        "unit": "points_per_150",
+        "rate": 0,
+        "min_txn_inr": null,
+        "max_txn_inr": null,
+        "priority": 1,
+        "conditions": {
+          "source_local_id": "insurance_exclusion",
+          "part": 2,
+          "info_reasons": [],
+          "flags": [
+            "mcc_scoped_exclusion"
+          ]
+        },
+        "notes": null,
+        "effective_from": "2024-05-01",
+        "effective_to": null,
+        "excluded_categories": [],
+        "rule_role": "exclusion",
+        "merchant_slugs": [],
+        "platform_slugs": [],
+        "mcc_include": [
+          "5960",
+          "6300"
+        ],
+        "mcc_exclude": [],
+        "except_merchant_slugs": [],
+        "except_platform_slugs": [],
+        "block_inr": null,
+        "min_engine_version": 2,
+        "max_engine_version": null,
+        "source_local_id": "insurance_exclusion",
+        "display_note": "Insurance premium payments excluded from reward accrual"
+      },
+      {
+        "id": "hpcl-idfc-first-power-plus:rule:insurance_exclusion#3",
+        "category_id": null,
+        "category_slug": null,
+        "merchant_pattern": null,
+        "rail": null,
+        "unit": "points_per_150",
+        "rate": 0,
+        "min_txn_inr": null,
+        "max_txn_inr": null,
+        "priority": 1,
+        "conditions": {
+          "source_local_id": "insurance_exclusion",
+          "part": 3,
+          "info_reasons": [],
+          "flags": [
+            "mcc_scoped_exclusion"
+          ]
+        },
+        "notes": null,
+        "effective_from": "2024-05-01",
+        "effective_to": null,
+        "excluded_categories": [],
+        "rule_role": "exclusion",
+        "merchant_slugs": [],
+        "platform_slugs": [],
+        "mcc_include": [
+          "5960",
+          "6300"
+        ],
+        "mcc_exclude": [],
+        "except_merchant_slugs": [],
+        "except_platform_slugs": [],
+        "block_inr": null,
+        "min_engine_version": 2,
+        "max_engine_version": null,
+        "source_local_id": "insurance_exclusion",
+        "display_note": "Insurance premium payments excluded from reward accrual"
+      },
+      {
+        "id": "hpcl-idfc-first-power-plus:rule:emi_exclusion#1",
+        "category_id": "cat-emi",
+        "category_slug": "emi",
+        "merchant_pattern": null,
+        "rail": null,
+        "unit": "points_per_150",
+        "rate": 0,
+        "min_txn_inr": null,
+        "max_txn_inr": null,
+        "priority": 2,
+        "conditions": {
+          "source_local_id": "emi_exclusion",
+          "part": 1,
+          "info_reasons": [],
+          "flags": [
+            "emi_alternatives"
+          ]
+        },
+        "notes": null,
+        "effective_from": "2024-05-01",
+        "effective_to": null,
+        "excluded_categories": [],
+        "rule_role": "exclusion",
+        "merchant_slugs": [],
+        "platform_slugs": [],
+        "mcc_include": [],
+        "mcc_exclude": [],
+        "except_merchant_slugs": [],
+        "except_platform_slugs": [],
+        "block_inr": null,
+        "min_engine_version": 1,
+        "max_engine_version": null,
+        "source_local_id": "emi_exclusion",
+        "display_note": "EMI transactions do not earn reward points"
+      },
+      {
+        "id": "hpcl-idfc-first-power-plus:rule:emi_exclusion#2",
+        "category_id": null,
+        "category_slug": null,
+        "merchant_pattern": null,
+        "rail": "emi",
+        "unit": "points_per_150",
+        "rate": 0,
+        "min_txn_inr": null,
+        "max_txn_inr": null,
+        "priority": 2,
+        "conditions": {
+          "source_local_id": "emi_exclusion",
+          "part": 2,
+          "info_reasons": [],
+          "flags": [
+            "emi_alternatives"
+          ]
+        },
+        "notes": null,
+        "effective_from": "2024-05-01",
+        "effective_to": null,
+        "excluded_categories": [],
+        "rule_role": "exclusion",
+        "merchant_slugs": [],
+        "platform_slugs": [],
+        "mcc_include": [],
+        "mcc_exclude": [],
+        "except_merchant_slugs": [],
+        "except_platform_slugs": [],
+        "block_inr": null,
+        "min_engine_version": 2,
+        "max_engine_version": null,
+        "source_local_id": "emi_exclusion",
+        "display_note": "EMI transactions do not earn reward points"
+      },
+      {
+        "id": "hpcl-idfc-first-power-plus:rule:cash_withdrawal_exclusion",
+        "category_id": null,
+        "category_slug": null,
+        "merchant_pattern": null,
+        "rail": "atm",
+        "unit": "points_per_150",
+        "rate": 0,
+        "min_txn_inr": null,
+        "max_txn_inr": null,
+        "priority": 3,
+        "conditions": {
+          "source_local_id": "cash_withdrawal_exclusion",
+          "part": null,
+          "info_reasons": [],
+          "flags": [
+            "exclusion_scope_broadened"
+          ]
+        },
+        "notes": null,
+        "effective_from": "2024-05-01",
+        "effective_to": null,
+        "excluded_categories": [],
+        "rule_role": "exclusion",
+        "merchant_slugs": [],
+        "platform_slugs": [],
+        "mcc_include": [
+          "6010",
+          "6011"
+        ],
+        "mcc_exclude": [],
+        "except_merchant_slugs": [],
+        "except_platform_slugs": [],
+        "block_inr": null,
+        "min_engine_version": 2,
+        "max_engine_version": null,
+        "source_local_id": "cash_withdrawal_exclusion",
+        "display_note": "ATM cash withdrawals do not earn reward points"
+      },
+      {
+        "id": "hpcl-idfc-first-power-plus:rule:non_hpcl_fuel_exclusion",
+        "category_id": null,
+        "category_slug": null,
+        "merchant_pattern": null,
+        "rail": null,
+        "unit": "points_per_150",
+        "rate": 0,
+        "min_txn_inr": null,
+        "max_txn_inr": null,
+        "priority": 4,
+        "conditions": {
+          "source_local_id": "non_hpcl_fuel_exclusion",
+          "part": null,
+          "info_reasons": [],
+          "flags": []
+        },
+        "notes": null,
+        "effective_from": "2024-05-01",
+        "effective_to": null,
+        "excluded_categories": [],
+        "rule_role": "exclusion",
+        "merchant_slugs": [],
+        "platform_slugs": [],
+        "mcc_include": [
+          "5172",
+          "5541",
+          "5542",
+          "5983"
+        ],
+        "mcc_exclude": [],
+        "except_merchant_slugs": [
+          "hpcl"
+        ],
+        "except_platform_slugs": [],
+        "block_inr": null,
+        "min_engine_version": 2,
+        "max_engine_version": null,
+        "source_local_id": "non_hpcl_fuel_exclusion",
+        "display_note": "Non-HPCL fuel transactions do not earn reward points"
+      },
+      {
+        "id": "hpcl-idfc-first-power-plus:rule:wp7_emi_rail_exclusion",
+        "category_id": null,
+        "category_slug": null,
+        "merchant_pattern": null,
+        "rail": "emi",
+        "unit": "points_per_150",
+        "rate": 0,
+        "min_txn_inr": null,
+        "max_txn_inr": null,
+        "priority": 0,
+        "conditions": {
+          "source_local_id": "wp7_emi_rail_exclusion",
+          "part": null,
+          "info_reasons": [],
+          "flags": []
+        },
+        "notes": null,
+        "effective_from": "2024-05-01",
+        "effective_to": null,
+        "excluded_categories": [],
+        "rule_role": "exclusion",
+        "merchant_slugs": [],
+        "platform_slugs": [],
+        "mcc_include": [],
+        "mcc_exclude": [],
+        "except_merchant_slugs": [],
+        "except_platform_slugs": [],
+        "block_inr": null,
+        "min_engine_version": 2,
+        "max_engine_version": null,
+        "source_local_id": "wp7_emi_rail_exclusion",
+        "display_note": "EMI transactions earn no rewards."
+      },
+      {
+        "id": "hpcl-idfc-first-power-plus:rule:other_retail_3x#min-amount",
+        "category_id": null,
+        "category_slug": null,
+        "merchant_pattern": null,
+        "rail": null,
+        "unit": "points_per_150",
+        "rate": 0,
+        "min_txn_inr": null,
+        "max_txn_inr": 150,
+        "priority": 0,
+        "conditions": {
+          "source_local_id": "other_retail_3x",
+          "part": null,
+          "info_reasons": [],
+          "flags": [
+            "synthesized_min_amount_exclusion"
+          ]
+        },
+        "notes": null,
+        "effective_from": "2024-05-01",
+        "effective_to": null,
+        "excluded_categories": [],
+        "rule_role": "exclusion",
+        "merchant_slugs": [],
+        "platform_slugs": [],
+        "mcc_include": [],
+        "mcc_exclude": [],
+        "except_merchant_slugs": [],
+        "except_platform_slugs": [],
+        "block_inr": null,
+        "min_engine_version": 2,
+        "max_engine_version": null,
+        "source_local_id": "other_retail_3x",
+        "display_note": "No rewards below ₹150"
+      }
+    ],
+    "cap_rules": [
+      {
+        "id": "hpcl-idfc-first-power-plus:cap:fuel_monthly_spend_cap",
+        "reward_rule_id": "hpcl-idfc-first-power-plus:rule:fuel_hpcl_30x",
+        "category_id": null,
+        "category_slug": null,
+        "benefit_kind": null,
+        "label": "Fuel monthly spend cap",
+        "measure": "spend_amount",
+        "period": "statement_cycle",
+        "cap_value": 12000,
+        "post_cap_unit": null,
+        "post_cap_rate": 0,
+        "resets_on_day": null,
+        "cap_kind": "eligible_spend",
+        "cap_amount": 12000,
+        "scope": "targets",
+        "targets": [
+          "hpcl-idfc-first-power-plus:rule:fuel_hpcl_30x"
+        ],
+        "parent_cap_id": null,
+        "post_cap_behavior": "zero",
+        "anchor": null,
+        "min_engine_version": 2,
+        "source_local_id": "fuel_monthly_spend_cap"
+      },
+      {
+        "id": "hpcl-idfc-first-power-plus:cap:grocery_utility_cap",
+        "reward_rule_id": null,
+        "category_id": null,
+        "category_slug": null,
+        "benefit_kind": null,
+        "label": "Grocery utility cap",
+        "measure": "spend_amount",
+        "period": "statement_cycle",
+        "cap_value": 2000,
+        "post_cap_unit": null,
+        "post_cap_rate": 0,
+        "resets_on_day": null,
+        "cap_kind": "eligible_spend",
+        "cap_amount": 2000,
+        "scope": "targets",
+        "targets": [
+          "hpcl-idfc-first-power-plus:rule:grocery_utility_30x#1",
+          "hpcl-idfc-first-power-plus:rule:grocery_utility_30x#2"
+        ],
+        "parent_cap_id": null,
+        "post_cap_behavior": "zero",
+        "anchor": null,
+        "min_engine_version": 2,
+        "source_local_id": "grocery_utility_cap"
+      },
+      {
+        "id": "hpcl-idfc-first-power-plus:cap:fastag_cap",
+        "reward_rule_id": "hpcl-idfc-first-power-plus:rule:fastag_30x",
+        "category_id": null,
+        "category_slug": null,
+        "benefit_kind": null,
+        "label": "Fastag cap",
+        "measure": "spend_amount",
+        "period": "statement_cycle",
+        "cap_value": 1000,
+        "post_cap_unit": null,
+        "post_cap_rate": 0,
+        "resets_on_day": null,
+        "cap_kind": "eligible_spend",
+        "cap_amount": 1000,
+        "scope": "targets",
+        "targets": [
+          "hpcl-idfc-first-power-plus:rule:fastag_30x"
+        ],
+        "parent_cap_id": null,
+        "post_cap_behavior": "zero",
+        "anchor": null,
+        "min_engine_version": 2,
+        "source_local_id": "fastag_cap"
+      }
+    ],
+    "milestone_rules": [
+      {
+        "id": "hpcl-idfc-first-power-plus:milestone:first_emi_cashback",
+        "label": "5% cashback up to ₹1,000 on first EMI conversion of ₹2,500+",
+        "period": "annual",
+        "threshold_spend_inr": 2500,
+        "reward_description": "5% cashback up to ₹1,000 on first EMI conversion of ₹2,500+",
+        "reward_value_inr": 1000,
+        "is_repeatable": false,
+        "max_repeats": null,
+        "anchor": "card_anniversary",
+        "reward_points": null,
+        "reward_kind": "cashback",
+        "excluded_category_ids": [],
+        "window_days": null,
+        "source_local_id": "first_emi_cashback"
+      }
+    ],
+    "fee_waiver_rules": [
+      {
+        "id": "hpcl-idfc-first-power-plus:waiver:1",
+        "threshold_spend_inr": 150000,
+        "period": "annual",
+        "waives_fee_inr": 499,
+        "excluded_category_slugs": [
+          "fuel",
+          "emi"
+        ],
+        "notes": "Eligible retail spends of ₹1,50,000 or more in the preceding anniversary year; excludes fuel spends, EMIs, cash advances, fees, and charges.",
+        "excluded_categories": [
+          "cat-fuel",
+          "cat-emi"
+        ]
+      }
+    ],
+    "benefits": [
+      {
+        "id": "hpcl-idfc-first-power-plus:benefit:domestic_lounge_qtr",
+        "key": "domestic_lounge_qtr",
+        "source_local_id": "domestic_lounge_qtr",
+        "kind": "lounge_domestic",
+        "label": "1 complimentary domestic airport lounge visit per quarter",
+        "description": "Sponsor: IDFC FIRST Bank",
+        "quota_count": 1,
+        "quota_period": "quarter",
+        "network_program": "rupay_select",
+        "value_estimate_inr": 1000,
+        "conditions": {
+          "source_category_id": "lounge",
+          "evaluation_engine": {
+            "conditions": {
+              "spend_threshold_inr": 20000,
+              "spend_period": "current_calendar_month",
+              "unlock_period": "next_calendar_month"
+            },
+            "benefit_calculation": {
+              "visits": 1
+            },
+            "perks": [
+              "select domestic airport lounges"
+            ]
+          }
+        }
+      },
+      {
+        "id": "hpcl-idfc-first-power-plus:benefit:movie_monthly",
+        "key": "movie_monthly",
+        "source_local_id": "movie_monthly",
+        "kind": "movie",
+        "label": "25% discount on movie tickets up to ₹100 once a month on Paytm Movies",
+        "description": "Sponsor: IDFC FIRST Bank",
+        "quota_count": 1,
+        "quota_period": "calendar_month",
+        "network_program": null,
+        "value_estimate_inr": 100,
+        "conditions": {
+          "source_category_id": "movie",
+          "evaluation_engine": {
+            "conditions": {
+              "booking_platform": "Paytm Movies",
+              "frequency": "once_per_month"
+            },
+            "benefit_calculation": {
+              "discount_percent": 25,
+              "max_discount_inr": 100
+            },
+            "perks": []
+          }
+        }
+      },
+      {
+        "id": "hpcl-idfc-first-power-plus:benefit:roadside_assistance",
+        "key": "roadside_assistance",
+        "source_local_id": "roadside_assistance",
+        "kind": "roadside_assistance",
+        "label": "Complimentary 24x7 Roadside Assistance",
+        "description": "Sponsor: IDFC FIRST Bank",
+        "quota_count": 4,
+        "quota_period": "annual",
+        "network_program": null,
+        "value_estimate_inr": 1399,
+        "conditions": {
+          "source_category_id": "other",
+          "evaluation_engine": {
+            "conditions": "N/A",
+            "benefit_calculation": {
+              "value_inr": 1399
+            },
+            "perks": [
+              "towing",
+              "battery_jumpstart",
+              "flat_tyre_support",
+              "fuel_delivery"
+            ]
+          }
+        }
+      },
+      {
+        "id": "hpcl-idfc-first-power-plus:benefit:insurance:other",
+        "key": "insurance:other",
+        "source_local_id": null,
+        "kind": "other",
+        "label": "Other",
+        "description": "Personal accident cover; subject to at least 1 POS/e-commerce transaction in the previous 30 days.",
+        "quota_count": null,
+        "quota_period": null,
+        "network_program": null,
+        "value_estimate_inr": 200000,
+        "conditions": {
+          "coverage_usd": null
+        }
+      },
+      {
+        "id": "hpcl-idfc-first-power-plus:benefit:insurance:other~2",
+        "key": "insurance:other~2",
+        "source_local_id": null,
+        "kind": "other",
+        "label": "Other",
+        "description": "Coverage against fraudulent transactions post-reporting the loss to the bank.",
+        "quota_count": null,
+        "quota_period": null,
+        "network_program": null,
+        "value_estimate_inr": 25000,
+        "conditions": {
+          "coverage_usd": null
+        }
+      }
+    ],
+    "unlock_rules": [
+      {
+        "id": "hpcl-idfc-first-power-plus:unlock:domestic_lounge_qtr@1",
+        "card_benefit_id": "hpcl-idfc-first-power-plus:benefit:domestic_lounge_qtr",
+        "kind": "lounge_domestic",
+        "label": "1 complimentary domestic airport lounge visit per quarter",
+        "spend_threshold_inr": 20000,
+        "spend_window": "previous_calendar_month",
+        "window_days": null,
+        "unlocks_quota": 1,
+        "unlocks_period": "quarter",
+        "tier_label": null,
+        "excluded_category_ids": [],
+        "notes": null,
+        "source_local_id": "domestic_lounge_qtr"
+      }
+    ],
+    "redemption_options": [
+      {
+        "program_name": "online purchase",
+        "method": "other",
+        "value_per_point_inr": 0.25,
+        "min_points": null,
+        "notes": "Redemption fee: ₹99"
+      }
+    ],
+    "is_upi_linkable": true
+  }
+}

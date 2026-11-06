@@ -10,8 +10,11 @@ import '../../app/design/display_text.dart';
 import '../../app/design/widgets.dart';
 import '../../app/providers.dart';
 import '../../app/router.dart';
+import 'cap_progress.dart';
 import 'card_actions_screen.dart';
 import 'card_visual.dart';
+import 'widgets/cap_bar.dart';
+import 'widgets/model_status_label.dart';
 import '../insights/credit_utilization_ui.dart';
 import '../insights/spending_visuals.dart';
 import '../insights/spend_trends_screen.dart'
@@ -317,6 +320,16 @@ class CardDetailScreen extends ConsumerWidget {
                               ),
                             ],
                           ],
+                        ),
+                      ],
+                      // WP9: Partial / Basic cards say so (tap for why);
+                      // Verified cards and v1-feed cards show nothing.
+                      if (ModelStatusLabel.labelFor(product.modelStatus) !=
+                          null) ...[
+                        const SizedBox(height: AppSpace.sm),
+                        Align(
+                          alignment: Alignment.centerLeft,
+                          child: ModelStatusLabel(status: product.modelStatus),
                         ),
                       ],
                       const SizedBox(height: AppSpace.xs),
@@ -2072,7 +2085,10 @@ class _CapsTab extends ConsumerWidget {
       CapMeasure.txnCount => 'transaction cap',
     };
 
-    final caps = uniqueCapRules(product.capRules);
+    // WP9: v2-shaped cards list every cap by id (no parse-time de-dup, D15a)
+    // and show native-unit bars; v1 cards keep today's display.
+    final isV2 = product.isV2Shaped;
+    final caps = isV2 ? product.capRules : uniqueCapRules(product.capRules);
     if (caps.isEmpty && product.fuelRule == null) {
       return const EmptyState(
         icon: Icons.speed_outlined,
@@ -2087,6 +2103,31 @@ class _CapsTab extends ConsumerWidget {
         for (final cap in caps)
           Builder(
             builder: (context) {
+              final progress = isV2
+                  ? capProgressFor(
+                      product: product,
+                      cap: cap,
+                      owned: userCard,
+                      now: ref.watch(clockProvider).now(),
+                    )
+                  : null;
+              if (progress != null) {
+                final ratio = progress.ratio;
+                return _CompactDisclosure(
+                  title: capRuleDisplayLabel(
+                    cap,
+                    categoryName: categoryName(cap.categoryId),
+                  ),
+                  subtitle:
+                      '${categoryName(cap.categoryId)} · ${_capKindLabel(progress.kind)}',
+                  // Rounded down, as in the alerts: never 100% before the
+                  // cap is reached.
+                  trailing: ratio == null
+                      ? 'Updating…'
+                      : '${percentFloor(ratio)}%',
+                  details: [CapBar(progress: progress)],
+                );
+              }
               final consumed =
                   userCard.capConsumed[cap.id] ?? const Money.zero();
               final ratio = capRatio(consumed, cap.capValue);
@@ -2178,6 +2219,15 @@ class _CapsTab extends ConsumerWidget {
       ],
     );
   }
+
+  static String _capKindLabel(CapKind kind) => switch (kind) {
+    CapKind.bonusPoints => 'bonus points cap',
+    CapKind.totalPoints => 'total points cap',
+    CapKind.bonusCashback => 'bonus cashback cap',
+    CapKind.totalCashback => 'total cashback cap',
+    CapKind.eligibleSpend => 'spend cap',
+    CapKind.txnCount => 'transaction cap',
+  };
 
   static String _periodLabel(CapPeriod period) => switch (period) {
     CapPeriod.statementCycle => 'each statement cycle',

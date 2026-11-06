@@ -1,0 +1,120 @@
+{
+  "source_slug": "indigo-kotak-credit-card",
+  "changes": [
+    {
+      "path": "reward_rules[id=dining_entertainment_accelerator].conditions.mcc_list",
+      "value": [
+        5811,
+        5812,
+        5813,
+        5814
+      ],
+      "reason": "WP7: Kotak page: 2 BluChips per Rs100 on Dining & Entertainment. This row keeps the dining MCCs; entertainment gets its own row (the dining category blocked cinema spends).",
+      "source_url": "https://www.kotak.bank.in/en/personal-banking/cards/credit-cards/indigo-credit-card.html",
+      "checked_on": "2026-11-05"
+    },
+    {
+      "path": "reward_rules",
+      "op": "append",
+      "value": {
+        "id": "entertainment_accelerator",
+        "category_id": "entertainment",
+        "priority": 20,
+        "evaluation_type": "accelerator",
+        "rail": "any",
+        "channel_type": "all",
+        "conditions": {
+          "mcc_list": [
+            7829,
+            7832,
+            7833,
+            7841,
+            7911,
+            7922,
+            7929,
+            7932,
+            7933,
+            7941,
+            7991,
+            7992,
+            7993,
+            7994,
+            7996,
+            7997,
+            7998,
+            7999
+          ]
+        },
+        "action": {
+          "multiplier": 2,
+          "points_per_block": 2,
+          "cashback_percent": null,
+          "cap_reference": null,
+          "reason": "Earn 2 IndiGo BluChips per Rs100 on Entertainment spends."
+        },
+        "effective_from": "2025-07-10",
+        "effective_to": null
+      },
+      "reason": "WP7: Kotak page: \"Earn unlimited 2 IndiGo BluChips per Rs 100 spent on all Dining & Entertainment spends\"; entertainment MCCs from the record.",
+      "source_url": "https://www.kotak.bank.in/en/personal-banking/cards/credit-cards/indigo-credit-card.html",
+      "checked_on": "2026-11-05"
+    },
+    {
+      "path": "reward_rules[id=indigo_flight_booking_accelerator].action.points_per_block",
+      "value": 3,
+      "reason": "WP7: D24a: T&C 2.3 Table B splits the 15/17/19 BluChips per Rs100 into IndiGo base 8 + tier bonus 0/2/4 + channel bonus 4 (IndiGo's own programme, any member) and \"IndiGo BluChips when the transaction is done via IndiGo Kotak Credit Card\": 3 per Rs100 at every tier. Only the card's 3 counts.",
+      "source_url": "https://images.kotak.bank.in/bank/mailers/2025/files/Kotak%20IndiGo%20Credit%20Card%20TnC.pdf",
+      "checked_on": "2026-11-05"
+    },
+    {
+      "path": "reward_rules[id=indigo_flight_booking_accelerator].action.reason",
+      "value": "3 IndiGo BluChips per Rs100 from the card on IndiGo flights booked on the IndiGo website or app (IndiGo's own base, tier and channel BluChips are not card rewards).",
+      "reason": "WP7: D24a card-issued rate; the tier bonus belongs to IndiGo's programme, so the card rate does not depend on the member tier (D13b no longer applies to this rule).",
+      "source_url": "https://images.kotak.bank.in/bank/mailers/2025/files/Kotak%20IndiGo%20Credit%20Card%20TnC.pdf",
+      "checked_on": "2026-11-05"
+    },
+    {
+      "path": "reward_rules[id=indigo_flight_booking_accelerator].conditions",
+      "value": {
+        "merchant": "IndiGo"
+      },
+      "reason": "WP7: T&C 2.1: only bookings on the IndiGo website/app earn (third-party sites do not); merchant IndiGo on rail online carries it. Group/corporate/SME/agent bookings are a separate info exclusion (indigo_group_booking_exclusion).",
+      "source_url": "https://images.kotak.bank.in/bank/mailers/2025/files/Kotak%20IndiGo%20Credit%20Card%20TnC.pdf",
+      "checked_on": "2026-11-05"
+    },
+    {
+      "path": "reward_rules",
+      "op": "append",
+      "value": {
+        "id": "indigo_group_booking_exclusion",
+        "rule_role": "info",
+        "category_id": "travel_flights",
+        "priority": 5,
+        "evaluation_type": "exclusion",
+        "rail": "online",
+        "channel_type": "all",
+        "conditions": {
+          "merchant": "IndiGo",
+          "booking_types": [
+            "group",
+            "corporate",
+            "SME",
+            "agent"
+          ]
+        },
+        "action": {
+          "multiplier": 0,
+          "points_per_block": 0,
+          "cashback_percent": null,
+          "cap_reference": null,
+          "reason": "No IndiGo BluChips on group, corporate, SME and agent bookings done through the IndiGo website/app."
+        },
+        "effective_from": "2025-07-10",
+        "effective_to": null
+      },
+      "reason": "WP7: T&C 4.3: \"No IndiGo BluChips will be earned on group, corporate, SME and agent bookings done through IndiGo Website/App\". The booking type is not in the context, so this is info (rule_role, D13d) with depends_on_txn_attribute (D14b); as a plain exclusion the loader would broaden it to every IndiGo booking.",
+      "source_url": "https://images.kotak.bank.in/bank/mailers/2025/files/Kotak%20IndiGo%20Credit%20Card%20TnC.pdf",
+      "checked_on": "2026-11-05"
+    }
+  ]
+}

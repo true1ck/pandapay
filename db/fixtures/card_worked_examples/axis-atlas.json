@@ -1,0 +1,344 @@
+{
+  "source_slug": "axis-atlas",
+  "cardpipeline_id": "axis-bank-axis-bank-atlas",
+  "card_name": "Axis Bank Atlas Credit Card",
+  "verified_on": "2026-11-05",
+  "sources": [
+    {
+      "url": "https://www.axis.bank.in/docs/default-source/atlas-credit-card/terms-and-conditions-of-features-of-axis-bank-atlas-credit-card.pdf",
+      "doc": "Atlas features T&Cs",
+      "quote": "Earn 5 EDGE Miles for every Rs. 100 spent ... up to cumulative transactions of Rs. 2,00,000 per month"
+    },
+    {
+      "url": "https://www.axis.bank.in/docs/default-source/atlas-credit-card/terms-and-conditions-of-features-of-axis-bank-atlas-credit-card.pdf",
+      "doc": "Atlas features T&Cs",
+      "quote": "bookings made through any travel agents ... shall be eligible for only 2 Miles for every INR 100 spent (base earn)"
+    },
+    {
+      "url": "https://www.axis.bank.in/docs/default-source/atlas-credit-card/terms-and-conditions-of-features-of-axis-bank-atlas-credit-card.pdf",
+      "doc": "Atlas features T&Cs",
+      "quote": "gold/ jewellery, rent, wallet, government institution, insurance, fuel, utilities and Telecom will be excluded from EDGE Miles earn"
+    }
+  ],
+  "examples": [
+    {
+      "id": "001",
+      "title": "Rs 10,000 general shopping",
+      "ctx": {
+        "amount": 10000,
+        "occurred": "2026-11-10T10:00:00+05:30",
+        "category_id": null,
+        "category_slug": "other",
+        "mcc": "5311",
+        "merchant_name": "Department store",
+        "merchant_vpa": null,
+        "merchant_slug": null,
+        "platform": null,
+        "rail": "swipe"
+      },
+      "state_before": {
+        "caps_by_source_id": {}
+      },
+      "expect": {
+        "currency": "points",
+        "amount": 200,
+        "value_inr": 200.0,
+        "excluded": false,
+        "cap_deltas_by_source_id": {}
+      },
+      "why": "2 EDGE Miles per Rs 100 on other eligible spends: 100 blocks x 2 = 200. 1 EDGE Mile = Rs 1 per issuer."
+    },
+    {
+      "id": "002",
+      "title": "Rs 50,000 airline ticket booked direct (MCC 4511)",
+      "ctx": {
+        "amount": 50000,
+        "occurred": "2026-11-10T10:00:00+05:30",
+        "category_id": null,
+        "category_slug": "travel",
+        "mcc": "4511",
+        "merchant_name": "Airline direct",
+        "merchant_vpa": null,
+        "merchant_slug": null,
+        "platform": null,
+        "rail": "online"
+      },
+      "state_before": {
+        "caps_by_source_id": {}
+      },
+      "expect": {
+        "currency": "points",
+        "amount": 2500,
+        "value_inr": 2500.0,
+        "excluded": false,
+        "cap_deltas_by_source_id": {
+          "travel-accelerated-monthly-spend-cap": 50000
+        }
+      },
+      "why": "5 EDGE Miles per Rs 100 on direct airline spend: 500 blocks x 5 = 2500. Counts Rs 50,000 towards the Rs 2,00,000 monthly travel limit."
+    },
+    {
+      "id": "003",
+      "title": "Rs 20,000 direct hotel stay (MCC 7011)",
+      "ctx": {
+        "amount": 20000,
+        "occurred": "2026-11-10T10:00:00+05:30",
+        "category_id": null,
+        "category_slug": "travel",
+        "mcc": "7011",
+        "merchant_name": "Hotel front desk",
+        "merchant_vpa": null,
+        "merchant_slug": null,
+        "platform": null,
+        "rail": "swipe"
+      },
+      "state_before": {
+        "caps_by_source_id": {}
+      },
+      "expect": {
+        "currency": "points",
+        "amount": 1000,
+        "value_inr": 1000.0,
+        "excluded": false,
+        "cap_deltas_by_source_id": {
+          "travel-accelerated-monthly-spend-cap": 20000
+        }
+      },
+      "why": "5 EDGE Miles per Rs 100 on direct hotel spend: 200 x 5 = 1000."
+    },
+    {
+      "id": "004",
+      "title": "Rs 30,000 booked on Axis Bank Travel EDGE portal",
+      "ctx": {
+        "amount": 30000,
+        "occurred": "2026-11-10T10:00:00+05:30",
+        "category_id": null,
+        "category_slug": "travel",
+        "mcc": null,
+        "merchant_name": "Axis Travel EDGE",
+        "merchant_vpa": null,
+        "merchant_slug": null,
+        "platform": "axis_travel_edge",
+        "rail": "online"
+      },
+      "state_before": {
+        "caps_by_source_id": {}
+      },
+      "expect": {
+        "currency": "points",
+        "amount": 1500,
+        "value_inr": 1500.0,
+        "excluded": false,
+        "cap_deltas_by_source_id": {
+          "travel-accelerated-monthly-spend-cap": 30000
+        }
+      },
+      "why": "Axis Travel EDGE portal bookings earn 5 per Rs 100: 300 x 5 = 1500."
+    },
+    {
+      "id": "005",
+      "title": "Rs 20,000 flight booked via an online travel agency",
+      "ctx": {
+        "amount": 20000,
+        "occurred": "2026-11-10T10:00:00+05:30",
+        "category_id": null,
+        "category_slug": "travel",
+        "mcc": "4722",
+        "merchant_name": "MakeMyTrip",
+        "merchant_vpa": null,
+        "merchant_slug": "makemytrip",
+        "platform": null,
+        "rail": "online"
+      },
+      "state_before": {
+        "caps_by_source_id": {}
+      },
+      "expect": {
+        "currency": "points",
+        "amount": 400,
+        "value_inr": 400.0,
+        "excluded": false,
+        "cap_deltas_by_source_id": {}
+      },
+      "why": "Bookings via travel agents/OTAs earn only the 2-mile base: 200 x 2 = 400. Does not touch the monthly travel limit."
+    },
+    {
+      "id": "006",
+      "title": "Rs 3,000 fuel",
+      "ctx": {
+        "amount": 3000,
+        "occurred": "2026-11-10T10:00:00+05:30",
+        "category_id": null,
+        "category_slug": "fuel",
+        "mcc": "5541",
+        "merchant_name": "Fuel station",
+        "merchant_vpa": null,
+        "merchant_slug": null,
+        "platform": null,
+        "rail": "swipe"
+      },
+      "state_before": {
+        "caps_by_source_id": {}
+      },
+      "expect": {
+        "currency": "points",
+        "amount": 0,
+        "value_inr": null,
+        "excluded": true,
+        "cap_deltas_by_source_id": {}
+      },
+      "why": "Fuel is excluded from EDGE Miles earn (also gold/jewellery, rent, wallet, government, insurance, utilities and telecom) from 20 Apr 2024."
+    },
+    {
+      "id": "007",
+      "title": "Rs 15,000 electricity bill",
+      "ctx": {
+        "amount": 15000,
+        "occurred": "2026-11-10T10:00:00+05:30",
+        "category_id": null,
+        "category_slug": "bills",
+        "mcc": "4900",
+        "merchant_name": "Electricity board",
+        "merchant_vpa": null,
+        "merchant_slug": null,
+        "platform": null,
+        "rail": "online"
+      },
+      "state_before": {
+        "caps_by_source_id": {}
+      },
+      "expect": {
+        "currency": "points",
+        "amount": 0,
+        "value_inr": null,
+        "excluded": true,
+        "cap_deltas_by_source_id": {}
+      },
+      "why": "Utilities and telecom are excluded from EDGE Miles earn."
+    },
+    {
+      "id": "008",
+      "title": "Rs 50,000 airline with Rs 1,50,000 already used this month (reaches the limit exactly)",
+      "ctx": {
+        "amount": 50000,
+        "occurred": "2026-11-10T10:00:00+05:30",
+        "category_id": null,
+        "category_slug": "travel",
+        "mcc": "4511",
+        "merchant_name": "Airline direct",
+        "merchant_vpa": null,
+        "merchant_slug": null,
+        "platform": null,
+        "rail": "online"
+      },
+      "state_before": {
+        "caps_by_source_id": {
+          "travel-accelerated-monthly-spend-cap": 150000
+        }
+      },
+      "expect": {
+        "currency": "points",
+        "amount": 2500,
+        "value_inr": 2500.0,
+        "excluded": false,
+        "cap_deltas_by_source_id": {
+          "travel-accelerated-monthly-spend-cap": 50000
+        }
+      },
+      "why": "Cumulative Rs 2,00,000 per month earns 5 per Rs 100. This spend lands exactly on the limit: 500 x 5 = 2500, so the limit is fully used."
+    },
+    {
+      "id": "009",
+      "title": "Rs 10,000 airline after the Rs 2,00,000 monthly limit is used",
+      "ctx": {
+        "amount": 10000,
+        "occurred": "2026-11-10T10:00:00+05:30",
+        "category_id": null,
+        "category_slug": "travel",
+        "mcc": "4511",
+        "merchant_name": "Airline direct",
+        "merchant_vpa": null,
+        "merchant_slug": null,
+        "platform": null,
+        "rail": "online"
+      },
+      "state_before": {
+        "caps_by_source_id": {
+          "travel-accelerated-monthly-spend-cap": 200000
+        }
+      },
+      "expect": {
+        "currency": "points",
+        "amount": 200,
+        "value_inr": 200.0,
+        "excluded": false,
+        "cap_deltas_by_source_id": {}
+      },
+      "why": "Above Rs 2,00,000 cumulative per month, travel spend earns 2 EDGE Miles per Rs 100: 100 x 2 = 200. No further limit is consumed."
+    },
+    {
+      "id": "010",
+      "title": "Rs 10,000 electronics purchase on EMI",
+      "ctx": {
+        "amount": 10000,
+        "occurred": "2026-11-10T10:00:00+05:30",
+        "category_id": null,
+        "category_slug": "other",
+        "mcc": "5732",
+        "merchant_name": "Electronics store",
+        "merchant_vpa": null,
+        "merchant_slug": null,
+        "platform": null,
+        "rail": "emi"
+      },
+      "state_before": {
+        "caps_by_source_id": {}
+      },
+      "expect": {
+        "currency": "points",
+        "amount": 0,
+        "value_inr": null,
+        "excluded": true,
+        "cap_deltas_by_source_id": {}
+      },
+      "why": "EDGE Miles are debited when a transaction is converted to EMI, so an EMI purchase keeps no miles (C8 D29a: counts as an EMI exclusion)."
+    }
+  ],
+  "research_notes": [
+    {
+      "item": "WP7 r4: EMI (example 010)",
+      "cardpipeline_says": "reward_ledger_rules.emi_conversion: \"EDGE Miles are debited when a credit-card transaction is converted to EMI; cancellation of the EMI does not restore the miles\".",
+      "issuer_says": "Not in the Atlas features T&C read for round 3 (it is silent on EMI); the clause comes from the CardPipeline record of Axis's reward-ledger terms. Contract D29a treats a debit-on-EMI clause as an EMI exclusion: rail-EMI all-retail exclusion added by override.",
+      "proposed_fix": "override",
+      "override_file": "api/scripts/catalogue_overrides/axis-atlas.json"
+    },
+    {
+      "item": "rounding of EDGE Miles per transaction",
+      "cardpipeline_says": "rounding_mode floor",
+      "issuer_says": "Atlas T&C do not state how fractional blocks are treated; no rounding example written.",
+      "proposed_fix": "none",
+      "override_file": null
+    },
+    {
+      "item": "travel agents and OTAs",
+      "cardpipeline_says": "travel rule matches airline/hotel MCC ranges and the Travel EDGE portal merchant id",
+      "issuer_says": "Bookings via travel agents or OTAs earn only 2 Miles per Rs 100. OTA MCC 4722 must not match the 5x rule.",
+      "proposed_fix": "importer: keep MCC-restricted; do not map MakeMyTrip/OTA merchants to the 5x rule",
+      "override_file": null
+    },
+    {
+      "item": "travel limit straddling",
+      "cardpipeline_says": "cap eligible_spend Rs 2,00,000 per month, downgrade to base",
+      "issuer_says": "T&C say 5 miles up to cumulative Rs 2,00,000 per month then 2 miles above; split within a straddling transaction is not stated.",
+      "proposed_fix": "none",
+      "override_file": null
+    },
+    {
+      "item": "milestones",
+      "cardpipeline_says": "three annual milestones 2500/2500/5000 on card anniversary year",
+      "issuer_says": "Matches the T&C table (3L: 2500, 7.5L: additional 2500, 15L: additional 5000). Anniversary-year clock is stated for tiers; milestone clock follows the same.",
+      "proposed_fix": "none",
+      "override_file": null
+    }
+  ]
+}

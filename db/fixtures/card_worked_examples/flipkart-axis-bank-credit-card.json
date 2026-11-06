@@ -1,0 +1,371 @@
+{
+  "source_slug": "flipkart-axis-bank-credit-card",
+  "cardpipeline_id": "axis-bank-flipkart-axis-bank-credit-card",
+  "card_name": "Flipkart Axis Bank Credit Card",
+  "verified_on": "2026-11-05",
+  "sources": [
+    {
+      "url": "https://www.axis.bank.in/docs/default-source/default-document-library/cashback-tncs---final.pdf?sfvrsn=b55a0e1a_5",
+      "doc": "Flipkart Axis cashback T&C",
+      "quote": "Maximum cashback that the customer can earn in a statement quarter per merchant (Flipkart, Myntra and Cleartrip) is INR 4000."
+    },
+    {
+      "url": "https://www.axis.bank.in/docs/default-source/default-document-library/cashback-tncs---final.pdf?sfvrsn=b55a0e1a_5",
+      "doc": "Flipkart Axis cashback T&C",
+      "quote": "The cashback will be rounded down for each individual transaction."
+    },
+    {
+      "url": "https://www.axis.bank.in/docs/default-source/default-document-library/terms-and-conditions-flipkart-axis-bank-credit-card.pdf?sfvrsn=5a68a36d_1",
+      "doc": "Revision eff. 20 Jun 2025",
+      "quote": "increased cashback of 7.5% (increased from earlier cashback of 1%) on Myntra"
+    },
+    {
+      "url": "https://www.axis.bank.in/docs/default-source/default-document-library/cashback-tncs---final.pdf?sfvrsn=b55a0e1a_5",
+      "doc": "Flipkart Axis cashback T&C",
+      "quote": "Cashback is not applicable on transactions less than Rs. 100."
+    }
+  ],
+  "examples": [
+    {
+      "id": "001",
+      "title": "Rs 10,000 on Flipkart",
+      "ctx": {
+        "amount": 10000,
+        "occurred": "2026-11-10T10:00:00+05:30",
+        "category_id": null,
+        "category_slug": "online",
+        "mcc": null,
+        "merchant_name": "Flipkart",
+        "merchant_vpa": null,
+        "merchant_slug": "flipkart",
+        "platform": null,
+        "rail": "online"
+      },
+      "state_before": {
+        "caps_by_source_id": {}
+      },
+      "expect": {
+        "currency": "cashback_inr",
+        "amount": 500,
+        "value_inr": null,
+        "excluded": false,
+        "cap_deltas_by_source_id": {
+          "flipkart-quarterly-4000": 500
+        }
+      },
+      "why": "5% on Flipkart (excluding Flipkart Health) = 500. Counts to the Rs 4,000 per statement quarter Flipkart cap."
+    },
+    {
+      "id": "002",
+      "title": "Rs 3,000 on Myntra",
+      "ctx": {
+        "amount": 3000,
+        "occurred": "2026-11-10T10:00:00+05:30",
+        "category_id": null,
+        "category_slug": "online",
+        "mcc": null,
+        "merchant_name": "Myntra",
+        "merchant_vpa": null,
+        "merchant_slug": "myntra",
+        "platform": null,
+        "rail": "online"
+      },
+      "state_before": {
+        "caps_by_source_id": {}
+      },
+      "expect": {
+        "currency": "cashback_inr",
+        "amount": 225,
+        "value_inr": null,
+        "excluded": false,
+        "cap_deltas_by_source_id": {
+          "myntra-quarterly-4000": 225
+        }
+      },
+      "why": "7.5% on Myntra (from 20 Jun 2025) = 225, matching the bank illustration."
+    },
+    {
+      "id": "003",
+      "title": "Rs 90,000 on Cleartrip",
+      "ctx": {
+        "amount": 90000,
+        "occurred": "2026-11-10T10:00:00+05:30",
+        "category_id": null,
+        "category_slug": "travel",
+        "mcc": null,
+        "merchant_name": "Cleartrip",
+        "merchant_vpa": null,
+        "merchant_slug": "cleartrip",
+        "platform": null,
+        "rail": "online"
+      },
+      "state_before": {
+        "caps_by_source_id": {}
+      },
+      "expect": {
+        "currency": "cashback_inr",
+        "amount": 4000,
+        "value_inr": null,
+        "excluded": false,
+        "cap_deltas_by_source_id": {
+          "cleartrip-quarterly-4000": 4000
+        }
+      },
+      "why": "5% would be 4,500 but each of Flipkart, Myntra and Cleartrip is capped at Rs 4,000 per statement quarter, so 4,000 (bank illustration)."
+    },
+    {
+      "id": "004",
+      "title": "Rs 30,000 on Flipkart with Rs 3,000 cashback already earned this quarter",
+      "ctx": {
+        "amount": 30000,
+        "occurred": "2026-11-10T10:00:00+05:30",
+        "category_id": null,
+        "category_slug": "online",
+        "mcc": null,
+        "merchant_name": "Flipkart",
+        "merchant_vpa": null,
+        "merchant_slug": "flipkart",
+        "platform": null,
+        "rail": "online"
+      },
+      "state_before": {
+        "caps_by_source_id": {
+          "flipkart-quarterly-4000": 3000
+        }
+      },
+      "expect": {
+        "currency": "cashback_inr",
+        "amount": 1000,
+        "value_inr": null,
+        "excluded": false,
+        "cap_deltas_by_source_id": {
+          "flipkart-quarterly-4000": 1000
+        }
+      },
+      "why": "Bank illustration: 5% = 1,500 but only Rs 1,000 of the Rs 4,000 Flipkart cap remains, so 1,000 is credited."
+    },
+    {
+      "id": "005",
+      "title": "Rs 6,000 on Cleartrip after the Rs 4,000 quarterly cap is used",
+      "ctx": {
+        "amount": 6000,
+        "occurred": "2026-11-10T10:00:00+05:30",
+        "category_id": null,
+        "category_slug": "travel",
+        "mcc": null,
+        "merchant_name": "Cleartrip",
+        "merchant_vpa": null,
+        "merchant_slug": "cleartrip",
+        "platform": null,
+        "rail": "online"
+      },
+      "state_before": {
+        "caps_by_source_id": {
+          "cleartrip-quarterly-4000": 4000
+        }
+      },
+      "expect": {
+        "currency": "cashback_inr",
+        "amount": 0,
+        "value_inr": null,
+        "excluded": false,
+        "cap_deltas_by_source_id": {}
+      },
+      "why": "Bank illustration shows 0 cashback for Cleartrip spend once the Rs 4,000 cap is reached (it does not fall back to 1%)."
+    },
+    {
+      "id": "006",
+      "title": "Rs 1,000 on Swiggy (preferred merchant)",
+      "ctx": {
+        "amount": 1000,
+        "occurred": "2026-11-10T10:00:00+05:30",
+        "category_id": null,
+        "category_slug": "dining",
+        "mcc": null,
+        "merchant_name": "Swiggy",
+        "merchant_vpa": null,
+        "merchant_slug": "swiggy",
+        "platform": null,
+        "rail": "online"
+      },
+      "state_before": {
+        "caps_by_source_id": {}
+      },
+      "expect": {
+        "currency": "cashback_inr",
+        "amount": 40,
+        "value_inr": null,
+        "excluded": false,
+        "cap_deltas_by_source_id": {}
+      },
+      "why": "4% unlimited on Preferred Merchants; the T&C say Swiggy food delivery qualifies for accelerated cashback. Not part of any cap."
+    },
+    {
+      "id": "007",
+      "title": "Rs 5,000 on other eligible spend",
+      "ctx": {
+        "amount": 5000,
+        "occurred": "2026-11-10T10:00:00+05:30",
+        "category_id": null,
+        "category_slug": "other",
+        "mcc": "5311",
+        "merchant_name": "Department store",
+        "merchant_vpa": null,
+        "merchant_slug": null,
+        "platform": null,
+        "rail": "swipe"
+      },
+      "state_before": {
+        "caps_by_source_id": {}
+      },
+      "expect": {
+        "currency": "cashback_inr",
+        "amount": 50,
+        "value_inr": null,
+        "excluded": false,
+        "cap_deltas_by_source_id": {}
+      },
+      "why": "1% unlimited on other eligible merchants."
+    },
+    {
+      "id": "008",
+      "title": "Rs 1,180 other spend rounds down",
+      "ctx": {
+        "amount": 1180,
+        "occurred": "2026-11-10T10:00:00+05:30",
+        "category_id": null,
+        "category_slug": "other",
+        "mcc": "5651",
+        "merchant_name": "Apparel store",
+        "merchant_vpa": null,
+        "merchant_slug": null,
+        "platform": null,
+        "rail": "swipe"
+      },
+      "state_before": {
+        "caps_by_source_id": {}
+      },
+      "expect": {
+        "currency": "cashback_inr",
+        "amount": 11,
+        "value_inr": null,
+        "excluded": false,
+        "cap_deltas_by_source_id": {}
+      },
+      "why": "Cashback is rounded down per transaction: 1180 x 1% = 11.80 -> Rs 11 (bank example)."
+    },
+    {
+      "id": "009",
+      "title": "Rs 2,500 electricity bill",
+      "ctx": {
+        "amount": 2500,
+        "occurred": "2026-11-10T10:00:00+05:30",
+        "category_id": null,
+        "category_slug": "bills",
+        "mcc": "4900",
+        "merchant_name": "Electricity board",
+        "merchant_vpa": null,
+        "merchant_slug": null,
+        "platform": null,
+        "rail": "online"
+      },
+      "state_before": {
+        "caps_by_source_id": {}
+      },
+      "expect": {
+        "currency": "cashback_inr",
+        "amount": 0,
+        "value_inr": null,
+        "excluded": true,
+        "cap_deltas_by_source_id": {}
+      },
+      "why": "Utility services MCC is excluded from cashback."
+    },
+    {
+      "id": "010",
+      "title": "Rs 99 purchase below the minimum",
+      "ctx": {
+        "amount": 99,
+        "occurred": "2026-11-10T10:00:00+05:30",
+        "category_id": null,
+        "category_slug": "other",
+        "mcc": "5411",
+        "merchant_name": "Kirana store",
+        "merchant_vpa": null,
+        "merchant_slug": null,
+        "platform": null,
+        "rail": "swipe"
+      },
+      "state_before": {
+        "caps_by_source_id": {}
+      },
+      "expect": {
+        "currency": "cashback_inr",
+        "amount": 0,
+        "value_inr": null,
+        "excluded": true,
+        "cap_deltas_by_source_id": {}
+      },
+      "why": "Cashback is not applicable on transactions less than Rs 100."
+    },
+    {
+      "id": "011",
+      "title": "Rs 2,000 Flipkart gift card",
+      "ctx": {
+        "amount": 2000,
+        "occurred": "2026-11-10T10:00:00+05:30",
+        "category_id": null,
+        "category_slug": "online",
+        "mcc": null,
+        "merchant_name": "Flipkart gift card",
+        "merchant_vpa": null,
+        "merchant_slug": "flipkart",
+        "platform": null,
+        "rail": "online"
+      },
+      "state_before": {
+        "caps_by_source_id": {}
+      },
+      "expect": {
+        "currency": "cashback_inr",
+        "amount": 0,
+        "value_inr": null,
+        "excluded": true,
+        "cap_deltas_by_source_id": {}
+      },
+      "why": "Gift card purchases on Flipkart and Myntra do not earn cashback.",
+      "engine_checkable": false,
+      "not_checkable_reason": "A gift-card purchase on a normal merchant (Flipkart) cannot be told apart by the C3.1 context (D14a)."
+    }
+  ],
+  "research_notes": [
+    {
+      "item": "quarterly caps per merchant",
+      "cardpipeline_says": "cap_rules is empty; caps only mentioned in rule reason text and no cap_reference",
+      "issuer_says": "INR 4,000 cashback per statement quarter separately for each of Flipkart, Myntra and Cleartrip. Post-cap spend earns nothing (illustration shows 0).",
+      "proposed_fix": "override",
+      "override_file": "api/scripts/catalogue_overrides/flipkart-axis-bank-credit-card.json"
+    },
+    {
+      "item": "Swiggy preferred-merchant coverage",
+      "cardpipeline_says": "merchant_list_source: Axis Bank Preferred Merchant list",
+      "issuer_says": "Preferred merchant list is not published in the T&C and can change; Swiggy food delivery only (Instamart, Genie excluded).",
+      "proposed_fix": "none",
+      "override_file": null
+    },
+    {
+      "item": "rounding",
+      "cardpipeline_says": "accrual_engine.rounding_mode (points rounding field) used for a cashback card",
+      "issuer_says": "Cashback is rounded down per transaction (11.80 -> 11). (D11: cashback_rounding = rupee_floor; rounding_mode governs points only.)",
+      "proposed_fix": "override",
+      "override_file": "api/scripts/catalogue_overrides/flipkart-axis-bank-credit-card.json"
+    },
+    {
+      "item": "statement quarter clock",
+      "cardpipeline_says": "capping_period_basis quarter",
+      "issuer_says": "Quarter is defined by statement date (e.g. 16 Mar-15 Jun), not calendar quarter.",
+      "proposed_fix": "engine: statement_cycle quarter anchor",
+      "override_file": null
+    }
+  ]
+}

@@ -1,0 +1,51 @@
+{
+  "source_slug": "hdfc-regalia-gold",
+  "changes": [
+    {
+      "path": "reward_rules[id=select_brand_5x].conditions.payment_requirement",
+      "op": "remove",
+      "reason": "WP7: T&C: \"payment must be done directly using HDFC Bank Regalia Gold Credit Card\"; a wallet payment reaches the card as a wallet load (excluded), never as the brand, so the merchant list already enforces it. Removing it lets the 5X rule load (was info).",
+      "source_url": "https://www.hdfc.bank.in/content/dam/hdfcbankpws/in/en/personal-banking/discover-products/cards/credit-cards/regalia-gold-credit-card/pdfs/regalia-gold-credit-card-reward-points-t-and-cs.pdf",
+      "checked_on": "2026-11-05"
+    },
+    {
+      "path": "reward_rules[id=select_brand_5x].action.points_per_block",
+      "value": 25,
+      "reason": "WP7: The loader reads points_per_block as the full rule rate. T&C: 5X on the four brands with \"Base reward points ... continue as is\"; 5X of the 5 RP/Rs200 base is 25 RP/Rs200 (100 base + 400 incremental on Rs4,000 in the worked example).",
+      "source_url": "https://www.hdfc.bank.in/content/dam/hdfcbankpws/in/en/personal-banking/discover-products/cards/credit-cards/regalia-gold-credit-card/pdfs/regalia-gold-credit-card-reward-points-t-and-cs.pdf",
+      "checked_on": "2026-11-05"
+    },
+    {
+      "path": "reward_rules[id=select_brand_5x].conditions.minimum_transaction_inr",
+      "value": 200,
+      "reason": "WP7: T&C: \"Minimum transaction value to be eligible for offer or reward points is Rs. 200.\"",
+      "source_url": "https://www.hdfc.bank.in/content/dam/hdfcbankpws/in/en/personal-banking/discover-products/cards/credit-cards/regalia-gold-credit-card/pdfs/regalia-gold-credit-card-reward-points-t-and-cs.pdf",
+      "checked_on": "2026-11-05"
+    },
+    {
+      "path": "reward_rules",
+      "op": "append",
+      "value": {
+        "id": "wp7_emi_rail_exclusion",
+        "category_id": "all_retail",
+        "priority": 0,
+        "evaluation_type": "exclusion",
+        "rail": "emi",
+        "channel_type": "all",
+        "conditions": {},
+        "action": {
+          "multiplier": 0,
+          "points_per_block": 0,
+          "cashback_percent": null,
+          "cap_reference": null,
+          "reason": "EMI transactions earn no rewards."
+        },
+        "effective_from": "2026-05-15",
+        "effective_to": null
+      },
+      "reason": "WP7: D28c: Reward Points T&C item 4: \"EasyEMI and e-wallet loading transactions will not accrue Reward points\". The record's EMI row needs category emi AND rail emi, so an EMI purchase in another category earned. Rail-EMI exclusion on all spend.",
+      "source_url": "https://www.hdfc.bank.in/content/dam/hdfcbankpws/in/en/personal-banking/discover-products/cards/credit-cards/regalia-gold-credit-card/pdfs/regalia-gold-credit-card-reward-points-t-and-cs.pdf",
+      "checked_on": "2026-11-05"
+    }
+  ]
+}

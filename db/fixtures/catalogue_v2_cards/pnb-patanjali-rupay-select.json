@@ -1,0 +1,427 @@
+{
+  "generated_by": "api/scripts/catalogue_v2/snapshot_examples.js",
+  "source_slug": "pnb-patanjali-rupay-select",
+  "inputs": {
+    "transform_version": "7",
+    "source_record_sha256": "a780c492e48a2387d559d6811b2636ce93cca5cade5fd99b7ae2e6581fde471e",
+    "override_sha256": "142a7d0528cbc1af61efb3f997e36b4a790465837938846f5d140b93a6b2e81f",
+    "directory_sha256": "b1094d54b77e848d22f7a9a64f3ae6d1ef43ca3eb2fc8e40cd43ed1994664694",
+    "verified": false
+  },
+  "blocking_flags": [
+    "info_rule"
+  ],
+  "card": {
+    "id": "pnb-patanjali-rupay-select:card",
+    "slug": "pnb-patanjali-rupay-select",
+    "name": "PNB\n Patanjali RuPay Select Credit Card",
+    "network": "rupay",
+    "issuer_slug": "pnb",
+    "base_reward_unit": "points_per_150",
+    "base_reward_rate": 2,
+    "point_value_inr": 0.25,
+    "excluded_categories": [],
+    "accrual_block_inr": 150,
+    "accrual_rounding": "floor",
+    "cashback_rounding": null,
+    "points_expiry_months": 36,
+    "model_status": "partial",
+    "model_coverage": {
+      "rules_total": 5,
+      "rules_modelled": 3,
+      "rules_info": 2,
+      "caps_total": 1,
+      "caps_enforced": 0,
+      "flags": [
+        {
+          "code": "info_rule",
+          "source_local_id": "first-90-days-300-bonus",
+          "detail": "missing_rate"
+        },
+        {
+          "code": "info_rule",
+          "source_local_id": "first-90-days-300-bonus",
+          "detail": "condition:period_days_from_card_receipt"
+        },
+        {
+          "code": "info_rule",
+          "source_local_id": "first-90-days-300-bonus",
+          "detail": "condition:first_eligible_transaction"
+        },
+        {
+          "code": "info_rule",
+          "source_local_id": "retail-2x-select",
+          "detail": "override_rule_role"
+        },
+        {
+          "code": "unenforced_period",
+          "source_local_id": "patanjali-cashback-per-transaction",
+          "detail": null
+        },
+        {
+          "code": "hidden_from_v1_uncapped",
+          "source_local_id": null,
+          "detail": "patanjali-cashback"
+        }
+      ],
+      "overrides_applied": [
+        {
+          "path": "reward_rules[id=retail-2x-select].rule_role",
+          "op": "set",
+          "value_sha256": "3e3e8e84e722887a",
+          "reason": "WP7: D33e: the record's own source page (PNB Patanjali RuPay Select card features) states \"Reward Points : 2 pt on Rs 150\" and \"Reward Multiplier : NA\"; it has no 2X. The record's retail rate is the same 2 Reward Points per Rs150 (base-retail-2rp-per-150), so a 4-per-Rs150 \"2X\" rule on all retail doubles it. Info, so the base 2 per Rs150 governs.",
+          "source_url": "https://creditcard.pnb.bank.in/types11.html",
+          "checked_on": "2026-11-06",
+          "citation": null
+        }
+      ]
+    },
+    "reward_rules": [
+      {
+        "id": "pnb-patanjali-rupay-select:rule:base-retail-2rp-per-150",
+        "category_id": null,
+        "category_slug": null,
+        "merchant_pattern": null,
+        "rail": null,
+        "unit": "points_per_150",
+        "rate": 2,
+        "min_txn_inr": null,
+        "max_txn_inr": null,
+        "priority": 100,
+        "conditions": {
+          "source_local_id": "base-retail-2rp-per-150",
+          "part": null,
+          "info_reasons": [],
+          "flags": []
+        },
+        "notes": null,
+        "effective_from": "2024-09-01",
+        "effective_to": null,
+        "excluded_categories": [],
+        "rule_role": "base",
+        "merchant_slugs": [],
+        "platform_slugs": [],
+        "mcc_include": [],
+        "mcc_exclude": [],
+        "except_merchant_slugs": [],
+        "except_platform_slugs": [],
+        "block_inr": null,
+        "min_engine_version": 1,
+        "max_engine_version": null,
+        "source_local_id": "base-retail-2rp-per-150",
+        "display_note": "Earn 2 Reward Points for every ₹150 spent on eligible retail transactions."
+      },
+      {
+        "id": "pnb-patanjali-rupay-select:rule:first-90-days-300-bonus",
+        "category_id": null,
+        "category_slug": null,
+        "merchant_pattern": null,
+        "rail": null,
+        "unit": "cashback_percent",
+        "rate": 0,
+        "min_txn_inr": null,
+        "max_txn_inr": null,
+        "priority": 20,
+        "conditions": {
+          "source_local_id": "first-90-days-300-bonus",
+          "part": null,
+          "info_reasons": [
+            "missing_rate",
+            "condition:period_days_from_card_receipt",
+            "condition:first_eligible_transaction"
+          ],
+          "flags": []
+        },
+        "notes": null,
+        "effective_from": "2024-09-01",
+        "effective_to": null,
+        "excluded_categories": [],
+        "rule_role": "info",
+        "merchant_slugs": [],
+        "platform_slugs": [],
+        "mcc_include": [],
+        "mcc_exclude": [],
+        "except_merchant_slugs": [],
+        "except_platform_slugs": [],
+        "block_inr": null,
+        "min_engine_version": 2,
+        "max_engine_version": null,
+        "source_local_id": "first-90-days-300-bonus",
+        "display_note": "300 Reward Points on the first retail or online transaction within 90 days of receiving the card."
+      },
+      {
+        "id": "pnb-patanjali-rupay-select:rule:retail-2x-select",
+        "category_id": null,
+        "category_slug": null,
+        "merchant_pattern": null,
+        "rail": null,
+        "unit": "points_per_150",
+        "rate": 4,
+        "min_txn_inr": null,
+        "max_txn_inr": null,
+        "priority": 30,
+        "conditions": {
+          "source_local_id": "retail-2x-select",
+          "part": null,
+          "info_reasons": [
+            "override_rule_role"
+          ],
+          "flags": []
+        },
+        "notes": null,
+        "effective_from": "2022-02-04",
+        "effective_to": null,
+        "excluded_categories": [],
+        "rule_role": "info",
+        "merchant_slugs": [],
+        "platform_slugs": [],
+        "mcc_include": [],
+        "mcc_exclude": [],
+        "except_merchant_slugs": [],
+        "except_platform_slugs": [],
+        "block_inr": null,
+        "min_engine_version": 2,
+        "max_engine_version": null,
+        "source_local_id": "retail-2x-select",
+        "display_note": "PNB's Patanjali RuPay Select product page advertises 2X reward points on retail merchandise."
+      },
+      {
+        "id": "pnb-patanjali-rupay-select:rule:fuel-zero-reward",
+        "category_id": "cat-fuel",
+        "category_slug": "fuel",
+        "merchant_pattern": null,
+        "rail": null,
+        "unit": "points_per_150",
+        "rate": 0,
+        "min_txn_inr": null,
+        "max_txn_inr": null,
+        "priority": 5,
+        "conditions": {
+          "source_local_id": "fuel-zero-reward",
+          "part": null,
+          "info_reasons": [],
+          "flags": []
+        },
+        "notes": null,
+        "effective_from": "2024-09-01",
+        "effective_to": null,
+        "excluded_categories": [],
+        "rule_role": "exclusion",
+        "merchant_slugs": [],
+        "platform_slugs": [],
+        "mcc_include": [],
+        "mcc_exclude": [],
+        "except_merchant_slugs": [],
+        "except_platform_slugs": [],
+        "block_inr": null,
+        "min_engine_version": 1,
+        "max_engine_version": null,
+        "source_local_id": "fuel-zero-reward",
+        "display_note": "Fuel transactions do not earn reward points under the applicable PNB reward exclusions."
+      },
+      {
+        "id": "pnb-patanjali-rupay-select:rule:patanjali-cashback",
+        "category_id": null,
+        "category_slug": null,
+        "merchant_pattern": "patanjali",
+        "rail": null,
+        "unit": "cashback_percent",
+        "rate": 2,
+        "min_txn_inr": 2500,
+        "max_txn_inr": null,
+        "priority": 10,
+        "conditions": {
+          "source_local_id": "patanjali-cashback",
+          "part": null,
+          "info_reasons": [],
+          "flags": [
+            "hidden_from_v1_uncapped"
+          ]
+        },
+        "notes": null,
+        "effective_from": "2022-02-04",
+        "effective_to": null,
+        "excluded_categories": [],
+        "rule_role": "earn",
+        "merchant_slugs": [
+          "patanjali"
+        ],
+        "platform_slugs": [],
+        "mcc_include": [],
+        "mcc_exclude": [],
+        "except_merchant_slugs": [],
+        "except_platform_slugs": [],
+        "block_inr": null,
+        "min_engine_version": 2,
+        "max_engine_version": null,
+        "source_local_id": "patanjali-cashback",
+        "display_note": "2% cashback on Patanjali transactions above ₹2,500, subject to a maximum of ₹50 cashback per transaction."
+      }
+    ],
+    "cap_rules": [
+      {
+        "id": "pnb-patanjali-rupay-select:cap:patanjali-cashback-per-transaction",
+        "reward_rule_id": "pnb-patanjali-rupay-select:rule:patanjali-cashback",
+        "category_id": null,
+        "category_slug": null,
+        "benefit_kind": null,
+        "label": "Patanjali cashback per transaction",
+        "measure": "txn_count",
+        "period": "statement_cycle",
+        "cap_value": 1,
+        "post_cap_unit": "points_per_150",
+        "post_cap_rate": 2,
+        "resets_on_day": null,
+        "cap_kind": "txn_count",
+        "cap_amount": 1,
+        "scope": "targets",
+        "targets": [
+          "pnb-patanjali-rupay-select:rule:patanjali-cashback"
+        ],
+        "parent_cap_id": null,
+        "post_cap_behavior": "custom_rate",
+        "anchor": null,
+        "min_engine_version": 2,
+        "source_local_id": "patanjali-cashback-per-transaction"
+      }
+    ],
+    "milestone_rules": [],
+    "fee_waiver_rules": [],
+    "benefits": [
+      {
+        "id": "pnb-patanjali-rupay-select:benefit:domestic-airport-lounge",
+        "key": "domestic-airport-lounge",
+        "source_local_id": "domestic-airport-lounge",
+        "kind": "lounge_domestic",
+        "label": "Complimentary Domestic Airport Lounge Access",
+        "description": "Sponsor: NPCI/RuPay",
+        "quota_count": 2,
+        "quota_period": "quarter",
+        "network_program": "rupay_select",
+        "value_estimate_inr": null,
+        "conditions": {
+          "source_category_id": "lounge",
+          "evaluation_engine": {
+            "conditions": {
+              "applicable_lounges": "Participating domestic airport lounges under the RuPay Select Credit Card lounge programme",
+              "eligibility_note": "Cardholder should check current eligibility with PNB/RuPay."
+            },
+            "benefit_calculation": {
+              "frequency": "calendar_quarter",
+              "allowed_visits": 2
+            },
+            "perks": [
+              "2 complimentary domestic airport lounge visits per calendar quarter for the cardholder"
+            ]
+          }
+        }
+      },
+      {
+        "id": "pnb-patanjali-rupay-select:benefit:international-airport-lounge",
+        "key": "international-airport-lounge",
+        "source_local_id": "international-airport-lounge",
+        "kind": "lounge_international",
+        "label": "Complimentary International Airport Lounge Access",
+        "description": "Sponsor: NPCI/RuPay",
+        "quota_count": 2,
+        "quota_period": "annual",
+        "network_program": "rupay_select",
+        "value_estimate_inr": null,
+        "conditions": {
+          "source_category_id": "lounge",
+          "evaluation_engine": {
+            "conditions": {
+              "applicable_lounges": "Participating international airport lounges under the RuPay Select Credit Card lounge programme",
+              "eligibility_note": "Cardholder should check current eligibility with PNB/RuPay."
+            },
+            "benefit_calculation": {
+              "frequency": "annual",
+              "allowed_visits": 2
+            },
+            "perks": [
+              "2 complimentary international airport lounge visits per calendar year for the cardholder"
+            ]
+          }
+        }
+      },
+      {
+        "id": "pnb-patanjali-rupay-select:benefit:rupay-select-wellness",
+        "key": "rupay-select-wellness",
+        "source_local_id": "rupay-select-wellness",
+        "kind": "other",
+        "label": "RuPay Select lifestyle and wellness benefits",
+        "description": "Sponsor: NPCI/RuPay",
+        "quota_count": 1,
+        "quota_period": "quarter",
+        "network_program": "rupay_select",
+        "value_estimate_inr": null,
+        "conditions": {
+          "source_category_id": "other",
+          "evaluation_engine": {
+            "conditions": {},
+            "benefit_calculation": {
+              "frequency": "quarterly"
+            },
+            "perks": [
+              "Complimentary health check-up",
+              "Spa/fitness benefits",
+              "Golf-related benefits, subject to current RuPay Select programme terms and participating partners"
+            ]
+          }
+        }
+      },
+      {
+        "id": "pnb-patanjali-rupay-select:benefit:pnb-genie",
+        "key": "pnb-genie",
+        "source_local_id": "pnb-genie",
+        "kind": "other",
+        "label": "PNB GENIE Mobile Application",
+        "description": "Sponsor: PNB",
+        "quota_count": null,
+        "quota_period": null,
+        "network_program": null,
+        "value_estimate_inr": null,
+        "conditions": {
+          "source_category_id": "other",
+          "evaluation_engine": {
+            "conditions": {},
+            "benefit_calculation": {},
+            "perks": [
+              "Card management",
+              "Transaction-limit controls",
+              "Instant card block/unblock",
+              "PIN generation",
+              "International transaction controls"
+            ]
+          }
+        }
+      },
+      {
+        "id": "pnb-patanjali-rupay-select:benefit:insurance:air_accidental_death",
+        "key": "insurance:air_accidental_death",
+        "source_local_id": null,
+        "kind": "insurance_travel",
+        "label": "Air Accidental Death",
+        "description": "RuPay Select insurance programme provides accidental death/permanent total disability cover up to ₹10 lakh, subject to the applicable RuPay/PNB insurance programme terms and qualifying card transaction conditions.",
+        "quota_count": null,
+        "quota_period": null,
+        "network_program": null,
+        "value_estimate_inr": 1000000,
+        "conditions": {
+          "coverage_usd": null
+        }
+      }
+    ],
+    "unlock_rules": [],
+    "redemption_options": [
+      {
+        "program_name": "PNB Rewardz",
+        "method": "partner_catalogue",
+        "value_per_point_inr": 0.25,
+        "min_points": 500,
+        "notes": "Redemption fee: ₹0"
+      }
+    ],
+    "is_upi_linkable": true
+  }
+}
