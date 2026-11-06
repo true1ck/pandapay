@@ -17,6 +17,9 @@ const { enqueueNotification } = require('../notification_outbox');
 
 const CATEGORY = 'needs_review';
 
+/** Only these commands ever notify someone; every other kind must cost no query. */
+const NOTIFYING_KINDS = new Set(['expense.propose', 'settlement.report', 'invitation.requested', 'invitation.joined']);
+
 function enabled(options = {}) {
   return (options.enabled ?? config.sharedExpenseNotificationsEnabled) === true;
 }
@@ -121,7 +124,7 @@ async function loadInvitationAudience(client, tokenHash) {
 }
 
 async function notifyAfterCommit({ withUserClient, actorId, kind, payload, contextId, operationId, tokenHash, options = {}, logger = console }) {
-  if (!enabled(options)) return 0;
+  if (!enabled(options) || !NOTIFYING_KINDS.has(kind)) return 0;
   try {
     const invitation = kind.startsWith('invitation.');
     const audience = invitation

@@ -6272,6 +6272,10 @@ final notificationDevicesApiProvider = Provider<NotificationDevicesApi?>((ref) {
 
 /// FCM is additive to the existing inbox and local-notification system. The
 /// service is kept alive by the app shell and restarted after sign-in.
+/// A validated in-app path from a tapped push. The app root consumes it, waits
+/// for the session to restore, navigates, and clears it.
+final pushOpenLinkProvider = StateProvider<String?>((ref) => null);
+
 final pushNotificationServiceProvider = Provider<PushNotificationService?>((
   ref,
 ) {
@@ -6280,6 +6284,7 @@ final pushNotificationServiceProvider = Provider<PushNotificationService?>((
   final service = PushNotificationService(
     api: api,
     gate: ref.watch(notificationGateProvider),
+    onOpenLink: (link) => ref.read(pushOpenLinkProvider.notifier).state = link,
   );
   ref.onDispose(service.stop);
   return service;

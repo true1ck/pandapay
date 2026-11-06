@@ -6,6 +6,7 @@ import 'package:flutter/foundation.dart';
 
 import '../../data/notification_devices_api.dart';
 import 'notification_gate.dart';
+import 'push_deep_link.dart';
 
 /// Firebase Messaging background entry point.
 ///
@@ -29,6 +30,11 @@ class PushNotificationService {
   final NotificationDevicesApi api;
   final NotificationGate gate;
 
+  /// Called with a validated in-app path when the user taps a push.
+  final void Function(String link)? onOpenLink;
+
+  StreamSubscription<RemoteMessage>? _openedSubscription;
+  bool _handledInitialMessage = false;
   StreamSubscription<String>? _tokenSubscription;
   StreamSubscription<RemoteMessage>? _messageSubscription;
   Timer? _registrationRetryTimer;
@@ -51,7 +57,16 @@ class PushNotificationService {
     required this.gate,
     this.readToken,
     this.deleteToken,
+    this.onOpenLink,
   });
+
+  void _openLink(RemoteMessage message) {
+    final link = pushDeepLink(message.data['deepLink']);
+    debugPrint(
+      'PandaPay push tap received (link ${link == null ? 'rejected' : 'accepted'})',
+    );
+    if (link != null) onOpenLink?.call(link);
+  }
 
   Future<void> start() async {
     if (_started) return;
@@ -84,6 +99,16 @@ class PushNotificationService {
         _showForeground,
       );
       _tokenSubscription = messaging.onTokenRefresh.listen(_registerToken);
+      // Taps on a push shown by the system while the app was in the background
+      // or closed. The initial message is consumed once per process.
+      _openedSubscription = FirebaseMessaging.onMessageOpenedApp.listen(
+        _openLink,
+      );
+      if (!_handledInitialMessage) {
+        _handledInitialMessage = true;
+        final initial = await messaging.getInitialMessage();
+        if (initial != null) _openLink(initial);
+      }
       final token = await messaging.getToken();
       if (!_started || generation != _lifecycleGeneration) return;
       if (token == null || token.isEmpty) {
@@ -184,8 +209,10 @@ class PushNotificationService {
     _startupRetryTimer?.cancel();
     await _tokenSubscription?.cancel();
     await _messageSubscription?.cancel();
+    await _openedSubscription?.cancel();
     _tokenSubscription = null;
     _messageSubscription = null;
+    _openedSubscription = null;
     _registrationRetryTimer = null;
     _startupRetryTimer = null;
     _lastToken = null;

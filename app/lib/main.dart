@@ -11,6 +11,7 @@ import 'package:http/http.dart' as http;
 import 'package:http/io_client.dart';
 import 'package:pandapay_domain/pandapay_domain.dart';
 import 'package:shared_preferences/shared_preferences.dart';
+import 'features/notifications/push_deep_link.dart';
 import 'features/shared_expenses/data/pending_split_invite.dart';
 import 'features/shared_expenses/data/shared_invitations.dart';
 
@@ -270,6 +271,35 @@ class _PandaPayAppState extends ConsumerState<PandaPayApp> {
     }
   }
 
+  String? _lastPushLink;
+  DateTime? _lastPushLinkAt;
+
+  Future<void> _openPushLink(String link) async {
+    // The Firebase plugin and the launch intent can both report the same tap.
+    final now = DateTime.now();
+    if (_lastPushLink == link &&
+        _lastPushLinkAt != null &&
+        now.difference(_lastPushLinkAt!) < const Duration(seconds: 5)) {
+      ref.read(pushOpenLinkProvider.notifier).state = null;
+      return;
+    }
+    _lastPushLink = link;
+    _lastPushLinkAt = now;
+    try {
+      await ref.read(sessionInitProvider.future);
+      for (var attempt = 0; attempt < 100; attempt += 1) {
+        if (!mounted || !ref.read(onboardingCompleteProvider).isLoading) break;
+        await Future<void>.delayed(const Duration(milliseconds: 20));
+      }
+    } catch (_) {
+      // The router's normal signed-out guard still applies.
+    }
+    if (!mounted) return;
+    ref.read(pushOpenLinkProvider.notifier).state = null;
+    debugPrint('PandaPay opening push destination');
+    ref.read(goRouterProvider).push(link);
+  }
+
   bool _resumingSplitJoin = false;
 
   /// Opens the Join screen for a remembered split invite once the user is
@@ -301,6 +331,12 @@ class _PandaPayAppState extends ConsumerState<PandaPayApp> {
   Future<void> _openAssistantUri(String raw) async {
     final uri = Uri.tryParse(raw);
     if (!mounted || uri == null) {
+      return;
+    }
+    if (uri.scheme == 'pandapay-push') {
+      // A push tapped while the app was closed. Only allow-listed paths route.
+      final link = pushDeepLink(uri.queryParameters['path']);
+      if (link != null) ref.read(pushOpenLinkProvider.notifier).state = link;
       return;
     }
     final splitToken = sharedInviteTokenFromUri(uri);
@@ -400,6 +436,11 @@ class _PandaPayAppState extends ConsumerState<PandaPayApp> {
     // launch or an app update. This closes the small session-restore race in
     // which the token was available while the shell was still transitioning.
     ref.watch(pushNotificationLifecycleProvider);
+    // A tapped push opens its validated destination once the session is back.
+    ref.listen<String?>(pushOpenLinkProvider, (previous, link) {
+      if (link == null) return;
+      unawaited(_openPushLink(link));
+    });
     // Restore saved location monitoring for every entry point, including
     // assistant links that open a screen outside the tab shell.
     ref.watch(backgroundAlertsLifecycleProvider);

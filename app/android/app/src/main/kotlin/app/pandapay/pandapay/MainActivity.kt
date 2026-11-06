@@ -94,12 +94,26 @@ class MainActivity : FlutterFragmentActivity() {
         // warm singleTop launch behave consistently.
     }
 
+    /**
+     * The URI a launch intent asks the app to open. A tapped push carries its
+     * data payload as intent extras; its deep link is wrapped in an internal
+     * scheme that Dart validates against an allow-list before routing. This does
+     * not depend on the Firebase plugin still holding the message in memory
+     * after the process was killed.
+     */
+    private fun launchUriFrom(intent: Intent?): String? {
+        intent?.dataString?.let { return it }
+        val link = intent?.getStringExtra("deepLink") ?: return null
+        return "pandapay-push://open?path=" + Uri.encode(link)
+    }
+
     override fun onNewIntent(intent: Intent) {
         super.onNewIntent(intent)
         setIntent(intent)
-        intent.dataString?.let {
+        launchUriFrom(intent)?.let {
             assistantChannel?.invokeMethod("assistantUri", it)
             intent.data = null
+            intent.removeExtra("deepLink")
         }
     }
 
@@ -130,8 +144,9 @@ class MainActivity : FlutterFragmentActivity() {
         assistantChannel?.setMethodCallHandler { call, result ->
             when (call.method) {
                 "getInitialAssistantUri" -> {
-                    val uri = intent?.dataString
+                    val uri = launchUriFrom(intent)
                     intent?.data = null
+                    intent?.removeExtra("deepLink")
                     result.success(uri)
                 }
                 else -> result.notImplemented()

@@ -108,3 +108,30 @@ test('join request: a claimant who cannot read the roster still notifies the own
   assert.match(insert.params[3], /Ravi asked to join/);
   assert.equal(insert.params[5], `split:op-j:${owner}`);
 });
+
+test('a command that notifies nobody costs no database query, even when enabled by default', async () => {
+  const { notifyAfterCommit, enabled } = require('../src/shared_expenses/notifications');
+  assert.equal(enabled(), true, 'on by default');
+  let calls = 0;
+  const sent = await notifyAfterCommit({
+    withUserClient: async () => { calls += 1; return {}; },
+    actorId: '11111111-1111-4111-8111-111111111111',
+    kind: 'context.create', payload: {}, contextId: '22222222-2222-4222-8222-222222222222',
+    operationId: '33333333-3333-4333-8333-333333333333',
+  });
+  assert.equal(sent, 0);
+  assert.equal(calls, 0);
+});
+
+test('the switch can still turn it off', async () => {
+  const { notifyAfterCommit } = require('../src/shared_expenses/notifications');
+  let calls = 0;
+  const sent = await notifyAfterCommit({
+    withUserClient: async () => { calls += 1; return {}; },
+    actorId: '11111111-1111-4111-8111-111111111111', kind: 'expense.propose', payload: {},
+    contextId: '22222222-2222-4222-8222-222222222222', operationId: '33333333-3333-4333-8333-333333333333',
+    options: { enabled: false },
+  });
+  assert.equal(sent, 0);
+  assert.equal(calls, 0);
+});
