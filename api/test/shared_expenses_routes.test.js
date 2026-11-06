@@ -1,4 +1,6 @@
 'use strict';
+process.env.API_DATABASE_URL ||= 'postgres://unused:unused@localhost:5432/pandapay';
+process.env.JWT_ACCESS_SECRET ||= 'ci_only_not_a_real_secret';
 const test=require('node:test');
 const assert=require('node:assert/strict');
 const express=require('express');

@@ -1,6 +1,7 @@
 import 'dart:async';
 
 import 'package:alchemist/alchemist.dart';
+import 'package:flutter/foundation.dart';
 import 'package:flutter_secure_storage_platform_interface/flutter_secure_storage_platform_interface.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:package_info_plus/package_info_plus.dart';
@@ -44,6 +45,32 @@ class _FakeSecureStoragePlatform extends FlutterSecureStoragePlatform {
   void clear() => _values.clear();
 }
 
+/// Largest share of pixels a golden may differ by (0.5%). The committed `ci/`
+/// goldens use the Ahem font, but anti-aliased edges and shadows still
+/// rasterise a few pixels differently on macOS and on the Linux CI runner
+/// (0.27% at most when this was set). A layout or colour change moves far more.
+const _goldenTolerance = 0.005;
+
+/// Flutter's own [LocalFileComparator.compare], plus [_goldenTolerance].
+class _TolerantGoldenComparator extends LocalFileComparator {
+  _TolerantGoldenComparator(super.testFile);
+
+  @override
+  Future<bool> compare(Uint8List imageBytes, Uri golden) async {
+    final ComparisonResult result = await GoldenFileComparator.compareLists(
+      imageBytes,
+      await getGoldenBytes(golden),
+    );
+    if (result.passed || result.diffPercent <= _goldenTolerance) {
+      result.dispose();
+      return true;
+    }
+    final String error = await generateFailureOutput(result, golden, basedir);
+    result.dispose();
+    throw FlutterError(error);
+  }
+}
+
 Future<void> testExecutable(FutureOr<void> Function() testMain) async {
   final fakeSecureStorage = _FakeSecureStoragePlatform();
   FlutterSecureStoragePlatform.instance = fakeSecureStorage;
@@ -67,6 +94,12 @@ Future<void> testExecutable(FutureOr<void> Function() testMain) async {
       buildSignature: '',
     ),
   );
+  final comparator = goldenFileComparator;
+  if (comparator is LocalFileComparator) {
+    goldenFileComparator = _TolerantGoldenComparator(
+      comparator.basedir.resolve('flutter_test_config.dart'),
+    );
+  }
   // Only the platform-independent `ci/` goldens (Ahem font, colour blocks
   // for text) are committed and compared. Alchemist 0.14 enables the
   // per-platform variants for every host with no CI detection, so on a Linux

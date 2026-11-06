@@ -126,19 +126,9 @@ jobs:
   postgres-suites:
     name: PostgreSQL-backed suites
     runs-on: ubuntu-latest
-    services:
-      postgres:
-        image: postgres:17
-        env:
-          POSTGRES_PASSWORD: ci_only_pg_suites
-          # The delivery fixture logs in as roles it creates without a
-          # password; this server exists only for this job.
-          POSTGRES_HOST_AUTH_METHOD: trust
-        ports:
-          - 5549:5432
-        options: >-
-          --health-cmd "pg_isready -U postgres"
-          --health-interval 5s --health-timeout 5s --health-retries 10
+    # The fixtures refuse a database server whose own address is not loopback,
+    # and a service container reports its container address. So the server is
+    # a throwaway cluster on this runner, listening on 127.0.0.1 only.
     steps:
       - uses: actions/checkout@v4
       - uses: actions/setup-node@v4
@@ -154,6 +144,16 @@ jobs:
           ls -d /usr/lib/postgresql/*/bin | sort -V | tail -n 1 >> "$GITHUB_PATH"
           npm ci --prefix api
           npm ci --omit=dev --prefix auth
+
+      # Trust authentication: the delivery fixture logs in as roles it creates
+      # without a password, and this cluster exists only for this job.
+      - name: Start a throwaway loopback PostgreSQL cluster
+        run: |
+          pgdata="$RUNNER_TEMP/pg-suites"
+          initdb -D "$pgdata" -U postgres -A trust --no-locale --encoding=UTF8 > /dev/null
+          pg_ctl -D "$pgdata" -l "$RUNNER_TEMP/pg-suites.log" \
+            -o "-c listen_addresses=127.0.0.1 -p 5549 -k $RUNNER_TEMP" -w start
+          psql "postgresql://postgres@127.0.0.1:5549/postgres" -XAtc 'select version()'
 
       - name: PostgreSQL suites
         env:

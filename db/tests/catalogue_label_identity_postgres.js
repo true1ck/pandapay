@@ -29,7 +29,19 @@ async function main(){
   assert.equal(files.length,11);
   for(const file of files)await c.query(fs.readFileSync(path.join(ROOT,'db/supabase/migrations',file),'utf8'));
   await c.query(fs.readFileSync(path.join(ROOT,'db/supabase/migrations/0015_card_products_rls_fix.sql'),'utf8'));
-  for(const [table,keys] of Object.entries(RULE_KEYS))await c.query(`CREATE UNIQUE INDEX uq_${table==='cap_rules'?'cap_rules':'card_benefits'}_semantic_identity ON ${table} (${keys.join(',')}) NULLS NOT DISTINCT`);
+  // This fixture reproduces the catalogue as it was when 20261025074636 ran,
+  // before 20261105120000_card_rules_v2 added the v2 cap_rules columns that
+  // RULE_KEYS (and so the data-cleanup review) now include. The migration
+  // refuses any other cap_rules shape, so the v2 columns exist only while the
+  // review runs, and for good once the migration has run. They are read from
+  // the v2 migration itself so the two cannot drift.
+  const cardRulesV2=fs.readFileSync(path.join(ROOT,'db/supabase/migrations/20261105120000_card_rules_v2.sql'),'utf8');
+  const capColumns=cardRulesV2.match(/alter table cap_rules\s+add column if not exists [^;]+;/);
+  assert.ok(capColumns,'card rules v2 still adds cap_rules columns in one statement');
+  const V2_COLUMNS=[...capColumns[0].matchAll(/add column if not exists (\w+)/g)].map(m=>m[1]);
+  const addV2Columns=()=>c.query(capColumns[0]);
+  const dropV2Columns=()=>c.query(`ALTER TABLE cap_rules ${V2_COLUMNS.map(n=>'DROP COLUMN '+n).join(', ')}`);
+  for(const [table,keys] of Object.entries(RULE_KEYS))await c.query(`CREATE UNIQUE INDEX uq_${table==='cap_rules'?'cap_rules':'card_benefits'}_semantic_identity ON ${table} (${keys.filter(k=>!V2_COLUMNS.includes(k)).join(',')}) NULLS NOT DISTINCT`);
   const issuer=randomUUID(),card=randomUUID(),card2=randomUUID(),category=randomUUID(),reward=randomUUID();
   await c.query("INSERT INTO issuers(id,slug,name) VALUES($1,'fixture','Fixture')",[issuer]);
   await c.query("INSERT INTO card_products(id,issuer_id,slug,name,network,status,verified_at) VALUES($1,$3,'fixture-a','Fixture A','visa','published',now()),($2,$3,'fixture-b','Fixture B','visa','draft',null)",[card,card2,issuer]);
@@ -48,7 +60,7 @@ async function main(){
   async function snapshot(client=c){const out={};for(const table of tables)out[table]=(await client.query(`SELECT COALESCE(jsonb_agg(to_jsonb(t) ORDER BY id),'[]'::jsonb) rows FROM ${table} t`)).rows[0].rows;return out;}
   for(const [table,record,label] of [['cap_rules',cap,'dining cap'],['card_benefits',benefit,'lounge pass']]){
    const duplicate=await insert(table,{...record,label}),before=await snapshot();
-   const review=await reviewDataCleanup(c,{scope:'product',restoredCopy:true});
+   await addV2Columns();const review=await reviewDataCleanup(c,{scope:'product',restoredCopy:true});await dropV2Columns();
    const name=table==='cap_rules'?'cap_rule_normalized_identity_v1':'benefit_normalized_identity_v1';
    const identity=review.checks.find(check=>check.name===name);
    assert.equal(identity.status,'completed');assert.equal(identity.duplicate_groups,'1');assert.equal(identity.extra_rows,'1');
@@ -68,6 +80,7 @@ async function main(){
   const before=await snapshot();
   await runProductMigrations(c,{dbDir});assert.deepEqual(await snapshot(),before,'migration must preserve every row and original label');
   await runProductMigrations(c,{dbDir});assert.deepEqual(await snapshot(),before,'checksummed rerun must skip');
+  await addV2Columns(); // card rules v2 runs after the label identity migration
   const reviewed=await reviewDataCleanup(c,{scope:'product',restoredCopy:true});
   for(const name of ['cap_rule_normalized_identity_v1','benefit_normalized_identity_v1']){
    const check=reviewed.checks.find(value=>value.name===name);assert.equal(check.status,'completed');assert.equal(check.extra_rows,'0');
