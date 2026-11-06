@@ -684,14 +684,19 @@ const DEFERRED_STATE = Object.freeze({ capStates: [], milestoneStates: [], point
  * nothing), and the next reconcile or recompute rebuilds the state. A failed
  * reversal still does what v1's reversal does to the transaction itself:
  * expected values to 0 and its ledger rows removed, so an ignored spend
- * never keeps counting. A v1-shaped card leaves the savepoint before the v1
- * path runs, which is unchanged.
+ * never keeps counting. That deferral applies only once the card is known to
+ * be v2; an error before then (loading the card or deciding its shape,
+ * C8 D34c) rolls back, releases the savepoint and returns null, so the
+ * unchanged v1 path runs. A v1-shaped card always leaves the savepoint
+ * before the v1 path runs.
  */
 async function applyIfV2(client, userId, userCard, args) {
   const userCardId = (args && args.userCardId) || (userCard && userCard.id);
   await client.query(`SAVEPOINT ${HOOK_SAVEPOINT}`);
+  let knownV2 = false;
   try {
     const v2 = await loadV2Card(client, userCardId, { profileId: userId });
+    if (v2) knownV2 = true;
     const result = !v2
       ? null
       : args.sign < 0
@@ -702,6 +707,13 @@ async function applyIfV2(client, userId, userCard, args) {
   } catch (err) {
     await client.query(`ROLLBACK TO SAVEPOINT ${HOOK_SAVEPOINT}`);
     await client.query(`RELEASE SAVEPOINT ${HOOK_SAVEPOINT}`);
+    if (!knownV2) {
+      // C8 D34c: the error came before the card was known to be v2 (loading
+      // it, or deciding its shape). Don't hide the v1 path: return null so
+      // applyTransactionState runs it, on apply and on reverse alike.
+      console.warn('card_state_v2 shape check failed; using the v1 path', safeErrorCode(err));
+      return null;
+    }
     console.warn('card_state_v2 deferred to the next rebuild', safeErrorCode(err));
     if (args && args.txnId) {
       if (args.sign < 0) {

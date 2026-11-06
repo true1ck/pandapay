@@ -507,6 +507,79 @@ function ignoreRoute(client, fns) {
   };
 }
 
+test('C8 D34c: a failure before the card is known to be v2 falls back to the v1 path (apply and reverse)', { skip }, async () => {
+  cardStateV2.clearDirectoryCache();
+  await withRollback(async (client) => {
+    const fns = extractIndexFunctions();
+    const { monthStart } = await v1Dates(client);
+    const cats = await categoryIds(client);
+    // A v1-shaped card with a cap, a milestone and a fee waiver, so reversal touches every bucket.
+    const issuer = (await client.query(`INSERT INTO issuers (slug, name) VALUES ('wp8-d34-bank', 'WP8 D34 Bank') RETURNING id`)).rows[0].id;
+    const product = (await client.query(
+      `INSERT INTO card_products (issuer_id, slug, name, network, status, verified_at, base_reward_unit, base_reward_rate, point_value_inr)
+       VALUES ($1, 'wp8-d34-card', 'WP8 D34 Card', 'visa', 'published', now(), 'cashback_percent', 1, 1) RETURNING id`,
+      [issuer],
+    )).rows[0].id;
+    const rule = (await client.query(
+      `INSERT INTO reward_rules (card_product_id, category_id, unit, rate) VALUES ($1, $2, 'cashback_percent', 5) RETURNING id`,
+      [product, cats.dining],
+    )).rows[0].id;
+    await client.query(
+      `INSERT INTO cap_rules (card_product_id, reward_rule_id, label, measure, period, cap_value)
+       VALUES ($1, $2, 'v1 dining cap', 'reward_value', 'calendar_month', 150)`, [product, rule]);
+    await client.query(
+      `INSERT INTO milestone_rules (card_product_id, label, period, threshold_spend_inr, reward_description, reward_value_inr, anchor)
+       VALUES ($1, 'v1 annual', 'annual', 100000, 'v1 annual', 500, 'calendar_year')`, [product]);
+    await client.query(
+      `INSERT INTO fee_waiver_rules (card_product_id, threshold_spend_inr, period, waives_fee_inr) VALUES ($1, 3000, 'annual', 500)`,
+      [product]);
+    const profileId = (await client.query(`INSERT INTO profiles (id) VALUES (gen_random_uuid()) RETURNING id`)).rows[0].id;
+    const userCardId = (await client.query(
+      `INSERT INTO user_cards (profile_id, card_product_id) VALUES ($1, $2) RETURNING id`, [profileId, product])).rows[0].id;
+    const ids = { cats, product, profileId, userCardId };
+
+    const state = async (txnIds) => ({
+      caps: (await capRows(client, userCardId)).map((r) => [r.cap_rule_id, r.period_start, r.consumed, r.cap_kind]),
+      milestones: (await milestoneRows(client, userCardId)).map((r) => [r.milestone_rule_id, r.period_start, r.qualified]),
+      feeWaivers: (await feeWaiverRows(client, userCardId)).map((r) => [r.fee_waiver_rule_id, r.period_start, r.qualified, r.waived]),
+      expected: (await expectedOf(client, txnIds)).map((t) => [t.value, t.card_state_v2]),
+      ledger: (await client.query(`SELECT count(*)::int AS n FROM points_ledger WHERE user_card_id = $1`, [userCardId])).rows[0].n,
+    });
+    // Two dining spends, then the first is ignored (a v1 reversal).
+    const run = async () => {
+      const txnIds = [];
+      for (let i = 0; i < 2; i += 1) {
+        txnIds.push((await recordSpend(client, fns, ids, { amount: 2000, day: monthStart, category: 'dining' })).txnId);
+      }
+      await ignoreSpend(client, fns, ids, txnIds[0]);
+      return state(txnIds);
+    };
+
+    await asUser(client, profileId);
+    await client.query('SAVEPOINT normal_run');
+    const normal = await run();
+    assert.ok(normal.caps.length === 1 && normal.milestones.length === 1 && normal.feeWaivers.length === 1, 'every bucket moved');
+    await client.query('ROLLBACK TO SAVEPOINT normal_run');
+
+    // Inject: loadV2Card can't read cap_rule_targets (only it reads that table).
+    await asOwner(client);
+    await client.query('REVOKE SELECT ON cap_rule_targets FROM app_user');
+    await asUser(client, profileId);
+    cardStateV2.clearDirectoryCache(); // no cached "v1-shaped" answer to skip the failing read
+    const warnings = [];
+    const warn = console.warn;
+    console.warn = (...args) => warnings.push(args.join(' '));
+    let injected;
+    try {
+      injected = await run();
+    } finally {
+      console.warn = warn;
+    }
+    assert.ok(warnings.some((w) => w.includes('42501')), 'the failure is logged by code');
+    assert.deepEqual(injected, normal, 'the v1 path ran: same rows as a normal run');
+  });
+});
+
 test('C8 D33c: a card-state failure never fails ingest or ignore; nothing half-applied, rebuilt later', { skip }, async () => {
   cardStateV2.clearDirectoryCache();
   await withRollback(async (client) => {
