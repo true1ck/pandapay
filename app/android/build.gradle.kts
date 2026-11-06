@@ -48,6 +48,21 @@ subprojects {
     }
 }
 
+// camera_android_camerax compiles against CameraX 1.6.1, whose public API
+// (SurfaceRequest) refers to androidx.concurrent.futures.CallbackToFutureAdapter.
+// CameraX declares concurrent-futures as an implementation dependency, so it is
+// missing from the plugin's compile classpath, and JDK 17's javac (the CI
+// runner's default) fails on it; newer javac versions do not. Compile-only, so
+// nothing changes in what the app packages: camera-core already brings the
+// library at runtime.
+subprojects {
+    if (name == "camera_android_camerax") {
+        plugins.withId("com.android.library") {
+            dependencies.add("compileOnly", "androidx.concurrent:concurrent-futures:1.1.0")
+        }
+    }
+}
+
 // Several old plugins (telephony, home_widget) hardcode their own mismatched
 // Java/Kotlin JVM targets, which Kotlin's compiler rejects as inconsistent.
 // Force both to the app's JVM target (17) app-wide, after each subproject's
