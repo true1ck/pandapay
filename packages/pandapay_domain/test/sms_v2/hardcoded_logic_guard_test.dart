@@ -101,6 +101,14 @@ const _allow = <_Allow>[
     tokens: {'sbi', 'phonpe', 'gpay', 'googpay', 'bhim'},
     debt: true,
   ),
+  _Allow(
+    'app/lib/features/sms_v2/ui/review_clustering.dart',
+    'DEBT: Pay Later provider table that groups Needs review messages into '
+        'bundles for display. Display-only: it never classifies a message or '
+        'changes stored data; move the providers to the bundle/catalogue.',
+    tokens: {'amazon pay', 'amazon', 'flipkart'},
+    debt: true,
+  ),
 ];
 
 class _Hit {
