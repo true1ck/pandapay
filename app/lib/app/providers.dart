@@ -6127,6 +6127,7 @@ Future<TransactionEntry?> cachedTransactionById(Ref ref, String id) async {
 final catalogueProvider = FutureProvider<List<CardProduct>>((ref) async {
   // Resolve Ref values before the first async gap (see _cacheOrNull).
   final directoryHolder = ref.read(_catalogueDirectoryHolderProvider);
+  final load = directoryHolder.beginLoad();
   final repository = ref.watch(catalogueRepositoryProvider);
   final cache = await _cacheOrNull(ref);
   final feed = await repository
@@ -6135,7 +6136,9 @@ final catalogueProvider = FutureProvider<List<CardProduct>>((ref) async {
         loadBundled: () => rootBundle.loadString(bundledCatalogueAsset),
       )
       .load();
-  directoryHolder.directory = feed.directory;
+  // Only the newest load may publish its directory: an older one finishing
+  // late (its result is discarded by Riverpod) must not overwrite it (M1).
+  directoryHolder.finishLoad(load, feed.directory);
   return feed.cards;
 });
 
@@ -6146,6 +6149,15 @@ final catalogueProvider = FutureProvider<List<CardProduct>>((ref) async {
 /// and `invalidate(catalogueProvider)` still refetches both.
 class CatalogueDirectoryHolder {
   MerchantDirectory directory = MerchantDirectory.empty;
+  int _latestLoad = 0;
+
+  /// A load is starting; the returned token is the newest.
+  int beginLoad() => ++_latestLoad;
+
+  /// Publishes [loaded] only if [token] is still the newest load.
+  void finishLoad(int token, MerchantDirectory loaded) {
+    if (token == _latestLoad) directory = loaded;
+  }
 }
 
 final _catalogueDirectoryHolderProvider = Provider<CatalogueDirectoryHolder>(
